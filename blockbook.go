@@ -23,12 +23,8 @@ type AddressTransactionOracle interface {
 	GetAddressTransactions(address string, lower uint32, higher uint32, fn func(txids []string) error) error
 }
 
-type OutpointIndex interface {
-	IndexBlockOutpoints(block *Block) error
-}
-
-type AddressIndex interface {
-	IndexBlockAddresses(block *Block, txids map[string][]string) error
+type BlockIndex interface {
+	IndexBlock(block *Block, txids map[string][]string) error
 }
 
 var (
@@ -86,7 +82,7 @@ func main() {
 				log.Fatal(err)
 			}
 		} else {
-			if err = indexBlocks(rpc, rpc, db, db, height, until); err != nil {
+			if err = indexBlocks(rpc, rpc, db, height, until); err != nil {
 				log.Fatal(err)
 			}
 		}
@@ -148,7 +144,7 @@ func (tx *Tx) CollectAddresses(o OutpointAddressOracle) ([]string, error) {
 	return addrs, nil
 }
 
-func indexBlocks(bo BlockOracle, oao OutpointAddressOracle, ai AddressIndex, oi OutpointIndex, lower uint32, higher uint32) error {
+func indexBlocks(bo BlockOracle, oao OutpointAddressOracle, bi BlockIndex, lower uint32, higher uint32) error {
 	for height := lower; height <= higher; height++ {
 		hash, err := bo.GetBlockHash(height)
 		if err != nil {
@@ -162,10 +158,7 @@ func indexBlocks(bo BlockOracle, oao OutpointAddressOracle, ai AddressIndex, oi 
 		if err != nil {
 			return err
 		}
-		if err := oi.IndexBlockOutpoints(block); err != nil {
-			return err
-		}
-		if err := ai.IndexBlockAddresses(block, addrs); err != nil {
+		if err := bi.IndexBlock(block, addrs); err != nil {
 			return err
 		}
 	}
