@@ -144,23 +144,50 @@ func (tx *Tx) CollectAddresses(o OutpointAddressOracle) ([]string, error) {
 	return addrs, nil
 }
 
-func indexBlocks(bo BlockOracle, oao OutpointAddressOracle, bi BlockIndex, lower uint32, higher uint32) error {
-	for height := lower; height <= higher; height++ {
-		hash, err := bo.GetBlockHash(height)
+func indexBlocks(
+	blocks BlockOracle,
+	outpoints OutpointAddressOracle,
+	index BlockIndex,
+	lower uint32,
+	higher uint32,
+) error {
+	bch := make(chan blockResult, 3)
+
+	go getBlocks(lower, higher, blocks, bch)
+
+	for res := range bch {
+		if res.err != nil {
+			return res.err
+		}
+		addrs, err := res.block.CollectBlockAddresses(outpoints)
 		if err != nil {
 			return err
 		}
-		block, err := bo.GetBlock(hash, height)
-		if err != nil {
-			return err
-		}
-		addrs, err := block.CollectBlockAddresses(oao)
-		if err != nil {
-			return err
-		}
-		if err := bi.IndexBlock(block, addrs); err != nil {
+		if err := index.IndexBlock(res.block, addrs); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+type blockResult struct {
+	block *Block
+	err   error
+}
+
+func getBlocks(lower uint32, higher uint32, blocks BlockOracle, results chan<- blockResult) {
+	defer close(results)
+	for height := lower; height <= higher; height++ {
+		hash, err := blocks.GetBlockHash(height)
+		if err != nil {
+			results <- blockResult{err: err}
+			return
+		}
+		block, err := blocks.GetBlock(hash, height)
+		if err != nil {
+			results <- blockResult{err: err}
+			return
+		}
+		results <- blockResult{block: block}
+	}
 }
