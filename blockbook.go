@@ -54,7 +54,7 @@ func main() {
 		rpc.EnableCache(*rpcCache)
 	}
 
-	if *chain != "" {
+	if *chain != "none" {
 		for _, p := range GetChainParams() {
 			if p.Name == *chain {
 				rpc.Parser = &BitcoinBlockParser{Params: p}
