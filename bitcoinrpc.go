@@ -135,8 +135,8 @@ func (b *BitcoinRPC) GetTransaction(txid string) (tx *Tx, err error) {
 	return
 }
 
-// GetOutpointAddresses returns all unique addresses from given transaction output.
-func (b *BitcoinRPC) GetOutpointAddresses(txid string, vout uint32) ([]string, error) {
+// GetAddresses returns all unique addresses from given transaction output.
+func (b *BitcoinRPC) GetAddresses(txid string, vout uint32) ([]string, error) {
 	tx, err := b.GetTransaction(txid)
 	if err != nil {
 		return nil, err

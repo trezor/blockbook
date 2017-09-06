@@ -55,7 +55,7 @@ func (d *RocksDB) Close() error {
 	return nil
 }
 
-func (d *RocksDB) GetOutpointAddresses(txid string, vout uint32) ([]string, error) {
+func (d *RocksDB) GetAddresses(txid string, vout uint32) ([]string, error) {
 	log.Printf("rocksdb: outpoint get %s:%d", txid, vout)
 	k, err := packOutpointKey(txid, vout)
 	if err != nil {
@@ -69,7 +69,7 @@ func (d *RocksDB) GetOutpointAddresses(txid string, vout uint32) ([]string, erro
 	return unpackOutpointValue(v.Data())
 }
 
-func (d *RocksDB) GetAddressTransactions(address string, lower uint32, higher uint32, fn func(txids []string) error) (err error) {
+func (d *RocksDB) GetTransactions(address string, lower uint32, higher uint32, fn func(txids []string) error) (err error) {
 	log.Printf("rocksdb: address get %d:%d %s", lower, higher, address)
 
 	kstart, err := packAddressKey(lower, address)

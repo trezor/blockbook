@@ -11,21 +11,25 @@ type BlockParser interface {
 	ParseBlock(b []byte) (*Block, error)
 }
 
-type BlockOracle interface {
+var (
+	ErrTxNotFound = errors.New("transaction not found")
+)
+
+type Blocks interface {
 	GetBestBlockHash() (string, error)
 	GetBlockHash(height uint32) (string, error)
 	GetBlock(hash string) (*Block, error)
 }
 
-type OutpointAddressOracle interface {
-	GetOutpointAddresses(txid string, vout uint32) ([]string, error)
+type Outpoints interface {
+	GetAddresses(txid string, vout uint32) ([]string, error)
 }
 
-type AddressTransactionOracle interface {
-	GetAddressTransactions(address string, lower uint32, higher uint32, fn func(txids []string) error) error
+type Addresses interface {
+	GetTransactions(address string, lower uint32, higher uint32, fn func(txids []string) error) error
 }
 
-type BlockIndex interface {
+type Indexer interface {
 	ConnectBlock(block *Block, txids map[string][]string) error
 	DisconnectBlock(block *Block, txids map[string][]string) error
 }
@@ -81,7 +85,7 @@ func main() {
 		address := *queryAddress
 
 		if address != "" {
-			if err = db.GetAddressTransactions(address, height, until, printResult); err != nil {
+			if err = db.GetTransactions(address, height, until, printResult); err != nil {
 				log.Fatal(err)
 			}
 		} else {
@@ -99,15 +103,15 @@ func printResult(txids []string) error {
 	return nil
 }
 
-func (b *Block) CollectBlockAddresses(o OutpointAddressOracle) (map[string][]string, error) {
+func (b *Block) GetAllAddresses(outpoints Outpoints) (map[string][]string, error) {
 	addrs := make(map[string][]string, 0)
 
 	for _, tx := range b.Txs {
-		voutAddrs, err := tx.CollectAddresses(o)
+		ta, err := b.GetTxAddresses(outpoints, tx)
 		if err != nil {
 			return nil, err
 		}
-		for _, addr := range voutAddrs {
+		for _, addr := range ta {
 			addrs[addr] = append(addrs[addr], tx.Txid)
 		}
 	}
@@ -115,69 +119,62 @@ func (b *Block) CollectBlockAddresses(o OutpointAddressOracle) (map[string][]str
 	return addrs, nil
 }
 
-var (
-	ErrTxNotFound = errors.New("transaction not found")
-)
+func (b *Block) GetTxAddresses(outpoints Outpoints, tx *Tx) ([]string, error) {
+	seen := make(map[string]struct{}) // Only unique values.
 
-func (b *Block) GetOutpointAddresses(txid string, vout uint32) ([]string, error) {
+	// Process outputs.
+	for _, o := range tx.Vout {
+		for _, a := range o.ScriptPubKey.Addresses {
+			seen[a] = struct{}{}
+		}
+	}
+
+	// Process inputs.  For each input, we need to take a look to the
+	// outpoint index.
+	for _, i := range tx.Vin {
+		if i.Coinbase != "" {
+			continue
+		}
+
+		// Lookup output in in the outpoint index.  In case it's not
+		// found, take a look in this block.
+		va, err := outpoints.GetAddresses(i.Txid, i.Vout)
+		if err == ErrTxNotFound {
+			va, err = b.GetAddresses(i.Txid, i.Vout)
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		for _, a := range va {
+			seen[a] = struct{}{}
+		}
+	}
+
+	// Convert the result set into a slice.
+	addrs := make([]string, len(seen))
+	i := 0
+	for a := range seen {
+		addrs[i] = a
+		i++
+	}
+	return addrs, nil
+}
+
+func (b *Block) GetAddresses(txid string, vout uint32) ([]string, error) {
+	// TODO: Lookup transaction in constant time.
 	for _, tx := range b.Txs {
 		if tx.Txid == txid {
 			return tx.Vout[vout].ScriptPubKey.Addresses, nil
 		}
 	}
-
 	return nil, ErrTxNotFound
 }
 
-type JoinedOutpointAddressOracle struct {
-	outpoints OutpointAddressOracle
-	block     *Block
-}
-
-func (o *JoinedOutpointAddressOracle) GetOutpointAddresses(txid string, vout uint32) ([]string, error) {
-	addrs, err := o.block.GetOutpointAddresses(txid, vout)
-	if err == nil {
-		return addrs, err
-	}
-	return o.outpoints.GetOutpointAddresses(txid, vout)
-}
-
-func (tx *Tx) CollectAddresses(o OutpointAddressOracle) ([]string, error) {
-	addrs := make([]string, 0)
-	seen := make(map[string]struct{})
-
-	for _, vout := range tx.Vout {
-		for _, addr := range vout.ScriptPubKey.Addresses {
-			if _, found := seen[addr]; !found {
-				addrs = append(addrs, addr)
-				seen[addr] = struct{}{}
-			}
-		}
-	}
-
-	for _, vin := range tx.Vin {
-		if vin.Coinbase != "" {
-			continue
-		}
-		vinAddrs, err := o.GetOutpointAddresses(vin.Txid, vin.Vout)
-		if err != nil {
-			return nil, err
-		}
-		for _, addr := range vinAddrs {
-			if _, found := seen[addr]; !found {
-				addrs = append(addrs, addr)
-				seen[addr] = struct{}{}
-			}
-		}
-	}
-
-	return addrs, nil
-}
-
 func indexBlocks(
-	blocks BlockOracle,
-	outpoints OutpointAddressOracle,
-	index BlockIndex,
+	blocks Blocks,
+	outpoints Outpoints,
+	index Indexer,
 	lower uint32,
 	higher uint32,
 ) error {
@@ -185,14 +182,11 @@ func indexBlocks(
 
 	go getBlocks(lower, higher, blocks, bch)
 
-	blouts := JoinedOutpointAddressOracle{outpoints: outpoints}
-
 	for res := range bch {
 		if res.err != nil {
 			return res.err
 		}
-		blouts.block = res.block
-		addrs, err := res.block.CollectBlockAddresses(&blouts)
+		addrs, err := res.block.GetAllAddresses(outpoints)
 		if err != nil {
 			return err
 		}
@@ -208,7 +202,7 @@ type blockResult struct {
 	err   error
 }
 
-func getBlocks(lower uint32, higher uint32, blocks BlockOracle, results chan<- blockResult) {
+func getBlocks(lower uint32, higher uint32, blocks Blocks, results chan<- blockResult) {
 	defer close(results)
 
 	height := lower
