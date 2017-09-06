@@ -46,9 +46,9 @@ func (b *BitcoinRPC) ClearCache() {
 }
 
 // GetBlock returns information about the block with the given hash.
-func (b *BitcoinRPC) GetBlock(hash string, height uint32) (block *Block, err error) {
+func (b *BitcoinRPC) GetBlock(hash string) (block *Block, err error) {
 	if b.Parser != nil {
-		return b.GetBlockAndParse(hash, height)
+		return b.GetBlockAndParse(hash)
 	} else {
 		return b.GetParsedBlock(hash)
 	}
@@ -57,8 +57,13 @@ func (b *BitcoinRPC) GetBlock(hash string, height uint32) (block *Block, err err
 // GetBlockAndParse returns information about the block with the given hash.
 //
 // It downloads raw block and parses it in-process.
-func (b *BitcoinRPC) GetBlockAndParse(hash string, height uint32) (block *Block, err error) {
+func (b *BitcoinRPC) GetBlockAndParse(hash string) (block *Block, err error) {
 	log.Printf("rpc: getblock (verbose=false) %v", hash)
+	var header BlockHeader
+	err = b.client.Call("getblockheader", &header, hash)
+	if err != nil {
+		return
+	}
 	var raw string
 	err = b.client.Call("getblock", &raw, hash, false) // verbose=false
 	if err != nil {
@@ -70,8 +75,9 @@ func (b *BitcoinRPC) GetBlockAndParse(hash string, height uint32) (block *Block,
 	}
 	block, err = b.Parser.ParseBlock(data)
 	if err == nil {
-		block.Hash = hash
-		block.Height = height
+		block.Hash = header.Hash
+		block.Height = header.Height
+		block.Next = header.Next
 	}
 	return
 }
@@ -97,6 +103,13 @@ func (b *BitcoinRPC) GetParsedBlock(hash string) (block *Block, err error) {
 	return
 }
 
+// GetBestBlockHash returns hash of the tip of the best-block-chain.
+func (b *BitcoinRPC) GetBestBlockHash() (hash string, err error) {
+	log.Printf("rpc: getbestblockhash")
+	err = b.client.Call("getbestblockhash", &hash)
+	return
+}
+
 // GetBlockHash returns hash of block in best-block-chain at given height.
 func (b *BitcoinRPC) GetBlockHash(height uint32) (hash string, err error) {
 	log.Printf("rpc: getblockhash %v", height)
@@ -104,15 +117,8 @@ func (b *BitcoinRPC) GetBlockHash(height uint32) (hash string, err error) {
 	return
 }
 
-// GetBlockCount returns the number of blocks in the longest chain.
-func (b *BitcoinRPC) GetBlockCount() (count uint32, err error) {
-	log.Printf("rpc: getblockcount")
-	err = b.client.Call("getblockcount", &count)
-	return
-}
-
-// GetRawTransaction returns the number of blocks in the longest chain.  If the
-// transaction cache is turned on, returned RawTx.Confirmations is stale.
+// GetTransaction returns the number of blocks in the longest chain.  If the
+// transaction cache is turned on, returned Tx.Confirmations is stale.
 func (b *BitcoinRPC) GetTransaction(txid string) (tx *Tx, err error) {
 	if b.txCache != nil {
 		if cachedTx, ok := b.txCache.Get(txid); ok {

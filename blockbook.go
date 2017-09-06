@@ -11,8 +11,9 @@ type BlockParser interface {
 }
 
 type BlockOracle interface {
+	GetBestBlockHash() (string, error)
 	GetBlockHash(height uint32) (string, error)
-	GetBlock(hash string, height uint32) (*Block, error)
+	GetBlock(hash string) (*Block, error)
 }
 
 type OutpointAddressOracle interface {
@@ -177,17 +178,22 @@ type blockResult struct {
 
 func getBlocks(lower uint32, higher uint32, blocks BlockOracle, results chan<- blockResult) {
 	defer close(results)
-	for height := lower; height <= higher; height++ {
+
+	height := lower
 		hash, err := blocks.GetBlockHash(height)
 		if err != nil {
 			results <- blockResult{err: err}
 			return
 		}
-		block, err := blocks.GetBlock(hash, height)
+
+	for height <= higher {
+		block, err := blocks.GetBlock(hash)
 		if err != nil {
 			results <- blockResult{err: err}
 			return
 		}
+		hash = block.Next
+		height = block.Height + 1
 		results <- blockResult{block: block}
 	}
 }

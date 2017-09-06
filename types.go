@@ -40,7 +40,14 @@ type Tx struct {
 
 type Block struct {
 	Hash   string   `json:"hash"`
+	Next   string   `json:"nextblockhash"`
 	Height uint32   `json:"height"`
 	Txids  []string `json:"tx"`
 	Txs    []*Tx    `json:"_"`
+}
+
+type BlockHeader struct {
+	Hash   string `json:"hash"`
+	Next   string `json:"nextblockhash"`
+	Height uint32 `json:"height"`
 }
