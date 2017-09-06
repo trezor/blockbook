@@ -55,6 +55,20 @@ func (d *RocksDB) Close() error {
 	return nil
 }
 
+func (d *RocksDB) GetOutpointAddresses(txid string, vout uint32) ([]string, error) {
+	log.Printf("rocksdb: outpoint get %s:%d", txid, vout)
+	k, err := packOutpointKey(txid, vout)
+	if err != nil {
+		return nil, err
+	}
+	v, err := d.db.Get(d.ro, k)
+	if err != nil {
+		return nil, err
+	}
+	defer v.Free()
+	return unpackOutpointValue(v.Data())
+}
+
 func (d *RocksDB) GetAddressTransactions(address string, lower uint32, higher uint32, fn func(txids []string) error) (err error) {
 	log.Printf("rocksdb: address get %d:%d %s", lower, higher, address)
 
@@ -164,7 +178,7 @@ func (d *RocksDB) writeOutpoints(wb *gorocksdb.WriteBatch, block *Block) error {
 
 	for _, tx := range block.Txs {
 		for _, vout := range tx.Vout {
-			k, err := packOutpointKey(block.Height, tx.Txid, vout.N)
+			k, err := packOutpointKey(tx.Txid, vout.N)
 			if err != nil {
 				return err
 			}
@@ -178,14 +192,12 @@ func (d *RocksDB) writeOutpoints(wb *gorocksdb.WriteBatch, block *Block) error {
 	return nil
 }
 
-func packOutpointKey(height uint32, txid string, vout uint32) (b []byte, err error) {
-	h := packUint(height)
+func packOutpointKey(txid string, vout uint32) (b []byte, err error) {
 	t, err := packTxid(txid)
 	if err != nil {
 		return nil, err
 	}
 	v := packVarint(vout)
-	b = append(b, h...)
 	b = append(b, t...)
 	b = append(b, v...)
 	return
