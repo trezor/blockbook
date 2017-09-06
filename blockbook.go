@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"log"
 	"time"
@@ -84,7 +85,7 @@ func main() {
 				log.Fatal(err)
 			}
 		} else {
-			if err = indexBlocks(rpc, rpc, db, height, until); err != nil {
+			if err = indexBlocks(rpc, db, db, height, until); err != nil {
 				log.Fatal(err)
 			}
 		}
@@ -112,6 +113,33 @@ func (b *Block) CollectBlockAddresses(o OutpointAddressOracle) (map[string][]str
 	}
 
 	return addrs, nil
+}
+
+var (
+	ErrTxNotFound = errors.New("transaction not found")
+)
+
+func (b *Block) GetOutpointAddresses(txid string, vout uint32) ([]string, error) {
+	for _, tx := range b.Txs {
+		if tx.Txid == txid {
+			return tx.Vout[vout].ScriptPubKey.Addresses, nil
+		}
+	}
+
+	return nil, ErrTxNotFound
+}
+
+type JoinedOutpointAddressOracle struct {
+	outpoints OutpointAddressOracle
+	block     *Block
+}
+
+func (o *JoinedOutpointAddressOracle) GetOutpointAddresses(txid string, vout uint32) ([]string, error) {
+	addrs, err := o.block.GetOutpointAddresses(txid, vout)
+	if err == nil {
+		return addrs, err
+	}
+	return o.outpoints.GetOutpointAddresses(txid, vout)
 }
 
 func (tx *Tx) CollectAddresses(o OutpointAddressOracle) ([]string, error) {
@@ -157,15 +185,18 @@ func indexBlocks(
 
 	go getBlocks(lower, higher, blocks, bch)
 
+	blouts := JoinedOutpointAddressOracle{outpoints: outpoints}
+
 	for res := range bch {
 		if res.err != nil {
 			return res.err
 		}
-		addrs, err := res.block.CollectBlockAddresses(outpoints)
+		blouts.block = res.block
+		addrs, err := res.block.CollectBlockAddresses(&blouts)
 		if err != nil {
 			return err
 		}
-		if err := index.IndexBlock(res.block, addrs); err != nil {
+		if err := index.ConnectBlock(res.block, addrs); err != nil {
 			return err
 		}
 	}
@@ -181,11 +212,11 @@ func getBlocks(lower uint32, higher uint32, blocks BlockOracle, results chan<- b
 	defer close(results)
 
 	height := lower
-		hash, err := blocks.GetBlockHash(height)
-		if err != nil {
-			results <- blockResult{err: err}
-			return
-		}
+	hash, err := blocks.GetBlockHash(height)
+	if err != nil {
+		results <- blockResult{err: err}
+		return
+	}
 
 	for height <= higher {
 		block, err := blocks.GetBlock(hash)
