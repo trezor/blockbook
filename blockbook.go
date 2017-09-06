@@ -25,7 +25,8 @@ type AddressTransactionOracle interface {
 }
 
 type BlockIndex interface {
-	IndexBlock(block *Block, txids map[string][]string) error
+	ConnectBlock(block *Block, txids map[string][]string) error
+	DisconnectBlock(block *Block, txids map[string][]string) error
 }
 
 var (

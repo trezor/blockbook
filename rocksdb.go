@@ -101,17 +101,29 @@ func (d *RocksDB) GetAddressTransactions(address string, lower uint32, higher ui
 	return nil
 }
 
-func (d *RocksDB) IndexBlock(block *Block, txids map[string][]string) error {
+func (d *RocksDB) ConnectBlock(block *Block, txids map[string][]string) error {
+	return d.writeBlock(block, txids, false /* delete */)
+}
+
+func (d *RocksDB) DisconnectBlock(block *Block, txids map[string][]string) error {
+	return d.writeBlock(block, txids, true /* delete */)
+}
+
+func (d *RocksDB) writeBlock(
+	block *Block,
+	txids map[string][]string,
+	delete bool,
+) error {
 	wb := gorocksdb.NewWriteBatch()
 	defer wb.Destroy()
 
-	if err := d.writeHeight(wb, block); err != nil {
+	if err := d.writeHeight(wb, block, delete); err != nil {
 		return err
 	}
-	if err := d.writeOutpoints(wb, block); err != nil {
+	if err := d.writeOutpoints(wb, block, delete); err != nil {
 		return err
 	}
-	if err := d.writeAddresses(wb, block, txids); err != nil {
+	if err := d.writeAddresses(wb, block, txids, delete); err != nil {
 		return err
 	}
 
@@ -120,8 +132,17 @@ func (d *RocksDB) IndexBlock(block *Block, txids map[string][]string) error {
 
 // Address Index
 
-func (d *RocksDB) writeAddresses(wb *gorocksdb.WriteBatch, block *Block, txids map[string][]string) error {
-	log.Printf("rocksdb: address put %d in %d %s", len(txids), block.Height, block.Hash)
+func (d *RocksDB) writeAddresses(
+	wb *gorocksdb.WriteBatch,
+	block *Block,
+	txids map[string][]string,
+	delete bool,
+) error {
+	if delete {
+		log.Printf("rocksdb: address delete %d in %d %s", len(txids), block.Height, block.Hash)
+	} else {
+		log.Printf("rocksdb: address put %d in %d %s", len(txids), block.Height, block.Hash)
+	}
 
 	for addr, txids := range txids {
 		k, err := packAddressKey(block.Height, addr)
@@ -132,7 +153,12 @@ func (d *RocksDB) writeAddresses(wb *gorocksdb.WriteBatch, block *Block, txids m
 		if err != nil {
 			return err
 		}
-		wb.Put(k, v)
+		if delete {
+			wb.Delete(k)
+		} else {
+			wb.Put(k, v)
+		}
+
 	}
 	return nil
 }
@@ -173,8 +199,16 @@ func unpackAddressVal(b []byte) (txids []string, err error) {
 
 // Outpoint index
 
-func (d *RocksDB) writeOutpoints(wb *gorocksdb.WriteBatch, block *Block) error {
-	log.Printf("rocksdb: outpoints put %d in %d %s", len(block.Txs), block.Height, block.Hash)
+func (d *RocksDB) writeOutpoints(
+	wb *gorocksdb.WriteBatch,
+	block *Block,
+	delete bool,
+) error {
+	if delete {
+		log.Printf("rocksdb: outpoints delete %d in %d %s", len(block.Txs), block.Height, block.Hash)
+	} else {
+		log.Printf("rocksdb: outpoints put %d in %d %s", len(block.Txs), block.Height, block.Hash)
+	}
 
 	for _, tx := range block.Txs {
 		for _, vout := range tx.Vout {
@@ -186,7 +220,11 @@ func (d *RocksDB) writeOutpoints(wb *gorocksdb.WriteBatch, block *Block) error {
 			if err != nil {
 				return err
 			}
-			wb.Put(k, v)
+			if delete {
+				wb.Delete(k)
+			} else {
+				wb.Put(k, v)
+			}
 		}
 	}
 	return nil
@@ -239,8 +277,16 @@ func unpackOutpointValue(b []byte) (addrs []string, err error) {
 
 // Block index
 
-func (d *RocksDB) writeHeight(wb *gorocksdb.WriteBatch, block *Block) error {
-	log.Printf("rocksdb: height put %d %s", block.Height, block.Hash)
+func (d *RocksDB) writeHeight(
+	wb *gorocksdb.WriteBatch,
+	block *Block,
+	delete bool,
+) error {
+	if delete {
+		log.Printf("rocksdb: height delete %d %s", block.Height, block.Hash)
+	} else {
+		log.Printf("rocksdb: height put %d %s", block.Height, block.Hash)
+	}
 
 	bv, err := packBlockValue(block.Hash)
 	if err != nil {
