@@ -22,13 +22,16 @@ type BitcoinBlockParser struct {
 	Params *chaincfg.Params
 }
 
-func (p *BitcoinBlockParser) parseOutputScript(b []byte) (addrs []string, err error) {
+func (p *BitcoinBlockParser) parseOutputScript(b []byte) ([]string, error) {
 	_, addresses, _, err := txscript.ExtractPkScriptAddrs(b, p.Params)
-	for _, a := range addresses {
-		addr := a.EncodeAddress()
-		addrs = append(addrs, addr)
+	if err != nil {
+		return nil, err
 	}
-	return addrs, err
+	addrs := make([]string, len(addresses))
+	for i, a := range addresses {
+		addrs[i] = a.EncodeAddress()
+	}
+	return addrs, nil
 }
 
 func (p *BitcoinBlockParser) ParseBlock(b []byte) (*Block, error) {
@@ -38,8 +41,10 @@ func (p *BitcoinBlockParser) ParseBlock(b []byte) (*Block, error) {
 		return nil, err
 	}
 
-	block := &Block{}
-	for _, t := range w.Transactions {
+	block := &Block{
+		Txs: make([]*Tx, len(w.Transactions)),
+	}
+	for ti, t := range w.Transactions {
 		tx := &Tx{
 			Txid:     t.TxHash().String(),
 			Version:  t.Version,
@@ -81,7 +86,7 @@ func (p *BitcoinBlockParser) ParseBlock(b []byte) (*Block, error) {
 				ScriptPubKey: s,
 			}
 		}
-		block.Txs = append(block.Txs, tx)
+		block.Txs[ti] = tx
 	}
 
 	return block, nil
