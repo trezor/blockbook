@@ -65,6 +65,9 @@ func (d *RocksDB) GetAddress(txid string, vout uint32) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if v.Size() == 0 {
+		return "", ErrNotFound
+	}
 	defer v.Free()
 	return unpackAddress(v.Data())
 }
@@ -223,7 +226,9 @@ func (d *RocksDB) writeOutpoints(
 			if delete {
 				wb.Delete(k)
 			} else {
-				wb.Put(k, v)
+				if len(v) > 0 {
+					wb.Put(k, v)
+				}
 			}
 		}
 	}
@@ -257,6 +262,9 @@ func (d *RocksDB) GetLastBlockHash() (string, error) {
 		return "", err
 	}
 	defer v.Free()
+	if v.Size() == 0 {
+		return "", ErrNotFound
+	}
 	return unpackBlockValue(v.Data())
 }
 
