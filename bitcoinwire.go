@@ -72,7 +72,7 @@ func (p *BitcoinBlockParser) ParseBlock(b []byte) (*Block, error) {
 		for i, out := range t.TxOut {
 			addrs, err := p.parseOutputScript(out.PkScript)
 			if err != nil {
-				return nil, err
+				addrs = []string{}
 			}
 			s := ScriptPubKey{
 				Hex:       hex.EncodeToString(out.PkScript),
