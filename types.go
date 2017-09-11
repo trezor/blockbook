@@ -46,7 +46,7 @@ type Block struct {
 
 type BlockHeader struct {
 	Hash          string `json:"hash"`
-	Prev          string `json:"prevblockhash"`
+	Prev          string `json:"previousblockhash"`
 	Next          string `json:"nextblockhash"`
 	Height        uint32 `json:"height"`
 	Confirmations int    `json:"confirmations"`
