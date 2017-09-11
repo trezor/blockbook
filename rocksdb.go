@@ -55,18 +55,18 @@ func (d *RocksDB) Close() error {
 	return nil
 }
 
-func (d *RocksDB) GetAddresses(txid string, vout uint32) ([]string, error) {
+func (d *RocksDB) GetAddress(txid string, vout uint32) (string, error) {
 	log.Printf("rocksdb: outpoint get %s:%d", txid, vout)
 	k, err := packOutpointKey(txid, vout)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	v, err := d.db.Get(d.ro, k)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	defer v.Free()
-	return unpackOutpointValue(v.Data())
+	return unpackAddress(v.Data())
 }
 
 func (d *RocksDB) GetTransactions(address string, lower uint32, higher uint32, fn func(txids []string) error) (err error) {
@@ -184,11 +184,11 @@ func packAddressVal(txids []string) (b []byte, err error) {
 	return
 }
 
-const transactionIDLen = 32
+const txidLen = 32
 
 func unpackAddressVal(b []byte) (txids []string, err error) {
-	for i := 0; i < len(b); i += transactionIDLen {
-		t, err := unpackTxid(b[i : i+transactionIDLen])
+	for i := 0; i < len(b); i += txidLen {
+		t, err := unpackTxid(b[i : i+txidLen])
 		if err != nil {
 			return nil, err
 		}
@@ -216,7 +216,7 @@ func (d *RocksDB) writeOutpoints(
 			if err != nil {
 				return err
 			}
-			v, err := packOutpointValue(vout.ScriptPubKey.Addresses)
+			v, err := packAddress(vout.GetAddress())
 			if err != nil {
 				return err
 			}
@@ -241,41 +241,24 @@ func packOutpointKey(txid string, vout uint32) (b []byte, err error) {
 	return
 }
 
-func packOutpointValue(addrs []string) (b []byte, err error) {
-	for _, addr := range addrs {
-		a, err := packAddress(addr)
-		if err != nil {
-			return nil, err
-		}
-		i := packVarint(uint32(len(a)))
-		b = append(b, i...)
-		b = append(b, a...)
-	}
-	return
-}
-
-func unpackOutpointValue(b []byte) (addrs []string, err error) {
-	r := bytes.NewReader(b)
-	for r.Len() > 0 {
-		alen, err := vlq.ReadUint(r)
-		if err != nil {
-			return nil, err
-		}
-		abuf := make([]byte, alen)
-		_, err = r.Read(abuf)
-		if err != nil {
-			return nil, err
-		}
-		addr, err := unpackAddress(abuf)
-		if err != nil {
-			return nil, err
-		}
-		addrs = append(addrs, addr)
-	}
-	return
-}
-
 // Block index
+
+const (
+	lastBlockHash = 0x00
+)
+
+var (
+	lastBlockHashKey = []byte{lastBlockHash}
+)
+
+func (d *RocksDB) GetLastBlockHash() (string, error) {
+	v, err := d.db.Get(d.ro, lastBlockHashKey)
+	if err != nil {
+		return "", err
+	}
+	defer v.Free()
+	return unpackBlockValue(v.Data())
+}
 
 func (d *RocksDB) writeHeight(
 	wb *gorocksdb.WriteBatch,
@@ -288,12 +271,24 @@ func (d *RocksDB) writeHeight(
 		log.Printf("rocksdb: height put %d %s", block.Height, block.Hash)
 	}
 
-	bv, err := packBlockValue(block.Hash)
-	if err != nil {
-		return err
-	}
 	bk := packUint(block.Height)
-	wb.Put(bk, bv)
+
+	if delete {
+		bv, err := packBlockValue(block.Prev)
+		if err != nil {
+			return err
+		}
+		wb.Delete(bk)
+		wb.Put(lastBlockHashKey, bv)
+
+	} else {
+		bv, err := packBlockValue(block.Hash)
+		if err != nil {
+			return err
+		}
+		wb.Put(bk, bv)
+		wb.Put(lastBlockHashKey, bv)
+	}
 
 	return nil
 }
@@ -316,33 +311,41 @@ var (
 	ErrInvalidAddress = errors.New("invalid address")
 )
 
-func packAddress(s string) (b []byte, err error) {
+func packAddress(s string) ([]byte, error) {
+	var b []byte
+	if len(s) == 0 {
+		return b, nil
+	}
 	b = base58.Decode(s)
-	if len(b) > 4 {
-		b = b[:len(b)-4]
-	} else {
-		err = ErrInvalidAddress
+	if len(b) <= 4 {
+		return nil, ErrInvalidAddress
 	}
-	return
+	b = b[:len(b)-4] // Slice off the checksum
+	return b, nil
 }
 
-func unpackAddress(b []byte) (s string, err error) {
-	if len(b) > 1 {
-		s = base58.CheckEncode(b[1:], b[0])
-	} else {
-		err = ErrInvalidAddress
+func unpackAddress(b []byte) (string, error) {
+	if len(b) == 0 {
+		return "", nil
 	}
-	return
+	if len(b) == 1 {
+		return "", ErrInvalidAddress
+	}
+	return base58.CheckEncode(b[1:], b[0]), nil
 }
 
-func packTxid(s string) (b []byte, err error) {
+func packTxid(s string) ([]byte, error) {
 	return hex.DecodeString(s)
 }
 
-func unpackTxid(b []byte) (s string, err error) {
+func unpackTxid(b []byte) (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
 func packBlockValue(hash string) ([]byte, error) {
 	return hex.DecodeString(hash)
+}
+
+func unpackBlockValue(b []byte) (string, error) {
+	return hex.EncodeToString(b), nil
 }

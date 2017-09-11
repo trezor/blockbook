@@ -75,9 +75,7 @@ func (b *BitcoinRPC) GetBlockAndParse(hash string) (block *Block, err error) {
 	}
 	block, err = b.Parser.ParseBlock(data)
 	if err == nil {
-		block.Hash = header.Hash
-		block.Height = header.Height
-		block.Next = header.Next
+		block.BlockHeader = header
 	}
 	return
 }
@@ -117,6 +115,14 @@ func (b *BitcoinRPC) GetBlockHash(height uint32) (hash string, err error) {
 	return
 }
 
+// GetBlockHeader returns header of block with given hash.
+func (b *BitcoinRPC) GetBlockHeader(hash string) (header *BlockHeader, err error) {
+	log.Printf("rpc: getblockheader")
+	header = &BlockHeader{}
+	err = b.client.Call("getblockheader", &header, hash)
+	return
+}
+
 // GetTransaction returns the number of blocks in the longest chain.  If the
 // transaction cache is turned on, returned Tx.Confirmations is stale.
 func (b *BitcoinRPC) GetTransaction(txid string) (tx *Tx, err error) {
@@ -135,11 +141,10 @@ func (b *BitcoinRPC) GetTransaction(txid string) (tx *Tx, err error) {
 	return
 }
 
-// GetAddresses returns all unique addresses from given transaction output.
-func (b *BitcoinRPC) GetAddresses(txid string, vout uint32) ([]string, error) {
+func (b *BitcoinRPC) GetAddress(txid string, vout uint32) (string, error) {
 	tx, err := b.GetTransaction(txid)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	return tx.Vout[vout].ScriptPubKey.Addresses, nil
+	return tx.GetAddress(vout)
 }
