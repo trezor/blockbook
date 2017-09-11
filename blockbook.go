@@ -261,8 +261,16 @@ func connectBlock(
 	index Indexer,
 	hash string,
 ) error {
-	for hash != "" {
-		block, err := blocks.GetBlock(hash)
+	bch := make(chan blockResult, 8)
+	done := make(chan struct{})
+	defer close(done)
+
+	go getBlockChain(hash, blocks, bch, done)
+
+	for res := range bch {
+		err := res.err
+		block := res.block
+
 		if err != nil {
 			return err
 		}
@@ -273,8 +281,6 @@ func connectBlock(
 		if err := index.ConnectBlock(block, addrs); err != nil {
 			return err
 		}
-
-		hash = block.Next
 	}
 
 	return nil
@@ -344,5 +350,29 @@ func getBlockRange(
 		hash = block.Next
 		height = block.Height + 1
 		results <- blockResult{block: block}
+	}
+}
+
+func getBlockChain(
+	hash string,
+	blocks Blocks,
+	out chan blockResult,
+	done chan struct{},
+) {
+	defer close(out)
+
+	for hash != "" {
+		select {
+		case <-done:
+			return
+		default:
+		}
+		block, err := blocks.GetBlock(hash)
+		if err != nil {
+			out <- blockResult{err: err}
+			return
+		}
+		hash = block.Next
+		out <- blockResult{block: block}
 	}
 }
