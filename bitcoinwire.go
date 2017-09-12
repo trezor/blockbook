@@ -37,31 +37,20 @@ func (p *BitcoinBlockParser) parseOutputScript(b []byte) ([]string, error) {
 func (p *BitcoinBlockParser) ParseBlock(b []byte) (*Block, error) {
 	w := wire.MsgBlock{}
 	r := bytes.NewReader(b)
-	if err := w.DeserializeNoWitness(r); err != nil {
+
+	if err := w.Deserialize(r); err != nil {
 		return nil, err
 	}
 
-	block := &Block{
-		Txs: make([]*Tx, len(w.Transactions)),
-	}
+	txs := make([]Tx, len(w.Transactions))
 	for ti, t := range w.Transactions {
-		tx := &Tx{
-			Txid:     t.TxHash().String(),
-			Version:  t.Version,
-			LockTime: t.LockTime,
-			Vin:      make([]Vin, len(t.TxIn)),
-			Vout:     make([]Vout, len(t.TxOut)),
-			// missing: BlockHash,
-			// missing: Confirmations,
-			// missing: Time,
-			// missing: Blocktime,
-		}
+		vin := make([]Vin, len(t.TxIn))
 		for i, in := range t.TxIn {
 			s := ScriptSig{
 				Hex: hex.EncodeToString(in.SignatureScript),
 				// missing: Asm,
 			}
-			tx.Vin[i] = Vin{
+			vin[i] = Vin{
 				Coinbase:  "_",
 				Txid:      in.PreviousOutPoint.Hash.String(),
 				Vout:      in.PreviousOutPoint.Index,
@@ -69,6 +58,7 @@ func (p *BitcoinBlockParser) ParseBlock(b []byte) (*Block, error) {
 				ScriptSig: s,
 			}
 		}
+		vout := make([]Vout, len(t.TxOut))
 		for i, out := range t.TxOut {
 			addrs, err := p.parseOutputScript(out.PkScript)
 			if err != nil {
@@ -80,14 +70,24 @@ func (p *BitcoinBlockParser) ParseBlock(b []byte) (*Block, error) {
 				// missing: Asm,
 				// missing: Type,
 			}
-			tx.Vout[i] = Vout{
+			vout[i] = Vout{
 				Value:        float64(out.Value),
 				N:            uint32(i),
 				ScriptPubKey: s,
 			}
 		}
-		block.Txs[ti] = tx
+		txs[ti] = Tx{
+			Txid:     t.TxHash().String(),
+			Version:  t.Version,
+			LockTime: t.LockTime,
+			Vin:      vin,
+			Vout:     vout,
+			// missing: BlockHash,
+			// missing: Confirmations,
+			// missing: Time,
+			// missing: Blocktime,
+		}
 	}
 
-	return block, nil
+	return &Block{Txs: txs}, nil
 }
