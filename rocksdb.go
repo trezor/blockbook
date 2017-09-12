@@ -38,7 +38,8 @@ func NewRocksDB(path string) (d *RocksDB, err error) {
 	opts := gorocksdb.NewDefaultOptions()
 	opts.SetBlockBasedTableFactory(bbto)
 	opts.SetCreateIfMissing(true)
-	opts.SetMaxBackgroundCompactions(4)
+	opts.SetMaxBackgroundCompactions(8)
+	opts.SetWriteBufferSize(2 * 1024 * 1024 * 1024) // 2 gb
 
 	db, err := gorocksdb.OpenDb(opts, path)
 	if err != nil {
