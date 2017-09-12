@@ -137,10 +137,19 @@ var (
 	queryAddress = flag.String("address", "", "query contents of this address")
 
 	resync = flag.Bool("resync", false, "resync until tip")
+
+	repair = flag.Bool("repair", false, "repair the database")
 )
 
 func main() {
 	flag.Parse()
+
+	if *repair {
+		if err := RepairRocksDB(*dbPath); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
 
 	timeout := time.Duration(*rpcTimeout) * time.Second
 	rpc := NewBitcoinRPC(*rpcURL, *rpcUser, *rpcPass, timeout)

@@ -13,6 +13,12 @@ import (
 	"github.com/tecbot/gorocksdb"
 )
 
+func RepairRocksDB(name string) error {
+	log.Printf("rocksdb: repair")
+	opts := gorocksdb.NewDefaultOptions()
+	return gorocksdb.RepairDb(name, opts)
+}
+
 type RocksDB struct {
 	db *gorocksdb.DB
 	wo *gorocksdb.WriteOptions
