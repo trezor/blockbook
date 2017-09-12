@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"flag"
 	"log"
 	"time"
@@ -10,10 +9,6 @@ import (
 type BlockParser interface {
 	ParseBlock(b []byte) (*Block, error)
 }
-
-var (
-	ErrNotFound = errors.New("not found")
-)
 
 type Blocks interface {
 	GetBestBlockHash() (string, error)
@@ -24,8 +19,8 @@ type Blocks interface {
 
 type Outpoints interface {
 	// GetAddress looks up a transaction output and returns its address.
-	// ErrNotFound is returned if the output is not found.  Address can be
-	// empty string in case it's not intelligable.
+	// Address can be empty string in case it's not found or not
+	// intelligable.
 	GetAddress(txid string, vout uint32) (string, error)
 }
 
@@ -77,49 +72,43 @@ func (b *Block) GetTxAddresses(outpoints Outpoints, tx *Tx) (map[string]struct{}
 		// Lookup output in in the outpoint index.  In case it's not
 		// found, take a look in this block.
 		a, err := outpoints.GetAddress(i.Txid, i.Vout)
-		if err == ErrNotFound {
-			a, err = b.GetAddress(i.Txid, i.Vout)
-		}
 		if err != nil {
 			return nil, err
 		}
+		if a == "" {
+			a = b.GetAddress(i.Txid, i.Vout)
+		}
 		if a != "" {
 			addrs[a] = struct{}{}
+		} else {
+			log.Printf("warn: output not found: %s:%d", i.Txid, i.Vout)
 		}
 	}
 
 	return addrs, nil
 }
 
-func (b *Block) GetAddress(txid string, vout uint32) (string, error) {
-	var t *Tx
+func (b *Block) GetAddress(txid string, vout uint32) string {
 	for i, _ := range b.Txs {
 		if b.Txs[i].Txid == txid {
-			t = &b.Txs[i]
-			break
+			return b.Txs[i].GetAddress(vout)
 		}
 	}
-	if t == nil {
-		// Transaction output was not found.
-		return "", ErrNotFound
-	}
-	return t.GetAddress(vout)
+	return "" // tx not found
 }
 
-func (t *Tx) GetAddress(vout uint32) (string, error) {
-	if vout >= uint32(len(t.Vout)) {
-		// The output doesn't exist.
-		return "", ErrNotFound
+func (t *Tx) GetAddress(vout uint32) string {
+	if vout < uint32(len(t.Vout)) {
+		return t.Vout[vout].GetAddress()
 	}
-	return t.Vout[vout].GetAddress(), nil
+	return "" // output not found
 }
 
 func (o *Vout) GetAddress() string {
-	if len(o.ScriptPubKey.Addresses) != 1 {
-		// The output address is not intelligible.
-		return ""
+	if len(o.ScriptPubKey.Addresses) == 1 {
+		return o.ScriptPubKey.Addresses[0]
 	}
-	return o.ScriptPubKey.Addresses[0]
+	return "" // output address not intelligible
 }
 
 var (

@@ -71,9 +71,6 @@ func (d *RocksDB) GetAddress(txid string, vout uint32) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if v.Size() == 0 {
-		return "", ErrNotFound
-	}
 	defer v.Free()
 	return unpackAddress(v.Data())
 }
@@ -268,9 +265,6 @@ func (d *RocksDB) GetLastBlockHash() (string, error) {
 		return "", err
 	}
 	defer v.Free()
-	if v.Size() == 0 {
-		return "", ErrNotFound
-	}
 	return unpackBlockValue(v.Data())
 }
 

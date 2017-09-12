@@ -299,7 +299,7 @@ func (b *BitcoinRPC) GetAddress(txid string, vout uint32) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return tx.GetAddress(vout)
+	return tx.GetAddress(vout), nil
 }
 
 func (b *BitcoinRPC) call(req interface{}, res interface{}) error {
