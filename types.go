@@ -40,8 +40,12 @@ type Tx struct {
 
 type Block struct {
 	BlockHeader
+	Txs []Tx `json:"tx"`
+}
+
+type ThinBlock struct {
+	BlockHeader
 	Txids []string `json:"tx"`
-	Txs   []*Tx    `json:"_"`
 }
 
 type BlockHeader struct {

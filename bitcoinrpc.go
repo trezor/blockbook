@@ -70,16 +70,21 @@ type cmdGetBlock struct {
 	Method string `json:"method"`
 	Params struct {
 		BlockHash string `json:"blockhash"`
-		Verbose   bool   `json:"verbose"`
+		Verbosity int    `json:"verbosity"`
 	} `json:"params"`
 }
 
-type resGetBlock struct {
+type resGetBlockRaw struct {
 	Error  *RPCError `json:"error"`
 	Result string    `json:"result"`
 }
 
-type resGetBlockVerbose struct {
+type resGetBlockThin struct {
+	Error  *RPCError `json:"error"`
+	Result ThinBlock `json:"result"`
+}
+
+type resGetBlockFull struct {
 	Error  *RPCError `json:"error"`
 	Result Block     `json:"result"`
 }
@@ -180,7 +185,7 @@ func (b *BitcoinRPC) GetBlockHeader(hash string) (*BlockHeader, error) {
 // GetBlock returns block with given hash.
 func (b *BitcoinRPC) GetBlock(hash string) (*Block, error) {
 	if b.Parser == nil {
-		return b.GetBlockVerbose(hash)
+		return b.GetBlockFull(hash)
 	}
 	header, err := b.GetBlockHeader(hash)
 	if err != nil {
@@ -200,12 +205,12 @@ func (b *BitcoinRPC) GetBlock(hash string) (*Block, error) {
 
 // GetBlockRaw returns block with given hash as bytes.
 func (b *BitcoinRPC) GetBlockRaw(hash string) ([]byte, error) {
-	log.Printf("rpc: getblock (verbose=false) %v", hash)
+	log.Printf("rpc: getblock (verbosity=0) %v", hash)
 
-	res := resGetBlock{}
+	res := resGetBlockRaw{}
 	req := cmdGetBlock{Method: "getblock"}
 	req.Params.BlockHash = hash
-	req.Params.Verbose = false
+	req.Params.Verbosity = 0
 	err := b.call(&req, &res)
 
 	if err != nil {
@@ -217,15 +222,15 @@ func (b *BitcoinRPC) GetBlockRaw(hash string) ([]byte, error) {
 	return hex.DecodeString(res.Result)
 }
 
-// GetBlockVerbose returns block with given hash by downloading block
+// GetBlockList returns block with given hash by downloading block
 // transactions one by one.
-func (b *BitcoinRPC) GetBlockVerbose(hash string) (*Block, error) {
-	log.Printf("rpc: getblock (verbose=true) %v", hash)
+func (b *BitcoinRPC) GetBlockList(hash string) (*Block, error) {
+	log.Printf("rpc: getblock (verbosity=1) %v", hash)
 
-	res := resGetBlockVerbose{}
+	res := resGetBlockThin{}
 	req := cmdGetBlock{Method: "getblock"}
 	req.Params.BlockHash = hash
-	req.Params.Verbose = true
+	req.Params.Verbosity = 1
 	err := b.call(&req, &res)
 
 	if err != nil {
@@ -235,12 +240,36 @@ func (b *BitcoinRPC) GetBlockVerbose(hash string) (*Block, error) {
 		return nil, res.Error
 	}
 
-	for _, txid := range res.Result.Txids {
+	txs := make([]Tx, len(res.Result.Txids))
+	for i, txid := range res.Result.Txids {
 		tx, err := b.GetTransaction(txid)
 		if err != nil {
 			return nil, err
 		}
-		res.Result.Txs = append(res.Result.Txs, tx)
+		txs[i] = *tx
+	}
+	block := &Block{
+		BlockHeader: res.Result.BlockHeader,
+		Txs:         txs,
+	}
+	return block, nil
+}
+
+// GetBlockFull returns block with given hash.
+func (b *BitcoinRPC) GetBlockFull(hash string) (*Block, error) {
+	log.Printf("rpc: getblock (verbosity=2) %v", hash)
+
+	res := resGetBlockFull{}
+	req := cmdGetBlock{Method: "getblock"}
+	req.Params.BlockHash = hash
+	req.Params.Verbosity = 2
+	err := b.call(&req, &res)
+
+	if err != nil {
+		return nil, err
+	}
+	if res.Error != nil {
+		return nil, res.Error
 	}
 	return &res.Result, nil
 }

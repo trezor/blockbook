@@ -42,7 +42,8 @@ type Indexer interface {
 func (b *Block) GetAllAddresses(outpoints Outpoints) (map[string][]string, error) {
 	addrs := make(map[string][]string, 0) // Address to a list of txids.
 
-	for _, tx := range b.Txs {
+	for i, _ := range b.Txs {
+		tx := &b.Txs[i]
 		ta, err := b.GetTxAddresses(outpoints, tx)
 		if err != nil {
 			return nil, err
@@ -92,9 +93,9 @@ func (b *Block) GetTxAddresses(outpoints Outpoints, tx *Tx) (map[string]struct{}
 
 func (b *Block) GetAddress(txid string, vout uint32) (string, error) {
 	var t *Tx
-	for _, tx := range b.Txs {
-		if tx.Txid == txid {
-			t = tx
+	for i, _ := range b.Txs {
+		if b.Txs[i].Txid == txid {
+			t = &b.Txs[i]
 			break
 		}
 	}
@@ -122,8 +123,6 @@ func (o *Vout) GetAddress() string {
 }
 
 var (
-	chain = flag.String("chain", "mainnet", "none | mainnet | regtest | testnet3 | simnet")
-
 	rpcURL     = flag.String("rpcurl", "http://localhost:8332", "url of bitcoin RPC service")
 	rpcUser    = flag.String("rpcuser", "rpc", "rpc username")
 	rpcPass    = flag.String("rpcpass", "rpc", "rpc password")
@@ -153,22 +152,17 @@ func main() {
 	timeout := time.Duration(*rpcTimeout) * time.Second
 	rpc := NewBitcoinRPC(*rpcURL, *rpcUser, *rpcPass, timeout)
 
-	if *chain != "none" {
-		for _, p := range GetChainParams() {
-			if p.Name == *chain {
-				rpc.Parser = &BitcoinBlockParser{Params: p}
-			}
-		}
-		if rpc.Parser == nil {
-			log.Fatal("unknown chain")
-		}
-	}
-
 	db, err := NewRocksDB(*dbPath)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer db.Close()
+
+	if *resync {
+		if err := resyncIndex(rpc, db, db); err != nil {
+			log.Fatal(err)
+		}
+	}
 
 	if *blockHeight >= 0 {
 		if *blockUntil < 0 {
@@ -186,12 +180,6 @@ func main() {
 			if err = connectBlockRange(rpc, db, db, height, until); err != nil {
 				log.Fatal(err)
 			}
-		}
-	}
-
-	if *resync {
-		if err := resyncIndex(rpc, db, db); err != nil {
-			log.Fatal(err)
 		}
 	}
 }
