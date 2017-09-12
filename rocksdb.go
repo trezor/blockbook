@@ -62,7 +62,8 @@ func (d *RocksDB) Close() error {
 }
 
 func (d *RocksDB) GetAddress(txid string, vout uint32) (string, error) {
-	log.Printf("rocksdb: outpoint get %s:%d", txid, vout)
+	// log.Printf("rocksdb: outpoint get %s:%d", txid, vout)
+
 	k, err := packOutpointKey(txid, vout)
 	if err != nil {
 		return "", err
