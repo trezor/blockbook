@@ -128,7 +128,6 @@ var (
 	rpcUser    = flag.String("rpcuser", "rpc", "rpc username")
 	rpcPass    = flag.String("rpcpass", "rpc", "rpc password")
 	rpcTimeout = flag.Uint("rpctimeout", 25, "rpc timeout in seconds")
-	rpcCache   = flag.Int("rpccache", 50000, "number to tx replies to cache")
 
 	dbPath = flag.String("path", "./data", "path to address index directory")
 
@@ -153,9 +152,6 @@ func main() {
 
 	timeout := time.Duration(*rpcTimeout) * time.Second
 	rpc := NewBitcoinRPC(*rpcURL, *rpcUser, *rpcPass, timeout)
-	if *rpcCache > 0 {
-		rpc.EnableCache(*rpcCache)
-	}
 
 	if *chain != "none" {
 		for _, p := range GetChainParams() {
@@ -243,7 +239,7 @@ func resyncIndex(
 	header, err := blocks.GetBlockHeader(last)
 	forked := false
 	if err != nil {
-		if e, ok := err.(*cmdError); ok && e.Message == "Block not found" {
+		if e, ok := err.(*RPCError); ok && e.Message == "Block not found" {
 			forked = true
 		} else {
 			return err

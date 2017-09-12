@@ -1,150 +1,292 @@
 package main
 
 import (
+	"bytes"
 	"encoding/hex"
+	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
-
-	lru "github.com/hashicorp/golang-lru"
 )
+
+type RPCError struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+}
+
+func (e *RPCError) Error() string {
+	return fmt.Sprintf("%d: %s", e.Code, e.Message)
+}
+
+// getblockhash
+
+type cmdGetBlockHash struct {
+	Method string `json:"method"`
+	Params struct {
+		Height uint32 `json:"height"`
+	} `json:"params"`
+}
+
+type resGetBlockHash struct {
+	Error  *RPCError `json:"error"`
+	Result string    `json:"result"`
+}
+
+// getbestblockhash
+
+type cmdGetBestBlockHash struct {
+	Method string `json:"method"`
+}
+
+type resGetBestBlockHash struct {
+	Error  *RPCError `json:"error"`
+	Result string    `json:"result"`
+}
+
+// getblockheader
+
+type cmdGetBlockHeader struct {
+	Method string `json:"method"`
+	Params struct {
+		BlockHash string `json:"blockhash"`
+		Verbose   bool   `json:"verbose"`
+	} `json:"params"`
+}
+
+type resGetBlockHeaderRaw struct {
+	Error  *RPCError `json:"error"`
+	Result string    `json:"result"`
+}
+
+type resGetBlockHeaderVerbose struct {
+	Error  *RPCError   `json:"error"`
+	Result BlockHeader `json:"result"`
+}
+
+// getblock
+
+type cmdGetBlock struct {
+	Method string `json:"method"`
+	Params struct {
+		BlockHash string `json:"blockhash"`
+		Verbose   bool   `json:"verbose"`
+	} `json:"params"`
+}
+
+type resGetBlock struct {
+	Error  *RPCError `json:"error"`
+	Result string    `json:"result"`
+}
+
+type resGetBlockVerbose struct {
+	Error  *RPCError `json:"error"`
+	Result Block     `json:"result"`
+}
+
+// getrawtransaction
+
+type cmdGetRawTransaction struct {
+	Method string `json:"method"`
+	Params struct {
+		Txid    string `json:"txid"`
+		Verbose bool   `json:"verbose"`
+	} `json:"params"`
+}
+
+type resGetRawTransactionRaw struct {
+	Error  *RPCError `json:"error"`
+	Result string    `json:"result"`
+}
+
+type resGetRawTransactionVerbose struct {
+	Error  *RPCError `json:"error"`
+	Result Tx        `json:"result"`
+}
 
 // BitcoinRPC is an interface to JSON-RPC bitcoind service.
 type BitcoinRPC struct {
-	client  JSONRPC
-	Parser  BlockParser
-	txCache *lru.Cache
+	client   http.Client
+	URL      string
+	User     string
+	Password string
+	Parser   BlockParser
 }
 
 // NewBitcoinRPC returns new BitcoinRPC instance.
 func NewBitcoinRPC(url string, user string, password string, timeout time.Duration) *BitcoinRPC {
 	return &BitcoinRPC{
-		client: JSONRPC{
-			Client:   http.Client{Timeout: timeout},
-			URL:      url,
-			User:     user,
-			Password: password,
-		},
+		client:   http.Client{Timeout: timeout},
+		URL:      url,
+		User:     user,
+		Password: password,
 	}
 }
 
-// EnableCache turns on LRU caching for transaction lookups.
-func (b *BitcoinRPC) EnableCache(size int) error {
-	c, err := lru.New(size)
+// GetBestBlockHash returns hash of the tip of the best-block-chain.
+func (b *BitcoinRPC) GetBestBlockHash() (string, error) {
+	log.Printf("rpc: getbestblockhash")
+
+	res := resGetBestBlockHash{}
+	req := cmdGetBestBlockHash{Method: "getbestblockhash"}
+	err := b.call(&req, &res)
+
 	if err != nil {
-		return err
+		return "", err
 	}
-	b.txCache = c
-	return nil
+	if res.Error != nil {
+		return "", res.Error
+	}
+	return res.Result, nil
 }
 
-// ClearCache purges the cache used for transaction results.
-func (b *BitcoinRPC) ClearCache() {
-	if b.txCache != nil {
-		b.txCache.Purge()
+// GetBlockHash returns hash of block in best-block-chain at given height.
+func (b *BitcoinRPC) GetBlockHash(height uint32) (string, error) {
+	log.Printf("rpc: getblockhash %v", height)
+
+	res := resGetBlockHash{}
+	req := cmdGetBlockHash{Method: "getblockhash"}
+	req.Params.Height = height
+	err := b.call(&req, &res)
+
+	if err != nil {
+		return "", err
 	}
+	if res.Error != nil {
+		return "", res.Error
+	}
+	return res.Result, nil
 }
 
-// GetBlock returns information about the block with the given hash.
-func (b *BitcoinRPC) GetBlock(hash string) (block *Block, err error) {
-	if b.Parser != nil {
-		return b.GetBlockAndParse(hash)
-	} else {
-		return b.GetParsedBlock(hash)
+// GetBlockHeader returns header of block with given hash.
+func (b *BitcoinRPC) GetBlockHeader(hash string) (*BlockHeader, error) {
+	log.Printf("rpc: getblockheader")
+
+	res := resGetBlockHeaderVerbose{}
+	req := cmdGetBlockHeader{Method: "getblockheader"}
+	req.Params.BlockHash = hash
+	req.Params.Verbose = true
+	err := b.call(&req, &res)
+
+	if err != nil {
+		return nil, err
 	}
+	if res.Error != nil {
+		return nil, res.Error
+	}
+	return &res.Result, nil
 }
 
-// GetBlockAndParse returns information about the block with the given hash.
-//
-// It downloads raw block and parses it in-process.
-func (b *BitcoinRPC) GetBlockAndParse(hash string) (block *Block, err error) {
+// GetBlock returns block with given hash.
+func (b *BitcoinRPC) GetBlock(hash string) (*Block, error) {
+	if b.Parser == nil {
+		return b.GetBlockVerbose(hash)
+	}
+	header, err := b.GetBlockHeader(hash)
+	if err != nil {
+		return nil, err
+	}
+	data, err := b.GetBlockRaw(hash)
+	if err != nil {
+		return nil, err
+	}
+	block, err := b.Parser.ParseBlock(data)
+	if err != nil {
+		return nil, err
+	}
+	block.BlockHeader = *header
+	return block, nil
+}
+
+// GetBlockRaw returns block with given hash as bytes.
+func (b *BitcoinRPC) GetBlockRaw(hash string) ([]byte, error) {
 	log.Printf("rpc: getblock (verbose=false) %v", hash)
-	var header BlockHeader
-	err = b.client.Call("getblockheader", &header, hash)
+
+	res := resGetBlock{}
+	req := cmdGetBlock{Method: "getblock"}
+	req.Params.BlockHash = hash
+	req.Params.Verbose = false
+	err := b.call(&req, &res)
+
 	if err != nil {
-		return
+		return nil, err
 	}
-	var raw string
-	err = b.client.Call("getblock", &raw, hash, false) // verbose=false
-	if err != nil {
-		return
+	if res.Error != nil {
+		return nil, res.Error
 	}
-	data, err := hex.DecodeString(raw)
-	if err != nil {
-		return
-	}
-	block, err = b.Parser.ParseBlock(data)
-	if err == nil {
-		block.BlockHeader = header
-	}
-	return
+	return hex.DecodeString(res.Result)
 }
 
-// GetParsedBlock returns information about the block with the given hash.
-//
-// It downloads parsed block with transaction IDs and then looks them up,
-// one by one.
-func (b *BitcoinRPC) GetParsedBlock(hash string) (block *Block, err error) {
+// GetBlockVerbose returns block with given hash by downloading block
+// transactions one by one.
+func (b *BitcoinRPC) GetBlockVerbose(hash string) (*Block, error) {
 	log.Printf("rpc: getblock (verbose=true) %v", hash)
-	block = &Block{}
-	err = b.client.Call("getblock", block, hash, true) // verbose=true
+
+	res := resGetBlockVerbose{}
+	req := cmdGetBlock{Method: "getblock"}
+	req.Params.BlockHash = hash
+	req.Params.Verbose = true
+	err := b.call(&req, &res)
+
 	if err != nil {
-		return
+		return nil, err
 	}
-	for _, txid := range block.Txids {
+	if res.Error != nil {
+		return nil, res.Error
+	}
+
+	for _, txid := range res.Result.Txids {
 		tx, err := b.GetTransaction(txid)
 		if err != nil {
 			return nil, err
 		}
-		block.Txs = append(block.Txs, tx)
+		res.Result.Txs = append(res.Result.Txs, tx)
 	}
-	return
+	return &res.Result, nil
 }
 
-// GetBestBlockHash returns hash of the tip of the best-block-chain.
-func (b *BitcoinRPC) GetBestBlockHash() (hash string, err error) {
-	log.Printf("rpc: getbestblockhash")
-	err = b.client.Call("getbestblockhash", &hash)
-	return
-}
-
-// GetBlockHash returns hash of block in best-block-chain at given height.
-func (b *BitcoinRPC) GetBlockHash(height uint32) (hash string, err error) {
-	log.Printf("rpc: getblockhash %v", height)
-	err = b.client.Call("getblockhash", &hash, height)
-	return
-}
-
-// GetBlockHeader returns header of block with given hash.
-func (b *BitcoinRPC) GetBlockHeader(hash string) (header *BlockHeader, err error) {
-	log.Printf("rpc: getblockheader")
-	header = &BlockHeader{}
-	err = b.client.Call("getblockheader", &header, hash)
-	return
-}
-
-// GetTransaction returns the number of blocks in the longest chain.  If the
-// transaction cache is turned on, returned Tx.Confirmations is stale.
-func (b *BitcoinRPC) GetTransaction(txid string) (tx *Tx, err error) {
-	if b.txCache != nil {
-		if cachedTx, ok := b.txCache.Get(txid); ok {
-			tx = cachedTx.(*Tx)
-			return
-		}
-	}
+// GetTransaction returns a transaction by the transaction ID.
+func (b *BitcoinRPC) GetTransaction(txid string) (*Tx, error) {
 	log.Printf("rpc: getrawtransaction %v", txid)
-	tx = &Tx{}
-	err = b.client.Call("getrawtransaction", tx, txid, true) // verbose = true
-	if b.txCache != nil {
-		b.txCache.Add(txid, tx)
+
+	res := resGetRawTransactionVerbose{}
+	req := cmdGetRawTransaction{Method: "getrawtransaction"}
+	req.Params.Txid = txid
+	req.Params.Verbose = true
+	err := b.call(&req, &res)
+
+	if err != nil {
+		return nil, err
 	}
-	return
+	if res.Error != nil {
+		return nil, res.Error
+	}
+	return &res.Result, nil
 }
 
+// GetAddress returns address of transaction output.
 func (b *BitcoinRPC) GetAddress(txid string, vout uint32) (string, error) {
 	tx, err := b.GetTransaction(txid)
 	if err != nil {
 		return "", err
 	}
 	return tx.GetAddress(vout)
+}
+
+func (b *BitcoinRPC) call(req interface{}, res interface{}) error {
+	httpData, err := json.Marshal(req)
+	if err != nil {
+		return err
+	}
+	httpReq, err := http.NewRequest("POST", b.URL, bytes.NewBuffer(httpData))
+	if err != nil {
+		return err
+	}
+	httpReq.SetBasicAuth(b.User, b.Password)
+	httpRes, err := b.client.Do(httpReq)
+	if err != nil {
+		return err
+	}
+	defer httpRes.Body.Close()
+	return json.NewDecoder(httpRes.Body).Decode(&res)
 }
