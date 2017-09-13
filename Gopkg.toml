@@ -40,3 +40,7 @@
 [[constraint]]
   branch = "master"
   name = "github.com/tecbot/gorocksdb"
+
+[[constraint]]
+  name = "github.com/pkg/profile"
+  version = "1.2.1"

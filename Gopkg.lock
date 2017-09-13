@@ -26,6 +26,12 @@
   revision = "501929d3d046174c3d39f0ea54ece471aa17238c"
 
 [[projects]]
+  name = "github.com/pkg/profile"
+  packages = ["."]
+  revision = "5b67d428864e92711fcbd2f8629456121a56d91f"
+  version = "v1.2.1"
+
+[[projects]]
   branch = "master"
   name = "github.com/tecbot/gorocksdb"
   packages = ["."]
@@ -40,6 +46,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "07980ae9893c6e67b266e97e50329139ccf005f5b425117cd5d0d5590e8ca541"
+  inputs-digest = "119cb8683257687e541ae944d0f3a29aa916bb81dcedd6a69a0f765fd8f1be9d"
   solver-name = "gps-cdcl"
   solver-version = 1

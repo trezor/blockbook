@@ -4,6 +4,8 @@ import (
 	"flag"
 	"log"
 	"time"
+
+	"github.com/pkg/profile"
 )
 
 type BlockParser interface {
@@ -124,12 +126,16 @@ var (
 	queryAddress = flag.String("address", "", "query contents of this address")
 
 	resync = flag.Bool("resync", false, "resync until tip")
-
 	repair = flag.Bool("repair", false, "repair the database")
+	prof   = flag.Bool("prof", false, "profile program execution")
 )
 
 func main() {
 	flag.Parse()
+
+	if *prof {
+		defer profile.Start().Stop()
+	}
 
 	if *repair {
 		if err := RepairRocksDB(*dbPath); err != nil {
