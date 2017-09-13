@@ -32,14 +32,18 @@ func NewRocksDB(path string) (d *RocksDB, err error) {
 
 	fp := gorocksdb.NewBloomFilter(10)
 	bbto := gorocksdb.NewDefaultBlockBasedTableOptions()
-	bbto.SetBlockCache(gorocksdb.NewLRUCache(3 << 30))
+	bbto.SetBlockSize(16 << 10)                        // 16kb
+	bbto.SetBlockCache(gorocksdb.NewLRUCache(8 << 30)) // 8 gb
 	bbto.SetFilterPolicy(fp)
 
 	opts := gorocksdb.NewDefaultOptions()
 	opts.SetBlockBasedTableFactory(bbto)
 	opts.SetCreateIfMissing(true)
-	opts.SetMaxBackgroundCompactions(8)
-	opts.SetWriteBufferSize(2 * 1024 * 1024 * 1024) // 2 gb
+	opts.SetMaxBackgroundCompactions(4)
+	opts.SetMaxBackgroundFlushes(2)
+	opts.SetBytesPerSync(1 << 20)    // 1mb
+	opts.SetWriteBufferSize(2 << 30) // 2 gb
+	opts.SetMaxOpenFiles(25000)
 
 	db, err := gorocksdb.OpenDb(opts, path)
 	if err != nil {
