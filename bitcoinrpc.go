@@ -3,12 +3,11 @@ package main
 import (
 	"bytes"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"time"
-
-	jsoniter "github.com/json-iterator/go"
 )
 
 type RPCError struct {
@@ -304,7 +303,7 @@ func (b *BitcoinRPC) GetAddress(txid string, vout uint32) (string, error) {
 }
 
 func (b *BitcoinRPC) call(req interface{}, res interface{}) error {
-	httpData, err := jsoniter.Marshal(req)
+	httpData, err := json.Marshal(req)
 	if err != nil {
 		return err
 	}
@@ -318,5 +317,5 @@ func (b *BitcoinRPC) call(req interface{}, res interface{}) error {
 		return err
 	}
 	defer httpRes.Body.Close()
-	return jsoniter.NewDecoder(httpRes.Body).Decode(res)
+	return json.NewDecoder(httpRes.Body).Decode(&res)
 }

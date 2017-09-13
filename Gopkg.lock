@@ -26,10 +26,10 @@
   revision = "501929d3d046174c3d39f0ea54ece471aa17238c"
 
 [[projects]]
-  name = "github.com/json-iterator/go"
-  packages = ["."]
-  revision = "36b14963da70d11297d313183d7e6388c8510e1e"
-  version = "1.0.0"
+  branch = "master"
+  name = "github.com/hashicorp/golang-lru"
+  packages = [".","simplelru"]
+  revision = "0a025b7e63adc15a622f29b0b2c4c3848243bbf6"
 
 [[projects]]
   branch = "master"
@@ -46,6 +46,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "827d405fafae0abd3b872001a1c24ad4e89a6302acd15d6eb1f3a5dfc6b18cdd"
+  inputs-digest = "3bb30a1d65e170c9b0f282efa56af8096dc74f149744743dddd27f26e1880612"
   solver-name = "gps-cdcl"
   solver-version = 1

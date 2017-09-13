@@ -40,7 +40,3 @@
 [[constraint]]
   branch = "master"
   name = "github.com/tecbot/gorocksdb"
-
-[[constraint]]
-  name = "github.com/json-iterator/go"
-  version = "1.0.0"
