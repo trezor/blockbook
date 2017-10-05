@@ -117,6 +117,13 @@ func (d *RocksDB) writeBlock(block *Block, op int) error {
 	wb := gorocksdb.NewWriteBatch()
 	defer wb.Destroy()
 
+	switch op {
+	case opInsert:
+		log.Printf("rocksdb: insert %d %s", block.Height, block.Hash)
+	case opDelete:
+		log.Printf("rocksdb: delete %d %s", block.Height, block.Hash)
+	}
+
 	if err := d.writeHeight(wb, block, op); err != nil {
 		return err
 	}
@@ -142,13 +149,6 @@ func (d *RocksDB) writeOutputs(
 	block *Block,
 	op int,
 ) error {
-	switch op {
-	case opInsert:
-		log.Printf("rocksdb: outputs insert %d %s", block.Height, block.Hash)
-	case opDelete:
-		log.Printf("rocksdb: outputs delete %d %s", block.Height, block.Hash)
-	}
-
 	records := make(map[string][]outpoint)
 
 	for _, tx := range block.Txs {
@@ -159,8 +159,6 @@ func (d *RocksDB) writeOutputs(
 					txid: tx.Txid,
 					vout: output.N,
 				})
-			} else {
-				log.Printf("rocksdb: skipping %s:%d", tx.Txid, output.N)
 			}
 		}
 	}
@@ -234,13 +232,6 @@ func (d *RocksDB) writeInputs(
 	block *Block,
 	op int,
 ) error {
-	switch op {
-	case opInsert:
-		log.Printf("rocksdb: inputs insert %d %s", block.Height, block.Hash)
-	case opDelete:
-		log.Printf("rocksdb: inputs delete %d %s", block.Height, block.Hash)
-	}
-
 	for _, tx := range block.Txs {
 		for i, input := range tx.Vin {
 			key, err := packOutpoint(input.Txid, input.Vout)
@@ -295,13 +286,6 @@ func (d *RocksDB) writeHeight(
 	block *Block,
 	op int,
 ) error {
-	switch op {
-	case opInsert:
-		log.Printf("rocksdb: height put %d %s", block.Height, block.Hash)
-	case opDelete:
-		log.Printf("rocksdb: height delete %d %s", block.Height, block.Hash)
-	}
-
 	key := packUint(block.Height)
 
 	switch op {
