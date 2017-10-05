@@ -293,15 +293,6 @@ func (b *BitcoinRPC) GetTransaction(txid string) (*Tx, error) {
 	return &res.Result, nil
 }
 
-// GetAddress returns address of transaction output.
-func (b *BitcoinRPC) GetAddress(txid string, vout uint32) (string, error) {
-	tx, err := b.GetTransaction(txid)
-	if err != nil {
-		return "", err
-	}
-	return tx.GetAddress(vout), nil
-}
-
 func (b *BitcoinRPC) call(req interface{}, res interface{}) error {
 	httpData, err := json.Marshal(req)
 	if err != nil {

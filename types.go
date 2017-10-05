@@ -26,6 +26,13 @@ type Vout struct {
 	ScriptPubKey ScriptPubKey `json:"scriptPubKey"`
 }
 
+func (vout *Vout) GetAddress() string {
+	if len(vout.ScriptPubKey.Addresses) != 1 {
+		return "" // output address not intelligible
+	}
+	return vout.ScriptPubKey.Addresses[0]
+}
+
 type Tx struct {
 	Txid          string `json:"txid"`
 	Version       int32  `json:"version"`

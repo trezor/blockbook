@@ -66,29 +66,14 @@ func (d *RocksDB) Close() error {
 	return nil
 }
 
-func (d *RocksDB) GetAddress(txid string, vout uint32) (string, error) {
-	// log.Printf("rocksdb: outpoint get %s:%d", txid, vout)
-
-	k, err := packOutpointKey(txid, vout)
-	if err != nil {
-		return "", err
-	}
-	v, err := d.db.Get(d.ro, k)
-	if err != nil {
-		return "", err
-	}
-	defer v.Free()
-	return unpackAddress(v.Data())
-}
-
-func (d *RocksDB) GetTransactions(address string, lower uint32, higher uint32, fn func(txids []string) error) (err error) {
+func (d *RocksDB) GetTransactions(address string, lower uint32, higher uint32, fn func(txid string) error) (err error) {
 	log.Printf("rocksdb: address get %d:%d %s", lower, higher, address)
 
-	kstart, err := packAddressKey(lower, address)
+	kstart, err := packOutputKey(address, lower)
 	if err != nil {
 		return err
 	}
-	kstop, err := packAddressKey(higher, address)
+	kstop, err := packOutputKey(address, higher)
 	if err != nil {
 		return err
 	}
@@ -97,211 +82,237 @@ func (d *RocksDB) GetTransactions(address string, lower uint32, higher uint32, f
 	defer it.Close()
 
 	for it.Seek(kstart); it.Valid(); it.Next() {
-		k := it.Key()
-		v := it.Value()
-		if bytes.Compare(k.Data(), kstop) > 0 {
+		key := it.Key()
+		val := it.Value()
+		if bytes.Compare(key.Data(), kstop) > 0 {
 			break
 		}
-		txids, err := unpackAddressVal(v.Data())
+		outpoints, err := unpackOutputValue(val.Data())
 		if err != nil {
 			return err
 		}
-		if err := fn(txids); err != nil {
-			return err
+		for _, o := range outpoints {
+			if err := fn(o.txid); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
 }
 
-func (d *RocksDB) ConnectBlock(block *Block, txids map[string][]string) error {
-	return d.writeBlock(block, txids, false /* delete */)
+const (
+	opInsert = 0
+	opDelete = 1
+)
+
+func (d *RocksDB) ConnectBlock(block *Block) error {
+	return d.writeBlock(block, opInsert)
 }
 
-func (d *RocksDB) DisconnectBlock(block *Block, txids map[string][]string) error {
-	return d.writeBlock(block, txids, true /* delete */)
+func (d *RocksDB) DisconnectBlock(block *Block) error {
+	return d.writeBlock(block, opDelete)
 }
 
-func (d *RocksDB) writeBlock(
-	block *Block,
-	txids map[string][]string,
-	delete bool,
-) error {
+func (d *RocksDB) writeBlock(block *Block, op int) error {
 	wb := gorocksdb.NewWriteBatch()
 	defer wb.Destroy()
 
-	if err := d.writeHeight(wb, block, delete); err != nil {
+	if err := d.writeHeight(wb, block, op); err != nil {
 		return err
 	}
-	if err := d.writeOutpoints(wb, block, delete); err != nil {
+	if err := d.writeOutputs(wb, block, op); err != nil {
 		return err
 	}
-	if err := d.writeAddresses(wb, block, txids, delete); err != nil {
+	if err := d.writeInputs(wb, block, op); err != nil {
 		return err
 	}
 
 	return d.db.Write(d.wo, wb)
 }
 
-// Address Index
+// Output Index
 
-func (d *RocksDB) writeAddresses(
+type outpoint struct {
+	txid string
+	vout uint32
+}
+
+func (d *RocksDB) writeOutputs(
 	wb *gorocksdb.WriteBatch,
 	block *Block,
-	txids map[string][]string,
-	delete bool,
+	op int,
 ) error {
-	if delete {
-		log.Printf("rocksdb: address delete %d in %d %s", len(txids), block.Height, block.Hash)
-	} else {
-		log.Printf("rocksdb: address put %d in %d %s", len(txids), block.Height, block.Hash)
+	switch op {
+	case opInsert:
+		log.Printf("rocksdb: outputs insert %d %s", block.Height, block.Hash)
+	case opDelete:
+		log.Printf("rocksdb: outputs delete %d %s", block.Height, block.Hash)
 	}
 
-	for addr, txids := range txids {
-		k, err := packAddressKey(block.Height, addr)
-		if err != nil {
-			return err
-		}
-		v, err := packAddressVal(txids)
-		if err != nil {
-			return err
-		}
-		if delete {
-			wb.Delete(k)
-		} else {
-			wb.Put(k, v)
-		}
-
-	}
-	return nil
-}
-
-func packAddressKey(height uint32, address string) (b []byte, err error) {
-	b, err = packAddress(address)
-	if err != nil {
-		return
-	}
-	h := packUint(height)
-	b = append(b, h...)
-	return
-}
-
-func packAddressVal(txids []string) (b []byte, err error) {
-	for _, txid := range txids {
-		t, err := packTxid(txid)
-		if err != nil {
-			return nil, err
-		}
-		b = append(b, t...)
-	}
-	return
-}
-
-const txidLen = 32
-
-func unpackAddressVal(b []byte) (txids []string, err error) {
-	for i := 0; i < len(b); i += txidLen {
-		t, err := unpackTxid(b[i : i+txidLen])
-		if err != nil {
-			return nil, err
-		}
-		txids = append(txids, t)
-	}
-	return
-}
-
-// Outpoint index
-
-func (d *RocksDB) writeOutpoints(
-	wb *gorocksdb.WriteBatch,
-	block *Block,
-	delete bool,
-) error {
-	if delete {
-		log.Printf("rocksdb: outpoints delete %d in %d %s", len(block.Txs), block.Height, block.Hash)
-	} else {
-		log.Printf("rocksdb: outpoints put %d in %d %s", len(block.Txs), block.Height, block.Hash)
-	}
+	records := make(map[string][]outpoint)
 
 	for _, tx := range block.Txs {
-		for _, vout := range tx.Vout {
-			k, err := packOutpointKey(tx.Txid, vout.N)
-			if err != nil {
-				return err
-			}
-			v, err := packAddress(vout.GetAddress())
-			if err != nil {
-				return err
-			}
-			if delete {
-				wb.Delete(k)
+		for _, output := range tx.Vout {
+			address := output.GetAddress()
+			if address != "" {
+				records[address] = append(records[address], outpoint{
+					txid: tx.Txid,
+					vout: output.N,
+				})
 			} else {
-				if len(v) > 0 {
-					wb.Put(k, v)
-				}
+				log.Printf("rocksdb: skipping %s:%d", tx.Txid, output.N)
 			}
 		}
 	}
+
+	for address, outpoints := range records {
+		key, err := packOutputKey(address, block.Height)
+		if err != nil {
+			return err
+		}
+		val, err := packOutputValue(outpoints)
+
+		switch op {
+		case opInsert:
+			wb.Put(key, val)
+		case opDelete:
+			wb.Delete(key)
+		}
+	}
+
 	return nil
 }
 
-func packOutpointKey(txid string, vout uint32) (b []byte, err error) {
-	t, err := packTxid(txid)
+func packOutputKey(address string, height uint32) ([]byte, error) {
+	baddress, err := packAddress(address)
 	if err != nil {
 		return nil, err
 	}
-	v := packVarint(vout)
-	b = append(b, t...)
-	b = append(b, v...)
-	return
+	bheight := packUint(height)
+	buf := make([]byte, 0, len(baddress)+len(bheight))
+	buf = append(buf, baddress...)
+	buf = append(buf, bheight...)
+	return buf, nil
+}
+
+func packOutputValue(outpoints []outpoint) ([]byte, error) {
+	buf := make([]byte, 0)
+	for _, o := range outpoints {
+		btxid, err := packTxid(o.txid)
+		if err != nil {
+			return nil, err
+		}
+		bvout := packVaruint(o.vout)
+		buf = append(buf, btxid...)
+		buf = append(buf, bvout...)
+	}
+	return buf, nil
+}
+
+func unpackOutputValue(buf []byte) ([]outpoint, error) {
+	outpoints := make([]outpoint, 0)
+	for i := 0; i < len(buf); {
+		txid, err := unpackTxid(buf[i : i+txIdUnpackedLen])
+		if err != nil {
+			return nil, err
+		}
+		i += txIdUnpackedLen
+		vout, voutLen := unpackVaruint(buf[i:])
+		i += voutLen
+		outpoints = append(outpoints, outpoint{
+			txid: txid,
+			vout: vout,
+		})
+	}
+	return outpoints, nil
+}
+
+// Input index
+
+func (d *RocksDB) writeInputs(
+	wb *gorocksdb.WriteBatch,
+	block *Block,
+	op int,
+) error {
+	switch op {
+	case opInsert:
+		log.Printf("rocksdb: inputs insert %d %s", block.Height, block.Hash)
+	case opDelete:
+		log.Printf("rocksdb: inputs delete %d %s", block.Height, block.Hash)
+	}
+
+	for _, tx := range block.Txs {
+		for i, input := range tx.Vin {
+			key, err := packOutpoint(input.Txid, input.Vout)
+			if err != nil {
+				return err
+			}
+			val, err := packOutpoint(tx.Txid, uint32(i))
+			if err != nil {
+				return err
+			}
+			switch op {
+			case opInsert:
+				wb.Put(key, val)
+			case opDelete:
+				wb.Delete(key)
+			}
+		}
+	}
+	return nil
+}
+
+func packOutpoint(txid string, vout uint32) ([]byte, error) {
+	btxid, err := packTxid(txid)
+	if err != nil {
+		return nil, err
+	}
+	bvout := packVaruint(vout)
+	buf := make([]byte, 0, len(btxid)+len(bvout))
+	buf = append(buf, btxid...)
+	buf = append(buf, bvout...)
+	return buf, nil
 }
 
 // Block index
 
-const (
-	lastBlockHash = 0x00
-)
+func (d *RocksDB) GetBestBlockHash() (string, error) {
+	return "", nil // TODO
+}
 
-var (
-	lastBlockHashKey = []byte{lastBlockHash}
-)
-
-func (d *RocksDB) GetLastBlockHash() (string, error) {
-	v, err := d.db.Get(d.ro, lastBlockHashKey)
+func (d *RocksDB) GetBlockHash(height uint32) (string, error) {
+	key := packUint(height)
+	val, err := d.db.Get(d.ro, key)
 	if err != nil {
 		return "", err
 	}
-	defer v.Free()
-	return unpackBlockValue(v.Data())
+	defer val.Free()
+	return unpackBlockValue(val.Data())
 }
 
 func (d *RocksDB) writeHeight(
 	wb *gorocksdb.WriteBatch,
 	block *Block,
-	delete bool,
+	op int,
 ) error {
-	if delete {
-		log.Printf("rocksdb: height delete %d %s", block.Height, block.Hash)
-	} else {
+	switch op {
+	case opInsert:
 		log.Printf("rocksdb: height put %d %s", block.Height, block.Hash)
+	case opDelete:
+		log.Printf("rocksdb: height delete %d %s", block.Height, block.Hash)
 	}
 
-	bk := packUint(block.Height)
+	key := packUint(block.Height)
 
-	if delete {
-		bv, err := packBlockValue(block.Prev)
+	switch op {
+	case opInsert:
+		val, err := packBlockValue(block.Hash)
 		if err != nil {
 			return err
 		}
-		wb.Delete(bk)
-		wb.Put(lastBlockHashKey, bv)
-
-	} else {
-		bv, err := packBlockValue(block.Hash)
-		if err != nil {
-			return err
-		}
-		wb.Put(bk, bv)
-		wb.Put(lastBlockHashKey, bv)
+		wb.Put(key, val)
+	case opDelete:
+		wb.Delete(key)
 	}
 
 	return nil
@@ -309,57 +320,54 @@ func (d *RocksDB) writeHeight(
 
 // Helpers
 
+const txIdUnpackedLen = 32
+
+var ErrInvalidAddress = errors.New("invalid address")
+
 func packUint(i uint32) []byte {
-	b := make([]byte, 4)
-	binary.BigEndian.PutUint32(b, i)
-	return b
+	buf := make([]byte, 4)
+	binary.BigEndian.PutUint32(buf, i)
+	return buf
 }
 
-func packVarint(i uint32) []byte {
-	b := make([]byte, vlq.MaxLen32)
-	n := vlq.PutUint(b, uint64(i))
-	return b[:n]
+func packVaruint(i uint32) []byte {
+	buf := make([]byte, vlq.MaxLen32)
+	ofs := vlq.PutUint(buf, uint64(i))
+	return buf[:ofs]
 }
 
-var (
-	ErrInvalidAddress = errors.New("invalid address")
-)
+func unpackVaruint(buf []byte) (uint32, int) {
+	i, ofs := vlq.Uint(buf)
+	return uint32(i), ofs
+}
 
-func packAddress(s string) ([]byte, error) {
-	var b []byte
-	if len(s) == 0 {
-		return b, nil
-	}
-	b = base58.Decode(s)
-	if len(b) <= 4 {
+func packAddress(address string) ([]byte, error) {
+	buf := base58.Decode(address)
+	if len(buf) <= 4 {
 		return nil, ErrInvalidAddress
 	}
-	b = b[:len(b)-4] // Slice off the checksum
-	return b, nil
+	return buf[:len(buf)-4], nil // Slice off the checksum
 }
 
-func unpackAddress(b []byte) (string, error) {
-	if len(b) == 0 {
-		return "", nil
-	}
-	if len(b) == 1 {
+func unpackAddress(buf []byte) (string, error) {
+	if len(buf) < 2 {
 		return "", ErrInvalidAddress
 	}
-	return base58.CheckEncode(b[1:], b[0]), nil
+	return base58.CheckEncode(buf[1:], buf[0]), nil
 }
 
-func packTxid(s string) ([]byte, error) {
-	return hex.DecodeString(s)
+func packTxid(txid string) ([]byte, error) {
+	return hex.DecodeString(txid)
 }
 
-func unpackTxid(b []byte) (string, error) {
-	return hex.EncodeToString(b), nil
+func unpackTxid(buf []byte) (string, error) {
+	return hex.EncodeToString(buf), nil
 }
 
 func packBlockValue(hash string) ([]byte, error) {
 	return hex.DecodeString(hash)
 }
 
-func unpackBlockValue(b []byte) (string, error) {
-	return hex.EncodeToString(b), nil
+func unpackBlockValue(buf []byte) (string, error) {
+	return hex.EncodeToString(buf), nil
 }

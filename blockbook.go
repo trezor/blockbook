@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/pkg/profile"
@@ -12,105 +13,19 @@ type BlockParser interface {
 	ParseBlock(b []byte) (*Block, error)
 }
 
-type Blocks interface {
+type Blockchain interface {
 	GetBestBlockHash() (string, error)
 	GetBlockHash(height uint32) (string, error)
 	GetBlockHeader(hash string) (*BlockHeader, error)
 	GetBlock(hash string) (*Block, error)
 }
 
-type Outpoints interface {
-	// GetAddress looks up a transaction output and returns its address.
-	// Address can be empty string in case it's not found or not
-	// intelligable.
-	GetAddress(txid string, vout uint32) (string, error)
-}
-
-type Addresses interface {
-	GetTransactions(address string, lower uint32, higher uint32, fn func(txids []string) error) error
-}
-
-type Indexer interface {
-	ConnectBlock(block *Block, txids map[string][]string) error
-	DisconnectBlock(block *Block, txids map[string][]string) error
-	GetLastBlockHash() (string, error)
-}
-
-func (b *Block) GetAllAddresses(outpoints Outpoints) (map[string][]string, error) {
-	addrs := make(map[string][]string, 0) // Address to a list of txids.
-
-	for i, _ := range b.Txs {
-		tx := &b.Txs[i]
-		ta, err := b.GetTxAddresses(outpoints, tx)
-		if err != nil {
-			return nil, err
-		}
-		for a, _ := range ta {
-			addrs[a] = append(addrs[a], tx.Txid)
-		}
-	}
-
-	return addrs, nil
-}
-
-func (b *Block) GetTxAddresses(outpoints Outpoints, tx *Tx) (map[string]struct{}, error) {
-	addrs := make(map[string]struct{}) // Only unique values.
-
-	// Process outputs.
-	for _, o := range tx.Vout {
-		a := o.GetAddress()
-		if a != "" {
-			addrs[a] = struct{}{}
-		}
-	}
-
-	// Process inputs.  For each input, we need to take a look to the
-	// outpoint index.
-	for _, i := range tx.Vin {
-		if i.Coinbase != "" {
-			continue
-		}
-
-		// Lookup output in in the outpoint index.  In case it's not
-		// found, take a look in this block.
-		a, err := outpoints.GetAddress(i.Txid, i.Vout)
-		if err != nil {
-			return nil, err
-		}
-		if a == "" {
-			a = b.GetAddress(i.Txid, i.Vout)
-		}
-		if a != "" {
-			addrs[a] = struct{}{}
-		} else {
-			log.Printf("warn: output not found: %s:%d", i.Txid, i.Vout)
-		}
-	}
-
-	return addrs, nil
-}
-
-func (b *Block) GetAddress(txid string, vout uint32) string {
-	for i, _ := range b.Txs {
-		if b.Txs[i].Txid == txid {
-			return b.Txs[i].GetAddress(vout)
-		}
-	}
-	return "" // tx not found
-}
-
-func (t *Tx) GetAddress(vout uint32) string {
-	if vout < uint32(len(t.Vout)) {
-		return t.Vout[vout].GetAddress()
-	}
-	return "" // output not found
-}
-
-func (o *Vout) GetAddress() string {
-	if len(o.ScriptPubKey.Addresses) == 1 {
-		return o.ScriptPubKey.Addresses[0]
-	}
-	return "" // output address not intelligible
+type Index interface {
+	GetBestBlockHash() (string, error)
+	GetBlockHash(height uint32) (string, error)
+	GetTransactions(address string, lower uint32, higher uint32, fn func(txid string) error) error
+	ConnectBlock(block *Block) error
+	DisconnectBlock(block *Block) error
 }
 
 var (
@@ -121,8 +36,9 @@ var (
 
 	dbPath = flag.String("path", "./data", "path to address index directory")
 
-	blockHeight  = flag.Int("blockheight", -1, "height of the starting block")
-	blockUntil   = flag.Int("blockuntil", -1, "height of the final block")
+	blockHeight = flag.Int("blockheight", -1, "height of the starting block")
+	blockUntil  = flag.Int("blockuntil", -1, "height of the final block")
+
 	queryAddress = flag.String("address", "", "query contents of this address")
 
 	resync = flag.Bool("resync", false, "resync until tip")
@@ -133,10 +49,6 @@ var (
 func main() {
 	flag.Parse()
 
-	if *prof {
-		defer profile.Start().Stop()
-	}
-
 	if *repair {
 		if err := RepairRocksDB(*dbPath); err != nil {
 			log.Fatal(err)
@@ -144,8 +56,15 @@ func main() {
 		return
 	}
 
-	timeout := time.Duration(*rpcTimeout) * time.Second
-	rpc := NewBitcoinRPC(*rpcURL, *rpcUser, *rpcPass, timeout)
+	if *prof {
+		defer profile.Start().Stop()
+	}
+
+	rpc := NewBitcoinRPC(
+		*rpcURL,
+		*rpcUser,
+		*rpcPass,
+		time.Duration(*rpcTimeout)*time.Second)
 
 	db, err := NewRocksDB(*dbPath)
 	if err != nil {
@@ -154,7 +73,7 @@ func main() {
 	defer db.Close()
 
 	if *resync {
-		if err := resyncIndex(rpc, db, db); err != nil {
+		if err := resyncIndex(rpc, db); err != nil {
 			log.Fatal(err)
 		}
 	}
@@ -172,54 +91,48 @@ func main() {
 				log.Fatal(err)
 			}
 		} else {
-			if err = connectBlockRange(rpc, db, db, height, until); err != nil {
+			if err = connectBlocksParallel(rpc, db, height, until); err != nil {
 				log.Fatal(err)
 			}
 		}
 	}
 }
 
-func printResult(txids []string) error {
-	for i, txid := range txids {
-		log.Printf("%d: %s", i, txid)
-	}
+func printResult(txid string) error {
+	log.Printf("%s", txid)
 	return nil
 }
 
-func resyncIndex(
-	blocks Blocks,
-	outpoints Outpoints,
-	index Indexer,
-) error {
-	best, err := blocks.GetBestBlockHash()
+func resyncIndex(chain Blockchain, index Index) error {
+	remote, err := chain.GetBestBlockHash()
 	if err != nil {
 		return err
 	}
-	last, err := index.GetLastBlockHash()
+	local, err := index.GetBestBlockHash()
 	if err != nil {
-		last = ""
+		local = ""
 	}
 
 	// If the local block is missing, we're indexing from the genesis block.
-	if last == "" {
+	if local == "" {
 		log.Printf("resync: genesis")
 
-		hash, err := blocks.GetBlockHash(0)
+		hash, err := chain.GetBlockHash(0)
 		if err != nil {
 			return err
 		}
-		return connectBlock(blocks, outpoints, index, hash)
+		return connectBlock(chain, index, hash)
 	}
 
 	// If the locally indexed block is the same as the best block on the
 	// network, we're done.
-	if last == best {
-		log.Printf("resync: synced on %s", last)
+	if local == remote {
+		log.Printf("resync: synced on %s", local)
 		return nil
 	}
 
 	// Is local tip on the best chain?
-	header, err := blocks.GetBlockHeader(last)
+	header, err := chain.GetBlockHeader(local)
 	forked := false
 	if err != nil {
 		if e, ok := err.(*RPCError); ok && e.Message == "Block not found" {
@@ -236,37 +149,30 @@ func resyncIndex(
 	if forked {
 		log.Printf("resync: local is forked")
 		// TODO: resync after disconnecting
-		return disconnectBlock(blocks, outpoints, index, header.Hash)
+		return disconnectBlock(chain, index, header.Hash)
 	} else {
 		log.Printf("resync: local is behind")
-		return connectBlock(blocks, outpoints, index, header.Next)
+		return connectBlock(chain, index, header.Next)
 	}
 }
 
 func connectBlock(
-	blocks Blocks,
-	outpoints Outpoints,
-	index Indexer,
+	chain Blockchain,
+	index Index,
 	hash string,
 ) error {
 	bch := make(chan blockResult, 8)
 	done := make(chan struct{})
 	defer close(done)
 
-	go getBlockChain(hash, blocks, bch, done)
+	go getBlockChain(hash, chain, bch, done)
 
 	for res := range bch {
-		err := res.err
-		block := res.block
-
-		if err != nil {
-			return err
+		if res.err != nil {
+			return res.err
 		}
-		addrs, err := block.GetAllAddresses(outpoints)
+		err := index.ConnectBlock(res.block)
 		if err != nil {
-			return err
-		}
-		if err := index.ConnectBlock(block, addrs); err != nil {
 			return err
 		}
 	}
@@ -275,38 +181,100 @@ func connectBlock(
 }
 
 func disconnectBlock(
-	blocks Blocks,
-	outpoints Outpoints,
-	index Indexer,
+	chain Blockchain,
+	index Index,
 	hash string,
 ) error {
 	return nil
 }
 
-func connectBlockRange(
-	blocks Blocks,
-	outpoints Outpoints,
-	index Indexer,
+func connectBlocksParallel(
+	chain Blockchain,
+	index Index,
 	lower uint32,
 	higher uint32,
 ) error {
-	bch := make(chan blockResult, 3)
+	const chunkSize = 100
+	const numWorkers = 8
 
-	go getBlockRange(lower, higher, blocks, bch)
+	var wg sync.WaitGroup
 
-	for res := range bch {
-		if res.err != nil {
-			return res.err
+	work := func(i int) {
+		defer wg.Done()
+
+		offset := uint32(chunkSize * i)
+		stride := uint32(chunkSize * numWorkers)
+
+		for low := offset; low <= higher; low += stride {
+			high := low + chunkSize - 1
+			if high > higher {
+				high = higher
+			}
+			err := connectBlockChunk(chain, index, low, high)
+			if err != nil {
+				log.Fatal(err) // TODO
+			}
 		}
-		addrs, err := res.block.GetAllAddresses(outpoints)
+	}
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go work(i)
+	}
+	wg.Wait()
+
+	return nil
+}
+
+func connectBlockChunk(
+	chain Blockchain,
+	index Index,
+	lower uint32,
+	higher uint32,
+) error {
+	connected, err := isBlockConnected(chain, index, higher)
+	if err != nil || connected {
+		return err
+	}
+
+	height := lower
+	hash, err := chain.GetBlockHash(lower)
+	if err != nil {
+		return err
+	}
+
+	for height <= higher {
+		block, err := chain.GetBlock(hash)
 		if err != nil {
 			return err
 		}
-		if err := index.ConnectBlock(res.block, addrs); err != nil {
+		hash = block.Next
+		height = block.Height + 1
+		err = index.ConnectBlock(block)
+		if err != nil {
 			return err
 		}
 	}
+
 	return nil
+}
+
+func isBlockConnected(
+	chain Blockchain,
+	index Index,
+	height uint32,
+) (bool, error) {
+	local, err := index.GetBlockHash(height)
+	if err != nil {
+		return false, err
+	}
+	remote, err := chain.GetBlockHash(height)
+	if err != nil {
+		return false, err
+	}
+	if local != remote {
+		return false, nil
+	}
+	return true, nil
 }
 
 type blockResult struct {
@@ -314,36 +282,9 @@ type blockResult struct {
 	err   error
 }
 
-func getBlockRange(
-	lower uint32,
-	higher uint32,
-	blocks Blocks,
-	results chan<- blockResult,
-) {
-	defer close(results)
-
-	height := lower
-	hash, err := blocks.GetBlockHash(height)
-	if err != nil {
-		results <- blockResult{err: err}
-		return
-	}
-
-	for height <= higher {
-		block, err := blocks.GetBlock(hash)
-		if err != nil {
-			results <- blockResult{err: err}
-			return
-		}
-		hash = block.Next
-		height = block.Height + 1
-		results <- blockResult{block: block}
-	}
-}
-
 func getBlockChain(
 	hash string,
-	blocks Blocks,
+	chain Blockchain,
 	out chan blockResult,
 	done chan struct{},
 ) {
@@ -355,7 +296,7 @@ func getBlockChain(
 			return
 		default:
 		}
-		block, err := blocks.GetBlock(hash)
+		block, err := chain.GetBlock(hash)
 		if err != nil {
 			out <- blockResult{err: err}
 			return
