@@ -44,6 +44,10 @@ var (
 	resync = flag.Bool("resync", false, "resync until tip")
 	repair = flag.Bool("repair", false, "repair the database")
 	prof   = flag.Bool("prof", false, "profile program execution")
+
+	syncChunk   = flag.Int("chunk", 100, "block chunk size for processing")
+	syncWorkers = flag.Int("workers", 8, "number of workers to process blocks")
+	dryRun      = flag.Bool("dryrun", false, "do not index blocks, only download")
 )
 
 func main() {
@@ -91,7 +95,14 @@ func main() {
 				log.Fatal(err)
 			}
 		} else {
-			if err = connectBlocksParallel(rpc, db, height, until); err != nil {
+			if err = connectBlocksParallel(
+				rpc,
+				db,
+				height,
+				until,
+				*syncChunk,
+				*syncWorkers,
+			); err != nil {
 				log.Fatal(err)
 			}
 		}
@@ -193,10 +204,9 @@ func connectBlocksParallel(
 	index Index,
 	lower uint32,
 	higher uint32,
+	chunkSize int,
+	numWorkers int,
 ) error {
-	const chunkSize = 100
-	const numWorkers = 8
-
 	var wg sync.WaitGroup
 
 	work := func(i int) {
@@ -206,7 +216,7 @@ func connectBlocksParallel(
 		stride := uint32(chunkSize * numWorkers)
 
 		for low := offset; low <= higher; low += stride {
-			high := low + chunkSize - 1
+			high := low + uint32(chunkSize-1)
 			if high > higher {
 				high = higher
 			}
@@ -249,6 +259,9 @@ func connectBlockChunk(
 		}
 		hash = block.Next
 		height = block.Height + 1
+		if *dryRun {
+			continue
+		}
 		err = index.ConnectBlock(block)
 		if err != nil {
 			return err
