@@ -48,6 +48,7 @@ var (
 	syncChunk   = flag.Int("chunk", 100, "block chunk size for processing")
 	syncWorkers = flag.Int("workers", 8, "number of workers to process blocks")
 	dryRun      = flag.Bool("dryrun", false, "do not index blocks, only download")
+	parse       = flag.Bool("parse", false, "use in-process block parsing")
 )
 
 func main() {
@@ -69,6 +70,12 @@ func main() {
 		*rpcUser,
 		*rpcPass,
 		time.Duration(*rpcTimeout)*time.Second)
+
+	if *parse {
+		rpc.Parser = &BitcoinBlockParser{
+			Params: GetChainParams()[0],
+		}
+	}
 
 	db, err := NewRocksDB(*dbPath)
 	if err != nil {
