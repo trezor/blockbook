@@ -215,7 +215,7 @@ func connectBlocksParallel(
 		offset := uint32(chunkSize * i)
 		stride := uint32(chunkSize * numWorkers)
 
-		for low := offset; low <= higher; low += stride {
+		for low := lower + offset; low <= higher; low += stride {
 			high := low + uint32(chunkSize-1)
 			if high > higher {
 				high = higher
