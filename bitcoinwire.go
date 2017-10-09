@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/hex"
 
+	"github.com/btcsuite/btcd/blockchain"
+
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
@@ -46,12 +48,18 @@ func (p *BitcoinBlockParser) ParseBlock(b []byte) (*Block, error) {
 	for ti, t := range w.Transactions {
 		vin := make([]Vin, len(t.TxIn))
 		for i, in := range t.TxIn {
+			if blockchain.IsCoinBaseTx(t) {
+				vin[i] = Vin{
+					Coinbase: hex.EncodeToString(in.SignatureScript),
+					Sequence: in.Sequence,
+				}
+				break
+			}
 			s := ScriptSig{
 				Hex: hex.EncodeToString(in.SignatureScript),
 				// missing: Asm,
 			}
 			vin[i] = Vin{
-				Coinbase:  "_",
 				Txid:      in.PreviousOutPoint.Hash.String(),
 				Vout:      in.PreviousOutPoint.Index,
 				Sequence:  in.Sequence,
