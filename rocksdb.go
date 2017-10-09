@@ -166,9 +166,14 @@ func (d *RocksDB) writeOutputs(
 	for address, outpoints := range records {
 		key, err := packOutputKey(address, block.Height)
 		if err != nil {
-			return err
+			log.Printf("rocksdb: warning: %v", err)
+			continue
 		}
 		val, err := packOutputValue(outpoints)
+		if err != nil {
+			log.Printf("rocksdb: warning: %v", err)
+			continue
+		}
 
 		switch op {
 		case opInsert:
@@ -234,6 +239,9 @@ func (d *RocksDB) writeInputs(
 ) error {
 	for _, tx := range block.Txs {
 		for i, input := range tx.Vin {
+			if input.Coinbase != "" {
+				continue
+			}
 			key, err := packOutpoint(input.Txid, input.Vout)
 			if err != nil {
 				return err
