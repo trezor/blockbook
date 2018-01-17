@@ -2,3 +2,5 @@ vendor/
 data/
 blockbook
 notes.txt
+debug
+.vscode
