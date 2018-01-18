@@ -4,7 +4,7 @@ import (
 	"blockbook/db"
 	"context"
 	"encoding/json"
-	"fmt"
+	"log"
 	"net/http"
 	"os"
 
@@ -38,17 +38,17 @@ func New(db *db.RocksDB) (*HttpServer, error) {
 }
 
 func (s *HttpServer) Run() error {
-	fmt.Printf("http server starting on port %s", s.https.Addr)
+	log.Printf("http server starting on port %s", s.https.Addr)
 	return s.https.ListenAndServe()
 }
 
 func (s *HttpServer) Close() error {
-	fmt.Printf("http server closing")
+	log.Printf("http server closing")
 	return s.https.Close()
 }
 
 func (s *HttpServer) Shutdown(ctx context.Context) error {
-	fmt.Printf("http server shutdown")
+	log.Printf("http server shutdown")
 	return s.https.Shutdown(ctx)
 }
 

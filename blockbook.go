@@ -146,17 +146,17 @@ func waitForSignalAndShutdown(s *server.HttpServer, timeout time.Duration) {
 
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 
-	<-stop
+	sig := <-stop
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	log.Printf("\nShutdown with timeout: %s\n", timeout)
+	log.Printf("Shutdown %v", sig)
 
-	if err := s.Shutdown(ctx); err != nil {
-		log.Printf("Error: %v\n", err)
-	} else {
-		log.Println("Server stopped")
+	if s != nil {
+		if err := s.Shutdown(ctx); err != nil {
+			log.Printf("Error: %v", err)
+		}
 	}
 }
 
