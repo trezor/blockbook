@@ -6,12 +6,11 @@ import (
 	"sync"
 	"time"
 
+	"blockbook/db"
+	"blockbook/server"
+
 	"github.com/pkg/profile"
 )
-
-type BlockParser interface {
-	ParseBlock(b []byte) (*Block, error)
-}
 
 type Blockchain interface {
 	GetBestBlockHash() (string, error)
@@ -49,6 +48,8 @@ var (
 	syncWorkers = flag.Int("workers", 8, "number of workers to process blocks")
 	dryRun      = flag.Bool("dryrun", false, "do not index blocks, only download")
 	parse       = flag.Bool("parse", false, "use in-process block parsing")
+
+	httpServer = flag.Bool("http", true, "run http server (default true)")
 )
 
 func main() {
@@ -77,11 +78,22 @@ func main() {
 		}
 	}
 
-	db, err := NewRocksDB(*dbPath)
+	db, err := db.NewRocksDB(*dbPath)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer db.Close()
+
+	if *httpServer {
+		s, err := server.New(db)
+		if err != nil {
+			log.Fatalf("https: %s", err)
+		}
+		err = s.Run()
+		if err != nil {
+			log.Fatalf("https: %s", err)
+		}
+	}
 
 	if *resync {
 		if err := resyncIndex(rpc, db); err != nil {

@@ -1,4 +1,4 @@
-package main
+package bitcoin
 
 import (
 	"bytes"
@@ -107,6 +107,10 @@ type resGetRawTransactionRaw struct {
 type resGetRawTransactionVerbose struct {
 	Error  *RPCError `json:"error"`
 	Result Tx        `json:"result"`
+}
+
+type BlockParser interface {
+	ParseBlock(b []byte) (*Block, error)
 }
 
 // BitcoinRPC is an interface to JSON-RPC bitcoind service.

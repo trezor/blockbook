@@ -1,4 +1,4 @@
-package main
+package bitcoin
 
 type ScriptSig struct {
 	Asm string `json:"asm"`

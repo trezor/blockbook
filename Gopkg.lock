@@ -10,7 +10,7 @@
 [[projects]]
   branch = "master"
   name = "github.com/btcsuite/btcd"
-  packages = ["btcec","chaincfg","chaincfg/chainhash","txscript","wire"]
+  packages = ["blockchain","btcec","chaincfg","chaincfg/chainhash","database","txscript","wire"]
   revision = "a1d1ea70dd212a440beb9caa4b766a58d1ed0254"
 
 [[projects]]
@@ -24,6 +24,24 @@
   name = "github.com/btcsuite/btcutil"
   packages = [".","base58","bech32"]
   revision = "501929d3d046174c3d39f0ea54ece471aa17238c"
+
+[[projects]]
+  name = "github.com/gorilla/context"
+  packages = ["."]
+  revision = "1ea25387ff6f684839d82767c1733ff4d4d15d0a"
+  version = "v1.1"
+
+[[projects]]
+  name = "github.com/gorilla/handlers"
+  packages = ["."]
+  revision = "90663712d74cb411cbef281bc1e08c19d1a76145"
+  version = "v1.3.0"
+
+[[projects]]
+  name = "github.com/gorilla/mux"
+  packages = ["."]
+  revision = "53c1911da2b537f792e7cafcb446b05ffe33b996"
+  version = "v1.6.1"
 
 [[projects]]
   name = "github.com/pkg/profile"
@@ -46,6 +64,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "119cb8683257687e541ae944d0f3a29aa916bb81dcedd6a69a0f765fd8f1be9d"
+  inputs-digest = "b02ba452e22aa8fee86c7c5ba26ab49ca8f59d5541124eece5b5719c12adde9f"
   solver-name = "gps-cdcl"
   solver-version = 1

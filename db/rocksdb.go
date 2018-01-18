@@ -1,6 +1,7 @@
-package main
+package db
 
 import (
+	"blockbook/bitcoin"
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
@@ -105,15 +106,15 @@ const (
 	opDelete = 1
 )
 
-func (d *RocksDB) ConnectBlock(block *Block) error {
+func (d *RocksDB) ConnectBlock(block *bitcoin.Block) error {
 	return d.writeBlock(block, opInsert)
 }
 
-func (d *RocksDB) DisconnectBlock(block *Block) error {
+func (d *RocksDB) DisconnectBlock(block *bitcoin.Block) error {
 	return d.writeBlock(block, opDelete)
 }
 
-func (d *RocksDB) writeBlock(block *Block, op int) error {
+func (d *RocksDB) writeBlock(block *bitcoin.Block, op int) error {
 	wb := gorocksdb.NewWriteBatch()
 	defer wb.Destroy()
 
@@ -146,7 +147,7 @@ type outpoint struct {
 
 func (d *RocksDB) writeOutputs(
 	wb *gorocksdb.WriteBatch,
-	block *Block,
+	block *bitcoin.Block,
 	op int,
 ) error {
 	records := make(map[string][]outpoint)
@@ -234,7 +235,7 @@ func unpackOutputValue(buf []byte) ([]outpoint, error) {
 
 func (d *RocksDB) writeInputs(
 	wb *gorocksdb.WriteBatch,
-	block *Block,
+	block *bitcoin.Block,
 	op int,
 ) error {
 	for _, tx := range block.Txs {
@@ -291,7 +292,7 @@ func (d *RocksDB) GetBlockHash(height uint32) (string, error) {
 
 func (d *RocksDB) writeHeight(
 	wb *gorocksdb.WriteBatch,
-	block *Block,
+	block *bitcoin.Block,
 	op int,
 ) error {
 	key := packUint(block.Height)
