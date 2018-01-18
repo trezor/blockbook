@@ -2,6 +2,7 @@ package server
 
 import (
 	"blockbook/db"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -11,16 +12,16 @@ import (
 	"github.com/gorilla/mux"
 )
 
-type server struct {
+type HttpServer struct {
 	https *http.Server
 	db    *db.RocksDB
 }
 
-func New(db *db.RocksDB) (*server, error) {
+func New(db *db.RocksDB) (*HttpServer, error) {
 	https := &http.Server{
 		Addr: ":8333",
 	}
-	s := &server{
+	s := &HttpServer{
 		https: https,
 		db:    db,
 	}
@@ -36,22 +37,22 @@ func New(db *db.RocksDB) (*server, error) {
 	return s, nil
 }
 
-func (s *server) Run() error {
-	fmt.Printf("http server starting")
+func (s *HttpServer) Run() error {
+	fmt.Printf("http server starting on port %s", s.https.Addr)
 	return s.https.ListenAndServe()
 }
 
-func (s *server) Close() error {
+func (s *HttpServer) Close() error {
 	fmt.Printf("http server closing")
 	return s.https.Close()
 }
 
-func (s *server) Shutdown() error {
+func (s *HttpServer) Shutdown(ctx context.Context) error {
 	fmt.Printf("http server shutdown")
-	return s.https.Shutdown()
+	return s.https.Shutdown(ctx)
 }
 
-func (s *server) Info(w http.ResponseWriter, r *http.Request) {
+func (s *HttpServer) Info(w http.ResponseWriter, r *http.Request) {
 	type info struct {
 		Version string `json:"version"`
 	}

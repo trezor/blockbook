@@ -1,11 +1,16 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"log"
+	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 	"time"
 
+	"blockbook/bitcoin"
 	"blockbook/db"
 	"blockbook/server"
 
@@ -15,16 +20,16 @@ import (
 type Blockchain interface {
 	GetBestBlockHash() (string, error)
 	GetBlockHash(height uint32) (string, error)
-	GetBlockHeader(hash string) (*BlockHeader, error)
-	GetBlock(hash string) (*Block, error)
+	GetBlockHeader(hash string) (*bitcoin.BlockHeader, error)
+	GetBlock(hash string) (*bitcoin.Block, error)
 }
 
 type Index interface {
 	GetBestBlockHash() (string, error)
 	GetBlockHash(height uint32) (string, error)
 	GetTransactions(address string, lower uint32, higher uint32, fn func(txid string) error) error
-	ConnectBlock(block *Block) error
-	DisconnectBlock(block *Block) error
+	ConnectBlock(block *bitcoin.Block) error
+	DisconnectBlock(block *bitcoin.Block) error
 }
 
 var (
@@ -49,14 +54,14 @@ var (
 	dryRun      = flag.Bool("dryrun", false, "do not index blocks, only download")
 	parse       = flag.Bool("parse", false, "use in-process block parsing")
 
-	httpServer = flag.Bool("http", true, "run http server (default true)")
+	startHTTPServer = flag.Bool("httpserver", true, "run http server (default true)")
 )
 
 func main() {
 	flag.Parse()
 
 	if *repair {
-		if err := RepairRocksDB(*dbPath); err != nil {
+		if err := db.RepairRocksDB(*dbPath); err != nil {
 			log.Fatal(err)
 		}
 		return
@@ -66,15 +71,15 @@ func main() {
 		defer profile.Start().Stop()
 	}
 
-	rpc := NewBitcoinRPC(
+	rpc := bitcoin.NewBitcoinRPC(
 		*rpcURL,
 		*rpcUser,
 		*rpcPass,
 		time.Duration(*rpcTimeout)*time.Second)
 
 	if *parse {
-		rpc.Parser = &BitcoinBlockParser{
-			Params: GetChainParams()[0],
+		rpc.Parser = &bitcoin.BitcoinBlockParser{
+			Params: bitcoin.GetChainParams()[0],
 		}
 	}
 
@@ -84,15 +89,19 @@ func main() {
 	}
 	defer db.Close()
 
-	if *httpServer {
-		s, err := server.New(db)
+	var httpServer *server.HttpServer
+
+	if *startHTTPServer {
+		httpServer, err = server.New(db)
 		if err != nil {
 			log.Fatalf("https: %s", err)
 		}
-		err = s.Run()
-		if err != nil {
-			log.Fatalf("https: %s", err)
-		}
+		go func() {
+			err = httpServer.Run()
+			if err != nil {
+				log.Fatalf("https: %s", err)
+			}
+		}()
 	}
 
 	if *resync {
@@ -125,6 +134,29 @@ func main() {
 				log.Fatal(err)
 			}
 		}
+	}
+
+	if httpServer != nil {
+		waitForSignalAndShutdown(httpServer, 5*time.Second)
+	}
+}
+
+func waitForSignalAndShutdown(s *server.HttpServer, timeout time.Duration) {
+	stop := make(chan os.Signal, 1)
+
+	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
+
+	<-stop
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	log.Printf("\nShutdown with timeout: %s\n", timeout)
+
+	if err := s.Shutdown(ctx); err != nil {
+		log.Printf("Error: %v\n", err)
+	} else {
+		log.Println("Server stopped")
 	}
 }
 
@@ -165,7 +197,7 @@ func resyncIndex(chain Blockchain, index Index) error {
 	header, err := chain.GetBlockHeader(local)
 	forked := false
 	if err != nil {
-		if e, ok := err.(*RPCError); ok && e.Message == "Block not found" {
+		if e, ok := err.(*bitcoin.RPCError); ok && e.Message == "Block not found" {
 			forked = true
 		} else {
 			return err
@@ -310,7 +342,7 @@ func isBlockConnected(
 }
 
 type blockResult struct {
-	block *Block
+	block *bitcoin.Block
 	err   error
 }
 
