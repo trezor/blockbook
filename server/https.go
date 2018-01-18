@@ -19,9 +19,9 @@ type HttpServer struct {
 	db    *db.RocksDB
 }
 
-func New(db *db.RocksDB) (*HttpServer, error) {
+func New(httpServerBinding string, db *db.RocksDB) (*HttpServer, error) {
 	https := &http.Server{
-		Addr: ":8333",
+		Addr: httpServerBinding,
 	}
 	s := &HttpServer{
 		https: https,
@@ -43,7 +43,7 @@ func New(db *db.RocksDB) (*HttpServer, error) {
 
 // Run starts the server
 func (s *HttpServer) Run() error {
-	log.Printf("http server starting on port %s", s.https.Addr)
+	log.Printf("http server starting to listen on %s", s.https.Addr)
 	return s.https.ListenAndServe()
 }
 

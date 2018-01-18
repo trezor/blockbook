@@ -54,7 +54,7 @@ var (
 	dryRun      = flag.Bool("dryrun", false, "do not index blocks, only download")
 	parse       = flag.Bool("parse", false, "use in-process block parsing")
 
-	startHTTPServer = flag.Bool("httpserver", true, "run http server (default true)")
+	httpServerBinding = flag.String("httpserver", "nil", "http server binding [address]:port, by default no http server")
 )
 
 func main() {
@@ -91,8 +91,8 @@ func main() {
 
 	var httpServer *server.HttpServer
 
-	if *startHTTPServer {
-		httpServer, err = server.New(db)
+	if *httpServerBinding != "nil" {
+		httpServer, err = server.New(*httpServerBinding, db)
 		if err != nil {
 			log.Fatalf("https: %s", err)
 		}
