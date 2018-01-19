@@ -54,11 +54,18 @@ var (
 	dryRun      = flag.Bool("dryrun", false, "do not index blocks, only download")
 	parse       = flag.Bool("parse", false, "use in-process block parsing")
 
-	httpServerBinding = flag.String("httpserver", "nil", "http server binding [address]:port, by default no http server")
+	httpServerBinding = flag.String("httpserver", "nil", "http server binding [address]:port, if missing no http server")
+
+	zeroMQBinding = flag.String("zeromq", "nil", "binding to zeromq, if missing no zeromq connection")
 )
 
 func main() {
 	flag.Parse()
+
+	if *zeroMQBinding != "nil" {
+		bitcoin.ZeroMQ(*zeroMQBinding)
+		return
+	}
 
 	if *repair {
 		if err := db.RepairRocksDB(*dbPath); err != nil {

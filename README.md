@@ -26,6 +26,13 @@ CGO_LDFLAGS="-L/path/to/rocksdb -lrocksdb -lstdc++ -lm -lz -lbz2 -lsnappy -llz4 
   go get github.com/tecbot/gorocksdb
 ```
 
+Install ZeroMQ: https://github.com/zeromq/libzmq
+
+Install Go interface to ZeroMQ:
+```
+go get github.com/pebbe/zmq4
+```
+
 Install blockbook:
 
 ```
