@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/hex"
 	"flag"
 	"log"
 	"os"
@@ -62,9 +63,8 @@ var (
 func main() {
 	flag.Parse()
 
-	if *zeroMQBinding != "nil" {
-		bitcoin.ZeroMQ(*zeroMQBinding)
-		return
+	if *prof {
+		defer profile.Start().Stop()
 	}
 
 	if *repair {
@@ -72,10 +72,6 @@ func main() {
 			log.Fatal(err)
 		}
 		return
-	}
-
-	if *prof {
-		defer profile.Start().Stop()
 	}
 
 	rpc := bitcoin.NewBitcoinRPC(
@@ -101,14 +97,22 @@ func main() {
 	if *httpServerBinding != "nil" {
 		httpServer, err = server.New(*httpServerBinding, db)
 		if err != nil {
-			log.Fatalf("https: %s", err)
+			log.Fatalf("https: %v", err)
 		}
 		go func() {
 			err = httpServer.Run()
 			if err != nil {
-				log.Fatalf("https: %s", err)
+				log.Fatalf("https: %v", err)
 			}
 		}()
+	}
+
+	var mq *bitcoin.MQ
+	if *zeroMQBinding != "nil" {
+		mq, err = bitcoin.New(*zeroMQBinding, mqHandler)
+		if err != nil {
+			log.Fatalf("mq: %v", err)
+		}
 	}
 
 	if *resync {
@@ -144,27 +148,38 @@ func main() {
 	}
 
 	if httpServer != nil {
-		waitForSignalAndShutdown(httpServer, 5*time.Second)
+		waitForSignalAndShutdown(httpServer, mq, 5*time.Second)
 	}
 }
 
-func waitForSignalAndShutdown(s *server.HttpServer, timeout time.Duration) {
-	stop := make(chan os.Signal, 1)
+func mqHandler(m *bitcoin.MQMessage) {
+	body := hex.EncodeToString(m.Body)
+	log.Printf("MQ: %s-%d  %s", m.Topic, m.Sequence, body)
+}
 
-	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
+func waitForSignalAndShutdown(s *server.HttpServer, mq *bitcoin.MQ, timeout time.Duration) {
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 
 	sig := <-stop
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	log.Printf("Shutdown %v", sig)
+	log.Printf("Shutdown with reason: %v", sig)
+
+	if mq != nil {
+		if err := mq.Shutdown(); err != nil {
+			log.Printf("MQ.Shutdown error: %v", err)
+		}
+	}
 
 	if s != nil {
 		if err := s.Shutdown(ctx); err != nil {
-			log.Printf("Error: %v", err)
+			log.Printf("HttpServer.Shutdown error: %v", err)
 		}
 	}
+
 }
 
 func printResult(txid string) error {
