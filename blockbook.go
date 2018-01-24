@@ -26,7 +26,7 @@ type Blockchain interface {
 }
 
 type Index interface {
-	GetBestBlockHash() (string, error)
+	GetBestBlock() (uint32, string, error)
 	GetBlockHash(height uint32) (string, error)
 	GetTransactions(address string, lower uint32, higher uint32, fn func(txid string) error) error
 	ConnectBlock(block *bitcoin.Block) error
@@ -192,7 +192,7 @@ func resyncIndex(chain Blockchain, index Index) error {
 	if err != nil {
 		return err
 	}
-	local, err := index.GetBestBlockHash()
+	_, local, err := index.GetBestBlock()
 	if err != nil {
 		local = ""
 	}

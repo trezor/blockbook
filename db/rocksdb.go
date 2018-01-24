@@ -20,6 +20,7 @@ func RepairRocksDB(name string) error {
 	return gorocksdb.RepairDb(name, opts)
 }
 
+// RocksDB handle
 type RocksDB struct {
 	db  *gorocksdb.DB
 	wo  *gorocksdb.WriteOptions
@@ -292,10 +293,20 @@ func packOutpoint(txid string, vout uint32) ([]byte, error) {
 
 // Block index
 
-func (d *RocksDB) GetBestBlockHash() (string, error) {
-	return "", nil // TODO
+// GetBestBlock returns the block hash of the block with highest height in the db
+func (d *RocksDB) GetBestBlock() (uint32, string, error) {
+	it := d.db.NewIteratorCF(d.ro, d.cfh[cfHeight])
+	defer it.Close()
+	if it.SeekToLast(); it.Valid() {
+		bestHeight := unpackUint(it.Key().Data())
+		val, err := unpackBlockValue(it.Value().Data())
+		log.Printf("Bestblock: %d %s", bestHeight, val)
+		return bestHeight, val, err
+	}
+	return 0, "", nil
 }
 
+// GetBlockHash returns block hash at given height or empty string if not found
 func (d *RocksDB) GetBlockHash(height uint32) (string, error) {
 	key := packUint(height)
 	val, err := d.db.GetCF(d.ro, d.cfh[cfHeight], key)
@@ -337,6 +348,10 @@ func packUint(i uint32) []byte {
 	buf := make([]byte, 4)
 	binary.BigEndian.PutUint32(buf, i)
 	return buf
+}
+
+func unpackUint(buf []byte) uint32 {
+	return binary.BigEndian.Uint32(buf)
 }
 
 func packVaruint(i uint32) []byte {

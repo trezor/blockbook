@@ -84,7 +84,7 @@ func (s *HttpServer) info(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *HttpServer) bestBlockHash(w http.ResponseWriter, r *http.Request) {
-	hash, err := s.db.GetBestBlockHash()
+	_, hash, err := s.db.GetBestBlock()
 	if err != nil {
 		respondError(w, err, "bestBlockHash")
 		return
