@@ -33,6 +33,7 @@ func New(httpServerBinding string, db *db.RocksDB) (*HttpServer, error) {
 	r.HandleFunc("/", s.info)
 	r.HandleFunc("/bestBlockHash", s.bestBlockHash)
 	r.HandleFunc("/blockHash/{height}", s.blockHash)
+	r.HandleFunc("/transactions/{address}/{lower}/{higher}", s.transactions)
 
 	var h http.Handler = r
 	h = handlers.LoggingHandler(os.Stdout, h)
@@ -103,4 +104,30 @@ func (s *HttpServer) blockHash(w http.ResponseWriter, r *http.Request) {
 	} else {
 		respondHashData(w, hash)
 	}
+}
+
+func (s *HttpServer) transactions(w http.ResponseWriter, r *http.Request) {
+	type transactionList struct {
+		Txid []string `json:"txid"`
+	}
+	txList := transactionList{}
+	address := mux.Vars(r)["address"]
+	higher, err := strconv.ParseUint(mux.Vars(r)["higher"], 10, 32)
+	lower, err2 := strconv.ParseUint(mux.Vars(r)["lower"], 10, 32)
+	if err == nil && err2 == nil {
+		err = s.db.GetTransactions(address, uint32(lower), uint32(higher), func(txid string) error {
+			txList.Txid = append(txList.Txid, txid)
+			return nil
+		})
+	} else {
+		if err == nil {
+			err = err2
+		}
+	}
+	if err != nil {
+		respondError(w, err, fmt.Sprintf("address %s", address))
+	} else {
+		json.NewEncoder(w).Encode(txList)
+	}
+
 }
