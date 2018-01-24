@@ -55,9 +55,9 @@ var (
 	dryRun      = flag.Bool("dryrun", false, "do not index blocks, only download")
 	parse       = flag.Bool("parse", false, "use in-process block parsing")
 
-	httpServerBinding = flag.String("httpserver", "nil", "http server binding [address]:port, if missing no http server")
+	httpServerBinding = flag.String("httpserver", "", "http server binding [address]:port, if missing no http server")
 
-	zeroMQBinding = flag.String("zeromq", "nil", "binding to zeromq, if missing no zeromq connection")
+	zeroMQBinding = flag.String("zeromq", "", "binding to zeromq, if missing no zeromq connection")
 )
 
 func main() {
@@ -94,7 +94,7 @@ func main() {
 
 	var httpServer *server.HttpServer
 
-	if *httpServerBinding != "nil" {
+	if *httpServerBinding != "" {
 		httpServer, err = server.New(*httpServerBinding, db)
 		if err != nil {
 			log.Fatalf("https: %v", err)
@@ -108,7 +108,7 @@ func main() {
 	}
 
 	var mq *bitcoin.MQ
-	if *zeroMQBinding != "nil" {
+	if *zeroMQBinding != "" {
 		mq, err = bitcoin.New(*zeroMQBinding, mqHandler)
 		if err != nil {
 			log.Fatalf("mq: %v", err)
