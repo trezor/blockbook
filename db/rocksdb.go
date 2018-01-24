@@ -335,11 +335,24 @@ func unpackVaruint(buf []byte) (uint32, int) {
 }
 
 func packAddress(address string) ([]byte, error) {
-	buf := base58.Decode(address)
-	if len(buf) <= 4 {
-		return nil, ErrInvalidAddress
+	var buf []byte
+	if len(address) == 42 || len(address) == 50 {
+		var err error
+		buf, err = hex.DecodeString(address)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		buf = base58.Decode(address)
 	}
-	return buf[:len(buf)-4], nil // Slice off the checksum
+	if len(buf) == 25 {
+		return buf[:len(buf)-4], nil // Slice off the checksum
+	}
+	if len(buf) == 21 { // address without checksum
+		return buf, nil
+	}
+	return nil, ErrInvalidAddress
+
 }
 
 func unpackAddress(buf []byte) (string, error) {
