@@ -295,7 +295,10 @@ func connectBlocksParallel(
 			}
 			err := connectBlockChunk(chain, index, low, high)
 			if err != nil {
-				log.Fatalf("connectBlocksParallel %d-%d %v", low, high, err) // TODO
+				if e, ok := err.(*bitcoin.RPCError); ok && (e.Message == "Block height out of range" || e.Message == "Block not found") {
+					break
+				}
+				log.Fatalf("connectBlocksParallel %d-%d %v", low, high, err)
 			}
 		}
 	}
@@ -316,7 +319,10 @@ func connectBlockChunk(
 ) error {
 	connected, err := isBlockConnected(chain, index, higher)
 	if err != nil || connected {
-		return err
+		// if higher is over the best block, continue with lower block, otherwise return error
+		if e, ok := err.(*bitcoin.RPCError); !ok || e.Message != "Block height out of range" {
+			return err
+		}
 	}
 
 	height := lower
