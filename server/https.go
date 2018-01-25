@@ -76,10 +76,20 @@ func respondHashData(w http.ResponseWriter, hash string) {
 
 func (s *HttpServer) info(w http.ResponseWriter, r *http.Request) {
 	type info struct {
-		Version string `json:"version"`
+		Version         string `json:"version"`
+		BestBlockHeight uint32 `json:"bestBlockHeight"`
+		BestBlockHash   string `json:"bestBlockHash"`
 	}
+
+	height, hash, err := s.db.GetBestBlock()
+	if err != nil {
+		log.Printf("https info: %v", err)
+	}
+
 	json.NewEncoder(w).Encode(info{
-		Version: "0.0.1",
+		Version:         "0.0.1",
+		BestBlockHeight: height,
+		BestBlockHash:   hash,
 	})
 }
 
