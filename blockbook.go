@@ -69,7 +69,7 @@ func main() {
 
 	if *repair {
 		if err := db.RepairRocksDB(*dbPath); err != nil {
-			log.Fatal(err)
+			log.Fatalf("RepairRocksDB %s: %v", *dbPath, err)
 		}
 		return
 	}
@@ -88,7 +88,7 @@ func main() {
 
 	db, err := db.NewRocksDB(*dbPath)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("NewRocksDB %v", err)
 	}
 	defer db.Close()
 
@@ -117,7 +117,7 @@ func main() {
 
 	if *resync {
 		if err := resyncIndex(rpc, db); err != nil {
-			log.Fatal(err)
+			log.Fatalf("resyncIndex %v", err)
 		}
 	}
 
@@ -131,7 +131,7 @@ func main() {
 
 		if address != "" {
 			if err = db.GetTransactions(address, height, until, printResult); err != nil {
-				log.Fatal(err)
+				log.Fatalf("GetTransactions %v", err)
 			}
 		} else {
 			if err = connectBlocksParallel(
@@ -142,7 +142,7 @@ func main() {
 				*syncChunk,
 				*syncWorkers,
 			); err != nil {
-				log.Fatal(err)
+				log.Fatalf("connectBlocksParallel %v", err)
 			}
 		}
 	}
@@ -295,7 +295,7 @@ func connectBlocksParallel(
 			}
 			err := connectBlockChunk(chain, index, low, high)
 			if err != nil {
-				log.Fatal(err) // TODO
+				log.Fatalf("connectBlocksParallel %d-%d %v", low, high, err) // TODO
 			}
 		}
 	}
