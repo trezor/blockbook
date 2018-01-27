@@ -31,6 +31,7 @@ type Index interface {
 	GetTransactions(address string, lower uint32, higher uint32, fn func(txid string) error) error
 	ConnectBlock(block *bitcoin.Block) error
 	DisconnectBlock(block *bitcoin.Block) error
+	DisconnectBlocks(lower uint32, higher uint32) error
 }
 
 var (
@@ -92,8 +93,13 @@ func main() {
 	}
 	defer db.Close()
 
-	var httpServer *server.HttpServer
+	if *resync {
+		if err := resyncIndex(rpc, db); err != nil {
+			log.Fatalf("resyncIndex %v", err)
+		}
+	}
 
+	var httpServer *server.HttpServer
 	if *httpServerBinding != "" {
 		httpServer, err = server.New(*httpServerBinding, db)
 		if err != nil {
@@ -112,12 +118,6 @@ func main() {
 		mq, err = bitcoin.New(*zeroMQBinding, mqHandler)
 		if err != nil {
 			log.Fatalf("mq: %v", err)
-		}
-	}
-
-	if *resync {
-		if err := resyncIndex(rpc, db); err != nil {
-			log.Fatalf("resyncIndex %v", err)
 		}
 	}
 
@@ -166,7 +166,7 @@ func waitForSignalAndShutdown(s *server.HttpServer, mq *bitcoin.MQ, timeout time
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	log.Printf("Shutdown with reason: %v", sig)
+	log.Printf("Shutdown: %v", sig)
 
 	if mq != nil {
 		if err := mq.Shutdown(); err != nil {
@@ -192,9 +192,16 @@ func resyncIndex(chain Blockchain, index Index) error {
 	if err != nil {
 		return err
 	}
-	_, local, err := index.GetBestBlock()
+	localBestHeight, local, err := index.GetBestBlock()
 	if err != nil {
 		local = ""
+	}
+
+	// If the locally indexed block is the same as the best block on the
+	// network, we're done.
+	if local == remote {
+		log.Printf("resync: synced on %d %s", localBestHeight, local)
+		return nil
 	}
 
 	// If the local block is missing, we're indexing from the genesis block.
@@ -205,14 +212,7 @@ func resyncIndex(chain Blockchain, index Index) error {
 		if err != nil {
 			return err
 		}
-		return connectBlock(chain, index, hash)
-	}
-
-	// If the locally indexed block is the same as the best block on the
-	// network, we're done.
-	if local == remote {
-		log.Printf("resync: synced on %s", local)
-		return nil
+		return connectBlocks(chain, index, hash)
 	}
 
 	// Is local tip on the best chain?
@@ -232,15 +232,32 @@ func resyncIndex(chain Blockchain, index Index) error {
 
 	if forked {
 		log.Printf("resync: local is forked")
-		// TODO: resync after disconnecting
-		return disconnectBlock(chain, index, header.Hash)
-	} else {
-		log.Printf("resync: local is behind")
-		return connectBlock(chain, index, header.Next)
+		var height uint32
+		for height = localBestHeight - 1; height >= 0; height-- {
+			local, err = index.GetBlockHash(height)
+			if err != nil {
+				return err
+			}
+			remote, err = chain.GetBlockHash(height)
+			if err != nil {
+				return err
+			}
+			if local == remote {
+				break
+			}
+		}
+		err = index.DisconnectBlocks(height+1, localBestHeight)
+		if err != nil {
+			return err
+		}
+		return resyncIndex(chain, index)
 	}
+
+	log.Printf("resync: local is behind")
+	return connectBlocks(chain, index, header.Next)
 }
 
-func connectBlock(
+func connectBlocks(
 	chain Blockchain,
 	index Index,
 	hash string,
@@ -261,14 +278,6 @@ func connectBlock(
 		}
 	}
 
-	return nil
-}
-
-func disconnectBlock(
-	chain Blockchain,
-	index Index,
-	hash string,
-) error {
 	return nil
 }
 

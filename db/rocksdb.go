@@ -338,6 +338,64 @@ func (d *RocksDB) writeHeight(
 	return nil
 }
 
+// DisconnectBlocks removes all data belonging to blocks in range lower-higher
+func (d *RocksDB) DisconnectBlocks(
+	lower uint32,
+	higher uint32,
+) error {
+	log.Printf("rocksdb: disconnecting blocks %d-%d", lower, higher)
+	it := d.db.NewIteratorCF(d.ro, d.cfh[cfOutputs])
+	defer it.Close()
+	outputKeys := [][]byte{}
+	outputValues := [][]byte{}
+	var totalOutputs uint64
+	for it.SeekToFirst(); it.Valid(); it.Next() {
+		totalOutputs++
+		key := it.Key().Data()
+		l := len(key)
+		if l > 4 {
+			height := unpackUint(key[l-4 : l])
+			if height >= lower && height <= higher {
+				outputKey := make([]byte, len(key))
+				copy(outputKey, key)
+				outputKeys = append(outputKeys, outputKey)
+				value := it.Value().Data()
+				outputValue := make([]byte, len(value))
+				copy(outputValue, value)
+				outputValues = append(outputValues, outputValue)
+			}
+		}
+	}
+	log.Printf("rocksdb: about to disconnect %d outputs from %d", len(outputKeys), totalOutputs)
+	wb := gorocksdb.NewWriteBatch()
+	defer wb.Destroy()
+	for i := 0; i < len(outputKeys); i++ {
+		log.Printf("output %s", hex.EncodeToString(outputKeys[i]))
+		wb.DeleteCF(d.cfh[cfOutputs], outputKeys[i])
+		outpoints, err := unpackOutputValue(outputValues[i])
+		if err != nil {
+			return err
+		}
+		for _, o := range outpoints {
+			boutpoint, err := packOutpoint(o.txid, o.vout)
+			if err != nil {
+				return err
+			}
+			log.Printf("input %s", hex.EncodeToString(boutpoint))
+			wb.DeleteCF(d.cfh[cfInputs], boutpoint)
+		}
+	}
+	for height := lower; height <= higher; height++ {
+		log.Printf("height %d", height)
+		wb.DeleteCF(d.cfh[cfHeight], packUint(height))
+	}
+	err := d.db.Write(d.wo, wb)
+	if err == nil {
+		log.Printf("rocksdb: blocks %d-%d disconnected", lower, higher)
+	}
+	return err
+}
+
 // Helpers
 
 const txIdUnpackedLen = 32
