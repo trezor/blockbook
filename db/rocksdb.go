@@ -85,7 +85,7 @@ func (d *RocksDB) Close() error {
 }
 
 func (d *RocksDB) GetTransactions(address string, lower uint32, higher uint32, fn func(txid string) error) (err error) {
-	log.Printf("rocksdb: address get %d:%d %s", lower, higher, address)
+	log.Printf("rocksdb: address get %s %d-%d ", address, lower, higher)
 
 	kstart, err := packOutputKey(address, lower)
 	if err != nil {
@@ -100,18 +100,39 @@ func (d *RocksDB) GetTransactions(address string, lower uint32, higher uint32, f
 	defer it.Close()
 
 	for it.Seek(kstart); it.Valid(); it.Next() {
-		key := it.Key()
-		val := it.Value()
-		if bytes.Compare(key.Data(), kstop) > 0 {
+		key := it.Key().Data()
+		val := it.Value().Data()
+		if bytes.Compare(key, kstop) > 0 {
 			break
 		}
-		outpoints, err := unpackOutputValue(val.Data())
+		outpoints, err := unpackOutputValue(val)
 		if err != nil {
 			return err
 		}
+		log.Printf("rocksdb: output %s: %s", hex.EncodeToString(key), hex.EncodeToString(val))
 		for _, o := range outpoints {
 			if err := fn(o.txid); err != nil {
 				return err
+			}
+			boutpoint, err := packOutpoint(o.txid, o.vout)
+			if err != nil {
+				return err
+			}
+			input, err := d.getInput(boutpoint)
+			if err != nil {
+				return err
+			}
+			if input != nil {
+				log.Printf("rocksdb: input %s: %s", hex.EncodeToString(boutpoint), hex.EncodeToString(input))
+				inpoints, err := unpackOutputValue(input)
+				if err != nil {
+					return err
+				}
+				for _, i := range inpoints {
+					if err := fn(i.txid); err != nil {
+						return err
+					}
+				}
 			}
 		}
 	}
@@ -300,7 +321,7 @@ func (d *RocksDB) GetBestBlock() (uint32, string, error) {
 	if it.SeekToLast(); it.Valid() {
 		bestHeight := unpackUint(it.Key().Data())
 		val, err := unpackBlockValue(it.Value().Data())
-		log.Printf("Bestblock: %d %s", bestHeight, val)
+		log.Printf("rocksdb: bestblock %d %s", bestHeight, val)
 		return bestHeight, val, err
 	}
 	return 0, "", nil
@@ -315,6 +336,15 @@ func (d *RocksDB) GetBlockHash(height uint32) (string, error) {
 	}
 	defer val.Free()
 	return unpackBlockValue(val.Data())
+}
+
+func (d *RocksDB) getInput(key []byte) ([]byte, error) {
+	val, err := d.db.GetCF(d.ro, d.cfh[cfInputs], key)
+	if err != nil {
+		return nil, err
+	}
+	defer val.Free()
+	return val.Data(), nil
 }
 
 func (d *RocksDB) writeHeight(
