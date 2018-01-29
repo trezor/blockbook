@@ -68,13 +68,13 @@ func (p *BitcoinBlockParser) ParseBlock(b []byte) (*Block, error) {
 		}
 		vout := make([]Vout, len(t.TxOut))
 		for i, out := range t.TxOut {
-			addrs, err := p.parseOutputScript(out.PkScript)
-			if err != nil {
-				addrs = []string{}
-			}
+			// addrs, err := p.parseOutputScript(out.PkScript)
+			// if err != nil {
+			// 	addrs = []string{}
+			// }
 			s := ScriptPubKey{
-				Hex:       hex.EncodeToString(out.PkScript),
-				Addresses: addrs,
+				Hex: hex.EncodeToString(out.PkScript),
+				// missing Addresses,
 				// missing: Asm,
 				// missing: Type,
 			}

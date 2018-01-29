@@ -9,7 +9,6 @@ import (
 	"log"
 
 	"github.com/bsm/go-vlq"
-	"github.com/btcsuite/btcutil/base58"
 
 	"github.com/tecbot/gorocksdb"
 )
@@ -84,14 +83,16 @@ func (d *RocksDB) Close() error {
 	return nil
 }
 
-func (d *RocksDB) GetTransactions(address string, lower uint32, higher uint32, fn func(txid string) error) (err error) {
-	log.Printf("rocksdb: address get %s %d-%d ", address, lower, higher)
+// GetTransactions finds all input/output transactions for address specified by outputScript.
+// Transaction are passed to callback function.
+func (d *RocksDB) GetTransactions(outputScript []byte, lower uint32, higher uint32, fn func(txid string) error) (err error) {
+	log.Printf("rocksdb: address get %s %d-%d ", unpackOutputScript(outputScript), lower, higher)
 
-	kstart, err := packOutputKey(address, lower)
+	kstart, err := packOutputKey(outputScript, lower)
 	if err != nil {
 		return err
 	}
-	kstop, err := packOutputKey(address, higher)
+	kstop, err := packOutputKey(outputScript, higher)
 	if err != nil {
 		return err
 	}
@@ -192,9 +193,9 @@ func (d *RocksDB) writeOutputs(
 
 	for _, tx := range block.Txs {
 		for _, output := range tx.Vout {
-			address := output.GetAddress()
-			if address != "" {
-				records[address] = append(records[address], outpoint{
+			outputScript := output.ScriptPubKey.Hex
+			if outputScript != "" {
+				records[outputScript] = append(records[outputScript], outpoint{
 					txid: tx.Txid,
 					vout: output.N,
 				})
@@ -202,15 +203,20 @@ func (d *RocksDB) writeOutputs(
 		}
 	}
 
-	for address, outpoints := range records {
-		key, err := packOutputKey(address, block.Height)
+	for outputScript, outpoints := range records {
+		bOutputScript, err := packOutputScript(outputScript)
 		if err != nil {
-			log.Printf("rocksdb: warning: %v", err)
+			log.Printf("rocksdb: packOutputScript warning: %v - %d %s", err, block.Height, outputScript)
+			continue
+		}
+		key, err := packOutputKey(bOutputScript, block.Height)
+		if err != nil {
+			log.Printf("rocksdb: packOutputKey warning: %v - %d %s", err, block.Height, outputScript)
 			continue
 		}
 		val, err := packOutputValue(outpoints)
 		if err != nil {
-			log.Printf("rocksdb: warning: %v", err)
+			log.Printf("rocksdb: packOutputValue warning: %v", err)
 			continue
 		}
 
@@ -225,14 +231,10 @@ func (d *RocksDB) writeOutputs(
 	return nil
 }
 
-func packOutputKey(address string, height uint32) ([]byte, error) {
-	baddress, err := packAddress(address)
-	if err != nil {
-		return nil, err
-	}
+func packOutputKey(outputScript []byte, height uint32) ([]byte, error) {
 	bheight := packUint(height)
-	buf := make([]byte, 0, len(baddress)+len(bheight))
-	buf = append(buf, baddress...)
+	buf := make([]byte, 0, len(outputScript)+len(bheight))
+	buf = append(buf, outputScript...)
 	buf = append(buf, bheight...)
 	return buf, nil
 }
@@ -453,34 +455,6 @@ func unpackVaruint(buf []byte) (uint32, int) {
 	return uint32(i), ofs
 }
 
-func packAddress(address string) ([]byte, error) {
-	var buf []byte
-	if len(address) == 42 || len(address) == 50 {
-		var err error
-		buf, err = hex.DecodeString(address)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		buf = base58.Decode(address)
-	}
-	if len(buf) == 25 {
-		return buf[:len(buf)-4], nil // Slice off the checksum
-	}
-	if len(buf) == 21 { // address without checksum
-		return buf, nil
-	}
-	return nil, ErrInvalidAddress
-
-}
-
-func unpackAddress(buf []byte) (string, error) {
-	if len(buf) < 2 {
-		return "", ErrInvalidAddress
-	}
-	return base58.CheckEncode(buf[1:], buf[0]), nil
-}
-
 func packTxid(txid string) ([]byte, error) {
 	return hex.DecodeString(txid)
 }
@@ -495,4 +469,12 @@ func packBlockValue(hash string) ([]byte, error) {
 
 func unpackBlockValue(buf []byte) (string, error) {
 	return hex.EncodeToString(buf), nil
+}
+
+func packOutputScript(script string) ([]byte, error) {
+	return hex.DecodeString(script)
+}
+
+func unpackOutputScript(buf []byte) string {
+	return hex.EncodeToString(buf)
 }

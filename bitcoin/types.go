@@ -1,5 +1,10 @@
 package bitcoin
 
+import (
+	"github.com/btcsuite/btcd/txscript"
+	"github.com/btcsuite/btcutil"
+)
+
 type ScriptSig struct {
 	Asm string `json:"asm"`
 	Hex string `json:"hex"`
@@ -26,11 +31,17 @@ type Vout struct {
 	ScriptPubKey ScriptPubKey `json:"scriptPubKey"`
 }
 
-func (vout *Vout) GetAddress() string {
-	if len(vout.ScriptPubKey.Addresses) != 1 {
-		return "" // output address not intelligible
+// AddressToOutputScript converts bitcoin address to ScriptPubKey
+func AddressToOutputScript(address string) ([]byte, error) {
+	da, err := btcutil.DecodeAddress(address, GetChainParams()[0])
+	if err != nil {
+		return nil, err
 	}
-	return vout.ScriptPubKey.Addresses[0]
+	script, err := txscript.PayToAddrScript(da)
+	if err != nil {
+		return nil, err
+	}
+	return script, nil
 }
 
 type Tx struct {

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"blockbook/bitcoin"
 	"blockbook/db"
 	"context"
 	"encoding/json"
@@ -120,24 +121,27 @@ func (s *HttpServer) transactions(w http.ResponseWriter, r *http.Request) {
 	type transactionList struct {
 		Txid []string `json:"txid"`
 	}
-	txList := transactionList{}
 	address := mux.Vars(r)["address"]
 	higher, err := strconv.ParseUint(mux.Vars(r)["higher"], 10, 32)
-	lower, err2 := strconv.ParseUint(mux.Vars(r)["lower"], 10, 32)
-	if err == nil && err2 == nil {
-		err = s.db.GetTransactions(address, uint32(lower), uint32(higher), func(txid string) error {
-			txList.Txid = append(txList.Txid, txid)
-			return nil
-		})
-	} else {
-		if err == nil {
-			err = err2
-		}
-	}
 	if err != nil {
 		respondError(w, err, fmt.Sprintf("address %s", address))
-	} else {
-		json.NewEncoder(w).Encode(txList)
 	}
+	lower, err := strconv.ParseUint(mux.Vars(r)["lower"], 10, 32)
+	if err != nil {
+		respondError(w, err, fmt.Sprintf("address %s", address))
+	}
+	script, err := bitcoin.AddressToOutputScript(address)
+	if err != nil {
+		respondError(w, err, fmt.Sprintf("address %s", address))
+	}
+	txList := transactionList{}
+	err = s.db.GetTransactions(script, uint32(lower), uint32(higher), func(txid string) error {
+		txList.Txid = append(txList.Txid, txid)
+		return nil
+	})
+	if err != nil {
+		respondError(w, err, fmt.Sprintf("address %s", address))
+	}
+	json.NewEncoder(w).Encode(txList)
 
 }

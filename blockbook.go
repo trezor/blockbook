@@ -28,7 +28,7 @@ type Blockchain interface {
 type Index interface {
 	GetBestBlock() (uint32, string, error)
 	GetBlockHash(height uint32) (string, error)
-	GetTransactions(address string, lower uint32, higher uint32, fn func(txid string) error) error
+	GetTransactions(outputScript []byte, lower uint32, higher uint32, fn func(txid string) error) error
 	ConnectBlock(block *bitcoin.Block) error
 	DisconnectBlock(block *bitcoin.Block) error
 	DisconnectBlocks(lower uint32, higher uint32) error
@@ -147,7 +147,11 @@ func main() {
 		address := *queryAddress
 
 		if address != "" {
-			if err = db.GetTransactions(address, height, until, printResult); err != nil {
+			script, err := bitcoin.AddressToOutputScript(address)
+			if err != nil {
+				log.Fatalf("GetTransactions %v", err)
+			}
+			if err = db.GetTransactions(script, height, until, printResult); err != nil {
 				log.Fatalf("GetTransactions %v", err)
 			}
 		} else {
