@@ -42,8 +42,9 @@ var (
 
 	dbPath = flag.String("path", "./data", "path to address index directory")
 
-	blockHeight = flag.Int("blockheight", -1, "height of the starting block")
-	blockUntil  = flag.Int("blockuntil", -1, "height of the final block")
+	blockHeight    = flag.Int("blockheight", -1, "height of the starting block")
+	blockUntil     = flag.Int("blockuntil", -1, "height of the final block")
+	rollbackHeight = flag.Int("rollback", -1, "rollback to the given height and quit")
 
 	queryAddress = flag.String("address", "", "query contents of this address")
 
@@ -92,6 +93,22 @@ func main() {
 		log.Fatalf("NewRocksDB %v", err)
 	}
 	defer db.Close()
+
+	if *rollbackHeight >= 0 {
+		bestHeight, _, err := db.GetBestBlock()
+		if err != nil {
+			log.Fatalf("rollbackHeight: %v", err)
+		}
+		if uint32(*rollbackHeight) > bestHeight {
+			log.Printf("nothing to rollback, rollbackHeight %d, bestHeight: %d", *rollbackHeight, bestHeight)
+		} else {
+			err = db.DisconnectBlocks(uint32(*rollbackHeight), bestHeight)
+			if err != nil {
+				log.Fatalf("rollbackHeight: %v", err)
+			}
+		}
+		return
+	}
 
 	if *resync {
 		if err := resyncIndex(rpc, db); err != nil {
