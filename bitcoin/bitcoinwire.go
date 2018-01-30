@@ -11,6 +11,9 @@ import (
 	"github.com/btcsuite/btcd/wire"
 )
 
+// GetChainParams contains network parameters for the main Bitcoin network,
+// the regression test Bitcoin network, the test Bitcoin network and
+// the simulation test Bitcoin network, in this order
 func GetChainParams() []*chaincfg.Params {
 	return []*chaincfg.Params{
 		&chaincfg.MainNetParams,
