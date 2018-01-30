@@ -44,6 +44,17 @@ type resGetBestBlockHash struct {
 	Result string    `json:"result"`
 }
 
+// getblockcount
+
+type cmdGetBlockCount struct {
+	Method string `json:"method"`
+}
+
+type resGetBlockCount struct {
+	Error  *RPCError `json:"error"`
+	Result uint32    `json:"result"`
+}
+
 // getblockheader
 
 type cmdGetBlockHeader struct {
@@ -145,6 +156,23 @@ func (b *BitcoinRPC) GetBestBlockHash() (string, error) {
 	}
 	if res.Error != nil {
 		return "", res.Error
+	}
+	return res.Result, nil
+}
+
+// GetBestBlockHeight returns height of the tip of the best-block-chain.
+func (b *BitcoinRPC) GetBestBlockHeight() (uint32, error) {
+	log.Printf("rpc: getblockcount")
+
+	res := resGetBlockCount{}
+	req := cmdGetBlockCount{Method: "getblockcount"}
+	err := b.call(&req, &res)
+
+	if err != nil {
+		return 0, err
+	}
+	if res.Error != nil {
+		return 0, res.Error
 	}
 	return res.Result, nil
 }
