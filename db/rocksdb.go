@@ -6,15 +6,15 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
-	"log"
 
 	"github.com/bsm/go-vlq"
+	"github.com/golang/glog"
 
 	"github.com/tecbot/gorocksdb"
 )
 
 func RepairRocksDB(name string) error {
-	log.Printf("rocksdb: repair")
+	glog.Infof("rocksdb: repair")
 	opts := gorocksdb.NewDefaultOptions()
 	return gorocksdb.RepairDb(name, opts)
 }
@@ -39,7 +39,7 @@ var cfNames = []string{"default", "height", "outputs", "inputs"}
 // NewRocksDB opens an internal handle to RocksDB environment.  Close
 // needs to be called to release it.
 func NewRocksDB(path string) (d *RocksDB, err error) {
-	log.Printf("rocksdb: open %s", path)
+	glog.Infof("rocksdb: open %s", path)
 
 	fp := gorocksdb.NewBloomFilter(10)
 	bbto := gorocksdb.NewDefaultBlockBasedTableOptions()
@@ -73,7 +73,7 @@ func NewRocksDB(path string) (d *RocksDB, err error) {
 
 // Close releases the RocksDB environment opened in NewRocksDB.
 func (d *RocksDB) Close() error {
-	log.Printf("rocksdb: close")
+	glog.Infof("rocksdb: close")
 	for _, h := range d.cfh {
 		h.Destroy()
 	}
@@ -86,7 +86,9 @@ func (d *RocksDB) Close() error {
 // GetTransactions finds all input/output transactions for address specified by outputScript.
 // Transaction are passed to callback function.
 func (d *RocksDB) GetTransactions(outputScript []byte, lower uint32, higher uint32, fn func(txid string) error) (err error) {
-	log.Printf("rocksdb: address get %s %d-%d ", unpackOutputScript(outputScript), lower, higher)
+	if glog.V(1) {
+		glog.Infof("rocksdb: address get %s %d-%d ", unpackOutputScript(outputScript), lower, higher)
+	}
 
 	kstart, err := packOutputKey(outputScript, lower)
 	if err != nil {
@@ -110,7 +112,9 @@ func (d *RocksDB) GetTransactions(outputScript []byte, lower uint32, higher uint
 		if err != nil {
 			return err
 		}
-		log.Printf("rocksdb: output %s: %s", hex.EncodeToString(key), hex.EncodeToString(val))
+		if glog.V(2) {
+			glog.Infof("rocksdb: output %s: %s", hex.EncodeToString(key), hex.EncodeToString(val))
+		}
 		for _, o := range outpoints {
 			if err := fn(o.txid); err != nil {
 				return err
@@ -124,7 +128,9 @@ func (d *RocksDB) GetTransactions(outputScript []byte, lower uint32, higher uint
 				return err
 			}
 			if input != nil {
-				log.Printf("rocksdb: input %s: %s", hex.EncodeToString(boutpoint), hex.EncodeToString(input))
+				if glog.V(2) {
+					glog.Infof("rocksdb: input %s: %s", hex.EncodeToString(boutpoint), hex.EncodeToString(input))
+				}
 				inpoints, err := unpackOutputValue(input)
 				if err != nil {
 					return err
@@ -157,11 +163,13 @@ func (d *RocksDB) writeBlock(block *bitcoin.Block, op int) error {
 	wb := gorocksdb.NewWriteBatch()
 	defer wb.Destroy()
 
-	switch op {
-	case opInsert:
-		log.Printf("rocksdb: insert %d %s", block.Height, block.Hash)
-	case opDelete:
-		log.Printf("rocksdb: delete %d %s", block.Height, block.Hash)
+	if glog.V(2) {
+		switch op {
+		case opInsert:
+			glog.Infof("rocksdb: insert %d %s", block.Height, block.Hash)
+		case opDelete:
+			glog.Infof("rocksdb: delete %d %s", block.Height, block.Hash)
+		}
 	}
 
 	if err := d.writeHeight(wb, block, op); err != nil {
@@ -206,17 +214,17 @@ func (d *RocksDB) writeOutputs(
 	for outputScript, outpoints := range records {
 		bOutputScript, err := packOutputScript(outputScript)
 		if err != nil {
-			log.Printf("rocksdb: packOutputScript warning: %v - %d %s", err, block.Height, outputScript)
+			glog.Warningf("rocksdb: packOutputScript: %v - %d %s", err, block.Height, outputScript)
 			continue
 		}
 		key, err := packOutputKey(bOutputScript, block.Height)
 		if err != nil {
-			log.Printf("rocksdb: packOutputKey warning: %v - %d %s", err, block.Height, outputScript)
+			glog.Warningf("rocksdb: packOutputKey: %v - %d %s", err, block.Height, outputScript)
 			continue
 		}
 		val, err := packOutputValue(outpoints)
 		if err != nil {
-			log.Printf("rocksdb: packOutputValue warning: %v", err)
+			glog.Warningf("rocksdb: packOutputValue: %v", err)
 			continue
 		}
 
@@ -323,7 +331,9 @@ func (d *RocksDB) GetBestBlock() (uint32, string, error) {
 	if it.SeekToLast(); it.Valid() {
 		bestHeight := unpackUint(it.Key().Data())
 		val, err := unpackBlockValue(it.Value().Data())
-		log.Printf("rocksdb: bestblock %d %s", bestHeight, val)
+		if glog.V(1) {
+			glog.Infof("rocksdb: bestblock %d %s", bestHeight, val)
+		}
 		return bestHeight, val, err
 	}
 	return 0, "", nil
@@ -375,7 +385,7 @@ func (d *RocksDB) DisconnectBlocks(
 	lower uint32,
 	higher uint32,
 ) error {
-	log.Printf("rocksdb: disconnecting blocks %d-%d", lower, higher)
+	glog.Infof("rocksdb: disconnecting blocks %d-%d", lower, higher)
 	it := d.db.NewIteratorCF(d.ro, d.cfh[cfOutputs])
 	defer it.Close()
 	outputKeys := [][]byte{}
@@ -398,11 +408,13 @@ func (d *RocksDB) DisconnectBlocks(
 			}
 		}
 	}
-	log.Printf("rocksdb: about to disconnect %d outputs from %d", len(outputKeys), totalOutputs)
+	glog.Infof("rocksdb: about to disconnect %d outputs from %d", len(outputKeys), totalOutputs)
 	wb := gorocksdb.NewWriteBatch()
 	defer wb.Destroy()
 	for i := 0; i < len(outputKeys); i++ {
-		log.Printf("output %s", hex.EncodeToString(outputKeys[i]))
+		if glog.V(2) {
+			glog.Info("output ", hex.EncodeToString(outputKeys[i]))
+		}
 		wb.DeleteCF(d.cfh[cfOutputs], outputKeys[i])
 		outpoints, err := unpackOutputValue(outputValues[i])
 		if err != nil {
@@ -413,17 +425,21 @@ func (d *RocksDB) DisconnectBlocks(
 			if err != nil {
 				return err
 			}
-			log.Printf("input %s", hex.EncodeToString(boutpoint))
+			if glog.V(2) {
+				glog.Info("input ", hex.EncodeToString(boutpoint))
+			}
 			wb.DeleteCF(d.cfh[cfInputs], boutpoint)
 		}
 	}
 	for height := lower; height <= higher; height++ {
-		log.Printf("height %d", height)
+		if glog.V(2) {
+			glog.Info("height ", height)
+		}
 		wb.DeleteCF(d.cfh[cfHeight], packUint(height))
 	}
 	err := d.db.Write(d.wo, wb)
 	if err == nil {
-		log.Printf("rocksdb: blocks %d-%d disconnected", lower, higher)
+		glog.Infof("rocksdb: blocks %d-%d disconnected", lower, higher)
 	}
 	return err
 }

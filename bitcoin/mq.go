@@ -2,8 +2,8 @@ package bitcoin
 
 import (
 	"encoding/binary"
-	"log"
 
+	"github.com/golang/glog"
 	zmq "github.com/pebbe/zmq4"
 )
 
@@ -38,7 +38,7 @@ func New(binding string, callback func(*MQMessage)) (*MQ, error) {
 	socket.SetSubscribe("rawblock")
 	socket.SetSubscribe("rawtx")
 	socket.Connect(binding)
-	log.Printf("MQ listening to %s", binding)
+	glog.Info("MQ listening to ", binding)
 	mq := &MQ{context, socket, true, make(chan bool)}
 	go mq.run(callback)
 	return mq, nil
@@ -51,10 +51,10 @@ func (mq *MQ) run(callback func(*MQMessage)) {
 		if err != nil {
 			if zmq.AsErrno(err) == zmq.Errno(zmq.ETERM) {
 				close(mq.finished)
-				log.Print("MQ loop terminated")
+				glog.Info("MQ loop terminated")
 				break
 			}
-			log.Printf("MQ RecvMessageBytes error %v", err)
+			glog.Error("MQ RecvMessageBytes error ", err)
 		}
 		if msg != nil && len(msg) >= 3 {
 			sequence := uint32(0)
@@ -74,7 +74,7 @@ func (mq *MQ) run(callback func(*MQMessage)) {
 
 // Shutdown stops listening to the ZeroMQ and closes the connection
 func (mq *MQ) Shutdown() error {
-	log.Printf("MQ server shutdown")
+	glog.Info("MQ server shutdown")
 	if mq.isRunning {
 		// if errors in socket.Close or context.Term, let it close ungracefully
 		if err := mq.socket.Close(); err != nil {
@@ -84,7 +84,7 @@ func (mq *MQ) Shutdown() error {
 			return err
 		}
 		_, _ = <-mq.finished
-		log.Printf("MQ server shutdown finished")
+		glog.Info("MQ server shutdown finished")
 	}
 	return nil
 }

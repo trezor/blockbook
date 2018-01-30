@@ -6,10 +6,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"strconv"
+
+	"github.com/golang/glog"
 
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
@@ -37,7 +38,7 @@ func New(httpServerBinding string, db *db.RocksDB) (*HttpServer, error) {
 	r.HandleFunc("/transactions/{address}/{lower}/{higher}", s.transactions)
 
 	var h http.Handler = r
-	h = handlers.LoggingHandler(os.Stdout, h)
+	h = handlers.LoggingHandler(os.Stderr, h)
 	https.Handler = h
 
 	return s, nil
@@ -45,25 +46,25 @@ func New(httpServerBinding string, db *db.RocksDB) (*HttpServer, error) {
 
 // Run starts the server
 func (s *HttpServer) Run() error {
-	log.Printf("http server starting to listen on %s", s.https.Addr)
+	glog.Infof("http server starting to listen on %s", s.https.Addr)
 	return s.https.ListenAndServe()
 }
 
 // Close closes the server
 func (s *HttpServer) Close() error {
-	log.Printf("http server closing")
+	glog.Infof("http server closing")
 	return s.https.Close()
 }
 
 // Shutdown shuts down the server
 func (s *HttpServer) Shutdown(ctx context.Context) error {
-	log.Printf("http server shutdown")
+	glog.Infof("http server shutdown")
 	return s.https.Shutdown(ctx)
 }
 
 func respondError(w http.ResponseWriter, err error, context string) {
 	w.WriteHeader(http.StatusBadRequest)
-	log.Printf("http server %s error: %v", context, err)
+	glog.Errorf("http server %s error: %v", context, err)
 }
 
 func respondHashData(w http.ResponseWriter, hash string) {
@@ -84,7 +85,7 @@ func (s *HttpServer) info(w http.ResponseWriter, r *http.Request) {
 
 	height, hash, err := s.db.GetBestBlock()
 	if err != nil {
-		log.Printf("https info: %v", err)
+		glog.Errorf("https info: %v", err)
 	}
 
 	json.NewEncoder(w).Encode(info{

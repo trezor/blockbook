@@ -33,6 +33,11 @@ Install Go interface to ZeroMQ:
 go get github.com/pebbe/zmq4
 ```
 
+Install glog logging:
+```
+go get github.com/golang/glog
+```
+
 Install blockbook:
 
 ```

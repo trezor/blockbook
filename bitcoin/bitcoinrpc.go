@@ -5,9 +5,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"time"
+
+	"github.com/golang/glog"
 )
 
 type RPCError struct {
@@ -145,7 +146,8 @@ func NewBitcoinRPC(url string, user string, password string, timeout time.Durati
 
 // GetBestBlockHash returns hash of the tip of the best-block-chain.
 func (b *BitcoinRPC) GetBestBlockHash() (string, error) {
-	log.Printf("rpc: getbestblockhash")
+
+	glog.V(1).Info("rpc: getbestblockhash")
 
 	res := resGetBestBlockHash{}
 	req := cmdGetBestBlockHash{Method: "getbestblockhash"}
@@ -162,7 +164,7 @@ func (b *BitcoinRPC) GetBestBlockHash() (string, error) {
 
 // GetBestBlockHeight returns height of the tip of the best-block-chain.
 func (b *BitcoinRPC) GetBestBlockHeight() (uint32, error) {
-	log.Printf("rpc: getblockcount")
+	glog.V(1).Info("rpc: getblockcount")
 
 	res := resGetBlockCount{}
 	req := cmdGetBlockCount{Method: "getblockcount"}
@@ -179,7 +181,7 @@ func (b *BitcoinRPC) GetBestBlockHeight() (uint32, error) {
 
 // GetBlockHash returns hash of block in best-block-chain at given height.
 func (b *BitcoinRPC) GetBlockHash(height uint32) (string, error) {
-	log.Printf("rpc: getblockhash %v", height)
+	glog.V(1).Info("rpc: getblockhash ", height)
 
 	res := resGetBlockHash{}
 	req := cmdGetBlockHash{Method: "getblockhash"}
@@ -197,7 +199,7 @@ func (b *BitcoinRPC) GetBlockHash(height uint32) (string, error) {
 
 // GetBlockHeader returns header of block with given hash.
 func (b *BitcoinRPC) GetBlockHeader(hash string) (*BlockHeader, error) {
-	log.Printf("rpc: getblockheader")
+	glog.V(1).Info("rpc: getblockheader")
 
 	res := resGetBlockHeaderVerbose{}
 	req := cmdGetBlockHeader{Method: "getblockheader"}
@@ -237,7 +239,7 @@ func (b *BitcoinRPC) GetBlock(hash string) (*Block, error) {
 
 // GetBlockRaw returns block with given hash as bytes.
 func (b *BitcoinRPC) GetBlockRaw(hash string) ([]byte, error) {
-	log.Printf("rpc: getblock (verbosity=0) %v", hash)
+	glog.V(1).Info("rpc: getblock (verbosity=0) ", hash)
 
 	res := resGetBlockRaw{}
 	req := cmdGetBlock{Method: "getblock"}
@@ -257,7 +259,7 @@ func (b *BitcoinRPC) GetBlockRaw(hash string) ([]byte, error) {
 // GetBlockList returns block with given hash by downloading block
 // transactions one by one.
 func (b *BitcoinRPC) GetBlockList(hash string) (*Block, error) {
-	log.Printf("rpc: getblock (verbosity=1) %v", hash)
+	glog.V(1).Info("rpc: getblock (verbosity=1) ", hash)
 
 	res := resGetBlockThin{}
 	req := cmdGetBlock{Method: "getblock"}
@@ -289,7 +291,7 @@ func (b *BitcoinRPC) GetBlockList(hash string) (*Block, error) {
 
 // GetBlockFull returns block with given hash.
 func (b *BitcoinRPC) GetBlockFull(hash string) (*Block, error) {
-	log.Printf("rpc: getblock (verbosity=2) %v", hash)
+	glog.V(1).Info("rpc: getblock (verbosity=2) ", hash)
 
 	res := resGetBlockFull{}
 	req := cmdGetBlock{Method: "getblock"}
@@ -308,7 +310,7 @@ func (b *BitcoinRPC) GetBlockFull(hash string) (*Block, error) {
 
 // GetTransaction returns a transaction by the transaction ID.
 func (b *BitcoinRPC) GetTransaction(txid string) (*Tx, error) {
-	log.Printf("rpc: getrawtransaction %v", txid)
+	glog.V(1).Info("rpc: getrawtransaction ", txid)
 
 	res := resGetRawTransactionVerbose{}
 	req := cmdGetRawTransaction{Method: "getrawtransaction"}

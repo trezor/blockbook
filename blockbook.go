@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/hex"
 	"flag"
-	"log"
 	"os"
 	"os/signal"
 	"sync"
@@ -15,6 +14,7 @@ import (
 	"blockbook/db"
 	"blockbook/server"
 
+	"github.com/golang/glog"
 	"github.com/pkg/profile"
 )
 
@@ -66,13 +66,16 @@ var (
 func main() {
 	flag.Parse()
 
+	// override setting for glog to log only to stderr, to match the http handler
+	flag.Lookup("logtostderr").Value.Set("true")
+
 	if *prof {
 		defer profile.Start().Stop()
 	}
 
 	if *repair {
 		if err := db.RepairRocksDB(*dbPath); err != nil {
-			log.Fatalf("RepairRocksDB %s: %v", *dbPath, err)
+			glog.Fatalf("RepairRocksDB %s: %v", *dbPath, err)
 		}
 		return
 	}
@@ -91,21 +94,21 @@ func main() {
 
 	db, err := db.NewRocksDB(*dbPath)
 	if err != nil {
-		log.Fatalf("NewRocksDB %v", err)
+		glog.Fatalf("NewRocksDB %v", err)
 	}
 	defer db.Close()
 
 	if *rollbackHeight >= 0 {
 		bestHeight, _, err := db.GetBestBlock()
 		if err != nil {
-			log.Fatalf("rollbackHeight: %v", err)
+			glog.Fatalf("rollbackHeight: %v", err)
 		}
 		if uint32(*rollbackHeight) > bestHeight {
-			log.Printf("nothing to rollback, rollbackHeight %d, bestHeight: %d", *rollbackHeight, bestHeight)
+			glog.Infof("nothing to rollback, rollbackHeight %d, bestHeight: %d", *rollbackHeight, bestHeight)
 		} else {
 			err = db.DisconnectBlocks(uint32(*rollbackHeight), bestHeight)
 			if err != nil {
-				log.Fatalf("rollbackHeight: %v", err)
+				glog.Fatalf("rollbackHeight: %v", err)
 			}
 		}
 		return
@@ -113,7 +116,7 @@ func main() {
 
 	if *resync {
 		if err := resyncIndex(rpc, db); err != nil {
-			log.Fatalf("resyncIndex %v", err)
+			glog.Fatal("resyncIndex ", err)
 		}
 	}
 
@@ -121,12 +124,12 @@ func main() {
 	if *httpServerBinding != "" {
 		httpServer, err = server.New(*httpServerBinding, db)
 		if err != nil {
-			log.Fatalf("https: %v", err)
+			glog.Fatalf("https: %v", err)
 		}
 		go func() {
 			err = httpServer.Run()
 			if err != nil {
-				log.Fatalf("https: %v", err)
+				glog.Fatalf("https: %v", err)
 			}
 		}()
 	}
@@ -135,7 +138,7 @@ func main() {
 	if *zeroMQBinding != "" {
 		mq, err = bitcoin.New(*zeroMQBinding, mqHandler)
 		if err != nil {
-			log.Fatalf("mq: %v", err)
+			glog.Fatalf("mq: %v", err)
 		}
 	}
 
@@ -150,10 +153,10 @@ func main() {
 		if address != "" {
 			script, err := bitcoin.AddressToOutputScript(address)
 			if err != nil {
-				log.Fatalf("GetTransactions %v", err)
+				glog.Fatalf("GetTransactions %v", err)
 			}
 			if err = db.GetTransactions(script, height, until, printResult); err != nil {
-				log.Fatalf("GetTransactions %v", err)
+				glog.Fatalf("GetTransactions %v", err)
 			}
 		} else if !*resync {
 			if err = connectBlocksParallel(
@@ -164,7 +167,7 @@ func main() {
 				*syncChunk,
 				*syncWorkers,
 			); err != nil {
-				log.Fatalf("connectBlocksParallel %v", err)
+				glog.Fatalf("connectBlocksParallel %v", err)
 			}
 		}
 	}
@@ -176,7 +179,7 @@ func main() {
 
 func mqHandler(m *bitcoin.MQMessage) {
 	body := hex.EncodeToString(m.Body)
-	log.Printf("MQ: %s-%d  %s", m.Topic, m.Sequence, body)
+	glog.Infof("MQ: %s-%d  %s", m.Topic, m.Sequence, body)
 }
 
 func waitForSignalAndShutdown(s *server.HttpServer, mq *bitcoin.MQ, timeout time.Duration) {
@@ -188,24 +191,25 @@ func waitForSignalAndShutdown(s *server.HttpServer, mq *bitcoin.MQ, timeout time
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	log.Printf("Shutdown: %v", sig)
+	glog.Infof("Shutdown: %v", sig)
 
 	if mq != nil {
 		if err := mq.Shutdown(); err != nil {
-			log.Printf("MQ.Shutdown error: %v", err)
+			glog.Error("MQ.Shutdown error: ", err)
 		}
 	}
 
 	if s != nil {
 		if err := s.Shutdown(ctx); err != nil {
-			log.Printf("HttpServer.Shutdown error: %v", err)
+			glog.Error("HttpServer.Shutdown error: ", err)
 		}
 	}
 
+	glog.Flush()
 }
 
 func printResult(txid string) error {
-	log.Printf("%s", txid)
+	glog.Info(txid)
 	return nil
 }
 
@@ -222,7 +226,7 @@ func resyncIndex(chain Blockchain, index Index) error {
 	// If the locally indexed block is the same as the best block on the
 	// network, we're done.
 	if local == remote {
-		log.Printf("resync: synced on %d %s", localBestHeight, local)
+		glog.Infof("resync: synced on %d %s", localBestHeight, local)
 		return nil
 	}
 
@@ -245,7 +249,7 @@ func resyncIndex(chain Blockchain, index Index) error {
 
 		if forked {
 			// find and disconnect forked blocks and then synchronize again
-			log.Printf("resync: local is forked")
+			glog.Info("resync: local is forked")
 			var height uint32
 			for height = localBestHeight - 1; height >= 0; height-- {
 				local, err = index.GetBlockHash(height)
@@ -271,7 +275,7 @@ func resyncIndex(chain Blockchain, index Index) error {
 	startHeight := uint32(0)
 	var hash string
 	if header != nil {
-		log.Printf("resync: local is behind")
+		glog.Info("resync: local is behind")
 		hash = header.Next
 		startHeight = localBestHeight
 	} else {
@@ -280,7 +284,7 @@ func resyncIndex(chain Blockchain, index Index) error {
 		if *blockHeight > 0 {
 			startHeight = uint32(*blockHeight)
 		}
-		log.Printf("resync: genesis from block %d", startHeight)
+		glog.Info("resync: genesis from block ", startHeight)
 		hash, err = chain.GetBlockHash(startHeight)
 		if err != nil {
 			return err
@@ -295,7 +299,7 @@ func resyncIndex(chain Blockchain, index Index) error {
 			return err
 		}
 		if chainBestHeight-startHeight > uint32(*syncChunk) {
-			log.Printf("resync: parallel sync of blocks %d-%d", startHeight, chainBestHeight)
+			glog.Infof("resync: parallel sync of blocks %d-%d", startHeight, chainBestHeight)
 			err = connectBlocksParallel(
 				chain,
 				index,
@@ -327,7 +331,9 @@ func connectBlocks(
 
 	go getBlockChain(hash, chain, bch, done)
 
+	var lastRes blockResult
 	for res := range bch {
+		lastRes = res
 		if res.err != nil {
 			return res.err
 		}
@@ -335,6 +341,10 @@ func connectBlocks(
 		if err != nil {
 			return err
 		}
+	}
+
+	if lastRes.block != nil {
+		glog.Infof("resync: synced on %d %s", lastRes.block.Height, lastRes.block.Hash)
 	}
 
 	return nil
@@ -366,7 +376,7 @@ func connectBlocksParallel(
 				if e, ok := err.(*bitcoin.RPCError); ok && (e.Message == "Block height out of range" || e.Message == "Block not found") {
 					break
 				}
-				log.Fatalf("connectBlocksParallel %d-%d %v", low, high, err)
+				glog.Fatalf("connectBlocksParallel %d-%d %v", low, high, err)
 			}
 		}
 	}
@@ -412,6 +422,9 @@ func connectBlockChunk(
 		err = index.ConnectBlock(block)
 		if err != nil {
 			return err
+		}
+		if block.Height%1000 == 0 {
+			glog.Info("connected block ", block.Height, " ", block.Hash)
 		}
 	}
 
