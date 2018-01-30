@@ -47,7 +47,7 @@ $GOPATH/bin/blockbook --help
 
 # Data storage in RocksDB
 
-Blockbook stores data the key-value store RocksDB.
+Blockbook stores data the key-value store RocksDB. Data are stored in binary form to save space.
 The data are separated to different column families:
 
 - **default**
@@ -56,34 +56,32 @@ The data are separated to different column families:
 
 - **height** - maps *block height* to *block hash*
 
-  *Block heigh* stored as binary array of 4 bytes (big endian uint32)  
-  *Block hash* stored as binary array of 32 bytes
+  *Block heigh* stored as array of 4 bytes (big endian uint32)  
+  *Block hash* stored as array of 32 bytes
 
   Example - the first four blocks (all data hex encoded)
 ```
-0x00000000 : 0x000000000933EA01AD0EE984209779BAAEC3CED90FA3F408719526F8D77F4943
-0x00000001 : 0x00000000B873E79784647A6C82962C70D228557D24A747EA4D1B8BBE878E1206
-0x00000002 : 0x000000006C02C8EA6E4FF69651F7FCDE348FB9D557A06E6957B65552002A7820
-0x00000003 : 0x000000008B896E272758DA5297BCD98FDC6D97C9B765ECEC401E286DC1FDBE10
+0x00000000 : 0x000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943
+0x00000001 : 0x00000000b873e79784647a6c82962c70d228557d24a747ea4d1b8bbe878e1206
+0x00000002 : 0x000000006c02c8ea6e4ff69651f7fcde348fb9d557a06e6957b65552002a7820
+0x00000003 : 0x000000008b896e272758da5297bcd98fdc6d97c9b765ecec401e286dc1fdbe10
 ```
 
-- **outputs** -  maps *address+block height* to *array of outpoints*
+- **outputs** -  maps *output script+block height* to *array of outpoints*
 
-  *Address+block height* stored as binary array 25 bytes total - 21 bytes address without checksum + 4 bytes (big endian uint32) block height  
-  *array of outpoints* stored as binary array of 32 bytes for transaction id + variable length outpoint index for each outpoint
+  *Output script (ScriptPubKey)+block height* stored as variable length array of bytes for output script + 4 bytes (big endian uint32) block height  
+  *array of outpoints* stored as array of 32 bytes for transaction id + variable length outpoint index for each outpoint
 
   Example - (all data hex encoded)
 ```
-0x6FCB8DBDD6F207F559162EF3BBD4229911DA248C3000000029 : 0xC459D961CC607A12AFDC6A8A200E84F1AD8E2021C2745FE12E0231DD90CA46BE00
-0x6FCF12C87234AF9C402246B1A5D5C3F937337E6ECC00000013 : 0x73A4988ADF462B6540CFA59097804174B298CFA439F73C1A072C2C6FBDBE57C700
-0x6FD3F80654BDA100BB704FBAF49E759E6084AB10DD0000005D : 0xC12A5ACAE3EFD788F088FCFA6D267ED48681A1AE4D2F477BFA60C0500274B6BE00
-0xC43E3D6ABE282D92A28CB791697BA001D733CEFDC7AF1BCF05 : 0x7246e79f97b5f82e7f51e291d533964028ec90be0634af8a8ef7d5a903c7f6d301
+0x001400efeb484a24a1c1240eafacef8566e734da429c000e2df6 : 0x1697966cbd76c75eb9fc736dfa3ba0bc045999bab1e8b10082bc0ba546b0178302
+0xa9143e3d6abe282d92a28cb791697ba001d733cefdc7870012c4b1 : 0x7246e79f97b5f82e7f51e291d533964028ec90be0634af8a8ef7d5a903c7f6d301
 ```
 
 - **inputs** - maps *transaction outpoint* to *input transaction* that spends it
 
-  *Transaction outpoint* stored as binary array of 32 bytes for transaction id + variable length outpoint index
-  *Input transaction* stored as binary array of 32 bytes for transaction id + variable length input index
+  *Transaction outpoint* stored as array of 32 bytes for transaction id + variable length outpoint index
+  *Input transaction* stored as array of 32 bytes for transaction id + variable length input index
 
   Example - (all data hex encoded)
 ```
