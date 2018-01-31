@@ -22,7 +22,7 @@ type MQMessage struct {
 	Body     []byte
 }
 
-// New creates new Bitcoind ZeroMQ listener
+// NewMQ creates new Bitcoind ZeroMQ listener
 // callback function receives messages
 func NewMQ(binding string, callback func(*MQMessage)) (*MQ, error) {
 	context, err := zmq.NewContext()

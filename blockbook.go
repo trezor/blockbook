@@ -47,9 +47,13 @@ var (
 )
 
 var (
-	syncChannel = make(chan struct{})
-	chain       *bchain.BitcoinRPC
-	index       *db.RocksDB
+	chanSyncIndex       = make(chan struct{})
+	chanSyncMempool     = make(chan struct{})
+	chanSyncIndexDone   = make(chan struct{})
+	chanSyncMempoolDone = make(chan struct{})
+	chain               *bchain.BitcoinRPC
+	mempool             *bchain.Mempool
+	index               *db.RocksDB
 )
 
 func main() {
@@ -83,6 +87,8 @@ func main() {
 		}
 	}
 
+	mempool = bchain.NewMempool(chain)
+
 	var err error
 	index, err = db.NewRocksDB(*dbPath)
 	if err != nil {
@@ -105,6 +111,9 @@ func main() {
 		}
 		return
 	}
+
+	go syncIndexLoop()
+	go syncMempoolLoop()
 
 	if *synchronize {
 		if err := resyncIndex(); err != nil {
@@ -135,12 +144,10 @@ func main() {
 		if !*synchronize {
 			glog.Error("zeromq connection without synchronization does not make sense, ignoring zeromq parameter")
 		} else {
-			go syncLoop()
 			mq, err = bchain.NewMQ(*zeroMQBinding, mqHandler)
 			if err != nil {
 				glog.Fatal("mq: ", err)
 			}
-
 		}
 	}
 
@@ -176,21 +183,41 @@ func main() {
 		waitForSignalAndShutdown(httpServer, mq, 5*time.Second)
 	}
 
+	close(chanSyncIndex)
+	close(chanSyncMempool)
+	<-chanSyncIndexDone
+	<-chanSyncMempoolDone
 }
 
-func syncLoop() {
-	for range syncChannel {
-		resyncIndex()
+func syncIndexLoop() {
+	defer close(chanSyncIndexDone)
+	glog.Info("syncIndexLoop starting")
+	for range chanSyncIndex {
+		if err := resyncIndex(); err != nil {
+			glog.Error(err)
+		}
 	}
+	glog.Info("syncIndexLoop stopped")
+}
+
+func syncMempoolLoop() {
+	defer close(chanSyncMempoolDone)
+	glog.Info("syncMempoolLoop starting")
+	for range chanSyncMempool {
+		if err := mempool.Resync(); err != nil {
+			glog.Error(err)
+		}
+	}
+	glog.Info("syncMempoolLoop stopped")
 }
 
 func mqHandler(m *bchain.MQMessage) {
 	body := hex.EncodeToString(m.Body)
-	glog.Infof("MQ: %s-%d  %s", m.Topic, m.Sequence, body)
+	glog.V(2).Infof("MQ: %s-%d  %s", m.Topic, m.Sequence, body)
 	if m.Topic == "hashblock" {
-		syncChannel <- struct{}{}
+		chanSyncIndex <- struct{}{}
 	} else if m.Topic == "hashtx" {
-
+		chanSyncMempool <- struct{}{}
 	} else {
 		glog.Errorf("MQ: unknown message %s-%d  %s", m.Topic, m.Sequence, body)
 	}
@@ -218,8 +245,6 @@ func waitForSignalAndShutdown(s *server.HttpServer, mq *bchain.MQ, timeout time.
 			glog.Error("HttpServer.Shutdown error: ", err)
 		}
 	}
-
-	close(syncChannel)
 }
 
 func printResult(txid string) error {
@@ -329,7 +354,12 @@ func resyncIndex() error {
 		}
 	}
 
-	return connectBlocks(hash)
+	err = connectBlocks(hash)
+	if err != nil {
+		return err
+	}
+	chanSyncMempool <- struct{}{}
+	return nil
 }
 
 func connectBlocks(
