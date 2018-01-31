@@ -56,6 +56,17 @@ type resGetBlockCount struct {
 	Result uint32    `json:"result"`
 }
 
+// getrawmempool
+
+type cmdGetMempool struct {
+	Method string `json:"method"`
+}
+
+type resGetMempool struct {
+	Error  *RPCError `json:"error"`
+	Result []string  `json:"result"`
+}
+
 // getblockheader
 
 type cmdGetBlockHeader struct {
@@ -306,6 +317,23 @@ func (b *BitcoinRPC) GetBlockFull(hash string) (*Block, error) {
 		return nil, res.Error
 	}
 	return &res.Result, nil
+}
+
+// GetMempool returns transactions in mempool.
+func (b *BitcoinRPC) GetMempool() ([]string, error) {
+	glog.V(1).Info("rpc: getrawmempool")
+
+	res := resGetMempool{}
+	req := cmdGetMempool{Method: "getrawmempool"}
+	err := b.call(&req, &res)
+
+	if err != nil {
+		return nil, err
+	}
+	if res.Error != nil {
+		return nil, res.Error
+	}
+	return res.Result, nil
 }
 
 // GetTransaction returns a transaction by the transaction ID.
