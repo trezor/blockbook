@@ -1,4 +1,4 @@
-package bitcoin
+package bchain
 
 import (
 	"encoding/binary"
@@ -24,7 +24,7 @@ type MQMessage struct {
 
 // New creates new Bitcoind ZeroMQ listener
 // callback function receives messages
-func New(binding string, callback func(*MQMessage)) (*MQ, error) {
+func NewMQ(binding string, callback func(*MQMessage)) (*MQ, error) {
 	context, err := zmq.NewContext()
 	if err != nil {
 		return nil, err

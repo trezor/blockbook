@@ -1,7 +1,7 @@
 package server
 
 import (
-	"blockbook/bitcoin"
+	"blockbook/bchain"
 	"blockbook/db"
 	"context"
 	"encoding/json"
@@ -131,7 +131,7 @@ func (s *HttpServer) transactions(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		respondError(w, err, fmt.Sprintf("address %s", address))
 	}
-	script, err := bitcoin.AddressToOutputScript(address)
+	script, err := bchain.AddressToOutputScript(address)
 	if err != nil {
 		respondError(w, err, fmt.Sprintf("address %s", address))
 	}

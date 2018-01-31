@@ -10,7 +10,7 @@ import (
 	"syscall"
 	"time"
 
-	"blockbook/bitcoin"
+	"blockbook/bchain"
 	"blockbook/db"
 	"blockbook/server"
 
@@ -48,7 +48,7 @@ var (
 
 var (
 	syncChannel = make(chan struct{})
-	chain       *bitcoin.BitcoinRPC
+	chain       *bchain.BitcoinRPC
 	index       *db.RocksDB
 )
 
@@ -71,15 +71,15 @@ func main() {
 		return
 	}
 
-	chain = bitcoin.NewBitcoinRPC(
+	chain = bchain.NewBitcoinRPC(
 		*rpcURL,
 		*rpcUser,
 		*rpcPass,
 		time.Duration(*rpcTimeout)*time.Second)
 
 	if *parse {
-		chain.Parser = &bitcoin.BitcoinBlockParser{
-			Params: bitcoin.GetChainParams()[0],
+		chain.Parser = &bchain.BitcoinBlockParser{
+			Params: bchain.GetChainParams()[0],
 		}
 	}
 
@@ -126,13 +126,13 @@ func main() {
 		}()
 	}
 
-	var mq *bitcoin.MQ
+	var mq *bchain.MQ
 	if *zeroMQBinding != "" {
 		if !*synchronize {
 			glog.Error("zeromq connection without synchronization does not make sense, ignoring zeromq parameter")
 		} else {
 			go syncLoop()
-			mq, err = bitcoin.New(*zeroMQBinding, mqHandler)
+			mq, err = bchain.NewMQ(*zeroMQBinding, mqHandler)
 			if err != nil {
 				glog.Fatal("mq: ", err)
 			}
@@ -149,7 +149,7 @@ func main() {
 		address := *queryAddress
 
 		if address != "" {
-			script, err := bitcoin.AddressToOutputScript(address)
+			script, err := bchain.AddressToOutputScript(address)
 			if err != nil {
 				glog.Fatalf("GetTransactions %v", err)
 			}
@@ -180,7 +180,7 @@ func syncLoop() {
 	}
 }
 
-func mqHandler(m *bitcoin.MQMessage) {
+func mqHandler(m *bchain.MQMessage) {
 	body := hex.EncodeToString(m.Body)
 	glog.Infof("MQ: %s-%d  %s", m.Topic, m.Sequence, body)
 	if m.Topic == "hashblock" {
@@ -192,7 +192,7 @@ func mqHandler(m *bitcoin.MQMessage) {
 	}
 }
 
-func waitForSignalAndShutdown(s *server.HttpServer, mq *bitcoin.MQ, timeout time.Duration) {
+func waitForSignalAndShutdown(s *server.HttpServer, mq *bchain.MQ, timeout time.Duration) {
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 
@@ -241,13 +241,13 @@ func resyncIndex() error {
 		return nil
 	}
 
-	var header *bitcoin.BlockHeader
+	var header *bchain.BlockHeader
 	if local != "" {
 		// Is local tip on the best chain?
 		header, err = chain.GetBlockHeader(local)
 		forked := false
 		if err != nil {
-			if e, ok := err.(*bitcoin.RPCError); ok && e.Message == "Block not found" {
+			if e, ok := err.(*bchain.RPCError); ok && e.Message == "Block not found" {
 				forked = true
 			} else {
 				return err
@@ -378,7 +378,7 @@ func connectBlocksParallel(
 			}
 			err := connectBlockChunk(low, high)
 			if err != nil {
-				if e, ok := err.(*bitcoin.RPCError); ok && (e.Message == "Block height out of range" || e.Message == "Block not found") {
+				if e, ok := err.(*bchain.RPCError); ok && (e.Message == "Block height out of range" || e.Message == "Block not found") {
 					break
 				}
 				glog.Fatalf("connectBlocksParallel %d-%d %v", low, high, err)
@@ -401,7 +401,7 @@ func connectBlockChunk(
 	connected, err := isBlockConnected(higher)
 	if err != nil || connected {
 		// if higher is over the best block, continue with lower block, otherwise return error
-		if e, ok := err.(*bitcoin.RPCError); !ok || e.Message != "Block height out of range" {
+		if e, ok := err.(*bchain.RPCError); !ok || e.Message != "Block height out of range" {
 			return err
 		}
 	}
@@ -452,7 +452,7 @@ func isBlockConnected(
 }
 
 type blockResult struct {
-	block *bitcoin.Block
+	block *bchain.Block
 	err   error
 }
 

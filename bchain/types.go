@@ -1,4 +1,4 @@
-package bitcoin
+package bchain
 
 import (
 	"github.com/btcsuite/btcd/txscript"
