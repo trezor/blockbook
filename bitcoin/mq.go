@@ -35,8 +35,10 @@ func New(binding string, callback func(*MQMessage)) (*MQ, error) {
 	}
 	socket.SetSubscribe("hashblock")
 	socket.SetSubscribe("hashtx")
-	socket.SetSubscribe("rawblock")
-	socket.SetSubscribe("rawtx")
+	// for now do not use raw subscriptions - we would have to handle skipped/lost notifications from zeromq
+	// on each notification we do sync or syncmempool respectively
+	// socket.SetSubscribe("rawblock")
+	// socket.SetSubscribe("rawtx")
 	socket.Connect(binding)
 	glog.Info("MQ listening to ", binding)
 	mq := &MQ{context, socket, true, make(chan bool)}
