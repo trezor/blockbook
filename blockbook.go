@@ -121,7 +121,11 @@ func main() {
 		go func() {
 			err = httpServer.Run()
 			if err != nil {
-				glog.Fatal("https: ", err)
+				if err.Error() == "http: Server closed" {
+					glog.Info(err)
+				} else {
+					glog.Fatal(err)
+				}
 			}
 		}()
 	}
@@ -216,7 +220,6 @@ func waitForSignalAndShutdown(s *server.HttpServer, mq *bchain.MQ, timeout time.
 	}
 
 	close(syncChannel)
-
 }
 
 func printResult(txid string) error {
