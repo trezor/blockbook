@@ -2,19 +2,22 @@
 
 ## Install
 
-Setup go environment:
+Setup go environment (Debian 9):
 
 ```
-sudo apt-get install golang
 sudo apt-get install git
+wget https://storage.googleapis.com/golang/go1.9.2.linux-amd64.tar.gz
+sudo mv go /usr/local
+sudo ln -s /usr/local/go/bin/go /usr/bin/go
 go help gopath
 ```
 
 Install RocksDB: https://github.com/facebook/rocksdb/blob/master/INSTALL.md
 
 ```
-sudo apt-get install libgflags-dev libsnappy-dev zlib1g-dev libbz2-dev liblz4-dev libzstd-dev
-cd /path/to/rocksdb
+sudo apt-get install libgflags-dev libsnappy-dev zlib1g-dev libbz2-dev liblz4-dev
+git clone https://github.com/facebook/rocksdb.git
+cd rocksdb
 make static_lib
 ```
 
@@ -22,7 +25,7 @@ Install gorocksdb: https://github.com/tecbot/gorocksdb
 
 ```
 CGO_CFLAGS="-I/path/to/rocksdb/include" \
-CGO_LDFLAGS="-L/path/to/rocksdb -lrocksdb -lstdc++ -lm -lz -lbz2 -lsnappy -llz4 -lzstd" \
+CGO_LDFLAGS="-L/path/to/rocksdb -lrocksdb -lstdc++ -lm -lz -lbz2 -lsnappy -llz4" \
   go get github.com/tecbot/gorocksdb
 ```
 
@@ -41,7 +44,10 @@ go get github.com/golang/glog
 Install blockbook:
 
 ```
-go get github.com/jpochyla/blockbook
+cd $GOPATH/src
+git clone https://github.com/jpochyla/blockbook.git
+cd blockbook
+go build
 ```
 
 ## Usage
