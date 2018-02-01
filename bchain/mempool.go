@@ -3,6 +3,7 @@ package bchain
 import (
 	"encoding/hex"
 	"sync"
+	"time"
 
 	"github.com/golang/glog"
 )
@@ -39,7 +40,8 @@ func (m *Mempool) updateMaps(newScriptToTx map[string][]string, newTxToScript ma
 // Resync is not reentrant, it should be called from a single thread.
 // Read operations (GetTransactions) are safe.
 func (m *Mempool) Resync() error {
-	glog.Info("Mempool: resync")
+	start := time.Now()
+	glog.V(1).Info("Mempool: resync")
 	txs, err := m.chain.GetMempool()
 	if err != nil {
 		return err
@@ -68,6 +70,6 @@ func (m *Mempool) Resync() error {
 		}
 	}
 	m.updateMaps(newScriptToTx, newTxToScript)
-	glog.Info("Mempool: resync finished, ", len(m.txToScript), " transactions in mempool")
+	glog.Info("Mempool: resync finished in ", time.Since(start), ", ", len(m.txToScript), " transactions in mempool")
 	return nil
 }
