@@ -193,20 +193,21 @@ func tickAndDebounce(tickTime time.Duration, debounceTime time.Duration, input c
 	timer := time.NewTimer(tickTime)
 Loop:
 	for {
-		timerChan := timer.C
 		select {
 		case _, ok := <-input:
-			timer.Stop()
-			// exit loop on closed channel
+			if !timer.Stop() {
+				<-timer.C
+			}
+			// exit loop on closed input channel
 			if !ok {
 				break Loop
 			}
 			// debounce for debounceTime
-			timer = time.NewTimer(debounceTime)
-		case <-timerChan:
+			timer.Reset(debounceTime)
+		case <-timer.C:
 			// do the action and start the loop again
 			f()
-			timer = time.NewTimer(tickTime)
+			timer.Reset(tickTime)
 		}
 	}
 }
