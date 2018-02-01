@@ -112,14 +112,15 @@ func main() {
 		return
 	}
 
-	go syncIndexLoop()
-	go syncMempoolLoop()
-
 	if *synchronize {
 		if err := resyncIndex(); err != nil {
 			glog.Fatal("resyncIndex ", err)
 		}
 	}
+
+	go syncIndexLoop()
+	go syncMempoolLoop()
+	chanSyncMempool <- struct{}{}
 
 	var httpServer *server.HTTPServer
 	if *httpServerBinding != "" {
@@ -363,7 +364,7 @@ func resyncIndex() error {
 			return err
 		}
 		if chainBestHeight-startHeight > uint32(*syncChunk) {
-			glog.Infof("resync: parallel sync of blocks %d-%d", startHeight, chainBestHeight)
+			glog.Infof("resync: parallel sync of blocks %d-%d, using %d workers", startHeight, chainBestHeight, *syncWorkers)
 			err = connectBlocksParallel(
 				startHeight,
 				chainBestHeight,
@@ -379,12 +380,7 @@ func resyncIndex() error {
 		}
 	}
 
-	err = connectBlocks(hash)
-	if err != nil {
-		return err
-	}
-	chanSyncMempool <- struct{}{}
-	return nil
+	return connectBlocks(hash)
 }
 
 func connectBlocks(
