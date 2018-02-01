@@ -16,26 +16,31 @@ import (
 	"github.com/gorilla/mux"
 )
 
-type HttpServer struct {
-	https *http.Server
-	db    *db.RocksDB
+// HTTPServer is handle to HttpServer
+type HTTPServer struct {
+	https   *http.Server
+	db      *db.RocksDB
+	mempool *bchain.Mempool
 }
 
-func New(httpServerBinding string, db *db.RocksDB) (*HttpServer, error) {
+// NewHTTPServer creates new REST interface to blockbook and returns its handle
+func NewHTTPServer(httpServerBinding string, db *db.RocksDB, mempool *bchain.Mempool) (*HTTPServer, error) {
 	https := &http.Server{
 		Addr: httpServerBinding,
 	}
-	s := &HttpServer{
-		https: https,
-		db:    db,
+	s := &HTTPServer{
+		https:   https,
+		db:      db,
+		mempool: mempool,
 	}
 
 	r := mux.NewRouter()
-
 	r.HandleFunc("/", s.info)
 	r.HandleFunc("/bestBlockHash", s.bestBlockHash)
 	r.HandleFunc("/blockHash/{height}", s.blockHash)
 	r.HandleFunc("/transactions/{address}/{lower}/{higher}", s.transactions)
+	r.HandleFunc("/confirmedTransactions/{address}/{lower}/{higher}", s.confirmedTransactions)
+	r.HandleFunc("/unconfirmedTransactions/{address}", s.unconfirmedTransactions)
 
 	var h http.Handler = r
 	h = handlers.LoggingHandler(os.Stderr, h)
@@ -45,26 +50,26 @@ func New(httpServerBinding string, db *db.RocksDB) (*HttpServer, error) {
 }
 
 // Run starts the server
-func (s *HttpServer) Run() error {
+func (s *HTTPServer) Run() error {
 	glog.Infof("http server starting to listen on %s", s.https.Addr)
 	return s.https.ListenAndServe()
 }
 
 // Close closes the server
-func (s *HttpServer) Close() error {
+func (s *HTTPServer) Close() error {
 	glog.Infof("http server closing")
 	return s.https.Close()
 }
 
 // Shutdown shuts down the server
-func (s *HttpServer) Shutdown(ctx context.Context) error {
+func (s *HTTPServer) Shutdown(ctx context.Context) error {
 	glog.Infof("http server shutdown")
 	return s.https.Shutdown(ctx)
 }
 
 func respondError(w http.ResponseWriter, err error, context string) {
 	w.WriteHeader(http.StatusBadRequest)
-	glog.Errorf("http server %s error: %v", context, err)
+	glog.Errorf("http server (context %s) error: %v", context, err)
 }
 
 func respondHashData(w http.ResponseWriter, hash string) {
@@ -76,7 +81,7 @@ func respondHashData(w http.ResponseWriter, hash string) {
 	})
 }
 
-func (s *HttpServer) info(w http.ResponseWriter, r *http.Request) {
+func (s *HTTPServer) info(w http.ResponseWriter, r *http.Request) {
 	type info struct {
 		Version         string `json:"version"`
 		BestBlockHeight uint32 `json:"bestBlockHeight"`
@@ -95,7 +100,7 @@ func (s *HttpServer) info(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (s *HttpServer) bestBlockHash(w http.ResponseWriter, r *http.Request) {
+func (s *HTTPServer) bestBlockHash(w http.ResponseWriter, r *http.Request) {
 	_, hash, err := s.db.GetBestBlock()
 	if err != nil {
 		respondError(w, err, "bestBlockHash")
@@ -104,7 +109,7 @@ func (s *HttpServer) bestBlockHash(w http.ResponseWriter, r *http.Request) {
 	respondHashData(w, hash)
 }
 
-func (s *HttpServer) blockHash(w http.ResponseWriter, r *http.Request) {
+func (s *HTTPServer) blockHash(w http.ResponseWriter, r *http.Request) {
 	heightString := mux.Vars(r)["height"]
 	var hash string
 	height, err := strconv.ParseUint(heightString, 10, 32)
@@ -118,31 +123,78 @@ func (s *HttpServer) blockHash(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *HttpServer) transactions(w http.ResponseWriter, r *http.Request) {
-	type transactionList struct {
-		Txid []string `json:"txid"`
-	}
-	address := mux.Vars(r)["address"]
-	higher, err := strconv.ParseUint(mux.Vars(r)["higher"], 10, 32)
+func getAddress(r *http.Request) (address string, script []byte, err error) {
+	address = mux.Vars(r)["address"]
+	script, err = bchain.AddressToOutputScript(address)
+	return
+}
+
+func getAddressAndHeightRange(r *http.Request) (address string, script []byte, lower, higher uint32, err error) {
+	address, script, err = getAddress(r)
 	if err != nil {
-		respondError(w, err, fmt.Sprintf("address %s", address))
+		return
 	}
-	lower, err := strconv.ParseUint(mux.Vars(r)["lower"], 10, 32)
+	higher64, err := strconv.ParseUint(mux.Vars(r)["higher"], 10, 32)
 	if err != nil {
-		respondError(w, err, fmt.Sprintf("address %s", address))
+		return
 	}
-	script, err := bchain.AddressToOutputScript(address)
+	lower64, err := strconv.ParseUint(mux.Vars(r)["lower"], 10, 32)
 	if err != nil {
-		respondError(w, err, fmt.Sprintf("address %s", address))
+		return
+	}
+	return address, script, uint32(lower64), uint32(higher64), err
+}
+
+type transactionList struct {
+	Txid []string `json:"txid"`
+}
+
+func (s *HTTPServer) unconfirmedTransactions(w http.ResponseWriter, r *http.Request) {
+	address, script, err := getAddress(r)
+	if err != nil {
+		respondError(w, err, fmt.Sprint("unconfirmedTransactions for address", address))
+	}
+	txs, err := s.mempool.GetTransactions(script)
+	if err != nil {
+		respondError(w, err, fmt.Sprint("unconfirmedTransactions for address", address))
+	}
+	txList := transactionList{Txid: txs}
+	json.NewEncoder(w).Encode(txList)
+}
+
+func (s *HTTPServer) confirmedTransactions(w http.ResponseWriter, r *http.Request) {
+	address, script, lower, higher, err := getAddressAndHeightRange(r)
+	if err != nil {
+		respondError(w, err, fmt.Sprint("confirmedTransactions for address", address))
 	}
 	txList := transactionList{}
-	err = s.db.GetTransactions(script, uint32(lower), uint32(higher), func(txid string) error {
+	err = s.db.GetTransactions(script, lower, higher, func(txid string) error {
 		txList.Txid = append(txList.Txid, txid)
 		return nil
 	})
 	if err != nil {
-		respondError(w, err, fmt.Sprintf("address %s", address))
+		respondError(w, err, fmt.Sprint("confirmedTransactions for address", address))
 	}
 	json.NewEncoder(w).Encode(txList)
+}
 
+func (s *HTTPServer) transactions(w http.ResponseWriter, r *http.Request) {
+	address, script, lower, higher, err := getAddressAndHeightRange(r)
+	if err != nil {
+		respondError(w, err, fmt.Sprint("transactions for address", address))
+	}
+	txList := transactionList{}
+	err = s.db.GetTransactions(script, lower, higher, func(txid string) error {
+		txList.Txid = append(txList.Txid, txid)
+		return nil
+	})
+	if err != nil {
+		respondError(w, err, fmt.Sprint("transactions for address", address))
+	}
+	txs, err := s.mempool.GetTransactions(script)
+	if err != nil {
+		respondError(w, err, fmt.Sprint("transactions for address", address))
+	}
+	txList.Txid = append(txList.Txid, txs...)
+	json.NewEncoder(w).Encode(txList)
 }

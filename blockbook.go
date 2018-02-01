@@ -121,9 +121,9 @@ func main() {
 		}
 	}
 
-	var httpServer *server.HttpServer
+	var httpServer *server.HTTPServer
 	if *httpServerBinding != "" {
-		httpServer, err = server.New(*httpServerBinding, index)
+		httpServer, err = server.NewHTTPServer(*httpServerBinding, index, mempool)
 		if err != nil {
 			glog.Fatal("https: ", err)
 		}
@@ -248,7 +248,7 @@ func mqHandler(m *bchain.MQMessage) {
 	}
 }
 
-func waitForSignalAndShutdown(s *server.HttpServer, mq *bchain.MQ, timeout time.Duration) {
+func waitForSignalAndShutdown(s *server.HTTPServer, mq *bchain.MQ, timeout time.Duration) {
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 
