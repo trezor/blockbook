@@ -116,11 +116,10 @@ func main() {
 		if err := resyncIndex(); err != nil {
 			glog.Fatal("resyncIndex ", err)
 		}
+		go syncIndexLoop()
+		go syncMempoolLoop()
+		chanSyncMempool <- struct{}{}
 	}
-
-	go syncIndexLoop()
-	go syncMempoolLoop()
-	chanSyncMempool <- struct{}{}
 
 	var httpServer *server.HTTPServer
 	if *httpServerBinding != "" {
@@ -184,10 +183,12 @@ func main() {
 		waitForSignalAndShutdown(httpServer, mq, 5*time.Second)
 	}
 
-	close(chanSyncIndex)
-	close(chanSyncMempool)
-	<-chanSyncIndexDone
-	<-chanSyncMempoolDone
+	if *synchronize {
+		close(chanSyncIndex)
+		close(chanSyncMempool)
+		<-chanSyncIndexDone
+		<-chanSyncMempoolDone
+	}
 }
 
 func tickAndDebounce(tickTime time.Duration, debounceTime time.Duration, input chan struct{}, f func()) {
