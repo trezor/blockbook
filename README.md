@@ -91,7 +91,7 @@ The data are separated to different column families:
 
 - **inputs** - maps *transaction outpoint* to *input transaction* that spends it
 
-  *Transaction outpoint* stored as array of 32 bytes for transaction id + variable length outpoint index
+  *Transaction outpoint* stored as array of 32 bytes for transaction id + variable length outpoint index  
   *Input transaction* stored as array of 32 bytes for transaction id + variable length input index
 
   Example - (all data hex encoded)
@@ -99,3 +99,18 @@ The data are separated to different column families:
 0x7246e79f97b5f82e7f51e291d533964028ec90be0634af8a8ef7d5a903c7f6d300 : 0x0a7aa90ea0269c79f844c516805e4cac594adb8830e56fca894b66aab19136a428
 0x7246e79f97b5f82e7f51e291d533964028ec90be0634af8a8ef7d5a903c7f6d301 : 0x4303a9fcfe6026b4d33ba488df6443c9a99bca7b7fcb7c6f6cd65cea24a749b700
 ```
+
+## Todo
+
+- mempool - return also input transactions
+- blockchain - return inputs from mempool
+- speedup - upper limit in rocksdb.GetTransactions
+- limit number of transactions returned by rocksdb.GetTransactions - probably by return value from callback function
+- legacy socket.io JSON interface
+- protobuf websocket interface
+- parallel sync - rewrite - it is not possible to gracefully stop it now, can leave holes in the block
+- parallel sync - let rocksdb to compact itself from time to time, otherwise it consumes too much disk space
+- disconnect blocks - optimize - full range scan is too slow and takes too much disk space (creates snapshot of the whole outputs), split to multiple iterators
+- disconnect blocks - keep map of transactions in the last 100 blocks
+- xpub index
+- tests
