@@ -274,8 +274,8 @@ func waitForSignalAndShutdown(s *server.HTTPServer, mq *bchain.MQ, timeout time.
 	}
 }
 
-func printResult(txid string) error {
-	glog.Info(txid)
+func printResult(txid string, vout uint32, isOutput bool) error {
+	glog.Info(txid, vout, isOutput)
 	return nil
 }
 

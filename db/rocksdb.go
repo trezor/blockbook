@@ -85,7 +85,7 @@ func (d *RocksDB) Close() error {
 
 // GetTransactions finds all input/output transactions for address specified by outputScript.
 // Transaction are passed to callback function.
-func (d *RocksDB) GetTransactions(outputScript []byte, lower uint32, higher uint32, fn func(txid string) error) (err error) {
+func (d *RocksDB) GetTransactions(outputScript []byte, lower uint32, higher uint32, fn func(txid string, vout uint32, isOutput bool) error) (err error) {
 	if glog.V(1) {
 		glog.Infof("rocksdb: address get %s %d-%d ", unpackOutputScript(outputScript), lower, higher)
 	}
@@ -116,7 +116,7 @@ func (d *RocksDB) GetTransactions(outputScript []byte, lower uint32, higher uint
 			glog.Infof("rocksdb: output %s: %s", hex.EncodeToString(key), hex.EncodeToString(val))
 		}
 		for _, o := range outpoints {
-			if err := fn(o.txid); err != nil {
+			if err := fn(o.txid, o.vout, true); err != nil {
 				return err
 			}
 			boutpoint, err := packOutpoint(o.txid, o.vout)
@@ -136,7 +136,7 @@ func (d *RocksDB) GetTransactions(outputScript []byte, lower uint32, higher uint
 					return err
 				}
 				for _, i := range inpoints {
-					if err := fn(i.txid); err != nil {
+					if err := fn(i.txid, i.vout, false); err != nil {
 						return err
 					}
 				}

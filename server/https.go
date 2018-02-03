@@ -168,7 +168,7 @@ func (s *HTTPServer) confirmedTransactions(w http.ResponseWriter, r *http.Reques
 		respondError(w, err, fmt.Sprint("confirmedTransactions for address", address))
 	}
 	txList := transactionList{}
-	err = s.db.GetTransactions(script, lower, higher, func(txid string) error {
+	err = s.db.GetTransactions(script, lower, higher, func(txid string, vout uint32, isOutput bool) error {
 		txList.Txid = append(txList.Txid, txid)
 		return nil
 	})
@@ -184,8 +184,14 @@ func (s *HTTPServer) transactions(w http.ResponseWriter, r *http.Request) {
 		respondError(w, err, fmt.Sprint("transactions for address", address))
 	}
 	txList := transactionList{}
-	err = s.db.GetTransactions(script, lower, higher, func(txid string) error {
+	err = s.db.GetTransactions(script, lower, higher, func(txid string, vout uint32, isOutput bool) error {
 		txList.Txid = append(txList.Txid, txid)
+		if isOutput {
+			input := s.mempool.GetInput(txid, vout)
+			if input != "" {
+				txList.Txid = append(txList.Txid, txid)
+			}
+		}
 		return nil
 	})
 	if err != nil {
