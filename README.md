@@ -102,12 +102,14 @@ The data are separated to different column families:
 
 ## Todo
 
-- mempool - return also input transactions
-- blockchain - return inputs from mempool
+- ~~mempool - return also input transactions~~
+- ~~blockchain - return inputs from mempool~~
+- do not return duplicate txids
 - speedup - upper limit in rocksdb.GetTransactions
 - limit number of transactions returned by rocksdb.GetTransactions - probably by return value from callback function
 - legacy socket.io JSON interface
 - protobuf websocket interface
+- stream results to REST and websocket interfaces
 - parallel sync - rewrite - it is not possible to gracefully stop it now, can leave holes in the block
 - parallel sync - let rocksdb to compact itself from time to time, otherwise it consumes too much disk space
 - disconnect blocks - optimize - full range scan is too slow and takes too much disk space (creates snapshot of the whole outputs), split to multiple iterators
