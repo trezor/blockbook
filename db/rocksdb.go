@@ -203,10 +203,14 @@ func (d *RocksDB) writeOutputs(
 		for _, output := range tx.Vout {
 			outputScript := output.ScriptPubKey.Hex
 			if outputScript != "" {
-				records[outputScript] = append(records[outputScript], outpoint{
-					txid: tx.Txid,
-					vout: output.N,
-				})
+				if len(outputScript) > 1024 {
+					glog.Infof("block %d, skipping outputScript of length %d", block.Height, len(outputScript)/2)
+				} else {
+					records[outputScript] = append(records[outputScript], outpoint{
+						txid: tx.Txid,
+						vout: output.N,
+					})
+				}
 			}
 		}
 	}
