@@ -168,7 +168,7 @@ func main() {
 				glog.Fatalf("GetTransactions %v", err)
 			}
 		} else if !*synchronize {
-			if err = connectBlocksParallel(
+			if err = connectBlocksParallelInChunks(
 				height,
 				until,
 				*syncChunk,
@@ -369,7 +369,6 @@ func resyncIndex() error {
 			err = connectBlocksParallel(
 				startHeight,
 				chainBestHeight,
-				*syncChunk,
 				*syncWorkers,
 			)
 			if err != nil {
@@ -413,6 +412,54 @@ func connectBlocks(
 }
 
 func connectBlocksParallel(
+	lower uint32,
+	higher uint32,
+	numWorkers int,
+) error {
+	var wg sync.WaitGroup
+	hch := make(chan string, numWorkers)
+
+	work := func() {
+		defer wg.Done()
+		for hash := range hch {
+			block, err := chain.GetBlock(hash)
+			if err != nil {
+				glog.Error("Connect block ", hash, " error ", err)
+				continue
+			}
+			if *dryRun {
+				continue
+			}
+			err = index.ConnectBlock(block)
+			if err != nil {
+				glog.Error("Connect block ", hash, " error ", err)
+			}
+		}
+	}
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go work()
+	}
+	var (
+		err  error
+		hash string
+	)
+	for h := lower; h <= higher; h++ {
+		hash, err = chain.GetBlockHash(h)
+		if err != nil {
+			break
+		}
+		hch <- hash
+		if h%1000 == 0 {
+			glog.Info("connecting block ", h, " ", hash)
+		}
+	}
+	close(hch)
+	wg.Wait()
+	return err
+}
+
+func connectBlocksParallelInChunks(
 	lower uint32,
 	higher uint32,
 	chunkSize int,
