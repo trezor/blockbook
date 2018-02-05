@@ -416,26 +416,43 @@ func (d *RocksDB) DisconnectBlocks(
 	higher uint32,
 ) error {
 	glog.Infof("rocksdb: disconnecting blocks %d-%d", lower, higher)
-	it := d.db.NewIteratorCF(d.ro, d.cfh[cfOutputs])
-	defer it.Close()
 	outputKeys := [][]byte{}
 	outputValues := [][]byte{}
-	var totalOutputs uint64
-	for it.SeekToFirst(); it.Valid(); it.Next() {
-		totalOutputs++
-		key := it.Key().Data()
-		l := len(key)
-		if l > 4 {
-			height := unpackUint(key[l-4 : l])
-			if height >= lower && height <= higher {
-				outputKey := make([]byte, len(key))
-				copy(outputKey, key)
-				outputKeys = append(outputKeys, outputKey)
-				value := it.Value().Data()
-				outputValue := make([]byte, len(value))
-				copy(outputValue, value)
-				outputValues = append(outputValues, outputValue)
+	var totalOutputs, count uint64
+	var seekKey []byte
+	for {
+		var key []byte
+		it := d.db.NewIteratorCF(d.ro, d.cfh[cfOutputs])
+		if totalOutputs == 0 {
+			it.SeekToFirst()
+		} else {
+			it.Seek(seekKey)
+			it.Next()
+		}
+		for count = 0; it.Valid() && count < 1000000; it.Next() {
+			totalOutputs++
+			count++
+			key = it.Key().Data()
+			l := len(key)
+			if l > 4 {
+				height := unpackUint(key[l-4 : l])
+				if height >= lower && height <= higher {
+					outputKey := make([]byte, len(key))
+					copy(outputKey, key)
+					outputKeys = append(outputKeys, outputKey)
+					value := it.Value().Data()
+					outputValue := make([]byte, len(value))
+					copy(outputValue, value)
+					outputValues = append(outputValues, outputValue)
+				}
 			}
+		}
+		seekKey = make([]byte, len(key))
+		copy(seekKey, key)
+		valid := it.Valid()
+		it.Close()
+		if !valid {
+			break
 		}
 	}
 	glog.Infof("rocksdb: about to disconnect %d outputs from %d", len(outputKeys), totalOutputs)
