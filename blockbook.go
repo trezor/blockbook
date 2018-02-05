@@ -416,6 +416,11 @@ func connectBlocksParallel(
 	higher uint32,
 	numWorkers int,
 ) error {
+	err := index.ReopenWithBulk(true)
+	if err != nil {
+		return err
+	}
+
 	var wg sync.WaitGroup
 	hch := make(chan string, numWorkers)
 	running := make([]bool, numWorkers)
@@ -444,10 +449,8 @@ func connectBlocksParallel(
 		wg.Add(1)
 		go work(i)
 	}
-	var (
-		err  error
-		hash string
-	)
+	var hash string
+
 	for h := lower; h <= higher; h++ {
 		hash, err = chain.GetBlockHash(h)
 		if err != nil {
@@ -469,7 +472,7 @@ func connectBlocksParallel(
 					}
 					break
 				}
-				if err = index.CompactDatabase(); err != nil {
+				if err = index.CompactDatabase(true); err != nil {
 					break
 				}
 			}
@@ -477,6 +480,11 @@ func connectBlocksParallel(
 	}
 	close(hch)
 	wg.Wait()
+
+	if err == nil {
+		err = index.ReopenWithBulk(false)
+	}
+
 	return err
 }
 
