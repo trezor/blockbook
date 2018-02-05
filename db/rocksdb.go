@@ -55,18 +55,30 @@ func openDB(path string, bulk bool) (*gorocksdb.DB, []*gorocksdb.ColumnFamilyHan
 	opts.SetBytesPerSync(1 << 20)    // 1mb
 	opts.SetWriteBufferSize(2 << 30) // 2 gb
 	opts.SetMaxOpenFiles(25000)
+
+	// opts for outputs are different:
+	// no bloom filter - from documentation: If most of your queries are executed using iterators, you shouldn't set bloom filter
+	optsOutputs := gorocksdb.NewDefaultOptions()
+	optsOutputs.SetCreateIfMissing(true)
+	optsOutputs.SetCreateIfMissingColumnFamilies(true)
+	optsOutputs.SetMaxBackgroundCompactions(4)
+	optsOutputs.SetMaxBackgroundFlushes(2)
+	optsOutputs.SetBytesPerSync(1 << 20)    // 1mb
+	optsOutputs.SetWriteBufferSize(2 << 30) // 2 gb
+	optsOutputs.SetMaxOpenFiles(25000)
+
 	if bulk {
 		opts.PrepareForBulkLoad()
+		optsOutputs.PrepareForBulkLoad()
 	}
 
-	fcOptions := []*gorocksdb.Options{opts, opts, opts, opts}
+	fcOptions := []*gorocksdb.Options{opts, opts, optsOutputs, opts}
 
 	db, cfh, err := gorocksdb.OpenDbColumnFamilies(opts, path, cfNames, fcOptions)
 	if err != nil {
 		return nil, nil, err
 	}
 	return db, cfh, nil
-
 }
 
 // NewRocksDB opens an internal handle to RocksDB environment.  Close
