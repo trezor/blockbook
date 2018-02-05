@@ -344,6 +344,8 @@ func resyncIndex(bulk bool) error {
 		glog.Info("resync: local is behind")
 		hash = header.Next
 		startHeight = localBestHeight
+		// bulk load is allowed only for empty db, otherwise we could get rocksdb "error db has more levels than options.num_levels"
+		bulk = false
 	} else {
 		// If the local block is missing, we're indexing from the genesis block
 		// or from the start block specified by flags
@@ -359,7 +361,7 @@ func resyncIndex(bulk bool) error {
 
 	// if parallel operation is enabled and the number of blocks to be connected is large,
 	// use parallel routine to load majority of blocks
-	if bulk && *syncWorkers > 1 {
+	if *syncWorkers > 1 {
 		chainBestHeight, err := chain.GetBestBlockHeight()
 		if err != nil {
 			return err
@@ -370,6 +372,7 @@ func resyncIndex(bulk bool) error {
 				startHeight,
 				chainBestHeight,
 				*syncWorkers,
+				bulk,
 			)
 			if err != nil {
 				return err
@@ -415,10 +418,14 @@ func connectBlocksParallel(
 	lower uint32,
 	higher uint32,
 	numWorkers int,
+	bulk bool,
 ) error {
-	err := index.ReopenWithBulk(true)
-	if err != nil {
-		return err
+	var err error
+	if bulk {
+		err = index.ReopenWithBulk(true)
+		if err != nil {
+			return err
+		}
 	}
 
 	var wg sync.WaitGroup
@@ -459,21 +466,23 @@ func connectBlocksParallel(
 		hch <- hash
 		if h > 0 && h%1000 == 0 {
 			glog.Info("connecting block ", h, " ", hash)
-			if h%50000 == 0 {
-				// wait for the workers to finish block
-			WaitAgain:
-				for {
-					for _, r := range running {
-						if r {
-							glog.Info("Waiting ", running)
-							time.Sleep(time.Millisecond * 500)
-							continue WaitAgain
+			if bulk {
+				if h%50000 == 0 {
+					// wait for the workers to finish block
+				WaitAgain:
+					for {
+						for _, r := range running {
+							if r {
+								glog.Info("Waiting ", running)
+								time.Sleep(time.Millisecond * 500)
+								continue WaitAgain
+							}
 						}
+						break
 					}
-					break
-				}
-				if err = index.CompactDatabase(true); err != nil {
-					break
+					if err = index.CompactDatabase(bulk); err != nil {
+						break
+					}
 				}
 			}
 		}
@@ -481,7 +490,7 @@ func connectBlocksParallel(
 	close(hch)
 	wg.Wait()
 
-	if err == nil {
+	if err == nil && bulk {
 		err = index.ReopenWithBulk(false)
 	}
 
