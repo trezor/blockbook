@@ -6,6 +6,7 @@ Setup go environment (Debian 9):
 
 ```
 sudo apt-get install git
+apt-get install -y pkg-config lxc-dev
 wget https://storage.googleapis.com/golang/go1.9.2.linux-amd64.tar.gz
 sudo mv go /usr/local
 sudo ln -s /usr/local/go/bin/go /usr/bin/go
@@ -105,13 +106,12 @@ The data are separated to different column families:
 - ~~mempool - return also input transactions~~
 - ~~blockchain - return inputs from mempool~~
 - do not return duplicate txids
-- speedup - upper limit in rocksdb.GetTransactions
 - limit number of transactions returned by rocksdb.GetTransactions - probably by return value from callback function
 - legacy socket.io JSON interface
 - protobuf websocket interface
 - stream results to REST and websocket interfaces
 - parallel sync - rewrite - it is not possible to gracefully stop it now, can leave holes in the block
-- parallel sync - let rocksdb to compact itself from time to time, otherwise it consumes too much disk space
+- ~~parallel sync - let rocksdb to compact itself from time to time, otherwise it consumes too much disk space~~
 - disconnect blocks - optimize - full range scan is too slow and takes too much disk space (creates snapshot of the whole outputs), split to multiple iterators
 - disconnect blocks - keep map of transactions in the last 100 blocks
 - xpub index
