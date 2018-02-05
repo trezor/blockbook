@@ -6,6 +6,8 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
+	"os"
+	"path/filepath"
 
 	"github.com/bsm/go-vlq"
 	"github.com/golang/glog"
@@ -21,10 +23,11 @@ func RepairRocksDB(name string) error {
 
 // RocksDB handle
 type RocksDB struct {
-	db  *gorocksdb.DB
-	wo  *gorocksdb.WriteOptions
-	ro  *gorocksdb.ReadOptions
-	cfh []*gorocksdb.ColumnFamilyHandle
+	path string
+	db   *gorocksdb.DB
+	wo   *gorocksdb.WriteOptions
+	ro   *gorocksdb.ReadOptions
+	cfh  []*gorocksdb.ColumnFamilyHandle
 }
 
 const (
@@ -36,11 +39,7 @@ const (
 
 var cfNames = []string{"default", "height", "outputs", "inputs"}
 
-// NewRocksDB opens an internal handle to RocksDB environment.  Close
-// needs to be called to release it.
-func NewRocksDB(path string) (d *RocksDB, err error) {
-	glog.Infof("rocksdb: open %s", path)
-
+func openDB(path string) (*gorocksdb.DB, []*gorocksdb.ColumnFamilyHandle, error) {
 	fp := gorocksdb.NewBloomFilter(10)
 	bbto := gorocksdb.NewDefaultBlockBasedTableOptions()
 	bbto.SetBlockSize(16 << 10)                        // 16kb
@@ -61,25 +60,37 @@ func NewRocksDB(path string) (d *RocksDB, err error) {
 
 	db, cfh, err := gorocksdb.OpenDbColumnFamilies(opts, path, cfNames, fcOptions)
 	if err != nil {
-		return
+		return nil, nil, err
 	}
+	return db, cfh, nil
 
+}
+
+// NewRocksDB opens an internal handle to RocksDB environment.  Close
+// needs to be called to release it.
+func NewRocksDB(path string) (d *RocksDB, err error) {
+	glog.Infof("rocksdb: open %s", path)
+	db, cfh, err := openDB(path)
 	wo := gorocksdb.NewDefaultWriteOptions()
 	ro := gorocksdb.NewDefaultReadOptions()
 	ro.SetFillCache(false)
+	return &RocksDB{path, db, wo, ro, cfh}, nil
+}
 
-	return &RocksDB{db, wo, ro, cfh}, nil
+func (d *RocksDB) closeDB() error {
+	for _, h := range d.cfh {
+		h.Destroy()
+	}
+	d.db.Close()
+	return nil
 }
 
 // Close releases the RocksDB environment opened in NewRocksDB.
 func (d *RocksDB) Close() error {
 	glog.Infof("rocksdb: close")
-	for _, h := range d.cfh {
-		h.Destroy()
-	}
+	d.closeDB()
 	d.wo.Destroy()
 	d.ro.Destroy()
-	d.db.Close()
 	return nil
 }
 
@@ -446,6 +457,39 @@ func (d *RocksDB) DisconnectBlocks(
 		glog.Infof("rocksdb: blocks %d-%d disconnected", lower, higher)
 	}
 	return err
+}
+
+func dirSize(path string) (int64, error) {
+	var size int64
+	err := filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
+		if !info.IsDir() {
+			size += info.Size()
+		}
+		return err
+	})
+	return size, err
+}
+
+// CompactDatabase compacts the database
+// After unsuccessful experiment with CompactRange method (slow and actually fragmenting the db without compacting)
+// the method now closes the db instance and opens it again.
+// This means that during compact nobody can access the dababase!
+func (d *RocksDB) CompactDatabase() error {
+	size, _ := dirSize(d.path)
+	glog.Info("Compacting database, db size ", size)
+	err := d.closeDB()
+	if err != nil {
+		return err
+	}
+	d.db = nil
+	db, cfh, err := openDB(d.path)
+	if err != nil {
+		return err
+	}
+	d.db, d.cfh = db, cfh
+	size, _ = dirSize(d.path)
+	glog.Info("Compacting database finished, db size ", size)
+	return nil
 }
 
 // Helpers

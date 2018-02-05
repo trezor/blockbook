@@ -113,7 +113,7 @@ func main() {
 	}
 
 	if *synchronize {
-		if err := resyncIndex(); err != nil {
+		if err := resyncIndex(true); err != nil {
 			glog.Fatal("resyncIndex ", err)
 		}
 		go syncIndexLoop()
@@ -219,7 +219,7 @@ func syncIndexLoop() {
 	glog.Info("syncIndexLoop starting")
 	// resync index about every 15 minutes if there are no chanSyncIndex requests, with debounce 1 second
 	tickAndDebounce(935093*time.Millisecond, 1009*time.Millisecond, chanSyncIndex, func() {
-		if err := resyncIndex(); err != nil {
+		if err := resyncIndex(false); err != nil {
 			glog.Error("syncIndexLoop", err)
 		}
 	})
@@ -279,7 +279,7 @@ func printResult(txid string, vout uint32, isOutput bool) error {
 	return nil
 }
 
-func resyncIndex() error {
+func resyncIndex(bulk bool) error {
 	remote, err := chain.GetBestBlockHash()
 	if err != nil {
 		return err
@@ -334,7 +334,7 @@ func resyncIndex() error {
 			if err != nil {
 				return err
 			}
-			return resyncIndex()
+			return resyncIndex(false)
 		}
 	}
 
@@ -359,7 +359,7 @@ func resyncIndex() error {
 
 	// if parallel operation is enabled and the number of blocks to be connected is large,
 	// use parallel routine to load majority of blocks
-	if *syncWorkers > 1 {
+	if bulk && *syncWorkers > 1 {
 		chainBestHeight, err := chain.GetBestBlockHeight()
 		if err != nil {
 			return err
@@ -376,7 +376,7 @@ func resyncIndex() error {
 			}
 			// after parallel load finish the sync using standard way,
 			// new blocks may have been created in the meantime
-			return resyncIndex()
+			return resyncIndex(false)
 		}
 	}
 
@@ -418,27 +418,31 @@ func connectBlocksParallel(
 ) error {
 	var wg sync.WaitGroup
 	hch := make(chan string, numWorkers)
-
-	work := func() {
+	running := make([]bool, numWorkers)
+	work := func(i int) {
 		defer wg.Done()
 		for hash := range hch {
+			running[i] = true
 			block, err := chain.GetBlock(hash)
 			if err != nil {
 				glog.Error("Connect block ", hash, " error ", err)
+				running[i] = false
 				continue
 			}
 			if *dryRun {
+				running[i] = false
 				continue
 			}
 			err = index.ConnectBlock(block)
 			if err != nil {
 				glog.Error("Connect block ", hash, " error ", err)
 			}
+			running[i] = false
 		}
 	}
 	for i := 0; i < numWorkers; i++ {
 		wg.Add(1)
-		go work()
+		go work(i)
 	}
 	var (
 		err  error
@@ -450,8 +454,25 @@ func connectBlocksParallel(
 			break
 		}
 		hch <- hash
-		if h%1000 == 0 {
+		if h > 0 && h%1000 == 0 {
 			glog.Info("connecting block ", h, " ", hash)
+			if h%50000 == 0 {
+				// wait for the workers to finish block
+			WaitAgain:
+				for {
+					for _, r := range running {
+						if r {
+							glog.Info("Waiting ", running)
+							time.Sleep(time.Millisecond * 500)
+							continue WaitAgain
+						}
+					}
+					break
+				}
+				if err = index.CompactDatabase(); err != nil {
+					break
+				}
+			}
 		}
 	}
 	close(hch)
