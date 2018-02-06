@@ -4,6 +4,8 @@ import (
 	"blockbook/bchain"
 	"blockbook/db"
 	"context"
+	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -27,22 +29,20 @@ func NewSocketIoServer(binding string, db *db.RocksDB, mempool *bchain.Mempool) 
 
 	server.On(gosocketio.OnConnection, func(c *gosocketio.Channel) {
 		glog.Info("Client connected ", c.Id())
-		c.Join("chat")
 	})
 
 	server.On(gosocketio.OnDisconnection, func(c *gosocketio.Channel) {
 		glog.Info("Client disconnected ", c.Id())
 	})
 
+	server.On(gosocketio.OnError, func(c *gosocketio.Channel) {
+		glog.Info("Client error ", c.Id())
+	})
+
 	type Message struct {
 		Name    string `json:"name"`
 		Message string `json:"message"`
 	}
-
-	server.On("send", func(c *gosocketio.Channel, msg Message) string {
-		c.BroadcastTo("chat", "message", msg)
-		return "OK"
-	})
 
 	addr, path := splitBinding(binding)
 	serveMux := http.NewServeMux()
@@ -59,6 +59,14 @@ func NewSocketIoServer(binding string, db *db.RocksDB, mempool *bchain.Mempool) 
 		db:      db,
 		mempool: mempool,
 	}
+
+	server.On("message", s.onMessage)
+
+	server.On("send", func(c *gosocketio.Channel, msg Message) string {
+		glog.Info(c.Id(), "; ", msg)
+		return "OK"
+	})
+
 	return s, nil
 }
 
@@ -86,4 +94,89 @@ func (s *SocketIoServer) Close() error {
 func (s *SocketIoServer) Shutdown(ctx context.Context) error {
 	glog.Infof("socketio server shutdown")
 	return s.https.Shutdown(ctx)
+}
+
+type reqRange struct {
+	Start            int  `json:"start"`
+	End              int  `json:"end"`
+	QueryMempol      bool `json:"queryMempol"`
+	QueryMempoolOnly bool `json:"queryMempoolOnly"`
+	From             int  `json:"from"`
+	To               int  `json:"to"`
+}
+
+func (s *SocketIoServer) onMessage(c *gosocketio.Channel, req map[string]json.RawMessage) string {
+	var err error
+	var rv []byte
+	var rvi interface{}
+	method := string(req["method"])
+	params := req["params"]
+	if method == "\"getAddressTxids\"" {
+		addr, rr, err := unmarshalGetAddressTxids(params)
+		if err == nil {
+			rvi, err = s.getAddressTxids(addr, &rr)
+		}
+	} else {
+		err = errors.New("unknown method")
+	}
+	if err == nil {
+		rv, err = json.Marshal(rvi)
+	}
+	if err == nil {
+		glog.Info(c.Id(), " ", method, " success, returning ", len(rv), " bytes")
+		return string(rv)
+	}
+	glog.Error(c.Id(), " ", method, ": ", err)
+	return ""
+}
+
+func unmarshalGetAddressTxids(params []byte) (addr []string, rr reqRange, err error) {
+	var p []json.RawMessage
+	err = json.Unmarshal(params, &p)
+	if err != nil {
+		return
+	}
+	err = json.Unmarshal(p[0], &addr)
+	if err != nil {
+		return
+	}
+	err = json.Unmarshal(p[1], &rr)
+	return
+}
+
+func (s *SocketIoServer) getAddressTxids(addr []string, rr *reqRange) ([]string, error) {
+	var txids []string
+	lower, higher := uint32(rr.To), uint32(rr.Start)
+	for _, address := range addr {
+		script, err := bchain.AddressToOutputScript(address)
+		if err != nil {
+			return nil, err
+		}
+		if !rr.QueryMempoolOnly {
+			err = s.db.GetTransactions(script, lower, higher, func(txid string, vout uint32, isOutput bool) error {
+				txids = append(txids, txid)
+				if isOutput && rr.QueryMempol {
+					input := s.mempool.GetInput(txid, vout)
+					if input != "" {
+						txids = append(txids, txid)
+					}
+				}
+				return nil
+			})
+			if err != nil {
+				return nil, err
+			}
+		}
+		if rr.QueryMempoolOnly || rr.QueryMempol {
+			mtxids, err := s.mempool.GetTransactions(script)
+			if err != nil {
+				return nil, err
+			}
+			txids = append(txids, mtxids...)
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+	return txids, nil
 }

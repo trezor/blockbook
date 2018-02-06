@@ -25,10 +25,31 @@
     });
     socket.on('connect', function () {
         console.log('socket connected');
-        socket.emit('send', { name: "my name", message: "hello" }, function (result) {
+
+        lookupTransactionsIdsMempool(["2MxvKTW83yhVsGCr4BSRqmhca7r8TB2dgW8", "bc1qrsf2l34jvqnq0lduyz0j5pfu2nkd93nnq0qggn"], false, 2000000, 0, function (result) {
             console.log('sent successfully');
             console.log(result);
         });
     });
+
+    function lookupTransactionsIdsMempool(addresses, mempool, start, end, f) {
+        const method = 'getAddressTxids';
+        const rangeParam = mempool ? {
+            start,
+            end,
+            queryMempoolOnly: true,
+        } : {
+                start,
+                end,
+                queryMempol: false,
+            };
+        const params = [
+            addresses,
+            rangeParam,
+        ];
+        return socket.send({ method, params }, f);
+    }
+
 </script>
+
 </html>
