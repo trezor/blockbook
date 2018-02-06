@@ -56,6 +56,8 @@ var (
 
 	httpServerBinding = flag.String("httpserver", "", "http server binding [address]:port, if missing no http server")
 
+	socketIoBinding = flag.String("socketio", "", "socketio server binding [address]:port[/path], if missing no socketio server")
+
 	zeroMQBinding = flag.String("zeromq", "", "binding to zeromq, if missing no zeromq connection")
 )
 
@@ -152,6 +154,24 @@ func main() {
 		}()
 	}
 
+	var socketIoServer *server.SocketIoServer
+	if *socketIoBinding != "" {
+		socketIoServer, err = server.NewSocketIoServer(*socketIoBinding, index, mempool)
+		if err != nil {
+			glog.Fatal("socketio: ", err)
+		}
+		go func() {
+			err = socketIoServer.Run()
+			if err != nil {
+				if err.Error() == "http: Server closed" {
+					glog.Info(err)
+				} else {
+					glog.Fatal(err)
+				}
+			}
+		}()
+	}
+
 	var mq *bchain.MQ
 	if *zeroMQBinding != "" {
 		if !*synchronize {
@@ -193,7 +213,7 @@ func main() {
 	}
 
 	if httpServer != nil || mq != nil {
-		waitForSignalAndShutdown(httpServer, mq, 5*time.Second)
+		waitForSignalAndShutdown(httpServer, socketIoServer, mq, 5*time.Second)
 	}
 
 	if *synchronize {
@@ -263,7 +283,7 @@ func mqHandler(m *bchain.MQMessage) {
 	}
 }
 
-func waitForSignalAndShutdown(s *server.HTTPServer, mq *bchain.MQ, timeout time.Duration) {
+func waitForSignalAndShutdown(https *server.HTTPServer, socketio *server.SocketIoServer, mq *bchain.MQ, timeout time.Duration) {
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 
@@ -280,9 +300,15 @@ func waitForSignalAndShutdown(s *server.HTTPServer, mq *bchain.MQ, timeout time.
 		}
 	}
 
-	if s != nil {
-		if err := s.Shutdown(ctx); err != nil {
+	if https != nil {
+		if err := https.Shutdown(ctx); err != nil {
 			glog.Error("HttpServer.Shutdown error: ", err)
+		}
+	}
+
+	if socketio != nil {
+		if err := socketio.Shutdown(ctx); err != nil {
+			glog.Error("SocketIo.Shutdown error: ", err)
 		}
 	}
 }

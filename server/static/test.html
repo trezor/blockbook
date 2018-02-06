@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm"
+        crossorigin="anonymous">
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/1.7.4/socket.io.js"></script>
+    <title>Test socket.io</title>
+</head>
+
+<body>
+    <div class="container">
+        <div class="row justify-content-center">
+            <h1>Socket.io tester</h1>
+        </div>
+    </div>
+</body>
+<script>
+    var socket = io('ws://127.0.0.1:8334', { transports: ['websocket'] });
+    socket.on('message', function (message) {
+        console.log('new message');
+        console.log(message);
+    });
+    socket.on('connect', function () {
+        console.log('socket connected');
+        socket.emit('send', { name: "my name", message: "hello" }, function (result) {
+            console.log('sent successfully');
+            console.log(result);
+        });
+    });
+</script>
+</html>

@@ -37,9 +37,10 @@ Install Go interface to ZeroMQ:
 go get github.com/pebbe/zmq4
 ```
 
-Install glog logging:
+Install additional go libraries - glog logging, socket.io:
 ```
 go get github.com/golang/glog
+go get github.com/graarh/golang-socketio
 ```
 
 Install blockbook:
@@ -112,7 +113,7 @@ The data are separated to different column families:
 - stream results to REST and websocket interfaces
 - parallel sync - rewrite - it is not possible to gracefully stop it now, can leave holes in the block
 - ~~parallel sync - let rocksdb to compact itself from time to time, otherwise it consumes too much disk space~~
-- disconnect blocks - optimize - full range scan is too slow and takes too much disk space (creates snapshot of the whole outputs), split to multiple iterators
+- ~~disconnect blocks - optimize - full range scan is too slow and takes too much disk space (creates snapshot of the whole outputs), split to multiple iterators~~
 - disconnect blocks - keep map of transactions in the last 100 blocks
 - xpub index
 - tests

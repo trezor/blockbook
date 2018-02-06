@@ -42,6 +42,9 @@ func NewHTTPServer(httpServerBinding string, db *db.RocksDB, mempool *bchain.Mem
 	r.HandleFunc("/confirmedTransactions/{address}/{lower}/{higher}", s.confirmedTransactions)
 	r.HandleFunc("/unconfirmedTransactions/{address}", s.unconfirmedTransactions)
 
+	// support for testing of socket.io interface
+	r.PathPrefix("/socket.io/").Handler(http.StripPrefix("/socket.io/", http.FileServer(http.Dir("./server/static/"))))
+
 	var h http.Handler = r
 	h = handlers.LoggingHandler(os.Stderr, h)
 	https.Handler = h
