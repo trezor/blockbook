@@ -62,11 +62,6 @@ func NewSocketIoServer(binding string, db *db.RocksDB, mempool *bchain.Mempool) 
 
 	server.On("message", s.onMessage)
 
-	server.On("send", func(c *gosocketio.Channel, msg Message) string {
-		glog.Info(c.Id(), "; ", msg)
-		return "OK"
-	})
-
 	return s, nil
 }
 
