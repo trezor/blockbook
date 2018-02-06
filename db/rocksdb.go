@@ -15,6 +15,10 @@ import (
 	"github.com/tecbot/gorocksdb"
 )
 
+// iterator creates snapshot, which takes lots of resources
+// when doing huge scan, it is better to close it and reopen from time to time to free the resources
+const disconnectBlocksRefreshIterator = uint64(1000000)
+
 func RepairRocksDB(name string) error {
 	glog.Infof("rocksdb: repair")
 	opts := gorocksdb.NewDefaultOptions()
@@ -429,7 +433,7 @@ func (d *RocksDB) DisconnectBlocks(
 			it.Seek(seekKey)
 			it.Next()
 		}
-		for count = 0; it.Valid() && count < 1000000; it.Next() {
+		for count = 0; it.Valid() && count < disconnectBlocksRefreshIterator; it.Next() {
 			totalOutputs++
 			count++
 			key = it.Key().Data()

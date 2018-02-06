@@ -18,6 +18,21 @@ import (
 	"github.com/pkg/profile"
 )
 
+// how many blocks are connected before database is compacted in connectBlocksParallel
+const compactAfterBlocks = 40000
+
+// resync index at least each resyncIndexPeriodMs (could be more often if invoked by message from ZeroMQ)
+const resyncIndexPeriodMs = 935093
+
+// debounce too close requests for resync
+const debounceResyncIndexMs = 1009
+
+// resync mempool at least each resyncIndexPeriodMs (could be more often if invoked by message from ZeroMQ)
+const resyncMempoolPeriodMs = 60017
+
+// debounce too close requests for resync mempool (ZeroMQ sends message for each tx, when new block there are many transactions)
+const debounceResyncMempoolMs = 1009
+
 var (
 	rpcURL     = flag.String("rpcurl", "http://localhost:8332", "url of bitcoin RPC service")
 	rpcUser    = flag.String("rpcuser", "rpc", "rpc username")
@@ -174,7 +189,7 @@ func main() {
 				*syncChunk,
 				*syncWorkers,
 			); err != nil {
-				glog.Fatalf("connectBlocksParallel %v", err)
+				glog.Fatalf("connectBlocksParallelInChunks %v", err)
 			}
 		}
 	}
@@ -218,7 +233,7 @@ func syncIndexLoop() {
 	defer close(chanSyncIndexDone)
 	glog.Info("syncIndexLoop starting")
 	// resync index about every 15 minutes if there are no chanSyncIndex requests, with debounce 1 second
-	tickAndDebounce(935093*time.Millisecond, 1009*time.Millisecond, chanSyncIndex, func() {
+	tickAndDebounce(resyncIndexPeriodMs*time.Millisecond, debounceResyncIndexMs*time.Millisecond, chanSyncIndex, func() {
 		if err := resyncIndex(false); err != nil {
 			glog.Error("syncIndexLoop", err)
 		}
@@ -230,7 +245,7 @@ func syncMempoolLoop() {
 	defer close(chanSyncMempoolDone)
 	glog.Info("syncMempoolLoop starting")
 	// resync mempool about every minute if there are no chanSyncMempool requests, with debounce 1 second
-	tickAndDebounce(60017*time.Millisecond, 1009*time.Millisecond, chanSyncMempool, func() {
+	tickAndDebounce(resyncMempoolPeriodMs*time.Millisecond, debounceResyncMempoolMs*time.Millisecond, chanSyncMempool, func() {
 		if err := mempool.Resync(); err != nil {
 			glog.Error("syncMempoolLoop", err)
 		}
@@ -467,7 +482,7 @@ func connectBlocksParallel(
 		if h > 0 && h%1000 == 0 {
 			glog.Info("connecting block ", h, " ", hash)
 			if bulk {
-				if h%50000 == 0 {
+				if h%compactAfterBlocks == 0 {
 					// wait for the workers to finish block
 				WaitAgain:
 					for {
