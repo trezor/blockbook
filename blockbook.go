@@ -18,9 +18,6 @@ import (
 	"github.com/pkg/profile"
 )
 
-// how many blocks are connected before database is compacted in connectBlocksParallel
-const compactAfterBlocks = 40000
-
 // resync index at least each resyncIndexPeriodMs (could be more often if invoked by message from ZeroMQ)
 const resyncIndexPeriodMs = 935093
 
@@ -51,10 +48,11 @@ var (
 	repair      = flag.Bool("repair", false, "repair the database")
 	prof        = flag.Bool("prof", false, "profile program execution")
 
-	syncChunk   = flag.Int("chunk", 100, "block chunk size for processing")
-	syncWorkers = flag.Int("workers", 8, "number of workers to process blocks")
-	dryRun      = flag.Bool("dryrun", false, "do not index blocks, only download")
-	parse       = flag.Bool("parse", false, "use in-process block parsing")
+	syncChunk          = flag.Int("chunk", 100, "block chunk size for processing")
+	syncWorkers        = flag.Int("workers", 8, "number of workers to process blocks")
+	dryRun             = flag.Bool("dryrun", false, "do not index blocks, only download")
+	parse              = flag.Bool("parse", false, "use in-process block parsing")
+	compactDBTriggerMB = flag.Int64("compact", -1, "invoke compaction when db size exceeds value in MB, default no compaction")
 
 	httpServerBinding = flag.String("httpserver", "", "http server binding [address]:port, if missing no http server")
 
@@ -481,8 +479,12 @@ func connectBlocksParallel(
 		hch <- hash
 		if h > 0 && h%1000 == 0 {
 			glog.Info("connecting block ", h, " ", hash)
-			if bulk {
-				if h%compactAfterBlocks == 0 {
+			if bulk && *compactDBTriggerMB > 0 {
+				size, err := index.DatabaseSizeOnDisk()
+				if err != nil {
+					break
+				}
+				if size > *compactDBTriggerMB*1048576 {
 					// wait for the workers to finish block
 				WaitAgain:
 					for {

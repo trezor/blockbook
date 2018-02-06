@@ -506,6 +506,11 @@ func dirSize(path string) (int64, error) {
 	return size, err
 }
 
+// DatabaseSizeOnDisk returns size of the database in bytes
+func (d *RocksDB) DatabaseSizeOnDisk() (int64, error) {
+	return dirSize(d.path)
+}
+
 // CompactDatabase compacts the database
 // After unsuccessful experiment with CompactRange method (slow and actually fragmenting the db without compacting)
 // the method now closes the db instance and opens it again.
