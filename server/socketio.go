@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -16,16 +17,17 @@ import (
 
 // SocketIoServer is handle to SocketIoServer
 type SocketIoServer struct {
-	binding string
-	server  *gosocketio.Server
-	https   *http.Server
-	db      *db.RocksDB
-	mempool *bchain.Mempool
-	chain   *bchain.BitcoinRPC
+	binding   string
+	certFiles string
+	server    *gosocketio.Server
+	https     *http.Server
+	db        *db.RocksDB
+	mempool   *bchain.Mempool
+	chain     *bchain.BitcoinRPC
 }
 
 // NewSocketIoServer creates new SocketIo interface to blockbook and returns its handle
-func NewSocketIoServer(binding string, db *db.RocksDB, mempool *bchain.Mempool, chain *bchain.BitcoinRPC) (*SocketIoServer, error) {
+func NewSocketIoServer(binding string, certFiles string, db *db.RocksDB, mempool *bchain.Mempool, chain *bchain.BitcoinRPC) (*SocketIoServer, error) {
 	server := gosocketio.NewServer(transport.GetDefaultWebsocketTransport())
 
 	server.On(gosocketio.OnConnection, func(c *gosocketio.Channel) {
@@ -54,12 +56,13 @@ func NewSocketIoServer(binding string, db *db.RocksDB, mempool *bchain.Mempool, 
 	}
 
 	s := &SocketIoServer{
-		binding: binding,
-		https:   https,
-		server:  server,
-		db:      db,
-		mempool: mempool,
-		chain:   chain,
+		binding:   binding,
+		certFiles: certFiles,
+		https:     https,
+		server:    server,
+		db:        db,
+		mempool:   mempool,
+		chain:     chain,
 	}
 
 	server.On("message", s.onMessage)
@@ -78,8 +81,12 @@ func splitBinding(binding string) (addr string, path string) {
 
 // Run starts the server
 func (s *SocketIoServer) Run() error {
-	glog.Info("socketio server starting to listen on ", s.https.Addr)
-	return s.https.ListenAndServe()
+	if s.certFiles == "" {
+		glog.Info("socketio server starting to listen on ws://", s.https.Addr)
+		return s.https.ListenAndServe()
+	}
+	glog.Info("socketio server starting to listen on wss://", s.https.Addr)
+	return s.https.ListenAndServeTLS(fmt.Sprint(s.certFiles, ".crt"), fmt.Sprint(s.certFiles, ".key"))
 }
 
 // Close closes the server

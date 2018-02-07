@@ -58,6 +58,8 @@ var (
 
 	socketIoBinding = flag.String("socketio", "", "socketio server binding [address]:port[/path], if missing no socketio server")
 
+	certFiles = flag.String("certfile", "", "to enable SSL specify path to certificate files without extension, expecting <certfile>.crt and <certfile>.key, default no SSL")
+
 	zeroMQBinding = flag.String("zeromq", "", "binding to zeromq, if missing no zeromq connection")
 )
 
@@ -138,7 +140,7 @@ func main() {
 
 	var httpServer *server.HTTPServer
 	if *httpServerBinding != "" {
-		httpServer, err = server.NewHTTPServer(*httpServerBinding, index, mempool)
+		httpServer, err = server.NewHTTPServer(*httpServerBinding, *certFiles, index, mempool)
 		if err != nil {
 			glog.Fatal("https: ", err)
 		}
@@ -156,7 +158,7 @@ func main() {
 
 	var socketIoServer *server.SocketIoServer
 	if *socketIoBinding != "" {
-		socketIoServer, err = server.NewSocketIoServer(*socketIoBinding, index, mempool, chain)
+		socketIoServer, err = server.NewSocketIoServer(*socketIoBinding, *certFiles, index, mempool, chain)
 		if err != nil {
 			glog.Fatal("socketio: ", err)
 		}

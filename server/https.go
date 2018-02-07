@@ -18,20 +18,22 @@ import (
 
 // HTTPServer is handle to HttpServer
 type HTTPServer struct {
-	https   *http.Server
-	db      *db.RocksDB
-	mempool *bchain.Mempool
+	https     *http.Server
+	certFiles string
+	db        *db.RocksDB
+	mempool   *bchain.Mempool
 }
 
 // NewHTTPServer creates new REST interface to blockbook and returns its handle
-func NewHTTPServer(httpServerBinding string, db *db.RocksDB, mempool *bchain.Mempool) (*HTTPServer, error) {
+func NewHTTPServer(httpServerBinding string, certFiles string, db *db.RocksDB, mempool *bchain.Mempool) (*HTTPServer, error) {
 	https := &http.Server{
 		Addr: httpServerBinding,
 	}
 	s := &HTTPServer{
-		https:   https,
-		db:      db,
-		mempool: mempool,
+		https:     https,
+		certFiles: certFiles,
+		db:        db,
+		mempool:   mempool,
 	}
 
 	r := mux.NewRouter()
@@ -54,8 +56,12 @@ func NewHTTPServer(httpServerBinding string, db *db.RocksDB, mempool *bchain.Mem
 
 // Run starts the server
 func (s *HTTPServer) Run() error {
-	glog.Infof("http server starting to listen on %s", s.https.Addr)
-	return s.https.ListenAndServe()
+	if s.certFiles == "" {
+		glog.Info("http server starting to listen on http://", s.https.Addr)
+		return s.https.ListenAndServe()
+	}
+	glog.Info("http server starting to listen on https://", s.https.Addr)
+	return s.https.ListenAndServeTLS(fmt.Sprint(s.certFiles, ".crt"), fmt.Sprint(s.certFiles, ".key"))
 }
 
 // Close closes the server
