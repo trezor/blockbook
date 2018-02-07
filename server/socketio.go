@@ -103,21 +103,38 @@ type reqRange struct {
 	To               int  `json:"to"`
 }
 
+var onMessageHandlers = map[string]func(*SocketIoServer, json.RawMessage) (interface{}, error){
+	"\"getAddressTxids\"": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
+		addr, rr, err := unmarshalGetAddressTxids(params)
+		if err == nil {
+			rv, err = s.getAddressTxids(addr, &rr)
+		}
+		return
+	},
+	"\"getBlockHeader\"": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
+		height, hash, err := unmarshalGetBlockHeader(params)
+		if err == nil {
+			rv, err = s.getBlockHeader(height, hash)
+		}
+		return
+	},
+	"\"estimateSmartFee\"": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
+		blocks, conservative, err := unmarshalEstimateSmartFee(params)
+		if err == nil {
+			rv, err = s.estimateSmartFee(blocks, conservative)
+		}
+		return
+	},
+}
+
 func (s *SocketIoServer) onMessage(c *gosocketio.Channel, req map[string]json.RawMessage) interface{} {
 	var err error
 	var rv interface{}
 	method := string(req["method"])
 	params := req["params"]
-	if method == "\"getAddressTxids\"" {
-		addr, rr, err := unmarshalGetAddressTxids(params)
-		if err == nil {
-			rv, err = s.getAddressTxids(addr, &rr)
-		}
-	} else if method == "\"getBlockHeader\"" {
-		height, hash, err := unmarshalGetBlockHeader(params)
-		if err == nil {
-			rv, err = s.getBlockHeader(height, hash)
-		}
+	f, ok := onMessageHandlers[method]
+	if ok {
+		rv, err = f(s, params)
 	} else {
 		err = errors.New("unknown method")
 	}
@@ -184,14 +201,21 @@ func (s *SocketIoServer) getAddressTxids(addr []string, rr *reqRange) ([]string,
 	return txids, nil
 }
 
-func unmarshalGetBlockHeader(params []byte) (height uint32, hash string, err error) {
-	var p []interface{}
+func unmarshalArray(params []byte, np int) (p []interface{}, err error) {
 	err = json.Unmarshal(params, &p)
 	if err != nil {
 		return
 	}
-	if len(p) != 1 {
+	if len(p) != np {
 		err = errors.New("incorrect number of parameters")
+		return
+	}
+	return
+}
+
+func unmarshalGetBlockHeader(params []byte) (height uint32, hash string, err error) {
+	p, err := unmarshalArray(params, 1)
+	if err != nil {
 		return
 	}
 	fheight, ok := p[0].(float64)
@@ -245,6 +269,38 @@ func (s *SocketIoServer) getBlockHeader(height uint32, hash string) (res resultG
 	res.Result.Confirmations = bh.Confirmations
 	res.Result.Height = int(bh.Height)
 	res.Result.NextHash = bh.Next
+	return
+}
+
+func unmarshalEstimateSmartFee(params []byte) (blocks int, conservative bool, err error) {
+	p, err := unmarshalArray(params, 2)
+	if err != nil {
+		return
+	}
+	fblocks, ok := p[0].(float64)
+	if !ok {
+		err = errors.New("Invalid parameter blocks")
+		return
+	}
+	blocks = int(fblocks)
+	conservative, ok = p[1].(bool)
+	if !ok {
+		err = errors.New("Invalid parameter conservative")
+		return
+	}
+	return
+}
+
+type resultEstimateSmartFee struct {
+	Result float64 `json:"result"`
+}
+
+func (s *SocketIoServer) estimateSmartFee(blocks int, conservative bool) (res resultEstimateSmartFee, err error) {
+	fee, err := s.chain.EstimateSmartFee(blocks, conservative)
+	if err != nil {
+		return
+	}
+	res.Result = fee
 	return
 }
 

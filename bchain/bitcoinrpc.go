@@ -132,6 +132,24 @@ type resGetRawTransactionVerbose struct {
 	Result Tx        `json:"result"`
 }
 
+// estimatesmartfee
+
+type cmdEstimateSmartFee struct {
+	Method string `json:"method"`
+	Params struct {
+		ConfTarget   int    `json:"conf_target"`
+		EstimateMode string `json:"estimate_mode"`
+	} `json:"params"`
+}
+
+type resEstimateSmartFee struct {
+	Error  *RPCError `json:"error"`
+	Result struct {
+		Feerate float64 `json:"feerate"`
+		Blocks  int     `json:"blocks"`
+	} `json:"result"`
+}
+
 type BlockParser interface {
 	ParseBlock(b []byte) (*Block, error)
 }
@@ -353,6 +371,29 @@ func (b *BitcoinRPC) GetTransaction(txid string) (*Tx, error) {
 		return nil, res.Error
 	}
 	return &res.Result, nil
+}
+
+// EstimateSmartFee returns fee estimation.
+func (b *BitcoinRPC) EstimateSmartFee(blocks int, conservative bool) (float64, error) {
+	glog.V(1).Info("rpc: estimatesmartfee ", blocks)
+
+	res := resEstimateSmartFee{}
+	req := cmdEstimateSmartFee{Method: "estimatesmartfee"}
+	req.Params.ConfTarget = blocks
+	if conservative {
+		req.Params.EstimateMode = "CONSERVATIVE"
+	} else {
+		req.Params.EstimateMode = "ECONOMICAL"
+	}
+	err := b.call(&req, &res)
+
+	if err != nil {
+		return 0, err
+	}
+	if res.Error != nil {
+		return 0, res.Error
+	}
+	return res.Result.Feerate, nil
 }
 
 func (b *BitcoinRPC) call(req interface{}, res interface{}) error {

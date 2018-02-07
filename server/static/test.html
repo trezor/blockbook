@@ -66,6 +66,21 @@
             return socket.send({ method, params }, f);
         }
 
+        function estimateSmartFee() {
+            var blocks = document.getElementById('estimateSmartFeeBlocks').value;
+            var conservative = document.getElementById("estimateSmartFeeConservative").checked;
+            estimateSmartTxFee(parseInt(blocks), conservative, function (result) {
+                console.log('estimateSmartFee sent successfully');
+                console.log(result);
+                document.getElementById('estimateSmartFeeResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
+            });
+        }
+
+        function estimateSmartTxFee(blocks, conservative, f) {
+            const method = 'estimateSmartFee';
+            const params = [blocks, conservative];
+            return socket.send({ method, params }, f);
+        }
     </script>
 </head>
 
@@ -113,6 +128,22 @@
         </div>
         <div class="row">
             <div class="col" id="getBlockHeaderResult">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <input class="btn btn-secondary" type="button" value="estimateSmartFee" onclick="estimateSmartFee()">
+            </div>
+            <div class="col-8">
+                <input type="text" class="form-control" id="estimateSmartFeeBlocks" value="20">
+            </div>
+            <div class="col form-inline">
+                <input type="checkbox" id="estimateSmartFeeConservative" checked>&nbsp;
+                <label>conservative</label>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col" id="estimateSmartFeeResult">
             </div>
         </div>
     </div>
