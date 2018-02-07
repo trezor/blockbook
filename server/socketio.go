@@ -100,26 +100,22 @@ type reqRange struct {
 	To               int  `json:"to"`
 }
 
-func (s *SocketIoServer) onMessage(c *gosocketio.Channel, req map[string]json.RawMessage) string {
+func (s *SocketIoServer) onMessage(c *gosocketio.Channel, req map[string]json.RawMessage) interface{} {
 	var err error
-	var rv []byte
-	var rvi interface{}
+	var rv interface{}
 	method := string(req["method"])
 	params := req["params"]
 	if method == "\"getAddressTxids\"" {
 		addr, rr, err := unmarshalGetAddressTxids(params)
 		if err == nil {
-			rvi, err = s.getAddressTxids(addr, &rr)
+			rv, err = s.getAddressTxids(addr, &rr)
 		}
 	} else {
 		err = errors.New("unknown method")
 	}
 	if err == nil {
-		rv, err = json.Marshal(rvi)
-	}
-	if err == nil {
-		glog.Info(c.Id(), " ", method, " success, returning ", len(rv), " bytes")
-		return string(rv)
+		glog.Info(c.Id(), " ", method, " success")
+		return rv
 	}
 	glog.Error(c.Id(), " ", method, ": ", err)
 	return ""
@@ -140,7 +136,7 @@ func unmarshalGetAddressTxids(params []byte) (addr []string, rr reqRange, err er
 }
 
 func (s *SocketIoServer) getAddressTxids(addr []string, rr *reqRange) ([]string, error) {
-	var txids []string
+	txids := make([]string, 0)
 	lower, higher := uint32(rr.To), uint32(rr.Start)
 	for _, address := range addr {
 		script, err := bchain.AddressToOutputScript(address)
