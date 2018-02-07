@@ -52,13 +52,13 @@ var (
 	syncWorkers        = flag.Int("workers", 8, "number of workers to process blocks")
 	dryRun             = flag.Bool("dryrun", false, "do not index blocks, only download")
 	parse              = flag.Bool("parse", false, "use in-process block parsing")
-	compactDBTriggerMB = flag.Int64("compact", -1, "invoke compaction when db size exceeds value in MB, default no compaction")
+	compactDBTriggerMB = flag.Int64("compact", -1, "invoke compaction when db size exceeds value in MB (default no compaction)")
 
-	httpServerBinding = flag.String("httpserver", "", "http server binding [address]:port, if missing no http server")
+	httpServerBinding = flag.String("httpserver", "", "http server binding [address]:port, (default no http server)")
 
-	socketIoBinding = flag.String("socketio", "", "socketio server binding [address]:port[/path], if missing no socketio server")
+	socketIoBinding = flag.String("socketio", "", "socketio server binding [address]:port[/path], (default no socket.io server)")
 
-	certFiles = flag.String("certfile", "", "to enable SSL specify path to certificate files without extension, expecting <certfile>.crt and <certfile>.key, default no SSL")
+	certFiles = flag.String("certfile", "", "to enable SSL specify path to certificate files without extension, expecting <certfile>.crt and <certfile>.key, (default no SSL)")
 
 	zeroMQBinding = flag.String("zeromq", "", "binding to zeromq, if missing no zeromq connection")
 )
