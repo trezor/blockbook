@@ -156,7 +156,7 @@ func main() {
 
 	var socketIoServer *server.SocketIoServer
 	if *socketIoBinding != "" {
-		socketIoServer, err = server.NewSocketIoServer(*socketIoBinding, index, mempool)
+		socketIoServer, err = server.NewSocketIoServer(*socketIoBinding, index, mempool, chain)
 		if err != nil {
 			glog.Fatal("socketio: ", err)
 		}

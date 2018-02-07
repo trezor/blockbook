@@ -23,13 +23,13 @@
             });
         }
 
-        function lookupTransactionIds() {
-            var addresses = document.getElementById('addresses').value.split(",");
-            var mempool = document.getElementById("addressesMempool").checked;
+        function getAddressTxids() {
+            var addresses = document.getElementById('getAddressTxidsAddresses').value.split(",");
+            var mempool = document.getElementById("getAddressTxidsMempool").checked;
             lookupTransactionsIdsMempool(addresses, mempool, 2000000, 0, function (result) {
-                console.log('sent successfully');
+                console.log('getAddressTxids sent successfully');
                 console.log(result);
-                document.getElementById('lookupTransactionIdsResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
+                document.getElementById('getAddressTxidsResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
             });
         }
 
@@ -49,7 +49,23 @@
                 rangeParam,
             ];
             return socket.send({ method, params }, f);
-        }        
+        }
+
+        function getBlockHeader() {
+            var height = document.getElementById('getBlockHeaderHeight').value;
+            lookupBlockHash(parseInt(height), function (result) {
+                console.log('getBlockHeader sent successfully');
+                console.log(result);
+                document.getElementById('getBlockHeaderResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
+            });
+        }
+
+        function lookupBlockHash(height, f) {
+            const method = 'getBlockHeader';
+            const params = [height];
+            return socket.send({ method, params }, f);
+        }
+
     </script>
 </head>
 
@@ -71,18 +87,32 @@
         </div>
         <div class="row">
             <div class="col">
-                <input class="btn btn-secondary" type="button" value="getAddressTxids" onclick="lookupTransactionIds()">
+                <input class="btn btn-secondary" type="button" value="getAddressTxids" onclick="getAddressTxids()">
             </div>
             <div class="col-8">
-                <input type="text" class="form-control" id="addresses" value="2MxvKTW83yhVsGCr4BSRqmhca7r8TB2dgW8,bc1qrsf2l34jvqnq0lduyz0j5pfu2nkd93nnq0qggn">
+                <input type="text" class="form-control" id="getAddressTxidsAddresses" value="2MxvKTW83yhVsGCr4BSRqmhca7r8TB2dgW8,bc1qrsf2l34jvqnq0lduyz0j5pfu2nkd93nnq0qggn">
             </div>
             <div class="col form-inline">
-                <input type="checkbox" id="addressesMempool">&nbsp;
+                <input type="checkbox" id="getAddressTxidsMempool">&nbsp;
                 <label>only mempool</label>
             </div>
         </div>
         <div class="row">
-            <div class="col" id="lookupTransactionIdsResult">
+            <div class="col" id="getAddressTxidsResult">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <input class="btn btn-secondary" type="button" value="getBlockHeader" onclick="getBlockHeader()">
+            </div>
+            <div class="col-8">
+                <input type="text" class="form-control" id="getBlockHeaderHeight" value="0">
+            </div>
+            <div class="col">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col" id="getBlockHeaderResult">
             </div>
         </div>
     </div>

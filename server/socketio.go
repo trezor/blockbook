@@ -21,10 +21,11 @@ type SocketIoServer struct {
 	https   *http.Server
 	db      *db.RocksDB
 	mempool *bchain.Mempool
+	chain   *bchain.BitcoinRPC
 }
 
 // NewSocketIoServer creates new SocketIo interface to blockbook and returns its handle
-func NewSocketIoServer(binding string, db *db.RocksDB, mempool *bchain.Mempool) (*SocketIoServer, error) {
+func NewSocketIoServer(binding string, db *db.RocksDB, mempool *bchain.Mempool, chain *bchain.BitcoinRPC) (*SocketIoServer, error) {
 	server := gosocketio.NewServer(transport.GetDefaultWebsocketTransport())
 
 	server.On(gosocketio.OnConnection, func(c *gosocketio.Channel) {
@@ -58,9 +59,11 @@ func NewSocketIoServer(binding string, db *db.RocksDB, mempool *bchain.Mempool) 
 		server:  server,
 		db:      db,
 		mempool: mempool,
+		chain:   chain,
 	}
 
 	server.On("message", s.onMessage)
+	server.On("subscribe", s.onSubscribe)
 
 	return s, nil
 }
@@ -110,14 +113,19 @@ func (s *SocketIoServer) onMessage(c *gosocketio.Channel, req map[string]json.Ra
 		if err == nil {
 			rv, err = s.getAddressTxids(addr, &rr)
 		}
+	} else if method == "\"getBlockHeader\"" {
+		height, hash, err := unmarshalGetBlockHeader(params)
+		if err == nil {
+			rv, err = s.getBlockHeader(height, hash)
+		}
 	} else {
 		err = errors.New("unknown method")
 	}
 	if err == nil {
-		glog.Info(c.Id(), " ", method, " success")
+		glog.Info(c.Id(), " onMessage ", method, " success")
 		return rv
 	}
-	glog.Error(c.Id(), " ", method, ": ", err)
+	glog.Error(c.Id(), " onMessage ", method, ": ", err)
 	return ""
 }
 
@@ -125,6 +133,10 @@ func unmarshalGetAddressTxids(params []byte) (addr []string, rr reqRange, err er
 	var p []json.RawMessage
 	err = json.Unmarshal(params, &p)
 	if err != nil {
+		return
+	}
+	if len(p) != 2 {
+		err = errors.New("incorrect number of parameters")
 		return
 	}
 	err = json.Unmarshal(p[0], &addr)
@@ -170,4 +182,73 @@ func (s *SocketIoServer) getAddressTxids(addr []string, rr *reqRange) ([]string,
 		}
 	}
 	return txids, nil
+}
+
+func unmarshalGetBlockHeader(params []byte) (height uint32, hash string, err error) {
+	var p []interface{}
+	err = json.Unmarshal(params, &p)
+	if err != nil {
+		return
+	}
+	if len(p) != 1 {
+		err = errors.New("incorrect number of parameters")
+		return
+	}
+	fheight, ok := p[0].(float64)
+	if ok {
+		return uint32(fheight), "", nil
+	}
+	hash, ok = p[0].(string)
+	if ok {
+		return
+	}
+	err = errors.New("incorrect parameter")
+	return
+}
+
+type resultGetBlockHeader struct {
+	Result struct {
+		Hash          string `json:"hash"`
+		Version       int    `json:"version"`
+		Confirmations int    `json:"confirmations"`
+		Height        int    `json:"height"`
+		ChainWork     string `json:"chainWork"`
+		NextHash      string `json:"nextHash"`
+		MerkleRoot    string `json:"merkleRoot"`
+		Time          int    `json:"time"`
+		MedianTime    int    `json:"medianTime"`
+		Nonce         int    `json:"nonce"`
+		Bits          string `json:"bits"`
+		Difficulty    int    `json:"difficulty"`
+	} `json:"result"`
+}
+
+func (s *SocketIoServer) getBlockHeader(height uint32, hash string) (res resultGetBlockHeader, err error) {
+	if hash == "" {
+		if height == 0 {
+			height, hash, err = s.db.GetBestBlock()
+			if err != nil {
+				return
+			}
+		} else {
+			hash, err = s.db.GetBlockHash(height)
+			if err != nil {
+				return
+			}
+		}
+	}
+	bh, err := s.chain.GetBlockHeader(hash)
+	if err != nil {
+		return
+	}
+	res.Result.Hash = bh.Hash
+	res.Result.Confirmations = bh.Confirmations
+	res.Result.Height = int(bh.Height)
+	res.Result.NextHash = bh.Next
+	return
+}
+
+func (s *SocketIoServer) onSubscribe(c *gosocketio.Channel, req map[string]json.RawMessage) interface{} {
+	glog.Info(c.Id(), " onSubscribe ", req)
+	return nil
 }
