@@ -55,8 +55,15 @@ go build
 ## Usage
 
 ```
-$GOPATH/bin/blockbook --help
+./blockbook --help
 ```
+
+## Example command
+To run blockbook with fast synchronization, connection to ZeroMQ and providing https and socket.io interface, with database in local directory *data* and connected to local bitcoind at http://localhost:8332 with user rpc/rpc:
+```
+./blockbook -sync -parse -httpserver=127.0.0.1:8333 -socketio=127.0.01:8334 -certfile=server/testcert -zeromq=tcp://127.0.0.1:28332
+```
+Blockbook logs only to stderr, logging to files is disabled. Verbosity of logs can be tuned by command line parameters *-v* and *-vmodule*, details at https://godoc.org/github.com/golang/glog
 
 # Data storage in RocksDB
 
