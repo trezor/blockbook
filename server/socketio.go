@@ -132,6 +132,9 @@ var onMessageHandlers = map[string]func(*SocketIoServer, json.RawMessage) (inter
 		}
 		return
 	},
+	"\"getInfo\"": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
+		return s.getInfo()
+	},
 }
 
 func (s *SocketIoServer) onMessage(c *gosocketio.Channel, req map[string]json.RawMessage) interface{} {
@@ -256,7 +259,7 @@ type resultGetBlockHeader struct {
 
 func (s *SocketIoServer) getBlockHeader(height uint32, hash string) (res resultGetBlockHeader, err error) {
 	if hash == "" {
-		// trezor is only interested in hash
+		// trezor is interested only in hash
 		if height == 0 {
 			height, hash, err = s.db.GetBestBlock()
 			if err != nil {
@@ -311,6 +314,34 @@ func (s *SocketIoServer) estimateSmartFee(blocks int, conservative bool) (res re
 		return
 	}
 	res.Result = fee
+	return
+}
+
+type resultGetInfo struct {
+	Result struct {
+		Version         int     `json:"version"`
+		ProtocolVersion int     `json:"protocolVersion"`
+		Blocks          int     `json:"blocks"`
+		TimeOffset      int     `json:"timeOffset"`
+		Connections     int     `json:"connections"`
+		Proxy           string  `json:"proxy"`
+		Difficulty      float64 `json:"difficulty"`
+		Testnet         bool    `json:"testnet"`
+		RelayFee        float64 `json:"relayFee"`
+		Errors          string  `json:"errors"`
+		Network         string  `json:"network"`
+		Subversion      string  `json:"subversion"`
+		LocalServices   string  `json:"localServices"`
+	} `json:"result"`
+}
+
+func (s *SocketIoServer) getInfo() (res resultGetInfo, err error) {
+	// trezor is interested only in best block height
+	height, _, err := s.db.GetBestBlock()
+	if err != nil {
+		return
+	}
+	res.Result.Blocks = int(height)
 	return
 }
 

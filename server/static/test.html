@@ -81,6 +81,21 @@
             const params = [blocks, conservative];
             return socket.send({ method, params }, f);
         }
+
+        function getInfo() {
+            lookupSyncStatus(function (result) {
+                console.log('getInfo sent successfully');
+                console.log(result);
+                document.getElementById('getInfoResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
+            });
+        }
+
+        function lookupSyncStatus(f) {
+            const method = 'getInfo';
+            const params = [];
+            return socket.send({ method, params }, f);
+        }
+
     </script>
 </head>
 
@@ -146,7 +161,13 @@
             <div class="col" id="estimateSmartFeeResult">
             </div>
         </div>
-    </div>
+        <div class="row">
+            <div class="col">
+                <input class="btn btn-secondary" type="button" value="getInfo" onclick="getInfo()">
+            </div>
+            <div class="col-10" id="getInfoResult">
+            </div>
+        </div>
     </div>
 </body>
 
