@@ -149,19 +149,15 @@ func (d *RocksDB) GetTransactions(outputScript []byte, lower uint32, higher uint
 			if err := fn(o.txid, o.vout, true); err != nil {
 				return err
 			}
-			boutpoint, err := packOutpoint(o.txid, o.vout)
+			spentOutput, err := d.GetSpentOutput(o.txid, o.vout)
 			if err != nil {
 				return err
 			}
-			input, err := d.getInput(boutpoint)
-			if err != nil {
-				return err
-			}
-			if input != nil {
+			if spentOutput != nil {
 				if glog.V(2) {
-					glog.Infof("rocksdb: input %s: %s", hex.EncodeToString(boutpoint), hex.EncodeToString(input))
+					glog.Infof("rocksdb: input %s/%d: %s", o.txid, o.vout, hex.EncodeToString(spentOutput))
 				}
-				inpoints, err := unpackOutputValue(input)
+				inpoints, err := unpackOutputValue(spentOutput)
 				if err != nil {
 					return err
 				}
@@ -384,7 +380,16 @@ func (d *RocksDB) GetBlockHash(height uint32) (string, error) {
 	return unpackBlockValue(val.Data())
 }
 
-func (d *RocksDB) getInput(key []byte) ([]byte, error) {
+// GetSpentOutput returns output which is spent by input tx
+func (d *RocksDB) GetSpentOutput(txid string, i uint32) ([]byte, error) {
+	b, err := packOutpoint(txid, i)
+	if err != nil {
+		return nil, err
+	}
+	return d.getSpentOutput(b)
+}
+
+func (d *RocksDB) getSpentOutput(key []byte) ([]byte, error) {
 	val, err := d.db.GetCF(d.ro, d.cfh[cfInputs], key)
 	if err != nil {
 		return nil, err
