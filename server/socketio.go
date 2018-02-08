@@ -112,9 +112,16 @@ type reqRange struct {
 
 var onMessageHandlers = map[string]func(*SocketIoServer, json.RawMessage) (interface{}, error){
 	"\"getAddressTxids\"": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
-		addr, rr, err := unmarshalGetAddressTxids(params)
+		addr, rr, err := unmarshalGetAddressRequest(params)
 		if err == nil {
 			rv, err = s.getAddressTxids(addr, &rr)
+		}
+		return
+	},
+	"\"getAddressHistory\"": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
+		addr, rr, err := unmarshalGetAddressRequest(params)
+		if err == nil {
+			rv, err = s.getAddressHistory(addr, &rr)
 		}
 		return
 	},
@@ -156,7 +163,7 @@ func (s *SocketIoServer) onMessage(c *gosocketio.Channel, req map[string]json.Ra
 	return ""
 }
 
-func unmarshalGetAddressTxids(params []byte) (addr []string, rr reqRange, err error) {
+func unmarshalGetAddressRequest(params []byte) (addr []string, rr reqRange, err error) {
 	var p []json.RawMessage
 	err = json.Unmarshal(params, &p)
 	if err != nil {
@@ -209,6 +216,185 @@ func (s *SocketIoServer) getAddressTxids(addr []string, rr *reqRange) ([]string,
 		}
 	}
 	return txids, nil
+}
+
+type addressHistoryIndexes struct {
+	InputIndexes  []int `json:"inputIndexes"`
+	OutputIndexes []int `json:"outputIndexes"`
+}
+
+type addressHistoryInputs struct {
+	PrevTxID    string `json:"prevTxId"`
+	OutputIndex int    `json:"outputIndex"`
+	Script      string `json:"script"`
+	ScriptAsm   string `json:"scriptAsm"`
+	Sequence    int64  `json:"sequence"`
+	Address     string `json:"address"`
+	Satoshis    int64  `json:"satoshis"`
+}
+
+type addressHistoryOutputs struct {
+	Satoshis    int64  `json:"satoshis"`
+	Script      string `json:"script"`
+	ScriptAsm   string `json:"scriptAsm"`
+	SpentTxID   string `json:"spentTxId,omitempty"`
+	SpentIndex  int    `json:"spentIndex,omitempty"`
+	SpentHeight int    `json:"spentHeight,omitempty"`
+	Address     string `json:"address"`
+}
+
+type addressHistoryItem struct {
+	Addresses     map[string]addressHistoryIndexes `json:"addresses"`
+	Satoshis      int                              `json:"satoshis"`
+	Confirmations int                              `json:"confirmations"`
+	Tx            struct {
+		Hex            string                  `json:"hex"`
+		BlockHash      string                  `json:"blockHash"`
+		Height         int                     `json:"height"`
+		BlockTimestamp int64                   `json:"blockTimestamp"`
+		Version        int                     `json:"version"`
+		Hash           string                  `json:"hash"`
+		Locktime       int                     `json:"locktime"`
+		Size           int                     `json:"size"`
+		Inputs         []addressHistoryInputs  `json:"inputs"`
+		InputSatoshis  int64                   `json:"inputSatoshis"`
+		Outputs        []addressHistoryOutputs `json:"outputs"`
+		OutputSatoshis int64                   `json:"outputSatoshis"`
+		FeeSatoshis    int64                   `json:"feeSatoshis"`
+	} `json:"tx"`
+}
+
+type resultGetAddressHistory struct {
+	Result struct {
+		TotalCount int                  `json:"totalCount"`
+		Items      []addressHistoryItem `json:"items"`
+	} `json:"result"`
+}
+
+func uniqueTxids(txids []string) []string {
+	uniqueTxids := make([]string, 0, len(txids))
+	txidsMap := make(map[string]struct{})
+	for _, txid := range txids {
+		_, e := txidsMap[txid]
+		if !e {
+			uniqueTxids = append(uniqueTxids, txid)
+			txidsMap[txid] = struct{}{}
+		}
+	}
+	return uniqueTxids
+}
+
+func stringInSlice(a string, list []string) bool {
+	for _, b := range list {
+		if b == a {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *SocketIoServer) getAddressHistory(addr []string, rr *reqRange) (res resultGetAddressHistory, err error) {
+	txids, err := s.getAddressTxids(addr, rr)
+	if err != nil {
+		return
+	}
+	bestheight, _, err := s.db.GetBestBlock()
+	if err != nil {
+		return
+	}
+	// todo - proper sorting of txids, probably by height desc
+	txids = uniqueTxids(txids)
+	res.Result.TotalCount = len(txids)
+	res.Result.Items = make([]addressHistoryItem, 0)
+	for i, txid := range txids {
+		if i >= rr.From && i < rr.To {
+			tx, err := s.chain.GetTransaction(txid)
+			if err != nil {
+				return res, err
+			}
+			ads := make(map[string]addressHistoryIndexes)
+			hi := make([]addressHistoryInputs, 0)
+			ho := make([]addressHistoryOutputs, 0)
+			for _, vin := range tx.Vin {
+				ai := addressHistoryInputs{
+					Script:      vin.ScriptSig.Hex,
+					ScriptAsm:   vin.ScriptSig.Asm,
+					Sequence:    int64(vin.Sequence),
+					OutputIndex: int(vin.Vout),
+				}
+				stxid, _, err := s.db.GetSpentOutput(vin.Txid, vin.Vout)
+				if err != nil {
+					return res, err
+				}
+				if stxid != "" {
+					otx, err := s.chain.GetTransaction(stxid)
+					if err != nil {
+						return res, err
+					}
+				SpentOutputLoop:
+					for _, vout := range otx.Vout {
+						for _, a := range vout.ScriptPubKey.Addresses {
+							if stringInSlice(a, addr) {
+								ai.Address = a
+								hi, ok := ads[a]
+								if ok {
+									hi.InputIndexes = append(hi.InputIndexes, int(vout.N))
+								} else {
+									hi := addressHistoryIndexes{}
+									hi.InputIndexes = append(hi.InputIndexes, int(vout.N))
+									hi.OutputIndexes = make([]int, 0)
+									ads[a] = hi
+								}
+								break SpentOutputLoop
+							}
+						}
+					}
+				}
+				hi = append(hi, ai)
+			}
+			for _, vout := range tx.Vout {
+				ao := addressHistoryOutputs{
+					Satoshis:   int64(vout.Value * 10E8),
+					Script:     vout.ScriptPubKey.Hex,
+					ScriptAsm:  vout.ScriptPubKey.Asm,
+					SpentIndex: int(vout.N),
+				}
+				for _, a := range vout.ScriptPubKey.Addresses {
+					if stringInSlice(a, addr) {
+						ao.Address = a
+						hi, ok := ads[a]
+						if ok {
+							hi.OutputIndexes = append(hi.OutputIndexes, int(vout.N))
+						} else {
+							hi := addressHistoryIndexes{}
+							hi.InputIndexes = make([]int, 0)
+							hi.OutputIndexes = append(hi.OutputIndexes, int(vout.N))
+							ads[a] = hi
+						}
+						break
+					}
+				}
+				ho = append(ho, ao)
+			}
+			ahi := addressHistoryItem{}
+			ahi.Addresses = ads
+			ahi.Confirmations = int(tx.Confirmations)
+			ahi.Tx.BlockHash = tx.BlockHash
+			ahi.Tx.BlockTimestamp = tx.Blocktime
+			// ahi.Tx.FeeSatoshis
+			ahi.Tx.Hash = tx.Txid
+			ahi.Tx.Height = int(bestheight) - ahi.Confirmations
+			ahi.Tx.Hex = tx.Hex
+			ahi.Tx.Inputs = hi
+			// ahi.Tx.InputSatoshis
+			ahi.Tx.Locktime = int(tx.LockTime)
+			ahi.Tx.Outputs = ho
+			// ahi.Tx.OutputSatoshis
+			ahi.Tx.Version = int(tx.Version)
+			res.Result.Items = append(res.Result.Items, ahi)
+		}
+	}
+	return
 }
 
 func unmarshalArray(params []byte, np int) (p []interface{}, err error) {

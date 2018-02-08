@@ -51,6 +51,56 @@
             return socket.send({ method, params }, f);
         }
 
+        function getAddressHistory() {
+            var addresses = document.getElementById('getAddressHistoryAddresses').value.split(",");
+            var mempool = document.getElementById("getAddressHistoryMempool").checked;
+            lookupAddressHistories(addresses, 0, 1, mempool, 2000000, 0, function (result) {
+                console.log('getAddressHistory sent successfully');
+                console.log(result);
+                document.getElementById('getAddressHistoryResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
+            });
+        }
+
+        function lookupAddressHistories(addresses, from, to, mempool, start, end, f) {
+            const method = 'getAddressHistory';
+            const rangeParam = mempool ? {
+                start, // needed for older bitcores (so we don't load all history if bitcore-node < 3.1.3)
+                end,
+                queryMempoolOnly: true,
+            } : {
+                    start,
+                    end,
+                    queryMempol: false,
+                };
+            const params = [
+                addresses,
+                {
+                    ...rangeParam,
+                    from,
+                    to,
+                },
+            ];
+            return socket.send({ method, params }, f);
+        }
+
+        function lookupTransactionsIdsMempool(addresses, mempool, start, end, f) {
+            const method = 'getAddressTxids';
+            const rangeParam = mempool ? {
+                start,
+                end,
+                queryMempoolOnly: true,
+            } : {
+                    start,
+                    end,
+                    queryMempol: false,
+                };
+            const params = [
+                addresses,
+                rangeParam,
+            ];
+            return socket.send({ method, params }, f);
+        }
+
         function getBlockHeader() {
             var height = document.getElementById('getBlockHeaderHeight').value;
             lookupBlockHash(parseInt(height), function (result) {
@@ -120,7 +170,7 @@
                 <input class="btn btn-secondary" type="button" value="getAddressTxids" onclick="getAddressTxids()">
             </div>
             <div class="col-8">
-                <input type="text" class="form-control" id="getAddressTxidsAddresses" value="2MxvKTW83yhVsGCr4BSRqmhca7r8TB2dgW8,bc1qrsf2l34jvqnq0lduyz0j5pfu2nkd93nnq0qggn">
+                <input type="text" class="form-control" id="getAddressTxidsAddresses" value="2N4Q5FhU2497BryFfUgbqkAJE87aKHUhXMp,2Mt7P2BAfE922zmfXrdcYTLyR7GUvbwSEns">
             </div>
             <div class="col form-inline">
                 <input type="checkbox" id="getAddressTxidsMempool">&nbsp;
@@ -129,6 +179,22 @@
         </div>
         <div class="row">
             <div class="col" id="getAddressTxidsResult">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <input class="btn btn-secondary" type="button" value="getAddressHistory" onclick="getAddressHistory()">
+            </div>
+            <div class="col-8">
+                <input type="text" class="form-control" id="getAddressHistoryAddresses" value="2N4Q5FhU2497BryFfUgbqkAJE87aKHUhXMp,2Mt7P2BAfE922zmfXrdcYTLyR7GUvbwSEns">
+            </div>
+            <div class="col form-inline">
+                <input type="checkbox" id="getAddressHistoryMempool">&nbsp;
+                <label>only mempool</label>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col" id="getAddressHistoryResult">
             </div>
         </div>
         <div class="row">
