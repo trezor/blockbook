@@ -1,5 +1,13 @@
 # blockbook
 
+## Install using Docker:
+
+```
+git clone https://github.com/jpochyla/blockbook.git
+cd blockbook/docker
+./build.sh
+```
+
 ## Install
 
 Setup go environment (Debian 9):
@@ -37,10 +45,17 @@ Install Go interface to ZeroMQ:
 go get github.com/pebbe/zmq4
 ```
 
-Install additional go libraries - glog logging, socket.io:
+Install additional go libraries:
 ```
 go get github.com/golang/glog
 go get github.com/graarh/golang-socketio
+go get github.com/btcsuite/btcd
+go get github.com/gorilla/handlers
+go get github.com/bsm/go-vlq
+go get github.com/gorilla/handlers
+go get github.com/gorilla/mux
+go get github.com/pebbe/zmq4
+go get github.com/pkg/profile
 ```
 
 Install blockbook:
