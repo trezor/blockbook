@@ -142,6 +142,8 @@ var onMessageHandlers = map[string]func(*SocketIoServer, json.RawMessage) (inter
 	"\"getInfo\"": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
 		return s.getInfo()
 	},
+	// getDetailedTransaction
+	// sendTransaction
 }
 
 func (s *SocketIoServer) onMessage(c *gosocketio.Channel, req map[string]json.RawMessage) interface{} {
@@ -223,7 +225,7 @@ type addressHistoryIndexes struct {
 	OutputIndexes []int `json:"outputIndexes"`
 }
 
-type addressHistoryInputs struct {
+type txInputs struct {
 	PrevTxID    string `json:"prevTxId"`
 	OutputIndex int    `json:"outputIndex"`
 	Script      string `json:"script"`
@@ -233,7 +235,7 @@ type addressHistoryInputs struct {
 	Satoshis    int64  `json:"satoshis"`
 }
 
-type addressHistoryOutputs struct {
+type txOutputs struct {
 	Satoshis    int64  `json:"satoshis"`
 	Script      string `json:"script"`
 	ScriptAsm   string `json:"scriptAsm"`
@@ -243,25 +245,27 @@ type addressHistoryOutputs struct {
 	Address     string `json:"address"`
 }
 
+type resTx struct {
+	Hex            string      `json:"hex"`
+	BlockHash      string      `json:"blockHash"`
+	Height         int         `json:"height"`
+	BlockTimestamp int64       `json:"blockTimestamp"`
+	Version        int         `json:"version"`
+	Hash           string      `json:"hash"`
+	Locktime       int         `json:"locktime"`
+	Size           int         `json:"size"`
+	Inputs         []txInputs  `json:"inputs"`
+	InputSatoshis  int64       `json:"inputSatoshis"`
+	Outputs        []txOutputs `json:"outputs"`
+	OutputSatoshis int64       `json:"outputSatoshis"`
+	FeeSatoshis    int64       `json:"feeSatoshis"`
+}
+
 type addressHistoryItem struct {
 	Addresses     map[string]addressHistoryIndexes `json:"addresses"`
 	Satoshis      int                              `json:"satoshis"`
 	Confirmations int                              `json:"confirmations"`
-	Tx            struct {
-		Hex            string                  `json:"hex"`
-		BlockHash      string                  `json:"blockHash"`
-		Height         int                     `json:"height"`
-		BlockTimestamp int64                   `json:"blockTimestamp"`
-		Version        int                     `json:"version"`
-		Hash           string                  `json:"hash"`
-		Locktime       int                     `json:"locktime"`
-		Size           int                     `json:"size"`
-		Inputs         []addressHistoryInputs  `json:"inputs"`
-		InputSatoshis  int64                   `json:"inputSatoshis"`
-		Outputs        []addressHistoryOutputs `json:"outputs"`
-		OutputSatoshis int64                   `json:"outputSatoshis"`
-		FeeSatoshis    int64                   `json:"feeSatoshis"`
-	} `json:"tx"`
+	Tx            resTx                            `json:"tx"`
 }
 
 type resultGetAddressHistory struct {
@@ -293,6 +297,23 @@ func stringInSlice(a string, list []string) bool {
 	return false
 }
 
+func txToResTx(tx *bchain.Tx, height int, hi []txInputs, ho []txOutputs) resTx {
+	return resTx{
+		BlockHash:      tx.BlockHash,
+		BlockTimestamp: tx.Blocktime,
+		// FeeSatoshis,
+		Hash:   tx.Txid,
+		Height: height,
+		Hex:    tx.Hex,
+		Inputs: hi,
+		// InputSatoshis,
+		Locktime: int(tx.LockTime),
+		Outputs:  ho,
+		// OutputSatoshis,
+		Version: int(tx.Version),
+	}
+}
+
 func (s *SocketIoServer) getAddressHistory(addr []string, rr *reqRange) (res resultGetAddressHistory, err error) {
 	txids, err := s.getAddressTxids(addr, rr)
 	if err != nil {
@@ -313,10 +334,10 @@ func (s *SocketIoServer) getAddressHistory(addr []string, rr *reqRange) (res res
 				return res, err
 			}
 			ads := make(map[string]addressHistoryIndexes)
-			hi := make([]addressHistoryInputs, 0)
-			ho := make([]addressHistoryOutputs, 0)
+			hi := make([]txInputs, 0)
+			ho := make([]txOutputs, 0)
 			for _, vin := range tx.Vin {
-				ai := addressHistoryInputs{
+				ai := txInputs{
 					Script:      vin.ScriptSig.Hex,
 					ScriptAsm:   vin.ScriptSig.Asm,
 					Sequence:    int64(vin.Sequence),
@@ -353,7 +374,7 @@ func (s *SocketIoServer) getAddressHistory(addr []string, rr *reqRange) (res res
 				hi = append(hi, ai)
 			}
 			for _, vout := range tx.Vout {
-				ao := addressHistoryOutputs{
+				ao := txOutputs{
 					Satoshis:   int64(vout.Value * 10E8),
 					Script:     vout.ScriptPubKey.Hex,
 					ScriptAsm:  vout.ScriptPubKey.Asm,
@@ -379,18 +400,7 @@ func (s *SocketIoServer) getAddressHistory(addr []string, rr *reqRange) (res res
 			ahi := addressHistoryItem{}
 			ahi.Addresses = ads
 			ahi.Confirmations = int(tx.Confirmations)
-			ahi.Tx.BlockHash = tx.BlockHash
-			ahi.Tx.BlockTimestamp = tx.Blocktime
-			// ahi.Tx.FeeSatoshis
-			ahi.Tx.Hash = tx.Txid
-			ahi.Tx.Height = int(bestheight) - ahi.Confirmations
-			ahi.Tx.Hex = tx.Hex
-			ahi.Tx.Inputs = hi
-			// ahi.Tx.InputSatoshis
-			ahi.Tx.Locktime = int(tx.LockTime)
-			ahi.Tx.Outputs = ho
-			// ahi.Tx.OutputSatoshis
-			ahi.Tx.Version = int(tx.Version)
+			ahi.Tx = txToResTx(tx, int(bestheight)-int(tx.Confirmations), hi, ho)
 			res.Result.Items = append(res.Result.Items, ahi)
 		}
 	}
