@@ -44,10 +44,11 @@ const (
 var cfNames = []string{"default", "height", "outputs", "inputs"}
 
 func openDB(path string, bulk bool) (*gorocksdb.DB, []*gorocksdb.ColumnFamilyHandle, error) {
+	c := gorocksdb.NewLRUCache(8 << 30) // 8 gb
 	fp := gorocksdb.NewBloomFilter(10)
 	bbto := gorocksdb.NewDefaultBlockBasedTableOptions()
-	bbto.SetBlockSize(16 << 10)                        // 16kb
-	bbto.SetBlockCache(gorocksdb.NewLRUCache(8 << 30)) // 8 gb
+	bbto.SetBlockSize(16 << 10) // 16kb
+	bbto.SetBlockCache(c)
 	bbto.SetFilterPolicy(fp)
 
 	opts := gorocksdb.NewDefaultOptions()
@@ -62,7 +63,12 @@ func openDB(path string, bulk bool) (*gorocksdb.DB, []*gorocksdb.ColumnFamilyHan
 
 	// opts for outputs are different:
 	// no bloom filter - from documentation: If most of your queries are executed using iterators, you shouldn't set bloom filter
+	bbtoOutputs := gorocksdb.NewDefaultBlockBasedTableOptions()
+	bbtoOutputs.SetBlockSize(16 << 10) // 16kb
+	bbtoOutputs.SetBlockCache(c)       // 8 gb
+
 	optsOutputs := gorocksdb.NewDefaultOptions()
+	optsOutputs.SetBlockBasedTableFactory(bbtoOutputs)
 	optsOutputs.SetCreateIfMissing(true)
 	optsOutputs.SetCreateIfMissingColumnFamilies(true)
 	optsOutputs.SetMaxBackgroundCompactions(4)
