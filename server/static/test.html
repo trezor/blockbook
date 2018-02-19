@@ -146,6 +146,23 @@
             return socket.send({ method, params }, f);
         }
 
+        function getDetailedTransaction() {
+            var hash = document.getElementById('getDetailedTransactionHash').value;
+            lookupDetailedTransaction(hash, function (result) {
+                console.log('getDetailedTransaction sent successfully');
+                console.log(result);
+                document.getElementById('getDetailedTransactionResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
+            });
+        }
+
+        function lookupDetailedTransaction(hash, f) {
+            const method = 'getDetailedTransaction';
+            const params = [
+                hash,
+            ];
+            return socket.send({ method, params }, f);
+        }
+
     </script>
 </head>
 
@@ -232,6 +249,20 @@
                 <input class="btn btn-secondary" type="button" value="getInfo" onclick="getInfo()">
             </div>
             <div class="col-10" id="getInfoResult">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <input class="btn btn-secondary" type="button" value="getDetailedTransaction" onclick="getDetailedTransaction()">
+            </div>
+            <div class="col-8">
+                <input type="text" class="form-control" id="getDetailedTransactionHash" value="474e6795760ebe81cb4023dc227e5a0efe340e1771c89a0035276361ed733de7">
+            </div>
+            <div class="col">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col" id="getDetailedTransactionResult">
             </div>
         </div>
     </div>

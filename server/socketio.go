@@ -142,7 +142,13 @@ var onMessageHandlers = map[string]func(*SocketIoServer, json.RawMessage) (inter
 	"\"getInfo\"": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
 		return s.getInfo()
 	},
-	// getDetailedTransaction
+	"\"getDetailedTransaction\"": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
+		txid, err := unmarshalGetDetailedTransaction(params)
+		if err == nil {
+			rv, err = s.getDetailedTransaction(txid)
+		}
+		return
+	},
 	// sendTransaction
 }
 
@@ -226,7 +232,7 @@ type addressHistoryIndexes struct {
 }
 
 type txInputs struct {
-	PrevTxID    string `json:"prevTxId"`
+	PrevTxID    string `json:"prevTxId,omitempty"`
 	OutputIndex int    `json:"outputIndex"`
 	Script      string `json:"script"`
 	ScriptAsm   string `json:"scriptAsm"`
@@ -247,13 +253,13 @@ type txOutputs struct {
 
 type resTx struct {
 	Hex            string      `json:"hex"`
-	BlockHash      string      `json:"blockHash"`
+	BlockHash      string      `json:"blockHash,omitempty"`
 	Height         int         `json:"height"`
 	BlockTimestamp int64       `json:"blockTimestamp"`
 	Version        int         `json:"version"`
 	Hash           string      `json:"hash"`
 	Locktime       int         `json:"locktime"`
-	Size           int         `json:"size"`
+	Size           int         `json:"size,omitempty"`
 	Inputs         []txInputs  `json:"inputs"`
 	InputSatoshis  int64       `json:"inputSatoshis"`
 	Outputs        []txOutputs `json:"outputs"`
@@ -299,7 +305,7 @@ func stringInSlice(a string, list []string) bool {
 
 func txToResTx(tx *bchain.Tx, height int, hi []txInputs, ho []txOutputs) resTx {
 	return resTx{
-		BlockHash:      tx.BlockHash,
+		// BlockHash:      tx.BlockHash,
 		BlockTimestamp: tx.Blocktime,
 		// FeeSatoshis,
 		Hash:   tx.Txid,
@@ -400,7 +406,13 @@ func (s *SocketIoServer) getAddressHistory(addr []string, rr *reqRange) (res res
 			ahi := addressHistoryItem{}
 			ahi.Addresses = ads
 			ahi.Confirmations = int(tx.Confirmations)
-			ahi.Tx = txToResTx(tx, int(bestheight)-int(tx.Confirmations), hi, ho)
+			var height int
+			if tx.Confirmations == 0 {
+				height = -1
+			} else {
+				height = int(bestheight) - int(tx.Confirmations)
+			}
+			ahi.Tx = txToResTx(tx, height, hi, ho)
 			res.Result.Items = append(res.Result.Items, ahi)
 		}
 	}
@@ -534,7 +546,63 @@ func (s *SocketIoServer) getInfo() (res resultGetInfo, err error) {
 	return
 }
 
-func (s *SocketIoServer) onSubscribe(c *gosocketio.Channel, req map[string]json.RawMessage) interface{} {
+func unmarshalGetDetailedTransaction(params []byte) (hash string, err error) {
+	p, err := unmarshalArray(params, 1)
+	if err != nil {
+		return
+	}
+	hash, ok := p[0].(string)
+	if ok {
+		return
+	}
+	err = errors.New("incorrect parameter")
+	return
+}
+
+type resultGetDetailedTransaction struct {
+	Result resTx `json:"result"`
+}
+
+func (s *SocketIoServer) getDetailedTransaction(txid string) (res resultGetDetailedTransaction, err error) {
+	bestheight, _, err := s.db.GetBestBlock()
+	if err != nil {
+		return
+	}
+	tx, err := s.chain.GetTransaction(txid)
+	if err != nil {
+		return res, err
+	}
+	hi := make([]txInputs, 0)
+	ho := make([]txOutputs, 0)
+	for _, vin := range tx.Vin {
+		ai := txInputs{
+			Script:      vin.ScriptSig.Hex,
+			ScriptAsm:   vin.ScriptSig.Asm,
+			Sequence:    int64(vin.Sequence),
+			OutputIndex: int(vin.Vout),
+		}
+		hi = append(hi, ai)
+	}
+	for _, vout := range tx.Vout {
+		ao := txOutputs{
+			Satoshis:   int64(vout.Value * 10E8),
+			Script:     vout.ScriptPubKey.Hex,
+			ScriptAsm:  vout.ScriptPubKey.Asm,
+			SpentIndex: int(vout.N),
+		}
+		ho = append(ho, ao)
+	}
+	var height int
+	if tx.Confirmations == 0 {
+		height = -1
+	} else {
+		height = int(bestheight) - int(tx.Confirmations)
+	}
+	res.Result = txToResTx(tx, height, hi, ho)
+	return
+}
+
+func (s *SocketIoServer) onSubscribe(c *gosocketio.Channel, req json.RawMessage) interface{} {
 	glog.Info(c.Id(), " onSubscribe ", req)
 	return nil
 }
