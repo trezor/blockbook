@@ -150,6 +150,18 @@ type resEstimateSmartFee struct {
 	} `json:"result"`
 }
 
+// sendrawtransaction
+
+type cmdSendRawTransaction struct {
+	Method string   `json:"method"`
+	Params []string `json:"params"`
+}
+
+type resSendRawTransaction struct {
+	Error  *RPCError `json:"error"`
+	Result string    `json:"result"`
+}
+
 type BlockParser interface {
 	ParseBlock(b []byte) (*Block, error)
 }
@@ -394,6 +406,24 @@ func (b *BitcoinRPC) EstimateSmartFee(blocks int, conservative bool) (float64, e
 		return 0, res.Error
 	}
 	return res.Result.Feerate, nil
+}
+
+// SendRawTransaction sends raw transaction.
+func (b *BitcoinRPC) SendRawTransaction(tx string) (string, error) {
+	glog.V(1).Info("rpc: sendrawtransaction")
+
+	res := resSendRawTransaction{}
+	req := cmdSendRawTransaction{Method: "sendrawtransaction"}
+	req.Params = []string{tx}
+	err := b.call(&req, &res)
+
+	if err != nil {
+		return "", err
+	}
+	if res.Error != nil {
+		return "", res.Error
+	}
+	return res.Result, nil
 }
 
 func (b *BitcoinRPC) call(req interface{}, res interface{}) error {
