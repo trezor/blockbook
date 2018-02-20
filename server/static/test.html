@@ -163,6 +163,22 @@
             return socket.send({ method, params }, f);
         }
 
+        function sendTransaction() {
+            var tx = document.getElementById('sendTransactionHex').value;
+            sendTransactionF(tx, function (result) {
+                console.log('sendTransaction sent successfully');
+                console.log(result);
+                document.getElementById('sendTransactionResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
+            });
+        }
+
+        function sendTransactionF(hex, f) {
+            const method = 'sendTransaction';
+            const params = [
+                hex,
+            ];
+            return socket.send({ method, params }, f);
+        }
     </script>
 </head>
 
@@ -263,6 +279,20 @@
         </div>
         <div class="row">
             <div class="col" id="getDetailedTransactionResult">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <input class="btn btn-secondary" type="button" value="sendTransaction" onclick="sendTransaction()">
+            </div>
+            <div class="col-8">
+                <input type="text" class="form-control" id="sendTransactionHex" value="010000000001019d64f0c72a0d206001decbffaa722eb1044534c74eee7a5df8318e42a4323ec10000000017160014550da1f5d25a9dae2eafd6902b4194c4c6500af6ffffffff02809698000000000017a914cd668d781ece600efa4b2404dc91fd26b8b8aed8870553d7360000000017a914246655bdbd54c7e477d0ea2375e86e0db2b8f80a8702473044022076aba4ad559616905fa51d4ddd357fc1fdb428d40cb388e042cdd1da4a1b7357022011916f90c712ead9a66d5f058252efd280439ad8956a967e95d437d246710bc9012102a80a5964c5612bb769ef73147b2cf3c149bc0fd4ecb02f8097629c94ab013ffd00000000">
+            </div>
+            <div class="col">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col" id="sendTransactionResult">
             </div>
         </div>
     </div>

@@ -149,7 +149,13 @@ var onMessageHandlers = map[string]func(*SocketIoServer, json.RawMessage) (inter
 		}
 		return
 	},
-	// sendTransaction
+	"\"sendTransaction\"": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
+		tx, err := unmarshalSendTransaction(params)
+		if err == nil {
+			rv, err = s.sendTransaction(tx)
+		}
+		return
+	},
 }
 
 func (s *SocketIoServer) onMessage(c *gosocketio.Channel, req map[string]json.RawMessage) interface{} {
@@ -599,6 +605,32 @@ func (s *SocketIoServer) getDetailedTransaction(txid string) (res resultGetDetai
 		height = int(bestheight) - int(tx.Confirmations)
 	}
 	res.Result = txToResTx(tx, height, hi, ho)
+	return
+}
+
+func unmarshalSendTransaction(params []byte) (tx string, err error) {
+	p, err := unmarshalArray(params, 1)
+	if err != nil {
+		return
+	}
+	tx, ok := p[0].(string)
+	if ok {
+		return
+	}
+	err = errors.New("incorrect parameter")
+	return
+}
+
+type resultSendTransaction struct {
+	Result string `json:"result"`
+}
+
+func (s *SocketIoServer) sendTransaction(tx string) (res resultSendTransaction, err error) {
+	txid, err := s.chain.SendRawTransaction(tx)
+	if err != nil {
+		return res, err
+	}
+	res.Result = txid
 	return
 }
 
