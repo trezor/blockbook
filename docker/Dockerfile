@@ -23,7 +23,7 @@ RUN cd /opt/rocksdb && CFLAGS=-fPIC CXXFLAGS=-fPIC make static_lib
 RUN CGO_CFLAGS="-I/opt/rocksdb/include" CGO_LDFLAGS="-L/opt/rocksdb -lrocksdb -lstdc++ -lm -lz -lbz2 -lsnappy -llz4" go get github.com/tecbot/gorocksdb
 
 RUN go get github.com/golang/glog
-RUN go get github.com/graarh/golang-socketio
+RUN go get github.com/martinboehm/golang-socketio
 RUN go get github.com/btcsuite/btcd
 RUN go get github.com/gorilla/handlers
 RUN go get github.com/bsm/go-vlq

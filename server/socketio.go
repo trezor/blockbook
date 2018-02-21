@@ -11,8 +11,8 @@ import (
 	"strings"
 
 	"github.com/golang/glog"
-	"github.com/graarh/golang-socketio"
-	"github.com/graarh/golang-socketio/transport"
+	"github.com/martinboehm/golang-socketio"
+	"github.com/martinboehm/golang-socketio/transport"
 )
 
 // SocketIoServer is handle to SocketIoServer
@@ -634,7 +634,7 @@ func (s *SocketIoServer) sendTransaction(tx string) (res resultSendTransaction, 
 	return
 }
 
-func (s *SocketIoServer) onSubscribe(c *gosocketio.Channel, req json.RawMessage) interface{} {
-	glog.Info(c.Id(), " onSubscribe ", req)
+func (s *SocketIoServer) onSubscribe(c *gosocketio.Channel, req []byte) interface{} {
+	glog.Info(c.Id(), " onSubscribe ", string(req))
 	return nil
 }

@@ -179,6 +179,29 @@
             ];
             return socket.send({ method, params }, f);
         }
+
+        function subscribeHashBlock() {
+            socket.emit('subscribe', "bitcoind/hashblock", function (result) {
+                console.log('subscribe bitcoind/hashblock sent successfully');
+                console.log(result);
+            });
+            socket.on("bitcoind/hashblock", function (result) {
+                console.log('on bitcoind/hashblock');
+                console.log(result);
+            });
+        }
+
+        function subscribeAddressTxid() {
+            var addresses = document.getElementById('subscribeAddressTxidAddresses').value.split(",");
+            socket.emit('subscribe', "bitcoind/addresstxid", addresses, function (result) {
+                console.log('subscribe bitcoind/addresstxid sent successfully');
+                console.log(result);
+            });
+            socket.on("bitcoind/addresstxid", function (result) {
+                console.log('on bitcoind/addresstxid');
+                console.log(result);
+            });
+        }
     </script>
 </head>
 
@@ -293,6 +316,29 @@
         </div>
         <div class="row">
             <div class="col" id="sendTransactionResult">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <input class="btn btn-secondary" type="button" value="subscribe hashblock" onclick="subscribeHashBlock()">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col" id="subscribeHashBlockResult">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <input class="btn btn-secondary" type="button" value="subscribe addresstxid" onclick="subscribeAddressTxid()">
+            </div>
+            <div class="col-8">
+                <input type="text" class="form-control" id="subscribeAddressTxidAddresses" value="2MzTmvPJLZaLzD9XdN3jMtQA5NexC3rAPww,2NAZRJKr63tSdcTxTN3WaE9ZNDyXy6PgGuv">
+            </div>
+            <div class="col">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col" id="subscribeAddressTxidResult">
             </div>
         </div>
     </div>
