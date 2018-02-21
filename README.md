@@ -22,12 +22,13 @@ go help gopath
 ```
 
 Install RocksDB: https://github.com/facebook/rocksdb/blob/master/INSTALL.md
+and compile the static_lib and tools
 
 ```
 sudo apt-get install libgflags-dev libsnappy-dev zlib1g-dev libbz2-dev liblz4-dev
 git clone https://github.com/facebook/rocksdb.git
 cd rocksdb
-make static_lib
+make release
 ```
 
 Install gorocksdb: https://github.com/tecbot/gorocksdb
@@ -48,7 +49,7 @@ go get github.com/pebbe/zmq4
 Install additional go libraries:
 ```
 go get github.com/golang/glog
-go get github.com/graarh/golang-socketio
+go get github.com/martinboehm/golang-socketio
 go get github.com/btcsuite/btcd
 go get github.com/gorilla/handlers
 go get github.com/bsm/go-vlq
