@@ -188,6 +188,7 @@
             socket.on("bitcoind/hashblock", function (result) {
                 console.log('on bitcoind/hashblock');
                 console.log(result);
+                document.getElementById('subscribeHashBlockResult').innerText += JSON.stringify(result).replace(/,/g, ", ") + "\n";
             });
         }
 

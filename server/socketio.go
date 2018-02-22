@@ -634,7 +634,42 @@ func (s *SocketIoServer) sendTransaction(tx string) (res resultSendTransaction, 
 	return
 }
 
+// onSubscribe expects two event subscriptions based on the req parameter (including the doublequotes):
+// "bitcoind/hashblock"
+// "bitcoind/addresstxid",["2MzTmvPJLZaLzD9XdN3jMtQA5NexC3rAPww","2NAZRJKr63tSdcTxTN3WaE9ZNDyXy6PgGuv"]
 func (s *SocketIoServer) onSubscribe(c *gosocketio.Channel, req []byte) interface{} {
-	glog.Info(c.Id(), " onSubscribe ", string(req))
+	r := string(req)
+	glog.Info(c.Id(), " onSubscribe ", r)
+	var sc string
+	i := strings.Index(r, "\",[")
+	if i > 0 {
+		var addrs []string
+		sc = r[1:i]
+		if sc != "bitcoind/addresstxid" {
+			glog.Error(c.Id(), " onSubscribe ", sc, ": invalid data")
+			return nil
+		}
+		err := json.Unmarshal([]byte(r[i+2:]), &addrs)
+		if err != nil {
+			glog.Error(c.Id(), " onSubscribe ", sc, ": ", err)
+			return nil
+		}
+		for _, a := range addrs {
+			c.Join(sc + "-" + a)
+		}
+	} else {
+		sc = r[1 : len(r)-1]
+		if sc != "bitcoind/hashblock" {
+			glog.Error(c.Id(), " onSubscribe ", sc, ": invalid data")
+			return nil
+		}
+		c.Join(sc)
+	}
 	return nil
+}
+
+// OnNewBlockHash notifies users subscribed to bitcoind/hashblock about new block
+func (s *SocketIoServer) OnNewBlockHash(hash string) {
+	glog.Info("broadcasting new block hash ", hash)
+	s.server.BroadcastTo("bitcoind/hashblock", "bitcoind/hashblock", hash)
 }

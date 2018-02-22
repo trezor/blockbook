@@ -64,13 +64,15 @@ var (
 )
 
 var (
-	chanSyncIndex       = make(chan struct{})
-	chanSyncMempool     = make(chan struct{})
-	chanSyncIndexDone   = make(chan struct{})
-	chanSyncMempoolDone = make(chan struct{})
-	chain               *bchain.BitcoinRPC
-	mempool             *bchain.Mempool
-	index               *db.RocksDB
+	chanSyncIndex          = make(chan struct{})
+	chanSyncMempool        = make(chan struct{})
+	chanSyncIndexDone      = make(chan struct{})
+	chanSyncMempoolDone    = make(chan struct{})
+	chain                  *bchain.BitcoinRPC
+	mempool                *bchain.Mempool
+	index                  *db.RocksDB
+	callbackOnNewIndexHash []func(hash string)
+	callbackOnNewTxAddr    []func(txid string, addr string)
 )
 
 func main() {
@@ -130,12 +132,9 @@ func main() {
 	}
 
 	if *synchronize {
-		if err := resyncIndex(true); err != nil {
+		if err := resyncIndex(true, nil); err != nil {
 			glog.Fatal("resyncIndex ", err)
 		}
-		go syncIndexLoop()
-		go syncMempoolLoop()
-		chanSyncMempool <- struct{}{}
 	}
 
 	var httpServer *server.HTTPServer
@@ -172,6 +171,15 @@ func main() {
 				}
 			}
 		}()
+		callbackOnNewIndexHash = append(callbackOnNewIndexHash, socketIoServer.OnNewBlockHash)
+	}
+
+	if *synchronize {
+		// start the synchronization loops after the server interfaces are started
+		go syncIndexLoop()
+		go syncMempoolLoop()
+		// sync mempool immediately
+		chanSyncMempool <- struct{}{}
 	}
 
 	var mq *bchain.MQ
@@ -214,7 +222,7 @@ func main() {
 		}
 	}
 
-	if httpServer != nil || mq != nil {
+	if httpServer != nil || socketIoServer != nil || mq != nil {
 		waitForSignalAndShutdown(httpServer, socketIoServer, mq, 5*time.Second)
 	}
 
@@ -254,11 +262,17 @@ func syncIndexLoop() {
 	glog.Info("syncIndexLoop starting")
 	// resync index about every 15 minutes if there are no chanSyncIndex requests, with debounce 1 second
 	tickAndDebounce(resyncIndexPeriodMs*time.Millisecond, debounceResyncIndexMs*time.Millisecond, chanSyncIndex, func() {
-		if err := resyncIndex(false); err != nil {
+		if err := resyncIndex(false, onNewBlockHash); err != nil {
 			glog.Error("syncIndexLoop", err)
 		}
 	})
 	glog.Info("syncIndexLoop stopped")
+}
+
+func onNewBlockHash(hash string) {
+	for _, c := range callbackOnNewIndexHash {
+		c(hash)
+	}
 }
 
 func syncMempoolLoop() {
@@ -320,7 +334,7 @@ func printResult(txid string, vout uint32, isOutput bool) error {
 	return nil
 }
 
-func resyncIndex(bulk bool) error {
+func resyncIndex(bulk bool, onNewBlock func(hash string)) error {
 	remote, err := chain.GetBestBlockHash()
 	if err != nil {
 		return err
@@ -375,7 +389,7 @@ func resyncIndex(bulk bool) error {
 			if err != nil {
 				return err
 			}
-			return resyncIndex(false)
+			return resyncIndex(false, onNewBlock)
 		}
 	}
 
@@ -420,16 +434,14 @@ func resyncIndex(bulk bool) error {
 			}
 			// after parallel load finish the sync using standard way,
 			// new blocks may have been created in the meantime
-			return resyncIndex(false)
+			return resyncIndex(false, onNewBlock)
 		}
 	}
 
-	return connectBlocks(hash)
+	return connectBlocks(hash, onNewBlock)
 }
 
-func connectBlocks(
-	hash string,
-) error {
+func connectBlocks(hash string, onNewBlock func(hash string)) error {
 	bch := make(chan blockResult, 8)
 	done := make(chan struct{})
 	defer close(done)
@@ -445,6 +457,9 @@ func connectBlocks(
 		err := index.ConnectBlock(res.block)
 		if err != nil {
 			return err
+		}
+		if onNewBlock != nil {
+			onNewBlock(res.block.Hash)
 		}
 	}
 
