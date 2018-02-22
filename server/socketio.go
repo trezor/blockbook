@@ -670,12 +670,14 @@ func (s *SocketIoServer) onSubscribe(c *gosocketio.Channel, req []byte) interfac
 
 // OnNewBlockHash notifies users subscribed to bitcoind/hashblock about new block
 func (s *SocketIoServer) OnNewBlockHash(hash string) {
-	glog.Info("broadcasting new block hash ", hash)
-	s.server.BroadcastTo("bitcoind/hashblock", "bitcoind/hashblock", hash)
+	c := s.server.BroadcastTo("bitcoind/hashblock", "bitcoind/hashblock", hash)
+	glog.Info("broadcasting new block hash ", hash, " to ", c, " channels")
 }
 
 // OnNewTxAddr notifies users subscribed to bitcoind/addresstxid about new block
 func (s *SocketIoServer) OnNewTxAddr(txid string, addr string) {
-	glog.Info("broadcasting new txid ", txid, " for addr ", addr)
-	s.server.BroadcastTo("bitcoind/addresstxid-"+addr, "bitcoind/addresstxid", map[string]string{"address": addr, "txid": txid})
+	c := s.server.BroadcastTo("bitcoind/addresstxid-"+addr, "bitcoind/addresstxid", map[string]string{"address": addr, "txid": txid})
+	if c > 0 {
+		glog.Info("broadcasting new txid ", txid, " for addr ", addr, " to ", c, " channels")
+	}
 }
