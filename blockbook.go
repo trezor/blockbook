@@ -64,15 +64,15 @@ var (
 )
 
 var (
-	chanSyncIndex          = make(chan struct{})
-	chanSyncMempool        = make(chan struct{})
-	chanSyncIndexDone      = make(chan struct{})
-	chanSyncMempoolDone    = make(chan struct{})
-	chain                  *bchain.BitcoinRPC
-	mempool                *bchain.Mempool
-	index                  *db.RocksDB
-	callbackOnNewIndexHash []func(hash string)
-	callbackOnNewTxAddr    []func(txid string, addr string)
+	chanSyncIndex           = make(chan struct{})
+	chanSyncMempool         = make(chan struct{})
+	chanSyncIndexDone       = make(chan struct{})
+	chanSyncMempoolDone     = make(chan struct{})
+	chain                   *bchain.BitcoinRPC
+	mempool                 *bchain.Mempool
+	index                   *db.RocksDB
+	callbacksOnNewBlockHash []func(hash string)
+	callbacksOnNewTxAddr    []func(txid string, addr string)
 )
 
 func main() {
@@ -171,7 +171,8 @@ func main() {
 				}
 			}
 		}()
-		callbackOnNewIndexHash = append(callbackOnNewIndexHash, socketIoServer.OnNewBlockHash)
+		callbacksOnNewBlockHash = append(callbacksOnNewBlockHash, socketIoServer.OnNewBlockHash)
+		callbacksOnNewTxAddr = append(callbacksOnNewTxAddr, socketIoServer.OnNewTxAddr)
 	}
 
 	if *synchronize {
@@ -270,7 +271,7 @@ func syncIndexLoop() {
 }
 
 func onNewBlockHash(hash string) {
-	for _, c := range callbackOnNewIndexHash {
+	for _, c := range callbacksOnNewBlockHash {
 		c(hash)
 	}
 }
@@ -280,11 +281,17 @@ func syncMempoolLoop() {
 	glog.Info("syncMempoolLoop starting")
 	// resync mempool about every minute if there are no chanSyncMempool requests, with debounce 1 second
 	tickAndDebounce(resyncMempoolPeriodMs*time.Millisecond, debounceResyncMempoolMs*time.Millisecond, chanSyncMempool, func() {
-		if err := mempool.Resync(); err != nil {
+		if err := mempool.Resync(onNewTxAddr); err != nil {
 			glog.Error("syncMempoolLoop", err)
 		}
 	})
 	glog.Info("syncMempoolLoop stopped")
+}
+
+func onNewTxAddr(txid string, addr string) {
+	for _, c := range callbacksOnNewTxAddr {
+		c(txid, addr)
+	}
 }
 
 func mqHandler(m *bchain.MQMessage) {

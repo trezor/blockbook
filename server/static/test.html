@@ -201,6 +201,7 @@
             socket.on("bitcoind/addresstxid", function (result) {
                 console.log('on bitcoind/addresstxid');
                 console.log(result);
+                document.getElementById('subscribeAddressTxidResult').innerText += JSON.stringify(result).replace(/,/g, ", ") + "\n";
             });
         }
     </script>

@@ -71,7 +71,7 @@ func (m *Mempool) updateMappings(newTxToInputOutput map[string]inputOutput, newS
 // Resync gets mempool transactions and maps output scripts to transactions.
 // Resync is not reentrant, it should be called from a single thread.
 // Read operations (GetTransactions) are safe.
-func (m *Mempool) Resync() error {
+func (m *Mempool) Resync(onNewTxAddr func(txid string, addr string)) error {
 	start := time.Now()
 	glog.V(1).Info("Mempool: resync")
 	txs, err := m.chain.GetMempool()
@@ -94,6 +94,9 @@ func (m *Mempool) Resync() error {
 				outputScript := output.ScriptPubKey.Hex
 				if outputScript != "" {
 					io.outputScripts = append(io.outputScripts, scriptIndex{outputScript, output.N})
+				}
+				if onNewTxAddr != nil && len(output.ScriptPubKey.Addresses) == 1 {
+					onNewTxAddr(tx.Txid, output.ScriptPubKey.Addresses[0])
 				}
 			}
 			io.inputs = make([]outpoint, 0, len(tx.Vin))

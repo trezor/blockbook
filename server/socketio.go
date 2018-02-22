@@ -655,7 +655,7 @@ func (s *SocketIoServer) onSubscribe(c *gosocketio.Channel, req []byte) interfac
 			return nil
 		}
 		for _, a := range addrs {
-			c.Join(sc + "-" + a)
+			c.Join("bitcoind/addresstxid-" + a)
 		}
 	} else {
 		sc = r[1 : len(r)-1]
@@ -672,4 +672,10 @@ func (s *SocketIoServer) onSubscribe(c *gosocketio.Channel, req []byte) interfac
 func (s *SocketIoServer) OnNewBlockHash(hash string) {
 	glog.Info("broadcasting new block hash ", hash)
 	s.server.BroadcastTo("bitcoind/hashblock", "bitcoind/hashblock", hash)
+}
+
+// OnNewTxAddr notifies users subscribed to bitcoind/addresstxid about new block
+func (s *SocketIoServer) OnNewTxAddr(txid string, addr string) {
+	glog.Info("broadcasting new txid ", txid, " for addr ", addr)
+	s.server.BroadcastTo("bitcoind/addresstxid-"+addr, "bitcoind/addresstxid", map[string]string{"address": addr, "txid": txid})
 }
