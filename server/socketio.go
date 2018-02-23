@@ -158,6 +158,12 @@ var onMessageHandlers = map[string]func(*SocketIoServer, json.RawMessage) (inter
 	},
 }
 
+type resultError struct {
+	Error struct {
+		Message string `json:"message"`
+	} `json:"error"`
+}
+
 func (s *SocketIoServer) onMessage(c *gosocketio.Channel, req map[string]json.RawMessage) interface{} {
 	var err error
 	var rv interface{}
@@ -174,7 +180,9 @@ func (s *SocketIoServer) onMessage(c *gosocketio.Channel, req map[string]json.Ra
 		return rv
 	}
 	glog.Error(c.Id(), " onMessage ", method, ": ", err)
-	return ""
+	e := resultError{}
+	e.Error.Message = err.Error()
+	return e
 }
 
 func unmarshalGetAddressRequest(params []byte) (addr []string, rr reqRange, err error) {
