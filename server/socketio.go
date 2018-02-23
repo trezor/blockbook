@@ -264,13 +264,13 @@ type resTx struct {
 	BlockTimestamp int64       `json:"blockTimestamp"`
 	Version        int         `json:"version"`
 	Hash           string      `json:"hash"`
-	Locktime       int         `json:"locktime"`
+	Locktime       int         `json:"locktime,omitempty"`
 	Size           int         `json:"size,omitempty"`
 	Inputs         []txInputs  `json:"inputs"`
-	InputSatoshis  int64       `json:"inputSatoshis"`
+	InputSatoshis  int64       `json:"inputSatoshis,omitempty"`
 	Outputs        []txOutputs `json:"outputs"`
-	OutputSatoshis int64       `json:"outputSatoshis"`
-	FeeSatoshis    int64       `json:"feeSatoshis"`
+	OutputSatoshis int64       `json:"outputSatoshis,omitempty"`
+	FeeSatoshis    int64       `json:"feeSatoshis,omitempty"`
 }
 
 type addressHistoryItem struct {
@@ -387,7 +387,7 @@ func (s *SocketIoServer) getAddressHistory(addr []string, rr *reqRange) (res res
 			}
 			for _, vout := range tx.Vout {
 				ao := txOutputs{
-					Satoshis:   int64(vout.Value * 10E8),
+					Satoshis:   int64(vout.Value * 1E8),
 					Script:     vout.ScriptPubKey.Hex,
 					ScriptAsm:  vout.ScriptPubKey.Asm,
 					SpentIndex: int(vout.N),
@@ -587,14 +587,28 @@ func (s *SocketIoServer) getDetailedTransaction(txid string) (res resultGetDetai
 			Sequence:    int64(vin.Sequence),
 			OutputIndex: int(vin.Vout),
 		}
+		otx, err := s.chain.GetTransaction(vin.Txid)
+		if err != nil {
+			return res, err
+		}
+		if len(otx.Vout) > int(vin.Vout) {
+			vout := otx.Vout[vin.Vout]
+			if len(vout.ScriptPubKey.Addresses) == 1 {
+				ai.Address = vout.ScriptPubKey.Addresses[0]
+			}
+			ai.Satoshis += int64(vout.Value * 1E8)
+		}
 		hi = append(hi, ai)
 	}
 	for _, vout := range tx.Vout {
 		ao := txOutputs{
-			Satoshis:   int64(vout.Value * 10E8),
+			Satoshis:   int64(vout.Value * 1E8),
 			Script:     vout.ScriptPubKey.Hex,
 			ScriptAsm:  vout.ScriptPubKey.Asm,
 			SpentIndex: int(vout.N),
+		}
+		if len(vout.ScriptPubKey.Addresses) == 1 {
+			ao.Address = vout.ScriptPubKey.Addresses[0]
 		}
 		ho = append(ho, ao)
 	}
@@ -602,7 +616,7 @@ func (s *SocketIoServer) getDetailedTransaction(txid string) (res resultGetDetai
 	if tx.Confirmations == 0 {
 		height = -1
 	} else {
-		height = int(bestheight) - int(tx.Confirmations)
+		height = int(bestheight) - int(tx.Confirmations) + 1
 	}
 	res.Result = txToResTx(tx, height, hi, ho)
 	return
