@@ -39,7 +39,7 @@ func NewSocketIoServer(binding string, certFiles string, db *db.RocksDB, mempool
 	})
 
 	server.On(gosocketio.OnError, func(c *gosocketio.Channel) {
-		glog.Info("Client error ", c.Id())
+		glog.Error("Client error ", c.Id())
 	})
 
 	type Message struct {
@@ -170,7 +170,7 @@ func (s *SocketIoServer) onMessage(c *gosocketio.Channel, req map[string]json.Ra
 		err = errors.New("unknown method")
 	}
 	if err == nil {
-		glog.Info(c.Id(), " onMessage ", method, " success")
+		glog.V(1).Info(c.Id(), " onMessage ", method, " success")
 		return rv
 	}
 	glog.Error(c.Id(), " onMessage ", method, ": ", err)
@@ -639,7 +639,7 @@ func (s *SocketIoServer) sendTransaction(tx string) (res resultSendTransaction, 
 // "bitcoind/addresstxid",["2MzTmvPJLZaLzD9XdN3jMtQA5NexC3rAPww","2NAZRJKr63tSdcTxTN3WaE9ZNDyXy6PgGuv"]
 func (s *SocketIoServer) onSubscribe(c *gosocketio.Channel, req []byte) interface{} {
 	r := string(req)
-	glog.Info(c.Id(), " onSubscribe ", r)
+	glog.V(1).Info(c.Id(), " onSubscribe ", r)
 	var sc string
 	i := strings.Index(r, "\",[")
 	if i > 0 {
