@@ -203,13 +203,30 @@ func unmarshalGetAddressRequest(params []byte) (addr []string, rr reqRange, err 
 	return
 }
 
-func (s *SocketIoServer) getAddressTxids(addr []string, rr *reqRange) ([]string, error) {
+func uniqueTxids(txids []string) []string {
+	uniqueTxids := make([]string, 0, len(txids))
+	txidsMap := make(map[string]struct{})
+	for _, txid := range txids {
+		_, e := txidsMap[txid]
+		if !e {
+			uniqueTxids = append(uniqueTxids, txid)
+			txidsMap[txid] = struct{}{}
+		}
+	}
+	return uniqueTxids
+}
+
+type resultAddressTxids struct {
+	Result []string `json:"result"`
+}
+
+func (s *SocketIoServer) getAddressTxids(addr []string, rr *reqRange) (res resultAddressTxids, err error) {
 	txids := make([]string, 0)
 	lower, higher := uint32(rr.To), uint32(rr.Start)
 	for _, address := range addr {
 		script, err := bchain.AddressToOutputScript(address)
 		if err != nil {
-			return nil, err
+			return res, err
 		}
 		if !rr.QueryMempoolOnly {
 			err = s.db.GetTransactions(script, lower, higher, func(txid string, vout uint32, isOutput bool) error {
@@ -223,21 +240,22 @@ func (s *SocketIoServer) getAddressTxids(addr []string, rr *reqRange) ([]string,
 				return nil
 			})
 			if err != nil {
-				return nil, err
+				return res, err
 			}
 		}
 		if rr.QueryMempoolOnly || rr.QueryMempol {
 			mtxids, err := s.mempool.GetTransactions(script)
 			if err != nil {
-				return nil, err
+				return res, err
 			}
 			txids = append(txids, mtxids...)
 		}
 		if err != nil {
-			return nil, err
+			return res, err
 		}
 	}
-	return txids, nil
+	res.Result = uniqueTxids(txids)
+	return res, nil
 }
 
 type addressHistoryIndexes struct {
@@ -295,19 +313,6 @@ type resultGetAddressHistory struct {
 	} `json:"result"`
 }
 
-func uniqueTxids(txids []string) []string {
-	uniqueTxids := make([]string, 0, len(txids))
-	txidsMap := make(map[string]struct{})
-	for _, txid := range txids {
-		_, e := txidsMap[txid]
-		if !e {
-			uniqueTxids = append(uniqueTxids, txid)
-			txidsMap[txid] = struct{}{}
-		}
-	}
-	return uniqueTxids
-}
-
 func stringInSlice(a string, list []string) bool {
 	for _, b := range list {
 		if b == a {
@@ -335,7 +340,7 @@ func txToResTx(tx *bchain.Tx, height int, hi []txInputs, ho []txOutputs) resTx {
 }
 
 func (s *SocketIoServer) getAddressHistory(addr []string, rr *reqRange) (res resultGetAddressHistory, err error) {
-	txids, err := s.getAddressTxids(addr, rr)
+	txr, err := s.getAddressTxids(addr, rr)
 	if err != nil {
 		return
 	}
@@ -343,8 +348,7 @@ func (s *SocketIoServer) getAddressHistory(addr []string, rr *reqRange) (res res
 	if err != nil {
 		return
 	}
-	// todo - proper sorting of txids, probably by height desc
-	txids = uniqueTxids(txids)
+	txids := txr.Result
 	res.Result.TotalCount = len(txids)
 	res.Result.Items = make([]addressHistoryItem, 0)
 	for i, txid := range txids {
