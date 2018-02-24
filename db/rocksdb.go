@@ -43,7 +43,7 @@ const (
 
 var cfNames = []string{"default", "height", "outputs", "inputs"}
 
-func openDB(path string, bulk bool) (*gorocksdb.DB, []*gorocksdb.ColumnFamilyHandle, error) {
+func openDB(path string) (*gorocksdb.DB, []*gorocksdb.ColumnFamilyHandle, error) {
 	c := gorocksdb.NewLRUCache(8 << 30) // 8 gb
 	fp := gorocksdb.NewBloomFilter(10)
 	bbto := gorocksdb.NewDefaultBlockBasedTableOptions()
@@ -58,8 +58,9 @@ func openDB(path string, bulk bool) (*gorocksdb.DB, []*gorocksdb.ColumnFamilyHan
 	opts.SetMaxBackgroundCompactions(4)
 	opts.SetMaxBackgroundFlushes(2)
 	opts.SetBytesPerSync(1 << 20)    // 1mb
-	opts.SetWriteBufferSize(2 << 30) // 2 gb
+	opts.SetWriteBufferSize(1 << 29) // .5 gb
 	opts.SetMaxOpenFiles(25000)
+	opts.SetCompression(gorocksdb.NoCompression)
 
 	// opts for outputs are different:
 	// no bloom filter - from documentation: If most of your queries are executed using iterators, you shouldn't set bloom filter
@@ -74,13 +75,9 @@ func openDB(path string, bulk bool) (*gorocksdb.DB, []*gorocksdb.ColumnFamilyHan
 	optsOutputs.SetMaxBackgroundCompactions(4)
 	optsOutputs.SetMaxBackgroundFlushes(2)
 	optsOutputs.SetBytesPerSync(1 << 20)    // 1mb
-	optsOutputs.SetWriteBufferSize(2 << 30) // 2 gb
+	optsOutputs.SetWriteBufferSize(1 << 29) // 0.5 gb
 	optsOutputs.SetMaxOpenFiles(25000)
-
-	if bulk {
-		opts.PrepareForBulkLoad()
-		optsOutputs.PrepareForBulkLoad()
-	}
+	optsOutputs.SetCompression(gorocksdb.NoCompression)
 
 	fcOptions := []*gorocksdb.Options{opts, opts, optsOutputs, opts}
 
@@ -95,7 +92,7 @@ func openDB(path string, bulk bool) (*gorocksdb.DB, []*gorocksdb.ColumnFamilyHan
 // needs to be called to release it.
 func NewRocksDB(path string) (d *RocksDB, err error) {
 	glog.Infof("rocksdb: open %s", path)
-	db, cfh, err := openDB(path, false)
+	db, cfh, err := openDB(path)
 	wo := gorocksdb.NewDefaultWriteOptions()
 	ro := gorocksdb.NewDefaultReadOptions()
 	ro.SetFillCache(false)
@@ -525,39 +522,6 @@ func dirSize(path string) (int64, error) {
 // DatabaseSizeOnDisk returns size of the database in bytes
 func (d *RocksDB) DatabaseSizeOnDisk() (int64, error) {
 	return dirSize(d.path)
-}
-
-// CompactDatabase compacts the database
-// After unsuccessful experiment with CompactRange method (slow and actually fragmenting the db without compacting)
-// the method now closes the db instance and opens it again.
-// This means that during compact nobody can access the dababase!
-func (d *RocksDB) CompactDatabase(bulk bool) error {
-	size, _ := dirSize(d.path)
-	glog.Info("Compacting database, db size ", size)
-	if err := d.ReopenWithBulk(bulk); err != nil {
-		return err
-	}
-	size, _ = dirSize(d.path)
-	glog.Info("Compacting database finished, db size ", size)
-	return nil
-}
-
-// ReopenWithBulk reopens the database with different settings:
-// if bulk==true, reopens for bulk load
-// if bulk==false, reopens for normal operation
-// It closes and reopens db, nobody can access the database during the operation!
-func (d *RocksDB) ReopenWithBulk(bulk bool) error {
-	err := d.closeDB()
-	if err != nil {
-		return err
-	}
-	d.db = nil
-	db, cfh, err := openDB(d.path, bulk)
-	if err != nil {
-		return err
-	}
-	d.db, d.cfh = db, cfh
-	return nil
 }
 
 // Helpers

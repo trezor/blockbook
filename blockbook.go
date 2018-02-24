@@ -132,7 +132,7 @@ func main() {
 	}
 
 	if *synchronize {
-		if err := resyncIndex(true, nil); err != nil {
+		if err := resyncIndex(nil); err != nil {
 			glog.Fatal("resyncIndex ", err)
 		}
 	}
@@ -263,7 +263,7 @@ func syncIndexLoop() {
 	glog.Info("syncIndexLoop starting")
 	// resync index about every 15 minutes if there are no chanSyncIndex requests, with debounce 1 second
 	tickAndDebounce(resyncIndexPeriodMs*time.Millisecond, debounceResyncIndexMs*time.Millisecond, chanSyncIndex, func() {
-		if err := resyncIndex(false, onNewBlockHash); err != nil {
+		if err := resyncIndex(onNewBlockHash); err != nil {
 			glog.Error("syncIndexLoop", err)
 		}
 	})
@@ -341,7 +341,7 @@ func printResult(txid string, vout uint32, isOutput bool) error {
 	return nil
 }
 
-func resyncIndex(bulk bool, onNewBlock func(hash string)) error {
+func resyncIndex(onNewBlock func(hash string)) error {
 	remote, err := chain.GetBestBlockHash()
 	if err != nil {
 		return err
@@ -396,7 +396,7 @@ func resyncIndex(bulk bool, onNewBlock func(hash string)) error {
 			if err != nil {
 				return err
 			}
-			return resyncIndex(false, onNewBlock)
+			return resyncIndex(onNewBlock)
 		}
 	}
 
@@ -406,8 +406,6 @@ func resyncIndex(bulk bool, onNewBlock func(hash string)) error {
 		glog.Info("resync: local is behind")
 		hash = header.Next
 		startHeight = localBestHeight
-		// bulk load is allowed only for empty db, otherwise we could get rocksdb "error db has more levels than options.num_levels"
-		bulk = false
 	} else {
 		// If the local block is missing, we're indexing from the genesis block
 		// or from the start block specified by flags
@@ -434,14 +432,13 @@ func resyncIndex(bulk bool, onNewBlock func(hash string)) error {
 				startHeight,
 				chainBestHeight,
 				*syncWorkers,
-				bulk,
 			)
 			if err != nil {
 				return err
 			}
 			// after parallel load finish the sync using standard way,
 			// new blocks may have been created in the meantime
-			return resyncIndex(false, onNewBlock)
+			return resyncIndex(onNewBlock)
 		}
 	}
 
@@ -481,16 +478,8 @@ func connectBlocksParallel(
 	lower uint32,
 	higher uint32,
 	numWorkers int,
-	bulk bool,
 ) error {
 	var err error
-	if bulk {
-		err = index.ReopenWithBulk(true)
-		if err != nil {
-			return err
-		}
-	}
-
 	var wg sync.WaitGroup
 	hch := make(chan string, numWorkers)
 	running := make([]bool, numWorkers)
@@ -529,38 +518,10 @@ func connectBlocksParallel(
 		hch <- hash
 		if h > 0 && h%1000 == 0 {
 			glog.Info("connecting block ", h, " ", hash)
-			if bulk && *compactDBTriggerMB > 0 {
-				size, err := index.DatabaseSizeOnDisk()
-				if err != nil {
-					break
-				}
-				if size > *compactDBTriggerMB*1048576 {
-					// wait for the workers to finish block
-				WaitAgain:
-					for {
-						for _, r := range running {
-							if r {
-								glog.Info("Waiting ", running)
-								time.Sleep(time.Millisecond * 500)
-								continue WaitAgain
-							}
-						}
-						break
-					}
-					if err = index.CompactDatabase(bulk); err != nil {
-						break
-					}
-				}
-			}
 		}
 	}
 	close(hch)
 	wg.Wait()
-
-	if err == nil && bulk {
-		err = index.ReopenWithBulk(false)
-	}
-
 	return err
 }
 
