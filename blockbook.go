@@ -62,7 +62,7 @@ var (
 
 	zeroMQBinding = flag.String("zeromq", "", "binding to zeromq, if missing no zeromq connection")
 
-	insightWeb = flag.String("insight", "", "address of the insight Bitcoin blockchain explorer")
+	explorerURL = flag.String("explorer", "", "address of the Bitcoin blockchain explorer")
 )
 
 var (
@@ -159,7 +159,7 @@ func main() {
 
 	var socketIoServer *server.SocketIoServer
 	if *socketIoBinding != "" {
-		socketIoServer, err = server.NewSocketIoServer(*socketIoBinding, *certFiles, index, mempool, chain, *insightWeb)
+		socketIoServer, err = server.NewSocketIoServer(*socketIoBinding, *certFiles, index, mempool, chain, *explorerURL)
 		if err != nil {
 			glog.Fatal("socketio: ", err)
 		}

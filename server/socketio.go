@@ -17,18 +17,18 @@ import (
 
 // SocketIoServer is handle to SocketIoServer
 type SocketIoServer struct {
-	binding    string
-	certFiles  string
-	server     *gosocketio.Server
-	https      *http.Server
-	db         *db.RocksDB
-	mempool    *bchain.Mempool
-	chain      *bchain.BitcoinRPC
-	insightWeb string
+	binding     string
+	certFiles   string
+	server      *gosocketio.Server
+	https       *http.Server
+	db          *db.RocksDB
+	mempool     *bchain.Mempool
+	chain       *bchain.BitcoinRPC
+	explorerURL string
 }
 
 // NewSocketIoServer creates new SocketIo interface to blockbook and returns its handle
-func NewSocketIoServer(binding string, certFiles string, db *db.RocksDB, mempool *bchain.Mempool, chain *bchain.BitcoinRPC, insightWeb string) (*SocketIoServer, error) {
+func NewSocketIoServer(binding string, certFiles string, db *db.RocksDB, mempool *bchain.Mempool, chain *bchain.BitcoinRPC, explorerURL string) (*SocketIoServer, error) {
 	server := gosocketio.NewServer(transport.GetDefaultWebsocketTransport())
 
 	server.On(gosocketio.OnConnection, func(c *gosocketio.Channel) {
@@ -56,14 +56,14 @@ func NewSocketIoServer(binding string, certFiles string, db *db.RocksDB, mempool
 	}
 
 	s := &SocketIoServer{
-		binding:    binding,
-		certFiles:  certFiles,
-		https:      https,
-		server:     server,
-		db:         db,
-		mempool:    mempool,
-		chain:      chain,
-		insightWeb: insightWeb,
+		binding:     binding,
+		certFiles:   certFiles,
+		https:       https,
+		server:      server,
+		db:          db,
+		mempool:     mempool,
+		chain:       chain,
+		explorerURL: explorerURL,
 	}
 
 	// support for tests of socket.io interface
@@ -110,8 +110,8 @@ func (s *SocketIoServer) Shutdown(ctx context.Context) error {
 }
 
 func (s *SocketIoServer) txRedirect(w http.ResponseWriter, r *http.Request) {
-	if s.insightWeb != "" {
-		http.Redirect(w, r, s.insightWeb+r.URL.Path, 302)
+	if s.explorerURL != "" {
+		http.Redirect(w, r, s.explorerURL+r.URL.Path, 302)
 	}
 }
 
