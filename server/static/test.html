@@ -54,7 +54,7 @@
         function getAddressHistory() {
             var addresses = document.getElementById('getAddressHistoryAddresses').value.split(",");
             var mempool = document.getElementById("getAddressHistoryMempool").checked;
-            lookupAddressHistories(addresses, 0, 1, mempool, 2000000, 0, function (result) {
+            lookupAddressHistories(addresses, 0, 5, mempool, 2000000, 0, function (result) {
                 console.log('getAddressHistory sent successfully');
                 console.log(result);
                 document.getElementById('getAddressHistoryResult').innerText = JSON.stringify(result).replace(/,/g, ", ");

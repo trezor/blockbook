@@ -264,30 +264,29 @@ type addressHistoryIndexes struct {
 }
 
 type txInputs struct {
-	PrevTxID    string `json:"prevTxId,omitempty"`
-	OutputIndex int    `json:"outputIndex"`
-	Script      string `json:"script"`
-	ScriptAsm   string `json:"scriptAsm"`
-	Sequence    int64  `json:"sequence"`
-	Address     string `json:"address"`
-	Satoshis    int64  `json:"satoshis"`
+	OutputIndex int     `json:"outputIndex"`
+	Script      *string `json:"script"`
+	ScriptAsm   *string `json:"scriptAsm"`
+	Sequence    int64   `json:"sequence"`
+	Address     *string `json:"address"`
+	Satoshis    int64   `json:"satoshis"`
 }
 
 type txOutputs struct {
-	Satoshis    int64  `json:"satoshis"`
-	Script      string `json:"script"`
-	ScriptAsm   string `json:"scriptAsm"`
-	SpentTxID   string `json:"spentTxId,omitempty"`
-	SpentIndex  int    `json:"spentIndex,omitempty"`
-	SpentHeight int    `json:"spentHeight,omitempty"`
-	Address     string `json:"address"`
+	Satoshis    int64   `json:"satoshis"`
+	Script      *string `json:"script"`
+	ScriptAsm   *string `json:"scriptAsm"`
+	SpentTxID   *string `json:"spentTxId,omitempty"`
+	SpentIndex  int     `json:"spentIndex,omitempty"`
+	SpentHeight int     `json:"spentHeight,omitempty"`
+	Address     *string `json:"address"`
 }
 
 type resTx struct {
 	Hex            string      `json:"hex"`
 	BlockHash      string      `json:"blockHash,omitempty"`
 	Height         int         `json:"height"`
-	BlockTimestamp int64       `json:"blockTimestamp"`
+	BlockTimestamp int64       `json:"blockTimestamp,omitempty"`
 	Version        int         `json:"version"`
 	Hash           string      `json:"hash"`
 	Locktime       int         `json:"locktime,omitempty"`
@@ -362,51 +361,47 @@ func (s *SocketIoServer) getAddressHistory(addr []string, rr *reqRange) (res res
 			ho := make([]txOutputs, 0)
 			for _, vin := range tx.Vin {
 				ai := txInputs{
-					Script:      vin.ScriptSig.Hex,
-					ScriptAsm:   vin.ScriptSig.Asm,
+					Script:      &vin.ScriptSig.Hex,
+					ScriptAsm:   &vin.ScriptSig.Asm,
 					Sequence:    int64(vin.Sequence),
 					OutputIndex: int(vin.Vout),
 				}
-				stxid, _, err := s.db.GetSpentOutput(vin.Txid, vin.Vout)
+				otx, err := s.chain.GetTransaction(vin.Txid)
 				if err != nil {
 					return res, err
 				}
-				if stxid != "" {
-					otx, err := s.chain.GetTransaction(stxid)
-					if err != nil {
-						return res, err
-					}
-				SpentOutputLoop:
-					for _, vout := range otx.Vout {
-						for _, a := range vout.ScriptPubKey.Addresses {
-							if stringInSlice(a, addr) {
-								ai.Address = a
-								hi, ok := ads[a]
-								if ok {
-									hi.InputIndexes = append(hi.InputIndexes, int(vout.N))
-								} else {
-									hi := addressHistoryIndexes{}
-									hi.InputIndexes = append(hi.InputIndexes, int(vout.N))
-									hi.OutputIndexes = make([]int, 0)
-									ads[a] = hi
-								}
-								break SpentOutputLoop
+				if len(otx.Vout) > int(vin.Vout) {
+					vout := otx.Vout[vin.Vout]
+					if len(vout.ScriptPubKey.Addresses) == 1 {
+						a := vout.ScriptPubKey.Addresses[0]
+						ai.Address = &a
+						if stringInSlice(a, addr) {
+							hi, ok := ads[a]
+							if ok {
+								hi.InputIndexes = append(hi.InputIndexes, int(vout.N))
+							} else {
+								hi := addressHistoryIndexes{}
+								hi.InputIndexes = append(hi.InputIndexes, int(vout.N))
+								hi.OutputIndexes = make([]int, 0)
+								ads[a] = hi
 							}
 						}
 					}
+					ai.Satoshis = int64(vout.Value * 1E8)
 				}
 				hi = append(hi, ai)
 			}
 			for _, vout := range tx.Vout {
 				ao := txOutputs{
 					Satoshis:   int64(vout.Value * 1E8),
-					Script:     vout.ScriptPubKey.Hex,
-					ScriptAsm:  vout.ScriptPubKey.Asm,
+					Script:     &vout.ScriptPubKey.Hex,
+					ScriptAsm:  &vout.ScriptPubKey.Asm,
 					SpentIndex: int(vout.N),
 				}
-				for _, a := range vout.ScriptPubKey.Addresses {
+				if len(vout.ScriptPubKey.Addresses) == 1 {
+					a := vout.ScriptPubKey.Addresses[0]
+					ao.Address = &a
 					if stringInSlice(a, addr) {
-						ao.Address = a
 						hi, ok := ads[a]
 						if ok {
 							hi.OutputIndexes = append(hi.OutputIndexes, int(vout.N))
@@ -416,7 +411,6 @@ func (s *SocketIoServer) getAddressHistory(addr []string, rr *reqRange) (res res
 							hi.OutputIndexes = append(hi.OutputIndexes, int(vout.N))
 							ads[a] = hi
 						}
-						break
 					}
 				}
 				ho = append(ho, ao)
@@ -428,7 +422,7 @@ func (s *SocketIoServer) getAddressHistory(addr []string, rr *reqRange) (res res
 			if tx.Confirmations == 0 {
 				height = -1
 			} else {
-				height = int(bestheight) - int(tx.Confirmations)
+				height = int(bestheight) - int(tx.Confirmations) + 1
 			}
 			ahi.Tx = txToResTx(tx, height, hi, ho)
 			res.Result.Items = append(res.Result.Items, ahi)
@@ -594,8 +588,8 @@ func (s *SocketIoServer) getDetailedTransaction(txid string) (res resultGetDetai
 	ho := make([]txOutputs, 0)
 	for _, vin := range tx.Vin {
 		ai := txInputs{
-			Script:      vin.ScriptSig.Hex,
-			ScriptAsm:   vin.ScriptSig.Asm,
+			Script:      &vin.ScriptSig.Hex,
+			ScriptAsm:   &vin.ScriptSig.Asm,
 			Sequence:    int64(vin.Sequence),
 			OutputIndex: int(vin.Vout),
 		}
@@ -606,21 +600,21 @@ func (s *SocketIoServer) getDetailedTransaction(txid string) (res resultGetDetai
 		if len(otx.Vout) > int(vin.Vout) {
 			vout := otx.Vout[vin.Vout]
 			if len(vout.ScriptPubKey.Addresses) == 1 {
-				ai.Address = vout.ScriptPubKey.Addresses[0]
+				ai.Address = &vout.ScriptPubKey.Addresses[0]
 			}
-			ai.Satoshis += int64(vout.Value * 1E8)
+			ai.Satoshis = int64(vout.Value * 1E8)
 		}
 		hi = append(hi, ai)
 	}
 	for _, vout := range tx.Vout {
 		ao := txOutputs{
 			Satoshis:   int64(vout.Value * 1E8),
-			Script:     vout.ScriptPubKey.Hex,
-			ScriptAsm:  vout.ScriptPubKey.Asm,
+			Script:     &vout.ScriptPubKey.Hex,
+			ScriptAsm:  &vout.ScriptPubKey.Asm,
 			SpentIndex: int(vout.N),
 		}
 		if len(vout.ScriptPubKey.Addresses) == 1 {
-			ao.Address = vout.ScriptPubKey.Addresses[0]
+			ao.Address = &vout.ScriptPubKey.Addresses[0]
 		}
 		ho = append(ho, ao)
 	}
