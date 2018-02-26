@@ -61,6 +61,8 @@ var (
 	certFiles = flag.String("certfile", "", "to enable SSL specify path to certificate files without extension, expecting <certfile>.crt and <certfile>.key, (default no SSL)")
 
 	zeroMQBinding = flag.String("zeromq", "", "binding to zeromq, if missing no zeromq connection")
+
+	insightWeb = flag.String("insight", "", "address of the insight Bitcoin blockchain explorer")
 )
 
 var (
@@ -157,7 +159,7 @@ func main() {
 
 	var socketIoServer *server.SocketIoServer
 	if *socketIoBinding != "" {
-		socketIoServer, err = server.NewSocketIoServer(*socketIoBinding, *certFiles, index, mempool, chain)
+		socketIoServer, err = server.NewSocketIoServer(*socketIoBinding, *certFiles, index, mempool, chain, *insightWeb)
 		if err != nil {
 			glog.Fatal("socketio: ", err)
 		}

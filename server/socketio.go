@@ -17,17 +17,18 @@ import (
 
 // SocketIoServer is handle to SocketIoServer
 type SocketIoServer struct {
-	binding   string
-	certFiles string
-	server    *gosocketio.Server
-	https     *http.Server
-	db        *db.RocksDB
-	mempool   *bchain.Mempool
-	chain     *bchain.BitcoinRPC
+	binding    string
+	certFiles  string
+	server     *gosocketio.Server
+	https      *http.Server
+	db         *db.RocksDB
+	mempool    *bchain.Mempool
+	chain      *bchain.BitcoinRPC
+	insightWeb string
 }
 
 // NewSocketIoServer creates new SocketIo interface to blockbook and returns its handle
-func NewSocketIoServer(binding string, certFiles string, db *db.RocksDB, mempool *bchain.Mempool, chain *bchain.BitcoinRPC) (*SocketIoServer, error) {
+func NewSocketIoServer(binding string, certFiles string, db *db.RocksDB, mempool *bchain.Mempool, chain *bchain.BitcoinRPC, insightWeb string) (*SocketIoServer, error) {
 	server := gosocketio.NewServer(transport.GetDefaultWebsocketTransport())
 
 	server.On(gosocketio.OnConnection, func(c *gosocketio.Channel) {
@@ -49,21 +50,28 @@ func NewSocketIoServer(binding string, certFiles string, db *db.RocksDB, mempool
 
 	addr, path := splitBinding(binding)
 	serveMux := http.NewServeMux()
-	serveMux.Handle(path, server)
 	https := &http.Server{
 		Addr:    addr,
 		Handler: serveMux,
 	}
 
 	s := &SocketIoServer{
-		binding:   binding,
-		certFiles: certFiles,
-		https:     https,
-		server:    server,
-		db:        db,
-		mempool:   mempool,
-		chain:     chain,
+		binding:    binding,
+		certFiles:  certFiles,
+		https:      https,
+		server:     server,
+		db:         db,
+		mempool:    mempool,
+		chain:      chain,
+		insightWeb: insightWeb,
 	}
+
+	// support for tests of socket.io interface
+	serveMux.Handle(path+"test.html", http.FileServer(http.Dir("./server/static/")))
+	// redirect to Bitcore for details of transaction
+	serveMux.HandleFunc(path+"tx/", s.txRedirect)
+	// handle socket.io
+	serveMux.Handle(path, server)
 
 	server.On("message", s.onMessage)
 	server.On("subscribe", s.onSubscribe)
@@ -99,6 +107,12 @@ func (s *SocketIoServer) Close() error {
 func (s *SocketIoServer) Shutdown(ctx context.Context) error {
 	glog.Infof("socketio server shutdown")
 	return s.https.Shutdown(ctx)
+}
+
+func (s *SocketIoServer) txRedirect(w http.ResponseWriter, r *http.Request) {
+	if s.insightWeb != "" {
+		http.Redirect(w, r, s.insightWeb+r.URL.Path, 302)
+	}
 }
 
 type reqRange struct {
