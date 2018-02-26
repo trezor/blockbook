@@ -48,11 +48,10 @@ var (
 	repair      = flag.Bool("repair", false, "repair the database")
 	prof        = flag.Bool("prof", false, "profile program execution")
 
-	syncChunk          = flag.Int("chunk", 100, "block chunk size for processing")
-	syncWorkers        = flag.Int("workers", 8, "number of workers to process blocks")
-	dryRun             = flag.Bool("dryrun", false, "do not index blocks, only download")
-	parse              = flag.Bool("parse", false, "use in-process block parsing")
-	compactDBTriggerMB = flag.Int64("compact", -1, "invoke compaction when db size exceeds value in MB (default no compaction)")
+	syncChunk   = flag.Int("chunk", 100, "block chunk size for processing")
+	syncWorkers = flag.Int("workers", 8, "number of workers to process blocks")
+	dryRun      = flag.Bool("dryrun", false, "do not index blocks, only download")
+	parse       = flag.Bool("parse", false, "use in-process block parsing")
 
 	httpServerBinding = flag.String("httpserver", "", "http server binding [address]:port, (default no http server)")
 
