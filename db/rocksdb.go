@@ -44,10 +44,10 @@ const (
 var cfNames = []string{"default", "height", "outputs", "inputs"}
 
 func openDB(path string) (*gorocksdb.DB, []*gorocksdb.ColumnFamilyHandle, error) {
-	c := gorocksdb.NewLRUCache(8 << 30) // 8 gb
+	c := gorocksdb.NewLRUCache(8 << 30) // 8GB
 	fp := gorocksdb.NewBloomFilter(10)
 	bbto := gorocksdb.NewDefaultBlockBasedTableOptions()
-	bbto.SetBlockSize(16 << 10) // 16kb
+	bbto.SetBlockSize(16 << 10) // 16kB
 	bbto.SetBlockCache(c)
 	bbto.SetFilterPolicy(fp)
 
@@ -57,16 +57,16 @@ func openDB(path string) (*gorocksdb.DB, []*gorocksdb.ColumnFamilyHandle, error)
 	opts.SetCreateIfMissingColumnFamilies(true)
 	opts.SetMaxBackgroundCompactions(4)
 	opts.SetMaxBackgroundFlushes(2)
-	opts.SetBytesPerSync(1 << 20)    // 1mb
-	opts.SetWriteBufferSize(1 << 29) // .5 gb
+	opts.SetBytesPerSync(1 << 20)    // 1MB
+	opts.SetWriteBufferSize(1 << 24) // 16MB
 	opts.SetMaxOpenFiles(25000)
 	opts.SetCompression(gorocksdb.NoCompression)
 
 	// opts for outputs are different:
 	// no bloom filter - from documentation: If most of your queries are executed using iterators, you shouldn't set bloom filter
 	bbtoOutputs := gorocksdb.NewDefaultBlockBasedTableOptions()
-	bbtoOutputs.SetBlockSize(16 << 10) // 16kb
-	bbtoOutputs.SetBlockCache(c)       // 8 gb
+	bbtoOutputs.SetBlockSize(16 << 10) // 16kB
+	bbtoOutputs.SetBlockCache(c)       // 8GB
 
 	optsOutputs := gorocksdb.NewDefaultOptions()
 	optsOutputs.SetBlockBasedTableFactory(bbtoOutputs)
@@ -74,8 +74,8 @@ func openDB(path string) (*gorocksdb.DB, []*gorocksdb.ColumnFamilyHandle, error)
 	optsOutputs.SetCreateIfMissingColumnFamilies(true)
 	optsOutputs.SetMaxBackgroundCompactions(4)
 	optsOutputs.SetMaxBackgroundFlushes(2)
-	optsOutputs.SetBytesPerSync(1 << 20)    // 1mb
-	optsOutputs.SetWriteBufferSize(1 << 29) // 0.5 gb
+	optsOutputs.SetBytesPerSync(1 << 20)    // 1MB
+	optsOutputs.SetWriteBufferSize(1 << 24) // 16MB
 	optsOutputs.SetMaxOpenFiles(25000)
 	optsOutputs.SetCompression(gorocksdb.NoCompression)
 
