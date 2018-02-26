@@ -2,6 +2,7 @@ package bchain
 
 import (
 	"encoding/binary"
+	"time"
 
 	"github.com/golang/glog"
 	zmq "github.com/pebbe/zmq4"
@@ -60,12 +61,13 @@ func (mq *MQ) run(callback func(*MQMessage)) {
 	for {
 		msg, err := mq.socket.RecvMessageBytes(0)
 		if err != nil {
-			if zmq.AsErrno(err) == zmq.Errno(zmq.ETERM) {
+			if zmq.AsErrno(err) == zmq.Errno(zmq.ETERM) || err.Error() == "Socket is closed" {
 				close(mq.finished)
 				glog.Info("MQ loop terminated")
 				break
 			}
-			glog.Error("MQ RecvMessageBytes error ", err)
+			glog.Error("MQ RecvMessageBytes error ", err, ", ", zmq.AsErrno(err))
+			time.Sleep(100 * time.Millisecond)
 		}
 		if msg != nil && len(msg) >= 3 {
 			sequence := uint32(0)
