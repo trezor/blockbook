@@ -177,8 +177,17 @@ type BitcoinRPC struct {
 
 // NewBitcoinRPC returns new BitcoinRPC instance.
 func NewBitcoinRPC(url string, user string, password string, timeout time.Duration) *BitcoinRPC {
+	// set higher MaxIdleConnsPerHost to not to deplete pool of sockets
+	defaultTransportPointer, ok := http.DefaultTransport.(*http.Transport)
+	if !ok {
+		glog.Fatal("http.DefaultTransport is not an *http.Transport")
+	}
+	// dereference it to get a copy of the struct that the pointer points to
+	defaultTransport := *defaultTransportPointer
+	defaultTransport.MaxIdleConns = 100
+	defaultTransport.MaxIdleConnsPerHost = 100
 	return &BitcoinRPC{
-		client:   http.Client{Timeout: timeout},
+		client:   http.Client{Timeout: timeout, Transport: &defaultTransport},
 		URL:      url,
 		User:     user,
 		Password: password,
