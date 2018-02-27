@@ -129,9 +129,10 @@ The data are separated to different column families:
 
 - ~~mempool - return also input transactions~~
 - ~~blockchain - return inputs from mempool~~
-- do not return duplicate txids
+- ~~do not return duplicate txids~~
 - limit number of transactions returned by rocksdb.GetTransactions - probably by return value from callback function
-- legacy socket.io JSON interface
+- ~~legacy socket.io JSON interface~~
+- cleanup of the socket.io - do not send unnecessary data
 - protobuf websocket interface
 - stream results to REST and websocket interfaces
 - parallel sync - rewrite - it is not possible to gracefully stop it now, can leave holes in the block
