@@ -58,7 +58,7 @@ func openDB(path string) (*gorocksdb.DB, []*gorocksdb.ColumnFamilyHandle, error)
 	opts.SetMaxBackgroundCompactions(4)
 	opts.SetMaxBackgroundFlushes(2)
 	opts.SetBytesPerSync(1 << 20)    // 1MB
-	opts.SetWriteBufferSize(1 << 26) // 64MB
+	opts.SetWriteBufferSize(1 << 27) // 128MB
 	opts.SetMaxOpenFiles(25000)
 	opts.SetCompression(gorocksdb.NoCompression)
 
@@ -75,7 +75,7 @@ func openDB(path string) (*gorocksdb.DB, []*gorocksdb.ColumnFamilyHandle, error)
 	optsOutputs.SetMaxBackgroundCompactions(4)
 	optsOutputs.SetMaxBackgroundFlushes(2)
 	optsOutputs.SetBytesPerSync(1 << 20)    // 1MB
-	optsOutputs.SetWriteBufferSize(1 << 26) // 64MB
+	optsOutputs.SetWriteBufferSize(1 << 27) // 128MB
 	optsOutputs.SetMaxOpenFiles(25000)
 	optsOutputs.SetCompression(gorocksdb.NoCompression)
 

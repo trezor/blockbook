@@ -134,109 +134,110 @@
       "txid": "474e6795760ebe81cb4023dc227e5a0efe340e1771c89a0035276361ed733de7"
     }
   ],
-  "dbl": {
+  "bb": {
     "result": {
-      "totalCount": 3,
-      "items": [
+      "hex": "010000000001030837f5b19fa0bad93466eab467a4903528bade4e441143ecc2180c1b2938edf101000000171600147edbcdda98080eeb6e8a63c63da135498295c3cdffffffffd5c5679c02074d61c6d4e27e8abddcf385fb8d7844d1a7409b83c5906c90f46c01000000171600147edbcdda98080eeb6e8a63c63da135498295c3cdffffffff694395239e8a054b2c7485c661a6d6ed491fdacdae8d118a32c1d0cbf3db879801000000171600144ef828f2834ef9e0a8807c646371f4e75fe8ee2affffffff0280a4bf070000000017a914b0dc147c52fd824eeff86d4babbc6c2b4d2dafad875f4cff310700000017a914f81f2180d556cda7f199f5b405d760687487635187024730440220367ad3a0626aa628e5a0ecf3b1f4c3e31c275096b261bc5ed63df1db2736bd9602204e15b4e995fa8c26506d1ff718442ee3eba7adfaf27492b5140647c9bf19ddf2012102b45e239d96f8504ae45a32af7c80f6164f7b9658166e318521ee822192fee3ef024830450221008fe4f72a6d4dc5fdf129583753cc620fba87cd6b5b8337c2a31df0f72d6d138c022065a616106e3ec683b5242651912569c34fcdac0759762bd800e2f206acffe3c9012102b45e239d96f8504ae45a32af7c80f6164f7b9658166e318521ee822192fee3ef0247304402207641e3e70f988d436e8dbc6dd93d93de5c0be36b3c12aa3ca8c1714beefe46200220298ce6154dd49f9ee74994ef6f6a898858e3b1d174c2e55abcf1a46063905bc30121039a15881193e947887583a1b1f4e166de7ccf80633d27beb58331204408869bbf00000000",
+      "height": -1,
+      "blockTimestamp": 0,
+      "version": 1,
+      "hash": "0c0ffd638dbf0ce80758a6f5fe963e4828965fea98ffe2e4b435ac8f077a9328",
+      "inputs": [
         {
-          "addresses": {
-            "2N4Q5FhU2497BryFfUgbqkAJE87aKHUhXMp": {
-              "inputIndexes": [
-                0
-              ],
-              "outputIndexes": []
-            }
-          },
-          "satoshis": 0,
-          "confirmations": 221285,
-          "tx": {
-            "hex": "010000000001018a44999c07bba32df1cacdc50987944e68e3205b4429438fdde35c76024614090000000000ffffffff02404b4c000000000017a9147a55d61848e77ca266e79a39bfc85c580a6426c987a8386f0000000000160014d16b8c0680c61fc6ed2e407455715055e41052f502483045022100a7ca8f097525f9044e64376dc0a0f5d4aeb8d15d66808ba97979a0475b06b66502200597c8ebcef63e047f9aeef1a8001d3560470cf896c12f6990eec4faec599b950121033add1f0e8e3c3136f7428dd4a4de1057380bd311f5b0856e2269170b4ffa65bf00000000",
-            "height": 1063387,
-            "blockTimestamp": 1483374791,
-            "version": 1,
-            "hash": "65b811d3eca0fe6915d9f2d77c86c5a7f19bf66b1b1253c2c51cb4ae5f0c017b",
-            "inputs": [
-              {
-                "outputIndex": 0,
-                "script": "",
-                "scriptAsm": "",
-                "sequence": 4294967295,
-                "address": "2N4Q5FhU2497BryFfUgbqkAJE87aKHUhXMp",
-                "satoshis": 0
-              }
-            ],
-            "outputs": [
-              {
-                "satoshis": 5000000,
-                "script": "a9147a55d61848e77ca266e79a39bfc85c580a6426c987",
-                "scriptAsm": "OP_HASH160 7a55d61848e77ca266e79a39bfc85c580a6426c9 OP_EQUAL",
-                "address": "2N4Q5FhU2497BryFfUgbqkAJE87aKHUhXMp"
-              },
-              {
-                "satoshis": 7289000,
-                "script": "0014d16b8c0680c61fc6ed2e407455715055e41052f5",
-                "scriptAsm": "0 d16b8c0680c61fc6ed2e407455715055e41052f5",
-                "spentIndex": 1,
-                "address": ""
-              }
-            ]
-          }
+          "outputIndex": 1,
+          "script": "1600144ef828f2834ef9e0a8807c646371f4e75fe8ee2a",
+          "scriptAsm": "00144ef828f2834ef9e0a8807c646371f4e75fe8ee2a",
+          "sequence": 4294967295,
+          "address": "2N8hwP1WmJrFF5QWABn38y63uYLhnJYJYTF",
+          "satoshis": 10000000
+        },
+        {
+          "outputIndex": 1,
+          "script": "1600144ef828f2834ef9e0a8807c646371f4e75fe8ee2a",
+          "scriptAsm": "00144ef828f2834ef9e0a8807c646371f4e75fe8ee2a",
+          "sequence": 4294967295,
+          "address": "2N8hwP1WmJrFF5QWABn38y63uYLhnJYJYTF",
+          "satoshis": 10000000
+        },
+        {
+          "outputIndex": 1,
+          "script": "1600144ef828f2834ef9e0a8807c646371f4e75fe8ee2a",
+          "scriptAsm": "00144ef828f2834ef9e0a8807c646371f4e75fe8ee2a",
+          "sequence": 4294967295,
+          "address": "2NCPYxNzYrjdwFAYGakRTFptxzXME15SSTz",
+          "satoshis": 31013685887
+        }
+      ],
+      "outputs": [
+        {
+          "satoshis": 130000000,
+          "script": "a914f81f2180d556cda7f199f5b405d760687487635187",
+          "scriptAsm": "OP_HASH160 f81f2180d556cda7f199f5b405d7606874876351 OP_EQUAL",
+          "address": "2N9NNZUTAzMUxvEyBLrvWweqHu4RSw1yZtF"
+        },
+        {
+          "satoshis": 30903585887,
+          "script": "a914f81f2180d556cda7f199f5b405d760687487635187",
+          "scriptAsm": "OP_HASH160 f81f2180d556cda7f199f5b405d7606874876351 OP_EQUAL",
+          "spentIndex": 1,
+          "address": "2NFsArsLvoBAcpBJj63zQ3zi2WZwBaKgAR7"
         }
       ]
     }
   },
-  "dbc": {
+  "bc": {
     "result": {
-      "totalCount": 3,
-      "items": [
+      "hex": "010000000001030837f5b19fa0bad93466eab467a4903528bade4e441143ecc2180c1b2938edf101000000171600147edbcdda98080eeb6e8a63c63da135498295c3cdffffffffd5c5679c02074d61c6d4e27e8abddcf385fb8d7844d1a7409b83c5906c90f46c01000000171600147edbcdda98080eeb6e8a63c63da135498295c3cdffffffff694395239e8a054b2c7485c661a6d6ed491fdacdae8d118a32c1d0cbf3db879801000000171600144ef828f2834ef9e0a8807c646371f4e75fe8ee2affffffff0280a4bf070000000017a914b0dc147c52fd824eeff86d4babbc6c2b4d2dafad875f4cff310700000017a914f81f2180d556cda7f199f5b405d760687487635187024730440220367ad3a0626aa628e5a0ecf3b1f4c3e31c275096b261bc5ed63df1db2736bd9602204e15b4e995fa8c26506d1ff718442ee3eba7adfaf27492b5140647c9bf19ddf2012102b45e239d96f8504ae45a32af7c80f6164f7b9658166e318521ee822192fee3ef024830450221008fe4f72a6d4dc5fdf129583753cc620fba87cd6b5b8337c2a31df0f72d6d138c022065a616106e3ec683b5242651912569c34fcdac0759762bd800e2f206acffe3c9012102b45e239d96f8504ae45a32af7c80f6164f7b9658166e318521ee822192fee3ef0247304402207641e3e70f988d436e8dbc6dd93d93de5c0be36b3c12aa3ca8c1714beefe46200220298ce6154dd49f9ee74994ef6f6a898858e3b1d174c2e55abcf1a46063905bc30121039a15881193e947887583a1b1f4e166de7ccf80633d27beb58331204408869bbf00000000",
+      "height": -1,
+      "version": 1,
+      "hash": "0c0ffd638dbf0ce80758a6f5fe963e4828965fea98ffe2e4b435ac8f077a9328",
+      "locktime": 0,
+      "size": 347,
+      "inputs": [
         {
-          "addresses": {
-            "2Mt7P2BAfE922zmfXrdcYTLyR7GUvbwSEns": {
-              "inputIndexes": [
-                0
-              ],
-              "outputIndexes": []
-            }
-          },
-          "satoshis": -4998060,
-          "confirmations": 167491,
-          "tx": {
-            "hex": "01000000000101b37ac5560b4af9d3c8128037c6f9710973870fe29d7d2bcb0af45109cdc7030000000000171600148696844b831babb221cdf61bd403d4957615ebfeffffffff01183c4c000000000017a914923d8873eaa1f1bf3ada05eddab1a8af36c40dcb8702473044022033f5eb9966f84aded43db81d7be4f61bd2640845f39e8451019411838f09979702205abe01330e56944bb9de0ed46b1c76eb45b88a501fea8063fd8b7035a620c2400121037ff6f928c104d7a01ebc9cf5e0a6d4f03e555788d6b4dda6e9ffbc40f6cdbaf700000000",
-            "blockHash": "00000000000008ff4f8113a18638d296f72acbdafe7b556e8c704a4840a30640",
-            "height": 1117182,
-            "blockTimestamp": 1491764656,
-            "version": 1,
-            "hash": "c6a92097466b9a690eeb9e704625587cbcf357520cc7573b2323d5b012026e0e",
-            "locktime": 0,
-            "size": 134,
-            "inputs": [
-              {
-                "prevTxId": "0003c7cd0951f40acb2b7d9de20f87730971f9c6378012c8d3f94a0b56c57ab3",
-                "outputIndex": 0,
-                "script": "1600148696844b831babb221cdf61bd403d4957615ebfe",
-                "scriptAsm": "00148696844b831babb221cdf61bd403d4957615ebfe",
-                "sequence": 4294967295,
-                "address": "2Mt7P2BAfE922zmfXrdcYTLyR7GUvbwSEns",
-                "satoshis": 4998060
-              }
-            ],
-            "inputSatoshis": 4998060,
-            "outputs": [
-              {
-                "satoshis": 4996120,
-                "script": "a914923d8873eaa1f1bf3ada05eddab1a8af36c40dcb87",
-                "scriptAsm": "OP_HASH160 923d8873eaa1f1bf3ada05eddab1a8af36c40dcb OP_EQUAL",
-                "spentTxId": "08c7ffb9d594d9c9f4e8827ca6058b94ff865260aa467c325562a213386be99e",
-                "spentIndex": 0,
-                "spentHeight": 1117205,
-                "address": "2N6aUMgQk8y1zvoq6FeWFyotyj75WY9BGsu"
-              }
-            ],
-            "outputSatoshis": 4996120,
-            "feeSatoshis": 1940
-          }
+          "prevTxId": "f1ed38291b0c18c2ec4311444edeba283590a467b4ea6634d9baa09fb1f53708",
+          "outputIndex": 1,
+          "script": "1600147edbcdda98080eeb6e8a63c63da135498295c3cd",
+          "scriptAsm": "00147edbcdda98080eeb6e8a63c63da135498295c3cd",
+          "sequence": 4294967295,
+          "address": "2N8hwP1WmJrFF5QWABn38y63uYLhnJYJYTF",
+          "satoshis": 10000000
+        },
+        {
+          "prevTxId": "6cf4906c90c5839b40a7d144788dfb85f3dcbd8a7ee2d4c6614d07029c67c5d5",
+          "outputIndex": 1,
+          "script": "1600147edbcdda98080eeb6e8a63c63da135498295c3cd",
+          "scriptAsm": "00147edbcdda98080eeb6e8a63c63da135498295c3cd",
+          "sequence": 4294967295,
+          "address": "2N8hwP1WmJrFF5QWABn38y63uYLhnJYJYTF",
+          "satoshis": 10000000
+        },
+        {
+          "prevTxId": "9887dbf3cbd0c1328a118daecdda1f49edd6a661c685742c4b058a9e23954369",
+          "outputIndex": 1,
+          "script": "1600144ef828f2834ef9e0a8807c646371f4e75fe8ee2a",
+          "scriptAsm": "00144ef828f2834ef9e0a8807c646371f4e75fe8ee2a",
+          "sequence": 4294967295,
+          "address": "2NCPYxNzYrjdwFAYGakRTFptxzXME15SSTz",
+          "satoshis": 31013685887
         }
-      ]
+      ],
+      "inputSatoshis": 31033685887,
+      "outputs": [
+        {
+          "satoshis": 130000000,
+          "script": "a914b0dc147c52fd824eeff86d4babbc6c2b4d2dafad87",
+          "scriptAsm": "OP_HASH160 b0dc147c52fd824eeff86d4babbc6c2b4d2dafad OP_EQUAL",
+          "address": "2N9NNZUTAzMUxvEyBLrvWweqHu4RSw1yZtF"
+        },
+        {
+          "satoshis": 30903585887,
+          "script": "a914f81f2180d556cda7f199f5b405d760687487635187",
+          "scriptAsm": "OP_HASH160 f81f2180d556cda7f199f5b405d7606874876351 OP_EQUAL",
+          "address": "2NFsArsLvoBAcpBJj63zQ3zi2WZwBaKgAR7"
+        }
+      ],
+      "outputSatoshis": 31033585887,
+      "feeSatoshis": 100000
     }
   }
 }
