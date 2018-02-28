@@ -383,8 +383,12 @@ func (d *RocksDB) GetSpentOutput(txid string, i uint32) (string, uint32, error) 
 	if err != nil {
 		return "", 0, err
 	}
-	o, err := d.getSpentOutput(b)
-	p, err := unpackOutputValue(o)
+	val, err := d.db.GetCF(d.ro, d.cfh[cfInputs], b)
+	if err != nil {
+		return "", 0, err
+	}
+	defer val.Free()
+	p, err := unpackOutputValue(val.Data())
 	if err != nil {
 		return "", 0, err
 	}
@@ -395,15 +399,6 @@ func (d *RocksDB) GetSpentOutput(txid string, i uint32) (string, uint32, error) 
 		break
 	}
 	return otxid, oi, nil
-}
-
-func (d *RocksDB) getSpentOutput(key []byte) ([]byte, error) {
-	val, err := d.db.GetCF(d.ro, d.cfh[cfInputs], key)
-	if err != nil {
-		return nil, err
-	}
-	defer val.Free()
-	return val.Data(), nil
 }
 
 func (d *RocksDB) writeHeight(
