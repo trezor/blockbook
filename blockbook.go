@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"flag"
+	"fmt"
 	"os"
 	"os/signal"
 	"sync"
@@ -74,6 +76,7 @@ var (
 	index                   *db.RocksDB
 	callbacksOnNewBlockHash []func(hash string)
 	callbacksOnNewTxAddr    []func(txid string, addr string)
+	chanOsSignal            chan os.Signal
 )
 
 func main() {
@@ -83,6 +86,9 @@ func main() {
 	flag.Lookup("logtostderr").Value.Set("true")
 
 	defer glog.Flush()
+
+	chanOsSignal = make(chan os.Signal, 1)
+	signal.Notify(chanOsSignal, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 
 	if *prof {
 		defer profile.Start().Stop()
@@ -308,10 +314,7 @@ func mqHandler(m *bchain.MQMessage) {
 }
 
 func waitForSignalAndShutdown(https *server.HTTPServer, socketio *server.SocketIoServer, mq *bchain.MQ, timeout time.Duration) {
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
-
-	sig := <-stop
+	sig := <-chanOsSignal
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -513,16 +516,37 @@ func connectBlocksParallel(
 		wg.Add(1)
 		go work(i)
 	}
-	var hash string
 
-	for h := lower; h <= higher; h++ {
-		hash, err = chain.GetBlockHash(h)
-		if err != nil {
-			break
-		}
-		hch <- hashHeight{hash, h}
-		if h > 0 && h%1000 == 0 {
-			glog.Info("connecting block ", h, " ", hash)
+	var hash string
+ConnectLoop:
+	for h := lower; h <= higher; {
+		select {
+		case <-chanOsSignal:
+			// wait for the workers to finish block
+		WaitAgain:
+			for {
+				for _, r := range running {
+					if r {
+						glog.Info("Waiting for workers to finish ", running)
+						time.Sleep(time.Millisecond * 500)
+						continue WaitAgain
+					}
+				}
+				err = errors.New(fmt.Sprint("connectBlocksParallel interrupted at height ", h))
+				break ConnectLoop
+			}
+		default:
+			hash, err = chain.GetBlockHash(h)
+			if err != nil {
+				glog.Error("GetBlockHash ", h, " error ", err)
+				time.Sleep(time.Millisecond * 500)
+				continue
+			}
+			hch <- hashHeight{hash, h}
+			if h > 0 && h%1000 == 0 {
+				glog.Info("connecting block ", h, " ", hash)
+			}
+			h++
 		}
 	}
 	close(hch)
