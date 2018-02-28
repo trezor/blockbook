@@ -287,6 +287,25 @@ func (b *BitcoinRPC) GetBlock(hash string) (*Block, error) {
 	return block, nil
 }
 
+// GetBlockWithoutHeader is an optimization - it does not call GetBlockHeader to get prev, next hashes
+// instead it sets to header only block hash and height passed in parameters
+func (b *BitcoinRPC) GetBlockWithoutHeader(hash string, height uint32) (*Block, error) {
+	if b.Parser == nil {
+		return b.GetBlockFull(hash)
+	}
+	data, err := b.GetBlockRaw(hash)
+	if err != nil {
+		return nil, err
+	}
+	block, err := b.Parser.ParseBlock(data)
+	if err != nil {
+		return nil, err
+	}
+	block.BlockHeader.Hash = hash
+	block.BlockHeader.Height = height
+	return block, nil
+}
+
 // GetBlockRaw returns block with given hash as bytes.
 func (b *BitcoinRPC) GetBlockRaw(hash string) ([]byte, error) {
 	glog.V(1).Info("rpc: getblock (verbosity=0) ", hash)

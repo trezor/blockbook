@@ -480,17 +480,21 @@ func connectBlocksParallel(
 	higher uint32,
 	numWorkers int,
 ) error {
+	type hashHeight struct {
+		hash   string
+		height uint32
+	}
 	var err error
 	var wg sync.WaitGroup
-	hch := make(chan string, numWorkers)
+	hch := make(chan hashHeight, numWorkers)
 	running := make([]bool, numWorkers)
 	work := func(i int) {
 		defer wg.Done()
-		for hash := range hch {
+		for hh := range hch {
 			running[i] = true
-			block, err := chain.GetBlock(hash)
+			block, err := chain.GetBlockWithoutHeader(hh.hash, hh.height)
 			if err != nil {
-				glog.Error("Connect block ", hash, " error ", err)
+				glog.Error("Connect block ", hh.height, " ", hh.hash, " error ", err)
 				running[i] = false
 				continue
 			}
@@ -500,7 +504,7 @@ func connectBlocksParallel(
 			}
 			err = index.ConnectBlock(block)
 			if err != nil {
-				glog.Error("Connect block ", hash, " error ", err)
+				glog.Error("Connect block ", hh.height, " ", hh.hash, " error ", err)
 			}
 			running[i] = false
 		}
@@ -516,7 +520,7 @@ func connectBlocksParallel(
 		if err != nil {
 			break
 		}
-		hch <- hash
+		hch <- hashHeight{hash, h}
 		if h > 0 && h%1000 == 0 {
 			glog.Info("connecting block ", h, " ", hash)
 		}
