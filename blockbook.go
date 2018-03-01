@@ -493,13 +493,18 @@ func connectBlocksParallel(
 	running := make([]bool, numWorkers)
 	work := func(i int) {
 		defer wg.Done()
+		var err error
+		var block *bchain.Block
 		for hh := range hch {
 			running[i] = true
-			block, err := chain.GetBlockWithoutHeader(hh.hash, hh.height)
-			if err != nil {
-				glog.Error("Connect block ", hh.height, " ", hh.hash, " error ", err)
-				running[i] = false
-				continue
+			for {
+				block, err = chain.GetBlockWithoutHeader(hh.hash, hh.height)
+				if err != nil {
+					glog.Error("Connect block ", hh.height, " ", hh.hash, " error ", err, ". Retrying...")
+					time.Sleep(time.Millisecond * 500)
+				} else {
+					break
+				}
 			}
 			if *dryRun {
 				running[i] = false
@@ -523,18 +528,20 @@ ConnectLoop:
 		select {
 		case <-chanOsSignal:
 			// wait for the workers to finish block
+			i := 0
 		WaitAgain:
-			for {
+			for ; i < 60; i++ {
 				for _, r := range running {
 					if r {
-						glog.Info("Waiting for workers to finish ", running)
-						time.Sleep(time.Millisecond * 500)
+						glog.Info("Waiting ", i, "s for workers to finish ", running)
+						time.Sleep(time.Millisecond * 1000)
 						continue WaitAgain
 					}
 				}
-				err = errors.New(fmt.Sprint("connectBlocksParallel interrupted at height ", h))
-				break ConnectLoop
+				break
 			}
+			err = errors.New(fmt.Sprint("connectBlocksParallel interrupted at height ", h))
+			break ConnectLoop
 		default:
 			hash, err = chain.GetBlockHash(h)
 			if err != nil {
