@@ -381,28 +381,30 @@ func (s *SocketIoServer) getAddressHistory(addr []string, rr *reqRange) (res res
 					Sequence:    int64(vin.Sequence),
 					OutputIndex: int(vin.Vout),
 				}
-				otx, err := s.chain.GetTransaction(vin.Txid)
-				if err != nil {
-					return res, err
-				}
-				if len(otx.Vout) > int(vin.Vout) {
-					vout := otx.Vout[vin.Vout]
-					if len(vout.ScriptPubKey.Addresses) == 1 {
-						a := vout.ScriptPubKey.Addresses[0]
-						ai.Address = &a
-						if stringInSlice(a, addr) {
-							hi, ok := ads[a]
-							if ok {
-								hi.InputIndexes = append(hi.InputIndexes, int(vout.N))
-							} else {
-								hi := addressHistoryIndexes{}
-								hi.InputIndexes = append(hi.InputIndexes, int(vout.N))
-								hi.OutputIndexes = make([]int, 0)
-								ads[a] = hi
+				if vin.Txid != "" {
+					otx, err := s.chain.GetTransaction(vin.Txid)
+					if err != nil {
+						return res, err
+					}
+					if len(otx.Vout) > int(vin.Vout) {
+						vout := otx.Vout[vin.Vout]
+						if len(vout.ScriptPubKey.Addresses) == 1 {
+							a := vout.ScriptPubKey.Addresses[0]
+							ai.Address = &a
+							if stringInSlice(a, addr) {
+								hi, ok := ads[a]
+								if ok {
+									hi.InputIndexes = append(hi.InputIndexes, int(vout.N))
+								} else {
+									hi := addressHistoryIndexes{}
+									hi.InputIndexes = append(hi.InputIndexes, int(vout.N))
+									hi.OutputIndexes = make([]int, 0)
+									ads[a] = hi
+								}
 							}
 						}
+						ai.Satoshis = int64(vout.Value * 1E8)
 					}
-					ai.Satoshis = int64(vout.Value * 1E8)
 				}
 				hi = append(hi, ai)
 			}
@@ -608,16 +610,18 @@ func (s *SocketIoServer) getDetailedTransaction(txid string) (res resultGetDetai
 			Sequence:    int64(vin.Sequence),
 			OutputIndex: int(vin.Vout),
 		}
-		otx, err := s.chain.GetTransaction(vin.Txid)
-		if err != nil {
-			return res, err
-		}
-		if len(otx.Vout) > int(vin.Vout) {
-			vout := otx.Vout[vin.Vout]
-			if len(vout.ScriptPubKey.Addresses) == 1 {
-				ai.Address = &vout.ScriptPubKey.Addresses[0]
+		if vin.Txid != "" {
+			otx, err := s.chain.GetTransaction(vin.Txid)
+			if err != nil {
+				return res, err
 			}
-			ai.Satoshis = int64(vout.Value * 1E8)
+			if len(otx.Vout) > int(vin.Vout) {
+				vout := otx.Vout[vin.Vout]
+				if len(vout.ScriptPubKey.Addresses) == 1 {
+					ai.Address = &vout.ScriptPubKey.Addresses[0]
+				}
+				ai.Satoshis = int64(vout.Value * 1E8)
+			}
 		}
 		hi = append(hi, ai)
 	}
