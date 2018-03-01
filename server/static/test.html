@@ -217,7 +217,7 @@
                 <input class="btn btn-secondary" type="button" value="Login" onclick="connect(document.getElementById('serverAddress').value)">
             </div>
             <div class="col-8">
-                <input type="text" class="form-control" id="serverAddress" value="wss://localhost:8334">
+                <input type="text" class="form-control" id="serverAddress" value="">
             </div>
             <div class="col form-inline">
                 <label id="connectionStatus">not connected</label>
@@ -345,5 +345,8 @@
         </div>
     </div>
 </body>
+<script>
+    document.getElementById('serverAddress').value = window.location.protocol.replace("http", "ws") + "//" + window.location.host;
+</script>
 
 </html>
