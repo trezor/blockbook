@@ -101,11 +101,11 @@ rpcpassword=rpc
 rpcport=18332
 txindex=1
 ```
-Create script that starts the bitcoind daemon *run-testnet-bitcoind.sh*
+Create script that starts the bitcoind daemon *run-testnet-bitcoind.sh* with increased rpcworkqueue and configured zeromq
 ```
 #!/bin/bash
 
-bitcoin-0.15.1/bin/bitcoind -datadir=/data/testnet/bitcoin -zmqpubhashtx=tcp://127.0.0.1:18334 -zmqpubhashblock=tcp://127.0.0.1:18334 -zmqpubrawblock=tcp://127.0.0.1:18334 -zmqpubrawtx=tcp://127.0.0.1:18334
+bitcoin-0.15.1/bin/bitcoind -datadir=/data/testnet/bitcoin -rpcworkqueue=32 -zmqpubhashtx=tcp://127.0.0.1:18334 -zmqpubhashblock=tcp://127.0.0.1:18334 -zmqpubrawblock=tcp://127.0.0.1:18334 -zmqpubrawtx=tcp://127.0.0.1:18334
 ```
 Run the *run-testnet-bitcoind.sh* to get initial import of data.
 
@@ -133,11 +133,11 @@ rpcpassword=rpc
 rpcport=8332
 txindex=1
 ```
-Create script that starts the bitcoind daemon *run-btc-bitcoind.sh*
+Create script that starts the bitcoind daemon *run-btc-bitcoind.sh* with increased rpcworkqueue and configured zeromq
 ```
 #!/bin/bash
 
-bitcoin-0.15.1/bin/bitcoind -datadir=/data/btc/bitcoin -zmqpubhashtx=tcp://127.0.0.1:8334 -zmqpubhashblock=tcp://127.0.0.1:8334 -zmqpubrawblock=tcp://127.0.0.1:8334 -zmqpubrawtx=tcp://127.0.0.1:8334
+bitcoin-0.15.1/bin/bitcoind -datadir=/data/btc/bitcoin -rpcworkqueue=32 -zmqpubhashtx=tcp://127.0.0.1:8334 -zmqpubhashblock=tcp://127.0.0.1:8334 -zmqpubrawblock=tcp://127.0.0.1:8334 -zmqpubrawtx=tcp://127.0.0.1:8334
 ```
 Run the *run-btc-bitcoind.sh* to get initial import of data.
 
