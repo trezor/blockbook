@@ -125,14 +125,16 @@ func main() {
 	if *rollbackHeight >= 0 {
 		bestHeight, _, err := index.GetBestBlock()
 		if err != nil {
-			glog.Fatalf("rollbackHeight: %v", err)
+			glog.Error("rollbackHeight: ", err)
+			return
 		}
 		if uint32(*rollbackHeight) > bestHeight {
 			glog.Infof("nothing to rollback, rollbackHeight %d, bestHeight: %d", *rollbackHeight, bestHeight)
 		} else {
 			err = index.DisconnectBlocks(uint32(*rollbackHeight), bestHeight)
 			if err != nil {
-				glog.Fatalf("rollbackHeight: %v", err)
+				glog.Error("rollbackHeight: ", err)
+				return
 			}
 		}
 		return
@@ -140,7 +142,8 @@ func main() {
 
 	if *synchronize {
 		if err := resyncIndex(nil); err != nil {
-			glog.Fatal("resyncIndex ", err)
+			glog.Error("resyncIndex ", err)
+			return
 		}
 	}
 
@@ -148,7 +151,8 @@ func main() {
 	if *httpServerBinding != "" {
 		httpServer, err = server.NewHTTPServer(*httpServerBinding, *certFiles, index, mempool)
 		if err != nil {
-			glog.Fatal("https: ", err)
+			glog.Error("https: ", err)
+			return
 		}
 		go func() {
 			err = httpServer.Run()
@@ -156,7 +160,8 @@ func main() {
 				if err.Error() == "http: Server closed" {
 					glog.Info(err)
 				} else {
-					glog.Fatal(err)
+					glog.Error(err)
+					return
 				}
 			}
 		}()
@@ -166,7 +171,8 @@ func main() {
 	if *socketIoBinding != "" {
 		socketIoServer, err = server.NewSocketIoServer(*socketIoBinding, *certFiles, index, mempool, chain, *explorerURL)
 		if err != nil {
-			glog.Fatal("socketio: ", err)
+			glog.Error("socketio: ", err)
+			return
 		}
 		go func() {
 			err = socketIoServer.Run()
@@ -174,7 +180,8 @@ func main() {
 				if err.Error() == "http: Server closed" {
 					glog.Info(err)
 				} else {
-					glog.Fatal(err)
+					glog.Error(err)
+					return
 				}
 			}
 		}()
@@ -197,7 +204,8 @@ func main() {
 		} else {
 			mq, err = bchain.NewMQ(*zeroMQBinding, mqHandler)
 			if err != nil {
-				glog.Fatal("mq: ", err)
+				glog.Error("mq: ", err)
+				return
 			}
 		}
 	}
@@ -213,10 +221,12 @@ func main() {
 		if address != "" {
 			script, err := bchain.AddressToOutputScript(address)
 			if err != nil {
-				glog.Fatalf("GetTransactions %v", err)
+				glog.Error("GetTransactions ", err)
+				return
 			}
 			if err = index.GetTransactions(script, height, until, printResult); err != nil {
-				glog.Fatalf("GetTransactions %v", err)
+				glog.Error("GetTransactions ", err)
+				return
 			}
 		} else if !*synchronize {
 			if err = connectBlocksParallelInChunks(
@@ -225,7 +235,8 @@ func main() {
 				*syncChunk,
 				*syncWorkers,
 			); err != nil {
-				glog.Fatalf("connectBlocksParallelInChunks %v", err)
+				glog.Error("connectBlocksParallelInChunks ", err)
+				return
 			}
 		}
 	}
@@ -271,7 +282,7 @@ func syncIndexLoop() {
 	// resync index about every 15 minutes if there are no chanSyncIndex requests, with debounce 1 second
 	tickAndDebounce(resyncIndexPeriodMs*time.Millisecond, debounceResyncIndexMs*time.Millisecond, chanSyncIndex, func() {
 		if err := resyncIndex(onNewBlockHash); err != nil {
-			glog.Error("syncIndexLoop", err)
+			glog.Error("syncIndexLoop ", errors.ErrorStack(err))
 		}
 	})
 	glog.Info("syncIndexLoop stopped")
@@ -289,7 +300,7 @@ func syncMempoolLoop() {
 	// resync mempool about every minute if there are no chanSyncMempool requests, with debounce 1 second
 	tickAndDebounce(resyncMempoolPeriodMs*time.Millisecond, debounceResyncMempoolMs*time.Millisecond, chanSyncMempool, func() {
 		if err := mempool.Resync(onNewTxAddr); err != nil {
-			glog.Error("syncMempoolLoop", err)
+			glog.Error("syncMempoolLoop ", errors.ErrorStack(err))
 		}
 	})
 	glog.Info("syncMempoolLoop stopped")
