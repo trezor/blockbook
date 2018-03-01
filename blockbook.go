@@ -140,7 +140,7 @@ func main() {
 		return
 	}
 
-	syncWorker, err = db.NewSyncWorker(index, chain, *syncWorkers, *syncChunk, uint32(*blockFrom), *dryRun, chanOsSignal)
+	syncWorker, err = db.NewSyncWorker(index, chain, *syncWorkers, *syncChunk, *blockFrom, *dryRun, chanOsSignal)
 	if err != nil {
 		glog.Fatalf("NewSyncWorker %v", err)
 	}
