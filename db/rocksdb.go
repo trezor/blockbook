@@ -5,9 +5,10 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
-	"errors"
 	"os"
 	"path/filepath"
+
+	"github.com/juju/errors"
 
 	"github.com/bsm/go-vlq"
 	"github.com/golang/glog"

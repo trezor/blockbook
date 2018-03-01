@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/golang/glog"
+	"github.com/juju/errors"
 )
 
 type RPCError struct {
@@ -239,10 +240,10 @@ func (b *BitcoinRPC) GetBlockHash(height uint32) (string, error) {
 	err := b.call(&req, &res)
 
 	if err != nil {
-		return "", err
+		return "", errors.Annotatef(err, "height %v", height)
 	}
 	if res.Error != nil {
-		return "", res.Error
+		return "", errors.Annotatef(res.Error, "height %v", height)
 	}
 	return res.Result, nil
 }
@@ -258,10 +259,10 @@ func (b *BitcoinRPC) GetBlockHeader(hash string) (*BlockHeader, error) {
 	err := b.call(&req, &res)
 
 	if err != nil {
-		return nil, err
+		return nil, errors.Annotatef(err, "hash %v", hash)
 	}
 	if res.Error != nil {
-		return nil, res.Error
+		return nil, errors.Annotatef(res.Error, "hash %v", hash)
 	}
 	return &res.Result, nil
 }
@@ -281,7 +282,7 @@ func (b *BitcoinRPC) GetBlock(hash string) (*Block, error) {
 	}
 	block, err := b.Parser.ParseBlock(data)
 	if err != nil {
-		return nil, err
+		return nil, errors.Annotatef(err, "hash %v", hash)
 	}
 	block.BlockHeader = *header
 	return block, nil
@@ -299,7 +300,7 @@ func (b *BitcoinRPC) GetBlockWithoutHeader(hash string, height uint32) (*Block, 
 	}
 	block, err := b.Parser.ParseBlock(data)
 	if err != nil {
-		return nil, err
+		return nil, errors.Annotatef(err, "%v %v", height, hash)
 	}
 	block.BlockHeader.Hash = hash
 	block.BlockHeader.Height = height
@@ -317,10 +318,10 @@ func (b *BitcoinRPC) GetBlockRaw(hash string) ([]byte, error) {
 	err := b.call(&req, &res)
 
 	if err != nil {
-		return nil, err
+		return nil, errors.Annotatef(err, "hash %v", hash)
 	}
 	if res.Error != nil {
-		return nil, res.Error
+		return nil, errors.Annotatef(res.Error, "hash %v", hash)
 	}
 	return hex.DecodeString(res.Result)
 }
@@ -337,10 +338,10 @@ func (b *BitcoinRPC) GetBlockList(hash string) (*Block, error) {
 	err := b.call(&req, &res)
 
 	if err != nil {
-		return nil, err
+		return nil, errors.Annotatef(err, "hash %v", hash)
 	}
 	if res.Error != nil {
-		return nil, res.Error
+		return nil, errors.Annotatef(res.Error, "hash %v", hash)
 	}
 
 	txs := make([]Tx, len(res.Result.Txids))
@@ -369,10 +370,10 @@ func (b *BitcoinRPC) GetBlockFull(hash string) (*Block, error) {
 	err := b.call(&req, &res)
 
 	if err != nil {
-		return nil, err
+		return nil, errors.Annotatef(err, "hash %v", hash)
 	}
 	if res.Error != nil {
-		return nil, res.Error
+		return nil, errors.Annotatef(res.Error, "hash %v", hash)
 	}
 	return &res.Result, nil
 }
@@ -405,10 +406,10 @@ func (b *BitcoinRPC) GetTransaction(txid string) (*Tx, error) {
 	err := b.call(&req, &res)
 
 	if err != nil {
-		return nil, err
+		return nil, errors.Annotatef(err, "txid %v", txid)
 	}
 	if res.Error != nil {
-		return nil, res.Error
+		return nil, errors.Annotatef(res.Error, "txid %v", txid)
 	}
 	return &res.Result, nil
 }

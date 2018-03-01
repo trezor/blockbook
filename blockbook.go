@@ -3,14 +3,14 @@ package main
 import (
 	"context"
 	"encoding/hex"
-	"errors"
 	"flag"
-	"fmt"
 	"os"
 	"os/signal"
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/juju/errors"
 
 	"blockbook/bchain"
 	"blockbook/db"
@@ -500,7 +500,7 @@ func connectBlocksParallel(
 			for {
 				block, err = chain.GetBlockWithoutHeader(hh.hash, hh.height)
 				if err != nil {
-					glog.Error("Connect block ", hh.height, " ", hh.hash, " error ", err, ". Retrying...")
+					glog.Error("Connect block error ", err, ". Retrying...")
 					time.Sleep(time.Millisecond * 500)
 				} else {
 					break
@@ -540,12 +540,12 @@ ConnectLoop:
 				}
 				break
 			}
-			err = errors.New(fmt.Sprint("connectBlocksParallel interrupted at height ", h))
+			err = errors.Errorf("connectBlocksParallel interrupted at height %d", h)
 			break ConnectLoop
 		default:
 			hash, err = chain.GetBlockHash(h)
 			if err != nil {
-				glog.Error("GetBlockHash ", h, " error ", err)
+				glog.Error("GetBlockHash error ", err)
 				time.Sleep(time.Millisecond * 500)
 				continue
 			}

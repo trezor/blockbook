@@ -56,6 +56,7 @@ go get github.com/gorilla/handlers
 go get github.com/gorilla/mux
 go get github.com/pebbe/zmq4
 go get github.com/pkg/profile
+go get github.com/juju/errors
 ```
 
 Install blockbook:

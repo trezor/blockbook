@@ -5,10 +5,11 @@ import (
 	"blockbook/db"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"strings"
+
+	"github.com/juju/errors"
 
 	"github.com/golang/glog"
 	"github.com/martinboehm/golang-socketio"
@@ -193,7 +194,7 @@ func (s *SocketIoServer) onMessage(c *gosocketio.Channel, req map[string]json.Ra
 		glog.V(1).Info(c.Id(), " onMessage ", method, " success")
 		return rv
 	}
-	glog.Error(c.Id(), " onMessage ", method, ": ", err)
+	glog.Error(c.Id(), " onMessage ", method, ": ", errors.ErrorStack(err))
 	e := resultError{}
 	e.Error.Message = err.Error()
 	return e
