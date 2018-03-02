@@ -5,6 +5,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"net/http"
 	"time"
 
@@ -466,9 +468,16 @@ func (b *BitcoinRPC) call(req interface{}, res interface{}) error {
 	}
 	httpReq.SetBasicAuth(b.User, b.Password)
 	httpRes, err := b.client.Do(httpReq)
+	// in some cases the httpRes can contain data even if it returns error
+	// see http://devs.cloudimmunity.com/gotchas-and-common-mistakes-in-go-golang/
+	if httpRes != nil {
+		defer httpRes.Body.Close()
+	}
 	if err != nil {
 		return err
 	}
-	defer httpRes.Body.Close()
+	// read the entire response body until the end to avoid memory leak when reusing http connection
+	// see http://devs.cloudimmunity.com/gotchas-and-common-mistakes-in-go-golang/
+	defer io.Copy(ioutil.Discard, httpRes.Body)
 	return json.NewDecoder(httpRes.Body).Decode(&res)
 }
