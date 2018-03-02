@@ -44,14 +44,16 @@ func AddressToOutputScript(address string) ([]byte, error) {
 	return script, nil
 }
 
+// Tx is blockchain transaction
+// unnecessary fields are commented out to avoid overhead
 type Tx struct {
-	Hex           string `json:"hex"`
-	Txid          string `json:"txid"`
-	Version       int32  `json:"version"`
-	LockTime      uint32 `json:"locktime"`
-	Vin           []Vin  `json:"vin"`
-	Vout          []Vout `json:"vout"`
-	BlockHash     string `json:"blockhash,omitempty"`
+	Hex      string `json:"hex"`
+	Txid     string `json:"txid"`
+	Version  int32  `json:"version"`
+	LockTime uint32 `json:"locktime"`
+	Vin      []Vin  `json:"vin"`
+	Vout     []Vout `json:"vout"`
+	// BlockHash     string `json:"blockhash,omitempty"`
 	Confirmations uint32 `json:"confirmations,omitempty"`
 	Time          int64  `json:"time,omitempty"`
 	Blocktime     int64  `json:"blocktime,omitempty"`
