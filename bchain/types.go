@@ -6,7 +6,7 @@ import (
 )
 
 type ScriptSig struct {
-	Asm string `json:"asm"`
+	// Asm string `json:"asm"`
 	Hex string `json:"hex"`
 }
 
@@ -47,9 +47,9 @@ func AddressToOutputScript(address string) ([]byte, error) {
 // Tx is blockchain transaction
 // unnecessary fields are commented out to avoid overhead
 type Tx struct {
-	Hex      string `json:"hex"`
-	Txid     string `json:"txid"`
-	Version  int32  `json:"version"`
+	Hex  string `json:"hex"`
+	Txid string `json:"txid"`
+	// Version  int32  `json:"version"`
 	LockTime uint32 `json:"locktime"`
 	Vin      []Vin  `json:"vin"`
 	Vout     []Vout `json:"vout"`

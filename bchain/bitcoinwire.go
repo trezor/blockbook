@@ -88,15 +88,15 @@ func (p *BitcoinBlockParser) ParseBlock(b []byte) (*Block, error) {
 			}
 		}
 		txs[ti] = Tx{
-			Txid:     t.TxHash().String(),
-			Version:  t.Version,
+			Txid: t.TxHash().String(),
+			// skip: Version,
 			LockTime: t.LockTime,
 			Vin:      vin,
 			Vout:     vout,
-			// missing: BlockHash,
-			// missing: Confirmations,
-			// missing: Time,
-			// missing: Blocktime,
+			// skip: BlockHash,
+			// skip: Confirmations,
+			// skip: Time,
+			// skip: Blocktime,
 		}
 	}
 
