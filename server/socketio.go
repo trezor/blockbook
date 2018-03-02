@@ -281,16 +281,16 @@ type addressHistoryIndexes struct {
 type txInputs struct {
 	OutputIndex int     `json:"outputIndex"`
 	Script      *string `json:"script"`
-	ScriptAsm   *string `json:"scriptAsm"`
-	Sequence    int64   `json:"sequence"`
-	Address     *string `json:"address"`
-	Satoshis    int64   `json:"satoshis"`
+	// ScriptAsm   *string `json:"scriptAsm"`
+	Sequence int64   `json:"sequence"`
+	Address  *string `json:"address"`
+	Satoshis int64   `json:"satoshis"`
 }
 
 type txOutputs struct {
-	Satoshis    int64   `json:"satoshis"`
-	Script      *string `json:"script"`
-	ScriptAsm   *string `json:"scriptAsm"`
+	Satoshis int64   `json:"satoshis"`
+	Script   *string `json:"script"`
+	// ScriptAsm   *string `json:"scriptAsm"`
 	SpentTxID   *string `json:"spentTxId,omitempty"`
 	SpentIndex  int     `json:"spentIndex,omitempty"`
 	SpentHeight int     `json:"spentHeight,omitempty"`
@@ -298,19 +298,19 @@ type txOutputs struct {
 }
 
 type resTx struct {
-	Hex            string      `json:"hex"`
-	BlockHash      string      `json:"blockHash,omitempty"`
-	Height         int         `json:"height"`
-	BlockTimestamp int64       `json:"blockTimestamp,omitempty"`
-	Version        int         `json:"version"`
-	Hash           string      `json:"hash"`
-	Locktime       int         `json:"locktime,omitempty"`
-	Size           int         `json:"size,omitempty"`
-	Inputs         []txInputs  `json:"inputs"`
-	InputSatoshis  int64       `json:"inputSatoshis,omitempty"`
-	Outputs        []txOutputs `json:"outputs"`
-	OutputSatoshis int64       `json:"outputSatoshis,omitempty"`
-	FeeSatoshis    int64       `json:"feeSatoshis,omitempty"`
+	Hex string `json:"hex"`
+	// BlockHash      string      `json:"blockHash,omitempty"`
+	Height         int   `json:"height"`
+	BlockTimestamp int64 `json:"blockTimestamp,omitempty"`
+	// Version        int         `json:"version"`
+	Hash     string `json:"hash"`
+	Locktime int    `json:"locktime,omitempty"`
+	// Size           int         `json:"size,omitempty"`
+	Inputs []txInputs `json:"inputs"`
+	// InputSatoshis  int64       `json:"inputSatoshis,omitempty"`
+	Outputs []txOutputs `json:"outputs"`
+	// OutputSatoshis int64       `json:"outputSatoshis,omitempty"`
+	// FeeSatoshis    int64       `json:"feeSatoshis,omitempty"`
 }
 
 type addressHistoryItem struct {
@@ -349,7 +349,7 @@ func txToResTx(tx *bchain.Tx, height int, hi []txInputs, ho []txOutputs) resTx {
 		Locktime: int(tx.LockTime),
 		Outputs:  ho,
 		// OutputSatoshis,
-		Version: int(tx.Version),
+		// Version: int(tx.Version),
 	}
 }
 
@@ -365,11 +365,16 @@ func (s *SocketIoServer) getAddressHistory(addr []string, rr *reqRange) (res res
 	txids := txr.Result
 	res.Result.TotalCount = len(txids)
 	res.Result.Items = make([]addressHistoryItem, 0)
+	txCache := make(map[string]*bchain.Tx, len(txids))
 	for i, txid := range txids {
 		if i >= rr.From && i < rr.To {
-			tx, err := s.chain.GetTransaction(txid)
-			if err != nil {
-				return res, err
+			tx, ok := txCache[txid]
+			if !ok {
+				tx, err = s.chain.GetTransaction(txid)
+				if err != nil {
+					return res, err
+				}
+				txCache[txid] = tx
 			}
 			ads := make(map[string]addressHistoryIndexes)
 			hi := make([]txInputs, 0)
@@ -377,14 +382,17 @@ func (s *SocketIoServer) getAddressHistory(addr []string, rr *reqRange) (res res
 			for _, vin := range tx.Vin {
 				ai := txInputs{
 					Script:      &vin.ScriptSig.Hex,
-					ScriptAsm:   &vin.ScriptSig.Asm,
 					Sequence:    int64(vin.Sequence),
 					OutputIndex: int(vin.Vout),
 				}
 				if vin.Txid != "" {
-					otx, err := s.chain.GetTransaction(vin.Txid)
-					if err != nil {
-						return res, err
+					otx, ok := txCache[vin.Txid]
+					if !ok {
+						otx, err = s.chain.GetTransaction(vin.Txid)
+						if err != nil {
+							return res, err
+						}
+						txCache[vin.Txid] = otx
 					}
 					if len(otx.Vout) > int(vin.Vout) {
 						vout := otx.Vout[vin.Vout]
@@ -412,7 +420,6 @@ func (s *SocketIoServer) getAddressHistory(addr []string, rr *reqRange) (res res
 				ao := txOutputs{
 					Satoshis:   int64(vout.Value * 1E8),
 					Script:     &vout.ScriptPubKey.Hex,
-					ScriptAsm:  &vout.ScriptPubKey.Asm,
 					SpentIndex: int(vout.N),
 				}
 				if len(vout.ScriptPubKey.Addresses) == 1 {
@@ -606,7 +613,6 @@ func (s *SocketIoServer) getDetailedTransaction(txid string) (res resultGetDetai
 	for _, vin := range tx.Vin {
 		ai := txInputs{
 			Script:      &vin.ScriptSig.Hex,
-			ScriptAsm:   &vin.ScriptSig.Asm,
 			Sequence:    int64(vin.Sequence),
 			OutputIndex: int(vin.Vout),
 		}
@@ -629,7 +635,6 @@ func (s *SocketIoServer) getDetailedTransaction(txid string) (res resultGetDetai
 		ao := txOutputs{
 			Satoshis:   int64(vout.Value * 1E8),
 			Script:     &vout.ScriptPubKey.Hex,
-			ScriptAsm:  &vout.ScriptPubKey.Asm,
 			SpentIndex: int(vout.N),
 		}
 		if len(vout.ScriptPubKey.Addresses) == 1 {
