@@ -44,6 +44,19 @@ func AddressToOutputScript(address string) ([]byte, error) {
 	return script, nil
 }
 
+// OutputScriptToAddresses converts ScriptPubKey to bitcoin addresses
+func OutputScriptToAddresses(script []byte) ([]string, error) {
+	_, addresses, _, err := txscript.ExtractPkScriptAddrs(script, GetChainParams()[0])
+	if err != nil {
+		return nil, err
+	}
+	rv := make([]string, len(addresses))
+	for i, a := range addresses {
+		rv[i] = a.EncodeAddress()
+	}
+	return rv, nil
+}
+
 // Tx is blockchain transaction
 // unnecessary fields are commented out to avoid overhead
 type Tx struct {
