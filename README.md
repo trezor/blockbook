@@ -200,14 +200,18 @@ The data are separated to different column families:
 
 ## Todo
 
+- cache transactions in RocksDB
+- implement getmempoolentry
 - cleanup of the socket.io - do not send unnecessary data
-- protobuf websocket interface
-- parallel sync - rewrite - it is not possible to gracefully stop it now, can leave holes in the block
 - disconnect blocks - keep map of transactions in the last 100 blocks
 - handle different versions of Bitcoin Core
+- log live traffic from production bitcore server and replay it in blockbook
+- find memory leak in initial import
+- protobuf websocket interface
 - limit number of transactions returned by rocksdb.GetTransactions
 - xpub index
 - tests
+- ~~parallel sync - rewrite - it is not possible to gracefully stop it now, can leave holes in the block~~
 - ~~mempool - return also input transactions~~
 - ~~blockchain - return inputs from mempool~~
 - ~~do not return duplicate txids~~
