@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 
 	"github.com/btcsuite/btcd/blockchain"
+	"github.com/btcsuite/btcutil"
 
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/txscript"
@@ -27,16 +28,30 @@ type BitcoinBlockParser struct {
 	Params *chaincfg.Params
 }
 
-func (p *BitcoinBlockParser) parseOutputScript(b []byte) ([]string, error) {
-	_, addresses, _, err := txscript.ExtractPkScriptAddrs(b, p.Params)
+// AddressToOutputScript converts bitcoin address to ScriptPubKey
+func AddressToOutputScript(address string) ([]byte, error) {
+	da, err := btcutil.DecodeAddress(address, GetChainParams()[0])
 	if err != nil {
 		return nil, err
 	}
-	addrs := make([]string, len(addresses))
-	for i, a := range addresses {
-		addrs[i] = a.EncodeAddress()
+	script, err := txscript.PayToAddrScript(da)
+	if err != nil {
+		return nil, err
 	}
-	return addrs, nil
+	return script, nil
+}
+
+// OutputScriptToAddresses converts ScriptPubKey to bitcoin addresses
+func OutputScriptToAddresses(script []byte) ([]string, error) {
+	_, addresses, _, err := txscript.ExtractPkScriptAddrs(script, GetChainParams()[0])
+	if err != nil {
+		return nil, err
+	}
+	rv := make([]string, len(addresses))
+	for i, a := range addresses {
+		rv[i] = a.EncodeAddress()
+	}
+	return rv, nil
 }
 
 func (p *BitcoinBlockParser) ParseBlock(b []byte) (*Block, error) {
@@ -71,7 +86,7 @@ func (p *BitcoinBlockParser) ParseBlock(b []byte) (*Block, error) {
 		}
 		vout := make([]Vout, len(t.TxOut))
 		for i, out := range t.TxOut {
-			// addrs, err := p.parseOutputScript(out.PkScript)
+			// addrs, err := OutputScriptToAddresses(out.PkScript)
 			// if err != nil {
 			// 	addrs = []string{}
 			// }

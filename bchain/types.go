@@ -1,10 +1,5 @@
 package bchain
 
-import (
-	"github.com/btcsuite/btcd/txscript"
-	"github.com/btcsuite/btcutil"
-)
-
 type ScriptSig struct {
 	// Asm string `json:"asm"`
 	Hex string `json:"hex"`
@@ -29,32 +24,6 @@ type Vout struct {
 	Value        float64      `json:"value"`
 	N            uint32       `json:"n"`
 	ScriptPubKey ScriptPubKey `json:"scriptPubKey"`
-}
-
-// AddressToOutputScript converts bitcoin address to ScriptPubKey
-func AddressToOutputScript(address string) ([]byte, error) {
-	da, err := btcutil.DecodeAddress(address, GetChainParams()[0])
-	if err != nil {
-		return nil, err
-	}
-	script, err := txscript.PayToAddrScript(da)
-	if err != nil {
-		return nil, err
-	}
-	return script, nil
-}
-
-// OutputScriptToAddresses converts ScriptPubKey to bitcoin addresses
-func OutputScriptToAddresses(script []byte) ([]string, error) {
-	_, addresses, _, err := txscript.ExtractPkScriptAddrs(script, GetChainParams()[0])
-	if err != nil {
-		return nil, err
-	}
-	rv := make([]string, len(addresses))
-	for i, a := range addresses {
-		rv[i] = a.EncodeAddress()
-	}
-	return rv, nil
 }
 
 // Tx is blockchain transaction
