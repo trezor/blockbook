@@ -3,5 +3,6 @@ data/
 blockbook
 notes.txt
 debug
+debug.test
 .vscode
 docker/blockbook
