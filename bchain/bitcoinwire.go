@@ -54,6 +54,72 @@ func OutputScriptToAddresses(script []byte) ([]string, error) {
 	return rv, nil
 }
 
+// ParseTx parses byte array containing transaction and returns Tx struct
+func ParseTx(b []byte) (*Tx, error) {
+	t := wire.MsgTx{}
+	r := bytes.NewReader(b)
+	if err := t.Deserialize(r); err != nil {
+		return nil, err
+	}
+	tx := txFromMsgTx(&t, true)
+	tx.Hex = hex.EncodeToString(b)
+	return &tx, nil
+}
+
+func txFromMsgTx(t *wire.MsgTx, parseAddresses bool) Tx {
+	vin := make([]Vin, len(t.TxIn))
+	for i, in := range t.TxIn {
+		if blockchain.IsCoinBaseTx(t) {
+			vin[i] = Vin{
+				Coinbase: hex.EncodeToString(in.SignatureScript),
+				Sequence: in.Sequence,
+			}
+			break
+		}
+		s := ScriptSig{
+			Hex: hex.EncodeToString(in.SignatureScript),
+			// missing: Asm,
+		}
+		vin[i] = Vin{
+			Txid:      in.PreviousOutPoint.Hash.String(),
+			Vout:      in.PreviousOutPoint.Index,
+			Sequence:  in.Sequence,
+			ScriptSig: s,
+		}
+	}
+	vout := make([]Vout, len(t.TxOut))
+	for i, out := range t.TxOut {
+		addrs := []string{}
+		if parseAddresses {
+			addrs, _ = OutputScriptToAddresses(out.PkScript)
+		}
+		s := ScriptPubKey{
+			Hex:       hex.EncodeToString(out.PkScript),
+			Addresses: addrs,
+			// missing: Asm,
+			// missing: Type,
+		}
+		vout[i] = Vout{
+			Value:        float64(out.Value) / 1E8,
+			N:            uint32(i),
+			ScriptPubKey: s,
+		}
+	}
+	tx := Tx{
+		Txid: t.TxHash().String(),
+		// skip: Version,
+		LockTime: t.LockTime,
+		Vin:      vin,
+		Vout:     vout,
+		// skip: BlockHash,
+		// skip: Confirmations,
+		// skip: Time,
+		// skip: Blocktime,
+	}
+	return tx
+}
+
+// ParseBlock parses raw block to our Block struct
 func (p *BitcoinBlockParser) ParseBlock(b []byte) (*Block, error) {
 	w := wire.MsgBlock{}
 	r := bytes.NewReader(b)
@@ -64,55 +130,7 @@ func (p *BitcoinBlockParser) ParseBlock(b []byte) (*Block, error) {
 
 	txs := make([]Tx, len(w.Transactions))
 	for ti, t := range w.Transactions {
-		vin := make([]Vin, len(t.TxIn))
-		for i, in := range t.TxIn {
-			if blockchain.IsCoinBaseTx(t) {
-				vin[i] = Vin{
-					Coinbase: hex.EncodeToString(in.SignatureScript),
-					Sequence: in.Sequence,
-				}
-				break
-			}
-			s := ScriptSig{
-				Hex: hex.EncodeToString(in.SignatureScript),
-				// missing: Asm,
-			}
-			vin[i] = Vin{
-				Txid:      in.PreviousOutPoint.Hash.String(),
-				Vout:      in.PreviousOutPoint.Index,
-				Sequence:  in.Sequence,
-				ScriptSig: s,
-			}
-		}
-		vout := make([]Vout, len(t.TxOut))
-		for i, out := range t.TxOut {
-			// addrs, err := OutputScriptToAddresses(out.PkScript)
-			// if err != nil {
-			// 	addrs = []string{}
-			// }
-			s := ScriptPubKey{
-				Hex: hex.EncodeToString(out.PkScript),
-				// missing Addresses,
-				// missing: Asm,
-				// missing: Type,
-			}
-			vout[i] = Vout{
-				Value:        float64(out.Value),
-				N:            uint32(i),
-				ScriptPubKey: s,
-			}
-		}
-		txs[ti] = Tx{
-			Txid: t.TxHash().String(),
-			// skip: Version,
-			LockTime: t.LockTime,
-			Vin:      vin,
-			Vout:     vout,
-			// skip: BlockHash,
-			// skip: Confirmations,
-			// skip: Time,
-			// skip: Blocktime,
-		}
+		txs[ti] = txFromMsgTx(t, false)
 	}
 
 	return &Block{Txs: txs}, nil

@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
+	"math"
 	"os"
 	"path/filepath"
 
@@ -40,9 +41,10 @@ const (
 	cfHeight
 	cfOutputs
 	cfInputs
+	cfTransactions
 )
 
-var cfNames = []string{"default", "height", "outputs", "inputs"}
+var cfNames = []string{"default", "height", "outputs", "inputs", "transactions"}
 
 func openDB(path string) (*gorocksdb.DB, []*gorocksdb.ColumnFamilyHandle, error) {
 	c := gorocksdb.NewLRUCache(8 << 30) // 8GB
@@ -80,7 +82,7 @@ func openDB(path string) (*gorocksdb.DB, []*gorocksdb.ColumnFamilyHandle, error)
 	optsOutputs.SetMaxOpenFiles(25000)
 	optsOutputs.SetCompression(gorocksdb.NoCompression)
 
-	fcOptions := []*gorocksdb.Options{opts, opts, optsOutputs, opts}
+	fcOptions := []*gorocksdb.Options{opts, opts, optsOutputs, opts, opts}
 
 	db, cfh, err := gorocksdb.OpenDbColumnFamilies(opts, path, cfNames, fcOptions)
 	if err != nil {
@@ -350,6 +352,12 @@ func packOutpoint(txid string, vout uint32) ([]byte, error) {
 	return buf, nil
 }
 
+func unpackOutpoint(buf []byte) (string, uint32, int) {
+	txid, _ := unpackTxid(buf[:txIdUnpackedLen])
+	vout, o := unpackVaruint(buf[txIdUnpackedLen:])
+	return txid, vout, txIdUnpackedLen + o
+}
+
 // Block index
 
 // GetBestBlock returns the block hash of the block with highest height in the db
@@ -520,6 +528,40 @@ func (d *RocksDB) DatabaseSizeOnDisk() (int64, error) {
 	return dirSize(d.path)
 }
 
+// GetTx returns transaction stored in db and height of the block containing it
+func (d *RocksDB) GetTx(txid string) (*bchain.Tx, uint32, error) {
+	key, err := packTxid(txid)
+	if err != nil {
+		return nil, 0, err
+	}
+	val, err := d.db.GetCF(d.ro, d.cfh[cfTransactions], key)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer val.Free()
+	return unpackTx(val.Data())
+}
+
+func (d *RocksDB) PutTx(tx *bchain.Tx, height uint32) error {
+	key, err := packTxid(tx.Txid)
+	if err != nil {
+		return nil
+	}
+	buf, err := packTx(tx, height)
+	if err != nil {
+		return err
+	}
+	return d.db.PutCF(d.wo, d.cfh[cfTransactions], key, buf)
+}
+
+func (d *RocksDB) DeleteTx(txid string) error {
+	key, err := packTxid(txid)
+	if err != nil {
+		return nil
+	}
+	return d.db.DeleteCF(d.wo, d.cfh[cfTransactions], key)
+}
+
 // Helpers
 
 const txIdUnpackedLen = 32
@@ -536,6 +578,16 @@ func unpackUint(buf []byte) uint32 {
 	return binary.BigEndian.Uint32(buf)
 }
 
+func packFloat64(f float64) []byte {
+	buf := make([]byte, 8)
+	binary.BigEndian.PutUint64(buf, math.Float64bits(f))
+	return buf
+}
+
+func unpackFloat64(buf []byte) float64 {
+	return math.Float64frombits(binary.BigEndian.Uint64(buf))
+}
+
 func packVaruint(i uint32) []byte {
 	buf := make([]byte, vlq.MaxLen32)
 	ofs := vlq.PutUint(buf, uint64(i))
@@ -545,6 +597,17 @@ func packVaruint(i uint32) []byte {
 func unpackVaruint(buf []byte) (uint32, int) {
 	i, ofs := vlq.Uint(buf)
 	return uint32(i), ofs
+}
+
+func packVarint64(i int64) []byte {
+	buf := make([]byte, vlq.MaxLen64)
+	ofs := vlq.PutInt(buf, i)
+	return buf[:ofs]
+}
+
+func unpackVarint64(buf []byte) (int64, int) {
+	i, ofs := vlq.Int(buf)
+	return i, ofs
 }
 
 func packTxid(txid string) ([]byte, error) {
@@ -569,4 +632,17 @@ func packOutputScript(script string) ([]byte, error) {
 
 func unpackOutputScript(buf []byte) string {
 	return hex.EncodeToString(buf)
+}
+
+func packTx(tx *bchain.Tx, height uint32) ([]byte, error) {
+	buf := make([]byte, 4+len(tx.Hex)/2)
+	binary.BigEndian.PutUint32(buf[0:4], height)
+	_, err := hex.Decode(buf[4:], []byte(tx.Hex))
+	return buf, err
+}
+
+func unpackTx(buf []byte) (*bchain.Tx, uint32, error) {
+	height := unpackUint(buf)
+	tx, err := bchain.ParseTx(buf[4:])
+	return tx, height, err
 }
