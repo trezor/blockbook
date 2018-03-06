@@ -23,13 +23,14 @@ type SocketIoServer struct {
 	server      *gosocketio.Server
 	https       *http.Server
 	db          *db.RocksDB
+	txCache     *db.TxCache
 	mempool     *bchain.Mempool
 	chain       *bchain.BitcoinRPC
 	explorerURL string
 }
 
 // NewSocketIoServer creates new SocketIo interface to blockbook and returns its handle
-func NewSocketIoServer(binding string, certFiles string, db *db.RocksDB, mempool *bchain.Mempool, chain *bchain.BitcoinRPC, explorerURL string) (*SocketIoServer, error) {
+func NewSocketIoServer(binding string, certFiles string, db *db.RocksDB, mempool *bchain.Mempool, chain *bchain.BitcoinRPC, txCache *db.TxCache, explorerURL string) (*SocketIoServer, error) {
 	server := gosocketio.NewServer(transport.GetDefaultWebsocketTransport())
 
 	server.On(gosocketio.OnConnection, func(c *gosocketio.Channel) {
@@ -62,6 +63,7 @@ func NewSocketIoServer(binding string, certFiles string, db *db.RocksDB, mempool
 		https:       https,
 		server:      server,
 		db:          db,
+		txCache:     txCache,
 		mempool:     mempool,
 		chain:       chain,
 		explorerURL: explorerURL,
@@ -292,7 +294,7 @@ type txOutputs struct {
 	Script   *string `json:"script"`
 	// ScriptAsm   *string `json:"scriptAsm"`
 	SpentTxID   *string `json:"spentTxId,omitempty"`
-	SpentIndex  int     `json:"spentIndex,omitempty"`
+	SpentIndex  int     `json:"spentIndex"`
 	SpentHeight int     `json:"spentHeight,omitempty"`
 	Address     *string `json:"address"`
 }
@@ -365,16 +367,16 @@ func (s *SocketIoServer) getAddressHistory(addr []string, rr *reqRange) (res res
 	txids := txr.Result
 	res.Result.TotalCount = len(txids)
 	res.Result.Items = make([]addressHistoryItem, 0)
-	txCache := make(map[string]*bchain.Tx, len(txids))
+	localCache := make(map[string]*bchain.Tx, len(txids))
 	for i, txid := range txids {
 		if i >= rr.From && i < rr.To {
-			tx, ok := txCache[txid]
+			tx, ok := localCache[txid]
 			if !ok {
-				tx, err = s.chain.GetTransaction(txid)
+				tx, err = s.txCache.GetTransaction(txid, bestheight)
 				if err != nil {
 					return res, err
 				}
-				txCache[txid] = tx
+				localCache[txid] = tx
 			}
 			ads := make(map[string]addressHistoryIndexes)
 			hi := make([]txInputs, 0)
@@ -386,13 +388,13 @@ func (s *SocketIoServer) getAddressHistory(addr []string, rr *reqRange) (res res
 					OutputIndex: int(vin.Vout),
 				}
 				if vin.Txid != "" {
-					otx, ok := txCache[vin.Txid]
+					otx, ok := localCache[vin.Txid]
 					if !ok {
-						otx, err = s.chain.GetTransaction(vin.Txid)
+						otx, err = s.txCache.GetTransaction(vin.Txid, bestheight)
 						if err != nil {
 							return res, err
 						}
-						txCache[vin.Txid] = otx
+						localCache[vin.Txid] = otx
 					}
 					if len(otx.Vout) > int(vin.Vout) {
 						vout := otx.Vout[vin.Vout]
@@ -604,7 +606,7 @@ func (s *SocketIoServer) getDetailedTransaction(txid string) (res resultGetDetai
 	if err != nil {
 		return
 	}
-	tx, err := s.chain.GetTransaction(txid)
+	tx, err := s.txCache.GetTransaction(txid, bestheight)
 	if err != nil {
 		return res, err
 	}
@@ -617,7 +619,7 @@ func (s *SocketIoServer) getDetailedTransaction(txid string) (res resultGetDetai
 			OutputIndex: int(vin.Vout),
 		}
 		if vin.Txid != "" {
-			otx, err := s.chain.GetTransaction(vin.Txid)
+			otx, err := s.txCache.GetTransaction(vin.Txid, bestheight)
 			if err != nil {
 				return res, err
 			}

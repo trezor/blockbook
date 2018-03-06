@@ -539,21 +539,27 @@ func (d *RocksDB) GetTx(txid string) (*bchain.Tx, uint32, error) {
 		return nil, 0, err
 	}
 	defer val.Free()
-	return unpackTx(val.Data())
+	data := val.Data()
+	if len(data) > 4 {
+		return unpackTx(data)
+	}
+	return nil, 0, nil
 }
 
-func (d *RocksDB) PutTx(tx *bchain.Tx, height uint32) error {
+// PutTx stores transactions in db
+func (d *RocksDB) PutTx(tx *bchain.Tx, height uint32, blockTime int64) error {
 	key, err := packTxid(tx.Txid)
 	if err != nil {
 		return nil
 	}
-	buf, err := packTx(tx, height)
+	buf, err := packTx(tx, height, blockTime)
 	if err != nil {
 		return err
 	}
 	return d.db.PutCF(d.wo, d.cfh[cfTransactions], key, buf)
 }
 
+// DeleteTx removes transactions from db
 func (d *RocksDB) DeleteTx(txid string) error {
 	key, err := packTxid(txid)
 	if err != nil {
@@ -634,15 +640,22 @@ func unpackOutputScript(buf []byte) string {
 	return hex.EncodeToString(buf)
 }
 
-func packTx(tx *bchain.Tx, height uint32) ([]byte, error) {
-	buf := make([]byte, 4+len(tx.Hex)/2)
+func packTx(tx *bchain.Tx, height uint32, blockTime int64) ([]byte, error) {
+	bt := packVarint64(blockTime)
+	buf := make([]byte, 4+len(bt)+len(tx.Hex)/2)
 	binary.BigEndian.PutUint32(buf[0:4], height)
-	_, err := hex.Decode(buf[4:], []byte(tx.Hex))
+	copy(buf[4:], bt)
+	_, err := hex.Decode(buf[4+len(bt):], []byte(tx.Hex))
 	return buf, err
 }
 
 func unpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 	height := unpackUint(buf)
-	tx, err := bchain.ParseTx(buf[4:])
-	return tx, height, err
+	bt, l := unpackVarint64(buf[4:])
+	tx, err := bchain.ParseTx(buf[4+l:])
+	if err != nil {
+		return nil, 0, err
+	}
+	tx.Blocktime = bt
+	return tx, height, nil
 }

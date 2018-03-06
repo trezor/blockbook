@@ -73,6 +73,7 @@ var (
 	chain                   *bchain.BitcoinRPC
 	mempool                 *bchain.Mempool
 	index                   *db.RocksDB
+	txCache                 *db.TxCache
 	syncWorker              *db.SyncWorker
 	callbacksOnNewBlockHash []func(hash string)
 	callbacksOnNewTxAddr    []func(txid string, addr string)
@@ -152,6 +153,11 @@ func main() {
 		}
 	}
 
+	if txCache, err = db.NewTxCache(index, chain); err != nil {
+		glog.Error("txCache ", err)
+		return
+	}
+
 	var httpServer *server.HTTPServer
 	if *httpServerBinding != "" {
 		httpServer, err = server.NewHTTPServer(*httpServerBinding, *certFiles, index, mempool)
@@ -174,7 +180,7 @@ func main() {
 
 	var socketIoServer *server.SocketIoServer
 	if *socketIoBinding != "" {
-		socketIoServer, err = server.NewSocketIoServer(*socketIoBinding, *certFiles, index, mempool, chain, *explorerURL)
+		socketIoServer, err = server.NewSocketIoServer(*socketIoBinding, *certFiles, index, mempool, chain, txCache, *explorerURL)
 		if err != nil {
 			glog.Error("socketio: ", err)
 			return
