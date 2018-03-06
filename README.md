@@ -207,6 +207,7 @@ The data are separated to different column families:
 - handle different versions of Bitcoin Core
 - log live traffic from production bitcore server and replay it in blockbook
 - find memory leak in initial import
+- compute statistics of data, txcache, usage, etc.
 - protobuf websocket interface
 - limit number of transactions returned by rocksdb.GetTransactions
 - xpub index
