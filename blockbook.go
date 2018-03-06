@@ -151,6 +151,10 @@ func main() {
 			glog.Error("resyncIndex ", err)
 			return
 		}
+		if err = mempool.Resync(nil); err != nil {
+			glog.Error("resyncIndex ", err)
+			return
+		}
 	}
 
 	if txCache, err = db.NewTxCache(index, chain); err != nil {
@@ -204,8 +208,6 @@ func main() {
 		// start the synchronization loops after the server interfaces are started
 		go syncIndexLoop()
 		go syncMempoolLoop()
-		// sync mempool immediately
-		chanSyncMempool <- struct{}{}
 	}
 
 	var mq *bchain.MQ
