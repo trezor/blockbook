@@ -15,13 +15,14 @@ import (
 // GetChainParams contains network parameters for the main Bitcoin network,
 // the regression test Bitcoin network, the test Bitcoin network and
 // the simulation test Bitcoin network, in this order
-func GetChainParams() []*chaincfg.Params {
-	return []*chaincfg.Params{
-		&chaincfg.MainNetParams,
-		&chaincfg.RegressionNetParams,
-		&chaincfg.TestNet3Params,
-		&chaincfg.SimNetParams,
+func GetChainParams(chain string) *chaincfg.Params {
+	switch chain {
+	case "test":
+		return &chaincfg.TestNet3Params
+	case "regtest":
+		return &chaincfg.RegressionNetParams
 	}
+	return &chaincfg.MainNetParams
 }
 
 type BitcoinBlockParser struct {
@@ -29,8 +30,8 @@ type BitcoinBlockParser struct {
 }
 
 // AddressToOutputScript converts bitcoin address to ScriptPubKey
-func AddressToOutputScript(address string) ([]byte, error) {
-	da, err := btcutil.DecodeAddress(address, GetChainParams()[0])
+func (p *BitcoinBlockParser) AddressToOutputScript(address string) ([]byte, error) {
+	da, err := btcutil.DecodeAddress(address, p.Params)
 	if err != nil {
 		return nil, err
 	}
@@ -42,8 +43,8 @@ func AddressToOutputScript(address string) ([]byte, error) {
 }
 
 // OutputScriptToAddresses converts ScriptPubKey to bitcoin addresses
-func OutputScriptToAddresses(script []byte) ([]string, error) {
-	_, addresses, _, err := txscript.ExtractPkScriptAddrs(script, GetChainParams()[0])
+func (p *BitcoinBlockParser) OutputScriptToAddresses(script []byte) ([]string, error) {
+	_, addresses, _, err := txscript.ExtractPkScriptAddrs(script, p.Params)
 	if err != nil {
 		return nil, err
 	}
@@ -55,18 +56,18 @@ func OutputScriptToAddresses(script []byte) ([]string, error) {
 }
 
 // ParseTx parses byte array containing transaction and returns Tx struct
-func ParseTx(b []byte) (*Tx, error) {
+func (p *BitcoinBlockParser) ParseTx(b []byte) (*Tx, error) {
 	t := wire.MsgTx{}
 	r := bytes.NewReader(b)
 	if err := t.Deserialize(r); err != nil {
 		return nil, err
 	}
-	tx := txFromMsgTx(&t, true)
+	tx := p.txFromMsgTx(&t, true)
 	tx.Hex = hex.EncodeToString(b)
 	return &tx, nil
 }
 
-func txFromMsgTx(t *wire.MsgTx, parseAddresses bool) Tx {
+func (p *BitcoinBlockParser) txFromMsgTx(t *wire.MsgTx, parseAddresses bool) Tx {
 	vin := make([]Vin, len(t.TxIn))
 	for i, in := range t.TxIn {
 		if blockchain.IsCoinBaseTx(t) {
@@ -91,7 +92,7 @@ func txFromMsgTx(t *wire.MsgTx, parseAddresses bool) Tx {
 	for i, out := range t.TxOut {
 		addrs := []string{}
 		if parseAddresses {
-			addrs, _ = OutputScriptToAddresses(out.PkScript)
+			addrs, _ = p.OutputScriptToAddresses(out.PkScript)
 		}
 		s := ScriptPubKey{
 			Hex:       hex.EncodeToString(out.PkScript),
@@ -130,7 +131,7 @@ func (p *BitcoinBlockParser) ParseBlock(b []byte) (*Block, error) {
 
 	txs := make([]Tx, len(w.Transactions))
 	for ti, t := range w.Transactions {
-		txs[ti] = txFromMsgTx(t, false)
+		txs[ti] = p.txFromMsgTx(t, false)
 	}
 
 	return &Block{Txs: txs}, nil

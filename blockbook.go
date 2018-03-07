@@ -102,22 +102,14 @@ func main() {
 		return
 	}
 
-	chain = bchain.NewBitcoinRPC(
-		*rpcURL,
-		*rpcUser,
-		*rpcPass,
-		time.Duration(*rpcTimeout)*time.Second)
-
-	if *parse {
-		chain.Parser = &bchain.BitcoinBlockParser{
-			Params: bchain.GetChainParams()[0],
-		}
+	var err error
+	if chain, err = bchain.NewBitcoinRPC(*rpcURL, *rpcUser, *rpcPass, time.Duration(*rpcTimeout)*time.Second, *parse); err != nil {
+		glog.Fatal("NewBitcoinRPC ", err)
 	}
 
 	mempool = bchain.NewMempool(chain)
 
-	var err error
-	index, err = db.NewRocksDB(*dbPath)
+	index, err = db.NewRocksDB(*dbPath, chain.Parser)
 	if err != nil {
 		glog.Fatalf("NewRocksDB %v", err)
 	}
@@ -164,7 +156,7 @@ func main() {
 
 	var httpServer *server.HTTPServer
 	if *httpServerBinding != "" {
-		httpServer, err = server.NewHTTPServer(*httpServerBinding, *certFiles, index, mempool)
+		httpServer, err = server.NewHTTPServer(*httpServerBinding, *certFiles, index, mempool, chain, txCache)
 		if err != nil {
 			glog.Error("https: ", err)
 			return
@@ -232,7 +224,7 @@ func main() {
 		address := *queryAddress
 
 		if address != "" {
-			script, err := bchain.AddressToOutputScript(address)
+			script, err := chain.Parser.AddressToOutputScript(address)
 			if err != nil {
 				glog.Error("GetTransactions ", err)
 				return

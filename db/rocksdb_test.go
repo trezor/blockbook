@@ -120,6 +120,7 @@ func Test_packTx(t *testing.T) {
 func Test_unpackTx(t *testing.T) {
 	type args struct {
 		packedTx string
+		parser   *bchain.BitcoinBlockParser
 	}
 	tests := []struct {
 		name    string
@@ -129,16 +130,21 @@ func Test_unpackTx(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name:    "btc-1",
-			args:    args{packedTx: testTxPacked1},
+			name: "btc-1",
+			args: args{
+				packedTx: testTxPacked1,
+				parser:   &bchain.BitcoinBlockParser{Params: bchain.GetChainParams("main")},
+			},
 			want:    &testTx1,
 			want1:   123456,
 			wantErr: false,
 		},
-		// this test fails now, needs testnet chaincfg.TestNet3Params
 		{
-			name:    "testnet-1",
-			args:    args{packedTx: testTxPacked2},
+			name: "testnet-1",
+			args: args{
+				packedTx: testTxPacked2,
+				parser:   &bchain.BitcoinBlockParser{Params: bchain.GetChainParams("test")},
+			},
 			want:    &testTx2,
 			want1:   510234,
 			wantErr: false,
@@ -147,7 +153,7 @@ func Test_unpackTx(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			b, _ := hex.DecodeString(tt.args.packedTx)
-			got, got1, err := unpackTx(b)
+			got, got1, err := unpackTx(b, tt.args.parser)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("unpackTx() error = %v, wantErr %v", err, tt.wantErr)
 				return

@@ -241,7 +241,7 @@ func (s *SocketIoServer) getAddressTxids(addr []string, rr *reqRange) (res resul
 	txids := make([]string, 0)
 	lower, higher := uint32(rr.To), uint32(rr.Start)
 	for _, address := range addr {
-		script, err := bchain.AddressToOutputScript(address)
+		script, err := s.chain.Parser.AddressToOutputScript(address)
 		if err != nil {
 			return res, err
 		}
@@ -558,19 +558,19 @@ func (s *SocketIoServer) estimateSmartFee(blocks int, conservative bool) (res re
 
 type resultGetInfo struct {
 	Result struct {
-		Version         int     `json:"version"`
-		ProtocolVersion int     `json:"protocolVersion"`
+		Version         int     `json:"version,omitempty"`
+		ProtocolVersion int     `json:"protocolVersion,omitempty"`
 		Blocks          int     `json:"blocks"`
-		TimeOffset      int     `json:"timeOffset"`
-		Connections     int     `json:"connections"`
-		Proxy           string  `json:"proxy"`
-		Difficulty      float64 `json:"difficulty"`
+		TimeOffset      int     `json:"timeOffset,omitempty"`
+		Connections     int     `json:"connections,omitempty"`
+		Proxy           string  `json:"proxy,omitempty"`
+		Difficulty      float64 `json:"difficulty,omitempty"`
 		Testnet         bool    `json:"testnet"`
-		RelayFee        float64 `json:"relayFee"`
-		Errors          string  `json:"errors"`
-		Network         string  `json:"network"`
-		Subversion      string  `json:"subversion"`
-		LocalServices   string  `json:"localServices"`
+		RelayFee        float64 `json:"relayFee,omitempty"`
+		Errors          string  `json:"errors,omitempty"`
+		Network         string  `json:"network,omitempty"`
+		Subversion      string  `json:"subversion,omitempty"`
+		LocalServices   string  `json:"localServices,omitempty"`
 	} `json:"result"`
 }
 

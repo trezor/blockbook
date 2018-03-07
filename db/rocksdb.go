@@ -29,11 +29,12 @@ func RepairRocksDB(name string) error {
 
 // RocksDB handle
 type RocksDB struct {
-	path string
-	db   *gorocksdb.DB
-	wo   *gorocksdb.WriteOptions
-	ro   *gorocksdb.ReadOptions
-	cfh  []*gorocksdb.ColumnFamilyHandle
+	path        string
+	db          *gorocksdb.DB
+	wo          *gorocksdb.WriteOptions
+	ro          *gorocksdb.ReadOptions
+	cfh         []*gorocksdb.ColumnFamilyHandle
+	chainParser *bchain.BitcoinBlockParser
 }
 
 const (
@@ -93,13 +94,13 @@ func openDB(path string) (*gorocksdb.DB, []*gorocksdb.ColumnFamilyHandle, error)
 
 // NewRocksDB opens an internal handle to RocksDB environment.  Close
 // needs to be called to release it.
-func NewRocksDB(path string) (d *RocksDB, err error) {
+func NewRocksDB(path string, parser *bchain.BitcoinBlockParser) (d *RocksDB, err error) {
 	glog.Infof("rocksdb: open %s", path)
 	db, cfh, err := openDB(path)
 	wo := gorocksdb.NewDefaultWriteOptions()
 	ro := gorocksdb.NewDefaultReadOptions()
 	ro.SetFillCache(false)
-	return &RocksDB{path, db, wo, ro, cfh}, nil
+	return &RocksDB{path, db, wo, ro, cfh, parser}, nil
 }
 
 func (d *RocksDB) closeDB() error {
@@ -541,7 +542,7 @@ func (d *RocksDB) GetTx(txid string) (*bchain.Tx, uint32, error) {
 	defer val.Free()
 	data := val.Data()
 	if len(data) > 4 {
-		return unpackTx(data)
+		return unpackTx(data, d.chainParser)
 	}
 	return nil, 0, nil
 }
@@ -649,10 +650,10 @@ func packTx(tx *bchain.Tx, height uint32, blockTime int64) ([]byte, error) {
 	return buf, err
 }
 
-func unpackTx(buf []byte) (*bchain.Tx, uint32, error) {
+func unpackTx(buf []byte, parser *bchain.BitcoinBlockParser) (*bchain.Tx, uint32, error) {
 	height := unpackUint(buf)
 	bt, l := unpackVarint64(buf[4:])
-	tx, err := bchain.ParseTx(buf[4+l:])
+	tx, err := parser.ParseTx(buf[4+l:])
 	if err != nil {
 		return nil, 0, err
 	}

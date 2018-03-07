@@ -11,6 +11,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/btcsuite/btcd/wire"
+
 	"github.com/golang/glog"
 	"github.com/juju/errors"
 )
@@ -58,6 +60,22 @@ type cmdGetBlockCount struct {
 type resGetBlockCount struct {
 	Error  *RPCError `json:"error"`
 	Result uint32    `json:"result"`
+}
+
+// getblockchaininfo
+
+type cmdGetBlockChainInfo struct {
+	Method string `json:"method"`
+}
+
+type resGetBlockChainInfo struct {
+	Error  *RPCError `json:"error"`
+	Result struct {
+		Chain         string `json:"chain"`
+		Blocks        int    `json:"blocks"`
+		Headers       int    `json:"headers"`
+		Bestblockhash string `json:"bestblockhash"`
+	} `json:"result"`
 }
 
 // getrawmempool
@@ -166,32 +184,50 @@ type resSendRawTransaction struct {
 	Result string    `json:"result"`
 }
 
-type BlockParser interface {
-	ParseBlock(b []byte) (*Block, error)
-}
-
 // BitcoinRPC is an interface to JSON-RPC bitcoind service.
 type BitcoinRPC struct {
 	client   http.Client
 	URL      string
 	User     string
 	Password string
-	Parser   BlockParser
+	Parser   *BitcoinBlockParser
+	Testnet  bool
+	Network  string
 }
 
 // NewBitcoinRPC returns new BitcoinRPC instance.
-func NewBitcoinRPC(url string, user string, password string, timeout time.Duration) *BitcoinRPC {
+func NewBitcoinRPC(url string, user string, password string, timeout time.Duration, parse bool) (*BitcoinRPC, error) {
 	transport := &http.Transport{
 		Dial:                (&net.Dialer{KeepAlive: 600 * time.Second}).Dial,
 		MaxIdleConns:        100,
 		MaxIdleConnsPerHost: 100, // necessary to not to deplete ports
 	}
-	return &BitcoinRPC{
+	s := &BitcoinRPC{
 		client:   http.Client{Timeout: timeout, Transport: transport},
 		URL:      url,
 		User:     user,
 		Password: password,
 	}
+	chain, err := s.GetBlockChainInfo()
+	if err != nil {
+		return nil, err
+	}
+
+	// always create parser
+	s.Parser = &BitcoinBlockParser{
+		Params: GetChainParams(chain),
+	}
+
+	// parameters for getInfo request
+	if s.Parser.Params.Net == wire.MainNet {
+		s.Testnet = false
+		s.Network = "livenet"
+	} else {
+		s.Testnet = true
+		s.Network = "testnet"
+	}
+	glog.Info("rpc: block chain ", s.Parser.Params.Name)
+	return s, nil
 }
 
 // GetBestBlockHash returns hash of the tip of the best-block-chain.
@@ -227,6 +263,23 @@ func (b *BitcoinRPC) GetBestBlockHeight() (uint32, error) {
 		return 0, res.Error
 	}
 	return res.Result, nil
+}
+
+// GetBlockChainInfo returns the name of the block chain: main/test/regtest.
+func (b *BitcoinRPC) GetBlockChainInfo() (string, error) {
+	glog.V(1).Info("rpc: getblockchaininfo")
+
+	res := resGetBlockChainInfo{}
+	req := cmdGetBlockChainInfo{Method: "getblockchaininfo"}
+	err := b.call(&req, &res)
+
+	if err != nil {
+		return "", err
+	}
+	if res.Error != nil {
+		return "", res.Error
+	}
+	return res.Result.Chain, nil
 }
 
 // GetBlockHash returns hash of block in best-block-chain at given height.

@@ -21,11 +21,13 @@ type HTTPServer struct {
 	https     *http.Server
 	certFiles string
 	db        *db.RocksDB
+	txCache   *db.TxCache
 	mempool   *bchain.Mempool
+	chain     *bchain.BitcoinRPC
 }
 
 // NewHTTPServer creates new REST interface to blockbook and returns its handle
-func NewHTTPServer(httpServerBinding string, certFiles string, db *db.RocksDB, mempool *bchain.Mempool) (*HTTPServer, error) {
+func NewHTTPServer(httpServerBinding string, certFiles string, db *db.RocksDB, mempool *bchain.Mempool, chain *bchain.BitcoinRPC, txCache *db.TxCache) (*HTTPServer, error) {
 	https := &http.Server{
 		Addr: httpServerBinding,
 	}
@@ -33,7 +35,9 @@ func NewHTTPServer(httpServerBinding string, certFiles string, db *db.RocksDB, m
 		https:     https,
 		certFiles: certFiles,
 		db:        db,
+		txCache:   txCache,
 		mempool:   mempool,
+		chain:     chain,
 	}
 
 	r := mux.NewRouter()
@@ -129,14 +133,14 @@ func (s *HTTPServer) blockHash(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func getAddress(r *http.Request) (address string, script []byte, err error) {
+func (s *HTTPServer) getAddress(r *http.Request) (address string, script []byte, err error) {
 	address = mux.Vars(r)["address"]
-	script, err = bchain.AddressToOutputScript(address)
+	script, err = s.chain.Parser.AddressToOutputScript(address)
 	return
 }
 
-func getAddressAndHeightRange(r *http.Request) (address string, script []byte, lower, higher uint32, err error) {
-	address, script, err = getAddress(r)
+func (s *HTTPServer) getAddressAndHeightRange(r *http.Request) (address string, script []byte, lower, higher uint32, err error) {
+	address, script, err = s.getAddress(r)
 	if err != nil {
 		return
 	}
@@ -156,7 +160,7 @@ type transactionList struct {
 }
 
 func (s *HTTPServer) unconfirmedTransactions(w http.ResponseWriter, r *http.Request) {
-	address, script, err := getAddress(r)
+	address, script, err := s.getAddress(r)
 	if err != nil {
 		respondError(w, err, fmt.Sprint("unconfirmedTransactions for address", address))
 	}
@@ -169,7 +173,7 @@ func (s *HTTPServer) unconfirmedTransactions(w http.ResponseWriter, r *http.Requ
 }
 
 func (s *HTTPServer) confirmedTransactions(w http.ResponseWriter, r *http.Request) {
-	address, script, lower, higher, err := getAddressAndHeightRange(r)
+	address, script, lower, higher, err := s.getAddressAndHeightRange(r)
 	if err != nil {
 		respondError(w, err, fmt.Sprint("confirmedTransactions for address", address))
 	}
@@ -185,7 +189,7 @@ func (s *HTTPServer) confirmedTransactions(w http.ResponseWriter, r *http.Reques
 }
 
 func (s *HTTPServer) transactions(w http.ResponseWriter, r *http.Request) {
-	address, script, lower, higher, err := getAddressAndHeightRange(r)
+	address, script, lower, higher, err := s.getAddressAndHeightRange(r)
 	if err != nil {
 		respondError(w, err, fmt.Sprint("transactions for address", address))
 	}

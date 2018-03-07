@@ -41,9 +41,11 @@ func TestAddressToOutputScript(t *testing.T) {
 			wantErr: false,
 		},
 	}
+	parser := &BitcoinBlockParser{Params: GetChainParams("main")}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := AddressToOutputScript(tt.args.address)
+			got, err := parser.AddressToOutputScript(tt.args.address)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("AddressToOutputScript() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -91,10 +93,11 @@ func TestOutputScriptToAddresses(t *testing.T) {
 			wantErr: false,
 		},
 	}
+	parser := &BitcoinBlockParser{Params: GetChainParams("main")}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			b, _ := hex.DecodeString(tt.args.script)
-			got, err := OutputScriptToAddresses(b)
+			got, err := parser.OutputScriptToAddresses(b)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("OutputScriptToAddresses() error = %v, wantErr %v", err, tt.wantErr)
 				return
