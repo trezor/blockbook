@@ -575,12 +575,13 @@ type resultGetInfo struct {
 }
 
 func (s *SocketIoServer) getInfo() (res resultGetInfo, err error) {
-	// trezor is interested only in best block height
 	height, _, err := s.db.GetBestBlock()
 	if err != nil {
 		return
 	}
 	res.Result.Blocks = int(height)
+	res.Result.Testnet = s.chain.Testnet
+	res.Result.Network = s.chain.Network
 	return
 }
 
