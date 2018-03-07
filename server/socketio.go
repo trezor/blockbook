@@ -160,16 +160,23 @@ var onMessageHandlers = map[string]func(*SocketIoServer, json.RawMessage) (inter
 		return s.getInfo()
 	},
 	"\"getDetailedTransaction\"": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
-		txid, err := unmarshalGetDetailedTransaction(params)
+		txid, err := unmarshalStringParameter(params)
 		if err == nil {
 			rv, err = s.getDetailedTransaction(txid)
 		}
 		return
 	},
 	"\"sendTransaction\"": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
-		tx, err := unmarshalSendTransaction(params)
+		tx, err := unmarshalStringParameter(params)
 		if err == nil {
 			rv, err = s.sendTransaction(tx)
+		}
+		return
+	},
+	"\"getMempoolEntry\"": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
+		txid, err := unmarshalStringParameter(params)
+		if err == nil {
+			rv, err = s.getMempoolEntry(txid)
 		}
 		return
 	},
@@ -585,12 +592,12 @@ func (s *SocketIoServer) getInfo() (res resultGetInfo, err error) {
 	return
 }
 
-func unmarshalGetDetailedTransaction(params []byte) (hash string, err error) {
+func unmarshalStringParameter(params []byte) (s string, err error) {
 	p, err := unmarshalArray(params, 1)
 	if err != nil {
 		return
 	}
-	hash, ok := p[0].(string)
+	s, ok := p[0].(string)
 	if ok {
 		return
 	}
@@ -655,19 +662,6 @@ func (s *SocketIoServer) getDetailedTransaction(txid string) (res resultGetDetai
 	return
 }
 
-func unmarshalSendTransaction(params []byte) (tx string, err error) {
-	p, err := unmarshalArray(params, 1)
-	if err != nil {
-		return
-	}
-	tx, ok := p[0].(string)
-	if ok {
-		return
-	}
-	err = errors.New("incorrect parameter")
-	return
-}
-
 type resultSendTransaction struct {
 	Result string `json:"result"`
 }
@@ -678,6 +672,19 @@ func (s *SocketIoServer) sendTransaction(tx string) (res resultSendTransaction, 
 		return res, err
 	}
 	res.Result = txid
+	return
+}
+
+type resultGetMempoolEntry struct {
+	Result *bchain.MempoolEntry `json:"result"`
+}
+
+func (s *SocketIoServer) getMempoolEntry(txid string) (res resultGetMempoolEntry, err error) {
+	entry, err := s.chain.GetMempoolEntry(txid)
+	if err != nil {
+		return res, err
+	}
+	res.Result = entry
 	return
 }
 

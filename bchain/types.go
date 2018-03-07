@@ -59,6 +59,21 @@ type BlockHeader struct {
 	Confirmations int    `json:"confirmations"`
 }
 
+type MempoolEntry struct {
+	Size            uint32   `json:"size"`
+	Fee             float64  `json:"fee"`
+	ModifiedFee     float64  `json:"modifiedfee"`
+	Time            float64  `json:"time"`
+	Height          uint32   `json:"height"`
+	DescendantCount uint32   `json:"descendantcount"`
+	DescendantSize  uint32   `json:"descendantsize"`
+	DescendantFees  uint32   `json:"descendantfees"`
+	AncestorCount   uint32   `json:"ancestorcount"`
+	AncestorSize    uint32   `json:"ancestorsize"`
+	AncestorFees    uint32   `json:"ancestorfees"`
+	Depends         []string `json:"depends"`
+}
+
 type RPCError struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
@@ -83,6 +98,7 @@ type BlockChain interface {
 	ResyncMempool(onNewTxAddr func(txid string, addr string)) error
 	GetMempoolTransactions(outputScript []byte) ([]string, error)
 	GetMempoolSpentOutput(outputTxid string, vout uint32) string
+	GetMempoolEntry(txid string) (*MempoolEntry, error)
 	// parser
 	GetChainParser() BlockChainParser
 }
