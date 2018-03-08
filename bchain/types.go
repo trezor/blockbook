@@ -58,3 +58,40 @@ type BlockHeader struct {
 	Height        uint32 `json:"height"`
 	Confirmations int    `json:"confirmations"`
 }
+
+type RPCError struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+}
+
+type BlockChain interface {
+	// chain info
+	IsTestnet() bool
+	GetNetworkName() string
+	// requests
+	GetBestBlockHash() (string, error)
+	GetBestBlockHeight() (uint32, error)
+	GetBlockHash(height uint32) (string, error)
+	GetBlockHeader(hash string) (*BlockHeader, error)
+	GetBlock(hash string) (*Block, error)
+	GetBlockWithoutHeader(hash string, height uint32) (*Block, error)
+	GetMempool() ([]string, error)
+	GetTransaction(txid string) (*Tx, error)
+	EstimateSmartFee(blocks int, conservative bool) (float64, error)
+	SendRawTransaction(tx string) (string, error)
+	// mempool
+	ResyncMempool(onNewTxAddr func(txid string, addr string)) error
+	GetMempoolTransactions(outputScript []byte) ([]string, error)
+	GetMempoolSpentOutput(outputTxid string, vout uint32) string
+	// parser
+	GetChainParser() BlockChainParser
+}
+
+type BlockChainParser interface {
+	AddressToOutputScript(address string) ([]byte, error)
+	OutputScriptToAddresses(script []byte) ([]string, error)
+	ParseTx(b []byte) (*Tx, error)
+	ParseBlock(b []byte) (*Block, error)
+	PackTx(tx *Tx, height uint32, blockTime int64) ([]byte, error)
+	UnpackTx(buf []byte) (*Tx, uint32, error)
+}

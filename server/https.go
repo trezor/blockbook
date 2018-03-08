@@ -18,26 +18,26 @@ import (
 
 // HTTPServer is handle to HttpServer
 type HTTPServer struct {
-	https     *http.Server
-	certFiles string
-	db        *db.RocksDB
-	txCache   *db.TxCache
-	mempool   *bchain.Mempool
-	chain     *bchain.BitcoinRPC
+	https       *http.Server
+	certFiles   string
+	db          *db.RocksDB
+	txCache     *db.TxCache
+	chain       bchain.BlockChain
+	chainParser bchain.BlockChainParser
 }
 
 // NewHTTPServer creates new REST interface to blockbook and returns its handle
-func NewHTTPServer(httpServerBinding string, certFiles string, db *db.RocksDB, mempool *bchain.Mempool, chain *bchain.BitcoinRPC, txCache *db.TxCache) (*HTTPServer, error) {
+func NewHTTPServer(httpServerBinding string, certFiles string, db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxCache) (*HTTPServer, error) {
 	https := &http.Server{
 		Addr: httpServerBinding,
 	}
 	s := &HTTPServer{
-		https:     https,
-		certFiles: certFiles,
-		db:        db,
-		txCache:   txCache,
-		mempool:   mempool,
-		chain:     chain,
+		https:       https,
+		certFiles:   certFiles,
+		db:          db,
+		txCache:     txCache,
+		chain:       chain,
+		chainParser: chain.GetChainParser(),
 	}
 
 	r := mux.NewRouter()
@@ -135,7 +135,7 @@ func (s *HTTPServer) blockHash(w http.ResponseWriter, r *http.Request) {
 
 func (s *HTTPServer) getAddress(r *http.Request) (address string, script []byte, err error) {
 	address = mux.Vars(r)["address"]
-	script, err = s.chain.Parser.AddressToOutputScript(address)
+	script, err = s.chainParser.AddressToOutputScript(address)
 	return
 }
 
@@ -164,7 +164,7 @@ func (s *HTTPServer) unconfirmedTransactions(w http.ResponseWriter, r *http.Requ
 	if err != nil {
 		respondError(w, err, fmt.Sprint("unconfirmedTransactions for address", address))
 	}
-	txs, err := s.mempool.GetTransactions(script)
+	txs, err := s.chain.GetMempoolTransactions(script)
 	if err != nil {
 		respondError(w, err, fmt.Sprint("unconfirmedTransactions for address", address))
 	}
@@ -197,7 +197,7 @@ func (s *HTTPServer) transactions(w http.ResponseWriter, r *http.Request) {
 	err = s.db.GetTransactions(script, lower, higher, func(txid string, vout uint32, isOutput bool) error {
 		txList.Txid = append(txList.Txid, txid)
 		if isOutput {
-			input := s.mempool.GetInput(txid, vout)
+			input := s.chain.GetMempoolSpentOutput(txid, vout)
 			if input != "" {
 				txList.Txid = append(txList.Txid, txid)
 			}
@@ -207,7 +207,7 @@ func (s *HTTPServer) transactions(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		respondError(w, err, fmt.Sprint("transactions for address", address))
 	}
-	txs, err := s.mempool.GetTransactions(script)
+	txs, err := s.chain.GetMempoolTransactions(script)
 	if err != nil {
 		respondError(w, err, fmt.Sprint("transactions for address", address))
 	}

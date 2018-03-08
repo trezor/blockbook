@@ -9,11 +9,11 @@ import (
 // TxCache is handle to TxCacheServer
 type TxCache struct {
 	db    *RocksDB
-	chain *bchain.BitcoinRPC
+	chain bchain.BlockChain
 }
 
 // NewTxCache creates new TxCache interface and returns its handle
-func NewTxCache(db *RocksDB, chain *bchain.BitcoinRPC) (*TxCache, error) {
+func NewTxCache(db *RocksDB, chain bchain.BlockChain) (*TxCache, error) {
 	return &TxCache{
 		db:    db,
 		chain: chain,

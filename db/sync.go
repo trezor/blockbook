@@ -14,7 +14,7 @@ import (
 // SyncWorker is handle to SyncWorker
 type SyncWorker struct {
 	db                     *RocksDB
-	chain                  *bchain.BitcoinRPC
+	chain                  bchain.BlockChain
 	syncWorkers, syncChunk int
 	dryRun                 bool
 	startHeight            uint32
@@ -22,7 +22,7 @@ type SyncWorker struct {
 }
 
 // NewSyncWorker creates new SyncWorker and returns its handle
-func NewSyncWorker(db *RocksDB, chain *bchain.BitcoinRPC, syncWorkers, syncChunk int, minStartHeight int, dryRun bool, chanOsSignal chan os.Signal) (*SyncWorker, error) {
+func NewSyncWorker(db *RocksDB, chain bchain.BlockChain, syncWorkers, syncChunk int, minStartHeight int, dryRun bool, chanOsSignal chan os.Signal) (*SyncWorker, error) {
 	if minStartHeight < 0 {
 		minStartHeight = 0
 	}

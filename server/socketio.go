@@ -24,13 +24,13 @@ type SocketIoServer struct {
 	https       *http.Server
 	db          *db.RocksDB
 	txCache     *db.TxCache
-	mempool     *bchain.Mempool
-	chain       *bchain.BitcoinRPC
+	chain       bchain.BlockChain
+	chainParser bchain.BlockChainParser
 	explorerURL string
 }
 
 // NewSocketIoServer creates new SocketIo interface to blockbook and returns its handle
-func NewSocketIoServer(binding string, certFiles string, db *db.RocksDB, mempool *bchain.Mempool, chain *bchain.BitcoinRPC, txCache *db.TxCache, explorerURL string) (*SocketIoServer, error) {
+func NewSocketIoServer(binding string, certFiles string, db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxCache, explorerURL string) (*SocketIoServer, error) {
 	server := gosocketio.NewServer(transport.GetDefaultWebsocketTransport())
 
 	server.On(gosocketio.OnConnection, func(c *gosocketio.Channel) {
@@ -64,8 +64,8 @@ func NewSocketIoServer(binding string, certFiles string, db *db.RocksDB, mempool
 		server:      server,
 		db:          db,
 		txCache:     txCache,
-		mempool:     mempool,
 		chain:       chain,
+		chainParser: chain.GetChainParser(),
 		explorerURL: explorerURL,
 	}
 
@@ -241,7 +241,7 @@ func (s *SocketIoServer) getAddressTxids(addr []string, rr *reqRange) (res resul
 	txids := make([]string, 0)
 	lower, higher := uint32(rr.To), uint32(rr.Start)
 	for _, address := range addr {
-		script, err := s.chain.Parser.AddressToOutputScript(address)
+		script, err := s.chainParser.AddressToOutputScript(address)
 		if err != nil {
 			return res, err
 		}
@@ -249,7 +249,7 @@ func (s *SocketIoServer) getAddressTxids(addr []string, rr *reqRange) (res resul
 			err = s.db.GetTransactions(script, lower, higher, func(txid string, vout uint32, isOutput bool) error {
 				txids = append(txids, txid)
 				if isOutput && rr.QueryMempol {
-					input := s.mempool.GetInput(txid, vout)
+					input := s.chain.GetMempoolSpentOutput(txid, vout)
 					if input != "" {
 						txids = append(txids, txid)
 					}
@@ -261,7 +261,7 @@ func (s *SocketIoServer) getAddressTxids(addr []string, rr *reqRange) (res resul
 			}
 		}
 		if rr.QueryMempoolOnly || rr.QueryMempol {
-			mtxids, err := s.mempool.GetTransactions(script)
+			mtxids, err := s.chain.GetMempoolTransactions(script)
 			if err != nil {
 				return res, err
 			}
@@ -580,8 +580,8 @@ func (s *SocketIoServer) getInfo() (res resultGetInfo, err error) {
 		return
 	}
 	res.Result.Blocks = int(height)
-	res.Result.Testnet = s.chain.Testnet
-	res.Result.Network = s.chain.Network
+	res.Result.Testnet = s.chain.IsTestnet()
+	res.Result.Network = s.chain.GetNetworkName()
 	return
 }
 

@@ -70,8 +70,7 @@ var (
 	chanSyncMempool         = make(chan struct{})
 	chanSyncIndexDone       = make(chan struct{})
 	chanSyncMempoolDone     = make(chan struct{})
-	chain                   *bchain.BitcoinRPC
-	mempool                 *bchain.Mempool
+	chain                   bchain.BlockChain
 	index                   *db.RocksDB
 	txCache                 *db.TxCache
 	syncWorker              *db.SyncWorker
@@ -107,9 +106,7 @@ func main() {
 		glog.Fatal("NewBitcoinRPC ", err)
 	}
 
-	mempool = bchain.NewMempool(chain)
-
-	index, err = db.NewRocksDB(*dbPath, chain.Parser)
+	index, err = db.NewRocksDB(*dbPath, chain.GetChainParser())
 	if err != nil {
 		glog.Fatalf("NewRocksDB %v", err)
 	}
@@ -143,8 +140,8 @@ func main() {
 			glog.Error("resyncIndex ", err)
 			return
 		}
-		if err = mempool.Resync(nil); err != nil {
-			glog.Error("resyncIndex ", err)
+		if err = chain.ResyncMempool(nil); err != nil {
+			glog.Error("resyncMempool ", err)
 			return
 		}
 	}
@@ -156,7 +153,7 @@ func main() {
 
 	var httpServer *server.HTTPServer
 	if *httpServerBinding != "" {
-		httpServer, err = server.NewHTTPServer(*httpServerBinding, *certFiles, index, mempool, chain, txCache)
+		httpServer, err = server.NewHTTPServer(*httpServerBinding, *certFiles, index, chain, txCache)
 		if err != nil {
 			glog.Error("https: ", err)
 			return
@@ -176,7 +173,7 @@ func main() {
 
 	var socketIoServer *server.SocketIoServer
 	if *socketIoBinding != "" {
-		socketIoServer, err = server.NewSocketIoServer(*socketIoBinding, *certFiles, index, mempool, chain, txCache, *explorerURL)
+		socketIoServer, err = server.NewSocketIoServer(*socketIoBinding, *certFiles, index, chain, txCache, *explorerURL)
 		if err != nil {
 			glog.Error("socketio: ", err)
 			return
@@ -224,7 +221,7 @@ func main() {
 		address := *queryAddress
 
 		if address != "" {
-			script, err := chain.Parser.AddressToOutputScript(address)
+			script, err := chain.GetChainParser().AddressToOutputScript(address)
 			if err != nil {
 				glog.Error("GetTransactions ", err)
 				return
@@ -299,7 +296,7 @@ func syncMempoolLoop() {
 	glog.Info("syncMempoolLoop starting")
 	// resync mempool about every minute if there are no chanSyncMempool requests, with debounce 1 second
 	tickAndDebounce(resyncMempoolPeriodMs*time.Millisecond, debounceResyncMempoolMs*time.Millisecond, chanSyncMempool, func() {
-		if err := mempool.Resync(onNewTxAddr); err != nil {
+		if err := chain.ResyncMempool(onNewTxAddr); err != nil {
 			glog.Error("syncMempoolLoop ", errors.ErrorStack(err))
 		}
 	})
@@ -313,6 +310,7 @@ func onNewTxAddr(txid string, addr string) {
 }
 
 func mqHandler(m *bchain.MQMessage) {
+	// TODO - is coin specific, item for abstraction
 	body := hex.EncodeToString(m.Body)
 	glog.V(1).Infof("MQ: %s-%d  %s", m.Topic, m.Sequence, body)
 	if m.Topic == "hashblock" {

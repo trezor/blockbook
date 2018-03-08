@@ -34,7 +34,7 @@ type RocksDB struct {
 	wo          *gorocksdb.WriteOptions
 	ro          *gorocksdb.ReadOptions
 	cfh         []*gorocksdb.ColumnFamilyHandle
-	chainParser *bchain.BitcoinBlockParser
+	chainParser bchain.BlockChainParser
 }
 
 const (
@@ -94,7 +94,7 @@ func openDB(path string) (*gorocksdb.DB, []*gorocksdb.ColumnFamilyHandle, error)
 
 // NewRocksDB opens an internal handle to RocksDB environment.  Close
 // needs to be called to release it.
-func NewRocksDB(path string, parser *bchain.BitcoinBlockParser) (d *RocksDB, err error) {
+func NewRocksDB(path string, parser bchain.BlockChainParser) (d *RocksDB, err error) {
 	glog.Infof("rocksdb: open %s", path)
 	db, cfh, err := openDB(path)
 	wo := gorocksdb.NewDefaultWriteOptions()
@@ -542,7 +542,7 @@ func (d *RocksDB) GetTx(txid string) (*bchain.Tx, uint32, error) {
 	defer val.Free()
 	data := val.Data()
 	if len(data) > 4 {
-		return unpackTx(data, d.chainParser)
+		return d.chainParser.UnpackTx(data)
 	}
 	return nil, 0, nil
 }
@@ -553,7 +553,7 @@ func (d *RocksDB) PutTx(tx *bchain.Tx, height uint32, blockTime int64) error {
 	if err != nil {
 		return nil
 	}
-	buf, err := packTx(tx, height, blockTime)
+	buf, err := d.chainParser.PackTx(tx, height, blockTime)
 	if err != nil {
 		return err
 	}
@@ -571,6 +571,7 @@ func (d *RocksDB) DeleteTx(txid string) error {
 
 // Helpers
 
+// TODO - this may be coin specific, refactor
 const txIdUnpackedLen = 32
 
 var ErrInvalidAddress = errors.New("invalid address")
@@ -639,24 +640,4 @@ func packOutputScript(script string) ([]byte, error) {
 
 func unpackOutputScript(buf []byte) string {
 	return hex.EncodeToString(buf)
-}
-
-func packTx(tx *bchain.Tx, height uint32, blockTime int64) ([]byte, error) {
-	bt := packVarint64(blockTime)
-	buf := make([]byte, 4+len(bt)+len(tx.Hex)/2)
-	binary.BigEndian.PutUint32(buf[0:4], height)
-	copy(buf[4:], bt)
-	_, err := hex.Decode(buf[4+len(bt):], []byte(tx.Hex))
-	return buf, err
-}
-
-func unpackTx(buf []byte, parser *bchain.BitcoinBlockParser) (*bchain.Tx, uint32, error) {
-	height := unpackUint(buf)
-	bt, l := unpackVarint64(buf[4:])
-	tx, err := parser.ParseTx(buf[4+l:])
-	if err != nil {
-		return nil, 0, err
-	}
-	tx.Blocktime = bt
-	return tx, height, nil
 }

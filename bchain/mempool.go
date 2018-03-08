@@ -25,7 +25,7 @@ type inputOutput struct {
 
 // Mempool is mempool handle.
 type Mempool struct {
-	chain           *BitcoinRPC
+	chain           BlockChain
 	mux             sync.Mutex
 	txToInputOutput map[string]inputOutput
 	scriptToTx      map[string][]outpoint
@@ -33,7 +33,7 @@ type Mempool struct {
 }
 
 // NewMempool creates new mempool handler.
-func NewMempool(chain *BitcoinRPC) *Mempool {
+func NewMempool(chain BlockChain) *Mempool {
 	return &Mempool{chain: chain}
 }
 
@@ -54,8 +54,8 @@ func (m *Mempool) GetTransactions(outputScript []byte) ([]string, error) {
 	return txs, nil
 }
 
-// GetInput returns transaction which spends given outpoint
-func (m *Mempool) GetInput(outputTxid string, vout uint32) string {
+// GetSpentOutput returns transaction which spends given outpoint
+func (m *Mempool) GetSpentOutput(outputTxid string, vout uint32) string {
 	o := outpoint{txid: outputTxid, vout: vout}
 	return m.inputs[o]
 }
