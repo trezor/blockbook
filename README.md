@@ -203,7 +203,6 @@ The data are separated to different column families:
 - find memory leak in initial import
 - implement getmempoolentry
 - disconnect blocks - keep map of transactions in the last 100 blocks
-- support altcoins, abstraction of blockchain server/service
 - add zcash support
 - add ethereum support
 - cleanup of the socket.io - do not send unnecessary data
@@ -213,6 +212,8 @@ The data are separated to different column families:
 - protobuf websocket interface
 - xpub index
 - tests
+- fix program dependencies
+- ~~support altcoins, abstraction of blockchain server/service~~
 - ~~cache transactions in RocksDB~~
 - ~~parallel sync - rewrite - it is not possible to gracefully stop it now, can leave holes in the block~~
 - ~~mempool - return also input transactions~~
