@@ -1,5 +1,7 @@
 package bchain
 
+import "fmt"
+
 type ScriptSig struct {
 	// Asm string `json:"asm"`
 	Hex string `json:"hex"`
@@ -77,6 +79,10 @@ type MempoolEntry struct {
 type RPCError struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
+}
+
+func (e *RPCError) Error() string {
+	return fmt.Sprintf("%d: %s", e.Code, e.Message)
 }
 
 type BlockChain interface {

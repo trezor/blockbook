@@ -1,23 +1,17 @@
-package bchain
+package btc
 
 import (
+	"blockbook/bchain"
 	"bytes"
-	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
 	"time"
 
-	vlq "github.com/bsm/go-vlq"
-	"github.com/btcsuite/btcd/blockchain"
-	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/btcsuite/btcutil"
 
 	"github.com/golang/glog"
 	"github.com/juju/errors"
@@ -32,12 +26,12 @@ type BitcoinRPC struct {
 	parser      *BitcoinBlockParser
 	testnet     bool
 	network     string
-	mempool     *Mempool
+	mempool     *bchain.Mempool
 	parseBlocks bool
 }
 
 // NewBitcoinRPC returns new BitcoinRPC instance.
-func NewBitcoinRPC(url string, user string, password string, timeout time.Duration, parse bool) (BlockChain, error) {
+func NewBitcoinRPC(url string, user string, password string, timeout time.Duration, parse bool) (bchain.BlockChain, error) {
 	transport := &http.Transport{
 		Dial:                (&net.Dialer{KeepAlive: 600 * time.Second}).Dial,
 		MaxIdleConns:        100,
@@ -69,7 +63,7 @@ func NewBitcoinRPC(url string, user string, password string, timeout time.Durati
 		s.network = "testnet"
 	}
 
-	s.mempool = NewMempool(s)
+	s.mempool = bchain.NewMempool(s)
 
 	glog.Info("rpc: block chain ", s.parser.Params.Name)
 	return s, nil
@@ -83,10 +77,6 @@ func (b *BitcoinRPC) GetNetworkName() string {
 	return b.network
 }
 
-func (e *RPCError) Error() string {
-	return fmt.Sprintf("%d: %s", e.Code, e.Message)
-}
-
 // getblockhash
 
 type cmdGetBlockHash struct {
@@ -97,8 +87,8 @@ type cmdGetBlockHash struct {
 }
 
 type resGetBlockHash struct {
-	Error  *RPCError `json:"error"`
-	Result string    `json:"result"`
+	Error  *bchain.RPCError `json:"error"`
+	Result string           `json:"result"`
 }
 
 // getbestblockhash
@@ -108,8 +98,8 @@ type cmdGetBestBlockHash struct {
 }
 
 type resGetBestBlockHash struct {
-	Error  *RPCError `json:"error"`
-	Result string    `json:"result"`
+	Error  *bchain.RPCError `json:"error"`
+	Result string           `json:"result"`
 }
 
 // getblockcount
@@ -119,8 +109,8 @@ type cmdGetBlockCount struct {
 }
 
 type resGetBlockCount struct {
-	Error  *RPCError `json:"error"`
-	Result uint32    `json:"result"`
+	Error  *bchain.RPCError `json:"error"`
+	Result uint32           `json:"result"`
 }
 
 // getblockchaininfo
@@ -130,7 +120,7 @@ type cmdGetBlockChainInfo struct {
 }
 
 type resGetBlockChainInfo struct {
-	Error  *RPCError `json:"error"`
+	Error  *bchain.RPCError `json:"error"`
 	Result struct {
 		Chain         string `json:"chain"`
 		Blocks        int    `json:"blocks"`
@@ -146,8 +136,8 @@ type cmdGetMempool struct {
 }
 
 type resGetMempool struct {
-	Error  *RPCError `json:"error"`
-	Result []string  `json:"result"`
+	Error  *bchain.RPCError `json:"error"`
+	Result []string         `json:"result"`
 }
 
 // getblockheader
@@ -161,13 +151,13 @@ type cmdGetBlockHeader struct {
 }
 
 type resGetBlockHeaderRaw struct {
-	Error  *RPCError `json:"error"`
-	Result string    `json:"result"`
+	Error  *bchain.RPCError `json:"error"`
+	Result string           `json:"result"`
 }
 
 type resGetBlockHeaderVerbose struct {
-	Error  *RPCError   `json:"error"`
-	Result BlockHeader `json:"result"`
+	Error  *bchain.RPCError   `json:"error"`
+	Result bchain.BlockHeader `json:"result"`
 }
 
 // getblock
@@ -181,18 +171,18 @@ type cmdGetBlock struct {
 }
 
 type resGetBlockRaw struct {
-	Error  *RPCError `json:"error"`
-	Result string    `json:"result"`
+	Error  *bchain.RPCError `json:"error"`
+	Result string           `json:"result"`
 }
 
 type resGetBlockThin struct {
-	Error  *RPCError `json:"error"`
-	Result ThinBlock `json:"result"`
+	Error  *bchain.RPCError `json:"error"`
+	Result bchain.ThinBlock `json:"result"`
 }
 
 type resGetBlockFull struct {
-	Error  *RPCError `json:"error"`
-	Result Block     `json:"result"`
+	Error  *bchain.RPCError `json:"error"`
+	Result bchain.Block     `json:"result"`
 }
 
 // getrawtransaction
@@ -206,13 +196,13 @@ type cmdGetRawTransaction struct {
 }
 
 type resGetRawTransactionRaw struct {
-	Error  *RPCError `json:"error"`
-	Result string    `json:"result"`
+	Error  *bchain.RPCError `json:"error"`
+	Result string           `json:"result"`
 }
 
 type resGetRawTransactionVerbose struct {
-	Error  *RPCError `json:"error"`
-	Result Tx        `json:"result"`
+	Error  *bchain.RPCError `json:"error"`
+	Result bchain.Tx        `json:"result"`
 }
 
 // estimatesmartfee
@@ -226,7 +216,7 @@ type cmdEstimateSmartFee struct {
 }
 
 type resEstimateSmartFee struct {
-	Error  *RPCError `json:"error"`
+	Error  *bchain.RPCError `json:"error"`
 	Result struct {
 		Feerate float64 `json:"feerate"`
 		Blocks  int     `json:"blocks"`
@@ -241,8 +231,8 @@ type cmdSendRawTransaction struct {
 }
 
 type resSendRawTransaction struct {
-	Error  *RPCError `json:"error"`
-	Result string    `json:"result"`
+	Error  *bchain.RPCError `json:"error"`
+	Result string           `json:"result"`
 }
 
 // getmempoolentry
@@ -253,8 +243,8 @@ type cmdGetMempoolEntry struct {
 }
 
 type resGetMempoolEntry struct {
-	Error  *RPCError     `json:"error"`
-	Result *MempoolEntry `json:"result"`
+	Error  *bchain.RPCError     `json:"error"`
+	Result *bchain.MempoolEntry `json:"result"`
 }
 
 // GetBestBlockHash returns hash of the tip of the best-block-chain.
@@ -328,7 +318,7 @@ func (b *BitcoinRPC) GetBlockHash(height uint32) (string, error) {
 }
 
 // GetBlockHeader returns header of block with given hash.
-func (b *BitcoinRPC) GetBlockHeader(hash string) (*BlockHeader, error) {
+func (b *BitcoinRPC) GetBlockHeader(hash string) (*bchain.BlockHeader, error) {
 	glog.V(1).Info("rpc: getblockheader")
 
 	res := resGetBlockHeaderVerbose{}
@@ -347,7 +337,7 @@ func (b *BitcoinRPC) GetBlockHeader(hash string) (*BlockHeader, error) {
 }
 
 // GetBlock returns block with given hash.
-func (b *BitcoinRPC) GetBlock(hash string) (*Block, error) {
+func (b *BitcoinRPC) GetBlock(hash string) (*bchain.Block, error) {
 	if !b.parseBlocks {
 		return b.GetBlockFull(hash)
 	}
@@ -369,7 +359,7 @@ func (b *BitcoinRPC) GetBlock(hash string) (*Block, error) {
 
 // GetBlockWithoutHeader is an optimization - it does not call GetBlockHeader to get prev, next hashes
 // instead it sets to header only block hash and height passed in parameters
-func (b *BitcoinRPC) GetBlockWithoutHeader(hash string, height uint32) (*Block, error) {
+func (b *BitcoinRPC) GetBlockWithoutHeader(hash string, height uint32) (*bchain.Block, error) {
 	if !b.parseBlocks {
 		return b.GetBlockFull(hash)
 	}
@@ -407,7 +397,7 @@ func (b *BitcoinRPC) GetBlockRaw(hash string) ([]byte, error) {
 
 // GetBlockList returns block with given hash by downloading block
 // transactions one by one.
-func (b *BitcoinRPC) GetBlockList(hash string) (*Block, error) {
+func (b *BitcoinRPC) GetBlockList(hash string) (*bchain.Block, error) {
 	glog.V(1).Info("rpc: getblock (verbosity=1) ", hash)
 
 	res := resGetBlockThin{}
@@ -423,7 +413,7 @@ func (b *BitcoinRPC) GetBlockList(hash string) (*Block, error) {
 		return nil, errors.Annotatef(res.Error, "hash %v", hash)
 	}
 
-	txs := make([]Tx, len(res.Result.Txids))
+	txs := make([]bchain.Tx, len(res.Result.Txids))
 	for i, txid := range res.Result.Txids {
 		tx, err := b.GetTransaction(txid)
 		if err != nil {
@@ -431,7 +421,7 @@ func (b *BitcoinRPC) GetBlockList(hash string) (*Block, error) {
 		}
 		txs[i] = *tx
 	}
-	block := &Block{
+	block := &bchain.Block{
 		BlockHeader: res.Result.BlockHeader,
 		Txs:         txs,
 	}
@@ -439,7 +429,7 @@ func (b *BitcoinRPC) GetBlockList(hash string) (*Block, error) {
 }
 
 // GetBlockFull returns block with given hash.
-func (b *BitcoinRPC) GetBlockFull(hash string) (*Block, error) {
+func (b *BitcoinRPC) GetBlockFull(hash string) (*bchain.Block, error) {
 	glog.V(1).Info("rpc: getblock (verbosity=2) ", hash)
 
 	res := resGetBlockFull{}
@@ -475,7 +465,7 @@ func (b *BitcoinRPC) GetMempool() ([]string, error) {
 }
 
 // GetTransaction returns a transaction by the transaction ID.
-func (b *BitcoinRPC) GetTransaction(txid string) (*Tx, error) {
+func (b *BitcoinRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 	glog.V(1).Info("rpc: getrawtransaction ", txid)
 
 	res := resGetRawTransactionVerbose{}
@@ -550,7 +540,7 @@ func (b *BitcoinRPC) SendRawTransaction(tx string) (string, error) {
 	return res.Result, nil
 }
 
-func (b *BitcoinRPC) GetMempoolEntry(txid string) (*MempoolEntry, error) {
+func (b *BitcoinRPC) GetMempoolEntry(txid string) (*bchain.MempoolEntry, error) {
 	glog.V(1).Info("rpc: getmempoolentry")
 
 	res := resGetMempoolEntry{}
@@ -595,154 +585,6 @@ func (b *BitcoinRPC) call(req interface{}, res interface{}) error {
 }
 
 // GetChainParser returns BlockChainParser
-func (b *BitcoinRPC) GetChainParser() BlockChainParser {
+func (b *BitcoinRPC) GetChainParser() bchain.BlockChainParser {
 	return b.parser
-}
-
-// bitcoinwire parsing
-
-type BitcoinBlockParser struct {
-	Params *chaincfg.Params
-}
-
-// getChainParams contains network parameters for the main Bitcoin network,
-// the regression test Bitcoin network, the test Bitcoin network and
-// the simulation test Bitcoin network, in this order
-func GetChainParams(chain string) *chaincfg.Params {
-	switch chain {
-	case "test":
-		return &chaincfg.TestNet3Params
-	case "regtest":
-		return &chaincfg.RegressionNetParams
-	}
-	return &chaincfg.MainNetParams
-}
-
-// AddressToOutputScript converts bitcoin address to ScriptPubKey
-func (p *BitcoinBlockParser) AddressToOutputScript(address string) ([]byte, error) {
-	da, err := btcutil.DecodeAddress(address, p.Params)
-	if err != nil {
-		return nil, err
-	}
-	script, err := txscript.PayToAddrScript(da)
-	if err != nil {
-		return nil, err
-	}
-	return script, nil
-}
-
-// OutputScriptToAddresses converts ScriptPubKey to bitcoin addresses
-func (p *BitcoinBlockParser) OutputScriptToAddresses(script []byte) ([]string, error) {
-	_, addresses, _, err := txscript.ExtractPkScriptAddrs(script, p.Params)
-	if err != nil {
-		return nil, err
-	}
-	rv := make([]string, len(addresses))
-	for i, a := range addresses {
-		rv[i] = a.EncodeAddress()
-	}
-	return rv, nil
-}
-
-func (p *BitcoinBlockParser) txFromMsgTx(t *wire.MsgTx, parseAddresses bool) Tx {
-	vin := make([]Vin, len(t.TxIn))
-	for i, in := range t.TxIn {
-		if blockchain.IsCoinBaseTx(t) {
-			vin[i] = Vin{
-				Coinbase: hex.EncodeToString(in.SignatureScript),
-				Sequence: in.Sequence,
-			}
-			break
-		}
-		s := ScriptSig{
-			Hex: hex.EncodeToString(in.SignatureScript),
-			// missing: Asm,
-		}
-		vin[i] = Vin{
-			Txid:      in.PreviousOutPoint.Hash.String(),
-			Vout:      in.PreviousOutPoint.Index,
-			Sequence:  in.Sequence,
-			ScriptSig: s,
-		}
-	}
-	vout := make([]Vout, len(t.TxOut))
-	for i, out := range t.TxOut {
-		addrs := []string{}
-		if parseAddresses {
-			addrs, _ = p.OutputScriptToAddresses(out.PkScript)
-		}
-		s := ScriptPubKey{
-			Hex:       hex.EncodeToString(out.PkScript),
-			Addresses: addrs,
-			// missing: Asm,
-			// missing: Type,
-		}
-		vout[i] = Vout{
-			Value:        float64(out.Value) / 1E8,
-			N:            uint32(i),
-			ScriptPubKey: s,
-		}
-	}
-	tx := Tx{
-		Txid: t.TxHash().String(),
-		// skip: Version,
-		LockTime: t.LockTime,
-		Vin:      vin,
-		Vout:     vout,
-		// skip: BlockHash,
-		// skip: Confirmations,
-		// skip: Time,
-		// skip: Blocktime,
-	}
-	return tx
-}
-
-// ParseTx parses byte array containing transaction and returns Tx struct
-func (p *BitcoinBlockParser) ParseTx(b []byte) (*Tx, error) {
-	t := wire.MsgTx{}
-	r := bytes.NewReader(b)
-	if err := t.Deserialize(r); err != nil {
-		return nil, err
-	}
-	tx := p.txFromMsgTx(&t, true)
-	tx.Hex = hex.EncodeToString(b)
-	return &tx, nil
-}
-
-// ParseBlock parses raw block to our Block struct
-func (p *BitcoinBlockParser) ParseBlock(b []byte) (*Block, error) {
-	w := wire.MsgBlock{}
-	r := bytes.NewReader(b)
-
-	if err := w.Deserialize(r); err != nil {
-		return nil, err
-	}
-
-	txs := make([]Tx, len(w.Transactions))
-	for ti, t := range w.Transactions {
-		txs[ti] = p.txFromMsgTx(t, false)
-	}
-
-	return &Block{Txs: txs}, nil
-}
-
-// PackTx packs transaction to byte array
-func (p *BitcoinBlockParser) PackTx(tx *Tx, height uint32, blockTime int64) ([]byte, error) {
-	buf := make([]byte, 4+vlq.MaxLen64+len(tx.Hex)/2)
-	binary.BigEndian.PutUint32(buf[0:4], height)
-	vl := vlq.PutInt(buf[4:4+vlq.MaxLen64], blockTime)
-	hl, err := hex.Decode(buf[4+vl:], []byte(tx.Hex))
-	return buf[0 : 4+vl+hl], err
-}
-
-// UnpackTx unpacks transaction from byte array
-func (p *BitcoinBlockParser) UnpackTx(buf []byte) (*Tx, uint32, error) {
-	height := binary.BigEndian.Uint32(buf)
-	bt, l := vlq.Int(buf[4:])
-	tx, err := p.ParseTx(buf[4+l:])
-	if err != nil {
-		return nil, 0, err
-	}
-	tx.Blocktime = bt
-	return tx, height, nil
 }

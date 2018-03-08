@@ -12,6 +12,7 @@ import (
 	"github.com/juju/errors"
 
 	"blockbook/bchain"
+	"blockbook/bchain/coins"
 	"blockbook/db"
 	"blockbook/server"
 
@@ -32,7 +33,7 @@ const resyncMempoolPeriodMs = 60017
 const debounceResyncMempoolMs = 1009
 
 var (
-	rpcURL     = flag.String("rpcurl", "http://localhost:8332", "url of bitcoin RPC service")
+	rpcURL     = flag.String("rpcurl", "http://localhost:8332", "url of blockchain RPC service")
 	rpcUser    = flag.String("rpcuser", "rpc", "rpc username")
 	rpcPass    = flag.String("rpcpass", "rpc", "rpc password")
 	rpcTimeout = flag.Uint("rpctimeout", 25, "rpc timeout in seconds")
@@ -62,7 +63,9 @@ var (
 
 	zeroMQBinding = flag.String("zeromq", "", "binding to zeromq, if missing no zeromq connection")
 
-	explorerURL = flag.String("explorer", "", "address of the Bitcoin blockchain explorer")
+	explorerURL = flag.String("explorer", "", "address of blockchain explorer")
+
+	coin = flag.String("coin", "btc", "coin name (default btc)")
 )
 
 var (
@@ -102,13 +105,13 @@ func main() {
 	}
 
 	var err error
-	if chain, err = bchain.NewBitcoinRPC(*rpcURL, *rpcUser, *rpcPass, time.Duration(*rpcTimeout)*time.Second, *parse); err != nil {
-		glog.Fatal("NewBitcoinRPC ", err)
+	if chain, err = coins.NewBlockChain(*coin, *rpcURL, *rpcUser, *rpcPass, time.Duration(*rpcTimeout)*time.Second, *parse); err != nil {
+		glog.Fatal("NewBlockChain: ", err)
 	}
 
 	index, err = db.NewRocksDB(*dbPath, chain.GetChainParser())
 	if err != nil {
-		glog.Fatalf("NewRocksDB %v", err)
+		glog.Fatal("NewRocksDB: ", err)
 	}
 	defer index.Close()
 
