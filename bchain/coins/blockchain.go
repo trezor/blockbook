@@ -3,6 +3,7 @@ package coins
 import (
 	"blockbook/bchain"
 	"blockbook/bchain/coins/btc"
+	"blockbook/bchain/coins/zec"
 	"fmt"
 	"reflect"
 	"time"
@@ -16,6 +17,7 @@ var blockChainFactories = make(map[string]blockChainFactory)
 
 func init() {
 	blockChainFactories["btc"] = btc.NewBitcoinRPC
+	blockChainFactories["zec"] = zec.NewZCashRPC
 }
 
 // NewBlockChain creates bchain.BlockChain of type defined by parameter coin

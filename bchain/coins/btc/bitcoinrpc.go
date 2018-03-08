@@ -23,11 +23,11 @@ type BitcoinRPC struct {
 	rpcURL      string
 	user        string
 	password    string
-	parser      *BitcoinBlockParser
-	testnet     bool
-	network     string
-	mempool     *bchain.Mempool
-	parseBlocks bool
+	Parser      *BitcoinBlockParser
+	Testnet     bool
+	Network     string
+	Mempool     *bchain.Mempool
+	ParseBlocks bool
 }
 
 // NewBitcoinRPC returns new BitcoinRPC instance.
@@ -42,7 +42,7 @@ func NewBitcoinRPC(url string, user string, password string, timeout time.Durati
 		rpcURL:      url,
 		user:        user,
 		password:    password,
-		parseBlocks: parse,
+		ParseBlocks: parse,
 	}
 	chainName, err := s.GetBlockChainInfo()
 	if err != nil {
@@ -50,31 +50,31 @@ func NewBitcoinRPC(url string, user string, password string, timeout time.Durati
 	}
 
 	// always create parser
-	s.parser = &BitcoinBlockParser{
+	s.Parser = &BitcoinBlockParser{
 		Params: GetChainParams(chainName),
 	}
 
 	// parameters for getInfo request
-	if s.parser.Params.Net == wire.MainNet {
-		s.testnet = false
-		s.network = "livenet"
+	if s.Parser.Params.Net == wire.MainNet {
+		s.Testnet = false
+		s.Network = "livenet"
 	} else {
-		s.testnet = true
-		s.network = "testnet"
+		s.Testnet = true
+		s.Network = "testnet"
 	}
 
-	s.mempool = bchain.NewMempool(s)
+	s.Mempool = bchain.NewMempool(s)
 
-	glog.Info("rpc: block chain ", s.parser.Params.Name)
+	glog.Info("rpc: block chain ", s.Parser.Params.Name)
 	return s, nil
 }
 
 func (b *BitcoinRPC) IsTestnet() bool {
-	return b.testnet
+	return b.Testnet
 }
 
 func (b *BitcoinRPC) GetNetworkName() string {
-	return b.network
+	return b.Network
 }
 
 // getblockhash
@@ -338,7 +338,7 @@ func (b *BitcoinRPC) GetBlockHeader(hash string) (*bchain.BlockHeader, error) {
 
 // GetBlock returns block with given hash.
 func (b *BitcoinRPC) GetBlock(hash string) (*bchain.Block, error) {
-	if !b.parseBlocks {
+	if !b.ParseBlocks {
 		return b.GetBlockFull(hash)
 	}
 	header, err := b.GetBlockHeader(hash)
@@ -349,7 +349,7 @@ func (b *BitcoinRPC) GetBlock(hash string) (*bchain.Block, error) {
 	if err != nil {
 		return nil, err
 	}
-	block, err := b.parser.ParseBlock(data)
+	block, err := b.Parser.ParseBlock(data)
 	if err != nil {
 		return nil, errors.Annotatef(err, "hash %v", hash)
 	}
@@ -360,14 +360,14 @@ func (b *BitcoinRPC) GetBlock(hash string) (*bchain.Block, error) {
 // GetBlockWithoutHeader is an optimization - it does not call GetBlockHeader to get prev, next hashes
 // instead it sets to header only block hash and height passed in parameters
 func (b *BitcoinRPC) GetBlockWithoutHeader(hash string, height uint32) (*bchain.Block, error) {
-	if !b.parseBlocks {
+	if !b.ParseBlocks {
 		return b.GetBlockFull(hash)
 	}
 	data, err := b.GetBlockRaw(hash)
 	if err != nil {
 		return nil, err
 	}
-	block, err := b.parser.ParseBlock(data)
+	block, err := b.Parser.ParseBlock(data)
 	if err != nil {
 		return nil, errors.Annotatef(err, "%v %v", height, hash)
 	}
@@ -486,17 +486,17 @@ func (b *BitcoinRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 // ResyncMempool gets mempool transactions and maps output scripts to transactions.
 // ResyncMempool is not reentrant, it should be called from a single thread.
 func (b *BitcoinRPC) ResyncMempool(onNewTxAddr func(txid string, addr string)) error {
-	return b.mempool.Resync(onNewTxAddr)
+	return b.Mempool.Resync(onNewTxAddr)
 }
 
 // GetMempoolTransactions returns slice of mempool transactions for given output script.
 func (b *BitcoinRPC) GetMempoolTransactions(outputScript []byte) ([]string, error) {
-	return b.mempool.GetTransactions(outputScript)
+	return b.Mempool.GetTransactions(outputScript)
 }
 
 // GetMempoolSpentOutput returns transaction in mempool which spends given outpoint
 func (b *BitcoinRPC) GetMempoolSpentOutput(outputTxid string, vout uint32) string {
-	return b.mempool.GetSpentOutput(outputTxid, vout)
+	return b.Mempool.GetSpentOutput(outputTxid, vout)
 }
 
 // EstimateSmartFee returns fee estimation.
@@ -586,5 +586,5 @@ func (b *BitcoinRPC) call(req interface{}, res interface{}) error {
 
 // GetChainParser returns BlockChainParser
 func (b *BitcoinRPC) GetChainParser() bchain.BlockChainParser {
-	return b.parser
+	return b.Parser
 }
