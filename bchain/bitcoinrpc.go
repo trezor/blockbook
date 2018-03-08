@@ -245,6 +245,18 @@ type resSendRawTransaction struct {
 	Result string    `json:"result"`
 }
 
+// getmempoolentry
+
+type cmdGetMempoolEntry struct {
+	Method string   `json:"method"`
+	Params []string `json:"params"`
+}
+
+type resGetMempoolEntry struct {
+	Error  *RPCError     `json:"error"`
+	Result *MempoolEntry `json:"result"`
+}
+
 // GetBestBlockHash returns hash of the tip of the best-block-chain.
 func (b *BitcoinRPC) GetBestBlockHash() (string, error) {
 
@@ -534,6 +546,25 @@ func (b *BitcoinRPC) SendRawTransaction(tx string) (string, error) {
 	}
 	if res.Error != nil {
 		return "", res.Error
+	}
+	return res.Result, nil
+}
+
+func (b *BitcoinRPC) GetMempoolEntry(txid string) (*MempoolEntry, error) {
+	glog.V(1).Info("rpc: getmempoolentry")
+
+	res := resGetMempoolEntry{}
+	req := cmdGetMempoolEntry{
+		Method: "getmempoolentry",
+		Params: []string{txid},
+	}
+	err := b.call(&req, &res)
+
+	if err != nil {
+		return nil, err
+	}
+	if res.Error != nil {
+		return nil, res.Error
 	}
 	return res.Result, nil
 }

@@ -204,6 +204,23 @@
                 document.getElementById('subscribeAddressTxidResult').innerText += JSON.stringify(result).replace(/,/g, ", ") + "\n";
             });
         }
+
+        function getMempoolEntry() {
+            var hash = document.getElementById('getMempoolEntryHash').value;
+            lookupMempoolEntry(hash, function (result) {
+                console.log('getMempoolEntry sent successfully');
+                console.log(result);
+                document.getElementById('getMempoolEntryResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
+            });
+        }
+
+        function lookupMempoolEntry(hash, f) {
+            const method = 'getMempoolEntry';
+            const params = [
+                hash,
+            ];
+            return socket.send({ method, params }, f);
+        }
     </script>
 </head>
 
@@ -341,6 +358,20 @@
         </div>
         <div class="row">
             <div class="col" id="subscribeAddressTxidResult">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <input class="btn btn-secondary" type="button" value="getMempoolEntry" onclick="getMempoolEntry()">
+            </div>
+            <div class="col-8">
+                <input type="text" class="form-control" id="getMempoolEntryHash" value="">
+            </div>
+            <div class="col">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col" id="getMempoolEntryResult">
             </div>
         </div>
     </div>
