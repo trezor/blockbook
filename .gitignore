@@ -1,8 +1,8 @@
 vendor/
-data/
+data*/
+profile/
 blockbook
 notes.txt
-debug
-debug.test
+debug*
 .vscode
 docker/blockbook
