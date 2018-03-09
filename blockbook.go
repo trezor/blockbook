@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"flag"
+	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -17,7 +18,9 @@ import (
 	"blockbook/server"
 
 	"github.com/golang/glog"
-	"github.com/pkg/profile"
+
+	"net/http"
+	_ "net/http/pprof"
 )
 
 // resync index at least each resyncIndexPeriodMs (could be more often if invoked by message from ZeroMQ)
@@ -48,7 +51,7 @@ var (
 
 	synchronize = flag.Bool("sync", false, "synchronizes until tip, if together with zeromq, keeps index synchronized")
 	repair      = flag.Bool("repair", false, "repair the database")
-	prof        = flag.Bool("prof", false, "profile program execution")
+	prof        = flag.String("prof", "", "http server binding [address]:port of the interface to profiling data /debug/pprof/ (default no profiling)")
 
 	syncChunk   = flag.Int("chunk", 100, "block chunk size for processing")
 	syncWorkers = flag.Int("workers", 8, "number of workers to process blocks")
@@ -93,8 +96,10 @@ func main() {
 	chanOsSignal = make(chan os.Signal, 1)
 	signal.Notify(chanOsSignal, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 
-	if *prof {
-		defer profile.Start().Stop()
+	if *prof != "" {
+		go func() {
+			log.Println(http.ListenAndServe(*prof, nil))
+		}()
 	}
 
 	if *repair {
