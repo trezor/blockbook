@@ -581,6 +581,15 @@ func (b *BitcoinRPC) call(req interface{}, res interface{}) error {
 	// read the entire response body until the end to avoid memory leak when reusing http connection
 	// see http://devs.cloudimmunity.com/gotchas-and-common-mistakes-in-go-golang/
 	defer io.Copy(ioutil.Discard, httpRes.Body)
+	// if server returns HTTP error code it might not return json with response
+	// handle both cases
+	if httpRes.StatusCode != 200 {
+		err = json.NewDecoder(httpRes.Body).Decode(&res)
+		if err != nil {
+			return errors.New(httpRes.Status)
+		}
+		return nil
+	}
 	return json.NewDecoder(httpRes.Body).Decode(&res)
 }
 

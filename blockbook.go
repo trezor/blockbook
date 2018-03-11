@@ -111,12 +111,12 @@ func main() {
 
 	var err error
 	if chain, err = coins.NewBlockChain(*coin, *rpcURL, *rpcUser, *rpcPass, time.Duration(*rpcTimeout)*time.Second, *parse); err != nil {
-		glog.Fatal("NewBlockChain: ", err)
+		glog.Fatal("rpc: ", err)
 	}
 
 	index, err = db.NewRocksDB(*dbPath, chain.GetChainParser())
 	if err != nil {
-		glog.Fatal("NewRocksDB: ", err)
+		glog.Fatal("rocksDB: ", err)
 	}
 	defer index.Close()
 
