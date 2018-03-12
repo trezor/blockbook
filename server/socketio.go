@@ -374,57 +374,15 @@ func (s *SocketIoServer) getAddressHistory(addr []string, rr *reqRange) (res res
 	txids := txr.Result
 	res.Result.TotalCount = len(txids)
 	res.Result.Items = make([]addressHistoryItem, 0)
-	localCache := make(map[string]*bchain.Tx, len(txids))
 	for i, txid := range txids {
 		if i >= rr.From && i < rr.To {
-			tx, ok := localCache[txid]
-			if !ok {
-				tx, err = s.txCache.GetTransaction(txid, bestheight)
-				if err != nil {
-					return res, err
-				}
-				localCache[txid] = tx
+			tx, err := s.txCache.GetTransaction(txid, bestheight)
+			if err != nil {
+				return res, err
 			}
 			ads := make(map[string]addressHistoryIndexes)
 			hi := make([]txInputs, 0)
 			ho := make([]txOutputs, 0)
-			for _, vin := range tx.Vin {
-				ai := txInputs{
-					Script:      &vin.ScriptSig.Hex,
-					Sequence:    int64(vin.Sequence),
-					OutputIndex: int(vin.Vout),
-				}
-				if vin.Txid != "" {
-					otx, ok := localCache[vin.Txid]
-					if !ok {
-						otx, err = s.txCache.GetTransaction(vin.Txid, bestheight)
-						if err != nil {
-							return res, err
-						}
-						localCache[vin.Txid] = otx
-					}
-					if len(otx.Vout) > int(vin.Vout) {
-						vout := otx.Vout[vin.Vout]
-						if len(vout.ScriptPubKey.Addresses) == 1 {
-							a := vout.ScriptPubKey.Addresses[0]
-							ai.Address = &a
-							if stringInSlice(a, addr) {
-								hi, ok := ads[a]
-								if ok {
-									hi.InputIndexes = append(hi.InputIndexes, int(vout.N))
-								} else {
-									hi := addressHistoryIndexes{}
-									hi.InputIndexes = append(hi.InputIndexes, int(vout.N))
-									hi.OutputIndexes = make([]int, 0)
-									ads[a] = hi
-								}
-							}
-						}
-						ai.Satoshis = int64(vout.Value * 1E8)
-					}
-				}
-				hi = append(hi, ai)
-			}
 			for _, vout := range tx.Vout {
 				ao := txOutputs{
 					Satoshis:   int64(vout.Value * 1E8),
