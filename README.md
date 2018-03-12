@@ -81,78 +81,11 @@ To run blockbook with fast synchronization, connection to ZeroMQ and providing h
 ```
 Blockbook logs only to stderr, logging to files is disabled. Verbosity of logs can be tuned by command line parameters *-v* and *-vmodule*, details at https://godoc.org/github.com/golang/glog
 
-## Setup on the blockbook-dev server (including Bitcoin Core)
-Get Bitcoin Core
-```
-wget https://bitcoin.org/bin/bitcoin-core-0.15.1/bitcoin-0.15.1-x86_64-linux-gnu.tar.gz
-tar -xf bitcoin-0.15.1-x86_64-linux-gnu.tar.gz 
-```
 
-### TESTNET ###
-Data are to be stored in */data/testnet*, in folders */data/testnet/bitcoin* for Bitcoin Core data, */data/testnet/blockbook* for Blockbook data.
+## Supported coins
 
-Create configuration file */data/testnet/bitcoin/bitcoin.conf* with content
-```
-testnet=1
-daemon=1
-server=1
-rpcuser=rpc
-rpcpassword=rpc
-rpcport=18332
-txindex=1
-```
-Create script that starts the bitcoind daemon *run-testnet-bitcoind.sh* with increased rpcworkqueue and configured zeromq
-```
-#!/bin/bash
-
-bitcoin-0.15.1/bin/bitcoind -datadir=/data/testnet/bitcoin -rpcworkqueue=32 -zmqpubhashtx=tcp://127.0.0.1:18334 -zmqpubhashblock=tcp://127.0.0.1:18334 -zmqpubrawblock=tcp://127.0.0.1:18334 -zmqpubrawtx=tcp://127.0.0.1:18334
-```
-Run the *run-testnet-bitcoind.sh* to get initial import of data.
-
-Create script that runs blockbook *run-testnet-blockbook.sh*
-```
-#!/bin/bash
-
-cd go/src/blockbook
-./blockbook -path=/data/testnet/blockbook/db -sync -parse -rpcurl=http://127.0.0.1:18332 -httpserver=:18335 -socketio=:18336 -certfile=server/testcert -zeromq=tcp://127.0.0.1:18334 -explorer=https://testnet-bitcore1.trezor.io $1
-```
-To run blockbook with logging to file (run with nohup or daemonize or using screen)
-```
-./run-testnet-blockbook.sh 2>/data/testnet/blockbook/blockbook.log
-```
-
-### BTC ###
-Data are to be stored in */data/btc*, in folders */data/btc/bitcoin* for Bitcoin Core data, */data/btc/blockbook* for Blockbook data.
-
-Create configuration file */data/btc/bitcoin/bitcoin.conf* with content
-```
-daemon=1
-server=1
-rpcuser=rpc
-rpcpassword=rpc
-rpcport=8332
-txindex=1
-```
-Create script that starts the bitcoind daemon *run-btc-bitcoind.sh* with increased rpcworkqueue and configured zeromq
-```
-#!/bin/bash
-
-bitcoin-0.15.1/bin/bitcoind -datadir=/data/btc/bitcoin -rpcworkqueue=32 -zmqpubhashtx=tcp://127.0.0.1:8334 -zmqpubhashblock=tcp://127.0.0.1:8334 -zmqpubrawblock=tcp://127.0.0.1:8334 -zmqpubrawtx=tcp://127.0.0.1:8334
-```
-Run the *run-btc-bitcoind.sh* to get initial import of data.
-
-Create script that runs blockbook *run-btc-blockbook.sh*
-```
-#!/bin/bash
-
-cd go/src/blockbook
-./blockbook -path=/data/btc/blockbook/db -sync -parse -rpcurl=http://127.0.0.1:8332 -httpserver=:8335 -socketio=:8336 -certfile=server/testcert -zeromq=tcp://127.0.0.1:8334 -explorer=https://bitcore1.trezor.io/ $1
-```
-To run blockbook with logging to file  (run with nohup or daemonize or using screen)
-```
-./run-btc-blockbook.sh 2>/data/btc/blockbook/blockbook.log
-```
-
+- [BTC](bchain/coins/btc/btc.md)
+- [BTC Testnet](bchain/coins/btc/btctestnet.md)
 
 # Data storage in RocksDB
 
@@ -201,7 +134,6 @@ The data are separated to different column families:
 ## Todo
 
 - find memory leak in initial import
-- implement getmempoolentry
 - disconnect blocks - keep map of transactions in the last 100 blocks
 - add zcash support
 - add ethereum support
@@ -213,6 +145,7 @@ The data are separated to different column families:
 - xpub index
 - tests
 - fix program dependencies
+- ~~implement getmempoolentry~~
 - ~~support altcoins, abstraction of blockchain server/service~~
 - ~~cache transactions in RocksDB~~
 - ~~parallel sync - rewrite - it is not possible to gracefully stop it now, can leave holes in the block~~
