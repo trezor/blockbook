@@ -180,7 +180,7 @@ func (w *SyncWorker) connectBlocksParallel(lower, higher uint32) error {
 		var block *bchain.Block
 		for hh := range hch {
 			for {
-				block, err = w.chain.GetBlockWithoutHeader(hh.hash, hh.height)
+				block, err = w.chain.GetBlock(hh.hash, hh.height)
 				if err != nil {
 					// signal came while looping in the error loop
 					if hchClosed.Load() == true {
@@ -252,7 +252,7 @@ func (w *SyncWorker) connectBlockChunk(lower, higher uint32) error {
 	}
 
 	for height <= higher {
-		block, err := w.chain.GetBlock(hash)
+		block, err := w.chain.GetBlock(hash, height)
 		if err != nil {
 			return err
 		}
@@ -335,7 +335,7 @@ func (w *SyncWorker) getBlockChain(hash string, out chan blockResult, done chan 
 			return
 		default:
 		}
-		block, err := w.chain.GetBlock(hash)
+		block, err := w.chain.GetBlock(hash, 0)
 		if err != nil {
 			out <- blockResult{err: err}
 			return

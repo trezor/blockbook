@@ -337,9 +337,13 @@ func (b *BitcoinRPC) GetBlockHeader(hash string) (*bchain.BlockHeader, error) {
 }
 
 // GetBlock returns block with given hash.
-func (b *BitcoinRPC) GetBlock(hash string) (*bchain.Block, error) {
+func (b *BitcoinRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 	if !b.ParseBlocks {
 		return b.GetBlockFull(hash)
+	}
+	// optimization
+	if height > 0 {
+		return b.getBlockWithoutHeader(hash, height)
 	}
 	header, err := b.GetBlockHeader(hash)
 	if err != nil {
@@ -357,9 +361,9 @@ func (b *BitcoinRPC) GetBlock(hash string) (*bchain.Block, error) {
 	return block, nil
 }
 
-// GetBlockWithoutHeader is an optimization - it does not call GetBlockHeader to get prev, next hashes
+// getBlockWithoutHeader is an optimization - it does not call GetBlockHeader to get prev, next hashes
 // instead it sets to header only block hash and height passed in parameters
-func (b *BitcoinRPC) GetBlockWithoutHeader(hash string, height uint32) (*bchain.Block, error) {
+func (b *BitcoinRPC) getBlockWithoutHeader(hash string, height uint32) (*bchain.Block, error) {
 	if !b.ParseBlocks {
 		return b.GetBlockFull(hash)
 	}
