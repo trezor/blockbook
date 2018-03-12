@@ -120,6 +120,22 @@ func (d *RocksDB) Close() error {
 	return nil
 }
 
+// Reopen reopens the database
+// It closes and reopens db, nobody can access the database during the operation!
+func (d *RocksDB) Reopen() error {
+	err := d.closeDB()
+	if err != nil {
+		return err
+	}
+	d.db = nil
+	db, cfh, err := openDB(d.path)
+	if err != nil {
+		return err
+	}
+	d.db, d.cfh = db, cfh
+	return nil
+}
+
 // GetTransactions finds all input/output transactions for address specified by outputScript.
 // Transaction are passed to callback function.
 func (d *RocksDB) GetTransactions(outputScript []byte, lower uint32, higher uint32, fn func(txid string, vout uint32, isOutput bool) error) (err error) {
