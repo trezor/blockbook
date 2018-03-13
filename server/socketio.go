@@ -2,12 +2,14 @@ package server
 
 import (
 	"blockbook/bchain"
+	"blockbook/common"
 	"blockbook/db"
 	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/juju/errors"
 
@@ -27,18 +29,21 @@ type SocketIoServer struct {
 	chain       bchain.BlockChain
 	chainParser bchain.BlockChainParser
 	explorerURL string
+	metrics     *common.Metrics
 }
 
 // NewSocketIoServer creates new SocketIo interface to blockbook and returns its handle
-func NewSocketIoServer(binding string, certFiles string, db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxCache, explorerURL string) (*SocketIoServer, error) {
+func NewSocketIoServer(binding string, certFiles string, db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxCache, explorerURL string, metrics *common.Metrics) (*SocketIoServer, error) {
 	server := gosocketio.NewServer(transport.GetDefaultWebsocketTransport())
 
 	server.On(gosocketio.OnConnection, func(c *gosocketio.Channel) {
 		glog.Info("Client connected ", c.Id())
+		metrics.Clients.With(common.Labels{"transport": "socketio"}).Inc()
 	})
 
 	server.On(gosocketio.OnDisconnection, func(c *gosocketio.Channel) {
 		glog.Info("Client disconnected ", c.Id())
+		metrics.Clients.With(common.Labels{"transport": "socketio"}).Dec()
 	})
 
 	server.On(gosocketio.OnError, func(c *gosocketio.Channel) {
@@ -67,6 +72,7 @@ func NewSocketIoServer(binding string, certFiles string, db *db.RocksDB, chain b
 		chain:       chain,
 		chainParser: chain.GetChainParser(),
 		explorerURL: explorerURL,
+		metrics:     metrics,
 	}
 
 	// support for tests of socket.io interface
@@ -128,52 +134,52 @@ type reqRange struct {
 }
 
 var onMessageHandlers = map[string]func(*SocketIoServer, json.RawMessage) (interface{}, error){
-	"\"getAddressTxids\"": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
+	"getAddressTxids": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
 		addr, rr, err := unmarshalGetAddressRequest(params)
 		if err == nil {
 			rv, err = s.getAddressTxids(addr, &rr)
 		}
 		return
 	},
-	"\"getAddressHistory\"": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
+	"getAddressHistory": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
 		addr, rr, err := unmarshalGetAddressRequest(params)
 		if err == nil {
 			rv, err = s.getAddressHistory(addr, &rr)
 		}
 		return
 	},
-	"\"getBlockHeader\"": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
+	"getBlockHeader": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
 		height, hash, err := unmarshalGetBlockHeader(params)
 		if err == nil {
 			rv, err = s.getBlockHeader(height, hash)
 		}
 		return
 	},
-	"\"estimateSmartFee\"": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
+	"estimateSmartFee": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
 		blocks, conservative, err := unmarshalEstimateSmartFee(params)
 		if err == nil {
 			rv, err = s.estimateSmartFee(blocks, conservative)
 		}
 		return
 	},
-	"\"getInfo\"": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
+	"getInfo": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
 		return s.getInfo()
 	},
-	"\"getDetailedTransaction\"": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
+	"getDetailedTransaction": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
 		txid, err := unmarshalStringParameter(params)
 		if err == nil {
 			rv, err = s.getDetailedTransaction(txid)
 		}
 		return
 	},
-	"\"sendTransaction\"": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
+	"sendTransaction": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
 		tx, err := unmarshalStringParameter(params)
 		if err == nil {
 			rv, err = s.sendTransaction(tx)
 		}
 		return
 	},
-	"\"getMempoolEntry\"": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
+	"getMempoolEntry": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
 		txid, err := unmarshalStringParameter(params)
 		if err == nil {
 			rv, err = s.getMempoolEntry(txid)
@@ -191,8 +197,10 @@ type resultError struct {
 func (s *SocketIoServer) onMessage(c *gosocketio.Channel, req map[string]json.RawMessage) interface{} {
 	var err error
 	var rv interface{}
-	method := string(req["method"])
+	t := time.Now()
+	method := strings.Trim(string(req["method"]), "\"")
 	params := req["params"]
+	defer s.metrics.RequestDuration.With(common.Labels{"transport": "socketio", "method": method}).Observe(float64(time.Since(t)) / 1e3) // in microseconds
 	f, ok := onMessageHandlers[method]
 	if ok {
 		rv, err = f(s, params)
@@ -201,9 +209,11 @@ func (s *SocketIoServer) onMessage(c *gosocketio.Channel, req map[string]json.Ra
 	}
 	if err == nil {
 		glog.V(1).Info(c.Id(), " onMessage ", method, " success")
+		s.metrics.RPCRequests.With(common.Labels{"transport": "socketio", "method": method, "status": "success"}).Inc()
 		return rv
 	}
 	glog.Error(c.Id(), " onMessage ", method, ": ", errors.ErrorStack(err))
+	s.metrics.RPCRequests.With(common.Labels{"transport": "socketio", "method": method, "status": err.Error()}).Inc()
 	e := resultError{}
 	e.Error.Message = err.Error()
 	return e
@@ -650,6 +660,11 @@ func (s *SocketIoServer) getMempoolEntry(txid string) (res resultGetMempoolEntry
 // "bitcoind/hashblock"
 // "bitcoind/addresstxid",["2MzTmvPJLZaLzD9XdN3jMtQA5NexC3rAPww","2NAZRJKr63tSdcTxTN3WaE9ZNDyXy6PgGuv"]
 func (s *SocketIoServer) onSubscribe(c *gosocketio.Channel, req []byte) interface{} {
+	onError := func(id, sc, err string) {
+		glog.Error(id, " onSubscribe ", sc, ": ", err)
+		s.metrics.SubscribeRequests.With(common.Labels{"transport": "socketio", "channel": sc, "status": err}).Inc()
+	}
+
 	r := string(req)
 	glog.V(1).Info(c.Id(), " onSubscribe ", r)
 	var sc string
@@ -658,12 +673,12 @@ func (s *SocketIoServer) onSubscribe(c *gosocketio.Channel, req []byte) interfac
 		var addrs []string
 		sc = r[1:i]
 		if sc != "bitcoind/addresstxid" {
-			glog.Error(c.Id(), " onSubscribe ", sc, ": invalid data")
+			onError(c.Id(), sc, "invalid data")
 			return nil
 		}
 		err := json.Unmarshal([]byte(r[i+2:]), &addrs)
 		if err != nil {
-			glog.Error(c.Id(), " onSubscribe ", sc, ": ", err)
+			onError(c.Id(), sc, err.Error())
 			return nil
 		}
 		for _, a := range addrs {
@@ -672,11 +687,12 @@ func (s *SocketIoServer) onSubscribe(c *gosocketio.Channel, req []byte) interfac
 	} else {
 		sc = r[1 : len(r)-1]
 		if sc != "bitcoind/hashblock" {
-			glog.Error(c.Id(), " onSubscribe ", sc, ": invalid data")
+			onError(c.Id(), sc, "invalid data")
 			return nil
 		}
 		c.Join(sc)
 	}
+	s.metrics.SubscribeRequests.With(common.Labels{"transport": "socketio", "channel": sc, "status": "success"}).Inc()
 	return nil
 }
 

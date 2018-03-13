@@ -2,6 +2,7 @@ package db
 
 import (
 	"blockbook/bchain"
+	"blockbook/common"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -19,10 +20,11 @@ type SyncWorker struct {
 	dryRun                 bool
 	startHeight            uint32
 	chanOsSignal           chan os.Signal
+	metrics                *common.Metrics
 }
 
 // NewSyncWorker creates new SyncWorker and returns its handle
-func NewSyncWorker(db *RocksDB, chain bchain.BlockChain, syncWorkers, syncChunk int, minStartHeight int, dryRun bool, chanOsSignal chan os.Signal) (*SyncWorker, error) {
+func NewSyncWorker(db *RocksDB, chain bchain.BlockChain, syncWorkers, syncChunk int, minStartHeight int, dryRun bool, chanOsSignal chan os.Signal, metrics *common.Metrics) (*SyncWorker, error) {
 	if minStartHeight < 0 {
 		minStartHeight = 0
 	}
@@ -34,12 +36,37 @@ func NewSyncWorker(db *RocksDB, chain bchain.BlockChain, syncWorkers, syncChunk 
 		dryRun:       dryRun,
 		startHeight:  uint32(minStartHeight),
 		chanOsSignal: chanOsSignal,
+		metrics:      metrics,
 	}, nil
 }
+
+var synced = errors.New("synced")
 
 // ResyncIndex synchronizes index to the top of the blockchain
 // onNewBlock is called when new block is connected, but not in initial parallel sync
 func (w *SyncWorker) ResyncIndex(onNewBlock func(hash string)) error {
+	start := time.Now()
+
+	err := w.resyncIndex(onNewBlock)
+
+	switch err {
+	case nil:
+		d := time.Since(start)
+		glog.Info("resync: finished in ", d)
+		w.metrics.IndexResyncDuration.Observe(float64(d) / 1e6) // in milliseconds
+		w.metrics.IndexDBSize.Set(float64(w.db.DatabaseSizeOnDisk()))
+		fallthrough
+	case synced:
+		// this is not actually error but flag that resync wasn't necessary
+		return nil
+	}
+
+	w.metrics.IndexResyncErrors.With(common.Labels{"error": err.Error()}).Inc()
+
+	return err
+}
+
+func (w *SyncWorker) resyncIndex(onNewBlock func(hash string)) error {
 	remote, err := w.chain.GetBestBlockHash()
 	if err != nil {
 		return err
@@ -53,7 +80,7 @@ func (w *SyncWorker) ResyncIndex(onNewBlock func(hash string)) error {
 	// network, we're done.
 	if local == remote {
 		glog.Infof("resync: synced on %d %s", localBestHeight, local)
-		return nil
+		return synced
 	}
 
 	var header *bchain.BlockHeader
@@ -94,7 +121,7 @@ func (w *SyncWorker) ResyncIndex(onNewBlock func(hash string)) error {
 			if err != nil {
 				return err
 			}
-			return w.ResyncIndex(onNewBlock)
+			return w.resyncIndex(onNewBlock)
 		}
 	}
 
@@ -128,7 +155,7 @@ func (w *SyncWorker) ResyncIndex(onNewBlock func(hash string)) error {
 			}
 			// after parallel load finish the sync using standard way,
 			// new blocks may have been created in the meantime
-			return w.ResyncIndex(onNewBlock)
+			return w.resyncIndex(onNewBlock)
 		}
 	}
 
@@ -188,6 +215,7 @@ func (w *SyncWorker) connectBlocksParallel(lower, higher uint32) error {
 						return
 					}
 					glog.Error("Worker ", i, " connect block error ", err, ". Retrying...")
+					w.metrics.IndexResyncErrors.With(common.Labels{"error": err.Error()}).Inc()
 					time.Sleep(time.Millisecond * 500)
 				} else {
 					break
@@ -219,6 +247,7 @@ ConnectLoop:
 			hash, err = w.chain.GetBlockHash(h)
 			if err != nil {
 				glog.Error("GetBlockHash error ", err)
+				w.metrics.IndexResyncErrors.With(common.Labels{"error": err.Error()}).Inc()
 				time.Sleep(time.Millisecond * 500)
 				continue
 			}
