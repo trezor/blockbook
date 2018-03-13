@@ -30,41 +30,27 @@ cd rocksdb
 make release
 ```
 
-Install gorocksdb: https://github.com/tecbot/gorocksdb
+Setup variables for gorocksdb: https://github.com/tecbot/gorocksdb
 
 ```
-CGO_CFLAGS="-I/path/to/rocksdb/include" \
-CGO_LDFLAGS="-L/path/to/rocksdb -lrocksdb -lstdc++ -lm -lz -lbz2 -lsnappy -llz4" \
-  go get github.com/tecbot/gorocksdb
+export CGO_CFLAGS="-I/path/to/rocksdb/include"
+export CGO_LDFLAGS="-L/path/to/rocksdb -lrocksdb -lstdc++ -lm -lz -lbz2 -lsnappy -llz4"
 ```
 
 Install ZeroMQ: https://github.com/zeromq/libzmq
 
-Install Go interface to ZeroMQ:
+Install go-dep tool:
 ```
-go get github.com/pebbe/zmq4
-```
-
-Install additional go libraries:
-```
-go get github.com/golang/glog
-go get github.com/martinboehm/golang-socketio
-go get github.com/btcsuite/btcd
-go get github.com/gorilla/handlers
-go get github.com/bsm/go-vlq
-go get github.com/gorilla/handlers
-go get github.com/gorilla/mux
-go get github.com/pebbe/zmq4
-go get github.com/pkg/profile
-go get github.com/juju/errors
+RUN go get github.com/golang/dep/cmd/dep
 ```
 
-Install blockbook:
+Get blockbook sources, install dependencies, build:
 
 ```
 cd $GOPATH/src
 git clone https://github.com/jpochyla/blockbook.git
 cd blockbook
+dep ensure
 go build
 ```
 
@@ -82,7 +68,7 @@ To run blockbook with fast synchronization, connection to ZeroMQ and providing h
 Blockbook logs only to stderr, logging to files is disabled. Verbosity of logs can be tuned by command line parameters *-v* and *-vmodule*, details at https://godoc.org/github.com/golang/glog
 
 
-## Supported coins
+# Supported coins
 
 - [BTC](bchain/coins/btc/btc.md)
 - [BTC Testnet](bchain/coins/btc/btctestnet.md)
