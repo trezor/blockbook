@@ -134,52 +134,52 @@ type reqRange struct {
 }
 
 var onMessageHandlers = map[string]func(*SocketIoServer, json.RawMessage) (interface{}, error){
-	"\"getAddressTxids\"": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
+	"getAddressTxids": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
 		addr, rr, err := unmarshalGetAddressRequest(params)
 		if err == nil {
 			rv, err = s.getAddressTxids(addr, &rr)
 		}
 		return
 	},
-	"\"getAddressHistory\"": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
+	"getAddressHistory": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
 		addr, rr, err := unmarshalGetAddressRequest(params)
 		if err == nil {
 			rv, err = s.getAddressHistory(addr, &rr)
 		}
 		return
 	},
-	"\"getBlockHeader\"": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
+	"getBlockHeader": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
 		height, hash, err := unmarshalGetBlockHeader(params)
 		if err == nil {
 			rv, err = s.getBlockHeader(height, hash)
 		}
 		return
 	},
-	"\"estimateSmartFee\"": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
+	"estimateSmartFee": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
 		blocks, conservative, err := unmarshalEstimateSmartFee(params)
 		if err == nil {
 			rv, err = s.estimateSmartFee(blocks, conservative)
 		}
 		return
 	},
-	"\"getInfo\"": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
+	"getInfo": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
 		return s.getInfo()
 	},
-	"\"getDetailedTransaction\"": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
+	"getDetailedTransaction": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
 		txid, err := unmarshalStringParameter(params)
 		if err == nil {
 			rv, err = s.getDetailedTransaction(txid)
 		}
 		return
 	},
-	"\"sendTransaction\"": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
+	"sendTransaction": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
 		tx, err := unmarshalStringParameter(params)
 		if err == nil {
 			rv, err = s.sendTransaction(tx)
 		}
 		return
 	},
-	"\"getMempoolEntry\"": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
+	"getMempoolEntry": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
 		txid, err := unmarshalStringParameter(params)
 		if err == nil {
 			rv, err = s.getMempoolEntry(txid)
@@ -197,8 +197,8 @@ type resultError struct {
 func (s *SocketIoServer) onMessage(c *gosocketio.Channel, req map[string]json.RawMessage) interface{} {
 	var err error
 	var rv interface{}
-	method := string(req["method"])
 	t := time.Now()
+	method := strings.Trim(string(req["method"]), "\"")
 	params := req["params"]
 	defer s.metrics.RequestDuration.With(common.Labels{"transport": "socketio", "method": method}).Observe(float64(time.Since(t)) / 1e3) // in microseconds
 	f, ok := onMessageHandlers[method]
