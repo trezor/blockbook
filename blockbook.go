@@ -143,22 +143,6 @@ func main() {
 		return
 	}
 
-	syncWorker, err = db.NewSyncWorker(index, chain, *syncWorkers, *syncChunk, *blockFrom, *dryRun, chanOsSignal, metrics)
-	if err != nil {
-		glog.Fatalf("NewSyncWorker %v", err)
-	}
-
-	if *synchronize {
-		if err := syncWorker.ResyncIndex(nil); err != nil {
-			glog.Error("resyncIndex ", err)
-			return
-		}
-		if err = chain.ResyncMempool(nil); err != nil {
-			glog.Error("resyncMempool ", err)
-			return
-		}
-	}
-
 	if txCache, err = db.NewTxCache(index, chain, metrics); err != nil {
 		glog.Error("txCache ", err)
 		return
@@ -182,6 +166,22 @@ func main() {
 				}
 			}
 		}()
+	}
+
+	syncWorker, err = db.NewSyncWorker(index, chain, *syncWorkers, *syncChunk, *blockFrom, *dryRun, chanOsSignal, metrics)
+	if err != nil {
+		glog.Fatalf("NewSyncWorker %v", err)
+	}
+
+	if *synchronize {
+		if err := syncWorker.ResyncIndex(nil); err != nil {
+			glog.Error("resyncIndex ", err)
+			return
+		}
+		if err = chain.ResyncMempool(nil); err != nil {
+			glog.Error("resyncMempool ", err)
+			return
+		}
 	}
 
 	var socketIoServer *server.SocketIoServer
