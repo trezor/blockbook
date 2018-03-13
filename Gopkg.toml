@@ -35,4 +35,32 @@
 
 [[constraint]]
   branch = "master"
+  name = "github.com/golang/glog"
+
+[[constraint]]
+  name = "github.com/gorilla/handlers"
+  version = "1.3.0"
+
+[[constraint]]
+  name = "github.com/gorilla/mux"
+  version = "1.6.1"
+
+[[constraint]]
+  branch = "master"
+  name = "github.com/juju/errors"
+
+[[constraint]]
+  branch = "master"
+  name = "github.com/martinboehm/golang-socketio"
+
+[[constraint]]
+  branch = "master"
+  name = "github.com/pebbe/zmq4"
+
+[[constraint]]
+  name = "github.com/prometheus/client_golang"
+  version = "0.8.0"
+
+[[constraint]]
+  branch = "master"
   name = "github.com/tecbot/gorocksdb"
