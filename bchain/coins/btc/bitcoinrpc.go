@@ -2,6 +2,7 @@ package btc
 
 import (
 	"blockbook/bchain"
+	"blockbook/common"
 	"bytes"
 	"encoding/hex"
 	"encoding/json"
@@ -28,10 +29,11 @@ type BitcoinRPC struct {
 	Network     string
 	Mempool     *bchain.Mempool
 	ParseBlocks bool
+	metrics     *common.Metrics
 }
 
 // NewBitcoinRPC returns new BitcoinRPC instance.
-func NewBitcoinRPC(url string, user string, password string, timeout time.Duration, parse bool) (bchain.BlockChain, error) {
+func NewBitcoinRPC(url string, user string, password string, timeout time.Duration, parse bool, metrics *common.Metrics) (bchain.BlockChain, error) {
 	transport := &http.Transport{
 		Dial:                (&net.Dialer{KeepAlive: 600 * time.Second}).Dial,
 		MaxIdleConns:        100,
@@ -43,6 +45,7 @@ func NewBitcoinRPC(url string, user string, password string, timeout time.Durati
 		user:        user,
 		password:    password,
 		ParseBlocks: parse,
+		metrics:     metrics,
 	}
 	chainName, err := s.GetBlockChainInfo()
 	if err != nil {
@@ -63,7 +66,7 @@ func NewBitcoinRPC(url string, user string, password string, timeout time.Durati
 		s.Network = "testnet"
 	}
 
-	s.Mempool = bchain.NewMempool(s)
+	s.Mempool = bchain.NewMempool(s, metrics)
 
 	glog.Info("rpc: block chain ", s.Parser.Params.Name)
 	return s, nil
@@ -254,7 +257,7 @@ func (b *BitcoinRPC) GetBestBlockHash() (string, error) {
 
 	res := resGetBestBlockHash{}
 	req := cmdGetBestBlockHash{Method: "getbestblockhash"}
-	err := b.call(&req, &res)
+	err := b.observeRPCLatency(req.Method, func() error { return b.call(&req, &res) })
 
 	if err != nil {
 		return "", err
@@ -271,7 +274,7 @@ func (b *BitcoinRPC) GetBestBlockHeight() (uint32, error) {
 
 	res := resGetBlockCount{}
 	req := cmdGetBlockCount{Method: "getblockcount"}
-	err := b.call(&req, &res)
+	err := b.observeRPCLatency(req.Method, func() error { return b.call(&req, &res) })
 
 	if err != nil {
 		return 0, err
@@ -288,7 +291,7 @@ func (b *BitcoinRPC) GetBlockChainInfo() (string, error) {
 
 	res := resGetBlockChainInfo{}
 	req := cmdGetBlockChainInfo{Method: "getblockchaininfo"}
-	err := b.call(&req, &res)
+	err := b.observeRPCLatency(req.Method, func() error { return b.call(&req, &res) })
 
 	if err != nil {
 		return "", err
@@ -306,7 +309,7 @@ func (b *BitcoinRPC) GetBlockHash(height uint32) (string, error) {
 	res := resGetBlockHash{}
 	req := cmdGetBlockHash{Method: "getblockhash"}
 	req.Params.Height = height
-	err := b.call(&req, &res)
+	err := b.observeRPCLatency(req.Method, func() error { return b.call(&req, &res) })
 
 	if err != nil {
 		return "", errors.Annotatef(err, "height %v", height)
@@ -325,7 +328,7 @@ func (b *BitcoinRPC) GetBlockHeader(hash string) (*bchain.BlockHeader, error) {
 	req := cmdGetBlockHeader{Method: "getblockheader"}
 	req.Params.BlockHash = hash
 	req.Params.Verbose = true
-	err := b.call(&req, &res)
+	err := b.observeRPCLatency(req.Method, func() error { return b.call(&req, &res) })
 
 	if err != nil {
 		return nil, errors.Annotatef(err, "hash %v", hash)
@@ -388,7 +391,7 @@ func (b *BitcoinRPC) GetBlockRaw(hash string) ([]byte, error) {
 	req := cmdGetBlock{Method: "getblock"}
 	req.Params.BlockHash = hash
 	req.Params.Verbosity = 0
-	err := b.call(&req, &res)
+	err := b.observeRPCLatency(req.Method, func() error { return b.call(&req, &res) })
 
 	if err != nil {
 		return nil, errors.Annotatef(err, "hash %v", hash)
@@ -408,7 +411,7 @@ func (b *BitcoinRPC) GetBlockList(hash string) (*bchain.Block, error) {
 	req := cmdGetBlock{Method: "getblock"}
 	req.Params.BlockHash = hash
 	req.Params.Verbosity = 1
-	err := b.call(&req, &res)
+	err := b.observeRPCLatency(req.Method, func() error { return b.call(&req, &res) })
 
 	if err != nil {
 		return nil, errors.Annotatef(err, "hash %v", hash)
@@ -440,7 +443,7 @@ func (b *BitcoinRPC) GetBlockFull(hash string) (*bchain.Block, error) {
 	req := cmdGetBlock{Method: "getblock"}
 	req.Params.BlockHash = hash
 	req.Params.Verbosity = 2
-	err := b.call(&req, &res)
+	err := b.observeRPCLatency(req.Method, func() error { return b.call(&req, &res) })
 
 	if err != nil {
 		return nil, errors.Annotatef(err, "hash %v", hash)
@@ -457,7 +460,7 @@ func (b *BitcoinRPC) GetMempool() ([]string, error) {
 
 	res := resGetMempool{}
 	req := cmdGetMempool{Method: "getrawmempool"}
-	err := b.call(&req, &res)
+	err := b.observeRPCLatency(req.Method, func() error { return b.call(&req, &res) })
 
 	if err != nil {
 		return nil, err
@@ -476,7 +479,7 @@ func (b *BitcoinRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 	req := cmdGetRawTransaction{Method: "getrawtransaction"}
 	req.Params.Txid = txid
 	req.Params.Verbose = true
-	err := b.call(&req, &res)
+	err := b.observeRPCLatency(req.Method, func() error { return b.call(&req, &res) })
 
 	if err != nil {
 		return nil, errors.Annotatef(err, "txid %v", txid)
@@ -515,7 +518,7 @@ func (b *BitcoinRPC) EstimateSmartFee(blocks int, conservative bool) (float64, e
 	} else {
 		req.Params.EstimateMode = "ECONOMICAL"
 	}
-	err := b.call(&req, &res)
+	err := b.observeRPCLatency(req.Method, func() error { return b.call(&req, &res) })
 
 	if err != nil {
 		return 0, err
@@ -533,7 +536,7 @@ func (b *BitcoinRPC) SendRawTransaction(tx string) (string, error) {
 	res := resSendRawTransaction{}
 	req := cmdSendRawTransaction{Method: "sendrawtransaction"}
 	req.Params = []string{tx}
-	err := b.call(&req, &res)
+	err := b.observeRPCLatency(req.Method, func() error { return b.call(&req, &res) })
 
 	if err != nil {
 		return "", err
@@ -552,7 +555,7 @@ func (b *BitcoinRPC) GetMempoolEntry(txid string) (*bchain.MempoolEntry, error) 
 		Method: "getmempoolentry",
 		Params: []string{txid},
 	}
-	err := b.call(&req, &res)
+	err := b.observeRPCLatency(req.Method, func() error { return b.call(&req, &res) })
 
 	if err != nil {
 		return nil, err
@@ -561,6 +564,15 @@ func (b *BitcoinRPC) GetMempoolEntry(txid string) (*bchain.MempoolEntry, error) 
 		return nil, res.Error
 	}
 	return res.Result, nil
+}
+
+func (b *BitcoinRPC) observeRPCLatency(method string, fn func() error) error {
+	start := time.Now()
+	err := fn()
+	if err == nil {
+		b.metrics.BlockChainLatency.With(common.Labels{"coin": "bitcoin", "method": method}).Observe(float64(time.Since(start)) / 1e6) // in milliseconds
+	}
+	return err
 }
 
 func (b *BitcoinRPC) call(req interface{}, res interface{}) error {

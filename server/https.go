@@ -14,6 +14,7 @@ import (
 
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 // HTTPServer is handle to HttpServer
@@ -47,6 +48,7 @@ func NewHTTPServer(httpServerBinding string, certFiles string, db *db.RocksDB, c
 	r.HandleFunc("/transactions/{address}/{lower}/{higher}", s.transactions)
 	r.HandleFunc("/confirmedTransactions/{address}/{lower}/{higher}", s.confirmedTransactions)
 	r.HandleFunc("/unconfirmedTransactions/{address}", s.unconfirmedTransactions)
+	r.HandleFunc("/metrics", promhttp.Handler().ServeHTTP)
 
 	var h http.Handler = r
 	h = handlers.LoggingHandler(os.Stderr, h)

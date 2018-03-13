@@ -541,8 +541,13 @@ func dirSize(path string) (int64, error) {
 }
 
 // DatabaseSizeOnDisk returns size of the database in bytes
-func (d *RocksDB) DatabaseSizeOnDisk() (int64, error) {
-	return dirSize(d.path)
+func (d *RocksDB) DatabaseSizeOnDisk() int64 {
+	size, err := dirSize(d.path)
+	if err != nil {
+		glog.Error("rocksdb: DatabaseSizeOnDisk: ", err)
+		return 0
+	}
+	return size
 }
 
 // GetTx returns transaction stored in db and height of the block containing it

@@ -1,6 +1,7 @@
 package bchain
 
 import (
+	"blockbook/common"
 	"encoding/hex"
 	"sync"
 	"time"
@@ -30,11 +31,12 @@ type Mempool struct {
 	txToInputOutput map[string]inputOutput
 	scriptToTx      map[string][]outpoint
 	inputs          map[outpoint]string
+	metrics         *common.Metrics
 }
 
 // NewMempool creates new mempool handler.
-func NewMempool(chain BlockChain) *Mempool {
-	return &Mempool{chain: chain}
+func NewMempool(chain BlockChain, metrics *common.Metrics) *Mempool {
+	return &Mempool{chain: chain, metrics: metrics}
 }
 
 // GetTransactions returns slice of mempool transactions for given output script.
@@ -76,6 +78,7 @@ func (m *Mempool) Resync(onNewTxAddr func(txid string, addr string)) error {
 	glog.V(1).Info("Mempool: resync")
 	txs, err := m.chain.GetMempool()
 	if err != nil {
+		m.metrics.MempoolResyncErrors.With(common.Labels{"error": err.Error()}).Inc()
 		return err
 	}
 	newTxToInputOutput := make(map[string]inputOutput, len(m.txToInputOutput)+1)
@@ -86,6 +89,7 @@ func (m *Mempool) Resync(onNewTxAddr func(txid string, addr string)) error {
 		if !exists {
 			tx, err := m.chain.GetTransaction(txid)
 			if err != nil {
+				m.metrics.MempoolResyncErrors.With(common.Labels{"error": err.Error()}).Inc()
 				glog.Error("cannot get transaction ", txid, ": ", err)
 				continue
 			}
@@ -116,6 +120,8 @@ func (m *Mempool) Resync(onNewTxAddr func(txid string, addr string)) error {
 		}
 	}
 	m.updateMappings(newTxToInputOutput, newScriptToTx, newInputs)
-	glog.Info("Mempool: resync finished in ", time.Since(start), ", ", len(m.txToInputOutput), " transactions in mempool")
+	d := time.Since(start)
+	glog.Info("Mempool: resync finished in ", d, ", ", len(m.txToInputOutput), " transactions in mempool")
+	m.metrics.MempoolResyncDuration.Observe(float64(d) / 1e6) // in milliseconds
 	return nil
 }

@@ -14,6 +14,7 @@ import (
 
 	"blockbook/bchain"
 	"blockbook/bchain/coins"
+	"blockbook/common"
 	"blockbook/db"
 	"blockbook/server"
 
@@ -109,8 +110,12 @@ func main() {
 		return
 	}
 
-	var err error
-	if chain, err = coins.NewBlockChain(*coin, *rpcURL, *rpcUser, *rpcPass, time.Duration(*rpcTimeout)*time.Second, *parse); err != nil {
+	metrics, err := common.GetMetrics()
+	if err != nil {
+		glog.Fatal("GetMetrics: ", err)
+	}
+
+	if chain, err = coins.NewBlockChain(*coin, *rpcURL, *rpcUser, *rpcPass, time.Duration(*rpcTimeout)*time.Second, *parse, metrics); err != nil {
 		glog.Fatal("rpc: ", err)
 	}
 
@@ -138,7 +143,7 @@ func main() {
 		return
 	}
 
-	syncWorker, err = db.NewSyncWorker(index, chain, *syncWorkers, *syncChunk, *blockFrom, *dryRun, chanOsSignal)
+	syncWorker, err = db.NewSyncWorker(index, chain, *syncWorkers, *syncChunk, *blockFrom, *dryRun, chanOsSignal, metrics)
 	if err != nil {
 		glog.Fatalf("NewSyncWorker %v", err)
 	}
@@ -154,7 +159,7 @@ func main() {
 		}
 	}
 
-	if txCache, err = db.NewTxCache(index, chain); err != nil {
+	if txCache, err = db.NewTxCache(index, chain, metrics); err != nil {
 		glog.Error("txCache ", err)
 		return
 	}
@@ -181,7 +186,8 @@ func main() {
 
 	var socketIoServer *server.SocketIoServer
 	if *socketIoBinding != "" {
-		socketIoServer, err = server.NewSocketIoServer(*socketIoBinding, *certFiles, index, chain, txCache, *explorerURL)
+		socketIoServer, err = server.NewSocketIoServer(
+			*socketIoBinding, *certFiles, index, chain, txCache, *explorerURL, metrics)
 		if err != nil {
 			glog.Error("socketio: ", err)
 			return
