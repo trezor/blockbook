@@ -38,12 +38,12 @@ func NewSocketIoServer(binding string, certFiles string, db *db.RocksDB, chain b
 
 	server.On(gosocketio.OnConnection, func(c *gosocketio.Channel) {
 		glog.Info("Client connected ", c.Id())
-		metrics.Clients.With(common.Labels{"transport": "socketio"}).Inc()
+		metrics.SocketIOClients.Inc()
 	})
 
 	server.On(gosocketio.OnDisconnection, func(c *gosocketio.Channel) {
 		glog.Info("Client disconnected ", c.Id())
-		metrics.Clients.With(common.Labels{"transport": "socketio"}).Dec()
+		metrics.SocketIOClients.Dec()
 	})
 
 	server.On(gosocketio.OnError, func(c *gosocketio.Channel) {
@@ -200,7 +200,7 @@ func (s *SocketIoServer) onMessage(c *gosocketio.Channel, req map[string]json.Ra
 	t := time.Now()
 	method := strings.Trim(string(req["method"]), "\"")
 	params := req["params"]
-	defer s.metrics.RequestDuration.With(common.Labels{"transport": "socketio", "method": method}).Observe(float64(time.Since(t)) / 1e3) // in microseconds
+	defer s.metrics.SocketIOReqDuration.With(common.Labels{"method": method}).Observe(float64(time.Since(t)) / 1e3) // in microseconds
 	f, ok := onMessageHandlers[method]
 	if ok {
 		rv, err = f(s, params)
@@ -209,11 +209,11 @@ func (s *SocketIoServer) onMessage(c *gosocketio.Channel, req map[string]json.Ra
 	}
 	if err == nil {
 		glog.V(1).Info(c.Id(), " onMessage ", method, " success")
-		s.metrics.RPCRequests.With(common.Labels{"transport": "socketio", "method": method, "status": "success"}).Inc()
+		s.metrics.SocketIORequests.With(common.Labels{"method": method, "status": "success"}).Inc()
 		return rv
 	}
 	glog.Error(c.Id(), " onMessage ", method, ": ", errors.ErrorStack(err))
-	s.metrics.RPCRequests.With(common.Labels{"transport": "socketio", "method": method, "status": err.Error()}).Inc()
+	s.metrics.SocketIORequests.With(common.Labels{"method": method, "status": err.Error()}).Inc()
 	e := resultError{}
 	e.Error.Message = err.Error()
 	return e
@@ -662,7 +662,7 @@ func (s *SocketIoServer) getMempoolEntry(txid string) (res resultGetMempoolEntry
 func (s *SocketIoServer) onSubscribe(c *gosocketio.Channel, req []byte) interface{} {
 	onError := func(id, sc, err string) {
 		glog.Error(id, " onSubscribe ", sc, ": ", err)
-		s.metrics.SubscribeRequests.With(common.Labels{"transport": "socketio", "channel": sc, "status": err}).Inc()
+		s.metrics.SocketIOSubscribes.With(common.Labels{"channel": sc, "status": err}).Inc()
 	}
 
 	r := string(req)
@@ -692,7 +692,7 @@ func (s *SocketIoServer) onSubscribe(c *gosocketio.Channel, req []byte) interfac
 		}
 		c.Join(sc)
 	}
-	s.metrics.SubscribeRequests.With(common.Labels{"transport": "socketio", "channel": sc, "status": "success"}).Inc()
+	s.metrics.SocketIOSubscribes.With(common.Labels{"channel": sc, "status": "success"}).Inc()
 	return nil
 }
 
