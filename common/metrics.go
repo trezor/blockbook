@@ -7,14 +7,14 @@ import (
 )
 
 type Metrics struct {
-	RPCRequests           *prometheus.CounterVec
-	SubscribeRequests     *prometheus.CounterVec
-	Clients               *prometheus.GaugeVec
-	RequestDuration       *prometheus.HistogramVec
+	SocketIORequests      *prometheus.CounterVec
+	SocketIOSubscribes    *prometheus.CounterVec
+	SocketIOClients       prometheus.Gauge
+	SocketIOReqDuration   *prometheus.HistogramVec
 	IndexResyncDuration   prometheus.Histogram
 	MempoolResyncDuration prometheus.Histogram
 	TxCacheEfficiency     *prometheus.CounterVec
-	BlockChainLatency     *prometheus.HistogramVec
+	RPCLatency            *prometheus.HistogramVec
 	IndexResyncErrors     *prometheus.CounterVec
 	MempoolResyncErrors   *prometheus.CounterVec
 	IndexDBSize           prometheus.Gauge
@@ -22,85 +22,95 @@ type Metrics struct {
 
 type Labels = prometheus.Labels
 
-func GetMetrics() (*Metrics, error) {
+func GetMetrics(coin string) (*Metrics, error) {
 	metrics := Metrics{}
 
-	metrics.RPCRequests = prometheus.NewCounterVec(
+	metrics.SocketIORequests = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "blockbook_rpc_requests",
-			Help: "Total number of RPC requests by transport, method and status",
+			Name:        "blockbook_socketio_requests",
+			Help:        "Total number of socketio requests by method and status",
+			ConstLabels: Labels{"coin": coin},
 		},
-		[]string{"transport", "method", "status"},
+		[]string{"method", "status"},
 	)
-	metrics.SubscribeRequests = prometheus.NewCounterVec(
+	metrics.SocketIOSubscribes = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "blockbook_subscribe_requests",
-			Help: "Total number of subscribe requests by transport, channel and status",
+			Name:        "blockbook_socketio_subscribes",
+			Help:        "Total number of socketio subscribes by channel and status",
+			ConstLabels: Labels{"coin": coin},
 		},
-		[]string{"transport", "channel", "status"},
+		[]string{"channel", "status"},
 	)
-	metrics.Clients = prometheus.NewGaugeVec(
+	metrics.SocketIOClients = prometheus.NewGauge(
 		prometheus.GaugeOpts{
-			Name: "blockbook_clients",
-			Help: "Number of currently connected clients by transport",
+			Name:        "blockbook_socketio_clients",
+			Help:        "Number of currently connected clients",
+			ConstLabels: Labels{"coin": coin},
 		},
-		[]string{"transport"},
 	)
-	metrics.RequestDuration = prometheus.NewHistogramVec(
+	metrics.SocketIOReqDuration = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
-			Name:    "blockbook_request_duration",
-			Help:    "Request duration by method (in microseconds)",
-			Buckets: []float64{1, 5, 10, 25, 50, 75, 100, 250},
+			Name:        "blockbook_socketio_req_duration",
+			Help:        "Socketio request duration by method (in microseconds)",
+			Buckets:     []float64{1, 5, 10, 25, 50, 75, 100, 250},
+			ConstLabels: Labels{"coin": coin},
 		},
-		[]string{"transport", "method"},
+		[]string{"method"},
 	)
 	metrics.IndexResyncDuration = prometheus.NewHistogram(
 		prometheus.HistogramOpts{
-			Name:    "blockbook_index_resync_duration",
-			Help:    "Duration of index resync operation (in milliseconds)",
-			Buckets: []float64{100, 250, 500, 750, 1000, 10000, 30000, 60000},
+			Name:        "blockbook_index_resync_duration",
+			Help:        "Duration of index resync operation (in milliseconds)",
+			Buckets:     []float64{100, 250, 500, 750, 1000, 10000, 30000, 60000},
+			ConstLabels: Labels{"coin": coin},
 		},
 	)
 	metrics.MempoolResyncDuration = prometheus.NewHistogram(
 		prometheus.HistogramOpts{
-			Name:    "blockbook_mempool_resync_duration",
-			Help:    "Duration of mempool resync operation (in milliseconds)",
-			Buckets: []float64{1, 5, 10, 25, 50, 75, 100, 250},
+			Name:        "blockbook_mempool_resync_duration",
+			Help:        "Duration of mempool resync operation (in milliseconds)",
+			Buckets:     []float64{1, 5, 10, 25, 50, 75, 100, 250},
+			ConstLabels: Labels{"coin": coin},
 		},
 	)
 	metrics.TxCacheEfficiency = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "blockbook_txcache_efficiency",
-			Help: "Efficiency of txCache",
+			Name:        "blockbook_txcache_efficiency",
+			Help:        "Efficiency of txCache",
+			ConstLabels: Labels{"coin": coin},
 		},
 		[]string{"status"},
 	)
-	metrics.BlockChainLatency = prometheus.NewHistogramVec(
+	metrics.RPCLatency = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
-			Name:    "blockbook_blockchain_latency",
-			Help:    "Latency of blockchain RPC by coin and method (in milliseconds)",
-			Buckets: []float64{1, 5, 10, 25, 50, 75, 100, 250},
+			Name:        "blockbook_rpc_latency",
+			Help:        "Latency of blockchain RPC by method (in milliseconds)",
+			Buckets:     []float64{1, 5, 10, 25, 50, 75, 100, 250},
+			ConstLabels: Labels{"coin": coin},
 		},
-		[]string{"coin", "method"},
+		[]string{"method"},
 	)
 	metrics.IndexResyncErrors = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "blockbook_index_resync_errors",
-			Help: "Number of errors of index resync operation",
+			Name:        "blockbook_index_resync_errors",
+			Help:        "Number of errors of index resync operation",
+			ConstLabels: Labels{"coin": coin},
 		},
 		[]string{"error"},
 	)
 	metrics.MempoolResyncErrors = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "blockbook_mempool_resync_errors",
-			Help: "Number of errors of mempool resync operation",
+			Name:        "blockbook_mempool_resync_errors",
+			Help:        "Number of errors of mempool resync operation",
+			ConstLabels: Labels{"coin": coin},
 		},
 		[]string{"error"},
 	)
 	metrics.IndexDBSize = prometheus.NewGauge(
 		prometheus.GaugeOpts{
-			Name: "blockbook_index_db_size",
-			Help: "Size of index database (in bytes)",
+			Name:        "blockbook_index_db_size",
+			Help:        "Size of index database (in bytes)",
+			ConstLabels: Labels{"coin": coin},
 		},
 	)
 

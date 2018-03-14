@@ -110,7 +110,7 @@ func main() {
 		return
 	}
 
-	metrics, err := common.GetMetrics()
+	metrics, err := common.GetMetrics(*coin)
 	if err != nil {
 		glog.Fatal("GetMetrics: ", err)
 	}

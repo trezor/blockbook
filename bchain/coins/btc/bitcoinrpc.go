@@ -570,7 +570,7 @@ func (b *BitcoinRPC) observeRPCLatency(method string, fn func() error) error {
 	start := time.Now()
 	err := fn()
 	if err == nil {
-		b.metrics.BlockChainLatency.With(common.Labels{"coin": "bitcoin", "method": method}).Observe(float64(time.Since(start)) / 1e6) // in milliseconds
+		b.metrics.RPCLatency.With(common.Labels{"method": method}).Observe(float64(time.Since(start)) / 1e6) // in milliseconds
 	}
 	return err
 }
