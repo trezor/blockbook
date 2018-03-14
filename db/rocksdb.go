@@ -235,11 +235,7 @@ type outpoint struct {
 	vout uint32
 }
 
-func (d *RocksDB) writeOutputs(
-	wb *gorocksdb.WriteBatch,
-	block *bchain.Block,
-	op int,
-) error {
+func (d *RocksDB) writeOutputs(wb *gorocksdb.WriteBatch, block *bchain.Block, op int) error {
 	records := make(map[string][]outpoint)
 
 	for _, tx := range block.Txs {
@@ -253,6 +249,14 @@ func (d *RocksDB) writeOutputs(
 						txid: tx.Txid,
 						vout: output.N,
 					})
+					if op == opDelete {
+						// remove transactions from cache
+						b, err := packTxid(tx.Txid)
+						if err != nil {
+							return err
+						}
+						wb.DeleteCF(d.cfh[cfTransactions], b)
+					}
 				}
 			}
 		}
@@ -448,12 +452,10 @@ func (d *RocksDB) writeHeight(
 	return nil
 }
 
-// DisconnectBlocks removes all data belonging to blocks in range lower-higher
-func (d *RocksDB) DisconnectBlocks(
-	lower uint32,
-	higher uint32,
-) error {
-	glog.Infof("rocksdb: disconnecting blocks %d-%d", lower, higher)
+// DisconnectBlocksFullScan removes all data belonging to blocks in range lower-higher
+// it finds the data by doing full scan of outputs column, therefore it is quite slow
+func (d *RocksDB) DisconnectBlocksFullScan(lower uint32, higher uint32) error {
+	glog.Infof("db: disconnecting blocks %d-%d using full scan", lower, higher)
 	outputKeys := [][]byte{}
 	outputValues := [][]byte{}
 	var totalOutputs, count uint64
@@ -506,6 +508,7 @@ func (d *RocksDB) DisconnectBlocks(
 			return err
 		}
 		for _, o := range outpoints {
+			// delete from inputs
 			boutpoint, err := packOutpoint(o.txid, o.vout)
 			if err != nil {
 				return err
@@ -514,6 +517,12 @@ func (d *RocksDB) DisconnectBlocks(
 				glog.Info("input ", hex.EncodeToString(boutpoint))
 			}
 			wb.DeleteCF(d.cfh[cfInputs], boutpoint)
+			// delete from txCache
+			b, err := packTxid(o.txid)
+			if err != nil {
+				return err
+			}
+			wb.DeleteCF(d.cfh[cfTransactions], b)
 		}
 	}
 	for height := lower; height <= higher; height++ {

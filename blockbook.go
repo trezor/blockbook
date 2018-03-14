@@ -125,8 +125,13 @@ func main() {
 	}
 	defer index.Close()
 
+	syncWorker, err = db.NewSyncWorker(index, chain, *syncWorkers, *syncChunk, *blockFrom, *dryRun, chanOsSignal, metrics)
+	if err != nil {
+		glog.Fatalf("NewSyncWorker %v", err)
+	}
+
 	if *rollbackHeight >= 0 {
-		bestHeight, _, err := index.GetBestBlock()
+		bestHeight, bestHash, err := index.GetBestBlock()
 		if err != nil {
 			glog.Error("rollbackHeight: ", err)
 			return
@@ -134,7 +139,16 @@ func main() {
 		if uint32(*rollbackHeight) > bestHeight {
 			glog.Infof("nothing to rollback, rollbackHeight %d, bestHeight: %d", *rollbackHeight, bestHeight)
 		} else {
-			err = index.DisconnectBlocks(uint32(*rollbackHeight), bestHeight)
+			hashes := []string{bestHash}
+			for height := bestHeight - 1; height >= uint32(*rollbackHeight); height-- {
+				hash, err := index.GetBlockHash(height)
+				if err != nil {
+					glog.Error("rollbackHeight: ", err)
+					return
+				}
+				hashes = append(hashes, hash)
+			}
+			err = syncWorker.DisconnectBlocks(uint32(*rollbackHeight), bestHeight, hashes)
 			if err != nil {
 				glog.Error("rollbackHeight: ", err)
 				return
@@ -166,11 +180,6 @@ func main() {
 				}
 			}
 		}()
-	}
-
-	syncWorker, err = db.NewSyncWorker(index, chain, *syncWorkers, *syncChunk, *blockFrom, *dryRun, chanOsSignal, metrics)
-	if err != nil {
-		glog.Fatalf("NewSyncWorker %v", err)
 	}
 
 	if *synchronize {

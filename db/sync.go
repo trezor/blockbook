@@ -4,6 +4,7 @@ import (
 	"blockbook/bchain"
 	"blockbook/common"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -66,6 +67,10 @@ func (w *SyncWorker) ResyncIndex(onNewBlock func(hash string)) error {
 	return err
 }
 
+func isError(err error, s string) bool {
+	return strings.Contains(err.Error(), s)
+}
+
 func (w *SyncWorker) resyncIndex(onNewBlock func(hash string)) error {
 	remote, err := w.chain.GetBestBlockHash()
 	if err != nil {
@@ -89,7 +94,7 @@ func (w *SyncWorker) resyncIndex(onNewBlock func(hash string)) error {
 		header, err = w.chain.GetBlockHeader(local)
 		forked := false
 		if err != nil {
-			if e, ok := err.(*bchain.RPCError); ok && e.Message == "Block not found" {
+			if isError(err, "Block not found") {
 				forked = true
 			} else {
 				return err
@@ -104,6 +109,7 @@ func (w *SyncWorker) resyncIndex(onNewBlock func(hash string)) error {
 			// find and disconnect forked blocks and then synchronize again
 			glog.Info("resync: local is forked")
 			var height uint32
+			hashes := []string{local}
 			for height = localBestHeight - 1; height >= 0; height-- {
 				local, err = w.db.GetBlockHash(height)
 				if err != nil {
@@ -116,8 +122,9 @@ func (w *SyncWorker) resyncIndex(onNewBlock func(hash string)) error {
 				if local == remote {
 					break
 				}
+				hashes = append(hashes, local)
 			}
-			err = w.db.DisconnectBlocks(height+1, localBestHeight)
+			err = w.DisconnectBlocks(height+1, localBestHeight, hashes)
 			if err != nil {
 				return err
 			}
@@ -269,7 +276,7 @@ func (w *SyncWorker) connectBlockChunk(lower, higher uint32) error {
 	connected, err := w.isBlockConnected(higher)
 	if err != nil || connected {
 		// if higher is over the best block, continue with lower block, otherwise return error
-		if e, ok := err.(*bchain.RPCError); !ok || e.Message != "Block height out of range" {
+		if isError(err, "Block height out of range") {
 			return err
 		}
 	}
@@ -319,7 +326,7 @@ func (w *SyncWorker) ConnectBlocksParallelInChunks(lower, higher uint32) error {
 			}
 			err := w.connectBlockChunk(low, high)
 			if err != nil {
-				if e, ok := err.(*bchain.RPCError); ok && (e.Message == "Block height out of range" || e.Message == "Block not found") {
+				if isError(err, "Block height out of range") || isError(err, "Block not found") {
 					break
 				}
 				glog.Fatalf("connectBlocksParallel %d-%d %v", low, high, err)
@@ -372,4 +379,29 @@ func (w *SyncWorker) getBlockChain(hash string, out chan blockResult, done chan 
 		hash = block.Next
 		out <- blockResult{block: block}
 	}
+}
+
+// DisconnectBlocks removes all data belonging to blocks in range lower-higher,
+// using block data from blockchain, if they are available,
+// otherwise doing full scan
+func (w *SyncWorker) DisconnectBlocks(lower uint32, higher uint32, hashes []string) error {
+	glog.Infof("sync: disconnecting blocks %d-%d", lower, higher)
+	blocks := make([]*bchain.Block, len(hashes))
+	var err error
+	// get all blocks first to see if we can avoid full scan
+	for i, hash := range hashes {
+		blocks[i], err = w.chain.GetBlock(hash, 0)
+		if err != nil {
+			// cannot get block, do full range scan
+			return w.db.DisconnectBlocksFullScan(lower, higher)
+		}
+	}
+	// then disconnect one after another
+	for i, block := range blocks {
+		glog.Info("Disconnecting block ", (int(higher) - i), " ", block.Hash)
+		if err = w.db.DisconnectBlock(block); err != nil {
+			return err
+		}
+	}
+	return nil
 }
