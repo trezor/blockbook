@@ -120,17 +120,18 @@ The data are separated to different column families:
 ## Todo
 
 - find memory leak in initial import
-- disconnect blocks - keep map of transactions in the last 100 blocks
 - add zcash support
 - add ethereum support
 - cleanup of the socket.io - do not send unnecessary data
 - handle different versions of Bitcoin Core
 - log live traffic from production bitcore server and replay it in blockbook
-- compute statistics of data, txcache, usage, etc.
 - protobuf websocket interface
 - xpub index
 - tests
-- fix program dependencies
+- fix program dependencies to concrete versions
+- ~~disconnect blocks - use block data if available to avoid full scan~~
+- ~~compute statistics of data, txcache, usage, etc.~~
+- ~~disconnect blocks - remove disconnected cached transactions~~
 - ~~implement getmempoolentry~~
 - ~~support altcoins, abstraction of blockchain server/service~~
 - ~~cache transactions in RocksDB~~
