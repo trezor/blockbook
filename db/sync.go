@@ -303,6 +303,7 @@ func (w *SyncWorker) connectBlockChunk(lower, higher uint32) error {
 		}
 		if block.Height%1000 == 0 {
 			glog.Info("connected block ", block.Height, " ", block.Hash)
+			go w.metrics.IndexDBSize.Set(float64(w.db.DatabaseSizeOnDisk()))
 		}
 	}
 
