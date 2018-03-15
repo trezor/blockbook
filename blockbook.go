@@ -37,12 +37,9 @@ const resyncMempoolPeriodMs = 60017
 const debounceResyncMempoolMs = 1009
 
 var (
-	rpcURL     = flag.String("rpcurl", "http://localhost:8332", "url of blockchain RPC service")
-	rpcUser    = flag.String("rpcuser", "rpc", "rpc username")
-	rpcPass    = flag.String("rpcpass", "rpc", "rpc password")
-	rpcTimeout = flag.Uint("rpctimeout", 25, "rpc timeout in seconds")
+	blockchain = flag.String("blockchaincfg", "", "path to blockchain RPC service configuration json file")
 
-	dbPath = flag.String("path", "./data", "path to address index directory")
+	dbPath = flag.String("datadir", "./data", "path to database directory")
 
 	blockFrom      = flag.Int("blockheight", -1, "height of the starting block")
 	blockUntil     = flag.Int("blockuntil", -1, "height of the final block")
@@ -57,15 +54,12 @@ var (
 	syncChunk   = flag.Int("chunk", 100, "block chunk size for processing")
 	syncWorkers = flag.Int("workers", 8, "number of workers to process blocks")
 	dryRun      = flag.Bool("dryrun", false, "do not index blocks, only download")
-	parse       = flag.Bool("parse", false, "use in-process block parsing")
 
 	httpServerBinding = flag.String("httpserver", "", "http server binding [address]:port, (default no http server)")
 
 	socketIoBinding = flag.String("socketio", "", "socketio server binding [address]:port[/path], (default no socket.io server)")
 
 	certFiles = flag.String("certfile", "", "to enable SSL specify path to certificate files without extension, expecting <certfile>.crt and <certfile>.key, (default no SSL)")
-
-	zeroMQBinding = flag.String("zeromq", "", "binding to zeromq, if missing no zeromq connection")
 
 	explorerURL = flag.String("explorer", "", "address of blockchain explorer")
 
@@ -115,7 +109,11 @@ func main() {
 		glog.Fatal("GetMetrics: ", err)
 	}
 
-	if chain, err = coins.NewBlockChain(*coin, *rpcURL, *rpcUser, *rpcPass, time.Duration(*rpcTimeout)*time.Second, *parse, metrics); err != nil {
+	if *blockchain == "" {
+		glog.Fatal("Missing blockchaincfg configuration parameter")
+	}
+
+	if chain, err = coins.NewBlockChain(*coin, *blockchain, pushSynchronizationHandler, metrics); err != nil {
 		glog.Fatal("rpc: ", err)
 	}
 
@@ -222,19 +220,6 @@ func main() {
 		go syncMempoolLoop()
 	}
 
-	var mq *bchain.MQ
-	if *zeroMQBinding != "" {
-		if !*synchronize {
-			glog.Error("zeromq connection without synchronization does not make sense, ignoring zeromq parameter")
-		} else {
-			mq, err = bchain.NewMQ(*zeroMQBinding, mqHandler)
-			if err != nil {
-				glog.Error("mq: ", err)
-				return
-			}
-		}
-	}
-
 	if *blockFrom >= 0 {
 		if *blockUntil < 0 {
 			*blockUntil = *blockFrom
@@ -261,8 +246,8 @@ func main() {
 		}
 	}
 
-	if httpServer != nil || socketIoServer != nil || mq != nil {
-		waitForSignalAndShutdown(httpServer, socketIoServer, mq, 5*time.Second)
+	if httpServer != nil || socketIoServer != nil || chain != nil {
+		waitForSignalAndShutdown(httpServer, socketIoServer, chain, 5*time.Second)
 	}
 
 	if *synchronize {
@@ -332,7 +317,7 @@ func onNewTxAddr(txid string, addr string) {
 	}
 }
 
-func mqHandler(m *bchain.MQMessage) {
+func pushSynchronizationHandler(m *bchain.MQMessage) {
 	// TODO - is coin specific, item for abstraction
 	body := hex.EncodeToString(m.Body)
 	glog.V(1).Infof("MQ: %s-%d  %s", m.Topic, m.Sequence, body)
@@ -345,19 +330,13 @@ func mqHandler(m *bchain.MQMessage) {
 	}
 }
 
-func waitForSignalAndShutdown(https *server.HTTPServer, socketio *server.SocketIoServer, mq *bchain.MQ, timeout time.Duration) {
+func waitForSignalAndShutdown(https *server.HTTPServer, socketio *server.SocketIoServer, chain bchain.BlockChain, timeout time.Duration) {
 	sig := <-chanOsSignal
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	glog.Infof("Shutdown: %v", sig)
-
-	if mq != nil {
-		if err := mq.Shutdown(); err != nil {
-			glog.Error("MQ.Shutdown error: ", err)
-		}
-	}
 
 	if https != nil {
 		if err := https.Shutdown(ctx); err != nil {
@@ -368,6 +347,12 @@ func waitForSignalAndShutdown(https *server.HTTPServer, socketio *server.SocketI
 	if socketio != nil {
 		if err := socketio.Shutdown(ctx); err != nil {
 			glog.Error("SocketIo.Shutdown error: ", err)
+		}
+	}
+
+	if chain != nil {
+		if err := chain.Shutdown(); err != nil {
+			glog.Error("BlockChain.Shutdown error: ", err)
 		}
 	}
 }

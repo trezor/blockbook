@@ -29,7 +29,7 @@ Create script that runs blockbook *run-testnet-blockbook.sh*
 #!/bin/bash
 
 cd go/src/blockbook
-./blockbook -path=/data/testnet/blockbook/db -sync -parse -rpcurl=http://127.0.0.1:18332 -httpserver=:18335 -socketio=:18336 -certfile=server/testcert -zeromq=tcp://127.0.0.1:18334 -explorer=https://testnet-bitcore1.trezor.io  -coin=btc-testnet $1
+./blockbook -datadir=/data/testnet/blockbook/db -sync -parse -rpcurl=http://127.0.0.1:18332 -httpserver=:18335 -socketio=:18336 -certfile=server/testcert -zeromq=tcp://127.0.0.1:18334 -explorer=https://testnet-bitcore1.trezor.io  -coin=btc-testnet $1
 ```
 To run blockbook with logging to file (run with nohup or daemonize or using screen)
 ```

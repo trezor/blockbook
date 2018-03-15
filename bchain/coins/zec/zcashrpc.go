@@ -4,15 +4,15 @@ import (
 	"blockbook/bchain"
 	"blockbook/bchain/coins/btc"
 	"blockbook/common"
-	"time"
+	"encoding/json"
 )
 
 type ZCashRPC struct {
 	*btc.BitcoinRPC
 }
 
-func NewZCashRPC(url string, user string, password string, timeout time.Duration, parse bool, metrics *common.Metrics) (bchain.BlockChain, error) {
-	b, err := btc.NewBitcoinRPC(url, user, password, timeout, parse, metrics)
+func NewZCashRPC(config json.RawMessage, pushHandler func(*bchain.MQMessage), metrics *common.Metrics) (bchain.BlockChain, error) {
+	b, err := btc.NewBitcoinRPC(config, pushHandler, metrics)
 	if err != nil {
 		return nil, err
 	}
