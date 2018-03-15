@@ -3,23 +3,25 @@ package eth
 import (
 	"blockbook/bchain"
 	"blockbook/common"
+	"context"
 	"time"
+
+	"github.com/golang/glog"
 
 	"github.com/ethereum/go-ethereum/ethclient"
 )
 
 // EthRPC is an interface to JSON-RPC eth service.
 type EthRPC struct {
-	client      *ethclient.Client
-	rpcURL      string
-	user        string
-	password    string
-	Parser      *EthParser
-	Testnet     bool
-	Network     string
-	Mempool     *bchain.Mempool
-	ParseBlocks bool
-	metrics     *common.Metrics
+	client    *ethclient.Client
+	ctx       context.Context
+	ctxCancel context.CancelFunc
+	rpcURL    string
+	Parser    *EthParser
+	Testnet   bool
+	Network   string
+	Mempool   *bchain.Mempool
+	metrics   *common.Metrics
 }
 
 // NewEthRPC returns new EthRPC instance.
@@ -28,17 +30,23 @@ func NewEthRPC(url string, user string, password string, timeout time.Duration, 
 	if err != nil {
 		return nil, err
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	s := &EthRPC{
-		client:      c,
-		rpcURL:      url,
-		user:        user,
-		password:    password,
-		ParseBlocks: parse,
-		metrics:     metrics,
+		client:    c,
+		ctx:       ctx,
+		ctxCancel: cancel,
+		rpcURL:    url,
+		metrics:   metrics,
 	}
 
 	// always create parser
 	s.Parser = &EthParser{}
+
+	h, err := c.HeaderByNumber(s.ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	glog.Info("best block ", h.Number)
 
 	// // parameters for getInfo request
 	// if s.Parser.Params.Net == wire.MainNet {
