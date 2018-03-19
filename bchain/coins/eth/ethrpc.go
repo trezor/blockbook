@@ -96,27 +96,76 @@ func (b *EthRPC) Shutdown() error {
 }
 
 func (b *EthRPC) IsTestnet() bool {
-	panic("not implemented")
+	return b.Testnet
 }
 
 func (b *EthRPC) GetNetworkName() string {
-	panic("not implemented")
+	return b.Network
+}
+
+func (b *EthRPC) getBestHeader() (*ethtypes.Header, error) {
+	// TODO lock
+	if b.bestHeader == nil {
+		var err error
+		ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
+		defer cancel()
+		b.bestHeader, err = b.client.HeaderByNumber(ctx, nil)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return b.bestHeader, nil
 }
 
 func (b *EthRPC) GetBestBlockHash() (string, error) {
-	panic("not implemented")
+	h, err := b.getBestHeader()
+	if err != nil {
+		return "", err
+	}
+	return h.TxHash.Hex()[2:], nil
 }
 
 func (b *EthRPC) GetBestBlockHeight() (uint32, error) {
-	panic("not implemented")
+	h, err := b.getBestHeader()
+	if err != nil {
+		return 0, err
+	}
+	// TODO - can it grow over 2^32 ?
+	return uint32(h.Number.Uint64()), nil
 }
 
 func (b *EthRPC) GetBlockHash(height uint32) (string, error) {
-	panic("not implemented")
+	var n big.Int
+	n.SetUint64(uint64(height))
+	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
+	defer cancel()
+	h, err := b.client.HeaderByNumber(ctx, &n)
+	if err != nil {
+		return "", err
+	}
+	return h.TxHash.Hex()[2:], nil
 }
 
 func (b *EthRPC) GetBlockHeader(hash string) (*bchain.BlockHeader, error) {
-	panic("not implemented")
+	bh, err := b.getBestHeader()
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
+	defer cancel()
+	h, err := b.client.HeaderByHash(ctx, ethcommon.StringToHash(hash))
+	if err != nil {
+		return nil, err
+	}
+	hn := uint32(h.Number.Uint64())
+	bn := uint32(bh.Number.Uint64())
+	rv := bchain.BlockHeader{
+		Hash:          h.TxHash.Hex()[2:],
+		Height:        hn,
+		Confirmations: int(bn - hn),
+		// TODO Next tx hash
+	}
+	return &rv, nil
 }
 
 func (b *EthRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
@@ -156,5 +205,5 @@ func (b *EthRPC) GetMempoolEntry(txid string) (*bchain.MempoolEntry, error) {
 }
 
 func (b *EthRPC) GetChainParser() bchain.BlockChainParser {
-	panic("not implemented")
+	return b.Parser
 }
