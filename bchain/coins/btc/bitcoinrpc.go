@@ -48,7 +48,7 @@ func NewBitcoinRPC(config json.RawMessage, pushHandler func(*bchain.MQMessage), 
 	var c configuration
 	err = json.Unmarshal(config, &c)
 	if err != nil {
-		return nil, errors.Annotatef(err, "Invalid configuragion file")
+		return nil, errors.Annotatef(err, "Invalid configuration file")
 	}
 	transport := &http.Transport{
 		Dial:                (&net.Dialer{KeepAlive: 600 * time.Second}).Dial,
