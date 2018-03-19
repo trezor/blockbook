@@ -83,6 +83,8 @@ func NewBitcoinRPC(config json.RawMessage, pushHandler func(*bchain.MQMessage), 
 		s.Network = "testnet"
 	}
 
+	glog.Info("rpc: block chain ", s.Parser.Params.Name)
+
 	mq, err := bchain.NewMQ(c.ZeroMQBinding, pushHandler)
 	if err != nil {
 		glog.Error("mq: ", err)
@@ -92,7 +94,6 @@ func NewBitcoinRPC(config json.RawMessage, pushHandler func(*bchain.MQMessage), 
 
 	s.Mempool = bchain.NewMempool(s, metrics)
 
-	glog.Info("rpc: block chain ", s.Parser.Params.Name)
 	return s, nil
 }
 
