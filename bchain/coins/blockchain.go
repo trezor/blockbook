@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"reflect"
+	"time"
 
 	"github.com/juju/errors"
 )
@@ -38,5 +39,10 @@ func NewBlockChain(coin string, configfile string, pushHandler func(*bchain.MQMe
 	if err != nil {
 		return nil, errors.Annotatef(err, "Error parsing file %v", configfile)
 	}
-	return bcf(config, pushHandler, metrics)
+	bc, err := bcf(config, pushHandler, metrics)
+	if err != nil {
+		return nil, err
+	}
+	bc.Initialize(bchain.NewMempool(bc, metrics))
+	return bc, nil
 }
