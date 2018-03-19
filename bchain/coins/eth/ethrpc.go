@@ -4,9 +4,11 @@ import (
 	"blockbook/bchain"
 	"blockbook/common"
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/golang/glog"
+	"github.com/juju/errors"
 
 	"github.com/ethereum/go-ethereum/ethclient"
 )
@@ -24,25 +26,36 @@ type EthRPC struct {
 	metrics   *common.Metrics
 }
 
+type configuration struct {
+	RPCURL     string `json:"rpcURL"`
+	RPCTimeout int    `json:"rpcTimeout"`
+}
+
 // NewEthRPC returns new EthRPC instance.
-func NewEthRPC(url string, user string, password string, timeout time.Duration, parse bool, metrics *common.Metrics) (bchain.BlockChain, error) {
-	c, err := ethclient.Dial(url)
+func NewEthRPC(config json.RawMessage, pushHandler func(*bchain.MQMessage), metrics *common.Metrics) (bchain.BlockChain, error) {
+	var err error
+	var c configuration
+	err = json.Unmarshal(config, &c)
+	if err != nil {
+		return nil, errors.Annotatef(err, "Invalid configuration file")
+	}
+	ec, err := ethclient.Dial(c.RPCURL)
 	if err != nil {
 		return nil, err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(c.RPCTimeout)*time.Second)
 	s := &EthRPC{
-		client:    c,
+		client:    ec,
 		ctx:       ctx,
 		ctxCancel: cancel,
-		rpcURL:    url,
+		rpcURL:    c.RPCURL,
 		metrics:   metrics,
 	}
 
 	// always create parser
 	s.Parser = &EthParser{}
 
-	h, err := c.HeaderByNumber(s.ctx, nil)
+	h, err := ec.HeaderByNumber(s.ctx, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -61,6 +74,13 @@ func NewEthRPC(url string, user string, password string, timeout time.Duration, 
 
 	// glog.Info("rpc: block chain ", s.Parser.Params.Name)
 	return s, nil
+}
+
+func (b *EthRPC) Shutdown() error {
+	if b.ctxCancel != nil {
+		b.ctxCancel()
+	}
+	return nil
 }
 
 func (b *EthRPC) IsTestnet() bool {
