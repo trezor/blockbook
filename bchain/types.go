@@ -86,6 +86,8 @@ func (e *RPCError) Error() string {
 }
 
 type BlockChain interface {
+	// cleanup
+	Shutdown() error
 	// chain info
 	IsTestnet() bool
 	GetNetworkName() string

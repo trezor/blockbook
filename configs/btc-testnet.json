@@ -1,0 +1,8 @@
+{
+  "rpcURL": "http://localhost:8332",
+  "rpcUser": "rpc",
+  "rpcPass": "rpc",
+  "rpcTimeout": 25,
+  "parse": true,
+  "zeroMQBinding": "tcp://127.0.0.1:28332"
+}

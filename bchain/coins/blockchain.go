@@ -6,14 +6,15 @@ import (
 	"blockbook/bchain/coins/eth"
 	"blockbook/bchain/coins/zec"
 	"blockbook/common"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"reflect"
-	"time"
 
 	"github.com/juju/errors"
 )
 
-type blockChainFactory func(url string, user string, password string, timeout time.Duration, parse bool, metrics *common.Metrics) (bchain.BlockChain, error)
+type blockChainFactory func(config json.RawMessage, pushHandler func(*bchain.MQMessage), metrics *common.Metrics) (bchain.BlockChain, error)
 
 var blockChainFactories = make(map[string]blockChainFactory)
 
@@ -26,10 +27,19 @@ func init() {
 }
 
 // NewBlockChain creates bchain.BlockChain of type defined by parameter coin
-func NewBlockChain(coin string, url string, user string, password string, timeout time.Duration, parse bool, metrics *common.Metrics) (bchain.BlockChain, error) {
+func NewBlockChain(coin string, configfile string, pushHandler func(*bchain.MQMessage), metrics *common.Metrics) (bchain.BlockChain, error) {
 	bcf, ok := blockChainFactories[coin]
 	if !ok {
 		return nil, errors.New(fmt.Sprint("Unsupported coin ", coin, ". Must be one of ", reflect.ValueOf(blockChainFactories).MapKeys()))
 	}
-	return bcf(url, user, password, timeout, parse, metrics)
+	data, err := ioutil.ReadFile(configfile)
+	if err != nil {
+		return nil, errors.Annotatef(err, "Error reading file %v", configfile)
+	}
+	var config json.RawMessage
+	err = json.Unmarshal(data, &config)
+	if err != nil {
+		return nil, errors.Annotatef(err, "Error parsing file %v", configfile)
+	}
+	return bcf(config, pushHandler, metrics)
 }

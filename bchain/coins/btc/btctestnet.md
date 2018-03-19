@@ -24,12 +24,24 @@ bitcoin-0.15.1/bin/bitcoind -datadir=/data/testnet/bitcoin -rpcworkqueue=32 -zmq
 ```
 Run the *run-testnet-bitcoind.sh* to get initial import of data.
 
+Create blockchain configuration file */data/testnet/blockbook/btc-testnet.json*
+```
+{
+  "rpcURL": "http://127.0.0.1:18332",
+  "rpcUser": "rpc",
+  "rpcPass": "rpc",
+  "rpcTimeout": 25,
+  "parse": true,
+  "zeroMQBinding": "tcp://127.0.0.1:18334"
+}
+```
+
 Create script that runs blockbook *run-testnet-blockbook.sh*
 ```
 #!/bin/bash
 
 cd go/src/blockbook
-./blockbook -path=/data/testnet/blockbook/db -sync -parse -rpcurl=http://127.0.0.1:18332 -httpserver=:18335 -socketio=:18336 -certfile=server/testcert -zeromq=tcp://127.0.0.1:18334 -explorer=https://testnet-bitcore1.trezor.io  -coin=btc-testnet $1
+./blockbook -coin=btc-testnet -blockchaincfg=/data/testnet/blockbook/btc-testnet.json  -datadir=/data/testnet/blockbook/db -sync -httpserver=:18335 -socketio=:18336 -certfile=server/testcert -explorer=https://testnet-bitcore1.trezor.io $1
 ```
 To run blockbook with logging to file (run with nohup or daemonize or using screen)
 ```

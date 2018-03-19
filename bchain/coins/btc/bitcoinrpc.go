@@ -30,21 +30,38 @@ type BitcoinRPC struct {
 	Mempool     *bchain.Mempool
 	ParseBlocks bool
 	metrics     *common.Metrics
+	mq          *bchain.MQ
+}
+
+type configuration struct {
+	RPCURL        string `json:"rpcURL"`
+	RPCUser       string `json:"rpcUser"`
+	RPCPass       string `json:"rpcPass"`
+	RPCTimeout    int    `json:"rpcTimeout"`
+	Parse         bool   `json:"parse"`
+	ZeroMQBinding string `json:"zeroMQBinding"`
 }
 
 // NewBitcoinRPC returns new BitcoinRPC instance.
-func NewBitcoinRPC(url string, user string, password string, timeout time.Duration, parse bool, metrics *common.Metrics) (bchain.BlockChain, error) {
+func NewBitcoinRPC(config json.RawMessage, pushHandler func(*bchain.MQMessage), metrics *common.Metrics) (bchain.BlockChain, error) {
+	var err error
+	var c configuration
+	err = json.Unmarshal(config, &c)
+	if err != nil {
+		return nil, errors.Annotatef(err, "Invalid configuragion file")
+	}
 	transport := &http.Transport{
 		Dial:                (&net.Dialer{KeepAlive: 600 * time.Second}).Dial,
 		MaxIdleConns:        100,
 		MaxIdleConnsPerHost: 100, // necessary to not to deplete ports
 	}
+
 	s := &BitcoinRPC{
-		client:      http.Client{Timeout: timeout, Transport: transport},
-		rpcURL:      url,
-		user:        user,
-		password:    password,
-		ParseBlocks: parse,
+		client:      http.Client{Timeout: time.Duration(c.RPCTimeout) * time.Second, Transport: transport},
+		rpcURL:      c.RPCURL,
+		user:        c.RPCUser,
+		password:    c.RPCPass,
+		ParseBlocks: c.Parse,
 		metrics:     metrics,
 	}
 	chainName, err := s.GetBlockChainInfo()
@@ -66,10 +83,28 @@ func NewBitcoinRPC(url string, user string, password string, timeout time.Durati
 		s.Network = "testnet"
 	}
 
+	glog.Info("rpc: block chain ", s.Parser.Params.Name)
+
+	mq, err := bchain.NewMQ(c.ZeroMQBinding, pushHandler)
+	if err != nil {
+		glog.Error("mq: ", err)
+		return nil, err
+	}
+	s.mq = mq
+
 	s.Mempool = bchain.NewMempool(s, metrics)
 
-	glog.Info("rpc: block chain ", s.Parser.Params.Name)
 	return s, nil
+}
+
+func (b *BitcoinRPC) Shutdown() error {
+	if b.mq != nil {
+		if err := b.mq.Shutdown(); err != nil {
+			glog.Error("MQ.Shutdown error: ", err)
+			return err
+		}
+	}
+	return nil
 }
 
 func (b *BitcoinRPC) IsTestnet() bool {
