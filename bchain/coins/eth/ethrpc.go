@@ -5,25 +5,35 @@ import (
 	"blockbook/common"
 	"context"
 	"encoding/json"
+	"math/big"
 	"time"
 
 	"github.com/golang/glog"
 	"github.com/juju/errors"
 
+	ethcommon "github.com/ethereum/go-ethereum/common"
+	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
+)
+
+type EthereumNet uint32
+
+const (
+	MainNet EthereumNet = 1
+	TestNet EthereumNet = 3
 )
 
 // EthRPC is an interface to JSON-RPC eth service.
 type EthRPC struct {
-	client    *ethclient.Client
-	ctx       context.Context
-	ctxCancel context.CancelFunc
-	rpcURL    string
-	Parser    *EthParser
-	Testnet   bool
-	Network   string
-	Mempool   *bchain.Mempool
-	metrics   *common.Metrics
+	client     *ethclient.Client
+	timeout    time.Duration
+	rpcURL     string
+	Parser     *EthParser
+	Testnet    bool
+	Network    string
+	Mempool    *bchain.Mempool
+	metrics    *common.Metrics
+	bestHeader *ethtypes.Header
 }
 
 type configuration struct {
@@ -43,43 +53,45 @@ func NewEthRPC(config json.RawMessage, pushHandler func(*bchain.MQMessage), metr
 	if err != nil {
 		return nil, err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(c.RPCTimeout)*time.Second)
 	s := &EthRPC{
-		client:    ec,
-		ctx:       ctx,
-		ctxCancel: cancel,
-		rpcURL:    c.RPCURL,
-		metrics:   metrics,
+		client:  ec,
+		rpcURL:  c.RPCURL,
+		metrics: metrics,
 	}
 
 	// always create parser
 	s.Parser = &EthParser{}
+	s.timeout = time.Duration(c.RPCTimeout) * time.Second
 
-	h, err := ec.HeaderByNumber(s.ctx, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), s.timeout)
+	defer cancel()
+
+	id, err := ec.NetworkID(ctx)
 	if err != nil {
 		return nil, err
 	}
-	glog.Info("best block ", h.Number)
 
-	// // parameters for getInfo request
-	// if s.Parser.Params.Net == wire.MainNet {
-	// 	s.Testnet = false
-	// 	s.Network = "livenet"
-	// } else {
-	// 	s.Testnet = true
-	// 	s.Network = "testnet"
-	// }
+	// parameters for getInfo request
+	switch EthereumNet(id.Uint64()) {
+	case MainNet:
+		s.Testnet = false
+		s.Network = "livenet"
+		break
+	case TestNet:
+		s.Testnet = true
+		s.Network = "testnet"
+		break
+	default:
+		return nil, errors.Errorf("Unknown network id %v", id)
+	}
+	glog.Info("rpc: block chain ", s.Network)
 
 	// s.Mempool = bchain.NewMempool(s, metrics)
 
-	// glog.Info("rpc: block chain ", s.Parser.Params.Name)
 	return s, nil
 }
 
 func (b *EthRPC) Shutdown() error {
-	if b.ctxCancel != nil {
-		b.ctxCancel()
-	}
 	return nil
 }
 
