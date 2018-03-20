@@ -531,9 +531,9 @@ func (b *BitcoinRPC) ResyncMempool(onNewTxAddr func(txid string, addr string)) e
 	return b.Mempool.Resync(onNewTxAddr)
 }
 
-// GetMempoolTransactions returns slice of mempool transactions for given output script.
-func (b *BitcoinRPC) GetMempoolTransactions(outputScript []byte) ([]string, error) {
-	return b.Mempool.GetTransactions(outputScript)
+// GetMempoolTransactions returns slice of mempool transactions for given address.
+func (b *BitcoinRPC) GetMempoolTransactions(address string) ([]string, error) {
+	return b.Mempool.GetTransactions(address)
 }
 
 // GetMempoolSpentOutput returns transaction in mempool which spends given outpoint

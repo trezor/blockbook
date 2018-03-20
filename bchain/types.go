@@ -103,7 +103,7 @@ type BlockChain interface {
 	SendRawTransaction(tx string) (string, error)
 	// mempool
 	ResyncMempool(onNewTxAddr func(txid string, addr string)) error
-	GetMempoolTransactions(outputScript []byte) ([]string, error)
+	GetMempoolTransactions(address string) ([]string, error)
 	GetMempoolSpentOutput(outputTxid string, vout uint32) string
 	GetMempoolEntry(txid string) (*MempoolEntry, error)
 	// parser
@@ -111,6 +111,10 @@ type BlockChain interface {
 }
 
 type BlockChainParser interface {
+	GetUIDFromVout(output *Vout) string
+	GetUIDFromAddress(address string) ([]byte, error)
+	PackUID(script string) ([]byte, error)
+	UnpackUID(buf []byte) string
 	AddressToOutputScript(address string) ([]byte, error)
 	OutputScriptToAddresses(script []byte) ([]string, error)
 	ParseTx(b []byte) (*Tx, error)

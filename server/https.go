@@ -5,6 +5,7 @@ import (
 	"blockbook/db"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -135,14 +136,16 @@ func (s *HTTPServer) blockHash(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *HTTPServer) getAddress(r *http.Request) (address string, script []byte, err error) {
-	address = mux.Vars(r)["address"]
-	script, err = s.chainParser.AddressToOutputScript(address)
+func (s *HTTPServer) getAddress(r *http.Request) (address string, err error) {
+	address, ok := mux.Vars(r)["address"]
+	if !ok {
+		err = errors.New("Empty address")
+	}
 	return
 }
 
-func (s *HTTPServer) getAddressAndHeightRange(r *http.Request) (address string, script []byte, lower, higher uint32, err error) {
-	address, script, err = s.getAddress(r)
+func (s *HTTPServer) getAddressAndHeightRange(r *http.Request) (address string, lower, higher uint32, err error) {
+	address, err = s.getAddress(r)
 	if err != nil {
 		return
 	}
@@ -154,7 +157,7 @@ func (s *HTTPServer) getAddressAndHeightRange(r *http.Request) (address string, 
 	if err != nil {
 		return
 	}
-	return address, script, uint32(lower64), uint32(higher64), err
+	return address, uint32(lower64), uint32(higher64), err
 }
 
 type transactionList struct {
@@ -162,11 +165,11 @@ type transactionList struct {
 }
 
 func (s *HTTPServer) unconfirmedTransactions(w http.ResponseWriter, r *http.Request) {
-	address, script, err := s.getAddress(r)
+	address, err := s.getAddress(r)
 	if err != nil {
 		respondError(w, err, fmt.Sprint("unconfirmedTransactions for address", address))
 	}
-	txs, err := s.chain.GetMempoolTransactions(script)
+	txs, err := s.chain.GetMempoolTransactions(address)
 	if err != nil {
 		respondError(w, err, fmt.Sprint("unconfirmedTransactions for address", address))
 	}
@@ -175,12 +178,12 @@ func (s *HTTPServer) unconfirmedTransactions(w http.ResponseWriter, r *http.Requ
 }
 
 func (s *HTTPServer) confirmedTransactions(w http.ResponseWriter, r *http.Request) {
-	address, script, lower, higher, err := s.getAddressAndHeightRange(r)
+	address, lower, higher, err := s.getAddressAndHeightRange(r)
 	if err != nil {
 		respondError(w, err, fmt.Sprint("confirmedTransactions for address", address))
 	}
 	txList := transactionList{}
-	err = s.db.GetTransactions(script, lower, higher, func(txid string, vout uint32, isOutput bool) error {
+	err = s.db.GetTransactions(address, lower, higher, func(txid string, vout uint32, isOutput bool) error {
 		txList.Txid = append(txList.Txid, txid)
 		return nil
 	})
@@ -191,12 +194,12 @@ func (s *HTTPServer) confirmedTransactions(w http.ResponseWriter, r *http.Reques
 }
 
 func (s *HTTPServer) transactions(w http.ResponseWriter, r *http.Request) {
-	address, script, lower, higher, err := s.getAddressAndHeightRange(r)
+	address, lower, higher, err := s.getAddressAndHeightRange(r)
 	if err != nil {
 		respondError(w, err, fmt.Sprint("transactions for address", address))
 	}
 	txList := transactionList{}
-	err = s.db.GetTransactions(script, lower, higher, func(txid string, vout uint32, isOutput bool) error {
+	err = s.db.GetTransactions(address, lower, higher, func(txid string, vout uint32, isOutput bool) error {
 		txList.Txid = append(txList.Txid, txid)
 		if isOutput {
 			input := s.chain.GetMempoolSpentOutput(txid, vout)
@@ -209,7 +212,7 @@ func (s *HTTPServer) transactions(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		respondError(w, err, fmt.Sprint("transactions for address", address))
 	}
-	txs, err := s.chain.GetMempoolTransactions(script)
+	txs, err := s.chain.GetMempoolTransactions(address)
 	if err != nil {
 		respondError(w, err, fmt.Sprint("transactions for address", address))
 	}

@@ -258,12 +258,8 @@ func (s *SocketIoServer) getAddressTxids(addr []string, rr *reqRange) (res resul
 	txids := make([]string, 0)
 	lower, higher := uint32(rr.To), uint32(rr.Start)
 	for _, address := range addr {
-		script, err := s.chainParser.AddressToOutputScript(address)
-		if err != nil {
-			return res, err
-		}
 		if !rr.QueryMempoolOnly {
-			err = s.db.GetTransactions(script, lower, higher, func(txid string, vout uint32, isOutput bool) error {
+			err = s.db.GetTransactions(address, lower, higher, func(txid string, vout uint32, isOutput bool) error {
 				txids = append(txids, txid)
 				if isOutput && rr.QueryMempol {
 					input := s.chain.GetMempoolSpentOutput(txid, vout)
@@ -278,7 +274,7 @@ func (s *SocketIoServer) getAddressTxids(addr []string, rr *reqRange) (res resul
 			}
 		}
 		if rr.QueryMempoolOnly || rr.QueryMempol {
-			mtxids, err := s.chain.GetMempoolTransactions(script)
+			mtxids, err := s.chain.GetMempoolTransactions(address)
 			if err != nil {
 				return res, err
 			}

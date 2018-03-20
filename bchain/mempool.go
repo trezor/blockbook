@@ -2,13 +2,13 @@ package bchain
 
 import (
 	"blockbook/common"
-	"encoding/hex"
 	"sync"
 	"time"
 
 	"github.com/golang/glog"
 )
 
+// TODO rename
 type scriptIndex struct {
 	script string
 	n      uint32
@@ -20,31 +20,36 @@ type outpoint struct {
 }
 
 type inputOutput struct {
-	outputScripts []scriptIndex
-	inputs        []outpoint
+	outputs []scriptIndex
+	inputs  []outpoint
 }
 
 // Mempool is mempool handle.
 type Mempool struct {
 	chain           BlockChain
+	chainParser     BlockChainParser
 	mux             sync.Mutex
 	txToInputOutput map[string]inputOutput
-	scriptToTx      map[string][]outpoint
+	scriptToTx      map[string][]outpoint // TODO rename all occurences
 	inputs          map[outpoint]string
 	metrics         *common.Metrics
 }
 
 // NewMempool creates new mempool handler.
 func NewMempool(chain BlockChain, metrics *common.Metrics) *Mempool {
-	return &Mempool{chain: chain, metrics: metrics}
+	return &Mempool{chain: chain, chainParser: chain.GetChainParser(), metrics: metrics}
 }
 
 // GetTransactions returns slice of mempool transactions for given output script.
-func (m *Mempool) GetTransactions(outputScript []byte) ([]string, error) {
+func (m *Mempool) GetTransactions(address string) ([]string, error) {
 	m.mux.Lock()
 	defer m.mux.Unlock()
-	scriptHex := hex.EncodeToString(outputScript)
-	outpoints := m.scriptToTx[scriptHex]
+	buf, err := m.chainParser.GetUIDFromAddress(address)
+	if err != nil {
+		return nil, err
+	}
+	outid := m.chainParser.UnpackUID(buf)
+	outpoints := m.scriptToTx[outid]
 	txs := make([]string, 0, len(outpoints)+len(outpoints)/2)
 	for _, o := range outpoints {
 		txs = append(txs, o.txid)
@@ -93,11 +98,11 @@ func (m *Mempool) Resync(onNewTxAddr func(txid string, addr string)) error {
 				glog.Error("cannot get transaction ", txid, ": ", err)
 				continue
 			}
-			io.outputScripts = make([]scriptIndex, 0, len(tx.Vout))
+			io.outputs = make([]scriptIndex, 0, len(tx.Vout))
 			for _, output := range tx.Vout {
-				outputScript := output.ScriptPubKey.Hex
-				if outputScript != "" {
-					io.outputScripts = append(io.outputScripts, scriptIndex{outputScript, output.N})
+				outid := m.chainParser.GetUIDFromVout(&output)
+				if outid != "" {
+					io.outputs = append(io.outputs, scriptIndex{outid, output.N})
 				}
 				if onNewTxAddr != nil && len(output.ScriptPubKey.Addresses) == 1 {
 					onNewTxAddr(tx.Txid, output.ScriptPubKey.Addresses[0])
@@ -112,7 +117,7 @@ func (m *Mempool) Resync(onNewTxAddr func(txid string, addr string)) error {
 			}
 		}
 		newTxToInputOutput[txid] = io
-		for _, si := range io.outputScripts {
+		for _, si := range io.outputs {
 			newScriptToTx[si.script] = append(newScriptToTx[si.script], outpoint{txid, si.n})
 		}
 		for _, i := range io.inputs {
