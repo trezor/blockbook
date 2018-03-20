@@ -48,7 +48,7 @@ func NewBitcoinRPC(config json.RawMessage, pushHandler func(*bchain.MQMessage), 
 	var c configuration
 	err = json.Unmarshal(config, &c)
 	if err != nil {
-		return nil, errors.Annotatef(err, "Invalid configuragion file")
+		return nil, errors.Annotatef(err, "Invalid configuration file")
 	}
 	transport := &http.Transport{
 		Dial:                (&net.Dialer{KeepAlive: 600 * time.Second}).Dial,
@@ -531,9 +531,9 @@ func (b *BitcoinRPC) ResyncMempool(onNewTxAddr func(txid string, addr string)) e
 	return b.Mempool.Resync(onNewTxAddr)
 }
 
-// GetMempoolTransactions returns slice of mempool transactions for given output script.
-func (b *BitcoinRPC) GetMempoolTransactions(outputScript []byte) ([]string, error) {
-	return b.Mempool.GetTransactions(outputScript)
+// GetMempoolTransactions returns slice of mempool transactions for given address.
+func (b *BitcoinRPC) GetMempoolTransactions(address string) ([]string, error) {
+	return b.Mempool.GetTransactions(address)
 }
 
 // GetMempoolSpentOutput returns transaction in mempool which spends given outpoint

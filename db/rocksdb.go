@@ -136,18 +136,19 @@ func (d *RocksDB) Reopen() error {
 	return nil
 }
 
-// GetTransactions finds all input/output transactions for address specified by outputScript.
+// GetTransactions finds all input/output transactions for address
 // Transaction are passed to callback function.
-func (d *RocksDB) GetTransactions(outputScript []byte, lower uint32, higher uint32, fn func(txid string, vout uint32, isOutput bool) error) (err error) {
+func (d *RocksDB) GetTransactions(address string, lower uint32, higher uint32, fn func(txid string, vout uint32, isOutput bool) error) (err error) {
 	if glog.V(1) {
-		glog.Infof("rocksdb: address get %s %d-%d ", unpackOutputScript(outputScript), lower, higher)
+		glog.Infof("rocksdb: address get %s %d-%d ", address, lower, higher)
 	}
+	outid, err := d.chainParser.GetUIDFromAddress(address)
 
-	kstart, err := packOutputKey(outputScript, lower)
+	kstart, err := packOutputKey(outid, lower)
 	if err != nil {
 		return err
 	}
-	kstop, err := packOutputKey(outputScript, higher)
+	kstop, err := packOutputKey(outid, higher)
 	if err != nil {
 		return err
 	}
@@ -240,12 +241,12 @@ func (d *RocksDB) writeOutputs(wb *gorocksdb.WriteBatch, block *bchain.Block, op
 
 	for _, tx := range block.Txs {
 		for _, output := range tx.Vout {
-			outputScript := output.ScriptPubKey.Hex
-			if outputScript != "" {
-				if len(outputScript) > 1024 {
-					glog.Infof("block %d, skipping outputScript of length %d", block.Height, len(outputScript)/2)
+			outid := d.chainParser.GetUIDFromVout(&output)
+			if outid != "" {
+				if len(outid) > 1024 {
+					glog.Infof("block %d, skipping outid of length %d", block.Height, len(outid)/2)
 				} else {
-					records[outputScript] = append(records[outputScript], outpoint{
+					records[outid] = append(records[outid], outpoint{
 						txid: tx.Txid,
 						vout: output.N,
 					})
@@ -262,15 +263,15 @@ func (d *RocksDB) writeOutputs(wb *gorocksdb.WriteBatch, block *bchain.Block, op
 		}
 	}
 
-	for outputScript, outpoints := range records {
-		bOutputScript, err := packOutputScript(outputScript)
+	for outid, outpoints := range records {
+		bOutid, err := d.chainParser.PackUID(outid)
 		if err != nil {
-			glog.Warningf("rocksdb: packOutputScript: %v - %d %s", err, block.Height, outputScript)
+			glog.Warningf("rocksdb: packOutputID: %v - %d %s", err, block.Height, outid)
 			continue
 		}
-		key, err := packOutputKey(bOutputScript, block.Height)
+		key, err := packOutputKey(bOutid, block.Height)
 		if err != nil {
-			glog.Warningf("rocksdb: packOutputKey: %v - %d %s", err, block.Height, outputScript)
+			glog.Warningf("rocksdb: packOutputKey: %v - %d %s", err, block.Height, outid)
 			continue
 		}
 		val, err := packOutputValue(outpoints)
@@ -662,12 +663,4 @@ func packBlockValue(hash string) ([]byte, error) {
 
 func unpackBlockValue(buf []byte) (string, error) {
 	return hex.EncodeToString(buf), nil
-}
-
-func packOutputScript(script string) ([]byte, error) {
-	return hex.DecodeString(script)
-}
-
-func unpackOutputScript(buf []byte) string {
-	return hex.EncodeToString(buf)
 }

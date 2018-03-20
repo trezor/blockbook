@@ -229,12 +229,7 @@ func main() {
 		address := *queryAddress
 
 		if address != "" {
-			script, err := chain.GetChainParser().AddressToOutputScript(address)
-			if err != nil {
-				glog.Error("GetTransactions ", err)
-				return
-			}
-			if err = index.GetTransactions(script, height, until, printResult); err != nil {
+			if err = index.GetTransactions(address, height, until, printResult); err != nil {
 				glog.Error("GetTransactions ", err)
 				return
 			}
