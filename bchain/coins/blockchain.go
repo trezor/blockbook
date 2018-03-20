@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"reflect"
-	"time"
 
 	"github.com/juju/errors"
 )
