@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"math/big"
+	"sync"
 	"time"
 
 	"github.com/golang/glog"
@@ -25,15 +26,16 @@ const (
 
 // EthRPC is an interface to JSON-RPC eth service.
 type EthRPC struct {
-	client     *ethclient.Client
-	timeout    time.Duration
-	rpcURL     string
-	Parser     *EthParser
-	Testnet    bool
-	Network    string
-	Mempool    *bchain.Mempool
-	metrics    *common.Metrics
-	bestHeader *ethtypes.Header
+	client       *ethclient.Client
+	timeout      time.Duration
+	rpcURL       string
+	Parser       *EthParser
+	Testnet      bool
+	Network      string
+	Mempool      *bchain.Mempool
+	metrics      *common.Metrics
+	bestHeaderMu sync.Mutex
+	bestHeader   *ethtypes.Header
 }
 
 type configuration struct {
@@ -104,7 +106,8 @@ func (b *EthRPC) GetNetworkName() string {
 }
 
 func (b *EthRPC) getBestHeader() (*ethtypes.Header, error) {
-	// TODO lock
+	b.bestHeaderMu.Lock()
+	defer b.bestHeaderMu.Unlock()
 	if b.bestHeader == nil {
 		var err error
 		ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
@@ -117,12 +120,16 @@ func (b *EthRPC) getBestHeader() (*ethtypes.Header, error) {
 	return b.bestHeader, nil
 }
 
+func ethHashToHash(h ethcommon.Hash) string {
+	return h.Hex()[2:]
+}
+
 func (b *EthRPC) GetBestBlockHash() (string, error) {
 	h, err := b.getBestHeader()
 	if err != nil {
 		return "", err
 	}
-	return h.TxHash.Hex()[2:], nil
+	return ethHashToHash(h.Hash()), nil
 }
 
 func (b *EthRPC) GetBestBlockHeight() (uint32, error) {
@@ -143,33 +150,63 @@ func (b *EthRPC) GetBlockHash(height uint32) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return h.TxHash.Hex()[2:], nil
+	return ethHashToHash(h.Hash()), nil
 }
 
-func (b *EthRPC) GetBlockHeader(hash string) (*bchain.BlockHeader, error) {
+func (b *EthRPC) ethHeaderToBlockHeader(h *ethtypes.Header) (*bchain.BlockHeader, error) {
 	bh, err := b.getBestHeader()
-	if err != nil {
-		return nil, err
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
-	defer cancel()
-	h, err := b.client.HeaderByHash(ctx, ethcommon.StringToHash(hash))
 	if err != nil {
 		return nil, err
 	}
 	hn := uint32(h.Number.Uint64())
 	bn := uint32(bh.Number.Uint64())
-	rv := bchain.BlockHeader{
-		Hash:          h.TxHash.Hex()[2:],
+	return &bchain.BlockHeader{
+		Hash:          ethHashToHash(h.Hash()),
 		Height:        hn,
 		Confirmations: int(bn - hn),
-		// TODO Next tx hash
+		// Next
+		// Prev
+
+	}, nil
+}
+
+func (b *EthRPC) GetBlockHeader(hash string) (*bchain.BlockHeader, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
+	defer cancel()
+	h, err := b.client.HeaderByHash(ctx, ethcommon.HexToHash(hash))
+	if err != nil {
+		return nil, err
 	}
-	return &rv, nil
+	return b.ethHeaderToBlockHeader(h)
 }
 
 func (b *EthRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
-	panic("not implemented")
+	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
+	defer cancel()
+	bk, err := b.client.BlockByHash(ctx, ethcommon.HexToHash(hash))
+	if err != nil {
+		return nil, err
+	}
+	// TODO maybe not the most optimal way to get the header
+	bbh, err := b.ethHeaderToBlockHeader(bk.Header())
+	txs := bk.Transactions()
+	btxs := make([]bchain.Tx, len(txs))
+	for i, tx := range txs {
+		btxs[i] = bchain.Tx{
+			// Blocktime
+			Confirmations: uint32(bbh.Confirmations),
+			// Hex
+			// LockTime
+			// Time
+			Txid: ethHashToHash(tx.Hash()),
+			// Vin
+		}
+	}
+	bbk := bchain.Block{
+		BlockHeader: *bbh,
+		Txs:         btxs,
+	}
+	return &bbk, nil
 }
 
 func (b *EthRPC) GetMempool() ([]string, error) {
@@ -177,7 +214,27 @@ func (b *EthRPC) GetMempool() ([]string, error) {
 }
 
 func (b *EthRPC) GetTransaction(txid string) (*bchain.Tx, error) {
-	panic("not implemented")
+	// bh, err := b.getBestHeader()
+	// if err != nil {
+	// 	return nil, err
+	// }
+	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
+	defer cancel()
+	tx, _, err := b.client.TransactionByHash(ctx, ethcommon.StringToHash(txid))
+	if err != nil {
+		return nil, err
+	}
+	btx := bchain.Tx{
+		// Blocktime
+		// Confirmations
+		// Hex
+		// LockTime
+		// Time
+		Txid: ethHashToHash(tx.Hash()),
+		// Vin
+		// Vout
+	}
+	return &btx, nil
 }
 
 func (b *EthRPC) EstimateSmartFee(blocks int, conservative bool) (float64, error) {
