@@ -249,7 +249,7 @@ func (b *EthRPC) ResyncMempool(onNewTxAddr func(txid string, addr string)) error
 	panic("not implemented")
 }
 
-func (b *EthRPC) GetMempoolTransactions(outputScript []byte) ([]string, error) {
+func (b *EthRPC) GetMempoolTransactions(address string) ([]string, error) {
 	panic("not implemented")
 }
 
