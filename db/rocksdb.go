@@ -266,7 +266,7 @@ func (d *RocksDB) writeOutputs(wb *gorocksdb.WriteBatch, block *bchain.Block, op
 	for outid, outpoints := range records {
 		bOutid, err := d.chainParser.PackUID(outid)
 		if err != nil {
-			glog.Warningf("rocksdb: packOutputID: %v - %d %s", err, block.Height, outid)
+			glog.Warningf("rocksdb: packUID: %v - %d %s", err, block.Height, outid)
 			continue
 		}
 		key, err := packOutputKey(bOutid, block.Height)

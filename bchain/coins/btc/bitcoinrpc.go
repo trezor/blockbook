@@ -24,7 +24,7 @@ type BitcoinRPC struct {
 	rpcURL      string
 	user        string
 	password    string
-	Parser      *BitcoinBlockParser
+	Parser      bchain.BlockChainParser
 	Testnet     bool
 	Network     string
 	Mempool     *bchain.Mempool
@@ -64,26 +64,6 @@ func NewBitcoinRPC(config json.RawMessage, pushHandler func(*bchain.MQMessage), 
 		ParseBlocks: c.Parse,
 		metrics:     metrics,
 	}
-	chainName, err := s.GetBlockChainInfo()
-	if err != nil {
-		return nil, err
-	}
-
-	// always create parser
-	s.Parser = &BitcoinBlockParser{
-		Params: GetChainParams(chainName),
-	}
-
-	// parameters for getInfo request
-	if s.Parser.Params.Net == wire.MainNet {
-		s.Testnet = false
-		s.Network = "livenet"
-	} else {
-		s.Testnet = true
-		s.Network = "testnet"
-	}
-
-	glog.Info("rpc: block chain ", s.Parser.Params.Name)
 
 	mq, err := bchain.NewMQ(c.ZeroMQBinding, pushHandler)
 	if err != nil {
@@ -95,6 +75,35 @@ func NewBitcoinRPC(config json.RawMessage, pushHandler func(*bchain.MQMessage), 
 	return s, nil
 }
 
+func (b *BitcoinRPC) Initialize(mempool *bchain.Mempool) error {
+	b.Mempool = mempool
+
+	chainName, err := b.GetBlockChainInfo()
+	if err != nil {
+		return err
+	}
+
+	params := GetChainParams(chainName)
+
+	// always create parser
+	b.Parser = &BitcoinBlockParser{
+		Params: params,
+	}
+
+	// parameters for getInfo request
+	if params.Net == wire.MainNet {
+		b.Testnet = false
+		b.Network = "livenet"
+	} else {
+		b.Testnet = true
+		b.Network = "testnet"
+	}
+
+	glog.Info("rpc: block chain ", params.Name)
+
+	return nil
+}
+
 func (b *BitcoinRPC) Shutdown() error {
 	if b.mq != nil {
 		if err := b.mq.Shutdown(); err != nil {
@@ -103,10 +112,6 @@ func (b *BitcoinRPC) Shutdown() error {
 		}
 	}
 	return nil
-}
-
-func (b *BitcoinRPC) Initialize(mempool *bchain.Mempool) {
-	b.Mempool = mempool
 }
 
 func (b *BitcoinRPC) IsTestnet() bool {

@@ -41,8 +41,8 @@ func (p *BitcoinBlockParser) GetUIDFromAddress(address string) ([]byte, error) {
 	return p.AddressToOutputScript(address)
 }
 
-func (p *BitcoinBlockParser) PackUID(script string) ([]byte, error) {
-	return hex.DecodeString(script)
+func (p *BitcoinBlockParser) PackUID(str string) ([]byte, error) {
+	return hex.DecodeString(str)
 }
 
 func (p *BitcoinBlockParser) UnpackUID(buf []byte) string {

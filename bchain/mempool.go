@@ -27,7 +27,6 @@ type inputOutput struct {
 // Mempool is mempool handle.
 type Mempool struct {
 	chain           BlockChain
-	chainParser     BlockChainParser
 	mux             sync.Mutex
 	txToInputOutput map[string]inputOutput
 	scriptToTx      map[string][]outpoint // TODO rename all occurences
@@ -37,18 +36,19 @@ type Mempool struct {
 
 // NewMempool creates new mempool handler.
 func NewMempool(chain BlockChain, metrics *common.Metrics) *Mempool {
-	return &Mempool{chain: chain, chainParser: chain.GetChainParser(), metrics: metrics}
+	return &Mempool{chain: chain, metrics: metrics}
 }
 
 // GetTransactions returns slice of mempool transactions for given output script.
 func (m *Mempool) GetTransactions(address string) ([]string, error) {
 	m.mux.Lock()
 	defer m.mux.Unlock()
-	buf, err := m.chainParser.GetUIDFromAddress(address)
+	parser := m.chain.GetChainParser()
+	buf, err := parser.GetUIDFromAddress(address)
 	if err != nil {
 		return nil, err
 	}
-	outid := m.chainParser.UnpackUID(buf)
+	outid := parser.UnpackUID(buf)
 	outpoints := m.scriptToTx[outid]
 	txs := make([]string, 0, len(outpoints)+len(outpoints)/2)
 	for _, o := range outpoints {
@@ -86,6 +86,7 @@ func (m *Mempool) Resync(onNewTxAddr func(txid string, addr string)) error {
 		m.metrics.MempoolResyncErrors.With(common.Labels{"error": err.Error()}).Inc()
 		return err
 	}
+	parser := m.chain.GetChainParser()
 	newTxToInputOutput := make(map[string]inputOutput, len(m.txToInputOutput)+1)
 	newScriptToTx := make(map[string][]outpoint, len(m.scriptToTx)+1)
 	newInputs := make(map[outpoint]string, len(m.inputs)+1)
@@ -100,7 +101,7 @@ func (m *Mempool) Resync(onNewTxAddr func(txid string, addr string)) error {
 			}
 			io.outputs = make([]scriptIndex, 0, len(tx.Vout))
 			for _, output := range tx.Vout {
-				outid := m.chainParser.GetUIDFromVout(&output)
+				outid := parser.GetUIDFromVout(&output)
 				if outid != "" {
 					io.outputs = append(io.outputs, scriptIndex{outid, output.N})
 				}
