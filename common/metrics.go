@@ -88,7 +88,7 @@ func GetMetrics(coin string) (*Metrics, error) {
 			Buckets:     []float64{1, 5, 10, 25, 50, 75, 100, 250},
 			ConstLabels: Labels{"coin": coin},
 		},
-		[]string{"method"},
+		[]string{"method", "error"},
 	)
 	metrics.IndexResyncErrors = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
