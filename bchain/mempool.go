@@ -1,7 +1,6 @@
 package bchain
 
 import (
-	"blockbook/common"
 	"sync"
 	"time"
 
@@ -27,28 +26,27 @@ type inputOutput struct {
 // Mempool is mempool handle.
 type Mempool struct {
 	chain           BlockChain
-	chainParser     BlockChainParser
 	mux             sync.Mutex
 	txToInputOutput map[string]inputOutput
 	scriptToTx      map[string][]outpoint // TODO rename all occurences
 	inputs          map[outpoint]string
-	metrics         *common.Metrics
 }
 
 // NewMempool creates new mempool handler.
-func NewMempool(chain BlockChain, metrics *common.Metrics) *Mempool {
-	return &Mempool{chain: chain, chainParser: chain.GetChainParser(), metrics: metrics}
+func NewMempool(chain BlockChain) *Mempool {
+	return &Mempool{chain: chain}
 }
 
 // GetTransactions returns slice of mempool transactions for given output script.
 func (m *Mempool) GetTransactions(address string) ([]string, error) {
 	m.mux.Lock()
 	defer m.mux.Unlock()
-	buf, err := m.chainParser.GetUIDFromAddress(address)
+	parser := m.chain.GetChainParser()
+	buf, err := parser.GetUIDFromAddress(address)
 	if err != nil {
 		return nil, err
 	}
-	outid := m.chainParser.UnpackUID(buf)
+	outid := parser.UnpackUID(buf)
 	outpoints := m.scriptToTx[outid]
 	txs := make([]string, 0, len(outpoints)+len(outpoints)/2)
 	for _, o := range outpoints {
@@ -83,9 +81,9 @@ func (m *Mempool) Resync(onNewTxAddr func(txid string, addr string)) error {
 	glog.V(1).Info("Mempool: resync")
 	txs, err := m.chain.GetMempool()
 	if err != nil {
-		m.metrics.MempoolResyncErrors.With(common.Labels{"error": err.Error()}).Inc()
 		return err
 	}
+	parser := m.chain.GetChainParser()
 	newTxToInputOutput := make(map[string]inputOutput, len(m.txToInputOutput)+1)
 	newScriptToTx := make(map[string][]outpoint, len(m.scriptToTx)+1)
 	newInputs := make(map[outpoint]string, len(m.inputs)+1)
@@ -94,13 +92,12 @@ func (m *Mempool) Resync(onNewTxAddr func(txid string, addr string)) error {
 		if !exists {
 			tx, err := m.chain.GetTransaction(txid)
 			if err != nil {
-				m.metrics.MempoolResyncErrors.With(common.Labels{"error": err.Error()}).Inc()
 				glog.Error("cannot get transaction ", txid, ": ", err)
 				continue
 			}
 			io.outputs = make([]scriptIndex, 0, len(tx.Vout))
 			for _, output := range tx.Vout {
-				outid := m.chainParser.GetUIDFromVout(&output)
+				outid := parser.GetUIDFromVout(&output)
 				if outid != "" {
 					io.outputs = append(io.outputs, scriptIndex{outid, output.N})
 				}
@@ -125,8 +122,6 @@ func (m *Mempool) Resync(onNewTxAddr func(txid string, addr string)) error {
 		}
 	}
 	m.updateMappings(newTxToInputOutput, newScriptToTx, newInputs)
-	d := time.Since(start)
-	glog.Info("Mempool: resync finished in ", d, ", ", len(m.txToInputOutput), " transactions in mempool")
-	m.metrics.MempoolResyncDuration.Observe(float64(d) / 1e6) // in milliseconds
+	glog.Info("Mempool: resync finished in ", time.Since(start), ", ", len(m.txToInputOutput), " transactions in mempool")
 	return nil
 }
