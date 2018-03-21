@@ -2,7 +2,6 @@ package eth
 
 import (
 	"blockbook/bchain"
-	"blockbook/common"
 	"context"
 	"encoding/json"
 	"math/big"
@@ -33,7 +32,6 @@ type EthRPC struct {
 	Testnet      bool
 	Network      string
 	Mempool      *bchain.Mempool
-	metrics      *common.Metrics
 	bestHeaderMu sync.Mutex
 	bestHeader   *ethtypes.Header
 }
@@ -44,7 +42,7 @@ type configuration struct {
 }
 
 // NewEthRPC returns new EthRPC instance.
-func NewEthRPC(config json.RawMessage, pushHandler func(*bchain.MQMessage), metrics *common.Metrics) (bchain.BlockChain, error) {
+func NewEthRPC(config json.RawMessage, pushHandler func(*bchain.MQMessage)) (bchain.BlockChain, error) {
 	var err error
 	var c configuration
 	err = json.Unmarshal(config, &c)
@@ -56,41 +54,43 @@ func NewEthRPC(config json.RawMessage, pushHandler func(*bchain.MQMessage), metr
 		return nil, err
 	}
 	s := &EthRPC{
-		client:  ec,
-		rpcURL:  c.RPCURL,
-		metrics: metrics,
+		client: ec,
+		rpcURL: c.RPCURL,
 	}
 
 	// always create parser
 	s.Parser = &EthParser{}
 	s.timeout = time.Duration(c.RPCTimeout) * time.Second
 
-	ctx, cancel := context.WithTimeout(context.Background(), s.timeout)
+	return s, nil
+}
+
+func (b *EthRPC) Initialize() error {
+	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
 	defer cancel()
 
-	id, err := ec.NetworkID(ctx)
+	id, err := b.client.NetworkID(ctx)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	// parameters for getInfo request
 	switch EthereumNet(id.Uint64()) {
 	case MainNet:
-		s.Testnet = false
-		s.Network = "livenet"
+		b.Testnet = false
+		b.Network = "livenet"
 		break
 	case TestNet:
-		s.Testnet = true
-		s.Network = "testnet"
+		b.Testnet = true
+		b.Network = "testnet"
 		break
 	default:
-		return nil, errors.Errorf("Unknown network id %v", id)
+		return errors.Errorf("Unknown network id %v", id)
 	}
-	glog.Info("rpc: block chain ", s.Network)
+	glog.Info("rpc: block chain ", b.Network)
 
-	// s.Mempool = bchain.NewMempool(s, metrics)
-
-	return s, nil
+	// b.Mempool = bchain.NewMempool(s, metrics)
+	return nil
 }
 
 func (b *EthRPC) Shutdown() error {
