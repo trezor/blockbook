@@ -14,7 +14,7 @@ import (
 	"github.com/juju/errors"
 )
 
-type blockChainFactory func(config json.RawMessage, pushHandler func(*bchain.MQMessage), metrics *common.Metrics) (bchain.BlockChain, error)
+type blockChainFactory func(config json.RawMessage, pushHandler func(*bchain.MQMessage)) (bchain.BlockChain, error)
 
 var blockChainFactories = make(map[string]blockChainFactory)
 
@@ -39,11 +39,11 @@ func NewBlockChain(coin string, configfile string, pushHandler func(*bchain.MQMe
 	if err != nil {
 		return nil, errors.Annotatef(err, "Error parsing file %v", configfile)
 	}
-	bc, err := bcf(config, pushHandler, metrics)
+	bc, err := bcf(config, pushHandler)
 	if err != nil {
 		return nil, err
 	}
-	bc.Initialize(bchain.NewMempool(bc, metrics))
+	bc.Initialize()
 	return &blockChainWithMetrics{b: bc, m: metrics}, nil
 }
 
@@ -53,11 +53,15 @@ type blockChainWithMetrics struct {
 }
 
 func (c *blockChainWithMetrics) observeRPCLatency(method string, start time.Time, err error) {
-	c.m.RPCLatency.With(common.Labels{"method": method, "error": err.Error()}).Observe(float64(time.Since(start)) / 1e6) // in milliseconds
+	var e string
+	if err != nil {
+		e = err.Error()
+	}
+	c.m.RPCLatency.With(common.Labels{"method": method, "error": e}).Observe(float64(time.Since(start)) / 1e6) // in milliseconds
 }
 
-func (c *blockChainWithMetrics) Initialize(mempool *bchain.Mempool) error {
-	return c.b.Initialize(mempool)
+func (c *blockChainWithMetrics) Initialize() error {
+	return c.b.Initialize()
 }
 
 func (c *blockChainWithMetrics) Shutdown() error {

@@ -16,7 +16,6 @@ type Metrics struct {
 	TxCacheEfficiency     *prometheus.CounterVec
 	RPCLatency            *prometheus.HistogramVec
 	IndexResyncErrors     *prometheus.CounterVec
-	MempoolResyncErrors   *prometheus.CounterVec
 	IndexDBSize           prometheus.Gauge
 }
 
@@ -94,14 +93,6 @@ func GetMetrics(coin string) (*Metrics, error) {
 		prometheus.CounterOpts{
 			Name:        "blockbook_index_resync_errors",
 			Help:        "Number of errors of index resync operation",
-			ConstLabels: Labels{"coin": coin},
-		},
-		[]string{"error"},
-	)
-	metrics.MempoolResyncErrors = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name:        "blockbook_mempool_resync_errors",
-			Help:        "Number of errors of mempool resync operation",
 			ConstLabels: Labels{"coin": coin},
 		},
 		[]string{"error"},
