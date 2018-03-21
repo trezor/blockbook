@@ -3,6 +3,9 @@ package zec
 import (
 	"blockbook/bchain"
 	"blockbook/bchain/coins/btc"
+	"bytes"
+	"encoding/binary"
+	"encoding/gob"
 
 	"github.com/btcsuite/btcd/chaincfg"
 )
@@ -43,4 +46,42 @@ func (p *ZCashBlockParser) PackUID(str string) ([]byte, error) {
 
 func (p *ZCashBlockParser) UnpackUID(buf []byte) string {
 	return string(buf)
+}
+
+// PackTx packs transaction to byte array
+func (p *ZCashBlockParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) ([]byte, error) {
+	buf := make([]byte, 4)
+	binary.BigEndian.PutUint32(buf, height)
+	buf, err := encodeTx(buf, tx)
+	if err != nil {
+		return nil, err
+	}
+	return buf, nil
+}
+
+func encodeTx(b []byte, tx *bchain.Tx) ([]byte, error) {
+	buf := bytes.NewBuffer(b)
+	enc := gob.NewEncoder(buf)
+	err := enc.Encode(tx)
+	return buf.Bytes(), err
+}
+
+// UnpackTx unpacks transaction from byte array
+func (p *ZCashBlockParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
+	height := binary.BigEndian.Uint32(buf)
+	tx, err := decodeTx(buf[4:])
+	if err != nil {
+		return nil, 0, err
+	}
+	return tx, height, nil
+}
+
+func decodeTx(buf []byte) (*bchain.Tx, error) {
+	tx := new(bchain.Tx)
+	dec := gob.NewDecoder(bytes.NewBuffer(buf))
+	err := dec.Decode(tx)
+	if err != nil {
+		return nil, err
+	}
+	return tx, nil
 }
