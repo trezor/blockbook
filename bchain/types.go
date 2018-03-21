@@ -87,7 +87,7 @@ func (e *RPCError) Error() string {
 
 type BlockChain interface {
 	// life-cycle methods
-	Initialize(mempool *Mempool) error
+	Initialize() error
 	Shutdown() error
 	// chain info
 	IsTestnet() bool

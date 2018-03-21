@@ -3,7 +3,6 @@ package zec
 import (
 	"blockbook/bchain"
 	"blockbook/bchain/coins/btc"
-	"blockbook/common"
 	"encoding/json"
 
 	"github.com/golang/glog"
@@ -14,8 +13,8 @@ type ZCashRPC struct {
 	*btc.BitcoinRPC
 }
 
-func NewZCashRPC(config json.RawMessage, pushHandler func(*bchain.MQMessage), metrics *common.Metrics) (bchain.BlockChain, error) {
-	b, err := btc.NewBitcoinRPC(config, pushHandler, metrics)
+func NewZCashRPC(config json.RawMessage, pushHandler func(*bchain.MQMessage)) (bchain.BlockChain, error) {
+	b, err := btc.NewBitcoinRPC(config, pushHandler)
 	if err != nil {
 		return nil, err
 	}
@@ -25,8 +24,8 @@ func NewZCashRPC(config json.RawMessage, pushHandler func(*bchain.MQMessage), me
 	return z, nil
 }
 
-func (z *ZCashRPC) Initialize(mempool *bchain.Mempool) error {
-	z.Mempool = mempool
+func (z *ZCashRPC) Initialize() error {
+	z.Mempool = bchain.NewMempool(z)
 	z.Parser = &ZCashBlockParser{}
 	z.Testnet = false
 	z.Network = "livenet"
@@ -77,7 +76,7 @@ func (z *ZCashRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 	req := untypedArrayParams{Method: "getblock"}
 	req.Params = append(req.Params, hash)
 	req.Params = append(req.Params, true)
-	err := z.Call(req.Method, &req, &res)
+	err := z.Call(&req, &res)
 
 	if err != nil {
 		return nil, errors.Annotatef(err, "hash %v", hash)
@@ -109,7 +108,7 @@ func (z *ZCashRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 	req := untypedArrayParams{Method: "getrawtransaction"}
 	req.Params = append(req.Params, txid)
 	req.Params = append(req.Params, 1)
-	err := z.Call(req.Method, &req, &res)
+	err := z.Call(&req, &res)
 
 	if err != nil {
 		return nil, errors.Annotatef(err, "txid %v", txid)
@@ -127,7 +126,7 @@ func (z *ZCashRPC) GetBlockHash(height uint32) (string, error) {
 	res := resGetBlockHash{}
 	req := untypedArrayParams{Method: "getblockhash"}
 	req.Params = append(req.Params, height)
-	err := z.Call(req.Method, &req, &res)
+	err := z.Call(&req, &res)
 
 	if err != nil {
 		return "", errors.Annotatef(err, "height %v", height)
@@ -146,7 +145,7 @@ func (z *ZCashRPC) GetBlockHeader(hash string) (*bchain.BlockHeader, error) {
 	req := untypedArrayParams{Method: "getblockheader"}
 	req.Params = append(req.Params, hash)
 	req.Params = append(req.Params, true)
-	err := z.Call(req.Method, &req, &res)
+	err := z.Call(&req, &res)
 
 	if err != nil {
 		return nil, errors.Annotatef(err, "hash %v", hash)
