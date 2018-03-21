@@ -6,8 +6,6 @@ import (
 	"blockbook/common"
 	"encoding/json"
 
-	"github.com/btcsuite/btcd/wire"
-
 	"github.com/golang/glog"
 	"github.com/juju/errors"
 )
@@ -29,31 +27,11 @@ func NewZCashRPC(config json.RawMessage, pushHandler func(*bchain.MQMessage), me
 
 func (z *ZCashRPC) Initialize(mempool *bchain.Mempool) error {
 	z.Mempool = mempool
+	z.Parser = &ZCashBlockParser{}
+	z.Testnet = false
+	z.Network = "livenet"
 
-	chainName, err := z.GetBlockChainInfo()
-	if err != nil {
-		return err
-	}
-
-	params := GetChainParams(chainName)
-
-	// always create parser
-	z.Parser = &ZCashBlockParser{
-		btc.BitcoinBlockParser{
-			Params: params,
-		},
-	}
-
-	// parameters for getInfo request
-	if params.Net == wire.MainNet {
-		z.Testnet = false
-		z.Network = "livenet"
-	} else {
-		z.Testnet = true
-		z.Network = "testnet"
-	}
-
-	glog.Info("rpc: block chain ", params.Name)
+	glog.Info("rpc: block chain mainnet")
 
 	return nil
 }
