@@ -2,32 +2,17 @@ package zec
 
 import (
 	"blockbook/bchain"
-	"blockbook/bchain/coins/btc"
 	"bytes"
 	"encoding/binary"
 	"encoding/gob"
+	"errors"
 
 	"github.com/btcsuite/btcd/chaincfg"
 )
 
 // bitcoinwire parsing
 
-type ZCashBlockParser struct {
-	btc.BitcoinBlockParser
-}
-
-// getChainParams contains network parameters for the main Bitcoin network,
-// the regression test Bitcoin network, the test Bitcoin network and
-// the simulation test Bitcoin network, in this order
-func GetChainParams(chain string) *chaincfg.Params {
-	switch chain {
-	case "test":
-		return &chaincfg.TestNet3Params
-	case "regtest":
-		return &chaincfg.RegressionNetParams
-	}
-	return &chaincfg.MainNetParams
-}
+type ZCashBlockParser struct{}
 
 func (p *ZCashBlockParser) GetUIDFromVout(output *bchain.Vout) string {
 	if len(output.ScriptPubKey.Addresses) != 1 {
@@ -84,4 +69,20 @@ func decodeTx(buf []byte) (*bchain.Tx, error) {
 		return nil, err
 	}
 	return tx, nil
+}
+
+func (p *ZCashBlockParser) AddressToOutputScript(address string) ([]byte, error) {
+	return nil, errors.New("AddressToOutputScript: not implemented")
+}
+
+func (p *ZCashBlockParser) OutputScriptToAddresses(script []byte) ([]string, error) {
+	return nil, errors.New("OutputScriptToAddresses: not implemented")
+}
+
+func (p *ZCashBlockParser) ParseBlock(b []byte) (*bchain.Block, error) {
+	return nil, errors.New("ParseBlock: not implemented")
+}
+
+func (p *ZCashBlockParser) ParseTx(b []byte) (*bchain.Tx, error) {
+	return nil, errors.New("ParseTx: not implemented")
 }
