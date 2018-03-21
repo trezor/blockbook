@@ -6,11 +6,7 @@ import (
 	"encoding/binary"
 	"encoding/gob"
 	"errors"
-
-	"github.com/btcsuite/btcd/chaincfg"
 )
-
-// bitcoinwire parsing
 
 type ZCashBlockParser struct{}
 
