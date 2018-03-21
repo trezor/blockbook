@@ -24,7 +24,7 @@ type BitcoinRPC struct {
 	rpcURL      string
 	user        string
 	password    string
-	Parser      *BitcoinBlockParser
+	Parser      bchain.BlockChainParser
 	Testnet     bool
 	Network     string
 	Mempool     *bchain.Mempool
@@ -64,26 +64,6 @@ func NewBitcoinRPC(config json.RawMessage, pushHandler func(*bchain.MQMessage), 
 		ParseBlocks: c.Parse,
 		metrics:     metrics,
 	}
-	chainName, err := s.GetBlockChainInfo()
-	if err != nil {
-		return nil, err
-	}
-
-	// always create parser
-	s.Parser = &BitcoinBlockParser{
-		Params: GetChainParams(chainName),
-	}
-
-	// parameters for getInfo request
-	if s.Parser.Params.Net == wire.MainNet {
-		s.Testnet = false
-		s.Network = "livenet"
-	} else {
-		s.Testnet = true
-		s.Network = "testnet"
-	}
-
-	glog.Info("rpc: block chain ", s.Parser.Params.Name)
 
 	mq, err := bchain.NewMQ(c.ZeroMQBinding, pushHandler)
 	if err != nil {
@@ -92,9 +72,36 @@ func NewBitcoinRPC(config json.RawMessage, pushHandler func(*bchain.MQMessage), 
 	}
 	s.mq = mq
 
-	s.Mempool = bchain.NewMempool(s, metrics)
-
 	return s, nil
+}
+
+func (b *BitcoinRPC) Initialize(mempool *bchain.Mempool) error {
+	b.Mempool = mempool
+
+	chainName, err := b.GetBlockChainInfo()
+	if err != nil {
+		return err
+	}
+
+	params := GetChainParams(chainName)
+
+	// always create parser
+	b.Parser = &BitcoinBlockParser{
+		Params: params,
+	}
+
+	// parameters for getInfo request
+	if params.Net == wire.MainNet {
+		b.Testnet = false
+		b.Network = "livenet"
+	} else {
+		b.Testnet = true
+		b.Network = "testnet"
+	}
+
+	glog.Info("rpc: block chain ", params.Name)
+
+	return nil
 }
 
 func (b *BitcoinRPC) Shutdown() error {
@@ -188,12 +195,7 @@ type cmdGetBlockHeader struct {
 	} `json:"params"`
 }
 
-type resGetBlockHeaderRaw struct {
-	Error  *bchain.RPCError `json:"error"`
-	Result string           `json:"result"`
-}
-
-type resGetBlockHeaderVerbose struct {
+type resGetBlockHeader struct {
 	Error  *bchain.RPCError   `json:"error"`
 	Result bchain.BlockHeader `json:"result"`
 }
@@ -233,12 +235,7 @@ type cmdGetRawTransaction struct {
 	} `json:"params"`
 }
 
-type resGetRawTransactionRaw struct {
-	Error  *bchain.RPCError `json:"error"`
-	Result string           `json:"result"`
-}
-
-type resGetRawTransactionVerbose struct {
+type resGetRawTransaction struct {
 	Error  *bchain.RPCError `json:"error"`
 	Result bchain.Tx        `json:"result"`
 }
@@ -292,7 +289,7 @@ func (b *BitcoinRPC) GetBestBlockHash() (string, error) {
 
 	res := resGetBestBlockHash{}
 	req := cmdGetBestBlockHash{Method: "getbestblockhash"}
-	err := b.observeRPCLatency(req.Method, func() error { return b.call(&req, &res) })
+	err := b.Call(req.Method, &req, &res)
 
 	if err != nil {
 		return "", err
@@ -309,7 +306,7 @@ func (b *BitcoinRPC) GetBestBlockHeight() (uint32, error) {
 
 	res := resGetBlockCount{}
 	req := cmdGetBlockCount{Method: "getblockcount"}
-	err := b.observeRPCLatency(req.Method, func() error { return b.call(&req, &res) })
+	err := b.Call(req.Method, &req, &res)
 
 	if err != nil {
 		return 0, err
@@ -326,7 +323,7 @@ func (b *BitcoinRPC) GetBlockChainInfo() (string, error) {
 
 	res := resGetBlockChainInfo{}
 	req := cmdGetBlockChainInfo{Method: "getblockchaininfo"}
-	err := b.observeRPCLatency(req.Method, func() error { return b.call(&req, &res) })
+	err := b.Call(req.Method, &req, &res)
 
 	if err != nil {
 		return "", err
@@ -344,7 +341,7 @@ func (b *BitcoinRPC) GetBlockHash(height uint32) (string, error) {
 	res := resGetBlockHash{}
 	req := cmdGetBlockHash{Method: "getblockhash"}
 	req.Params.Height = height
-	err := b.observeRPCLatency(req.Method, func() error { return b.call(&req, &res) })
+	err := b.Call(req.Method, &req, &res)
 
 	if err != nil {
 		return "", errors.Annotatef(err, "height %v", height)
@@ -359,11 +356,11 @@ func (b *BitcoinRPC) GetBlockHash(height uint32) (string, error) {
 func (b *BitcoinRPC) GetBlockHeader(hash string) (*bchain.BlockHeader, error) {
 	glog.V(1).Info("rpc: getblockheader")
 
-	res := resGetBlockHeaderVerbose{}
+	res := resGetBlockHeader{}
 	req := cmdGetBlockHeader{Method: "getblockheader"}
 	req.Params.BlockHash = hash
 	req.Params.Verbose = true
-	err := b.observeRPCLatency(req.Method, func() error { return b.call(&req, &res) })
+	err := b.Call(req.Method, &req, &res)
 
 	if err != nil {
 		return nil, errors.Annotatef(err, "hash %v", hash)
@@ -402,9 +399,6 @@ func (b *BitcoinRPC) GetBlock(hash string, height uint32) (*bchain.Block, error)
 // getBlockWithoutHeader is an optimization - it does not call GetBlockHeader to get prev, next hashes
 // instead it sets to header only block hash and height passed in parameters
 func (b *BitcoinRPC) getBlockWithoutHeader(hash string, height uint32) (*bchain.Block, error) {
-	if !b.ParseBlocks {
-		return b.GetBlockFull(hash)
-	}
 	data, err := b.GetBlockRaw(hash)
 	if err != nil {
 		return nil, err
@@ -426,7 +420,7 @@ func (b *BitcoinRPC) GetBlockRaw(hash string) ([]byte, error) {
 	req := cmdGetBlock{Method: "getblock"}
 	req.Params.BlockHash = hash
 	req.Params.Verbosity = 0
-	err := b.observeRPCLatency(req.Method, func() error { return b.call(&req, &res) })
+	err := b.Call(req.Method, &req, &res)
 
 	if err != nil {
 		return nil, errors.Annotatef(err, "hash %v", hash)
@@ -446,7 +440,7 @@ func (b *BitcoinRPC) GetBlockList(hash string) (*bchain.Block, error) {
 	req := cmdGetBlock{Method: "getblock"}
 	req.Params.BlockHash = hash
 	req.Params.Verbosity = 1
-	err := b.observeRPCLatency(req.Method, func() error { return b.call(&req, &res) })
+	err := b.Call(req.Method, &req, &res)
 
 	if err != nil {
 		return nil, errors.Annotatef(err, "hash %v", hash)
@@ -478,7 +472,7 @@ func (b *BitcoinRPC) GetBlockFull(hash string) (*bchain.Block, error) {
 	req := cmdGetBlock{Method: "getblock"}
 	req.Params.BlockHash = hash
 	req.Params.Verbosity = 2
-	err := b.observeRPCLatency(req.Method, func() error { return b.call(&req, &res) })
+	err := b.Call(req.Method, &req, &res)
 
 	if err != nil {
 		return nil, errors.Annotatef(err, "hash %v", hash)
@@ -495,7 +489,7 @@ func (b *BitcoinRPC) GetMempool() ([]string, error) {
 
 	res := resGetMempool{}
 	req := cmdGetMempool{Method: "getrawmempool"}
-	err := b.observeRPCLatency(req.Method, func() error { return b.call(&req, &res) })
+	err := b.Call(req.Method, &req, &res)
 
 	if err != nil {
 		return nil, err
@@ -510,11 +504,11 @@ func (b *BitcoinRPC) GetMempool() ([]string, error) {
 func (b *BitcoinRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 	glog.V(1).Info("rpc: getrawtransaction ", txid)
 
-	res := resGetRawTransactionVerbose{}
+	res := resGetRawTransaction{}
 	req := cmdGetRawTransaction{Method: "getrawtransaction"}
 	req.Params.Txid = txid
 	req.Params.Verbose = true
-	err := b.observeRPCLatency(req.Method, func() error { return b.call(&req, &res) })
+	err := b.Call(req.Method, &req, &res)
 
 	if err != nil {
 		return nil, errors.Annotatef(err, "txid %v", txid)
@@ -553,7 +547,7 @@ func (b *BitcoinRPC) EstimateSmartFee(blocks int, conservative bool) (float64, e
 	} else {
 		req.Params.EstimateMode = "ECONOMICAL"
 	}
-	err := b.observeRPCLatency(req.Method, func() error { return b.call(&req, &res) })
+	err := b.Call(req.Method, &req, &res)
 
 	if err != nil {
 		return 0, err
@@ -571,7 +565,7 @@ func (b *BitcoinRPC) SendRawTransaction(tx string) (string, error) {
 	res := resSendRawTransaction{}
 	req := cmdSendRawTransaction{Method: "sendrawtransaction"}
 	req.Params = []string{tx}
-	err := b.observeRPCLatency(req.Method, func() error { return b.call(&req, &res) })
+	err := b.Call(req.Method, &req, &res)
 
 	if err != nil {
 		return "", err
@@ -590,7 +584,7 @@ func (b *BitcoinRPC) GetMempoolEntry(txid string) (*bchain.MempoolEntry, error) 
 		Method: "getmempoolentry",
 		Params: []string{txid},
 	}
-	err := b.observeRPCLatency(req.Method, func() error { return b.call(&req, &res) })
+	err := b.Call(req.Method, &req, &res)
 
 	if err != nil {
 		return nil, err
@@ -601,9 +595,9 @@ func (b *BitcoinRPC) GetMempoolEntry(txid string) (*bchain.MempoolEntry, error) 
 	return res.Result, nil
 }
 
-func (b *BitcoinRPC) observeRPCLatency(method string, fn func() error) error {
+func (b *BitcoinRPC) Call(method string, req interface{}, res interface{}) error {
 	start := time.Now()
-	err := fn()
+	err := b.call(req, res)
 	if err == nil {
 		b.metrics.RPCLatency.With(common.Labels{"method": method}).Observe(float64(time.Since(start)) / 1e6) // in milliseconds
 	}

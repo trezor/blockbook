@@ -43,6 +43,7 @@ func NewBlockChain(coin string, configfile string, pushHandler func(*bchain.MQMe
 	if err != nil {
 		return nil, err
 	}
+	bc.Initialize(bchain.NewMempool(bc, metrics))
 	return &blockChainWithMetrics{b: bc, m: metrics}, nil
 }
 
@@ -53,6 +54,10 @@ type blockChainWithMetrics struct {
 
 func (c *blockChainWithMetrics) observeRPCLatency(method string, start time.Time, err error) {
 	c.m.RPCLatency.With(common.Labels{"method": method, "error": err.Error()}).Observe(float64(time.Since(start)) / 1e6) // in milliseconds
+}
+
+func (c *blockChainWithMetrics) Initialize(mempool *bchain.Mempool) error {
+	return c.b.Initialize(mempool)
 }
 
 func (c *blockChainWithMetrics) Shutdown() error {
