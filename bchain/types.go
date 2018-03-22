@@ -16,9 +16,9 @@ type Vin struct {
 }
 
 type ScriptPubKey struct {
-	Asm       string   `json:"asm"`
-	Hex       string   `json:"hex,omitempty"`
-	Type      string   `json:"type"`
+	// Asm       string   `json:"asm"`
+	Hex string `json:"hex,omitempty"`
+	// Type      string   `json:"type"`
 	Addresses []string `json:"addresses,omitempty"`
 }
 
