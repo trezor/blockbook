@@ -89,6 +89,10 @@ func (z *ZCashRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 	for i, txid := range res.Result.Txids {
 		tx, err := z.GetTransaction(txid)
 		if err != nil {
+			if isInvalidTx(err) {
+				glog.Errorf("rpc: getblock: skipping transanction in block %s due error: %s", hash, err)
+				continue
+			}
 			return nil, err
 		}
 		txs[i] = *tx
@@ -98,6 +102,20 @@ func (z *ZCashRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 		Txs:         txs,
 	}
 	return block, nil
+}
+
+func isInvalidTx(err error) bool {
+	switch e1 := err.(type) {
+	case *errors.Err:
+		switch e2 := e1.Cause().(type) {
+		case *bchain.RPCError:
+			if e2.Code == -5 { // "No information available about transaction"
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 // GetTransaction returns a transaction by the transaction ID.
@@ -155,6 +173,8 @@ func (z *ZCashRPC) GetBlockHeader(hash string) (*bchain.BlockHeader, error) {
 	}
 	return &res.Result, nil
 }
+
+// TODO pouzit misto toho estimate fee?
 // EstimateSmartFee returns fee estimation.
 func (b *ZCashRPC) EstimateSmartFee(blocks int, conservative bool) (float64, error) {
 	return 0, errors.New("EstimateSmartFee: not implemented")
