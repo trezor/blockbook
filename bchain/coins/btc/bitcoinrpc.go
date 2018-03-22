@@ -573,6 +573,7 @@ func (b *BitcoinRPC) SendRawTransaction(tx string) (string, error) {
 	return res.Result, nil
 }
 
+// GetMempoolEntry returns mempool data for given transaction
 func (b *BitcoinRPC) GetMempoolEntry(txid string) (*bchain.MempoolEntry, error) {
 	glog.V(1).Info("rpc: getmempoolentry")
 

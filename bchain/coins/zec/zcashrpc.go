@@ -155,3 +155,12 @@ func (z *ZCashRPC) GetBlockHeader(hash string) (*bchain.BlockHeader, error) {
 	}
 	return &res.Result, nil
 }
+// EstimateSmartFee returns fee estimation.
+func (b *ZCashRPC) EstimateSmartFee(blocks int, conservative bool) (float64, error) {
+	return 0, errors.New("EstimateSmartFee: not implemented")
+}
+
+// GetMempoolEntry returns mempool data for given transaction
+func (b *ZCashRPC) GetMempoolEntry(txid string) (*bchain.MempoolEntry, error) {
+	return nil, errors.New("GetMempoolEntry: not implemented")
+}
