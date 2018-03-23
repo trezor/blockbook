@@ -33,20 +33,12 @@ func GetChainParams(chain string) *chaincfg.Params {
 	return &chaincfg.MainNetParams
 }
 
-func (p *BitcoinBlockParser) GetUIDFromVout(output *bchain.Vout) string {
-	return output.ScriptPubKey.Hex
+func (p *BitcoinBlockParser) GetAddrIDFromVout(output *bchain.Vout) ([]byte, error) {
+	return hex.DecodeString(output.ScriptPubKey.Hex)
 }
 
-func (p *BitcoinBlockParser) GetUIDFromAddress(address string) ([]byte, error) {
+func (p *BitcoinBlockParser) GetAddrIDFromAddress(address string) ([]byte, error) {
 	return p.AddressToOutputScript(address)
-}
-
-func (p *BitcoinBlockParser) PackUID(str string) ([]byte, error) {
-	return hex.DecodeString(str)
-}
-
-func (p *BitcoinBlockParser) UnpackUID(buf []byte) string {
-	return hex.EncodeToString(buf)
 }
 
 // AddressToOutputScript converts bitcoin address to ScriptPubKey
@@ -176,4 +168,8 @@ func (p *BitcoinBlockParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 	}
 	tx.Blocktime = bt
 	return tx, height, nil
+}
+
+func (p *BitcoinBlockParser) IsUTXOChain() bool {
+	return true
 }

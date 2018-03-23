@@ -142,19 +142,21 @@ func (d *RocksDB) GetTransactions(address string, lower uint32, higher uint32, f
 	if glog.V(1) {
 		glog.Infof("rocksdb: address get %s %d-%d ", address, lower, higher)
 	}
-	outid, err := d.chainParser.GetUIDFromAddress(address)
+	addrID, err := d.chainParser.GetAddrIDFromAddress(address)
 
-	kstart, err := packOutputKey(outid, lower)
+	kstart, err := packOutputKey(addrID, lower)
 	if err != nil {
 		return err
 	}
-	kstop, err := packOutputKey(outid, higher)
+	kstop, err := packOutputKey(addrID, higher)
 	if err != nil {
 		return err
 	}
 
 	it := d.db.NewIteratorCF(d.ro, d.cfh[cfOutputs])
 	defer it.Close()
+
+	isUTXO := d.chainParser.IsUTXOChain()
 
 	for it.Seek(kstart); it.Valid(); it.Next() {
 		key := it.Key().Data()
@@ -170,19 +172,30 @@ func (d *RocksDB) GetTransactions(address string, lower uint32, higher uint32, f
 			glog.Infof("rocksdb: output %s: %s", hex.EncodeToString(key), hex.EncodeToString(val))
 		}
 		for _, o := range outpoints {
-			if err := fn(o.txid, o.vout, true); err != nil {
+			var vout uint32
+			var isOutput bool
+			if o.vout < 0 {
+				vout = uint32(^o.vout)
+				isOutput = false
+			} else {
+				vout = uint32(o.vout)
+				isOutput = true
+			}
+			if err := fn(o.txid, vout, isOutput); err != nil {
 				return err
 			}
-			stxid, so, err := d.GetSpentOutput(o.txid, o.vout)
-			if err != nil {
-				return err
-			}
-			if stxid != "" {
-				if glog.V(2) {
-					glog.Infof("rocksdb: input %s/%d: %s/%d", o.txid, o.vout, stxid, so)
-				}
-				if err := fn(stxid, so, false); err != nil {
+			if isUTXO {
+				stxid, so, err := d.GetSpentOutput(o.txid, o.vout)
+				if err != nil {
 					return err
+				}
+				if stxid != "" {
+					if glog.V(2) {
+						glog.Infof("rocksdb: input %s/%d: %s/%d", o.txid, o.vout, stxid, so)
+					}
+					if err := fn(stxid, uint32(so), false); err != nil {
+						return err
+					}
 				}
 			}
 		}
@@ -216,14 +229,18 @@ func (d *RocksDB) writeBlock(block *bchain.Block, op int) error {
 		}
 	}
 
+	isUTXO := d.chainParser.IsUTXOChain()
+
 	if err := d.writeHeight(wb, block, op); err != nil {
 		return err
 	}
-	if err := d.writeOutputs(wb, block, op); err != nil {
+	if err := d.writeOutputs(wb, block, op, isUTXO); err != nil {
 		return err
 	}
-	if err := d.writeInputs(wb, block, op); err != nil {
-		return err
+	if isUTXO {
+		if err := d.writeInputs(wb, block, op); err != nil {
+			return err
+		}
 	}
 
 	return d.db.Write(d.wo, wb)
@@ -233,55 +250,79 @@ func (d *RocksDB) writeBlock(block *bchain.Block, op int) error {
 
 type outpoint struct {
 	txid string
-	vout uint32
+	vout int32
 }
 
-func (d *RocksDB) writeOutputs(wb *gorocksdb.WriteBatch, block *bchain.Block, op int) error {
+func (d *RocksDB) addAddrIDToRecords(op int, wb *gorocksdb.WriteBatch, records map[string][]outpoint, addrID []byte, txid string, vout int32, bh uint32) error {
+	if len(addrID) > 0 {
+		if len(addrID) > 1024 {
+			glog.Infof("block %d, skipping addrID of length %d", bh, len(addrID))
+		} else {
+			strAddrID := string(addrID)
+			records[strAddrID] = append(records[strAddrID], outpoint{
+				txid: txid,
+				vout: vout,
+			})
+			if op == opDelete {
+				// remove transactions from cache
+				b, err := packTxid(txid)
+				if err != nil {
+					return err
+				}
+				wb.DeleteCF(d.cfh[cfTransactions], b)
+			}
+		}
+	}
+	return nil
+}
+
+func (d *RocksDB) writeOutputs(wb *gorocksdb.WriteBatch, block *bchain.Block, op int, isUTXO bool) error {
 	records := make(map[string][]outpoint)
 
 	for _, tx := range block.Txs {
 		for _, output := range tx.Vout {
-			outid := d.chainParser.GetUIDFromVout(&output)
-			if outid != "" {
-				if len(outid) > 1024 {
-					glog.Infof("block %d, skipping outid of length %d", block.Height, len(outid)/2)
-				} else {
-					records[outid] = append(records[outid], outpoint{
-						txid: tx.Txid,
-						vout: output.N,
-					})
-					if op == opDelete {
-						// remove transactions from cache
-						b, err := packTxid(tx.Txid)
-						if err != nil {
-							return err
-						}
-						wb.DeleteCF(d.cfh[cfTransactions], b)
+			addrID, err := d.chainParser.GetAddrIDFromVout(&output)
+			if err != nil {
+				glog.Warningf("rocksdb: addrID: %v - %d %s", err, block.Height, addrID)
+				continue
+			}
+			err = d.addAddrIDToRecords(op, wb, records, addrID, tx.Txid, int32(output.N), block.Height)
+			if err != nil {
+				return err
+			}
+		}
+		if !isUTXO {
+			// store inputs in output column in format txid ^index
+			for _, input := range tx.Vin {
+				for i, a := range input.Addresses {
+					addrID, err := d.chainParser.GetAddrIDFromAddress(a)
+					if err != nil {
+						glog.Warningf("rocksdb: addrID: %v - %d %s", err, block.Height, addrID)
+						continue
+					}
+					err = d.addAddrIDToRecords(op, wb, records, addrID, tx.Txid, int32(^i), block.Height)
+					if err != nil {
+						return err
 					}
 				}
 			}
 		}
 	}
 
-	for outid, outpoints := range records {
-		bOutid, err := d.chainParser.PackUID(outid)
+	for addrID, outpoints := range records {
+		key, err := packOutputKey([]byte(addrID), block.Height)
 		if err != nil {
-			glog.Warningf("rocksdb: packUID: %v - %d %s", err, block.Height, outid)
-			continue
-		}
-		key, err := packOutputKey(bOutid, block.Height)
-		if err != nil {
-			glog.Warningf("rocksdb: packOutputKey: %v - %d %s", err, block.Height, outid)
-			continue
-		}
-		val, err := packOutputValue(outpoints)
-		if err != nil {
-			glog.Warningf("rocksdb: packOutputValue: %v", err)
+			glog.Warningf("rocksdb: packOutputKey: %v - %d %s", err, block.Height, addrID)
 			continue
 		}
 
 		switch op {
 		case opInsert:
+			val, err := packOutputValue(outpoints)
+			if err != nil {
+				glog.Warningf("rocksdb: packOutputValue: %v", err)
+				continue
+			}
 			wb.PutCF(d.cfh[cfOutputs], key, val)
 		case opDelete:
 			wb.DeleteCF(d.cfh[cfOutputs], key)
@@ -306,7 +347,7 @@ func packOutputValue(outpoints []outpoint) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		bvout := packVaruint(o.vout)
+		bvout := packVarint(o.vout)
 		buf = append(buf, btxid...)
 		buf = append(buf, bvout...)
 	}
@@ -321,7 +362,7 @@ func unpackOutputValue(buf []byte) ([]outpoint, error) {
 			return nil, err
 		}
 		i += txIdUnpackedLen
-		vout, voutLen := unpackVaruint(buf[i:])
+		vout, voutLen := unpackVarint(buf[i:])
 		i += voutLen
 		outpoints = append(outpoints, outpoint{
 			txid: txid,
@@ -343,11 +384,11 @@ func (d *RocksDB) writeInputs(
 			if input.Coinbase != "" {
 				continue
 			}
-			key, err := packOutpoint(input.Txid, input.Vout)
+			key, err := packOutpoint(input.Txid, int32(input.Vout))
 			if err != nil {
 				return err
 			}
-			val, err := packOutpoint(tx.Txid, uint32(i))
+			val, err := packOutpoint(tx.Txid, int32(i))
 			if err != nil {
 				return err
 			}
@@ -362,21 +403,21 @@ func (d *RocksDB) writeInputs(
 	return nil
 }
 
-func packOutpoint(txid string, vout uint32) ([]byte, error) {
+func packOutpoint(txid string, vout int32) ([]byte, error) {
 	btxid, err := packTxid(txid)
 	if err != nil {
 		return nil, err
 	}
-	bvout := packVaruint(vout)
+	bvout := packVarint(vout)
 	buf := make([]byte, 0, len(btxid)+len(bvout))
 	buf = append(buf, btxid...)
 	buf = append(buf, bvout...)
 	return buf, nil
 }
 
-func unpackOutpoint(buf []byte) (string, uint32, int) {
+func unpackOutpoint(buf []byte) (string, int32, int) {
 	txid, _ := unpackTxid(buf[:txIdUnpackedLen])
-	vout, o := unpackVaruint(buf[txIdUnpackedLen:])
+	vout, o := unpackVarint(buf[txIdUnpackedLen:])
 	return txid, vout, txIdUnpackedLen + o
 }
 
@@ -409,7 +450,7 @@ func (d *RocksDB) GetBlockHash(height uint32) (string, error) {
 }
 
 // GetSpentOutput returns output which is spent by input tx
-func (d *RocksDB) GetSpentOutput(txid string, i uint32) (string, uint32, error) {
+func (d *RocksDB) GetSpentOutput(txid string, i int32) (string, int32, error) {
 	b, err := packOutpoint(txid, i)
 	if err != nil {
 		return "", 0, err
@@ -424,7 +465,7 @@ func (d *RocksDB) GetSpentOutput(txid string, i uint32) (string, uint32, error) 
 		return "", 0, err
 	}
 	var otxid string
-	var oi uint32
+	var oi int32
 	for _, i := range p {
 		otxid, oi = i.txid, i.vout
 		break
@@ -627,15 +668,15 @@ func unpackFloat64(buf []byte) float64 {
 	return math.Float64frombits(binary.BigEndian.Uint64(buf))
 }
 
-func packVaruint(i uint32) []byte {
+func packVarint(i int32) []byte {
 	buf := make([]byte, vlq.MaxLen32)
-	ofs := vlq.PutUint(buf, uint64(i))
+	ofs := vlq.PutInt(buf, int64(i))
 	return buf[:ofs]
 }
 
-func unpackVaruint(buf []byte) (uint32, int) {
+func unpackVarint(buf []byte) (int32, int) {
 	i, ofs := vlq.Uint(buf)
-	return uint32(i), ofs
+	return int32(i), ofs
 }
 
 func packVarint64(i int64) []byte {

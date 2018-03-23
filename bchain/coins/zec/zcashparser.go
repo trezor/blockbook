@@ -10,23 +10,15 @@ import (
 
 type ZCashBlockParser struct{}
 
-func (p *ZCashBlockParser) GetUIDFromVout(output *bchain.Vout) string {
+func (p *ZCashBlockParser) GetAddrIDFromVout(output *bchain.Vout) ([]byte, error) {
 	if len(output.ScriptPubKey.Addresses) != 1 {
-		return ""
+		return nil, nil
 	}
-	return output.ScriptPubKey.Addresses[0]
+	return []byte(output.ScriptPubKey.Addresses[0]), nil
 }
 
-func (p *ZCashBlockParser) GetUIDFromAddress(address string) ([]byte, error) {
-	return p.PackUID(address)
-}
-
-func (p *ZCashBlockParser) PackUID(str string) ([]byte, error) {
-	return []byte(str), nil
-}
-
-func (p *ZCashBlockParser) UnpackUID(buf []byte) string {
-	return string(buf)
+func (p *ZCashBlockParser) GetAddrIDFromAddress(address string) ([]byte, error) {
+	return []byte(address), nil
 }
 
 // PackTx packs transaction to byte array
