@@ -33,20 +33,12 @@ func GetChainParams(chain string) *chaincfg.Params {
 	return &chaincfg.MainNetParams
 }
 
-func (p *BitcoinBlockParser) GetAddrIDFromVout(output *bchain.Vout) string {
-	return output.ScriptPubKey.Hex
+func (p *BitcoinBlockParser) GetAddrIDFromVout(output *bchain.Vout) ([]byte, error) {
+	return hex.DecodeString(output.ScriptPubKey.Hex)
 }
 
 func (p *BitcoinBlockParser) GetAddrIDFromAddress(address string) ([]byte, error) {
 	return p.AddressToOutputScript(address)
-}
-
-func (p *BitcoinBlockParser) PackAddrID(str string) ([]byte, error) {
-	return hex.DecodeString(str)
-}
-
-func (p *BitcoinBlockParser) UnpackAddrID(buf []byte) string {
-	return hex.EncodeToString(buf)
 }
 
 // AddressToOutputScript converts bitcoin address to ScriptPubKey

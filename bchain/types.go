@@ -117,10 +117,8 @@ type BlockChainParser interface {
 	// non UTXO chains have mapping of address to input and output transactions directly in "outputs" column in db
 	IsUTXOChain() bool
 	// address id conversions
-	GetAddrIDFromVout(output *Vout) string
+	GetAddrIDFromVout(output *Vout) ([]byte, error)
 	GetAddrIDFromAddress(address string) ([]byte, error)
-	PackAddrID(addrID string) ([]byte, error)
-	UnpackAddrID(buf []byte) string
 	// address to output script conversions
 	AddressToOutputScript(address string) ([]byte, error)
 	OutputScriptToAddresses(script []byte) ([]string, error)
