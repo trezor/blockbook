@@ -25,6 +25,7 @@
 
         function getAddressTxids() {
             var addresses = document.getElementById('getAddressTxidsAddresses').value.split(",");
+            addresses = addresses.map(s => s.trim());
             var mempool = document.getElementById("getAddressTxidsMempool").checked;
             lookupTransactionsIdsMempool(addresses, mempool, 2000000, 0, function (result) {
                 console.log('getAddressTxids sent successfully');
@@ -53,6 +54,7 @@
 
         function getAddressHistory() {
             var addresses = document.getElementById('getAddressHistoryAddresses').value.split(",");
+            addresses = addresses.map(s => s.trim());
             var mempool = document.getElementById("getAddressHistoryMempool").checked;
             lookupAddressHistories(addresses, 0, 5, mempool, 2000000, 0, function (result) {
                 console.log('getAddressHistory sent successfully');
@@ -102,7 +104,7 @@
         }
 
         function getBlockHeader() {
-            var param = document.getElementById('getBlockHeaderParam').value;
+            var param = document.getElementById('getBlockHeaderParam').value.trim();
             lookupBlockHash(isHash(param) ? param : parseInt(param), function (result) {
                 console.log('getBlockHeader sent successfully');
                 console.log(result);
@@ -122,7 +124,7 @@
         }
 
         function estimateSmartFee() {
-            var blocks = document.getElementById('estimateSmartFeeBlocks').value;
+            var blocks = document.getElementById('estimateSmartFeeBlocks').value.trim();
             var conservative = document.getElementById("estimateSmartFeeConservative").checked;
             estimateSmartTxFee(parseInt(blocks), conservative, function (result) {
                 console.log('estimateSmartFee sent successfully');
@@ -152,7 +154,7 @@
         }
 
         function getDetailedTransaction() {
-            var hash = document.getElementById('getDetailedTransactionHash').value;
+            var hash = document.getElementById('getDetailedTransactionHash').value.trim();
             lookupDetailedTransaction(hash, function (result) {
                 console.log('getDetailedTransaction sent successfully');
                 console.log(result);
@@ -169,7 +171,7 @@
         }
 
         function sendTransaction() {
-            var tx = document.getElementById('sendTransactionHex').value;
+            var tx = document.getElementById('sendTransactionHex').value.trim();
             sendTransactionF(tx, function (result) {
                 console.log('sendTransaction sent successfully');
                 console.log(result);
@@ -199,6 +201,7 @@
 
         function subscribeAddressTxid() {
             var addresses = document.getElementById('subscribeAddressTxidAddresses').value.split(",");
+            addresses = addresses.map(s => s.trim());
             socket.emit('subscribe', "bitcoind/addresstxid", addresses, function (result) {
                 console.log('subscribe bitcoind/addresstxid sent successfully');
                 console.log(result);
@@ -211,7 +214,7 @@
         }
 
         function getMempoolEntry() {
-            var hash = document.getElementById('getMempoolEntryHash').value;
+            var hash = document.getElementById('getMempoolEntryHash').value.trim();
             lookupMempoolEntry(hash, function (result) {
                 console.log('getMempoolEntry sent successfully');
                 console.log(result);
