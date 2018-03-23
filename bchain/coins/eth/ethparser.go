@@ -5,19 +5,11 @@ import "blockbook/bchain"
 type EthParser struct {
 }
 
-func (p *EthParser) GetUIDFromVout(output *bchain.Vout) string {
+func (p *EthParser) GetAddrIDFromVout(output *bchain.Vout) ([]byte, error) {
 	panic("not implemented")
 }
 
-func (p *EthParser) GetUIDFromAddress(address string) ([]byte, error) {
-	panic("not implemented")
-}
-
-func (p *EthParser) PackUID(script string) ([]byte, error) {
-	panic("not implemented")
-}
-
-func (p *EthParser) UnpackUID(buf []byte) string {
+func (p *EthParser) GetAddrIDFromAddress(address string) ([]byte, error) {
 	panic("not implemented")
 }
 
@@ -43,4 +35,8 @@ func (p *EthParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) ([]byt
 
 func (p *EthParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 	panic("not implemented")
+}
+
+func (p *EthParser) IsUTXOChain() bool {
+	return false
 }
