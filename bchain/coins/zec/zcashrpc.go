@@ -68,6 +68,13 @@ type resGetBlockHeader struct {
 	Result bchain.BlockHeader `json:"result"`
 }
 
+// estimatefee
+
+type resEstimateSmartFee struct {
+	Error  *bchain.RPCError `json:"error"`
+	Result float64          `json:"result"`
+}
+
 // GetBlock returns block with given hash.
 func (z *ZCashRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 	glog.V(1).Info("rpc: getblock (verbosity=1) ", hash)
@@ -174,13 +181,25 @@ func (z *ZCashRPC) GetBlockHeader(hash string) (*bchain.BlockHeader, error) {
 	return &res.Result, nil
 }
 
-// TODO pouzit misto toho estimate fee?
 // EstimateSmartFee returns fee estimation.
-func (b *ZCashRPC) EstimateSmartFee(blocks int, conservative bool) (float64, error) {
-	return 0, errors.New("EstimateSmartFee: not implemented")
+func (z *ZCashRPC) EstimateSmartFee(blocks int, conservative bool) (float64, error) {
+	glog.V(1).Info("rpc: estimatesmartfee")
+
+	res := resEstimateSmartFee{}
+	req := untypedArrayParams{Method: "estimatefee"}
+	req.Params = append(req.Params, blocks)
+	err := z.Call(&req, &res)
+
+	if err != nil {
+		return 0, err
+	}
+	if res.Error != nil {
+		return 0, res.Error
+	}
+	return res.Result, nil
 }
 
 // GetMempoolEntry returns mempool data for given transaction
-func (b *ZCashRPC) GetMempoolEntry(txid string) (*bchain.MempoolEntry, error) {
+func (z *ZCashRPC) GetMempoolEntry(txid string) (*bchain.MempoolEntry, error) {
 	return nil, errors.New("GetMempoolEntry: not implemented")
 }
