@@ -102,17 +102,22 @@
         }
 
         function getBlockHeader() {
-            var height = document.getElementById('getBlockHeaderHeight').value;
-            lookupBlockHash(parseInt(height), function (result) {
+            var param = document.getElementById('getBlockHeaderParam').value;
+            lookupBlockHash(isHash(param) ? param : parseInt(param), function (result) {
                 console.log('getBlockHeader sent successfully');
                 console.log(result);
                 document.getElementById('getBlockHeaderResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
             });
         }
 
-        function lookupBlockHash(height, f) {
+        function isHash(str) {
+            var re = /[0-9A-Fa-f]{64}/g;
+            return re.test(str);
+        }
+
+        function lookupBlockHash(heightOrHash, f) {
             const method = 'getBlockHeader';
-            const params = [height];
+            const params = [heightOrHash];
             return socket.send({ method, params }, f);
         }
 
@@ -277,7 +282,7 @@
                 <input class="btn btn-secondary" type="button" value="getBlockHeader" onclick="getBlockHeader()">
             </div>
             <div class="col-8">
-                <input type="text" class="form-control" id="getBlockHeaderHeight" value="0">
+                <input type="text" class="form-control" id="getBlockHeaderParam" value="0">
             </div>
             <div class="col">
             </div>
