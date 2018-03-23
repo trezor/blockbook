@@ -28,7 +28,7 @@ type Mempool struct {
 	chain           BlockChain
 	mux             sync.Mutex
 	txToInputOutput map[string]inputOutput
-	scriptToTx      map[string][]outpoint // TODO rename all occurences
+	addrIDToTx      map[string][]outpoint
 	inputs          map[outpoint]string
 }
 
@@ -42,12 +42,11 @@ func (m *Mempool) GetTransactions(address string) ([]string, error) {
 	m.mux.Lock()
 	defer m.mux.Unlock()
 	parser := m.chain.GetChainParser()
-	buf, err := parser.GetUIDFromAddress(address)
+	addrID, err := parser.GetAddrIDFromAddress(address)
 	if err != nil {
 		return nil, err
 	}
-	outid := parser.UnpackUID(buf)
-	outpoints := m.scriptToTx[outid]
+	outpoints := m.addrIDToTx[string(addrID)]
 	txs := make([]string, 0, len(outpoints)+len(outpoints)/2)
 	for _, o := range outpoints {
 		txs = append(txs, o.txid)
@@ -69,7 +68,7 @@ func (m *Mempool) updateMappings(newTxToInputOutput map[string]inputOutput, newS
 	m.mux.Lock()
 	defer m.mux.Unlock()
 	m.txToInputOutput = newTxToInputOutput
-	m.scriptToTx = newScriptToTx
+	m.addrIDToTx = newScriptToTx
 	m.inputs = newInputs
 }
 
@@ -85,7 +84,7 @@ func (m *Mempool) Resync(onNewTxAddr func(txid string, addr string)) error {
 	}
 	parser := m.chain.GetChainParser()
 	newTxToInputOutput := make(map[string]inputOutput, len(m.txToInputOutput)+1)
-	newScriptToTx := make(map[string][]outpoint, len(m.scriptToTx)+1)
+	newAddrIDToTx := make(map[string][]outpoint, len(m.addrIDToTx)+1)
 	newInputs := make(map[outpoint]string, len(m.inputs)+1)
 	for _, txid := range txs {
 		io, exists := m.txToInputOutput[txid]
@@ -97,9 +96,13 @@ func (m *Mempool) Resync(onNewTxAddr func(txid string, addr string)) error {
 			}
 			io.outputs = make([]scriptIndex, 0, len(tx.Vout))
 			for _, output := range tx.Vout {
-				outid := parser.GetUIDFromVout(&output)
-				if outid != "" {
-					io.outputs = append(io.outputs, scriptIndex{outid, output.N})
+				addrID, err := parser.GetAddrIDFromVout(&output)
+				if err != nil {
+					glog.Error("error in addrID in ", txid, " ", output.N, ": ", err)
+					continue
+				}
+				if len(addrID) > 0 {
+					io.outputs = append(io.outputs, scriptIndex{string(addrID), output.N})
 				}
 				if onNewTxAddr != nil && len(output.ScriptPubKey.Addresses) == 1 {
 					onNewTxAddr(tx.Txid, output.ScriptPubKey.Addresses[0])
@@ -115,13 +118,13 @@ func (m *Mempool) Resync(onNewTxAddr func(txid string, addr string)) error {
 		}
 		newTxToInputOutput[txid] = io
 		for _, si := range io.outputs {
-			newScriptToTx[si.script] = append(newScriptToTx[si.script], outpoint{txid, si.n})
+			newAddrIDToTx[si.script] = append(newAddrIDToTx[si.script], outpoint{txid, si.n})
 		}
 		for _, i := range io.inputs {
 			newInputs[i] = txid
 		}
 	}
-	m.updateMappings(newTxToInputOutput, newScriptToTx, newInputs)
+	m.updateMappings(newTxToInputOutput, newAddrIDToTx, newInputs)
 	glog.Info("Mempool: resync finished in ", time.Since(start), ", ", len(m.txToInputOutput), " transactions in mempool")
 	return nil
 }
