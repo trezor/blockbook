@@ -112,14 +112,22 @@ type BlockChain interface {
 }
 
 type BlockChainParser interface {
-	GetUIDFromVout(output *Vout) string
-	GetUIDFromAddress(address string) ([]byte, error)
-	PackUID(script string) ([]byte, error)
-	UnpackUID(buf []byte) string
+	// self description
+	// UTXO chains need "inputs" column in db, that map transactions to transactions that spend them
+	// non UTXO chains have mapping of address to input and output transactions directly in "outputs" column in db
+	IsUTXOChain() bool
+	// address id conversions
+	GetAddrIDFromVout(output *Vout) string
+	GetAddrIDFromAddress(address string) ([]byte, error)
+	PackAddrID(addrID string) ([]byte, error)
+	UnpackAddrID(buf []byte) string
+	// address to output script conversions
 	AddressToOutputScript(address string) ([]byte, error)
 	OutputScriptToAddresses(script []byte) ([]string, error)
+	// transactions
 	ParseTx(b []byte) (*Tx, error)
-	ParseBlock(b []byte) (*Block, error)
 	PackTx(tx *Tx, height uint32, blockTime int64) ([]byte, error)
 	UnpackTx(buf []byte) (*Tx, uint32, error)
+	// blocks
+	ParseBlock(b []byte) (*Block, error)
 }

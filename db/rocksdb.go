@@ -142,13 +142,13 @@ func (d *RocksDB) GetTransactions(address string, lower uint32, higher uint32, f
 	if glog.V(1) {
 		glog.Infof("rocksdb: address get %s %d-%d ", address, lower, higher)
 	}
-	outid, err := d.chainParser.GetUIDFromAddress(address)
+	addrID, err := d.chainParser.GetAddrIDFromAddress(address)
 
-	kstart, err := packOutputKey(outid, lower)
+	kstart, err := packOutputKey(addrID, lower)
 	if err != nil {
 		return err
 	}
-	kstop, err := packOutputKey(outid, higher)
+	kstop, err := packOutputKey(addrID, higher)
 	if err != nil {
 		return err
 	}
@@ -241,12 +241,12 @@ func (d *RocksDB) writeOutputs(wb *gorocksdb.WriteBatch, block *bchain.Block, op
 
 	for _, tx := range block.Txs {
 		for _, output := range tx.Vout {
-			outid := d.chainParser.GetUIDFromVout(&output)
-			if outid != "" {
-				if len(outid) > 1024 {
-					glog.Infof("block %d, skipping outid of length %d", block.Height, len(outid)/2)
+			addrID := d.chainParser.GetAddrIDFromVout(&output)
+			if addrID != "" {
+				if len(addrID) > 1024 {
+					glog.Infof("block %d, skipping addrID of length %d", block.Height, len(addrID)/2)
 				} else {
-					records[outid] = append(records[outid], outpoint{
+					records[addrID] = append(records[addrID], outpoint{
 						txid: tx.Txid,
 						vout: output.N,
 					})
@@ -263,25 +263,25 @@ func (d *RocksDB) writeOutputs(wb *gorocksdb.WriteBatch, block *bchain.Block, op
 		}
 	}
 
-	for outid, outpoints := range records {
-		bOutid, err := d.chainParser.PackUID(outid)
+	for addrID, outpoints := range records {
+		bOutid, err := d.chainParser.PackAddrID(addrID)
 		if err != nil {
-			glog.Warningf("rocksdb: packUID: %v - %d %s", err, block.Height, outid)
+			glog.Warningf("rocksdb: addrID: %v - %d %s", err, block.Height, addrID)
 			continue
 		}
 		key, err := packOutputKey(bOutid, block.Height)
 		if err != nil {
-			glog.Warningf("rocksdb: packOutputKey: %v - %d %s", err, block.Height, outid)
-			continue
-		}
-		val, err := packOutputValue(outpoints)
-		if err != nil {
-			glog.Warningf("rocksdb: packOutputValue: %v", err)
+			glog.Warningf("rocksdb: packOutputKey: %v - %d %s", err, block.Height, addrID)
 			continue
 		}
 
 		switch op {
 		case opInsert:
+			val, err := packOutputValue(outpoints)
+			if err != nil {
+				glog.Warningf("rocksdb: packOutputValue: %v", err)
+				continue
+			}
 			wb.PutCF(d.cfh[cfOutputs], key, val)
 		case opDelete:
 			wb.DeleteCF(d.cfh[cfOutputs], key)

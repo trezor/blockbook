@@ -26,21 +26,21 @@ func GetChainParams(chain string) *chaincfg.Params {
 	return &chaincfg.MainNetParams
 }
 
-func (p *ZCashBlockParser) GetUIDFromVout(output *bchain.Vout) string {
+func (p *ZCashBlockParser) GetAddrIDFromVout(output *bchain.Vout) string {
 	if len(output.ScriptPubKey.Addresses) != 1 {
 		return ""
 	}
 	return output.ScriptPubKey.Addresses[0]
 }
 
-func (p *ZCashBlockParser) GetUIDFromAddress(address string) ([]byte, error) {
-	return p.PackUID(address)
+func (p *ZCashBlockParser) GetAddrIDFromAddress(address string) ([]byte, error) {
+	return p.PackAddrID(address)
 }
 
-func (p *ZCashBlockParser) PackUID(str string) ([]byte, error) {
+func (p *ZCashBlockParser) PackAddrID(str string) ([]byte, error) {
 	return []byte(str), nil
 }
 
-func (p *ZCashBlockParser) UnpackUID(buf []byte) string {
+func (p *ZCashBlockParser) UnpackAddrID(buf []byte) string {
 	return string(buf)
 }
