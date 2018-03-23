@@ -13,6 +13,7 @@ type Vin struct {
 	Vout      uint32    `json:"vout"`
 	ScriptSig ScriptSig `json:"scriptSig"`
 	Sequence  uint32    `json:"sequence"`
+	Addresses []string  `json:"addresses,omitempty"`
 }
 
 type ScriptPubKey struct {

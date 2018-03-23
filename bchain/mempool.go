@@ -42,12 +42,11 @@ func (m *Mempool) GetTransactions(address string) ([]string, error) {
 	m.mux.Lock()
 	defer m.mux.Unlock()
 	parser := m.chain.GetChainParser()
-	buf, err := parser.GetAddrIDFromAddress(address)
+	addrID, err := parser.GetAddrIDFromAddress(address)
 	if err != nil {
 		return nil, err
 	}
-	addrID := parser.UnpackAddrID(buf)
-	outpoints := m.addrIDToTx[addrID]
+	outpoints := m.addrIDToTx[string(addrID)]
 	txs := make([]string, 0, len(outpoints)+len(outpoints)/2)
 	for _, o := range outpoints {
 		txs = append(txs, o.txid)
@@ -97,9 +96,13 @@ func (m *Mempool) Resync(onNewTxAddr func(txid string, addr string)) error {
 			}
 			io.outputs = make([]scriptIndex, 0, len(tx.Vout))
 			for _, output := range tx.Vout {
-				addrID := parser.GetAddrIDFromVout(&output)
-				if addrID != "" {
-					io.outputs = append(io.outputs, scriptIndex{addrID, output.N})
+				addrID, err := parser.GetAddrIDFromVout(&output)
+				if err != nil {
+					glog.Error("error in addrID in ", txid, " ", output.N, ": ", err)
+					continue
+				}
+				if len(addrID) > 0 {
+					io.outputs = append(io.outputs, scriptIndex{string(addrID), output.N})
 				}
 				if onNewTxAddr != nil && len(output.ScriptPubKey.Addresses) == 1 {
 					onNewTxAddr(tx.Txid, output.ScriptPubKey.Addresses[0])
