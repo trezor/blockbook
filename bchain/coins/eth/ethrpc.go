@@ -3,6 +3,7 @@ package eth
 import (
 	"blockbook/bchain"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -197,15 +198,21 @@ func (b *EthRPC) computeConfirmations(n uint64) (uint32, error) {
 }
 
 type rpcTransaction struct {
-	tx *ethtypes.Transaction
-	txExtraInfo
-}
-
-type txExtraInfo struct {
-	BlockNumber      *string
+	AccountNonce     string         `json:"nonce"    gencodec:"required"`
+	Price            string         `json:"gasPrice" gencodec:"required"`
+	GasLimit         string         `json:"gas"      gencodec:"required"`
+	To               string         `json:"to"       rlp:"nil"` // nil means contract creation
+	Value            string         `json:"value"    gencodec:"required"`
+	Payload          string         `json:"input"    gencodec:"required"`
+	Hash             ethcommon.Hash `json:"hash" rlp:"-"`
+	BlockNumber      string
 	BlockHash        ethcommon.Hash
-	From             ethcommon.Address
+	From             string
 	TransactionIndex string `json:"transactionIndex"`
+	// Signature values
+	V string `json:"v" gencodec:"required"`
+	R string `json:"r" gencodec:"required"`
+	S string `json:"s" gencodec:"required"`
 }
 
 type rpcBlock struct {
@@ -214,22 +221,39 @@ type rpcBlock struct {
 	UncleHashes  []ethcommon.Hash `json:"uncles"`
 }
 
-func ethTxToTx(rtx *rpcTransaction, blocktime int64, confirmations uint32) (*bchain.Tx, error) {
-	txid := ethHashToHash(rtx.tx.Hash())
-	n, err := strconv.ParseInt(rtx.TransactionIndex, 16, 64)
+func ethNumber(n string) (int64, error) {
+	if len(n) > 2 {
+		return strconv.ParseInt(n[2:], 16, 64)
+	}
+	return 0, errors.Errorf("Not a number: '%v'", n)
+}
+
+func ethTxToTx(tx *rpcTransaction, blocktime int64, confirmations uint32) (*bchain.Tx, error) {
+	txid := ethHashToHash(tx.Hash)
+	n, err := ethNumber(tx.TransactionIndex)
 	if err != nil {
 		return nil, err
 	}
 	var from, to string
-	ethTo := rtx.tx.To()
-	if ethTo != nil {
-		to = ethTo.Hex()[2:]
+	if len(tx.To) > 2 {
+		to = tx.To[2:]
 	}
-	from = rtx.From.Hex()[2:]
+	if len(tx.From) > 2 {
+		from = tx.From[2:]
+	}
+	v, err := ethNumber(tx.Value)
+	if err != nil {
+		return nil, err
+	}
+	b, err := json.Marshal(tx)
+	if err != nil {
+		return nil, err
+	}
+	h := hex.EncodeToString(b)
 	return &bchain.Tx{
 		Blocktime:     blocktime,
 		Confirmations: confirmations,
-		// Hex
+		Hex:           h,
 		// LockTime
 		Time: blocktime,
 		Txid: txid,
@@ -246,7 +270,7 @@ func ethTxToTx(rtx *rpcTransaction, blocktime int64, confirmations uint32) (*bch
 		Vout: []bchain.Vout{
 			{
 				N:     uint32(n),
-				Value: float64(rtx.tx.Value().Int64()),
+				Value: float64(v),
 				ScriptPubKey: bchain.ScriptPubKey{
 					// Hex
 					Addresses: []string{to},
@@ -307,29 +331,29 @@ func (b *EthRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 func (b *EthRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
 	defer cancel()
-	var json *rpcTransaction
-	err := b.rpc.CallContext(ctx, &json, "eth_getTransactionByHash", ethcommon.HexToHash(txid))
+	var tx *rpcTransaction
+	err := b.rpc.CallContext(ctx, &tx, "eth_getTransactionByHash", ethcommon.HexToHash(txid))
 	if err != nil {
 		return nil, err
-	} else if json == nil {
+	} else if tx == nil {
 		return nil, ethereum.NotFound
-	} else if _, r, _ := json.tx.RawSignatureValues(); r == nil {
+	} else if tx.R == "" {
 		return nil, fmt.Errorf("server returned transaction without signature")
 	}
 	var btx *bchain.Tx
-	if json.BlockNumber == nil {
+	if tx.BlockNumber == "" {
 		// mempool tx
-		btx, err = ethTxToTx(json, 0, 0)
+		btx, err = ethTxToTx(tx, 0, 0)
 		if err != nil {
 			return nil, err
 		}
 	} else {
 		// non mempool tx - we must read the block header to get the block time
-		n, err := strconv.ParseInt((*json.BlockNumber)[2:], 16, 64)
+		n, err := ethNumber(tx.BlockNumber)
 		if err != nil {
 			return nil, err
 		}
-		h, err := b.client.HeaderByHash(ctx, json.BlockHash)
+		h, err := b.client.HeaderByHash(ctx, tx.BlockHash)
 		if err != nil {
 			return nil, err
 		}
@@ -337,7 +361,7 @@ func (b *EthRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 		if err != nil {
 			return nil, err
 		}
-		btx, err = ethTxToTx(json, h.Time.Int64(), confirmations)
+		btx, err = ethTxToTx(tx, h.Time.Int64(), confirmations)
 		if err != nil {
 			return nil, err
 		}
