@@ -382,7 +382,6 @@ func TestEthRPC_GetTransaction(t *testing.T) {
 						ScriptPubKey: bchain.ScriptPubKey{
 							Addresses: []string{"682b7903a11098cf770c7aef4aa02a85b3f3601a"},
 						},
-						Value: 0,
 					},
 				},
 			},
@@ -412,7 +411,6 @@ func TestEthRPC_GetTransaction(t *testing.T) {
 						ScriptPubKey: bchain.ScriptPubKey{
 							Addresses: []string{"555ee11fbddc0e49a9bab358a8941ad95ffdb48f"},
 						},
-						Value: 1.999622e+18,
 					},
 				},
 			},

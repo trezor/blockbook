@@ -247,10 +247,6 @@ func ethTxToTx(tx *rpcTransaction, blocktime int64, confirmations uint32) (*bcha
 	if len(tx.From) > 2 {
 		from = tx.From[2:]
 	}
-	v, err := ethNumber(tx.Value)
-	if err != nil {
-		return nil, err
-	}
 	b, err := json.Marshal(tx)
 	if err != nil {
 		return nil, err
@@ -275,8 +271,8 @@ func ethTxToTx(tx *rpcTransaction, blocktime int64, confirmations uint32) (*bcha
 		},
 		Vout: []bchain.Vout{
 			{
-				N:     uint32(n),
-				Value: float64(v),
+				N: uint32(n),
+				// Value - cannot set, it does not fit precisely to float64
 				ScriptPubKey: bchain.ScriptPubKey{
 					// Hex
 					Addresses: []string{to},
