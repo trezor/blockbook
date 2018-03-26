@@ -331,9 +331,9 @@ func (b *BitcoinRPC) GetBlockChainInfo() (string, error) {
 	return res.Result.Chain, nil
 }
 
-func isErrBlockNotFound(err error) bool {
-	return err.Error() == "Block not found" ||
-		err.Error() == "Block height out of range"
+func isErrBlockNotFound(err *bchain.RPCError) bool {
+	return err.Message == "Block not found" ||
+		err.Message == "Block height out of range"
 }
 
 // GetBlockHash returns hash of block in best-block-chain at given height.
@@ -381,6 +381,13 @@ func (b *BitcoinRPC) GetBlockHeader(hash string) (*bchain.BlockHeader, error) {
 
 // GetBlock returns block with given hash.
 func (b *BitcoinRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
+	var err error
+	if hash == "" && height > 0 {
+		hash, err = b.GetBlockHash(height)
+		if err != nil {
+			return nil, err
+		}
+	}
 	if !b.ParseBlocks {
 		return b.GetBlockFull(hash)
 	}
