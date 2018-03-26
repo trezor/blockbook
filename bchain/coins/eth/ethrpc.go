@@ -160,7 +160,7 @@ func (b *EthRPC) GetBlockHash(height uint32) (string, error) {
 		if err == ethereum.NotFound {
 			return "", bchain.ErrBlockNotFound
 		}
-		return "", err
+		return "", errors.Annotatef(err, "height %v", height)
 	}
 	return ethHashToHash(h.Hash()), nil
 }
@@ -189,7 +189,7 @@ func (b *EthRPC) GetBlockHeader(hash string) (*bchain.BlockHeader, error) {
 		if err == ethereum.NotFound {
 			return nil, bchain.ErrBlockNotFound
 		}
-		return nil, err
+		return nil, errors.Annotatef(err, "hash %v", hash)
 	}
 	return b.ethHeaderToBlockHeader(h)
 }
@@ -298,7 +298,7 @@ func (b *EthRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 		err = b.rpc.CallContext(ctx, &raw, "eth_getBlockByNumber", fmt.Sprintf("%#x", height), true)
 	}
 	if err != nil {
-		return nil, err
+		return nil, errors.Annotatef(err, "hash %v, height %v", hash, height)
 	} else if len(raw) == 0 {
 		return nil, bchain.ErrBlockNotFound
 	}
@@ -306,33 +306,33 @@ func (b *EthRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 	var head *ethtypes.Header
 	var body rpcBlock
 	if err := json.Unmarshal(raw, &head); err != nil {
-		return nil, err
+		return nil, errors.Annotatef(err, "hash %v, height %v", hash, height)
 	}
 	if head == nil {
 		return nil, bchain.ErrBlockNotFound
 	}
 	if err := json.Unmarshal(raw, &body); err != nil {
-		return nil, err
+		return nil, errors.Annotatef(err, "hash %v, height %v", hash, height)
 	}
 	// Quick-verify transaction and uncle lists. This mostly helps with debugging the server.
 	if head.UncleHash == ethtypes.EmptyUncleHash && len(body.UncleHashes) > 0 {
-		return nil, fmt.Errorf("server returned non-empty uncle list but block header indicates no uncles")
+		return nil, errors.Annotatef(fmt.Errorf("server returned non-empty uncle list but block header indicates no uncles"), "hash %v, height %v", hash, height)
 	}
 	if head.UncleHash != ethtypes.EmptyUncleHash && len(body.UncleHashes) == 0 {
-		return nil, fmt.Errorf("server returned empty uncle list but block header indicates uncles")
+		return nil, errors.Annotatef(fmt.Errorf("server returned empty uncle list but block header indicates uncles"), "hash %v, height %v", hash, height)
 	}
 	if head.TxHash == ethtypes.EmptyRootHash && len(body.Transactions) > 0 {
-		return nil, fmt.Errorf("server returned non-empty transaction list but block header indicates no transactions")
+		return nil, errors.Annotatef(fmt.Errorf("server returned non-empty transaction list but block header indicates no transactions"), "hash %v, height %v", hash, height)
 	}
 	if head.TxHash != ethtypes.EmptyRootHash && len(body.Transactions) == 0 {
-		return nil, fmt.Errorf("server returned empty transaction list but block header indicates transactions")
+		return nil, errors.Annotatef(fmt.Errorf("server returned empty transaction list but block header indicates transactions"), "hash %v, height %v", hash, height)
 	}
 	bbh, err := b.ethHeaderToBlockHeader(head)
 	btxs := make([]bchain.Tx, len(body.Transactions))
 	for i, tx := range body.Transactions {
 		btx, err := ethTxToTx(&tx, int64(head.Time.Uint64()), uint32(bbh.Confirmations))
 		if err != nil {
-			return nil, err
+			return nil, errors.Annotatef(err, "hash %v, height %v, txid %v", hash, height, tx.Hash.String())
 		}
 		btxs[i] = *btx
 	}
@@ -353,32 +353,32 @@ func (b *EthRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 	} else if tx == nil {
 		return nil, ethereum.NotFound
 	} else if tx.R == "" {
-		return nil, fmt.Errorf("server returned transaction without signature")
+		return nil, errors.Annotatef(fmt.Errorf("server returned transaction without signature"), "txid %v", txid)
 	}
 	var btx *bchain.Tx
 	if tx.BlockNumber == "" {
 		// mempool tx
 		btx, err = ethTxToTx(tx, 0, 0)
 		if err != nil {
-			return nil, err
+			return nil, errors.Annotatef(err, "txid %v", txid)
 		}
 	} else {
 		// non mempool tx - we must read the block header to get the block time
 		n, err := ethNumber(tx.BlockNumber)
 		if err != nil {
-			return nil, err
+			return nil, errors.Annotatef(err, "txid %v", txid)
 		}
 		h, err := b.client.HeaderByHash(ctx, tx.BlockHash)
 		if err != nil {
-			return nil, err
+			return nil, errors.Annotatef(err, "txid %v", txid)
 		}
 		confirmations, err := b.computeConfirmations(uint64(n))
 		if err != nil {
-			return nil, err
+			return nil, errors.Annotatef(err, "txid %v", txid)
 		}
 		btx, err = ethTxToTx(tx, h.Time.Int64(), confirmations)
 		if err != nil {
-			return nil, err
+			return nil, errors.Annotatef(err, "txid %v", txid)
 		}
 	}
 	return btx, nil
