@@ -33,10 +33,12 @@ func GetChainParams(chain string) *chaincfg.Params {
 	return &chaincfg.MainNetParams
 }
 
+// GetAddrIDFromAddress returns internal address representation of given transaction output
 func (p *BitcoinBlockParser) GetAddrIDFromVout(output *bchain.Vout) ([]byte, error) {
 	return hex.DecodeString(output.ScriptPubKey.Hex)
 }
 
+// GetAddrIDFromAddress returns internal address representation of given address
 func (p *BitcoinBlockParser) GetAddrIDFromAddress(address string) ([]byte, error) {
 	return p.AddressToOutputScript(address)
 }

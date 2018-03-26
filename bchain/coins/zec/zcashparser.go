@@ -10,15 +10,19 @@ import (
 
 type ZCashBlockParser struct{}
 
+// GetAddrIDFromAddress returns internal address representation of given transaction output
 func (p *ZCashBlockParser) GetAddrIDFromVout(output *bchain.Vout) ([]byte, error) {
 	if len(output.ScriptPubKey.Addresses) != 1 {
 		return nil, nil
 	}
-	return []byte(output.ScriptPubKey.Addresses[0]), nil
+	hash, _, err := CheckDecode(output.ScriptPubKey.Addresses[0])
+	return hash, err
 }
 
+// GetAddrIDFromAddress returns internal address representation of given address
 func (p *ZCashBlockParser) GetAddrIDFromAddress(address string) ([]byte, error) {
-	return []byte(address), nil
+	hash, _, err := CheckDecode(address)
+	return hash, err
 }
 
 // PackTx packs transaction to byte array
@@ -73,4 +77,8 @@ func (p *ZCashBlockParser) ParseBlock(b []byte) (*bchain.Block, error) {
 
 func (p *ZCashBlockParser) ParseTx(b []byte) (*bchain.Tx, error) {
 	return nil, errors.New("ParseTx: not implemented")
+}
+
+func (p *ZCashBlockParser) IsUTXOChain() bool {
+	return true
 }
