@@ -157,6 +157,9 @@ func (b *EthRPC) GetBlockHash(height uint32) (string, error) {
 	defer cancel()
 	h, err := b.client.HeaderByNumber(ctx, &n)
 	if err != nil {
+		if err == ethereum.NotFound {
+			return "", bchain.ErrBlockNotFound
+		}
 		return "", err
 	}
 	return ethHashToHash(h.Hash()), nil
@@ -183,6 +186,9 @@ func (b *EthRPC) GetBlockHeader(hash string) (*bchain.BlockHeader, error) {
 	defer cancel()
 	h, err := b.client.HeaderByHash(ctx, ethcommon.HexToHash(hash))
 	if err != nil {
+		if err == ethereum.NotFound {
+			return nil, bchain.ErrBlockNotFound
+		}
 		return nil, err
 	}
 	return b.ethHeaderToBlockHeader(h)
@@ -294,13 +300,16 @@ func (b *EthRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 	if err != nil {
 		return nil, err
 	} else if len(raw) == 0 {
-		return nil, ethereum.NotFound
+		return nil, bchain.ErrBlockNotFound
 	}
 	// Decode header and transactions.
 	var head *ethtypes.Header
 	var body rpcBlock
 	if err := json.Unmarshal(raw, &head); err != nil {
 		return nil, err
+	}
+	if head == nil {
+		return nil, bchain.ErrBlockNotFound
 	}
 	if err := json.Unmarshal(raw, &body); err != nil {
 		return nil, err

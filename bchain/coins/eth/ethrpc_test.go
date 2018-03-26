@@ -139,7 +139,7 @@ func TestEthRPC_GetBlockHash(t *testing.T) {
 		fields  fields
 		args    args
 		want    string
-		wantErr bool
+		wantErr error
 	}{
 		{
 			name: "1000000",
@@ -161,11 +161,22 @@ func TestEthRPC_GetBlockHash(t *testing.T) {
 			},
 			want: "eccd6b0031015a19cb7d4e10f28590ba65a6a54ad1baa322b50fe5ad16903895",
 		},
+		{
+			name: "ErrBlockNotFound",
+			fields: fields{
+				b: setupEthRPC(),
+			},
+			args: args{
+				height: 1 << 31,
+			},
+			want:    "",
+			wantErr: bchain.ErrBlockNotFound,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := tt.fields.b.GetBlockHash(tt.args.height)
-			if (err != nil) != tt.wantErr {
+			if err != tt.wantErr {
 				t.Errorf("EthRPC.GetBlockHash() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
@@ -192,7 +203,7 @@ func TestEthRPC_GetBlockHeader(t *testing.T) {
 		fields  fields
 		args    args
 		want    *bchain.BlockHeader
-		wantErr bool
+		wantErr error
 	}{
 		{
 			name: "2870000",
@@ -208,11 +219,21 @@ func TestEthRPC_GetBlockHeader(t *testing.T) {
 				Confirmations: int(uint32(bh.Number.Uint64()) - 2870000),
 			},
 		},
+		{
+			name: "ErrBlockNotFound",
+			fields: fields{
+				b: setupEthRPC(),
+			},
+			args: args{
+				hash: "eccd6b0031015a19cb7d4e10f28590ba65a6a54ad1baa322b50fe5ad16903896",
+			},
+			wantErr: bchain.ErrBlockNotFound,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := tt.fields.b.GetBlockHeader(tt.args.hash)
-			if (err != nil) != tt.wantErr {
+			if err != tt.wantErr {
 				t.Errorf("EthRPC.GetBlockHeader() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
@@ -241,7 +262,7 @@ func TestEthRPC_GetBlock(t *testing.T) {
 		args        args
 		want        *bchain.Block
 		wantTxCount int
-		wantErr     bool
+		wantErr     error
 	}{
 		{
 			name: "2870000 by hash",
@@ -277,12 +298,25 @@ func TestEthRPC_GetBlock(t *testing.T) {
 			},
 			wantTxCount: 12,
 		},
+		{
+			name: "ErrBlockNotFound",
+			fields: fields{
+				b: setupEthRPC(),
+			},
+			args: args{
+				hash: "eccd6b0031015a19cb7d4e10f28590ba65a6a54ad1baa322b50fe5ad16903896",
+			},
+			wantErr: bchain.ErrBlockNotFound,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := tt.fields.b.GetBlock(tt.args.hash, tt.args.height)
-			if (err != nil) != tt.wantErr {
+			if err != tt.wantErr {
 				t.Errorf("EthRPC.GetBlock() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got == nil && tt.want == nil {
 				return
 			}
 			if got.Hash != tt.want.Hash {
