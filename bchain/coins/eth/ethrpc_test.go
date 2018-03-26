@@ -244,12 +244,29 @@ func TestEthRPC_GetBlock(t *testing.T) {
 		wantErr     bool
 	}{
 		{
-			name: "2870000",
+			name: "2870000 by hash",
 			fields: fields{
 				b: setupEthRPC(),
 			},
 			args: args{
 				hash: "eccd6b0031015a19cb7d4e10f28590ba65a6a54ad1baa322b50fe5ad16903895",
+			},
+			want: &bchain.Block{
+				BlockHeader: bchain.BlockHeader{
+					Hash:          "eccd6b0031015a19cb7d4e10f28590ba65a6a54ad1baa322b50fe5ad16903895",
+					Height:        2870000,
+					Confirmations: int(uint32(bh.Number.Uint64()) - 2870000),
+				},
+			},
+			wantTxCount: 12,
+		},
+		{
+			name: "2870000 by height",
+			fields: fields{
+				b: setupEthRPC(),
+			},
+			args: args{
+				height: 2870000,
 			},
 			want: &bchain.Block{
 				BlockHeader: bchain.BlockHeader{

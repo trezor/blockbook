@@ -284,7 +284,13 @@ func (b *EthRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
 	defer cancel()
 	var raw json.RawMessage
-	err := b.rpc.CallContext(ctx, &raw, "eth_getBlockByHash", ethcommon.HexToHash(hash), true)
+	var err error
+	if hash != "" {
+		err = b.rpc.CallContext(ctx, &raw, "eth_getBlockByHash", ethcommon.HexToHash(hash), true)
+	} else {
+
+		err = b.rpc.CallContext(ctx, &raw, "eth_getBlockByNumber", fmt.Sprintf("%#x", height), true)
+	}
 	if err != nil {
 		return nil, err
 	} else if len(raw) == 0 {
