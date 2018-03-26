@@ -1,6 +1,17 @@
 package bchain
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
+
+// errors with specific meaning returned by blockchain rpc
+var (
+	// ErrBlockNotFound is returned when block is not found
+	// either unknown hash or too high height
+	// can be returned from GetBlockHash, GetBlockHeader, GetBlock
+	ErrBlockNotFound = errors.New("Block not found")
+)
 
 type ScriptSig struct {
 	// Asm string `json:"asm"`

@@ -331,6 +331,11 @@ func (b *BitcoinRPC) GetBlockChainInfo() (string, error) {
 	return res.Result.Chain, nil
 }
 
+func isErrBlockNotFound(err *bchain.RPCError) bool {
+	return err.Message == "Block not found" ||
+		err.Message == "Block height out of range"
+}
+
 // GetBlockHash returns hash of block in best-block-chain at given height.
 func (b *BitcoinRPC) GetBlockHash(height uint32) (string, error) {
 	glog.V(1).Info("rpc: getblockhash ", height)
@@ -344,6 +349,9 @@ func (b *BitcoinRPC) GetBlockHash(height uint32) (string, error) {
 		return "", errors.Annotatef(err, "height %v", height)
 	}
 	if res.Error != nil {
+		if isErrBlockNotFound(res.Error) {
+			return "", bchain.ErrBlockNotFound
+		}
 		return "", errors.Annotatef(res.Error, "height %v", height)
 	}
 	return res.Result, nil
@@ -363,6 +371,9 @@ func (b *BitcoinRPC) GetBlockHeader(hash string) (*bchain.BlockHeader, error) {
 		return nil, errors.Annotatef(err, "hash %v", hash)
 	}
 	if res.Error != nil {
+		if isErrBlockNotFound(res.Error) {
+			return nil, bchain.ErrBlockNotFound
+		}
 		return nil, errors.Annotatef(res.Error, "hash %v", hash)
 	}
 	return &res.Result, nil
@@ -370,6 +381,13 @@ func (b *BitcoinRPC) GetBlockHeader(hash string) (*bchain.BlockHeader, error) {
 
 // GetBlock returns block with given hash.
 func (b *BitcoinRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
+	var err error
+	if hash == "" && height > 0 {
+		hash, err = b.GetBlockHash(height)
+		if err != nil {
+			return nil, err
+		}
+	}
 	if !b.ParseBlocks {
 		return b.GetBlockFull(hash)
 	}
@@ -423,6 +441,9 @@ func (b *BitcoinRPC) GetBlockRaw(hash string) ([]byte, error) {
 		return nil, errors.Annotatef(err, "hash %v", hash)
 	}
 	if res.Error != nil {
+		if isErrBlockNotFound(res.Error) {
+			return nil, bchain.ErrBlockNotFound
+		}
 		return nil, errors.Annotatef(res.Error, "hash %v", hash)
 	}
 	return hex.DecodeString(res.Result)
@@ -443,6 +464,9 @@ func (b *BitcoinRPC) GetBlockList(hash string) (*bchain.Block, error) {
 		return nil, errors.Annotatef(err, "hash %v", hash)
 	}
 	if res.Error != nil {
+		if isErrBlockNotFound(res.Error) {
+			return nil, bchain.ErrBlockNotFound
+		}
 		return nil, errors.Annotatef(res.Error, "hash %v", hash)
 	}
 
@@ -475,6 +499,9 @@ func (b *BitcoinRPC) GetBlockFull(hash string) (*bchain.Block, error) {
 		return nil, errors.Annotatef(err, "hash %v", hash)
 	}
 	if res.Error != nil {
+		if isErrBlockNotFound(res.Error) {
+			return nil, bchain.ErrBlockNotFound
+		}
 		return nil, errors.Annotatef(res.Error, "hash %v", hash)
 	}
 	return &res.Result, nil
