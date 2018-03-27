@@ -70,7 +70,7 @@ type resGetBlockHeader struct {
 
 // estimatefee
 
-type resEstimateSmartFee struct {
+type resEstimateFee struct {
 	Error  *bchain.RPCError `json:"error"`
 	Result float64          `json:"result"`
 }
@@ -185,7 +185,18 @@ func (z *ZCashRPC) GetBlockHeader(hash string) (*bchain.BlockHeader, error) {
 func (z *ZCashRPC) EstimateSmartFee(blocks int, conservative bool) (float64, error) {
 	glog.V(1).Info("rpc: estimatesmartfee")
 
-	res := resEstimateSmartFee{}
+	return z.estimateFee(blocks)
+}
+
+// EstimateFee returns fee estimation.
+func (z *ZCashRPC) EstimateFee(blocks int) (float64, error) {
+	glog.V(1).Info("rpc: estimatefee ", blocks)
+
+	return z.estimateFee(blocks)
+}
+
+func (z *ZCashRPC) estimateFee(blocks int) (float64, error) {
+	res := resEstimateFee{}
 	req := untypedArrayParams{Method: "estimatefee"}
 	req.Params = append(req.Params, blocks)
 	err := z.Call(&req, &res)

@@ -162,6 +162,13 @@ var onMessageHandlers = map[string]func(*SocketIoServer, json.RawMessage) (inter
 		}
 		return
 	},
+	"estimateFee": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
+		blocks, err := unmarshalEstimateFee(params)
+		if err == nil {
+			rv, err = s.estimateFee(blocks)
+		}
+		return
+	},
 	"getInfo": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
 		return s.getInfo()
 	},
@@ -520,6 +527,33 @@ type resultEstimateSmartFee struct {
 
 func (s *SocketIoServer) estimateSmartFee(blocks int, conservative bool) (res resultEstimateSmartFee, err error) {
 	fee, err := s.chain.EstimateSmartFee(blocks, conservative)
+	if err != nil {
+		return
+	}
+	res.Result = fee
+	return
+}
+
+func unmarshalEstimateFee(params []byte) (blocks int, err error) {
+	p, err := unmarshalArray(params, 1)
+	if err != nil {
+		return
+	}
+	fblocks, ok := p[0].(float64)
+	if !ok {
+		err = errors.New("Invalid parameter nblocks")
+		return
+	}
+	blocks = int(fblocks)
+	return
+}
+
+type resultEstimateFee struct {
+	Result float64 `json:"result"`
+}
+
+func (s *SocketIoServer) estimateFee(blocks int) (res resultEstimateFee, err error) {
+	fee, err := s.chain.EstimateFee(blocks)
 	if err != nil {
 		return
 	}

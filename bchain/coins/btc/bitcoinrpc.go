@@ -255,6 +255,20 @@ type resEstimateSmartFee struct {
 	} `json:"result"`
 }
 
+// estimatefee
+
+type cmdEstimateFee struct {
+	Method string `json:"method"`
+	Params struct {
+		Blocks int `json:"nblocks"`
+	} `json:"params"`
+}
+
+type resEstimateFee struct {
+	Error  *bchain.RPCError `json:"error"`
+	Result float64          `json:"result"`
+}
+
 // sendrawtransaction
 
 type cmdSendRawTransaction struct {
@@ -553,6 +567,24 @@ func (b *BitcoinRPC) EstimateSmartFee(blocks int, conservative bool) (float64, e
 		return 0, res.Error
 	}
 	return res.Result.Feerate, nil
+}
+
+// EstimateFee returns fee estimation.
+func (b *BitcoinRPC) EstimateFee(blocks int) (float64, error) {
+	glog.V(1).Info("rpc: estimatefee ", blocks)
+
+	res := resEstimateFee{}
+	req := cmdEstimateFee{Method: "estimatefee"}
+	req.Params.Blocks = blocks
+	err := b.Call(&req, &res)
+
+	if err != nil {
+		return 0, err
+	}
+	if res.Error != nil {
+		return 0, res.Error
+	}
+	return res.Result, nil
 }
 
 // SendRawTransaction sends raw transaction.
