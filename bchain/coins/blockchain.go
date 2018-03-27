@@ -46,7 +46,10 @@ func NewBlockChain(coin string, configfile string, pushHandler func(*bchain.MQMe
 	if err != nil {
 		return nil, err
 	}
-	bc.Initialize()
+	err = bc.Initialize()
+	if err != nil {
+		return nil, err
+	}
 	return &blockChainWithMetrics{b: bc, m: metrics}, nil
 }
 
