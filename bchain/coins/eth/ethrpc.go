@@ -282,6 +282,7 @@ func ethTxToTx(tx *rpcTransaction, blocktime int64, confirmations uint32) (*bcha
 	}, nil
 }
 
+// GetBlock returns block with given hash or height, hash has precedence if both passed
 func (b *EthRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
 	defer cancel()
@@ -339,6 +340,7 @@ func (b *EthRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 	return &bbk, nil
 }
 
+// GetTransaction returns a transaction by the transaction ID.
 func (b *EthRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
 	defer cancel()
@@ -384,10 +386,28 @@ func (b *EthRPC) GetMempool() ([]string, error) {
 	panic("not implemented")
 }
 
-func (b *EthRPC) EstimateSmartFee(blocks int, conservative bool) (float64, error) {
-	panic("not implemented")
+// EstimateFee returns fee estimation.
+func (b *EthRPC) EstimateFee(blocks int) (float64, error) {
+	return b.EstimateSmartFee(blocks, true)
 }
 
+// EstimateSmartFee returns fee estimation.
+func (b *EthRPC) EstimateSmartFee(blocks int, conservative bool) (float64, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
+	defer cancel()
+	// TODO - what parameters of msg to use to get better estimate, maybe more data from the wallet are needed
+	a := ethcommon.HexToAddress("0x1234567890123456789012345678901234567890")
+	msg := ethereum.CallMsg{
+		To: &a,
+	}
+	g, err := b.client.EstimateGas(ctx, msg)
+	if err != nil {
+		return 0, err
+	}
+	return float64(g), nil
+}
+
+// SendRawTransaction sends raw transaction.
 func (b *EthRPC) SendRawTransaction(tx string) (string, error) {
 	panic("not implemented")
 }

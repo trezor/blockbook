@@ -13,7 +13,7 @@ import (
 
 var rpcURL = "ws://10.34.3.4:18546"
 var ethClient *ethclient.Client
-var ethRpcClient *rpc.Client
+var ethRPCClient *rpc.Client
 
 func setupEthRPC() *EthRPC {
 	if ethClient == nil {
@@ -22,12 +22,12 @@ func setupEthRPC() *EthRPC {
 			panic(err)
 		}
 		ec := ethclient.NewClient(rc)
-		ethRpcClient = rc
+		ethRPCClient = rc
 		ethClient = ec
 	}
 	return &EthRPC{
 		client:  ethClient,
-		rpc:     ethRpcClient,
+		rpc:     ethRPCClient,
 		timeout: time.Duration(25) * time.Second,
 		rpcURL:  "ws://10.34.3.4:18546",
 	}
@@ -425,6 +425,45 @@ func TestEthRPC_GetTransaction(t *testing.T) {
 			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("EthRPC.GetTransaction() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEthRPC_EstimateFee(t *testing.T) {
+	type fields struct {
+		b *EthRPC
+	}
+	type args struct {
+		blocks int
+	}
+	tests := []struct {
+		name    string
+		fields  fields
+		args    args
+		want    float64
+		wantErr bool
+	}{
+		{
+			name: "1",
+			fields: fields{
+				b: setupEthRPC(),
+			},
+			args: args{
+				blocks: 10,
+			},
+			want: 1., // check that there is some estimate
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.fields.b.EstimateFee(tt.args.blocks)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("EthRPC.EstimateFee() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got < tt.want {
+				t.Errorf("EthRPC.EstimateFee() = %v, want %v", got, tt.want)
 			}
 		})
 	}
