@@ -4,7 +4,6 @@ import (
 	"blockbook/bchain"
 	"blockbook/common"
 	"os"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -20,6 +19,7 @@ type SyncWorker struct {
 	syncWorkers, syncChunk int
 	dryRun                 bool
 	startHeight            uint32
+	startHash              string
 	chanOsSignal           chan os.Signal
 	metrics                *common.Metrics
 }
@@ -67,10 +67,6 @@ func (w *SyncWorker) ResyncIndex(onNewBlock func(hash string)) error {
 	return err
 }
 
-func isError(err error, s string) bool {
-	return strings.Contains(err.Error(), s)
-}
-
 func (w *SyncWorker) resyncIndex(onNewBlock func(hash string)) error {
 	remote, err := w.chain.GetBestBlockHash()
 	if err != nil {
@@ -94,7 +90,7 @@ func (w *SyncWorker) resyncIndex(onNewBlock func(hash string)) error {
 		header, err = w.chain.GetBlockHeader(local)
 		forked := false
 		if err != nil {
-			if isError(err, "Block not found") {
+			if err == bchain.ErrBlockNotFound {
 				forked = true
 			} else {
 				return err
@@ -132,16 +128,15 @@ func (w *SyncWorker) resyncIndex(onNewBlock func(hash string)) error {
 		}
 	}
 
-	var hash string
 	if header != nil {
 		glog.Info("resync: local is behind")
-		hash = header.Next
+		w.startHash = header.Next
 		w.startHeight = localBestHeight
 	} else {
 		// If the local block is missing, we're indexing from the genesis block
 		// or from the start block specified by flags
 		glog.Info("resync: genesis from block ", w.startHeight)
-		hash, err = w.chain.GetBlockHash(w.startHeight)
+		w.startHash, err = w.chain.GetBlockHash(w.startHeight)
 		if err != nil {
 			return err
 		}
@@ -166,15 +161,15 @@ func (w *SyncWorker) resyncIndex(onNewBlock func(hash string)) error {
 		}
 	}
 
-	return w.connectBlocks(hash, onNewBlock)
+	return w.connectBlocks(onNewBlock)
 }
 
-func (w *SyncWorker) connectBlocks(hash string, onNewBlock func(hash string)) error {
+func (w *SyncWorker) connectBlocks(onNewBlock func(hash string)) error {
 	bch := make(chan blockResult, 8)
 	done := make(chan struct{})
 	defer close(done)
 
-	go w.getBlockChain(hash, bch, done)
+	go w.getBlockChain(bch, done)
 
 	var lastRes blockResult
 	for res := range bch {
@@ -276,7 +271,7 @@ func (w *SyncWorker) connectBlockChunk(lower, higher uint32) error {
 	connected, err := w.isBlockConnected(higher)
 	if err != nil || connected {
 		// if higher is over the best block, continue with lower block, otherwise return error
-		if isError(err, "Block height out of range") {
+		if err != bchain.ErrBlockNotFound {
 			return err
 		}
 	}
@@ -327,7 +322,7 @@ func (w *SyncWorker) ConnectBlocksParallelInChunks(lower, higher uint32) error {
 			}
 			err := w.connectBlockChunk(low, high)
 			if err != nil {
-				if isError(err, "Block height out of range") || isError(err, "Block not found") {
+				if err == bchain.ErrBlockNotFound {
 					break
 				}
 				glog.Fatalf("connectBlocksParallel %d-%d %v", low, high, err)
@@ -348,7 +343,7 @@ func (w *SyncWorker) isBlockConnected(height uint32) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	remote, err := w.db.GetBlockHash(height)
+	remote, err := w.chain.GetBlockHash(height)
 	if err != nil {
 		return false, err
 	}
@@ -363,21 +358,30 @@ type blockResult struct {
 	err   error
 }
 
-func (w *SyncWorker) getBlockChain(hash string, out chan blockResult, done chan struct{}) {
+func (w *SyncWorker) getBlockChain(out chan blockResult, done chan struct{}) {
 	defer close(out)
 
-	for hash != "" {
+	hash := w.startHash
+	height := w.startHeight
+
+	// some coins do not return Next hash
+	// must loop until error
+	for {
 		select {
 		case <-done:
 			return
 		default:
 		}
-		block, err := w.chain.GetBlock(hash, 0)
+		block, err := w.chain.GetBlock(hash, height)
 		if err != nil {
+			if err == bchain.ErrBlockNotFound {
+				break
+			}
 			out <- blockResult{err: err}
 			return
 		}
 		hash = block.Next
+		height++
 		out <- blockResult{block: block}
 	}
 }
