@@ -119,6 +119,11 @@ func (c *blockChainWithMetrics) EstimateSmartFee(blocks int, conservative bool) 
 	return c.b.EstimateSmartFee(blocks, conservative)
 }
 
+func (c *blockChainWithMetrics) EstimateFee(blocks int) (v float64, err error) {
+	defer func(s time.Time) { c.observeRPCLatency("EstimateFee", s, err) }(time.Now())
+	return c.b.EstimateFee(blocks)
+}
+
 func (c *blockChainWithMetrics) SendRawTransaction(tx string) (v string, err error) {
 	defer func(s time.Time) { c.observeRPCLatency("SendRawTransaction", s, err) }(time.Now())
 	return c.b.SendRawTransaction(tx)

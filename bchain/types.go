@@ -113,6 +113,7 @@ type BlockChain interface {
 	GetMempool() ([]string, error)
 	GetTransaction(txid string) (*Tx, error)
 	EstimateSmartFee(blocks int, conservative bool) (float64, error)
+	EstimateFee(blocks int) (float64, error)
 	SendRawTransaction(tx string) (string, error)
 	// mempool
 	ResyncMempool(onNewTxAddr func(txid string, addr string)) error
