@@ -77,13 +77,21 @@ type resEstimateFee struct {
 
 // GetBlock returns block with given hash.
 func (z *ZCashRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
+	var err error
+	if hash == "" && height > 0 {
+		hash, err = z.GetBlockHash(height)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	glog.V(1).Info("rpc: getblock (verbosity=1) ", hash)
 
 	res := resGetBlockThin{}
 	req := untypedArrayParams{Method: "getblock"}
 	req.Params = append(req.Params, hash)
 	req.Params = append(req.Params, true)
-	err := z.Call(&req, &res)
+	err = z.Call(&req, &res)
 
 	if err != nil {
 		return nil, errors.Annotatef(err, "hash %v", hash)
@@ -157,6 +165,9 @@ func (z *ZCashRPC) GetBlockHash(height uint32) (string, error) {
 		return "", errors.Annotatef(err, "height %v", height)
 	}
 	if res.Error != nil {
+		if isErrBlockNotFound(res.Error) {
+			return "", bchain.ErrBlockNotFound
+		}
 		return "", errors.Annotatef(res.Error, "height %v", height)
 	}
 	return res.Result, nil
@@ -176,6 +187,9 @@ func (z *ZCashRPC) GetBlockHeader(hash string) (*bchain.BlockHeader, error) {
 		return nil, errors.Annotatef(err, "hash %v", hash)
 	}
 	if res.Error != nil {
+		if isErrBlockNotFound(res.Error) {
+			return nil, bchain.ErrBlockNotFound
+		}
 		return nil, errors.Annotatef(res.Error, "hash %v", hash)
 	}
 	return &res.Result, nil
@@ -213,4 +227,9 @@ func (z *ZCashRPC) estimateFee(blocks int) (float64, error) {
 // GetMempoolEntry returns mempool data for given transaction
 func (z *ZCashRPC) GetMempoolEntry(txid string) (*bchain.MempoolEntry, error) {
 	return nil, errors.New("GetMempoolEntry: not implemented")
+}
+
+func isErrBlockNotFound(err *bchain.RPCError) bool {
+	return err.Message == "Block not found" ||
+		err.Message == "Block height out of range"
 }
