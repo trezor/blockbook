@@ -7,9 +7,8 @@ import (
 	"github.com/golang/glog"
 )
 
-// TODO rename
-type scriptIndex struct {
-	script string
+type addrIndex struct {
+	addrID string
 	n      uint32
 }
 
@@ -19,12 +18,12 @@ type outpoint struct {
 }
 
 type inputOutput struct {
-	outputs []scriptIndex
+	outputs []addrIndex
 	inputs  []outpoint
 }
 
-// Mempool is mempool handle.
-type Mempool struct {
+// UTXOMempool is mempool handle.
+type UTXOMempool struct {
 	chain           BlockChain
 	mux             sync.Mutex
 	txToInputOutput map[string]inputOutput
@@ -33,12 +32,12 @@ type Mempool struct {
 }
 
 // NewMempool creates new mempool handler.
-func NewMempool(chain BlockChain) *Mempool {
-	return &Mempool{chain: chain}
+func NewMempool(chain BlockChain) *UTXOMempool {
+	return &UTXOMempool{chain: chain}
 }
 
-// GetTransactions returns slice of mempool transactions for given output script.
-func (m *Mempool) GetTransactions(address string) ([]string, error) {
+// GetTransactions returns slice of mempool transactions for given address
+func (m *UTXOMempool) GetTransactions(address string) ([]string, error) {
 	m.mux.Lock()
 	defer m.mux.Unlock()
 	parser := m.chain.GetChainParser()
@@ -59,23 +58,23 @@ func (m *Mempool) GetTransactions(address string) ([]string, error) {
 }
 
 // GetSpentOutput returns transaction which spends given outpoint
-func (m *Mempool) GetSpentOutput(outputTxid string, vout uint32) string {
+func (m *UTXOMempool) GetSpentOutput(outputTxid string, vout uint32) string {
 	o := outpoint{txid: outputTxid, vout: vout}
 	return m.inputs[o]
 }
 
-func (m *Mempool) updateMappings(newTxToInputOutput map[string]inputOutput, newScriptToTx map[string][]outpoint, newInputs map[outpoint]string) {
+func (m *UTXOMempool) updateMappings(newTxToInputOutput map[string]inputOutput, newAddrIDToTx map[string][]outpoint, newInputs map[outpoint]string) {
 	m.mux.Lock()
 	defer m.mux.Unlock()
 	m.txToInputOutput = newTxToInputOutput
-	m.addrIDToTx = newScriptToTx
+	m.addrIDToTx = newAddrIDToTx
 	m.inputs = newInputs
 }
 
-// Resync gets mempool transactions and maps output scripts to transactions.
+// Resync gets mempool transactions and maps outputs to transactions.
 // Resync is not reentrant, it should be called from a single thread.
 // Read operations (GetTransactions) are safe.
-func (m *Mempool) Resync(onNewTxAddr func(txid string, addr string)) error {
+func (m *UTXOMempool) Resync(onNewTxAddr func(txid string, addr string)) error {
 	start := time.Now()
 	glog.V(1).Info("Mempool: resync")
 	txs, err := m.chain.GetMempool()
@@ -94,7 +93,7 @@ func (m *Mempool) Resync(onNewTxAddr func(txid string, addr string)) error {
 				glog.Error("cannot get transaction ", txid, ": ", err)
 				continue
 			}
-			io.outputs = make([]scriptIndex, 0, len(tx.Vout))
+			io.outputs = make([]addrIndex, 0, len(tx.Vout))
 			for _, output := range tx.Vout {
 				addrID, err := parser.GetAddrIDFromVout(&output)
 				if err != nil {
@@ -102,7 +101,7 @@ func (m *Mempool) Resync(onNewTxAddr func(txid string, addr string)) error {
 					continue
 				}
 				if len(addrID) > 0 {
-					io.outputs = append(io.outputs, scriptIndex{string(addrID), output.N})
+					io.outputs = append(io.outputs, addrIndex{string(addrID), output.N})
 				}
 				if onNewTxAddr != nil && len(output.ScriptPubKey.Addresses) == 1 {
 					onNewTxAddr(tx.Txid, output.ScriptPubKey.Addresses[0])
@@ -118,7 +117,7 @@ func (m *Mempool) Resync(onNewTxAddr func(txid string, addr string)) error {
 		}
 		newTxToInputOutput[txid] = io
 		for _, si := range io.outputs {
-			newAddrIDToTx[si.script] = append(newAddrIDToTx[si.script], outpoint{txid, si.n})
+			newAddrIDToTx[si.addrID] = append(newAddrIDToTx[si.addrID], outpoint{txid, si.n})
 		}
 		for _, i := range io.inputs {
 			newInputs[i] = txid

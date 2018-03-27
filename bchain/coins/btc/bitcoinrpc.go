@@ -26,7 +26,7 @@ type BitcoinRPC struct {
 	Parser      bchain.BlockChainParser
 	Testnet     bool
 	Network     string
-	Mempool     *bchain.Mempool
+	Mempool     *bchain.UTXOMempool
 	ParseBlocks bool
 	mq          *bchain.MQ
 }
