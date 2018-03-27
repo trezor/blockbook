@@ -129,6 +129,7 @@ The data are separated to different column families:
 - xpub index
 - tests
 - fix program dependencies to concrete versions
+- protect blockbook against illicit usage
 - ~~disconnect blocks - use block data if available to avoid full scan~~
 - ~~compute statistics of data, txcache, usage, etc.~~
 - ~~disconnect blocks - remove disconnected cached transactions~~
