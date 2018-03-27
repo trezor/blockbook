@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/hex"
 	"flag"
 	"log"
 	"os"
@@ -312,16 +311,14 @@ func onNewTxAddr(txid string, addr string) {
 	}
 }
 
-func pushSynchronizationHandler(m *bchain.MQMessage) {
-	// TODO - is coin specific, item for abstraction
-	body := hex.EncodeToString(m.Body)
-	glog.V(1).Infof("MQ: %s-%d  %s", m.Topic, m.Sequence, body)
-	if m.Topic == "hashblock" {
+func pushSynchronizationHandler(nt bchain.NotificationType) {
+	glog.V(1).Infof("MQ: notification ", nt)
+	if nt == bchain.NotificationNewBlock {
 		chanSyncIndex <- struct{}{}
-	} else if m.Topic == "hashtx" {
+	} else if nt == bchain.NotificationNewTx {
 		chanSyncMempool <- struct{}{}
 	} else {
-		glog.Errorf("MQ: unknown message %s-%d  %s", m.Topic, m.Sequence, body)
+		glog.Error("MQ: unknown notification sent")
 	}
 }
 

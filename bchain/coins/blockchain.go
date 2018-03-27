@@ -15,7 +15,7 @@ import (
 	"github.com/juju/errors"
 )
 
-type blockChainFactory func(config json.RawMessage, pushHandler func(*bchain.MQMessage)) (bchain.BlockChain, error)
+type blockChainFactory func(config json.RawMessage, pushHandler func(bchain.NotificationType)) (bchain.BlockChain, error)
 
 var blockChainFactories = make(map[string]blockChainFactory)
 
@@ -28,7 +28,7 @@ func init() {
 }
 
 // NewBlockChain creates bchain.BlockChain of type defined by parameter coin
-func NewBlockChain(coin string, configfile string, pushHandler func(*bchain.MQMessage), metrics *common.Metrics) (bchain.BlockChain, error) {
+func NewBlockChain(coin string, configfile string, pushHandler func(bchain.NotificationType), metrics *common.Metrics) (bchain.BlockChain, error) {
 	bcf, ok := blockChainFactories[coin]
 	if !ok {
 		return nil, errors.New(fmt.Sprint("Unsupported coin ", coin, ". Must be one of ", reflect.ValueOf(blockChainFactories).MapKeys()))

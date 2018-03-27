@@ -48,7 +48,7 @@ type configuration struct {
 }
 
 // NewEthRPC returns new EthRPC instance.
-func NewEthRPC(config json.RawMessage, pushHandler func(*bchain.MQMessage)) (bchain.BlockChain, error) {
+func NewEthRPC(config json.RawMessage, pushHandler func(bchain.NotificationType)) (bchain.BlockChain, error) {
 	var err error
 	var c configuration
 	err = json.Unmarshal(config, &c)

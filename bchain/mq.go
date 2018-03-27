@@ -16,16 +16,21 @@ type MQ struct {
 	finished  chan bool
 }
 
-// MQMessage contains data received from Bitcoind message queue
-type MQMessage struct {
-	Topic    string
-	Sequence uint32
-	Body     []byte
-}
+// NotificationType is type of notification
+type NotificationType int
+
+const (
+	// NotificationUnknown is unknown
+	NotificationUnknown NotificationType = iota
+	// NotificationNewBlock message is sent when there is a new block to be imported
+	NotificationNewBlock NotificationType = iota
+	// NotificationNewTx message is sent when there is a new mempool transaction
+	NotificationNewTx NotificationType = iota
+)
 
 // NewMQ creates new Bitcoind ZeroMQ listener
 // callback function receives messages
-func NewMQ(binding string, callback func(*MQMessage)) (*MQ, error) {
+func NewMQ(binding string, callback func(NotificationType)) (*MQ, error) {
 	context, err := zmq.NewContext()
 	if err != nil {
 		return nil, err
@@ -56,7 +61,7 @@ func NewMQ(binding string, callback func(*MQMessage)) (*MQ, error) {
 	return mq, nil
 }
 
-func (mq *MQ) run(callback func(*MQMessage)) {
+func (mq *MQ) run(callback func(NotificationType)) {
 	mq.isRunning = true
 	for {
 		msg, err := mq.socket.RecvMessageBytes(0)
@@ -70,16 +75,25 @@ func (mq *MQ) run(callback func(*MQMessage)) {
 			time.Sleep(100 * time.Millisecond)
 		}
 		if msg != nil && len(msg) >= 3 {
-			sequence := uint32(0)
-			if len(msg[len(msg)-1]) == 4 {
-				sequence = binary.LittleEndian.Uint32(msg[len(msg)-1])
+			var nt NotificationType
+			switch string(msg[0]) {
+			case "hashblock":
+				nt = NotificationNewBlock
+				break
+			case "hashtx":
+				nt = NotificationNewTx
+				break
+			default:
+				nt = NotificationUnknown
 			}
-			m := &MQMessage{
-				Topic:    string(msg[0]),
-				Sequence: sequence,
-				Body:     msg[1],
+			if glog.V(2) {
+				sequence := uint32(0)
+				if len(msg[len(msg)-1]) == 4 {
+					sequence = binary.LittleEndian.Uint32(msg[len(msg)-1])
+				}
+				glog.Infof("MQ: %v %s-%d", nt, string(msg[0]), sequence)
 			}
-			callback(m)
+			callback(nt)
 		}
 	}
 	mq.isRunning = false
