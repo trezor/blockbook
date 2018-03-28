@@ -131,7 +131,7 @@ func (w *SyncWorker) resyncIndex(onNewBlock func(hash string)) error {
 	if header != nil {
 		glog.Info("resync: local is behind")
 		w.startHash = header.Next
-		w.startHeight = localBestHeight
+		w.startHeight = localBestHeight + 1
 	} else {
 		// If the local block is missing, we're indexing from the genesis block
 		// or from the start block specified by flags
