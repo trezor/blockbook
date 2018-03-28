@@ -143,6 +143,9 @@ func (d *RocksDB) GetTransactions(address string, lower uint32, higher uint32, f
 		glog.Infof("rocksdb: address get %s %d-%d ", address, lower, higher)
 	}
 	addrID, err := d.chainParser.GetAddrIDFromAddress(address)
+	if err != nil {
+		return err
+	}
 
 	kstart, err := packOutputKey(addrID, lower)
 	if err != nil {
@@ -283,7 +286,10 @@ func (d *RocksDB) writeOutputs(wb *gorocksdb.WriteBatch, block *bchain.Block, op
 		for _, output := range tx.Vout {
 			addrID, err := d.chainParser.GetAddrIDFromVout(&output)
 			if err != nil {
-				glog.Warningf("rocksdb: addrID: %v - %d %s", err, block.Height, addrID)
+				// do not log ErrAddressMissing, transactions can be without to address (for example eth contracts)
+				if err != bchain.ErrAddressMissing {
+					glog.Warningf("rocksdb: addrID: %v - height %d, tx %v, output %v", err, block.Height, tx.Txid, output)
+				}
 				continue
 			}
 			err = d.addAddrIDToRecords(op, wb, records, addrID, tx.Txid, int32(output.N), block.Height)

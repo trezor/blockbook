@@ -2,9 +2,8 @@ package eth
 
 import (
 	"blockbook/bchain"
+	"encoding/hex"
 	"errors"
-
-	ethcommon "github.com/ethereum/go-ethereum/common"
 )
 
 type EthParser struct {
@@ -18,8 +17,21 @@ func (p *EthParser) GetAddrIDFromVout(output *bchain.Vout) ([]byte, error) {
 }
 
 func (p *EthParser) GetAddrIDFromAddress(address string) ([]byte, error) {
-	a := ethcommon.HexToAddress(address)
-	return a.Bytes(), nil
+	// github.com/ethereum/go-ethereum/common.HexToAddress does not handle address errors, using own decoding
+	if len(address) > 1 {
+		if address[0:2] == "0x" || address[0:2] == "0X" {
+			address = address[2:]
+		}
+	} else {
+		if len(address) == 0 {
+			return nil, bchain.ErrAddressMissing
+		}
+		return nil, errors.New("Invalid address")
+	}
+	if len(address)&1 == 1 {
+		address = "0" + address
+	}
+	return hex.DecodeString(address)
 }
 
 func (p *EthParser) AddressToOutputScript(address string) ([]byte, error) {

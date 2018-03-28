@@ -11,6 +11,9 @@ var (
 	// either unknown hash or too high height
 	// can be returned from GetBlockHash, GetBlockHeader, GetBlock
 	ErrBlockNotFound = errors.New("Block not found")
+	// ErrAddressMissing is returned if address is not specified
+	// for example To address in ethereum can be missing in case of contract transaction
+	ErrAddressMissing = errors.New("Address missing")
 )
 
 type ScriptSig struct {
