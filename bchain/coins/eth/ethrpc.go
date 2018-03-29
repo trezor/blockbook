@@ -273,16 +273,12 @@ func ethNumber(n string) (int64, error) {
 
 func ethTxToTx(tx *rpcTransaction, blocktime int64, confirmations uint32) (*bchain.Tx, error) {
 	txid := ethHashToHash(tx.Hash)
-	n, err := ethNumber(tx.TransactionIndex)
-	if err != nil {
-		return nil, err
-	}
-	var from, to string
-	if len(tx.To) > 2 {
-		to = tx.To[2:]
-	}
+	var fa, ta []string
 	if len(tx.From) > 2 {
-		from = tx.From[2:]
+		fa = []string{tx.From[2:]}
+	}
+	if len(tx.To) > 2 {
+		ta = []string{tx.To[2:]}
 	}
 	b, err := json.Marshal(tx)
 	if err != nil {
@@ -298,7 +294,7 @@ func ethTxToTx(tx *rpcTransaction, blocktime int64, confirmations uint32) (*bcha
 		Txid: txid,
 		Vin: []bchain.Vin{
 			{
-				Addresses: []string{from},
+				Addresses: fa,
 				// Coinbase
 				// ScriptSig
 				// Sequence
@@ -308,11 +304,11 @@ func ethTxToTx(tx *rpcTransaction, blocktime int64, confirmations uint32) (*bcha
 		},
 		Vout: []bchain.Vout{
 			{
-				N: uint32(n),
+				N: 0, // there is always up to one To address
 				// Value - cannot set, it does not fit precisely to float64
 				ScriptPubKey: bchain.ScriptPubKey{
 					// Hex
-					Addresses: []string{to},
+					Addresses: ta,
 				},
 			},
 		},

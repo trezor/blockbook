@@ -11,7 +11,7 @@ type EthParser struct {
 
 func (p *EthParser) GetAddrIDFromVout(output *bchain.Vout) ([]byte, error) {
 	if len(output.ScriptPubKey.Addresses) != 1 {
-		return nil, nil
+		return nil, bchain.ErrAddressMissing
 	}
 	return p.GetAddrIDFromAddress(output.ScriptPubKey.Addresses[0])
 }
