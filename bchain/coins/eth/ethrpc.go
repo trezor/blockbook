@@ -37,7 +37,7 @@ type EthRPC struct {
 	Parser               *EthParser
 	Testnet              bool
 	Network              string
-	Mempool              *bchain.UTXOMempool
+	Mempool              *bchain.NonUTXOMempool
 	bestHeaderMu         sync.Mutex
 	bestHeader           *ethtypes.Header
 	chanNewBlock         chan *ethtypes.Header
@@ -126,7 +126,9 @@ func (b *EthRPC) Initialize() error {
 		return errors.Annotatef(err, "EthSubscribe newHeads")
 	}
 	b.newBlockSubscription = sub
-	// b.Mempool = bchain.NewMempool(s, metrics)
+
+	b.Mempool = bchain.NewNonUTXOMempool(b)
+
 	return nil
 }
 
@@ -415,8 +417,26 @@ func (b *EthRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 	return btx, nil
 }
 
+type rpcMempoolBlock struct {
+	Transactions []string `json:"transactions"`
+}
+
 func (b *EthRPC) GetMempool() ([]string, error) {
-	panic("not implemented")
+	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
+	defer cancel()
+	var raw json.RawMessage
+	var err error
+	err = b.rpc.CallContext(ctx, &raw, "eth_getBlockByNumber", "pending", false)
+	if err != nil {
+		return nil, err
+	} else if len(raw) == 0 {
+		return nil, bchain.ErrBlockNotFound
+	}
+	var body rpcMempoolBlock
+	if err := json.Unmarshal(raw, &body); err != nil {
+		return nil, err
+	}
+	return body.Transactions, nil
 }
 
 // EstimateFee returns fee estimation.
@@ -446,12 +466,11 @@ func (b *EthRPC) SendRawTransaction(tx string) (string, error) {
 }
 
 func (b *EthRPC) ResyncMempool(onNewTxAddr func(txid string, addr string)) error {
-	return nil
-	return errors.New("ResyncMempool: not implemented")
+	return b.Mempool.Resync(onNewTxAddr)
 }
 
 func (b *EthRPC) GetMempoolTransactions(address string) ([]string, error) {
-	return nil, errors.New("ResyncMempool: not implemented")
+	return b.Mempool.GetTransactions(address)
 }
 
 func (b *EthRPC) GetMempoolSpentOutput(outputTxid string, vout uint32) string {

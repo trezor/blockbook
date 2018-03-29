@@ -378,7 +378,6 @@ func TestEthRPC_GetTransaction(t *testing.T) {
 				},
 				Vout: []bchain.Vout{
 					{
-						N: uint32(1),
 						ScriptPubKey: bchain.ScriptPubKey{
 							Addresses: []string{"682b7903a11098cf770c7aef4aa02a85b3f3601a"},
 						},
@@ -407,7 +406,6 @@ func TestEthRPC_GetTransaction(t *testing.T) {
 				},
 				Vout: []bchain.Vout{
 					{
-						N: uint32(10),
 						ScriptPubKey: bchain.ScriptPubKey{
 							Addresses: []string{"555ee11fbddc0e49a9bab358a8941ad95ffdb48f"},
 						},
@@ -465,6 +463,35 @@ func TestEthRPC_EstimateFee(t *testing.T) {
 			if got < tt.want {
 				t.Errorf("EthRPC.EstimateFee() = %v, want %v", got, tt.want)
 			}
+		})
+	}
+}
+
+func TestEthRPC_GetMempool(t *testing.T) {
+	type fields struct {
+		b *EthRPC
+	}
+	tests := []struct {
+		name    string
+		fields  fields
+		want    []string
+		wantErr bool
+	}{
+		{
+			name: "1",
+			fields: fields{
+				b: setupEthRPC(),
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.fields.b.GetMempool()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("EthRPC.GetMempool() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			t.Logf("EthRPC.GetMempool() returned %v transactions", len(got))
 		})
 	}
 }
