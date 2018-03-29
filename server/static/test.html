@@ -27,7 +27,7 @@
             var addresses = document.getElementById('getAddressTxidsAddresses').value.split(",");
             addresses = addresses.map(s => s.trim());
             var mempool = document.getElementById("getAddressTxidsMempool").checked;
-            lookupTransactionsIdsMempool(addresses, mempool, 2000000, 0, function (result) {
+            lookupTransactionsIdsMempool(addresses, mempool, 20000000, 0, function (result) {
                 console.log('getAddressTxids sent successfully');
                 console.log(result);
                 document.getElementById('getAddressTxidsResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
@@ -56,7 +56,7 @@
             var addresses = document.getElementById('getAddressHistoryAddresses').value.split(",");
             addresses = addresses.map(s => s.trim());
             var mempool = document.getElementById("getAddressHistoryMempool").checked;
-            lookupAddressHistories(addresses, 0, 5, mempool, 2000000, 0, function (result) {
+            lookupAddressHistories(addresses, 0, 5, mempool, 20000000, 0, function (result) {
                 console.log('getAddressHistory sent successfully');
                 console.log(result);
                 document.getElementById('getAddressHistoryResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
