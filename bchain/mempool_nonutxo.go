@@ -7,38 +7,21 @@ import (
 	"github.com/golang/glog"
 )
 
-// addrIndex and outpoint are used also in nonutxo mempool
-type addrIndex struct {
-	addrID string
-	n      int32
-}
-
-type outpoint struct {
-	txid string
-	vout int32
-}
-
-type inputOutput struct {
-	outputs []addrIndex
-	inputs  []outpoint
-}
-
-// UTXOMempool is mempool handle.
-type UTXOMempool struct {
+// NonUTXOMempool is mempool handle of non UTXO chains
+type NonUTXOMempool struct {
 	chain           BlockChain
 	mux             sync.Mutex
-	txToInputOutput map[string]inputOutput
+	txToInputOutput map[string][]addrIndex
 	addrIDToTx      map[string][]outpoint
-	inputs          map[outpoint]string
 }
 
-// NewMempool creates new mempool handler.
-func NewUTXOMempool(chain BlockChain) *UTXOMempool {
-	return &UTXOMempool{chain: chain}
+// NewNonUTXOMempool creates new mempool handler.
+func NewNonUTXOMempool(chain BlockChain) *NonUTXOMempool {
+	return &NonUTXOMempool{chain: chain}
 }
 
 // GetTransactions returns slice of mempool transactions for given address
-func (m *UTXOMempool) GetTransactions(address string) ([]string, error) {
+func (m *NonUTXOMempool) GetTransactions(address string) ([]string, error) {
 	m.mux.Lock()
 	defer m.mux.Unlock()
 	parser := m.chain.GetChainParser()
@@ -47,35 +30,24 @@ func (m *UTXOMempool) GetTransactions(address string) ([]string, error) {
 		return nil, err
 	}
 	outpoints := m.addrIDToTx[string(addrID)]
-	txs := make([]string, 0, len(outpoints)+len(outpoints)/2)
+	txs := make([]string, 0, len(outpoints))
 	for _, o := range outpoints {
 		txs = append(txs, o.txid)
-		i := m.inputs[o]
-		if i != "" {
-			txs = append(txs, i)
-		}
 	}
 	return txs, nil
 }
 
-// GetSpentOutput returns transaction which spends given outpoint
-func (m *UTXOMempool) GetSpentOutput(outputTxid string, vout uint32) string {
-	o := outpoint{txid: outputTxid, vout: int32(vout)}
-	return m.inputs[o]
-}
-
-func (m *UTXOMempool) updateMappings(newTxToInputOutput map[string]inputOutput, newAddrIDToTx map[string][]outpoint, newInputs map[outpoint]string) {
+func (m *NonUTXOMempool) updateMappings(newTxToInputOutput map[string][]addrIndex, newAddrIDToTx map[string][]outpoint) {
 	m.mux.Lock()
 	defer m.mux.Unlock()
 	m.txToInputOutput = newTxToInputOutput
 	m.addrIDToTx = newAddrIDToTx
-	m.inputs = newInputs
 }
 
 // Resync gets mempool transactions and maps outputs to transactions.
 // Resync is not reentrant, it should be called from a single thread.
 // Read operations (GetTransactions) are safe.
-func (m *UTXOMempool) Resync(onNewTxAddr func(txid string, addr string)) error {
+func (m *NonUTXOMempool) Resync(onNewTxAddr func(txid string, addr string)) error {
 	start := time.Now()
 	glog.V(1).Info("Mempool: resync")
 	txs, err := m.chain.GetMempool()
@@ -83,9 +55,8 @@ func (m *UTXOMempool) Resync(onNewTxAddr func(txid string, addr string)) error {
 		return err
 	}
 	parser := m.chain.GetChainParser()
-	newTxToInputOutput := make(map[string]inputOutput, len(m.txToInputOutput)+1)
+	newTxToInputOutput := make(map[string][]addrIndex, len(m.txToInputOutput)+1)
 	newAddrIDToTx := make(map[string][]outpoint, len(m.addrIDToTx)+1)
-	newInputs := make(map[outpoint]string, len(m.inputs)+1)
 	for _, txid := range txs {
 		io, exists := m.txToInputOutput[txid]
 		if !exists {
@@ -94,37 +65,41 @@ func (m *UTXOMempool) Resync(onNewTxAddr func(txid string, addr string)) error {
 				glog.Error("cannot get transaction ", txid, ": ", err)
 				continue
 			}
-			io.outputs = make([]addrIndex, 0, len(tx.Vout))
+			io = make([]addrIndex, 0, len(tx.Vout)+len(tx.Vin))
 			for _, output := range tx.Vout {
 				addrID, err := parser.GetAddrIDFromVout(&output)
 				if err != nil {
-					glog.Error("error in addrID in ", txid, " ", output.N, ": ", err)
+					if err != ErrAddressMissing {
+						glog.Error("error in output addrID in ", txid, " ", output.N, ": ", err)
+					}
 					continue
 				}
 				if len(addrID) > 0 {
-					io.outputs = append(io.outputs, addrIndex{string(addrID), int32(output.N)})
+					io = append(io, addrIndex{string(addrID), int32(output.N)})
 				}
 				if onNewTxAddr != nil && len(output.ScriptPubKey.Addresses) == 1 {
 					onNewTxAddr(tx.Txid, output.ScriptPubKey.Addresses[0])
 				}
 			}
-			io.inputs = make([]outpoint, 0, len(tx.Vin))
 			for _, input := range tx.Vin {
-				if input.Coinbase != "" {
-					continue
+				for i, a := range input.Addresses {
+					if len(a) > 0 {
+						addrID, err := parser.GetAddrIDFromAddress(a)
+						if err != nil {
+							glog.Error("error in input addrID in ", txid, " ", a, ": ", err)
+							continue
+						}
+						io = append(io, addrIndex{string(addrID), int32(^i)})
+					}
 				}
-				io.inputs = append(io.inputs, outpoint{input.Txid, int32(input.Vout)})
 			}
 		}
 		newTxToInputOutput[txid] = io
-		for _, si := range io.outputs {
+		for _, si := range io {
 			newAddrIDToTx[si.addrID] = append(newAddrIDToTx[si.addrID], outpoint{txid, si.n})
 		}
-		for _, i := range io.inputs {
-			newInputs[i] = txid
-		}
 	}
-	m.updateMappings(newTxToInputOutput, newAddrIDToTx, newInputs)
+	m.updateMappings(newTxToInputOutput, newAddrIDToTx)
 	glog.Info("Mempool: resync finished in ", time.Since(start), ", ", len(m.txToInputOutput), " transactions in mempool")
 	return nil
 }

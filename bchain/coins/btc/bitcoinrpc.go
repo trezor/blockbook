@@ -73,7 +73,7 @@ func NewBitcoinRPC(config json.RawMessage, pushHandler func(bchain.NotificationT
 }
 
 func (b *BitcoinRPC) Initialize() error {
-	b.Mempool = bchain.NewMempool(b)
+	b.Mempool = bchain.NewUTXOMempool(b)
 
 	chainName, err := b.GetBlockChainInfo()
 	if err != nil {
