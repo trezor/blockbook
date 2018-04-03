@@ -21,20 +21,23 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
+// EthereumNet type specifies the type of ethereum network
 type EthereumNet uint32
 
 const (
+	// MainNet is production network
 	MainNet EthereumNet = 1
+	// TestNet is Ropsten test network
 	TestNet EthereumNet = 3
 )
 
-// EthRPC is an interface to JSON-RPC eth service.
-type EthRPC struct {
+// EthereumRPC is an interface to JSON-RPC eth service.
+type EthereumRPC struct {
 	client               *ethclient.Client
 	rpc                  *rpc.Client
 	timeout              time.Duration
 	rpcURL               string
-	Parser               *EthParser
+	Parser               *EthereumParser
 	Testnet              bool
 	Network              string
 	Mempool              *bchain.NonUTXOMempool
@@ -51,8 +54,8 @@ type configuration struct {
 	RPCTimeout int    `json:"rpcTimeout"`
 }
 
-// NewEthRPC returns new EthRPC instance.
-func NewEthRPC(config json.RawMessage, pushHandler func(bchain.NotificationType)) (bchain.BlockChain, error) {
+// NewEthereumRPC returns new EthRPC instance.
+func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.NotificationType)) (bchain.BlockChain, error) {
 	var err error
 	var c configuration
 	err = json.Unmarshal(config, &c)
@@ -65,14 +68,14 @@ func NewEthRPC(config json.RawMessage, pushHandler func(bchain.NotificationType)
 	}
 	ec := ethclient.NewClient(rc)
 
-	s := &EthRPC{
+	s := &EthereumRPC{
 		client: ec,
 		rpc:    rc,
 		rpcURL: c.RPCURL,
 	}
 
 	// always create parser
-	s.Parser = &EthParser{}
+	s.Parser = &EthereumParser{}
 	s.timeout = time.Duration(c.RPCTimeout) * time.Second
 
 	// new blocks notifications handling
@@ -114,7 +117,7 @@ func NewEthRPC(config json.RawMessage, pushHandler func(bchain.NotificationType)
 }
 
 // Initialize initializes ethereum rpc interface
-func (b *EthRPC) Initialize() error {
+func (b *EthereumRPC) Initialize() error {
 	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
 	defer cancel()
 
@@ -158,7 +161,7 @@ func (b *EthRPC) Initialize() error {
 }
 
 // Shutdown cleans up rpc interface to ethereum
-func (b *EthRPC) Shutdown() error {
+func (b *EthereumRPC) Shutdown() error {
 	if b.newBlockSubscription != nil {
 		b.newBlockSubscription.Unsubscribe()
 	}
@@ -173,15 +176,15 @@ func (b *EthRPC) Shutdown() error {
 	return nil
 }
 
-func (b *EthRPC) IsTestnet() bool {
+func (b *EthereumRPC) IsTestnet() bool {
 	return b.Testnet
 }
 
-func (b *EthRPC) GetNetworkName() string {
+func (b *EthereumRPC) GetNetworkName() string {
 	return b.Network
 }
 
-func (b *EthRPC) getBestHeader() (*ethtypes.Header, error) {
+func (b *EthereumRPC) getBestHeader() (*ethtypes.Header, error) {
 	b.bestHeaderMu.Lock()
 	defer b.bestHeaderMu.Unlock()
 	if b.bestHeader == nil {
@@ -200,7 +203,7 @@ func ethHashToHash(h ethcommon.Hash) string {
 	return h.Hex()[2:]
 }
 
-func (b *EthRPC) GetBestBlockHash() (string, error) {
+func (b *EthereumRPC) GetBestBlockHash() (string, error) {
 	h, err := b.getBestHeader()
 	if err != nil {
 		return "", err
@@ -208,7 +211,7 @@ func (b *EthRPC) GetBestBlockHash() (string, error) {
 	return ethHashToHash(h.Hash()), nil
 }
 
-func (b *EthRPC) GetBestBlockHeight() (uint32, error) {
+func (b *EthereumRPC) GetBestBlockHeight() (uint32, error) {
 	h, err := b.getBestHeader()
 	if err != nil {
 		return 0, err
@@ -217,7 +220,7 @@ func (b *EthRPC) GetBestBlockHeight() (uint32, error) {
 	return uint32(h.Number.Uint64()), nil
 }
 
-func (b *EthRPC) GetBlockHash(height uint32) (string, error) {
+func (b *EthereumRPC) GetBlockHash(height uint32) (string, error) {
 	var n big.Int
 	n.SetUint64(uint64(height))
 	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
@@ -232,7 +235,7 @@ func (b *EthRPC) GetBlockHash(height uint32) (string, error) {
 	return ethHashToHash(h.Hash()), nil
 }
 
-func (b *EthRPC) ethHeaderToBlockHeader(h *ethtypes.Header) (*bchain.BlockHeader, error) {
+func (b *EthereumRPC) ethHeaderToBlockHeader(h *ethtypes.Header) (*bchain.BlockHeader, error) {
 	hn := h.Number.Uint64()
 	c, err := b.computeConfirmations(hn)
 	if err != nil {
@@ -248,7 +251,7 @@ func (b *EthRPC) ethHeaderToBlockHeader(h *ethtypes.Header) (*bchain.BlockHeader
 	}, nil
 }
 
-func (b *EthRPC) GetBlockHeader(hash string) (*bchain.BlockHeader, error) {
+func (b *EthereumRPC) GetBlockHeader(hash string) (*bchain.BlockHeader, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
 	defer cancel()
 	h, err := b.client.HeaderByHash(ctx, ethcommon.HexToHash(hash))
@@ -261,7 +264,7 @@ func (b *EthRPC) GetBlockHeader(hash string) (*bchain.BlockHeader, error) {
 	return b.ethHeaderToBlockHeader(h)
 }
 
-func (b *EthRPC) computeConfirmations(n uint64) (uint32, error) {
+func (b *EthereumRPC) computeConfirmations(n uint64) (uint32, error) {
 	bh, err := b.getBestHeader()
 	if err != nil {
 		return 0, err
@@ -346,7 +349,7 @@ func ethTxToTx(tx *rpcTransaction, blocktime int64, confirmations uint32) (*bcha
 }
 
 // GetBlock returns block with given hash or height, hash has precedence if both passed
-func (b *EthRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
+func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
 	defer cancel()
 	var raw json.RawMessage
@@ -404,7 +407,7 @@ func (b *EthRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 }
 
 // GetTransaction returns a transaction by the transaction ID.
-func (b *EthRPC) GetTransaction(txid string) (*bchain.Tx, error) {
+func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
 	defer cancel()
 	var tx *rpcTransaction
@@ -449,7 +452,7 @@ type rpcMempoolBlock struct {
 	Transactions []string `json:"transactions"`
 }
 
-func (b *EthRPC) GetMempool() ([]string, error) {
+func (b *EthereumRPC) GetMempool() ([]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
 	defer cancel()
 	var raw json.RawMessage
@@ -468,12 +471,12 @@ func (b *EthRPC) GetMempool() ([]string, error) {
 }
 
 // EstimateFee returns fee estimation.
-func (b *EthRPC) EstimateFee(blocks int) (float64, error) {
+func (b *EthereumRPC) EstimateFee(blocks int) (float64, error) {
 	return b.EstimateSmartFee(blocks, true)
 }
 
 // EstimateSmartFee returns fee estimation.
-func (b *EthRPC) EstimateSmartFee(blocks int, conservative bool) (float64, error) {
+func (b *EthereumRPC) EstimateSmartFee(blocks int, conservative bool) (float64, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
 	defer cancel()
 	// TODO - what parameters of msg to use to get better estimate, maybe more data from the wallet are needed
@@ -489,26 +492,26 @@ func (b *EthRPC) EstimateSmartFee(blocks int, conservative bool) (float64, error
 }
 
 // SendRawTransaction sends raw transaction.
-func (b *EthRPC) SendRawTransaction(tx string) (string, error) {
+func (b *EthereumRPC) SendRawTransaction(tx string) (string, error) {
 	return "", errors.New("SendRawTransaction: not implemented")
 }
 
-func (b *EthRPC) ResyncMempool(onNewTxAddr func(txid string, addr string)) error {
+func (b *EthereumRPC) ResyncMempool(onNewTxAddr func(txid string, addr string)) error {
 	return b.Mempool.Resync(onNewTxAddr)
 }
 
-func (b *EthRPC) GetMempoolTransactions(address string) ([]string, error) {
+func (b *EthereumRPC) GetMempoolTransactions(address string) ([]string, error) {
 	return b.Mempool.GetTransactions(address)
 }
 
-func (b *EthRPC) GetMempoolSpentOutput(outputTxid string, vout uint32) string {
+func (b *EthereumRPC) GetMempoolSpentOutput(outputTxid string, vout uint32) string {
 	return ""
 }
 
-func (b *EthRPC) GetMempoolEntry(txid string) (*bchain.MempoolEntry, error) {
-	return nil, errors.New("ResyncMempool: not implemented")
+func (b *EthereumRPC) GetMempoolEntry(txid string) (*bchain.MempoolEntry, error) {
+	return nil, errors.New("GetMempoolEntry: not implemented")
 }
 
-func (b *EthRPC) GetChainParser() bchain.BlockChainParser {
+func (b *EthereumRPC) GetChainParser() bchain.BlockChainParser {
 	return b.Parser
 }

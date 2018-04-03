@@ -23,8 +23,8 @@ func init() {
 	blockChainFactories["btc"] = btc.NewBitcoinRPC
 	blockChainFactories["btc-testnet"] = btc.NewBitcoinRPC
 	blockChainFactories["zec"] = zec.NewZCashRPC
-	blockChainFactories["eth"] = eth.NewEthRPC
-	blockChainFactories["eth-testnet"] = eth.NewEthRPC
+	blockChainFactories["eth"] = eth.NewEthereumRPC
+	blockChainFactories["eth-testnet"] = eth.NewEthereumRPC
 }
 
 // NewBlockChain creates bchain.BlockChain of type defined by parameter coin

@@ -15,7 +15,7 @@ var rpcURL = "ws://10.34.3.4:18546"
 var ethClient *ethclient.Client
 var ethRPCClient *rpc.Client
 
-func setupEthRPC() *EthRPC {
+func setupEthRPC() *EthereumRPC {
 	if ethClient == nil {
 		rc, err := rpc.Dial(rpcURL)
 		if err != nil {
@@ -25,7 +25,7 @@ func setupEthRPC() *EthRPC {
 		ethRPCClient = rc
 		ethClient = ec
 	}
-	return &EthRPC{
+	return &EthereumRPC{
 		client:  ethClient,
 		rpc:     ethRPCClient,
 		timeout: time.Duration(25) * time.Second,
@@ -35,7 +35,7 @@ func setupEthRPC() *EthRPC {
 
 func TestEthRPC_getBestHeader(t *testing.T) {
 	type fields struct {
-		b *EthRPC
+		b *EthereumRPC
 	}
 	tests := []struct {
 		name    string
@@ -64,7 +64,7 @@ func TestEthRPC_getBestHeader(t *testing.T) {
 
 func TestEthRPC_GetBestBlockHash(t *testing.T) {
 	type fields struct {
-		b *EthRPC
+		b *EthereumRPC
 	}
 	tests := []struct {
 		name    string
@@ -97,7 +97,7 @@ func TestEthRPC_GetBestBlockHash(t *testing.T) {
 
 func TestEthRPC_GetBestBlockHeight(t *testing.T) {
 	type fields struct {
-		b *EthRPC
+		b *EthereumRPC
 	}
 	tests := []struct {
 		name    string
@@ -129,7 +129,7 @@ func TestEthRPC_GetBestBlockHeight(t *testing.T) {
 
 func TestEthRPC_GetBlockHash(t *testing.T) {
 	type fields struct {
-		b *EthRPC
+		b *EthereumRPC
 	}
 	type args struct {
 		height uint32
@@ -193,7 +193,7 @@ func TestEthRPC_GetBlockHeader(t *testing.T) {
 		panic(err)
 	}
 	type fields struct {
-		b *EthRPC
+		b *EthereumRPC
 	}
 	type args struct {
 		hash string
@@ -250,7 +250,7 @@ func TestEthRPC_GetBlock(t *testing.T) {
 		panic(err)
 	}
 	type fields struct {
-		b *EthRPC
+		b *EthereumRPC
 	}
 	type args struct {
 		hash   string
@@ -345,7 +345,7 @@ func TestEthRPC_GetTransaction(t *testing.T) {
 		panic(err)
 	}
 	type fields struct {
-		b *EthRPC
+		b *EthereumRPC
 	}
 	type args struct {
 		txid string
@@ -430,7 +430,7 @@ func TestEthRPC_GetTransaction(t *testing.T) {
 
 func TestEthRPC_EstimateFee(t *testing.T) {
 	type fields struct {
-		b *EthRPC
+		b *EthereumRPC
 	}
 	type args struct {
 		blocks int
@@ -469,7 +469,7 @@ func TestEthRPC_EstimateFee(t *testing.T) {
 
 func TestEthRPC_GetMempool(t *testing.T) {
 	type fields struct {
-		b *EthRPC
+		b *EthereumRPC
 	}
 	tests := []struct {
 		name    string
