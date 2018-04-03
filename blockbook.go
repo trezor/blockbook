@@ -255,6 +255,7 @@ func main() {
 
 func tickAndDebounce(tickTime time.Duration, debounceTime time.Duration, input chan struct{}, f func()) {
 	timer := time.NewTimer(tickTime)
+	var firstDebounce time.Time
 Loop:
 	for {
 		select {
@@ -266,12 +267,21 @@ Loop:
 			if !ok {
 				break Loop
 			}
-			// debounce for debounceTime
-			timer.Reset(debounceTime)
+			if firstDebounce.IsZero() {
+				firstDebounce = time.Now()
+			}
+			// debounce for up to debounceTime period
+			// afterwards execute immediately
+			if firstDebounce.Add(debounceTime).After(time.Now()) {
+				timer.Reset(debounceTime)
+			} else {
+				timer.Reset(0)
+			}
 		case <-timer.C:
 			// do the action and start the loop again
 			f()
 			timer.Reset(tickTime)
+			firstDebounce = time.Time{}
 		}
 	}
 }
