@@ -3,11 +3,9 @@ package eth
 import (
 	"blockbook/bchain"
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math/big"
-	"strconv"
 	"sync"
 	"time"
 
@@ -199,10 +197,6 @@ func (b *EthereumRPC) getBestHeader() (*ethtypes.Header, error) {
 	return b.bestHeader, nil
 }
 
-func ethHashToHash(h ethcommon.Hash) string {
-	return h.Hex()[2:]
-}
-
 func (b *EthereumRPC) GetBestBlockHash() (string, error) {
 	h, err := b.getBestHeader()
 	if err != nil {
@@ -271,81 +265,6 @@ func (b *EthereumRPC) computeConfirmations(n uint64) (uint32, error) {
 	}
 	bn := bh.Number.Uint64()
 	return uint32(bn - n), nil
-}
-
-type rpcTransaction struct {
-	AccountNonce     string         `json:"nonce"    gencodec:"required"`
-	Price            string         `json:"gasPrice" gencodec:"required"`
-	GasLimit         string         `json:"gas"      gencodec:"required"`
-	To               string         `json:"to"       rlp:"nil"` // nil means contract creation
-	Value            string         `json:"value"    gencodec:"required"`
-	Payload          string         `json:"input"    gencodec:"required"`
-	Hash             ethcommon.Hash `json:"hash" rlp:"-"`
-	BlockNumber      string
-	BlockHash        ethcommon.Hash
-	From             string
-	TransactionIndex string `json:"transactionIndex"`
-	// Signature values
-	V string `json:"v" gencodec:"required"`
-	R string `json:"r" gencodec:"required"`
-	S string `json:"s" gencodec:"required"`
-}
-
-type rpcBlock struct {
-	Hash         ethcommon.Hash   `json:"hash"`
-	Transactions []rpcTransaction `json:"transactions"`
-	UncleHashes  []ethcommon.Hash `json:"uncles"`
-}
-
-func ethNumber(n string) (int64, error) {
-	if len(n) > 2 {
-		return strconv.ParseInt(n[2:], 16, 64)
-	}
-	return 0, errors.Errorf("Not a number: '%v'", n)
-}
-
-func ethTxToTx(tx *rpcTransaction, blocktime int64, confirmations uint32) (*bchain.Tx, error) {
-	txid := ethHashToHash(tx.Hash)
-	var fa, ta []string
-	if len(tx.From) > 2 {
-		fa = []string{tx.From[2:]}
-	}
-	if len(tx.To) > 2 {
-		ta = []string{tx.To[2:]}
-	}
-	b, err := json.Marshal(tx)
-	if err != nil {
-		return nil, err
-	}
-	h := hex.EncodeToString(b)
-	return &bchain.Tx{
-		Blocktime:     blocktime,
-		Confirmations: confirmations,
-		Hex:           h,
-		// LockTime
-		Time: blocktime,
-		Txid: txid,
-		Vin: []bchain.Vin{
-			{
-				Addresses: fa,
-				// Coinbase
-				// ScriptSig
-				// Sequence
-				// Txid
-				// Vout
-			},
-		},
-		Vout: []bchain.Vout{
-			{
-				N: 0, // there is always up to one To address
-				// Value - cannot set, it does not fit precisely to float64
-				ScriptPubKey: bchain.ScriptPubKey{
-					// Hex
-					Addresses: ta,
-				},
-			},
-		},
-	}, nil
 }
 
 // GetBlock returns block with given hash or height, hash has precedence if both passed
