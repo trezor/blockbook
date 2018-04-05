@@ -351,7 +351,7 @@ func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 		if err != nil {
 			return nil, errors.Annotatef(err, "txid %v", txid)
 		}
-		h, err := b.client.HeaderByHash(ctx, tx.BlockHash)
+		h, err := b.client.HeaderByHash(ctx, *tx.BlockHash)
 		if err != nil {
 			return nil, errors.Annotatef(err, "txid %v", txid)
 		}

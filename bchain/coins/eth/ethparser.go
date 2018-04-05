@@ -4,6 +4,7 @@ import (
 	"blockbook/bchain"
 	"encoding/hex"
 	"encoding/json"
+	"math/big"
 	"strconv"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -15,17 +16,17 @@ import (
 )
 
 type rpcTransaction struct {
-	AccountNonce     string         `json:"nonce"    gencodec:"required"`
-	Price            string         `json:"gasPrice" gencodec:"required"`
-	GasLimit         string         `json:"gas"      gencodec:"required"`
-	To               string         `json:"to"       rlp:"nil"` // nil means contract creation
-	Value            string         `json:"value"    gencodec:"required"`
-	Payload          string         `json:"input"    gencodec:"required"`
-	Hash             ethcommon.Hash `json:"hash" rlp:"-"`
-	BlockNumber      string
-	BlockHash        ethcommon.Hash
-	From             string
-	TransactionIndex string `json:"transactionIndex"`
+	AccountNonce     string          `json:"nonce"    gencodec:"required"`
+	Price            string          `json:"gasPrice" gencodec:"required"`
+	GasLimit         string          `json:"gas"      gencodec:"required"`
+	To               string          `json:"to"       rlp:"nil"` // nil means contract creation
+	Value            string          `json:"value"    gencodec:"required"`
+	Payload          string          `json:"input"    gencodec:"required"`
+	Hash             ethcommon.Hash  `json:"hash" rlp:"-"`
+	BlockNumber      string          `json:"blockNumber"`
+	BlockHash        *ethcommon.Hash `json:"blockHash,omitempty"`
+	From             string          `json:"from"`
+	TransactionIndex string          `json:"transactionIndex"`
 	// Signature values
 	V string `json:"v" gencodec:"required"`
 	R string `json:"r" gencodec:"required"`
@@ -58,11 +59,14 @@ func ethTxToTx(tx *rpcTransaction, blocktime int64, confirmations uint32) (*bcha
 	if len(tx.To) > 2 {
 		ta = []string{tx.To[2:]}
 	}
-	// temporarily, the complete rpcTransaction is marshalled and hex encoded to bchain.Tx.Hex
+	// temporarily, the complete rpcTransaction without BlockHash is marshalled and hex encoded to bchain.Tx.Hex
+	bh := tx.BlockHash
+	tx.BlockHash = nil
 	b, err := json.Marshal(tx)
 	if err != nil {
 		return nil, err
 	}
+	tx.BlockHash = bh
 	h := hex.EncodeToString(b)
 	return &bchain.Tx{
 		Blocktime:     blocktime,
@@ -154,6 +158,12 @@ func hexDecodeBig(s string) ([]byte, error) {
 	return b.Bytes(), nil
 }
 
+func hexEncodeBig(b []byte) string {
+	var i big.Int
+	i.SetBytes(b)
+	return hexutil.EncodeBig(&i)
+}
+
 func (p *EthereumParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) ([]byte, error) {
 	b, err := hex.DecodeString(tx.Hex)
 	if err != nil {
@@ -187,13 +197,13 @@ func (p *EthereumParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) (
 	if pt.Price, err = hexDecodeBig(r.Price); err != nil {
 		return nil, errors.Annotatef(err, "Price %v", r.Price)
 	}
-	if pt.R, err = hexDecode(r.R); err != nil {
+	if pt.R, err = hexDecodeBig(r.R); err != nil {
 		return nil, errors.Annotatef(err, "R %v", r.R)
 	}
-	if pt.S, err = hexDecode(r.S); err != nil {
+	if pt.S, err = hexDecodeBig(r.S); err != nil {
 		return nil, errors.Annotatef(err, "S %v", r.S)
 	}
-	if pt.V, err = hexDecode(r.V); err != nil {
+	if pt.V, err = hexDecodeBig(r.V); err != nil {
 		return nil, errors.Annotatef(err, "V %v", r.V)
 	}
 	if pt.To, err = hexDecode(r.To); err != nil {
@@ -210,7 +220,31 @@ func (p *EthereumParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) (
 }
 
 func (p *EthereumParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
-	return nil, 0, errors.New("UnpackTx: not implemented")
+	var pt ProtoTransaction
+	err := proto.Unmarshal(buf, &pt)
+	if err != nil {
+		return nil, 0, err
+	}
+	r := rpcTransaction{
+		AccountNonce:     hexutil.EncodeUint64(pt.AccountNonce),
+		BlockNumber:      hexutil.EncodeUint64(uint64(pt.BlockNumber)),
+		From:             hexutil.Encode(pt.From),
+		GasLimit:         hexutil.EncodeUint64(pt.GasLimit),
+		Hash:             ethcommon.BytesToHash(pt.Hash),
+		Payload:          hexutil.Encode(pt.Payload),
+		Price:            hexEncodeBig(pt.Price),
+		R:                hexEncodeBig(pt.R),
+		S:                hexEncodeBig(pt.S),
+		V:                hexEncodeBig(pt.V),
+		To:               hexutil.Encode(pt.To),
+		TransactionIndex: hexutil.EncodeUint64(uint64(pt.TransactionIndex)),
+		Value:            hexEncodeBig(pt.Value),
+	}
+	tx, err := ethTxToTx(&r, int64(pt.BlockTime), 0)
+	if err != nil {
+		return nil, 0, err
+	}
+	return tx, pt.BlockNumber, nil
 }
 
 func (p *EthereumParser) IsUTXOChain() bool {
