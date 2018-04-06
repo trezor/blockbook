@@ -72,6 +72,8 @@ Blockbook logs only to stderr, logging to files is disabled. Verbosity of logs c
 
 - [BTC](bchain/coins/btc/btc.md)
 - [BTC Testnet](bchain/coins/btc/btctestnet.md)
+- [ZCash](bchain/coins/zec/zec.md)
+- [Ethereum Ropsten Testnet](bchain/coins/eth/ethropsten.md)
 
 # Data storage in RocksDB
 
@@ -120,8 +122,8 @@ The data are separated to different column families:
 ## Todo
 
 - find memory leak in initial import
-- add zcash support
-- add ethereum support
+- support all coins from https://github.com/trezor/trezor-common/blob/master/coins.json
+- full ethereum support
 - cleanup of the socket.io - do not send unnecessary data
 - handle different versions of Bitcoin Core
 - log live traffic from production bitcore server and replay it in blockbook
@@ -130,6 +132,8 @@ The data are separated to different column families:
 - tests
 - fix program dependencies to concrete versions
 - protect blockbook against illicit usage
+- ~~zcash support~~
+- ~~basic ethereum support~~
 - ~~disconnect blocks - use block data if available to avoid full scan~~
 - ~~compute statistics of data, txcache, usage, etc.~~
 - ~~disconnect blocks - remove disconnected cached transactions~~
