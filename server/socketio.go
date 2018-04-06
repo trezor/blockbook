@@ -389,7 +389,7 @@ func (s *SocketIoServer) getAddressHistory(addr []string, rr *reqRange) (res res
 	res.Result.Items = make([]addressHistoryItem, 0)
 	for i, txid := range txids {
 		if i >= rr.From && i < rr.To {
-			tx, err := s.txCache.GetTransaction(txid, bestheight)
+			tx, height, err := s.txCache.GetTransaction(txid, bestheight)
 			if err != nil {
 				return res, err
 			}
@@ -422,13 +422,13 @@ func (s *SocketIoServer) getAddressHistory(addr []string, rr *reqRange) (res res
 			ahi := addressHistoryItem{}
 			ahi.Addresses = ads
 			ahi.Confirmations = int(tx.Confirmations)
-			var height int
+			var h int
 			if tx.Confirmations == 0 {
-				height = -1
+				h = -1
 			} else {
-				height = int(bestheight) - int(tx.Confirmations) + 1
+				h = int(height)
 			}
-			ahi.Tx = txToResTx(tx, height, hi, ho)
+			ahi.Tx = txToResTx(tx, h, hi, ho)
 			res.Result.Items = append(res.Result.Items, ahi)
 		}
 	}
@@ -612,7 +612,7 @@ func (s *SocketIoServer) getDetailedTransaction(txid string) (res resultGetDetai
 	if err != nil {
 		return
 	}
-	tx, err := s.txCache.GetTransaction(txid, bestheight)
+	tx, height, err := s.txCache.GetTransaction(txid, bestheight)
 	if err != nil {
 		return res, err
 	}
@@ -625,7 +625,7 @@ func (s *SocketIoServer) getDetailedTransaction(txid string) (res resultGetDetai
 			OutputIndex: int(vin.Vout),
 		}
 		if vin.Txid != "" {
-			otx, err := s.txCache.GetTransaction(vin.Txid, bestheight)
+			otx, _, err := s.txCache.GetTransaction(vin.Txid, bestheight)
 			if err != nil {
 				return res, err
 			}
@@ -650,13 +650,13 @@ func (s *SocketIoServer) getDetailedTransaction(txid string) (res resultGetDetai
 		}
 		ho = append(ho, ao)
 	}
-	var height int
+	var h int
 	if tx.Confirmations == 0 {
-		height = -1
+		h = -1
 	} else {
-		height = int(bestheight) - int(tx.Confirmations) + 1
+		h = int(height)
 	}
-	res.Result = txToResTx(tx, height, hi, ho)
+	res.Result = txToResTx(tx, h, hi, ho)
 	return
 }
 

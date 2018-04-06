@@ -322,7 +322,8 @@ func (b *EthereumRPC) computeConfirmations(n uint64) (uint32, error) {
 		return 0, err
 	}
 	bn := bh.Number.Uint64()
-	return uint32(bn - n), nil
+	// transaction in the best block has 1 confirmation
+	return uint32(bn - n + 1), nil
 }
 
 // GetBlock returns block with given hash or height, hash has precedence if both passed
