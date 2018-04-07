@@ -54,10 +54,10 @@ func ethTxToTx(tx *rpcTransaction, blocktime int64, confirmations uint32) (*bcha
 	txid := ethHashToHash(tx.Hash)
 	var fa, ta []string
 	if len(tx.From) > 2 {
-		fa = []string{tx.From[2:]}
+		fa = []string{tx.From}
 	}
 	if len(tx.To) > 2 {
-		ta = []string{tx.To[2:]}
+		ta = []string{tx.To}
 	}
 	// temporarily, the complete rpcTransaction without BlockHash is marshalled and hex encoded to bchain.Tx.Hex
 	bh := tx.BlockHash

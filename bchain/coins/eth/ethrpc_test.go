@@ -225,7 +225,7 @@ func TestEthRPC_GetBlockHeader(t *testing.T) {
 				b: setupEthRPC(),
 			},
 			args: args{
-				hash: "eccd6b0031015a19cb7d4e10f28590ba65a6a54ad1baa322b50fe5ad16903896",
+				hash: "0xeccd6b0031015a19cb7d4e10f28590ba65a6a54ad1baa322b50fe5ad16903896",
 			},
 			wantErr: bchain.ErrBlockNotFound,
 		},
@@ -304,7 +304,7 @@ func TestEthRPC_GetBlock(t *testing.T) {
 				b: setupEthRPC(),
 			},
 			args: args{
-				hash: "eccd6b0031015a19cb7d4e10f28590ba65a6a54ad1baa322b50fe5ad16903896",
+				hash: "0xeccd6b0031015a19cb7d4e10f28590ba65a6a54ad1baa322b50fe5ad16903896",
 			},
 			wantErr: bchain.ErrBlockNotFound,
 		},
@@ -363,7 +363,7 @@ func TestEthRPC_GetTransaction(t *testing.T) {
 				b: setupEthRPC(),
 			},
 			args: args{
-				txid: "e6b168d6bb3d8ed78e03dbf828b6bfd1fb613f6e129cba624964984553724c5d",
+				txid: "0xe6b168d6bb3d8ed78e03dbf828b6bfd1fb613f6e129cba624964984553724c5d",
 			},
 			want: &bchain.Tx{
 				Blocktime:     1521515026,
@@ -373,13 +373,13 @@ func TestEthRPC_GetTransaction(t *testing.T) {
 				Txid:          "e6b168d6bb3d8ed78e03dbf828b6bfd1fb613f6e129cba624964984553724c5d",
 				Vin: []bchain.Vin{
 					{
-						Addresses: []string{"dacc9c61754a0c4616fc5323dc946e89eb272302"},
+						Addresses: []string{"0xdacc9c61754a0c4616fc5323dc946e89eb272302"},
 					},
 				},
 				Vout: []bchain.Vout{
 					{
 						ScriptPubKey: bchain.ScriptPubKey{
-							Addresses: []string{"682b7903a11098cf770c7aef4aa02a85b3f3601a"},
+							Addresses: []string{"0x682b7903a11098cf770c7aef4aa02a85b3f3601a"},
 						},
 					},
 				},
@@ -401,13 +401,13 @@ func TestEthRPC_GetTransaction(t *testing.T) {
 				Txid:          "cd647151552b5132b2aef7c9be00dc6f73afc5901dde157aab131335baaa853b",
 				Vin: []bchain.Vin{
 					{
-						Addresses: []string{"3e3a3d69dc66ba10737f531ed088954a9ec89d97"},
+						Addresses: []string{"0x3e3a3d69dc66ba10737f531ed088954a9ec89d97"},
 					},
 				},
 				Vout: []bchain.Vout{
 					{
 						ScriptPubKey: bchain.ScriptPubKey{
-							Addresses: []string{"555ee11fbddc0e49a9bab358a8941ad95ffdb48f"},
+							Addresses: []string{"0x555ee11fbddc0e49a9bab358a8941ad95ffdb48f"},
 						},
 					},
 				},
