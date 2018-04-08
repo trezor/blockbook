@@ -16,6 +16,7 @@ import (
 
 // BitcoinParser handle
 type BitcoinParser struct {
+	*bchain.BaseParser
 	Params *chaincfg.Params
 }
 
@@ -169,34 +170,4 @@ func (p *BitcoinParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 	}
 	tx.Blocktime = bt
 	return tx, height, nil
-}
-
-// PackedTxidLen returns length in bytes of packed txid
-func (p *BitcoinParser) PackedTxidLen() int {
-	return 32
-}
-
-// PackTxid packs txid to byte array
-func (p *BitcoinParser) PackTxid(txid string) ([]byte, error) {
-	return hex.DecodeString(txid)
-}
-
-// UnpackTxid unpacks byte array to txid
-func (p *BitcoinParser) UnpackTxid(buf []byte) (string, error) {
-	return hex.EncodeToString(buf), nil
-}
-
-// PackBlockHash packs block hash to byte array
-func (p *BitcoinParser) PackBlockHash(hash string) ([]byte, error) {
-	return hex.DecodeString(hash)
-}
-
-// UnpackBlockHash unpacks byte array to block hash
-func (p *BitcoinParser) UnpackBlockHash(buf []byte) (string, error) {
-	return hex.EncodeToString(buf), nil
-}
-
-// IsUTXOChain returns true if the block chain is UTXO type, otherwise false
-func (p *BitcoinParser) IsUTXOChain() bool {
-	return true
 }

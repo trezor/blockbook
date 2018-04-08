@@ -15,6 +15,11 @@ import (
 	ethcommon "github.com/ethereum/go-ethereum/common"
 )
 
+// EthereumParser handle
+type EthereumParser struct {
+	*bchain.BaseParser
+}
+
 type rpcTransaction struct {
 	AccountNonce     string          `json:"nonce"    gencodec:"required"`
 	Price            string          `json:"gasPrice" gencodec:"required"`
@@ -98,10 +103,6 @@ func ethTxToTx(tx *rpcTransaction, blocktime int64, confirmations uint32) (*bcha
 	}, nil
 }
 
-// EthereumParser handle
-type EthereumParser struct {
-}
-
 // GetAddrIDFromVout returns internal address representation of given transaction output
 func (p *EthereumParser) GetAddrIDFromVout(output *bchain.Vout) ([]byte, error) {
 	if len(output.ScriptPubKey.Addresses) != 1 {
@@ -127,26 +128,6 @@ func (p *EthereumParser) GetAddrIDFromAddress(address string) ([]byte, error) {
 		address = "0" + address
 	}
 	return hex.DecodeString(address)
-}
-
-// AddressToOutputScript converts address to ScriptPubKey - currently not implemented
-func (p *EthereumParser) AddressToOutputScript(address string) ([]byte, error) {
-	return nil, errors.New("AddressToOutputScript: not implemented")
-}
-
-// OutputScriptToAddresses converts ScriptPubKey to addresses - currently not implemented
-func (p *EthereumParser) OutputScriptToAddresses(script []byte) ([]string, error) {
-	return nil, errors.New("OutputScriptToAddresses: not implemented")
-}
-
-// ParseTx parses byte array containing transaction and returns Tx struct - currently not implemented
-func (p *EthereumParser) ParseTx(b []byte) (*bchain.Tx, error) {
-	return nil, errors.New("ParseTx: not implemented")
-}
-
-// ParseBlock parses raw block to our Block struct - currently not implemented
-func (p *EthereumParser) ParseBlock(b []byte) (*bchain.Block, error) {
-	return nil, errors.New("ParseBlock: not implemented")
 }
 
 func hexDecode(s string) ([]byte, error) {

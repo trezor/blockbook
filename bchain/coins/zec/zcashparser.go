@@ -5,12 +5,12 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/gob"
-	"encoding/hex"
-	"errors"
 )
 
 // ZCashParser handle
-type ZCashParser struct{}
+type ZCashParser struct {
+	*bchain.BaseParser
+}
 
 // GetAddrIDFromVout returns internal address representation of given transaction output
 func (p *ZCashParser) GetAddrIDFromVout(output *bchain.Vout) ([]byte, error) {
@@ -63,54 +63,4 @@ func decodeTx(buf []byte) (*bchain.Tx, error) {
 		return nil, err
 	}
 	return tx, nil
-}
-
-// AddressToOutputScript converts address to ScriptPubKey - currently not implemented
-func (p *ZCashParser) AddressToOutputScript(address string) ([]byte, error) {
-	return nil, errors.New("AddressToOutputScript: not implemented")
-}
-
-// OutputScriptToAddresses converts ScriptPubKey to addresses - currently not implemented
-func (p *ZCashParser) OutputScriptToAddresses(script []byte) ([]string, error) {
-	return nil, errors.New("OutputScriptToAddresses: not implemented")
-}
-
-// ParseBlock parses raw block to our Block struct - currently not implemented
-func (p *ZCashParser) ParseBlock(b []byte) (*bchain.Block, error) {
-	return nil, errors.New("ParseBlock: not implemented")
-}
-
-// ParseTx parses byte array containing transaction and returns Tx struct - currently not implemented
-func (p *ZCashParser) ParseTx(b []byte) (*bchain.Tx, error) {
-	return nil, errors.New("ParseTx: not implemented")
-}
-
-// PackedTxidLen returns length in bytes of packed txid
-func (p *ZCashParser) PackedTxidLen() int {
-	return 32
-}
-
-// PackTxid packs txid to byte array
-func (p *ZCashParser) PackTxid(txid string) ([]byte, error) {
-	return hex.DecodeString(txid)
-}
-
-// UnpackTxid unpacks byte array to txid
-func (p *ZCashParser) UnpackTxid(buf []byte) (string, error) {
-	return hex.EncodeToString(buf), nil
-}
-
-// PackBlockHash packs block hash to byte array
-func (p *ZCashParser) PackBlockHash(hash string) ([]byte, error) {
-	return hex.DecodeString(hash)
-}
-
-// UnpackBlockHash unpacks byte array to block hash
-func (p *ZCashParser) UnpackBlockHash(buf []byte) (string, error) {
-	return hex.EncodeToString(buf), nil
-}
-
-// IsUTXOChain returns true if the block chain is UTXO type, otherwise false
-func (p *ZCashParser) IsUTXOChain() bool {
-	return true
 }
