@@ -167,7 +167,7 @@ func (d *RocksDB) GetTransactions(address string, lower uint32, higher uint32, f
 		if bytes.Compare(key, kstop) > 0 {
 			break
 		}
-		outpoints, err := unpackOutputValue(val)
+		outpoints, err := d.unpackOutputValue(val)
 		if err != nil {
 			return err
 		}
@@ -268,7 +268,7 @@ func (d *RocksDB) addAddrIDToRecords(op int, wb *gorocksdb.WriteBatch, records m
 			})
 			if op == opDelete {
 				// remove transactions from cache
-				b, err := packTxid(txid)
+				b, err := d.chainParser.PackTxid(txid)
 				if err != nil {
 					return err
 				}
@@ -324,7 +324,7 @@ func (d *RocksDB) writeOutputs(wb *gorocksdb.WriteBatch, block *bchain.Block, op
 
 		switch op {
 		case opInsert:
-			val, err := packOutputValue(outpoints)
+			val, err := d.packOutputValue(outpoints)
 			if err != nil {
 				glog.Warningf("rocksdb: packOutputValue: %v", err)
 				continue
@@ -346,10 +346,10 @@ func packOutputKey(outputScript []byte, height uint32) ([]byte, error) {
 	return buf, nil
 }
 
-func packOutputValue(outpoints []outpoint) ([]byte, error) {
+func (d *RocksDB) packOutputValue(outpoints []outpoint) ([]byte, error) {
 	buf := make([]byte, 0)
 	for _, o := range outpoints {
-		btxid, err := packTxid(o.txid)
+		btxid, err := d.chainParser.PackTxid(o.txid)
 		if err != nil {
 			return nil, err
 		}
@@ -360,14 +360,15 @@ func packOutputValue(outpoints []outpoint) ([]byte, error) {
 	return buf, nil
 }
 
-func unpackOutputValue(buf []byte) ([]outpoint, error) {
+func (d *RocksDB) unpackOutputValue(buf []byte) ([]outpoint, error) {
+	txidUnpackedLen := d.chainParser.PackedTxidLen()
 	outpoints := make([]outpoint, 0)
 	for i := 0; i < len(buf); {
-		txid, err := unpackTxid(buf[i : i+txIdUnpackedLen])
+		txid, err := d.chainParser.UnpackTxid(buf[i : i+txidUnpackedLen])
 		if err != nil {
 			return nil, err
 		}
-		i += txIdUnpackedLen
+		i += txidUnpackedLen
 		vout, voutLen := unpackVarint(buf[i:])
 		i += voutLen
 		outpoints = append(outpoints, outpoint{
@@ -390,11 +391,11 @@ func (d *RocksDB) writeInputs(
 			if input.Coinbase != "" {
 				continue
 			}
-			key, err := packOutpoint(input.Txid, int32(input.Vout))
+			key, err := d.packOutpoint(input.Txid, int32(input.Vout))
 			if err != nil {
 				return err
 			}
-			val, err := packOutpoint(tx.Txid, int32(i))
+			val, err := d.packOutpoint(tx.Txid, int32(i))
 			if err != nil {
 				return err
 			}
@@ -409,8 +410,8 @@ func (d *RocksDB) writeInputs(
 	return nil
 }
 
-func packOutpoint(txid string, vout int32) ([]byte, error) {
-	btxid, err := packTxid(txid)
+func (d *RocksDB) packOutpoint(txid string, vout int32) ([]byte, error) {
+	btxid, err := d.chainParser.PackTxid(txid)
 	if err != nil {
 		return nil, err
 	}
@@ -421,10 +422,11 @@ func packOutpoint(txid string, vout int32) ([]byte, error) {
 	return buf, nil
 }
 
-func unpackOutpoint(buf []byte) (string, int32, int) {
-	txid, _ := unpackTxid(buf[:txIdUnpackedLen])
-	vout, o := unpackVarint(buf[txIdUnpackedLen:])
-	return txid, vout, txIdUnpackedLen + o
+func (d *RocksDB) unpackOutpoint(buf []byte) (string, int32, int) {
+	txidUnpackedLen := d.chainParser.PackedTxidLen()
+	txid, _ := d.chainParser.UnpackTxid(buf[:txidUnpackedLen])
+	vout, o := unpackVarint(buf[txidUnpackedLen:])
+	return txid, vout, txidUnpackedLen + o
 }
 
 // Block index
@@ -435,7 +437,7 @@ func (d *RocksDB) GetBestBlock() (uint32, string, error) {
 	defer it.Close()
 	if it.SeekToLast(); it.Valid() {
 		bestHeight := unpackUint(it.Key().Data())
-		val, err := unpackBlockValue(it.Value().Data())
+		val, err := d.chainParser.UnpackBlockHash(it.Value().Data())
 		if glog.V(1) {
 			glog.Infof("rocksdb: bestblock %d %s", bestHeight, val)
 		}
@@ -452,12 +454,12 @@ func (d *RocksDB) GetBlockHash(height uint32) (string, error) {
 		return "", err
 	}
 	defer val.Free()
-	return unpackBlockValue(val.Data())
+	return d.chainParser.UnpackBlockHash(val.Data())
 }
 
 // GetSpentOutput returns output which is spent by input tx
 func (d *RocksDB) GetSpentOutput(txid string, i int32) (string, int32, error) {
-	b, err := packOutpoint(txid, i)
+	b, err := d.packOutpoint(txid, i)
 	if err != nil {
 		return "", 0, err
 	}
@@ -466,7 +468,7 @@ func (d *RocksDB) GetSpentOutput(txid string, i int32) (string, int32, error) {
 		return "", 0, err
 	}
 	defer val.Free()
-	p, err := unpackOutputValue(val.Data())
+	p, err := d.unpackOutputValue(val.Data())
 	if err != nil {
 		return "", 0, err
 	}
@@ -488,7 +490,7 @@ func (d *RocksDB) writeHeight(
 
 	switch op {
 	case opInsert:
-		val, err := packBlockValue(block.Hash)
+		val, err := d.chainParser.PackBlockHash(block.Hash)
 		if err != nil {
 			return err
 		}
@@ -551,13 +553,13 @@ func (d *RocksDB) DisconnectBlocksFullScan(lower uint32, higher uint32) error {
 			glog.Info("output ", hex.EncodeToString(outputKeys[i]))
 		}
 		wb.DeleteCF(d.cfh[cfOutputs], outputKeys[i])
-		outpoints, err := unpackOutputValue(outputValues[i])
+		outpoints, err := d.unpackOutputValue(outputValues[i])
 		if err != nil {
 			return err
 		}
 		for _, o := range outpoints {
 			// delete from inputs
-			boutpoint, err := packOutpoint(o.txid, o.vout)
+			boutpoint, err := d.packOutpoint(o.txid, o.vout)
 			if err != nil {
 				return err
 			}
@@ -566,7 +568,7 @@ func (d *RocksDB) DisconnectBlocksFullScan(lower uint32, higher uint32) error {
 			}
 			wb.DeleteCF(d.cfh[cfInputs], boutpoint)
 			// delete from txCache
-			b, err := packTxid(o.txid)
+			b, err := d.chainParser.PackTxid(o.txid)
 			if err != nil {
 				return err
 			}
@@ -609,7 +611,7 @@ func (d *RocksDB) DatabaseSizeOnDisk() int64 {
 
 // GetTx returns transaction stored in db and height of the block containing it
 func (d *RocksDB) GetTx(txid string) (*bchain.Tx, uint32, error) {
-	key, err := packTxid(txid)
+	key, err := d.chainParser.PackTxid(txid)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -627,7 +629,7 @@ func (d *RocksDB) GetTx(txid string) (*bchain.Tx, uint32, error) {
 
 // PutTx stores transactions in db
 func (d *RocksDB) PutTx(tx *bchain.Tx, height uint32, blockTime int64) error {
-	key, err := packTxid(tx.Txid)
+	key, err := d.chainParser.PackTxid(tx.Txid)
 	if err != nil {
 		return nil
 	}
@@ -640,7 +642,7 @@ func (d *RocksDB) PutTx(tx *bchain.Tx, height uint32, blockTime int64) error {
 
 // DeleteTx removes transactions from db
 func (d *RocksDB) DeleteTx(txid string) error {
-	key, err := packTxid(txid)
+	key, err := d.chainParser.PackTxid(txid)
 	if err != nil {
 		return nil
 	}
@@ -648,9 +650,6 @@ func (d *RocksDB) DeleteTx(txid string) error {
 }
 
 // Helpers
-
-// TODO - this may be coin specific, refactor
-const txIdUnpackedLen = 32
 
 var ErrInvalidAddress = errors.New("invalid address")
 
@@ -694,20 +693,4 @@ func packVarint64(i int64) []byte {
 func unpackVarint64(buf []byte) (int64, int) {
 	i, ofs := vlq.Int(buf)
 	return i, ofs
-}
-
-func packTxid(txid string) ([]byte, error) {
-	return hex.DecodeString(txid)
-}
-
-func unpackTxid(buf []byte) (string, error) {
-	return hex.EncodeToString(buf), nil
-}
-
-func packBlockValue(hash string) ([]byte, error) {
-	return hex.DecodeString(hash)
-}
-
-func unpackBlockValue(buf []byte) (string, error) {
-	return hex.EncodeToString(buf), nil
 }

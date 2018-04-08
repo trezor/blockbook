@@ -100,6 +100,7 @@ func (e *RPCError) Error() string {
 	return fmt.Sprintf("%d: %s", e.Code, e.Message)
 }
 
+// BlockChain defines common interface to block chain daemon
 type BlockChain interface {
 	// life-cycle methods
 	Initialize() error
@@ -127,6 +128,7 @@ type BlockChain interface {
 	GetChainParser() BlockChainParser
 }
 
+// BlockChainParser defines common interface to parsing and conversions of block chain data
 type BlockChainParser interface {
 	// self description
 	// UTXO chains need "inputs" column in db, that map transactions to transactions that spend them
@@ -139,9 +141,14 @@ type BlockChainParser interface {
 	AddressToOutputScript(address string) ([]byte, error)
 	OutputScriptToAddresses(script []byte) ([]string, error)
 	// transactions
+	PackedTxidLen() int
+	PackTxid(txid string) ([]byte, error)
+	UnpackTxid(buf []byte) (string, error)
 	ParseTx(b []byte) (*Tx, error)
 	PackTx(tx *Tx, height uint32, blockTime int64) ([]byte, error)
 	UnpackTx(buf []byte) (*Tx, uint32, error)
 	// blocks
+	PackBlockHash(hash string) ([]byte, error)
+	UnpackBlockHash(buf []byte) (string, error)
 	ParseBlock(b []byte) (*Block, error)
 }

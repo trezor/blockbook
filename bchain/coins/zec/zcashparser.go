@@ -5,13 +5,15 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/gob"
+	"encoding/hex"
 	"errors"
 )
 
-type ZCashBlockParser struct{}
+// ZCashParser handle
+type ZCashParser struct{}
 
-// GetAddrIDFromAddress returns internal address representation of given transaction output
-func (p *ZCashBlockParser) GetAddrIDFromVout(output *bchain.Vout) ([]byte, error) {
+// GetAddrIDFromVout returns internal address representation of given transaction output
+func (p *ZCashParser) GetAddrIDFromVout(output *bchain.Vout) ([]byte, error) {
 	if len(output.ScriptPubKey.Addresses) != 1 {
 		return nil, nil
 	}
@@ -20,13 +22,13 @@ func (p *ZCashBlockParser) GetAddrIDFromVout(output *bchain.Vout) ([]byte, error
 }
 
 // GetAddrIDFromAddress returns internal address representation of given address
-func (p *ZCashBlockParser) GetAddrIDFromAddress(address string) ([]byte, error) {
+func (p *ZCashParser) GetAddrIDFromAddress(address string) ([]byte, error) {
 	hash, _, err := CheckDecode(address)
 	return hash, err
 }
 
 // PackTx packs transaction to byte array
-func (p *ZCashBlockParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) ([]byte, error) {
+func (p *ZCashParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) ([]byte, error) {
 	buf := make([]byte, 4)
 	binary.BigEndian.PutUint32(buf, height)
 	buf, err := encodeTx(buf, tx)
@@ -44,7 +46,7 @@ func encodeTx(b []byte, tx *bchain.Tx) ([]byte, error) {
 }
 
 // UnpackTx unpacks transaction from byte array
-func (p *ZCashBlockParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
+func (p *ZCashParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 	height := binary.BigEndian.Uint32(buf)
 	tx, err := decodeTx(buf[4:])
 	if err != nil {
@@ -63,22 +65,52 @@ func decodeTx(buf []byte) (*bchain.Tx, error) {
 	return tx, nil
 }
 
-func (p *ZCashBlockParser) AddressToOutputScript(address string) ([]byte, error) {
+// AddressToOutputScript converts address to ScriptPubKey - currently not implemented
+func (p *ZCashParser) AddressToOutputScript(address string) ([]byte, error) {
 	return nil, errors.New("AddressToOutputScript: not implemented")
 }
 
-func (p *ZCashBlockParser) OutputScriptToAddresses(script []byte) ([]string, error) {
+// OutputScriptToAddresses converts ScriptPubKey to addresses - currently not implemented
+func (p *ZCashParser) OutputScriptToAddresses(script []byte) ([]string, error) {
 	return nil, errors.New("OutputScriptToAddresses: not implemented")
 }
 
-func (p *ZCashBlockParser) ParseBlock(b []byte) (*bchain.Block, error) {
+// ParseBlock parses raw block to our Block struct - currently not implemented
+func (p *ZCashParser) ParseBlock(b []byte) (*bchain.Block, error) {
 	return nil, errors.New("ParseBlock: not implemented")
 }
 
-func (p *ZCashBlockParser) ParseTx(b []byte) (*bchain.Tx, error) {
+// ParseTx parses byte array containing transaction and returns Tx struct - currently not implemented
+func (p *ZCashParser) ParseTx(b []byte) (*bchain.Tx, error) {
 	return nil, errors.New("ParseTx: not implemented")
 }
 
-func (p *ZCashBlockParser) IsUTXOChain() bool {
+// PackedTxidLen returns length in bytes of packed txid
+func (p *ZCashParser) PackedTxidLen() int {
+	return 32
+}
+
+// PackTxid packs txid to byte array
+func (p *ZCashParser) PackTxid(txid string) ([]byte, error) {
+	return hex.DecodeString(txid)
+}
+
+// UnpackTxid unpacks byte array to txid
+func (p *ZCashParser) UnpackTxid(buf []byte) (string, error) {
+	return hex.EncodeToString(buf), nil
+}
+
+// PackBlockHash packs block hash to byte array
+func (p *ZCashParser) PackBlockHash(hash string) ([]byte, error) {
+	return hex.DecodeString(hash)
+}
+
+// UnpackBlockHash unpacks byte array to block hash
+func (p *ZCashParser) UnpackBlockHash(buf []byte) (string, error) {
+	return hex.EncodeToString(buf), nil
+}
+
+// IsUTXOChain returns true if the block chain is UTXO type, otherwise false
+func (p *ZCashParser) IsUTXOChain() bool {
 	return true
 }

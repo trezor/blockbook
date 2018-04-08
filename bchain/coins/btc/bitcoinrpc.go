@@ -83,7 +83,7 @@ func (b *BitcoinRPC) Initialize() error {
 	params := GetChainParams(chainName)
 
 	// always create parser
-	b.Parser = &BitcoinBlockParser{
+	b.Parser = &BitcoinParser{
 		Params: params,
 	}
 

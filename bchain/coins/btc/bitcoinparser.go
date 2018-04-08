@@ -14,13 +14,12 @@ import (
 	"github.com/btcsuite/btcutil"
 )
 
-// bitcoinwire parsing
-
-type BitcoinBlockParser struct {
+// BitcoinParser handle
+type BitcoinParser struct {
 	Params *chaincfg.Params
 }
 
-// getChainParams contains network parameters for the main Bitcoin network,
+// GetChainParams contains network parameters for the main Bitcoin network,
 // the regression test Bitcoin network, the test Bitcoin network and
 // the simulation test Bitcoin network, in this order
 func GetChainParams(chain string) *chaincfg.Params {
@@ -33,18 +32,18 @@ func GetChainParams(chain string) *chaincfg.Params {
 	return &chaincfg.MainNetParams
 }
 
-// GetAddrIDFromAddress returns internal address representation of given transaction output
-func (p *BitcoinBlockParser) GetAddrIDFromVout(output *bchain.Vout) ([]byte, error) {
+// GetAddrIDFromVout returns internal address representation of given transaction output
+func (p *BitcoinParser) GetAddrIDFromVout(output *bchain.Vout) ([]byte, error) {
 	return hex.DecodeString(output.ScriptPubKey.Hex)
 }
 
 // GetAddrIDFromAddress returns internal address representation of given address
-func (p *BitcoinBlockParser) GetAddrIDFromAddress(address string) ([]byte, error) {
+func (p *BitcoinParser) GetAddrIDFromAddress(address string) ([]byte, error) {
 	return p.AddressToOutputScript(address)
 }
 
 // AddressToOutputScript converts bitcoin address to ScriptPubKey
-func (p *BitcoinBlockParser) AddressToOutputScript(address string) ([]byte, error) {
+func (p *BitcoinParser) AddressToOutputScript(address string) ([]byte, error) {
 	da, err := btcutil.DecodeAddress(address, p.Params)
 	if err != nil {
 		return nil, err
@@ -57,7 +56,7 @@ func (p *BitcoinBlockParser) AddressToOutputScript(address string) ([]byte, erro
 }
 
 // OutputScriptToAddresses converts ScriptPubKey to bitcoin addresses
-func (p *BitcoinBlockParser) OutputScriptToAddresses(script []byte) ([]string, error) {
+func (p *BitcoinParser) OutputScriptToAddresses(script []byte) ([]string, error) {
 	_, addresses, _, err := txscript.ExtractPkScriptAddrs(script, p.Params)
 	if err != nil {
 		return nil, err
@@ -69,7 +68,7 @@ func (p *BitcoinBlockParser) OutputScriptToAddresses(script []byte) ([]string, e
 	return rv, nil
 }
 
-func (p *BitcoinBlockParser) txFromMsgTx(t *wire.MsgTx, parseAddresses bool) bchain.Tx {
+func (p *BitcoinParser) txFromMsgTx(t *wire.MsgTx, parseAddresses bool) bchain.Tx {
 	vin := make([]bchain.Vin, len(t.TxIn))
 	for i, in := range t.TxIn {
 		if blockchain.IsCoinBaseTx(t) {
@@ -123,7 +122,7 @@ func (p *BitcoinBlockParser) txFromMsgTx(t *wire.MsgTx, parseAddresses bool) bch
 }
 
 // ParseTx parses byte array containing transaction and returns Tx struct
-func (p *BitcoinBlockParser) ParseTx(b []byte) (*bchain.Tx, error) {
+func (p *BitcoinParser) ParseTx(b []byte) (*bchain.Tx, error) {
 	t := wire.MsgTx{}
 	r := bytes.NewReader(b)
 	if err := t.Deserialize(r); err != nil {
@@ -135,7 +134,7 @@ func (p *BitcoinBlockParser) ParseTx(b []byte) (*bchain.Tx, error) {
 }
 
 // ParseBlock parses raw block to our Block struct
-func (p *BitcoinBlockParser) ParseBlock(b []byte) (*bchain.Block, error) {
+func (p *BitcoinParser) ParseBlock(b []byte) (*bchain.Block, error) {
 	w := wire.MsgBlock{}
 	r := bytes.NewReader(b)
 
@@ -152,7 +151,7 @@ func (p *BitcoinBlockParser) ParseBlock(b []byte) (*bchain.Block, error) {
 }
 
 // PackTx packs transaction to byte array
-func (p *BitcoinBlockParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) ([]byte, error) {
+func (p *BitcoinParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) ([]byte, error) {
 	buf := make([]byte, 4+vlq.MaxLen64+len(tx.Hex)/2)
 	binary.BigEndian.PutUint32(buf[0:4], height)
 	vl := vlq.PutInt(buf[4:4+vlq.MaxLen64], blockTime)
@@ -161,7 +160,7 @@ func (p *BitcoinBlockParser) PackTx(tx *bchain.Tx, height uint32, blockTime int6
 }
 
 // UnpackTx unpacks transaction from byte array
-func (p *BitcoinBlockParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
+func (p *BitcoinParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 	height := binary.BigEndian.Uint32(buf)
 	bt, l := vlq.Int(buf[4:])
 	tx, err := p.ParseTx(buf[4+l:])
@@ -172,6 +171,32 @@ func (p *BitcoinBlockParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 	return tx, height, nil
 }
 
-func (p *BitcoinBlockParser) IsUTXOChain() bool {
+// PackedTxidLen returns length in bytes of packed txid
+func (p *BitcoinParser) PackedTxidLen() int {
+	return 32
+}
+
+// PackTxid packs txid to byte array
+func (p *BitcoinParser) PackTxid(txid string) ([]byte, error) {
+	return hex.DecodeString(txid)
+}
+
+// UnpackTxid unpacks byte array to txid
+func (p *BitcoinParser) UnpackTxid(buf []byte) (string, error) {
+	return hex.EncodeToString(buf), nil
+}
+
+// PackBlockHash packs block hash to byte array
+func (p *BitcoinParser) PackBlockHash(hash string) ([]byte, error) {
+	return hex.DecodeString(hash)
+}
+
+// UnpackBlockHash unpacks byte array to block hash
+func (p *BitcoinParser) UnpackBlockHash(buf []byte) (string, error) {
+	return hex.EncodeToString(buf), nil
+}
+
+// IsUTXOChain returns true if the block chain is UTXO type, otherwise false
+func (p *BitcoinParser) IsUTXOChain() bool {
 	return true
 }

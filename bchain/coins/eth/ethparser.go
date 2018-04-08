@@ -98,9 +98,11 @@ func ethTxToTx(tx *rpcTransaction, blocktime int64, confirmations uint32) (*bcha
 	}, nil
 }
 
+// EthereumParser handle
 type EthereumParser struct {
 }
 
+// GetAddrIDFromVout returns internal address representation of given transaction output
 func (p *EthereumParser) GetAddrIDFromVout(output *bchain.Vout) ([]byte, error) {
 	if len(output.ScriptPubKey.Addresses) != 1 {
 		return nil, bchain.ErrAddressMissing
@@ -108,6 +110,7 @@ func (p *EthereumParser) GetAddrIDFromVout(output *bchain.Vout) ([]byte, error) 
 	return p.GetAddrIDFromAddress(output.ScriptPubKey.Addresses[0])
 }
 
+// GetAddrIDFromAddress returns internal address representation of given address
 func (p *EthereumParser) GetAddrIDFromAddress(address string) ([]byte, error) {
 	// github.com/ethereum/go-ethereum/common.HexToAddress does not handle address errors, using own decoding
 	if len(address) > 1 {
@@ -126,18 +129,22 @@ func (p *EthereumParser) GetAddrIDFromAddress(address string) ([]byte, error) {
 	return hex.DecodeString(address)
 }
 
+// AddressToOutputScript converts address to ScriptPubKey - currently not implemented
 func (p *EthereumParser) AddressToOutputScript(address string) ([]byte, error) {
 	return nil, errors.New("AddressToOutputScript: not implemented")
 }
 
+// OutputScriptToAddresses converts ScriptPubKey to addresses - currently not implemented
 func (p *EthereumParser) OutputScriptToAddresses(script []byte) ([]string, error) {
 	return nil, errors.New("OutputScriptToAddresses: not implemented")
 }
 
+// ParseTx parses byte array containing transaction and returns Tx struct - currently not implemented
 func (p *EthereumParser) ParseTx(b []byte) (*bchain.Tx, error) {
 	return nil, errors.New("ParseTx: not implemented")
 }
 
+// ParseBlock parses raw block to our Block struct - currently not implemented
 func (p *EthereumParser) ParseBlock(b []byte) (*bchain.Block, error) {
 	return nil, errors.New("ParseBlock: not implemented")
 }
@@ -164,6 +171,7 @@ func hexEncodeBig(b []byte) string {
 	return hexutil.EncodeBig(&i)
 }
 
+// PackTx packs transaction to byte array
 func (p *EthereumParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) ([]byte, error) {
 	b, err := hex.DecodeString(tx.Hex)
 	if err != nil {
@@ -219,6 +227,7 @@ func (p *EthereumParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) (
 	return proto.Marshal(pt)
 }
 
+// UnpackTx unpacks transaction from byte array
 func (p *EthereumParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 	var pt ProtoTransaction
 	err := proto.Unmarshal(buf, &pt)
@@ -247,6 +256,32 @@ func (p *EthereumParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 	return tx, pt.BlockNumber, nil
 }
 
+// PackedTxidLen returns length in bytes of packed txid
+func (p *EthereumParser) PackedTxidLen() int {
+	return 32
+}
+
+// PackTxid packs txid to byte array
+func (p *EthereumParser) PackTxid(txid string) ([]byte, error) {
+	return hex.DecodeString(txid)
+}
+
+// UnpackTxid unpacks byte array to txid
+func (p *EthereumParser) UnpackTxid(buf []byte) (string, error) {
+	return hex.EncodeToString(buf), nil
+}
+
+// PackBlockHash packs block hash to byte array
+func (p *EthereumParser) PackBlockHash(hash string) ([]byte, error) {
+	return hex.DecodeString(hash)
+}
+
+// UnpackBlockHash unpacks byte array to block hash
+func (p *EthereumParser) UnpackBlockHash(buf []byte) (string, error) {
+	return hex.EncodeToString(buf), nil
+}
+
+// IsUTXOChain returns true if the block chain is UTXO type, otherwise false
 func (p *EthereumParser) IsUTXOChain() bool {
 	return false
 }

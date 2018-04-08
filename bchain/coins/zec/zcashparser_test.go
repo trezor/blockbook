@@ -87,7 +87,7 @@ func TestPackTx(t *testing.T) {
 		tx        bchain.Tx
 		height    uint32
 		blockTime int64
-		parser    *ZCashBlockParser
+		parser    *ZCashParser
 	}
 	tests := []struct {
 		name    string
@@ -101,7 +101,7 @@ func TestPackTx(t *testing.T) {
 				tx:        testTx1,
 				height:    292272,
 				blockTime: 1521645728,
-				parser:    &ZCashBlockParser{},
+				parser:    &ZCashParser{},
 			},
 			want:    testTxPacked1,
 			wantErr: false,
@@ -112,7 +112,7 @@ func TestPackTx(t *testing.T) {
 				tx:        testTx2,
 				height:    292217,
 				blockTime: 1521637604,
-				parser:    &ZCashBlockParser{},
+				parser:    &ZCashParser{},
 			},
 			want:    testTxPacked2,
 			wantErr: false,
@@ -136,7 +136,7 @@ func TestPackTx(t *testing.T) {
 func TestUnpackTx(t *testing.T) {
 	type args struct {
 		packedTx string
-		parser   *ZCashBlockParser
+		parser   *ZCashParser
 	}
 	tests := []struct {
 		name    string
@@ -149,7 +149,7 @@ func TestUnpackTx(t *testing.T) {
 			name: "zec-1",
 			args: args{
 				packedTx: testTxPacked1,
-				parser:   &ZCashBlockParser{},
+				parser:   &ZCashParser{},
 			},
 			want:    &testTx1,
 			want1:   292272,
@@ -159,7 +159,7 @@ func TestUnpackTx(t *testing.T) {
 			name: "zec-2",
 			args: args{
 				packedTx: testTxPacked2,
-				parser:   &ZCashBlockParser{},
+				parser:   &ZCashParser{},
 			},
 			want:    &testTx2,
 			want1:   292217,
