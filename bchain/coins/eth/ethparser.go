@@ -40,7 +40,7 @@ type rpcBlock struct {
 }
 
 func ethHashToHash(h ethcommon.Hash) string {
-	return h.Hex()[2:]
+	return h.Hex()
 }
 
 func ethNumber(n string) (int64, error) {
@@ -88,7 +88,7 @@ func ethTxToTx(tx *rpcTransaction, blocktime int64, confirmations uint32) (*bcha
 		Vout: []bchain.Vout{
 			{
 				N: 0, // there is always up to one To address
-				// Value - cannot set, it does not fit precisely to float64
+				// Value - cannot be set, it does not fit precisely to float64
 				ScriptPubKey: bchain.ScriptPubKey{
 					// Hex
 					Addresses: ta,
@@ -110,18 +110,18 @@ func (p *EthereumParser) GetAddrIDFromVout(output *bchain.Vout) ([]byte, error) 
 	return p.GetAddrIDFromAddress(output.ScriptPubKey.Addresses[0])
 }
 
+func has0xPrefix(s string) bool {
+	return len(s) >= 2 && s[0] == '0' && (s[1]|32) == 'x'
+}
+
 // GetAddrIDFromAddress returns internal address representation of given address
 func (p *EthereumParser) GetAddrIDFromAddress(address string) ([]byte, error) {
 	// github.com/ethereum/go-ethereum/common.HexToAddress does not handle address errors, using own decoding
-	if len(address) > 1 {
-		if address[0:2] == "0x" || address[0:2] == "0X" {
-			address = address[2:]
-		}
-	} else {
-		if len(address) == 0 {
-			return nil, bchain.ErrAddressMissing
-		}
-		return nil, errors.Errorf("Invalid address '%v'", address)
+	if has0xPrefix(address) {
+		address = address[2:]
+	}
+	if len(address) == 0 {
+		return nil, bchain.ErrAddressMissing
 	}
 	if len(address)&1 == 1 {
 		address = "0" + address
@@ -263,22 +263,28 @@ func (p *EthereumParser) PackedTxidLen() int {
 
 // PackTxid packs txid to byte array
 func (p *EthereumParser) PackTxid(txid string) ([]byte, error) {
+	if has0xPrefix(txid) {
+		txid = txid[2:]
+	}
 	return hex.DecodeString(txid)
 }
 
 // UnpackTxid unpacks byte array to txid
 func (p *EthereumParser) UnpackTxid(buf []byte) (string, error) {
-	return hex.EncodeToString(buf), nil
+	return hexutil.Encode(buf), nil
 }
 
 // PackBlockHash packs block hash to byte array
 func (p *EthereumParser) PackBlockHash(hash string) ([]byte, error) {
+	if has0xPrefix(hash) {
+		hash = hash[2:]
+	}
 	return hex.DecodeString(hash)
 }
 
 // UnpackBlockHash unpacks byte array to block hash
 func (p *EthereumParser) UnpackBlockHash(buf []byte) (string, error) {
-	return hex.EncodeToString(buf), nil
+	return hexutil.Encode(buf), nil
 }
 
 // IsUTXOChain returns true if the block chain is UTXO type, otherwise false
