@@ -73,6 +73,7 @@ Blockbook logs only to stderr, logging to files is disabled. Verbosity of logs c
 - [BTC](bchain/coins/btc/btc.md)
 - [BTC Testnet](bchain/coins/btc/btctestnet.md)
 - [ZCash](bchain/coins/zec/zec.md)
+- [Ethereum](bchain/coins/eth/eth.md)
 - [Ethereum Ropsten Testnet](bchain/coins/eth/ethropsten.md)
 
 # Data storage in RocksDB

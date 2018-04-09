@@ -21,5 +21,5 @@ cd go/src/blockbook
 ```
 To run blockbook with logging to file (run with nohup or daemonize or using screen)
 ```
-./run-eth-testnet-blockbook.sh 2>/data/testnet/eth-testnet/blockbook.log
+./run-eth-testnet-blockbook.sh 2>/data/eth-testnet/blockbook/blockbook.log
 ```
