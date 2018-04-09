@@ -9,7 +9,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 
-	proto "github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/proto"
 	"github.com/juju/errors"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
