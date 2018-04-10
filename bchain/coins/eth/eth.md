@@ -9,7 +9,7 @@ Data are stored in */data/eth*, in folders */data/eth/eth* for Ethereum data, */
 
 Run geth with rpc and websocket interfaces, bound to all ip addresses - insecure! (run with nohup or daemonize or using screen)
 ```
-go-ethereum/build/bin/geth --datadir /data/eth/eth --port "35555" --rpc --rpcport 8545 -rpcaddr 0.0.0.0 --rpccorsdomain "*" --ws --wsaddr 0.0.0.0 --wsport 8546 --wsorigins "*" 2>/data/eth/eth/eth.log
+go-ethereum/build/bin/geth --syncmode "full" --cache 1024 --datadir /data/eth/eth --port "35555" --rpc --rpcport 8545 -rpcaddr 0.0.0.0 --rpccorsdomain "*" --ws --wsaddr 0.0.0.0 --wsport 8546 --wsorigins "*" 2>/data/eth/eth/eth.log
 ```
 
 Create script that runs blockbook *run-eth-blockbook.sh*
