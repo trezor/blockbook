@@ -1,0 +1,2 @@
+/opt/blockbook/zec/cert/testcert.crt /opt/blockbook/zec/cert/blockbook.crt
+/opt/blockbook/zec/cert/testcert.key /opt/blockbook/zec/cert/blockbook.key

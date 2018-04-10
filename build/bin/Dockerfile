@@ -26,14 +26,8 @@ RUN cd /opt/rocksdb && CFLAGS=-fPIC CXXFLAGS=-fPIC make static_lib
 
 RUN go get github.com/golang/dep/cmd/dep
 
-# clone repo and ensure dependencies
-RUN cd $GOPATH/src && git clone https://github.com/jpochyla/blockbook.git
-RUN cd $GOPATH/src/blockbook && dep ensure
+ADD Makefile /build/Makefile
 
-# install gorocksdb
-RUN cd $GOPATH/src/blockbook/vendor/github.com/tecbot/gorocksdb && \
-    go install .
+VOLUME /out
 
-WORKDIR $GOPATH/src/blockbook
-
-CMD go build -o /out/blockbook
+WORKDIR /build

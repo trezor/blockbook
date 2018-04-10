@@ -1,0 +1,4 @@
+#!/usr/bin/dh-exec --with=install
+blockbook /opt/blockbook/zec/bin
+server/testcert.* /opt/blockbook/zec/cert
+configs/zec.json => /opt/blockbook/zec/config/blockchaincfg.json

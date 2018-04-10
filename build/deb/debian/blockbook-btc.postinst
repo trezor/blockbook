@@ -1,0 +1,20 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+
+  configure)
+    if ! id -u blockbook &> /dev/null
+    then
+        useradd --system -M -U blockbook
+    fi
+
+    if [ "$(stat -c '%U' /data/btc/blockbook)" != "blockbook" ]
+    then
+        chown -R blockbook:blockbook /data/btc/blockbook
+    fi
+  ;;
+
+esac
+
+#DEBHELPER#

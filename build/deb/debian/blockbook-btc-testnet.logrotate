@@ -1,0 +1,9 @@
+/opt/blockbook/btc-testnet/logs/blockbook.log
+{
+        rotate 7
+        daily
+        compress
+        missingok
+        notifempty
+        copytruncate
+}
