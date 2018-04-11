@@ -1,0 +1,21 @@
+Source: bitcoin
+Section: satoshilabs
+Priority: optional
+Maintainer: jakub.matys@satoshilabs.com
+Build-Depends: debhelper, wget, tar, gzip, make, dh-systemd
+Standards-Version: 3.9.5
+
+Package: bitcoin
+Architecture: amd64
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Satoshilabs packaged bitcoin server (binaries)
+
+Package: bitcoin-btc
+Architecture: all
+Depends: bitcoin (= ${binary:Version}), logrotate
+Description: Satoshilabs packaged bitcoin server (configuration)
+
+Package: bitcoin-testnet
+Architecture: all
+Depends: bitcoin (= ${binary:Version}), logrotate
+Description: Satoshilabs packaged bitcoin server (configuration)

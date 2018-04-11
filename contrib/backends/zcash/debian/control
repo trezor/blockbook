@@ -1,0 +1,16 @@
+Source: zcash
+Section: satoshilabs
+Priority: optional
+Maintainer: jakub.matys@satoshilabs.com
+Build-Depends: debhelper, wget, tar, gzip, make, dh-systemd
+Standards-Version: 3.9.5
+
+Package: zcash
+Architecture: amd64
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Satoshilabs packaged zcash server (binaries)
+
+Package: zcash-zec
+Architecture: all
+Depends: zcash (= ${binary:Version}), logrotate
+Description: Satoshilabs packaged zcash server (configuration)

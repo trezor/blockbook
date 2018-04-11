@@ -1,0 +1,2 @@
+/opt/satoshilabs/bitcoin/bin/bitcoind /usr/bin/bitcoind
+/opt/satoshilabs/bitcoin/bin/bitcoin-cli /usr/bin/bitcoin-cli

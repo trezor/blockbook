@@ -1,0 +1,10 @@
+/data/btc-testnet/bitcoin/testnet3/debug.log
+/data/btc-testnet/bitcoin/testnet3/db.log
+{
+        rotate 7
+        daily
+        compress
+        missingok
+        notifempty
+        copytruncate
+}

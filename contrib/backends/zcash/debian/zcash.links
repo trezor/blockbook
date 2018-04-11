@@ -1,0 +1,2 @@
+/opt/satoshilabs/zcash/bin/zcashd /usr/bin/zcashd
+/opt/satoshilabs/zcash/bin/zcash-cli /usr/bin/zcash-cli
