@@ -15,7 +15,7 @@ build-image:
 	$(MAKE) .docker-image
 
 .docker-image:
-	docker build --no-cache=$(NO_CACHE)-t $(IMAGE) docker
+	docker build --no-cache=$(NO_CACHE) -t $(IMAGE) docker
 	@ docker images -q $(IMAGE) > $@
 
 clean: clean-packages clean-image
