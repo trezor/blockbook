@@ -1,1 +1,2 @@
-zec.conf /data/zec/zcash
+zcash/* /opt/zcash/zec
+zec.conf /opt/zcash/zec

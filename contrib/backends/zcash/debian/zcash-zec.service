@@ -5,14 +5,15 @@
 # See "man systemd.service" for details.
 
 # Note that almost all daemon options could be specified in
-# /data/zec/zcash/zcash.conf
+# /opt/zcash/zec/zec.conf
 
 [Unit]
 Description=ZCash daemon (mainnet)
 After=network.target
 
 [Service]
-ExecStart=/opt/satoshilabs/zcash/bin/zcashd -datadir=/data/zec/zcash -conf=/data/zec/zcash/zec.conf -pid=/run/zcashd/zec.pid
+Environment="HOME=/data/zec/zcash"
+ExecStart=/opt/zcash/zec/bin/zcashd -datadir=/data/zec/zcash -conf=/opt/zcash/zec/zec.conf -pid=/run/zcashd/zec.pid
 # Creates /run/zcashd owned by zcash
 RuntimeDirectory=zcashd
 User=zcash
@@ -38,7 +39,7 @@ NoNewPrivileges=true
 PrivateDevices=true
 
 # Deny the creation of writable and executable memory mappings.
-MemoryDenyWriteExecute=true
+# MemoryDenyWriteExecute=true
 
 [Install]
 WantedBy=multi-user.target
