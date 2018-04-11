@@ -1,17 +1,50 @@
+BIN_IMAGE = blockbook-build
+DEB_IMAGE = blockbook-build-deb
 PACKAGER = $(shell id -u):$(shell id -g)
+NO_CACHE = false
 
-.PHONY: build test deb
+.PHONY: build build-debug test deb
 
-build:
-	docker run -t --rm -e PACKAGER=$(PACKAGER) -v $(CURDIR):/src -v $(CURDIR)/build:/out blockbook-build make build
-	strip build/blockbook
+build: .bin-image
+	docker run -t --rm -e PACKAGER=$(PACKAGER) -v $(CURDIR):/src -v $(CURDIR)/build:/out $(BIN_IMAGE) make build
 
-test:
-	docker run -t --rm -e PACKAGER=$(PACKAGER) -v $(CURDIR):/src blockbook-build make test
+build-debug: .bin-image
+	docker run -t --rm -e PACKAGER=$(PACKAGER) -v $(CURDIR):/src -v $(CURDIR)/build:/out $(BIN_IMAGE) make build-debug
 
-deb:
-	docker run -t --rm -e PACKAGER=$(PACKAGER) -v $(CURDIR):/src -v $(CURDIR)/build:/out blockbook-build-deb
+test: .bin-image
+	docker run -t --rm -e PACKAGER=$(PACKAGER) -v $(CURDIR):/src $(BIN_IMAGE) make test
 
-clean:
+deb: .deb-image
+	docker run -t --rm -e PACKAGER=$(PACKAGER) -v $(CURDIR):/src -v $(CURDIR)/build:/out $(DEB_IMAGE)
+
+build-images:
+	rm -f .bin-image .deb-image
+	$(MAKE) .bin-image .deb-image
+
+.bin-image:
+	docker build --no-cache=$(NO_CACHE) -t $(BIN_IMAGE) build/bin
+	@ docker images -q $(BIN_IMAGE) > $@
+
+.deb-image:
+	docker build --no-cache=$(NO_CACHE) -t $(DEB_IMAGE) build/deb
+	@ docker images -q $(DEB_IMAGE) > $@
+
+clean: clean-bin clean-deb
+
+clean-all: clean clean-images
+
+clean-bin:
 	rm -f build/blockbook
+
+clean-deb:
 	rm -f build/*.deb
+
+clean-images: clean-bin-image clean-deb-image
+
+clean-bin-image:
+	- docker rmi $(BIN_IMAGE)
+	@ rm -f .bin-image
+
+clean-deb-image:
+	- docker rmi $(DEB_IMAGE)
+	@ rm -f .deb-image

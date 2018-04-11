@@ -2,7 +2,7 @@ Source: blockbook
 Section: satoshilabs
 Priority: optional
 Maintainer: jakub.matys@satoshilabs.com
-Build-Depends: debhelper, dh-systemd, dh-exec
+Build-Depends: debhelper, dh-systemd, dh-exec, upx
 Standards-Version: 3.9.5
 
 Package: blockbook-btc
