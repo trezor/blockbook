@@ -9,10 +9,13 @@ case "$1" in
         useradd --system -M -U blockbook
     fi
 
-    if [ "$(stat -c '%U' /data/btc-testnet/blockbook)" != "blockbook" ]
-    then
-        chown -R blockbook:blockbook /data/btc-testnet/blockbook
-    fi
+    for dir in /data/btc-testnet/blockbook /opt/blockbook/btc-testnet/logs
+    do
+        if [ "$(stat -c '%U' $dir)" != "blockbook" ]
+        then
+            chown -R blockbook:blockbook $dir
+        fi
+    done
   ;;
 
 esac

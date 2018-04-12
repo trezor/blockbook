@@ -1,9 +1,0 @@
-/opt/blockbook/zec/logs/blockbook.log
-{
-        rotate 7
-        daily
-        compress
-        missingok
-        notifempty
-        copytruncate
-}

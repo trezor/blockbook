@@ -79,11 +79,13 @@ var (
 	chanOsSignal            chan os.Signal
 )
 
+func init() {
+	glog.MaxSize = 1024 * 1024
+	glog.CopyStandardLogTo("INFO")
+}
+
 func main() {
 	flag.Parse()
-
-	// override setting for glog to log only to stderr, to match the http handler
-	flag.Lookup("logtostderr").Value.Set("true")
 
 	defer glog.Flush()
 

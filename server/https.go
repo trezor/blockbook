@@ -8,12 +8,10 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"os"
 	"strconv"
 
 	"github.com/golang/glog"
 
-	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -30,8 +28,10 @@ type HTTPServer struct {
 
 // NewHTTPServer creates new REST interface to blockbook and returns its handle
 func NewHTTPServer(httpServerBinding string, certFiles string, db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxCache) (*HTTPServer, error) {
+	r := mux.NewRouter()
 	https := &http.Server{
-		Addr: httpServerBinding,
+		Addr:    httpServerBinding,
+		Handler: r,
 	}
 	s := &HTTPServer{
 		https:       https,
@@ -42,7 +42,6 @@ func NewHTTPServer(httpServerBinding string, certFiles string, db *db.RocksDB, c
 		chainParser: chain.GetChainParser(),
 	}
 
-	r := mux.NewRouter()
 	r.HandleFunc("/", s.info)
 	r.HandleFunc("/bestBlockHash", s.bestBlockHash)
 	r.HandleFunc("/blockHash/{height}", s.blockHash)
@@ -50,10 +49,6 @@ func NewHTTPServer(httpServerBinding string, certFiles string, db *db.RocksDB, c
 	r.HandleFunc("/confirmedTransactions/{address}/{lower}/{higher}", s.confirmedTransactions)
 	r.HandleFunc("/unconfirmedTransactions/{address}", s.unconfirmedTransactions)
 	r.HandleFunc("/metrics", promhttp.Handler().ServeHTTP)
-
-	var h http.Handler = r
-	h = handlers.LoggingHandler(os.Stderr, h)
-	https.Handler = h
 
 	return s, nil
 }

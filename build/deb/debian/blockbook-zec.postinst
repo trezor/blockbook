@@ -9,10 +9,13 @@ case "$1" in
         useradd --system -M -U blockbook
     fi
 
-    if [ "$(stat -c '%U' /data/zec/blockbook)" != "blockbook" ]
-    then
-        chown -R blockbook:blockbook /data/zec/blockbook
-    fi
+    for dir in /data/zec/blockbook /opt/blockbook/zec/logs
+    do
+        if [ "$(stat -c '%U' $dir)" != "blockbook" ]
+        then
+            chown -R blockbook:blockbook $dir
+        fi
+    done
   ;;
 
 esac

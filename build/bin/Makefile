@@ -1,6 +1,5 @@
 build: prepare-sources
 	cd $(GOPATH)/src/blockbook && go build -o $(CURDIR)/blockbook -ldflags="-s -w"
-	upx $(CURDIR)/blockbook
 	cp $(CURDIR)/blockbook /out/blockbook
 	chown $(PACKAGER) /out/blockbook
 

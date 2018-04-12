@@ -9,15 +9,11 @@ Description=Blockbook daemon (BTC testnet)
 After=network.target
 
 [Service]
-ExecStart=/opt/blockbook/btc-testnet/bin/blockbook -coin=btc-testnet -blockchaincfg=/opt/blockbook/btc-testnet/config/blockchaincfg.json -datadir=/data/btc-testnet/blockbook/db -sync -httpserver=:18335 -socketio=:18336 -certfile=/opt/blockbook/btc-testnet/cert/blockbook -explorer=https://bitcore1.trezor.io/
-# Creates /run/blockbook owned by blockbook
-RuntimeDirectory=blockbook
+ExecStart=/opt/blockbook/btc-testnet/bin/blockbook -coin=btc-testnet -blockchaincfg=/opt/blockbook/btc-testnet/config/blockchaincfg.json -datadir=/data/btc-testnet/blockbook/db -sync -httpserver=:18335 -socketio=:18336 -certfile=/opt/blockbook/btc-testnet/cert/blockbook -explorer=https://bitcore1.trezor.io/ -log_dir=/opt/blockbook/btc-testnet/logs
 User=blockbook
-# Type=forking
-# PIDFile=/run/bitcoind/btc-testnet.pid
+Type=simple
 Restart=on-failure
-StandardOutput=file:/opt/blockbook/btc-testnet/logs/blockbook.log
-StandardError=file:/opt/blockbook/btc-testnet/logs/blockbook.log
+WorkingDirectory=/opt/blockbook/btc-testnet
 
 # Hardening measures
 ####################
