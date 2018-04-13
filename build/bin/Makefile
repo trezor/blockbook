@@ -9,7 +9,7 @@ build-debug: prepare-sources
 	chown $(PACKAGER) /out/blockbook
 
 test: prepare-sources
-	cd $(GOPATH)/src/blockbook && go test -v ./bchain/coins/zec
+	cd $(GOPATH)/src/blockbook && go test -v ./...
 
 prepare-sources:
 	@ [ -n "`ls /src 2> /dev/null`" ] || (echo "/src doesn't exist or is empty" 1>&2 && exit 1)
