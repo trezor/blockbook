@@ -1,0 +1,21 @@
+Source: blockbook
+Section: satoshilabs
+Priority: optional
+Maintainer: jakub.matys@satoshilabs.com
+Build-Depends: debhelper, dh-systemd, dh-exec
+Standards-Version: 3.9.5
+
+Package: blockbook-btc
+Architecture: amd64
+Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils
+Description: Satoshilabs blockbook server
+
+Package: blockbook-btc-testnet
+Architecture: amd64
+Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils
+Description: Satoshilabs blockbook server
+
+Package: blockbook-zec
+Architecture: amd64
+Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils
+Description: Satoshilabs blockbook server

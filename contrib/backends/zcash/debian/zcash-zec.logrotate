@@ -1,0 +1,10 @@
+/data/zec/zcash/debug.log
+/data/zec/zcash/db.log
+{
+        rotate 7
+        daily
+        compress
+        missingok
+        notifempty
+        copytruncate
+}

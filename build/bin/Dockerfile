@@ -2,9 +2,11 @@
 
 FROM debian:9
 
-RUN apt-get update && apt-get install -y \
-    build-essential git wget pkg-config lxc-dev libzmq3-dev libgflags-dev \
-    libsnappy-dev zlib1g-dev libbz2-dev liblz4-dev graphviz
+RUN apt-get update && \
+    apt-get install -y build-essential git wget pkg-config lxc-dev libzmq3-dev \
+                       libgflags-dev libsnappy-dev zlib1g-dev libbz2-dev \
+                       liblz4-dev graphviz && \
+    apt-get clean
 
 ENV GOLANG_VERSION=go1.10.linux-amd64
 ENV GOPATH=/go
@@ -22,18 +24,12 @@ RUN echo -n "GOPATH: " && echo $GOPATH
 
 # install rocksdb
 RUN cd /opt && git clone https://github.com/facebook/rocksdb.git
-RUN cd /opt/rocksdb && CFLAGS=-fPIC CXXFLAGS=-fPIC make static_lib
+RUN cd /opt/rocksdb && CFLAGS=-fPIC CXXFLAGS=-fPIC make -j 4 static_lib
 
 RUN go get github.com/golang/dep/cmd/dep
 
-# clone repo and ensure dependencies
-RUN cd $GOPATH/src && git clone https://github.com/jpochyla/blockbook.git
-RUN cd $GOPATH/src/blockbook && dep ensure
+ADD Makefile /build/Makefile
 
-# install gorocksdb
-RUN cd $GOPATH/src/blockbook/vendor/github.com/tecbot/gorocksdb && \
-    go install .
+VOLUME /out
 
-WORKDIR $GOPATH/src/blockbook
-
-CMD go build -o /out/blockbook
+WORKDIR /build

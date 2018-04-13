@@ -1,8 +1,8 @@
 {
-  "rpcURL": "http://localhost:18332",
+  "rpcURL": "http://127.0.0.1:8332",
   "rpcUser": "rpc",
   "rpcPass": "rpc",
   "rpcTimeout": 25,
   "parse": true,
-  "zeroMQBinding": "tcp://127.0.0.1:18334"
+  "zeroMQBinding": "tcp://127.0.0.1:8334"
 }

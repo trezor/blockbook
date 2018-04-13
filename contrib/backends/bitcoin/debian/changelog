@@ -1,0 +1,5 @@
+bitcoin (0.16.0-satoshilabs1) unstable; urgency=medium
+
+  * Initial build
+
+ -- Jakub Matys <jakub.matys@satoshilabs.com>  Thu, 05 Apr 2018 08:40:39 +0200

@@ -76,7 +76,7 @@ func NewSocketIoServer(binding string, certFiles string, db *db.RocksDB, chain b
 	}
 
 	// support for tests of socket.io interface
-	serveMux.Handle(path+"test.html", http.FileServer(http.Dir("./server/static/")))
+	serveMux.Handle(path+"test.html", http.FileServer(http.Dir("./static/")))
 	// redirect to Bitcore for details of transaction
 	serveMux.HandleFunc(path+"tx/", s.txRedirect)
 	// handle socket.io

@@ -1,0 +1,8 @@
+#!/usr/bin/make -f
+
+DH_VERBOSE = 1
+
+%:
+	dh $@ --with=systemd
+
+override_dh_strip:

@@ -1,0 +1,39 @@
+# It is not recommended to modify this file in-place, because it will
+# be overwritten during package upgrades. If you want to add further
+# options or overwrite existing ones then use
+# $ systemctl edit blockbook-zec.service
+# See "man systemd.service" for details.
+
+[Unit]
+Description=Blockbook daemon (ZEC mainnet)
+After=network.target
+
+[Service]
+ExecStart=/opt/blockbook/zec/bin/blockbook -coin=zec -blockchaincfg=/opt/blockbook/zec/config/blockchaincfg.json -datadir=/data/zec/blockbook/db -sync -httpserver=:8235 -socketio=:8236 -certfile=/opt/blockbook/zec/cert/blockbook -explorer=https://zec-bitcore1.trezor.io/ -log_dir=/opt/blockbook/zec/logs
+User=blockbook
+Type=simple
+Restart=on-failure
+WorkingDirectory=/opt/blockbook/zec
+
+# Hardening measures
+####################
+
+# Provide a private /tmp and /var/tmp.
+PrivateTmp=true
+
+# Mount /usr, /boot/ and /etc read-only for the process.
+ProtectSystem=full
+
+# Disallow the process and all of its children to gain
+# new privileges through execve().
+NoNewPrivileges=true
+
+# Use a new /dev namespace only populated with API pseudo devices
+# such as /dev/null, /dev/zero and /dev/random.
+PrivateDevices=true
+
+# Deny the creation of writable and executable memory mappings.
+MemoryDenyWriteExecute=true
+
+[Install]
+WantedBy=multi-user.target

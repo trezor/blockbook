@@ -1,0 +1,2 @@
+bitcoin/* /opt/bitcoin/btc-testnet
+btc-testnet.conf /opt/bitcoin/btc-testnet
