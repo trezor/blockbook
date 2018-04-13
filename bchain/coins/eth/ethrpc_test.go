@@ -2,6 +2,7 @@ package eth
 
 import (
 	"blockbook/bchain"
+	"flag"
 	"reflect"
 	"testing"
 	"time"
@@ -11,13 +12,13 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-var rpcURL = "ws://10.34.3.4:18546"
+var rpcURL = flag.String("rpc", "ws://10.34.3.4:18546", "URL of geth server")
 var ethClient *ethclient.Client
 var ethRPCClient *rpc.Client
 
 func setupEthRPC() *EthereumRPC {
 	if ethClient == nil {
-		rc, err := rpc.Dial(rpcURL)
+		rc, err := rpc.Dial(*rpcURL)
 		if err != nil {
 			panic(err)
 		}
@@ -34,6 +35,9 @@ func setupEthRPC() *EthereumRPC {
 }
 
 func TestEthRPC_getBestHeader(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode.")
+	}
 	type fields struct {
 		b *EthereumRPC
 	}
@@ -63,6 +67,9 @@ func TestEthRPC_getBestHeader(t *testing.T) {
 }
 
 func TestEthRPC_GetBestBlockHash(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode.")
+	}
 	type fields struct {
 		b *EthereumRPC
 	}
@@ -96,6 +103,9 @@ func TestEthRPC_GetBestBlockHash(t *testing.T) {
 }
 
 func TestEthRPC_GetBestBlockHeight(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode.")
+	}
 	type fields struct {
 		b *EthereumRPC
 	}
@@ -128,6 +138,9 @@ func TestEthRPC_GetBestBlockHeight(t *testing.T) {
 }
 
 func TestEthRPC_GetBlockHash(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode.")
+	}
 	type fields struct {
 		b *EthereumRPC
 	}
@@ -188,6 +201,9 @@ func TestEthRPC_GetBlockHash(t *testing.T) {
 }
 
 func TestEthRPC_GetBlockHeader(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode.")
+	}
 	bh, err := setupEthRPC().getBestHeader()
 	if err != nil {
 		panic(err)
@@ -245,6 +261,9 @@ func TestEthRPC_GetBlockHeader(t *testing.T) {
 }
 
 func TestEthRPC_GetBlock(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode.")
+	}
 	bh, err := setupEthRPC().getBestHeader()
 	if err != nil {
 		panic(err)
@@ -340,6 +359,9 @@ func TestEthRPC_GetBlock(t *testing.T) {
 }
 
 func TestEthRPC_GetTransaction(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode.")
+	}
 	bh, err := setupEthRPC().getBestHeader()
 	if err != nil {
 		panic(err)
@@ -429,6 +451,9 @@ func TestEthRPC_GetTransaction(t *testing.T) {
 }
 
 func TestEthRPC_EstimateFee(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode.")
+	}
 	type fields struct {
 		b *EthereumRPC
 	}
@@ -468,6 +493,9 @@ func TestEthRPC_EstimateFee(t *testing.T) {
 }
 
 func TestEthRPC_GetMempool(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode.")
+	}
 	type fields struct {
 		b *EthereumRPC
 	}
