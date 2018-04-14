@@ -95,7 +95,7 @@
   branch = "master"
   name = "github.com/martinboehm/golang-socketio"
   packages = [".","protocol","transport"]
-  revision = "a75d7b2d508c4746fd14ec8116c1e183834b7f77"
+  revision = "f60b0a8befde091474a624a8ffd81ee9912957b3"
 
 [[projects]]
   name = "github.com/matttproud/golang_protobuf_extensions"
@@ -125,7 +125,7 @@
   branch = "master"
   name = "github.com/prometheus/common"
   packages = ["expfmt","internal/bitbucket.org/ww/goautoneg","model"]
-  revision = "38c53a9f4bfcd932d1b00bfc65e256a7fba6b37a"
+  revision = "d0f7cd64bda49e08b22ae8a730aa57aa0db125d6"
 
 [[projects]]
   branch = "master"
@@ -184,6 +184,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "a463c234bc11d9917876a827f692392845ed89571edc1484ae3e932f555d484b"
+  inputs-digest = "47ed30394b51a48d76267e128d24a1b110e0c018cf7dfb41881511a4f2a1a866"
   solver-name = "gps-cdcl"
   solver-version = 1
