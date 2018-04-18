@@ -37,10 +37,16 @@ type ScriptPubKey struct {
 	Addresses []string `json:"addresses,omitempty"`
 }
 
+type Address interface {
+	String() string
+	EncodeAddress(format uint8) (string, error)
+}
+
 type Vout struct {
 	Value        float64      `json:"value"`
 	N            uint32       `json:"n"`
 	ScriptPubKey ScriptPubKey `json:"scriptPubKey"`
+	Address      Address
 }
 
 // Tx is blockchain transaction
