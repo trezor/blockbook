@@ -263,7 +263,7 @@ func (d *RocksDB) writeAddressRecords(wb *gorocksdb.WriteBatch, block *bchain.Bl
 func (d *RocksDB) addAddrIDToRecords(op int, wb *gorocksdb.WriteBatch, records map[string][]outpoint, addrID []byte, btxid []byte, vout int32, bh uint32) error {
 	if len(addrID) > 0 {
 		if len(addrID) > 1024 {
-			glog.Infof("block %d, skipping addrID of length %d", bh, len(addrID))
+			glog.Infof("rocksdb: block %d, skipping addrID of length %d", bh, len(addrID))
 		} else {
 			strAddrID := string(addrID)
 			records[strAddrID] = append(records[strAddrID], outpoint{
@@ -305,18 +305,19 @@ func appendPackedAddrID(txAddrs []byte, addrID []byte, n uint32, remaining int) 
 }
 
 func findAndRemoveUnspentAddr(unspentAddrs []byte, vout uint32) ([]byte, uint32, []byte) {
+	// the addresses are packed as lenaddrID:addrID:vout, where lenaddrID and vout are varints
 	for i := 0; i < len(unspentAddrs); {
 		l, lv1 := unpackVarint(unspentAddrs[i:])
 		// index of vout of address in unspentAddrs
 		j := i + int(l) + lv1
 		if j >= len(unspentAddrs) {
-			glog.Error("Inconsistent data in unspentAddrs")
+			glog.Error("rocksdb: Inconsistent data in unspentAddrs")
 			return nil, 0, unspentAddrs
 		}
 		n, lv2 := unpackVarint(unspentAddrs[j:])
 		if uint32(n) == vout {
 			addrID := append([]byte(nil), unspentAddrs[i+lv1:j]...)
-			unspentAddrs = append(unspentAddrs[:i], unspentAddrs[i+lv2:]...)
+			unspentAddrs = append(unspentAddrs[:i], unspentAddrs[j+lv2:]...)
 			return addrID, uint32(n), unspentAddrs
 		}
 		i += j + lv2
@@ -325,7 +326,6 @@ func findAndRemoveUnspentAddr(unspentAddrs []byte, vout uint32) ([]byte, uint32,
 }
 
 func (d *RocksDB) writeAddressesUTXO(wb *gorocksdb.WriteBatch, block *bchain.Block, op int) error {
-	var err error
 	addresses := make(map[string][]outpoint)
 	unspentTxs := make(map[string][]byte)
 	btxIDs := make([][]byte, len(block.Txs))
@@ -357,44 +357,35 @@ func (d *RocksDB) writeAddressesUTXO(wb *gorocksdb.WriteBatch, block *bchain.Blo
 	}
 	// locate unspent addresses and add them to addresses map them in format txid ^index
 	for txi, tx := range block.Txs {
-		btxID := btxIDs[txi]
-		// try to find the tx in current block
-		unspentAddrs, inThisBlock := unspentTxs[string(btxID)]
-		if !inThisBlock {
-			unspentAddrs, err = d.getUnspentTx(btxID)
+		spendingTxid := btxIDs[txi]
+		for i, input := range tx.Vin {
+			btxID, err := d.chainParser.PackTxid(input.Txid)
 			if err != nil {
 				return err
 			}
-			if unspentAddrs == nil {
-				glog.Warningf("rocksdb: height %d, tx %v in inputs but missing in unspentTxs", block.Height, tx.Txid)
-				continue
+			// try to find the tx in current block
+			unspentAddrs, inThisBlock := unspentTxs[string(btxID)]
+			if !inThisBlock {
+				unspentAddrs, err = d.getUnspentTx(btxID)
+				if err != nil {
+					return err
+				}
+				if unspentAddrs == nil {
+					glog.Warningf("rocksdb: height %d, tx %v in inputs but missing in unspentTxs", block.Height, tx.Txid)
+					continue
+				}
 			}
-		}
-		var addrID []byte
-		var n uint32
-		for _, input := range tx.Vin {
-			addrID, n, unspentAddrs = findAndRemoveUnspentAddr(unspentAddrs, input.Vout)
+			var addrID []byte
+			addrID, _, unspentAddrs = findAndRemoveUnspentAddr(unspentAddrs, input.Vout)
 			if addrID == nil {
 				glog.Warningf("rocksdb: height %d, tx %v vout %v in inputs but missing in unspentTxs", block.Height, tx.Txid, input.Vout)
 				continue
 			}
-			err = d.addAddrIDToRecords(op, wb, addresses, addrID, btxID, int32(^n), block.Height)
+			err = d.addAddrIDToRecords(op, wb, addresses, addrID, spendingTxid, int32(^i), block.Height)
 			if err != nil {
 				return err
 			}
-		}
-		if inThisBlock {
-			if len(unspentAddrs) == 0 {
-				delete(unspentTxs, string(btxID))
-			} else {
-				unspentTxs[string(btxID)] = unspentAddrs
-			}
-		} else {
-			if len(unspentAddrs) == 0 {
-				wb.DeleteCF(d.cfh[cfUnspentTxs], btxID)
-			} else {
-				wb.PutCF(d.cfh[cfUnspentTxs], btxID, unspentAddrs)
-			}
+			unspentTxs[string(btxID)] = unspentAddrs
 		}
 	}
 	if err := d.writeAddressRecords(wb, block, op, addresses); err != nil {
@@ -404,7 +395,11 @@ func (d *RocksDB) writeAddressesUTXO(wb *gorocksdb.WriteBatch, block *bchain.Blo
 	for tx, val := range unspentTxs {
 		switch op {
 		case opInsert:
-			wb.PutCF(d.cfh[cfUnspentTxs], []byte(tx), val)
+			if len(val) == 0 {
+				wb.DeleteCF(d.cfh[cfUnspentTxs], []byte(tx))
+			} else {
+				wb.PutCF(d.cfh[cfUnspentTxs], []byte(tx), val)
+			}
 		case opDelete:
 			wb.DeleteCF(d.cfh[cfUnspentTxs], []byte(tx))
 		}
@@ -722,6 +717,6 @@ func packVarint(i int32, buf []byte) int {
 }
 
 func unpackVarint(buf []byte) (int32, int) {
-	i, ofs := vlq.Uint(buf)
+	i, ofs := vlq.Int(buf)
 	return int32(i), ofs
 }
