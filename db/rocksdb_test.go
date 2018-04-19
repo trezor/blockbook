@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"io/ioutil"
 	"os"
+	"reflect"
 	"sort"
 	"strconv"
 	"testing"
@@ -77,20 +78,8 @@ func checkColumn(d *RocksDB, col int, kp []keyPair) error {
 	return nil
 }
 
-// TestRocksDB_Index_UTXO is a composite test testing the whole indexing functionality for UTXO chains
-// It does the following:
-// 1) Connect two blocks (inputs from 2nd block are spending some outputs from the 1st block)
-// 2) GetTransactions for known addresses
-// 3) Disconnect block 2
-// 4) GetTransactions for known addresses
-// 5) Connect the block 2 back
-// After each step, the whole content of DB is examined and any difference against expected state is regarded as failure
-func TestRocksDB_Index_UTXO(t *testing.T) {
-	d := setupRocksDB(t, &btc.BitcoinParser{Params: btc.GetChainParams("test")})
-	defer closeAnddestroyRocksDB(t, d)
-
-	// connect 1st block - will log warnings about missing UTXO transactions in cfUnspentTxs column
-	block1 := bchain.Block{
+func getTestBlock1(t *testing.T, d *RocksDB) *bchain.Block {
+	return &bchain.Block{
 		BlockHeader: bchain.BlockHeader{
 			Height: 225493,
 			Hash:   "0000000076fbbed90fd75b0e18856aa35baa984e9c9d444cf746ad85e94e2997",
@@ -132,44 +121,10 @@ func TestRocksDB_Index_UTXO(t *testing.T) {
 			},
 		},
 	}
-	if err := d.ConnectBlock(&block1); err != nil {
-		t.Fatal(err)
-	}
-	if err := checkColumn(d, cfHeight, []keyPair{
-		keyPair{"000370d5", "0000000076fbbed90fd75b0e18856aa35baa984e9c9d444cf746ad85e94e2997"},
-	}); err != nil {
-		{
-			t.Fatal(err)
-		}
-	}
-	// the vout is encoded as signed varint, i.e. value * 2 for non negative values
-	if err := checkColumn(d, cfAddresses, []keyPair{
-		keyPair{addressToPubKeyHex("mfcWp7DB6NuaZsExybTTXpVgWz559Np4Ti", t, d) + "000370d5", "00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840" + "00"},
-		keyPair{addressToPubKeyHex("mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz", t, d) + "000370d5", "00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840" + "02"},
-		keyPair{addressToPubKeyHex("mv9uLThosiEnGRbVPS7Vhyw6VssbVRsiAw", t, d) + "000370d5", "effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75" + "00"},
-		keyPair{addressToPubKeyHex("2Mz1CYoppGGsLNUGF2YDhTif6J661JitALS", t, d) + "000370d5", "effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75" + "02"},
-	}); err != nil {
-		{
-			t.Fatal(err)
-		}
-	}
-	if err := checkColumn(d, cfUnspentTxs, []keyPair{
-		keyPair{
-			"00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840",
-			addressToPubKeyHexWithLenght("mfcWp7DB6NuaZsExybTTXpVgWz559Np4Ti", t, d) + "00" + addressToPubKeyHexWithLenght("mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz", t, d) + "02",
-		},
-		keyPair{
-			"effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75",
-			addressToPubKeyHexWithLenght("mv9uLThosiEnGRbVPS7Vhyw6VssbVRsiAw", t, d) + "00" + addressToPubKeyHexWithLenght("2Mz1CYoppGGsLNUGF2YDhTif6J661JitALS", t, d) + "02",
-		},
-	}); err != nil {
-		{
-			t.Fatal(err)
-		}
-	}
+}
 
-	// connect 2nd block - use some outputs from the 1st block as the inputs and 1 input uses tx from the same block
-	block2 := bchain.Block{
+func getTestBlock2(t *testing.T, d *RocksDB) *bchain.Block {
+	return &bchain.Block{
 		BlockHeader: bchain.BlockHeader{
 			Height: 225494,
 			Hash:   "00000000eb0443fd7dc4a1ed5c686a8e995057805f9a161d9a5a77a95e72b7b6",
@@ -231,9 +186,44 @@ func TestRocksDB_Index_UTXO(t *testing.T) {
 			},
 		},
 	}
-	if err := d.ConnectBlock(&block2); err != nil {
-		t.Fatal(err)
+}
+
+func verifyAfterBlock1(t *testing.T, d *RocksDB) {
+	if err := checkColumn(d, cfHeight, []keyPair{
+		keyPair{"000370d5", "0000000076fbbed90fd75b0e18856aa35baa984e9c9d444cf746ad85e94e2997"},
+	}); err != nil {
+		{
+			t.Fatal(err)
+		}
 	}
+	// the vout is encoded as signed varint, i.e. value * 2 for non negative values
+	if err := checkColumn(d, cfAddresses, []keyPair{
+		keyPair{addressToPubKeyHex("mfcWp7DB6NuaZsExybTTXpVgWz559Np4Ti", t, d) + "000370d5", "00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840" + "00"},
+		keyPair{addressToPubKeyHex("mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz", t, d) + "000370d5", "00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840" + "02"},
+		keyPair{addressToPubKeyHex("mv9uLThosiEnGRbVPS7Vhyw6VssbVRsiAw", t, d) + "000370d5", "effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75" + "00"},
+		keyPair{addressToPubKeyHex("2Mz1CYoppGGsLNUGF2YDhTif6J661JitALS", t, d) + "000370d5", "effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75" + "02"},
+	}); err != nil {
+		{
+			t.Fatal(err)
+		}
+	}
+	if err := checkColumn(d, cfUnspentTxs, []keyPair{
+		keyPair{
+			"00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840",
+			addressToPubKeyHexWithLenght("mfcWp7DB6NuaZsExybTTXpVgWz559Np4Ti", t, d) + "00" + addressToPubKeyHexWithLenght("mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz", t, d) + "02",
+		},
+		keyPair{
+			"effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75",
+			addressToPubKeyHexWithLenght("mv9uLThosiEnGRbVPS7Vhyw6VssbVRsiAw", t, d) + "00" + addressToPubKeyHexWithLenght("2Mz1CYoppGGsLNUGF2YDhTif6J661JitALS", t, d) + "02",
+		},
+	}); err != nil {
+		{
+			t.Fatal(err)
+		}
+	}
+}
+
+func verifyAfterBlock2(t *testing.T, d *RocksDB) {
 	if err := checkColumn(d, cfHeight, []keyPair{
 		keyPair{"000370d5", "0000000076fbbed90fd75b0e18856aa35baa984e9c9d444cf746ad85e94e2997"},
 		keyPair{"000370d6", "00000000eb0443fd7dc4a1ed5c686a8e995057805f9a161d9a5a77a95e72b7b6"},
@@ -277,4 +267,71 @@ func TestRocksDB_Index_UTXO(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+}
+
+type txidVoutOutput struct {
+	txid     string
+	vout     uint32
+	isOutput bool
+}
+
+func verifyGetTransactions(t *testing.T, d *RocksDB, addr string, low, high uint32, wantTxids []txidVoutOutput, wantErr error) {
+	gotTxids := make([]txidVoutOutput, 0)
+	addToTxids := func(txid string, vout uint32, isOutput bool) error {
+		gotTxids = append(gotTxids, txidVoutOutput{txid, vout, isOutput})
+		return nil
+	}
+	if err := d.GetTransactions(addr, low, high, addToTxids); err != nil {
+		if wantErr == nil || wantErr.Error() != err.Error() {
+			t.Fatal(err)
+		}
+	}
+	if !reflect.DeepEqual(gotTxids, wantTxids) {
+		t.Errorf("GetTransactions() = %v, want %v", gotTxids, wantTxids)
+	}
+}
+
+// TestRocksDB_Index_UTXO is a composite test probing the whole indexing functionality for UTXO chains
+// It does the following:
+// 1) Connect two blocks (inputs from 2nd block are spending some outputs from the 1st block)
+// 2) GetTransactions for various addresses / low-high ranges
+// 3) Disconnect block 2
+// 4) GetTransactions for various addresses
+// 5) Connect the block 2 back
+// After each step, the whole content of DB is examined and any difference against expected state is regarded as failure
+func TestRocksDB_Index_UTXO(t *testing.T) {
+	d := setupRocksDB(t, &btc.BitcoinParser{Params: btc.GetChainParams("test")})
+	defer closeAnddestroyRocksDB(t, d)
+
+	// connect 1st block - will log warnings about missing UTXO transactions in cfUnspentTxs column
+	block1 := getTestBlock1(t, d)
+	if err := d.ConnectBlock(block1); err != nil {
+		t.Fatal(err)
+	}
+	verifyAfterBlock1(t, d)
+
+	// connect 2nd block - use some outputs from the 1st block as the inputs and 1 input uses tx from the same block
+	block2 := getTestBlock2(t, d)
+	if err := d.ConnectBlock(block2); err != nil {
+		t.Fatal(err)
+	}
+	verifyAfterBlock2(t, d)
+
+	// get transactions for various addresses / low-high ranges
+	verifyGetTransactions(t, d, "mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz", 0, 1000000, []txidVoutOutput{
+		txidVoutOutput{"00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840", 1, true},
+		txidVoutOutput{"7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25", 1, false},
+	}, nil)
+	verifyGetTransactions(t, d, "mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz", 225493, 225493, []txidVoutOutput{
+		txidVoutOutput{"00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840", 1, true},
+	}, nil)
+	verifyGetTransactions(t, d, "mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz", 225494, 1000000, []txidVoutOutput{
+		txidVoutOutput{"7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25", 1, false},
+	}, nil)
+	verifyGetTransactions(t, d, "mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz", 500000, 1000000, []txidVoutOutput{}, nil)
+	verifyGetTransactions(t, d, "mwwoKQE5Lb1G4picHSHDQKg8jw424PF9SC", 0, 1000000, []txidVoutOutput{
+		txidVoutOutput{"3d90d15ed026dc45e19ffb52875ed18fa9e8012ad123d7f7212176e2b0ebdb71", 0, true},
+	}, nil)
+	verifyGetTransactions(t, d, "mtGXQvBowMkBpnhLckhxhbwYK44Gs9eBad", 500000, 1000000, []txidVoutOutput{}, errors.New("checksum mismatch"))
+
 }
