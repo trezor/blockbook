@@ -4,6 +4,7 @@ import (
 	"blockbook/bchain"
 	"blockbook/bchain/coins/btc"
 	"encoding/hex"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"reflect"
@@ -122,6 +123,8 @@ func getTestUTXOBlock1(t *testing.T, d *RocksDB) *bchain.Block {
 						},
 					},
 				},
+				Blocktime: 22549300000,
+				Time:      22549300000,
 			},
 			bchain.Tx{
 				Txid: "effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75",
@@ -139,6 +142,8 @@ func getTestUTXOBlock1(t *testing.T, d *RocksDB) *bchain.Block {
 						},
 					},
 				},
+				Blocktime: 22549300001,
+				Time:      22549300001,
 			},
 		},
 	}
@@ -177,6 +182,8 @@ func getTestUTXOBlock2(t *testing.T, d *RocksDB) *bchain.Block {
 						},
 					},
 				},
+				Blocktime: 22549400000,
+				Time:      22549400000,
 			},
 			bchain.Tx{
 				Txid: "3d90d15ed026dc45e19ffb52875ed18fa9e8012ad123d7f7212176e2b0ebdb71",
@@ -204,6 +211,8 @@ func getTestUTXOBlock2(t *testing.T, d *RocksDB) *bchain.Block {
 						},
 					},
 				},
+				Blocktime: 22549400001,
+				Time:      22549400001,
 			},
 		},
 	}
@@ -362,6 +371,35 @@ func (p *testBitcoinParser) KeepBlockAddresses() int {
 	return 1
 }
 
+// override PackTx and UnpackTx to default BaseParser functionality
+// BitcoinParser uses tx hex which is not available for the test transactions
+func (p *testBitcoinParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) ([]byte, error) {
+	return p.BaseParser.PackTx(tx, height, blockTime)
+}
+
+func (p *testBitcoinParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
+	return p.BaseParser.UnpackTx(buf)
+}
+
+func testTxCache(t *testing.T, d *RocksDB, b *bchain.Block, tx *bchain.Tx) {
+	if err := d.PutTx(tx, b.Height, tx.Blocktime); err != nil {
+		t.Fatal(err)
+	}
+	gtx, height, err := d.GetTx(tx.Txid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b.Height != height {
+		t.Fatalf("GetTx: got height %v, expected %v", height, b.Height)
+	}
+	if fmt.Sprint(gtx) != fmt.Sprint(tx) {
+		t.Errorf("GetTx: %v, want %v", gtx, tx)
+	}
+	if err := d.DeleteTx(tx.Txid); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // TestRocksDB_Index_UTXO is a composite test probing the whole indexing functionality for UTXO chains
 // It does the following:
 // 1) Connect two blocks (inputs from 2nd block are spending some outputs from the 1st block)
@@ -370,7 +408,7 @@ func (p *testBitcoinParser) KeepBlockAddresses() int {
 // 4) Test tx caching functionality
 // 5) Disconnect block 2 - expect error
 // 6) Disconnect the block 2 using full scan
-// After each step, the whole content of DB is examined and any difference against expected state is regarded as failure
+// After each step, the content of DB is examined and any difference against expected state is regarded as failure
 func TestRocksDB_Index_UTXO(t *testing.T) {
 	d := setupRocksDB(t, &testBitcoinParser{BitcoinParser: &btc.BitcoinParser{Params: btc.GetChainParams("test")}})
 	defer closeAnddestroyRocksDB(t, d)
@@ -425,6 +463,22 @@ func TestRocksDB_Index_UTXO(t *testing.T) {
 	}
 	if hash != "0000000076fbbed90fd75b0e18856aa35baa984e9c9d444cf746ad85e94e2997" {
 		t.Fatalf("GetBlockHash: got hash %v, expected %v", hash, "0000000076fbbed90fd75b0e18856aa35baa984e9c9d444cf746ad85e94e2997")
+	}
+
+	// Test tx caching functionality, leave one tx in db to test cleanup in DisconnectBlock
+	testTxCache(t, d, block1, &block1.Txs[0])
+	testTxCache(t, d, block2, &block2.Txs[0])
+	if err = d.PutTx(&block2.Txs[1], block2.Height, block2.Txs[1].Blocktime); err != nil {
+		t.Fatal(err)
+	}
+	// check that there is only the last tx in the cache
+	packedTx, err := d.chainParser.PackTx(&block2.Txs[1], block2.Height, block2.Txs[1].Blocktime)
+	if err := checkColumn(d, cfTransactions, []keyPair{
+		keyPair{block2.Txs[1].Txid, hex.EncodeToString(packedTx), nil},
+	}); err != nil {
+		{
+			t.Fatal(err)
+		}
 	}
 
 	// DisconnectBlock for UTXO chains is not possible
