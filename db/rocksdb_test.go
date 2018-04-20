@@ -491,3 +491,61 @@ func TestRocksDB_Index_UTXO(t *testing.T) {
 	// disconnect the 2nd block, verify that the db contains only the 1st block
 
 }
+
+func Test_findAndRemoveUnspentAddr(t *testing.T) {
+	type args struct {
+		unspentAddrs string
+		vout         uint32
+	}
+	tests := []struct {
+		name  string
+		args  args
+		want  string
+		want2 string
+	}{
+		{
+			name: "3",
+			args: args{
+				unspentAddrs: "029c0010517a0115887452870212709393588893935687040e64635167006868060e76519351880087080a7b7b0115870a3276a9144150837fb91d9461d6b95059842ab85262c2923f88ac0c08636751680e04578710029112026114",
+				vout:         3,
+			},
+			want:  "64635167006868",
+			want2: "029c0010517a0115887452870212709393588893935687040e76519351880087080a7b7b0115870a3276a9144150837fb91d9461d6b95059842ab85262c2923f88ac0c08636751680e04578710029112026114",
+		},
+		{
+			name: "10",
+			args: args{
+				unspentAddrs: "029c0010517a0115887452870212709393588893935687040e64635167006868060e76519351880087080a7b7b0115870a3276a9144150837fb91d9461d6b95059842ab85262c2923f88ac0c08636751680e04578710029112026114",
+				vout:         10,
+			},
+			want:  "61",
+			want2: "029c0010517a0115887452870212709393588893935687040e64635167006868060e76519351880087080a7b7b0115870a3276a9144150837fb91d9461d6b95059842ab85262c2923f88ac0c08636751680e04578710029112",
+		},
+		{
+			name: "not there",
+			args: args{
+				unspentAddrs: "029c0010517a0115887452870212709393588893935687040e64635167006868060e76519351880087080a7b7b0115870a3276a9144150837fb91d9461d6b95059842ab85262c2923f88ac0c08636751680e04578710029112026114",
+				vout:         11,
+			},
+			want:  "",
+			want2: "029c0010517a0115887452870212709393588893935687040e64635167006868060e76519351880087080a7b7b0115870a3276a9144150837fb91d9461d6b95059842ab85262c2923f88ac0c08636751680e04578710029112026114",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b, err := hex.DecodeString(tt.args.unspentAddrs)
+			if err != nil {
+				panic(err)
+			}
+			got, got2 := findAndRemoveUnspentAddr(b, tt.args.vout)
+			h := hex.EncodeToString(got)
+			if !reflect.DeepEqual(h, tt.want) {
+				t.Errorf("findAndRemoveUnspentAddr() got = %v, want %v", h, tt.want)
+			}
+			h2 := hex.EncodeToString(got2)
+			if !reflect.DeepEqual(h2, tt.want2) {
+				t.Errorf("findAndRemoveUnspentAddr() got2 = %v, want %v", h2, tt.want2)
+			}
+		})
+	}
+}

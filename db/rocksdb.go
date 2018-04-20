@@ -335,25 +335,25 @@ func appendPackedAddrID(txAddrs []byte, addrID []byte, n uint32, remaining int) 
 	return txAddrs
 }
 
-func findAndRemoveUnspentAddr(unspentAddrs []byte, vout uint32) ([]byte, uint32, []byte) {
+func findAndRemoveUnspentAddr(unspentAddrs []byte, vout uint32) ([]byte, []byte) {
 	// the addresses are packed as lenaddrID addrID vout, where lenaddrID and vout are varints
 	for i := 0; i < len(unspentAddrs); {
 		l, lv1 := unpackVarint(unspentAddrs[i:])
 		// index of vout of address in unspentAddrs
 		j := i + int(l) + lv1
 		if j >= len(unspentAddrs) {
-			glog.Error("rocksdb: Inconsistent data in unspentAddrs")
-			return nil, 0, unspentAddrs
+			glog.Error("rocksdb: Inconsistent data in unspentAddrs ", hex.EncodeToString(unspentAddrs), ", ", vout)
+			return nil, unspentAddrs
 		}
 		n, lv2 := unpackVarint(unspentAddrs[j:])
 		if uint32(n) == vout {
 			addrID := append([]byte(nil), unspentAddrs[i+lv1:j]...)
 			unspentAddrs = append(unspentAddrs[:i], unspentAddrs[j+lv2:]...)
-			return addrID, uint32(n), unspentAddrs
+			return addrID, unspentAddrs
 		}
-		i += j + lv2
+		i = j + lv2
 	}
-	return nil, 0, unspentAddrs
+	return nil, unspentAddrs
 }
 
 func (d *RocksDB) writeAddressesUTXO(wb *gorocksdb.WriteBatch, block *bchain.Block, op int) error {
@@ -397,6 +397,10 @@ func (d *RocksDB) writeAddressesUTXO(wb *gorocksdb.WriteBatch, block *bchain.Blo
 		for i, input := range tx.Vin {
 			btxID, err := d.chainParser.PackTxid(input.Txid)
 			if err != nil {
+				// do not process inputs without input txid
+				if err == bchain.ErrTxidMissing {
+					continue
+				}
 				return err
 			}
 			// try to find the tx in current block
@@ -412,7 +416,7 @@ func (d *RocksDB) writeAddressesUTXO(wb *gorocksdb.WriteBatch, block *bchain.Blo
 				}
 			}
 			var addrID []byte
-			addrID, _, unspentAddrs = findAndRemoveUnspentAddr(unspentAddrs, input.Vout)
+			addrID, unspentAddrs = findAndRemoveUnspentAddr(unspentAddrs, input.Vout)
 			if addrID == nil {
 				glog.Warningf("rocksdb: height %d, tx %v vout %v in inputs but missing in unspentTxs", block.Height, tx.Txid, input.Vout)
 				continue

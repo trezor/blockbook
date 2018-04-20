@@ -14,6 +14,9 @@ var (
 	// ErrAddressMissing is returned if address is not specified
 	// for example To address in ethereum can be missing in case of contract transaction
 	ErrAddressMissing = errors.New("Address missing")
+	// ErrTxidMissing is returned if txid is not specified
+	// for example coinbase transactions in Bitcoin
+	ErrTxidMissing = errors.New("Txid missing")
 )
 
 type ScriptSig struct {

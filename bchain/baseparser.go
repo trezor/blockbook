@@ -42,6 +42,9 @@ func (p *BaseParser) KeepBlockAddresses() int {
 
 // PackTxid packs txid to byte array
 func (p *BaseParser) PackTxid(txid string) ([]byte, error) {
+	if txid == "" {
+		return nil, ErrTxidMissing
+	}
 	return hex.DecodeString(txid)
 }
 
