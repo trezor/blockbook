@@ -35,6 +35,11 @@ func (p *BaseParser) PackedTxidLen() int {
 	return 32
 }
 
+// KeepBlockAddresses returns number of blocks which are to be kept in blockaddresses column
+func (p *BaseParser) KeepBlockAddresses() int {
+	return 100
+}
+
 // PackTxid packs txid to byte array
 func (p *BaseParser) PackTxid(txid string) ([]byte, error) {
 	return hex.DecodeString(txid)

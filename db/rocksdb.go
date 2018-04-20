@@ -10,6 +10,7 @@ import (
 
 	"github.com/bsm/go-vlq"
 	"github.com/golang/glog"
+	"github.com/juju/errors"
 
 	"github.com/tecbot/gorocksdb"
 )
@@ -40,9 +41,10 @@ const (
 	cfAddresses
 	cfUnspentTxs
 	cfTransactions
+	cfBlockAddresses
 )
 
-var cfNames = []string{"default", "height", "addresses", "unspenttxs", "transactions"}
+var cfNames = []string{"default", "height", "addresses", "unspenttxs", "transactions", "blockaddresses"}
 
 func openDB(path string) (*gorocksdb.DB, []*gorocksdb.ColumnFamilyHandle, error) {
 	c := gorocksdb.NewLRUCache(8 << 30) // 8GB
@@ -80,7 +82,7 @@ func openDB(path string) (*gorocksdb.DB, []*gorocksdb.ColumnFamilyHandle, error)
 	optsOutputs.SetMaxOpenFiles(25000)
 	optsOutputs.SetCompression(gorocksdb.NoCompression)
 
-	fcOptions := []*gorocksdb.Options{opts, opts, optsOutputs, opts, opts}
+	fcOptions := []*gorocksdb.Options{opts, opts, optsOutputs, opts, opts, opts}
 
 	db, cfh, err := gorocksdb.OpenDbColumnFamilies(opts, path, cfNames, fcOptions)
 	if err != nil {
@@ -239,6 +241,9 @@ type outpoint struct {
 }
 
 func (d *RocksDB) writeAddressRecords(wb *gorocksdb.WriteBatch, block *bchain.Block, op int, records map[string][]outpoint) error {
+	keep := d.chainParser.KeepBlockAddresses()
+	blockAddresses := make([]byte, 0)
+	vBuf := make([]byte, vlq.MaxLen32)
 	for addrID, outpoints := range records {
 		key, err := packOutputKey([]byte(addrID), block.Height)
 		if err != nil {
@@ -253,8 +258,34 @@ func (d *RocksDB) writeAddressRecords(wb *gorocksdb.WriteBatch, block *bchain.Bl
 				continue
 			}
 			wb.PutCF(d.cfh[cfAddresses], key, val)
+			if keep > 0 {
+				// collect all addresses to be stored in blockaddresses
+				vl := packVarint(int32(len([]byte(addrID))), vBuf)
+				blockAddresses = append(blockAddresses, vBuf[0:vl]...)
+				blockAddresses = append(blockAddresses, []byte(addrID)...)
+			}
 		case opDelete:
 			wb.DeleteCF(d.cfh[cfAddresses], key)
+		}
+	}
+	if keep > 0 && op == opInsert {
+		// write new block address
+		key := packUint(block.Height)
+		wb.PutCF(d.cfh[cfBlockAddresses], key, blockAddresses)
+		// cleanup old block address
+		if block.Height > uint32(keep) {
+			for rh := block.Height - uint32(keep); rh < block.Height; rh-- {
+				key = packUint(rh)
+				val, err := d.db.GetCF(d.ro, d.cfh[cfBlockAddresses], key)
+				if err != nil {
+					return err
+				}
+				if val.Size() == 0 {
+					break
+				}
+				val.Free()
+				d.db.DeleteCF(d.wo, d.cfh[cfBlockAddresses], key)
+			}
 		}
 	}
 	return nil
@@ -305,7 +336,7 @@ func appendPackedAddrID(txAddrs []byte, addrID []byte, n uint32, remaining int) 
 }
 
 func findAndRemoveUnspentAddr(unspentAddrs []byte, vout uint32) ([]byte, uint32, []byte) {
-	// the addresses are packed as lenaddrID:addrID:vout, where lenaddrID and vout are varints
+	// the addresses are packed as lenaddrID addrID vout, where lenaddrID and vout are varints
 	for i := 0; i < len(unspentAddrs); {
 		l, lv1 := unpackVarint(unspentAddrs[i:])
 		// index of vout of address in unspentAddrs
@@ -326,6 +357,11 @@ func findAndRemoveUnspentAddr(unspentAddrs []byte, vout uint32) ([]byte, uint32,
 }
 
 func (d *RocksDB) writeAddressesUTXO(wb *gorocksdb.WriteBatch, block *bchain.Block, op int) error {
+	if op == opDelete {
+		// block does not contain mapping tx-> input address, which is necessary to recreate
+		// unspentTxs; therefore it is not possible to DisconnectBlocks this way
+		return errors.New("DisconnectBlock is not supported for UTXO chains")
+	}
 	addresses := make(map[string][]outpoint)
 	unspentTxs := make(map[string][]byte)
 	btxIDs := make([][]byte, len(block.Txs))
@@ -355,7 +391,7 @@ func (d *RocksDB) writeAddressesUTXO(wb *gorocksdb.WriteBatch, block *bchain.Blo
 		}
 		unspentTxs[string(btxID)] = txAddrs
 	}
-	// locate unspent addresses and add them to addresses map them in format txid ^index
+	// locate addresses spent by this tx and add them to addresses map them in format txid ^index
 	for txi, tx := range block.Txs {
 		spendingTxid := btxIDs[txi]
 		for i, input := range tx.Vin {
@@ -393,15 +429,10 @@ func (d *RocksDB) writeAddressesUTXO(wb *gorocksdb.WriteBatch, block *bchain.Blo
 	}
 	// save unspent txs from current block
 	for tx, val := range unspentTxs {
-		switch op {
-		case opInsert:
-			if len(val) == 0 {
-				wb.DeleteCF(d.cfh[cfUnspentTxs], []byte(tx))
-			} else {
-				wb.PutCF(d.cfh[cfUnspentTxs], []byte(tx), val)
-			}
-		case opDelete:
+		if len(val) == 0 {
 			wb.DeleteCF(d.cfh[cfUnspentTxs], []byte(tx))
+		} else {
+			wb.PutCF(d.cfh[cfUnspentTxs], []byte(tx), val)
 		}
 	}
 	return nil

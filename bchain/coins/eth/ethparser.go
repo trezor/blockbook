@@ -272,3 +272,9 @@ func (p *EthereumParser) UnpackBlockHash(buf []byte) (string, error) {
 func (p *EthereumParser) IsUTXOChain() bool {
 	return false
 }
+
+// KeepBlockAddresses returns number of blocks which are to be kept in blockaddresses column
+// do not use the blockaddresses for eth
+func (p *EthereumParser) KeepBlockAddresses() int {
+	return 0
+}

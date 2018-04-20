@@ -134,6 +134,10 @@ type BlockChainParser interface {
 	// UTXO chains need "inputs" column in db, that map transactions to transactions that spend them
 	// non UTXO chains have mapping of address to input and output transactions directly in "outputs" column in db
 	IsUTXOChain() bool
+	// KeepBlockAddresses returns number of blocks which are to be kept in blockaddresses column
+	// and used in case of fork
+	// if 0 the blockaddresses column is not used at all (usually non UTXO chains)
+	KeepBlockAddresses() int
 	// address id conversions
 	GetAddrIDFromVout(output *Vout) ([]byte, error)
 	GetAddrIDFromAddress(address string) ([]byte, error)

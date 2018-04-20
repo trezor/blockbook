@@ -382,6 +382,11 @@ func (w *SyncWorker) getBlockChain(out chan blockResult, done chan struct{}) {
 // otherwise doing full scan
 func (w *SyncWorker) DisconnectBlocks(lower uint32, higher uint32, hashes []string) error {
 	glog.Infof("sync: disconnecting blocks %d-%d", lower, higher)
+	// if the chain uses Block to Addresses mapping, always use DisconnectBlocksFullScan
+	// the full scan will be optimized using the mapping
+	if w.chain.GetChainParser().KeepBlockAddresses() > 0 {
+		return w.db.DisconnectBlocksFullScan(lower, higher)
+	}
 	blocks := make([]*bchain.Block, len(hashes))
 	var err error
 	// get all blocks first to see if we can avoid full scan
