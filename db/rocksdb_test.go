@@ -55,6 +55,17 @@ type keyPair struct {
 	CompareFunc func(string) bool
 }
 
+func compareFuncBlockAddresses(v string, expected []string) bool {
+	for _, e := range expected {
+		lb := len(v)
+		v = strings.Replace(v, e, "", 1)
+		if lb == len(v) {
+			return false
+		}
+	}
+	return len(v) == 0
+}
+
 func checkColumn(d *RocksDB, col int, kp []keyPair) error {
 	sort.Slice(kp, func(i, j int) bool {
 		return kp[i].Key < kp[j].Key
@@ -83,7 +94,7 @@ func checkColumn(d *RocksDB, col int, kp []keyPair) error {
 		i++
 	}
 	if i != len(kp) {
-		return errors.Errorf("Expected more rows in column %v: found %v, expected %v", col, i, len(kp))
+		return errors.Errorf("Expected more rows in column %v: got %v, expected %v", col, i, len(kp))
 	}
 	return nil
 }
@@ -237,20 +248,12 @@ func verifyAfterUTXOBlock1(t *testing.T, d *RocksDB) {
 	if err := checkColumn(d, cfBlockAddresses, []keyPair{
 		keyPair{"000370d5", "",
 			func(v string) bool {
-				expected := []string{
+				return compareFuncBlockAddresses(v, []string{
 					addressToPubKeyHexWithLength("mfcWp7DB6NuaZsExybTTXpVgWz559Np4Ti", t, d),
 					addressToPubKeyHexWithLength("mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz", t, d),
 					addressToPubKeyHexWithLength("mv9uLThosiEnGRbVPS7Vhyw6VssbVRsiAw", t, d),
 					addressToPubKeyHexWithLength("2Mz1CYoppGGsLNUGF2YDhTif6J661JitALS", t, d),
-				}
-				for _, e := range expected {
-					lb := len(v)
-					v = strings.Replace(v, e, "", 1)
-					if lb == len(v) {
-						return false
-					}
-				}
-				return len(v) == 0
+				})
 			},
 		},
 	}); err != nil {
@@ -310,7 +313,7 @@ func verifyAfterUTXOBlock2(t *testing.T, d *RocksDB) {
 	if err := checkColumn(d, cfBlockAddresses, []keyPair{
 		keyPair{"000370d6", "",
 			func(v string) bool {
-				expected := []string{
+				return compareFuncBlockAddresses(v, []string{
 					addressToPubKeyHexWithLength("mzB8cYrfRwFRFAGTDzV8LkUQy5BQicxGhX", t, d),
 					addressToPubKeyHexWithLength("mtR97eM2HPWVM6c8FGLGcukgaHHQv7THoL", t, d),
 					addressToPubKeyHexWithLength("mwwoKQE5Lb1G4picHSHDQKg8jw424PF9SC", t, d),
@@ -318,15 +321,7 @@ func verifyAfterUTXOBlock2(t *testing.T, d *RocksDB) {
 					addressToPubKeyHexWithLength("mv9uLThosiEnGRbVPS7Vhyw6VssbVRsiAw", t, d),
 					addressToPubKeyHexWithLength("mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz", t, d),
 					addressToPubKeyHexWithLength("2Mz1CYoppGGsLNUGF2YDhTif6J661JitALS", t, d),
-				}
-				for _, e := range expected {
-					lb := len(v)
-					v = strings.Replace(v, e, "", 1)
-					if lb == len(v) {
-						return false
-					}
-				}
-				return len(v) == 0
+				})
 			},
 		},
 	}); err != nil {
@@ -371,8 +366,10 @@ func (p *testBitcoinParser) KeepBlockAddresses() int {
 // It does the following:
 // 1) Connect two blocks (inputs from 2nd block are spending some outputs from the 1st block)
 // 2) GetTransactions for various addresses / low-high ranges
-// 3) Disconnect block 2 - expect error
-// 4) Disconnect the block 2 using full scan
+// 3) GetBestBlock, GetBlockHash
+// 4) Test tx caching functionality
+// 5) Disconnect block 2 - expect error
+// 6) Disconnect the block 2 using full scan
 // After each step, the whole content of DB is examined and any difference against expected state is regarded as failure
 func TestRocksDB_Index_UTXO(t *testing.T) {
 	d := setupRocksDB(t, &testBitcoinParser{BitcoinParser: &btc.BitcoinParser{Params: btc.GetChainParams("test")}})
@@ -409,8 +406,29 @@ func TestRocksDB_Index_UTXO(t *testing.T) {
 	}, nil)
 	verifyGetTransactions(t, d, "mtGXQvBowMkBpnhLckhxhbwYK44Gs9eBad", 500000, 1000000, []txidVoutOutput{}, errors.New("checksum mismatch"))
 
+	// GetBestBlock
+	height, hash, err := d.GetBestBlock()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if height != 225494 {
+		t.Fatalf("GetBestBlock: got height %v, expected %v", height, 225494)
+	}
+	if hash != "00000000eb0443fd7dc4a1ed5c686a8e995057805f9a161d9a5a77a95e72b7b6" {
+		t.Fatalf("GetBestBlock: got hash %v, expected %v", hash, "00000000eb0443fd7dc4a1ed5c686a8e995057805f9a161d9a5a77a95e72b7b6")
+	}
+
+	// GetBlockHash
+	hash, err = d.GetBlockHash(225493)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hash != "0000000076fbbed90fd75b0e18856aa35baa984e9c9d444cf746ad85e94e2997" {
+		t.Fatalf("GetBlockHash: got hash %v, expected %v", hash, "0000000076fbbed90fd75b0e18856aa35baa984e9c9d444cf746ad85e94e2997")
+	}
+
 	// DisconnectBlock for UTXO chains is not possible
-	err := d.DisconnectBlock(block2)
+	err = d.DisconnectBlock(block2)
 	if err == nil || err.Error() != "DisconnectBlock is not supported for UTXO chains" {
 		t.Fatal(err)
 	}
