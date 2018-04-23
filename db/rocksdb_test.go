@@ -218,7 +218,7 @@ func getTestUTXOBlock2(t *testing.T, d *RocksDB) *bchain.Block {
 	}
 }
 
-func verifyAfterUTXOBlock1(t *testing.T, d *RocksDB) {
+func verifyAfterUTXOBlock1(t *testing.T, d *RocksDB, noBlockAddresses bool) {
 	if err := checkColumn(d, cfHeight, []keyPair{
 		keyPair{"000370d5", "0000000076fbbed90fd75b0e18856aa35baa984e9c9d444cf746ad85e94e2997", nil},
 	}); err != nil {
@@ -253,19 +253,26 @@ func verifyAfterUTXOBlock1(t *testing.T, d *RocksDB) {
 			t.Fatal(err)
 		}
 	}
-	// the values in cfBlockAddresses has random order, must use CompareFunc
-	if err := checkColumn(d, cfBlockAddresses, []keyPair{
-		keyPair{"000370d5", "",
-			func(v string) bool {
-				return compareFuncBlockAddresses(v, []string{
-					addressToPubKeyHexWithLength("mfcWp7DB6NuaZsExybTTXpVgWz559Np4Ti", t, d),
-					addressToPubKeyHexWithLength("mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz", t, d),
-					addressToPubKeyHexWithLength("mv9uLThosiEnGRbVPS7Vhyw6VssbVRsiAw", t, d),
-					addressToPubKeyHexWithLength("2Mz1CYoppGGsLNUGF2YDhTif6J661JitALS", t, d),
-				})
+	// after disconnect there are no blockaddresses for the previous block
+	var blockAddressesKp []keyPair
+	if noBlockAddresses {
+		blockAddressesKp = []keyPair{}
+	} else {
+		// the values in cfBlockAddresses have random order, must use CompareFunc
+		blockAddressesKp = []keyPair{
+			keyPair{"000370d5", "",
+				func(v string) bool {
+					return compareFuncBlockAddresses(v, []string{
+						addressToPubKeyHexWithLength("mfcWp7DB6NuaZsExybTTXpVgWz559Np4Ti", t, d),
+						addressToPubKeyHexWithLength("mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz", t, d),
+						addressToPubKeyHexWithLength("mv9uLThosiEnGRbVPS7Vhyw6VssbVRsiAw", t, d),
+						addressToPubKeyHexWithLength("2Mz1CYoppGGsLNUGF2YDhTif6J661JitALS", t, d),
+					})
+				},
 			},
-		},
-	}); err != nil {
+		}
+	}
+	if err := checkColumn(d, cfBlockAddresses, blockAddressesKp); err != nil {
 		{
 			t.Fatal(err)
 		}
@@ -400,14 +407,15 @@ func testTxCache(t *testing.T, d *RocksDB, b *bchain.Block, tx *bchain.Tx) {
 	}
 }
 
-// TestRocksDB_Index_UTXO is a composite test probing the whole indexing functionality for UTXO chains
+// TestRocksDB_Index_UTXO is an integration test probing the whole indexing functionality for UTXO chains
 // It does the following:
 // 1) Connect two blocks (inputs from 2nd block are spending some outputs from the 1st block)
 // 2) GetTransactions for various addresses / low-high ranges
 // 3) GetBestBlock, GetBlockHash
 // 4) Test tx caching functionality
 // 5) Disconnect block 2 - expect error
-// 6) Disconnect the block 2 using full scan
+// 6) Disconnect the block 2 using blockaddresses column
+// 7) Reconnect block 2 and disconnect blocks 1 and 2 using full scan
 // After each step, the content of DB is examined and any difference against expected state is regarded as failure
 func TestRocksDB_Index_UTXO(t *testing.T) {
 	d := setupRocksDB(t, &testBitcoinParser{BitcoinParser: &btc.BitcoinParser{Params: btc.GetChainParams("test")}})
@@ -418,7 +426,7 @@ func TestRocksDB_Index_UTXO(t *testing.T) {
 	if err := d.ConnectBlock(block1); err != nil {
 		t.Fatal(err)
 	}
-	verifyAfterUTXOBlock1(t, d)
+	verifyAfterUTXOBlock1(t, d, false)
 
 	// connect 2nd block - use some outputs from the 1st block as the inputs and 1 input uses tx from the same block
 	block2 := getTestUTXOBlock2(t, d)
@@ -488,7 +496,19 @@ func TestRocksDB_Index_UTXO(t *testing.T) {
 	}
 	verifyAfterUTXOBlock2(t, d)
 
-	// disconnect the 2nd block, verify that the db contains only the 1st block
+	// disconnect the 2nd block, verify that the db contains only data from the 1st block with restored unspentTxs
+	// and that the cached tx is removed
+	err = d.DisconnectBlockRange(225494, 225494)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	verifyAfterUTXOBlock1(t, d, true)
+	if err := checkColumn(d, cfTransactions, []keyPair{}); err != nil {
+		{
+			t.Fatal(err)
+		}
+	}
 
 }
 
@@ -545,6 +565,44 @@ func Test_findAndRemoveUnspentAddr(t *testing.T) {
 			h2 := hex.EncodeToString(got2)
 			if !reflect.DeepEqual(h2, tt.want2) {
 				t.Errorf("findAndRemoveUnspentAddr() got2 = %v, want %v", h2, tt.want2)
+			}
+		})
+	}
+}
+
+func Test_unpackBlockAddresses(t *testing.T) {
+	type args struct {
+		buf string
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    []string
+		wantErr bool
+	}{
+		{
+			name: "1",
+			args: args{"029c10517a011588745287127093935888939356870e646351670068680e765193518800870a7b7b0115873276a9144150837fb91d9461d6b95059842ab85262c2923f88ac08636751680457870291"},
+			want: []string{"9c", "517a011588745287", "709393588893935687", "64635167006868", "76519351880087", "7b7b011587", "76a9144150837fb91d9461d6b95059842ab85262c2923f88ac", "63675168", "5787", "91"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b, err := hex.DecodeString(tt.args.buf)
+			if err != nil {
+				panic(err)
+			}
+			got, err := unpackBlockAddresses(b)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("unpackBlockAddresses() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			h := make([]string, len(got))
+			for i, g := range got {
+				h[i] = hex.EncodeToString(g)
+			}
+			if !reflect.DeepEqual(h, tt.want) {
+				t.Errorf("unpackBlockAddresses() = %v, want %v", got, tt.want)
 			}
 		})
 	}
