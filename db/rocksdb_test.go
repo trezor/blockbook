@@ -16,6 +16,10 @@ import (
 	"github.com/juju/errors"
 )
 
+// simplified explanation of signed varint packing, used in many index data structures
+// for number n, the packing is: 2*n if n>=0 else 2*(-n)-1
+// take only 1 byte if abs(n)<127
+
 func setupRocksDB(t *testing.T, p bchain.BlockChainParser) *RocksDB {
 	tmp, err := ioutil.TempDir("", "testdb")
 	if err != nil {
@@ -45,7 +49,6 @@ func addressToPubKeyHex(addr string, t *testing.T, d *RocksDB) string {
 
 func addressToPubKeyHexWithLength(addr string, t *testing.T, d *RocksDB) string {
 	h := addressToPubKeyHex(addr, t, d)
-	// length is signed varint, therefore 2 times big, we can take len(h) as the correct value
 	return strconv.FormatInt(int64(len(h)), 16) + h
 }
 
@@ -56,13 +59,17 @@ type keyPair struct {
 	CompareFunc func(string) bool
 }
 
-func compareFuncBlockAddresses(v string, expected []string) bool {
+func compareFuncBlockAddresses(t *testing.T, v string, expected []string) bool {
 	for _, e := range expected {
 		lb := len(v)
 		v = strings.Replace(v, e, "", 1)
 		if lb == len(v) {
+			t.Error(e, " not found in ", v)
 			return false
 		}
+	}
+	if len(v) != 0 {
+		t.Error("not expected content ", v)
 	}
 	return len(v) == 0
 }
@@ -262,11 +269,11 @@ func verifyAfterUTXOBlock1(t *testing.T, d *RocksDB, noBlockAddresses bool) {
 		blockAddressesKp = []keyPair{
 			keyPair{"000370d5", "",
 				func(v string) bool {
-					return compareFuncBlockAddresses(v, []string{
-						addressToPubKeyHexWithLength("mfcWp7DB6NuaZsExybTTXpVgWz559Np4Ti", t, d),
-						addressToPubKeyHexWithLength("mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz", t, d),
-						addressToPubKeyHexWithLength("mv9uLThosiEnGRbVPS7Vhyw6VssbVRsiAw", t, d),
-						addressToPubKeyHexWithLength("2Mz1CYoppGGsLNUGF2YDhTif6J661JitALS", t, d),
+					return compareFuncBlockAddresses(t, v, []string{
+						addressToPubKeyHexWithLength("mfcWp7DB6NuaZsExybTTXpVgWz559Np4Ti", t, d) + "00",
+						addressToPubKeyHexWithLength("mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz", t, d) + "00",
+						addressToPubKeyHexWithLength("mv9uLThosiEnGRbVPS7Vhyw6VssbVRsiAw", t, d) + "00",
+						addressToPubKeyHexWithLength("2Mz1CYoppGGsLNUGF2YDhTif6J661JitALS", t, d) + "00",
 					})
 				},
 			},
@@ -329,14 +336,14 @@ func verifyAfterUTXOBlock2(t *testing.T, d *RocksDB) {
 	if err := checkColumn(d, cfBlockAddresses, []keyPair{
 		keyPair{"000370d6", "",
 			func(v string) bool {
-				return compareFuncBlockAddresses(v, []string{
-					addressToPubKeyHexWithLength("mzB8cYrfRwFRFAGTDzV8LkUQy5BQicxGhX", t, d),
-					addressToPubKeyHexWithLength("mtR97eM2HPWVM6c8FGLGcukgaHHQv7THoL", t, d),
-					addressToPubKeyHexWithLength("mwwoKQE5Lb1G4picHSHDQKg8jw424PF9SC", t, d),
-					addressToPubKeyHexWithLength("mmJx9Y8ayz9h14yd9fgCW1bUKoEpkBAquP", t, d),
-					addressToPubKeyHexWithLength("mv9uLThosiEnGRbVPS7Vhyw6VssbVRsiAw", t, d),
-					addressToPubKeyHexWithLength("mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz", t, d),
-					addressToPubKeyHexWithLength("2Mz1CYoppGGsLNUGF2YDhTif6J661JitALS", t, d),
+				return compareFuncBlockAddresses(t, v, []string{
+					addressToPubKeyHexWithLength("mzB8cYrfRwFRFAGTDzV8LkUQy5BQicxGhX", t, d) + "02" + "7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25" + "00",
+					addressToPubKeyHexWithLength("mtR97eM2HPWVM6c8FGLGcukgaHHQv7THoL", t, d) + "00",
+					addressToPubKeyHexWithLength("mwwoKQE5Lb1G4picHSHDQKg8jw424PF9SC", t, d) + "00",
+					addressToPubKeyHexWithLength("mmJx9Y8ayz9h14yd9fgCW1bUKoEpkBAquP", t, d) + "00",
+					addressToPubKeyHexWithLength("mv9uLThosiEnGRbVPS7Vhyw6VssbVRsiAw", t, d) + "02" + "effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75" + "00",
+					addressToPubKeyHexWithLength("mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz", t, d) + "02" + "00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840" + "02",
+					addressToPubKeyHexWithLength("2Mz1CYoppGGsLNUGF2YDhTif6J661JitALS", t, d) + "02" + "effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75" + "02",
 				})
 			},
 		},
@@ -570,7 +577,14 @@ func Test_findAndRemoveUnspentAddr(t *testing.T) {
 	}
 }
 
+type hexoutpoint struct {
+	txID string
+	vout int32
+}
+
 func Test_unpackBlockAddresses(t *testing.T) {
+	d := setupRocksDB(t, &testBitcoinParser{BitcoinParser: &btc.BitcoinParser{Params: btc.GetChainParams("test")}})
+	defer closeAnddestroyRocksDB(t, d)
 	type args struct {
 		buf string
 	}
@@ -578,12 +592,25 @@ func Test_unpackBlockAddresses(t *testing.T) {
 		name    string
 		args    args
 		want    []string
+		want2   [][]hexoutpoint
 		wantErr bool
 	}{
 		{
 			name: "1",
-			args: args{"029c10517a011588745287127093935888939356870e646351670068680e765193518800870a7b7b0115873276a9144150837fb91d9461d6b95059842ab85262c2923f88ac08636751680457870291"},
-			want: []string{"9c", "517a011588745287", "709393588893935687", "64635167006868", "76519351880087", "7b7b011587", "76a9144150837fb91d9461d6b95059842ab85262c2923f88ac", "63675168", "5787", "91"},
+			args: args{"029c0010517a011588745287047c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d250000b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa38400612709393588893935687000e64635167006868000e7651935188008702effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac7502"},
+			want: []string{"9c", "517a011588745287", "709393588893935687", "64635167006868", "76519351880087"},
+			want2: [][]hexoutpoint{
+				[]hexoutpoint{},
+				[]hexoutpoint{
+					hexoutpoint{"7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25", 0},
+					hexoutpoint{"00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840", 3},
+				},
+				[]hexoutpoint{},
+				[]hexoutpoint{},
+				[]hexoutpoint{
+					hexoutpoint{"effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75", 1},
+				},
+			},
 		},
 	}
 	for _, tt := range tests {
@@ -592,7 +619,7 @@ func Test_unpackBlockAddresses(t *testing.T) {
 			if err != nil {
 				panic(err)
 			}
-			got, err := unpackBlockAddresses(b)
+			got, got2, err := d.unpackBlockAddresses(b)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("unpackBlockAddresses() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -602,7 +629,18 @@ func Test_unpackBlockAddresses(t *testing.T) {
 				h[i] = hex.EncodeToString(g)
 			}
 			if !reflect.DeepEqual(h, tt.want) {
-				t.Errorf("unpackBlockAddresses() = %v, want %v", got, tt.want)
+				t.Errorf("unpackBlockAddresses() = %v, want %v", h, tt.want)
+			}
+			h2 := make([][]hexoutpoint, len(got2))
+			for i, g := range got2 {
+				ho := make([]hexoutpoint, len(g))
+				for j, o := range g {
+					ho[j] = hexoutpoint{hex.EncodeToString(o.btxID), o.vout}
+				}
+				h2[i] = ho
+			}
+			if !reflect.DeepEqual(h2, tt.want2) {
+				t.Errorf("unpackBlockAddresses() = %v, want %v", h2, tt.want2)
 			}
 		})
 	}
