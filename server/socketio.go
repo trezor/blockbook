@@ -124,27 +124,32 @@ func (s *SocketIoServer) txRedirect(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-type reqRange struct {
-	Start            int  `json:"start"`
-	End              int  `json:"end"`
-	QueryMempol      bool `json:"queryMempol"`
-	QueryMempoolOnly bool `json:"queryMempoolOnly"`
-	From             int  `json:"from"`
-	To               int  `json:"to"`
+type addrOpts struct {
+	Start            int   `json:"start"`
+	End              int   `json:"end"`
+	QueryMempol      bool  `json:"queryMempol"`
+	QueryMempoolOnly bool  `json:"queryMempoolOnly"`
+	From             int   `json:"from"`
+	To               int   `json:"to"`
+	AddressFormat    uint8 `json:"addressFormat"`
+}
+
+type txOpts struct {
+	AddressFormat uint8 `json:"addressFormat"`
 }
 
 var onMessageHandlers = map[string]func(*SocketIoServer, json.RawMessage) (interface{}, error){
 	"getAddressTxids": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
-		addr, rr, err := unmarshalGetAddressRequest(params)
+		addr, opts, err := unmarshalGetAddressRequest(params)
 		if err == nil {
-			rv, err = s.getAddressTxids(addr, &rr)
+			rv, err = s.getAddressTxids(addr, &opts)
 		}
 		return
 	},
 	"getAddressHistory": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
-		addr, rr, err := unmarshalGetAddressRequest(params)
+		addr, opts, err := unmarshalGetAddressRequest(params)
 		if err == nil {
-			rv, err = s.getAddressHistory(addr, &rr)
+			rv, err = s.getAddressHistory(addr, &opts)
 		}
 		return
 	},
@@ -173,9 +178,9 @@ var onMessageHandlers = map[string]func(*SocketIoServer, json.RawMessage) (inter
 		return s.getInfo()
 	},
 	"getDetailedTransaction": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
-		txid, err := unmarshalStringParameter(params)
+		txid, opts, err := unmarshalGetDetailedTransaction(params)
 		if err == nil {
-			rv, err = s.getDetailedTransaction(txid)
+			rv, err = s.getDetailedTransaction(txid, opts)
 		}
 		return
 	},
@@ -226,7 +231,7 @@ func (s *SocketIoServer) onMessage(c *gosocketio.Channel, req map[string]json.Ra
 	return e
 }
 
-func unmarshalGetAddressRequest(params []byte) (addr []string, rr reqRange, err error) {
+func unmarshalGetAddressRequest(params []byte) (addr []string, opts addrOpts, err error) {
 	var p []json.RawMessage
 	err = json.Unmarshal(params, &p)
 	if err != nil {
@@ -240,7 +245,7 @@ func unmarshalGetAddressRequest(params []byte) (addr []string, rr reqRange, err 
 	if err != nil {
 		return
 	}
-	err = json.Unmarshal(p[1], &rr)
+	err = json.Unmarshal(p[1], &opts)
 	return
 }
 
@@ -261,14 +266,14 @@ type resultAddressTxids struct {
 	Result []string `json:"result"`
 }
 
-func (s *SocketIoServer) getAddressTxids(addr []string, rr *reqRange) (res resultAddressTxids, err error) {
+func (s *SocketIoServer) getAddressTxids(addr []string, opts *addrOpts) (res resultAddressTxids, err error) {
 	txids := make([]string, 0)
-	lower, higher := uint32(rr.To), uint32(rr.Start)
+	lower, higher := uint32(opts.To), uint32(opts.Start)
 	for _, address := range addr {
-		if !rr.QueryMempoolOnly {
+		if !opts.QueryMempoolOnly {
 			err = s.db.GetTransactions(address, lower, higher, func(txid string, vout uint32, isOutput bool) error {
 				txids = append(txids, txid)
-				if isOutput && rr.QueryMempol {
+				if isOutput && opts.QueryMempol {
 					input := s.chain.GetMempoolSpentOutput(txid, vout)
 					if input != "" {
 						txids = append(txids, txid)
@@ -280,7 +285,7 @@ func (s *SocketIoServer) getAddressTxids(addr []string, rr *reqRange) (res resul
 				return res, err
 			}
 		}
-		if rr.QueryMempoolOnly || rr.QueryMempol {
+		if opts.QueryMempoolOnly || opts.QueryMempol {
 			mtxids, err := s.chain.GetMempoolTransactions(address)
 			if err != nil {
 				return res, err
@@ -375,8 +380,8 @@ func txToResTx(tx *bchain.Tx, height int, hi []txInputs, ho []txOutputs) resTx {
 	}
 }
 
-func (s *SocketIoServer) getAddressHistory(addr []string, rr *reqRange) (res resultGetAddressHistory, err error) {
-	txr, err := s.getAddressTxids(addr, rr)
+func (s *SocketIoServer) getAddressHistory(addr []string, opts *addrOpts) (res resultGetAddressHistory, err error) {
+	txr, err := s.getAddressTxids(addr, opts)
 	if err != nil {
 		return
 	}
@@ -388,7 +393,7 @@ func (s *SocketIoServer) getAddressHistory(addr []string, rr *reqRange) (res res
 	res.Result.TotalCount = len(txids)
 	res.Result.Items = make([]addressHistoryItem, 0)
 	for i, txid := range txids {
-		if i >= rr.From && i < rr.To {
+		if i >= opts.From && i < opts.To {
 			tx, height, err := s.txCache.GetTransaction(txid, bestheight)
 			if err != nil {
 				return res, err
@@ -402,10 +407,17 @@ func (s *SocketIoServer) getAddressHistory(addr []string, rr *reqRange) (res res
 					Script:     &vout.ScriptPubKey.Hex,
 					SpentIndex: int(vout.N),
 				}
-				if len(vout.ScriptPubKey.Addresses) == 1 {
-					a := vout.ScriptPubKey.Addresses[0]
+				if vout.Address != nil {
+					a, err := vout.Address.EncodeAddress(opts.AddressFormat)
+					if err != nil {
+						return res, err
+					}
 					ao.Address = &a
-					if stringInSlice(a, addr) {
+					found, err := vout.Address.InSlice(addr)
+					if err != nil {
+						return res, err
+					}
+					if found {
 						hi, ok := ads[a]
 						if ok {
 							hi.OutputIndexes = append(hi.OutputIndexes, int(vout.N))
@@ -603,11 +615,31 @@ func unmarshalStringParameter(params []byte) (s string, err error) {
 	return
 }
 
+func unmarshalGetDetailedTransaction(params []byte) (txid string, opts txOpts, err error) {
+	var p []json.RawMessage
+	err = json.Unmarshal(params, &p)
+	if err != nil {
+		return
+	}
+	if len(p) < 1 || len(p) > 2 {
+		err = errors.New("incorrect number of parameters")
+		return
+	}
+	err = json.Unmarshal(p[0], &txid)
+	if err != nil {
+		return
+	}
+	if len(p) > 1 {
+		err = json.Unmarshal(p[1], &opts)
+	}
+	return
+}
+
 type resultGetDetailedTransaction struct {
 	Result resTx `json:"result"`
 }
 
-func (s *SocketIoServer) getDetailedTransaction(txid string) (res resultGetDetailedTransaction, err error) {
+func (s *SocketIoServer) getDetailedTransaction(txid string, opts txOpts) (res resultGetDetailedTransaction, err error) {
 	bestheight, _, err := s.db.GetBestBlock()
 	if err != nil {
 		return
@@ -631,8 +663,12 @@ func (s *SocketIoServer) getDetailedTransaction(txid string) (res resultGetDetai
 			}
 			if len(otx.Vout) > int(vin.Vout) {
 				vout := otx.Vout[vin.Vout]
-				if len(vout.ScriptPubKey.Addresses) == 1 {
-					ai.Address = &vout.ScriptPubKey.Addresses[0]
+				if vout.Address != nil {
+					a, err := vout.Address.EncodeAddress(opts.AddressFormat)
+					if err != nil {
+						return res, err
+					}
+					ai.Address = &a
 				}
 				ai.Satoshis = int64(vout.Value * 1E8)
 			}
@@ -645,8 +681,12 @@ func (s *SocketIoServer) getDetailedTransaction(txid string) (res resultGetDetai
 			Script:     &vout.ScriptPubKey.Hex,
 			SpentIndex: int(vout.N),
 		}
-		if len(vout.ScriptPubKey.Addresses) == 1 {
-			ao.Address = &vout.ScriptPubKey.Addresses[0]
+		if vout.Address != nil {
+			a, err := vout.Address.EncodeAddress(opts.AddressFormat)
+			if err != nil {
+				return res, err
+			}
+			ao.Address = &a
 		}
 		ho = append(ho, ao)
 	}

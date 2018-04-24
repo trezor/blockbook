@@ -10,17 +10,9 @@ import (
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcutil"
 	"github.com/cpacia/bchutil"
-	"github.com/golang/glog"
 )
 
-var prefixes []string
-
-func init() {
-	prefixes = make([]string, 0, len(bchutil.Prefixes))
-	for _, prefix := range bchutil.Prefixes {
-		prefixes = append(prefixes, prefix)
-	}
-}
+var prefixes = []string{"bitcoincash", "bchtest", "bchreg"}
 
 // BCashParser handle
 type BCashParser struct {
@@ -92,6 +84,9 @@ func isCashAddr(addr string) bool {
 
 func (p *BCashParser) UnpackTx(buf []byte) (tx *bchain.Tx, height uint32, err error) {
 	tx, height, err = p.BitcoinParser.UnpackTx(buf)
+	if err != nil {
+		return
+	}
 
 	for i, vout := range tx.Vout {
 		if len(vout.ScriptPubKey.Addresses) == 1 {
@@ -114,18 +109,11 @@ func (a *bcashAddress) String() string {
 	return a.addr
 }
 
-type AddressFormat = uint8
-
-const (
-	LegacyAddress AddressFormat = iota
-	CashAddress
-)
-
-func (a *bcashAddress) EncodeAddress(format AddressFormat) (string, error) {
+func (a *bcashAddress) EncodeAddress(format bchain.AddressFormat) (string, error) {
 	switch format {
-	case LegacyAddress:
+	case bchain.DefaultAddress:
 		return a.String(), nil
-	case CashAddress:
+	case bchain.BCashAddress:
 		da, err := btcutil.DecodeAddress(a.addr, a.net)
 		if err != nil {
 			return "", err
@@ -147,4 +135,31 @@ func (a *bcashAddress) EncodeAddress(format AddressFormat) (string, error) {
 	default:
 		return "", fmt.Errorf("Unknown address format: %d", format)
 	}
+}
+
+func (a *bcashAddress) AreEqual(addr string) (bool, error) {
+	var format bchain.AddressFormat
+	if isCashAddr(addr) {
+		format = bchain.BCashAddress
+	} else {
+		format = bchain.DefaultAddress
+	}
+	ea, err := a.EncodeAddress(format)
+	if err != nil {
+		return false, err
+	}
+	return ea == addr, nil
+}
+
+func (a *bcashAddress) InSlice(addrs []string) (bool, error) {
+	for _, addr := range addrs {
+		eq, err := a.AreEqual(addr)
+		if err != nil {
+			return false, err
+		}
+		if eq {
+			return true, nil
+		}
+	}
+	return false, nil
 }
