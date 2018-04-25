@@ -81,6 +81,23 @@ type resGetBlockThin struct {
 	Result bchain.ThinBlock `json:"result"`
 }
 
+// estimatesmartfee
+
+type cmdEstimateSmartFee struct {
+	Method string `json:"method"`
+	Params struct {
+		Blocks int `json:"nblocks"`
+	} `json:"params"`
+}
+
+type resEstimateSmartFee struct {
+	Error  *bchain.RPCError `json:"error"`
+	Result struct {
+		Feerate float64 `json:"feerate"`
+		Blocks  int     `json:"blocks"`
+	} `json:"result"`
+}
+
 // GetBlock returns block with given hash.
 func (b *BCashRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 	var err error
@@ -172,6 +189,25 @@ func (b *BCashRPC) GetBlockList(hash string) (*bchain.Block, error) {
 // GetBlockFull returns block with given hash.
 func (b *BCashRPC) GetBlockFull(hash string) (*bchain.Block, error) {
 	return nil, errors.New("Not implemented")
+}
+
+// EstimateSmartFee returns fee estimation.
+func (b *BCashRPC) EstimateSmartFee(blocks int, conservative bool) (float64, error) {
+	glog.V(1).Info("rpc: estimatesmartfee ", blocks)
+
+	res := resEstimateSmartFee{}
+	req := cmdEstimateSmartFee{Method: "estimatesmartfee"}
+	req.Params.Blocks = blocks
+	// conservative param is omitted
+	err := b.Call(&req, &res)
+
+	if err != nil {
+		return 0, err
+	}
+	if res.Error != nil {
+		return 0, res.Error
+	}
+	return res.Result.Feerate, nil
 }
 
 func isErrBlockNotFound(err *bchain.RPCError) bool {

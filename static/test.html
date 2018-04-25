@@ -141,6 +141,21 @@
             return socket.send({ method, params }, f);
         }
 
+        function estimateFee() {
+            var blocks = document.getElementById('estimateFeeBlocks').value.trim();
+            estimateTxFee(parseInt(blocks), function (result) {
+                console.log('estimateFee sent successfully');
+                console.log(result);
+                document.getElementById('estimateFeeResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
+            });
+        }
+
+        function estimateTxFee(blocks, f) {
+            const method = 'estimateFee';
+            const params = [blocks];
+            return socket.send({ method, params }, f);
+        }
+
         function getInfo() {
             lookupSyncStatus(function (result) {
                 console.log('getInfo sent successfully');
@@ -322,6 +337,19 @@
         </div>
         <div class="row">
             <div class="col" id="estimateSmartFeeResult">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <input class="btn btn-secondary" type="button" value="estimateFee" onclick="estimateFee()">
+            </div>
+            <div class="col-8">
+                <input type="text" class="form-control" id="estimateFeeBlocks" value="20">
+            </div>
+            <div class="col"></div>
+        </div>
+        <div class="row">
+            <div class="col" id="estimateFeeResult">
             </div>
         </div>
         <div class="row">
