@@ -1,5 +1,5 @@
 #!/usr/bin/dh-exec
 blockbook /opt/blockbook/bch-testnet/bin
-server/testcert.* /opt/blockbook/bch-testnet/cert
-server/static /opt/blockbook/bch-testnet
+cert /opt/blockbook/bch-testnet
+static /opt/blockbook/bch-testnet
 configs/bch-testnet.json => /opt/blockbook/bch-testnet/config/blockchaincfg.json
