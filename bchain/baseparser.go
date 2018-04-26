@@ -2,6 +2,7 @@ package bchain
 
 import (
 	"encoding/hex"
+	"fmt"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/juju/errors"
@@ -149,6 +150,9 @@ func (p *BaseParser) UnpackTx(buf []byte) (*Tx, uint32, error) {
 			},
 			Value: pto.Value,
 		}
+		if len(pto.Addresses) == 1 {
+			vout[i].Address = NewBaseAddress(pto.Addresses[0])
+		}
 	}
 	tx := Tx{
 		Blocktime: int64(pt.Blocktime),
@@ -160,4 +164,44 @@ func (p *BaseParser) UnpackTx(buf []byte) (*Tx, uint32, error) {
 		Vout:      vout,
 	}
 	return &tx, pt.Height, nil
+}
+
+type baseAddress struct {
+	addr string
+}
+
+func NewBaseAddress(addr string) Address {
+	return &baseAddress{addr: addr}
+}
+
+func (a baseAddress) String() string {
+	return a.addr
+}
+
+func (a baseAddress) EncodeAddress(format AddressFormat) (string, error) {
+	if format != DefaultAddress {
+		return "", fmt.Errorf("Unknown address format: %d", format)
+	}
+	return a.addr, nil
+}
+
+func (a baseAddress) AreEqual(addr string) (bool, error) {
+	ea, err := a.EncodeAddress(0)
+	if err != nil {
+		return false, err
+	}
+	return ea == addr, nil
+}
+
+func (a baseAddress) InSlice(addrs []string) (bool, error) {
+	for _, addr := range addrs {
+		eq, err := a.AreEqual(addr)
+		if err != nil {
+			return false, err
+		}
+		if eq {
+			return true, nil
+		}
+	}
+	return false, nil
 }

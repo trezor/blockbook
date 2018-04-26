@@ -1,0 +1,2 @@
+#!/bin/sh
+find /opt/blockbook/bch-testnet/logs -mtime +6 -type f -delete
