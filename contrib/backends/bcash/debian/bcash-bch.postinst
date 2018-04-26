@@ -9,7 +9,7 @@ case "$1" in
         useradd --system -M -U bitcoin
     fi
 
-    if [ "$(stat -c '%U' /data/btc/bitcoin)" != "bitcoin" ]
+    if [ "$(stat -c '%U' /data/bch/bitcoin)" != "bitcoin" ]
     then
         chown bitcoin:bitcoin /data/bch/bitcoin
     fi
