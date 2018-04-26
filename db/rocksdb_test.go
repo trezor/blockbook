@@ -83,11 +83,11 @@ func checkColumn(d *RocksDB, col int, kp []keyPair) error {
 	i := 0
 	for it.SeekToFirst(); it.Valid(); it.Next() {
 		if i >= len(kp) {
-			return errors.Errorf("Expected less rows in column %v", col)
+			return errors.Errorf("Expected less rows in column %v", cfNames[col])
 		}
 		key := hex.EncodeToString(it.Key().Data())
 		if key != kp[i].Key {
-			return errors.Errorf("Incorrect key %v found in column %v row %v, expecting %v", key, col, i, kp[i].Key)
+			return errors.Errorf("Incorrect key %v found in column %v row %v, expecting %v", key, cfNames[col], i, kp[i].Key)
 		}
 		val := hex.EncodeToString(it.Value().Data())
 		var valOK bool
@@ -97,12 +97,12 @@ func checkColumn(d *RocksDB, col int, kp []keyPair) error {
 			valOK = kp[i].CompareFunc(val)
 		}
 		if !valOK {
-			return errors.Errorf("Incorrect value %v found in column %v row %v, expecting %v", val, col, i, kp[i].Value)
+			return errors.Errorf("Incorrect value %v found in column %v row %v, expecting %v", val, cfNames[col], i, kp[i].Value)
 		}
 		i++
 	}
 	if i != len(kp) {
-		return errors.Errorf("Expected more rows in column %v: got %v, expected %v", col, i, len(kp))
+		return errors.Errorf("Expected more rows in column %v: got %v, expected %v", cfNames[col], i, len(kp))
 	}
 	return nil
 }
@@ -337,7 +337,7 @@ func verifyAfterUTXOBlock2(t *testing.T, d *RocksDB) {
 		keyPair{"000370d6", "",
 			func(v string) bool {
 				return compareFuncBlockAddresses(t, v, []string{
-					addressToPubKeyHexWithLength("mzB8cYrfRwFRFAGTDzV8LkUQy5BQicxGhX", t, d) + "02" + "7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25" + "00",
+					addressToPubKeyHexWithLength("mzB8cYrfRwFRFAGTDzV8LkUQy5BQicxGhX", t, d) + "00", //+ "7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25" + "00",
 					addressToPubKeyHexWithLength("mtR97eM2HPWVM6c8FGLGcukgaHHQv7THoL", t, d) + "00",
 					addressToPubKeyHexWithLength("mwwoKQE5Lb1G4picHSHDQKg8jw424PF9SC", t, d) + "00",
 					addressToPubKeyHexWithLength("mmJx9Y8ayz9h14yd9fgCW1bUKoEpkBAquP", t, d) + "00",
@@ -422,7 +422,7 @@ func testTxCache(t *testing.T, d *RocksDB, b *bchain.Block, tx *bchain.Tx) {
 // 4) Test tx caching functionality
 // 5) Disconnect block 2 - expect error
 // 6) Disconnect the block 2 using blockaddresses column
-// 7) Reconnect block 2 and disconnect blocks 1 and 2 using full scan
+// 7) Reconnect block 2 and disconnect blocks 1 and 2 using full scan - expect error
 // After each step, the content of DB is examined and any difference against expected state is regarded as failure
 func TestRocksDB_Index_UTXO(t *testing.T) {
 	d := setupRocksDB(t, &testBitcoinParser{BitcoinParser: &btc.BitcoinParser{Params: btc.GetChainParams("test")}})
@@ -610,6 +610,26 @@ func Test_unpackBlockAddresses(t *testing.T) {
 				[]hexoutpoint{
 					hexoutpoint{"effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75", 1},
 				},
+			},
+		},
+		{
+			name: "1",
+			args: args{"3276A914B434EB0C1A3B7A02E8A29CC616E791EF1E0BF51F88AC003276A9143F8BA3FDA3BA7B69F5818086E12223C6DD25E3C888AC003276A914A08EAE93007F22668AB5E4A9C83C8CD1C325E3E088AC02EFFD9EF509383D536B1C8AF5BF434C8EFBF521A4F2BEFD4022BBD68694B4AC75003276A9148BDF0AA3C567AA5975C2E61321B8BEBBE7293DF688AC0200B2C06055E5E90E9C82BD4181FDE310104391A7FA4F289B1704E5D90CAA3840022EA9144A21DB08FB6882CB152E1FF06780A430740F77048702EFFD9EF509383D536B1C8AF5BF434C8EFBF521A4F2BEFD4022BBD68694B4AC75023276A914CCAAAF374E1B06CB83118453D102587B4273D09588AC003276A9148D802C045445DF49613F6A70DDD2E48526F3701F88AC00"},
+			want: []string{"76a914b434eb0c1a3b7a02e8a29cc616e791ef1e0bf51f88ac", "76a9143f8ba3fda3ba7b69f5818086e12223c6dd25e3c888ac", "76a914a08eae93007f22668ab5e4a9c83c8cd1c325e3e088ac", "76a9148bdf0aa3c567aa5975c2e61321b8bebbe7293df688ac", "a9144a21db08fb6882cb152e1ff06780a430740f770487", "76a914ccaaaf374e1b06cb83118453d102587b4273d09588ac", "76a9148d802c045445df49613f6a70ddd2e48526f3701f88ac"},
+			want2: [][]hexoutpoint{
+				[]hexoutpoint{},
+				[]hexoutpoint{},
+				[]hexoutpoint{
+					hexoutpoint{"effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75", 0},
+				},
+				[]hexoutpoint{
+					hexoutpoint{"00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840", 1},
+				},
+				[]hexoutpoint{
+					hexoutpoint{"effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75", 1},
+				},
+				[]hexoutpoint{},
+				[]hexoutpoint{},
 			},
 		},
 	}
