@@ -169,5 +169,12 @@ func (p *BitcoinParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 		return nil, 0, err
 	}
 	tx.Blocktime = bt
+
+	for i, vout := range tx.Vout {
+		if len(vout.ScriptPubKey.Addresses) == 1 {
+			tx.Vout[i].Address = bchain.NewBaseAddress(vout.ScriptPubKey.Addresses[0])
+		}
+	}
+
 	return tx, height, nil
 }

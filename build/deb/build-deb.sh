@@ -3,7 +3,8 @@ set -e
 
 cp -r /src/build/deb/debian .
 cp -r /src/configs .
-mkdir server && cp -r /src/server/testcert.* /src/server/static server
+cp -r /src/static static
+mkdir cert && cp /src/server/testcert.* cert
 
 dpkg-buildpackage -us -uc
 mv ../*.deb /out

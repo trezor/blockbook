@@ -2,6 +2,7 @@ package coins
 
 import (
 	"blockbook/bchain"
+	"blockbook/bchain/coins/bch"
 	"blockbook/bchain/coins/btc"
 	"blockbook/bchain/coins/eth"
 	"blockbook/bchain/coins/zec"
@@ -25,6 +26,8 @@ func init() {
 	blockChainFactories["zec"] = zec.NewZCashRPC
 	blockChainFactories["eth"] = eth.NewEthereumRPC
 	blockChainFactories["eth-testnet"] = eth.NewEthereumRPC
+	blockChainFactories["bch"] = bch.NewBCashRPC
+	blockChainFactories["bch-testnet"] = bch.NewBCashRPC
 }
 
 // NewBlockChain creates bchain.BlockChain of type defined by parameter coin

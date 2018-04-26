@@ -1,0 +1,10 @@
+/data/bch/bitcoin/debug.log
+/data/bch/bitcoin/db.log
+{
+        rotate 7
+        daily
+        compress
+        missingok
+        notifempty
+        copytruncate
+}

@@ -32,6 +32,12 @@
   revision = "501929d3d046174c3d39f0ea54ece471aa17238c"
 
 [[projects]]
+  branch = "master"
+  name = "github.com/cpacia/bchutil"
+  packages = ["."]
+  revision = "12e86f41eb040d3b85b5d8e3a3a4bed035517c52"
+
+[[projects]]
   name = "github.com/ethereum/go-ethereum"
   packages = [".","common","common/hexutil","common/math","core/types","crypto","crypto/secp256k1","crypto/sha3","ethclient","ethdb","log","metrics","params","rlp","rpc","trie"]
   revision = "329ac18ef617d0238f71637bffe78f028b0f13f7"
@@ -184,6 +190,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "a463c234bc11d9917876a827f692392845ed89571edc1484ae3e932f555d484b"
+  inputs-digest = "e632a1e904953397e9eae00f30a86bffab2d303232c7bac47a16e1ce663043bf"
   solver-name = "gps-cdcl"
   solver-version = 1
