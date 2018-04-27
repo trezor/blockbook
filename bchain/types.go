@@ -123,6 +123,7 @@ type BlockChain interface {
 	// chain info
 	IsTestnet() bool
 	GetNetworkName() string
+	GetSubversion() string
 	// requests
 	GetBestBlockHash() (string, error)
 	GetBestBlockHeight() (uint32, error)

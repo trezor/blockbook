@@ -29,6 +29,7 @@ type BitcoinRPC struct {
 	Mempool     *bchain.UTXOMempool
 	ParseBlocks bool
 	mq          *bchain.MQ
+	Subversion  string
 }
 
 type configuration struct {
@@ -38,6 +39,7 @@ type configuration struct {
 	RPCTimeout    int    `json:"rpcTimeout"`
 	Parse         bool   `json:"parse"`
 	ZeroMQBinding string `json:"zeroMQBinding"`
+	Subversion    string `json:"subversion"`
 }
 
 // NewBitcoinRPC returns new BitcoinRPC instance.
@@ -60,6 +62,7 @@ func NewBitcoinRPC(config json.RawMessage, pushHandler func(bchain.NotificationT
 		user:        c.RPCUser,
 		password:    c.RPCPass,
 		ParseBlocks: c.Parse,
+		Subversion:  c.Subversion,
 	}
 
 	mq, err := bchain.NewMQ(c.ZeroMQBinding, pushHandler)
@@ -117,6 +120,10 @@ func (b *BitcoinRPC) IsTestnet() bool {
 
 func (b *BitcoinRPC) GetNetworkName() string {
 	return b.Network
+}
+
+func (b *BitcoinRPC) GetSubversion() string {
+	return b.Subversion
 }
 
 // getblockhash
