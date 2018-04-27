@@ -599,6 +599,7 @@ func (s *SocketIoServer) getInfo() (res resultGetInfo, err error) {
 	res.Result.Blocks = int(height)
 	res.Result.Testnet = s.chain.IsTestnet()
 	res.Result.Network = s.chain.GetNetworkName()
+	res.Result.Subversion = s.chain.GetSubversion()
 	return
 }
 
