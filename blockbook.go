@@ -235,8 +235,8 @@ func main() {
 				return
 			}
 		} else if !*synchronize {
-			if err = syncWorker.ConnectBlocksParallelInChunks(height, until); err != nil {
-				glog.Error("connectBlocksParallelInChunks ", err)
+			if err = syncWorker.ConnectBlocksParallel(height, until); err != nil {
+				glog.Error("connectBlocksParallel ", err)
 				return
 			}
 		}
