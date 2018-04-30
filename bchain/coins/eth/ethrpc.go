@@ -240,6 +240,10 @@ func (b *EthereumRPC) GetNetworkName() string {
 	return b.Network
 }
 
+func (b *EthereumRPC) GetSubversion() string {
+	return ""
+}
+
 func (b *EthereumRPC) getBestHeader() (*ethtypes.Header, error) {
 	b.bestHeaderMu.Lock()
 	defer b.bestHeaderMu.Unlock()

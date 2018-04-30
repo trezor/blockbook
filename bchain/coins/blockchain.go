@@ -85,6 +85,10 @@ func (c *blockChainWithMetrics) GetNetworkName() string {
 	return c.b.GetNetworkName()
 }
 
+func (c *blockChainWithMetrics) GetSubversion() string {
+	return c.b.GetSubversion()
+}
+
 func (c *blockChainWithMetrics) GetBestBlockHash() (v string, err error) {
 	defer func(s time.Time) { c.observeRPCLatency("GetBestBlockHash", s, err) }(time.Now())
 	return c.b.GetBestBlockHash()
