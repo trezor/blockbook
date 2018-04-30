@@ -249,17 +249,20 @@ func unmarshalGetAddressRequest(params []byte) (addr []string, opts addrOpts, er
 	return
 }
 
-func uniqueTxids(txids []string) []string {
-	uniqueTxids := make([]string, 0, len(txids))
+// bitcore returns txids from the newest to the oldest, we have to revert the order
+func uniqueTxidsInReverse(txids []string) []string {
+	i := len(txids)
+	ut := make([]string, i)
 	txidsMap := make(map[string]struct{})
 	for _, txid := range txids {
 		_, e := txidsMap[txid]
 		if !e {
-			uniqueTxids = append(uniqueTxids, txid)
+			i--
+			ut[i] = txid
 			txidsMap[txid] = struct{}{}
 		}
 	}
-	return uniqueTxids
+	return ut[i:]
 }
 
 type resultAddressTxids struct {
@@ -296,7 +299,7 @@ func (s *SocketIoServer) getAddressTxids(addr []string, opts *addrOpts) (res res
 			return res, err
 		}
 	}
-	res.Result = uniqueTxids(txids)
+	res.Result = uniqueTxidsInReverse(txids)
 	return res, nil
 }
 
