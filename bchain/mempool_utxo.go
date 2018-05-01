@@ -7,7 +7,7 @@ import (
 	"github.com/golang/glog"
 )
 
-// addrIndex and outpoint are used also in nonutxo mempool
+// addrIndex and outpoint are used also in non utxo mempool
 type addrIndex struct {
 	addrID string
 	n      int32
@@ -39,13 +39,13 @@ func NewUTXOMempool(chain BlockChain) *UTXOMempool {
 
 // GetTransactions returns slice of mempool transactions for given address
 func (m *UTXOMempool) GetTransactions(address string) ([]string, error) {
-	m.mux.Lock()
-	defer m.mux.Unlock()
 	parser := m.chain.GetChainParser()
 	addrID, err := parser.GetAddrIDFromAddress(address)
 	if err != nil {
 		return nil, err
 	}
+	m.mux.Lock()
+	defer m.mux.Unlock()
 	outpoints := m.addrIDToTx[string(addrID)]
 	txs := make([]string, 0, len(outpoints)+len(outpoints)/2)
 	for _, o := range outpoints {

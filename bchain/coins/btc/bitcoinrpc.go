@@ -575,11 +575,6 @@ func (b *BitcoinRPC) GetMempoolTransactions(address string) ([]string, error) {
 	return b.Mempool.GetTransactions(address)
 }
 
-// GetMempoolSpentOutput returns transaction in mempool which spends given outpoint
-func (b *BitcoinRPC) GetMempoolSpentOutput(outputTxid string, vout uint32) string {
-	return b.Mempool.GetSpentOutput(outputTxid, vout)
-}
-
 // EstimateSmartFee returns fee estimation.
 func (b *BitcoinRPC) EstimateSmartFee(blocks int, conservative bool) (float64, error) {
 	glog.V(1).Info("rpc: estimatesmartfee ", blocks)

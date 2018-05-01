@@ -127,7 +127,6 @@ func (s *SocketIoServer) txRedirect(w http.ResponseWriter, r *http.Request) {
 type addrOpts struct {
 	Start            int   `json:"start"`
 	End              int   `json:"end"`
-	QueryMempol      bool  `json:"queryMempol"`
 	QueryMempoolOnly bool  `json:"queryMempoolOnly"`
 	From             int   `json:"from"`
 	To               int   `json:"to"`
@@ -276,27 +275,17 @@ func (s *SocketIoServer) getAddressTxids(addr []string, opts *addrOpts) (res res
 		if !opts.QueryMempoolOnly {
 			err = s.db.GetTransactions(address, lower, higher, func(txid string, vout uint32, isOutput bool) error {
 				txids = append(txids, txid)
-				if isOutput && opts.QueryMempol {
-					input := s.chain.GetMempoolSpentOutput(txid, vout)
-					if input != "" {
-						txids = append(txids, txid)
-					}
-				}
 				return nil
 			})
 			if err != nil {
 				return res, err
 			}
-		}
-		if opts.QueryMempoolOnly || opts.QueryMempol {
-			mtxids, err := s.chain.GetMempoolTransactions(address)
+		} else {
+			m, err := s.chain.GetMempoolTransactions(address)
 			if err != nil {
 				return res, err
 			}
-			txids = append(txids, mtxids...)
-		}
-		if err != nil {
-			return res, err
+			txids = append(txids, m...)
 		}
 	}
 	res.Result = uniqueTxidsInReverse(txids)

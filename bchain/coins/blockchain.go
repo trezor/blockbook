@@ -149,10 +149,6 @@ func (c *blockChainWithMetrics) GetMempoolTransactions(address string) (v []stri
 	return c.b.GetMempoolTransactions(address)
 }
 
-func (c *blockChainWithMetrics) GetMempoolSpentOutput(outputTxid string, vout uint32) (v string) {
-	return c.b.GetMempoolSpentOutput(outputTxid, vout)
-}
-
 func (c *blockChainWithMetrics) GetMempoolEntry(txid string) (v *bchain.MempoolEntry, err error) {
 	defer func(s time.Time) { c.observeRPCLatency("GetMempoolEntry", s, err) }(time.Now())
 	return c.b.GetMempoolEntry(txid)

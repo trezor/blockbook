@@ -22,13 +22,13 @@ func NewNonUTXOMempool(chain BlockChain) *NonUTXOMempool {
 
 // GetTransactions returns slice of mempool transactions for given address
 func (m *NonUTXOMempool) GetTransactions(address string) ([]string, error) {
-	m.mux.Lock()
-	defer m.mux.Unlock()
 	parser := m.chain.GetChainParser()
 	addrID, err := parser.GetAddrIDFromAddress(address)
 	if err != nil {
 		return nil, err
 	}
+	m.mux.Lock()
+	defer m.mux.Unlock()
 	outpoints := m.addrIDToTx[string(addrID)]
 	txs := make([]string, 0, len(outpoints))
 	for _, o := range outpoints {

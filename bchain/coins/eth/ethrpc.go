@@ -486,10 +486,6 @@ func (b *EthereumRPC) GetMempoolTransactions(address string) ([]string, error) {
 	return b.Mempool.GetTransactions(address)
 }
 
-func (b *EthereumRPC) GetMempoolSpentOutput(outputTxid string, vout uint32) string {
-	return ""
-}
-
 func (b *EthereumRPC) GetMempoolEntry(txid string) (*bchain.MempoolEntry, error) {
 	return nil, errors.New("GetMempoolEntry: not implemented")
 }

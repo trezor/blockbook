@@ -141,7 +141,6 @@ type BlockChain interface {
 	// mempool
 	ResyncMempool(onNewTxAddr func(txid string, addr string)) error
 	GetMempoolTransactions(address string) ([]string, error)
-	GetMempoolSpentOutput(outputTxid string, vout uint32) string
 	GetMempoolEntry(txid string) (*MempoolEntry, error)
 	// parser
 	GetChainParser() BlockChainParser
