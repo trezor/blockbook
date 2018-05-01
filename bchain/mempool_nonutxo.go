@@ -55,8 +55,9 @@ func (m *NonUTXOMempool) Resync(onNewTxAddr func(txid string, addr string)) erro
 		return err
 	}
 	parser := m.chain.GetChainParser()
-	newTxToInputOutput := make(map[string][]addrIndex, len(m.txToInputOutput)+1)
-	newAddrIDToTx := make(map[string][]outpoint, len(m.addrIDToTx)+1)
+	// allocate slightly larger capacity of the maps
+	newTxToInputOutput := make(map[string][]addrIndex, len(m.txToInputOutput)+5)
+	newAddrIDToTx := make(map[string][]outpoint, len(m.addrIDToTx)+5)
 	for _, txid := range txs {
 		io, exists := m.txToInputOutput[txid]
 		if !exists {
