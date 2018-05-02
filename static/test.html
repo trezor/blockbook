@@ -182,12 +182,18 @@
 
         function lookupDetailedTransaction(hash, format, f) {
             const method = 'getDetailedTransaction';
-            const params = [
+            const af = parseInt(format)
+            var params = [
                 hash,
-                {
-                    addressFormat: parseInt(format),
-                },
             ];
+            if (af !== 0) {
+                params = [
+                    hash,
+                    {
+                        addressFormat: af,
+                    },
+                ];
+            }
             return socket.send({ method, params }, f);
         }
 
