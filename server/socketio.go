@@ -670,9 +670,9 @@ func (s *SocketIoServer) getDetailedTransaction(txid string, opts txOpts) (res r
 	}
 	for _, vout := range tx.Vout {
 		ao := txOutputs{
-			Satoshis:   int64(vout.Value * 1E8),
-			Script:     &vout.ScriptPubKey.Hex,
-			SpentIndex: int(vout.N),
+			Satoshis: int64(vout.Value * 1E8),
+			Script:   &vout.ScriptPubKey.Hex,
+			// SpentIndex: int(vout.N),
 		}
 		if vout.Address != nil {
 			a, err := vout.Address.EncodeAddress(opts.AddressFormat)

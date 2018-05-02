@@ -374,6 +374,7 @@ func (d *RocksDB) writeAddressesUTXO(wb *gorocksdb.WriteBatch, block *bchain.Blo
 	}
 	addresses := make(map[string][]outpoint)
 	unspentTxs := make(map[string][]byte)
+	thisBlockTxs := make(map[string]struct{})
 	btxIDs := make([][]byte, len(block.Txs))
 	// first process all outputs, build mapping of addresses to outpoints and mappings of unspent txs to addresses
 	for txi, tx := range block.Txs {
@@ -399,7 +400,9 @@ func (d *RocksDB) writeAddressesUTXO(wb *gorocksdb.WriteBatch, block *bchain.Blo
 			}
 			txAddrs = appendPackedAddrID(txAddrs, addrID, output.N, len(tx.Vout)-i)
 		}
-		unspentTxs[string(btxID)] = txAddrs
+		stxID := string(btxID)
+		unspentTxs[stxID] = txAddrs
+		thisBlockTxs[stxID] = struct{}{}
 	}
 	// locate addresses spent by this tx and remove them from unspent addresses
 	// keep them so that they be stored for DisconnectBlock functionality
@@ -415,30 +418,30 @@ func (d *RocksDB) writeAddressesUTXO(wb *gorocksdb.WriteBatch, block *bchain.Blo
 				}
 				return err
 			}
-			// try to find the tx in current block
+			// find the tx in current block or already processed
 			stxID := string(btxID)
-			unspentAddrs, inThisBlock := unspentTxs[stxID]
-			if !inThisBlock {
+			unspentAddrs, exists := unspentTxs[stxID]
+			if !exists {
 				// else find it in previous blocks
 				unspentAddrs, err = d.getUnspentTx(btxID)
 				if err != nil {
 					return err
 				}
 				if unspentAddrs == nil {
-					glog.Warningf("rocksdb: height %d, tx %v in inputs but missing in unspentTxs", block.Height, tx.Txid)
+					glog.Warningf("rocksdb: height %d, tx %v, input tx %v vin %v %v missing in unspentTxs", block.Height, tx.Txid, input.Txid, input.Vout, i)
 					continue
 				}
 			}
 			var addrID []byte
 			addrID, unspentAddrs = findAndRemoveUnspentAddr(unspentAddrs, input.Vout)
 			if addrID == nil {
-				glog.Warningf("rocksdb: height %d, tx %v vin %v in inputs but missing in unspentTxs", block.Height, tx.Txid, i)
+				glog.Warningf("rocksdb: height %d, tx %v, input tx %v vin %v %v not found in unspentAddrs", block.Height, tx.Txid, input.Txid, input.Vout, i)
 				continue
 			}
-			// record what was removed from unspentTx
+			// record what was spent in this tx
 			// skip transactions that were created in this block
-			saddrID := string(addrID)
-			if _, exists := addresses[saddrID]; !exists {
+			if _, exists := thisBlockTxs[stxID]; !exists {
+				saddrID := string(addrID)
 				rut := spentTxs[saddrID]
 				rut = append(rut, outpoint{btxID, int32(input.Vout)})
 				spentTxs[saddrID] = rut

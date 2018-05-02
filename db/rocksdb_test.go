@@ -148,6 +148,12 @@ func getTestUTXOBlock1(t *testing.T, d *RocksDB) *bchain.Block {
 							Hex: addressToPubKeyHex("2Mz1CYoppGGsLNUGF2YDhTif6J661JitALS", t, d),
 						},
 					},
+					bchain.Vout{
+						N: 2,
+						ScriptPubKey: bchain.ScriptPubKey{
+							Hex: addressToPubKeyHex("2NEVv9LJmAnY99W1pFoc5UJjVdypBqdnvu1", t, d),
+						},
+					},
 				},
 				Blocktime: 22549300001,
 				Time:      22549300001,
@@ -195,10 +201,12 @@ func getTestUTXOBlock2(t *testing.T, d *RocksDB) *bchain.Block {
 			bchain.Tx{
 				Txid: "3d90d15ed026dc45e19ffb52875ed18fa9e8012ad123d7f7212176e2b0ebdb71",
 				Vin: []bchain.Vin{
+					// spending an output in the same block
 					bchain.Vin{
 						Txid: "7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25",
 						Vout: 0,
 					},
+					// spending an output in the previous block
 					bchain.Vin{
 						Txid: "effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75",
 						Vout: 1,
@@ -221,6 +229,26 @@ func getTestUTXOBlock2(t *testing.T, d *RocksDB) *bchain.Block {
 				Blocktime: 22549400001,
 				Time:      22549400001,
 			},
+			// transaction from the same address in the previous block
+			bchain.Tx{
+				Txid: "05e2e48aeabdd9b75def7b48d756ba304713c2aba7b522bf9dbc893fc4231b07",
+				Vin: []bchain.Vin{
+					bchain.Vin{
+						Txid: "effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75",
+						Vout: 2,
+					},
+				},
+				Vout: []bchain.Vout{
+					bchain.Vout{
+						N: 0,
+						ScriptPubKey: bchain.ScriptPubKey{
+							Hex: addressToPubKeyHex("2NEVv9LJmAnY99W1pFoc5UJjVdypBqdnvu1", t, d),
+						},
+					},
+				},
+				Blocktime: 22549400002,
+				Time:      22549400002,
+			},
 		},
 	}
 }
@@ -239,6 +267,7 @@ func verifyAfterUTXOBlock1(t *testing.T, d *RocksDB, noBlockAddresses bool) {
 		keyPair{addressToPubKeyHex("mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz", t, d) + "000370d5", "00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840" + "02", nil},
 		keyPair{addressToPubKeyHex("mv9uLThosiEnGRbVPS7Vhyw6VssbVRsiAw", t, d) + "000370d5", "effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75" + "00", nil},
 		keyPair{addressToPubKeyHex("2Mz1CYoppGGsLNUGF2YDhTif6J661JitALS", t, d) + "000370d5", "effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75" + "02", nil},
+		keyPair{addressToPubKeyHex("2NEVv9LJmAnY99W1pFoc5UJjVdypBqdnvu1", t, d) + "000370d5", "effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75" + "04", nil},
 	}); err != nil {
 		{
 			t.Fatal(err)
@@ -260,6 +289,7 @@ func verifyAfterUTXOBlock1(t *testing.T, d *RocksDB, noBlockAddresses bool) {
 				return compareFuncBlockAddresses(t, v, []string{
 					addressToPubKeyHexWithLength("mv9uLThosiEnGRbVPS7Vhyw6VssbVRsiAw", t, d) + "00",
 					addressToPubKeyHexWithLength("2Mz1CYoppGGsLNUGF2YDhTif6J661JitALS", t, d) + "02",
+					addressToPubKeyHexWithLength("2NEVv9LJmAnY99W1pFoc5UJjVdypBqdnvu1", t, d) + "04",
 				})
 			},
 		},
@@ -273,7 +303,7 @@ func verifyAfterUTXOBlock1(t *testing.T, d *RocksDB, noBlockAddresses bool) {
 	if noBlockAddresses {
 		blockAddressesKp = []keyPair{}
 	} else {
-		// the values in cfBlockAddresses have random order, must use CompareFunc
+		// the values in cfBlockAddresses are in random order, must use CompareFunc
 		blockAddressesKp = []keyPair{
 			keyPair{"000370d5", "",
 				func(v string) bool {
@@ -282,6 +312,7 @@ func verifyAfterUTXOBlock1(t *testing.T, d *RocksDB, noBlockAddresses bool) {
 						addressToPubKeyHexWithLength("mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz", t, d) + "00",
 						addressToPubKeyHexWithLength("mv9uLThosiEnGRbVPS7Vhyw6VssbVRsiAw", t, d) + "00",
 						addressToPubKeyHexWithLength("2Mz1CYoppGGsLNUGF2YDhTif6J661JitALS", t, d) + "00",
+						addressToPubKeyHexWithLength("2NEVv9LJmAnY99W1pFoc5UJjVdypBqdnvu1", t, d) + "00",
 					})
 				},
 			},
@@ -308,12 +339,14 @@ func verifyAfterUTXOBlock2(t *testing.T, d *RocksDB) {
 		keyPair{addressToPubKeyHex("mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz", t, d) + "000370d5", "00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840" + "02", nil},
 		keyPair{addressToPubKeyHex("mv9uLThosiEnGRbVPS7Vhyw6VssbVRsiAw", t, d) + "000370d5", "effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75" + "00", nil},
 		keyPair{addressToPubKeyHex("2Mz1CYoppGGsLNUGF2YDhTif6J661JitALS", t, d) + "000370d5", "effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75" + "02", nil},
+		keyPair{addressToPubKeyHex("2NEVv9LJmAnY99W1pFoc5UJjVdypBqdnvu1", t, d) + "000370d5", "effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75" + "04", nil},
 		keyPair{addressToPubKeyHex("mzB8cYrfRwFRFAGTDzV8LkUQy5BQicxGhX", t, d) + "000370d6", "7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25" + "00" + "3d90d15ed026dc45e19ffb52875ed18fa9e8012ad123d7f7212176e2b0ebdb71" + "01", nil},
 		keyPair{addressToPubKeyHex("mtR97eM2HPWVM6c8FGLGcukgaHHQv7THoL", t, d) + "000370d6", "7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25" + "02", nil},
 		keyPair{addressToPubKeyHex("mwwoKQE5Lb1G4picHSHDQKg8jw424PF9SC", t, d) + "000370d6", "3d90d15ed026dc45e19ffb52875ed18fa9e8012ad123d7f7212176e2b0ebdb71" + "00", nil},
 		keyPair{addressToPubKeyHex("mmJx9Y8ayz9h14yd9fgCW1bUKoEpkBAquP", t, d) + "000370d6", "3d90d15ed026dc45e19ffb52875ed18fa9e8012ad123d7f7212176e2b0ebdb71" + "02", nil},
 		keyPair{addressToPubKeyHex("mv9uLThosiEnGRbVPS7Vhyw6VssbVRsiAw", t, d) + "000370d6", "7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25" + "01", nil},
 		keyPair{addressToPubKeyHex("mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz", t, d) + "000370d6", "7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25" + "03", nil},
+		keyPair{addressToPubKeyHex("2NEVv9LJmAnY99W1pFoc5UJjVdypBqdnvu1", t, d) + "000370d6", "05e2e48aeabdd9b75def7b48d756ba304713c2aba7b522bf9dbc893fc4231b07" + "00" + "05e2e48aeabdd9b75def7b48d756ba304713c2aba7b522bf9dbc893fc4231b07" + "01", nil},
 		keyPair{addressToPubKeyHex("2Mz1CYoppGGsLNUGF2YDhTif6J661JitALS", t, d) + "000370d6", "3d90d15ed026dc45e19ffb52875ed18fa9e8012ad123d7f7212176e2b0ebdb71" + "03", nil},
 	}); err != nil {
 		{
@@ -340,6 +373,11 @@ func verifyAfterUTXOBlock2(t *testing.T, d *RocksDB) {
 				})
 			},
 		},
+		keyPair{
+			"05e2e48aeabdd9b75def7b48d756ba304713c2aba7b522bf9dbc893fc4231b07",
+			addressToPubKeyHexWithLength("2NEVv9LJmAnY99W1pFoc5UJjVdypBqdnvu1", t, d) + "00",
+			nil,
+		},
 	}); err != nil {
 		{
 			t.Fatal(err)
@@ -356,6 +394,7 @@ func verifyAfterUTXOBlock2(t *testing.T, d *RocksDB) {
 					addressToPubKeyHexWithLength("mv9uLThosiEnGRbVPS7Vhyw6VssbVRsiAw", t, d) + "02" + "effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75" + "00",
 					addressToPubKeyHexWithLength("mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz", t, d) + "02" + "00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840" + "02",
 					addressToPubKeyHexWithLength("2Mz1CYoppGGsLNUGF2YDhTif6J661JitALS", t, d) + "02" + "effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75" + "02",
+					addressToPubKeyHexWithLength("2NEVv9LJmAnY99W1pFoc5UJjVdypBqdnvu1", t, d) + "02" + "effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75" + "04",
 				})
 			},
 		},
