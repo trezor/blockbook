@@ -51,7 +51,7 @@ var (
 	prof        = flag.String("prof", "", "http server binding [address]:port of the interface to profiling data /debug/pprof/ (default no profiling)")
 
 	syncChunk   = flag.Int("chunk", 100, "block chunk size for processing")
-	syncWorkers = flag.Int("workers", 8, "number of workers to process blocks (default 8)")
+	syncWorkers = flag.Int("workers", 8, "number of workers to process blocks")
 	dryRun      = flag.Bool("dryrun", false, "do not index blocks, only download")
 
 	httpServerBinding = flag.String("httpserver", "", "http server binding [address]:port, (default no http server)")
@@ -62,7 +62,7 @@ var (
 
 	explorerURL = flag.String("explorer", "", "address of blockchain explorer")
 
-	coin = flag.String("coin", "btc", "coin name (default btc)")
+	coin = flag.String("coin", "btc", "coin name")
 )
 
 var (
