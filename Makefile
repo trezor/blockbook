@@ -14,6 +14,9 @@ build-debug: .bin-image
 test: .bin-image
 	docker run -t --rm -e PACKAGER=$(PACKAGER) -v $(CURDIR):/src $(BIN_IMAGE) make test
 
+test-all: .bin-image
+	docker run -t --rm -e PACKAGER=$(PACKAGER) -v $(CURDIR):/src $(BIN_IMAGE) make test-all
+
 deb: .deb-image
 	docker run -t --rm -e PACKAGER=$(PACKAGER) -v $(CURDIR):/src -v $(CURDIR)/build:/out $(DEB_IMAGE)
 

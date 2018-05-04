@@ -33,6 +33,7 @@ var testTx1 = bchain.Tx{
 					"t1Y4yL14ACHaAbjemkdpW7nYNHWnv1yQbDA",
 				},
 			},
+			Address: bchain.NewBaseAddress("t1Y4yL14ACHaAbjemkdpW7nYNHWnv1yQbDA"),
 		},
 	},
 }
@@ -65,6 +66,7 @@ var testTx2 = bchain.Tx{
 					"t1VmHTTwpEtwvojxodN2CSQqLYi1hzY3cAq",
 				},
 			},
+			Address: bchain.NewBaseAddress("t1VmHTTwpEtwvojxodN2CSQqLYi1hzY3cAq"),
 		},
 		{
 			Value: .1,
@@ -75,6 +77,7 @@ var testTx2 = bchain.Tx{
 					"t1ecxMXpphUTRQXGLXnVhJ6ucqD3DZipddg",
 				},
 			},
+			Address: bchain.NewBaseAddress("t1ecxMXpphUTRQXGLXnVhJ6ucqD3DZipddg"),
 		},
 	},
 }

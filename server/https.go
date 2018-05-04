@@ -196,12 +196,6 @@ func (s *HTTPServer) transactions(w http.ResponseWriter, r *http.Request) {
 	txList := transactionList{}
 	err = s.db.GetTransactions(address, lower, higher, func(txid string, vout uint32, isOutput bool) error {
 		txList.Txid = append(txList.Txid, txid)
-		if isOutput {
-			input := s.chain.GetMempoolSpentOutput(txid, vout)
-			if input != "" {
-				txList.Txid = append(txList.Txid, txid)
-			}
-		}
 		return nil
 	})
 	if err != nil {

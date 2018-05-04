@@ -14,6 +14,9 @@ var (
 	// ErrAddressMissing is returned if address is not specified
 	// for example To address in ethereum can be missing in case of contract transaction
 	ErrAddressMissing = errors.New("Address missing")
+	// ErrTxidMissing is returned if txid is not specified
+	// for example coinbase transactions in Bitcoin
+	ErrTxidMissing = errors.New("Txid missing")
 )
 
 type ScriptSig struct {
@@ -37,10 +40,25 @@ type ScriptPubKey struct {
 	Addresses []string `json:"addresses,omitempty"`
 }
 
+type AddressFormat = uint8
+
+const (
+	DefaultAddress AddressFormat = iota
+	BCashAddress
+)
+
+type Address interface {
+	String() string
+	EncodeAddress(format AddressFormat) (string, error)
+	AreEqual(addr string) (bool, error)
+	InSlice(addrs []string) (bool, error)
+}
+
 type Vout struct {
 	Value        float64      `json:"value"`
 	N            uint32       `json:"n"`
 	ScriptPubKey ScriptPubKey `json:"scriptPubKey"`
+	Address      Address
 }
 
 // Tx is blockchain transaction
@@ -108,6 +126,7 @@ type BlockChain interface {
 	// chain info
 	IsTestnet() bool
 	GetNetworkName() string
+	GetSubversion() string
 	// requests
 	GetBestBlockHash() (string, error)
 	GetBestBlockHeight() (uint32, error)
@@ -122,7 +141,6 @@ type BlockChain interface {
 	// mempool
 	ResyncMempool(onNewTxAddr func(txid string, addr string)) error
 	GetMempoolTransactions(address string) ([]string, error)
-	GetMempoolSpentOutput(outputTxid string, vout uint32) string
 	GetMempoolEntry(txid string) (*MempoolEntry, error)
 	// parser
 	GetChainParser() BlockChainParser
@@ -134,6 +152,10 @@ type BlockChainParser interface {
 	// UTXO chains need "inputs" column in db, that map transactions to transactions that spend them
 	// non UTXO chains have mapping of address to input and output transactions directly in "outputs" column in db
 	IsUTXOChain() bool
+	// KeepBlockAddresses returns number of blocks which are to be kept in blockaddresses column
+	// and used in case of fork
+	// if 0 the blockaddresses column is not used at all (usually non UTXO chains)
+	KeepBlockAddresses() int
 	// address id conversions
 	GetAddrIDFromVout(output *Vout) ([]byte, error)
 	GetAddrIDFromAddress(address string) ([]byte, error)

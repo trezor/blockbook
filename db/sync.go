@@ -115,7 +115,7 @@ func (w *SyncWorker) resyncIndex(onNewBlock func(hash string)) error {
 		}
 		if remoteBestHeight-w.startHeight > uint32(w.syncChunk) {
 			glog.Infof("resync: parallel sync of blocks %d-%d, using %d workers", w.startHeight, remoteBestHeight, w.syncWorkers)
-			err = w.connectBlocksParallel(w.startHeight, remoteBestHeight)
+			err = w.ConnectBlocksParallel(w.startHeight, remoteBestHeight)
 			if err != nil {
 				return err
 			}
@@ -175,6 +175,9 @@ func (w *SyncWorker) connectBlocks(onNewBlock func(hash string)) error {
 		if onNewBlock != nil {
 			onNewBlock(res.block.Hash)
 		}
+		if res.block.Height > 0 && res.block.Height%1000 == 0 {
+			glog.Info("connected block ", res.block.Height, " ", res.block.Hash)
+		}
 	}
 
 	if lastRes.block != nil {
@@ -184,17 +187,38 @@ func (w *SyncWorker) connectBlocks(onNewBlock func(hash string)) error {
 	return nil
 }
 
-func (w *SyncWorker) connectBlocksParallel(lower, higher uint32) error {
+// ConnectBlocksParallel uses parallel goroutines to get data from blockchain daemon
+func (w *SyncWorker) ConnectBlocksParallel(lower, higher uint32) error {
 	type hashHeight struct {
 		hash   string
 		height uint32
 	}
 	var err error
 	var wg sync.WaitGroup
+	bch := make(chan *bchain.Block, w.syncWorkers)
 	hch := make(chan hashHeight, w.syncWorkers)
 	hchClosed := atomic.Value{}
 	hchClosed.Store(false)
-	work := func(i int) {
+	var getBlockMux sync.Mutex
+	getBlockCond := sync.NewCond(&getBlockMux)
+	lastConnectedBlock := lower - 1
+	writeBlockDone := make(chan struct{})
+	writeBlockWorker := func() {
+		defer close(writeBlockDone)
+		lastBlock := lower - 1
+		for b := range bch {
+			if lastBlock+1 != b.Height {
+				glog.Error("writeBlockWorker skipped block, last connected block", lastBlock, ", new block ", b.Height)
+			}
+			err := w.db.ConnectBlock(b)
+			if err != nil {
+				glog.Error("writeBlockWorker ", b.Height, " ", b.Hash, " error ", err)
+			}
+			lastBlock = b.Height
+		}
+		glog.Info("WriteBlock exiting...")
+	}
+	getBlockWorker := func(i int) {
 		defer wg.Done()
 		var err error
 		var block *bchain.Block
@@ -204,10 +228,10 @@ func (w *SyncWorker) connectBlocksParallel(lower, higher uint32) error {
 				if err != nil {
 					// signal came while looping in the error loop
 					if hchClosed.Load() == true {
-						glog.Error("Worker ", i, " connect block error ", err, ". Exiting...")
+						glog.Error("getBlockWorker ", i, " connect block error ", err, ". Exiting...")
 						return
 					}
-					glog.Error("Worker ", i, " connect block error ", err, ". Retrying...")
+					glog.Error("getBlockWorker ", i, " connect block error ", err, ". Retrying...")
 					w.metrics.IndexResyncErrors.With(common.Labels{"error": err.Error()}).Inc()
 					time.Sleep(time.Millisecond * 500)
 				} else {
@@ -217,18 +241,32 @@ func (w *SyncWorker) connectBlocksParallel(lower, higher uint32) error {
 			if w.dryRun {
 				continue
 			}
-			err = w.db.ConnectBlock(block)
-			if err != nil {
-				glog.Error("Worker ", i, " connect block ", hh.height, " ", hh.hash, " error ", err)
+			getBlockMux.Lock()
+			for {
+				// we must make sure that the blocks are written to db in the correct order
+				if lastConnectedBlock+1 == hh.height {
+					// we have the right block, pass it to the writeBlockWorker
+					lastConnectedBlock = hh.height
+					bch <- block
+					getBlockCond.Broadcast()
+					break
+				}
+				// break the endless loop on OS signal
+				if hchClosed.Load() == true {
+					break
+				}
+				// wait for the time this block is top be passed to the writeBlockWorker
+				getBlockCond.Wait()
 			}
+			getBlockMux.Unlock()
 		}
-		glog.Info("Worker ", i, " exiting...")
+		glog.Info("getBlockWorker ", i, " exiting...")
 	}
 	for i := 0; i < w.syncWorkers; i++ {
 		wg.Add(1)
-		go work(i)
+		go getBlockWorker(i)
 	}
-
+	go writeBlockWorker()
 	var hash string
 ConnectLoop:
 	for h := lower; h <= higher; {
@@ -252,96 +290,18 @@ ConnectLoop:
 		}
 	}
 	close(hch)
-	// signal stop to workers that are in w.chain.GetBlockWithoutHeader error loop
+	// signal stop to workers that are in a loop
 	hchClosed.Store(true)
-	wg.Wait()
-	return err
-}
-
-func (w *SyncWorker) connectBlockChunk(lower, higher uint32) error {
-	connected, err := w.isBlockConnected(higher)
-	if err != nil || connected {
-		// if higher is over the best block, continue with lower block, otherwise return error
-		if err != bchain.ErrBlockNotFound {
-			return err
-		}
-	}
-
-	height := lower
-	hash, err := w.chain.GetBlockHash(lower)
-	if err != nil {
-		return err
-	}
-
-	for height <= higher {
-		block, err := w.chain.GetBlock(hash, height)
-		if err != nil {
-			return err
-		}
-		hash = block.Next
-		height = block.Height + 1
-		if w.dryRun {
-			continue
-		}
-		err = w.db.ConnectBlock(block)
-		if err != nil {
-			return err
-		}
-		if block.Height%1000 == 0 {
-			glog.Info("connected block ", block.Height, " ", block.Hash)
-			go w.metrics.IndexDBSize.Set(float64(w.db.DatabaseSizeOnDisk()))
-		}
-	}
-
-	return nil
-}
-
-// ConnectBlocksParallelInChunks connect blocks in chunks
-func (w *SyncWorker) ConnectBlocksParallelInChunks(lower, higher uint32) error {
-	var wg sync.WaitGroup
-
-	work := func(i int) {
-		defer wg.Done()
-
-		offset := uint32(w.syncChunk * i)
-		stride := uint32(w.syncChunk * w.syncWorkers)
-
-		for low := lower + offset; low <= higher; low += stride {
-			high := low + uint32(w.syncChunk-1)
-			if high > higher {
-				high = higher
-			}
-			err := w.connectBlockChunk(low, high)
-			if err != nil {
-				if err == bchain.ErrBlockNotFound {
-					break
-				}
-				glog.Fatalf("connectBlocksParallel %d-%d %v", low, high, err)
-			}
-		}
-	}
+	// broadcast syncWorkers times to unstuck all waiting getBlockWorkers
 	for i := 0; i < w.syncWorkers; i++ {
-		wg.Add(1)
-		go work(i)
+		getBlockCond.Broadcast()
 	}
+	// first wait for the getBlockWorkers to finish and then close bch channel
+	// so that the getBlockWorkers do not write to the closed channel
 	wg.Wait()
-
-	return nil
-}
-
-func (w *SyncWorker) isBlockConnected(height uint32) (bool, error) {
-	local, err := w.db.GetBlockHash(height)
-	if err != nil {
-		return false, err
-	}
-	remote, err := w.chain.GetBlockHash(height)
-	if err != nil {
-		return false, err
-	}
-	if local != remote {
-		return false, nil
-	}
-	return true, nil
+	close(bch)
+	<-writeBlockDone
+	return err
 }
 
 type blockResult struct {
@@ -382,14 +342,18 @@ func (w *SyncWorker) getBlockChain(out chan blockResult, done chan struct{}) {
 // otherwise doing full scan
 func (w *SyncWorker) DisconnectBlocks(lower uint32, higher uint32, hashes []string) error {
 	glog.Infof("sync: disconnecting blocks %d-%d", lower, higher)
+	// if the chain uses Block to Addresses mapping, always use DisconnectBlockRange
+	if w.chain.GetChainParser().KeepBlockAddresses() > 0 {
+		return w.db.DisconnectBlockRange(lower, higher)
+	}
 	blocks := make([]*bchain.Block, len(hashes))
 	var err error
 	// get all blocks first to see if we can avoid full scan
 	for i, hash := range hashes {
 		blocks[i], err = w.chain.GetBlock(hash, 0)
 		if err != nil {
-			// cannot get block, do full range scan
-			return w.db.DisconnectBlocksFullScan(lower, higher)
+			// cannot get a block, we must do full range scan
+			return w.db.DisconnectBlockRange(lower, higher)
 		}
 	}
 	// then disconnect one after another

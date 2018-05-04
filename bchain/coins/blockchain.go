@@ -2,6 +2,7 @@ package coins
 
 import (
 	"blockbook/bchain"
+	"blockbook/bchain/coins/bch"
 	"blockbook/bchain/coins/btc"
 	"blockbook/bchain/coins/eth"
 	"blockbook/bchain/coins/zec"
@@ -25,6 +26,8 @@ func init() {
 	blockChainFactories["zec"] = zec.NewZCashRPC
 	blockChainFactories["eth"] = eth.NewEthereumRPC
 	blockChainFactories["eth-testnet"] = eth.NewEthereumRPC
+	blockChainFactories["bch"] = bch.NewBCashRPC
+	blockChainFactories["bch-testnet"] = bch.NewBCashRPC
 }
 
 // NewBlockChain creates bchain.BlockChain of type defined by parameter coin
@@ -80,6 +83,10 @@ func (c *blockChainWithMetrics) IsTestnet() bool {
 
 func (c *blockChainWithMetrics) GetNetworkName() string {
 	return c.b.GetNetworkName()
+}
+
+func (c *blockChainWithMetrics) GetSubversion() string {
+	return c.b.GetSubversion()
 }
 
 func (c *blockChainWithMetrics) GetBestBlockHash() (v string, err error) {
@@ -140,10 +147,6 @@ func (c *blockChainWithMetrics) ResyncMempool(onNewTxAddr func(txid string, addr
 func (c *blockChainWithMetrics) GetMempoolTransactions(address string) (v []string, err error) {
 	defer func(s time.Time) { c.observeRPCLatency("GetMempoolTransactions", s, err) }(time.Now())
 	return c.b.GetMempoolTransactions(address)
-}
-
-func (c *blockChainWithMetrics) GetMempoolSpentOutput(outputTxid string, vout uint32) (v string) {
-	return c.b.GetMempoolSpentOutput(outputTxid, vout)
 }
 
 func (c *blockChainWithMetrics) GetMempoolEntry(txid string) (v *bchain.MempoolEntry, err error) {

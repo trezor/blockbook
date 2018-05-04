@@ -240,6 +240,10 @@ func (b *EthereumRPC) GetNetworkName() string {
 	return b.Network
 }
 
+func (b *EthereumRPC) GetSubversion() string {
+	return ""
+}
+
 func (b *EthereumRPC) getBestHeader() (*ethtypes.Header, error) {
 	b.bestHeaderMu.Lock()
 	defer b.bestHeaderMu.Unlock()
@@ -480,10 +484,6 @@ func (b *EthereumRPC) ResyncMempool(onNewTxAddr func(txid string, addr string)) 
 
 func (b *EthereumRPC) GetMempoolTransactions(address string) ([]string, error) {
 	return b.Mempool.GetTransactions(address)
-}
-
-func (b *EthereumRPC) GetMempoolSpentOutput(outputTxid string, vout uint32) string {
-	return ""
 }
 
 func (b *EthereumRPC) GetMempoolEntry(txid string) (*bchain.MempoolEntry, error) {
