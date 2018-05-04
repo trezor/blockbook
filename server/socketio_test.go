@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/juju/errors"
 	"github.com/martinboehm/golang-socketio"
 	"github.com/martinboehm/golang-socketio/transport"
 )
@@ -64,25 +65,55 @@ func unmarshalResponses(t *testing.T, id int, lrs *logRequestResponse, bbResStr 
 	return nil
 }
 
-func verifyGetAddressHistory(t *testing.T, id int, lrs *logRequestResponse, bbResStr string, stat *verifyStats, ws *gosocketio.Client, bbRequest map[string]json.RawMessage) {
-	type reqParamsData struct {
-		Start            int  `json:"start"`
-		End              int  `json:"end"`
-		QueryMempoolOnly bool `json:"queryMempoolOnly"`
-		From             int  `json:"from"`
-		To               int  `json:"to"`
+func getFullAddressHistory(addr []string, rr addrOpts, ws *gosocketio.Client) (*resultGetAddressHistory, error) {
+	rr.From = 0
+	rr.To = 100000000
+	rq := map[string]interface{}{
+		"method": "getAddressHistory",
+		"params": []interface{}{
+			addr,
+			rr,
+		},
+	}
+	rrq, err := json.Marshal(rq)
+	if err != nil {
+		return nil, err
+	}
+	res, err := ws.Ack("message", json.RawMessage(rrq), time.Second*30)
+	if err != nil {
+		return nil, err
 	}
 	bbResponse := resultGetAddressHistory{}
+	err = json.Unmarshal([]byte(res), &bbResponse)
+	if err != nil {
+		return nil, err
+	}
+	return &bbResponse, nil
+}
+
+func equalAddressHistoryItem(logItem addressHistoryItem, bbItem addressHistoryItem) error {
+	if logItem.Tx.Hash != bbItem.Tx.Hash {
+		return errors.Errorf("Different hash bb: %v log: %v", bbItem.Tx.Hash, logItem.Tx.Hash)
+	}
+	if logItem.Tx.Hex != bbItem.Tx.Hex {
+		return errors.Errorf("Different hex bb: %v log: %v", bbItem.Tx.Hex, logItem.Tx.Hex)
+	}
+	return nil
+}
+func verifyGetAddressHistory(t *testing.T, id int, lrs *logRequestResponse, bbResStr string, stat *verifyStats, ws *gosocketio.Client, bbRequest map[string]json.RawMessage) {
+	bbResponse := resultGetAddressHistory{}
 	logResponse := resultGetAddressHistory{}
+	var bbFullResponse *resultGetAddressHistory
 	if err := unmarshalResponses(t, id, lrs, bbResStr, &bbResponse, &logResponse); err != nil {
 		return
 	}
-	// parse request
+	// parse request to check params
 	addr, rr, err := unmarshalGetAddressRequest(bbRequest["params"])
 	if err != nil {
 		t.Log(id, ": getAddressHistory error unmarshal BB request ", err)
 		return
 	}
+	// mempool transactions are not comparable
 	if !rr.QueryMempoolOnly {
 		if (logResponse.Result.TotalCount != bbResponse.Result.TotalCount) ||
 			len(logResponse.Result.Items) != len(bbResponse.Result.Items) {
@@ -93,41 +124,36 @@ func verifyGetAddressHistory(t *testing.T, id int, lrs *logRequestResponse, bbRe
 		if logResponse.Result.TotalCount > 0 {
 			for i, logItem := range logResponse.Result.Items {
 				bbItem := bbResponse.Result.Items[i]
-				if logItem.Tx.Hash != bbItem.Tx.Hash || logItem.Tx.Hex != bbItem.Tx.Hex {
-					t.Log("getAddressHistory", id, "mismatch in tx", i, "bb:", bbItem.Tx.Hash,
-						"log:", logItem.Tx.Hash)
-
+				if err = equalAddressHistoryItem(logItem, bbItem); err != nil {
 					// if multiple addresses are specified, BlockBook returns transactions in different order
 					// which causes problems in paged responses
 					// we have to get all transactions from blockbook and check that they are in the logged response
-					rr.From = 0
-					rr.To = 100000000
-					rq := map[string]interface{}{
-						"method": "getAddressHistory",
-						"params": []interface{}{
-							addr,
-							rr,
-						},
+					var err1 error
+					if bbFullResponse == nil {
+						bbFullResponse, err1 = getFullAddressHistory(addr, rr, ws)
+						if err1 != nil {
+							t.Log("getFullAddressHistory error", err)
+							return
+						}
+						if bbFullResponse.Result.TotalCount != logResponse.Result.TotalCount {
+							t.Log("getFullAddressHistory count mismatch", bbFullResponse.Result.TotalCount, logResponse.Result.TotalCount)
+							return
+						}
 					}
-					rrq, err := json.Marshal(rq)
-					if err != nil {
-						t.Log(id, ", getAddressHistory: rq marshall error ", err)
+					found := false
+					for _, bbFullItem := range bbFullResponse.Result.Items {
+						if err1 = equalAddressHistoryItem(logItem, bbFullItem); err1 == nil {
+							found = true
+							break
+						}
+					}
+					if !found {
+						t.Log("getAddressHistory", id, "addresses", addr, "mismatch ", err)
+						bf, _ := json.Marshal(bbFullResponse.Result)
+						bl, _ := json.Marshal(logResponse.Result)
+						t.Log("{ \"bf\":", string(bf), ",\"bl\":", string(bl), "}")
 						return
 					}
-					res, err := ws.Ack("message", json.RawMessage(rrq), time.Second*30)
-					if err != nil {
-						t.Log(id, ", getAddressHistory: ws.Ack error ", err)
-						return
-					}
-					bbFullResponse := resultGetAddressHistory{}
-					t.Log(id, ": bbResponse", bbResponse.Result.TotalCount, "bbFullResponse", bbFullResponse.Result.TotalCount)
-					t.Log(string(rrq))
-					err = json.Unmarshal([]byte(res), &bbFullResponse)
-					if err != nil {
-						t.Log(id, ": getAddressHistory error unmarshal BB response ", err)
-						return
-					}
-					return
 				}
 			}
 		}
@@ -181,6 +207,26 @@ func verifyEstimateSmartFee(t *testing.T, id int, lrs *logRequestResponse, bbRes
 	}
 }
 
+func verifySendTransaction(t *testing.T, id int, lrs *logRequestResponse, bbResStr string, stat *verifyStats) {
+	bbResponse := resultSendTransaction{}
+	logResponse := resultSendTransaction{}
+	if err := unmarshalResponses(t, id, lrs, bbResStr, &bbResponse, &logResponse); err != nil {
+		return
+	}
+	bbResponseError := resultError{}
+	err := json.Unmarshal([]byte(bbResStr), bbResponseError)
+	if err != nil {
+		t.Log(id, ": error unmarshal resultError ", err)
+		return
+	}
+	// it is not possible to repeat sendTransaction, expect error
+	if bbResponse.Result == "" && bbResponseError.Error.Message != "" {
+		stat.SuccessCount++
+	} else {
+		t.Log("sendTransaction", id, "problem:", bbResponse.Result, bbResponseError)
+	}
+}
+
 func verifyMessage(t *testing.T, ws *gosocketio.Client, id int, lrs *logRequestResponse, stats map[string]*verifyStats) {
 	req := make(map[string]json.RawMessage)
 	err := json.Unmarshal(lrs.Request, &req)
@@ -208,7 +254,6 @@ func verifyMessage(t *testing.T, ws *gosocketio.Client, id int, lrs *logRequestR
 	stat.TotalLogNs += lrs.LogElapsedTime
 	stat.TotalBlockbookNs += ts
 	switch method {
-	// case "getAddressTxids":
 	case "getAddressHistory":
 		verifyGetAddressHistory(t, id, lrs, res, stat, ws, req)
 	case "getBlockHeader":
@@ -218,8 +263,10 @@ func verifyMessage(t *testing.T, ws *gosocketio.Client, id int, lrs *logRequestR
 		verifyGetInfo(t, id, lrs, res, stat)
 	case "estimateSmartFee":
 		verifyEstimateSmartFee(t, id, lrs, res, stat)
+	case "sendTransaction":
+		verifySendTransaction(t, id, lrs, res, stat)
 	// case "estimateFee":
-	// case "sendTransaction":
+	// case "getAddressTxids":
 	// case "getMempoolEntry":
 	default:
 		t.Log(id, ",", method, ": unknown/unverified method", method)
@@ -248,6 +295,8 @@ func Test_VerifyLog(t *testing.T) {
 	}
 	defer file.Close()
 	scanner := bufio.NewScanner(file)
+	buf := make([]byte, 1<<25)
+	scanner.Buffer(buf, 1<<25)
 	scanner.Split(bufio.ScanLines)
 	line := 0
 	stats := make(map[string]*verifyStats)
