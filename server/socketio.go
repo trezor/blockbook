@@ -270,7 +270,7 @@ type resultAddressTxids struct {
 
 func (s *SocketIoServer) getAddressTxids(addr []string, opts *addrOpts) (res resultAddressTxids, err error) {
 	txids := make([]string, 0)
-	lower, higher := uint32(opts.To), uint32(opts.Start)
+	lower, higher := uint32(opts.End), uint32(opts.Start)
 	for _, address := range addr {
 		if !opts.QueryMempoolOnly {
 			err = s.db.GetTransactions(address, lower, higher, func(txid string, vout uint32, isOutput bool) error {
