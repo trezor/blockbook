@@ -466,18 +466,18 @@ func unmarshalGetBlockHeader(params []byte) (height uint32, hash string, err err
 
 type resultGetBlockHeader struct {
 	Result struct {
-		Hash          string `json:"hash"`
-		Version       int    `json:"version"`
-		Confirmations int    `json:"confirmations"`
-		Height        int    `json:"height"`
-		ChainWork     string `json:"chainWork"`
-		NextHash      string `json:"nextHash"`
-		MerkleRoot    string `json:"merkleRoot"`
-		Time          int    `json:"time"`
-		MedianTime    int    `json:"medianTime"`
-		Nonce         int    `json:"nonce"`
-		Bits          string `json:"bits"`
-		Difficulty    int    `json:"difficulty"`
+		Hash          string  `json:"hash"`
+		Version       int     `json:"version"`
+		Confirmations int     `json:"confirmations"`
+		Height        int     `json:"height"`
+		ChainWork     string  `json:"chainWork"`
+		NextHash      string  `json:"nextHash"`
+		MerkleRoot    string  `json:"merkleRoot"`
+		Time          int     `json:"time"`
+		MedianTime    int     `json:"medianTime"`
+		Nonce         int     `json:"nonce"`
+		Bits          string  `json:"bits"`
+		Difficulty    float64 `json:"difficulty"`
 	} `json:"result"`
 }
 
