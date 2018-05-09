@@ -281,14 +281,15 @@ func verifyGetDetailedTransaction(t *testing.T, id int, lrs *logRequestResponse,
 		}
 		return nil
 	}
-	// the tx in the log could have been still in mempool with height -1
+	// the tx in the log could have been still in mempool with Height -1
 	if (bbResponse.Result.Height != logResponse.Result.Height && logResponse.Result.Height != -1) ||
 		bbResponse.Result.Hash != logResponse.Result.Hash {
 		t.Log("getDetailedTransaction", id, "mismatch bb:", bbResponse.Result.Hash, bbResponse.Result.Height,
 			"log:", logResponse.Result.Hash, logResponse.Result.Height)
 		return
 	}
-	if bbResponse.Result.BlockTimestamp != logResponse.Result.BlockTimestamp {
+	// the tx in the log could have been still in mempool with BlockTimestamp 0
+	if bbResponse.Result.BlockTimestamp != logResponse.Result.BlockTimestamp && logResponse.Result.BlockTimestamp != 0 {
 		t.Log("getDetailedTransaction", id, "mismatch BlockTimestamp:", bbResponse.Result.BlockTimestamp,
 			"log:", logResponse.Result.BlockTimestamp)
 		return
