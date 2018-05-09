@@ -1,3 +1,9 @@
+bcash (0.17.1-satoshilabs1) unstable; urgency=medium
+
+  * Upgrade to 0.17.1
+
+ -- Jakub Matys <jakub.matys@satoshilabs.com>  Wed, 09 May 2018 14:06:23 +0200
+
 bcash (0.17.0-satoshilabs1) unstable; urgency=medium
 
   * Initial build
