@@ -311,7 +311,7 @@ type txOutputs struct {
 	Script   *string `json:"script"`
 	// ScriptAsm   *string `json:"scriptAsm"`
 	SpentTxID   *string `json:"spentTxId,omitempty"`
-	SpentIndex  int     `json:"spentIndex"`
+	SpentIndex  int     `json:"spentIndex,omitempty"`
 	SpentHeight int     `json:"spentHeight,omitempty"`
 	Address     *string `json:"address"`
 }
@@ -394,10 +394,10 @@ func (s *SocketIoServer) getAddressHistory(addr []string, opts *addrOpts) (res r
 			hi := make([]txInputs, 0)
 			ho := make([]txOutputs, 0)
 			for _, vout := range tx.Vout {
+				aoh := vout.ScriptPubKey.Hex
 				ao := txOutputs{
-					Satoshis:   int64(vout.Value * 1E8),
-					Script:     &vout.ScriptPubKey.Hex,
-					SpentIndex: int(vout.N),
+					Satoshis: int64(vout.Value * 1E8),
+					Script:   &aoh,
 				}
 				if vout.Address != nil {
 					a, err := vout.Address.EncodeAddress(opts.AddressFormat)
@@ -644,8 +644,9 @@ func (s *SocketIoServer) getDetailedTransaction(txid string, opts txOpts) (res r
 	hi := make([]txInputs, 0)
 	ho := make([]txOutputs, 0)
 	for _, vin := range tx.Vin {
+		ais := vin.ScriptSig.Hex
 		ai := txInputs{
-			Script:      &vin.ScriptSig.Hex,
+			Script:      &ais,
 			Sequence:    int64(vin.Sequence),
 			OutputIndex: int(vin.Vout),
 		}
@@ -669,10 +670,10 @@ func (s *SocketIoServer) getDetailedTransaction(txid string, opts txOpts) (res r
 		hi = append(hi, ai)
 	}
 	for _, vout := range tx.Vout {
+		aos := vout.ScriptPubKey.Hex
 		ao := txOutputs{
 			Satoshis: int64(vout.Value * 1E8),
-			Script:   &vout.ScriptPubKey.Hex,
-			// SpentIndex: int(vout.N),
+			Script:   &aos,
 		}
 		if vout.Address != nil {
 			a, err := vout.Address.EncodeAddress(opts.AddressFormat)
