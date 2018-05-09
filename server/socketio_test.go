@@ -98,6 +98,7 @@ func equalAddressHistoryItem(logItem addressHistoryItem, bbItem addressHistoryIt
 	if logItem.Tx.Hex != bbItem.Tx.Hex {
 		return errors.Errorf("Different hex bb: %v log: %v", bbItem.Tx.Hex, logItem.Tx.Hex)
 	}
+	// Addresses do not match, bb getAddressHistory does not return input addresses
 	return nil
 }
 func verifyGetAddressHistory(t *testing.T, id int, lrs *logRequestResponse, bbResStr string, stat *verifyStats, ws *gosocketio.Client, bbRequest map[string]json.RawMessage) {
@@ -149,9 +150,9 @@ func verifyGetAddressHistory(t *testing.T, id int, lrs *logRequestResponse, bbRe
 					}
 					if !found {
 						t.Log("getAddressHistory", id, "addresses", addr, "mismatch ", err)
-						bf, _ := json.Marshal(bbFullResponse.Result)
-						bl, _ := json.Marshal(logResponse.Result)
-						t.Log("{ \"bf\":", string(bf), ",\"bl\":", string(bl), "}")
+						// bf, _ := json.Marshal(bbFullResponse.Result)
+						// bl, _ := json.Marshal(logResponse.Result)
+						// t.Log("{ \"bf\":", string(bf), ",\"bl\":", string(bl), "}")
 						return
 					}
 				}
@@ -214,7 +215,7 @@ func verifySendTransaction(t *testing.T, id int, lrs *logRequestResponse, bbResS
 		return
 	}
 	bbResponseError := resultError{}
-	err := json.Unmarshal([]byte(bbResStr), bbResponseError)
+	err := json.Unmarshal([]byte(bbResStr), &bbResponseError)
 	if err != nil {
 		t.Log(id, ": error unmarshal resultError ", err)
 		return
@@ -225,6 +226,87 @@ func verifySendTransaction(t *testing.T, id int, lrs *logRequestResponse, bbResS
 	} else {
 		t.Log("sendTransaction", id, "problem:", bbResponse.Result, bbResponseError)
 	}
+}
+
+func verifyGetDetailedTransaction(t *testing.T, id int, lrs *logRequestResponse, bbResStr string, stat *verifyStats) {
+	bbResponse := resultGetDetailedTransaction{}
+	logResponse := resultGetDetailedTransaction{}
+	if err := unmarshalResponses(t, id, lrs, bbResStr, &bbResponse, &logResponse); err != nil {
+		return
+	}
+	equalInputs := func() error {
+		if len(bbResponse.Result.Inputs) != len(logResponse.Result.Inputs) {
+			return errors.Errorf("mismatch number of inputs %v %v", len(bbResponse.Result.Inputs), len(logResponse.Result.Inputs))
+		}
+		for i, bbi := range bbResponse.Result.Inputs {
+			li := logResponse.Result.Inputs[i]
+
+			if bbi.OutputIndex != li.OutputIndex ||
+				bbi.Sequence != li.Sequence ||
+				bbi.Satoshis != li.Satoshis {
+				return errors.Errorf("mismatch input  %v %v, %v %v, %v %v", bbi.OutputIndex, li.OutputIndex, bbi.Sequence, li.Sequence, bbi.Satoshis, li.Satoshis)
+			}
+			if bbi.Address != nil && li.Address != nil {
+				if *bbi.Address != *li.Address {
+					return errors.Errorf("mismatch input Address %v %v", *bbi.Address, *li.Address)
+				}
+			} else if bbi.Address != li.Address {
+				return errors.Errorf("mismatch input Address %v %v", bbi.Address, li.Address)
+			}
+			if bbi.Script != nil && li.Script != nil {
+				if *bbi.Script != *li.Script {
+					return errors.Errorf("mismatch input Script %v %v", *bbi.Script, *li.Script)
+				}
+			} else if bbi.Script != li.Script {
+				return errors.Errorf("mismatch input Script %v %v", bbi.Script, li.Script)
+			}
+		}
+		return nil
+	}
+	equalOutputs := func() error {
+		if len(bbResponse.Result.Outputs) != len(logResponse.Result.Outputs) {
+			return errors.Errorf("mismatch number of outputs %v %v", len(bbResponse.Result.Outputs), len(logResponse.Result.Outputs))
+		}
+		for i, bbo := range bbResponse.Result.Outputs {
+			lo := logResponse.Result.Outputs[i]
+			if bbo.Satoshis != lo.Satoshis {
+				return errors.Errorf("mismatch output Satoshis %v %v", bbo.Satoshis, lo.Satoshis)
+			}
+			if *bbo.Script != *lo.Script {
+				return errors.Errorf("mismatch output Script %v %v", *bbo.Script, *lo.Script)
+			}
+			if *bbo.Address != *lo.Address {
+				return errors.Errorf("mismatch output Address %v %v", *bbo.Address, *lo.Address)
+			}
+		}
+		return nil
+	}
+	// the tx in the log could have been still in mempool with height -1
+	if (bbResponse.Result.Height != logResponse.Result.Height && logResponse.Result.Height != -1) ||
+		bbResponse.Result.Hash != logResponse.Result.Hash {
+		t.Log("getDetailedTransaction", id, "mismatch bb:", bbResponse.Result.Hash, bbResponse.Result.Height,
+			"log:", logResponse.Result.Hash, logResponse.Result.Height)
+		return
+	}
+	if bbResponse.Result.BlockTimestamp != logResponse.Result.BlockTimestamp {
+		t.Log("getDetailedTransaction", id, "mismatch BlockTimestamp:", bbResponse.Result.BlockTimestamp,
+			"log:", logResponse.Result.BlockTimestamp)
+		return
+	}
+	if bbResponse.Result.Hex != logResponse.Result.Hex {
+		t.Log("getDetailedTransaction", id, "mismatch Hex:", bbResponse.Result.Hex,
+			"log:", logResponse.Result.Hex)
+		return
+	}
+	if err := equalInputs(); err != nil {
+		t.Log("getDetailedTransaction", id, err)
+		return
+	}
+	if err := equalOutputs(); err != nil {
+		t.Log("getDetailedTransaction", id, err)
+		return
+	}
+	stat.SuccessCount++
 }
 
 func verifyMessage(t *testing.T, ws *gosocketio.Client, id int, lrs *logRequestResponse, stats map[string]*verifyStats) {
@@ -248,7 +330,6 @@ func verifyMessage(t *testing.T, ws *gosocketio.Client, id int, lrs *logRequestR
 		return
 	}
 	ts := time.Since(start).Nanoseconds()
-	// t.Log(id, ",", method, ": response ", res)
 	stat := getStat(method, stats)
 	stat.Count++
 	stat.TotalLogNs += lrs.LogElapsedTime
@@ -259,14 +340,15 @@ func verifyMessage(t *testing.T, ws *gosocketio.Client, id int, lrs *logRequestR
 	case "getBlockHeader":
 		verifyGetBlockHeader(t, id, lrs, res, stat)
 	case "getDetailedTransaction":
+		verifyGetDetailedTransaction(t, id, lrs, res, stat)
 	case "getInfo":
 		verifyGetInfo(t, id, lrs, res, stat)
 	case "estimateSmartFee":
 		verifyEstimateSmartFee(t, id, lrs, res, stat)
 	case "sendTransaction":
 		verifySendTransaction(t, id, lrs, res, stat)
-	// case "estimateFee":
 	// case "getAddressTxids":
+	// case "estimateFee":
 	// case "getMempoolEntry":
 	default:
 		t.Log(id, ",", method, ": unknown/unverified method", method)
