@@ -19,8 +19,8 @@ import (
 
 var (
 	// verifier functionality
-	verifylog = flag.String("verifylog", "/Users/mxb2/Downloads/messageLogBtc.log", "path to logfile containing socket.io requests/responses")
-	wsurl     = flag.String("wsurl", "wss://blockbook-dev:8336", "URL of socket.io interface to verify")
+	verifylog = flag.String("verifylog", "", "path to logfile containing socket.io requests/responses")
+	wsurl     = flag.String("wsurl", "", "URL of socket.io interface to verify")
 )
 
 type verifyStats struct {
