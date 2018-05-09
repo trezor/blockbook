@@ -334,7 +334,7 @@ type resTx struct {
 
 type addressHistoryItem struct {
 	Addresses     map[string]addressHistoryIndexes `json:"addresses"`
-	Satoshis      int                              `json:"satoshis"`
+	Satoshis      int64                            `json:"satoshis"`
 	Confirmations int                              `json:"confirmations"`
 	Tx            resTx                            `json:"tx"`
 }
@@ -396,7 +396,7 @@ func (s *SocketIoServer) getAddressHistory(addr []string, opts *addrOpts) (res r
 			for _, vout := range tx.Vout {
 				aoh := vout.ScriptPubKey.Hex
 				ao := txOutputs{
-					Satoshis: int64(vout.Value * 1E8),
+					Satoshis: int64(vout.Value*1E8 + 0.5),
 					Script:   &aoh,
 				}
 				if vout.Address != nil {
@@ -664,7 +664,7 @@ func (s *SocketIoServer) getDetailedTransaction(txid string, opts txOpts) (res r
 					}
 					ai.Address = &a
 				}
-				ai.Satoshis = int64(vout.Value * 1E8)
+				ai.Satoshis = int64(vout.Value*1E8 + 0.5)
 			}
 		}
 		hi = append(hi, ai)
@@ -672,7 +672,7 @@ func (s *SocketIoServer) getDetailedTransaction(txid string, opts txOpts) (res r
 	for _, vout := range tx.Vout {
 		aos := vout.ScriptPubKey.Hex
 		ao := txOutputs{
-			Satoshis: int64(vout.Value * 1E8),
+			Satoshis: int64(vout.Value*1E8 + 0.5),
 			Script:   &aos,
 		}
 		if vout.Address != nil {
