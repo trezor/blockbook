@@ -272,11 +272,19 @@ func verifyGetDetailedTransaction(t *testing.T, id int, lrs *logRequestResponse,
 			if bbo.Satoshis != lo.Satoshis {
 				return errors.Errorf("mismatch output Satoshis %v %v", bbo.Satoshis, lo.Satoshis)
 			}
-			if *bbo.Script != *lo.Script {
-				return errors.Errorf("mismatch output Script %v %v", *bbo.Script, *lo.Script)
+			if bbo.Script != nil && lo.Script != nil {
+				if *bbo.Script != *lo.Script {
+					return errors.Errorf("mismatch output Script %v %v", *bbo.Script, *lo.Script)
+				}
+			} else {
+				return errors.Errorf("mismatch output Script %v %v", bbo.Script, lo.Script)
 			}
-			if *bbo.Address != *lo.Address {
-				return errors.Errorf("mismatch output Address %v %v", *bbo.Address, *lo.Address)
+			if bbo.Address != nil && lo.Address != nil {
+				if *bbo.Address != *lo.Address {
+					return errors.Errorf("mismatch output Address %v %v", *bbo.Address, *lo.Address)
+				}
+			} else {
+				return errors.Errorf("mismatch output Address %v %v", bbo.Address, lo.Address)
 			}
 		}
 		return nil
