@@ -5,7 +5,6 @@ all:
 	tar -xf bitcoin-${BITCOIN_VERSION}-x86_64-linux-gnu.tar.gz
 	mv bitcoin-${BITCOIN_VERSION} bitcoin
 	rm bitcoin/bin/bitcoin-qt
-	rm bitcoin/bin/bitcoin-tx
 	rm bitcoin/bin/test_bitcoin
 
 clean:
