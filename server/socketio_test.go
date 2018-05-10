@@ -19,6 +19,8 @@ import (
 
 var (
 	// verifier functionality
+	verifylog = flag.String("verifylog", "", "path to logfile containing socket.io requests/responses")
+	wsurl     = flag.String("wsurl", "", "URL of socket.io interface to verify")
 	newSocket = flag.Bool("newsocket", false, "Create new socket.io connection for each request")
 )
 
@@ -253,8 +255,8 @@ func verifyGetDetailedTransaction(t *testing.T, id int, lrs *logRequestResponse,
 			} else if bbi.Address != li.Address {
 				// bitcore does not parse bech P2WPKH and P2WSH addresses
 				if bbi.Address == nil || (*bbi.Address)[0:3] != "bc1" {
-				return errors.Errorf("mismatch input Address %v %v", bbi.Address, li.Address)
-			}
+					return errors.Errorf("mismatch input Address %v %v", bbi.Address, li.Address)
+				}
 			}
 			// both must be null or both must not be null
 			if bbi.Script != nil && li.Script != nil {
@@ -292,9 +294,9 @@ func verifyGetDetailedTransaction(t *testing.T, id int, lrs *logRequestResponse,
 			} else if bbo.Address != lo.Address {
 				// bitcore does not parse bech P2WPKH and P2WSH addresses
 				if bbo.Address == nil || (*bbo.Address)[0:3] != "bc1" {
-				return errors.Errorf("mismatch output Address %v %v", bbo.Address, lo.Address)
+					return errors.Errorf("mismatch output Address %v %v", bbo.Address, lo.Address)
+				}
 			}
-		}
 		}
 		return nil
 	}
@@ -394,7 +396,7 @@ func Test_VerifyLog(t *testing.T) {
 	var ws *gosocketio.Client
 	if !*newSocket {
 		ws = connectSocketIO(t)
-	defer ws.Close()
+		defer ws.Close()
 	}
 	file, err := os.Open(*verifylog)
 	if err != nil {
