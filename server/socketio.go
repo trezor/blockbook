@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -17,6 +18,8 @@ import (
 	"github.com/martinboehm/golang-socketio"
 	"github.com/martinboehm/golang-socketio/transport"
 )
+
+const blockbookAbout = "Blockbook v0.0.1, blockchain indexer for TREZOR wallet https://trezor.io/. Do not use for any other purpose."
 
 // SocketIoServer is handle to SocketIoServer
 type SocketIoServer struct {
@@ -79,6 +82,8 @@ func NewSocketIoServer(binding string, certFiles string, db *db.RocksDB, chain b
 	serveMux.Handle(path+"test.html", http.FileServer(http.Dir("./static/")))
 	// redirect to Bitcore for details of transaction
 	serveMux.HandleFunc(path+"tx/", s.txRedirect)
+	// API call used to detect state of Blockbook
+	serveMux.HandleFunc(path+"api/block-index/", s.apiBlockIndex)
 	// handle socket.io
 	serveMux.Handle(path, server)
 
@@ -121,6 +126,32 @@ func (s *SocketIoServer) Shutdown(ctx context.Context) error {
 func (s *SocketIoServer) txRedirect(w http.ResponseWriter, r *http.Request) {
 	if s.explorerURL != "" {
 		http.Redirect(w, r, s.explorerURL+r.URL.Path, 302)
+	}
+}
+
+func (s *SocketIoServer) apiBlockIndex(w http.ResponseWriter, r *http.Request) {
+	type resBlockIndex struct {
+		BlockHash string `json:"blockHash"`
+		About     string `json:"about"`
+	}
+	var err error
+	var hash string
+	height := -1
+	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
+		if h, err := strconv.Atoi(r.URL.Path[i+1:]); err == nil {
+			height = h
+		}
+	}
+	if height >= 0 {
+		hash, err = s.db.GetBlockHash(uint32(height))
+	} else {
+		_, hash, err = s.db.GetBestBlock()
+	}
+	if err != nil {
+		glog.Error(err)
+	} else {
+		r := resBlockIndex{BlockHash: hash, About: blockbookAbout}
+		json.NewEncoder(w).Encode(r)
 	}
 }
 
