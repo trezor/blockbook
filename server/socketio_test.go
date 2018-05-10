@@ -19,8 +19,7 @@ import (
 
 var (
 	// verifier functionality
-	verifylog = flag.String("verifylog", "", "path to logfile containing socket.io requests/responses")
-	wsurl     = flag.String("wsurl", "", "URL of socket.io interface to verify")
+	newSocket = flag.Bool("newsocket", false, "Create new socket.io connection for each request")
 )
 
 type verifyStats struct {
@@ -374,11 +373,7 @@ func verifyMessage(t *testing.T, ws *gosocketio.Client, id int, lrs *logRequestR
 	}
 }
 
-func Test_VerifyLog(t *testing.T) {
-	if *verifylog == "" || *wsurl == "" {
-		t.Skip("skipping test, flags verifylog or wsurl not specified")
-	}
-	t.Log("Verifying log", *verifylog, "against service", *wsurl)
+func connectSocketIO(t *testing.T) *gosocketio.Client {
 	tr := transport.GetDefaultWebsocketTransport()
 	tr.WebsocketDialer = websocket.Dialer{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
@@ -386,9 +381,21 @@ func Test_VerifyLog(t *testing.T) {
 	ws, err := gosocketio.Dial(*wsurl, tr)
 	if err != nil {
 		t.Fatal("Dial error ", err)
-		return
+		return nil
 	}
+	return ws
+}
+
+func Test_VerifyLog(t *testing.T) {
+	if *verifylog == "" || *wsurl == "" {
+		t.Skip("skipping test, flags verifylog or wsurl not specified")
+	}
+	t.Log("Verifying log", *verifylog, "against service", *wsurl)
+	var ws *gosocketio.Client
+	if !*newSocket {
+		ws = connectSocketIO(t)
 	defer ws.Close()
+	}
 	file, err := os.Open(*verifylog)
 	if err != nil {
 		t.Fatal("File read error", err)
@@ -430,7 +437,13 @@ func Test_VerifyLog(t *testing.T) {
 			lrs.LogElapsedTime = msg.Et
 		}
 		if lrs.Request != nil && lrs.Response != nil {
+			if *newSocket {
+				ws = connectSocketIO(t)
+			}
 			verifyMessage(t, ws, msg.ID, lrs, stats)
+			if *newSocket {
+				ws.Close()
+			}
 			delete(pairs, msg.ID)
 		}
 	}
