@@ -9,7 +9,7 @@ Description=Blockbook daemon (BCH testnet)
 After=network.target
 
 [Service]
-ExecStart=/opt/blockbook/bch-testnet/bin/blockbook -coin=bch-testnet -blockchaincfg=/opt/blockbook/bch-testnet/config/blockchaincfg.json -datadir=/data/bch-testnet/blockbook/db -sync -httpserver=:18435 -socketio=:18436 -certfile=/opt/blockbook/bch-testnet/cert/blockbook -explorer=https://bch-bitcore1.trezor.io/ -log_dir=/opt/blockbook/bch-testnet/logs
+ExecStart=/opt/blockbook/bch-testnet/bin/blockbook -coin=bch-testnet -blockchaincfg=/opt/blockbook/bch-testnet/config/blockchaincfg.json -datadir=/data/bch-testnet/blockbook/db -sync -httpserver=:18435 -socketio=:18436 -certfile=/opt/blockbook/bch-testnet/cert/blockbook -explorer=https://bitcoincash.blockexplorer.com/ -log_dir=/opt/blockbook/bch-testnet/logs
 User=blockbook
 Type=simple
 Restart=on-failure
