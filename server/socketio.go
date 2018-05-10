@@ -85,7 +85,9 @@ func NewSocketIoServer(binding string, certFiles string, db *db.RocksDB, chain b
 	// API call used to detect state of Blockbook
 	serveMux.HandleFunc(path+"api/block-index/", s.apiBlockIndex)
 	// handle socket.io
-	serveMux.Handle(path, server)
+	serveMux.Handle(path+"socket.io/", server)
+	// default handler
+	serveMux.HandleFunc(path, s.index)
 
 	server.On("message", s.onMessage)
 	server.On("subscribe", s.onSubscribe)
@@ -127,6 +129,10 @@ func (s *SocketIoServer) txRedirect(w http.ResponseWriter, r *http.Request) {
 	if s.explorerURL != "" {
 		http.Redirect(w, r, s.explorerURL+r.URL.Path, 302)
 	}
+}
+
+func (s *SocketIoServer) index(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte(blockbookAbout))
 }
 
 func (s *SocketIoServer) apiBlockIndex(w http.ResponseWriter, r *http.Request) {
