@@ -246,13 +246,18 @@ func verifyGetDetailedTransaction(t *testing.T, id int, lrs *logRequestResponse,
 				bbi.Satoshis != li.Satoshis {
 				return errors.Errorf("mismatch input  %v %v, %v %v, %v %v", bbi.OutputIndex, li.OutputIndex, bbi.Sequence, li.Sequence, bbi.Satoshis, li.Satoshis)
 			}
+			// both must be null or both must not be null
 			if bbi.Address != nil && li.Address != nil {
 				if *bbi.Address != *li.Address {
 					return errors.Errorf("mismatch input Address %v %v", *bbi.Address, *li.Address)
 				}
 			} else if bbi.Address != li.Address {
+				// bitcore does not parse bech P2WPKH and P2WSH addresses
+				if bbi.Address == nil || (*bbi.Address)[0:3] != "bc1" {
 				return errors.Errorf("mismatch input Address %v %v", bbi.Address, li.Address)
 			}
+			}
+			// both must be null or both must not be null
 			if bbi.Script != nil && li.Script != nil {
 				if *bbi.Script != *li.Script {
 					return errors.Errorf("mismatch input Script %v %v", *bbi.Script, *li.Script)
@@ -272,20 +277,25 @@ func verifyGetDetailedTransaction(t *testing.T, id int, lrs *logRequestResponse,
 			if bbo.Satoshis != lo.Satoshis {
 				return errors.Errorf("mismatch output Satoshis %v %v", bbo.Satoshis, lo.Satoshis)
 			}
+			// both must be null or both must not be null
 			if bbo.Script != nil && lo.Script != nil {
 				if *bbo.Script != *lo.Script {
 					return errors.Errorf("mismatch output Script %v %v", *bbo.Script, *lo.Script)
 				}
-			} else {
+			} else if bbo.Script != lo.Script {
 				return errors.Errorf("mismatch output Script %v %v", bbo.Script, lo.Script)
 			}
+			// both must be null or both must not be null
 			if bbo.Address != nil && lo.Address != nil {
 				if *bbo.Address != *lo.Address {
 					return errors.Errorf("mismatch output Address %v %v", *bbo.Address, *lo.Address)
 				}
-			} else {
+			} else if bbo.Address != lo.Address {
+				// bitcore does not parse bech P2WPKH and P2WSH addresses
+				if bbo.Address == nil || (*bbo.Address)[0:3] != "bc1" {
 				return errors.Errorf("mismatch output Address %v %v", bbo.Address, lo.Address)
 			}
+		}
 		}
 		return nil
 	}
