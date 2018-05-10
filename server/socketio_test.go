@@ -21,6 +21,7 @@ var (
 	// verifier functionality
 	verifylog = flag.String("verifylog", "", "path to logfile containing socket.io requests/responses")
 	wsurl     = flag.String("wsurl", "", "URL of socket.io interface to verify")
+	newSocket = flag.Bool("newsocket", false, "Create new socket.io connection for each request")
 )
 
 type verifyStats struct {
@@ -246,13 +247,18 @@ func verifyGetDetailedTransaction(t *testing.T, id int, lrs *logRequestResponse,
 				bbi.Satoshis != li.Satoshis {
 				return errors.Errorf("mismatch input  %v %v, %v %v, %v %v", bbi.OutputIndex, li.OutputIndex, bbi.Sequence, li.Sequence, bbi.Satoshis, li.Satoshis)
 			}
+			// both must be null or both must not be null
 			if bbi.Address != nil && li.Address != nil {
 				if *bbi.Address != *li.Address {
 					return errors.Errorf("mismatch input Address %v %v", *bbi.Address, *li.Address)
 				}
 			} else if bbi.Address != li.Address {
-				return errors.Errorf("mismatch input Address %v %v", bbi.Address, li.Address)
+				// bitcore does not parse bech P2WPKH and P2WSH addresses
+				if bbi.Address == nil || (*bbi.Address)[0:3] != "bc1" {
+					return errors.Errorf("mismatch input Address %v %v", bbi.Address, li.Address)
+				}
 			}
+			// both must be null or both must not be null
 			if bbi.Script != nil && li.Script != nil {
 				if *bbi.Script != *li.Script {
 					return errors.Errorf("mismatch input Script %v %v", *bbi.Script, *li.Script)
@@ -272,19 +278,24 @@ func verifyGetDetailedTransaction(t *testing.T, id int, lrs *logRequestResponse,
 			if bbo.Satoshis != lo.Satoshis {
 				return errors.Errorf("mismatch output Satoshis %v %v", bbo.Satoshis, lo.Satoshis)
 			}
+			// both must be null or both must not be null
 			if bbo.Script != nil && lo.Script != nil {
 				if *bbo.Script != *lo.Script {
 					return errors.Errorf("mismatch output Script %v %v", *bbo.Script, *lo.Script)
 				}
-			} else {
+			} else if bbo.Script != lo.Script {
 				return errors.Errorf("mismatch output Script %v %v", bbo.Script, lo.Script)
 			}
+			// both must be null or both must not be null
 			if bbo.Address != nil && lo.Address != nil {
 				if *bbo.Address != *lo.Address {
 					return errors.Errorf("mismatch output Address %v %v", *bbo.Address, *lo.Address)
 				}
-			} else {
-				return errors.Errorf("mismatch output Address %v %v", bbo.Address, lo.Address)
+			} else if bbo.Address != lo.Address {
+				// bitcore does not parse bech P2WPKH and P2WSH addresses
+				if bbo.Address == nil || (*bbo.Address)[0:3] != "bc1" {
+					return errors.Errorf("mismatch output Address %v %v", bbo.Address, lo.Address)
+				}
 			}
 		}
 		return nil
@@ -364,11 +375,7 @@ func verifyMessage(t *testing.T, ws *gosocketio.Client, id int, lrs *logRequestR
 	}
 }
 
-func Test_VerifyLog(t *testing.T) {
-	if *verifylog == "" || *wsurl == "" {
-		t.Skip("skipping test, flags verifylog or wsurl not specified")
-	}
-	t.Log("Verifying log", *verifylog, "against service", *wsurl)
+func connectSocketIO(t *testing.T) *gosocketio.Client {
 	tr := transport.GetDefaultWebsocketTransport()
 	tr.WebsocketDialer = websocket.Dialer{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
@@ -376,9 +383,21 @@ func Test_VerifyLog(t *testing.T) {
 	ws, err := gosocketio.Dial(*wsurl, tr)
 	if err != nil {
 		t.Fatal("Dial error ", err)
-		return
+		return nil
 	}
-	defer ws.Close()
+	return ws
+}
+
+func Test_VerifyLog(t *testing.T) {
+	if *verifylog == "" || *wsurl == "" {
+		t.Skip("skipping test, flags verifylog or wsurl not specified")
+	}
+	t.Log("Verifying log", *verifylog, "against service", *wsurl)
+	var ws *gosocketio.Client
+	if !*newSocket {
+		ws = connectSocketIO(t)
+		defer ws.Close()
+	}
 	file, err := os.Open(*verifylog)
 	if err != nil {
 		t.Fatal("File read error", err)
@@ -420,7 +439,13 @@ func Test_VerifyLog(t *testing.T) {
 			lrs.LogElapsedTime = msg.Et
 		}
 		if lrs.Request != nil && lrs.Response != nil {
+			if *newSocket {
+				ws = connectSocketIO(t)
+			}
 			verifyMessage(t, ws, msg.ID, lrs, stats)
+			if *newSocket {
+				ws.Close()
+			}
 			delete(pairs, msg.ID)
 		}
 	}
