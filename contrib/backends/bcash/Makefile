@@ -5,8 +5,6 @@ all:
 	tar -xf bitcoin-abc-${BITCOINABC_VERSION}-x86_64-linux-gnu.tar.gz
 	mv bitcoin-abc-${BITCOINABC_VERSION} bitcoin-abc
 	rm bitcoin-abc/bin/bitcoin-qt
-	rm bitcoin-abc/bin/bitcoin-tx
-	rm bitcoin-abc/bin/bitcoin-seeder
 	rm bitcoin-abc/bin/test_bitcoin
 
 clean:
