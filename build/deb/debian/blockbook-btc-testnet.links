@@ -1,2 +1,2 @@
-/opt/blockbook/btc-testnet/cert/testcert.crt /opt/blockbook/btc-testnet/cert/blockbook.crt
-/opt/blockbook/btc-testnet/cert/testcert.key /opt/blockbook/btc-testnet/cert/blockbook.key
+/opt/coins/blockbook/btc-testnet/cert/testcert.crt /opt/coins/blockbook/btc-testnet/cert/blockbook.crt
+/opt/coins/blockbook/btc-testnet/cert/testcert.key /opt/coins/blockbook/btc-testnet/cert/blockbook.key

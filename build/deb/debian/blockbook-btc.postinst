@@ -9,7 +9,7 @@ case "$1" in
         useradd --system -M -U blockbook
     fi
 
-    for dir in /data/btc/blockbook /opt/blockbook/btc/logs
+    for dir in /data/btc/blockbook /opt/coins/blockbook/btc/logs
     do
         if [ "$(stat -c '%U' $dir)" != "blockbook" ]
         then

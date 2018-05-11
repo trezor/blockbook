@@ -1,5 +1,5 @@
 #!/usr/bin/dh-exec
-blockbook /opt/blockbook/btc-testnet/bin
-cert /opt/blockbook/btc-testnet
-static /opt/blockbook/btc-testnet
-configs/btc-testnet.json => /opt/blockbook/btc-testnet/config/blockchaincfg.json
+blockbook /opt/coins/blockbook/btc-testnet/bin
+cert /opt/coins/blockbook/btc-testnet
+static /opt/coins/blockbook/btc-testnet
+configs/btc-testnet.json => /opt/coins/blockbook/btc-testnet/config/blockchaincfg.json
