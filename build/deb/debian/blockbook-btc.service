@@ -10,7 +10,7 @@ After=network.target
 
 [Service]
 ExecStart=/opt/coins/blockbook/btc/bin/blockbook -coin=btc -blockchaincfg=/opt/coins/blockbook/btc/config/blockchaincfg.json -datadir=/opt/coins/data/btc/blockbook/db -sync -httpserver=:8335 -socketio=:8336 -certfile=/opt/coins/blockbook/btc/cert/blockbook -explorer=https://bitcore1.trezor.io/ -log_dir=/opt/coins/blockbook/btc/logs
-User=blockbook
+User=blockbook-btc
 Type=simple
 Restart=on-failure
 WorkingDirectory=/opt/coins/blockbook/btc

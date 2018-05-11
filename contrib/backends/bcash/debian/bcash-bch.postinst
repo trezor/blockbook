@@ -4,14 +4,14 @@ set -e
 case "$1" in
 
   configure)
-    if ! id -u bitcoin &> /dev/null
+    if ! id -u bcash &> /dev/null
     then
-        useradd --system -M -U bitcoin
+        useradd --system -M -U bcash
     fi
 
-    if [ "$(stat -c '%U' /opt/coins/data/bch/bitcoin)" != "bitcoin" ]
+    if [ "$(stat -c '%U' /opt/coins/data/bch/bitcoin)" != "bcash" ]
     then
-        chown bitcoin:bitcoin /opt/coins/data/bch/bitcoin
+        chown bcash:bcash /opt/coins/data/bch/bitcoin
     fi
   ;;
 

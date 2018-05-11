@@ -12,12 +12,12 @@ Description=Bitcoin Cash daemon (mainnet)
 After=network.target
 
 [Service]
-ExecStart=/opt/coins/nodes/bitcoin-abc/bch/bin/bitcoind -datadir=/opt/coins/data/bch/bitcoin -conf=/opt/coins/nodes/bitcoin-abc/bch/bch.conf -pid=/run/bitcoind/bch.pid
-# Creates /run/bitcoind owned by bitcoin
-RuntimeDirectory=bitcoind
-User=bitcoin
+ExecStart=/opt/coins/nodes/bitcoin-abc/bch/bin/bitcoind -datadir=/opt/coins/data/bch/bitcoin -conf=/opt/coins/nodes/bitcoin-abc/bch/bch.conf -pid=/run/bitcoin-abc/bch.pid
+# Creates /run/bitcoin-abc owned by bcash
+RuntimeDirectory=bitcoin-abc
+User=bcash
 Type=forking
-PIDFile=/run/bitcoind/bch.pid
+PIDFile=/run/bitcoin-abc/bch.pid
 Restart=on-failure
 
 # Hardening measures

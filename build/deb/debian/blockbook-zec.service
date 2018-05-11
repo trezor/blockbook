@@ -10,7 +10,7 @@ After=network.target
 
 [Service]
 ExecStart=/opt/coins/blockbook/zec/bin/blockbook -coin=zec -blockchaincfg=/opt/coins/blockbook/zec/config/blockchaincfg.json -datadir=/opt/coins/data/zec/blockbook/db -sync -httpserver=:8235 -socketio=:8236 -certfile=/opt/coins/blockbook/zec/cert/blockbook -explorer=https://zec-bitcore1.trezor.io/ -log_dir=/opt/coins/blockbook/zec/logs
-User=blockbook
+User=blockbook-zec
 Type=simple
 Restart=on-failure
 WorkingDirectory=/opt/coins/blockbook/zec
