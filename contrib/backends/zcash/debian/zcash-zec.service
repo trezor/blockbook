@@ -5,7 +5,7 @@
 # See "man systemd.service" for details.
 
 # Note that almost all daemon options could be specified in
-# /opt/zcash/zec/zec.conf
+# /opt/coins/nodes/zcash/zec/zec.conf
 
 [Unit]
 Description=ZCash daemon (mainnet)
@@ -13,7 +13,7 @@ After=network.target
 
 [Service]
 Environment="HOME=/opt/coins/data/zec/zcash"
-ExecStart=/opt/zcash/zec/bin/zcashd -datadir=/opt/coins/data/zec/zcash -conf=/opt/zcash/zec/zec.conf -pid=/run/zcashd/zec.pid
+ExecStart=/opt/coins/nodes/zcash/zec/bin/zcashd -datadir=/opt/coins/data/zec/zcash -conf=/opt/coins/nodes/zcash/zec/zec.conf -pid=/run/zcashd/zec.pid
 # Creates /run/zcashd owned by zcash
 RuntimeDirectory=zcashd
 User=zcash

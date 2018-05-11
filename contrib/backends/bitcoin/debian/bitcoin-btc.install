@@ -1,2 +1,2 @@
-bitcoin/* /opt/bitcoin/btc
-btc.conf /opt/bitcoin/btc
+bitcoin/* /opt/coins/nodes/bitcoin/btc
+btc.conf /opt/coins/nodes/bitcoin/btc

@@ -14,7 +14,7 @@ case "$1" in
         chown zcash:zcash /opt/coins/data/zec/zcash
     fi
 
-    HOME=/opt/coins/data/zec/zcash /opt/zcash/zec/bin/zcash-fetch-params
+    HOME=/opt/coins/data/zec/zcash /opt/coins/nodes/zcash/zec/bin/zcash-fetch-params
   ;;
 
 esac

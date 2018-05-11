@@ -5,14 +5,14 @@
 # See "man systemd.service" for details.
 
 # Note that almost all daemon options could be specified in
-# /opt/bitcoin/bch-testnet/bch-testnet.conf
+# /opt/coins/nodes/bitcoin-abc/bch-testnet/bch-testnet.conf
 
 [Unit]
 Description=Bitcoin Cash daemon (testnet)
 After=network.target
 
 [Service]
-ExecStart=/opt/bitcoin/bch-testnet/bin/bitcoind -datadir=/opt/coins/data/bch-testnet/bitcoin -conf=/opt/bitcoin/bch-testnet/bch-testnet.conf -pid=/run/bitcoind/bch-testnet.pid
+ExecStart=/opt/coins/nodes/bitcoin-abc/bch-testnet/bin/bitcoind -datadir=/opt/coins/data/bch-testnet/bitcoin -conf=/opt/coins/nodes/bitcoin-abc/bch-testnet/bch-testnet.conf -pid=/run/bitcoind/bch-testnet.pid
 # Creates /run/bitcoind owned by bitcoin
 RuntimeDirectory=bitcoind
 User=bitcoin

@@ -1,2 +1,2 @@
-bitcoin-abc/* /opt/bitcoin/bch-testnet
-bch-testnet.conf /opt/bitcoin/bch-testnet
+bitcoin-abc/* /opt/coins/nodes/bitcoin-abc/bch-testnet
+bch-testnet.conf /opt/coins/nodes/bitcoin-abc/bch-testnet
