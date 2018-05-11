@@ -12,8 +12,8 @@ Description=ZCash daemon (mainnet)
 After=network.target
 
 [Service]
-Environment="HOME=/data/zec/zcash"
-ExecStart=/opt/zcash/zec/bin/zcashd -datadir=/data/zec/zcash -conf=/opt/zcash/zec/zec.conf -pid=/run/zcashd/zec.pid
+Environment="HOME=/opt/coins/data/zec/zcash"
+ExecStart=/opt/zcash/zec/bin/zcashd -datadir=/opt/coins/data/zec/zcash -conf=/opt/zcash/zec/zec.conf -pid=/run/zcashd/zec.pid
 # Creates /run/zcashd owned by zcash
 RuntimeDirectory=zcashd
 User=zcash

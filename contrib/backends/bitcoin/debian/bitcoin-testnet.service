@@ -12,7 +12,7 @@ Description=Bitcoin daemon (testnet)
 After=network.target
 
 [Service]
-ExecStart=/opt/bitcoin/btc-testnet/bin/bitcoind -datadir=/data/btc-testnet/bitcoin -conf=/opt/bitcoin/btc-testnet/btc-testnet.conf -pid=/run/bitcoind/testnet.pid
+ExecStart=/opt/bitcoin/btc-testnet/bin/bitcoind -datadir=/opt/coins/data/btc-testnet/bitcoin -conf=/opt/bitcoin/btc-testnet/btc-testnet.conf -pid=/run/bitcoind/testnet.pid
 # Creates /run/bitcoind owned by bitcoin
 RuntimeDirectory=bitcoind
 User=bitcoin

@@ -9,12 +9,12 @@ case "$1" in
         useradd --system -M -U zcash
     fi
 
-    if [ "$(stat -c '%U' /data/zec/zcash)" != "zcash" ]
+    if [ "$(stat -c '%U' /opt/coins/data/zec/zcash)" != "zcash" ]
     then
-        chown zcash:zcash /data/zec/zcash
+        chown zcash:zcash /opt/coins/data/zec/zcash
     fi
 
-    HOME=/data/zec/zcash /opt/zcash/zec/bin/zcash-fetch-params
+    HOME=/opt/coins/data/zec/zcash /opt/zcash/zec/bin/zcash-fetch-params
   ;;
 
 esac

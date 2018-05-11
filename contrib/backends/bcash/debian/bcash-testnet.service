@@ -12,7 +12,7 @@ Description=Bitcoin Cash daemon (testnet)
 After=network.target
 
 [Service]
-ExecStart=/opt/bitcoin/bch-testnet/bin/bitcoind -datadir=/data/bch-testnet/bitcoin -conf=/opt/bitcoin/bch-testnet/bch-testnet.conf -pid=/run/bitcoind/bch-testnet.pid
+ExecStart=/opt/bitcoin/bch-testnet/bin/bitcoind -datadir=/opt/coins/data/bch-testnet/bitcoin -conf=/opt/bitcoin/bch-testnet/bch-testnet.conf -pid=/run/bitcoind/bch-testnet.pid
 # Creates /run/bitcoind owned by bitcoin
 RuntimeDirectory=bitcoind
 User=bitcoin

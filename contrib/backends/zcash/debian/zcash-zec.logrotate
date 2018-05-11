@@ -1,5 +1,5 @@
-/data/zec/zcash/debug.log
-/data/zec/zcash/db.log
+/opt/coins/data/zec/zcash/debug.log
+/opt/coins/data/zec/zcash/db.log
 {
         rotate 7
         daily
