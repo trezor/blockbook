@@ -122,17 +122,23 @@ The data are separated to different column families:
 
 ## Todo
 
-- find memory leak in initial import
+- update used paths and users according to specification by system admin
+- improve txcache (time of storage, number/size of cached txs, purge cache)
+- collect blockbook stats (number of items in indexes, )
+- optimize mempool (use non verbose get transaction, possibly parallelize)
+- update documentation
+- create/integrate blockchain explorer
 - support all coins from https://github.com/trezor/trezor-common/blob/master/coins.json
-- full ethereum support
-- cleanup of the socket.io - do not send unnecessary data
-- handle different versions of Bitcoin Core
-- log live traffic from production bitcore server and replay it in blockbook
-- protobuf websocket interface
+- full ethereum support (tokens, balance)
+- protobuf websocket interface instead of socket.io
 - xpub index
 - tests
 - fix program dependencies to concrete versions
-- protect blockbook against illicit usage
+- protect socket.io interface against illicit usage
+- ~~cleanup of the socket.io - do not send unnecessary data~~
+- ~~handle different versions of Bitcoin Core~~
+- ~~log live traffic from production bitcore server and replay it in blockbook~~
+- ~~find memory leak in initial import - disappeared with index v2~~
 - ~~zcash support~~
 - ~~basic ethereum support~~
 - ~~disconnect blocks - use block data if available to avoid full scan~~
