@@ -11,7 +11,7 @@ case "$1" in
 
     if [ "$(stat -c '%U' /opt/coins/data/bch-testnet/bitcoin)" != "bcash" ]
     then
-        chown bcash:bcash /opt/coins/data/bch-testnet/bitcoin
+        chown -R bcash:bcash /opt/coins/data/bch-testnet/bitcoin
     fi
   ;;
 

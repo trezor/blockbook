@@ -11,7 +11,7 @@ case "$1" in
 
     if [ "$(stat -c '%U' /opt/coins/data/zec/zcash)" != "zcash" ]
     then
-        chown zcash:zcash /opt/coins/data/zec/zcash
+        chown -R zcash:zcash /opt/coins/data/zec/zcash
     fi
 
     HOME=/opt/coins/data/zec/zcash /opt/coins/nodes/zcash/zec/bin/zcash-fetch-params
