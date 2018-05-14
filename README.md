@@ -122,6 +122,7 @@ The data are separated to different column families:
 
 ## Todo
 
+- add db data version (column data version) checking to db to avoid data corruption
 - update used paths and users according to specification by system admin
 - improve txcache (time of storage, number/size of cached txs, purge cache)
 - collect blockbook stats (number of items in indexes, )
