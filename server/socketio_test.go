@@ -201,7 +201,7 @@ func verifyEstimateSmartFee(t *testing.T, id int, lrs *logRequestResponse, bbRes
 	}
 	// it is not possible to compare fee directly, it changes over time,
 	// verify that the BB fee is in a reasonable range
-	if bbResponse.Result > 0 && bbResponse.Result < 1e-3 {
+	if bbResponse.Result > 0 && bbResponse.Result < .1 {
 		stat.SuccessCount++
 	} else {
 		t.Log("estimateSmartFee", id, "mismatch bb:", bbResponse.Result,
