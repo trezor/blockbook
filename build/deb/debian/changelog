@@ -1,3 +1,9 @@
+blockbook (0.0.2) unstable; urgency=medium
+
+  * v0.0.2
+
+ -- Jakub Matys <jakub.matys@satoshilabs.com>  Mon, 14 May 2018 15:53:15 +0200
+
 blockbook (0.0.1-satoshilabs1) unstable; urgency=medium
 
   * Initial build
