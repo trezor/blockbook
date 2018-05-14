@@ -21,6 +21,9 @@ Type=forking
 PIDFile=/run/zcashd/zec.pid
 Restart=on-failure
 
+# Resource limits
+LimitNOFILE=500000
+
 # Hardening measures
 ####################
 
