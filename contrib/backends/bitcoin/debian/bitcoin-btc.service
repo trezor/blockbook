@@ -20,6 +20,9 @@ Type=forking
 PIDFile=/run/bitcoind/btc.pid
 Restart=on-failure
 
+# Resource limits
+LimitNOFILE=500000
+
 # Hardening measures
 ####################
 

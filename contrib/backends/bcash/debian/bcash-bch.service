@@ -20,6 +20,9 @@ Type=forking
 PIDFile=/run/bitcoin-abc/bch.pid
 Restart=on-failure
 
+# Resource limits
+LimitNOFILE=500000
+
 # Hardening measures
 ####################
 

@@ -15,6 +15,9 @@ Type=simple
 Restart=on-failure
 WorkingDirectory=/opt/coins/blockbook/btc-testnet
 
+# Resource limits
+LimitNOFILE=500000
+
 # Hardening measures
 ####################
 
