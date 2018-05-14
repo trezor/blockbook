@@ -135,6 +135,7 @@ type BlockChain interface {
 	GetBlock(hash string, height uint32) (*Block, error)
 	GetMempool() ([]string, error)
 	GetTransaction(txid string) (*Tx, error)
+	GetTransactionForMempool(txid string) (*Tx, error)
 	EstimateSmartFee(blocks int, conservative bool) (float64, error)
 	EstimateFee(blocks int) (float64, error)
 	SendRawTransaction(tx string) (string, error)

@@ -124,6 +124,11 @@ func (c *blockChainWithMetrics) GetTransaction(txid string) (v *bchain.Tx, err e
 	return c.b.GetTransaction(txid)
 }
 
+func (c *blockChainWithMetrics) GetTransactionForMempool(txid string) (v *bchain.Tx, err error) {
+	defer func(s time.Time) { c.observeRPCLatency("GetTransactionForMempool", s, err) }(time.Now())
+	return c.b.GetTransactionForMempool(txid)
+}
+
 func (c *blockChainWithMetrics) EstimateSmartFee(blocks int, conservative bool) (v float64, err error) {
 	defer func(s time.Time) { c.observeRPCLatency("EstimateSmartFee", s, err) }(time.Now())
 	return c.b.EstimateSmartFee(blocks, conservative)

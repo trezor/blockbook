@@ -244,6 +244,11 @@ type resGetRawTransaction struct {
 	Result bchain.Tx        `json:"result"`
 }
 
+type resGetRawTransactionNonverbose struct {
+	Error  *bchain.RPCError `json:"error"`
+	Result string           `json:"result"`
+}
+
 // estimatesmartfee
 
 type cmdEstimateSmartFee struct {
@@ -543,6 +548,33 @@ func (b *BitcoinRPC) GetMempool() ([]string, error) {
 		return nil, res.Error
 	}
 	return res.Result, nil
+}
+
+// GetTransactionForMempool returns a transaction by the transaction ID.
+// It could be optimized for mempool, i.e. without block time and confirmations
+func (b *BitcoinRPC) GetTransactionForMempool(txid string) (*bchain.Tx, error) {
+	glog.V(1).Info("rpc: getrawtransaction nonverbose ", txid)
+
+	res := resGetRawTransactionNonverbose{}
+	req := cmdGetRawTransaction{Method: "getrawtransaction"}
+	req.Params.Txid = txid
+	req.Params.Verbose = false
+	err := b.Call(&req, &res)
+	if err != nil {
+		return nil, errors.Annotatef(err, "txid %v", txid)
+	}
+	if res.Error != nil {
+		return nil, errors.Annotatef(res.Error, "txid %v", txid)
+	}
+	data, err := hex.DecodeString(res.Result)
+	if err != nil {
+		return nil, errors.Annotatef(err, "txid %v", txid)
+	}
+	tx, err := b.Parser.ParseTx(data)
+	if err != nil {
+		return nil, errors.Annotatef(err, "txid %v", txid)
+	}
+	return tx, nil
 }
 
 // GetTransaction returns a transaction by the transaction ID.

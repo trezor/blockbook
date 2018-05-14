@@ -133,6 +133,12 @@ func isInvalidTx(err error) bool {
 	return false
 }
 
+// GetTransactionForMempool returns a transaction by the transaction ID.
+// It could be optimized for mempool, i.e. without block time and confirmations
+func (z *ZCashRPC) GetTransactionForMempool(txid string) (*bchain.Tx, error) {
+	return z.GetTransaction(txid)
+}
+
 // GetTransaction returns a transaction by the transaction ID.
 func (z *ZCashRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 	glog.V(1).Info("rpc: getrawtransaction ", txid)

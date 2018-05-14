@@ -61,7 +61,7 @@ func (m *NonUTXOMempool) Resync(onNewTxAddr func(txid string, addr string)) erro
 	for _, txid := range txs {
 		io, exists := m.txToInputOutput[txid]
 		if !exists {
-			tx, err := m.chain.GetTransaction(txid)
+			tx, err := m.chain.GetTransactionForMempool(txid)
 			if err != nil {
 				glog.Error("cannot get transaction ", txid, ": ", err)
 				continue

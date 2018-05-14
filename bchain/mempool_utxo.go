@@ -55,6 +55,51 @@ func (m *UTXOMempool) updateMappings(newTxToInputOutput map[string][]addrIndex, 
 	m.addrIDToTx = newAddrIDToTx
 }
 
+func (m *UTXOMempool) getMempoolTxAddrs(txid string, onNewTxAddr func(txid string, addr string)) ([]addrIndex, bool) {
+	parser := m.chain.GetChainParser()
+	tx, err := m.chain.GetTransactionForMempool(txid)
+	if err != nil {
+		glog.Error("cannot get transaction ", txid, ": ", err)
+		return nil, false
+	}
+	io := make([]addrIndex, 0, len(tx.Vout)+len(tx.Vin))
+	for _, output := range tx.Vout {
+		addrID, err := parser.GetAddrIDFromVout(&output)
+		if err != nil {
+			glog.Error("error in addrID in ", txid, " ", output.N, ": ", err)
+			continue
+		}
+		if len(addrID) > 0 {
+			io = append(io, addrIndex{string(addrID), int32(output.N)})
+		}
+		if onNewTxAddr != nil && len(output.ScriptPubKey.Addresses) == 1 {
+			onNewTxAddr(tx.Txid, output.ScriptPubKey.Addresses[0])
+		}
+	}
+	for _, input := range tx.Vin {
+		if input.Coinbase != "" {
+			continue
+		}
+		// TODO - possibly get from DB unspenttxs - however some output txs can be in mempool only
+		itx, err := m.chain.GetTransactionForMempool(input.Txid)
+		if err != nil {
+			glog.Error("cannot get transaction ", input.Txid, ": ", err)
+			continue
+		}
+		if int(input.Vout) >= len(itx.Vout) {
+			glog.Error("Vout len in transaction ", input.Txid, " ", len(itx.Vout), " input.Vout=", input.Vout)
+			continue
+		}
+		addrID, err := parser.GetAddrIDFromVout(&itx.Vout[input.Vout])
+		if err != nil {
+			glog.Error("error in addrID in ", input.Txid, " ", input.Vout, ": ", err)
+			continue
+		}
+		io = append(io, addrIndex{string(addrID), int32(^input.Vout)})
+	}
+	return io, true
+}
+
 // Resync gets mempool transactions and maps outputs to transactions.
 // Resync is not reentrant, it should be called from a single thread.
 // Read operations (GetTransactions) are safe.
@@ -65,52 +110,16 @@ func (m *UTXOMempool) Resync(onNewTxAddr func(txid string, addr string)) error {
 	if err != nil {
 		return err
 	}
-	parser := m.chain.GetChainParser()
 	// allocate slightly larger capacity of the maps
 	newTxToInputOutput := make(map[string][]addrIndex, len(m.txToInputOutput)+5)
 	newAddrIDToTx := make(map[string][]outpoint, len(m.addrIDToTx)+5)
 	for _, txid := range txs {
 		io, exists := m.txToInputOutput[txid]
 		if !exists {
-			tx, err := m.chain.GetTransaction(txid)
-			if err != nil {
-				glog.Error("cannot get transaction ", txid, ": ", err)
+			var ok bool
+			io, ok = m.getMempoolTxAddrs(txid, onNewTxAddr)
+			if !ok {
 				continue
-			}
-			io = make([]addrIndex, 0, len(tx.Vout)+len(tx.Vin))
-			for _, output := range tx.Vout {
-				addrID, err := parser.GetAddrIDFromVout(&output)
-				if err != nil {
-					glog.Error("error in addrID in ", txid, " ", output.N, ": ", err)
-					continue
-				}
-				if len(addrID) > 0 {
-					io = append(io, addrIndex{string(addrID), int32(output.N)})
-				}
-				if onNewTxAddr != nil && len(output.ScriptPubKey.Addresses) == 1 {
-					onNewTxAddr(tx.Txid, output.ScriptPubKey.Addresses[0])
-				}
-			}
-			for _, input := range tx.Vin {
-				if input.Coinbase != "" {
-					continue
-				}
-				// TODO - possibly get from DB unspenttxs - however some output txs can be in mempool only
-				itx, err := m.chain.GetTransaction(input.Txid)
-				if err != nil {
-					glog.Error("cannot get transaction ", input.Txid, ": ", err)
-					continue
-				}
-				if int(input.Vout) >= len(itx.Vout) {
-					glog.Error("Vout len in transaction ", input.Txid, " ", len(itx.Vout), " input.Vout=", input.Vout)
-					continue
-				}
-				addrID, err := parser.GetAddrIDFromVout(&itx.Vout[input.Vout])
-				if err != nil {
-					glog.Error("error in addrID in ", input.Txid, " ", input.Vout, ": ", err)
-					continue
-				}
-				io = append(io, addrIndex{string(addrID), int32(^input.Vout)})
 			}
 		}
 		newTxToInputOutput[txid] = io

@@ -388,6 +388,12 @@ func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error
 	return &bbk, nil
 }
 
+// GetTransactionForMempool returns a transaction by the transaction ID.
+// It could be optimized for mempool, i.e. without block time and confirmations
+func (b *EthereumRPC) GetTransactionForMempool(txid string) (*bchain.Tx, error) {
+	return b.GetTransaction(txid)
+}
+
 // GetTransaction returns a transaction by the transaction ID.
 func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
