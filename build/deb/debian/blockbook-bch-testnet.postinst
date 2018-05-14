@@ -4,16 +4,16 @@ set -e
 case "$1" in
 
   configure)
-    if ! id -u blockbook &> /dev/null
+    if ! id -u blockbook-bch &> /dev/null
     then
-        useradd --system -M -U blockbook
+        useradd --system -M -U blockbook-bch
     fi
 
-    for dir in /data/bch-testnet/blockbook /opt/blockbook/bch-testnet/logs
+    for dir in /opt/coins/data/bch-testnet/blockbook /opt/coins/blockbook/bch-testnet/logs
     do
-        if [ "$(stat -c '%U' $dir)" != "blockbook" ]
+        if [ "$(stat -c '%U' $dir)" != "blockbook-bch" ]
         then
-            chown -R blockbook:blockbook $dir
+            chown -R blockbook-bch:blockbook-bch $dir
         fi
     done
   ;;

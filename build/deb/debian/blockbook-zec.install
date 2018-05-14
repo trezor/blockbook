@@ -1,5 +1,5 @@
 #!/usr/bin/dh-exec --with=install
-blockbook /opt/blockbook/zec/bin
-cert /opt/blockbook/zec
-static /opt/blockbook/zec
-configs/zec.json => /opt/blockbook/zec/config/blockchaincfg.json
+blockbook /opt/coins/blockbook/zec/bin
+cert /opt/coins/blockbook/zec
+static /opt/coins/blockbook/zec
+configs/zec.json => /opt/coins/blockbook/zec/config/blockchaincfg.json

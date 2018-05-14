@@ -4,16 +4,16 @@ set -e
 case "$1" in
 
   configure)
-    if ! id -u blockbook &> /dev/null
+    if ! id -u blockbook-zec &> /dev/null
     then
-        useradd --system -M -U blockbook
+        useradd --system -M -U blockbook-zec
     fi
 
-    for dir in /data/zec/blockbook /opt/blockbook/zec/logs
+    for dir in /opt/coins/data/zec/blockbook /opt/coins/blockbook/zec/logs
     do
-        if [ "$(stat -c '%U' $dir)" != "blockbook" ]
+        if [ "$(stat -c '%U' $dir)" != "blockbook-zec" ]
         then
-            chown -R blockbook:blockbook $dir
+            chown -R blockbook-zec:blockbook-zec $dir
         fi
     done
   ;;

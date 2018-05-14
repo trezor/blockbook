@@ -1,2 +1,2 @@
-/data/btc-testnet/blockbook
-/opt/blockbook/btc-testnet/logs
+/opt/coins/data/btc-testnet/blockbook
+/opt/coins/blockbook/btc-testnet/logs
