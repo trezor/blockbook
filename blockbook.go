@@ -63,6 +63,8 @@ var (
 	explorerURL = flag.String("explorer", "", "address of blockchain explorer")
 
 	coin = flag.String("coin", "btc", "coin name")
+
+	noTxCache = flag.Bool("notxcache", false, "disable tx cache")
 )
 
 var (
@@ -156,7 +158,7 @@ func main() {
 		return
 	}
 
-	if txCache, err = db.NewTxCache(index, chain, metrics); err != nil {
+	if txCache, err = db.NewTxCache(index, chain, metrics, !*noTxCache); err != nil {
 		glog.Error("txCache ", err)
 		return
 	}
