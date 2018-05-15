@@ -29,7 +29,7 @@ build-images:
 	docker build --no-cache=$(NO_CACHE) -t $(BIN_IMAGE) build/bin
 	@ docker images -q $(BIN_IMAGE) > $@
 
-.deb-image:
+.deb-image: .bin-image
 	docker build --no-cache=$(NO_CACHE) -t $(DEB_IMAGE) build/deb
 	@ docker images -q $(DEB_IMAGE) > $@
 
