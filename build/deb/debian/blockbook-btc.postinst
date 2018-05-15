@@ -6,7 +6,7 @@ case "$1" in
   configure)
     if ! id -u blockbook-btc &> /dev/null
     then
-        useradd --system -M -U blockbook-btc
+        useradd --system -M -U blockbook-btc -s /bin/false
     fi
 
     for dir in /opt/coins/data/btc/blockbook /opt/coins/blockbook/btc/logs
