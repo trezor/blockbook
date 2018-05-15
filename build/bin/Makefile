@@ -11,12 +11,10 @@ build-debug: prepare-sources
 	chown $(PACKAGER) /out/blockbook
 
 test: prepare-sources
-	#cd $(GOPATH)/src/blockbook && go test -short ./...  # FIXME
-	cd $(GOPATH)/src/blockbook && go test -short ./bchain/coins/btc ./bchain/coins/bch ./bchain/coins/eth ./bchain/coins/zec
+	cd $(GOPATH)/src/blockbook && go test -short ./...
 
 test-all: prepare-sources
-	# cd $(GOPATH)/src/blockbook && go test ./...  # FIXME
-	cd $(GOPATH)/src/blockbook && go test ./bchain/coins/btc ./bchain/coins/bch ./bchain/coins/eth ./bchain/coins/zec
+	cd $(GOPATH)/src/blockbook && go test ./...
 
 prepare-sources:
 	@ [ -n "`ls /src 2> /dev/null`" ] || (echo "/src doesn't exist or is empty" 1>&2 && exit 1)
