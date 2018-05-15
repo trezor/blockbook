@@ -7,19 +7,19 @@ UPDATE_VENDOR = 1
 .PHONY: build build-debug test deb
 
 build: .bin-image
-	docker run -t --rm -e PACKAGER=$(PACKAGER) -v $(CURDIR):/src -v $(CURDIR)/build:/out $(BIN_IMAGE) make build
+	docker run -t --rm -e PACKAGER=$(PACKAGER) -e UPDATE_VENDOR=$(UPDATE_VENDOR) -v $(CURDIR):/src -v $(CURDIR)/build:/out $(BIN_IMAGE) make build
 
 build-debug: .bin-image
-	docker run -t --rm -e PACKAGER=$(PACKAGER) -v $(CURDIR):/src -v $(CURDIR)/build:/out $(BIN_IMAGE) make build-debug
+	docker run -t --rm -e PACKAGER=$(PACKAGER) -e UPDATE_VENDOR=$(UPDATE_VENDOR) -v $(CURDIR):/src -v $(CURDIR)/build:/out $(BIN_IMAGE) make build-debug
 
 test: .bin-image
-	docker run -t --rm -e PACKAGER=$(PACKAGER) -v $(CURDIR):/src $(BIN_IMAGE) make test
+	docker run -t --rm -e PACKAGER=$(PACKAGER) -e UPDATE_VENDOR=$(UPDATE_VENDOR) -v $(CURDIR):/src $(BIN_IMAGE) make test
 
 test-all: .bin-image
-	docker run -t --rm -e PACKAGER=$(PACKAGER) -v $(CURDIR):/src $(BIN_IMAGE) make test-all
+	docker run -t --rm -e PACKAGER=$(PACKAGER) -e UPDATE_VENDOR=$(UPDATE_VENDOR) -v $(CURDIR):/src $(BIN_IMAGE) make test-all
 
 deb: .deb-image
-	docker run -t --rm -e PACKAGER=$(PACKAGER) -v $(CURDIR):/src -v $(CURDIR)/build:/out $(DEB_IMAGE)
+	docker run -t --rm -e PACKAGER=$(PACKAGER) -e UPDATE_VENDOR=$(UPDATE_VENDOR) -v $(CURDIR):/src -v $(CURDIR)/build:/out $(DEB_IMAGE)
 
 build-images:
 	rm -f .bin-image .deb-image

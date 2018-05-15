@@ -1,4 +1,4 @@
-UPDATE_VENDOR=1
+UPDATE_VENDOR ?= 1
 
 build: prepare-sources
 	cd $(GOPATH)/src/blockbook && go build -o $(CURDIR)/blockbook -ldflags="-s -w"
