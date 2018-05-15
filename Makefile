@@ -2,6 +2,7 @@ BIN_IMAGE = blockbook-build
 DEB_IMAGE = blockbook-build-deb
 PACKAGER = $(shell id -u):$(shell id -g)
 NO_CACHE = false
+UPDATE_VENDOR = 1
 
 .PHONY: build build-debug test deb
 

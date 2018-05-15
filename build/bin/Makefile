@@ -1,3 +1,5 @@
+UPDATE_VENDOR=1
+
 build: prepare-sources
 	cd $(GOPATH)/src/blockbook && go build -o $(CURDIR)/blockbook -ldflags="-s -w"
 	cp $(CURDIR)/blockbook /out/blockbook
@@ -19,5 +21,12 @@ test-all: prepare-sources
 prepare-sources:
 	@ [ -n "`ls /src 2> /dev/null`" ] || (echo "/src doesn't exist or is empty" 1>&2 && exit 1)
 	cp -r /src $(GOPATH)/src/blockbook
-	rm -rf $(GOPATH)/src/blockbook/vendor
-	cd $(GOPATH)/src/blockbook && dep ensure -vendor-only
+	$(MAKE) prepare-vendor
+
+prepare-vendor:
+	@ if [ "$(UPDATE_VENDOR)" -eq 1 ]; then \
+		echo "Updating vendor"; \
+		rm -rf $(GOPATH)/src/blockbook/vendor && cd $(GOPATH)/src/blockbook && dep ensure -vendor-only ; \
+	else \
+		echo "Update of vendor not demanded, keeping version from src" ; \
+	fi
