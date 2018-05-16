@@ -55,6 +55,7 @@ func NewUTXOMempool(chain BlockChain) *UTXOMempool {
 			}
 		}(i)
 	}
+	glog.Info("mempool: starting with ", numberOfSyncRoutines, " workers")
 	return m
 }
 
@@ -177,6 +178,6 @@ func (m *UTXOMempool) Resync(onNewTxAddr func(txid string, addr string)) error {
 	}
 	m.updateMappings(newTxToInputOutput, newAddrIDToTx)
 	m.onNewTxAddr = nil
-	glog.Info("Mempool: resync finished in ", time.Since(start), ", ", len(m.txToInputOutput), " transactions in mempool")
+	glog.Info("mempool: resync finished in ", time.Since(start), ", ", len(m.txToInputOutput), " transactions in mempool")
 	return nil
 }
