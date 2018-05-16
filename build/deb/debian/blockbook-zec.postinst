@@ -6,7 +6,7 @@ case "$1" in
   configure)
     if ! id -u blockbook-zec &> /dev/null
     then
-        useradd --system -M -U blockbook-zec
+        useradd --system -M -U blockbook-zec -s /bin/false
     fi
 
     for dir in /opt/coins/data/zec/blockbook /opt/coins/blockbook/zec/logs

@@ -6,7 +6,7 @@ case "$1" in
   configure)
     if ! id -u blockbook-bch &> /dev/null
     then
-        useradd --system -M -U blockbook-bch
+        useradd --system -M -U blockbook-bch -s /bin/false
     fi
 
     for dir in /opt/coins/data/bch/blockbook /opt/coins/blockbook/bch/logs

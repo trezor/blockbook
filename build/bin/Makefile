@@ -1,3 +1,5 @@
+UPDATE_VENDOR ?= 1
+
 build: prepare-sources
 	cd $(GOPATH)/src/blockbook && go build -o $(CURDIR)/blockbook -ldflags="-s -w"
 	cp $(CURDIR)/blockbook /out/blockbook
@@ -9,15 +11,20 @@ build-debug: prepare-sources
 	chown $(PACKAGER) /out/blockbook
 
 test: prepare-sources
-	#cd $(GOPATH)/src/blockbook && go test -short ./...  # FIXME
-	cd $(GOPATH)/src/blockbook && go test -short ./bchain/coins/btc ./bchain/coins/bch ./bchain/coins/eth ./bchain/coins/zec
+	cd $(GOPATH)/src/blockbook && go test -short ./...
 
 test-all: prepare-sources
-	# cd $(GOPATH)/src/blockbook && go test ./...  # FIXME
-	cd $(GOPATH)/src/blockbook && go test ./bchain/coins/btc ./bchain/coins/bch ./bchain/coins/eth ./bchain/coins/zec
+	cd $(GOPATH)/src/blockbook && go test ./...
 
 prepare-sources:
 	@ [ -n "`ls /src 2> /dev/null`" ] || (echo "/src doesn't exist or is empty" 1>&2 && exit 1)
-	cp -r /src $(GOPATH)/src/blockbook
-	rm -rf $(GOPATH)/src/blockbook/vendor
-	cd $(GOPATH)/src/blockbook && dep ensure -vendor-only
+	[ -d $(GOPATH)/src/blockbook ] || cp -r /src $(GOPATH)/src/blockbook
+	$(MAKE) prepare-vendor
+
+prepare-vendor:
+	@ if [ "$(UPDATE_VENDOR)" -eq 1 ]; then \
+		echo "Updating vendor"; \
+		rm -rf $(GOPATH)/src/blockbook/vendor && cd $(GOPATH)/src/blockbook && dep ensure -vendor-only ; \
+	else \
+		echo "Update of vendor not demanded, keeping version from src" ; \
+	fi
