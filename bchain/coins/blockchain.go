@@ -89,6 +89,11 @@ func (c *blockChainWithMetrics) GetSubversion() string {
 	return c.b.GetSubversion()
 }
 
+func (c *blockChainWithMetrics) GetBlockChainInfo() (v string, err error) {
+	defer func(s time.Time) { c.observeRPCLatency("GetBlockChainInfo", s, err) }(time.Now())
+	return c.b.GetBlockChainInfo()
+}
+
 func (c *blockChainWithMetrics) GetBestBlockHash() (v string, err error) {
 	defer func(s time.Time) { c.observeRPCLatency("GetBestBlockHash", s, err) }(time.Now())
 	return c.b.GetBestBlockHash()

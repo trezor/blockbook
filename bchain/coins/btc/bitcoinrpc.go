@@ -75,9 +75,9 @@ func NewBitcoinRPC(config json.RawMessage, pushHandler func(bchain.NotificationT
 // GetChainInfoAndInitializeMempool is called by Initialize and reused by other coins
 // it contacts the blockchain rpc interface for the first time
 // and if successful it connects to ZeroMQ and creates mempool handler
-func (b *BitcoinRPC) GetChainInfoAndInitializeMempool() (string, error) {
+func (b *BitcoinRPC) GetChainInfoAndInitializeMempool(bc bchain.BlockChain) (string, error) {
 	// try to connect to block chain and get some info
-	chainName, err := b.GetBlockChainInfo()
+	chainName, err := bc.GetBlockChainInfo()
 	if err != nil {
 		return "", err
 	}
@@ -89,7 +89,7 @@ func (b *BitcoinRPC) GetChainInfoAndInitializeMempool() (string, error) {
 	}
 	b.mq = mq
 
-	b.Mempool = bchain.NewUTXOMempool(b)
+	b.Mempool = bchain.NewUTXOMempool(bc)
 
 	return chainName, nil
 }
@@ -97,7 +97,7 @@ func (b *BitcoinRPC) GetChainInfoAndInitializeMempool() (string, error) {
 // Initialize initializes BitcoinRPC instance.
 func (b *BitcoinRPC) Initialize() error {
 
-	chainName, err := b.GetChainInfoAndInitializeMempool()
+	chainName, err := b.GetChainInfoAndInitializeMempool(b)
 	if err != nil {
 		return err
 	}

@@ -33,7 +33,7 @@ func NewBCashRPC(config json.RawMessage, pushHandler func(bchain.NotificationTyp
 // Initialize initializes BCashRPC instance.
 func (b *BCashRPC) Initialize() error {
 
-	chainName, err := b.GetChainInfoAndInitializeMempool()
+	chainName, err := b.GetChainInfoAndInitializeMempool(b)
 	if err != nil {
 		return err
 	}
