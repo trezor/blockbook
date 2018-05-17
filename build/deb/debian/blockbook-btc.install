@@ -3,3 +3,4 @@ blockbook /opt/coins/blockbook/btc/bin
 cert /opt/coins/blockbook/btc
 static /opt/coins/blockbook/btc
 configs/btc.json => /opt/coins/blockbook/btc/config/blockchaincfg.json
+logrotate.sh /opt/coins/blockbook/btc/bin

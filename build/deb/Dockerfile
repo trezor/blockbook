@@ -7,6 +7,7 @@ RUN apt-get update && \
     apt-get clean
 
 ADD build-deb.sh /build/build-deb.sh
+ADD logrotate.sh /build/logrotate.sh
 
 WORKDIR /build
 

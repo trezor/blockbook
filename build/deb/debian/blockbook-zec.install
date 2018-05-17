@@ -3,3 +3,4 @@ blockbook /opt/coins/blockbook/zec/bin
 cert /opt/coins/blockbook/zec
 static /opt/coins/blockbook/zec
 configs/zec.json => /opt/coins/blockbook/zec/config/blockchaincfg.json
+logrotate.sh /opt/coins/blockbook/zec/bin
