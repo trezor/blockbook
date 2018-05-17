@@ -55,7 +55,7 @@ func NewUTXOMempool(chain BlockChain) *UTXOMempool {
 			}
 		}(i)
 	}
-	glog.Info("mempool: starting with ", numberOfSyncRoutines, " workers")
+	glog.Info("mempool: starting with ", numberOfSyncRoutines, " sync workers")
 	return m
 }
 
@@ -108,7 +108,7 @@ func (m *UTXOMempool) getMempoolTxAddrs(txid string) ([]addrIndex, bool) {
 		if input.Coinbase != "" {
 			continue
 		}
-		// TODO - possibly get from DB unspenttxs - however some output txs can be in mempool only
+		// TODO - possibly get from DB unspenttxs - however some output txs can be also in mempool
 		itx, err := m.chain.GetTransactionForMempool(input.Txid)
 		if err != nil {
 			glog.Error("cannot get transaction ", input.Txid, ": ", err)
@@ -133,7 +133,7 @@ func (m *UTXOMempool) getMempoolTxAddrs(txid string) ([]addrIndex, bool) {
 // Read operations (GetTransactions) are safe.
 func (m *UTXOMempool) Resync(onNewTxAddr func(txid string, addr string)) error {
 	start := time.Now()
-	glog.V(1).Info("Mempool: resync")
+	glog.V(1).Info("mempool: resync")
 	m.onNewTxAddr = onNewTxAddr
 	txs, err := m.chain.GetMempool()
 	if err != nil {
