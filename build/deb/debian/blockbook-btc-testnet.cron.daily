@@ -1,2 +1,2 @@
 #!/bin/sh
-find /opt/coins/blockbook/btc-testnet/logs -mtime +6 -type f -delete
+/opt/coins/blockbook/btc-testnet/bin/logrotate.sh

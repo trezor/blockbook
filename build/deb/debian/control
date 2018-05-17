@@ -7,25 +7,25 @@ Standards-Version: 3.9.5
 
 Package: blockbook-btc
 Architecture: amd64
-Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, bitcoin-btc
+Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, bitcoin-btc
 Description: Satoshilabs blockbook server (Bitcoin mainnet)
 
 Package: blockbook-btc-testnet
 Architecture: amd64
-Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, bitcoin-testnet
+Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, bitcoin-testnet
 Description: Satoshilabs blockbook server (Bitcoin testnet)
 
 Package: blockbook-zec
 Architecture: amd64
-Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, zcash-zec
+Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, zcash-zec
 Description: Satoshilabs blockbook server (ZCash mainnet)
 
 Package: blockbook-bch
 Architecture: amd64
-Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, bcash-bch
+Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, bcash-bch
 Description: Satoshilabs blockbook server (Bitcoin Cash mainnet)
 
 Package: blockbook-bch-testnet
 Architecture: amd64
-Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, bcash-testnet
+Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, bcash-testnet
 Description: Satoshilabs blockbook server (Bitcoin Cash testnet)

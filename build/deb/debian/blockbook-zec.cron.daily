@@ -1,2 +1,2 @@
 #!/bin/sh
-find /opt/coins/blockbook/zec/logs -mtime +6 -type f -delete
+/opt/coins/blockbook/zec/bin/logrotate.sh

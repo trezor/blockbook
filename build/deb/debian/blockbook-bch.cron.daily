@@ -1,2 +1,2 @@
 #!/bin/sh
-find /opt/coins/blockbook/bch/logs -mtime +6 -type f -delete
+/opt/coins/blockbook/bch/bin/logrotate.sh
