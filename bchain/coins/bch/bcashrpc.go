@@ -30,10 +30,10 @@ func NewBCashRPC(config json.RawMessage, pushHandler func(bchain.NotificationTyp
 	return s, nil
 }
 
+// Initialize initializes BCashRPC instance.
 func (b *BCashRPC) Initialize() error {
-	b.Mempool = bchain.NewUTXOMempool(b)
 
-	chainName, err := b.GetBlockChainInfo()
+	chainName, err := b.GetChainInfoAndInitializeMempool()
 	if err != nil {
 		return err
 	}

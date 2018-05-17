@@ -24,8 +24,13 @@ func NewZCashRPC(config json.RawMessage, pushHandler func(bchain.NotificationTyp
 	return z, nil
 }
 
+// Initialize initializes ZCashRPC instance.
 func (z *ZCashRPC) Initialize() error {
-	z.Mempool = bchain.NewUTXOMempool(z)
+	_, err := z.GetChainInfoAndInitializeMempool()
+	if err != nil {
+		return err
+	}
+
 	z.Parser = &ZCashParser{}
 	z.Testnet = false
 	z.Network = "livenet"

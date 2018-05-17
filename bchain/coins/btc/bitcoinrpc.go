@@ -19,17 +19,19 @@ import (
 
 // BitcoinRPC is an interface to JSON-RPC bitcoind service.
 type BitcoinRPC struct {
-	client      http.Client
-	rpcURL      string
-	user        string
-	password    string
-	Parser      bchain.BlockChainParser
-	Testnet     bool
-	Network     string
-	Mempool     *bchain.UTXOMempool
-	ParseBlocks bool
-	mq          *bchain.MQ
-	Subversion  string
+	client        http.Client
+	rpcURL        string
+	user          string
+	password      string
+	Parser        bchain.BlockChainParser
+	Testnet       bool
+	Network       string
+	Mempool       *bchain.UTXOMempool
+	ParseBlocks   bool
+	zeroMQBinding string
+	pushHandler   func(bchain.NotificationType)
+	mq            *bchain.MQ
+	Subversion    string
 }
 
 type configuration struct {
@@ -57,28 +59,45 @@ func NewBitcoinRPC(config json.RawMessage, pushHandler func(bchain.NotificationT
 	}
 
 	s := &BitcoinRPC{
-		client:      http.Client{Timeout: time.Duration(c.RPCTimeout) * time.Second, Transport: transport},
-		rpcURL:      c.RPCURL,
-		user:        c.RPCUser,
-		password:    c.RPCPass,
-		ParseBlocks: c.Parse,
-		Subversion:  c.Subversion,
+		client:        http.Client{Timeout: time.Duration(c.RPCTimeout) * time.Second, Transport: transport},
+		rpcURL:        c.RPCURL,
+		user:          c.RPCUser,
+		password:      c.RPCPass,
+		ParseBlocks:   c.Parse,
+		Subversion:    c.Subversion,
+		zeroMQBinding: c.ZeroMQBinding,
+		pushHandler:   pushHandler,
 	}
-
-	mq, err := bchain.NewMQ(c.ZeroMQBinding, pushHandler)
-	if err != nil {
-		glog.Error("mq: ", err)
-		return nil, err
-	}
-	s.mq = mq
 
 	return s, nil
 }
 
-func (b *BitcoinRPC) Initialize() error {
+// GetChainInfoAndInitializeMempool is called by Initialize and reused by other coins
+// it contacts the blockchain rpc interface for the first time
+// and if successful it connects to ZeroMQ and creates mempool handler
+func (b *BitcoinRPC) GetChainInfoAndInitializeMempool() (string, error) {
+	// try to connect to block chain and get some info
+	chainName, err := b.GetBlockChainInfo()
+	if err != nil {
+		return "", err
+	}
+
+	mq, err := bchain.NewMQ(b.zeroMQBinding, b.pushHandler)
+	if err != nil {
+		glog.Error("mq: ", err)
+		return "", err
+	}
+	b.mq = mq
+
 	b.Mempool = bchain.NewUTXOMempool(b)
 
-	chainName, err := b.GetBlockChainInfo()
+	return chainName, nil
+}
+
+// Initialize initializes BitcoinRPC instance.
+func (b *BitcoinRPC) Initialize() error {
+
+	chainName, err := b.GetChainInfoAndInitializeMempool()
 	if err != nil {
 		return err
 	}

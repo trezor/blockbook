@@ -86,6 +86,29 @@ func init() {
 	glog.CopyStandardLogTo("INFO")
 }
 
+func getBlockChainWithRetry(coin string, configfile string, pushHandler func(bchain.NotificationType), metrics *common.Metrics, seconds int) (bchain.BlockChain, error) {
+	var chain bchain.BlockChain
+	var err error
+	timer := time.NewTimer(time.Second)
+	for i := 0; ; i++ {
+		if chain, err = coins.NewBlockChain(coin, configfile, pushHandler, metrics); err != nil {
+			if i < seconds {
+				glog.Error("rpc: ", err, " Retrying...")
+				select {
+				case <-chanOsSignal:
+					return nil, errors.New("Interrupted")
+				case <-timer.C:
+					timer.Reset(time.Second)
+					continue
+				}
+			} else {
+				return nil, err
+			}
+		}
+		return chain, nil
+	}
+}
+
 func main() {
 	flag.Parse()
 
@@ -116,7 +139,7 @@ func main() {
 		glog.Fatal("Missing blockchaincfg configuration parameter")
 	}
 
-	if chain, err = coins.NewBlockChain(*coin, *blockchain, pushSynchronizationHandler, metrics); err != nil {
+	if chain, err = getBlockChainWithRetry(*coin, *blockchain, pushSynchronizationHandler, metrics, 60); err != nil {
 		glog.Fatal("rpc: ", err)
 	}
 
