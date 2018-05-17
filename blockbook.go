@@ -82,7 +82,7 @@ var (
 )
 
 func init() {
-	glog.MaxSize = 1024 * 1024
+	glog.MaxSize = 1024 * 1024 * 8
 	glog.CopyStandardLogTo("INFO")
 }
 
