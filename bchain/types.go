@@ -1,6 +1,7 @@
 package bchain
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 )
@@ -168,6 +169,7 @@ type BlockChainParser interface {
 	PackTxid(txid string) ([]byte, error)
 	UnpackTxid(buf []byte) (string, error)
 	ParseTx(b []byte) (*Tx, error)
+	ParseTxFromJson(json.RawMessage) (*Tx, error)
 	PackTx(tx *Tx, height uint32, blockTime int64) ([]byte, error)
 	UnpackTx(buf []byte) (*Tx, uint32, error)
 	// blocks

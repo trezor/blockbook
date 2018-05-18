@@ -2,7 +2,6 @@ package bch
 
 import (
 	"blockbook/bchain"
-	"blockbook/bchain/coins/btc"
 	"bytes"
 	"encoding/hex"
 	"reflect"
@@ -102,7 +101,7 @@ func TestBcashAddressInSlice(t *testing.T) {
 }
 
 func TestAddressToOutputScript(t *testing.T) {
-	parser := BCashParser{&btc.BitcoinParser{Params: GetChainParams("test")}}
+	parser := NewBCashParser(GetChainParams("test"))
 	want, err := hex.DecodeString("76a9144fa927fd3bcf57d4e3c582c3d2eb2bd3df8df47c88ac")
 	if err != nil {
 		panic(err)
@@ -214,7 +213,7 @@ func Test_UnpackTx(t *testing.T) {
 			name: "btc-1",
 			args: args{
 				packedTx: testTxPacked1,
-				parser:   &BCashParser{&btc.BitcoinParser{Params: GetChainParams("main")}},
+				parser:   NewBCashParser(GetChainParams("main")),
 			},
 			want:    &testTx1,
 			want1:   123456,
@@ -224,7 +223,7 @@ func Test_UnpackTx(t *testing.T) {
 			name: "testnet-1",
 			args: args{
 				packedTx: testTxPacked2,
-				parser:   &BCashParser{&btc.BitcoinParser{Params: GetChainParams("test")}},
+				parser:   NewBCashParser(GetChainParams("test")),
 			},
 			want:    &testTx2,
 			want1:   510234,

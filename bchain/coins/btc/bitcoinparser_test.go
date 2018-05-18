@@ -42,7 +42,7 @@ func TestAddressToOutputScript(t *testing.T) {
 			wantErr: false,
 		},
 	}
-	parser := &BitcoinParser{Params: GetChainParams("main")}
+	parser := NewBitcoinParser(GetChainParams("main"))
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -94,7 +94,7 @@ func TestOutputScriptToAddresses(t *testing.T) {
 			wantErr: false,
 		},
 	}
-	parser := &BitcoinParser{Params: GetChainParams("main")}
+	parser := NewBitcoinParser(GetChainParams("main"))
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			b, _ := hex.DecodeString(tt.args.script)
@@ -202,7 +202,7 @@ func Test_PackTx(t *testing.T) {
 				tx:        testTx1,
 				height:    123456,
 				blockTime: 1519053802,
-				parser:    &BitcoinParser{Params: GetChainParams("main")},
+				parser:    NewBitcoinParser(GetChainParams("main")),
 			},
 			want:    testTxPacked1,
 			wantErr: false,
@@ -213,7 +213,7 @@ func Test_PackTx(t *testing.T) {
 				tx:        testTx2,
 				height:    510234,
 				blockTime: 1235678901,
-				parser:    &BitcoinParser{Params: GetChainParams("test")},
+				parser:    NewBitcoinParser(GetChainParams("test")),
 			},
 			want:    testTxPacked2,
 			wantErr: false,
@@ -250,7 +250,7 @@ func Test_UnpackTx(t *testing.T) {
 			name: "btc-1",
 			args: args{
 				packedTx: testTxPacked1,
-				parser:   &BitcoinParser{Params: GetChainParams("main")},
+				parser:   NewBitcoinParser(GetChainParams("main")),
 			},
 			want:    &testTx1,
 			want1:   123456,
@@ -260,7 +260,7 @@ func Test_UnpackTx(t *testing.T) {
 			name: "testnet-1",
 			args: args{
 				packedTx: testTxPacked2,
-				parser:   &BitcoinParser{Params: GetChainParams("test")},
+				parser:   NewBitcoinParser(GetChainParams("test")),
 			},
 			want:    &testTx2,
 			want1:   510234,

@@ -19,6 +19,20 @@ type BCashParser struct {
 	*btc.BitcoinParser
 }
 
+// NewBCashParser returns new BCashParser instance
+func NewBCashParser(params *chaincfg.Params) *BCashParser {
+	return &BCashParser{
+		&btc.BitcoinParser{
+			&bchain.BaseParser{
+				AddressFactory: func(addr string) bchain.Address {
+					return &bcashAddress{addr: addr, net: params}
+				},
+			},
+			params,
+		},
+	}
+}
+
 // GetChainParams contains network parameters for the main Bitcoin Cash network,
 // the regression test Bitcoin Cash network, the test Bitcoin Cash network and
 // the simulation test Bitcoin Cash network, in this order

@@ -41,11 +41,7 @@ func (b *BCashRPC) Initialize() error {
 	params := GetChainParams(chainName)
 
 	// always create parser
-	b.Parser = &BCashParser{
-		&btc.BitcoinParser{
-			Params: params,
-		},
-	}
+	b.Parser = NewBCashParser(params)
 
 	// parameters for getInfo request
 	if params.Net == bchutil.MainnetMagic {
