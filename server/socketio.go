@@ -128,6 +128,7 @@ func (s *SocketIoServer) Shutdown(ctx context.Context) error {
 func (s *SocketIoServer) txRedirect(w http.ResponseWriter, r *http.Request) {
 	if s.explorerURL != "" {
 		http.Redirect(w, r, s.explorerURL+r.URL.Path, 302)
+		s.metrics.TxExplorerRedirects.With(common.Labels{}).Inc()
 	}
 }
 
