@@ -20,6 +20,16 @@ type BitcoinParser struct {
 	Params *chaincfg.Params
 }
 
+// NewBitcoinParser returns new BitcoinParser instance
+func NewBitcoinParser(params *chaincfg.Params) *BitcoinParser {
+	return &BitcoinParser{
+		&bchain.BaseParser{
+			AddressFactory: bchain.NewBaseAddress,
+		},
+		params,
+	}
+}
+
 // GetChainParams contains network parameters for the main Bitcoin network,
 // the regression test Bitcoin network, the test Bitcoin network and
 // the simulation test Bitcoin network, in this order
@@ -131,6 +141,17 @@ func (p *BitcoinParser) ParseTx(b []byte) (*bchain.Tx, error) {
 	}
 	tx := p.txFromMsgTx(&t, true)
 	tx.Hex = hex.EncodeToString(b)
+
+	for i, vout := range tx.Vout {
+		if len(vout.ScriptPubKey.Addresses) == 1 {
+			a, err := p.AddressFactory(vout.ScriptPubKey.Addresses[0])
+			if err != nil {
+				return nil, err
+			}
+			tx.Vout[i].Address = a
+		}
+	}
+
 	return &tx, nil
 }
 
@@ -169,12 +190,6 @@ func (p *BitcoinParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 		return nil, 0, err
 	}
 	tx.Blocktime = bt
-
-	for i, vout := range tx.Vout {
-		if len(vout.ScriptPubKey.Addresses) == 1 {
-			tx.Vout[i].Address = bchain.NewBaseAddress(vout.ScriptPubKey.Addresses[0])
-		}
-	}
 
 	return tx, height, nil
 }

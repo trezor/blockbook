@@ -20,6 +20,11 @@ type EthereumParser struct {
 	*bchain.BaseParser
 }
 
+// NewEthereumParser returns new EthereumParser instance
+func NewEthereumParser() *EthereumParser {
+	return &EthereumParser{&bchain.BaseParser{AddressFactory: bchain.NewBaseAddress}}
+}
+
 type rpcTransaction struct {
 	AccountNonce     string          `json:"nonce"    gencodec:"required"`
 	Price            string          `json:"gasPrice" gencodec:"required"`
@@ -55,14 +60,22 @@ func ethNumber(n string) (int64, error) {
 	return 0, errors.Errorf("Not a number: '%v'", n)
 }
 
-func ethTxToTx(tx *rpcTransaction, blocktime int64, confirmations uint32) (*bchain.Tx, error) {
+func (p *EthereumParser) ethTxToTx(tx *rpcTransaction, blocktime int64, confirmations uint32) (*bchain.Tx, error) {
 	txid := ethHashToHash(tx.Hash)
-	var fa, ta []string
+	var (
+		fa, ta []string
+		addr   bchain.Address
+		err    error
+	)
 	if len(tx.From) > 2 {
 		fa = []string{tx.From}
 	}
 	if len(tx.To) > 2 {
 		ta = []string{tx.To}
+		addr, err = p.AddressFactory(tx.To)
+		if err != nil {
+			return nil, err
+		}
 	}
 	// temporarily, the complete rpcTransaction without BlockHash is marshalled and hex encoded to bchain.Tx.Hex
 	bh := tx.BlockHash
@@ -98,6 +111,7 @@ func ethTxToTx(tx *rpcTransaction, blocktime int64, confirmations uint32) (*bcha
 					// Hex
 					Addresses: ta,
 				},
+				Address: addr,
 			},
 		},
 	}, nil
@@ -230,7 +244,7 @@ func (p *EthereumParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 		TransactionIndex: hexutil.EncodeUint64(uint64(pt.TransactionIndex)),
 		Value:            hexEncodeBig(pt.Value),
 	}
-	tx, err := ethTxToTx(&r, int64(pt.BlockTime), 0)
+	tx, err := p.ethTxToTx(&r, int64(pt.BlockTime), 0)
 	if err != nil {
 		return nil, 0, err
 	}

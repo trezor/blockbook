@@ -19,6 +19,16 @@ type BCashParser struct {
 	*btc.BitcoinParser
 }
 
+// NewBCashParser returns new BCashParser instance
+func NewBCashParser(params *chaincfg.Params) *BCashParser {
+	return &BCashParser{
+		&btc.BitcoinParser{
+			&bchain.BaseParser{AddressFactory: func(addr string) (bchain.Address, error) { return newBCashAddress(addr, params) }},
+			params,
+		},
+	}
+}
+
 // GetChainParams contains network parameters for the main Bitcoin Cash network,
 // the regression test Bitcoin Cash network, the test Bitcoin Cash network and
 // the simulation test Bitcoin Cash network, in this order
@@ -90,10 +100,11 @@ func (p *BCashParser) UnpackTx(buf []byte) (tx *bchain.Tx, height uint32, err er
 
 	for i, vout := range tx.Vout {
 		if len(vout.ScriptPubKey.Addresses) == 1 {
-			tx.Vout[i].Address = &bcashAddress{
-				addr: vout.ScriptPubKey.Addresses[0],
-				net:  p.Params,
+			a, err := newBCashAddress(vout.ScriptPubKey.Addresses[0], p.Params)
+			if err != nil {
+				return nil, 0, err
 			}
+			tx.Vout[i].Address = a
 		}
 	}
 
@@ -101,12 +112,44 @@ func (p *BCashParser) UnpackTx(buf []byte) (tx *bchain.Tx, height uint32, err er
 }
 
 type bcashAddress struct {
-	addr string
+	addr btcutil.Address
 	net  *chaincfg.Params
 }
 
+func newBCashAddress(addr string, net *chaincfg.Params) (*bcashAddress, error) {
+	var (
+		da  btcutil.Address
+		err error
+	)
+	if isCashAddr(addr) {
+		// for cashaddr we need to convert it to the legacy form (i.e. to btcutil's Address)
+		// because bchutil doesn't allow later conversions
+		da, err = bchutil.DecodeAddress(addr, net)
+		if err != nil {
+			return nil, err
+		}
+		switch ca := da.(type) {
+		case *bchutil.CashAddressPubKeyHash:
+			da, err = btcutil.NewAddressPubKeyHash(ca.Hash160()[:], net)
+		case *bchutil.CashAddressScriptHash:
+			da, err = btcutil.NewAddressScriptHash(ca.Hash160()[:], net)
+		default:
+			err = fmt.Errorf("Unknown address type: %T", da)
+		}
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		da, err = btcutil.DecodeAddress(addr, net)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return &bcashAddress{addr: da, net: net}, nil
+}
+
 func (a *bcashAddress) String() string {
-	return a.addr
+	return a.addr.String()
 }
 
 func (a *bcashAddress) EncodeAddress(format bchain.AddressFormat) (string, error) {
@@ -114,12 +157,11 @@ func (a *bcashAddress) EncodeAddress(format bchain.AddressFormat) (string, error
 	case bchain.DefaultAddress:
 		return a.String(), nil
 	case bchain.BCashAddress:
-		da, err := btcutil.DecodeAddress(a.addr, a.net)
-		if err != nil {
-			return "", err
-		}
-		var ca btcutil.Address
-		switch da := da.(type) {
+		var (
+			ca  btcutil.Address
+			err error
+		)
+		switch da := a.addr.(type) {
 		case *btcutil.AddressPubKeyHash:
 			ca, err = bchutil.NewCashAddressPubKeyHash(da.Hash160()[:], a.net)
 		case *btcutil.AddressScriptHash:

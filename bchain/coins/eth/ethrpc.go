@@ -73,7 +73,7 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 	}
 
 	// always create parser
-	s.Parser = &EthereumParser{}
+	s.Parser = NewEthereumParser()
 	s.timeout = time.Duration(c.RPCTimeout) * time.Second
 
 	// new blocks notifications handling
@@ -387,7 +387,7 @@ func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error
 	bbh, err := b.ethHeaderToBlockHeader(head)
 	btxs := make([]bchain.Tx, len(body.Transactions))
 	for i, tx := range body.Transactions {
-		btx, err := ethTxToTx(&tx, int64(head.Time.Uint64()), uint32(bbh.Confirmations))
+		btx, err := b.Parser.ethTxToTx(&tx, int64(head.Time.Uint64()), uint32(bbh.Confirmations))
 		if err != nil {
 			return nil, errors.Annotatef(err, "hash %v, height %v, txid %v", hash, height, tx.Hash.String())
 		}
@@ -422,7 +422,7 @@ func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 	var btx *bchain.Tx
 	if tx.BlockNumber == "" {
 		// mempool tx
-		btx, err = ethTxToTx(tx, 0, 0)
+		btx, err = b.Parser.ethTxToTx(tx, 0, 0)
 		if err != nil {
 			return nil, errors.Annotatef(err, "txid %v", txid)
 		}
@@ -440,7 +440,7 @@ func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 		if err != nil {
 			return nil, errors.Annotatef(err, "txid %v", txid)
 		}
-		btx, err = ethTxToTx(tx, h.Time.Int64(), confirmations)
+		btx, err = b.Parser.ethTxToTx(tx, h.Time.Int64(), confirmations)
 		if err != nil {
 			return nil, errors.Annotatef(err, "txid %v", txid)
 		}
