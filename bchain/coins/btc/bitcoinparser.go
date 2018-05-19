@@ -144,7 +144,11 @@ func (p *BitcoinParser) ParseTx(b []byte) (*bchain.Tx, error) {
 
 	for i, vout := range tx.Vout {
 		if len(vout.ScriptPubKey.Addresses) == 1 {
-			tx.Vout[i].Address = p.AddressFactory(vout.ScriptPubKey.Addresses[0])
+			a, err := p.AddressFactory(vout.ScriptPubKey.Addresses[0])
+			if err != nil {
+				return nil, err
+			}
+			tx.Vout[i].Address = a
 		}
 	}
 

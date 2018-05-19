@@ -62,14 +62,20 @@ func ethNumber(n string) (int64, error) {
 
 func (p *EthereumParser) ethTxToTx(tx *rpcTransaction, blocktime int64, confirmations uint32) (*bchain.Tx, error) {
 	txid := ethHashToHash(tx.Hash)
-	var fa, ta []string
-	var addr bchain.Address
+	var (
+		fa, ta []string
+		addr   bchain.Address
+		err    error
+	)
 	if len(tx.From) > 2 {
 		fa = []string{tx.From}
 	}
 	if len(tx.To) > 2 {
 		ta = []string{tx.To}
-		addr = p.AddressFactory(tx.To)
+		addr, err = p.AddressFactory(tx.To)
+		if err != nil {
+			return nil, err
+		}
 	}
 	// temporarily, the complete rpcTransaction without BlockHash is marshalled and hex encoded to bchain.Tx.Hex
 	bh := tx.BlockHash

@@ -11,7 +11,7 @@ import (
 
 // BaseParser implements data parsing/handling functionality base for all other parsers
 type BaseParser struct {
-	AddressFactory func(string) Address
+	AddressFactory func(string) (Address, error)
 }
 
 // AddressToOutputScript converts address to ScriptPubKey - currently not implemented
@@ -37,14 +37,18 @@ func (p *BaseParser) ParseTx(b []byte) (*Tx, error) {
 // ParseTxFromJson parses JSON message containing transaction and returs Tx struct
 func (p *BaseParser) ParseTxFromJson(msg json.RawMessage) (*Tx, error) {
 	var tx Tx
-	err := json.Unmarshal(msg, tx)
+	err := json.Unmarshal(msg, &tx)
 	if err != nil {
 		return nil, err
 	}
 
 	for i, vout := range tx.Vout {
 		if len(vout.ScriptPubKey.Addresses) == 1 {
-			tx.Vout[i].Address = p.AddressFactory(vout.ScriptPubKey.Addresses[0])
+			a, err := p.AddressFactory(vout.ScriptPubKey.Addresses[0])
+			if err != nil {
+				return nil, err
+			}
+			tx.Vout[i].Address = a
 		}
 	}
 
@@ -179,7 +183,11 @@ func (p *BaseParser) UnpackTx(buf []byte) (*Tx, uint32, error) {
 			Value: pto.Value,
 		}
 		if len(pto.Addresses) == 1 {
-			vout[i].Address = p.AddressFactory(pto.Addresses[0])
+			a, err := p.AddressFactory(pto.Addresses[0])
+			if err != nil {
+				return nil, 0, err
+			}
+			vout[i].Address = a
 		}
 	}
 	tx := Tx{
@@ -198,8 +206,8 @@ type baseAddress struct {
 	addr string
 }
 
-func NewBaseAddress(addr string) Address {
-	return &baseAddress{addr: addr}
+func NewBaseAddress(addr string) (Address, error) {
+	return &baseAddress{addr: addr}, nil
 }
 
 func (a baseAddress) String() string {

@@ -144,6 +144,18 @@ func TestEthereumParser_PackTx(t *testing.T) {
 }
 
 func TestEthereumParser_UnpackTx(t *testing.T) {
+	var (
+		addr1, addr2 bchain.Address
+		err          error
+	)
+	addr1, err = bchain.NewBaseAddress("0x682b7903a11098cf770c7aef4aa02a85b3f3601a")
+	if err == nil {
+		addr2, err = bchain.NewBaseAddress("0x555ee11fbddc0e49a9bab358a8941ad95ffdb48f")
+	}
+	if err != nil {
+		panic(err)
+	}
+
 	type args struct {
 		hex string
 	}
@@ -173,7 +185,7 @@ func TestEthereumParser_UnpackTx(t *testing.T) {
 						ScriptPubKey: bchain.ScriptPubKey{
 							Addresses: []string{"0x682b7903a11098cf770c7aef4aa02a85b3f3601a"},
 						},
-						Address: bchain.NewBaseAddress("0x682b7903a11098cf770c7aef4aa02a85b3f3601a"),
+						Address: addr1,
 					},
 				},
 			},
@@ -197,7 +209,7 @@ func TestEthereumParser_UnpackTx(t *testing.T) {
 						ScriptPubKey: bchain.ScriptPubKey{
 							Addresses: []string{"0x555ee11fbddc0e49a9bab358a8941ad95ffdb48f"},
 						},
-						Address: bchain.NewBaseAddress("0x555ee11fbddc0e49a9bab358a8941ad95ffdb48f"),
+						Address: addr2,
 					},
 				},
 			},
