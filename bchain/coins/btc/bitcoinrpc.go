@@ -105,9 +105,7 @@ func (b *BitcoinRPC) Initialize() error {
 	params := GetChainParams(chainName)
 
 	// always create parser
-	b.Parser = &BitcoinParser{
-		Params: params,
-	}
+	b.Parser = NewBitcoinParser(params)
 
 	// parameters for getInfo request
 	if params.Net == wire.MainNet {
@@ -260,7 +258,7 @@ type cmdGetRawTransaction struct {
 
 type resGetRawTransaction struct {
 	Error  *bchain.RPCError `json:"error"`
-	Result bchain.Tx        `json:"result"`
+	Result json.RawMessage  `json:"result"`
 }
 
 type resGetRawTransactionNonverbose struct {
@@ -612,7 +610,11 @@ func (b *BitcoinRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 	if res.Error != nil {
 		return nil, errors.Annotatef(res.Error, "txid %v", txid)
 	}
-	return &res.Result, nil
+	tx, err := b.Parser.ParseTxFromJson(res.Result)
+	if err != nil {
+		return nil, errors.Annotatef(err, "txid %v", txid)
+	}
+	return tx, nil
 }
 
 // ResyncMempool gets mempool transactions and maps output scripts to transactions.

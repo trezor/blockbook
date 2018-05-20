@@ -5,5 +5,5 @@
   "rpcTimeout": 25,
   "parse": true,
   "zeroMQBinding": "tcp://127.0.0.1:18434",
-  "subversion": "/Bitcoin ABC:0.17.1(EB8.0; bitcore-sl)/"
+  "subversion": "/Bitcoin ABC:0.17.1/"
 }

@@ -2,6 +2,7 @@ package bchain
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 
 	"github.com/gogo/protobuf/proto"
@@ -9,7 +10,9 @@ import (
 )
 
 // BaseParser implements data parsing/handling functionality base for all other parsers
-type BaseParser struct{}
+type BaseParser struct {
+	AddressFactory func(string) (Address, error)
+}
 
 // AddressToOutputScript converts address to ScriptPubKey - currently not implemented
 func (p *BaseParser) AddressToOutputScript(address string) ([]byte, error) {
@@ -29,6 +32,27 @@ func (p *BaseParser) ParseBlock(b []byte) (*Block, error) {
 // ParseTx parses byte array containing transaction and returns Tx struct - currently not implemented
 func (p *BaseParser) ParseTx(b []byte) (*Tx, error) {
 	return nil, errors.New("ParseTx: not implemented")
+}
+
+// ParseTxFromJson parses JSON message containing transaction and returs Tx struct
+func (p *BaseParser) ParseTxFromJson(msg json.RawMessage) (*Tx, error) {
+	var tx Tx
+	err := json.Unmarshal(msg, &tx)
+	if err != nil {
+		return nil, err
+	}
+
+	for i, vout := range tx.Vout {
+		if len(vout.ScriptPubKey.Addresses) == 1 {
+			a, err := p.AddressFactory(vout.ScriptPubKey.Addresses[0])
+			if err != nil {
+				return nil, err
+			}
+			tx.Vout[i].Address = a
+		}
+	}
+
+	return &tx, nil
 }
 
 // PackedTxidLen returns length in bytes of packed txid
@@ -159,7 +183,11 @@ func (p *BaseParser) UnpackTx(buf []byte) (*Tx, uint32, error) {
 			Value: pto.Value,
 		}
 		if len(pto.Addresses) == 1 {
-			vout[i].Address = NewBaseAddress(pto.Addresses[0])
+			a, err := p.AddressFactory(pto.Addresses[0])
+			if err != nil {
+				return nil, 0, err
+			}
+			vout[i].Address = a
 		}
 	}
 	tx := Tx{
@@ -178,8 +206,8 @@ type baseAddress struct {
 	addr string
 }
 
-func NewBaseAddress(addr string) Address {
-	return &baseAddress{addr: addr}
+func NewBaseAddress(addr string) (Address, error) {
+	return &baseAddress{addr: addr}, nil
 }
 
 func (a baseAddress) String() string {

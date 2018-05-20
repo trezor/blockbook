@@ -47,7 +47,7 @@ func TestEthParser_GetAddrIDFromAddress(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := &EthereumParser{}
+			p := NewEthereumParser()
 			got, err := p.GetAddrIDFromAddress(tt.args.address)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("EthParser.GetAddrIDFromAddress() error = %v, wantErr %v", err, tt.wantErr)
@@ -129,7 +129,7 @@ func TestEthereumParser_PackTx(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := &EthereumParser{}
+			p := NewEthereumParser()
 			got, err := p.PackTx(tt.args.tx, tt.args.height, tt.args.blockTime)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("EthereumParser.PackTx() error = %v, wantErr %v", err, tt.wantErr)
@@ -144,6 +144,18 @@ func TestEthereumParser_PackTx(t *testing.T) {
 }
 
 func TestEthereumParser_UnpackTx(t *testing.T) {
+	var (
+		addr1, addr2 bchain.Address
+		err          error
+	)
+	addr1, err = bchain.NewBaseAddress("0x682b7903a11098cf770c7aef4aa02a85b3f3601a")
+	if err == nil {
+		addr2, err = bchain.NewBaseAddress("0x555ee11fbddc0e49a9bab358a8941ad95ffdb48f")
+	}
+	if err != nil {
+		panic(err)
+	}
+
 	type args struct {
 		hex string
 	}
@@ -173,6 +185,7 @@ func TestEthereumParser_UnpackTx(t *testing.T) {
 						ScriptPubKey: bchain.ScriptPubKey{
 							Addresses: []string{"0x682b7903a11098cf770c7aef4aa02a85b3f3601a"},
 						},
+						Address: addr1,
 					},
 				},
 			},
@@ -196,6 +209,7 @@ func TestEthereumParser_UnpackTx(t *testing.T) {
 						ScriptPubKey: bchain.ScriptPubKey{
 							Addresses: []string{"0x555ee11fbddc0e49a9bab358a8941ad95ffdb48f"},
 						},
+						Address: addr2,
 					},
 				},
 			},
@@ -204,7 +218,7 @@ func TestEthereumParser_UnpackTx(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := &EthereumParser{}
+			p := NewEthereumParser()
 			b, err := hex.DecodeString(tt.args.hex)
 			if err != nil {
 				panic(err)
