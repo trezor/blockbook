@@ -12,7 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-var rpcURL = flag.String("rpc", "ws://10.34.3.4:18546", "URL of geth server")
+var rpcURL = flag.String("rpc", "ws://blockbook-dev:18546", "URL of geth server")
 var ethClient *ethclient.Client
 var ethRPCClient *rpc.Client
 
@@ -30,7 +30,8 @@ func setupEthRPC() *EthereumRPC {
 		client:  ethClient,
 		rpc:     ethRPCClient,
 		timeout: time.Duration(25) * time.Second,
-		rpcURL:  "ws://10.34.3.4:18546",
+		rpcURL:  *rpcURL,
+		Parser:  NewEthereumParser(),
 	}
 }
 
@@ -359,6 +360,18 @@ func TestEthRPC_GetBlock(t *testing.T) {
 }
 
 func TestEthRPC_GetTransaction(t *testing.T) {
+	var (
+		addr1, addr2 bchain.Address
+		err          error
+	)
+	addr1, err = bchain.NewBaseAddress("0x682b7903a11098cf770c7aef4aa02a85b3f3601a")
+	if err == nil {
+		addr2, err = bchain.NewBaseAddress("0x555ee11fbddc0e49a9bab358a8941ad95ffdb48f")
+	}
+	if err != nil {
+		panic(err)
+	}
+
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")
 	}
@@ -403,12 +416,13 @@ func TestEthRPC_GetTransaction(t *testing.T) {
 						ScriptPubKey: bchain.ScriptPubKey{
 							Addresses: []string{"0x682b7903a11098cf770c7aef4aa02a85b3f3601a"},
 						},
+						Address: addr1,
 					},
 				},
 			},
 		},
 		{
-			name: "1",
+			name: "2",
 			fields: fields{
 				b: setupEthRPC(),
 			},
@@ -431,6 +445,7 @@ func TestEthRPC_GetTransaction(t *testing.T) {
 						ScriptPubKey: bchain.ScriptPubKey{
 							Addresses: []string{"0x555ee11fbddc0e49a9bab358a8941ad95ffdb48f"},
 						},
+						Address: addr2,
 					},
 				},
 			},

@@ -1,4 +1,4 @@
 {
-  "rpcURL": "ws://10.34.3.4:18546",
+  "rpcURL": "ws://localhost:18546",
   "rpcTimeout": 25
 }
