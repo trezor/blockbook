@@ -149,9 +149,24 @@ func main() {
 	}
 	defer index.Close()
 
+	common.IS, err = index.LoadInternalState()
+	if err != nil {
+		glog.Fatal("internalState: ", err)
+	}
+	if common.IS.DbState != common.DbStateClosed {
+		glog.Warning("internalState: database in not closed state ", common.IS.DbState, ", possibly previous ungraceful shutdown")
+	}
+
 	syncWorker, err = db.NewSyncWorker(index, chain, *syncWorkers, *syncChunk, *blockFrom, *dryRun, chanOsSignal, metrics)
 	if err != nil {
 		glog.Fatalf("NewSyncWorker %v", err)
+	}
+
+	// set the DbState to open at this moment, after all important workers are initialized
+	common.IS.DbState = common.DbStateOpen
+	err = index.StoreInternalState(common.IS)
+	if err != nil {
+		glog.Fatal("internalState: ", err)
 	}
 
 	if *rollbackHeight >= 0 {

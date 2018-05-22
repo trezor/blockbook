@@ -2,6 +2,7 @@ package db
 
 import (
 	"blockbook/bchain"
+	"blockbook/common"
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
@@ -109,15 +110,25 @@ func (d *RocksDB) closeDB() error {
 		h.Destroy()
 	}
 	d.db.Close()
+	d.db = nil
 	return nil
 }
 
 // Close releases the RocksDB environment opened in NewRocksDB.
 func (d *RocksDB) Close() error {
-	glog.Infof("rocksdb: close")
-	d.closeDB()
-	d.wo.Destroy()
-	d.ro.Destroy()
+	if d.db != nil {
+		// store the internal state of the app
+		if common.IS.DbState == common.DbStateOpen {
+			common.IS.DbState = common.DbStateClosed
+			if err := d.StoreInternalState(common.IS); err != nil {
+				glog.Infof("internalState: ", err)
+			}
+		}
+		glog.Infof("rocksdb: close")
+		d.closeDB()
+		d.wo.Destroy()
+		d.ro.Destroy()
+	}
 	return nil
 }
 
@@ -858,6 +869,54 @@ func (d *RocksDB) DeleteTx(txid string) error {
 		return nil
 	}
 	return d.db.DeleteCF(d.wo, d.cfh[cfTransactions], key)
+}
+
+// internal state
+const internalStateKey = "internalState"
+
+// LoadInternalState loads from db internal state or initializes a new one if not yet stored
+func (d *RocksDB) LoadInternalState() (*common.InternalState, error) {
+	val, err := d.db.GetCF(d.ro, d.cfh[cfDefault], []byte(internalStateKey))
+	if err != nil {
+		return nil, err
+	}
+	defer val.Free()
+	data := val.Data()
+	var is *common.InternalState
+	if len(data) == 0 {
+		is = &common.InternalState{}
+	} else {
+		is, err = common.UnpackInternalState(data)
+		if err != nil {
+			return nil, err
+		}
+	}
+	// make sure that column stats match the columns
+	sc := is.DbColumns
+	nc := make([]common.InternalStateColumn, len(cfNames))
+	for i := 0; i < len(nc); i++ {
+		nc[i].Name = cfNames[i]
+		for j := 0; j < len(sc); j++ {
+			if sc[j].Name == nc[i].Name {
+				nc[i].Version = sc[j].Version
+				nc[i].Rows = sc[j].Rows
+				nc[i].KeysSum = sc[j].KeysSum
+				nc[i].ValuesSum = sc[j].ValuesSum
+				break
+			}
+		}
+	}
+	is.DbColumns = nc
+	return is, nil
+}
+
+// StoreInternalState stores the internal state to db
+func (d *RocksDB) StoreInternalState(is *common.InternalState) error {
+	buf, err := is.Pack()
+	if err != nil {
+		return err
+	}
+	return d.db.PutCF(d.wo, d.cfh[cfDefault], []byte(internalStateKey), buf)
 }
 
 // Helpers
