@@ -105,8 +105,8 @@ func (z *ZCashRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 		return nil, errors.Annotatef(res.Error, "hash %v", hash)
 	}
 
-	txs := make([]bchain.Tx, len(res.Result.Txids))
-	for i, txid := range res.Result.Txids {
+	txs := make([]bchain.Tx, 0, len(res.Result.Txids))
+	for _, txid := range res.Result.Txids {
 		tx, err := z.GetTransaction(txid)
 		if err != nil {
 			if isInvalidTx(err) {
@@ -115,7 +115,7 @@ func (z *ZCashRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 			}
 			return nil, err
 		}
-		txs[i] = *tx
+		txs = append(txs, *tx)
 	}
 	block := &bchain.Block{
 		BlockHeader: res.Result.BlockHeader,
