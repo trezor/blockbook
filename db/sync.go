@@ -47,6 +47,7 @@ var errSynced = errors.New("synced")
 // onNewBlock is called when new block is connected, but not in initial parallel sync
 func (w *SyncWorker) ResyncIndex(onNewBlock func(hash string)) error {
 	start := time.Now()
+	common.IS.StartedSync()
 
 	err := w.resyncIndex(onNewBlock)
 
@@ -56,6 +57,10 @@ func (w *SyncWorker) ResyncIndex(onNewBlock func(hash string)) error {
 		glog.Info("resync: finished in ", d)
 		w.metrics.IndexResyncDuration.Observe(float64(d) / 1e6) // in milliseconds
 		w.metrics.IndexDBSize.Set(float64(w.db.DatabaseSizeOnDisk()))
+		bh, _, err := w.db.GetBestBlock()
+		if err == nil {
+			common.IS.FinishedSync(bh)
+		}
 		fallthrough
 	case errSynced:
 		// this is not actually error but flag that resync wasn't necessary

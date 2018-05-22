@@ -350,8 +350,11 @@ func syncMempoolLoop() {
 	glog.Info("syncMempoolLoop starting")
 	// resync mempool about every minute if there are no chanSyncMempool requests, with debounce 1 second
 	tickAndDebounce(resyncMempoolPeriodMs*time.Millisecond, debounceResyncMempoolMs*time.Millisecond, chanSyncMempool, func() {
+		common.IS.StartedMempoolSync()
 		if err := chain.ResyncMempool(onNewTxAddr); err != nil {
 			glog.Error("syncMempoolLoop ", errors.ErrorStack(err))
+		} else {
+			common.IS.FinishedMempoolSync()
 		}
 	})
 	glog.Info("syncMempoolLoop stopped")
