@@ -19,7 +19,7 @@ import (
 	"github.com/martinboehm/golang-socketio/transport"
 )
 
-const blockbookAbout = "Blockbook v0.0.1, blockchain indexer for TREZOR wallet https://trezor.io/. Do not use for any other purpose."
+const blockbookAbout = "Blockbook - blockchain indexer for TREZOR wallet https://trezor.io/. Do not use for any other purpose."
 
 // SocketIoServer is handle to SocketIoServer
 type SocketIoServer struct {
@@ -140,6 +140,7 @@ func (s *SocketIoServer) apiBlockIndex(w http.ResponseWriter, r *http.Request) {
 	type resBlockIndex struct {
 		BlockHash string `json:"blockHash"`
 		About     string `json:"about"`
+		common.VersionInfo
 	}
 	var err error
 	var hash string
@@ -157,7 +158,11 @@ func (s *SocketIoServer) apiBlockIndex(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		glog.Error(err)
 	} else {
-		r := resBlockIndex{BlockHash: hash, About: blockbookAbout}
+		r := resBlockIndex{
+			BlockHash:   hash,
+			About:       blockbookAbout,
+			VersionInfo: common.GetVersionInfo(),
+		}
 		json.NewEncoder(w).Encode(r)
 	}
 }
