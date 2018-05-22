@@ -117,6 +117,8 @@ func main() {
 	chanOsSignal = make(chan os.Signal, 1)
 	signal.Notify(chanOsSignal, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 
+	glog.Infof("Blockbook: %+v", common.GetVersionInfo())
+
 	if *prof != "" {
 		go func() {
 			log.Println(http.ListenAndServe(*prof, nil))
