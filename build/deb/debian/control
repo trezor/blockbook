@@ -20,6 +20,11 @@ Architecture: amd64
 Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, zcash-zec
 Description: Satoshilabs blockbook server (ZCash mainnet)
 
+Package: blockbook-zec-testnet
+Architecture: amd64
+Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, zcash-testnet
+Description: Satoshilabs blockbook server (ZCash testnet)
+
 Package: blockbook-bch
 Architecture: amd64
 Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, bcash-bch

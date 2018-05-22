@@ -1,0 +1,2 @@
+/opt/coins/blockbook/zec-testnet/cert/testcert.crt /opt/coins/blockbook/zec-testnet/cert/blockbook.crt
+/opt/coins/blockbook/zec-testnet/cert/testcert.key /opt/coins/blockbook/zec-testnet/cert/blockbook.key

@@ -9,3 +9,8 @@ Package: zcash-zec
 Architecture: amd64
 Depends: ${shlibs:Depends}, ${misc:Depends}, logrotate
 Description: Satoshilabs packaged zcash server
+
+Package: zcash-testnet
+Architecture: amd64
+Depends: ${shlibs:Depends}, ${misc:Depends}, logrotate
+Description: Satoshilabs packaged zcash server

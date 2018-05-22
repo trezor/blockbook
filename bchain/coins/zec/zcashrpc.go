@@ -26,16 +26,25 @@ func NewZCashRPC(config json.RawMessage, pushHandler func(bchain.NotificationTyp
 
 // Initialize initializes ZCashRPC instance.
 func (z *ZCashRPC) Initialize() error {
-	_, err := z.GetChainInfoAndInitializeMempool(z)
+	chainName, err := z.GetChainInfoAndInitializeMempool(z)
 	if err != nil {
 		return err
 	}
 
-	z.Parser = NewZCashParser()
-	z.Testnet = false
-	z.Network = "livenet"
+	params := GetChainParams(chainName)
 
-	glog.Info("rpc: block chain mainnet")
+	z.Parser = NewZCashParser()
+
+	// parameters for getInfo request
+	if params.Net == MainnetMagic {
+		z.Testnet = false
+		z.Network = "livenet"
+	} else {
+		z.Testnet = true
+		z.Network = "testnet"
+	}
+
+	glog.Info("rpc: block chain ", params.Name)
 
 	return nil
 }
@@ -89,7 +98,6 @@ func (z *ZCashRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 			return nil, err
 		}
 	}
-
 	glog.V(1).Info("rpc: getblock (verbosity=1) ", hash)
 
 	res := resGetBlockThin{}
