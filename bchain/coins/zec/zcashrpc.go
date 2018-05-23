@@ -72,7 +72,7 @@ type resGetBlockThin struct {
 
 type resGetRawTransaction struct {
 	Error  *bchain.RPCError `json:"error"`
-	Result bchain.Tx        `json:"result"`
+	Result json.RawMessage  `json:"result"`
 }
 
 // getblockheader
@@ -168,7 +168,11 @@ func (z *ZCashRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 	if res.Error != nil {
 		return nil, errors.Annotatef(res.Error, "txid %v", txid)
 	}
-	return &res.Result, nil
+	tx, err := z.Parser.ParseTxFromJson(res.Result)
+	if err != nil {
+		return nil, errors.Annotatef(err, "txid %v", txid)
+	}
+	return tx, nil
 }
 
 // GetBlockHash returns hash of block in best-block-chain at given height.
