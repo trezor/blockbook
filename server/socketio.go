@@ -132,15 +132,46 @@ func (s *SocketIoServer) txRedirect(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+type resAboutBlockbookPublic struct {
+	Coin            string    `json:"coin"`
+	About           string    `json:"about"`
+	Version         string    `json:"version"`
+	GitCommit       string    `json:"gitcommit"`
+	BuildTime       string    `json:"buildtime"`
+	InSync          bool      `json:"inSync"`
+	BestHeight      uint32    `json:"bestHeight"`
+	LastBlockTime   time.Time `json:"lastBlockTime"`
+	InSyncMempool   bool      `json:"inSyncMempool"`
+	LastMempoolTime time.Time `json:"lastMempoolTime"`
+}
+
 func (s *SocketIoServer) index(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte(blockbookAbout))
+	vi := common.GetVersionInfo()
+	ss, bh, st := common.IS.GetSyncState()
+	ms, mt := common.IS.GetMempoolSyncState()
+	a := resAboutBlockbookPublic{
+		Coin:            common.IS.Coin,
+		About:           blockbookAbout,
+		Version:         vi.Version,
+		GitCommit:       vi.GitCommit,
+		BuildTime:       vi.BuildTime,
+		InSync:          ss,
+		BestHeight:      bh,
+		LastBlockTime:   st,
+		InSyncMempool:   ms,
+		LastMempoolTime: mt,
+	}
+	buf, err := json.MarshalIndent(a, "", "    ")
+	if err != nil {
+		glog.Error(err)
+	}
+	w.Write(buf)
 }
 
 func (s *SocketIoServer) apiBlockIndex(w http.ResponseWriter, r *http.Request) {
 	type resBlockIndex struct {
 		BlockHash string `json:"blockHash"`
 		About     string `json:"about"`
-		common.VersionInfo
 	}
 	var err error
 	var hash string
@@ -159,9 +190,8 @@ func (s *SocketIoServer) apiBlockIndex(w http.ResponseWriter, r *http.Request) {
 		glog.Error(err)
 	} else {
 		r := resBlockIndex{
-			BlockHash:   hash,
-			About:       blockbookAbout,
-			VersionInfo: common.GetVersionInfo(),
+			BlockHash: hash,
+			About:     blockbookAbout,
 		}
 		json.NewEncoder(w).Encode(r)
 	}
