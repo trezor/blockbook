@@ -1,3 +1,9 @@
+zcash (1.0.15-satoshilabs3) unstable; urgency=medium
+
+  * Added nolisten=1 option
+
+ -- Jakub Matys <jakub.matys@satoshilabs.com>  Wed, 23 May 2018 12:49:34 +0200
+
 zcash (1.0.15-satoshilabs2) unstable; urgency=medium
 
   * Changed RPC and ZMQ ports

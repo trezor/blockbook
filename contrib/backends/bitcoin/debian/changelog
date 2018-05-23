@@ -1,3 +1,9 @@
+bitcoin (0.16.0-satoshilabs3) unstable; urgency=medium
+
+  * Added nolisten=1 option
+
+ -- Jakub Matys <jakub.matys@satoshilabs.com>  Wed, 23 May 2018 12:49:05 +0200
+
 bitcoin (0.16.0-satoshilabs2) unstable; urgency=medium
 
   * Changed RPC and ZMQ ports
