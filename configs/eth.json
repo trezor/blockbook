@@ -1,4 +1,4 @@
 {
-  "rpcURL": "ws://localhost:8546",
+  "rpcURL": "ws://localhost:8036",
   "rpcTimeout": 25
 }

@@ -87,7 +87,7 @@ The data are separated to different column families:
 
 - **height** - maps *block height* to *block hash*
 
-  *Block heigh* stored as array of 4 bytes (big endian uint32)  
+  *Block heigh* stored as array of 4 bytes (big endian uint32)
   *Block hash* stored as array of 32 bytes
 
   Example - the first four blocks (all data hex encoded)
@@ -100,7 +100,7 @@ The data are separated to different column families:
 
 - **outputs** -  maps *output script+block height* to *array of outpoints*
 
-  *Output script (ScriptPubKey)+block height* stored as variable length array of bytes for output script + 4 bytes (big endian uint32) block height  
+  *Output script (ScriptPubKey)+block height* stored as variable length array of bytes for output script + 4 bytes (big endian uint32) block height
   *array of outpoints* stored as array of 32 bytes for transaction id + variable length outpoint index for each outpoint
 
   Example - (all data hex encoded)
@@ -111,7 +111,7 @@ The data are separated to different column families:
 
 - **inputs** - maps *transaction outpoint* to *input transaction* that spends it
 
-  *Transaction outpoint* stored as array of 32 bytes for transaction id + variable length outpoint index  
+  *Transaction outpoint* stored as array of 32 bytes for transaction id + variable length outpoint index
   *Input transaction* stored as array of 32 bytes for transaction id + variable length input index
 
   Example - (all data hex encoded)
@@ -119,6 +119,24 @@ The data are separated to different column families:
 0x7246e79f97b5f82e7f51e291d533964028ec90be0634af8a8ef7d5a903c7f6d300 : 0x0a7aa90ea0269c79f844c516805e4cac594adb8830e56fca894b66aab19136a428
 0x7246e79f97b5f82e7f51e291d533964028ec90be0634af8a8ef7d5a903c7f6d301 : 0x4303a9fcfe6026b4d33ba488df6443c9a99bca7b7fcb7c6f6cd65cea24a749b700
 ```
+
+## Registry of ports
+
+| coin        | blockbook http port | blockbook socket.io port | RPC port | zmq port |
+|-------------|---------------------|--------------------------|----------|----------|
+| btc         | 9030                | 9130                     | 8030     | 38330    |
+| bch         | 9031                | 9131                     | 8031     | 38331    |
+| zec         | 9032                | 9132                     | 8032     | 38332    |
+| dash        | 9033                | 9133                     | 8033     | 38333    |
+| ltc         | 9034                | 9134                     | 8034     | 38334    |
+| btg         | 9035                | 9135                     | 8035     | 38335    |
+| eth         | 9036                | 9136                     | 8036     |          |
+| etc         | 9037                | 9137                     | 8037     |          |
+| xem         | 9038                | 9138                     | 8038     | 38336    |
+| btc-testnet | 19030               | 19130                    | 18030    | 48330    |
+| bch-testnet | 19031               | 19131                    | 18031    | 48331    |
+| zec-testnet | 19032               | 19132                    | 18032    | 48332    |
+| eth-testnet | 19036               | 19136                    | 18036    |          |
 
 ## Todo
 

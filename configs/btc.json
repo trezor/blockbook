@@ -1,8 +1,8 @@
 {
-  "rpcURL": "http://127.0.0.1:8332",
+  "rpcURL": "http://127.0.0.1:8030",
   "rpcUser": "rpc",
   "rpcPass": "rpc",
   "rpcTimeout": 25,
   "parse": true,
-  "zeroMQBinding": "tcp://127.0.0.1:8334"
+  "zeroMQBinding": "tcp://127.0.0.1:38330"
 }
