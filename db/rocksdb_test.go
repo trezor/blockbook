@@ -3,6 +3,7 @@ package db
 import (
 	"blockbook/bchain"
 	"blockbook/bchain/coins/btc"
+	"blockbook/common"
 	"encoding/hex"
 	"fmt"
 	"io/ioutil"
@@ -29,10 +30,14 @@ func setupRocksDB(t *testing.T, p bchain.BlockChainParser) *RocksDB {
 	if err != nil {
 		t.Fatal(err)
 	}
+	common.IS, err = d.LoadInternalState("btc-testnet")
+	if err != nil {
+		t.Fatal("internalState: ", err)
+	}
 	return d
 }
 
-func closeAnddestroyRocksDB(t *testing.T, d *RocksDB) {
+func closeAndDestroyRocksDB(t *testing.T, d *RocksDB) {
 	if err := d.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -477,7 +482,7 @@ func testTxCache(t *testing.T, d *RocksDB, b *bchain.Block, tx *bchain.Tx) {
 // After each step, the content of DB is examined and any difference against expected state is regarded as failure
 func TestRocksDB_Index_UTXO(t *testing.T) {
 	d := setupRocksDB(t, &testBitcoinParser{BitcoinParser: &btc.BitcoinParser{Params: btc.GetChainParams("test")}})
-	defer closeAnddestroyRocksDB(t, d)
+	defer closeAndDestroyRocksDB(t, d)
 
 	// connect 1st block - will log warnings about missing UTXO transactions in cfUnspentTxs column
 	block1 := getTestUTXOBlock1(t, d)
@@ -635,7 +640,7 @@ type hexoutpoint struct {
 
 func Test_unpackBlockAddresses(t *testing.T) {
 	d := setupRocksDB(t, &testBitcoinParser{BitcoinParser: &btc.BitcoinParser{Params: btc.GetChainParams("test")}})
-	defer closeAnddestroyRocksDB(t, d)
+	defer closeAndDestroyRocksDB(t, d)
 	type args struct {
 		buf string
 	}
