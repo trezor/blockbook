@@ -90,6 +90,7 @@ func (m *UTXOMempool) getMempoolTxAddrs(txid string) ([]addrIndex, bool) {
 		glog.Error("cannot get transaction ", txid, ": ", err)
 		return nil, false
 	}
+	glog.V(2).Info("mempool: gettxaddrs ", txid, ", ", len(tx.Vin), " inputs")
 	io := make([]addrIndex, 0, len(tx.Vout)+len(tx.Vin))
 	for _, output := range tx.Vout {
 		addrID, err := parser.GetAddrIDFromVout(&output)
@@ -139,6 +140,7 @@ func (m *UTXOMempool) Resync(onNewTxAddr func(txid string, addr string)) error {
 	if err != nil {
 		return err
 	}
+	glog.V(2).Info("mempool: resync ", len(txs), " txs")
 	// allocate slightly larger capacity of the maps
 	newTxToInputOutput := make(map[string][]addrIndex, len(m.txToInputOutput)+5)
 	newAddrIDToTx := make(map[string][]outpoint, len(m.addrIDToTx)+5)
