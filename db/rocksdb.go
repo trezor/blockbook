@@ -875,7 +875,7 @@ func (d *RocksDB) DeleteTx(txid string) error {
 const internalStateKey = "internalState"
 
 // LoadInternalState loads from db internal state or initializes a new one if not yet stored
-func (d *RocksDB) LoadInternalState() (*common.InternalState, error) {
+func (d *RocksDB) LoadInternalState(rpcCoin string) (*common.InternalState, error) {
 	val, err := d.db.GetCF(d.ro, d.cfh[cfDefault], []byte(internalStateKey))
 	if err != nil {
 		return nil, err
@@ -884,11 +884,18 @@ func (d *RocksDB) LoadInternalState() (*common.InternalState, error) {
 	data := val.Data()
 	var is *common.InternalState
 	if len(data) == 0 {
-		is = &common.InternalState{}
+		is = &common.InternalState{Coin: rpcCoin}
 	} else {
 		is, err = common.UnpackInternalState(data)
 		if err != nil {
 			return nil, err
+		}
+		// verify that the rpc coin matches DB coin
+		// running it mismatched would corrupt the database
+		if is.Coin == "" {
+			is.Coin = rpcCoin
+		} else if is.Coin != rpcCoin {
+			return nil, errors.Errorf("Coins do not match. DB coin %v, RPC coin %v", is.Coin, rpcCoin)
 		}
 	}
 	// make sure that column stats match the columns

@@ -156,7 +156,7 @@ func main() {
 	}
 	defer index.Close()
 
-	common.IS, err = index.LoadInternalState()
+	common.IS, err = index.LoadInternalState(*coin)
 	if err != nil {
 		glog.Fatal("internalState: ", err)
 	}

@@ -26,6 +26,8 @@ type InternalStateColumn struct {
 type InternalState struct {
 	mux sync.Mutex
 
+	Coin string `json:"coin"`
+
 	DbState uint32 `json:"dbState"`
 
 	LastStore time.Time `json:"lastStore"`
