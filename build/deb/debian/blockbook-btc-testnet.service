@@ -10,7 +10,7 @@ After=network.target
 Wants=bitcoin-testnet.service
 
 [Service]
-ExecStart=/opt/coins/blockbook/btc-testnet/bin/blockbook -coin=btc-testnet -blockchaincfg=/opt/coins/blockbook/btc-testnet/config/blockchaincfg.json -datadir=/opt/coins/data/btc-testnet/blockbook/db -sync -httpserver=:19030 -socketio=:19130 -certfile=/opt/coins/blockbook/btc-testnet/cert/blockbook -explorer=https://bitcore1.trezor.io/ -log_dir=/opt/coins/blockbook/btc-testnet/logs
+ExecStart=/opt/coins/blockbook/btc-testnet/bin/blockbook -coin=btc-testnet -blockchaincfg=/opt/coins/blockbook/btc-testnet/config/blockchaincfg.json -datadir=/opt/coins/data/btc-testnet/blockbook/db -sync -httpserver=:19030 -socketio=:19130 -certfile=/opt/coins/blockbook/btc-testnet/cert/blockbook -explorer=https://btc-testnet-explorer.trezor.io/ -log_dir=/opt/coins/blockbook/btc-testnet/logs
 User=blockbook-btc
 Type=simple
 Restart=on-failure
