@@ -2,6 +2,7 @@ package zec
 
 import (
 	"blockbook/bchain"
+	"blockbook/bchain/coins/btc"
 	"encoding/hex"
 	"reflect"
 	"testing"
@@ -123,7 +124,7 @@ func TestPackTx(t *testing.T) {
 				tx:        testTx1,
 				height:    292272,
 				blockTime: 1521645728,
-				parser:    NewZCashParser(),
+				parser:    NewZCashParser(&btc.Configuration{}),
 			},
 			want:    testTxPacked1,
 			wantErr: false,
@@ -134,7 +135,7 @@ func TestPackTx(t *testing.T) {
 				tx:        testTx2,
 				height:    292217,
 				blockTime: 1521637604,
-				parser:    NewZCashParser(),
+				parser:    NewZCashParser(&btc.Configuration{}),
 			},
 			want:    testTxPacked2,
 			wantErr: false,
@@ -171,7 +172,7 @@ func TestUnpackTx(t *testing.T) {
 			name: "zec-1",
 			args: args{
 				packedTx: testTxPacked1,
-				parser:   NewZCashParser(),
+				parser:   NewZCashParser(&btc.Configuration{}),
 			},
 			want:    &testTx1,
 			want1:   292272,
@@ -181,7 +182,7 @@ func TestUnpackTx(t *testing.T) {
 			name: "zec-2",
 			args: args{
 				packedTx: testTxPacked2,
-				parser:   NewZCashParser(),
+				parser:   NewZCashParser(&btc.Configuration{}),
 			},
 			want:    &testTx2,
 			want1:   292217,

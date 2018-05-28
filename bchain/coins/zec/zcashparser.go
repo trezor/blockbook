@@ -2,6 +2,7 @@ package zec
 
 import (
 	"blockbook/bchain"
+	"blockbook/bchain/coins/btc"
 )
 
 // ZCashParser handle
@@ -10,8 +11,13 @@ type ZCashParser struct {
 }
 
 // NewZCAshParser returns new ZCAshParser instance
-func NewZCashParser() *ZCashParser {
-	return &ZCashParser{&bchain.BaseParser{AddressFactory: bchain.NewBaseAddress}}
+func NewZCashParser(c *btc.Configuration) *ZCashParser {
+	return &ZCashParser{
+		&bchain.BaseParser{
+			AddressFactory:       bchain.NewBaseAddress,
+			BlockAddressesToKeep: c.BlockAddressesToKeep,
+		},
+	}
 }
 
 // GetAddrIDFromVout returns internal address representation of given transaction output

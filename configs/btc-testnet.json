@@ -4,5 +4,6 @@
   "rpcPass": "rpc",
   "rpcTimeout": 25,
   "parse": true,
-  "zeroMQBinding": "tcp://127.0.0.1:48330"
+  "zeroMQBinding": "tcp://127.0.0.1:48330",
+  "blockAddressesToKeep": 300
 }

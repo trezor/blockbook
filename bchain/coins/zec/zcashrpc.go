@@ -31,7 +31,7 @@ func (z *ZCashRPC) Initialize() error {
 		return err
 	}
 
-	z.Parser = NewZCashParser()
+	z.Parser = NewZCashParser(z.ChainConfig)
 	z.Testnet = false
 	z.Network = "livenet"
 

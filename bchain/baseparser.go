@@ -11,7 +11,8 @@ import (
 
 // BaseParser implements data parsing/handling functionality base for all other parsers
 type BaseParser struct {
-	AddressFactory func(string) (Address, error)
+	AddressFactory       func(string) (Address, error)
+	BlockAddressesToKeep int
 }
 
 // AddressToOutputScript converts address to ScriptPubKey - currently not implemented
@@ -62,7 +63,7 @@ func (p *BaseParser) PackedTxidLen() int {
 
 // KeepBlockAddresses returns number of blocks which are to be kept in blockaddresses column
 func (p *BaseParser) KeepBlockAddresses() int {
-	return 100
+	return p.BlockAddressesToKeep
 }
 
 // PackTxid packs txid to byte array

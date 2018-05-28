@@ -20,11 +20,14 @@ type BCashParser struct {
 }
 
 // NewBCashParser returns new BCashParser instance
-func NewBCashParser(params *chaincfg.Params) *BCashParser {
+func NewBCashParser(params *chaincfg.Params, c *btc.Configuration) *BCashParser {
 	return &BCashParser{
-		&btc.BitcoinParser{
-			&bchain.BaseParser{AddressFactory: func(addr string) (bchain.Address, error) { return newBCashAddress(addr, params) }},
-			params,
+		BitcoinParser: &btc.BitcoinParser{
+			BaseParser: &bchain.BaseParser{
+				AddressFactory:       func(addr string) (bchain.Address, error) { return newBCashAddress(addr, params) },
+				BlockAddressesToKeep: c.BlockAddressesToKeep,
+			},
+			Params: params,
 		},
 	}
 }

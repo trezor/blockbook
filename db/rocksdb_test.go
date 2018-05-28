@@ -436,11 +436,6 @@ type testBitcoinParser struct {
 	*btc.BitcoinParser
 }
 
-// override btc.KeepBlockAddresses to keep only one blockaddress
-func (p *testBitcoinParser) KeepBlockAddresses() int {
-	return 1
-}
-
 // override PackTx and UnpackTx to default BaseParser functionality
 // BitcoinParser uses tx hex which is not available for the test transactions
 func (p *testBitcoinParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) ([]byte, error) {
@@ -481,7 +476,12 @@ func testTxCache(t *testing.T, d *RocksDB, b *bchain.Block, tx *bchain.Tx) {
 // 7) Reconnect block 2 and disconnect blocks 1 and 2 using full scan - expect error
 // After each step, the content of DB is examined and any difference against expected state is regarded as failure
 func TestRocksDB_Index_UTXO(t *testing.T) {
-	d := setupRocksDB(t, &testBitcoinParser{BitcoinParser: &btc.BitcoinParser{Params: btc.GetChainParams("test")}})
+	d := setupRocksDB(t, &testBitcoinParser{
+		BitcoinParser: &btc.BitcoinParser{
+			BaseParser: &bchain.BaseParser{BlockAddressesToKeep: 1},
+			Params:     btc.GetChainParams("test"),
+		},
+	})
 	defer closeAndDestroyRocksDB(t, d)
 
 	// connect 1st block - will log warnings about missing UTXO transactions in cfUnspentTxs column

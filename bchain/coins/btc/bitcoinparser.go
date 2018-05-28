@@ -21,10 +21,11 @@ type BitcoinParser struct {
 }
 
 // NewBitcoinParser returns new BitcoinParser instance
-func NewBitcoinParser(params *chaincfg.Params) *BitcoinParser {
+func NewBitcoinParser(params *chaincfg.Params, c *Configuration) *BitcoinParser {
 	return &BitcoinParser{
 		&bchain.BaseParser{
-			AddressFactory: bchain.NewBaseAddress,
+			AddressFactory:       bchain.NewBaseAddress,
+			BlockAddressesToKeep: c.BlockAddressesToKeep,
 		},
 		params,
 	}

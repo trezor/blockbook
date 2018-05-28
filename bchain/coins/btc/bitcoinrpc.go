@@ -19,38 +19,42 @@ import (
 
 // BitcoinRPC is an interface to JSON-RPC bitcoind service.
 type BitcoinRPC struct {
-	client        http.Client
-	rpcURL        string
-	user          string
-	password      string
-	Parser        bchain.BlockChainParser
-	Testnet       bool
-	Network       string
-	Mempool       *bchain.UTXOMempool
-	ParseBlocks   bool
-	zeroMQBinding string
-	pushHandler   func(bchain.NotificationType)
-	mq            *bchain.MQ
-	Subversion    string
+	client      http.Client
+	rpcURL      string
+	user        string
+	password    string
+	Parser      bchain.BlockChainParser
+	Testnet     bool
+	Network     string
+	Mempool     *bchain.UTXOMempool
+	ParseBlocks bool
+	pushHandler func(bchain.NotificationType)
+	mq          *bchain.MQ
+	ChainConfig *Configuration
 }
 
-type configuration struct {
-	RPCURL        string `json:"rpcURL"`
-	RPCUser       string `json:"rpcUser"`
-	RPCPass       string `json:"rpcPass"`
-	RPCTimeout    int    `json:"rpcTimeout"`
-	Parse         bool   `json:"parse"`
-	ZeroMQBinding string `json:"zeroMQBinding"`
-	Subversion    string `json:"subversion"`
+type Configuration struct {
+	RPCURL               string `json:"rpcURL"`
+	RPCUser              string `json:"rpcUser"`
+	RPCPass              string `json:"rpcPass"`
+	RPCTimeout           int    `json:"rpcTimeout"`
+	Parse                bool   `json:"parse"`
+	ZeroMQBinding        string `json:"zeroMQBinding"`
+	Subversion           string `json:"subversion"`
+	BlockAddressesToKeep int    `json:"blockAddressesToKeep"`
 }
 
 // NewBitcoinRPC returns new BitcoinRPC instance.
 func NewBitcoinRPC(config json.RawMessage, pushHandler func(bchain.NotificationType)) (bchain.BlockChain, error) {
 	var err error
-	var c configuration
+	var c Configuration
 	err = json.Unmarshal(config, &c)
 	if err != nil {
 		return nil, errors.Annotatef(err, "Invalid configuration file")
+	}
+	// keep at least 100 mappings block->addresses to allow rollback
+	if c.BlockAddressesToKeep < 100 {
+		c.BlockAddressesToKeep = 100
 	}
 	transport := &http.Transport{
 		Dial:                (&net.Dialer{KeepAlive: 600 * time.Second}).Dial,
@@ -59,14 +63,13 @@ func NewBitcoinRPC(config json.RawMessage, pushHandler func(bchain.NotificationT
 	}
 
 	s := &BitcoinRPC{
-		client:        http.Client{Timeout: time.Duration(c.RPCTimeout) * time.Second, Transport: transport},
-		rpcURL:        c.RPCURL,
-		user:          c.RPCUser,
-		password:      c.RPCPass,
-		ParseBlocks:   c.Parse,
-		Subversion:    c.Subversion,
-		zeroMQBinding: c.ZeroMQBinding,
-		pushHandler:   pushHandler,
+		client:      http.Client{Timeout: time.Duration(c.RPCTimeout) * time.Second, Transport: transport},
+		rpcURL:      c.RPCURL,
+		user:        c.RPCUser,
+		password:    c.RPCPass,
+		ParseBlocks: c.Parse,
+		ChainConfig: &c,
+		pushHandler: pushHandler,
 	}
 
 	return s, nil
@@ -82,7 +85,7 @@ func (b *BitcoinRPC) GetChainInfoAndInitializeMempool(bc bchain.BlockChain) (str
 		return "", err
 	}
 
-	mq, err := bchain.NewMQ(b.zeroMQBinding, b.pushHandler)
+	mq, err := bchain.NewMQ(b.ChainConfig.ZeroMQBinding, b.pushHandler)
 	if err != nil {
 		glog.Error("mq: ", err)
 		return "", err
@@ -105,7 +108,7 @@ func (b *BitcoinRPC) Initialize() error {
 	params := GetChainParams(chainName)
 
 	// always create parser
-	b.Parser = NewBitcoinParser(params)
+	b.Parser = NewBitcoinParser(params, b.ChainConfig)
 
 	// parameters for getInfo request
 	if params.Net == wire.MainNet {
@@ -140,7 +143,7 @@ func (b *BitcoinRPC) GetNetworkName() string {
 }
 
 func (b *BitcoinRPC) GetSubversion() string {
-	return b.Subversion
+	return b.ChainConfig.Subversion
 }
 
 // getblockhash
