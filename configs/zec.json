@@ -5,5 +5,7 @@
   "rpcTimeout": 25,
   "parse": true,
   "zeroMQBinding": "tcp://127.0.0.1:38332",
+  "mempoolWorkers": 4,
+  "mempoolSubWorkers": 8,
   "blockAddressesToKeep": 300
 }

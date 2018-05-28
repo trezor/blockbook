@@ -42,6 +42,8 @@ type Configuration struct {
 	ZeroMQBinding        string `json:"zeroMQBinding"`
 	Subversion           string `json:"subversion"`
 	BlockAddressesToKeep int    `json:"blockAddressesToKeep"`
+	MempoolWorkers       int    `json:"mempoolWorkers"`
+	MempoolSubWorkers    int    `json:"mempoolSubWorkers"`
 }
 
 // NewBitcoinRPC returns new BitcoinRPC instance.
@@ -56,6 +58,14 @@ func NewBitcoinRPC(config json.RawMessage, pushHandler func(bchain.NotificationT
 	if c.BlockAddressesToKeep < 100 {
 		c.BlockAddressesToKeep = 100
 	}
+	// at least 1 mempool worker/subworker for synchronous mempool synchronization
+	if c.MempoolWorkers < 1 {
+		c.MempoolWorkers = 1
+	}
+	if c.MempoolSubWorkers < 1 {
+		c.MempoolSubWorkers = 1
+	}
+
 	transport := &http.Transport{
 		Dial:                (&net.Dialer{KeepAlive: 600 * time.Second}).Dial,
 		MaxIdleConns:        100,
@@ -92,7 +102,7 @@ func (b *BitcoinRPC) GetChainInfoAndInitializeMempool(bc bchain.BlockChain) (str
 	}
 	b.mq = mq
 
-	b.Mempool = bchain.NewUTXOMempool(bc)
+	b.Mempool = bchain.NewUTXOMempool(bc, b.ChainConfig.MempoolWorkers, b.ChainConfig.MempoolSubWorkers)
 
 	return chainName, nil
 }

@@ -6,5 +6,7 @@
   "parse": true,
   "zeroMQBinding": "tcp://127.0.0.1:38331",
   "subversion": "/Bitcoin ABC:0.17.1/",
+  "mempoolWorkers": 8,
+  "mempoolSubWorkers": 2,
   "blockAddressesToKeep": 300
 }
