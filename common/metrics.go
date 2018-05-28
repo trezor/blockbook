@@ -17,7 +17,7 @@ type Metrics struct {
 	RPCLatency            *prometheus.HistogramVec
 	IndexResyncErrors     *prometheus.CounterVec
 	IndexDBSize           prometheus.Gauge
-	TxExplorerRedirects   *prometheus.CounterVec
+	ExplorerViews         *prometheus.CounterVec
 }
 
 type Labels = prometheus.Labels
@@ -105,13 +105,13 @@ func GetMetrics(coin string) (*Metrics, error) {
 			ConstLabels: Labels{"coin": coin},
 		},
 	)
-	metrics.TxExplorerRedirects = prometheus.NewCounterVec(
+	metrics.ExplorerViews = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name:        "blockbook_tx_explorer_views",
-			Help:        "Number of views of the transaction explorer",
+			Name:        "blockbook_explorer_views",
+			Help:        "Number of explorer views",
 			ConstLabels: Labels{"coin": coin},
 		},
-		[]string{},
+		[]string{"action"},
 	)
 
 	v := reflect.ValueOf(metrics)

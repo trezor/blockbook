@@ -82,6 +82,7 @@ func NewSocketIoServer(binding string, certFiles string, db *db.RocksDB, chain b
 	serveMux.Handle(path+"test.html", http.FileServer(http.Dir("./static/")))
 	// redirect to Bitcore for details of transaction
 	serveMux.HandleFunc(path+"tx/", s.txRedirect)
+	serveMux.HandleFunc(path+"address/", s.addressRedirect)
 	// API call used to detect state of Blockbook
 	serveMux.HandleFunc(path+"api/block-index/", s.apiBlockIndex)
 	// handle socket.io
@@ -128,7 +129,14 @@ func (s *SocketIoServer) Shutdown(ctx context.Context) error {
 func (s *SocketIoServer) txRedirect(w http.ResponseWriter, r *http.Request) {
 	if s.explorerURL != "" {
 		http.Redirect(w, r, s.explorerURL+r.URL.Path, 302)
-		s.metrics.TxExplorerRedirects.With(common.Labels{}).Inc()
+		s.metrics.ExplorerViews.With(common.Labels{"action": "tx"}).Inc()
+	}
+}
+
+func (s *SocketIoServer) addressRedirect(w http.ResponseWriter, r *http.Request) {
+	if s.explorerURL != "" {
+		http.Redirect(w, r, s.explorerURL+r.URL.Path, 302)
+		s.metrics.ExplorerViews.With(common.Labels{"action": "address"}).Inc()
 	}
 }
 
