@@ -3,6 +3,7 @@
 FROM debian:9
 
 RUN apt-get update && \
+    apt-get upgrade -y && \
     apt-get install -y build-essential git wget pkg-config lxc-dev libzmq3-dev \
                        libgflags-dev libsnappy-dev zlib1g-dev libbz2-dev \
                        liblz4-dev graphviz && \
