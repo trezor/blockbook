@@ -67,8 +67,8 @@ func (mq *MQ) run(callback func(NotificationType)) {
 			glog.Error("MQ loop recovered from ", r)
 		}
 		mq.isRunning = false
-		close(mq.finished)
 		glog.Info("MQ loop terminated")
+		mq.finished <- true
 	}()
 	mq.isRunning = true
 	for {
@@ -117,7 +117,7 @@ func (mq *MQ) Shutdown() error {
 		if err := mq.context.Term(); err != nil {
 			return err
 		}
-		_, _ = <-mq.finished
+		<-mq.finished
 		glog.Info("MQ server shutdown finished")
 	}
 	return nil
