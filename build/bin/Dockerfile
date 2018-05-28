@@ -14,6 +14,8 @@ ENV PATH=$PATH:$GOPATH/bin
 ENV CGO_CFLAGS="-I/opt/rocksdb/include"
 ENV CGO_LDFLAGS="-L/opt/rocksdb -lrocksdb -lstdc++ -lm -lz -lbz2 -lsnappy -llz4"
 
+RUN mkdir /build
+
 # install and configure go
 RUN cd /opt && wget https://storage.googleapis.com/golang/$GOLANG_VERSION.tar.gz && \
     tar xf $GOLANG_VERSION.tar.gz
@@ -24,7 +26,9 @@ RUN echo -n "GOPATH: " && echo $GOPATH
 
 # install rocksdb
 RUN cd /opt && git clone https://github.com/facebook/rocksdb.git
-RUN cd /opt/rocksdb && CFLAGS=-fPIC CXXFLAGS=-fPIC make -j 4 static_lib
+RUN cd /opt/rocksdb && CFLAGS=-fPIC CXXFLAGS=-fPIC make -j 4 release
+RUN strip /opt/rocksdb/ldb /opt/rocksdb/sst_dump && \
+    cp /opt/rocksdb/ldb /opt/rocksdb/sst_dump /build
 
 RUN go get github.com/golang/dep/cmd/dep
 
