@@ -44,7 +44,7 @@ func NewUTXOMempool(chain BlockChain, workers int, subworkers int) *UTXOMempool 
 	}
 	for i := 0; i < workers; i++ {
 		go func(i int) {
-			chanInput := make(chan *Vin, 1)
+			chanInput := make(chan outpoint, 1)
 			chanResult := make(chan *addrIndex, 1)
 			for j := 0; j < subworkers; j++ {
 				go func(j int) {
@@ -91,27 +91,27 @@ func (m *UTXOMempool) updateMappings(newTxToInputOutput map[string][]addrIndex, 
 	m.addrIDToTx = newAddrIDToTx
 }
 
-func (m *UTXOMempool) getInputAddress(input *Vin) *addrIndex {
+func (m *UTXOMempool) getInputAddress(input outpoint) *addrIndex {
 	// TODO - possibly get from DB unspenttxs - however some output txs can be also in mempool
-	itx, err := m.chain.GetTransactionForMempool(input.Txid)
+	itx, err := m.chain.GetTransactionForMempool(input.txid)
 	if err != nil {
-		glog.Error("cannot get transaction ", input.Txid, ": ", err)
+		glog.Error("cannot get transaction ", input.txid, ": ", err)
 		return nil
 	}
-	if int(input.Vout) >= len(itx.Vout) {
-		glog.Error("Vout len in transaction ", input.Txid, " ", len(itx.Vout), " input.Vout=", input.Vout)
+	if int(input.vout) >= len(itx.Vout) {
+		glog.Error("Vout len in transaction ", input.txid, " ", len(itx.Vout), " input.Vout=", input.vout)
 		return nil
 	}
-	addrID, err := m.chain.GetChainParser().GetAddrIDFromVout(&itx.Vout[input.Vout])
+	addrID, err := m.chain.GetChainParser().GetAddrIDFromVout(&itx.Vout[input.vout])
 	if err != nil {
-		glog.Error("error in addrID in ", input.Txid, " ", input.Vout, ": ", err)
+		glog.Error("error in addrID in ", input.txid, " ", input.vout, ": ", err)
 		return nil
 	}
-	return &addrIndex{string(addrID), int32(^input.Vout)}
+	return &addrIndex{string(addrID), ^input.vout}
 
 }
 
-func (m *UTXOMempool) getTxAddrs(txid string, chanInput chan *Vin, chanResult chan *addrIndex) ([]addrIndex, bool) {
+func (m *UTXOMempool) getTxAddrs(txid string, chanInput chan outpoint, chanResult chan *addrIndex) ([]addrIndex, bool) {
 	tx, err := m.chain.GetTransactionForMempool(txid)
 	if err != nil {
 		glog.Error("cannot get transaction ", txid, ": ", err)
@@ -137,6 +137,7 @@ func (m *UTXOMempool) getTxAddrs(txid string, chanInput chan *Vin, chanResult ch
 		if input.Coinbase != "" {
 			continue
 		}
+		o := outpoint{input.Txid, int32(input.Vout)}
 	loop:
 		for {
 			select {
@@ -147,7 +148,7 @@ func (m *UTXOMempool) getTxAddrs(txid string, chanInput chan *Vin, chanResult ch
 				}
 				dispatched--
 			// send input to be processed
-			case chanInput <- &input:
+			case chanInput <- o:
 				dispatched++
 				break loop
 			}
