@@ -43,9 +43,8 @@ type ScriptPubKey struct {
 
 type Address interface {
 	String() string
-	EncodeAddress() (string, error)
-	AreEqual(addr string) (bool, error)
-	InSlice(addrs []string) (bool, error)
+	AreEqual(addr string) bool
+	InSlice(addrs []string) bool
 }
 
 type Vout struct {

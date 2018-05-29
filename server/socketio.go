@@ -478,16 +478,9 @@ func (s *SocketIoServer) getAddressHistory(addr []string, opts *addrOpts) (res r
 					Script:   &aoh,
 				}
 				if vout.Address != nil {
-					a, err := vout.Address.EncodeAddress()
-					if err != nil {
-						return res, err
-					}
+					a := vout.Address.String()
 					ao.Address = &a
-					found, err := vout.Address.InSlice(addr)
-					if err != nil {
-						return res, err
-					}
-					if found {
+					if vout.Address.InSlice(addr) {
 						hi, ok := ads[a]
 						if ok {
 							hi.OutputIndexes = append(hi.OutputIndexes, int(vout.N))
@@ -735,10 +728,7 @@ func (s *SocketIoServer) getDetailedTransaction(txid string) (res resultGetDetai
 			if len(otx.Vout) > int(vin.Vout) {
 				vout := otx.Vout[vin.Vout]
 				if vout.Address != nil {
-					a, err := vout.Address.EncodeAddress()
-					if err != nil {
-						return res, err
-					}
+					a := vout.Address.String()
 					ai.Address = &a
 				}
 				ai.Satoshis = int64(vout.Value*1E8 + 0.5)
@@ -753,10 +743,7 @@ func (s *SocketIoServer) getDetailedTransaction(txid string) (res resultGetDetai
 			Script:   &aos,
 		}
 		if vout.Address != nil {
-			a, err := vout.Address.EncodeAddress()
-			if err != nil {
-				return res, err
-			}
+			a := vout.Address.String()
 			ao.Address = &a
 		}
 		ho = append(ho, ao)

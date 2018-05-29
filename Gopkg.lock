@@ -111,6 +111,12 @@
 
 [[projects]]
   branch = "master"
+  name = "github.com/mr-tron/base58"
+  packages = ["base58"]
+  revision = "c1bdf7c52f59d6685ca597b9955a443ff95eeee6"
+
+[[projects]]
+  branch = "master"
   name = "github.com/pebbe/zmq4"
   packages = ["."]
   revision = "5b443b6471cea4b4f9f85025530c04c93233f76a"
@@ -144,6 +150,12 @@
   packages = ["."]
   revision = "feef513b9575b32f84bafa580aad89b011259019"
   version = "v1.3.0"
+
+[[projects]]
+  name = "github.com/schancel/cashaddr-converter"
+  packages = ["address","baseconv","cashaddress","legacy"]
+  revision = "0a38f5822f795dc3727b4caacc298e02938d9eb1"
+  version = "v9"
 
 [[projects]]
   branch = "master"
@@ -190,6 +202,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "3a5adb167369a6d82fec8664beb93b7e7c8109b31c9f19ecd8ce1142755d621f"
+  inputs-digest = "97b5e11b3aa46e6b54a5c3fd7835c49f324f9821a1c641e5682f60ee6716d8c2"
   solver-name = "gps-cdcl"
   solver-version = 1
