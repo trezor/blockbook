@@ -26,16 +26,25 @@ func NewZCashRPC(config json.RawMessage, pushHandler func(bchain.NotificationTyp
 
 // Initialize initializes ZCashRPC instance.
 func (z *ZCashRPC) Initialize() error {
-	_, err := z.GetChainInfoAndInitializeMempool(z)
+	chainName, err := z.GetChainInfoAndInitializeMempool(z)
 	if err != nil {
 		return err
 	}
 
-	z.Parser = NewZCashParser(z.ChainConfig)
-	z.Testnet = false
-	z.Network = "livenet"
+	params := GetChainParams(chainName)
 
-	glog.Info("rpc: block chain mainnet")
+	z.Parser = NewZCashParser(z.ChainConfig)
+
+	// parameters for getInfo request
+	if params.Net == MainnetMagic {
+		z.Testnet = false
+		z.Network = "livenet"
+	} else {
+		z.Testnet = true
+		z.Network = "testnet"
+	}
+
+	glog.Info("rpc: block chain ", params.Name)
 
 	return nil
 }
@@ -63,7 +72,7 @@ type resGetBlockThin struct {
 
 type resGetRawTransaction struct {
 	Error  *bchain.RPCError `json:"error"`
-	Result bchain.Tx        `json:"result"`
+	Result json.RawMessage  `json:"result"`
 }
 
 // getblockheader
@@ -105,8 +114,8 @@ func (z *ZCashRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 		return nil, errors.Annotatef(res.Error, "hash %v", hash)
 	}
 
-	txs := make([]bchain.Tx, len(res.Result.Txids))
-	for i, txid := range res.Result.Txids {
+	txs := make([]bchain.Tx, 0, len(res.Result.Txids))
+	for _, txid := range res.Result.Txids {
 		tx, err := z.GetTransaction(txid)
 		if err != nil {
 			if isInvalidTx(err) {
@@ -115,7 +124,7 @@ func (z *ZCashRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 			}
 			return nil, err
 		}
-		txs[i] = *tx
+		txs = append(txs, *tx)
 	}
 	block := &bchain.Block{
 		BlockHeader: res.Result.BlockHeader,
@@ -160,7 +169,11 @@ func (z *ZCashRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 	if res.Error != nil {
 		return nil, errors.Annotatef(res.Error, "txid %v", txid)
 	}
-	return &res.Result, nil
+	tx, err := z.Parser.ParseTxFromJson(res.Result)
+	if err != nil {
+		return nil, errors.Annotatef(err, "txid %v", txid)
+	}
+	return tx, nil
 }
 
 // GetBlockHash returns hash of block in best-block-chain at given height.

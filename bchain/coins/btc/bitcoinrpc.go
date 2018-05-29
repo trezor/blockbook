@@ -505,42 +505,6 @@ func (b *BitcoinRPC) GetBlockRaw(hash string) ([]byte, error) {
 	return hex.DecodeString(res.Result)
 }
 
-// GetBlockList returns block with given hash by downloading block
-// transactions one by one.
-func (b *BitcoinRPC) GetBlockList(hash string) (*bchain.Block, error) {
-	glog.V(1).Info("rpc: getblock (verbosity=1) ", hash)
-
-	res := resGetBlockThin{}
-	req := cmdGetBlock{Method: "getblock"}
-	req.Params.BlockHash = hash
-	req.Params.Verbosity = 1
-	err := b.Call(&req, &res)
-
-	if err != nil {
-		return nil, errors.Annotatef(err, "hash %v", hash)
-	}
-	if res.Error != nil {
-		if isErrBlockNotFound(res.Error) {
-			return nil, bchain.ErrBlockNotFound
-		}
-		return nil, errors.Annotatef(res.Error, "hash %v", hash)
-	}
-
-	txs := make([]bchain.Tx, len(res.Result.Txids))
-	for i, txid := range res.Result.Txids {
-		tx, err := b.GetTransaction(txid)
-		if err != nil {
-			return nil, err
-		}
-		txs[i] = *tx
-	}
-	block := &bchain.Block{
-		BlockHeader: res.Result.BlockHeader,
-		Txs:         txs,
-	}
-	return block, nil
-}
-
 // GetBlockFull returns block with given hash.
 func (b *BitcoinRPC) GetBlockFull(hash string) (*bchain.Block, error) {
 	glog.V(1).Info("rpc: getblock (verbosity=2) ", hash)

@@ -1,0 +1,22 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+
+  configure)
+    if ! id -u zcash &> /dev/null
+    then
+        useradd --system -M -U zcash -s /bin/false
+    fi
+
+    if [ "$(stat -c '%U' /opt/coins/data/zec-testnet/zcash)" != "zcash" ]
+    then
+        chown -R zcash:zcash /opt/coins/data/zec-testnet/zcash
+    fi
+
+    HOME=/opt/coins/data/zec-testnet/zcash /opt/coins/nodes/zcash/zec-testnet/bin/zcash-fetch-params
+  ;;
+
+esac
+
+#DEBHELPER#
