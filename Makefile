@@ -21,6 +21,11 @@ test-all: .bin-image
 deb: .deb-image
 	docker run -t --rm -e PACKAGER=$(PACKAGER) -e UPDATE_VENDOR=$(UPDATE_VENDOR) -v $(CURDIR):/src -v $(CURDIR)/build:/out $(DEB_IMAGE)
 
+tools:
+	docker run -t --rm -e PACKAGER=$(PACKAGER) -e UPDATE_VENDOR=$(UPDATE_VENDOR) -v $(CURDIR):/src -v $(CURDIR)/build:/out $(BIN_IMAGE) make tools
+
+all: build-images deb
+
 build-images:
 	rm -f .bin-image .deb-image
 	$(MAKE) .bin-image .deb-image
@@ -38,7 +43,7 @@ clean: clean-bin clean-deb
 clean-all: clean clean-images
 
 clean-bin:
-	rm -f build/blockbook
+	find build -maxdepth 1 -type f -executable -delete
 
 clean-deb:
 	rm -f build/*.deb

@@ -1,0 +1,2 @@
+ldb /opt/coins/blockbook/tools
+sst_dump /opt/coins/blockbook/tools

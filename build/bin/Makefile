@@ -1,8 +1,11 @@
+SHELL = /bin/bash
 UPDATE_VENDOR ?= 1
 VERSION ?= devel
 GITCOMMIT = $(shell cd /src && git describe --tags --always --dirty)
 BUILDTIME = $(shell date --iso-8601=seconds)
 LDFLAGS := -X blockbook/common.version=$(VERSION) -X blockbook/common.gitcommit=$(GITCOMMIT) -X blockbook/common.buildtime=$(BUILDTIME)
+
+all: build tools
 
 build: prepare-sources
 	cd $(GOPATH)/src/blockbook && go build -o $(CURDIR)/blockbook -ldflags="-s -w $(LDFLAGS)"
@@ -13,6 +16,10 @@ build-debug: prepare-sources
 	cd $(GOPATH)/src/blockbook && go build -o $(CURDIR)/blockbook -ldflags="$(LDFLAGS)"
 	cp $(CURDIR)/blockbook /out/blockbook
 	chown $(PACKAGER) /out/blockbook
+
+tools:
+	cp $(CURDIR)/{ldb,sst_dump} /out
+	chown $(PACKAGER) /out/{ldb,sst_dump}
 
 test: prepare-sources
 	cd $(GOPATH)/src/blockbook && go test -short ./...
