@@ -809,8 +809,8 @@ func (s *SocketIoServer) getMempoolEntry(txid string) (res resultGetMempoolEntry
 // "bitcoind/hashblock"
 // "bitcoind/addresstxid",["2MzTmvPJLZaLzD9XdN3jMtQA5NexC3rAPww","2NAZRJKr63tSdcTxTN3WaE9ZNDyXy6PgGuv"]
 func (s *SocketIoServer) onSubscribe(c *gosocketio.Channel, req []byte) interface{} {
-	onError := func(id, sc, err string) {
-		glog.Error(id, " onSubscribe ", sc, ": ", err)
+	onError := func(id, sc, err, detail string) {
+		glog.Error(id, " onSubscribe ", err, ": ", err)
 		s.metrics.SocketIOSubscribes.With(common.Labels{"channel": sc, "status": err}).Inc()
 	}
 
@@ -822,12 +822,12 @@ func (s *SocketIoServer) onSubscribe(c *gosocketio.Channel, req []byte) interfac
 		var addrs []string
 		sc = r[1:i]
 		if sc != "bitcoind/addresstxid" {
-			onError(c.Id(), sc, "invalid data")
+			onError(c.Id(), sc, "invalid data", "expecting bitcoind/addresstxid, req: "+r)
 			return nil
 		}
 		err := json.Unmarshal([]byte(r[i+2:]), &addrs)
 		if err != nil {
-			onError(c.Id(), sc, err.Error())
+			onError(c.Id(), sc, "invalid data", err.Error()+", req: "+r)
 			return nil
 		}
 		for _, a := range addrs {
@@ -836,7 +836,7 @@ func (s *SocketIoServer) onSubscribe(c *gosocketio.Channel, req []byte) interfac
 	} else {
 		sc = r[1 : len(r)-1]
 		if sc != "bitcoind/hashblock" {
-			onError(c.Id(), sc, "invalid data")
+			onError(c.Id(), sc, "invalid data", "expecting bitcoind/hashblock, req: "+r)
 			return nil
 		}
 		c.Join(sc)
