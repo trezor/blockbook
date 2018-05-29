@@ -406,11 +406,10 @@ func pushSynchronizationHandler(nt bchain.NotificationType) {
 
 func waitForSignalAndShutdown(https *server.HTTPServer, socketio *server.SocketIoServer, chain bchain.BlockChain, timeout time.Duration) {
 	sig := <-chanOsSignal
+	glog.Infof("Shutdown: %v", sig)
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-
-	glog.Infof("Shutdown: %v", sig)
 
 	if https != nil {
 		if err := https.Shutdown(ctx); err != nil {
