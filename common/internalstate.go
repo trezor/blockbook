@@ -42,9 +42,6 @@ type InternalState struct {
 	DbColumns []InternalStateColumn `json:"dbColumns"`
 }
 
-// IS is a singleton holding internal state of the application
-var IS *InternalState
-
 // StartedSync signals start of synchronization
 func (is *InternalState) StartedSync() {
 	is.mux.Lock()

@@ -33,10 +33,11 @@ type SocketIoServer struct {
 	chainParser bchain.BlockChainParser
 	explorerURL string
 	metrics     *common.Metrics
+	is          *common.InternalState
 }
 
 // NewSocketIoServer creates new SocketIo interface to blockbook and returns its handle
-func NewSocketIoServer(binding string, certFiles string, db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxCache, explorerURL string, metrics *common.Metrics) (*SocketIoServer, error) {
+func NewSocketIoServer(binding string, certFiles string, db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxCache, explorerURL string, metrics *common.Metrics, is *common.InternalState) (*SocketIoServer, error) {
 	server := gosocketio.NewServer(transport.GetDefaultWebsocketTransport())
 
 	server.On(gosocketio.OnConnection, func(c *gosocketio.Channel) {
@@ -76,6 +77,7 @@ func NewSocketIoServer(binding string, certFiles string, db *db.RocksDB, chain b
 		chainParser: chain.GetChainParser(),
 		explorerURL: explorerURL,
 		metrics:     metrics,
+		is:          is,
 	}
 
 	// support for tests of socket.io interface
@@ -155,10 +157,10 @@ type resAboutBlockbookPublic struct {
 
 func (s *SocketIoServer) index(w http.ResponseWriter, r *http.Request) {
 	vi := common.GetVersionInfo()
-	ss, bh, st := common.IS.GetSyncState()
-	ms, mt := common.IS.GetMempoolSyncState()
+	ss, bh, st := s.is.GetSyncState()
+	ms, mt := s.is.GetMempoolSyncState()
 	a := resAboutBlockbookPublic{
-		Coin:            common.IS.Coin,
+		Coin:            s.is.Coin,
 		About:           blockbookAbout,
 		Version:         vi.Version,
 		GitCommit:       vi.GitCommit,

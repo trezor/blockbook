@@ -36,6 +36,7 @@ type RocksDB struct {
 	ro          *gorocksdb.ReadOptions
 	cfh         []*gorocksdb.ColumnFamilyHandle
 	chainParser bchain.BlockChainParser
+	is          *common.InternalState
 }
 
 const (
@@ -102,7 +103,7 @@ func NewRocksDB(path string, parser bchain.BlockChainParser) (d *RocksDB, err er
 	wo := gorocksdb.NewDefaultWriteOptions()
 	ro := gorocksdb.NewDefaultReadOptions()
 	ro.SetFillCache(false)
-	return &RocksDB{path, db, wo, ro, cfh, parser}, nil
+	return &RocksDB{path, db, wo, ro, cfh, parser, nil}, nil
 }
 
 func (d *RocksDB) closeDB() error {
@@ -118,9 +119,9 @@ func (d *RocksDB) closeDB() error {
 func (d *RocksDB) Close() error {
 	if d.db != nil {
 		// store the internal state of the app
-		if common.IS.DbState == common.DbStateOpen {
-			common.IS.DbState = common.DbStateClosed
-			if err := d.StoreInternalState(common.IS); err != nil {
+		if d.is != nil && d.is.DbState == common.DbStateOpen {
+			d.is.DbState = common.DbStateClosed
+			if err := d.StoreInternalState(d.is); err != nil {
 				glog.Infof("internalState: ", err)
 			}
 		}
@@ -915,6 +916,11 @@ func (d *RocksDB) LoadInternalState(rpcCoin string) (*common.InternalState, erro
 	}
 	is.DbColumns = nc
 	return is, nil
+}
+
+// SetInternalState sets the InternalState to be used by db to collect internal state
+func (d *RocksDB) SetInternalState(is *common.InternalState) {
+	d.is = is
 }
 
 // StoreInternalState stores the internal state to db

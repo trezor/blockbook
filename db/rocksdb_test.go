@@ -3,7 +3,6 @@ package db
 import (
 	"blockbook/bchain"
 	"blockbook/bchain/coins/btc"
-	"blockbook/common"
 	"encoding/hex"
 	"fmt"
 	"io/ioutil"
@@ -19,7 +18,7 @@ import (
 
 // simplified explanation of signed varint packing, used in many index data structures
 // for number n, the packing is: 2*n if n>=0 else 2*(-n)-1
-// take only 1 byte if abs(n)<127
+// takes only 1 byte if abs(n)<127
 
 func setupRocksDB(t *testing.T, p bchain.BlockChainParser) *RocksDB {
 	tmp, err := ioutil.TempDir("", "testdb")
@@ -29,10 +28,6 @@ func setupRocksDB(t *testing.T, p bchain.BlockChainParser) *RocksDB {
 	d, err := NewRocksDB(tmp, p)
 	if err != nil {
 		t.Fatal(err)
-	}
-	common.IS, err = d.LoadInternalState("btc-testnet")
-	if err != nil {
-		t.Fatal("internalState: ", err)
 	}
 	return d
 }

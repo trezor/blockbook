@@ -22,10 +22,11 @@ type SyncWorker struct {
 	startHash              string
 	chanOsSignal           chan os.Signal
 	metrics                *common.Metrics
+	is                     *common.InternalState
 }
 
 // NewSyncWorker creates new SyncWorker and returns its handle
-func NewSyncWorker(db *RocksDB, chain bchain.BlockChain, syncWorkers, syncChunk int, minStartHeight int, dryRun bool, chanOsSignal chan os.Signal, metrics *common.Metrics) (*SyncWorker, error) {
+func NewSyncWorker(db *RocksDB, chain bchain.BlockChain, syncWorkers, syncChunk int, minStartHeight int, dryRun bool, chanOsSignal chan os.Signal, metrics *common.Metrics, is *common.InternalState) (*SyncWorker, error) {
 	if minStartHeight < 0 {
 		minStartHeight = 0
 	}
@@ -38,6 +39,7 @@ func NewSyncWorker(db *RocksDB, chain bchain.BlockChain, syncWorkers, syncChunk 
 		startHeight:  uint32(minStartHeight),
 		chanOsSignal: chanOsSignal,
 		metrics:      metrics,
+		is:           is,
 	}, nil
 }
 
@@ -47,7 +49,7 @@ var errSynced = errors.New("synced")
 // onNewBlock is called when new block is connected, but not in initial parallel sync
 func (w *SyncWorker) ResyncIndex(onNewBlock func(hash string)) error {
 	start := time.Now()
-	common.IS.StartedSync()
+	w.is.StartedSync()
 
 	err := w.resyncIndex(onNewBlock)
 
@@ -59,12 +61,12 @@ func (w *SyncWorker) ResyncIndex(onNewBlock func(hash string)) error {
 		w.metrics.IndexDBSize.Set(float64(w.db.DatabaseSizeOnDisk()))
 		bh, _, err := w.db.GetBestBlock()
 		if err == nil {
-			common.IS.FinishedSync(bh)
+			w.is.FinishedSync(bh)
 		}
 		return nil
 	case errSynced:
 		// this is not actually error but flag that resync wasn't necessary
-		common.IS.FinishedSyncNoChange()
+		w.is.FinishedSyncNoChange()
 		return nil
 	}
 

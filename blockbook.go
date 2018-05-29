@@ -81,6 +81,7 @@ var (
 	index                      *db.RocksDB
 	txCache                    *db.TxCache
 	syncWorker                 *db.SyncWorker
+	internalState              *common.InternalState
 	callbacksOnNewBlockHash    []func(hash string)
 	callbacksOnNewTxAddr       []func(txid string, addr string)
 	chanOsSignal               chan os.Signal
@@ -156,22 +157,23 @@ func main() {
 	}
 	defer index.Close()
 
-	common.IS, err = index.LoadInternalState(*coin)
+	internalState, err = newInternalState(*coin, index)
 	if err != nil {
 		glog.Fatal("internalState: ", err)
 	}
-	if common.IS.DbState != common.DbStateClosed {
-		glog.Warning("internalState: database in not closed state ", common.IS.DbState, ", possibly previous ungraceful shutdown")
+	index.SetInternalState(internalState)
+	if internalState.DbState != common.DbStateClosed {
+		glog.Warning("internalState: database in not closed state ", internalState.DbState, ", possibly previous ungraceful shutdown")
 	}
 
-	syncWorker, err = db.NewSyncWorker(index, chain, *syncWorkers, *syncChunk, *blockFrom, *dryRun, chanOsSignal, metrics)
+	syncWorker, err = db.NewSyncWorker(index, chain, *syncWorkers, *syncChunk, *blockFrom, *dryRun, chanOsSignal, metrics, internalState)
 	if err != nil {
 		glog.Fatalf("NewSyncWorker %v", err)
 	}
 
 	// set the DbState to open at this moment, after all important workers are initialized
-	common.IS.DbState = common.DbStateOpen
-	err = index.StoreInternalState(common.IS)
+	internalState.DbState = common.DbStateOpen
+	err = index.StoreInternalState(internalState)
 	if err != nil {
 		glog.Fatal("internalState: ", err)
 	}
@@ -242,7 +244,7 @@ func main() {
 	var socketIoServer *server.SocketIoServer
 	if *socketIoBinding != "" {
 		socketIoServer, err = server.NewSocketIoServer(
-			*socketIoBinding, *certFiles, index, chain, txCache, *explorerURL, metrics)
+			*socketIoBinding, *certFiles, index, chain, txCache, *explorerURL, metrics, internalState)
 		if err != nil {
 			glog.Error("socketio: ", err)
 			return
@@ -304,6 +306,10 @@ func main() {
 	}
 }
 
+func newInternalState(coin string, d *db.RocksDB) (*common.InternalState, error) {
+	return d.LoadInternalState(coin)
+}
+
 func tickAndDebounce(tickTime time.Duration, debounceTime time.Duration, input chan struct{}, f func()) {
 	timer := time.NewTimer(tickTime)
 	var firstDebounce time.Time
@@ -360,11 +366,11 @@ func syncMempoolLoop() {
 	glog.Info("syncMempoolLoop starting")
 	// resync mempool about every minute if there are no chanSyncMempool requests, with debounce 1 second
 	tickAndDebounce(resyncMempoolPeriodMs*time.Millisecond, debounceResyncMempoolMs*time.Millisecond, chanSyncMempool, func() {
-		common.IS.StartedMempoolSync()
+		internalState.StartedMempoolSync()
 		if err := chain.ResyncMempool(onNewTxAddr); err != nil {
 			glog.Error("syncMempoolLoop ", errors.ErrorStack(err))
 		} else {
-			common.IS.FinishedMempoolSync()
+			internalState.FinishedMempoolSync()
 		}
 	})
 	glog.Info("syncMempoolLoop stopped")
@@ -374,7 +380,7 @@ func storeInternalStateLoop() {
 	defer close(chanStoreInternalStateDone)
 	glog.Info("storeInternalStateLoop starting")
 	tickAndDebounce(storeInternalStatePeriodMs*time.Millisecond, (storeInternalStatePeriodMs-1)*time.Millisecond, chanStoreInternalState, func() {
-		if err := index.StoreInternalState(common.IS); err != nil {
+		if err := index.StoreInternalState(internalState); err != nil {
 			glog.Error("storeInternalStateLoop ", errors.ErrorStack(err))
 		}
 	})
