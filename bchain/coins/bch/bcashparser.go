@@ -4,7 +4,6 @@ import (
 	"blockbook/bchain"
 	"blockbook/bchain/coins/btc"
 	"fmt"
-	"strings"
 
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/txscript"
@@ -20,7 +19,11 @@ const (
 	CashAddr
 )
 
-var prefixes = []string{"bitcoincash", "bchtest", "bchreg"}
+const (
+	MainNetPrefix = "bitcoincash:"
+	TestNetPrefix = "bchtest:"
+	RegTestPrefix = "bchreg:"
+)
 
 // BCashParser handle
 type BCashParser struct {
@@ -44,10 +47,11 @@ func NewBCashParser(params *chaincfg.Params, c *btc.Configuration) (*BCashParser
 	p := &BCashParser{
 		BitcoinParser: &btc.BitcoinParser{
 			BaseParser: &bchain.BaseParser{
-				AddressFactory:       func(addr string) (bchain.Address, error) { return newBCashAddress(addr, params, format) },
+				AddressFactory:       func(addr string) (bchain.Address, error) { return newBCashAddress(addr, format) },
 				BlockAddressesToKeep: c.BlockAddressesToKeep,
 			},
-			Params: params,
+			Params:                  params,
+			OutputScriptToAddresses: outputScriptToAddresses,
 		},
 		AddressFormat: format,
 	}
@@ -105,42 +109,37 @@ func (p *BCashParser) AddressToOutputScript(address string) ([]byte, error) {
 }
 
 func isCashAddr(addr string) bool {
-	slice := strings.Split(addr, ":")
-	if len(slice) != 2 {
-		return false
+	n := len(addr)
+	switch {
+	case n > len(MainNetPrefix) && addr[0:len(MainNetPrefix)] == MainNetPrefix:
+		return true
+	case n > len(TestNetPrefix) && addr[0:len(TestNetPrefix)] == TestNetPrefix:
+		return true
+	case n > len(RegTestPrefix) && addr[0:len(RegTestPrefix)] == RegTestPrefix:
+		return true
 	}
-	for _, prefix := range prefixes {
-		if slice[0] == prefix {
-			return true
-		}
-	}
+
 	return false
 }
 
-func (p *BCashParser) UnpackTx(buf []byte) (tx *bchain.Tx, height uint32, err error) {
-	tx, height, err = p.BitcoinParser.UnpackTx(buf)
+// outputScriptToAddresses converts ScriptPubKey to bitcoin addresses
+func outputScriptToAddresses(script []byte, params *chaincfg.Params) ([]string, error) {
+	a, err := bchutil.ExtractPkScriptAddrs(script, params)
 	if err != nil {
-		return
+		return nil, err
 	}
-
-	for i, vout := range tx.Vout {
-		if len(vout.ScriptPubKey.Addresses) == 1 {
-			a, err := newBCashAddress(vout.ScriptPubKey.Addresses[0], p.Params, p.AddressFormat)
-			if err != nil {
-				return nil, 0, err
-			}
-			tx.Vout[i].Address = a
-		}
-	}
-
-	return
+	return []string{a.EncodeAddress()}, nil
 }
 
 type bcashAddress struct {
 	addr string
 }
 
-func newBCashAddress(addr string, net *chaincfg.Params, format AddressFormat) (*bcashAddress, error) {
+func newBCashAddress(addr string, format AddressFormat) (*bcashAddress, error) {
+	if isCashAddr(addr) && format == CashAddr {
+		return &bcashAddress{addr: addr}, nil
+	}
+
 	da, err := address.NewFromString(addr)
 	if err != nil {
 		return nil, err

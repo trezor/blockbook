@@ -19,11 +19,6 @@ func (p *BaseParser) AddressToOutputScript(address string) ([]byte, error) {
 	return nil, errors.New("AddressToOutputScript: not implemented")
 }
 
-// OutputScriptToAddresses converts ScriptPubKey to addresses - currently not implemented
-func (p *BaseParser) OutputScriptToAddresses(script []byte) ([]string, error) {
-	return nil, errors.New("OutputScriptToAddresses: not implemented")
-}
-
 // ParseBlock parses raw block to our Block struct - currently not implemented
 func (p *BaseParser) ParseBlock(b []byte) (*Block, error) {
 	return nil, errors.New("ParseBlock: not implemented")

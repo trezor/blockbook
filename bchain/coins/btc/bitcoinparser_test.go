@@ -94,17 +94,16 @@ func TestOutputScriptToAddresses(t *testing.T) {
 			wantErr: false,
 		},
 	}
-	parser := NewBitcoinParser(GetChainParams("main"), &Configuration{})
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			b, _ := hex.DecodeString(tt.args.script)
-			got, err := parser.OutputScriptToAddresses(b)
+			got, err := outputScriptToAddresses(b, GetChainParams("main"))
 			if (err != nil) != tt.wantErr {
-				t.Errorf("OutputScriptToAddresses() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("outputScriptToAddresses() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("OutputScriptToAddresses() = %v, want %v", got, tt.want)
+				t.Errorf("outputScriptToAddresses() = %v, want %v", got, tt.want)
 			}
 		})
 	}

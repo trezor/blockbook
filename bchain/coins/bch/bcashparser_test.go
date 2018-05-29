@@ -10,7 +10,7 @@ import (
 )
 
 func TestBcashAddressEncodeAddress(t *testing.T) {
-	addr1, err := newBCashAddress("13zMwGC5bxRn9ckJ1mgxf7UR8qbbNe2iji", GetChainParams("main"), Legacy)
+	addr1, err := newBCashAddress("13zMwGC5bxRn9ckJ1mgxf7UR8qbbNe2iji", Legacy)
 	if err != nil {
 		t.Errorf("newBCashAddress() error = %v", err)
 		return
@@ -19,7 +19,7 @@ func TestBcashAddressEncodeAddress(t *testing.T) {
 	if got1 != "13zMwGC5bxRn9ckJ1mgxf7UR8qbbNe2iji" {
 		t.Errorf("String() got1 = %v, want %v", got1, "13zMwGC5bxRn9ckJ1mgxf7UR8qbbNe2iji")
 	}
-	addr2, err := newBCashAddress("13zMwGC5bxRn9ckJ1mgxf7UR8qbbNe2iji", GetChainParams("main"), CashAddr)
+	addr2, err := newBCashAddress("13zMwGC5bxRn9ckJ1mgxf7UR8qbbNe2iji", CashAddr)
 	if err != nil {
 		t.Errorf("newBCashAddress() error = %v", err)
 		return
@@ -31,12 +31,12 @@ func TestBcashAddressEncodeAddress(t *testing.T) {
 }
 
 func TestBcashAddressAreEqual(t *testing.T) {
-	addr1, err := newBCashAddress("13zMwGC5bxRn9ckJ1mgxf7UR8qbbNe2iji", GetChainParams("main"), Legacy)
+	addr1, err := newBCashAddress("13zMwGC5bxRn9ckJ1mgxf7UR8qbbNe2iji", Legacy)
 	if err != nil {
 		t.Errorf("newBCashAddress() error = %v", err)
 		return
 	}
-	addr2, err := newBCashAddress("13zMwGC5bxRn9ckJ1mgxf7UR8qbbNe2iji", GetChainParams("main"), CashAddr)
+	addr2, err := newBCashAddress("13zMwGC5bxRn9ckJ1mgxf7UR8qbbNe2iji", CashAddr)
 	if err != nil {
 		t.Errorf("newBCashAddress() error = %v", err)
 		return
@@ -60,12 +60,12 @@ func TestBcashAddressAreEqual(t *testing.T) {
 }
 
 func TestBcashAddressInSlice(t *testing.T) {
-	addr1, err := newBCashAddress("13zMwGC5bxRn9ckJ1mgxf7UR8qbbNe2iji", GetChainParams("main"), Legacy)
+	addr1, err := newBCashAddress("13zMwGC5bxRn9ckJ1mgxf7UR8qbbNe2iji", Legacy)
 	if err != nil {
 		t.Errorf("newBCashAddress() error = %v", err)
 		return
 	}
-	addr2, err := newBCashAddress("13zMwGC5bxRn9ckJ1mgxf7UR8qbbNe2iji", GetChainParams("main"), CashAddr)
+	addr2, err := newBCashAddress("13zMwGC5bxRn9ckJ1mgxf7UR8qbbNe2iji", CashAddr)
 	if err != nil {
 		t.Errorf("newBCashAddress() error = %v", err)
 		return
@@ -128,12 +128,12 @@ func init() {
 		addr1, addr2, addr3 bchain.Address
 		err                 error
 	)
-	addr1, err = newBCashAddress("3AZKvpKhSh1o8t1QrX3UeXG9d2BhCRnbcK", GetChainParams("main"), Legacy)
+	addr1, err = newBCashAddress("3AZKvpKhSh1o8t1QrX3UeXG9d2BhCRnbcK", Legacy)
 	if err == nil {
-		addr2, err = newBCashAddress("2NByHN6A8QYkBATzxf4pRGbCSHD5CEN2TRu", GetChainParams("test"), Legacy)
+		addr2, err = newBCashAddress("2NByHN6A8QYkBATzxf4pRGbCSHD5CEN2TRu", Legacy)
 	}
 	if err == nil {
-		addr3, err = newBCashAddress("2MvZguYaGjM7JihBgNqgLF2Ca2Enb76Hj9D", GetChainParams("test"), Legacy)
+		addr3, err = newBCashAddress("2MvZguYaGjM7JihBgNqgLF2Ca2Enb76Hj9D", Legacy)
 	}
 	if err != nil {
 		panic(err)
@@ -161,7 +161,7 @@ func init() {
 				ScriptPubKey: bchain.ScriptPubKey{
 					Hex: "a9146144d57c8aff48492c9dfb914e120b20bad72d6f87",
 					Addresses: []string{
-						"3AZKvpKhSh1o8t1QrX3UeXG9d2BhCRnbcK",
+						"bitcoincash:pps5f4tu3tl5sjfvnhaeznsjpvst44eddugfcnqpy9",
 					},
 				},
 				Address: addr1,
@@ -191,7 +191,7 @@ func init() {
 				ScriptPubKey: bchain.ScriptPubKey{
 					Hex: "a914cd668d781ece600efa4b2404dc91fd26b8b8aed887",
 					Addresses: []string{
-						"2NByHN6A8QYkBATzxf4pRGbCSHD5CEN2TRu",
+						"bchtest:prxkdrtcrm8xqrh6fvjqfhy3l5nt3w9wmq9fmsvkmz",
 					},
 				},
 				Address: addr2,
@@ -202,7 +202,7 @@ func init() {
 				ScriptPubKey: bchain.ScriptPubKey{
 					Hex: "a914246655bdbd54c7e477d0ea2375e86e0db2b8f80a87",
 					Addresses: []string{
-						"2MvZguYaGjM7JihBgNqgLF2Ca2Enb76Hj9D",
+						"bchtest:pqjxv4dah42v0erh6r4zxa0gdcxm9w8cpg0qw8tqf6",
 					},
 				},
 				Address: addr3,
