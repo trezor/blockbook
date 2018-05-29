@@ -4,5 +4,8 @@
   "rpcPass": "rpc",
   "rpcTimeout": 25,
   "parse": true,
-  "zeroMQBinding": "tcp://127.0.0.1:48332"
+  "zeroMQBinding": "tcp://127.0.0.1:48332",
+  "mempoolWorkers": 4,
+  "mempoolSubWorkers": 8,
+  "blockAddressesToKeep": 300
 }
