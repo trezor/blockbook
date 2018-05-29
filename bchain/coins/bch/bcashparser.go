@@ -12,23 +12,45 @@ import (
 	"github.com/cpacia/bchutil"
 )
 
+type AddressFormat = uint8
+
+const (
+	Legacy AddressFormat = iota
+	CashAddr
+)
+
 var prefixes = []string{"bitcoincash", "bchtest", "bchreg"}
 
 // BCashParser handle
 type BCashParser struct {
 	*btc.BitcoinParser
+	AddressFormat AddressFormat
 }
 
 // NewBCashParser returns new BCashParser instance
 func NewBCashParser(params *chaincfg.Params, c *btc.Configuration) *BCashParser {
+	var format AddressFormat
+	switch c.AddressFormat {
+	case "":
+		fallthrough
+	case "cashaddr":
+		format = CashAddr
+	case "legacy":
+		format = Legacy
+	default:
+		// XXX
+		e := fmt.Errorf("Unknown address format: %s", c.AddressFormat)
+		panic(e)
+	}
 	return &BCashParser{
 		BitcoinParser: &btc.BitcoinParser{
 			BaseParser: &bchain.BaseParser{
-				AddressFactory:       func(addr string) (bchain.Address, error) { return newBCashAddress(addr, params) },
+				AddressFactory:       func(addr string) (bchain.Address, error) { return newBCashAddress(addr, params, format) },
 				BlockAddressesToKeep: c.BlockAddressesToKeep,
 			},
 			Params: params,
 		},
+		AddressFormat: format,
 	}
 }
 
@@ -103,7 +125,7 @@ func (p *BCashParser) UnpackTx(buf []byte) (tx *bchain.Tx, height uint32, err er
 
 	for i, vout := range tx.Vout {
 		if len(vout.ScriptPubKey.Addresses) == 1 {
-			a, err := newBCashAddress(vout.ScriptPubKey.Addresses[0], p.Params)
+			a, err := newBCashAddress(vout.ScriptPubKey.Addresses[0], p.Params, p.AddressFormat)
 			if err != nil {
 				return nil, 0, err
 			}
@@ -115,11 +137,12 @@ func (p *BCashParser) UnpackTx(buf []byte) (tx *bchain.Tx, height uint32, err er
 }
 
 type bcashAddress struct {
-	addr btcutil.Address
-	net  *chaincfg.Params
+	addr   btcutil.Address
+	net    *chaincfg.Params
+	format AddressFormat
 }
 
-func newBCashAddress(addr string, net *chaincfg.Params) (*bcashAddress, error) {
+func newBCashAddress(addr string, net *chaincfg.Params, format AddressFormat) (*bcashAddress, error) {
 	var (
 		da  btcutil.Address
 		err error
@@ -148,18 +171,23 @@ func newBCashAddress(addr string, net *chaincfg.Params) (*bcashAddress, error) {
 			return nil, err
 		}
 	}
-	return &bcashAddress{addr: da, net: net}, nil
+	switch format {
+	case Legacy, CashAddr:
+	default:
+		return nil, fmt.Errorf("Unknown address format: %d", format)
+	}
+	return &bcashAddress{addr: da, net: net, format: format}, nil
 }
 
 func (a *bcashAddress) String() string {
 	return a.addr.String()
 }
 
-func (a *bcashAddress) EncodeAddress(format bchain.AddressFormat) (string, error) {
-	switch format {
-	case bchain.DefaultAddress:
+func (a *bcashAddress) EncodeAddress() (string, error) {
+	switch a.format {
+	case Legacy:
 		return a.String(), nil
-	case bchain.BCashAddress:
+	case CashAddr:
 		var (
 			ca  btcutil.Address
 			err error
@@ -178,18 +206,12 @@ func (a *bcashAddress) EncodeAddress(format bchain.AddressFormat) (string, error
 		return ca.String(), nil
 
 	default:
-		return "", fmt.Errorf("Unknown address format: %d", format)
+		return "", fmt.Errorf("Unknown address format: %d", a.format)
 	}
 }
 
 func (a *bcashAddress) AreEqual(addr string) (bool, error) {
-	var format bchain.AddressFormat
-	if isCashAddr(addr) {
-		format = bchain.BCashAddress
-	} else {
-		format = bchain.DefaultAddress
-	}
-	ea, err := a.EncodeAddress(format)
+	ea, err := a.EncodeAddress()
 	if err != nil {
 		return false, err
 	}
@@ -197,12 +219,12 @@ func (a *bcashAddress) AreEqual(addr string) (bool, error) {
 }
 
 func (a *bcashAddress) InSlice(addrs []string) (bool, error) {
+	ea, err := a.EncodeAddress()
+	if err != nil {
+		return false, err
+	}
 	for _, addr := range addrs {
-		eq, err := a.AreEqual(addr)
-		if err != nil {
-			return false, err
-		}
-		if eq {
+		if ea == addr {
 			return true, nil
 		}
 	}

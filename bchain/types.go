@@ -41,16 +41,9 @@ type ScriptPubKey struct {
 	Addresses []string `json:"addresses,omitempty"`
 }
 
-type AddressFormat = uint8
-
-const (
-	DefaultAddress AddressFormat = iota
-	BCashAddress
-)
-
 type Address interface {
 	String() string
-	EncodeAddress(format AddressFormat) (string, error)
+	EncodeAddress() (string, error)
 	AreEqual(addr string) (bool, error)
 	InSlice(addrs []string) (bool, error)
 }

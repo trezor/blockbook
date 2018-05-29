@@ -208,16 +208,11 @@ func (s *SocketIoServer) apiBlockIndex(w http.ResponseWriter, r *http.Request) {
 }
 
 type addrOpts struct {
-	Start            int   `json:"start"`
-	End              int   `json:"end"`
-	QueryMempoolOnly bool  `json:"queryMempoolOnly"`
-	From             int   `json:"from"`
-	To               int   `json:"to"`
-	AddressFormat    uint8 `json:"addressFormat"`
-}
-
-type txOpts struct {
-	AddressFormat uint8 `json:"addressFormat"`
+	Start            int  `json:"start"`
+	End              int  `json:"end"`
+	QueryMempoolOnly bool `json:"queryMempoolOnly"`
+	From             int  `json:"from"`
+	To               int  `json:"to"`
 }
 
 var onMessageHandlers = map[string]func(*SocketIoServer, json.RawMessage) (interface{}, error){
@@ -260,9 +255,9 @@ var onMessageHandlers = map[string]func(*SocketIoServer, json.RawMessage) (inter
 		return s.getInfo()
 	},
 	"getDetailedTransaction": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
-		txid, opts, err := unmarshalGetDetailedTransaction(params)
+		txid, err := unmarshalGetDetailedTransaction(params)
 		if err == nil {
-			rv, err = s.getDetailedTransaction(txid, opts)
+			rv, err = s.getDetailedTransaction(txid)
 		}
 		return
 	},
@@ -483,7 +478,7 @@ func (s *SocketIoServer) getAddressHistory(addr []string, opts *addrOpts) (res r
 					Script:   &aoh,
 				}
 				if vout.Address != nil {
-					a, err := vout.Address.EncodeAddress(opts.AddressFormat)
+					a, err := vout.Address.EncodeAddress()
 					if err != nil {
 						return res, err
 					}
@@ -693,22 +688,19 @@ func unmarshalStringParameter(params []byte) (s string, err error) {
 	return
 }
 
-func unmarshalGetDetailedTransaction(params []byte) (txid string, opts txOpts, err error) {
+func unmarshalGetDetailedTransaction(params []byte) (txid string, err error) {
 	var p []json.RawMessage
 	err = json.Unmarshal(params, &p)
 	if err != nil {
 		return
 	}
-	if len(p) < 1 || len(p) > 2 {
+	if len(p) != 1 {
 		err = errors.New("incorrect number of parameters")
 		return
 	}
 	err = json.Unmarshal(p[0], &txid)
 	if err != nil {
 		return
-	}
-	if len(p) > 1 {
-		err = json.Unmarshal(p[1], &opts)
 	}
 	return
 }
@@ -717,7 +709,7 @@ type resultGetDetailedTransaction struct {
 	Result resTx `json:"result"`
 }
 
-func (s *SocketIoServer) getDetailedTransaction(txid string, opts txOpts) (res resultGetDetailedTransaction, err error) {
+func (s *SocketIoServer) getDetailedTransaction(txid string) (res resultGetDetailedTransaction, err error) {
 	bestheight, _, err := s.db.GetBestBlock()
 	if err != nil {
 		return
@@ -743,7 +735,7 @@ func (s *SocketIoServer) getDetailedTransaction(txid string, opts txOpts) (res r
 			if len(otx.Vout) > int(vin.Vout) {
 				vout := otx.Vout[vin.Vout]
 				if vout.Address != nil {
-					a, err := vout.Address.EncodeAddress(opts.AddressFormat)
+					a, err := vout.Address.EncodeAddress()
 					if err != nil {
 						return res, err
 					}
@@ -761,7 +753,7 @@ func (s *SocketIoServer) getDetailedTransaction(txid string, opts txOpts) (res r
 			Script:   &aos,
 		}
 		if vout.Address != nil {
-			a, err := vout.Address.EncodeAddress(opts.AddressFormat)
+			a, err := vout.Address.EncodeAddress()
 			if err != nil {
 				return res, err
 			}

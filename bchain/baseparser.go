@@ -3,7 +3,6 @@ package bchain
 import (
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/juju/errors"
@@ -215,15 +214,12 @@ func (a baseAddress) String() string {
 	return a.addr
 }
 
-func (a baseAddress) EncodeAddress(format AddressFormat) (string, error) {
-	if format != DefaultAddress {
-		return "", fmt.Errorf("Unknown address format: %d", format)
-	}
+func (a baseAddress) EncodeAddress() (string, error) {
 	return a.addr, nil
 }
 
 func (a baseAddress) AreEqual(addr string) (bool, error) {
-	ea, err := a.EncodeAddress(0)
+	ea, err := a.EncodeAddress()
 	if err != nil {
 		return false, err
 	}
@@ -231,12 +227,12 @@ func (a baseAddress) AreEqual(addr string) (bool, error) {
 }
 
 func (a baseAddress) InSlice(addrs []string) (bool, error) {
+	ea, err := a.EncodeAddress()
+	if err != nil {
+		return false, err
+	}
 	for _, addr := range addrs {
-		eq, err := a.AreEqual(addr)
-		if err != nil {
-			return false, err
-		}
-		if eq {
+		if ea == addr {
 			return true, nil
 		}
 	}
