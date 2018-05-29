@@ -45,12 +45,14 @@ type InternalState struct {
 // IS is a singleton holding internal state of the application
 var IS *InternalState
 
+// StartedSync signals start of synchronization
 func (is *InternalState) StartedSync() {
 	is.mux.Lock()
 	defer is.mux.Unlock()
 	is.IsSynchronized = false
 }
 
+// FinishedSync marks end of synchronization, bestHeight specifies new best block height
 func (is *InternalState) FinishedSync(bestHeight uint32) {
 	is.mux.Lock()
 	defer is.mux.Unlock()
@@ -59,18 +61,28 @@ func (is *InternalState) FinishedSync(bestHeight uint32) {
 	is.LastSync = time.Now()
 }
 
+// FinishedSyncNoChange marks end of synchronization in case no index update was necessary, it does not update lastSync time
+func (is *InternalState) FinishedSyncNoChange() {
+	is.mux.Lock()
+	defer is.mux.Unlock()
+	is.IsSynchronized = true
+}
+
+// GetSyncState gets the state of synchronization
 func (is *InternalState) GetSyncState() (bool, uint32, time.Time) {
 	is.mux.Lock()
 	defer is.mux.Unlock()
 	return is.IsSynchronized, is.BestHeight, is.LastSync
 }
 
+// StartedMempoolSync signals start of mempool synchronization
 func (is *InternalState) StartedMempoolSync() {
 	is.mux.Lock()
 	defer is.mux.Unlock()
 	is.IsMempoolSynchronized = false
 }
 
+// FinishedMempoolSync marks end of mempool synchronization
 func (is *InternalState) FinishedMempoolSync() {
 	is.mux.Lock()
 	defer is.mux.Unlock()
@@ -78,6 +90,7 @@ func (is *InternalState) FinishedMempoolSync() {
 	is.LastMempoolSync = time.Now()
 }
 
+// GetMempoolSyncState gets the state of mempool synchronization
 func (is *InternalState) GetMempoolSyncState() (bool, time.Time) {
 	is.mux.Lock()
 	defer is.mux.Unlock()

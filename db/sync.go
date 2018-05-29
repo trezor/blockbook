@@ -61,9 +61,10 @@ func (w *SyncWorker) ResyncIndex(onNewBlock func(hash string)) error {
 		if err == nil {
 			common.IS.FinishedSync(bh)
 		}
-		fallthrough
+		return nil
 	case errSynced:
 		// this is not actually error but flag that resync wasn't necessary
+		common.IS.FinishedSyncNoChange()
 		return nil
 	}
 
