@@ -14,6 +14,7 @@ type MQ struct {
 	socket    *zmq.Socket
 	isRunning bool
 	finished  chan bool
+	binding   string
 }
 
 // NotificationType is type of notification
@@ -56,7 +57,7 @@ func NewMQ(binding string, callback func(NotificationType)) (*MQ, error) {
 		return nil, err
 	}
 	glog.Info("MQ listening to ", binding)
-	mq := &MQ{context, socket, true, make(chan bool)}
+	mq := &MQ{context, socket, true, make(chan bool), binding}
 	go mq.run(callback)
 	return mq, nil
 }
@@ -91,6 +92,7 @@ func (mq *MQ) run(callback func(NotificationType)) {
 				break
 			default:
 				nt = NotificationUnknown
+				glog.Infof("MQ: NotificationUnknown %v", string(msg[0]))
 			}
 			if glog.V(2) {
 				sequence := uint32(0)
@@ -108,9 +110,16 @@ func (mq *MQ) run(callback func(NotificationType)) {
 func (mq *MQ) Shutdown() error {
 	glog.Info("MQ server shutdown")
 	if mq.isRunning {
-		mq.socket.SetUnsubscribe("hashtx")
-		mq.socket.SetUnsubscribe("hashblock")
-		// if errors in socket.Close or context.Term, let it close ungracefully
+		// if errors in the closing sequence, let it close ungracefully
+		if err := mq.socket.SetUnsubscribe("hashtx"); err != nil {
+			return err
+		}
+		if err := mq.socket.SetUnsubscribe("hashblock"); err != nil {
+			return err
+		}
+		if err := mq.socket.Unbind(mq.binding); err != nil {
+			return err
+		}
 		if err := mq.socket.Close(); err != nil {
 			return err
 		}
