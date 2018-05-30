@@ -61,7 +61,7 @@ func GetMetrics(coin string) (*Metrics, error) {
 		prometheus.HistogramOpts{
 			Name:        "blockbook_index_resync_duration",
 			Help:        "Duration of index resync operation (in milliseconds)",
-			Buckets:     []float64{100, 250, 500, 750, 1000, 10000, 30000, 60000},
+			Buckets:     []float64{50, 100, 150, 200, 250, 300, 350, 400, 450, 500, 600, 700, 1000, 2000, 5000},
 			ConstLabels: Labels{"coin": coin},
 		},
 	)
@@ -69,7 +69,7 @@ func GetMetrics(coin string) (*Metrics, error) {
 		prometheus.HistogramOpts{
 			Name:        "blockbook_mempool_resync_duration",
 			Help:        "Duration of mempool resync operation (in milliseconds)",
-			Buckets:     []float64{1, 5, 10, 25, 50, 75, 100, 250},
+			Buckets:     []float64{10, 25, 50, 75, 100, 150, 250, 500, 750, 1000, 2000, 5000},
 			ConstLabels: Labels{"coin": coin},
 		},
 	)
@@ -85,7 +85,7 @@ func GetMetrics(coin string) (*Metrics, error) {
 		prometheus.HistogramOpts{
 			Name:        "blockbook_rpc_latency",
 			Help:        "Latency of blockchain RPC by method (in milliseconds)",
-			Buckets:     []float64{1, 5, 10, 25, 50, 75, 100, 250},
+			Buckets:     []float64{0.1, 0.5, 1, 5, 10, 25, 50, 75, 100, 250},
 			ConstLabels: Labels{"coin": coin},
 		},
 		[]string{"method", "error"},
