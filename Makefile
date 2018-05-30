@@ -18,7 +18,7 @@ test: .bin-image
 test-all: .bin-image
 	docker run -t --rm -e PACKAGER=$(PACKAGER) -e UPDATE_VENDOR=$(UPDATE_VENDOR) -v $(CURDIR):/src $(BIN_IMAGE) make test-all
 
-deb: .deb-image
+deb: .deb-image clean-deb
 	docker run -t --rm -e PACKAGER=$(PACKAGER) -e UPDATE_VENDOR=$(UPDATE_VENDOR) -v $(CURDIR):/src -v $(CURDIR)/build:/out $(DEB_IMAGE)
 
 tools:
