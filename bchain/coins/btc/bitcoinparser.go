@@ -14,10 +14,14 @@ import (
 	"github.com/btcsuite/btcutil"
 )
 
+// OutputScriptToAddressesFunc converts ScriptPubKey to bitcoin addresses
+type OutputScriptToAddressesFunc func(script []byte, params *chaincfg.Params) ([]string, error)
+
 // BitcoinParser handle
 type BitcoinParser struct {
 	*bchain.BaseParser
-	Params *chaincfg.Params
+	Params                  *chaincfg.Params
+	OutputScriptToAddresses OutputScriptToAddressesFunc
 }
 
 // NewBitcoinParser returns new BitcoinParser instance
@@ -28,6 +32,7 @@ func NewBitcoinParser(params *chaincfg.Params, c *Configuration) *BitcoinParser 
 			BlockAddressesToKeep: c.BlockAddressesToKeep,
 		},
 		params,
+		outputScriptToAddresses,
 	}
 }
 
@@ -67,9 +72,9 @@ func (p *BitcoinParser) AddressToOutputScript(address string) ([]byte, error) {
 	return script, nil
 }
 
-// OutputScriptToAddresses converts ScriptPubKey to bitcoin addresses
-func (p *BitcoinParser) OutputScriptToAddresses(script []byte) ([]string, error) {
-	_, addresses, _, err := txscript.ExtractPkScriptAddrs(script, p.Params)
+// outputScriptToAddresses converts ScriptPubKey to bitcoin addresses
+func outputScriptToAddresses(script []byte, params *chaincfg.Params) ([]string, error) {
+	_, addresses, _, err := txscript.ExtractPkScriptAddrs(script, params)
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +110,7 @@ func (p *BitcoinParser) txFromMsgTx(t *wire.MsgTx, parseAddresses bool) bchain.T
 	for i, out := range t.TxOut {
 		addrs := []string{}
 		if parseAddresses {
-			addrs, _ = p.OutputScriptToAddresses(out.PkScript)
+			addrs, _ = p.OutputScriptToAddresses(out.PkScript, p.Params)
 		}
 		s := bchain.ScriptPubKey{
 			Hex:       hex.EncodeToString(out.PkScript),

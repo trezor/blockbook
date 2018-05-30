@@ -41,18 +41,10 @@ type ScriptPubKey struct {
 	Addresses []string `json:"addresses,omitempty"`
 }
 
-type AddressFormat = uint8
-
-const (
-	DefaultAddress AddressFormat = iota
-	BCashAddress
-)
-
 type Address interface {
 	String() string
-	EncodeAddress(format AddressFormat) (string, error)
-	AreEqual(addr string) (bool, error)
-	InSlice(addrs []string) (bool, error)
+	AreEqual(addr string) bool
+	InSlice(addrs []string) bool
 }
 
 type Vout struct {
@@ -164,7 +156,6 @@ type BlockChainParser interface {
 	GetAddrIDFromAddress(address string) ([]byte, error)
 	// address to output script conversions
 	AddressToOutputScript(address string) ([]byte, error)
-	OutputScriptToAddresses(script []byte) ([]string, error)
 	// transactions
 	PackedTxidLen() int
 	PackTxid(txid string) ([]byte, error)

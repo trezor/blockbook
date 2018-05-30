@@ -56,15 +56,14 @@
             var addresses = document.getElementById('getAddressHistoryAddresses').value.split(",");
             addresses = addresses.map(s => s.trim());
             var mempool = document.getElementById("getAddressHistoryMempool").checked;
-            var format = document.getElementById("getAddressHistoryFormat").value;
-            lookupAddressHistories(addresses, 0, 5, mempool, 20000000, 0, format, function (result) {
+            lookupAddressHistories(addresses, 0, 5, mempool, 20000000, 0, function (result) {
                 console.log('getAddressHistory sent successfully');
                 console.log(result);
                 document.getElementById('getAddressHistoryResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
             });
         }
 
-        function lookupAddressHistories(addresses, from, to, mempool, start, end, format, f) {
+        function lookupAddressHistories(addresses, from, to, mempool, start, end, f) {
             const method = 'getAddressHistory';
             const opts = mempool ? {
                 start, // needed for older bitcores (so we don't load all history if bitcore-node < 3.1.3)
@@ -81,7 +80,6 @@
                     ...opts,
                     from,
                     to,
-                    addressFormat: parseInt(format),
                 },
             ];
             return socket.send({ method, params }, f);
@@ -172,28 +170,18 @@
 
         function getDetailedTransaction() {
             var hash = document.getElementById('getDetailedTransactionHash').value.trim();
-            var format = document.getElementById("getDetailedTransactionFormat").value;
-            lookupDetailedTransaction(hash, format, function (result) {
+            lookupDetailedTransaction(hash, function (result) {
                 console.log('getDetailedTransaction sent successfully');
                 console.log(result);
                 document.getElementById('getDetailedTransactionResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
             });
         }
 
-        function lookupDetailedTransaction(hash, format, f) {
+        function lookupDetailedTransaction(hash, f) {
             const method = 'getDetailedTransaction';
-            const af = parseInt(format)
             var params = [
                 hash,
             ];
-            if (af !== 0) {
-                params = [
-                    hash,
-                    {
-                        addressFormat: af,
-                    },
-                ];
-            }
             return socket.send({ method, params }, f);
         }
 
@@ -302,14 +290,6 @@
                 <input type="checkbox" id="getAddressHistoryMempool">&nbsp;
                 <label>only mempool</label>
             </div>
-            <div class="col-9"></div>
-            <div class="col form-inline">
-                <label>address format</label>&nbsp;
-                <select id="getAddressHistoryFormat" value="0">
-                    <option value="0">default</option>
-                    <option value="1">bitcoincash</option>
-                </select>
-            </div>
         </div>
         <div class="row">
             <div class="col" id="getAddressHistoryResult">
@@ -373,14 +353,6 @@
                 <input type="text" class="form-control" id="getDetailedTransactionHash" value="474e6795760ebe81cb4023dc227e5a0efe340e1771c89a0035276361ed733de7">
             </div>
             <div class="col"></div>
-            <div class="col-9"></div>
-            <div class="col form-inline">
-                <label>address format</label>&nbsp;
-                <select id="getDetailedTransactionFormat" value="0">
-                    <option value="0">default</option>
-                    <option value="1">bitcoincash</option>
-                </select>
-            </div>
         </div>
         <div class="row">
             <div class="col" id="getDetailedTransactionResult">

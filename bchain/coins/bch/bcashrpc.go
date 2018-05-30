@@ -32,7 +32,6 @@ func NewBCashRPC(config json.RawMessage, pushHandler func(bchain.NotificationTyp
 
 // Initialize initializes BCashRPC instance.
 func (b *BCashRPC) Initialize() error {
-
 	chainName, err := b.GetChainInfoAndInitializeMempool(b)
 	if err != nil {
 		return err
@@ -41,7 +40,11 @@ func (b *BCashRPC) Initialize() error {
 	params := GetChainParams(chainName)
 
 	// always create parser
-	b.Parser = NewBCashParser(params, b.ChainConfig)
+	b.Parser, err = NewBCashParser(params, b.ChainConfig)
+
+	if err != nil {
+		return err
+	}
 
 	// parameters for getInfo request
 	if params.Net == bchutil.MainnetMagic {

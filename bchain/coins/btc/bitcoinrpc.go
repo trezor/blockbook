@@ -44,6 +44,7 @@ type Configuration struct {
 	BlockAddressesToKeep int    `json:"blockAddressesToKeep"`
 	MempoolWorkers       int    `json:"mempoolWorkers"`
 	MempoolSubWorkers    int    `json:"mempoolSubWorkers"`
+	AddressFormat        string `json:"addressFormat"`
 }
 
 // NewBitcoinRPC returns new BitcoinRPC instance.
