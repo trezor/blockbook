@@ -1,6 +1,7 @@
 package bchain
 
 import (
+	"context"
 	"encoding/binary"
 	"time"
 
@@ -13,7 +14,7 @@ type MQ struct {
 	context   *zmq.Context
 	socket    *zmq.Socket
 	isRunning bool
-	finished  chan bool
+	finished  chan error
 	binding   string
 }
 
@@ -57,7 +58,7 @@ func NewMQ(binding string, callback func(NotificationType)) (*MQ, error) {
 		return nil, err
 	}
 	glog.Info("MQ listening to ", binding)
-	mq := &MQ{context, socket, true, make(chan bool), binding}
+	mq := &MQ{context, socket, true, make(chan error), binding}
 	go mq.run(callback)
 	return mq, nil
 }
@@ -69,7 +70,7 @@ func (mq *MQ) run(callback func(NotificationType)) {
 		}
 		mq.isRunning = false
 		glog.Info("MQ loop terminated")
-		mq.finished <- true
+		mq.finished <- nil
 	}()
 	mq.isRunning = true
 	for {
@@ -107,27 +108,42 @@ func (mq *MQ) run(callback func(NotificationType)) {
 }
 
 // Shutdown stops listening to the ZeroMQ and closes the connection
-func (mq *MQ) Shutdown() error {
+func (mq *MQ) Shutdown(ctx context.Context) error {
 	glog.Info("MQ server shutdown")
 	if mq.isRunning {
-		// if errors in the closing sequence, let it close ungracefully
-		if err := mq.socket.SetUnsubscribe("hashtx"); err != nil {
+		go func() {
+			// if errors in the closing sequence, let it close ungracefully
+			if err := mq.socket.SetUnsubscribe("hashtx"); err != nil {
+				mq.finished <- err
+				return
+			}
+			if err := mq.socket.SetUnsubscribe("hashblock"); err != nil {
+				mq.finished <- err
+				return
+			}
+			if err := mq.socket.Unbind(mq.binding); err != nil {
+				mq.finished <- err
+				return
+			}
+			if err := mq.socket.Close(); err != nil {
+				mq.finished <- err
+				return
+			}
+			if err := mq.context.Term(); err != nil {
+				mq.finished <- err
+				return
+			}
+		}()
+		var err error
+		select {
+		case <-ctx.Done():
+			err = ctx.Err()
+		case err = <-mq.finished:
+		}
+		if err != nil {
 			return err
 		}
-		if err := mq.socket.SetUnsubscribe("hashblock"); err != nil {
-			return err
-		}
-		if err := mq.socket.Unbind(mq.binding); err != nil {
-			return err
-		}
-		if err := mq.socket.Close(); err != nil {
-			return err
-		}
-		if err := mq.context.Term(); err != nil {
-			return err
-		}
-		<-mq.finished
-		glog.Info("MQ server shutdown finished")
 	}
+	glog.Info("MQ server shutdown finished")
 	return nil
 }

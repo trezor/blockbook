@@ -1,6 +1,7 @@
 package bchain
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -115,7 +116,7 @@ func (e *RPCError) Error() string {
 type BlockChain interface {
 	// life-cycle methods
 	Initialize() error
-	Shutdown() error
+	Shutdown(ctx context.Context) error
 	// chain info
 	IsTestnet() bool
 	GetNetworkName() string

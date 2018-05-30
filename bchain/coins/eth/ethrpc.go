@@ -217,7 +217,7 @@ func (b *EthereumRPC) subscribe(f func() (*rpc.ClientSubscription, error)) error
 }
 
 // Shutdown cleans up rpc interface to ethereum
-func (b *EthereumRPC) Shutdown() error {
+func (b *EthereumRPC) Shutdown(ctx context.Context) error {
 	if b.newBlockSubscription != nil {
 		b.newBlockSubscription.Unsubscribe()
 	}

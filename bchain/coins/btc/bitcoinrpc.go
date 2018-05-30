@@ -3,6 +3,7 @@ package btc
 import (
 	"blockbook/bchain"
 	"bytes"
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"io"
@@ -135,9 +136,9 @@ func (b *BitcoinRPC) Initialize() error {
 	return nil
 }
 
-func (b *BitcoinRPC) Shutdown() error {
+func (b *BitcoinRPC) Shutdown(ctx context.Context) error {
 	if b.mq != nil {
-		if err := b.mq.Shutdown(); err != nil {
+		if err := b.mq.Shutdown(ctx); err != nil {
 			glog.Error("MQ.Shutdown error: ", err)
 			return err
 		}

@@ -7,6 +7,7 @@ import (
 	"blockbook/bchain/coins/eth"
 	"blockbook/bchain/coins/zec"
 	"blockbook/common"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -74,8 +75,8 @@ func (c *blockChainWithMetrics) Initialize() error {
 	return c.b.Initialize()
 }
 
-func (c *blockChainWithMetrics) Shutdown() error {
-	return c.b.Shutdown()
+func (c *blockChainWithMetrics) Shutdown(ctx context.Context) error {
+	return c.b.Shutdown(ctx)
 }
 
 func (c *blockChainWithMetrics) IsTestnet() bool {

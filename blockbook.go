@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -29,7 +30,7 @@ const resyncIndexPeriodMs = 935093
 // debounce too close requests for resync
 const debounceResyncIndexMs = 1009
 
-// resync mempool at least each resyncIndexPeriodMs (could be more often if invoked by message from ZeroMQ)
+// resync mempool at least each resyncMempoolPeriodMs (could be more often if invoked by message from ZeroMQ)
 const resyncMempoolPeriodMs = 60017
 
 // debounce too close requests for resync mempool (ZeroMQ sends message for each tx, when new block there are many transactions)
@@ -85,6 +86,7 @@ var (
 	callbacksOnNewBlockHash    []func(hash string)
 	callbacksOnNewTxAddr       []func(txid string, addr string)
 	chanOsSignal               chan os.Signal
+	inShutdown                 int32
 )
 
 func init() {
@@ -293,7 +295,7 @@ func main() {
 	}
 
 	if httpServer != nil || socketIoServer != nil || chain != nil {
-		waitForSignalAndShutdown(httpServer, socketIoServer, chain, 5*time.Second)
+		waitForSignalAndShutdown(httpServer, socketIoServer, chain, 10*time.Second)
 	}
 
 	if *synchronize {
@@ -335,8 +337,10 @@ Loop:
 				timer.Reset(0)
 			}
 		case <-timer.C:
-			// do the action and start the loop again
-			f()
+			// do the action, if not in shutdown, then start the loop again
+			if atomic.LoadInt32(&inShutdown) == 0 {
+				f()
+			}
 			timer.Reset(tickTime)
 			firstDebounce = time.Time{}
 		}
@@ -394,6 +398,9 @@ func onNewTxAddr(txid string, addr string) {
 }
 
 func pushSynchronizationHandler(nt bchain.NotificationType) {
+	if atomic.LoadInt32(&inShutdown) != 0 {
+		return
+	}
 	glog.V(1).Infof("MQ: notification ", nt)
 	if nt == bchain.NotificationNewBlock {
 		chanSyncIndex <- struct{}{}
@@ -406,6 +413,7 @@ func pushSynchronizationHandler(nt bchain.NotificationType) {
 
 func waitForSignalAndShutdown(https *server.HTTPServer, socketio *server.SocketIoServer, chain bchain.BlockChain, timeout time.Duration) {
 	sig := <-chanOsSignal
+	atomic.StoreInt32(&inShutdown, 1)
 	glog.Infof("Shutdown: %v", sig)
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -424,7 +432,7 @@ func waitForSignalAndShutdown(https *server.HTTPServer, socketio *server.SocketI
 	}
 
 	if chain != nil {
-		if err := chain.Shutdown(); err != nil {
+		if err := chain.Shutdown(ctx); err != nil {
 			glog.Error("BlockChain.Shutdown error: ", err)
 		}
 	}
