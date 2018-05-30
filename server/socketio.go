@@ -144,7 +144,7 @@ func (s *SocketIoServer) addressRedirect(w http.ResponseWriter, r *http.Request)
 
 type resAboutBlockbookPublic struct {
 	Coin            string    `json:"coin"`
-	About           string    `json:"about"`
+	Host            string    `json:"host"`
 	Version         string    `json:"version"`
 	GitCommit       string    `json:"gitcommit"`
 	BuildTime       string    `json:"buildtime"`
@@ -153,6 +153,7 @@ type resAboutBlockbookPublic struct {
 	LastBlockTime   time.Time `json:"lastBlockTime"`
 	InSyncMempool   bool      `json:"inSyncMempool"`
 	LastMempoolTime time.Time `json:"lastMempoolTime"`
+	About           string    `json:"about"`
 }
 
 func (s *SocketIoServer) index(w http.ResponseWriter, r *http.Request) {
@@ -161,7 +162,7 @@ func (s *SocketIoServer) index(w http.ResponseWriter, r *http.Request) {
 	ms, mt := s.is.GetMempoolSyncState()
 	a := resAboutBlockbookPublic{
 		Coin:            s.is.Coin,
-		About:           blockbookAbout,
+		Host:            s.is.Host,
 		Version:         vi.Version,
 		GitCommit:       vi.GitCommit,
 		BuildTime:       vi.BuildTime,
@@ -170,6 +171,7 @@ func (s *SocketIoServer) index(w http.ResponseWriter, r *http.Request) {
 		LastBlockTime:   st,
 		InSyncMempool:   ms,
 		LastMempoolTime: mt,
+		About:           blockbookAbout,
 	}
 	buf, err := json.MarshalIndent(a, "", "    ")
 	if err != nil {

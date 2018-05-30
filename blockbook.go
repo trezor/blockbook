@@ -309,7 +309,17 @@ func main() {
 }
 
 func newInternalState(coin string, d *db.RocksDB) (*common.InternalState, error) {
-	return d.LoadInternalState(coin)
+	is, err := d.LoadInternalState(coin)
+	if err != nil {
+		return nil, err
+	}
+	name, err := os.Hostname()
+	if err != nil {
+		glog.Error("get hostname ", err)
+	} else {
+		is.Host = name
+	}
+	return is, nil
 }
 
 func tickAndDebounce(tickTime time.Duration, debounceTime time.Duration, input chan struct{}, f func()) {

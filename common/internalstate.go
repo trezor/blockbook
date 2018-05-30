@@ -27,6 +27,7 @@ type InternalState struct {
 	mux sync.Mutex
 
 	Coin string `json:"coin"`
+	Host string `json:"host"`
 
 	DbState uint32 `json:"dbState"`
 
