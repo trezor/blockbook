@@ -1,14 +1,18 @@
 # blockbook
 
-## Install using Docker:
+## **blockbook is currently in the state of heavy development, do not expect this documentation to be up to date**
+
+## Build and install using docker
+
+Run in the project root
 
 ```
-git clone https://github.com/jpochyla/blockbook.git
-cd blockbook/docker
-./build.sh
+make all
 ```
 
-## Install
+to create blockbook debian packages.
+
+## Install manually
 
 Setup go environment (Debian 9):
 
@@ -72,7 +76,10 @@ Blockbook logs only to stderr, logging to files is disabled. Verbosity of logs c
 
 - [BTC](bchain/coins/btc/btc.md)
 - [BTC Testnet](bchain/coins/btc/btctestnet.md)
+- BCH
+- BCH Testnet
 - [ZCash](bchain/coins/zec/zec.md)
+- ZCash Testnet
 - [Ethereum](bchain/coins/eth/eth.md)
 - [Ethereum Ropsten Testnet](bchain/coins/eth/ethropsten.md)
 
@@ -141,10 +148,8 @@ The data are separated to different column families:
 ## Todo
 
 - add db data version (column data version) checking to db to avoid data corruption
-- update used paths and users according to specification by system admin
 - improve txcache (time of storage, number/size of cached txs, purge cache)
-- collect blockbook stats (number of items in indexes, )
-- optimize mempool (use non verbose get transaction, possibly parallelize)
+- collect blockbook stats (number of items in indexes, etc)
 - update documentation
 - create/integrate blockchain explorer
 - support all coins from https://github.com/trezor/trezor-common/blob/master/coins.json
@@ -154,6 +159,8 @@ The data are separated to different column families:
 - tests
 - fix program dependencies to concrete versions
 - protect socket.io interface against illicit usage
+- ~~optimize mempool (use non verbose get transaction, possibly parallelize)~~
+- ~~update used paths and users according to specification by system admin~~
 - ~~cleanup of the socket.io - do not send unnecessary data~~
 - ~~handle different versions of Bitcoin Core~~
 - ~~log live traffic from production bitcore server and replay it in blockbook~~
