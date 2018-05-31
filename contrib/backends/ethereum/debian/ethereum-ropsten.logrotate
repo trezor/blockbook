@@ -1,4 +1,4 @@
-/opt/coins/data/eth/eth-ropsten/eth.log
+/opt/coins/data/eth-ropsten/eth/eth.log
 {
         rotate 7
         daily
