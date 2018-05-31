@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -317,6 +318,9 @@ func newInternalState(coin string, d *db.RocksDB) (*common.InternalState, error)
 	if err != nil {
 		glog.Error("get hostname ", err)
 	} else {
+		if i := strings.IndexByte(name, '.'); i > 0 {
+			name = name[:i]
+		}
 		is.Host = name
 	}
 	return is, nil
