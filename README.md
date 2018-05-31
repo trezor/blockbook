@@ -152,7 +152,7 @@ The data are separated to different column families:
 - collect blockbook stats (number of items in indexes, etc)
 - update documentation
 - create/integrate blockchain explorer
-- support all coins from https://github.com/trezor/trezor-common/blob/master/coins.json
+- support all coins from https://github.com/trezor/trezor-common/tree/master/defs/coins
 - full ethereum support (tokens, balance)
 - protobuf websocket interface instead of socket.io
 - xpub index
