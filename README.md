@@ -52,7 +52,7 @@ Get blockbook sources, install dependencies, build:
 
 ```
 cd $GOPATH/src
-git clone https://github.com/jpochyla/blockbook.git
+git clone https://github.com/trezor/blockbook.git
 cd blockbook
 dep ensure
 go build
