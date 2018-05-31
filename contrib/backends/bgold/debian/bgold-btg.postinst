@@ -1,0 +1,20 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+
+  configure)
+    if ! id -u bgold &> /dev/null
+    then
+        useradd --system -M -U bgold -s /bin/false
+    fi
+
+    if [ "$(stat -c '%U' /opt/coins/data/btg/bgold)" != "bgold" ]
+    then
+        chown -R bgold:bgold /opt/coins/data/btg/bgold
+    fi
+  ;;
+
+esac
+
+#DEBHELPER#

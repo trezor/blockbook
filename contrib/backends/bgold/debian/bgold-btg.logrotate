@@ -1,0 +1,10 @@
+/opt/coins/data/btg/bgold/debug.log
+/opt/coins/data/btg/bgold/db.log
+{
+        rotate 7
+        daily
+        compress
+        missingok
+        notifempty
+        copytruncate
+}
