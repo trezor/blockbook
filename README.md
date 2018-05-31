@@ -137,13 +137,14 @@ The data are separated to different column families:
 | dash        | 9033                | 9133                     | 8033     | 38333    |
 | ltc         | 9034                | 9134                     | 8034     | 38334    |
 | btg         | 9035                | 9135                     | 8035     | 38335    |
-| eth         | 9036                | 9136                     | 8036     |          |
+| eth         | 9036                | 9136                     | 8036     | 38336*   |
 | etc         | 9037                | 9137                     | 8037     |          |
 | xem         | 9038                | 9138                     | 8038     | 38336    |
 | btc-testnet | 19030               | 19130                    | 18030    | 48330    |
 | bch-testnet | 19031               | 19131                    | 18031    | 48331    |
 | zec-testnet | 19032               | 19132                    | 18032    | 48332    |
-| eth-testnet | 19036               | 19136                    | 18036    |          |
+| eth-ropsten | 19036               | 19136                    | 18036    | 48333*   |
+\* geth listens on this port, however not as zmq service
 
 ## Todo
 

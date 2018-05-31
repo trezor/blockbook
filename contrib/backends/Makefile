@@ -1,4 +1,4 @@
-TARGETS = bitcoin zcash bcash
+TARGETS = bitcoin zcash bcash ethereum
 IMAGE = blockbook-backend-build-deb
 NO_CACHE = false
 
