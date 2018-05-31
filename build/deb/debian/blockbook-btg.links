@@ -1,0 +1,2 @@
+/opt/coins/blockbook/btg/cert/testcert.crt /opt/coins/blockbook/btg/cert/blockbook.crt
+/opt/coins/blockbook/btg/cert/testcert.key /opt/coins/blockbook/btg/cert/blockbook.key

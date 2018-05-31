@@ -1,0 +1,13 @@
+{
+  "rpcURL": "http://127.0.0.1:8035",
+  "rpcUser": "rpc",
+  "rpcPass": "rpc",
+  "rpcTimeout": 25,
+  "parse": true,
+  "zeroMQBinding": "tcp://127.0.0.1:38335",
+  "subversion": "/Bitcoin Gold:0.15.0.2/",
+  "mempoolWorkers": 8,
+  "mempoolSubWorkers": 2,
+  "blockAddressesToKeep": 300,
+  "addressFormat": "legacy"
+}
