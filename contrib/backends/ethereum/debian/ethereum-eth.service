@@ -1,11 +1,11 @@
 # It is not recommended to modify this file in-place, because it will
 # be overwritten during package upgrades. If you want to add further
 # options or overwrite existing ones then use
-# $ systemctl edit blockbook-eth.service
+# $ systemctl edit ethereum-eth.service
 # See "man systemd.service" for details.
 
 [Unit]
-Description=Ethereum  daemon (ropsten testnet)
+Description=Ethereum daemon (mainnet)
 After=network.target
 
 [Service]
