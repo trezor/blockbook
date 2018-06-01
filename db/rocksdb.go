@@ -18,7 +18,7 @@ import (
 
 // iterator creates snapshot, which takes lots of resources
 // when doing huge scan, it is better to close it and reopen from time to time to free the resources
-const disconnectBlocksRefreshIterator = uint64(1000000)
+const refreshIterator = 5000000
 const packedHeightBytes = 4
 
 // RepairRocksDB calls RocksDb db repair function
@@ -686,7 +686,7 @@ func (d *RocksDB) allAddressesScan(lower uint32, higher uint32) ([][]byte, [][]b
 			it.Seek(seekKey)
 			it.Next()
 		}
-		for count = 0; it.Valid() && count < disconnectBlocksRefreshIterator; it.Next() {
+		for count = 0; it.Valid() && count < refreshIterator; it.Next() {
 			totalOutputs++
 			count++
 			key = it.Key().Data()
@@ -930,6 +930,50 @@ func (d *RocksDB) StoreInternalState(is *common.InternalState) error {
 		return err
 	}
 	return d.db.PutCF(d.wo, d.cfh[cfDefault], []byte(internalStateKey), buf)
+}
+
+func (d *RocksDB) computeColumnSize(col int) (int64, int64, int64, error) {
+	var rows, keysSum, valuesSum int64
+	var seekKey []byte
+	for {
+		var key []byte
+		it := d.db.NewIteratorCF(d.ro, d.cfh[col])
+		if rows == 0 {
+			it.SeekToFirst()
+		} else {
+			glog.Info("Column ", cfNames[col], ": rows ", rows, ", key bytes ", keysSum, ", value bytes ", valuesSum, ", in progress...")
+			it.Seek(seekKey)
+			it.Next()
+		}
+		for count := 0; it.Valid() && count < refreshIterator; it.Next() {
+			key = it.Key().Data()
+			count++
+			rows++
+			keysSum += int64(len(key))
+			valuesSum += int64(len(it.Value().Data()))
+		}
+		seekKey = append([]byte{}, key...)
+		valid := it.Valid()
+		it.Close()
+		if !valid {
+			break
+		}
+	}
+	return rows, keysSum, valuesSum, nil
+}
+
+// ComputeInternalStateColumnStats computes stats of all db columns and sets them to internal state
+// can be very slow operation
+func (d *RocksDB) ComputeInternalStateColumnStats() error {
+	for c := 0; c < len(cfNames); c++ {
+		rows, keysSum, valuesSum, err := d.computeColumnSize(c)
+		if err != nil {
+			return err
+		}
+		d.is.SetDBColumnStats(c, rows, keysSum, valuesSum)
+		glog.Info("Column ", cfNames[c], ": rows ", rows, ", key bytes ", keysSum, ", value bytes ", valuesSum)
+	}
+	return nil
 }
 
 // Helpers

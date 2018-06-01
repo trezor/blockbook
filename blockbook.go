@@ -70,6 +70,8 @@ var (
 	coin = flag.String("coin", "btc", "coin name")
 
 	noTxCache = flag.Bool("notxcache", false, "disable tx cache")
+
+	computeColumnStats = flag.Bool("computedbstats", false, "compute column stats and exit")
 )
 
 var (
@@ -162,11 +164,22 @@ func main() {
 
 	internalState, err = newInternalState(*coin, index)
 	if err != nil {
-		glog.Fatal("internalState: ", err)
+		glog.Error("internalState: ", err)
+		return
 	}
 	index.SetInternalState(internalState)
 	if internalState.DbState != common.DbStateClosed {
 		glog.Warning("internalState: database in not closed state ", internalState.DbState, ", possibly previous ungraceful shutdown")
+	}
+
+	if *computeColumnStats {
+		internalState.DbState = common.DbStateOpen
+		err = index.ComputeInternalStateColumnStats()
+		if err != nil {
+			glog.Error("internalState: ", err)
+		}
+		glog.Info("DB size on disk: ", index.DatabaseSizeOnDisk())
+		return
 	}
 
 	syncWorker, err = db.NewSyncWorker(index, chain, *syncWorkers, *syncChunk, *blockFrom, *dryRun, chanOsSignal, metrics, internalState)

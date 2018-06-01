@@ -105,6 +105,14 @@ func (is *InternalState) AddDBColumnStats(c int, rowsDiff int64, keysSumDiff int
 	is.DbColumns[c].ValuesSum += valuesSumDiff
 }
 
+func (is *InternalState) SetDBColumnStats(c int, rowsDiff int64, keysSumDiff int64, valuesSumDiff int64) {
+	is.mux.Lock()
+	defer is.mux.Unlock()
+	is.DbColumns[c].Rows = rowsDiff
+	is.DbColumns[c].KeysSum = keysSumDiff
+	is.DbColumns[c].ValuesSum = valuesSumDiff
+}
+
 func (is *InternalState) Pack() ([]byte, error) {
 	is.mux.Lock()
 	defer is.mux.Unlock()
