@@ -18,6 +18,7 @@ type Metrics struct {
 	IndexResyncErrors     *prometheus.CounterVec
 	IndexDBSize           prometheus.Gauge
 	ExplorerViews         *prometheus.CounterVec
+	MempoolSize           prometheus.Gauge
 }
 
 type Labels = prometheus.Labels
@@ -112,6 +113,13 @@ func GetMetrics(coin string) (*Metrics, error) {
 			ConstLabels: Labels{"coin": coin},
 		},
 		[]string{"action"},
+	)
+	metrics.MempoolSize = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name:        "blockbook_mempool_size",
+			Help:        "Mempool size (number of transactions)",
+			ConstLabels: Labels{"coin": coin},
+		},
 	)
 
 	v := reflect.ValueOf(metrics)
