@@ -151,7 +151,7 @@ func (c *blockChainWithMetrics) SendRawTransaction(tx string) (v string, err err
 	return c.b.SendRawTransaction(tx)
 }
 
-func (c *blockChainWithMetrics) ResyncMempool(onNewTxAddr func(txid string, addr string)) (err error) {
+func (c *blockChainWithMetrics) ResyncMempool(onNewTxAddr func(txid string, addr string)) (count int, err error) {
 	defer func(s time.Time) { c.observeRPCLatency("ResyncMempool", s, err) }(time.Now())
 	return c.b.ResyncMempool(onNewTxAddr)
 }

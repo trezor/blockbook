@@ -166,13 +166,13 @@ func (m *UTXOMempool) getTxAddrs(txid string, chanInput chan outpoint, chanResul
 // Resync gets mempool transactions and maps outputs to transactions.
 // Resync is not reentrant, it should be called from a single thread.
 // Read operations (GetTransactions) are safe.
-func (m *UTXOMempool) Resync(onNewTxAddr func(txid string, addr string)) error {
+func (m *UTXOMempool) Resync(onNewTxAddr func(txid string, addr string)) (int, error) {
 	start := time.Now()
 	glog.V(1).Info("mempool: resync")
 	m.onNewTxAddr = onNewTxAddr
 	txs, err := m.chain.GetMempool()
 	if err != nil {
-		return err
+		return 0, err
 	}
 	glog.V(2).Info("mempool: resync ", len(txs), " txs")
 	// allocate slightly larger capacity of the maps
@@ -215,5 +215,5 @@ func (m *UTXOMempool) Resync(onNewTxAddr func(txid string, addr string)) error {
 	m.updateMappings(newTxToInputOutput, newAddrIDToTx)
 	m.onNewTxAddr = nil
 	glog.Info("mempool: resync finished in ", time.Since(start), ", ", len(m.txToInputOutput), " transactions in mempool")
-	return nil
+	return len(m.txToInputOutput), nil
 }

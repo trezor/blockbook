@@ -238,7 +238,7 @@ func main() {
 			glog.Error("resyncIndex ", err)
 			return
 		}
-		if err = chain.ResyncMempool(nil); err != nil {
+		if _, err = chain.ResyncMempool(nil); err != nil {
 			glog.Error("resyncMempool ", err)
 			return
 		}
@@ -385,10 +385,11 @@ func syncMempoolLoop() {
 	// resync mempool about every minute if there are no chanSyncMempool requests, with debounce 1 second
 	tickAndDebounce(resyncMempoolPeriodMs*time.Millisecond, debounceResyncMempoolMs*time.Millisecond, chanSyncMempool, func() {
 		internalState.StartedMempoolSync()
-		if err := chain.ResyncMempool(onNewTxAddr); err != nil {
+		if count, err := chain.ResyncMempool(onNewTxAddr); err != nil {
 			glog.Error("syncMempoolLoop ", errors.ErrorStack(err))
 		} else {
-			internalState.FinishedMempoolSync()
+			internalState.FinishedMempoolSync(count)
+
 		}
 	})
 	glog.Info("syncMempoolLoop stopped")

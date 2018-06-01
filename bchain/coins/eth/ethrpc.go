@@ -496,7 +496,7 @@ func (b *EthereumRPC) SendRawTransaction(tx string) (string, error) {
 	return "", errors.New("SendRawTransaction: not implemented")
 }
 
-func (b *EthereumRPC) ResyncMempool(onNewTxAddr func(txid string, addr string)) error {
+func (b *EthereumRPC) ResyncMempool(onNewTxAddr func(txid string, addr string)) (int, error) {
 	return b.Mempool.Resync(onNewTxAddr)
 }
 

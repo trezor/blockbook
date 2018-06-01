@@ -38,6 +38,7 @@ type InternalState struct {
 	LastSync       time.Time `json:"lastSync"`
 
 	IsMempoolSynchronized bool      `json:"isMempoolSynchronized"`
+	MempoolSize           int       `json:"mempoolSize"`
 	LastMempoolSync       time.Time `json:"lastMempoolSync"`
 
 	DbColumns []InternalStateColumn `json:"dbColumns"`
@@ -81,10 +82,11 @@ func (is *InternalState) StartedMempoolSync() {
 }
 
 // FinishedMempoolSync marks end of mempool synchronization
-func (is *InternalState) FinishedMempoolSync() {
+func (is *InternalState) FinishedMempoolSync(mempoolSize int) {
 	is.mux.Lock()
 	defer is.mux.Unlock()
 	is.IsMempoolSynchronized = true
+	is.MempoolSize = mempoolSize
 	is.LastMempoolSync = time.Now()
 }
 
