@@ -178,7 +178,7 @@ func main() {
 		if err != nil {
 			glog.Error("internalState: ", err)
 		}
-		glog.Info("DB size on disk: ", index.DatabaseSizeOnDisk())
+		glog.Info("DB size on disk: ", index.DatabaseSizeOnDisk(), ", DB size as computed: ", internalState.DBSizeTotal())
 		return
 	}
 

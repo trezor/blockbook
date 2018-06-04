@@ -113,6 +113,16 @@ func (is *InternalState) SetDBColumnStats(c int, rowsDiff int64, keysSumDiff int
 	is.DbColumns[c].ValuesSum = valuesSumDiff
 }
 
+func (is *InternalState) DBSizeTotal() int64 {
+	is.mux.Lock()
+	defer is.mux.Unlock()
+	total := int64(0)
+	for _, c := range is.DbColumns {
+		total += c.KeysSum + c.ValuesSum
+	}
+	return total
+}
+
 func (is *InternalState) Pack() ([]byte, error) {
 	is.mux.Lock()
 	defer is.mux.Unlock()
