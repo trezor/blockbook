@@ -15,11 +15,11 @@ const (
 
 // InternalStateColumn contains the data of a db column
 type InternalStateColumn struct {
-	Name      string `json:"name"`
-	Version   uint32 `json:"version"`
-	Rows      int64  `json:"rows"`
-	KeysSum   int64  `json:"keysSum"`
-	ValuesSum int64  `json:"valuesSum"`
+	Name       string `json:"name"`
+	Version    uint32 `json:"version"`
+	Rows       int64  `json:"rows"`
+	KeyBytes   int64  `json:"keysSum"`
+	ValueBytes int64  `json:"valuesSum"`
 }
 
 // InternalState contains the data of the internal state
@@ -97,20 +97,29 @@ func (is *InternalState) GetMempoolSyncState() (bool, time.Time) {
 	return is.IsMempoolSynchronized, is.LastMempoolSync
 }
 
-func (is *InternalState) AddDBColumnStats(c int, rowsDiff int64, keysSumDiff int64, valuesSumDiff int64) {
+func (is *InternalState) AddDBColumnStats(c int, rowsDiff int64, keyBytesDiff int64, valueBytesDiff int64) {
 	is.mux.Lock()
 	defer is.mux.Unlock()
 	is.DbColumns[c].Rows += rowsDiff
-	is.DbColumns[c].KeysSum += keysSumDiff
-	is.DbColumns[c].ValuesSum += valuesSumDiff
+	is.DbColumns[c].KeyBytes += keyBytesDiff
+	is.DbColumns[c].ValueBytes += valueBytesDiff
 }
 
-func (is *InternalState) SetDBColumnStats(c int, rowsDiff int64, keysSumDiff int64, valuesSumDiff int64) {
+func (is *InternalState) SetDBColumnStats(c int, rows int64, keyBytes int64, valueBytes int64) {
 	is.mux.Lock()
 	defer is.mux.Unlock()
-	is.DbColumns[c].Rows = rowsDiff
-	is.DbColumns[c].KeysSum = keysSumDiff
-	is.DbColumns[c].ValuesSum = valuesSumDiff
+	is.DbColumns[c].Rows = rows
+	is.DbColumns[c].KeyBytes = keyBytes
+	is.DbColumns[c].ValueBytes = valueBytes
+}
+
+func (is *InternalState) GetDBColumnStats(c int) (int64, int64, int64) {
+	is.mux.Lock()
+	defer is.mux.Unlock()
+	if c < len(is.DbColumns) {
+		return is.DbColumns[c].Rows, is.DbColumns[c].KeyBytes, is.DbColumns[c].ValueBytes
+	}
+	return 0, 0, 0
 }
 
 func (is *InternalState) DBSizeTotal() int64 {
@@ -118,7 +127,7 @@ func (is *InternalState) DBSizeTotal() int64 {
 	defer is.mux.Unlock()
 	total := int64(0)
 	for _, c := range is.DbColumns {
-		total += c.KeysSum + c.ValuesSum
+		total += c.KeyBytes + c.ValueBytes
 	}
 	return total
 }

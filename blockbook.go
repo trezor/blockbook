@@ -156,7 +156,7 @@ func main() {
 		glog.Fatal("rpc: ", err)
 	}
 
-	index, err = db.NewRocksDB(*dbPath, chain.GetChainParser())
+	index, err = db.NewRocksDB(*dbPath, chain.GetChainParser(), metrics)
 	if err != nil {
 		glog.Fatal("rocksDB: ", err)
 	}

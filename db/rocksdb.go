@@ -37,6 +37,7 @@ type RocksDB struct {
 	cfh         []*gorocksdb.ColumnFamilyHandle
 	chainParser bchain.BlockChainParser
 	is          *common.InternalState
+	metrics     *common.Metrics
 }
 
 const (
@@ -97,13 +98,13 @@ func openDB(path string) (*gorocksdb.DB, []*gorocksdb.ColumnFamilyHandle, error)
 
 // NewRocksDB opens an internal handle to RocksDB environment.  Close
 // needs to be called to release it.
-func NewRocksDB(path string, parser bchain.BlockChainParser) (d *RocksDB, err error) {
+func NewRocksDB(path string, parser bchain.BlockChainParser, metrics *common.Metrics) (d *RocksDB, err error) {
 	glog.Infof("rocksdb: open %s", path)
 	db, cfh, err := openDB(path)
 	wo := gorocksdb.NewDefaultWriteOptions()
 	ro := gorocksdb.NewDefaultReadOptions()
 	ro.SetFillCache(false)
-	return &RocksDB{path, db, wo, ro, cfh, parser, nil}, nil
+	return &RocksDB{path, db, wo, ro, cfh, parser, nil, metrics}, nil
 }
 
 func (d *RocksDB) closeDB() error {
@@ -930,8 +931,8 @@ func (d *RocksDB) LoadInternalState(rpcCoin string) (*common.InternalState, erro
 			if sc[j].Name == nc[i].Name {
 				nc[i].Version = sc[j].Version
 				nc[i].Rows = sc[j].Rows
-				nc[i].KeysSum = sc[j].KeysSum
-				nc[i].ValuesSum = sc[j].ValuesSum
+				nc[i].KeyBytes = sc[j].KeyBytes
+				nc[i].ValueBytes = sc[j].ValueBytes
 				break
 			}
 		}
@@ -947,6 +948,9 @@ func (d *RocksDB) SetInternalState(is *common.InternalState) {
 
 // StoreInternalState stores the internal state to db
 func (d *RocksDB) StoreInternalState(is *common.InternalState) error {
+	rows, keyBytes, valueBytes := d.is.GetDBColumnStats(cfTransactions)
+	d.metrics.DbColumnRows.With(common.Labels{"column": cfNames[cfTransactions]}).Set(float64(rows))
+	d.metrics.DbColumnSize.With(common.Labels{"column": cfNames[cfTransactions]}).Set(float64(keyBytes + valueBytes))
 	buf, err := is.Pack()
 	if err != nil {
 		return err

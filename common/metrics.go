@@ -19,6 +19,8 @@ type Metrics struct {
 	IndexDBSize           prometheus.Gauge
 	ExplorerViews         *prometheus.CounterVec
 	MempoolSize           prometheus.Gauge
+	DbColumnRows          *prometheus.GaugeVec
+	DbColumnSize          *prometheus.GaugeVec
 }
 
 type Labels = prometheus.Labels
@@ -120,6 +122,22 @@ func GetMetrics(coin string) (*Metrics, error) {
 			Help:        "Mempool size (number of transactions)",
 			ConstLabels: Labels{"coin": coin},
 		},
+	)
+	metrics.DbColumnRows = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name:        "blockbook_dbcolumn_rows",
+			Help:        "Number of rows in db column",
+			ConstLabels: Labels{"coin": coin},
+		},
+		[]string{"column"},
+	)
+	metrics.DbColumnSize = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name:        "blockbook_dbcolumn_size",
+			Help:        "Size of db column (in bytes)",
+			ConstLabels: Labels{"coin": coin},
+		},
+		[]string{"column"},
 	)
 
 	v := reflect.ValueOf(metrics)
