@@ -325,7 +325,7 @@ func (d *RocksDB) addAddrIDToRecords(op int, wb *gorocksdb.WriteBatch, records m
 			})
 			if op == opDelete {
 				// remove transactions from cache
-				wb.DeleteCF(d.cfh[cfTransactions], btxid)
+				d.internalDeleteTx(wb, btxid)
 			}
 		}
 	}
@@ -788,7 +788,7 @@ func (d *RocksDB) DisconnectBlockRange(lower uint32, higher uint32) error {
 		}
 		for _, o := range outpoints {
 			wb.DeleteCF(d.cfh[cfUnspentTxs], o.btxID)
-			wb.DeleteCF(d.cfh[cfTransactions], o.btxID)
+			d.internalDeleteTx(wb, o.btxID)
 		}
 	}
 	for key, val := range unspentTxs {
@@ -860,7 +860,11 @@ func (d *RocksDB) PutTx(tx *bchain.Tx, height uint32, blockTime int64) error {
 	if err != nil {
 		return err
 	}
-	return d.db.PutCF(d.wo, d.cfh[cfTransactions], key, buf)
+	err = d.db.PutCF(d.wo, d.cfh[cfTransactions], key, buf)
+	if err == nil {
+		d.is.AddDBColumnStats(cfTransactions, 1, int64(len(key)), int64(len(buf)))
+	}
+	return err
 }
 
 // DeleteTx removes transactions from db
@@ -869,7 +873,25 @@ func (d *RocksDB) DeleteTx(txid string) error {
 	if err != nil {
 		return nil
 	}
-	return d.db.DeleteCF(d.wo, d.cfh[cfTransactions], key)
+	// use write batch so that this delete matches other deletes
+	wb := gorocksdb.NewWriteBatch()
+	defer wb.Destroy()
+	d.internalDeleteTx(wb, key)
+	return d.db.Write(d.wo, wb)
+}
+
+// internalDeleteTx checks if tx is cached and updates internal state accordingly
+func (d *RocksDB) internalDeleteTx(wb *gorocksdb.WriteBatch, key []byte) {
+	val, err := d.db.GetCF(d.ro, d.cfh[cfTransactions], key)
+	// ignore error, it is only for statistics
+	if err == nil {
+		l := len(val.Data())
+		if l > 0 {
+			d.is.AddDBColumnStats(cfTransactions, -1, int64(-len(key)), int64(-l))
+		}
+		defer val.Free()
+	}
+	wb.DeleteCF(d.cfh[cfTransactions], key)
 }
 
 // internal state

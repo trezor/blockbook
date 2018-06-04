@@ -29,6 +29,11 @@ func setupRocksDB(t *testing.T, p bchain.BlockChainParser) *RocksDB {
 	if err != nil {
 		t.Fatal(err)
 	}
+	is, err := d.LoadInternalState("btc-testnet")
+	if err != nil {
+		t.Fatal(err)
+	}
+	d.SetInternalState(is)
 	return d
 }
 
