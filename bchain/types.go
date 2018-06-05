@@ -121,6 +121,7 @@ type BlockChain interface {
 	IsTestnet() bool
 	GetNetworkName() string
 	GetSubversion() string
+	GetCoinName() string
 	// requests
 	GetBlockChainInfo() (string, error)
 	GetBestBlockHash() (string, error)
