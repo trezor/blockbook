@@ -40,7 +40,7 @@ Architecture: amd64
 Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, bcash-testnet
 Description: Satoshilabs blockbook server (Bitcoin Cash testnet)
 
-Package: blockbook-btg
+Package: blockbook-bgold
 Architecture: amd64
-Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, bgold-btg
+Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, bgold
 Description: Satoshilabs blockbook server (Bitcoin Gold mainnet)

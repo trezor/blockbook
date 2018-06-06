@@ -31,7 +31,7 @@ func init() {
 	blockChainFactories["Ethereum Testnet Ropsten"] = eth.NewEthereumRPC
 	blockChainFactories["bch"] = bch.NewBCashRPC
 	blockChainFactories["bch-testnet"] = bch.NewBCashRPC
-	blockChainFactories["btg"] = btg.NewBGoldRPC
+	blockChainFactories["Bgold"] = btg.NewBGoldRPC
 }
 
 // GetCoinNameFromConfig gets coin name from config file

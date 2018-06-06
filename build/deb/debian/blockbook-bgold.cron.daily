@@ -1,0 +1,2 @@
+#!/bin/sh
+/opt/coins/blockbook/bgold/bin/logrotate.sh

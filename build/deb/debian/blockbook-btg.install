@@ -1,6 +1,0 @@
-#!/usr/bin/dh-exec
-blockbook /opt/coins/blockbook/btg/bin
-cert /opt/coins/blockbook/btg
-static /opt/coins/blockbook/btg
-configs/btg.json => /opt/coins/blockbook/btg/config/blockchaincfg.json
-logrotate.sh /opt/coins/blockbook/btg/bin
