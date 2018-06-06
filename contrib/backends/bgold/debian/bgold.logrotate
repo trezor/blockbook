@@ -1,5 +1,5 @@
-/opt/coins/data/btg/bgold/debug.log
-/opt/coins/data/btg/bgold/db.log
+/opt/coins/data/bgold/backend/debug.log
+/opt/coins/data/bgold/backend/db.log
 {
         rotate 7
         daily

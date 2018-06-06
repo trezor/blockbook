@@ -1,23 +1,23 @@
 # It is not recommended to modify this file in-place, because it will
 # be overwritten during package upgrades. If you want to add further
 # options or overwrite existing ones then use
-# $ systemctl edit bgold-btg.service
+# $ systemctl edit bgold.service
 # See "man systemd.service" for details.
 
 # Note that almost all daemon options could be specified in
-# /opt/coins/nodes/bgold/btg/btg.conf
+# /opt/coins/nodes/bgold/bgold.conf
 
 [Unit]
 Description=Bitcoin Cash daemon (mainnet)
 After=network.target
 
 [Service]
-ExecStart=/opt/coins/nodes/bgold/btg/bin/bgoldd -datadir=/opt/coins/data/btg/bgold -conf=/opt/coins/nodes/bgold/btg/btg.conf -pid=/run/bgoldd/btg.pid
+ExecStart=/opt/coins/nodes/bgold/bin/bgoldd -datadir=/opt/coins/data/bgold/backend -conf=/opt/coins/nodes/bgold/bgold.conf -pid=/run/bgold/bgold.pid
 # Creates /run/bitcoind owned by bgold
-RuntimeDirectory=bgoldd
+RuntimeDirectory=bgold
 User=bgold
 Type=forking
-PIDFile=/run/bgoldd/btg.pid
+PIDFile=/run/bgold/bgold.pid
 Restart=on-failure
 
 # Resource limits
