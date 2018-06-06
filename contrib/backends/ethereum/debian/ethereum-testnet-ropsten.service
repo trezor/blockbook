@@ -1,19 +1,19 @@
 # It is not recommended to modify this file in-place, because it will
 # be overwritten during package upgrades. If you want to add further
 # options or overwrite existing ones then use
-# $ systemctl edit ethereum-eth.service
+# $ systemctl edit ethereum-testnet-ropsten.service
 # See "man systemd.service" for details.
 
 [Unit]
-Description=Ethereum daemon (mainnet)
+Description=Ethereum daemon (ropsten testnet)
 After=network.target
 
 [Service]
-ExecStart=/bin/sh -c '/opt/coins/nodes/ethereum/eth/geth --ipcdisable --syncmode full --cache 1024 --datadir /opt/coins/data/eth/eth --port 38336 --ws --wsaddr 0.0.0.0 --wsport 8036 --wsorigins * 2>>/opt/coins/data/eth/eth/eth.log'
+ExecStart=/bin/sh -c '/opt/coins/nodes/ethereum_testnet_ropsten/geth --ipcdisable --testnet --cache 1024 --datadir /opt/coins/data/ethereum_testnet_ropsten/backend --port 48333 --ws --wsaddr 0.0.0.0 --wsport 18036 --wsorigins * 2>>/opt/coins/data/ethereum_testnet_ropsten/backend/ethereum_testnet_ropsten.log'
 User=ethereum
 Type=simple
 Restart=on-failure
-WorkingDirectory=/opt/coins/nodes/ethereum/eth
+WorkingDirectory=/opt/coins/nodes/ethereum_testnet_ropsten
 
 # Resource limits
 LimitNOFILE=500000

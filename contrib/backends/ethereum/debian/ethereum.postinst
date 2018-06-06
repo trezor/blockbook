@@ -9,9 +9,9 @@ case "$1" in
         useradd --system -M -U ethereum -s /bin/false
     fi
 
-    if [ "$(stat -c '%U' /opt/coins/data/eth-ropsten/eth)" != "ethereum" ]
+    if [ "$(stat -c '%U' /opt/coins/data/ethereum/backend)" != "ethereum" ]
     then
-        chown -R ethereum:ethereum /opt/coins/data/eth-ropsten/eth
+        chown -R ethereum:ethereum /opt/coins/data/ethereum/backend
     fi
   ;;
 

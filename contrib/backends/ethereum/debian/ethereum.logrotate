@@ -1,4 +1,4 @@
-/opt/coins/data/eth/eth/eth.log
+/opt/coins/data/ethereum/backend/ethereum.log
 {
         rotate 7
         daily
