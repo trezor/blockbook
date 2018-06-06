@@ -1,4 +1,4 @@
-package bch
+package btg
 
 // import (
 // 	"blockbook/bchain"
