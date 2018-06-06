@@ -1,23 +1,23 @@
 # It is not recommended to modify this file in-place, because it will
 # be overwritten during package upgrades. If you want to add further
 # options or overwrite existing ones then use
-# $ systemctl edit bitcoin-btc.service
+# $ systemctl edit bitcoin.service
 # See "man systemd.service" for details.
 
 # Note that almost all daemon options could be specified in
-# /opt/coins/nodes/bitcoin/btc/btc.conf
+# /opt/coins/nodes/bitcoin/bitcoin.conf
 
 [Unit]
 Description=Bitcoin daemon (mainnet)
 After=network.target
 
 [Service]
-ExecStart=/opt/coins/nodes/bitcoin/btc/bin/bitcoind -datadir=/opt/coins/data/btc/bitcoin -conf=/opt/coins/nodes/bitcoin/btc/btc.conf -pid=/run/bitcoind/btc.pid
+ExecStart=/opt/coins/nodes/bitcoin/bin/bitcoind -datadir=/opt/coins/data/bitcoin/backend -conf=/opt/coins/nodes/bitcoin/bitcoin.conf -pid=/run/bitcoind/bitcoin.pid
 # Creates /run/bitcoind owned by bitcoin
 RuntimeDirectory=bitcoind
 User=bitcoin
 Type=forking
-PIDFile=/run/bitcoind/btc.pid
+PIDFile=/run/bitcoind/bitcoin.pid
 Restart=on-failure
 
 # Resource limits

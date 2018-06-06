@@ -1,5 +1,5 @@
-/opt/coins/data/btc/bitcoin/debug.log
-/opt/coins/data/btc/bitcoin/db.log
+/opt/coins/data/bitcoin/backend/debug.log
+/opt/coins/data/bitcoin/backend/db.log
 {
         rotate 7
         daily
