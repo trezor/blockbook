@@ -1,0 +1,23 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+
+  configure)
+    if ! id -u blockbook-bitcoin &> /dev/null
+    then
+        useradd --system -M -U blockbook-bitcoin -s /bin/false
+    fi
+
+    for dir in /opt/coins/data/bitcoin/blockbook /opt/coins/blockbook/bitcoin/logs
+    do
+        if [ "$(stat -c '%U' $dir)" != "blockbook-bitcoin" ]
+        then
+            chown -R blockbook-bitcoin:blockbook-bitcoin $dir
+        fi
+    done
+  ;;
+
+esac
+
+#DEBHELPER#

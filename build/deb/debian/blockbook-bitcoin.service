@@ -1,20 +1,20 @@
 # It is not recommended to modify this file in-place, because it will
 # be overwritten during package upgrades. If you want to add further
 # options or overwrite existing ones then use
-# $ systemctl edit blockbook-btc-testnet.service
+# $ systemctl edit blockbook-bitcoin.service
 # See "man systemd.service" for details.
 
 [Unit]
-Description=Blockbook daemon (BTC testnet)
+Description=Blockbook daemon (Bitcoin mainnet)
 After=network.target
-Wants=bitcoin-testnet.service
+Wants=bitcoin.service
 
 [Service]
-ExecStart=/opt/coins/blockbook/btc-testnet/bin/blockbook -coin=btc-testnet -blockchaincfg=/opt/coins/blockbook/btc-testnet/config/blockchaincfg.json -datadir=/opt/coins/data/btc-testnet/blockbook/db -sync -httpserver=:19030 -socketio=:19130 -certfile=/opt/coins/blockbook/btc-testnet/cert/blockbook -explorer=https://btc-testnet-explorer.trezor.io/ -log_dir=/opt/coins/blockbook/btc-testnet/logs
-User=blockbook-btc
+ExecStart=/opt/coins/blockbook/bitcoin/bin/blockbook -blockchaincfg=/opt/coins/blockbook/bitcoin/config/blockchaincfg.json -datadir=/opt/coins/data/bitcoin/blockbook/db -sync -httpserver=:9030 -socketio=:9130 -certfile=/opt/coins/blockbook/bitcoin/cert/blockbook -explorer=https://btc-explorer.trezor.io/ -log_dir=/opt/coins/blockbook/bitcoin/logs
+User=blockbook-bitcoin
 Type=simple
 Restart=on-failure
-WorkingDirectory=/opt/coins/blockbook/btc-testnet
+WorkingDirectory=/opt/coins/blockbook/bitcoin
 
 # Resource limits
 LimitNOFILE=500000

@@ -10,12 +10,12 @@ Architecture: amd64
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: Satoshilabs blockbook server (tools)
 
-Package: blockbook-btc
+Package: blockbook-bitcoin
 Architecture: amd64
-Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, bitcoin-btc
+Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, bitcoin
 Description: Satoshilabs blockbook server (Bitcoin mainnet)
 
-Package: blockbook-btc-testnet
+Package: blockbook-bitcoin-testnet
 Architecture: amd64
 Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, bitcoin-testnet
 Description: Satoshilabs blockbook server (Bitcoin testnet)
