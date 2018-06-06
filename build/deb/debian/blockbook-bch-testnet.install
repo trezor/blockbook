@@ -1,6 +1,0 @@
-#!/usr/bin/dh-exec
-blockbook /opt/coins/blockbook/bch-testnet/bin
-cert /opt/coins/blockbook/bch-testnet
-static /opt/coins/blockbook/bch-testnet
-configs/bch-testnet.json => /opt/coins/blockbook/bch-testnet/config/blockchaincfg.json
-logrotate.sh /opt/coins/blockbook/bch-testnet/bin

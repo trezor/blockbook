@@ -1,23 +1,23 @@
 # It is not recommended to modify this file in-place, because it will
 # be overwritten during package upgrades. If you want to add further
 # options or overwrite existing ones then use
-# $ systemctl edit bcash-bch.service
+# $ systemctl edit bcash.service
 # See "man systemd.service" for details.
 
 # Note that almost all daemon options could be specified in
-# /opt/coins/nodes/bitcoin-abc/bch/bch.conf
+# /opt/coins/nodes/bcash/bcash.conf
 
 [Unit]
 Description=Bitcoin Cash daemon (mainnet)
 After=network.target
 
 [Service]
-ExecStart=/opt/coins/nodes/bitcoin-abc/bch/bin/bitcoind -datadir=/opt/coins/data/bch/bitcoin -conf=/opt/coins/nodes/bitcoin-abc/bch/bch.conf -pid=/run/bitcoin-abc/bch.pid
+ExecStart=/opt/coins/nodes/bcash/bin/bitcoind -datadir=/opt/coins/data/bcash/backend -conf=/opt/coins/nodes/bcash/bcash.conf -pid=/run/bitcoin-abc/bcash.pid
 # Creates /run/bitcoin-abc owned by bcash
 RuntimeDirectory=bitcoin-abc
 User=bcash
 Type=forking
-PIDFile=/run/bitcoin-abc/bch.pid
+PIDFile=/run/bitcoin-abc/bcash.pid
 Restart=on-failure
 
 # Resource limits

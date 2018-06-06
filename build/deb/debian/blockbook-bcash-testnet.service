@@ -1,20 +1,20 @@
 # It is not recommended to modify this file in-place, because it will
 # be overwritten during package upgrades. If you want to add further
 # options or overwrite existing ones then use
-# $ systemctl edit blockbook-bch.service
+# $ systemctl edit blockbook-bcash-testnet.service
 # See "man systemd.service" for details.
 
 [Unit]
-Description=Blockbook daemon (BCH mainnet)
+Description=Blockbook daemon (Bcash testnet)
 After=network.target
-Wants=bcash-bch.service
+Wants=bcash-testnet.service
 
 [Service]
-ExecStart=/opt/coins/blockbook/bch/bin/blockbook -coin=bch -blockchaincfg=/opt/coins/blockbook/bch/config/blockchaincfg.json -datadir=/opt/coins/data/bch/blockbook/db -sync -httpserver=:9031 -socketio=:9131 -certfile=/opt/coins/blockbook/bch/cert/blockbook -explorer=https://bitcoincash.blockexplorer.com/ -log_dir=/opt/coins/blockbook/bch/logs
-User=blockbook-bch
+ExecStart=/opt/coins/blockbook/bcash_testnet/bin/blockbook -blockchaincfg=/opt/coins/blockbook/bcash_testnet/config/blockchaincfg.json -datadir=/opt/coins/data/bcash_testnet/blockbook/db -sync -httpserver=:19031 -socketio=:19131 -certfile=/opt/coins/blockbook/bcash_testnet/cert/blockbook -explorer=https://bitcoincash.blockexplorer.com/ -log_dir=/opt/coins/blockbook/bcash_testnet/logs
+User=blockbook-bcash
 Type=simple
 Restart=on-failure
-WorkingDirectory=/opt/coins/blockbook/bch
+WorkingDirectory=/opt/coins/blockbook/bcash_testnet
 
 # Resource limits
 LimitNOFILE=500000

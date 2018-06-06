@@ -1,2 +1,0 @@
-#!/bin/sh
-/opt/coins/blockbook/bch/bin/logrotate.sh
