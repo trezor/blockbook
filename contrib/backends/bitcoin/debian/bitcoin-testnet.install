@@ -1,2 +1,2 @@
 bitcoin/* /opt/coins/nodes/bitcoin_testnet
-bitcoin_testnet.conf /opt/coins/nodes/bitcoin_testnet/bitcoin_testnet.conf
+bitcoin_testnet.conf /opt/coins/nodes/bitcoin_testnet
