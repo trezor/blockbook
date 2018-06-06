@@ -86,7 +86,9 @@ const minTxPayload = 10
 // possibly fit into a block.
 const maxTxPerBlock = (wire.MaxBlockPayload / minTxPayload) + 1
 
-const headerConstLength = 44 + (chainhash.HashSize * 3)
+// headerFixedLength is the length of fixed fields of a block (i.e. without solution)
+// see https://github.com/BTCGPU/BTCGPU/wiki/Technical-Spec#block-header
+const headerFixedLength = 44 + (chainhash.HashSize * 3)
 
 // ParseBlock parses raw block to our Block struct
 func (p *BGoldParser) ParseBlock(b []byte) (*bchain.Block, error) {
@@ -118,7 +120,7 @@ func (p *BGoldParser) ParseBlock(b []byte) (*bchain.Block, error) {
 }
 
 func skipHeader(r io.ReadSeeker, pver uint32) error {
-	_, err := r.Seek(headerConstLength, io.SeekStart)
+	_, err := r.Seek(headerFixedLength, io.SeekStart)
 	if err != nil {
 		return err
 	}
