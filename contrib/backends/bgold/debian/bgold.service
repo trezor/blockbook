@@ -8,7 +8,7 @@
 # /opt/coins/nodes/bgold/bgold.conf
 
 [Unit]
-Description=Bitcoin Cash daemon (mainnet)
+Description=Bitcoin Gold daemon (mainnet)
 After=network.target
 
 [Service]
