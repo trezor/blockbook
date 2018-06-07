@@ -9,6 +9,5 @@
   "subversion": "/Bitcoin Gold:0.15.0.2/",
   "mempoolWorkers": 8,
   "mempoolSubWorkers": 2,
-  "blockAddressesToKeep": 300,
-  "addressFormat": "legacy"
+  "blockAddressesToKeep": 300
 }

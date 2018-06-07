@@ -10,7 +10,6 @@ import (
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/golang/glog"
 )
 
 const (
@@ -98,18 +97,11 @@ func (p *BGoldParser) ParseBlock(b []byte) (*bchain.Block, error) {
 		return nil, err
 	}
 
-	if glog.V(1) {
-		off, _ := r.Seek(0, io.SeekCurrent)
-		glog.Infof("parseblock: skipped %d bytes", off)
-	}
-
 	w := wire.MsgBlock{}
 	err = decodeTransactions(r, 0, wire.WitnessEncoding, &w)
 	if err != nil {
 		return nil, err
 	}
-
-	glog.V(1).Infof("parseblock: got %d transactions", len(w.Transactions))
 
 	txs := make([]bchain.Tx, len(w.Transactions))
 	for ti, t := range w.Transactions {
