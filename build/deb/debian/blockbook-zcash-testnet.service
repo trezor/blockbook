@@ -1,20 +1,20 @@
 # It is not recommended to modify this file in-place, because it will
 # be overwritten during package upgrades. If you want to add further
 # options or overwrite existing ones then use
-# $ systemctl edit blockbook-zec-testnet.service
+# $ systemctl edit blockbook-zcash-testnet.service
 # See "man systemd.service" for details.
 
 [Unit]
-Description=Blockbook daemon (ZEC testnet)
+Description=Blockbook daemon (Zcash Testnet)
 After=network.target
-Wants=zcash-zec-testnet.service
+Wants=zcash-testnet.service
 
 [Service]
-ExecStart=/opt/coins/blockbook/zec-testnet/bin/blockbook -coin=zec-testnet -blockchaincfg=/opt/coins/blockbook/zec-testnet/config/blockchaincfg.json -datadir=/opt/coins/data/zec-testnet/blockbook/db -sync -httpserver=:19032 -socketio=:19132 -certfile=/opt/coins/blockbook/zec-testnet/cert/blockbook -explorer=https://zcash.blockexplorer.com/ -log_dir=/opt/coins/blockbook/zec-testnet/logs
-User=blockbook-zec
+ExecStart=/opt/coins/blockbook/zcash_testnet/bin/blockbook -blockchaincfg=/opt/coins/blockbook/zcash_testnet/config/blockchaincfg.json -datadir=/opt/coins/data/zcash_testnet/blockbook/db -sync -httpserver=:19032 -socketio=:19132 -certfile=/opt/coins/blockbook/zcash_testnet/cert/blockbook -explorer=https://zcash.blockexplorer.com/ -log_dir=/opt/coins/blockbook/zcash_testnet/logs
+User=blockbook-zcash
 Type=simple
 Restart=on-failure
-WorkingDirectory=/opt/coins/blockbook/zec-testnet
+WorkingDirectory=/opt/coins/blockbook/zcash_testnet
 
 # Resource limits
 LimitNOFILE=500000

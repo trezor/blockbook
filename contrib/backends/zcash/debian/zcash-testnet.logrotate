@@ -1,5 +1,5 @@
-/opt/coins/data/zec-testnet/zcash/testnet3/debug.log
-/opt/coins/data/zec-testnet/zcash/testnet3/db.log
+/opt/coins/data/zcash_testnet/backend/testnet3/debug.log
+/opt/coins/data/zcash_testnet/backend/testnet3/db.log
 {
         rotate 7
         daily

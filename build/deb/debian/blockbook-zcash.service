@@ -1,25 +1,20 @@
 # It is not recommended to modify this file in-place, because it will
 # be overwritten during package upgrades. If you want to add further
 # options or overwrite existing ones then use
-# $ systemctl edit zcash-zec.service
+# $ systemctl edit blockbook-zcash.service
 # See "man systemd.service" for details.
 
-# Note that almost all daemon options could be specified in
-# /opt/coins/nodes/zcash/zec/zec.conf
-
 [Unit]
-Description=ZCash daemon (mainnet)
+Description=Blockbook daemon (Zcash mainnet)
 After=network.target
+Wants=zcash.service
 
 [Service]
-Environment="HOME=/opt/coins/data/zec/zcash"
-ExecStart=/opt/coins/nodes/zcash/zec/bin/zcashd -datadir=/opt/coins/data/zec/zcash -conf=/opt/coins/nodes/zcash/zec/zec.conf -pid=/run/zcashd/zec.pid
-# Creates /run/zcashd owned by zcash
-RuntimeDirectory=zcashd
-User=zcash
-Type=forking
-PIDFile=/run/zcashd/zec.pid
+ExecStart=/opt/coins/blockbook/zcash/bin/blockbook -blockchaincfg=/opt/coins/blockbook/zcash/config/blockchaincfg.json -datadir=/opt/coins/data/zcash/blockbook/db -sync -httpserver=:9032 -socketio=:9132 -certfile=/opt/coins/blockbook/zcash/cert/blockbook -explorer=https://zcash.blockexplorer.com/ -log_dir=/opt/coins/blockbook/zcash/logs
+User=blockbook-zcash
+Type=simple
 Restart=on-failure
+WorkingDirectory=/opt/coins/blockbook/zcash
 
 # Resource limits
 LimitNOFILE=500000
@@ -42,7 +37,7 @@ NoNewPrivileges=true
 PrivateDevices=true
 
 # Deny the creation of writable and executable memory mappings.
-# MemoryDenyWriteExecute=true
+MemoryDenyWriteExecute=true
 
 [Install]
 WantedBy=multi-user.target

@@ -5,20 +5,20 @@
 # See "man systemd.service" for details.
 
 # Note that almost all daemon options could be specified in
-# /opt/coins/nodes/zcash/zec-testnet/zec-testnet.conf
+# /opt/coins/nodes/zcash_testnet/zcash_testnet.conf
 
 [Unit]
-Description=ZCash daemon (testnet)
+Description=Zcash daemon (testnet)
 After=network.target
 
 [Service]
-Environment="HOME=/opt/coins/data/zec-testnet/zcash"
-ExecStart=/opt/coins/nodes/zcash/zec-testnet/bin/zcashd -datadir=/opt/coins/data/zec-testnet/zcash -conf=/opt/coins/nodes/zcash/zec-testnet/zec-testnet.conf -pid=/run/zcashd/zec-testnet.pid
+Environment="HOME=/opt/coins/data/zcash_testnet/backend"
+ExecStart=/opt/coins/nodes/zcash_testnet/bin/zcashd -datadir=/opt/coins/data/zcash_testnet/backend -conf=/opt/coins/nodes/zcash_testnet/zcash_testnet.conf -pid=/run/zcashd/zcash_testnet.pid
 # Creates /run/zcashd owned by zcash
 RuntimeDirectory=zcashd
 User=zcash
 Type=forking
-PIDFile=/run/zcashd/zec-testnet.pid
+PIDFile=/run/zcashd/zcash_testnet.pid
 Restart=on-failure
 
 # Resource limits

@@ -1,0 +1,23 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+
+  configure)
+    if ! id -u blockbook-zcash &> /dev/null
+    then
+        useradd --system -M -U blockbook-zcash -s /bin/false
+    fi
+
+    for dir in /opt/coins/data/zcash_testnet/blockbook /opt/coins/blockbook/zcash_testnet/logs
+    do
+        if [ "$(stat -c '%U' $dir)" != "blockbook-zcash" ]
+        then
+            chown -R blockbook-zcash:blockbook-zcash $dir
+        fi
+    done
+  ;;
+
+esac
+
+#DEBHELPER#

@@ -1,6 +1,0 @@
-#!/usr/bin/dh-exec --with=install
-blockbook /opt/coins/blockbook/zec-testnet/bin
-cert /opt/coins/blockbook/zec-testnet
-static /opt/coins/blockbook/zec-testnet
-configs/zec-testnet.json => /opt/coins/blockbook/zec-testnet/config/blockchaincfg.json
-logrotate.sh /opt/coins/blockbook/zec-testnet/bin
