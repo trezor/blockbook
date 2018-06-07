@@ -28,8 +28,8 @@ func init() {
 	blockChainFactories["zec-testnet"] = zec.NewZCashRPC
 	blockChainFactories["Ethereum"] = eth.NewEthereumRPC
 	blockChainFactories["Ethereum Testnet Ropsten"] = eth.NewEthereumRPC
-	blockChainFactories["bch"] = bch.NewBCashRPC
-	blockChainFactories["bch-testnet"] = bch.NewBCashRPC
+	blockChainFactories["Bcash"] = bch.NewBCashRPC
+	blockChainFactories["Bcash Testnet"] = bch.NewBCashRPC
 }
 
 // GetCoinNameFromConfig gets coin name from config file
