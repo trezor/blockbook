@@ -9,7 +9,7 @@ Description=Ethereum daemon (mainnet)
 After=network.target
 
 [Service]
-ExecStart=/bin/sh -c '/opt/coins/nodes/ethereum/geth --ipcdisable --syncmode full --cache 1024 --nat none --datadir /opt/coins/data/ethereum/backend --port 38336 --ws --wsaddr 0.0.0.0 --wsport 8036 --wsorigins * 2>>/opt/coins/data/ethereum/backend/ethereum.log'
+ExecStart=/bin/sh -c '/opt/coins/nodes/ethereum/geth --ipcdisable --syncmode full --cache 1024 --nat none --datadir /opt/coins/data/ethereum/backend --port 38336 --ws --wsaddr 0.0.0.0 --wsport 8036 --wsorigins "*" 2>>/opt/coins/data/ethereum/backend/ethereum.log'
 User=ethereum
 Type=simple
 Restart=on-failure
