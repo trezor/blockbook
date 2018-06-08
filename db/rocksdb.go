@@ -949,9 +949,11 @@ func (d *RocksDB) SetInternalState(is *common.InternalState) {
 
 // StoreInternalState stores the internal state to db
 func (d *RocksDB) StoreInternalState(is *common.InternalState) error {
-	rows, keyBytes, valueBytes := d.is.GetDBColumnStats(cfTransactions)
-	d.metrics.DbColumnRows.With(common.Labels{"column": cfNames[cfTransactions]}).Set(float64(rows))
-	d.metrics.DbColumnSize.With(common.Labels{"column": cfNames[cfTransactions]}).Set(float64(keyBytes + valueBytes))
+	for c := 0; c < len(cfNames); c++ {
+		rows, keyBytes, valueBytes := d.is.GetDBColumnStats(c)
+		d.metrics.DbColumnRows.With(common.Labels{"column": cfNames[c]}).Set(float64(rows))
+		d.metrics.DbColumnSize.With(common.Labels{"column": cfNames[c]}).Set(float64(keyBytes + valueBytes))
+	}
 	buf, err := is.Pack()
 	if err != nil {
 		return err
