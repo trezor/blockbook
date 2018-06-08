@@ -1,0 +1,13 @@
+{
+  "coin_name": "Dash",
+  "rpcURL": "http://127.0.0.1:8033",
+  "rpcUser": "rpc",
+  "rpcPass": "rpc",
+  "rpcTimeout": 25,
+  "parse": true,
+  "zeroMQBinding": "tcp://127.0.0.1:38333",
+  "subversion": "/Dash Core:0.12.2/",
+  "mempoolWorkers": 8,
+  "mempoolSubWorkers": 2,
+  "blockAddressesToKeep": 300
+}

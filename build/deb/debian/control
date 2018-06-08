@@ -44,3 +44,13 @@ Package: blockbook-bgold
 Architecture: amd64
 Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, bgold
 Description: Satoshilabs blockbook server (Bitcoin Gold mainnet)
+
+Package: blockbook-dash
+Architecture: amd64
+Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, dash
+Description: Satoshilabs blockbook server (Dash mainnet)
+
+Package: blockbook-dash-testnet
+Architecture: amd64
+Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, dash-testnet
+Description: Satoshilabs blockbook server (Dash testnet)
