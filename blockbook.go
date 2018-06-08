@@ -177,7 +177,7 @@ func main() {
 
 	if *computeColumnStats {
 		internalState.DbState = common.DbStateOpen
-		err = index.ComputeInternalStateColumnStats()
+		err = index.ComputeInternalStateColumnStats(chanOsSignal)
 		if err != nil {
 			glog.Error("internalState: ", err)
 		}
@@ -321,7 +321,7 @@ func main() {
 		close(chanStoreInternalState)
 		<-chanSyncIndexDone
 		<-chanSyncMempoolDone
-		<-chanStoreInternalState
+		<-chanStoreInternalStateDone
 	}
 }
 
@@ -412,9 +412,26 @@ func syncMempoolLoop() {
 }
 
 func storeInternalStateLoop() {
-	defer close(chanStoreInternalStateDone)
+	stopCompute := make(chan os.Signal)
+	defer func() {
+		close(stopCompute)
+		close(chanStoreInternalStateDone)
+	}()
 	glog.Info("storeInternalStateLoop starting")
+	lastCompute := time.Now()
+	var computeRunning bool
 	tickAndDebounce(storeInternalStatePeriodMs*time.Millisecond, (storeInternalStatePeriodMs-1)*time.Millisecond, chanStoreInternalState, func() {
+		if !computeRunning && lastCompute.Add(10*time.Hour).Before(time.Now()) {
+			computeRunning = true
+			go func() {
+				err := index.ComputeInternalStateColumnStats(stopCompute)
+				if err != nil {
+					glog.Error("computeInternalStateColumnStats error: ", err)
+				}
+				lastCompute = time.Now()
+				computeRunning = false
+			}()
+		}
 		if err := index.StoreInternalState(internalState); err != nil {
 			glog.Error("storeInternalStateLoop ", errors.ErrorStack(err))
 		}

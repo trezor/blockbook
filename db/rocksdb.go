@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/bsm/go-vlq"
 	"github.com/golang/glog"
@@ -958,7 +959,7 @@ func (d *RocksDB) StoreInternalState(is *common.InternalState) error {
 	return d.db.PutCF(d.wo, d.cfh[cfDefault], []byte(internalStateKey), buf)
 }
 
-func (d *RocksDB) computeColumnSize(col int) (int64, int64, int64, error) {
+func (d *RocksDB) computeColumnSize(col int, stopCompute chan os.Signal) (int64, int64, int64, error) {
 	var rows, keysSum, valuesSum int64
 	var seekKey []byte
 	for {
@@ -967,11 +968,16 @@ func (d *RocksDB) computeColumnSize(col int) (int64, int64, int64, error) {
 		if rows == 0 {
 			it.SeekToFirst()
 		} else {
-			glog.Info("Column ", cfNames[col], ": rows ", rows, ", key bytes ", keysSum, ", value bytes ", valuesSum, ", in progress...")
+			glog.Info("db: Column ", cfNames[col], ": rows ", rows, ", key bytes ", keysSum, ", value bytes ", valuesSum, ", in progress...")
 			it.Seek(seekKey)
 			it.Next()
 		}
 		for count := 0; it.Valid() && count < refreshIterator; it.Next() {
+			select {
+			case <-stopCompute:
+				return 0, 0, 0, errors.New("Interrupted")
+			default:
+			}
 			key = it.Key().Data()
 			count++
 			rows++
@@ -990,15 +996,18 @@ func (d *RocksDB) computeColumnSize(col int) (int64, int64, int64, error) {
 
 // ComputeInternalStateColumnStats computes stats of all db columns and sets them to internal state
 // can be very slow operation
-func (d *RocksDB) ComputeInternalStateColumnStats() error {
+func (d *RocksDB) ComputeInternalStateColumnStats(stopCompute chan os.Signal) error {
+	start := time.Now()
+	glog.Info("db: ComputeInternalStateColumnStats start")
 	for c := 0; c < len(cfNames); c++ {
-		rows, keysSum, valuesSum, err := d.computeColumnSize(c)
+		rows, keysSum, valuesSum, err := d.computeColumnSize(c, stopCompute)
 		if err != nil {
 			return err
 		}
 		d.is.SetDBColumnStats(c, rows, keysSum, valuesSum)
-		glog.Info("Column ", cfNames[c], ": rows ", rows, ", key bytes ", keysSum, ", value bytes ", valuesSum)
+		glog.Info("db: Column ", cfNames[c], ": rows ", rows, ", key bytes ", keysSum, ", value bytes ", valuesSum)
 	}
+	glog.Info("db: ComputeInternalStateColumnStats finished in ", time.Since(start))
 	return nil
 }
 
