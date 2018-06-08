@@ -1,0 +1,20 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+
+  configure)
+    if ! id -u dash &> /dev/null
+    then
+        useradd --system -M -U dash -s /bin/false
+    fi
+
+    if [ "$(stat -c '%U' /opt/coins/data/dash_testnet/backend)" != "dash" ]
+    then
+        chown -R dash:dash /opt/coins/data/dash_testnet/backend
+    fi
+  ;;
+
+esac
+
+#DEBHELPER#
