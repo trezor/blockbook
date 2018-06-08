@@ -9,7 +9,7 @@ Description=Ethereum daemon (ropsten testnet)
 After=network.target
 
 [Service]
-ExecStart=/bin/sh -c '/opt/coins/nodes/ethereum_testnet_ropsten/geth --ipcdisable --testnet --cache 1024 --nat none --datadir /opt/coins/data/ethereum_testnet_ropsten/backend --port 48333 --ws --wsaddr 0.0.0.0 --wsport 18036 --wsorigins "*" 2>>/opt/coins/data/ethereum_testnet_ropsten/backend/ethereum_testnet_ropsten.log'
+ExecStart=/bin/sh -c '/opt/coins/nodes/ethereum_testnet_ropsten/geth --ipcdisable --testnet --cache 1024 --nat none --datadir /opt/coins/data/ethereum_testnet_ropsten/backend --port 48336 --ws --wsaddr 0.0.0.0 --wsport 18036 --wsorigins "*" 2>>/opt/coins/data/ethereum_testnet_ropsten/backend/ethereum_testnet_ropsten.log'
 User=ethereum
 Type=simple
 Restart=on-failure
