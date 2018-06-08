@@ -4,6 +4,7 @@ import (
 	"blockbook/bchain"
 	"blockbook/bchain/coins/bch"
 	"blockbook/bchain/coins/btc"
+	"blockbook/bchain/coins/btg"
 	"blockbook/bchain/coins/eth"
 	"blockbook/bchain/coins/zec"
 	"blockbook/common"
@@ -30,6 +31,7 @@ func init() {
 	blockChainFactories["Ethereum Testnet Ropsten"] = eth.NewEthereumRPC
 	blockChainFactories["Bcash"] = bch.NewBCashRPC
 	blockChainFactories["Bcash Testnet"] = bch.NewBCashRPC
+	blockChainFactories["Bgold"] = btg.NewBGoldRPC
 }
 
 // GetCoinNameFromConfig gets coin name from config file
