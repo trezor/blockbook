@@ -85,7 +85,7 @@ func outputScriptToAddresses(script []byte, params *chaincfg.Params) ([]string, 
 	return rv, nil
 }
 
-func (p *BitcoinParser) txFromMsgTx(t *wire.MsgTx, parseAddresses bool) bchain.Tx {
+func (p *BitcoinParser) TxFromMsgTx(t *wire.MsgTx, parseAddresses bool) bchain.Tx {
 	vin := make([]bchain.Vin, len(t.TxIn))
 	for i, in := range t.TxIn {
 		if blockchain.IsCoinBaseTx(t) {
@@ -145,7 +145,7 @@ func (p *BitcoinParser) ParseTx(b []byte) (*bchain.Tx, error) {
 	if err := t.Deserialize(r); err != nil {
 		return nil, err
 	}
-	tx := p.txFromMsgTx(&t, true)
+	tx := p.TxFromMsgTx(&t, true)
 	tx.Hex = hex.EncodeToString(b)
 
 	for i, vout := range tx.Vout {
@@ -172,7 +172,7 @@ func (p *BitcoinParser) ParseBlock(b []byte) (*bchain.Block, error) {
 
 	txs := make([]bchain.Tx, len(w.Transactions))
 	for ti, t := range w.Transactions {
-		txs[ti] = p.txFromMsgTx(t, false)
+		txs[ti] = p.TxFromMsgTx(t, false)
 	}
 
 	return &bchain.Block{Txs: txs}, nil

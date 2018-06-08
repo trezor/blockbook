@@ -1,0 +1,9 @@
+/opt/coins/data/ethereum_testnet_ropsten/backend/ethereum_testnet_ropsten.log
+{
+        rotate 7
+        daily
+        compress
+        missingok
+        notifempty
+        copytruncate
+}

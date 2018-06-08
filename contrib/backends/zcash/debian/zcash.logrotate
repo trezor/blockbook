@@ -1,0 +1,10 @@
+/opt/coins/data/zcash/backend/debug.log
+/opt/coins/data/zcash/backend/db.log
+{
+        rotate 7
+        daily
+        compress
+        missingok
+        notifempty
+        copytruncate
+}

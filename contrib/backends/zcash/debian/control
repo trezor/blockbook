@@ -5,7 +5,7 @@ Maintainer: jakub.matys@satoshilabs.com
 Build-Depends: debhelper, wget, tar, gzip, make, dh-systemd, dh-exec
 Standards-Version: 3.9.5
 
-Package: zcash-zec
+Package: zcash
 Architecture: amd64
 Depends: ${shlibs:Depends}, ${misc:Depends}, logrotate
 Description: Satoshilabs packaged zcash server

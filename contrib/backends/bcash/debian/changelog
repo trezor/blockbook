@@ -1,3 +1,9 @@
+bcash (0.17.1-satoshilabs4) unstable; urgency=medium
+
+  * Rename packages and directories
+
+ -- Martin Bohm <martin.bohm@satoshilabs.com>  Wed, 06 Jun 2018 11:12:13 +0200
+
 bcash (0.17.1-satoshilabs3) unstable; urgency=medium
 
   * Increased limits in backend configs

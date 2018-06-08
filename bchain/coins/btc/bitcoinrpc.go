@@ -35,6 +35,7 @@ type BitcoinRPC struct {
 }
 
 type Configuration struct {
+	CoinName             string `json:"coin_name"`
 	RPCURL               string `json:"rpcURL"`
 	RPCUser              string `json:"rpcUser"`
 	RPCPass              string `json:"rpcPass"`
@@ -152,6 +153,10 @@ func (b *BitcoinRPC) IsTestnet() bool {
 
 func (b *BitcoinRPC) GetNetworkName() string {
 	return b.Network
+}
+
+func (b *BitcoinRPC) GetCoinName() string {
+	return b.ChainConfig.CoinName
 }
 
 func (b *BitcoinRPC) GetSubversion() string {

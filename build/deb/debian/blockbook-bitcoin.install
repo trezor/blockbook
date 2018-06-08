@@ -1,0 +1,6 @@
+#!/usr/bin/dh-exec
+blockbook /opt/coins/blockbook/bitcoin/bin
+cert /opt/coins/blockbook/bitcoin
+static /opt/coins/blockbook/bitcoin
+configs/bitcoin.json => /opt/coins/blockbook/bitcoin/config/blockchaincfg.json
+logrotate.sh /opt/coins/blockbook/bitcoin/bin

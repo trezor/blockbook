@@ -653,6 +653,7 @@ type resultGetInfo struct {
 		Network         string  `json:"network,omitempty"`
 		Subversion      string  `json:"subversion,omitempty"`
 		LocalServices   string  `json:"localServices,omitempty"`
+		CoinName        string  `json:"coin_name,omitempty"`
 		About           string  `json:"about,omitempty"`
 	} `json:"result"`
 }
@@ -666,6 +667,7 @@ func (s *SocketIoServer) getInfo() (res resultGetInfo, err error) {
 	res.Result.Testnet = s.chain.IsTestnet()
 	res.Result.Network = s.chain.GetNetworkName()
 	res.Result.Subversion = s.chain.GetSubversion()
+	res.Result.CoinName = s.chain.GetCoinName()
 	res.Result.About = blockbookAbout
 	return
 }

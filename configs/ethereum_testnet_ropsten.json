@@ -1,0 +1,5 @@
+{
+  "coin_name": "Ethereum Testnet Ropsten",
+  "rpcURL": "ws://localhost:18036",
+  "rpcTimeout": 25
+}

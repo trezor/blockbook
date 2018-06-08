@@ -1,0 +1,2 @@
+bitcoin/* /opt/coins/nodes/bitcoin
+bitcoin.conf /opt/coins/nodes/bitcoin

@@ -1,0 +1,20 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+
+  configure)
+    if ! id -u ethereum &> /dev/null
+    then
+        useradd --system -M -U ethereum -s /bin/false
+    fi
+
+    if [ "$(stat -c '%U' /opt/coins/data/ethereum_testnet_ropsten/backend)" != "ethereum" ]
+    then
+        chown -R ethereum:ethereum /opt/coins/data/ethereum_testnet_ropsten/backend
+    fi
+  ;;
+
+esac
+
+#DEBHELPER#

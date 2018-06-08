@@ -1,2 +1,0 @@
-#!/bin/sh
-/opt/coins/blockbook/btc-testnet/bin/logrotate.sh

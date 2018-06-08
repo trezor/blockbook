@@ -1,0 +1,2 @@
+/opt/coins/blockbook/bcash_testnet/cert/testcert.crt /opt/coins/blockbook/bcash_testnet/cert/blockbook.crt
+/opt/coins/blockbook/bcash_testnet/cert/testcert.key /opt/coins/blockbook/bcash_testnet/cert/blockbook.key

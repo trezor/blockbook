@@ -1,3 +1,9 @@
+blockbook (0.0.5) unstable; urgency=medium
+
+  * v0.0.5, renamed packages and coins
+
+ -- Martin Bohm <martin.bohm@satoshilabs.com>  Wed, 06 Jun 2018 11:12:13 +0200
+
 blockbook (0.0.4) unstable; urgency=medium
 
   * v0.0.4

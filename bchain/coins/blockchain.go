@@ -4,6 +4,7 @@ import (
 	"blockbook/bchain"
 	"blockbook/bchain/coins/bch"
 	"blockbook/bchain/coins/btc"
+	"blockbook/bchain/coins/btg"
 	"blockbook/bchain/coins/eth"
 	"blockbook/bchain/coins/zec"
 	"blockbook/common"
@@ -22,22 +23,35 @@ type blockChainFactory func(config json.RawMessage, pushHandler func(bchain.Noti
 var blockChainFactories = make(map[string]blockChainFactory)
 
 func init() {
-	blockChainFactories["btc"] = btc.NewBitcoinRPC
-	blockChainFactories["btc-testnet"] = btc.NewBitcoinRPC
-	blockChainFactories["zec"] = zec.NewZCashRPC
-	blockChainFactories["zec-testnet"] = zec.NewZCashRPC
-	blockChainFactories["eth"] = eth.NewEthereumRPC
-	blockChainFactories["eth-testnet"] = eth.NewEthereumRPC
-	blockChainFactories["bch"] = bch.NewBCashRPC
-	blockChainFactories["bch-testnet"] = bch.NewBCashRPC
+	blockChainFactories["Bitcoin"] = btc.NewBitcoinRPC
+	blockChainFactories["Testnet"] = btc.NewBitcoinRPC
+	blockChainFactories["Zcash"] = zec.NewZCashRPC
+	blockChainFactories["Zcash Testnet"] = zec.NewZCashRPC
+	blockChainFactories["Ethereum"] = eth.NewEthereumRPC
+	blockChainFactories["Ethereum Testnet Ropsten"] = eth.NewEthereumRPC
+	blockChainFactories["Bcash"] = bch.NewBCashRPC
+	blockChainFactories["Bcash Testnet"] = bch.NewBCashRPC
+	blockChainFactories["Bgold"] = btg.NewBGoldRPC
+}
+
+// GetCoinNameFromConfig gets coin name from config file
+func GetCoinNameFromConfig(configfile string) (string, error) {
+	data, err := ioutil.ReadFile(configfile)
+	if err != nil {
+		return "", errors.Annotatef(err, "Error reading file %v", configfile)
+	}
+	var cn struct {
+		CoinName string `json:"coin_name"`
+	}
+	err = json.Unmarshal(data, &cn)
+	if err != nil {
+		return "", errors.Annotatef(err, "Error parsing file %v", configfile)
+	}
+	return cn.CoinName, nil
 }
 
 // NewBlockChain creates bchain.BlockChain of type defined by parameter coin
 func NewBlockChain(coin string, configfile string, pushHandler func(bchain.NotificationType), metrics *common.Metrics) (bchain.BlockChain, error) {
-	bcf, ok := blockChainFactories[coin]
-	if !ok {
-		return nil, errors.New(fmt.Sprint("Unsupported coin ", coin, ". Must be one of ", reflect.ValueOf(blockChainFactories).MapKeys()))
-	}
 	data, err := ioutil.ReadFile(configfile)
 	if err != nil {
 		return nil, errors.Annotatef(err, "Error reading file %v", configfile)
@@ -46,6 +60,10 @@ func NewBlockChain(coin string, configfile string, pushHandler func(bchain.Notif
 	err = json.Unmarshal(data, &config)
 	if err != nil {
 		return nil, errors.Annotatef(err, "Error parsing file %v", configfile)
+	}
+	bcf, ok := blockChainFactories[coin]
+	if !ok {
+		return nil, errors.New(fmt.Sprint("Unsupported coin '", coin, "'. Must be one of ", reflect.ValueOf(blockChainFactories).MapKeys()))
 	}
 	bc, err := bcf(config, pushHandler)
 	if err != nil {
@@ -85,6 +103,10 @@ func (c *blockChainWithMetrics) IsTestnet() bool {
 
 func (c *blockChainWithMetrics) GetNetworkName() string {
 	return c.b.GetNetworkName()
+}
+
+func (c *blockChainWithMetrics) GetCoinName() string {
+	return c.b.GetCoinName()
 }
 
 func (c *blockChainWithMetrics) GetSubversion() string {

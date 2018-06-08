@@ -1,0 +1,6 @@
+#!/usr/bin/dh-exec --with=install
+blockbook /opt/coins/blockbook/zcash/bin
+cert /opt/coins/blockbook/zcash
+static /opt/coins/blockbook/zcash
+configs/zcash.json => /opt/coins/blockbook/zcash/config/blockchaincfg.json
+logrotate.sh /opt/coins/blockbook/zcash/bin

@@ -67,8 +67,6 @@ var (
 
 	explorerURL = flag.String("explorer", "", "address of blockchain explorer")
 
-	coin = flag.String("coin", "btc", "coin name")
-
 	noTxCache = flag.Bool("notxcache", false, "disable tx cache")
 
 	computeColumnStats = flag.Bool("computedbstats", false, "compute column stats and exit")
@@ -143,16 +141,21 @@ func main() {
 		return
 	}
 
-	metrics, err := common.GetMetrics(*coin)
-	if err != nil {
-		glog.Fatal("GetMetrics: ", err)
-	}
-
 	if *blockchain == "" {
 		glog.Fatal("Missing blockchaincfg configuration parameter")
 	}
 
-	if chain, err = getBlockChainWithRetry(*coin, *blockchain, pushSynchronizationHandler, metrics, 60); err != nil {
+	coin, err := coins.GetCoinNameFromConfig(*blockchain)
+	if err != nil {
+		glog.Fatal("config: ", err)
+	}
+
+	metrics, err := common.GetMetrics(coin)
+	if err != nil {
+		glog.Fatal("metrics: ", err)
+	}
+
+	if chain, err = getBlockChainWithRetry(coin, *blockchain, pushSynchronizationHandler, metrics, 60); err != nil {
 		glog.Fatal("rpc: ", err)
 	}
 
@@ -162,7 +165,7 @@ func main() {
 	}
 	defer index.Close()
 
-	internalState, err = newInternalState(*coin, index)
+	internalState, err = newInternalState(coin, index)
 	if err != nil {
 		glog.Error("internalState: ", err)
 		return

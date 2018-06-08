@@ -29,6 +29,12 @@ const (
 	TestNet EthereumNet = 3
 )
 
+type Configuration struct {
+	CoinName   string `json:"coin_name"`
+	RPCURL     string `json:"rpcURL"`
+	RPCTimeout int    `json:"rpcTimeout"`
+}
+
 // EthereumRPC is an interface to JSON-RPC eth service.
 type EthereumRPC struct {
 	client               *ethclient.Client
@@ -36,6 +42,7 @@ type EthereumRPC struct {
 	timeout              time.Duration
 	rpcURL               string
 	Parser               *EthereumParser
+	CoinName             string
 	Testnet              bool
 	Network              string
 	Mempool              *bchain.NonUTXOMempool
@@ -45,17 +52,13 @@ type EthereumRPC struct {
 	newBlockSubscription *rpc.ClientSubscription
 	chanNewTx            chan ethcommon.Hash
 	newTxSubscription    *rpc.ClientSubscription
-}
-
-type configuration struct {
-	RPCURL     string `json:"rpcURL"`
-	RPCTimeout int    `json:"rpcTimeout"`
+	ChainConfig          *Configuration
 }
 
 // NewEthereumRPC returns new EthRPC instance.
 func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.NotificationType)) (bchain.BlockChain, error) {
 	var err error
-	var c configuration
+	var c Configuration
 	err = json.Unmarshal(config, &c)
 	if err != nil {
 		return nil, errors.Annotatef(err, "Invalid configuration file")
@@ -67,9 +70,9 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 	ec := ethclient.NewClient(rc)
 
 	s := &EthereumRPC{
-		client: ec,
-		rpc:    rc,
-		rpcURL: c.RPCURL,
+		client:      ec,
+		rpc:         rc,
+		ChainConfig: &c,
 	}
 
 	// always create parser
@@ -238,6 +241,10 @@ func (b *EthereumRPC) IsTestnet() bool {
 
 func (b *EthereumRPC) GetNetworkName() string {
 	return b.Network
+}
+
+func (b *EthereumRPC) GetCoinName() string {
+	return b.ChainConfig.CoinName
 }
 
 func (b *EthereumRPC) GetSubversion() string {

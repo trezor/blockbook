@@ -10,32 +10,37 @@ Architecture: amd64
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: Satoshilabs blockbook server (tools)
 
-Package: blockbook-btc
+Package: blockbook-bitcoin
 Architecture: amd64
-Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, bitcoin-btc
+Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, bitcoin
 Description: Satoshilabs blockbook server (Bitcoin mainnet)
 
-Package: blockbook-btc-testnet
+Package: blockbook-bitcoin-testnet
 Architecture: amd64
 Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, bitcoin-testnet
 Description: Satoshilabs blockbook server (Bitcoin testnet)
 
-Package: blockbook-zec
+Package: blockbook-zcash
 Architecture: amd64
-Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, zcash-zec
+Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, zcash
 Description: Satoshilabs blockbook server (ZCash mainnet)
 
-Package: blockbook-zec-testnet
+Package: blockbook-zcash-testnet
 Architecture: amd64
 Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, zcash-testnet
 Description: Satoshilabs blockbook server (ZCash testnet)
 
-Package: blockbook-bch
+Package: blockbook-bcash
 Architecture: amd64
-Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, bcash-bch
+Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, bcash
 Description: Satoshilabs blockbook server (Bitcoin Cash mainnet)
 
-Package: blockbook-bch-testnet
+Package: blockbook-bcash-testnet
 Architecture: amd64
 Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, bcash-testnet
 Description: Satoshilabs blockbook server (Bitcoin Cash testnet)
+
+Package: blockbook-bgold
+Architecture: amd64
+Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, bgold
+Description: Satoshilabs blockbook server (Bitcoin Gold mainnet)

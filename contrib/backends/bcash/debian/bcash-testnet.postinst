@@ -9,9 +9,9 @@ case "$1" in
         useradd --system -M -U bcash -s /bin/false
     fi
 
-    if [ "$(stat -c '%U' /opt/coins/data/bch-testnet/bitcoin)" != "bcash" ]
+    if [ "$(stat -c '%U' /opt/coins/data/bcash_testnet/backend)" != "bcash" ]
     then
-        chown -R bcash:bcash /opt/coins/data/bch-testnet/bitcoin
+        chown -R bcash:bcash /opt/coins/data/bcash_testnet/backend
     fi
   ;;
 

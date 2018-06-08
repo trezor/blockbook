@@ -1,3 +1,9 @@
+zcash (1.0.15-satoshilabs5) unstable; urgency=medium
+
+  * Rename packages and directories
+
+ -- Martin Bohm <martin.bohm@satoshilabs.com>  Wed, 06 Jun 2018 11:12:13 +0200
+
 zcash (1.0.15-satoshilabs4) unstable; urgency=medium
 
   * Increased limits in backend config
