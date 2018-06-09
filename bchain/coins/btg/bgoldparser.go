@@ -53,7 +53,7 @@ type BGoldParser struct {
 	*btc.BitcoinParser
 }
 
-// NewBCashParser returns new BGoldParser instance
+// NewBGoldParser returns new BGoldParser instance
 func NewBGoldParser(params *chaincfg.Params, c *btc.Configuration) *BGoldParser {
 	return &BGoldParser{BitcoinParser: btc.NewBitcoinParser(params, c)}
 }

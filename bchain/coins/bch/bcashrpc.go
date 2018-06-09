@@ -70,16 +70,6 @@ type cmdGetBlock struct {
 	} `json:"params"`
 }
 
-type resGetBlockRaw struct {
-	Error  *bchain.RPCError `json:"error"`
-	Result string           `json:"result"`
-}
-
-type resGetBlockThin struct {
-	Error  *bchain.RPCError `json:"error"`
-	Result bchain.ThinBlock `json:"result"`
-}
-
 // estimatesmartfee
 
 type cmdEstimateSmartFee struct {
@@ -87,14 +77,6 @@ type cmdEstimateSmartFee struct {
 	Params struct {
 		Blocks int `json:"nblocks"`
 	} `json:"params"`
-}
-
-type resEstimateSmartFee struct {
-	Error  *bchain.RPCError `json:"error"`
-	Result struct {
-		Feerate float64 `json:"feerate"`
-		Blocks  int     `json:"blocks"`
-	} `json:"result"`
 }
 
 // GetBlock returns block with given hash.
@@ -126,7 +108,7 @@ func (b *BCashRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 func (b *BCashRPC) GetBlockRaw(hash string) ([]byte, error) {
 	glog.V(1).Info("rpc: getblock (verbose=0) ", hash)
 
-	res := resGetBlockRaw{}
+	res := btc.ResGetBlockRaw{}
 	req := cmdGetBlock{Method: "getblock"}
 	req.Params.BlockHash = hash
 	req.Params.Verbose = false
@@ -153,7 +135,7 @@ func (b *BCashRPC) GetBlockFull(hash string) (*bchain.Block, error) {
 func (b *BCashRPC) EstimateSmartFee(blocks int, conservative bool) (float64, error) {
 	glog.V(1).Info("rpc: estimatesmartfee ", blocks)
 
-	res := resEstimateSmartFee{}
+	res := btc.ResEstimateSmartFee{}
 	req := cmdEstimateSmartFee{Method: "estimatesmartfee"}
 	req.Params.Blocks = blocks
 	// conservative param is omitted

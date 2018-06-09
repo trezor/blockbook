@@ -1,0 +1,16 @@
+Source: dash
+Section: satoshilabs
+Priority: optional
+Maintainer: jakub.matys@satoshilabs.com
+Build-Depends: debhelper, wget, tar, gzip, make, dh-systemd, dh-exec
+Standards-Version: 3.9.5
+
+Package: dash
+Architecture: amd64
+Depends: ${shlibs:Depends}, ${misc:Depends}, logrotate
+Description: Satoshilabs packaged dash server
+
+Package: dash-testnet
+Architecture: amd64
+Depends: ${shlibs:Depends}, ${misc:Depends}, logrotate
+Description: Satoshilabs packaged dash server
