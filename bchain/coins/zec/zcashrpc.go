@@ -114,29 +114,6 @@ func (z *ZCashRPC) GetTransactionForMempool(txid string) (*bchain.Tx, error) {
 	return z.GetTransaction(txid)
 }
 
-// GetTransaction returns a transaction by the transaction ID.
-func (z *ZCashRPC) GetTransaction(txid string) (*bchain.Tx, error) {
-	glog.V(1).Info("rpc: getrawtransaction ", txid)
-
-	res := btc.ResGetRawTransaction{}
-	req := btc.CmdGetRawTransaction{Method: "getrawtransaction"}
-	req.Params.Txid = txid
-	req.Params.Verbose = true
-	err := z.Call(&req, &res)
-
-	if err != nil {
-		return nil, errors.Annotatef(err, "txid %v", txid)
-	}
-	if res.Error != nil {
-		return nil, errors.Annotatef(res.Error, "txid %v", txid)
-	}
-	tx, err := z.Parser.ParseTxFromJson(res.Result)
-	if err != nil {
-		return nil, errors.Annotatef(err, "txid %v", txid)
-	}
-	return tx, nil
-}
-
 // EstimateSmartFee returns fee estimation.
 func (z *ZCashRPC) EstimateSmartFee(blocks int, conservative bool) (float64, error) {
 	glog.V(1).Info("rpc: estimatesmartfee")
