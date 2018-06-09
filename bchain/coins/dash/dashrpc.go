@@ -23,6 +23,7 @@ func NewDashRPC(config json.RawMessage, pushHandler func(bchain.NotificationType
 	s := &DashRPC{
 		b.(*btc.BitcoinRPC),
 	}
+	s.RPCMarshaler = btc.JSONMarshalerV1{}
 
 	return s, nil
 }

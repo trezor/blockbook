@@ -20,18 +20,19 @@ import (
 
 // BitcoinRPC is an interface to JSON-RPC bitcoind service.
 type BitcoinRPC struct {
-	client      http.Client
-	rpcURL      string
-	user        string
-	password    string
-	Parser      bchain.BlockChainParser
-	Testnet     bool
-	Network     string
-	Mempool     *bchain.UTXOMempool
-	ParseBlocks bool
-	pushHandler func(bchain.NotificationType)
-	mq          *bchain.MQ
-	ChainConfig *Configuration
+	client       http.Client
+	rpcURL       string
+	user         string
+	password     string
+	Parser       bchain.BlockChainParser
+	Testnet      bool
+	Network      string
+	Mempool      *bchain.UTXOMempool
+	ParseBlocks  bool
+	pushHandler  func(bchain.NotificationType)
+	mq           *bchain.MQ
+	ChainConfig  *Configuration
+	RPCMarshaler RPCMarshaler
 }
 
 type Configuration struct {
@@ -76,13 +77,14 @@ func NewBitcoinRPC(config json.RawMessage, pushHandler func(bchain.NotificationT
 	}
 
 	s := &BitcoinRPC{
-		client:      http.Client{Timeout: time.Duration(c.RPCTimeout) * time.Second, Transport: transport},
-		rpcURL:      c.RPCURL,
-		user:        c.RPCUser,
-		password:    c.RPCPass,
-		ParseBlocks: c.Parse,
-		ChainConfig: &c,
-		pushHandler: pushHandler,
+		client:       http.Client{Timeout: time.Duration(c.RPCTimeout) * time.Second, Transport: transport},
+		rpcURL:       c.RPCURL,
+		user:         c.RPCUser,
+		password:     c.RPCPass,
+		ParseBlocks:  c.Parse,
+		ChainConfig:  &c,
+		pushHandler:  pushHandler,
+		RPCMarshaler: JSONMarshalerV2{},
 	}
 
 	return s, nil
@@ -165,47 +167,47 @@ func (b *BitcoinRPC) GetSubversion() string {
 
 // getblockhash
 
-type cmdGetBlockHash struct {
+type CmdGetBlockHash struct {
 	Method string `json:"method"`
 	Params struct {
 		Height uint32 `json:"height"`
 	} `json:"params"`
 }
 
-type resGetBlockHash struct {
+type ResGetBlockHash struct {
 	Error  *bchain.RPCError `json:"error"`
 	Result string           `json:"result"`
 }
 
 // getbestblockhash
 
-type cmdGetBestBlockHash struct {
+type CmdGetBestBlockHash struct {
 	Method string `json:"method"`
 }
 
-type resGetBestBlockHash struct {
+type ResGetBestBlockHash struct {
 	Error  *bchain.RPCError `json:"error"`
 	Result string           `json:"result"`
 }
 
 // getblockcount
 
-type cmdGetBlockCount struct {
+type CmdGetBlockCount struct {
 	Method string `json:"method"`
 }
 
-type resGetBlockCount struct {
+type ResGetBlockCount struct {
 	Error  *bchain.RPCError `json:"error"`
 	Result uint32           `json:"result"`
 }
 
 // getblockchaininfo
 
-type cmdGetBlockChainInfo struct {
+type CmdGetBlockChainInfo struct {
 	Method string `json:"method"`
 }
 
-type resGetBlockChainInfo struct {
+type ResGetBlockChainInfo struct {
 	Error  *bchain.RPCError `json:"error"`
 	Result struct {
 		Chain         string `json:"chain"`
@@ -217,18 +219,18 @@ type resGetBlockChainInfo struct {
 
 // getrawmempool
 
-type cmdGetMempool struct {
+type CmdGetMempool struct {
 	Method string `json:"method"`
 }
 
-type resGetMempool struct {
+type ResGetMempool struct {
 	Error  *bchain.RPCError `json:"error"`
 	Result []string         `json:"result"`
 }
 
 // getblockheader
 
-type cmdGetBlockHeader struct {
+type CmdGetBlockHeader struct {
 	Method string `json:"method"`
 	Params struct {
 		BlockHash string `json:"blockhash"`
@@ -236,14 +238,14 @@ type cmdGetBlockHeader struct {
 	} `json:"params"`
 }
 
-type resGetBlockHeader struct {
+type ResGetBlockHeader struct {
 	Error  *bchain.RPCError   `json:"error"`
 	Result bchain.BlockHeader `json:"result"`
 }
 
 // getblock
 
-type cmdGetBlock struct {
+type CmdGetBlock struct {
 	Method string `json:"method"`
 	Params struct {
 		BlockHash string `json:"blockhash"`
@@ -251,24 +253,24 @@ type cmdGetBlock struct {
 	} `json:"params"`
 }
 
-type resGetBlockRaw struct {
+type ResGetBlockRaw struct {
 	Error  *bchain.RPCError `json:"error"`
 	Result string           `json:"result"`
 }
 
-type resGetBlockThin struct {
+type ResGetBlockThin struct {
 	Error  *bchain.RPCError `json:"error"`
 	Result bchain.ThinBlock `json:"result"`
 }
 
-type resGetBlockFull struct {
+type ResGetBlockFull struct {
 	Error  *bchain.RPCError `json:"error"`
 	Result bchain.Block     `json:"result"`
 }
 
 // getrawtransaction
 
-type cmdGetRawTransaction struct {
+type CmdGetRawTransaction struct {
 	Method string `json:"method"`
 	Params struct {
 		Txid    string `json:"txid"`
@@ -276,19 +278,19 @@ type cmdGetRawTransaction struct {
 	} `json:"params"`
 }
 
-type resGetRawTransaction struct {
+type ResGetRawTransaction struct {
 	Error  *bchain.RPCError `json:"error"`
 	Result json.RawMessage  `json:"result"`
 }
 
-type resGetRawTransactionNonverbose struct {
+type ResGetRawTransactionNonverbose struct {
 	Error  *bchain.RPCError `json:"error"`
 	Result string           `json:"result"`
 }
 
 // estimatesmartfee
 
-type cmdEstimateSmartFee struct {
+type CmdEstimateSmartFee struct {
 	Method string `json:"method"`
 	Params struct {
 		ConfTarget   int    `json:"conf_target"`
@@ -296,7 +298,7 @@ type cmdEstimateSmartFee struct {
 	} `json:"params"`
 }
 
-type resEstimateSmartFee struct {
+type ResEstimateSmartFee struct {
 	Error  *bchain.RPCError `json:"error"`
 	Result struct {
 		Feerate float64 `json:"feerate"`
@@ -306,38 +308,38 @@ type resEstimateSmartFee struct {
 
 // estimatefee
 
-type cmdEstimateFee struct {
+type CmdEstimateFee struct {
 	Method string `json:"method"`
 	Params struct {
 		Blocks int `json:"nblocks"`
 	} `json:"params"`
 }
 
-type resEstimateFee struct {
+type ResEstimateFee struct {
 	Error  *bchain.RPCError `json:"error"`
 	Result float64          `json:"result"`
 }
 
 // sendrawtransaction
 
-type cmdSendRawTransaction struct {
+type CmdSendRawTransaction struct {
 	Method string   `json:"method"`
 	Params []string `json:"params"`
 }
 
-type resSendRawTransaction struct {
+type ResSendRawTransaction struct {
 	Error  *bchain.RPCError `json:"error"`
 	Result string           `json:"result"`
 }
 
 // getmempoolentry
 
-type cmdGetMempoolEntry struct {
+type CmdGetMempoolEntry struct {
 	Method string   `json:"method"`
 	Params []string `json:"params"`
 }
 
-type resGetMempoolEntry struct {
+type ResGetMempoolEntry struct {
 	Error  *bchain.RPCError     `json:"error"`
 	Result *bchain.MempoolEntry `json:"result"`
 }
@@ -347,8 +349,8 @@ func (b *BitcoinRPC) GetBestBlockHash() (string, error) {
 
 	glog.V(1).Info("rpc: getbestblockhash")
 
-	res := resGetBestBlockHash{}
-	req := cmdGetBestBlockHash{Method: "getbestblockhash"}
+	res := ResGetBestBlockHash{}
+	req := CmdGetBestBlockHash{Method: "getbestblockhash"}
 	err := b.Call(&req, &res)
 
 	if err != nil {
@@ -364,8 +366,8 @@ func (b *BitcoinRPC) GetBestBlockHash() (string, error) {
 func (b *BitcoinRPC) GetBestBlockHeight() (uint32, error) {
 	glog.V(1).Info("rpc: getblockcount")
 
-	res := resGetBlockCount{}
-	req := cmdGetBlockCount{Method: "getblockcount"}
+	res := ResGetBlockCount{}
+	req := CmdGetBlockCount{Method: "getblockcount"}
 	err := b.Call(&req, &res)
 
 	if err != nil {
@@ -381,8 +383,8 @@ func (b *BitcoinRPC) GetBestBlockHeight() (uint32, error) {
 func (b *BitcoinRPC) GetBlockChainInfo() (string, error) {
 	glog.V(1).Info("rpc: getblockchaininfo")
 
-	res := resGetBlockChainInfo{}
-	req := cmdGetBlockChainInfo{Method: "getblockchaininfo"}
+	res := ResGetBlockChainInfo{}
+	req := CmdGetBlockChainInfo{Method: "getblockchaininfo"}
 	err := b.Call(&req, &res)
 
 	if err != nil {
@@ -403,8 +405,8 @@ func isErrBlockNotFound(err *bchain.RPCError) bool {
 func (b *BitcoinRPC) GetBlockHash(height uint32) (string, error) {
 	glog.V(1).Info("rpc: getblockhash ", height)
 
-	res := resGetBlockHash{}
-	req := cmdGetBlockHash{Method: "getblockhash"}
+	res := ResGetBlockHash{}
+	req := CmdGetBlockHash{Method: "getblockhash"}
 	req.Params.Height = height
 	err := b.Call(&req, &res)
 
@@ -424,8 +426,8 @@ func (b *BitcoinRPC) GetBlockHash(height uint32) (string, error) {
 func (b *BitcoinRPC) GetBlockHeader(hash string) (*bchain.BlockHeader, error) {
 	glog.V(1).Info("rpc: getblockheader")
 
-	res := resGetBlockHeader{}
-	req := cmdGetBlockHeader{Method: "getblockheader"}
+	res := ResGetBlockHeader{}
+	req := CmdGetBlockHeader{Method: "getblockheader"}
 	req.Params.BlockHash = hash
 	req.Params.Verbose = true
 	err := b.Call(&req, &res)
@@ -494,8 +496,8 @@ func (b *BitcoinRPC) getBlockWithoutHeader(hash string, height uint32) (*bchain.
 func (b *BitcoinRPC) GetBlockRaw(hash string) ([]byte, error) {
 	glog.V(1).Info("rpc: getblock (verbosity=0) ", hash)
 
-	res := resGetBlockRaw{}
-	req := cmdGetBlock{Method: "getblock"}
+	res := ResGetBlockRaw{}
+	req := CmdGetBlock{Method: "getblock"}
 	req.Params.BlockHash = hash
 	req.Params.Verbosity = 0
 	err := b.Call(&req, &res)
@@ -516,8 +518,8 @@ func (b *BitcoinRPC) GetBlockRaw(hash string) ([]byte, error) {
 func (b *BitcoinRPC) GetBlockFull(hash string) (*bchain.Block, error) {
 	glog.V(1).Info("rpc: getblock (verbosity=2) ", hash)
 
-	res := resGetBlockFull{}
-	req := cmdGetBlock{Method: "getblock"}
+	res := ResGetBlockFull{}
+	req := CmdGetBlock{Method: "getblock"}
 	req.Params.BlockHash = hash
 	req.Params.Verbosity = 2
 	err := b.Call(&req, &res)
@@ -538,8 +540,8 @@ func (b *BitcoinRPC) GetBlockFull(hash string) (*bchain.Block, error) {
 func (b *BitcoinRPC) GetMempool() ([]string, error) {
 	glog.V(1).Info("rpc: getrawmempool")
 
-	res := resGetMempool{}
-	req := cmdGetMempool{Method: "getrawmempool"}
+	res := ResGetMempool{}
+	req := CmdGetMempool{Method: "getrawmempool"}
 	err := b.Call(&req, &res)
 
 	if err != nil {
@@ -556,8 +558,8 @@ func (b *BitcoinRPC) GetMempool() ([]string, error) {
 func (b *BitcoinRPC) GetTransactionForMempool(txid string) (*bchain.Tx, error) {
 	glog.V(1).Info("rpc: getrawtransaction nonverbose ", txid)
 
-	res := resGetRawTransactionNonverbose{}
-	req := cmdGetRawTransaction{Method: "getrawtransaction"}
+	res := ResGetRawTransactionNonverbose{}
+	req := CmdGetRawTransaction{Method: "getrawtransaction"}
 	req.Params.Txid = txid
 	req.Params.Verbose = false
 	err := b.Call(&req, &res)
@@ -582,8 +584,8 @@ func (b *BitcoinRPC) GetTransactionForMempool(txid string) (*bchain.Tx, error) {
 func (b *BitcoinRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 	glog.V(1).Info("rpc: getrawtransaction ", txid)
 
-	res := resGetRawTransaction{}
-	req := cmdGetRawTransaction{Method: "getrawtransaction"}
+	res := ResGetRawTransaction{}
+	req := CmdGetRawTransaction{Method: "getrawtransaction"}
 	req.Params.Txid = txid
 	req.Params.Verbose = true
 	err := b.Call(&req, &res)
@@ -617,8 +619,8 @@ func (b *BitcoinRPC) GetMempoolTransactions(address string) ([]string, error) {
 func (b *BitcoinRPC) EstimateSmartFee(blocks int, conservative bool) (float64, error) {
 	glog.V(1).Info("rpc: estimatesmartfee ", blocks)
 
-	res := resEstimateSmartFee{}
-	req := cmdEstimateSmartFee{Method: "estimatesmartfee"}
+	res := ResEstimateSmartFee{}
+	req := CmdEstimateSmartFee{Method: "estimatesmartfee"}
 	req.Params.ConfTarget = blocks
 	if conservative {
 		req.Params.EstimateMode = "CONSERVATIVE"
@@ -640,8 +642,8 @@ func (b *BitcoinRPC) EstimateSmartFee(blocks int, conservative bool) (float64, e
 func (b *BitcoinRPC) EstimateFee(blocks int) (float64, error) {
 	glog.V(1).Info("rpc: estimatefee ", blocks)
 
-	res := resEstimateFee{}
-	req := cmdEstimateFee{Method: "estimatefee"}
+	res := ResEstimateFee{}
+	req := CmdEstimateFee{Method: "estimatefee"}
 	req.Params.Blocks = blocks
 	err := b.Call(&req, &res)
 
@@ -658,8 +660,8 @@ func (b *BitcoinRPC) EstimateFee(blocks int) (float64, error) {
 func (b *BitcoinRPC) SendRawTransaction(tx string) (string, error) {
 	glog.V(1).Info("rpc: sendrawtransaction")
 
-	res := resSendRawTransaction{}
-	req := cmdSendRawTransaction{Method: "sendrawtransaction"}
+	res := ResSendRawTransaction{}
+	req := CmdSendRawTransaction{Method: "sendrawtransaction"}
 	req.Params = []string{tx}
 	err := b.Call(&req, &res)
 
@@ -676,8 +678,8 @@ func (b *BitcoinRPC) SendRawTransaction(tx string) (string, error) {
 func (b *BitcoinRPC) GetMempoolEntry(txid string) (*bchain.MempoolEntry, error) {
 	glog.V(1).Info("rpc: getmempoolentry")
 
-	res := resGetMempoolEntry{}
-	req := cmdGetMempoolEntry{
+	res := ResGetMempoolEntry{}
+	req := CmdGetMempoolEntry{
 		Method: "getmempoolentry",
 		Params: []string{txid},
 	}
@@ -693,7 +695,7 @@ func (b *BitcoinRPC) GetMempoolEntry(txid string) (*bchain.MempoolEntry, error) 
 }
 
 func (b *BitcoinRPC) Call(req interface{}, res interface{}) error {
-	httpData, err := json.Marshal(req)
+	httpData, err := b.RPCMarshaler.Marshal(req)
 	if err != nil {
 		return err
 	}

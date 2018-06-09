@@ -21,6 +21,7 @@ func NewZCashRPC(config json.RawMessage, pushHandler func(bchain.NotificationTyp
 	z := &ZCashRPC{
 		BitcoinRPC: b.(*btc.BitcoinRPC),
 	}
+	z.RPCMarshaler = btc.JSONMarshalerV1{}
 	return z, nil
 }
 
@@ -49,46 +50,6 @@ func (z *ZCashRPC) Initialize() error {
 	return nil
 }
 
-type untypedArrayParams struct {
-	Method string        `json:"method"`
-	Params []interface{} `json:"params"`
-}
-
-// getblockhash
-
-type resGetBlockHash struct {
-	Error  *bchain.RPCError `json:"error"`
-	Result string           `json:"result"`
-}
-
-// getblock
-
-type resGetBlockThin struct {
-	Error  *bchain.RPCError `json:"error"`
-	Result bchain.ThinBlock `json:"result"`
-}
-
-// getrawtransaction
-
-type resGetRawTransaction struct {
-	Error  *bchain.RPCError `json:"error"`
-	Result json.RawMessage  `json:"result"`
-}
-
-// getblockheader
-
-type resGetBlockHeader struct {
-	Error  *bchain.RPCError   `json:"error"`
-	Result bchain.BlockHeader `json:"result"`
-}
-
-// estimatefee
-
-type resEstimateFee struct {
-	Error  *bchain.RPCError `json:"error"`
-	Result float64          `json:"result"`
-}
-
 // GetBlock returns block with given hash.
 func (z *ZCashRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 	var err error
@@ -101,10 +62,10 @@ func (z *ZCashRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 
 	glog.V(1).Info("rpc: getblock (verbosity=1) ", hash)
 
-	res := resGetBlockThin{}
-	req := untypedArrayParams{Method: "getblock"}
-	req.Params = append(req.Params, hash)
-	req.Params = append(req.Params, true)
+	res := btc.ResGetBlockThin{}
+	req := btc.CmdGetBlock{Method: "getblock"}
+	req.Params.BlockHash = hash
+	req.Params.Verbosity = 1
 	err = z.Call(&req, &res)
 
 	if err != nil {
@@ -157,10 +118,10 @@ func (z *ZCashRPC) GetTransactionForMempool(txid string) (*bchain.Tx, error) {
 func (z *ZCashRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 	glog.V(1).Info("rpc: getrawtransaction ", txid)
 
-	res := resGetRawTransaction{}
-	req := untypedArrayParams{Method: "getrawtransaction"}
-	req.Params = append(req.Params, txid)
-	req.Params = append(req.Params, 1)
+	res := btc.ResGetRawTransaction{}
+	req := btc.CmdGetRawTransaction{Method: "getrawtransaction"}
+	req.Params.Txid = txid
+	req.Params.Verbose = true
 	err := z.Call(&req, &res)
 
 	if err != nil {
@@ -176,76 +137,12 @@ func (z *ZCashRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 	return tx, nil
 }
 
-// GetBlockHash returns hash of block in best-block-chain at given height.
-func (z *ZCashRPC) GetBlockHash(height uint32) (string, error) {
-	glog.V(1).Info("rpc: getblockhash ", height)
-
-	res := resGetBlockHash{}
-	req := untypedArrayParams{Method: "getblockhash"}
-	req.Params = append(req.Params, height)
-	err := z.Call(&req, &res)
-
-	if err != nil {
-		return "", errors.Annotatef(err, "height %v", height)
-	}
-	if res.Error != nil {
-		if isErrBlockNotFound(res.Error) {
-			return "", bchain.ErrBlockNotFound
-		}
-		return "", errors.Annotatef(res.Error, "height %v", height)
-	}
-	return res.Result, nil
-}
-
-// GetBlockHeader returns header of block with given hash.
-func (z *ZCashRPC) GetBlockHeader(hash string) (*bchain.BlockHeader, error) {
-	glog.V(1).Info("rpc: getblockheader")
-
-	res := resGetBlockHeader{}
-	req := untypedArrayParams{Method: "getblockheader"}
-	req.Params = append(req.Params, hash)
-	req.Params = append(req.Params, true)
-	err := z.Call(&req, &res)
-
-	if err != nil {
-		return nil, errors.Annotatef(err, "hash %v", hash)
-	}
-	if res.Error != nil {
-		if isErrBlockNotFound(res.Error) {
-			return nil, bchain.ErrBlockNotFound
-		}
-		return nil, errors.Annotatef(res.Error, "hash %v", hash)
-	}
-	return &res.Result, nil
-}
-
 // EstimateSmartFee returns fee estimation.
 func (z *ZCashRPC) EstimateSmartFee(blocks int, conservative bool) (float64, error) {
 	glog.V(1).Info("rpc: estimatesmartfee")
 
-	return z.estimateFee(blocks)
-}
-
-// EstimateFee returns fee estimation.
-func (z *ZCashRPC) EstimateFee(blocks int) (float64, error) {
-	glog.V(1).Info("rpc: estimatefee ", blocks)
-
-	return z.estimateFee(blocks)
-}
-
-func (z *ZCashRPC) estimateFee(blocks int) (float64, error) {
-	res := resEstimateFee{}
-	req := untypedArrayParams{Method: "estimatefee"}
-	req.Params = append(req.Params, blocks)
-	err := z.Call(&req, &res)
-
-	if err != nil {
-		return 0, err
-	}
-	if res.Error != nil {
-		return 0, res.Error
-	}
-	return res.Result, nil
+	// return z.estimateFee(blocks)
+	return z.EstimateFee(blocks)
 }
 
 // GetMempoolEntry returns mempool data for given transaction
