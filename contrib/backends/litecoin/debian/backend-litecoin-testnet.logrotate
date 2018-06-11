@@ -1,5 +1,5 @@
-/opt/coins/data/litecoin_testnet/backend/testnet3/debug.log
-/opt/coins/data/litecoin_testnet/backend/testnet3/db.log
+/opt/coins/data/litecoin_testnet/backend/testnet4/debug.log
+/opt/coins/data/litecoin_testnet/backend/testnet4/db.log
 {
         rotate 7
         daily
