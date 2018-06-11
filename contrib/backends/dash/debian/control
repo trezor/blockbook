@@ -5,12 +5,12 @@ Maintainer: jakub.matys@satoshilabs.com
 Build-Depends: debhelper, wget, tar, gzip, make, dh-systemd, dh-exec
 Standards-Version: 3.9.5
 
-Package: dash
+Package: backend-dash
 Architecture: amd64
 Depends: ${shlibs:Depends}, ${misc:Depends}, logrotate
 Description: Satoshilabs packaged dash server
 
-Package: dash-testnet
+Package: backend-dash-testnet
 Architecture: amd64
 Depends: ${shlibs:Depends}, ${misc:Depends}, logrotate
 Description: Satoshilabs packaged dash server

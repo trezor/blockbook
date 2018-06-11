@@ -12,45 +12,45 @@ Description: Satoshilabs blockbook server (tools)
 
 Package: blockbook-bitcoin
 Architecture: amd64
-Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, bitcoin
+Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, backend-bitcoin
 Description: Satoshilabs blockbook server (Bitcoin mainnet)
 
 Package: blockbook-bitcoin-testnet
 Architecture: amd64
-Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, bitcoin-testnet
+Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, backend-bitcoin-testnet
 Description: Satoshilabs blockbook server (Bitcoin testnet)
 
 Package: blockbook-zcash
 Architecture: amd64
-Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, zcash
+Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, backend-zcash
 Description: Satoshilabs blockbook server (ZCash mainnet)
 
 Package: blockbook-zcash-testnet
 Architecture: amd64
-Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, zcash-testnet
+Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, backend-zcash-testnet
 Description: Satoshilabs blockbook server (ZCash testnet)
 
 Package: blockbook-bcash
 Architecture: amd64
-Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, bcash
+Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, backend-bcash
 Description: Satoshilabs blockbook server (Bitcoin Cash mainnet)
 
 Package: blockbook-bcash-testnet
 Architecture: amd64
-Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, bcash-testnet
+Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, backend-bcash-testnet
 Description: Satoshilabs blockbook server (Bitcoin Cash testnet)
 
 Package: blockbook-bgold
 Architecture: amd64
-Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, bgold
+Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, backend-bgold
 Description: Satoshilabs blockbook server (Bitcoin Gold mainnet)
 
 Package: blockbook-dash
 Architecture: amd64
-Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, dash
+Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, backend-dash
 Description: Satoshilabs blockbook server (Dash mainnet)
 
 Package: blockbook-dash-testnet
 Architecture: amd64
-Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, dash-testnet
+Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, backend-dash-testnet
 Description: Satoshilabs blockbook server (Dash testnet)

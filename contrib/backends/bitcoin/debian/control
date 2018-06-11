@@ -5,12 +5,12 @@ Maintainer: jakub.matys@satoshilabs.com
 Build-Depends: debhelper, wget, tar, gzip, make, dh-systemd, dh-exec
 Standards-Version: 3.9.5
 
-Package: bitcoin
+Package: backend-bitcoin
 Architecture: amd64
 Depends: ${shlibs:Depends}, ${misc:Depends}, logrotate
 Description: Satoshilabs packaged bitcoin server
 
-Package: bitcoin-testnet
+Package: backend-bitcoin-testnet
 Architecture: amd64
 Depends: ${shlibs:Depends}, ${misc:Depends}, logrotate
 Description: Satoshilabs packaged bitcoin server

@@ -5,12 +5,12 @@ Maintainer: jakub.matys@satoshilabs.com
 Build-Depends: debhelper, wget, tar, gzip, make, dh-systemd, dh-exec
 Standards-Version: 3.9.5
 
-Package: bcash
+Package: backend-bcash
 Architecture: amd64
 Depends: ${shlibs:Depends}, ${misc:Depends}, logrotate
 Description: Satoshilabs packaged bitcoin-cash server
 
-Package: bcash-testnet
+Package: backend-bcash-testnet
 Architecture: amd64
 Depends: ${shlibs:Depends}, ${misc:Depends}, logrotate
 Description: Satoshilabs packaged bitcoin-cash server

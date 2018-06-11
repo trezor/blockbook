@@ -5,12 +5,12 @@ Maintainer: martin.bohm@satoshilabs.com
 Build-Depends: debhelper, wget, tar, gzip, make, dh-systemd, dh-exec
 Standards-Version: 3.9.5
 
-Package: ethereum
+Package: backend-ethereum
 Architecture: amd64
 Depends: ${shlibs:Depends}, ${misc:Depends}, logrotate
 Description: Satoshilabs packaged ethereum geth server
 
-Package: ethereum-testnet-ropsten
+Package: backend-ethereum-testnet-ropsten
 Architecture: amd64
 Depends: ${shlibs:Depends}, ${misc:Depends}, logrotate
 Description: Satoshilabs packaged ethereum geth server
