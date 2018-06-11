@@ -54,3 +54,13 @@ Package: blockbook-dash-testnet
 Architecture: amd64
 Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, backend-dash-testnet
 Description: Satoshilabs blockbook server (Dash testnet)
+
+Package: blockbook-litecoin
+Architecture: amd64
+Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, backend-litecoin
+Description: Satoshilabs blockbook server (Litecoin mainnet)
+
+Package: blockbook-litecoin-testnet
+Architecture: amd64
+Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, backend-litecoin-testnet
+Description: Satoshilabs blockbook server (Litecoin testnet)
