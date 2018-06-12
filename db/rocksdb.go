@@ -934,6 +934,7 @@ func (d *RocksDB) LoadInternalState(rpcCoin string) (*common.InternalState, erro
 				nc[i].Rows = sc[j].Rows
 				nc[i].KeyBytes = sc[j].KeyBytes
 				nc[i].ValueBytes = sc[j].ValueBytes
+				nc[i].Updated = sc[j].Updated
 				break
 			}
 		}
@@ -950,7 +951,7 @@ func (d *RocksDB) SetInternalState(is *common.InternalState) {
 // StoreInternalState stores the internal state to db
 func (d *RocksDB) StoreInternalState(is *common.InternalState) error {
 	for c := 0; c < len(cfNames); c++ {
-		rows, keyBytes, valueBytes := d.is.GetDBColumnStats(c)
+		rows, keyBytes, valueBytes := d.is.GetDBColumnStatValues(c)
 		d.metrics.DbColumnRows.With(common.Labels{"column": cfNames[c]}).Set(float64(rows))
 		d.metrics.DbColumnSize.With(common.Labels{"column": cfNames[c]}).Set(float64(keyBytes + valueBytes))
 	}

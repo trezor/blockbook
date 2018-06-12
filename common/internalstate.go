@@ -15,11 +15,12 @@ const (
 
 // InternalStateColumn contains the data of a db column
 type InternalStateColumn struct {
-	Name       string `json:"name"`
-	Version    uint32 `json:"version"`
-	Rows       int64  `json:"rows"`
-	KeyBytes   int64  `json:"keysSum"`
-	ValueBytes int64  `json:"valuesSum"`
+	Name       string    `json:"name"`
+	Version    uint32    `json:"version"`
+	Rows       int64     `json:"rows"`
+	KeyBytes   int64     `json:"keyBytes"`
+	ValueBytes int64     `json:"valueBytes"`
+	Updated    time.Time `json:"updated"`
 }
 
 // InternalState contains the data of the internal state
@@ -91,29 +92,36 @@ func (is *InternalState) FinishedMempoolSync(mempoolSize int) {
 }
 
 // GetMempoolSyncState gets the state of mempool synchronization
-func (is *InternalState) GetMempoolSyncState() (bool, time.Time) {
+func (is *InternalState) GetMempoolSyncState() (bool, time.Time, int) {
 	is.mux.Lock()
 	defer is.mux.Unlock()
-	return is.IsMempoolSynchronized, is.LastMempoolSync
+	return is.IsMempoolSynchronized, is.LastMempoolSync, is.MempoolSize
 }
 
+// AddDBColumnStats adds differences in column statistics to column stats
 func (is *InternalState) AddDBColumnStats(c int, rowsDiff int64, keyBytesDiff int64, valueBytesDiff int64) {
 	is.mux.Lock()
 	defer is.mux.Unlock()
-	is.DbColumns[c].Rows += rowsDiff
-	is.DbColumns[c].KeyBytes += keyBytesDiff
-	is.DbColumns[c].ValueBytes += valueBytesDiff
+	dc := &is.DbColumns[c]
+	dc.Rows += rowsDiff
+	dc.KeyBytes += keyBytesDiff
+	dc.ValueBytes += valueBytesDiff
+	dc.Updated = time.Now()
 }
 
+// SetDBColumnStats sets new values of column stats
 func (is *InternalState) SetDBColumnStats(c int, rows int64, keyBytes int64, valueBytes int64) {
 	is.mux.Lock()
 	defer is.mux.Unlock()
-	is.DbColumns[c].Rows = rows
-	is.DbColumns[c].KeyBytes = keyBytes
-	is.DbColumns[c].ValueBytes = valueBytes
+	dc := &is.DbColumns[c]
+	dc.Rows = rows
+	dc.KeyBytes = keyBytes
+	dc.ValueBytes = valueBytes
+	dc.Updated = time.Now()
 }
 
-func (is *InternalState) GetDBColumnStats(c int) (int64, int64, int64) {
+// GetDBColumnStatValues gets stat values for given column
+func (is *InternalState) GetDBColumnStatValues(c int) (int64, int64, int64) {
 	is.mux.Lock()
 	defer is.mux.Unlock()
 	if c < len(is.DbColumns) {
@@ -122,6 +130,16 @@ func (is *InternalState) GetDBColumnStats(c int) (int64, int64, int64) {
 	return 0, 0, 0
 }
 
+// GetAllDBColumnStats returns stats for all columns
+func (is *InternalState) GetAllDBColumnStats() []InternalStateColumn {
+	is.mux.Lock()
+	defer is.mux.Unlock()
+	rv := make([]InternalStateColumn, len(is.DbColumns))
+	copy(rv, is.DbColumns)
+	return rv
+}
+
+// DBSizeTotal sums the computed sizes of all columns
 func (is *InternalState) DBSizeTotal() int64 {
 	is.mux.Lock()
 	defer is.mux.Unlock()
@@ -132,6 +150,7 @@ func (is *InternalState) DBSizeTotal() int64 {
 	return total
 }
 
+// Pack marshals internal state to json
 func (is *InternalState) Pack() ([]byte, error) {
 	is.mux.Lock()
 	defer is.mux.Unlock()
@@ -139,6 +158,7 @@ func (is *InternalState) Pack() ([]byte, error) {
 	return json.Marshal(is)
 }
 
+// UnpackInternalState unmarshals internal state from json
 func UnpackInternalState(buf []byte) (*InternalState, error) {
 	var is InternalState
 	if err := json.Unmarshal(buf, &is); err != nil {

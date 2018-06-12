@@ -2,6 +2,7 @@ package server
 
 import (
 	"blockbook/bchain"
+	"blockbook/common"
 	"blockbook/db"
 	"context"
 	"encoding/json"
@@ -9,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/golang/glog"
 
@@ -24,10 +26,26 @@ type HTTPServer struct {
 	txCache     *db.TxCache
 	chain       bchain.BlockChain
 	chainParser bchain.BlockChainParser
+	is          *common.InternalState
+}
+
+type resAboutBlockbookInternal struct {
+	Coin            string                       `json:"coin"`
+	Host            string                       `json:"host"`
+	Version         string                       `json:"version"`
+	GitCommit       string                       `json:"gitcommit"`
+	BuildTime       string                       `json:"buildtime"`
+	InSync          bool                         `json:"inSync"`
+	BestHeight      uint32                       `json:"bestHeight"`
+	LastBlockTime   time.Time                    `json:"lastBlockTime"`
+	InSyncMempool   bool                         `json:"inSyncMempool"`
+	LastMempoolTime time.Time                    `json:"lastMempoolTime"`
+	MempoolSize     int                          `json:"mempoolSize"`
+	DbColumns       []common.InternalStateColumn `json:"dbColumns"`
 }
 
 // NewHTTPServer creates new REST interface to blockbook and returns its handle
-func NewHTTPServer(httpServerBinding string, certFiles string, db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxCache) (*HTTPServer, error) {
+func NewHTTPServer(httpServerBinding string, certFiles string, db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxCache, is *common.InternalState) (*HTTPServer, error) {
 	r := mux.NewRouter()
 	https := &http.Server{
 		Addr:    httpServerBinding,
@@ -40,9 +58,10 @@ func NewHTTPServer(httpServerBinding string, certFiles string, db *db.RocksDB, c
 		txCache:     txCache,
 		chain:       chain,
 		chainParser: chain.GetChainParser(),
+		is:          is,
 	}
 
-	r.HandleFunc("/", s.info)
+	r.HandleFunc("/", s.index)
 	r.HandleFunc("/bestBlockHash", s.bestBlockHash)
 	r.HandleFunc("/blockHash/{height}", s.blockHash)
 	r.HandleFunc("/transactions/{address}/{lower}/{higher}", s.transactions)
@@ -89,23 +108,29 @@ func respondHashData(w http.ResponseWriter, hash string) {
 	})
 }
 
-func (s *HTTPServer) info(w http.ResponseWriter, r *http.Request) {
-	type info struct {
-		Version         string `json:"version"`
-		BestBlockHeight uint32 `json:"bestBlockHeight"`
-		BestBlockHash   string `json:"bestBlockHash"`
+func (s *HTTPServer) index(w http.ResponseWriter, r *http.Request) {
+	vi := common.GetVersionInfo()
+	ss, bh, st := s.is.GetSyncState()
+	ms, mt, msz := s.is.GetMempoolSyncState()
+	a := resAboutBlockbookInternal{
+		Coin:            s.is.Coin,
+		Host:            s.is.Host,
+		Version:         vi.Version,
+		GitCommit:       vi.GitCommit,
+		BuildTime:       vi.BuildTime,
+		InSync:          ss,
+		BestHeight:      bh,
+		LastBlockTime:   st,
+		InSyncMempool:   ms,
+		LastMempoolTime: mt,
+		MempoolSize:     msz,
+		DbColumns:       s.is.GetAllDBColumnStats(),
 	}
-
-	height, hash, err := s.db.GetBestBlock()
+	buf, err := json.MarshalIndent(a, "", "    ")
 	if err != nil {
-		glog.Errorf("https info: %v", err)
+		glog.Error(err)
 	}
-
-	json.NewEncoder(w).Encode(info{
-		Version:         "0.0.1",
-		BestBlockHeight: height,
-		BestBlockHash:   hash,
-	})
+	w.Write(buf)
 }
 
 func (s *HTTPServer) bestBlockHash(w http.ResponseWriter, r *http.Request) {

@@ -234,7 +234,7 @@ func main() {
 
 	var httpServer *server.HTTPServer
 	if *httpServerBinding != "" {
-		httpServer, err = server.NewHTTPServer(*httpServerBinding, *certFiles, index, chain, txCache)
+		httpServer, err = server.NewHTTPServer(*httpServerBinding, *certFiles, index, chain, txCache, internalState)
 		if err != nil {
 			glog.Error("https: ", err)
 			return
@@ -424,7 +424,7 @@ func storeInternalStateLoop() {
 	lastCompute := time.Now()
 	// randomize the duration between ComputeInternalStateColumnStats to avoid peaks after reboot of machine with multiple blockbooks
 	computePeriod := 9*time.Hour + time.Duration(rand.Float64()*float64((2*time.Hour).Nanoseconds()))
-	glog.Info("storeInternalStateLoop starting with internal state compute period ", computePeriod)
+	glog.Info("storeInternalStateLoop starting with db stats recompute period ", computePeriod)
 	tickAndDebounce(storeInternalStatePeriodMs*time.Millisecond, (storeInternalStatePeriodMs-1)*time.Millisecond, chanStoreInternalState, func() {
 		if !computeRunning && lastCompute.Add(computePeriod).Before(time.Now()) {
 			computeRunning = true
