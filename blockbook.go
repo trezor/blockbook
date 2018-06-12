@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"log"
+	"math/rand"
 	"os"
 	"os/signal"
 	"strings"
@@ -122,6 +123,8 @@ func main() {
 	flag.Parse()
 
 	defer glog.Flush()
+
+	rand.Seed(time.Now().UTC().UnixNano())
 
 	chanOsSignal = make(chan os.Signal, 1)
 	signal.Notify(chanOsSignal, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
@@ -417,11 +420,13 @@ func storeInternalStateLoop() {
 		close(stopCompute)
 		close(chanStoreInternalStateDone)
 	}()
-	glog.Info("storeInternalStateLoop starting")
-	lastCompute := time.Now()
 	var computeRunning bool
+	lastCompute := time.Now()
+	// randomize the duration between ComputeInternalStateColumnStats to avoid peeks after reboot of machine with multiple blockbooks
+	computePeriod := 9*time.Hour + time.Duration(rand.Float64()*float64((2*time.Hour).Nanoseconds()))
+	glog.Info("storeInternalStateLoop starting with internal state compute period ", computePeriod)
 	tickAndDebounce(storeInternalStatePeriodMs*time.Millisecond, (storeInternalStatePeriodMs-1)*time.Millisecond, chanStoreInternalState, func() {
-		if !computeRunning && lastCompute.Add(10*time.Hour).Before(time.Now()) {
+		if !computeRunning && lastCompute.Add(computePeriod).Before(time.Now()) {
 			computeRunning = true
 			go func() {
 				err := index.ComputeInternalStateColumnStats(stopCompute)
