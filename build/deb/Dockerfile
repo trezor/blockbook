@@ -11,5 +11,3 @@ ADD build-deb.sh /build/build-deb.sh
 ADD logrotate.sh /build/logrotate.sh
 
 WORKDIR /build
-
-CMD /build/build-deb.sh
