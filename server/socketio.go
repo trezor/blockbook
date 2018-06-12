@@ -159,7 +159,7 @@ type resAboutBlockbookPublic struct {
 func (s *SocketIoServer) index(w http.ResponseWriter, r *http.Request) {
 	vi := common.GetVersionInfo()
 	ss, bh, st := s.is.GetSyncState()
-	ms, mt := s.is.GetMempoolSyncState()
+	ms, mt, _ := s.is.GetMempoolSyncState()
 	a := resAboutBlockbookPublic{
 		Coin:            s.is.Coin,
 		Host:            s.is.Host,
@@ -285,11 +285,18 @@ type resultError struct {
 	} `json:"error"`
 }
 
-func (s *SocketIoServer) onMessage(c *gosocketio.Channel, req map[string]json.RawMessage) interface{} {
+func (s *SocketIoServer) onMessage(c *gosocketio.Channel, req map[string]json.RawMessage) (rv interface{}) {
 	var err error
-	var rv interface{}
-	t := time.Now()
 	method := strings.Trim(string(req["method"]), "\"")
+	defer func() {
+		if r := recover(); r != nil {
+			glog.Error(c.Id(), " onMessage ", method, " recovered from panic: ", r)
+			e := resultError{}
+			e.Error.Message = "Internal error"
+			rv = e
+		}
+	}()
+	t := time.Now()
 	params := req["params"]
 	defer s.metrics.SocketIOReqDuration.With(common.Labels{"method": method}).Observe(float64(time.Since(t)) / 1e3) // in microseconds
 	f, ok := onMessageHandlers[method]
@@ -792,8 +799,14 @@ func (s *SocketIoServer) getMempoolEntry(txid string) (res resultGetMempoolEntry
 // "bitcoind/hashblock"
 // "bitcoind/addresstxid",["2MzTmvPJLZaLzD9XdN3jMtQA5NexC3rAPww","2NAZRJKr63tSdcTxTN3WaE9ZNDyXy6PgGuv"]
 func (s *SocketIoServer) onSubscribe(c *gosocketio.Channel, req []byte) interface{} {
+	defer func() {
+		if r := recover(); r != nil {
+			glog.Error(c.Id(), " onSubscribe recovered from panic: ", r)
+		}
+	}()
+
 	onError := func(id, sc, err, detail string) {
-		glog.Error(id, " onSubscribe ", err, ": ", err)
+		glog.Error(id, " onSubscribe ", err, ": ", detail)
 		s.metrics.SocketIOSubscribes.With(common.Labels{"channel": sc, "status": err}).Inc()
 	}
 
