@@ -72,14 +72,19 @@ To run blockbook with fast synchronization, connection to ZeroMQ and providing h
 Blockbook logs only to stderr, logging to files is disabled. Verbosity of logs can be tuned by command line parameters *-v* and *-vmodule*, details at https://godoc.org/github.com/golang/glog
 
 
-# Supported coins
+# Implemented coins
 
 - [Bitcoin](bchain/coins/btc/btc.md)
 - [Bitcoin Testnet](bchain/coins/btc/btctestnet.md)
 - Bcash
 - Bcash Testnet
+- Bgold
 - [ZCash](bchain/coins/zec/zec.md)
 - ZCash Testnet
+- Dash
+- Dash Testnet
+- Litecoin
+- Litecoin Testnet
 - [Ethereum](bchain/coins/eth/eth.md)
 - [Ethereum Testnet Ropsten](bchain/coins/eth/ethropsten.md)
 
