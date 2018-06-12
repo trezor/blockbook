@@ -1,0 +1,16 @@
+Source: litecoin
+Section: satoshilabs
+Priority: optional
+Maintainer: martin.bohm@satoshilabs.com
+Build-Depends: debhelper, wget, tar, gzip, make, dh-systemd, dh-exec
+Standards-Version: 3.9.5
+
+Package: backend-litecoin
+Architecture: amd64
+Depends: ${shlibs:Depends}, ${misc:Depends}, logrotate
+Description: Satoshilabs packaged litecoin server
+
+Package: backend-litecoin-testnet
+Architecture: amd64
+Depends: ${shlibs:Depends}, ${misc:Depends}, logrotate
+Description: Satoshilabs packaged litecoin server
