@@ -16,20 +16,19 @@ const (
 var (
 	MainNetParams chaincfg.Params
 	TestNetParams chaincfg.Params
-	RegtestParams chaincfg.Params
 )
 
 func init() {
 	MainNetParams = chaincfg.MainNetParams
 	MainNetParams.Net = MainnetMagic
 	MainNetParams.PubKeyHashAddrID = 48
-	MainNetParams.ScriptHashAddrID = 5
+	MainNetParams.ScriptHashAddrID = 50
 	MainNetParams.Bech32HRPSegwit = "ltc"
 
 	TestNetParams = chaincfg.TestNet3Params
 	TestNetParams.Net = TestnetMagic
 	TestNetParams.PubKeyHashAddrID = 111
-	TestNetParams.ScriptHashAddrID = 196
+	TestNetParams.ScriptHashAddrID = 58
 	TestNetParams.Bech32HRPSegwit = "tltc"
 
 	err := chaincfg.Register(&MainNetParams)
@@ -52,14 +51,11 @@ func NewLitecoinParser(params *chaincfg.Params, c *btc.Configuration) *LitecoinP
 }
 
 // GetChainParams contains network parameters for the main Litecoin network,
-// the regression test Litecoin network, the test Litecoin network and
-// the simulation test Litecoin network, in this order
+// and the test Litecoin network
 func GetChainParams(chain string) *chaincfg.Params {
 	switch chain {
 	case "test":
 		return &TestNetParams
-	case "regtest":
-		return &RegtestParams
 	default:
 		return &MainNetParams
 	}
