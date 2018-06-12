@@ -65,11 +65,11 @@ go build
 ```
 
 ## Example command
-To run blockbook with fast synchronization, connection to ZeroMQ and providing https and socket.io interface, with database in local directory *data* and connected to local bitcoind at http://localhost:8332 with user rpc/rpc:
+To run blockbook with fast synchronization, connection to ZeroMQ and providing https and socket.io interface, with database in local directory *data* and connected to local bitcoind with configuration specified by parameter  *-blockchaincfg*:
 ```
-./blockbook -sync -parse -httpserver=127.0.0.1:8333 -socketio=127.0.01:8334 -certfile=server/testcert -zeromq=tcp://127.0.0.1:28332
+./blockbook -sync -blockchaincfg=configs/bitcoin_testnet.json -httpserver=127.0.0.1:8333 -socketio=127.0.01:8334 -certfile=server/testcert -logtostderr 
 ```
-Blockbook logs only to stderr, logging to files is disabled. Verbosity of logs can be tuned by command line parameters *-v* and *-vmodule*, details at https://godoc.org/github.com/golang/glog
+Blockbook logs to stderr *-logtostderr* or to directory specified by parameter *-log_dir* . Verbosity of logs can be tuned by command line parameters *-v* and *-vmodule*, details at https://godoc.org/github.com/golang/glog
 
 
 # Implemented coins
@@ -152,13 +152,13 @@ The data are separated to different column families:
 | Dash Testnet             | 19033               | 19133                    | 18033              | 48333    |
 | Litecoin Testnet         | 19034               | 19134                    | 18034              | 48334    |
 | Ethereum Testnet Ropsten | 19036               | 19136                    | 18036              | 48336*   |
+
 \* geth listens on this port, however not as zmq service
 
 ## Todo
 
 - add db data version (column data version) checking to db to avoid data corruption
 - improve txcache (time of storage, number/size of cached txs, purge cache)
-- collect blockbook stats (number of items in indexes, etc)
 - update documentation
 - create/integrate blockchain explorer
 - support all coins from https://github.com/trezor/trezor-common/tree/master/defs/coins
@@ -168,6 +168,7 @@ The data are separated to different column families:
 - tests
 - fix program dependencies to concrete versions
 - protect socket.io interface against illicit usage
+- ~~collect blockbook db stats (number of items in indexes, etc)~~
 - ~~optimize mempool (use non verbose get transaction, possibly parallelize)~~
 - ~~update used paths and users according to specification by system admin~~
 - ~~cleanup of the socket.io - do not send unnecessary data~~
