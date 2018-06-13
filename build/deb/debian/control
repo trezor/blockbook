@@ -70,7 +70,7 @@ Architecture: amd64
 Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, backend-ethereum
 Description: Satoshilabs blockbook server (Litecoin mainnet)
 
-Package: blockbook-ethereum-testnet
+Package: blockbook-ethereum-testnet-ropsten
 Architecture: amd64
 Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, backend-ethereum-testnet-ropsten
 Description: Satoshilabs blockbook server (Litecoin testnet)
