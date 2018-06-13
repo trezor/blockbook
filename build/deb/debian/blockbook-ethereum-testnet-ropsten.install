@@ -1,0 +1,6 @@
+#!/usr/bin/dh-exec
+blockbook /opt/coins/blockbook/ethereum_testnet_ropsten/bin
+cert /opt/coins/blockbook/ethereum_testnet_ropsten
+static /opt/coins/blockbook/ethereum_testnet_ropsten
+configs/ethereum_testnet_ropsten.json => /opt/coins/blockbook/ethereum_testnet_ropsten/config/blockchaincfg.json
+logrotate.sh /opt/coins/blockbook/ethereum_testnet_ropsten/bin

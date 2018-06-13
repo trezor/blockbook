@@ -1,0 +1,2 @@
+/opt/coins/blockbook/ethereum_testnet_ropsten/cert/testcert.crt /opt/coins/blockbook/ethereum_testnet_ropsten/cert/blockbook.crt
+/opt/coins/blockbook/ethereum_testnet_ropsten/cert/testcert.key /opt/coins/blockbook/ethereum_testnet_ropsten/cert/blockbook.key
