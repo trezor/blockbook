@@ -12,7 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-var rpcURL = flag.String("rpc", "ws://blockbook-dev:18546", "URL of geth server")
+var rpcURL = flag.String("rpc", "ws://localhost:18036", "URL of geth server")
 var ethClient *ethclient.Client
 var ethRPCClient *rpc.Client
 
