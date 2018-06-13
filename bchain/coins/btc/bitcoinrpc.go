@@ -694,6 +694,25 @@ func (b *BitcoinRPC) GetMempoolEntry(txid string) (*bchain.MempoolEntry, error) 
 	return res.Result, nil
 }
 
+func safeDecodeResponse(body io.ReadCloser, res interface{}) (err error) {
+	var data []byte
+	defer func() {
+		if r := recover(); r != nil {
+			glog.Error("unmarshal json recovered from panic: ", r, "; data: ", string(data))
+			if len(data) > 0 && len(data) < 2048 {
+				err = errors.Errorf("Error: ", string(data))
+			} else {
+				err = errors.New("Internal error")
+			}
+		}
+	}()
+	data, err = ioutil.ReadAll(body)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(data, &res)
+}
+
 func (b *BitcoinRPC) Call(req interface{}, res interface{}) error {
 	httpData, err := b.RPCMarshaler.Marshal(req)
 	if err != nil {
@@ -713,19 +732,16 @@ func (b *BitcoinRPC) Call(req interface{}, res interface{}) error {
 	if err != nil {
 		return err
 	}
-	// read the entire response body until the end to avoid memory leak when reusing http connection
-	// see http://devs.cloudimmunity.com/gotchas-and-common-mistakes-in-go-golang/
-	defer io.Copy(ioutil.Discard, httpRes.Body)
 	// if server returns HTTP error code it might not return json with response
 	// handle both cases
 	if httpRes.StatusCode != 200 {
-		err = json.NewDecoder(httpRes.Body).Decode(&res)
+		err = safeDecodeResponse(httpRes.Body, &res)
 		if err != nil {
-			return errors.New(httpRes.Status)
+			return errors.Errorf("%v %v", httpRes.Status, err)
 		}
 		return nil
 	}
-	return json.NewDecoder(httpRes.Body).Decode(&res)
+	return safeDecodeResponse(httpRes.Body, &res)
 }
 
 // GetChainParser returns BlockChainParser
