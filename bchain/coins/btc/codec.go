@@ -56,9 +56,20 @@ func (JSONMarshalerV1) Marshal(v interface{}) ([]byte, error) {
 
 			f = v.FieldByName("Params")
 			if f.IsValid() {
-				arr := make([]interface{}, f.NumField())
-				for i := 0; i < f.NumField(); i++ {
-					arr[i] = f.Field(i).Interface()
+				var arr []interface{}
+				switch f.Kind() {
+				case reflect.Slice:
+					arr = make([]interface{}, f.Len())
+					for i := 0; i < f.Len(); i++ {
+						arr[i] = f.Index(i).Interface()
+					}
+				case reflect.Struct:
+					arr = make([]interface{}, f.NumField())
+					for i := 0; i < f.NumField(); i++ {
+						arr[i] = f.Field(i).Interface()
+					}
+				default:
+					return nil, InvalidValue
 				}
 				u.Params = arr
 			}
