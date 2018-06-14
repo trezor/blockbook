@@ -7,7 +7,7 @@
 [Unit]
 Description=Blockbook daemon (Bitcoin testnet)
 After=network.target
-Wants=bitcoin-testnet.service
+Wants=backend-bitcoin-testnet.service
 
 [Service]
 ExecStart=/opt/coins/blockbook/bitcoin_testnet/bin/blockbook -blockchaincfg=/opt/coins/blockbook/bitcoin_testnet/config/blockchaincfg.json -datadir=/opt/coins/data/bitcoin_testnet/blockbook/db -sync -httpserver=:19030 -socketio=:19130 -certfile=/opt/coins/blockbook/bitcoin_testnet/cert/blockbook -explorer=https://btc-testnet-explorer.trezor.io/ -log_dir=/opt/coins/blockbook/bitcoin_testnet/logs

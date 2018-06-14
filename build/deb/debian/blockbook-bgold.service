@@ -7,7 +7,7 @@
 [Unit]
 Description=Blockbook daemon (Bitcoin Gold mainnet)
 After=network.target
-Wants=bgold.service
+Wants=backend-bgold.service
 
 [Service]
 ExecStart=/opt/coins/blockbook/bgold/bin/blockbook -blockchaincfg=/opt/coins/blockbook/bgold/config/blockchaincfg.json -datadir=/opt/coins/data/bgold/blockbook/db -sync -httpserver=:9035 -socketio=:9135 -certfile=/opt/coins/blockbook/bgold/cert/blockbook -explorer=https://btg-explorer.trezor.io/ -log_dir=/opt/coins/blockbook/bgold/logs

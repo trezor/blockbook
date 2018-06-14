@@ -7,7 +7,7 @@
 [Unit]
 Description=Blockbook daemon (Bcash mainnet)
 After=network.target
-Wants=bcash.service
+Wants=backend-bcash.service
 
 [Service]
 ExecStart=/opt/coins/blockbook/bcash/bin/blockbook -blockchaincfg=/opt/coins/blockbook/bcash/config/blockchaincfg.json -datadir=/opt/coins/data/bcash/blockbook/db -sync -httpserver=:9031 -socketio=:9131 -certfile=/opt/coins/blockbook/bcash/cert/blockbook -explorer=https://bitcoincash.blockexplorer.com/ -log_dir=/opt/coins/blockbook/bcash/logs

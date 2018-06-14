@@ -7,7 +7,7 @@
 [Unit]
 Description=Blockbook daemon (Bcash testnet)
 After=network.target
-Wants=bcash-testnet.service
+Wants=backend-bcash-testnet.service
 
 [Service]
 ExecStart=/opt/coins/blockbook/bcash_testnet/bin/blockbook -blockchaincfg=/opt/coins/blockbook/bcash_testnet/config/blockchaincfg.json -datadir=/opt/coins/data/bcash_testnet/blockbook/db -sync -httpserver=:19031 -socketio=:19131 -certfile=/opt/coins/blockbook/bcash_testnet/cert/blockbook -explorer=https://bitcoincash.blockexplorer.com/ -log_dir=/opt/coins/blockbook/bcash_testnet/logs

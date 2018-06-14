@@ -7,7 +7,7 @@
 [Unit]
 Description=Blockbook daemon (Zcash mainnet)
 After=network.target
-Wants=zcash.service
+Wants=backend-zcash.service
 
 [Service]
 ExecStart=/opt/coins/blockbook/zcash/bin/blockbook -blockchaincfg=/opt/coins/blockbook/zcash/config/blockchaincfg.json -datadir=/opt/coins/data/zcash/blockbook/db -sync -httpserver=:9032 -socketio=:9132 -certfile=/opt/coins/blockbook/zcash/cert/blockbook -explorer=https://zcash.blockexplorer.com/ -log_dir=/opt/coins/blockbook/zcash/logs

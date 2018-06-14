@@ -7,7 +7,7 @@
 [Unit]
 Description=Blockbook daemon (Dash testnet)
 After=network.target
-Wants=dash-testnet.service
+Wants=backend-dash-testnet.service
 
 [Service]
 ExecStart=/opt/coins/blockbook/dash_testnet/bin/blockbook -blockchaincfg=/opt/coins/blockbook/dash_testnet/config/blockchaincfg.json -datadir=/opt/coins/data/dash_testnet/blockbook/db -sync -httpserver=:19033 -socketio=:19133 -certfile=/opt/coins/blockbook/dash_testnet/cert/blockbook -explorer=https://dash-explorer.trezor.io/ -log_dir=/opt/coins/blockbook/dash_testnet/logs

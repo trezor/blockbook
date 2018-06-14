@@ -7,7 +7,7 @@
 [Unit]
 Description=Blockbook daemon (Bitcoin mainnet)
 After=network.target
-Wants=bitcoin.service
+Wants=backend-bitcoin.service
 
 [Service]
 ExecStart=/opt/coins/blockbook/bitcoin/bin/blockbook -blockchaincfg=/opt/coins/blockbook/bitcoin/config/blockchaincfg.json -datadir=/opt/coins/data/bitcoin/blockbook/db -sync -httpserver=:9030 -socketio=:9130 -certfile=/opt/coins/blockbook/bitcoin/cert/blockbook -explorer=https://btc-explorer.trezor.io/ -log_dir=/opt/coins/blockbook/bitcoin/logs
