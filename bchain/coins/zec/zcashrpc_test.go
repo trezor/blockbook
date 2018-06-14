@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-var rpcURL = flag.String("rpcURL", "http://blockbook-dev.corp:18032", "RPC URL of backend server")
+var rpcURL = flag.String("rpcURL", "http://localhost:18032", "RPC URL of backend server")
 var rpcUser = flag.String("rpcUser", "rpc", "RPC user of backend server")
 var rpcPass = flag.String("rpcPass", "rpc", "RPC password of backend server")
 var rpcClient *ZCashRPC
