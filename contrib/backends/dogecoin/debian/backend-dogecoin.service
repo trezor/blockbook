@@ -41,7 +41,7 @@ NoNewPrivileges=true
 PrivateDevices=true
 
 # Deny the creation of writable and executable memory mappings.
-MemoryDenyWriteExecute=true
+# MemoryDenyWriteExecute=true
 
 [Install]
 WantedBy=multi-user.target
