@@ -1,3 +1,5 @@
+// +build integration
+
 package zec
 
 import (
@@ -167,11 +169,7 @@ func init() {
 	}
 }
 
-func TestRPC_GetBlockHash(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping test in short mode.")
-	}
-
+func TestZCashRPC_GetBlockHash(t *testing.T) {
 	cli, err := getRPCClient()
 	if err != nil {
 		t.Fatal(err)
@@ -188,11 +186,7 @@ func TestRPC_GetBlockHash(t *testing.T) {
 	}
 }
 
-func TestRPC_GetBlockRaw(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping test in short mode.")
-	}
-
+func TestZCashRPC_GetBlockRaw(t *testing.T) {
 	cli, err := getRPCClient()
 	if err != nil {
 		t.Fatal(err)
@@ -211,11 +205,7 @@ func TestRPC_GetBlockRaw(t *testing.T) {
 	}
 }
 
-func TestRPC_GetBlock(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping test in short mode.")
-	}
-
+func TestZCashRPC_GetBlock(t *testing.T) {
 	cli, err := getRPCClient()
 	if err != nil {
 		t.Fatal(err)
@@ -239,11 +229,7 @@ func TestRPC_GetBlock(t *testing.T) {
 
 }
 
-func TestRPC_GetTransaction(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping test in short mode.")
-	}
-
+func TestZCashRPC_GetTransaction(t *testing.T) {
 	cli, err := getRPCClient()
 	if err != nil {
 		t.Fatal(err)

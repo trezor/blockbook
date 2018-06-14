@@ -23,10 +23,10 @@ tools:
 	chown $(PACKAGER) /out/{ldb,sst_dump}
 
 test: prepare-sources
-	cd $(GOPATH)/src/blockbook && go test -short ./... $(ARGS)
+	cd $(GOPATH)/src/blockbook && go test -tags unittest ./... $(ARGS)
 
 test-all: prepare-sources
-	cd $(GOPATH)/src/blockbook && go test ./... $(ARGS)
+	cd $(GOPATH)/src/blockbook && go test -tags 'unittest integration' ./... $(ARGS)
 
 prepare-sources:
 	@ [ -n "`ls /src 2> /dev/null`" ] || (echo "/src doesn't exist or is empty" 1>&2 && exit 1)

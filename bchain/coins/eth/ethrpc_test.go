@@ -1,3 +1,5 @@
+// +build integration
+
 package eth
 
 import (
@@ -36,9 +38,6 @@ func setupEthRPC() *EthereumRPC {
 }
 
 func TestEthRPC_getBestHeader(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping test in short mode.")
-	}
 	type fields struct {
 		b *EthereumRPC
 	}
@@ -68,9 +67,6 @@ func TestEthRPC_getBestHeader(t *testing.T) {
 }
 
 func TestEthRPC_GetBestBlockHash(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping test in short mode.")
-	}
 	type fields struct {
 		b *EthereumRPC
 	}
@@ -104,9 +100,6 @@ func TestEthRPC_GetBestBlockHash(t *testing.T) {
 }
 
 func TestEthRPC_GetBestBlockHeight(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping test in short mode.")
-	}
 	type fields struct {
 		b *EthereumRPC
 	}
@@ -139,9 +132,6 @@ func TestEthRPC_GetBestBlockHeight(t *testing.T) {
 }
 
 func TestEthRPC_GetBlockHash(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping test in short mode.")
-	}
 	type fields struct {
 		b *EthereumRPC
 	}
@@ -202,9 +192,6 @@ func TestEthRPC_GetBlockHash(t *testing.T) {
 }
 
 func TestEthRPC_GetBlockHeader(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping test in short mode.")
-	}
 	bh, err := setupEthRPC().getBestHeader()
 	if err != nil {
 		panic(err)
@@ -262,9 +249,6 @@ func TestEthRPC_GetBlockHeader(t *testing.T) {
 }
 
 func TestEthRPC_GetBlock(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping test in short mode.")
-	}
 	bh, err := setupEthRPC().getBestHeader()
 	if err != nil {
 		panic(err)
@@ -372,9 +356,6 @@ func TestEthRPC_GetTransaction(t *testing.T) {
 		panic(err)
 	}
 
-	if testing.Short() {
-		t.Skip("skipping test in short mode.")
-	}
 	bh, err := setupEthRPC().getBestHeader()
 	if err != nil {
 		panic(err)
@@ -466,9 +447,6 @@ func TestEthRPC_GetTransaction(t *testing.T) {
 }
 
 func TestEthRPC_EstimateFee(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping test in short mode.")
-	}
 	type fields struct {
 		b *EthereumRPC
 	}
@@ -508,9 +486,6 @@ func TestEthRPC_EstimateFee(t *testing.T) {
 }
 
 func TestEthRPC_GetMempool(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping test in short mode.")
-	}
 	type fields struct {
 		b *EthereumRPC
 	}
