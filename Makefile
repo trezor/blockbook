@@ -14,10 +14,10 @@ build-debug: .bin-image
 	docker run -t --rm -e PACKAGER=$(PACKAGER) -e UPDATE_VENDOR=$(UPDATE_VENDOR) -v $(CURDIR):/src -v $(CURDIR)/build:/out $(BIN_IMAGE) make build-debug ARGS="$(ARGS)"
 
 test: .bin-image
-	docker run -t --rm -e PACKAGER=$(PACKAGER) -e UPDATE_VENDOR=$(UPDATE_VENDOR) -v $(CURDIR):/src $(BIN_IMAGE) make test ARGS="$(ARGS)"
+	docker run -t --rm -e PACKAGER=$(PACKAGER) -e UPDATE_VENDOR=$(UPDATE_VENDOR) -v $(CURDIR):/src --network="host" $(BIN_IMAGE) make test ARGS="$(ARGS)"
 
 test-all: .bin-image
-	docker run -t --rm -e PACKAGER=$(PACKAGER) -e UPDATE_VENDOR=$(UPDATE_VENDOR) -v $(CURDIR):/src $(BIN_IMAGE) make test-all ARGS="$(ARGS)"
+	docker run -t --rm -e PACKAGER=$(PACKAGER) -e UPDATE_VENDOR=$(UPDATE_VENDOR) -v $(CURDIR):/src --network="host" $(BIN_IMAGE) make test-all ARGS="$(ARGS)"
 
 deb: .deb-image clean-deb
 	docker run -t --rm -e PACKAGER=$(PACKAGER) -e UPDATE_VENDOR=$(UPDATE_VENDOR) -v $(CURDIR):/src -v $(CURDIR)/build:/out $(DEB_IMAGE) /build/build-deb.sh $(ARGS)
