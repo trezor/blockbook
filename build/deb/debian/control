@@ -74,3 +74,8 @@ Package: blockbook-ethereum-testnet-ropsten
 Architecture: amd64
 Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, backend-ethereum-testnet-ropsten
 Description: Satoshilabs blockbook server (Litecoin testnet)
+
+Package: blockbook-dogecoin
+Architecture: amd64
+Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, backend-dogecoin
+Description: Satoshilabs blockbook server (Dogecoin mainnet)
