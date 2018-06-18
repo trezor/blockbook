@@ -53,3 +53,8 @@ func (b *DashRPC) Initialize() error {
 
 	return nil
 }
+
+// EstimateSmartFee returns fee estimation.
+func (b *DashRPC) EstimateSmartFee(blocks int, conservative bool) (float64, error) {
+	return b.EstimateFee(blocks)
+}

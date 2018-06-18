@@ -54,3 +54,8 @@ func (b *LitecoinRPC) Initialize() error {
 
 	return nil
 }
+
+// EstimateFee returns fee estimation.
+func (b *LitecoinRPC) EstimateFee(blocks int) (float64, error) {
+	return b.EstimateSmartFee(blocks, true)
+}
