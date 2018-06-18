@@ -1,3 +1,5 @@
+// +build unittest
+
 package server
 
 import (

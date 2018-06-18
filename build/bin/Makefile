@@ -4,16 +4,17 @@ VERSION ?= devel
 GITCOMMIT = $(shell cd /src && git describe --tags --always --dirty)
 BUILDTIME = $(shell date --iso-8601=seconds)
 LDFLAGS := -X blockbook/common.version=$(VERSION) -X blockbook/common.gitcommit=$(GITCOMMIT) -X blockbook/common.buildtime=$(BUILDTIME)
+ARGS ?=
 
 all: build tools
 
 build: prepare-sources
-	cd $(GOPATH)/src/blockbook && go build -o $(CURDIR)/blockbook -ldflags="-s -w $(LDFLAGS)"
+	cd $(GOPATH)/src/blockbook && go build -o $(CURDIR)/blockbook -ldflags="-s -w $(LDFLAGS)" $(ARGS)
 	cp $(CURDIR)/blockbook /out/blockbook
 	chown $(PACKAGER) /out/blockbook
 
 build-debug: prepare-sources
-	cd $(GOPATH)/src/blockbook && go build -o $(CURDIR)/blockbook -ldflags="$(LDFLAGS)"
+	cd $(GOPATH)/src/blockbook && go build -o $(CURDIR)/blockbook -ldflags="$(LDFLAGS)" $(ARGS)
 	cp $(CURDIR)/blockbook /out/blockbook
 	chown $(PACKAGER) /out/blockbook
 
@@ -22,10 +23,10 @@ tools:
 	chown $(PACKAGER) /out/{ldb,sst_dump}
 
 test: prepare-sources
-	cd $(GOPATH)/src/blockbook && go test -short ./...
+	cd $(GOPATH)/src/blockbook && go test -tags unittest ./... $(ARGS)
 
 test-all: prepare-sources
-	cd $(GOPATH)/src/blockbook && go test ./...
+	cd $(GOPATH)/src/blockbook && go test -tags 'unittest integration' ./... $(ARGS)
 
 prepare-sources:
 	@ [ -n "`ls /src 2> /dev/null`" ] || (echo "/src doesn't exist or is empty" 1>&2 && exit 1)

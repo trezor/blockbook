@@ -1,0 +1,27 @@
+{
+    "Bcash Testnet": {
+        "url": "http://localhost:18031",
+        "user": "rpc",
+        "pass": "rpc"
+    },
+    "Bitcoin Testnet": {
+        "url": "http://localhost:18030",
+        "user": "rpc",
+        "pass": "rpc"
+    },
+    "Dash Testnet": {
+        "url": "http://localhost:18033",
+        "user": "rpc",
+        "pass": "rpc"
+    },
+    "Ethereum Testnet": {
+        "url": "ws://localhost:18036",
+        "user": null,
+        "pass": null
+    },
+    "Zcash Testnet": {
+        "url": "http://localhost:18032",
+        "user": "rpc",
+        "pass": "rpc"
+    }
+}

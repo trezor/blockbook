@@ -8,6 +8,6 @@ mkdir cert && cp /src/server/testcert.* cert
 
 export VERSION=$(dpkg-parsechangelog | sed -rne 's/^Version: ([0-9.]+)([-+~].+)?$/\1/p')
 
-dpkg-buildpackage -us -uc
+dpkg-buildpackage -us -uc $@
 mv ../*.deb /out
 chown $PACKAGER /out/*.deb
