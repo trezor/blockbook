@@ -8,15 +8,22 @@ import (
 	"github.com/juju/errors"
 )
 
+type AddressFactoryFunc func(string) (Address, error)
+
 // BaseParser implements data parsing/handling functionality base for all other parsers
 type BaseParser struct {
-	AddressFactory       func(string) (Address, error)
+	AddressFactory       AddressFactoryFunc
 	BlockAddressesToKeep int
 }
 
 // AddressToOutputScript converts address to ScriptPubKey - currently not implemented
 func (p *BaseParser) AddressToOutputScript(address string) ([]byte, error) {
 	return nil, errors.New("AddressToOutputScript: not implemented")
+}
+
+// OutputScriptToAddresses converts ScriptPubKey to addresses - currently not implemented
+func (p *BaseParser) OutputScriptToAddresses(script []byte) ([]string, error) {
+	return nil, errors.New("OutputScriptToAddresses: not implemented")
 }
 
 // ParseBlock parses raw block to our Block struct - currently not implemented

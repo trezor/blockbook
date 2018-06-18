@@ -1,0 +1,27 @@
+{
+    "bch": {
+        "url": "http://localhost:18031",
+        "user": "rpc",
+        "pass": "rpc"
+    },
+    "btc": {
+        "url": "http://localhost:18030",
+        "user": "rpc",
+        "pass": "rpc"
+    },
+    "dash": {
+        "url": "http://localhost:18033",
+        "user": "rpc",
+        "pass": "rpc"
+    },
+    "eth": {
+        "url": "ws://localhost:18036",
+        "user": null,
+        "pass": null
+    },
+    "zec": {
+        "url": "http://localhost:18032",
+        "user": "rpc",
+        "pass": "rpc"
+    }
+}

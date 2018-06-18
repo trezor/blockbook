@@ -158,6 +158,7 @@ type BlockChainParser interface {
 	GetAddrIDFromAddress(address string) ([]byte, error)
 	// address to output script conversions
 	AddressToOutputScript(address string) ([]byte, error)
+	OutputScriptToAddresses(script []byte) ([]string, error)
 	// transactions
 	PackedTxidLen() int
 	PackTxid(txid string) ([]byte, error)
