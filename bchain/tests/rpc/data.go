@@ -38,6 +38,7 @@ func readDataFile(dir, relDir, filename string) ([]byte, error) {
 	if !ok {
 		return nil, errors.New("Path not found")
 	}
+	filename = strings.Replace(filename, " ", "_", -1)
 	path = filepath.Join(path, filename)
 	return ioutil.ReadFile(path)
 }

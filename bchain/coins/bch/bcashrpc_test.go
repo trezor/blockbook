@@ -25,7 +25,7 @@ func getRPCClient(cfg json.RawMessage) (bchain.BlockChain, error) {
 var rpcTest *rpc.Test
 
 func init() {
-	t, err := rpc.NewTest("bch", getRPCClient)
+	t, err := rpc.NewTest("Bcash Testnet", getRPCClient)
 	if err != nil {
 		panic(err)
 	}
