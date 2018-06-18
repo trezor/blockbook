@@ -128,16 +128,27 @@ func (s *SocketIoServer) Shutdown(ctx context.Context) error {
 	return s.https.Shutdown(ctx)
 }
 
+func joinURL(base string, part string) string {
+	if len(base) > 0 {
+		if len(base) > 0 && base[len(base)-1] == '/' && len(part) > 0 && part[0] == '/' {
+			return base + part[1:]
+		} else {
+			return base + part
+		}
+	}
+	return part
+}
+
 func (s *SocketIoServer) txRedirect(w http.ResponseWriter, r *http.Request) {
 	if s.explorerURL != "" {
-		http.Redirect(w, r, s.explorerURL+r.URL.Path, 302)
+		http.Redirect(w, r, joinURL(s.explorerURL, r.URL.Path), 302)
 		s.metrics.ExplorerViews.With(common.Labels{"action": "tx"}).Inc()
 	}
 }
 
 func (s *SocketIoServer) addressRedirect(w http.ResponseWriter, r *http.Request) {
 	if s.explorerURL != "" {
-		http.Redirect(w, r, s.explorerURL+r.URL.Path, 302)
+		http.Redirect(w, r, joinURL(s.explorerURL, r.URL.Path), 302)
 		s.metrics.ExplorerViews.With(common.Labels{"action": "address"}).Inc()
 	}
 }
