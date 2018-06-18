@@ -1,0 +1,2 @@
+#!/bin/sh
+/opt/coins/blockbook/dogecoin/bin/logrotate.sh

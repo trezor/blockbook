@@ -1,0 +1,6 @@
+#!/usr/bin/dh-exec
+blockbook /opt/coins/blockbook/dogecoin/bin
+cert /opt/coins/blockbook/dogecoin
+static /opt/coins/blockbook/dogecoin
+configs/dogecoin.json => /opt/coins/blockbook/dogecoin/config/blockchaincfg.json
+logrotate.sh /opt/coins/blockbook/dogecoin/bin

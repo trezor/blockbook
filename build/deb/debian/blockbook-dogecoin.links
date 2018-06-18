@@ -1,0 +1,2 @@
+/opt/coins/blockbook/dogecoin/cert/testcert.crt /opt/coins/blockbook/dogecoin/cert/blockbook.crt
+/opt/coins/blockbook/dogecoin/cert/testcert.key /opt/coins/blockbook/dogecoin/cert/blockbook.key

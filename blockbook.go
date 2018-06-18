@@ -26,14 +26,8 @@ import (
 	_ "net/http/pprof"
 )
 
-// resync index at least each resyncIndexPeriodMs (could be more often if invoked by message from ZeroMQ)
-const resyncIndexPeriodMs = 935093
-
 // debounce too close requests for resync
 const debounceResyncIndexMs = 1009
-
-// resync mempool at least each resyncMempoolPeriodMs (could be more often if invoked by message from ZeroMQ)
-const resyncMempoolPeriodMs = 60017
 
 // debounce too close requests for resync mempool (ZeroMQ sends message for each tx, when new block there are many transactions)
 const debounceResyncMempoolMs = 1009
@@ -71,6 +65,12 @@ var (
 	noTxCache = flag.Bool("notxcache", false, "disable tx cache")
 
 	computeColumnStats = flag.Bool("computedbstats", false, "compute column stats and exit")
+
+	// resync index at least each resyncIndexPeriodMs (could be more often if invoked by message from ZeroMQ)
+	resyncIndexPeriodMs = flag.Int("resyncindexperiod", 935093, "resync index period in milliseconds")
+
+	// resync mempool at least each resyncMempoolPeriodMs (could be more often if invoked by message from ZeroMQ)
+	resyncMempoolPeriodMs = flag.Int("resyncmempoolperiod", 60017, "resync mempool period in milliseconds")
 )
 
 var (
@@ -384,7 +384,7 @@ func syncIndexLoop() {
 	defer close(chanSyncIndexDone)
 	glog.Info("syncIndexLoop starting")
 	// resync index about every 15 minutes if there are no chanSyncIndex requests, with debounce 1 second
-	tickAndDebounce(resyncIndexPeriodMs*time.Millisecond, debounceResyncIndexMs*time.Millisecond, chanSyncIndex, func() {
+	tickAndDebounce(time.Duration(*resyncIndexPeriodMs)*time.Millisecond, debounceResyncIndexMs*time.Millisecond, chanSyncIndex, func() {
 		if err := syncWorker.ResyncIndex(onNewBlockHash); err != nil {
 			glog.Error("syncIndexLoop ", errors.ErrorStack(err))
 		}
@@ -402,7 +402,7 @@ func syncMempoolLoop() {
 	defer close(chanSyncMempoolDone)
 	glog.Info("syncMempoolLoop starting")
 	// resync mempool about every minute if there are no chanSyncMempool requests, with debounce 1 second
-	tickAndDebounce(resyncMempoolPeriodMs*time.Millisecond, debounceResyncMempoolMs*time.Millisecond, chanSyncMempool, func() {
+	tickAndDebounce(time.Duration(*resyncMempoolPeriodMs)*time.Millisecond, debounceResyncMempoolMs*time.Millisecond, chanSyncMempool, func() {
 		internalState.StartedMempoolSync()
 		if count, err := chain.ResyncMempool(onNewTxAddr); err != nil {
 			glog.Error("syncMempoolLoop ", errors.ErrorStack(err))
