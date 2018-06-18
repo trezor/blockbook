@@ -69,3 +69,8 @@ func (b *DogecoinRPC) GetBlock(hash string, height uint32) (*bchain.Block, error
 	}
 	return b.GetBlockWithoutHeader(hash, height)
 }
+
+// EstimateSmartFee returns fee estimation.
+func (b *DogecoinRPC) EstimateSmartFee(blocks int, conservative bool) (float64, error) {
+	return b.EstimateFee(blocks)
+}
