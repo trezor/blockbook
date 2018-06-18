@@ -10,7 +10,7 @@ After=network.target
 Wants=backend-litecoin.service
 
 [Service]
-ExecStart=/opt/coins/blockbook/litecoin/bin/blockbook -blockchaincfg=/opt/coins/blockbook/litecoin/config/blockchaincfg.json -datadir=/opt/coins/data/litecoin/blockbook/db -sync -httpserver=:9034 -socketio=:9134 -certfile=/opt/coins/blockbook/litecoin/cert/blockbook -explorer=https://ltc-explorer.trezor.io/ -log_dir=/opt/coins/blockbook/litecoin/logs
+ExecStart=/opt/coins/blockbook/litecoin/bin/blockbook -blockchaincfg=/opt/coins/blockbook/litecoin/config/blockchaincfg.json -datadir=/opt/coins/data/litecoin/blockbook/db -sync -httpserver=:9034 -socketio=:9134 -certfile=/opt/coins/blockbook/litecoin/cert/blockbook -explorer=https://ltc-bitcore1.trezor.io/ -log_dir=/opt/coins/blockbook/litecoin/logs
 User=blockbook-litecoin
 Type=simple
 Restart=on-failure
