@@ -1,3 +1,9 @@
+bitcoin (0.16.1-satoshilabs1) unstable; urgency=medium
+
+  * Update bitcoin core daemon version 0.16.1
+
+ -- Petr Kracik <petr.kracik@satoshilabs.com>  Mon, 18 Jun 2018 11:00:13 +0200
+
 bitcoin (0.16.0-satoshilabs6) unstable; urgency=medium
 
   * Rename packages and directories
