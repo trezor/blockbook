@@ -23,7 +23,6 @@ func init() {
 	MainNetParams.Net = MainnetMagic
 	MainNetParams.PubKeyHashAddrID = 52
 	MainNetParams.ScriptHashAddrID = 13
-	MainNetParams.Bech32HRPSegwit = "nc"
 
 	err := chaincfg.Register(&MainNetParams)
 	if err != nil {
