@@ -113,9 +113,11 @@ func (p *BitcoinParser) TxFromMsgTx(t *wire.MsgTx, parseAddresses bool) bchain.T
 	}
 	vout := make([]bchain.Vout, len(t.TxOut))
 	for i, out := range t.TxOut {
-		addrs := []string{}
+		var addrs []string
 		if parseAddresses {
-			addrs, _ = p.OutputScriptToAddresses(out.PkScript)
+			if tmp, _ := p.OutputScriptToAddresses(out.PkScript); len(tmp) > 0 {
+				addrs = tmp
+			}
 		}
 		s := bchain.ScriptPubKey{
 			Hex:       hex.EncodeToString(out.PkScript),
