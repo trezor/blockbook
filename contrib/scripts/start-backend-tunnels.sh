@@ -25,4 +25,10 @@ at_exit() {
 }
 
 trap at_exit EXIT
-sleep inf
+
+wait -n
+code=$?
+
+if [ $code != 0 ]; then
+    exit $code
+fi
