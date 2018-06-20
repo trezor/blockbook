@@ -15,7 +15,7 @@ testnet_ports=$(gawk 'match($0, /"rpcURL":\s+"(http|ws):\/\/[^:]+:([0-9]+)"/, a)
 
 for port in $testnet_ports
 do
-    ssh -nNT -L $port:localhost:$port blockbook-dev.corp &
+    ssh -nNT -L $port:localhost:$port $host &
     pid=$!
     echo "Started tunnel to ${host}:${port} (pid: ${pid})"
 done
