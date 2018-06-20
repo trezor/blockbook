@@ -1,0 +1,6 @@
+#!/usr/bin/dh-exec
+blockbook /opt/coins/blockbook/namecoin/bin
+cert /opt/coins/blockbook/namecoin
+static /opt/coins/blockbook/namecoin
+configs/namecoin.json => /opt/coins/blockbook/namecoin/config/blockchaincfg.json
+logrotate.sh /opt/coins/blockbook/namecoin/bin

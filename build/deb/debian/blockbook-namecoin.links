@@ -1,0 +1,2 @@
+/opt/coins/blockbook/namecoin/cert/testcert.crt /opt/coins/blockbook/namecoin/cert/blockbook.crt
+/opt/coins/blockbook/namecoin/cert/testcert.key /opt/coins/blockbook/namecoin/cert/blockbook.key
