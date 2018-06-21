@@ -10,7 +10,7 @@ After=network.target
 Wants=backend-vertcoin.service
 
 [Service]
-ExecStart=/opt/coins/blockbook/vertcoin/bin/blockbook -blockchaincfg=/opt/coins/blockbook/vertcoin/config/blockchaincfg.json -datadir=/opt/coins/data/vertcoin/blockbook/db -sync -httpserver=:9034 -socketio=:9134 -certfile=/opt/coins/blockbook/vertcoin/cert/blockbook -explorer=https://insight.vertcoin.org/ -log_dir=/opt/coins/blockbook/vertcoin/logs
+ExecStart=/opt/coins/blockbook/vertcoin/bin/blockbook -blockchaincfg=/opt/coins/blockbook/vertcoin/config/blockchaincfg.json -datadir=/opt/coins/data/vertcoin/blockbook/db -sync -httpserver=:9040 -socketio=:9140 -certfile=/opt/coins/blockbook/vertcoin/cert/blockbook -explorer=https://insight.vertcoin.org/ -log_dir=/opt/coins/blockbook/vertcoin/logs
 User=blockbook-vertcoin
 Type=simple
 Restart=on-failure
