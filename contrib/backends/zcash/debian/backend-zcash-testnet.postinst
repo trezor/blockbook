@@ -14,7 +14,7 @@ case "$1" in
         chown -R zcash:zcash /opt/coins/data/zcash_testnet/backend
     fi
 
-    HOME=/opt/coins/data/zcash_testnet/backend /opt/coins/nodes/zcash_testnet/bin/zcash-fetch-params
+    HOME=/opt/coins/data/zcash_testnet/backend /opt/coins/nodes/zcash_testnet/bin/zcash-fetch-params --testnet
   ;;
 
 esac
