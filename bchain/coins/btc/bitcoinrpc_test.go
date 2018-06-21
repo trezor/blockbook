@@ -56,3 +56,15 @@ func TestBitcoinRPC_TestMempoolSync(t *testing.T) {
 func TestBitcoinRPC_GetMempoolEntry(t *testing.T) {
 	rpcTest.TestGetMempoolEntry(t)
 }
+
+func TestBitcoinRPC_SendRawTransaction(t *testing.T) {
+	rpcTest.TestSendRawTransaction(t)
+}
+
+func TestBitcoinRPC_EstimateSmartFee(t *testing.T) {
+	rpcTest.TestEstimateSmartFee(t)
+}
+
+func TestBitcoinRPC_EstimateFee(t *testing.T) {
+	rpcTest.TestEstimateFee(t)
+}

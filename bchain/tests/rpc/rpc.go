@@ -284,3 +284,39 @@ func (rt *Test) TestGetMempoolEntry(t *testing.T) {
 	}
 	t.Skip("Skipping test, all attempts to get mempool entry failed due to network state changes")
 }
+
+func (rt *Test) TestSendRawTransaction(t *testing.T) {
+	for txid, tx := range rt.TestData.TxDetails {
+		_, err := rt.Client.SendRawTransaction(tx.Hex)
+		if err != nil {
+			if err, ok := err.(*bchain.RPCError); ok && err.Code == -27 {
+				continue
+			}
+		}
+		t.Errorf("SendRawTransaction() for %s returned unexpected error: %#v", txid, err)
+	}
+}
+
+func (rt *Test) TestEstimateSmartFee(t *testing.T) {
+	for _, blocks := range []int{1, 2, 3, 5, 10} {
+		fee, err := rt.Client.EstimateSmartFee(blocks, true)
+		if err != nil {
+			t.Error(err)
+		}
+		if fee != -1 && (fee < 0 || fee > 1) {
+			t.Errorf("EstimateSmartFee() returned unexpected fee rate: %f", fee)
+		}
+	}
+}
+
+func (rt *Test) TestEstimateFee(t *testing.T) {
+	for _, blocks := range []int{1, 2, 3, 5, 10} {
+		fee, err := rt.Client.EstimateFee(blocks)
+		if err != nil {
+			t.Error(err)
+		}
+		if fee != -1 && (fee < 0 || fee > 1) {
+			t.Errorf("EstimateFee() returned unexpected fee rate: %f", fee)
+		}
+	}
+}
