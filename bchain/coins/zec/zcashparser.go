@@ -3,6 +3,7 @@ package zec
 import (
 	"blockbook/bchain"
 	"blockbook/bchain/coins/btc"
+	"blockbook/bchain/coins/utils"
 
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/wire"
@@ -54,12 +55,12 @@ func (p *ZCashParser) GetAddrIDFromVout(output *bchain.Vout) ([]byte, error) {
 	if len(output.ScriptPubKey.Addresses) != 1 {
 		return nil, nil
 	}
-	hash, _, err := CheckDecode(output.ScriptPubKey.Addresses[0])
+	hash, _, err := utils.CheckDecode(output.ScriptPubKey.Addresses[0])
 	return hash, err
 }
 
 // GetAddrIDFromAddress returns internal address representation of given address
 func (p *ZCashParser) GetAddrIDFromAddress(address string) ([]byte, error) {
-	hash, _, err := CheckDecode(address)
+	hash, _, err := utils.CheckDecode(address)
 	return hash, err
 }
