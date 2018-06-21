@@ -12,7 +12,7 @@ Description=vertcoin daemon (testnet)
 After=network.target
 
 [Service]
-ExecStart=/opt/coins/nodes/vertcoin_testnet/bin/vertcoind -datadir=/opt/coins/data/vertcoin_testnet/backend -conf=/opt/coins/nodes/vertcoin_testnet/vertcoin_testnet.conf -pid=/run/vertcoind/vertcoin_testnet.pid
+ExecStart=/opt/coins/nodes/vertcoin_testnet/vertcoind -datadir=/opt/coins/data/vertcoin_testnet/backend -conf=/opt/coins/nodes/vertcoin_testnet/vertcoin_testnet.conf -pid=/run/vertcoind/vertcoin_testnet.pid
 # Creates /run/vertcoind owned by vertcoin
 RuntimeDirectory=vertcoind
 User=vertcoin
