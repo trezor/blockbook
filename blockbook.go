@@ -54,9 +54,9 @@ var (
 	syncWorkers = flag.Int("workers", 8, "number of workers to process blocks")
 	dryRun      = flag.Bool("dryrun", false, "do not index blocks, only download")
 
-	internalBinding = flag.String("httpserver", "", "http server binding [address]:port, (default no http server)")
+	internalBinding = flag.String("internal", "", "internal http server binding [address]:port, (default no internal server)")
 
-	publicBinding = flag.String("socketio", "", "socketio server binding [address]:port[/path], (default no socket.io server)")
+	publicBinding = flag.String("public", "", "public http server binding [address]:port[/path], (default no public server)")
 
 	certFiles = flag.String("certfile", "", "to enable SSL specify path to certificate files without extension, expecting <certfile>.crt and <certfile>.key, (default no SSL)")
 

@@ -17,7 +17,7 @@ Create script that runs blockbook *run-eth-testnet-blockbook.sh*
 #!/bin/bash
 
 cd go/src/blockbook
-./blockbook -coin=eth-testnet -blockchaincfg=/data/eth-testnet/blockbook/eth-testnet.json -datadir=/data/eth-testnet/blockbook/db -sync -httpserver=:18555 -socketio=:18556 -certfile=server/testcert  $1
+./blockbook -coin=eth-testnet -blockchaincfg=/data/eth-testnet/blockbook/eth-testnet.json -datadir=/data/eth-testnet/blockbook/db -sync -internal=:18555 -public=:18556 -certfile=server/testcert  $1
 ```
 To run blockbook with logging to file (run with nohup or daemonize or using screen)
 ```
