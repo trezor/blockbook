@@ -1,4 +1,4 @@
-ZCASH_VERSION := 1.0.15
+ZCASH_VERSION := 1.1.1
 
 all:
 	wget https://z.cash/downloads/zcash-${ZCASH_VERSION}-linux64.tar.gz
