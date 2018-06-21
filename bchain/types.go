@@ -32,14 +32,14 @@ type Vin struct {
 	Vout      uint32    `json:"vout"`
 	ScriptSig ScriptSig `json:"scriptSig"`
 	Sequence  uint32    `json:"sequence"`
-	Addresses []string  `json:"addresses,omitempty"`
+	Addresses []string  `json:"addresses"`
 }
 
 type ScriptPubKey struct {
 	// Asm       string   `json:"asm"`
 	Hex string `json:"hex,omitempty"`
 	// Type      string   `json:"type"`
-	Addresses []string `json:"addresses,omitempty"`
+	Addresses []string `json:"addresses"`
 }
 
 type Address interface {

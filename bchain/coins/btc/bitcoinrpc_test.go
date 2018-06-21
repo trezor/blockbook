@@ -19,6 +19,7 @@ func getRPCClient(cfg json.RawMessage) (bchain.BlockChain, error) {
 	if err != nil {
 		return nil, err
 	}
+	cli.Mempool = bchain.NewUTXOMempool(cli, cli.ChainConfig.MempoolWorkers, cli.ChainConfig.MempoolSubWorkers)
 	return cli, nil
 }
 
@@ -42,4 +43,28 @@ func TestBitcoinRPC_GetBlock(t *testing.T) {
 
 func TestBitcoinRPC_GetTransaction(t *testing.T) {
 	rpcTest.TestGetTransaction(t)
+}
+
+func TestBitcoinRPC_TestGetTransactionForMempool(t *testing.T) {
+	rpcTest.TestGetTransactionForMempool(t)
+}
+
+func TestBitcoinRPC_TestMempoolSync(t *testing.T) {
+	rpcTest.TestMempoolSync(t)
+}
+
+func TestBitcoinRPC_GetMempoolEntry(t *testing.T) {
+	rpcTest.TestGetMempoolEntry(t)
+}
+
+func TestBitcoinRPC_SendRawTransaction(t *testing.T) {
+	rpcTest.TestSendRawTransaction(t)
+}
+
+func TestBitcoinRPC_EstimateSmartFee(t *testing.T) {
+	rpcTest.TestEstimateSmartFee(t)
+}
+
+func TestBitcoinRPC_EstimateFee(t *testing.T) {
+	rpcTest.TestEstimateFee(t)
 }

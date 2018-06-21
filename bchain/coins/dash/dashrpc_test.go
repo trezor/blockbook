@@ -16,6 +16,7 @@ func getRPCClient(cfg json.RawMessage) (bchain.BlockChain, error) {
 	}
 	cli := c.(*DashRPC)
 	cli.Parser = NewDashParser(GetChainParams("test"), cli.ChainConfig)
+	cli.Mempool = bchain.NewUTXOMempool(cli, cli.ChainConfig.MempoolWorkers, cli.ChainConfig.MempoolSubWorkers)
 	return cli, nil
 }
 
@@ -39,4 +40,24 @@ func TestDashRPC_GetBlock(t *testing.T) {
 
 func TestDashRPC_GetTransaction(t *testing.T) {
 	rpcTest.TestGetTransaction(t)
+}
+
+func TestDashRPC_TestGetTransactionForMempool(t *testing.T) {
+	rpcTest.TestGetTransactionForMempool(t)
+}
+
+func TestDashRPC_TestMempoolSync(t *testing.T) {
+	rpcTest.TestMempoolSync(t)
+}
+
+func TestDashRPC_SendRawTransaction(t *testing.T) {
+	rpcTest.TestSendRawTransaction(t)
+}
+
+func TestDashRPC_EstimateSmartFee(t *testing.T) {
+	rpcTest.TestEstimateSmartFee(t)
+}
+
+func TestDashRPC_EstimateFee(t *testing.T) {
+	rpcTest.TestEstimateFee(t)
 }
