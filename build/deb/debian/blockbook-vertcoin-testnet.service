@@ -1,0 +1,43 @@
+# It is not recommended to modify this file in-place, because it will
+# be overwritten during package upgrades. If you want to add further
+# options or overwrite existing ones then use
+# $ systemctl edit blockbook-vertcoin-testnet.service
+# See "man systemd.service" for details.
+
+[Unit]
+Description=Blockbook daemon (Vertcoin testnet)
+After=network.target
+Wants=backend-vertcoin-testnet.service
+
+[Service]
+ExecStart=/opt/coins/blockbook/vertcoin_testnet/bin/blockbook -blockchaincfg=/opt/coins/blockbook/vertcoin_testnet/config/blockchaincfg.json -datadir=/opt/coins/data/vertcoin_testnet/blockbook/db -sync -httpserver=:19034 -socketio=:19134 -certfile=/opt/coins/blockbook/vertcoin_testnet/cert/blockbook -explorer=http://explorer.vertcointools.com/ -log_dir=/opt/coins/blockbook/vertcoin_testnet/logs
+User=blockbook-vertcoin
+Type=simple
+Restart=on-failure
+WorkingDirectory=/opt/coins/blockbook/vertcoin_testnet
+
+# Resource limits
+LimitNOFILE=500000
+
+# Hardening measures
+####################
+
+# Provide a private /tmp and /var/tmp.
+PrivateTmp=true
+
+# Mount /usr, /boot/ and /etc read-only for the process.
+ProtectSystem=full
+
+# Disallow the process and all of its children to gain
+# new privileges through execve().
+NoNewPrivileges=true
+
+# Use a new /dev namespace only populated with API pseudo devices
+# such as /dev/null, /dev/zero and /dev/random.
+PrivateDevices=true
+
+# Deny the creation of writable and executable memory mappings.
+MemoryDenyWriteExecute=true
+
+[Install]
+WantedBy=multi-user.target

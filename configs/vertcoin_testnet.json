@@ -1,0 +1,12 @@
+{
+  "coin_name": "Vertcoin Testnet",
+  "rpcURL": "http://localhost:18040",
+  "rpcUser": "rpc",
+  "rpcPass": "rpc",
+  "rpcTimeout": 25,
+  "parse": true,
+  "zeroMQBinding": "tcp://localhost:48340",
+  "mempoolWorkers": 8,
+  "mempoolSubWorkers": 2,
+  "blockAddressesToKeep": 300
+}
