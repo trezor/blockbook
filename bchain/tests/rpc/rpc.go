@@ -269,7 +269,7 @@ func (rt *Test) TestGetMempoolEntry(t *testing.T) {
 			}
 		}
 
-		if e.Height != h {
+		if e.Height-h > 1 {
 			t.Errorf("GetMempoolEntry() got height %d, want %d", e.Height, h)
 		}
 		if e.Size <= 0 {
