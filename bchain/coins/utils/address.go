@@ -1,8 +1,9 @@
-package zec
+package utils
 
 import (
 	"crypto/sha256"
 	"errors"
+
 	"github.com/btcsuite/btcutil/base58"
 )
 

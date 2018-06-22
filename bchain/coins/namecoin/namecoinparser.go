@@ -1,4 +1,4 @@
-package dogecoin
+package namecoin
 
 import (
 	"blockbook/bchain"
@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	MainnetMagic wire.BitcoinNet = 0xc0c0c0c0
+	MainnetMagic wire.BitcoinNet = 0xfeb4bef9
 )
 
 var (
@@ -21,8 +21,8 @@ var (
 func init() {
 	MainNetParams = chaincfg.MainNetParams
 	MainNetParams.Net = MainnetMagic
-	MainNetParams.PubKeyHashAddrID = 30
-	MainNetParams.ScriptHashAddrID = 22
+	MainNetParams.PubKeyHashAddrID = 52
+	MainNetParams.ScriptHashAddrID = 13
 
 	err := chaincfg.Register(&MainNetParams)
 	if err != nil {
@@ -30,18 +30,18 @@ func init() {
 	}
 }
 
-// DogecoinParser handle
-type DogecoinParser struct {
+// NamecoinParser handle
+type NamecoinParser struct {
 	*btc.BitcoinParser
 }
 
-// NewDogecoinParser returns new DogecoinParser instance
-func NewDogecoinParser(params *chaincfg.Params, c *btc.Configuration) *DogecoinParser {
-	return &DogecoinParser{BitcoinParser: btc.NewBitcoinParser(params, c)}
+// NewNamecoinParser returns new NamecoinParser instance
+func NewNamecoinParser(params *chaincfg.Params, c *btc.Configuration) *NamecoinParser {
+	return &NamecoinParser{BitcoinParser: btc.NewBitcoinParser(params, c)}
 }
 
-// GetChainParams contains network parameters for the main Dogecoin network,
-// and the test Dogecoin network
+// GetChainParams contains network parameters for the main Namecoin network,
+// and the test Namecoin network
 func GetChainParams(chain string) *chaincfg.Params {
 	switch chain {
 	default:
@@ -51,7 +51,7 @@ func GetChainParams(chain string) *chaincfg.Params {
 
 // ParseBlock parses raw block to our Block struct
 // it has special handling for Auxpow blocks that cannot be parsed by standard btc wire parser
-func (p *DogecoinParser) ParseBlock(b []byte) (*bchain.Block, error) {
+func (p *NamecoinParser) ParseBlock(b []byte) (*bchain.Block, error) {
 	r := bytes.NewReader(b)
 	w := wire.MsgBlock{}
 	h := wire.BlockHeader{}

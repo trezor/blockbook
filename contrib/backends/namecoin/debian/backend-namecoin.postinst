@@ -1,0 +1,20 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+
+  configure)
+    if ! id -u namecoin &> /dev/null
+    then
+        useradd --system -M -U namecoin -s /bin/false
+    fi
+
+    if [ "$(stat -c '%U' /opt/coins/data/namecoin/backend)" != "namecoin" ]
+    then
+        chown -R namecoin:namecoin /opt/coins/data/namecoin/backend
+    fi
+  ;;
+
+esac
+
+#DEBHELPER#
