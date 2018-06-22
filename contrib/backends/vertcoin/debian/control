@@ -1,0 +1,16 @@
+Source: vertcoin
+Section: satoshilabs
+Priority: optional
+Maintainer: petr.kracik@satoshilabs.com
+Build-Depends: debhelper, wget, tar, gzip, make, dh-systemd, dh-exec
+Standards-Version: 3.9.5
+
+Package: backend-vertcoin
+Architecture: amd64
+Depends: ${shlibs:Depends}, ${misc:Depends}, logrotate
+Description: Satoshilabs packaged vertcoin server
+
+Package: backend-vertcoin-testnet
+Architecture: amd64
+Depends: ${shlibs:Depends}, ${misc:Depends}, logrotate
+Description: Satoshilabs packaged vertcoin server
