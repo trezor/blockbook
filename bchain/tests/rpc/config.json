@@ -23,5 +23,10 @@
         "url": "http://localhost:18032",
         "user": "rpc",
         "pass": "rpc"
+    },
+    "Vertcoin": {
+        "url": "http://localhost:8040",
+        "user": "rpc",
+        "pass": "rpc"
     }
 }
