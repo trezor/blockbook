@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"net/http"
 	"strconv"
 	"strings"
@@ -32,6 +33,7 @@ type PublicServer struct {
 	explorerURL string
 	metrics     *common.Metrics
 	is          *common.InternalState
+	txTpl       *template.Template
 }
 
 // NewPublicServerS creates new public server http interface to blockbook and returns its handle
@@ -69,6 +71,8 @@ func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bch
 		is:          is,
 	}
 
+	// favicon
+	serveMux.Handle(path+"favicon.ico", http.FileServer(http.Dir("./static/")))
 	// support for tests of socket.io interface
 	serveMux.Handle(path+"test.html", http.FileServer(http.Dir("./static/")))
 	// redirect to Bitcore for details of transaction
@@ -76,12 +80,16 @@ func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bch
 	serveMux.HandleFunc(path+"address/", s.addressRedirect)
 	// explorer
 	serveMux.HandleFunc(path+"explorer/tx/", s.explorerTx)
-	// API call used to detect state of Blockbook
+	// API calls
 	serveMux.HandleFunc(path+"api/block-index/", s.apiBlockIndex)
+	serveMux.HandleFunc(path+"api/tx/", s.apiTx)
 	// handle socket.io
 	serveMux.Handle(path+"socket.io/", socketio.GetHandler())
 	// default handler
 	serveMux.HandleFunc(path, s.index)
+
+	s.txTpl = template.Must(template.New("tx").ParseFiles("./static/templates/tx.html", "./static/templates/base.html"))
+
 	return s, nil
 }
 
@@ -151,20 +159,22 @@ func (s *PublicServer) addressRedirect(w http.ResponseWriter, r *http.Request) {
 
 func (s *PublicServer) explorerTx(w http.ResponseWriter, r *http.Request) {
 	var tx *api.Tx
-	var err error
 	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
 		txid := r.URL.Path[i+1:]
 		bestheight, _, err := s.db.GetBestBlock()
 		if err == nil {
 			tx, err = s.api.GetTransaction(txid, bestheight, true)
-		}
-	}
-	if err == nil {
-		buf, err := json.MarshalIndent(tx, "", "    ")
-		if err != nil {
+		} else {
 			glog.Error(err)
 		}
-		w.Write(buf)
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	data := struct {
+		CoinName string
+		Tx       *api.Tx
+	}{s.is.Coin, tx}
+	if err := s.txTpl.ExecuteTemplate(w, "base.html", data); err != nil {
+		glog.Error(err)
 	}
 }
 
@@ -199,6 +209,7 @@ func (s *PublicServer) index(w http.ResponseWriter, r *http.Request) {
 		LastMempoolTime: mt,
 		About:           blockbookAbout,
 	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	buf, err := json.MarshalIndent(a, "", "    ")
 	if err != nil {
 		glog.Error(err)
@@ -231,6 +242,25 @@ func (s *PublicServer) apiBlockIndex(w http.ResponseWriter, r *http.Request) {
 			BlockHash: hash,
 			About:     blockbookAbout,
 		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		json.NewEncoder(w).Encode(r)
+	}
+}
+
+func (s *PublicServer) apiTx(w http.ResponseWriter, r *http.Request) {
+	var tx *api.Tx
+	var err error
+	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
+		txid := r.URL.Path[i+1:]
+		bestheight, _, err := s.db.GetBestBlock()
+		if err == nil {
+			tx, err = s.api.GetTransaction(txid, bestheight, true)
+		} else {
+			glog.Error(err)
+		}
+	}
+	if err == nil {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		json.NewEncoder(w).Encode(tx)
 	}
 }
