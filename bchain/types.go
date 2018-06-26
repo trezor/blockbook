@@ -58,9 +58,9 @@ type Vout struct {
 // Tx is blockchain transaction
 // unnecessary fields are commented out to avoid overhead
 type Tx struct {
-	Hex  string `json:"hex"`
-	Txid string `json:"txid"`
-	// Version  int32  `json:"version"`
+	Hex      string `json:"hex"`
+	Txid     string `json:"txid"`
+	Version  int32  `json:"version"`
 	LockTime uint32 `json:"locktime"`
 	Vin      []Vin  `json:"vin"`
 	Vout     []Vout `json:"vout"`

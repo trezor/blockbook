@@ -598,7 +598,7 @@ func (s *SocketIoServer) getDetailedTransaction(txid string) (res resultGetDetai
 				return res, err
 			}
 			if len(otx.Vout) > int(vin.Vout) {
-				vout := otx.Vout[vin.Vout]
+				vout := &otx.Vout[vin.Vout]
 				if vout.Address != nil {
 					a := vout.Address.String()
 					ai.Address = &a

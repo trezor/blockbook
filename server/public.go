@@ -1,6 +1,7 @@
 package server
 
 import (
+	"blockbook/api"
 	"blockbook/bchain"
 	"blockbook/common"
 	"blockbook/db"
@@ -27,6 +28,7 @@ type PublicServer struct {
 	txCache     *db.TxCache
 	chain       bchain.BlockChain
 	chainParser bchain.BlockChainParser
+	api         *api.Worker
 	explorerURL string
 	metrics     *common.Metrics
 	is          *common.InternalState
@@ -34,6 +36,11 @@ type PublicServer struct {
 
 // NewPublicServerS creates new public server http interface to blockbook and returns its handle
 func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxCache, explorerURL string, metrics *common.Metrics, is *common.InternalState) (*PublicServer, error) {
+
+	api, err := api.NewWorker(db, chain, txCache)
+	if err != nil {
+		return nil, err
+	}
 
 	socketio, err := NewSocketIoServer(db, chain, txCache, metrics, is)
 	if err != nil {
@@ -51,6 +58,7 @@ func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bch
 		binding:     binding,
 		certFiles:   certFiles,
 		https:       https,
+		api:         api,
 		socketio:    socketio,
 		db:          db,
 		txCache:     txCache,
@@ -66,6 +74,8 @@ func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bch
 	// redirect to Bitcore for details of transaction
 	serveMux.HandleFunc(path+"tx/", s.txRedirect)
 	serveMux.HandleFunc(path+"address/", s.addressRedirect)
+	// explorer
+	serveMux.HandleFunc(path+"explorer/tx/", s.explorerTx)
 	// API call used to detect state of Blockbook
 	serveMux.HandleFunc(path+"api/block-index/", s.apiBlockIndex)
 	// handle socket.io
@@ -136,6 +146,25 @@ func (s *PublicServer) addressRedirect(w http.ResponseWriter, r *http.Request) {
 	if s.explorerURL != "" {
 		http.Redirect(w, r, joinURL(s.explorerURL, r.URL.Path), 302)
 		s.metrics.ExplorerViews.With(common.Labels{"action": "address"}).Inc()
+	}
+}
+
+func (s *PublicServer) explorerTx(w http.ResponseWriter, r *http.Request) {
+	var tx *api.Tx
+	var err error
+	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
+		txid := r.URL.Path[i+1:]
+		bestheight, _, err := s.db.GetBestBlock()
+		if err == nil {
+			tx, err = s.api.GetTransaction(txid, bestheight, true)
+		}
+	}
+	if err == nil {
+		buf, err := json.MarshalIndent(tx, "", "    ")
+		if err != nil {
+			glog.Error(err)
+		}
+		w.Write(buf)
 	}
 }
 
