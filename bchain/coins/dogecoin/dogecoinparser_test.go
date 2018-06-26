@@ -98,6 +98,7 @@ func init() {
 		Blocktime: 1519053456,
 		Txid:      "097ea09ba284f3f2a9e880e11f837edf7e5cea81c8da2238f5bc7c2c4c407943",
 		LockTime:  0,
+		Version:   1,
 		Vin: []bchain.Vin{
 			{
 				ScriptSig: bchain.ScriptSig{
@@ -139,6 +140,7 @@ func init() {
 		Blocktime: 1519050987,
 		Txid:      "b276545af246e3ed5a4e3e5b60d359942a1808579effc53ff4f343e4f6cfc5a0",
 		LockTime:  0,
+		Version:   1,
 		Vin: []bchain.Vin{
 			{
 				ScriptSig: bchain.ScriptSig{

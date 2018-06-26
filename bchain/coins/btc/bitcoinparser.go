@@ -130,8 +130,8 @@ func (p *BitcoinParser) TxFromMsgTx(t *wire.MsgTx, parseAddresses bool) bchain.T
 		}
 	}
 	tx := bchain.Tx{
-		Txid: t.TxHash().String(),
-		// skip: Version,
+		Txid:     t.TxHash().String(),
+		Version:  t.Version,
 		LockTime: t.LockTime,
 		Vin:      vin,
 		Vout:     vout,
