@@ -2,6 +2,7 @@ package api
 
 import (
 	"blockbook/bchain"
+	"blockbook/common"
 	"blockbook/db"
 )
 
@@ -11,19 +12,22 @@ type Worker struct {
 	txCache     *db.TxCache
 	chain       bchain.BlockChain
 	chainParser bchain.BlockChainParser
+	is          *common.InternalState
 }
 
 // NewWorker creates new api worker
-func NewWorker(db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxCache) (*Worker, error) {
+func NewWorker(db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxCache, is *common.InternalState) (*Worker, error) {
 	w := &Worker{
 		db:          db,
 		txCache:     txCache,
 		chain:       chain,
 		chainParser: chain.GetChainParser(),
+		is:          is,
 	}
 	return w, nil
 }
 
+// GetTransaction reads transaction data from txid
 func (w *Worker) GetTransaction(txid string, bestheight uint32, spendingTx bool) (*Tx, error) {
 	bchainTx, height, err := w.txCache.GetTransaction(txid, bestheight)
 	if err != nil {
@@ -80,9 +84,11 @@ func (w *Worker) GetTransaction(txid string, bestheight uint32, spendingTx bool)
 		Blockhash:     blockhash,
 		Blockheight:   int(height),
 		Blocktime:     bchainTx.Blocktime,
+		CoinShortcut:  w.is.CoinShortcut,
 		Confirmations: bchainTx.Confirmations,
 		Fees:          fees,
 		Locktime:      bchainTx.LockTime,
+		WithSpends:    spendingTx,
 		Time:          bchainTx.Time,
 		Txid:          txid,
 		ValueIn:       valIn,

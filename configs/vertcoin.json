@@ -1,5 +1,6 @@
 {
   "coin_name": "Vertcoin",
+  "coin_shortcut": "VTC",
   "rpcURL": "http://localhost:8040",
   "rpcUser": "rpc",
   "rpcPass": "rpc",

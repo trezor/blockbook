@@ -1,5 +1,6 @@
 {
   "coin_name": "Litecoin",
+  "coin_shortcut": "LTC",
   "rpcURL": "http://localhost:8034",
   "rpcUser": "rpc",
   "rpcPass": "rpc",

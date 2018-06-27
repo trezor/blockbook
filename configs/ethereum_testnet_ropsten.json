@@ -1,5 +1,6 @@
 {
   "coin_name": "Ethereum Testnet Ropsten",
+  "coin_shortcut": "tETH",
   "rpcURL": "ws://localhost:18036",
   "rpcTimeout": 25
 }

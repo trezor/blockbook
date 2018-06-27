@@ -1,5 +1,6 @@
 {
   "coin_name": "Bgold",
+  "coin_shortcut": "BTG",
   "rpcURL": "http://127.0.0.1:8035",
   "rpcUser": "rpc",
   "rpcPass": "rpc",

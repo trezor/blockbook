@@ -1,5 +1,6 @@
 {
   "coin_name": "Bcash",
+  "coin_shortcut": "BCH",
   "rpcURL": "http://127.0.0.1:8031",
   "rpcUser": "rpc",
   "rpcPass": "rpc",

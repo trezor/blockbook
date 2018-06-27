@@ -1,5 +1,6 @@
 {
   "coin_name": "Bitcoin",
+  "coin_shortcut": "BTC",
   "rpcURL": "http://127.0.0.1:8030",
   "rpcUser": "rpc",
   "rpcPass": "rpc",

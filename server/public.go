@@ -39,7 +39,7 @@ type PublicServer struct {
 // NewPublicServerS creates new public server http interface to blockbook and returns its handle
 func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxCache, explorerURL string, metrics *common.Metrics, is *common.InternalState) (*PublicServer, error) {
 
-	api, err := api.NewWorker(db, chain, txCache)
+	api, err := api.NewWorker(db, chain, txCache, is)
 	if err != nil {
 		return nil, err
 	}

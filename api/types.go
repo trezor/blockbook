@@ -46,4 +46,6 @@ type Tx struct {
 	Size          int     `json:"size,omitempty"`
 	ValueIn       float64 `json:"valueIn"`
 	Fees          float64 `json:"fees"`
+	CoinShortcut  string  `json:"coinShortcut"`
+	WithSpends    bool    `json:"withSpends,omitempty"`
 }

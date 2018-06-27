@@ -1,5 +1,6 @@
 {
   "coin_name": "Zcash",
+  "coin_shortcut": "ZEC",
   "rpcURL": "http://127.0.0.1:8032",
   "rpcUser": "rpc",
   "rpcPass": "rpc",

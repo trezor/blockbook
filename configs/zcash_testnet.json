@@ -1,5 +1,6 @@
 {
   "coin_name": "Zcash Testnet",
+  "coin_shortcut": "TAZ",
   "rpcURL": "http://127.0.0.1:18032",
   "rpcUser": "rpc",
   "rpcPass": "rpc",

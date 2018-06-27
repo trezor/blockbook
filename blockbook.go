@@ -148,7 +148,7 @@ func main() {
 		glog.Fatal("Missing blockchaincfg configuration parameter")
 	}
 
-	coin, err := coins.GetCoinNameFromConfig(*blockchain)
+	coin, coinShortcut, err := coins.GetCoinNameFromConfig(*blockchain)
 	if err != nil {
 		glog.Fatal("config: ", err)
 	}
@@ -168,7 +168,7 @@ func main() {
 	}
 	defer index.Close()
 
-	internalState, err = newInternalState(coin, index)
+	internalState, err = newInternalState(coin, coinShortcut, index)
 	if err != nil {
 		glog.Error("internalState: ", err)
 		return
@@ -327,11 +327,12 @@ func main() {
 	}
 }
 
-func newInternalState(coin string, d *db.RocksDB) (*common.InternalState, error) {
+func newInternalState(coin string, coinShortcut string, d *db.RocksDB) (*common.InternalState, error) {
 	is, err := d.LoadInternalState(coin)
 	if err != nil {
 		return nil, err
 	}
+	is.CoinShortcut = coinShortcut
 	name, err := os.Hostname()
 	if err != nil {
 		glog.Error("get hostname ", err)

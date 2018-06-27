@@ -1,5 +1,6 @@
 {
   "coin_name": "Litecoin Testnet",
+  "coin_shortcut": "TLTC",
   "rpcURL": "http://localhost:18034",
   "rpcUser": "rpc",
   "rpcPass": "rpc",
