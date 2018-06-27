@@ -28,5 +28,10 @@
         "url": "http://localhost:8040",
         "user": "rpc",
         "pass": "rpc"
+    },
+    "Namecoin": {
+        "url": "http://localhost:8039",
+        "user": "rpc",
+        "pass": "rpc"
     }
 }
