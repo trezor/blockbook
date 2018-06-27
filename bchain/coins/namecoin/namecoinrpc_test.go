@@ -52,13 +52,13 @@ func TestNamecoinRPC_GetTransaction(t *testing.T) {
 	rpcTest.TestGetTransaction(t)
 }
 
-func TestNamecoinRPC_TestGetTransactionForMempool(t *testing.T) {
+func TestNamecoinRPC_GetTransactionForMempool(t *testing.T) {
 	// extra opcodes (name_new, name_firstupdate, name_update) aren't supported, so some transactions
 	// in mempool can't be parsed correctly
 	t.Skipf("Skipped because of instability")
 }
 
-func TestNamecoinRPC_TestMempoolSync(t *testing.T) {
+func TestNamecoinRPC_MempoolSync(t *testing.T) {
 	rpcTest.TestMempoolSync(t)
 }
 

@@ -52,11 +52,11 @@ func TestBCashRPC_GetTransaction(t *testing.T) {
 	rpcTest.TestGetTransaction(t)
 }
 
-func TestBCashRPC_TestGetTransactionForMempool(t *testing.T) {
+func TestBCashRPC_GetTransactionForMempool(t *testing.T) {
 	rpcTest.TestGetTransactionForMempool(t)
 }
 
-func TestBCashRPC_TestMempoolSync(t *testing.T) {
+func TestBCashRPC_MempoolSync(t *testing.T) {
 	rpcTest.TestMempoolSync(t)
 }
 

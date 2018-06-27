@@ -52,11 +52,11 @@ func TestBitcoinRPC_GetTransaction(t *testing.T) {
 	rpcTest.TestGetTransaction(t)
 }
 
-func TestBitcoinRPC_TestGetTransactionForMempool(t *testing.T) {
+func TestBitcoinRPC_GetTransactionForMempool(t *testing.T) {
 	rpcTest.TestGetTransactionForMempool(t)
 }
 
-func TestBitcoinRPC_TestMempoolSync(t *testing.T) {
+func TestBitcoinRPC_MempoolSync(t *testing.T) {
 	rpcTest.TestMempoolSync(t)
 }
 

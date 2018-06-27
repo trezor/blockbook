@@ -52,11 +52,11 @@ func TestVertcoinRPC_GetTransaction(t *testing.T) {
 	rpcTest.TestGetTransaction(t)
 }
 
-func TestVertcoinRPC_TestGetTransactionForMempool(t *testing.T) {
+func TestVertcoinRPC_GetTransactionForMempool(t *testing.T) {
 	rpcTest.TestGetTransactionForMempool(t)
 }
 
-func TestVertcoinRPC_TestMempoolSync(t *testing.T) {
+func TestVertcoinRPC_MempoolSync(t *testing.T) {
 	rpcTest.TestMempoolSync(t)
 }
 
