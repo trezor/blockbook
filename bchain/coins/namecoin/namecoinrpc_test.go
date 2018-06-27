@@ -6,6 +6,8 @@ import (
 	"blockbook/bchain"
 	"blockbook/bchain/tests/rpc"
 	"encoding/json"
+	"flag"
+	"os"
 	"testing"
 )
 
@@ -25,12 +27,17 @@ func getRPCClient(cfg json.RawMessage) (bchain.BlockChain, error) {
 
 var rpcTest *rpc.Test
 
-func init() {
+func TestMain(m *testing.M) {
+	flag.Parse()
 	t, err := rpc.NewTest("Namecoin", getRPCClient)
 	if err != nil {
 		panic(err)
 	}
+	t.TryConnect()
+
 	rpcTest = t
+
+	os.Exit(m.Run())
 }
 
 func TestNamecoinRPC_GetBlockHash(t *testing.T) {

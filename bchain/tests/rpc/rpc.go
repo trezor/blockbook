@@ -6,6 +6,7 @@ import (
 	"blockbook/bchain"
 	"encoding/json"
 	"math/rand"
+	"net"
 	"reflect"
 	"testing"
 	"time"
@@ -26,8 +27,9 @@ type TestData struct {
 }
 
 type Test struct {
-	Client   bchain.BlockChain
-	TestData *TestData
+	Client    bchain.BlockChain
+	TestData  *TestData
+	connected bool
 }
 
 type TestChainFactoryFunc func(json.RawMessage) (bchain.BlockChain, error)
@@ -75,7 +77,28 @@ func setTxAddresses(parser bchain.BlockChainParser, tx *bchain.Tx) error {
 	}
 	return err
 }
+
+func (rt *Test) TryConnect() {
+	_, err := rt.Client.GetBlockChainInfo()
+	if err != nil {
+		switch err.(type) {
+		case net.Error:
+			rt.connected = false
+			return
+		}
+	}
+	rt.connected = true
+}
+
+func (rt *Test) skipUnconnected(t *testing.T) {
+	if !rt.connected {
+		t.Skip("Skipping test, not connected to backend service")
+	}
+}
+
 func (rt *Test) TestGetBlockHash(t *testing.T) {
+	rt.skipUnconnected(t)
+
 	hash, err := rt.Client.GetBlockHash(rt.TestData.BlockHeight)
 	if err != nil {
 		t.Error(err)
@@ -88,6 +111,8 @@ func (rt *Test) TestGetBlockHash(t *testing.T) {
 }
 
 func (rt *Test) TestGetBlock(t *testing.T) {
+	rt.skipUnconnected(t)
+
 	blk, err := rt.Client.GetBlock(rt.TestData.BlockHash, 0)
 	if err != nil {
 		t.Error(err)
@@ -107,6 +132,8 @@ func (rt *Test) TestGetBlock(t *testing.T) {
 }
 
 func (rt *Test) TestGetTransaction(t *testing.T) {
+	rt.skipUnconnected(t)
+
 	for txid, want := range rt.TestData.TxDetails {
 		got, err := rt.Client.GetTransaction(txid)
 		if err != nil {
@@ -166,6 +193,8 @@ func (rt *Test) getMempoolTransaction(t *testing.T, txid string) *bchain.Tx {
 }
 
 func (rt *Test) TestGetTransactionForMempool(t *testing.T) {
+	rt.skipUnconnected(t)
+
 	txs := rt.getMempool(t)
 	txid := txs[rand.Intn(len(txs))]
 	got := rt.getMempoolTransaction(t, txid)
@@ -203,6 +232,8 @@ func (rt *Test) getMempoolAddresses(t *testing.T, txs []string) map[string][]str
 }
 
 func (rt *Test) TestMempoolSync(t *testing.T) {
+	rt.skipUnconnected(t)
+
 	for i := 0; i < 3; i++ {
 		txs := rt.getMempool(t)
 		txid2addrs := rt.getMempoolAddresses(t, txs)
@@ -253,6 +284,8 @@ func containsString(slice []string, s string) bool {
 }
 
 func (rt *Test) TestGetMempoolEntry(t *testing.T) {
+	rt.skipUnconnected(t)
+
 	for i := 0; i < 3; i++ {
 		txs := rt.getMempool(t)
 		h, err := rt.Client.GetBestBlockHeight()
@@ -286,6 +319,8 @@ func (rt *Test) TestGetMempoolEntry(t *testing.T) {
 }
 
 func (rt *Test) TestSendRawTransaction(t *testing.T) {
+	rt.skipUnconnected(t)
+
 	for txid, tx := range rt.TestData.TxDetails {
 		_, err := rt.Client.SendRawTransaction(tx.Hex)
 		if err != nil {
@@ -298,6 +333,8 @@ func (rt *Test) TestSendRawTransaction(t *testing.T) {
 }
 
 func (rt *Test) TestEstimateSmartFee(t *testing.T) {
+	rt.skipUnconnected(t)
+
 	for _, blocks := range []int{1, 2, 3, 5, 10} {
 		fee, err := rt.Client.EstimateSmartFee(blocks, true)
 		if err != nil {
@@ -310,6 +347,8 @@ func (rt *Test) TestEstimateSmartFee(t *testing.T) {
 }
 
 func (rt *Test) TestEstimateFee(t *testing.T) {
+	rt.skipUnconnected(t)
+
 	for _, blocks := range []int{1, 2, 3, 5, 10} {
 		fee, err := rt.Client.EstimateFee(blocks)
 		if err != nil {
