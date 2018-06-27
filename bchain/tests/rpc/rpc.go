@@ -195,17 +195,19 @@ func (rt *Test) getMempoolTransaction(t *testing.T, txid string) *bchain.Tx {
 func (rt *Test) TestGetTransactionForMempool(t *testing.T) {
 	rt.skipUnconnected(t)
 
-	txs := rt.getMempool(t)
-	txid := txs[rand.Intn(len(txs))]
-	got := rt.getMempoolTransaction(t, txid)
+	for txid, want := range rt.TestData.TxDetails {
+		// reset fields that are not parsed
+		want.Confirmations = 0
+		want.Blocktime = 0
+		want.Time = 0
 
-	want, err := rt.Client.GetTransaction(txid)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("GetTransactionForMempool() got %v, want %v", got, want)
+		got, err := rt.Client.GetTransactionForMempool(txid)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("GetTransactionForMempool() got %v, want %v", got, want)
+		}
 	}
 }
 
