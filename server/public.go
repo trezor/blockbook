@@ -89,9 +89,17 @@ func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bch
 	// default handler
 	serveMux.HandleFunc(path, s.index)
 
-	s.txTpl = template.Must(template.New("tx").ParseFiles("./static/templates/tx.html", "./static/templates/base.html"))
+	templateFuncMap := template.FuncMap{
+		"formatUnixTime": formatUnixTime,
+	}
+
+	s.txTpl = template.Must(template.New("tx").Funcs(templateFuncMap).ParseFiles("./static/templates/tx.html", "./static/templates/txdetail.html", "./static/templates/base.html"))
 
 	return s, nil
+}
+
+func formatUnixTime(ut int64) string {
+	return time.Unix(ut, 0).Format(time.RFC1123)
 }
 
 // Run starts the server
@@ -170,9 +178,13 @@ func (s *PublicServer) explorerTx(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+
 	// temporarily reread the template on each request
 	// to reflect changes during development
-	txTpl := template.Must(template.New("tx").ParseFiles("./static/templates/tx.html", "./static/templates/base.html"))
+	templateFuncMap := template.FuncMap{
+		"formatUnixTime": formatUnixTime,
+	}
+	txTpl := template.Must(template.New("tx").Funcs(templateFuncMap).ParseFiles("./static/templates/tx.html", "./static/templates/txdetail.html", "./static/templates/base.html"))
 
 	data := struct {
 		CoinName string

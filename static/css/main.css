@@ -3,7 +3,6 @@ html, body {
 }
 
 body {
-    display: inline-block;
     width: 100%;
     min-width: 727px;
     min-height: 100%;
@@ -64,12 +63,16 @@ body {
     min-height: 100%;
     height: auto;
     padding: 75px 0;
-    margin: 0 auto -51px;
+    margin: 0 auto -53px;
 }
 
 #footer {
     background-color: #212121;
     color: #fff;
-    height: 51px;
+    height: 53px;
     overflow: hidden;
+}
+
+.value-group {
+    margin: 20px 0;
 }
