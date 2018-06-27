@@ -1,0 +1,75 @@
+html, body {
+    height: 100%;
+}
+
+body {
+    display: inline-block;
+    width: 100%;
+    min-width: 727px;
+    min-height: 100%;
+    background-color: #ffffff;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Helvetica Neue", Arial, sans-serif;
+    font-size: 14px;
+}
+
+@media (min-width: 768px) {
+    .container {
+        width: 750px;
+    }
+}
+
+@media (min-width: 992px) {
+    .container {
+        width: 970px;
+    }
+}
+
+@media (min-width: 1200px) {
+    .container {
+        width: 1170px;
+    }
+}
+
+#header {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 53px;
+    width: 100%;
+    margin: 0;
+    padding-bottom: 0;
+    padding-top: 0;
+    background-color: #212121;
+    border: 0;
+}
+
+.bg-trezor {
+    background-color: #212121!important;
+    height: 53px;
+}
+
+.bg-trezor .navbar-text {
+    color: rgba(255, 255, 255);
+    font-weight: bold;
+    font-size: 19px;
+    padding-left: 35px;
+}
+
+.trezor-logo-svg-white svg {
+    fill: #FFFFFF;
+    margin-top: 6px;
+}
+
+#wrap {
+    min-height: 100%;
+    height: auto;
+    padding: 75px 0;
+    margin: 0 auto -51px;
+}
+
+#footer {
+    background-color: #212121;
+    color: #fff;
+    height: 51px;
+    overflow: hidden;
+}

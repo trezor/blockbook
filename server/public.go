@@ -80,6 +80,7 @@ func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bch
 	serveMux.HandleFunc(path+"address/", s.addressRedirect)
 	// explorer
 	serveMux.HandleFunc(path+"explorer/tx/", s.explorerTx)
+	serveMux.Handle(path+"static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./static/"))))
 	// API calls
 	serveMux.HandleFunc(path+"api/block-index/", s.apiBlockIndex)
 	serveMux.HandleFunc(path+"api/tx/", s.apiTx)
@@ -169,11 +170,15 @@ func (s *PublicServer) explorerTx(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	// temporarily reread the template on each request
+	// to reflect changes during development
+	txTpl := template.Must(template.New("tx").ParseFiles("./static/templates/tx.html", "./static/templates/base.html"))
+
 	data := struct {
 		CoinName string
-		Tx       *api.Tx
+		Specific *api.Tx
 	}{s.is.Coin, tx}
-	if err := s.txTpl.ExecuteTemplate(w, "base.html", data); err != nil {
+	if err := txTpl.ExecuteTemplate(w, "base.html", data); err != nil {
 		glog.Error(err)
 	}
 }
