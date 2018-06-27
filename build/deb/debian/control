@@ -80,6 +80,11 @@ Architecture: amd64
 Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, backend-dogecoin
 Description: Satoshilabs blockbook server (Dogecoin mainnet)
 
+Package: blockbook-denarius
+Architecture: amd64
+Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, backend-denarius
+Description: Satoshilabs blockbook server (Denarius mainnet)
+
 Package: blockbook-vertcoin
 Architecture: amd64
 Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, backend-dogecoin

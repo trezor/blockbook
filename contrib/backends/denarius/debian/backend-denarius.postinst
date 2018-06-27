@@ -1,0 +1,20 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+
+  configure)
+    if ! id -u denarius &> /dev/null
+    then
+        useradd --system -M -U denarius -s /bin/false
+    fi
+
+    if [ "$(stat -c '%U' /opt/coins/data/denarius/backend)" != "denarius" ]
+    then
+        chown -R denarius:denarius /opt/coins/data/denarius/backend
+    fi
+  ;;
+
+esac
+
+#DEBHELPER#

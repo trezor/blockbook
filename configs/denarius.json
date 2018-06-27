@@ -1,0 +1,12 @@
+{
+  "coin_name": "Denarius",
+  "rpcURL": "http://127.0.0.1:8041",
+  "rpcUser": "rpc",
+  "rpcPass": "rpcp",
+  "rpcTimeout": 25,
+  "parse": true,
+  "zeroMQBinding": "tcp://127.0.0.1:38341",
+  "mempoolWorkers": 8,
+  "mempoolSubWorkers": 2,
+  "blockAddressesToKeep": 300
+}

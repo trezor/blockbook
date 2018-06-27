@@ -1,0 +1,11 @@
+Source: denarius
+Section: satoshilabs
+Priority: optional
+Maintainer: martin.bohm@satoshilabs.com
+Build-Depends: debhelper, wget, tar, gzip, make, dh-systemd, dh-exec
+Standards-Version: 3.9.5
+
+Package: backend-denarius
+Architecture: amd64
+Depends: ${shlibs:Depends}, ${misc:Depends}, logrotate
+Description: Satoshilabs packaged denarius server

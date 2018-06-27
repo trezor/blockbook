@@ -1,0 +1,23 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+
+  configure)
+    if ! id -u blockbook-denarius &> /dev/null
+    then
+        useradd --system -M -U blockbook-denarius -s /bin/false
+    fi
+
+    for dir in /opt/coins/data/denarius/blockbook /opt/coins/blockbook/denarius/logs
+    do
+        if [ "$(stat -c '%U' $dir)" != "blockbook-denarius" ]
+        then
+            chown -R blockbook-denarius:blockbook-denarius $dir
+        fi
+    done
+  ;;
+
+esac
+
+#DEBHELPER#
