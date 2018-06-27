@@ -1,4 +1,4 @@
-TARGETS = bitcoin zcash bcash ethereum bgold dash litecoin dogecoin namecoin
+TARGETS = bitcoin zcash bcash ethereum bgold dash litecoin dogecoin vertcoin namecoin
 IMAGE = blockbook-backend-build-deb
 NO_CACHE = false
 

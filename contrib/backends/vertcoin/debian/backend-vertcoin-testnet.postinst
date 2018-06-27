@@ -1,0 +1,20 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+
+  configure)
+    if ! id -u vertcoin &> /dev/null
+    then
+        useradd --system -M -U vertcoin -s /bin/false
+    fi
+
+    if [ "$(stat -c '%U' /opt/coins/data/vertcoin_testnet/backend)" != "vertcoin" ]
+    then
+        chown -R vertcoin:vertcoin /opt/coins/data/vertcoin_testnet/backend
+    fi
+  ;;
+
+esac
+
+#DEBHELPER#

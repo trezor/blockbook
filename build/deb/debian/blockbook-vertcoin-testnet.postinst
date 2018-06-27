@@ -1,0 +1,23 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+
+  configure)
+    if ! id -u blockbook-vertcoin &> /dev/null
+    then
+        useradd --system -M -U blockbook-vertcoin -s /bin/false
+    fi
+
+    for dir in /opt/coins/data/vertcoin_testnet/blockbook /opt/coins/blockbook/vertcoin_testnet/logs
+    do
+        if [ "$(stat -c '%U' $dir)" != "blockbook-vertcoin" ]
+        then
+            chown -R blockbook-vertcoin:blockbook-vertcoin $dir
+        fi
+    done
+  ;;
+
+esac
+
+#DEBHELPER#

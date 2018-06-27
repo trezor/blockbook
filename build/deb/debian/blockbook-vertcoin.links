@@ -1,0 +1,2 @@
+/opt/coins/blockbook/vertcoin/cert/testcert.crt /opt/coins/blockbook/vertcoin/cert/blockbook.crt
+/opt/coins/blockbook/vertcoin/cert/testcert.key /opt/coins/blockbook/vertcoin/cert/blockbook.key
