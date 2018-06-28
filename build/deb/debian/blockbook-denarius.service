@@ -10,7 +10,7 @@ After=network.target
 Wants=backend-denarius.service
 
 [Service]
-ExecStart=/opt/coins/blockbook/denarius/bin/blockbook -blockchaincfg=/opt/coins/blockbook/denarius/config/blockchaincfg.json -datadir=/opt/coins/data/denarius/blockbook/db -sync -httpserver=:9038 -socketio=:9138 -certfile=/opt/coins/blockbook/denarius/cert/blockbook -explorer=https://dogechain.info/ -resyncindexperiod=30011 -resyncmempoolperiod=2011 -log_dir=/opt/coins/blockbook/denarius/logs
+ExecStart=/opt/coins/blockbook/denarius/bin/blockbook -blockchaincfg=/opt/coins/blockbook/denarius/config/blockchaincfg.json -datadir=/opt/coins/data/denarius/blockbook/db -sync -httpserver=:9041 -socketio=:9141 -certfile=/opt/coins/blockbook/denarius/cert/blockbook -explorer=https://coinexplorer.net/DNR/ -resyncindexperiod=30011 -resyncmempoolperiod=2011 -log_dir=/opt/coins/blockbook/denarius/logs
 User=blockbook-denarius
 Type=simple
 Restart=on-failure
