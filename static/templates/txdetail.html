@@ -1,3 +1,78 @@
-{{define "txdetail"}}
-{{.Txid}}
+{{define "txdetail"}}{{$cs := .CoinShortcut}}
+<div class="alert alert-data">
+    <div class="row line-bot">
+        <div class="col-xs-7 col-md-8 ellipsis">
+            <a href="/explorer/tx/{{.Txid}}">{{.Txid}}</a>
+        </div>
+        {{if .Confirmations}}
+        <div class="col-xs-5 col-md-4 text-muted text-right">mined {{formatUnixTime .Blocktime}}</div>
+        {{end}}
+    </div>
+    <div class="row line-mid">
+        <div class="col-md-5">
+            <div class="row">
+                <table class="table data-table">
+                    <tbody>
+                        {{range $vin := .Vin}}
+                        <tr>
+                            <td>
+                                {{if $vin.Txid}}
+                                <span class="float-left ellipsis">
+                                    {{if $vin.Addr}}
+                                    <a href="/explorer/address/{{$vin.Addr}}">{{$vin.Addr}}</a>
+                                    {{else}}Unparsed address{{end}}
+                                </span>
+                                <span class="float-right"> {{$vin.Value}} {{$cs}} </span>
+                                {{else}}No Inputs (Newly Generated Coins){{end}}
+                            </td>
+                        </tr>
+                        {{end}}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="col-md-1 col-xs-12 text-center">
+            <svg class="octicon" viewBox="0 0 8 16">
+                <path fill-rule="evenodd" d="M7.5 8l-5 5L1 11.5 4.75 8 1 4.5 2.5 3l5 5z"></path>
+            </svg>
+        </div>
+        <div class="col-md-6">
+            <div class="row">
+                <table class="table data-table">
+                    <tbody>
+                        {{range $vout := .Vout}}
+                        <tr>
+                            <td>
+                                {{range $a := $vout.ScriptPubKey.Addresses}}
+                                <span class="ellipsis float-left">
+                                    <a href="/explorer/address/{{$a}}">{{$a}}</a>
+                                </span>
+                                {{else}}
+                                <span class="float-left">Unparsed address</span>
+                                {{end}}
+                                <span class="float-right">{{$vout.Value}} {{$cs}}</span>
+                            </td>
+                        </tr>
+                        {{end}}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="row line-top">
+        <div class="col-xs-6 col-sm-4 col-md-4">
+            {{if .Fees}}
+            <span class="txvalues txvalues-default">Fee: {{formatAmount .Fees}} {{$cs}}</span>
+            {{end}}
+        </div>
+        <div class="col-xs-6 col-sm-8 col-md-8 text-right">
+            {{if .Confirmations}}
+            <span class="txvalues txvalues-success">{{.Confirmations}} Confirmations</span>
+            {{else}}
+            <span class="txvalues txvalues-danger ng-hide">Unconfirmed Transaction!</span>
+            {{end}}
+            <span class="txvalues txvalues-primary">{{formatAmount .ValueOut}} {{$cs}}</span>
+        </div>
+    </div>
+</div>
 {{end}}

@@ -4,28 +4,52 @@ html, body {
 
 body {
     width: 100%;
-    min-width: 727px;
     min-height: 100%;
     background-color: #ffffff;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Helvetica Neue", Arial, sans-serif;
-    font-size: 14px;
+    font-size: 11px;
+}
+
+a {
+    color: #428bca;
+    text-decoration: none;
+}
+
+.octicon {
+    color: #777;
+    display: inline-block;
+    vertical-align: text-top;
+    fill: currentColor;
+    height: 16px;
 }
 
 @media (min-width: 768px) {
     .container {
-        width: 750px;
+        max-width: 750px;
     }
 }
 
 @media (min-width: 992px) {
+    body {
+        font-size: 12px;
+    }
     .container {
-        width: 970px;
+        max-width: 970px;
+    }
+    .octicon {
+        height: 24px;
     }
 }
 
 @media (min-width: 1200px) {
+    body {
+        font-size: 14px;
+    }
     .container {
-        width: 1170px;
+        max-width: 1170px;
+    }
+    .octicon {
+        height: 32px;
     }
 }
 
@@ -73,6 +97,82 @@ body {
     overflow: hidden;
 }
 
-.value-group {
+.alert-data {
+    color: #383d41;
+    background-color: #f4f4f4;
+    border-color: #d6d8db;
+    padding: 15px;
+}
+
+.line-top {
+    border-top: 1px solid #EAEAEA;
+    padding: 15px 0 0;
+}
+
+.line-mid {
+    padding: 15px;
+}
+
+.line-bot {
+    border-bottom: 2px solid #EAEAEA;
+    padding: 0 0 15px;
+}
+
+.txvalues {
+    display: inline-block;
+    padding: .7em 2em;
+    font-size: 13px;
+    font-weight: 100;
+    color: #fff;
+    text-align: center;
+    white-space: nowrap;
+    vertical-align: baseline;
+    border-radius: .25em;
+}
+
+.txvalues-default {
+    background-color: #EBEBEB;
+    color: #333;
+}
+
+.txvalues-success {
+    background-color: dimgray;
+}
+
+.txvalues-primary {
+    background-color: #000;
+}
+
+.txvalues-danger {
+    background-color: #AC0015;
+    text-transform: uppercase;
+}
+
+.ellipsis {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.data-div {
     margin: 20px 0;
+}
+
+.data-table {
+    table-layout: fixed;
+    border-radius: .25rem;
+    background: white;
+}
+
+.data-table td, .data-table th {
+    padding: .4rem;
+}
+
+.data {
+    font-weight: bold;
+}
+
+.alert .data-table {
+    margin: 0;
 }

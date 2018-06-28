@@ -49,18 +49,21 @@ func (w *Worker) GetTransaction(txid string, bestheight uint32, spendingTx bool)
 		vin.N = i
 		vin.Vout = bchainVin.Vout
 		vin.ScriptSig.Hex = bchainVin.ScriptSig.Hex
-		otx, _, err := w.txCache.GetTransaction(bchainVin.Txid, bestheight)
-		if err != nil {
-			return nil, err
-		}
-		if len(otx.Vout) > int(vin.Vout) {
-			vout := &otx.Vout[vin.Vout]
-			vin.Value = vout.Value
-			valIn += vout.Value
-			vin.ValueSat = int64(vout.Value*1E8 + 0.5)
-			if vout.Address != nil {
-				a := vout.Address.String()
-				vin.Addr = a
+		//  bchainVin.Txid=="" is coinbase transaction
+		if bchainVin.Txid != "" {
+			otx, _, err := w.txCache.GetTransaction(bchainVin.Txid, bestheight)
+			if err != nil {
+				return nil, err
+			}
+			if len(otx.Vout) > int(vin.Vout) {
+				vout := &otx.Vout[vin.Vout]
+				vin.Value = vout.Value
+				valIn += vout.Value
+				vin.ValueSat = int64(vout.Value*1E8 + 0.5)
+				if vout.Address != nil {
+					a := vout.Address.String()
+					vin.Addr = a
+				}
 			}
 		}
 	}
@@ -77,9 +80,13 @@ func (w *Worker) GetTransaction(txid string, bestheight uint32, spendingTx bool)
 			// TODO
 		}
 	}
+	// for coinbase transactions valIn is 0
+	fees = valIn - valOut
+	if fees < 0 {
+		fees = 0
+	}
 	// for now do not return size, we would have to compute vsize of segwit transactions
 	// size:=len(bchainTx.Hex) / 2
-	fees = valIn - valOut
 	r := &Tx{
 		Blockhash:     blockhash,
 		Blockheight:   int(height),

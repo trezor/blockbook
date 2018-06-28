@@ -89,17 +89,26 @@ func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bch
 	// default handler
 	serveMux.HandleFunc(path, s.index)
 
-	templateFuncMap := template.FuncMap{
-		"formatUnixTime": formatUnixTime,
-	}
-
-	s.txTpl = template.Must(template.New("tx").Funcs(templateFuncMap).ParseFiles("./static/templates/tx.html", "./static/templates/txdetail.html", "./static/templates/base.html"))
+	s.txTpl = parseTemplates()
 
 	return s, nil
 }
 
+func parseTemplates() (txTpl *template.Template) {
+	templateFuncMap := template.FuncMap{
+		"formatUnixTime": formatUnixTime,
+		"formatAmount":   formatAmount,
+	}
+	txTpl = template.Must(template.New("tx").Funcs(templateFuncMap).ParseFiles("./static/templates/tx.html", "./static/templates/txdetail.html", "./static/templates/base.html"))
+	return
+}
+
 func formatUnixTime(ut int64) string {
 	return time.Unix(ut, 0).Format(time.RFC1123)
+}
+
+func formatAmount(a float64) string {
+	return fmt.Sprintf("%0.8f", a)
 }
 
 // Run starts the server
@@ -173,7 +182,8 @@ func (s *PublicServer) explorerTx(w http.ResponseWriter, r *http.Request) {
 		bestheight, _, err := s.db.GetBestBlock()
 		if err == nil {
 			tx, err = s.api.GetTransaction(txid, bestheight, true)
-		} else {
+		}
+		if err != nil {
 			glog.Error(err)
 		}
 	}
@@ -181,16 +191,13 @@ func (s *PublicServer) explorerTx(w http.ResponseWriter, r *http.Request) {
 
 	// temporarily reread the template on each request
 	// to reflect changes during development
-	templateFuncMap := template.FuncMap{
-		"formatUnixTime": formatUnixTime,
-	}
-	txTpl := template.Must(template.New("tx").Funcs(templateFuncMap).ParseFiles("./static/templates/tx.html", "./static/templates/txdetail.html", "./static/templates/base.html"))
+	s.txTpl = parseTemplates()
 
 	data := struct {
 		CoinName string
 		Specific *api.Tx
 	}{s.is.Coin, tx}
-	if err := txTpl.ExecuteTemplate(w, "base.html", data); err != nil {
+	if err := s.txTpl.ExecuteTemplate(w, "base.html", data); err != nil {
 		glog.Error(err)
 	}
 }

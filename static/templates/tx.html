@@ -1,27 +1,40 @@
 {{define "specific"}}
 <h1>Transaction</h1>
-<div class="alert alert-secondary">
-    <strong>
-        <span>Transaction</span>
-    </strong>
-    <span class="text-muted">{{.Txid}}</span>
+<div class="alert alert-data">
+    <span class="ellipsis data">{{.Txid}}</span>
 </div>
-<h2>Summary</h2>
-<div class="value-group">
-    <div class="row">
-        <div class="col-md-4">Mined Time</div>
-        <div class="col-md-8 text-muted">{{formatUnixTime .Blocktime}}</div>
-    </div>
-    <div class="row">
-        <div class="col-md-4">In Block</div>
-        <div class="col-md-8 text-muted">{{.Blockhash}}</div>
-    </div>
-    <div class="row">
-            <div class="col-md-4">In Block Height</div>
-            <div class="col-md-8 text-muted">{{.Blockheight}}</div>
-        </div>
-    </div>
-<h2>Details</h2>
-<div class="value-group">
-        {{template "txdetail" .}} {{end}}
+<h3>Summary</h3>
+<div class="data-div">
+    <table class="table data-table">
+        <tbody>
+            {{if .Confirmations}}<tr>
+                <td style="width: 25%;">Mined Time</td>
+                <td class="data">{{formatUnixTime .Blocktime}}</td>
+            </tr>{{end}}
+            <tr>
+                <td style="width: 25%;">In Block</td>
+                <td class="ellipsis data">{{if .Confirmations}}{{.Blockhash}}{{else}}Unconfirmed{{end}}</td>
+            </tr>
+            {{if .Confirmations}}<tr>
+                <td>In Block Height</td>
+                <td class="data">{{.Blockheight}}</td>
+            </tr>{{end}}
+            <tr>
+                <td>Total Input</td>
+                <td class="data">{{formatAmount .ValueIn}} {{.CoinShortcut}}</td>
+            </tr>
+            <tr>
+                <td>Total Output</td>
+                <td class="data">{{formatAmount .ValueOut}} {{.CoinShortcut}}</td>
+            </tr>
+            {{if .Fees}}<tr>
+                <td>Fees</td>
+                <td class="data">{{formatAmount .Fees}} {{.CoinShortcut}}</td>
+            </tr>{{end}}
+        </tbody>
+    </table>
+</div>
+<h3>Details</h3>
+<div class="data-div">
+    {{template "txdetail" .}} {{end}}
 </div>
