@@ -30,7 +30,6 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic(err)
 	}
-	t.TryConnect()
 
 	rpcTest = t
 

@@ -9,7 +9,8 @@ import (
 	"net"
 	"reflect"
 	"testing"
-	"time"
+
+	"github.com/deckarep/golang-set"
 )
 
 type TestConfig struct {
@@ -21,7 +22,6 @@ type TestConfig struct {
 type TestData struct {
 	BlockHeight uint32                `json:"blockHeight"`
 	BlockHash   string                `json:"blockHash"`
-	BlockHex    string                `json:"blockHex"`
 	BlockTxs    []string              `json:"blockTxs"`
 	TxDetails   map[string]*bchain.Tx `json:"txDetails"`
 }
@@ -35,31 +35,57 @@ type Test struct {
 type TestChainFactoryFunc func(json.RawMessage) (bchain.BlockChain, error)
 
 func NewTest(coin string, factory TestChainFactoryFunc) (*Test, error) {
-	cfg, err := LoadRPCConfig(coin)
-	if err != nil {
-		return nil, err
-	}
-	cli, err := factory(cfg)
-	if err != nil {
-		return nil, err
-	}
-	td, err := LoadTestData(coin)
+	var (
+		connected = true
+		cli       bchain.BlockChain
+		cfg       json.RawMessage
+		td        *TestData
+		err       error
+	)
+
+	cfg, err = LoadRPCConfig(coin)
 	if err != nil {
 		return nil, err
 	}
 
-	if td.TxDetails != nil {
-		parser := cli.GetChainParser()
+	cli, err = factory(cfg)
+	if err != nil {
+		if isNetError(err) {
+			connected = false
+		} else {
+			return nil, err
+		}
+	} else {
+		td, err = LoadTestData(coin)
+		if err != nil {
+			return nil, err
+		}
 
-		for _, tx := range td.TxDetails {
-			err := setTxAddresses(parser, tx)
-			if err != nil {
-				return nil, err
+		if td.TxDetails != nil {
+			parser := cli.GetChainParser()
+
+			for _, tx := range td.TxDetails {
+				err := setTxAddresses(parser, tx)
+				if err != nil {
+					return nil, err
+				}
 			}
+		}
+
+		_, err = cli.GetBlockChainInfo()
+		if err != nil && isNetError(err) {
+			connected = false
 		}
 	}
 
-	return &Test{Client: cli, TestData: td}, nil
+	return &Test{Client: cli, TestData: td, connected: connected}, nil
+}
+
+func isNetError(err error) bool {
+	if _, ok := err.(net.Error); ok {
+		return true
+	}
+	return false
 }
 
 func setTxAddresses(parser bchain.BlockChainParser, tx *bchain.Tx) error {
@@ -76,18 +102,6 @@ func setTxAddresses(parser bchain.BlockChainParser, tx *bchain.Tx) error {
 		}
 	}
 	return err
-}
-
-func (rt *Test) TryConnect() {
-	_, err := rt.Client.GetBlockChainInfo()
-	if err != nil {
-		switch err.(type) {
-		case net.Error:
-			rt.connected = false
-			return
-		}
-	}
-	rt.connected = true
 }
 
 func (rt *Test) skipUnconnected(t *testing.T) {
@@ -154,44 +168,6 @@ func (rt *Test) TestGetTransaction(t *testing.T) {
 	}
 }
 
-func (rt *Test) getMempool(t *testing.T) []string {
-	var (
-		txs []string
-		err error
-	)
-	// attempts to get transactions for 2 min
-	for i := 0; i < 8; i++ {
-		txs, err = rt.Client.GetMempool()
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(txs) == 0 {
-			time.Sleep(15 * time.Second)
-			continue
-		}
-
-		// done
-		break
-	}
-	if len(txs) == 0 {
-		t.Skipf("Skipping test, all attempts to get mempool failed")
-	}
-
-	return txs
-}
-
-func (rt *Test) getMempoolTransaction(t *testing.T, txid string) *bchain.Tx {
-	tx, err := rt.Client.GetTransactionForMempool(txid)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if tx.Confirmations > 0 {
-		t.Skip("Skipping test, transaction moved away from mepool")
-	}
-
-	return tx
-}
-
 func (rt *Test) TestGetTransactionForMempool(t *testing.T) {
 	rt.skipUnconnected(t)
 
@@ -211,10 +187,25 @@ func (rt *Test) TestGetTransactionForMempool(t *testing.T) {
 	}
 }
 
+func (rt *Test) getMempool(t *testing.T) []string {
+	txs, err := rt.Client.GetMempool()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(txs) == 0 {
+		t.Skip("Skipping test, mempool is empty")
+	}
+
+	return txs
+}
+
 func (rt *Test) getMempoolAddresses(t *testing.T, txs []string) map[string][]string {
 	txid2addrs := map[string][]string{}
 	for i := 0; i < len(txs); i++ {
-		tx := rt.getMempoolTransaction(t, txs[i])
+		tx, err := rt.Client.GetTransactionForMempool(txs[i])
+		if err != nil {
+			t.Fatal(err)
+		}
 		addrs := []string{}
 		for _, vin := range tx.Vin {
 			for _, a := range vin.Addresses {
@@ -238,32 +229,34 @@ func (rt *Test) TestMempoolSync(t *testing.T) {
 
 	for i := 0; i < 3; i++ {
 		txs := rt.getMempool(t)
-		txid2addrs := rt.getMempoolAddresses(t, txs)
-		if len(txid2addrs) == 0 {
-			t.Fatal("No transaction in mempool has any address")
-		}
 
 		n, err := rt.Client.ResyncMempool(nil)
 		if err != nil {
 			t.Fatal(err)
 		}
-
-		if tmp := rt.getMempool(t); len(txs) != len(tmp) {
-			// mempool reset
+		if n == 0 {
+			// no transactions to test
 			continue
 		}
 
-		if len(txs) != n {
-			t.Fatalf("ResyncMempool() returned different number of transactions than backend call")
+		txs = intersect(txs, rt.getMempool(t))
+		if len(txs) == 0 {
+			// no transactions to test
+			continue
+		}
+
+		txid2addrs := rt.getMempoolAddresses(t, txs)
+		if len(txid2addrs) == 0 {
+			t.Skip("Skipping test, no addresses in mempool")
 		}
 
 		for txid, addrs := range txid2addrs {
 			for _, a := range addrs {
-				txs, err := rt.Client.GetMempoolTransactions(a)
+				got, err := rt.Client.GetMempoolTransactions(a)
 				if err != nil {
 					t.Fatal(err)
 				}
-				if !containsString(txs, txid) {
+				if !containsString(got, txid) {
 					t.Errorf("ResyncMempool() - for address %s, transaction %s wasn't found in mempool", a, txid)
 					return
 				}
@@ -274,6 +267,23 @@ func (rt *Test) TestMempoolSync(t *testing.T) {
 		return
 	}
 	t.Skip("Skipping test, all attempts to sync mempool failed due to network state changes")
+}
+
+func intersect(a, b []string) []string {
+	setA := mapset.NewSet()
+	for _, v := range a {
+		setA.Add(v)
+	}
+	setB := mapset.NewSet()
+	for _, v := range b {
+		setB.Add(v)
+	}
+	inter := setA.Intersect(setB)
+	res := make([]string, 0, inter.Cardinality())
+	for v := range inter.Iter() {
+		res = append(res, v.(string))
+	}
+	return res
 }
 
 func containsString(slice []string, s string) bool {
@@ -295,16 +305,26 @@ func (rt *Test) TestGetMempoolEntry(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		tx := rt.getMempoolTransaction(t, txs[rand.Intn(len(txs))])
-		e, err := rt.Client.GetMempoolEntry(tx.Txid)
+		txid := txs[rand.Intn(len(txs))]
+		tx, err := rt.Client.GetTransactionForMempool(txid)
 		if err != nil {
-			if err, ok := err.(*bchain.RPCError); ok && err.Code == -5 {
-				// mempool reset
-				continue
-			}
+			t.Fatal(err)
+		}
+		if tx.Confirmations > 0 {
+			// tx confirmed
+			continue
 		}
 
-		if e.Height-h > 1 {
+		e, err := rt.Client.GetMempoolEntry(txid)
+		if err != nil {
+			if err, ok := err.(*bchain.RPCError); ok && err.Code == -5 {
+				// tx confirmed
+				continue
+			}
+			t.Fatal(err)
+		}
+
+		if d := int(e.Height) - int(h); d < -1 || d > 1 {
 			t.Errorf("GetMempoolEntry() got height %d, want %d", e.Height, h)
 		}
 		if e.Size <= 0 {
