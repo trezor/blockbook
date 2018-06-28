@@ -97,7 +97,7 @@ func (w *Worker) GetTransaction(txid string, bestheight uint32, spendingTx bool)
 		Locktime:      bchainTx.LockTime,
 		WithSpends:    spendingTx,
 		Time:          bchainTx.Time,
-		Txid:          txid,
+		Txid:          bchainTx.Txid,
 		ValueIn:       valIn,
 		ValueOut:      valOut,
 		Version:       bchainTx.Version,

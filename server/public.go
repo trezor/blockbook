@@ -108,7 +108,7 @@ func formatUnixTime(ut int64) string {
 }
 
 func formatAmount(a float64) string {
-	return fmt.Sprintf("%0.8f", a)
+	return strings.TrimRight(strings.TrimRight(fmt.Sprintf("%0.8f", a), "0"), ".")
 }
 
 // Run starts the server

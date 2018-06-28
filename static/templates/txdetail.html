@@ -22,7 +22,7 @@
                                     <a href="/explorer/address/{{$vin.Addr}}">{{$vin.Addr}}</a>
                                     {{else}}Unparsed address{{end}}
                                 </span>
-                                <span class="float-right"> {{$vin.Value}} {{$cs}} </span>
+                                <span class="float-right"> {{formatAmount $vin.Value}} {{$cs}} </span>
                                 {{else}}No Inputs (Newly Generated Coins){{end}}
                             </td>
                         </tr>
@@ -50,7 +50,7 @@
                                 {{else}}
                                 <span class="float-left">Unparsed address</span>
                                 {{end}}
-                                <span class="float-right">{{$vout.Value}} {{$cs}}</span>
+                                <span class="float-right">{{formatAmount $vout.Value}} {{$cs}}</span>
                             </td>
                         </tr>
                         {{end}}
