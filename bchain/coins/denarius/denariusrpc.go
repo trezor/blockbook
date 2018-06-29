@@ -23,7 +23,7 @@ func NewDenariusRPC(config json.RawMessage, pushHandler func(bchain.Notification
 	s := &DenariusRPC{
 		b.(*btc.BitcoinRPC),
 	}
-	s.RPCMarshaler = btc.JSONMarshalerV2{}
+	s.RPCMarshaler = btc.JSONMarshalerV1{}
 
 	return s, nil
 }
