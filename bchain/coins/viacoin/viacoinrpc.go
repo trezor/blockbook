@@ -1,9 +1,9 @@
 package viacoin
 
 import (
+	"blockbook/bchain"
 	"blockbook/bchain/coins/btc"
 	"encoding/json"
-	"blockbook/bchain"
 	"github.com/golang/glog"
 )
 
