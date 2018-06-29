@@ -93,3 +93,8 @@ func (p *ViacoinParser) ParseBlock(b []byte) (*bchain.Block, error) {
 	return &bchain.Block{Txs: txs}, nil
 
 }
+
+// EstimateSmartFee returns fee estimation.
+func (b *ViacoinRPC) EstimateSmartFee(blocks int, conservative bool) (float64, error) {
+	return b.EstimateFee(blocks)
+}
