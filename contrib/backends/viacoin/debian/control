@@ -1,0 +1,16 @@
+Source: viacoin
+Section: satoshilabs
+Priority: optional
+Maintainer: romanornr@gmail.com
+Build-Depends: debhelper, wget, tar, gzip, make, dh-systemd, dh-exec
+Standards-Version: 3.9.5
+
+Package: backend-viacoin
+Architecture: amd64
+Depends: ${shlibs:Depends}, ${misc:Depends}, logrotate
+Description: Satoshilabs packaged viacoin server
+
+Package: backend-viacoin-testnet
+Architecture: amd64
+Depends: ${shlibs:Depends}, ${misc:Depends}, logrotate
+Description: Satoshilabs packaged viacoin server

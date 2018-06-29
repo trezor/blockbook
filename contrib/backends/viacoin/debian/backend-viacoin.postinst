@@ -1,0 +1,20 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+
+  configure)
+    if ! id -u viacoin &> /dev/null
+    then
+        useradd --system -M -U viacoin -s /bin/false
+    fi
+
+    if [ "$(stat -c '%U' /opt/coins/data/viacoin/backend)" != "viacoin" ]
+    then
+        chown -R viacoin:viacoin /opt/coins/data/viacoin/backend
+    fi
+  ;;
+
+esac
+
+#DEBHELPER#
