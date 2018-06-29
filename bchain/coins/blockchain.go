@@ -128,11 +128,6 @@ func (c *blockChainWithMetrics) GetSubversion() string {
 	return c.b.GetSubversion()
 }
 
-func (c *blockChainWithMetrics) GetInfo() (v string, err error) {
-	defer func(s time.Time) { c.observeRPCLatency("GetInfo", s, err) }(time.Now())
-	return c.b.GetInfo()
-}
-
 func (c *blockChainWithMetrics) GetBlockChainInfo() (v string, err error) {
 	defer func(s time.Time) { c.observeRPCLatency("GetBlockChainInfo", s, err) }(time.Now())
 	return c.b.GetBlockChainInfo()

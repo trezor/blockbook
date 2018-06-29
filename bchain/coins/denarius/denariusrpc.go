@@ -28,9 +28,38 @@ func NewDenariusRPC(config json.RawMessage, pushHandler func(bchain.Notification
 	return s, nil
 }
 
+type cmdGetInfo struct {
+	Method string `json:"method"`
+}
+
+type resGetInfo struct {
+	Error  *bchain.RPCError `json:"error"`
+	Result struct {
+		Chain         string `json:"chain"`
+		Blocks        int    `json:"blocks"`
+		Headers       int    `json:"headers"`
+		Bestblockhash string `json:"bestblockhash"`
+	} `json:"result"`
+}
+
+func (b *DenariusRPC) GetBlockChainInfo() (string, error) {
+	glog.V(1).Info("rpc: getinfo")
+
+	res := resGetInfo{}
+	req := cmdGetInfo{Method: "getinfo"}
+	err := b.Call(&req, &res)
+	if err != nil {
+		return "", err
+	}
+	if res.Error != nil {
+		return "", res.Error
+	}
+	return res.Result.Chain, nil
+}
+
 // Initialize initializes DenariusRPC instance.
 func (b *DenariusRPC) Initialize() error {
-	chainName, err := b.GetChainInfoAndInitializeMempool2(b)
+	chainName, err := b.GetChainInfoAndInitializeMempool(b)
 	if err != nil {
 		return err
 	}

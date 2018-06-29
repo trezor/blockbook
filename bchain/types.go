@@ -123,7 +123,6 @@ type BlockChain interface {
 	GetSubversion() string
 	GetCoinName() string
 	// requests
-	GetInfo() (string, error)
 	GetBlockChainInfo() (string, error)
 	GetBestBlockHash() (string, error)
 	GetBestBlockHeight() (uint32, error)

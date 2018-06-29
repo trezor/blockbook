@@ -112,28 +112,6 @@ func (b *BitcoinRPC) GetChainInfoAndInitializeMempool(bc bchain.BlockChain) (str
 	return chainName, nil
 }
 
-// GetChainInfoAndInitializeMempool2 is called by Denarius's Initialize and reused by other coins
-// it contacts the blockchain rpc interface for the first time
-// and if successful it connects to ZeroMQ and creates mempool handler
-func (b *BitcoinRPC) GetChainInfoAndInitializeMempool2(bc bchain.BlockChain) (string, error) {
-	// try to connect to block chain and get some info
-	chainName, err := bc.GetInfo()
-	if err != nil {
-		return "", err
-	}
-
-	mq, err := bchain.NewMQ(b.ChainConfig.ZeroMQBinding, b.pushHandler)
-	if err != nil {
-		glog.Error("mq: ", err)
-		return "", err
-	}
-	b.mq = mq
-
-	b.Mempool = bchain.NewUTXOMempool(bc, b.ChainConfig.MempoolWorkers, b.ChainConfig.MempoolSubWorkers)
-
-	return chainName, nil
-}
-
 // Initialize initializes BitcoinRPC instance.
 func (b *BitcoinRPC) Initialize() error {
 
@@ -230,22 +208,6 @@ type CmdGetBlockChainInfo struct {
 }
 
 type ResGetBlockChainInfo struct {
-	Error  *bchain.RPCError `json:"error"`
-	Result struct {
-		Chain         string `json:"chain"`
-		Blocks        int    `json:"blocks"`
-		Headers       int    `json:"headers"`
-		Bestblockhash string `json:"bestblockhash"`
-	} `json:"result"`
-}
-
-// getinfo
-
-type CmdGetInfo struct {
-	Method string `json:"method"`
-}
-
-type ResGetInfo struct {
 	Error  *bchain.RPCError `json:"error"`
 	Result struct {
 		Chain         string `json:"chain"`
@@ -423,23 +385,6 @@ func (b *BitcoinRPC) GetBlockChainInfo() (string, error) {
 
 	res := ResGetBlockChainInfo{}
 	req := CmdGetBlockChainInfo{Method: "getblockchaininfo"}
-	err := b.Call(&req, &res)
-
-	if err != nil {
-		return "", err
-	}
-	if res.Error != nil {
-		return "", res.Error
-	}
-	return res.Result.Chain, nil
-}
-
-// GetInfo returns the name of the block chain: main/test/regtest.
-func (b *BitcoinRPC) GetInfo() (string, error) {
-	glog.V(1).Info("rpc: getinfo")
-
-	res := ResGetInfo{}
-	req := CmdGetInfo{Method: "getinfo"}
 	err := b.Call(&req, &res)
 
 	if err != nil {
