@@ -95,7 +95,7 @@ func NewBitcoinRPC(config json.RawMessage, pushHandler func(bchain.NotificationT
 // and if successful it connects to ZeroMQ and creates mempool handler
 func (b *BitcoinRPC) GetChainInfoAndInitializeMempool(bc bchain.BlockChain) (string, error) {
 	// try to connect to block chain and get some info
-	chainName, err := bc.GetBlockChainInfo()
+	chainName, err := bc.GetInfo()
 	if err != nil {
 		return "", err
 	}
@@ -201,13 +201,13 @@ type ResGetBlockCount struct {
 	Result uint32           `json:"result"`
 }
 
-// getblockchaininfo
+// getinfo
 
-type CmdGetBlockChainInfo struct {
+type CmdGetInfo struct {
 	Method string `json:"method"`
 }
 
-type ResGetBlockChainInfo struct {
+type ResGetInfo struct {
 	Error  *bchain.RPCError `json:"error"`
 	Result struct {
 		Chain         string `json:"chain"`
@@ -381,10 +381,10 @@ func (b *BitcoinRPC) GetBestBlockHeight() (uint32, error) {
 
 // GetBlockChainInfo returns the name of the block chain: main/test/regtest.
 func (b *BitcoinRPC) GetBlockChainInfo() (string, error) {
-	glog.V(1).Info("rpc: getblockchaininfo")
+	glog.V(1).Info("rpc: getinfo")
 
-	res := ResGetBlockChainInfo{}
-	req := CmdGetBlockChainInfo{Method: "getblockchaininfo"}
+	res := ResGetInfo{}
+	req := CmdGetInfo{Method: "getinfo"}
 	err := b.Call(&req, &res)
 
 	if err != nil {

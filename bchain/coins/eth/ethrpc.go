@@ -252,7 +252,7 @@ func (b *EthereumRPC) GetSubversion() string {
 }
 
 // GetBlockChainInfo returns the NetworkID of the ethereum network
-func (b *EthereumRPC) GetBlockChainInfo() (string, error) {
+func (b *EthereumRPC) GetInfo() (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
 	defer cancel()
 
