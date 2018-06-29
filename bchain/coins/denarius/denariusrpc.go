@@ -30,7 +30,7 @@ func NewDenariusRPC(config json.RawMessage, pushHandler func(bchain.Notification
 
 // Initialize initializes DenariusRPC instance.
 func (b *DenariusRPC) Initialize() error {
-	chainName, err := b.GetChainInfoAndInitializeMempool(b)
+	chainName, err := b.GetChainInfoAndInitializeMempool2(b)
 	if err != nil {
 		return err
 	}
