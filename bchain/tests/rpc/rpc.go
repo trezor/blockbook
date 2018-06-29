@@ -172,15 +172,15 @@ func (rt *Test) TestGetTransactionForMempool(t *testing.T) {
 	rt.skipUnconnected(t)
 
 	for txid, want := range rt.TestData.TxDetails {
-		// reset fields that are not parsed
-		want.Confirmations = 0
-		want.Blocktime = 0
-		want.Time = 0
+		// reset fields that are not parsed by BlockChainParser
+		want.Confirmations, want.Blocktime, want.Time = 0, 0, 0
 
 		got, err := rt.Client.GetTransactionForMempool(txid)
 		if err != nil {
 			t.Fatal(err)
 		}
+		// transactions parsed from JSON may contain additional data
+		got.Confirmations, got.Blocktime, got.Time = 0, 0, 0
 		if !reflect.DeepEqual(got, want) {
 			t.Errorf("GetTransactionForMempool() got %v, want %v", got, want)
 		}
