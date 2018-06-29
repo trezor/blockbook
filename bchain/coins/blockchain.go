@@ -11,6 +11,7 @@ import (
 	"blockbook/bchain/coins/litecoin"
 	"blockbook/bchain/coins/vertcoin"
 	"blockbook/bchain/coins/namecoin"
+	"blockbook/bchain/coins/viacoin"
 	"blockbook/bchain/coins/zec"
 	"blockbook/common"
 	"context"
@@ -45,6 +46,7 @@ func init() {
 	blockChainFactories["Vertcoin"] = vertcoin.NewVertcoinRPC
 	blockChainFactories["Vertcoin Testnet"] = vertcoin.NewVertcoinRPC
 	blockChainFactories["Namecoin"] = namecoin.NewNamecoinRPC
+	blockChainFactories["Viacoin"] = viacoin.NewViacoinRPC
 }
 
 // GetCoinNameFromConfig gets coin name from config file
