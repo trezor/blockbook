@@ -147,6 +147,7 @@ The data are separated to different column families:
 | Dogecoin                 | 9038                | 9138                     | 8038               | 38338    |
 | Namecoin                 | 9039                | 9139                     | 8039               | 38339    |
 | Vertcoin                 | 9040                | 9140                     | 8040               | 38340    |
+| Viacoin                  | 9041                | 9141                     | 5222               | 52224    |
 | Bitcoin Testnet          | 19030               | 19130                    | 18030              | 48330    |
 | Bcash Testnet            | 19031               | 19131                    | 18031              | 48331    |
 | Zcash Testnet            | 19032               | 19132                    | 18032              | 48332    |
