@@ -1,3 +1,9 @@
+bgold (0.15.1-rc1-satoshilabs1) unstable; urgency=medium
+
+  * Version 0.15.1-rc1
+
+ -- Martin Bohm <martin.bohm@satoshilabs.com>  Fri, 29 Jun 2018 14:15:16 +0200
+
 bgold (0.15.0-satoshilabs2) unstable; urgency=medium
 
   * Renamed package and paths
