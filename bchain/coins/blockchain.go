@@ -133,6 +133,11 @@ func (c *blockChainWithMetrics) GetInfo() (v string, err error) {
 	return c.b.GetInfo()
 }
 
+func (c *blockChainWithMetrics) GetBlockChainInfo() (v string, err error) {
+	defer func(s time.Time) { c.observeRPCLatency("GetBlockChainInfo", s, err) }(time.Now())
+	return c.b.GetBlockChainInfo()
+}
+
 func (c *blockChainWithMetrics) GetBestBlockHash() (v string, err error) {
 	defer func(s time.Time) { c.observeRPCLatency("GetBestBlockHash", s, err) }(time.Now())
 	return c.b.GetBestBlockHash()
