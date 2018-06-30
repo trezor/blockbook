@@ -34,6 +34,7 @@ type PublicServer struct {
 	metrics     *common.Metrics
 	is          *common.InternalState
 	txTpl       *template.Template
+	addressTpl  *template.Template
 }
 
 // NewPublicServerS creates new public server http interface to blockbook and returns its handle
@@ -80,26 +81,30 @@ func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bch
 	serveMux.HandleFunc(path+"address/", s.addressRedirect)
 	// explorer
 	serveMux.HandleFunc(path+"explorer/tx/", s.explorerTx)
+	serveMux.HandleFunc(path+"explorer/address/", s.explorerAddress)
 	serveMux.Handle(path+"static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./static/"))))
 	// API calls
 	serveMux.HandleFunc(path+"api/block-index/", s.apiBlockIndex)
 	serveMux.HandleFunc(path+"api/tx/", s.apiTx)
+	serveMux.HandleFunc(path+"api/address/", s.apiAddress)
 	// handle socket.io
 	serveMux.Handle(path+"socket.io/", socketio.GetHandler())
 	// default handler
 	serveMux.HandleFunc(path, s.index)
 
-	s.txTpl = parseTemplates()
+	s.txTpl, s.addressTpl = parseTemplates()
 
 	return s, nil
 }
 
-func parseTemplates() (txTpl *template.Template) {
+func parseTemplates() (txTpl, addressTpl *template.Template) {
 	templateFuncMap := template.FuncMap{
-		"formatUnixTime": formatUnixTime,
-		"formatAmount":   formatAmount,
+		"formatUnixTime":      formatUnixTime,
+		"formatAmount":        formatAmount,
+		"setTxToTemplateData": setTxToTemplateData,
 	}
 	txTpl = template.Must(template.New("tx").Funcs(templateFuncMap).ParseFiles("./static/templates/tx.html", "./static/templates/txdetail.html", "./static/templates/base.html"))
+	addressTpl = template.Must(template.New("address").Funcs(templateFuncMap).ParseFiles("./static/templates/address.html", "./static/templates/txdetail.html", "./static/templates/base.html"))
 	return
 }
 
@@ -175,6 +180,19 @@ func (s *PublicServer) addressRedirect(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+type TemplateData struct {
+	CoinName     string
+	CoinShortcut string
+	Address      *api.Address
+	AddrStr      string
+	Tx           *api.Tx
+}
+
+func setTxToTemplateData(td *TemplateData, tx *api.Tx) *TemplateData {
+	td.Tx = tx
+	return td
+}
+
 func (s *PublicServer) explorerTx(w http.ResponseWriter, r *http.Request) {
 	var tx *api.Tx
 	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
@@ -191,13 +209,41 @@ func (s *PublicServer) explorerTx(w http.ResponseWriter, r *http.Request) {
 
 	// temporarily reread the template on each request
 	// to reflect changes during development
-	s.txTpl = parseTemplates()
+	s.txTpl, s.addressTpl = parseTemplates()
 
-	data := struct {
-		CoinName string
-		Specific *api.Tx
-	}{s.is.Coin, tx}
+	data := &TemplateData{
+		CoinName:     s.is.Coin,
+		CoinShortcut: s.is.CoinShortcut,
+		Tx:           tx,
+	}
 	if err := s.txTpl.ExecuteTemplate(w, "base.html", data); err != nil {
+		glog.Error(err)
+	}
+}
+
+func (s *PublicServer) explorerAddress(w http.ResponseWriter, r *http.Request) {
+	var address *api.Address
+	var err error
+	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
+		addrID := r.URL.Path[i+1:]
+		address, err = s.api.GetAddress(addrID)
+		if err != nil {
+			glog.Error(err)
+		}
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+
+	// temporarily reread the template on each request
+	// to reflect changes during development
+	s.txTpl, s.addressTpl = parseTemplates()
+
+	data := &TemplateData{
+		CoinName:     s.is.Coin,
+		CoinShortcut: s.is.CoinShortcut,
+		AddrStr:      address.AddrStr,
+		Address:      address,
+	}
+	if err := s.addressTpl.ExecuteTemplate(w, "base.html", data); err != nil {
 		glog.Error(err)
 	}
 }
@@ -286,5 +332,21 @@ func (s *PublicServer) apiTx(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		json.NewEncoder(w).Encode(tx)
+	}
+}
+
+func (s *PublicServer) apiAddress(w http.ResponseWriter, r *http.Request) {
+	var address *api.Address
+	var err error
+	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
+		addrID := r.URL.Path[i+1:]
+		address, err = s.api.GetAddress(addrID)
+		if err != nil {
+			glog.Error(err)
+		}
+	}
+	if err == nil {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		json.NewEncoder(w).Encode(address)
 	}
 }

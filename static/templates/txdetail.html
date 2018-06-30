@@ -1,11 +1,11 @@
-{{define "txdetail"}}{{$cs := .CoinShortcut}}
+{{define "txdetail"}}{{$cs := .CoinShortcut}}{{$addr := .AddrStr}}{{$tx := .Tx}}
 <div class="alert alert-data">
     <div class="row line-bot">
         <div class="col-xs-7 col-md-8 ellipsis">
-            <a href="/explorer/tx/{{.Txid}}">{{.Txid}}</a>
+            <a href="/explorer/tx/{{$tx.Txid}}">{{$tx.Txid}}</a>
         </div>
-        {{if .Confirmations}}
-        <div class="col-xs-5 col-md-4 text-muted text-right">mined {{formatUnixTime .Blocktime}}</div>
+        {{if $tx.Confirmations}}
+        <div class="col-xs-5 col-md-4 text-muted text-right">mined {{formatUnixTime $tx.Blocktime}}</div>
         {{end}}
     </div>
     <div class="row line-mid">
@@ -13,7 +13,7 @@
             <div class="row">
                 <table class="table data-table">
                     <tbody>
-                        {{range $vin := .Vin}}
+                        {{range $vin := $tx.Vin}}
                         <tr>
                             <td>
                                 {{if $vin.Txid}}
@@ -40,7 +40,7 @@
             <div class="row">
                 <table class="table data-table">
                     <tbody>
-                        {{range $vout := .Vout}}
+                        {{range $vout := $tx.Vout}}
                         <tr>
                             <td>
                                 {{range $a := $vout.ScriptPubKey.Addresses}}
@@ -61,17 +61,17 @@
     </div>
     <div class="row line-top">
         <div class="col-xs-6 col-sm-4 col-md-4">
-            {{if .Fees}}
-            <span class="txvalues txvalues-default">Fee: {{formatAmount .Fees}} {{$cs}}</span>
+            {{if $tx.Fees}}
+            <span class="txvalues txvalues-default">Fee: {{formatAmount $tx.Fees}} {{$cs}}</span>
             {{end}}
         </div>
         <div class="col-xs-6 col-sm-8 col-md-8 text-right">
-            {{if .Confirmations}}
-            <span class="txvalues txvalues-success">{{.Confirmations}} Confirmations</span>
+            {{if $tx.Confirmations}}
+            <span class="txvalues txvalues-success">{{$tx.Confirmations}} Confirmations</span>
             {{else}}
             <span class="txvalues txvalues-danger ng-hide">Unconfirmed Transaction!</span>
             {{end}}
-            <span class="txvalues txvalues-primary">{{formatAmount .ValueOut}} {{$cs}}</span>
+            <span class="txvalues txvalues-primary">{{formatAmount $tx.ValueOut}} {{$cs}}</span>
         </div>
     </div>
 </div>

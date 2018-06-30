@@ -1,0 +1,52 @@
+{{define "specific"}}{{$cs := .CoinShortcut}}{{$addr := .Address}}{{$data := .}}
+<h1>Address
+    <small class="text-muted">{{formatAmount $addr.Balance}} {{$cs}}</small>
+</h1>
+<div class="alert alert-data">
+    <span class="ellipsis data">{{$addr.AddrStr}}</span>
+</div>
+<h3>Confirmed</h3>
+<div class="data-div">
+    <table class="table data-table">
+        <tbody>
+            <tr>
+                <td style="width: 25%;">Total Received</td>
+                <td class="data">{{formatAmount $addr.TotalReceived}} {{$cs}}</td>
+            </tr>
+            <tr>
+                <td>Total Sent</td>
+                <td class="data">{{formatAmount $addr.TotalSent}} {{$cs}}</td>
+            </tr>
+            <tr>
+                <td>Final Balance</td>
+                <td class="data">{{formatAmount $addr.Balance}} {{$cs}}</td>
+            </tr>
+            <tr>
+                <td>No. Transactions</td>
+                <td class="data">{{$addr.TxApperances}}</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+{{if $addr.UnconfirmedTxApperances}}
+<h3>Unconfirmed</h3>
+<div class="data-div">
+    <table class="table data-table">
+        <tbody>
+            <tr>
+                <td style="width: 25%;">Unconfirmed Balance</td>
+                <td class="data">{{formatAmount $addr.UnconfirmedBalance}} {{$cs}}</td>
+            </tr>
+            <tr>
+                <td>No. Transactions</td>
+                <td class="data">{{$addr.UnconfirmedTxApperances}}</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+{{end}} {{if $addr.Transactions}}
+<h3>Transactions</h3>
+<div class="data-div">
+    {{range $tx := $addr.Transactions}}{{$data := setTxToTemplateData $data $tx}}{{template "txdetail" $data }}{{end}}
+</div>
+{{end}} {{end}}
