@@ -22,8 +22,8 @@ func TestAddressToOutputScript_Mainnet(t *testing.T) {
 	}{
 		{
 			name:    "pubkeyhash1",
-			args:    args{address: "Vnc6MPCogVCwZgCr1yfuubcooYh1TNb1TV"},
-			want:    "76a9148a4cf57cbbd86b88fad8a3e2c8fe66b9e9522b4088ac",
+			args:    args{address: "VhyGT8kJU9x28dHwjf1jEDG8gMY8yhckDR"},
+			want:    "76a91457757edd001d16528c7aa337b314a7bab303ee8088ac",
 			wantErr: false,
 		},
 		{
@@ -51,6 +51,7 @@ func TestAddressToOutputScript_Mainnet(t *testing.T) {
 			wantErr: false,
 		},
 	}
+
 	parser := NewViacoinParser(GetChainParams("main"), &btc.Configuration{})
 
 	for _, tt := range tests {

@@ -24,16 +24,16 @@ func init() {
 	MainNetParams.Net = MainnetMagic
 
 	// Mainnet address encoding magics
-	MainNetParams.PubKeyHashAddrID = 47 // base58 prefix: v
-	MainNetParams.ScriptHashAddrID = 21 // base68 prefix: 7
+	MainNetParams.PubKeyHashAddrID = 71 // base58 prefix: v
+	MainNetParams.ScriptHashAddrID = 33 // base68 prefix: E
 	MainNetParams.Bech32HRPSegwit = "via"
 
 	RegtestParams = chaincfg.RegressionNetParams
 	RegtestParams.Net = RegtestMagic
 
 	// Regtest address encoding magics
-	RegtestParams.PubKeyHashAddrID = 0x6f // base58 prefix: m or n
-	RegtestParams.ScriptHashAddrID = 0xc4 // base58 prefix: 2
+	RegtestParams.PubKeyHashAddrID = 111 // base58 prefix: m or n
+	RegtestParams.ScriptHashAddrID = 196 // base58 prefix: 2
 	RegtestParams.Bech32HRPSegwit = "tvia"
 
 	err := chaincfg.Register(&MainNetParams)
