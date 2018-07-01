@@ -46,8 +46,8 @@ func TestAddressToOutputScript_Mainnet(t *testing.T) {
 		},
 		{
 			name:    "witness_v0_keyhash",
-			args:    args{address: "via1"}, //TODO
-			want:    "001469de0e878beb0975b202f88a208f99062ef035ef",
+			args:    args{address: "via1q95qlu98cpj23xy6w9tdnfn65n5vkpkey99g6wl"},
+			want:    "00142d01fe14f80c9513134e2adb34cf549d1960db24",
 			wantErr: false,
 		},
 	}
