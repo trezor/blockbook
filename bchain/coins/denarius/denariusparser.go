@@ -32,12 +32,17 @@ func init() {
 
 // DenariusParser handle
 type DenariusParser struct {
-	*btc.BitcoinParser
+	*bchain.BaseParser
 }
 
 // NewDenariusParser returns new DenariusParser instance
-func NewDenariusParser(params *chaincfg.Params, c *btc.Configuration) *DenariusParser {
-	return &DenariusParser{BitcoinParser: btc.NewBitcoinParser(params, c)}
+func NewDenariusParser(c *btc.Configuration) *DenariusParser {
+		return &DenariusParser{
+		&bchain.BaseParser{
+			AddressFactory:       bchain.NewBaseAddress,
+			BlockAddressesToKeep: c.BlockAddressesToKeep,
+		},
+	}
 }
 
 // GetChainParams contains network parameters for the main Denarius network,
@@ -45,8 +50,10 @@ func NewDenariusParser(params *chaincfg.Params, c *btc.Configuration) *DenariusP
 func GetChainParams(chain string) *chaincfg.Params {
 	switch chain {
 	default:
-		return &MainNetParams
+		params = &chaincfg.MainNetParams
+		params.Net = MainnetMagic
 	}
+	return params
 }
 
 // GetAddrIDFromVout returns internal address representation of given transaction output

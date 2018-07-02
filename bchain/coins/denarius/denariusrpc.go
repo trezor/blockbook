@@ -20,12 +20,12 @@ func NewDenariusRPC(config json.RawMessage, pushHandler func(bchain.Notification
 		return nil, err
 	}
 
-	s := &DenariusRPC{
+	d := &DenariusRPC{
 		b.(*btc.BitcoinRPC),
 	}
-	s.RPCMarshaler = btc.JSONMarshalerV1{}
+	d.RPCMarshaler = btc.JSONMarshalerV1{}
 
-	return s, nil
+	return d, nil
 }
 
 type cmdGetInfo struct {
@@ -58,25 +58,24 @@ func (b *DenariusRPC) GetBlockChainInfo() (string, error) {
 }
 
 // Initialize initializes DenariusRPC instance.
-func (b *DenariusRPC) Initialize() error {
-	chainName, err := b.GetChainInfoAndInitializeMempool(b)
+func (d *DenariusRPC) Initialize() error {
+	chainName, err := d.GetChainInfoAndInitializeMempool(d)
 	if err != nil {
 		return err
 	}
 
-	glog.Info("Chain name ", chainName)
 	params := GetChainParams(chainName)
 
 	// always create parser
-	b.Parser = NewDenariusParser(params, b.ChainConfig)
+	d.Parser = NewDenariusParser(params, d.ChainConfig)
 
 	// parameters for getInfo request
 	if params.Net == MainnetMagic {
-		b.Testnet = false
-		b.Network = "livenet"
+		d.Testnet = false
+		d.Network = "livenet"
 	} else {
-		b.Testnet = true
-		b.Network = "testnet"
+		d.Testnet = true
+		d.Network = "testnet"
 	}
 
 	glog.Info("rpc: block chain ", params.Name)
@@ -85,10 +84,10 @@ func (b *DenariusRPC) Initialize() error {
 }
 
 // GetBlock returns block with given hash.
-func (b *DenariusRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
+func (d *DenariusRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 	var err error
 	if hash == "" && height > 0 {
-		hash, err = b.GetBlockHash(height)
+		hash, err = d.GetBlockHash(height)
 		if err != nil {
 			return nil, err
 		}
@@ -100,7 +99,7 @@ func (b *DenariusRPC) GetBlock(hash string, height uint32) (*bchain.Block, error
 	req := btc.CmdGetBlock{Method: "getblock"}
 	req.Params.BlockHash = hash
 	req.Params.Verbosity = 1
-	err = b.Call(&req, &res)
+	err = d.Call(&req, &res)
 
 	if err != nil {
 		return nil, errors.Annotatef(err, "hash %v", hash)
@@ -111,7 +110,7 @@ func (b *DenariusRPC) GetBlock(hash string, height uint32) (*bchain.Block, error
 
 	txs := make([]bchain.Tx, 0, len(res.Result.Txids))
 	for _, txid := range res.Result.Txids {
-		tx, err := b.GetTransaction(txid)
+		tx, err := d.GetTransaction(txid)
 		if err != nil {
 			if isInvalidTx(err) {
 				glog.Errorf("rpc: getblock: skipping transanction in block %s due error: %s", hash, err)
@@ -144,17 +143,17 @@ func isInvalidTx(err error) bool {
 
 // GetTransactionForMempool returns a transaction by the transaction ID.
 // It could be optimized for mempool, i.e. without block time and confirmations
-func (b *DenariusRPC) GetTransactionForMempool(txid string) (*bchain.Tx, error) {
-	return b.GetTransaction(txid)
+func (d *DenariusRPC) GetTransactionForMempool(txid string) (*bchain.Tx, error) {
+	return d.GetTransaction(txid)
 }
 
 // EstimateFee returns fee estimation.
-func (b *DenariusRPC) EstimateFee(blocks int) (float64, error) {
-	return b.EstimateSmartFee(blocks, true)
+func (d *DenariusRPC) EstimateFee(blocks int) (float64, error) {
+	return d.EstimateSmartFee(blocks, true)
 }
 
 // GetMempoolEntry returns mempool data for given transaction
-func (b *DenariusRPC) GetMempoolEntry(txid string) (*bchain.MempoolEntry, error) {
+func (d *DenariusRPC) GetMempoolEntry(txid string) (*bchain.MempoolEntry, error) {
 	return nil, errors.New("GetMempoolEntry: not implemented")
 }
 
