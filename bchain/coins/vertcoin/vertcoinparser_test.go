@@ -1,4 +1,4 @@
-// build unittest
+// +build unittest
 
 package vertcoin
 
@@ -92,6 +92,7 @@ func init() {
 		Blocktime: 1529925180,
 		Txid:      "d58c11aa970449c3e0ee5e0cdf78532435a9d2b28a2da284a8dd4dd6bdd0331c",
 		LockTime:  952180,
+		Version:   1,
 		Vin: []bchain.Vin{
 			{
 				ScriptSig: bchain.ScriptSig{
