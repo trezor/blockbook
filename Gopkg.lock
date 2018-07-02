@@ -38,6 +38,12 @@
   revision = "12e86f41eb040d3b85b5d8e3a3a4bed035517c52"
 
 [[projects]]
+  name = "github.com/deckarep/golang-set"
+  packages = ["."]
+  revision = "1d4478f51bed434f1dadf96dcd9b43aabac66795"
+  version = "v1.7"
+
+[[projects]]
   name = "github.com/ethereum/go-ethereum"
   packages = [".","common","common/hexutil","common/math","core/types","crypto","crypto/secp256k1","crypto/sha3","ethclient","ethdb","log","metrics","params","rlp","rpc","trie"]
   revision = "329ac18ef617d0238f71637bffe78f028b0f13f7"
@@ -202,6 +208,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "97b5e11b3aa46e6b54a5c3fd7835c49f324f9821a1c641e5682f60ee6716d8c2"
+  inputs-digest = "afcce626624acc0db803a97ce0238798cf034dc999161f32b4158c8033542cb7"
   solver-name = "gps-cdcl"
   solver-version = 1
