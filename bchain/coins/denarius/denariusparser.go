@@ -49,31 +49,17 @@ func GetChainParams(chain string) *chaincfg.Params {
 	}
 }
 
-// ParseBlock parses raw block to our Block struct
-// it has special handling for Auxpow blocks that cannot be parsed by standard btc wire parser
-func (p *DenariusParser) ParseBlock(b []byte) (*bchain.Block, error) {
-	r := bytes.NewReader(b)
-	w := wire.MsgBlock{}
-	h := wire.BlockHeader{}
-	err := h.Deserialize(r)
-	if err != nil {
-		return nil, err
+// GetAddrIDFromVout returns internal address representation of given transaction output
+func (p *DenariusParser) GetAddrIDFromVout(output *bchain.Vout) ([]byte, error) {
+	if len(output.ScriptPubKey.Addresses) != 1 {
+		return nil, nil
 	}
-	if (h.Version & utils.VersionAuxpow) != 0 {
-		if err = utils.SkipAuxpow(r); err != nil {
-			return nil, err
-		}
-	}
+	hash, _, err := utils.CheckDecode(output.ScriptPubKey.Addresses[0])
+	return hash, err
+}
 
-	err = utils.DecodeTransactions(r, 0, wire.WitnessEncoding, &w)
-	if err != nil {
-		return nil, err
-	}
-
-	txs := make([]bchain.Tx, len(w.Transactions))
-	for ti, t := range w.Transactions {
-		txs[ti] = p.TxFromMsgTx(t, false)
-	}
-
-	return &bchain.Block{Txs: txs}, nil
+// GetAddrIDFromAddress returns internal address representation of given address
+func (p *DenariusParser) GetAddrIDFromAddress(address string) ([]byte, error) {
+	hash, _, err := utils.CheckDecode(address)
+	return hash, err
 }
