@@ -1,5 +1,5 @@
 BGOLD_VERSION := 0.15.1
-BUILD_VERSION := -rc1
+BUILD_VERSION := 
 
 all:
 	wget https://github.com/BTCGPU/BTCGPU/releases/download/v${BGOLD_VERSION}${BUILD_VERSION}/bitcoin-gold-${BGOLD_VERSION}-x86_64-linux-gnu.tar.gz
