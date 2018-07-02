@@ -102,6 +102,7 @@ func parseTemplates() (txTpl, addressTpl *template.Template) {
 		"formatUnixTime":      formatUnixTime,
 		"formatAmount":        formatAmount,
 		"setTxToTemplateData": setTxToTemplateData,
+		"stringInSlice":       stringInSlice,
 	}
 	txTpl = template.Must(template.New("tx").Funcs(templateFuncMap).ParseFiles("./static/templates/tx.html", "./static/templates/txdetail.html", "./static/templates/base.html"))
 	addressTpl = template.Must(template.New("address").Funcs(templateFuncMap).ParseFiles("./static/templates/address.html", "./static/templates/txdetail.html", "./static/templates/base.html"))
