@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 
 	"github.com/golang/glog"
+	"github.com/juju/errors"
 )
 
 // DenariusRPC is an interface to JSON-RPC bitcoind service.
@@ -67,7 +68,7 @@ func (d *DenariusRPC) Initialize() error {
 	params := GetChainParams(chainName)
 
 	// always create parser
-	d.Parser = NewDenariusParser(params, d.ChainConfig)
+	d.Parser = NewDenariusParser(d.ChainConfig)
 
 	// parameters for getInfo request
 	if params.Net == MainnetMagic {

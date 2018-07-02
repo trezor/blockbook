@@ -4,7 +4,6 @@ import (
 	"blockbook/bchain"
 	"blockbook/bchain/coins/btc"
 	"blockbook/bchain/coins/utils"
-	"bytes"
 
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/wire"
@@ -48,6 +47,7 @@ func NewDenariusParser(c *btc.Configuration) *DenariusParser {
 // GetChainParams contains network parameters for the main Denarius network,
 // and the test Denarius network
 func GetChainParams(chain string) *chaincfg.Params {
+	var params *chaincfg.Params
 	switch chain {
 	default:
 		params = &chaincfg.MainNetParams
