@@ -82,15 +82,15 @@ Description: Satoshilabs blockbook server (Dogecoin mainnet)
 
 Package: blockbook-vertcoin
 Architecture: amd64
-Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, backend-dogecoin
+Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, backend-vertcoin
 Description: Satoshilabs blockbook server (Vertcoin mainnet)
 
 Package: blockbook-vertcoin-testnet
 Architecture: amd64
-Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, backend-dogecoin
+Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, backend-vertcoin-testnet
 Description: Satoshilabs blockbook server (Vertcoin testnet)
 
 Package: blockbook-namecoin
 Architecture: amd64
 Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, backend-namecoin
-Description: Satoshilabs blockbook server (Dogecoin mainnet)
+Description: Satoshilabs blockbook server (Namecoin mainnet)
