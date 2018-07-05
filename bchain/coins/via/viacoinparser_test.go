@@ -35,7 +35,7 @@ func TestAddressToOutputScript_Mainnet(t *testing.T) {
 		{
 			name:    "scripthash1",
 			args:    args{address: "ESqJAgbiBMEt578P5gqKVMaQyyxH8if6Gh"},
-			want:    "a9146a2c482f4985f57e702f325816c90e3723ca81ae87",Viacoin
+			want:    "a9146a2c482f4985f57e702f325816c90e3723ca81ae87",
 			wantErr: false,
 		},
 		{
@@ -44,7 +44,6 @@ func TestAddressToOutputScript_Mainnet(t *testing.T) {
 			want:    "a914a5ab14c9804d0d8bf02f1aea4e82780733ad0a8387",
 			wantErr: false,
 		},
-		
 	}
 	parser := NewViacoinParser(GetChainParams("main"), &btc.Configuration{})
 
