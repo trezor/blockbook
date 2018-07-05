@@ -1,4 +1,4 @@
-package viacoinPubke
+package viacoin
 
 import (
 	"blockbook/bchain/coins/btc"

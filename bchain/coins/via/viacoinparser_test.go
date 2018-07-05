@@ -92,7 +92,7 @@ func init() {
 				ScriptSig: bchain.ScriptSig{
 					Hex: "47304402204f929a1e1e40bd352bbd5d3c5ae6c29740e5a8b29dd8c53a15d3eab29aecee7c02206a514e5e4561cfb9330d98f4a4fe1385af56d87eb1d3e1a379d7a50276788cfe0121034a9305644fbcb56d4fc0bc15959b917f7753ae8e581acc97f9cfe771ad1e8249",
 				},
-				Txid:     "d65a60b340a233d55809ad04d9175e717dc49edf1edacc99034ea3341878fd46",
+				Txid:     "d0284c75a389a07cc256e0bb913110d8d8059efd04daa8147ecf2fa0b3bdf6ff",
 				Vout:     0,
 				Sequence: 4294967294,
 			},
