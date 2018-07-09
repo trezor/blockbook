@@ -1,0 +1,23 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+
+  configure)
+    if ! id -u blockbook-digibyte &> /dev/null
+    then
+        useradd --system -M -U blockbook-digibyte -s /bin/false
+    fi
+
+    for dir in /opt/coins/data/digibyte/blockbook /opt/coins/blockbook/digibyte/logs
+    do
+        if [ "$(stat -c '%U' $dir)" != "blockbook-digibyte" ]
+        then
+            chown -R blockbook-digibyte:blockbook-digibyte $dir
+        fi
+    done
+  ;;
+
+esac
+
+#DEBHELPER#

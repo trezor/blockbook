@@ -1,0 +1,20 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+
+  configure)
+    if ! id -u digibyte &> /dev/null
+    then
+        useradd --system -M -U digibyte -s /bin/false
+    fi
+
+    if [ "$(stat -c '%U' /opt/coins/data/digibyte/backend)" != "digibyte" ]
+    then
+        chown -R digibyte:digibyte /opt/coins/data/digibyte/backend
+    fi
+  ;;
+
+esac
+
+#DEBHELPER#

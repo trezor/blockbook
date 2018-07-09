@@ -1,0 +1,10 @@
+/opt/coins/data/digibyte/backend/debug.log
+/opt/coins/data/digibyte/backend/db.log
+{
+        rotate 7
+        daily
+        compress
+        missingok
+        notifempty
+        copytruncate
+}

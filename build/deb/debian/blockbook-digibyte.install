@@ -1,0 +1,6 @@
+#!/usr/bin/dh-exec
+blockbook /opt/coins/blockbook/digibyte/bin
+cert /opt/coins/blockbook/digibyte
+static /opt/coins/blockbook/digibyte
+configs/digibyte.json => /opt/coins/blockbook/digibyte/config/blockchaincfg.json
+logrotate.sh /opt/coins/blockbook/digibyte/bin
