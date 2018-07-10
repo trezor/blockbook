@@ -79,6 +79,18 @@ func TestZCashRPC_EstimateFee(t *testing.T) {
 	tests.mainnet.TestEstimateFee(t)
 }
 
+func TestZCashRPC_GetBestBlockHash(t *testing.T) {
+	tests.mainnet.TestGetBestBlockHash(t)
+}
+
+func TestZCashRPC_GetBestBlockHeight(t *testing.T) {
+	tests.mainnet.TestGetBestBlockHeight(t)
+}
+
+func TestZCashRPC_GetBlockHeader(t *testing.T) {
+	tests.mainnet.TestGetBlockHeader(t)
+}
+
 func TestZCashTestnetRPC_GetBlockHash(t *testing.T) {
 	tests.testnet.TestGetBlockHash(t)
 }
@@ -109,4 +121,16 @@ func TestZCashTestnetRPC_EstimateSmartFee(t *testing.T) {
 
 func TestZCashTestnetRPC_EstimateFee(t *testing.T) {
 	tests.testnet.TestEstimateFee(t)
+}
+
+func TestZCashTestnetRPC_GetBestBlockHash(t *testing.T) {
+	tests.mainnet.TestGetBestBlockHash(t)
+}
+
+func TestZCashTestnetRPC_GetBestBlockHeight(t *testing.T) {
+	tests.mainnet.TestGetBestBlockHeight(t)
+}
+
+func TestZCashTestnetRPC_GetBlockHeader(t *testing.T) {
+	tests.mainnet.TestGetBlockHeader(t)
 }

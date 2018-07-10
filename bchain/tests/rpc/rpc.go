@@ -155,12 +155,11 @@ func (rt *Test) TestGetTransaction(t *testing.T) {
 			return
 		}
 		// Confirmations is variable field, we just check if is set and reset it
-		if got.Confirmations > 0 {
-			got.Confirmations = 0
-		} else {
-			t.Errorf("GetTransaction() has empty Confirmations field")
+		if got.Confirmations <= 0 {
+			t.Errorf("GetTransaction() got struct with invalid Confirmations field")
 			continue
 		}
+		got.Confirmations = 0
 
 		if !reflect.DeepEqual(got, want) {
 			t.Errorf("GetTransaction() got %v, want %v", got, want)
@@ -362,7 +361,7 @@ func (rt *Test) TestEstimateSmartFee(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		if fee != -1 && (fee < 0 || fee > 1) {
+		if fee != -1 && fee < 0 {
 			t.Errorf("EstimateSmartFee() returned unexpected fee rate: %f", fee)
 		}
 	}
@@ -376,8 +375,75 @@ func (rt *Test) TestEstimateFee(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		if fee != -1 && (fee < 0 || fee > 1) {
+		if fee != -1 && fee < 0 {
 			t.Errorf("EstimateFee() returned unexpected fee rate: %f", fee)
 		}
+	}
+}
+
+func (rt *Test) TestGetBestBlockHash(t *testing.T) {
+	for i := 0; i < 3; i++ {
+		hash, err := rt.Client.GetBestBlockHash()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		blk, err := rt.Client.GetBlock(hash, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// we expect no next block
+		_, err = rt.Client.GetBlock("", blk.Height+1)
+		if err != nil {
+			if err != bchain.ErrBlockNotFound {
+				t.Error(err)
+			}
+			return
+		}
+	}
+	t.Error("GetBestBlockHash() didn't get the best hash")
+}
+
+func (rt *Test) TestGetBestBlockHeight(t *testing.T) {
+	for i := 0; i < 3; i++ {
+		height, err := rt.Client.GetBestBlockHeight()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// we expect no next block
+		_, err = rt.Client.GetBlock("", height+1)
+		if err != nil {
+			if err != bchain.ErrBlockNotFound {
+				t.Error(err)
+			}
+			return
+		}
+	}
+	t.Error("GetBestBlockHeigh() didn't get the the best heigh")
+}
+
+func (rt *Test) TestGetBlockHeader(t *testing.T) {
+	want := &bchain.BlockHeader{
+		Hash:   rt.TestData.BlockHash,
+		Height: rt.TestData.BlockHeight,
+	}
+
+	got, err := rt.Client.GetBlockHeader(rt.TestData.BlockHash)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Confirmations is variable field, we just check if is set and reset it
+	if got.Confirmations <= 0 {
+		t.Fatalf("GetBlockHeader() got struct with invalid Confirmations field")
+	}
+	got.Confirmations = 0
+
+	got.Prev, got.Next = "", ""
+
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("GetBlockHeader() got=%v, want=%v", got, want)
 	}
 }

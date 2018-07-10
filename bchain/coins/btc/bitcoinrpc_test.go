@@ -87,6 +87,18 @@ func TestBitcoinRPC_EstimateFee(t *testing.T) {
 	tests.mainnet.TestEstimateFee(t)
 }
 
+func TestBitcoinRPC_GetBestBlockHash(t *testing.T) {
+	tests.mainnet.TestGetBestBlockHash(t)
+}
+
+func TestBitcoinRPC_GetBestBlockHeight(t *testing.T) {
+	tests.mainnet.TestGetBestBlockHeight(t)
+}
+
+func TestBitcoinRPC_GetBlockHeader(t *testing.T) {
+	tests.mainnet.TestGetBlockHeader(t)
+}
+
 func TestBitcoinTestnetRPC_GetBlockHash(t *testing.T) {
 	tests.testnet.TestGetBlockHash(t)
 }
@@ -121,4 +133,16 @@ func TestBitcoinTestnetRPC_EstimateSmartFee(t *testing.T) {
 
 func TestBitcoinTestnetRPC_EstimateFee(t *testing.T) {
 	tests.testnet.TestEstimateFee(t)
+}
+
+func TestBitcoinTestnetRPC_GetBestBlockHash(t *testing.T) {
+	tests.testnet.TestGetBestBlockHash(t)
+}
+
+func TestBitcoinTestnetRPC_GetBestBlockHeight(t *testing.T) {
+	tests.testnet.TestGetBestBlockHeight(t)
+}
+
+func TestBitcoinTestnetRPC_GetBlockHeader(t *testing.T) {
+	tests.testnet.TestGetBlockHeader(t)
 }

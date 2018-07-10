@@ -76,3 +76,15 @@ func TestNamecoinRPC_EstimateSmartFee(t *testing.T) {
 func TestNamecoinRPC_EstimateFee(t *testing.T) {
 	rpcTest.TestEstimateFee(t)
 }
+
+func TestNamecoinRPC_GetBestBlockHash(t *testing.T) {
+	rpcTest.TestGetBestBlockHash(t)
+}
+
+func TestNamecoinRPC_GetBestBlockHeight(t *testing.T) {
+	rpcTest.TestGetBestBlockHeight(t)
+}
+
+func TestNamecoinRPC_GetBlockHeader(t *testing.T) {
+	rpcTest.TestGetBlockHeader(t)
+}
