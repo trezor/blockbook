@@ -67,8 +67,10 @@ func TestBitcoinRPC_GetTransactionForMempool(t *testing.T) {
 	tests.mainnet.TestGetTransactionForMempool(t)
 }
 
+// FIXME
 func TestBitcoinRPC_MempoolSync(t *testing.T) {
-	tests.mainnet.TestMempoolSync(t)
+	t.Skip("skipping test, run too long")
+	// tests.mainnet.TestMempoolSync(t)
 }
 
 func TestBitcoinRPC_GetMempoolEntry(t *testing.T) {
