@@ -1,0 +1,6 @@
+#!/usr/bin/dh-exec
+blockbook /opt/coins/blockbook/groestlcoin/bin
+cert /opt/coins/blockbook/groestlcoin
+static /opt/coins/blockbook/groestlcoin
+configs/groestlcoin.json => /opt/coins/blockbook/groestlcoin/config/blockchaincfg.json
+logrotate.sh /opt/coins/blockbook/groestlcoin/bin

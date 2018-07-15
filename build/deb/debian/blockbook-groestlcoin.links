@@ -1,0 +1,2 @@
+/opt/coins/blockbook/groestlcoin/cert/testcert.crt /opt/coins/blockbook/groestlcoin/cert/blockbook.crt
+/opt/coins/blockbook/groestlcoin/cert/testcert.key /opt/coins/blockbook/groestlcoin/cert/blockbook.key

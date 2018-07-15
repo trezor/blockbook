@@ -34,9 +34,9 @@ prepare-sources:
 	$(MAKE) prepare-vendor
 
 prepare-vendor:
-	@ if [ "$(UPDATE_VENDOR)" -eq 1 ]; then \
+	if [ "$(UPDATE_VENDOR)" -eq 1 ]; then \
 		echo "Updating vendor"; \
-		rm -rf $(GOPATH)/src/blockbook/vendor && cd $(GOPATH)/src/blockbook && dep ensure -vendor-only ; \
+		rm -rf $(GOPATH)/src/blockbook/vendor && cd $(GOPATH)/src/blockbook && dep ensure -vendor-only ; rm -rf /out/vendor; cp -r $(GOPATH)/src/blockbook/vendor /out ; \
 	else \
 		echo "Update of vendor not demanded, keeping version from src" ; \
 	fi

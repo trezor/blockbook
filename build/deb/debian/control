@@ -80,6 +80,16 @@ Architecture: amd64
 Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, backend-dogecoin
 Description: Satoshilabs blockbook server (Dogecoin mainnet)
 
+Package: blockbook-groestlcoin
+Architecture: amd64
+Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, backend-groestlcoin
+Description: Satoshilabs blockbook server (Groestlcoin mainnet)
+
+Package: blockbook-groestlcoin-testnet
+Architecture: amd64
+Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, backend-groestlcoin-testnet
+Description: Satoshilabs blockbook server (Groestlcoin testnet)
+
 Package: blockbook-vertcoin
 Architecture: amd64
 Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, backend-vertcoin

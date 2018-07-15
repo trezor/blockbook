@@ -1,0 +1,23 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+
+  configure)
+    if ! id -u blockbook-groestlcoin &> /dev/null
+    then
+        useradd --system -M -U blockbook-groestlcoin -s /bin/false
+    fi
+
+    for dir in /opt/coins/data/groestlcoin_testnet/blockbook /opt/coins/blockbook/groestlcoin_testnet/logs
+    do
+        if [ "$(stat -c '%U' $dir)" != "blockbook-groestlcoin" ]
+        then
+            chown -R blockbook-groestlcoin:blockbook-groestlcoin $dir
+        fi
+    done
+  ;;
+
+esac
+
+#DEBHELPER#

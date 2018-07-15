@@ -311,7 +311,7 @@ func (msg *MsgTx) TxHash() chainhash.Hash {
 	// cause a run-time panic.
 	buf := bytes.NewBuffer(make([]byte, 0, msg.SerializeSizeStripped()))
 	_ = msg.SerializeNoWitness(buf)
-	return chainhash.DoubleHashH(buf.Bytes())
+	return chainhash.HashH(buf.Bytes())
 }
 
 // WitnessHash generates the hash of the transaction serialized according to

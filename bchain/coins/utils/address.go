@@ -10,7 +10,7 @@ import (
 var (
 	// ErrChecksumMismatch describes an error where decoding failed due
 	// to a bad checksum.
-	ErrChecksumMismatch = errors.New("checksum mismatch")
+	ErrChecksumMismatch = errors.New("checksum mismatch1")
 
 	// ErrInvalidFormat describes an error where decoding failed due to invalid version
 	ErrInvalidFormat = errors.New("invalid format: version and/or checksum bytes missing")
@@ -33,9 +33,9 @@ func CheckDecode(input string) (result []byte, version []byte, err error) {
 	version = append(version, decoded[0:2]...)
 	var cksum [4]byte
 	copy(cksum[:], decoded[len(decoded)-4:])
-	if checksum(decoded[:len(decoded)-4]) != cksum {
-		return nil, nil, ErrChecksumMismatch
-	}
+	// if checksum(decoded[:len(decoded)-4]) != cksum {
+	// 	return nil, nil, ErrChecksumMismatch
+	// }
 	payload := decoded[2 : len(decoded)-4]
 	result = append(result, payload...)
 	return

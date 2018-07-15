@@ -1,0 +1,12 @@
+{
+  "coin_name": "Groestlcoin Testnet",
+  "rpcURL": "http://localhost:18045",
+  "rpcUser": "rpc",
+  "rpcPass": "rpc",
+  "rpcTimeout": 25,
+  "parse": true,
+  "zeroMQBinding": "tcp://localhost:48345",
+  "mempoolWorkers": 8,
+  "mempoolSubWorkers": 2,
+  "blockAddressesToKeep": 300
+}

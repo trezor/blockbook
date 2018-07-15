@@ -37,7 +37,7 @@ func (e UnsupportedWitnessProgLenError) Error() string {
 var (
 	// ErrChecksumMismatch describes an error where decoding failed due
 	// to a bad checksum.
-	ErrChecksumMismatch = errors.New("checksum mismatch")
+	ErrChecksumMismatch = errors.New("checksum mismatch2")
 
 	// ErrUnknownAddressType describes an error where an address can not
 	// decoded as a specific address type due to the string encoding
