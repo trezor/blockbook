@@ -3,6 +3,12 @@
 
 [[projects]]
   branch = "master"
+  name = "github.com/Groestlcoin/go-groestl-hash"
+  packages = ["groestl","hash"]
+  revision = "790653ac190c4029ee200e82a8f21b5d1afaf7d6"
+
+[[projects]]
+  branch = "master"
   name = "github.com/beorn7/perks"
   packages = ["quantile"]
   revision = "3a771d992973f24aa725d07868b467d1ddfceafb"
@@ -89,13 +95,13 @@
   branch = "master"
   name = "github.com/jakm/bchutil"
   packages = ["."]
-  revision = "9e4fc13b082c87967b0befbcbad6fe5a5aa5ac1a"
+  revision = "d4461d2030814290cfde9d06f64af7703c5a1cc8"
 
 [[projects]]
   branch = "master"
   name = "github.com/jakm/btcutil"
   packages = [".","base58","bech32","chaincfg","txscript"]
-  revision = "83dfbb3d0b20916f89b36b95c6ca580e3a785856"
+  revision = "f9e15ad630678fa44cbf06f6450527a51008b08a"
 
 [[projects]]
   branch = "master"
