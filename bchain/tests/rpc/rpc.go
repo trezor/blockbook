@@ -382,6 +382,8 @@ func (rt *Test) TestEstimateFee(t *testing.T) {
 }
 
 func (rt *Test) TestGetBestBlockHash(t *testing.T) {
+	rt.skipUnconnected(t)
+
 	for i := 0; i < 3; i++ {
 		hash, err := rt.Client.GetBestBlockHash()
 		if err != nil {
@@ -406,6 +408,8 @@ func (rt *Test) TestGetBestBlockHash(t *testing.T) {
 }
 
 func (rt *Test) TestGetBestBlockHeight(t *testing.T) {
+	rt.skipUnconnected(t)
+
 	for i := 0; i < 3; i++ {
 		height, err := rt.Client.GetBestBlockHeight()
 		if err != nil {
@@ -425,6 +429,8 @@ func (rt *Test) TestGetBestBlockHeight(t *testing.T) {
 }
 
 func (rt *Test) TestGetBlockHeader(t *testing.T) {
+	rt.skipUnconnected(t)
+
 	want := &bchain.BlockHeader{
 		Hash:   rt.TestData.BlockHash,
 		Height: rt.TestData.BlockHeight,
