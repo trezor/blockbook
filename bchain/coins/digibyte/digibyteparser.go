@@ -9,7 +9,7 @@ import (
 
 const (
 	MainnetMagic wire.BitcoinNet = 0xdab6c3fa
-	TestnetMagic wire.BitcoinNet = 0xdab6c3fa // "vert" word
+	TestnetMagic wire.BitcoinNet = 0xdab6c3fa 
 	RegtestMagic wire.BitcoinNet = 0xdab5bffc
 )
 
@@ -27,7 +27,8 @@ func init() {
 
 	TestNetParams = chaincfg.TestNet3Params
 	TestNetParams.Net = TestnetMagic
-	TestNetParams.PubKeyHashAddrID = 74
+	// ToDo: Check whether there is a dgb testnet and update the pubkeyhash and scripthash
+	TestNetParams.PubKeyHashAddrID = 74 
 	TestNetParams.ScriptHashAddrID = 196
 	TestNetParams.Bech32HRPSegwit = "tdgb"
 
