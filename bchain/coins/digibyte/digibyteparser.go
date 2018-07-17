@@ -8,8 +8,8 @@ import (
 )
 
 const (
-	MainnetMagic wire.BitcoinNet = 0xdab5bffb
-	TestnetMagic wire.BitcoinNet = 0x74726576 // "vert" word
+	MainnetMagic wire.BitcoinNet = 0xdab6c3fa
+	TestnetMagic wire.BitcoinNet = 0xdab6c3fa // "vert" word
 	RegtestMagic wire.BitcoinNet = 0xdab5bffc
 )
 
@@ -21,15 +21,15 @@ var (
 func init() {
 	MainNetParams = chaincfg.MainNetParams
 	MainNetParams.Net = MainnetMagic
-	MainNetParams.PubKeyHashAddrID = 71
+	MainNetParams.PubKeyHashAddrID = 30
 	MainNetParams.ScriptHashAddrID = 5
-	MainNetParams.Bech32HRPSegwit = "vtc"
+	MainNetParams.Bech32HRPSegwit = "dgb"
 
 	TestNetParams = chaincfg.TestNet3Params
 	TestNetParams.Net = TestnetMagic
 	TestNetParams.PubKeyHashAddrID = 74
 	TestNetParams.ScriptHashAddrID = 196
-	TestNetParams.Bech32HRPSegwit = "tvtc"
+	TestNetParams.Bech32HRPSegwit = "tdgb"
 
 	err := chaincfg.Register(&MainNetParams)
 	if err == nil {
