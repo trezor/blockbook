@@ -76,10 +76,6 @@ func TestBCashRPC_GetMempoolEntry(t *testing.T) {
 	tests.mainnet.TestGetMempoolEntry(t)
 }
 
-func TestBCashRPC_SendRawTransaction(t *testing.T) {
-	tests.mainnet.TestSendRawTransaction(t)
-}
-
 func TestBCashRPC_EstimateSmartFee(t *testing.T) {
 	tests.mainnet.TestEstimateSmartFee(t)
 }
@@ -122,10 +118,6 @@ func TestBCashTestnetRPC_MempoolSync(t *testing.T) {
 
 func TestBCashTestnetRPC_GetMempoolEntry(t *testing.T) {
 	tests.testnet.TestGetMempoolEntry(t)
-}
-
-func TestBCashTestnetRPC_SendRawTransaction(t *testing.T) {
-	tests.testnet.TestSendRawTransaction(t)
 }
 
 func TestBCashTestnetRPC_EstimateSmartFee(t *testing.T) {

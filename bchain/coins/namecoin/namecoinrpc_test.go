@@ -65,10 +65,6 @@ func TestNamecoinRPC_GetMempoolEntry(t *testing.T) {
 	rpcTest.TestGetMempoolEntry(t)
 }
 
-func TestNamecoinRPC_SendRawTransaction(t *testing.T) {
-	rpcTest.TestSendRawTransaction(t)
-}
-
 func TestNamecoinRPC_EstimateSmartFee(t *testing.T) {
 	rpcTest.TestEstimateSmartFee(t)
 }
