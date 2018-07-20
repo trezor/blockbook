@@ -226,8 +226,12 @@ func (s *PublicServer) explorerAddress(w http.ResponseWriter, r *http.Request) {
 	var address *api.Address
 	var err error
 	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
+		page, ec := strconv.Atoi(r.URL.Query().Get("page"))
+		if ec != nil {
+			page = 0
+		}
 		addrID := r.URL.Path[i+1:]
-		address, err = s.api.GetAddress(addrID)
+		address, err = s.api.GetAddress(addrID, page)
 		if err != nil {
 			glog.Error(err)
 		}
@@ -340,8 +344,12 @@ func (s *PublicServer) apiAddress(w http.ResponseWriter, r *http.Request) {
 	var address *api.Address
 	var err error
 	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
+		page, ec := strconv.Atoi(r.URL.Query().Get("page"))
+		if ec != nil {
+			page = 0
+		}
 		addrID := r.URL.Path[i+1:]
-		address, err = s.api.GetAddress(addrID)
+		address, err = s.api.GetAddress(addrID, page)
 		if err != nil {
 			glog.Error(err)
 		}

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"blockbook/api"
 	"blockbook/bchain"
 	"blockbook/common"
 	"blockbook/db"
@@ -196,22 +197,6 @@ func unmarshalGetAddressRequest(params []byte) (addr []string, opts addrOpts, er
 	return
 }
 
-// bitcore returns txids from the newest to the oldest, we have to revert the order
-func uniqueTxidsInReverse(txids []string) []string {
-	i := len(txids)
-	ut := make([]string, i)
-	txidsMap := make(map[string]struct{})
-	for _, txid := range txids {
-		_, e := txidsMap[txid]
-		if !e {
-			i--
-			ut[i] = txid
-			txidsMap[txid] = struct{}{}
-		}
-	}
-	return ut[i:]
-}
-
 type resultAddressTxids struct {
 	Result []string `json:"result"`
 }
@@ -236,7 +221,7 @@ func (s *SocketIoServer) getAddressTxids(addr []string, opts *addrOpts) (res res
 			txids = append(txids, m...)
 		}
 	}
-	res.Result = uniqueTxidsInReverse(txids)
+	res.Result = api.UniqueTxidsInReverse(txids)
 	return res, nil
 }
 

@@ -8,6 +8,8 @@ import (
 	"github.com/golang/glog"
 )
 
+const txsOnPage = 30
+
 // Worker is handle to api worker
 type Worker struct {
 	db          *db.RocksDB
@@ -151,10 +153,27 @@ func (t *Tx) getAddrVinValue(addrID string) float64 {
 	return val
 }
 
+// UniqueTxidsInReverse reverts the order of transactions (so that newest are first) and removes duplicate transactions
+func UniqueTxidsInReverse(txids []string) []string {
+	i := len(txids)
+	ut := make([]string, i)
+	txidsMap := make(map[string]struct{})
+	for _, txid := range txids {
+		_, e := txidsMap[txid]
+		if !e {
+			i--
+			ut[i] = txid
+			txidsMap[txid] = struct{}{}
+		}
+	}
+	return ut[i:]
+}
+
 // GetAddress computes address value and gets transactions for given address
-func (w *Worker) GetAddress(addrID string) (*Address, error) {
+func (w *Worker) GetAddress(addrID string, page int) (*Address, error) {
 	glog.Info(addrID, " start")
 	txc, err := w.getAddressTxids(addrID, false)
+	txc = UniqueTxidsInReverse(txc)
 	if err != nil {
 		return nil, err
 	}
@@ -166,7 +185,11 @@ func (w *Worker) GetAddress(addrID string) (*Address, error) {
 	if err != nil {
 		return nil, err
 	}
-	txs := make([]*Tx, len(txc)+len(txm))
+	lc := len(txc)
+	if lc > txsOnPage {
+		lc = txsOnPage
+	}
+	txs := make([]*Tx, len(txm)+lc)
 	txi := 0
 	var uBal, bal, totRecv, totSent float64
 	for _, tx := range txm {
@@ -175,20 +198,30 @@ func (w *Worker) GetAddress(addrID string) (*Address, error) {
 		if err != nil {
 			glog.Error("GetTransaction ", tx, ": ", err)
 		} else {
-			txs[txi] = tx
 			uBal = tx.getAddrVoutValue(addrID) - tx.getAddrVinValue(addrID)
+			txs[txi] = tx
 			txi++
 		}
 	}
-	for i := len(txc) - 1; i >= 0; i-- {
-		tx, err := w.GetTransaction(txc[i], bestheight, false)
+	if page < 0 {
+		page = 0
+	}
+	from := page * txsOnPage
+	if from > len(txc) {
+		from = 0
+	}
+	to := from + txsOnPage
+	for i, tx := range txc {
+		tx, err := w.GetTransaction(tx, bestheight, false)
 		if err != nil {
 			return nil, err
 		} else {
-			txs[txi] = tx
 			totRecv += tx.getAddrVoutValue(addrID)
 			totSent += tx.getAddrVinValue(addrID)
-			txi++
+			if i >= from && i < to {
+				txs[txi] = tx
+				txi++
+			}
 		}
 	}
 	bal = totRecv - totSent
