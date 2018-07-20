@@ -1,0 +1,13 @@
+{
+    "coin_name": "Viacoin",
+    "rpcURL": "http://localhost:5222",
+    "rpcUser": "rpc",
+    "rpcPass": "rpc",
+    "rpcTimeout": 25,
+    "parse": true,
+    "zeroMQBinding": "tcp://localhost:52224",
+    "mempoolWorkers": 8,
+    "mempoolSubWorkers": 2,
+    "blockAddressesToKeep": 300
+  }
+  
