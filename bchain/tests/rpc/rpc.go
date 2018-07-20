@@ -390,13 +390,20 @@ func (rt *Test) TestGetBestBlockHash(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		blk, err := rt.Client.GetBlock(hash, 0)
+		height, err := rt.Client.GetBestBlockHeight()
 		if err != nil {
 			t.Fatal(err)
 		}
+		hh, err := rt.Client.GetBlockHash(height)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if hash != hh {
+			continue
+		}
 
 		// we expect no next block
-		_, err = rt.Client.GetBlock("", blk.Height+1)
+		_, err = rt.Client.GetBlock("", height+1)
 		if err != nil {
 			if err != bchain.ErrBlockNotFound {
 				t.Error(err)
