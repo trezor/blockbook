@@ -1,0 +1,2 @@
+#!/bin/sh
+/opt/coins/blockbook/denarius/bin/logrotate.sh

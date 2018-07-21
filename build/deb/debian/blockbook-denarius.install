@@ -1,0 +1,6 @@
+#!/usr/bin/dh-exec
+blockbook /opt/coins/blockbook/denarius/bin
+cert /opt/coins/blockbook/denarius
+static /opt/coins/blockbook/denarius
+configs/denarius.json => /opt/coins/blockbook/denarius/config/blockchaincfg.json
+logrotate.sh /opt/coins/blockbook/denarius/bin
