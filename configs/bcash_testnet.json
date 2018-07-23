@@ -1,5 +1,6 @@
 {
   "coin_name": "Bcash Testnet",
+  "coin_shortcut": "TBCH",
   "rpcURL": "http://localhost:18031",
   "rpcUser": "rpc",
   "rpcPass": "rpc",

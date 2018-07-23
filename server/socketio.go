@@ -1,14 +1,12 @@
 package server
 
 import (
+	"blockbook/api"
 	"blockbook/bchain"
 	"blockbook/common"
 	"blockbook/db"
-	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -19,25 +17,19 @@ import (
 	"github.com/martinboehm/golang-socketio/transport"
 )
 
-const blockbookAbout = "Blockbook - blockchain indexer for TREZOR wallet https://trezor.io/. Do not use for any other purpose."
-
 // SocketIoServer is handle to SocketIoServer
 type SocketIoServer struct {
-	binding     string
-	certFiles   string
 	server      *gosocketio.Server
-	https       *http.Server
 	db          *db.RocksDB
 	txCache     *db.TxCache
 	chain       bchain.BlockChain
 	chainParser bchain.BlockChainParser
-	explorerURL string
 	metrics     *common.Metrics
 	is          *common.InternalState
 }
 
 // NewSocketIoServer creates new SocketIo interface to blockbook and returns its handle
-func NewSocketIoServer(binding string, certFiles string, db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxCache, explorerURL string, metrics *common.Metrics, is *common.InternalState) (*SocketIoServer, error) {
+func NewSocketIoServer(db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxCache, metrics *common.Metrics, is *common.InternalState) (*SocketIoServer, error) {
 	server := gosocketio.NewServer(transport.GetDefaultWebsocketTransport())
 
 	server.On(gosocketio.OnConnection, func(c *gosocketio.Channel) {
@@ -58,39 +50,15 @@ func NewSocketIoServer(binding string, certFiles string, db *db.RocksDB, chain b
 		Name    string `json:"name"`
 		Message string `json:"message"`
 	}
-
-	addr, path := splitBinding(binding)
-	serveMux := http.NewServeMux()
-	https := &http.Server{
-		Addr:    addr,
-		Handler: serveMux,
-	}
-
 	s := &SocketIoServer{
-		binding:     binding,
-		certFiles:   certFiles,
-		https:       https,
 		server:      server,
 		db:          db,
 		txCache:     txCache,
 		chain:       chain,
 		chainParser: chain.GetChainParser(),
-		explorerURL: explorerURL,
 		metrics:     metrics,
 		is:          is,
 	}
-
-	// support for tests of socket.io interface
-	serveMux.Handle(path+"test.html", http.FileServer(http.Dir("./static/")))
-	// redirect to Bitcore for details of transaction
-	serveMux.HandleFunc(path+"tx/", s.txRedirect)
-	serveMux.HandleFunc(path+"address/", s.addressRedirect)
-	// API call used to detect state of Blockbook
-	serveMux.HandleFunc(path+"api/block-index/", s.apiBlockIndex)
-	// handle socket.io
-	serveMux.Handle(path+"socket.io/", server)
-	// default handler
-	serveMux.HandleFunc(path, s.index)
 
 	server.On("message", s.onMessage)
 	server.On("subscribe", s.onSubscribe)
@@ -98,126 +66,9 @@ func NewSocketIoServer(binding string, certFiles string, db *db.RocksDB, chain b
 	return s, nil
 }
 
-func splitBinding(binding string) (addr string, path string) {
-	i := strings.Index(binding, "/")
-	if i >= 0 {
-		return binding[0:i], binding[i:]
-	}
-	return binding, "/"
-}
-
-// Run starts the server
-func (s *SocketIoServer) Run() error {
-	if s.certFiles == "" {
-		glog.Info("socketio server starting to listen on ws://", s.https.Addr)
-		return s.https.ListenAndServe()
-	}
-	glog.Info("socketio server starting to listen on wss://", s.https.Addr)
-	return s.https.ListenAndServeTLS(fmt.Sprint(s.certFiles, ".crt"), fmt.Sprint(s.certFiles, ".key"))
-}
-
-// Close closes the server
-func (s *SocketIoServer) Close() error {
-	glog.Infof("socketio server closing")
-	return s.https.Close()
-}
-
-// Shutdown shuts down the server
-func (s *SocketIoServer) Shutdown(ctx context.Context) error {
-	glog.Infof("socketio server shutdown")
-	return s.https.Shutdown(ctx)
-}
-
-func joinURL(base string, part string) string {
-	if len(base) > 0 {
-		if len(base) > 0 && base[len(base)-1] == '/' && len(part) > 0 && part[0] == '/' {
-			return base + part[1:]
-		} else {
-			return base + part
-		}
-	}
-	return part
-}
-
-func (s *SocketIoServer) txRedirect(w http.ResponseWriter, r *http.Request) {
-	if s.explorerURL != "" {
-		http.Redirect(w, r, joinURL(s.explorerURL, r.URL.Path), 302)
-		s.metrics.ExplorerViews.With(common.Labels{"action": "tx"}).Inc()
-	}
-}
-
-func (s *SocketIoServer) addressRedirect(w http.ResponseWriter, r *http.Request) {
-	if s.explorerURL != "" {
-		http.Redirect(w, r, joinURL(s.explorerURL, r.URL.Path), 302)
-		s.metrics.ExplorerViews.With(common.Labels{"action": "address"}).Inc()
-	}
-}
-
-type resAboutBlockbookPublic struct {
-	Coin            string    `json:"coin"`
-	Host            string    `json:"host"`
-	Version         string    `json:"version"`
-	GitCommit       string    `json:"gitcommit"`
-	BuildTime       string    `json:"buildtime"`
-	InSync          bool      `json:"inSync"`
-	BestHeight      uint32    `json:"bestHeight"`
-	LastBlockTime   time.Time `json:"lastBlockTime"`
-	InSyncMempool   bool      `json:"inSyncMempool"`
-	LastMempoolTime time.Time `json:"lastMempoolTime"`
-	About           string    `json:"about"`
-}
-
-func (s *SocketIoServer) index(w http.ResponseWriter, r *http.Request) {
-	vi := common.GetVersionInfo()
-	ss, bh, st := s.is.GetSyncState()
-	ms, mt, _ := s.is.GetMempoolSyncState()
-	a := resAboutBlockbookPublic{
-		Coin:            s.is.Coin,
-		Host:            s.is.Host,
-		Version:         vi.Version,
-		GitCommit:       vi.GitCommit,
-		BuildTime:       vi.BuildTime,
-		InSync:          ss,
-		BestHeight:      bh,
-		LastBlockTime:   st,
-		InSyncMempool:   ms,
-		LastMempoolTime: mt,
-		About:           blockbookAbout,
-	}
-	buf, err := json.MarshalIndent(a, "", "    ")
-	if err != nil {
-		glog.Error(err)
-	}
-	w.Write(buf)
-}
-
-func (s *SocketIoServer) apiBlockIndex(w http.ResponseWriter, r *http.Request) {
-	type resBlockIndex struct {
-		BlockHash string `json:"blockHash"`
-		About     string `json:"about"`
-	}
-	var err error
-	var hash string
-	height := -1
-	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
-		if h, err := strconv.Atoi(r.URL.Path[i+1:]); err == nil {
-			height = h
-		}
-	}
-	if height >= 0 {
-		hash, err = s.db.GetBlockHash(uint32(height))
-	} else {
-		_, hash, err = s.db.GetBestBlock()
-	}
-	if err != nil {
-		glog.Error(err)
-	} else {
-		r := resBlockIndex{
-			BlockHash: hash,
-			About:     blockbookAbout,
-		}
-		json.NewEncoder(w).Encode(r)
-	}
+// GetHandler returns socket.io http handler
+func (s *SocketIoServer) GetHandler() http.Handler {
+	return s.server
 }
 
 type addrOpts struct {
@@ -346,22 +197,6 @@ func unmarshalGetAddressRequest(params []byte) (addr []string, opts addrOpts, er
 	return
 }
 
-// bitcore returns txids from the newest to the oldest, we have to revert the order
-func uniqueTxidsInReverse(txids []string) []string {
-	i := len(txids)
-	ut := make([]string, i)
-	txidsMap := make(map[string]struct{})
-	for _, txid := range txids {
-		_, e := txidsMap[txid]
-		if !e {
-			i--
-			ut[i] = txid
-			txidsMap[txid] = struct{}{}
-		}
-	}
-	return ut[i:]
-}
-
 type resultAddressTxids struct {
 	Result []string `json:"result"`
 }
@@ -386,7 +221,7 @@ func (s *SocketIoServer) getAddressTxids(addr []string, opts *addrOpts) (res res
 			txids = append(txids, m...)
 		}
 	}
-	res.Result = uniqueTxidsInReverse(txids)
+	res.Result = api.UniqueTxidsInReverse(txids)
 	return res, nil
 }
 
@@ -748,7 +583,7 @@ func (s *SocketIoServer) getDetailedTransaction(txid string) (res resultGetDetai
 				return res, err
 			}
 			if len(otx.Vout) > int(vin.Vout) {
-				vout := otx.Vout[vin.Vout]
+				vout := &otx.Vout[vin.Vout]
 				if vout.Address != nil {
 					a := vout.Address.String()
 					ai.Address = &a

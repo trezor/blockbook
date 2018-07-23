@@ -1,5 +1,6 @@
 {
   "coin_name": "Vertcoin Testnet",
+  "coin_shortcut": "tVTC",
   "rpcURL": "http://localhost:18040",
   "rpcUser": "rpc",
   "rpcPass": "rpc",

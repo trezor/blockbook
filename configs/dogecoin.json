@@ -1,5 +1,6 @@
 {
   "coin_name": "Dogecoin",
+  "coin_shortcut": "DOGE",
   "rpcURL": "http://127.0.0.1:8038",
   "rpcUser": "rpc",
   "rpcPass": "rpcp",

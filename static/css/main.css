@@ -1,0 +1,178 @@
+html, body {
+    height: 100%;
+}
+
+body {
+    width: 100%;
+    min-height: 100%;
+    background-color: #ffffff;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Helvetica Neue", Arial, sans-serif;
+    font-size: 11px;
+}
+
+a {
+    color: #428bca;
+    text-decoration: none;
+}
+
+.octicon {
+    color: #777;
+    display: inline-block;
+    vertical-align: text-top;
+    fill: currentColor;
+    height: 16px;
+}
+
+@media (min-width: 768px) {
+    .container {
+        max-width: 750px;
+    }
+}
+
+@media (min-width: 992px) {
+    body {
+        font-size: 12px;
+    }
+    .container {
+        max-width: 970px;
+    }
+    .octicon {
+        height: 24px;
+    }
+}
+
+@media (min-width: 1200px) {
+    body {
+        font-size: 14px;
+    }
+    .container {
+        max-width: 1170px;
+    }
+    .octicon {
+        height: 32px;
+    }
+}
+
+#header {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 53px;
+    width: 100%;
+    margin: 0;
+    padding-bottom: 0;
+    padding-top: 0;
+    background-color: #212121;
+    border: 0;
+}
+
+.bg-trezor {
+    background-color: #212121!important;
+    height: 53px;
+}
+
+.bg-trezor .navbar-text {
+    color: rgba(255, 255, 255);
+    font-weight: bold;
+    font-size: 19px;
+    padding-left: 35px;
+}
+
+.trezor-logo-svg-white svg {
+    fill: #FFFFFF;
+    margin-top: 6px;
+}
+
+#wrap {
+    min-height: 100%;
+    height: auto;
+    padding: 75px 0;
+    margin: 0 auto -53px;
+}
+
+#footer {
+    background-color: #212121;
+    color: #fff;
+    height: 53px;
+    overflow: hidden;
+}
+
+.alert-data {
+    color: #383d41;
+    background-color: #f4f4f4;
+    border-color: #d6d8db;
+    padding: 15px;
+}
+
+.line-top {
+    border-top: 1px solid #EAEAEA;
+    padding: 15px 0 0;
+}
+
+.line-mid {
+    padding: 15px;
+}
+
+.line-bot {
+    border-bottom: 2px solid #EAEAEA;
+    padding: 0 0 15px;
+}
+
+.txvalues {
+    display: inline-block;
+    padding: .7em 2em;
+    font-size: 13px;
+    font-weight: 100;
+    color: #fff;
+    text-align: center;
+    white-space: nowrap;
+    vertical-align: baseline;
+    border-radius: .25em;
+}
+
+.txvalues-default {
+    background-color: #EBEBEB;
+    color: #333;
+}
+
+.txvalues-success {
+    background-color: dimgray;
+}
+
+.txvalues-primary {
+    background-color: #000;
+}
+
+.txvalues-danger {
+    background-color: #AC0015;
+    text-transform: uppercase;
+}
+
+.ellipsis {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.data-div {
+    margin: 20px 0;
+}
+
+.data-table {
+    table-layout: fixed;
+    border-radius: .25rem;
+    background: white;
+}
+
+.data-table td, .data-table th {
+    padding: .4rem;
+}
+
+.data {
+    font-weight: bold;
+}
+
+.alert .data-table {
+    margin: 0;
+}

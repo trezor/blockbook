@@ -1,5 +1,6 @@
 {
   "coin_name": "Testnet",
+  "coin_shortcut": "TEST",
   "rpcURL": "http://localhost:18030",
   "rpcUser": "rpc",
   "rpcPass": "rpc",

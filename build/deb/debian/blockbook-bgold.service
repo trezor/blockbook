@@ -10,7 +10,7 @@ After=network.target
 Wants=backend-bgold.service
 
 [Service]
-ExecStart=/opt/coins/blockbook/bgold/bin/blockbook -blockchaincfg=/opt/coins/blockbook/bgold/config/blockchaincfg.json -datadir=/opt/coins/data/bgold/blockbook/db -sync -httpserver=:9035 -socketio=:9135 -certfile=/opt/coins/blockbook/bgold/cert/blockbook -explorer=https://explorer.bitcoingold.org/ -log_dir=/opt/coins/blockbook/bgold/logs
+ExecStart=/opt/coins/blockbook/bgold/bin/blockbook -blockchaincfg=/opt/coins/blockbook/bgold/config/blockchaincfg.json -datadir=/opt/coins/data/bgold/blockbook/db -sync -internal=:9035 -public=:9135 -certfile=/opt/coins/blockbook/bgold/cert/blockbook -explorer=/explorer -log_dir=/opt/coins/blockbook/bgold/logs
 User=blockbook-bgold
 Type=simple
 Restart=on-failure

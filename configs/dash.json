@@ -1,5 +1,6 @@
 {
   "coin_name": "Dash",
+  "coin_shortcut": "DASH",
   "rpcURL": "http://127.0.0.1:8033",
   "rpcUser": "rpc",
   "rpcPass": "rpc",

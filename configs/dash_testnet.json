@@ -1,5 +1,6 @@
 {
   "coin_name": "Dash Testnet",
+  "coin_shortcut": "tDASH",
   "rpcURL": "http://localhost:18033",
   "rpcUser": "rpc",
   "rpcPass": "rpc",

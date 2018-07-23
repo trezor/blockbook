@@ -18,8 +18,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-// HTTPServer is handle to HttpServer
-type HTTPServer struct {
+// InternalServer is handle to internal http server
+type InternalServer struct {
 	https       *http.Server
 	certFiles   string
 	db          *db.RocksDB
@@ -44,14 +44,14 @@ type resAboutBlockbookInternal struct {
 	DbColumns       []common.InternalStateColumn `json:"dbColumns"`
 }
 
-// NewHTTPServer creates new REST interface to blockbook and returns its handle
-func NewHTTPServer(httpServerBinding string, certFiles string, db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxCache, is *common.InternalState) (*HTTPServer, error) {
+// NewInternalServer creates new internal http interface to blockbook and returns its handle
+func NewInternalServer(httpServerBinding string, certFiles string, db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxCache, is *common.InternalState) (*InternalServer, error) {
 	r := mux.NewRouter()
 	https := &http.Server{
 		Addr:    httpServerBinding,
 		Handler: r,
 	}
-	s := &HTTPServer{
+	s := &InternalServer{
 		https:       https,
 		certFiles:   certFiles,
 		db:          db,
@@ -73,30 +73,30 @@ func NewHTTPServer(httpServerBinding string, certFiles string, db *db.RocksDB, c
 }
 
 // Run starts the server
-func (s *HTTPServer) Run() error {
+func (s *InternalServer) Run() error {
 	if s.certFiles == "" {
-		glog.Info("http server starting to listen on http://", s.https.Addr)
+		glog.Info("internal server: starting to listen on http://", s.https.Addr)
 		return s.https.ListenAndServe()
 	}
-	glog.Info("http server starting to listen on https://", s.https.Addr)
+	glog.Info("internal server: starting to listen on https://", s.https.Addr)
 	return s.https.ListenAndServeTLS(fmt.Sprint(s.certFiles, ".crt"), fmt.Sprint(s.certFiles, ".key"))
 }
 
 // Close closes the server
-func (s *HTTPServer) Close() error {
-	glog.Infof("http server closing")
+func (s *InternalServer) Close() error {
+	glog.Infof("internal server: closing")
 	return s.https.Close()
 }
 
 // Shutdown shuts down the server
-func (s *HTTPServer) Shutdown(ctx context.Context) error {
-	glog.Infof("http server shutdown")
+func (s *InternalServer) Shutdown(ctx context.Context) error {
+	glog.Infof("internal server: shutdown")
 	return s.https.Shutdown(ctx)
 }
 
 func respondError(w http.ResponseWriter, err error, context string) {
 	w.WriteHeader(http.StatusBadRequest)
-	glog.Errorf("http server (context %s) error: %v", context, err)
+	glog.Errorf("internal server: (context %s) error: %v", context, err)
 }
 
 func respondHashData(w http.ResponseWriter, hash string) {
@@ -108,7 +108,7 @@ func respondHashData(w http.ResponseWriter, hash string) {
 	})
 }
 
-func (s *HTTPServer) index(w http.ResponseWriter, r *http.Request) {
+func (s *InternalServer) index(w http.ResponseWriter, r *http.Request) {
 	vi := common.GetVersionInfo()
 	ss, bh, st := s.is.GetSyncState()
 	ms, mt, msz := s.is.GetMempoolSyncState()
@@ -133,7 +133,7 @@ func (s *HTTPServer) index(w http.ResponseWriter, r *http.Request) {
 	w.Write(buf)
 }
 
-func (s *HTTPServer) bestBlockHash(w http.ResponseWriter, r *http.Request) {
+func (s *InternalServer) bestBlockHash(w http.ResponseWriter, r *http.Request) {
 	_, hash, err := s.db.GetBestBlock()
 	if err != nil {
 		respondError(w, err, "bestBlockHash")
@@ -142,7 +142,7 @@ func (s *HTTPServer) bestBlockHash(w http.ResponseWriter, r *http.Request) {
 	respondHashData(w, hash)
 }
 
-func (s *HTTPServer) blockHash(w http.ResponseWriter, r *http.Request) {
+func (s *InternalServer) blockHash(w http.ResponseWriter, r *http.Request) {
 	heightString := mux.Vars(r)["height"]
 	var hash string
 	height, err := strconv.ParseUint(heightString, 10, 32)
@@ -156,7 +156,7 @@ func (s *HTTPServer) blockHash(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *HTTPServer) getAddress(r *http.Request) (address string, err error) {
+func (s *InternalServer) getAddress(r *http.Request) (address string, err error) {
 	address, ok := mux.Vars(r)["address"]
 	if !ok {
 		err = errors.New("Empty address")
@@ -164,7 +164,7 @@ func (s *HTTPServer) getAddress(r *http.Request) (address string, err error) {
 	return
 }
 
-func (s *HTTPServer) getAddressAndHeightRange(r *http.Request) (address string, lower, higher uint32, err error) {
+func (s *InternalServer) getAddressAndHeightRange(r *http.Request) (address string, lower, higher uint32, err error) {
 	address, err = s.getAddress(r)
 	if err != nil {
 		return
@@ -184,7 +184,7 @@ type transactionList struct {
 	Txid []string `json:"txid"`
 }
 
-func (s *HTTPServer) unconfirmedTransactions(w http.ResponseWriter, r *http.Request) {
+func (s *InternalServer) unconfirmedTransactions(w http.ResponseWriter, r *http.Request) {
 	address, err := s.getAddress(r)
 	if err != nil {
 		respondError(w, err, fmt.Sprint("unconfirmedTransactions for address", address))
@@ -197,7 +197,7 @@ func (s *HTTPServer) unconfirmedTransactions(w http.ResponseWriter, r *http.Requ
 	json.NewEncoder(w).Encode(txList)
 }
 
-func (s *HTTPServer) confirmedTransactions(w http.ResponseWriter, r *http.Request) {
+func (s *InternalServer) confirmedTransactions(w http.ResponseWriter, r *http.Request) {
 	address, lower, higher, err := s.getAddressAndHeightRange(r)
 	if err != nil {
 		respondError(w, err, fmt.Sprint("confirmedTransactions for address", address))
@@ -213,7 +213,7 @@ func (s *HTTPServer) confirmedTransactions(w http.ResponseWriter, r *http.Reques
 	json.NewEncoder(w).Encode(txList)
 }
 
-func (s *HTTPServer) transactions(w http.ResponseWriter, r *http.Request) {
+func (s *InternalServer) transactions(w http.ResponseWriter, r *http.Request) {
 	address, lower, higher, err := s.getAddressAndHeightRange(r)
 	if err != nil {
 		respondError(w, err, fmt.Sprint("transactions for address", address))

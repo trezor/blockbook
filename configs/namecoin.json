@@ -1,5 +1,6 @@
 {
   "coin_name": "Namecoin",
+  "coin_shortcut": "NMC",
   "rpcURL": "http://127.0.0.1:8039",
   "rpcUser": "rpc",
   "rpcPass": "rpc",

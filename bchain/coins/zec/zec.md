@@ -48,7 +48,7 @@ Create blockchain configuration file */data/zec/blockbook/zec.json*
 Create *run-zec-blockbook.sh* script that starts blockbook
 ```
 #!/bin/bash
-./blockbook -coin=zec -blockchaincfg=/data/zec/blockbook/zec.json -datadir=/data/zec/blockbook/db -sync -httpserver=:9032 -socketio=:9132 -certfile=server/testcert -explorer=https://zec-bitcore1.trezor.io $1
+./blockbook -coin=zec -blockchaincfg=/data/zec/blockbook/zec.json -datadir=/data/zec/blockbook/db -sync -internal=:9032 -public=:9132 -certfile=server/testcert -explorer=https://zec-bitcore1.trezor.io $1
 ```
 
 To run blockbook with logging to file (run with nohup or daemonize using screen)

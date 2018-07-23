@@ -54,9 +54,9 @@ var (
 	syncWorkers = flag.Int("workers", 8, "number of workers to process blocks")
 	dryRun      = flag.Bool("dryrun", false, "do not index blocks, only download")
 
-	httpServerBinding = flag.String("httpserver", "", "http server binding [address]:port, (default no http server)")
+	internalBinding = flag.String("internal", "", "internal http server binding [address]:port, (default no internal server)")
 
-	socketIoBinding = flag.String("socketio", "", "socketio server binding [address]:port[/path], (default no socket.io server)")
+	publicBinding = flag.String("public", "", "public http server binding [address]:port[/path], (default no public server)")
 
 	certFiles = flag.String("certfile", "", "to enable SSL specify path to certificate files without extension, expecting <certfile>.crt and <certfile>.key, (default no SSL)")
 
@@ -148,7 +148,7 @@ func main() {
 		glog.Fatal("Missing blockchaincfg configuration parameter")
 	}
 
-	coin, err := coins.GetCoinNameFromConfig(*blockchain)
+	coin, coinShortcut, err := coins.GetCoinNameFromConfig(*blockchain)
 	if err != nil {
 		glog.Fatal("config: ", err)
 	}
@@ -168,7 +168,7 @@ func main() {
 	}
 	defer index.Close()
 
-	internalState, err = newInternalState(coin, index)
+	internalState, err = newInternalState(coin, coinShortcut, index)
 	if err != nil {
 		glog.Error("internalState: ", err)
 		return
@@ -232,18 +232,18 @@ func main() {
 		return
 	}
 
-	var httpServer *server.HTTPServer
-	if *httpServerBinding != "" {
-		httpServer, err = server.NewHTTPServer(*httpServerBinding, *certFiles, index, chain, txCache, internalState)
+	var internalServer *server.InternalServer
+	if *internalBinding != "" {
+		internalServer, err = server.NewInternalServer(*internalBinding, *certFiles, index, chain, txCache, internalState)
 		if err != nil {
 			glog.Error("https: ", err)
 			return
 		}
 		go func() {
-			err = httpServer.Run()
+			err = internalServer.Run()
 			if err != nil {
 				if err.Error() == "http: Server closed" {
-					glog.Info(err)
+					glog.Info("internal server: closed")
 				} else {
 					glog.Error(err)
 					return
@@ -263,27 +263,26 @@ func main() {
 		}
 	}
 
-	var socketIoServer *server.SocketIoServer
-	if *socketIoBinding != "" {
-		socketIoServer, err = server.NewSocketIoServer(
-			*socketIoBinding, *certFiles, index, chain, txCache, *explorerURL, metrics, internalState)
+	var publicServer *server.PublicServer
+	if *publicBinding != "" {
+		publicServer, err = server.NewPublicServer(*publicBinding, *certFiles, index, chain, txCache, *explorerURL, metrics, internalState)
 		if err != nil {
 			glog.Error("socketio: ", err)
 			return
 		}
 		go func() {
-			err = socketIoServer.Run()
+			err = publicServer.Run()
 			if err != nil {
 				if err.Error() == "http: Server closed" {
-					glog.Info(err)
+					glog.Info("public server: closed")
 				} else {
 					glog.Error(err)
 					return
 				}
 			}
 		}()
-		callbacksOnNewBlockHash = append(callbacksOnNewBlockHash, socketIoServer.OnNewBlockHash)
-		callbacksOnNewTxAddr = append(callbacksOnNewTxAddr, socketIoServer.OnNewTxAddr)
+		callbacksOnNewBlockHash = append(callbacksOnNewBlockHash, publicServer.OnNewBlockHash)
+		callbacksOnNewTxAddr = append(callbacksOnNewTxAddr, publicServer.OnNewTxAddr)
 	}
 
 	if *synchronize {
@@ -314,8 +313,8 @@ func main() {
 		}
 	}
 
-	if httpServer != nil || socketIoServer != nil || chain != nil {
-		waitForSignalAndShutdown(httpServer, socketIoServer, chain, 10*time.Second)
+	if internalServer != nil || publicServer != nil || chain != nil {
+		waitForSignalAndShutdown(internalServer, publicServer, chain, 10*time.Second)
 	}
 
 	if *synchronize {
@@ -328,11 +327,12 @@ func main() {
 	}
 }
 
-func newInternalState(coin string, d *db.RocksDB) (*common.InternalState, error) {
+func newInternalState(coin string, coinShortcut string, d *db.RocksDB) (*common.InternalState, error) {
 	is, err := d.LoadInternalState(coin)
 	if err != nil {
 		return nil, err
 	}
+	is.CoinShortcut = coinShortcut
 	name, err := os.Hostname()
 	if err != nil {
 		glog.Error("get hostname ", err)
@@ -464,29 +464,29 @@ func pushSynchronizationHandler(nt bchain.NotificationType) {
 	}
 }
 
-func waitForSignalAndShutdown(https *server.HTTPServer, socketio *server.SocketIoServer, chain bchain.BlockChain, timeout time.Duration) {
+func waitForSignalAndShutdown(internal *server.InternalServer, public *server.PublicServer, chain bchain.BlockChain, timeout time.Duration) {
 	sig := <-chanOsSignal
 	atomic.StoreInt32(&inShutdown, 1)
-	glog.Infof("Shutdown: %v", sig)
+	glog.Infof("shutdown: %v", sig)
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	if https != nil {
-		if err := https.Shutdown(ctx); err != nil {
-			glog.Error("HttpServer.Shutdown error: ", err)
+	if internal != nil {
+		if err := internal.Shutdown(ctx); err != nil {
+			glog.Error("internal server: shutdown error: ", err)
 		}
 	}
 
-	if socketio != nil {
-		if err := socketio.Shutdown(ctx); err != nil {
-			glog.Error("SocketIo.Shutdown error: ", err)
+	if public != nil {
+		if err := public.Shutdown(ctx); err != nil {
+			glog.Error("public server: shutdown error: ", err)
 		}
 	}
 
 	if chain != nil {
 		if err := chain.Shutdown(ctx); err != nil {
-			glog.Error("BlockChain.Shutdown error: ", err)
+			glog.Error("rpc: shutdown error: ", err)
 		}
 	}
 }

@@ -1,0 +1,44 @@
+{{define "specific"}}{{$cs := .CoinShortcut}}{{$tx := .Tx}}
+<h1>Transaction</h1>
+<div class="alert alert-data">
+    <span class="ellipsis data">{{$tx.Txid}}</span>
+</div>
+<h3>Summary</h3>
+<div class="data-div">
+    <table class="table data-table">
+        <tbody>
+            {{if $tx.Confirmations}}
+            <tr>
+                <td style="width: 25%;">Mined Time</td>
+                <td class="data">{{formatUnixTime $tx.Blocktime}}</td>
+            </tr>{{end}}
+            <tr>
+                <td style="width: 25%;">In Block</td>
+                <td class="ellipsis data">{{if $tx.Confirmations}}{{$tx.Blockhash}}{{else}}Unconfirmed{{end}}</td>
+            </tr>
+            {{if $tx.Confirmations}}
+            <tr>
+                <td>In Block Height</td>
+                <td class="data">{{$tx.Blockheight}}</td>
+            </tr>{{end}}
+            <tr>
+                <td>Total Input</td>
+                <td class="data">{{formatAmount $tx.ValueIn}} {{$cs}}</td>
+            </tr>
+            <tr>
+                <td>Total Output</td>
+                <td class="data">{{formatAmount $tx.ValueOut}} {{$cs}}</td>
+            </tr>
+            {{if $tx.Fees}}
+            <tr>
+                <td>Fees</td>
+                <td class="data">{{formatAmount $tx.Fees}} {{$cs}}</td>
+            </tr>{{end}}
+        </tbody>
+    </table>
+</div>
+<h3>Details</h3>
+<div class="data-div">
+    {{template "txdetail" .}}
+</div>
+{{end}}
