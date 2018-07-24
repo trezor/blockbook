@@ -22,7 +22,11 @@ type EthereumParser struct {
 
 // NewEthereumParser returns new EthereumParser instance
 func NewEthereumParser() *EthereumParser {
-	return &EthereumParser{&bchain.BaseParser{AddressFactory: bchain.NewBaseAddress}}
+	return &EthereumParser{&bchain.BaseParser{
+		AddressFactory:       bchain.NewBaseAddress,
+		BlockAddressesToKeep: 0,
+		AmountDecimalPoint:   18,
+	}}
 }
 
 type rpcTransaction struct {
@@ -86,6 +90,10 @@ func (p *EthereumParser) ethTxToTx(tx *rpcTransaction, blocktime int64, confirma
 	}
 	tx.BlockHash = bh
 	h := hex.EncodeToString(b)
+	vs, err := hexutil.DecodeBig(tx.Value)
+	if err != nil {
+		return nil, err
+	}
 	return &bchain.Tx{
 		Blocktime:     blocktime,
 		Confirmations: confirmations,
@@ -105,8 +113,8 @@ func (p *EthereumParser) ethTxToTx(tx *rpcTransaction, blocktime int64, confirma
 		},
 		Vout: []bchain.Vout{
 			{
-				N: 0, // there is always up to one To address
-				// Value - cannot be set, it does not fit precisely to float64
+				N:        0, // there is always up to one To address
+				ValueSat: *vs,
 				ScriptPubKey: bchain.ScriptPubKey{
 					// Hex
 					Addresses: ta,
@@ -285,10 +293,4 @@ func (p *EthereumParser) UnpackBlockHash(buf []byte) (string, error) {
 // IsUTXOChain returns true if the block chain is UTXO type, otherwise false
 func (p *EthereumParser) IsUTXOChain() bool {
 	return false
-}
-
-// KeepBlockAddresses returns number of blocks which are to be kept in blockaddresses column
-// do not use the blockaddresses for eth
-func (p *EthereumParser) KeepBlockAddresses() int {
-	return 0
 }

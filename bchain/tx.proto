@@ -11,7 +11,7 @@ syntax = "proto3";
             repeated string Addresses = 6;
         }
         message VoutType {
-            double Value = 1;
+            bytes ValueSat = 1;
             uint32 N = 2;
             bytes ScriptPubKeyHex = 3;
             repeated string Addresses = 4;

@@ -4,6 +4,7 @@ import (
 	"blockbook/bchain"
 	"blockbook/common"
 	"blockbook/db"
+	"math/big"
 
 	"github.com/golang/glog"
 )
@@ -44,7 +45,7 @@ func (w *Worker) GetTransaction(txid string, bestheight uint32, spendingTx bool)
 			return nil, err
 		}
 	}
-	var valIn, valOut, fees float64
+	var valInSat, valOutSat, feesSat big.Int
 	vins := make([]Vin, len(bchainTx.Vin))
 	for i := range bchainTx.Vin {
 		bchainVin := &bchainTx.Vin[i]
@@ -61,9 +62,9 @@ func (w *Worker) GetTransaction(txid string, bestheight uint32, spendingTx bool)
 			}
 			if len(otx.Vout) > int(vin.Vout) {
 				vout := &otx.Vout[vin.Vout]
-				vin.Value = vout.Value
-				valIn += vout.Value
-				vin.ValueSat = int64(vout.Value*1E8 + 0.5)
+				vin.ValueSat = vout.ValueSat
+				vin.Value = w.chainParser.AmountToDecimalString(&vout.ValueSat)
+				valInSat.Add(&valInSat, &vout.ValueSat)
 				if vout.Address != nil {
 					a := vout.Address.String()
 					vin.Addr = a
@@ -76,8 +77,9 @@ func (w *Worker) GetTransaction(txid string, bestheight uint32, spendingTx bool)
 		bchainVout := &bchainTx.Vout[i]
 		vout := &vouts[i]
 		vout.N = i
-		vout.Value = bchainVout.Value
-		valOut += bchainVout.Value
+		vout.ValueSat = bchainVout.ValueSat
+		vout.Value = w.chainParser.AmountToDecimalString(&bchainVout.ValueSat)
+		valOutSat.Add(&valOutSat, &bchainVout.ValueSat)
 		vout.ScriptPubKey.Hex = bchainVout.ScriptPubKey.Hex
 		vout.ScriptPubKey.Addresses = bchainVout.ScriptPubKey.Addresses
 		if spendingTx {
@@ -85,9 +87,9 @@ func (w *Worker) GetTransaction(txid string, bestheight uint32, spendingTx bool)
 		}
 	}
 	// for coinbase transactions valIn is 0
-	fees = valIn - valOut
-	if fees < 0 {
-		fees = 0
+	feesSat.Sub(&valInSat, &valOutSat)
+	if feesSat.Sign() == -1 {
+		feesSat.SetUint64(0)
 	}
 	// for now do not return size, we would have to compute vsize of segwit transactions
 	// size:=len(bchainTx.Hex) / 2
@@ -96,13 +98,13 @@ func (w *Worker) GetTransaction(txid string, bestheight uint32, spendingTx bool)
 		Blockheight:   int(height),
 		Blocktime:     bchainTx.Blocktime,
 		Confirmations: bchainTx.Confirmations,
-		Fees:          fees,
+		Fees:          w.chainParser.AmountToDecimalString(&feesSat),
 		Locktime:      bchainTx.LockTime,
 		WithSpends:    spendingTx,
 		Time:          bchainTx.Time,
 		Txid:          bchainTx.Txid,
-		ValueIn:       valIn,
-		ValueOut:      valOut,
+		ValueIn:       w.chainParser.AmountToDecimalString(&valInSat),
+		ValueOut:      w.chainParser.AmountToDecimalString(&valOutSat),
 		Version:       bchainTx.Version,
 		Vin:           vins,
 		Vout:          vouts,
@@ -131,26 +133,26 @@ func (s *Worker) getAddressTxids(address string, mempool bool) ([]string, error)
 	return txids, nil
 }
 
-func (t *Tx) getAddrVoutValue(addrID string) float64 {
-	var val float64
+func (t *Tx) getAddrVoutValue(addrID string) *big.Int {
+	var val big.Int
 	for _, vout := range t.Vout {
 		for _, a := range vout.ScriptPubKey.Addresses {
 			if a == addrID {
-				val += vout.Value
+				val.Add(&val, &vout.ValueSat)
 			}
 		}
 	}
-	return val
+	return &val
 }
 
-func (t *Tx) getAddrVinValue(addrID string) float64 {
-	var val float64
+func (t *Tx) getAddrVinValue(addrID string) *big.Int {
+	var val big.Int
 	for _, vin := range t.Vin {
 		if vin.Addr == addrID {
-			val += vin.Value
+			val.Add(&val, &vin.ValueSat)
 		}
 	}
-	return val
+	return &val
 }
 
 // UniqueTxidsInReverse reverts the order of transactions (so that newest are first) and removes duplicate transactions
@@ -191,14 +193,14 @@ func (w *Worker) GetAddress(addrID string, page int) (*Address, error) {
 	}
 	txs := make([]*Tx, len(txm)+lc)
 	txi := 0
-	var uBal, bal, totRecv, totSent float64
+	var uBalSat, balSat, totRecvSat, totSentSat big.Int
 	for _, tx := range txm {
 		tx, err := w.GetTransaction(tx, bestheight, false)
 		// mempool transaction may fail
 		if err != nil {
 			glog.Error("GetTransaction ", tx, ": ", err)
 		} else {
-			uBal = tx.getAddrVoutValue(addrID) - tx.getAddrVinValue(addrID)
+			uBalSat.Sub(tx.getAddrVoutValue(addrID), tx.getAddrVinValue(addrID))
 			txs[txi] = tx
 			txi++
 		}
@@ -216,26 +218,23 @@ func (w *Worker) GetAddress(addrID string, page int) (*Address, error) {
 		if err != nil {
 			return nil, err
 		} else {
-			totRecv += tx.getAddrVoutValue(addrID)
-			totSent += tx.getAddrVinValue(addrID)
+			totRecvSat.Add(&totRecvSat, tx.getAddrVoutValue(addrID))
+			totSentSat.Add(&totSentSat, tx.getAddrVinValue(addrID))
 			if i >= from && i < to {
 				txs[txi] = tx
 				txi++
 			}
 		}
 	}
-	bal = totRecv - totSent
+	balSat.Sub(&totRecvSat, &totSentSat)
 	r := &Address{
 		AddrStr:                 addrID,
-		Balance:                 bal,
-		BalanceSat:              int64(bal*1E8 + 0.5),
-		TotalReceived:           totRecv,
-		TotalReceivedSat:        int64(totRecv*1E8 + 0.5),
-		TotalSent:               totSent,
-		TotalSentSat:            int64(totSent*1E8 + 0.5),
+		Balance:                 w.chainParser.AmountToDecimalString(&balSat),
+		TotalReceived:           w.chainParser.AmountToDecimalString(&totRecvSat),
+		TotalSent:               w.chainParser.AmountToDecimalString(&totSentSat),
 		Transactions:            txs[:txi],
 		TxApperances:            len(txc),
-		UnconfirmedBalance:      uBal,
+		UnconfirmedBalance:      w.chainParser.AmountToDecimalString(&uBalSat),
 		UnconfirmedTxApperances: len(txm),
 	}
 	glog.Info(addrID, " finished")

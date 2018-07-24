@@ -24,6 +24,7 @@ func NewDashRPC(config json.RawMessage, pushHandler func(bchain.NotificationType
 		b.(*btc.BitcoinRPC),
 	}
 	s.RPCMarshaler = btc.JSONMarshalerV1{}
+	s.ChainConfig.SupportsEstimateSmartFee = false
 
 	return s, nil
 }
@@ -52,9 +53,4 @@ func (b *DashRPC) Initialize() error {
 	glog.Info("rpc: block chain ", params.Name)
 
 	return nil
-}
-
-// EstimateSmartFee returns fee estimation.
-func (b *DashRPC) EstimateSmartFee(blocks int, conservative bool) (float64, error) {
-	return b.EstimateFee(blocks)
 }

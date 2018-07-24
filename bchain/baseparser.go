@@ -3,6 +3,8 @@ package bchain
 import (
 	"encoding/hex"
 	"encoding/json"
+	"math/big"
+	"strings"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/juju/errors"
@@ -14,6 +16,7 @@ type AddressFactoryFunc func(string) (Address, error)
 type BaseParser struct {
 	AddressFactory       AddressFactoryFunc
 	BlockAddressesToKeep int
+	AmountDecimalPoint   int
 }
 
 // AddressToOutputScript converts address to ScriptPubKey - currently not implemented
@@ -36,7 +39,47 @@ func (p *BaseParser) ParseTx(b []byte) (*Tx, error) {
 	return nil, errors.New("ParseTx: not implemented")
 }
 
-// ParseTxFromJson parses JSON message containing transaction and returs Tx struct
+const zeros = "0000000000000000000000000000000000000000"
+
+// AmountToBigInt converts amount in json.Number (string) to big.Int
+// it uses string operations to avoid problems with rounding
+func (p *BaseParser) AmountToBigInt(n json.Number) (big.Int, error) {
+	var r big.Int
+	s := string(n)
+	i := strings.IndexByte(s, '.')
+	if i == -1 {
+		s = s + zeros[:p.AmountDecimalPoint]
+	} else {
+		z := p.AmountDecimalPoint - len(s) + i + 1
+		if z > 0 {
+			s = s[:i] + s[i+1:] + zeros[:z]
+		} else {
+			s = s[:i] + s[i+1:len(s)+z]
+		}
+	}
+	if _, ok := r.SetString(s, 10); !ok {
+		return r, errors.New("AmountToBigInt: failed to convert")
+	}
+	return r, nil
+}
+
+// AmountToDecimalString converts amount in big.Int to string with decimal point in the correct place
+func (p *BaseParser) AmountToDecimalString(a *big.Int) string {
+	s := a.String()
+	if len(s) <= p.AmountDecimalPoint {
+		s = zeros[:p.AmountDecimalPoint-len(s)+1] + s
+	}
+	i := len(s) - p.AmountDecimalPoint
+	ad := strings.TrimRight(s[i:], "0")
+	if len(ad) > 0 {
+		s = s[:i] + "." + ad
+	} else {
+		s = s[:i]
+	}
+	return s
+}
+
+// ParseTxFromJson parses JSON message containing transaction and returns Tx struct
 func (p *BaseParser) ParseTxFromJson(msg json.RawMessage) (*Tx, error) {
 	var tx Tx
 	err := json.Unmarshal(msg, &tx)
@@ -44,13 +87,18 @@ func (p *BaseParser) ParseTxFromJson(msg json.RawMessage) (*Tx, error) {
 		return nil, err
 	}
 
-	for i, vout := range tx.Vout {
+	for i := range tx.Vout {
+		vout := &tx.Vout[i]
+		vout.ValueSat, err = p.AmountToBigInt(vout.JsonValue)
+		if err != nil {
+			return nil, err
+		}
 		if len(vout.ScriptPubKey.Addresses) == 1 {
 			a, err := p.AddressFactory(vout.ScriptPubKey.Addresses[0])
 			if err != nil {
 				return nil, err
 			}
-			tx.Vout[i].Address = a
+			vout.Address = a
 		}
 	}
 
@@ -127,7 +175,7 @@ func (p *BaseParser) PackTx(tx *Tx, height uint32, blockTime int64) ([]byte, err
 			Addresses:       vo.ScriptPubKey.Addresses,
 			N:               vo.N,
 			ScriptPubKeyHex: hex,
-			Value:           vo.Value,
+			ValueSat:        vo.ValueSat.Bytes(),
 		}
 	}
 	pt := &ProtoTransaction{
@@ -176,13 +224,15 @@ func (p *BaseParser) UnpackTx(buf []byte) (*Tx, uint32, error) {
 	}
 	vout := make([]Vout, len(pt.Vout))
 	for i, pto := range pt.Vout {
+		var vs big.Int
+		vs.SetBytes(pto.ValueSat)
 		vout[i] = Vout{
 			N: pto.N,
 			ScriptPubKey: ScriptPubKey{
 				Addresses: pto.Addresses,
 				Hex:       hex.EncodeToString(pto.ScriptPubKeyHex),
 			},
-			Value: pto.Value,
+			ValueSat: vs,
 		}
 		if len(pto.Addresses) == 1 {
 			a, err := p.AddressFactory(pto.Addresses[0])

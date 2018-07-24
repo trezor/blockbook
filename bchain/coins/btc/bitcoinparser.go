@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
+	"math/big"
 
 	vlq "github.com/bsm/go-vlq"
 	"github.com/btcsuite/btcd/blockchain"
@@ -30,6 +31,7 @@ func NewBitcoinParser(params *chaincfg.Params, c *Configuration) *BitcoinParser 
 		&bchain.BaseParser{
 			AddressFactory:       bchain.NewBaseAddress,
 			BlockAddressesToKeep: c.BlockAddressesToKeep,
+			AmountDecimalPoint:   8,
 		},
 		params,
 		outputScriptToAddresses,
@@ -123,8 +125,10 @@ func (p *BitcoinParser) TxFromMsgTx(t *wire.MsgTx, parseAddresses bool) bchain.T
 			// missing: Asm,
 			// missing: Type,
 		}
+		var vs big.Int
+		vs.SetInt64(out.Value)
 		vout[i] = bchain.Vout{
-			Value:        float64(out.Value) / 1E8,
+			ValueSat:     vs,
 			N:            uint32(i),
 			ScriptPubKey: s,
 		}

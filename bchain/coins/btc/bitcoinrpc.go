@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"io"
 	"io/ioutil"
+	"math/big"
 	"net"
 	"net/http"
 	"time"
@@ -36,18 +37,20 @@ type BitcoinRPC struct {
 }
 
 type Configuration struct {
-	CoinName             string `json:"coin_name"`
-	RPCURL               string `json:"rpcURL"`
-	RPCUser              string `json:"rpcUser"`
-	RPCPass              string `json:"rpcPass"`
-	RPCTimeout           int    `json:"rpcTimeout"`
-	Parse                bool   `json:"parse"`
-	ZeroMQBinding        string `json:"zeroMQBinding"`
-	Subversion           string `json:"subversion"`
-	BlockAddressesToKeep int    `json:"blockAddressesToKeep"`
-	MempoolWorkers       int    `json:"mempoolWorkers"`
-	MempoolSubWorkers    int    `json:"mempoolSubWorkers"`
-	AddressFormat        string `json:"addressFormat"`
+	CoinName                 string `json:"coin_name"`
+	RPCURL                   string `json:"rpcURL"`
+	RPCUser                  string `json:"rpcUser"`
+	RPCPass                  string `json:"rpcPass"`
+	RPCTimeout               int    `json:"rpcTimeout"`
+	Parse                    bool   `json:"parse"`
+	ZeroMQBinding            string `json:"zeroMQBinding"`
+	Subversion               string `json:"subversion"`
+	BlockAddressesToKeep     int    `json:"blockAddressesToKeep"`
+	MempoolWorkers           int    `json:"mempoolWorkers"`
+	MempoolSubWorkers        int    `json:"mempoolSubWorkers"`
+	AddressFormat            string `json:"addressFormat"`
+	SupportsEstimateFee      bool   `json:"supportsEstimateFee"`
+	SupportsEstimateSmartFee bool   `json:"supportsEstimateSmartFee"`
 }
 
 // NewBitcoinRPC returns new BitcoinRPC instance.
@@ -69,6 +72,9 @@ func NewBitcoinRPC(config json.RawMessage, pushHandler func(bchain.NotificationT
 	if c.MempoolSubWorkers < 1 {
 		c.MempoolSubWorkers = 1
 	}
+	// btc supports both calls, other coins overriding BitcoinRPC can change this
+	c.SupportsEstimateFee = true
+	c.SupportsEstimateSmartFee = true
 
 	transport := &http.Transport{
 		Dial:                (&net.Dialer{KeepAlive: 600 * time.Second}).Dial,
@@ -301,8 +307,8 @@ type CmdEstimateSmartFee struct {
 type ResEstimateSmartFee struct {
 	Error  *bchain.RPCError `json:"error"`
 	Result struct {
-		Feerate float64 `json:"feerate"`
-		Blocks  int     `json:"blocks"`
+		Feerate json.Number `json:"feerate"`
+		Blocks  int         `json:"blocks"`
 	} `json:"result"`
 }
 
@@ -317,7 +323,7 @@ type CmdEstimateFee struct {
 
 type ResEstimateFee struct {
 	Error  *bchain.RPCError `json:"error"`
-	Result float64          `json:"result"`
+	Result json.Number      `json:"result"`
 }
 
 // sendrawtransaction
@@ -616,7 +622,12 @@ func (b *BitcoinRPC) GetMempoolTransactions(address string) ([]string, error) {
 }
 
 // EstimateSmartFee returns fee estimation.
-func (b *BitcoinRPC) EstimateSmartFee(blocks int, conservative bool) (float64, error) {
+func (b *BitcoinRPC) EstimateSmartFee(blocks int, conservative bool) (big.Int, error) {
+	// use EstimateFee if EstimateSmartFee is not supported
+	if !b.ChainConfig.SupportsEstimateSmartFee && b.ChainConfig.SupportsEstimateFee {
+		return b.EstimateFee(blocks)
+	}
+
 	glog.V(1).Info("rpc: estimatesmartfee ", blocks)
 
 	res := ResEstimateSmartFee{}
@@ -629,17 +640,27 @@ func (b *BitcoinRPC) EstimateSmartFee(blocks int, conservative bool) (float64, e
 	}
 	err := b.Call(&req, &res)
 
+	var r big.Int
 	if err != nil {
-		return 0, err
+		return r, err
 	}
 	if res.Error != nil {
-		return 0, res.Error
+		return r, res.Error
 	}
-	return res.Result.Feerate, nil
+	r, err = b.Parser.AmountToBigInt(res.Result.Feerate)
+	if err != nil {
+		return r, err
+	}
+	return r, nil
 }
 
 // EstimateFee returns fee estimation.
-func (b *BitcoinRPC) EstimateFee(blocks int) (float64, error) {
+func (b *BitcoinRPC) EstimateFee(blocks int) (big.Int, error) {
+	// use EstimateSmartFee if EstimateFee is not supported
+	if !b.ChainConfig.SupportsEstimateFee && b.ChainConfig.SupportsEstimateSmartFee {
+		return b.EstimateSmartFee(blocks, true)
+	}
+
 	glog.V(1).Info("rpc: estimatefee ", blocks)
 
 	res := ResEstimateFee{}
@@ -647,13 +668,18 @@ func (b *BitcoinRPC) EstimateFee(blocks int) (float64, error) {
 	req.Params.Blocks = blocks
 	err := b.Call(&req, &res)
 
+	var r big.Int
 	if err != nil {
-		return 0, err
+		return r, err
 	}
 	if res.Error != nil {
-		return 0, res.Error
+		return r, res.Error
 	}
-	return res.Result, nil
+	r, err = b.Parser.AmountToBigInt(res.Result)
+	if err != nil {
+		return r, err
+	}
+	return r, nil
 }
 
 // SendRawTransaction sends raw transaction.
