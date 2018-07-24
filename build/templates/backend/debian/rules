@@ -1,0 +1,16 @@
+{{define "main" -}}
+#!/usr/bin/make -f
+
+DH_VERBOSE = 1
+
+%:
+	dh $@ --with=systemd
+
+override_dh_systemd_start:
+	dh_systemd_start --no-start
+
+override_dh_installinit:
+
+override_dh_strip:
+	dh_strip --no-automatic-dbgsym
+{{end}}

@@ -1,0 +1,56 @@
+{
+  "coin": {
+      "name": "Zcash",
+      "shortcut": "ZEC",
+      "label": "Zcash",
+      "alias": "zcash"
+  },
+  "ports": {
+    "backend_rpc": 8032,
+    "backend_message_queue": 38332,
+    "blockbook_internal": 9032,
+    "blockbook_public": 9132
+  },
+  "rpc": {
+    "rpc_url_template": "http://localhost:{{.Ports.BackendRPC}}",
+    "rpc_user": "rpc",
+    "rpc_pass": "rpc",
+    "rpc_timeout": 25,
+    "parse": true,
+    "message_queue_binding_template": "tcp://127.0.0.1:{{.Ports.BackendMessageQueue}}",
+    "mempool_workers": 4,
+    "mempool_sub_workers": 8,
+    "block_addresses_to_keep": 300
+  },
+  "backend": {
+    "package_name": "backend-zcash",
+    "package_revision": "satoshilabs-1",
+    "package_maintainer": "Jakub Matys",
+    "package_maintainer_email": "jakub.matys@satoshilabs.com",
+    "system_user": "zcash",
+    "version": "1.1.1",
+    "binary_url": "https://z.cash/downloads/zcash-1.1.1-linux64.tar.gz",
+    "verification_type": "gpg",
+    "verification_source": "https://z.cash/downloads/zcash-1.1.1-linux64.tar.gz.asc",
+    "extract_command": "tar -C backend --strip 1 -xf",
+    "exclude_files": [],
+    "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/zcashd -datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -conf={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf -pid=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",
+    "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/*.log",
+    "postinst_script_template": "HOME={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/zcash-fetch-params",
+    "service_type": "forking",
+    "protect_memory": false,
+    "mainnet": true,
+    "config_file": "bitcoin.conf",
+    "additional_params": {
+        "addnode": [
+            "mainnet.z.cash"
+        ]
+    }
+  },
+  "blockbook": {
+    "package_name": "blockbook-zcash",
+    "system_user": "blockbook-zcash",
+    "explorer": "/explorer",
+    "additional_params": ""
+  }
+}
