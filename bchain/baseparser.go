@@ -65,18 +65,23 @@ func (p *BaseParser) AmountToBigInt(n json.Number) (big.Int, error) {
 
 // AmountToDecimalString converts amount in big.Int to string with decimal point in the correct place
 func (p *BaseParser) AmountToDecimalString(a *big.Int) string {
-	s := a.String()
-	if len(s) <= p.AmountDecimalPoint {
-		s = zeros[:p.AmountDecimalPoint-len(s)+1] + s
+	n := a.String()
+	var s string
+	if n[0] == '-' {
+		n = n[1:]
+		s = "-"
 	}
-	i := len(s) - p.AmountDecimalPoint
-	ad := strings.TrimRight(s[i:], "0")
+	if len(n) <= p.AmountDecimalPoint {
+		n = zeros[:p.AmountDecimalPoint-len(n)+1] + n
+	}
+	i := len(n) - p.AmountDecimalPoint
+	ad := strings.TrimRight(n[i:], "0")
 	if len(ad) > 0 {
-		s = s[:i] + "." + ad
+		n = n[:i] + "." + ad
 	} else {
-		s = s[:i]
+		n = n[:i]
 	}
-	return s
+	return s + n
 }
 
 // ParseTxFromJson parses JSON message containing transaction and returns Tx struct
