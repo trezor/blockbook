@@ -91,18 +91,20 @@ type BlockHeader struct {
 }
 
 type MempoolEntry struct {
-	Size            uint32   `json:"size"`
-	Fee             big.Int  `json:"fee"`
-	ModifiedFee     big.Int  `json:"modifiedfee"`
-	Time            uint64   `json:"time"`
-	Height          uint32   `json:"height"`
-	DescendantCount uint32   `json:"descendantcount"`
-	DescendantSize  uint32   `json:"descendantsize"`
-	DescendantFees  uint32   `json:"descendantfees"`
-	AncestorCount   uint32   `json:"ancestorcount"`
-	AncestorSize    uint32   `json:"ancestorsize"`
-	AncestorFees    uint32   `json:"ancestorfees"`
-	Depends         []string `json:"depends"`
+	Size            uint32 `json:"size"`
+	FeeSat          big.Int
+	Fee             json.Number `json:"fee"`
+	ModifiedFeeSat  big.Int
+	ModifiedFee     json.Number `json:"modifiedfee"`
+	Time            uint64      `json:"time"`
+	Height          uint32      `json:"height"`
+	DescendantCount uint32      `json:"descendantcount"`
+	DescendantSize  uint32      `json:"descendantsize"`
+	DescendantFees  uint32      `json:"descendantfees"`
+	AncestorCount   uint32      `json:"ancestorcount"`
+	AncestorSize    uint32      `json:"ancestorsize"`
+	AncestorFees    uint32      `json:"ancestorfees"`
+	Depends         []string    `json:"depends"`
 }
 
 type RPCError struct {

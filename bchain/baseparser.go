@@ -94,10 +94,12 @@ func (p *BaseParser) ParseTxFromJson(msg json.RawMessage) (*Tx, error) {
 
 	for i := range tx.Vout {
 		vout := &tx.Vout[i]
+		// convert vout.JsonValue to big.Int and clear it, it is only temporary value used for unmarshal
 		vout.ValueSat, err = p.AmountToBigInt(vout.JsonValue)
 		if err != nil {
 			return nil, err
 		}
+		vout.JsonValue = ""
 		if len(vout.ScriptPubKey.Addresses) == 1 {
 			a, err := p.AddressFactory(vout.ScriptPubKey.Addresses[0])
 			if err != nil {

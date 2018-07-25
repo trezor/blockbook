@@ -1,8 +1,7 @@
-// +build integration
-
 package rpc
 
 import (
+	"blockbook/bchain"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -83,7 +82,7 @@ func LoadRPCConfig(coin string) (json.RawMessage, error) {
 	return json.RawMessage(fmt.Sprintf(t, coin, c.URL, c.User, c.Pass)), nil
 }
 
-func LoadTestData(coin string) (*TestData, error) {
+func LoadTestData(coin string, parser bchain.BlockChainParser) (*TestData, error) {
 	b, err := readDataFile(".", "bchain/tests/rpc/testdata", coin+".json")
 	if err != nil {
 		return nil, err
@@ -92,6 +91,17 @@ func LoadTestData(coin string) (*TestData, error) {
 	err = json.Unmarshal(b, &v)
 	if err != nil {
 		return nil, err
+	}
+	// convert amounts in test json to bit.Int and clear the temporary JsonValue
+	for _, tx := range v.TxDetails {
+		for i := range tx.Vout {
+			vout := &tx.Vout[i]
+			vout.ValueSat, err = parser.AmountToBigInt(vout.JsonValue)
+			if err != nil {
+				return nil, err
+			}
+			vout.JsonValue = ""
+		}
 	}
 	return &v, nil
 }

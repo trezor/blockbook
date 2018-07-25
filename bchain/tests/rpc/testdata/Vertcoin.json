@@ -14,6 +14,7 @@
             "blocktime": 1529932850,
             "time": 1529932850,
             "locktime": 952232,
+            "version": 2,
             "vin": [
                 {
                     "txid": "8ec70404bdd16559c589736863ee9d9f69431ba4e6b2ab3b1641b3f9f3821624",
@@ -47,6 +48,7 @@
             "blocktime": 1529932850,
             "time": 1529932850,
             "locktime": 952233,
+            "version": 1,
             "vin": [
                 {
                     "txid": "5765db7dd62cddada154b2c95505e298818a308cc1ce1e28d6e8565301cb8d74",

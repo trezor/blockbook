@@ -710,12 +710,19 @@ func (b *BitcoinRPC) GetMempoolEntry(txid string) (*bchain.MempoolEntry, error) 
 		Params: []string{txid},
 	}
 	err := b.Call(&req, &res)
-
 	if err != nil {
 		return nil, err
 	}
 	if res.Error != nil {
 		return nil, res.Error
+	}
+	res.Result.FeeSat, err = b.Parser.AmountToBigInt(res.Result.Fee)
+	if err != nil {
+		return nil, err
+	}
+	res.Result.ModifiedFeeSat, err = b.Parser.AmountToBigInt(res.Result.ModifiedFee)
+	if err != nil {
+		return nil, err
 	}
 	return res.Result, nil
 }

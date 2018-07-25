@@ -1,5 +1,3 @@
-// +build integration
-
 package rpc
 
 import (
@@ -9,6 +7,7 @@ import (
 	"net"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/deckarep/golang-set"
 )
@@ -56,7 +55,7 @@ func NewTest(coin string, factory TestChainFactoryFunc) (*Test, error) {
 			return nil, err
 		}
 	} else {
-		td, err = LoadTestData(coin)
+		td, err = LoadTestData(coin, cli.GetChainParser())
 		if err != nil {
 			return nil, err
 		}
@@ -162,7 +161,7 @@ func (rt *Test) TestGetTransaction(t *testing.T) {
 		got.Confirmations = 0
 
 		if !reflect.DeepEqual(got, want) {
-			t.Errorf("GetTransaction() got %v, want %v", got, want)
+			t.Errorf("GetTransaction() got %+v, want %+v", got, want)
 		}
 	}
 }
@@ -181,7 +180,7 @@ func (rt *Test) TestGetTransactionForMempool(t *testing.T) {
 		// transactions parsed from JSON may contain additional data
 		got.Confirmations, got.Blocktime, got.Time = 0, 0, 0
 		if !reflect.DeepEqual(got, want) {
-			t.Errorf("GetTransactionForMempool() got %v, want %v", got, want)
+			t.Errorf("GetTransactionForMempool() got %+v, want %+v", got, want)
 		}
 	}
 }
@@ -329,8 +328,8 @@ func (rt *Test) TestGetMempoolEntry(t *testing.T) {
 		if e.Size <= 0 {
 			t.Errorf("GetMempoolEntry() got zero or negative size %d", e.Size)
 		}
-		if e.Fee <= 0 {
-			t.Errorf("GetMempoolEntry() got zero or negative fee %f", e.Fee)
+		if e.FeeSat.Sign() != 1 {
+			t.Errorf("GetMempoolEntry() got zero or negative fee %v", e.FeeSat.String())
 		}
 
 		// done
@@ -347,8 +346,11 @@ func (rt *Test) TestEstimateSmartFee(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		if fee != -1 && fee < 0 {
-			t.Errorf("EstimateSmartFee() returned unexpected fee rate: %f", fee)
+		if fee.Sign() == -1 {
+			sf := rt.Client.GetChainParser().AmountToDecimalString(&fee)
+			if sf != "-1" {
+				t.Errorf("EstimateSmartFee() returned unexpected fee rate: %v", sf)
+			}
 		}
 	}
 }
@@ -361,8 +363,11 @@ func (rt *Test) TestEstimateFee(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		if fee != -1 && fee < 0 {
-			t.Errorf("EstimateFee() returned unexpected fee rate: %f", fee)
+		if fee.Sign() == -1 {
+			sf := rt.Client.GetChainParser().AmountToDecimalString(&fee)
+			if sf != "-1" {
+				t.Errorf("EstimateFee() returned unexpected fee rate: %v", sf)
+			}
 		}
 	}
 }
@@ -385,6 +390,7 @@ func (rt *Test) TestGetBestBlockHash(t *testing.T) {
 			t.Fatal(err)
 		}
 		if hash != hh {
+			time.Sleep(time.Millisecond * 100)
 			continue
 		}
 
