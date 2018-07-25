@@ -183,6 +183,7 @@ func (w *Worker) GetAddress(addrID string, page int) (*Address, error) {
 	if err != nil {
 		return nil, err
 	}
+	txm = UniqueTxidsInReverse(txm)
 	bestheight, _, err := w.db.GetBestBlock()
 	if err != nil {
 		return nil, err
