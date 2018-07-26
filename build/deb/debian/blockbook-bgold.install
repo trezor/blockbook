@@ -1,6 +1,0 @@
-#!/usr/bin/dh-exec
-blockbook /opt/coins/blockbook/bgold/bin
-cert /opt/coins/blockbook/bgold
-static /opt/coins/blockbook/bgold
-configs/bgold.json => /opt/coins/blockbook/bgold/config/blockchaincfg.json
-logrotate.sh /opt/coins/blockbook/bgold/bin

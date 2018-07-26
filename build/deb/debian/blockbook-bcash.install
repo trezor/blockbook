@@ -1,6 +1,0 @@
-#!/usr/bin/dh-exec
-blockbook /opt/coins/blockbook/bcash/bin
-cert /opt/coins/blockbook/bcash
-static /opt/coins/blockbook/bcash
-configs/bcash.json => /opt/coins/blockbook/bcash/config/blockchaincfg.json
-logrotate.sh /opt/coins/blockbook/bcash/bin

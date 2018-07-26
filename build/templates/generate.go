@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	inputDir  = "build/templates"
-	outputDir = "build/pkg-defs"
+	inputDir  = "templates"
+	outputDir = "pkg-defs"
 )
 
 type Config struct {
