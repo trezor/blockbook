@@ -1,5 +1,5 @@
 {{define "main" -}}
-{{template "LogrotateFilesTemplate" .}}
+{{template "Backend.LogrotateFilesTemplate" .}}
 {
         rotate 7
         daily

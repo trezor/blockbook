@@ -2,12 +2,12 @@
 Source: backend
 Section: satoshilabs
 Priority: optional
-Maintainer: {{.Backend.PackageMaintainerEmail}}
+Maintainer: {{.Meta.PackageMaintainerEmail}}
 Build-Depends: debhelper, wget, tar, gzip, make, dh-systemd, dh-exec
 Standards-Version: 3.9.5
 
 Package: {{.Backend.PackageName}}
 Architecture: amd64
 Depends: ${shlibs:Depends}, ${misc:Depends}, logrotate
-Description: {{.Coin.Name}} backend daemon
+Description: Satoshilabs packaged {{.Coin.Name}} server
 {{end}}

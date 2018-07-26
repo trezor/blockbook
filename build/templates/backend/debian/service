@@ -4,7 +4,7 @@ Description={{.Coin.Name}} backend daemon
 After=network.target
 
 [Service]
-ExecStart={{template "ExecCommandTemplate" .}}
+ExecStart={{template "Backend.ExecCommandTemplate" .}}
 User={{.Backend.SystemUser}}
 Restart=on-failure
 WorkingDirectory={{.Env.BackendInstallPath}}/{{.Coin.Alias}}

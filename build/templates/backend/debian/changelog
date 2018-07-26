@@ -3,5 +3,5 @@ backend ({{.Backend.Version}}{{if .Backend.PackageRevision}}-{{.Backend.PackageR
 
   * {{.Coin.Name}} backend daemon version {{.Backend.Version}}
 
- -- {{.Backend.PackageMaintainer}} <{{.Backend.PackageMaintainerEmail}}>  {{.Meta.BuildDatetime}}
+ -- {{.Meta.PackageMaintainer}} <{{.Meta.PackageMaintainerEmail}}>  {{.Meta.BuildDatetime}}
 {{end}}

@@ -1,4 +1,8 @@
 {
+  "meta": {
+    "package_maintainer": "Jakub Matys",
+    "package_maintainer_email": "jakub.matys@satoshilabs.com"
+  },
   "coin": {
       "name": "Bcash Testnet",
       "shortcut": "TBCH",
@@ -27,8 +31,6 @@
   "backend": {
     "package_name": "backend-bcash-testnet",
     "package_revision": "satoshilabs-1",
-    "package_maintainer": "Jakub Matys",
-    "package_maintainer_email": "jakub.matys@satoshilabs.com",
     "system_user": "bcash",
     "version": "0.17.1",
     "binary_url": "https://download.bitcoinabc.org/0.17.1/linux/bitcoin-abc-0.17.1-x86_64-linux-gnu.tar.gz",
@@ -49,7 +51,9 @@
   "blockbook": {
     "package_name": "blockbook-bcash-testnet",
     "system_user": "blockbook-bcash",
-    "explorer": "/explorer",
+    "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
+    "public_binding_template": ":{{.Ports.BlockbookPublic}}",
+    "explorer_url": "https://bitcoincash.blockexplorer.com",
     "additional_params": ""
   }
 }

@@ -1,4 +1,8 @@
 {
+  "meta": {
+    "package_maintainer": "Jakub Matys",
+    "package_maintainer_email": "jakub.matys@satoshilabs.com"
+  },
   "coin": {
       "name": "Ethereum",
       "shortcut": "ETH",
@@ -25,8 +29,6 @@
   "backend": {
     "package_name": "backend-ethereum",
     "package_revision": "satoshilabs-1",
-    "package_maintainer": "Jakub Matys",
-    "package_maintainer_email": "jakub.matys@satoshilabs.com",
     "system_user": "ethereum",
     "version": "1.8.10-eae63c51",
     "binary_url": "https://gethstore.blob.core.windows.net/builds/geth-linux-amd64-1.8.10-eae63c51.tar.gz",
@@ -45,7 +47,9 @@
   "blockbook": {
     "package_name": "blockbook-ethereum",
     "system_user": "blockbook-ethereum",
-    "explorer": "/explorer",
+    "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
+    "public_binding_template": ":{{.Ports.BlockbookPublic}}",
+    "explorer_url": "https://etherscan.io/",
     "additional_params": ""
   }
 }

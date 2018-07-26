@@ -1,4 +1,8 @@
 {
+  "meta": {
+    "package_maintainer": "Jakub Matys",
+    "package_maintainer_email": "jakub.matys@satoshilabs.com"
+  },
   "coin": {
       "name": "Bgold",
       "shortcut": "BTG",
@@ -26,8 +30,6 @@
   "backend": {
     "package_name": "backend-bgold",
     "package_revision": "satoshilabs-1",
-    "package_maintainer": "Jakub Matys",
-    "package_maintainer_email": "jakub.matys@satoshilabs.com",
     "system_user": "bgold",
     "version": "0.15.1",
     "binary_url": "https://github.com/BTCGPU/BTCGPU/releases/download/v0.15.1/bitcoin-gold-0.15.1-x86_64-linux-gnu.tar.gz",
@@ -243,7 +245,9 @@
   "blockbook": {
     "package_name": "blockbook-bgold",
     "system_user": "blockbook-bgold",
-    "explorer": "/explorer",
+    "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
+    "public_binding_template": ":{{.Ports.BlockbookPublic}}",
+    "explorer_url": "https://explorer.bitcoingold.org",
     "additional_params": ""
   }
 }

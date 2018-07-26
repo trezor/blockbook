@@ -1,4 +1,8 @@
 {
+  "meta": {
+    "package_maintainer": "Jakub Matys",
+    "package_maintainer_email": "jakub.matys@satoshilabs.com"
+  },
   "coin": {
       "name": "Zcash",
       "shortcut": "ZEC",
@@ -25,8 +29,6 @@
   "backend": {
     "package_name": "backend-zcash",
     "package_revision": "satoshilabs-1",
-    "package_maintainer": "Jakub Matys",
-    "package_maintainer_email": "jakub.matys@satoshilabs.com",
     "system_user": "zcash",
     "version": "1.1.1",
     "binary_url": "https://z.cash/downloads/zcash-1.1.1-linux64.tar.gz",
@@ -50,7 +52,9 @@
   "blockbook": {
     "package_name": "blockbook-zcash",
     "system_user": "blockbook-zcash",
-    "explorer": "/explorer",
+    "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
+    "public_binding_template": ":{{.Ports.BlockbookPublic}}",
+    "explorer_url": "https://zcash.blockexplorer.com/",
     "additional_params": ""
   }
 }

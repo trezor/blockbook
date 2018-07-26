@@ -1,4 +1,8 @@
 {
+  "meta": {
+    "package_maintainer": "Jakub Matys",
+    "package_maintainer_email": "jakub.matys@satoshilabs.com"
+  },
   "coin": {
       "name": "Bitcoin",
       "shortcut": "BTC",
@@ -25,8 +29,6 @@
   "backend": {
     "package_name": "backend-bitcoin",
     "package_revision": "satoshilabs-1",
-    "package_maintainer": "Jakub Matys",
-    "package_maintainer_email": "jakub.matys@satoshilabs.com",
     "system_user": "bitcoin",
     "version": "0.16.1",
     "binary_url": "https://bitcoin.org/bin/bitcoin-core-0.16.1/bitcoin-0.16.1-x86_64-linux-gnu.tar.gz",
@@ -50,7 +52,9 @@
   "blockbook": {
     "package_name": "blockbook-bitcoin",
     "system_user": "blockbook-bitcoin",
-    "explorer": "/explorer",
+    "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
+    "public_binding_template": ":{{.Ports.BlockbookPublic}}",
+    "explorer_url": "https://btc-explorer.trezor.io",
     "additional_params": ""
   }
 }

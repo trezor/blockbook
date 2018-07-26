@@ -1,0 +1,15 @@
+{{define "main" -}}
+{
+    "rpc_url": "{{template "BlockChain.RPCURLTemplate" .}}",
+    "rpc_user": "{{.BlockChain.RPCUser}}",
+    "rpc_pass": "{{.BlockChain.RPCPass}}",
+    "rpc_timeout": {{.BlockChain.RPCTimeout}},
+    "parse": {{.BlockChain.Parse}},
+    "message_queue_binding": "{{template "BlockChain.MessageQueueBindingTemplate" .}}",
+    "subversion": "{{.BlockChain.Subversion}}",
+    "address_format": "{{.BlockChain.AddressFormat}}",
+    "mempool_workers": {{.BlockChain.MempoolWorkers}},
+    "mempool_sub_workers": {{.BlockChain.MempoolSubWorkers}},
+    "block_addresses_to_keep": {{.BlockChain.BlockAddressesToKeep}}
+}
+{{end}}

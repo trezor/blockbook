@@ -1,4 +1,8 @@
 {
+  "meta": {
+    "package_maintainer": "Jakub Matys",
+    "package_maintainer_email": "jakub.matys@satoshilabs.com"
+  },
   "coin": {
       "name": "Dogecoin",
       "shortcut": "DOGE",
@@ -25,8 +29,6 @@
   "backend": {
     "package_name": "backend-dogecoin",
     "package_revision": "satoshilabs-1",
-    "package_maintainer": "Jakub Matys",
-    "package_maintainer_email": "jakub.matys@satoshilabs.com",
     "system_user": "dogecoin",
     "version": "1.10.0",
     "binary_url": "https://github.com/dogecoin/dogecoin/releases/download/v1.10.0/dogecoin-1.10.0-linux64.tar.gz",
@@ -51,7 +53,9 @@
   "blockbook": {
     "package_name": "blockbook-dogecoin",
     "system_user": "blockbook-dogecoin",
-    "explorer": "/explorer",
+    "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
+    "public_binding_template": ":{{.Ports.BlockbookPublic}}",
+    "explorer_url": "https://dogechain.info/",
     "additional_params": "-resyncindexperiod=30011 -resyncmempoolperiod=2011"
   }
 }

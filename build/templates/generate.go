@@ -17,7 +17,9 @@ const (
 
 type Config struct {
 	Meta struct {
-		BuildDatetime string
+		BuildDatetime          string // generated field
+		PackageMaintainer      string `json:"package_maintainer"`
+		PackageMaintainerEmail string `json:"package_maintainer_email"`
 	}
 	Env struct {
 		Version              string `json:"version"`
@@ -38,7 +40,7 @@ type Config struct {
 		BlockbookInternal   int `json:"blockbook_internal"`
 		BlockbookPublic     int `json:"blockbook_public"`
 	} `json:"ports"`
-	RPC struct {
+	BlockChain struct {
 		RPCURLTemplate              string `json:"rpc_url_template"`
 		RPCUser                     string `json:"rpc_user"`
 		RPCPass                     string `json:"rpc_pass"`
@@ -54,8 +56,6 @@ type Config struct {
 	Backend struct {
 		PackageName            string      `json:"package_name"`
 		PackageRevision        string      `json:"package_revision"`
-		PackageMaintainer      string      `json:"package_maintainer"`
-		PackageMaintainerEmail string      `json:"package_maintainer_email"`
 		SystemUser             string      `json:"system_user"`
 		Version                string      `json:"version"`
 		BinaryURL              string      `json:"binary_url"`
@@ -73,20 +73,24 @@ type Config struct {
 		AdditionalParams       interface{} `json:"additional_params"`
 	} `json:"backend"`
 	Blockbook struct {
-		PackageName      string `json:"package_name"`
-		SystemUser       string `json:"system_user"`
-		Explorer         string `json:"explorer"`
-		AdditionalParams string `json:"additional_params"`
+		PackageName             string `json:"package_name"`
+		SystemUser              string `json:"system_user"`
+		InternalBindingTemplate string `json:"internal_binding_template"`
+		PublicBindingTemplate   string `json:"public_binding_template"`
+		ExplorerURL             string `json:"explorer_url"`
+		AdditionalParams        string `json:"additional_params"`
 	} `json:"blockbook"`
 }
 
 func (c *Config) ParseTemplate() *template.Template {
 	templates := map[string]string{
-		"RPCURLTemplate":              c.RPC.RPCURLTemplate,
-		"MessageQueueBindingTemplate": c.RPC.MessageQueueBindingTemplate,
-		"ExecCommandTemplate":         c.Backend.ExecCommandTemplate,
-		"LogrotateFilesTemplate":      c.Backend.LogrotateFilesTemplate,
-		"PostinstScriptTemplate":      c.Backend.PostinstScriptTemplate,
+		"BlockChain.RPCURLTemplate":              c.BlockChain.RPCURLTemplate,
+		"BlockChain.MessageQueueBindingTemplate": c.BlockChain.MessageQueueBindingTemplate,
+		"Backend.ExecCommandTemplate":            c.Backend.ExecCommandTemplate,
+		"Backend.LogrotateFilesTemplate":         c.Backend.LogrotateFilesTemplate,
+		"Backend.PostinstScriptTemplate":         c.Backend.PostinstScriptTemplate,
+		"Blockbook.InternalBindingTemplate":      c.Blockbook.InternalBindingTemplate,
+		"Blockbook.PublicBindingTemplate":        c.Blockbook.PublicBindingTemplate,
 	}
 
 	t := template.New("")
@@ -160,7 +164,7 @@ func generatePackageDefinitions(config *Config) {
 
 	makeOutputDir(outputDir)
 
-	for _, subdir := range []string{"backend"} {
+	for _, subdir := range []string{"backend", "blockbook"} {
 		root := filepath.Join(inputDir, subdir)
 
 		err := os.Mkdir(filepath.Join(outputDir, subdir), 0755)

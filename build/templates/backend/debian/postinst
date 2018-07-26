@@ -17,7 +17,7 @@ case "$1" in
 
 {{if .Backend.PostinstScriptTemplate}}
     # generated from postinst_template
-    {{template "PostinstScriptTemplate" .}}
+    {{template "Backend.PostinstScriptTemplate" .}}
 {{end}}
   ;;
 
