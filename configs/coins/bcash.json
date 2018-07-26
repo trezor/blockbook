@@ -15,7 +15,7 @@
     "blockbook_internal": 9031,
     "blockbook_public": 9131
   },
-  "rpc": {
+  "block_chain": {
     "rpc_url_template": "http://localhost:{{.Ports.BackendRPC}}",
     "rpc_user": "rpc",
     "rpc_pass": "rpc",
@@ -26,7 +26,8 @@
     "address_format": "legacy",
     "mempool_workers": 8,
     "mempool_sub_workers": 2,
-    "block_addresses_to_keep": 300
+    "block_addresses_to_keep": 300,
+    "additional_params": {}
   },
   "backend": {
     "package_name": "backend-bcash",

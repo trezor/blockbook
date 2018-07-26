@@ -1,5 +1,12 @@
 {{define "main" -}}
 {
+{{- if .BlockChain.AdditionalParams}}
+{{- range $name, $value := .BlockChain.AdditionalParams}}
+    "{{$name}}": {{jsonToString $value}},
+{{- end}}
+{{end}}
+
+    "coin_name": {{.Coin.Name}},
     "rpc_url": "{{template "BlockChain.RPCURLTemplate" .}}",
     "rpc_user": "{{.BlockChain.RPCUser}}",
     "rpc_pass": "{{.BlockChain.RPCPass}}",

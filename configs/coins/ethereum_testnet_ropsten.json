@@ -15,16 +15,10 @@
     "blockbook_internal": 19036,
     "blockbook_public": 19136
   },
-  "rpc": {
+  "block_chain": {
     "rpc_url_template": "ws://localhost:{{.Ports.BackendRPC}}",
-    "rpc_user": "rpc",
-    "rpc_pass": "rpc",
     "rpc_timeout": 25,
-    "parse": true,
-    "message_queue_binding_template": "",
-    "mempool_workers": 8,
-    "mempool_sub_workers": 2,
-    "block_addresses_to_keep": 300
+    "additional_params": {}
   },
   "backend": {
     "package_name": "backend-ethereum-testnet-ropsten",

@@ -41,18 +41,19 @@ type Config struct {
 		BlockbookPublic     int `json:"blockbook_public"`
 	} `json:"ports"`
 	BlockChain struct {
-		RPCURLTemplate              string `json:"rpc_url_template"`
-		RPCUser                     string `json:"rpc_user"`
-		RPCPass                     string `json:"rpc_pass"`
-		RPCTimeout                  int    `json:"rpc_timeout"`
-		Parse                       bool   `json:"parse"`
-		MessageQueueBindingTemplate string `json:"message_queue_binding_template"`
-		Subversion                  string `json:"subversion"`
-		AddressFormat               string `json:"address_format"`
-		MempoolWorkers              int    `json:"mempool_workers"`
-		MempoolSubWorkers           int    `json:"mempool_sub_workers"`
-		BlockAddressesToKeep        int    `json:"block_addresses_to_keep"`
-	} `json:"rpc"`
+		RPCURLTemplate              string                     `json:"rpc_url_template"`
+		RPCUser                     string                     `json:"rpc_user"`
+		RPCPass                     string                     `json:"rpc_pass"`
+		RPCTimeout                  int                        `json:"rpc_timeout"`
+		Parse                       bool                       `json:"parse"`
+		MessageQueueBindingTemplate string                     `json:"message_queue_binding_template"`
+		Subversion                  string                     `json:"subversion"`
+		AddressFormat               string                     `json:"address_format"`
+		MempoolWorkers              int                        `json:"mempool_workers"`
+		MempoolSubWorkers           int                        `json:"mempool_sub_workers"`
+		BlockAddressesToKeep        int                        `json:"block_addresses_to_keep"`
+		AdditionalParams            map[string]json.RawMessage `json:"additional_params"`
+	} `json:"block_chain"`
 	Backend struct {
 		PackageName            string      `json:"package_name"`
 		PackageRevision        string      `json:"package_revision"`
@@ -82,6 +83,14 @@ type Config struct {
 	} `json:"blockbook"`
 }
 
+func jsonToString(msg json.RawMessage) (string, error) {
+	d, err := msg.MarshalJSON()
+	if err != nil {
+		return "", err
+	}
+	return string(d), nil
+}
+
 func (c *Config) ParseTemplate() *template.Template {
 	templates := map[string]string{
 		"BlockChain.RPCURLTemplate":              c.BlockChain.RPCURLTemplate,
@@ -93,7 +102,11 @@ func (c *Config) ParseTemplate() *template.Template {
 		"Blockbook.PublicBindingTemplate":        c.Blockbook.PublicBindingTemplate,
 	}
 
-	t := template.New("")
+	funcMap := template.FuncMap{
+		"jsonToString": jsonToString,
+	}
+
+	t := template.New("").Funcs(funcMap)
 
 	for name, def := range templates {
 		t = template.Must(t.Parse(fmt.Sprintf(`{{define "%s"}}%s{{end}}`, name, def)))

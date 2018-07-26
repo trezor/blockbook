@@ -31,8 +31,8 @@ const (
 
 type Configuration struct {
 	CoinName   string `json:"coin_name"`
-	RPCURL     string `json:"rpcURL"`
-	RPCTimeout int    `json:"rpcTimeout"`
+	RPCURL     string `json:"rpc_url"`
+	RPCTimeout int    `json:"rpc_timeout"`
 }
 
 // EthereumRPC is an interface to JSON-RPC eth service.

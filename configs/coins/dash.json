@@ -15,7 +15,7 @@
     "blockbook_internal": 9033,
     "blockbook_public": 9133
   },
-  "rpc": {
+  "block_chain": {
     "rpc_url_template": "http://localhost:{{.Ports.BackendRPC}}",
     "rpc_user": "rpc",
     "rpc_pass": "rpc",
@@ -25,7 +25,8 @@
     "subversion": "/Dash Core:0.12.3.2/",
     "mempool_workers": 8,
     "mempool_sub_workers": 2,
-    "block_addresses_to_keep": 300
+    "block_addresses_to_keep": 300,
+    "additional_params": {}
   },
   "backend": {
     "package_name": "backend-dash",

@@ -15,7 +15,7 @@
     "blockbook_internal": 19030,
     "blockbook_public": 19130
   },
-  "rpc": {
+  "block_chain": {
     "rpc_url_template": "http://localhost:{{.Ports.BackendRPC}}",
     "rpc_user": "rpc",
     "rpc_pass": "rpc",
@@ -24,7 +24,8 @@
     "message_queue_binding_template": "tcp://127.0.0.1:{{.Ports.BackendMessageQueue}}",
     "mempool_workers": 8,
     "mempool_sub_workers": 2,
-    "block_addresses_to_keep": 300
+    "block_addresses_to_keep": 300,
+    "additional_params": {}
   },
   "backend": {
     "package_name": "backend-bitcoin-testnet",

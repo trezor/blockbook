@@ -37,17 +37,17 @@ type BitcoinRPC struct {
 
 type Configuration struct {
 	CoinName             string `json:"coin_name"`
-	RPCURL               string `json:"rpcURL"`
-	RPCUser              string `json:"rpcUser"`
-	RPCPass              string `json:"rpcPass"`
-	RPCTimeout           int    `json:"rpcTimeout"`
+	RPCURL               string `json:"rpc_url"`
+	RPCUser              string `json:"rpc_user"`
+	RPCPass              string `json:"rpc_pass"`
+	RPCTimeout           int    `json:"rpc_timeout"`
 	Parse                bool   `json:"parse"`
-	ZeroMQBinding        string `json:"zeroMQBinding"`
+	MessageQueueBinding  string `json:"message_queue_binding"`
 	Subversion           string `json:"subversion"`
-	BlockAddressesToKeep int    `json:"blockAddressesToKeep"`
-	MempoolWorkers       int    `json:"mempoolWorkers"`
-	MempoolSubWorkers    int    `json:"mempoolSubWorkers"`
-	AddressFormat        string `json:"addressFormat"`
+	BlockAddressesToKeep int    `json:"block_addresses_to_keep"`
+	MempoolWorkers       int    `json:"mempool_workers"`
+	MempoolSubWorkers    int    `json:"mempool_sub_workers"`
+	AddressFormat        string `json:"address_format"`
 }
 
 // NewBitcoinRPC returns new BitcoinRPC instance.
@@ -100,7 +100,7 @@ func (b *BitcoinRPC) GetChainInfoAndInitializeMempool(bc bchain.BlockChain) (str
 		return "", err
 	}
 
-	mq, err := bchain.NewMQ(b.ChainConfig.ZeroMQBinding, b.pushHandler)
+	mq, err := bchain.NewMQ(b.ChainConfig.MessageQueueBinding, b.pushHandler)
 	if err != nil {
 		glog.Error("mq: ", err)
 		return "", err
