@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
+	"math/big"
 	"os"
 	"path/filepath"
 	"time"
@@ -1071,4 +1072,63 @@ func packVarint(i int32, buf []byte) int {
 func unpackVarint(buf []byte) (int32, int) {
 	i, ofs := vlq.Int(buf)
 	return int32(i), ofs
+}
+
+const (
+	// number of bits in a big.Word
+	wordBits = 32 << (uint64(^big.Word(0)) >> 63)
+	// number of bytes in a big.Word
+	wordBytes = wordBits / 8
+	// max packed bigint words
+	maxPackedBigintWords = (256 - wordBytes) / wordBytes
+)
+
+// big int is packed in BigEndian order without memory allocation as 1 byte length followed by bytes of big int
+// number of written bytes is returned
+// limitation: bigints longer than 248 bytes are truncated to 248 bytes
+// caution: buffer must be big enough to hold the packed big int, buffer 249 bytes big is always safe
+func packBigint(bi *big.Int, buf []byte) int {
+	w := bi.Bits()
+	lw := len(w)
+	// zero returns only one byte - zero length
+	if lw == 0 {
+		buf[0] = 0
+		return 1
+	}
+	// pack the most significant word in a special way - skip leading zeros
+	w0 := w[lw-1]
+	fb := 8
+	mask := big.Word(0xff) << (wordBits - 8)
+	for w0&mask == 0 {
+		fb--
+		mask >>= 8
+	}
+	for i := fb; i > 0; i-- {
+		buf[i] = byte(w0)
+		w0 >>= 8
+	}
+	// if the big int is too big (> 2^1984), the number of bytes would not fit to 1 byte
+	// in this case, truncate the number, it is not expected to work with this big numbers as amounts
+	s := 0
+	if lw > maxPackedBigintWords {
+		s = lw - maxPackedBigintWords
+	}
+	// pack the rest of the words in reverse order
+	for j := lw - 2; j >= s; j-- {
+		d := w[j]
+		for i := fb + wordBytes; i > fb; i-- {
+			buf[i] = byte(d)
+			d >>= 8
+		}
+		fb += wordBytes
+	}
+	buf[0] = byte(fb)
+	return fb + 1
+}
+
+func unpackBigint(buf []byte) (big.Int, int) {
+	var r big.Int
+	l := int(buf[0]) + 1
+	r.SetBytes(buf[1:l])
+	return r, l
 }

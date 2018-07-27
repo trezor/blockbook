@@ -1,4 +1,4 @@
-// +build unittest
+// build unittest
 
 package db
 
@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io/ioutil"
+	"math/big"
 	"os"
 	"reflect"
 	"sort"
@@ -719,6 +720,96 @@ func Test_unpackBlockAddresses(t *testing.T) {
 			}
 			if !reflect.DeepEqual(h2, tt.want2) {
 				t.Errorf("unpackBlockAddresses() = %v, want %v", h2, tt.want2)
+			}
+		})
+	}
+}
+
+func Test_packBigint_unpackBigint(t *testing.T) {
+	bigbig1, _ := big.NewInt(0).SetString("123456789123456789012345", 10)
+	bigbig2, _ := big.NewInt(0).SetString("12345678912345678901234512389012345123456789123456789012345123456789123456789012345", 10)
+	bigbigbig := big.NewInt(0)
+	bigbigbig.Mul(bigbig2, bigbig2)
+	bigbigbig.Mul(bigbigbig, bigbigbig)
+	bigbigbig.Mul(bigbigbig, bigbigbig)
+	tests := []struct {
+		name      string
+		bi        *big.Int
+		buf       []byte
+		toobiglen int
+	}{
+		{
+			name: "0",
+			bi:   big.NewInt(0),
+			buf:  make([]byte, 249),
+		},
+		{
+			name: "1",
+			bi:   big.NewInt(1),
+			buf:  make([]byte, 249),
+		},
+		{
+			name: "54321",
+			bi:   big.NewInt(54321),
+			buf:  make([]byte, 249),
+		},
+		{
+			name: "12345678",
+			bi:   big.NewInt(12345678),
+			buf:  make([]byte, 249),
+		},
+		{
+			name: "123456789123456789",
+			bi:   big.NewInt(123456789123456789),
+			buf:  make([]byte, 249),
+		},
+		{
+			name: "bigbig1",
+			bi:   bigbig1,
+			buf:  make([]byte, 249),
+		},
+		{
+			name: "bigbig2",
+			bi:   bigbig2,
+			buf:  make([]byte, 249),
+		},
+		{
+			name:      "bigbigbig",
+			bi:        bigbigbig,
+			buf:       make([]byte, 249),
+			toobiglen: 242,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// packBigint
+			got := packBigint(tt.bi, tt.buf)
+			if tt.toobiglen == 0 {
+				// create buffer that we expect
+				bb := tt.bi.Bytes()
+				want := append([]byte(nil), byte(len(bb)))
+				want = append(want, bb...)
+				if got != len(want) {
+					t.Errorf("packBigint() = %v, want %v", got, len(want))
+				}
+				for i := 0; i < got; i++ {
+					if tt.buf[i] != want[i] {
+						t.Errorf("packBigint() buf = %v, want %v", tt.buf[:got], want)
+						break
+					}
+				}
+				// unpackBigint
+				got1, got2 := unpackBigint(tt.buf)
+				if got2 != len(want) {
+					t.Errorf("unpackBigint() = %v, want %v", got2, len(want))
+				}
+				if tt.bi.Cmp(&got1) != 0 {
+					t.Errorf("unpackBigint() = %v, want %v", got1, tt.bi)
+				}
+			} else {
+				if got != tt.toobiglen {
+					t.Errorf("packBigint() = %v, want toobiglen %v", got, tt.toobiglen)
+				}
 			}
 		})
 	}
