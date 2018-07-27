@@ -14,7 +14,7 @@
   "ipc": {
     "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
     "rpc_user": "rpc",
-    "rpc_pass": "rpc",
+    "rpc_pass": "rpcp",
     "rpc_timeout": 25,
     "message_queue_binding_template": "tcp://127.0.0.1:{{.Ports.BackendMessageQueue}}"
   },
@@ -39,7 +39,9 @@
     "config_file": "bitcoin.conf",
     "additional_params": {
         "whitelist": "127.0.0.1",
-        "rpcthreads": 32
+        "rpcthreads": 16,
+        "upnp": 0,
+        "discover": 0
     }
   },
   "blockbook": {
