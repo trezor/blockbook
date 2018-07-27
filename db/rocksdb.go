@@ -46,12 +46,17 @@ const (
 	cfDefault = iota
 	cfHeight
 	cfAddresses
-	cfUnspentTxs
+	cfTxAddresses
+	cfAddressBalance
+	cfBlockTxids
 	cfTransactions
+
+	// to be removed, kept temporarily so that the code is compilable
+	cfUnspentTxs
 	cfBlockAddresses
 )
 
-var cfNames = []string{"default", "height", "addresses", "unspenttxs", "transactions", "blockaddresses"}
+var cfNames = []string{"default", "height", "addresses", "txAddresses", "addressBalance", "blockTxids", "transactions"}
 
 func openDB(path string) (*gorocksdb.DB, []*gorocksdb.ColumnFamilyHandle, error) {
 	c := gorocksdb.NewLRUCache(8 << 30) // 8GB
@@ -61,37 +66,49 @@ func openDB(path string) (*gorocksdb.DB, []*gorocksdb.ColumnFamilyHandle, error)
 	bbto.SetBlockCache(c)
 	bbto.SetFilterPolicy(fp)
 
-	opts := gorocksdb.NewDefaultOptions()
-	opts.SetBlockBasedTableFactory(bbto)
-	opts.SetCreateIfMissing(true)
-	opts.SetCreateIfMissingColumnFamilies(true)
-	opts.SetMaxBackgroundCompactions(4)
-	opts.SetMaxBackgroundFlushes(2)
-	opts.SetBytesPerSync(1 << 20)    // 1MB
-	opts.SetWriteBufferSize(1 << 27) // 128MB
-	opts.SetMaxOpenFiles(25000)
-	opts.SetCompression(gorocksdb.NoCompression)
+	optsNoCompression := gorocksdb.NewDefaultOptions()
+	optsNoCompression.SetBlockBasedTableFactory(bbto)
+	optsNoCompression.SetCreateIfMissing(true)
+	optsNoCompression.SetCreateIfMissingColumnFamilies(true)
+	optsNoCompression.SetMaxBackgroundCompactions(4)
+	optsNoCompression.SetMaxBackgroundFlushes(2)
+	optsNoCompression.SetBytesPerSync(1 << 20)    // 1MB
+	optsNoCompression.SetWriteBufferSize(1 << 27) // 128MB
+	optsNoCompression.SetMaxOpenFiles(25000)
+	optsNoCompression.SetCompression(gorocksdb.NoCompression)
 
-	// opts for outputs are different:
+	optsLZ4 := gorocksdb.NewDefaultOptions()
+	optsLZ4.SetBlockBasedTableFactory(bbto)
+	optsLZ4.SetCreateIfMissing(true)
+	optsLZ4.SetCreateIfMissingColumnFamilies(true)
+	optsLZ4.SetMaxBackgroundCompactions(4)
+	optsLZ4.SetMaxBackgroundFlushes(2)
+	optsLZ4.SetBytesPerSync(1 << 20)    // 1MB
+	optsLZ4.SetWriteBufferSize(1 << 27) // 128MB
+	optsLZ4.SetMaxOpenFiles(25000)
+	optsLZ4.SetCompression(gorocksdb.LZ4Compression)
+
+	// opts for addresses are different:
 	// no bloom filter - from documentation: If most of your queries are executed using iterators, you shouldn't set bloom filter
-	bbtoOutputs := gorocksdb.NewDefaultBlockBasedTableOptions()
-	bbtoOutputs.SetBlockSize(16 << 10) // 16kB
-	bbtoOutputs.SetBlockCache(c)       // 8GB
+	bbtoAddresses := gorocksdb.NewDefaultBlockBasedTableOptions()
+	bbtoAddresses.SetBlockSize(16 << 10) // 16kB
+	bbtoAddresses.SetBlockCache(c)       // 8GB
 
-	optsOutputs := gorocksdb.NewDefaultOptions()
-	optsOutputs.SetBlockBasedTableFactory(bbtoOutputs)
-	optsOutputs.SetCreateIfMissing(true)
-	optsOutputs.SetCreateIfMissingColumnFamilies(true)
-	optsOutputs.SetMaxBackgroundCompactions(4)
-	optsOutputs.SetMaxBackgroundFlushes(2)
-	optsOutputs.SetBytesPerSync(1 << 20)    // 1MB
-	optsOutputs.SetWriteBufferSize(1 << 27) // 128MB
-	optsOutputs.SetMaxOpenFiles(25000)
-	optsOutputs.SetCompression(gorocksdb.NoCompression)
+	optsAddresses := gorocksdb.NewDefaultOptions()
+	optsAddresses.SetBlockBasedTableFactory(bbtoAddresses)
+	optsAddresses.SetCreateIfMissing(true)
+	optsAddresses.SetCreateIfMissingColumnFamilies(true)
+	optsAddresses.SetMaxBackgroundCompactions(4)
+	optsAddresses.SetMaxBackgroundFlushes(2)
+	optsAddresses.SetBytesPerSync(1 << 20)    // 1MB
+	optsAddresses.SetWriteBufferSize(1 << 27) // 128MB
+	optsAddresses.SetMaxOpenFiles(25000)
+	optsAddresses.SetCompression(gorocksdb.NoCompression)
 
-	fcOptions := []*gorocksdb.Options{opts, opts, optsOutputs, opts, opts, opts}
+	// default, height, addresses, txAddresses, addressBalance, blockTxids, transactions
+	fcOptions := []*gorocksdb.Options{optsNoCompression, optsNoCompression, optsAddresses, optsLZ4, optsLZ4, optsLZ4, optsLZ4}
 
-	db, cfh, err := gorocksdb.OpenDbColumnFamilies(opts, path, cfNames, fcOptions)
+	db, cfh, err := gorocksdb.OpenDbColumnFamilies(optsNoCompression, path, cfNames, fcOptions)
 	if err != nil {
 		return nil, nil, err
 	}
