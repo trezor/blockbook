@@ -40,20 +40,13 @@ type Config struct {
 		BlockbookInternal   int `json:"blockbook_internal"`
 		BlockbookPublic     int `json:"blockbook_public"`
 	} `json:"ports"`
-	BlockChain struct {
-		RPCURLTemplate              string                     `json:"rpc_url_template"`
-		RPCUser                     string                     `json:"rpc_user"`
-		RPCPass                     string                     `json:"rpc_pass"`
-		RPCTimeout                  int                        `json:"rpc_timeout"`
-		Parse                       bool                       `json:"parse"`
-		MessageQueueBindingTemplate string                     `json:"message_queue_binding_template"`
-		Subversion                  string                     `json:"subversion"`
-		AddressFormat               string                     `json:"address_format"`
-		MempoolWorkers              int                        `json:"mempool_workers"`
-		MempoolSubWorkers           int                        `json:"mempool_sub_workers"`
-		BlockAddressesToKeep        int                        `json:"block_addresses_to_keep"`
-		AdditionalParams            map[string]json.RawMessage `json:"additional_params"`
-	} `json:"block_chain"`
+	IPC struct {
+		RPCURLTemplate              string `json:"rpc_url_template"`
+		RPCUser                     string `json:"rpc_user"`
+		RPCPass                     string `json:"rpc_pass"`
+		RPCTimeout                  int    `json:"rpc_timeout"`
+		MessageQueueBindingTemplate string `json:"message_queue_binding_template"`
+	} `json:"ipc"`
 	Backend struct {
 		PackageName            string      `json:"package_name"`
 		PackageRevision        string      `json:"package_revision"`
@@ -80,6 +73,15 @@ type Config struct {
 		PublicBindingTemplate   string `json:"public_binding_template"`
 		ExplorerURL             string `json:"explorer_url"`
 		AdditionalParams        string `json:"additional_params"`
+		BlockChain              struct {
+			Parse                bool                       `json:"parse"`
+			Subversion           string                     `json:"subversion"`
+			AddressFormat        string                     `json:"address_format"`
+			MempoolWorkers       int                        `json:"mempool_workers"`
+			MempoolSubWorkers    int                        `json:"mempool_sub_workers"`
+			BlockAddressesToKeep int                        `json:"block_addresses_to_keep"`
+			AdditionalParams     map[string]json.RawMessage `json:"additional_params"`
+		} `json:"block_chain"`
 	} `json:"blockbook"`
 }
 
@@ -93,13 +95,13 @@ func jsonToString(msg json.RawMessage) (string, error) {
 
 func (c *Config) ParseTemplate() *template.Template {
 	templates := map[string]string{
-		"BlockChain.RPCURLTemplate":              c.BlockChain.RPCURLTemplate,
-		"BlockChain.MessageQueueBindingTemplate": c.BlockChain.MessageQueueBindingTemplate,
-		"Backend.ExecCommandTemplate":            c.Backend.ExecCommandTemplate,
-		"Backend.LogrotateFilesTemplate":         c.Backend.LogrotateFilesTemplate,
-		"Backend.PostinstScriptTemplate":         c.Backend.PostinstScriptTemplate,
-		"Blockbook.InternalBindingTemplate":      c.Blockbook.InternalBindingTemplate,
-		"Blockbook.PublicBindingTemplate":        c.Blockbook.PublicBindingTemplate,
+		"IPC.RPCURLTemplate":                c.IPC.RPCURLTemplate,
+		"IPC.MessageQueueBindingTemplate":   c.IPC.MessageQueueBindingTemplate,
+		"Backend.ExecCommandTemplate":       c.Backend.ExecCommandTemplate,
+		"Backend.LogrotateFilesTemplate":    c.Backend.LogrotateFilesTemplate,
+		"Backend.PostinstScriptTemplate":    c.Backend.PostinstScriptTemplate,
+		"Blockbook.InternalBindingTemplate": c.Blockbook.InternalBindingTemplate,
+		"Blockbook.PublicBindingTemplate":   c.Blockbook.PublicBindingTemplate,
 	}
 
 	funcMap := template.FuncMap{

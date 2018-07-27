@@ -1,8 +1,4 @@
 {
-  "meta": {
-    "package_maintainer": "Jakub Matys",
-    "package_maintainer_email": "jakub.matys@satoshilabs.com"
-  },
   "coin": {
       "name": "Litecoin Testnet",
       "shortcut": "TLTC",
@@ -15,17 +11,12 @@
     "blockbook_internal": 19034,
     "blockbook_public": 19134
   },
-  "block_chain": {
+  "ipc": {
     "rpc_url_template": "http://localhost:{{.Ports.BackendRPC}}",
     "rpc_user": "rpc",
     "rpc_pass": "rpc",
     "rpc_timeout": 25,
-    "parse": true,
-    "message_queue_binding_template": "tcp://127.0.0.1:{{.Ports.BackendMessageQueue}}",
-    "mempool_workers": 8,
-    "mempool_sub_workers": 2,
-    "block_addresses_to_keep": 300,
-    "additional_params": {}
+    "message_queue_binding_template": "tcp://127.0.0.1:{{.Ports.BackendMessageQueue}}"
   },
   "backend": {
     "package_name": "backend-litecoin-testnet",
@@ -56,6 +47,17 @@
     "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
     "public_binding_template": ":{{.Ports.BlockbookPublic}}",
     "explorer_url": "https://ltc-explorer.trezor.io",
-    "additional_params": ""
+    "additional_params": "",
+    "block_chain": {
+      "parse": true,
+      "mempool_workers": 8,
+      "mempool_sub_workers": 2,
+      "block_addresses_to_keep": 300,
+      "additional_params": {}
+    }
+  },
+  "meta": {
+    "package_maintainer": "Jakub Matys",
+    "package_maintainer_email": "jakub.matys@satoshilabs.com"
   }
 }

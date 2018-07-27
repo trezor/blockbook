@@ -1,22 +1,22 @@
 {{define "main" -}}
 {
-{{- if .BlockChain.AdditionalParams}}
-{{- range $name, $value := .BlockChain.AdditionalParams}}
+{{- if .Blockbook.BlockChain.AdditionalParams}}
+{{- range $name, $value := .Blockbook.BlockChain.AdditionalParams}}
     "{{$name}}": {{jsonToString $value}},
 {{- end}}
 {{end}}
 
-    "coin_name": {{.Coin.Name}},
-    "rpc_url": "{{template "BlockChain.RPCURLTemplate" .}}",
-    "rpc_user": "{{.BlockChain.RPCUser}}",
-    "rpc_pass": "{{.BlockChain.RPCPass}}",
-    "rpc_timeout": {{.BlockChain.RPCTimeout}},
-    "parse": {{.BlockChain.Parse}},
-    "message_queue_binding": "{{template "BlockChain.MessageQueueBindingTemplate" .}}",
-    "subversion": "{{.BlockChain.Subversion}}",
-    "address_format": "{{.BlockChain.AddressFormat}}",
-    "mempool_workers": {{.BlockChain.MempoolWorkers}},
-    "mempool_sub_workers": {{.BlockChain.MempoolSubWorkers}},
-    "block_addresses_to_keep": {{.BlockChain.BlockAddressesToKeep}}
+    "coin_name": "{{.Coin.Name}}",
+    "rpc_url": "{{template "IPC.RPCURLTemplate" .}}",
+    "rpc_user": "{{.IPC.RPCUser}}",
+    "rpc_pass": "{{.IPC.RPCPass}}",
+    "rpc_timeout": {{.IPC.RPCTimeout}},
+    "parse": {{.Blockbook.BlockChain.Parse}},
+    "message_queue_binding": "{{template "IPC.MessageQueueBindingTemplate" .}}",
+    "subversion": "{{.Blockbook.BlockChain.Subversion}}",
+    "address_format": "{{.Blockbook.BlockChain.AddressFormat}}",
+    "mempool_workers": {{.Blockbook.BlockChain.MempoolWorkers}},
+    "mempool_sub_workers": {{.Blockbook.BlockChain.MempoolSubWorkers}},
+    "block_addresses_to_keep": {{.Blockbook.BlockChain.BlockAddressesToKeep}}
 }
 {{end}}

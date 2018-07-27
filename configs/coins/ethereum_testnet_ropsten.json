@@ -1,8 +1,4 @@
 {
-  "meta": {
-    "package_maintainer": "Jakub Matys",
-    "package_maintainer_email": "jakub.matys@satoshilabs.com"
-  },
   "coin": {
       "name": "Ethereum Testnet Ropsten",
       "shortcut": "tETH",
@@ -15,10 +11,9 @@
     "blockbook_internal": 19036,
     "blockbook_public": 19136
   },
-  "block_chain": {
+  "ipc": {
     "rpc_url_template": "ws://localhost:{{.Ports.BackendRPC}}",
-    "rpc_timeout": 25,
-    "additional_params": {}
+    "rpc_timeout": 25
   },
   "backend": {
     "package_name": "backend-ethereum-testnet-ropsten",
@@ -44,6 +39,13 @@
     "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
     "public_binding_template": ":{{.Ports.BlockbookPublic}}",
     "explorer_url": "https://ropsten.etherscan.io/",
-    "additional_params": ""
+    "additional_params": "",
+    "block_chain": {
+      "additional_params": {}
+    }
+  },
+  "meta": {
+    "package_maintainer": "Jakub Matys",
+    "package_maintainer_email": "jakub.matys@satoshilabs.com"
   }
 }

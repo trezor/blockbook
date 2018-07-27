@@ -8,7 +8,7 @@ if [ $# -lt 2 ]; then
 fi
 
 package=$1
-coin=$(echo "$2" | tr '-' '_')
+coin=$2
 shift 2
 
 cp -r /src/build/templates .
