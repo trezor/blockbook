@@ -21,6 +21,7 @@ import (
 // when doing huge scan, it is better to close it and reopen from time to time to free the resources
 const refreshIterator = 5000000
 const packedHeightBytes = 4
+const dbVersion = 0
 
 // RepairRocksDB calls RocksDb db repair function
 func RepairRocksDB(name string) error {
@@ -928,9 +929,13 @@ func (d *RocksDB) LoadInternalState(rpcCoin string) (*common.InternalState, erro
 	nc := make([]common.InternalStateColumn, len(cfNames))
 	for i := 0; i < len(nc); i++ {
 		nc[i].Name = cfNames[i]
+		nc[i].Version = dbVersion
 		for j := 0; j < len(sc); j++ {
 			if sc[j].Name == nc[i].Name {
-				nc[i].Version = sc[j].Version
+				// check the version of the column, if it does not match, the db is not compatible
+				if sc[j].Version != dbVersion {
+					return nil, errors.Errorf("DB version %v of column '%v' does not match the required version %v. DB is not compatible.", sc[j].Version, sc[j].Name, dbVersion)
+				}
 				nc[i].Rows = sc[j].Rows
 				nc[i].KeyBytes = sc[j].KeyBytes
 				nc[i].ValueBytes = sc[j].ValueBytes
