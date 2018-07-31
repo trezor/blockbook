@@ -6,3 +6,6 @@ notes.txt
 debug*
 .vscode
 docker/blockbook
+build
+!build/templates
+!build/docker
