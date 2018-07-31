@@ -41,6 +41,10 @@
     "explorer_url": "https://ropsten.etherscan.io/",
     "additional_params": "",
     "block_chain": {
+      "parse": true,
+      "mempool_workers": 8,
+      "mempool_sub_workers": 2,
+      "block_addresses_to_keep": 300,
       "additional_params": {}
     }
   },
