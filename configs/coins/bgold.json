@@ -6,7 +6,7 @@
       "alias": "bgold"
   },
   "ports": {
-    "backend_rpc": 18035,
+    "backend_rpc": 8035,
     "backend_message_queue": 38335,
     "blockbook_internal": 9035,
     "blockbook_public": 9135
