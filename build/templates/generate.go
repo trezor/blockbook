@@ -6,13 +6,15 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"text/template"
 	"time"
 )
 
 const (
-	inputDir  = "build/templates"
-	outputDir = "build/pkg-defs"
+	configsDir = "configs"
+	inputDir   = "build/templates"
+	outputDir  = "build/pkg-defs"
 )
 
 type Config struct {
@@ -121,21 +123,28 @@ func (c *Config) ParseTemplate() *template.Template {
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintf(os.Stderr, "Usage: %s coin_alias [...]\n", filepath.Base(os.Args[0]))
+		var coins []string
+		filepath.Walk(filepath.Join(configsDir, "coins"), func(path string, info os.FileInfo, err error) error {
+			n := strings.TrimSuffix(info.Name(), ".json")
+			if n != info.Name() {
+				coins = append(coins, n)
+			}
+			return nil
+		})
+		fmt.Fprintf(os.Stderr, "Usage: %s coin\nCoin is one of:\n%v\n", filepath.Base(os.Args[0]), coins)
 		os.Exit(1)
 	}
 
-	for _, coin := range os.Args[1:] {
-		config := loadConfig(coin)
-		generatePackageDefinitions(config)
-	}
+	coin := os.Args[1]
+	config := loadConfig(coin)
+	generatePackageDefinitions(config)
+	fmt.Fprintf(os.Stderr, "Package files for %v generated to %v\n", coin, outputDir)
 }
 
 func loadConfig(coin string) *Config {
-	dir := "configs"
 	config := new(Config)
 
-	f, err := os.Open(filepath.Join(dir, "coins", coin+".json"))
+	f, err := os.Open(filepath.Join(configsDir, "coins", coin+".json"))
 	if err != nil {
 		panic(err)
 	}
@@ -145,7 +154,7 @@ func loadConfig(coin string) *Config {
 		panic(err)
 	}
 
-	f, err = os.Open(filepath.Join(dir, "environ.json"))
+	f, err = os.Open(filepath.Join(configsDir, "environ.json"))
 	if err != nil {
 		panic(err)
 	}
