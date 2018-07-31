@@ -1,0 +1,7 @@
+{{define "main" -}}
+blockbook ({{.Env.Version}}) unstable; urgency=medium
+
+  * Blockbook daemon ({{.Coin.Name}}) version {{.Env.Version}}
+
+ -- {{.Meta.PackageMaintainer}} <{{.Meta.PackageMaintainerEmail}}>  {{.Meta.BuildDatetime}}
+{{end}}

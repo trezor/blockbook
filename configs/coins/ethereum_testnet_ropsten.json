@@ -1,0 +1,56 @@
+{
+  "coin": {
+      "name": "Ethereum Testnet Ropsten",
+      "shortcut": "tETH",
+      "label": "Ethereum Testnet Ropsten",
+      "alias": "ethereum_testnet_ropsten"
+  },
+  "ports": {
+    "backend_rpc": 18036,
+    "backend_message_queue": 0,
+    "blockbook_internal": 19036,
+    "blockbook_public": 19136
+  },
+  "ipc": {
+    "rpc_url_template": "ws://127.0.0.1:{{.Ports.BackendRPC}}",
+    "rpc_timeout": 25
+  },
+  "backend": {
+    "package_name": "backend-ethereum-testnet-ropsten",
+    "package_revision": "satoshilabs-1",
+    "system_user": "ethereum",
+    "version": "1.8.10-eae63c51",
+    "binary_url": "https://gethstore.blob.core.windows.net/builds/geth-linux-amd64-1.8.10-eae63c51.tar.gz",
+    "verification_type": "gpg",
+    "verification_source": "https://gethstore.blob.core.windows.net/builds/geth-linux-amd64-1.8.10-eae63c51.tar.gz.asc",
+    "extract_command": "tar -C backend --strip 1 -xf",
+    "exclude_files": [],
+    "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/geth --testnet --ipcdisable --cache 1024 --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --port 48336 --ws --wsaddr 0.0.0.0 --wsport {{.Ports.BackendRPC}} --wsorigins \"*\" 2>>{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
+    "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
+    "postinst_script_template": "",
+    "service_type": "simple",
+    "service_additional_params_template": "",
+    "protect_memory": true,
+    "mainnet": false,
+    "config_file": ""
+  },
+  "blockbook": {
+    "package_name": "blockbook-ethereum-testnet-ropsten",
+    "system_user": "blockbook-ethereum",
+    "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
+    "public_binding_template": ":{{.Ports.BlockbookPublic}}",
+    "explorer_url": "https://ropsten.etherscan.io/",
+    "additional_params": "",
+    "block_chain": {
+      "parse": true,
+      "mempool_workers": 8,
+      "mempool_sub_workers": 2,
+      "block_addresses_to_keep": 300,
+      "additional_params": {}
+    }
+  },
+  "meta": {
+    "package_maintainer": "Jakub Matys",
+    "package_maintainer_email": "jakub.matys@satoshilabs.com"
+  }
+}

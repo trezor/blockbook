@@ -1,0 +1,25 @@
+{{define "main" -}}
+#!/bin/bash
+set -e
+
+case "$1" in
+
+  configure)
+    if ! id -u {{.Blockbook.SystemUser}} &> /dev/null
+    then
+        useradd --system -M -U {{.Blockbook.SystemUser}} -s /bin/false
+    fi
+
+    for dir in {{.Env.BlockbookDataPath}}/{{.Coin.Alias}}/blockbook {{.Env.BlockbookInstallPath}}/{{.Coin.Alias}}/logs
+    do
+        if [ "$(stat -c '%U' $dir)" != "{{.Blockbook.SystemUser}}" ]
+        then
+            chown -R {{.Blockbook.SystemUser}}:{{.Blockbook.SystemUser}} $dir
+        fi
+    done
+  ;;
+
+esac
+
+#DEBHELPER#
+{{end}}
