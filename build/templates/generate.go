@@ -166,23 +166,36 @@ func loadConfig(coin string) *Config {
 
 	config.Meta.BuildDatetime = time.Now().Format("Mon, 02 Jan 2006 15:04:05 -0700")
 
-	switch config.Backend.ServiceType {
-	case "forking":
-	case "simple":
-	default:
-		panic("Invalid service type: " + config.Backend.ServiceType)
-	}
+	if !isEmpty(config, "backend") {
+		switch config.Backend.ServiceType {
+		case "forking":
+		case "simple":
+		default:
+			panic("Invalid service type: " + config.Backend.ServiceType)
+		}
 
-	switch config.Backend.VerificationType {
-	case "":
-	case "gpg":
-	case "sha256":
-	case "gpg-sha256":
-	default:
-		panic("Invalid verification type: " + config.Backend.VerificationType)
+		switch config.Backend.VerificationType {
+		case "":
+		case "gpg":
+		case "sha256":
+		case "gpg-sha256":
+		default:
+			panic("Invalid verification type: " + config.Backend.VerificationType)
+		}
 	}
 
 	return config
+}
+
+func isEmpty(config *Config, target string) bool {
+	switch target {
+	case "backend":
+		return config.Backend.PackageName == ""
+	case "blockbook":
+		return config.Blockbook.PackageName == ""
+	default:
+		panic("Invalid target name: " + target)
+	}
 }
 
 func generatePackageDefinitions(config *Config) {
@@ -191,6 +204,10 @@ func generatePackageDefinitions(config *Config) {
 	makeOutputDir(outputDir)
 
 	for _, subdir := range []string{"backend", "blockbook"} {
+		if isEmpty(config, subdir) {
+			continue
+		}
+
 		root := filepath.Join(inputDir, subdir)
 
 		err := os.Mkdir(filepath.Join(outputDir, subdir), 0755)
@@ -235,7 +252,9 @@ func generatePackageDefinitions(config *Config) {
 		}
 	}
 
-	writeBackendConfigFile(config)
+	if !isEmpty(config, "backend") {
+		writeBackendConfigFile(config)
+	}
 }
 
 func makeOutputDir(path string) {

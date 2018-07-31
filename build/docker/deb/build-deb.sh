@@ -17,12 +17,12 @@ cp -r /src/configs .
 go run build/templates/generate.go $coin
 
 # backend
-if [ $package = "backend" ] || [ $package = "all" ]; then
+if ([ $package = "backend" ] || [ $package = "all" ]) && [ -d build/pkg-defs/backend ]; then
     (cd build/pkg-defs/backend && dpkg-buildpackage -us -uc $@)
 fi
 
 # blockbook
-if [ $package = "blockbook" ] || [ $package = "all" ]; then
+if ([ $package = "blockbook" ] || [ $package = "all" ]) && [ -d build/pkg-defs/blockbook ]; then
     export VERSION=$(cd build/pkg-defs/blockbook && dpkg-parsechangelog | sed -rne 's/^Version: ([0-9.]+)([-+~].+)?$/\1/p')
 
     cp Makefile ldb sst_dump build/pkg-defs/blockbook
