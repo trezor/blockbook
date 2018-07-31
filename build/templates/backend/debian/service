@@ -15,6 +15,7 @@ PIDFile=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid
 {{else -}}
 Type=simple
 {{end}}
+{{template "Backend.ServiceAdditionalParamsTemplate" .}}
 
 # Resource limits
 LimitNOFILE=500000

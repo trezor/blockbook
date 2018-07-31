@@ -29,6 +29,7 @@
     "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
     "postinst_script_template": "",
     "service_type": "simple",
+    "service_additional_params_template": "",
     "protect_memory": true,
     "mainnet": true,
     "config_file": ""

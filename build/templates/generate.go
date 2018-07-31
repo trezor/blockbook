@@ -48,23 +48,24 @@ type Config struct {
 		MessageQueueBindingTemplate string `json:"message_queue_binding_template"`
 	} `json:"ipc"`
 	Backend struct {
-		PackageName            string      `json:"package_name"`
-		PackageRevision        string      `json:"package_revision"`
-		SystemUser             string      `json:"system_user"`
-		Version                string      `json:"version"`
-		BinaryURL              string      `json:"binary_url"`
-		VerificationType       string      `json:"verification_type"`
-		VerificationSource     string      `json:"verification_source"`
-		ExtractCommand         string      `json:"extract_command"`
-		ExcludeFiles           []string    `json:"exclude_files"`
-		ExecCommandTemplate    string      `json:"exec_command_template"`
-		LogrotateFilesTemplate string      `json:"logrotate_files_template"`
-		PostinstScriptTemplate string      `json:"postinst_script_template"`
-		ServiceType            string      `json:"service_type"`
-		ProtectMemory          bool        `json:"protect_memory"`
-		Mainnet                bool        `json:"mainnet"`
-		ConfigFile             string      `json:"config_file"`
-		AdditionalParams       interface{} `json:"additional_params"`
+		PackageName                     string      `json:"package_name"`
+		PackageRevision                 string      `json:"package_revision"`
+		SystemUser                      string      `json:"system_user"`
+		Version                         string      `json:"version"`
+		BinaryURL                       string      `json:"binary_url"`
+		VerificationType                string      `json:"verification_type"`
+		VerificationSource              string      `json:"verification_source"`
+		ExtractCommand                  string      `json:"extract_command"`
+		ExcludeFiles                    []string    `json:"exclude_files"`
+		ExecCommandTemplate             string      `json:"exec_command_template"`
+		LogrotateFilesTemplate          string      `json:"logrotate_files_template"`
+		PostinstScriptTemplate          string      `json:"postinst_script_template"`
+		ServiceType                     string      `json:"service_type"`
+		ServiceAdditionalParamsTemplate string      `json:"service_additional_params_template"`
+		ProtectMemory                   bool        `json:"protect_memory"`
+		Mainnet                         bool        `json:"mainnet"`
+		ConfigFile                      string      `json:"config_file"`
+		AdditionalParams                interface{} `json:"additional_params"`
 	} `json:"backend"`
 	Blockbook struct {
 		PackageName             string `json:"package_name"`
@@ -95,13 +96,14 @@ func jsonToString(msg json.RawMessage) (string, error) {
 
 func (c *Config) ParseTemplate() *template.Template {
 	templates := map[string]string{
-		"IPC.RPCURLTemplate":                c.IPC.RPCURLTemplate,
-		"IPC.MessageQueueBindingTemplate":   c.IPC.MessageQueueBindingTemplate,
-		"Backend.ExecCommandTemplate":       c.Backend.ExecCommandTemplate,
-		"Backend.LogrotateFilesTemplate":    c.Backend.LogrotateFilesTemplate,
-		"Backend.PostinstScriptTemplate":    c.Backend.PostinstScriptTemplate,
-		"Blockbook.InternalBindingTemplate": c.Blockbook.InternalBindingTemplate,
-		"Blockbook.PublicBindingTemplate":   c.Blockbook.PublicBindingTemplate,
+		"IPC.RPCURLTemplate":                      c.IPC.RPCURLTemplate,
+		"IPC.MessageQueueBindingTemplate":         c.IPC.MessageQueueBindingTemplate,
+		"Backend.ExecCommandTemplate":             c.Backend.ExecCommandTemplate,
+		"Backend.LogrotateFilesTemplate":          c.Backend.LogrotateFilesTemplate,
+		"Backend.PostinstScriptTemplate":          c.Backend.PostinstScriptTemplate,
+		"Backend.ServiceAdditionalParamsTemplate": c.Backend.ServiceAdditionalParamsTemplate,
+		"Blockbook.InternalBindingTemplate":       c.Blockbook.InternalBindingTemplate,
+		"Blockbook.PublicBindingTemplate":         c.Blockbook.PublicBindingTemplate,
 	}
 
 	funcMap := template.FuncMap{

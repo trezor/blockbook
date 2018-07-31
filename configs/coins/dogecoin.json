@@ -34,6 +34,7 @@
     "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/*.log",
     "postinst_script_template": "",
     "service_type": "forking",
+    "service_additional_params_template": "",
     "protect_memory": false,
     "mainnet": true,
     "config_file": "bitcoin.conf",
