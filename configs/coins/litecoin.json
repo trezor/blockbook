@@ -47,7 +47,7 @@
     "system_user": "blockbook-litecoin",
     "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
     "public_binding_template": ":{{.Ports.BlockbookPublic}}",
-    "explorer_url": "https://ltc-explorer.trezor.io",
+    "explorer_url": "/explorer",
     "additional_params": "",
     "block_chain": {
       "parse": true,

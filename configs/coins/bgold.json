@@ -239,7 +239,7 @@
     "system_user": "blockbook-bgold",
     "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
     "public_binding_template": ":{{.Ports.BlockbookPublic}}",
-    "explorer_url": "https://explorer.bitcoingold.org",
+    "explorer_url": "/explorer",
     "additional_params": "",
     "block_chain": {
       "parse": true,

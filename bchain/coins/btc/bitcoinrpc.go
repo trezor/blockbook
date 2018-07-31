@@ -37,6 +37,7 @@ type BitcoinRPC struct {
 
 type Configuration struct {
 	CoinName             string `json:"coin_name"`
+	CoinShortcut         string `json:"coin_shortcut"`
 	RPCURL               string `json:"rpc_url"`
 	RPCUser              string `json:"rpc_user"`
 	RPCPass              string `json:"rpc_pass"`
