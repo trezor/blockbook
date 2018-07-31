@@ -1,0 +1,4 @@
+{{define "main" -}}
+{{.Env.BlockbookDataPath}}/{{.Coin.Alias}}/blockbook
+{{.Env.BlockbookInstallPath}}/{{.Coin.Alias}}/logs
+{{end}}

@@ -5,6 +5,8 @@ NO_CACHE = false
 UPDATE_VENDOR = 1
 ARGS ?=
 
+TARGETS=$(subst .json,, $(shell ls configs/coins))
+
 .PHONY: build build-debug test deb
 
 build: .bin-image
@@ -19,24 +21,29 @@ test: .bin-image
 test-all: .bin-image
 	docker run -t --rm -e PACKAGER=$(PACKAGER) -e UPDATE_VENDOR=$(UPDATE_VENDOR) -v $(CURDIR):/src --network="host" $(BIN_IMAGE) make test-all ARGS="$(ARGS)"
 
-deb: .deb-image clean-deb
-	docker run -t --rm -e PACKAGER=$(PACKAGER) -e UPDATE_VENDOR=$(UPDATE_VENDOR) -v $(CURDIR):/src -v $(CURDIR)/build:/out $(DEB_IMAGE) /build/build-deb.sh $(ARGS)
+deb-backend-%: .deb-image
+	docker run -t --rm -e PACKAGER=$(PACKAGER) -e UPDATE_VENDOR=$(UPDATE_VENDOR) -v $(CURDIR):/src -v $(CURDIR)/build:/out $(DEB_IMAGE) /build/build-deb.sh backend $* $(ARGS)
 
-tools:
-	docker run -t --rm -e PACKAGER=$(PACKAGER) -e UPDATE_VENDOR=$(UPDATE_VENDOR) -v $(CURDIR):/src -v $(CURDIR)/build:/out $(BIN_IMAGE) make tools ARGS="$(ARGS)"
+deb-blockbook-%: .deb-image
+	docker run -t --rm -e PACKAGER=$(PACKAGER) -e UPDATE_VENDOR=$(UPDATE_VENDOR) -v $(CURDIR):/src -v $(CURDIR)/build:/out $(DEB_IMAGE) /build/build-deb.sh blockbook $* $(ARGS)
 
-all: build-images deb
+deb-%: .deb-image
+	docker run -t --rm -e PACKAGER=$(PACKAGER) -e UPDATE_VENDOR=$(UPDATE_VENDOR) -v $(CURDIR):/src -v $(CURDIR)/build:/out $(DEB_IMAGE) /build/build-deb.sh all $* $(ARGS)
+
+$(addprefix all-, $(TARGETS)): all-%: clean-deb build-images deb-%
+
+all: clean-deb build-images $(addprefix deb-, $(TARGETS))
 
 build-images:
 	rm -f .bin-image .deb-image
 	$(MAKE) .bin-image .deb-image
 
 .bin-image:
-	docker build --no-cache=$(NO_CACHE) -t $(BIN_IMAGE) build/bin
+	docker build --no-cache=$(NO_CACHE) -t $(BIN_IMAGE) build/docker/bin
 	@ docker images -q $(BIN_IMAGE) > $@
 
 .deb-image: .bin-image
-	docker build --no-cache=$(NO_CACHE) -t $(DEB_IMAGE) build/deb
+	docker build --no-cache=$(NO_CACHE) -t $(DEB_IMAGE) build/docker/deb
 	@ docker images -q $(DEB_IMAGE) > $@
 
 clean: clean-bin clean-deb
@@ -47,6 +54,7 @@ clean-bin:
 	find build -maxdepth 1 -type f -executable -delete
 
 clean-deb:
+	rm -rf build/pkg-defs
 	rm -f build/*.deb
 
 clean-images: clean-bin-image clean-deb-image

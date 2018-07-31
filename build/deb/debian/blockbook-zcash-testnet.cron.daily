@@ -1,2 +1,0 @@
-#!/bin/sh
-/opt/coins/blockbook/zcash_testnet/bin/logrotate.sh

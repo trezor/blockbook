@@ -1,9 +1,0 @@
-/opt/coins/data/ethereum/backend/ethereum.log
-{
-        rotate 7
-        daily
-        compress
-        missingok
-        notifempty
-        copytruncate
-}

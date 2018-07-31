@@ -1,0 +1,7 @@
+{{define "main" -}}
+backend ({{.Backend.Version}}{{if .Backend.PackageRevision}}-{{.Backend.PackageRevision}}{{end}}) unstable; urgency=medium
+
+  * {{.Coin.Name}} backend daemon version {{.Backend.Version}}
+
+ -- {{.Meta.PackageMaintainer}} <{{.Meta.PackageMaintainerEmail}}>  {{.Meta.BuildDatetime}}
+{{end}}

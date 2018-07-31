@@ -1,0 +1,13 @@
+{{define "main" -}}
+Source: blockbook
+Section: satoshilabs
+Priority: optional
+Maintainer: {{.Meta.PackageMaintainerEmail}}
+Build-Depends: debhelper, dh-systemd, dh-exec
+Standards-Version: 3.9.5
+
+Package: {{.Blockbook.PackageName}}
+Architecture: amd64
+Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, backend-bitcoin
+Description: Satoshilabs blockbook server ({{.Coin.Name}})
+{{end}}

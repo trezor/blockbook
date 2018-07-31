@@ -1,0 +1,11 @@
+{{define "main" -}}
+{{template "Backend.LogrotateFilesTemplate" .}}
+{
+        rotate 7
+        daily
+        compress
+        missingok
+        notifempty
+        copytruncate
+}
+{{end}}

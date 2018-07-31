@@ -1,0 +1,27 @@
+{{define "main" -}}
+#!/bin/bash
+set -e
+
+case "$1" in
+
+  configure)
+    if ! id -u {{.Backend.SystemUser}} &> /dev/null
+    then
+        useradd --system -M -U {{.Backend.SystemUser}} -s /bin/false
+    fi
+
+    if [ "$(stat -c '%U' {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend)" != "{{.Backend.SystemUser}}" ]
+    then
+        chown -R {{.Backend.SystemUser}}:{{.Backend.SystemUser}} {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend
+    fi
+
+{{if .Backend.PostinstScriptTemplate}}
+    # generated from postinst_template
+    {{template "Backend.PostinstScriptTemplate" .}}
+{{end}}
+  ;;
+
+esac
+
+#DEBHELPER#
+{{end}}

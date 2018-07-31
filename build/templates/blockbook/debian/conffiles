@@ -1,0 +1,3 @@
+{{define "main" -}}
+{{.Env.BlockbookInstallPath}}/{{.Coin.Alias}}/config/blockchaincfg.json
+{{end}}
