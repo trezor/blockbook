@@ -54,6 +54,7 @@ clean-bin:
 	find build -maxdepth 1 -type f -executable -delete
 
 clean-deb:
+	rm -rf build/pkg-defs
 	rm -f build/*.deb
 
 clean-images: clean-bin-image clean-deb-image
