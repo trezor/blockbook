@@ -138,7 +138,7 @@ func main() {
 	coin := os.Args[1]
 	config := loadConfig(coin)
 	generatePackageDefinitions(config)
-	fmt.Fprintf(os.Stderr, "Package files for %v generated to %v\n", coin, outputDir)
+	fmt.Printf("Package files for %v generated to %v\n", coin, outputDir)
 }
 
 func loadConfig(coin string) *Config {
