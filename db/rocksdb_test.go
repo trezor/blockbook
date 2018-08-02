@@ -60,6 +60,17 @@ func addressToPubKeyHexWithLength(addr string, t *testing.T, d *RocksDB) string 
 	return strconv.FormatInt(int64(len(h)), 16) + h
 }
 
+func spentAddressToPubKeyHexWithLength(addr string, t *testing.T, d *RocksDB) string {
+	h := addressToPubKeyHex(addr, t, d)
+	return strconv.FormatInt(int64(len(h)+1), 16) + h
+}
+
+func bigintToHex(i *big.Int) string {
+	b := make([]byte, maxPackedBigintBytes)
+	l := packBigint(i, b)
+	return hex.EncodeToString(b[:l])
+}
+
 // keyPair is used to compare given key value in DB with expected
 // for more complicated compares it is possible to specify CompareFunc
 type keyPair struct {
@@ -105,7 +116,7 @@ func checkColumn(d *RocksDB, col int, kp []keyPair) error {
 			valOK = kp[i].CompareFunc(val)
 		}
 		if !valOK {
-			return errors.Errorf("Incorrect value %v found in column %v row %v, expecting %v", val, cfNames[col], i, kp[i].Value)
+			return errors.Errorf("Incorrect value %v found in column %v row %v key %v, expecting %v", val, cfNames[col], i, key, kp[i].Value)
 		}
 		i++
 	}
@@ -115,6 +126,38 @@ func checkColumn(d *RocksDB, col int, kp []keyPair) error {
 	return nil
 }
 
+const (
+	txidB1T1 = "00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840"
+	txidB1T2 = "effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75"
+	txidB2T1 = "7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25"
+	txidB2T2 = "3d90d15ed026dc45e19ffb52875ed18fa9e8012ad123d7f7212176e2b0ebdb71"
+	txidB2T3 = "05e2e48aeabdd9b75def7b48d756ba304713c2aba7b522bf9dbc893fc4231b07"
+
+	addr1 = "mfcWp7DB6NuaZsExybTTXpVgWz559Np4Ti"  // 76a914010d39800f86122416e28f485029acf77507169288ac
+	addr2 = "mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz"  // 76a9148bdf0aa3c567aa5975c2e61321b8bebbe7293df688ac
+	addr3 = "mv9uLThosiEnGRbVPS7Vhyw6VssbVRsiAw"  // 76a914a08eae93007f22668ab5e4a9c83c8cd1c325e3e088ac
+	addr4 = "2Mz1CYoppGGsLNUGF2YDhTif6J661JitALS" // a9144a21db08fb6882cb152e1ff06780a430740f770487
+	addr5 = "2NEVv9LJmAnY99W1pFoc5UJjVdypBqdnvu1" // a914e921fc4912a315078f370d959f2c4f7b6d2a683c87
+	addr6 = "mzB8cYrfRwFRFAGTDzV8LkUQy5BQicxGhX"  // 76a914ccaaaf374e1b06cb83118453d102587b4273d09588ac
+	addr7 = "mtR97eM2HPWVM6c8FGLGcukgaHHQv7THoL"  // 76a9148d802c045445df49613f6a70ddd2e48526f3701f88ac
+	addr8 = "mwwoKQE5Lb1G4picHSHDQKg8jw424PF9SC"  // 76a914b434eb0c1a3b7a02e8a29cc616e791ef1e0bf51f88ac
+	addr9 = "mmJx9Y8ayz9h14yd9fgCW1bUKoEpkBAquP"  // 76a9143f8ba3fda3ba7b69f5818086e12223c6dd25e3c888ac
+)
+
+var (
+	satZero   = big.NewInt(0)
+	satB1T1A1 = big.NewInt(100000000)
+	satB1T1A2 = big.NewInt(12345)
+	satB1T2A3 = big.NewInt(1234567890123)
+	satB1T2A4 = big.NewInt(1)
+	satB1T2A5 = big.NewInt(9876)
+	satB2T1A6 = big.NewInt(317283951061)
+	satB2T1A7 = big.NewInt(917283951061)
+	satB2T2A8 = big.NewInt(118641975500)
+	satB2T2A9 = big.NewInt(198641975500)
+	satB2T3A5 = big.NewInt(9000)
+)
+
 func getTestUTXOBlock1(t *testing.T, d *RocksDB) *bchain.Block {
 	return &bchain.Block{
 		BlockHeader: bchain.BlockHeader{
@@ -123,44 +166,49 @@ func getTestUTXOBlock1(t *testing.T, d *RocksDB) *bchain.Block {
 		},
 		Txs: []bchain.Tx{
 			bchain.Tx{
-				Txid: "00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840",
+				Txid: txidB1T1,
 				Vout: []bchain.Vout{
 					bchain.Vout{
 						N: 0,
 						ScriptPubKey: bchain.ScriptPubKey{
-							Hex: addressToPubKeyHex("mfcWp7DB6NuaZsExybTTXpVgWz559Np4Ti", t, d),
+							Hex: addressToPubKeyHex(addr1, t, d),
 						},
+						ValueSat: *satB1T1A1,
 					},
 					bchain.Vout{
 						N: 1,
 						ScriptPubKey: bchain.ScriptPubKey{
-							Hex: addressToPubKeyHex("mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz", t, d),
+							Hex: addressToPubKeyHex(addr2, t, d),
 						},
+						ValueSat: *satB1T1A2,
 					},
 				},
 				Blocktime: 22549300000,
 				Time:      22549300000,
 			},
 			bchain.Tx{
-				Txid: "effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75",
+				Txid: txidB1T2,
 				Vout: []bchain.Vout{
 					bchain.Vout{
 						N: 0,
 						ScriptPubKey: bchain.ScriptPubKey{
-							Hex: addressToPubKeyHex("mv9uLThosiEnGRbVPS7Vhyw6VssbVRsiAw", t, d),
+							Hex: addressToPubKeyHex(addr3, t, d),
 						},
+						ValueSat: *satB1T2A3,
 					},
 					bchain.Vout{
 						N: 1,
 						ScriptPubKey: bchain.ScriptPubKey{
-							Hex: addressToPubKeyHex("2Mz1CYoppGGsLNUGF2YDhTif6J661JitALS", t, d),
+							Hex: addressToPubKeyHex(addr4, t, d),
 						},
+						ValueSat: *satB1T2A4,
 					},
 					bchain.Vout{
 						N: 2,
 						ScriptPubKey: bchain.ScriptPubKey{
-							Hex: addressToPubKeyHex("2NEVv9LJmAnY99W1pFoc5UJjVdypBqdnvu1", t, d),
+							Hex: addressToPubKeyHex(addr5, t, d),
 						},
+						ValueSat: *satB1T2A5,
 					},
 				},
 				Blocktime: 22549300001,
@@ -178,14 +226,16 @@ func getTestUTXOBlock2(t *testing.T, d *RocksDB) *bchain.Block {
 		},
 		Txs: []bchain.Tx{
 			bchain.Tx{
-				Txid: "7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25",
+				Txid: txidB2T1,
 				Vin: []bchain.Vin{
+					// addr3
 					bchain.Vin{
-						Txid: "effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75",
+						Txid: txidB1T2,
 						Vout: 0,
 					},
+					// addr2
 					bchain.Vin{
-						Txid: "00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840",
+						Txid: txidB1T1,
 						Vout: 1,
 					},
 				},
@@ -193,30 +243,32 @@ func getTestUTXOBlock2(t *testing.T, d *RocksDB) *bchain.Block {
 					bchain.Vout{
 						N: 0,
 						ScriptPubKey: bchain.ScriptPubKey{
-							Hex: addressToPubKeyHex("mzB8cYrfRwFRFAGTDzV8LkUQy5BQicxGhX", t, d),
+							Hex: addressToPubKeyHex(addr6, t, d),
 						},
+						ValueSat: *satB2T1A6,
 					},
 					bchain.Vout{
 						N: 1,
 						ScriptPubKey: bchain.ScriptPubKey{
-							Hex: addressToPubKeyHex("mtR97eM2HPWVM6c8FGLGcukgaHHQv7THoL", t, d),
+							Hex: addressToPubKeyHex(addr7, t, d),
 						},
+						ValueSat: *satB2T1A7,
 					},
 				},
 				Blocktime: 22549400000,
 				Time:      22549400000,
 			},
 			bchain.Tx{
-				Txid: "3d90d15ed026dc45e19ffb52875ed18fa9e8012ad123d7f7212176e2b0ebdb71",
+				Txid: txidB2T2,
 				Vin: []bchain.Vin{
-					// spending an output in the same block
+					// spending an output in the same block - addr6
 					bchain.Vin{
-						Txid: "7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25",
+						Txid: txidB2T1,
 						Vout: 0,
 					},
-					// spending an output in the previous block
+					// spending an output in the previous block - addr4
 					bchain.Vin{
-						Txid: "effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75",
+						Txid: txidB1T2,
 						Vout: 1,
 					},
 				},
@@ -224,14 +276,16 @@ func getTestUTXOBlock2(t *testing.T, d *RocksDB) *bchain.Block {
 					bchain.Vout{
 						N: 0,
 						ScriptPubKey: bchain.ScriptPubKey{
-							Hex: addressToPubKeyHex("mwwoKQE5Lb1G4picHSHDQKg8jw424PF9SC", t, d),
+							Hex: addressToPubKeyHex(addr8, t, d),
 						},
+						ValueSat: *satB2T2A8,
 					},
 					bchain.Vout{
 						N: 1,
 						ScriptPubKey: bchain.ScriptPubKey{
-							Hex: addressToPubKeyHex("mmJx9Y8ayz9h14yd9fgCW1bUKoEpkBAquP", t, d),
+							Hex: addressToPubKeyHex(addr9, t, d),
 						},
+						ValueSat: *satB2T2A9,
 					},
 				},
 				Blocktime: 22549400001,
@@ -239,10 +293,11 @@ func getTestUTXOBlock2(t *testing.T, d *RocksDB) *bchain.Block {
 			},
 			// transaction from the same address in the previous block
 			bchain.Tx{
-				Txid: "05e2e48aeabdd9b75def7b48d756ba304713c2aba7b522bf9dbc893fc4231b07",
+				Txid: txidB2T3,
 				Vin: []bchain.Vin{
+					// addr5
 					bchain.Vin{
-						Txid: "effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75",
+						Txid: txidB1T2,
 						Vout: 2,
 					},
 				},
@@ -250,8 +305,9 @@ func getTestUTXOBlock2(t *testing.T, d *RocksDB) *bchain.Block {
 					bchain.Vout{
 						N: 0,
 						ScriptPubKey: bchain.ScriptPubKey{
-							Hex: addressToPubKeyHex("2NEVv9LJmAnY99W1pFoc5UJjVdypBqdnvu1", t, d),
+							Hex: addressToPubKeyHex(addr5, t, d),
 						},
+						ValueSat: *satB2T3A5,
 					},
 				},
 				Blocktime: 22549400002,
@@ -261,7 +317,7 @@ func getTestUTXOBlock2(t *testing.T, d *RocksDB) *bchain.Block {
 	}
 }
 
-func verifyAfterUTXOBlock1(t *testing.T, d *RocksDB, noBlockAddresses bool) {
+func verifyAfterUTXOBlock1(t *testing.T, d *RocksDB) {
 	if err := checkColumn(d, cfHeight, []keyPair{
 		keyPair{"000370d5", "0000000076fbbed90fd75b0e18856aa35baa984e9c9d444cf746ad85e94e2997", nil},
 	}); err != nil {
@@ -271,62 +327,51 @@ func verifyAfterUTXOBlock1(t *testing.T, d *RocksDB, noBlockAddresses bool) {
 	}
 	// the vout is encoded as signed varint, i.e. value * 2 for non negative values
 	if err := checkColumn(d, cfAddresses, []keyPair{
-		keyPair{addressToPubKeyHex("mfcWp7DB6NuaZsExybTTXpVgWz559Np4Ti", t, d) + "000370d5", "00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840" + "00", nil},
-		keyPair{addressToPubKeyHex("mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz", t, d) + "000370d5", "00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840" + "02", nil},
-		keyPair{addressToPubKeyHex("mv9uLThosiEnGRbVPS7Vhyw6VssbVRsiAw", t, d) + "000370d5", "effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75" + "00", nil},
-		keyPair{addressToPubKeyHex("2Mz1CYoppGGsLNUGF2YDhTif6J661JitALS", t, d) + "000370d5", "effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75" + "02", nil},
-		keyPair{addressToPubKeyHex("2NEVv9LJmAnY99W1pFoc5UJjVdypBqdnvu1", t, d) + "000370d5", "effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75" + "04", nil},
+		keyPair{addressToPubKeyHex(addr1, t, d) + "000370d5", txidB1T1 + "00", nil},
+		keyPair{addressToPubKeyHex(addr2, t, d) + "000370d5", txidB1T1 + "02", nil},
+		keyPair{addressToPubKeyHex(addr3, t, d) + "000370d5", txidB1T2 + "00", nil},
+		keyPair{addressToPubKeyHex(addr4, t, d) + "000370d5", txidB1T2 + "02", nil},
+		keyPair{addressToPubKeyHex(addr5, t, d) + "000370d5", txidB1T2 + "04", nil},
 	}); err != nil {
 		{
 			t.Fatal(err)
 		}
 	}
-	if err := checkColumn(d, cfUnspentTxs, []keyPair{
+	if err := checkColumn(d, cfTxAddresses, []keyPair{
 		keyPair{
-			"00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840", "",
-			func(v string) bool {
-				return compareFuncBlockAddresses(t, v, []string{
-					addressToPubKeyHexWithLength("mfcWp7DB6NuaZsExybTTXpVgWz559Np4Ti", t, d) + "00",
-					addressToPubKeyHexWithLength("mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz", t, d) + "02",
-				})
-			},
+			txidB1T1,
+			"00" + "02" +
+				addressToPubKeyHexWithLength(addr1, t, d) + bigintToHex(satB1T1A1) +
+				addressToPubKeyHexWithLength(addr2, t, d) + bigintToHex(satB1T1A2),
+			nil,
 		},
 		keyPair{
-			"effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75", "",
-			func(v string) bool {
-				return compareFuncBlockAddresses(t, v, []string{
-					addressToPubKeyHexWithLength("mv9uLThosiEnGRbVPS7Vhyw6VssbVRsiAw", t, d) + "00",
-					addressToPubKeyHexWithLength("2Mz1CYoppGGsLNUGF2YDhTif6J661JitALS", t, d) + "02",
-					addressToPubKeyHexWithLength("2NEVv9LJmAnY99W1pFoc5UJjVdypBqdnvu1", t, d) + "04",
-				})
-			},
+			txidB1T2,
+			"00" + "03" +
+				addressToPubKeyHexWithLength(addr3, t, d) + bigintToHex(satB1T2A3) +
+				addressToPubKeyHexWithLength(addr4, t, d) + bigintToHex(satB1T2A4) +
+				addressToPubKeyHexWithLength(addr5, t, d) + bigintToHex(satB1T2A5),
+			nil,
 		},
 	}); err != nil {
 		{
 			t.Fatal(err)
 		}
 	}
-	// after disconnect there are no blockaddresses for the previous block
-	var blockAddressesKp []keyPair
-	if noBlockAddresses {
-		blockAddressesKp = []keyPair{}
-	} else {
-		// the values in cfBlockAddresses are in random order, must use CompareFunc
-		blockAddressesKp = []keyPair{
-			keyPair{"000370d5", "",
-				func(v string) bool {
-					return compareFuncBlockAddresses(t, v, []string{
-						addressToPubKeyHexWithLength("mfcWp7DB6NuaZsExybTTXpVgWz559Np4Ti", t, d) + "00",
-						addressToPubKeyHexWithLength("mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz", t, d) + "00",
-						addressToPubKeyHexWithLength("mv9uLThosiEnGRbVPS7Vhyw6VssbVRsiAw", t, d) + "00",
-						addressToPubKeyHexWithLength("2Mz1CYoppGGsLNUGF2YDhTif6J661JitALS", t, d) + "00",
-						addressToPubKeyHexWithLength("2NEVv9LJmAnY99W1pFoc5UJjVdypBqdnvu1", t, d) + "00",
-					})
-				},
-			},
+	if err := checkColumn(d, cfAddressBalance, []keyPair{
+		keyPair{addressToPubKeyHex(addr1, t, d), "01" + bigintToHex(satZero) + bigintToHex(satB1T1A1), nil},
+		keyPair{addressToPubKeyHex(addr2, t, d), "01" + bigintToHex(satZero) + bigintToHex(satB1T1A2), nil},
+		keyPair{addressToPubKeyHex(addr3, t, d), "01" + bigintToHex(satZero) + bigintToHex(satB1T2A3), nil},
+		keyPair{addressToPubKeyHex(addr4, t, d), "01" + bigintToHex(satZero) + bigintToHex(satB1T2A4), nil},
+		keyPair{addressToPubKeyHex(addr5, t, d), "01" + bigintToHex(satZero) + bigintToHex(satB1T2A5), nil},
+	}); err != nil {
+		{
+			t.Fatal(err)
 		}
 	}
-	if err := checkColumn(d, cfBlockAddresses, blockAddressesKp); err != nil {
+	if err := checkColumn(d, cfBlockTxids, []keyPair{
+		keyPair{"000370d5", txidB1T1 + txidB1T2, nil},
+	}); err != nil {
 		{
 			t.Fatal(err)
 		}
@@ -343,47 +388,66 @@ func verifyAfterUTXOBlock2(t *testing.T, d *RocksDB) {
 		}
 	}
 	if err := checkColumn(d, cfAddresses, []keyPair{
-		keyPair{addressToPubKeyHex("mfcWp7DB6NuaZsExybTTXpVgWz559Np4Ti", t, d) + "000370d5", "00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840" + "00", nil},
-		keyPair{addressToPubKeyHex("mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz", t, d) + "000370d5", "00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840" + "02", nil},
-		keyPair{addressToPubKeyHex("mv9uLThosiEnGRbVPS7Vhyw6VssbVRsiAw", t, d) + "000370d5", "effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75" + "00", nil},
-		keyPair{addressToPubKeyHex("2Mz1CYoppGGsLNUGF2YDhTif6J661JitALS", t, d) + "000370d5", "effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75" + "02", nil},
-		keyPair{addressToPubKeyHex("2NEVv9LJmAnY99W1pFoc5UJjVdypBqdnvu1", t, d) + "000370d5", "effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75" + "04", nil},
-		keyPair{addressToPubKeyHex("mzB8cYrfRwFRFAGTDzV8LkUQy5BQicxGhX", t, d) + "000370d6", "7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25" + "00" + "3d90d15ed026dc45e19ffb52875ed18fa9e8012ad123d7f7212176e2b0ebdb71" + "01", nil},
-		keyPair{addressToPubKeyHex("mtR97eM2HPWVM6c8FGLGcukgaHHQv7THoL", t, d) + "000370d6", "7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25" + "02", nil},
-		keyPair{addressToPubKeyHex("mwwoKQE5Lb1G4picHSHDQKg8jw424PF9SC", t, d) + "000370d6", "3d90d15ed026dc45e19ffb52875ed18fa9e8012ad123d7f7212176e2b0ebdb71" + "00", nil},
-		keyPair{addressToPubKeyHex("mmJx9Y8ayz9h14yd9fgCW1bUKoEpkBAquP", t, d) + "000370d6", "3d90d15ed026dc45e19ffb52875ed18fa9e8012ad123d7f7212176e2b0ebdb71" + "02", nil},
-		keyPair{addressToPubKeyHex("mv9uLThosiEnGRbVPS7Vhyw6VssbVRsiAw", t, d) + "000370d6", "7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25" + "01", nil},
-		keyPair{addressToPubKeyHex("mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz", t, d) + "000370d6", "7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25" + "03", nil},
-		keyPair{addressToPubKeyHex("2NEVv9LJmAnY99W1pFoc5UJjVdypBqdnvu1", t, d) + "000370d6", "05e2e48aeabdd9b75def7b48d756ba304713c2aba7b522bf9dbc893fc4231b07" + "00" + "05e2e48aeabdd9b75def7b48d756ba304713c2aba7b522bf9dbc893fc4231b07" + "01", nil},
-		keyPair{addressToPubKeyHex("2Mz1CYoppGGsLNUGF2YDhTif6J661JitALS", t, d) + "000370d6", "3d90d15ed026dc45e19ffb52875ed18fa9e8012ad123d7f7212176e2b0ebdb71" + "03", nil},
+		keyPair{addressToPubKeyHex(addr1, t, d) + "000370d5", txidB1T1 + "00", nil},
+		keyPair{addressToPubKeyHex(addr2, t, d) + "000370d5", txidB1T1 + "02", nil},
+		keyPair{addressToPubKeyHex(addr3, t, d) + "000370d5", txidB1T2 + "00", nil},
+		keyPair{addressToPubKeyHex(addr4, t, d) + "000370d5", txidB1T2 + "02", nil},
+		keyPair{addressToPubKeyHex(addr5, t, d) + "000370d5", txidB1T2 + "04", nil},
+		keyPair{addressToPubKeyHex(addr6, t, d) + "000370d6", txidB2T1 + "00" + txidB2T2 + "01", nil},
+		keyPair{addressToPubKeyHex(addr7, t, d) + "000370d6", txidB2T1 + "02", nil},
+		keyPair{addressToPubKeyHex(addr8, t, d) + "000370d6", txidB2T2 + "00", nil},
+		keyPair{addressToPubKeyHex(addr9, t, d) + "000370d6", txidB2T2 + "02", nil},
+		keyPair{addressToPubKeyHex(addr3, t, d) + "000370d6", txidB2T1 + "01", nil},
+		keyPair{addressToPubKeyHex(addr2, t, d) + "000370d6", txidB2T1 + "03", nil},
+		keyPair{addressToPubKeyHex(addr5, t, d) + "000370d6", txidB2T3 + "00" + txidB2T3 + "01", nil},
+		keyPair{addressToPubKeyHex(addr4, t, d) + "000370d6", txidB2T2 + "03", nil},
 	}); err != nil {
 		{
 			t.Fatal(err)
 		}
 	}
-	if err := checkColumn(d, cfUnspentTxs, []keyPair{
+	if err := checkColumn(d, cfTxAddresses, []keyPair{
 		keyPair{
-			"00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840",
-			addressToPubKeyHexWithLength("mfcWp7DB6NuaZsExybTTXpVgWz559Np4Ti", t, d) + "00",
+			txidB1T1,
+			"00" + "02" +
+				addressToPubKeyHexWithLength(addr1, t, d) + bigintToHex(satB1T1A1) +
+				spentAddressToPubKeyHexWithLength(addr2, t, d) + bigintToHex(satB1T1A2),
 			nil,
 		},
 		keyPair{
-			"7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25",
-			addressToPubKeyHexWithLength("mtR97eM2HPWVM6c8FGLGcukgaHHQv7THoL", t, d) + "02",
+			txidB1T2,
+			"00" + "03" +
+				spentAddressToPubKeyHexWithLength(addr3, t, d) + bigintToHex(satB1T2A3) +
+				spentAddressToPubKeyHexWithLength(addr4, t, d) + bigintToHex(satB1T2A4) +
+				spentAddressToPubKeyHexWithLength(addr5, t, d) + bigintToHex(satB1T2A5),
 			nil,
 		},
 		keyPair{
-			"3d90d15ed026dc45e19ffb52875ed18fa9e8012ad123d7f7212176e2b0ebdb71", "",
-			func(v string) bool {
-				return compareFuncBlockAddresses(t, v, []string{
-					addressToPubKeyHexWithLength("mwwoKQE5Lb1G4picHSHDQKg8jw424PF9SC", t, d) + "00",
-					addressToPubKeyHexWithLength("mmJx9Y8ayz9h14yd9fgCW1bUKoEpkBAquP", t, d) + "02",
-				})
-			},
+			txidB2T1,
+			"02" +
+				addressToPubKeyHexWithLength(addr3, t, d) + bigintToHex(satB1T2A3) +
+				addressToPubKeyHexWithLength(addr2, t, d) + bigintToHex(satB1T1A2) +
+				"02" +
+				spentAddressToPubKeyHexWithLength(addr6, t, d) + bigintToHex(satB2T1A6) +
+				addressToPubKeyHexWithLength(addr7, t, d) + bigintToHex(satB2T1A7),
+			nil,
 		},
 		keyPair{
-			"05e2e48aeabdd9b75def7b48d756ba304713c2aba7b522bf9dbc893fc4231b07",
-			addressToPubKeyHexWithLength("2NEVv9LJmAnY99W1pFoc5UJjVdypBqdnvu1", t, d) + "00",
+			txidB2T2,
+			"02" +
+				addressToPubKeyHexWithLength(addr6, t, d) + bigintToHex(satB2T1A6) +
+				addressToPubKeyHexWithLength(addr4, t, d) + bigintToHex(satB1T2A4) +
+				"02" +
+				addressToPubKeyHexWithLength(addr8, t, d) + bigintToHex(satB2T2A8) +
+				addressToPubKeyHexWithLength(addr9, t, d) + bigintToHex(satB2T2A9),
+			nil,
+		},
+		keyPair{
+			txidB2T3,
+			"01" +
+				addressToPubKeyHexWithLength(addr5, t, d) + bigintToHex(satB1T2A5) +
+				"01" +
+				addressToPubKeyHexWithLength(addr5, t, d) + bigintToHex(satB2T3A5),
 			nil,
 		},
 	}); err != nil {
@@ -391,21 +455,23 @@ func verifyAfterUTXOBlock2(t *testing.T, d *RocksDB) {
 			t.Fatal(err)
 		}
 	}
-	if err := checkColumn(d, cfBlockAddresses, []keyPair{
-		keyPair{"000370d6", "",
-			func(v string) bool {
-				return compareFuncBlockAddresses(t, v, []string{
-					addressToPubKeyHexWithLength("mzB8cYrfRwFRFAGTDzV8LkUQy5BQicxGhX", t, d) + "00",
-					addressToPubKeyHexWithLength("mtR97eM2HPWVM6c8FGLGcukgaHHQv7THoL", t, d) + "00",
-					addressToPubKeyHexWithLength("mwwoKQE5Lb1G4picHSHDQKg8jw424PF9SC", t, d) + "00",
-					addressToPubKeyHexWithLength("mmJx9Y8ayz9h14yd9fgCW1bUKoEpkBAquP", t, d) + "00",
-					addressToPubKeyHexWithLength("mv9uLThosiEnGRbVPS7Vhyw6VssbVRsiAw", t, d) + "02" + "effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75" + "00",
-					addressToPubKeyHexWithLength("mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz", t, d) + "02" + "00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840" + "02",
-					addressToPubKeyHexWithLength("2Mz1CYoppGGsLNUGF2YDhTif6J661JitALS", t, d) + "02" + "effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75" + "02",
-					addressToPubKeyHexWithLength("2NEVv9LJmAnY99W1pFoc5UJjVdypBqdnvu1", t, d) + "02" + "effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75" + "04",
-				})
-			},
-		},
+	if err := checkColumn(d, cfAddressBalance, []keyPair{
+		keyPair{addressToPubKeyHex(addr1, t, d), "01" + bigintToHex(satZero) + bigintToHex(satB1T1A1), nil},
+		keyPair{addressToPubKeyHex(addr2, t, d), "02" + bigintToHex(satB1T1A2) + bigintToHex(satZero), nil},
+		keyPair{addressToPubKeyHex(addr3, t, d), "02" + bigintToHex(satB1T2A3) + bigintToHex(satZero), nil},
+		keyPair{addressToPubKeyHex(addr4, t, d), "02" + bigintToHex(satB1T2A4) + bigintToHex(satZero), nil},
+		keyPair{addressToPubKeyHex(addr5, t, d), "02" + bigintToHex(satB1T2A5) + bigintToHex(satB2T3A5), nil},
+		keyPair{addressToPubKeyHex(addr6, t, d), "02" + bigintToHex(satB2T1A6) + bigintToHex(satZero), nil},
+		keyPair{addressToPubKeyHex(addr7, t, d), "01" + bigintToHex(satZero) + bigintToHex(satB2T1A7), nil},
+		keyPair{addressToPubKeyHex(addr8, t, d), "01" + bigintToHex(satZero) + bigintToHex(satB2T2A8), nil},
+		keyPair{addressToPubKeyHex(addr9, t, d), "01" + bigintToHex(satZero) + bigintToHex(satB2T2A9), nil},
+	}); err != nil {
+		{
+			t.Fatal(err)
+		}
+	}
+	if err := checkColumn(d, cfBlockTxids, []keyPair{
+		keyPair{"000370d6", txidB2T1 + txidB2T2 + txidB2T3, nil},
 	}); err != nil {
 		{
 			t.Fatal(err)
@@ -487,12 +553,12 @@ func TestRocksDB_Index_UTXO(t *testing.T) {
 	})
 	defer closeAndDestroyRocksDB(t, d)
 
-	// connect 1st block - will log warnings about missing UTXO transactions in cfUnspentTxs column
+	// connect 1st block - will log warnings about missing UTXO transactions in txAddresses column
 	block1 := getTestUTXOBlock1(t, d)
 	if err := d.ConnectBlock(block1); err != nil {
 		t.Fatal(err)
 	}
-	verifyAfterUTXOBlock1(t, d, false)
+	verifyAfterUTXOBlock1(t, d)
 
 	// connect 2nd block - use some outputs from the 1st block as the inputs and 1 input uses tx from the same block
 	block2 := getTestUTXOBlock2(t, d)
@@ -502,19 +568,19 @@ func TestRocksDB_Index_UTXO(t *testing.T) {
 	verifyAfterUTXOBlock2(t, d)
 
 	// get transactions for various addresses / low-high ranges
-	verifyGetTransactions(t, d, "mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz", 0, 1000000, []txidVoutOutput{
-		txidVoutOutput{"00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840", 1, true},
-		txidVoutOutput{"7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25", 1, false},
+	verifyGetTransactions(t, d, addr2, 0, 1000000, []txidVoutOutput{
+		txidVoutOutput{txidB1T1, 1, true},
+		txidVoutOutput{txidB2T1, 1, false},
 	}, nil)
-	verifyGetTransactions(t, d, "mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz", 225493, 225493, []txidVoutOutput{
-		txidVoutOutput{"00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840", 1, true},
+	verifyGetTransactions(t, d, addr2, 225493, 225493, []txidVoutOutput{
+		txidVoutOutput{txidB1T1, 1, true},
 	}, nil)
-	verifyGetTransactions(t, d, "mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz", 225494, 1000000, []txidVoutOutput{
-		txidVoutOutput{"7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25", 1, false},
+	verifyGetTransactions(t, d, addr2, 225494, 1000000, []txidVoutOutput{
+		txidVoutOutput{txidB2T1, 1, false},
 	}, nil)
-	verifyGetTransactions(t, d, "mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz", 500000, 1000000, []txidVoutOutput{}, nil)
-	verifyGetTransactions(t, d, "mwwoKQE5Lb1G4picHSHDQKg8jw424PF9SC", 0, 1000000, []txidVoutOutput{
-		txidVoutOutput{"3d90d15ed026dc45e19ffb52875ed18fa9e8012ad123d7f7212176e2b0ebdb71", 0, true},
+	verifyGetTransactions(t, d, addr2, 500000, 1000000, []txidVoutOutput{}, nil)
+	verifyGetTransactions(t, d, addr8, 0, 1000000, []txidVoutOutput{
+		txidVoutOutput{txidB2T2, 0, true},
 	}, nil)
 	verifyGetTransactions(t, d, "mtGXQvBowMkBpnhLckhxhbwYK44Gs9eBad", 500000, 1000000, []txidVoutOutput{}, errors.New("checksum mismatch"))
 
@@ -569,7 +635,7 @@ func TestRocksDB_Index_UTXO(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	verifyAfterUTXOBlock1(t, d, true)
+	verifyAfterUTXOBlock1(t, d)
 	if err := checkColumn(d, cfTransactions, []keyPair{}); err != nil {
 		{
 			t.Fatal(err)
@@ -661,13 +727,13 @@ func Test_unpackBlockAddresses(t *testing.T) {
 			want2: [][]hexoutpoint{
 				[]hexoutpoint{},
 				[]hexoutpoint{
-					hexoutpoint{"7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25", 0},
-					hexoutpoint{"00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840", 3},
+					hexoutpoint{txidB2T1, 0},
+					hexoutpoint{txidB1T1, 3},
 				},
 				[]hexoutpoint{},
 				[]hexoutpoint{},
 				[]hexoutpoint{
-					hexoutpoint{"effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75", 1},
+					hexoutpoint{txidB1T2, 1},
 				},
 			},
 		},
@@ -679,13 +745,13 @@ func Test_unpackBlockAddresses(t *testing.T) {
 				[]hexoutpoint{},
 				[]hexoutpoint{},
 				[]hexoutpoint{
-					hexoutpoint{"effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75", 0},
+					hexoutpoint{txidB1T2, 0},
 				},
 				[]hexoutpoint{
-					hexoutpoint{"00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840", 1},
+					hexoutpoint{txidB1T1, 1},
 				},
 				[]hexoutpoint{
-					hexoutpoint{"effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75", 1},
+					hexoutpoint{txidB1T2, 1},
 				},
 				[]hexoutpoint{},
 				[]hexoutpoint{},
@@ -714,7 +780,7 @@ func Test_unpackBlockAddresses(t *testing.T) {
 			for i, g := range got2 {
 				ho := make([]hexoutpoint, len(g))
 				for j, o := range g {
-					ho[j] = hexoutpoint{hex.EncodeToString(o.btxID), o.vout}
+					ho[j] = hexoutpoint{hex.EncodeToString(o.btxID), o.index}
 				}
 				h2[i] = ho
 			}
@@ -741,12 +807,12 @@ func Test_packBigint_unpackBigint(t *testing.T) {
 		{
 			name: "0",
 			bi:   big.NewInt(0),
-			buf:  make([]byte, 249),
+			buf:  make([]byte, maxPackedBigintBytes),
 		},
 		{
 			name: "1",
 			bi:   big.NewInt(1),
-			buf:  make([]byte, 249),
+			buf:  make([]byte, maxPackedBigintBytes),
 		},
 		{
 			name: "54321",
@@ -756,27 +822,27 @@ func Test_packBigint_unpackBigint(t *testing.T) {
 		{
 			name: "12345678",
 			bi:   big.NewInt(12345678),
-			buf:  make([]byte, 249),
+			buf:  make([]byte, maxPackedBigintBytes),
 		},
 		{
 			name: "123456789123456789",
 			bi:   big.NewInt(123456789123456789),
-			buf:  make([]byte, 249),
+			buf:  make([]byte, maxPackedBigintBytes),
 		},
 		{
 			name: "bigbig1",
 			bi:   bigbig1,
-			buf:  make([]byte, 249),
+			buf:  make([]byte, maxPackedBigintBytes),
 		},
 		{
 			name: "bigbig2",
 			bi:   bigbig2,
-			buf:  make([]byte, 249),
+			buf:  make([]byte, maxPackedBigintBytes),
 		},
 		{
 			name:      "bigbigbig",
 			bi:        bigbigbig,
-			buf:       make([]byte, 249),
+			buf:       make([]byte, maxPackedBigintBytes),
 			toobiglen: 242,
 		},
 	}
