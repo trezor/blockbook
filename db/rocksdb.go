@@ -324,7 +324,7 @@ func (d *RocksDB) writeAddressesUTXO(wb *gorocksdb.WriteBatch, block *bchain.Blo
 						glog.Warningf("rocksdb: addrID: %v - height %d, tx %v, output %v", err, block.Height, tx.Txid, output)
 					}
 				} else {
-					glog.Infof("rocksdb: block %d, skipping addrID of length %d", block.Height, len(addrID))
+					glog.Infof("rocksdb: height %d, tx %v, vout %v, skipping addrID of length %d", block.Height, tx.Txid, i, len(addrID))
 				}
 				continue
 			}
@@ -397,8 +397,12 @@ func (d *RocksDB) writeAddressesUTXO(wb *gorocksdb.WriteBatch, block *bchain.Blo
 			}
 			tai.addrID = ot.addrID
 			tai.valueSat = ot.valueSat
-			// mark the output tx as spent
+			// mark the output as spent in tx
 			ot.spent = true
+			if len(ot.addrID) == 0 {
+				glog.Warningf("rocksdb: height %d, tx %v, input tx %v vout %v skipping empty address", block.Height, tx.Txid, input.Txid, input.Vout)
+				continue
+			}
 			strAddrID := string(ot.addrID)
 			// check that the address was used already in this block
 			o, processed := addresses[strAddrID]
@@ -428,10 +432,11 @@ func (d *RocksDB) writeAddressesUTXO(wb *gorocksdb.WriteBatch, block *bchain.Blo
 			ab.balanceSat.Sub(&ab.balanceSat, &ot.valueSat)
 			if ab.balanceSat.Sign() < 0 {
 				ad, err := d.chainParser.OutputScriptToAddresses(ot.addrID)
+				had := hex.EncodeToString(ot.addrID)
 				if err != nil {
-					glog.Warningf("rocksdb: unparsable address reached negative balance %v, resetting to 0. Parser error %v", ab.balanceSat.String(), err)
+					glog.Warningf("rocksdb: unparsable address hex '%v' reached negative balance %v, resetting to 0. Parser error %v", had, ab.balanceSat.String(), err)
 				} else {
-					glog.Warningf("rocksdb: address %v reached negative balance %v, resetting to 0", ab.balanceSat.String(), ad)
+					glog.Warningf("rocksdb: address %v hex '%v' reached negative balance %v, resetting to 0", ad, had, ab.balanceSat.String())
 				}
 				ab.balanceSat.SetInt64(0)
 			}
