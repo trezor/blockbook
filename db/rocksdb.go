@@ -478,17 +478,7 @@ func (d *RocksDB) storeTxAddresses(wb *gorocksdb.WriteBatch, am map[string]*txAd
 	varBuf := make([]byte, maxPackedBigintBytes)
 	buf := make([]byte, 1024)
 	for txID, ta := range am {
-		buf = buf[:0]
-		l := packVaruint(uint(len(ta.inputs)), varBuf)
-		buf = append(buf, varBuf[:l]...)
-		for i := range ta.inputs {
-			buf = appendTxAddress(buf, varBuf, &ta.inputs[i])
-		}
-		l = packVaruint(uint(len(ta.outputs)), varBuf)
-		buf = append(buf, varBuf[:l]...)
-		for i := range ta.outputs {
-			buf = appendTxAddress(buf, varBuf, &ta.outputs[i])
-		}
+		buf = packTxAddresses(ta, buf, varBuf)
 		wb.PutCF(d.cfh[cfTxAddresses], []byte(txID), buf)
 	}
 	return nil
@@ -506,19 +496,6 @@ func (d *RocksDB) storeBalances(wb *gorocksdb.WriteBatch, abm map[string]*addrBa
 		wb.PutCF(d.cfh[cfAddressBalance], []byte(addrID), buf[:l])
 	}
 	return nil
-}
-
-func appendTxAddress(buf []byte, varBuf []byte, txa *txAddress) []byte {
-	la := len(txa.addrID)
-	if txa.spent {
-		la = ^la
-	}
-	l := packVarint(la, varBuf)
-	buf = append(buf, varBuf[:l]...)
-	buf = append(buf, txa.addrID...)
-	l = packBigint(&txa.valueSat, varBuf)
-	buf = append(buf, varBuf[:l]...)
-	return buf
 }
 
 func (d *RocksDB) storeAndCleanupBlockTxids(wb *gorocksdb.WriteBatch, block *bchain.Block, txids [][]byte) error {
@@ -582,6 +559,38 @@ func (d *RocksDB) getTxAddresses(btxID []byte) (*txAddresses, error) {
 	if len(buf) < 2 {
 		return nil, nil
 	}
+	return unpackTxAddresses(buf)
+}
+
+func packTxAddresses(ta *txAddresses, buf []byte, varBuf []byte) []byte {
+	buf = buf[:0]
+	l := packVaruint(uint(len(ta.inputs)), varBuf)
+	buf = append(buf, varBuf[:l]...)
+	for i := range ta.inputs {
+		buf = appendTxAddress(&ta.inputs[i], buf, varBuf)
+	}
+	l = packVaruint(uint(len(ta.outputs)), varBuf)
+	buf = append(buf, varBuf[:l]...)
+	for i := range ta.outputs {
+		buf = appendTxAddress(&ta.outputs[i], buf, varBuf)
+	}
+	return buf
+}
+
+func appendTxAddress(txa *txAddress, buf []byte, varBuf []byte) []byte {
+	la := len(txa.addrID)
+	if txa.spent {
+		la = ^la
+	}
+	l := packVarint(la, varBuf)
+	buf = append(buf, varBuf[:l]...)
+	buf = append(buf, txa.addrID...)
+	l = packBigint(&txa.valueSat, varBuf)
+	buf = append(buf, varBuf[:l]...)
+	return buf
+}
+
+func unpackTxAddresses(buf []byte) (*txAddresses, error) {
 	ta := txAddresses{}
 	inputs, l := unpackVaruint(buf)
 	ta.inputs = make([]txAddress, inputs)
@@ -601,7 +610,7 @@ func unpackTxAddress(ta *txAddress, buf []byte) int {
 	al, l := unpackVarint(buf)
 	if al < 0 {
 		ta.spent = true
-		al ^= al
+		al = ^al
 	}
 	ta.addrID = make([]byte, al)
 	copy(ta.addrID, buf[l:l+al])
