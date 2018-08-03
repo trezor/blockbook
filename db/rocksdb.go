@@ -88,7 +88,7 @@ func openDB(path string) (*gorocksdb.DB, []*gorocksdb.ColumnFamilyHandle, error)
 	optsLZ4.SetBytesPerSync(1 << 20)    // 1MB
 	optsLZ4.SetWriteBufferSize(1 << 27) // 128MB
 	optsLZ4.SetMaxOpenFiles(25000)
-	optsLZ4.SetCompression(gorocksdb.LZ4Compression)
+	optsLZ4.SetCompression(gorocksdb.LZ4HCCompression)
 
 	// opts for addresses are different:
 	// no bloom filter - from documentation: If most of your queries are executed using iterators, you shouldn't set bloom filter
@@ -105,10 +105,10 @@ func openDB(path string) (*gorocksdb.DB, []*gorocksdb.ColumnFamilyHandle, error)
 	optsAddresses.SetBytesPerSync(1 << 20)    // 1MB
 	optsAddresses.SetWriteBufferSize(1 << 27) // 128MB
 	optsAddresses.SetMaxOpenFiles(25000)
-	optsAddresses.SetCompression(gorocksdb.NoCompression)
+	optsAddresses.SetCompression(gorocksdb.LZ4HCCompression)
 
 	// default, height, addresses, txAddresses, addressBalance, blockTxids, transactions
-	fcOptions := []*gorocksdb.Options{optsNoCompression, optsNoCompression, optsAddresses, optsLZ4, optsLZ4, optsLZ4, optsLZ4}
+	fcOptions := []*gorocksdb.Options{optsLZ4, optsLZ4, optsAddresses, optsLZ4, optsLZ4, optsLZ4, optsLZ4}
 
 	db, cfh, err := gorocksdb.OpenDbColumnFamilies(optsNoCompression, path, cfNames, fcOptions)
 	if err != nil {
