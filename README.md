@@ -147,6 +147,7 @@ The data are separated to different column families:
 | Dogecoin                 | 9038                    | 9138                  | 8038               | 38338    |
 | Namecoin                 | 9039                    | 9139                  | 8039               | 38339    |
 | Vertcoin                 | 9040                    | 9140                  | 8040               | 38340    |
+| Monacoin                 | 9041                    | 9141                  | 8041               | 38341    |
 | Bitcoin Testnet          | 19030                   | 1913                  | 18030              | 48330    |
 | Bcash Testnet            | 19031                   | 1913                  | 18031              | 48331    |
 | Zcash Testnet            | 19032                   | 1913                  | 18032              | 48332    |
@@ -154,6 +155,7 @@ The data are separated to different column families:
 | Litecoin Testnet         | 19034                   | 1913                  | 18034              | 48334    |
 | Ethereum Testnet Ropsten | 19036                   | 19136                 | 18036              | 48336*   |
 | Vertcoin Testnet         | 19040                   | 19140                 | 18040              | 48340    |
+| Monacoin Testnet         | 19041                   | 19141                 | 18041              | 48341    |
 
 \* geth listens on this port, however not as zmq service
 
