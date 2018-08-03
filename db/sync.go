@@ -346,25 +346,23 @@ func (w *SyncWorker) getBlockChain(out chan blockResult, done chan struct{}) {
 }
 
 // DisconnectBlocks removes all data belonging to blocks in range lower-higher,
-// using block data from blockchain, if they are available,
-// otherwise doing full scan
 func (w *SyncWorker) DisconnectBlocks(lower uint32, higher uint32, hashes []string) error {
 	glog.Infof("sync: disconnecting blocks %d-%d", lower, higher)
-	// if the chain uses Block to Addresses mapping, always use DisconnectBlockRange
-	if w.chain.GetChainParser().KeepBlockAddresses() > 0 {
-		return w.db.DisconnectBlockRange(lower, higher)
+	// if the chain is UTXO, always use DisconnectBlockRange
+	if w.chain.GetChainParser().IsUTXOChain() {
+		return w.db.DisconnectBlockRangeUTXO(lower, higher)
 	}
 	blocks := make([]*bchain.Block, len(hashes))
 	var err error
-	// get all blocks first to see if we can avoid full scan
+	// try to get all blocks first to see if we can avoid full scan
 	for i, hash := range hashes {
 		blocks[i], err = w.chain.GetBlock(hash, 0)
 		if err != nil {
 			// cannot get a block, we must do full range scan
-			return w.db.DisconnectBlockRange(lower, higher)
+			return w.db.DisconnectBlockRangeNonUTXO(lower, higher)
 		}
 	}
-	// then disconnect one after another
+	// got all blocks to be disconnected, disconnect them one after another
 	for i, block := range blocks {
 		glog.Info("Disconnecting block ", (int(higher) - i), " ", block.Hash)
 		if err = w.db.DisconnectBlock(block); err != nil {

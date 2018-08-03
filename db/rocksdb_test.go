@@ -632,9 +632,16 @@ func TestRocksDB_Index_UTXO(t *testing.T) {
 	}
 	verifyAfterUTXOBlock2(t, d)
 
+	// try to disconnect both blocks, however only the last one is kept, it is not possible
+	err = d.DisconnectBlockRangeUTXO(225493, 225494)
+	if err == nil || err.Error() != "Cannot disconnect blocks with height 225493 and lower. It is necessary to rebuild index." {
+		t.Fatal(err)
+	}
+	verifyAfterUTXOBlock2(t, d)
+
 	// disconnect the 2nd block, verify that the db contains only data from the 1st block with restored unspentTxs
 	// and that the cached tx is removed
-	err = d.DisconnectBlockRange(225494, 225494)
+	err = d.DisconnectBlockRangeUTXO(225494, 225494)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -646,153 +653,6 @@ func TestRocksDB_Index_UTXO(t *testing.T) {
 		}
 	}
 
-}
-
-func Test_findAndRemoveUnspentAddr(t *testing.T) {
-	type args struct {
-		unspentAddrs string
-		vout         uint32
-	}
-	tests := []struct {
-		name  string
-		args  args
-		want  string
-		want2 string
-	}{
-		{
-			name: "3",
-			args: args{
-				unspentAddrs: "029c0010517a0115887452870212709393588893935687040e64635167006868060e76519351880087080a7b7b0115870a3276a9144150837fb91d9461d6b95059842ab85262c2923f88ac0c08636751680e04578710029112026114",
-				vout:         3,
-			},
-			want:  "64635167006868",
-			want2: "029c0010517a0115887452870212709393588893935687040e76519351880087080a7b7b0115870a3276a9144150837fb91d9461d6b95059842ab85262c2923f88ac0c08636751680e04578710029112026114",
-		},
-		{
-			name: "10",
-			args: args{
-				unspentAddrs: "029c0010517a0115887452870212709393588893935687040e64635167006868060e76519351880087080a7b7b0115870a3276a9144150837fb91d9461d6b95059842ab85262c2923f88ac0c08636751680e04578710029112026114",
-				vout:         10,
-			},
-			want:  "61",
-			want2: "029c0010517a0115887452870212709393588893935687040e64635167006868060e76519351880087080a7b7b0115870a3276a9144150837fb91d9461d6b95059842ab85262c2923f88ac0c08636751680e04578710029112",
-		},
-		{
-			name: "not there",
-			args: args{
-				unspentAddrs: "029c0010517a0115887452870212709393588893935687040e64635167006868060e76519351880087080a7b7b0115870a3276a9144150837fb91d9461d6b95059842ab85262c2923f88ac0c08636751680e04578710029112026114",
-				vout:         11,
-			},
-			want:  "",
-			want2: "029c0010517a0115887452870212709393588893935687040e64635167006868060e76519351880087080a7b7b0115870a3276a9144150837fb91d9461d6b95059842ab85262c2923f88ac0c08636751680e04578710029112026114",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			b, err := hex.DecodeString(tt.args.unspentAddrs)
-			if err != nil {
-				panic(err)
-			}
-			got, got2 := findAndRemoveUnspentAddr(b, tt.args.vout)
-			h := hex.EncodeToString(got)
-			if !reflect.DeepEqual(h, tt.want) {
-				t.Errorf("findAndRemoveUnspentAddr() got = %v, want %v", h, tt.want)
-			}
-			h2 := hex.EncodeToString(got2)
-			if !reflect.DeepEqual(h2, tt.want2) {
-				t.Errorf("findAndRemoveUnspentAddr() got2 = %v, want %v", h2, tt.want2)
-			}
-		})
-	}
-}
-
-type hexoutpoint struct {
-	txID string
-	vout int32
-}
-
-func Test_unpackBlockAddresses(t *testing.T) {
-	d := setupRocksDB(t, &testBitcoinParser{BitcoinParser: &btc.BitcoinParser{Params: btc.GetChainParams("test")}})
-	defer closeAndDestroyRocksDB(t, d)
-	type args struct {
-		buf string
-	}
-	tests := []struct {
-		name    string
-		args    args
-		want    []string
-		want2   [][]hexoutpoint
-		wantErr bool
-	}{
-		{
-			name: "1",
-			args: args{"029c0010517a011588745287047c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d250000b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa38400612709393588893935687000e64635167006868000e7651935188008702effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac7502"},
-			want: []string{"9c", "517a011588745287", "709393588893935687", "64635167006868", "76519351880087"},
-			want2: [][]hexoutpoint{
-				[]hexoutpoint{},
-				[]hexoutpoint{
-					hexoutpoint{txidB2T1, 0},
-					hexoutpoint{txidB1T1, 3},
-				},
-				[]hexoutpoint{},
-				[]hexoutpoint{},
-				[]hexoutpoint{
-					hexoutpoint{txidB1T2, 1},
-				},
-			},
-		},
-		{
-			name: "1",
-			args: args{"3276A914B434EB0C1A3B7A02E8A29CC616E791EF1E0BF51F88AC003276A9143F8BA3FDA3BA7B69F5818086E12223C6DD25E3C888AC003276A914A08EAE93007F22668AB5E4A9C83C8CD1C325E3E088AC02EFFD9EF509383D536B1C8AF5BF434C8EFBF521A4F2BEFD4022BBD68694B4AC75003276A9148BDF0AA3C567AA5975C2E61321B8BEBBE7293DF688AC0200B2C06055E5E90E9C82BD4181FDE310104391A7FA4F289B1704E5D90CAA3840022EA9144A21DB08FB6882CB152E1FF06780A430740F77048702EFFD9EF509383D536B1C8AF5BF434C8EFBF521A4F2BEFD4022BBD68694B4AC75023276A914CCAAAF374E1B06CB83118453D102587B4273D09588AC003276A9148D802C045445DF49613F6A70DDD2E48526F3701F88AC00"},
-			want: []string{"76a914b434eb0c1a3b7a02e8a29cc616e791ef1e0bf51f88ac", "76a9143f8ba3fda3ba7b69f5818086e12223c6dd25e3c888ac", "76a914a08eae93007f22668ab5e4a9c83c8cd1c325e3e088ac", "76a9148bdf0aa3c567aa5975c2e61321b8bebbe7293df688ac", "a9144a21db08fb6882cb152e1ff06780a430740f770487", "76a914ccaaaf374e1b06cb83118453d102587b4273d09588ac", "76a9148d802c045445df49613f6a70ddd2e48526f3701f88ac"},
-			want2: [][]hexoutpoint{
-				[]hexoutpoint{},
-				[]hexoutpoint{},
-				[]hexoutpoint{
-					hexoutpoint{txidB1T2, 0},
-				},
-				[]hexoutpoint{
-					hexoutpoint{txidB1T1, 1},
-				},
-				[]hexoutpoint{
-					hexoutpoint{txidB1T2, 1},
-				},
-				[]hexoutpoint{},
-				[]hexoutpoint{},
-			},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			b, err := hex.DecodeString(tt.args.buf)
-			if err != nil {
-				panic(err)
-			}
-			got, got2, err := d.unpackBlockAddresses(b)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("unpackBlockAddresses() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			h := make([]string, len(got))
-			for i, g := range got {
-				h[i] = hex.EncodeToString(g)
-			}
-			if !reflect.DeepEqual(h, tt.want) {
-				t.Errorf("unpackBlockAddresses() = %v, want %v", h, tt.want)
-			}
-			h2 := make([][]hexoutpoint, len(got2))
-			for i, g := range got2 {
-				ho := make([]hexoutpoint, len(g))
-				for j, o := range g {
-					ho[j] = hexoutpoint{hex.EncodeToString(o.btxID), o.index}
-				}
-				h2[i] = ho
-			}
-			if !reflect.DeepEqual(h2, tt.want2) {
-				t.Errorf("unpackBlockAddresses() = %v, want %v", h2, tt.want2)
-			}
-		})
-	}
 }
 
 func Test_packBigint_unpackBigint(t *testing.T) {
