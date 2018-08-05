@@ -1,0 +1,3 @@
+{{define "main" -}}
+{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend
+{{end}}

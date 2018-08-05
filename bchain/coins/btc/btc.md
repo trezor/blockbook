@@ -41,7 +41,7 @@ Create script that runs blockbook *run-btc-blockbook.sh*
 #!/bin/bash
 
 cd go/src/blockbook
-./blockbook -coin=btc -blockchaincfg=/data/btc/blockbook/btc.json -datadir=/data/btc/blockbook/db -sync -httpserver=:9030 -socketio=:9130 -certfile=server/testcert -explorer=https://bitcore1.trezor.io/ $1
+./blockbook -coin=btc -blockchaincfg=/data/btc/blockbook/btc.json -datadir=/data/btc/blockbook/db -sync -internal=:9030 -public=:9130 -certfile=server/testcert -explorer=https://bitcore1.trezor.io/ $1
 ```
 To run blockbook with logging to file  (run with nohup or daemonize or using screen)
 ```

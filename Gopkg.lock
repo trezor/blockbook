@@ -3,9 +3,21 @@
 
 [[projects]]
   branch = "master"
+  name = "github.com/aead/skein"
+  packages = [".","threefish"]
+  revision = "9365ae6e95d294dc113a0b308852f97c916db233"
+
+[[projects]]
+  branch = "master"
   name = "github.com/beorn7/perks"
   packages = ["quantile"]
   revision = "3a771d992973f24aa725d07868b467d1ddfceafb"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/bitgoin/lyra2rev2"
+  packages = [".","sha3"]
+  revision = "bae9ad2043bb55facb14c4918e909f88a7d3ed84"
 
 [[projects]]
   branch = "master"
@@ -33,9 +45,27 @@
 
 [[projects]]
   branch = "master"
+  name = "github.com/btcsuite/golangcrypto"
+  packages = ["ripemd160"]
+  revision = "53f62d9b43e87a6c56975cf862af7edf33a8d0df"
+
+[[projects]]
+  branch = "master"
   name = "github.com/cpacia/bchutil"
   packages = ["."]
   revision = "12e86f41eb040d3b85b5d8e3a3a4bed035517c52"
+
+[[projects]]
+  name = "github.com/dchest/blake256"
+  packages = ["."]
+  revision = "dee3fe6eb0e98dc774a94fc231f85baf7c29d360"
+  version = "v1.0.0"
+
+[[projects]]
+  name = "github.com/deckarep/golang-set"
+  packages = ["."]
+  revision = "1d4478f51bed434f1dadf96dcd9b43aabac66795"
+  version = "v1.7"
 
 [[projects]]
   name = "github.com/ethereum/go-ethereum"
@@ -171,6 +201,18 @@
 
 [[projects]]
   branch = "master"
+  name = "github.com/wakiyamap/monad"
+  packages = ["btcec","chaincfg","chaincfg/chainhash","txscript","wire"]
+  revision = "2b35d553bb7e65947d87100f50758ee11261da33"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/wakiyamap/monautil"
+  packages = [".","base58","bech32"]
+  revision = "c1fba54cb210ffa57c4cb5e40fa09c789daa56b8"
+
+[[projects]]
+  branch = "master"
   name = "golang.org/x/crypto"
   packages = ["ripemd160"]
   revision = "d6449816ce06963d9d136eee5a56fca5b0616e7e"
@@ -202,6 +244,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "97b5e11b3aa46e6b54a5c3fd7835c49f324f9821a1c641e5682f60ee6716d8c2"
+  inputs-digest = "03817720a4b1b5011cc64018a1344ed3fb4d8228af41c86856069f57851b3819"
   solver-name = "gps-cdcl"
   solver-version = 1

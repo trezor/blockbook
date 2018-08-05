@@ -1,0 +1,4 @@
+{{define "main" -}}
+{{.Env.BlockbookInstallPath}}/{{.Coin.Alias}}/cert/testcert.crt {{.Env.BlockbookInstallPath}}/{{.Coin.Alias}}/cert/blockbook.crt
+{{.Env.BlockbookInstallPath}}/{{.Coin.Alias}}/cert/testcert.key {{.Env.BlockbookInstallPath}}/{{.Coin.Alias}}/cert/blockbook.key
+{{end}}

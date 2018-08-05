@@ -9,8 +9,9 @@ import (
 	"blockbook/bchain/coins/dogecoin"
 	"blockbook/bchain/coins/eth"
 	"blockbook/bchain/coins/litecoin"
-	"blockbook/bchain/coins/vertcoin"
+	"blockbook/bchain/coins/monacoin"
 	"blockbook/bchain/coins/namecoin"
+	"blockbook/bchain/coins/vertcoin"
 	"blockbook/bchain/coins/viacoin"
 	"blockbook/bchain/coins/zec"
 	"blockbook/common"
@@ -46,23 +47,26 @@ func init() {
 	blockChainFactories["Vertcoin"] = vertcoin.NewVertcoinRPC
 	blockChainFactories["Vertcoin Testnet"] = vertcoin.NewVertcoinRPC
 	blockChainFactories["Namecoin"] = namecoin.NewNamecoinRPC
+	blockChainFactories["Monacoin"] = monacoin.NewMonacoinRPC
+	blockChainFactories["Monacoin Testnet"] = monacoin.NewMonacoinRPC
 	blockChainFactories["Viacoin"] = viacoin.NewViacoinRPC
 }
 
-// GetCoinNameFromConfig gets coin name from config file
-func GetCoinNameFromConfig(configfile string) (string, error) {
+// GetCoinNameFromConfig gets coin name and coin shortcut from config file
+func GetCoinNameFromConfig(configfile string) (string, string, error) {
 	data, err := ioutil.ReadFile(configfile)
 	if err != nil {
-		return "", errors.Annotatef(err, "Error reading file %v", configfile)
+		return "", "", errors.Annotatef(err, "Error reading file %v", configfile)
 	}
 	var cn struct {
-		CoinName string `json:"coin_name"`
+		CoinName     string `json:"coin_name"`
+		CoinShortcut string `json:"coin_shortcut"`
 	}
 	err = json.Unmarshal(data, &cn)
 	if err != nil {
-		return "", errors.Annotatef(err, "Error parsing file %v", configfile)
+		return "", "", errors.Annotatef(err, "Error parsing file %v", configfile)
 	}
-	return cn.CoinName, nil
+	return cn.CoinName, cn.CoinShortcut, nil
 }
 
 // NewBlockChain creates bchain.BlockChain of type defined by parameter coin

@@ -1,6 +1,0 @@
-#!/usr/bin/dh-exec
-blockbook /opt/coins/blockbook/ethereum/bin
-cert /opt/coins/blockbook/ethereum
-static /opt/coins/blockbook/ethereum
-configs/ethereum.json => /opt/coins/blockbook/ethereum/config/blockchaincfg.json
-logrotate.sh /opt/coins/blockbook/ethereum/bin

@@ -1,5 +1,0 @@
-{
-  "coin_name": "Ethereum",
-  "rpcURL": "ws://localhost:8036",
-  "rpcTimeout": 25
-}

@@ -1,0 +1,65 @@
+{
+  "coin": {
+      "name": "Dash",
+      "shortcut": "DASH",
+      "label": "Dash",
+      "alias": "dash"
+  },
+  "ports": {
+    "backend_rpc": 8033,
+    "backend_message_queue": 38333,
+    "blockbook_internal": 9033,
+    "blockbook_public": 9133
+  },
+  "ipc": {
+    "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
+    "rpc_user": "rpc",
+    "rpc_pass": "rpc",
+    "rpc_timeout": 25,
+    "message_queue_binding_template": "tcp://127.0.0.1:{{.Ports.BackendMessageQueue}}"
+  },
+  "backend": {
+    "package_name": "backend-dash",
+    "package_revision": "satoshilabs-1",
+    "system_user": "dash",
+    "version": "0.12.3",
+    "binary_url": "https://github.com/dashpay/dash/releases/download/v0.12.3.2/dashcore-0.12.3.2-x86_64-linux-gnu.tar.gz",
+    "verification_type": "gpg-sha256",
+    "verification_source": "https://github.com/dashpay/dash/releases/download/v0.12.3.2/SHA256SUMS.asc",
+    "extract_command": "tar -C backend --strip 1 -xf",
+    "exclude_files": [
+        "bin/dash-qt"
+    ],
+    "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/dashd -datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -conf={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf -pid=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",
+    "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/*.log",
+    "postinst_script_template": "",
+    "service_type": "forking",
+    "service_additional_params_template": "",
+    "protect_memory": true,
+    "mainnet": true,
+    "config_file": "bitcoin.conf",
+    "additional_params": {
+        "mempoolexpiry": 72
+    }
+  },
+  "blockbook": {
+    "package_name": "blockbook-dash",
+    "system_user": "blockbook-dash",
+    "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
+    "public_binding_template": ":{{.Ports.BlockbookPublic}}",
+    "explorer_url": "https://dash-explorer.trezor.io",
+    "additional_params": "",
+    "block_chain": {
+      "parse": true,
+      "subversion": "/Dash Core:0.12.3.2/",
+      "mempool_workers": 8,
+      "mempool_sub_workers": 2,
+      "block_addresses_to_keep": 300,
+      "additional_params": {}
+    }
+  },
+  "meta": {
+    "package_maintainer": "Jakub Matys",
+    "package_maintainer_email": "jakub.matys@satoshilabs.com"
+  }
+}

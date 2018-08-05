@@ -1,6 +1,0 @@
-#!/usr/bin/dh-exec
-blockbook /opt/coins/blockbook/vertcoin_testnet/bin
-cert /opt/coins/blockbook/vertcoin_testnet
-static /opt/coins/blockbook/vertcoin_testnet
-configs/vertcoin_testnet.json => /opt/coins/blockbook/vertcoin_testnet/config/blockchaincfg.json
-logrotate.sh /opt/coins/blockbook/vertcoin_testnet/bin

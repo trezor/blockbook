@@ -1,0 +1,4 @@
+{{define "main" -}}
+#!/bin/sh
+{{.Env.BlockbookInstallPath}}/{{.Coin.Alias}}/bin/logrotate.sh
+{{end}}
