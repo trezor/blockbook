@@ -93,15 +93,17 @@ command: `make build-images NO_CACHE=true`.
 
 ### On naming conventions and versioning
 
+All configuration keys described below are in coin definition file in *configs/coins*.
+
 **install and data directories**
 
 Both Blockbook and back-end have separated install and data directories. They use common preffix and are defined in
 *configs/environ.json* and all templates use them.
 
-Back-end install directory is */opt/coins/nodes/&lt;coin&gt;*.
-Back-end data directory is */opt/coins/data/&lt;coin&gt;/backend*.
-Blockbook install directory is */opt/coins/blockbook/&lt;coin&gt;*.
-Blockbook data directory is */opt/coins/data/&lt;coin&gt;/blockbook*.
+* back-end install directory is */opt/coins/nodes/&lt;coin&gt;*.
+* back-end data directory is */opt/coins/data/&lt;coin&gt;/backend*.
+* Blockbook install directory is */opt/coins/blockbook/&lt;coin&gt;*.
+* Blockbook data directory is */opt/coins/data/&lt;coin&gt;/blockbook*.
 
 *coin* used above is defined in *coin.alias* in coin definition file.
 
