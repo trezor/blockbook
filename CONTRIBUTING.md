@@ -63,12 +63,11 @@ In section *blockbook* update information how to build and configure Blockbook s
 
 Update *package_maintainer* and *package_maintainer_email* options in section *meta*.
 
+Execute script *contrib/scripts/check-ports.go* that will check mandatory ports and uniquity of registered ports.
+
 Execute script *contrib/scripts/generate-port-registry.go* that will update *docs/ports.md*.
 
 Now you can try generate package definitions as described above in order to check outputs.
-
-TODO:
-* script that checks unique port numbers
 
 #### Add coin implementation
 
