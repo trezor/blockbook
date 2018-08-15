@@ -116,7 +116,7 @@ func openDB(path string) (*gorocksdb.DB, []*gorocksdb.ColumnFamilyHandle, error)
 // NewRocksDB opens an internal handle to RocksDB environment.  Close
 // needs to be called to release it.
 func NewRocksDB(path string, parser bchain.BlockChainParser, metrics *common.Metrics) (d *RocksDB, err error) {
-	glog.Infof("rocksdb: open %s", path)
+	glog.Infof("rocksdb: open %s, version %v", path, dbVersion)
 	db, cfh, err := openDB(path)
 	wo := gorocksdb.NewDefaultWriteOptions()
 	ro := gorocksdb.NewDefaultReadOptions()
