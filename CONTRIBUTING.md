@@ -71,6 +71,83 @@ Now you can try generate package definitions as described above in order to chec
 
 #### Add coin implementation
 
+Coin implementation is stored in *bchain/coins* directory. Each coin must implement interfaces *BlockChain* and
+*BlockChainParser* (both defined in [bchain/types.go][/bchain/types.go]) and has registered factory function by
+*init()* function of package *blockbook/bchain/coins* ([bchain/coins/blockchain.go](/bchain/coins/blockchain.go)).
+
+There are several approaches how to implement coin support in Blockbook, please see examples below.
+
+Bitcoin package *blockbook/bchain/coins/btc* is reference implementation for Bitcoin-like coins. Most of functinality is
+same so particular coin should embed it and override just different parts.
+
+Bitcoin uses binary WIRE protocol thus decoding is very fast but require complex parser. Parser translate whole
+pubkey-script to databse ID and therefore it is usually possible store transactions without change.
+
+ZCash package *blockbook/bchain/coins/zec* on the other side uses JSON version of RPCs therefore it dosn't require
+specialized parser. Only responsibility that parser has is to translate address to database ID and vice versa.
+
+Ethereum package *blockbook/bchain/coins/eth* must have stand alone implementation because Ethereum uses totally
+different concept than Bitcoin.
+
+##### BlockChain interface
+
+Type that implements *bchain.BlockChain* interface ensures communication with block chain network. Because
+it calls node RPCs it usually has suffix RPC.
+
+Initialization of object is separated into two stages. At first there is called factory method (details described
+in next section) and then *bchain.BlockChain.Initialize()* method. Separated initialization method allows you call
+inherited methods during initialization. However it is common practice override fields of embedded structure in factory
+method.
+
+During initialization, there is usually loaded chain information, registered message queue callback and created mempool
+and parser objects.
+
+BitcoinRPC uses *btc.RPCMarshaller* ([btc/codec.go](/bchain/coins/btc/codec.go)) in order to distinguish API version of
+Bitcoin RPC. Current API (*btc.JSONMarshalerV2*) uses JSON object with method arguments. Older API (*btc.JSONMarshalerV1*)
+uses JSON array with method arguments and some arguments are defined differently (e.g. bool vs int).
+
+For example see [zec/zcashrpc.go](/bchain/coins/zec/zcashrpc.go).
+
+##### BlockChain factory function
+
+Factory function must be *coins.blockChainFactory* type ([coins/blockchain.go](/bchain/coins/blockchain.go)). It gets
+configuration as JSON object and handler function for PUSH notifications. All factory functions have registered by
+*init()* function of package *blockbook/bchain/coins* ([coins/blockchain.go](/bchain/coins/blockchain.go)). Coin name
+must correspond to *coin.name* in coin definition file (see above).
+
+Configuration passed to factory method is coin specific. For types that embed *btc.BitcoinRPC,* configuration must
+contain at least fields referred in *btc.Configuration* ([btc/bitcoinrpc.go](/bchain/coins/btc/bitcoinrpc.go)).
+
+For types that embed base struct it is common practise call factory method of embedded type in order to
+create & initialize it. It is much more robust than simple struct composition.
+
+For example see [zec/zcashrpc.go](/bchain/coins/zec/zcashrpc.go).
+
+##### BlockChainParser interface
+
+Type that implements *bchain.BlockChainParser* interface ensures parsing and conversions of block chain data. It is
+initialized by *bchain.BlockChain* during initialization.
+
+There are several groups of methods defined in *bchian.BlockChainParser*:
+
+* *GetAddrIDFromVout* and *GetAddrIDFromAddress* – Convert transaction addresses to *[]byte* ID that is used as database ID.
+  Most of coins use pubkey-script as ID.
+* *AddressToOutputScript* and *OutputScriptToAddresses*  – Convert address to output script and vice versa. Note that
+  *btc.BitcoinParser* uses pointer to function *OutputScriptToAddressesFunc* that is called from *OutputScriptToAddress*
+  method in order to rewrite implementation by types embdedding it.
+* *PackTxid* and *UnpackTxid* – Packs txid to store in database and vice versa.
+* *ParseTx* and *ParseTxFromJson* – Parse transaction from binary data or JSON and return *bchain.Tx.
+* PackTx* and *UnpackTx* – Pack transaction to binary data to store in database and vice versa.
+* *ParseBlock* – Parse block from binary data and return *bchain.Block*.
+
+Base type of parsers is *bchain.BaseParser*. It implements method *ParseTxFromJson* that would be same for all
+Bitcoin-like coins. Also implements *PackTx* and *UnpackTx* that pack and unpack transactions using protobuf. Note
+that Bitcoin store transactions in hex format.
+
+*bchain.BaseParser* stores pointer to function *bchain.AddressFactoryFunc* that is responsible for making human readable
+address representation. See [*bch.BCashParser*](/bchain/coins/bch/bcashparser.go) for example of implementation that uses
+different approach for address representation than Bitcoin.
+
 #### Add tests
 
 #### Deploy public server
