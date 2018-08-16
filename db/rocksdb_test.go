@@ -24,10 +24,9 @@ import (
 // takes only 1 byte if abs(n)<127
 
 func bitcoinTestnetParser() *btc.BitcoinParser {
-	return &btc.BitcoinParser{
-		BaseParser: &bchain.BaseParser{BlockAddressesToKeep: 1},
-		Params:     btc.GetChainParams("test"),
-	}
+	return btc.NewBitcoinParser(
+		btc.GetChainParams("test"),
+		&btc.Configuration{BlockAddressesToKeep: 1})
 }
 
 func setupRocksDB(t *testing.T, p bchain.BlockChainParser) *RocksDB {
@@ -60,6 +59,11 @@ func addressToPubKeyHex(addr string, t *testing.T, d *RocksDB) string {
 		t.Fatal(err)
 	}
 	return hex.EncodeToString(b)
+}
+
+func inputAddressToPubKeyHexWithLength(addr string, t *testing.T, d *RocksDB) string {
+	h := addressToPubKeyHex(addr, t, d)
+	return strconv.FormatInt(int64(len(h)/2), 16) + h
 }
 
 func addressToPubKeyHexWithLength(addr string, t *testing.T, d *RocksDB) string {
@@ -324,7 +328,7 @@ func getTestUTXOBlock2(t *testing.T, d *RocksDB) *bchain.Block {
 	}
 }
 
-func verifyAfterUTXOBlock1(t *testing.T, d *RocksDB) {
+func verifyAfterUTXOBlock1(t *testing.T, d *RocksDB, afterDisconnect bool) {
 	if err := checkColumn(d, cfHeight, []keyPair{
 		keyPair{"000370d5", "0000000076fbbed90fd75b0e18856aa35baa984e9c9d444cf746ad85e94e2997", nil},
 	}); err != nil {
@@ -376,9 +380,21 @@ func verifyAfterUTXOBlock1(t *testing.T, d *RocksDB) {
 			t.Fatal(err)
 		}
 	}
-	if err := checkColumn(d, cfBlockTxids, []keyPair{
-		keyPair{"000370d5", txidB1T1 + txidB1T2, nil},
-	}); err != nil {
+
+	var blockTxsKp []keyPair
+	if afterDisconnect {
+		blockTxsKp = []keyPair{}
+	} else {
+		blockTxsKp = []keyPair{
+			keyPair{
+				"000370d5",
+				txidB1T1 + "00" + txidB1T2 + "00",
+				nil,
+			},
+		}
+	}
+
+	if err := checkColumn(d, cfBlockTxs, blockTxsKp); err != nil {
 		{
 			t.Fatal(err)
 		}
@@ -432,8 +448,8 @@ func verifyAfterUTXOBlock2(t *testing.T, d *RocksDB) {
 		keyPair{
 			txidB2T1,
 			"02" +
-				addressToPubKeyHexWithLength(addr3, t, d) + bigintToHex(satB1T2A3) + "00" +
-				addressToPubKeyHexWithLength(addr2, t, d) + bigintToHex(satB1T1A2) + "01" +
+				inputAddressToPubKeyHexWithLength(addr3, t, d) + bigintToHex(satB1T2A3) +
+				inputAddressToPubKeyHexWithLength(addr2, t, d) + bigintToHex(satB1T1A2) +
 				"02" +
 				spentAddressToPubKeyHexWithLength(addr6, t, d) + bigintToHex(satB2T1A6) +
 				addressToPubKeyHexWithLength(addr7, t, d) + bigintToHex(satB2T1A7),
@@ -442,8 +458,8 @@ func verifyAfterUTXOBlock2(t *testing.T, d *RocksDB) {
 		keyPair{
 			txidB2T2,
 			"02" +
-				addressToPubKeyHexWithLength(addr6, t, d) + bigintToHex(satB2T1A6) + "00" +
-				addressToPubKeyHexWithLength(addr4, t, d) + bigintToHex(satB1T2A4) + "01" +
+				inputAddressToPubKeyHexWithLength(addr6, t, d) + bigintToHex(satB2T1A6) +
+				inputAddressToPubKeyHexWithLength(addr4, t, d) + bigintToHex(satB1T2A4) +
 				"02" +
 				addressToPubKeyHexWithLength(addr8, t, d) + bigintToHex(satB2T2A8) +
 				addressToPubKeyHexWithLength(addr9, t, d) + bigintToHex(satB2T2A9),
@@ -452,7 +468,7 @@ func verifyAfterUTXOBlock2(t *testing.T, d *RocksDB) {
 		keyPair{
 			txidB2T3,
 			"01" +
-				addressToPubKeyHexWithLength(addr5, t, d) + bigintToHex(satB1T2A5) + "02" +
+				inputAddressToPubKeyHexWithLength(addr5, t, d) + bigintToHex(satB1T2A5) +
 				"01" +
 				addressToPubKeyHexWithLength(addr5, t, d) + bigintToHex(satB2T3A5),
 			nil,
@@ -477,8 +493,14 @@ func verifyAfterUTXOBlock2(t *testing.T, d *RocksDB) {
 			t.Fatal(err)
 		}
 	}
-	if err := checkColumn(d, cfBlockTxids, []keyPair{
-		keyPair{"000370d6", txidB2T1 + txidB2T2 + txidB2T3, nil},
+	if err := checkColumn(d, cfBlockTxs, []keyPair{
+		keyPair{
+			"000370d6",
+			txidB2T1 + "02" + txidB1T2 + "00" + txidB1T1 + "02" +
+				txidB2T2 + "02" + txidB2T1 + "00" + txidB1T2 + "02" +
+				txidB2T3 + "01" + txidB1T2 + "04",
+			nil,
+		},
 	}); err != nil {
 		{
 			t.Fatal(err)
@@ -548,8 +570,8 @@ func testTxCache(t *testing.T, d *RocksDB, b *bchain.Block, tx *bchain.Tx) {
 // 3) GetBestBlock, GetBlockHash
 // 4) Test tx caching functionality
 // 5) Disconnect block 2 - expect error
-// 6) Disconnect the block 2 using BlockTxids column
-// 7) Reconnect block 2 and disconnect blocks 1 and 2 using full scan - expect error
+// 6) Disconnect the block 2 using BlockTxs column
+// 7) Reconnect block 2 and check
 // After each step, the content of DB is examined and any difference against expected state is regarded as failure
 func TestRocksDB_Index_UTXO(t *testing.T) {
 	d := setupRocksDB(t, &testBitcoinParser{
@@ -562,7 +584,7 @@ func TestRocksDB_Index_UTXO(t *testing.T) {
 	if err := d.ConnectBlock(block1); err != nil {
 		t.Fatal(err)
 	}
-	verifyAfterUTXOBlock1(t, d)
+	verifyAfterUTXOBlock1(t, d, false)
 
 	// connect 2nd block - use some outputs from the 1st block as the inputs and 1 input uses tx from the same block
 	block2 := getTestUTXOBlock2(t, d)
@@ -645,13 +667,18 @@ func TestRocksDB_Index_UTXO(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	verifyAfterUTXOBlock1(t, d)
+	verifyAfterUTXOBlock1(t, d, true)
 	if err := checkColumn(d, cfTransactions, []keyPair{}); err != nil {
 		{
 			t.Fatal(err)
 		}
 	}
+
+	// connect block again and verify the state of db
+	if err := d.ConnectBlock(block2); err != nil {
+		t.Fatal(err)
+	}
+	verifyAfterUTXOBlock2(t, d)
 
 }
 
@@ -762,18 +789,16 @@ func Test_packTxAddresses_unpackTxAddresses(t *testing.T) {
 	}{
 		{
 			name: "1",
-			hex:  "022c001443aac20a116e09ea4f7914be1c55e4c17aa600b700e0392c001454633aa8bd2e552bd4e89c01e73c1b7905eb58460811207cb68a19987283bb55012d001443aac20a116e09ea4f7914be1c55e4c17aa600b70101",
+			hex:  "0216001443aac20a116e09ea4f7914be1c55e4c17aa600b70016001454633aa8bd2e552bd4e89c01e73c1b7905eb58460811207cb68a199872012d001443aac20a116e09ea4f7914be1c55e4c17aa600b70101",
 			data: &txAddresses{
 				inputs: []txInput{
 					{
 						addrID:   addressToOutput("tb1qgw4vyzs3dcy75nmezjlpc40yc9a2vq9hghdyt2", parser),
 						valueSat: *big.NewInt(0),
-						vout:     12345,
 					},
 					{
 						addrID:   addressToOutput("tb1q233n429a9e2jh48gnsq7w0qm0yz7kkzx0qczw8", parser),
 						valueSat: *big.NewInt(1234123421342341234),
-						vout:     56789,
 					},
 				},
 				outputs: []txOutput{
@@ -787,23 +812,20 @@ func Test_packTxAddresses_unpackTxAddresses(t *testing.T) {
 		},
 		{
 			name: "2",
-			hex:  "032ea9149eb21980dc9d413d8eac27314938b9da920ee53e8705021918f2c0012ea91409f70b896169c37981d2b54b371df0d81a136a2c870501dd7e28c0022ea914e371782582a4addb541362c55565d2cdf56f6498870501a1e35ec003052fa9141d9ca71efa36d814424ea6ca1437e67287aebe348705012aadcac02ea91424fbc77cdc62702ade74dcf989c15e5d3f9240bc870501664894c02fa914afbfb74ee994c7d45f6698738bc4226d065266f7870501a1e35ec03276a914d2a37ce20ac9ec4f15dd05a7c6e8e9fbdb99850e88ac043b9943603376a9146b2044146a4438e6e5bfbc65f147afeb64d14fbb88ac05012a05f200",
+			hex:  "0317a9149eb21980dc9d413d8eac27314938b9da920ee53e8705021918f2c017a91409f70b896169c37981d2b54b371df0d81a136a2c870501dd7e28c017a914e371782582a4addb541362c55565d2cdf56f6498870501a1e35ec0052fa9141d9ca71efa36d814424ea6ca1437e67287aebe348705012aadcac02ea91424fbc77cdc62702ade74dcf989c15e5d3f9240bc870501664894c02fa914afbfb74ee994c7d45f6698738bc4226d065266f7870501a1e35ec03276a914d2a37ce20ac9ec4f15dd05a7c6e8e9fbdb99850e88ac043b9943603376a9146b2044146a4438e6e5bfbc65f147afeb64d14fbb88ac05012a05f200",
 			data: &txAddresses{
 				inputs: []txInput{
 					{
 						addrID:   addressToOutput("2N7iL7AvS4LViugwsdjTB13uN4T7XhV1bCP", parser),
 						valueSat: *big.NewInt(9011000000),
-						vout:     1,
 					},
 					{
 						addrID:   addressToOutput("2Mt9v216YiNBAzobeNEzd4FQweHrGyuRHze", parser),
 						valueSat: *big.NewInt(8011000000),
-						vout:     2,
 					},
 					{
 						addrID:   addressToOutput("2NDyqJpHvHnqNtL1F9xAeCWMAW8WLJmEMyD", parser),
 						valueSat: *big.NewInt(7011000000),
-						vout:     3,
 					},
 				},
 				outputs: []txOutput{
@@ -835,13 +857,12 @@ func Test_packTxAddresses_unpackTxAddresses(t *testing.T) {
 		},
 		{
 			name: "empty address",
-			hex:  "01000204d201020002162e010162",
+			hex:  "01000204d2020002162e010162",
 			data: &txAddresses{
 				inputs: []txInput{
 					{
 						addrID:   []byte{},
 						valueSat: *big.NewInt(1234),
-						vout:     1,
 					},
 				},
 				outputs: []txOutput{
