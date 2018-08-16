@@ -67,7 +67,7 @@ go build
 ## Example command
 To run blockbook with fast synchronization, connection to ZeroMQ and providing https and socket.io interface, with database in local directory *data* and connected to local bitcoind with configuration specified by parameter  *-blockchaincfg*:
 ```
-./blockbook -sync -blockchaincfg=configs/bitcoin_testnet.json -internal=127.0.0.1:8333 -public=127.0.0.1:8334 -certfile=server/testcert -logtostderr
+./blockbook -sync -blockchaincfg=configs/coins/bitcoin_testnet.json -internal=127.0.0.1:8333 -public=127.0.0.1:8334 -certfile=server/testcert -logtostderr
 ```
 Blockbook logs to stderr *-logtostderr* or to directory specified by parameter *-log_dir* . Verbosity of logs can be tuned by command line parameters *-v* and *-vmodule*, details at https://godoc.org/github.com/golang/glog
 
