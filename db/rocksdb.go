@@ -515,8 +515,10 @@ func (d *RocksDB) storeBalances(wb *gorocksdb.WriteBatch, abm map[string]*addrBa
 }
 
 func (d *RocksDB) storeAndCleanupBlockTxs(wb *gorocksdb.WriteBatch, block *bchain.Block) error {
-	buf := make([]byte, 0, d.chainParser.PackedTxidLen()*len(block.Txs))
+	pl := d.chainParser.PackedTxidLen()
+	buf := make([]byte, 0, pl*len(block.Txs))
 	varBuf := make([]byte, vlq.MaxLen64)
+	zeroTx := make([]byte, pl)
 	for i := range block.Txs {
 		tx := &block.Txs[i]
 		o := make([]outpoint, len(tx.Vin))
@@ -524,7 +526,12 @@ func (d *RocksDB) storeAndCleanupBlockTxs(wb *gorocksdb.WriteBatch, block *bchai
 			vin := &tx.Vin[v]
 			btxID, err := d.chainParser.PackTxid(vin.Txid)
 			if err != nil {
-				return err
+				// do not process inputs without input txid
+				if err == bchain.ErrTxidMissing {
+					btxID = zeroTx
+				} else {
+					return err
+				}
 			}
 			o[v].btxID = btxID
 			o[v].index = int32(vin.Vout)
