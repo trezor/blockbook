@@ -213,16 +213,25 @@ func (w *SyncWorker) ConnectBlocksParallel(lower, higher uint32) error {
 	writeBlockDone := make(chan struct{})
 	writeBlockWorker := func() {
 		defer close(writeBlockDone)
+		bc, err := w.db.InitBulkConnect()
+		if err != nil {
+			glog.Error("sync: InitBulkConnect error ", err)
+		}
 		lastBlock := lower - 1
+		keep := uint32(w.chain.GetChainParser().KeepBlockAddresses())
 		for b := range bch {
 			if lastBlock+1 != b.Height {
 				glog.Error("writeBlockWorker skipped block, last connected block", lastBlock, ", new block ", b.Height)
 			}
-			err := w.db.ConnectBlock(b)
+			err := bc.ConnectBlock(b, b.Height+keep > higher)
 			if err != nil {
 				glog.Error("writeBlockWorker ", b.Height, " ", b.Hash, " error ", err)
 			}
 			lastBlock = b.Height
+		}
+		err = bc.Close()
+		if err != nil {
+			glog.Error("sync: bulkconnect.Close error ", err)
 		}
 		glog.Info("WriteBlock exiting...")
 	}
@@ -276,6 +285,7 @@ func (w *SyncWorker) ConnectBlocksParallel(lower, higher uint32) error {
 	}
 	go writeBlockWorker()
 	var hash string
+	start := time.Now()
 ConnectLoop:
 	for h := lower; h <= higher; {
 		select {
@@ -292,7 +302,8 @@ ConnectLoop:
 			}
 			hch <- hashHeight{hash, h}
 			if h > 0 && h%1000 == 0 {
-				glog.Info("connecting block ", h, " ", hash)
+				glog.Info("connecting block ", h, " ", hash, ", elapsed ", time.Since(start))
+				start = time.Now()
 			}
 			h++
 		}

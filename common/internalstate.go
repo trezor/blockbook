@@ -11,6 +11,8 @@ const (
 	DbStateClosed = uint32(iota)
 	// DbStateOpen means db is open or application died without closing the db
 	DbStateOpen
+	// DbStateInconsistent means db is in inconsistent state and cannot be used
+	DbStateInconsistent
 )
 
 // InternalStateColumn contains the data of a db column

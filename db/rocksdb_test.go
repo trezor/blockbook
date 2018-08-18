@@ -5,6 +5,7 @@ package db
 import (
 	"blockbook/bchain"
 	"blockbook/bchain/coins/btc"
+	"blockbook/common"
 	"encoding/hex"
 	"fmt"
 	"io/ioutil"
@@ -720,7 +721,45 @@ func TestRocksDB_Index_UTXO(t *testing.T) {
 		t.Fatal(err)
 	}
 	verifyAfterUTXOBlock2(t, d)
+}
 
+func Test_BulkConnect_UTXO(t *testing.T) {
+	d := setupRocksDB(t, &testBitcoinParser{
+		BitcoinParser: bitcoinTestnetParser(),
+	})
+	defer closeAndDestroyRocksDB(t, d)
+
+	bc, err := d.InitBulkConnect()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if d.is.DbState != common.DbStateInconsistent {
+		t.Fatal("DB not in DbStateInconsistent")
+	}
+
+	if err := bc.ConnectBlock(getTestUTXOBlock1(t, d), false); err != nil {
+		t.Fatal(err)
+	}
+	if err := checkColumn(d, cfBlockTxs, []keyPair{}); err != nil {
+		{
+			t.Fatal(err)
+		}
+	}
+
+	if err := bc.ConnectBlock(getTestUTXOBlock2(t, d), true); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := bc.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	if d.is.DbState != common.DbStateOpen {
+		t.Fatal("DB not in DbStateOpen")
+	}
+
+	verifyAfterUTXOBlock2(t, d)
 }
 
 func Test_packBigint_unpackBigint(t *testing.T) {
