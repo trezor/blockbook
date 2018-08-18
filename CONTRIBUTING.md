@@ -150,4 +150,8 @@ different approach for address representation than Bitcoin.
 
 #### Add tests
 
+Add unit tests and integration tests. Tests are described [here](/docs/testing.md).
+
 #### Deploy public server
+
+Deploy Blockbook server on public IP addres. Blockbook maintainers will check implementation before merging.
