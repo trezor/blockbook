@@ -6,6 +6,7 @@ import (
 	"blockbook/bchain"
 	"blockbook/bchain/coins/btc"
 	"encoding/hex"
+	"math/big"
 	"reflect"
 	"testing"
 )
@@ -173,8 +174,8 @@ func init() {
 		},
 		Vout: []bchain.Vout{
 			{
-				Value: 0.21420790,
-				N:     0,
+				ValueSat: *big.NewInt(21420790),
+				N:        0,
 				ScriptPubKey: bchain.ScriptPubKey{
 					Hex: "76a914fb69fe6dcfe88557dc0ce0ea65bd7cf02f5e4f5b88ac",
 					Addresses: []string{
@@ -184,8 +185,8 @@ func init() {
 				Address: addr1,
 			},
 			{
-				Value: 14.68857739,
-				N:     1,
+				ValueSat: *big.NewInt(1468857739),
+				N:        1,
 				ScriptPubKey: bchain.ScriptPubKey{
 					Hex: "76a914628d603ac50d656e3311ff0cd5490b4c5cdd92ea88ac",
 					Addresses: []string{
