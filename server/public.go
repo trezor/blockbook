@@ -113,8 +113,10 @@ func formatUnixTime(ut int64) string {
 	return time.Unix(ut, 0).Format(time.RFC1123)
 }
 
-func formatAmount(a float64) string {
-	return strings.TrimRight(strings.TrimRight(fmt.Sprintf("%0.8f", a), "0"), ".")
+// for now return the string as it is
+// in future could be used to do coin specific formatting
+func formatAmount(a string) string {
+	return a
 }
 
 // Run starts the server

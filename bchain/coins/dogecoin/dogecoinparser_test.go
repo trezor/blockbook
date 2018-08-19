@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io/ioutil"
+	"math/big"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -111,8 +112,8 @@ func init() {
 		},
 		Vout: []bchain.Vout{
 			{
-				Value: 27478.75452951,
-				N:     0,
+				ValueSat: *big.NewInt(2747875452951),
+				N:        0,
 				ScriptPubKey: bchain.ScriptPubKey{
 					Hex: "76a914eef21768a546590993e313c7f3dfadf6a6efa1e888ac",
 					Addresses: []string{
@@ -122,8 +123,8 @@ func init() {
 				Address: addr1,
 			},
 			{
-				Value: 74.20567469,
-				N:     1,
+				ValueSat: *big.NewInt(7420567469),
+				N:        1,
 				ScriptPubKey: bchain.ScriptPubKey{
 					Hex: "76a914e0fee2ea29dd9c6c759d8341bd0da4c4f738cced88ac",
 					Addresses: []string{
@@ -153,8 +154,8 @@ func init() {
 		},
 		Vout: []bchain.Vout{
 			{
-				Value: 59890867.89818935,
-				N:     0,
+				ValueSat: *big.NewInt(5989086789818935),
+				N:        0,
 				ScriptPubKey: bchain.ScriptPubKey{
 					Hex: "76a9149355c01ed20057eac9fe0bbf8b07d87e62fe712d88ac",
 					Addresses: []string{
@@ -164,8 +165,8 @@ func init() {
 				Address: addr3,
 			},
 			{
-				Value: 9999998.90000000,
-				N:     1,
+				ValueSat: *big.NewInt(999999890000000),
+				N:        1,
 				ScriptPubKey: bchain.ScriptPubKey{
 					Hex: "76a9145b4f2511c94e4fcaa8f8835b2458f8cb6542ca7688ac",
 					Addresses: []string{

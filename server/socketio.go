@@ -7,6 +7,7 @@ import (
 	"blockbook/db"
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -236,11 +237,11 @@ type txInputs struct {
 	// ScriptAsm   *string `json:"scriptAsm"`
 	Sequence int64   `json:"sequence"`
 	Address  *string `json:"address"`
-	Satoshis int64   `json:"satoshis"`
+	Satoshis string  `json:"satoshis"`
 }
 
 type txOutputs struct {
-	Satoshis int64   `json:"satoshis"`
+	Satoshis string  `json:"satoshis"`
 	Script   *string `json:"script"`
 	// ScriptAsm   *string `json:"scriptAsm"`
 	SpentTxID   *string `json:"spentTxId,omitempty"`
@@ -267,7 +268,7 @@ type resTx struct {
 
 type addressHistoryItem struct {
 	Addresses     map[string]addressHistoryIndexes `json:"addresses"`
-	Satoshis      int64                            `json:"satoshis"`
+	Satoshis      string                           `json:"satoshis"`
 	Confirmations int                              `json:"confirmations"`
 	Tx            resTx                            `json:"tx"`
 }
@@ -329,7 +330,7 @@ func (s *SocketIoServer) getAddressHistory(addr []string, opts *addrOpts) (res r
 			for _, vout := range tx.Vout {
 				aoh := vout.ScriptPubKey.Hex
 				ao := txOutputs{
-					Satoshis: int64(vout.Value*1E8 + 0.5),
+					Satoshis: vout.ValueSat.String(),
 					Script:   &aoh,
 				}
 				if vout.Address != nil {
@@ -452,6 +453,7 @@ func unmarshalEstimateSmartFee(params []byte) (blocks int, conservative bool, er
 }
 
 type resultEstimateSmartFee struct {
+	// for compatibility reasons use float64
 	Result float64 `json:"result"`
 }
 
@@ -460,7 +462,7 @@ func (s *SocketIoServer) estimateSmartFee(blocks int, conservative bool) (res re
 	if err != nil {
 		return
 	}
-	res.Result = fee
+	res.Result, err = strconv.ParseFloat(s.chainParser.AmountToDecimalString(&fee), 64)
 	return
 }
 
@@ -479,6 +481,7 @@ func unmarshalEstimateFee(params []byte) (blocks int, err error) {
 }
 
 type resultEstimateFee struct {
+	// for compatibility reasons use float64
 	Result float64 `json:"result"`
 }
 
@@ -487,7 +490,7 @@ func (s *SocketIoServer) estimateFee(blocks int) (res resultEstimateFee, err err
 	if err != nil {
 		return
 	}
-	res.Result = fee
+	res.Result, err = strconv.ParseFloat(s.chainParser.AmountToDecimalString(&fee), 64)
 	return
 }
 
@@ -588,7 +591,7 @@ func (s *SocketIoServer) getDetailedTransaction(txid string) (res resultGetDetai
 					a := vout.Address.String()
 					ai.Address = &a
 				}
-				ai.Satoshis = int64(vout.Value*1E8 + 0.5)
+				ai.Satoshis = vout.ValueSat.String()
 			}
 		}
 		hi = append(hi, ai)
@@ -596,7 +599,7 @@ func (s *SocketIoServer) getDetailedTransaction(txid string) (res resultGetDetai
 	for _, vout := range tx.Vout {
 		aos := vout.ScriptPubKey.Hex
 		ao := txOutputs{
-			Satoshis: int64(vout.Value*1E8 + 0.5),
+			Satoshis: vout.ValueSat.String(),
 			Script:   &aos,
 		}
 		if vout.Address != nil {

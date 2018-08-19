@@ -213,16 +213,25 @@ func (w *SyncWorker) ConnectBlocksParallel(lower, higher uint32) error {
 	writeBlockDone := make(chan struct{})
 	writeBlockWorker := func() {
 		defer close(writeBlockDone)
+		bc, err := w.db.InitBulkConnect()
+		if err != nil {
+			glog.Error("sync: InitBulkConnect error ", err)
+		}
 		lastBlock := lower - 1
+		keep := uint32(w.chain.GetChainParser().KeepBlockAddresses())
 		for b := range bch {
 			if lastBlock+1 != b.Height {
 				glog.Error("writeBlockWorker skipped block, last connected block", lastBlock, ", new block ", b.Height)
 			}
-			err := w.db.ConnectBlock(b)
+			err := bc.ConnectBlock(b, b.Height+keep > higher)
 			if err != nil {
 				glog.Error("writeBlockWorker ", b.Height, " ", b.Hash, " error ", err)
 			}
 			lastBlock = b.Height
+		}
+		err = bc.Close()
+		if err != nil {
+			glog.Error("sync: bulkconnect.Close error ", err)
 		}
 		glog.Info("WriteBlock exiting...")
 	}
@@ -276,6 +285,7 @@ func (w *SyncWorker) ConnectBlocksParallel(lower, higher uint32) error {
 	}
 	go writeBlockWorker()
 	var hash string
+	start := time.Now()
 ConnectLoop:
 	for h := lower; h <= higher; {
 		select {
@@ -292,7 +302,8 @@ ConnectLoop:
 			}
 			hch <- hashHeight{hash, h}
 			if h > 0 && h%1000 == 0 {
-				glog.Info("connecting block ", h, " ", hash)
+				glog.Info("connecting block ", h, " ", hash, ", elapsed ", time.Since(start))
+				start = time.Now()
 			}
 			h++
 		}
@@ -346,25 +357,23 @@ func (w *SyncWorker) getBlockChain(out chan blockResult, done chan struct{}) {
 }
 
 // DisconnectBlocks removes all data belonging to blocks in range lower-higher,
-// using block data from blockchain, if they are available,
-// otherwise doing full scan
 func (w *SyncWorker) DisconnectBlocks(lower uint32, higher uint32, hashes []string) error {
 	glog.Infof("sync: disconnecting blocks %d-%d", lower, higher)
-	// if the chain uses Block to Addresses mapping, always use DisconnectBlockRange
-	if w.chain.GetChainParser().KeepBlockAddresses() > 0 {
-		return w.db.DisconnectBlockRange(lower, higher)
+	// if the chain is UTXO, always use DisconnectBlockRange
+	if w.chain.GetChainParser().IsUTXOChain() {
+		return w.db.DisconnectBlockRangeUTXO(lower, higher)
 	}
 	blocks := make([]*bchain.Block, len(hashes))
 	var err error
-	// get all blocks first to see if we can avoid full scan
+	// try to get all blocks first to see if we can avoid full scan
 	for i, hash := range hashes {
 		blocks[i], err = w.chain.GetBlock(hash, 0)
 		if err != nil {
 			// cannot get a block, we must do full range scan
-			return w.db.DisconnectBlockRange(lower, higher)
+			return w.db.DisconnectBlockRangeNonUTXO(lower, higher)
 		}
 	}
-	// then disconnect one after another
+	// got all blocks to be disconnected, disconnect them one after another
 	for i, block := range blocks {
 		glog.Info("Disconnecting block ", (int(higher) - i), " ", block.Hash)
 		if err = w.db.DisconnectBlock(block); err != nil {

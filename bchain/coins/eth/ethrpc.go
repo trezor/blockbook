@@ -479,12 +479,12 @@ func (b *EthereumRPC) GetMempool() ([]string, error) {
 }
 
 // EstimateFee returns fee estimation.
-func (b *EthereumRPC) EstimateFee(blocks int) (float64, error) {
+func (b *EthereumRPC) EstimateFee(blocks int) (big.Int, error) {
 	return b.EstimateSmartFee(blocks, true)
 }
 
 // EstimateSmartFee returns fee estimation.
-func (b *EthereumRPC) EstimateSmartFee(blocks int, conservative bool) (float64, error) {
+func (b *EthereumRPC) EstimateSmartFee(blocks int, conservative bool) (big.Int, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
 	defer cancel()
 	// TODO - what parameters of msg to use to get better estimate, maybe more data from the wallet are needed
@@ -493,10 +493,12 @@ func (b *EthereumRPC) EstimateSmartFee(blocks int, conservative bool) (float64, 
 		To: &a,
 	}
 	g, err := b.client.EstimateGas(ctx, msg)
+	var r big.Int
 	if err != nil {
-		return 0, err
+		return r, err
 	}
-	return float64(g), nil
+	r.SetUint64(g)
+	return r, nil
 }
 
 // SendRawTransaction sends raw transaction.

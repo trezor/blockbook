@@ -22,6 +22,7 @@ func NewZCashRPC(config json.RawMessage, pushHandler func(bchain.NotificationTyp
 		BitcoinRPC: b.(*btc.BitcoinRPC),
 	}
 	z.RPCMarshaler = btc.JSONMarshalerV1{}
+	z.ChainConfig.SupportsEstimateSmartFee = false
 	return z, nil
 }
 
@@ -112,14 +113,6 @@ func isInvalidTx(err error) bool {
 // It could be optimized for mempool, i.e. without block time and confirmations
 func (z *ZCashRPC) GetTransactionForMempool(txid string) (*bchain.Tx, error) {
 	return z.GetTransaction(txid)
-}
-
-// EstimateSmartFee returns fee estimation.
-func (z *ZCashRPC) EstimateSmartFee(blocks int, conservative bool) (float64, error) {
-	glog.V(1).Info("rpc: estimatesmartfee")
-
-	// return z.estimateFee(blocks)
-	return z.EstimateFee(blocks)
 }
 
 // GetMempoolEntry returns mempool data for given transaction

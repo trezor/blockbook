@@ -175,7 +175,11 @@ func main() {
 	}
 	index.SetInternalState(internalState)
 	if internalState.DbState != common.DbStateClosed {
-		glog.Warning("internalState: database in not closed state ", internalState.DbState, ", possibly previous ungraceful shutdown")
+		if internalState.DbState == common.DbStateInconsistent {
+			glog.Error("internalState: database is in inconsistent state and cannot be used")
+			return
+		}
+		glog.Warning("internalState: database was left in open state, possibly previous ungraceful shutdown")
 	}
 
 	if *computeColumnStats {

@@ -12,6 +12,7 @@
             "blocktime":1529571678,
             "time":1529571678,
             "locktime": 0,
+            "version": 1,
             "vin": [
                 {
                     "coinbase": "03fbf212055374617368",
@@ -34,6 +35,7 @@
             "blocktime":1529571678,
             "time":1529571678,
             "locktime": 0,
+            "version": 1,
             "vin": [
                 {
                     "txid": "58ff2450a71b3c228d17d04ec8edcaae452bc97d5ccc4591e2741fd8b031d221",

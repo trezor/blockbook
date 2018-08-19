@@ -49,6 +49,7 @@ func NewBCashParser(params *chaincfg.Params, c *btc.Configuration) (*BCashParser
 			BaseParser: &bchain.BaseParser{
 				AddressFactory:       func(addr string) (bchain.Address, error) { return newBCashAddress(addr, format) },
 				BlockAddressesToKeep: c.BlockAddressesToKeep,
+				AmountDecimalPoint:   8,
 			},
 			Params: params,
 			OutputScriptToAddressesFunc: outputScriptToAddresses,

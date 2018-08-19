@@ -20,12 +20,13 @@ type ZCashParser struct {
 	*bchain.BaseParser
 }
 
-// NewZCAshParser returns new ZCAshParser instance
+// NewZCashParser returns new ZCashParser instance
 func NewZCashParser(c *btc.Configuration) *ZCashParser {
 	return &ZCashParser{
 		&bchain.BaseParser{
 			AddressFactory:       bchain.NewBaseAddress,
 			BlockAddressesToKeep: c.BlockAddressesToKeep,
+			AmountDecimalPoint:   8,
 		},
 	}
 }

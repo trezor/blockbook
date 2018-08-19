@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/big"
 )
 
 // errors with specific meaning returned by blockchain rpc
@@ -49,7 +50,8 @@ type Address interface {
 }
 
 type Vout struct {
-	Value        float64      `json:"value"`
+	ValueSat     big.Int
+	JsonValue    json.Number  `json:"value"`
 	N            uint32       `json:"n"`
 	ScriptPubKey ScriptPubKey `json:"scriptPubKey"`
 	Address      Address
@@ -89,18 +91,20 @@ type BlockHeader struct {
 }
 
 type MempoolEntry struct {
-	Size            uint32   `json:"size"`
-	Fee             float64  `json:"fee"`
-	ModifiedFee     float64  `json:"modifiedfee"`
-	Time            float64  `json:"time"`
-	Height          uint32   `json:"height"`
-	DescendantCount uint32   `json:"descendantcount"`
-	DescendantSize  uint32   `json:"descendantsize"`
-	DescendantFees  uint32   `json:"descendantfees"`
-	AncestorCount   uint32   `json:"ancestorcount"`
-	AncestorSize    uint32   `json:"ancestorsize"`
-	AncestorFees    uint32   `json:"ancestorfees"`
-	Depends         []string `json:"depends"`
+	Size            uint32 `json:"size"`
+	FeeSat          big.Int
+	Fee             json.Number `json:"fee"`
+	ModifiedFeeSat  big.Int
+	ModifiedFee     json.Number `json:"modifiedfee"`
+	Time            uint64      `json:"time"`
+	Height          uint32      `json:"height"`
+	DescendantCount uint32      `json:"descendantcount"`
+	DescendantSize  uint32      `json:"descendantsize"`
+	DescendantFees  uint32      `json:"descendantfees"`
+	AncestorCount   uint32      `json:"ancestorcount"`
+	AncestorSize    uint32      `json:"ancestorsize"`
+	AncestorFees    uint32      `json:"ancestorfees"`
+	Depends         []string    `json:"depends"`
 }
 
 type RPCError struct {
@@ -132,8 +136,8 @@ type BlockChain interface {
 	GetMempool() ([]string, error)
 	GetTransaction(txid string) (*Tx, error)
 	GetTransactionForMempool(txid string) (*Tx, error)
-	EstimateSmartFee(blocks int, conservative bool) (float64, error)
-	EstimateFee(blocks int) (float64, error)
+	EstimateSmartFee(blocks int, conservative bool) (big.Int, error)
+	EstimateFee(blocks int) (big.Int, error)
 	SendRawTransaction(tx string) (string, error)
 	// mempool
 	ResyncMempool(onNewTxAddr func(txid string, addr string)) (int, error)
@@ -145,7 +149,7 @@ type BlockChain interface {
 
 // BlockChainParser defines common interface to parsing and conversions of block chain data
 type BlockChainParser interface {
-	// self description
+	// chain configuration description
 	// UTXO chains need "inputs" column in db, that map transactions to transactions that spend them
 	// non UTXO chains have mapping of address to input and output transactions directly in "outputs" column in db
 	IsUTXOChain() bool
@@ -153,6 +157,11 @@ type BlockChainParser interface {
 	// and used in case of fork
 	// if 0 the blockaddresses column is not used at all (usually non UTXO chains)
 	KeepBlockAddresses() int
+	// AmountToDecimalString converts amount in big.Int to string with decimal point in the correct place
+	AmountToDecimalString(a *big.Int) string
+	// AmountToBigInt converts amount in json.Number (string) to big.Int
+	// it uses string operations to avoid problems with rounding
+	AmountToBigInt(n json.Number) (big.Int, error)
 	// address id conversions
 	GetAddrIDFromVout(output *Vout) ([]byte, error)
 	GetAddrIDFromAddress(address string) ([]byte, error)

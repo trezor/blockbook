@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"math/big"
 	"reflect"
 	"time"
 
@@ -175,12 +176,12 @@ func (c *blockChainWithMetrics) GetTransactionForMempool(txid string) (v *bchain
 	return c.b.GetTransactionForMempool(txid)
 }
 
-func (c *blockChainWithMetrics) EstimateSmartFee(blocks int, conservative bool) (v float64, err error) {
+func (c *blockChainWithMetrics) EstimateSmartFee(blocks int, conservative bool) (v big.Int, err error) {
 	defer func(s time.Time) { c.observeRPCLatency("EstimateSmartFee", s, err) }(time.Now())
 	return c.b.EstimateSmartFee(blocks, conservative)
 }
 
-func (c *blockChainWithMetrics) EstimateFee(blocks int) (v float64, err error) {
+func (c *blockChainWithMetrics) EstimateFee(blocks int) (v big.Int, err error) {
 	defer func(s time.Time) { c.observeRPCLatency("EstimateFee", s, err) }(time.Now())
 	return c.b.EstimateFee(blocks)
 }

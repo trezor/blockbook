@@ -24,6 +24,7 @@ func NewLitecoinRPC(config json.RawMessage, pushHandler func(bchain.Notification
 		b.(*btc.BitcoinRPC),
 	}
 	s.RPCMarshaler = btc.JSONMarshalerV2{}
+	s.ChainConfig.SupportsEstimateFee = false
 
 	return s, nil
 }
@@ -53,9 +54,4 @@ func (b *LitecoinRPC) Initialize() error {
 	glog.Info("rpc: block chain ", params.Name)
 
 	return nil
-}
-
-// EstimateFee returns fee estimation.
-func (b *LitecoinRPC) EstimateFee(blocks int) (float64, error) {
-	return b.EstimateSmartFee(blocks, true)
 }
