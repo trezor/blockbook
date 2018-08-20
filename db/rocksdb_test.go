@@ -721,6 +721,66 @@ func TestRocksDB_Index_UTXO(t *testing.T) {
 		t.Fatal(err)
 	}
 	verifyAfterUTXOBlock2(t, d)
+
+	// test public methods for address balance and tx addresses
+
+	ab, err := d.GetAddressBalance(addr5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	abw := &AddrBalance{
+		Txs:        2,
+		SentSat:    *satB1T2A5,
+		BalanceSat: *satB2T3A5,
+	}
+	if !reflect.DeepEqual(ab, abw) {
+		t.Errorf("GetAddressBalance() = %+v, want %+v", ab, abw)
+	}
+	rs := ab.ReceivedSat()
+	rsw := satB1T2A5.Add(satB1T2A5, satB2T3A5)
+	if rs.Cmp(rsw) != 0 {
+		t.Errorf("GetAddressBalance().ReceivedSat() = %v, want %v", rs, rsw)
+	}
+
+	ta, err := d.GetTxAddresses(txidB2T1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	taw := &TxAddresses{
+		Inputs: []TxInput{
+			{
+				addrID:   addressToOutput(addr3, d.chainParser),
+				ValueSat: *satB1T2A3,
+			},
+			{
+				addrID:   addressToOutput(addr2, d.chainParser),
+				ValueSat: *satB1T1A2,
+			},
+		},
+		Outputs: []TxOutput{
+			{
+				addrID:   addressToOutput(addr6, d.chainParser),
+				Spent:    true,
+				ValueSat: *satB2T1A6,
+			},
+			{
+				addrID:   addressToOutput(addr7, d.chainParser),
+				Spent:    false,
+				ValueSat: *satB2T1A7,
+			},
+		},
+	}
+	if !reflect.DeepEqual(ta, taw) {
+		t.Errorf("GetTxAddresses() = %+v, want %+v", ta, taw)
+	}
+	ia, err := ta.Inputs[0].Addresses(d.chainParser)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(ia, []string{addr3}) {
+		t.Errorf("GetTxAddresses().Inputs[0].Addresses() = %v, want %v", ia, []string{addr3})
+	}
+
 }
 
 func Test_BulkConnect_UTXO(t *testing.T) {
@@ -852,7 +912,7 @@ func Test_packBigint_unpackBigint(t *testing.T) {
 	}
 }
 
-func addressToOutput(addr string, parser *btc.BitcoinParser) []byte {
+func addressToOutput(addr string, parser bchain.BlockChainParser) []byte {
 	b, err := parser.AddressToOutputScript(addr)
 	if err != nil {
 		panic(err)
@@ -865,27 +925,27 @@ func Test_packTxAddresses_unpackTxAddresses(t *testing.T) {
 	tests := []struct {
 		name string
 		hex  string
-		data *txAddresses
+		data *TxAddresses
 	}{
 		{
 			name: "1",
 			hex:  "0216001443aac20a116e09ea4f7914be1c55e4c17aa600b70016001454633aa8bd2e552bd4e89c01e73c1b7905eb58460811207cb68a199872012d001443aac20a116e09ea4f7914be1c55e4c17aa600b70101",
-			data: &txAddresses{
-				inputs: []txInput{
+			data: &TxAddresses{
+				Inputs: []TxInput{
 					{
 						addrID:   addressToOutput("tb1qgw4vyzs3dcy75nmezjlpc40yc9a2vq9hghdyt2", parser),
-						valueSat: *big.NewInt(0),
+						ValueSat: *big.NewInt(0),
 					},
 					{
 						addrID:   addressToOutput("tb1q233n429a9e2jh48gnsq7w0qm0yz7kkzx0qczw8", parser),
-						valueSat: *big.NewInt(1234123421342341234),
+						ValueSat: *big.NewInt(1234123421342341234),
 					},
 				},
-				outputs: []txOutput{
+				Outputs: []TxOutput{
 					{
 						addrID:   addressToOutput("tb1qgw4vyzs3dcy75nmezjlpc40yc9a2vq9hghdyt2", parser),
-						valueSat: *big.NewInt(1),
-						spent:    true,
+						ValueSat: *big.NewInt(1),
+						Spent:    true,
 					},
 				},
 			},
@@ -893,44 +953,44 @@ func Test_packTxAddresses_unpackTxAddresses(t *testing.T) {
 		{
 			name: "2",
 			hex:  "0317a9149eb21980dc9d413d8eac27314938b9da920ee53e8705021918f2c017a91409f70b896169c37981d2b54b371df0d81a136a2c870501dd7e28c017a914e371782582a4addb541362c55565d2cdf56f6498870501a1e35ec0052fa9141d9ca71efa36d814424ea6ca1437e67287aebe348705012aadcac02ea91424fbc77cdc62702ade74dcf989c15e5d3f9240bc870501664894c02fa914afbfb74ee994c7d45f6698738bc4226d065266f7870501a1e35ec03276a914d2a37ce20ac9ec4f15dd05a7c6e8e9fbdb99850e88ac043b9943603376a9146b2044146a4438e6e5bfbc65f147afeb64d14fbb88ac05012a05f200",
-			data: &txAddresses{
-				inputs: []txInput{
+			data: &TxAddresses{
+				Inputs: []TxInput{
 					{
 						addrID:   addressToOutput("2N7iL7AvS4LViugwsdjTB13uN4T7XhV1bCP", parser),
-						valueSat: *big.NewInt(9011000000),
+						ValueSat: *big.NewInt(9011000000),
 					},
 					{
 						addrID:   addressToOutput("2Mt9v216YiNBAzobeNEzd4FQweHrGyuRHze", parser),
-						valueSat: *big.NewInt(8011000000),
+						ValueSat: *big.NewInt(8011000000),
 					},
 					{
 						addrID:   addressToOutput("2NDyqJpHvHnqNtL1F9xAeCWMAW8WLJmEMyD", parser),
-						valueSat: *big.NewInt(7011000000),
+						ValueSat: *big.NewInt(7011000000),
 					},
 				},
-				outputs: []txOutput{
+				Outputs: []TxOutput{
 					{
 						addrID:   addressToOutput("2MuwoFGwABMakU7DCpdGDAKzyj2nTyRagDP", parser),
-						valueSat: *big.NewInt(5011000000),
-						spent:    true,
+						ValueSat: *big.NewInt(5011000000),
+						Spent:    true,
 					},
 					{
 						addrID:   addressToOutput("2Mvcmw7qkGXNWzkfH1EjvxDcNRGL1Kf2tEM", parser),
-						valueSat: *big.NewInt(6011000000),
+						ValueSat: *big.NewInt(6011000000),
 					},
 					{
 						addrID:   addressToOutput("2N9GVuX3XJGHS5MCdgn97gVezc6EgvzikTB", parser),
-						valueSat: *big.NewInt(7011000000),
-						spent:    true,
+						ValueSat: *big.NewInt(7011000000),
+						Spent:    true,
 					},
 					{
 						addrID:   addressToOutput("mzii3fuRSpExMLJEHdHveW8NmiX8MPgavk", parser),
-						valueSat: *big.NewInt(999900000),
+						ValueSat: *big.NewInt(999900000),
 					},
 					{
 						addrID:   addressToOutput("mqHPFTRk23JZm9W1ANuEFtwTYwxjESSgKs", parser),
-						valueSat: *big.NewInt(5000000000),
-						spent:    true,
+						ValueSat: *big.NewInt(5000000000),
+						Spent:    true,
 					},
 				},
 			},
@@ -938,22 +998,22 @@ func Test_packTxAddresses_unpackTxAddresses(t *testing.T) {
 		{
 			name: "empty address",
 			hex:  "01000204d2020002162e010162",
-			data: &txAddresses{
-				inputs: []txInput{
+			data: &TxAddresses{
+				Inputs: []TxInput{
 					{
 						addrID:   []byte{},
-						valueSat: *big.NewInt(1234),
+						ValueSat: *big.NewInt(1234),
 					},
 				},
-				outputs: []txOutput{
+				Outputs: []TxOutput{
 					{
 						addrID:   []byte{},
-						valueSat: *big.NewInt(5678),
+						ValueSat: *big.NewInt(5678),
 					},
 					{
 						addrID:   []byte{},
-						valueSat: *big.NewInt(98),
-						spent:    true,
+						ValueSat: *big.NewInt(98),
+						Spent:    true,
 					},
 				},
 			},
@@ -961,9 +1021,9 @@ func Test_packTxAddresses_unpackTxAddresses(t *testing.T) {
 		{
 			name: "empty",
 			hex:  "0000",
-			data: &txAddresses{
-				inputs:  []txInput{},
-				outputs: []txOutput{},
+			data: &TxAddresses{
+				Inputs:  []TxInput{},
+				Outputs: []TxOutput{},
 			},
 		},
 	}
