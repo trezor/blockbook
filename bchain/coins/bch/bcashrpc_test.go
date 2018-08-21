@@ -3,8 +3,8 @@
 package bch
 
 import (
-	"blockbook/bchain"
-	"blockbook/bchain/tests/rpc"
+	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/bchain/tests/rpc"
 	"encoding/json"
 	"flag"
 	"os"

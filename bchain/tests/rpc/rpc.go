@@ -3,7 +3,7 @@
 package rpc
 
 import (
-	"blockbook/bchain"
+	"github.com/trezor/blockbook/bchain"
 	"encoding/json"
 	"math/rand"
 	"net"

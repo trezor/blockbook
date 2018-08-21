@@ -1,9 +1,9 @@
 package api
 
 import (
-	"blockbook/bchain"
-	"blockbook/common"
-	"blockbook/db"
+	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/common"
+	"github.com/trezor/blockbook/db"
 
 	"github.com/golang/glog"
 )

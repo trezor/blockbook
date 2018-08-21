@@ -1,7 +1,7 @@
 package btc
 
 import (
-	"blockbook/bchain"
+	"github.com/trezor/blockbook/bchain"
 	"bytes"
 	"context"
 	"encoding/hex"

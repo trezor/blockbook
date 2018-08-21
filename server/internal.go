@@ -1,9 +1,9 @@
 package server
 
 import (
-	"blockbook/bchain"
-	"blockbook/common"
-	"blockbook/db"
+	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/common"
+	"github.com/trezor/blockbook/db"
 	"context"
 	"encoding/json"
 	"errors"

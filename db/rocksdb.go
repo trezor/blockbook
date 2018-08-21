@@ -1,8 +1,8 @@
 package db
 
 import (
-	"blockbook/bchain"
-	"blockbook/common"
+	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/common"
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
