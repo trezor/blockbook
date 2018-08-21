@@ -535,6 +535,7 @@ func (to *TxOutput) Addresses(p bchain.BlockChainParser) ([]string, error) {
 }
 
 type TxAddresses struct {
+	Height  uint32
 	Inputs  []TxInput
 	Outputs []TxOutput
 }
@@ -569,6 +570,7 @@ func (d *RocksDB) resetValueSatToZero(valueSat *big.Int, addrID []byte, logText 
 
 func (d *RocksDB) processAddressesUTXO(block *bchain.Block, addresses map[string][]outpoint, txAddressesMap map[string]*TxAddresses, balances map[string]*AddrBalance) error {
 	blockTxIDs := make([][]byte, len(block.Txs))
+	blockTxAddresses := make([]*TxAddresses, len(block.Txs))
 	// first process all outputs so that inputs can point to txs in this block
 	for txi := range block.Txs {
 		tx := &block.Txs[txi]
@@ -577,9 +579,10 @@ func (d *RocksDB) processAddressesUTXO(block *bchain.Block, addresses map[string
 			return err
 		}
 		blockTxIDs[txi] = btxID
-		ta := TxAddresses{}
+		ta := TxAddresses{Height: block.Height}
 		ta.Outputs = make([]TxOutput, len(tx.Vout))
 		txAddressesMap[string(btxID)] = &ta
+		blockTxAddresses[txi] = &ta
 		for i, output := range tx.Vout {
 			tao := &ta.Outputs[i]
 			tao.ValueSat = output.ValueSat
@@ -629,7 +632,7 @@ func (d *RocksDB) processAddressesUTXO(block *bchain.Block, addresses map[string
 	for txi := range block.Txs {
 		tx := &block.Txs[txi]
 		spendingTxid := blockTxIDs[txi]
-		ta := txAddressesMap[string(spendingTxid)]
+		ta := blockTxAddresses[txi]
 		ta.Inputs = make([]TxInput, len(tx.Vin))
 		for i, input := range tx.Vin {
 			tai := &ta.Inputs[i]
@@ -874,8 +877,8 @@ func (d *RocksDB) getTxAddresses(btxID []byte) (*TxAddresses, error) {
 	}
 	defer val.Free()
 	buf := val.Data()
-	// 2 is minimum length of addrBalance - 1 byte inputs len, 1 byte outputs len
-	if len(buf) < 2 {
+	// 2 is minimum length of addrBalance - 1 byte height, 1 byte inputs len, 1 byte outputs len
+	if len(buf) < 3 {
 		return nil, nil
 	}
 	return unpackTxAddresses(buf)
@@ -892,7 +895,9 @@ func (d *RocksDB) GetTxAddresses(txid string) (*TxAddresses, error) {
 
 func packTxAddresses(ta *TxAddresses, buf []byte, varBuf []byte) []byte {
 	buf = buf[:0]
-	l := packVaruint(uint(len(ta.Inputs)), varBuf)
+	l := packVaruint(uint(ta.Height), varBuf)
+	buf = append(buf, varBuf[:l]...)
+	l = packVaruint(uint(len(ta.Inputs)), varBuf)
 	buf = append(buf, varBuf[:l]...)
 	for i := range ta.Inputs {
 		buf = appendTxInput(&ta.Inputs[i], buf, varBuf)
@@ -930,7 +935,10 @@ func appendTxOutput(txo *TxOutput, buf []byte, varBuf []byte) []byte {
 
 func unpackTxAddresses(buf []byte) (*TxAddresses, error) {
 	ta := TxAddresses{}
-	inputs, l := unpackVaruint(buf)
+	height, l := unpackVaruint(buf)
+	ta.Height = uint32(height)
+	inputs, ll := unpackVaruint(buf[l:])
+	l += ll
 	ta.Inputs = make([]TxInput, inputs)
 	for i := uint(0); i < inputs; i++ {
 		l += unpackTxInput(&ta.Inputs[i], buf[l:])
