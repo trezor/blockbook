@@ -731,10 +731,10 @@ func TestRocksDB_Index_UTXO(t *testing.T) {
 		t.Fatal(err)
 	}
 	iw := &BlockInfo{
-		Txid: "00000000eb0443fd7dc4a1ed5c686a8e995057805f9a161d9a5a77a95e72b7b6",
-		Txs:  4,
-		Size: 2345678,
-		Time: time.Unix(1534859123, 0),
+		BlockHash: "00000000eb0443fd7dc4a1ed5c686a8e995057805f9a161d9a5a77a95e72b7b6",
+		Txs:       4,
+		Size:      2345678,
+		Time:      time.Unix(1534859123, 0),
 	}
 	if !reflect.DeepEqual(info, iw) {
 		t.Errorf("GetAddressBalance() = %+v, want %+v", info, iw)

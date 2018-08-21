@@ -1125,10 +1125,10 @@ func (d *RocksDB) writeAddressesNonUTXO(wb *gorocksdb.WriteBatch, block *bchain.
 // Block index
 
 type BlockInfo struct {
-	Txid string
-	Time time.Time
-	Txs  uint32
-	Size uint32
+	BlockHash string
+	Time      time.Time
+	Txs       uint32
+	Size      uint32
 }
 
 func (d *RocksDB) packBlockInfo(block *bchain.Block) ([]byte, error) {
@@ -1161,10 +1161,10 @@ func (d *RocksDB) unpackBlockInfo(buf []byte) (*BlockInfo, error) {
 	txs, l := unpackVaruint(buf[pl+4:])
 	size, _ := unpackVaruint(buf[pl+4+l:])
 	return &BlockInfo{
-		Txid: txid,
-		Time: time.Unix(int64(t), 0),
-		Txs:  uint32(txs),
-		Size: uint32(size),
+		BlockHash: txid,
+		Time:      time.Unix(int64(t), 0),
+		Txs:       uint32(txs),
+		Size:      uint32(size),
 	}, nil
 }
 
@@ -1179,7 +1179,7 @@ func (d *RocksDB) GetBestBlock() (uint32, string, error) {
 			if glog.V(1) {
 				glog.Infof("rocksdb: bestblock %d %+v", bestHeight, info)
 			}
-			return bestHeight, info.Txid, err
+			return bestHeight, info.BlockHash, err
 		}
 	}
 	return 0, "", nil
@@ -1197,7 +1197,7 @@ func (d *RocksDB) GetBlockHash(height uint32) (string, error) {
 	if info == nil {
 		return "", err
 	}
-	return info.Txid, nil
+	return info.BlockHash, nil
 }
 
 // GetBlockInfo returns block info stored in db

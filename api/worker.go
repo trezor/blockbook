@@ -170,8 +170,57 @@ func UniqueTxidsInReverse(txids []string) []string {
 	return ut[i:]
 }
 
+func (w *Worker) txFromTxAddress(txid string, ta *db.TxAddresses, bi *db.BlockInfo, bestheight uint32) *Tx {
+	var valInSat, valOutSat, feesSat big.Int
+	vins := make([]Vin, len(ta.Inputs))
+	for i := range ta.Inputs {
+		tai := &ta.Inputs[i]
+		vin := &vins[i]
+		vin.N = i
+		vin.ValueSat = tai.ValueSat
+		vin.Value = w.chainParser.AmountToDecimalString(&vin.ValueSat)
+		valInSat.Add(&valInSat, &vin.ValueSat)
+		a, err := tai.Addresses(w.chainParser)
+		if err != nil && len(a) == 1 {
+			vin.Addr = a[0]
+		}
+	}
+	vouts := make([]Vout, len(ta.Outputs))
+	for i := range ta.Outputs {
+		tao := &ta.Outputs[i]
+		vout := &vouts[i]
+		vout.N = i
+		vout.ValueSat = tao.ValueSat
+		vout.Value = w.chainParser.AmountToDecimalString(&vout.ValueSat)
+		valOutSat.Add(&valOutSat, &vout.ValueSat)
+		a, err := tao.Addresses(w.chainParser)
+		if err != nil {
+			vout.ScriptPubKey.Addresses = a
+		}
+	}
+	// for coinbase transactions valIn is 0
+	feesSat.Sub(&valInSat, &valOutSat)
+	if feesSat.Sign() == -1 {
+		feesSat.SetUint64(0)
+	}
+	r := &Tx{
+		Blockhash:     bi.BlockHash,
+		Blockheight:   int(ta.Height),
+		Blocktime:     bi.Time.Unix(),
+		Confirmations: bestheight - ta.Height + 1,
+		Fees:          w.chainParser.AmountToDecimalString(&feesSat),
+		Time:          bi.Time.Unix(),
+		Txid:          txid,
+		ValueIn:       w.chainParser.AmountToDecimalString(&valInSat),
+		ValueOut:      w.chainParser.AmountToDecimalString(&valOutSat),
+		Vin:           vins,
+		Vout:          vouts,
+	}
+	return r
+}
+
 // GetAddress computes address value and gets transactions for given address
-func (w *Worker) GetAddressNew(address string, page int, txsOnPage int) (*Address, error) {
+func (w *Worker) GetAddress(address string, page int, txsOnPage int) (*Address, error) {
 	glog.Info(address, " start")
 	ba, err := w.db.GetAddressBalance(address)
 	if err != nil {
@@ -227,9 +276,29 @@ func (w *Worker) GetAddressNew(address string, page int, txsOnPage int) (*Addres
 		}
 	}
 	if len(txc) != int(ba.Txs) {
-		glog.Warning("DB inconsistency in address ", address, ": number of txs from column addresses ", len(txc), ", from addressBalance ", ba.Txs)
+		glog.Warning("DB inconsistency for address ", address, ": number of txs from column addresses ", len(txc), ", from addressBalance ", ba.Txs)
 	}
-
+	for i := from; i < to; i++ {
+		txid := txc[i]
+		ta, err := w.db.GetTxAddresses(txid)
+		if err != nil {
+			return nil, err
+		}
+		if ta == nil {
+			glog.Warning("DB inconsistency:  tx ", txid, ": not found in txAddresses")
+			continue
+		}
+		bi, err := w.db.GetBlockInfo(ta.Height)
+		if err != nil {
+			return nil, err
+		}
+		if bi == nil {
+			glog.Warning("DB inconsistency:  block height ", ta.Height, ": not found in db")
+			continue
+		}
+		txs[txi] = w.txFromTxAddress(txid, ta, bi, bestheight)
+		txi++
+	}
 	r := &Address{
 		AddrStr:                 address,
 		Balance:                 w.chainParser.AmountToDecimalString(&ba.BalanceSat),
@@ -238,16 +307,17 @@ func (w *Worker) GetAddressNew(address string, page int, txsOnPage int) (*Addres
 		TxApperances:            len(txc),
 		UnconfirmedBalance:      w.chainParser.AmountToDecimalString(&uBalSat),
 		UnconfirmedTxApperances: len(txm),
-		Page:       page,
-		TotalPages: totalPages,
-		TxsOnPage:  txsOnPage,
+		Transactions:            txs[:txi],
+		Page:                    page,
+		TotalPages:              totalPages,
+		TxsOnPage:               txsOnPage,
 	}
 	glog.Info(address, " finished")
 	return r, nil
 }
 
 // GetAddress computes address value and gets transactions for given address
-func (w *Worker) GetAddress(addrID string, page int, txsOnPage int) (*Address, error) {
+func (w *Worker) GetAddressOld(addrID string, page int, txsOnPage int) (*Address, error) {
 	glog.Info(addrID, " start")
 	txc, err := w.getAddressTxids(addrID, false)
 	txc = UniqueTxidsInReverse(txc)
