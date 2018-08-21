@@ -545,10 +545,10 @@ type AddrBalance struct {
 	BalanceSat big.Int
 }
 
-func (ab *AddrBalance) ReceivedSat() big.Int {
+func (ab *AddrBalance) ReceivedSat() *big.Int {
 	var r big.Int
 	r.Add(&ab.BalanceSat, &ab.SentSat)
-	return r
+	return &r
 }
 
 type blockTxs struct {

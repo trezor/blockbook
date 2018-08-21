@@ -61,4 +61,7 @@ type Address struct {
 	UnconfirmedTxApperances int    `json:"unconfirmedTxApperances"`
 	TxApperances            int    `json:"txApperances"`
 	Transactions            []*Tx  `json:"transactions"`
+	Page                    int    `json:"page"`
+	TotalPages              int    `json:"totalPages"`
+	TxsOnPage               int    `json:"txsOnPage"`
 }

@@ -4,12 +4,11 @@ import (
 	"blockbook/bchain"
 	"blockbook/common"
 	"blockbook/db"
+	"errors"
 	"math/big"
 
 	"github.com/golang/glog"
 )
-
-const txsOnPage = 30
 
 // Worker is handle to api worker
 type Worker struct {
@@ -172,7 +171,83 @@ func UniqueTxidsInReverse(txids []string) []string {
 }
 
 // GetAddress computes address value and gets transactions for given address
-func (w *Worker) GetAddress(addrID string, page int) (*Address, error) {
+func (w *Worker) GetAddressNew(address string, page int, txsOnPage int) (*Address, error) {
+	glog.Info(address, " start")
+	ba, err := w.db.GetAddressBalance(address)
+	if err != nil {
+		return nil, err
+	}
+	if ba == nil {
+		return nil, errors.New("Address not found")
+	}
+	txc, err := w.getAddressTxids(address, false)
+	txc = UniqueTxidsInReverse(txc)
+	if err != nil {
+		return nil, err
+	}
+	txm, err := w.getAddressTxids(address, true)
+	if err != nil {
+		return nil, err
+	}
+	txm = UniqueTxidsInReverse(txm)
+	bestheight, _, err := w.db.GetBestBlock()
+	if err != nil {
+		return nil, err
+	}
+	// paging
+	if page < 0 {
+		page = 0
+	}
+	from := page * txsOnPage
+	totalPages := len(txc) / txsOnPage
+	if from >= len(txc) {
+		page = totalPages - 1
+		if page < 0 {
+			page = 0
+		}
+	}
+	from = page * txsOnPage
+	to := (page + 1) * txsOnPage
+	if to > len(txc) {
+		to = len(txc)
+	}
+	txs := make([]*Tx, len(txm)+to-from)
+	txi := 0
+	// load mempool transactions
+	var uBalSat big.Int
+	for _, tx := range txm {
+		tx, err := w.GetTransaction(tx, bestheight, false)
+		// mempool transaction may fail
+		if err != nil {
+			glog.Error("GetTransaction ", tx, ": ", err)
+		} else {
+			uBalSat.Sub(tx.getAddrVoutValue(address), tx.getAddrVinValue(address))
+			txs[txi] = tx
+			txi++
+		}
+	}
+	if len(txc) != int(ba.Txs) {
+		glog.Warning("DB inconsistency in address ", address, ": number of txs from column addresses ", len(txc), ", from addressBalance ", ba.Txs)
+	}
+
+	r := &Address{
+		AddrStr:                 address,
+		Balance:                 w.chainParser.AmountToDecimalString(&ba.BalanceSat),
+		TotalReceived:           w.chainParser.AmountToDecimalString(ba.ReceivedSat()),
+		TotalSent:               w.chainParser.AmountToDecimalString(&ba.SentSat),
+		TxApperances:            len(txc),
+		UnconfirmedBalance:      w.chainParser.AmountToDecimalString(&uBalSat),
+		UnconfirmedTxApperances: len(txm),
+		Page:       page,
+		TotalPages: totalPages,
+		TxsOnPage:  txsOnPage,
+	}
+	glog.Info(address, " finished")
+	return r, nil
+}
+
+// GetAddress computes address value and gets transactions for given address
+func (w *Worker) GetAddress(addrID string, page int, txsOnPage int) (*Address, error) {
 	glog.Info(addrID, " start")
 	txc, err := w.getAddressTxids(addrID, false)
 	txc = UniqueTxidsInReverse(txc)

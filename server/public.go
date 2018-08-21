@@ -18,8 +18,10 @@ import (
 )
 
 const blockbookAbout = "Blockbook - blockchain indexer for TREZOR wallet https://trezor.io/. Do not use for any other purpose."
+const txsOnPage = 30
+const txsInAPI = 1000
 
-// PublicServer is handle to public http server
+// PublicServer is a handle to public http server
 type PublicServer struct {
 	binding     string
 	certFiles   string
@@ -37,7 +39,7 @@ type PublicServer struct {
 	addressTpl  *template.Template
 }
 
-// NewPublicServerS creates new public server http interface to blockbook and returns its handle
+// NewPublicServer creates new public server http interface to blockbook and returns its handle
 func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxCache, explorerURL string, metrics *common.Metrics, is *common.InternalState) (*PublicServer, error) {
 
 	api, err := api.NewWorker(db, chain, txCache, is)
@@ -233,9 +235,10 @@ func (s *PublicServer) explorerAddress(w http.ResponseWriter, r *http.Request) {
 			page = 0
 		}
 		addrID := r.URL.Path[i+1:]
-		address, err = s.api.GetAddress(addrID, page)
+		address, err = s.api.GetAddress(addrID, page, txsOnPage)
 		if err != nil {
 			glog.Error(err)
+			// TODO return error.html
 		}
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -351,7 +354,7 @@ func (s *PublicServer) apiAddress(w http.ResponseWriter, r *http.Request) {
 			page = 0
 		}
 		addrID := r.URL.Path[i+1:]
-		address, err = s.api.GetAddress(addrID, page)
+		address, err = s.api.GetAddress(addrID, page, txsInAPI)
 		if err != nil {
 			glog.Error(err)
 		}
