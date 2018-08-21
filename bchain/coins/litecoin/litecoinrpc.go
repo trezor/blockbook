@@ -1,9 +1,9 @@
 package litecoin
 
 import (
+	"encoding/json"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/bchain/coins/btc"
-	"encoding/json"
 
 	"github.com/golang/glog"
 )

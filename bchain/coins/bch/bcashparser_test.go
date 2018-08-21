@@ -3,10 +3,10 @@
 package bch
 
 import (
-	"github.com/trezor/blockbook/bchain"
-	"github.com/trezor/blockbook/bchain/coins/btc"
 	"bytes"
 	"encoding/hex"
+	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/bchain/coins/btc"
 	"reflect"
 	"testing"
 )

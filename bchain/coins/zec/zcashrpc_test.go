@@ -3,10 +3,10 @@
 package zec
 
 import (
-	"github.com/trezor/blockbook/bchain"
-	"github.com/trezor/blockbook/bchain/tests/rpc"
 	"encoding/json"
 	"flag"
+	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/bchain/tests/rpc"
 	"os"
 	"testing"
 )

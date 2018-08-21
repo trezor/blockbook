@@ -3,8 +3,8 @@
 package eth
 
 import (
-	"github.com/trezor/blockbook/bchain"
 	"encoding/hex"
+	"github.com/trezor/blockbook/bchain"
 	"reflect"
 	"testing"
 )

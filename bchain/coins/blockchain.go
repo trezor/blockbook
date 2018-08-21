@@ -1,6 +1,9 @@
 package coins
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/bchain/coins/bch"
 	"github.com/trezor/blockbook/bchain/coins/btc"
@@ -14,9 +17,6 @@ import (
 	"github.com/trezor/blockbook/bchain/coins/vertcoin"
 	"github.com/trezor/blockbook/bchain/coins/zec"
 	"github.com/trezor/blockbook/common"
-	"context"
-	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"reflect"
 	"time"

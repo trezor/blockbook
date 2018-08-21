@@ -1,10 +1,10 @@
 package bch
 
 import (
-	"github.com/trezor/blockbook/bchain"
-	"github.com/trezor/blockbook/bchain/coins/btc"
 	"encoding/hex"
 	"encoding/json"
+	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/bchain/coins/btc"
 
 	"github.com/cpacia/bchutil"
 	"github.com/golang/glog"

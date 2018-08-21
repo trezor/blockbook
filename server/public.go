@@ -1,13 +1,13 @@
 package server
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
 	"github.com/trezor/blockbook/api"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/common"
 	"github.com/trezor/blockbook/db"
-	"context"
-	"encoding/json"
-	"fmt"
 	"html/template"
 	"net/http"
 	"strconv"

@@ -3,10 +3,10 @@
 package btg
 
 import (
-	"github.com/trezor/blockbook/bchain/coins/btc"
 	"bytes"
 	"encoding/hex"
 	"fmt"
+	"github.com/trezor/blockbook/bchain/coins/btc"
 	"io/ioutil"
 	"path/filepath"
 	"testing"

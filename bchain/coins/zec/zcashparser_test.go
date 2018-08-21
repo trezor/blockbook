@@ -3,9 +3,9 @@
 package zec
 
 import (
+	"encoding/hex"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/bchain/coins/btc"
-	"encoding/hex"
 	"reflect"
 	"testing"
 )
