@@ -6,6 +6,7 @@ import (
 	"blockbook/bchain"
 	"blockbook/bchain/coins/btc"
 	"blockbook/common"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"io/ioutil"
@@ -15,6 +16,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	vlq "github.com/bsm/go-vlq"
 	"github.com/juju/errors"
@@ -90,6 +92,12 @@ func varuintToHex(i uint) string {
 	b := make([]byte, vlq.MaxLen64)
 	l := vlq.PutUint(b, uint64(i))
 	return hex.EncodeToString(b[:l])
+}
+
+func uintToHex(i uint32) string {
+	buf := make([]byte, 4)
+	binary.BigEndian.PutUint32(buf, i)
+	return hex.EncodeToString(buf)
 }
 
 // keyPair is used to compare given key value in DB with expected
@@ -187,6 +195,8 @@ func getTestUTXOBlock1(t *testing.T, d *RocksDB) *bchain.Block {
 		BlockHeader: bchain.BlockHeader{
 			Height: 225493,
 			Hash:   "0000000076fbbed90fd75b0e18856aa35baa984e9c9d444cf746ad85e94e2997",
+			Size:   1234567,
+			Time:   1534858021,
 		},
 		Txs: []bchain.Tx{
 			bchain.Tx{
@@ -247,6 +257,8 @@ func getTestUTXOBlock2(t *testing.T, d *RocksDB) *bchain.Block {
 		BlockHeader: bchain.BlockHeader{
 			Height: 225494,
 			Hash:   "00000000eb0443fd7dc4a1ed5c686a8e995057805f9a161d9a5a77a95e72b7b6",
+			Size:   2345678,
+			Time:   1534859123,
 		},
 		Txs: []bchain.Tx{
 			bchain.Tx{
@@ -368,7 +380,11 @@ func getTestUTXOBlock2(t *testing.T, d *RocksDB) *bchain.Block {
 
 func verifyAfterUTXOBlock1(t *testing.T, d *RocksDB, afterDisconnect bool) {
 	if err := checkColumn(d, cfHeight, []keyPair{
-		keyPair{"000370d5", "0000000076fbbed90fd75b0e18856aa35baa984e9c9d444cf746ad85e94e2997", nil},
+		keyPair{
+			"000370d5",
+			"0000000076fbbed90fd75b0e18856aa35baa984e9c9d444cf746ad85e94e2997" + uintToHex(1534858021) + varuintToHex(2) + varuintToHex(1234567),
+			nil,
+		},
 	}); err != nil {
 		{
 			t.Fatal(err)
@@ -445,8 +461,16 @@ func verifyAfterUTXOBlock1(t *testing.T, d *RocksDB, afterDisconnect bool) {
 
 func verifyAfterUTXOBlock2(t *testing.T, d *RocksDB) {
 	if err := checkColumn(d, cfHeight, []keyPair{
-		keyPair{"000370d5", "0000000076fbbed90fd75b0e18856aa35baa984e9c9d444cf746ad85e94e2997", nil},
-		keyPair{"000370d6", "00000000eb0443fd7dc4a1ed5c686a8e995057805f9a161d9a5a77a95e72b7b6", nil},
+		keyPair{
+			"000370d5",
+			"0000000076fbbed90fd75b0e18856aa35baa984e9c9d444cf746ad85e94e2997" + uintToHex(1534858021) + varuintToHex(2) + varuintToHex(1234567),
+			nil,
+		},
+		keyPair{
+			"000370d6",
+			"00000000eb0443fd7dc4a1ed5c686a8e995057805f9a161d9a5a77a95e72b7b6" + uintToHex(1534859123) + varuintToHex(4) + varuintToHex(2345678),
+			nil,
+		},
 	}); err != nil {
 		{
 			t.Fatal(err)
@@ -690,6 +714,30 @@ func TestRocksDB_Index_UTXO(t *testing.T) {
 	}
 	if hash != "0000000076fbbed90fd75b0e18856aa35baa984e9c9d444cf746ad85e94e2997" {
 		t.Fatalf("GetBlockHash: got hash %v, expected %v", hash, "0000000076fbbed90fd75b0e18856aa35baa984e9c9d444cf746ad85e94e2997")
+	}
+
+	// Not connected block
+	hash, err = d.GetBlockHash(225495)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hash != "" {
+		t.Fatalf("GetBlockHash: got hash '%v', expected ''", hash)
+	}
+
+	// GetBlockHash
+	info, err := d.GetBlockInfo(225494)
+	if err != nil {
+		t.Fatal(err)
+	}
+	iw := &BlockInfo{
+		Txid: "00000000eb0443fd7dc4a1ed5c686a8e995057805f9a161d9a5a77a95e72b7b6",
+		Txs:  4,
+		Size: 2345678,
+		Time: time.Unix(1534859123, 0),
+	}
+	if !reflect.DeepEqual(info, iw) {
+		t.Errorf("GetAddressBalance() = %+v, want %+v", info, iw)
 	}
 
 	// Test tx caching functionality, leave one tx in db to test cleanup in DisconnectBlock

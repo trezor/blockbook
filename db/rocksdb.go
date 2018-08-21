@@ -1091,17 +1091,63 @@ func (d *RocksDB) writeAddressesNonUTXO(wb *gorocksdb.WriteBatch, block *bchain.
 
 // Block index
 
+type BlockInfo struct {
+	Txid string
+	Time time.Time
+	Txs  uint32
+	Size uint32
+}
+
+func (d *RocksDB) packBlockInfo(block *bchain.Block) ([]byte, error) {
+	packed := make([]byte, 0, 64)
+	varBuf := make([]byte, vlq.MaxLen64)
+	b, err := d.chainParser.PackBlockHash(block.Hash)
+	if err != nil {
+		return nil, err
+	}
+	packed = append(packed, b...)
+	packed = append(packed, packUint(uint32(block.Time))...)
+	l := packVaruint(uint(len(block.Txs)), varBuf)
+	packed = append(packed, varBuf[:l]...)
+	l = packVaruint(uint(block.Size), varBuf)
+	packed = append(packed, varBuf[:l]...)
+	return packed, nil
+}
+
+func (d *RocksDB) unpackBlockInfo(buf []byte) (*BlockInfo, error) {
+	pl := d.chainParser.PackedTxidLen()
+	// minimum length is PackedTxidLen+4 bytes time + 1 byte txs + 1 byte size
+	if len(buf) < pl+4+2 {
+		return nil, nil
+	}
+	txid, err := d.chainParser.UnpackBlockHash(buf[:pl])
+	if err != nil {
+		return nil, err
+	}
+	t := unpackUint(buf[pl:])
+	txs, l := unpackVaruint(buf[pl+4:])
+	size, _ := unpackVaruint(buf[pl+4+l:])
+	return &BlockInfo{
+		Txid: txid,
+		Time: time.Unix(int64(t), 0),
+		Txs:  uint32(txs),
+		Size: uint32(size),
+	}, nil
+}
+
 // GetBestBlock returns the block hash of the block with highest height in the db
 func (d *RocksDB) GetBestBlock() (uint32, string, error) {
 	it := d.db.NewIteratorCF(d.ro, d.cfh[cfHeight])
 	defer it.Close()
 	if it.SeekToLast(); it.Valid() {
 		bestHeight := unpackUint(it.Key().Data())
-		val, err := d.chainParser.UnpackBlockHash(it.Value().Data())
-		if glog.V(1) {
-			glog.Infof("rocksdb: bestblock %d %s", bestHeight, val)
+		info, err := d.unpackBlockInfo(it.Value().Data())
+		if info != nil {
+			if glog.V(1) {
+				glog.Infof("rocksdb: bestblock %d %+v", bestHeight, info)
+			}
+			return bestHeight, info.Txid, err
 		}
-		return bestHeight, val, err
 	}
 	return 0, "", nil
 }
@@ -1114,7 +1160,22 @@ func (d *RocksDB) GetBlockHash(height uint32) (string, error) {
 		return "", err
 	}
 	defer val.Free()
-	return d.chainParser.UnpackBlockHash(val.Data())
+	info, err := d.unpackBlockInfo(val.Data())
+	if info == nil {
+		return "", err
+	}
+	return info.Txid, nil
+}
+
+// GetBlockInfo returns block info stored in db
+func (d *RocksDB) GetBlockInfo(height uint32) (*BlockInfo, error) {
+	key := packUint(height)
+	val, err := d.db.GetCF(d.ro, d.cfh[cfHeight], key)
+	if err != nil {
+		return nil, err
+	}
+	defer val.Free()
+	return d.unpackBlockInfo(val.Data())
 }
 
 func (d *RocksDB) writeHeight(wb *gorocksdb.WriteBatch, block *bchain.Block, op int) error {
@@ -1122,7 +1183,7 @@ func (d *RocksDB) writeHeight(wb *gorocksdb.WriteBatch, block *bchain.Block, op 
 
 	switch op {
 	case opInsert:
-		val, err := d.chainParser.PackBlockHash(block.Hash)
+		val, err := d.packBlockInfo(block)
 		if err != nil {
 			return err
 		}

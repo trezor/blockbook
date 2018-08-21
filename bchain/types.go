@@ -88,6 +88,8 @@ type BlockHeader struct {
 	Next          string `json:"nextblockhash"`
 	Height        uint32 `json:"height"`
 	Confirmations int    `json:"confirmations"`
+	Size          int    `json:"size"`
+	Time          int64  `json:"time,omitempty"`
 }
 
 type MempoolEntry struct {
