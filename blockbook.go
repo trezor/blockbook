@@ -14,11 +14,11 @@ import (
 
 	"github.com/juju/errors"
 
-	"blockbook/bchain"
-	"blockbook/bchain/coins"
-	"blockbook/common"
-	"blockbook/db"
-	"blockbook/server"
+	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/bchain/coins"
+	"github.com/trezor/blockbook/common"
+	"github.com/trezor/blockbook/db"
+	"github.com/trezor/blockbook/server"
 
 	"github.com/golang/glog"
 

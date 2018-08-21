@@ -1,10 +1,10 @@
 package btc
 
 import (
-	"blockbook/bchain"
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
+	"github.com/trezor/blockbook/bchain"
 
 	vlq "github.com/bsm/go-vlq"
 	"github.com/btcsuite/btcd/blockchain"

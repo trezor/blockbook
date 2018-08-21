@@ -3,8 +3,8 @@
 package btc
 
 import (
-	"blockbook/bchain"
 	"encoding/hex"
+	"github.com/trezor/blockbook/bchain"
 	"reflect"
 	"testing"
 )

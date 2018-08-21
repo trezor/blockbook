@@ -1,11 +1,11 @@
 package db
 
 import (
-	"blockbook/bchain"
-	"blockbook/common"
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
+	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/common"
 	"os"
 	"path/filepath"
 	"time"

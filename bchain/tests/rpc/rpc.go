@@ -3,8 +3,8 @@
 package rpc
 
 import (
-	"blockbook/bchain"
 	"encoding/json"
+	"github.com/trezor/blockbook/bchain"
 	"math/rand"
 	"net"
 	"reflect"

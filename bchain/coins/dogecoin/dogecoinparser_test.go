@@ -3,11 +3,11 @@
 package dogecoin
 
 import (
-	"blockbook/bchain"
-	"blockbook/bchain/coins/btc"
 	"bytes"
 	"encoding/hex"
 	"fmt"
+	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/bchain/coins/btc"
 	"io/ioutil"
 	"path/filepath"
 	"reflect"

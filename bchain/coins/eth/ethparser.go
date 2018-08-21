@@ -1,9 +1,9 @@
 package eth
 
 import (
-	"blockbook/bchain"
 	"encoding/hex"
 	"encoding/json"
+	"github.com/trezor/blockbook/bchain"
 	"math/big"
 	"strconv"
 

@@ -1,10 +1,10 @@
 package btg
 
 import (
-	"blockbook/bchain"
-	"blockbook/bchain/coins/btc"
-	"blockbook/bchain/coins/utils"
 	"bytes"
+	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/bchain/coins/btc"
+	"github.com/trezor/blockbook/bchain/coins/utils"
 	"io"
 
 	"github.com/btcsuite/btcd/chaincfg"

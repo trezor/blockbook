@@ -1,10 +1,10 @@
 package eth
 
 import (
-	"blockbook/bchain"
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/trezor/blockbook/bchain"
 	"math/big"
 	"sync"
 	"time"

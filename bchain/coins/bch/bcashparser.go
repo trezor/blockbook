@@ -1,9 +1,9 @@
 package bch
 
 import (
-	"blockbook/bchain"
-	"blockbook/bchain/coins/btc"
 	"fmt"
+	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/bchain/coins/btc"
 
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/txscript"
