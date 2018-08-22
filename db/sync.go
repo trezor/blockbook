@@ -286,6 +286,7 @@ func (w *SyncWorker) ConnectBlocksParallel(lower, higher uint32) error {
 	go writeBlockWorker()
 	var hash string
 	start := time.Now()
+	msTime := time.Now().Add(1 * time.Minute)
 ConnectLoop:
 	for h := lower; h <= higher; {
 		select {
@@ -304,6 +305,10 @@ ConnectLoop:
 			if h > 0 && h%1000 == 0 {
 				glog.Info("connecting block ", h, " ", hash, ", elapsed ", time.Since(start))
 				start = time.Now()
+			}
+			if msTime.Before(time.Now()) {
+				glog.Info(w.db.GetMemoryStats())
+				msTime = time.Now().Add(1 * time.Minute)
 			}
 			h++
 		}
