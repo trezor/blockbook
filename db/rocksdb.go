@@ -59,47 +59,13 @@ const (
 var cfNames = []string{"default", "height", "addresses", "txAddresses", "addressBalance", "blockTxs", "transactions"}
 
 func openDB(path string, c *gorocksdb.Cache) (*gorocksdb.DB, []*gorocksdb.ColumnFamilyHandle, error) {
-	bloom := gorocksdb.NewBloomFilter(10)
-	blockOpts := gorocksdb.NewDefaultBlockBasedTableOptions()
-	blockOpts.SetBlockSize(16 << 10) // 16kB
-	blockOpts.SetBlockCache(c)
-	blockOpts.SetFilterPolicy(bloom)
-	blockOpts.SetCacheIndexAndFilterBlocks(true)
-	blockOpts.SetPinL0FilterAndIndexBlocksInCache(true)
-
-	opts := gorocksdb.NewDefaultOptions()
-	opts.SetBlockBasedTableFactory(blockOpts)
-	opts.SetCreateIfMissing(true)
-	opts.SetCreateIfMissingColumnFamilies(true)
-	opts.SetMaxBackgroundCompactions(6)
-	opts.SetMaxBackgroundFlushes(6)
-	opts.SetBytesPerSync(1 << 20)    // 1MB
-	opts.SetWriteBufferSize(1 << 27) // 128MB
-	opts.SetMaxOpenFiles(25000)
-	opts.SetCompression(gorocksdb.LZ4HCCompression)
-
-	// opts for addresses are different:
-	// no bloom filter - from documentation: If most of your queries are executed using iterators, you shouldn't set bloom filter
-	blockOptsAddress := gorocksdb.NewDefaultBlockBasedTableOptions()
-	blockOptsAddress.SetBlockSize(16 << 10) // 16kB
-	blockOptsAddress.SetBlockCache(c)       // 8GB
-	blockOptsAddress.SetCacheIndexAndFilterBlocks(true)
-	blockOptsAddress.SetPinL0FilterAndIndexBlocksInCache(true)
-
-	optsAddresses := gorocksdb.NewDefaultOptions()
-	optsAddresses.SetBlockBasedTableFactory(blockOptsAddress)
-	optsAddresses.SetCreateIfMissing(true)
-	optsAddresses.SetCreateIfMissingColumnFamilies(true)
-	optsAddresses.SetMaxBackgroundCompactions(6)
-	optsAddresses.SetMaxBackgroundFlushes(6)
-	optsAddresses.SetBytesPerSync(1 << 20)    // 1MB
-	optsAddresses.SetWriteBufferSize(1 << 27) // 128MB
-	optsAddresses.SetMaxOpenFiles(25000)
-	optsAddresses.SetCompression(gorocksdb.LZ4HCCompression)
-
+	// opts with bloom filter
+	opts := createAndSetDBOptions(10, true, c)
+	// opts for addresses without bloom filter
+	// from documentation: if most of your queries are executed using iterators, you shouldn't set bloom filter
+	optsAddresses := createAndSetDBOptions(0, true, c)
 	// default, height, addresses, txAddresses, addressBalance, blockTxids, transactions
 	fcOptions := []*gorocksdb.Options{opts, opts, optsAddresses, opts, opts, opts, opts}
-
 	db, cfh, err := gorocksdb.OpenDbColumnFamilies(opts, path, cfNames, fcOptions)
 	if err != nil {
 		return nil, nil, err
@@ -111,7 +77,7 @@ func openDB(path string, c *gorocksdb.Cache) (*gorocksdb.DB, []*gorocksdb.Column
 // needs to be called to release it.
 func NewRocksDB(path string, parser bchain.BlockChainParser, metrics *common.Metrics) (d *RocksDB, err error) {
 	glog.Infof("rocksdb: open %s, version %v", path, dbVersion)
-	c := gorocksdb.NewLRUCache(8 << 30) // 8GB
+	c := gorocksdb.NewLRUCache(1 << 30) // 1GB
 	db, cfh, err := openDB(path, c)
 	wo := gorocksdb.NewDefaultWriteOptions()
 	ro := gorocksdb.NewDefaultReadOptions()
