@@ -16,6 +16,7 @@ import (
 
 type bulkAddresses struct {
 	height    uint32
+	bi        BlockInfo
 	addresses map[string][]outpoint
 }
 
@@ -156,6 +157,9 @@ func (b *BulkConnect) storeBulkAddresses(wb *gorocksdb.WriteBatch) error {
 		if err := b.d.storeAddresses(wb, ba.height, ba.addresses); err != nil {
 			return err
 		}
+		if err := b.d.writeHeight(wb, ba.height, &ba.bi, opInsert); err != nil {
+			return err
+		}
 	}
 	b.bulkAddressesCount = 0
 	b.bulkAddresses = b.bulkAddresses[:0]
@@ -168,15 +172,12 @@ func (b *BulkConnect) ConnectBlock(block *bchain.Block, storeBlockTxs bool) erro
 	if !b.isUTXO {
 		return b.d.ConnectBlock(block)
 	}
-	wb := gorocksdb.NewWriteBatch()
-	defer wb.Destroy()
 	addresses := make(map[string][]outpoint)
 	if err := b.d.processAddressesUTXO(block, addresses, b.txAddressesMap, b.balances); err != nil {
 		return err
 	}
-	start := time.Now()
-	var sa bool
 	var storeAddressesChan, storeBalancesChan chan error
+	var sa bool
 	if len(b.txAddressesMap) > maxBulkTxAddresses || len(b.balances) > maxBulkBalances {
 		sa = true
 		if len(b.txAddressesMap)+partialStoreAddresses > maxBulkTxAddresses {
@@ -189,29 +190,38 @@ func (b *BulkConnect) ConnectBlock(block *bchain.Block, storeBlockTxs bool) erro
 		}
 	}
 	b.bulkAddresses = append(b.bulkAddresses, bulkAddresses{
-		height:    block.Height,
+		height: block.Height,
+		bi: BlockInfo{
+			Hash: block.Hash,
+			Time: block.Time,
+			Txs:  uint32(len(block.Txs)),
+			Size: uint32(block.Size),
+		},
 		addresses: addresses,
 	})
 	b.bulkAddressesCount += len(addresses)
-	bac := b.bulkAddressesCount
-	if sa || b.bulkAddressesCount > maxBulkAddresses {
-		if err := b.storeBulkAddresses(wb); err != nil {
+	// open WriteBatch only if going to write
+	if sa || b.bulkAddressesCount > maxBulkAddresses || storeBlockTxs {
+		start := time.Now()
+		wb := gorocksdb.NewWriteBatch()
+		defer wb.Destroy()
+		bac := b.bulkAddressesCount
+		if sa || b.bulkAddressesCount > maxBulkAddresses {
+			if err := b.storeBulkAddresses(wb); err != nil {
+				return err
+			}
+		}
+		if storeBlockTxs {
+			if err := b.d.storeAndCleanupBlockTxs(wb, block); err != nil {
+				return err
+			}
+		}
+		if err := b.d.db.Write(b.d.wo, wb); err != nil {
 			return err
 		}
-	}
-	if storeBlockTxs {
-		if err := b.d.storeAndCleanupBlockTxs(wb, block); err != nil {
-			return err
+		if bac > b.bulkAddressesCount {
+			glog.Info("rocksdb: height ", b.height, ", stored ", bac, " addresses, done in ", time.Since(start))
 		}
-	}
-	if err := b.d.writeHeight(wb, block, opInsert); err != nil {
-		return err
-	}
-	if err := b.d.db.Write(b.d.wo, wb); err != nil {
-		return err
-	}
-	if bac > b.bulkAddressesCount {
-		glog.Info("rocksdb: height ", b.height, ", stored ", bac, " addresses, done in ", time.Since(start))
 	}
 	if storeAddressesChan != nil {
 		if err := <-storeAddressesChan; err != nil {

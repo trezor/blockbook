@@ -181,7 +181,7 @@ func (w *Worker) txFromTxAddress(txid string, ta *db.TxAddresses, bi *db.BlockIn
 		vin.Value = w.chainParser.AmountToDecimalString(&vin.ValueSat)
 		valInSat.Add(&valInSat, &vin.ValueSat)
 		a, err := tai.Addresses(w.chainParser)
-		if err != nil && len(a) == 1 {
+		if err == nil && len(a) == 1 {
 			vin.Addr = a[0]
 		}
 	}
@@ -194,7 +194,7 @@ func (w *Worker) txFromTxAddress(txid string, ta *db.TxAddresses, bi *db.BlockIn
 		vout.Value = w.chainParser.AmountToDecimalString(&vout.ValueSat)
 		valOutSat.Add(&valOutSat, &vout.ValueSat)
 		a, err := tao.Addresses(w.chainParser)
-		if err != nil {
+		if err == nil {
 			vout.ScriptPubKey.Addresses = a
 		}
 	}
@@ -204,12 +204,12 @@ func (w *Worker) txFromTxAddress(txid string, ta *db.TxAddresses, bi *db.BlockIn
 		feesSat.SetUint64(0)
 	}
 	r := &Tx{
-		Blockhash:     bi.BlockHash,
+		Blockhash:     bi.Hash,
 		Blockheight:   int(ta.Height),
-		Blocktime:     bi.Time.Unix(),
+		Blocktime:     bi.Time,
 		Confirmations: bestheight - ta.Height + 1,
 		Fees:          w.chainParser.AmountToDecimalString(&feesSat),
-		Time:          bi.Time.Unix(),
+		Time:          bi.Time,
 		Txid:          txid,
 		ValueIn:       w.chainParser.AmountToDecimalString(&valInSat),
 		ValueOut:      w.chainParser.AmountToDecimalString(&valOutSat),

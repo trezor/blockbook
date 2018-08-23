@@ -237,7 +237,7 @@ func (d *RocksDB) writeBlock(block *bchain.Block, op int) error {
 
 	isUTXO := d.chainParser.IsUTXOChain()
 
-	if err := d.writeHeight(wb, block, op); err != nil {
+	if err := d.writeHeightFromBlock(wb, block, op); err != nil {
 		return err
 	}
 	if isUTXO {
@@ -862,14 +862,15 @@ func (d *RocksDB) writeAddressesNonUTXO(wb *gorocksdb.WriteBatch, block *bchain.
 
 // Block index
 
+// BlockInfo holds information about blocks kept in column height
 type BlockInfo struct {
-	BlockHash string
-	Time      time.Time
-	Txs       uint32
-	Size      uint32
+	Hash string
+	Time int64
+	Txs  uint32
+	Size uint32
 }
 
-func (d *RocksDB) packBlockInfo(block *bchain.Block) ([]byte, error) {
+func (d *RocksDB) packBlockInfo(block *BlockInfo) ([]byte, error) {
 	packed := make([]byte, 0, 64)
 	varBuf := make([]byte, vlq.MaxLen64)
 	b, err := d.chainParser.PackBlockHash(block.Hash)
@@ -878,7 +879,7 @@ func (d *RocksDB) packBlockInfo(block *bchain.Block) ([]byte, error) {
 	}
 	packed = append(packed, b...)
 	packed = append(packed, packUint(uint32(block.Time))...)
-	l := packVaruint(uint(len(block.Txs)), varBuf)
+	l := packVaruint(uint(block.Txs), varBuf)
 	packed = append(packed, varBuf[:l]...)
 	l = packVaruint(uint(block.Size), varBuf)
 	packed = append(packed, varBuf[:l]...)
@@ -899,10 +900,10 @@ func (d *RocksDB) unpackBlockInfo(buf []byte) (*BlockInfo, error) {
 	txs, l := unpackVaruint(buf[pl+4:])
 	size, _ := unpackVaruint(buf[pl+4+l:])
 	return &BlockInfo{
-		BlockHash: txid,
-		Time:      time.Unix(int64(t), 0),
-		Txs:       uint32(txs),
-		Size:      uint32(size),
+		Hash: txid,
+		Time: int64(t),
+		Txs:  uint32(txs),
+		Size: uint32(size),
 	}, nil
 }
 
@@ -917,7 +918,7 @@ func (d *RocksDB) GetBestBlock() (uint32, string, error) {
 			if glog.V(1) {
 				glog.Infof("rocksdb: bestblock %d %+v", bestHeight, info)
 			}
-			return bestHeight, info.BlockHash, err
+			return bestHeight, info.Hash, err
 		}
 	}
 	return 0, "", nil
@@ -935,7 +936,7 @@ func (d *RocksDB) GetBlockHash(height uint32) (string, error) {
 	if info == nil {
 		return "", err
 	}
-	return info.BlockHash, nil
+	return info.Hash, nil
 }
 
 // GetBlockInfo returns block info stored in db
@@ -949,12 +950,20 @@ func (d *RocksDB) GetBlockInfo(height uint32) (*BlockInfo, error) {
 	return d.unpackBlockInfo(val.Data())
 }
 
-func (d *RocksDB) writeHeight(wb *gorocksdb.WriteBatch, block *bchain.Block, op int) error {
-	key := packUint(block.Height)
+func (d *RocksDB) writeHeightFromBlock(wb *gorocksdb.WriteBatch, block *bchain.Block, op int) error {
+	return d.writeHeight(wb, block.Height, &BlockInfo{
+		Hash: block.Hash,
+		Time: block.Time,
+		Txs:  uint32(len(block.Txs)),
+		Size: uint32(block.Size),
+	}, op)
+}
 
+func (d *RocksDB) writeHeight(wb *gorocksdb.WriteBatch, height uint32, bi *BlockInfo, op int) error {
+	key := packUint(height)
 	switch op {
 	case opInsert:
-		val, err := d.packBlockInfo(block)
+		val, err := d.packBlockInfo(bi)
 		if err != nil {
 			return err
 		}
