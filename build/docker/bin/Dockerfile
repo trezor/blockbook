@@ -10,6 +10,7 @@ RUN apt-get update && \
     apt-get clean
 
 ENV GOLANG_VERSION=go1.10.linux-amd64
+ENV ROCKSDB_VERSION=rocksdb-5.14.3
 ENV GOPATH=/go
 ENV PATH=$PATH:$GOPATH/bin
 ENV CGO_CFLAGS="-I/opt/rocksdb/include"
@@ -26,7 +27,7 @@ RUN echo -n "GO version: " && go version
 RUN echo -n "GOPATH: " && echo $GOPATH
 
 # install rocksdb
-RUN cd /opt && git clone https://github.com/facebook/rocksdb.git
+RUN cd /opt && git clone -b $ROCKSDB_VERSION --depth 1 https://github.com/facebook/rocksdb.git 
 RUN cd /opt/rocksdb && CFLAGS=-fPIC CXXFLAGS=-fPIC make -j 4 release
 RUN strip /opt/rocksdb/ldb /opt/rocksdb/sst_dump && \
     cp /opt/rocksdb/ldb /opt/rocksdb/sst_dump /build
