@@ -60,10 +60,10 @@ var cfNames = []string{"default", "height", "addresses", "txAddresses", "address
 
 func openDB(path string, c *gorocksdb.Cache) (*gorocksdb.DB, []*gorocksdb.ColumnFamilyHandle, error) {
 	// opts with bloom filter
-	opts := createAndSetDBOptions(10, true, c)
+	opts := createAndSetDBOptions(10, c)
 	// opts for addresses without bloom filter
 	// from documentation: if most of your queries are executed using iterators, you shouldn't set bloom filter
-	optsAddresses := createAndSetDBOptions(0, true, c)
+	optsAddresses := createAndSetDBOptions(0, c)
 	// default, height, addresses, txAddresses, addressBalance, blockTxids, transactions
 	fcOptions := []*gorocksdb.Options{opts, opts, optsAddresses, opts, opts, opts, opts}
 	db, cfh, err := gorocksdb.OpenDbColumnFamilies(opts, path, cfNames, fcOptions)
@@ -75,9 +75,9 @@ func openDB(path string, c *gorocksdb.Cache) (*gorocksdb.DB, []*gorocksdb.Column
 
 // NewRocksDB opens an internal handle to RocksDB environment.  Close
 // needs to be called to release it.
-func NewRocksDB(path string, parser bchain.BlockChainParser, metrics *common.Metrics) (d *RocksDB, err error) {
+func NewRocksDB(path string, cacheSize int, parser bchain.BlockChainParser, metrics *common.Metrics) (d *RocksDB, err error) {
 	glog.Infof("rocksdb: open %s, version %v", path, dbVersion)
-	c := gorocksdb.NewLRUCache(1 << 30) // 1GB
+	c := gorocksdb.NewLRUCache(cacheSize)
 	db, cfh, err := openDB(path, c)
 	wo := gorocksdb.NewDefaultWriteOptions()
 	ro := gorocksdb.NewDefaultReadOptions()
