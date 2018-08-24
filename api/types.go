@@ -2,6 +2,22 @@ package api
 
 import "math/big"
 
+type ApiError struct {
+	Text   string
+	Public bool
+}
+
+func (e *ApiError) Error() string {
+	return e.Text
+}
+
+func NewApiError(s string, public bool) error {
+	return &ApiError{
+		Text:   s,
+		Public: public,
+	}
+}
+
 type ScriptSig struct {
 	Hex string `json:"hex"`
 	Asm string `json:"asm,omitempty"`

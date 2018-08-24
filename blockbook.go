@@ -55,6 +55,8 @@ var (
 	syncWorkers = flag.Int("workers", 8, "number of workers to process blocks")
 	dryRun      = flag.Bool("dryrun", false, "do not index blocks, only download")
 
+	debugMode = flag.Bool("debug", false, "debug mode, return more verbose errors, reload templates on each request")
+
 	internalBinding = flag.String("internal", "", "internal http server binding [address]:port, (default no internal server)")
 
 	publicBinding = flag.String("public", "", "public http server binding [address]:port[/path], (default no public server)")
@@ -130,7 +132,7 @@ func main() {
 	chanOsSignal = make(chan os.Signal, 1)
 	signal.Notify(chanOsSignal, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 
-	glog.Infof("Blockbook: %+v", common.GetVersionInfo())
+	glog.Infof("Blockbook: %+v, debug mode %v", common.GetVersionInfo(), *debugMode)
 
 	if *prof != "" {
 		go func() {
@@ -270,7 +272,7 @@ func main() {
 
 	var publicServer *server.PublicServer
 	if *publicBinding != "" {
-		publicServer, err = server.NewPublicServer(*publicBinding, *certFiles, index, chain, txCache, *explorerURL, metrics, internalState)
+		publicServer, err = server.NewPublicServer(*publicBinding, *certFiles, index, chain, txCache, *explorerURL, metrics, internalState, *debugMode)
 		if err != nil {
 			glog.Error("socketio: ", err)
 			return

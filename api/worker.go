@@ -4,10 +4,11 @@ import (
 	"blockbook/bchain"
 	"blockbook/common"
 	"blockbook/db"
-	"errors"
 	"math/big"
+	"time"
 
 	"github.com/golang/glog"
+	"github.com/juju/errors"
 )
 
 // Worker is handle to api worker
@@ -35,13 +36,13 @@ func NewWorker(db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxCache, is 
 func (w *Worker) GetTransaction(txid string, bestheight uint32, spendingTx bool) (*Tx, error) {
 	bchainTx, height, err := w.txCache.GetTransaction(txid, bestheight)
 	if err != nil {
-		return nil, err
+		return nil, errors.Annotatef(err, "txCache.GetTransaction %v", txid)
 	}
 	var blockhash string
 	if bchainTx.Confirmations > 0 {
 		blockhash, err = w.db.GetBlockHash(height)
 		if err != nil {
-			return nil, err
+			return nil, errors.Annotatef(err, "GetBlockHash %v", height)
 		}
 	}
 	var valInSat, valOutSat, feesSat big.Int
@@ -57,7 +58,7 @@ func (w *Worker) GetTransaction(txid string, bestheight uint32, spendingTx bool)
 		if bchainVin.Txid != "" {
 			otx, _, err := w.txCache.GetTransaction(bchainVin.Txid, bestheight)
 			if err != nil {
-				return nil, err
+				return nil, errors.Annotatef(err, "txCache.GetTransaction %v", bchainVin.Txid)
 			}
 			if len(otx.Vout) > int(vin.Vout) {
 				vout := &otx.Vout[vin.Vout]
@@ -220,28 +221,28 @@ func (w *Worker) txFromTxAddress(txid string, ta *db.TxAddresses, bi *db.BlockIn
 }
 
 // GetAddress computes address value and gets transactions for given address
-func (w *Worker) GetAddress(address string, page int, txsOnPage int) (*Address, error) {
-	glog.Info(address, " start")
+func (w *Worker) GetAddress(address string, page int, txsOnPage int, onlyTxids bool) (*Address, error) {
+	start := time.Now()
 	ba, err := w.db.GetAddressBalance(address)
 	if err != nil {
-		return nil, err
+		return nil, errors.Annotatef(err, "GetAddressBalance %v", address)
 	}
 	if ba == nil {
-		return nil, errors.New("Address not found")
+		return nil, NewApiError("Address not found", true)
 	}
 	txc, err := w.getAddressTxids(address, false)
-	txc = UniqueTxidsInReverse(txc)
 	if err != nil {
-		return nil, err
+		return nil, errors.Annotatef(err, "getAddressTxids %v false", address)
 	}
+	txc = UniqueTxidsInReverse(txc)
 	txm, err := w.getAddressTxids(address, true)
 	if err != nil {
-		return nil, err
+		return nil, errors.Annotatef(err, "getAddressTxids %v true", address)
 	}
 	txm = UniqueTxidsInReverse(txm)
 	bestheight, _, err := w.db.GetBestBlock()
 	if err != nil {
-		return nil, err
+		return nil, errors.Annotatef(err, "GetBestBlock")
 	}
 	// paging
 	if page < 0 {
@@ -268,7 +269,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int) (*Address, 
 		tx, err := w.GetTransaction(tx, bestheight, false)
 		// mempool transaction may fail
 		if err != nil {
-			glog.Error("GetTransaction ", tx, ": ", err)
+			glog.Error("GetTransaction in mempool ", tx, ": ", err)
 		} else {
 			uBalSat.Sub(tx.getAddrVoutValue(address), tx.getAddrVinValue(address))
 			txs[txi] = tx
@@ -282,7 +283,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int) (*Address, 
 		txid := txc[i]
 		ta, err := w.db.GetTxAddresses(txid)
 		if err != nil {
-			return nil, err
+			return nil, errors.Annotatef(err, "GetTxAddresses %v", txid)
 		}
 		if ta == nil {
 			glog.Warning("DB inconsistency:  tx ", txid, ": not found in txAddresses")
@@ -290,7 +291,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int) (*Address, 
 		}
 		bi, err := w.db.GetBlockInfo(ta.Height)
 		if err != nil {
-			return nil, err
+			return nil, errors.Annotatef(err, "GetBlockInfo %v", ta.Height)
 		}
 		if bi == nil {
 			glog.Warning("DB inconsistency:  block height ", ta.Height, ": not found in db")
@@ -312,7 +313,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int) (*Address, 
 		TotalPages:              totalPages,
 		TxsOnPage:               txsOnPage,
 	}
-	glog.Info(address, " finished")
+	glog.Info(address, " finished in ", time.Since(start))
 	return r, nil
 }
 
