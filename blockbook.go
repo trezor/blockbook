@@ -431,6 +431,8 @@ func storeInternalStateLoop() {
 	lastCompute := time.Now()
 	// randomize the duration between ComputeInternalStateColumnStats to avoid peaks after reboot of machine with multiple blockbooks
 	computePeriod := 9*time.Hour + time.Duration(rand.Float64()*float64((2*time.Hour).Nanoseconds()))
+	lastLogMemory := time.Now()
+	logMemoryPeriod := 15 * time.Minute
 	glog.Info("storeInternalStateLoop starting with db stats recompute period ", computePeriod)
 	tickAndDebounce(storeInternalStatePeriodMs*time.Millisecond, (storeInternalStatePeriodMs-1)*time.Millisecond, chanStoreInternalState, func() {
 		if !computeRunning && lastCompute.Add(computePeriod).Before(time.Now()) {
@@ -446,6 +448,10 @@ func storeInternalStateLoop() {
 		}
 		if err := index.StoreInternalState(internalState); err != nil {
 			glog.Error("storeInternalStateLoop ", errors.ErrorStack(err))
+		}
+		if lastLogMemory.Add(logMemoryPeriod).Before(time.Now()) {
+			glog.Info(index.GetMemoryStats())
+			lastLogMemory = time.Now()
 		}
 	})
 	glog.Info("storeInternalStateLoop stopped")

@@ -308,7 +308,8 @@ ConnectLoop:
 			}
 			if msTime.Before(time.Now()) {
 				glog.Info(w.db.GetMemoryStats())
-				msTime = time.Now().Add(1 * time.Minute)
+				w.metrics.IndexDBSize.Set(float64(w.db.DatabaseSizeOnDisk()))
+				msTime = time.Now().Add(10 * time.Minute)
 			}
 			h++
 		}
