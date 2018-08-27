@@ -30,6 +30,7 @@ type Vin struct {
 	N         int       `json:"n"`
 	ScriptSig ScriptSig `json:"scriptSig"`
 	Addr      string    `json:"addr"`
+	AddrLink  bool      `json:"-"`
 	Value     string    `json:"value"`
 	ValueSat  big.Int   `json:"-"`
 }
@@ -38,6 +39,7 @@ type ScriptPubKey struct {
 	Hex       string   `json:"hex"`
 	Asm       string   `json:"asm,omitempty"`
 	Addresses []string `json:"addresses"`
+	AddrsLink []bool   `json:"-"`
 	Type      string   `json:"type,omitempty"`
 }
 type Vout struct {
@@ -45,6 +47,7 @@ type Vout struct {
 	ValueSat     big.Int      `json:"-"`
 	N            int          `json:"n"`
 	ScriptPubKey ScriptPubKey `json:"scriptPubKey"`
+	Spent        bool         `json:"-"`
 	SpentTxID    string       `json:"spentTxId,omitempty"`
 	SpentIndex   int          `json:"spentIndex,omitempty"`
 	SpentHeight  int          `json:"spentHeight,omitempty"`
@@ -69,15 +72,16 @@ type Tx struct {
 }
 
 type Address struct {
-	AddrStr                 string `json:"addrStr"`
-	Balance                 string `json:"balance"`
-	TotalReceived           string `json:"totalReceived"`
-	TotalSent               string `json:"totalSent"`
-	UnconfirmedBalance      string `json:"unconfirmedBalance"`
-	UnconfirmedTxApperances int    `json:"unconfirmedTxApperances"`
-	TxApperances            int    `json:"txApperances"`
-	Transactions            []*Tx  `json:"transactions"`
-	Page                    int    `json:"page"`
-	TotalPages              int    `json:"totalPages"`
-	TxsOnPage               int    `json:"txsOnPage"`
+	AddrStr                 string   `json:"addrStr"`
+	Balance                 string   `json:"balance"`
+	TotalReceived           string   `json:"totalReceived"`
+	TotalSent               string   `json:"totalSent"`
+	UnconfirmedBalance      string   `json:"unconfirmedBalance"`
+	UnconfirmedTxApperances int      `json:"unconfirmedTxApperances"`
+	TxApperances            int      `json:"txApperances"`
+	Transactions            []*Tx    `json:"transactions,omitempty"`
+	Txids                   []string `json:"transactions,omitempty"` // this is intentional, we return either Transactions or Txids
+	Page                    int      `json:"page"`
+	TotalPages              int      `json:"totalPages"`
+	TxsOnPage               int      `json:"txsOnPage"`
 }

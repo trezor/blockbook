@@ -15,6 +15,14 @@ a {
     text-decoration: none;
 }
 
+h1 small {
+    font-size: 65%;
+}
+
+h3 {
+    margin-top: 20px;
+}
+
 .octicon {
     color: #777;
     display: inline-block;
@@ -175,4 +183,9 @@ a {
 
 .alert .data-table {
     margin: 0;
+}
+
+.navbar-nav .nav-link {
+    padding-right: 0;
+    padding-left: .25rem;
 }
