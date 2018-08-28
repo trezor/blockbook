@@ -306,6 +306,29 @@ func txToResTx(tx *bchain.Tx, height int, hi []txInputs, ho []txOutputs) resTx {
 	}
 }
 
+func addressInSlice(s, t []string) string {
+	for _, sa := range s {
+		for _, ta := range t {
+			if ta == sa {
+				return sa
+			}
+		}
+	}
+	return ""
+}
+
+func (s *SocketIoServer) getAddressesFromVout(vout *bchain.Vout) ([]string, error) {
+	addrDesc, err := s.chainParser.GetAddrDescFromVout(vout)
+	if err != nil {
+		return nil, err
+	}
+	voutAddr, _, err := s.chainParser.GetAddressesFromAddrDesc(addrDesc)
+	if err != nil {
+		return nil, err
+	}
+	return voutAddr, nil
+}
+
 func (s *SocketIoServer) getAddressHistory(addr []string, opts *addrOpts) (res resultGetAddressHistory, err error) {
 	txr, err := s.getAddressTxids(addr, opts)
 	if err != nil {
@@ -333,19 +356,23 @@ func (s *SocketIoServer) getAddressHistory(addr []string, opts *addrOpts) (res r
 					Satoshis: vout.ValueSat.String(),
 					Script:   &aoh,
 				}
-				if vout.Address != nil {
-					a := vout.Address.String()
-					ao.Address = &a
-					if vout.Address.InSlice(addr) {
-						hi, ok := ads[a]
-						if ok {
-							hi.OutputIndexes = append(hi.OutputIndexes, int(vout.N))
-						} else {
-							hi := addressHistoryIndexes{}
-							hi.InputIndexes = make([]int, 0)
-							hi.OutputIndexes = append(hi.OutputIndexes, int(vout.N))
-							ads[a] = hi
-						}
+				voutAddr, err := s.getAddressesFromVout(&vout)
+				if err != nil {
+					return res, err
+				}
+				if len(voutAddr) > 0 {
+					ao.Address = &voutAddr[0]
+				}
+				a := addressInSlice(voutAddr, addr)
+				if a != "" {
+					hi, ok := ads[a]
+					if ok {
+						hi.OutputIndexes = append(hi.OutputIndexes, int(vout.N))
+					} else {
+						hi := addressHistoryIndexes{}
+						hi.InputIndexes = make([]int, 0)
+						hi.OutputIndexes = append(hi.OutputIndexes, int(vout.N))
+						ads[a] = hi
 					}
 				}
 				ho = append(ho, ao)
@@ -587,9 +614,12 @@ func (s *SocketIoServer) getDetailedTransaction(txid string) (res resultGetDetai
 			}
 			if len(otx.Vout) > int(vin.Vout) {
 				vout := &otx.Vout[vin.Vout]
-				if vout.Address != nil {
-					a := vout.Address.String()
-					ai.Address = &a
+				voutAddr, err := s.getAddressesFromVout(vout)
+				if err != nil {
+					return res, err
+				}
+				if len(voutAddr) > 0 {
+					ai.Address = &voutAddr[0]
 				}
 				ai.Satoshis = vout.ValueSat.String()
 			}
@@ -602,9 +632,12 @@ func (s *SocketIoServer) getDetailedTransaction(txid string) (res resultGetDetai
 			Satoshis: vout.ValueSat.String(),
 			Script:   &aos,
 		}
-		if vout.Address != nil {
-			a := vout.Address.String()
-			ao.Address = &a
+		voutAddr, err := s.getAddressesFromVout(&vout)
+		if err != nil {
+			return res, err
+		}
+		if len(voutAddr) > 0 {
+			ao.Address = &voutAddr[0]
 		}
 		ho = append(ho, ao)
 	}

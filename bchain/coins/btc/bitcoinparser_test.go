@@ -1,4 +1,4 @@
-// +build unittest
+// build unittest
 
 package btc
 
@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-func TestAddressToOutputScript(t *testing.T) {
+func Test_GetAddrDescFromAddress(t *testing.T) {
 	type args struct {
 		address string
 	}
@@ -49,20 +49,20 @@ func TestAddressToOutputScript(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := parser.AddressToOutputScript(tt.args.address)
+			got, err := parser.GetAddrDescFromAddress(tt.args.address)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("AddressToOutputScript() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("GetAddrDescFromAddress() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			h := hex.EncodeToString(got)
 			if !reflect.DeepEqual(h, tt.want) {
-				t.Errorf("AddressToOutputScript() = %v, want %v", h, tt.want)
+				t.Errorf("GetAddrDescFromAddress() = %v, want %v", h, tt.want)
 			}
 		})
 	}
 }
 
-func TestOutputScriptToAddresses(t *testing.T) {
+func Test_GetAddressesFromAddrDesc(t *testing.T) {
 	type args struct {
 		script string
 	}
@@ -70,43 +70,62 @@ func TestOutputScriptToAddresses(t *testing.T) {
 		name    string
 		args    args
 		want    []string
+		want2   bool
 		wantErr bool
 	}{
 		{
 			name:    "P2PKH",
 			args:    args{script: "76a914be027bf3eac907bd4ac8cb9c5293b6f37662722088ac"},
 			want:    []string{"1JKgN43B9SyLuZH19H5ECvr4KcfrbVHzZ6"},
+			want2:   true,
 			wantErr: false,
 		},
 		{
 			name:    "P2SH",
 			args:    args{script: "a9140394b3cf9a44782c10105b93962daa8dba304d7f87"},
 			want:    []string{"321x69Cb9HZLWwAWGiUBT1U81r1zPLnEjL"},
+			want2:   true,
 			wantErr: false,
 		},
 		{
 			name:    "P2WPKH",
 			args:    args{script: "00141c12afc6b2602607fdbc209f2a053c54ecd2c673"},
 			want:    []string{"bc1qrsf2l34jvqnq0lduyz0j5pfu2nkd93nnq0qggn"},
+			want2:   true,
 			wantErr: false,
 		},
 		{
 			name:    "P2WSH",
 			args:    args{script: "002003973a40ec94c0d10f6f6f0e7a62ba2044b7d19db6ff2bf60651e17fb29d8d29"},
 			want:    []string{"bc1qqwtn5s8vjnqdzrm0du885c46ypzt05vakmljhasx28shlv5a355sw5exgr"},
+			want2:   true,
+			wantErr: false,
+		},
+		{
+			// TODO handle OP_RETURN better
+			name:    "OP_RETURN",
+			args:    args{script: "6a0461686f6a"},
+			want:    []string{},
+			want2:   false,
 			wantErr: false,
 		},
 	}
+
+	parser := NewBitcoinParser(GetChainParams("main"), &Configuration{})
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			b, _ := hex.DecodeString(tt.args.script)
-			got, err := outputScriptToAddresses(b, GetChainParams("main"))
+			got, got2, err := parser.GetAddressesFromAddrDesc(b)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("outputScriptToAddresses() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("outputScriptToAddresses() = %v, want %v", got, tt.want)
+				t.Errorf("GetAddressesFromAddrDesc() = %v, want %v", got, tt.want)
+			}
+			if !reflect.DeepEqual(got2, tt.want2) {
+				t.Errorf("GetAddressesFromAddrDesc() = %v, want %v", got2, tt.want2)
 			}
 		})
 	}
@@ -120,21 +139,6 @@ var (
 )
 
 func init() {
-	var (
-		addr1, addr2, addr3 bchain.Address
-		err                 error
-	)
-	addr1, err = bchain.NewBaseAddress("3AZKvpKhSh1o8t1QrX3UeXG9d2BhCRnbcK")
-	if err == nil {
-		addr2, err = bchain.NewBaseAddress("2NByHN6A8QYkBATzxf4pRGbCSHD5CEN2TRu")
-	}
-	if err == nil {
-		addr3, err = bchain.NewBaseAddress("2MvZguYaGjM7JihBgNqgLF2Ca2Enb76Hj9D")
-	}
-	if err != nil {
-		panic(err)
-	}
-
 	testTx1 = bchain.Tx{
 		Hex:       "01000000017f9a22c9cbf54bd902400df746f138f37bcf5b4d93eb755820e974ba43ed5f42040000006a4730440220037f4ed5427cde81d55b9b6a2fd08c8a25090c2c2fff3a75c1a57625ca8a7118022076c702fe55969fa08137f71afd4851c48e31082dd3c40c919c92cdbc826758d30121029f6da5623c9f9b68a9baf9c1bc7511df88fa34c6c2f71f7c62f2f03ff48dca80feffffff019c9700000000000017a9146144d57c8aff48492c9dfb914e120b20bad72d6f8773d00700",
 		Blocktime: 1519053802,
@@ -161,7 +165,6 @@ func init() {
 						"3AZKvpKhSh1o8t1QrX3UeXG9d2BhCRnbcK",
 					},
 				},
-				Address: addr1,
 			},
 		},
 	}
@@ -192,7 +195,6 @@ func init() {
 						"2NByHN6A8QYkBATzxf4pRGbCSHD5CEN2TRu",
 					},
 				},
-				Address: addr2,
 			},
 			{
 				ValueSat: *big.NewInt(920081157),
@@ -203,7 +205,6 @@ func init() {
 						"2MvZguYaGjM7JihBgNqgLF2Ca2Enb76Hj9D",
 					},
 				},
-				Address: addr3,
 			},
 		},
 	}

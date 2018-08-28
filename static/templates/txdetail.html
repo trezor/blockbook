@@ -16,13 +16,16 @@
                         {{range $vin := $tx.Vin}}
                         <tr>
                             <td>
-                                {{if $vin.Txid}}
-                                <span class="float-left ellipsis">
-                                    {{if $vin.Addr}}{{if eq $vin.Addr $addr}}{{$vin.Addr}}{{else}}
-                                    <a href="/explorer/address/{{$vin.Addr}}">{{$vin.Addr}}</a>{{end}}{{else}}Unparsed address{{end}}
+                                {{range $a := $vin.Addresses}}
+                                <span class="ellipsis float-left">
+                                    {{if eq $a $addr}}{{$a}}{{else}}
+                                    <a href="/explorer/address/{{$a}}">{{$a}}</a>{{end}}
                                 </span>
-                                <span class="float-right{{if eq $vin.Addr $addr}} text-danger{{end}}">{{formatAmount $vin.Value}} {{$cs}}</span>
-                                {{else}}No Inputs (Newly Generated Coins){{end}}
+                                {{else}}
+                                <span class="float-left">No Inputs (Newly Generated Coins)</span>
+                                {{end}} {{if $vin.Addresses}}
+                                <span class="float-right{{if stringInSlice $addr $vin.Addresses}} text-danger{{end}}">{{formatAmount $vin.Value}} {{$cs}}</span>
+                                {{end}}
                             </td>
                         </tr>
                         {{end}}

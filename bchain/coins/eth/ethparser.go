@@ -23,7 +23,6 @@ type EthereumParser struct {
 // NewEthereumParser returns new EthereumParser instance
 func NewEthereumParser() *EthereumParser {
 	return &EthereumParser{&bchain.BaseParser{
-		AddressFactory:       bchain.NewBaseAddress,
 		BlockAddressesToKeep: 0,
 		AmountDecimalPoint:   18,
 	}}
@@ -68,7 +67,6 @@ func (p *EthereumParser) ethTxToTx(tx *rpcTransaction, blocktime int64, confirma
 	txid := ethHashToHash(tx.Hash)
 	var (
 		fa, ta []string
-		addr   bchain.Address
 		err    error
 	)
 	if len(tx.From) > 2 {
@@ -76,10 +74,6 @@ func (p *EthereumParser) ethTxToTx(tx *rpcTransaction, blocktime int64, confirma
 	}
 	if len(tx.To) > 2 {
 		ta = []string{tx.To}
-		addr, err = p.AddressFactory(tx.To)
-		if err != nil {
-			return nil, err
-		}
 	}
 	// temporarily, the complete rpcTransaction without BlockHash is marshalled and hex encoded to bchain.Tx.Hex
 	bh := tx.BlockHash
@@ -119,26 +113,25 @@ func (p *EthereumParser) ethTxToTx(tx *rpcTransaction, blocktime int64, confirma
 					// Hex
 					Addresses: ta,
 				},
-				Address: addr,
 			},
 		},
 	}, nil
 }
 
-// GetAddrIDFromVout returns internal address representation of given transaction output
-func (p *EthereumParser) GetAddrIDFromVout(output *bchain.Vout) ([]byte, error) {
+// GetAddrDescFromVout returns internal address representation of given transaction output
+func (p *EthereumParser) GetAddrDescFromVout(output *bchain.Vout) ([]byte, error) {
 	if len(output.ScriptPubKey.Addresses) != 1 {
 		return nil, bchain.ErrAddressMissing
 	}
-	return p.GetAddrIDFromAddress(output.ScriptPubKey.Addresses[0])
+	return p.GetAddrDescFromAddress(output.ScriptPubKey.Addresses[0])
 }
 
 func has0xPrefix(s string) bool {
 	return len(s) >= 2 && s[0] == '0' && (s[1]|32) == 'x'
 }
 
-// GetAddrIDFromAddress returns internal address representation of given address
-func (p *EthereumParser) GetAddrIDFromAddress(address string) ([]byte, error) {
+// GetAddrDescFromAddress returns internal address representation of given address
+func (p *EthereumParser) GetAddrDescFromAddress(address string) ([]byte, error) {
 	// github.com/ethereum/go-ethereum/common.HexToAddress does not handle address errors, using own decoding
 	if has0xPrefix(address) {
 		address = address[2:]
@@ -150,6 +143,16 @@ func (p *EthereumParser) GetAddrIDFromAddress(address string) ([]byte, error) {
 		address = "0" + address
 	}
 	return hex.DecodeString(address)
+}
+
+// GetAddressesFromAddrDesc returns addresses for given address descriptor with flag if the addresses are searchable
+func (p *EthereumParser) GetAddressesFromAddrDesc(addrDesc []byte) ([]string, bool, error) {
+	return []string{hexutil.Encode(addrDesc)}, true, nil
+}
+
+// GetScriptFromAddrDesc returns output script for given address descriptor
+func (p *EthereumParser) GetScriptFromAddrDesc(addrDesc []byte) ([]byte, error) {
+	return addrDesc, nil
 }
 
 func hexDecode(s string) ([]byte, error) {

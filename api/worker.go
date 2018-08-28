@@ -33,6 +33,14 @@ func NewWorker(db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxCache, is 
 	return w, nil
 }
 
+func (w *Worker) getAddressesFromVout(vout *bchain.Vout) ([]string, bool, error) {
+	addrDesc, err := w.chainParser.GetAddrDescFromVout(vout)
+	if err != nil {
+		return nil, false, err
+	}
+	return w.chainParser.GetAddressesFromAddrDesc(addrDesc)
+}
+
 // GetTransaction reads transaction data from txid
 func (w *Worker) GetTransaction(txid string, bestheight uint32, spendingTxs bool) (*Tx, error) {
 	bchainTx, height, err := w.txCache.GetTransaction(txid, bestheight)
@@ -75,9 +83,9 @@ func (w *Worker) GetTransaction(txid string, bestheight uint32, spendingTxs bool
 				if len(otx.Vout) > int(vin.Vout) {
 					vout := &otx.Vout[vin.Vout]
 					vin.ValueSat = vout.ValueSat
-					if vout.Address != nil {
-						a := vout.Address.String()
-						vin.Addr = a
+					vin.Addresses, vin.Searchable, err = w.getAddressesFromVout(vout)
+					if err != nil {
+						glog.Errorf("getAddressesFromVout error %v, vout %+v", err, vout)
 					}
 				}
 			} else {
@@ -85,9 +93,9 @@ func (w *Worker) GetTransaction(txid string, bestheight uint32, spendingTxs bool
 					output := &ta.Outputs[vin.Vout]
 					vin.ValueSat = output.ValueSat
 					vin.Value = w.chainParser.AmountToDecimalString(&vin.ValueSat)
-					a, _ := output.Addresses(w.chainParser)
-					if len(a) > 0 {
-						vin.Addr = a[0]
+					vin.Addresses, vin.Searchable, err = output.Addresses(w.chainParser)
+					if err != nil {
+						glog.Errorf("output.Addresses error %v, tx %v, output %v", err, bchainVin.Txid, i)
 					}
 				}
 			}
@@ -104,6 +112,7 @@ func (w *Worker) GetTransaction(txid string, bestheight uint32, spendingTxs bool
 		vout.Value = w.chainParser.AmountToDecimalString(&bchainVout.ValueSat)
 		valOutSat.Add(&valOutSat, &bchainVout.ValueSat)
 		vout.ScriptPubKey.Hex = bchainVout.ScriptPubKey.Hex
+
 		vout.ScriptPubKey.Addresses = bchainVout.ScriptPubKey.Addresses
 		if spendingTxs {
 			// TODO
@@ -156,11 +165,11 @@ func (w *Worker) getAddressTxids(address string, mempool bool) ([]string, error)
 	return txids, nil
 }
 
-func (t *Tx) getAddrVoutValue(addrID string) *big.Int {
+func (t *Tx) getAddrVoutValue(addr string) *big.Int {
 	var val big.Int
 	for _, vout := range t.Vout {
 		for _, a := range vout.ScriptPubKey.Addresses {
-			if a == addrID {
+			if a == addr {
 				val.Add(&val, &vout.ValueSat)
 			}
 		}
@@ -168,11 +177,13 @@ func (t *Tx) getAddrVoutValue(addrID string) *big.Int {
 	return &val
 }
 
-func (t *Tx) getAddrVinValue(addrID string) *big.Int {
+func (t *Tx) getAddrVinValue(addr string) *big.Int {
 	var val big.Int
 	for _, vin := range t.Vin {
-		if vin.Addr == addrID {
-			val.Add(&val, &vin.ValueSat)
+		for _, a := range vin.Addresses {
+			if a == addr {
+				val.Add(&val, &vin.ValueSat)
+			}
 		}
 	}
 	return &val
@@ -195,6 +206,7 @@ func UniqueTxidsInReverse(txids []string) []string {
 }
 
 func (w *Worker) txFromTxAddress(txid string, ta *db.TxAddresses, bi *db.BlockInfo, bestheight uint32) *Tx {
+	var err error
 	var valInSat, valOutSat, feesSat big.Int
 	vins := make([]Vin, len(ta.Inputs))
 	for i := range ta.Inputs {
@@ -204,9 +216,9 @@ func (w *Worker) txFromTxAddress(txid string, ta *db.TxAddresses, bi *db.BlockIn
 		vin.ValueSat = tai.ValueSat
 		vin.Value = w.chainParser.AmountToDecimalString(&vin.ValueSat)
 		valInSat.Add(&valInSat, &vin.ValueSat)
-		a, err := tai.Addresses(w.chainParser)
-		if err == nil && len(a) == 1 {
-			vin.Addr = a[0]
+		vin.Addresses, vin.Searchable, err = tai.Addresses(w.chainParser)
+		if err != nil {
+			glog.Errorf("tai.Addresses error %v, tx %v, input %v", err, txid, i)
 		}
 	}
 	vouts := make([]Vout, len(ta.Outputs))
@@ -217,9 +229,9 @@ func (w *Worker) txFromTxAddress(txid string, ta *db.TxAddresses, bi *db.BlockIn
 		vout.ValueSat = tao.ValueSat
 		vout.Value = w.chainParser.AmountToDecimalString(&vout.ValueSat)
 		valOutSat.Add(&valOutSat, &vout.ValueSat)
-		a, err := tao.Addresses(w.chainParser)
-		if err == nil {
-			vout.ScriptPubKey.Addresses = a
+		vout.ScriptPubKey.Addresses, vout.ScriptPubKey.Searchable, err = tao.Addresses(w.chainParser)
+		if err != nil {
+			glog.Errorf("tai.Addresses error %v, tx %v, output %v", err, txid, i)
 		}
 	}
 	// for coinbase transactions valIn is 0
@@ -341,76 +353,5 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, onlyTxids b
 		TxsOnPage:               txsOnPage,
 	}
 	glog.Info(address, " finished in ", time.Since(start))
-	return r, nil
-}
-
-// GetAddress computes address value and gets transactions for given address
-func (w *Worker) GetAddressOld(addrID string, page int, txsOnPage int) (*Address, error) {
-	glog.Info(addrID, " start")
-	txc, err := w.getAddressTxids(addrID, false)
-	txc = UniqueTxidsInReverse(txc)
-	if err != nil {
-		return nil, err
-	}
-	txm, err := w.getAddressTxids(addrID, true)
-	if err != nil {
-		return nil, err
-	}
-	txm = UniqueTxidsInReverse(txm)
-	bestheight, _, err := w.db.GetBestBlock()
-	if err != nil {
-		return nil, err
-	}
-	lc := len(txc)
-	if lc > txsOnPage {
-		lc = txsOnPage
-	}
-	txs := make([]*Tx, len(txm)+lc)
-	txi := 0
-	var uBalSat, balSat, totRecvSat, totSentSat big.Int
-	for _, tx := range txm {
-		tx, err := w.GetTransaction(tx, bestheight, false)
-		// mempool transaction may fail
-		if err != nil {
-			glog.Error("GetTransaction ", tx, ": ", err)
-		} else {
-			uBalSat.Sub(tx.getAddrVoutValue(addrID), tx.getAddrVinValue(addrID))
-			txs[txi] = tx
-			txi++
-		}
-	}
-	if page < 0 {
-		page = 0
-	}
-	from := page * txsOnPage
-	if from > len(txc) {
-		from = 0
-	}
-	to := from + txsOnPage
-	for i, tx := range txc {
-		tx, err := w.GetTransaction(tx, bestheight, false)
-		if err != nil {
-			return nil, err
-		} else {
-			totRecvSat.Add(&totRecvSat, tx.getAddrVoutValue(addrID))
-			totSentSat.Add(&totSentSat, tx.getAddrVinValue(addrID))
-			if i >= from && i < to {
-				txs[txi] = tx
-				txi++
-			}
-		}
-	}
-	balSat.Sub(&totRecvSat, &totSentSat)
-	r := &Address{
-		AddrStr:                 addrID,
-		Balance:                 w.chainParser.AmountToDecimalString(&balSat),
-		TotalReceived:           w.chainParser.AmountToDecimalString(&totRecvSat),
-		TotalSent:               w.chainParser.AmountToDecimalString(&totSentSat),
-		Transactions:            txs[:txi],
-		TxApperances:            len(txc),
-		UnconfirmedBalance:      w.chainParser.AmountToDecimalString(&uBalSat),
-		UnconfirmedTxApperances: len(txm),
-	}
-	glog.Info(addrID, " finished")
 	return r, nil
 }

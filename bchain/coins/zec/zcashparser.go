@@ -7,6 +7,7 @@ import (
 
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/wire"
+	"github.com/juju/errors"
 )
 
 const (
@@ -24,7 +25,6 @@ type ZCashParser struct {
 func NewZCashParser(c *btc.Configuration) *ZCashParser {
 	return &ZCashParser{
 		&bchain.BaseParser{
-			AddressFactory:       bchain.NewBaseAddress,
 			BlockAddressesToKeep: c.BlockAddressesToKeep,
 			AmountDecimalPoint:   8,
 		},
@@ -51,8 +51,8 @@ func GetChainParams(chain string) *chaincfg.Params {
 	return params
 }
 
-// GetAddrIDFromVout returns internal address representation of given transaction output
-func (p *ZCashParser) GetAddrIDFromVout(output *bchain.Vout) ([]byte, error) {
+// GetAddrDescFromVout returns internal address representation of given transaction output
+func (p *ZCashParser) GetAddrDescFromVout(output *bchain.Vout) ([]byte, error) {
 	if len(output.ScriptPubKey.Addresses) != 1 {
 		return nil, nil
 	}
@@ -60,8 +60,20 @@ func (p *ZCashParser) GetAddrIDFromVout(output *bchain.Vout) ([]byte, error) {
 	return hash, err
 }
 
-// GetAddrIDFromAddress returns internal address representation of given address
-func (p *ZCashParser) GetAddrIDFromAddress(address string) ([]byte, error) {
+// GetAddrDescFromAddress returns internal address representation of given address
+func (p *ZCashParser) GetAddrDescFromAddress(address string) ([]byte, error) {
 	hash, _, err := utils.CheckDecode(address)
 	return hash, err
+}
+
+// GetAddressesFromAddrDesc returns addresses for given address descriptor with flag if the addresses are searchable
+func (p *ZCashParser) GetAddressesFromAddrDesc(addrDesc []byte) ([]string, bool, error) {
+	// TODO implement
+	return nil, false, errors.New("GetAddressesFromAddrDesc: not implemented")
+}
+
+// GetScriptFromAddrDesc returns output script for given address descriptor
+func (p *ZCashParser) GetScriptFromAddrDesc(addrDesc []byte) ([]byte, error) {
+	// TODO implement
+	return nil, errors.New("GetScriptFromAddrDesc: not implemented")
 }

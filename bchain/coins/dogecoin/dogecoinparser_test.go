@@ -15,7 +15,7 @@ import (
 	"testing"
 )
 
-func TestAddressToOutputScript_Mainnet(t *testing.T) {
+func Test_GetAddrDescFromAddress_Mainnet(t *testing.T) {
 	type args struct {
 		address string
 	}
@@ -54,14 +54,14 @@ func TestAddressToOutputScript_Mainnet(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := parser.AddressToOutputScript(tt.args.address)
+			got, err := parser.GetAddrDescFromAddress(tt.args.address)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("AddressToOutputScript() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("GetAddrDescFromAddress() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			h := hex.EncodeToString(got)
 			if !reflect.DeepEqual(h, tt.want) {
-				t.Errorf("AddressToOutputScript() = %v, want %v", h, tt.want)
+				t.Errorf("GetAddrDescFromAddress() = %v, want %v", h, tt.want)
 			}
 		})
 	}
@@ -76,24 +76,6 @@ var (
 )
 
 func init() {
-	var (
-		addr1, addr2, addr3, addr4 bchain.Address
-		err                        error
-	)
-	addr1, err = bchain.NewBaseAddress("DSvXNiqvG42wdteLqh3i6inxgDTs8Y9w2i")
-	if err == nil {
-		addr2, err = bchain.NewBaseAddress("DRemF3ZcqJ1PFeM7e7sXzzwQJKR8GNUtwK")
-	}
-	if err == nil {
-		addr3, err = bchain.NewBaseAddress("DJa8bWDrZKu4HgsYRYWuJrvxt6iTYuvXJ6")
-	}
-	if err == nil {
-		addr4, err = bchain.NewBaseAddress("DDTtqnuZ5kfRT5qh2c7sNtqrJmV3iXYdGG")
-	}
-	if err != nil {
-		panic(err)
-	}
-
 	testTx1 = bchain.Tx{
 		Hex:       "01000000016b3c0c53267964120acf7f7e72217e3f463e52ce622f89659f6a6bb8e69a4d91000000006c493046022100a96454237e3a020994534583e28c04757881374bceac89f933ea9ff00b4db259022100fbb757ff7ea4f02c4e42556b2834c61eba1f1af605db089d836a0614d90a3b46012103cebdde6d1046e285df4f48497bc50dc20a4a258ca5b7308cb0a929c9fdadcd9dffffffff0217e823ca7f0200001976a914eef21768a546590993e313c7f3dfadf6a6efa1e888acaddf4cba010000001976a914e0fee2ea29dd9c6c759d8341bd0da4c4f738cced88ac00000000",
 		Blocktime: 1519053456,
@@ -120,7 +102,6 @@ func init() {
 						"DSvXNiqvG42wdteLqh3i6inxgDTs8Y9w2i",
 					},
 				},
-				Address: addr1,
 			},
 			{
 				ValueSat: *big.NewInt(7420567469),
@@ -131,7 +112,6 @@ func init() {
 						"DRemF3ZcqJ1PFeM7e7sXzzwQJKR8GNUtwK",
 					},
 				},
-				Address: addr2,
 			},
 		},
 	}
@@ -162,7 +142,6 @@ func init() {
 						"DJa8bWDrZKu4HgsYRYWuJrvxt6iTYuvXJ6",
 					},
 				},
-				Address: addr3,
 			},
 			{
 				ValueSat: *big.NewInt(999999890000000),
@@ -173,7 +152,6 @@ func init() {
 						"DDTtqnuZ5kfRT5qh2c7sNtqrJmV3iXYdGG",
 					},
 				},
-				Address: addr4,
 			},
 		},
 	}

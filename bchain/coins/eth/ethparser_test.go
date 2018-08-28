@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-func TestEthParser_GetAddrIDFromAddress(t *testing.T) {
+func TestEthParser_GetAddrDescFromAddress(t *testing.T) {
 	type args struct {
 		address string
 	}
@@ -51,14 +51,14 @@ func TestEthParser_GetAddrIDFromAddress(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			p := NewEthereumParser()
-			got, err := p.GetAddrIDFromAddress(tt.args.address)
+			got, err := p.GetAddrDescFromAddress(tt.args.address)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("EthParser.GetAddrIDFromAddress() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("EthParser.GetAddrDescFromAddress() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			h := hex.EncodeToString(got)
 			if !reflect.DeepEqual(h, tt.want) {
-				t.Errorf("EthParser.GetAddrIDFromAddress() = %v, want %v", h, tt.want)
+				t.Errorf("EthParser.GetAddrDescFromAddress() = %v, want %v", h, tt.want)
 			}
 		})
 	}
@@ -71,17 +71,6 @@ var (
 )
 
 func init() {
-	var (
-		addr1, addr2 bchain.Address
-		err          error
-	)
-	addr1, err = bchain.NewBaseAddress("0x682b7903a11098cf770c7aef4aa02a85b3f3601a")
-	if err == nil {
-		addr2, err = bchain.NewBaseAddress("0x555ee11fbddc0e49a9bab358a8941ad95ffdb48f")
-	}
-	if err != nil {
-		panic(err)
-	}
 
 	testTx1 = bchain.Tx{
 		Blocktime: 1521515026,
@@ -99,7 +88,6 @@ func init() {
 				ScriptPubKey: bchain.ScriptPubKey{
 					Addresses: []string{"0x682b7903a11098cf770c7aef4aa02a85b3f3601a"},
 				},
-				Address: addr1,
 			},
 		},
 	}
@@ -120,7 +108,6 @@ func init() {
 				ScriptPubKey: bchain.ScriptPubKey{
 					Addresses: []string{"0x555ee11fbddc0e49a9bab358a8941ad95ffdb48f"},
 				},
-				Address: addr2,
 			},
 		},
 	}

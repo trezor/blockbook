@@ -91,7 +91,7 @@ func TestBcashAddressInSlice(t *testing.T) {
 	}
 }
 
-func TestAddressToOutputScript(t *testing.T) {
+func Test_GetAddrDescFromAddress(t *testing.T) {
 	parser, err := NewBCashParser(GetChainParams("test"), &btc.Configuration{AddressFormat: "legacy"})
 	if err != nil {
 		t.Errorf("NewBCashParser() error = %v", err)
@@ -101,21 +101,21 @@ func TestAddressToOutputScript(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
-	got1, err := parser.AddressToOutputScript("mnnAKPTSrWjgoi3uEYaQkHA1QEC5btFeBr")
+	got1, err := parser.GetAddrDescFromAddress("mnnAKPTSrWjgoi3uEYaQkHA1QEC5btFeBr")
 	if err != nil {
-		t.Errorf("AddressToOutputScript() error = %v", err)
+		t.Errorf("GetAddrDescFromAddress() error = %v", err)
 		return
 	}
 	if !bytes.Equal(got1, want) {
-		t.Errorf("AddressToOutputScript() got1 = %v, want %v", got1, want)
+		t.Errorf("GetAddrDescFromAddress() got1 = %v, want %v", got1, want)
 	}
-	got2, err := parser.AddressToOutputScript("bchtest:qp86jfla8084048rckpv85ht90falr050s03ejaesm")
+	got2, err := parser.GetAddrDescFromAddress("bchtest:qp86jfla8084048rckpv85ht90falr050s03ejaesm")
 	if err != nil {
-		t.Errorf("AddressToOutputScript() error = %v", err)
+		t.Errorf("GetAddrDescFromAddress() error = %v", err)
 		return
 	}
 	if !bytes.Equal(got2, want) {
-		t.Errorf("AddressToOutputScript() got2 = %v, want %v", got2, want)
+		t.Errorf("GetAddrDescFromAddress() got2 = %v, want %v", got2, want)
 	}
 }
 
@@ -127,20 +127,6 @@ var (
 )
 
 func init() {
-	var (
-		addr1, addr2, addr3 bchain.Address
-		err                 error
-	)
-	addr1, err = newBCashAddress("3AZKvpKhSh1o8t1QrX3UeXG9d2BhCRnbcK", Legacy)
-	if err == nil {
-		addr2, err = newBCashAddress("2NByHN6A8QYkBATzxf4pRGbCSHD5CEN2TRu", Legacy)
-	}
-	if err == nil {
-		addr3, err = newBCashAddress("2MvZguYaGjM7JihBgNqgLF2Ca2Enb76Hj9D", Legacy)
-	}
-	if err != nil {
-		panic(err)
-	}
 
 	testTx1 = bchain.Tx{
 		Hex:       "01000000017f9a22c9cbf54bd902400df746f138f37bcf5b4d93eb755820e974ba43ed5f42040000006a4730440220037f4ed5427cde81d55b9b6a2fd08c8a25090c2c2fff3a75c1a57625ca8a7118022076c702fe55969fa08137f71afd4851c48e31082dd3c40c919c92cdbc826758d30121029f6da5623c9f9b68a9baf9c1bc7511df88fa34c6c2f71f7c62f2f03ff48dca80feffffff019c9700000000000017a9146144d57c8aff48492c9dfb914e120b20bad72d6f8773d00700",
@@ -168,7 +154,6 @@ func init() {
 						"bitcoincash:pps5f4tu3tl5sjfvnhaeznsjpvst44eddugfcnqpy9",
 					},
 				},
-				Address: addr1,
 			},
 		},
 	}
@@ -199,7 +184,6 @@ func init() {
 						"bchtest:prxkdrtcrm8xqrh6fvjqfhy3l5nt3w9wmq9fmsvkmz",
 					},
 				},
-				Address: addr2,
 			},
 			{
 				ValueSat: *big.NewInt(920081157),
@@ -210,7 +194,6 @@ func init() {
 						"bchtest:pqjxv4dah42v0erh6r4zxa0gdcxm9w8cpg0qw8tqf6",
 					},
 				},
-				Address: addr3,
 			},
 		},
 	}

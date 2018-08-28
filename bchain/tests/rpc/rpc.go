@@ -96,7 +96,6 @@ func setTxAddresses(parser bchain.BlockChainParser, tx *bchain.Tx) error {
 		if err == nil {
 			for i := 0; i < len(tx.Vout); i++ {
 				tx.Vout[i].ScriptPubKey.Addresses = tmp.Vout[i].ScriptPubKey.Addresses
-				tx.Vout[i].Address = tmp.Vout[i].Address
 			}
 		}
 	}

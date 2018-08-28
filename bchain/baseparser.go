@@ -10,23 +10,10 @@ import (
 	"github.com/juju/errors"
 )
 
-type AddressFactoryFunc func(string) (Address, error)
-
 // BaseParser implements data parsing/handling functionality base for all other parsers
 type BaseParser struct {
-	AddressFactory       AddressFactoryFunc
 	BlockAddressesToKeep int
 	AmountDecimalPoint   int
-}
-
-// AddressToOutputScript converts address to ScriptPubKey - currently not implemented
-func (p *BaseParser) AddressToOutputScript(address string) ([]byte, error) {
-	return nil, errors.New("AddressToOutputScript: not implemented")
-}
-
-// OutputScriptToAddresses converts ScriptPubKey to addresses - currently not implemented
-func (p *BaseParser) OutputScriptToAddresses(script []byte) ([]string, error) {
-	return nil, errors.New("OutputScriptToAddresses: not implemented")
 }
 
 // ParseBlock parses raw block to our Block struct - currently not implemented
@@ -100,13 +87,6 @@ func (p *BaseParser) ParseTxFromJson(msg json.RawMessage) (*Tx, error) {
 			return nil, err
 		}
 		vout.JsonValue = ""
-		if len(vout.ScriptPubKey.Addresses) == 1 {
-			a, err := p.AddressFactory(vout.ScriptPubKey.Addresses[0])
-			if err != nil {
-				return nil, err
-			}
-			vout.Address = a
-		}
 	}
 
 	return &tx, nil
@@ -241,13 +221,6 @@ func (p *BaseParser) UnpackTx(buf []byte) (*Tx, uint32, error) {
 			},
 			ValueSat: vs,
 		}
-		if len(pto.Addresses) == 1 {
-			a, err := p.AddressFactory(pto.Addresses[0])
-			if err != nil {
-				return nil, 0, err
-			}
-			vout[i].Address = a
-		}
 	}
 	tx := Tx{
 		Blocktime: int64(pt.Blocktime),
@@ -259,30 +232,4 @@ func (p *BaseParser) UnpackTx(buf []byte) (*Tx, uint32, error) {
 		Vout:      vout,
 	}
 	return &tx, pt.Height, nil
-}
-
-type baseAddress struct {
-	addr string
-}
-
-func NewBaseAddress(addr string) (Address, error) {
-	return &baseAddress{addr: addr}, nil
-}
-
-func (a baseAddress) String() string {
-	return a.addr
-}
-
-func (a baseAddress) AreEqual(addr string) bool {
-	return a.String() == addr
-}
-
-func (a baseAddress) InSlice(addrs []string) bool {
-	ea := a.String()
-	for _, addr := range addrs {
-		if ea == addr {
-			return true
-		}
-	}
-	return false
 }

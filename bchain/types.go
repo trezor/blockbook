@@ -43,18 +43,11 @@ type ScriptPubKey struct {
 	Addresses []string `json:"addresses"`
 }
 
-type Address interface {
-	String() string
-	AreEqual(addr string) bool
-	InSlice(addrs []string) bool
-}
-
 type Vout struct {
 	ValueSat     big.Int
 	JsonValue    json.Number  `json:"value"`
 	N            uint32       `json:"n"`
 	ScriptPubKey ScriptPubKey `json:"scriptPubKey"`
-	Address      Address
 }
 
 // Tx is blockchain transaction
@@ -164,12 +157,11 @@ type BlockChainParser interface {
 	// AmountToBigInt converts amount in json.Number (string) to big.Int
 	// it uses string operations to avoid problems with rounding
 	AmountToBigInt(n json.Number) (big.Int, error)
-	// address id conversions
-	GetAddrIDFromVout(output *Vout) ([]byte, error)
-	GetAddrIDFromAddress(address string) ([]byte, error)
-	// address to output script conversions
-	AddressToOutputScript(address string) ([]byte, error)
-	OutputScriptToAddresses(script []byte) ([]string, error)
+	// address descriptor conversions
+	GetAddrDescFromVout(output *Vout) ([]byte, error)
+	GetAddrDescFromAddress(address string) ([]byte, error)
+	GetAddressesFromAddrDesc(addrDesc []byte) ([]string, bool, error)
+	GetScriptFromAddrDesc(addrDesc []byte) ([]byte, error)
 	// transactions
 	PackedTxidLen() int
 	PackTxid(txid string) ([]byte, error)

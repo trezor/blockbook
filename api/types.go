@@ -24,23 +24,23 @@ type ScriptSig struct {
 }
 
 type Vin struct {
-	Txid      string    `json:"txid"`
-	Vout      uint32    `json:"vout"`
-	Sequence  int64     `json:"sequence,omitempty"`
-	N         int       `json:"n"`
-	ScriptSig ScriptSig `json:"scriptSig"`
-	Addr      string    `json:"addr"`
-	AddrLink  bool      `json:"-"`
-	Value     string    `json:"value"`
-	ValueSat  big.Int   `json:"-"`
+	Txid       string    `json:"txid"`
+	Vout       uint32    `json:"vout"`
+	Sequence   int64     `json:"sequence,omitempty"`
+	N          int       `json:"n"`
+	ScriptSig  ScriptSig `json:"scriptSig"`
+	Addresses  []string  `json:"addresses"`
+	Searchable bool      `json:"-"`
+	Value      string    `json:"value"`
+	ValueSat   big.Int   `json:"-"`
 }
 
 type ScriptPubKey struct {
-	Hex       string   `json:"hex"`
-	Asm       string   `json:"asm,omitempty"`
-	Addresses []string `json:"addresses"`
-	AddrsLink []bool   `json:"-"`
-	Type      string   `json:"type,omitempty"`
+	Hex        string   `json:"hex"`
+	Asm        string   `json:"asm,omitempty"`
+	Addresses  []string `json:"addresses"`
+	Searchable bool     `json:"-"`
+	Type       string   `json:"type,omitempty"`
 }
 type Vout struct {
 	Value        string       `json:"value"`

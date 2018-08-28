@@ -13,7 +13,7 @@ import (
 	"testing"
 )
 
-func TestAddressToOutputScript_Mainnet(t *testing.T) {
+func Test_GetAddrDescFromAddress_Mainnet(t *testing.T) {
 	type args struct {
 		address string
 	}
@@ -40,14 +40,14 @@ func TestAddressToOutputScript_Mainnet(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := parser.AddressToOutputScript(tt.args.address)
+			got, err := parser.GetAddrDescFromAddress(tt.args.address)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("AddressToOutputScript() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("GetAddrDescFromAddress() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			h := hex.EncodeToString(got)
 			if !reflect.DeepEqual(h, tt.want) {
-				t.Errorf("AddressToOutputScript() = %v, want %v", h, tt.want)
+				t.Errorf("GetAddrDescFromAddress() = %v, want %v", h, tt.want)
 			}
 		})
 	}

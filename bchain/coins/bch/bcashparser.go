@@ -47,15 +47,14 @@ func NewBCashParser(params *chaincfg.Params, c *btc.Configuration) (*BCashParser
 	p := &BCashParser{
 		BitcoinParser: &btc.BitcoinParser{
 			BaseParser: &bchain.BaseParser{
-				AddressFactory:       func(addr string) (bchain.Address, error) { return newBCashAddress(addr, format) },
 				BlockAddressesToKeep: c.BlockAddressesToKeep,
 				AmountDecimalPoint:   8,
 			},
 			Params: params,
-			OutputScriptToAddressesFunc: outputScriptToAddresses,
 		},
 		AddressFormat: format,
 	}
+	p.OutputScriptToAddressesFunc = p.outputScriptToAddresses
 	return p, nil
 }
 
@@ -79,13 +78,13 @@ func GetChainParams(chain string) *chaincfg.Params {
 	return params
 }
 
-// GetAddrIDFromAddress returns internal address representation of given address
-func (p *BCashParser) GetAddrIDFromAddress(address string) ([]byte, error) {
-	return p.AddressToOutputScript(address)
+// GetAddrDescFromAddress returns internal address representation of given address
+func (p *BCashParser) GetAddrDescFromAddress(address string) ([]byte, error) {
+	return p.addressToOutputScript(address)
 }
 
-// AddressToOutputScript converts bitcoin address to ScriptPubKey
-func (p *BCashParser) AddressToOutputScript(address string) ([]byte, error) {
+// addressToOutputScript converts bitcoin address to ScriptPubKey
+func (p *BCashParser) addressToOutputScript(address string) ([]byte, error) {
 	if isCashAddr(address) {
 		da, err := bchutil.DecodeAddress(address, p.Params)
 		if err != nil {
@@ -124,12 +123,13 @@ func isCashAddr(addr string) bool {
 }
 
 // outputScriptToAddresses converts ScriptPubKey to bitcoin addresses
-func outputScriptToAddresses(script []byte, params *chaincfg.Params) ([]string, error) {
-	a, err := bchutil.ExtractPkScriptAddrs(script, params)
+func (p *BCashParser) outputScriptToAddresses(script []byte) ([]string, bool, error) {
+	a, err := bchutil.ExtractPkScriptAddrs(script, p.Params)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	return []string{a.EncodeAddress()}, nil
+	addr := a.EncodeAddress()
+	return []string{addr}, len(addr) > 0, nil
 }
 
 type bcashAddress struct {

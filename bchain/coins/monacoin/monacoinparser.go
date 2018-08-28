@@ -91,11 +91,11 @@ func GetMonaChainParams(chain string) *monacoinCfg.Params {
 
 // GetAddrIDFromAddress returns internal address representation of given address
 func (p *MonacoinParser) GetAddrIDFromAddress(address string) ([]byte, error) {
-	return p.AddressToOutputScript(address)
+	return p.addressToOutputScript(address)
 }
 
-// AddressToOutputScript converts monacoin address to ScriptPubKey
-func (p *MonacoinParser) AddressToOutputScript(address string) ([]byte, error) {
+// addressToOutputScript converts monacoin address to ScriptPubKey
+func (p *MonacoinParser) addressToOutputScript(address string) ([]byte, error) {
 	switch p.Params.Net {
 	case MainnetMagic:
 		da, err := monautil.DecodeAddress(address, &MonaMainParams)

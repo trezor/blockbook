@@ -338,8 +338,7 @@ func (s *PublicServer) explorerAddress(r *http.Request) (tpl, *TemplateData, err
 		if ec != nil {
 			page = 0
 		}
-		addrID := r.URL.Path[i+1:]
-		address, err = s.api.GetAddress(addrID, page, txsOnPage, false)
+		address, err = s.api.GetAddress(r.URL.Path[i+1:], page, txsOnPage, false)
 		if err != nil {
 			return errorTpl, nil, err
 		}
@@ -439,8 +438,7 @@ func (s *PublicServer) apiAddress(r *http.Request) (interface{}, error) {
 		if ec != nil {
 			page = 0
 		}
-		addrID := r.URL.Path[i+1:]
-		address, err = s.api.GetAddress(addrID, page, txsInAPI, true)
+		address, err = s.api.GetAddress(r.URL.Path[i+1:], page, txsInAPI, true)
 	}
 	return address, err
 }
