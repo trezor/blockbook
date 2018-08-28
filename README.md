@@ -4,7 +4,7 @@
 
 ## Build and installation instructions
 
-Develper build guide is [here](/docs/build.md).
+Developer build guide is [here](/docs/build.md).
 
 Sysadmin installation guide is [here](https://wiki.trezor.io/Blockbook).
 
