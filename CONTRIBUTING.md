@@ -1,10 +1,11 @@
 # Blockbook Contributor Guide
 
 Blockbook is back-end service for Trezor wallet. Although it is open source, design and development of core packages
-is done by Trezor developers in order to keep Blockbook compatible with Trezor. If you feel you could use Blockbook
-for another purposes, we recommend you to make a fork.
+is done by Trezor developers in order to keep Blockbook compatible with Trezor.
 
-However you can still help us find bugs or add support for new coins.
+Bug fixes and support for new coins are welcome. Please take note that non-fixing pull requests that change base
+packages or another coin code will not be accepted. If you will have to change some of existing code, please file
+an issue and discuss your request with Blockbook maintainers.
 
 ## Development environment
 
@@ -14,6 +15,10 @@ Instructions to set up your development environment and build Blockbook are desc
 ## How can I contribute?
 
 ### Reporting bugs
+
+If you think you found a bug, please [file an issue](https://github.com/trezor/blockbook/issues/new).
+
+TODO issue content
 
 ### Adding coin support
 
@@ -50,12 +55,13 @@ about coin in section *coin* – name, alias etc. Then update port information i
 listed in [port registry](/docs/ports.md). Select next port numbers in series. Port numbers must be unique across all
 port definitions.
 
-In section *backend* update information how to build and configure backend service. When back-end package is built,
+In section *backend* update information how to build and configure back-end service. When back-end package is built,
 build process downloads installation archive, verify and extract it. How it is done is described in
 [build guide](/docs/build.md#on-back-end-building). Naming conventions and versioning are described
 also in [build guide](/docs/build.md#on-naming-conventions-and-versioning). You have to update *package_name*,
-*package_revision*, *system_user*, *version*, *binary_url*, *verification_type*, *verification_source*, *extract_command* and
-*exclude_files*. Also update information whether service runs mainnet or testnet network in *mainnet* option.
+*package_revision*, *system_user*, *version*, *binary_url*, *verification_type*, *verification_source*,
+*extract_command* and *exclude_files*. Also update information whether service runs mainnet or testnet network in
+*mainnet* option.
 
 In section *blockbook* update information how to build and configure Blockbook service. Usually they are only
 *package_name*, *system_user* and *explorer_url* options. Naming conventions are are described
@@ -77,8 +83,8 @@ Coin implementation is stored in *bchain/coins* directory. Each coin must implem
 
 There are several approaches how to implement coin support in Blockbook, please see examples below.
 
-Bitcoin package *blockbook/bchain/coins/btc* is reference implementation for Bitcoin-like coins. Most of functionality is
-same so particular coin should embed it and override just different parts.
+Bitcoin package *blockbook/bchain/coins/btc* is reference implementation for Bitcoin-like coins. Most of functionality
+is same so particular coin should embed it and override just different parts.
 
 Bitcoin uses binary WIRE protocol thus decoding is very fast but require complex parser. Parser translate whole
 pubkey-script to database ID and therefore it is usually possible store transactions without change.
