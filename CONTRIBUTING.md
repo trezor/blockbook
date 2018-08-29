@@ -16,9 +16,21 @@ Instructions to set up your development environment and build Blockbook are desc
 
 ### Reporting bugs
 
-If you think you found a bug, please [file an issue](https://github.com/trezor/blockbook/issues/new).
+A great way to contribute to the project is to send a detailed report when you encounter an issue. We always appreciate
+a well-written, thorough bug report, and will thank you for it!
 
-TODO issue content
+Check that [our issue database](https://github.com/trezor/blockbook/issues) doesn't already include that problem or
+suggestion before submitting an issue. If you find a match, you can use the "subscribe" button to get notified on
+updates. Do not leave random "+1" or "I have this too" comments, as they only clutter the discussion, and don't help
+resolving it. However, if you have ways to reproduce the issue or have additional information that may help resolving
+the issue, please leave a comment.
+
+Include information about Blockbook instance which is exposed at internal HTTP port. Ports are listed in
+[port registry](/docs/ports.md). For example execute `curl -k https://localhost:9030` for Bitcoin.
+
+Also include the steps required to reproduce the problem if possible and applicable. This information will help us
+review and fix your issue faster. When sending lengthy log-files, consider posting them as a gist
+(https://gist.github.com).
 
 ### Adding coin support
 
@@ -142,8 +154,8 @@ There are several groups of methods defined in *bchian.BlockChainParser*:
   *btc.BitcoinParser* uses pointer to function *OutputScriptToAddressesFunc* that is called from *OutputScriptToAddress*
   method in order to rewrite implementation by types embedding it.
 * *PackTxid* and *UnpackTxid* – Packs txid to store in database and vice versa.
-* *ParseTx* and *ParseTxFromJson* – Parse transaction from binary data or JSON and return *bchain.Tx.
-* PackTx* and *UnpackTx* – Pack transaction to binary data to store in database and vice versa.
+* *ParseTx* and *ParseTxFromJson* – Parse transaction from binary data or JSON and return *bchain.Tx*.
+* *PackTx* and *UnpackTx* – Pack transaction to binary data to store in database and vice versa.
 * *ParseBlock* – Parse block from binary data and return *bchain.Block*.
 
 Base type of parsers is *bchain.BaseParser*. It implements method *ParseTxFromJson* that would be same for all
