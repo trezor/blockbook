@@ -4,6 +4,10 @@
 
 ## Build and installation instructions
 
+Officially supported platform is **Debian Linux** and **AMD64** architecture. Memory requirements for initial sync are
+around 32 GB RAM and 100 GB of disk size. Fully synchronized instance takes around 10 GB RAM. Note that fast SSD disks
+are highly recommended.
+
 Developer build guide is [here](/docs/build.md).
 
 Sysadmin installation guide is [here](https://wiki.trezor.io/Blockbook).
@@ -40,7 +44,6 @@ Reserved ports are described [here](/docs/ports.md)
 
 - add db data version (column data version) checking to db to avoid data corruption
 - improve txcache (time of storage, number/size of cached txs, purge cache)
-- update documentation
 - create/integrate blockchain explorer
 - support all coins from https://github.com/trezor/trezor-common/tree/master/defs/coins
 - full ethereum support (tokens, balance)
@@ -49,6 +52,7 @@ Reserved ports are described [here](/docs/ports.md)
 - tests
 - fix program dependencies to concrete versions
 - protect socket.io interface against illicit usage
+- ~~update documentation~~
 - ~~collect blockbook db stats (number of items in indexes, etc)~~
 - ~~optimize mempool (use non verbose get transaction, possibly parallelize)~~
 - ~~update used paths and users according to specification by system admin~~
