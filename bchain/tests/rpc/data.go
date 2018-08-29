@@ -67,10 +67,10 @@ func LoadTestConfig(coin string) (*TestConfig, error) {
 func LoadRPCConfig(coin string) (json.RawMessage, error) {
 	t := `{
 	"coin_name": "%s",
-	"rpcURL": "%s",
-	"rpcUser": "%s",
-	"rpcPass": "%s",
-	"rpcTimeout": 25,
+	"rpc_url": "%s",
+	"rpc_user": "%s",
+	"rpc_pass": "%s",
+	"rpc_timeout": 25,
 	"parse": true
 	}`
 

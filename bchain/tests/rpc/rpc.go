@@ -21,6 +21,7 @@ type TestConfig struct {
 type TestData struct {
 	BlockHeight uint32                `json:"blockHeight"`
 	BlockHash   string                `json:"blockHash"`
+	BlockTime   int64                 `json:"blockTime"`
 	BlockTxs    []string              `json:"blockTxs"`
 	TxDetails   map[string]*bchain.Tx `json:"txDetails"`
 }
@@ -432,6 +433,7 @@ func (rt *Test) TestGetBlockHeader(t *testing.T) {
 	want := &bchain.BlockHeader{
 		Hash:   rt.TestData.BlockHash,
 		Height: rt.TestData.BlockHeight,
+		Time:   rt.TestData.BlockTime,
 	}
 
 	got, err := rt.Client.GetBlockHeader(rt.TestData.BlockHash)
@@ -448,6 +450,6 @@ func (rt *Test) TestGetBlockHeader(t *testing.T) {
 	got.Prev, got.Next = "", ""
 
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("GetBlockHeader() got=%v, want=%v", got, want)
+		t.Errorf("GetBlockHeader() got=%+v, want=%+v", got, want)
 	}
 }

@@ -1,6 +1,7 @@
 {
     "blockHeight": 1325168,
     "blockHash": "000000000000004ed0834f3de922e66d024ec4da9fcc2da17be61369cb6dc041",
+    "blockTime": 1528788394,
     "blockTxs": [
         "e1179f205aabbf48dc2ce4ebd9ed255571b0578e4de551f6574a50cb81120007",
         "00a5aa2891d41af9eb1dc30c940f142a609ecab8f370eb0874ba7d32252d1b1b",
