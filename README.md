@@ -4,13 +4,14 @@
 
 ## Build and installation instructions
 
-Officially supported platform is **Debian Linux** and **AMD64** architecture. Memory requirements for initial sync are
-around 32 GB RAM and 100 GB of disk size. Fully synchronized instance takes around 10 GB RAM. Note that fast SSD disks
-are highly recommended.
+Officially supported platform is **Debian Linux** and **AMD64** architecture. Memory requirements for initial synchronization
+of **Bitcoin mainnet** are around 32 GB RAM and 100 GB of disk size. Fully synchronized instance takes around 10 GB RAM.
+Other coins should have lower requirements depending on size of their block chain. Note that fast SSD disks are highly
+recommended.
+
+User installation guide is [here](https://wiki.trezor.io/User_manual:Running_a_local_instance_of_Trezor_Wallet_backend_(Blockbook)).
 
 Developer build guide is [here](/docs/build.md).
-
-Sysadmin installation guide is [here](https://wiki.trezor.io/Blockbook).
 
 # Implemented coins
 
