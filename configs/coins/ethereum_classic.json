@@ -1,0 +1,14 @@
+{
+  "coin": {
+      "name": "Ethereum Classic",
+      "shortcut": "ETC",
+      "label": "Ethereum Classic",
+      "alias": "ethereum_classic"
+  },
+  "ports": {
+    "backend_rpc": 8037,
+    "backend_message_queue": 0,
+    "blockbook_internal": 9037,
+    "blockbook_public": 9137
+  }
+}
