@@ -19,10 +19,20 @@
         "user": "rpc",
         "pass": "rpc"
     },
+    "Litecoin": {
+        "url": "http://localhost:8034",
+        "user": "rpc",
+        "pass": "rpc"
+    },
     "Ethereum": {
         "url": "ws://localhost:8036",
         "user": null,
         "pass": null
+    },
+    "Dogecoin": {
+        "url": "http://localhost:8038",
+        "user": "rpc",
+        "pass": "rpcp"
     },
     "Namecoin": {
         "url": "http://localhost:8039",
