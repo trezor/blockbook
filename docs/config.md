@@ -99,7 +99,7 @@ Good examples of coin configuration are
 
 We use *text/template* package to generate package definitions and configuration files. Some options in coin definition
 are also templates and are executed inside base template. Use `{{.path}}` syntax to refer values in coin definition,
-where *.path* can be for example *.Blockbook.BlockChain.Parse*. Go uses CammelCase notation so references inside templates
+where *.path* can be for example *.Blockbook.BlockChain.Parse*. Go uses CamelCase notation so references inside templates
 as well. Note that dot at the beginning is mandatory. Go template syntax is fully documented
 [here](https://godoc.org/text/template).
 

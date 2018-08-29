@@ -22,7 +22,7 @@ them to Blockbook. Actually implemented coins are listed [here](/docs/ports.md).
 
 You should follow few steps bellow to get smooth merge of your PR.
 
-> Altough we are happy for support of new coins we have not enough capacity to run them all on our infrastructure.
+> Although we are happy for support of new coins we have not enough capacity to run them all on our infrastructure.
 > Actually we can run Blockbook instances only for coins supported by Trezor wallet. If you want to have Blockbook
 > instance for your coin, you will have to deploy your own server.
 
@@ -77,13 +77,13 @@ Coin implementation is stored in *bchain/coins* directory. Each coin must implem
 
 There are several approaches how to implement coin support in Blockbook, please see examples below.
 
-Bitcoin package *blockbook/bchain/coins/btc* is reference implementation for Bitcoin-like coins. Most of functinality is
+Bitcoin package *blockbook/bchain/coins/btc* is reference implementation for Bitcoin-like coins. Most of functionality is
 same so particular coin should embed it and override just different parts.
 
 Bitcoin uses binary WIRE protocol thus decoding is very fast but require complex parser. Parser translate whole
-pubkey-script to databse ID and therefore it is usually possible store transactions without change.
+pubkey-script to database ID and therefore it is usually possible store transactions without change.
 
-ZCash package *blockbook/bchain/coins/zec* on the other side uses JSON version of RPCs therefore it dosn't require
+ZCash package *blockbook/bchain/coins/zec* on the other side uses JSON version of RPCs therefore it doesn't require
 specialized parser. Only responsibility that parser has is to translate address to database ID and vice versa.
 
 Ethereum package *blockbook/bchain/coins/eth* must have stand alone implementation because Ethereum uses totally
@@ -134,7 +134,7 @@ There are several groups of methods defined in *bchian.BlockChainParser*:
   Most of coins use pubkey-script as ID.
 * *AddressToOutputScript* and *OutputScriptToAddresses*  – Convert address to output script and vice versa. Note that
   *btc.BitcoinParser* uses pointer to function *OutputScriptToAddressesFunc* that is called from *OutputScriptToAddress*
-  method in order to rewrite implementation by types embdedding it.
+  method in order to rewrite implementation by types embedding it.
 * *PackTxid* and *UnpackTxid* – Packs txid to store in database and vice versa.
 * *ParseTx* and *ParseTxFromJson* – Parse transaction from binary data or JSON and return *bchain.Tx.
 * PackTx* and *UnpackTx* – Pack transaction to binary data to store in database and vice versa.
@@ -154,4 +154,4 @@ Add unit tests and integration tests. Tests are described [here](/docs/testing.m
 
 #### Deploy public server
 
-Deploy Blockbook server on public IP addres. Blockbook maintainers will check implementation before merging.
+Deploy Blockbook server on public IP address. Blockbook maintainers will check implementation before merging.

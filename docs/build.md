@@ -43,7 +43,7 @@ mandatory, of course.
 > back-end configuration and Blockbook configuration as well. There were many options that were duplicated across
 > configuration files and therefore error prone.
 >
-> Actually all configuration options and also build options for both Blockbook and backend are defined in single JSON
+> Actually all configuration options and also build options for both Blockbook and back-end are defined in single JSON
 > file and all stuff required during build is generated dynamically.
 
 Makefile targets follow simple pattern, there are few prefixes that define what to build.
@@ -70,8 +70,8 @@ For example we want to build some packages for Bitcoin and Bitcoin Testnet.
 build/backend-bitcoin_0.16.1-satoshilabs-1_amd64.deb  build/backend-bitcoin-testnet_0.16.1-satoshilabs-1_amd64.deb  build/blockbook-bitcoin_0.0.6_amd64.deb
 ```
 
-We have built two backend packages – for Bitcoin and Testnet – and Blockbook package for Bitcoin. Before build have been
-performed there was cleaned build directory and rebuilt Docker image.
+We have built two back-end packages – for Bitcoin and Testnet – and Blockbook package for Bitcoin. Before build have
+been performed there was cleaned build directory and rebuilt Docker image.
 
 ### Extra variables
 
@@ -244,7 +244,7 @@ Blockbook require full node daemon as its back-end. You are responsible for prop
 daemon configuration are defined in *configs/coins* and *build/templates/backend/config* directories. You should use
 specific installation process for particular coin you want run (e.g. https://bitcoin.org/en/full-node#other-linux-distributions for Bitcoin).
 
-When you have running back-end daemon you can start Blockbook. It is highly recomended use ports described in [ports.md](/docs/ports.md)
+When you have running back-end daemon you can start Blockbook. It is highly recommended use ports described in [ports.md](/docs/ports.md)
 for both Blockbook and back-end daemon. You can use *contrib/scripts/build-blockchaincfg.sh* that will generate
 Blockbook's blockchain configuration from our coin definition files.
 
