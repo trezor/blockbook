@@ -1,11 +1,16 @@
 {
+    "Bitcoin": {
+        "url": "http://localhost:8030",
+        "user": "rpc",
+        "pass": "rpc"
+    },
     "Bcash": {
         "url": "http://localhost:8031",
         "user": "rpc",
         "pass": "rpc"
     },
-    "Bitcoin": {
-        "url": "http://localhost:8030",
+    "Zcash": {
+        "url": "http://localhost:8032",
         "user": "rpc",
         "pass": "rpc"
     },
@@ -19,8 +24,8 @@
         "user": null,
         "pass": null
     },
-    "Zcash": {
-        "url": "http://localhost:8032",
+    "Namecoin": {
+        "url": "http://localhost:8039",
         "user": "rpc",
         "pass": "rpc"
     },
@@ -29,8 +34,13 @@
         "user": "rpc",
         "pass": "rpc"
     },
-    "Namecoin": {
-        "url": "http://localhost:8039",
+    "Monacoin": {
+        "url": "http://localhost:8041",
+        "user": "rpc",
+        "pass": "rpc"
+    },
+    "Bitcoin Testnet": {
+        "url": "http://localhost:18030",
         "user": "rpc",
         "pass": "rpc"
     },
@@ -39,8 +49,8 @@
         "user": "rpc",
         "pass": "rpc"
     },
-    "Bitcoin Testnet": {
-        "url": "http://localhost:18030",
+    "Zcash Testnet": {
+        "url": "http://localhost:18032",
         "user": "rpc",
         "pass": "rpc"
     },
@@ -53,10 +63,5 @@
         "url": "ws://localhost:18036",
         "user": null,
         "pass": null
-    },
-    "Zcash Testnet": {
-        "url": "http://localhost:18032",
-        "user": "rpc",
-        "pass": "rpc"
     }
 }
