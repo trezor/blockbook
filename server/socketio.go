@@ -237,11 +237,11 @@ type txInputs struct {
 	// ScriptAsm   *string `json:"scriptAsm"`
 	Sequence int64   `json:"sequence"`
 	Address  *string `json:"address"`
-	Satoshis uint64  `json:"satoshis"`
+	Satoshis int64   `json:"satoshis"`
 }
 
 type txOutputs struct {
-	Satoshis uint64  `json:"satoshis"`
+	Satoshis int64   `json:"satoshis"`
 	Script   *string `json:"script"`
 	// ScriptAsm   *string `json:"scriptAsm"`
 	SpentTxID   *string `json:"spentTxId,omitempty"`
@@ -260,15 +260,15 @@ type resTx struct {
 	Locktime int    `json:"locktime,omitempty"`
 	// Size           int         `json:"size,omitempty"`
 	Inputs []txInputs `json:"inputs"`
-	// InputSatoshis  uint64       `json:"inputSatoshis,omitempty"`
+	// InputSatoshis  int64       `json:"inputSatoshis,omitempty"`
 	Outputs []txOutputs `json:"outputs"`
-	// OutputSatoshis uint64       `json:"outputSatoshis,omitempty"`
-	// FeeSatoshis    uint64       `json:"feeSatoshis,omitempty"`
+	// OutputSatoshis int64       `json:"outputSatoshis,omitempty"`
+	// FeeSatoshis    int64       `json:"feeSatoshis,omitempty"`
 }
 
 type addressHistoryItem struct {
 	Addresses     map[string]addressHistoryIndexes `json:"addresses"`
-	Satoshis      uint64                           `json:"satoshis"`
+	Satoshis      int64                            `json:"satoshis"`
 	Confirmations int                              `json:"confirmations"`
 	Tx            resTx                            `json:"tx"`
 }
@@ -353,7 +353,7 @@ func (s *SocketIoServer) getAddressHistory(addr []string, opts *addrOpts) (res r
 			for _, vout := range tx.Vout {
 				aoh := vout.ScriptPubKey.Hex
 				ao := txOutputs{
-					Satoshis: vout.ValueSat.Uint64(),
+					Satoshis: vout.ValueSat.Int64(),
 					Script:   &aoh,
 				}
 				voutAddr, err := s.getAddressesFromVout(&vout)
@@ -626,12 +626,12 @@ func (s *SocketIoServer) getDetailedTransaction(txid string) (res resultGetDetai
 					if err != nil {
 						return res, err
 					}
-					ai.Satoshis = vout.ValueSat.Uint64()
+					ai.Satoshis = vout.ValueSat.Int64()
 				}
 			} else {
 				if len(ta.Outputs) > int(vin.Vout) {
 					output := &ta.Outputs[vin.Vout]
-					ai.Satoshis = output.ValueSat.Uint64()
+					ai.Satoshis = output.ValueSat.Int64()
 					voutAddr, _, err = output.Addresses(s.chainParser)
 					if err != nil {
 						return res, err
@@ -647,7 +647,7 @@ func (s *SocketIoServer) getDetailedTransaction(txid string) (res resultGetDetai
 	for _, vout := range tx.Vout {
 		aos := vout.ScriptPubKey.Hex
 		ao := txOutputs{
-			Satoshis: vout.ValueSat.Uint64(),
+			Satoshis: vout.ValueSat.Int64(),
 			Script:   &aos,
 		}
 		voutAddr, err := s.getAddressesFromVout(&vout)
