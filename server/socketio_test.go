@@ -1,4 +1,4 @@
-// +build unittest
+// +build integration
 
 package server
 
