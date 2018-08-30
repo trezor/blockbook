@@ -18,12 +18,11 @@
                             <td>
                                 {{range $a := $vin.Addresses}}
                                 <span class="ellipsis float-left">
-                                    {{if eq $a $addr}}{{$a}}{{else}}
-                                    <a href="/explorer/address/{{$a}}">{{$a}}</a>{{end}}
+                                    {{if and (ne $a $addr) $vin.Searchable}}<a href="/explorer/address/{{$a}}">{{$a}}</a>{{else}}{{$a}}{{end}}
                                 </span>
                                 {{else}}
                                 <span class="float-left">No Inputs (Newly Generated Coins)</span>
-                                {{end}} {{if $vin.Addresses}}
+                                {{end}}{{if $vin.Addresses}}
                                 <span class="float-right{{if stringInSlice $addr $vin.Addresses}} text-danger{{end}}">{{formatAmount $vin.Value}} {{$cs}}</span>
                                 {{end}}
                             </td>
@@ -47,8 +46,7 @@
                             <td>
                                 {{range $a := $vout.ScriptPubKey.Addresses}}
                                 <span class="ellipsis float-left">
-                                    {{if eq $a $addr}}{{$a}}{{else}}
-                                    <a href="/explorer/address/{{$a}}">{{$a}}</a>{{end}}
+                                    {{if and (ne $a $addr) $vout.ScriptPubKey.Searchable}}<a href="/explorer/address/{{$a}}">{{$a}}</a>{{else}}{{$a}}{{end}}
                                 </span>
                                 {{else}}
                                 <span class="float-left">Unparsed address</span>

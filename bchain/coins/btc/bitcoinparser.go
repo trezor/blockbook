@@ -63,7 +63,7 @@ func (p *BitcoinParser) GetAddrDescFromAddress(address string) ([]byte, error) {
 
 // GetAddressesFromAddrDesc returns addresses for given address descriptor with flag if the addresses are searchable
 func (p *BitcoinParser) GetAddressesFromAddrDesc(addrDesc []byte) ([]string, bool, error) {
-	return p.outputScriptToAddresses(addrDesc)
+	return p.OutputScriptToAddressesFunc(addrDesc)
 }
 
 // GetScriptFromAddrDesc returns output script for given address descriptor
@@ -97,6 +97,27 @@ func (p *BitcoinParser) outputScriptToAddresses(script []byte) ([]string, bool, 
 	var s bool
 	if sc != txscript.NonStandardTy && sc != txscript.NullDataTy {
 		s = true
+	} else {
+		if len(script) > 1 && script[0] == txscript.OP_RETURN && len(rv) == 0 {
+			l := int(script[1])
+			data := script[2:]
+			if l == len(data) {
+				isASCII := true
+				for _, c := range data {
+					if c < 32 || c > 127 {
+						isASCII = false
+						break
+					}
+				}
+				var ed string
+				if isASCII {
+					ed = "(" + string(data) + ")"
+				} else {
+					ed = hex.EncodeToString([]byte{byte(l)}) + " " + hex.EncodeToString(data)
+				}
+				rv = []string{"OP_RETURN " + ed}
+			}
+		}
 	}
 	return rv, s, nil
 }

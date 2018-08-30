@@ -112,8 +112,7 @@ func (w *Worker) GetTransaction(txid string, bestheight uint32, spendingTxs bool
 		vout.Value = w.chainParser.AmountToDecimalString(&bchainVout.ValueSat)
 		valOutSat.Add(&valOutSat, &bchainVout.ValueSat)
 		vout.ScriptPubKey.Hex = bchainVout.ScriptPubKey.Hex
-
-		vout.ScriptPubKey.Addresses = bchainVout.ScriptPubKey.Addresses
+		vout.ScriptPubKey.Addresses, vout.ScriptPubKey.Searchable, err = w.getAddressesFromVout(bchainVout)
 		if spendingTxs {
 			// TODO
 		}

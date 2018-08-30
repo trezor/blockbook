@@ -102,10 +102,16 @@ func Test_GetAddressesFromAddrDesc(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			// TODO handle OP_RETURN better
-			name:    "OP_RETURN",
+			name:    "OP_RETURN ascii",
 			args:    args{script: "6a0461686f6a"},
-			want:    []string{},
+			want:    []string{"OP_RETURN (ahoj)"},
+			want2:   false,
+			wantErr: false,
+		},
+		{
+			name:    "OP_RETURN hex",
+			args:    args{script: "6a072020f1686f6a20"},
+			want:    []string{"OP_RETURN 07 2020f1686f6a20"},
 			want2:   false,
 			wantErr: false,
 		},
