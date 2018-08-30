@@ -111,6 +111,9 @@ func (e *RPCError) Error() string {
 	return fmt.Sprintf("%d: %s", e.Code, e.Message)
 }
 
+// AddressDescriptor is an opaque type obtained by parser.GetAddrDesc* methods
+type AddressDescriptor []byte
+
 // BlockChain defines common interface to block chain daemon
 type BlockChain interface {
 	// life-cycle methods
@@ -137,6 +140,7 @@ type BlockChain interface {
 	// mempool
 	ResyncMempool(onNewTxAddr func(txid string, addr string)) (int, error)
 	GetMempoolTransactions(address string) ([]string, error)
+	GetMempoolTransactionsForAddrDesc(addrDesc AddressDescriptor) ([]string, error)
 	GetMempoolEntry(txid string) (*MempoolEntry, error)
 	// parser
 	GetChainParser() BlockChainParser
@@ -158,10 +162,10 @@ type BlockChainParser interface {
 	// it uses string operations to avoid problems with rounding
 	AmountToBigInt(n json.Number) (big.Int, error)
 	// address descriptor conversions
-	GetAddrDescFromVout(output *Vout) ([]byte, error)
-	GetAddrDescFromAddress(address string) ([]byte, error)
-	GetAddressesFromAddrDesc(addrDesc []byte) ([]string, bool, error)
-	GetScriptFromAddrDesc(addrDesc []byte) ([]byte, error)
+	GetAddrDescFromVout(output *Vout) (AddressDescriptor, error)
+	GetAddrDescFromAddress(address string) (AddressDescriptor, error)
+	GetAddressesFromAddrDesc(addrDesc AddressDescriptor) ([]string, bool, error)
+	GetScriptFromAddrDesc(addrDesc AddressDescriptor) ([]byte, error)
 	// transactions
 	PackedTxidLen() int
 	PackTxid(txid string) ([]byte, error)

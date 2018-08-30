@@ -121,6 +121,81 @@ func Test_GetAddrDescFromAddress_Mainnet(t *testing.T) {
 	}
 }
 
+func Test_GetAddressesFromAddrDesc(t *testing.T) {
+	type args struct {
+		script string
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    []string
+		want2   bool
+		wantErr bool
+	}{
+		{
+			name:    "P2PKH",
+			args:    args{script: "76a91451dadacc7021440cbe4ca148a5db563b329b4c0388ac"},
+			want:    []string{"MFMy9FwJsV6HiN5eZDqDETw4pw52q3UGrb"},
+			want2:   true,
+			wantErr: false,
+		},
+		{
+			name:    "P2SH",
+			args:    args{script: "a9146449f568c9cd2378138f2636e1567112a184a9e887"},
+			want:    []string{"PHjTKtgYLTJ9D2Bzw2f6xBB41KBm2HeGfg"},
+			want2:   true,
+			wantErr: false,
+		},
+		{
+			name:    "P2WPKH",
+			args:    args{script: "0014a96d3cef194f469b33801f868ec9bc89a8831c22"},
+			want:    []string{"mona1q49knemcefarfkvuqr7rgajdu3x5gx8pzdnurgq"},
+			want2:   true,
+			wantErr: false,
+		},
+		{
+			name:    "P2WSH",
+			args:    args{script: "002009d27aa88e70cb7a0da620908c9bc08ac6c633bd1a61036312e514396aeb4893"},
+			want:    []string{"mona1qp8f842ywwr9h5rdxyzggex7q3trvvvaarfssxccju52rj6htfzfsqr79j2"},
+			want2:   true,
+			wantErr: false,
+		},
+		{
+			name:    "OP_RETURN ascii",
+			args:    args{script: "6a0461686f6a"},
+			want:    []string{"OP_RETURN (ahoj)"},
+			want2:   false,
+			wantErr: false,
+		},
+		{
+			name:    "OP_RETURN hex",
+			args:    args{script: "6a072020f1686f6a20"},
+			want:    []string{"OP_RETURN 07 2020f1686f6a20"},
+			want2:   false,
+			wantErr: false,
+		},
+	}
+
+	parser := NewMonacoinParser(GetChainParams("main"), &btc.Configuration{})
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b, _ := hex.DecodeString(tt.args.script)
+			got, got2, err := parser.GetAddressesFromAddrDesc(b)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("outputScriptToAddresses() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("GetAddressesFromAddrDesc() = %v, want %v", got, tt.want)
+			}
+			if !reflect.DeepEqual(got2, tt.want2) {
+				t.Errorf("GetAddressesFromAddrDesc() = %v, want %v", got2, tt.want2)
+			}
+		})
+	}
+}
+
 var (
 	testTx1 bchain.Tx
 

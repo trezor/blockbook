@@ -480,12 +480,12 @@ func (b *EthereumRPC) GetMempool() ([]string, error) {
 	return body.Transactions, nil
 }
 
-// EstimateFee returns fee estimation.
+// EstimateFee returns fee estimation
 func (b *EthereumRPC) EstimateFee(blocks int) (big.Int, error) {
 	return b.EstimateSmartFee(blocks, true)
 }
 
-// EstimateSmartFee returns fee estimation.
+// EstimateSmartFee returns fee estimation
 func (b *EthereumRPC) EstimateSmartFee(blocks int, conservative bool) (big.Int, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
 	defer cancel()
@@ -503,7 +503,7 @@ func (b *EthereumRPC) EstimateSmartFee(blocks int, conservative bool) (big.Int, 
 	return r, nil
 }
 
-// SendRawTransaction sends raw transaction.
+// SendRawTransaction sends raw transaction
 func (b *EthereumRPC) SendRawTransaction(tx string) (string, error) {
 	return "", errors.New("SendRawTransaction: not implemented")
 }
@@ -512,8 +512,14 @@ func (b *EthereumRPC) ResyncMempool(onNewTxAddr func(txid string, addr string)) 
 	return b.Mempool.Resync(onNewTxAddr)
 }
 
+// GetMempoolTransactions returns slice of mempool transactions for given address
 func (b *EthereumRPC) GetMempoolTransactions(address string) ([]string, error) {
 	return b.Mempool.GetTransactions(address)
+}
+
+// GetMempoolTransactionsForAddrDesc returns slice of mempool transactions for given address descriptor
+func (b *EthereumRPC) GetMempoolTransactionsForAddrDesc(addrDesc bchain.AddressDescriptor) ([]string, error) {
+	return b.Mempool.GetAddrDescTransactions(addrDesc)
 }
 
 func (b *EthereumRPC) GetMempoolEntry(txid string) (*bchain.MempoolEntry, error) {

@@ -12,7 +12,7 @@ type NonUTXOMempool struct {
 	chain           BlockChain
 	mux             sync.Mutex
 	txToInputOutput map[string][]addrIndex
-	addrDescToTx      map[string][]outpoint
+	addrDescToTx    map[string][]outpoint
 }
 
 // NewNonUTXOMempool creates new mempool handler.
@@ -27,6 +27,11 @@ func (m *NonUTXOMempool) GetTransactions(address string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	return m.GetAddrDescTransactions(addrDesc)
+}
+
+// GetAddrDescTransactions returns slice of mempool transactions for given address descriptor
+func (m *NonUTXOMempool) GetAddrDescTransactions(addrDesc AddressDescriptor) ([]string, error) {
 	m.mux.Lock()
 	defer m.mux.Unlock()
 	outpoints := m.addrDescToTx[string(addrDesc)]

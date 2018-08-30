@@ -205,6 +205,11 @@ func (c *blockChainWithMetrics) GetMempoolTransactions(address string) (v []stri
 	return c.b.GetMempoolTransactions(address)
 }
 
+func (c *blockChainWithMetrics) GetMempoolTransactionsForAddrDesc(addrDesc bchain.AddressDescriptor) (v []string, err error) {
+	defer func(s time.Time) { c.observeRPCLatency("GetMempoolTransactionsForAddrDesc", s, err) }(time.Now())
+	return c.b.GetMempoolTransactionsForAddrDesc(addrDesc)
+}
+
 func (c *blockChainWithMetrics) GetMempoolEntry(txid string) (v *bchain.MempoolEntry, err error) {
 	defer func(s time.Time) { c.observeRPCLatency("GetMempoolEntry", s, err) }(time.Now())
 	return c.b.GetMempoolEntry(txid)

@@ -52,22 +52,22 @@ func GetChainParams(chain string) *chaincfg.Params {
 }
 
 // GetAddrDescFromVout returns internal address representation (descriptor) of given transaction output
-func (p *BitcoinParser) GetAddrDescFromVout(output *bchain.Vout) ([]byte, error) {
+func (p *BitcoinParser) GetAddrDescFromVout(output *bchain.Vout) (bchain.AddressDescriptor, error) {
 	return hex.DecodeString(output.ScriptPubKey.Hex)
 }
 
 // GetAddrDescFromAddress returns internal address representation (descriptor) of given address
-func (p *BitcoinParser) GetAddrDescFromAddress(address string) ([]byte, error) {
+func (p *BitcoinParser) GetAddrDescFromAddress(address string) (bchain.AddressDescriptor, error) {
 	return p.addressToOutputScript(address)
 }
 
 // GetAddressesFromAddrDesc returns addresses for given address descriptor with flag if the addresses are searchable
-func (p *BitcoinParser) GetAddressesFromAddrDesc(addrDesc []byte) ([]string, bool, error) {
+func (p *BitcoinParser) GetAddressesFromAddrDesc(addrDesc bchain.AddressDescriptor) ([]string, bool, error) {
 	return p.OutputScriptToAddressesFunc(addrDesc)
 }
 
 // GetScriptFromAddrDesc returns output script for given address descriptor
-func (p *BitcoinParser) GetScriptFromAddrDesc(addrDesc []byte) ([]byte, error) {
+func (p *BitcoinParser) GetScriptFromAddrDesc(addrDesc bchain.AddressDescriptor) ([]byte, error) {
 	return addrDesc, nil
 }
 

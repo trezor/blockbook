@@ -52,7 +52,7 @@ func GetChainParams(chain string) *chaincfg.Params {
 }
 
 // GetAddrDescFromVout returns internal address representation of given transaction output
-func (p *ZCashParser) GetAddrDescFromVout(output *bchain.Vout) ([]byte, error) {
+func (p *ZCashParser) GetAddrDescFromVout(output *bchain.Vout) (bchain.AddressDescriptor, error) {
 	if len(output.ScriptPubKey.Addresses) != 1 {
 		return nil, nil
 	}
@@ -61,19 +61,19 @@ func (p *ZCashParser) GetAddrDescFromVout(output *bchain.Vout) ([]byte, error) {
 }
 
 // GetAddrDescFromAddress returns internal address representation of given address
-func (p *ZCashParser) GetAddrDescFromAddress(address string) ([]byte, error) {
+func (p *ZCashParser) GetAddrDescFromAddress(address string) (bchain.AddressDescriptor, error) {
 	hash, _, err := utils.CheckDecode(address)
 	return hash, err
 }
 
 // GetAddressesFromAddrDesc returns addresses for given address descriptor with flag if the addresses are searchable
-func (p *ZCashParser) GetAddressesFromAddrDesc(addrDesc []byte) ([]string, bool, error) {
+func (p *ZCashParser) GetAddressesFromAddrDesc(addrDesc bchain.AddressDescriptor) ([]string, bool, error) {
 	// TODO implement
 	return nil, false, errors.New("GetAddressesFromAddrDesc: not implemented")
 }
 
 // GetScriptFromAddrDesc returns output script for given address descriptor
-func (p *ZCashParser) GetScriptFromAddrDesc(addrDesc []byte) ([]byte, error) {
+func (p *ZCashParser) GetScriptFromAddrDesc(addrDesc bchain.AddressDescriptor) ([]byte, error) {
 	// TODO implement
 	return nil, errors.New("GetScriptFromAddrDesc: not implemented")
 }

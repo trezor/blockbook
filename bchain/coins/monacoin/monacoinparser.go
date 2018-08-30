@@ -1,6 +1,7 @@
 package monacoin
 
 import (
+	"blockbook/bchain"
 	"blockbook/bchain/coins/btc"
 
 	"github.com/btcsuite/btcd/chaincfg"
@@ -89,8 +90,8 @@ func GetMonaChainParams(chain string) *monacoinCfg.Params {
 	}
 }
 
-// GetAddrIDFromAddress returns internal address representation of given address
-func (p *MonacoinParser) GetAddrIDFromAddress(address string) ([]byte, error) {
+// GetAddrDescFromAddress returns internal address representation (descriptor) of given address
+func (p *MonacoinParser) GetAddrDescFromAddress(address string) (bchain.AddressDescriptor, error) {
 	return p.addressToOutputScript(address)
 }
 

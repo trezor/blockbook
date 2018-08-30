@@ -816,22 +816,22 @@ func TestRocksDB_Index_UTXO(t *testing.T) {
 		Height: 225494,
 		Inputs: []TxInput{
 			{
-				addrDesc: addressToAddrDesc(addr3, d.chainParser),
+				AddrDesc: addressToAddrDesc(addr3, d.chainParser),
 				ValueSat: *satB1T2A3,
 			},
 			{
-				addrDesc: addressToAddrDesc(addr2, d.chainParser),
+				AddrDesc: addressToAddrDesc(addr2, d.chainParser),
 				ValueSat: *satB1T1A2,
 			},
 		},
 		Outputs: []TxOutput{
 			{
-				addrDesc: addressToAddrDesc(addr6, d.chainParser),
+				AddrDesc: addressToAddrDesc(addr6, d.chainParser),
 				Spent:    true,
 				ValueSat: *satB2T1A6,
 			},
 			{
-				addrDesc: addressToAddrDesc(addr7, d.chainParser),
+				AddrDesc: addressToAddrDesc(addr7, d.chainParser),
 				Spent:    false,
 				ValueSat: *satB2T1A7,
 			},
@@ -1001,17 +1001,17 @@ func Test_packTxAddresses_unpackTxAddresses(t *testing.T) {
 				Height: 123,
 				Inputs: []TxInput{
 					{
-						addrDesc: addressToAddrDesc("tb1qgw4vyzs3dcy75nmezjlpc40yc9a2vq9hghdyt2", parser),
+						AddrDesc: addressToAddrDesc("tb1qgw4vyzs3dcy75nmezjlpc40yc9a2vq9hghdyt2", parser),
 						ValueSat: *big.NewInt(0),
 					},
 					{
-						addrDesc: addressToAddrDesc("tb1q233n429a9e2jh48gnsq7w0qm0yz7kkzx0qczw8", parser),
+						AddrDesc: addressToAddrDesc("tb1q233n429a9e2jh48gnsq7w0qm0yz7kkzx0qczw8", parser),
 						ValueSat: *big.NewInt(1234123421342341234),
 					},
 				},
 				Outputs: []TxOutput{
 					{
-						addrDesc: addressToAddrDesc("tb1qgw4vyzs3dcy75nmezjlpc40yc9a2vq9hghdyt2", parser),
+						AddrDesc: addressToAddrDesc("tb1qgw4vyzs3dcy75nmezjlpc40yc9a2vq9hghdyt2", parser),
 						ValueSat: *big.NewInt(1),
 						Spent:    true,
 					},
@@ -1025,39 +1025,39 @@ func Test_packTxAddresses_unpackTxAddresses(t *testing.T) {
 				Height: 12345,
 				Inputs: []TxInput{
 					{
-						addrDesc: addressToAddrDesc("2N7iL7AvS4LViugwsdjTB13uN4T7XhV1bCP", parser),
+						AddrDesc: addressToAddrDesc("2N7iL7AvS4LViugwsdjTB13uN4T7XhV1bCP", parser),
 						ValueSat: *big.NewInt(9011000000),
 					},
 					{
-						addrDesc: addressToAddrDesc("2Mt9v216YiNBAzobeNEzd4FQweHrGyuRHze", parser),
+						AddrDesc: addressToAddrDesc("2Mt9v216YiNBAzobeNEzd4FQweHrGyuRHze", parser),
 						ValueSat: *big.NewInt(8011000000),
 					},
 					{
-						addrDesc: addressToAddrDesc("2NDyqJpHvHnqNtL1F9xAeCWMAW8WLJmEMyD", parser),
+						AddrDesc: addressToAddrDesc("2NDyqJpHvHnqNtL1F9xAeCWMAW8WLJmEMyD", parser),
 						ValueSat: *big.NewInt(7011000000),
 					},
 				},
 				Outputs: []TxOutput{
 					{
-						addrDesc: addressToAddrDesc("2MuwoFGwABMakU7DCpdGDAKzyj2nTyRagDP", parser),
+						AddrDesc: addressToAddrDesc("2MuwoFGwABMakU7DCpdGDAKzyj2nTyRagDP", parser),
 						ValueSat: *big.NewInt(5011000000),
 						Spent:    true,
 					},
 					{
-						addrDesc: addressToAddrDesc("2Mvcmw7qkGXNWzkfH1EjvxDcNRGL1Kf2tEM", parser),
+						AddrDesc: addressToAddrDesc("2Mvcmw7qkGXNWzkfH1EjvxDcNRGL1Kf2tEM", parser),
 						ValueSat: *big.NewInt(6011000000),
 					},
 					{
-						addrDesc: addressToAddrDesc("2N9GVuX3XJGHS5MCdgn97gVezc6EgvzikTB", parser),
+						AddrDesc: addressToAddrDesc("2N9GVuX3XJGHS5MCdgn97gVezc6EgvzikTB", parser),
 						ValueSat: *big.NewInt(7011000000),
 						Spent:    true,
 					},
 					{
-						addrDesc: addressToAddrDesc("mzii3fuRSpExMLJEHdHveW8NmiX8MPgavk", parser),
+						AddrDesc: addressToAddrDesc("mzii3fuRSpExMLJEHdHveW8NmiX8MPgavk", parser),
 						ValueSat: *big.NewInt(999900000),
 					},
 					{
-						addrDesc: addressToAddrDesc("mqHPFTRk23JZm9W1ANuEFtwTYwxjESSgKs", parser),
+						AddrDesc: addressToAddrDesc("mqHPFTRk23JZm9W1ANuEFtwTYwxjESSgKs", parser),
 						ValueSat: *big.NewInt(5000000000),
 						Spent:    true,
 					},
@@ -1071,17 +1071,17 @@ func Test_packTxAddresses_unpackTxAddresses(t *testing.T) {
 				Height: 123456789,
 				Inputs: []TxInput{
 					{
-						addrDesc: []byte{},
+						AddrDesc: []byte{},
 						ValueSat: *big.NewInt(1234),
 					},
 				},
 				Outputs: []TxOutput{
 					{
-						addrDesc: []byte{},
+						AddrDesc: []byte{},
 						ValueSat: *big.NewInt(5678),
 					},
 					{
-						addrDesc: []byte{},
+						AddrDesc: []byte{},
 						ValueSat: *big.NewInt(98),
 						Spent:    true,
 					},

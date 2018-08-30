@@ -617,12 +617,17 @@ func (b *BitcoinRPC) ResyncMempool(onNewTxAddr func(txid string, addr string)) (
 	return b.Mempool.Resync(onNewTxAddr)
 }
 
-// GetMempoolTransactions returns slice of mempool transactions for given address.
+// GetMempoolTransactions returns slice of mempool transactions for given address
 func (b *BitcoinRPC) GetMempoolTransactions(address string) ([]string, error) {
 	return b.Mempool.GetTransactions(address)
 }
 
-// EstimateSmartFee returns fee estimation.
+// GetMempoolTransactionsForAddrDesc returns slice of mempool transactions for given address descriptor
+func (b *BitcoinRPC) GetMempoolTransactionsForAddrDesc(addrDesc bchain.AddressDescriptor) ([]string, error) {
+	return b.Mempool.GetAddrDescTransactions(addrDesc)
+}
+
+// EstimateSmartFee returns fee estimation
 func (b *BitcoinRPC) EstimateSmartFee(blocks int, conservative bool) (big.Int, error) {
 	// use EstimateFee if EstimateSmartFee is not supported
 	if !b.ChainConfig.SupportsEstimateSmartFee && b.ChainConfig.SupportsEstimateFee {
