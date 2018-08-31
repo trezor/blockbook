@@ -128,64 +128,21 @@ func (p *BCashParser) outputScriptToAddresses(script []byte) ([]string, bool, er
 	if err != nil {
 		return nil, false, err
 	}
+	// EncodeAddress returns CashAddr address
 	addr := a.EncodeAddress()
+	if p.AddressFormat == Legacy {
+		da, err := address.NewFromString(addr)
+		if err != nil {
+			return nil, false, err
+		}
+		ca, err := da.Legacy()
+		if err != nil {
+			return nil, false, err
+		}
+		addr, err = ca.Encode()
+		if err != nil {
+			return nil, false, err
+		}
+	}
 	return []string{addr}, len(addr) > 0, nil
-}
-
-type bcashAddress struct {
-	addr string
-}
-
-func newBCashAddress(addr string, format AddressFormat) (*bcashAddress, error) {
-	if isCashAddr(addr) && format == CashAddr {
-		return &bcashAddress{addr: addr}, nil
-	}
-
-	da, err := address.NewFromString(addr)
-	if err != nil {
-		return nil, err
-	}
-	var ea string
-	switch format {
-	case CashAddr:
-		if a, err := da.CashAddress(); err != nil {
-			return nil, err
-		} else {
-			ea, err = a.Encode()
-			if err != nil {
-				return nil, err
-			}
-		}
-
-	case Legacy:
-		if a, err := da.Legacy(); err != nil {
-			return nil, err
-		} else {
-			ea, err = a.Encode()
-			if err != nil {
-				return nil, err
-			}
-		}
-	default:
-		return nil, fmt.Errorf("Unknown address format: %d", format)
-	}
-	return &bcashAddress{addr: ea}, nil
-}
-
-func (a *bcashAddress) String() string {
-	return a.addr
-}
-
-func (a *bcashAddress) AreEqual(addr string) bool {
-	return a.String() == addr
-}
-
-func (a *bcashAddress) InSlice(addrs []string) bool {
-	ea := a.String()
-	for _, addr := range addrs {
-		if ea == addr {
-			return true
-		}
-	}
-	return false
 }

@@ -124,7 +124,7 @@ func Test_GetAddressesFromAddrDesc(t *testing.T) {
 			b, _ := hex.DecodeString(tt.args.script)
 			got, got2, err := parser.GetAddressesFromAddrDesc(b)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("outputScriptToAddresses() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("GetAddressesFromAddrDesc() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if !reflect.DeepEqual(got, tt.want) {
