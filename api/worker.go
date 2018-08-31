@@ -4,6 +4,7 @@ import (
 	"blockbook/bchain"
 	"blockbook/common"
 	"blockbook/db"
+	"bytes"
 	"fmt"
 	"math/big"
 	"time"
@@ -33,12 +34,13 @@ func NewWorker(db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxCache, is 
 	return w, nil
 }
 
-func (w *Worker) getAddressesFromVout(vout *bchain.Vout) ([]string, bool, error) {
+func (w *Worker) getAddressesFromVout(vout *bchain.Vout) (bchain.AddressDescriptor, []string, bool, error) {
 	addrDesc, err := w.chainParser.GetAddrDescFromVout(vout)
 	if err != nil {
-		return nil, false, err
+		return nil, nil, false, err
 	}
-	return w.chainParser.GetAddressesFromAddrDesc(addrDesc)
+	a, s, err := w.chainParser.GetAddressesFromAddrDesc(addrDesc)
+	return addrDesc, a, s, err
 }
 
 // GetTransaction reads transaction data from txid
@@ -46,6 +48,10 @@ func (w *Worker) GetTransaction(txid string, bestheight uint32, spendingTxs bool
 	bchainTx, height, err := w.txCache.GetTransaction(txid, bestheight)
 	if err != nil {
 		return nil, NewApiError(fmt.Sprintf("Tx not found, %v", err), true)
+	}
+	ta, err := w.db.GetTxAddresses(txid)
+	if err != nil {
+		return nil, errors.Annotatef(err, "GetTxAddresses %v", txid)
 	}
 	var blockhash string
 	if bchainTx.Confirmations > 0 {
@@ -66,11 +72,11 @@ func (w *Worker) GetTransaction(txid string, bestheight uint32, spendingTxs bool
 		//  bchainVin.Txid=="" is coinbase transaction
 		if bchainVin.Txid != "" {
 			// load spending addresses from TxAddresses
-			ta, err := w.db.GetTxAddresses(bchainVin.Txid)
+			tas, err := w.db.GetTxAddresses(bchainVin.Txid)
 			if err != nil {
 				return nil, errors.Annotatef(err, "GetTxAddresses %v", bchainVin.Txid)
 			}
-			if ta == nil {
+			if tas == nil {
 				// mempool transactions are not in TxAddresses, all confirmed should be there, log a problem
 				if bchainTx.Confirmations > 0 {
 					glog.Warning("DB inconsistency:  tx ", bchainVin.Txid, ": not found in txAddresses")
@@ -83,14 +89,14 @@ func (w *Worker) GetTransaction(txid string, bestheight uint32, spendingTxs bool
 				if len(otx.Vout) > int(vin.Vout) {
 					vout := &otx.Vout[vin.Vout]
 					vin.ValueSat = vout.ValueSat
-					vin.Addresses, vin.Searchable, err = w.getAddressesFromVout(vout)
+					vin.AddrDesc, vin.Addresses, vin.Searchable, err = w.getAddressesFromVout(vout)
 					if err != nil {
 						glog.Errorf("getAddressesFromVout error %v, vout %+v", err, vout)
 					}
 				}
 			} else {
-				if len(ta.Outputs) > int(vin.Vout) {
-					output := &ta.Outputs[vin.Vout]
+				if len(tas.Outputs) > int(vin.Vout) {
+					output := &tas.Outputs[vin.Vout]
 					vin.ValueSat = output.ValueSat
 					vin.Value = w.chainParser.AmountToDecimalString(&vin.ValueSat)
 					vin.Addresses, vin.Searchable, err = output.Addresses(w.chainParser)
@@ -112,9 +118,12 @@ func (w *Worker) GetTransaction(txid string, bestheight uint32, spendingTxs bool
 		vout.Value = w.chainParser.AmountToDecimalString(&bchainVout.ValueSat)
 		valOutSat.Add(&valOutSat, &bchainVout.ValueSat)
 		vout.ScriptPubKey.Hex = bchainVout.ScriptPubKey.Hex
-		vout.ScriptPubKey.Addresses, vout.ScriptPubKey.Searchable, err = w.getAddressesFromVout(bchainVout)
-		if spendingTxs {
-			// TODO
+		vout.ScriptPubKey.AddrDesc, vout.ScriptPubKey.Addresses, vout.ScriptPubKey.Searchable, err = w.getAddressesFromVout(bchainVout)
+		if ta != nil {
+			vout.Spent = ta.Outputs[i].Spent
+			if spendingTxs && vout.Spent {
+				// TODO
+			}
 		}
 	}
 	// for coinbase transactions valIn is 0
@@ -143,11 +152,11 @@ func (w *Worker) GetTransaction(txid string, bestheight uint32, spendingTxs bool
 	return r, nil
 }
 
-func (w *Worker) getAddressTxids(address string, mempool bool) ([]string, error) {
+func (w *Worker) getAddressTxids(addrDesc bchain.AddressDescriptor, mempool bool) ([]string, error) {
 	var err error
 	txids := make([]string, 0)
 	if !mempool {
-		err = w.db.GetTransactions(address, 0, ^uint32(0), func(txid string, vout uint32, isOutput bool) error {
+		err = w.db.GetAddrDescTransactions(addrDesc, 0, ^uint32(0), func(txid string, vout uint32, isOutput bool) error {
 			txids = append(txids, txid)
 			return nil
 		})
@@ -155,7 +164,7 @@ func (w *Worker) getAddressTxids(address string, mempool bool) ([]string, error)
 			return nil, err
 		}
 	} else {
-		m, err := w.chain.GetMempoolTransactions(address)
+		m, err := w.chain.GetMempoolTransactionsForAddrDesc(addrDesc)
 		if err != nil {
 			return nil, err
 		}
@@ -164,25 +173,21 @@ func (w *Worker) getAddressTxids(address string, mempool bool) ([]string, error)
 	return txids, nil
 }
 
-func (t *Tx) getAddrVoutValue(addr string) *big.Int {
+func (t *Tx) getAddrVoutValue(addrDesc bchain.AddressDescriptor) *big.Int {
 	var val big.Int
 	for _, vout := range t.Vout {
-		for _, a := range vout.ScriptPubKey.Addresses {
-			if a == addr {
-				val.Add(&val, &vout.ValueSat)
-			}
+		if bytes.Equal(vout.ScriptPubKey.AddrDesc, addrDesc) {
+			val.Add(&val, &vout.ValueSat)
 		}
 	}
 	return &val
 }
 
-func (t *Tx) getAddrVinValue(addr string) *big.Int {
+func (t *Tx) getAddrVinValue(addrDesc bchain.AddressDescriptor) *big.Int {
 	var val big.Int
 	for _, vin := range t.Vin {
-		for _, a := range vin.Addresses {
-			if a == addr {
-				val.Add(&val, &vin.ValueSat)
-			}
+		if bytes.Equal(vin.AddrDesc, addrDesc) {
+			val.Add(&val, &vin.ValueSat)
 		}
 	}
 	return &val
@@ -260,26 +265,36 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, onlyTxids b
 	if page < 0 {
 		page = 0
 	}
-	ba, err := w.db.GetAddressBalance(address)
+	addrDesc, err := w.chainParser.GetAddrDescFromAddress(address)
 	if err != nil {
 		return nil, NewApiError(fmt.Sprintf("Address not found, %v", err), true)
 	}
-	if ba == nil {
-		return nil, NewApiError("Address not found", true)
+	// ba can be nil if the address is only in mempool!
+	ba, err := w.db.GetAddrDescBalance(addrDesc)
+	if err != nil {
+		return nil, NewApiError(fmt.Sprintf("Address not found, %v", err), true)
 	}
-	txc, err := w.getAddressTxids(address, false)
+	txc, err := w.getAddressTxids(addrDesc, false)
 	if err != nil {
 		return nil, errors.Annotatef(err, "getAddressTxids %v false", address)
 	}
 	txc = UniqueTxidsInReverse(txc)
 	var txm []string
-	// mempool only on the first page
-	if page == 0 {
-		txm, err = w.getAddressTxids(address, true)
+	// mempool only on the first page or if there are no confirmed transactions
+	if page == 0 || ba == nil {
+		if ba == nil {
+			ba = &db.AddrBalance{}
+			page = 0
+		}
+		txm, err = w.getAddressTxids(addrDesc, true)
 		if err != nil {
 			return nil, errors.Annotatef(err, "getAddressTxids %v true", address)
 		}
 		txm = UniqueTxidsInReverse(txm)
+	}
+	// check if the address exist
+	if len(txc)+len(txm) == 0 {
+		return nil, NewApiError("Address not found", true)
 	}
 	bestheight, _, err := w.db.GetBestBlock()
 	if err != nil {
@@ -309,7 +324,9 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, onlyTxids b
 		if err != nil {
 			glog.Error("GetTransaction in mempool ", tx, ": ", err)
 		} else {
-			uBalSat.Sub(tx.getAddrVoutValue(address), tx.getAddrVinValue(address))
+			uBalSat.Add(&uBalSat, tx.getAddrVoutValue(addrDesc))
+			uBalSat.Sub(&uBalSat, tx.getAddrVinValue(addrDesc))
+			glog.Info("uBalSat ", uBalSat, tx.getAddrVoutValue(addrDesc), tx.getAddrVinValue(addrDesc))
 			txs[txi] = tx
 			txi++
 		}
@@ -347,6 +364,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, onlyTxids b
 		UnconfirmedBalance:      w.chainParser.AmountToDecimalString(&uBalSat),
 		UnconfirmedTxApperances: len(txm),
 		Transactions:            txs[:txi],
+		Txids:                   nil,
 		Page:                    page,
 		TotalPages:              totalPages,
 		TxsOnPage:               txsOnPage,

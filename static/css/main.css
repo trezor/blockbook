@@ -177,6 +177,10 @@ h3 {
     padding: .4rem;
 }
 
+.data-table span.ellipsis {
+    max-width: 100%;
+}
+
 .data {
     font-weight: bold;
 }
