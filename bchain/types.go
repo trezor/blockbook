@@ -2,6 +2,7 @@ package bchain
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -113,6 +114,10 @@ func (e *RPCError) Error() string {
 
 // AddressDescriptor is an opaque type obtained by parser.GetAddrDesc* methods
 type AddressDescriptor []byte
+
+func (ad AddressDescriptor) String() string {
+	return "ad:" + hex.EncodeToString(ad)
+}
 
 // BlockChain defines common interface to block chain daemon
 type BlockChain interface {

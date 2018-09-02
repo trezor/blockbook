@@ -339,11 +339,10 @@ type blockTxs struct {
 
 func (d *RocksDB) resetValueSatToZero(valueSat *big.Int, addrDesc bchain.AddressDescriptor, logText string) {
 	ad, _, err := d.chainParser.GetAddressesFromAddrDesc(addrDesc)
-	had := hex.EncodeToString(addrDesc)
 	if err != nil {
-		glog.Warningf("rocksdb: unparsable address hex '%v' reached negative %s %v, resetting to 0. Parser error %v", had, logText, valueSat.String(), err)
+		glog.Warningf("rocksdb: unparsable address hex '%v' reached negative %s %v, resetting to 0. Parser error %v", addrDesc, logText, valueSat.String(), err)
 	} else {
-		glog.Warningf("rocksdb: address %v hex '%v' reached negative %s %v, resetting to 0", ad, had, logText, valueSat.String())
+		glog.Warningf("rocksdb: address %v hex '%v' reached negative %s %v, resetting to 0", ad, addrDesc, logText, valueSat.String())
 	}
 	valueSat.SetInt64(0)
 }
@@ -1073,8 +1072,7 @@ func (d *RocksDB) disconnectTxAddresses(wb *gorocksdb.WriteBatch, height uint32,
 				b.BalanceSat.Add(&b.BalanceSat, &t.ValueSat)
 			} else {
 				ad, _, _ := d.chainParser.GetAddressesFromAddrDesc(t.AddrDesc)
-				had := hex.EncodeToString(t.AddrDesc)
-				glog.Warningf("Balance for address %s (%s) not found", ad, had)
+				glog.Warningf("Balance for address %s (%s) not found", ad, t.AddrDesc)
 			}
 			s = string(inputs[i].btxID)
 			sa, exist := txAddressesToUpdate[s]
@@ -1110,8 +1108,7 @@ func (d *RocksDB) disconnectTxAddresses(wb *gorocksdb.WriteBatch, height uint32,
 				}
 			} else {
 				ad, _, _ := d.chainParser.GetAddressesFromAddrDesc(t.AddrDesc)
-				had := hex.EncodeToString(t.AddrDesc)
-				glog.Warningf("Balance for address %s (%s) not found", ad, had)
+				glog.Warningf("Balance for address %s (%s) not found", ad, t.AddrDesc)
 			}
 		}
 	}
