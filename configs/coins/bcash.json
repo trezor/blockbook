@@ -49,7 +49,7 @@
     "block_chain": {
       "parse": true,
       "subversion": "/Bitcoin ABC:0.17.1/",
-      "address_format": "legacy",
+      "address_format": "cashaddr",
       "mempool_workers": 8,
       "mempool_sub_workers": 2,
       "block_addresses_to_keep": 300,
