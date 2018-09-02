@@ -77,7 +77,7 @@ func (w *Worker) GetTransaction(txid string, bestheight uint32, spendingTxs bool
 				return nil, errors.Annotatef(err, "GetTxAddresses %v", bchainVin.Txid)
 			}
 			if tas == nil {
-				// mempool transactions are not in TxAddresses, all confirmed should be there, log a problem
+				// mempool transactions are not in TxAddresses but confirmed should be there, log a problem
 				if bchainTx.Confirmations > 0 {
 					glog.Warning("DB inconsistency:  tx ", bchainVin.Txid, ": not found in txAddresses")
 				}
@@ -99,6 +99,7 @@ func (w *Worker) GetTransaction(txid string, bestheight uint32, spendingTxs bool
 					output := &tas.Outputs[vin.Vout]
 					vin.ValueSat = output.ValueSat
 					vin.Value = w.chainParser.AmountToDecimalString(&vin.ValueSat)
+					vin.AddrDesc = output.AddrDesc
 					vin.Addresses, vin.Searchable, err = output.Addresses(w.chainParser)
 					if err != nil {
 						glog.Errorf("output.Addresses error %v, tx %v, output %v", err, bchainVin.Txid, i)
@@ -274,6 +275,11 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, onlyTxids b
 	if err != nil {
 		return nil, NewApiError(fmt.Sprintf("Address not found, %v", err), true)
 	}
+	// convert the address to the format defined by the parser
+	addresses, _, err := w.chainParser.GetAddressesFromAddrDesc(addrDesc)
+	if len(addresses) == 1 {
+		address = addresses[0]
+	}
 	txc, err := w.getAddressTxids(addrDesc, false)
 	if err != nil {
 		return nil, errors.Annotatef(err, "getAddressTxids %v false", address)
@@ -326,7 +332,6 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, onlyTxids b
 		} else {
 			uBalSat.Add(&uBalSat, tx.getAddrVoutValue(addrDesc))
 			uBalSat.Sub(&uBalSat, tx.getAddrVinValue(addrDesc))
-			glog.Info("uBalSat ", uBalSat, tx.getAddrVoutValue(addrDesc), tx.getAddrVinValue(addrDesc))
 			txs[txi] = tx
 			txi++
 		}
