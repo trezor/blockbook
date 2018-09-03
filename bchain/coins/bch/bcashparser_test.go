@@ -82,53 +82,85 @@ func Test_GetAddrDescFromAddress(t *testing.T) {
 func Test_GetAddressesFromAddrDesc(t *testing.T) {
 	mainParserCashAddr, mainParserLegacy, testParserCashAddr, testParserLegacy := setupParsers(t)
 	tests := []struct {
-		name      string
-		parser    *BCashParser
-		addresses []string
-		hex       string
-		wantErr   bool
+		name       string
+		parser     *BCashParser
+		addresses  []string
+		searchable bool
+		hex        string
+		wantErr    bool
 	}{
 		{
-			name:      "test-P2PKH-0",
-			parser:    testParserLegacy,
-			addresses: []string{"mnnAKPTSrWjgoi3uEYaQkHA1QEC5btFeBr"},
-			hex:       "76a9144fa927fd3bcf57d4e3c582c3d2eb2bd3df8df47c88ac",
-			wantErr:   false,
+			name:       "test-P2PKH-0",
+			parser:     testParserLegacy,
+			addresses:  []string{"mnnAKPTSrWjgoi3uEYaQkHA1QEC5btFeBr"},
+			searchable: true,
+			hex:        "76a9144fa927fd3bcf57d4e3c582c3d2eb2bd3df8df47c88ac",
+
+			wantErr: false,
 		},
 		{
-			name:      "test-P2PKH-1",
-			parser:    testParserCashAddr,
-			addresses: []string{"bchtest:qp86jfla8084048rckpv85ht90falr050s03ejaesm"},
-			hex:       "76a9144fa927fd3bcf57d4e3c582c3d2eb2bd3df8df47c88ac",
-			wantErr:   false,
+			name:       "test-P2PKH-1",
+			parser:     testParserCashAddr,
+			addresses:  []string{"bchtest:qp86jfla8084048rckpv85ht90falr050s03ejaesm"},
+			searchable: true,
+			hex:        "76a9144fa927fd3bcf57d4e3c582c3d2eb2bd3df8df47c88ac",
+			wantErr:    false,
 		},
 		{
-			name:      "main-P2PKH-0",
-			parser:    mainParserLegacy,
-			addresses: []string{"129HiRqekqPVucKy2M8zsqvafGgKypciPp"},
-			hex:       "76a9140c8967e6382c7a2ca64d8e850bfc99b7736e1a0d88ac",
-			wantErr:   false,
+			name:       "main-P2PKH-0",
+			parser:     mainParserLegacy,
+			addresses:  []string{"129HiRqekqPVucKy2M8zsqvafGgKypciPp"},
+			searchable: true,
+			hex:        "76a9140c8967e6382c7a2ca64d8e850bfc99b7736e1a0d88ac",
+			wantErr:    false,
 		},
 		{
-			name:      "main-P2PKH-0",
-			parser:    mainParserCashAddr,
-			addresses: []string{"bitcoincash:qqxgjelx8qk85t9xfk8g2zlunxmhxms6p55xarv2r5"},
-			hex:       "76a9140c8967e6382c7a2ca64d8e850bfc99b7736e1a0d88ac",
-			wantErr:   false,
+			name:       "main-P2PKH-0",
+			parser:     mainParserCashAddr,
+			addresses:  []string{"bitcoincash:qqxgjelx8qk85t9xfk8g2zlunxmhxms6p55xarv2r5"},
+			searchable: true,
+			hex:        "76a9140c8967e6382c7a2ca64d8e850bfc99b7736e1a0d88ac",
+			wantErr:    false,
 		},
 		{
-			name:      "main-P2SH-0",
-			parser:    mainParserLegacy,
-			addresses: []string{"3EBEFWPtDYWCNszQ7etoqtWmmygccayLiH"},
-			hex:       "a91488f772450c830a30eddfdc08a93d5f2ae1a30e1787",
-			wantErr:   false,
+			name:       "main-P2SH-0",
+			parser:     mainParserLegacy,
+			addresses:  []string{"3EBEFWPtDYWCNszQ7etoqtWmmygccayLiH"},
+			searchable: true,
+			hex:        "a91488f772450c830a30eddfdc08a93d5f2ae1a30e1787",
+			wantErr:    false,
 		},
 		{
-			name:      "main-P2SH-1",
-			parser:    mainParserCashAddr,
-			addresses: []string{"bitcoincash:pzy0wuj9pjps5v8dmlwq32fatu4wrgcwzuayq5nfhh"},
-			hex:       "a91488f772450c830a30eddfdc08a93d5f2ae1a30e1787",
-			wantErr:   false,
+			name:       "main-P2SH-1",
+			parser:     mainParserCashAddr,
+			addresses:  []string{"bitcoincash:pzy0wuj9pjps5v8dmlwq32fatu4wrgcwzuayq5nfhh"},
+			searchable: true,
+			hex:        "a91488f772450c830a30eddfdc08a93d5f2ae1a30e1787",
+			wantErr:    false,
+		},
+		{
+			name:       "OP_RETURN ascii",
+			parser:     mainParserCashAddr,
+			addresses:  []string{"OP_RETURN (ahoj)"},
+			searchable: false,
+			hex:        "6a0461686f6a",
+			wantErr:    false,
+		},
+		{
+			name:       "OP_RETURN hex",
+			parser:     mainParserCashAddr,
+			addresses:  []string{"OP_RETURN 07 2020f1686f6a20"},
+			searchable: false,
+			hex:        "6a072020f1686f6a20",
+			wantErr:    false,
+		},
+		{
+			name:       "empty",
+			parser:     mainParserCashAddr,
+			addresses:  []string{},
+			searchable: false,
+			hex:        "",
+			wantErr:    false,
 		},
 	}
 
@@ -143,8 +175,8 @@ func Test_GetAddressesFromAddrDesc(t *testing.T) {
 			if !reflect.DeepEqual(got, tt.addresses) {
 				t.Errorf("GetAddressesFromAddrDesc() = %v, want %v", got, tt.addresses)
 			}
-			if !reflect.DeepEqual(got2, true) {
-				t.Errorf("GetAddressesFromAddrDesc() = %v, want %v", got2, true)
+			if !reflect.DeepEqual(got2, tt.searchable) {
+				t.Errorf("GetAddressesFromAddrDesc() = %v, want %v", got2, tt.searchable)
 			}
 		})
 	}

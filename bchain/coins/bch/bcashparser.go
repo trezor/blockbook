@@ -126,6 +126,15 @@ func isCashAddr(addr string) bool {
 func (p *BCashParser) outputScriptToAddresses(script []byte) ([]string, bool, error) {
 	a, err := bchutil.ExtractPkScriptAddrs(script, p.Params)
 	if err != nil {
+		// do not return unknown script type error as error
+		if err.Error() == "unknown script type" {
+			// try OP_RETURN script
+			or := btc.TryParseOPReturn(script)
+			if or != "" {
+				return []string{or}, false, nil
+			}
+			return []string{}, false, nil
+		}
 		return nil, false, err
 	}
 	// EncodeAddress returns CashAddr address

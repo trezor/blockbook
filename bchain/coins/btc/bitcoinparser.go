@@ -84,6 +84,31 @@ func (p *BitcoinParser) addressToOutputScript(address string) ([]byte, error) {
 	return script, nil
 }
 
+// TryParseOPReturn tries to process OP_RETURN script and return its string representation
+func TryParseOPReturn(script []byte) string {
+	if len(script) > 1 && script[0] == txscript.OP_RETURN {
+		l := int(script[1])
+		data := script[2:]
+		if l == len(data) {
+			isASCII := true
+			for _, c := range data {
+				if c < 32 || c > 127 {
+					isASCII = false
+					break
+				}
+			}
+			var ed string
+			if isASCII {
+				ed = "(" + string(data) + ")"
+			} else {
+				ed = hex.EncodeToString([]byte{byte(l)}) + " " + hex.EncodeToString(data)
+			}
+			return "OP_RETURN " + ed
+		}
+	}
+	return ""
+}
+
 // outputScriptToAddresses converts ScriptPubKey to bitcoin addresses
 func (p *BitcoinParser) outputScriptToAddresses(script []byte) ([]string, bool, error) {
 	sc, addresses, _, err := txscript.ExtractPkScriptAddrs(script, p.Params)
@@ -97,26 +122,10 @@ func (p *BitcoinParser) outputScriptToAddresses(script []byte) ([]string, bool, 
 	var s bool
 	if sc != txscript.NonStandardTy && sc != txscript.NullDataTy {
 		s = true
-	} else {
-		if len(script) > 1 && script[0] == txscript.OP_RETURN && len(rv) == 0 {
-			l := int(script[1])
-			data := script[2:]
-			if l == len(data) {
-				isASCII := true
-				for _, c := range data {
-					if c < 32 || c > 127 {
-						isASCII = false
-						break
-					}
-				}
-				var ed string
-				if isASCII {
-					ed = "(" + string(data) + ")"
-				} else {
-					ed = hex.EncodeToString([]byte{byte(l)}) + " " + hex.EncodeToString(data)
-				}
-				rv = []string{"OP_RETURN " + ed}
-			}
+	} else if len(rv) == 0 {
+		or := TryParseOPReturn(script)
+		if or != "" {
+			rv = []string{or}
 		}
 	}
 	return rv, s, nil

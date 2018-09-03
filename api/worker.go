@@ -223,7 +223,7 @@ func (w *Worker) txFromTxAddress(txid string, ta *db.TxAddresses, bi *db.BlockIn
 		valInSat.Add(&valInSat, &vin.ValueSat)
 		vin.Addresses, vin.Searchable, err = tai.Addresses(w.chainParser)
 		if err != nil {
-			glog.Errorf("tai.Addresses error %v, tx %v, input %v", err, txid, i)
+			glog.Errorf("tai.Addresses error %v, tx %v, input %v, tai %+v", err, txid, i, tai)
 		}
 	}
 	vouts := make([]Vout, len(ta.Outputs))
@@ -236,7 +236,7 @@ func (w *Worker) txFromTxAddress(txid string, ta *db.TxAddresses, bi *db.BlockIn
 		valOutSat.Add(&valOutSat, &vout.ValueSat)
 		vout.ScriptPubKey.Addresses, vout.ScriptPubKey.Searchable, err = tao.Addresses(w.chainParser)
 		if err != nil {
-			glog.Errorf("tai.Addresses error %v, tx %v, output %v", err, txid, i)
+			glog.Errorf("tai.Addresses error %v, tx %v, output %v, tao %+v", err, txid, i, tao)
 		}
 	}
 	// for coinbase transactions valIn is 0
