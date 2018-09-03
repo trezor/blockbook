@@ -4,30 +4,30 @@
         <div class="col-xs-7 col-md-8 ellipsis">
             <a href="/explorer/tx/{{$tx.Txid}}">{{$tx.Txid}}</a>
         </div>
-        {{if $tx.Confirmations}}
+        {{- if $tx.Confirmations -}}
         <div class="col-xs-5 col-md-4 text-muted text-right">mined {{formatUnixTime $tx.Blocktime}}</div>
-        {{end}}
+        {{- end -}}
     </div>
     <div class="row line-mid">
         <div class="col-md-5">
             <div class="row">
                 <table class="table data-table">
                     <tbody>
-                        {{range $vin := $tx.Vin}}
+                        {{- range $vin := $tx.Vin -}}
                         <tr>
                             <td>
-                                {{range $a := $vin.Addresses}}
+                                {{- range $a := $vin.Addresses}}
                                 <span class="ellipsis float-left">
                                     {{if and (ne $a $addr) $vin.Searchable}}<a href="/explorer/address/{{$a}}">{{$a}}</a>{{else}}{{$a}}{{end}}
                                 </span>
-                                {{else}}
+                                {{- else -}}
                                 <span class="float-left">No Inputs (Newly Generated Coins)</span>
-                                {{end}}{{if $vin.Addresses}}
+                                {{- end -}}{{- if $vin.Addresses -}}
                                 <span class="float-right{{if stringInSlice $addr $vin.Addresses}} text-danger{{end}}">{{formatAmount $vin.Value}} {{$cs}}</span>
-                                {{end}}
+                                {{- end -}}
                             </td>
                         </tr>
-                        {{end}}
+                        {{- end -}}
                     </tbody>
                 </table>
             </div>
@@ -41,27 +41,24 @@
             <div class="row">
                 <table class="table data-table">
                     <tbody>
-                        {{range $vout := $tx.Vout}}
+                        {{- range $vout := $tx.Vout -}}
                         <tr>
                             <td>
-                                {{range $a := $vout.ScriptPubKey.Addresses}}
+                                {{- range $a := $vout.ScriptPubKey.Addresses -}}
                                 <span class="ellipsis float-left">
-                                    {{if and (ne $a $addr) $vout.ScriptPubKey.Searchable}}<a href="/explorer/address/{{$a}}">{{$a}}</a>{{else}}{{$a}}{{end}}
+                                    {{- if and (ne $a $addr) $vout.ScriptPubKey.Searchable}}<a href="/explorer/address/{{$a}}">{{$a}}</a>{{else}}{{$a}}{{- end -}}
                                 </span>
-                                {{else}}
+                                {{- else -}}
                                 <span class="float-left">Unparsed address</span>
-                                {{end}}
+                                {{- end -}}
                                 <span class="float-right{{if stringInSlice $addr $vout.ScriptPubKey.Addresses}} text-success{{end}}">
-                                    {{formatAmount $vout.Value}} {{$cs}}
-                                    {{if $vout.Spent}}
-                                    <span class="text-danger">(S)</span>
-                                    {{else}}
+                                    {{formatAmount $vout.Value}} {{$cs}}{{if $vout.Spent}}{{if $vout.SpentTxID}}<a class="text-danger" href="/explorer/tx/{{$vout.SpentTxID}}">(S)</a>{{else}}<span class="text-danger">(S)</span>{{end}}{{else -}}
                                     <span class="text-success">(U)</span>
-                                    {{end}}
+                                    {{- end -}}
                                 </span>
                             </td>
                         </tr>
-                        {{end}}
+                        {{- end -}}
                     </tbody>
                 </table>
             </div>
@@ -69,16 +66,16 @@
     </div>
     <div class="row line-top">
         <div class="col-xs-6 col-sm-4 col-md-4">
-            {{if $tx.Fees}}
+            {{- if $tx.Fees -}}
             <span class="txvalues txvalues-default">Fee: {{formatAmount $tx.Fees}} {{$cs}}</span>
-            {{end}}
+            {{- end -}}
         </div>
         <div class="col-xs-6 col-sm-8 col-md-8 text-right">
-            {{if $tx.Confirmations}}
+            {{- if $tx.Confirmations -}}
             <span class="txvalues txvalues-success">{{$tx.Confirmations}} Confirmations</span>
-            {{else}}
+            {{- else -}}
             <span class="txvalues txvalues-danger ng-hide">Unconfirmed Transaction!</span>
-            {{end}}
+            {{- end -}}
             <span class="txvalues txvalues-primary">{{formatAmount $tx.ValueOut}} {{$cs}}</span>
         </div>
     </div>

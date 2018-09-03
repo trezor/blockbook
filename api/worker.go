@@ -45,6 +45,7 @@ func (w *Worker) getAddressesFromVout(vout *bchain.Vout) (bchain.AddressDescript
 
 // GetTransaction reads transaction data from txid
 func (w *Worker) GetTransaction(txid string, bestheight uint32, spendingTxs bool) (*Tx, error) {
+	start := time.Now()
 	bchainTx, height, err := w.txCache.GetTransaction(txid, bestheight)
 	if err != nil {
 		return nil, NewApiError(fmt.Sprintf("Tx not found, %v", err), true)
@@ -123,7 +124,39 @@ func (w *Worker) GetTransaction(txid string, bestheight uint32, spendingTxs bool
 		if ta != nil {
 			vout.Spent = ta.Outputs[i].Spent
 			if spendingTxs && vout.Spent {
-				// TODO
+				// find transaction that spent this output
+				// there is not an index, it must be found in addresses -> txaddresses -> tx
+				// given that each step is more and more selective, it is not
+				err = w.db.GetAddrDescTransactions(vout.ScriptPubKey.AddrDesc, height, ^uint32(0), func(t string, index uint32, isOutput bool) error {
+					if isOutput == false {
+						tsp, err := w.db.GetTxAddresses(t)
+						if err != nil {
+							glog.Warning("DB inconsistency:  tx ", t, ": not found in txAddresses")
+						} else {
+							if len(tsp.Inputs) > int(index) {
+								if tsp.Inputs[index].ValueSat.Cmp(&vout.ValueSat) == 0 {
+									spentTx, spentHeight, err := w.txCache.GetTransaction(t, bestheight)
+									if err != nil {
+										glog.Warning("Tx ", t, ": not found")
+									} else {
+										if len(spentTx.Vin) > int(index) {
+											if spentTx.Vin[index].Txid == bchainTx.Txid {
+												vout.SpentTxID = t
+												vout.SpentHeight = int(spentHeight)
+												vout.SpentIndex = int(index)
+												return &db.StopIteration{}
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+					return nil
+				})
+				if err != nil {
+					glog.Errorf("GetAddrDescTransactions error %v, %v, output %v", err, vout.ScriptPubKey.AddrDesc)
+				}
 			}
 		}
 	}
@@ -150,6 +183,7 @@ func (w *Worker) GetTransaction(txid string, bestheight uint32, spendingTxs bool
 		Vin:           vins,
 		Vout:          vouts,
 	}
+	glog.Info("GetTransaction ", txid, " finished in ", time.Since(start))
 	return r, nil
 }
 
@@ -238,6 +272,7 @@ func (w *Worker) txFromTxAddress(txid string, ta *db.TxAddresses, bi *db.BlockIn
 		if err != nil {
 			glog.Errorf("tai.Addresses error %v, tx %v, output %v, tao %+v", err, txid, i, tao)
 		}
+		vout.Spent = tao.Spent
 	}
 	// for coinbase transactions valIn is 0
 	feesSat.Sub(&valInSat, &valOutSat)
@@ -374,6 +409,6 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, onlyTxids b
 		TotalPages:              totalPages,
 		TxsOnPage:               txsOnPage,
 	}
-	glog.Info(address, " finished in ", time.Since(start))
+	glog.Info("GetAddress ", address, " finished in ", time.Since(start))
 	return r, nil
 }
