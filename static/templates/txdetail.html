@@ -51,7 +51,14 @@
                                 {{else}}
                                 <span class="float-left">Unparsed address</span>
                                 {{end}}
-                                <span class="float-right{{if stringInSlice $addr $vout.ScriptPubKey.Addresses}} text-success{{end}}">{{formatAmount $vout.Value}} {{$cs}}</span>
+                                <span class="float-right{{if stringInSlice $addr $vout.ScriptPubKey.Addresses}} text-success{{end}}">
+                                    {{formatAmount $vout.Value}} {{$cs}}
+                                    {{if $vout.Spent}}
+                                    <span class="text-danger">(S)</span>
+                                    {{else}}
+                                    <span class="text-success">(U)</span>
+                                    {{end}}
+                                </span>
                             </td>
                         </tr>
                         {{end}}

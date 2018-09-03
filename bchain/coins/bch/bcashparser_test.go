@@ -139,6 +139,14 @@ func Test_GetAddressesFromAddrDesc(t *testing.T) {
 			wantErr:    false,
 		},
 		{
+			name:       "main-P2PK",
+			parser:     mainParserCashAddr,
+			addresses:  []string{"bitcoincash:qqr95pwp0w5jqnh9vcjl4qm4x45atr0er57n49pq75"},
+			searchable: true,
+			hex:        "2103db3c3977c5165058bf38c46f72d32f4e872112dbafc13083a948676165cd1603ac",
+			wantErr:    false,
+		},
+		{
 			name:       "OP_RETURN ascii",
 			parser:     mainParserCashAddr,
 			addresses:  []string{"OP_RETURN (ahoj)"},
