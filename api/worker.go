@@ -126,7 +126,6 @@ func (w *Worker) GetTransaction(txid string, bestheight uint32, spendingTxs bool
 			if spendingTxs && vout.Spent {
 				// find transaction that spent this output
 				// there is not an index, it must be found in addresses -> txaddresses -> tx
-				// given that each step is more and more selective, it is not
 				err = w.db.GetAddrDescTransactions(vout.ScriptPubKey.AddrDesc, height, ^uint32(0), func(t string, index uint32, isOutput bool) error {
 					if isOutput == false {
 						tsp, err := w.db.GetTxAddresses(t)
@@ -321,18 +320,16 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, onlyTxids b
 	}
 	txc = UniqueTxidsInReverse(txc)
 	var txm []string
-	// mempool only on the first page or if there are no confirmed transactions
-	if page == 0 || ba == nil {
-		if ba == nil {
-			ba = &db.AddrBalance{}
-			page = 0
-		}
-		txm, err = w.getAddressTxids(addrDesc, true)
-		if err != nil {
-			return nil, errors.Annotatef(err, "getAddressTxids %v true", address)
-		}
-		txm = UniqueTxidsInReverse(txm)
+	// if there are only unconfirmed transactions, ba is nil
+	if ba == nil {
+		ba = &db.AddrBalance{}
+		page = 0
 	}
+	txm, err = w.getAddressTxids(addrDesc, true)
+	if err != nil {
+		return nil, errors.Annotatef(err, "getAddressTxids %v true", address)
+	}
+	txm = UniqueTxidsInReverse(txm)
 	// check if the address exist
 	if len(txc)+len(txm) == 0 {
 		return nil, NewApiError("Address not found", true)
@@ -355,7 +352,13 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, onlyTxids b
 	if to > len(txc) {
 		to = len(txc)
 	}
-	txs := make([]*Tx, len(txm)+to-from)
+	var txs []*Tx
+	var txids []string
+	if onlyTxids {
+		txids = make([]string, len(txm)+to-from)
+	} else {
+		txs = make([]*Tx, len(txm)+to-from)
+	}
 	txi := 0
 	// load mempool transactions
 	var uBalSat big.Int
@@ -367,8 +370,14 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, onlyTxids b
 		} else {
 			uBalSat.Add(&uBalSat, tx.getAddrVoutValue(addrDesc))
 			uBalSat.Sub(&uBalSat, tx.getAddrVinValue(addrDesc))
-			txs[txi] = tx
-			txi++
+			if page > 0 {
+				if onlyTxids {
+					txids[txi] = tx.Txid
+				} else {
+					txs[txi] = tx
+				}
+				txi++
+			}
 		}
 	}
 	if len(txc) != int(ba.Txs) {
@@ -376,24 +385,31 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, onlyTxids b
 	}
 	for i := from; i < to; i++ {
 		txid := txc[i]
-		ta, err := w.db.GetTxAddresses(txid)
-		if err != nil {
-			return nil, errors.Annotatef(err, "GetTxAddresses %v", txid)
+		if onlyTxids {
+			txids[txi] = txid
+		} else {
+			ta, err := w.db.GetTxAddresses(txid)
+			if err != nil {
+				return nil, errors.Annotatef(err, "GetTxAddresses %v", txid)
+			}
+			if ta == nil {
+				glog.Warning("DB inconsistency:  tx ", txid, ": not found in txAddresses")
+				continue
+			}
+			bi, err := w.db.GetBlockInfo(ta.Height)
+			if err != nil {
+				return nil, errors.Annotatef(err, "GetBlockInfo %v", ta.Height)
+			}
+			if bi == nil {
+				glog.Warning("DB inconsistency:  block height ", ta.Height, ": not found in db")
+				continue
+			}
+			txs[txi] = w.txFromTxAddress(txid, ta, bi, bestheight)
 		}
-		if ta == nil {
-			glog.Warning("DB inconsistency:  tx ", txid, ": not found in txAddresses")
-			continue
-		}
-		bi, err := w.db.GetBlockInfo(ta.Height)
-		if err != nil {
-			return nil, errors.Annotatef(err, "GetBlockInfo %v", ta.Height)
-		}
-		if bi == nil {
-			glog.Warning("DB inconsistency:  block height ", ta.Height, ": not found in db")
-			continue
-		}
-		txs[txi] = w.txFromTxAddress(txid, ta, bi, bestheight)
 		txi++
+	}
+	if !onlyTxids {
+		txs = txs[:txi]
 	}
 	r := &Address{
 		AddrStr:                 address,
@@ -403,8 +419,8 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, onlyTxids b
 		TxApperances:            len(txc),
 		UnconfirmedBalance:      w.chainParser.AmountToDecimalString(&uBalSat),
 		UnconfirmedTxApperances: len(txm),
-		Transactions:            txs[:txi],
-		Txids:                   nil,
+		Transactions:            txs,
+		Txids:                   txids,
 		Page:                    page,
 		TotalPages:              totalPages,
 		TxsOnPage:               txsOnPage,

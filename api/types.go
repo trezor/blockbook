@@ -84,8 +84,8 @@ type Address struct {
 	UnconfirmedBalance      string   `json:"unconfirmedBalance"`
 	UnconfirmedTxApperances int      `json:"unconfirmedTxApperances"`
 	TxApperances            int      `json:"txApperances"`
-	Transactions            []*Tx    `json:"transactions,omitempty"`
-	Txids                   []string `json:"transactions,omitempty"` // this is intentional, we return either Transactions or Txids
+	Transactions            []*Tx    `json:"txs,omitempty"`
+	Txids                   []string `json:"transactions,omitempty"`
 	Page                    int      `json:"page"`
 	TotalPages              int      `json:"totalPages"`
 	TxsOnPage               int      `json:"txsOnPage"`
