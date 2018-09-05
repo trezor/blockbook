@@ -41,9 +41,7 @@ type EthereumRPC struct {
 	client               *ethclient.Client
 	rpc                  *rpc.Client
 	timeout              time.Duration
-	rpcURL               string
 	Parser               *EthereumParser
-	CoinName             string
 	Testnet              bool
 	Network              string
 	Mempool              *bchain.NonUTXOMempool
@@ -143,21 +141,25 @@ func (b *EthereumRPC) Initialize() error {
 	}
 	glog.Info("rpc: block chain ", b.Network)
 
-	// subscriptions
-	if err = b.subscribe(func() (*rpc.ClientSubscription, error) {
-		// invalidate the previous subscription - it is either the first one or there was an error
-		b.newBlockSubscription = nil
-		ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
-		defer cancel()
-		sub, err := b.rpc.EthSubscribe(ctx, b.chanNewBlock, "newHeads")
-		if err != nil {
-			return nil, errors.Annotatef(err, "EthSubscribe newHeads")
+	if b.ChainConfig.CoinName == "Ethereum Classic" {
+		glog.Info(b.ChainConfig.CoinName, " does not support subscription to newHeads")
+	} else {
+		// subscriptions
+		if err = b.subscribe(func() (*rpc.ClientSubscription, error) {
+			// invalidate the previous subscription - it is either the first one or there was an error
+			b.newBlockSubscription = nil
+			ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
+			defer cancel()
+			sub, err := b.rpc.EthSubscribe(ctx, b.chanNewBlock, "newHeads")
+			if err != nil {
+				return nil, errors.Annotatef(err, "EthSubscribe newHeads")
+			}
+			b.newBlockSubscription = sub
+			glog.Info("Subscribed to newHeads")
+			return sub, nil
+		}); err != nil {
+			return err
 		}
-		b.newBlockSubscription = sub
-		glog.Info("Subscribed to newHeads")
-		return sub, nil
-	}); err != nil {
-		return err
 	}
 	if err = b.subscribe(func() (*rpc.ClientSubscription, error) {
 		// invalidate the previous subscription - it is either the first one or there was an error
