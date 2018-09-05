@@ -91,6 +91,9 @@ func (m *NonUTXOMempool) Resync(onNewTxAddr func(txid string, addr string)) (int
 							continue
 						}
 						io = append(io, addrIndex{string(addrID), int32(^i)})
+						if onNewTxAddr != nil {
+							onNewTxAddr(tx.Txid, a)
+						}
 					}
 				}
 			}
