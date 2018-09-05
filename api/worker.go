@@ -182,7 +182,9 @@ func (w *Worker) GetTransaction(txid string, bestheight uint32, spendingTxs bool
 		Vin:           vins,
 		Vout:          vouts,
 	}
-	glog.Info("GetTransaction ", txid, " finished in ", time.Since(start))
+	if spendingTxs {
+		glog.Info("GetTransaction ", txid, " finished in ", time.Since(start))
+	}
 	return r, nil
 }
 
@@ -297,6 +299,7 @@ func (w *Worker) txFromTxAddress(txid string, ta *db.TxAddresses, bi *db.BlockIn
 // GetAddress computes address value and gets transactions for given address
 func (w *Worker) GetAddress(address string, page int, txsOnPage int, onlyTxids bool) (*Address, error) {
 	start := time.Now()
+	page--
 	if page < 0 {
 		page = 0
 	}
@@ -340,7 +343,10 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, onlyTxids b
 	}
 	// paging
 	from := page * txsOnPage
-	totalPages := len(txc) / txsOnPage
+	totalPages := (len(txc) - 1) / txsOnPage
+	if totalPages < 0 {
+		totalPages = 0
+	}
 	if from >= len(txc) {
 		page = totalPages - 1
 		if page < 0 {
@@ -370,7 +376,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, onlyTxids b
 		} else {
 			uBalSat.Add(&uBalSat, tx.getAddrVoutValue(addrDesc))
 			uBalSat.Sub(&uBalSat, tx.getAddrVinValue(addrDesc))
-			if page > 0 {
+			if page == 0 {
 				if onlyTxids {
 					txids[txi] = tx.Txid
 				} else {
@@ -408,7 +414,9 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, onlyTxids b
 		}
 		txi++
 	}
-	if !onlyTxids {
+	if onlyTxids {
+		txids = txids[:txi]
+	} else {
 		txs = txs[:txi]
 	}
 	r := &Address{
@@ -421,8 +429,8 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, onlyTxids b
 		UnconfirmedTxApperances: len(txm),
 		Transactions:            txs,
 		Txids:                   txids,
-		Page:                    page,
-		TotalPages:              totalPages,
+		Page:                    page + 1,
+		TotalPages:              totalPages + 1,
 		TxsOnPage:               txsOnPage,
 	}
 	glog.Info("GetAddress ", address, " finished in ", time.Since(start))

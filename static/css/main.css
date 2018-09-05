@@ -193,3 +193,37 @@ h3 {
     padding-right: 0;
     padding-left: .25rem;
 }
+
+.h-container {
+    display: -webkit-box;
+    display: -ms-flexbox;
+    -ms-flex-wrap: wrap;
+    flex-wrap: wrap;
+}
+
+.h-container-6 {
+    width: 50%;
+    margin: 0;
+}
+
+.h-container ul {
+    margin: 0;
+}
+
+.page-link {
+    color: #428bca;
+}
+
+.page-text {
+    display: block;
+    padding: .5rem .3rem;
+    line-height: 1.25;
+}
+
+.page-link {
+    color: #428bca;
+}
+
+.page-item.active .page-link {
+    background-color: #428bca;
+}

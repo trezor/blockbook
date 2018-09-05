@@ -20,7 +20,7 @@ import (
 )
 
 const blockbookAbout = "Blockbook - blockchain indexer for TREZOR wallet https://trezor.io/. Do not use for any other purpose."
-const txsOnPage = 30
+const txsOnPage = 25
 const txsInAPI = 1000
 
 // PublicServer is a handle to public http server
@@ -272,6 +272,8 @@ const (
 	errorTpl = tpl(iota)
 	txTpl
 	addressTpl
+
+	tplCount
 )
 
 type TemplateData struct {
@@ -281,6 +283,10 @@ type TemplateData struct {
 	AddrStr      string
 	Tx           *api.Tx
 	Error        *api.ApiError
+	Page         int
+	PrevPage     int
+	NextPage     int
+	PagingRange  []int
 }
 
 func parseTemplates() []*template.Template {
@@ -290,10 +296,10 @@ func parseTemplates() []*template.Template {
 		"setTxToTemplateData": setTxToTemplateData,
 		"stringInSlice":       stringInSlice,
 	}
-	t := make([]*template.Template, 3)
-	t[errorTpl] = template.Must(template.New("tx").Funcs(templateFuncMap).ParseFiles("./static/templates/error.html", "./static/templates/base.html"))
+	t := make([]*template.Template, tplCount)
+	t[errorTpl] = template.Must(template.New("error").Funcs(templateFuncMap).ParseFiles("./static/templates/error.html", "./static/templates/base.html"))
 	t[txTpl] = template.Must(template.New("tx").Funcs(templateFuncMap).ParseFiles("./static/templates/tx.html", "./static/templates/txdetail.html", "./static/templates/base.html"))
-	t[addressTpl] = template.Must(template.New("address").Funcs(templateFuncMap).ParseFiles("./static/templates/address.html", "./static/templates/txdetail.html", "./static/templates/base.html"))
+	t[addressTpl] = template.Must(template.New("address").Funcs(templateFuncMap).ParseFiles("./static/templates/address.html", "./static/templates/txdetail.html", "./static/templates/paging.html", "./static/templates/base.html"))
 	return t
 }
 
@@ -346,7 +352,63 @@ func (s *PublicServer) explorerAddress(r *http.Request) (tpl, *TemplateData, err
 	data := s.newTemplateData()
 	data.AddrStr = address.AddrStr
 	data.Address = address
+	data.Page = address.Page
+	data.PagingRange, data.PrevPage, data.NextPage = getPagingRange(address.Page, address.TotalPages)
 	return addressTpl, data, nil
+}
+
+func getPagingRange(page int, total int) ([]int, int, int) {
+	if total < 2 {
+		return nil, 0, 0
+	}
+	pp, np := page-1, page+1
+	if np > total {
+		np = total
+	}
+	if pp < 1 {
+		pp = 1
+	}
+	r := make([]int, 0, 8)
+	if total < 6 {
+		for i := 1; i <= total; i++ {
+			r = append(r, i)
+		}
+	} else {
+		r = append(r, 1)
+		if page > 3 {
+			r = append(r, 0)
+		}
+		if pp == 1 {
+			if page == 1 {
+				r = append(r, np)
+				r = append(r, np+1)
+				r = append(r, np+2)
+			} else {
+				r = append(r, page)
+				r = append(r, np)
+				r = append(r, np+1)
+			}
+		} else if np == total {
+			if page == total {
+				r = append(r, pp-2)
+				r = append(r, pp-1)
+				r = append(r, pp)
+			} else {
+				r = append(r, pp-1)
+				r = append(r, pp)
+				r = append(r, page)
+			}
+		} else {
+			r = append(r, pp)
+			r = append(r, page)
+			r = append(r, np)
+		}
+		if page <= total-3 {
+			r = append(r, 0)
+		}
+		r = append(r, total)
+	}
+	return r, pp, np
 }
 
 type resAboutBlockbookPublic struct {

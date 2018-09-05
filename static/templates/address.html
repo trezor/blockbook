@@ -28,7 +28,7 @@
         </tbody>
     </table>
 </div>
-{{if $addr.UnconfirmedTxApperances}}
+{{- if $addr.UnconfirmedTxApperances -}}
 <h3>Unconfirmed</h3>
 <div class="data-div">
     <table class="table data-table">
@@ -44,9 +44,13 @@
         </tbody>
     </table>
 </div>
-{{end}} {{if $addr.Transactions}}
-<h3>Transactions</h3>
-<div class="data-div">
-    {{range $tx := $addr.Transactions}}{{$data := setTxToTemplateData $data $tx}}{{template "txdetail" $data }}{{end}}
+{{- end}}{{if $addr.Transactions -}}
+<div class="h-container">
+    <h3 class="h-container-6">Transactions</h3>
+    <nav class="h-container-6">{{template "paging" $data}}</nav>
 </div>
-{{end}} {{end}}
+<div class="data-div">
+    {{- range $tx := $addr.Transactions}}{{$data := setTxToTemplateData $data $tx}}{{template "txdetail" $data}}{{end -}}
+</div>
+<nav>{{template "paging" $data }}</nav>
+{{end}}{{end}}
