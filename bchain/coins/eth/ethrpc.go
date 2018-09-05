@@ -502,8 +502,28 @@ func (b *EthereumRPC) EstimateSmartFee(blocks int, conservative bool) (float64, 
 }
 
 // SendRawTransaction sends raw transaction.
-func (b *EthereumRPC) SendRawTransaction(tx string) (string, error) {
-	return "", errors.New("SendRawTransaction: not implemented")
+func (b *EthereumRPC) SendRawTransaction(hex string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
+	defer cancel()
+	glog.Info("SendRawTransaction hex ", hex)
+	var raw json.RawMessage
+	err := b.rpc.CallContext(ctx, &raw, "eth_sendRawTransaction", hex)
+	if err != nil {
+		return "", err
+	} else if len(raw) == 0 {
+		return "", errors.New("SendRawTransaction: failed")
+	}
+	type rpcSendResult struct {
+		Result string `json:"result"`
+	}
+	var r rpcSendResult
+	if err := json.Unmarshal(raw, &r); err != nil {
+		return "", errors.Annotatef(err, "raw result %v", raw)
+	}
+	if r.Result == "" {
+		return "", errors.New("SendRawTransaction: failed, empty result")
+	}
+	return r.Result, nil
 }
 
 func (b *EthereumRPC) ResyncMempool(onNewTxAddr func(txid string, addr string)) (int, error) {
