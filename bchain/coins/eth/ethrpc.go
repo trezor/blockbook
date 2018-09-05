@@ -505,7 +505,6 @@ func (b *EthereumRPC) EstimateSmartFee(blocks int, conservative bool) (float64, 
 func (b *EthereumRPC) SendRawTransaction(hex string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
 	defer cancel()
-	glog.Info("SendRawTransaction hex ", hex)
 	var raw json.RawMessage
 	err := b.rpc.CallContext(ctx, &raw, "eth_sendRawTransaction", hex)
 	if err != nil {
