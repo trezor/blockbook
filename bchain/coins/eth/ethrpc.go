@@ -513,17 +513,14 @@ func (b *EthereumRPC) SendRawTransaction(hex string) (string, error) {
 	} else if len(raw) == 0 {
 		return "", errors.New("SendRawTransaction: failed")
 	}
-	type rpcSendResult struct {
-		Result string `json:"result"`
-	}
-	var r rpcSendResult
-	if err := json.Unmarshal(raw, &r); err != nil {
+	var result string
+	if err := json.Unmarshal(raw, &result); err != nil {
 		return "", errors.Annotatef(err, "raw result %v", raw)
 	}
-	if r.Result == "" {
+	if result == "" {
 		return "", errors.New("SendRawTransaction: failed, empty result")
 	}
-	return r.Result, nil
+	return result, nil
 }
 
 func (b *EthereumRPC) ResyncMempool(onNewTxAddr func(txid string, addr string)) (int, error) {
