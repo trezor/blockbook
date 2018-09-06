@@ -3,8 +3,8 @@ package dash
 import (
 	"blockbook/bchain/coins/btc"
 
-	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/wire"
+	"github.com/jakm/btcutil/chaincfg"
 )
 
 const (
@@ -24,22 +24,22 @@ func init() {
 	MainNetParams.Net = MainnetMagic
 
 	// Address encoding magics
-	MainNetParams.PubKeyHashAddrID = 76 // base58 prefix: X
-	MainNetParams.ScriptHashAddrID = 16 // base58 prefix: 7
+	MainNetParams.PubKeyHashAddrID = []byte{76} // base58 prefix: X
+	MainNetParams.ScriptHashAddrID = []byte{16} // base58 prefix: 7
 
 	TestNetParams = chaincfg.TestNet3Params
 	TestNetParams.Net = TestnetMagic
 
 	// Address encoding magics
-	TestNetParams.PubKeyHashAddrID = 140 // base58 prefix: y
-	TestNetParams.ScriptHashAddrID = 19  // base58 prefix: 8 or 9
+	TestNetParams.PubKeyHashAddrID = []byte{140} // base58 prefix: y
+	TestNetParams.ScriptHashAddrID = []byte{19}  // base58 prefix: 8 or 9
 
 	RegtestParams = chaincfg.RegressionNetParams
 	RegtestParams.Net = RegtestMagic
 
 	// Address encoding magics
-	RegtestParams.PubKeyHashAddrID = 140 // base58 prefix: y
-	RegtestParams.ScriptHashAddrID = 19  // base58 prefix: 8 or 9
+	RegtestParams.PubKeyHashAddrID = []byte{140} // base58 prefix: y
+	RegtestParams.ScriptHashAddrID = []byte{19}  // base58 prefix: 8 or 9
 
 	err := chaincfg.Register(&MainNetParams)
 	if err == nil {

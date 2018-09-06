@@ -11,15 +11,17 @@ import (
 	"testing"
 )
 
-func getRPCClient(cfg json.RawMessage) (bchain.BlockChain, error) {
-	c, err := NewZCashRPC(cfg, nil)
-	if err != nil {
-		return nil, err
+func getRPCClient(chain string) func(cfg json.RawMessage) (bchain.BlockChain, error) {
+	return func(cfg json.RawMessage) (bchain.BlockChain, error) {
+		c, err := NewZCashRPC(cfg, nil)
+		if err != nil {
+			return nil, err
+		}
+		cli := c.(*ZCashRPC)
+		cli.Parser = NewZCashParser(GetChainParams(chain), cli.ChainConfig)
+		cli.Mempool = bchain.NewUTXOMempool(cli, cli.ChainConfig.MempoolWorkers, cli.ChainConfig.MempoolSubWorkers)
+		return cli, nil
 	}
-	cli := c.(*ZCashRPC)
-	cli.Parser = NewZCashParser(cli.ChainConfig)
-	cli.Mempool = bchain.NewUTXOMempool(cli, cli.ChainConfig.MempoolWorkers, cli.ChainConfig.MempoolSubWorkers)
-	return cli, nil
 }
 
 var tests struct {
@@ -30,14 +32,14 @@ var tests struct {
 func TestMain(m *testing.M) {
 	flag.Parse()
 
-	t, err := rpc.NewTest("Zcash", getRPCClient)
+	t, err := rpc.NewTest("Zcash", getRPCClient("main"))
 	if err != nil {
 		panic(err)
 	}
 
 	tests.mainnet = t
 
-	t, err = rpc.NewTest("Zcash Testnet", getRPCClient)
+	t, err = rpc.NewTest("Zcash Testnet", getRPCClient("test"))
 	if err != nil {
 		panic(err)
 	}

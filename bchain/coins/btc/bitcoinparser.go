@@ -9,10 +9,10 @@ import (
 
 	vlq "github.com/bsm/go-vlq"
 	"github.com/btcsuite/btcd/blockchain"
-	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/btcsuite/btcutil"
+	"github.com/jakm/btcutil"
+	"github.com/jakm/btcutil/chaincfg"
+	"github.com/jakm/btcutil/txscript"
 )
 
 // OutputScriptToAddressesFunc converts ScriptPubKey to bitcoin addresses

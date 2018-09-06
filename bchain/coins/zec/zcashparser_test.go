@@ -5,6 +5,7 @@ package zec
 import (
 	"blockbook/bchain"
 	"blockbook/bchain/coins/btc"
+	"bytes"
 	"encoding/hex"
 	"math/big"
 	"reflect"
@@ -90,6 +91,51 @@ func init() {
 	}
 }
 
+func TestGetAddrDesc(t *testing.T) {
+	type args struct {
+		tx     bchain.Tx
+		parser *ZCashParser
+	}
+	tests := []struct {
+		name string
+		args args
+	}{
+		{
+			name: "zec-1",
+			args: args{
+				tx:     testTx1,
+				parser: NewZCashParser(GetChainParams("main"), &btc.Configuration{}),
+			},
+		},
+		{
+			name: "zec-2",
+			args: args{
+				tx:     testTx2,
+				parser: NewZCashParser(GetChainParams("main"), &btc.Configuration{}),
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for n, vout := range tt.args.tx.Vout {
+				got1, err := tt.args.parser.GetAddrDescFromVout(&vout)
+				if err != nil {
+					t.Errorf("getAddrDescFromVout() error = %v, vout = %d", err, n)
+					return
+				}
+				got2, err := tt.args.parser.GetAddrDescFromAddress(vout.ScriptPubKey.Addresses[0])
+				if err != nil {
+					t.Errorf("getAddrDescFromAddress() error = %v, vout = %d", err, n)
+					return
+				}
+				if !bytes.Equal(got1, got2) {
+					t.Errorf("Address descriptors mismatch: got1 = %v, got2 = %v", got1, got2)
+				}
+			}
+		})
+	}
+}
+
 func TestPackTx(t *testing.T) {
 	type args struct {
 		tx        bchain.Tx
@@ -109,7 +155,7 @@ func TestPackTx(t *testing.T) {
 				tx:        testTx1,
 				height:    292272,
 				blockTime: 1521645728,
-				parser:    NewZCashParser(&btc.Configuration{}),
+				parser:    NewZCashParser(GetChainParams("main"), &btc.Configuration{}),
 			},
 			want:    testTxPacked1,
 			wantErr: false,
@@ -120,7 +166,7 @@ func TestPackTx(t *testing.T) {
 				tx:        testTx2,
 				height:    292217,
 				blockTime: 1521637604,
-				parser:    NewZCashParser(&btc.Configuration{}),
+				parser:    NewZCashParser(GetChainParams("main"), &btc.Configuration{}),
 			},
 			want:    testTxPacked2,
 			wantErr: false,
@@ -157,7 +203,7 @@ func TestUnpackTx(t *testing.T) {
 			name: "zec-1",
 			args: args{
 				packedTx: testTxPacked1,
-				parser:   NewZCashParser(&btc.Configuration{}),
+				parser:   NewZCashParser(GetChainParams("main"), &btc.Configuration{}),
 			},
 			want:    &testTx1,
 			want1:   292272,
@@ -167,7 +213,7 @@ func TestUnpackTx(t *testing.T) {
 			name: "zec-2",
 			args: args{
 				packedTx: testTxPacked2,
-				parser:   NewZCashParser(&btc.Configuration{}),
+				parser:   NewZCashParser(GetChainParams("main"), &btc.Configuration{}),
 			},
 			want:    &testTx2,
 			want1:   292217,

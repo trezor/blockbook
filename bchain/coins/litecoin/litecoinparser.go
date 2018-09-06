@@ -3,8 +3,8 @@ package litecoin
 import (
 	"blockbook/bchain/coins/btc"
 
-	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/wire"
+	"github.com/jakm/btcutil/chaincfg"
 )
 
 const (
@@ -21,14 +21,14 @@ var (
 func init() {
 	MainNetParams = chaincfg.MainNetParams
 	MainNetParams.Net = MainnetMagic
-	MainNetParams.PubKeyHashAddrID = 48
-	MainNetParams.ScriptHashAddrID = 50
+	MainNetParams.PubKeyHashAddrID = []byte{48}
+	MainNetParams.ScriptHashAddrID = []byte{50}
 	MainNetParams.Bech32HRPSegwit = "ltc"
 
 	TestNetParams = chaincfg.TestNet3Params
 	TestNetParams.Net = TestnetMagic
-	TestNetParams.PubKeyHashAddrID = 111
-	TestNetParams.ScriptHashAddrID = 58
+	TestNetParams.PubKeyHashAddrID = []byte{111}
+	TestNetParams.ScriptHashAddrID = []byte{58}
 	TestNetParams.Bech32HRPSegwit = "tltc"
 
 	err := chaincfg.Register(&MainNetParams)
