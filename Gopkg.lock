@@ -68,6 +68,12 @@
   version = "v1.7"
 
 [[projects]]
+  branch = "master"
+  name = "github.com/erikdubbelboer/gspt"
+  packages = ["."]
+  revision = "e39e726e09cc23d1ccf13b36ce10dbdb4a4510e0"
+
+[[projects]]
   name = "github.com/ethereum/go-ethereum"
   packages = [".","common","common/hexutil","common/math","core/types","crypto","crypto/secp256k1","crypto/sha3","ethclient","ethdb","log","metrics","params","rlp","rpc","trie"]
   revision = "329ac18ef617d0238f71637bffe78f028b0f13f7"
@@ -244,6 +250,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "03817720a4b1b5011cc64018a1344ed3fb4d8228af41c86856069f57851b3819"
+  inputs-digest = "98fb9a6252acd86d1c0a4b09a42e34673c2ccd6327caf49ed85bcee573601d95"
   solver-name = "gps-cdcl"
   solver-version = 1
