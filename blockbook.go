@@ -1,10 +1,17 @@
 package main
 
 import (
+	"blockbook/bchain"
+	"blockbook/bchain/coins"
+	"blockbook/common"
+	"blockbook/db"
+	"blockbook/server"
 	"context"
 	"flag"
 	"log"
 	"math/rand"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"strings"
@@ -12,18 +19,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/juju/errors"
-
-	"blockbook/bchain"
-	"blockbook/bchain/coins"
-	"blockbook/common"
-	"blockbook/db"
-	"blockbook/server"
-
+	"github.com/erikdubbelboer/gspt"
 	"github.com/golang/glog"
-
-	"net/http"
-	_ "net/http/pprof"
+	"github.com/juju/errors"
 )
 
 // debounce too close requests for resync
@@ -155,6 +153,8 @@ func main() {
 	if err != nil {
 		glog.Fatal("config: ", err)
 	}
+
+	gspt.SetProcTitle("blockbook-" + normalizeName(coin))
 
 	metrics, err := common.GetMetrics(coin)
 	if err != nil {
@@ -507,4 +507,10 @@ func waitForSignalAndShutdown(internal *server.InternalServer, public *server.Pu
 func printResult(txid string, vout uint32, isOutput bool) error {
 	glog.Info(txid, vout, isOutput)
 	return nil
+}
+
+func normalizeName(s string) string {
+	s = strings.ToLower(s)
+	s = strings.Replace(s, " ", "-", -1)
+	return s
 }
