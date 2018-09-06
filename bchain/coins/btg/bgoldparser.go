@@ -7,9 +7,9 @@ import (
 	"bytes"
 	"io"
 
-	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
+	"github.com/jakm/btcutil/chaincfg"
 )
 
 const (
@@ -27,8 +27,8 @@ func init() {
 	MainNetParams.Net = MainnetMagic
 
 	// Address encoding magics
-	MainNetParams.PubKeyHashAddrID = 38 // base58 prefix: G
-	MainNetParams.ScriptHashAddrID = 23 // base58 prefix: A
+	MainNetParams.PubKeyHashAddrID = []byte{38} // base58 prefix: G
+	MainNetParams.ScriptHashAddrID = []byte{23} // base58 prefix: A
 
 	TestNetParams = chaincfg.TestNet3Params
 	TestNetParams.Net = TestnetMagic

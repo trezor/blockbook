@@ -4,8 +4,8 @@ import (
 	"blockbook/bchain"
 	"blockbook/bchain/coins/btc"
 
-	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/wire"
+	"github.com/jakm/btcutil/chaincfg"
 	monacoinCfg "github.com/wakiyamap/monad/chaincfg"
 	"github.com/wakiyamap/monad/txscript"
 	monacoinWire "github.com/wakiyamap/monad/wire"
@@ -29,8 +29,8 @@ var (
 func init() {
 	MainNetParams = chaincfg.MainNetParams
 	MainNetParams.Net = MainnetMagic
-	MainNetParams.PubKeyHashAddrID = 50
-	MainNetParams.ScriptHashAddrID = 55
+	MainNetParams.PubKeyHashAddrID = []byte{50}
+	MainNetParams.ScriptHashAddrID = []byte{55}
 	MainNetParams.Bech32HRPSegwit = "mona"
 	MonaMainParams = monacoinCfg.MainNetParams
 	MonaMainParams.Net = MonaMainMagic
@@ -40,8 +40,8 @@ func init() {
 
 	TestNetParams = chaincfg.TestNet3Params
 	TestNetParams.Net = TestnetMagic
-	TestNetParams.PubKeyHashAddrID = 111
-	TestNetParams.ScriptHashAddrID = 117
+	TestNetParams.PubKeyHashAddrID = []byte{111}
+	TestNetParams.ScriptHashAddrID = []byte{117}
 	TestNetParams.Bech32HRPSegwit = "tmona"
 	MonaTestParams = monacoinCfg.TestNet4Params
 	MonaTestParams.Net = MonaTestMagic

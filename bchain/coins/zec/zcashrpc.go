@@ -35,7 +35,7 @@ func (z *ZCashRPC) Initialize() error {
 
 	params := GetChainParams(chainName)
 
-	z.Parser = NewZCashParser(z.ChainConfig)
+	z.Parser = NewZCashParser(params, z.ChainConfig)
 
 	// parameters for getInfo request
 	if params.Net == MainnetMagic {

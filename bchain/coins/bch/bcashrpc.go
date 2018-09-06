@@ -7,8 +7,8 @@ import (
 	"encoding/json"
 	"math/big"
 
-	"github.com/cpacia/bchutil"
 	"github.com/golang/glog"
+	"github.com/jakm/bchutil"
 	"github.com/juju/errors"
 )
 
