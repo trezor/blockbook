@@ -52,6 +52,7 @@ type EthereumRPC struct {
 	chanNewTx            chan ethcommon.Hash
 	newTxSubscription    *rpc.ClientSubscription
 	ChainConfig          *Configuration
+	isETC                bool
 }
 
 // NewEthereumRPC returns new EthRPC instance.
@@ -77,6 +78,9 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 	// always create parser
 	s.Parser = NewEthereumParser()
 	s.timeout = time.Duration(c.RPCTimeout) * time.Second
+
+	// detect ethereum classic
+	s.isETC = s.ChainConfig.CoinName == "Ethereum Classic"
 
 	// new blocks notifications handling
 	// the subscription is done in Initialize
@@ -141,7 +145,7 @@ func (b *EthereumRPC) Initialize() error {
 	}
 	glog.Info("rpc: block chain ", b.Network)
 
-	if b.ChainConfig.CoinName == "Ethereum Classic" {
+	if b.isETC {
 		glog.Info(b.ChainConfig.CoinName, " does not support subscription to newHeads")
 	} else {
 		// subscriptions
@@ -427,7 +431,11 @@ func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 	} else if tx == nil {
 		return nil, ethereum.NotFound
 	} else if tx.R == "" {
-		return nil, errors.Annotatef(fmt.Errorf("server returned transaction without signature"), "txid %v", txid)
+		if !b.isETC {
+			return nil, errors.Annotatef(fmt.Errorf("server returned transaction without signature"), "txid %v", txid)
+		} else {
+			glog.Warning("server returned transaction without signature, txid ", txid)
+		}
 	}
 	var btx *bchain.Tx
 	if tx.BlockNumber == "" {
