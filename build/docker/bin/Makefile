@@ -4,17 +4,20 @@ VERSION ?= devel
 GITCOMMIT = $(shell cd /src && git describe --tags --always --dirty)
 BUILDTIME = $(shell date --iso-8601=seconds)
 LDFLAGS := -X blockbook/common.version=$(VERSION) -X blockbook/common.gitcommit=$(GITCOMMIT) -X blockbook/common.buildtime=$(BUILDTIME)
+BLOCKBOOK_SRC := $(GOPATH)/src/blockbook
 ARGS ?=
+
+export BLOCKBOOK_SRC
 
 all: build tools
 
 build: prepare-sources
-	cd $(GOPATH)/src/blockbook && go build -o $(CURDIR)/blockbook -ldflags="-s -w $(LDFLAGS)" $(ARGS)
+	cd $(BLOCKBOOK_SRC) && go build -o $(CURDIR)/blockbook -ldflags="-s -w $(LDFLAGS)" $(ARGS)
 	cp $(CURDIR)/blockbook /out/blockbook
 	chown $(PACKAGER) /out/blockbook
 
 build-debug: prepare-sources
-	cd $(GOPATH)/src/blockbook && go build -o $(CURDIR)/blockbook -ldflags="$(LDFLAGS)" $(ARGS)
+	cd $(BLOCKBOOK_SRC) && go build -o $(CURDIR)/blockbook -ldflags="$(LDFLAGS)" $(ARGS)
 	cp $(CURDIR)/blockbook /out/blockbook
 	chown $(PACKAGER) /out/blockbook
 
@@ -23,20 +26,20 @@ tools:
 	chown $(PACKAGER) /out/{ldb,sst_dump}
 
 test: prepare-sources
-	cd $(GOPATH)/src/blockbook && go test -tags unittest `go list ./... | grep -v '^blockbook/contrib'` $(ARGS)
+	cd $(BLOCKBOOK_SRC) && go test -tags unittest `go list ./... | grep -v '^blockbook/contrib'` $(ARGS)
 
 test-all: prepare-sources
-	cd $(GOPATH)/src/blockbook && go test -tags 'unittest integration' `go list ./... | grep -v '^blockbook/contrib'` $(ARGS)
+	cd $(BLOCKBOOK_SRC) && go test -tags 'unittest integration' `go list ./... | grep -v '^blockbook/contrib'` $(ARGS)
 
 prepare-sources:
 	@ [ -n "`ls /src 2> /dev/null`" ] || (echo "/src doesn't exist or is empty" 1>&2 && exit 1)
-	[ -d $(GOPATH)/src/blockbook ] || cp -r /src $(GOPATH)/src/blockbook
+	[ -d $(BLOCKBOOK_SRC) ] || cp -r /src $(BLOCKBOOK_SRC)
 	$(MAKE) prepare-vendor
 
 prepare-vendor:
 	@ if [ "$(UPDATE_VENDOR)" -eq 1 ]; then \
 		echo "Updating vendor"; \
-		rm -rf $(GOPATH)/src/blockbook/vendor && cd $(GOPATH)/src/blockbook && dep ensure -vendor-only ; \
+		rm -rf $(BLOCKBOOK_SRC)/vendor && cd $(BLOCKBOOK_SRC) && dep ensure -vendor-only ; \
 	else \
 		echo "Update of vendor not demanded, keeping version from src" ; \
 	fi

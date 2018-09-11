@@ -4,11 +4,18 @@ import (
 	"blockbook/bchain"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io/ioutil"
 	"path/filepath"
 	"strings"
 )
+
+type TestData struct {
+	BlockHeight uint32                `json:"blockHeight"`
+	BlockHash   string                `json:"blockHash"`
+	BlockTime   int64                 `json:"blockTime"`
+	BlockTxs    []string              `json:"blockTxs"`
+	TxDetails   map[string]*bchain.Tx `json:"txDetails"`
+}
 
 func joinPathsWithCommonElement(p1, p2 string) (string, bool) {
 	idx := strings.IndexRune(p2, filepath.Separator)
@@ -40,46 +47,6 @@ func readDataFile(dir, relDir, filename string) ([]byte, error) {
 	filename = strings.Replace(filename, " ", "_", -1)
 	path = filepath.Join(path, filename)
 	return ioutil.ReadFile(path)
-}
-
-var testConfigRegistry map[string]*TestConfig
-
-func LoadTestConfig(coin string) (*TestConfig, error) {
-	if testConfigRegistry == nil {
-		b, err := readDataFile(".", "bchain/tests/rpc", "config.json")
-		if err != nil {
-			return nil, err
-		}
-		var v map[string]*TestConfig
-		err = json.Unmarshal(b, &v)
-		if err != nil {
-			return nil, err
-		}
-		testConfigRegistry = v
-	}
-	c, found := testConfigRegistry[coin]
-	if !found {
-		return nil, errors.New("Test config not found")
-	}
-	return c, nil
-}
-
-func LoadRPCConfig(coin string) (json.RawMessage, error) {
-	t := `{
-	"coin_name": "%s",
-	"rpc_url": "%s",
-	"rpc_user": "%s",
-	"rpc_pass": "%s",
-	"rpc_timeout": 25,
-	"parse": true
-	}`
-
-	c, err := LoadTestConfig(coin)
-	if err != nil {
-		return json.RawMessage{}, err
-	}
-
-	return json.RawMessage(fmt.Sprintf(t, coin, c.URL, c.User, c.Pass)), nil
 }
 
 func LoadTestData(coin string, parser bchain.BlockChainParser) (*TestData, error) {
