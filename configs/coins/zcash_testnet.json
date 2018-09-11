@@ -47,7 +47,7 @@
     "system_user": "blockbook-zcash",
     "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
     "public_binding_template": ":{{.Ports.BlockbookPublic}}",
-    "explorer_url": "https://explorer.testnet.z.cash/",
+    "explorer_url": "/explorer",
     "additional_params": "",
     "block_chain": {
       "parse": true,
