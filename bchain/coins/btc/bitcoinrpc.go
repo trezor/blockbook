@@ -613,7 +613,7 @@ func (b *BitcoinRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 // ResyncMempool gets mempool transactions and maps output scripts to transactions.
 // ResyncMempool is not reentrant, it should be called from a single thread.
 // It returns number of transactions in mempool
-func (b *BitcoinRPC) ResyncMempool(onNewTxAddr func(txid string, addr string)) (int, error) {
+func (b *BitcoinRPC) ResyncMempool(onNewTxAddr bchain.OnNewTxAddrFunc) (int, error) {
 	return b.Mempool.Resync(onNewTxAddr)
 }
 

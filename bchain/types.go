@@ -119,6 +119,12 @@ func (ad AddressDescriptor) String() string {
 	return "ad:" + hex.EncodeToString(ad)
 }
 
+// OnNewBlockFunc is used to send notification about a new block
+type OnNewBlockFunc func(hash string, height uint32)
+
+// OnNewTxAddrFunc is used to send notification about a new transaction/address
+type OnNewTxAddrFunc func(txid string, addr string, isOutput bool)
+
 // BlockChain defines common interface to block chain daemon
 type BlockChain interface {
 	// life-cycle methods
@@ -143,7 +149,7 @@ type BlockChain interface {
 	EstimateFee(blocks int) (big.Int, error)
 	SendRawTransaction(tx string) (string, error)
 	// mempool
-	ResyncMempool(onNewTxAddr func(txid string, addr string)) (int, error)
+	ResyncMempool(onNewTxAddr OnNewTxAddrFunc) (int, error)
 	GetMempoolTransactions(address string) ([]string, error)
 	GetMempoolTransactionsForAddrDesc(addrDesc AddressDescriptor) ([]string, error)
 	GetMempoolEntry(txid string) (*MempoolEntry, error)

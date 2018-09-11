@@ -41,9 +41,7 @@ type EthereumRPC struct {
 	client               *ethclient.Client
 	rpc                  *rpc.Client
 	timeout              time.Duration
-	rpcURL               string
 	Parser               *EthereumParser
-	CoinName             string
 	Testnet              bool
 	Network              string
 	Mempool              *bchain.NonUTXOMempool
@@ -54,6 +52,7 @@ type EthereumRPC struct {
 	chanNewTx            chan ethcommon.Hash
 	newTxSubscription    *rpc.ClientSubscription
 	ChainConfig          *Configuration
+	isETC                bool
 }
 
 // NewEthereumRPC returns new EthRPC instance.
@@ -79,6 +78,9 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 	// always create parser
 	s.Parser = NewEthereumParser()
 	s.timeout = time.Duration(c.RPCTimeout) * time.Second
+
+	// detect ethereum classic
+	s.isETC = s.ChainConfig.CoinName == "Ethereum Classic"
 
 	// new blocks notifications handling
 	// the subscription is done in Initialize
@@ -143,21 +145,25 @@ func (b *EthereumRPC) Initialize() error {
 	}
 	glog.Info("rpc: block chain ", b.Network)
 
-	// subscriptions
-	if err = b.subscribe(func() (*rpc.ClientSubscription, error) {
-		// invalidate the previous subscription - it is either the first one or there was an error
-		b.newBlockSubscription = nil
-		ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
-		defer cancel()
-		sub, err := b.rpc.EthSubscribe(ctx, b.chanNewBlock, "newHeads")
-		if err != nil {
-			return nil, errors.Annotatef(err, "EthSubscribe newHeads")
+	if b.isETC {
+		glog.Info(b.ChainConfig.CoinName, " does not support subscription to newHeads")
+	} else {
+		// subscriptions
+		if err = b.subscribe(func() (*rpc.ClientSubscription, error) {
+			// invalidate the previous subscription - it is either the first one or there was an error
+			b.newBlockSubscription = nil
+			ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
+			defer cancel()
+			sub, err := b.rpc.EthSubscribe(ctx, b.chanNewBlock, "newHeads")
+			if err != nil {
+				return nil, errors.Annotatef(err, "EthSubscribe newHeads")
+			}
+			b.newBlockSubscription = sub
+			glog.Info("Subscribed to newHeads")
+			return sub, nil
+		}); err != nil {
+			return err
 		}
-		b.newBlockSubscription = sub
-		glog.Info("Subscribed to newHeads")
-		return sub, nil
-	}); err != nil {
-		return err
 	}
 	if err = b.subscribe(func() (*rpc.ClientSubscription, error) {
 		// invalidate the previous subscription - it is either the first one or there was an error
@@ -427,7 +433,11 @@ func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 	} else if tx == nil {
 		return nil, ethereum.NotFound
 	} else if tx.R == "" {
-		return nil, errors.Annotatef(fmt.Errorf("server returned transaction without signature"), "txid %v", txid)
+		if !b.isETC {
+			return nil, errors.Annotatef(fmt.Errorf("server returned transaction without signature"), "txid %v", txid)
+		} else {
+			glog.Warning("server returned transaction without signature, txid ", txid)
+		}
 	}
 	var btx *bchain.Tx
 	if tx.BlockNumber == "" {
@@ -503,12 +513,28 @@ func (b *EthereumRPC) EstimateSmartFee(blocks int, conservative bool) (big.Int, 
 	return r, nil
 }
 
-// SendRawTransaction sends raw transaction
-func (b *EthereumRPC) SendRawTransaction(tx string) (string, error) {
-	return "", errors.New("SendRawTransaction: not implemented")
+// SendRawTransaction sends raw transaction.
+func (b *EthereumRPC) SendRawTransaction(hex string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
+	defer cancel()
+	var raw json.RawMessage
+	err := b.rpc.CallContext(ctx, &raw, "eth_sendRawTransaction", hex)
+	if err != nil {
+		return "", err
+	} else if len(raw) == 0 {
+		return "", errors.New("SendRawTransaction: failed")
+	}
+	var result string
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return "", errors.Annotatef(err, "raw result %v", raw)
+	}
+	if result == "" {
+		return "", errors.New("SendRawTransaction: failed, empty result")
+	}
+	return result, nil
 }
 
-func (b *EthereumRPC) ResyncMempool(onNewTxAddr func(txid string, addr string)) (int, error) {
+func (b *EthereumRPC) ResyncMempool(onNewTxAddr bchain.OnNewTxAddrFunc) (int, error) {
 	return b.Mempool.Resync(onNewTxAddr)
 }
 

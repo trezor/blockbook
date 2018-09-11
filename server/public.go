@@ -124,14 +124,14 @@ func (s *PublicServer) Shutdown(ctx context.Context) error {
 	return s.https.Shutdown(ctx)
 }
 
-// OnNewBlockHash notifies users subscribed to bitcoind/hashblock about new block
-func (s *PublicServer) OnNewBlockHash(hash string) {
+// OnNewBlock notifies users subscribed to bitcoind/hashblock about new block
+func (s *PublicServer) OnNewBlock(hash string, height uint32) {
 	s.socketio.OnNewBlockHash(hash)
 }
 
 // OnNewTxAddr notifies users subscribed to bitcoind/addresstxid about new block
-func (s *PublicServer) OnNewTxAddr(txid string, addr string) {
-	s.socketio.OnNewTxAddr(txid, addr)
+func (s *PublicServer) OnNewTxAddr(txid string, addr string, isOutput bool) {
+	s.socketio.OnNewTxAddr(txid, addr, isOutput)
 }
 
 func (s *PublicServer) txRedirect(w http.ResponseWriter, r *http.Request) {
