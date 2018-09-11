@@ -145,8 +145,8 @@ func (s *PublicServer) OnNewBlockHash(hash string) {
 }
 
 // OnNewTxAddr notifies users subscribed to bitcoind/addresstxid about new block
-func (s *PublicServer) OnNewTxAddr(txid string, addr string) {
-	s.socketio.OnNewTxAddr(txid, addr)
+func (s *PublicServer) OnNewTxAddr(txid string, addr string, isOutput bool) {
+	s.socketio.OnNewTxAddr(txid, addr, isOutput)
 }
 
 func splitBinding(binding string) (addr string, path string) {

@@ -86,7 +86,7 @@ var (
 	syncWorker                 *db.SyncWorker
 	internalState              *common.InternalState
 	callbacksOnNewBlockHash    []func(hash string)
-	callbacksOnNewTxAddr       []func(txid string, addr string)
+	callbacksOnNewTxAddr       []func(txid string, addr string, isOutput bool)
 	chanOsSignal               chan os.Signal
 	inShutdown                 int32
 )
@@ -444,9 +444,9 @@ func storeInternalStateLoop() {
 	glog.Info("storeInternalStateLoop stopped")
 }
 
-func onNewTxAddr(txid string, addr string) {
+func onNewTxAddr(txid string, addr string, isOutput bool) {
 	for _, c := range callbacksOnNewTxAddr {
-		c(txid, addr)
+		c(txid, addr, isOutput)
 	}
 }
 

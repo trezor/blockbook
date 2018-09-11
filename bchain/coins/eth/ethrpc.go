@@ -530,7 +530,7 @@ func (b *EthereumRPC) SendRawTransaction(hex string) (string, error) {
 	return result, nil
 }
 
-func (b *EthereumRPC) ResyncMempool(onNewTxAddr func(txid string, addr string)) (int, error) {
+func (b *EthereumRPC) ResyncMempool(onNewTxAddr func(txid string, addr string, isOutput bool)) (int, error) {
 	return b.Mempool.Resync(onNewTxAddr)
 }
 
