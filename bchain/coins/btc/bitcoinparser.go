@@ -87,8 +87,22 @@ func (p *BitcoinParser) addressToOutputScript(address string) ([]byte, error) {
 // TryParseOPReturn tries to process OP_RETURN script and return its string representation
 func TryParseOPReturn(script []byte) string {
 	if len(script) > 1 && script[0] == txscript.OP_RETURN {
-		l := int(script[1])
-		data := script[2:]
+		// trying 2 variants of OP_RETURN data
+		// 1) OP_RETURN OP_PUSHDATA1 <datalen> <data>
+		// 2) OP_RETURN <datalen> <data>
+		var data []byte
+		var l int
+		if script[1] == txscript.OP_PUSHDATA1 && len(script) > 2 {
+			l = int(script[2])
+			data = script[3:]
+			if l != len(data) {
+				l = int(script[1])
+				data = script[2:]
+			}
+		} else {
+			l = int(script[1])
+			data = script[2:]
+		}
 		if l == len(data) {
 			isASCII := true
 			for _, c := range data {
@@ -101,7 +115,7 @@ func TryParseOPReturn(script []byte) string {
 			if isASCII {
 				ed = "(" + string(data) + ")"
 			} else {
-				ed = hex.EncodeToString([]byte{byte(l)}) + " " + hex.EncodeToString(data)
+				ed = hex.EncodeToString(data)
 			}
 			return "OP_RETURN " + ed
 		}
