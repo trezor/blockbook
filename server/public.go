@@ -139,8 +139,8 @@ func (s *PublicServer) Shutdown(ctx context.Context) error {
 	return s.https.Shutdown(ctx)
 }
 
-// OnNewBlockHash notifies users subscribed to bitcoind/hashblock about new block
-func (s *PublicServer) OnNewBlockHash(hash string) {
+// OnNewBlock notifies users subscribed to bitcoind/hashblock about new block
+func (s *PublicServer) OnNewBlock(hash string, height uint32) {
 	s.socketio.OnNewBlockHash(hash)
 }
 

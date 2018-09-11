@@ -47,7 +47,7 @@ var errSynced = errors.New("synced")
 
 // ResyncIndex synchronizes index to the top of the blockchain
 // onNewBlock is called when new block is connected, but not in initial parallel sync
-func (w *SyncWorker) ResyncIndex(onNewBlock func(hash string)) error {
+func (w *SyncWorker) ResyncIndex(onNewBlock bchain.OnNewBlockFunc) error {
 	start := time.Now()
 	w.is.StartedSync()
 
@@ -75,7 +75,7 @@ func (w *SyncWorker) ResyncIndex(onNewBlock func(hash string)) error {
 	return err
 }
 
-func (w *SyncWorker) resyncIndex(onNewBlock func(hash string)) error {
+func (w *SyncWorker) resyncIndex(onNewBlock bchain.OnNewBlockFunc) error {
 	remoteBestHash, err := w.chain.GetBestBlockHash()
 	if err != nil {
 		return err
@@ -135,7 +135,7 @@ func (w *SyncWorker) resyncIndex(onNewBlock func(hash string)) error {
 	return w.connectBlocks(onNewBlock)
 }
 
-func (w *SyncWorker) handleFork(localBestHeight uint32, localBestHash string, onNewBlock func(hash string)) error {
+func (w *SyncWorker) handleFork(localBestHeight uint32, localBestHash string, onNewBlock bchain.OnNewBlockFunc) error {
 	// find forked blocks, disconnect them and then synchronize again
 	var height uint32
 	hashes := []string{localBestHash}
@@ -163,7 +163,7 @@ func (w *SyncWorker) handleFork(localBestHeight uint32, localBestHash string, on
 	return w.resyncIndex(onNewBlock)
 }
 
-func (w *SyncWorker) connectBlocks(onNewBlock func(hash string)) error {
+func (w *SyncWorker) connectBlocks(onNewBlock bchain.OnNewBlockFunc) error {
 	bch := make(chan blockResult, 8)
 	done := make(chan struct{})
 	defer close(done)
@@ -181,7 +181,7 @@ func (w *SyncWorker) connectBlocks(onNewBlock func(hash string)) error {
 			return err
 		}
 		if onNewBlock != nil {
-			onNewBlock(res.block.Hash)
+			onNewBlock(res.block.Hash, res.block.Height)
 		}
 		if res.block.Height > 0 && res.block.Height%1000 == 0 {
 			glog.Info("connected block ", res.block.Height, " ", res.block.Hash)

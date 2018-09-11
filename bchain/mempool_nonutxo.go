@@ -47,7 +47,7 @@ func (m *NonUTXOMempool) updateMappings(newTxToInputOutput map[string][]addrInde
 // Resync gets mempool transactions and maps outputs to transactions.
 // Resync is not reentrant, it should be called from a single thread.
 // Read operations (GetTransactions) are safe.
-func (m *NonUTXOMempool) Resync(onNewTxAddr func(txid string, addr string, isOutput bool)) (int, error) {
+func (m *NonUTXOMempool) Resync(onNewTxAddr OnNewTxAddrFunc) (int, error) {
 	start := time.Now()
 	glog.V(1).Info("Mempool: resync")
 	txs, err := m.chain.GetMempool()

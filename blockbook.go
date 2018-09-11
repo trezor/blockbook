@@ -85,8 +85,8 @@ var (
 	txCache                    *db.TxCache
 	syncWorker                 *db.SyncWorker
 	internalState              *common.InternalState
-	callbacksOnNewBlockHash    []func(hash string)
-	callbacksOnNewTxAddr       []func(txid string, addr string, isOutput bool)
+	callbacksOnNewBlock        []bchain.OnNewBlockFunc
+	callbacksOnNewTxAddr       []bchain.OnNewTxAddrFunc
 	chanOsSignal               chan os.Signal
 	inShutdown                 int32
 )
@@ -281,7 +281,7 @@ func main() {
 				}
 			}
 		}()
-		callbacksOnNewBlockHash = append(callbacksOnNewBlockHash, publicServer.OnNewBlockHash)
+		callbacksOnNewBlock = append(callbacksOnNewBlock, publicServer.OnNewBlock)
 		callbacksOnNewTxAddr = append(callbacksOnNewTxAddr, publicServer.OnNewTxAddr)
 	}
 
@@ -392,9 +392,9 @@ func syncIndexLoop() {
 	glog.Info("syncIndexLoop stopped")
 }
 
-func onNewBlockHash(hash string) {
-	for _, c := range callbacksOnNewBlockHash {
-		c(hash)
+func onNewBlockHash(hash string, height uint32) {
+	for _, c := range callbacksOnNewBlock {
+		c(hash, height)
 	}
 }
 

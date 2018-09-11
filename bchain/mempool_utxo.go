@@ -31,7 +31,7 @@ type UTXOMempool struct {
 	addrIDToTx      map[string][]outpoint
 	chanTxid        chan string
 	chanAddrIndex   chan txidio
-	onNewTxAddr     func(txid string, addr string, isOutput bool)
+	onNewTxAddr     OnNewTxAddrFunc
 }
 
 // NewUTXOMempool creates new mempool handler.
@@ -166,7 +166,7 @@ func (m *UTXOMempool) getTxAddrs(txid string, chanInput chan outpoint, chanResul
 // Resync gets mempool transactions and maps outputs to transactions.
 // Resync is not reentrant, it should be called from a single thread.
 // Read operations (GetTransactions) are safe.
-func (m *UTXOMempool) Resync(onNewTxAddr func(txid string, addr string, isOutput bool)) (int, error) {
+func (m *UTXOMempool) Resync(onNewTxAddr OnNewTxAddrFunc) (int, error) {
 	start := time.Now()
 	glog.V(1).Info("mempool: resync")
 	m.onNewTxAddr = onNewTxAddr
