@@ -98,7 +98,7 @@ func TestRPCIntegration(t *testing.T) {
 	}
 
 	if len(skippedTests) > 0 {
-		t.Errorf("Too many skipped tests: %q", skippedTests)
+		t.Errorf("Too many skipped tests due to connection issues: %q", skippedTests)
 	}
 }
 
@@ -442,12 +442,16 @@ func getMempoolAddresses(t *testing.T, h *TestHandler, txs []string) map[string]
 		addrs := []string{}
 		for _, vin := range tx.Vin {
 			for _, a := range vin.Addresses {
-				addrs = append(addrs, a)
+				if isSearchableAddr(a) {
+					addrs = append(addrs, a)
+				}
 			}
 		}
 		for _, vout := range tx.Vout {
 			for _, a := range vout.ScriptPubKey.Addresses {
-				addrs = append(addrs, a)
+				if isSearchableAddr(a) {
+					addrs = append(addrs, a)
+				}
 			}
 		}
 		if len(addrs) > 0 {
@@ -455,6 +459,10 @@ func getMempoolAddresses(t *testing.T, h *TestHandler, txs []string) map[string]
 		}
 	}
 	return txid2addrs
+}
+
+func isSearchableAddr(addr string) bool {
+	return len(addr) > 3 && addr[:3] != "OP_"
 }
 
 func intersect(a, b []string) []string {
