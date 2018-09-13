@@ -6,27 +6,36 @@
     <span class="ellipsis data">{{$addr.AddrStr}}</span>
 </div>
 <h3>Confirmed</h3>
-<div class="data-div">
-    <table class="table data-table">
-        <tbody>
-            <tr>
-                <td style="width: 25%;">Total Received</td>
-                <td class="data">{{formatAmount $addr.TotalReceived}} {{$cs}}</td>
-            </tr>
-            <tr>
-                <td>Total Sent</td>
-                <td class="data">{{formatAmount $addr.TotalSent}} {{$cs}}</td>
-            </tr>
-            <tr>
-                <td>Final Balance</td>
-                <td class="data">{{formatAmount $addr.Balance}} {{$cs}}</td>
-            </tr>
-            <tr>
-                <td>No. Transactions</td>
-                <td class="data">{{$addr.TxApperances}}</td>
-            </tr>
-        </tbody>
-    </table>
+<div class="data-div row">
+    <div class="col-md-10">
+        <table class="table data-table">
+            <tbody>
+                <tr>
+                    <td style="width: 25%;">Total Received</td>
+                    <td class="data">{{formatAmount $addr.TotalReceived}} {{$cs}}</td>
+                </tr>
+                <tr>
+                    <td>Total Sent</td>
+                    <td class="data">{{formatAmount $addr.TotalSent}} {{$cs}}</td>
+                </tr>
+                <tr>
+                    <td>Final Balance</td>
+                    <td class="data">{{formatAmount $addr.Balance}} {{$cs}}</td>
+                </tr>
+                <tr>
+                    <td>No. Transactions</td>
+                    <td class="data">{{$addr.TxApperances}}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    <div class="col-md-2">
+        <div id="qrcode"></div>
+        <script type="text/javascript" src="/static/js/qrcode.min.js"></script>
+        <script type="text/javascript">
+            new QRCode(document.getElementById("qrcode"), { text: "{{$addr.AddrStr}}", width: 160, height: 160 });
+        </script>
+    </div>
 </div>
 {{- if $addr.UnconfirmedTxApperances -}}
 <h3>Unconfirmed</h3>

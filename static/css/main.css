@@ -189,7 +189,11 @@ h3 {
 }
 
 .data-div {
-    margin: 20px 0;
+    margin: 20px 0 30px 0;
+}
+
+.data-div .col-md-10 {
+    padding-left: 0;
 }
 
 .data-table {
