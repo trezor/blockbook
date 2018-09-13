@@ -138,14 +138,14 @@ func (s *PublicServer) OnNewTxAddr(txid string, addr string, isOutput bool) {
 func (s *PublicServer) txRedirect(w http.ResponseWriter, r *http.Request) {
 	if s.explorerURL != "" {
 		http.Redirect(w, r, joinURL(s.explorerURL, r.URL.Path), 302)
-		s.metrics.ExplorerViews.With(common.Labels{"action": "tx"}).Inc()
+		s.metrics.ExplorerViews.With(common.Labels{"action": "tx-redirect"}).Inc()
 	}
 }
 
 func (s *PublicServer) addressRedirect(w http.ResponseWriter, r *http.Request) {
 	if s.explorerURL != "" {
 		http.Redirect(w, r, joinURL(s.explorerURL, r.URL.Path), 302)
-		s.metrics.ExplorerViews.With(common.Labels{"action": "address"}).Inc()
+		s.metrics.ExplorerViews.With(common.Labels{"action": "address-redirect"}).Inc()
 	}
 }
 
@@ -326,6 +326,7 @@ func setTxToTemplateData(td *TemplateData, tx *api.Tx) *TemplateData {
 
 func (s *PublicServer) explorerTx(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
 	var tx *api.Tx
+	s.metrics.ExplorerViews.With(common.Labels{"action": "tx"}).Inc()
 	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
 		txid := r.URL.Path[i+1:]
 		bestheight, _, err := s.db.GetBestBlock()
@@ -344,6 +345,7 @@ func (s *PublicServer) explorerTx(w http.ResponseWriter, r *http.Request) (tpl, 
 func (s *PublicServer) explorerAddress(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
 	var address *api.Address
 	var err error
+	s.metrics.ExplorerViews.With(common.Labels{"action": "address"}).Inc()
 	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
 		page, ec := strconv.Atoi(r.URL.Query().Get("page"))
 		if ec != nil {
@@ -367,6 +369,7 @@ func (s *PublicServer) explorerSearch(w http.ResponseWriter, r *http.Request) (t
 	var tx *api.Tx
 	var address *api.Address
 	var err error
+	s.metrics.ExplorerViews.With(common.Labels{"action": "search"}).Inc()
 	if len(q) > 0 {
 		if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
 			bestheight, _, err := s.db.GetBestBlock()
@@ -515,6 +518,7 @@ func (s *PublicServer) apiBlockIndex(r *http.Request) (interface{}, error) {
 func (s *PublicServer) apiTx(r *http.Request) (interface{}, error) {
 	var tx *api.Tx
 	var err error
+	s.metrics.ExplorerViews.With(common.Labels{"action": "api-tx"}).Inc()
 	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
 		txid := r.URL.Path[i+1:]
 		bestheight, _, err := s.db.GetBestBlock()
@@ -528,6 +532,7 @@ func (s *PublicServer) apiTx(r *http.Request) (interface{}, error) {
 func (s *PublicServer) apiAddress(r *http.Request) (interface{}, error) {
 	var address *api.Address
 	var err error
+	s.metrics.ExplorerViews.With(common.Labels{"action": "api-address"}).Inc()
 	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
 		page, ec := strconv.Atoi(r.URL.Query().Get("page"))
 		if ec != nil {
