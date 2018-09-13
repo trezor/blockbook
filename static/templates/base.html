@@ -29,15 +29,23 @@
                         </svg>
                     </div>
                 </a>
-                <span class="navbar-text">
-                    {{.CoinName}} Explorer
+                <span class="navbar-text ml-md-auto">
+                    <a href="/" class="nav-link">{{.CoinName}} Explorer</a>
                 </span>
-                <span class="d-none d-md-flex navbar-form navbar-left">
+                <ul class="navbar-nav flex-row ml-md-auto d-none d-lg-flex">
+                    <li class="nav-item">
+                        <a href="/explorer/blocks" class="nav-link">Blocks</a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="/" class="nav-link">Status</a>
+                    </li>
+                </ul>
+                <span class="d-none ml-md-auto d-md-flex navbar-form navbar-left">
                     <form id="search" action="/explorer/search" method="get">
                         <input name="q" type="text" class="form-control" placeholder="Search for block, transaction or address" focus="true">
                     </form>
                 </span>
-                <ul class="navbar-nav flex-row ml-md-auto d-none d-md-flex">
+                <ul class="navbar-nav flex-row ml-md-auto d-none d-lg-flex ">
                     <li class="nav-item">
                         <a href="https://trezor.io/" class="nav-link">TREZOR</a>
                     </li>

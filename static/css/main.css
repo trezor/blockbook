@@ -32,7 +32,6 @@ h3 {
 }
 
 .navbar-form {
-    padding-left: 15px;
     padding-bottom: 1px;
 }
 
@@ -65,7 +64,7 @@ h3 {
         height: 24px;
     }
     .navbar-form .form-control {
-        width: 350px;
+        width: 230px;
     }
 }
 
@@ -106,7 +105,6 @@ h3 {
     color: rgba(255, 255, 255);
     font-weight: bold;
     font-size: 19px;
-    padding-left: 35px;
 }
 
 .trezor-logo-svg-white svg {
@@ -159,6 +157,10 @@ h3 {
     white-space: nowrap;
     vertical-align: baseline;
     border-radius: .25em;
+}
+
+.txvalues:not(:last-child) {
+    margin-right: 5px;
 }
 
 .txvalues-default {
@@ -215,6 +217,10 @@ h3 {
 .navbar-nav .nav-link {
     padding-right: 0;
     padding-left: .25rem;
+}
+
+.navbar-text .nav-link {
+    padding: 0;
 }
 
 ::-webkit-input-placeholder {
