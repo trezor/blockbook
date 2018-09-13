@@ -222,7 +222,7 @@ func (s *PublicServer) newTemplateDataWithError(text string) *TemplateData {
 		Error:        &api.ApiError{Text: text},
 	}
 }
-func (s *PublicServer) htmlTemplateHandler(handler func(r *http.Request) (tpl, *TemplateData, error)) func(w http.ResponseWriter, r *http.Request) {
+func (s *PublicServer) htmlTemplateHandler(handler func(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error)) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var t tpl
 		var data *TemplateData
@@ -237,9 +237,12 @@ func (s *PublicServer) htmlTemplateHandler(handler func(r *http.Request) (tpl, *
 					data = s.newTemplateDataWithError("Internal server error")
 				}
 			}
-			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			if err := s.templates[t].ExecuteTemplate(w, "base.html", data); err != nil {
-				glog.Error(err)
+			// noTpl means the handler completely handled the request
+			if t != noTpl {
+				w.Header().Set("Content-Type", "text/html; charset=utf-8")
+				if err := s.templates[t].ExecuteTemplate(w, "base.html", data); err != nil {
+					glog.Error(err)
+				}
 			}
 		}()
 		if s.debug {
@@ -247,8 +250,8 @@ func (s *PublicServer) htmlTemplateHandler(handler func(r *http.Request) (tpl, *
 			// to reflect changes during development
 			s.templates = parseTemplates()
 		}
-		t, data, err = handler(r)
-		if err != nil || data == nil {
+		t, data, err = handler(w, r)
+		if err != nil || (data == nil && t != noTpl) {
 			t = errorTpl
 			if apiErr, ok := err.(*api.ApiError); ok {
 				data = s.newTemplateData()
@@ -270,7 +273,8 @@ func (s *PublicServer) htmlTemplateHandler(handler func(r *http.Request) (tpl, *
 type tpl int
 
 const (
-	errorTpl = tpl(iota)
+	noTpl = tpl(iota)
+	errorTpl
 	txTpl
 	addressTpl
 
@@ -320,13 +324,7 @@ func setTxToTemplateData(td *TemplateData, tx *api.Tx) *TemplateData {
 	return td
 }
 
-func (s *PublicServer) templateForTx(tx *api.Tx) (tpl, *TemplateData, error) {
-	data := s.newTemplateData()
-	data.Tx = tx
-	return txTpl, data, nil
-}
-
-func (s *PublicServer) explorerTx(r *http.Request) (tpl, *TemplateData, error) {
+func (s *PublicServer) explorerTx(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
 	var tx *api.Tx
 	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
 		txid := r.URL.Path[i+1:]
@@ -338,19 +336,12 @@ func (s *PublicServer) explorerTx(r *http.Request) (tpl, *TemplateData, error) {
 			return errorTpl, nil, err
 		}
 	}
-	return s.templateForTx(tx)
-}
-
-func (s *PublicServer) templateForAddress(address *api.Address) (tpl, *TemplateData, error) {
 	data := s.newTemplateData()
-	data.AddrStr = address.AddrStr
-	data.Address = address
-	data.Page = address.Page
-	data.PagingRange, data.PrevPage, data.NextPage = getPagingRange(address.Page, address.TotalPages)
-	return addressTpl, data, nil
+	data.Tx = tx
+	return txTpl, data, nil
 }
 
-func (s *PublicServer) explorerAddress(r *http.Request) (tpl, *TemplateData, error) {
+func (s *PublicServer) explorerAddress(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
 	var address *api.Address
 	var err error
 	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
@@ -363,27 +354,34 @@ func (s *PublicServer) explorerAddress(r *http.Request) (tpl, *TemplateData, err
 			return errorTpl, nil, err
 		}
 	}
-	return s.templateForAddress(address)
+	data := s.newTemplateData()
+	data.AddrStr = address.AddrStr
+	data.Address = address
+	data.Page = address.Page
+	data.PagingRange, data.PrevPage, data.NextPage = getPagingRange(address.Page, address.TotalPages)
+	return addressTpl, data, nil
 }
 
-func (s *PublicServer) explorerSearch(r *http.Request) (tpl, *TemplateData, error) {
+func (s *PublicServer) explorerSearch(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
-	if len(q) > 0 {
-	}
 	var tx *api.Tx
 	var address *api.Address
 	var err error
-	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
-		bestheight, _, err := s.db.GetBestBlock()
-		if err == nil {
-			tx, err = s.api.GetTransaction(q, bestheight, true)
+	if len(q) > 0 {
+		if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
+			bestheight, _, err := s.db.GetBestBlock()
 			if err == nil {
-				return s.templateForTx(tx)
+				tx, err = s.api.GetTransaction(q, bestheight, false)
+				if err == nil {
+					http.Redirect(w, r, joinURL("/explorer/tx/", tx.Txid), 302)
+					return noTpl, nil, nil
+				}
 			}
-		}
-		address, err = s.api.GetAddress(q, 0, txsOnPage, false)
-		if err == nil {
-			return s.templateForAddress(address)
+			address, err = s.api.GetAddress(q, 0, 1, true)
+			if err == nil {
+				http.Redirect(w, r, joinURL("/explorer/address/", address.AddrStr), 302)
+				return noTpl, nil, nil
+			}
 		}
 	}
 	if err == nil {
