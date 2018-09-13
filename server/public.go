@@ -87,6 +87,7 @@ func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bch
 	// explorer
 	serveMux.HandleFunc(path+"explorer/tx/", s.htmlTemplateHandler(s.explorerTx))
 	serveMux.HandleFunc(path+"explorer/address/", s.htmlTemplateHandler(s.explorerAddress))
+	serveMux.HandleFunc(path+"explorer/search/", s.htmlTemplateHandler(s.explorerSearch))
 	serveMux.Handle(path+"static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./static/"))))
 	// API calls
 	serveMux.HandleFunc(path+"api/block-index/", s.jsonHandler(s.apiBlockIndex))
@@ -319,6 +320,12 @@ func setTxToTemplateData(td *TemplateData, tx *api.Tx) *TemplateData {
 	return td
 }
 
+func (s *PublicServer) templateForTx(tx *api.Tx) (tpl, *TemplateData, error) {
+	data := s.newTemplateData()
+	data.Tx = tx
+	return txTpl, data, nil
+}
+
 func (s *PublicServer) explorerTx(r *http.Request) (tpl, *TemplateData, error) {
 	var tx *api.Tx
 	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
@@ -331,9 +338,16 @@ func (s *PublicServer) explorerTx(r *http.Request) (tpl, *TemplateData, error) {
 			return errorTpl, nil, err
 		}
 	}
+	return s.templateForTx(tx)
+}
+
+func (s *PublicServer) templateForAddress(address *api.Address) (tpl, *TemplateData, error) {
 	data := s.newTemplateData()
-	data.Tx = tx
-	return txTpl, data, nil
+	data.AddrStr = address.AddrStr
+	data.Address = address
+	data.Page = address.Page
+	data.PagingRange, data.PrevPage, data.NextPage = getPagingRange(address.Page, address.TotalPages)
+	return addressTpl, data, nil
 }
 
 func (s *PublicServer) explorerAddress(r *http.Request) (tpl, *TemplateData, error) {
@@ -349,12 +363,33 @@ func (s *PublicServer) explorerAddress(r *http.Request) (tpl, *TemplateData, err
 			return errorTpl, nil, err
 		}
 	}
-	data := s.newTemplateData()
-	data.AddrStr = address.AddrStr
-	data.Address = address
-	data.Page = address.Page
-	data.PagingRange, data.PrevPage, data.NextPage = getPagingRange(address.Page, address.TotalPages)
-	return addressTpl, data, nil
+	return s.templateForAddress(address)
+}
+
+func (s *PublicServer) explorerSearch(r *http.Request) (tpl, *TemplateData, error) {
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	if len(q) > 0 {
+	}
+	var tx *api.Tx
+	var address *api.Address
+	var err error
+	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
+		bestheight, _, err := s.db.GetBestBlock()
+		if err == nil {
+			tx, err = s.api.GetTransaction(q, bestheight, true)
+			if err == nil {
+				return s.templateForTx(tx)
+			}
+		}
+		address, err = s.api.GetAddress(q, 0, txsOnPage, false)
+		if err == nil {
+			return s.templateForAddress(address)
+		}
+	}
+	if err == nil {
+		err = api.NewApiError(fmt.Sprintf("No matching records found for '%v'", q), true)
+	}
+	return errorTpl, nil, err
 }
 
 func getPagingRange(page int, total int) ([]int, int, int) {
