@@ -876,10 +876,11 @@ func (d *RocksDB) writeAddressesNonUTXO(wb *gorocksdb.WriteBatch, block *bchain.
 
 // BlockInfo holds information about blocks kept in column height
 type BlockInfo struct {
-	Hash string
-	Time int64
-	Txs  uint32
-	Size uint32
+	Hash   string
+	Time   int64
+	Txs    uint32
+	Size   uint32
+	Height uint32 // Height is not packed!
 }
 
 func (d *RocksDB) packBlockInfo(block *BlockInfo) ([]byte, error) {
@@ -959,15 +960,21 @@ func (d *RocksDB) GetBlockInfo(height uint32) (*BlockInfo, error) {
 		return nil, err
 	}
 	defer val.Free()
-	return d.unpackBlockInfo(val.Data())
+	bi, err := d.unpackBlockInfo(val.Data())
+	if err != nil {
+		return nil, err
+	}
+	bi.Height = height
+	return bi, err
 }
 
 func (d *RocksDB) writeHeightFromBlock(wb *gorocksdb.WriteBatch, block *bchain.Block, op int) error {
 	return d.writeHeight(wb, block.Height, &BlockInfo{
-		Hash: block.Hash,
-		Time: block.Time,
-		Txs:  uint32(len(block.Txs)),
-		Size: uint32(block.Size),
+		Hash:   block.Hash,
+		Time:   block.Time,
+		Txs:    uint32(len(block.Txs)),
+		Size:   uint32(block.Size),
+		Height: block.Height,
 	}, op)
 }
 

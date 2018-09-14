@@ -2,6 +2,7 @@ package api
 
 import (
 	"blockbook/bchain"
+	"blockbook/db"
 	"math/big"
 )
 
@@ -89,4 +90,11 @@ type Address struct {
 	Page                    int      `json:"page"`
 	TotalPages              int      `json:"totalPages"`
 	TxsOnPage               int      `json:"txsOnPage"`
+}
+
+type Blocks struct {
+	Blocks       []db.BlockInfo `json:"blocks"`
+	Page         int            `json:"page"`
+	TotalPages   int            `json:"totalPages"`
+	BlocksOnPage int            `json:"blocksOnPage"`
 }

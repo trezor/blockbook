@@ -21,6 +21,7 @@ import (
 
 const blockbookAbout = "Blockbook - blockchain indexer for TREZOR wallet https://trezor.io/. Do not use for any other purpose."
 const txsOnPage = 25
+const blocksOnPage = 50
 const txsInAPI = 1000
 
 // PublicServer is a handle to public http server
@@ -88,6 +89,7 @@ func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bch
 	serveMux.HandleFunc(path+"explorer/tx/", s.htmlTemplateHandler(s.explorerTx))
 	serveMux.HandleFunc(path+"explorer/address/", s.htmlTemplateHandler(s.explorerAddress))
 	serveMux.HandleFunc(path+"explorer/search/", s.htmlTemplateHandler(s.explorerSearch))
+	serveMux.HandleFunc(path+"explorer/blocks", s.htmlTemplateHandler(s.explorerBlocks))
 	serveMux.Handle(path+"static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./static/"))))
 	// API calls
 	serveMux.HandleFunc(path+"api/block-index/", s.jsonHandler(s.apiBlockIndex))
@@ -277,6 +279,7 @@ const (
 	errorTpl
 	txTpl
 	addressTpl
+	blocksTpl
 
 	tplCount
 )
@@ -288,6 +291,7 @@ type TemplateData struct {
 	AddrStr      string
 	Tx           *api.Tx
 	Error        *api.ApiError
+	Blocks       *api.Blocks
 	Page         int
 	PrevPage     int
 	NextPage     int
@@ -305,6 +309,7 @@ func parseTemplates() []*template.Template {
 	t[errorTpl] = template.Must(template.New("error").Funcs(templateFuncMap).ParseFiles("./static/templates/error.html", "./static/templates/base.html"))
 	t[txTpl] = template.Must(template.New("tx").Funcs(templateFuncMap).ParseFiles("./static/templates/tx.html", "./static/templates/txdetail.html", "./static/templates/base.html"))
 	t[addressTpl] = template.Must(template.New("address").Funcs(templateFuncMap).ParseFiles("./static/templates/address.html", "./static/templates/txdetail.html", "./static/templates/paging.html", "./static/templates/base.html"))
+	t[blocksTpl] = template.Must(template.New("blocks").Funcs(templateFuncMap).ParseFiles("./static/templates/blocks.html", "./static/templates/paging.html", "./static/templates/base.html"))
 	return t
 }
 
@@ -362,6 +367,25 @@ func (s *PublicServer) explorerAddress(w http.ResponseWriter, r *http.Request) (
 	data.Page = address.Page
 	data.PagingRange, data.PrevPage, data.NextPage = getPagingRange(address.Page, address.TotalPages)
 	return addressTpl, data, nil
+}
+
+func (s *PublicServer) explorerBlocks(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
+	var blocks *api.Blocks
+	var err error
+	s.metrics.ExplorerViews.With(common.Labels{"action": "blocks"}).Inc()
+	page, ec := strconv.Atoi(r.URL.Query().Get("page"))
+	if ec != nil {
+		page = 0
+	}
+	blocks, err = s.api.GetBlocks(page, blocksOnPage)
+	if err != nil {
+		return errorTpl, nil, err
+	}
+	data := s.newTemplateData()
+	data.Blocks = blocks
+	data.Page = blocks.Page
+	data.PagingRange, data.PrevPage, data.NextPage = getPagingRange(blocks.Page, blocks.TotalPages)
+	return blocksTpl, data, nil
 }
 
 func (s *PublicServer) explorerSearch(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {

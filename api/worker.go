@@ -436,3 +436,49 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, onlyTxids b
 	glog.Info("GetAddress ", address, " finished in ", time.Since(start))
 	return r, nil
 }
+
+// GetBlocks returns BlockInfo for blocks on given page
+func (w *Worker) GetBlocks(page int, blocksOnPage int) (*Blocks, error) {
+	start := time.Now()
+	page--
+	if page < 0 {
+		page = 0
+	}
+	b, _, err := w.db.GetBestBlock()
+	bestheight := int(b)
+	if err != nil {
+		return nil, errors.Annotatef(err, "GetBestBlock")
+	}
+	// paging
+	from := page * blocksOnPage
+	totalPages := (bestheight - 1) / blocksOnPage
+	if totalPages < 0 {
+		totalPages = 0
+	}
+	if from >= bestheight {
+		page = totalPages - 1
+		if page < 0 {
+			page = 0
+		}
+	}
+	from = page * blocksOnPage
+	to := (page + 1) * blocksOnPage
+	if to > bestheight {
+		to = bestheight
+	}
+	r := &Blocks{
+		Page:         page + 1,
+		TotalPages:   totalPages + 1,
+		BlocksOnPage: blocksOnPage,
+	}
+	r.Blocks = make([]db.BlockInfo, to-from)
+	for i := from; i < to; i++ {
+		bi, err := w.db.GetBlockInfo(uint32(bestheight - i))
+		if err != nil {
+			return nil, err
+		}
+		r.Blocks[i-from] = *bi
+	}
+	glog.Info("GetBlocks page ", page, " finished in ", time.Since(start))
+	return r, nil
+}
