@@ -72,7 +72,7 @@ func NewTest(coin string, factory TestChainFactoryFunc) (*Test, error) {
 			}
 		}
 
-		_, err = cli.GetBlockChainInfo()
+		_, err = cli.GetChainInfo()
 		if err != nil && isNetError(err) {
 			connected = false
 		}

@@ -103,6 +103,20 @@ type MempoolEntry struct {
 	Depends         []string    `json:"depends"`
 }
 
+type ChainInfo struct {
+	Chain           string  `json:"chain"`
+	Blocks          int     `json:"blocks"`
+	Headers         int     `json:"headers"`
+	Bestblockhash   string  `json:"bestblockhash"`
+	Difficulty      float64 `json:"difficulty"`
+	SizeOnDisk      int64   `json:"size_on_disk"`
+	Version         string  `json:"version"`
+	Subversion      string  `json:"subversion"`
+	ProtocolVersion string  `json:"protocolversion"`
+	Timeoffset      float64 `json:"timeoffset"`
+	Warnings        string  `json:"warnings"`
+}
+
 type RPCError struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
@@ -135,8 +149,8 @@ type BlockChain interface {
 	GetNetworkName() string
 	GetSubversion() string
 	GetCoinName() string
+	GetChainInfo() (*ChainInfo, error)
 	// requests
-	GetBlockChainInfo() (string, error)
 	GetBestBlockHash() (string, error)
 	GetBestBlockHeight() (uint32, error)
 	GetBlockHash(height uint32) (string, error)

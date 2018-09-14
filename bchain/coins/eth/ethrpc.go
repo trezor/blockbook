@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"strconv"
 	"sync"
 	"time"
 
@@ -258,16 +259,23 @@ func (b *EthereumRPC) GetSubversion() string {
 	return ""
 }
 
-// GetBlockChainInfo returns the NetworkID of the ethereum network
-func (b *EthereumRPC) GetBlockChainInfo() (string, error) {
+// GetChainInfo returns information about the connected backend
+func (b *EthereumRPC) GetChainInfo() (*bchain.ChainInfo, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
 	defer cancel()
-
 	id, err := b.client.NetworkID(ctx)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return id.String(), nil
+	rv := &bchain.ChainInfo{}
+	idi := int(id.Uint64())
+	if idi == 1 {
+		rv.Chain = "mainnet"
+	} else {
+		rv.Chain = "testnet " + strconv.Itoa(idi)
+	}
+	// TODO  - return more information about the chain
+	return rv, nil
 }
 
 func (b *EthereumRPC) getBestHeader() (*ethtypes.Header, error) {
