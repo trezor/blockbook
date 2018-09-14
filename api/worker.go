@@ -452,7 +452,7 @@ func (w *Worker) GetBlocks(page int, blocksOnPage int) (*Blocks, error) {
 	if err != nil {
 		return nil, errors.Annotatef(err, "GetBestBlock")
 	}
-	pg, from, to, page := computePaging(bestheight, page, blocksOnPage)
+	pg, from, to, page := computePaging(bestheight+1, page, blocksOnPage)
 	r := &Blocks{Paging: pg}
 	r.Blocks = make([]db.BlockInfo, to-from)
 	for i := from; i < to; i++ {
