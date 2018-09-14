@@ -77,7 +77,14 @@ type Tx struct {
 	WithSpends    bool   `json:"withSpends,omitempty"`
 }
 
+type Paging struct {
+	Page        int `json:"page"`
+	TotalPages  int `json:"totalPages"`
+	ItemsOnPage int `json:"itemsOnPage"`
+}
+
 type Address struct {
+	Paging
 	AddrStr                 string   `json:"addrStr"`
 	Balance                 string   `json:"balance"`
 	TotalReceived           string   `json:"totalReceived"`
@@ -87,14 +94,9 @@ type Address struct {
 	TxApperances            int      `json:"txApperances"`
 	Transactions            []*Tx    `json:"txs,omitempty"`
 	Txids                   []string `json:"transactions,omitempty"`
-	Page                    int      `json:"page"`
-	TotalPages              int      `json:"totalPages"`
-	TxsOnPage               int      `json:"txsOnPage"`
 }
 
 type Blocks struct {
-	Blocks       []db.BlockInfo `json:"blocks"`
-	Page         int            `json:"page"`
-	TotalPages   int            `json:"totalPages"`
-	BlocksOnPage int            `json:"blocksOnPage"`
+	Paging
+	Blocks []db.BlockInfo `json:"blocks"`
 }

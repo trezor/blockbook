@@ -296,6 +296,27 @@ func (w *Worker) txFromTxAddress(txid string, ta *db.TxAddresses, bi *db.BlockIn
 	return r
 }
 
+func computePaging(count, page, itemsOnPage int) (Paging, int, int, int) {
+	from := page * itemsOnPage
+	totalPages := (count - 1) / itemsOnPage
+	if totalPages < 0 {
+		totalPages = 0
+	}
+	if from >= count {
+		page = totalPages
+	}
+	from = page * itemsOnPage
+	to := (page + 1) * itemsOnPage
+	if to > count {
+		to = count
+	}
+	return Paging{
+		ItemsOnPage: itemsOnPage,
+		Page:        page + 1,
+		TotalPages:  totalPages + 1,
+	}, from, to, page
+}
+
 // GetAddress computes address value and gets transactions for given address
 func (w *Worker) GetAddress(address string, page int, txsOnPage int, onlyTxids bool) (*Address, error) {
 	start := time.Now()
@@ -341,23 +362,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, onlyTxids b
 	if err != nil {
 		return nil, errors.Annotatef(err, "GetBestBlock")
 	}
-	// paging
-	from := page * txsOnPage
-	totalPages := (len(txc) - 1) / txsOnPage
-	if totalPages < 0 {
-		totalPages = 0
-	}
-	if from >= len(txc) {
-		page = totalPages - 1
-		if page < 0 {
-			page = 0
-		}
-	}
-	from = page * txsOnPage
-	to := (page + 1) * txsOnPage
-	if to > len(txc) {
-		to = len(txc)
-	}
+	pg, from, to, page := computePaging(len(txc), page, txsOnPage)
 	var txs []*Tx
 	var txids []string
 	if onlyTxids {
@@ -420,6 +425,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, onlyTxids b
 		txs = txs[:txi]
 	}
 	r := &Address{
+		Paging:                  pg,
 		AddrStr:                 address,
 		Balance:                 w.chainParser.AmountToDecimalString(&ba.BalanceSat),
 		TotalReceived:           w.chainParser.AmountToDecimalString(ba.ReceivedSat()),
@@ -429,9 +435,6 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, onlyTxids b
 		UnconfirmedTxApperances: len(txm),
 		Transactions:            txs,
 		Txids:                   txids,
-		Page:                    page + 1,
-		TotalPages:              totalPages + 1,
-		TxsOnPage:               txsOnPage,
 	}
 	glog.Info("GetAddress ", address, " finished in ", time.Since(start))
 	return r, nil
@@ -449,28 +452,8 @@ func (w *Worker) GetBlocks(page int, blocksOnPage int) (*Blocks, error) {
 	if err != nil {
 		return nil, errors.Annotatef(err, "GetBestBlock")
 	}
-	// paging
-	from := page * blocksOnPage
-	totalPages := (bestheight - 1) / blocksOnPage
-	if totalPages < 0 {
-		totalPages = 0
-	}
-	if from >= bestheight {
-		page = totalPages - 1
-		if page < 0 {
-			page = 0
-		}
-	}
-	from = page * blocksOnPage
-	to := (page + 1) * blocksOnPage
-	if to > bestheight {
-		to = bestheight
-	}
-	r := &Blocks{
-		Page:         page + 1,
-		TotalPages:   totalPages + 1,
-		BlocksOnPage: blocksOnPage,
-	}
+	pg, from, to, page := computePaging(bestheight, page, blocksOnPage)
+	r := &Blocks{Paging: pg}
 	r.Blocks = make([]db.BlockInfo, to-from)
 	for i := from; i < to; i++ {
 		bi, err := w.db.GetBlockInfo(uint32(bestheight - i))
