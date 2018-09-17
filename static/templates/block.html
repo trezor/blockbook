@@ -1,0 +1,78 @@
+{{define "specific"}}{{$cs := .CoinShortcut}}{{$b := .Block}}{{$data := .}}
+<h1>Block {{$b.Height}}</h1>
+<div class="alert alert-data">
+    <span class="ellipsis data">{{$b.Hash}}</span>
+</div>
+<div class="h-container">
+    <h3 class="h-container-6">Summary</h3>
+    <nav class="h-container-6">
+        <ul class="pagination justify-content-end">
+            {{- if $b.Prev}}<li class="page-item"><a class="page-link" href="/explorer/block/{{$b.Prev}}">Previous Block</a></li>{{end -}}
+            {{- if $b.Next}}<li class="page-item"><a class="page-link" href="/explorer/block/{{$b.Next}}">Next Block</a></li>{{end -}}
+        </ul>
+    </nav>
+</div>
+<div class="data-div row">
+    <div class="col-md-6">
+        <table class="table data-table">
+            <tbody>
+                <tr>
+                    <td style="width: 25%;">Transactions</td>
+                    <td class="data">{{$b.TxCount}}</td>
+                </tr>
+                <tr>
+                    <td>Height</td>
+                    <td class="data">{{$b.Height}}</td>
+                </tr>
+                <tr>
+                    <td>Confirmations</td>
+                    <td class="data">{{$b.Confirmations}}</td>
+                </tr>
+                <tr>
+                    <td>Timestamp</td>
+                    <td class="data">{{formatUnixTime $b.Time}}</td>
+                </tr>
+                <tr>
+                    <td>Size (bytes)</td>
+                    <td class="data">{{$b.Size}}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    <div class="col-md-6">
+        <table class="table data-table">
+            <tbody>
+                <tr>
+                    <td style="width: 25%;">Version</td>
+                    <td class="data">{{$b.Version}}</td>
+                </tr>
+                <tr>
+                    <td>Merkle Root</td>
+                    <td class="data ellipsis">{{$b.MerkleRoot}}</td>
+                </tr>
+                <tr>
+                    <td>Nonce</td>
+                    <td class="data">{{$b.Nonce}}</td>
+                </tr>
+                <tr>
+                    <td>Bits</td>
+                    <td class="data">{{$b.Bits}}</td>
+                </tr>
+                <tr>
+                    <td>Difficulty</td>
+                    <td class="data">{{$b.Difficulty}}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{{- if $b.Transactions -}}
+<div class="h-container">
+    <h3 class="h-container-6">Transactions</h3>
+    <nav class="h-container-6">{{template "paging" $data}}</nav>
+</div>
+<div class="data-div">
+    {{- range $tx := $b.Transactions}}{{$data := setTxToTemplateData $data $tx}}{{template "txdetail" $data}}{{end -}}
+</div>
+<nav>{{template "paging" $data }}</nav>
+{{end}}{{end}}

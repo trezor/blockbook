@@ -89,11 +89,13 @@ func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bch
 	serveMux.HandleFunc(path+"explorer/address/", s.htmlTemplateHandler(s.explorerAddress))
 	serveMux.HandleFunc(path+"explorer/search/", s.htmlTemplateHandler(s.explorerSearch))
 	serveMux.HandleFunc(path+"explorer/blocks", s.htmlTemplateHandler(s.explorerBlocks))
+	serveMux.HandleFunc(path+"explorer/block/", s.htmlTemplateHandler(s.explorerBlock))
 	serveMux.Handle(path+"static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./static/"))))
 	// API calls
 	serveMux.HandleFunc(path+"api/block-index/", s.jsonHandler(s.apiBlockIndex))
 	serveMux.HandleFunc(path+"api/tx/", s.jsonHandler(s.apiTx))
 	serveMux.HandleFunc(path+"api/address/", s.jsonHandler(s.apiAddress))
+	serveMux.HandleFunc(path+"api/block/", s.jsonHandler(s.apiBlock))
 	serveMux.HandleFunc(path+"api/", s.jsonHandler(s.apiIndex))
 	// handle socket.io
 	serveMux.Handle(path+"socket.io/", socketio.GetHandler())
@@ -281,6 +283,7 @@ const (
 	txTpl
 	addressTpl
 	blocksTpl
+	blockTpl
 
 	tplCount
 )
@@ -293,6 +296,7 @@ type TemplateData struct {
 	Tx           *api.Tx
 	Error        *api.ApiError
 	Blocks       *api.Blocks
+	Block        *api.Block
 	Info         *api.SystemInfo
 	Page         int
 	PrevPage     int
@@ -314,6 +318,7 @@ func parseTemplates() []*template.Template {
 	t[txTpl] = template.Must(template.New("tx").Funcs(templateFuncMap).ParseFiles("./static/templates/tx.html", "./static/templates/txdetail.html", "./static/templates/base.html"))
 	t[addressTpl] = template.Must(template.New("address").Funcs(templateFuncMap).ParseFiles("./static/templates/address.html", "./static/templates/txdetail.html", "./static/templates/paging.html", "./static/templates/base.html"))
 	t[blocksTpl] = template.Must(template.New("blocks").Funcs(templateFuncMap).ParseFiles("./static/templates/blocks.html", "./static/templates/paging.html", "./static/templates/base.html"))
+	t[blockTpl] = template.Must(template.New("block").Funcs(templateFuncMap).ParseFiles("./static/templates/block.html", "./static/templates/txdetail.html", "./static/templates/paging.html", "./static/templates/base.html"))
 	return t
 }
 
@@ -396,6 +401,27 @@ func (s *PublicServer) explorerBlocks(w http.ResponseWriter, r *http.Request) (t
 	return blocksTpl, data, nil
 }
 
+func (s *PublicServer) explorerBlock(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
+	var block *api.Block
+	var err error
+	s.metrics.ExplorerViews.With(common.Labels{"action": "block"}).Inc()
+	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
+		page, ec := strconv.Atoi(r.URL.Query().Get("page"))
+		if ec != nil {
+			page = 0
+		}
+		block, err = s.api.GetBlock(r.URL.Path[i+1:], page, txsOnPage)
+		if err != nil {
+			return errorTpl, nil, err
+		}
+	}
+	data := s.newTemplateData()
+	data.Block = block
+	data.Page = block.Page
+	data.PagingRange, data.PrevPage, data.NextPage = getPagingRange(block.Page, block.TotalPages)
+	return blockTpl, data, nil
+}
+
 func (s *PublicServer) explorerIndex(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
 	var si *api.SystemInfo
 	var err error
@@ -413,29 +439,31 @@ func (s *PublicServer) explorerSearch(w http.ResponseWriter, r *http.Request) (t
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 	var tx *api.Tx
 	var address *api.Address
+	var block *api.Block
+	var bestheight uint32
 	var err error
 	s.metrics.ExplorerViews.With(common.Labels{"action": "search"}).Inc()
 	if len(q) > 0 {
-		if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
-			bestheight, _, err := s.db.GetBestBlock()
+		block, err = s.api.GetBlock(q, 0, 1)
+		if err == nil {
+			http.Redirect(w, r, joinURL("/explorer/block/", block.Hash), 302)
+			return noTpl, nil, nil
+		}
+		bestheight, _, err = s.db.GetBestBlock()
+		if err == nil {
+			tx, err = s.api.GetTransaction(q, bestheight, false)
 			if err == nil {
-				tx, err = s.api.GetTransaction(q, bestheight, false)
-				if err == nil {
-					http.Redirect(w, r, joinURL("/explorer/tx/", tx.Txid), 302)
-					return noTpl, nil, nil
-				}
-			}
-			address, err = s.api.GetAddress(q, 0, 1, true)
-			if err == nil {
-				http.Redirect(w, r, joinURL("/explorer/address/", address.AddrStr), 302)
+				http.Redirect(w, r, joinURL("/explorer/tx/", tx.Txid), 302)
 				return noTpl, nil, nil
 			}
 		}
+		address, err = s.api.GetAddress(q, 0, 1, true)
+		if err == nil {
+			http.Redirect(w, r, joinURL("/explorer/address/", address.AddrStr), 302)
+			return noTpl, nil, nil
+		}
 	}
-	if err == nil {
-		err = api.NewApiError(fmt.Sprintf("No matching records found for '%v'", q), true)
-	}
-	return errorTpl, nil, err
+	return errorTpl, nil, api.NewApiError(fmt.Sprintf("No matching records found for '%v'", q), true)
 }
 
 func getPagingRange(page int, total int) ([]int, int, int) {
@@ -549,4 +577,18 @@ func (s *PublicServer) apiAddress(r *http.Request) (interface{}, error) {
 		address, err = s.api.GetAddress(r.URL.Path[i+1:], page, txsInAPI, true)
 	}
 	return address, err
+}
+
+func (s *PublicServer) apiBlock(r *http.Request) (interface{}, error) {
+	var block *api.Block
+	var err error
+	s.metrics.ExplorerViews.With(common.Labels{"action": "api-block"}).Inc()
+	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
+		page, ec := strconv.Atoi(r.URL.Query().Get("page"))
+		if ec != nil {
+			page = 0
+		}
+		block, err = s.api.GetBlock(r.URL.Path[i+1:], page, txsInAPI)
+	}
+	return block, err
 }

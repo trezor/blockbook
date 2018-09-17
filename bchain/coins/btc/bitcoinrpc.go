@@ -287,14 +287,24 @@ type ResGetBlockRaw struct {
 	Result string           `json:"result"`
 }
 
+type BlockThin struct {
+	bchain.BlockHeader
+	Txids []string `json:"tx"`
+}
+
 type ResGetBlockThin struct {
 	Error  *bchain.RPCError `json:"error"`
-	Result bchain.ThinBlock `json:"result"`
+	Result BlockThin        `json:"result"`
 }
 
 type ResGetBlockFull struct {
 	Error  *bchain.RPCError `json:"error"`
 	Result bchain.Block     `json:"result"`
+}
+
+type ResGetBlockInfo struct {
+	Error  *bchain.RPCError `json:"error"`
+	Result bchain.BlockInfo `json:"result"`
 }
 
 // getrawtransaction
@@ -534,6 +544,28 @@ func (b *BitcoinRPC) GetBlock(hash string, height uint32) (*bchain.Block, error)
 	}
 	block.BlockHeader = *header
 	return block, nil
+}
+
+// GetBlockInfo returns extended header (more info than in bchain.BlockHeader) with a list of txids
+func (b *BitcoinRPC) GetBlockInfo(hash string) (*bchain.BlockInfo, error) {
+	glog.V(1).Info("rpc: getblock (verbosity=1) ", hash)
+
+	res := ResGetBlockInfo{}
+	req := CmdGetBlock{Method: "getblock"}
+	req.Params.BlockHash = hash
+	req.Params.Verbosity = 1
+	err := b.Call(&req, &res)
+
+	if err != nil {
+		return nil, errors.Annotatef(err, "hash %v", hash)
+	}
+	if res.Error != nil {
+		if isErrBlockNotFound(res.Error) {
+			return nil, bchain.ErrBlockNotFound
+		}
+		return nil, errors.Annotatef(res.Error, "hash %v", hash)
+	}
+	return &res.Result, nil
 }
 
 // GetBlockWithoutHeader is an optimization - it does not call GetBlockHeader to get prev, next hashes

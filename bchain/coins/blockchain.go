@@ -162,6 +162,11 @@ func (c *blockChainWithMetrics) GetBlock(hash string, height uint32) (v *bchain.
 	return c.b.GetBlock(hash, height)
 }
 
+func (c *blockChainWithMetrics) GetBlockInfo(hash string) (v *bchain.BlockInfo, err error) {
+	defer func(s time.Time) { c.observeRPCLatency("GetBlockInfo", s, err) }(time.Now())
+	return c.b.GetBlockInfo(hash)
+}
+
 func (c *blockChainWithMetrics) GetMempool() (v []string, err error) {
 	defer func(s time.Time) { c.observeRPCLatency("GetMempool", s, err) }(time.Now())
 	return c.b.GetMempool()

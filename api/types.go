@@ -104,6 +104,13 @@ type Blocks struct {
 	Blocks []db.BlockInfo `json:"blocks"`
 }
 
+type Block struct {
+	Paging
+	bchain.BlockInfo
+	TxCount      int   `json:"TxCount"`
+	Transactions []*Tx `json:"txs,omitempty"`
+}
+
 type BlockbookInfo struct {
 	Coin            string    `json:"coin"`
 	Host            string    `json:"host"`

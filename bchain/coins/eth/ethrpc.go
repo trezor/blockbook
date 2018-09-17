@@ -424,6 +424,12 @@ func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error
 	return &bbk, nil
 }
 
+// GetBlockInfo returns extended header (more info than in bchain.BlockHeader) with a list of txids
+func (b *EthereumRPC) GetBlockInfo(hash string) (*bchain.BlockInfo, error) {
+	// TODO - implement
+	return nil, errors.New("Not implemented yet")
+}
+
 // GetTransactionForMempool returns a transaction by the transaction ID.
 // It could be optimized for mempool, i.e. without block time and confirmations
 func (b *EthereumRPC) GetTransactionForMempool(txid string) (*bchain.Tx, error) {

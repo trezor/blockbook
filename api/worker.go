@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"fmt"
 	"math/big"
+	"strconv"
 	"time"
 
 	"github.com/golang/glog"
@@ -464,6 +465,64 @@ func (w *Worker) GetBlocks(page int, blocksOnPage int) (*Blocks, error) {
 	}
 	glog.Info("GetBlocks page ", page, " finished in ", time.Since(start))
 	return r, nil
+}
+
+// GetBlock returns paged data about block
+func (w *Worker) GetBlock(bid string, page int, txsOnPage int) (*Block, error) {
+	start := time.Now()
+	page--
+	if page < 0 {
+		page = 0
+	}
+	var hash string
+	height, err := strconv.Atoi(bid)
+	if err == nil && height < int(^uint32(0)) {
+		hash, err = w.db.GetBlockHash(uint32(height))
+	} else {
+		hash = bid
+	}
+	bi, err := w.chain.GetBlockInfo(hash)
+	if err != nil {
+		if err == bchain.ErrBlockNotFound {
+			return nil, NewApiError("Block not found", true)
+		}
+		return nil, NewApiError(fmt.Sprintf("Block not found, %v", err), true)
+	}
+	dbi := &db.BlockInfo{
+		Hash:   bi.Hash,
+		Height: bi.Height,
+		Time:   bi.Time,
+	}
+	txCount := len(bi.Txids)
+	bestheight, _, err := w.db.GetBestBlock()
+	if err != nil {
+		return nil, errors.Annotatef(err, "GetBestBlock")
+	}
+	pg, from, to, page := computePaging(txCount, page, txsOnPage)
+	glog.Info("GetBlock ", bid, ", page ", page, " finished in ", time.Since(start))
+	txs := make([]*Tx, to-from)
+	txi := 0
+	for i := from; i < to; i++ {
+		txid := bi.Txids[i]
+		ta, err := w.db.GetTxAddresses(txid)
+		if err != nil {
+			return nil, errors.Annotatef(err, "GetTxAddresses %v", txid)
+		}
+		if ta == nil {
+			glog.Warning("DB inconsistency:  tx ", txid, ": not found in txAddresses")
+			continue
+		}
+		txs[txi] = w.txFromTxAddress(txid, ta, dbi, bestheight)
+		txi++
+	}
+	txs = txs[:txi]
+	bi.Txids = nil
+	return &Block{
+		Paging:       pg,
+		BlockInfo:    *bi,
+		TxCount:      txCount,
+		Transactions: txs,
+	}, nil
 }
 
 // GetSystemInfo returns information about system

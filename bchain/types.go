@@ -71,11 +71,7 @@ type Block struct {
 	Txs []Tx `json:"tx"`
 }
 
-type ThinBlock struct {
-	BlockHeader
-	Txids []string `json:"tx"`
-}
-
+// BlockHeader contains limited data (as needed for indexing) from backend block header
 type BlockHeader struct {
 	Hash          string `json:"hash"`
 	Prev          string `json:"previousblockhash"`
@@ -84,6 +80,17 @@ type BlockHeader struct {
 	Confirmations int    `json:"confirmations"`
 	Size          int    `json:"size"`
 	Time          int64  `json:"time,omitempty"`
+}
+
+// BlockInfo contains extended block header data and a list of block txids
+type BlockInfo struct {
+	BlockHeader
+	Version    int64    `json:"version"`
+	MerkleRoot string   `json:"merkleroot"`
+	Nonce      uint64   `json:"nonce"`
+	Bits       string   `json:"bits"`
+	Difficulty float64  `json:"difficulty"`
+	Txids      []string `json:"tx,omitempty"`
 }
 
 type MempoolEntry struct {
@@ -156,6 +163,7 @@ type BlockChain interface {
 	GetBlockHash(height uint32) (string, error)
 	GetBlockHeader(hash string) (*BlockHeader, error)
 	GetBlock(hash string, height uint32) (*Block, error)
+	GetBlockInfo(hash string) (*BlockInfo, error)
 	GetMempool() ([]string, error)
 	GetTransaction(txid string) (*Tx, error)
 	GetTransactionForMempool(txid string) (*Tx, error)
