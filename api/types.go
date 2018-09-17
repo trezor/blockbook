@@ -77,7 +77,7 @@ type Tx struct {
 	Size          int    `json:"size,omitempty"`
 	ValueIn       string `json:"valueIn"`
 	Fees          string `json:"fees"`
-	WithSpends    bool   `json:"withSpends,omitempty"`
+	Hex           string `json:"hex"`
 }
 
 type Paging struct {

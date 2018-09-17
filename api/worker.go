@@ -173,12 +173,12 @@ func (w *Worker) GetTransaction(txid string, bestheight uint32, spendingTxs bool
 		Confirmations: bchainTx.Confirmations,
 		Fees:          w.chainParser.AmountToDecimalString(&feesSat),
 		Locktime:      bchainTx.LockTime,
-		WithSpends:    spendingTxs,
 		Time:          bchainTx.Time,
 		Txid:          bchainTx.Txid,
 		ValueIn:       w.chainParser.AmountToDecimalString(&valInSat),
 		ValueOut:      w.chainParser.AmountToDecimalString(&valOutSat),
 		Version:       bchainTx.Version,
+		Hex:           bchainTx.Hex,
 		Vin:           vins,
 		Vout:          vouts,
 	}
