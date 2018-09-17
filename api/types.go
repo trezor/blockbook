@@ -4,7 +4,10 @@ import (
 	"blockbook/bchain"
 	"blockbook/db"
 	"math/big"
+	"time"
 )
+
+const BlockbookAbout = "Blockbook - blockchain indexer for TREZOR wallet https://trezor.io/. Do not use for any other purpose."
 
 type ApiError struct {
 	Text   string
@@ -99,4 +102,24 @@ type Address struct {
 type Blocks struct {
 	Paging
 	Blocks []db.BlockInfo `json:"blocks"`
+}
+
+type BlockbookInfo struct {
+	Coin            string    `json:"coin"`
+	Host            string    `json:"host"`
+	Version         string    `json:"version"`
+	GitCommit       string    `json:"gitcommit"`
+	BuildTime       string    `json:"buildtime"`
+	InSync          bool      `json:"inSync"`
+	BestHeight      uint32    `json:"bestHeight"`
+	LastBlockTime   time.Time `json:"lastBlockTime"`
+	InSyncMempool   bool      `json:"inSyncMempool"`
+	LastMempoolTime time.Time `json:"lastMempoolTime"`
+	DbSize          int64     `json:"dbSize"`
+	About           string    `json:"about"`
+}
+
+type SystemInfo struct {
+	Blockbook *BlockbookInfo    `json:"blockbook"`
+	Backend   *bchain.ChainInfo `json:"backend"`
 }

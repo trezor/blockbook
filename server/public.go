@@ -19,7 +19,6 @@ import (
 	"github.com/golang/glog"
 )
 
-const blockbookAbout = "Blockbook - blockchain indexer for TREZOR wallet https://trezor.io/. Do not use for any other purpose."
 const txsOnPage = 25
 const blocksOnPage = 50
 const txsInAPI = 1000
@@ -95,10 +94,11 @@ func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bch
 	serveMux.HandleFunc(path+"api/block-index/", s.jsonHandler(s.apiBlockIndex))
 	serveMux.HandleFunc(path+"api/tx/", s.jsonHandler(s.apiTx))
 	serveMux.HandleFunc(path+"api/address/", s.jsonHandler(s.apiAddress))
+	serveMux.HandleFunc(path+"api/", s.jsonHandler(s.apiIndex))
 	// handle socket.io
 	serveMux.Handle(path+"socket.io/", socketio.GetHandler())
 	// default handler
-	serveMux.HandleFunc(path, s.index)
+	serveMux.HandleFunc(path, s.htmlTemplateHandler(s.explorerIndex))
 
 	s.templates = parseTemplates()
 
@@ -277,6 +277,7 @@ type tpl int
 const (
 	noTpl = tpl(iota)
 	errorTpl
+	indexTpl
 	txTpl
 	addressTpl
 	blocksTpl
@@ -292,6 +293,7 @@ type TemplateData struct {
 	Tx           *api.Tx
 	Error        *api.ApiError
 	Blocks       *api.Blocks
+	Info         *api.SystemInfo
 	Page         int
 	PrevPage     int
 	NextPage     int
@@ -300,6 +302,7 @@ type TemplateData struct {
 
 func parseTemplates() []*template.Template {
 	templateFuncMap := template.FuncMap{
+		"formatTime":          formatTime,
 		"formatUnixTime":      formatUnixTime,
 		"formatAmount":        formatAmount,
 		"setTxToTemplateData": setTxToTemplateData,
@@ -307,6 +310,7 @@ func parseTemplates() []*template.Template {
 	}
 	t := make([]*template.Template, tplCount)
 	t[errorTpl] = template.Must(template.New("error").Funcs(templateFuncMap).ParseFiles("./static/templates/error.html", "./static/templates/base.html"))
+	t[indexTpl] = template.Must(template.New("index").Funcs(templateFuncMap).ParseFiles("./static/templates/index.html", "./static/templates/base.html"))
 	t[txTpl] = template.Must(template.New("tx").Funcs(templateFuncMap).ParseFiles("./static/templates/tx.html", "./static/templates/txdetail.html", "./static/templates/base.html"))
 	t[addressTpl] = template.Must(template.New("address").Funcs(templateFuncMap).ParseFiles("./static/templates/address.html", "./static/templates/txdetail.html", "./static/templates/paging.html", "./static/templates/base.html"))
 	t[blocksTpl] = template.Must(template.New("blocks").Funcs(templateFuncMap).ParseFiles("./static/templates/blocks.html", "./static/templates/paging.html", "./static/templates/base.html"))
@@ -314,7 +318,11 @@ func parseTemplates() []*template.Template {
 }
 
 func formatUnixTime(ut int64) string {
-	return time.Unix(ut, 0).Format(time.RFC1123)
+	return formatTime(time.Unix(ut, 0))
+}
+
+func formatTime(t time.Time) string {
+	return t.Format(time.RFC1123)
 }
 
 // for now return the string as it is
@@ -386,6 +394,19 @@ func (s *PublicServer) explorerBlocks(w http.ResponseWriter, r *http.Request) (t
 	data.Page = blocks.Page
 	data.PagingRange, data.PrevPage, data.NextPage = getPagingRange(blocks.Page, blocks.TotalPages)
 	return blocksTpl, data, nil
+}
+
+func (s *PublicServer) explorerIndex(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
+	var si *api.SystemInfo
+	var err error
+	s.metrics.ExplorerViews.With(common.Labels{"action": "index"}).Inc()
+	si, err = s.api.GetSystemInfo()
+	if err != nil {
+		return errorTpl, nil, err
+	}
+	data := s.newTemplateData()
+	data.Info = si
+	return indexTpl, data, nil
 }
 
 func (s *PublicServer) explorerSearch(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
@@ -471,50 +492,14 @@ func getPagingRange(page int, total int) ([]int, int, int) {
 	return r, pp, np
 }
 
-type resAboutBlockbookPublic struct {
-	Coin            string    `json:"coin"`
-	Host            string    `json:"host"`
-	Version         string    `json:"version"`
-	GitCommit       string    `json:"gitcommit"`
-	BuildTime       string    `json:"buildtime"`
-	InSync          bool      `json:"inSync"`
-	BestHeight      uint32    `json:"bestHeight"`
-	LastBlockTime   time.Time `json:"lastBlockTime"`
-	InSyncMempool   bool      `json:"inSyncMempool"`
-	LastMempoolTime time.Time `json:"lastMempoolTime"`
-	About           string    `json:"about"`
-}
-
-// TODO - this is temporary, return html status page
-func (s *PublicServer) index(w http.ResponseWriter, r *http.Request) {
-	vi := common.GetVersionInfo()
-	ss, bh, st := s.is.GetSyncState()
-	ms, mt, _ := s.is.GetMempoolSyncState()
-	a := resAboutBlockbookPublic{
-		Coin:            s.is.Coin,
-		Host:            s.is.Host,
-		Version:         vi.Version,
-		GitCommit:       vi.GitCommit,
-		BuildTime:       vi.BuildTime,
-		InSync:          ss,
-		BestHeight:      bh,
-		LastBlockTime:   st,
-		InSyncMempool:   ms,
-		LastMempoolTime: mt,
-		About:           blockbookAbout,
-	}
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	buf, err := json.MarshalIndent(a, "", "    ")
-	if err != nil {
-		glog.Error(err)
-	}
-	w.Write(buf)
+func (s *PublicServer) apiIndex(r *http.Request) (interface{}, error) {
+	s.metrics.ExplorerViews.With(common.Labels{"action": "api-index"}).Inc()
+	return s.api.GetSystemInfo()
 }
 
 func (s *PublicServer) apiBlockIndex(r *http.Request) (interface{}, error) {
 	type resBlockIndex struct {
 		BlockHash string `json:"blockHash"`
-		About     string `json:"about"`
 	}
 	var err error
 	var hash string
@@ -535,7 +520,6 @@ func (s *PublicServer) apiBlockIndex(r *http.Request) (interface{}, error) {
 	}
 	return resBlockIndex{
 		BlockHash: hash,
-		About:     blockbookAbout,
 	}, nil
 }
 

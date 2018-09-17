@@ -465,3 +465,31 @@ func (w *Worker) GetBlocks(page int, blocksOnPage int) (*Blocks, error) {
 	glog.Info("GetBlocks page ", page, " finished in ", time.Since(start))
 	return r, nil
 }
+
+// GetSystemInfo returns information about system
+func (w *Worker) GetSystemInfo() (*SystemInfo, error) {
+	start := time.Now()
+	ci, err := w.chain.GetChainInfo()
+	if err != nil {
+		return nil, errors.Annotatef(err, "GetChainInfo")
+	}
+	vi := common.GetVersionInfo()
+	ss, bh, st := w.is.GetSyncState()
+	ms, mt, _ := w.is.GetMempoolSyncState()
+	bi := &BlockbookInfo{
+		Coin:            w.is.Coin,
+		Host:            w.is.Host,
+		Version:         vi.Version,
+		GitCommit:       vi.GitCommit,
+		BuildTime:       vi.BuildTime,
+		InSync:          ss,
+		BestHeight:      bh,
+		LastBlockTime:   st,
+		InSyncMempool:   ms,
+		LastMempoolTime: mt,
+		About:           BlockbookAbout,
+		DbSize:          w.db.DatabaseSizeOnDisk(),
+	}
+	glog.Info("GetSystemInfo finished in ", time.Since(start))
+	return &SystemInfo{bi, ci}, nil
+}
