@@ -76,10 +76,12 @@
                     <td>Timeoffset</td>
                     <td class="data">{{$be.Timeoffset}}</td>
                 </tr>
+                {{- if $be.SizeOnDisk -}}
                 <tr>
                     <td>Size On Disk</td>
                     <td class="data">{{$be.SizeOnDisk}}</td>
                 </tr>
+                {{- end -}}
                 {{- if $be.Warnings -}}
                 <tr>
                     <td>Warnings</td>
