@@ -16,7 +16,10 @@
                         {{- range $vin := $tx.Vin -}}
                         <tr>
                             <td>
-                                {{- range $a := $vin.Addresses}}
+                                {{- if $vin.Txid -}}
+                                <a class="float-left text-muted" href="/explorer/tx/{{$vin.Txid}}" title="Outpoint {{$vin.Txid}},{{$vin.Vout}}">➡&nbsp;</a>
+                                {{- end -}}
+                                {{- range $a := $vin.Addresses -}}
                                 <span class="ellipsis float-left">
                                     {{if and (ne $a $addr) $vin.Searchable}}<a href="/explorer/address/{{$a}}">{{$a}}</a>{{else}}{{$a}}{{end}}
                                 </span>
@@ -56,8 +59,8 @@
                                 <span class="float-left">Unparsed address</span>
                                 {{- end -}}
                                 <span class="float-right{{if stringInSlice $addr $vout.ScriptPubKey.Addresses}} text-success{{end}}">
-                                    {{formatAmount $vout.Value}} {{$cs}}{{if $vout.Spent}}{{if $vout.SpentTxID}}<a class="text-danger" href="/explorer/tx/{{$vout.SpentTxID}}">(S)</a>{{else}}<span class="text-danger">(S)</span>{{end}}{{else -}}
-                                    <span class="text-success">(U)</span>
+                                    {{formatAmount $vout.Value}} {{$cs}} {{if $vout.Spent}}{{if $vout.SpentTxID}}<a class="text-danger" href="/explorer/tx/{{$vout.SpentTxID}}" title="Spent">➡</a>{{else}}<span class="text-danger" title="Spent">➡</span>{{end}}{{else -}}
+                                    <span class="text-success" title="Unspent"> <b>×</b></span>
                                     {{- end -}}
                                 </span>
                             </td>
