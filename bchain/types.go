@@ -85,12 +85,12 @@ type BlockHeader struct {
 // BlockInfo contains extended block header data and a list of block txids
 type BlockInfo struct {
 	BlockHeader
-	Version    int64    `json:"version"`
-	MerkleRoot string   `json:"merkleroot"`
-	Nonce      uint64   `json:"nonce"`
-	Bits       string   `json:"bits"`
-	Difficulty float64  `json:"difficulty"`
-	Txids      []string `json:"tx,omitempty"`
+	Version    json.Number `json:"version"`
+	MerkleRoot string      `json:"merkleroot"`
+	Nonce      json.Number `json:"nonce"`
+	Bits       string      `json:"bits"`
+	Difficulty json.Number `json:"difficulty"`
+	Txids      []string    `json:"tx,omitempty"`
 }
 
 type MempoolEntry struct {
@@ -115,7 +115,7 @@ type ChainInfo struct {
 	Blocks          int     `json:"blocks"`
 	Headers         int     `json:"headers"`
 	Bestblockhash   string  `json:"bestblockhash"`
-	Difficulty      float64 `json:"difficulty"`
+	Difficulty      string  `json:"difficulty"`
 	SizeOnDisk      int64   `json:"size_on_disk"`
 	Version         string  `json:"version"`
 	Subversion      string  `json:"subversion"`

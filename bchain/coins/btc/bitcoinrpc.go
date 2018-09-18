@@ -11,7 +11,6 @@ import (
 	"math/big"
 	"net"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/btcsuite/btcd/wire"
@@ -219,13 +218,13 @@ type CmdGetBlockChainInfo struct {
 type ResGetBlockChainInfo struct {
 	Error  *bchain.RPCError `json:"error"`
 	Result struct {
-		Chain         string  `json:"chain"`
-		Blocks        int     `json:"blocks"`
-		Headers       int     `json:"headers"`
-		Bestblockhash string  `json:"bestblockhash"`
-		Difficulty    float64 `json:"difficulty"`
-		SizeOnDisk    int64   `json:"size_on_disk"`
-		Warnings      string  `json:"warnings"`
+		Chain         string      `json:"chain"`
+		Blocks        int         `json:"blocks"`
+		Headers       int         `json:"headers"`
+		Bestblockhash string      `json:"bestblockhash"`
+		Difficulty    json.Number `json:"difficulty"`
+		SizeOnDisk    int64       `json:"size_on_disk"`
+		Warnings      string      `json:"warnings"`
 	} `json:"result"`
 }
 
@@ -238,11 +237,11 @@ type CmdGetNetworkInfo struct {
 type ResGetNetworkInfo struct {
 	Error  *bchain.RPCError `json:"error"`
 	Result struct {
-		Version         int     `json:"version"`
-		Subversion      string  `json:"subversion"`
-		ProtocolVersion int     `json:"protocolversion"`
-		Timeoffset      float64 `json:"timeoffset"`
-		Warnings        string  `json:"warnings"`
+		Version         json.Number `json:"version"`
+		Subversion      json.Number `json:"subversion"`
+		ProtocolVersion json.Number `json:"protocolversion"`
+		Timeoffset      float64     `json:"timeoffset"`
+		Warnings        string      `json:"warnings"`
 	} `json:"result"`
 }
 
@@ -445,18 +444,14 @@ func (b *BitcoinRPC) GetChainInfo() (*bchain.ChainInfo, error) {
 		Bestblockhash: resCi.Result.Bestblockhash,
 		Blocks:        resCi.Result.Blocks,
 		Chain:         resCi.Result.Chain,
-		Difficulty:    resCi.Result.Difficulty,
+		Difficulty:    string(resCi.Result.Difficulty),
 		Headers:       resCi.Result.Headers,
 		SizeOnDisk:    resCi.Result.SizeOnDisk,
-		Subversion:    resNi.Result.Subversion,
+		Subversion:    string(resNi.Result.Subversion),
 		Timeoffset:    resNi.Result.Timeoffset,
 	}
-	if resNi.Result.Version > 0 {
-		rv.Version = strconv.Itoa(resNi.Result.Version)
-	}
-	if resNi.Result.ProtocolVersion > 0 {
-		rv.ProtocolVersion = strconv.Itoa(resNi.Result.ProtocolVersion)
-	}
+	rv.Version = string(resNi.Result.Version)
+	rv.ProtocolVersion = string(resNi.Result.ProtocolVersion)
 	if len(resCi.Result.Warnings) > 0 {
 		rv.Warnings = resCi.Result.Warnings + " "
 	}
