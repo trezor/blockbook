@@ -36,8 +36,9 @@ const storeInternalStatePeriodMs = 59699
 var (
 	blockchain = flag.String("blockchaincfg", "", "path to blockchain RPC service configuration json file")
 
-	dbPath  = flag.String("datadir", "./data", "path to database directory")
-	dbCache = flag.Int("dbcache", 1<<29, "size of the rocksdb cache")
+	dbPath         = flag.String("datadir", "./data", "path to database directory")
+	dbCache        = flag.Int("dbcache", 1<<29, "size of the rocksdb cache")
+	dbMaxOpenFiles = flag.Int("dbmaxopenfiles", 1<<14, "max open files by rocksdb")
 
 	blockFrom      = flag.Int("blockheight", -1, "height of the starting block")
 	blockUntil     = flag.Int("blockuntil", -1, "height of the final block")
@@ -165,7 +166,7 @@ func main() {
 		glog.Fatal("rpc: ", err)
 	}
 
-	index, err = db.NewRocksDB(*dbPath, *dbCache, chain.GetChainParser(), metrics)
+	index, err = db.NewRocksDB(*dbPath, *dbCache, *dbMaxOpenFiles, chain.GetChainParser(), metrics)
 	if err != nil {
 		glog.Fatal("rocksDB: ", err)
 	}

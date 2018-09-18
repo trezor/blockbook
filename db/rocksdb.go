@@ -35,15 +35,16 @@ func RepairRocksDB(name string) error {
 
 // RocksDB handle
 type RocksDB struct {
-	path        string
-	db          *gorocksdb.DB
-	wo          *gorocksdb.WriteOptions
-	ro          *gorocksdb.ReadOptions
-	cfh         []*gorocksdb.ColumnFamilyHandle
-	chainParser bchain.BlockChainParser
-	is          *common.InternalState
-	metrics     *common.Metrics
-	cache       *gorocksdb.Cache
+	path         string
+	db           *gorocksdb.DB
+	wo           *gorocksdb.WriteOptions
+	ro           *gorocksdb.ReadOptions
+	cfh          []*gorocksdb.ColumnFamilyHandle
+	chainParser  bchain.BlockChainParser
+	is           *common.InternalState
+	metrics      *common.Metrics
+	cache        *gorocksdb.Cache
+	maxOpenFiles int
 }
 
 const (
@@ -58,12 +59,12 @@ const (
 
 var cfNames = []string{"default", "height", "addresses", "txAddresses", "addressBalance", "blockTxs", "transactions"}
 
-func openDB(path string, c *gorocksdb.Cache) (*gorocksdb.DB, []*gorocksdb.ColumnFamilyHandle, error) {
+func openDB(path string, c *gorocksdb.Cache, openFiles int) (*gorocksdb.DB, []*gorocksdb.ColumnFamilyHandle, error) {
 	// opts with bloom filter
-	opts := createAndSetDBOptions(10, c)
+	opts := createAndSetDBOptions(10, c, openFiles)
 	// opts for addresses without bloom filter
 	// from documentation: if most of your queries are executed using iterators, you shouldn't set bloom filter
-	optsAddresses := createAndSetDBOptions(0, c)
+	optsAddresses := createAndSetDBOptions(0, c, openFiles)
 	// default, height, addresses, txAddresses, addressBalance, blockTxids, transactions
 	fcOptions := []*gorocksdb.Options{opts, opts, optsAddresses, opts, opts, opts, opts}
 	db, cfh, err := gorocksdb.OpenDbColumnFamilies(opts, path, cfNames, fcOptions)
@@ -75,13 +76,13 @@ func openDB(path string, c *gorocksdb.Cache) (*gorocksdb.DB, []*gorocksdb.Column
 
 // NewRocksDB opens an internal handle to RocksDB environment.  Close
 // needs to be called to release it.
-func NewRocksDB(path string, cacheSize int, parser bchain.BlockChainParser, metrics *common.Metrics) (d *RocksDB, err error) {
-	glog.Infof("rocksdb: open %s, version %v", path, dbVersion)
+func NewRocksDB(path string, cacheSize, maxOpenFiles int, parser bchain.BlockChainParser, metrics *common.Metrics) (d *RocksDB, err error) {
+	glog.Infof("rocksdb: opening %s, required data version %v, cache size %v, max open files %v", path, dbVersion, cacheSize, maxOpenFiles)
 	c := gorocksdb.NewLRUCache(cacheSize)
-	db, cfh, err := openDB(path, c)
+	db, cfh, err := openDB(path, c, maxOpenFiles)
 	wo := gorocksdb.NewDefaultWriteOptions()
 	ro := gorocksdb.NewDefaultReadOptions()
-	return &RocksDB{path, db, wo, ro, cfh, parser, nil, metrics, c}, nil
+	return &RocksDB{path, db, wo, ro, cfh, parser, nil, metrics, c, maxOpenFiles}, nil
 }
 
 func (d *RocksDB) closeDB() error {
@@ -119,7 +120,7 @@ func (d *RocksDB) Reopen() error {
 		return err
 	}
 	d.db = nil
-	db, cfh, err := openDB(d.path, d.cache)
+	db, cfh, err := openDB(d.path, d.cache, d.maxOpenFiles)
 	if err != nil {
 		return err
 	}
