@@ -33,7 +33,7 @@ func DecodeTransactions(r io.Reader, pver uint32, enc wire.MessageEncoding, blk 
 	if txCount > maxTxPerBlock {
 		str := fmt.Sprintf("too many transactions to fit into a block "+
 			"[count %d, max %d]", txCount, maxTxPerBlock)
-		return &wire.MessageError{Func: "btg.decodeTransactions", Description: str}
+		return &wire.MessageError{Func: "utils.decodeTransactions", Description: str}
 	}
 
 	blk.Transactions = make([]*wire.MsgTx, 0, txCount)

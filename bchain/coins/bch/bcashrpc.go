@@ -101,7 +101,10 @@ func (b *BCashRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 	if err != nil {
 		return nil, errors.Annotatef(err, "hash %v", hash)
 	}
+	// size is not returned by GetBlockHeader and would be overwritten
+	size := block.Size
 	block.BlockHeader = *header
+	block.Size = size
 	return block, nil
 }
 
