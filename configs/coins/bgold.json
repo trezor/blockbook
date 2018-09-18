@@ -239,8 +239,8 @@
     "system_user": "blockbook-bgold",
     "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
     "public_binding_template": ":{{.Ports.BlockbookPublic}}",
-    "explorer_url": "https://btg-explorer.trezor.io/",
-    "additional_params": "",
+    "explorer_url": "/explorer",
+    "additional_params": "-maxdbopenfiles=128",
     "block_chain": {
       "parse": true,
       "subversion": "/Bitcoin Gold:0.15.1/",
