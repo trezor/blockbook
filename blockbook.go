@@ -1,6 +1,7 @@
 package main
 
 import (
+	"blockbook/api"
 	"blockbook/bchain"
 	"blockbook/bchain/coins"
 	"blockbook/common"
@@ -85,6 +86,7 @@ var (
 	chain                      bchain.BlockChain
 	index                      *db.RocksDB
 	txCache                    *db.TxCache
+	metrics                    *common.Metrics
 	syncWorker                 *db.SyncWorker
 	internalState              *common.InternalState
 	callbacksOnNewBlock        []bchain.OnNewBlockFunc
@@ -157,7 +159,7 @@ func main() {
 
 	gspt.SetProcTitle("blockbook-" + normalizeName(coin))
 
-	metrics, err := common.GetMetrics(coin)
+	metrics, err = common.GetMetrics(coin)
 	if err != nil {
 		glog.Fatal("metrics: ", err)
 	}
@@ -238,6 +240,11 @@ func main() {
 	if txCache, err = db.NewTxCache(index, chain, metrics, !*noTxCache); err != nil {
 		glog.Error("txCache ", err)
 		return
+	}
+
+	// report BlockbookAppInfo metric, only log possible error
+	if err = blockbookAppInfoMetric(index, chain, txCache, internalState, metrics); err != nil {
+		glog.Error("blockbookAppInfoMetric ", err)
 	}
 
 	var internalServer *server.InternalServer
@@ -333,6 +340,24 @@ func main() {
 		<-chanSyncMempoolDone
 		<-chanStoreInternalStateDone
 	}
+}
+
+func blockbookAppInfoMetric(db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxCache, is *common.InternalState, metrics *common.Metrics) error {
+	api, err := api.NewWorker(db, chain, txCache, is)
+	if err != nil {
+		return err
+	}
+	si, err := api.GetSystemInfo(false)
+	if err != nil {
+		return err
+	}
+	metrics.BlockbookAppInfo.With(common.Labels{
+		"blockbook_version":        si.Blockbook.Version,
+		"blockbook_commit":         si.Blockbook.GitCommit,
+		"backend_version":          si.Backend.Version,
+		"backend_subversion":       si.Backend.Subversion,
+		"backend_protocol_version": si.Backend.ProtocolVersion}).Set(float64(0))
+	return nil
 }
 
 func newInternalState(coin string, coinShortcut string, d *db.RocksDB) (*common.InternalState, error) {
@@ -432,8 +457,8 @@ func storeInternalStateLoop() {
 	lastCompute := time.Now()
 	// randomize the duration between ComputeInternalStateColumnStats to avoid peaks after reboot of machine with multiple blockbooks
 	computePeriod := 9*time.Hour + time.Duration(rand.Float64()*float64((2*time.Hour).Nanoseconds()))
-	lastLogMemory := time.Now()
-	logMemoryPeriod := 15 * time.Minute
+	lastAppInfo := time.Now()
+	logAppInfoPeriod := 15 * time.Minute
 	glog.Info("storeInternalStateLoop starting with db stats recompute period ", computePeriod)
 	tickAndDebounce(storeInternalStatePeriodMs*time.Millisecond, (storeInternalStatePeriodMs-1)*time.Millisecond, chanStoreInternalState, func() {
 		if !computeRunning && lastCompute.Add(computePeriod).Before(time.Now()) {
@@ -450,9 +475,12 @@ func storeInternalStateLoop() {
 		if err := index.StoreInternalState(internalState); err != nil {
 			glog.Error("storeInternalStateLoop ", errors.ErrorStack(err))
 		}
-		if lastLogMemory.Add(logMemoryPeriod).Before(time.Now()) {
+		if lastAppInfo.Add(logAppInfoPeriod).Before(time.Now()) {
 			glog.Info(index.GetMemoryStats())
-			lastLogMemory = time.Now()
+			if err := blockbookAppInfoMetric(index, chain, txCache, internalState, metrics); err != nil {
+				glog.Error("blockbookAppInfoMetric ", err)
+			}
+			lastAppInfo = time.Now()
 		}
 	})
 	glog.Info("storeInternalStateLoop stopped")
