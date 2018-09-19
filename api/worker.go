@@ -526,7 +526,7 @@ func (w *Worker) GetBlock(bid string, page int, txsOnPage int) (*Block, error) {
 }
 
 // GetSystemInfo returns information about system
-func (w *Worker) GetSystemInfo() (*SystemInfo, error) {
+func (w *Worker) GetSystemInfo(internal bool) (*SystemInfo, error) {
 	start := time.Now()
 	ci, err := w.chain.GetChainInfo()
 	if err != nil {
@@ -534,20 +534,29 @@ func (w *Worker) GetSystemInfo() (*SystemInfo, error) {
 	}
 	vi := common.GetVersionInfo()
 	ss, bh, st := w.is.GetSyncState()
-	ms, mt, _ := w.is.GetMempoolSyncState()
+	ms, mt, msz := w.is.GetMempoolSyncState()
+	var dbc []common.InternalStateColumn
+	var dbs int64
+	if internal {
+		dbc = w.is.GetAllDBColumnStats()
+		dbs = w.is.DBSizeTotal()
+	}
 	bi := &BlockbookInfo{
-		Coin:            w.is.Coin,
-		Host:            w.is.Host,
-		Version:         vi.Version,
-		GitCommit:       vi.GitCommit,
-		BuildTime:       vi.BuildTime,
-		InSync:          ss,
-		BestHeight:      bh,
-		LastBlockTime:   st,
-		InSyncMempool:   ms,
-		LastMempoolTime: mt,
-		About:           BlockbookAbout,
-		DbSize:          w.db.DatabaseSizeOnDisk(),
+		Coin:              w.is.Coin,
+		Host:              w.is.Host,
+		Version:           vi.Version,
+		GitCommit:         vi.GitCommit,
+		BuildTime:         vi.BuildTime,
+		InSync:            ss,
+		BestHeight:        bh,
+		LastBlockTime:     st,
+		InSyncMempool:     ms,
+		LastMempoolTime:   mt,
+		MempoolSize:       msz,
+		DbSize:            w.db.DatabaseSizeOnDisk(),
+		DbSizeFromColumns: dbs,
+		DbColumns:         dbc,
+		About:             BlockbookAbout,
 	}
 	glog.Info("GetSystemInfo finished in ", time.Since(start))
 	return &SystemInfo{bi, ci}, nil

@@ -426,7 +426,7 @@ func (s *PublicServer) explorerIndex(w http.ResponseWriter, r *http.Request) (tp
 	var si *api.SystemInfo
 	var err error
 	s.metrics.ExplorerViews.With(common.Labels{"action": "index"}).Inc()
-	si, err = s.api.GetSystemInfo()
+	si, err = s.api.GetSystemInfo(false)
 	if err != nil {
 		return errorTpl, nil, err
 	}
@@ -522,7 +522,7 @@ func getPagingRange(page int, total int) ([]int, int, int) {
 
 func (s *PublicServer) apiIndex(r *http.Request) (interface{}, error) {
 	s.metrics.ExplorerViews.With(common.Labels{"action": "api-index"}).Inc()
-	return s.api.GetSystemInfo()
+	return s.api.GetSystemInfo(false)
 }
 
 func (s *PublicServer) apiBlockIndex(r *http.Request) (interface{}, error) {
