@@ -547,6 +547,8 @@ func (w *Worker) GetSystemInfo(internal bool) (*SystemInfo, error) {
 		Version:           vi.Version,
 		GitCommit:         vi.GitCommit,
 		BuildTime:         vi.BuildTime,
+		SyncMode:          w.is.SyncMode,
+		InitialSync:       w.is.InitialSync,
 		InSync:            ss,
 		BestHeight:        bh,
 		LastBlockTime:     st,

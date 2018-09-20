@@ -267,19 +267,9 @@ func main() {
 		}()
 	}
 
-	if *synchronize {
-		if err := syncWorker.ResyncIndex(nil); err != nil {
-			glog.Error("resyncIndex ", err)
-			return
-		}
-		if _, err = chain.ResyncMempool(nil); err != nil {
-			glog.Error("resyncMempool ", err)
-			return
-		}
-	}
-
 	var publicServer *server.PublicServer
 	if *publicBinding != "" {
+		// start public server in limited functionality, extend it after sync is finished by calling ConnectFullPublicInterface
 		publicServer, err = server.NewPublicServer(*publicBinding, *certFiles, index, chain, txCache, *explorerURL, metrics, internalState, *debugMode)
 		if err != nil {
 			glog.Error("socketio: ", err)
@@ -301,10 +291,27 @@ func main() {
 	}
 
 	if *synchronize {
-		// start the synchronization loops after the server interfaces are started
+		internalState.SyncMode = true
+		internalState.InitialSync = true
+		if err := syncWorker.ResyncIndex(nil); err != nil {
+			glog.Error("resyncIndex ", err)
+			return
+		}
+		var mempoolCount int
+		if mempoolCount, err = chain.ResyncMempool(nil); err != nil {
+			glog.Error("resyncMempool ", err)
+			return
+		}
+		internalState.FinishedMempoolSync(mempoolCount)
 		go syncIndexLoop()
 		go syncMempoolLoop()
-		go storeInternalStateLoop()
+		internalState.InitialSync = false
+	}
+	go storeInternalStateLoop()
+
+	if *publicBinding != "" {
+		// start full public interface
+		publicServer.ConnectFullPublicInterface()
 	}
 
 	if *blockFrom >= 0 {

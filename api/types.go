@@ -118,6 +118,8 @@ type BlockbookInfo struct {
 	Version           string                       `json:"version"`
 	GitCommit         string                       `json:"gitcommit"`
 	BuildTime         string                       `json:"buildtime"`
+	SyncMode          bool                         `json:"syncMode"`
+	InitialSync       bool                         `json:"initialsync"`
 	InSync            bool                         `json:"inSync"`
 	BestHeight        uint32                       `json:"bestHeight"`
 	LastBlockTime     time.Time                    `json:"lastBlockTime"`

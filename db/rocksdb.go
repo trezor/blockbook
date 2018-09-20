@@ -988,8 +988,10 @@ func (d *RocksDB) writeHeight(wb *gorocksdb.WriteBatch, height uint32, bi *Block
 			return err
 		}
 		wb.PutCF(d.cfh[cfHeight], key, val)
+		d.is.UpdateBestHeight(height)
 	case opDelete:
 		wb.DeleteCF(d.cfh[cfHeight], key)
+		d.is.UpdateBestHeight(height - 1)
 	}
 	return nil
 }
@@ -1223,9 +1225,9 @@ func dirSize(path string) (int64, error) {
 	var size int64
 	err := filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
 		if err == nil {
-		if !info.IsDir() {
-			size += info.Size()
-		}
+			if !info.IsDir() {
+				size += info.Size()
+			}
 		}
 		return err
 	})
@@ -1352,6 +1354,12 @@ func (d *RocksDB) LoadInternalState(rpcCoin string) (*common.InternalState, erro
 		}
 	}
 	is.DbColumns = nc
+	// after load, reset the synchronization data
+	is.IsSynchronized = false
+	is.IsMempoolSynchronized = false
+	var t time.Time
+	is.LastMempoolSync = t
+	is.SyncMode = false
 	return is, nil
 }
 

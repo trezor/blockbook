@@ -42,6 +42,7 @@ type PublicServer struct {
 }
 
 // NewPublicServer creates new public server http interface to blockbook and returns its handle
+// only basic functionality is mapped, to map all functions, call
 func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxCache, explorerURL string, metrics *common.Metrics, is *common.InternalState, debugMode bool) (*PublicServer, error) {
 
 	api, err := api.NewWorker(db, chain, txCache, is)
@@ -76,33 +77,15 @@ func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bch
 		is:          is,
 		debug:       debugMode,
 	}
+	s.templates = parseTemplates()
 
-	// favicon
+	// map only basic functions, the rest is enabled by method MapFullPublicInterface
 	serveMux.Handle(path+"favicon.ico", http.FileServer(http.Dir("./static/")))
-	// support for tests of socket.io interface
-	serveMux.Handle(path+"test.html", http.FileServer(http.Dir("./static/")))
-	// redirect to wallet requests for tx and address, possibly to external site
-	serveMux.HandleFunc(path+"tx/", s.txRedirect)
-	serveMux.HandleFunc(path+"address/", s.addressRedirect)
-	// explorer
-	serveMux.HandleFunc(path+"explorer/tx/", s.htmlTemplateHandler(s.explorerTx))
-	serveMux.HandleFunc(path+"explorer/address/", s.htmlTemplateHandler(s.explorerAddress))
-	serveMux.HandleFunc(path+"explorer/search/", s.htmlTemplateHandler(s.explorerSearch))
-	serveMux.HandleFunc(path+"explorer/blocks", s.htmlTemplateHandler(s.explorerBlocks))
-	serveMux.HandleFunc(path+"explorer/block/", s.htmlTemplateHandler(s.explorerBlock))
 	serveMux.Handle(path+"static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./static/"))))
-	// API calls
-	serveMux.HandleFunc(path+"api/block-index/", s.jsonHandler(s.apiBlockIndex))
-	serveMux.HandleFunc(path+"api/tx/", s.jsonHandler(s.apiTx))
-	serveMux.HandleFunc(path+"api/address/", s.jsonHandler(s.apiAddress))
-	serveMux.HandleFunc(path+"api/block/", s.jsonHandler(s.apiBlock))
-	serveMux.HandleFunc(path+"api/", s.jsonHandler(s.apiIndex))
-	// handle socket.io
-	serveMux.Handle(path+"socket.io/", socketio.GetHandler())
 	// default handler
 	serveMux.HandleFunc(path, s.htmlTemplateHandler(s.explorerIndex))
-
-	s.templates = parseTemplates()
+	// default API handler
+	serveMux.HandleFunc(path+"api/", s.jsonHandler(s.apiIndex))
 
 	return s, nil
 }
@@ -115,6 +98,30 @@ func (s *PublicServer) Run() error {
 	}
 	glog.Info("public server starting to listen on https://", s.https.Addr)
 	return s.https.ListenAndServeTLS(fmt.Sprint(s.certFiles, ".crt"), fmt.Sprint(s.certFiles, ".key"))
+}
+
+// ConnectFullPublicInterface enables complete public functionality
+func (s *PublicServer) ConnectFullPublicInterface() {
+	serveMux := s.https.Handler.(*http.ServeMux)
+	_, path := splitBinding(s.binding)
+	// support for tests of socket.io interface
+	serveMux.Handle(path+"test.html", http.FileServer(http.Dir("./static/")))
+	// redirect to wallet requests for tx and address, possibly to external site
+	serveMux.HandleFunc(path+"tx/", s.txRedirect)
+	serveMux.HandleFunc(path+"address/", s.addressRedirect)
+	// explorer
+	serveMux.HandleFunc(path+"explorer/tx/", s.htmlTemplateHandler(s.explorerTx))
+	serveMux.HandleFunc(path+"explorer/address/", s.htmlTemplateHandler(s.explorerAddress))
+	serveMux.HandleFunc(path+"explorer/search/", s.htmlTemplateHandler(s.explorerSearch))
+	serveMux.HandleFunc(path+"explorer/blocks", s.htmlTemplateHandler(s.explorerBlocks))
+	serveMux.HandleFunc(path+"explorer/block/", s.htmlTemplateHandler(s.explorerBlock))
+	// API calls
+	serveMux.HandleFunc(path+"api/block-index/", s.jsonHandler(s.apiBlockIndex))
+	serveMux.HandleFunc(path+"api/tx/", s.jsonHandler(s.apiTx))
+	serveMux.HandleFunc(path+"api/address/", s.jsonHandler(s.apiAddress))
+	serveMux.HandleFunc(path+"api/block/", s.jsonHandler(s.apiBlock))
+	// socket.io interface
+	serveMux.Handle(path+"socket.io/", s.socketio.GetHandler())
 }
 
 // Close closes the server
