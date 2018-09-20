@@ -67,9 +67,5 @@
   "meta": {
     "package_maintainer": "Jakub Matys",
     "package_maintainer_email": "jakub.matys@satoshilabs.com"
-  },
-  "integration_tests": {
-      "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "MempoolSync", "EstimateSmartFee",
-              "EstimateFee", "GetBestBlockHash", "GetBestBlockHeight", "GetBlockHeader"]
   }
 }
