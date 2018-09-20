@@ -20,7 +20,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/erikdubbelboer/gspt"
+	// "github.com/erikdubbelboer/gspt"
 	"github.com/golang/glog"
 	"github.com/juju/errors"
 )
@@ -157,7 +157,7 @@ func main() {
 		glog.Fatal("config: ", err)
 	}
 
-	gspt.SetProcTitle("blockbook-" + normalizeName(coin))
+	// gspt.SetProcTitle("blockbook-" + normalizeName(coin))
 
 	metrics, err = common.GetMetrics(coin)
 	if err != nil {
