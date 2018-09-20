@@ -29,7 +29,7 @@
                 </tr>
                 <tr>
                     <td>Last Block</td>
-                    <td class="data"><a href="/explorer/block/{{$bb.BestHeight}}">{{$bb.BestHeight}}</a></td>
+                    <td class="data">{{if .InternalExplorer}}<a href="/block/{{$bb.BestHeight}}">{{$bb.BestHeight}}</a>{{else}}{{$bb.BestHeight}}{{end}}</td>
                 </tr>
                 <tr>
                     <td>Last Block Update</td>

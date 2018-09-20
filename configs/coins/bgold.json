@@ -239,7 +239,7 @@
     "system_user": "blockbook-bgold",
     "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
     "public_binding_template": ":{{.Ports.BlockbookPublic}}",
-    "explorer_url": "/explorer",
+    "explorer_url": "",
     "additional_params": "-dbmaxopenfiles=128",
     "block_chain": {
       "parse": true,

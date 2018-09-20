@@ -135,7 +135,7 @@ h3 {
 
 .line-top {
     border-top: 1px solid #EAEAEA;
-    padding: 15px 0 0;
+    padding: 10px 0 0;
 }
 
 .line-mid {
@@ -157,6 +157,7 @@ h3 {
     white-space: nowrap;
     vertical-align: baseline;
     border-radius: .25em;
+    margin-top: 5px;
 }
 
 .txvalues:not(:last-child) {

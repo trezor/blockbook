@@ -17,7 +17,7 @@
         <tbody>
             {{- range $b := $blocks.Blocks -}}
             <tr>
-                <td><a href="/explorer/block/{{$b.Height}}">{{$b.Height}}</a></td>
+                <td><a href="/block/{{$b.Height}}">{{$b.Height}}</a></td>
                 <td>{{formatUnixTime $b.Time}}</td>
                 <td class="text-right">{{$b.Txs}}</td>
                 <td class="text-right">{{$b.Size}}</td>

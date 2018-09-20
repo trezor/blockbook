@@ -1,14 +1,14 @@
 {{define "specific"}}{{$cs := .CoinShortcut}}{{$b := .Block}}{{$data := . -}}
 <h1>Block {{$b.Height}}</h1>
-<div class="alert alert-data">
-    <span class="ellipsis data">{{$b.Hash}}</span>
+<div class="alert alert-data ellipsis">
+    <span class="data">{{$b.Hash}}</span>
 </div>
 <div class="h-container">
     <h3 class="h-container-6">Summary</h3>
     <nav class="h-container-6">
         <ul class="pagination justify-content-end">
-            <li class="page-item">{{if $b.Prev}}<a class="page-link" href="/explorer/block/{{$b.Prev}}">Previous Block</a>{{else}}<span class="page-link text-muted disabled">Previous Block</span>{{end}}</li>
-            <li class="page-item">{{if $b.Next}}<a class="page-link" href="/explorer/block/{{$b.Next}}">Next Block</a>{{else}}<span class="page-link text-muted disabled">Next Block</span>{{end}}</li>
+            <li class="page-item">{{if $b.Prev}}<a class="page-link" href="/block/{{$b.Prev}}">Previous Block</a>{{else}}<span class="page-link text-muted disabled">Previous Block</span>{{end}}</li>
+            <li class="page-item">{{if $b.Next}}<a class="page-link" href="/block/{{$b.Next}}">Next Block</a>{{else}}<span class="page-link text-muted disabled">Next Block</span>{{end}}</li>
         </ul>
     </nav>
 </div>

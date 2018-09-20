@@ -25,20 +25,21 @@ const txsInAPI = 1000
 
 // PublicServer is a handle to public http server
 type PublicServer struct {
-	binding     string
-	certFiles   string
-	socketio    *SocketIoServer
-	https       *http.Server
-	db          *db.RocksDB
-	txCache     *db.TxCache
-	chain       bchain.BlockChain
-	chainParser bchain.BlockChainParser
-	api         *api.Worker
-	explorerURL string
-	metrics     *common.Metrics
-	is          *common.InternalState
-	templates   []*template.Template
-	debug       bool
+	binding          string
+	certFiles        string
+	socketio         *SocketIoServer
+	https            *http.Server
+	db               *db.RocksDB
+	txCache          *db.TxCache
+	chain            bchain.BlockChain
+	chainParser      bchain.BlockChainParser
+	api              *api.Worker
+	explorerURL      string
+	internalExplorer bool
+	metrics          *common.Metrics
+	is               *common.InternalState
+	templates        []*template.Template
+	debug            bool
 }
 
 // NewPublicServer creates new public server http interface to blockbook and returns its handle
@@ -63,19 +64,20 @@ func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bch
 	}
 
 	s := &PublicServer{
-		binding:     binding,
-		certFiles:   certFiles,
-		https:       https,
-		api:         api,
-		socketio:    socketio,
-		db:          db,
-		txCache:     txCache,
-		chain:       chain,
-		chainParser: chain.GetChainParser(),
-		explorerURL: explorerURL,
-		metrics:     metrics,
-		is:          is,
-		debug:       debugMode,
+		binding:          binding,
+		certFiles:        certFiles,
+		https:            https,
+		api:              api,
+		socketio:         socketio,
+		db:               db,
+		txCache:          txCache,
+		chain:            chain,
+		chainParser:      chain.GetChainParser(),
+		explorerURL:      explorerURL,
+		internalExplorer: explorerURL == "",
+		metrics:          metrics,
+		is:               is,
+		debug:            debugMode,
 	}
 	s.templates = parseTemplates()
 
@@ -106,15 +108,18 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 	_, path := splitBinding(s.binding)
 	// support for tests of socket.io interface
 	serveMux.Handle(path+"test.html", http.FileServer(http.Dir("./static/")))
-	// redirect to wallet requests for tx and address, possibly to external site
-	serveMux.HandleFunc(path+"tx/", s.txRedirect)
-	serveMux.HandleFunc(path+"address/", s.addressRedirect)
-	// explorer
-	serveMux.HandleFunc(path+"explorer/tx/", s.htmlTemplateHandler(s.explorerTx))
-	serveMux.HandleFunc(path+"explorer/address/", s.htmlTemplateHandler(s.explorerAddress))
-	serveMux.HandleFunc(path+"explorer/search/", s.htmlTemplateHandler(s.explorerSearch))
-	serveMux.HandleFunc(path+"explorer/blocks", s.htmlTemplateHandler(s.explorerBlocks))
-	serveMux.HandleFunc(path+"explorer/block/", s.htmlTemplateHandler(s.explorerBlock))
+	if s.internalExplorer {
+		// internal explorer handlers
+		serveMux.HandleFunc(path+"tx/", s.htmlTemplateHandler(s.explorerTx))
+		serveMux.HandleFunc(path+"address/", s.htmlTemplateHandler(s.explorerAddress))
+		serveMux.HandleFunc(path+"search/", s.htmlTemplateHandler(s.explorerSearch))
+		serveMux.HandleFunc(path+"blocks", s.htmlTemplateHandler(s.explorerBlocks))
+		serveMux.HandleFunc(path+"block/", s.htmlTemplateHandler(s.explorerBlock))
+	} else {
+		// redirect to wallet requests for tx and address, possibly to external site
+		serveMux.HandleFunc(path+"tx/", s.txRedirect)
+		serveMux.HandleFunc(path+"address/", s.addressRedirect)
+	}
 	// API calls
 	serveMux.HandleFunc(path+"api/block-index/", s.jsonHandler(s.apiBlockIndex))
 	serveMux.HandleFunc(path+"api/tx/", s.jsonHandler(s.apiTx))
@@ -147,17 +152,13 @@ func (s *PublicServer) OnNewTxAddr(txid string, addr string, isOutput bool) {
 }
 
 func (s *PublicServer) txRedirect(w http.ResponseWriter, r *http.Request) {
-	if s.explorerURL != "" {
-		http.Redirect(w, r, joinURL(s.explorerURL, r.URL.Path), 302)
-		s.metrics.ExplorerViews.With(common.Labels{"action": "tx-redirect"}).Inc()
-	}
+	http.Redirect(w, r, joinURL(s.explorerURL, r.URL.Path), 302)
+	s.metrics.ExplorerViews.With(common.Labels{"action": "tx-redirect"}).Inc()
 }
 
 func (s *PublicServer) addressRedirect(w http.ResponseWriter, r *http.Request) {
-	if s.explorerURL != "" {
-		http.Redirect(w, r, joinURL(s.explorerURL, r.URL.Path), 302)
-		s.metrics.ExplorerViews.With(common.Labels{"action": "address-redirect"}).Inc()
-	}
+	http.Redirect(w, r, joinURL(s.explorerURL, r.URL.Path), 302)
+	s.metrics.ExplorerViews.With(common.Labels{"action": "address-redirect"}).Inc()
 }
 
 func splitBinding(binding string) (addr string, path string) {
@@ -221,8 +222,9 @@ func (s *PublicServer) jsonHandler(handler func(r *http.Request) (interface{}, e
 
 func (s *PublicServer) newTemplateData() *TemplateData {
 	return &TemplateData{
-		CoinName:     s.is.Coin,
-		CoinShortcut: s.is.CoinShortcut,
+		CoinName:         s.is.Coin,
+		CoinShortcut:     s.is.CoinShortcut,
+		InternalExplorer: s.internalExplorer,
 	}
 }
 
@@ -296,19 +298,20 @@ const (
 )
 
 type TemplateData struct {
-	CoinName     string
-	CoinShortcut string
-	Address      *api.Address
-	AddrStr      string
-	Tx           *api.Tx
-	Error        *api.ApiError
-	Blocks       *api.Blocks
-	Block        *api.Block
-	Info         *api.SystemInfo
-	Page         int
-	PrevPage     int
-	NextPage     int
-	PagingRange  []int
+	CoinName         string
+	CoinShortcut     string
+	InternalExplorer bool
+	Address          *api.Address
+	AddrStr          string
+	Tx               *api.Tx
+	Error            *api.ApiError
+	Blocks           *api.Blocks
+	Block            *api.Block
+	Info             *api.SystemInfo
+	Page             int
+	PrevPage         int
+	NextPage         int
+	PagingRange      []int
 }
 
 func parseTemplates() []*template.Template {
@@ -453,20 +456,20 @@ func (s *PublicServer) explorerSearch(w http.ResponseWriter, r *http.Request) (t
 	if len(q) > 0 {
 		block, err = s.api.GetBlock(q, 0, 1)
 		if err == nil {
-			http.Redirect(w, r, joinURL("/explorer/block/", block.Hash), 302)
+			http.Redirect(w, r, joinURL("/block/", block.Hash), 302)
 			return noTpl, nil, nil
 		}
 		bestheight, _, err = s.db.GetBestBlock()
 		if err == nil {
 			tx, err = s.api.GetTransaction(q, bestheight, false)
 			if err == nil {
-				http.Redirect(w, r, joinURL("/explorer/tx/", tx.Txid), 302)
+				http.Redirect(w, r, joinURL("/tx/", tx.Txid), 302)
 				return noTpl, nil, nil
 			}
 		}
 		address, err = s.api.GetAddress(q, 0, 1, true)
 		if err == nil {
-			http.Redirect(w, r, joinURL("/explorer/address/", address.AddrStr), 302)
+			http.Redirect(w, r, joinURL("/address/", address.AddrStr), 302)
 			return noTpl, nil, nil
 		}
 	}
