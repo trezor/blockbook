@@ -224,7 +224,7 @@ func (s *PublicServer) newTemplateData() *TemplateData {
 	return &TemplateData{
 		CoinName:         s.is.Coin,
 		CoinShortcut:     s.is.CoinShortcut,
-		InternalExplorer: s.internalExplorer,
+		InternalExplorer: s.internalExplorer && !s.is.InitialSync,
 	}
 }
 
