@@ -200,6 +200,9 @@ func (s *PublicServer) jsonHandler(handler func(r *http.Request) (interface{}, e
 				}
 			}
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			if _, isError := data.(jsonError); isError {
+				w.WriteHeader(http.StatusInternalServerError)
+			}
 			json.NewEncoder(w).Encode(data)
 		}()
 		data, err = handler(r)
@@ -229,12 +232,11 @@ func (s *PublicServer) newTemplateData() *TemplateData {
 }
 
 func (s *PublicServer) newTemplateDataWithError(text string) *TemplateData {
-	return &TemplateData{
-		CoinName:     s.is.Coin,
-		CoinShortcut: s.is.CoinShortcut,
-		Error:        &api.ApiError{Text: text},
-	}
+	td := s.newTemplateData()
+	td.Error = &api.ApiError{Text: text}
+	return td
 }
+
 func (s *PublicServer) htmlTemplateHandler(handler func(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error)) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var t tpl
@@ -243,7 +245,7 @@ func (s *PublicServer) htmlTemplateHandler(handler func(w http.ResponseWriter, r
 		defer func() {
 			if e := recover(); e != nil {
 				glog.Error(getFunctionName(handler), " recovered from panic: ", e)
-				t = errorTpl
+				t = errorInternalTpl
 				if s.debug {
 					data = s.newTemplateDataWithError(fmt.Sprint("Internal server error: recovered from panic ", e))
 				} else {
@@ -253,6 +255,10 @@ func (s *PublicServer) htmlTemplateHandler(handler func(w http.ResponseWriter, r
 			// noTpl means the handler completely handled the request
 			if t != noTpl {
 				w.Header().Set("Content-Type", "text/html; charset=utf-8")
+				// return 500 Internal Server Error with errorInternalTpl
+				if t == errorInternalTpl {
+					w.WriteHeader(http.StatusInternalServerError)
+				}
 				if err := s.templates[t].ExecuteTemplate(w, "base.html", data); err != nil {
 					glog.Error(err)
 				}
@@ -265,10 +271,13 @@ func (s *PublicServer) htmlTemplateHandler(handler func(w http.ResponseWriter, r
 		}
 		t, data, err = handler(w, r)
 		if err != nil || (data == nil && t != noTpl) {
-			t = errorTpl
+			t = errorInternalTpl
 			if apiErr, ok := err.(*api.ApiError); ok {
 				data = s.newTemplateData()
 				data.Error = apiErr
+				if apiErr.Public {
+					t = errorTpl
+				}
 			} else {
 				if err != nil {
 					glog.Error(getFunctionName(handler), " error: ", err)
@@ -288,6 +297,7 @@ type tpl int
 const (
 	noTpl = tpl(iota)
 	errorTpl
+	errorInternalTpl
 	indexTpl
 	txTpl
 	addressTpl
@@ -324,6 +334,7 @@ func parseTemplates() []*template.Template {
 	}
 	t := make([]*template.Template, tplCount)
 	t[errorTpl] = template.Must(template.New("error").Funcs(templateFuncMap).ParseFiles("./static/templates/error.html", "./static/templates/base.html"))
+	t[errorInternalTpl] = template.Must(template.New("error").Funcs(templateFuncMap).ParseFiles("./static/templates/error.html", "./static/templates/base.html"))
 	t[indexTpl] = template.Must(template.New("index").Funcs(templateFuncMap).ParseFiles("./static/templates/index.html", "./static/templates/base.html"))
 	t[txTpl] = template.Must(template.New("tx").Funcs(templateFuncMap).ParseFiles("./static/templates/tx.html", "./static/templates/txdetail.html", "./static/templates/base.html"))
 	t[addressTpl] = template.Must(template.New("address").Funcs(templateFuncMap).ParseFiles("./static/templates/address.html", "./static/templates/txdetail.html", "./static/templates/paging.html", "./static/templates/base.html"))
