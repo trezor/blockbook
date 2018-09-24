@@ -334,11 +334,13 @@ func verifyAddresses(t *testing.T, d *db.RocksDB, h *TestHandler) {
 					tx.Txid, taInfo.valOutSat.String(), txInfo.valOutSat.String())
 			}
 
-			treshold := "0.0001"
-			fee := new(big.Int).Sub(&taInfo.valInSat, &taInfo.valOutSat)
-			if strings.Compare(parser.AmountToDecimalString(fee), treshold) > 0 {
-				t.Errorf("Tx %s: suspicious amounts: input ∑ [%s] - output ∑ [%s] > %s",
-					tx.Txid, taInfo.valInSat.String(), taInfo.valOutSat.String(), treshold)
+			if len(txInfo.inputs) > 0 {
+				treshold := "0.0001"
+				fee := new(big.Int).Sub(&taInfo.valInSat, &taInfo.valOutSat)
+				if strings.Compare(parser.AmountToDecimalString(fee), treshold) > 0 {
+					t.Errorf("Tx %s: suspicious amounts: input ∑ [%s] - output ∑ [%s] > %s",
+						tx.Txid, taInfo.valInSat.String(), taInfo.valOutSat.String(), treshold)
+				}
 			}
 		}
 	}
