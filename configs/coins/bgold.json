@@ -240,7 +240,7 @@
     "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
     "public_binding_template": ":{{.Ports.BlockbookPublic}}",
     "explorer_url": "",
-    "additional_params": "-dbmaxopenfiles=128",
+    "additional_params": "",
     "block_chain": {
       "parse": true,
       "subversion": "/Bitcoin Gold:0.15.1/",
