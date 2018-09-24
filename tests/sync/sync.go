@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 )
 
@@ -328,19 +329,16 @@ func verifyAddresses(t *testing.T, d *db.RocksDB, h *TestHandler) {
 				t.Errorf("Tx %s: outputs mismatch: got %q, want %q", tx.Txid, taInfo.outputs, txInfo.outputs)
 			}
 
-			taValIn := satToFloat(parser, &taInfo.valInSat)
-			taValOut := satToFloat(parser, &taInfo.valOutSat)
-			txValOut := satToFloat(parser, &txInfo.valOutSat)
-
-			if taValOut.Cmp(txValOut) != 0 {
+			if taInfo.valOutSat.Cmp(&txInfo.valOutSat) != 0 {
 				t.Errorf("Tx %s: total output amount mismatch: got %s, want %s",
-					tx.Txid, taValOut.String(), txValOut.String())
+					tx.Txid, taInfo.valOutSat.String(), txInfo.valOutSat.String())
 			}
 
-			treshold := big.NewFloat(0.0001)
-			if new(big.Float).Sub(taValIn, taValOut).Cmp(treshold) > 0 {
+			treshold := "0.0001"
+			fee := new(big.Int).Sub(&taInfo.valInSat, &taInfo.valOutSat)
+			if strings.Compare(parser.AmountToDecimalString(fee), treshold) > 0 {
 				t.Errorf("Tx %s: suspicious amounts: input ∑ [%s] - output ∑ [%s] > %s",
-					tx.Txid, taValIn.String(), taValOut.String(), treshold)
+					tx.Txid, taInfo.valInSat.String(), taInfo.valOutSat.String(), treshold)
 			}
 		}
 	}
