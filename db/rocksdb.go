@@ -33,6 +33,13 @@ func RepairRocksDB(name string) error {
 	return gorocksdb.RepairDb(name, opts)
 }
 
+type connectBlockStats struct {
+	txAddressesHit  int
+	txAddressesMiss int
+	balancesHit     int
+	balancesMiss    int
+}
+
 // RocksDB handle
 type RocksDB struct {
 	path         string
@@ -45,6 +52,7 @@ type RocksDB struct {
 	metrics      *common.Metrics
 	cache        *gorocksdb.Cache
 	maxOpenFiles int
+	cbs          connectBlockStats
 }
 
 const (
@@ -82,7 +90,7 @@ func NewRocksDB(path string, cacheSize, maxOpenFiles int, parser bchain.BlockCha
 	db, cfh, err := openDB(path, c, maxOpenFiles)
 	wo := gorocksdb.NewDefaultWriteOptions()
 	ro := gorocksdb.NewDefaultReadOptions()
-	return &RocksDB{path, db, wo, ro, cfh, parser, nil, metrics, c, maxOpenFiles}, nil
+	return &RocksDB{path, db, wo, ro, cfh, parser, nil, metrics, c, maxOpenFiles, connectBlockStats{}}, nil
 }
 
 func (d *RocksDB) closeDB() error {
@@ -348,6 +356,12 @@ func (d *RocksDB) resetValueSatToZero(valueSat *big.Int, addrDesc bchain.Address
 	valueSat.SetInt64(0)
 }
 
+func (d *RocksDB) GetAndResetConnectBlockStats() string {
+	s := fmt.Sprintf("%+v", d.cbs)
+	d.cbs = connectBlockStats{}
+	return s
+}
+
 func (d *RocksDB) processAddressesUTXO(block *bchain.Block, addresses map[string][]outpoint, txAddressesMap map[string]*TxAddresses, balances map[string]*AddrBalance) error {
 	blockTxIDs := make([][]byte, len(block.Txs))
 	blockTxAddresses := make([]*TxAddresses, len(block.Txs))
@@ -400,6 +414,9 @@ func (d *RocksDB) processAddressesUTXO(block *bchain.Block, addresses map[string
 					ab = &AddrBalance{}
 				}
 				balances[strAddrDesc] = ab
+				d.cbs.balancesMiss++
+			} else {
+				d.cbs.balancesHit++
 			}
 			// add number of trx in balance only once, address can be multiple times in tx
 			if !processed {
@@ -437,6 +454,9 @@ func (d *RocksDB) processAddressesUTXO(block *bchain.Block, addresses map[string
 					continue
 				}
 				txAddressesMap[stxID] = ita
+				d.cbs.txAddressesMiss++
+			} else {
+				d.cbs.txAddressesHit++
 			}
 			if len(ita.Outputs) <= int(input.Vout) {
 				glog.Warningf("rocksdb: height %d, tx %v, input tx %v vout %v is out of bounds of stored tx", block.Height, tx.Txid, input.Txid, input.Vout)
@@ -478,6 +498,9 @@ func (d *RocksDB) processAddressesUTXO(block *bchain.Block, addresses map[string
 					ab = &AddrBalance{}
 				}
 				balances[strAddrDesc] = ab
+				d.cbs.balancesMiss++
+			} else {
+				d.cbs.balancesHit++
 			}
 			// add number of trx in balance only once, address can be multiple times in tx
 			if !processed {

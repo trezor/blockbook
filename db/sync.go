@@ -304,7 +304,7 @@ ConnectLoop:
 			}
 			hch <- hashHeight{hash, h}
 			if h > 0 && h%1000 == 0 {
-				glog.Info("connecting block ", h, " ", hash, ", elapsed ", time.Since(start))
+				glog.Info("connecting block ", h, " ", hash, ", elapsed ", time.Since(start), " ", w.db.GetAndResetConnectBlockStats())
 				start = time.Now()
 			}
 			if msTime.Before(time.Now()) {
