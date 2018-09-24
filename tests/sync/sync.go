@@ -11,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"sort"
 	"strings"
 	"testing"
 )
@@ -28,12 +27,14 @@ type TestHandler struct {
 	TestData *TestData
 }
 
+type Range struct {
+	Lower uint32 `json:"lower"`
+	Upper uint32 `json:"upper"`
+}
+
 type TestData struct {
-	ConnectBlocksParallel struct {
-		SyncWorkers int `json:"syncWorkers"`
-		SyncChunk   int `json:"syncChunk"`
-	} `json:"connectBlocksParallel"`
-	Blocks []BlockInfo `json:"blocks"`
+	SyncRanges []Range              `json:"syncRanges"`
+	Blocks     map[uint32]BlockInfo `json:"blocks"`
 }
 
 type BlockInfo struct {
@@ -111,10 +112,6 @@ func loadTestData(coin string, parser bchain.BlockChainParser) (*TestData, error
 		}
 	}
 
-	sort.Slice(v.Blocks, func(i, j int) bool {
-		return v.Blocks[i].Height < v.Blocks[j].Height
-	})
-
 	return &v, nil
 }
 
@@ -154,8 +151,23 @@ func makeRocksDB(parser bchain.BlockChainParser, m *common.Metrics, is *common.I
 	return d, closer, nil
 }
 
-func withRocksDBAndSyncWorker(t *testing.T, h *TestHandler, fn func(*db.RocksDB, *db.SyncWorker, chan os.Signal)) {
-	m, err := common.GetMetrics(h.Coin)
+var metricsRegistry = map[string]*common.Metrics{}
+
+func getMetrics(name string) (*common.Metrics, error) {
+	if m, found := metricsRegistry[name]; found {
+		return m, nil
+	} else {
+		m, err := common.GetMetrics(name)
+		if err != nil {
+			return nil, err
+		}
+		metricsRegistry[name] = m
+		return m, nil
+	}
+}
+
+func withRocksDBAndSyncWorker(t *testing.T, h *TestHandler, startHeight uint32, fn func(*db.RocksDB, *db.SyncWorker, chan os.Signal)) {
+	m, err := getMetrics(h.Coin)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -167,13 +179,9 @@ func withRocksDBAndSyncWorker(t *testing.T, h *TestHandler, fn func(*db.RocksDB,
 	}
 	defer closer()
 
-	if len(h.TestData.Blocks) == 0 {
-		t.Fatal("No test data")
-	}
-
 	ch := make(chan os.Signal)
 
-	sw, err := db.NewSyncWorker(d, h.Chain, 3, 0, int(h.TestData.Blocks[0].Height), false, ch, m, is)
+	sw, err := db.NewSyncWorker(d, h.Chain, 8, 0, int(startHeight), false, ch, m, is)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,42 +190,50 @@ func withRocksDBAndSyncWorker(t *testing.T, h *TestHandler, fn func(*db.RocksDB,
 }
 
 func testConnectBlocksParallel(t *testing.T, h *TestHandler) {
-	withRocksDBAndSyncWorker(t, h, func(d *db.RocksDB, sw *db.SyncWorker, ch chan os.Signal) {
-		lowerHeight := h.TestData.Blocks[0].Height
-		upperHeight := h.TestData.Blocks[len(h.TestData.Blocks)-1].Height
-		upperHash := h.TestData.Blocks[len(h.TestData.Blocks)-1].Hash
+	for _, rng := range h.TestData.SyncRanges {
+		withRocksDBAndSyncWorker(t, h, rng.Lower, func(d *db.RocksDB, sw *db.SyncWorker, ch chan os.Signal) {
+			upperHash, err := h.Chain.GetBlockHash(rng.Upper)
+			if err != nil {
+				t.Fatal(err)
+			}
 
-		err := sw.ConnectBlocksParallel(lowerHeight, upperHeight)
-		if err != nil {
-			t.Fatal(err)
-		}
+			err = sw.ConnectBlocksParallel(rng.Lower, rng.Upper)
+			if err != nil {
+				t.Fatal(err)
+			}
 
-		height, hash, err := d.GetBestBlock()
-		if err != nil {
-			t.Fatal(err)
-		}
-		if height != upperHeight {
-			t.Fatalf("Upper block height mismatch: %d != %d", height, upperHeight)
-		}
-		if hash != upperHash {
-			t.Fatalf("Upper block hash mismatch: %s != %s", hash, upperHash)
-		}
+			height, hash, err := d.GetBestBlock()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if height != rng.Upper {
+				t.Fatalf("Upper block height mismatch: %d != %d", height, rng.Upper)
+			}
+			if hash != upperHash {
+				t.Fatalf("Upper block hash mismatch: %s != %s", hash, upperHash)
+			}
 
-		t.Run("verifyBlockInfo", func(t *testing.T) { verifyBlockInfo(t, d, h) })
-		t.Run("verifyTransactions", func(t *testing.T) { verifyTransactions(t, d, h) })
-		t.Run("verifyAddresses", func(t *testing.T) { verifyAddresses(t, d, h) })
-	})
+			t.Run("verifyBlockInfo", func(t *testing.T) { verifyBlockInfo(t, d, h, rng) })
+			t.Run("verifyTransactions", func(t *testing.T) { verifyTransactions(t, d, h, rng) })
+			t.Run("verifyAddresses", func(t *testing.T) { verifyAddresses(t, d, h, rng) })
+		})
+	}
 }
 
-func verifyBlockInfo(t *testing.T, d *db.RocksDB, h *TestHandler) {
-	for _, block := range h.TestData.Blocks {
-		bi, err := d.GetBlockInfo(block.Height)
+func verifyBlockInfo(t *testing.T, d *db.RocksDB, h *TestHandler, rng Range) {
+	for height := rng.Lower; height <= rng.Upper; height++ {
+		block, found := h.TestData.Blocks[height]
+		if !found {
+			continue
+		}
+
+		bi, err := d.GetBlockInfo(height)
 		if err != nil {
-			t.Errorf("GetBlockInfo(%d) error: %s", block.Height, err)
+			t.Errorf("GetBlockInfo(%d) error: %s", height, err)
 			continue
 		}
 		if bi == nil {
-			t.Errorf("GetBlockInfo(%d) returned nil", block.Height)
+			t.Errorf("GetBlockInfo(%d) returned nil", height)
 			continue
 		}
 
@@ -231,7 +247,7 @@ func verifyBlockInfo(t *testing.T, d *db.RocksDB, h *TestHandler) {
 	}
 }
 
-func verifyTransactions(t *testing.T, d *db.RocksDB, h *TestHandler) {
+func verifyTransactions(t *testing.T, d *db.RocksDB, h *TestHandler, rng Range) {
 	type txInfo struct {
 		txid     string
 		vout     uint32
@@ -240,26 +256,13 @@ func verifyTransactions(t *testing.T, d *db.RocksDB, h *TestHandler) {
 	addr2txs := make(map[string][]txInfo)
 	checkMap := make(map[string][]bool)
 
-	for _, block := range h.TestData.Blocks {
+	for height := rng.Lower; height <= rng.Upper; height++ {
+		block, found := h.TestData.Blocks[height]
+		if !found {
+			continue
+		}
+
 		for _, tx := range block.TxDetails {
-			// for _, vin := range tx.Vin {
-			// 	if vin.Txid != "" {
-			// 		ta, err := d.GetTxAddresses(vin.Txid)
-			// 		if err != nil {
-			// 			t.Fatal(err)
-			// 		}
-			// 		if ta != nil {
-			// 			if len(ta.Outputs) > int(vin.Vout) {
-			// 				output := &ta.Outputs[vin.Vout]
-			// 				voutAddr, _, err := output.Addresses(h.Chain.GetChainParser())
-			// 				if err != nil {
-			// 					t.Fatal(err)
-			// 				}
-			// 				t.Logf("XXX: %q", voutAddr)
-			// 			}
-			// 		}
-			// 	}
-			// }
 			for _, vin := range tx.Vin {
 				for _, a := range vin.Addresses {
 					addr2txs[a] = append(addr2txs[a], txInfo{tx.Txid, vin.Vout, false})
@@ -275,10 +278,8 @@ func verifyTransactions(t *testing.T, d *db.RocksDB, h *TestHandler) {
 		}
 	}
 
-	lowerHeight := h.TestData.Blocks[0].Height
-	upperHeight := h.TestData.Blocks[len(h.TestData.Blocks)-1].Height
 	for addr, txs := range addr2txs {
-		err := d.GetTransactions(addr, lowerHeight, upperHeight, func(txid string, vout uint32, isOutput bool) error {
+		err := d.GetTransactions(addr, rng.Lower, rng.Upper, func(txid string, vout uint32, isOutput bool) error {
 			for i, tx := range txs {
 				if txid == tx.txid && vout == tx.vout && isOutput == tx.isOutput {
 					checkMap[addr][i] = true
@@ -300,10 +301,15 @@ func verifyTransactions(t *testing.T, d *db.RocksDB, h *TestHandler) {
 	}
 }
 
-func verifyAddresses(t *testing.T, d *db.RocksDB, h *TestHandler) {
+func verifyAddresses(t *testing.T, d *db.RocksDB, h *TestHandler, rng Range) {
 	parser := h.Chain.GetChainParser()
 
-	for _, block := range h.TestData.Blocks {
+	for height := rng.Lower; height <= rng.Upper; height++ {
+		block, found := h.TestData.Blocks[height]
+		if !found {
+			continue
+		}
+
 		for _, tx := range block.TxDetails {
 			ta, err := d.GetTxAddresses(tx.Txid)
 			if err != nil {
@@ -316,8 +322,8 @@ func verifyAddresses(t *testing.T, d *db.RocksDB, h *TestHandler) {
 				t.Fatal(err)
 			}
 
-			if ta.Height != block.Height {
-				t.Errorf("Tx %s: block height mismatch: %d != %d", tx.Txid, ta.Height, block.Height)
+			if ta.Height != height {
+				t.Errorf("Tx %s: block height mismatch: %d != %d", tx.Txid, ta.Height, height)
 				continue
 			}
 
@@ -393,12 +399,4 @@ func getTaInfo(parser bchain.BlockChainParser, ta *db.TxAddresses) (*txInfo, err
 	}
 
 	return info, nil
-}
-
-func satToFloat(parser bchain.BlockChainParser, sat *big.Int) *big.Float {
-	f, ok := new(big.Float).SetString(parser.AmountToDecimalString(sat))
-	if !ok {
-		return big.NewFloat(-1)
-	}
-	return f
 }
