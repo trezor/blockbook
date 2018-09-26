@@ -67,6 +67,7 @@ func (w *SyncWorker) ResyncIndex(onNewBlock bchain.OnNewBlockFunc) error {
 	case errSynced:
 		// this is not actually error but flag that resync wasn't necessary
 		w.is.FinishedSyncNoChange()
+		w.metrics.IndexDBSize.Set(float64(w.db.DatabaseSizeOnDisk()))
 		return nil
 	}
 
