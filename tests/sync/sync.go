@@ -6,6 +6,7 @@ import (
 	"blockbook/db"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"math/big"
 	"os"
@@ -16,9 +17,9 @@ import (
 )
 
 var testMap = map[string]func(t *testing.T, th *TestHandler){
-	// "ConnectBlocks": nil,
+	"ConnectBlocks":         testConnectBlocks,
 	"ConnectBlocksParallel": testConnectBlocksParallel,
-	// "DisconnectBlocks":      nil,
+	// "HandleFork":            testHandleFork,
 }
 
 type TestHandler struct {
@@ -33,13 +34,24 @@ type Range struct {
 }
 
 type TestData struct {
-	SyncRanges []Range              `json:"syncRanges"`
-	Blocks     map[uint32]BlockInfo `json:"blocks"`
+	ConnectBlocks struct {
+		SyncRanges []Range              `json:"syncRanges"`
+		Blocks     map[uint32]BlockInfo `json:"blocks"`
+	} `json:"connectBlocks"`
+	HandleFork struct {
+		SyncRanges []Range            `json:"syncRanges"`
+		FakeBlocks map[uint32]BlockID `json:"fakeBlocks"`
+		RealBlocks map[uint32]BlockID `json:"realBlocks"`
+	} `json:"handleFork"`
+}
+
+type BlockID struct {
+	Height uint32 `json:"height"`
+	Hash   string `json:"hash"`
 }
 
 type BlockInfo struct {
-	Height    uint32       `json:"height"`
-	Hash      string       `json:"hash"`
+	BlockID
 	NoTxs     uint32       `json:"noTxs"`
 	TxDetails []*bchain.Tx `json:"txDetails"`
 }
@@ -56,10 +68,9 @@ func IntegrationTest(t *testing.T, coin string, chain bchain.BlockChain, testCon
 		t.Fatalf("Failed loading of test data: %s", err)
 	}
 
-	h := TestHandler{Coin: coin, Chain: chain, TestData: td}
-
 	for _, test := range tests {
 		if f, found := testMap[test]; found {
+			h := TestHandler{Coin: coin, Chain: chain, TestData: td}
 			t.Run(test, func(t *testing.T) { f(t, &h) })
 		} else {
 			t.Errorf("%s: test not found", test)
@@ -92,7 +103,7 @@ func loadTestData(coin string, parser bchain.BlockChainParser) (*TestData, error
 		return nil, err
 	}
 
-	for _, b := range v.Blocks {
+	for _, b := range v.ConnectBlocks.Blocks {
 		for _, tx := range b.TxDetails {
 			// convert amounts in test json to bit.Int and clear the temporary JsonValue
 			for i := range tx.Vout {
@@ -189,8 +200,45 @@ func withRocksDBAndSyncWorker(t *testing.T, h *TestHandler, startHeight uint32, 
 	fn(d, sw, ch)
 }
 
+func testConnectBlocks(t *testing.T, h *TestHandler) {
+	for _, rng := range h.TestData.ConnectBlocks.SyncRanges {
+		withRocksDBAndSyncWorker(t, h, rng.Lower, func(d *db.RocksDB, sw *db.SyncWorker, ch chan os.Signal) {
+			upperHash, err := h.Chain.GetBlockHash(rng.Upper)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			err = db.ConnectBlocks(sw, func(hash string) {
+				if hash == upperHash {
+					close(ch)
+				}
+			}, true)
+			if err != nil {
+				if err.Error() != fmt.Sprintf("connectBlocks interrupted at height %d", rng.Upper) {
+					t.Fatal(err)
+				}
+			}
+
+			height, hash, err := d.GetBestBlock()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if height != rng.Upper {
+				t.Fatalf("Upper block height mismatch: %d != %d", height, rng.Upper)
+			}
+			if hash != upperHash {
+				t.Fatalf("Upper block hash mismatch: %s != %s", hash, upperHash)
+			}
+
+			t.Run("verifyBlockInfo", func(t *testing.T) { verifyBlockInfo(t, d, h, rng) })
+			t.Run("verifyTransactions", func(t *testing.T) { verifyTransactions(t, d, h, rng) })
+			t.Run("verifyAddresses", func(t *testing.T) { verifyAddresses(t, d, h, rng) })
+		})
+	}
+}
+
 func testConnectBlocksParallel(t *testing.T, h *TestHandler) {
-	for _, rng := range h.TestData.SyncRanges {
+	for _, rng := range h.TestData.ConnectBlocks.SyncRanges {
 		withRocksDBAndSyncWorker(t, h, rng.Lower, func(d *db.RocksDB, sw *db.SyncWorker, ch chan os.Signal) {
 			upperHash, err := h.Chain.GetBlockHash(rng.Upper)
 			if err != nil {
@@ -222,7 +270,7 @@ func testConnectBlocksParallel(t *testing.T, h *TestHandler) {
 
 func verifyBlockInfo(t *testing.T, d *db.RocksDB, h *TestHandler, rng Range) {
 	for height := rng.Lower; height <= rng.Upper; height++ {
-		block, found := h.TestData.Blocks[height]
+		block, found := h.TestData.ConnectBlocks.Blocks[height]
 		if !found {
 			continue
 		}
@@ -257,7 +305,7 @@ func verifyTransactions(t *testing.T, d *db.RocksDB, h *TestHandler, rng Range) 
 	checkMap := make(map[string][]bool)
 
 	for height := rng.Lower; height <= rng.Upper; height++ {
-		block, found := h.TestData.Blocks[height]
+		block, found := h.TestData.ConnectBlocks.Blocks[height]
 		if !found {
 			continue
 		}
@@ -305,7 +353,7 @@ func verifyAddresses(t *testing.T, d *db.RocksDB, h *TestHandler, rng Range) {
 	parser := h.Chain.GetChainParser()
 
 	for height := rng.Lower; height <= rng.Upper; height++ {
-		block, found := h.TestData.Blocks[height]
+		block, found := h.TestData.ConnectBlocks.Blocks[height]
 		if !found {
 			continue
 		}

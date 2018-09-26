@@ -10,7 +10,7 @@
     "bitcoin": {
         "rpc":  ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",
                  "EstimateSmartFee", "EstimateFee", "GetBestBlockHash", "GetBestBlockHeight", "GetBlockHeader"],
-        "sync": ["ConnectBlocksParallel"]
+        "sync": ["ConnectBlocksParallel", "ConnectBlocks"]
     },
     "bitcoin_testnet": {
         "rpc":  ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",
