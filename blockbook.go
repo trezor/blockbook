@@ -360,7 +360,7 @@ func blockbookAppInfoMetric(db *db.RocksDB, chain bchain.BlockChain, txCache *db
 	}
 	metrics.BlockbookAppInfo.Reset()
 	metrics.BlockbookAppInfo.With(common.Labels{
-		"blockbook_version":        si.Blockbook.Version + time.Now().String(),
+		"blockbook_version":        si.Blockbook.Version,
 		"blockbook_commit":         si.Blockbook.GitCommit,
 		"backend_version":          si.Backend.Version,
 		"backend_subversion":       si.Backend.Subversion,
