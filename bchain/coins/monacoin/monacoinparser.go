@@ -3,6 +3,7 @@ package monacoin
 import (
 	"blockbook/bchain"
 	"blockbook/bchain/coins/btc"
+	"encoding/hex"
 
 	"github.com/btcsuite/btcd/wire"
 	"github.com/jakm/btcutil/chaincfg"
@@ -65,7 +66,9 @@ type MonacoinParser struct {
 
 // NewMonacoinParser returns new MonacoinParser instance
 func NewMonacoinParser(params *chaincfg.Params, c *btc.Configuration) *MonacoinParser {
-	return &MonacoinParser{BitcoinParser: btc.NewBitcoinParser(params, c)}
+	p := &MonacoinParser{BitcoinParser: btc.NewBitcoinParser(params, c)}
+	p.OutputScriptToAddressesFunc = p.outputScriptToAddresses
+	return p
 }
 
 // GetChainParams contains network parameters for the main Monacoin network,
@@ -79,17 +82,6 @@ func GetChainParams(chain string) *chaincfg.Params {
 		return &TestNetParams
 	default:
 		return &MainNetParams
-	}
-}
-
-// GetMonaChainParams contains network parameters for the main Monacoin network,
-// and the test Monacoin network
-func GetMonaChainParams(chain string) *monacoinCfg.Params {
-	switch chain {
-	case "test":
-		return &MonaTestParams
-	default:
-		return &MonaMainParams
 	}
 }
 
@@ -123,3 +115,92 @@ func (p *MonacoinParser) addressToOutputScript(address string) ([]byte, error) {
 		return script, nil
 	}
 }
+
+// GetAddressesFromAddrDesc returns addresses for given address descriptor with flag if the addresses are searchable
+func (p *MonacoinParser) GetAddressesFromAddrDesc(addrDesc bchain.AddressDescriptor) ([]string, bool, error) {
+	return p.OutputScriptToAddressesFunc(addrDesc)
+}
+
+// outputScriptToAddresses converts ScriptPubKey to bitcoin addresses
+func (p *MonacoinParser) outputScriptToAddresses(script []byte) ([]string, bool, error) {
+	switch p.Params.Net {
+	case MainnetMagic:
+		sc, addresses, _, err := txscript.ExtractPkScriptAddrs(script, &MonaMainParams)
+		if err != nil {
+			return nil, false, err
+		}
+		rv := make([]string, len(addresses))
+		for i, a := range addresses {
+			rv[i] = a.EncodeAddress()
+		}
+		var s bool
+		if sc != txscript.NonStandardTy && sc != txscript.NullDataTy {
+			s = true
+		} else if len(rv) == 0 {
+			or := TryParseOPReturn(script)
+			if or != "" {
+				rv = []string{or}
+			}
+		}
+		return rv, s, nil
+	default:
+		sc, addresses, _, err := txscript.ExtractPkScriptAddrs(script, &MonaTestParams)
+		if err != nil {
+			return nil, false, err
+		}
+		rv := make([]string, len(addresses))
+		for i, a := range addresses {
+			rv[i] = a.EncodeAddress()
+		}
+		var s bool
+		if sc != txscript.NonStandardTy && sc != txscript.NullDataTy {
+			s = true
+		} else if len(rv) == 0 {
+			or := TryParseOPReturn(script)
+			if or != "" {
+				rv = []string{or}
+			}
+		}
+		return rv, s, nil
+	}
+}
+
+// TryParseOPReturn tries to process OP_RETURN script and return its string representation
+func TryParseOPReturn(script []byte) string {
+	if len(script) > 1 && script[0] == txscript.OP_RETURN {
+		// trying 2 variants of OP_RETURN data
+		// 1) OP_RETURN OP_PUSHDATA1 <datalen> <data>
+		// 2) OP_RETURN <datalen> <data>
+		var data []byte
+		var l int
+		if script[1] == txscript.OP_PUSHDATA1 && len(script) > 2 {
+			l = int(script[2])
+			data = script[3:]
+			if l != len(data) {
+				l = int(script[1])
+				data = script[2:]
+			}
+		} else {
+			l = int(script[1])
+			data = script[2:]
+		}
+		if l == len(data) {
+			isASCII := true
+			for _, c := range data {
+				if c < 32 || c > 127 {
+					isASCII = false
+					break
+				}
+			}
+			var ed string
+			if isASCII {
+				ed = "(" + string(data) + ")"
+			} else {
+				ed = hex.EncodeToString(data)
+			}
+			return "OP_RETURN " + ed
+		}
+	}
+	return ""
+}
+
