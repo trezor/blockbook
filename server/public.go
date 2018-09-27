@@ -115,6 +115,7 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 		serveMux.HandleFunc(path+"search/", s.htmlTemplateHandler(s.explorerSearch))
 		serveMux.HandleFunc(path+"blocks", s.htmlTemplateHandler(s.explorerBlocks))
 		serveMux.HandleFunc(path+"block/", s.htmlTemplateHandler(s.explorerBlock))
+		serveMux.HandleFunc(path+"spending/", s.htmlTemplateHandler(s.explorerSpendingTx))
 	} else {
 		// redirect to wallet requests for tx and address, possibly to external site
 		serveMux.HandleFunc(path+"tx/", s.txRedirect)
@@ -370,7 +371,7 @@ func (s *PublicServer) explorerTx(w http.ResponseWriter, r *http.Request) (tpl, 
 		txid := r.URL.Path[i+1:]
 		bestheight, _, err := s.db.GetBestBlock()
 		if err == nil {
-			tx, err = s.api.GetTransaction(txid, bestheight, true)
+			tx, err = s.api.GetTransaction(txid, bestheight, false)
 		}
 		if err != nil {
 			return errorTpl, nil, err
@@ -379,6 +380,27 @@ func (s *PublicServer) explorerTx(w http.ResponseWriter, r *http.Request) (tpl, 
 	data := s.newTemplateData()
 	data.Tx = tx
 	return txTpl, data, nil
+}
+
+func (s *PublicServer) explorerSpendingTx(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
+	s.metrics.ExplorerViews.With(common.Labels{"action": "spendingtx"}).Inc()
+	var err error
+	parts := strings.Split(r.URL.Path, "/")
+	if len(parts) > 2 {
+		tx := parts[len(parts)-2]
+		n, ec := strconv.Atoi(parts[len(parts)-1])
+		if ec == nil {
+			spendingTx, err := s.api.GetSpendingTxid(tx, n)
+			if err == nil && spendingTx != "" {
+				http.Redirect(w, r, joinURL("/tx/", spendingTx), 302)
+				return noTpl, nil, nil
+			}
+		}
+	}
+	if err == nil {
+		err = api.NewApiError("Transaction not found", true)
+	}
+	return errorTpl, nil, err
 }
 
 func (s *PublicServer) explorerAddress(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {

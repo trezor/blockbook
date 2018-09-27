@@ -44,6 +44,61 @@ func (w *Worker) getAddressesFromVout(vout *bchain.Vout) (bchain.AddressDescript
 	return addrDesc, a, s, err
 }
 
+// setSpendingTxToVout is helper function, that finds transaction that spent given output and sets it to the output
+// there is not an index, it must be found using addresses -> txaddresses -> tx
+func (w *Worker) setSpendingTxToVout(vout *Vout, txid string, height, bestheight uint32) error {
+	err := w.db.GetAddrDescTransactions(vout.ScriptPubKey.AddrDesc, height, ^uint32(0), func(t string, index uint32, isOutput bool) error {
+		if isOutput == false {
+			tsp, err := w.db.GetTxAddresses(t)
+			if err != nil {
+				glog.Warning("DB inconsistency:  tx ", t, ": not found in txAddresses")
+			} else {
+				if len(tsp.Inputs) > int(index) {
+					if tsp.Inputs[index].ValueSat.Cmp(&vout.ValueSat) == 0 {
+						spentTx, spentHeight, err := w.txCache.GetTransaction(t, bestheight)
+						if err != nil {
+							glog.Warning("Tx ", t, ": not found")
+						} else {
+							if len(spentTx.Vin) > int(index) {
+								if spentTx.Vin[index].Txid == txid {
+									vout.SpentTxID = t
+									vout.SpentHeight = int(spentHeight)
+									vout.SpentIndex = int(index)
+									return &db.StopIteration{}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		return nil
+	})
+	return err
+}
+
+// GetSpendingTxid returns transaction id of transaction that spent given output
+func (w *Worker) GetSpendingTxid(txid string, n int) (string, error) {
+	start := time.Now()
+	bestheight, _, err := w.db.GetBestBlock()
+	if err != nil {
+		return "", err
+	}
+	tx, err := w.GetTransaction(txid, bestheight, false)
+	if err != nil {
+		return "", err
+	}
+	if n >= len(tx.Vout) || n < 0 {
+		return "", NewApiError(fmt.Sprintf("Passed incorrect vout index %v for tx %v, len vout %v", n, tx.Txid, len(tx.Vout)), false)
+	}
+	err = w.setSpendingTxToVout(&tx.Vout[n], tx.Txid, uint32(tx.Blockheight), bestheight)
+	if err != nil {
+		return "", err
+	}
+	glog.Info("GetSpendingTxid ", txid, " ", n, " finished in ", time.Since(start))
+	return tx.Vout[n].SpentTxID, nil
+}
+
 // GetTransaction reads transaction data from txid
 func (w *Worker) GetTransaction(txid string, bestheight uint32, spendingTxs bool) (*Tx, error) {
 	start := time.Now()
@@ -125,37 +180,9 @@ func (w *Worker) GetTransaction(txid string, bestheight uint32, spendingTxs bool
 		if ta != nil {
 			vout.Spent = ta.Outputs[i].Spent
 			if spendingTxs && vout.Spent {
-				// find transaction that spent this output
-				// there is not an index, it must be found in addresses -> txaddresses -> tx
-				err = w.db.GetAddrDescTransactions(vout.ScriptPubKey.AddrDesc, height, ^uint32(0), func(t string, index uint32, isOutput bool) error {
-					if isOutput == false {
-						tsp, err := w.db.GetTxAddresses(t)
-						if err != nil {
-							glog.Warning("DB inconsistency:  tx ", t, ": not found in txAddresses")
-						} else {
-							if len(tsp.Inputs) > int(index) {
-								if tsp.Inputs[index].ValueSat.Cmp(&vout.ValueSat) == 0 {
-									spentTx, spentHeight, err := w.txCache.GetTransaction(t, bestheight)
-									if err != nil {
-										glog.Warning("Tx ", t, ": not found")
-									} else {
-										if len(spentTx.Vin) > int(index) {
-											if spentTx.Vin[index].Txid == bchainTx.Txid {
-												vout.SpentTxID = t
-												vout.SpentHeight = int(spentHeight)
-												vout.SpentIndex = int(index)
-												return &db.StopIteration{}
-											}
-										}
-									}
-								}
-							}
-						}
-					}
-					return nil
-				})
+				err = w.setSpendingTxToVout(vout, bchainTx.Txid, height, bestheight)
 				if err != nil {
-					glog.Errorf("GetAddrDescTransactions error %v, %v, output %v", err, vout.ScriptPubKey.AddrDesc)
+					glog.Errorf("setSpendingTxToVout error %v, %v, output %v", err, vout.ScriptPubKey.AddrDesc, vout.N)
 				}
 			}
 		}

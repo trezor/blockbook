@@ -59,7 +59,7 @@
                                 <span class="float-left">Unparsed address</span>
                                 {{- end -}}
                                 <span class="float-right{{if stringInSlice $addr $vout.ScriptPubKey.Addresses}} text-success{{end}}">
-                                    {{formatAmount $vout.Value}} {{$cs}} {{if $vout.Spent}}{{if $vout.SpentTxID}}<a class="text-danger" href="/tx/{{$vout.SpentTxID}}" title="Spent">➡</a>{{else}}<span class="text-danger" title="Spent">➡</span>{{end}}{{else -}}
+                                    {{formatAmount $vout.Value}} {{$cs}} {{if $vout.Spent}}<a class="text-danger" href="{{if $vout.SpentTxID}}/tx/{{$vout.SpentTxID}}{{else}}/spending/{{$tx.Txid}}/{{$vout.N}}{{end}}" title="Spent">➡</a>{{else -}}
                                     <span class="text-success" title="Unspent"> <b>×</b></span>
                                     {{- end -}}
                                 </span>
