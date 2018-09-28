@@ -23,7 +23,7 @@ var (
 	TestNetParams chaincfg.Params
 )
 
-func init() {
+func initParams() {
 	MainNetParams = chaincfg.MainNetParams
 	MainNetParams.Net = MainnetMagic
 
@@ -63,6 +63,9 @@ func NewBGoldParser(params *chaincfg.Params, c *btc.Configuration) *BGoldParser 
 // the regression test Bitcoin Cash network, the test Bitcoin Cash network and
 // the simulation test Bitcoin Cash network, in this order
 func GetChainParams(chain string) *chaincfg.Params {
+	if MainNetParams.Name == "" {
+		initParams()
+	}
 	switch chain {
 	case "test":
 		return &TestNetParams
