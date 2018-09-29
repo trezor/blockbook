@@ -49,6 +49,11 @@
         "user": "rpc",
         "pass": "rpc"
     },
+    "Myriad": {
+        "url": "http://localhost:8043",
+        "user": "rpc",
+        "pass": "rpc"
+    },
     "Bitcoin Testnet": {
         "url": "http://localhost:18030",
         "user": "rpc",
