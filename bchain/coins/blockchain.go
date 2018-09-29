@@ -12,6 +12,7 @@ import (
 	"blockbook/bchain/coins/monacoin"
 	"blockbook/bchain/coins/namecoin"
 	"blockbook/bchain/coins/vertcoin"
+	"blockbook/bchain/coins/myriad"
 	"blockbook/bchain/coins/zec"
 	"blockbook/common"
 	"context"
@@ -47,6 +48,7 @@ func init() {
 	blockChainFactories["Dogecoin"] = dogecoin.NewDogecoinRPC
 	blockChainFactories["Vertcoin"] = vertcoin.NewVertcoinRPC
 	blockChainFactories["Vertcoin Testnet"] = vertcoin.NewVertcoinRPC
+	blockChainFactories["Myriad"] = myriad.NewMyriadRPC
 	blockChainFactories["Namecoin"] = namecoin.NewNamecoinRPC
 	blockChainFactories["Monacoin"] = monacoin.NewMonacoinRPC
 	blockChainFactories["Monacoin Testnet"] = monacoin.NewMonacoinRPC
