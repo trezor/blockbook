@@ -60,5 +60,9 @@
   "meta": {
     "package_maintainer": "wakiyamap",
     "package_maintainer_email": "wakiyamap@gmail.com"
+  },
+  "integration_tests": {
+      "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync", "EstimateSmartFee",
+              "EstimateFee"]
   }
 }

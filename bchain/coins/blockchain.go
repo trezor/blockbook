@@ -27,29 +27,29 @@ import (
 
 type blockChainFactory func(config json.RawMessage, pushHandler func(bchain.NotificationType)) (bchain.BlockChain, error)
 
-var blockChainFactories = make(map[string]blockChainFactory)
+var BlockChainFactories = make(map[string]blockChainFactory)
 
 func init() {
-	blockChainFactories["Bitcoin"] = btc.NewBitcoinRPC
-	blockChainFactories["Testnet"] = btc.NewBitcoinRPC
-	blockChainFactories["Zcash"] = zec.NewZCashRPC
-	blockChainFactories["Zcash Testnet"] = zec.NewZCashRPC
-	blockChainFactories["Ethereum"] = eth.NewEthereumRPC
-	blockChainFactories["Ethereum Classic"] = eth.NewEthereumRPC
-	blockChainFactories["Ethereum Testnet Ropsten"] = eth.NewEthereumRPC
-	blockChainFactories["Bcash"] = bch.NewBCashRPC
-	blockChainFactories["Bcash Testnet"] = bch.NewBCashRPC
-	blockChainFactories["Bgold"] = btg.NewBGoldRPC
-	blockChainFactories["Dash"] = dash.NewDashRPC
-	blockChainFactories["Dash Testnet"] = dash.NewDashRPC
-	blockChainFactories["Litecoin"] = litecoin.NewLitecoinRPC
-	blockChainFactories["Litecoin Testnet"] = litecoin.NewLitecoinRPC
-	blockChainFactories["Dogecoin"] = dogecoin.NewDogecoinRPC
-	blockChainFactories["Vertcoin"] = vertcoin.NewVertcoinRPC
-	blockChainFactories["Vertcoin Testnet"] = vertcoin.NewVertcoinRPC
-	blockChainFactories["Namecoin"] = namecoin.NewNamecoinRPC
-	blockChainFactories["Monacoin"] = monacoin.NewMonacoinRPC
-	blockChainFactories["Monacoin Testnet"] = monacoin.NewMonacoinRPC
+	BlockChainFactories["Bitcoin"] = btc.NewBitcoinRPC
+	BlockChainFactories["Testnet"] = btc.NewBitcoinRPC
+	BlockChainFactories["Zcash"] = zec.NewZCashRPC
+	BlockChainFactories["Zcash Testnet"] = zec.NewZCashRPC
+	BlockChainFactories["Ethereum"] = eth.NewEthereumRPC
+	BlockChainFactories["Ethereum Classic"] = eth.NewEthereumRPC
+	BlockChainFactories["Ethereum Testnet Ropsten"] = eth.NewEthereumRPC
+	BlockChainFactories["Bcash"] = bch.NewBCashRPC
+	BlockChainFactories["Bcash Testnet"] = bch.NewBCashRPC
+	BlockChainFactories["Bgold"] = btg.NewBGoldRPC
+	BlockChainFactories["Dash"] = dash.NewDashRPC
+	BlockChainFactories["Dash Testnet"] = dash.NewDashRPC
+	BlockChainFactories["Litecoin"] = litecoin.NewLitecoinRPC
+	BlockChainFactories["Litecoin Testnet"] = litecoin.NewLitecoinRPC
+	BlockChainFactories["Dogecoin"] = dogecoin.NewDogecoinRPC
+	BlockChainFactories["Vertcoin"] = vertcoin.NewVertcoinRPC
+	BlockChainFactories["Vertcoin Testnet"] = vertcoin.NewVertcoinRPC
+	BlockChainFactories["Namecoin"] = namecoin.NewNamecoinRPC
+	BlockChainFactories["Monacoin"] = monacoin.NewMonacoinRPC
+	BlockChainFactories["Monacoin Testnet"] = monacoin.NewMonacoinRPC
 }
 
 // GetCoinNameFromConfig gets coin name and coin shortcut from config file
@@ -80,9 +80,9 @@ func NewBlockChain(coin string, configfile string, pushHandler func(bchain.Notif
 	if err != nil {
 		return nil, errors.Annotatef(err, "Error parsing file %v", configfile)
 	}
-	bcf, ok := blockChainFactories[coin]
+	bcf, ok := BlockChainFactories[coin]
 	if !ok {
-		return nil, errors.New(fmt.Sprint("Unsupported coin '", coin, "'. Must be one of ", reflect.ValueOf(blockChainFactories).MapKeys()))
+		return nil, errors.New(fmt.Sprint("Unsupported coin '", coin, "'. Must be one of ", reflect.ValueOf(BlockChainFactories).MapKeys()))
 	}
 	bc, err := bcf(config, pushHandler)
 	if err != nil {
