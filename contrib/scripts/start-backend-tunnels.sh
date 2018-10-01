@@ -7,13 +7,19 @@ fi
 
 host=$1
 
+get_port() {
+    data=$1
+    key=$2
+    echo "${data}" | gawk "match(\$0, /\"${key}\":\s+([0-9]+)/, a) {print a[1]}" -
+}
+
 # change dir to root of git repository
 cd $(cd $(dirname $(readlink -f $0)) && git rev-parse --show-toplevel)
 
 # get all testnet ports from configs/
-testnet_ports=$(gawk 'match($0, /"rpcURL":\s+"(http|ws):\/\/[^:]+:([0-9]+)"/, a) {print a[2]}' configs/*_testnet*.json)
+ports=$(gawk 'match($0, /"backend_rpc":\s+([0-9]+)/, a) {print a[1]}' configs/coins/*.json)
 
-for port in $testnet_ports
+for port in $ports
 do
     ssh -nNT -L $port:localhost:$port $host &
     pid=$!
@@ -26,9 +32,10 @@ at_exit() {
 
 trap at_exit EXIT
 
-wait -n
-code=$?
-
-if [ $code != 0 ]; then
-    exit $code
-fi
+sleep inf
+# wait -n
+# code=$?
+#
+# if [ $code != 0 ]; then
+#     exit $code
+# fi
