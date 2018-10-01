@@ -18,7 +18,7 @@ var (
 	MainNetParams chaincfg.Params
 )
 
-func init() {
+func initParams() {
 	MainNetParams = chaincfg.MainNetParams
 	MainNetParams.Net = MainnetMagic
 	MainNetParams.PubKeyHashAddrID = []byte{52}
@@ -43,6 +43,9 @@ func NewNamecoinParser(params *chaincfg.Params, c *btc.Configuration) *NamecoinP
 // GetChainParams contains network parameters for the main Namecoin network,
 // and the test Namecoin network
 func GetChainParams(chain string) *chaincfg.Params {
+	if MainNetParams.Name == "" {
+		initParams()
+	}
 	switch chain {
 	default:
 		return &MainNetParams
@@ -75,5 +78,11 @@ func (p *NamecoinParser) ParseBlock(b []byte) (*bchain.Block, error) {
 		txs[ti] = p.TxFromMsgTx(t, false)
 	}
 
-	return &bchain.Block{Txs: txs}, nil
+	return &bchain.Block{
+		BlockHeader: bchain.BlockHeader{
+			Size: len(b),
+			Time: h.Timestamp.Unix(),
+		},
+		Txs: txs,
+	}, nil
 }

@@ -47,7 +47,7 @@ var errSynced = errors.New("synced")
 
 // ResyncIndex synchronizes index to the top of the blockchain
 // onNewBlock is called when new block is connected, but not in initial parallel sync
-func (w *SyncWorker) ResyncIndex(onNewBlock func(hash string), initialSync bool) error {
+func (w *SyncWorker) ResyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync bool) error {
 	start := time.Now()
 	w.is.StartedSync()
 
@@ -67,6 +67,7 @@ func (w *SyncWorker) ResyncIndex(onNewBlock func(hash string), initialSync bool)
 	case errSynced:
 		// this is not actually error but flag that resync wasn't necessary
 		w.is.FinishedSyncNoChange()
+		w.metrics.IndexDBSize.Set(float64(w.db.DatabaseSizeOnDisk()))
 		return nil
 	}
 
@@ -75,7 +76,7 @@ func (w *SyncWorker) ResyncIndex(onNewBlock func(hash string), initialSync bool)
 	return err
 }
 
-func (w *SyncWorker) resyncIndex(onNewBlock func(hash string), initialSync bool) error {
+func (w *SyncWorker) resyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync bool) error {
 	remoteBestHash, err := w.chain.GetBestBlockHash()
 	if err != nil {
 		return err
@@ -135,7 +136,7 @@ func (w *SyncWorker) resyncIndex(onNewBlock func(hash string), initialSync bool)
 	return w.connectBlocks(onNewBlock, initialSync)
 }
 
-func (w *SyncWorker) handleFork(localBestHeight uint32, localBestHash string, onNewBlock func(hash string), initialSync bool) error {
+func (w *SyncWorker) handleFork(localBestHeight uint32, localBestHash string, onNewBlock bchain.OnNewBlockFunc, initialSync bool) error {
 	// find forked blocks, disconnect them and then synchronize again
 	var height uint32
 	hashes := []string{localBestHash}
@@ -163,7 +164,7 @@ func (w *SyncWorker) handleFork(localBestHeight uint32, localBestHash string, on
 	return w.resyncIndex(onNewBlock, initialSync)
 }
 
-func (w *SyncWorker) connectBlocks(onNewBlock func(hash string), initialSync bool) error {
+func (w *SyncWorker) connectBlocks(onNewBlock bchain.OnNewBlockFunc, initialSync bool) error {
 	bch := make(chan blockResult, 8)
 	done := make(chan struct{})
 	defer close(done)
@@ -182,7 +183,7 @@ func (w *SyncWorker) connectBlocks(onNewBlock func(hash string), initialSync boo
 			return err
 		}
 		if onNewBlock != nil {
-			onNewBlock(res.block.Hash)
+			onNewBlock(res.block.Hash, res.block.Height)
 		}
 		if res.block.Height > 0 && res.block.Height%1000 == 0 {
 			glog.Info("connected block ", res.block.Height, " ", res.block.Hash)
@@ -333,7 +334,7 @@ ConnectLoop:
 			}
 			hch <- hashHeight{hash, h}
 			if h > 0 && h%1000 == 0 {
-				glog.Info("connecting block ", h, " ", hash, ", elapsed ", time.Since(start))
+				glog.Info("connecting block ", h, " ", hash, ", elapsed ", time.Since(start), " ", w.db.GetAndResetConnectBlockStats())
 				start = time.Now()
 			}
 			if msTime.Before(time.Now()) {

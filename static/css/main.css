@@ -31,6 +31,22 @@ h3 {
     height: 16px;
 }
 
+.navbar-form {
+    padding-bottom: 1px;
+}
+
+.navbar-form .form-control {
+    background-color: gray;
+    color: #fff;
+    border-radius: 3px;
+    -webkit-border-radius: 3px;
+    -moz-border-radius: 3px;
+    border: 0;
+    -webkit-box-shadow: 1px 1px 0 0 rgba(255, 255, 255, .41), inset 1px 1px 3px 0 rgba(0, 0, 0, .10);
+    -moz-box-shadow: 1px 1px 0 0 rgba(255, 255, 255, .41), inset 1px 1px 3px 0 rgba(0, 0, 0, .10);
+    box-shadow: 1px 1px 0 0 rgba(255, 255, 255, .41), inset 1px 1px 3px 0 rgba(0, 0, 0, .10);
+}
+
 @media (min-width: 768px) {
     .container {
         max-width: 750px;
@@ -47,6 +63,9 @@ h3 {
     .octicon {
         height: 24px;
     }
+    .navbar-form .form-control {
+        width: 230px;
+    }
 }
 
 @media (min-width: 1200px) {
@@ -58,6 +77,9 @@ h3 {
     }
     .octicon {
         height: 32px;
+    }
+    .navbar-form .form-control {
+        width: 360px;
     }
 }
 
@@ -83,7 +105,6 @@ h3 {
     color: rgba(255, 255, 255);
     font-weight: bold;
     font-size: 19px;
-    padding-left: 35px;
 }
 
 .trezor-logo-svg-white svg {
@@ -114,7 +135,7 @@ h3 {
 
 .line-top {
     border-top: 1px solid #EAEAEA;
-    padding: 15px 0 0;
+    padding: 10px 0 0;
 }
 
 .line-mid {
@@ -136,6 +157,11 @@ h3 {
     white-space: nowrap;
     vertical-align: baseline;
     border-radius: .25em;
+    margin-top: 5px;
+}
+
+.txvalues:not(:last-child) {
+    margin-right: 5px;
 }
 
 .txvalues-default {
@@ -157,14 +183,17 @@ h3 {
 }
 
 .ellipsis {
-    display: block;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
 .data-div {
-    margin: 20px 0;
+    margin: 20px 0 30px 0;
+}
+
+.data-div .col-md-10 {
+    padding-left: 0;
 }
 
 .data-table {
@@ -192,6 +221,22 @@ h3 {
 .navbar-nav .nav-link {
     padding-right: 0;
     padding-left: .25rem;
+}
+
+.navbar-text .nav-link {
+    padding: 0;
+}
+
+::-webkit-input-placeholder {
+    color: #CCC!important;
+    font-style: italic;
+    font-size: 14px;
+}
+
+::-moz-placeholder {
+    color: #CCC!important;
+    font-style: italic;
+    font-size: 14px;
 }
 
 .h-container {

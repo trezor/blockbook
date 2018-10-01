@@ -35,6 +35,7 @@ func init() {
 	BlockChainFactories["Zcash"] = zec.NewZCashRPC
 	BlockChainFactories["Zcash Testnet"] = zec.NewZCashRPC
 	BlockChainFactories["Ethereum"] = eth.NewEthereumRPC
+	BlockChainFactories["Ethereum Classic"] = eth.NewEthereumRPC
 	BlockChainFactories["Ethereum Testnet Ropsten"] = eth.NewEthereumRPC
 	BlockChainFactories["Bcash"] = bch.NewBCashRPC
 	BlockChainFactories["Bcash Testnet"] = bch.NewBCashRPC
@@ -131,9 +132,9 @@ func (c *blockChainWithMetrics) GetSubversion() string {
 	return c.b.GetSubversion()
 }
 
-func (c *blockChainWithMetrics) GetBlockChainInfo() (v string, err error) {
-	defer func(s time.Time) { c.observeRPCLatency("GetBlockChainInfo", s, err) }(time.Now())
-	return c.b.GetBlockChainInfo()
+func (c *blockChainWithMetrics) GetChainInfo() (v *bchain.ChainInfo, err error) {
+	defer func(s time.Time) { c.observeRPCLatency("GetChainInfo", s, err) }(time.Now())
+	return c.b.GetChainInfo()
 }
 
 func (c *blockChainWithMetrics) GetBestBlockHash() (v string, err error) {
@@ -159,6 +160,11 @@ func (c *blockChainWithMetrics) GetBlockHeader(hash string) (v *bchain.BlockHead
 func (c *blockChainWithMetrics) GetBlock(hash string, height uint32) (v *bchain.Block, err error) {
 	defer func(s time.Time) { c.observeRPCLatency("GetBlock", s, err) }(time.Now())
 	return c.b.GetBlock(hash, height)
+}
+
+func (c *blockChainWithMetrics) GetBlockInfo(hash string) (v *bchain.BlockInfo, err error) {
+	defer func(s time.Time) { c.observeRPCLatency("GetBlockInfo", s, err) }(time.Now())
+	return c.b.GetBlockInfo(hash)
 }
 
 func (c *blockChainWithMetrics) GetMempool() (v []string, err error) {
@@ -191,7 +197,7 @@ func (c *blockChainWithMetrics) SendRawTransaction(tx string) (v string, err err
 	return c.b.SendRawTransaction(tx)
 }
 
-func (c *blockChainWithMetrics) ResyncMempool(onNewTxAddr func(txid string, addr string)) (count int, err error) {
+func (c *blockChainWithMetrics) ResyncMempool(onNewTxAddr bchain.OnNewTxAddrFunc) (count int, err error) {
 	defer func(s time.Time) { c.observeRPCLatency("ResyncMempool", s, err) }(time.Now())
 	count, err = c.b.ResyncMempool(onNewTxAddr)
 	if err == nil {

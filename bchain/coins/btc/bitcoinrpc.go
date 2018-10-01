@@ -102,10 +102,11 @@ func NewBitcoinRPC(config json.RawMessage, pushHandler func(bchain.NotificationT
 // and if successful it connects to ZeroMQ and creates mempool handler
 func (b *BitcoinRPC) GetChainInfoAndInitializeMempool(bc bchain.BlockChain) (string, error) {
 	// try to connect to block chain and get some info
-	chainName, err := bc.GetBlockChainInfo()
+	ci, err := bc.GetChainInfo()
 	if err != nil {
 		return "", err
 	}
+	chainName := ci.Chain
 
 	mq, err := bchain.NewMQ(b.ChainConfig.MessageQueueBinding, b.pushHandler)
 	if err != nil {
@@ -217,10 +218,30 @@ type CmdGetBlockChainInfo struct {
 type ResGetBlockChainInfo struct {
 	Error  *bchain.RPCError `json:"error"`
 	Result struct {
-		Chain         string `json:"chain"`
-		Blocks        int    `json:"blocks"`
-		Headers       int    `json:"headers"`
-		Bestblockhash string `json:"bestblockhash"`
+		Chain         string      `json:"chain"`
+		Blocks        int         `json:"blocks"`
+		Headers       int         `json:"headers"`
+		Bestblockhash string      `json:"bestblockhash"`
+		Difficulty    json.Number `json:"difficulty"`
+		SizeOnDisk    int64       `json:"size_on_disk"`
+		Warnings      string      `json:"warnings"`
+	} `json:"result"`
+}
+
+// getnetworkinfo
+
+type CmdGetNetworkInfo struct {
+	Method string `json:"method"`
+}
+
+type ResGetNetworkInfo struct {
+	Error  *bchain.RPCError `json:"error"`
+	Result struct {
+		Version         json.Number `json:"version"`
+		Subversion      json.Number `json:"subversion"`
+		ProtocolVersion json.Number `json:"protocolversion"`
+		Timeoffset      float64     `json:"timeoffset"`
+		Warnings        string      `json:"warnings"`
 	} `json:"result"`
 }
 
@@ -265,14 +286,24 @@ type ResGetBlockRaw struct {
 	Result string           `json:"result"`
 }
 
+type BlockThin struct {
+	bchain.BlockHeader
+	Txids []string `json:"tx"`
+}
+
 type ResGetBlockThin struct {
 	Error  *bchain.RPCError `json:"error"`
-	Result bchain.ThinBlock `json:"result"`
+	Result BlockThin        `json:"result"`
 }
 
 type ResGetBlockFull struct {
 	Error  *bchain.RPCError `json:"error"`
 	Result bchain.Block     `json:"result"`
+}
+
+type ResGetBlockInfo struct {
+	Error  *bchain.RPCError `json:"error"`
+	Result bchain.BlockInfo `json:"result"`
 }
 
 // getrawtransaction
@@ -386,21 +417,48 @@ func (b *BitcoinRPC) GetBestBlockHeight() (uint32, error) {
 	return res.Result, nil
 }
 
-// GetBlockChainInfo returns the name of the block chain: main/test/regtest.
-func (b *BitcoinRPC) GetBlockChainInfo() (string, error) {
+// GetChainInfo returns information about the connected backend
+func (b *BitcoinRPC) GetChainInfo() (*bchain.ChainInfo, error) {
 	glog.V(1).Info("rpc: getblockchaininfo")
 
-	res := ResGetBlockChainInfo{}
-	req := CmdGetBlockChainInfo{Method: "getblockchaininfo"}
-	err := b.Call(&req, &res)
-
+	resCi := ResGetBlockChainInfo{}
+	err := b.Call(&CmdGetBlockChainInfo{Method: "getblockchaininfo"}, &resCi)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	if res.Error != nil {
-		return "", res.Error
+	if resCi.Error != nil {
+		return nil, resCi.Error
 	}
-	return res.Result.Chain, nil
+
+	glog.V(1).Info("rpc: getnetworkinfo")
+	resNi := ResGetNetworkInfo{}
+	err = b.Call(&CmdGetNetworkInfo{Method: "getnetworkinfo"}, &resNi)
+	if err != nil {
+		return nil, err
+	}
+	if resNi.Error != nil {
+		return nil, resNi.Error
+	}
+
+	rv := &bchain.ChainInfo{
+		Bestblockhash: resCi.Result.Bestblockhash,
+		Blocks:        resCi.Result.Blocks,
+		Chain:         resCi.Result.Chain,
+		Difficulty:    string(resCi.Result.Difficulty),
+		Headers:       resCi.Result.Headers,
+		SizeOnDisk:    resCi.Result.SizeOnDisk,
+		Subversion:    string(resNi.Result.Subversion),
+		Timeoffset:    resNi.Result.Timeoffset,
+	}
+	rv.Version = string(resNi.Result.Version)
+	rv.ProtocolVersion = string(resNi.Result.ProtocolVersion)
+	if len(resCi.Result.Warnings) > 0 {
+		rv.Warnings = resCi.Result.Warnings + " "
+	}
+	if resCi.Result.Warnings != resNi.Result.Warnings {
+		rv.Warnings += resNi.Result.Warnings
+	}
+	return rv, nil
 }
 
 func isErrBlockNotFound(err *bchain.RPCError) bool {
@@ -454,7 +512,7 @@ func (b *BitcoinRPC) GetBlockHeader(hash string) (*bchain.BlockHeader, error) {
 // GetBlock returns block with given hash.
 func (b *BitcoinRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 	var err error
-	if hash == "" && height > 0 {
+	if hash == "" {
 		hash, err = b.GetBlockHash(height)
 		if err != nil {
 			return nil, err
@@ -483,7 +541,29 @@ func (b *BitcoinRPC) GetBlock(hash string, height uint32) (*bchain.Block, error)
 	return block, nil
 }
 
-// getBlockWithoutHeader is an optimization - it does not call GetBlockHeader to get prev, next hashes
+// GetBlockInfo returns extended header (more info than in bchain.BlockHeader) with a list of txids
+func (b *BitcoinRPC) GetBlockInfo(hash string) (*bchain.BlockInfo, error) {
+	glog.V(1).Info("rpc: getblock (verbosity=1) ", hash)
+
+	res := ResGetBlockInfo{}
+	req := CmdGetBlock{Method: "getblock"}
+	req.Params.BlockHash = hash
+	req.Params.Verbosity = 1
+	err := b.Call(&req, &res)
+
+	if err != nil {
+		return nil, errors.Annotatef(err, "hash %v", hash)
+	}
+	if res.Error != nil {
+		if isErrBlockNotFound(res.Error) {
+			return nil, bchain.ErrBlockNotFound
+		}
+		return nil, errors.Annotatef(res.Error, "hash %v", hash)
+	}
+	return &res.Result, nil
+}
+
+// GetBlockWithoutHeader is an optimization - it does not call GetBlockHeader to get prev, next hashes
 // instead it sets to header only block hash and height passed in parameters
 func (b *BitcoinRPC) GetBlockWithoutHeader(hash string, height uint32) (*bchain.Block, error) {
 	data, err := b.GetBlockRaw(hash)
@@ -613,7 +693,7 @@ func (b *BitcoinRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 // ResyncMempool gets mempool transactions and maps output scripts to transactions.
 // ResyncMempool is not reentrant, it should be called from a single thread.
 // It returns number of transactions in mempool
-func (b *BitcoinRPC) ResyncMempool(onNewTxAddr func(txid string, addr string)) (int, error) {
+func (b *BitcoinRPC) ResyncMempool(onNewTxAddr bchain.OnNewTxAddrFunc) (int, error) {
 	return b.Mempool.Resync(onNewTxAddr)
 }
 

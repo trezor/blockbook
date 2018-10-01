@@ -157,7 +157,7 @@ func Test_GetAddressesFromAddrDesc(t *testing.T) {
 		{
 			name:       "OP_RETURN hex",
 			parser:     mainParserCashAddr,
-			addresses:  []string{"OP_RETURN 07 2020f1686f6a20"},
+			addresses:  []string{"OP_RETURN 2020f1686f6a20"},
 			searchable: false,
 			hex:        "6a072020f1686f6a20",
 			wantErr:    false,

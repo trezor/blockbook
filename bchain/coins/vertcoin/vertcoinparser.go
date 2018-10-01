@@ -18,7 +18,7 @@ var (
 	TestNetParams chaincfg.Params
 )
 
-func init() {
+func initParams() {
 	MainNetParams = chaincfg.MainNetParams
 	MainNetParams.Net = MainnetMagic
 	MainNetParams.PubKeyHashAddrID = []byte{71}
@@ -53,6 +53,9 @@ func NewVertcoinParser(params *chaincfg.Params, c *btc.Configuration) *VertcoinP
 // GetChainParams contains network parameters for the main Vertcoin network,
 // and the test Vertcoin network
 func GetChainParams(chain string) *chaincfg.Params {
+	if MainNetParams.Name == "" {
+		initParams()
+	}
 	switch chain {
 	case "test":
 		return &TestNetParams

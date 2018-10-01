@@ -36,7 +36,7 @@ func setupRocksDB(t *testing.T, p bchain.BlockChainParser) *RocksDB {
 	if err != nil {
 		t.Fatal(err)
 	}
-	d, err := NewRocksDB(tmp, 100000, p, nil)
+	d, err := NewRocksDB(tmp, 100000, -1, p, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -730,10 +730,11 @@ func TestRocksDB_Index_UTXO(t *testing.T) {
 		t.Fatal(err)
 	}
 	iw := &BlockInfo{
-		Hash: "00000000eb0443fd7dc4a1ed5c686a8e995057805f9a161d9a5a77a95e72b7b6",
-		Txs:  4,
-		Size: 2345678,
-		Time: 1534859123,
+		Hash:   "00000000eb0443fd7dc4a1ed5c686a8e995057805f9a161d9a5a77a95e72b7b6",
+		Txs:    4,
+		Size:   2345678,
+		Time:   1534859123,
+		Height: 225494,
 	}
 	if !reflect.DeepEqual(info, iw) {
 		t.Errorf("GetAddressBalance() = %+v, want %+v", info, iw)

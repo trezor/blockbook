@@ -33,17 +33,29 @@ func RepairRocksDB(name string) error {
 	return gorocksdb.RepairDb(name, opts)
 }
 
+type connectBlockStats struct {
+	txAddressesHit  int
+	txAddressesMiss int
+	balancesHit     int
+	balancesMiss    int
+}
+
 // RocksDB handle
 type RocksDB struct {
-	path        string
-	db          *gorocksdb.DB
-	wo          *gorocksdb.WriteOptions
-	ro          *gorocksdb.ReadOptions
-	cfh         []*gorocksdb.ColumnFamilyHandle
-	chainParser bchain.BlockChainParser
-	is          *common.InternalState
-	metrics     *common.Metrics
-	cache       *gorocksdb.Cache
+	path                    string
+	db                      *gorocksdb.DB
+	wo                      *gorocksdb.WriteOptions
+	ro                      *gorocksdb.ReadOptions
+	cfh                     []*gorocksdb.ColumnFamilyHandle
+	chainParser             bchain.BlockChainParser
+	is                      *common.InternalState
+	metrics                 *common.Metrics
+	cache                   *gorocksdb.Cache
+	maxOpenFiles            int
+	cbs                     connectBlockStats
+	chanUpdateBalance       chan updateBalanceData
+	chanUpdateBalanceResult chan error
+	updateBalancesMap       map[string]*AddrBalance
 }
 
 const (
@@ -58,12 +70,12 @@ const (
 
 var cfNames = []string{"default", "height", "addresses", "txAddresses", "addressBalance", "blockTxs", "transactions"}
 
-func openDB(path string, c *gorocksdb.Cache) (*gorocksdb.DB, []*gorocksdb.ColumnFamilyHandle, error) {
+func openDB(path string, c *gorocksdb.Cache, openFiles int) (*gorocksdb.DB, []*gorocksdb.ColumnFamilyHandle, error) {
 	// opts with bloom filter
-	opts := createAndSetDBOptions(10, c)
+	opts := createAndSetDBOptions(10, c, openFiles)
 	// opts for addresses without bloom filter
 	// from documentation: if most of your queries are executed using iterators, you shouldn't set bloom filter
-	optsAddresses := createAndSetDBOptions(0, c)
+	optsAddresses := createAndSetDBOptions(0, c, openFiles)
 	// default, height, addresses, txAddresses, addressBalance, blockTxids, transactions
 	fcOptions := []*gorocksdb.Options{opts, opts, optsAddresses, opts, opts, opts, opts}
 	db, cfh, err := gorocksdb.OpenDbColumnFamilies(opts, path, cfNames, fcOptions)
@@ -75,13 +87,26 @@ func openDB(path string, c *gorocksdb.Cache) (*gorocksdb.DB, []*gorocksdb.Column
 
 // NewRocksDB opens an internal handle to RocksDB environment.  Close
 // needs to be called to release it.
-func NewRocksDB(path string, cacheSize int, parser bchain.BlockChainParser, metrics *common.Metrics) (d *RocksDB, err error) {
-	glog.Infof("rocksdb: open %s, version %v", path, dbVersion)
+func NewRocksDB(path string, cacheSize, maxOpenFiles int, parser bchain.BlockChainParser, metrics *common.Metrics) (d *RocksDB, err error) {
+	glog.Infof("rocksdb: opening %s, required data version %v, cache size %v, max open files %v", path, dbVersion, cacheSize, maxOpenFiles)
 	c := gorocksdb.NewLRUCache(cacheSize)
-	db, cfh, err := openDB(path, c)
+	db, cfh, err := openDB(path, c, maxOpenFiles)
 	wo := gorocksdb.NewDefaultWriteOptions()
 	ro := gorocksdb.NewDefaultReadOptions()
-	return &RocksDB{path, db, wo, ro, cfh, parser, nil, metrics, c}, nil
+	rdb := &RocksDB{
+		path:         path,
+		db:           db,
+		wo:           wo,
+		ro:           ro,
+		cfh:          cfh,
+		chainParser:  parser,
+		metrics:      metrics,
+		cache:        c,
+		maxOpenFiles: maxOpenFiles,
+		cbs:          connectBlockStats{},
+	}
+	rdb.initUpdateBalancesWorker()
+	return rdb, nil
 }
 
 func (d *RocksDB) closeDB() error {
@@ -119,7 +144,7 @@ func (d *RocksDB) Reopen() error {
 		return err
 	}
 	d.db = nil
-	db, cfh, err := openDB(d.path, d.cache)
+	db, cfh, err := openDB(d.path, d.cache, d.maxOpenFiles)
 	if err != nil {
 		return err
 	}
@@ -265,6 +290,8 @@ func (d *RocksDB) writeBlock(block *bchain.Block, op int) error {
 		txAddressesMap := make(map[string]*TxAddresses)
 		balances := make(map[string]*AddrBalance)
 		if err := d.processAddressesUTXO(block, addresses, txAddressesMap, balances); err != nil {
+			// reinitialize balanceWorker so that there are no left balances in the queue
+			d.initUpdateBalancesWorker()
 			return err
 		}
 		if err := d.storeAddresses(wb, block.Height, addresses); err != nil {
@@ -347,7 +374,86 @@ func (d *RocksDB) resetValueSatToZero(valueSat *big.Int, addrDesc bchain.Address
 	valueSat.SetInt64(0)
 }
 
+func (d *RocksDB) GetAndResetConnectBlockStats() string {
+	s := fmt.Sprintf("%+v", d.cbs)
+	d.cbs = connectBlockStats{}
+	return s
+}
+
+type updateBalanceData struct {
+	valueSat          big.Int
+	strAddrDesc       string
+	addrDesc          bchain.AddressDescriptor
+	processed, output bool
+}
+
+func (d *RocksDB) initUpdateBalancesWorker() {
+	if d.chanUpdateBalance != nil {
+		close(d.chanUpdateBalance)
+	}
+	d.chanUpdateBalance = make(chan updateBalanceData, 16)
+	d.chanUpdateBalanceResult = make(chan error, 16)
+	go d.updateBalancesWorker()
+}
+
+// updateBalancesWorker is a single worker used to update balances in parallel to processAddressesUTXO
+func (d *RocksDB) updateBalancesWorker() {
+	var err error
+	for bd := range d.chanUpdateBalance {
+		ab, e := d.updateBalancesMap[bd.strAddrDesc]
+		if !e {
+			ab, err = d.GetAddrDescBalance(bd.addrDesc)
+			if err != nil {
+				d.chanUpdateBalanceResult <- err
+				continue
+			}
+			if ab == nil {
+				ab = &AddrBalance{}
+			}
+			d.updateBalancesMap[bd.strAddrDesc] = ab
+			d.cbs.balancesMiss++
+		} else {
+			d.cbs.balancesHit++
+		}
+		// add number of trx in balance only once, address can be multiple times in tx
+		if !bd.processed {
+			ab.Txs++
+		}
+		if bd.output {
+			ab.BalanceSat.Add(&ab.BalanceSat, &bd.valueSat)
+		} else {
+			ab.BalanceSat.Sub(&ab.BalanceSat, &bd.valueSat)
+			if ab.BalanceSat.Sign() < 0 {
+				d.resetValueSatToZero(&ab.BalanceSat, bd.addrDesc, "balance")
+			}
+			ab.SentSat.Add(&ab.SentSat, &bd.valueSat)
+		}
+		d.chanUpdateBalanceResult <- nil
+	}
+}
+
+func (d *RocksDB) dispatchUpdateBalance(dispatchedBalances int, valueSat *big.Int, strAddrDesc string, addrDesc bchain.AddressDescriptor, processed, output bool) (int, error) {
+loop:
+	for {
+		select {
+		// process as many results as possible
+		case err := <-d.chanUpdateBalanceResult:
+			if err != nil {
+				return 0, err
+			}
+			dispatchedBalances--
+		// send input to be processed
+		case d.chanUpdateBalance <- updateBalanceData{*valueSat, strAddrDesc, addrDesc, processed, output}:
+			dispatchedBalances++
+			break loop
+		}
+	}
+	return dispatchedBalances, nil
+}
+
 func (d *RocksDB) processAddressesUTXO(block *bchain.Block, addresses map[string][]outpoint, txAddressesMap map[string]*TxAddresses, balances map[string]*AddrBalance) error {
+	d.updateBalancesMap = balances
+	dispatchedBalances := 0
 	blockTxIDs := make([][]byte, len(block.Txs))
 	blockTxAddresses := make([]*TxAddresses, len(block.Txs))
 	// first process all outputs so that inputs can point to txs in this block
@@ -389,22 +495,10 @@ func (d *RocksDB) processAddressesUTXO(block *bchain.Block, addresses map[string
 				btxID: btxID,
 				index: int32(i),
 			})
-			ab, e := balances[strAddrDesc]
-			if !e {
-				ab, err = d.GetAddrDescBalance(addrDesc)
-				if err != nil {
-					return err
-				}
-				if ab == nil {
-					ab = &AddrBalance{}
-				}
-				balances[strAddrDesc] = ab
+			dispatchedBalances, err = d.dispatchUpdateBalance(dispatchedBalances, &output.ValueSat, strAddrDesc, addrDesc, processed, true)
+			if err != nil {
+				return err
 			}
-			// add number of trx in balance only once, address can be multiple times in tx
-			if !processed {
-				ab.Txs++
-			}
-			ab.BalanceSat.Add(&ab.BalanceSat, &output.ValueSat)
 		}
 	}
 	// process inputs
@@ -436,6 +530,9 @@ func (d *RocksDB) processAddressesUTXO(block *bchain.Block, addresses map[string
 					continue
 				}
 				txAddressesMap[stxID] = ita
+				d.cbs.txAddressesMiss++
+			} else {
+				d.cbs.txAddressesHit++
 			}
 			if len(ita.Outputs) <= int(input.Vout) {
 				glog.Warningf("rocksdb: height %d, tx %v, input tx %v vout %v is out of bounds of stored tx", block.Height, tx.Txid, input.Txid, input.Vout)
@@ -467,26 +564,16 @@ func (d *RocksDB) processAddressesUTXO(block *bchain.Block, addresses map[string
 				btxID: spendingTxid,
 				index: ^int32(i),
 			})
-			ab, e := balances[strAddrDesc]
-			if !e {
-				ab, err = d.GetAddrDescBalance(ot.AddrDesc)
-				if err != nil {
-					return err
-				}
-				if ab == nil {
-					ab = &AddrBalance{}
-				}
-				balances[strAddrDesc] = ab
+			dispatchedBalances, err = d.dispatchUpdateBalance(dispatchedBalances, &ot.ValueSat, strAddrDesc, ot.AddrDesc, processed, false)
+			if err != nil {
+				return err
 			}
-			// add number of trx in balance only once, address can be multiple times in tx
-			if !processed {
-				ab.Txs++
-			}
-			ab.BalanceSat.Sub(&ab.BalanceSat, &ot.ValueSat)
-			if ab.BalanceSat.Sign() < 0 {
-				d.resetValueSatToZero(&ab.BalanceSat, ot.AddrDesc, "balance")
-			}
-			ab.SentSat.Add(&ab.SentSat, &ot.ValueSat)
+		}
+	}
+	for i := 0; i < dispatchedBalances; i++ {
+		err := <-d.chanUpdateBalanceResult
+		if err != nil {
+			return err
 		}
 	}
 	return nil
@@ -876,10 +963,11 @@ func (d *RocksDB) writeAddressesNonUTXO(wb *gorocksdb.WriteBatch, block *bchain.
 
 // BlockInfo holds information about blocks kept in column height
 type BlockInfo struct {
-	Hash string
-	Time int64
-	Txs  uint32
-	Size uint32
+	Hash   string
+	Time   int64
+	Txs    uint32
+	Size   uint32
+	Height uint32 // Height is not packed!
 }
 
 func (d *RocksDB) packBlockInfo(block *BlockInfo) ([]byte, error) {
@@ -959,15 +1047,21 @@ func (d *RocksDB) GetBlockInfo(height uint32) (*BlockInfo, error) {
 		return nil, err
 	}
 	defer val.Free()
-	return d.unpackBlockInfo(val.Data())
+	bi, err := d.unpackBlockInfo(val.Data())
+	if err != nil {
+		return nil, err
+	}
+	bi.Height = height
+	return bi, err
 }
 
 func (d *RocksDB) writeHeightFromBlock(wb *gorocksdb.WriteBatch, block *bchain.Block, op int) error {
 	return d.writeHeight(wb, block.Height, &BlockInfo{
-		Hash: block.Hash,
-		Time: block.Time,
-		Txs:  uint32(len(block.Txs)),
-		Size: uint32(block.Size),
+		Hash:   block.Hash,
+		Time:   block.Time,
+		Txs:    uint32(len(block.Txs)),
+		Size:   uint32(block.Size),
+		Height: block.Height,
 	}, op)
 }
 
@@ -980,8 +1074,10 @@ func (d *RocksDB) writeHeight(wb *gorocksdb.WriteBatch, height uint32, bi *Block
 			return err
 		}
 		wb.PutCF(d.cfh[cfHeight], key, val)
+		d.is.UpdateBestHeight(height)
 	case opDelete:
 		wb.DeleteCF(d.cfh[cfHeight], key)
+		d.is.UpdateBestHeight(height - 1)
 	}
 	return nil
 }
@@ -1214,8 +1310,10 @@ func (d *RocksDB) DisconnectBlockRangeNonUTXO(lower uint32, higher uint32) error
 func dirSize(path string) (int64, error) {
 	var size int64
 	err := filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
-		if !info.IsDir() {
-			size += info.Size()
+		if err == nil {
+			if !info.IsDir() {
+				size += info.Size()
+			}
 		}
 		return err
 	})
@@ -1342,6 +1440,12 @@ func (d *RocksDB) LoadInternalState(rpcCoin string) (*common.InternalState, erro
 		}
 	}
 	is.DbColumns = nc
+	// after load, reset the synchronization data
+	is.IsSynchronized = false
+	is.IsMempoolSynchronized = false
+	var t time.Time
+	is.LastMempoolSync = t
+	is.SyncMode = false
 	return is, nil
 }
 

@@ -22,10 +22,10 @@
     "package_name": "backend-namecoin",
     "package_revision": "satoshilabs-1",
     "system_user": "namecoin",
-    "version": "0.13.99",
-    "binary_url": "https://namecoin.org/files/namecoin-core-0.13.99-name-tab-beta1-notreproduced/namecoin-0.13.99-x86_64-linux-gnu.tar.gz",
+    "version": "0.16.3",
+    "binary_url": "https://www.namecoin.org/files/namecoin-core-0.16.3/namecoin-0.16.3-x86_64-linux-gnu.tar.gz",
     "verification_type": "sha256",
-    "verification_source": "294b1106001d6ea2b9d9ee6a655021ef207a24e8f1dec8efd5899728b3849129",
+    "verification_source": "14ebaaf6f22f69b057a5bcb9b6959548f0a3f1b62cc113f19581d2297044827e",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
         "bin/namecoin-qt"
@@ -54,7 +54,7 @@
     "system_user": "blockbook-namecoin",
     "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
     "public_binding_template": ":{{.Ports.BlockbookPublic}}",
-    "explorer_url": "https://namecha.in/",
+    "explorer_url": "",
     "additional_params": "",
     "block_chain": {
       "parse": true,

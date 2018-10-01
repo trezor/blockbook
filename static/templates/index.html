@@ -1,0 +1,102 @@
+{{define "specific"}}{{$cs := .CoinShortcut}}{{$bb := .Info.Blockbook}}{{$be := .Info.Backend}}
+<h1>Application status</h1>
+{{- if $bb.InitialSync -}}
+<h3 class="bg-danger text-white" style="padding: 20px;">Application is now in initial synchronization and does not provide any data.</h3>
+{{- end -}}
+{{- if not $bb.SyncMode -}}
+<h3 class="bg-warning text-white" style="padding: 20px;">Synchronization with backend is disabled, the state of index is not up to date.</h3>
+{{- end -}}
+<div class="row">
+    <div class="col-md-6">
+        <h3>Blockbook</h3>
+        <table class="table data-table">
+            <tbody>
+                <tr>
+                    <td style="width: 33%;">Coin</td>
+                    <td class="data">{{$bb.Coin}}</td>
+                </tr>
+                <tr>
+                    <td>Host</td>
+                    <td class="data">{{$bb.Host}}</td>
+                </tr>
+                <tr>
+                    <td>Version / Commit / Build</td>
+                    <td class="data">{{$bb.Version}} / <a href="https://github.com/trezor/blockbook/commit/{{$bb.GitCommit}}" target="_blank" rel="noopener noreferrer">{{$bb.GitCommit}}</a> / {{$bb.BuildTime}}</td>
+                </tr>
+                <tr>
+                    <td>Synchronized</td>
+                    <td class="data {{if not $bb.InSync}}text-danger{{else}}text-success{{end}}">{{$bb.InSync}}</td>
+                </tr>
+                <tr>
+                    <td>Last Block</td>
+                    <td class="data">{{if .InternalExplorer}}<a href="/block/{{$bb.BestHeight}}">{{$bb.BestHeight}}</a>{{else}}{{$bb.BestHeight}}{{end}}</td>
+                </tr>
+                <tr>
+                    <td>Last Block Update</td>
+                    <td class="data">{{formatTime $bb.LastBlockTime}}</td>
+                </tr>
+                <tr>
+                    <td>Mempool in Sync</td>
+                    <td class="data {{if not $bb.InSyncMempool}}text-danger{{else}}text-success{{end}}">{{$bb.InSyncMempool}}</td>
+                </tr>
+                <tr>
+                    <td>Last Mempool Update</td>
+                    <td class="data">{{formatTime $bb.LastMempoolTime}}</td>
+                </tr>
+                <tr>
+                    <td>Size On Disk</td>
+                    <td class="data">{{$bb.DbSize}}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    <div class="col-md-6">
+        <h3>Backend</h3>
+        <table class="table data-table">
+            <tbody>
+                <tr>
+                    <td style="width: 30%;">Chain</td>
+                    <td class="data">{{$be.Chain}}</td>
+                </tr>
+                <tr>
+                    <td>Version</td>
+                    <td class="data">{{$be.Version}}</td>
+                </tr>
+                <tr>
+                    <td>Subversion</td>
+                    <td class="data">{{$be.Subversion}}</td>
+                </tr>
+                <tr>
+                    <td>Protocol Version</td>
+                    <td class="data">{{$be.ProtocolVersion}}</td>
+                </tr>
+                <tr>
+                    <td>Last Block</td>
+                    <td class="data">{{$be.Blocks}}</td>
+                </tr>
+                <tr>
+                    <td>Difficulty</td>
+                    <td class="data">{{$be.Difficulty}}</td>
+                </tr>
+                <tr>
+                    <td>Timeoffset</td>
+                    <td class="data">{{$be.Timeoffset}}</td>
+                </tr>
+                {{- if $be.SizeOnDisk -}}
+                <tr>
+                    <td>Size On Disk</td>
+                    <td class="data">{{$be.SizeOnDisk}}</td>
+                </tr>
+                {{- end -}}
+                {{- if $be.Warnings -}}
+                <tr>
+                    <td>Warnings</td>
+                    <td class="data text-warning">{{$be.Warnings}}</td>
+                </tr>
+                {{- end -}}
+            </tbody>
+        </table>
+    </div>
+</div>
+<span class="text-muted">{{$bb.About}}</span>
+{{end}}

@@ -38,7 +38,7 @@ func boolToChar(b bool) C.uchar {
 }
 */
 
-func createAndSetDBOptions(bloomBits int, c *gorocksdb.Cache) *gorocksdb.Options {
+func createAndSetDBOptions(bloomBits int, c *gorocksdb.Cache, maxOpenFiles int) *gorocksdb.Options {
 	blockOpts := gorocksdb.NewDefaultBlockBasedTableOptions()
 	blockOpts.SetBlockSize(32 << 10) // 32kB
 	blockOpts.SetBlockCache(c)
@@ -54,7 +54,7 @@ func createAndSetDBOptions(bloomBits int, c *gorocksdb.Cache) *gorocksdb.Options
 	opts.SetBytesPerSync(8 << 20)         // 8MB
 	opts.SetWriteBufferSize(1 << 27)      // 128MB
 	opts.SetMaxBytesForLevelBase(1 << 27) // 128MB
-	opts.SetMaxOpenFiles(25000)
+	opts.SetMaxOpenFiles(maxOpenFiles)
 	opts.SetCompression(gorocksdb.LZ4HCCompression)
 	return opts
 }

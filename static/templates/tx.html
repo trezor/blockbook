@@ -1,7 +1,7 @@
 {{define "specific"}}{{$cs := .CoinShortcut}}{{$tx := .Tx}}
 <h1>Transaction</h1>
-<div class="alert alert-data">
-    <span class="ellipsis data">{{$tx.Txid}}</span>
+<div class="alert alert-data ellipsis">
+    <span class="data">{{$tx.Txid}}</span>
 </div>
 <h3>Summary</h3>
 <div class="data-div">
@@ -40,5 +40,11 @@
 <h3>Details</h3>
 <div class="data-div">
     {{template "txdetail" .}}
+</div>
+<div class="data-div">
+    <h5>Hex</h5>
+    <div class="alert alert-data" style="word-wrap: break-word; font-size: smaller;">
+        <span>{{$tx.Hex}}</span>
+    </div>
 </div>
 {{end}}

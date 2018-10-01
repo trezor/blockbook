@@ -53,11 +53,21 @@ func Test_GetAddrDescFromAddress_Mainnet(t *testing.T) {
 	}
 }
 
-var testParseBlockTxs = map[int][]string{
-	40000: []string{
-		"e193a821393b20b99f4a4e05a481368ef8a8cfd43d0c45bdad7f53bc9535e844",
-		"ddcbf95797e81dd04127885bd001e96695b717e11c52721f6e8ee53f6dea8a6f",
-		"31ff728f24200f59fa4958e6c26de03d172b320e6eef2b8abecf6f94d01dd4ae",
+type testBlock struct {
+	size int
+	time int64
+	txs  []string
+}
+
+var testParseBlockTxs = map[int]testBlock{
+	40000: testBlock{
+		size: 1385,
+		time: 1327728573,
+		txs: []string{
+			"e193a821393b20b99f4a4e05a481368ef8a8cfd43d0c45bdad7f53bc9535e844",
+			"ddcbf95797e81dd04127885bd001e96695b717e11c52721f6e8ee53f6dea8a6f",
+			"31ff728f24200f59fa4958e6c26de03d172b320e6eef2b8abecf6f94d01dd4ae",
+		},
 	},
 }
 
@@ -84,7 +94,7 @@ func helperLoadBlock(t *testing.T, height int) []byte {
 func TestParseBlock(t *testing.T) {
 	p := NewNamecoinParser(GetChainParams("main"), &btc.Configuration{})
 
-	for height, txs := range testParseBlockTxs {
+	for height, tb := range testParseBlockTxs {
 		b := helperLoadBlock(t, height)
 
 		blk, err := p.ParseBlock(b)
@@ -92,11 +102,19 @@ func TestParseBlock(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if len(blk.Txs) != len(txs) {
-			t.Errorf("ParseBlock() number of transactions: got %d, want %d", len(blk.Txs), len(txs))
+		if blk.Size != tb.size {
+			t.Errorf("ParseBlock() block size: got %d, want %d", blk.Size, tb.size)
 		}
 
-		for ti, tx := range txs {
+		if blk.Time != tb.time {
+			t.Errorf("ParseBlock() block time: got %d, want %d", blk.Time, tb.time)
+		}
+
+		if len(blk.Txs) != len(tb.txs) {
+			t.Errorf("ParseBlock() number of transactions: got %d, want %d", len(blk.Txs), len(tb.txs))
+		}
+
+		for ti, tx := range tb.txs {
 			if blk.Txs[ti].Txid != tx {
 				t.Errorf("ParseBlock() transaction %d: got %s, want %s", ti, blk.Txs[ti].Txid, tx)
 			}

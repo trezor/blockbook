@@ -2,8 +2,13 @@ package api
 
 import (
 	"blockbook/bchain"
+	"blockbook/common"
+	"blockbook/db"
 	"math/big"
+	"time"
 )
+
+const BlockbookAbout = "Blockbook - blockchain indexer for TREZOR wallet https://trezor.io/. Do not use for any other purpose."
 
 type ApiError struct {
 	Text   string
@@ -73,10 +78,17 @@ type Tx struct {
 	Size          int    `json:"size,omitempty"`
 	ValueIn       string `json:"valueIn"`
 	Fees          string `json:"fees"`
-	WithSpends    bool   `json:"withSpends,omitempty"`
+	Hex           string `json:"hex"`
+}
+
+type Paging struct {
+	Page        int `json:"page"`
+	TotalPages  int `json:"totalPages"`
+	ItemsOnPage int `json:"itemsOnPage"`
 }
 
 type Address struct {
+	Paging
 	AddrStr                 string   `json:"addrStr"`
 	Balance                 string   `json:"balance"`
 	TotalReceived           string   `json:"totalReceived"`
@@ -86,7 +98,41 @@ type Address struct {
 	TxApperances            int      `json:"txApperances"`
 	Transactions            []*Tx    `json:"txs,omitempty"`
 	Txids                   []string `json:"transactions,omitempty"`
-	Page                    int      `json:"page"`
-	TotalPages              int      `json:"totalPages"`
-	TxsOnPage               int      `json:"txsOnPage"`
+}
+
+type Blocks struct {
+	Paging
+	Blocks []db.BlockInfo `json:"blocks"`
+}
+
+type Block struct {
+	Paging
+	bchain.BlockInfo
+	TxCount      int   `json:"TxCount"`
+	Transactions []*Tx `json:"txs,omitempty"`
+}
+
+type BlockbookInfo struct {
+	Coin              string                       `json:"coin"`
+	Host              string                       `json:"host"`
+	Version           string                       `json:"version"`
+	GitCommit         string                       `json:"gitcommit"`
+	BuildTime         string                       `json:"buildtime"`
+	SyncMode          bool                         `json:"syncMode"`
+	InitialSync       bool                         `json:"initialsync"`
+	InSync            bool                         `json:"inSync"`
+	BestHeight        uint32                       `json:"bestHeight"`
+	LastBlockTime     time.Time                    `json:"lastBlockTime"`
+	InSyncMempool     bool                         `json:"inSyncMempool"`
+	LastMempoolTime   time.Time                    `json:"lastMempoolTime"`
+	MempoolSize       int                          `json:"mempoolSize"`
+	DbSize            int64                        `json:"dbSize"`
+	DbSizeFromColumns int64                        `json:"dbSizeFromColumns,omitempty"`
+	DbColumns         []common.InternalStateColumn `json:"dbColumns,omitempty"`
+	About             string                       `json:"about"`
+}
+
+type SystemInfo struct {
+	Blockbook *BlockbookInfo    `json:"blockbook"`
+	Backend   *bchain.ChainInfo `json:"backend"`
 }
