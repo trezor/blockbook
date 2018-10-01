@@ -1,0 +1,35 @@
+{
+    "handleFork": {
+        "syncRanges": [
+            {"lower": 1414526, "upper": 1414546}
+        ],
+        "fakeBlocks": {
+            "1414544": {
+                "height": 1414544,
+                "hash": "00000000aa4bbe624efc4cc0be98f1d49b03abca094a9785ad1e50c20e7634b1"
+            },
+            "1414545": {
+                "height": 1414545,
+                "hash": "0000000000035fd65c471e0645190d5392de4dc626358bc001c753ade3b8a44c"
+            },
+            "1414546": {
+                "height": 1414546,
+                "hash": "000000000003b4360cebb2c29d7798c22ae31b8ba83941ebed0c61fb56beb765"
+            }
+        },
+        "realBlocks": {
+            "1414544": {
+                "height": 1414544,
+                "hash": "0000000000012b55c84faf61e201a1c64c6a57e8be3d2b5e11868c39cab5027e"
+            },
+            "1414545": {
+                "height": 1414545,
+                "hash": "0000000017020556bdeac9d3bbd2361d11aba79ac39f8a161170ac22d225856d"
+            },
+            "1414546": {
+                "height": 1414546,
+                "hash": "0000000000000000b169d17aee62e9f5758a38c7bead2676fc4e4a22a51f17b9"
+            }
+        }
+    }
+}

@@ -6,6 +6,10 @@ import (
 	"blockbook/bchain"
 )
 
+func SetBlockChain(w *SyncWorker, chain bchain.BlockChain) {
+	w.chain = chain
+}
+
 func ConnectBlocks(w *SyncWorker, onNewBlock bchain.OnNewBlockFunc, initialSync bool) error {
 	return w.connectBlocks(onNewBlock, initialSync)
 }
