@@ -36,6 +36,67 @@ type Config struct {
 	Ports map[string]uint16 `json:"ports"`
 }
 
+func checkPorts() int {
+	ports := make(map[uint16][]string)
+	status := 0
+
+	files, err := ioutil.ReadDir(inputDir)
+	if err != nil {
+		panic(err)
+	}
+
+	for _, fi := range files {
+		if fi.IsDir() || fi.Name()[0] == '.' {
+			continue
+		}
+
+		path := filepath.Join(inputDir, fi.Name())
+		f, err := os.Open(path)
+		if err != nil {
+			panic(fmt.Errorf("%s: %s", path, err))
+		}
+		defer f.Close()
+
+		v := Config{}
+		d := json.NewDecoder(f)
+		err = d.Decode(&v)
+		if err != nil {
+			panic(fmt.Errorf("%s: json: %s", path, err))
+		}
+
+		if _, ok := v.Ports["blockbook_internal"]; !ok {
+			fmt.Printf("%s: missing blockbook_internal port\n", v.Coin.Name)
+			status = 1
+		}
+		if _, ok := v.Ports["blockbook_public"]; !ok {
+			fmt.Printf("%s: missing blockbook_public port\n", v.Coin.Name)
+			status = 1
+		}
+		if _, ok := v.Ports["backend_rpc"]; !ok {
+			fmt.Printf("%s: missing backend_rpc port\n", v.Coin.Name)
+			status = 1
+		}
+
+		for _, port := range v.Ports {
+			if port > 0 {
+				ports[port] = append(ports[port], v.Coin.Name)
+			}
+		}
+	}
+
+	for port, coins := range ports {
+		if len(coins) > 1 {
+			fmt.Printf("port %d: registered by %q\n", port, coins)
+			status = 1
+		}
+	}
+
+	if status != 0 {
+		fmt.Println("Got some errors")
+	}
+	return status
+}
+
 func main() {
 	output := "stdout"
 	if len(os.Args) > 1 {
@@ -46,6 +107,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "    -w    write output to %s instead of stdout\n", outputFile)
 			os.Exit(1)
 		}
+	}
+
+	status := checkPorts()
+	if status != 0 {
+		os.Exit(status)
 	}
 
 	slice, err := loadPortInfo(inputDir)

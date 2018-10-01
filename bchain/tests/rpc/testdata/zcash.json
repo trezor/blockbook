@@ -1,6 +1,7 @@
 {
     "blockHeight": 349410,
     "blockHash": "000000000101b45343aeda139d06d7f188393a5cf4adabfa191cb1828d67f6bd",
+    "blockTime": 1530264033,
     "blockTxs": [
         "6ebf0114454ba776f878cf726be3cb65964b21fad8dfca5d2ee69bd4a32cfa97",
         "3de894528d5f8dbe14f726244be70a88f9b738020215c91b2893fa5a46f48c14",
@@ -22,6 +23,7 @@
             "blocktime": 1530264033,
             "time": 1530264033,
             "locktime": 349399,
+            "version": 3,
             "vin": [
                 {
                     "txid": "9c9faac29b0fa1b0e683727f2973bfcb87e4baadd07e9c997b431a31713cb30c",
@@ -57,6 +59,7 @@
             "blocktime": 1530264033,
             "time": 1530264033,
             "locktime": 0,
+            "version": 3,
             "vin": [
                 {
                     "txid": "4440c8e9d5b57da7ca0fb3f62ec13f392267aeb797c123bb01e850adf8573dd0",

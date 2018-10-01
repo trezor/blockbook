@@ -7,6 +7,7 @@ import (
 	"blockbook/db"
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -305,6 +306,29 @@ func txToResTx(tx *bchain.Tx, height int, hi []txInputs, ho []txOutputs) resTx {
 	}
 }
 
+func addressInSlice(s, t []string) string {
+	for _, sa := range s {
+		for _, ta := range t {
+			if ta == sa {
+				return sa
+			}
+		}
+	}
+	return ""
+}
+
+func (s *SocketIoServer) getAddressesFromVout(vout *bchain.Vout) ([]string, error) {
+	addrDesc, err := s.chainParser.GetAddrDescFromVout(vout)
+	if err != nil {
+		return nil, err
+	}
+	voutAddr, _, err := s.chainParser.GetAddressesFromAddrDesc(addrDesc)
+	if err != nil {
+		return nil, err
+	}
+	return voutAddr, nil
+}
+
 func (s *SocketIoServer) getAddressHistory(addr []string, opts *addrOpts) (res resultGetAddressHistory, err error) {
 	txr, err := s.getAddressTxids(addr, opts)
 	if err != nil {
@@ -329,22 +353,26 @@ func (s *SocketIoServer) getAddressHistory(addr []string, opts *addrOpts) (res r
 			for _, vout := range tx.Vout {
 				aoh := vout.ScriptPubKey.Hex
 				ao := txOutputs{
-					Satoshis: int64(vout.Value*1E8 + 0.5),
+					Satoshis: vout.ValueSat.Int64(),
 					Script:   &aoh,
 				}
-				if vout.Address != nil {
-					a := vout.Address.String()
-					ao.Address = &a
-					if vout.Address.InSlice(addr) {
-						hi, ok := ads[a]
-						if ok {
-							hi.OutputIndexes = append(hi.OutputIndexes, int(vout.N))
-						} else {
-							hi := addressHistoryIndexes{}
-							hi.InputIndexes = make([]int, 0)
-							hi.OutputIndexes = append(hi.OutputIndexes, int(vout.N))
-							ads[a] = hi
-						}
+				voutAddr, err := s.getAddressesFromVout(&vout)
+				if err != nil {
+					return res, err
+				}
+				if len(voutAddr) > 0 {
+					ao.Address = &voutAddr[0]
+				}
+				a := addressInSlice(voutAddr, addr)
+				if a != "" {
+					hi, ok := ads[a]
+					if ok {
+						hi.OutputIndexes = append(hi.OutputIndexes, int(vout.N))
+					} else {
+						hi := addressHistoryIndexes{}
+						hi.InputIndexes = make([]int, 0)
+						hi.OutputIndexes = append(hi.OutputIndexes, int(vout.N))
+						ads[a] = hi
 					}
 				}
 				ho = append(ho, ao)
@@ -452,6 +480,7 @@ func unmarshalEstimateSmartFee(params []byte) (blocks int, conservative bool, er
 }
 
 type resultEstimateSmartFee struct {
+	// for compatibility reasons use float64
 	Result float64 `json:"result"`
 }
 
@@ -460,7 +489,7 @@ func (s *SocketIoServer) estimateSmartFee(blocks int, conservative bool) (res re
 	if err != nil {
 		return
 	}
-	res.Result = fee
+	res.Result, err = strconv.ParseFloat(s.chainParser.AmountToDecimalString(&fee), 64)
 	return
 }
 
@@ -479,6 +508,7 @@ func unmarshalEstimateFee(params []byte) (blocks int, err error) {
 }
 
 type resultEstimateFee struct {
+	// for compatibility reasons use float64
 	Result float64 `json:"result"`
 }
 
@@ -487,7 +517,7 @@ func (s *SocketIoServer) estimateFee(blocks int) (res resultEstimateFee, err err
 	if err != nil {
 		return
 	}
-	res.Result = fee
+	res.Result, err = strconv.ParseFloat(s.chainParser.AmountToDecimalString(&fee), 64)
 	return
 }
 
@@ -521,7 +551,7 @@ func (s *SocketIoServer) getInfo() (res resultGetInfo, err error) {
 	res.Result.Network = s.chain.GetNetworkName()
 	res.Result.Subversion = s.chain.GetSubversion()
 	res.Result.CoinName = s.chain.GetCoinName()
-	res.Result.About = blockbookAbout
+	res.Result.About = api.BlockbookAbout
 	return
 }
 
@@ -578,17 +608,38 @@ func (s *SocketIoServer) getDetailedTransaction(txid string) (res resultGetDetai
 			OutputIndex: int(vin.Vout),
 		}
 		if vin.Txid != "" {
-			otx, _, err := s.txCache.GetTransaction(vin.Txid, bestheight)
+			var voutAddr []string
+			// load spending addresses from TxAddresses
+			ta, err := s.db.GetTxAddresses(vin.Txid)
 			if err != nil {
 				return res, err
 			}
-			if len(otx.Vout) > int(vin.Vout) {
-				vout := &otx.Vout[vin.Vout]
-				if vout.Address != nil {
-					a := vout.Address.String()
-					ai.Address = &a
+			if ta == nil {
+				// the tx may be in mempool, try to load it from backend
+				otx, _, err := s.txCache.GetTransaction(vin.Txid, bestheight)
+				if err != nil {
+					return res, err
 				}
-				ai.Satoshis = int64(vout.Value*1E8 + 0.5)
+				if len(otx.Vout) > int(vin.Vout) {
+					vout := &otx.Vout[vin.Vout]
+					voutAddr, err = s.getAddressesFromVout(vout)
+					if err != nil {
+						return res, err
+					}
+					ai.Satoshis = vout.ValueSat.Int64()
+				}
+			} else {
+				if len(ta.Outputs) > int(vin.Vout) {
+					output := &ta.Outputs[vin.Vout]
+					ai.Satoshis = output.ValueSat.Int64()
+					voutAddr, _, err = output.Addresses(s.chainParser)
+					if err != nil {
+						return res, err
+					}
+				}
+			}
+			if len(voutAddr) > 0 {
+				ai.Address = &voutAddr[0]
 			}
 		}
 		hi = append(hi, ai)
@@ -596,12 +647,15 @@ func (s *SocketIoServer) getDetailedTransaction(txid string) (res resultGetDetai
 	for _, vout := range tx.Vout {
 		aos := vout.ScriptPubKey.Hex
 		ao := txOutputs{
-			Satoshis: int64(vout.Value*1E8 + 0.5),
+			Satoshis: vout.ValueSat.Int64(),
 			Script:   &aos,
 		}
-		if vout.Address != nil {
-			a := vout.Address.String()
-			ao.Address = &a
+		voutAddr, err := s.getAddressesFromVout(&vout)
+		if err != nil {
+			return res, err
+		}
+		if len(voutAddr) > 0 {
+			ao.Address = &voutAddr[0]
 		}
 		ho = append(ho, ao)
 	}

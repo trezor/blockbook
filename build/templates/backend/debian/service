@@ -7,6 +7,7 @@ After=network.target
 ExecStart={{template "Backend.ExecCommandTemplate" .}}
 User={{.Backend.SystemUser}}
 Restart=on-failure
+TimeoutStopSec=300
 WorkingDirectory={{.Env.BackendInstallPath}}/{{.Coin.Alias}}
 {{if eq .Backend.ServiceType "forking" -}}
 Type=forking

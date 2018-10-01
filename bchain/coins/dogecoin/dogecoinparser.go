@@ -6,8 +6,8 @@ import (
 	"blockbook/bchain/coins/utils"
 	"bytes"
 
-	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/wire"
+	"github.com/jakm/btcutil/chaincfg"
 )
 
 const (
@@ -18,11 +18,11 @@ var (
 	MainNetParams chaincfg.Params
 )
 
-func init() {
+func initParams() {
 	MainNetParams = chaincfg.MainNetParams
 	MainNetParams.Net = MainnetMagic
-	MainNetParams.PubKeyHashAddrID = 30
-	MainNetParams.ScriptHashAddrID = 22
+	MainNetParams.PubKeyHashAddrID = []byte{30}
+	MainNetParams.ScriptHashAddrID = []byte{22}
 
 	err := chaincfg.Register(&MainNetParams)
 	if err != nil {
@@ -43,6 +43,9 @@ func NewDogecoinParser(params *chaincfg.Params, c *btc.Configuration) *DogecoinP
 // GetChainParams contains network parameters for the main Dogecoin network,
 // and the test Dogecoin network
 func GetChainParams(chain string) *chaincfg.Params {
+	if MainNetParams.Name == "" {
+		initParams()
+	}
 	switch chain {
 	default:
 		return &MainNetParams
@@ -75,5 +78,11 @@ func (p *DogecoinParser) ParseBlock(b []byte) (*bchain.Block, error) {
 		txs[ti] = p.TxFromMsgTx(t, false)
 	}
 
-	return &bchain.Block{Txs: txs}, nil
+	return &bchain.Block{
+		BlockHeader: bchain.BlockHeader{
+			Size: len(b),
+			Time: h.Timestamp.Unix(),
+		},
+		Txs: txs,
+	}, nil
 }

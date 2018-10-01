@@ -24,6 +24,7 @@ func NewDogecoinRPC(config json.RawMessage, pushHandler func(bchain.Notification
 		b.(*btc.BitcoinRPC),
 	}
 	s.RPCMarshaler = btc.JSONMarshalerV1{}
+	s.ChainConfig.SupportsEstimateSmartFee = false
 
 	return s, nil
 }
@@ -68,9 +69,4 @@ func (b *DogecoinRPC) GetBlock(hash string, height uint32) (*bchain.Block, error
 		return b.GetBlockFull(hash)
 	}
 	return b.GetBlockWithoutHeader(hash, height)
-}
-
-// EstimateSmartFee returns fee estimation.
-func (b *DogecoinRPC) EstimateSmartFee(blocks int, conservative bool) (float64, error) {
-	return b.EstimateFee(blocks)
 }

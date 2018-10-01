@@ -15,12 +15,36 @@ a {
     text-decoration: none;
 }
 
+h1 small {
+    font-size: 65%;
+}
+
+h3 {
+    margin-top: 20px;
+}
+
 .octicon {
     color: #777;
     display: inline-block;
     vertical-align: text-top;
     fill: currentColor;
     height: 16px;
+}
+
+.navbar-form {
+    padding-bottom: 1px;
+}
+
+.navbar-form .form-control {
+    background-color: gray;
+    color: #fff;
+    border-radius: 3px;
+    -webkit-border-radius: 3px;
+    -moz-border-radius: 3px;
+    border: 0;
+    -webkit-box-shadow: 1px 1px 0 0 rgba(255, 255, 255, .41), inset 1px 1px 3px 0 rgba(0, 0, 0, .10);
+    -moz-box-shadow: 1px 1px 0 0 rgba(255, 255, 255, .41), inset 1px 1px 3px 0 rgba(0, 0, 0, .10);
+    box-shadow: 1px 1px 0 0 rgba(255, 255, 255, .41), inset 1px 1px 3px 0 rgba(0, 0, 0, .10);
 }
 
 @media (min-width: 768px) {
@@ -39,6 +63,9 @@ a {
     .octicon {
         height: 24px;
     }
+    .navbar-form .form-control {
+        width: 230px;
+    }
 }
 
 @media (min-width: 1200px) {
@@ -50,6 +77,9 @@ a {
     }
     .octicon {
         height: 32px;
+    }
+    .navbar-form .form-control {
+        width: 360px;
     }
 }
 
@@ -75,7 +105,6 @@ a {
     color: rgba(255, 255, 255);
     font-weight: bold;
     font-size: 19px;
-    padding-left: 35px;
 }
 
 .trezor-logo-svg-white svg {
@@ -106,7 +135,7 @@ a {
 
 .line-top {
     border-top: 1px solid #EAEAEA;
-    padding: 15px 0 0;
+    padding: 10px 0 0;
 }
 
 .line-mid {
@@ -128,6 +157,11 @@ a {
     white-space: nowrap;
     vertical-align: baseline;
     border-radius: .25em;
+    margin-top: 5px;
+}
+
+.txvalues:not(:last-child) {
+    margin-right: 5px;
 }
 
 .txvalues-default {
@@ -149,14 +183,17 @@ a {
 }
 
 .ellipsis {
-    display: block;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
 .data-div {
-    margin: 20px 0;
+    margin: 20px 0 30px 0;
+}
+
+.data-div .col-md-10 {
+    padding-left: 0;
 }
 
 .data-table {
@@ -169,10 +206,69 @@ a {
     padding: .4rem;
 }
 
+.data-table span.ellipsis {
+    max-width: 100%;
+}
+
 .data {
     font-weight: bold;
 }
 
 .alert .data-table {
     margin: 0;
+}
+
+.navbar-nav .nav-link {
+    padding-right: 0;
+    padding-left: .25rem;
+}
+
+.navbar-text .nav-link {
+    padding: 0;
+}
+
+::-webkit-input-placeholder {
+    color: #CCC!important;
+    font-style: italic;
+    font-size: 14px;
+}
+
+::-moz-placeholder {
+    color: #CCC!important;
+    font-style: italic;
+    font-size: 14px;
+}
+
+.h-container {
+    display: -webkit-box;
+    display: -ms-flexbox;
+    -ms-flex-wrap: wrap;
+    flex-wrap: wrap;
+}
+
+.h-container-6 {
+    width: 50%;
+    margin: 0;
+}
+
+.h-container ul {
+    margin: 0;
+}
+
+.page-link {
+    color: #428bca;
+}
+
+.page-text {
+    display: block;
+    padding: .5rem .3rem;
+    line-height: 1.25;
+}
+
+.page-link {
+    color: #428bca;
+}
+
+.page-item.active .page-link {
+    background-color: #428bca;
 }

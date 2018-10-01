@@ -2,30 +2,39 @@
 <div class="alert alert-data">
     <div class="row line-bot">
         <div class="col-xs-7 col-md-8 ellipsis">
-            <a href="/explorer/tx/{{$tx.Txid}}">{{$tx.Txid}}</a>
+            <a href="/tx/{{$tx.Txid}}">{{$tx.Txid}}</a>
         </div>
-        {{if $tx.Confirmations}}
+        {{- if $tx.Confirmations -}}
         <div class="col-xs-5 col-md-4 text-muted text-right">mined {{formatUnixTime $tx.Blocktime}}</div>
-        {{end}}
+        {{- end -}}
     </div>
     <div class="row line-mid">
         <div class="col-md-5">
             <div class="row">
                 <table class="table data-table">
                     <tbody>
-                        {{range $vin := $tx.Vin}}
+                        {{- range $vin := $tx.Vin -}}
                         <tr>
                             <td>
-                                {{if $vin.Txid}}
-                                <span class="float-left ellipsis">
-                                    {{if $vin.Addr}}{{if eq $vin.Addr $addr}}{{$vin.Addr}}{{else}}
-                                    <a href="/explorer/address/{{$vin.Addr}}">{{$vin.Addr}}</a>{{end}}{{else}}Unparsed address{{end}}
+                                {{- if $vin.Txid -}}
+                                <a class="float-left text-muted" href="/tx/{{$vin.Txid}}" title="Outpoint {{$vin.Txid}},{{$vin.Vout}}">➡&nbsp;</a>
+                                {{- end -}}
+                                {{- range $a := $vin.Addresses -}}
+                                <span class="ellipsis float-left">
+                                    {{if and (ne $a $addr) $vin.Searchable}}<a href="/address/{{$a}}">{{$a}}</a>{{else}}{{$a}}{{end}}
                                 </span>
-                                <span class="float-right{{if eq $vin.Addr $addr}} text-danger{{end}}">{{formatAmount $vin.Value}} {{$cs}}</span>
-                                {{else}}No Inputs (Newly Generated Coins){{end}}
+                                {{- else -}}
+                                <span class="float-left">No Inputs (Newly Generated Coins)</span>
+                                {{- end -}}{{- if $vin.Addresses -}}
+                                <span class="float-right{{if stringInSlice $addr $vin.Addresses}} text-danger{{end}}">{{formatAmount $vin.Value}} {{$cs}}</span>
+                                {{- end -}}
                             </td>
                         </tr>
-                        {{end}}
+                        {{- else -}}
+                        <tr>
+                            <td>No Inputs</td>
+                        </tr>
+                        {{- end -}}
                     </tbody>
                 </table>
             </div>
@@ -39,21 +48,28 @@
             <div class="row">
                 <table class="table data-table">
                     <tbody>
-                        {{range $vout := $tx.Vout}}
+                        {{- range $vout := $tx.Vout -}}
                         <tr>
                             <td>
-                                {{range $a := $vout.ScriptPubKey.Addresses}}
+                                {{- range $a := $vout.ScriptPubKey.Addresses -}}
                                 <span class="ellipsis float-left">
-                                    {{if eq $a $addr}}{{$a}}{{else}}
-                                    <a href="/explorer/address/{{$a}}">{{$a}}</a>{{end}}
+                                    {{- if and (ne $a $addr) $vout.ScriptPubKey.Searchable}}<a href="/address/{{$a}}">{{$a}}</a>{{else}}{{$a}}{{- end -}}
                                 </span>
-                                {{else}}
+                                {{- else -}}
                                 <span class="float-left">Unparsed address</span>
-                                {{end}}
-                                <span class="float-right{{if stringInSlice $addr $vout.ScriptPubKey.Addresses}} text-success{{end}}">{{formatAmount $vout.Value}} {{$cs}}</span>
+                                {{- end -}}
+                                <span class="float-right{{if stringInSlice $addr $vout.ScriptPubKey.Addresses}} text-success{{end}}">
+                                    {{formatAmount $vout.Value}} {{$cs}} {{if $vout.Spent}}<a class="text-danger" href="{{if $vout.SpentTxID}}/tx/{{$vout.SpentTxID}}{{else}}/spending/{{$tx.Txid}}/{{$vout.N}}{{end}}" title="Spent">➡</a>{{else -}}
+                                    <span class="text-success" title="Unspent"> <b>×</b></span>
+                                    {{- end -}}
+                                </span>
                             </td>
                         </tr>
-                        {{end}}
+                        {{- else -}}
+                        <tr>
+                            <td>No Outputs</td>
+                        </tr>
+                        {{- end -}}
                     </tbody>
                 </table>
             </div>
@@ -61,16 +77,16 @@
     </div>
     <div class="row line-top">
         <div class="col-xs-6 col-sm-4 col-md-4">
-            {{if $tx.Fees}}
+            {{- if $tx.Fees -}}
             <span class="txvalues txvalues-default">Fee: {{formatAmount $tx.Fees}} {{$cs}}</span>
-            {{end}}
+            {{- end -}}
         </div>
         <div class="col-xs-6 col-sm-8 col-md-8 text-right">
-            {{if $tx.Confirmations}}
+            {{- if $tx.Confirmations -}}
             <span class="txvalues txvalues-success">{{$tx.Confirmations}} Confirmations</span>
-            {{else}}
+            {{- else -}}
             <span class="txvalues txvalues-danger ng-hide">Unconfirmed Transaction!</span>
-            {{end}}
+            {{- end -}}
             <span class="txvalues txvalues-primary">{{formatAmount $tx.ValueOut}} {{$cs}}</span>
         </div>
     </div>

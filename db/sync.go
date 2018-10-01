@@ -67,6 +67,7 @@ func (w *SyncWorker) ResyncIndex(onNewBlock bchain.OnNewBlockFunc) error {
 	case errSynced:
 		// this is not actually error but flag that resync wasn't necessary
 		w.is.FinishedSyncNoChange()
+		w.metrics.IndexDBSize.Set(float64(w.db.DatabaseSizeOnDisk()))
 		return nil
 	}
 
@@ -203,26 +204,46 @@ func (w *SyncWorker) ConnectBlocksParallel(lower, higher uint32) error {
 	}
 	var err error
 	var wg sync.WaitGroup
-	bch := make(chan *bchain.Block, w.syncWorkers)
+	bch := make([]chan *bchain.Block, w.syncWorkers)
+	for i := 0; i < w.syncWorkers; i++ {
+		bch[i] = make(chan *bchain.Block)
+	}
 	hch := make(chan hashHeight, w.syncWorkers)
 	hchClosed := atomic.Value{}
 	hchClosed.Store(false)
-	var getBlockMux sync.Mutex
-	getBlockCond := sync.NewCond(&getBlockMux)
-	lastConnectedBlock := lower - 1
 	writeBlockDone := make(chan struct{})
+	terminating := make(chan struct{})
 	writeBlockWorker := func() {
 		defer close(writeBlockDone)
+		bc, err := w.db.InitBulkConnect()
+		if err != nil {
+			glog.Error("sync: InitBulkConnect error ", err)
+		}
 		lastBlock := lower - 1
-		for b := range bch {
-			if lastBlock+1 != b.Height {
-				glog.Error("writeBlockWorker skipped block, last connected block", lastBlock, ", new block ", b.Height)
+		keep := uint32(w.chain.GetChainParser().KeepBlockAddresses())
+	WriteBlockLoop:
+		for {
+			select {
+			case b := <-bch[(lastBlock+1)%uint32(w.syncWorkers)]:
+				if b == nil {
+					// channel is closed and empty - work is done
+					break WriteBlockLoop
+				}
+				if b.Height != lastBlock+1 {
+					glog.Fatal("writeBlockWorker skipped block, expected block ", lastBlock+1, ", new block ", b.Height)
+				}
+				err := bc.ConnectBlock(b, b.Height+keep > higher)
+				if err != nil {
+					glog.Fatal("writeBlockWorker ", b.Height, " ", b.Hash, " error ", err)
+				}
+				lastBlock = b.Height
+			case <-terminating:
+				break WriteBlockLoop
 			}
-			err := w.db.ConnectBlock(b)
-			if err != nil {
-				glog.Error("writeBlockWorker ", b.Height, " ", b.Hash, " error ", err)
-			}
-			lastBlock = b.Height
+		}
+		err = bc.Close()
+		if err != nil {
+			glog.Error("sync: bulkconnect.Close error ", err)
 		}
 		glog.Info("WriteBlock exiting...")
 	}
@@ -230,6 +251,7 @@ func (w *SyncWorker) ConnectBlocksParallel(lower, higher uint32) error {
 		defer wg.Done()
 		var err error
 		var block *bchain.Block
+	GetBlockLoop:
 		for hh := range hch {
 			for {
 				block, err = w.chain.GetBlock(hh.hash, hh.height)
@@ -249,24 +271,11 @@ func (w *SyncWorker) ConnectBlocksParallel(lower, higher uint32) error {
 			if w.dryRun {
 				continue
 			}
-			getBlockMux.Lock()
-			for {
-				// we must make sure that the blocks are written to db in the correct order
-				if lastConnectedBlock+1 == hh.height {
-					// we have the right block, pass it to the writeBlockWorker
-					lastConnectedBlock = hh.height
-					bch <- block
-					getBlockCond.Broadcast()
-					break
-				}
-				// break the endless loop on OS signal
-				if hchClosed.Load() == true {
-					break
-				}
-				// wait for the time this block is top be passed to the writeBlockWorker
-				getBlockCond.Wait()
+			select {
+			case bch[hh.height%uint32(w.syncWorkers)] <- block:
+			case <-terminating:
+				break GetBlockLoop
 			}
-			getBlockMux.Unlock()
 		}
 		glog.Info("getBlockWorker ", i, " exiting...")
 	}
@@ -276,11 +285,15 @@ func (w *SyncWorker) ConnectBlocksParallel(lower, higher uint32) error {
 	}
 	go writeBlockWorker()
 	var hash string
+	start := time.Now()
+	msTime := time.Now().Add(1 * time.Minute)
 ConnectLoop:
 	for h := lower; h <= higher; {
 		select {
 		case <-w.chanOsSignal:
 			err = errors.Errorf("connectBlocksParallel interrupted at height %d", h)
+			// signal all workers to terminate their loops (error loops are interrupted below)
+			close(terminating)
 			break ConnectLoop
 		default:
 			hash, err = w.chain.GetBlockHash(h)
@@ -292,22 +305,25 @@ ConnectLoop:
 			}
 			hch <- hashHeight{hash, h}
 			if h > 0 && h%1000 == 0 {
-				glog.Info("connecting block ", h, " ", hash)
+				glog.Info("connecting block ", h, " ", hash, ", elapsed ", time.Since(start), " ", w.db.GetAndResetConnectBlockStats())
+				start = time.Now()
+			}
+			if msTime.Before(time.Now()) {
+				glog.Info(w.db.GetMemoryStats())
+				w.metrics.IndexDBSize.Set(float64(w.db.DatabaseSizeOnDisk()))
+				msTime = time.Now().Add(10 * time.Minute)
 			}
 			h++
 		}
 	}
 	close(hch)
-	// signal stop to workers that are in a loop
+	// signal stop to workers that are in a error loop
 	hchClosed.Store(true)
-	// broadcast syncWorkers times to unstuck all waiting getBlockWorkers
-	for i := 0; i < w.syncWorkers; i++ {
-		getBlockCond.Broadcast()
-	}
-	// first wait for the getBlockWorkers to finish and then close bch channel
-	// so that the getBlockWorkers do not write to the closed channel
+	// wait for workers and close bch that will stop writer loop
 	wg.Wait()
-	close(bch)
+	for i := 0; i < w.syncWorkers; i++ {
+		close(bch[i])
+	}
 	<-writeBlockDone
 	return err
 }
@@ -346,25 +362,23 @@ func (w *SyncWorker) getBlockChain(out chan blockResult, done chan struct{}) {
 }
 
 // DisconnectBlocks removes all data belonging to blocks in range lower-higher,
-// using block data from blockchain, if they are available,
-// otherwise doing full scan
 func (w *SyncWorker) DisconnectBlocks(lower uint32, higher uint32, hashes []string) error {
 	glog.Infof("sync: disconnecting blocks %d-%d", lower, higher)
-	// if the chain uses Block to Addresses mapping, always use DisconnectBlockRange
-	if w.chain.GetChainParser().KeepBlockAddresses() > 0 {
-		return w.db.DisconnectBlockRange(lower, higher)
+	// if the chain is UTXO, always use DisconnectBlockRange
+	if w.chain.GetChainParser().IsUTXOChain() {
+		return w.db.DisconnectBlockRangeUTXO(lower, higher)
 	}
 	blocks := make([]*bchain.Block, len(hashes))
 	var err error
-	// get all blocks first to see if we can avoid full scan
+	// try to get all blocks first to see if we can avoid full scan
 	for i, hash := range hashes {
 		blocks[i], err = w.chain.GetBlock(hash, 0)
 		if err != nil {
 			// cannot get a block, we must do full range scan
-			return w.db.DisconnectBlockRange(lower, higher)
+			return w.db.DisconnectBlockRangeNonUTXO(lower, higher)
 		}
 	}
-	// then disconnect one after another
+	// got all blocks to be disconnected, disconnect them one after another
 	for i, block := range blocks {
 		glog.Info("Disconnecting block ", (int(higher) - i), " ", block.Hash)
 		if err = w.db.DisconnectBlock(block); err != nil {

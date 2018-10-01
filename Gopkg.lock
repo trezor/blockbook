@@ -50,12 +50,6 @@
   revision = "53f62d9b43e87a6c56975cf862af7edf33a8d0df"
 
 [[projects]]
-  branch = "master"
-  name = "github.com/cpacia/bchutil"
-  packages = ["."]
-  revision = "12e86f41eb040d3b85b5d8e3a3a4bed035517c52"
-
-[[projects]]
   name = "github.com/dchest/blake256"
   packages = ["."]
   revision = "dee3fe6eb0e98dc774a94fc231f85baf7c29d360"
@@ -66,6 +60,12 @@
   packages = ["."]
   revision = "1d4478f51bed434f1dadf96dcd9b43aabac66795"
   version = "v1.7"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/erikdubbelboer/gspt"
+  packages = ["."]
+  revision = "e39e726e09cc23d1ccf13b36ce10dbdb4a4510e0"
 
 [[projects]]
   name = "github.com/ethereum/go-ethereum"
@@ -120,6 +120,18 @@
   packages = ["."]
   revision = "ea4d1f681babbce9545c9c5f3d5194a789c89f5b"
   version = "v1.2.0"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/jakm/bchutil"
+  packages = ["."]
+  revision = "9e4fc13b082c87967b0befbcbad6fe5a5aa5ac1a"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/jakm/btcutil"
+  packages = [".","base58","bech32","chaincfg","txscript"]
+  revision = "a45c5a6a9cb32f0caecb14a4e5a8f82640be1f39"
 
 [[projects]]
   branch = "master"
@@ -244,6 +256,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "03817720a4b1b5011cc64018a1344ed3fb4d8228af41c86856069f57851b3819"
+  inputs-digest = "98fb9a6252acd86d1c0a4b09a42e34673c2ccd6327caf49ed85bcee573601d95"
   solver-name = "gps-cdcl"
   solver-version = 1

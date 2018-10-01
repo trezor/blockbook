@@ -5,10 +5,10 @@ import (
 	"blockbook/bchain/coins/btc"
 	"fmt"
 
-	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcd/txscript"
-	"github.com/btcsuite/btcutil"
-	"github.com/cpacia/bchutil"
+	"github.com/jakm/bchutil"
+	"github.com/jakm/btcutil"
+	"github.com/jakm/btcutil/chaincfg"
+	"github.com/jakm/btcutil/txscript"
 	"github.com/schancel/cashaddr-converter/address"
 )
 
@@ -47,14 +47,14 @@ func NewBCashParser(params *chaincfg.Params, c *btc.Configuration) (*BCashParser
 	p := &BCashParser{
 		BitcoinParser: &btc.BitcoinParser{
 			BaseParser: &bchain.BaseParser{
-				AddressFactory:       func(addr string) (bchain.Address, error) { return newBCashAddress(addr, format) },
 				BlockAddressesToKeep: c.BlockAddressesToKeep,
+				AmountDecimalPoint:   8,
 			},
 			Params: params,
-			OutputScriptToAddressesFunc: outputScriptToAddresses,
 		},
 		AddressFormat: format,
 	}
+	p.OutputScriptToAddressesFunc = p.outputScriptToAddresses
 	return p, nil
 }
 
@@ -78,13 +78,13 @@ func GetChainParams(chain string) *chaincfg.Params {
 	return params
 }
 
-// GetAddrIDFromAddress returns internal address representation of given address
-func (p *BCashParser) GetAddrIDFromAddress(address string) ([]byte, error) {
-	return p.AddressToOutputScript(address)
+// GetAddrDescFromAddress returns internal address representation of given address
+func (p *BCashParser) GetAddrDescFromAddress(address string) (bchain.AddressDescriptor, error) {
+	return p.addressToOutputScript(address)
 }
 
-// AddressToOutputScript converts bitcoin address to ScriptPubKey
-func (p *BCashParser) AddressToOutputScript(address string) ([]byte, error) {
+// addressToOutputScript converts bitcoin address to ScriptPubKey
+func (p *BCashParser) addressToOutputScript(address string) ([]byte, error) {
 	if isCashAddr(address) {
 		da, err := bchutil.DecodeAddress(address, p.Params)
 		if err != nil {
@@ -123,68 +123,49 @@ func isCashAddr(addr string) bool {
 }
 
 // outputScriptToAddresses converts ScriptPubKey to bitcoin addresses
-func outputScriptToAddresses(script []byte, params *chaincfg.Params) ([]string, error) {
-	a, err := bchutil.ExtractPkScriptAddrs(script, params)
+func (p *BCashParser) outputScriptToAddresses(script []byte) ([]string, bool, error) {
+	a, err := bchutil.ExtractPkScriptAddrs(script, p.Params)
 	if err != nil {
-		return nil, err
-	}
-	return []string{a.EncodeAddress()}, nil
-}
-
-type bcashAddress struct {
-	addr string
-}
-
-func newBCashAddress(addr string, format AddressFormat) (*bcashAddress, error) {
-	if isCashAddr(addr) && format == CashAddr {
-		return &bcashAddress{addr: addr}, nil
-	}
-
-	da, err := address.NewFromString(addr)
-	if err != nil {
-		return nil, err
-	}
-	var ea string
-	switch format {
-	case CashAddr:
-		if a, err := da.CashAddress(); err != nil {
-			return nil, err
-		} else {
-			ea, err = a.Encode()
-			if err != nil {
-				return nil, err
+		// do not return unknown script type error as error
+		if err.Error() == "unknown script type" {
+			// try bitcoin parser to parse P2PK scripts - kind of hack as bchutil does not support pay-to-pubkey
+			_, addresses, _, err := txscript.ExtractPkScriptAddrs(script, p.Params)
+			if err == nil && len(addresses) == 1 {
+				// convert the address back to output script and back to get from bitcoin to bcash
+				s, err := p.addressToOutputScript(addresses[0].EncodeAddress())
+				if err == nil {
+					a, err = bchutil.ExtractPkScriptAddrs(s, p.Params)
+					if err != nil {
+						return []string{}, false, nil
+					}
+				}
+			} else {
+				// try OP_RETURN script
+				or := btc.TryParseOPReturn(script)
+				if or != "" {
+					return []string{or}, false, nil
+				}
+				return []string{}, false, nil
 			}
-		}
-
-	case Legacy:
-		if a, err := da.Legacy(); err != nil {
-			return nil, err
 		} else {
-			ea, err = a.Encode()
-			if err != nil {
-				return nil, err
-			}
-		}
-	default:
-		return nil, fmt.Errorf("Unknown address format: %d", format)
-	}
-	return &bcashAddress{addr: ea}, nil
-}
-
-func (a *bcashAddress) String() string {
-	return a.addr
-}
-
-func (a *bcashAddress) AreEqual(addr string) bool {
-	return a.String() == addr
-}
-
-func (a *bcashAddress) InSlice(addrs []string) bool {
-	ea := a.String()
-	for _, addr := range addrs {
-		if ea == addr {
-			return true
+			return nil, false, err
 		}
 	}
-	return false
+	// EncodeAddress returns CashAddr address
+	addr := a.EncodeAddress()
+	if p.AddressFormat == Legacy {
+		da, err := address.NewFromString(addr)
+		if err != nil {
+			return nil, false, err
+		}
+		ca, err := da.Legacy()
+		if err != nil {
+			return nil, false, err
+		}
+		addr, err = ca.Encode()
+		if err != nil {
+			return nil, false, err
+		}
+	}
+	return []string{addr}, len(addr) > 0, nil
 }

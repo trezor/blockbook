@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"io"
 	"io/ioutil"
+	"math/big"
 	"net"
 	"net/http"
 	"time"
@@ -36,19 +37,21 @@ type BitcoinRPC struct {
 }
 
 type Configuration struct {
-	CoinName             string `json:"coin_name"`
-	CoinShortcut         string `json:"coin_shortcut"`
-	RPCURL               string `json:"rpc_url"`
-	RPCUser              string `json:"rpc_user"`
-	RPCPass              string `json:"rpc_pass"`
-	RPCTimeout           int    `json:"rpc_timeout"`
-	Parse                bool   `json:"parse"`
-	MessageQueueBinding  string `json:"message_queue_binding"`
-	Subversion           string `json:"subversion"`
-	BlockAddressesToKeep int    `json:"block_addresses_to_keep"`
-	MempoolWorkers       int    `json:"mempool_workers"`
-	MempoolSubWorkers    int    `json:"mempool_sub_workers"`
-	AddressFormat        string `json:"address_format"`
+	CoinName                 string `json:"coin_name"`
+	CoinShortcut             string `json:"coin_shortcut"`
+	RPCURL                   string `json:"rpc_url"`
+	RPCUser                  string `json:"rpc_user"`
+	RPCPass                  string `json:"rpc_pass"`
+	RPCTimeout               int    `json:"rpc_timeout"`
+	Parse                    bool   `json:"parse"`
+	MessageQueueBinding      string `json:"message_queue_binding"`
+	Subversion               string `json:"subversion"`
+	BlockAddressesToKeep     int    `json:"block_addresses_to_keep"`
+	MempoolWorkers           int    `json:"mempool_workers"`
+	MempoolSubWorkers        int    `json:"mempool_sub_workers"`
+	AddressFormat            string `json:"address_format"`
+	SupportsEstimateFee      bool   `json:"supports_estimate_fee"`
+	SupportsEstimateSmartFee bool   `json:"supports_estimate_smart_fee"`
 }
 
 // NewBitcoinRPC returns new BitcoinRPC instance.
@@ -70,6 +73,9 @@ func NewBitcoinRPC(config json.RawMessage, pushHandler func(bchain.NotificationT
 	if c.MempoolSubWorkers < 1 {
 		c.MempoolSubWorkers = 1
 	}
+	// btc supports both calls, other coins overriding BitcoinRPC can change this
+	c.SupportsEstimateFee = true
+	c.SupportsEstimateSmartFee = true
 
 	transport := &http.Transport{
 		Dial:                (&net.Dialer{KeepAlive: 600 * time.Second}).Dial,
@@ -96,10 +102,11 @@ func NewBitcoinRPC(config json.RawMessage, pushHandler func(bchain.NotificationT
 // and if successful it connects to ZeroMQ and creates mempool handler
 func (b *BitcoinRPC) GetChainInfoAndInitializeMempool(bc bchain.BlockChain) (string, error) {
 	// try to connect to block chain and get some info
-	chainName, err := bc.GetBlockChainInfo()
+	ci, err := bc.GetChainInfo()
 	if err != nil {
 		return "", err
 	}
+	chainName := ci.Chain
 
 	mq, err := bchain.NewMQ(b.ChainConfig.MessageQueueBinding, b.pushHandler)
 	if err != nil {
@@ -211,10 +218,30 @@ type CmdGetBlockChainInfo struct {
 type ResGetBlockChainInfo struct {
 	Error  *bchain.RPCError `json:"error"`
 	Result struct {
-		Chain         string `json:"chain"`
-		Blocks        int    `json:"blocks"`
-		Headers       int    `json:"headers"`
-		Bestblockhash string `json:"bestblockhash"`
+		Chain         string      `json:"chain"`
+		Blocks        int         `json:"blocks"`
+		Headers       int         `json:"headers"`
+		Bestblockhash string      `json:"bestblockhash"`
+		Difficulty    json.Number `json:"difficulty"`
+		SizeOnDisk    int64       `json:"size_on_disk"`
+		Warnings      string      `json:"warnings"`
+	} `json:"result"`
+}
+
+// getnetworkinfo
+
+type CmdGetNetworkInfo struct {
+	Method string `json:"method"`
+}
+
+type ResGetNetworkInfo struct {
+	Error  *bchain.RPCError `json:"error"`
+	Result struct {
+		Version         json.Number `json:"version"`
+		Subversion      json.Number `json:"subversion"`
+		ProtocolVersion json.Number `json:"protocolversion"`
+		Timeoffset      float64     `json:"timeoffset"`
+		Warnings        string      `json:"warnings"`
 	} `json:"result"`
 }
 
@@ -259,14 +286,24 @@ type ResGetBlockRaw struct {
 	Result string           `json:"result"`
 }
 
+type BlockThin struct {
+	bchain.BlockHeader
+	Txids []string `json:"tx"`
+}
+
 type ResGetBlockThin struct {
 	Error  *bchain.RPCError `json:"error"`
-	Result bchain.ThinBlock `json:"result"`
+	Result BlockThin        `json:"result"`
 }
 
 type ResGetBlockFull struct {
 	Error  *bchain.RPCError `json:"error"`
 	Result bchain.Block     `json:"result"`
+}
+
+type ResGetBlockInfo struct {
+	Error  *bchain.RPCError `json:"error"`
+	Result bchain.BlockInfo `json:"result"`
 }
 
 // getrawtransaction
@@ -302,8 +339,8 @@ type CmdEstimateSmartFee struct {
 type ResEstimateSmartFee struct {
 	Error  *bchain.RPCError `json:"error"`
 	Result struct {
-		Feerate float64 `json:"feerate"`
-		Blocks  int     `json:"blocks"`
+		Feerate json.Number `json:"feerate"`
+		Blocks  int         `json:"blocks"`
 	} `json:"result"`
 }
 
@@ -318,7 +355,7 @@ type CmdEstimateFee struct {
 
 type ResEstimateFee struct {
 	Error  *bchain.RPCError `json:"error"`
-	Result float64          `json:"result"`
+	Result json.Number      `json:"result"`
 }
 
 // sendrawtransaction
@@ -380,21 +417,48 @@ func (b *BitcoinRPC) GetBestBlockHeight() (uint32, error) {
 	return res.Result, nil
 }
 
-// GetBlockChainInfo returns the name of the block chain: main/test/regtest.
-func (b *BitcoinRPC) GetBlockChainInfo() (string, error) {
+// GetChainInfo returns information about the connected backend
+func (b *BitcoinRPC) GetChainInfo() (*bchain.ChainInfo, error) {
 	glog.V(1).Info("rpc: getblockchaininfo")
 
-	res := ResGetBlockChainInfo{}
-	req := CmdGetBlockChainInfo{Method: "getblockchaininfo"}
-	err := b.Call(&req, &res)
-
+	resCi := ResGetBlockChainInfo{}
+	err := b.Call(&CmdGetBlockChainInfo{Method: "getblockchaininfo"}, &resCi)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	if res.Error != nil {
-		return "", res.Error
+	if resCi.Error != nil {
+		return nil, resCi.Error
 	}
-	return res.Result.Chain, nil
+
+	glog.V(1).Info("rpc: getnetworkinfo")
+	resNi := ResGetNetworkInfo{}
+	err = b.Call(&CmdGetNetworkInfo{Method: "getnetworkinfo"}, &resNi)
+	if err != nil {
+		return nil, err
+	}
+	if resNi.Error != nil {
+		return nil, resNi.Error
+	}
+
+	rv := &bchain.ChainInfo{
+		Bestblockhash: resCi.Result.Bestblockhash,
+		Blocks:        resCi.Result.Blocks,
+		Chain:         resCi.Result.Chain,
+		Difficulty:    string(resCi.Result.Difficulty),
+		Headers:       resCi.Result.Headers,
+		SizeOnDisk:    resCi.Result.SizeOnDisk,
+		Subversion:    string(resNi.Result.Subversion),
+		Timeoffset:    resNi.Result.Timeoffset,
+	}
+	rv.Version = string(resNi.Result.Version)
+	rv.ProtocolVersion = string(resNi.Result.ProtocolVersion)
+	if len(resCi.Result.Warnings) > 0 {
+		rv.Warnings = resCi.Result.Warnings + " "
+	}
+	if resCi.Result.Warnings != resNi.Result.Warnings {
+		rv.Warnings += resNi.Result.Warnings
+	}
+	return rv, nil
 }
 
 func isErrBlockNotFound(err *bchain.RPCError) bool {
@@ -448,7 +512,7 @@ func (b *BitcoinRPC) GetBlockHeader(hash string) (*bchain.BlockHeader, error) {
 // GetBlock returns block with given hash.
 func (b *BitcoinRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 	var err error
-	if hash == "" && height > 0 {
+	if hash == "" {
 		hash, err = b.GetBlockHash(height)
 		if err != nil {
 			return nil, err
@@ -477,7 +541,29 @@ func (b *BitcoinRPC) GetBlock(hash string, height uint32) (*bchain.Block, error)
 	return block, nil
 }
 
-// getBlockWithoutHeader is an optimization - it does not call GetBlockHeader to get prev, next hashes
+// GetBlockInfo returns extended header (more info than in bchain.BlockHeader) with a list of txids
+func (b *BitcoinRPC) GetBlockInfo(hash string) (*bchain.BlockInfo, error) {
+	glog.V(1).Info("rpc: getblock (verbosity=1) ", hash)
+
+	res := ResGetBlockInfo{}
+	req := CmdGetBlock{Method: "getblock"}
+	req.Params.BlockHash = hash
+	req.Params.Verbosity = 1
+	err := b.Call(&req, &res)
+
+	if err != nil {
+		return nil, errors.Annotatef(err, "hash %v", hash)
+	}
+	if res.Error != nil {
+		if isErrBlockNotFound(res.Error) {
+			return nil, bchain.ErrBlockNotFound
+		}
+		return nil, errors.Annotatef(res.Error, "hash %v", hash)
+	}
+	return &res.Result, nil
+}
+
+// GetBlockWithoutHeader is an optimization - it does not call GetBlockHeader to get prev, next hashes
 // instead it sets to header only block hash and height passed in parameters
 func (b *BitcoinRPC) GetBlockWithoutHeader(hash string, height uint32) (*bchain.Block, error) {
 	data, err := b.GetBlockRaw(hash)
@@ -611,13 +697,23 @@ func (b *BitcoinRPC) ResyncMempool(onNewTxAddr bchain.OnNewTxAddrFunc) (int, err
 	return b.Mempool.Resync(onNewTxAddr)
 }
 
-// GetMempoolTransactions returns slice of mempool transactions for given address.
+// GetMempoolTransactions returns slice of mempool transactions for given address
 func (b *BitcoinRPC) GetMempoolTransactions(address string) ([]string, error) {
 	return b.Mempool.GetTransactions(address)
 }
 
-// EstimateSmartFee returns fee estimation.
-func (b *BitcoinRPC) EstimateSmartFee(blocks int, conservative bool) (float64, error) {
+// GetMempoolTransactionsForAddrDesc returns slice of mempool transactions for given address descriptor
+func (b *BitcoinRPC) GetMempoolTransactionsForAddrDesc(addrDesc bchain.AddressDescriptor) ([]string, error) {
+	return b.Mempool.GetAddrDescTransactions(addrDesc)
+}
+
+// EstimateSmartFee returns fee estimation
+func (b *BitcoinRPC) EstimateSmartFee(blocks int, conservative bool) (big.Int, error) {
+	// use EstimateFee if EstimateSmartFee is not supported
+	if !b.ChainConfig.SupportsEstimateSmartFee && b.ChainConfig.SupportsEstimateFee {
+		return b.EstimateFee(blocks)
+	}
+
 	glog.V(1).Info("rpc: estimatesmartfee ", blocks)
 
 	res := ResEstimateSmartFee{}
@@ -630,17 +726,27 @@ func (b *BitcoinRPC) EstimateSmartFee(blocks int, conservative bool) (float64, e
 	}
 	err := b.Call(&req, &res)
 
+	var r big.Int
 	if err != nil {
-		return 0, err
+		return r, err
 	}
 	if res.Error != nil {
-		return 0, res.Error
+		return r, res.Error
 	}
-	return res.Result.Feerate, nil
+	r, err = b.Parser.AmountToBigInt(res.Result.Feerate)
+	if err != nil {
+		return r, err
+	}
+	return r, nil
 }
 
 // EstimateFee returns fee estimation.
-func (b *BitcoinRPC) EstimateFee(blocks int) (float64, error) {
+func (b *BitcoinRPC) EstimateFee(blocks int) (big.Int, error) {
+	// use EstimateSmartFee if EstimateFee is not supported
+	if !b.ChainConfig.SupportsEstimateFee && b.ChainConfig.SupportsEstimateSmartFee {
+		return b.EstimateSmartFee(blocks, true)
+	}
+
 	glog.V(1).Info("rpc: estimatefee ", blocks)
 
 	res := ResEstimateFee{}
@@ -648,13 +754,18 @@ func (b *BitcoinRPC) EstimateFee(blocks int) (float64, error) {
 	req.Params.Blocks = blocks
 	err := b.Call(&req, &res)
 
+	var r big.Int
 	if err != nil {
-		return 0, err
+		return r, err
 	}
 	if res.Error != nil {
-		return 0, res.Error
+		return r, res.Error
 	}
-	return res.Result, nil
+	r, err = b.Parser.AmountToBigInt(res.Result)
+	if err != nil {
+		return r, err
+	}
+	return r, nil
 }
 
 // SendRawTransaction sends raw transaction.
@@ -685,12 +796,19 @@ func (b *BitcoinRPC) GetMempoolEntry(txid string) (*bchain.MempoolEntry, error) 
 		Params: []string{txid},
 	}
 	err := b.Call(&req, &res)
-
 	if err != nil {
 		return nil, err
 	}
 	if res.Error != nil {
 		return nil, res.Error
+	}
+	res.Result.FeeSat, err = b.Parser.AmountToBigInt(res.Result.Fee)
+	if err != nil {
+		return nil, err
+	}
+	res.Result.ModifiedFeeSat, err = b.Parser.AmountToBigInt(res.Result.ModifiedFee)
+	if err != nil {
+		return nil, err
 	}
 	return res.Result, nil
 }

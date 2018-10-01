@@ -6,11 +6,12 @@ import (
 	"blockbook/bchain"
 	"blockbook/bchain/coins/btc"
 	"encoding/hex"
+	"math/big"
 	"reflect"
 	"testing"
 )
 
-func TestAddressToOutputScript_Mainnet(t *testing.T) {
+func Test_GetAddrDescFromAddress_Mainnet(t *testing.T) {
 	type args struct {
 		address string
 	}
@@ -55,14 +56,14 @@ func TestAddressToOutputScript_Mainnet(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := parser.AddressToOutputScript(tt.args.address)
+			got, err := parser.GetAddrDescFromAddress(tt.args.address)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("AddressToOutputScript() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("GetAddrDescFromAddress() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			h := hex.EncodeToString(got)
 			if !reflect.DeepEqual(h, tt.want) {
-				t.Errorf("AddressToOutputScript() = %v, want %v", h, tt.want)
+				t.Errorf("GetAddrDescFromAddress() = %v, want %v", h, tt.want)
 			}
 		})
 	}
@@ -75,18 +76,6 @@ var (
 )
 
 func init() {
-	var (
-		addr1, addr2 bchain.Address
-		err          error
-	)
-	addr1, err = bchain.NewBaseAddress("Vp1UqzsmVecaexfbWFGSFFL5x1g2XQnrGR")
-	if err == nil {
-		addr2, err = bchain.NewBaseAddress("38A1RNvbA5c9wNRfyLVn1FCH5TPKJVG8YR")
-	}
-	if err != nil {
-		panic(err)
-	}
-
 	testTx1 = bchain.Tx{
 		Hex:       "010000000146fd781834a34e0399ccda1edf9ec47d715e17d904ad0958d533a240b3605ad6000000006a473044022026b352a0c35c232342339e2b50ec9f04587b990d5213174e368cc76dc82686f002207d0787461ad846825872a50d3d6fc748d5a836575c1daf6ad0ca602f9c4a8826012103d36b6b829c571ed7caa565eca9bdc2aa36519b7ab8551ace5edb0356d477ad3cfdffffff020882a400000000001976a91499b16da88a7e29b913b6131df2644d6d06cb331b88ac80f0fa020000000017a91446eb90e002f137f05385896c882fe000cc2e967f8774870e00",
 		Blocktime: 1529925180,
@@ -105,26 +94,24 @@ func init() {
 		},
 		Vout: []bchain.Vout{
 			{
-				Value: 0.10781192,
-				N:     0,
+				ValueSat: *big.NewInt(10781192),
+				N:        0,
 				ScriptPubKey: bchain.ScriptPubKey{
 					Hex: "76a91499b16da88a7e29b913b6131df2644d6d06cb331b88ac",
 					Addresses: []string{
 						"Vp1UqzsmVecaexfbWFGSFFL5x1g2XQnrGR",
 					},
 				},
-				Address: addr1,
 			},
 			{
-				Value: 0.5000000,
-				N:     1,
+				ValueSat: *big.NewInt(50000000),
+				N:        1,
 				ScriptPubKey: bchain.ScriptPubKey{
 					Hex: "a91446eb90e002f137f05385896c882fe000cc2e967f87",
 					Addresses: []string{
 						"38A1RNvbA5c9wNRfyLVn1FCH5TPKJVG8YR",
 					},
 				},
-				Address: addr2,
 			},
 		},
 	}

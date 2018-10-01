@@ -5,141 +5,218 @@ package bch
 import (
 	"blockbook/bchain"
 	"blockbook/bchain/coins/btc"
-	"bytes"
 	"encoding/hex"
+	"math/big"
 	"reflect"
 	"testing"
 )
 
-func TestBcashAddressEncodeAddress(t *testing.T) {
-	addr1, err := newBCashAddress("13zMwGC5bxRn9ckJ1mgxf7UR8qbbNe2iji", Legacy)
-	if err != nil {
-		t.Errorf("newBCashAddress() error = %v", err)
-		return
+func Test_GetAddrDescFromAddress(t *testing.T) {
+	mainParserCashAddr, mainParserLegacy, testParserCashAddr, _ := setupParsers(t)
+	tests := []struct {
+		name      string
+		parser    *BCashParser
+		addresses []string
+		hex       string
+		wantErr   bool
+	}{
+		{
+			name:      "test-P2PKH-0",
+			parser:    testParserCashAddr,
+			addresses: []string{"mnnAKPTSrWjgoi3uEYaQkHA1QEC5btFeBr"},
+			hex:       "76a9144fa927fd3bcf57d4e3c582c3d2eb2bd3df8df47c88ac",
+			wantErr:   false,
+		},
+		{
+			name:      "test-P2PKH-1",
+			parser:    testParserCashAddr,
+			addresses: []string{"bchtest:qp86jfla8084048rckpv85ht90falr050s03ejaesm"},
+			hex:       "76a9144fa927fd3bcf57d4e3c582c3d2eb2bd3df8df47c88ac",
+			wantErr:   false,
+		},
+		{
+			name:      "main-P2PKH-0",
+			parser:    mainParserLegacy,
+			addresses: []string{"129HiRqekqPVucKy2M8zsqvafGgKypciPp"},
+			hex:       "76a9140c8967e6382c7a2ca64d8e850bfc99b7736e1a0d88ac",
+			wantErr:   false,
+		},
+		{
+			name:      "main-P2PKH-0",
+			parser:    mainParserCashAddr,
+			addresses: []string{"bitcoincash:qqxgjelx8qk85t9xfk8g2zlunxmhxms6p55xarv2r5"},
+			hex:       "76a9140c8967e6382c7a2ca64d8e850bfc99b7736e1a0d88ac",
+			wantErr:   false,
+		},
+		{
+			name:      "main-P2SH-0",
+			parser:    mainParserCashAddr,
+			addresses: []string{"3EBEFWPtDYWCNszQ7etoqtWmmygccayLiH"},
+			hex:       "a91488f772450c830a30eddfdc08a93d5f2ae1a30e1787",
+			wantErr:   false,
+		},
+		{
+			name:      "main-P2SH-1",
+			parser:    mainParserLegacy,
+			addresses: []string{"bitcoincash:pzy0wuj9pjps5v8dmlwq32fatu4wrgcwzuayq5nfhh"},
+			hex:       "a91488f772450c830a30eddfdc08a93d5f2ae1a30e1787",
+			wantErr:   false,
+		},
 	}
-	got1 := addr1.String()
-	if got1 != "13zMwGC5bxRn9ckJ1mgxf7UR8qbbNe2iji" {
-		t.Errorf("String() got1 = %v, want %v", got1, "13zMwGC5bxRn9ckJ1mgxf7UR8qbbNe2iji")
-	}
-	addr2, err := newBCashAddress("13zMwGC5bxRn9ckJ1mgxf7UR8qbbNe2iji", CashAddr)
-	if err != nil {
-		t.Errorf("newBCashAddress() error = %v", err)
-		return
-	}
-	got2 := addr2.String()
-	if got2 != "bitcoincash:qqsvjuqqwgyzvz7zz9xcvxent0ul2xjs6y4d9qvsrf" {
-		t.Errorf("String() got2 = %v, want %v", got2, "bitcoincash:qqsvjuqqwgyzvz7zz9xcvxent0ul2xjs6y4d9qvsrf")
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.parser.GetAddrDescFromAddress(tt.addresses[0])
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GetAddrDescFromAddress() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			h := hex.EncodeToString(got)
+			if !reflect.DeepEqual(h, tt.hex) {
+				t.Errorf("GetAddrDescFromAddress() = %v, want %v", h, tt.hex)
+			}
+		})
 	}
 }
 
-func TestBcashAddressAreEqual(t *testing.T) {
-	addr1, err := newBCashAddress("13zMwGC5bxRn9ckJ1mgxf7UR8qbbNe2iji", Legacy)
-	if err != nil {
-		t.Errorf("newBCashAddress() error = %v", err)
-		return
-	}
-	addr2, err := newBCashAddress("13zMwGC5bxRn9ckJ1mgxf7UR8qbbNe2iji", CashAddr)
-	if err != nil {
-		t.Errorf("newBCashAddress() error = %v", err)
-		return
-	}
-	got1 := addr1.AreEqual("13zMwGC5bxRn9ckJ1mgxf7UR8qbbNe2iji")
-	if got1 != true {
-		t.Errorf("AreEqual() got1 = %v, want %v", got1, true)
-	}
-	got2 := addr2.AreEqual("bitcoincash:qqsvjuqqwgyzvz7zz9xcvxent0ul2xjs6y4d9qvsrf")
-	if got2 != true {
-		t.Errorf("AreEqual() got2 = %v, want %v", got2, true)
-	}
-	got3 := addr1.AreEqual("1HoKgKQh7ZNomWURmS9Tk3z8JM2MWm7S1w")
-	if got3 != false {
-		t.Errorf("AreEqual() got3 = %v, want %v", got3, false)
-	}
-	got4 := addr2.AreEqual("bitcoincash:qzuyf0gpqj7q5wfck3nyghhklju7r0k3ksmq6d0vch")
-	if got4 != false {
-		t.Errorf("AreEqual() got4 = %v, want %v", got4, false)
-	}
-}
+func Test_GetAddressesFromAddrDesc(t *testing.T) {
+	mainParserCashAddr, mainParserLegacy, testParserCashAddr, testParserLegacy := setupParsers(t)
+	tests := []struct {
+		name       string
+		parser     *BCashParser
+		addresses  []string
+		searchable bool
+		hex        string
+		wantErr    bool
+	}{
+		{
+			name:       "test-P2PKH-0",
+			parser:     testParserLegacy,
+			addresses:  []string{"mnnAKPTSrWjgoi3uEYaQkHA1QEC5btFeBr"},
+			searchable: true,
+			hex:        "76a9144fa927fd3bcf57d4e3c582c3d2eb2bd3df8df47c88ac",
 
-func TestBcashAddressInSlice(t *testing.T) {
-	addr1, err := newBCashAddress("13zMwGC5bxRn9ckJ1mgxf7UR8qbbNe2iji", Legacy)
-	if err != nil {
-		t.Errorf("newBCashAddress() error = %v", err)
-		return
+			wantErr: false,
+		},
+		{
+			name:       "test-P2PKH-1",
+			parser:     testParserCashAddr,
+			addresses:  []string{"bchtest:qp86jfla8084048rckpv85ht90falr050s03ejaesm"},
+			searchable: true,
+			hex:        "76a9144fa927fd3bcf57d4e3c582c3d2eb2bd3df8df47c88ac",
+			wantErr:    false,
+		},
+		{
+			name:       "main-P2PKH-0",
+			parser:     mainParserLegacy,
+			addresses:  []string{"129HiRqekqPVucKy2M8zsqvafGgKypciPp"},
+			searchable: true,
+			hex:        "76a9140c8967e6382c7a2ca64d8e850bfc99b7736e1a0d88ac",
+			wantErr:    false,
+		},
+		{
+			name:       "main-P2PKH-0",
+			parser:     mainParserCashAddr,
+			addresses:  []string{"bitcoincash:qqxgjelx8qk85t9xfk8g2zlunxmhxms6p55xarv2r5"},
+			searchable: true,
+			hex:        "76a9140c8967e6382c7a2ca64d8e850bfc99b7736e1a0d88ac",
+			wantErr:    false,
+		},
+		{
+			name:       "main-P2SH-0",
+			parser:     mainParserLegacy,
+			addresses:  []string{"3EBEFWPtDYWCNszQ7etoqtWmmygccayLiH"},
+			searchable: true,
+			hex:        "a91488f772450c830a30eddfdc08a93d5f2ae1a30e1787",
+			wantErr:    false,
+		},
+		{
+			name:       "main-P2SH-1",
+			parser:     mainParserCashAddr,
+			addresses:  []string{"bitcoincash:pzy0wuj9pjps5v8dmlwq32fatu4wrgcwzuayq5nfhh"},
+			searchable: true,
+			hex:        "a91488f772450c830a30eddfdc08a93d5f2ae1a30e1787",
+			wantErr:    false,
+		},
+		{
+			name:       "main-P2PK",
+			parser:     mainParserCashAddr,
+			addresses:  []string{"bitcoincash:qqr95pwp0w5jqnh9vcjl4qm4x45atr0er57n49pq75"},
+			searchable: true,
+			hex:        "2103db3c3977c5165058bf38c46f72d32f4e872112dbafc13083a948676165cd1603ac",
+			wantErr:    false,
+		},
+		{
+			name:       "OP_RETURN ascii",
+			parser:     mainParserCashAddr,
+			addresses:  []string{"OP_RETURN (ahoj)"},
+			searchable: false,
+			hex:        "6a0461686f6a",
+			wantErr:    false,
+		},
+		{
+			name:       "OP_RETURN hex",
+			parser:     mainParserCashAddr,
+			addresses:  []string{"OP_RETURN 2020f1686f6a20"},
+			searchable: false,
+			hex:        "6a072020f1686f6a20",
+			wantErr:    false,
+		},
+		{
+			name:       "empty",
+			parser:     mainParserCashAddr,
+			addresses:  []string{},
+			searchable: false,
+			hex:        "",
+			wantErr:    false,
+		},
 	}
-	addr2, err := newBCashAddress("13zMwGC5bxRn9ckJ1mgxf7UR8qbbNe2iji", CashAddr)
-	if err != nil {
-		t.Errorf("newBCashAddress() error = %v", err)
-		return
-	}
-	got1 := addr1.InSlice([]string{"13zMwGC5bxRn9ckJ1mgxf7UR8qbbNe2iji", "1HoKgKQh7ZNomWURmS9Tk3z8JM2MWm7S1w"})
-	if got1 != true {
-		t.Errorf("InSlice() got1 = %v, want %v", got1, true)
-	}
-	got2 := addr2.InSlice([]string{"bitcoincash:qzuyf0gpqj7q5wfck3nyghhklju7r0k3ksmq6d0vch", "bitcoincash:qqsvjuqqwgyzvz7zz9xcvxent0ul2xjs6y4d9qvsrf"})
-	if got2 != true {
-		t.Errorf("InSlice() got2 = %v, want %v", got2, true)
-	}
-	got3 := addr1.InSlice([]string{"1HoKgKQh7ZNomWURmS9Tk3z8JM2MWm7S1w", "1E6Np6dUPYpBSdLMLuwBF8sRQ3cngdaRRY"})
-	if got3 != false {
-		t.Errorf("InSlice() got3 = %v, want %v", got3, false)
-	}
-	got4 := addr2.InSlice([]string{"bitcoincash:qzuyf0gpqj7q5wfck3nyghhklju7r0k3ksmq6d0vch", "bitcoincash:qz8emmpenqgeg7et8xsz8prvhy6cqcalyyjcamt7e9"})
-	if got4 != false {
-		t.Errorf("InSlice() got4 = %v, want %v", got4, false)
-	}
-}
 
-func TestAddressToOutputScript(t *testing.T) {
-	parser, err := NewBCashParser(GetChainParams("test"), &btc.Configuration{AddressFormat: "legacy"})
-	if err != nil {
-		t.Errorf("NewBCashParser() error = %v", err)
-		return
-	}
-	want, err := hex.DecodeString("76a9144fa927fd3bcf57d4e3c582c3d2eb2bd3df8df47c88ac")
-	if err != nil {
-		panic(err)
-	}
-	got1, err := parser.AddressToOutputScript("mnnAKPTSrWjgoi3uEYaQkHA1QEC5btFeBr")
-	if err != nil {
-		t.Errorf("AddressToOutputScript() error = %v", err)
-		return
-	}
-	if !bytes.Equal(got1, want) {
-		t.Errorf("AddressToOutputScript() got1 = %v, want %v", got1, want)
-	}
-	got2, err := parser.AddressToOutputScript("bchtest:qp86jfla8084048rckpv85ht90falr050s03ejaesm")
-	if err != nil {
-		t.Errorf("AddressToOutputScript() error = %v", err)
-		return
-	}
-	if !bytes.Equal(got2, want) {
-		t.Errorf("AddressToOutputScript() got2 = %v, want %v", got2, want)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b, _ := hex.DecodeString(tt.hex)
+			got, got2, err := tt.parser.GetAddressesFromAddrDesc(b)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GetAddressesFromAddrDesc() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.addresses) {
+				t.Errorf("GetAddressesFromAddrDesc() = %v, want %v", got, tt.addresses)
+			}
+			if !reflect.DeepEqual(got2, tt.searchable) {
+				t.Errorf("GetAddressesFromAddrDesc() = %v, want %v", got2, tt.searchable)
+			}
+		})
 	}
 }
 
 var (
 	testTx1, testTx2 bchain.Tx
-
-	testTxPacked1 = "0001e2408ba8d7af5401000000017f9a22c9cbf54bd902400df746f138f37bcf5b4d93eb755820e974ba43ed5f42040000006a4730440220037f4ed5427cde81d55b9b6a2fd08c8a25090c2c2fff3a75c1a57625ca8a7118022076c702fe55969fa08137f71afd4851c48e31082dd3c40c919c92cdbc826758d30121029f6da5623c9f9b68a9baf9c1bc7511df88fa34c6c2f71f7c62f2f03ff48dca80feffffff019c9700000000000017a9146144d57c8aff48492c9dfb914e120b20bad72d6f8773d00700"
-	testTxPacked2 = "0007c91a899ab7da6a010000000001019d64f0c72a0d206001decbffaa722eb1044534c74eee7a5df8318e42a4323ec10000000017160014550da1f5d25a9dae2eafd6902b4194c4c6500af6ffffffff02809698000000000017a914cd668d781ece600efa4b2404dc91fd26b8b8aed8870553d7360000000017a914246655bdbd54c7e477d0ea2375e86e0db2b8f80a8702473044022076aba4ad559616905fa51d4ddd357fc1fdb428d40cb388e042cdd1da4a1b7357022011916f90c712ead9a66d5f058252efd280439ad8956a967e95d437d246710bc9012102a80a5964c5612bb769ef73147b2cf3c149bc0fd4ecb02f8097629c94ab013ffd00000000"
+	testTxPacked1    = "0001e2408ba8d7af5401000000017f9a22c9cbf54bd902400df746f138f37bcf5b4d93eb755820e974ba43ed5f42040000006a4730440220037f4ed5427cde81d55b9b6a2fd08c8a25090c2c2fff3a75c1a57625ca8a7118022076c702fe55969fa08137f71afd4851c48e31082dd3c40c919c92cdbc826758d30121029f6da5623c9f9b68a9baf9c1bc7511df88fa34c6c2f71f7c62f2f03ff48dca80feffffff019c9700000000000017a9146144d57c8aff48492c9dfb914e120b20bad72d6f8773d00700"
+	testTxPacked2    = "0007c91a899ab7da6a010000000001019d64f0c72a0d206001decbffaa722eb1044534c74eee7a5df8318e42a4323ec10000000017160014550da1f5d25a9dae2eafd6902b4194c4c6500af6ffffffff02809698000000000017a914cd668d781ece600efa4b2404dc91fd26b8b8aed8870553d7360000000017a914246655bdbd54c7e477d0ea2375e86e0db2b8f80a8702473044022076aba4ad559616905fa51d4ddd357fc1fdb428d40cb388e042cdd1da4a1b7357022011916f90c712ead9a66d5f058252efd280439ad8956a967e95d437d246710bc9012102a80a5964c5612bb769ef73147b2cf3c149bc0fd4ecb02f8097629c94ab013ffd00000000"
 )
 
-func init() {
-	var (
-		addr1, addr2, addr3 bchain.Address
-		err                 error
-	)
-	addr1, err = newBCashAddress("3AZKvpKhSh1o8t1QrX3UeXG9d2BhCRnbcK", Legacy)
-	if err == nil {
-		addr2, err = newBCashAddress("2NByHN6A8QYkBATzxf4pRGbCSHD5CEN2TRu", Legacy)
-	}
-	if err == nil {
-		addr3, err = newBCashAddress("2MvZguYaGjM7JihBgNqgLF2Ca2Enb76Hj9D", Legacy)
-	}
+func setupParsers(t *testing.T) (mainParserCashAddr, mainParserLegacy, testParserCashAddr, testParserLegacy *BCashParser) {
+	parser1, err := NewBCashParser(GetChainParams("main"), &btc.Configuration{AddressFormat: "cashaddr"})
 	if err != nil {
-		panic(err)
+		t.Fatalf("NewBCashParser() error = %v", err)
 	}
+	parser2, err := NewBCashParser(GetChainParams("main"), &btc.Configuration{AddressFormat: "legacy"})
+	if err != nil {
+		t.Fatalf("NewBCashParser() error = %v", err)
+	}
+	parser3, err := NewBCashParser(GetChainParams("test"), &btc.Configuration{AddressFormat: "cashaddr"})
+	if err != nil {
+		t.Fatalf("NewBCashParser() error = %v", err)
+	}
+	parser4, err := NewBCashParser(GetChainParams("test"), &btc.Configuration{AddressFormat: "legacy"})
+	if err != nil {
+		t.Fatalf("NewBCashParser() error = %v", err)
+	}
+	return parser1, parser2, parser3, parser4
+}
+
+func init() {
 
 	testTx1 = bchain.Tx{
 		Hex:       "01000000017f9a22c9cbf54bd902400df746f138f37bcf5b4d93eb755820e974ba43ed5f42040000006a4730440220037f4ed5427cde81d55b9b6a2fd08c8a25090c2c2fff3a75c1a57625ca8a7118022076c702fe55969fa08137f71afd4851c48e31082dd3c40c919c92cdbc826758d30121029f6da5623c9f9b68a9baf9c1bc7511df88fa34c6c2f71f7c62f2f03ff48dca80feffffff019c9700000000000017a9146144d57c8aff48492c9dfb914e120b20bad72d6f8773d00700",
@@ -159,15 +236,14 @@ func init() {
 		},
 		Vout: []bchain.Vout{
 			{
-				Value: 0.00038812,
-				N:     0,
+				ValueSat: *big.NewInt(38812),
+				N:        0,
 				ScriptPubKey: bchain.ScriptPubKey{
 					Hex: "a9146144d57c8aff48492c9dfb914e120b20bad72d6f87",
 					Addresses: []string{
 						"bitcoincash:pps5f4tu3tl5sjfvnhaeznsjpvst44eddugfcnqpy9",
 					},
 				},
-				Address: addr1,
 			},
 		},
 	}
@@ -190,42 +266,31 @@ func init() {
 		},
 		Vout: []bchain.Vout{
 			{
-				Value: .1,
-				N:     0,
+				ValueSat: *big.NewInt(10000000),
+				N:        0,
 				ScriptPubKey: bchain.ScriptPubKey{
 					Hex: "a914cd668d781ece600efa4b2404dc91fd26b8b8aed887",
 					Addresses: []string{
 						"bchtest:prxkdrtcrm8xqrh6fvjqfhy3l5nt3w9wmq9fmsvkmz",
 					},
 				},
-				Address: addr2,
 			},
 			{
-				Value: 9.20081157,
-				N:     1,
+				ValueSat: *big.NewInt(920081157),
+				N:        1,
 				ScriptPubKey: bchain.ScriptPubKey{
 					Hex: "a914246655bdbd54c7e477d0ea2375e86e0db2b8f80a87",
 					Addresses: []string{
 						"bchtest:pqjxv4dah42v0erh6r4zxa0gdcxm9w8cpg0qw8tqf6",
 					},
 				},
-				Address: addr3,
 			},
 		},
 	}
 }
 
 func Test_UnpackTx(t *testing.T) {
-	parser1, err := NewBCashParser(GetChainParams("main"), &btc.Configuration{AddressFormat: "legacy"})
-	if err != nil {
-		t.Errorf("NewBCashParser() error = %v", err)
-		return
-	}
-	parser2, err := NewBCashParser(GetChainParams("test"), &btc.Configuration{AddressFormat: "legacy"})
-	if err != nil {
-		t.Errorf("NewBCashParser() error = %v", err)
-		return
-	}
+	mainParser, _, testParser, _ := setupParsers(t)
 
 	type args struct {
 		packedTx string
@@ -239,10 +304,10 @@ func Test_UnpackTx(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "btc-1",
+			name: "bcash-1",
 			args: args{
 				packedTx: testTxPacked1,
-				parser:   parser1,
+				parser:   mainParser,
 			},
 			want:    &testTx1,
 			want1:   123456,
@@ -252,7 +317,7 @@ func Test_UnpackTx(t *testing.T) {
 			name: "testnet-1",
 			args: args{
 				packedTx: testTxPacked2,
-				parser:   parser2,
+				parser:   testParser,
 			},
 			want:    &testTx2,
 			want1:   510234,

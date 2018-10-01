@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"strconv"
 	"sync"
 	"time"
 
@@ -260,16 +261,23 @@ func (b *EthereumRPC) GetSubversion() string {
 	return ""
 }
 
-// GetBlockChainInfo returns the NetworkID of the ethereum network
-func (b *EthereumRPC) GetBlockChainInfo() (string, error) {
+// GetChainInfo returns information about the connected backend
+func (b *EthereumRPC) GetChainInfo() (*bchain.ChainInfo, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
 	defer cancel()
-
 	id, err := b.client.NetworkID(ctx)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return id.String(), nil
+	rv := &bchain.ChainInfo{}
+	idi := int(id.Uint64())
+	if idi == 1 {
+		rv.Chain = "mainnet"
+	} else {
+		rv.Chain = "testnet " + strconv.Itoa(idi)
+	}
+	// TODO  - return more information about the chain
+	return rv, nil
 }
 
 func (b *EthereumRPC) getBestHeader() (*ethtypes.Header, error) {
@@ -336,9 +344,9 @@ func (b *EthereumRPC) ethHeaderToBlockHeader(h *ethtypes.Header) (*bchain.BlockH
 		Hash:          ethHashToHash(h.Hash()),
 		Height:        uint32(hn),
 		Confirmations: int(c),
+		Time:          int64(h.Time.Uint64()),
 		// Next
 		// Prev
-
 	}, nil
 }
 
@@ -408,6 +416,8 @@ func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error
 		return nil, errors.Annotatef(fmt.Errorf("server returned empty transaction list but block header indicates transactions"), "hash %v, height %v", hash, height)
 	}
 	bbh, err := b.ethHeaderToBlockHeader(head)
+	// TODO - this is probably not the correct size
+	bbh.Size = len(raw)
 	btxs := make([]bchain.Tx, len(body.Transactions))
 	for i, tx := range body.Transactions {
 		btx, err := b.Parser.ethTxToTx(&tx, int64(head.Time.Uint64()), uint32(bbh.Confirmations))
@@ -421,6 +431,12 @@ func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error
 		Txs:         btxs,
 	}
 	return &bbk, nil
+}
+
+// GetBlockInfo returns extended header (more info than in bchain.BlockHeader) with a list of txids
+func (b *EthereumRPC) GetBlockInfo(hash string) (*bchain.BlockInfo, error) {
+	// TODO - implement
+	return nil, errors.New("Not implemented yet")
 }
 
 // GetTransactionForMempool returns a transaction by the transaction ID.
@@ -497,13 +513,13 @@ func (b *EthereumRPC) GetMempool() ([]string, error) {
 	return body.Transactions, nil
 }
 
-// EstimateFee returns fee estimation.
-func (b *EthereumRPC) EstimateFee(blocks int) (float64, error) {
+// EstimateFee returns fee estimation
+func (b *EthereumRPC) EstimateFee(blocks int) (big.Int, error) {
 	return b.EstimateSmartFee(blocks, true)
 }
 
-// EstimateSmartFee returns fee estimation.
-func (b *EthereumRPC) EstimateSmartFee(blocks int, conservative bool) (float64, error) {
+// EstimateSmartFee returns fee estimation
+func (b *EthereumRPC) EstimateSmartFee(blocks int, conservative bool) (big.Int, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
 	defer cancel()
 	// TODO - what parameters of msg to use to get better estimate, maybe more data from the wallet are needed
@@ -512,10 +528,12 @@ func (b *EthereumRPC) EstimateSmartFee(blocks int, conservative bool) (float64, 
 		To: &a,
 	}
 	g, err := b.client.EstimateGas(ctx, msg)
+	var r big.Int
 	if err != nil {
-		return 0, err
+		return r, err
 	}
-	return float64(g), nil
+	r.SetUint64(g)
+	return r, nil
 }
 
 // SendRawTransaction sends raw transaction.
@@ -543,8 +561,14 @@ func (b *EthereumRPC) ResyncMempool(onNewTxAddr bchain.OnNewTxAddrFunc) (int, er
 	return b.Mempool.Resync(onNewTxAddr)
 }
 
+// GetMempoolTransactions returns slice of mempool transactions for given address
 func (b *EthereumRPC) GetMempoolTransactions(address string) ([]string, error) {
 	return b.Mempool.GetTransactions(address)
+}
+
+// GetMempoolTransactionsForAddrDesc returns slice of mempool transactions for given address descriptor
+func (b *EthereumRPC) GetMempoolTransactionsForAddrDesc(addrDesc bchain.AddressDescriptor) ([]string, error) {
+	return b.Mempool.GetAddrDescTransactions(addrDesc)
 }
 
 func (b *EthereumRPC) GetMempoolEntry(txid string) (*bchain.MempoolEntry, error) {

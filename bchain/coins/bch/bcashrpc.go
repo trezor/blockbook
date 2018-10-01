@@ -5,9 +5,10 @@ import (
 	"blockbook/bchain/coins/btc"
 	"encoding/hex"
 	"encoding/json"
+	"math/big"
 
-	"github.com/cpacia/bchutil"
 	"github.com/golang/glog"
+	"github.com/jakm/bchutil"
 	"github.com/juju/errors"
 )
 
@@ -100,7 +101,10 @@ func (b *BCashRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 	if err != nil {
 		return nil, errors.Annotatef(err, "hash %v", hash)
 	}
+	// size is not returned by GetBlockHeader and would be overwritten
+	size := block.Size
 	block.BlockHeader = *header
+	block.Size = size
 	return block, nil
 }
 
@@ -126,13 +130,35 @@ func (b *BCashRPC) GetBlockRaw(hash string) ([]byte, error) {
 	return hex.DecodeString(res.Result)
 }
 
+// GetBlockInfo returns extended header (more info than in bchain.BlockHeader) with a list of txids
+func (b *BCashRPC) GetBlockInfo(hash string) (*bchain.BlockInfo, error) {
+	glog.V(1).Info("rpc: getblock (verbosity=1) ", hash)
+
+	res := btc.ResGetBlockInfo{}
+	req := cmdGetBlock{Method: "getblock"}
+	req.Params.BlockHash = hash
+	req.Params.Verbose = true
+	err := b.Call(&req, &res)
+
+	if err != nil {
+		return nil, errors.Annotatef(err, "hash %v", hash)
+	}
+	if res.Error != nil {
+		if isErrBlockNotFound(res.Error) {
+			return nil, bchain.ErrBlockNotFound
+		}
+		return nil, errors.Annotatef(res.Error, "hash %v", hash)
+	}
+	return &res.Result, nil
+}
+
 // GetBlockFull returns block with given hash.
 func (b *BCashRPC) GetBlockFull(hash string) (*bchain.Block, error) {
 	return nil, errors.New("Not implemented")
 }
 
 // EstimateSmartFee returns fee estimation.
-func (b *BCashRPC) EstimateSmartFee(blocks int, conservative bool) (float64, error) {
+func (b *BCashRPC) EstimateSmartFee(blocks int, conservative bool) (big.Int, error) {
 	glog.V(1).Info("rpc: estimatesmartfee ", blocks)
 
 	res := btc.ResEstimateSmartFee{}
@@ -141,13 +167,18 @@ func (b *BCashRPC) EstimateSmartFee(blocks int, conservative bool) (float64, err
 	// conservative param is omitted
 	err := b.Call(&req, &res)
 
+	var r big.Int
 	if err != nil {
-		return 0, err
+		return r, err
 	}
 	if res.Error != nil {
-		return 0, res.Error
+		return r, res.Error
 	}
-	return res.Result.Feerate, nil
+	r, err = b.Parser.AmountToBigInt(res.Result.Feerate)
+	if err != nil {
+		return r, err
+	}
+	return r, nil
 }
 
 func isErrBlockNotFound(err *bchain.RPCError) bool {

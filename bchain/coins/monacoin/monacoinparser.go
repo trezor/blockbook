@@ -1,10 +1,11 @@
 package monacoin
 
 import (
+	"blockbook/bchain"
 	"blockbook/bchain/coins/btc"
 
-	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/wire"
+	"github.com/jakm/btcutil/chaincfg"
 	monacoinCfg "github.com/wakiyamap/monad/chaincfg"
 	"github.com/wakiyamap/monad/txscript"
 	monacoinWire "github.com/wakiyamap/monad/wire"
@@ -25,11 +26,11 @@ var (
 	MonaTestParams monacoinCfg.Params
 )
 
-func init() {
+func initParams() {
 	MainNetParams = chaincfg.MainNetParams
 	MainNetParams.Net = MainnetMagic
-	MainNetParams.PubKeyHashAddrID = 50
-	MainNetParams.ScriptHashAddrID = 55
+	MainNetParams.PubKeyHashAddrID = []byte{50}
+	MainNetParams.ScriptHashAddrID = []byte{55}
 	MainNetParams.Bech32HRPSegwit = "mona"
 	MonaMainParams = monacoinCfg.MainNetParams
 	MonaMainParams.Net = MonaMainMagic
@@ -39,8 +40,8 @@ func init() {
 
 	TestNetParams = chaincfg.TestNet3Params
 	TestNetParams.Net = TestnetMagic
-	TestNetParams.PubKeyHashAddrID = 111
-	TestNetParams.ScriptHashAddrID = 117
+	TestNetParams.PubKeyHashAddrID = []byte{111}
+	TestNetParams.ScriptHashAddrID = []byte{117}
 	TestNetParams.Bech32HRPSegwit = "tmona"
 	MonaTestParams = monacoinCfg.TestNet4Params
 	MonaTestParams.Net = MonaTestMagic
@@ -70,6 +71,9 @@ func NewMonacoinParser(params *chaincfg.Params, c *btc.Configuration) *MonacoinP
 // GetChainParams contains network parameters for the main Monacoin network,
 // and the test Monacoin network
 func GetChainParams(chain string) *chaincfg.Params {
+	if MainNetParams.Name == "" {
+		initParams()
+	}
 	switch chain {
 	case "test":
 		return &TestNetParams
@@ -89,13 +93,13 @@ func GetMonaChainParams(chain string) *monacoinCfg.Params {
 	}
 }
 
-// GetAddrIDFromAddress returns internal address representation of given address
-func (p *MonacoinParser) GetAddrIDFromAddress(address string) ([]byte, error) {
-	return p.AddressToOutputScript(address)
+// GetAddrDescFromAddress returns internal address representation (descriptor) of given address
+func (p *MonacoinParser) GetAddrDescFromAddress(address string) (bchain.AddressDescriptor, error) {
+	return p.addressToOutputScript(address)
 }
 
-// AddressToOutputScript converts monacoin address to ScriptPubKey
-func (p *MonacoinParser) AddressToOutputScript(address string) ([]byte, error) {
+// addressToOutputScript converts monacoin address to ScriptPubKey
+func (p *MonacoinParser) addressToOutputScript(address string) ([]byte, error) {
 	switch p.Params.Net {
 	case MainnetMagic:
 		da, err := monautil.DecodeAddress(address, &MonaMainParams)

@@ -5,17 +5,18 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
+	"math/big"
 
 	vlq "github.com/bsm/go-vlq"
 	"github.com/btcsuite/btcd/blockchain"
-	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/btcsuite/btcutil"
+	"github.com/jakm/btcutil"
+	"github.com/jakm/btcutil/chaincfg"
+	"github.com/jakm/btcutil/txscript"
 )
 
 // OutputScriptToAddressesFunc converts ScriptPubKey to bitcoin addresses
-type OutputScriptToAddressesFunc func(script []byte, params *chaincfg.Params) ([]string, error)
+type OutputScriptToAddressesFunc func(script []byte) ([]string, bool, error)
 
 // BitcoinParser handle
 type BitcoinParser struct {
@@ -26,14 +27,15 @@ type BitcoinParser struct {
 
 // NewBitcoinParser returns new BitcoinParser instance
 func NewBitcoinParser(params *chaincfg.Params, c *Configuration) *BitcoinParser {
-	return &BitcoinParser{
-		&bchain.BaseParser{
-			AddressFactory:       bchain.NewBaseAddress,
+	p := &BitcoinParser{
+		BaseParser: &bchain.BaseParser{
 			BlockAddressesToKeep: c.BlockAddressesToKeep,
+			AmountDecimalPoint:   8,
 		},
-		params,
-		outputScriptToAddresses,
+		Params: params,
 	}
+	p.OutputScriptToAddressesFunc = p.outputScriptToAddresses
+	return p
 }
 
 // GetChainParams contains network parameters for the main Bitcoin network,
@@ -49,18 +51,28 @@ func GetChainParams(chain string) *chaincfg.Params {
 	return &chaincfg.MainNetParams
 }
 
-// GetAddrIDFromVout returns internal address representation of given transaction output
-func (p *BitcoinParser) GetAddrIDFromVout(output *bchain.Vout) ([]byte, error) {
+// GetAddrDescFromVout returns internal address representation (descriptor) of given transaction output
+func (p *BitcoinParser) GetAddrDescFromVout(output *bchain.Vout) (bchain.AddressDescriptor, error) {
 	return hex.DecodeString(output.ScriptPubKey.Hex)
 }
 
-// GetAddrIDFromAddress returns internal address representation of given address
-func (p *BitcoinParser) GetAddrIDFromAddress(address string) ([]byte, error) {
-	return p.AddressToOutputScript(address)
+// GetAddrDescFromAddress returns internal address representation (descriptor) of given address
+func (p *BitcoinParser) GetAddrDescFromAddress(address string) (bchain.AddressDescriptor, error) {
+	return p.addressToOutputScript(address)
 }
 
-// AddressToOutputScript converts bitcoin address to ScriptPubKey
-func (p *BitcoinParser) AddressToOutputScript(address string) ([]byte, error) {
+// GetAddressesFromAddrDesc returns addresses for given address descriptor with flag if the addresses are searchable
+func (p *BitcoinParser) GetAddressesFromAddrDesc(addrDesc bchain.AddressDescriptor) ([]string, bool, error) {
+	return p.OutputScriptToAddressesFunc(addrDesc)
+}
+
+// GetScriptFromAddrDesc returns output script for given address descriptor
+func (p *BitcoinParser) GetScriptFromAddrDesc(addrDesc bchain.AddressDescriptor) ([]byte, error) {
+	return addrDesc, nil
+}
+
+// addressToOutputScript converts bitcoin address to ScriptPubKey
+func (p *BitcoinParser) addressToOutputScript(address string) ([]byte, error) {
 	da, err := btcutil.DecodeAddress(address, p.Params)
 	if err != nil {
 		return nil, err
@@ -72,22 +84,65 @@ func (p *BitcoinParser) AddressToOutputScript(address string) ([]byte, error) {
 	return script, nil
 }
 
-// OutputScriptToAddresses converts ScriptPubKey to bitcoin addresses
-func (p *BitcoinParser) OutputScriptToAddresses(script []byte) ([]string, error) {
-	return p.OutputScriptToAddressesFunc(script, p.Params)
+// TryParseOPReturn tries to process OP_RETURN script and return its string representation
+func TryParseOPReturn(script []byte) string {
+	if len(script) > 1 && script[0] == txscript.OP_RETURN {
+		// trying 2 variants of OP_RETURN data
+		// 1) OP_RETURN OP_PUSHDATA1 <datalen> <data>
+		// 2) OP_RETURN <datalen> <data>
+		var data []byte
+		var l int
+		if script[1] == txscript.OP_PUSHDATA1 && len(script) > 2 {
+			l = int(script[2])
+			data = script[3:]
+			if l != len(data) {
+				l = int(script[1])
+				data = script[2:]
+			}
+		} else {
+			l = int(script[1])
+			data = script[2:]
+		}
+		if l == len(data) {
+			isASCII := true
+			for _, c := range data {
+				if c < 32 || c > 127 {
+					isASCII = false
+					break
+				}
+			}
+			var ed string
+			if isASCII {
+				ed = "(" + string(data) + ")"
+			} else {
+				ed = hex.EncodeToString(data)
+			}
+			return "OP_RETURN " + ed
+		}
+	}
+	return ""
 }
 
 // outputScriptToAddresses converts ScriptPubKey to bitcoin addresses
-func outputScriptToAddresses(script []byte, params *chaincfg.Params) ([]string, error) {
-	_, addresses, _, err := txscript.ExtractPkScriptAddrs(script, params)
+func (p *BitcoinParser) outputScriptToAddresses(script []byte) ([]string, bool, error) {
+	sc, addresses, _, err := txscript.ExtractPkScriptAddrs(script, p.Params)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	rv := make([]string, len(addresses))
 	for i, a := range addresses {
 		rv[i] = a.EncodeAddress()
 	}
-	return rv, nil
+	var s bool
+	if sc != txscript.NonStandardTy && sc != txscript.NullDataTy {
+		s = true
+	} else if len(rv) == 0 {
+		or := TryParseOPReturn(script)
+		if or != "" {
+			rv = []string{or}
+		}
+	}
+	return rv, s, nil
 }
 
 func (p *BitcoinParser) TxFromMsgTx(t *wire.MsgTx, parseAddresses bool) bchain.Tx {
@@ -115,7 +170,7 @@ func (p *BitcoinParser) TxFromMsgTx(t *wire.MsgTx, parseAddresses bool) bchain.T
 	for i, out := range t.TxOut {
 		addrs := []string{}
 		if parseAddresses {
-			addrs, _ = p.OutputScriptToAddresses(out.PkScript)
+			addrs, _, _ = p.OutputScriptToAddressesFunc(out.PkScript)
 		}
 		s := bchain.ScriptPubKey{
 			Hex:       hex.EncodeToString(out.PkScript),
@@ -123,8 +178,10 @@ func (p *BitcoinParser) TxFromMsgTx(t *wire.MsgTx, parseAddresses bool) bchain.T
 			// missing: Asm,
 			// missing: Type,
 		}
+		var vs big.Int
+		vs.SetInt64(out.Value)
 		vout[i] = bchain.Vout{
-			Value:        float64(out.Value) / 1E8,
+			ValueSat:     vs,
 			N:            uint32(i),
 			ScriptPubKey: s,
 		}
@@ -152,17 +209,6 @@ func (p *BitcoinParser) ParseTx(b []byte) (*bchain.Tx, error) {
 	}
 	tx := p.TxFromMsgTx(&t, true)
 	tx.Hex = hex.EncodeToString(b)
-
-	for i, vout := range tx.Vout {
-		if len(vout.ScriptPubKey.Addresses) == 1 {
-			a, err := p.AddressFactory(vout.ScriptPubKey.Addresses[0])
-			if err != nil {
-				return nil, err
-			}
-			tx.Vout[i].Address = a
-		}
-	}
-
 	return &tx, nil
 }
 
@@ -180,7 +226,13 @@ func (p *BitcoinParser) ParseBlock(b []byte) (*bchain.Block, error) {
 		txs[ti] = p.TxFromMsgTx(t, false)
 	}
 
-	return &bchain.Block{Txs: txs}, nil
+	return &bchain.Block{
+		BlockHeader: bchain.BlockHeader{
+			Size: len(b),
+			Time: w.Header.Timestamp.Unix(),
+		},
+		Txs: txs,
+	}, nil
 }
 
 // PackTx packs transaction to byte array

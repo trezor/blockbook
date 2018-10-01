@@ -11,6 +11,8 @@ const (
 	DbStateClosed = uint32(iota)
 	// DbStateOpen means db is open or application died without closing the db
 	DbStateOpen
+	// DbStateInconsistent means db is in inconsistent state and cannot be used
+	DbStateInconsistent
 )
 
 // InternalStateColumn contains the data of a db column
@@ -35,6 +37,10 @@ type InternalState struct {
 
 	LastStore time.Time `json:"lastStore"`
 
+	// true if application is with flag --sync
+	SyncMode bool `json:"syncMode"`
+
+	InitialSync    bool      `json:"initialSync"`
 	IsSynchronized bool      `json:"isSynchronized"`
 	BestHeight     uint32    `json:"bestHeight"`
 	LastSync       time.Time `json:"lastSync"`
@@ -58,6 +64,14 @@ func (is *InternalState) FinishedSync(bestHeight uint32) {
 	is.mux.Lock()
 	defer is.mux.Unlock()
 	is.IsSynchronized = true
+	is.BestHeight = bestHeight
+	is.LastSync = time.Now()
+}
+
+// UpdateBestHeight sets new best height, without changing IsSynchronized flag
+func (is *InternalState) UpdateBestHeight(bestHeight uint32) {
+	is.mux.Lock()
+	defer is.mux.Unlock()
 	is.BestHeight = bestHeight
 	is.LastSync = time.Now()
 }

@@ -9,6 +9,7 @@ ExecStart={{.Env.BlockbookInstallPath}}/{{.Coin.Alias}}/bin/blockbook -blockchai
 User={{.Blockbook.SystemUser}}
 Type=simple
 Restart=on-failure
+TimeoutStopSec=300
 WorkingDirectory={{.Env.BlockbookInstallPath}}/{{.Coin.Alias}}
 
 # Resource limits
