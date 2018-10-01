@@ -138,7 +138,7 @@ func makeRocksDB(parser bchain.BlockChainParser, m *common.Metrics, is *common.I
 		return nil, nil, err
 	}
 
-	d, err := db.NewRocksDB(p, 100000, parser, m)
+	d, err := db.NewRocksDB(p, 1<<17, 1<<14, parser, m)
 	if err != nil {
 		return nil, nil, err
 	}
