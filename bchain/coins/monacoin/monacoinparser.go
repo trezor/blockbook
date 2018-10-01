@@ -65,7 +65,9 @@ type MonacoinParser struct {
 
 // NewMonacoinParser returns new MonacoinParser instance
 func NewMonacoinParser(params *chaincfg.Params, c *btc.Configuration) *MonacoinParser {
-	return &MonacoinParser{BitcoinParser: btc.NewBitcoinParser(params, c)}
+	p := &MonacoinParser{BitcoinParser: btc.NewBitcoinParser(params, c)}
+	p.OutputScriptToAddressesFunc = p.outputScriptToAddresses
+	return p
 }
 
 // GetChainParams contains network parameters for the main Monacoin network,
@@ -79,17 +81,6 @@ func GetChainParams(chain string) *chaincfg.Params {
 		return &TestNetParams
 	default:
 		return &MainNetParams
-	}
-}
-
-// GetMonaChainParams contains network parameters for the main Monacoin network,
-// and the test Monacoin network
-func GetMonaChainParams(chain string) *monacoinCfg.Params {
-	switch chain {
-	case "test":
-		return &MonaTestParams
-	default:
-		return &MonaMainParams
 	}
 }
 
@@ -121,5 +112,54 @@ func (p *MonacoinParser) addressToOutputScript(address string) ([]byte, error) {
 			return nil, err
 		}
 		return script, nil
+	}
+}
+
+// GetAddressesFromAddrDesc returns addresses for given address descriptor with flag if the addresses are searchable
+func (p *MonacoinParser) GetAddressesFromAddrDesc(addrDesc bchain.AddressDescriptor) ([]string, bool, error) {
+	return p.OutputScriptToAddressesFunc(addrDesc)
+}
+
+// outputScriptToAddresses converts ScriptPubKey to bitcoin addresses
+func (p *MonacoinParser) outputScriptToAddresses(script []byte) ([]string, bool, error) {
+	switch p.Params.Net {
+	case MainnetMagic:
+		sc, addresses, _, err := txscript.ExtractPkScriptAddrs(script, &MonaMainParams)
+		if err != nil {
+			return nil, false, err
+		}
+		rv := make([]string, len(addresses))
+		for i, a := range addresses {
+			rv[i] = a.EncodeAddress()
+		}
+		var s bool
+		if sc != txscript.NonStandardTy && sc != txscript.NullDataTy {
+			s = true
+		} else if len(rv) == 0 {
+			or := btc.TryParseOPReturn(script)
+			if or != "" {
+				rv = []string{or}
+			}
+		}
+		return rv, s, nil
+	default:
+		sc, addresses, _, err := txscript.ExtractPkScriptAddrs(script, &MonaTestParams)
+		if err != nil {
+			return nil, false, err
+		}
+		rv := make([]string, len(addresses))
+		for i, a := range addresses {
+			rv[i] = a.EncodeAddress()
+		}
+		var s bool
+		if sc != txscript.NonStandardTy && sc != txscript.NullDataTy {
+			s = true
+		} else if len(rv) == 0 {
+			or := btc.TryParseOPReturn(script)
+			if or != "" {
+				rv = []string{or}
+			}
+		}
+		return rv, s, nil
 	}
 }
