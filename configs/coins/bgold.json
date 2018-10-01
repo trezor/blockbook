@@ -22,10 +22,10 @@
     "package_name": "backend-bgold",
     "package_revision": "satoshilabs-1",
     "system_user": "bgold",
-    "version": "0.15.1",
-    "binary_url": "https://github.com/BTCGPU/BTCGPU/releases/download/v0.15.1/bitcoin-gold-0.15.1-x86_64-linux-gnu.tar.gz",
+    "version": "0.15.2",
+    "binary_url": "https://github.com/BTCGPU/BTCGPU/releases/download/v0.15.2/bitcoin-gold-0.15.2-x86_64-linux-gnu.tar.gz",
     "verification_type": "gpg-sha256",
-    "verification_source": "https://github.com/BTCGPU/BTCGPU/releases/download/v0.15.1/SHA256SUMS.asc",
+    "verification_source": "https://github.com/BTCGPU/BTCGPU/releases/download/v0.15.2/SHA256SUMS.asc",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
         "bin/bitcoin-qt"
@@ -239,11 +239,11 @@
     "system_user": "blockbook-bgold",
     "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
     "public_binding_template": ":{{.Ports.BlockbookPublic}}",
-    "explorer_url": "https://btg-explorer.trezor.io/",
+    "explorer_url": "",
     "additional_params": "",
     "block_chain": {
       "parse": true,
-      "subversion": "/Bitcoin Gold:0.15.1/",
+      "subversion": "/Bitcoin Gold:0.15.2/",
       "mempool_workers": 8,
       "mempool_sub_workers": 2,
       "block_addresses_to_keep": 300,

@@ -71,11 +71,7 @@ type Block struct {
 	Txs []Tx `json:"tx"`
 }
 
-type ThinBlock struct {
-	BlockHeader
-	Txids []string `json:"tx"`
-}
-
+// BlockHeader contains limited data (as needed for indexing) from backend block header
 type BlockHeader struct {
 	Hash          string `json:"hash"`
 	Prev          string `json:"previousblockhash"`
@@ -84,6 +80,17 @@ type BlockHeader struct {
 	Confirmations int    `json:"confirmations"`
 	Size          int    `json:"size"`
 	Time          int64  `json:"time,omitempty"`
+}
+
+// BlockInfo contains extended block header data and a list of block txids
+type BlockInfo struct {
+	BlockHeader
+	Version    json.Number `json:"version"`
+	MerkleRoot string      `json:"merkleroot"`
+	Nonce      json.Number `json:"nonce"`
+	Bits       string      `json:"bits"`
+	Difficulty json.Number `json:"difficulty"`
+	Txids      []string    `json:"tx,omitempty"`
 }
 
 type MempoolEntry struct {
@@ -103,6 +110,20 @@ type MempoolEntry struct {
 	Depends         []string    `json:"depends"`
 }
 
+type ChainInfo struct {
+	Chain           string  `json:"chain"`
+	Blocks          int     `json:"blocks"`
+	Headers         int     `json:"headers"`
+	Bestblockhash   string  `json:"bestblockhash"`
+	Difficulty      string  `json:"difficulty"`
+	SizeOnDisk      int64   `json:"size_on_disk"`
+	Version         string  `json:"version"`
+	Subversion      string  `json:"subversion"`
+	ProtocolVersion string  `json:"protocolversion"`
+	Timeoffset      float64 `json:"timeoffset"`
+	Warnings        string  `json:"warnings"`
+}
+
 type RPCError struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
@@ -119,6 +140,12 @@ func (ad AddressDescriptor) String() string {
 	return "ad:" + hex.EncodeToString(ad)
 }
 
+// OnNewBlockFunc is used to send notification about a new block
+type OnNewBlockFunc func(hash string, height uint32)
+
+// OnNewTxAddrFunc is used to send notification about a new transaction/address
+type OnNewTxAddrFunc func(txid string, addr string, isOutput bool)
+
 // BlockChain defines common interface to block chain daemon
 type BlockChain interface {
 	// life-cycle methods
@@ -129,13 +156,14 @@ type BlockChain interface {
 	GetNetworkName() string
 	GetSubversion() string
 	GetCoinName() string
+	GetChainInfo() (*ChainInfo, error)
 	// requests
-	GetBlockChainInfo() (string, error)
 	GetBestBlockHash() (string, error)
 	GetBestBlockHeight() (uint32, error)
 	GetBlockHash(height uint32) (string, error)
 	GetBlockHeader(hash string) (*BlockHeader, error)
 	GetBlock(hash string, height uint32) (*Block, error)
+	GetBlockInfo(hash string) (*BlockInfo, error)
 	GetMempool() ([]string, error)
 	GetTransaction(txid string) (*Tx, error)
 	GetTransactionForMempool(txid string) (*Tx, error)
@@ -143,7 +171,7 @@ type BlockChain interface {
 	EstimateFee(blocks int) (big.Int, error)
 	SendRawTransaction(tx string) (string, error)
 	// mempool
-	ResyncMempool(onNewTxAddr func(txid string, addr string)) (int, error)
+	ResyncMempool(onNewTxAddr OnNewTxAddrFunc) (int, error)
 	GetMempoolTransactions(address string) ([]string, error)
 	GetMempoolTransactionsForAddrDesc(addrDesc AddressDescriptor) ([]string, error)
 	GetMempoolEntry(txid string) (*MempoolEntry, error)

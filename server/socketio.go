@@ -551,7 +551,7 @@ func (s *SocketIoServer) getInfo() (res resultGetInfo, err error) {
 	res.Result.Network = s.chain.GetNetworkName()
 	res.Result.Subversion = s.chain.GetSubversion()
 	res.Result.CoinName = s.chain.GetCoinName()
-	res.Result.About = blockbookAbout
+	res.Result.About = api.BlockbookAbout
 	return
 }
 
@@ -748,8 +748,12 @@ func (s *SocketIoServer) OnNewBlockHash(hash string) {
 }
 
 // OnNewTxAddr notifies users subscribed to bitcoind/addresstxid about new block
-func (s *SocketIoServer) OnNewTxAddr(txid string, addr string) {
-	c := s.server.BroadcastTo("bitcoind/addresstxid-"+addr, "bitcoind/addresstxid", map[string]string{"address": addr, "txid": txid})
+func (s *SocketIoServer) OnNewTxAddr(txid string, addr string, isOutput bool) {
+	data := map[string]interface{}{"address": addr, "txid": txid}
+	if !isOutput {
+		data["input"] = true
+	}
+	c := s.server.BroadcastTo("bitcoind/addresstxid-"+addr, "bitcoind/addresstxid", data)
 	if c > 0 {
 		glog.Info("broadcasting new txid ", txid, " for addr ", addr, " to ", c, " channels")
 	}

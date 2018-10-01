@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"fmt"
 	"math/big"
+	"strconv"
 	"time"
 
 	"github.com/golang/glog"
@@ -41,6 +42,61 @@ func (w *Worker) getAddressesFromVout(vout *bchain.Vout) (bchain.AddressDescript
 	}
 	a, s, err := w.chainParser.GetAddressesFromAddrDesc(addrDesc)
 	return addrDesc, a, s, err
+}
+
+// setSpendingTxToVout is helper function, that finds transaction that spent given output and sets it to the output
+// there is not an index, it must be found using addresses -> txaddresses -> tx
+func (w *Worker) setSpendingTxToVout(vout *Vout, txid string, height, bestheight uint32) error {
+	err := w.db.GetAddrDescTransactions(vout.ScriptPubKey.AddrDesc, height, ^uint32(0), func(t string, index uint32, isOutput bool) error {
+		if isOutput == false {
+			tsp, err := w.db.GetTxAddresses(t)
+			if err != nil {
+				glog.Warning("DB inconsistency:  tx ", t, ": not found in txAddresses")
+			} else {
+				if len(tsp.Inputs) > int(index) {
+					if tsp.Inputs[index].ValueSat.Cmp(&vout.ValueSat) == 0 {
+						spentTx, spentHeight, err := w.txCache.GetTransaction(t, bestheight)
+						if err != nil {
+							glog.Warning("Tx ", t, ": not found")
+						} else {
+							if len(spentTx.Vin) > int(index) {
+								if spentTx.Vin[index].Txid == txid {
+									vout.SpentTxID = t
+									vout.SpentHeight = int(spentHeight)
+									vout.SpentIndex = int(index)
+									return &db.StopIteration{}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		return nil
+	})
+	return err
+}
+
+// GetSpendingTxid returns transaction id of transaction that spent given output
+func (w *Worker) GetSpendingTxid(txid string, n int) (string, error) {
+	start := time.Now()
+	bestheight, _, err := w.db.GetBestBlock()
+	if err != nil {
+		return "", err
+	}
+	tx, err := w.GetTransaction(txid, bestheight, false)
+	if err != nil {
+		return "", err
+	}
+	if n >= len(tx.Vout) || n < 0 {
+		return "", NewApiError(fmt.Sprintf("Passed incorrect vout index %v for tx %v, len vout %v", n, tx.Txid, len(tx.Vout)), false)
+	}
+	err = w.setSpendingTxToVout(&tx.Vout[n], tx.Txid, uint32(tx.Blockheight), bestheight)
+	if err != nil {
+		return "", err
+	}
+	glog.Info("GetSpendingTxid ", txid, " ", n, " finished in ", time.Since(start))
+	return tx.Vout[n].SpentTxID, nil
 }
 
 // GetTransaction reads transaction data from txid
@@ -124,37 +180,9 @@ func (w *Worker) GetTransaction(txid string, bestheight uint32, spendingTxs bool
 		if ta != nil {
 			vout.Spent = ta.Outputs[i].Spent
 			if spendingTxs && vout.Spent {
-				// find transaction that spent this output
-				// there is not an index, it must be found in addresses -> txaddresses -> tx
-				err = w.db.GetAddrDescTransactions(vout.ScriptPubKey.AddrDesc, height, ^uint32(0), func(t string, index uint32, isOutput bool) error {
-					if isOutput == false {
-						tsp, err := w.db.GetTxAddresses(t)
-						if err != nil {
-							glog.Warning("DB inconsistency:  tx ", t, ": not found in txAddresses")
-						} else {
-							if len(tsp.Inputs) > int(index) {
-								if tsp.Inputs[index].ValueSat.Cmp(&vout.ValueSat) == 0 {
-									spentTx, spentHeight, err := w.txCache.GetTransaction(t, bestheight)
-									if err != nil {
-										glog.Warning("Tx ", t, ": not found")
-									} else {
-										if len(spentTx.Vin) > int(index) {
-											if spentTx.Vin[index].Txid == bchainTx.Txid {
-												vout.SpentTxID = t
-												vout.SpentHeight = int(spentHeight)
-												vout.SpentIndex = int(index)
-												return &db.StopIteration{}
-											}
-										}
-									}
-								}
-							}
-						}
-					}
-					return nil
-				})
+				err = w.setSpendingTxToVout(vout, bchainTx.Txid, height, bestheight)
 				if err != nil {
-					glog.Errorf("GetAddrDescTransactions error %v, %v, output %v", err, vout.ScriptPubKey.AddrDesc)
+					glog.Errorf("setSpendingTxToVout error %v, %v, output %v", err, vout.ScriptPubKey.AddrDesc, vout.N)
 				}
 			}
 		}
@@ -173,12 +201,12 @@ func (w *Worker) GetTransaction(txid string, bestheight uint32, spendingTxs bool
 		Confirmations: bchainTx.Confirmations,
 		Fees:          w.chainParser.AmountToDecimalString(&feesSat),
 		Locktime:      bchainTx.LockTime,
-		WithSpends:    spendingTxs,
 		Time:          bchainTx.Time,
 		Txid:          bchainTx.Txid,
 		ValueIn:       w.chainParser.AmountToDecimalString(&valInSat),
 		ValueOut:      w.chainParser.AmountToDecimalString(&valOutSat),
 		Version:       bchainTx.Version,
+		Hex:           bchainTx.Hex,
 		Vin:           vins,
 		Vout:          vouts,
 	}
@@ -296,6 +324,27 @@ func (w *Worker) txFromTxAddress(txid string, ta *db.TxAddresses, bi *db.BlockIn
 	return r
 }
 
+func computePaging(count, page, itemsOnPage int) (Paging, int, int, int) {
+	from := page * itemsOnPage
+	totalPages := (count - 1) / itemsOnPage
+	if totalPages < 0 {
+		totalPages = 0
+	}
+	if from >= count {
+		page = totalPages
+	}
+	from = page * itemsOnPage
+	to := (page + 1) * itemsOnPage
+	if to > count {
+		to = count
+	}
+	return Paging{
+		ItemsOnPage: itemsOnPage,
+		Page:        page + 1,
+		TotalPages:  totalPages + 1,
+	}, from, to, page
+}
+
 // GetAddress computes address value and gets transactions for given address
 func (w *Worker) GetAddress(address string, page int, txsOnPage int, onlyTxids bool) (*Address, error) {
 	start := time.Now()
@@ -341,23 +390,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, onlyTxids b
 	if err != nil {
 		return nil, errors.Annotatef(err, "GetBestBlock")
 	}
-	// paging
-	from := page * txsOnPage
-	totalPages := (len(txc) - 1) / txsOnPage
-	if totalPages < 0 {
-		totalPages = 0
-	}
-	if from >= len(txc) {
-		page = totalPages - 1
-		if page < 0 {
-			page = 0
-		}
-	}
-	from = page * txsOnPage
-	to := (page + 1) * txsOnPage
-	if to > len(txc) {
-		to = len(txc)
-	}
+	pg, from, to, page := computePaging(len(txc), page, txsOnPage)
 	var txs []*Tx
 	var txids []string
 	if onlyTxids {
@@ -420,6 +453,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, onlyTxids b
 		txs = txs[:txi]
 	}
 	r := &Address{
+		Paging:                  pg,
 		AddrStr:                 address,
 		Balance:                 w.chainParser.AmountToDecimalString(&ba.BalanceSat),
 		TotalReceived:           w.chainParser.AmountToDecimalString(ba.ReceivedSat()),
@@ -429,10 +463,130 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, onlyTxids b
 		UnconfirmedTxApperances: len(txm),
 		Transactions:            txs,
 		Txids:                   txids,
-		Page:                    page + 1,
-		TotalPages:              totalPages + 1,
-		TxsOnPage:               txsOnPage,
 	}
 	glog.Info("GetAddress ", address, " finished in ", time.Since(start))
 	return r, nil
+}
+
+// GetBlocks returns BlockInfo for blocks on given page
+func (w *Worker) GetBlocks(page int, blocksOnPage int) (*Blocks, error) {
+	start := time.Now()
+	page--
+	if page < 0 {
+		page = 0
+	}
+	b, _, err := w.db.GetBestBlock()
+	bestheight := int(b)
+	if err != nil {
+		return nil, errors.Annotatef(err, "GetBestBlock")
+	}
+	pg, from, to, page := computePaging(bestheight+1, page, blocksOnPage)
+	r := &Blocks{Paging: pg}
+	r.Blocks = make([]db.BlockInfo, to-from)
+	for i := from; i < to; i++ {
+		bi, err := w.db.GetBlockInfo(uint32(bestheight - i))
+		if err != nil {
+			return nil, err
+		}
+		r.Blocks[i-from] = *bi
+	}
+	glog.Info("GetBlocks page ", page, " finished in ", time.Since(start))
+	return r, nil
+}
+
+// GetBlock returns paged data about block
+func (w *Worker) GetBlock(bid string, page int, txsOnPage int) (*Block, error) {
+	start := time.Now()
+	page--
+	if page < 0 {
+		page = 0
+	}
+	var hash string
+	height, err := strconv.Atoi(bid)
+	if err == nil && height < int(^uint32(0)) {
+		hash, err = w.db.GetBlockHash(uint32(height))
+	} else {
+		hash = bid
+	}
+	bi, err := w.chain.GetBlockInfo(hash)
+	if err != nil {
+		if err == bchain.ErrBlockNotFound {
+			return nil, NewApiError("Block not found", true)
+		}
+		return nil, NewApiError(fmt.Sprintf("Block not found, %v", err), true)
+	}
+	dbi := &db.BlockInfo{
+		Hash:   bi.Hash,
+		Height: bi.Height,
+		Time:   bi.Time,
+	}
+	txCount := len(bi.Txids)
+	bestheight, _, err := w.db.GetBestBlock()
+	if err != nil {
+		return nil, errors.Annotatef(err, "GetBestBlock")
+	}
+	pg, from, to, page := computePaging(txCount, page, txsOnPage)
+	glog.Info("GetBlock ", bid, ", page ", page, " finished in ", time.Since(start))
+	txs := make([]*Tx, to-from)
+	txi := 0
+	for i := from; i < to; i++ {
+		txid := bi.Txids[i]
+		ta, err := w.db.GetTxAddresses(txid)
+		if err != nil {
+			return nil, errors.Annotatef(err, "GetTxAddresses %v", txid)
+		}
+		if ta == nil {
+			glog.Warning("DB inconsistency:  tx ", txid, ": not found in txAddresses")
+			continue
+		}
+		txs[txi] = w.txFromTxAddress(txid, ta, dbi, bestheight)
+		txi++
+	}
+	txs = txs[:txi]
+	bi.Txids = nil
+	return &Block{
+		Paging:       pg,
+		BlockInfo:    *bi,
+		TxCount:      txCount,
+		Transactions: txs,
+	}, nil
+}
+
+// GetSystemInfo returns information about system
+func (w *Worker) GetSystemInfo(internal bool) (*SystemInfo, error) {
+	start := time.Now()
+	ci, err := w.chain.GetChainInfo()
+	if err != nil {
+		return nil, errors.Annotatef(err, "GetChainInfo")
+	}
+	vi := common.GetVersionInfo()
+	ss, bh, st := w.is.GetSyncState()
+	ms, mt, msz := w.is.GetMempoolSyncState()
+	var dbc []common.InternalStateColumn
+	var dbs int64
+	if internal {
+		dbc = w.is.GetAllDBColumnStats()
+		dbs = w.is.DBSizeTotal()
+	}
+	bi := &BlockbookInfo{
+		Coin:              w.is.Coin,
+		Host:              w.is.Host,
+		Version:           vi.Version,
+		GitCommit:         vi.GitCommit,
+		BuildTime:         vi.BuildTime,
+		SyncMode:          w.is.SyncMode,
+		InitialSync:       w.is.InitialSync,
+		InSync:            ss,
+		BestHeight:        bh,
+		LastBlockTime:     st,
+		InSyncMempool:     ms,
+		LastMempoolTime:   mt,
+		MempoolSize:       msz,
+		DbSize:            w.db.DatabaseSizeOnDisk(),
+		DbSizeFromColumns: dbs,
+		DbColumns:         dbc,
+		About:             BlockbookAbout,
+	}
+	glog.Info("GetSystemInfo finished in ", time.Since(start))
+	return &SystemInfo{bi, ci}, nil
 }

@@ -79,7 +79,7 @@ Good examples of coin configuration are
     * `system_user` – User used to run Blockbook service. See convention note in [build guide](/docs/build.md#on-naming-conventions-and-versioning).
     * `internal_binding_template` – Template for *-internal* parameter. See note on templates below.
     * `public_binding_template` – Template for *-public* parameter. See note on templates below.
-    * `explorer_url` – URL of blockchain explorer.
+    * `explorer_url` – URL of blockchain explorer. Leave empty for internal explorer.
     * `additional_params` – Additional params of exec command (see [Dogecoin definition](configs/coins/dogecoin.json)).
     * `block_chain` – Configuration of BlockChain type that ensures communication with back-end service. All options
        must be tweaked for each individual coin separely.

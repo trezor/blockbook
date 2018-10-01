@@ -170,7 +170,7 @@ func Test_GetAddressesFromAddrDesc(t *testing.T) {
 		{
 			name:    "OP_RETURN hex",
 			args:    args{script: "6a072020f1686f6a20"},
-			want:    []string{"OP_RETURN 07 2020f1686f6a20"},
+			want:    []string{"OP_RETURN 2020f1686f6a20"},
 			want2:   false,
 			wantErr: false,
 		},

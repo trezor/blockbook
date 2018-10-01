@@ -2,7 +2,7 @@
 <div class="alert alert-data">
     <div class="row line-bot">
         <div class="col-xs-7 col-md-8 ellipsis">
-            <a href="/explorer/tx/{{$tx.Txid}}">{{$tx.Txid}}</a>
+            <a href="/tx/{{$tx.Txid}}">{{$tx.Txid}}</a>
         </div>
         {{- if $tx.Confirmations -}}
         <div class="col-xs-5 col-md-4 text-muted text-right">mined {{formatUnixTime $tx.Blocktime}}</div>
@@ -16,9 +16,12 @@
                         {{- range $vin := $tx.Vin -}}
                         <tr>
                             <td>
-                                {{- range $a := $vin.Addresses}}
+                                {{- if $vin.Txid -}}
+                                <a class="float-left text-muted" href="/tx/{{$vin.Txid}}" title="Outpoint {{$vin.Txid}},{{$vin.Vout}}">➡&nbsp;</a>
+                                {{- end -}}
+                                {{- range $a := $vin.Addresses -}}
                                 <span class="ellipsis float-left">
-                                    {{if and (ne $a $addr) $vin.Searchable}}<a href="/explorer/address/{{$a}}">{{$a}}</a>{{else}}{{$a}}{{end}}
+                                    {{if and (ne $a $addr) $vin.Searchable}}<a href="/address/{{$a}}">{{$a}}</a>{{else}}{{$a}}{{end}}
                                 </span>
                                 {{- else -}}
                                 <span class="float-left">No Inputs (Newly Generated Coins)</span>
@@ -26,6 +29,10 @@
                                 <span class="float-right{{if stringInSlice $addr $vin.Addresses}} text-danger{{end}}">{{formatAmount $vin.Value}} {{$cs}}</span>
                                 {{- end -}}
                             </td>
+                        </tr>
+                        {{- else -}}
+                        <tr>
+                            <td>No Inputs</td>
                         </tr>
                         {{- end -}}
                     </tbody>
@@ -46,17 +53,21 @@
                             <td>
                                 {{- range $a := $vout.ScriptPubKey.Addresses -}}
                                 <span class="ellipsis float-left">
-                                    {{- if and (ne $a $addr) $vout.ScriptPubKey.Searchable}}<a href="/explorer/address/{{$a}}">{{$a}}</a>{{else}}{{$a}}{{- end -}}
+                                    {{- if and (ne $a $addr) $vout.ScriptPubKey.Searchable}}<a href="/address/{{$a}}">{{$a}}</a>{{else}}{{$a}}{{- end -}}
                                 </span>
                                 {{- else -}}
                                 <span class="float-left">Unparsed address</span>
                                 {{- end -}}
                                 <span class="float-right{{if stringInSlice $addr $vout.ScriptPubKey.Addresses}} text-success{{end}}">
-                                    {{formatAmount $vout.Value}} {{$cs}}{{if $vout.Spent}}{{if $vout.SpentTxID}}<a class="text-danger" href="/explorer/tx/{{$vout.SpentTxID}}">(S)</a>{{else}}<span class="text-danger">(S)</span>{{end}}{{else -}}
-                                    <span class="text-success">(U)</span>
+                                    {{formatAmount $vout.Value}} {{$cs}} {{if $vout.Spent}}<a class="text-danger" href="{{if $vout.SpentTxID}}/tx/{{$vout.SpentTxID}}{{else}}/spending/{{$tx.Txid}}/{{$vout.N}}{{end}}" title="Spent">➡</a>{{else -}}
+                                    <span class="text-success" title="Unspent"> <b>×</b></span>
                                     {{- end -}}
                                 </span>
                             </td>
+                        </tr>
+                        {{- else -}}
+                        <tr>
+                            <td>No Outputs</td>
                         </tr>
                         {{- end -}}
                     </tbody>

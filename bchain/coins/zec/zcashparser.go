@@ -19,7 +19,7 @@ var (
 	TestNetParams chaincfg.Params
 )
 
-func init() {
+func initParams() {
 	MainNetParams = chaincfg.MainNetParams
 	MainNetParams.Net = MainnetMagic
 
@@ -63,6 +63,9 @@ func NewZCashParser(params *chaincfg.Params, c *btc.Configuration) *ZCashParser 
 // the regression test ZCash network, the test ZCash network and
 // the simulation test ZCash network, in this order
 func GetChainParams(chain string) *chaincfg.Params {
+	if MainNetParams.Name == "" {
+		initParams()
+	}
 	var params *chaincfg.Params
 	switch chain {
 	case "test":

@@ -69,9 +69,9 @@
 
 [[projects]]
   name = "github.com/ethereum/go-ethereum"
-  packages = [".","common","common/hexutil","common/math","core/types","crypto","crypto/secp256k1","crypto/sha3","ethclient","ethdb","log","metrics","params","rlp","rpc","trie"]
-  revision = "329ac18ef617d0238f71637bffe78f028b0f13f7"
-  version = "v1.8.3"
+  packages = [".","common","common/hexutil","common/math","core/types","crypto","crypto/secp256k1","crypto/sha3","ethclient","ethdb","log","metrics","p2p/netutil","params","rlp","rpc","trie"]
+  revision = "89451f7c382ad2185987ee369f16416f89c28a7d"
+  version = "v1.8.15"
 
 [[projects]]
   name = "github.com/go-stack/stack"

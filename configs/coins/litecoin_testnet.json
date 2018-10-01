@@ -22,10 +22,10 @@
     "package_name": "backend-litecoin-testnet",
     "package_revision": "satoshilabs-1",
     "system_user": "litecoin",
-    "version": "0.16.0",
-    "binary_url": "https://download.litecoin.org/litecoin-0.16.0/linux/litecoin-0.16.0-x86_64-linux-gnu.tar.gz",
+    "version": "0.16.3",
+    "binary_url": "https://download.litecoin.org/litecoin-0.16.3/linux/litecoin-0.16.3-x86_64-linux-gnu.tar.gz",
     "verification_type": "gpg-sha256",
-    "verification_source": "https://download.litecoin.org/litecoin-0.16.0/linux/litecoin-0.16.0-linux-signatures.asc",
+    "verification_source": "https://download.litecoin.org/litecoin-0.16.3/linux/litecoin-0.16.3-linux-signatures.asc",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
         "bin/litecoin-qt"
@@ -47,7 +47,7 @@
     "system_user": "blockbook-litecoin",
     "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
     "public_binding_template": ":{{.Ports.BlockbookPublic}}",
-    "explorer_url": "https://ltc-explorer.trezor.io",
+    "explorer_url": "",
     "additional_params": "",
     "block_chain": {
       "parse": true,

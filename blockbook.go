@@ -1,6 +1,7 @@
 package main
 
 import (
+	"blockbook/api"
 	"blockbook/bchain"
 	"blockbook/bchain/coins"
 	"blockbook/common"
@@ -19,7 +20,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/erikdubbelboer/gspt"
+	// "github.com/erikdubbelboer/gspt"
 	"github.com/golang/glog"
 	"github.com/juju/errors"
 )
@@ -36,8 +37,9 @@ const storeInternalStatePeriodMs = 59699
 var (
 	blockchain = flag.String("blockchaincfg", "", "path to blockchain RPC service configuration json file")
 
-	dbPath  = flag.String("datadir", "./data", "path to database directory")
-	dbCache = flag.Int("dbcache", 1<<29, "size of the rocksdb cache")
+	dbPath         = flag.String("datadir", "./data", "path to database directory")
+	dbCache        = flag.Int("dbcache", 1<<29, "size of the rocksdb cache")
+	dbMaxOpenFiles = flag.Int("dbmaxopenfiles", 1<<14, "max open files by rocksdb")
 
 	blockFrom      = flag.Int("blockheight", -1, "height of the starting block")
 	blockUntil     = flag.Int("blockuntil", -1, "height of the final block")
@@ -49,17 +51,17 @@ var (
 	repair      = flag.Bool("repair", false, "repair the database")
 	prof        = flag.String("prof", "", "http server binding [address]:port of the interface to profiling data /debug/pprof/ (default no profiling)")
 
-	syncChunk   = flag.Int("chunk", 100, "block chunk size for processing")
-	syncWorkers = flag.Int("workers", 8, "number of workers to process blocks")
+	syncChunk   = flag.Int("chunk", 100, "block chunk size for processing in bulk mode")
+	syncWorkers = flag.Int("workers", 8, "number of workers to process blocks in bulk mode")
 	dryRun      = flag.Bool("dryrun", false, "do not index blocks, only download")
 
 	debugMode = flag.Bool("debug", false, "debug mode, return more verbose errors, reload templates on each request")
 
 	internalBinding = flag.String("internal", "", "internal http server binding [address]:port, (default no internal server)")
 
-	publicBinding = flag.String("public", "", "public http server binding [address]:port[/path], (default no public server)")
+	publicBinding = flag.String("public", "", "public http server binding [address]:port[/path] (default no public server)")
 
-	certFiles = flag.String("certfile", "", "to enable SSL specify path to certificate files without extension, expecting <certfile>.crt and <certfile>.key, (default no SSL)")
+	certFiles = flag.String("certfile", "", "to enable SSL specify path to certificate files without extension, expecting <certfile>.crt and <certfile>.key (default no SSL)")
 
 	explorerURL = flag.String("explorer", "", "address of blockchain explorer")
 
@@ -84,10 +86,11 @@ var (
 	chain                      bchain.BlockChain
 	index                      *db.RocksDB
 	txCache                    *db.TxCache
+	metrics                    *common.Metrics
 	syncWorker                 *db.SyncWorker
 	internalState              *common.InternalState
-	callbacksOnNewBlockHash    []func(hash string)
-	callbacksOnNewTxAddr       []func(txid string, addr string)
+	callbacksOnNewBlock        []bchain.OnNewBlockFunc
+	callbacksOnNewTxAddr       []bchain.OnNewTxAddrFunc
 	chanOsSignal               chan os.Signal
 	inShutdown                 int32
 )
@@ -154,9 +157,9 @@ func main() {
 		glog.Fatal("config: ", err)
 	}
 
-	gspt.SetProcTitle("blockbook-" + normalizeName(coin))
+	// gspt.SetProcTitle("blockbook-" + normalizeName(coin))
 
-	metrics, err := common.GetMetrics(coin)
+	metrics, err = common.GetMetrics(coin)
 	if err != nil {
 		glog.Fatal("metrics: ", err)
 	}
@@ -165,7 +168,7 @@ func main() {
 		glog.Fatal("rpc: ", err)
 	}
 
-	index, err = db.NewRocksDB(*dbPath, *dbCache, chain.GetChainParser(), metrics)
+	index, err = db.NewRocksDB(*dbPath, *dbCache, *dbMaxOpenFiles, chain.GetChainParser(), metrics)
 	if err != nil {
 		glog.Fatal("rocksDB: ", err)
 	}
@@ -239,6 +242,11 @@ func main() {
 		return
 	}
 
+	// report BlockbookAppInfo metric, only log possible error
+	if err = blockbookAppInfoMetric(index, chain, txCache, internalState, metrics); err != nil {
+		glog.Error("blockbookAppInfoMetric ", err)
+	}
+
 	var internalServer *server.InternalServer
 	if *internalBinding != "" {
 		internalServer, err = server.NewInternalServer(*internalBinding, *certFiles, index, chain, txCache, internalState)
@@ -259,19 +267,9 @@ func main() {
 		}()
 	}
 
-	if *synchronize {
-		if err := syncWorker.ResyncIndex(nil); err != nil {
-			glog.Error("resyncIndex ", err)
-			return
-		}
-		if _, err = chain.ResyncMempool(nil); err != nil {
-			glog.Error("resyncMempool ", err)
-			return
-		}
-	}
-
 	var publicServer *server.PublicServer
 	if *publicBinding != "" {
+		// start public server in limited functionality, extend it after sync is finished by calling ConnectFullPublicInterface
 		publicServer, err = server.NewPublicServer(*publicBinding, *certFiles, index, chain, txCache, *explorerURL, metrics, internalState, *debugMode)
 		if err != nil {
 			glog.Error("socketio: ", err)
@@ -288,15 +286,32 @@ func main() {
 				}
 			}
 		}()
-		callbacksOnNewBlockHash = append(callbacksOnNewBlockHash, publicServer.OnNewBlockHash)
+		callbacksOnNewBlock = append(callbacksOnNewBlock, publicServer.OnNewBlock)
 		callbacksOnNewTxAddr = append(callbacksOnNewTxAddr, publicServer.OnNewTxAddr)
 	}
 
 	if *synchronize {
-		// start the synchronization loops after the server interfaces are started
+		internalState.SyncMode = true
+		internalState.InitialSync = true
+		if err := syncWorker.ResyncIndex(nil); err != nil {
+			glog.Error("resyncIndex ", err)
+			return
+		}
+		var mempoolCount int
+		if mempoolCount, err = chain.ResyncMempool(nil); err != nil {
+			glog.Error("resyncMempool ", err)
+			return
+		}
+		internalState.FinishedMempoolSync(mempoolCount)
 		go syncIndexLoop()
 		go syncMempoolLoop()
-		go storeInternalStateLoop()
+		internalState.InitialSync = false
+	}
+	go storeInternalStateLoop()
+
+	if *publicBinding != "" {
+		// start full public interface
+		publicServer.ConnectFullPublicInterface()
 	}
 
 	if *blockFrom >= 0 {
@@ -332,6 +347,25 @@ func main() {
 		<-chanSyncMempoolDone
 		<-chanStoreInternalStateDone
 	}
+}
+
+func blockbookAppInfoMetric(db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxCache, is *common.InternalState, metrics *common.Metrics) error {
+	api, err := api.NewWorker(db, chain, txCache, is)
+	if err != nil {
+		return err
+	}
+	si, err := api.GetSystemInfo(false)
+	if err != nil {
+		return err
+	}
+	metrics.BlockbookAppInfo.Reset()
+	metrics.BlockbookAppInfo.With(common.Labels{
+		"blockbook_version":        si.Blockbook.Version,
+		"blockbook_commit":         si.Blockbook.GitCommit,
+		"backend_version":          si.Backend.Version,
+		"backend_subversion":       si.Backend.Subversion,
+		"backend_protocol_version": si.Backend.ProtocolVersion}).Set(float64(0))
+	return nil
 }
 
 func newInternalState(coin string, coinShortcut string, d *db.RocksDB) (*common.InternalState, error) {
@@ -399,9 +433,9 @@ func syncIndexLoop() {
 	glog.Info("syncIndexLoop stopped")
 }
 
-func onNewBlockHash(hash string) {
-	for _, c := range callbacksOnNewBlockHash {
-		c(hash)
+func onNewBlockHash(hash string, height uint32) {
+	for _, c := range callbacksOnNewBlock {
+		c(hash, height)
 	}
 }
 
@@ -431,8 +465,8 @@ func storeInternalStateLoop() {
 	lastCompute := time.Now()
 	// randomize the duration between ComputeInternalStateColumnStats to avoid peaks after reboot of machine with multiple blockbooks
 	computePeriod := 9*time.Hour + time.Duration(rand.Float64()*float64((2*time.Hour).Nanoseconds()))
-	lastLogMemory := time.Now()
-	logMemoryPeriod := 15 * time.Minute
+	lastAppInfo := time.Now()
+	logAppInfoPeriod := 15 * time.Minute
 	glog.Info("storeInternalStateLoop starting with db stats recompute period ", computePeriod)
 	tickAndDebounce(storeInternalStatePeriodMs*time.Millisecond, (storeInternalStatePeriodMs-1)*time.Millisecond, chanStoreInternalState, func() {
 		if !computeRunning && lastCompute.Add(computePeriod).Before(time.Now()) {
@@ -449,17 +483,20 @@ func storeInternalStateLoop() {
 		if err := index.StoreInternalState(internalState); err != nil {
 			glog.Error("storeInternalStateLoop ", errors.ErrorStack(err))
 		}
-		if lastLogMemory.Add(logMemoryPeriod).Before(time.Now()) {
+		if lastAppInfo.Add(logAppInfoPeriod).Before(time.Now()) {
 			glog.Info(index.GetMemoryStats())
-			lastLogMemory = time.Now()
+			if err := blockbookAppInfoMetric(index, chain, txCache, internalState, metrics); err != nil {
+				glog.Error("blockbookAppInfoMetric ", err)
+			}
+			lastAppInfo = time.Now()
 		}
 	})
 	glog.Info("storeInternalStateLoop stopped")
 }
 
-func onNewTxAddr(txid string, addr string) {
+func onNewTxAddr(txid string, addr string, isOutput bool) {
 	for _, c := range callbacksOnNewTxAddr {
-		c(txid, addr)
+		c(txid, addr, isOutput)
 	}
 }
 

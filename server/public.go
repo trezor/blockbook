@@ -19,29 +19,31 @@ import (
 	"github.com/golang/glog"
 )
 
-const blockbookAbout = "Blockbook - blockchain indexer for TREZOR wallet https://trezor.io/. Do not use for any other purpose."
 const txsOnPage = 25
+const blocksOnPage = 50
 const txsInAPI = 1000
 
 // PublicServer is a handle to public http server
 type PublicServer struct {
-	binding     string
-	certFiles   string
-	socketio    *SocketIoServer
-	https       *http.Server
-	db          *db.RocksDB
-	txCache     *db.TxCache
-	chain       bchain.BlockChain
-	chainParser bchain.BlockChainParser
-	api         *api.Worker
-	explorerURL string
-	metrics     *common.Metrics
-	is          *common.InternalState
-	templates   []*template.Template
-	debug       bool
+	binding          string
+	certFiles        string
+	socketio         *SocketIoServer
+	https            *http.Server
+	db               *db.RocksDB
+	txCache          *db.TxCache
+	chain            bchain.BlockChain
+	chainParser      bchain.BlockChainParser
+	api              *api.Worker
+	explorerURL      string
+	internalExplorer bool
+	metrics          *common.Metrics
+	is               *common.InternalState
+	templates        []*template.Template
+	debug            bool
 }
 
 // NewPublicServer creates new public server http interface to blockbook and returns its handle
+// only basic functionality is mapped, to map all functions, call
 func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxCache, explorerURL string, metrics *common.Metrics, is *common.InternalState, debugMode bool) (*PublicServer, error) {
 
 	api, err := api.NewWorker(db, chain, txCache, is)
@@ -62,42 +64,30 @@ func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bch
 	}
 
 	s := &PublicServer{
-		binding:     binding,
-		certFiles:   certFiles,
-		https:       https,
-		api:         api,
-		socketio:    socketio,
-		db:          db,
-		txCache:     txCache,
-		chain:       chain,
-		chainParser: chain.GetChainParser(),
-		explorerURL: explorerURL,
-		metrics:     metrics,
-		is:          is,
-		debug:       debugMode,
+		binding:          binding,
+		certFiles:        certFiles,
+		https:            https,
+		api:              api,
+		socketio:         socketio,
+		db:               db,
+		txCache:          txCache,
+		chain:            chain,
+		chainParser:      chain.GetChainParser(),
+		explorerURL:      explorerURL,
+		internalExplorer: explorerURL == "",
+		metrics:          metrics,
+		is:               is,
+		debug:            debugMode,
 	}
-
-	// favicon
-	serveMux.Handle(path+"favicon.ico", http.FileServer(http.Dir("./static/")))
-	// support for tests of socket.io interface
-	serveMux.Handle(path+"test.html", http.FileServer(http.Dir("./static/")))
-	// redirect to wallet requests for tx and address, possibly to external site
-	serveMux.HandleFunc(path+"tx/", s.txRedirect)
-	serveMux.HandleFunc(path+"address/", s.addressRedirect)
-	// explorer
-	serveMux.HandleFunc(path+"explorer/tx/", s.htmlTemplateHandler(s.explorerTx))
-	serveMux.HandleFunc(path+"explorer/address/", s.htmlTemplateHandler(s.explorerAddress))
-	serveMux.Handle(path+"static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./static/"))))
-	// API calls
-	serveMux.HandleFunc(path+"api/block-index/", s.jsonHandler(s.apiBlockIndex))
-	serveMux.HandleFunc(path+"api/tx/", s.jsonHandler(s.apiTx))
-	serveMux.HandleFunc(path+"api/address/", s.jsonHandler(s.apiAddress))
-	// handle socket.io
-	serveMux.Handle(path+"socket.io/", socketio.GetHandler())
-	// default handler
-	serveMux.HandleFunc(path, s.index)
-
 	s.templates = parseTemplates()
+
+	// map only basic functions, the rest is enabled by method MapFullPublicInterface
+	serveMux.Handle(path+"favicon.ico", http.FileServer(http.Dir("./static/")))
+	serveMux.Handle(path+"static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./static/"))))
+	// default handler
+	serveMux.HandleFunc(path, s.htmlTemplateHandler(s.explorerIndex))
+	// default API handler
+	serveMux.HandleFunc(path+"api/", s.jsonHandler(s.apiIndex))
 
 	return s, nil
 }
@@ -112,6 +102,34 @@ func (s *PublicServer) Run() error {
 	return s.https.ListenAndServeTLS(fmt.Sprint(s.certFiles, ".crt"), fmt.Sprint(s.certFiles, ".key"))
 }
 
+// ConnectFullPublicInterface enables complete public functionality
+func (s *PublicServer) ConnectFullPublicInterface() {
+	serveMux := s.https.Handler.(*http.ServeMux)
+	_, path := splitBinding(s.binding)
+	// support for tests of socket.io interface
+	serveMux.Handle(path+"test.html", http.FileServer(http.Dir("./static/")))
+	if s.internalExplorer {
+		// internal explorer handlers
+		serveMux.HandleFunc(path+"tx/", s.htmlTemplateHandler(s.explorerTx))
+		serveMux.HandleFunc(path+"address/", s.htmlTemplateHandler(s.explorerAddress))
+		serveMux.HandleFunc(path+"search/", s.htmlTemplateHandler(s.explorerSearch))
+		serveMux.HandleFunc(path+"blocks", s.htmlTemplateHandler(s.explorerBlocks))
+		serveMux.HandleFunc(path+"block/", s.htmlTemplateHandler(s.explorerBlock))
+		serveMux.HandleFunc(path+"spending/", s.htmlTemplateHandler(s.explorerSpendingTx))
+	} else {
+		// redirect to wallet requests for tx and address, possibly to external site
+		serveMux.HandleFunc(path+"tx/", s.txRedirect)
+		serveMux.HandleFunc(path+"address/", s.addressRedirect)
+	}
+	// API calls
+	serveMux.HandleFunc(path+"api/block-index/", s.jsonHandler(s.apiBlockIndex))
+	serveMux.HandleFunc(path+"api/tx/", s.jsonHandler(s.apiTx))
+	serveMux.HandleFunc(path+"api/address/", s.jsonHandler(s.apiAddress))
+	serveMux.HandleFunc(path+"api/block/", s.jsonHandler(s.apiBlock))
+	// socket.io interface
+	serveMux.Handle(path+"socket.io/", s.socketio.GetHandler())
+}
+
 // Close closes the server
 func (s *PublicServer) Close() error {
 	glog.Infof("public server: closing")
@@ -124,28 +142,24 @@ func (s *PublicServer) Shutdown(ctx context.Context) error {
 	return s.https.Shutdown(ctx)
 }
 
-// OnNewBlockHash notifies users subscribed to bitcoind/hashblock about new block
-func (s *PublicServer) OnNewBlockHash(hash string) {
+// OnNewBlock notifies users subscribed to bitcoind/hashblock about new block
+func (s *PublicServer) OnNewBlock(hash string, height uint32) {
 	s.socketio.OnNewBlockHash(hash)
 }
 
 // OnNewTxAddr notifies users subscribed to bitcoind/addresstxid about new block
-func (s *PublicServer) OnNewTxAddr(txid string, addr string) {
-	s.socketio.OnNewTxAddr(txid, addr)
+func (s *PublicServer) OnNewTxAddr(txid string, addr string, isOutput bool) {
+	s.socketio.OnNewTxAddr(txid, addr, isOutput)
 }
 
 func (s *PublicServer) txRedirect(w http.ResponseWriter, r *http.Request) {
-	if s.explorerURL != "" {
-		http.Redirect(w, r, joinURL(s.explorerURL, r.URL.Path), 302)
-		s.metrics.ExplorerViews.With(common.Labels{"action": "tx"}).Inc()
-	}
+	http.Redirect(w, r, joinURL(s.explorerURL, r.URL.Path), 302)
+	s.metrics.ExplorerViews.With(common.Labels{"action": "tx-redirect"}).Inc()
 }
 
 func (s *PublicServer) addressRedirect(w http.ResponseWriter, r *http.Request) {
-	if s.explorerURL != "" {
-		http.Redirect(w, r, joinURL(s.explorerURL, r.URL.Path), 302)
-		s.metrics.ExplorerViews.With(common.Labels{"action": "address"}).Inc()
-	}
+	http.Redirect(w, r, joinURL(s.explorerURL, r.URL.Path), 302)
+	s.metrics.ExplorerViews.With(common.Labels{"action": "address-redirect"}).Inc()
 }
 
 func splitBinding(binding string) (addr string, path string) {
@@ -187,6 +201,9 @@ func (s *PublicServer) jsonHandler(handler func(r *http.Request) (interface{}, e
 				}
 			}
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			if _, isError := data.(jsonError); isError {
+				w.WriteHeader(http.StatusInternalServerError)
+			}
 			json.NewEncoder(w).Encode(data)
 		}()
 		data, err = handler(r)
@@ -209,19 +226,19 @@ func (s *PublicServer) jsonHandler(handler func(r *http.Request) (interface{}, e
 
 func (s *PublicServer) newTemplateData() *TemplateData {
 	return &TemplateData{
-		CoinName:     s.is.Coin,
-		CoinShortcut: s.is.CoinShortcut,
+		CoinName:         s.is.Coin,
+		CoinShortcut:     s.is.CoinShortcut,
+		InternalExplorer: s.internalExplorer && !s.is.InitialSync,
 	}
 }
 
 func (s *PublicServer) newTemplateDataWithError(text string) *TemplateData {
-	return &TemplateData{
-		CoinName:     s.is.Coin,
-		CoinShortcut: s.is.CoinShortcut,
-		Error:        &api.ApiError{Text: text},
-	}
+	td := s.newTemplateData()
+	td.Error = &api.ApiError{Text: text}
+	return td
 }
-func (s *PublicServer) htmlTemplateHandler(handler func(r *http.Request) (tpl, *TemplateData, error)) func(w http.ResponseWriter, r *http.Request) {
+
+func (s *PublicServer) htmlTemplateHandler(handler func(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error)) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var t tpl
 		var data *TemplateData
@@ -229,16 +246,23 @@ func (s *PublicServer) htmlTemplateHandler(handler func(r *http.Request) (tpl, *
 		defer func() {
 			if e := recover(); e != nil {
 				glog.Error(getFunctionName(handler), " recovered from panic: ", e)
-				t = errorTpl
+				t = errorInternalTpl
 				if s.debug {
 					data = s.newTemplateDataWithError(fmt.Sprint("Internal server error: recovered from panic ", e))
 				} else {
 					data = s.newTemplateDataWithError("Internal server error")
 				}
 			}
-			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			if err := s.templates[t].ExecuteTemplate(w, "base.html", data); err != nil {
-				glog.Error(err)
+			// noTpl means the handler completely handled the request
+			if t != noTpl {
+				w.Header().Set("Content-Type", "text/html; charset=utf-8")
+				// return 500 Internal Server Error with errorInternalTpl
+				if t == errorInternalTpl {
+					w.WriteHeader(http.StatusInternalServerError)
+				}
+				if err := s.templates[t].ExecuteTemplate(w, "base.html", data); err != nil {
+					glog.Error(err)
+				}
 			}
 		}()
 		if s.debug {
@@ -246,12 +270,15 @@ func (s *PublicServer) htmlTemplateHandler(handler func(r *http.Request) (tpl, *
 			// to reflect changes during development
 			s.templates = parseTemplates()
 		}
-		t, data, err = handler(r)
-		if err != nil || data == nil {
-			t = errorTpl
+		t, data, err = handler(w, r)
+		if err != nil || (data == nil && t != noTpl) {
+			t = errorInternalTpl
 			if apiErr, ok := err.(*api.ApiError); ok {
 				data = s.newTemplateData()
 				data.Error = apiErr
+				if apiErr.Public {
+					t = errorTpl
+				}
 			} else {
 				if err != nil {
 					glog.Error(getFunctionName(handler), " error: ", err)
@@ -269,28 +296,38 @@ func (s *PublicServer) htmlTemplateHandler(handler func(r *http.Request) (tpl, *
 type tpl int
 
 const (
-	errorTpl = tpl(iota)
+	noTpl = tpl(iota)
+	errorTpl
+	errorInternalTpl
+	indexTpl
 	txTpl
 	addressTpl
+	blocksTpl
+	blockTpl
 
 	tplCount
 )
 
 type TemplateData struct {
-	CoinName     string
-	CoinShortcut string
-	Address      *api.Address
-	AddrStr      string
-	Tx           *api.Tx
-	Error        *api.ApiError
-	Page         int
-	PrevPage     int
-	NextPage     int
-	PagingRange  []int
+	CoinName         string
+	CoinShortcut     string
+	InternalExplorer bool
+	Address          *api.Address
+	AddrStr          string
+	Tx               *api.Tx
+	Error            *api.ApiError
+	Blocks           *api.Blocks
+	Block            *api.Block
+	Info             *api.SystemInfo
+	Page             int
+	PrevPage         int
+	NextPage         int
+	PagingRange      []int
 }
 
 func parseTemplates() []*template.Template {
 	templateFuncMap := template.FuncMap{
+		"formatTime":          formatTime,
 		"formatUnixTime":      formatUnixTime,
 		"formatAmount":        formatAmount,
 		"setTxToTemplateData": setTxToTemplateData,
@@ -298,13 +335,21 @@ func parseTemplates() []*template.Template {
 	}
 	t := make([]*template.Template, tplCount)
 	t[errorTpl] = template.Must(template.New("error").Funcs(templateFuncMap).ParseFiles("./static/templates/error.html", "./static/templates/base.html"))
+	t[errorInternalTpl] = template.Must(template.New("error").Funcs(templateFuncMap).ParseFiles("./static/templates/error.html", "./static/templates/base.html"))
+	t[indexTpl] = template.Must(template.New("index").Funcs(templateFuncMap).ParseFiles("./static/templates/index.html", "./static/templates/base.html"))
 	t[txTpl] = template.Must(template.New("tx").Funcs(templateFuncMap).ParseFiles("./static/templates/tx.html", "./static/templates/txdetail.html", "./static/templates/base.html"))
 	t[addressTpl] = template.Must(template.New("address").Funcs(templateFuncMap).ParseFiles("./static/templates/address.html", "./static/templates/txdetail.html", "./static/templates/paging.html", "./static/templates/base.html"))
+	t[blocksTpl] = template.Must(template.New("blocks").Funcs(templateFuncMap).ParseFiles("./static/templates/blocks.html", "./static/templates/paging.html", "./static/templates/base.html"))
+	t[blockTpl] = template.Must(template.New("block").Funcs(templateFuncMap).ParseFiles("./static/templates/block.html", "./static/templates/txdetail.html", "./static/templates/paging.html", "./static/templates/base.html"))
 	return t
 }
 
 func formatUnixTime(ut int64) string {
-	return time.Unix(ut, 0).Format(time.RFC1123)
+	return formatTime(time.Unix(ut, 0))
+}
+
+func formatTime(t time.Time) string {
+	return t.Format(time.RFC1123)
 }
 
 // for now return the string as it is
@@ -319,13 +364,14 @@ func setTxToTemplateData(td *TemplateData, tx *api.Tx) *TemplateData {
 	return td
 }
 
-func (s *PublicServer) explorerTx(r *http.Request) (tpl, *TemplateData, error) {
+func (s *PublicServer) explorerTx(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
 	var tx *api.Tx
+	s.metrics.ExplorerViews.With(common.Labels{"action": "tx"}).Inc()
 	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
 		txid := r.URL.Path[i+1:]
 		bestheight, _, err := s.db.GetBestBlock()
 		if err == nil {
-			tx, err = s.api.GetTransaction(txid, bestheight, true)
+			tx, err = s.api.GetTransaction(txid, bestheight, false)
 		}
 		if err != nil {
 			return errorTpl, nil, err
@@ -336,9 +382,31 @@ func (s *PublicServer) explorerTx(r *http.Request) (tpl, *TemplateData, error) {
 	return txTpl, data, nil
 }
 
-func (s *PublicServer) explorerAddress(r *http.Request) (tpl, *TemplateData, error) {
+func (s *PublicServer) explorerSpendingTx(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
+	s.metrics.ExplorerViews.With(common.Labels{"action": "spendingtx"}).Inc()
+	var err error
+	parts := strings.Split(r.URL.Path, "/")
+	if len(parts) > 2 {
+		tx := parts[len(parts)-2]
+		n, ec := strconv.Atoi(parts[len(parts)-1])
+		if ec == nil {
+			spendingTx, err := s.api.GetSpendingTxid(tx, n)
+			if err == nil && spendingTx != "" {
+				http.Redirect(w, r, joinURL("/tx/", spendingTx), 302)
+				return noTpl, nil, nil
+			}
+		}
+	}
+	if err == nil {
+		err = api.NewApiError("Transaction not found", true)
+	}
+	return errorTpl, nil, err
+}
+
+func (s *PublicServer) explorerAddress(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
 	var address *api.Address
 	var err error
+	s.metrics.ExplorerViews.With(common.Labels{"action": "address"}).Inc()
 	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
 		page, ec := strconv.Atoi(r.URL.Query().Get("page"))
 		if ec != nil {
@@ -355,6 +423,90 @@ func (s *PublicServer) explorerAddress(r *http.Request) (tpl, *TemplateData, err
 	data.Page = address.Page
 	data.PagingRange, data.PrevPage, data.NextPage = getPagingRange(address.Page, address.TotalPages)
 	return addressTpl, data, nil
+}
+
+func (s *PublicServer) explorerBlocks(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
+	var blocks *api.Blocks
+	var err error
+	s.metrics.ExplorerViews.With(common.Labels{"action": "blocks"}).Inc()
+	page, ec := strconv.Atoi(r.URL.Query().Get("page"))
+	if ec != nil {
+		page = 0
+	}
+	blocks, err = s.api.GetBlocks(page, blocksOnPage)
+	if err != nil {
+		return errorTpl, nil, err
+	}
+	data := s.newTemplateData()
+	data.Blocks = blocks
+	data.Page = blocks.Page
+	data.PagingRange, data.PrevPage, data.NextPage = getPagingRange(blocks.Page, blocks.TotalPages)
+	return blocksTpl, data, nil
+}
+
+func (s *PublicServer) explorerBlock(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
+	var block *api.Block
+	var err error
+	s.metrics.ExplorerViews.With(common.Labels{"action": "block"}).Inc()
+	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
+		page, ec := strconv.Atoi(r.URL.Query().Get("page"))
+		if ec != nil {
+			page = 0
+		}
+		block, err = s.api.GetBlock(r.URL.Path[i+1:], page, txsOnPage)
+		if err != nil {
+			return errorTpl, nil, err
+		}
+	}
+	data := s.newTemplateData()
+	data.Block = block
+	data.Page = block.Page
+	data.PagingRange, data.PrevPage, data.NextPage = getPagingRange(block.Page, block.TotalPages)
+	return blockTpl, data, nil
+}
+
+func (s *PublicServer) explorerIndex(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
+	var si *api.SystemInfo
+	var err error
+	s.metrics.ExplorerViews.With(common.Labels{"action": "index"}).Inc()
+	si, err = s.api.GetSystemInfo(false)
+	if err != nil {
+		return errorTpl, nil, err
+	}
+	data := s.newTemplateData()
+	data.Info = si
+	return indexTpl, data, nil
+}
+
+func (s *PublicServer) explorerSearch(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	var tx *api.Tx
+	var address *api.Address
+	var block *api.Block
+	var bestheight uint32
+	var err error
+	s.metrics.ExplorerViews.With(common.Labels{"action": "search"}).Inc()
+	if len(q) > 0 {
+		block, err = s.api.GetBlock(q, 0, 1)
+		if err == nil {
+			http.Redirect(w, r, joinURL("/block/", block.Hash), 302)
+			return noTpl, nil, nil
+		}
+		bestheight, _, err = s.db.GetBestBlock()
+		if err == nil {
+			tx, err = s.api.GetTransaction(q, bestheight, false)
+			if err == nil {
+				http.Redirect(w, r, joinURL("/tx/", tx.Txid), 302)
+				return noTpl, nil, nil
+			}
+		}
+		address, err = s.api.GetAddress(q, 0, 1, true)
+		if err == nil {
+			http.Redirect(w, r, joinURL("/address/", address.AddrStr), 302)
+			return noTpl, nil, nil
+		}
+	}
+	return errorTpl, nil, api.NewApiError(fmt.Sprintf("No matching records found for '%v'", q), true)
 }
 
 func getPagingRange(page int, total int) ([]int, int, int) {
@@ -411,50 +563,14 @@ func getPagingRange(page int, total int) ([]int, int, int) {
 	return r, pp, np
 }
 
-type resAboutBlockbookPublic struct {
-	Coin            string    `json:"coin"`
-	Host            string    `json:"host"`
-	Version         string    `json:"version"`
-	GitCommit       string    `json:"gitcommit"`
-	BuildTime       string    `json:"buildtime"`
-	InSync          bool      `json:"inSync"`
-	BestHeight      uint32    `json:"bestHeight"`
-	LastBlockTime   time.Time `json:"lastBlockTime"`
-	InSyncMempool   bool      `json:"inSyncMempool"`
-	LastMempoolTime time.Time `json:"lastMempoolTime"`
-	About           string    `json:"about"`
-}
-
-// TODO - this is temporary, return html status page
-func (s *PublicServer) index(w http.ResponseWriter, r *http.Request) {
-	vi := common.GetVersionInfo()
-	ss, bh, st := s.is.GetSyncState()
-	ms, mt, _ := s.is.GetMempoolSyncState()
-	a := resAboutBlockbookPublic{
-		Coin:            s.is.Coin,
-		Host:            s.is.Host,
-		Version:         vi.Version,
-		GitCommit:       vi.GitCommit,
-		BuildTime:       vi.BuildTime,
-		InSync:          ss,
-		BestHeight:      bh,
-		LastBlockTime:   st,
-		InSyncMempool:   ms,
-		LastMempoolTime: mt,
-		About:           blockbookAbout,
-	}
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	buf, err := json.MarshalIndent(a, "", "    ")
-	if err != nil {
-		glog.Error(err)
-	}
-	w.Write(buf)
+func (s *PublicServer) apiIndex(r *http.Request) (interface{}, error) {
+	s.metrics.ExplorerViews.With(common.Labels{"action": "api-index"}).Inc()
+	return s.api.GetSystemInfo(false)
 }
 
 func (s *PublicServer) apiBlockIndex(r *http.Request) (interface{}, error) {
 	type resBlockIndex struct {
 		BlockHash string `json:"blockHash"`
-		About     string `json:"about"`
 	}
 	var err error
 	var hash string
@@ -475,13 +591,13 @@ func (s *PublicServer) apiBlockIndex(r *http.Request) (interface{}, error) {
 	}
 	return resBlockIndex{
 		BlockHash: hash,
-		About:     blockbookAbout,
 	}, nil
 }
 
 func (s *PublicServer) apiTx(r *http.Request) (interface{}, error) {
 	var tx *api.Tx
 	var err error
+	s.metrics.ExplorerViews.With(common.Labels{"action": "api-tx"}).Inc()
 	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
 		txid := r.URL.Path[i+1:]
 		bestheight, _, err := s.db.GetBestBlock()
@@ -495,6 +611,7 @@ func (s *PublicServer) apiTx(r *http.Request) (interface{}, error) {
 func (s *PublicServer) apiAddress(r *http.Request) (interface{}, error) {
 	var address *api.Address
 	var err error
+	s.metrics.ExplorerViews.With(common.Labels{"action": "api-address"}).Inc()
 	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
 		page, ec := strconv.Atoi(r.URL.Query().Get("page"))
 		if ec != nil {
@@ -503,4 +620,18 @@ func (s *PublicServer) apiAddress(r *http.Request) (interface{}, error) {
 		address, err = s.api.GetAddress(r.URL.Path[i+1:], page, txsInAPI, true)
 	}
 	return address, err
+}
+
+func (s *PublicServer) apiBlock(r *http.Request) (interface{}, error) {
+	var block *api.Block
+	var err error
+	s.metrics.ExplorerViews.With(common.Labels{"action": "api-block"}).Inc()
+	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
+		page, ec := strconv.Atoi(r.URL.Query().Get("page"))
+		if ec != nil {
+			page = 0
+		}
+		block, err = s.api.GetBlock(r.URL.Path[i+1:], page, txsInAPI)
+	}
+	return block, err
 }

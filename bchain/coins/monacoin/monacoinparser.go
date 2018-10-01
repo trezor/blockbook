@@ -26,7 +26,7 @@ var (
 	MonaTestParams monacoinCfg.Params
 )
 
-func init() {
+func initParams() {
 	MainNetParams = chaincfg.MainNetParams
 	MainNetParams.Net = MainnetMagic
 	MainNetParams.PubKeyHashAddrID = []byte{50}
@@ -71,6 +71,9 @@ func NewMonacoinParser(params *chaincfg.Params, c *btc.Configuration) *MonacoinP
 // GetChainParams contains network parameters for the main Monacoin network,
 // and the test Monacoin network
 func GetChainParams(chain string) *chaincfg.Params {
+	if MainNetParams.Name == "" {
+		initParams()
+	}
 	switch chain {
 	case "test":
 		return &TestNetParams

@@ -19,7 +19,7 @@ var (
 	RegtestParams chaincfg.Params
 )
 
-func init() {
+func initParams() {
 	MainNetParams = chaincfg.MainNetParams
 	MainNetParams.Net = MainnetMagic
 
@@ -67,6 +67,9 @@ func NewDashParser(params *chaincfg.Params, c *btc.Configuration) *DashParser {
 // the regression test Dash network, the test Dash network and
 // the simulation test Dash network, in this order
 func GetChainParams(chain string) *chaincfg.Params {
+	if MainNetParams.Name == "" {
+		initParams()
+	}
 	switch chain {
 	case "test":
 		return &TestNetParams

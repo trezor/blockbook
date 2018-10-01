@@ -15,7 +15,6 @@ import (
 // 2) rocksdb seems to handle better fewer larger batches than continuous stream of smaller batches
 
 type bulkAddresses struct {
-	height    uint32
 	bi        BlockInfo
 	addresses map[string][]outpoint
 }
@@ -154,10 +153,10 @@ func (b *BulkConnect) parallelStoreBalances(c chan error, all bool) {
 
 func (b *BulkConnect) storeBulkAddresses(wb *gorocksdb.WriteBatch) error {
 	for _, ba := range b.bulkAddresses {
-		if err := b.d.storeAddresses(wb, ba.height, ba.addresses); err != nil {
+		if err := b.d.storeAddresses(wb, ba.bi.Height, ba.addresses); err != nil {
 			return err
 		}
-		if err := b.d.writeHeight(wb, ba.height, &ba.bi, opInsert); err != nil {
+		if err := b.d.writeHeight(wb, ba.bi.Height, &ba.bi, opInsert); err != nil {
 			return err
 		}
 	}
@@ -190,12 +189,12 @@ func (b *BulkConnect) ConnectBlock(block *bchain.Block, storeBlockTxs bool) erro
 		}
 	}
 	b.bulkAddresses = append(b.bulkAddresses, bulkAddresses{
-		height: block.Height,
 		bi: BlockInfo{
-			Hash: block.Hash,
-			Time: block.Time,
-			Txs:  uint32(len(block.Txs)),
-			Size: uint32(block.Size),
+			Hash:   block.Hash,
+			Time:   block.Time,
+			Txs:    uint32(len(block.Txs)),
+			Size:   uint32(block.Size),
+			Height: block.Height,
 		},
 		addresses: addresses,
 	})
