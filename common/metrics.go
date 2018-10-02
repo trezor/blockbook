@@ -146,7 +146,7 @@ func GetMetrics(coin string) (*Metrics, error) {
 			Help:        "Information about blockbook and backend application versions",
 			ConstLabels: Labels{"coin": coin},
 		},
-		[]string{"blockbook_version", "blockbook_commit", "backend_version", "backend_subversion", "backend_protocol_version"},
+		[]string{"blockbook_version", "blockbook_commit", "blockbook_buildtime", "backend_version", "backend_subversion", "backend_protocol_version"},
 	)
 
 	v := reflect.ValueOf(metrics)
