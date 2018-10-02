@@ -19,7 +19,7 @@ var (
 	RegtestParams chaincfg.Params
 )
 
-func initParams() {
+func init() {
 	MainNetParams = chaincfg.MainNetParams
 	MainNetParams.Net = MainnetMagic
 
@@ -40,17 +40,6 @@ func initParams() {
 	// Address encoding magics
 	RegtestParams.PubKeyHashAddrID = []byte{140} // base58 prefix: y
 	RegtestParams.ScriptHashAddrID = []byte{19}  // base58 prefix: 8 or 9
-
-	err := chaincfg.Register(&MainNetParams)
-	if err == nil {
-		err = chaincfg.Register(&TestNetParams)
-	}
-	if err == nil {
-		err = chaincfg.Register(&RegtestParams)
-	}
-	if err != nil {
-		panic(err)
-	}
 }
 
 // DashParser handle
@@ -67,8 +56,17 @@ func NewDashParser(params *chaincfg.Params, c *btc.Configuration) *DashParser {
 // the regression test Dash network, the test Dash network and
 // the simulation test Dash network, in this order
 func GetChainParams(chain string) *chaincfg.Params {
-	if MainNetParams.Name == "" {
-		initParams()
+	if !chaincfg.IsRegistered(&MainNetParams) {
+		err := chaincfg.Register(&MainNetParams)
+		if err == nil {
+			err = chaincfg.Register(&TestNetParams)
+		}
+		if err == nil {
+			err = chaincfg.Register(&RegtestParams)
+		}
+		if err != nil {
+			panic(err)
+		}
 	}
 	switch chain {
 	case "test":

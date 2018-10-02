@@ -8,9 +8,18 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/jakm/btcutil/chaincfg"
 )
+
+func TestMain(m *testing.M) {
+	c := m.Run()
+	chaincfg.ResetParams()
+	os.Exit(c)
+}
 
 type testBlock struct {
 	size int

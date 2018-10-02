@@ -18,16 +18,11 @@ var (
 	MainNetParams chaincfg.Params
 )
 
-func initParams() {
+func init() {
 	MainNetParams = chaincfg.MainNetParams
 	MainNetParams.Net = MainnetMagic
 	MainNetParams.PubKeyHashAddrID = []byte{30}
 	MainNetParams.ScriptHashAddrID = []byte{22}
-
-	err := chaincfg.Register(&MainNetParams)
-	if err != nil {
-		panic(err)
-	}
 }
 
 // DogecoinParser handle
@@ -43,8 +38,11 @@ func NewDogecoinParser(params *chaincfg.Params, c *btc.Configuration) *DogecoinP
 // GetChainParams contains network parameters for the main Dogecoin network,
 // and the test Dogecoin network
 func GetChainParams(chain string) *chaincfg.Params {
-	if MainNetParams.Name == "" {
-		initParams()
+	if !chaincfg.IsRegistered(&MainNetParams) {
+		err := chaincfg.Register(&MainNetParams)
+		if err != nil {
+			panic(err)
+		}
 	}
 	switch chain {
 	default:

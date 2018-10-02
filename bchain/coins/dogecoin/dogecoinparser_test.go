@@ -10,10 +10,19 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math/big"
+	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/jakm/btcutil/chaincfg"
 )
+
+func TestMain(m *testing.M) {
+	c := m.Run()
+	chaincfg.ResetParams()
+	os.Exit(c)
+}
 
 func Test_GetAddrDescFromAddress_Mainnet(t *testing.T) {
 	type args struct {

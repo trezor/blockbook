@@ -26,7 +26,7 @@ var (
 	MonaTestParams monacoinCfg.Params
 )
 
-func initParams() {
+func init() {
 	MainNetParams = chaincfg.MainNetParams
 	MainNetParams.Net = MainnetMagic
 	MainNetParams.PubKeyHashAddrID = []byte{50}
@@ -48,14 +48,6 @@ func initParams() {
 	MonaTestParams.PubKeyHashAddrID = 111
 	MonaTestParams.ScriptHashAddrID = 117
 	MonaTestParams.Bech32HRPSegwit = "tmona"
-
-	err := chaincfg.Register(&MainNetParams)
-	if err == nil {
-		err = chaincfg.Register(&TestNetParams)
-	}
-	if err != nil {
-		panic(err)
-	}
 }
 
 // MonacoinParser handle
@@ -73,8 +65,14 @@ func NewMonacoinParser(params *chaincfg.Params, c *btc.Configuration) *MonacoinP
 // GetChainParams contains network parameters for the main Monacoin network,
 // and the test Monacoin network
 func GetChainParams(chain string) *chaincfg.Params {
-	if MainNetParams.Name == "" {
-		initParams()
+	if !chaincfg.IsRegistered(&MainNetParams) {
+		err := chaincfg.Register(&MainNetParams)
+		if err == nil {
+			err = chaincfg.Register(&TestNetParams)
+		}
+		if err != nil {
+			panic(err)
+		}
 	}
 	switch chain {
 	case "test":

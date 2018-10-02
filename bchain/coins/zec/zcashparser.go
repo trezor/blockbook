@@ -17,9 +17,10 @@ const (
 var (
 	MainNetParams chaincfg.Params
 	TestNetParams chaincfg.Params
+	RegtestParams chaincfg.Params
 )
 
-func initParams() {
+func init() {
 	MainNetParams = chaincfg.MainNetParams
 	MainNetParams.Net = MainnetMagic
 
@@ -36,13 +37,8 @@ func initParams() {
 	TestNetParams.PubKeyHashAddrID = []byte{0x1D, 0x25} // base58 prefix: tm
 	TestNetParams.ScriptHashAddrID = []byte{0x1C, 0xBA} // base58 prefix: t2
 
-	err := chaincfg.Register(&MainNetParams)
-	if err == nil {
-		err = chaincfg.Register(&TestNetParams)
-	}
-	if err != nil {
-		panic(err)
-	}
+	RegtestParams = chaincfg.RegressionNetParams
+	RegtestParams.Net = RegtestMagic
 }
 
 // ZCashParser handle
@@ -63,16 +59,24 @@ func NewZCashParser(params *chaincfg.Params, c *btc.Configuration) *ZCashParser 
 // the regression test ZCash network, the test ZCash network and
 // the simulation test ZCash network, in this order
 func GetChainParams(chain string) *chaincfg.Params {
-	if MainNetParams.Name == "" {
-		initParams()
+	if !chaincfg.IsRegistered(&MainNetParams) {
+		err := chaincfg.Register(&MainNetParams)
+		if err == nil {
+			err = chaincfg.Register(&TestNetParams)
+		}
+		if err == nil {
+			err = chaincfg.Register(&RegtestParams)
+		}
+		if err != nil {
+			panic(err)
+		}
 	}
 	var params *chaincfg.Params
 	switch chain {
 	case "test":
 		return &TestNetParams
 	case "regtest":
-		params = &chaincfg.RegressionNetParams
-		params.Net = RegtestMagic
+		return &RegtestParams
 	default:
 		return &MainNetParams
 	}
