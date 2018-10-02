@@ -83,5 +83,11 @@ func (p *MyriadParser) ParseBlock(b []byte) (*bchain.Block, error) {
 		txs[ti] = p.TxFromMsgTx(t, false)
 	}
 
-	return &bchain.Block{Txs: txs}, nil
+	return &bchain.Block{
+		BlockHeader: bchain.BlockHeader{
+			Size: len(b),
+			Time: h.Timestamp.Unix(),
+		},
+		Txs: txs,
+	}, nil
 }
