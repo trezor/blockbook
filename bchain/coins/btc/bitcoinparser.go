@@ -42,6 +42,9 @@ func NewBitcoinParser(params *chaincfg.Params, c *Configuration) *BitcoinParser 
 // the regression test Bitcoin network, the test Bitcoin network and
 // the simulation test Bitcoin network, in this order
 func GetChainParams(chain string) *chaincfg.Params {
+	if !chaincfg.IsRegistered(&chaincfg.MainNetParams) {
+		chaincfg.RegisterBitcoinParams()
+	}
 	switch chain {
 	case "test":
 		return &chaincfg.TestNet3Params

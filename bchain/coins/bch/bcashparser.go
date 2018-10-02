@@ -25,6 +25,23 @@ const (
 	RegTestPrefix = "bchreg:"
 )
 
+var (
+	MainNetParams chaincfg.Params
+	TestNetParams chaincfg.Params
+	RegtestParams chaincfg.Params
+)
+
+func init() {
+	MainNetParams = chaincfg.MainNetParams
+	MainNetParams.Net = bchutil.MainnetMagic
+
+	TestNetParams = chaincfg.TestNet3Params
+	TestNetParams.Net = bchutil.TestnetMagic
+
+	RegtestParams = chaincfg.RegressionNetParams
+	RegtestParams.Net = bchutil.Regtestmagic
+}
+
 // BCashParser handle
 type BCashParser struct {
 	*btc.BitcoinParser
@@ -62,17 +79,26 @@ func NewBCashParser(params *chaincfg.Params, c *btc.Configuration) (*BCashParser
 // the regression test Bitcoin Cash network, the test Bitcoin Cash network and
 // the simulation test Bitcoin Cash network, in this order
 func GetChainParams(chain string) *chaincfg.Params {
+	if !chaincfg.IsRegistered(&MainNetParams) {
+		err := chaincfg.Register(&MainNetParams)
+		if err == nil {
+			err = chaincfg.Register(&TestNetParams)
+		}
+		if err == nil {
+			err = chaincfg.Register(&RegtestParams)
+		}
+		if err != nil {
+			panic(err)
+		}
+	}
 	var params *chaincfg.Params
 	switch chain {
 	case "test":
-		params = &chaincfg.TestNet3Params
-		params.Net = bchutil.TestnetMagic
+		return &TestNetParams
 	case "regtest":
-		params = &chaincfg.RegressionNetParams
-		params.Net = bchutil.Regtestmagic
+		return &RegtestParams
 	default:
-		params = &chaincfg.MainNetParams
-		params.Net = bchutil.MainnetMagic
+		return &MainNetParams
 	}
 
 	return params

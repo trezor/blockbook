@@ -8,8 +8,11 @@ import (
 	"bytes"
 	"encoding/hex"
 	"math/big"
+	"os"
 	"reflect"
 	"testing"
+
+	"github.com/jakm/btcutil/chaincfg"
 )
 
 var (
@@ -89,6 +92,12 @@ func init() {
 			},
 		},
 	}
+}
+
+func TestMain(m *testing.M) {
+	c := m.Run()
+	chaincfg.ResetParams()
+	os.Exit(c)
 }
 
 func TestGetAddrDesc(t *testing.T) {

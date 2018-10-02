@@ -18,7 +18,7 @@ var (
 	TestNetParams chaincfg.Params
 )
 
-func initParams() {
+func init() {
 	MainNetParams = chaincfg.MainNetParams
 	MainNetParams.Net = MainnetMagic
 	MainNetParams.PubKeyHashAddrID = []byte{48}
@@ -30,14 +30,6 @@ func initParams() {
 	TestNetParams.PubKeyHashAddrID = []byte{111}
 	TestNetParams.ScriptHashAddrID = []byte{58}
 	TestNetParams.Bech32HRPSegwit = "tltc"
-
-	err := chaincfg.Register(&MainNetParams)
-	if err == nil {
-		err = chaincfg.Register(&TestNetParams)
-	}
-	if err != nil {
-		panic(err)
-	}
 }
 
 // LitecoinParser handle
@@ -53,8 +45,17 @@ func NewLitecoinParser(params *chaincfg.Params, c *btc.Configuration) *LitecoinP
 // GetChainParams contains network parameters for the main Litecoin network,
 // and the test Litecoin network
 func GetChainParams(chain string) *chaincfg.Params {
-	if MainNetParams.Name == "" {
-		initParams()
+	if !chaincfg.IsRegistered(&chaincfg.MainNetParams) {
+		chaincfg.RegisterBitcoinParams()
+	}
+	if !chaincfg.IsRegistered(&MainNetParams) {
+		err := chaincfg.Register(&MainNetParams)
+		if err == nil {
+			err = chaincfg.Register(&TestNetParams)
+		}
+		if err != nil {
+			panic(err)
+		}
 	}
 	switch chain {
 	case "test":

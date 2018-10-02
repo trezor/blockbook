@@ -1,7 +1,7 @@
 SHELL = /bin/bash
 UPDATE_VENDOR ?= 1
 VERSION ?= devel
-GITCOMMIT = $(shell cd /src && git describe --tags --always --dirty)
+GITCOMMIT = $(shell cd /src && git describe --always --dirty)
 BUILDTIME = $(shell date --iso-8601=seconds)
 LDFLAGS := -X blockbook/common.version=$(VERSION) -X blockbook/common.gitcommit=$(GITCOMMIT) -X blockbook/common.buildtime=$(BUILDTIME)
 BLOCKBOOK_SRC := $(GOPATH)/src/blockbook

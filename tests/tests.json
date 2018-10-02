@@ -1,11 +1,11 @@
 {
     "bcash": {
         "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",
-                "EstimateSmartFee", "EstimateFee", "GetBestBlockHash", "GetBestBlockHeight", "GetBlockHeader"]
+                "EstimateFee", "GetBestBlockHash", "GetBestBlockHeight", "GetBlockHeader"]
     },
     "bcash_testnet": {
         "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",
-                "EstimateSmartFee", "EstimateFee", "GetBestBlockHash", "GetBestBlockHeight", "GetBlockHeader"]
+                "EstimateFee", "GetBestBlockHash", "GetBestBlockHeight", "GetBlockHeader"]
     },
     "bitcoin": {
         "rpc":  ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",

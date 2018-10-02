@@ -48,6 +48,7 @@ type EthereumRPC struct {
 	Mempool              *bchain.NonUTXOMempool
 	bestHeaderMu         sync.Mutex
 	bestHeader           *ethtypes.Header
+	bestHeaderTime       time.Time
 	chanNewBlock         chan *ethtypes.Header
 	newBlockSubscription *rpc.ClientSubscription
 	chanNewTx            chan ethcommon.Hash
@@ -96,6 +97,7 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 			// update best header to the new header
 			s.bestHeaderMu.Lock()
 			s.bestHeader = h
+			s.bestHeaderTime = time.Now()
 			s.bestHeaderMu.Unlock()
 			// notify blockbook
 			pushHandler(bchain.NotificationNewBlock)
@@ -188,7 +190,7 @@ func (b *EthereumRPC) Initialize() error {
 	return nil
 }
 
-// subscribeNewBlocks subscribes to new blocks notification
+// subscribe subscribes notification and tries to resubscribe in case of error
 func (b *EthereumRPC) subscribe(f func() (*rpc.ClientSubscription, error)) error {
 	s, err := f()
 	if err != nil {
@@ -281,6 +283,12 @@ func (b *EthereumRPC) GetChainInfo() (*bchain.ChainInfo, error) {
 func (b *EthereumRPC) getBestHeader() (*ethtypes.Header, error) {
 	b.bestHeaderMu.Lock()
 	defer b.bestHeaderMu.Unlock()
+	// ETC does not have newBlocks subscription, bestHeader must be updated very often (each 1 second)
+	if b.isETC {
+		if b.bestHeaderTime.Add(1 * time.Second).Before(time.Now()) {
+			b.bestHeader = nil
+		}
+	}
 	if b.bestHeader == nil {
 		var err error
 		ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
@@ -289,6 +297,7 @@ func (b *EthereumRPC) getBestHeader() (*ethtypes.Header, error) {
 		if err != nil {
 			return nil, err
 		}
+		b.bestHeaderTime = time.Now()
 	}
 	return b.bestHeader, nil
 }

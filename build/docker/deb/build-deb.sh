@@ -11,9 +11,10 @@ package=$1
 coin=$2
 shift 2
 
-mkdir build
+mkdir -p build
 cp -r /src/build/templates build
 cp -r /src/configs .
+ln -s /src/ /go/src/blockbook
 go run build/templates/generate.go $coin
 
 # backend

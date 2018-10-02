@@ -18,7 +18,7 @@ var (
 	TestNetParams chaincfg.Params
 )
 
-func initParams() {
+func init() {
 	MainNetParams = chaincfg.MainNetParams
 	MainNetParams.Net = MainnetMagic
 	MainNetParams.PubKeyHashAddrID = []byte{71}
@@ -30,14 +30,6 @@ func initParams() {
 	TestNetParams.PubKeyHashAddrID = []byte{74}
 	TestNetParams.ScriptHashAddrID = []byte{196}
 	TestNetParams.Bech32HRPSegwit = "tvtc"
-
-	err := chaincfg.Register(&MainNetParams)
-	if err == nil {
-		err = chaincfg.Register(&TestNetParams)
-	}
-	if err != nil {
-		panic(err)
-	}
 }
 
 // VertcoinParser handle
@@ -53,8 +45,14 @@ func NewVertcoinParser(params *chaincfg.Params, c *btc.Configuration) *VertcoinP
 // GetChainParams contains network parameters for the main Vertcoin network,
 // and the test Vertcoin network
 func GetChainParams(chain string) *chaincfg.Params {
-	if MainNetParams.Name == "" {
-		initParams()
+	if !chaincfg.IsRegistered(&MainNetParams) {
+		err := chaincfg.Register(&MainNetParams)
+		if err == nil {
+			err = chaincfg.Register(&TestNetParams)
+		}
+		if err != nil {
+			panic(err)
+		}
 	}
 	switch chain {
 	case "test":
