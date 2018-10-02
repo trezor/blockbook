@@ -24,7 +24,7 @@ func NewNamecoinRPC(config json.RawMessage, pushHandler func(bchain.Notification
 		b.(*btc.BitcoinRPC),
 	}
 	s.RPCMarshaler = btc.JSONMarshalerV1{}
-	s.ChainConfig.SupportsEstimateSmartFee = false
+	s.ChainConfig.SupportsEstimateFee = false
 
 	return s, nil
 }
