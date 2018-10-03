@@ -66,6 +66,67 @@ func Test_GetAddrDescFromAddress_Mainnet(t *testing.T) {
 	}
 }
 
+func Test_GetAddressesFromAddrDesc(t *testing.T) {
+	type args struct {
+		script string
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    []string
+		want2   bool
+		wantErr bool
+	}{
+		{
+			name:    "P2PKH1",
+			args:    args{script: "76a914e5f419d3b464c67152fb9d3ecc36932d5280673f88ac"},
+			want:    []string{"MUs3PnZLdBQyct2emEc7QJvVnjeQj52kug"},
+			want2:   true,
+			wantErr: false,
+		},
+		{
+			name:    "P2SH1",
+			args:    args{script: "a9143e69d8c4772eb34d77c96aae58c041e887b404f387"},
+			want:    []string{"4ijSZESajWvhhJAz1APdzGivwc31WCjxHD"},
+			want2:   true,
+			wantErr: false,
+		},
+		{
+			name:    "witness_v0_keyhash",
+			args:    args{script: "0014194910b7ce27a5208127f021b0bcf9c043878552"},
+			want:    []string{"my1qr9y3pd7wy7jjpqf87qsmp08ecppc0p2jxhfcfc"},
+			want2:   true,
+			wantErr: false,
+		},
+		{
+			name:    "pubkey",
+			args:    args{script: "2102c5c7165eb66f35a120f2f9d97fa61b1be6c621f9b868454b35a284fa7ecc831eac"},
+			want:    []string{"MDac4WH5jxqWLwe6kmWzR3ERu6BgszXUwn"},
+			want2:   false,
+			wantErr: false,
+		},
+	}
+
+	parser := NewMyriadParser(GetChainParams("main"), &btc.Configuration{})
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b, _ := hex.DecodeString(tt.args.script)
+			got, got2, err := parser.GetAddressesFromAddrDesc(b)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GetAddressesFromAddrDesc() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("GetAddressesFromAddrDesc() = %v, want %v", got, tt.want)
+			}
+			if !reflect.DeepEqual(got2, tt.want2) {
+				t.Errorf("GetAddressesFromAddrDesc() = %v, want %v", got2, tt.want2)
+			}
+		})
+	}
+}
+
 var (
 	testTx1       bchain.Tx
 	testTxPacked1 = "00004e208ab194a1180100000001163465df9bb21d89e90056f11887a398d5a313aef71e3974306459661a91588c000000006b4830450220129c9e9a27406796f3f7d7edcc446037b38ddb3ef94745cec8e7cde618a811140221008eb3b893cdd3725e99b74c020867821e1f74199065260586f5ef3c22b133dd2a012103e2e23d38dc8fa493cde4077f650ab9f22eacafd14a10b123994f38c9f35dfee9ffffffff025e90ec28050000001976a9141cba92fe1510b8c73550fd4d3e0b44acdffcd12d88ac79c268ba0a0000001976a9142f86cdfa98cac89143cf9e3d309cc072caccdf6f88ac00000000"
