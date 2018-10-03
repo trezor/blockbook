@@ -18,12 +18,19 @@ import (
 	"testing"
 
 	vlq "github.com/bsm/go-vlq"
+	"github.com/jakm/btcutil/chaincfg"
 	"github.com/juju/errors"
 )
 
 // simplified explanation of signed varint packing, used in many index data structures
 // for number n, the packing is: 2*n if n>=0 else 2*(-n)-1
 // takes only 1 byte if abs(n)<127
+
+func TestMain(m *testing.M) {
+	c := m.Run()
+	chaincfg.ResetParams()
+	os.Exit(c)
+}
 
 func bitcoinTestnetParser() *btc.BitcoinParser {
 	return btc.NewBitcoinParser(

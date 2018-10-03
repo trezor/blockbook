@@ -7,9 +7,18 @@ import (
 	"blockbook/bchain/coins/btc"
 	"encoding/hex"
 	"math/big"
+	"os"
 	"reflect"
 	"testing"
+
+	"github.com/jakm/btcutil/chaincfg"
 )
+
+func TestMain(m *testing.M) {
+	c := m.Run()
+	chaincfg.ResetParams()
+	os.Exit(c)
+}
 
 func Test_GetAddrDescFromAddress_Testnet(t *testing.T) {
 	type args struct {
@@ -28,14 +37,26 @@ func Test_GetAddrDescFromAddress_Testnet(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:    "P2SH1",
+			name:    "P2SH1-legacy",
 			args:    args{address: "2MvGVySztevmycxrSmMRjJaVj2iJin7qpap"},
 			want:    "a9142126232e3f47ae0f1246ec5f05fc400d83c86a0d87",
 			wantErr: false,
 		},
 		{
-			name:    "P2SH2",
+			name:    "P2SH2-legacy",
 			args:    args{address: "2N9a2TNzWz1FEKGFxUdMEh62V83URdZ5QAZ"},
+			want:    "a914b31049e7ee51501fe19e3e0cdb803dc84cf99f9e87",
+			wantErr: false,
+		},
+		{
+			name:    "P2SH1",
+			args:    args{address: "QPdG6Ts8g2q4m9cVPTTkPGwAB6kYgXB7Hc"},
+			want:    "a9142126232e3f47ae0f1246ec5f05fc400d83c86a0d87",
+			wantErr: false,
+		},
+		{
+			name:    "P2SH2",
+			args:    args{address: "QcvnaPrm17JKTT216jPFmnTvGRvFX2fWzN"},
 			want:    "a914b31049e7ee51501fe19e3e0cdb803dc84cf99f9e87",
 			wantErr: false,
 		},

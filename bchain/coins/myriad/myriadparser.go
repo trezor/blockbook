@@ -6,8 +6,8 @@ import (
 	"blockbook/bchain/coins/utils"
 	"bytes"
 
-	"github.com/jakm/btcutil/chaincfg"
 	"github.com/btcsuite/btcd/wire"
+	"github.com/jakm/btcutil/chaincfg"
 )
 
 const (
@@ -18,22 +18,17 @@ var (
 	MainNetParams chaincfg.Params
 )
 
-func initParams() {
+func init() {
 	MainNetParams = chaincfg.MainNetParams
 	MainNetParams.Net = MainnetMagic
 
 	MainNetParams.Bech32HRPSegwit = "my"
 
 	MainNetParams.PubKeyHashAddrID = []byte{50} // 0x32 - starts with M
-	MainNetParams.ScriptHashAddrID = []byte{9} // 0x09 - starts with 4
-	MainNetParams.PrivateKeyID = []byte{178} // 0xB2
-	
-	MainNetParams.HDCoinType = 90
+	MainNetParams.ScriptHashAddrID = []byte{9}  // 0x09 - starts with 4
+	MainNetParams.PrivateKeyID = []byte{178}    // 0xB2
 
-	err := chaincfg.Register(&MainNetParams)
-	if err != nil {
-		panic(err)
-	}
+	MainNetParams.HDCoinType = 90
 }
 
 // MyriadParser handle
@@ -48,8 +43,11 @@ func NewMyriadParser(params *chaincfg.Params, c *btc.Configuration) *MyriadParse
 
 // GetChainParams contains network parameters for the main Myriad network
 func GetChainParams(chain string) *chaincfg.Params {
-	if MainNetParams.Name == "" {
-		initParams()
+	if !chaincfg.IsRegistered(&MainNetParams) {
+		err := chaincfg.Register(&MainNetParams)
+		if err != nil {
+			panic(err)
+		}
 	}
 	switch chain {
 	default:

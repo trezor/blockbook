@@ -23,7 +23,7 @@ var (
 	TestNetParams chaincfg.Params
 )
 
-func initParams() {
+func init() {
 	MainNetParams = chaincfg.MainNetParams
 	MainNetParams.Net = MainnetMagic
 
@@ -39,14 +39,6 @@ func initParams() {
 	// see https://github.com/satoshilabs/slips/blob/master/slip-0173.md
 	MainNetParams.Bech32HRPSegwit = "btg"
 	TestNetParams.Bech32HRPSegwit = "tbtg"
-
-	err := chaincfg.Register(&MainNetParams)
-	if err == nil {
-		err = chaincfg.Register(&TestNetParams)
-	}
-	if err != nil {
-		panic(err)
-	}
 }
 
 // BGoldParser handle
@@ -63,8 +55,14 @@ func NewBGoldParser(params *chaincfg.Params, c *btc.Configuration) *BGoldParser 
 // the regression test Bitcoin Cash network, the test Bitcoin Cash network and
 // the simulation test Bitcoin Cash network, in this order
 func GetChainParams(chain string) *chaincfg.Params {
-	if MainNetParams.Name == "" {
-		initParams()
+	if !chaincfg.IsRegistered(&MainNetParams) {
+		err := chaincfg.Register(&MainNetParams)
+		if err == nil {
+			err = chaincfg.Register(&TestNetParams)
+		}
+		if err != nil {
+			panic(err)
+		}
 	}
 	switch chain {
 	case "test":

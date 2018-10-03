@@ -6,9 +6,18 @@ import (
 	"blockbook/bchain"
 	"encoding/hex"
 	"math/big"
+	"os"
 	"reflect"
 	"testing"
+
+	"github.com/jakm/btcutil/chaincfg"
 )
+
+func TestMain(m *testing.M) {
+	c := m.Run()
+	chaincfg.ResetParams()
+	os.Exit(c)
+}
 
 func Test_GetAddrDescFromAddress(t *testing.T) {
 	type args struct {
