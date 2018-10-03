@@ -126,7 +126,7 @@ func TryParseOPReturn(script []byte) string {
 	return ""
 }
 
-// outputScriptToAddresses converts ScriptPubKey to bitcoin addresses
+// outputScriptToAddresses converts ScriptPubKey to addresses with a flag that the addresses are searchable
 func (p *BitcoinParser) outputScriptToAddresses(script []byte) ([]string, bool, error) {
 	sc, addresses, _, err := txscript.ExtractPkScriptAddrs(script, p.Params)
 	if err != nil {

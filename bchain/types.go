@@ -144,7 +144,7 @@ func (ad AddressDescriptor) String() string {
 type OnNewBlockFunc func(hash string, height uint32)
 
 // OnNewTxAddrFunc is used to send notification about a new transaction/address
-type OnNewTxAddrFunc func(txid string, addr string, isOutput bool)
+type OnNewTxAddrFunc func(txid string, desc AddressDescriptor, isOutput bool)
 
 // BlockChain defines common interface to block chain daemon
 type BlockChain interface {
