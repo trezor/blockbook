@@ -24,6 +24,7 @@ func NewMyriadRPC(config json.RawMessage, pushHandler func(bchain.NotificationTy
 		b.(*btc.BitcoinRPC),
 	}
 	s.RPCMarshaler = btc.JSONMarshalerV2{}
+	s.ChainConfig.SupportsEstimateFee = false
 
 	return s, nil
 }
