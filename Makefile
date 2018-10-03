@@ -30,6 +30,8 @@ deb-blockbook-%: .deb-image
 deb-%: .deb-image
 	docker run -t --rm -e PACKAGER=$(PACKAGER) -e UPDATE_VENDOR=$(UPDATE_VENDOR) -v $(CURDIR):/src -v $(CURDIR)/build:/out $(DEB_IMAGE) /build/build-deb.sh all $* $(ARGS)
 
+deb-blockbook-all: clean-deb $(addprefix deb-blockbook-, $(TARGETS))
+
 $(addprefix all-, $(TARGETS)): all-%: clean-deb build-images deb-%
 
 all: clean-deb build-images $(addprefix deb-, $(TARGETS))

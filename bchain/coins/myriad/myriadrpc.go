@@ -1,4 +1,4 @@
-package namecoin
+package myriad
 
 import (
 	"blockbook/bchain"
@@ -8,29 +8,29 @@ import (
 	"github.com/golang/glog"
 )
 
-// NamecoinRPC is an interface to JSON-RPC namecoin service.
-type NamecoinRPC struct {
+// MyriadRPC is an interface to JSON-RPC bitcoind service.
+type MyriadRPC struct {
 	*btc.BitcoinRPC
 }
 
-// NewNamecoinRPC returns new NamecoinRPC instance.
-func NewNamecoinRPC(config json.RawMessage, pushHandler func(bchain.NotificationType)) (bchain.BlockChain, error) {
+// NewMyriadRPC returns new MyriadRPC instance.
+func NewMyriadRPC(config json.RawMessage, pushHandler func(bchain.NotificationType)) (bchain.BlockChain, error) {
 	b, err := btc.NewBitcoinRPC(config, pushHandler)
 	if err != nil {
 		return nil, err
 	}
 
-	s := &NamecoinRPC{
+	s := &MyriadRPC{
 		b.(*btc.BitcoinRPC),
 	}
-	s.RPCMarshaler = btc.JSONMarshalerV1{}
+	s.RPCMarshaler = btc.JSONMarshalerV2{}
 	s.ChainConfig.SupportsEstimateFee = false
 
 	return s, nil
 }
 
-// Initialize initializes NamecoinRPC instance.
-func (b *NamecoinRPC) Initialize() error {
+// Initialize initializes MyriadRPC instance.
+func (b *MyriadRPC) Initialize() error {
 	chainName, err := b.GetChainInfoAndInitializeMempool(b)
 	if err != nil {
 		return err
@@ -40,7 +40,7 @@ func (b *NamecoinRPC) Initialize() error {
 	params := GetChainParams(chainName)
 
 	// always create parser
-	b.Parser = NewNamecoinParser(params, b.ChainConfig)
+	b.Parser = NewMyriadParser(params, b.ChainConfig)
 
 	// parameters for getInfo request
 	if params.Net == MainnetMagic {
@@ -57,7 +57,7 @@ func (b *NamecoinRPC) Initialize() error {
 }
 
 // GetBlock returns block with given hash.
-func (b *NamecoinRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
+func (b *MyriadRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 	var err error
 	if hash == "" {
 		hash, err = b.GetBlockHash(height)

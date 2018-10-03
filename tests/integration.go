@@ -15,6 +15,8 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/jakm/btcutil/chaincfg"
 )
 
 type TestFunc func(t *testing.T, coin string, chain bchain.BlockChain, testConfig json.RawMessage)
@@ -52,6 +54,7 @@ func runTests(t *testing.T, coin string, cfg map[string]json.RawMessage) {
 	if cfg == nil || len(cfg) == 0 {
 		t.Skip("No tests to run")
 	}
+	defer chaincfg.ResetParams()
 
 	bc, err := makeBlockChain(coin)
 	if err != nil {

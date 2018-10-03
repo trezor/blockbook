@@ -122,6 +122,7 @@ func (b *BitcoinRPC) GetChainInfoAndInitializeMempool(bc bchain.BlockChain) (str
 
 // Initialize initializes BitcoinRPC instance.
 func (b *BitcoinRPC) Initialize() error {
+	b.ChainConfig.SupportsEstimateFee = false
 
 	chainName, err := b.GetChainInfoAndInitializeMempool(b)
 	if err != nil {

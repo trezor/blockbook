@@ -362,6 +362,7 @@ func blockbookAppInfoMetric(db *db.RocksDB, chain bchain.BlockChain, txCache *db
 	metrics.BlockbookAppInfo.With(common.Labels{
 		"blockbook_version":        si.Blockbook.Version,
 		"blockbook_commit":         si.Blockbook.GitCommit,
+		"blockbook_buildtime":      si.Blockbook.BuildTime,
 		"backend_version":          si.Backend.Version,
 		"backend_subversion":       si.Backend.Subversion,
 		"backend_protocol_version": si.Backend.ProtocolVersion}).Set(float64(0))

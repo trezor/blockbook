@@ -137,7 +137,7 @@ func (p *BitcoinParser) outputScriptToAddresses(script []byte) ([]string, bool, 
 		rv[i] = a.EncodeAddress()
 	}
 	var s bool
-	if sc != txscript.NonStandardTy && sc != txscript.NullDataTy {
+	if sc == txscript.PubKeyHashTy || sc == txscript.WitnessV0PubKeyHashTy || sc == txscript.ScriptHashTy || sc == txscript.WitnessV0ScriptHashTy {
 		s = true
 	} else if len(rv) == 0 {
 		or := TryParseOPReturn(script)
