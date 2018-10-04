@@ -820,7 +820,7 @@ func safeDecodeResponse(body io.ReadCloser, res interface{}) (err error) {
 		if r := recover(); r != nil {
 			glog.Error("unmarshal json recovered from panic: ", r, "; data: ", string(data))
 			if len(data) > 0 && len(data) < 2048 {
-				err = errors.Errorf("Error: ", string(data))
+				err = errors.Errorf("Error: %v", string(data))
 			} else {
 				err = errors.New("Internal error")
 			}

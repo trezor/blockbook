@@ -505,7 +505,7 @@ func pushSynchronizationHandler(nt bchain.NotificationType) {
 	if atomic.LoadInt32(&inShutdown) != 0 {
 		return
 	}
-	glog.V(1).Infof("MQ: notification ", nt)
+	glog.V(1).Info("MQ: notification ", nt)
 	if nt == bchain.NotificationNewBlock {
 		chanSyncIndex <- struct{}{}
 	} else if nt == bchain.NotificationNewTx {

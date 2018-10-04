@@ -109,7 +109,7 @@ func (d *RocksDB) Close() error {
 		if d.is != nil && d.is.DbState == common.DbStateOpen {
 			d.is.DbState = common.DbStateClosed
 			if err := d.StoreInternalState(d.is); err != nil {
-				glog.Infof("internalState: ", err)
+				glog.Info("internalState: ", err)
 			}
 		}
 		glog.Infof("rocksdb: close")
