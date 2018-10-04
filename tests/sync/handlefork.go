@@ -176,7 +176,7 @@ func makeFakeChain(chain bchain.BlockChain, blks []BlockID, upper uint32) (*fake
 		return nil, fmt.Errorf("Range must end with fake block in order to emulate fork [%d != %d]", blks[len(blks)-1].Height, upper)
 	}
 	mBlks := make(map[uint32]BlockID, len(blks))
-	for i := 0; i < len(blks); i++ {
+	for i := range blks {
 		mBlks[blks[i].Height] = blks[i]
 	}
 	return &fakeBlockChain{
@@ -215,7 +215,7 @@ func getBlockTxs(chain bchain.BlockChain, hash string) ([]bchain.Tx, error) {
 		return nil, fmt.Errorf("GetBlock: %s", err)
 	}
 	parser := chain.GetChainParser()
-	for i := 0; i < len(b.Txs); i++ {
+	for i := range b.Txs {
 		err := setTxAddresses(parser, &b.Txs[i])
 		if err != nil {
 			return nil, fmt.Errorf("setTxAddresses [%s]: %s", b.Txs[i].Txid, err)
@@ -226,9 +226,9 @@ func getBlockTxs(chain bchain.BlockChain, hash string) ([]bchain.Tx, error) {
 
 func getAddr2TxsMap(txs []bchain.Tx) map[string][]string {
 	addr2txs := make(map[string][]string)
-	for i := 0; i < len(txs); i++ {
-		for j := 0; j < len(txs[i].Vout); j++ {
-			for k := 0; k < len(txs[i].Vout[j].ScriptPubKey.Addresses); k++ {
+	for i := range txs {
+		for j := range txs[i].Vout {
+			for k := range txs[i].Vout[j].ScriptPubKey.Addresses {
 				addr := txs[i].Vout[j].ScriptPubKey.Addresses[k]
 				txid := txs[i].Txid
 				addr2txs[addr] = append(addr2txs[addr], txid)

@@ -125,7 +125,7 @@ func loadTestData(coin string, parser bchain.BlockChainParser) (*TestData, error
 }
 
 func setTxAddresses(parser bchain.BlockChainParser, tx *bchain.Tx) error {
-	for i := 0; i < len(tx.Vout); i++ {
+	for i := range tx.Vout {
 		ad, err := parser.GetAddrDescFromVout(&tx.Vout[i])
 		if err != nil {
 			return err

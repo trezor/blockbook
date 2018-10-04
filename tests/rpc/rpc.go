@@ -400,7 +400,7 @@ func intersect(a, b []string) []string {
 }
 
 func containsString(slice []string, s string) bool {
-	for i := 0; i < len(slice); i++ {
+	for i := range slice {
 		if slice[i] == s {
 			return true
 		}
