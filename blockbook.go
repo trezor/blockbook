@@ -293,7 +293,7 @@ func main() {
 	if *synchronize {
 		internalState.SyncMode = true
 		internalState.InitialSync = true
-		if err := syncWorker.ResyncIndex(nil); err != nil {
+		if err := syncWorker.ResyncIndex(nil, true); err != nil {
 			glog.Error("resyncIndex ", err)
 			return
 		}
@@ -427,7 +427,7 @@ func syncIndexLoop() {
 	glog.Info("syncIndexLoop starting")
 	// resync index about every 15 minutes if there are no chanSyncIndex requests, with debounce 1 second
 	tickAndDebounce(time.Duration(*resyncIndexPeriodMs)*time.Millisecond, debounceResyncIndexMs*time.Millisecond, chanSyncIndex, func() {
-		if err := syncWorker.ResyncIndex(onNewBlockHash); err != nil {
+		if err := syncWorker.ResyncIndex(onNewBlockHash, false); err != nil {
 			glog.Error("syncIndexLoop ", errors.ErrorStack(err))
 		}
 	})

@@ -1,3 +1,5 @@
+// +build integration
+
 package tests
 
 import (
@@ -14,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"testing"
 
 	"github.com/jakm/btcutil/chaincfg"
@@ -34,7 +37,14 @@ func runIntegrationTests(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for coin, cfg := range tests {
+	keys := make([]string, 0, len(tests))
+	for k := range tests {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for _, coin := range keys {
+		cfg := tests[coin]
 		t.Run(coin, func(t *testing.T) { runTests(t, coin, cfg) })
 
 	}
