@@ -44,5 +44,10 @@ func (c *fakeBlockChain) GetBlock(hash string, height uint32) (*bchain.Block, er
 			}
 		}
 	}
-	return c.BlockChain.GetBlock(hash, height)
+	b, err := c.BlockChain.GetBlock(hash, height)
+	if err != nil {
+		return nil, err
+	}
+	b.Height = height
+	return b, nil
 }
