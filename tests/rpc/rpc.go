@@ -5,7 +5,6 @@ package rpc
 import (
 	"blockbook/bchain"
 	"encoding/json"
-	"errors"
 	"io/ioutil"
 	"path/filepath"
 	"reflect"
@@ -13,6 +12,7 @@ import (
 	"time"
 
 	"github.com/deckarep/golang-set"
+	"github.com/juju/errors"
 )
 
 var testMap = map[string]func(t *testing.T, th *TestHandler){
@@ -110,18 +110,19 @@ func loadTestData(coin string, parser bchain.BlockChainParser) (*TestData, error
 }
 
 func setTxAddresses(parser bchain.BlockChainParser, tx *bchain.Tx) error {
-	// pack and unpack transaction in order to get addresses decoded - ugly but works
-	var tmp *bchain.Tx
-	b, err := parser.PackTx(tx, 0, 0)
-	if err == nil {
-		tmp, _, err = parser.UnpackTx(b)
-		if err == nil {
-			for i := 0; i < len(tx.Vout); i++ {
-				tx.Vout[i].ScriptPubKey.Addresses = tmp.Vout[i].ScriptPubKey.Addresses
-			}
+	for i := range tx.Vout {
+		ad, err := parser.GetAddrDescFromVout(&tx.Vout[i])
+		if err != nil {
+			return err
 		}
+		addrs := []string{}
+		a, s, err := parser.GetAddressesFromAddrDesc(ad)
+		if err == nil && s {
+			addrs = append(addrs, a...)
+		}
+		tx.Vout[i].ScriptPubKey.Addresses = addrs
 	}
-	return err
+	return nil
 }
 
 func testGetBlockHash(t *testing.T, h *TestHandler) {
@@ -206,7 +207,7 @@ func testMempoolSync(t *testing.T, h *TestHandler) {
 			continue
 		}
 
-		txid2addrs := getMempoolAddresses(t, h, txs)
+		txid2addrs := getTxid2addrs(t, h, txs)
 		if len(txid2addrs) == 0 {
 			t.Skip("Skipping test, no addresses in mempool")
 		}
@@ -215,7 +216,7 @@ func testMempoolSync(t *testing.T, h *TestHandler) {
 			for _, a := range addrs {
 				got, err := h.Chain.GetMempoolTransactions(a)
 				if err != nil {
-					t.Fatal(err)
+					t.Fatalf("address %q: %s", a, err)
 				}
 				if !containsString(got, txid) {
 					t.Errorf("ResyncMempool() - for address %s, transaction %s wasn't found in mempool", a, txid)
@@ -343,26 +344,21 @@ func getMempool(t *testing.T, h *TestHandler) []string {
 	return txs
 }
 
-func getMempoolAddresses(t *testing.T, h *TestHandler, txs []string) map[string][]string {
+func getTxid2addrs(t *testing.T, h *TestHandler, txs []string) map[string][]string {
 	txid2addrs := map[string][]string{}
-	for i := 0; i < len(txs); i++ {
+	for i := range txs {
 		tx, err := h.Chain.GetTransactionForMempool(txs[i])
 		if err != nil {
+			if isMissingTx(err) {
+				continue
+			}
 			t.Fatal(err)
 		}
+		setTxAddresses(h.Chain.GetChainParser(), tx)
 		addrs := []string{}
-		for _, vin := range tx.Vin {
-			for _, a := range vin.Addresses {
-				if isSearchableAddr(a) {
-					addrs = append(addrs, a)
-				}
-			}
-		}
-		for _, vout := range tx.Vout {
-			for _, a := range vout.ScriptPubKey.Addresses {
-				if isSearchableAddr(a) {
-					addrs = append(addrs, a)
-				}
+		for j := range tx.Vout {
+			for _, a := range tx.Vout[j].ScriptPubKey.Addresses {
+				addrs = append(addrs, a)
 			}
 		}
 		if len(addrs) > 0 {
@@ -372,8 +368,18 @@ func getMempoolAddresses(t *testing.T, h *TestHandler, txs []string) map[string]
 	return txid2addrs
 }
 
-func isSearchableAddr(addr string) bool {
-	return len(addr) > 3 && addr[:3] != "OP_"
+func isMissingTx(err error) bool {
+	switch e1 := err.(type) {
+	case *errors.Err:
+		switch e2 := e1.Cause().(type) {
+		case *bchain.RPCError:
+			if e2.Code == -5 { // "No such mempool or blockchain transaction"
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 func intersect(a, b []string) []string {
