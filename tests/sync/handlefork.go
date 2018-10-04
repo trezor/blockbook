@@ -5,7 +5,6 @@ package sync
 import (
 	"blockbook/bchain"
 	"blockbook/db"
-	"errors"
 	"fmt"
 	"math/big"
 	"os"
@@ -154,8 +153,8 @@ func verifyTransactionsXXX(t *testing.T, d *db.RocksDB, rng Range, addr2txs map[
 
 func getFakeBlocks(h *TestHandler, rng Range) []BlockID {
 	blks := make([]BlockID, 0, rng.Upper-rng.Lower+1)
-	for _, b := range h.TestData.HandleFork.FakeBlocks {
-		if b.Height >= rng.Lower && b.Height <= rng.Upper {
+	for i := rng.Lower; i <= rng.Upper; i++ {
+		if b, found := h.TestData.HandleFork.FakeBlocks[i]; found {
 			blks = append(blks, b)
 		}
 	}
@@ -174,17 +173,17 @@ func getRealBlocks(h *TestHandler, rng Range) []BlockID {
 
 func makeFakeChain(chain bchain.BlockChain, blks []BlockID, upper uint32) (*fakeBlockChain, error) {
 	if blks[len(blks)-1].Height != upper {
-		return nil, errors.New("Range must end with fake block in order to emulate fork")
+		return nil, fmt.Errorf("Range must end with fake block in order to emulate fork [%d != %d]", blks[len(blks)-1].Height, upper)
 	}
 	mBlks := make(map[uint32]BlockID, len(blks))
 	for i := 0; i < len(blks); i++ {
 		mBlks[blks[i].Height] = blks[i]
 	}
 	return &fakeBlockChain{
-		BlockChain:     chain,
-		returnFakes:    true,
-		fakeBlocks:     mBlks,
-		fakeBestHeight: upper,
+		BlockChain:  chain,
+		returnFakes: true,
+		fakeBlocks:  mBlks,
+		bestHeight:  upper,
 	}, nil
 }
 
