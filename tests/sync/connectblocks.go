@@ -243,12 +243,9 @@ func getTaInfo(parser bchain.BlockChainParser, ta *db.TxAddresses) (*txInfo, err
 
 	for i := range ta.Inputs {
 		info.valInSat.Add(&info.valInSat, &ta.Inputs[i].ValueSat)
-		addrs, _, err := ta.Inputs[i].Addresses(parser)
-		if err != nil {
-			return nil, err
-		}
-		for _, a := range addrs {
-			if !strings.HasPrefix(a, "OP_") {
+		addrs, s, err := ta.Inputs[i].Addresses(parser)
+		if err == nil && s {
+			for _, a := range addrs {
 				info.inputs = append(info.inputs, a)
 			}
 		}
@@ -256,12 +253,9 @@ func getTaInfo(parser bchain.BlockChainParser, ta *db.TxAddresses) (*txInfo, err
 
 	for i := range ta.Outputs {
 		info.valOutSat.Add(&info.valOutSat, &ta.Outputs[i].ValueSat)
-		addrs, _, err := ta.Outputs[i].Addresses(parser)
-		if err != nil {
-			return nil, err
-		}
-		for _, a := range addrs {
-			if !strings.HasPrefix(a, "OP_") {
+		addrs, s, err := ta.Outputs[i].Addresses(parser)
+		if err == nil && s {
+			for _, a := range addrs {
 				info.outputs = append(info.outputs, a)
 			}
 		}
