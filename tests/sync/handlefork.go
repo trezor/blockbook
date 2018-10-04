@@ -40,8 +40,8 @@ func testHandleFork(t *testing.T, h *TestHandler) {
 			}
 			fakeAddr2txs := getAddr2TxsMap(fakeTxs)
 
-			verifyTransactionsXXX(t, d, rng, fakeAddr2txs, true)
-			// verifyAddressesXXX(t, d, h.Chain, fakeBlocks)
+			verifyTransactions2(t, d, rng, fakeAddr2txs, true)
+			verifyAddresses2(t, d, h.Chain, fakeBlocks)
 
 			chain.returnFakes = false
 
@@ -59,14 +59,14 @@ func testHandleFork(t *testing.T, h *TestHandler) {
 			}
 			realAddr2txs := getAddr2TxsMap(realTxs)
 
-			verifyTransactionsXXX(t, d, rng, fakeAddr2txs, false)
-			verifyTransactionsXXX(t, d, rng, realAddr2txs, true)
-			// verifyAddressesXXX(t, d, h.Chain, realBlocks)
+			verifyTransactions2(t, d, rng, fakeAddr2txs, false)
+			verifyTransactions2(t, d, rng, realAddr2txs, true)
+			verifyAddresses2(t, d, h.Chain, realBlocks)
 		})
 	}
 }
 
-func verifyAddressesXXX(t *testing.T, d *db.RocksDB, chain bchain.BlockChain, blks []BlockID) {
+func verifyAddresses2(t *testing.T, d *db.RocksDB, chain bchain.BlockChain, blks []BlockID) {
 	parser := chain.GetChainParser()
 
 	for _, b := range blks {
@@ -117,7 +117,7 @@ func verifyAddressesXXX(t *testing.T, d *db.RocksDB, chain bchain.BlockChain, bl
 	}
 }
 
-func verifyTransactionsXXX(t *testing.T, d *db.RocksDB, rng Range, addr2txs map[string][]string, exist bool) {
+func verifyTransactions2(t *testing.T, d *db.RocksDB, rng Range, addr2txs map[string][]string, exist bool) {
 	noErrs := 0
 	for addr, txs := range addr2txs {
 		checkMap := make(map[string]bool, len(txs))
