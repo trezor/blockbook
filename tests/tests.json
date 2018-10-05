@@ -6,7 +6,11 @@
     },
     "bcash_testnet": {
         "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",
-                "EstimateFee", "GetBestBlockHash", "GetBestBlockHeight", "GetBlockHeader"]
+                "EstimateFee", "GetBestBlockHash", "GetBestBlockHeight", "GetBlockHeader"],
+        "sync": ["ConnectBlocksParallel", "ConnectBlocks", "HandleFork"]
+    },
+    "bgold": {
+        "sync": ["ConnectBlocksParallel", "ConnectBlocks", "HandleFork"]
     },
     "bitcoin": {
         "rpc":  ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",
@@ -20,14 +24,17 @@
     },
     "dash": {
         "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",
-                "EstimateSmartFee", "EstimateFee", "GetBestBlockHash", "GetBestBlockHeight", "GetBlockHeader"]
+                "EstimateSmartFee", "EstimateFee", "GetBestBlockHash", "GetBestBlockHeight", "GetBlockHeader"],
+        "sync": ["ConnectBlocksParallel", "ConnectBlocks", "HandleFork"]
     },
     "dash_testnet": {
         "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",
-                "EstimateSmartFee", "EstimateFee", "GetBestBlockHash", "GetBestBlockHeight", "GetBlockHeader"]
+                "EstimateSmartFee", "EstimateFee", "GetBestBlockHash", "GetBestBlockHeight", "GetBlockHeader"],
+        "sync": ["ConnectBlocksParallel", "ConnectBlocks", "HandleFork"]
     },
     "dogecoin": {
-        "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync"]
+        "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync"],
+        "sync": ["ConnectBlocksParallel", "ConnectBlocks"]
     },
     "ethereum_testnet_ropsten": {
         "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "EstimateFee", "GetBestBlockHash", "GetBestBlockHeight",
@@ -35,7 +42,8 @@
     },
     "litecoin": {
         "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",
-                "EstimateSmartFee", "EstimateFee"]
+                "EstimateSmartFee", "EstimateFee"],
+        "sync": ["ConnectBlocksParallel", "ConnectBlocks", "HandleFork"]
     },
     "monacoin": {
         "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",
@@ -51,7 +59,8 @@
     },
     "vertcoin": {
         "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",
-                "EstimateSmartFee", "EstimateFee", "GetBestBlockHash", "GetBestBlockHeight", "GetBlockHeader"]
+                "EstimateSmartFee", "EstimateFee", "GetBestBlockHash", "GetBestBlockHeight", "GetBlockHeader"],
+        "sync": ["ConnectBlocksParallel", "ConnectBlocks", "HandleFork"]
     },
     "zcash": {
         "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",

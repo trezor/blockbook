@@ -1,0 +1,185 @@
+{
+    "connectBlocks": {
+        "syncRanges": [
+            {"lower": 1260372, "upper": 1260392}
+        ],
+        "blocks": {
+            "1260392": {
+                "height": 1260392,
+                "hash": "00000000288329200dc788719c9f703d03efcb5a547c0b115fb75da74853f533",
+                "noTxs": 84,
+                "txDetails": [
+                    {
+                        "hex": "01000000026f54f3d4af8b5703286fd80c35daf28f15a0aa89e821b1dad3505fe1ee0a4ccb010000006a473044022020bd040b64be0b1cedad56094d14915234aaf0f2929654415929d1c407d78ee102201d14095f485f85f7db18db4b47b32c0f183230dd6bf3ab6a2d9e90ee0669ace0412103758d7df1e4f797e0e68303deb91c06eebcaae2b5bab5151f8e2008990c957b0f00000000354ef9c8d3378993afcbfdd3aabc91427eda790e45bb3266e070f40a0d338672000000006a47304402205c3f184e710dfb7b3deb07c5ff5bfea5732178fcda4331a400ca4fa389757d150220669359e5c9ce3b7141a84dd2ae96e48320862457658dfb58da27a862ad9e9450412103758d7df1e4f797e0e68303deb91c06eebcaae2b5bab5151f8e2008990c957b0f0000000003501608000000000017a9145c253d296fafb232d99dcec34dd709590b71656a87a4f31700000000001976a9146d58051f5adb29b305f74f41f98b39ad4f35ca8288ac00000000000000003a6a04006667700365746804000000012a30784546664139353731373065373834354333463264343839624230454336384231453030303935326400000000",
+                        "txid": "f99a80a71f6775bfac0c0c7452bd351d27b31076e717f4add1df9d9e3029754f",
+                        "version": 1,
+                        "vin": [
+                            {
+                                "txid": "cb4c0aeee15f50d3dab121e889aaa0158ff2da350cd86f2803578bafd4f3546f",
+                                "vout": 1,
+                                "scriptSig": {
+                                    "hex": "473044022020bd040b64be0b1cedad56094d14915234aaf0f2929654415929d1c407d78ee102201d14095f485f85f7db18db4b47b32c0f183230dd6bf3ab6a2d9e90ee0669ace0412103758d7df1e4f797e0e68303deb91c06eebcaae2b5bab5151f8e2008990c957b0f"
+                                },
+                                "sequence": 0
+                            },
+                            {
+                                "txid": "7286330d0af470e06632bb450e79da7e4291bcaad3fdcbaf938937d3c8f94e35",
+                                "vout": 0,
+                                "scriptSig": {
+                                    "hex": "47304402205c3f184e710dfb7b3deb07c5ff5bfea5732178fcda4331a400ca4fa389757d150220669359e5c9ce3b7141a84dd2ae96e48320862457658dfb58da27a862ad9e9450412103758d7df1e4f797e0e68303deb91c06eebcaae2b5bab5151f8e2008990c957b0f"
+                                },
+                                "sequence": 0
+                            }
+                        ],
+                        "vout": [
+                            {
+                                "value": 0.0053,
+                                "n": 0,
+                                "scriptPubKey": {
+                                    "hex": "a9145c253d296fafb232d99dcec34dd709590b71656a87"
+                                }
+                            },
+                            {
+                                "value": 0.015697,
+                                "n": 1,
+                                "scriptPubKey": {
+                                    "hex": "76a9146d58051f5adb29b305f74f41f98b39ad4f35ca8288ac"
+                                }
+                            },
+                            {
+                                "value": 0,
+                                "n": 2,
+                                "scriptPubKey": {
+                                    "hex": "6a04006667700365746804000000012a307845466641393537313730653738343543334632643438396242304543363842314530303039353264"
+                                }
+                            }
+                        ],
+                        "time": 1538728768,
+                        "blocktime": 1538728768
+                    },
+                    {
+                        "hex": "02000000017bfacb87e6fb974f63b141b5f294e8e22215e32b7ecccdc017246b1fed4661cd000000006b483045022100eebb1b8d09bd46b6afaddeb1c5d09abeb3a9a0e4b8213358ea283ad1fe473c1b0220662db98e7ba80cb12f4f11b659e1cb295cefec34bd7df6740a99a93eda4c07c14121021af5e582c17e65bae40cf5ed8f04ea99ac9834b9741278eda2680489db900dc9feffffff026d646c01000000001976a9143004753f7e48481d5cb75197611de0fb4ccb6e7388ac92136a3b1e0000001976a9141dbe4a3ba19009b8f7380f7213dff950681646e888ac673b1300",
+                        "txid": "f594c87948db4fae47609280f9593201fc3bf1012a9d0fab47265f931bd38e89",
+                        "version": 2,
+                        "vin": [
+                            {
+                                "txid": "cd6146ed1f6b2417c0cdcc7e2be31522e2e894f2b541b1634f97fbe687cbfa7b",
+                                "vout": 0,
+                                "scriptSig": {
+                                    "hex": "483045022100eebb1b8d09bd46b6afaddeb1c5d09abeb3a9a0e4b8213358ea283ad1fe473c1b0220662db98e7ba80cb12f4f11b659e1cb295cefec34bd7df6740a99a93eda4c07c14121021af5e582c17e65bae40cf5ed8f04ea99ac9834b9741278eda2680489db900dc9"
+                                },
+                                "sequence": 4294967294
+                            }
+                        ],
+                        "vout": [
+                            {
+                                "value": 0.23880813,
+                                "n": 0,
+                                "scriptPubKey": {
+                                    "hex": "76a9143004753f7e48481d5cb75197611de0fb4ccb6e7388ac"
+                                }
+                            },
+                            {
+                                "value": 1298.4582645,
+                                "n": 1,
+                                "scriptPubKey": {
+                                    "hex": "76a9141dbe4a3ba19009b8f7380f7213dff950681646e888ac"
+                                }
+                            }
+                        ],
+                        "time": 1538728768,
+                        "blocktime": 1538728768
+                    }
+                ]
+            },
+            "1260387": {
+                "height": 1260387,
+                "hash": "000000002fe9bf1b030f7f23c91f9514c6b2c5fb43b4e7da2db3757bc33bc270",
+                "noTxs": 67,
+                "txDetails": [
+                    {
+                        "hex": "0100000002e788165be663aca4c59623b46448bc5169f26d2dc52de60d4870aab7e88a62d2000000006a47304402205e108efdd93cc5263b466c046feb8f95ceac089b3af97136af80011d44db36a20220654952230c53acd9e1421bc965f60988d8c0612ce3370d58ccbcfe2fa5b271df412103758d7df1e4f797e0e68303deb91c06eebcaae2b5bab5151f8e2008990c957b0f00000000a458c3e88c7becf492230588403b8e4caffd7a1272eeeed69845b06c209078f0000000006a47304402202ef72ac389f349fc325af21c9b167e3f25061b7a8a0c06667a4a84ec713a3d6002202e46355a7f3019a3868ebd5086efaafbfc9d2537538e04abaa2aaa21b717c57c412103758d7df1e4f797e0e68303deb91c06eebcaae2b5bab5151f8e2008990c957b0f000000000370f305000000000017a9145c253d296fafb232d99dcec34dd709590b71656a87d87d2c00000000001976a9146d58051f5adb29b305f74f41f98b39ad4f35ca8288ac00000000000000003a6a04006667700365746804000000012a30784546664139353731373065373834354333463264343839624230454336384231453030303935326400000000",
+                        "txid": "2c99d9b14779d695841b99af146c491d701fbedc6919458cfcbef4f89ea93318",
+                        "version": 1,
+                        "vin": [
+                            {
+                                "txid": "d2628ae8b7aa70480de62dc52d6df26951bc4864b42396c5a4ac63e65b1688e7",
+                                "vout": 0,
+                                "scriptSig": {
+                                    "hex": "47304402205e108efdd93cc5263b466c046feb8f95ceac089b3af97136af80011d44db36a20220654952230c53acd9e1421bc965f60988d8c0612ce3370d58ccbcfe2fa5b271df412103758d7df1e4f797e0e68303deb91c06eebcaae2b5bab5151f8e2008990c957b0f"
+                                },
+                                "sequence": 0
+                            },
+                            {
+                                "txid": "f07890206cb04598d6eeee72127afdaf4c8e3b4088052392f4ec7b8ce8c358a4",
+                                "vout": 0,
+                                "scriptSig": {
+                                    "hex": "47304402202ef72ac389f349fc325af21c9b167e3f25061b7a8a0c06667a4a84ec713a3d6002202e46355a7f3019a3868ebd5086efaafbfc9d2537538e04abaa2aaa21b717c57c412103758d7df1e4f797e0e68303deb91c06eebcaae2b5bab5151f8e2008990c957b0f"
+                                },
+                                "sequence": 0
+                            }
+                        ],
+                        "vout": [
+                            {
+                                "value": 0.0039,
+                                "n": 0,
+                                "scriptPubKey": {
+                                    "hex": "a9145c253d296fafb232d99dcec34dd709590b71656a87"
+                                }
+                            },
+                            {
+                                "value": 0.029158,
+                                "n": 1,
+                                "scriptPubKey": {
+                                    "hex": "76a9146d58051f5adb29b305f74f41f98b39ad4f35ca8288ac"
+                                }
+                            },
+                            {
+                                "value": 0,
+                                "n": 2,
+                                "scriptPubKey": {
+                                    "hex": "6a04006667700365746804000000012a307845466641393537313730653738343543334632643438396242304543363842314530303039353264"
+                                }
+                            }
+                        ],
+                        "time": 1538722614,
+                        "blocktime": 1538722614
+                    }
+                ]
+            }
+        }
+    },
+    "handleFork": {
+        "syncRanges": [
+            {"lower": 1260382, "upper": 1260387}
+        ],
+        "fakeBlocks": {
+            "1260385": {
+                "height": 1260385,
+                "hash": "0000000089ef3930311cd2354444afcf258f87406350453bbbbd5cf7786780f3"
+            },
+            "1260386": {
+                "height": 1260386,
+                "hash": "00000000a2c66f3260a9bafe33ef1618fa96d50743c70c23d175efdfba521319"
+            },
+            "1260387": {
+                "height": 1260387,
+                "hash": "0000000000e02e14a16e08fd6a8b36597b969c25dfc7c96f63c850e0554ae621"
+            }
+        },
+        "realBlocks": {
+            "1260385": {
+                "height": 1260385,
+                "hash": "000000006869aa2b332772556fe036e2df2c74143397a57835029b391db7671c"
+            },
+            "1260386": {
+                "height": 1260386,
+                "hash": "0000000077240793646ed50f4f4faaeeb4428f8ac0415f66274667a091577738"
+            },
+            "1260387": {
+                "height": 1260387,
+                "hash": "000000002fe9bf1b030f7f23c91f9514c6b2c5fb43b4e7da2db3757bc33bc270"
+            }
+        }
+    }
+}
