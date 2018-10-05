@@ -26,7 +26,10 @@ tools:
 	chown $(PACKAGER) /out/{ldb,sst_dump}
 
 test: prepare-sources
-	cd $(BLOCKBOOK_SRC) && go test -tags unittest `go list ./... | grep -v '^blockbook/contrib'` $(ARGS)
+	cd $(BLOCKBOOK_SRC) && go test -tags unittest `go list ./... | grep -vP '^blockbook/(contrib|tests)'` $(ARGS)
+
+test-integration: prepare-sources
+	cd $(BLOCKBOOK_SRC) && go test -tags integration `go list blockbook/tests/...` $(ARGS)
 
 test-all: prepare-sources
 	cd $(BLOCKBOOK_SRC) && go test -tags 'unittest integration' `go list ./... | grep -v '^blockbook/contrib'` $(ARGS)
