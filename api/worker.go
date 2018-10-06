@@ -125,6 +125,7 @@ func (w *Worker) GetTransaction(txid string, bestheight uint32, spendingTxs bool
 		vin.Txid = bchainVin.Txid
 		vin.N = i
 		vin.Vout = bchainVin.Vout
+		vin.Sequence = int64(bchainVin.Sequence)
 		vin.ScriptSig.Hex = bchainVin.ScriptSig.Hex
 		//  bchainVin.Txid=="" is coinbase transaction
 		if bchainVin.Txid != "" {
@@ -200,11 +201,14 @@ func (w *Worker) GetTransaction(txid string, bestheight uint32, spendingTxs bool
 		Blocktime:     bchainTx.Blocktime,
 		Confirmations: bchainTx.Confirmations,
 		Fees:          w.chainParser.AmountToDecimalString(&feesSat),
+		FeesSat:       feesSat,
 		Locktime:      bchainTx.LockTime,
 		Time:          bchainTx.Time,
 		Txid:          bchainTx.Txid,
 		ValueIn:       w.chainParser.AmountToDecimalString(&valInSat),
+		ValueInSat:    valInSat,
 		ValueOut:      w.chainParser.AmountToDecimalString(&valOutSat),
+		ValueOutSat:   valOutSat,
 		Version:       bchainTx.Version,
 		Hex:           bchainTx.Hex,
 		Vin:           vins,

@@ -1,4 +1,4 @@
-// +build integration
+// build integration
 
 package server
 
@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"flag"
 	"os"
+	"reflect"
 	"sort"
 	"strings"
 	"testing"
@@ -94,16 +95,74 @@ func getFullAddressHistory(addr []string, rr addrOpts, ws *gosocketio.Client) (*
 	return &bbResponse, nil
 }
 
-func equalAddressHistoryItem(logItem addressHistoryItem, bbItem addressHistoryItem) error {
-	if logItem.Tx.Hash != bbItem.Tx.Hash {
-		return errors.Errorf("Different hash bb: %v log: %v", bbItem.Tx.Hash, logItem.Tx.Hash)
+func equalTx(logTx resTx, bbTx resTx) error {
+	if logTx.Hash != bbTx.Hash {
+		return errors.Errorf("Different Hash bb: %v log: %v", bbTx.Hash, logTx.Hash)
 	}
-	if logItem.Tx.Hex != bbItem.Tx.Hex {
-		return errors.Errorf("Different hex bb: %v log: %v", bbItem.Tx.Hex, logItem.Tx.Hex)
+	if logTx.Hex != bbTx.Hex {
+		return errors.Errorf("Different Hex bb: %v log: %v", bbTx.Hex, logTx.Hex)
 	}
-	// Addresses do not match, bb getAddressHistory does not return input addresses
+	if logTx.BlockTimestamp != bbTx.BlockTimestamp {
+		return errors.Errorf("Different BlockTimestamp bb: %v log: %v", bbTx.BlockTimestamp, logTx.BlockTimestamp)
+	}
+	if logTx.FeeSatoshis != bbTx.FeeSatoshis {
+		return errors.Errorf("Different FeeSatoshis bb: %v log: %v", bbTx.FeeSatoshis, logTx.FeeSatoshis)
+	}
+	if logTx.Height != bbTx.Height {
+		return errors.Errorf("Different Height bb: %v log: %v", bbTx.Height, logTx.Height)
+	}
+	if logTx.InputSatoshis != bbTx.InputSatoshis {
+		return errors.Errorf("Different InputSatoshis bb: %v log: %v", bbTx.InputSatoshis, logTx.InputSatoshis)
+	}
+	if logTx.Locktime != bbTx.Locktime {
+		return errors.Errorf("Different Locktime bb: %v log: %v", bbTx.Locktime, logTx.Locktime)
+	}
+	if logTx.OutputSatoshis != bbTx.OutputSatoshis {
+		return errors.Errorf("Different OutputSatoshis bb: %v log: %v", bbTx.OutputSatoshis, logTx.OutputSatoshis)
+	}
+	if logTx.Version != bbTx.Version {
+		return errors.Errorf("Different Version bb: %v log: %v", bbTx.Version, logTx.Version)
+	}
+	if len(logTx.Inputs) != len(bbTx.Inputs) {
+		return errors.Errorf("Different number of Inputs bb: %v log: %v", len(bbTx.Inputs), len(logTx.Inputs))
+	}
+	// blockbook parses bech addresses, it is ok for bitcore to return nil address and blockbook parsed address
+	for i := range logTx.Inputs {
+		if logTx.Inputs[i].Satoshis != bbTx.Inputs[i].Satoshis ||
+			(bbTx.Inputs[i].Address == nil && logTx.Inputs[i].Address != bbTx.Inputs[i].Address) ||
+			(logTx.Inputs[i].Address != nil && *logTx.Inputs[i].Address != *bbTx.Inputs[i].Address) ||
+			logTx.Inputs[i].OutputIndex != bbTx.Inputs[i].OutputIndex ||
+			logTx.Inputs[i].Sequence != bbTx.Inputs[i].Sequence {
+			return errors.Errorf("Different Inputs bb: %+v log: %+v", bbTx.Inputs, logTx.Inputs)
+		}
+	}
+	if len(logTx.Outputs) != len(bbTx.Outputs) {
+		return errors.Errorf("Different number of Outputs bb: %v log: %v", len(bbTx.Outputs), len(logTx.Outputs))
+	}
+	// blockbook parses bech addresses, it is ok for bitcore to return nil address and blockbook parsed address
+	for i := range logTx.Outputs {
+		if logTx.Outputs[i].Satoshis != bbTx.Outputs[i].Satoshis ||
+			(bbTx.Outputs[i].Address == nil && logTx.Outputs[i].Address != bbTx.Outputs[i].Address) ||
+			(logTx.Outputs[i].Address != nil && *logTx.Outputs[i].Address != *bbTx.Outputs[i].Address) {
+			return errors.Errorf("Different Outputs bb: %+v log: %+v", bbTx.Outputs, logTx.Outputs)
+		}
+	}
 	return nil
 }
+
+func equalAddressHistoryItem(logItem addressHistoryItem, bbItem addressHistoryItem) error {
+	if err := equalTx(logItem.Tx, bbItem.Tx); err != nil {
+		return err
+	}
+	if !reflect.DeepEqual(logItem.Addresses, bbItem.Addresses) {
+		return errors.Errorf("Different Addresses bb: %v log: %v", bbItem.Addresses, logItem.Addresses)
+	}
+	if logItem.Satoshis != bbItem.Satoshis {
+		return errors.Errorf("Different Satoshis bb: %v log: %v", bbItem.Satoshis, logItem.Satoshis)
+	}
+	return nil
+}
+
 func verifyGetAddressHistory(t *testing.T, id int, lrs *logRequestResponse, bbResStr string, stat *verifyStats, ws *gosocketio.Client, bbRequest map[string]json.RawMessage) {
 	bbResponse := resultGetAddressHistory{}
 	logResponse := resultGetAddressHistory{}
@@ -146,16 +205,17 @@ func verifyGetAddressHistory(t *testing.T, id int, lrs *logRequestResponse, bbRe
 					}
 					found := false
 					for _, bbFullItem := range bbFullResponse.Result.Items {
-						if err1 = equalAddressHistoryItem(logItem, bbFullItem); err1 == nil {
+						err1 = equalAddressHistoryItem(logItem, bbFullItem)
+						if err1 == nil {
 							found = true
 							break
+						}
+						if err1.Error()[:14] != "Different Hash" {
+							t.Log(err1)
 						}
 					}
 					if !found {
 						t.Log("getAddressHistory", id, "addresses", addr, "mismatch ", err)
-						// bf, _ := json.Marshal(bbFullResponse.Result)
-						// bl, _ := json.Marshal(logResponse.Result)
-						// t.Log("{ \"bf\":", string(bf), ",\"bl\":", string(bl), "}")
 						return
 					}
 				}
@@ -237,94 +297,7 @@ func verifyGetDetailedTransaction(t *testing.T, id int, lrs *logRequestResponse,
 	if err := unmarshalResponses(t, id, lrs, bbResStr, &bbResponse, &logResponse); err != nil {
 		return
 	}
-	equalInputs := func() error {
-		if len(bbResponse.Result.Inputs) != len(logResponse.Result.Inputs) {
-			return errors.Errorf("mismatch number of inputs %v %v", len(bbResponse.Result.Inputs), len(logResponse.Result.Inputs))
-		}
-		for i, bbi := range bbResponse.Result.Inputs {
-			li := logResponse.Result.Inputs[i]
-
-			if bbi.OutputIndex != li.OutputIndex ||
-				bbi.Sequence != li.Sequence ||
-				bbi.Satoshis != li.Satoshis {
-				return errors.Errorf("mismatch input  %v %v, %v %v, %v %v", bbi.OutputIndex, li.OutputIndex, bbi.Sequence, li.Sequence, bbi.Satoshis, li.Satoshis)
-			}
-			// both must be null or both must not be null
-			if bbi.Address != nil && li.Address != nil {
-				if *bbi.Address != *li.Address {
-					return errors.Errorf("mismatch input Address %v %v", *bbi.Address, *li.Address)
-				}
-			} else if bbi.Address != li.Address {
-				// bitcore does not parse bech P2WPKH and P2WSH addresses
-				if bbi.Address == nil || (*bbi.Address)[0:3] != "bc1" {
-					return errors.Errorf("mismatch input Address %v %v", bbi.Address, li.Address)
-				}
-			}
-			// both must be null or both must not be null
-			if bbi.Script != nil && li.Script != nil {
-				if *bbi.Script != *li.Script {
-					return errors.Errorf("mismatch input Script %v %v", *bbi.Script, *li.Script)
-				}
-			} else if bbi.Script != li.Script {
-				return errors.Errorf("mismatch input Script %v %v", bbi.Script, li.Script)
-			}
-		}
-		return nil
-	}
-	equalOutputs := func() error {
-		if len(bbResponse.Result.Outputs) != len(logResponse.Result.Outputs) {
-			return errors.Errorf("mismatch number of outputs %v %v", len(bbResponse.Result.Outputs), len(logResponse.Result.Outputs))
-		}
-		for i, bbo := range bbResponse.Result.Outputs {
-			lo := logResponse.Result.Outputs[i]
-			if bbo.Satoshis != lo.Satoshis {
-				return errors.Errorf("mismatch output Satoshis %v %v", bbo.Satoshis, lo.Satoshis)
-			}
-			// both must be null or both must not be null
-			if bbo.Script != nil && lo.Script != nil {
-				if *bbo.Script != *lo.Script {
-					return errors.Errorf("mismatch output Script %v %v", *bbo.Script, *lo.Script)
-				}
-			} else if bbo.Script != lo.Script {
-				return errors.Errorf("mismatch output Script %v %v", bbo.Script, lo.Script)
-			}
-			// both must be null or both must not be null
-			if bbo.Address != nil && lo.Address != nil {
-				if *bbo.Address != *lo.Address {
-					return errors.Errorf("mismatch output Address %v %v", *bbo.Address, *lo.Address)
-				}
-			} else if bbo.Address != lo.Address {
-				// bitcore does not parse bech P2WPKH and P2WSH addresses
-				if bbo.Address == nil || (*bbo.Address)[0:3] != "bc1" {
-					return errors.Errorf("mismatch output Address %v %v", bbo.Address, lo.Address)
-				}
-			}
-		}
-		return nil
-	}
-	// the tx in the log could have been still in mempool with Height -1
-	if (bbResponse.Result.Height != logResponse.Result.Height && logResponse.Result.Height != -1) ||
-		bbResponse.Result.Hash != logResponse.Result.Hash {
-		t.Log("getDetailedTransaction", id, "mismatch bb:", bbResponse.Result.Hash, bbResponse.Result.Height,
-			"log:", logResponse.Result.Hash, logResponse.Result.Height)
-		return
-	}
-	// the tx in the log could have been still in mempool with BlockTimestamp 0
-	if bbResponse.Result.BlockTimestamp != logResponse.Result.BlockTimestamp && logResponse.Result.BlockTimestamp != 0 {
-		t.Log("getDetailedTransaction", id, "mismatch BlockTimestamp:", bbResponse.Result.BlockTimestamp,
-			"log:", logResponse.Result.BlockTimestamp)
-		return
-	}
-	if bbResponse.Result.Hex != logResponse.Result.Hex {
-		t.Log("getDetailedTransaction", id, "mismatch Hex:", bbResponse.Result.Hex,
-			"log:", logResponse.Result.Hex)
-		return
-	}
-	if err := equalInputs(); err != nil {
-		t.Log("getDetailedTransaction", id, err)
-		return
-	}
-	if err := equalOutputs(); err != nil {
+	if err := equalTx(logResponse.Result, bbResponse.Result); err != nil {
 		t.Log("getDetailedTransaction", id, err)
 		return
 	}
