@@ -1,0 +1,64 @@
+{
+  "coin": {
+      "name": "DigiByte",
+      "shortcut": "DGB",
+      "label": "DigiByte",
+      "alias": "digibyte"
+  },
+  "ports": {
+    "backend_rpc": 8042,
+    "backend_message_queue": 38342,
+    "blockbook_internal": 9042,
+    "blockbook_public": 9142
+  },
+  "ipc": {
+    "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
+    "rpc_user": "rpc",
+    "rpc_pass": "rpc",
+    "rpc_timeout": 25,
+    "message_queue_binding_template": "tcp://127.0.0.1:{{.Ports.BackendMessageQueue}}"
+  },
+  "backend": {
+    "package_name": "backend-digibyte",
+    "package_revision": "satoshilabs-1",
+    "system_user": "digibyte",
+    "version": "6.16.5.1",
+    "binary_url": "https://github.com/digibyte/digibyte/releases/download/v6.16.5.1/digibyte-6.16.5-x86_64-linux-gnu.tar.gz",
+    "verification_type": "sha256",
+    "verification_source": "dd6bed0228087fbb51f08be55cbc08a0e3251acfe1be3249b634447837ecd857",
+    "extract_command": "tar -C backend --strip 1 -xf",
+    "exclude_files": [
+        "bin/digibyte-qt"
+    ],
+    "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/digibyted -datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -conf={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf -pid=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",
+    "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/*.log",
+    "postinst_script_template": "",
+    "service_type": "forking",
+    "service_additional_params_template": "",
+    "protect_memory": true,
+    "mainnet": true,
+    "config_file": "bitcoin.conf",
+    "additional_params": {
+        "whitelist": "127.0.0.1"
+    }
+  },
+  "blockbook": {
+    "package_name": "blockbook-digibyte",
+    "system_user": "blockbook-digibyte",
+    "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
+    "public_binding_template": ":{{.Ports.BlockbookPublic}}",
+    "explorer_url": "",
+    "additional_params": "",
+    "block_chain": {
+      "parse": true,
+      "mempool_workers": 8,
+      "mempool_sub_workers": 2,
+      "block_addresses_to_keep": 300,
+      "additional_params": {}
+    }
+  },
+  "meta": {
+    "package_maintainer": "Martin Boehm",
+    "package_maintainer_email": "martin.bohm@satoshilabs.com"
+  }
+}
