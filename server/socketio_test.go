@@ -1,4 +1,4 @@
-// build integration
+// +build integration
 
 package server
 
@@ -102,13 +102,13 @@ func equalTx(logTx resTx, bbTx resTx) error {
 	if logTx.Hex != bbTx.Hex {
 		return errors.Errorf("Different Hex bb: %v log: %v", bbTx.Hex, logTx.Hex)
 	}
-	if logTx.BlockTimestamp != bbTx.BlockTimestamp {
+	if logTx.BlockTimestamp != bbTx.BlockTimestamp && logTx.BlockTimestamp != 0 {
 		return errors.Errorf("Different BlockTimestamp bb: %v log: %v", bbTx.BlockTimestamp, logTx.BlockTimestamp)
 	}
 	if logTx.FeeSatoshis != bbTx.FeeSatoshis {
 		return errors.Errorf("Different FeeSatoshis bb: %v log: %v", bbTx.FeeSatoshis, logTx.FeeSatoshis)
 	}
-	if logTx.Height != bbTx.Height {
+	if logTx.Height != bbTx.Height && logTx.Height != -1 {
 		return errors.Errorf("Different Height bb: %v log: %v", bbTx.Height, logTx.Height)
 	}
 	if logTx.InputSatoshis != bbTx.InputSatoshis {
