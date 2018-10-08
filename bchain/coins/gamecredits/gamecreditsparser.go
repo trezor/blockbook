@@ -45,9 +45,6 @@ func NewGameCreditsParser(params *chaincfg.Params, c *btc.Configuration) *GameCr
 // GetChainParams contains network parameters for the main GameCredits network,
 // and the test GameCredits network
 func GetChainParams(chain string) *chaincfg.Params {
-	if !chaincfg.IsRegistered(&chaincfg.MainNetParams) {
-		chaincfg.RegisterBitcoinParams()
-	}
 	if !chaincfg.IsRegistered(&MainNetParams) {
 		err := chaincfg.Register(&MainNetParams)
 		if err == nil {
