@@ -377,10 +377,6 @@ func (s *SocketIoServer) getAddressHistory(addr []string, opts *addrOpts) (res r
 	if err != nil {
 		return
 	}
-	bestheight, _, err := s.db.GetBestBlock()
-	if err != nil {
-		return
-	}
 	txids := txr.Result
 	res.Result.TotalCount = len(txids)
 	res.Result.Items = make([]addressHistoryItem, 0)
@@ -389,7 +385,7 @@ func (s *SocketIoServer) getAddressHistory(addr []string, opts *addrOpts) (res r
 		to = opts.To
 	}
 	for txi := opts.From; txi < to; txi++ {
-		tx, err := s.api.GetTransaction(txids[txi], bestheight, false)
+		tx, err := s.api.GetTransaction(txids[txi], false)
 		// for i, txid := range txids {
 		// 	if i >= opts.From && i < opts.To {
 		// 		tx, err := s.api.GetTransaction(txid, bestheight, false)
@@ -632,11 +628,7 @@ type resultGetDetailedTransaction struct {
 }
 
 func (s *SocketIoServer) getDetailedTransaction(txid string) (res resultGetDetailedTransaction, err error) {
-	bestheight, _, err := s.db.GetBestBlock()
-	if err != nil {
-		return
-	}
-	tx, err := s.api.GetTransaction(txid, bestheight, false)
+	tx, err := s.api.GetTransaction(txid, false)
 	if err != nil {
 		return res, err
 	}

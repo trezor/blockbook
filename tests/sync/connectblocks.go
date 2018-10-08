@@ -176,6 +176,10 @@ func verifyAddresses(t *testing.T, d *db.RocksDB, h *TestHandler, rng Range) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			if ta == nil {
+				t.Errorf("Tx %s: not found in TxAddresses", tx.Txid)
+				continue
+			}
 
 			txInfo := getTxInfo(tx)
 			taInfo, err := getTaInfo(parser, ta)

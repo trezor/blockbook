@@ -237,7 +237,7 @@ func main() {
 		return
 	}
 
-	if txCache, err = db.NewTxCache(index, chain, metrics, !*noTxCache); err != nil {
+	if txCache, err = db.NewTxCache(index, chain, metrics, internalState, !*noTxCache); err != nil {
 		glog.Error("txCache ", err)
 		return
 	}

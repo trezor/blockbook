@@ -366,13 +366,11 @@ func setTxToTemplateData(td *TemplateData, tx *api.Tx) *TemplateData {
 
 func (s *PublicServer) explorerTx(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
 	var tx *api.Tx
+	var err error
 	s.metrics.ExplorerViews.With(common.Labels{"action": "tx"}).Inc()
 	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
 		txid := r.URL.Path[i+1:]
-		bestheight, _, err := s.db.GetBestBlock()
-		if err == nil {
-			tx, err = s.api.GetTransaction(txid, bestheight, false)
-		}
+		tx, err = s.api.GetTransaction(txid, false)
 		if err != nil {
 			return errorTpl, nil, err
 		}
@@ -483,7 +481,6 @@ func (s *PublicServer) explorerSearch(w http.ResponseWriter, r *http.Request) (t
 	var tx *api.Tx
 	var address *api.Address
 	var block *api.Block
-	var bestheight uint32
 	var err error
 	s.metrics.ExplorerViews.With(common.Labels{"action": "search"}).Inc()
 	if len(q) > 0 {
@@ -492,13 +489,10 @@ func (s *PublicServer) explorerSearch(w http.ResponseWriter, r *http.Request) (t
 			http.Redirect(w, r, joinURL("/block/", block.Hash), 302)
 			return noTpl, nil, nil
 		}
-		bestheight, _, err = s.db.GetBestBlock()
+		tx, err = s.api.GetTransaction(q, false)
 		if err == nil {
-			tx, err = s.api.GetTransaction(q, bestheight, false)
-			if err == nil {
-				http.Redirect(w, r, joinURL("/tx/", tx.Txid), 302)
-				return noTpl, nil, nil
-			}
+			http.Redirect(w, r, joinURL("/tx/", tx.Txid), 302)
+			return noTpl, nil, nil
 		}
 		address, err = s.api.GetAddress(q, 0, 1, true)
 		if err == nil {
@@ -600,10 +594,7 @@ func (s *PublicServer) apiTx(r *http.Request) (interface{}, error) {
 	s.metrics.ExplorerViews.With(common.Labels{"action": "api-tx"}).Inc()
 	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
 		txid := r.URL.Path[i+1:]
-		bestheight, _, err := s.db.GetBestBlock()
-		if err == nil {
-			tx, err = s.api.GetTransaction(txid, bestheight, true)
-		}
+		tx, err = s.api.GetTransaction(txid, true)
 	}
 	return tx, err
 }
