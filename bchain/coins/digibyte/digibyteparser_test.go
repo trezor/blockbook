@@ -40,19 +40,19 @@ func TestAddressToOutputScript_Mainnet(t *testing.T) {
 			want:    "76a914c92bc70927a752deb91cf0361dcdb60bdac6a1d588ac",
 			wantErr: false,
 		},
+		{
+			name:    "scripthash1",
+			args:    args{address: "SgbK2hJXBUccpQgj41fR4VMZqVPesPZgzC"},
+			want:    "a914d3b07c1aaea886f8ceddedec440623f812e49ddc87",
+			wantErr: false,
+		},
+		{
+			name:    "scripthash2",
+			args:    args{address: "SRrevBM5bfZNpFJ4MhzaNfkTghYKoTB6LV"},
+			want:    "a914320d7056c33fd8d0f5bb9cf42d74133dc28d89bb87",
+			wantErr: false,
+		},
 		// TODO - complete
-		// {
-		// 	name:    "scripthash1",
-		// 	args:    args{address: "36c8VAv74dPZZa4cFayb92hzozkPL4fBPe"},
-		// 	want:    "a91435ec06fa05f2d3b16e88cd7eda7651a10ca2e01987",
-		// 	wantErr: false,
-		// },
-		// {
-		// 	name:    "scripthash2",
-		// 	args:    args{address: "38A1RNvbA5c9wNRfyLVn1FCH5TPKJVG8YR"},
-		// 	want:    "a91446eb90e002f137f05385896c882fe000cc2e967f87",
-		// 	wantErr: false,
-		// },
 		// {
 		// 	name:    "witness_v0_keyhash",
 		// 	args:    args{address: "vtc1qd80qaputavyhtvszlz9zprueqch0qd003g520j"},

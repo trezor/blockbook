@@ -35,9 +35,6 @@ func NewDigiByteParser(params *chaincfg.Params, c *btc.Configuration) *DigiByteP
 
 // GetChainParams contains network parameters for the main DigiByte network
 func GetChainParams(chain string) *chaincfg.Params {
-	if !chaincfg.IsRegistered(&chaincfg.MainNetParams) {
-		chaincfg.RegisterBitcoinParams()
-	}
 	if !chaincfg.IsRegistered(&MainNetParams) {
 		err := chaincfg.Register(&MainNetParams)
 		if err != nil {
