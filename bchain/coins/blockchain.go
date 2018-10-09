@@ -55,20 +55,21 @@ func init() {
 }
 
 // GetCoinNameFromConfig gets coin name and coin shortcut from config file
-func GetCoinNameFromConfig(configfile string) (string, string, error) {
+func GetCoinNameFromConfig(configfile string) (string, string, string, error) {
 	data, err := ioutil.ReadFile(configfile)
 	if err != nil {
-		return "", "", errors.Annotatef(err, "Error reading file %v", configfile)
+		return "", "", "", errors.Annotatef(err, "Error reading file %v", configfile)
 	}
 	var cn struct {
 		CoinName     string `json:"coin_name"`
 		CoinShortcut string `json:"coin_shortcut"`
+		CoinLabel    string `json:"coin_label"`
 	}
 	err = json.Unmarshal(data, &cn)
 	if err != nil {
-		return "", "", errors.Annotatef(err, "Error parsing file %v", configfile)
+		return "", "", "", errors.Annotatef(err, "Error parsing file %v", configfile)
 	}
-	return cn.CoinName, cn.CoinShortcut, nil
+	return cn.CoinName, cn.CoinShortcut, cn.CoinLabel, nil
 }
 
 // NewBlockChain creates bchain.BlockChain of type defined by parameter coin

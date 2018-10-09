@@ -2,7 +2,7 @@
   "coin": {
       "name": "Testnet",
       "shortcut": "TEST",
-      "label": "Testnet",
+      "label": "Bitcoin Testnet",
       "alias": "bitcoin_testnet"
   },
   "ports": {

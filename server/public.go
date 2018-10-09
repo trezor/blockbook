@@ -228,6 +228,7 @@ func (s *PublicServer) newTemplateData() *TemplateData {
 	return &TemplateData{
 		CoinName:         s.is.Coin,
 		CoinShortcut:     s.is.CoinShortcut,
+		CoinLabel:        s.is.CoinLabel,
 		InternalExplorer: s.internalExplorer && !s.is.InitialSync,
 	}
 }
@@ -311,6 +312,7 @@ const (
 type TemplateData struct {
 	CoinName         string
 	CoinShortcut     string
+	CoinLabel        string
 	InternalExplorer bool
 	Address          *api.Address
 	AddrStr          string
