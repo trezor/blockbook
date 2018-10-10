@@ -240,6 +240,7 @@ type addressHistoryIndexes struct {
 }
 
 type txInputs struct {
+	Txid       *string   `json:"txid"`
 	OutputIndex int     `json:"outputIndex"`
 	Script      *string `json:"script"`
 	// ScriptAsm   *string `json:"scriptAsm"`
@@ -301,8 +302,10 @@ func txToResTx(tx *api.Tx) resTx {
 	inputs := make([]txInputs, len(tx.Vin))
 	for i := range tx.Vin {
 		vin := &tx.Vin[i]
+		txid := vin.Txid
 		script := vin.ScriptSig.Hex
 		input := txInputs{
+			Txid:        &txid,
 			Script:      &script,
 			Sequence:    int64(vin.Sequence),
 			OutputIndex: int(vin.Vout),
