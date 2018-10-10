@@ -81,7 +81,7 @@ In section *blockbook* update information how to build and configure Blockbook s
 
 Update *package_maintainer* and *package_maintainer_email* options in section *meta*.
 
-Execute script *go run contrib/scripts/check-and-generate-port-registry.go -w* that checks mandatory ports and 
+Execute script *go run contrib/scripts/check-and-generate-port-registry.go -w* that checks mandatory ports and
 uniqueness of ports and updates registry of ports *docs/ports.md*.
 
 Now you can try generate package definitions as described above in order to check outputs.
@@ -167,7 +167,7 @@ different approach for address representation than Bitcoin.
 
 #### Add tests
 
-Add unit tests and integration tests. Tests are described [here](/docs/testing.md).
+Add unit tests and integration tests. PR without passing tests won't be accepted. Tests are described [here](/docs/testing.md).
 
 #### Deploy public server
 
