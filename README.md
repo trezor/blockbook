@@ -1,6 +1,6 @@
 # Blockbook
 
-> **WARNING: Blockbook is currently in the state of heavy development. We may implement at any time backwards incompatible changes, that require full reindexation of the database. Also, do not expect this documentation to be always up to date.**
+> **WARNING: Blockbook is currently in the state of heavy development. We may implement at any time backwards incompatible changes that require full reindexation of the database. Also, do not expect this documentation to be always up to date.**
 
 **Blockbook** is back-end service for Trezor wallet. Main features of **Blockbook** are:
 
