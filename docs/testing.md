@@ -84,7 +84,7 @@ fixture file. So data in fixture file must be related together.
 * `GetBlock` – Calls *BlockChain.GetBlock* with hash and checks returned block (actually number of transactions and
    their txids).
 * `GetTransaction` – Calls *BlockChain.GetTransaction* with txid and checks result against transaction object, where
-   *txid* is key and* **transaction object* is value of *txDetails* object in fixture file.
+   *txid* is key and *transaction object* is value of *txDetails* object in fixture file.
 * `GetTransactionForMempool` – Calls *BlockChain.GetTransactionForMempool* that should be version of
    *BlockChain.GetTransaction* optimized for mempool. Implementation of test is similar.
 * `GetMempoolEntry` – Calls *BlockChain.GetMempoolEntry* and checks result. Because mempool is living structure it
