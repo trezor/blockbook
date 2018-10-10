@@ -42,7 +42,7 @@ prepare-sources:
 prepare-vendor:
 	@ if [ "$(UPDATE_VENDOR)" -eq 1 ]; then \
 		echo "Updating vendor"; \
-		cd $(BLOCKBOOK_SRC) && rm -rf vendor?* && dep ensure -vendor-only ; \
+		cd $(BLOCKBOOK_SRC) && rm -rf vendor* && cp -r /build/vendor . && dep ensure -vendor-only ; \
 	else \
 		echo "Update of vendor not demanded, keeping version from src" ; \
 	fi
