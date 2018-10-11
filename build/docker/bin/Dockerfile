@@ -32,8 +32,11 @@ RUN cd /opt/rocksdb && CFLAGS=-fPIC CXXFLAGS=-fPIC make -j 4 release
 RUN strip /opt/rocksdb/ldb /opt/rocksdb/sst_dump && \
     cp /opt/rocksdb/ldb /opt/rocksdb/sst_dump /build
 
+# install build tools
 RUN go get github.com/golang/dep/cmd/dep
+RUN go get github.com/gobuffalo/packr/...
 
+# download pre-loaded depencencies
 RUN \
     cleanup() { rm -rf $GOPATH/src/blockbook; } && \
     trap cleanup EXIT && \

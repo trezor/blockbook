@@ -230,6 +230,7 @@ func (s *PublicServer) newTemplateData() *TemplateData {
 		CoinShortcut:     s.is.CoinShortcut,
 		CoinLabel:        s.is.CoinLabel,
 		InternalExplorer: s.internalExplorer && !s.is.InitialSync,
+		TOSLink:          api.Text.TOSLink,
 	}
 }
 
@@ -325,6 +326,7 @@ type TemplateData struct {
 	PrevPage         int
 	NextPage         int
 	PagingRange      []int
+	TOSLink          string
 }
 
 func parseTemplates() []*template.Template {

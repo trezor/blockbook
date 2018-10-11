@@ -592,7 +592,7 @@ func (s *SocketIoServer) getInfo() (res resultGetInfo, err error) {
 	res.Result.Network = s.chain.GetNetworkName()
 	res.Result.Subversion = s.chain.GetSubversion()
 	res.Result.CoinName = s.chain.GetCoinName()
-	res.Result.About = api.BlockbookAbout
+	res.Result.About = api.Text.BlockbookAbout
 	return
 }
 

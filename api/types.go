@@ -8,8 +8,6 @@ import (
 	"time"
 )
 
-const BlockbookAbout = "Blockbook - blockchain indexer for TREZOR wallet https://trezor.io/. Do not use for any other purpose."
-
 type ApiError struct {
 	Text   string
 	Public bool

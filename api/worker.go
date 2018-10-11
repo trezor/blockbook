@@ -585,7 +585,7 @@ func (w *Worker) GetSystemInfo(internal bool) (*SystemInfo, error) {
 		DbSize:            w.db.DatabaseSizeOnDisk(),
 		DbSizeFromColumns: dbs,
 		DbColumns:         dbc,
-		About:             BlockbookAbout,
+		About:             Text.BlockbookAbout,
 	}
 	glog.Info("GetSystemInfo finished in ", time.Since(start))
 	return &SystemInfo{bi, ci}, nil
