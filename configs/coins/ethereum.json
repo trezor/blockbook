@@ -34,7 +34,8 @@
     "service_additional_params_template": "",
     "protect_memory": true,
     "mainnet": true,
-    "config_file": ""
+    "server_config_file": "",
+    "client_config_file": ""
   },
   "blockbook": {
     "package_name": "blockbook-ethereum",

@@ -35,7 +35,8 @@
     "service_additional_params_template": "Environment=\"HOME={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend\"",
     "protect_memory": false,
     "mainnet": true,
-    "config_file": "bitcoin.conf",
+    "server_config_file": "bitcoin_like.conf",
+    "client_config_file": "bitcoin_like_client.conf",
     "additional_params": {
         "addnode": [
             "mainnet.z.cash"

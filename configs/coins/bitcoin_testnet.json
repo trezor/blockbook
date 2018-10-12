@@ -37,7 +37,8 @@
     "service_additional_params_template": "",
     "protect_memory": true,
     "mainnet": false,
-    "config_file": "bitcoin.conf",
+    "server_config_file": "bitcoin.conf",
+    "client_config_file": "bitcoin_client.conf",
     "additional_params": {
         "deprecatedrpc": "estimatefee"
     }
