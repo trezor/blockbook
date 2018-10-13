@@ -167,7 +167,7 @@
   branch = "master"
   name = "github.com/tecbot/gorocksdb"
   packages = ["."]
-  revision = "3e476152774442234f9a9f747386a48a1d82a515"
+  revision = "214b6b7bc0f06812ab5602fdc502a3e619916f38"
 
 [[projects]]
   branch = "master"

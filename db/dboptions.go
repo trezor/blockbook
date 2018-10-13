@@ -1,6 +1,12 @@
 package db
 
+// #include "rocksdb/c.h"
+import "C"
+
 import (
+	"reflect"
+	"unsafe"
+
 	"github.com/tecbot/gorocksdb"
 )
 
@@ -39,12 +45,19 @@ func boolToChar(b bool) C.uchar {
 */
 
 func createAndSetDBOptions(bloomBits int, c *gorocksdb.Cache, maxOpenFiles int) *gorocksdb.Options {
-	blockOpts := gorocksdb.NewDefaultBlockBasedTableOptions()
+	// blockOpts := gorocksdb.NewDefaultBlockBasedTableOptions()
+	cNativeBlockOpts := C.rocksdb_block_based_options_create()
+	blockOpts := &gorocksdb.BlockBasedTableOptions{}
+	cBlockField := reflect.Indirect(reflect.ValueOf(blockOpts)).FieldByName("c")
+	cBlockPtr := (**C.rocksdb_block_based_table_options_t)(unsafe.Pointer(cBlockField.UnsafeAddr()))
+	*cBlockPtr = cNativeBlockOpts
 	blockOpts.SetBlockSize(32 << 10) // 32kB
 	blockOpts.SetBlockCache(c)
 	if bloomBits > 0 {
 		blockOpts.SetFilterPolicy(gorocksdb.NewBloomFilter(bloomBits))
 	}
+	C.rocksdb_block_based_options_set_format_version(cNativeBlockOpts, 3)
+
 	opts := gorocksdb.NewDefaultOptions()
 	opts.SetBlockBasedTableFactory(blockOpts)
 	opts.SetCreateIfMissing(true)
