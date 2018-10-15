@@ -64,17 +64,17 @@ func closeAndDestroyRocksDB(t *testing.T, d *RocksDB) {
 }
 
 func inputAddressToPubKeyHexWithLength(addr string, t *testing.T, d *RocksDB) string {
-	h := dbtestdata.AddressToPubKeyHex(addr, t, d.chainParser)
+	h := dbtestdata.AddressToPubKeyHex(addr, d.chainParser)
 	return hex.EncodeToString([]byte{byte(len(h) / 2)}) + h
 }
 
 func addressToPubKeyHexWithLength(addr string, t *testing.T, d *RocksDB) string {
-	h := dbtestdata.AddressToPubKeyHex(addr, t, d.chainParser)
+	h := dbtestdata.AddressToPubKeyHex(addr, d.chainParser)
 	return hex.EncodeToString([]byte{byte(len(h))}) + h
 }
 
 func spentAddressToPubKeyHexWithLength(addr string, t *testing.T, d *RocksDB) string {
-	h := dbtestdata.AddressToPubKeyHex(addr, t, d.chainParser)
+	h := dbtestdata.AddressToPubKeyHex(addr, d.chainParser)
 	return hex.EncodeToString([]byte{byte(len(h) + 1)}) + h
 }
 
@@ -165,11 +165,11 @@ func verifyAfterUTXOBlock1(t *testing.T, d *RocksDB, afterDisconnect bool) {
 	}
 	// the vout is encoded as signed varint, i.e. value * 2 for non negative values
 	if err := checkColumn(d, cfAddresses, []keyPair{
-		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr1, t, d.chainParser) + "000370d5", dbtestdata.TxidB1T1 + "00", nil},
-		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr2, t, d.chainParser) + "000370d5", dbtestdata.TxidB1T1 + "02", nil},
-		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr3, t, d.chainParser) + "000370d5", dbtestdata.TxidB1T2 + "00", nil},
-		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr4, t, d.chainParser) + "000370d5", dbtestdata.TxidB1T2 + "02", nil},
-		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr5, t, d.chainParser) + "000370d5", dbtestdata.TxidB1T2 + "04", nil},
+		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr1, d.chainParser) + "000370d5", dbtestdata.TxidB1T1 + "00", nil},
+		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr2, d.chainParser) + "000370d5", dbtestdata.TxidB1T1 + "02", nil},
+		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr3, d.chainParser) + "000370d5", dbtestdata.TxidB1T2 + "00", nil},
+		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr4, d.chainParser) + "000370d5", dbtestdata.TxidB1T2 + "02", nil},
+		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr5, d.chainParser) + "000370d5", dbtestdata.TxidB1T2 + "04", nil},
 	}); err != nil {
 		{
 			t.Fatal(err)
@@ -201,11 +201,11 @@ func verifyAfterUTXOBlock1(t *testing.T, d *RocksDB, afterDisconnect bool) {
 		}
 	}
 	if err := checkColumn(d, cfAddressBalance, []keyPair{
-		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr1, t, d.chainParser), "01" + bigintToHex(dbtestdata.SatZero) + bigintToHex(dbtestdata.SatB1T1A1), nil},
-		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr2, t, d.chainParser), "01" + bigintToHex(dbtestdata.SatZero) + bigintToHex(dbtestdata.SatB1T1A2), nil},
-		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr3, t, d.chainParser), "01" + bigintToHex(dbtestdata.SatZero) + bigintToHex(dbtestdata.SatB1T2A3), nil},
-		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr4, t, d.chainParser), "01" + bigintToHex(dbtestdata.SatZero) + bigintToHex(dbtestdata.SatB1T2A4), nil},
-		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr5, t, d.chainParser), "01" + bigintToHex(dbtestdata.SatZero) + bigintToHex(dbtestdata.SatB1T2A5), nil},
+		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr1, d.chainParser), "01" + bigintToHex(dbtestdata.SatZero) + bigintToHex(dbtestdata.SatB1T1A1), nil},
+		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr2, d.chainParser), "01" + bigintToHex(dbtestdata.SatZero) + bigintToHex(dbtestdata.SatB1T1A2), nil},
+		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr3, d.chainParser), "01" + bigintToHex(dbtestdata.SatZero) + bigintToHex(dbtestdata.SatB1T2A3), nil},
+		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr4, d.chainParser), "01" + bigintToHex(dbtestdata.SatZero) + bigintToHex(dbtestdata.SatB1T2A4), nil},
+		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr5, d.chainParser), "01" + bigintToHex(dbtestdata.SatZero) + bigintToHex(dbtestdata.SatB1T2A5), nil},
 	}); err != nil {
 		{
 			t.Fatal(err)
@@ -250,20 +250,20 @@ func verifyAfterUTXOBlock2(t *testing.T, d *RocksDB) {
 		}
 	}
 	if err := checkColumn(d, cfAddresses, []keyPair{
-		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr1, t, d.chainParser) + "000370d5", dbtestdata.TxidB1T1 + "00", nil},
-		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr2, t, d.chainParser) + "000370d5", dbtestdata.TxidB1T1 + "02", nil},
-		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr3, t, d.chainParser) + "000370d5", dbtestdata.TxidB1T2 + "00", nil},
-		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr4, t, d.chainParser) + "000370d5", dbtestdata.TxidB1T2 + "02", nil},
-		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr5, t, d.chainParser) + "000370d5", dbtestdata.TxidB1T2 + "04", nil},
-		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr6, t, d.chainParser) + "000370d6", dbtestdata.TxidB2T1 + "00" + dbtestdata.TxidB2T2 + "01", nil},
-		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr7, t, d.chainParser) + "000370d6", dbtestdata.TxidB2T1 + "02", nil},
-		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr8, t, d.chainParser) + "000370d6", dbtestdata.TxidB2T2 + "00", nil},
-		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr9, t, d.chainParser) + "000370d6", dbtestdata.TxidB2T2 + "02", nil},
-		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr3, t, d.chainParser) + "000370d6", dbtestdata.TxidB2T1 + "01", nil},
-		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr2, t, d.chainParser) + "000370d6", dbtestdata.TxidB2T1 + "03", nil},
-		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr5, t, d.chainParser) + "000370d6", dbtestdata.TxidB2T3 + "00" + dbtestdata.TxidB2T3 + "01", nil},
-		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.AddrA, t, d.chainParser) + "000370d6", dbtestdata.TxidB2T4 + "00", nil},
-		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr4, t, d.chainParser) + "000370d6", dbtestdata.TxidB2T2 + "03", nil},
+		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr1, d.chainParser) + "000370d5", dbtestdata.TxidB1T1 + "00", nil},
+		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr2, d.chainParser) + "000370d5", dbtestdata.TxidB1T1 + "02", nil},
+		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr3, d.chainParser) + "000370d5", dbtestdata.TxidB1T2 + "00", nil},
+		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr4, d.chainParser) + "000370d5", dbtestdata.TxidB1T2 + "02", nil},
+		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr5, d.chainParser) + "000370d5", dbtestdata.TxidB1T2 + "04", nil},
+		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr6, d.chainParser) + "000370d6", dbtestdata.TxidB2T1 + "00" + dbtestdata.TxidB2T2 + "01", nil},
+		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr7, d.chainParser) + "000370d6", dbtestdata.TxidB2T1 + "02", nil},
+		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr8, d.chainParser) + "000370d6", dbtestdata.TxidB2T2 + "00", nil},
+		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr9, d.chainParser) + "000370d6", dbtestdata.TxidB2T2 + "02", nil},
+		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr3, d.chainParser) + "000370d6", dbtestdata.TxidB2T1 + "01", nil},
+		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr2, d.chainParser) + "000370d6", dbtestdata.TxidB2T1 + "03", nil},
+		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr5, d.chainParser) + "000370d6", dbtestdata.TxidB2T3 + "00" + dbtestdata.TxidB2T3 + "01", nil},
+		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.AddrA, d.chainParser) + "000370d6", dbtestdata.TxidB2T4 + "00", nil},
+		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr4, d.chainParser) + "000370d6", dbtestdata.TxidB2T2 + "03", nil},
 	}); err != nil {
 		{
 			t.Fatal(err)
@@ -335,16 +335,16 @@ func verifyAfterUTXOBlock2(t *testing.T, d *RocksDB) {
 		}
 	}
 	if err := checkColumn(d, cfAddressBalance, []keyPair{
-		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr1, t, d.chainParser), "01" + bigintToHex(dbtestdata.SatZero) + bigintToHex(dbtestdata.SatB1T1A1), nil},
-		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr2, t, d.chainParser), "02" + bigintToHex(dbtestdata.SatB1T1A2) + bigintToHex(dbtestdata.SatZero), nil},
-		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr3, t, d.chainParser), "02" + bigintToHex(dbtestdata.SatB1T2A3) + bigintToHex(dbtestdata.SatZero), nil},
-		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr4, t, d.chainParser), "02" + bigintToHex(dbtestdata.SatB1T2A4) + bigintToHex(dbtestdata.SatZero), nil},
-		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr5, t, d.chainParser), "02" + bigintToHex(dbtestdata.SatB1T2A5) + bigintToHex(dbtestdata.SatB2T3A5), nil},
-		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr6, t, d.chainParser), "02" + bigintToHex(dbtestdata.SatB2T1A6) + bigintToHex(dbtestdata.SatZero), nil},
-		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr7, t, d.chainParser), "01" + bigintToHex(dbtestdata.SatZero) + bigintToHex(dbtestdata.SatB2T1A7), nil},
-		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr8, t, d.chainParser), "01" + bigintToHex(dbtestdata.SatZero) + bigintToHex(dbtestdata.SatB2T2A8), nil},
-		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr9, t, d.chainParser), "01" + bigintToHex(dbtestdata.SatZero) + bigintToHex(dbtestdata.SatB2T2A9), nil},
-		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.AddrA, t, d.chainParser), "01" + bigintToHex(dbtestdata.SatZero) + bigintToHex(dbtestdata.SatB2T4AA), nil},
+		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr1, d.chainParser), "01" + bigintToHex(dbtestdata.SatZero) + bigintToHex(dbtestdata.SatB1T1A1), nil},
+		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr2, d.chainParser), "02" + bigintToHex(dbtestdata.SatB1T1A2) + bigintToHex(dbtestdata.SatZero), nil},
+		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr3, d.chainParser), "02" + bigintToHex(dbtestdata.SatB1T2A3) + bigintToHex(dbtestdata.SatZero), nil},
+		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr4, d.chainParser), "02" + bigintToHex(dbtestdata.SatB1T2A4) + bigintToHex(dbtestdata.SatZero), nil},
+		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr5, d.chainParser), "02" + bigintToHex(dbtestdata.SatB1T2A5) + bigintToHex(dbtestdata.SatB2T3A5), nil},
+		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr6, d.chainParser), "02" + bigintToHex(dbtestdata.SatB2T1A6) + bigintToHex(dbtestdata.SatZero), nil},
+		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr7, d.chainParser), "01" + bigintToHex(dbtestdata.SatZero) + bigintToHex(dbtestdata.SatB2T1A7), nil},
+		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr8, d.chainParser), "01" + bigintToHex(dbtestdata.SatZero) + bigintToHex(dbtestdata.SatB2T2A8), nil},
+		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr9, d.chainParser), "01" + bigintToHex(dbtestdata.SatZero) + bigintToHex(dbtestdata.SatB2T2A9), nil},
+		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.AddrA, d.chainParser), "01" + bigintToHex(dbtestdata.SatZero) + bigintToHex(dbtestdata.SatB2T4AA), nil},
 	}); err != nil {
 		{
 			t.Fatal(err)
@@ -438,14 +438,14 @@ func TestRocksDB_Index_UTXO(t *testing.T) {
 	defer closeAndDestroyRocksDB(t, d)
 
 	// connect 1st block - will log warnings about missing UTXO transactions in txAddresses column
-	block1 := dbtestdata.GetTestUTXOBlock1(t, d.chainParser)
+	block1 := dbtestdata.GetTestUTXOBlock1(d.chainParser)
 	if err := d.ConnectBlock(block1); err != nil {
 		t.Fatal(err)
 	}
 	verifyAfterUTXOBlock1(t, d, false)
 
 	// connect 2nd block - use some outputs from the 1st block as the inputs and 1 input uses tx from the same block
-	block2 := dbtestdata.GetTestUTXOBlock2(t, d.chainParser)
+	block2 := dbtestdata.GetTestUTXOBlock2(d.chainParser)
 	if err := d.ConnectBlock(block2); err != nil {
 		t.Fatal(err)
 	}
@@ -640,7 +640,7 @@ func Test_BulkConnect_UTXO(t *testing.T) {
 		t.Fatal("DB not in DbStateInconsistent")
 	}
 
-	if err := bc.ConnectBlock(dbtestdata.GetTestUTXOBlock1(t, d.chainParser), false); err != nil {
+	if err := bc.ConnectBlock(dbtestdata.GetTestUTXOBlock1(d.chainParser), false); err != nil {
 		t.Fatal(err)
 	}
 	if err := checkColumn(d, cfBlockTxs, []keyPair{}); err != nil {
@@ -649,7 +649,7 @@ func Test_BulkConnect_UTXO(t *testing.T) {
 		}
 	}
 
-	if err := bc.ConnectBlock(dbtestdata.GetTestUTXOBlock2(t, d.chainParser), true); err != nil {
+	if err := bc.ConnectBlock(dbtestdata.GetTestUTXOBlock2(d.chainParser), true); err != nil {
 		t.Fatal(err)
 	}
 

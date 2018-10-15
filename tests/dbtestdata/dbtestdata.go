@@ -4,19 +4,9 @@ import (
 	"blockbook/bchain"
 	"encoding/hex"
 	"math/big"
-	"testing"
-)
 
-func AddressToPubKeyHex(addr string, t *testing.T, parser bchain.BlockChainParser) string {
-	if addr == "" {
-		return ""
-	}
-	b, err := parser.GetAddrDescFromAddress(addr)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return hex.EncodeToString(b)
-}
+	"github.com/golang/glog"
+)
 
 const (
 	TxidB1T1 = "00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840"
@@ -53,7 +43,18 @@ var (
 	SatB2T4AA = big.NewInt(1360030331)
 )
 
-func GetTestUTXOBlock1(t *testing.T, parser bchain.BlockChainParser) *bchain.Block {
+func AddressToPubKeyHex(addr string, parser bchain.BlockChainParser) string {
+	if addr == "" {
+		return ""
+	}
+	b, err := parser.GetAddrDescFromAddress(addr)
+	if err != nil {
+		glog.Fatal(err)
+	}
+	return hex.EncodeToString(b)
+}
+
+func GetTestUTXOBlock1(parser bchain.BlockChainParser) *bchain.Block {
 	return &bchain.Block{
 		BlockHeader: bchain.BlockHeader{
 			Height: 225493,
@@ -68,14 +69,14 @@ func GetTestUTXOBlock1(t *testing.T, parser bchain.BlockChainParser) *bchain.Blo
 					bchain.Vout{
 						N: 0,
 						ScriptPubKey: bchain.ScriptPubKey{
-							Hex: AddressToPubKeyHex(Addr1, t, parser),
+							Hex: AddressToPubKeyHex(Addr1, parser),
 						},
 						ValueSat: *SatB1T1A1,
 					},
 					bchain.Vout{
 						N: 1,
 						ScriptPubKey: bchain.ScriptPubKey{
-							Hex: AddressToPubKeyHex(Addr2, t, parser),
+							Hex: AddressToPubKeyHex(Addr2, parser),
 						},
 						ValueSat: *SatB1T1A2,
 					},
@@ -89,21 +90,21 @@ func GetTestUTXOBlock1(t *testing.T, parser bchain.BlockChainParser) *bchain.Blo
 					bchain.Vout{
 						N: 0,
 						ScriptPubKey: bchain.ScriptPubKey{
-							Hex: AddressToPubKeyHex(Addr3, t, parser),
+							Hex: AddressToPubKeyHex(Addr3, parser),
 						},
 						ValueSat: *SatB1T2A3,
 					},
 					bchain.Vout{
 						N: 1,
 						ScriptPubKey: bchain.ScriptPubKey{
-							Hex: AddressToPubKeyHex(Addr4, t, parser),
+							Hex: AddressToPubKeyHex(Addr4, parser),
 						},
 						ValueSat: *SatB1T2A4,
 					},
 					bchain.Vout{
 						N: 2,
 						ScriptPubKey: bchain.ScriptPubKey{
-							Hex: AddressToPubKeyHex(Addr5, t, parser),
+							Hex: AddressToPubKeyHex(Addr5, parser),
 						},
 						ValueSat: *SatB1T2A5,
 					},
@@ -115,7 +116,7 @@ func GetTestUTXOBlock1(t *testing.T, parser bchain.BlockChainParser) *bchain.Blo
 	}
 }
 
-func GetTestUTXOBlock2(t *testing.T, parser bchain.BlockChainParser) *bchain.Block {
+func GetTestUTXOBlock2(parser bchain.BlockChainParser) *bchain.Block {
 	return &bchain.Block{
 		BlockHeader: bchain.BlockHeader{
 			Height: 225494,
@@ -142,14 +143,14 @@ func GetTestUTXOBlock2(t *testing.T, parser bchain.BlockChainParser) *bchain.Blo
 					bchain.Vout{
 						N: 0,
 						ScriptPubKey: bchain.ScriptPubKey{
-							Hex: AddressToPubKeyHex(Addr6, t, parser),
+							Hex: AddressToPubKeyHex(Addr6, parser),
 						},
 						ValueSat: *SatB2T1A6,
 					},
 					bchain.Vout{
 						N: 1,
 						ScriptPubKey: bchain.ScriptPubKey{
-							Hex: AddressToPubKeyHex(Addr7, t, parser),
+							Hex: AddressToPubKeyHex(Addr7, parser),
 						},
 						ValueSat: *SatB2T1A7,
 					},
@@ -175,14 +176,14 @@ func GetTestUTXOBlock2(t *testing.T, parser bchain.BlockChainParser) *bchain.Blo
 					bchain.Vout{
 						N: 0,
 						ScriptPubKey: bchain.ScriptPubKey{
-							Hex: AddressToPubKeyHex(Addr8, t, parser),
+							Hex: AddressToPubKeyHex(Addr8, parser),
 						},
 						ValueSat: *SatB2T2A8,
 					},
 					bchain.Vout{
 						N: 1,
 						ScriptPubKey: bchain.ScriptPubKey{
-							Hex: AddressToPubKeyHex(Addr9, t, parser),
+							Hex: AddressToPubKeyHex(Addr9, parser),
 						},
 						ValueSat: *SatB2T2A9,
 					},
@@ -204,7 +205,7 @@ func GetTestUTXOBlock2(t *testing.T, parser bchain.BlockChainParser) *bchain.Blo
 					bchain.Vout{
 						N: 0,
 						ScriptPubKey: bchain.ScriptPubKey{
-							Hex: AddressToPubKeyHex(Addr5, t, parser),
+							Hex: AddressToPubKeyHex(Addr5, parser),
 						},
 						ValueSat: *SatB2T3A5,
 					},
@@ -224,7 +225,7 @@ func GetTestUTXOBlock2(t *testing.T, parser bchain.BlockChainParser) *bchain.Blo
 					bchain.Vout{
 						N: 0,
 						ScriptPubKey: bchain.ScriptPubKey{
-							Hex: AddressToPubKeyHex(AddrA, t, parser),
+							Hex: AddressToPubKeyHex(AddrA, parser),
 						},
 						ValueSat: *SatB2T4AA,
 					},
