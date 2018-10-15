@@ -39,17 +39,20 @@ $(addprefix all-, $(TARGETS)): all-%: clean-deb build-images deb-%
 
 all: clean-deb build-images $(addprefix deb-, $(TARGETS))
 
-build-images:
-	rm -f .bin-image .deb-image
+build-images: clean-images
 	$(MAKE) .bin-image .deb-image
 
 .bin-image:
-	docker build --no-cache=$(NO_CACHE) -t $(BIN_IMAGE) build/docker/bin
-	@ docker images -q $(BIN_IMAGE) > $@
+	@if [ -z "$(shell docker images --quiet --filter=reference=$(BIN_IMAGE):latest)" ]; then \
+		echo "Building image $(BIN_IMAGE)..."; \
+		docker build --no-cache=$(NO_CACHE) -t $(BIN_IMAGE) build/docker/bin; \
+	fi
 
 .deb-image: .bin-image
-	docker build --no-cache=$(NO_CACHE) -t $(DEB_IMAGE) build/docker/deb
-	@ docker images -q $(DEB_IMAGE) > $@
+	@if [ -z "$(shell docker images --quiet --filter=reference=$(DEB_IMAGE):latest)" ]; then \
+		echo "Building image $(DEB_IMAGE)..."; \
+		docker build --no-cache=$(NO_CACHE) -t $(DEB_IMAGE) build/docker/deb; \
+	fi
 
 clean: clean-bin clean-deb
 
@@ -66,8 +69,6 @@ clean-images: clean-bin-image clean-deb-image
 
 clean-bin-image:
 	- docker rmi $(BIN_IMAGE)
-	@ rm -f .bin-image
 
 clean-deb-image:
 	- docker rmi $(DEB_IMAGE)
-	@ rm -f .deb-image

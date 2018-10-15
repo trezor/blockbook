@@ -34,7 +34,7 @@ test-all: prepare-sources generate-data
 
 prepare-sources:
 	@ [ -n "`ls /src 2> /dev/null`" ] || (echo "/src doesn't exist or is empty" 1>&2 && exit 1)
-	[ -d $(BLOCKBOOK_SRC) ] && rm -rf $(BLOCKBOOK_SRC)
+	rm -rf $(BLOCKBOOK_SRC)
 	cp -r /src $(BLOCKBOOK_SRC)
 	$(MAKE) prepare-vendor
 
