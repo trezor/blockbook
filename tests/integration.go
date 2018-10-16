@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/jakm/btcutil/chaincfg"
@@ -45,7 +46,8 @@ func runIntegrationTests(t *testing.T) {
 
 	for _, coin := range keys {
 		cfg := tests[coin]
-		t.Run(coin, func(t *testing.T) { runTests(t, coin, cfg) })
+		name := getMatchableName(coin)
+		t.Run(name, func(t *testing.T) { runTests(t, coin, cfg) })
 
 	}
 }
@@ -58,6 +60,14 @@ func loadTests(path string) (map[string]map[string]json.RawMessage, error) {
 	v := make(map[string]map[string]json.RawMessage)
 	err = json.Unmarshal(b, &v)
 	return v, err
+}
+
+func getMatchableName(coin string) string {
+	if idx := strings.Index(coin, "_testnet"); idx != -1 {
+		return coin[:idx] + "=test"
+	} else {
+		return coin + "=main"
+	}
 }
 
 func runTests(t *testing.T, coin string, cfg map[string]json.RawMessage) {

@@ -1,0 +1,27 @@
+stages:
+  - build
+  - test
+
+build:
+  stage: build
+  only:
+    - master
+  tags:
+    - blockbook
+  script: make build
+
+unit-test:
+  stage: test
+  only:
+    - master
+  tags:
+    - blockbook
+  script: make test
+
+integration-test:
+  stage: test
+  only:
+    - schedules
+  tags:
+    - blockbook
+  script: make test-integration ARGS="-run='TestIntegration/(bcash|bgold|bitcoin|dash|dogecoin|litecoin|vertcoin|zcash)=main/'"
