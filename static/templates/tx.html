@@ -1,4 +1,4 @@
-{{define "specific"}}{{$cs := .CoinShortcut}}{{$tx := .Tx}}
+{{define "specific"}}{{$cs := .CoinShortcut}}{{$tx := .Tx}}{{$txSpecific := .TxSpecific}}
 <h1>Transaction</h1>
 <div class="alert alert-data ellipsis">
     <span class="data">{{$tx.Txid}}</span>
@@ -42,9 +42,32 @@
     {{template "txdetail" .}}
 </div>
 <div class="data-div">
-    <h5>Hex</h5>
+    <h5>Transaction Data</h5>
     <div class="alert alert-data" style="word-wrap: break-word; font-size: smaller;">
-        <span>{{$tx.Hex}}</span>
+        <pre id="txSpecific"></pre>
     </div>
+    <script type="text/javascript">
+        txSpecific = {{ $txSpecific }};
+        function syntaxHighlight(json) {
+            json = JSON.stringify(json, undefined, 2);
+            json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
+                var cls = 'number';
+                if (/^"/.test(match)) {
+                    if (/:$/.test(match)) {
+                        cls = 'key';
+                    } else {
+                        cls = 'string';
+                    }
+                } else if (/true|false/.test(match)) {
+                    cls = 'boolean';
+                } else if (/null/.test(match)) {
+                    cls = 'null';
+                }
+                return '<span class="' + cls + '">' + match + '</span>';
+            });
+        }
+        document.getElementById('txSpecific').innerHTML = syntaxHighlight(txSpecific);
+    </script>
 </div>
 {{end}}

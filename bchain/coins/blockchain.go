@@ -180,6 +180,11 @@ func (c *blockChainWithMetrics) GetTransaction(txid string) (v *bchain.Tx, err e
 	return c.b.GetTransaction(txid)
 }
 
+func (c *blockChainWithMetrics) GetTransactionSpecific(txid string) (v json.RawMessage, err error) {
+	defer func(s time.Time) { c.observeRPCLatency("GetTransactionSpecific", s, err) }(time.Now())
+	return c.b.GetTransactionSpecific(txid)
+}
+
 func (c *blockChainWithMetrics) GetTransactionForMempool(txid string) (v *bchain.Tx, err error) {
 	defer func(s time.Time) { c.observeRPCLatency("GetTransactionForMempool", s, err) }(time.Now())
 	return c.b.GetTransactionForMempool(txid)
