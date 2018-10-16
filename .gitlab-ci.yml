@@ -2,20 +2,20 @@ stages:
   - build
   - test
 
-build:binary:
+build:
   stage: build
   tags:
     - blockbook
   script: make build
 
-test:unittest:
+unit-test:
   stage: test
   tags:
     - blockbook
   script: make test
 
-test:integration:
+integration-test:
   stage: test
   tags:
     - blockbook
-  script: make test-integration ARGS="-run='TestIntegration/(bcash|bgold|bitcoin|dash|dogecoin|litecoin|vertcoin|zcash)/'"
+  script: make test-integration ARGS="-run='TestIntegration/(bcash|bgold|bitcoin|dash|dogecoin|litecoin|vertcoin|zcash)=main/'"
