@@ -52,7 +52,7 @@
     "system_user": "blockbook-dogecoin",
     "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
     "public_binding_template": ":{{.Ports.BlockbookPublic}}",
-    "explorer_url": "https://dogechain.info/",
+    "explorer_url": "",
     "additional_params": "-resyncindexperiod=30011 -resyncmempoolperiod=2011",
     "block_chain": {
       "parse": true,
