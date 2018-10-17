@@ -19,7 +19,7 @@
             {{if $tx.Confirmations}}
             <tr>
                 <td>In Block Height</td>
-                <td class="data">{{$tx.Blockheight}}</td>
+                <td class="data"><a href="/block/{{$tx.Blockheight}}">{{$tx.Blockheight}}</a></td>
             </tr>{{end}}
             <tr>
                 <td>Total Input</td>
