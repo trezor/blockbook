@@ -66,6 +66,7 @@ clean-deb:
 	rm -f build/*.deb
 
 clean-images: clean-bin-image clean-deb-image
+	rm -f .bin-image .deb-image  # remove obsolete tag files
 
 clean-bin-image:
 	- docker rmi $(BIN_IMAGE)
