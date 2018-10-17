@@ -5,7 +5,6 @@ package sync
 import (
 	"blockbook/bchain"
 	"blockbook/db"
-	"fmt"
 	"math/big"
 	"os"
 	"reflect"
