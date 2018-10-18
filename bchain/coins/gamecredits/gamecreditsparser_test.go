@@ -32,32 +32,14 @@ func Test_GetAddrDescFromAddress_Testnet(t *testing.T) {
 	}{
 		{
 			name:    "P2PKH1",
-			args:    args{address: "mgPdTgEq6YqUJ4yzQgR8jH5TCX5c5yRwCP"},
+			args:    args{address: "GcGBy77CCfZJJhGLALohdahf9eAc7jo7Yk"},
 			want:    "76a91409957dfdb3eb620a94b99857e13949551584c33688ac",
 			wantErr: false,
 		},
 		{
-			name:    "P2SH1-legacy",
-			args:    args{address: "2MvGVySztevmycxrSmMRjJaVj2iJin7qpap"},
-			want:    "a9142126232e3f47ae0f1246ec5f05fc400d83c86a0d87",
-			wantErr: false,
-		},
-		{
-			name:    "P2SH2-legacy",
-			args:    args{address: "2N9a2TNzWz1FEKGFxUdMEh62V83URdZ5QAZ"},
-			want:    "a914b31049e7ee51501fe19e3e0cdb803dc84cf99f9e87",
-			wantErr: false,
-		},
-		{
 			name:    "P2SH1",
-			args:    args{address: "QPdG6Ts8g2q4m9cVPTTkPGwAB6kYgXB7Hc"},
+			args:    args{address: "S84eckDshWupTwErdLKkyDauNwtWfa9rPL"},
 			want:    "a9142126232e3f47ae0f1246ec5f05fc400d83c86a0d87",
-			wantErr: false,
-		},
-		{
-			name:    "P2SH2",
-			args:    args{address: "QcvnaPrm17JKTT216jPFmnTvGRvFX2fWzN"},
-			want:    "a914b31049e7ee51501fe19e3e0cdb803dc84cf99f9e87",
 			wantErr: false,
 		},
 	}
@@ -90,38 +72,14 @@ func Test_GetAddrDescFromAddress_Mainnet(t *testing.T) {
 	}{
 		{
 			name:    "P2PKH1",
-			args:    args{address: "LgJGe7aKy1wfXESKhiKeRWj6z4KjzCfXNW"},
+			args:    args{address: "GcGBy77CCfZJJhGLALohdahf9eAc7jo7Yk"},
 			want:    "76a914e72ba56ab6afccac045d696b979e3b5077e88d1988ac",
 			wantErr: false,
 		},
 		{
-			name:    "P2PKH2",
-			args:    args{address: "LiTVReQ6N8rWc2pNg2XMwCWq7A9P15teWg"},
-			want:    "76a914feda50542e61108cf53b93dbffa0959f91ccb32588ac",
-			wantErr: false,
-		},
-		{
 			name:    "P2SH1",
-			args:    args{address: "MLTQ8niHMnpJLNvK72zBeY91hQmUtoo8nX"},
+			args:    args{address: "S84eckDshWupTwErdLKkyDauNwtWfa9rPL"},
 			want:    "a91489ba6cf45546f91f1bdf553e695d63fc6b8795bd87",
-			wantErr: false,
-		},
-		{
-			name:    "P2SH2",
-			args:    args{address: "MAVWzxXm8KGkZTesqLtqywzrvbs96FEoKy"},
-			want:    "a9141c6fbaf46d64221e80cbae182c33ddf81b9294ac87",
-			wantErr: false,
-		},
-		{
-			name:    "witness_v0_keyhash",
-			args:    args{address: "ltc1q5fgkuac9s2ry56jka5s6zqsyfcugcchrqgz2yl"},
-			want:    "0014a2516e770582864a6a56ed21a102044e388c62e3",
-			wantErr: false,
-		},
-		{
-			name:    "witness_v0_scripthashx",
-			args:    args{address: "ltc1qu9dgdg330r6r84g5mw7wqshg04exv2uttmw2elfwx74h5tgntuzsk3x5nd"},
-			want:    "0020e15a86a23178f433d514dbbce042e87d72662b8b5edcacfd2e37ab7a2d135f05",
 			wantErr: false,
 		},
 	}
