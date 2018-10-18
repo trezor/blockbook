@@ -15,7 +15,6 @@ import (
 	"github.com/bsm/go-vlq"
 	"github.com/golang/glog"
 	"github.com/juju/errors"
-
 	"github.com/tecbot/gorocksdb"
 )
 
@@ -987,6 +986,10 @@ func (d *RocksDB) GetBlockInfo(height uint32) (*BlockInfo, error) {
 		return nil, err
 	}
 	defer val.Free()
+	if val.Size() == 0 {
+		// block not found
+		return nil, nil
+	}
 	bi, err := d.unpackBlockInfo(val.Data())
 	if err != nil {
 		return nil, err
