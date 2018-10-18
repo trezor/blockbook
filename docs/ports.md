@@ -8,13 +8,14 @@
 | Dash                     | 9033                    | 9133                  | 8033             | 38333                       |
 | Litecoin                 | 9034                    | 9134                  | 8034             | 38334                       |
 | Bgold                    | 9035                    | 9135                  | 8035             | 38335                       |
-| Ethereum                 | 9036                    | 9136                  | 8036             | 8136 http, 38336 p2p        |
+| Ethereum                 | 9036                    | 9136                  | 8036             | 38336 p2p, 8136 http        |
 | Ethereum Classic         | 9037                    | 9137                  | 8037             |                             |
 | Dogecoin                 | 9038                    | 9138                  | 8038             | 38338                       |
 | Namecoin                 | 9039                    | 9139                  | 8039             | 38339                       |
 | Vertcoin                 | 9040                    | 9140                  | 8040             | 38340                       |
 | Monacoin                 | 9041                    | 9141                  | 8041             | 38341                       |
 | Myriad                   | 9043                    | 9143                  | 8043             | 38343                       |
+| Groestlcoin              | 9045                    | 9145                  | 8045             | 38345                       |
 | Testnet                  | 19030                   | 19130                 | 18030            | 48330                       |
 | Bcash Testnet            | 19031                   | 19131                 | 18031            | 48331                       |
 | Zcash Testnet            | 19032                   | 19132                 | 18032            | 48332                       |
@@ -23,5 +24,6 @@
 | Ethereum Testnet Ropsten | 19036                   | 19136                 | 18036            | 48336 p2p                   |
 | Vertcoin Testnet         | 19040                   | 19140                 | 18040            | 48340                       |
 | Monacoin Testnet         | 19041                   | 19141                 | 18041            | 48341                       |
+| Groestlcoin Testnet      | 19045                   | 19145                 | 18045            | 48345                       |
 
 > NOTE: This document is generated from coin definitions in `configs/coins`.
