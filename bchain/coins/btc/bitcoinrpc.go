@@ -670,6 +670,19 @@ func (b *BitcoinRPC) GetTransactionForMempool(txid string) (*bchain.Tx, error) {
 
 // GetTransaction returns a transaction by the transaction ID.
 func (b *BitcoinRPC) GetTransaction(txid string) (*bchain.Tx, error) {
+	r, err := b.GetTransactionSpecific(txid)
+	if err != nil {
+		return nil, err
+	}
+	tx, err := b.Parser.ParseTxFromJson(r)
+	if err != nil {
+		return nil, errors.Annotatef(err, "txid %v", txid)
+	}
+	return tx, nil
+}
+
+// GetTransactionSpecific returns json as returned by backend, with all coin specific data
+func (b *BitcoinRPC) GetTransactionSpecific(txid string) (json.RawMessage, error) {
 	glog.V(1).Info("rpc: getrawtransaction ", txid)
 
 	res := ResGetRawTransaction{}
@@ -684,11 +697,7 @@ func (b *BitcoinRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 	if res.Error != nil {
 		return nil, errors.Annotatef(res.Error, "txid %v", txid)
 	}
-	tx, err := b.Parser.ParseTxFromJson(res.Result)
-	if err != nil {
-		return nil, errors.Annotatef(err, "txid %v", txid)
-	}
-	return tx, nil
+	return res.Result, nil
 }
 
 // ResyncMempool gets mempool transactions and maps output scripts to transactions.

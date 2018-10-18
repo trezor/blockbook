@@ -124,6 +124,7 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 	// API calls
 	serveMux.HandleFunc(path+"api/block-index/", s.jsonHandler(s.apiBlockIndex))
 	serveMux.HandleFunc(path+"api/tx/", s.jsonHandler(s.apiTx))
+	serveMux.HandleFunc(path+"api/tx-specific/", s.jsonHandler(s.apiTxSpecific))
 	serveMux.HandleFunc(path+"api/address/", s.jsonHandler(s.apiAddress))
 	serveMux.HandleFunc(path+"api/block/", s.jsonHandler(s.apiBlock))
 	// socket.io interface
@@ -148,8 +149,8 @@ func (s *PublicServer) OnNewBlock(hash string, height uint32) {
 }
 
 // OnNewTxAddr notifies users subscribed to bitcoind/addresstxid about new block
-func (s *PublicServer) OnNewTxAddr(txid string, addr string, isOutput bool) {
-	s.socketio.OnNewTxAddr(txid, addr, isOutput)
+func (s *PublicServer) OnNewTxAddr(txid string, desc bchain.AddressDescriptor, isOutput bool) {
+	s.socketio.OnNewTxAddr(txid, desc, isOutput)
 }
 
 func (s *PublicServer) txRedirect(w http.ResponseWriter, r *http.Request) {
@@ -228,7 +229,9 @@ func (s *PublicServer) newTemplateData() *TemplateData {
 	return &TemplateData{
 		CoinName:         s.is.Coin,
 		CoinShortcut:     s.is.CoinShortcut,
+		CoinLabel:        s.is.CoinLabel,
 		InternalExplorer: s.internalExplorer && !s.is.InitialSync,
+		TOSLink:          api.Text.TOSLink,
 	}
 }
 
@@ -311,10 +314,12 @@ const (
 type TemplateData struct {
 	CoinName         string
 	CoinShortcut     string
+	CoinLabel        string
 	InternalExplorer bool
 	Address          *api.Address
 	AddrStr          string
 	Tx               *api.Tx
+	TxSpecific       json.RawMessage
 	Error            *api.ApiError
 	Blocks           *api.Blocks
 	Block            *api.Block
@@ -323,6 +328,7 @@ type TemplateData struct {
 	PrevPage         int
 	NextPage         int
 	PagingRange      []int
+	TOSLink          string
 }
 
 func parseTemplates() []*template.Template {
@@ -366,19 +372,23 @@ func setTxToTemplateData(td *TemplateData, tx *api.Tx) *TemplateData {
 
 func (s *PublicServer) explorerTx(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
 	var tx *api.Tx
+	var txSpecific json.RawMessage
+	var err error
 	s.metrics.ExplorerViews.With(common.Labels{"action": "tx"}).Inc()
 	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
 		txid := r.URL.Path[i+1:]
-		bestheight, _, err := s.db.GetBestBlock()
-		if err == nil {
-			tx, err = s.api.GetTransaction(txid, bestheight, false)
+		tx, err = s.api.GetTransaction(txid, false)
+		if err != nil {
+			return errorTpl, nil, err
 		}
+		txSpecific, err = s.chain.GetTransactionSpecific(txid)
 		if err != nil {
 			return errorTpl, nil, err
 		}
 	}
 	data := s.newTemplateData()
 	data.Tx = tx
+	data.TxSpecific = txSpecific
 	return txTpl, data, nil
 }
 
@@ -483,7 +493,6 @@ func (s *PublicServer) explorerSearch(w http.ResponseWriter, r *http.Request) (t
 	var tx *api.Tx
 	var address *api.Address
 	var block *api.Block
-	var bestheight uint32
 	var err error
 	s.metrics.ExplorerViews.With(common.Labels{"action": "search"}).Inc()
 	if len(q) > 0 {
@@ -492,13 +501,10 @@ func (s *PublicServer) explorerSearch(w http.ResponseWriter, r *http.Request) (t
 			http.Redirect(w, r, joinURL("/block/", block.Hash), 302)
 			return noTpl, nil, nil
 		}
-		bestheight, _, err = s.db.GetBestBlock()
+		tx, err = s.api.GetTransaction(q, false)
 		if err == nil {
-			tx, err = s.api.GetTransaction(q, bestheight, false)
-			if err == nil {
-				http.Redirect(w, r, joinURL("/tx/", tx.Txid), 302)
-				return noTpl, nil, nil
-			}
+			http.Redirect(w, r, joinURL("/tx/", tx.Txid), 302)
+			return noTpl, nil, nil
 		}
 		address, err = s.api.GetAddress(q, 0, 1, true)
 		if err == nil {
@@ -600,10 +606,18 @@ func (s *PublicServer) apiTx(r *http.Request) (interface{}, error) {
 	s.metrics.ExplorerViews.With(common.Labels{"action": "api-tx"}).Inc()
 	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
 		txid := r.URL.Path[i+1:]
-		bestheight, _, err := s.db.GetBestBlock()
-		if err == nil {
-			tx, err = s.api.GetTransaction(txid, bestheight, true)
-		}
+		tx, err = s.api.GetTransaction(txid, true)
+	}
+	return tx, err
+}
+
+func (s *PublicServer) apiTxSpecific(r *http.Request) (interface{}, error) {
+	var tx json.RawMessage
+	var err error
+	s.metrics.ExplorerViews.With(common.Labels{"action": "api-tx-specific"}).Inc()
+	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
+		txid := r.URL.Path[i+1:]
+		tx, err = s.chain.GetTransactionSpecific(txid)
 	}
 	return tx, err
 }

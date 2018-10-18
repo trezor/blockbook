@@ -1,10 +1,12 @@
 package build
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"text/template"
 	"time"
@@ -59,7 +61,8 @@ type Config struct {
 		ServiceAdditionalParamsTemplate string      `json:"service_additional_params_template"`
 		ProtectMemory                   bool        `json:"protect_memory"`
 		Mainnet                         bool        `json:"mainnet"`
-		ConfigFile                      string      `json:"config_file"`
+		ServerConfigFile                string      `json:"server_config_file"`
+		ClientConfigFile                string      `json:"client_config_file"`
 		AdditionalParams                interface{} `json:"additional_params"`
 	} `json:"backend"`
 	Blockbook struct {
@@ -90,6 +93,17 @@ func jsonToString(msg json.RawMessage) (string, error) {
 	return string(d), nil
 }
 
+func generateRPCAuth(user, pass string) (string, error) {
+	cmd := exec.Command("/bin/bash", "-c", "build/scripts/rpcauth.py \"$0\" \"$1\" | sed -n -e 2p", user, pass)
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	err := cmd.Run()
+	if err != nil {
+		return "", err
+	}
+	return out.String(), nil
+}
+
 func (c *Config) ParseTemplate() *template.Template {
 	templates := map[string]string{
 		"IPC.RPCURLTemplate":                      c.IPC.RPCURLTemplate,
@@ -103,7 +117,8 @@ func (c *Config) ParseTemplate() *template.Template {
 	}
 
 	funcMap := template.FuncMap{
-		"jsonToString": jsonToString,
+		"jsonToString":    jsonToString,
+		"generateRPCAuth": generateRPCAuth,
 	}
 
 	t := template.New("").Funcs(funcMap)
@@ -230,7 +245,10 @@ func GeneratePackageDefinitions(config *Config, templateDir, outputDir string) e
 	}
 
 	if !isEmpty(config, "backend") {
-		err = writeBackendConfigFile(config, outputDir)
+		err = writeBackendServerConfigFile(config, outputDir)
+		if err == nil {
+			err = writeBackendClientConfigFile(config, outputDir)
+		}
 		if err != nil {
 			return err
 		}
@@ -262,17 +280,42 @@ func writeTemplate(path string, info os.FileInfo, templ *template.Template, conf
 	return nil
 }
 
-func writeBackendConfigFile(config *Config, outputDir string) error {
-	out, err := os.OpenFile(filepath.Join(outputDir, "backend/backend.conf"), os.O_CREATE|os.O_WRONLY, 0644)
+func writeBackendServerConfigFile(config *Config, outputDir string) error {
+	out, err := os.OpenFile(filepath.Join(outputDir, "backend/server.conf"), os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return err
 	}
 	defer out.Close()
 
-	if config.Backend.ConfigFile == "" {
+	if config.Backend.ServerConfigFile == "" {
 		return nil
 	} else {
-		in, err := os.Open(filepath.Join(outputDir, "backend/config", config.Backend.ConfigFile))
+		in, err := os.Open(filepath.Join(outputDir, "backend/config", config.Backend.ServerConfigFile))
+		if err != nil {
+			return err
+		}
+		defer in.Close()
+
+		_, err = io.Copy(out, in)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func writeBackendClientConfigFile(config *Config, outputDir string) error {
+	out, err := os.OpenFile(filepath.Join(outputDir, "backend/client.conf"), os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	if config.Backend.ClientConfigFile == "" {
+		return nil
+	} else {
+		in, err := os.Open(filepath.Join(outputDir, "backend/config", config.Backend.ClientConfigFile))
 		if err != nil {
 			return err
 		}

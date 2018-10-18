@@ -55,23 +55,26 @@ func init() {
 	BlockChainFactories["Monacoin"] = monacoin.NewMonacoinRPC
 	BlockChainFactories["Monacoin Testnet"] = monacoin.NewMonacoinRPC
 	BlockChainFactories["Myriad"] = myriad.NewMyriadRPC
+	BlockChainFactories["Groestlcoin"] = grs.NewGroestlcoinRPC
+	BlockChainFactories["Groestlcoin Testnet"] = grs.NewGroestlcoinRPC
 }
 
 // GetCoinNameFromConfig gets coin name and coin shortcut from config file
-func GetCoinNameFromConfig(configfile string) (string, string, error) {
+func GetCoinNameFromConfig(configfile string) (string, string, string, error) {
 	data, err := ioutil.ReadFile(configfile)
 	if err != nil {
-		return "", "", errors.Annotatef(err, "Error reading file %v", configfile)
+		return "", "", "", errors.Annotatef(err, "Error reading file %v", configfile)
 	}
 	var cn struct {
 		CoinName     string `json:"coin_name"`
 		CoinShortcut string `json:"coin_shortcut"`
+		CoinLabel    string `json:"coin_label"`
 	}
 	err = json.Unmarshal(data, &cn)
 	if err != nil {
-		return "", "", errors.Annotatef(err, "Error parsing file %v", configfile)
+		return "", "", "", errors.Annotatef(err, "Error parsing file %v", configfile)
 	}
-	return cn.CoinName, cn.CoinShortcut, nil
+	return cn.CoinName, cn.CoinShortcut, cn.CoinLabel, nil
 }
 
 // NewBlockChain creates bchain.BlockChain of type defined by parameter coin
@@ -180,6 +183,11 @@ func (c *blockChainWithMetrics) GetMempool() (v []string, err error) {
 func (c *blockChainWithMetrics) GetTransaction(txid string) (v *bchain.Tx, err error) {
 	defer func(s time.Time) { c.observeRPCLatency("GetTransaction", s, err) }(time.Now())
 	return c.b.GetTransaction(txid)
+}
+
+func (c *blockChainWithMetrics) GetTransactionSpecific(txid string) (v json.RawMessage, err error) {
+	defer func(s time.Time) { c.observeRPCLatency("GetTransactionSpecific", s, err) }(time.Now())
+	return c.b.GetTransactionSpecific(txid)
 }
 
 func (c *blockChainWithMetrics) GetTransactionForMempool(txid string) (v *bchain.Tx, err error) {

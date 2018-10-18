@@ -52,39 +52,39 @@ coin index per running instance, every coin (including testnet) must have single
 All options of coin definition are described in [config.md](/docs/config.md).
 
 Because most of coins are fork of Bitcoin and they have similar way to install and configure their daemon, we use
-templates to generate package definition and configuration files during build process. It is similar to build Blockbook
-package too. Templates are filled with data from coin definition. Although build process generate packages
-automatically, there is sometimes necessary see intermediate step. You can generate all files by calling
-`go run build/templates/generate.go coin` where *coin* is name of definition file without .json extension. Files are
+templates to generate package definition and configuration files during build process. Similarly, there templates for Blockbook
+package. Templates are filled with data from coin definition. Although normally all package definitions are generated automatically
+during the build process, sometimes there is a reason to see them. You can create them by calling
+`go run build/templates/generate.go coin`, where *coin* is name of definition file without .json extension. Files are
 generated to *build/pkg-defs* directory.
 
 Good examples of coin configuration are
 [*configs/coins/bitcoin.json*](configs/coins/bitcoin.json) and
 [*configs/coins/ethereum.json*](configs/coins/ethereum.json) for Bitcoin-like coins and different coins, respectively.
 
-Usually you have to update only few options that differ from Bitcoin definition. At first there are base information
+Usually you have to update only few options that differ from Bitcoin definition. At first there is base information
 about coin in section *coin* – name, alias etc. Then update port information in *port* section. We keep port series as
-listed in [port registry](/docs/ports.md). Select next port numbers in series. Port numbers must be unique across all
+listed in [the port registry](/docs/ports.md). Select next port numbers in the series. Port numbers must be unique across all
 port definitions.
 
-In section *backend* update information how to build and configure back-end service. When back-end package is built,
-build process downloads installation archive, verify and extract it. How it is done is described in
+In the section *backend* update information how to build and configure back-end service. When back-end package is built,
+build process downloads installation archive, verifies and extracts it. How it is done is described in
 [build guide](/docs/build.md#on-back-end-building). Naming conventions and versioning are described
 also in [build guide](/docs/build.md#on-naming-conventions-and-versioning). You have to update *package_name*,
 *package_revision*, *system_user*, *version*, *binary_url*, *verification_type*, *verification_source*,
 *extract_command* and *exclude_files*. Also update information whether service runs mainnet or testnet network in
 *mainnet* option.
 
-In section *blockbook* update information how to build and configure Blockbook service. Usually they are only
+In the section *blockbook* update information how to build and configure Blockbook service. Usually they are only
 *package_name*, *system_user* and *explorer_url* options. Naming conventions are are described
 [here](/docs/build.md#on-naming-conventions-and-versioning).
 
-Update *package_maintainer* and *package_maintainer_email* options in section *meta*.
+Update *package_maintainer* and *package_maintainer_email* options in the section *meta*.
 
-Execute script *go run contrib/scripts/check-and-generate-port-registry.go -w* that checks mandatory ports and 
+Execute script *go run contrib/scripts/check-and-generate-port-registry.go -w* that checks mandatory ports and
 uniqueness of ports and updates registry of ports *docs/ports.md*.
 
-Now you can try generate package definitions as described above in order to check outputs.
+Now you can try to generate package definitions as described above in order to check outputs.
 
 #### Add coin implementation
 
@@ -94,16 +94,17 @@ Coin implementation is stored in *bchain/coins* directory. Each coin must implem
 
 There are several approaches how to implement coin support in Blockbook, please see examples below.
 
-Bitcoin package *blockbook/bchain/coins/btc* is reference implementation for Bitcoin-like coins. Most of functionality
-is same so particular coin should embed it and override just different parts.
+Bitcoin package *blockbook/bchain/coins/btc* is a reference implementation for Bitcoin-like coins. Most of the functionality
+is usually the same so particular coin should embed it and override just different parts.
 
 Bitcoin uses binary WIRE protocol thus decoding is very fast but require complex parser. Parser translate whole
 pubkey-script to database ID and therefore it is usually possible store transactions without change.
 
 ZCash package *blockbook/bchain/coins/zec* on the other side uses JSON version of RPCs therefore it doesn't require
-specialized parser. Only responsibility that parser has is to translate address to database ID and vice versa.
+specialized parser. Only responsibility that parser has is to translate address to Address Descriptor (used as 
+address ID in the database) and vice versa.
 
-Ethereum package *blockbook/bchain/coins/eth* must have stand alone implementation because Ethereum uses totally
+Ethereum package *blockbook/bchain/coins/eth* has own stand alone implementation because Ethereum uses totally
 different concept than Bitcoin.
 
 ##### BlockChain interface
@@ -147,27 +148,28 @@ initialized by *bchain.BlockChain* during initialization.
 
 There are several groups of methods defined in *bchian.BlockChainParser*:
 
-* *GetAddrIDFromVout* and *GetAddrIDFromAddress* – Convert transaction addresses to *[]byte* ID that is used as database ID.
-  Most of coins use pubkey-script as ID.
-* *AddressToOutputScript* and *OutputScriptToAddresses*  – Convert address to output script and vice versa. Note that
-  *btc.BitcoinParser* uses pointer to function *OutputScriptToAddressesFunc* that is called from *OutputScriptToAddress*
+* *GetAddrDescFromVout* and *GetAddrDescFromAddress* – Convert transaction addresses to *Address Descriptor* that is used as database ID.
+  Most of coins use output script as *Address Descriptor*.
+* *GetAddressesFromAddrDesc* and *GetScriptFromAddrDesc*  – Convert *Address Descriptor* to addresses and output script. Note that
+  *btc.BitcoinParser* uses pointer to function *OutputScriptToAddressesFunc* that is called from *GetAddressesFromAddrDesc*
   method in order to rewrite implementation by types embedding it.
 * *PackTxid* and *UnpackTxid* – Packs txid to store in database and vice versa.
 * *ParseTx* and *ParseTxFromJson* – Parse transaction from binary data or JSON and return *bchain.Tx*.
 * *PackTx* and *UnpackTx* – Pack transaction to binary data to store in database and vice versa.
 * *ParseBlock* – Parse block from binary data and return *bchain.Block*.
 
-Base type of parsers is *bchain.BaseParser*. It implements method *ParseTxFromJson* that would be same for all
+Base type of parsers is *bchain.BaseParser*. It implements method *ParseTxFromJson* that should be the same for all
 Bitcoin-like coins. Also implements *PackTx* and *UnpackTx* that pack and unpack transactions using protobuf. Note
-that Bitcoin store transactions in hex format.
+that Bitcoin stores transactions in more compact binary format.
 
 *bchain.BaseParser* stores pointer to function *bchain.AddressFactoryFunc* that is responsible for making human readable
-address representation. See [*bch.BCashParser*](/bchain/coins/bch/bcashparser.go) for example of implementation that uses
+address representation. See [*bch.bcashparser*](/bchain/coins/bch/bcashparser.go) for example of implementation that uses
 different approach for address representation than Bitcoin.
 
 #### Add tests
 
-Add unit tests and integration tests. Tests are described [here](/docs/testing.md).
+Add unit tests and integration tests. PR without passing tests won't be accepted. 
+Tests are described [here](/docs/testing.md).
 
 #### Deploy public server
 

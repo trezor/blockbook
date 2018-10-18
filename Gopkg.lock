@@ -3,6 +3,12 @@
 
 [[projects]]
   branch = "master"
+  name = "github.com/Groestlcoin/go-groestl-hash"
+  packages = ["groestl","hash"]
+  revision = "790653ac190c4029ee200e82a8f21b5d1afaf7d6"
+
+[[projects]]
+  branch = "master"
   name = "github.com/beorn7/perks"
   packages = ["quantile"]
   revision = "3a771d992973f24aa725d07868b467d1ddfceafb"
@@ -50,6 +56,12 @@
   version = "v1.7.0"
 
 [[projects]]
+  name = "github.com/gobuffalo/packr"
+  packages = ["."]
+  revision = "5a2cbb54c4e7d482e3f518c56f1f86f133d5204f"
+  version = "v1.13.7"
+
+[[projects]]
   name = "github.com/gogo/protobuf"
   packages = ["proto"]
   revision = "1adfc126b41513cc696b209667c8656ea7aac67c"
@@ -83,13 +95,13 @@
   branch = "master"
   name = "github.com/jakm/bchutil"
   packages = ["."]
-  revision = "9e4fc13b082c87967b0befbcbad6fe5a5aa5ac1a"
+  revision = "5a273ca8a96628732c07ff5cfb9f3e7d965241e8"
 
 [[projects]]
   branch = "master"
   name = "github.com/jakm/btcutil"
   packages = [".","base58","bech32","chaincfg","txscript"]
-  revision = "90ef4c720a6c3b3f9974dd6a6c6c339906236c35"
+  revision = "224b76333062172edefdeb502123fdda12205f76"
 
 [[projects]]
   branch = "master"
@@ -120,6 +132,12 @@
   name = "github.com/pebbe/zmq4"
   packages = ["."]
   revision = "5b443b6471cea4b4f9f85025530c04c93233f76a"
+
+[[projects]]
+  name = "github.com/pkg/errors"
+  packages = ["."]
+  revision = "645ef00459ed84a119197bfb8d8205042c6df63d"
+  version = "v0.8.0"
 
 [[projects]]
   name = "github.com/prometheus/client_golang"
@@ -167,7 +185,7 @@
   branch = "master"
   name = "github.com/tecbot/gorocksdb"
   packages = ["."]
-  revision = "3e476152774442234f9a9f747386a48a1d82a515"
+  revision = "214b6b7bc0f06812ab5602fdc502a3e619916f38"
 
 [[projects]]
   branch = "master"
@@ -196,6 +214,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "37517a6a6dbd6e924bf6761b562697a069e952f72f4d3ef984faf72738e91670"
+  inputs-digest = "3a7b863bec3806ba9460f3961e2d6e8ff4b77e5f66d196b1f79bd37fa6bf8d82"
   solver-name = "gps-cdcl"
   solver-version = 1

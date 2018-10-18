@@ -39,17 +39,24 @@ $(addprefix all-, $(TARGETS)): all-%: clean-deb build-images deb-%
 
 all: clean-deb build-images $(addprefix deb-, $(TARGETS))
 
-build-images:
-	rm -f .bin-image .deb-image
+build-images: clean-images
 	$(MAKE) .bin-image .deb-image
 
 .bin-image:
-	docker build --no-cache=$(NO_CACHE) -t $(BIN_IMAGE) build/docker/bin
-	@ docker images -q $(BIN_IMAGE) > $@
+	@if [ $$(build/tools/image_status.sh $(BIN_IMAGE):latest build/docker) != "ok" ]; then \
+		echo "Building image $(BIN_IMAGE)..."; \
+		docker build --no-cache=$(NO_CACHE) -t $(BIN_IMAGE) build/docker/bin; \
+	else \
+		echo "Image $(BIN_IMAGE) is up to date"; \
+	fi
 
 .deb-image: .bin-image
-	docker build --no-cache=$(NO_CACHE) -t $(DEB_IMAGE) build/docker/deb
-	@ docker images -q $(DEB_IMAGE) > $@
+	@if [ $$(build/tools/image_status.sh $(DEB_IMAGE):latest build/docker) != "ok" ]; then \
+		echo "Building image $(DEB_IMAGE)..."; \
+		docker build --no-cache=$(NO_CACHE) -t $(DEB_IMAGE) build/docker/deb; \
+	else \
+		echo "Image $(DEB_IMAGE) is up to date"; \
+	fi
 
 clean: clean-bin clean-deb
 
@@ -63,11 +70,10 @@ clean-deb:
 	rm -f build/*.deb
 
 clean-images: clean-bin-image clean-deb-image
+	rm -f .bin-image .deb-image  # remove obsolete tag files
 
 clean-bin-image:
 	- docker rmi $(BIN_IMAGE)
-	@ rm -f .bin-image
 
 clean-deb-image:
 	- docker rmi $(DEB_IMAGE)
-	@ rm -f .deb-image

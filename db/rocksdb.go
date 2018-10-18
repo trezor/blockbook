@@ -88,6 +88,9 @@ func NewRocksDB(path string, cacheSize, maxOpenFiles int, parser bchain.BlockCha
 	glog.Infof("rocksdb: opening %s, required data version %v, cache size %v, max open files %v", path, dbVersion, cacheSize, maxOpenFiles)
 	c := gorocksdb.NewLRUCache(cacheSize)
 	db, cfh, err := openDB(path, c, maxOpenFiles)
+	if err != nil {
+		return nil, err
+	}
 	wo := gorocksdb.NewDefaultWriteOptions()
 	ro := gorocksdb.NewDefaultReadOptions()
 	return &RocksDB{path, db, wo, ro, cfh, parser, nil, metrics, c, maxOpenFiles, connectBlockStats{}}, nil

@@ -8,8 +8,6 @@ import (
 	"time"
 )
 
-const BlockbookAbout = "Blockbook - blockchain indexer for TREZOR wallet https://trezor.io/. Do not use for any other purpose."
-
 type ApiError struct {
 	Text   string
 	Public bool
@@ -64,21 +62,24 @@ type Vout struct {
 }
 
 type Tx struct {
-	Txid          string `json:"txid"`
-	Version       int32  `json:"version,omitempty"`
-	Locktime      uint32 `json:"locktime,omitempty"`
-	Vin           []Vin  `json:"vin"`
-	Vout          []Vout `json:"vout"`
-	Blockhash     string `json:"blockhash,omitempty"`
-	Blockheight   int    `json:"blockheight"`
-	Confirmations uint32 `json:"confirmations"`
-	Time          int64  `json:"time,omitempty"`
-	Blocktime     int64  `json:"blocktime"`
-	ValueOut      string `json:"valueOut"`
-	Size          int    `json:"size,omitempty"`
-	ValueIn       string `json:"valueIn"`
-	Fees          string `json:"fees"`
-	Hex           string `json:"hex"`
+	Txid          string  `json:"txid"`
+	Version       int32   `json:"version,omitempty"`
+	Locktime      uint32  `json:"locktime,omitempty"`
+	Vin           []Vin   `json:"vin"`
+	Vout          []Vout  `json:"vout"`
+	Blockhash     string  `json:"blockhash,omitempty"`
+	Blockheight   int     `json:"blockheight"`
+	Confirmations uint32  `json:"confirmations"`
+	Time          int64   `json:"time,omitempty"`
+	Blocktime     int64   `json:"blocktime"`
+	ValueOut      string  `json:"valueOut"`
+	ValueOutSat   big.Int `json:"-"`
+	Size          int     `json:"size,omitempty"`
+	ValueIn       string  `json:"valueIn"`
+	ValueInSat    big.Int `json:"-"`
+	Fees          string  `json:"fees"`
+	FeesSat       big.Int `json:"-"`
+	Hex           string  `json:"hex"`
 }
 
 type Paging struct {

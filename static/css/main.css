@@ -272,3 +272,23 @@ h3 {
 .page-item.active .page-link {
     background-color: #428bca;
 }
+
+#txSpecific {
+    margin: 0;
+}
+
+.string {
+    color: darkgreen;
+}
+
+.number, .boolean {
+    color: darkred;
+}
+
+.null {
+    color: red;
+}
+
+.key {
+    color: #333 ;
+}

@@ -491,6 +491,20 @@ func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 	return btx, nil
 }
 
+// GetTransactionSpecific returns json as returned by backend, with all coin specific data
+func (b *EthereumRPC) GetTransactionSpecific(txid string) (json.RawMessage, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
+	defer cancel()
+	var tx json.RawMessage
+	err := b.rpc.CallContext(ctx, &tx, "eth_getTransactionByHash", ethcommon.HexToHash(txid))
+	if err != nil {
+		return nil, err
+	} else if tx == nil {
+		return nil, ethereum.NotFound
+	}
+	return tx, nil
+}
+
 type rpcMempoolBlock struct {
 	Transactions []string `json:"transactions"`
 }

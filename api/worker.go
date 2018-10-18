@@ -46,26 +46,26 @@ func (w *Worker) getAddressesFromVout(vout *bchain.Vout) (bchain.AddressDescript
 
 // setSpendingTxToVout is helper function, that finds transaction that spent given output and sets it to the output
 // there is not an index, it must be found using addresses -> txaddresses -> tx
-func (w *Worker) setSpendingTxToVout(vout *Vout, txid string, height, bestheight uint32) error {
+func (w *Worker) setSpendingTxToVout(vout *Vout, txid string, height uint32) error {
 	err := w.db.GetAddrDescTransactions(vout.ScriptPubKey.AddrDesc, height, ^uint32(0), func(t string, index uint32, isOutput bool) error {
 		if isOutput == false {
 			tsp, err := w.db.GetTxAddresses(t)
 			if err != nil {
+				return err
+			} else if tsp == nil {
 				glog.Warning("DB inconsistency:  tx ", t, ": not found in txAddresses")
-			} else {
-				if len(tsp.Inputs) > int(index) {
-					if tsp.Inputs[index].ValueSat.Cmp(&vout.ValueSat) == 0 {
-						spentTx, spentHeight, err := w.txCache.GetTransaction(t, bestheight)
-						if err != nil {
-							glog.Warning("Tx ", t, ": not found")
-						} else {
-							if len(spentTx.Vin) > int(index) {
-								if spentTx.Vin[index].Txid == txid {
-									vout.SpentTxID = t
-									vout.SpentHeight = int(spentHeight)
-									vout.SpentIndex = int(index)
-									return &db.StopIteration{}
-								}
+			} else if len(tsp.Inputs) > int(index) {
+				if tsp.Inputs[index].ValueSat.Cmp(&vout.ValueSat) == 0 {
+					spentTx, spentHeight, err := w.txCache.GetTransaction(t)
+					if err != nil {
+						glog.Warning("Tx ", t, ": not found")
+					} else {
+						if len(spentTx.Vin) > int(index) {
+							if spentTx.Vin[index].Txid == txid {
+								vout.SpentTxID = t
+								vout.SpentHeight = int(spentHeight)
+								vout.SpentIndex = int(index)
+								return &db.StopIteration{}
 							}
 						}
 					}
@@ -80,18 +80,14 @@ func (w *Worker) setSpendingTxToVout(vout *Vout, txid string, height, bestheight
 // GetSpendingTxid returns transaction id of transaction that spent given output
 func (w *Worker) GetSpendingTxid(txid string, n int) (string, error) {
 	start := time.Now()
-	bestheight, _, err := w.db.GetBestBlock()
-	if err != nil {
-		return "", err
-	}
-	tx, err := w.GetTransaction(txid, bestheight, false)
+	tx, err := w.GetTransaction(txid, false)
 	if err != nil {
 		return "", err
 	}
 	if n >= len(tx.Vout) || n < 0 {
 		return "", NewApiError(fmt.Sprintf("Passed incorrect vout index %v for tx %v, len vout %v", n, tx.Txid, len(tx.Vout)), false)
 	}
-	err = w.setSpendingTxToVout(&tx.Vout[n], tx.Txid, uint32(tx.Blockheight), bestheight)
+	err = w.setSpendingTxToVout(&tx.Vout[n], tx.Txid, uint32(tx.Blockheight))
 	if err != nil {
 		return "", err
 	}
@@ -100,9 +96,9 @@ func (w *Worker) GetSpendingTxid(txid string, n int) (string, error) {
 }
 
 // GetTransaction reads transaction data from txid
-func (w *Worker) GetTransaction(txid string, bestheight uint32, spendingTxs bool) (*Tx, error) {
+func (w *Worker) GetTransaction(txid string, spendingTxs bool) (*Tx, error) {
 	start := time.Now()
-	bchainTx, height, err := w.txCache.GetTransaction(txid, bestheight)
+	bchainTx, height, err := w.txCache.GetTransaction(txid)
 	if err != nil {
 		return nil, NewApiError(fmt.Sprintf("Tx not found, %v", err), true)
 	}
@@ -125,6 +121,7 @@ func (w *Worker) GetTransaction(txid string, bestheight uint32, spendingTxs bool
 		vin.Txid = bchainVin.Txid
 		vin.N = i
 		vin.Vout = bchainVin.Vout
+		vin.Sequence = int64(bchainVin.Sequence)
 		vin.ScriptSig.Hex = bchainVin.ScriptSig.Hex
 		//  bchainVin.Txid=="" is coinbase transaction
 		if bchainVin.Txid != "" {
@@ -139,7 +136,7 @@ func (w *Worker) GetTransaction(txid string, bestheight uint32, spendingTxs bool
 					glog.Warning("DB inconsistency:  tx ", bchainVin.Txid, ": not found in txAddresses")
 				}
 				// try to load from backend
-				otx, _, err := w.txCache.GetTransaction(bchainVin.Txid, bestheight)
+				otx, _, err := w.txCache.GetTransaction(bchainVin.Txid)
 				if err != nil {
 					return nil, errors.Annotatef(err, "txCache.GetTransaction %v", bchainVin.Txid)
 				}
@@ -180,7 +177,7 @@ func (w *Worker) GetTransaction(txid string, bestheight uint32, spendingTxs bool
 		if ta != nil {
 			vout.Spent = ta.Outputs[i].Spent
 			if spendingTxs && vout.Spent {
-				err = w.setSpendingTxToVout(vout, bchainTx.Txid, height, bestheight)
+				err = w.setSpendingTxToVout(vout, bchainTx.Txid, height)
 				if err != nil {
 					glog.Errorf("setSpendingTxToVout error %v, %v, output %v", err, vout.ScriptPubKey.AddrDesc, vout.N)
 				}
@@ -200,11 +197,14 @@ func (w *Worker) GetTransaction(txid string, bestheight uint32, spendingTxs bool
 		Blocktime:     bchainTx.Blocktime,
 		Confirmations: bchainTx.Confirmations,
 		Fees:          w.chainParser.AmountToDecimalString(&feesSat),
+		FeesSat:       feesSat,
 		Locktime:      bchainTx.LockTime,
 		Time:          bchainTx.Time,
 		Txid:          bchainTx.Txid,
 		ValueIn:       w.chainParser.AmountToDecimalString(&valInSat),
+		ValueInSat:    valInSat,
 		ValueOut:      w.chainParser.AmountToDecimalString(&valOutSat),
+		ValueOutSat:   valOutSat,
 		Version:       bchainTx.Version,
 		Hex:           bchainTx.Hex,
 		Vin:           vins,
@@ -402,7 +402,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, onlyTxids b
 	// load mempool transactions
 	var uBalSat big.Int
 	for _, tx := range txm {
-		tx, err := w.GetTransaction(tx, bestheight, false)
+		tx, err := w.GetTransaction(tx, false)
 		// mempool transaction may fail
 		if err != nil {
 			glog.Error("GetTransaction in mempool ", tx, ": ", err)
@@ -585,7 +585,7 @@ func (w *Worker) GetSystemInfo(internal bool) (*SystemInfo, error) {
 		DbSize:            w.db.DatabaseSizeOnDisk(),
 		DbSizeFromColumns: dbs,
 		DbColumns:         dbc,
-		About:             BlockbookAbout,
+		About:             Text.BlockbookAbout,
 	}
 	glog.Info("GetSystemInfo finished in ", time.Since(start))
 	return &SystemInfo{bi, ci}, nil

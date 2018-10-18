@@ -83,8 +83,8 @@ func (m *NonUTXOMempool) Resync(onNewTxAddr OnNewTxAddrFunc) (int, error) {
 				if len(addrDesc) > 0 {
 					io = append(io, addrIndex{string(addrDesc), int32(output.N)})
 				}
-				if onNewTxAddr != nil && len(output.ScriptPubKey.Addresses) == 1 {
-					onNewTxAddr(tx.Txid, output.ScriptPubKey.Addresses[0], true)
+				if onNewTxAddr != nil {
+					onNewTxAddr(tx.Txid, addrDesc, true)
 				}
 			}
 			for _, input := range tx.Vin {
@@ -97,7 +97,7 @@ func (m *NonUTXOMempool) Resync(onNewTxAddr OnNewTxAddrFunc) (int, error) {
 						}
 						io = append(io, addrIndex{string(addrDesc), int32(^i)})
 						if onNewTxAddr != nil {
-							onNewTxAddr(tx.Txid, a, false)
+							onNewTxAddr(tx.Txid, addrDesc, false)
 						}
 					}
 				}

@@ -1,44 +1,74 @@
 # Data storage in RocksDB
 
-Blockbook stores data the key-value store RocksDB. Data are stored in binary form to save space.
-The data are separated to different column families:
+**Blockbook** stores data the key-value store RocksDB. Each index is stored in its own column family.
+
+>Database content is described in golang pseudo types in the form *(name type)*. 
+>
+>Operators used in the description: 
+>- -> mapping from key to value. 
+>- \+ concatenation, 
+>- [] array
+>
+>Types used in the description:
+>- []byte - array of bytes
+>- uint32 - unsigned integer, stored as array of 4 bytes in big endian*
+>- vint, vuint - variable length signed/unsigned int
+>- addrDesc - address descriptor, abstraction of an address. In all bitcoin like coins it is output script. Stored as variable length array of bytes.
+>- bigInt - unsigned big integer, stored as length of array (1 byte) followed by array of bytes of big int, i.e. *(int_len byte)+(int_value []byte)*. Zero is stored as one byte containing 0.
+
+**Column families:**
 
 - **default**
 
-  at the moment not used, will store statistical data etc.
+  stores internal state in json format, under the key *internalState*. 
+  
+  Most important internal state values are:
+  - coin - which coin is indexed in DB
+  - data format version - currently 3
+  - dbState - closed, open, inconsistent
+    
+  Blockbook is on startup checking these values and does not allow to run against wrong coin, data format version and in inconsistent state.
 
-- **height** - maps *block height* to *block hash*
+- **height** 
 
-  *Block heigh* stored as array of 4 bytes (big endian uint32)
-  *Block hash* stored as array of 32 bytes
+    maps *block height* to *block hash* and additional data about block
+    ```
+    (height uint32) -> (hash [32]byte)+(time uint32)+(nr_txs vuint)+(size vuint)
+    ```
 
-  Example - the first four blocks (all data hex encoded)
-```
-0x00000000 : 0x000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943
-0x00000001 : 0x00000000b873e79784647a6c82962c70d228557d24a747ea4d1b8bbe878e1206
-0x00000002 : 0x000000006c02c8ea6e4ff69651f7fcde348fb9d557a06e6957b65552002a7820
-0x00000003 : 0x000000008b896e272758da5297bcd98fdc6d97c9b765ecec401e286dc1fdbe10
-```
+- **addresses**
 
-- **outputs** -  maps *output script+block height* to *array of outpoints*
+    maps *addrDesc+block height* to  *array of outpoints* (array of transactions with input/output index). Input/output is recognized by the sign of the number, output is positive, input is negative, with operation bitwise complement ^ performed on the number.
+    ```
+    (addrDesc []byte)+(height uint32) -> []((txid [32]byte)+(index vint))
+    ```
 
-  *Output script (ScriptPubKey)+block height* stored as variable length array of bytes for output script + 4 bytes (big endian uint32) block height
-  *array of outpoints* stored as array of 32 bytes for transaction id + variable length outpoint index for each outpoint
+- **addressBalance**
 
-  Example - (all data hex encoded)
-```
-0x001400efeb484a24a1c1240eafacef8566e734da429c000e2df6 : 0x1697966cbd76c75eb9fc736dfa3ba0bc045999bab1e8b10082bc0ba546b0178302
-0xa9143e3d6abe282d92a28cb791697ba001d733cefdc7870012c4b1 : 0x7246e79f97b5f82e7f51e291d533964028ec90be0634af8a8ef7d5a903c7f6d301
-```
+    maps *addrDesc* to *number of transactions*, *sent amount* and *total balance* of given address
+    ```
+    (addrDesc []byte) -> (nr_txs vuint)+(sent_amount bigInt)+(balance bigInt)
+    ```
 
-- **inputs** - maps *transaction outpoint* to *input transaction* that spends it
+- **txAddresses**
 
-  *Transaction outpoint* stored as array of 32 bytes for transaction id + variable length outpoint index
-  *Input transaction* stored as array of 32 bytes for transaction id + variable length input index
+    maps *txid* to *block height* and array of *input addrDesc* with *amounts* and array of *output addrDesc* with *amounts*, with flag if output is spent. In case of spent output, *addrDesc_len* is negative (negative sign is achieved by bitwise complement ^).
+    ```
+    (txid []byte) -> (height vuint)+
+                     (nr_inputs vuint)+[]((addrDesc_len vuint)+(addrDesc []byte)+(amount bigInt))+
+                     (nr_outputs vuint)+[]((addrDesc_len vint)+(addrDesc []byte)+(amount bigInt))
+    ```
 
-  Example - (all data hex encoded)
-```
-0x7246e79f97b5f82e7f51e291d533964028ec90be0634af8a8ef7d5a903c7f6d300 : 0x0a7aa90ea0269c79f844c516805e4cac594adb8830e56fca894b66aab19136a428
-0x7246e79f97b5f82e7f51e291d533964028ec90be0634af8a8ef7d5a903c7f6d301 : 0x4303a9fcfe6026b4d33ba488df6443c9a99bca7b7fcb7c6f6cd65cea24a749b700
-```
+- **blockTxs**
 
+    maps *block height* to an array of *txids* and *input points* in the block - only last 300 (by default) blocks are kept, the column is used in case of rollback.
+    ```
+    (height uint32) -> []((txid [32]byte)+(nr_inputs vuint)+[]((txid [32]byte)+(index vint)))
+    ```
+
+- **transactions**
+
+    transaction cache, *txdata* is generated by coin specific parser function PackTx
+    ```
+    (txid []byte) -> (txdata []byte)
+    ```
