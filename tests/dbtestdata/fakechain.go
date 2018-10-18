@@ -178,7 +178,7 @@ func (c *fakeBlockChain) GetMempoolTransactions(address string) (v []string, err
 }
 
 func (c *fakeBlockChain) GetMempoolTransactionsForAddrDesc(addrDesc bchain.AddressDescriptor) (v []string, err error) {
-	return nil, errors.New("Not implemented")
+	return []string{}, nil
 }
 
 func (c *fakeBlockChain) GetMempoolEntry(txid string) (v *bchain.MempoolEntry, err error) {
