@@ -1,0 +1,66 @@
+{
+  "coin": {
+      "name": "Groestlcoin",
+      "shortcut": "GRS",
+      "label": "Groestlcoin",
+      "alias": "groestlcoin"
+  },
+  "ports": {
+    "backend_rpc": 8045,
+    "backend_message_queue": 38345,
+    "blockbook_internal": 9045,
+    "blockbook_public": 9145
+  },
+  "ipc": {
+    "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
+    "rpc_user": "rpc",
+    "rpc_pass": "rpc",
+    "rpc_timeout": 25,
+    "message_queue_binding_template": "tcp://127.0.0.1:{{.Ports.BackendMessageQueue}}"
+  },
+  "backend": {
+    "package_name": "backend-groestlcoin",
+    "package_revision": "satoshilabs-1",
+    "system_user": "groestlcoin",
+    "version": "2.16.3",
+    "binary_url": "https://github.com/Groestlcoin/groestlcoin/releases/download/v2.16.3/groestlcoin-2.16.3-x86_64-linux-gnu.tar.gz",
+    "verification_type": "sha256",
+    "verification_source": "f15bd5e38b25a103821f1563cd0e1b2cf7146ec9f9835493a30bd57313d3b86f",
+    "extract_command": "mkdir -p backend/bin; tar -C backend/bin -xf",
+    "exclude_files": [
+        "bin/groestlcoin-qt"
+    ],
+    "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/groestlcoind -datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -conf={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf -pid=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",
+    "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/*.log",
+    "postinst_script_template": "",
+    "service_type": "forking",
+    "service_additional_params_template": "",
+    "protect_memory": true,
+    "mainnet": true,
+    "server_config_file": "bitcoin_like.conf",
+    "client_config_file": "bitcoin_like_client.conf",
+    "additional_params": {
+        "deprecatedrpc": "estimatefee",
+        "whitelist": "127.0.0.1"
+    }
+  },
+  "blockbook": {
+    "package_name": "blockbook-groestlcoin",
+    "system_user": "blockbook-groestlcoin",
+    "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
+    "public_binding_template": ":{{.Ports.BlockbookPublic}}",
+    "explorer_url": "",
+    "additional_params": "",
+    "block_chain": {
+      "parse": true,
+      "mempool_workers": 8,
+      "mempool_sub_workers": 2,
+      "block_addresses_to_keep": 300,
+      "additional_params": {}
+    }
+  },
+  "meta": {
+    "package_maintainer": "Groestlcoin team",
+    "package_maintainer_email": "support@groestlcoin.org"
+  }
+}
