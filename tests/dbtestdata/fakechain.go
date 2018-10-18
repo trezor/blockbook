@@ -3,6 +3,7 @@ package dbtestdata
 import (
 	"blockbook/bchain"
 	"context"
+	"encoding/json"
 	"errors"
 	"math/big"
 )
@@ -67,7 +68,7 @@ func (c *fakeBlockChain) GetBlockHash(height uint32) (v string, err error) {
 	if height == b2.BlockHeader.Height {
 		return b2.BlockHeader.Hash, nil
 	}
-	return "", errors.New("Block not found")
+	return "", bchain.ErrBlockNotFound
 }
 
 func (c *fakeBlockChain) GetBlockHeader(hash string) (v *bchain.BlockHeader, err error) {
@@ -79,7 +80,7 @@ func (c *fakeBlockChain) GetBlockHeader(hash string) (v *bchain.BlockHeader, err
 	if hash == b2.BlockHeader.Hash {
 		return &b2.BlockHeader, nil
 	}
-	return nil, errors.New("Block not found")
+	return nil, bchain.ErrBlockNotFound
 }
 
 func (c *fakeBlockChain) GetBlock(hash string, height uint32) (v *bchain.Block, err error) {
@@ -91,11 +92,29 @@ func (c *fakeBlockChain) GetBlock(hash string, height uint32) (v *bchain.Block, 
 	if hash == b2.BlockHeader.Hash || height == b2.BlockHeader.Height {
 		return b2, nil
 	}
-	return nil, errors.New("Block not found")
+	return nil, bchain.ErrBlockNotFound
+}
+
+func getBlockInfo(b *bchain.Block) *bchain.BlockInfo {
+	bi := &bchain.BlockInfo{
+		BlockHeader: b.BlockHeader,
+	}
+	for _, tx := range b.Txs {
+		bi.Txids = append(bi.Txids, tx.Txid)
+	}
+	return bi
 }
 
 func (c *fakeBlockChain) GetBlockInfo(hash string) (v *bchain.BlockInfo, err error) {
-	return nil, errors.New("Not implemented")
+	b1 := GetTestUTXOBlock1(c.parser)
+	if hash == b1.BlockHeader.Hash {
+		return getBlockInfo(b1), nil
+	}
+	b2 := GetTestUTXOBlock2(c.parser)
+	if hash == b2.BlockHeader.Hash {
+		return getBlockInfo(b2), nil
+	}
+	return nil, bchain.ErrBlockNotFound
 }
 
 func (c *fakeBlockChain) GetMempool() (v []string, err error) {
@@ -120,6 +139,18 @@ func (c *fakeBlockChain) GetTransaction(txid string) (v *bchain.Tx, err error) {
 		return v, nil
 	}
 	return nil, errors.New("Not implemented")
+}
+
+func (c *fakeBlockChain) GetTransactionSpecific(txid string) (v json.RawMessage, err error) {
+	tx, err := c.GetTransaction(txid)
+	if err != nil {
+		return nil, err
+	}
+	rm, err := json.Marshal(tx)
+	if err != nil {
+		return nil, err
+	}
+	return json.RawMessage(rm), nil
 }
 
 func (c *fakeBlockChain) GetTransactionForMempool(txid string) (v *bchain.Tx, err error) {
