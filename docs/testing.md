@@ -67,7 +67,10 @@ blockchain and verify them against fixtures. Ranges of blocks to sync are define
    synchronization. Uses the same fixtures as ConnectBlocks.
 * `HandleFork` – Calls *db.SyncWorker.HandleFork* method that rolls back blockchain if a fork is detected. Test uses two
    sets of blocks with the same heights in fixtures. First set – with fake blocks – is synced initially, than *HandleFork*
-   method is called and finally it is checked that index contain only blocks from second set – the real blocks.
+   method is called and finally it is checked that index contain only blocks from second set – the real blocks. *Make
+   sure that fake blocks have hashes of real blocks out of a sync range. It is important because Blockbook attempts to
+   load these blocks and if it is unsuccessful the test fails. A good practice is use blocks with a height about 20 lower
+   than `syncRanges.lower` and decreasing.*
 
 ### Back-end RPC integration tests
 
