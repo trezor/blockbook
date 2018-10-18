@@ -119,7 +119,7 @@ func init() {
 					Hex: "",
 				},
 				Txid:     "55fe0fdf4fb40ae3614005af836a2a8669e632dfc685a1cb9a9d2caf4c0e109c",
-				Vout:     null,
+				Vout:     1,
 				Sequence: 0,
 			},
 			{
