@@ -128,12 +128,12 @@ func init() {
 				ValueSat: *big.NewInt(27980800),
 				N:        0,
 				ScriptPubKey: bchain.ScriptPubKey{
-					Hex: "76a9141ae882e788091732da6910595314447c9e38bd8d88ac",
+					Hex: "76a914ca093a938a0e19e86b36859d9423a475d45eb3a288ac",
 					Addresses: []string{
 						"GcGBy77CCfZJJhGLALohdahf9eAc7jo7Yk",
 					},
 				},
-			}
+			},
 		},
 	}
 }
