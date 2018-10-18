@@ -95,13 +95,13 @@
   branch = "master"
   name = "github.com/jakm/bchutil"
   packages = ["."]
-  revision = "d4461d2030814290cfde9d06f64af7703c5a1cc8"
+  revision = "5a273ca8a96628732c07ff5cfb9f3e7d965241e8"
 
 [[projects]]
   branch = "master"
   name = "github.com/jakm/btcutil"
   packages = [".","base58","bech32","chaincfg","txscript"]
-  revision = "f9e15ad630678fa44cbf06f6450527a51008b08a"
+  revision = "224b76333062172edefdeb502123fdda12205f76"
 
 [[projects]]
   branch = "master"
