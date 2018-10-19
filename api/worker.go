@@ -488,6 +488,10 @@ func (w *Worker) GetBlocks(page int, blocksOnPage int) (*Blocks, error) {
 		if err != nil {
 			return nil, err
 		}
+		if bi == nil {
+			r.Blocks = r.Blocks[:i]
+			break
+		}
 		r.Blocks[i-from] = *bi
 	}
 	glog.Info("GetBlocks page ", page, " finished in ", time.Since(start))

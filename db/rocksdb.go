@@ -15,7 +15,6 @@ import (
 	"github.com/bsm/go-vlq"
 	"github.com/golang/glog"
 	"github.com/juju/errors"
-
 	"github.com/tecbot/gorocksdb"
 )
 
@@ -928,7 +927,7 @@ func (d *RocksDB) packBlockInfo(block *BlockInfo) ([]byte, error) {
 
 func (d *RocksDB) unpackBlockInfo(buf []byte) (*BlockInfo, error) {
 	pl := d.chainParser.PackedTxidLen()
-	// minimum length is PackedTxidLen+4 bytes time + 1 byte txs + 1 byte size
+	// minimum length is PackedTxidLen + 4 bytes time + 1 byte txs + 1 byte size
 	if len(buf) < pl+4+2 {
 		return nil, nil
 	}
@@ -988,7 +987,7 @@ func (d *RocksDB) GetBlockInfo(height uint32) (*BlockInfo, error) {
 	}
 	defer val.Free()
 	bi, err := d.unpackBlockInfo(val.Data())
-	if err != nil {
+	if err != nil || bi == nil {
 		return nil, err
 	}
 	bi.Height = height

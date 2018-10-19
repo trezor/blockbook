@@ -12,9 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/juju/errors"
-
 	"github.com/golang/glog"
+	"github.com/juju/errors"
 	"github.com/martinboehm/golang-socketio"
 	"github.com/martinboehm/golang-socketio/transport"
 )
@@ -240,7 +239,7 @@ type addressHistoryIndexes struct {
 }
 
 type txInputs struct {
-	Txid       *string   `json:"txid"`
+	Txid        *string `json:"txid"`
 	OutputIndex int     `json:"outputIndex"`
 	Script      *string `json:"script"`
 	// ScriptAsm   *string `json:"scriptAsm"`
@@ -389,9 +388,6 @@ func (s *SocketIoServer) getAddressHistory(addr []string, opts *addrOpts) (res r
 	}
 	for txi := opts.From; txi < to; txi++ {
 		tx, err := s.api.GetTransaction(txids[txi], false)
-		// for i, txid := range txids {
-		// 	if i >= opts.From && i < opts.To {
-		// 		tx, err := s.api.GetTransaction(txid, bestheight, false)
 		if err != nil {
 			return res, err
 		}
