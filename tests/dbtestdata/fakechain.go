@@ -29,15 +29,15 @@ func (c *fakeBlockChain) IsTestnet() bool {
 }
 
 func (c *fakeBlockChain) GetNetworkName() string {
-	return "test"
+	return "fakecoin"
 }
 
 func (c *fakeBlockChain) GetCoinName() string {
-	return "Testnet"
+	return "Fakecoin"
 }
 
 func (c *fakeBlockChain) GetSubversion() string {
-	return "/Satoshi:0.16.3/"
+	return "/Fakecoin:0.0.1/"
 }
 
 func (c *fakeBlockChain) GetChainInfo() (v *bchain.ChainInfo, err error) {
@@ -46,7 +46,7 @@ func (c *fakeBlockChain) GetChainInfo() (v *bchain.ChainInfo, err error) {
 		Blocks:        2,
 		Headers:       2,
 		Bestblockhash: GetTestUTXOBlock2(c.parser).BlockHeader.Hash,
-		Version:       "160300",
+		Version:       "001001",
 		Subversion:    c.GetSubversion(),
 	}, nil
 }
@@ -138,7 +138,7 @@ func (c *fakeBlockChain) GetTransaction(txid string) (v *bchain.Tx, err error) {
 	if v != nil {
 		return v, nil
 	}
-	return nil, errors.New("Not implemented")
+	return nil, errors.New("Not found")
 }
 
 func (c *fakeBlockChain) GetTransactionSpecific(txid string) (v json.RawMessage, err error) {
