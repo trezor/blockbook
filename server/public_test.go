@@ -189,7 +189,6 @@ func httpTests(t *testing.T, ts *httptest.Server) {
 				`<td><a href="/block/225494">225494</a></td>`,
 				`<td class="ellipsis">00000000eb0443fd7dc4a1ed5c686a8e995057805f9a161d9a5a77a95e72b7b6</td>`,
 				`<td class="ellipsis">0000000076fbbed90fd75b0e18856aa35baa984e9c9d444cf746ad85e94e2997</td>`,
-				`<td>Tue, 21 Aug 2018 15:27:01 CEST</td>`,
 				`<td class="text-right">2</td>`,
 				`<td class="text-right">1234567</td>`,
 				`</html>`,
