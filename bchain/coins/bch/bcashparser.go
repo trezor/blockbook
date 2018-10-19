@@ -150,29 +150,22 @@ func isCashAddr(addr string) bool {
 
 // outputScriptToAddresses converts ScriptPubKey to bitcoin addresses
 func (p *BCashParser) outputScriptToAddresses(script []byte) ([]string, bool, error) {
+	// convert possible P2PK script to P2PK, which bchutil can process
+	var err error
+	script, err = txscript.ConvertP2PKtoP2PKH(script)
+	if err != nil {
+		return nil, false, err
+	}
 	a, err := bchutil.ExtractPkScriptAddrs(script, p.Params)
 	if err != nil {
 		// do not return unknown script type error as error
 		if err.Error() == "unknown script type" {
-			// try bitcoin parser to parse P2PK scripts - kind of hack as bchutil does not support pay-to-pubkey
-			_, addresses, _, err := txscript.ExtractPkScriptAddrs(script, p.Params)
-			if err == nil && len(addresses) == 1 {
-				// convert the address back to output script and back to get from bitcoin to bcash
-				s, err := p.addressToOutputScript(addresses[0].EncodeAddress())
-				if err == nil {
-					a, err = bchutil.ExtractPkScriptAddrs(s, p.Params)
-					if err != nil {
-						return []string{}, false, nil
-					}
-				}
-			} else {
-				// try OP_RETURN script
-				or := btc.TryParseOPReturn(script)
-				if or != "" {
-					return []string{or}, false, nil
-				}
-				return []string{}, false, nil
+			// try OP_RETURN script
+			or := btc.TryParseOPReturn(script)
+			if or != "" {
+				return []string{or}, false, nil
 			}
+			return []string{}, false, nil
 		} else {
 			return nil, false, err
 		}

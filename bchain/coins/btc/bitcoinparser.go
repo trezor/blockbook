@@ -56,7 +56,13 @@ func GetChainParams(chain string) *chaincfg.Params {
 
 // GetAddrDescFromVout returns internal address representation (descriptor) of given transaction output
 func (p *BitcoinParser) GetAddrDescFromVout(output *bchain.Vout) (bchain.AddressDescriptor, error) {
-	return hex.DecodeString(output.ScriptPubKey.Hex)
+	ad, err := hex.DecodeString(output.ScriptPubKey.Hex)
+	if err != nil {
+		return ad, err
+	}
+	// convert possible P2PK script to P2PKH
+	// so that all transactions by given public key are indexed together
+	return txscript.ConvertP2PKtoP2PKH(ad)
 }
 
 // GetAddrDescFromAddress returns internal address representation (descriptor) of given address
@@ -126,7 +132,7 @@ func TryParseOPReturn(script []byte) string {
 	return ""
 }
 
-// outputScriptToAddresses converts ScriptPubKey to bitcoin addresses
+// outputScriptToAddresses converts ScriptPubKey to addresses with a flag that the addresses are searchable
 func (p *BitcoinParser) outputScriptToAddresses(script []byte) ([]string, bool, error) {
 	sc, addresses, _, err := txscript.ExtractPkScriptAddrs(script, p.Params)
 	if err != nil {

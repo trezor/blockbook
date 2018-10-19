@@ -31,6 +31,7 @@ type InternalState struct {
 
 	Coin         string `json:"coin"`
 	CoinShortcut string `json:"coinShortcut"`
+	CoinLabel    string `json:"coinLabel"`
 	Host         string `json:"host"`
 
 	DbState uint32 `json:"dbState"`

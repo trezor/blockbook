@@ -132,8 +132,8 @@ func (m *UTXOMempool) getTxAddrs(txid string, chanInput chan outpoint, chanResul
 		if len(addrDesc) > 0 {
 			io = append(io, addrIndex{string(addrDesc), int32(output.N)})
 		}
-		if m.onNewTxAddr != nil && len(output.ScriptPubKey.Addresses) == 1 {
-			m.onNewTxAddr(tx.Txid, output.ScriptPubKey.Addresses[0], true)
+		if m.onNewTxAddr != nil {
+			m.onNewTxAddr(tx.Txid, addrDesc, true)
 		}
 	}
 	dispatched := 0

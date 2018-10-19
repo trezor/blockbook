@@ -6,6 +6,7 @@ import (
 	"blockbook/common"
 	"blockbook/db"
 	"encoding/json"
+	"math/big"
 	"net/http"
 	"strconv"
 	"strings"
@@ -27,10 +28,16 @@ type SocketIoServer struct {
 	chainParser bchain.BlockChainParser
 	metrics     *common.Metrics
 	is          *common.InternalState
+	api         *api.Worker
 }
 
 // NewSocketIoServer creates new SocketIo interface to blockbook and returns its handle
 func NewSocketIoServer(db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxCache, metrics *common.Metrics, is *common.InternalState) (*SocketIoServer, error) {
+	api, err := api.NewWorker(db, chain, txCache, is)
+	if err != nil {
+		return nil, err
+	}
+
 	server := gosocketio.NewServer(transport.GetDefaultWebsocketTransport())
 
 	server.On(gosocketio.OnConnection, func(c *gosocketio.Channel) {
@@ -59,6 +66,7 @@ func NewSocketIoServer(db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxCa
 		chainParser: chain.GetChainParser(),
 		metrics:     metrics,
 		is:          is,
+		api:         api,
 	}
 
 	server.On("message", s.onMessage)
@@ -232,6 +240,7 @@ type addressHistoryIndexes struct {
 }
 
 type txInputs struct {
+	Txid       *string   `json:"txid"`
 	OutputIndex int     `json:"outputIndex"`
 	Script      *string `json:"script"`
 	// ScriptAsm   *string `json:"scriptAsm"`
@@ -244,33 +253,33 @@ type txOutputs struct {
 	Satoshis int64   `json:"satoshis"`
 	Script   *string `json:"script"`
 	// ScriptAsm   *string `json:"scriptAsm"`
-	SpentTxID   *string `json:"spentTxId,omitempty"`
-	SpentIndex  int     `json:"spentIndex,omitempty"`
-	SpentHeight int     `json:"spentHeight,omitempty"`
-	Address     *string `json:"address"`
+	// SpentTxID   *string `json:"spentTxId,omitempty"`
+	// SpentIndex  int     `json:"spentIndex,omitempty"`
+	// SpentHeight int     `json:"spentHeight,omitempty"`
+	Address *string `json:"address"`
 }
 
 type resTx struct {
 	Hex string `json:"hex"`
 	// BlockHash      string      `json:"blockHash,omitempty"`
-	Height         int   `json:"height"`
-	BlockTimestamp int64 `json:"blockTimestamp,omitempty"`
-	// Version        int         `json:"version"`
-	Hash     string `json:"hash"`
-	Locktime int    `json:"locktime,omitempty"`
+	Height         int    `json:"height"`
+	BlockTimestamp int64  `json:"blockTimestamp,omitempty"`
+	Version        int    `json:"version"`
+	Hash           string `json:"hash"`
+	Locktime       int    `json:"locktime,omitempty"`
 	// Size           int         `json:"size,omitempty"`
-	Inputs []txInputs `json:"inputs"`
-	// InputSatoshis  int64       `json:"inputSatoshis,omitempty"`
-	Outputs []txOutputs `json:"outputs"`
-	// OutputSatoshis int64       `json:"outputSatoshis,omitempty"`
-	// FeeSatoshis    int64       `json:"feeSatoshis,omitempty"`
+	Inputs         []txInputs  `json:"inputs"`
+	InputSatoshis  int64       `json:"inputSatoshis,omitempty"`
+	Outputs        []txOutputs `json:"outputs"`
+	OutputSatoshis int64       `json:"outputSatoshis,omitempty"`
+	FeeSatoshis    int64       `json:"feeSatoshis,omitempty"`
 }
 
 type addressHistoryItem struct {
-	Addresses     map[string]addressHistoryIndexes `json:"addresses"`
-	Satoshis      int64                            `json:"satoshis"`
-	Confirmations int                              `json:"confirmations"`
-	Tx            resTx                            `json:"tx"`
+	Addresses     map[string]*addressHistoryIndexes `json:"addresses"`
+	Satoshis      int64                             `json:"satoshis"`
+	Confirmations int                               `json:"confirmations"`
+	Tx            resTx                             `json:"tx"`
 }
 
 type resultGetAddressHistory struct {
@@ -289,20 +298,57 @@ func stringInSlice(a string, list []string) bool {
 	return false
 }
 
-func txToResTx(tx *bchain.Tx, height int, hi []txInputs, ho []txOutputs) resTx {
+func txToResTx(tx *api.Tx) resTx {
+	inputs := make([]txInputs, len(tx.Vin))
+	for i := range tx.Vin {
+		vin := &tx.Vin[i]
+		txid := vin.Txid
+		script := vin.ScriptSig.Hex
+		input := txInputs{
+			Txid:        &txid,
+			Script:      &script,
+			Sequence:    int64(vin.Sequence),
+			OutputIndex: int(vin.Vout),
+			Satoshis:    vin.ValueSat.Int64(),
+		}
+		if len(vin.Addresses) > 0 {
+			a := vin.Addresses[0]
+			input.Address = &a
+		}
+		inputs[i] = input
+	}
+	outputs := make([]txOutputs, len(tx.Vout))
+	for i := range tx.Vout {
+		vout := &tx.Vout[i]
+		script := vout.ScriptPubKey.Hex
+		output := txOutputs{
+			Satoshis: vout.ValueSat.Int64(),
+			Script:   &script,
+		}
+		if len(vout.ScriptPubKey.Addresses) > 0 {
+			a := vout.ScriptPubKey.Addresses[0]
+			output.Address = &a
+		}
+		outputs[i] = output
+	}
+	var h int
+	if tx.Confirmations == 0 {
+		h = -1
+	} else {
+		h = int(tx.Blockheight)
+	}
 	return resTx{
-		// BlockHash:      tx.BlockHash,
 		BlockTimestamp: tx.Blocktime,
-		// FeeSatoshis,
-		Hash:   tx.Txid,
-		Height: height,
-		Hex:    tx.Hex,
-		Inputs: hi,
-		// InputSatoshis,
-		Locktime: int(tx.LockTime),
-		Outputs:  ho,
-		// OutputSatoshis,
-		// Version: int(tx.Version),
+		FeeSatoshis:    tx.FeesSat.Int64(),
+		Hash:           tx.Txid,
+		Height:         h,
+		Hex:            tx.Hex,
+		Inputs:         inputs,
+		InputSatoshis:  tx.ValueInSat.Int64(),
+		Locktime:       int(tx.Locktime),
+		Outputs:        outputs,
+		OutputSatoshis: tx.ValueOutSat.Int64(),
+		Version:        int(tx.Version),
 	}
 }
 
@@ -334,61 +380,56 @@ func (s *SocketIoServer) getAddressHistory(addr []string, opts *addrOpts) (res r
 	if err != nil {
 		return
 	}
-	bestheight, _, err := s.db.GetBestBlock()
-	if err != nil {
-		return
-	}
 	txids := txr.Result
 	res.Result.TotalCount = len(txids)
 	res.Result.Items = make([]addressHistoryItem, 0)
-	for i, txid := range txids {
-		if i >= opts.From && i < opts.To {
-			tx, height, err := s.txCache.GetTransaction(txid, bestheight)
-			if err != nil {
-				return res, err
-			}
-			ads := make(map[string]addressHistoryIndexes)
-			hi := make([]txInputs, 0)
-			ho := make([]txOutputs, 0)
-			for _, vout := range tx.Vout {
-				aoh := vout.ScriptPubKey.Hex
-				ao := txOutputs{
-					Satoshis: vout.ValueSat.Int64(),
-					Script:   &aoh,
-				}
-				voutAddr, err := s.getAddressesFromVout(&vout)
-				if err != nil {
-					return res, err
-				}
-				if len(voutAddr) > 0 {
-					ao.Address = &voutAddr[0]
-				}
-				a := addressInSlice(voutAddr, addr)
-				if a != "" {
-					hi, ok := ads[a]
-					if ok {
-						hi.OutputIndexes = append(hi.OutputIndexes, int(vout.N))
-					} else {
-						hi := addressHistoryIndexes{}
-						hi.InputIndexes = make([]int, 0)
-						hi.OutputIndexes = append(hi.OutputIndexes, int(vout.N))
-						ads[a] = hi
-					}
-				}
-				ho = append(ho, ao)
-			}
-			ahi := addressHistoryItem{}
-			ahi.Addresses = ads
-			ahi.Confirmations = int(tx.Confirmations)
-			var h int
-			if tx.Confirmations == 0 {
-				h = -1
-			} else {
-				h = int(height)
-			}
-			ahi.Tx = txToResTx(tx, h, hi, ho)
-			res.Result.Items = append(res.Result.Items, ahi)
+	to := len(txids)
+	if to > opts.To {
+		to = opts.To
+	}
+	for txi := opts.From; txi < to; txi++ {
+		tx, err := s.api.GetTransaction(txids[txi], false)
+		// for i, txid := range txids {
+		// 	if i >= opts.From && i < opts.To {
+		// 		tx, err := s.api.GetTransaction(txid, bestheight, false)
+		if err != nil {
+			return res, err
 		}
+		ads := make(map[string]*addressHistoryIndexes)
+		var totalSat big.Int
+		for i := range tx.Vin {
+			vin := &tx.Vin[i]
+			a := addressInSlice(vin.Addresses, addr)
+			if a != "" {
+				hi := ads[a]
+				if hi == nil {
+					hi = &addressHistoryIndexes{OutputIndexes: []int{}}
+					ads[a] = hi
+				}
+				hi.InputIndexes = append(hi.InputIndexes, int(vin.N))
+				totalSat.Sub(&totalSat, &vin.ValueSat)
+			}
+		}
+		for i := range tx.Vout {
+			vout := &tx.Vout[i]
+			a := addressInSlice(vout.ScriptPubKey.Addresses, addr)
+			if a != "" {
+				hi := ads[a]
+				if hi == nil {
+					hi = &addressHistoryIndexes{InputIndexes: []int{}}
+					ads[a] = hi
+				}
+				hi.OutputIndexes = append(hi.OutputIndexes, int(vout.N))
+				totalSat.Add(&totalSat, &vout.ValueSat)
+			}
+		}
+		ahi := addressHistoryItem{}
+		ahi.Addresses = ads
+		ahi.Confirmations = int(tx.Confirmations)
+		ahi.Satoshis = totalSat.Int64()
+		ahi.Tx = txToResTx(tx)
+		res.Result.Items = append(res.Result.Items, ahi)
+		// }
 	}
 	return
 }
@@ -551,7 +592,7 @@ func (s *SocketIoServer) getInfo() (res resultGetInfo, err error) {
 	res.Result.Network = s.chain.GetNetworkName()
 	res.Result.Subversion = s.chain.GetSubversion()
 	res.Result.CoinName = s.chain.GetCoinName()
-	res.Result.About = api.BlockbookAbout
+	res.Result.About = api.Text.BlockbookAbout
 	return
 }
 
@@ -590,82 +631,11 @@ type resultGetDetailedTransaction struct {
 }
 
 func (s *SocketIoServer) getDetailedTransaction(txid string) (res resultGetDetailedTransaction, err error) {
-	bestheight, _, err := s.db.GetBestBlock()
-	if err != nil {
-		return
-	}
-	tx, height, err := s.txCache.GetTransaction(txid, bestheight)
+	tx, err := s.api.GetTransaction(txid, false)
 	if err != nil {
 		return res, err
 	}
-	hi := make([]txInputs, 0)
-	ho := make([]txOutputs, 0)
-	for _, vin := range tx.Vin {
-		ais := vin.ScriptSig.Hex
-		ai := txInputs{
-			Script:      &ais,
-			Sequence:    int64(vin.Sequence),
-			OutputIndex: int(vin.Vout),
-		}
-		if vin.Txid != "" {
-			var voutAddr []string
-			// load spending addresses from TxAddresses
-			ta, err := s.db.GetTxAddresses(vin.Txid)
-			if err != nil {
-				return res, err
-			}
-			if ta == nil {
-				// the tx may be in mempool, try to load it from backend
-				otx, _, err := s.txCache.GetTransaction(vin.Txid, bestheight)
-				if err != nil {
-					return res, err
-				}
-				if len(otx.Vout) > int(vin.Vout) {
-					vout := &otx.Vout[vin.Vout]
-					voutAddr, err = s.getAddressesFromVout(vout)
-					if err != nil {
-						return res, err
-					}
-					ai.Satoshis = vout.ValueSat.Int64()
-				}
-			} else {
-				if len(ta.Outputs) > int(vin.Vout) {
-					output := &ta.Outputs[vin.Vout]
-					ai.Satoshis = output.ValueSat.Int64()
-					voutAddr, _, err = output.Addresses(s.chainParser)
-					if err != nil {
-						return res, err
-					}
-				}
-			}
-			if len(voutAddr) > 0 {
-				ai.Address = &voutAddr[0]
-			}
-		}
-		hi = append(hi, ai)
-	}
-	for _, vout := range tx.Vout {
-		aos := vout.ScriptPubKey.Hex
-		ao := txOutputs{
-			Satoshis: vout.ValueSat.Int64(),
-			Script:   &aos,
-		}
-		voutAddr, err := s.getAddressesFromVout(&vout)
-		if err != nil {
-			return res, err
-		}
-		if len(voutAddr) > 0 {
-			ao.Address = &voutAddr[0]
-		}
-		ho = append(ho, ao)
-	}
-	var h int
-	if tx.Confirmations == 0 {
-		h = -1
-	} else {
-		h = int(height)
-	}
-	res.Result = txToResTx(tx, h, hi, ho)
+	res.Result = txToResTx(tx)
 	return
 }
 
@@ -726,8 +696,18 @@ func (s *SocketIoServer) onSubscribe(c *gosocketio.Channel, req []byte) interfac
 			onError(c.Id(), sc, "invalid data", err.Error()+", req: "+r)
 			return nil
 		}
-		for _, a := range addrs {
-			c.Join("bitcoind/addresstxid-" + a)
+		// normalize the addresses to AddressDescriptor
+		descs := make([]bchain.AddressDescriptor, len(addrs))
+		for i, a := range addrs {
+			d, err := s.chainParser.GetAddrDescFromAddress(a)
+			if err != nil {
+				onError(c.Id(), sc, "invalid address "+a, err.Error()+", req: "+r)
+				return nil
+			}
+			descs[i] = d
+		}
+		for _, d := range descs {
+			c.Join("bitcoind/addresstxid-" + string(d))
 		}
 	} else {
 		sc = r[1 : len(r)-1]
@@ -748,13 +728,18 @@ func (s *SocketIoServer) OnNewBlockHash(hash string) {
 }
 
 // OnNewTxAddr notifies users subscribed to bitcoind/addresstxid about new block
-func (s *SocketIoServer) OnNewTxAddr(txid string, addr string, isOutput bool) {
-	data := map[string]interface{}{"address": addr, "txid": txid}
-	if !isOutput {
-		data["input"] = true
-	}
-	c := s.server.BroadcastTo("bitcoind/addresstxid-"+addr, "bitcoind/addresstxid", data)
-	if c > 0 {
-		glog.Info("broadcasting new txid ", txid, " for addr ", addr, " to ", c, " channels")
+func (s *SocketIoServer) OnNewTxAddr(txid string, desc bchain.AddressDescriptor, isOutput bool) {
+	addr, searchable, err := s.chainParser.GetAddressesFromAddrDesc(desc)
+	if err != nil {
+		glog.Error("GetAddressesFromAddrDesc error ", err, " for descriptor ", desc)
+	} else if searchable && len(addr) == 1 {
+		data := map[string]interface{}{"address": addr[0], "txid": txid}
+		if !isOutput {
+			data["input"] = true
+		}
+		c := s.server.BroadcastTo("bitcoind/addresstxid-"+string(desc), "bitcoind/addresstxid", data)
+		if c > 0 {
+			glog.Info("broadcasting new txid ", txid, " for addr ", addr[0], " to ", c, " channels")
+		}
 	}
 }

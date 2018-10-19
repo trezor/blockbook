@@ -5,7 +5,6 @@ package sync
 import (
 	"blockbook/bchain"
 	"blockbook/db"
-	"fmt"
 	"math/big"
 	"os"
 	"reflect"
@@ -27,20 +26,17 @@ func testConnectBlocks(t *testing.T, h *TestHandler) {
 				}
 			}, true)
 			if err != nil {
-				if err.Error() != fmt.Sprintf("connectBlocks interrupted at height %d", rng.Upper) {
+				if !strings.HasPrefix(err.Error(), "connectBlocks interrupted at height") {
 					t.Fatal(err)
 				}
 			}
 
-			height, hash, err := d.GetBestBlock()
+			height, _, err := d.GetBestBlock()
 			if err != nil {
 				t.Fatal(err)
 			}
-			if height != rng.Upper {
-				t.Fatalf("Upper block height mismatch: %d != %d", height, rng.Upper)
-			}
-			if hash != upperHash {
-				t.Fatalf("Upper block hash mismatch: %s != %s", hash, upperHash)
+			if height < rng.Upper {
+				t.Fatalf("Best block height mismatch: %d < %d", height, rng.Upper)
 			}
 
 			t.Run("verifyBlockInfo", func(t *testing.T) { verifyBlockInfo(t, d, h, rng) })
@@ -68,10 +64,10 @@ func testConnectBlocksParallel(t *testing.T, h *TestHandler) {
 				t.Fatal(err)
 			}
 			if height != rng.Upper {
-				t.Fatalf("Upper block height mismatch: %d != %d", height, rng.Upper)
+				t.Fatalf("Best block height mismatch: %d != %d", height, rng.Upper)
 			}
 			if hash != upperHash {
-				t.Fatalf("Upper block hash mismatch: %s != %s", hash, upperHash)
+				t.Fatalf("Best block hash mismatch: %s != %s", hash, upperHash)
 			}
 
 			t.Run("verifyBlockInfo", func(t *testing.T) { verifyBlockInfo(t, d, h, rng) })
@@ -175,6 +171,10 @@ func verifyAddresses(t *testing.T, d *db.RocksDB, h *TestHandler, rng Range) {
 			ta, err := d.GetTxAddresses(tx.Txid)
 			if err != nil {
 				t.Fatal(err)
+			}
+			if ta == nil {
+				t.Errorf("Tx %s: not found in TxAddresses", tx.Txid)
+				continue
 			}
 
 			txInfo := getTxInfo(tx)

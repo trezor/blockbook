@@ -36,6 +36,12 @@ func Test_GetAddrDescFromAddress(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name:    "P2PKH from P2PK",
+			args:    args{address: "1HY6bKYhFH7HF3F48ikvziPHLrEWPGwXcE"},
+			want:    "76a914b563933904dceba5c234e978bea0e9eb8b7e721b88ac",
+			wantErr: false,
+		},
+		{
 			name:    "P2SH",
 			args:    args{address: "321x69Cb9HZLWwAWGiUBT1U81r1zPLnEjL"},
 			want:    "a9140394b3cf9a44782c10105b93962daa8dba304d7f87",
@@ -71,6 +77,70 @@ func Test_GetAddrDescFromAddress(t *testing.T) {
 	}
 }
 
+func Test_GetAddrDescFromVout(t *testing.T) {
+	type args struct {
+		vout bchain.Vout
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    string
+		wantErr bool
+	}{
+		{
+			name:    "P2PKH",
+			args:    args{vout: bchain.Vout{ScriptPubKey: bchain.ScriptPubKey{Hex: "76a914be027bf3eac907bd4ac8cb9c5293b6f37662722088ac"}}},
+			want:    "76a914be027bf3eac907bd4ac8cb9c5293b6f37662722088ac",
+			wantErr: false,
+		},
+		{
+			name:    "P2PK compressed 1P3rU1Nk1pmc2BiWC8dEy9bZa1ZbMp5jfg",
+			args:    args{vout: bchain.Vout{ScriptPubKey: bchain.ScriptPubKey{Hex: "21020e46e79a2a8d12b9b5d12c7a91adb4e454edfae43c0a0cb805427d2ac7613fd9ac"}}},
+			want:    "76a914f1dce4182fce875748c4986b240ff7d7bc3fffb088ac",
+			wantErr: false,
+		},
+		{
+			name:    "P2PK uncompressed 1HY6bKYhFH7HF3F48ikvziPHLrEWPGwXcE",
+			args:    args{vout: bchain.Vout{ScriptPubKey: bchain.ScriptPubKey{Hex: "41041057356b91bfd3efeff5fc0fa8b865faafafb67bd653c5da2cd16ce15c7b86db0e622c8e1e135f68918a23601eb49208c1ac72c7b64a4ee99c396cf788da16ccac"}}},
+			want:    "76a914b563933904dceba5c234e978bea0e9eb8b7e721b88ac",
+			wantErr: false,
+		},
+		{
+			name:    "P2SH",
+			args:    args{vout: bchain.Vout{ScriptPubKey: bchain.ScriptPubKey{Hex: "a9140394b3cf9a44782c10105b93962daa8dba304d7f87"}}},
+			want:    "a9140394b3cf9a44782c10105b93962daa8dba304d7f87",
+			wantErr: false,
+		},
+		{
+			name:    "P2WPKH",
+			args:    args{vout: bchain.Vout{ScriptPubKey: bchain.ScriptPubKey{Hex: "00141c12afc6b2602607fdbc209f2a053c54ecd2c673"}}},
+			want:    "00141c12afc6b2602607fdbc209f2a053c54ecd2c673",
+			wantErr: false,
+		},
+		{
+			name:    "P2WSH",
+			args:    args{vout: bchain.Vout{ScriptPubKey: bchain.ScriptPubKey{Hex: "002003973a40ec94c0d10f6f6f0e7a62ba2044b7d19db6ff2bf60651e17fb29d8d29"}}},
+			want:    "002003973a40ec94c0d10f6f6f0e7a62ba2044b7d19db6ff2bf60651e17fb29d8d29",
+			wantErr: false,
+		},
+	}
+	parser := NewBitcoinParser(GetChainParams("main"), &Configuration{})
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parser.GetAddrDescFromVout(&tt.args.vout)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GetAddrDescFromVout() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			h := hex.EncodeToString(got)
+			if !reflect.DeepEqual(h, tt.want) {
+				t.Errorf("GetAddrDescFromVout() = %v, want %v", h, tt.want)
+			}
+		})
+	}
+}
+
 func Test_GetAddressesFromAddrDesc(t *testing.T) {
 	type args struct {
 		script string
@@ -87,6 +157,20 @@ func Test_GetAddressesFromAddrDesc(t *testing.T) {
 			args:    args{script: "76a914be027bf3eac907bd4ac8cb9c5293b6f37662722088ac"},
 			want:    []string{"1JKgN43B9SyLuZH19H5ECvr4KcfrbVHzZ6"},
 			want2:   true,
+			wantErr: false,
+		},
+		{
+			name:    "P2PK compressed",
+			args:    args{script: "21020e46e79a2a8d12b9b5d12c7a91adb4e454edfae43c0a0cb805427d2ac7613fd9ac"},
+			want:    []string{"1P3rU1Nk1pmc2BiWC8dEy9bZa1ZbMp5jfg"},
+			want2:   false,
+			wantErr: false,
+		},
+		{
+			name:    "P2PK uncompressed",
+			args:    args{script: "41041057356b91bfd3efeff5fc0fa8b865faafafb67bd653c5da2cd16ce15c7b86db0e622c8e1e135f68918a23601eb49208c1ac72c7b64a4ee99c396cf788da16ccac"},
+			want:    []string{"1HY6bKYhFH7HF3F48ikvziPHLrEWPGwXcE"},
+			want2:   false,
 			wantErr: false,
 		},
 		{

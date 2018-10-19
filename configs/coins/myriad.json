@@ -23,9 +23,9 @@
     "package_revision": "satoshilabs-1",
     "system_user": "myriad",
     "version": "0.16.3.0",
-    "binary_url": "https://github.com/myriadteam/myriadcoin/releases/download/v0.16.3.0-beta0/myriadcoin-0.16.3.0-beta0-x86_64-linux-gnu.tar.gz",
+    "binary_url": "https://github.com/myriadteam/myriadcoin/releases/download/v0.16.3.0-beta1/myriadcoin-0.16.3.0-beta1-x86_64-linux-gnu.tar.gz",
     "verification_type": "sha256",
-    "verification_source": "36b076eebb5951d7b2bc3c2d4654c76024fbabb3ea5a82c987d05c462a09324c",
+    "verification_source": "8bb5143f54b47cefc780d93b9ea2d4079a5b4743730d1247cd582628119ae6ae",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
         "bin/myriadcoin-qt"
@@ -37,7 +37,8 @@
     "service_additional_params_template": "",
     "protect_memory": true,
     "mainnet": true,
-    "config_file": "bitcoin.conf",
+    "server_config_file": "bitcoin_like.conf",
+    "client_config_file": "bitcoin_like_client.conf",
     "additional_params": {
         "whitelist": "127.0.0.1"
     }

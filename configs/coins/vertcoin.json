@@ -35,7 +35,8 @@
     "service_additional_params_template": "",
     "protect_memory": true,
     "mainnet": true,
-    "config_file": "bitcoin.conf",
+    "server_config_file": "bitcoin_like.conf",
+    "client_config_file": "bitcoin_like_client.conf",
     "additional_params": {
         "whitelist": "127.0.0.1"
     }
