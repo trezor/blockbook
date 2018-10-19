@@ -158,11 +158,13 @@ func (c *fakeBlockChain) GetTransactionForMempool(txid string) (v *bchain.Tx, er
 }
 
 func (c *fakeBlockChain) EstimateSmartFee(blocks int, conservative bool) (v big.Int, err error) {
-	return v, errors.New("Not implemented")
+	v.SetInt64(int64(blocks) * 100)
+	return
 }
 
 func (c *fakeBlockChain) EstimateFee(blocks int) (v big.Int, err error) {
-	return v, errors.New("Not implemented")
+	v.SetInt64(int64(blocks) * 200)
+	return
 }
 
 func (c *fakeBlockChain) SendRawTransaction(tx string) (v string, err error) {

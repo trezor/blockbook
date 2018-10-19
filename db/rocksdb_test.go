@@ -413,6 +413,8 @@ func testTxCache(t *testing.T, d *RocksDB, b *bchain.Block, tx *bchain.Tx) {
 	if b.Height != height {
 		t.Fatalf("GetTx: got height %v, expected %v", height, b.Height)
 	}
+	// Confirmations are not stored in the DB, set them from input tx
+	gtx.Confirmations = tx.Confirmations
 	if fmt.Sprint(gtx) != fmt.Sprint(tx) {
 		t.Errorf("GetTx: %v, want %v", gtx, tx)
 	}

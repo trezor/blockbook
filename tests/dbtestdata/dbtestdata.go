@@ -57,10 +57,11 @@ func AddressToPubKeyHex(addr string, parser bchain.BlockChainParser) string {
 func GetTestUTXOBlock1(parser bchain.BlockChainParser) *bchain.Block {
 	return &bchain.Block{
 		BlockHeader: bchain.BlockHeader{
-			Height: 225493,
-			Hash:   "0000000076fbbed90fd75b0e18856aa35baa984e9c9d444cf746ad85e94e2997",
-			Size:   1234567,
-			Time:   1534858021,
+			Height:        225493,
+			Hash:          "0000000076fbbed90fd75b0e18856aa35baa984e9c9d444cf746ad85e94e2997",
+			Size:          1234567,
+			Time:          1534858021,
+			Confirmations: 2,
 		},
 		Txs: []bchain.Tx{
 			bchain.Tx{
@@ -81,8 +82,9 @@ func GetTestUTXOBlock1(parser bchain.BlockChainParser) *bchain.Block {
 						ValueSat: *SatB1T1A2,
 					},
 				},
-				Blocktime: 22549300000,
-				Time:      22549300000,
+				Blocktime:     22549300000,
+				Time:          22549300000,
+				Confirmations: 2,
 			},
 			bchain.Tx{
 				Txid: TxidB1T2,
@@ -109,8 +111,9 @@ func GetTestUTXOBlock1(parser bchain.BlockChainParser) *bchain.Block {
 						ValueSat: *SatB1T2A5,
 					},
 				},
-				Blocktime: 22549300001,
-				Time:      22549300001,
+				Blocktime:     22549300001,
+				Time:          22549300001,
+				Confirmations: 2,
 			},
 		},
 	}
@@ -119,10 +122,11 @@ func GetTestUTXOBlock1(parser bchain.BlockChainParser) *bchain.Block {
 func GetTestUTXOBlock2(parser bchain.BlockChainParser) *bchain.Block {
 	return &bchain.Block{
 		BlockHeader: bchain.BlockHeader{
-			Height: 225494,
-			Hash:   "00000000eb0443fd7dc4a1ed5c686a8e995057805f9a161d9a5a77a95e72b7b6",
-			Size:   2345678,
-			Time:   1534859123,
+			Height:        225494,
+			Hash:          "00000000eb0443fd7dc4a1ed5c686a8e995057805f9a161d9a5a77a95e72b7b6",
+			Size:          2345678,
+			Time:          1534859123,
+			Confirmations: 1,
 		},
 		Txs: []bchain.Tx{
 			bchain.Tx{
@@ -155,8 +159,9 @@ func GetTestUTXOBlock2(parser bchain.BlockChainParser) *bchain.Block {
 						ValueSat: *SatB2T1A7,
 					},
 				},
-				Blocktime: 22549400000,
-				Time:      22549400000,
+				Blocktime:     22549400000,
+				Time:          22549400000,
+				Confirmations: 1,
 			},
 			bchain.Tx{
 				Txid: TxidB2T2,
@@ -188,8 +193,9 @@ func GetTestUTXOBlock2(parser bchain.BlockChainParser) *bchain.Block {
 						ValueSat: *SatB2T2A9,
 					},
 				},
-				Blocktime: 22549400001,
-				Time:      22549400001,
+				Blocktime:     22549400001,
+				Time:          22549400001,
+				Confirmations: 1,
 			},
 			// transaction from the same address in the previous block
 			bchain.Tx{
@@ -210,8 +216,9 @@ func GetTestUTXOBlock2(parser bchain.BlockChainParser) *bchain.Block {
 						ValueSat: *SatB2T3A5,
 					},
 				},
-				Blocktime: 22549400002,
-				Time:      22549400002,
+				Blocktime:     22549400002,
+				Time:          22549400002,
+				Confirmations: 1,
 			},
 			// mining transaction
 			bchain.Tx{
@@ -235,8 +242,9 @@ func GetTestUTXOBlock2(parser bchain.BlockChainParser) *bchain.Block {
 						ValueSat:     *SatZero,
 					},
 				},
-				Blocktime: 22549400003,
-				Time:      22549400003,
+				Blocktime:     22549400003,
+				Time:          22549400003,
+				Confirmations: 1,
 			},
 		},
 	}
