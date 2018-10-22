@@ -66,15 +66,12 @@ func GetChainParams(chain string) *chaincfg.Params {
 			panic(err)
 		}
 	}
-	var params *chaincfg.Params
 	switch chain {
 	case "test":
 		return &TestNetParams
 	default:
 		return &MainNetParams
 	}
-
-	return params
 }
 
 // PackTx packs transaction to byte array using protobuf

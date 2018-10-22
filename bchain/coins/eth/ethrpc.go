@@ -416,6 +416,9 @@ func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error
 		return nil, errors.Annotatef(fmt.Errorf("server returned empty transaction list but block header indicates transactions"), "hash %v, height %v", hash, height)
 	}
 	bbh, err := b.ethHeaderToBlockHeader(head)
+	if err != nil {
+		return nil, errors.Annotatef(err, "hash %v, height %v", hash, height)
+	}
 	// TODO - this is probably not the correct size
 	bbh.Size = len(raw)
 	btxs := make([]bchain.Tx, len(body.Transactions))

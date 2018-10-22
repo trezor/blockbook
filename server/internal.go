@@ -82,9 +82,17 @@ func (s *InternalServer) Shutdown(ctx context.Context) error {
 
 func (s *InternalServer) index(w http.ResponseWriter, r *http.Request) {
 	si, err := s.api.GetSystemInfo(true)
+	if err != nil {
+		glog.Error(err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 	buf, err := json.MarshalIndent(si, "", "    ")
 	if err != nil {
 		glog.Error(err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
+
 	w.Write(buf)
 }

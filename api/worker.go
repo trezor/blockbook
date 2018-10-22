@@ -174,6 +174,9 @@ func (w *Worker) GetTransaction(txid string, spendingTxs bool) (*Tx, error) {
 		valOutSat.Add(&valOutSat, &bchainVout.ValueSat)
 		vout.ScriptPubKey.Hex = bchainVout.ScriptPubKey.Hex
 		vout.ScriptPubKey.AddrDesc, vout.ScriptPubKey.Addresses, vout.ScriptPubKey.Searchable, err = w.getAddressesFromVout(bchainVout)
+		if err != nil {
+			glog.Errorf("getAddressesFromVout error %v, %v, output %v", err, vout.ScriptPubKey.AddrDesc, vout.N)
+		}
 		if ta != nil {
 			vout.Spent = ta.Outputs[i].Spent
 			if spendingTxs && vout.Spent {
@@ -363,6 +366,9 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, onlyTxids b
 	}
 	// convert the address to the format defined by the parser
 	addresses, _, err := w.chainParser.GetAddressesFromAddrDesc(addrDesc)
+	if err != nil {
+		return nil, errors.Annotatef(err, "GetAddressesFromAddrDesc %v", addrDesc)
+	}
 	if len(addresses) == 1 {
 		address = addresses[0]
 	}
@@ -505,10 +511,15 @@ func (w *Worker) GetBlock(bid string, page int, txsOnPage int) (*Block, error) {
 	if page < 0 {
 		page = 0
 	}
+	// try to decide if passed string (bid) is block height or block hash
+	// if it's a number, must be less than int32
 	var hash string
 	height, err := strconv.Atoi(bid)
 	if err == nil && height < int(^uint32(0)) {
 		hash, err = w.db.GetBlockHash(uint32(height))
+		if err != nil {
+			hash = bid
+		}
 	} else {
 		hash = bid
 	}
