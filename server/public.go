@@ -116,6 +116,7 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 		serveMux.HandleFunc(path+"blocks", s.htmlTemplateHandler(s.explorerBlocks))
 		serveMux.HandleFunc(path+"block/", s.htmlTemplateHandler(s.explorerBlock))
 		serveMux.HandleFunc(path+"spending/", s.htmlTemplateHandler(s.explorerSpendingTx))
+		serveMux.HandleFunc(path+"sendtx", s.htmlTemplateHandler(s.explorerSendTx))
 	} else {
 		// redirect to wallet requests for tx and address, possibly to external site
 		serveMux.HandleFunc(path+"tx/", s.txRedirect)
@@ -307,10 +308,12 @@ const (
 	addressTpl
 	blocksTpl
 	blockTpl
+	sendTransactionTpl
 
 	tplCount
 )
 
+// TemplateData is used to transfer data to the templates
 type TemplateData struct {
 	CoinName         string
 	CoinShortcut     string
@@ -329,6 +332,8 @@ type TemplateData struct {
 	NextPage         int
 	PagingRange      []int
 	TOSLink          string
+	SendTxHex        string
+	Status           string
 }
 
 func parseTemplates() []*template.Template {
@@ -347,6 +352,7 @@ func parseTemplates() []*template.Template {
 	t[addressTpl] = template.Must(template.New("address").Funcs(templateFuncMap).ParseFiles("./static/templates/address.html", "./static/templates/txdetail.html", "./static/templates/paging.html", "./static/templates/base.html"))
 	t[blocksTpl] = template.Must(template.New("blocks").Funcs(templateFuncMap).ParseFiles("./static/templates/blocks.html", "./static/templates/paging.html", "./static/templates/base.html"))
 	t[blockTpl] = template.Must(template.New("block").Funcs(templateFuncMap).ParseFiles("./static/templates/block.html", "./static/templates/txdetail.html", "./static/templates/paging.html", "./static/templates/base.html"))
+	t[sendTransactionTpl] = template.Must(template.New("block").Funcs(templateFuncMap).ParseFiles("./static/templates/sendtx.html", "./static/templates/base.html"))
 	return t
 }
 
@@ -513,6 +519,28 @@ func (s *PublicServer) explorerSearch(w http.ResponseWriter, r *http.Request) (t
 		}
 	}
 	return errorTpl, nil, api.NewApiError(fmt.Sprintf("No matching records found for '%v'", q), true)
+}
+
+func (s *PublicServer) explorerSendTx(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
+	s.metrics.ExplorerViews.With(common.Labels{"action": "sendtx"}).Inc()
+	data := s.newTemplateData()
+	if r.Method == http.MethodPost {
+		err := r.ParseForm()
+		if err != nil {
+			return sendTransactionTpl, data, err
+		}
+		hex := r.FormValue("hex")
+		if len(hex) > 0 {
+			res, err := s.chain.SendRawTransaction(hex)
+			if err != nil {
+				data.SendTxHex = hex
+				data.Error = &api.ApiError{Text: err.Error(), Public: true}
+				return sendTransactionTpl, data, nil
+			}
+			data.Status = "Transaction sent " + res
+		}
+	}
+	return sendTransactionTpl, data, nil
 }
 
 func getPagingRange(page int, total int) ([]int, int, int) {

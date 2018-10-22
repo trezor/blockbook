@@ -8,10 +8,10 @@ import (
 	"blockbook/common"
 	"blockbook/db"
 	"blockbook/tests/dbtestdata"
-	"io"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -101,11 +101,24 @@ func closeAndDestroyPublicServer(t *testing.T, s *PublicServer, dbpath string) {
 	os.RemoveAll(dbpath)
 }
 
-func newGetRequest(url string, body io.Reader) *http.Request {
-	r, err := http.NewRequest("GET", url, body)
+func newGetRequest(u string) *http.Request {
+	r, err := http.NewRequest("GET", u, nil)
 	if err != nil {
 		glog.Fatal(err)
 	}
+	return r
+}
+
+func newPostRequest(u string, formdata ...string) *http.Request {
+	form := url.Values{}
+	for i := 0; i < len(formdata)-1; i += 2 {
+		form.Add(formdata[i], formdata[i+1])
+	}
+	r, err := http.NewRequest("POST", u, strings.NewReader(form.Encode()))
+	if err != nil {
+		glog.Fatal(err)
+	}
+	r.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 	return r
 }
 
@@ -119,7 +132,7 @@ func httpTests(t *testing.T, ts *httptest.Server) {
 	}{
 		{
 			name:        "explorerTx",
-			r:           newGetRequest(ts.URL+"/tx/fdd824a780cbb718eeb766eb05d83fdefc793a27082cd5e67f856d69798cf7db", nil),
+			r:           newGetRequest(ts.URL + "/tx/fdd824a780cbb718eeb766eb05d83fdefc793a27082cd5e67f856d69798cf7db"),
 			status:      http.StatusOK,
 			contentType: "text/html; charset=utf-8",
 			body: []string{
@@ -135,7 +148,7 @@ func httpTests(t *testing.T, ts *httptest.Server) {
 		},
 		{
 			name:        "explorerAddress",
-			r:           newGetRequest(ts.URL+"/address/mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz", nil),
+			r:           newGetRequest(ts.URL + "/address/mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz"),
 			status:      http.StatusOK,
 			contentType: "text/html; charset=utf-8",
 			body: []string{
@@ -155,7 +168,7 @@ func httpTests(t *testing.T, ts *httptest.Server) {
 		},
 		{
 			name:        "explorerSpendingTx",
-			r:           newGetRequest(ts.URL+"/spending/7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25/0", nil),
+			r:           newGetRequest(ts.URL + "/spending/7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25/0"),
 			status:      http.StatusOK,
 			contentType: "text/html; charset=utf-8",
 			body: []string{
@@ -168,7 +181,7 @@ func httpTests(t *testing.T, ts *httptest.Server) {
 		},
 		{
 			name:        "explorerSpendingTx - not found",
-			r:           newGetRequest(ts.URL+"/spending/123be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25/0", nil),
+			r:           newGetRequest(ts.URL + "/spending/123be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25/0"),
 			status:      http.StatusOK,
 			contentType: "text/html; charset=utf-8",
 			body: []string{
@@ -180,7 +193,7 @@ func httpTests(t *testing.T, ts *httptest.Server) {
 		},
 		{
 			name:        "explorerBlocks",
-			r:           newGetRequest(ts.URL+"/blocks", nil),
+			r:           newGetRequest(ts.URL + "/blocks"),
 			status:      http.StatusOK,
 			contentType: "text/html; charset=utf-8",
 			body: []string{
@@ -196,7 +209,7 @@ func httpTests(t *testing.T, ts *httptest.Server) {
 		},
 		{
 			name:        "explorerBlock",
-			r:           newGetRequest(ts.URL+"/block/225494", nil),
+			r:           newGetRequest(ts.URL + "/block/225494"),
 			status:      http.StatusOK,
 			contentType: "text/html; charset=utf-8",
 			body: []string{
@@ -212,7 +225,7 @@ func httpTests(t *testing.T, ts *httptest.Server) {
 		},
 		{
 			name:        "explorerIndex",
-			r:           newGetRequest(ts.URL+"/", nil),
+			r:           newGetRequest(ts.URL + "/"),
 			status:      http.StatusOK,
 			contentType: "text/html; charset=utf-8",
 			body: []string{
@@ -226,7 +239,7 @@ func httpTests(t *testing.T, ts *httptest.Server) {
 		},
 		{
 			name:        "explorerSearch block height",
-			r:           newGetRequest(ts.URL+"/search?q=225494", nil),
+			r:           newGetRequest(ts.URL + "/search?q=225494"),
 			status:      http.StatusOK,
 			contentType: "text/html; charset=utf-8",
 			body: []string{
@@ -242,7 +255,7 @@ func httpTests(t *testing.T, ts *httptest.Server) {
 		},
 		{
 			name:        "explorerSearch block hash",
-			r:           newGetRequest(ts.URL+"/search?q=00000000eb0443fd7dc4a1ed5c686a8e995057805f9a161d9a5a77a95e72b7b6", nil),
+			r:           newGetRequest(ts.URL + "/search?q=00000000eb0443fd7dc4a1ed5c686a8e995057805f9a161d9a5a77a95e72b7b6"),
 			status:      http.StatusOK,
 			contentType: "text/html; charset=utf-8",
 			body: []string{
@@ -258,7 +271,7 @@ func httpTests(t *testing.T, ts *httptest.Server) {
 		},
 		{
 			name:        "explorerSearch tx",
-			r:           newGetRequest(ts.URL+"/search?q=fdd824a780cbb718eeb766eb05d83fdefc793a27082cd5e67f856d69798cf7db", nil),
+			r:           newGetRequest(ts.URL + "/search?q=fdd824a780cbb718eeb766eb05d83fdefc793a27082cd5e67f856d69798cf7db"),
 			status:      http.StatusOK,
 			contentType: "text/html; charset=utf-8",
 			body: []string{
@@ -274,7 +287,7 @@ func httpTests(t *testing.T, ts *httptest.Server) {
 		},
 		{
 			name:        "explorerSearch address",
-			r:           newGetRequest(ts.URL+"/search?q=mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz", nil),
+			r:           newGetRequest(ts.URL + "/search?q=mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz"),
 			status:      http.StatusOK,
 			contentType: "text/html; charset=utf-8",
 			body: []string{
@@ -294,7 +307,7 @@ func httpTests(t *testing.T, ts *httptest.Server) {
 		},
 		{
 			name:        "explorerSearch not found",
-			r:           newGetRequest(ts.URL+"/search?q=1234", nil),
+			r:           newGetRequest(ts.URL + "/search?q=1234"),
 			status:      http.StatusOK,
 			contentType: "text/html; charset=utf-8",
 			body: []string{
@@ -305,8 +318,33 @@ func httpTests(t *testing.T, ts *httptest.Server) {
 			},
 		},
 		{
+			name:        "explorerSendTx",
+			r:           newGetRequest(ts.URL + "/sendtx"),
+			status:      http.StatusOK,
+			contentType: "text/html; charset=utf-8",
+			body: []string{
+				`<a href="/" class="nav-link">Fake Coin Explorer</a>`,
+				`<h1>Send Raw Transaction</h1>`,
+				`<textarea class="form-control" rows="8" name="hex"></textarea>`,
+				`</html>`,
+			},
+		},
+		{
+			name:        "explorerSendTx POST",
+			r:           newPostRequest(ts.URL+"/sendtx", "hex", "12341234"),
+			status:      http.StatusOK,
+			contentType: "text/html; charset=utf-8",
+			body: []string{
+				`<a href="/" class="nav-link">Fake Coin Explorer</a>`,
+				`<h1>Send Raw Transaction</h1>`,
+				`<textarea class="form-control" rows="8" name="hex">12341234</textarea>`,
+				`<div class="alert alert-danger">Not implemented</div></div>`,
+				`</html>`,
+			},
+		},
+		{
 			name:        "apiIndex",
-			r:           newGetRequest(ts.URL+"/api", nil),
+			r:           newGetRequest(ts.URL + "/api"),
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
@@ -318,7 +356,7 @@ func httpTests(t *testing.T, ts *httptest.Server) {
 		},
 		{
 			name:        "apiBlockIndex",
-			r:           newGetRequest(ts.URL+"/api/block-index/", nil),
+			r:           newGetRequest(ts.URL + "/api/block-index/"),
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
@@ -327,7 +365,7 @@ func httpTests(t *testing.T, ts *httptest.Server) {
 		},
 		{
 			name:        "apiTx",
-			r:           newGetRequest(ts.URL+"/api/tx/05e2e48aeabdd9b75def7b48d756ba304713c2aba7b522bf9dbc893fc4231b07", nil),
+			r:           newGetRequest(ts.URL + "/api/tx/05e2e48aeabdd9b75def7b48d756ba304713c2aba7b522bf9dbc893fc4231b07"),
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
@@ -336,7 +374,7 @@ func httpTests(t *testing.T, ts *httptest.Server) {
 		},
 		{
 			name:        "apiTx - not found",
-			r:           newGetRequest(ts.URL+"/api/tx/1232e48aeabdd9b75def7b48d756ba304713c2aba7b522bf9dbc893fc4231b07", nil),
+			r:           newGetRequest(ts.URL + "/api/tx/1232e48aeabdd9b75def7b48d756ba304713c2aba7b522bf9dbc893fc4231b07"),
 			status:      http.StatusInternalServerError,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
@@ -345,7 +383,7 @@ func httpTests(t *testing.T, ts *httptest.Server) {
 		},
 		{
 			name:        "apiTxSpecific",
-			r:           newGetRequest(ts.URL+"/api/tx-specific/00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840", nil),
+			r:           newGetRequest(ts.URL + "/api/tx-specific/00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840"),
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
@@ -354,7 +392,7 @@ func httpTests(t *testing.T, ts *httptest.Server) {
 		},
 		{
 			name:        "apiAddress",
-			r:           newGetRequest(ts.URL+"/api/address/mv9uLThosiEnGRbVPS7Vhyw6VssbVRsiAw", nil),
+			r:           newGetRequest(ts.URL + "/api/address/mv9uLThosiEnGRbVPS7Vhyw6VssbVRsiAw"),
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
@@ -363,7 +401,7 @@ func httpTests(t *testing.T, ts *httptest.Server) {
 		},
 		{
 			name:        "apiBlock",
-			r:           newGetRequest(ts.URL+"/api/block/225493", nil),
+			r:           newGetRequest(ts.URL + "/api/block/225493"),
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
