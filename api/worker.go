@@ -175,7 +175,7 @@ func (w *Worker) GetTransaction(txid string, spendingTxs bool) (*Tx, error) {
 		vout.ScriptPubKey.Hex = bchainVout.ScriptPubKey.Hex
 		vout.ScriptPubKey.AddrDesc, vout.ScriptPubKey.Addresses, vout.ScriptPubKey.Searchable, err = w.getAddressesFromVout(bchainVout)
 		if err != nil {
-			glog.Errorf("getAddressesFromVout error %v, %v, output %v", err, vout.ScriptPubKey.AddrDesc, vout.N)
+			glog.V(2).Infof("getAddressesFromVout error %v, %v, output %v", err, bchainTx.Txid, bchainVout.N)
 		}
 		if ta != nil {
 			vout.Spent = ta.Outputs[i].Spent
@@ -367,7 +367,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, onlyTxids b
 	// convert the address to the format defined by the parser
 	addresses, _, err := w.chainParser.GetAddressesFromAddrDesc(addrDesc)
 	if err != nil {
-		return nil, errors.Annotatef(err, "GetAddressesFromAddrDesc %v", addrDesc)
+		glog.V(2).Infof("GetAddressesFromAddrDesc error %v, %v", err, addrDesc)
 	}
 	if len(addresses) == 1 {
 		address = addresses[0]
