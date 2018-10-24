@@ -1,0 +1,155 @@
+{
+    "connectBlocks": {
+        "syncRanges": [
+            {"lower": 19996, "upper": 20000}
+        ],
+        "blocks": {
+            "20000": {
+                "height": 20000,
+                "hash": "181a7c4b110ca609df9c7dcc76c5304a02c73fecb768ed659e8025f1f5fb3fb7",
+                "noTxs": 4,
+                "txDetails": [
+                    {
+                        "txid": "eaea085406cbbee0f46002db388e35c38d526d7b82616c41523a6187c35e549f",
+                        "version": 1,
+                        "vin": [
+                            {
+                                "txid": "040cfa1e7b84b29ed80afc6bb98c649de29681c56b84f29d4872bf542fd3419e",
+                                "vout": 0,
+                                "scriptSig": {
+                                    "hex": "493046022100d87440b92f29e0e79159e5ccc7b76efec31209b88ea1bbdfdf0ff463f250eb1f022100908e71f4f19204d4cfaa0abd6b4753a6b3870052a4721a73cd2bad85f916a9fa012103319f1de23237d05be3dbadd03ab952bbc6641f86c77d0189e5592a4298f39ab9"
+                                },
+                                "sequence": 4294967295
+                            }
+                        ],
+                        "vout": [
+                            {
+                                "value": 16.05816437,
+                                "n": 0,
+                                "scriptPubKey": {
+                                    "hex": "76a91428cd329a2572f3cb19204b02251cbcf485a446f788ac"
+                                }
+                            },
+                            {
+                                "value": 1.05256936,
+                                "n": 1,
+                                "scriptPubKey": {
+                                    "hex": "76a914b0ff75d5586d99de1b0a6783c8568ac67f80e3a788ac"
+                                }
+                            }
+                        ],
+                        "hex": "01000000019e41d32f54bf72489df2846bc58196e29d648cb96bfc0ad89eb2847b1efa0c04000000006c493046022100d87440b92f29e0e79159e5ccc7b76efec31209b88ea1bbdfdf0ff463f250eb1f022100908e71f4f19204d4cfaa0abd6b4753a6b3870052a4721a73cd2bad85f916a9fa012103319f1de23237d05be3dbadd03ab952bbc6641f86c77d0189e5592a4298f39ab9ffffffff0275d0b65f000000001976a91428cd329a2572f3cb19204b02251cbcf485a446f788ace8174606000000001976a914b0ff75d5586d99de1b0a6783c8568ac67f80e3a788ac00000000",
+                        "time": 1395288011,
+                        "blocktime": 1395288011
+                    },
+                    {
+                        "txid": "e647a5cd2e01e7d0ad52869d6b33a9be163fcbe7c3080aca2cfa3e366a71f6de",
+                        "version": 1,
+                        "vin": [
+                            {
+                                "txid": "4395b4c27cf240d02fa7092f1e7210bf29ce65d08f9b4a4f05a83aa7690cd4f7",
+                                "vout": 0,
+                                "scriptSig": {
+                                    "hex": "4830450220465aa4cc8b4d6b3d858cbd9af018468e3c0854c7e6e26fef26bf74c30378b4c2022100a512deb0ef2b82a2862c2c3750400a0760cb249d80b4410860f606f12c19e9da012103c1dbd2cd54ac068dba0a70fe2cfc5faa0390b92c9526d15283d0ed8cc1e1e636"
+                                },
+                                "sequence": 4294967295
+                            }
+                        ],
+                        "vout": [
+                            {
+                                "value": 7.27384700,
+                                "n": 0,
+                                "scriptPubKey": {
+                                    "hex": "76a914c92c955e515850c58ad8e0fa26ebb22b0747fe6d88ac"
+                                }
+                            },
+                            {
+                                "value": 3.93954109,
+                                "n": 1,
+                                "scriptPubKey": {
+                                    "hex": "76a914d601816f4e8998e5d1492775f5bd088a5583c65888ac"
+                                }
+                            }
+                        ],
+                        "hex": "0100000001f7d40c69a73aa8054f4a9b8fd065ce29bf10721e2f09a72fd040f27cc2b49543000000006b4830450220465aa4cc8b4d6b3d858cbd9af018468e3c0854c7e6e26fef26bf74c30378b4c2022100a512deb0ef2b82a2862c2c3750400a0760cb249d80b4410860f606f12c19e9da012103c1dbd2cd54ac068dba0a70fe2cfc5faa0390b92c9526d15283d0ed8cc1e1e636ffffffff027c025b2b000000001976a914c92c955e515850c58ad8e0fa26ebb22b0747fe6d88ac3d437b17000000001976a914d601816f4e8998e5d1492775f5bd088a5583c65888ac00000000",
+                        "time": 1395288011,
+                        "blocktime": 1395288011
+                    }
+                ]
+            },
+            "19996": {
+                "height": 19996,
+                "hash": "b637594b407313d29f8c8d2a32c38bb850549e5d430cfc31456c77385e9559b9",
+                "noTxs": 4,
+                "txDetails": [
+                    {
+                        "txid": "583985bdb1f41cd828d349a73f683e7b9921464ccf1fee6184af738fc02a4b25",
+                        "version": 1,
+                        "vin": [
+                            {
+                                "txid": "5a301225da616a5bb6041e61ad66b17676e1d93cede5745902cd892674b71e20",
+                                "vout": 0,
+                                "scriptSig": {
+                                    "hex": "483045022071fbf14909514638fe2b8827f9b4997516dbebf4642c83f39f905b9571b1ee0d022100f84296fd0e3deea165ef016d6773ddb488105cc53e8c83a37fe1903fce8d6f33012102c945500b3466398c723010b8fd3c74173391724c88515e3fed7989eba7a1b096"
+                                },
+                                "sequence": 4294967295
+                            }
+                        ],
+                        "vout": [
+                            {
+                                "value": 27.24067865,
+                                "n": 0,
+                                "scriptPubKey": {
+                                    "hex": "76a91493ad6d2ce1381cd1902f429f159f588011d1fe7888ac"
+                                }
+                            },
+                            {
+                                "value": 6.58598171,
+                                "n": 1,
+                                "scriptPubKey": {
+                                    "hex": "76a91475b80ba9929c5c51dd31fe2ccc4c15e1e18bdb6488ac"
+                                }
+                            }
+                        ],
+                        "hex": "0100000001201eb7742689cd025974e5ed3cd9e17676b166ad611e04b65b6a61da2512305a000000006b483045022071fbf14909514638fe2b8827f9b4997516dbebf4642c83f39f905b9571b1ee0d022100f84296fd0e3deea165ef016d6773ddb488105cc53e8c83a37fe1903fce8d6f33012102c945500b3466398c723010b8fd3c74173391724c88515e3fed7989eba7a1b096ffffffff0219fa5da2000000001976a91493ad6d2ce1381cd1902f429f159f588011d1fe7888ac1b694127000000001976a91475b80ba9929c5c51dd31fe2ccc4c15e1e18bdb6488ac00000000",
+                        "time": 1395287965,
+                        "blocktime": 1395287965
+                    }
+                ]
+            }
+        }
+    },
+    "handleFork": {
+        "syncRanges": [
+            {"lower": 19998, "upper": 20000}
+        ],
+        "fakeBlocks": {
+            "19998": {
+                "height": 19998,
+                "hash": "74316a1bab32d550a572901fd94fb4e27014e0e673ee1d0254fe80af74873fc2"
+            },
+            "19999": {
+                "height": 19999,
+                "hash": "72a3b6ad6b22bfd3479fd1f7392201a227b449d2fe43af7ce7ecb0f2863052e9"
+            },
+            "20000": {
+                "height": 20000,
+                "hash": "04373b83f4e6cc80c09fb72af523944903cc7566a1d75308f0e8bf3d41ba8da4"
+            }
+        },
+        "realBlocks": {
+            "19998": {
+                "height": 19998,
+                "hash": "6fe35692d79e74079dbc3f96b1ae7ce06530f69c8eedcec8c543dbcdba0968f0"
+            },
+            "19999": {
+                "height": 19999,
+                "hash": "f20c6bec1cd52493d8d51b55cde07df3f0742083bfaf22184393f55412edbad3"
+            },
+            "20000": {
+                "height": 20000,
+                "hash": "181a7c4b110ca609df9c7dcc76c5304a02c73fecb768ed659e8025f1f5fb3fb7"
+            }
+        }
+    }
+}
