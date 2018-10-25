@@ -20,7 +20,6 @@ import (
 	"syscall"
 	"time"
 
-	// "github.com/erikdubbelboer/gspt"
 	"github.com/golang/glog"
 	"github.com/juju/errors"
 )
@@ -469,7 +468,7 @@ func storeInternalStateLoop() {
 	var computeRunning bool
 	lastCompute := time.Now()
 	// randomize the duration between ComputeInternalStateColumnStats to avoid peaks after reboot of machine with multiple blockbooks
-	computePeriod := 9*time.Hour + time.Duration(rand.Float64()*float64((2*time.Hour).Nanoseconds()))
+	computePeriod := 23*time.Hour + time.Duration(rand.Float64()*float64((4*time.Hour).Nanoseconds()))
 	lastAppInfo := time.Now()
 	logAppInfoPeriod := 15 * time.Minute
 	glog.Info("storeInternalStateLoop starting with db stats recompute period ", computePeriod)
