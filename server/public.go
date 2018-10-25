@@ -641,7 +641,15 @@ func (s *PublicServer) apiTx(r *http.Request) (interface{}, error) {
 	s.metrics.ExplorerViews.With(common.Labels{"action": "api-tx"}).Inc()
 	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
 		txid := r.URL.Path[i+1:]
-		tx, err = s.api.GetTransaction(txid, true)
+		spendingTxs := false
+		p := r.URL.Query().Get("spending")
+		if len(p) > 0 {
+			spendingTxs, err = strconv.ParseBool(p)
+			if err != nil {
+				return nil, api.NewApiError("Parameter 'spending' cannot be converted to boolean", true)
+			}
+		}
+		tx, err = s.api.GetTransaction(txid, spendingTxs)
 	}
 	return tx, err
 }
