@@ -158,7 +158,11 @@ func (c *fakeBlockChain) GetTransactionForMempool(txid string) (v *bchain.Tx, er
 }
 
 func (c *fakeBlockChain) EstimateSmartFee(blocks int, conservative bool) (v big.Int, err error) {
-	v.SetInt64(int64(blocks) * 100)
+	if conservative == false {
+		v.SetInt64(int64(blocks)*100 - 1)
+	} else {
+		v.SetInt64(int64(blocks) * 100)
+	}
 	return
 }
 
@@ -168,7 +172,10 @@ func (c *fakeBlockChain) EstimateFee(blocks int) (v big.Int, err error) {
 }
 
 func (c *fakeBlockChain) SendRawTransaction(tx string) (v string, err error) {
-	return "", errors.New("Not implemented")
+	if tx == "123456" {
+		return "9876", nil
+	}
+	return "", errors.New("Invalid data")
 }
 
 func (c *fakeBlockChain) ResyncMempool(onNewTxAddr bchain.OnNewTxAddrFunc) (count int, err error) {

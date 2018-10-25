@@ -338,7 +338,7 @@ func httpTests(t *testing.T, ts *httptest.Server) {
 				`<a href="/" class="nav-link">Fake Coin Explorer</a>`,
 				`<h1>Send Raw Transaction</h1>`,
 				`<textarea class="form-control" rows="8" name="hex">12341234</textarea>`,
-				`<div class="alert alert-danger">Not implemented</div></div>`,
+				`<div class="alert alert-danger">Invalid data</div>`,
 				`</html>`,
 			},
 		},
@@ -400,12 +400,21 @@ func httpTests(t *testing.T, ts *httptest.Server) {
 			},
 		},
 		{
-			name:        "apiBlock",
-			r:           newGetRequest(ts.URL + "/api/block/225493"),
+			name:        "apiSendTx",
+			r:           newGetRequest(ts.URL + "/api/sendtx/123456"),
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"page":1,"totalPages":1,"itemsOnPage":1000,"hash":"0000000076fbbed90fd75b0e18856aa35baa984e9c9d444cf746ad85e94e2997","previousblockhash":"","nextblockhash":"","height":225493,"confirmations":2,"size":1234567,"time":1534858021,"version":0,"merkleroot":"","nonce":0,"bits":"","difficulty":0,"TxCount":2,"txs":[{"txid":"00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840","vin":[],"vout":[{"value":"1","n":0,"scriptPubKey":{"hex":"","addresses":["mfcWp7DB6NuaZsExybTTXpVgWz559Np4Ti"]}},{"value":"0.00012345","n":1,"scriptPubKey":{"hex":"","addresses":["mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz"]}}],"blockhash":"0000000076fbbed90fd75b0e18856aa35baa984e9c9d444cf746ad85e94e2997","blockheight":225493,"confirmations":2,"time":1534858021,"blocktime":1534858021,"valueOut":"1.00012345","valueIn":"0","fees":"0","hex":""},{"txid":"effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75","vin":[],"vout":[{"value":"12345.67890123","n":0,"scriptPubKey":{"hex":"","addresses":["mv9uLThosiEnGRbVPS7Vhyw6VssbVRsiAw"]}},{"value":"0.00000001","n":1,"scriptPubKey":{"hex":"","addresses":["2Mz1CYoppGGsLNUGF2YDhTif6J661JitALS"]}},{"value":"0.00009876","n":2,"scriptPubKey":{"hex":"","addresses":["2NEVv9LJmAnY99W1pFoc5UJjVdypBqdnvu1"]}}],"blockhash":"0000000076fbbed90fd75b0e18856aa35baa984e9c9d444cf746ad85e94e2997","blockheight":225493,"confirmations":2,"time":1534858021,"blocktime":1534858021,"valueOut":"12345.679","valueIn":"0","fees":"0","hex":""}]}`,
+				`{"result":"9876"}`,
+			},
+		},
+		{
+			name:        "apiEstimateFee",
+			r:           newGetRequest(ts.URL + "/api/estimatefee/123?conservative=false"),
+			status:      http.StatusOK,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`{"result":"0.00012299"}`,
 			},
 		},
 	}
@@ -522,7 +531,7 @@ func socketioTests(t *testing.T, ts *httptest.Server) {
 		{
 			name: "sendTransaction",
 			req:  socketioReq{"sendTransaction", []interface{}{"010000000001019d64f0c72a0d206001decbffaa722eb1044534c"}},
-			want: `{"error":{"message":"Not implemented"}}`,
+			want: `{"error":{"message":"Invalid data"}}`,
 		},
 	}
 

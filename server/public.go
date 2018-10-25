@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"math/big"
 	"net/http"
 	"reflect"
 	"runtime"
@@ -128,6 +129,8 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 	serveMux.HandleFunc(path+"api/tx-specific/", s.jsonHandler(s.apiTxSpecific))
 	serveMux.HandleFunc(path+"api/address/", s.jsonHandler(s.apiAddress))
 	serveMux.HandleFunc(path+"api/block/", s.jsonHandler(s.apiBlock))
+	serveMux.HandleFunc(path+"api/sendtx/", s.jsonHandler(s.apiSendTx))
+	serveMux.HandleFunc(path+"api/estimatefee/", s.jsonHandler(s.apiEstimateFee))
 	// socket.io interface
 	serveMux.Handle(path+"socket.io/", s.socketio.GetHandler())
 }
@@ -217,7 +220,11 @@ func (s *PublicServer) jsonHandler(handler func(r *http.Request) (interface{}, e
 					glog.Error(getFunctionName(handler), " error: ", err)
 				}
 				if s.debug {
-					data = jsonError{fmt.Sprintf("Internal server error: %v, data %+v", err, data)}
+					if data != nil {
+						data = jsonError{fmt.Sprintf("Internal server error: %v, data %+v", err, data)}
+					} else {
+						data = jsonError{fmt.Sprintf("Internal server error: %v", err)}
+					}
 				} else {
 					data = jsonError{"Internal server error"}
 				}
@@ -537,7 +544,7 @@ func (s *PublicServer) explorerSendTx(w http.ResponseWriter, r *http.Request) (t
 				data.Error = &api.ApiError{Text: err.Error(), Public: true}
 				return sendTransactionTpl, data, nil
 			}
-			data.Status = "Transaction sent " + res
+			data.Status = "Transaction sent, result " + res
 		}
 	}
 	return sendTransactionTpl, data, nil
@@ -676,4 +683,61 @@ func (s *PublicServer) apiBlock(r *http.Request) (interface{}, error) {
 		block, err = s.api.GetBlock(r.URL.Path[i+1:], page, txsInAPI)
 	}
 	return block, err
+}
+
+type resultSendTransaction struct {
+	Result string `json:"result"`
+}
+
+func (s *PublicServer) apiSendTx(r *http.Request) (interface{}, error) {
+	var err error
+	var res resultSendTransaction
+	s.metrics.ExplorerViews.With(common.Labels{"action": "api-sendtx"}).Inc()
+	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
+		hex := r.URL.Path[i+1:]
+		if len(hex) > 0 {
+			if len(hex) > 0 {
+				res.Result, err = s.chain.SendRawTransaction(hex)
+				return res, err
+			}
+		}
+	}
+	return nil, api.NewApiError("Missing tx blob", true)
+}
+
+type resultEstimateFeeAsString struct {
+	Result string `json:"result"`
+}
+
+func (s *PublicServer) apiEstimateFee(r *http.Request) (interface{}, error) {
+	var res resultEstimateFeeAsString
+	s.metrics.ExplorerViews.With(common.Labels{"action": "api-estimatefee"}).Inc()
+	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
+		b := r.URL.Path[i+1:]
+		if len(b) > 0 {
+			blocks, err := strconv.Atoi(b)
+			if err != nil {
+				return nil, api.NewApiError("Parameter 'number of blocks' is not a number", true)
+			}
+			conservative := true
+			c := r.URL.Query().Get("conservative")
+			if len(c) > 0 {
+				conservative, err = strconv.ParseBool(c)
+				if err != nil {
+					return nil, api.NewApiError("Parameter 'conservative' cannot be converted to boolean", true)
+				}
+			}
+			var fee big.Int
+			fee, err = s.chain.EstimateSmartFee(blocks, conservative)
+			if err != nil {
+				fee, err = s.chain.EstimateFee(blocks)
+				if err != nil {
+					return nil, err
+				}
+			}
+			res.Result = s.chainParser.AmountToDecimalString(&fee)
+			return res, nil
+		}
+	}
+	return nil, api.NewApiError("Missing parameter 'number of blocks'", true)
 }

@@ -635,10 +635,6 @@ func (s *SocketIoServer) getDetailedTransaction(txid string) (res resultGetDetai
 	return
 }
 
-type resultSendTransaction struct {
-	Result string `json:"result"`
-}
-
 func (s *SocketIoServer) sendTransaction(tx string) (res resultSendTransaction, err error) {
 	txid, err := s.chain.SendRawTransaction(tx)
 	if err != nil {
