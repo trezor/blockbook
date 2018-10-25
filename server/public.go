@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"io/ioutil"
 	"math/big"
 	"net/http"
 	"reflect"
@@ -191,7 +192,8 @@ func getFunctionName(i interface{}) string {
 
 func (s *PublicServer) jsonHandler(handler func(r *http.Request) (interface{}, error)) func(w http.ResponseWriter, r *http.Request) {
 	type jsonError struct {
-		Error string `json:"error"`
+		Text       string `json:"error"`
+		HTTPStatus int    `json:"-"`
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
 		var data interface{}
@@ -200,33 +202,37 @@ func (s *PublicServer) jsonHandler(handler func(r *http.Request) (interface{}, e
 			if e := recover(); e != nil {
 				glog.Error(getFunctionName(handler), " recovered from panic: ", e)
 				if s.debug {
-					data = jsonError{fmt.Sprint("Internal server error: recovered from panic ", e)}
+					data = jsonError{fmt.Sprint("Internal server error: recovered from panic ", e), http.StatusInternalServerError}
 				} else {
-					data = jsonError{"Internal server error"}
+					data = jsonError{"Internal server error", http.StatusInternalServerError}
 				}
 			}
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
-			if _, isError := data.(jsonError); isError {
-				w.WriteHeader(http.StatusInternalServerError)
+			if e, isError := data.(jsonError); isError {
+				w.WriteHeader(e.HTTPStatus)
 			}
 			json.NewEncoder(w).Encode(data)
 		}()
 		data, err = handler(r)
 		if err != nil || data == nil {
 			if apiErr, ok := err.(*api.ApiError); ok {
-				data = jsonError{apiErr.Error()}
+				if apiErr.Public {
+					data = jsonError{apiErr.Error(), http.StatusBadRequest}
+				} else {
+					data = jsonError{apiErr.Error(), http.StatusInternalServerError}
+				}
 			} else {
 				if err != nil {
 					glog.Error(getFunctionName(handler), " error: ", err)
 				}
 				if s.debug {
 					if data != nil {
-						data = jsonError{fmt.Sprintf("Internal server error: %v, data %+v", err, data)}
+						data = jsonError{fmt.Sprintf("Internal server error: %v, data %+v", err, data), http.StatusInternalServerError}
 					} else {
-						data = jsonError{fmt.Sprintf("Internal server error: %v", err)}
+						data = jsonError{fmt.Sprintf("Internal server error: %v", err), http.StatusInternalServerError}
 					}
 				} else {
-					data = jsonError{"Internal server error"}
+					data = jsonError{"Internal server error", http.StatusInternalServerError}
 				}
 			}
 		}
@@ -700,15 +706,25 @@ type resultSendTransaction struct {
 func (s *PublicServer) apiSendTx(r *http.Request) (interface{}, error) {
 	var err error
 	var res resultSendTransaction
+	var hex string
 	s.metrics.ExplorerViews.With(common.Labels{"action": "api-sendtx"}).Inc()
-	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
-		hex := r.URL.Path[i+1:]
-		if len(hex) > 0 {
-			if len(hex) > 0 {
-				res.Result, err = s.chain.SendRawTransaction(hex)
-				return res, err
-			}
+	if r.Method == http.MethodPost {
+		data, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			return nil, api.NewApiError("Missing tx blob", true)
 		}
+		hex = string(data)
+	} else {
+		if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
+			hex = r.URL.Path[i+1:]
+		}
+	}
+	if len(hex) > 0 {
+		res.Result, err = s.chain.SendRawTransaction(hex)
+		if err != nil {
+			return nil, api.NewApiError(err.Error(), true)
+		}
+		return res, nil
 	}
 	return nil, api.NewApiError("Missing tx blob", true)
 }

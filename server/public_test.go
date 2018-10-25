@@ -109,7 +109,7 @@ func newGetRequest(u string) *http.Request {
 	return r
 }
 
-func newPostRequest(u string, formdata ...string) *http.Request {
+func newPostFormRequest(u string, formdata ...string) *http.Request {
 	form := url.Values{}
 	for i := 0; i < len(formdata)-1; i += 2 {
 		form.Add(formdata[i], formdata[i+1])
@@ -119,6 +119,15 @@ func newPostRequest(u string, formdata ...string) *http.Request {
 		glog.Fatal(err)
 	}
 	r.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+	return r
+}
+
+func newPostRequest(u string, body string) *http.Request {
+	r, err := http.NewRequest("POST", u, strings.NewReader(body))
+	if err != nil {
+		glog.Fatal(err)
+	}
+	r.Header.Add("Content-Type", "application/octet-stream")
 	return r
 }
 
@@ -331,7 +340,7 @@ func httpTests(t *testing.T, ts *httptest.Server) {
 		},
 		{
 			name:        "explorerSendTx POST",
-			r:           newPostRequest(ts.URL+"/sendtx", "hex", "12341234"),
+			r:           newPostFormRequest(ts.URL+"/sendtx", "hex", "12341234"),
 			status:      http.StatusOK,
 			contentType: "text/html; charset=utf-8",
 			body: []string{
@@ -375,7 +384,7 @@ func httpTests(t *testing.T, ts *httptest.Server) {
 		{
 			name:        "apiTx - not found",
 			r:           newGetRequest(ts.URL + "/api/tx/1232e48aeabdd9b75def7b48d756ba304713c2aba7b522bf9dbc893fc4231b07"),
-			status:      http.StatusInternalServerError,
+			status:      http.StatusBadRequest,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
 				`{"error":"Tx not found, Not found"}`,
@@ -401,11 +410,29 @@ func httpTests(t *testing.T, ts *httptest.Server) {
 		},
 		{
 			name:        "apiSendTx",
-			r:           newGetRequest(ts.URL + "/api/sendtx/123456"),
+			r:           newGetRequest(ts.URL + "/api/sendtx/1234567890"),
+			status:      http.StatusBadRequest,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`{"error":"Invalid data"}`,
+			},
+		},
+		{
+			name:        "apiSendTx POST",
+			r:           newPostRequest(ts.URL+"/api/sendtx/", "123456"),
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
 				`{"result":"9876"}`,
+			},
+		},
+		{
+			name:        "apiSendTx POST empty",
+			r:           newPostRequest(ts.URL+"/api/sendtx", ""),
+			status:      http.StatusBadRequest,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`{"error":"Missing tx blob"}`,
 			},
 		},
 		{
