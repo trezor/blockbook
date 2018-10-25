@@ -1,0 +1,67 @@
+{
+  "coin": {
+      "name": "Koto",
+      "shortcut": "KOTO",
+      "label": "Koto",
+      "alias": "koto"
+  },
+  "ports": {
+    "backend_rpc": 8046,
+    "backend_message_queue": 38346,
+    "blockbook_internal": 9046,
+    "blockbook_public": 9146
+  },
+  "ipc": {
+    "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
+    "rpc_user": "rpc",
+    "rpc_pass": "rpc",
+    "rpc_timeout": 25,
+    "message_queue_binding_template": "tcp://127.0.0.1:{{.Ports.BackendMessageQueue}}"
+  },
+  "backend": {
+    "package_name": "backend-koto",
+    "package_revision": "satoshilabs-1",
+    "system_user": "koto",
+    "version": "1.1.2.1",
+    "binary_url": "https://github.com/KotoDevelopers/koto/releases/download/v1.1.2.1/koto-1.1.2.1-linux64.tar.gz",
+    "verification_type": "sha256",
+    "verification_source": "414b854cbf2ea47bec30b06ba4c70dd06d6686221944f833bcf1b7f86fc755d9",
+    "extract_command": "tar -C backend --strip 1 -xf",
+    "exclude_files": [
+        "koto-qt"
+    ],
+    "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/kotod -datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -conf={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf -pid=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",
+    "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/*.log",
+    "postinst_script_template": "HOME={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/koto-fetch-params",
+    "service_type": "forking",
+    "service_additional_params_template": "Environment=\"HOME={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend\"",
+    "protect_memory": false,
+    "mainnet": true,
+    "server_config_file": "bitcoin_like.conf",
+    "client_config_file": "bitcoin_like_client.conf",
+    "additional_params": {
+        "addnode": [
+            "dnsseed.ko-to.org"
+        ]
+    }
+  },
+  "blockbook": {
+    "package_name": "blockbook-koto",
+    "system_user": "blockbook-koto",
+    "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
+    "public_binding_template": ":{{.Ports.BlockbookPublic}}",
+    "explorer_url": "",
+    "additional_params": "",
+    "block_chain": {
+      "parse": true,
+      "mempool_workers": 4,
+      "mempool_sub_workers": 8,
+      "block_addresses_to_keep": 300,
+      "additional_params": {}
+    }
+  },
+  "meta": {
+    "package_maintainer": "Jakub Matys",
+    "package_maintainer_email": "jakub.matys@satoshilabs.com"
+  }
+}
