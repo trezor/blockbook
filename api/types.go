@@ -55,7 +55,7 @@ type Vout struct {
 	ValueSat     big.Int      `json:"-"`
 	N            int          `json:"n"`
 	ScriptPubKey ScriptPubKey `json:"scriptPubKey"`
-	Spent        bool         `json:"-"`
+	Spent        bool         `json:"spent"`
 	SpentTxID    string       `json:"spentTxId,omitempty"`
 	SpentIndex   int          `json:"spentIndex,omitempty"`
 	SpentHeight  int          `json:"spentHeight,omitempty"`

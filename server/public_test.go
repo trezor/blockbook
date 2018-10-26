@@ -378,7 +378,7 @@ func httpTests(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"txid":"05e2e48aeabdd9b75def7b48d756ba304713c2aba7b522bf9dbc893fc4231b07","vin":[{"txid":"effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75","vout":2,"n":0,"scriptSig":{"hex":""},"addresses":["2NEVv9LJmAnY99W1pFoc5UJjVdypBqdnvu1"],"value":"0.00009876"}],"vout":[{"value":"0.00009","n":0,"scriptPubKey":{"hex":"a914e921fc4912a315078f370d959f2c4f7b6d2a683c87","addresses":["2NEVv9LJmAnY99W1pFoc5UJjVdypBqdnvu1"]}}],"blockhash":"00000000eb0443fd7dc4a1ed5c686a8e995057805f9a161d9a5a77a95e72b7b6","blockheight":225494,"confirmations":1,"time":22549400002,"blocktime":22549400002,"valueOut":"0.00009","valueIn":"0.00009876","fees":"0.00000876","hex":""}`,
+				`{"txid":"05e2e48aeabdd9b75def7b48d756ba304713c2aba7b522bf9dbc893fc4231b07","vin":[{"txid":"effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75","vout":2,"n":0,"scriptSig":{"hex":""},"addresses":["2NEVv9LJmAnY99W1pFoc5UJjVdypBqdnvu1"],"value":"0.00009876"}],"vout":[{"value":"0.00009","n":0,"scriptPubKey":{"hex":"a914e921fc4912a315078f370d959f2c4f7b6d2a683c87","addresses":["2NEVv9LJmAnY99W1pFoc5UJjVdypBqdnvu1"]},"spent":false}],"blockhash":"00000000eb0443fd7dc4a1ed5c686a8e995057805f9a161d9a5a77a95e72b7b6","blockheight":225494,"confirmations":1,"time":22549400002,"blocktime":22549400002,"valueOut":"0.00009","valueIn":"0.00009876","fees":"0.00000876","hex":""}`,
 			},
 		},
 		{
