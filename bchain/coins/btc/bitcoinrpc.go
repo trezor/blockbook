@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcd/wire"
-
 	"github.com/golang/glog"
 	"github.com/juju/errors"
 )
@@ -36,6 +35,7 @@ type BitcoinRPC struct {
 	RPCMarshaler RPCMarshaler
 }
 
+// Configuration represents json config file
 type Configuration struct {
 	CoinName                 string `json:"coin_name"`
 	CoinShortcut             string `json:"coin_shortcut"`
@@ -580,7 +580,7 @@ func (b *BitcoinRPC) GetBlockWithoutHeader(hash string, height uint32) (*bchain.
 	return block, nil
 }
 
-// GetBlockRaw returns block with given hash as bytes.
+// GetBlockRaw returns block with given hash as bytes
 func (b *BitcoinRPC) GetBlockRaw(hash string) ([]byte, error) {
 	glog.V(1).Info("rpc: getblock (verbosity=0) ", hash)
 
@@ -602,7 +602,7 @@ func (b *BitcoinRPC) GetBlockRaw(hash string) ([]byte, error) {
 	return hex.DecodeString(res.Result)
 }
 
-// GetBlockFull returns block with given hash.
+// GetBlockFull returns block with given hash
 func (b *BitcoinRPC) GetBlockFull(hash string) (*bchain.Block, error) {
 	glog.V(1).Info("rpc: getblock (verbosity=2) ", hash)
 
@@ -624,7 +624,7 @@ func (b *BitcoinRPC) GetBlockFull(hash string) (*bchain.Block, error) {
 	return &res.Result, nil
 }
 
-// GetMempool returns transactions in mempool.
+// GetMempool returns transactions in mempool
 func (b *BitcoinRPC) GetMempool() ([]string, error) {
 	glog.V(1).Info("rpc: getrawmempool")
 
@@ -641,7 +641,7 @@ func (b *BitcoinRPC) GetMempool() ([]string, error) {
 	return res.Result, nil
 }
 
-// GetTransactionForMempool returns a transaction by the transaction ID.
+// GetTransactionForMempool returns a transaction by the transaction ID
 // It could be optimized for mempool, i.e. without block time and confirmations
 func (b *BitcoinRPC) GetTransactionForMempool(txid string) (*bchain.Tx, error) {
 	glog.V(1).Info("rpc: getrawtransaction nonverbose ", txid)
@@ -668,7 +668,7 @@ func (b *BitcoinRPC) GetTransactionForMempool(txid string) (*bchain.Tx, error) {
 	return tx, nil
 }
 
-// GetTransaction returns a transaction by the transaction ID.
+// GetTransaction returns a transaction by the transaction ID
 func (b *BitcoinRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 	r, err := b.GetTransactionSpecific(txid)
 	if err != nil {
@@ -702,7 +702,7 @@ func (b *BitcoinRPC) GetTransactionSpecific(txid string) (json.RawMessage, error
 
 // ResyncMempool gets mempool transactions and maps output scripts to transactions.
 // ResyncMempool is not reentrant, it should be called from a single thread.
-// It returns number of transactions in mempool
+// Return value is number of transactions in mempool
 func (b *BitcoinRPC) ResyncMempool(onNewTxAddr bchain.OnNewTxAddrFunc) (int, error) {
 	return b.Mempool.Resync(onNewTxAddr)
 }

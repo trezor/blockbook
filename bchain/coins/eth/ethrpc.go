@@ -10,14 +10,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/glog"
-	"github.com/juju/errors"
-
 	ethereum "github.com/ethereum/go-ethereum"
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/golang/glog"
+	"github.com/juju/errors"
 )
 
 // EthereumNet type specifies the type of ethereum network
@@ -30,6 +29,7 @@ const (
 	TestNet EthereumNet = 3
 )
 
+// Configuration represents json config file
 type Configuration struct {
 	CoinName     string `json:"coin_name"`
 	CoinShortcut string `json:"coin_shortcut"`
@@ -269,14 +269,30 @@ func (b *EthereumRPC) GetChainInfo() (*bchain.ChainInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	rv := &bchain.ChainInfo{}
+	h, err := b.getBestHeader()
+	if err != nil {
+		return nil, err
+	}
+	var ver, protocol string
+	if err := b.rpc.CallContext(ctx, &ver, "web3_clientVersion"); err != nil {
+		return nil, err
+	}
+	if err := b.rpc.CallContext(ctx, &protocol, "eth_protocolVersion"); err != nil {
+		return nil, err
+	}
+	rv := &bchain.ChainInfo{
+		Blocks:          int(h.Number.Int64()),
+		Bestblockhash:   ethHashToHash(h.Hash()),
+		Difficulty:      h.Difficulty.String(),
+		Version:         ver,
+		ProtocolVersion: protocol,
+	}
 	idi := int(id.Uint64())
 	if idi == 1 {
 		rv.Chain = "mainnet"
 	} else {
 		rv.Chain = "testnet " + strconv.Itoa(idi)
 	}
-	// TODO  - return more information about the chain
 	return rv, nil
 }
 
@@ -302,6 +318,7 @@ func (b *EthereumRPC) getBestHeader() (*ethtypes.Header, error) {
 	return b.bestHeader, nil
 }
 
+// GetBestBlockHash returns hash of the tip of the best-block-chain
 func (b *EthereumRPC) GetBestBlockHash() (string, error) {
 	h, err := b.getBestHeader()
 	if err != nil {
@@ -310,6 +327,7 @@ func (b *EthereumRPC) GetBestBlockHash() (string, error) {
 	return ethHashToHash(h.Hash()), nil
 }
 
+// GetBestBlockHeight returns height of the tip of the best-block-chain
 func (b *EthereumRPC) GetBestBlockHeight() (uint32, error) {
 	h, err := b.getBestHeader()
 	if err != nil {
@@ -319,6 +337,7 @@ func (b *EthereumRPC) GetBestBlockHeight() (uint32, error) {
 	return uint32(h.Number.Uint64()), nil
 }
 
+// GetBlockHash returns hash of block in best-block-chain at given height
 func (b *EthereumRPC) GetBlockHash(height uint32) (string, error) {
 	var n big.Int
 	n.SetUint64(uint64(height))
@@ -350,6 +369,7 @@ func (b *EthereumRPC) ethHeaderToBlockHeader(h *ethtypes.Header) (*bchain.BlockH
 	}, nil
 }
 
+// GetBlockHeader returns header of block with given hash
 func (b *EthereumRPC) GetBlockHeader(hash string) (*bchain.BlockHeader, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
 	defer cancel()
@@ -512,6 +532,7 @@ type rpcMempoolBlock struct {
 	Transactions []string `json:"transactions"`
 }
 
+// GetMempool returns transactions in mempool
 func (b *EthereumRPC) GetMempool() ([]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
 	defer cancel()
@@ -553,7 +574,7 @@ func (b *EthereumRPC) EstimateSmartFee(blocks int, conservative bool) (big.Int, 
 	return r, nil
 }
 
-// SendRawTransaction sends raw transaction.
+// SendRawTransaction sends raw transaction
 func (b *EthereumRPC) SendRawTransaction(hex string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
 	defer cancel()
@@ -574,6 +595,9 @@ func (b *EthereumRPC) SendRawTransaction(hex string) (string, error) {
 	return result, nil
 }
 
+// ResyncMempool gets mempool transactions and maps output scripts to transactions.
+// ResyncMempool is not reentrant, it should be called from a single thread.
+// Return value is number of transactions in mempool
 func (b *EthereumRPC) ResyncMempool(onNewTxAddr bchain.OnNewTxAddrFunc) (int, error) {
 	return b.Mempool.Resync(onNewTxAddr)
 }
@@ -588,10 +612,12 @@ func (b *EthereumRPC) GetMempoolTransactionsForAddrDesc(addrDesc bchain.AddressD
 	return b.Mempool.GetAddrDescTransactions(addrDesc)
 }
 
+// GetMempoolEntry is not supported by etherem
 func (b *EthereumRPC) GetMempoolEntry(txid string) (*bchain.MempoolEntry, error) {
-	return nil, errors.New("GetMempoolEntry: not implemented")
+	return nil, errors.New("GetMempoolEntry: not supported")
 }
 
+// GetChainParser returns ethereum BlockChainParser
 func (b *EthereumRPC) GetChainParser() bchain.BlockChainParser {
 	return b.Parser
 }
