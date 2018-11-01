@@ -10,6 +10,7 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/bsm/go-vlq"
@@ -138,7 +139,17 @@ func (d *RocksDB) Reopen() error {
 	return nil
 }
 
+func atoi(s string) int {
+	i, err := strconv.Atoi(s)
+	if err != nil {
+		return 0
+	}
+	return i
+}
+
+// GetMemoryStats returns memory usage statistics as reported by RocksDB
 func (d *RocksDB) GetMemoryStats() string {
+	var total, indexAndFilter, memtable int
 	type columnStats struct {
 		name           string
 		indexAndFilter string
@@ -149,21 +160,20 @@ func (d *RocksDB) GetMemoryStats() string {
 		cs[i].name = cfNames[i]
 		cs[i].indexAndFilter = d.db.GetPropertyCF("rocksdb.estimate-table-readers-mem", d.cfh[i])
 		cs[i].memtable = d.db.GetPropertyCF("rocksdb.cur-size-all-mem-tables", d.cfh[i])
+		indexAndFilter += atoi(cs[i].indexAndFilter)
+		memtable += atoi(cs[i].memtable)
 	}
 	m := struct {
 		cacheUsage       int
 		pinnedCacheUsage int
-		indexAndFilter   string
-		memtable         string
 		columns          []columnStats
 	}{
 		cacheUsage:       d.cache.GetUsage(),
 		pinnedCacheUsage: d.cache.GetPinnedUsage(),
-		indexAndFilter:   d.db.GetProperty("rocksdb.estimate-table-readers-mem"),
-		memtable:         d.db.GetProperty("rocksdb.cur-size-all-mem-tables"),
 		columns:          cs,
 	}
-	return fmt.Sprintf("%+v", m)
+	total = m.cacheUsage + indexAndFilter + memtable
+	return fmt.Sprintf("Total %d, indexAndFilter %d, memtable %d, %+v", total, indexAndFilter, memtable, m)
 }
 
 // StopIteration is returned by callback function to signal stop of iteration
@@ -358,6 +368,7 @@ func (d *RocksDB) resetValueSatToZero(valueSat *big.Int, addrDesc bchain.Address
 	valueSat.SetInt64(0)
 }
 
+// GetAndResetConnectBlockStats gets statistics about cache usage in connect blocks and resets the counters
 func (d *RocksDB) GetAndResetConnectBlockStats() string {
 	s := fmt.Sprintf("%+v", d.cbs)
 	d.cbs = connectBlockStats{}
@@ -649,6 +660,7 @@ func (d *RocksDB) getBlockTxs(height uint32) ([]blockTxs, error) {
 	return bt, nil
 }
 
+// GetAddrDescBalance returns AddrBalance for given addrDesc
 func (d *RocksDB) GetAddrDescBalance(addrDesc bchain.AddressDescriptor) (*AddrBalance, error) {
 	val, err := d.db.GetCF(d.ro, d.cfh[cfAddressBalance], addrDesc)
 	if err != nil {
@@ -1388,6 +1400,8 @@ func (d *RocksDB) LoadInternalState(rpcCoin string) (*common.InternalState, erro
 	return is, nil
 }
 
+// SetInconsistentState sets the internal state to DbStateInconsistent or DbStateOpen based on inconsistent parameter
+// db in left in DbStateInconsistent state cannot be used and must be recreated
 func (d *RocksDB) SetInconsistentState(inconsistent bool) error {
 	if d.is == nil {
 		return errors.New("Internal state not created")
