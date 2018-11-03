@@ -1,0 +1,40 @@
+{{define "main" -}}
+[Unit]
+Description=Blockbook daemon ({{.Coin.Name}})
+After=network.target
+Wants={{.Backend.PackageName}}.service
+
+[Service]
+ExecStart={{.Env.BlockbookInstallPath}}/{{.Coin.Alias}}/bin/blockbook -blockchaincfg={{.Env.BlockbookInstallPath}}/{{.Coin.Alias}}/config/blockchaincfg.json -datadir={{.Env.BlockbookDataPath}}/{{.Coin.Alias}}/blockbook/db -sync -internal={{template "Blockbook.InternalBindingTemplate" .}} -public={{template "Blockbook.PublicBindingTemplate" .}} -certfile={{.Env.BlockbookInstallPath}}/{{.Coin.Alias}}/cert/blockbook -explorer={{.Blockbook.ExplorerURL}} -log_dir={{.Env.BlockbookInstallPath}}/{{.Coin.Alias}}/logs {{.Blockbook.AdditionalParams}}
+User={{.Blockbook.SystemUser}}
+Type=simple
+Restart=on-failure
+TimeoutStopSec=300
+WorkingDirectory={{.Env.BlockbookInstallPath}}/{{.Coin.Alias}}
+
+# Resource limits
+LimitNOFILE=500000
+
+# Hardening measures
+####################
+
+# Provide a private /tmp and /var/tmp.
+PrivateTmp=true
+
+# Mount /usr, /boot/ and /etc read-only for the process.
+ProtectSystem=full
+
+# Disallow the process and all of its children to gain
+# new privileges through execve().
+NoNewPrivileges=true
+
+# Use a new /dev namespace only populated with API pseudo devices
+# such as /dev/null, /dev/zero and /dev/random.
+PrivateDevices=true
+
+# Deny the creation of writable and executable memory mappings.
+MemoryDenyWriteExecute=true
+
+[Install]
+WantedBy=multi-user.target
+{{end}}

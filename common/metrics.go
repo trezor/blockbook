@@ -21,6 +21,7 @@ type Metrics struct {
 	MempoolSize           prometheus.Gauge
 	DbColumnRows          *prometheus.GaugeVec
 	DbColumnSize          *prometheus.GaugeVec
+	BlockbookAppInfo      *prometheus.GaugeVec
 }
 
 type Labels = prometheus.Labels
@@ -138,6 +139,14 @@ func GetMetrics(coin string) (*Metrics, error) {
 			ConstLabels: Labels{"coin": coin},
 		},
 		[]string{"column"},
+	)
+	metrics.BlockbookAppInfo = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name:        "blockbook_app_info",
+			Help:        "Information about blockbook and backend application versions",
+			ConstLabels: Labels{"coin": coin},
+		},
+		[]string{"blockbook_version", "blockbook_commit", "blockbook_buildtime", "backend_version", "backend_subversion", "backend_protocol_version"},
 	)
 
 	v := reflect.ValueOf(metrics)

@@ -1,6 +1,0 @@
-#!/usr/bin/dh-exec
-blockbook /opt/coins/blockbook/litecoin_testnet/bin
-cert /opt/coins/blockbook/litecoin_testnet
-static /opt/coins/blockbook/litecoin_testnet
-configs/litecoin_testnet.json => /opt/coins/blockbook/litecoin_testnet/config/blockchaincfg.json
-logrotate.sh /opt/coins/blockbook/litecoin_testnet/bin

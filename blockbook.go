@@ -1,10 +1,18 @@
 package main
 
 import (
+	"blockbook/api"
+	"blockbook/bchain"
+	"blockbook/bchain/coins"
+	"blockbook/common"
+	"blockbook/db"
+	"blockbook/server"
 	"context"
 	"flag"
 	"log"
 	"math/rand"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"strings"
@@ -12,18 +20,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/juju/errors"
-
-	"blockbook/bchain"
-	"blockbook/bchain/coins"
-	"blockbook/common"
-	"blockbook/db"
-	"blockbook/server"
-
 	"github.com/golang/glog"
-
-	"net/http"
-	_ "net/http/pprof"
+	"github.com/juju/errors"
 )
 
 // debounce too close requests for resync
@@ -38,7 +36,9 @@ const storeInternalStatePeriodMs = 59699
 var (
 	blockchain = flag.String("blockchaincfg", "", "path to blockchain RPC service configuration json file")
 
-	dbPath = flag.String("datadir", "./data", "path to database directory")
+	dbPath         = flag.String("datadir", "./data", "path to database directory")
+	dbCache        = flag.Int("dbcache", 1<<29, "size of the rocksdb cache")
+	dbMaxOpenFiles = flag.Int("dbmaxopenfiles", 1<<14, "max open files by rocksdb")
 
 	blockFrom      = flag.Int("blockheight", -1, "height of the starting block")
 	blockUntil     = flag.Int("blockuntil", -1, "height of the final block")
@@ -50,15 +50,17 @@ var (
 	repair      = flag.Bool("repair", false, "repair the database")
 	prof        = flag.String("prof", "", "http server binding [address]:port of the interface to profiling data /debug/pprof/ (default no profiling)")
 
-	syncChunk   = flag.Int("chunk", 100, "block chunk size for processing")
-	syncWorkers = flag.Int("workers", 8, "number of workers to process blocks")
+	syncChunk   = flag.Int("chunk", 100, "block chunk size for processing in bulk mode")
+	syncWorkers = flag.Int("workers", 8, "number of workers to process blocks in bulk mode")
 	dryRun      = flag.Bool("dryrun", false, "do not index blocks, only download")
 
-	httpServerBinding = flag.String("httpserver", "", "http server binding [address]:port, (default no http server)")
+	debugMode = flag.Bool("debug", false, "debug mode, return more verbose errors, reload templates on each request")
 
-	socketIoBinding = flag.String("socketio", "", "socketio server binding [address]:port[/path], (default no socket.io server)")
+	internalBinding = flag.String("internal", "", "internal http server binding [address]:port, (default no internal server)")
 
-	certFiles = flag.String("certfile", "", "to enable SSL specify path to certificate files without extension, expecting <certfile>.crt and <certfile>.key, (default no SSL)")
+	publicBinding = flag.String("public", "", "public http server binding [address]:port[/path] (default no public server)")
+
+	certFiles = flag.String("certfile", "", "to enable SSL specify path to certificate files without extension, expecting <certfile>.crt and <certfile>.key (default no SSL)")
 
 	explorerURL = flag.String("explorer", "", "address of blockchain explorer")
 
@@ -83,10 +85,11 @@ var (
 	chain                      bchain.BlockChain
 	index                      *db.RocksDB
 	txCache                    *db.TxCache
+	metrics                    *common.Metrics
 	syncWorker                 *db.SyncWorker
 	internalState              *common.InternalState
-	callbacksOnNewBlockHash    []func(hash string)
-	callbacksOnNewTxAddr       []func(txid string, addr string)
+	callbacksOnNewBlock        []bchain.OnNewBlockFunc
+	callbacksOnNewTxAddr       []bchain.OnNewTxAddrFunc
 	chanOsSignal               chan os.Signal
 	inShutdown                 int32
 )
@@ -129,7 +132,7 @@ func main() {
 	chanOsSignal = make(chan os.Signal, 1)
 	signal.Notify(chanOsSignal, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 
-	glog.Infof("Blockbook: %+v", common.GetVersionInfo())
+	glog.Infof("Blockbook: %+v, debug mode %v", common.GetVersionInfo(), *debugMode)
 
 	if *prof != "" {
 		go func() {
@@ -148,12 +151,14 @@ func main() {
 		glog.Fatal("Missing blockchaincfg configuration parameter")
 	}
 
-	coin, err := coins.GetCoinNameFromConfig(*blockchain)
+	coin, coinShortcut, coinLabel, err := coins.GetCoinNameFromConfig(*blockchain)
 	if err != nil {
 		glog.Fatal("config: ", err)
 	}
 
-	metrics, err := common.GetMetrics(coin)
+	// gspt.SetProcTitle("blockbook-" + normalizeName(coin))
+
+	metrics, err = common.GetMetrics(coin)
 	if err != nil {
 		glog.Fatal("metrics: ", err)
 	}
@@ -162,20 +167,24 @@ func main() {
 		glog.Fatal("rpc: ", err)
 	}
 
-	index, err = db.NewRocksDB(*dbPath, chain.GetChainParser(), metrics)
+	index, err = db.NewRocksDB(*dbPath, *dbCache, *dbMaxOpenFiles, chain.GetChainParser(), metrics)
 	if err != nil {
 		glog.Fatal("rocksDB: ", err)
 	}
 	defer index.Close()
 
-	internalState, err = newInternalState(coin, index)
+	internalState, err = newInternalState(coin, coinShortcut, coinLabel, index)
 	if err != nil {
 		glog.Error("internalState: ", err)
 		return
 	}
 	index.SetInternalState(internalState)
 	if internalState.DbState != common.DbStateClosed {
-		glog.Warning("internalState: database in not closed state ", internalState.DbState, ", possibly previous ungraceful shutdown")
+		if internalState.DbState == common.DbStateInconsistent {
+			glog.Error("internalState: database is in inconsistent state and cannot be used")
+			return
+		}
+		glog.Warning("internalState: database was left in open state, possibly previous ungraceful shutdown")
 	}
 
 	if *computeColumnStats {
@@ -227,23 +236,28 @@ func main() {
 		return
 	}
 
-	if txCache, err = db.NewTxCache(index, chain, metrics, !*noTxCache); err != nil {
+	if txCache, err = db.NewTxCache(index, chain, metrics, internalState, !*noTxCache); err != nil {
 		glog.Error("txCache ", err)
 		return
 	}
 
-	var httpServer *server.HTTPServer
-	if *httpServerBinding != "" {
-		httpServer, err = server.NewHTTPServer(*httpServerBinding, *certFiles, index, chain, txCache, internalState)
+	// report BlockbookAppInfo metric, only log possible error
+	if err = blockbookAppInfoMetric(index, chain, txCache, internalState, metrics); err != nil {
+		glog.Error("blockbookAppInfoMetric ", err)
+	}
+
+	var internalServer *server.InternalServer
+	if *internalBinding != "" {
+		internalServer, err = server.NewInternalServer(*internalBinding, *certFiles, index, chain, txCache, internalState)
 		if err != nil {
 			glog.Error("https: ", err)
 			return
 		}
 		go func() {
-			err = httpServer.Run()
+			err = internalServer.Run()
 			if err != nil {
 				if err.Error() == "http: Server closed" {
-					glog.Info(err)
+					glog.Info("internal server: closed")
 				} else {
 					glog.Error(err)
 					return
@@ -252,45 +266,51 @@ func main() {
 		}()
 	}
 
-	if *synchronize {
-		if err := syncWorker.ResyncIndex(nil); err != nil {
-			glog.Error("resyncIndex ", err)
-			return
-		}
-		if _, err = chain.ResyncMempool(nil); err != nil {
-			glog.Error("resyncMempool ", err)
-			return
-		}
-	}
-
-	var socketIoServer *server.SocketIoServer
-	if *socketIoBinding != "" {
-		socketIoServer, err = server.NewSocketIoServer(
-			*socketIoBinding, *certFiles, index, chain, txCache, *explorerURL, metrics, internalState)
+	var publicServer *server.PublicServer
+	if *publicBinding != "" {
+		// start public server in limited functionality, extend it after sync is finished by calling ConnectFullPublicInterface
+		publicServer, err = server.NewPublicServer(*publicBinding, *certFiles, index, chain, txCache, *explorerURL, metrics, internalState, *debugMode)
 		if err != nil {
 			glog.Error("socketio: ", err)
 			return
 		}
 		go func() {
-			err = socketIoServer.Run()
+			err = publicServer.Run()
 			if err != nil {
 				if err.Error() == "http: Server closed" {
-					glog.Info(err)
+					glog.Info("public server: closed")
 				} else {
 					glog.Error(err)
 					return
 				}
 			}
 		}()
-		callbacksOnNewBlockHash = append(callbacksOnNewBlockHash, socketIoServer.OnNewBlockHash)
-		callbacksOnNewTxAddr = append(callbacksOnNewTxAddr, socketIoServer.OnNewTxAddr)
+		callbacksOnNewBlock = append(callbacksOnNewBlock, publicServer.OnNewBlock)
+		callbacksOnNewTxAddr = append(callbacksOnNewTxAddr, publicServer.OnNewTxAddr)
 	}
 
 	if *synchronize {
-		// start the synchronization loops after the server interfaces are started
+		internalState.SyncMode = true
+		internalState.InitialSync = true
+		if err := syncWorker.ResyncIndex(nil, true); err != nil {
+			glog.Error("resyncIndex ", err)
+			return
+		}
+		var mempoolCount int
+		if mempoolCount, err = chain.ResyncMempool(nil); err != nil {
+			glog.Error("resyncMempool ", err)
+			return
+		}
+		internalState.FinishedMempoolSync(mempoolCount)
 		go syncIndexLoop()
 		go syncMempoolLoop()
-		go storeInternalStateLoop()
+		internalState.InitialSync = false
+	}
+	go storeInternalStateLoop()
+
+	if *publicBinding != "" {
+		// start full public interface
+		publicServer.ConnectFullPublicInterface()
 	}
 
 	if *blockFrom >= 0 {
@@ -314,8 +334,8 @@ func main() {
 		}
 	}
 
-	if httpServer != nil || socketIoServer != nil || chain != nil {
-		waitForSignalAndShutdown(httpServer, socketIoServer, chain, 10*time.Second)
+	if internalServer != nil || publicServer != nil || chain != nil {
+		waitForSignalAndShutdown(internalServer, publicServer, chain, 10*time.Second)
 	}
 
 	if *synchronize {
@@ -328,11 +348,36 @@ func main() {
 	}
 }
 
-func newInternalState(coin string, d *db.RocksDB) (*common.InternalState, error) {
+func blockbookAppInfoMetric(db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxCache, is *common.InternalState, metrics *common.Metrics) error {
+	api, err := api.NewWorker(db, chain, txCache, is)
+	if err != nil {
+		return err
+	}
+	si, err := api.GetSystemInfo(false)
+	if err != nil {
+		return err
+	}
+	metrics.BlockbookAppInfo.Reset()
+	metrics.BlockbookAppInfo.With(common.Labels{
+		"blockbook_version":        si.Blockbook.Version,
+		"blockbook_commit":         si.Blockbook.GitCommit,
+		"blockbook_buildtime":      si.Blockbook.BuildTime,
+		"backend_version":          si.Backend.Version,
+		"backend_subversion":       si.Backend.Subversion,
+		"backend_protocol_version": si.Backend.ProtocolVersion}).Set(float64(0))
+	return nil
+}
+
+func newInternalState(coin, coinShortcut, coinLabel string, d *db.RocksDB) (*common.InternalState, error) {
 	is, err := d.LoadInternalState(coin)
 	if err != nil {
 		return nil, err
 	}
+	is.CoinShortcut = coinShortcut
+	if coinLabel == "" {
+		coinLabel = coin
+	}
+	is.CoinLabel = coinLabel
 	name, err := os.Hostname()
 	if err != nil {
 		glog.Error("get hostname ", err)
@@ -385,16 +430,16 @@ func syncIndexLoop() {
 	glog.Info("syncIndexLoop starting")
 	// resync index about every 15 minutes if there are no chanSyncIndex requests, with debounce 1 second
 	tickAndDebounce(time.Duration(*resyncIndexPeriodMs)*time.Millisecond, debounceResyncIndexMs*time.Millisecond, chanSyncIndex, func() {
-		if err := syncWorker.ResyncIndex(onNewBlockHash); err != nil {
+		if err := syncWorker.ResyncIndex(onNewBlockHash, false); err != nil {
 			glog.Error("syncIndexLoop ", errors.ErrorStack(err))
 		}
 	})
 	glog.Info("syncIndexLoop stopped")
 }
 
-func onNewBlockHash(hash string) {
-	for _, c := range callbacksOnNewBlockHash {
-		c(hash)
+func onNewBlockHash(hash string, height uint32) {
+	for _, c := range callbacksOnNewBlock {
+		c(hash, height)
 	}
 }
 
@@ -423,7 +468,9 @@ func storeInternalStateLoop() {
 	var computeRunning bool
 	lastCompute := time.Now()
 	// randomize the duration between ComputeInternalStateColumnStats to avoid peaks after reboot of machine with multiple blockbooks
-	computePeriod := 9*time.Hour + time.Duration(rand.Float64()*float64((2*time.Hour).Nanoseconds()))
+	computePeriod := 23*time.Hour + time.Duration(rand.Float64()*float64((4*time.Hour).Nanoseconds()))
+	lastAppInfo := time.Now()
+	logAppInfoPeriod := 15 * time.Minute
 	glog.Info("storeInternalStateLoop starting with db stats recompute period ", computePeriod)
 	tickAndDebounce(storeInternalStatePeriodMs*time.Millisecond, (storeInternalStatePeriodMs-1)*time.Millisecond, chanStoreInternalState, func() {
 		if !computeRunning && lastCompute.Add(computePeriod).Before(time.Now()) {
@@ -440,13 +487,20 @@ func storeInternalStateLoop() {
 		if err := index.StoreInternalState(internalState); err != nil {
 			glog.Error("storeInternalStateLoop ", errors.ErrorStack(err))
 		}
+		if lastAppInfo.Add(logAppInfoPeriod).Before(time.Now()) {
+			glog.Info(index.GetMemoryStats())
+			if err := blockbookAppInfoMetric(index, chain, txCache, internalState, metrics); err != nil {
+				glog.Error("blockbookAppInfoMetric ", err)
+			}
+			lastAppInfo = time.Now()
+		}
 	})
 	glog.Info("storeInternalStateLoop stopped")
 }
 
-func onNewTxAddr(txid string, addr string) {
+func onNewTxAddr(txid string, desc bchain.AddressDescriptor, isOutput bool) {
 	for _, c := range callbacksOnNewTxAddr {
-		c(txid, addr)
+		c(txid, desc, isOutput)
 	}
 }
 
@@ -454,7 +508,7 @@ func pushSynchronizationHandler(nt bchain.NotificationType) {
 	if atomic.LoadInt32(&inShutdown) != 0 {
 		return
 	}
-	glog.V(1).Infof("MQ: notification ", nt)
+	glog.V(1).Info("MQ: notification ", nt)
 	if nt == bchain.NotificationNewBlock {
 		chanSyncIndex <- struct{}{}
 	} else if nt == bchain.NotificationNewTx {
@@ -464,29 +518,29 @@ func pushSynchronizationHandler(nt bchain.NotificationType) {
 	}
 }
 
-func waitForSignalAndShutdown(https *server.HTTPServer, socketio *server.SocketIoServer, chain bchain.BlockChain, timeout time.Duration) {
+func waitForSignalAndShutdown(internal *server.InternalServer, public *server.PublicServer, chain bchain.BlockChain, timeout time.Duration) {
 	sig := <-chanOsSignal
 	atomic.StoreInt32(&inShutdown, 1)
-	glog.Infof("Shutdown: %v", sig)
+	glog.Infof("shutdown: %v", sig)
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	if https != nil {
-		if err := https.Shutdown(ctx); err != nil {
-			glog.Error("HttpServer.Shutdown error: ", err)
+	if internal != nil {
+		if err := internal.Shutdown(ctx); err != nil {
+			glog.Error("internal server: shutdown error: ", err)
 		}
 	}
 
-	if socketio != nil {
-		if err := socketio.Shutdown(ctx); err != nil {
-			glog.Error("SocketIo.Shutdown error: ", err)
+	if public != nil {
+		if err := public.Shutdown(ctx); err != nil {
+			glog.Error("public server: shutdown error: ", err)
 		}
 	}
 
 	if chain != nil {
 		if err := chain.Shutdown(ctx); err != nil {
-			glog.Error("BlockChain.Shutdown error: ", err)
+			glog.Error("rpc: shutdown error: ", err)
 		}
 	}
 }
@@ -494,4 +548,10 @@ func waitForSignalAndShutdown(https *server.HTTPServer, socketio *server.SocketI
 func printResult(txid string, vout uint32, isOutput bool) error {
 	glog.Info(txid, vout, isOutput)
 	return nil
+}
+
+func normalizeName(s string) string {
+	s = strings.ToLower(s)
+	s = strings.Replace(s, " ", "-", -1)
+	return s
 }

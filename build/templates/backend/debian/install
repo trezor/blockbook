@@ -1,0 +1,6 @@
+{{define "main" -}}
+#!/usr/bin/dh-exec
+backend/* {{.Env.BackendInstallPath}}/{{.Coin.Alias}}
+server.conf => {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf
+client.conf => {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}_client.conf
+{{end}}

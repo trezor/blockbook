@@ -1,0 +1,65 @@
+{{define "specific"}}{{$cs := .CoinShortcut}}{{$addr := .Address}}{{$data := .}}
+<h1>Address
+    <small class="text-muted">{{formatAmount $addr.Balance}} {{$cs}}</small>
+</h1>
+<div class="alert alert-data ellipsis">
+    <span class="data">{{$addr.AddrStr}}</span>
+</div>
+<h3>Confirmed</h3>
+<div class="data-div row">
+    <div class="col-md-10">
+        <table class="table data-table">
+            <tbody>
+                <tr>
+                    <td style="width: 25%;">Total Received</td>
+                    <td class="data">{{formatAmount $addr.TotalReceived}} {{$cs}}</td>
+                </tr>
+                <tr>
+                    <td>Total Sent</td>
+                    <td class="data">{{formatAmount $addr.TotalSent}} {{$cs}}</td>
+                </tr>
+                <tr>
+                    <td>Final Balance</td>
+                    <td class="data">{{formatAmount $addr.Balance}} {{$cs}}</td>
+                </tr>
+                <tr>
+                    <td>No. Transactions</td>
+                    <td class="data">{{$addr.TxApperances}}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    <div class="col-md-2">
+        <div id="qrcode" style="width: 160px; height: 160px;"></div>
+        <script type="text/javascript" src="/static/js/qrcode.min.js"></script>
+        <script type="text/javascript">
+            new QRCode(document.getElementById("qrcode"), { text: "{{$addr.AddrStr}}", width: 160, height: 160 });
+        </script>
+    </div>
+</div>
+{{- if $addr.UnconfirmedTxApperances -}}
+<h3>Unconfirmed</h3>
+<div class="data-div">
+    <table class="table data-table">
+        <tbody>
+            <tr>
+                <td style="width: 25%;">Unconfirmed Balance</td>
+                <td class="data">{{formatAmount $addr.UnconfirmedBalance}} {{$cs}}</td>
+            </tr>
+            <tr>
+                <td>No. Transactions</td>
+                <td class="data">{{$addr.UnconfirmedTxApperances}}</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+{{- end}}{{if $addr.Transactions -}}
+<div class="h-container">
+    <h3 class="h-container-6">Transactions</h3>
+    <nav class="h-container-6">{{template "paging" $data}}</nav>
+</div>
+<div class="data-div">
+    {{- range $tx := $addr.Transactions}}{{$data := setTxToTemplateData $data $tx}}{{template "txdetail" $data}}{{end -}}
+</div>
+<nav>{{template "paging" $data }}</nav>
+{{end}}{{end}}

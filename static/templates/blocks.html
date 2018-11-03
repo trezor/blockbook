@@ -1,0 +1,32 @@
+{{define "specific"}}{{$blocks := .Blocks}}{{$data := .}}
+<h1>Blocks
+    <small class="text-muted">by date</small>
+</h1>
+{{if $blocks.Blocks -}}
+<nav>{{template "paging" $data }}</nav>
+<div class="data-div">
+    <table class="table table-striped data-table table-hover">
+        <thead>
+            <tr>
+                <th style="width: 10%;">Height</th>
+                <th style="width: 48%;">Hash</th>
+                <th>Timestamp</span></th>
+                <th class="text-right" style="width: 10%;">Transactions</th>
+                <th class="text-right" style="width: 10%;">Size</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{- range $b := $blocks.Blocks -}}
+            <tr>
+                <td><a href="/block/{{$b.Height}}">{{$b.Height}}</a></td>
+                <td class="ellipsis">{{$b.Hash}}</td>
+                <td>{{formatUnixTime $b.Time}}</td>
+                <td class="text-right">{{$b.Txs}}</td>
+                <td class="text-right">{{$b.Size}}</td>
+            </tr>
+            {{- end -}}
+        </tbody>
+    </table>
+</div>
+<nav>{{template "paging" $data }}</nav>
+{{end}}{{end}}

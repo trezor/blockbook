@@ -12,11 +12,12 @@ type TxCache struct {
 	db      *RocksDB
 	chain   bchain.BlockChain
 	metrics *common.Metrics
+	is      *common.InternalState
 	enabled bool
 }
 
 // NewTxCache creates new TxCache interface and returns its handle
-func NewTxCache(db *RocksDB, chain bchain.BlockChain, metrics *common.Metrics, enabled bool) (*TxCache, error) {
+func NewTxCache(db *RocksDB, chain bchain.BlockChain, metrics *common.Metrics, is *common.InternalState, enabled bool) (*TxCache, error) {
 	if !enabled {
 		glog.Info("txcache: disabled")
 	}
@@ -24,13 +25,14 @@ func NewTxCache(db *RocksDB, chain bchain.BlockChain, metrics *common.Metrics, e
 		db:      db,
 		chain:   chain,
 		metrics: metrics,
+		is:      is,
 		enabled: enabled,
 	}, nil
 }
 
 // GetTransaction returns transaction either from RocksDB or if not present from blockchain
 // it the transaction is confirmed, it is stored in the RocksDB
-func (c *TxCache) GetTransaction(txid string, bestheight uint32) (*bchain.Tx, uint32, error) {
+func (c *TxCache) GetTransaction(txid string) (*bchain.Tx, uint32, error) {
 	var tx *bchain.Tx
 	var h uint32
 	var err error
@@ -41,6 +43,7 @@ func (c *TxCache) GetTransaction(txid string, bestheight uint32) (*bchain.Tx, ui
 		}
 		if tx != nil {
 			// number of confirmations is not stored in cache, they change all the time
+			_, bestheight, _ := c.is.GetSyncState()
 			tx.Confirmations = bestheight - h + 1
 			c.metrics.TxCacheEfficiency.With(common.Labels{"status": "hit"}).Inc()
 			return tx, h, nil
@@ -51,10 +54,21 @@ func (c *TxCache) GetTransaction(txid string, bestheight uint32) (*bchain.Tx, ui
 		return nil, 0, err
 	}
 	c.metrics.TxCacheEfficiency.With(common.Labels{"status": "miss"}).Inc()
-	// do not cache mempool transactions
+	// cache only confirmed transactions
 	if tx.Confirmations > 0 {
-		// the transaction in the currently best block has 1 confirmation
-		h = bestheight - tx.Confirmations + 1
+		ta, err := c.db.GetTxAddresses(txid)
+		if err != nil {
+			return nil, 0, err
+		}
+		// the transaction may me not yet indexed, in that case get the height from the backend
+		if ta == nil {
+			h, err = c.chain.GetBestBlockHeight()
+			if err != nil {
+				return nil, 0, err
+			}
+		} else {
+			h = ta.Height
+		}
 		if c.enabled {
 			err = c.db.PutTx(tx, h, tx.Blocktime)
 			// do not return caching error, only log it

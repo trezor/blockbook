@@ -3,6 +3,12 @@
 
 [[projects]]
   branch = "master"
+  name = "github.com/Groestlcoin/go-groestl-hash"
+  packages = ["groestl","hash"]
+  revision = "790653ac190c4029ee200e82a8f21b5d1afaf7d6"
+
+[[projects]]
+  branch = "master"
   name = "github.com/beorn7/perks"
   packages = ["quantile"]
   revision = "3a771d992973f24aa725d07868b467d1ddfceafb"
@@ -32,12 +38,6 @@
   revision = "501929d3d046174c3d39f0ea54ece471aa17238c"
 
 [[projects]]
-  branch = "master"
-  name = "github.com/cpacia/bchutil"
-  packages = ["."]
-  revision = "12e86f41eb040d3b85b5d8e3a3a4bed035517c52"
-
-[[projects]]
   name = "github.com/deckarep/golang-set"
   packages = ["."]
   revision = "1d4478f51bed434f1dadf96dcd9b43aabac66795"
@@ -45,15 +45,21 @@
 
 [[projects]]
   name = "github.com/ethereum/go-ethereum"
-  packages = [".","common","common/hexutil","common/math","core/types","crypto","crypto/secp256k1","crypto/sha3","ethclient","ethdb","log","metrics","params","rlp","rpc","trie"]
-  revision = "329ac18ef617d0238f71637bffe78f028b0f13f7"
-  version = "v1.8.3"
+  packages = [".","common","common/hexutil","common/math","core/types","crypto","crypto/secp256k1","crypto/sha3","ethclient","ethdb","log","metrics","p2p/netutil","params","rlp","rpc","trie"]
+  revision = "89451f7c382ad2185987ee369f16416f89c28a7d"
+  version = "v1.8.15"
 
 [[projects]]
   name = "github.com/go-stack/stack"
   packages = ["."]
   revision = "259ab82a6cad3992b4e21ff5cac294ccb06474bc"
   version = "v1.7.0"
+
+[[projects]]
+  name = "github.com/gobuffalo/packr"
+  packages = ["."]
+  revision = "5a2cbb54c4e7d482e3f518c56f1f86f133d5204f"
+  version = "v1.13.7"
 
 [[projects]]
   name = "github.com/gogo/protobuf"
@@ -80,22 +86,22 @@
   revision = "553a641470496b2327abcac10b36396bd98e45c9"
 
 [[projects]]
-  name = "github.com/gorilla/context"
-  packages = ["."]
-  revision = "1ea25387ff6f684839d82767c1733ff4d4d15d0a"
-  version = "v1.1"
-
-[[projects]]
-  name = "github.com/gorilla/mux"
-  packages = ["."]
-  revision = "53c1911da2b537f792e7cafcb446b05ffe33b996"
-  version = "v1.6.1"
-
-[[projects]]
   name = "github.com/gorilla/websocket"
   packages = ["."]
   revision = "ea4d1f681babbce9545c9c5f3d5194a789c89f5b"
   version = "v1.2.0"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/jakm/bchutil"
+  packages = ["."]
+  revision = "5a273ca8a96628732c07ff5cfb9f3e7d965241e8"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/jakm/btcutil"
+  packages = [".","base58","bech32","chaincfg","txscript"]
+  revision = "224b76333062172edefdeb502123fdda12205f76"
 
 [[projects]]
   branch = "master"
@@ -126,6 +132,12 @@
   name = "github.com/pebbe/zmq4"
   packages = ["."]
   revision = "5b443b6471cea4b4f9f85025530c04c93233f76a"
+
+[[projects]]
+  name = "github.com/pkg/errors"
+  packages = ["."]
+  revision = "645ef00459ed84a119197bfb8d8205042c6df63d"
+  version = "v0.8.0"
 
 [[projects]]
   name = "github.com/prometheus/client_golang"
@@ -173,7 +185,7 @@
   branch = "master"
   name = "github.com/tecbot/gorocksdb"
   packages = ["."]
-  revision = "3e476152774442234f9a9f747386a48a1d82a515"
+  revision = "214b6b7bc0f06812ab5602fdc502a3e619916f38"
 
 [[projects]]
   branch = "master"
@@ -186,12 +198,6 @@
   name = "golang.org/x/net"
   packages = ["websocket"]
   revision = "61147c48b25b599e5b561d2e9c4f3e1ef489ca41"
-
-[[projects]]
-  name = "gopkg.in/fatih/set.v0"
-  packages = ["."]
-  revision = "57907de300222151a123d29255ed17f5ed43fad3"
-  version = "v0.1.0"
 
 [[projects]]
   branch = "v2"
@@ -208,6 +214,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "afcce626624acc0db803a97ce0238798cf034dc999161f32b4158c8033542cb7"
+  inputs-digest = "3a7b863bec3806ba9460f3961e2d6e8ff4b77e5f66d196b1f79bd37fa6bf8d82"
   solver-name = "gps-cdcl"
   solver-version = 1

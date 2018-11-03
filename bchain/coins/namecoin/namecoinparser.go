@@ -6,8 +6,8 @@ import (
 	"blockbook/bchain/coins/utils"
 	"bytes"
 
-	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/wire"
+	"github.com/jakm/btcutil/chaincfg"
 )
 
 const (
@@ -21,13 +21,8 @@ var (
 func init() {
 	MainNetParams = chaincfg.MainNetParams
 	MainNetParams.Net = MainnetMagic
-	MainNetParams.PubKeyHashAddrID = 52
-	MainNetParams.ScriptHashAddrID = 13
-
-	err := chaincfg.Register(&MainNetParams)
-	if err != nil {
-		panic(err)
-	}
+	MainNetParams.PubKeyHashAddrID = []byte{52}
+	MainNetParams.ScriptHashAddrID = []byte{13}
 }
 
 // NamecoinParser handle
@@ -43,6 +38,12 @@ func NewNamecoinParser(params *chaincfg.Params, c *btc.Configuration) *NamecoinP
 // GetChainParams contains network parameters for the main Namecoin network,
 // and the test Namecoin network
 func GetChainParams(chain string) *chaincfg.Params {
+	if !chaincfg.IsRegistered(&MainNetParams) {
+		err := chaincfg.Register(&MainNetParams)
+		if err != nil {
+			panic(err)
+		}
+	}
 	switch chain {
 	default:
 		return &MainNetParams
@@ -75,5 +76,11 @@ func (p *NamecoinParser) ParseBlock(b []byte) (*bchain.Block, error) {
 		txs[ti] = p.TxFromMsgTx(t, false)
 	}
 
-	return &bchain.Block{Txs: txs}, nil
+	return &bchain.Block{
+		BlockHeader: bchain.BlockHeader{
+			Size: len(b),
+			Time: h.Timestamp.Unix(),
+		},
+		Txs: txs,
+	}, nil
 }

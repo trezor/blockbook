@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"strconv"
 	"sync"
 	"time"
 
@@ -30,9 +31,10 @@ const (
 )
 
 type Configuration struct {
-	CoinName   string `json:"coin_name"`
-	RPCURL     string `json:"rpcURL"`
-	RPCTimeout int    `json:"rpcTimeout"`
+	CoinName     string `json:"coin_name"`
+	CoinShortcut string `json:"coin_shortcut"`
+	RPCURL       string `json:"rpc_url"`
+	RPCTimeout   int    `json:"rpc_timeout"`
 }
 
 // EthereumRPC is an interface to JSON-RPC eth service.
@@ -40,19 +42,19 @@ type EthereumRPC struct {
 	client               *ethclient.Client
 	rpc                  *rpc.Client
 	timeout              time.Duration
-	rpcURL               string
 	Parser               *EthereumParser
-	CoinName             string
 	Testnet              bool
 	Network              string
 	Mempool              *bchain.NonUTXOMempool
 	bestHeaderMu         sync.Mutex
 	bestHeader           *ethtypes.Header
+	bestHeaderTime       time.Time
 	chanNewBlock         chan *ethtypes.Header
 	newBlockSubscription *rpc.ClientSubscription
 	chanNewTx            chan ethcommon.Hash
 	newTxSubscription    *rpc.ClientSubscription
 	ChainConfig          *Configuration
+	isETC                bool
 }
 
 // NewEthereumRPC returns new EthRPC instance.
@@ -79,6 +81,9 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 	s.Parser = NewEthereumParser()
 	s.timeout = time.Duration(c.RPCTimeout) * time.Second
 
+	// detect ethereum classic
+	s.isETC = s.ChainConfig.CoinName == "Ethereum Classic"
+
 	// new blocks notifications handling
 	// the subscription is done in Initialize
 	s.chanNewBlock = make(chan *ethtypes.Header)
@@ -92,6 +97,7 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 			// update best header to the new header
 			s.bestHeaderMu.Lock()
 			s.bestHeader = h
+			s.bestHeaderTime = time.Now()
 			s.bestHeaderMu.Unlock()
 			// notify blockbook
 			pushHandler(bchain.NotificationNewBlock)
@@ -142,21 +148,25 @@ func (b *EthereumRPC) Initialize() error {
 	}
 	glog.Info("rpc: block chain ", b.Network)
 
-	// subscriptions
-	if err = b.subscribe(func() (*rpc.ClientSubscription, error) {
-		// invalidate the previous subscription - it is either the first one or there was an error
-		b.newBlockSubscription = nil
-		ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
-		defer cancel()
-		sub, err := b.rpc.EthSubscribe(ctx, b.chanNewBlock, "newHeads")
-		if err != nil {
-			return nil, errors.Annotatef(err, "EthSubscribe newHeads")
+	if b.isETC {
+		glog.Info(b.ChainConfig.CoinName, " does not support subscription to newHeads")
+	} else {
+		// subscriptions
+		if err = b.subscribe(func() (*rpc.ClientSubscription, error) {
+			// invalidate the previous subscription - it is either the first one or there was an error
+			b.newBlockSubscription = nil
+			ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
+			defer cancel()
+			sub, err := b.rpc.EthSubscribe(ctx, b.chanNewBlock, "newHeads")
+			if err != nil {
+				return nil, errors.Annotatef(err, "EthSubscribe newHeads")
+			}
+			b.newBlockSubscription = sub
+			glog.Info("Subscribed to newHeads")
+			return sub, nil
+		}); err != nil {
+			return err
 		}
-		b.newBlockSubscription = sub
-		glog.Info("Subscribed to newHeads")
-		return sub, nil
-	}); err != nil {
-		return err
 	}
 	if err = b.subscribe(func() (*rpc.ClientSubscription, error) {
 		// invalidate the previous subscription - it is either the first one or there was an error
@@ -180,7 +190,7 @@ func (b *EthereumRPC) Initialize() error {
 	return nil
 }
 
-// subscribeNewBlocks subscribes to new blocks notification
+// subscribe subscribes notification and tries to resubscribe in case of error
 func (b *EthereumRPC) subscribe(f func() (*rpc.ClientSubscription, error)) error {
 	s, err := f()
 	if err != nil {
@@ -251,21 +261,34 @@ func (b *EthereumRPC) GetSubversion() string {
 	return ""
 }
 
-// GetBlockChainInfo returns the NetworkID of the ethereum network
-func (b *EthereumRPC) GetBlockChainInfo() (string, error) {
+// GetChainInfo returns information about the connected backend
+func (b *EthereumRPC) GetChainInfo() (*bchain.ChainInfo, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
 	defer cancel()
-
 	id, err := b.client.NetworkID(ctx)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return id.String(), nil
+	rv := &bchain.ChainInfo{}
+	idi := int(id.Uint64())
+	if idi == 1 {
+		rv.Chain = "mainnet"
+	} else {
+		rv.Chain = "testnet " + strconv.Itoa(idi)
+	}
+	// TODO  - return more information about the chain
+	return rv, nil
 }
 
 func (b *EthereumRPC) getBestHeader() (*ethtypes.Header, error) {
 	b.bestHeaderMu.Lock()
 	defer b.bestHeaderMu.Unlock()
+	// ETC does not have newBlocks subscription, bestHeader must be updated very often (each 1 second)
+	if b.isETC {
+		if b.bestHeaderTime.Add(1 * time.Second).Before(time.Now()) {
+			b.bestHeader = nil
+		}
+	}
 	if b.bestHeader == nil {
 		var err error
 		ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
@@ -274,6 +297,7 @@ func (b *EthereumRPC) getBestHeader() (*ethtypes.Header, error) {
 		if err != nil {
 			return nil, err
 		}
+		b.bestHeaderTime = time.Now()
 	}
 	return b.bestHeader, nil
 }
@@ -320,9 +344,9 @@ func (b *EthereumRPC) ethHeaderToBlockHeader(h *ethtypes.Header) (*bchain.BlockH
 		Hash:          ethHashToHash(h.Hash()),
 		Height:        uint32(hn),
 		Confirmations: int(c),
+		Time:          int64(h.Time.Uint64()),
 		// Next
 		// Prev
-
 	}, nil
 }
 
@@ -392,6 +416,11 @@ func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error
 		return nil, errors.Annotatef(fmt.Errorf("server returned empty transaction list but block header indicates transactions"), "hash %v, height %v", hash, height)
 	}
 	bbh, err := b.ethHeaderToBlockHeader(head)
+	if err != nil {
+		return nil, errors.Annotatef(err, "hash %v, height %v", hash, height)
+	}
+	// TODO - this is probably not the correct size
+	bbh.Size = len(raw)
 	btxs := make([]bchain.Tx, len(body.Transactions))
 	for i, tx := range body.Transactions {
 		btx, err := b.Parser.ethTxToTx(&tx, int64(head.Time.Uint64()), uint32(bbh.Confirmations))
@@ -405,6 +434,12 @@ func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error
 		Txs:         btxs,
 	}
 	return &bbk, nil
+}
+
+// GetBlockInfo returns extended header (more info than in bchain.BlockHeader) with a list of txids
+func (b *EthereumRPC) GetBlockInfo(hash string) (*bchain.BlockInfo, error) {
+	// TODO - implement
+	return nil, errors.New("Not implemented yet")
 }
 
 // GetTransactionForMempool returns a transaction by the transaction ID.
@@ -424,7 +459,11 @@ func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 	} else if tx == nil {
 		return nil, ethereum.NotFound
 	} else if tx.R == "" {
-		return nil, errors.Annotatef(fmt.Errorf("server returned transaction without signature"), "txid %v", txid)
+		if !b.isETC {
+			return nil, errors.Annotatef(fmt.Errorf("server returned transaction without signature"), "txid %v", txid)
+		} else {
+			glog.Warning("server returned transaction without signature, txid ", txid)
+		}
 	}
 	var btx *bchain.Tx
 	if tx.BlockNumber == "" {
@@ -455,6 +494,20 @@ func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 	return btx, nil
 }
 
+// GetTransactionSpecific returns json as returned by backend, with all coin specific data
+func (b *EthereumRPC) GetTransactionSpecific(txid string) (json.RawMessage, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
+	defer cancel()
+	var tx json.RawMessage
+	err := b.rpc.CallContext(ctx, &tx, "eth_getTransactionByHash", ethcommon.HexToHash(txid))
+	if err != nil {
+		return nil, err
+	} else if tx == nil {
+		return nil, ethereum.NotFound
+	}
+	return tx, nil
+}
+
 type rpcMempoolBlock struct {
 	Transactions []string `json:"transactions"`
 }
@@ -477,13 +530,13 @@ func (b *EthereumRPC) GetMempool() ([]string, error) {
 	return body.Transactions, nil
 }
 
-// EstimateFee returns fee estimation.
-func (b *EthereumRPC) EstimateFee(blocks int) (float64, error) {
+// EstimateFee returns fee estimation
+func (b *EthereumRPC) EstimateFee(blocks int) (big.Int, error) {
 	return b.EstimateSmartFee(blocks, true)
 }
 
-// EstimateSmartFee returns fee estimation.
-func (b *EthereumRPC) EstimateSmartFee(blocks int, conservative bool) (float64, error) {
+// EstimateSmartFee returns fee estimation
+func (b *EthereumRPC) EstimateSmartFee(blocks int, conservative bool) (big.Int, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
 	defer cancel()
 	// TODO - what parameters of msg to use to get better estimate, maybe more data from the wallet are needed
@@ -492,23 +545,47 @@ func (b *EthereumRPC) EstimateSmartFee(blocks int, conservative bool) (float64, 
 		To: &a,
 	}
 	g, err := b.client.EstimateGas(ctx, msg)
+	var r big.Int
 	if err != nil {
-		return 0, err
+		return r, err
 	}
-	return float64(g), nil
+	r.SetUint64(g)
+	return r, nil
 }
 
 // SendRawTransaction sends raw transaction.
-func (b *EthereumRPC) SendRawTransaction(tx string) (string, error) {
-	return "", errors.New("SendRawTransaction: not implemented")
+func (b *EthereumRPC) SendRawTransaction(hex string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
+	defer cancel()
+	var raw json.RawMessage
+	err := b.rpc.CallContext(ctx, &raw, "eth_sendRawTransaction", hex)
+	if err != nil {
+		return "", err
+	} else if len(raw) == 0 {
+		return "", errors.New("SendRawTransaction: failed")
+	}
+	var result string
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return "", errors.Annotatef(err, "raw result %v", raw)
+	}
+	if result == "" {
+		return "", errors.New("SendRawTransaction: failed, empty result")
+	}
+	return result, nil
 }
 
-func (b *EthereumRPC) ResyncMempool(onNewTxAddr func(txid string, addr string)) (int, error) {
+func (b *EthereumRPC) ResyncMempool(onNewTxAddr bchain.OnNewTxAddrFunc) (int, error) {
 	return b.Mempool.Resync(onNewTxAddr)
 }
 
+// GetMempoolTransactions returns slice of mempool transactions for given address
 func (b *EthereumRPC) GetMempoolTransactions(address string) ([]string, error) {
 	return b.Mempool.GetTransactions(address)
+}
+
+// GetMempoolTransactionsForAddrDesc returns slice of mempool transactions for given address descriptor
+func (b *EthereumRPC) GetMempoolTransactionsForAddrDesc(addrDesc bchain.AddressDescriptor) ([]string, error) {
+	return b.Mempool.GetAddrDescTransactions(addrDesc)
 }
 
 func (b *EthereumRPC) GetMempoolEntry(txid string) (*bchain.MempoolEntry, error) {

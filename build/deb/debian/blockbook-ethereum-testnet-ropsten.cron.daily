@@ -1,2 +1,0 @@
-#!/bin/sh
-/opt/coins/blockbook/ethereum_testnet_ropsten/bin/logrotate.sh

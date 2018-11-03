@@ -5,11 +5,12 @@ import (
 	"blockbook/bchain/coins/btc"
 	"blockbook/bchain/coins/utils"
 	"bytes"
+	"encoding/binary"
 	"io"
 
-	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
+	"github.com/jakm/btcutil/chaincfg"
 )
 
 const (
@@ -27,8 +28,8 @@ func init() {
 	MainNetParams.Net = MainnetMagic
 
 	// Address encoding magics
-	MainNetParams.PubKeyHashAddrID = 38 // base58 prefix: G
-	MainNetParams.ScriptHashAddrID = 23 // base58 prefix: A
+	MainNetParams.PubKeyHashAddrID = []byte{38} // base58 prefix: G
+	MainNetParams.ScriptHashAddrID = []byte{23} // base58 prefix: A
 
 	TestNetParams = chaincfg.TestNet3Params
 	TestNetParams.Net = TestnetMagic
@@ -38,14 +39,6 @@ func init() {
 	// see https://github.com/satoshilabs/slips/blob/master/slip-0173.md
 	MainNetParams.Bech32HRPSegwit = "btg"
 	TestNetParams.Bech32HRPSegwit = "tbtg"
-
-	err := chaincfg.Register(&MainNetParams)
-	if err == nil {
-		err = chaincfg.Register(&TestNetParams)
-	}
-	if err != nil {
-		panic(err)
-	}
 }
 
 // BGoldParser handle
@@ -62,6 +55,15 @@ func NewBGoldParser(params *chaincfg.Params, c *btc.Configuration) *BGoldParser 
 // the regression test Bitcoin Cash network, the test Bitcoin Cash network and
 // the simulation test Bitcoin Cash network, in this order
 func GetChainParams(chain string) *chaincfg.Params {
+	if !chaincfg.IsRegistered(&MainNetParams) {
+		err := chaincfg.Register(&MainNetParams)
+		if err == nil {
+			err = chaincfg.Register(&TestNetParams)
+		}
+		if err != nil {
+			panic(err)
+		}
+	}
 	switch chain {
 	case "test":
 		return &TestNetParams
@@ -75,11 +77,13 @@ func GetChainParams(chain string) *chaincfg.Params {
 // headerFixedLength is the length of fixed fields of a block (i.e. without solution)
 // see https://github.com/BTCGPU/BTCGPU/wiki/Technical-Spec#block-header
 const headerFixedLength = 44 + (chainhash.HashSize * 3)
+const timestampOffset = 100
+const timestampLength = 4
 
 // ParseBlock parses raw block to our Block struct
 func (p *BGoldParser) ParseBlock(b []byte) (*bchain.Block, error) {
 	r := bytes.NewReader(b)
-	err := skipHeader(r, 0)
+	time, err := getTimestampAndSkipHeader(r, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -95,24 +99,41 @@ func (p *BGoldParser) ParseBlock(b []byte) (*bchain.Block, error) {
 		txs[ti] = p.TxFromMsgTx(t, false)
 	}
 
-	return &bchain.Block{Txs: txs}, nil
+	return &bchain.Block{
+		BlockHeader: bchain.BlockHeader{
+			Size: len(b),
+			Time: time,
+		},
+		Txs: txs,
+	}, nil
 }
 
-func skipHeader(r io.ReadSeeker, pver uint32) error {
-	_, err := r.Seek(headerFixedLength, io.SeekStart)
+func getTimestampAndSkipHeader(r io.ReadSeeker, pver uint32) (int64, error) {
+	_, err := r.Seek(timestampOffset, io.SeekStart)
 	if err != nil {
-		return err
+		return 0, err
+	}
+
+	buf := make([]byte, timestampLength)
+	if _, err = io.ReadFull(r, buf); err != nil {
+		return 0, err
+	}
+	time := binary.LittleEndian.Uint32(buf)
+
+	_, err = r.Seek(headerFixedLength-timestampOffset-timestampLength, io.SeekCurrent)
+	if err != nil {
+		return 0, err
 	}
 
 	size, err := wire.ReadVarInt(r, pver)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	_, err = r.Seek(int64(size), io.SeekCurrent)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
-	return nil
+	return int64(time), nil
 }

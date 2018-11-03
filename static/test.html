@@ -4,8 +4,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm"
-        crossorigin="anonymous">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
     <style>
         .row {
             margin-top: 1%;
@@ -56,7 +55,9 @@
             var addresses = document.getElementById('getAddressHistoryAddresses').value.split(",");
             addresses = addresses.map(s => s.trim());
             var mempool = document.getElementById("getAddressHistoryMempool").checked;
-            lookupAddressHistories(addresses, 0, 5, mempool, 20000000, 0, function (result) {
+            var from = parseInt(document.getElementById("getAddressHistoryFrom").value);
+            var to = parseInt(document.getElementById("getAddressHistoryTo").value);
+            lookupAddressHistories(addresses, from, to, mempool, 90000000, 0, function (result) {
                 console.log('getAddressHistory sent successfully');
                 console.log(result);
                 document.getElementById('getAddressHistoryResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
@@ -284,7 +285,11 @@
                 <input class="btn btn-secondary" type="button" value="getAddressHistory" onclick="getAddressHistory()">
             </div>
             <div class="col-8">
-                <input type="text" class="form-control" id="getAddressHistoryAddresses" value="2N4Q5FhU2497BryFfUgbqkAJE87aKHUhXMp,2Mt7P2BAfE922zmfXrdcYTLyR7GUvbwSEns">
+                <div class="row" style="margin: 0;">
+                    <input type="text" style="width: 84%" class="form-control" id="getAddressHistoryAddresses" value="2N4Q5FhU2497BryFfUgbqkAJE87aKHUhXMp,2Mt7P2BAfE922zmfXrdcYTLyR7GUvbwSEns">
+                    <input type="text" style="width: 7%; margin-left: 5px; margin-right: 5px;" class="form-control" id="getAddressHistoryFrom" value="0">
+                    <input type="text" style="width: 7%" class="form-control" id="getAddressHistoryTo" value="5">
+                </div>
             </div>
             <div class="col form-inline">
                 <input type="checkbox" id="getAddressHistoryMempool">&nbsp;

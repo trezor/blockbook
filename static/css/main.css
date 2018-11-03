@@ -1,0 +1,294 @@
+html, body {
+    height: 100%;
+}
+
+body {
+    width: 100%;
+    min-height: 100%;
+    background-color: #ffffff;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Helvetica Neue", Arial, sans-serif;
+    font-size: 11px;
+}
+
+a {
+    color: #428bca;
+    text-decoration: none;
+}
+
+h1 small {
+    font-size: 65%;
+}
+
+h3 {
+    margin-top: 20px;
+}
+
+.octicon {
+    color: #777;
+    display: inline-block;
+    vertical-align: text-top;
+    fill: currentColor;
+    height: 16px;
+}
+
+.navbar-form {
+    padding-bottom: 1px;
+}
+
+.navbar-form .form-control {
+    background-color: gray;
+    color: #fff;
+    border-radius: 3px;
+    -webkit-border-radius: 3px;
+    -moz-border-radius: 3px;
+    border: 0;
+    -webkit-box-shadow: 1px 1px 0 0 rgba(255, 255, 255, .41), inset 1px 1px 3px 0 rgba(0, 0, 0, .10);
+    -moz-box-shadow: 1px 1px 0 0 rgba(255, 255, 255, .41), inset 1px 1px 3px 0 rgba(0, 0, 0, .10);
+    box-shadow: 1px 1px 0 0 rgba(255, 255, 255, .41), inset 1px 1px 3px 0 rgba(0, 0, 0, .10);
+}
+
+@media (min-width: 768px) {
+    .container {
+        max-width: 750px;
+    }
+}
+
+@media (min-width: 992px) {
+    body {
+        font-size: 12px;
+    }
+    .container {
+        max-width: 970px;
+    }
+    .octicon {
+        height: 24px;
+    }
+    .navbar-form .form-control {
+        width: 230px;
+    }
+}
+
+@media (min-width: 1200px) {
+    body {
+        font-size: 14px;
+    }
+    .container {
+        max-width: 1170px;
+    }
+    .octicon {
+        height: 32px;
+    }
+    .navbar-form .form-control {
+        width: 360px;
+    }
+}
+
+#header {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 53px;
+    width: 100%;
+    margin: 0;
+    padding-bottom: 0;
+    padding-top: 0;
+    background-color: #212121;
+    border: 0;
+}
+
+.bg-trezor {
+    background-color: #212121!important;
+    height: 53px;
+}
+
+.bg-trezor .navbar-text {
+    color: rgba(255, 255, 255);
+    font-weight: bold;
+    font-size: 19px;
+}
+
+.trezor-logo-svg-white svg {
+    fill: #FFFFFF;
+    margin-top: 6px;
+}
+
+#wrap {
+    min-height: 100%;
+    height: auto;
+    padding: 75px 0;
+    margin: 0 auto -53px;
+}
+
+#footer {
+    background-color: #212121;
+    color: #fff;
+    height: 53px;
+    overflow: hidden;
+}
+
+.alert-data {
+    color: #383d41;
+    background-color: #f4f4f4;
+    border-color: #d6d8db;
+    padding: 15px;
+}
+
+.line-top {
+    border-top: 1px solid #EAEAEA;
+    padding: 10px 0 0;
+}
+
+.line-mid {
+    padding: 15px;
+}
+
+.line-bot {
+    border-bottom: 2px solid #EAEAEA;
+    padding: 0 0 15px;
+}
+
+.txvalues {
+    display: inline-block;
+    padding: .7em 2em;
+    font-size: 13px;
+    font-weight: 100;
+    color: #fff;
+    text-align: center;
+    white-space: nowrap;
+    vertical-align: baseline;
+    border-radius: .25em;
+    margin-top: 5px;
+}
+
+.txvalues:not(:last-child) {
+    margin-right: 5px;
+}
+
+.txvalues-default {
+    background-color: #EBEBEB;
+    color: #333;
+}
+
+.txvalues-success {
+    background-color: dimgray;
+}
+
+.txvalues-primary {
+    background-color: #000;
+}
+
+.txvalues-danger {
+    background-color: #AC0015;
+    text-transform: uppercase;
+}
+
+.ellipsis {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.data-div {
+    margin: 20px 0 30px 0;
+}
+
+.data-div .col-md-10 {
+    padding-left: 0;
+}
+
+.data-table {
+    table-layout: fixed;
+    border-radius: .25rem;
+    background: white;
+}
+
+.data-table td, .data-table th {
+    padding: .4rem;
+}
+
+.data-table span.ellipsis {
+    max-width: 100%;
+}
+
+.data {
+    font-weight: bold;
+}
+
+.alert .data-table {
+    margin: 0;
+}
+
+.navbar-nav .nav-link {
+    padding-right: 0;
+    padding-left: .25rem;
+}
+
+.navbar-text .nav-link {
+    padding: 0;
+}
+
+::-webkit-input-placeholder {
+    color: #CCC!important;
+    font-style: italic;
+    font-size: 14px;
+}
+
+::-moz-placeholder {
+    color: #CCC!important;
+    font-style: italic;
+    font-size: 14px;
+}
+
+.h-container {
+    display: -webkit-box;
+    display: -ms-flexbox;
+    -ms-flex-wrap: wrap;
+    flex-wrap: wrap;
+}
+
+.h-container-6 {
+    width: 50%;
+    margin: 0;
+}
+
+.h-container ul {
+    margin: 0;
+}
+
+.page-link {
+    color: #428bca;
+}
+
+.page-text {
+    display: block;
+    padding: .5rem .3rem;
+    line-height: 1.25;
+}
+
+.page-link {
+    color: #428bca;
+}
+
+.page-item.active .page-link {
+    background-color: #428bca;
+}
+
+#txSpecific {
+    margin: 0;
+}
+
+.string {
+    color: darkgreen;
+}
+
+.number, .boolean {
+    color: darkred;
+}
+
+.null {
+    color: red;
+}
+
+.key {
+    color: #333 ;
+}

@@ -1,0 +1,4 @@
+{{define "main" -}}
+{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf
+{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}_client.conf
+{{end}}

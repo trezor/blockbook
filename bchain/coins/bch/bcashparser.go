@@ -5,10 +5,10 @@ import (
 	"blockbook/bchain/coins/btc"
 	"fmt"
 
-	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/btcsuite/btcd/txscript"
-	"github.com/btcsuite/btcutil"
-	"github.com/cpacia/bchutil"
+	"github.com/jakm/bchutil"
+	"github.com/jakm/btcutil"
+	"github.com/jakm/btcutil/chaincfg"
+	"github.com/jakm/btcutil/txscript"
 	"github.com/schancel/cashaddr-converter/address"
 )
 
@@ -24,6 +24,23 @@ const (
 	TestNetPrefix = "bchtest:"
 	RegTestPrefix = "bchreg:"
 )
+
+var (
+	MainNetParams chaincfg.Params
+	TestNetParams chaincfg.Params
+	RegtestParams chaincfg.Params
+)
+
+func init() {
+	MainNetParams = chaincfg.MainNetParams
+	MainNetParams.Net = bchutil.MainnetMagic
+
+	TestNetParams = chaincfg.TestNet3Params
+	TestNetParams.Net = bchutil.TestnetMagic
+
+	RegtestParams = chaincfg.RegressionNetParams
+	RegtestParams.Net = bchutil.Regtestmagic
+}
 
 // BCashParser handle
 type BCashParser struct {
@@ -47,14 +64,14 @@ func NewBCashParser(params *chaincfg.Params, c *btc.Configuration) (*BCashParser
 	p := &BCashParser{
 		BitcoinParser: &btc.BitcoinParser{
 			BaseParser: &bchain.BaseParser{
-				AddressFactory:       func(addr string) (bchain.Address, error) { return newBCashAddress(addr, format) },
 				BlockAddressesToKeep: c.BlockAddressesToKeep,
+				AmountDecimalPoint:   8,
 			},
 			Params: params,
-			OutputScriptToAddressesFunc: outputScriptToAddresses,
 		},
 		AddressFormat: format,
 	}
+	p.OutputScriptToAddressesFunc = p.outputScriptToAddresses
 	return p, nil
 }
 
@@ -62,29 +79,35 @@ func NewBCashParser(params *chaincfg.Params, c *btc.Configuration) (*BCashParser
 // the regression test Bitcoin Cash network, the test Bitcoin Cash network and
 // the simulation test Bitcoin Cash network, in this order
 func GetChainParams(chain string) *chaincfg.Params {
-	var params *chaincfg.Params
+	if !chaincfg.IsRegistered(&MainNetParams) {
+		err := chaincfg.Register(&MainNetParams)
+		if err == nil {
+			err = chaincfg.Register(&TestNetParams)
+		}
+		if err == nil {
+			err = chaincfg.Register(&RegtestParams)
+		}
+		if err != nil {
+			panic(err)
+		}
+	}
 	switch chain {
 	case "test":
-		params = &chaincfg.TestNet3Params
-		params.Net = bchutil.TestnetMagic
+		return &TestNetParams
 	case "regtest":
-		params = &chaincfg.RegressionNetParams
-		params.Net = bchutil.Regtestmagic
+		return &RegtestParams
 	default:
-		params = &chaincfg.MainNetParams
-		params.Net = bchutil.MainnetMagic
+		return &MainNetParams
 	}
-
-	return params
 }
 
-// GetAddrIDFromAddress returns internal address representation of given address
-func (p *BCashParser) GetAddrIDFromAddress(address string) ([]byte, error) {
-	return p.AddressToOutputScript(address)
+// GetAddrDescFromAddress returns internal address representation of given address
+func (p *BCashParser) GetAddrDescFromAddress(address string) (bchain.AddressDescriptor, error) {
+	return p.addressToOutputScript(address)
 }
 
-// AddressToOutputScript converts bitcoin address to ScriptPubKey
-func (p *BCashParser) AddressToOutputScript(address string) ([]byte, error) {
+// addressToOutputScript converts bitcoin address to ScriptPubKey
+func (p *BCashParser) addressToOutputScript(address string) ([]byte, error) {
 	if isCashAddr(address) {
 		da, err := bchutil.DecodeAddress(address, p.Params)
 		if err != nil {
@@ -123,68 +146,42 @@ func isCashAddr(addr string) bool {
 }
 
 // outputScriptToAddresses converts ScriptPubKey to bitcoin addresses
-func outputScriptToAddresses(script []byte, params *chaincfg.Params) ([]string, error) {
-	a, err := bchutil.ExtractPkScriptAddrs(script, params)
+func (p *BCashParser) outputScriptToAddresses(script []byte) ([]string, bool, error) {
+	// convert possible P2PK script to P2PK, which bchutil can process
+	var err error
+	script, err = txscript.ConvertP2PKtoP2PKH(script)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	return []string{a.EncodeAddress()}, nil
-}
-
-type bcashAddress struct {
-	addr string
-}
-
-func newBCashAddress(addr string, format AddressFormat) (*bcashAddress, error) {
-	if isCashAddr(addr) && format == CashAddr {
-		return &bcashAddress{addr: addr}, nil
-	}
-
-	da, err := address.NewFromString(addr)
+	a, err := bchutil.ExtractPkScriptAddrs(script, p.Params)
 	if err != nil {
-		return nil, err
-	}
-	var ea string
-	switch format {
-	case CashAddr:
-		if a, err := da.CashAddress(); err != nil {
-			return nil, err
-		} else {
-			ea, err = a.Encode()
-			if err != nil {
-				return nil, err
+		// do not return unknown script type error as error
+		if err.Error() == "unknown script type" {
+			// try OP_RETURN script
+			or := btc.TryParseOPReturn(script)
+			if or != "" {
+				return []string{or}, false, nil
 			}
-		}
-
-	case Legacy:
-		if a, err := da.Legacy(); err != nil {
-			return nil, err
+			return []string{}, false, nil
 		} else {
-			ea, err = a.Encode()
-			if err != nil {
-				return nil, err
-			}
-		}
-	default:
-		return nil, fmt.Errorf("Unknown address format: %d", format)
-	}
-	return &bcashAddress{addr: ea}, nil
-}
-
-func (a *bcashAddress) String() string {
-	return a.addr
-}
-
-func (a *bcashAddress) AreEqual(addr string) bool {
-	return a.String() == addr
-}
-
-func (a *bcashAddress) InSlice(addrs []string) bool {
-	ea := a.String()
-	for _, addr := range addrs {
-		if ea == addr {
-			return true
+			return nil, false, err
 		}
 	}
-	return false
+	// EncodeAddress returns CashAddr address
+	addr := a.EncodeAddress()
+	if p.AddressFormat == Legacy {
+		da, err := address.NewFromString(addr)
+		if err != nil {
+			return nil, false, err
+		}
+		ca, err := da.Legacy()
+		if err != nil {
+			return nil, false, err
+		}
+		addr, err = ca.Encode()
+		if err != nil {
+			return nil, false, err
+		}
+	}
+	return []string{addr}, len(addr) > 0, nil
 }

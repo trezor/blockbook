@@ -2,9 +2,11 @@ package bchain
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/big"
 )
 
 // errors with specific meaning returned by blockchain rpc
@@ -42,25 +44,19 @@ type ScriptPubKey struct {
 	Addresses []string `json:"addresses"`
 }
 
-type Address interface {
-	String() string
-	AreEqual(addr string) bool
-	InSlice(addrs []string) bool
-}
-
 type Vout struct {
-	Value        float64      `json:"value"`
+	ValueSat     big.Int
+	JsonValue    json.Number  `json:"value"`
 	N            uint32       `json:"n"`
 	ScriptPubKey ScriptPubKey `json:"scriptPubKey"`
-	Address      Address
 }
 
 // Tx is blockchain transaction
 // unnecessary fields are commented out to avoid overhead
 type Tx struct {
-	Hex  string `json:"hex"`
-	Txid string `json:"txid"`
-	// Version  int32  `json:"version"`
+	Hex      string `json:"hex"`
+	Txid     string `json:"txid"`
+	Version  int32  `json:"version"`
 	LockTime uint32 `json:"locktime"`
 	Vin      []Vin  `json:"vin"`
 	Vout     []Vout `json:"vout"`
@@ -75,32 +71,57 @@ type Block struct {
 	Txs []Tx `json:"tx"`
 }
 
-type ThinBlock struct {
-	BlockHeader
-	Txids []string `json:"tx"`
-}
-
+// BlockHeader contains limited data (as needed for indexing) from backend block header
 type BlockHeader struct {
 	Hash          string `json:"hash"`
 	Prev          string `json:"previousblockhash"`
 	Next          string `json:"nextblockhash"`
 	Height        uint32 `json:"height"`
 	Confirmations int    `json:"confirmations"`
+	Size          int    `json:"size"`
+	Time          int64  `json:"time,omitempty"`
+}
+
+// BlockInfo contains extended block header data and a list of block txids
+type BlockInfo struct {
+	BlockHeader
+	Version    json.Number `json:"version"`
+	MerkleRoot string      `json:"merkleroot"`
+	Nonce      json.Number `json:"nonce"`
+	Bits       string      `json:"bits"`
+	Difficulty json.Number `json:"difficulty"`
+	Txids      []string    `json:"tx,omitempty"`
 }
 
 type MempoolEntry struct {
-	Size            uint32   `json:"size"`
-	Fee             float64  `json:"fee"`
-	ModifiedFee     float64  `json:"modifiedfee"`
-	Time            float64  `json:"time"`
-	Height          uint32   `json:"height"`
-	DescendantCount uint32   `json:"descendantcount"`
-	DescendantSize  uint32   `json:"descendantsize"`
-	DescendantFees  uint32   `json:"descendantfees"`
-	AncestorCount   uint32   `json:"ancestorcount"`
-	AncestorSize    uint32   `json:"ancestorsize"`
-	AncestorFees    uint32   `json:"ancestorfees"`
-	Depends         []string `json:"depends"`
+	Size            uint32 `json:"size"`
+	FeeSat          big.Int
+	Fee             json.Number `json:"fee"`
+	ModifiedFeeSat  big.Int
+	ModifiedFee     json.Number `json:"modifiedfee"`
+	Time            uint64      `json:"time"`
+	Height          uint32      `json:"height"`
+	DescendantCount uint32      `json:"descendantcount"`
+	DescendantSize  uint32      `json:"descendantsize"`
+	DescendantFees  uint32      `json:"descendantfees"`
+	AncestorCount   uint32      `json:"ancestorcount"`
+	AncestorSize    uint32      `json:"ancestorsize"`
+	AncestorFees    uint32      `json:"ancestorfees"`
+	Depends         []string    `json:"depends"`
+}
+
+type ChainInfo struct {
+	Chain           string  `json:"chain"`
+	Blocks          int     `json:"blocks"`
+	Headers         int     `json:"headers"`
+	Bestblockhash   string  `json:"bestblockhash"`
+	Difficulty      string  `json:"difficulty"`
+	SizeOnDisk      int64   `json:"size_on_disk"`
+	Version         string  `json:"version"`
+	Subversion      string  `json:"subversion"`
+	ProtocolVersion string  `json:"protocolversion"`
+	Timeoffset      float64 `json:"timeoffset"`
+	Warnings        string  `json:"warnings"`
 }
 
 type RPCError struct {
@@ -112,6 +133,19 @@ func (e *RPCError) Error() string {
 	return fmt.Sprintf("%d: %s", e.Code, e.Message)
 }
 
+// AddressDescriptor is an opaque type obtained by parser.GetAddrDesc* methods
+type AddressDescriptor []byte
+
+func (ad AddressDescriptor) String() string {
+	return "ad:" + hex.EncodeToString(ad)
+}
+
+// OnNewBlockFunc is used to send notification about a new block
+type OnNewBlockFunc func(hash string, height uint32)
+
+// OnNewTxAddrFunc is used to send notification about a new transaction/address
+type OnNewTxAddrFunc func(txid string, desc AddressDescriptor, isOutput bool)
+
 // BlockChain defines common interface to block chain daemon
 type BlockChain interface {
 	// life-cycle methods
@@ -122,22 +156,25 @@ type BlockChain interface {
 	GetNetworkName() string
 	GetSubversion() string
 	GetCoinName() string
+	GetChainInfo() (*ChainInfo, error)
 	// requests
-	GetBlockChainInfo() (string, error)
 	GetBestBlockHash() (string, error)
 	GetBestBlockHeight() (uint32, error)
 	GetBlockHash(height uint32) (string, error)
 	GetBlockHeader(hash string) (*BlockHeader, error)
 	GetBlock(hash string, height uint32) (*Block, error)
+	GetBlockInfo(hash string) (*BlockInfo, error)
 	GetMempool() ([]string, error)
 	GetTransaction(txid string) (*Tx, error)
 	GetTransactionForMempool(txid string) (*Tx, error)
-	EstimateSmartFee(blocks int, conservative bool) (float64, error)
-	EstimateFee(blocks int) (float64, error)
+	GetTransactionSpecific(txid string) (json.RawMessage, error)
+	EstimateSmartFee(blocks int, conservative bool) (big.Int, error)
+	EstimateFee(blocks int) (big.Int, error)
 	SendRawTransaction(tx string) (string, error)
 	// mempool
-	ResyncMempool(onNewTxAddr func(txid string, addr string)) (int, error)
+	ResyncMempool(onNewTxAddr OnNewTxAddrFunc) (int, error)
 	GetMempoolTransactions(address string) ([]string, error)
+	GetMempoolTransactionsForAddrDesc(addrDesc AddressDescriptor) ([]string, error)
 	GetMempoolEntry(txid string) (*MempoolEntry, error)
 	// parser
 	GetChainParser() BlockChainParser
@@ -145,7 +182,7 @@ type BlockChain interface {
 
 // BlockChainParser defines common interface to parsing and conversions of block chain data
 type BlockChainParser interface {
-	// self description
+	// chain configuration description
 	// UTXO chains need "inputs" column in db, that map transactions to transactions that spend them
 	// non UTXO chains have mapping of address to input and output transactions directly in "outputs" column in db
 	IsUTXOChain() bool
@@ -153,12 +190,16 @@ type BlockChainParser interface {
 	// and used in case of fork
 	// if 0 the blockaddresses column is not used at all (usually non UTXO chains)
 	KeepBlockAddresses() int
-	// address id conversions
-	GetAddrIDFromVout(output *Vout) ([]byte, error)
-	GetAddrIDFromAddress(address string) ([]byte, error)
-	// address to output script conversions
-	AddressToOutputScript(address string) ([]byte, error)
-	OutputScriptToAddresses(script []byte) ([]string, error)
+	// AmountToDecimalString converts amount in big.Int to string with decimal point in the correct place
+	AmountToDecimalString(a *big.Int) string
+	// AmountToBigInt converts amount in json.Number (string) to big.Int
+	// it uses string operations to avoid problems with rounding
+	AmountToBigInt(n json.Number) (big.Int, error)
+	// address descriptor conversions
+	GetAddrDescFromVout(output *Vout) (AddressDescriptor, error)
+	GetAddrDescFromAddress(address string) (AddressDescriptor, error)
+	GetAddressesFromAddrDesc(addrDesc AddressDescriptor) ([]string, bool, error)
+	GetScriptFromAddrDesc(addrDesc AddressDescriptor) ([]byte, error)
 	// transactions
 	PackedTxidLen() int
 	PackTxid(txid string) ([]byte, error)

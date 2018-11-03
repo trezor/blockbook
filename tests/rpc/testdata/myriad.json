@@ -1,0 +1,46 @@
+{
+    "blockHeight": 20000,
+    "blockHash": "a5eac2e226d40d758059c3b5041372c82f49e5df72047424187be72bab410885",
+    "blockTime": 1393723468,
+    "blockTxs": [
+        "b5860208ff392f5c750fd4e0d5c8d647f9fc9e1d30a1b5401d3717a9fc604c16",
+        "b01e2eb866ed101ed117b4ad18b753929e85c42e3d8add76bdd16e5c00519dcc",
+        "834e1498be0c5b00dfa5db855f18c69aff19ff9f823b05922077c0875057bce0"
+    ],
+    "txDetails": {
+        "b01e2eb866ed101ed117b4ad18b753929e85c42e3d8add76bdd16e5c00519dcc": {
+            "hex": "0100000001163465df9bb21d89e90056f11887a398d5a313aef71e3974306459661a91588c000000006b4830450220129c9e9a27406796f3f7d7edcc446037b38ddb3ef94745cec8e7cde618a811140221008eb3b893cdd3725e99b74c020867821e1f74199065260586f5ef3c22b133dd2a012103e2e23d38dc8fa493cde4077f650ab9f22eacafd14a10b123994f38c9f35dfee9ffffffff025e90ec28050000001976a9141cba92fe1510b8c73550fd4d3e0b44acdffcd12d88ac79c268ba0a0000001976a9142f86cdfa98cac89143cf9e3d309cc072caccdf6f88ac00000000",
+            "txid": "b01e2eb866ed101ed117b4ad18b753929e85c42e3d8add76bdd16e5c00519dcc",
+            "blocktime": 1393723468,
+            "time": 1393723468,
+            "locktime": 0,
+            "version": 1,
+            "vin": [
+                {
+                    "txid": "8c58911a6659643074391ef7ae13a3d598a38718f15600e9891db29bdf653416",
+                    "vout": 0,
+                    "sequence": 4294967295,
+                    "scriptSig": {
+                        "hex": "4830450220129c9e9a27406796f3f7d7edcc446037b38ddb3ef94745cec8e7cde618a811140221008eb3b893cdd3725e99b74c020867821e1f74199065260586f5ef3c22b133dd2a012103e2e23d38dc8fa493cde4077f650ab9f22eacafd14a10b123994f38c9f35dfee9"
+                    }
+                }
+            ],
+            "vout": [
+                {
+                    "value": 221.61428574,
+                    "n": 0,
+                    "scriptPubKey": {
+                        "hex": "76a9141cba92fe1510b8c73550fd4d3e0b44acdffcd12d88ac"
+                    }
+                },
+                {
+                    "value": 460.77100665,
+                    "n": 1,
+                    "scriptPubKey": {
+                        "hex": "76a9142f86cdfa98cac89143cf9e3d309cc072caccdf6f88ac"
+                    }
+                }
+            ]
+        }
+    }
+}

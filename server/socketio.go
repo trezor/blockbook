@@ -1,43 +1,42 @@
 package server
 
 import (
+	"blockbook/api"
 	"blockbook/bchain"
 	"blockbook/common"
 	"blockbook/db"
-	"context"
 	"encoding/json"
-	"fmt"
+	"math/big"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/juju/errors"
-
 	"github.com/golang/glog"
+	"github.com/juju/errors"
 	"github.com/martinboehm/golang-socketio"
 	"github.com/martinboehm/golang-socketio/transport"
 )
 
-const blockbookAbout = "Blockbook - blockchain indexer for TREZOR wallet https://trezor.io/. Do not use for any other purpose."
-
 // SocketIoServer is handle to SocketIoServer
 type SocketIoServer struct {
-	binding     string
-	certFiles   string
 	server      *gosocketio.Server
-	https       *http.Server
 	db          *db.RocksDB
 	txCache     *db.TxCache
 	chain       bchain.BlockChain
 	chainParser bchain.BlockChainParser
-	explorerURL string
 	metrics     *common.Metrics
 	is          *common.InternalState
+	api         *api.Worker
 }
 
 // NewSocketIoServer creates new SocketIo interface to blockbook and returns its handle
-func NewSocketIoServer(binding string, certFiles string, db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxCache, explorerURL string, metrics *common.Metrics, is *common.InternalState) (*SocketIoServer, error) {
+func NewSocketIoServer(db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxCache, metrics *common.Metrics, is *common.InternalState) (*SocketIoServer, error) {
+	api, err := api.NewWorker(db, chain, txCache, is)
+	if err != nil {
+		return nil, err
+	}
+
 	server := gosocketio.NewServer(transport.GetDefaultWebsocketTransport())
 
 	server.On(gosocketio.OnConnection, func(c *gosocketio.Channel) {
@@ -58,39 +57,16 @@ func NewSocketIoServer(binding string, certFiles string, db *db.RocksDB, chain b
 		Name    string `json:"name"`
 		Message string `json:"message"`
 	}
-
-	addr, path := splitBinding(binding)
-	serveMux := http.NewServeMux()
-	https := &http.Server{
-		Addr:    addr,
-		Handler: serveMux,
-	}
-
 	s := &SocketIoServer{
-		binding:     binding,
-		certFiles:   certFiles,
-		https:       https,
 		server:      server,
 		db:          db,
 		txCache:     txCache,
 		chain:       chain,
 		chainParser: chain.GetChainParser(),
-		explorerURL: explorerURL,
 		metrics:     metrics,
 		is:          is,
+		api:         api,
 	}
-
-	// support for tests of socket.io interface
-	serveMux.Handle(path+"test.html", http.FileServer(http.Dir("./static/")))
-	// redirect to Bitcore for details of transaction
-	serveMux.HandleFunc(path+"tx/", s.txRedirect)
-	serveMux.HandleFunc(path+"address/", s.addressRedirect)
-	// API call used to detect state of Blockbook
-	serveMux.HandleFunc(path+"api/block-index/", s.apiBlockIndex)
-	// handle socket.io
-	serveMux.Handle(path+"socket.io/", server)
-	// default handler
-	serveMux.HandleFunc(path, s.index)
 
 	server.On("message", s.onMessage)
 	server.On("subscribe", s.onSubscribe)
@@ -98,126 +74,9 @@ func NewSocketIoServer(binding string, certFiles string, db *db.RocksDB, chain b
 	return s, nil
 }
 
-func splitBinding(binding string) (addr string, path string) {
-	i := strings.Index(binding, "/")
-	if i >= 0 {
-		return binding[0:i], binding[i:]
-	}
-	return binding, "/"
-}
-
-// Run starts the server
-func (s *SocketIoServer) Run() error {
-	if s.certFiles == "" {
-		glog.Info("socketio server starting to listen on ws://", s.https.Addr)
-		return s.https.ListenAndServe()
-	}
-	glog.Info("socketio server starting to listen on wss://", s.https.Addr)
-	return s.https.ListenAndServeTLS(fmt.Sprint(s.certFiles, ".crt"), fmt.Sprint(s.certFiles, ".key"))
-}
-
-// Close closes the server
-func (s *SocketIoServer) Close() error {
-	glog.Infof("socketio server closing")
-	return s.https.Close()
-}
-
-// Shutdown shuts down the server
-func (s *SocketIoServer) Shutdown(ctx context.Context) error {
-	glog.Infof("socketio server shutdown")
-	return s.https.Shutdown(ctx)
-}
-
-func joinURL(base string, part string) string {
-	if len(base) > 0 {
-		if len(base) > 0 && base[len(base)-1] == '/' && len(part) > 0 && part[0] == '/' {
-			return base + part[1:]
-		} else {
-			return base + part
-		}
-	}
-	return part
-}
-
-func (s *SocketIoServer) txRedirect(w http.ResponseWriter, r *http.Request) {
-	if s.explorerURL != "" {
-		http.Redirect(w, r, joinURL(s.explorerURL, r.URL.Path), 302)
-		s.metrics.ExplorerViews.With(common.Labels{"action": "tx"}).Inc()
-	}
-}
-
-func (s *SocketIoServer) addressRedirect(w http.ResponseWriter, r *http.Request) {
-	if s.explorerURL != "" {
-		http.Redirect(w, r, joinURL(s.explorerURL, r.URL.Path), 302)
-		s.metrics.ExplorerViews.With(common.Labels{"action": "address"}).Inc()
-	}
-}
-
-type resAboutBlockbookPublic struct {
-	Coin            string    `json:"coin"`
-	Host            string    `json:"host"`
-	Version         string    `json:"version"`
-	GitCommit       string    `json:"gitcommit"`
-	BuildTime       string    `json:"buildtime"`
-	InSync          bool      `json:"inSync"`
-	BestHeight      uint32    `json:"bestHeight"`
-	LastBlockTime   time.Time `json:"lastBlockTime"`
-	InSyncMempool   bool      `json:"inSyncMempool"`
-	LastMempoolTime time.Time `json:"lastMempoolTime"`
-	About           string    `json:"about"`
-}
-
-func (s *SocketIoServer) index(w http.ResponseWriter, r *http.Request) {
-	vi := common.GetVersionInfo()
-	ss, bh, st := s.is.GetSyncState()
-	ms, mt, _ := s.is.GetMempoolSyncState()
-	a := resAboutBlockbookPublic{
-		Coin:            s.is.Coin,
-		Host:            s.is.Host,
-		Version:         vi.Version,
-		GitCommit:       vi.GitCommit,
-		BuildTime:       vi.BuildTime,
-		InSync:          ss,
-		BestHeight:      bh,
-		LastBlockTime:   st,
-		InSyncMempool:   ms,
-		LastMempoolTime: mt,
-		About:           blockbookAbout,
-	}
-	buf, err := json.MarshalIndent(a, "", "    ")
-	if err != nil {
-		glog.Error(err)
-	}
-	w.Write(buf)
-}
-
-func (s *SocketIoServer) apiBlockIndex(w http.ResponseWriter, r *http.Request) {
-	type resBlockIndex struct {
-		BlockHash string `json:"blockHash"`
-		About     string `json:"about"`
-	}
-	var err error
-	var hash string
-	height := -1
-	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
-		if h, err := strconv.Atoi(r.URL.Path[i+1:]); err == nil {
-			height = h
-		}
-	}
-	if height >= 0 {
-		hash, err = s.db.GetBlockHash(uint32(height))
-	} else {
-		_, hash, err = s.db.GetBestBlock()
-	}
-	if err != nil {
-		glog.Error(err)
-	} else {
-		r := resBlockIndex{
-			BlockHash: hash,
-			About:     blockbookAbout,
-		}
-		json.NewEncoder(w).Encode(r)
-	}
+// GetHandler returns socket.io http handler
+func (s *SocketIoServer) GetHandler() http.Handler {
+	return s.server
 }
 
 type addrOpts struct {
@@ -346,22 +205,6 @@ func unmarshalGetAddressRequest(params []byte) (addr []string, opts addrOpts, er
 	return
 }
 
-// bitcore returns txids from the newest to the oldest, we have to revert the order
-func uniqueTxidsInReverse(txids []string) []string {
-	i := len(txids)
-	ut := make([]string, i)
-	txidsMap := make(map[string]struct{})
-	for _, txid := range txids {
-		_, e := txidsMap[txid]
-		if !e {
-			i--
-			ut[i] = txid
-			txidsMap[txid] = struct{}{}
-		}
-	}
-	return ut[i:]
-}
-
 type resultAddressTxids struct {
 	Result []string `json:"result"`
 }
@@ -386,7 +229,7 @@ func (s *SocketIoServer) getAddressTxids(addr []string, opts *addrOpts) (res res
 			txids = append(txids, m...)
 		}
 	}
-	res.Result = uniqueTxidsInReverse(txids)
+	res.Result = api.UniqueTxidsInReverse(txids)
 	return res, nil
 }
 
@@ -396,6 +239,7 @@ type addressHistoryIndexes struct {
 }
 
 type txInputs struct {
+	Txid        *string `json:"txid"`
 	OutputIndex int     `json:"outputIndex"`
 	Script      *string `json:"script"`
 	// ScriptAsm   *string `json:"scriptAsm"`
@@ -408,33 +252,33 @@ type txOutputs struct {
 	Satoshis int64   `json:"satoshis"`
 	Script   *string `json:"script"`
 	// ScriptAsm   *string `json:"scriptAsm"`
-	SpentTxID   *string `json:"spentTxId,omitempty"`
-	SpentIndex  int     `json:"spentIndex,omitempty"`
-	SpentHeight int     `json:"spentHeight,omitempty"`
-	Address     *string `json:"address"`
+	// SpentTxID   *string `json:"spentTxId,omitempty"`
+	// SpentIndex  int     `json:"spentIndex,omitempty"`
+	// SpentHeight int     `json:"spentHeight,omitempty"`
+	Address *string `json:"address"`
 }
 
 type resTx struct {
 	Hex string `json:"hex"`
 	// BlockHash      string      `json:"blockHash,omitempty"`
-	Height         int   `json:"height"`
-	BlockTimestamp int64 `json:"blockTimestamp,omitempty"`
-	// Version        int         `json:"version"`
-	Hash     string `json:"hash"`
-	Locktime int    `json:"locktime,omitempty"`
+	Height         int    `json:"height"`
+	BlockTimestamp int64  `json:"blockTimestamp,omitempty"`
+	Version        int    `json:"version"`
+	Hash           string `json:"hash"`
+	Locktime       int    `json:"locktime,omitempty"`
 	// Size           int         `json:"size,omitempty"`
-	Inputs []txInputs `json:"inputs"`
-	// InputSatoshis  int64       `json:"inputSatoshis,omitempty"`
-	Outputs []txOutputs `json:"outputs"`
-	// OutputSatoshis int64       `json:"outputSatoshis,omitempty"`
-	// FeeSatoshis    int64       `json:"feeSatoshis,omitempty"`
+	Inputs         []txInputs  `json:"inputs"`
+	InputSatoshis  int64       `json:"inputSatoshis,omitempty"`
+	Outputs        []txOutputs `json:"outputs"`
+	OutputSatoshis int64       `json:"outputSatoshis,omitempty"`
+	FeeSatoshis    int64       `json:"feeSatoshis,omitempty"`
 }
 
 type addressHistoryItem struct {
-	Addresses     map[string]addressHistoryIndexes `json:"addresses"`
-	Satoshis      int64                            `json:"satoshis"`
-	Confirmations int                              `json:"confirmations"`
-	Tx            resTx                            `json:"tx"`
+	Addresses     map[string]*addressHistoryIndexes `json:"addresses"`
+	Satoshis      int64                             `json:"satoshis"`
+	Confirmations int                               `json:"confirmations"`
+	Tx            resTx                             `json:"tx"`
 }
 
 type resultGetAddressHistory struct {
@@ -453,21 +297,81 @@ func stringInSlice(a string, list []string) bool {
 	return false
 }
 
-func txToResTx(tx *bchain.Tx, height int, hi []txInputs, ho []txOutputs) resTx {
-	return resTx{
-		// BlockHash:      tx.BlockHash,
-		BlockTimestamp: tx.Blocktime,
-		// FeeSatoshis,
-		Hash:   tx.Txid,
-		Height: height,
-		Hex:    tx.Hex,
-		Inputs: hi,
-		// InputSatoshis,
-		Locktime: int(tx.LockTime),
-		Outputs:  ho,
-		// OutputSatoshis,
-		// Version: int(tx.Version),
+func txToResTx(tx *api.Tx) resTx {
+	inputs := make([]txInputs, len(tx.Vin))
+	for i := range tx.Vin {
+		vin := &tx.Vin[i]
+		txid := vin.Txid
+		script := vin.ScriptSig.Hex
+		input := txInputs{
+			Txid:        &txid,
+			Script:      &script,
+			Sequence:    int64(vin.Sequence),
+			OutputIndex: int(vin.Vout),
+			Satoshis:    vin.ValueSat.Int64(),
+		}
+		if len(vin.Addresses) > 0 {
+			a := vin.Addresses[0]
+			input.Address = &a
+		}
+		inputs[i] = input
 	}
+	outputs := make([]txOutputs, len(tx.Vout))
+	for i := range tx.Vout {
+		vout := &tx.Vout[i]
+		script := vout.ScriptPubKey.Hex
+		output := txOutputs{
+			Satoshis: vout.ValueSat.Int64(),
+			Script:   &script,
+		}
+		if len(vout.ScriptPubKey.Addresses) > 0 {
+			a := vout.ScriptPubKey.Addresses[0]
+			output.Address = &a
+		}
+		outputs[i] = output
+	}
+	var h int
+	if tx.Confirmations == 0 {
+		h = -1
+	} else {
+		h = int(tx.Blockheight)
+	}
+	return resTx{
+		BlockTimestamp: tx.Blocktime,
+		FeeSatoshis:    tx.FeesSat.Int64(),
+		Hash:           tx.Txid,
+		Height:         h,
+		Hex:            tx.Hex,
+		Inputs:         inputs,
+		InputSatoshis:  tx.ValueInSat.Int64(),
+		Locktime:       int(tx.Locktime),
+		Outputs:        outputs,
+		OutputSatoshis: tx.ValueOutSat.Int64(),
+		Version:        int(tx.Version),
+	}
+}
+
+func addressInSlice(s, t []string) string {
+	for _, sa := range s {
+		for _, ta := range t {
+			if ta == sa {
+				return sa
+			}
+		}
+	}
+	return ""
+}
+
+func (s *SocketIoServer) getAddressesFromVout(vout *bchain.Vout) ([]string, error) {
+	addrDesc, err := s.chainParser.GetAddrDescFromVout(vout)
+	if err != nil {
+		return nil, err
+	}
+	voutAddr, _, err := s.chainParser.GetAddressesFromAddrDesc(addrDesc)
+	if err != nil {
+		return nil, err
+	}
+	return voutAddr, nil
 }
 
 func (s *SocketIoServer) getAddressHistory(addr []string, opts *addrOpts) (res resultGetAddressHistory, err error) {
@@ -475,57 +379,53 @@ func (s *SocketIoServer) getAddressHistory(addr []string, opts *addrOpts) (res r
 	if err != nil {
 		return
 	}
-	bestheight, _, err := s.db.GetBestBlock()
-	if err != nil {
-		return
-	}
 	txids := txr.Result
 	res.Result.TotalCount = len(txids)
 	res.Result.Items = make([]addressHistoryItem, 0)
-	for i, txid := range txids {
-		if i >= opts.From && i < opts.To {
-			tx, height, err := s.txCache.GetTransaction(txid, bestheight)
-			if err != nil {
-				return res, err
-			}
-			ads := make(map[string]addressHistoryIndexes)
-			hi := make([]txInputs, 0)
-			ho := make([]txOutputs, 0)
-			for _, vout := range tx.Vout {
-				aoh := vout.ScriptPubKey.Hex
-				ao := txOutputs{
-					Satoshis: int64(vout.Value*1E8 + 0.5),
-					Script:   &aoh,
-				}
-				if vout.Address != nil {
-					a := vout.Address.String()
-					ao.Address = &a
-					if vout.Address.InSlice(addr) {
-						hi, ok := ads[a]
-						if ok {
-							hi.OutputIndexes = append(hi.OutputIndexes, int(vout.N))
-						} else {
-							hi := addressHistoryIndexes{}
-							hi.InputIndexes = make([]int, 0)
-							hi.OutputIndexes = append(hi.OutputIndexes, int(vout.N))
-							ads[a] = hi
-						}
-					}
-				}
-				ho = append(ho, ao)
-			}
-			ahi := addressHistoryItem{}
-			ahi.Addresses = ads
-			ahi.Confirmations = int(tx.Confirmations)
-			var h int
-			if tx.Confirmations == 0 {
-				h = -1
-			} else {
-				h = int(height)
-			}
-			ahi.Tx = txToResTx(tx, h, hi, ho)
-			res.Result.Items = append(res.Result.Items, ahi)
+	to := len(txids)
+	if to > opts.To {
+		to = opts.To
+	}
+	for txi := opts.From; txi < to; txi++ {
+		tx, err := s.api.GetTransaction(txids[txi], false)
+		if err != nil {
+			return res, err
 		}
+		ads := make(map[string]*addressHistoryIndexes)
+		var totalSat big.Int
+		for i := range tx.Vin {
+			vin := &tx.Vin[i]
+			a := addressInSlice(vin.Addresses, addr)
+			if a != "" {
+				hi := ads[a]
+				if hi == nil {
+					hi = &addressHistoryIndexes{OutputIndexes: []int{}}
+					ads[a] = hi
+				}
+				hi.InputIndexes = append(hi.InputIndexes, int(vin.N))
+				totalSat.Sub(&totalSat, &vin.ValueSat)
+			}
+		}
+		for i := range tx.Vout {
+			vout := &tx.Vout[i]
+			a := addressInSlice(vout.ScriptPubKey.Addresses, addr)
+			if a != "" {
+				hi := ads[a]
+				if hi == nil {
+					hi = &addressHistoryIndexes{InputIndexes: []int{}}
+					ads[a] = hi
+				}
+				hi.OutputIndexes = append(hi.OutputIndexes, int(vout.N))
+				totalSat.Add(&totalSat, &vout.ValueSat)
+			}
+		}
+		ahi := addressHistoryItem{}
+		ahi.Addresses = ads
+		ahi.Confirmations = int(tx.Confirmations)
+		ahi.Satoshis = totalSat.Int64()
+		ahi.Tx = txToResTx(tx)
+		res.Result.Items = append(res.Result.Items, ahi)
+		// }
 	}
 	return
 }
@@ -617,6 +517,7 @@ func unmarshalEstimateSmartFee(params []byte) (blocks int, conservative bool, er
 }
 
 type resultEstimateSmartFee struct {
+	// for compatibility reasons use float64
 	Result float64 `json:"result"`
 }
 
@@ -625,7 +526,7 @@ func (s *SocketIoServer) estimateSmartFee(blocks int, conservative bool) (res re
 	if err != nil {
 		return
 	}
-	res.Result = fee
+	res.Result, err = strconv.ParseFloat(s.chainParser.AmountToDecimalString(&fee), 64)
 	return
 }
 
@@ -644,6 +545,7 @@ func unmarshalEstimateFee(params []byte) (blocks int, err error) {
 }
 
 type resultEstimateFee struct {
+	// for compatibility reasons use float64
 	Result float64 `json:"result"`
 }
 
@@ -652,7 +554,7 @@ func (s *SocketIoServer) estimateFee(blocks int) (res resultEstimateFee, err err
 	if err != nil {
 		return
 	}
-	res.Result = fee
+	res.Result, err = strconv.ParseFloat(s.chainParser.AmountToDecimalString(&fee), 64)
 	return
 }
 
@@ -686,7 +588,7 @@ func (s *SocketIoServer) getInfo() (res resultGetInfo, err error) {
 	res.Result.Network = s.chain.GetNetworkName()
 	res.Result.Subversion = s.chain.GetSubversion()
 	res.Result.CoinName = s.chain.GetCoinName()
-	res.Result.About = blockbookAbout
+	res.Result.About = api.Text.BlockbookAbout
 	return
 }
 
@@ -725,63 +627,12 @@ type resultGetDetailedTransaction struct {
 }
 
 func (s *SocketIoServer) getDetailedTransaction(txid string) (res resultGetDetailedTransaction, err error) {
-	bestheight, _, err := s.db.GetBestBlock()
-	if err != nil {
-		return
-	}
-	tx, height, err := s.txCache.GetTransaction(txid, bestheight)
+	tx, err := s.api.GetTransaction(txid, false)
 	if err != nil {
 		return res, err
 	}
-	hi := make([]txInputs, 0)
-	ho := make([]txOutputs, 0)
-	for _, vin := range tx.Vin {
-		ais := vin.ScriptSig.Hex
-		ai := txInputs{
-			Script:      &ais,
-			Sequence:    int64(vin.Sequence),
-			OutputIndex: int(vin.Vout),
-		}
-		if vin.Txid != "" {
-			otx, _, err := s.txCache.GetTransaction(vin.Txid, bestheight)
-			if err != nil {
-				return res, err
-			}
-			if len(otx.Vout) > int(vin.Vout) {
-				vout := otx.Vout[vin.Vout]
-				if vout.Address != nil {
-					a := vout.Address.String()
-					ai.Address = &a
-				}
-				ai.Satoshis = int64(vout.Value*1E8 + 0.5)
-			}
-		}
-		hi = append(hi, ai)
-	}
-	for _, vout := range tx.Vout {
-		aos := vout.ScriptPubKey.Hex
-		ao := txOutputs{
-			Satoshis: int64(vout.Value*1E8 + 0.5),
-			Script:   &aos,
-		}
-		if vout.Address != nil {
-			a := vout.Address.String()
-			ao.Address = &a
-		}
-		ho = append(ho, ao)
-	}
-	var h int
-	if tx.Confirmations == 0 {
-		h = -1
-	} else {
-		h = int(height)
-	}
-	res.Result = txToResTx(tx, h, hi, ho)
+	res.Result = txToResTx(tx)
 	return
-}
-
-type resultSendTransaction struct {
-	Result string `json:"result"`
 }
 
 func (s *SocketIoServer) sendTransaction(tx string) (res resultSendTransaction, err error) {
@@ -837,8 +688,18 @@ func (s *SocketIoServer) onSubscribe(c *gosocketio.Channel, req []byte) interfac
 			onError(c.Id(), sc, "invalid data", err.Error()+", req: "+r)
 			return nil
 		}
-		for _, a := range addrs {
-			c.Join("bitcoind/addresstxid-" + a)
+		// normalize the addresses to AddressDescriptor
+		descs := make([]bchain.AddressDescriptor, len(addrs))
+		for i, a := range addrs {
+			d, err := s.chainParser.GetAddrDescFromAddress(a)
+			if err != nil {
+				onError(c.Id(), sc, "invalid address "+a, err.Error()+", req: "+r)
+				return nil
+			}
+			descs[i] = d
+		}
+		for _, d := range descs {
+			c.Join("bitcoind/addresstxid-" + string(d))
 		}
 	} else {
 		sc = r[1 : len(r)-1]
@@ -859,9 +720,18 @@ func (s *SocketIoServer) OnNewBlockHash(hash string) {
 }
 
 // OnNewTxAddr notifies users subscribed to bitcoind/addresstxid about new block
-func (s *SocketIoServer) OnNewTxAddr(txid string, addr string) {
-	c := s.server.BroadcastTo("bitcoind/addresstxid-"+addr, "bitcoind/addresstxid", map[string]string{"address": addr, "txid": txid})
-	if c > 0 {
-		glog.Info("broadcasting new txid ", txid, " for addr ", addr, " to ", c, " channels")
+func (s *SocketIoServer) OnNewTxAddr(txid string, desc bchain.AddressDescriptor, isOutput bool) {
+	addr, searchable, err := s.chainParser.GetAddressesFromAddrDesc(desc)
+	if err != nil {
+		glog.Error("GetAddressesFromAddrDesc error ", err, " for descriptor ", desc)
+	} else if searchable && len(addr) == 1 {
+		data := map[string]interface{}{"address": addr[0], "txid": txid}
+		if !isOutput {
+			data["input"] = true
+		}
+		c := s.server.BroadcastTo("bitcoind/addresstxid-"+string(desc), "bitcoind/addresstxid", data)
+		if c > 0 {
+			glog.Info("broadcasting new txid ", txid, " for addr ", addr[0], " to ", c, " channels")
+		}
 	}
 }
