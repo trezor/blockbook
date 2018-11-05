@@ -8,6 +8,7 @@ import (
 	"github.com/gobuffalo/packr"
 )
 
+// Text contains static overridable texts used in explorer
 var Text struct {
 	BlockbookAbout, TOSLink string
 }

@@ -85,7 +85,7 @@ func (w *Worker) GetSpendingTxid(txid string, n int) (string, error) {
 		return "", err
 	}
 	if n >= len(tx.Vout) || n < 0 {
-		return "", NewApiError(fmt.Sprintf("Passed incorrect vout index %v for tx %v, len vout %v", n, tx.Txid, len(tx.Vout)), false)
+		return "", NewAPIError(fmt.Sprintf("Passed incorrect vout index %v for tx %v, len vout %v", n, tx.Txid, len(tx.Vout)), false)
 	}
 	err = w.setSpendingTxToVout(&tx.Vout[n], tx.Txid, uint32(tx.Blockheight))
 	if err != nil {
@@ -100,7 +100,7 @@ func (w *Worker) GetTransaction(txid string, spendingTxs bool) (*Tx, error) {
 	start := time.Now()
 	bchainTx, height, err := w.txCache.GetTransaction(txid)
 	if err != nil {
-		return nil, NewApiError(fmt.Sprintf("Tx not found, %v", err), true)
+		return nil, NewAPIError(fmt.Sprintf("Tx not found, %v", err), true)
 	}
 	ta, err := w.db.GetTxAddresses(txid)
 	if err != nil {
@@ -357,12 +357,12 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, onlyTxids b
 	}
 	addrDesc, err := w.chainParser.GetAddrDescFromAddress(address)
 	if err != nil {
-		return nil, NewApiError(fmt.Sprintf("Address not found, %v", err), true)
+		return nil, NewAPIError(fmt.Sprintf("Invalid address, %v", err), true)
 	}
 	// ba can be nil if the address is only in mempool!
 	ba, err := w.db.GetAddrDescBalance(addrDesc)
 	if err != nil {
-		return nil, NewApiError(fmt.Sprintf("Address not found, %v", err), true)
+		return nil, NewAPIError(fmt.Sprintf("Address not found, %v", err), true)
 	}
 	// convert the address to the format defined by the parser
 	addresses, _, err := w.chainParser.GetAddressesFromAddrDesc(addrDesc)
@@ -390,7 +390,9 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, onlyTxids b
 	txm = UniqueTxidsInReverse(txm)
 	// check if the address exist
 	if len(txc)+len(txm) == 0 {
-		return nil, NewApiError("Address not found", true)
+		return &Address{
+			AddrStr: address,
+		}, nil
 	}
 	bestheight, _, err := w.db.GetBestBlock()
 	if err != nil {
@@ -526,9 +528,9 @@ func (w *Worker) GetBlock(bid string, page int, txsOnPage int) (*Block, error) {
 	bi, err := w.chain.GetBlockInfo(hash)
 	if err != nil {
 		if err == bchain.ErrBlockNotFound {
-			return nil, NewApiError("Block not found", true)
+			return nil, NewAPIError("Block not found", true)
 		}
-		return nil, NewApiError(fmt.Sprintf("Block not found, %v", err), true)
+		return nil, NewAPIError(fmt.Sprintf("Block not found, %v", err), true)
 	}
 	dbi := &db.BlockInfo{
 		Hash:   bi.Hash,

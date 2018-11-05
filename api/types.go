@@ -8,27 +8,31 @@ import (
 	"time"
 )
 
-type ApiError struct {
+// APIError extends error by information if the error details should be returned to the end user
+type APIError struct {
 	Text   string
 	Public bool
 }
 
-func (e *ApiError) Error() string {
+func (e *APIError) Error() string {
 	return e.Text
 }
 
-func NewApiError(s string, public bool) error {
-	return &ApiError{
+// NewAPIError creates ApiError
+func NewAPIError(s string, public bool) error {
+	return &APIError{
 		Text:   s,
 		Public: public,
 	}
 }
 
+// ScriptSig contains input script
 type ScriptSig struct {
 	Hex string `json:"hex"`
 	Asm string `json:"asm,omitempty"`
 }
 
+// Vin contains information about single transaction input
 type Vin struct {
 	Txid       string                   `json:"txid"`
 	Vout       uint32                   `json:"vout"`
@@ -42,6 +46,7 @@ type Vin struct {
 	ValueSat   big.Int                  `json:"-"`
 }
 
+// ScriptPubKey contains output script and addresses derived from it
 type ScriptPubKey struct {
 	Hex        string                   `json:"hex"`
 	Asm        string                   `json:"asm,omitempty"`
@@ -50,6 +55,8 @@ type ScriptPubKey struct {
 	Searchable bool                     `json:"-"`
 	Type       string                   `json:"type,omitempty"`
 }
+
+// Vout contains information about single transaction output
 type Vout struct {
 	Value        string       `json:"value"`
 	ValueSat     big.Int      `json:"-"`
@@ -61,6 +68,7 @@ type Vout struct {
 	SpentHeight  int          `json:"spentHeight,omitempty"`
 }
 
+// Tx holds information about a transaction
 type Tx struct {
 	Txid          string  `json:"txid"`
 	Version       int32   `json:"version,omitempty"`
@@ -82,12 +90,14 @@ type Tx struct {
 	Hex           string  `json:"hex"`
 }
 
+// Paging contains information about paging for address, blocks and block
 type Paging struct {
 	Page        int `json:"page"`
 	TotalPages  int `json:"totalPages"`
 	ItemsOnPage int `json:"itemsOnPage"`
 }
 
+// Address holds information about address and its transactions
 type Address struct {
 	Paging
 	AddrStr                 string   `json:"addrStr"`
@@ -101,11 +111,13 @@ type Address struct {
 	Txids                   []string `json:"transactions,omitempty"`
 }
 
+// Blocks is list of blocks with paging information
 type Blocks struct {
 	Paging
 	Blocks []db.BlockInfo `json:"blocks"`
 }
 
+// Block contains information about block
 type Block struct {
 	Paging
 	bchain.BlockInfo
@@ -113,6 +125,7 @@ type Block struct {
 	Transactions []*Tx `json:"txs,omitempty"`
 }
 
+// BlockbookInfo contains information about the running blockbook instance
 type BlockbookInfo struct {
 	Coin              string                       `json:"coin"`
 	Host              string                       `json:"host"`
@@ -133,6 +146,7 @@ type BlockbookInfo struct {
 	About             string                       `json:"about"`
 }
 
+// SystemInfo contains information about the running blockbook and backend instance
 type SystemInfo struct {
 	Blockbook *BlockbookInfo    `json:"blockbook"`
 	Backend   *bchain.ChainInfo `json:"backend"`
