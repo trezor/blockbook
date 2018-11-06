@@ -291,7 +291,26 @@ func (p *EthereumParser) UnpackBlockHash(buf []byte) (string, error) {
 	return hexutil.Encode(buf), nil
 }
 
-// GetChainType returns TypeEthereum
+// GetChainType returns EthereumType
 func (p *EthereumParser) GetChainType() bchain.ChainType {
 	return bchain.ChainEthereumType
+}
+
+// GetHeightFromTx returns ethereum specific data from bchain.Tx
+func GetHeightFromTx(tx *bchain.Tx) (uint32, error) {
+	// TODO -  temporary implementation - will use bchain.Tx.SpecificData field
+	b, err := hex.DecodeString(tx.Hex)
+	if err != nil {
+		return 0, err
+	}
+	var r rpcTransaction
+	var n uint64
+	err = json.Unmarshal(b, &r)
+	if err != nil {
+		return 0, err
+	}
+	if n, err = hexutil.DecodeUint64(r.BlockNumber); err != nil {
+		return 0, errors.Annotatef(err, "BlockNumber %v", r.BlockNumber)
+	}
+	return uint32(n), nil
 }

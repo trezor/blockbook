@@ -15,7 +15,7 @@ type ChainType int
 const (
 	// ChainBitcoinType is blockchain derived from bitcoin
 	ChainBitcoinType = ChainType(iota)
-	// TypeEthereum is blockchain derived from ethereum
+	// ChainEthereumType is blockchain derived from ethereum
 	ChainEthereumType
 )
 
