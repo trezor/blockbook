@@ -7,21 +7,21 @@ import (
 	"github.com/golang/glog"
 )
 
-// NonUTXOMempool is mempool handle of non UTXO chains
-type NonUTXOMempool struct {
+// MempoolEthereumType is mempool handle of EthereumType chains
+type MempoolEthereumType struct {
 	chain           BlockChain
 	mux             sync.Mutex
 	txToInputOutput map[string][]addrIndex
 	addrDescToTx    map[string][]outpoint
 }
 
-// NewNonUTXOMempool creates new mempool handler.
-func NewNonUTXOMempool(chain BlockChain) *NonUTXOMempool {
-	return &NonUTXOMempool{chain: chain}
+// NewMempoolEthereumType creates new mempool handler.
+func NewMempoolEthereumType(chain BlockChain) *MempoolEthereumType {
+	return &MempoolEthereumType{chain: chain}
 }
 
 // GetTransactions returns slice of mempool transactions for given address
-func (m *NonUTXOMempool) GetTransactions(address string) ([]string, error) {
+func (m *MempoolEthereumType) GetTransactions(address string) ([]string, error) {
 	parser := m.chain.GetChainParser()
 	addrDesc, err := parser.GetAddrDescFromAddress(address)
 	if err != nil {
@@ -31,7 +31,7 @@ func (m *NonUTXOMempool) GetTransactions(address string) ([]string, error) {
 }
 
 // GetAddrDescTransactions returns slice of mempool transactions for given address descriptor
-func (m *NonUTXOMempool) GetAddrDescTransactions(addrDesc AddressDescriptor) ([]string, error) {
+func (m *MempoolEthereumType) GetAddrDescTransactions(addrDesc AddressDescriptor) ([]string, error) {
 	m.mux.Lock()
 	defer m.mux.Unlock()
 	outpoints := m.addrDescToTx[string(addrDesc)]
@@ -42,7 +42,7 @@ func (m *NonUTXOMempool) GetAddrDescTransactions(addrDesc AddressDescriptor) ([]
 	return txs, nil
 }
 
-func (m *NonUTXOMempool) updateMappings(newTxToInputOutput map[string][]addrIndex, newAddrDescToTx map[string][]outpoint) {
+func (m *MempoolEthereumType) updateMappings(newTxToInputOutput map[string][]addrIndex, newAddrDescToTx map[string][]outpoint) {
 	m.mux.Lock()
 	defer m.mux.Unlock()
 	m.txToInputOutput = newTxToInputOutput
@@ -52,7 +52,7 @@ func (m *NonUTXOMempool) updateMappings(newTxToInputOutput map[string][]addrInde
 // Resync gets mempool transactions and maps outputs to transactions.
 // Resync is not reentrant, it should be called from a single thread.
 // Read operations (GetTransactions) are safe.
-func (m *NonUTXOMempool) Resync(onNewTxAddr OnNewTxAddrFunc) (int, error) {
+func (m *MempoolEthereumType) Resync(onNewTxAddr OnNewTxAddrFunc) (int, error) {
 	start := time.Now()
 	glog.V(1).Info("Mempool: resync")
 	txs, err := m.chain.GetMempool()

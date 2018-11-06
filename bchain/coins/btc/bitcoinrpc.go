@@ -27,7 +27,7 @@ type BitcoinRPC struct {
 	Parser       bchain.BlockChainParser
 	Testnet      bool
 	Network      string
-	Mempool      *bchain.UTXOMempool
+	Mempool      *bchain.MempoolBitcoinType
 	ParseBlocks  bool
 	pushHandler  func(bchain.NotificationType)
 	mq           *bchain.MQ
@@ -115,7 +115,7 @@ func (b *BitcoinRPC) GetChainInfoAndInitializeMempool(bc bchain.BlockChain) (str
 	}
 	b.mq = mq
 
-	b.Mempool = bchain.NewUTXOMempool(bc, b.ChainConfig.MempoolWorkers, b.ChainConfig.MempoolSubWorkers)
+	b.Mempool = bchain.NewMempoolBitcoinType(bc, b.ChainConfig.MempoolWorkers, b.ChainConfig.MempoolSubWorkers)
 
 	return chainName, nil
 }

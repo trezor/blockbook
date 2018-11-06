@@ -54,7 +54,7 @@ func AddressToPubKeyHex(addr string, parser bchain.BlockChainParser) string {
 	return hex.EncodeToString(b)
 }
 
-func GetTestUTXOBlock1(parser bchain.BlockChainParser) *bchain.Block {
+func GetTestBitcoinTypeBlock1(parser bchain.BlockChainParser) *bchain.Block {
 	return &bchain.Block{
 		BlockHeader: bchain.BlockHeader{
 			Height:        225493,
@@ -119,7 +119,7 @@ func GetTestUTXOBlock1(parser bchain.BlockChainParser) *bchain.Block {
 	}
 }
 
-func GetTestUTXOBlock2(parser bchain.BlockChainParser) *bchain.Block {
+func GetTestBitcoinTypeBlock2(parser bchain.BlockChainParser) *bchain.Block {
 	return &bchain.Block{
 		BlockHeader: bchain.BlockHeader{
 			Height:        225494,
