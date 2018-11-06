@@ -86,8 +86,8 @@ Good examples of coin configuration are
         * `parse` – Use binary parser for block decoding if *true* else call verbose back-end RPC method that returns
            JSON. Note that verbose method is slow and not every coin support it. However there are coin implementations
            that don't support binary parsing (e.g. ZCash).
-        * `mempool_workers` – Number of workers for UTXO mempool.
-        * `mempool_sub_workers` – Number of subworkers for UTXO mempool.
+        * `mempool_workers` – Number of workers for BitcoinType mempool.
+        * `mempool_sub_workers` – Number of subworkers for BitcoinType mempool.
         * `block_addresses_to_keep` – Number of blocks that are to be kept in blockaddresses column.
         * `additional_params` – Object of coin-specific params.
 

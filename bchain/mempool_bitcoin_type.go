@@ -23,8 +23,8 @@ type txidio struct {
 	io   []addrIndex
 }
 
-// UTXOMempool is mempool handle.
-type UTXOMempool struct {
+// MempoolBitcoinType is mempool handle.
+type MempoolBitcoinType struct {
 	chain           BlockChain
 	mux             sync.Mutex
 	txToInputOutput map[string][]addrIndex
@@ -34,10 +34,10 @@ type UTXOMempool struct {
 	onNewTxAddr     OnNewTxAddrFunc
 }
 
-// NewUTXOMempool creates new mempool handler.
+// NewMempoolBitcoinType creates new mempool handler.
 // For now there is no cleanup of sync routines, the expectation is that the mempool is created only once per process
-func NewUTXOMempool(chain BlockChain, workers int, subworkers int) *UTXOMempool {
-	m := &UTXOMempool{
+func NewMempoolBitcoinType(chain BlockChain, workers int, subworkers int) *MempoolBitcoinType {
+	m := &MempoolBitcoinType{
 		chain:         chain,
 		chanTxid:      make(chan string, 1),
 		chanAddrIndex: make(chan txidio, 1),
@@ -68,7 +68,7 @@ func NewUTXOMempool(chain BlockChain, workers int, subworkers int) *UTXOMempool 
 }
 
 // GetTransactions returns slice of mempool transactions for given address
-func (m *UTXOMempool) GetTransactions(address string) ([]string, error) {
+func (m *MempoolBitcoinType) GetTransactions(address string) ([]string, error) {
 	parser := m.chain.GetChainParser()
 	addrDesc, err := parser.GetAddrDescFromAddress(address)
 	if err != nil {
@@ -78,7 +78,7 @@ func (m *UTXOMempool) GetTransactions(address string) ([]string, error) {
 }
 
 // GetAddrDescTransactions returns slice of mempool transactions for given address descriptor
-func (m *UTXOMempool) GetAddrDescTransactions(addrDesc AddressDescriptor) ([]string, error) {
+func (m *MempoolBitcoinType) GetAddrDescTransactions(addrDesc AddressDescriptor) ([]string, error) {
 	m.mux.Lock()
 	defer m.mux.Unlock()
 	outpoints := m.addrDescToTx[string(addrDesc)]
@@ -89,14 +89,14 @@ func (m *UTXOMempool) GetAddrDescTransactions(addrDesc AddressDescriptor) ([]str
 	return txs, nil
 }
 
-func (m *UTXOMempool) updateMappings(newTxToInputOutput map[string][]addrIndex, newAddrDescToTx map[string][]outpoint) {
+func (m *MempoolBitcoinType) updateMappings(newTxToInputOutput map[string][]addrIndex, newAddrDescToTx map[string][]outpoint) {
 	m.mux.Lock()
 	defer m.mux.Unlock()
 	m.txToInputOutput = newTxToInputOutput
 	m.addrDescToTx = newAddrDescToTx
 }
 
-func (m *UTXOMempool) getInputAddress(input outpoint) *addrIndex {
+func (m *MempoolBitcoinType) getInputAddress(input outpoint) *addrIndex {
 	itx, err := m.chain.GetTransactionForMempool(input.txid)
 	if err != nil {
 		glog.Error("cannot get transaction ", input.txid, ": ", err)
@@ -115,7 +115,7 @@ func (m *UTXOMempool) getInputAddress(input outpoint) *addrIndex {
 
 }
 
-func (m *UTXOMempool) getTxAddrs(txid string, chanInput chan outpoint, chanResult chan *addrIndex) ([]addrIndex, bool) {
+func (m *MempoolBitcoinType) getTxAddrs(txid string, chanInput chan outpoint, chanResult chan *addrIndex) ([]addrIndex, bool) {
 	tx, err := m.chain.GetTransactionForMempool(txid)
 	if err != nil {
 		glog.Error("cannot get transaction ", txid, ": ", err)
@@ -170,7 +170,7 @@ func (m *UTXOMempool) getTxAddrs(txid string, chanInput chan outpoint, chanResul
 // Resync gets mempool transactions and maps outputs to transactions.
 // Resync is not reentrant, it should be called from a single thread.
 // Read operations (GetTransactions) are safe.
-func (m *UTXOMempool) Resync(onNewTxAddr OnNewTxAddrFunc) (int, error) {
+func (m *MempoolBitcoinType) Resync(onNewTxAddr OnNewTxAddrFunc) (int, error) {
 	start := time.Now()
 	glog.V(1).Info("mempool: resync")
 	m.onNewTxAddr = onNewTxAddr

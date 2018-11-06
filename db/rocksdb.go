@@ -271,21 +271,21 @@ func (d *RocksDB) writeBlock(block *bchain.Block, op int) error {
 		}
 	}
 
-	isUTXO := d.chainParser.IsUTXOChain()
+	chainType := d.chainParser.GetChainType()
 
 	if err := d.writeHeightFromBlock(wb, block, op); err != nil {
 		return err
 	}
-	if isUTXO {
+	if chainType == bchain.ChainBitcoinType {
 		if op == opDelete {
 			// block does not contain mapping tx-> input address, which is necessary to recreate
 			// unspentTxs; therefore it is not possible to DisconnectBlocks this way
-			return errors.New("DisconnectBlock is not supported for UTXO chains")
+			return errors.New("DisconnectBlock is not supported for BitcoinType chains")
 		}
 		addresses := make(map[string][]outpoint)
 		txAddressesMap := make(map[string]*TxAddresses)
 		balances := make(map[string]*AddrBalance)
-		if err := d.processAddressesUTXO(block, addresses, txAddressesMap, balances); err != nil {
+		if err := d.processAddressesBitcoinType(block, addresses, txAddressesMap, balances); err != nil {
 			return err
 		}
 		if err := d.storeAddresses(wb, block.Height, addresses); err != nil {
@@ -300,8 +300,8 @@ func (d *RocksDB) writeBlock(block *bchain.Block, op int) error {
 		if err := d.storeAndCleanupBlockTxs(wb, block); err != nil {
 			return err
 		}
-	} else {
-		if err := d.writeAddressesNonUTXO(wb, block, op); err != nil {
+	} else if chainType == bchain.ChainEthereumType {
+		if err := d.writeAddressesTypeEthereum(wb, block, op); err != nil {
 			return err
 		}
 	}
@@ -375,7 +375,7 @@ func (d *RocksDB) GetAndResetConnectBlockStats() string {
 	return s
 }
 
-func (d *RocksDB) processAddressesUTXO(block *bchain.Block, addresses map[string][]outpoint, txAddressesMap map[string]*TxAddresses, balances map[string]*AddrBalance) error {
+func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses map[string][]outpoint, txAddressesMap map[string]*TxAddresses, balances map[string]*AddrBalance) error {
 	blockTxIDs := make([][]byte, len(block.Txs))
 	blockTxAddresses := make([]*TxAddresses, len(block.Txs))
 	// first process all outputs so that inputs can point to txs in this block
@@ -861,7 +861,7 @@ func (d *RocksDB) addAddrDescToRecords(op int, wb *gorocksdb.WriteBatch, records
 	return nil
 }
 
-func (d *RocksDB) writeAddressesNonUTXO(wb *gorocksdb.WriteBatch, block *bchain.Block, op int) error {
+func (d *RocksDB) writeAddressesTypeEthereum(wb *gorocksdb.WriteBatch, block *bchain.Block, op int) error {
 	addresses := make(map[string][]outpoint)
 	for _, tx := range block.Txs {
 		btxID, err := d.chainParser.PackTxid(tx.Txid)
@@ -1166,9 +1166,9 @@ func (d *RocksDB) disconnectTxAddresses(wb *gorocksdb.WriteBatch, height uint32,
 	return nil
 }
 
-// DisconnectBlockRangeUTXO removes all data belonging to blocks in range lower-higher
+// DisconnectBlockRangeBitcoinType removes all data belonging to blocks in range lower-higher
 // if they are in the range kept in the cfBlockTxids column
-func (d *RocksDB) DisconnectBlockRangeUTXO(lower uint32, higher uint32) error {
+func (d *RocksDB) DisconnectBlockRangeBitcoinType(lower uint32, higher uint32) error {
 	glog.Infof("db: disconnecting blocks %d-%d", lower, higher)
 	blocks := make([][]blockTxs, higher-lower+1)
 	for height := lower; height <= higher; height++ {

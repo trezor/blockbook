@@ -9,6 +9,16 @@ import (
 	"math/big"
 )
 
+// ChainType is type of the blockchain
+type ChainType int
+
+const (
+	// ChainBitcoinType is blockchain derived from bitcoin
+	ChainBitcoinType = ChainType(iota)
+	// TypeEthereum is blockchain derived from ethereum
+	ChainEthereumType
+)
+
 // errors with specific meaning returned by blockchain rpc
 var (
 	// ErrBlockNotFound is returned when block is not found
@@ -23,11 +33,13 @@ var (
 	ErrTxidMissing = errors.New("Txid missing")
 )
 
+// ScriptSig contains data about input script
 type ScriptSig struct {
 	// Asm string `json:"asm"`
 	Hex string `json:"hex"`
 }
 
+// Vin contains data about tx output
 type Vin struct {
 	Coinbase  string    `json:"coinbase"`
 	Txid      string    `json:"txid"`
@@ -37,6 +49,7 @@ type Vin struct {
 	Addresses []string  `json:"addresses"`
 }
 
+// ScriptPubKey contains data about output script
 type ScriptPubKey struct {
 	// Asm       string   `json:"asm"`
 	Hex string `json:"hex,omitempty"`
@@ -44,6 +57,7 @@ type ScriptPubKey struct {
 	Addresses []string `json:"addresses"`
 }
 
+// Vout contains data about tx output
 type Vout struct {
 	ValueSat     big.Int
 	JsonValue    json.Number  `json:"value"`
@@ -66,6 +80,7 @@ type Tx struct {
 	Blocktime     int64  `json:"blocktime,omitempty"`
 }
 
+// Block is block header and list of transactions
 type Block struct {
 	BlockHeader
 	Txs []Tx `json:"tx"`
@@ -93,6 +108,7 @@ type BlockInfo struct {
 	Txids      []string    `json:"tx,omitempty"`
 }
 
+// MempoolEntry is used to get data about mempool entry
 type MempoolEntry struct {
 	Size            uint32 `json:"size"`
 	FeeSat          big.Int
@@ -110,6 +126,7 @@ type MempoolEntry struct {
 	Depends         []string    `json:"depends"`
 }
 
+// ChainInfo is used to get information about blockchain
 type ChainInfo struct {
 	Chain           string  `json:"chain"`
 	Blocks          int     `json:"blocks"`
@@ -124,6 +141,7 @@ type ChainInfo struct {
 	Warnings        string  `json:"warnings"`
 }
 
+// RPCError defines rpc error returned by backend
 type RPCError struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
@@ -182,13 +200,10 @@ type BlockChain interface {
 
 // BlockChainParser defines common interface to parsing and conversions of block chain data
 type BlockChainParser interface {
-	// chain configuration description
-	// UTXO chains need "inputs" column in db, that map transactions to transactions that spend them
-	// non UTXO chains have mapping of address to input and output transactions directly in "outputs" column in db
-	IsUTXOChain() bool
-	// KeepBlockAddresses returns number of blocks which are to be kept in blockaddresses column
-	// and used in case of fork
-	// if 0 the blockaddresses column is not used at all (usually non UTXO chains)
+	// type of the blockchain
+	GetChainType() ChainType
+	// KeepBlockAddresses returns number of blocks which are to be kept in blockTxs column
+	// to be used for rollbacks
 	KeepBlockAddresses() int
 	// AmountToDecimalString converts amount in big.Int to string with decimal point in the correct place
 	AmountToDecimalString(a *big.Int) string

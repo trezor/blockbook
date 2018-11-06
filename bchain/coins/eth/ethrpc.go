@@ -45,7 +45,7 @@ type EthereumRPC struct {
 	Parser               *EthereumParser
 	Testnet              bool
 	Network              string
-	Mempool              *bchain.NonUTXOMempool
+	Mempool              *bchain.MempoolEthereumType
 	bestHeaderMu         sync.Mutex
 	bestHeader           *ethtypes.Header
 	bestHeaderTime       time.Time
@@ -185,7 +185,7 @@ func (b *EthereumRPC) Initialize() error {
 	}
 
 	// create mempool
-	b.Mempool = bchain.NewNonUTXOMempool(b)
+	b.Mempool = bchain.NewMempoolEthereumType(b)
 
 	return nil
 }

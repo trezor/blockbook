@@ -48,10 +48,10 @@ func setupRocksDB(t *testing.T, parser bchain.BlockChainParser) (*db.RocksDB, *c
 	}
 	d.SetInternalState(is)
 	// import data
-	if err := d.ConnectBlock(dbtestdata.GetTestUTXOBlock1(parser)); err != nil {
+	if err := d.ConnectBlock(dbtestdata.GetTestBitcoinTypeBlock1(parser)); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.ConnectBlock(dbtestdata.GetTestUTXOBlock2(parser)); err != nil {
+	if err := d.ConnectBlock(dbtestdata.GetTestBitcoinTypeBlock2(parser)); err != nil {
 		t.Fatal(err)
 	}
 	return d, is, tmp
@@ -575,7 +575,7 @@ func socketioTests(t *testing.T, ts *httptest.Server) {
 	}
 }
 
-func Test_PublicServer_UTXO(t *testing.T) {
+func Test_PublicServer_BitcoinType(t *testing.T) {
 	s, dbpath := setupPublicHTTPServer(t)
 	defer closeAndDestroyPublicServer(t, s, dbpath)
 	s.ConnectFullPublicInterface()
@@ -585,5 +585,4 @@ func Test_PublicServer_UTXO(t *testing.T) {
 
 	httpTests(t, ts)
 	socketioTests(t, ts)
-
 }

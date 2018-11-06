@@ -1,4 +1,4 @@
-// +build unittest
+// build unittest
 
 package db
 
@@ -151,7 +151,7 @@ func checkColumn(d *RocksDB, col int, kp []keyPair) error {
 	return nil
 }
 
-func verifyAfterUTXOBlock1(t *testing.T, d *RocksDB, afterDisconnect bool) {
+func verifyAfterBitcoinTypeOBlock1(t *testing.T, d *RocksDB, afterDisconnect bool) {
 	if err := checkColumn(d, cfHeight, []keyPair{
 		keyPair{
 			"000370d5",
@@ -232,7 +232,7 @@ func verifyAfterUTXOBlock1(t *testing.T, d *RocksDB, afterDisconnect bool) {
 	}
 }
 
-func verifyAfterUTXOBlock2(t *testing.T, d *RocksDB) {
+func verifyAfterBitcoinTypeBlock2(t *testing.T, d *RocksDB) {
 	if err := checkColumn(d, cfHeight, []keyPair{
 		keyPair{
 			"000370d5",
@@ -423,7 +423,7 @@ func testTxCache(t *testing.T, d *RocksDB, b *bchain.Block, tx *bchain.Tx) {
 	}
 }
 
-// TestRocksDB_Index_UTXO is an integration test probing the whole indexing functionality for UTXO chains
+// TestRocksDB_Index_BitcoinType is an integration test probing the whole indexing functionality for BitcoinType chains
 // It does the following:
 // 1) Connect two blocks (inputs from 2nd block are spending some outputs from the 1st block)
 // 2) GetTransactions for various addresses / low-high ranges
@@ -433,25 +433,25 @@ func testTxCache(t *testing.T, d *RocksDB, b *bchain.Block, tx *bchain.Tx) {
 // 6) Disconnect the block 2 using BlockTxs column
 // 7) Reconnect block 2 and check
 // After each step, the content of DB is examined and any difference against expected state is regarded as failure
-func TestRocksDB_Index_UTXO(t *testing.T) {
+func TestRocksDB_Index_BitcoinType(t *testing.T) {
 	d := setupRocksDB(t, &testBitcoinParser{
 		BitcoinParser: bitcoinTestnetParser(),
 	})
 	defer closeAndDestroyRocksDB(t, d)
 
 	// connect 1st block - will log warnings about missing UTXO transactions in txAddresses column
-	block1 := dbtestdata.GetTestUTXOBlock1(d.chainParser)
+	block1 := dbtestdata.GetTestBitcoinTypeBlock1(d.chainParser)
 	if err := d.ConnectBlock(block1); err != nil {
 		t.Fatal(err)
 	}
-	verifyAfterUTXOBlock1(t, d, false)
+	verifyAfterBitcoinTypeOBlock1(t, d, false)
 
 	// connect 2nd block - use some outputs from the 1st block as the inputs and 1 input uses tx from the same block
-	block2 := dbtestdata.GetTestUTXOBlock2(d.chainParser)
+	block2 := dbtestdata.GetTestBitcoinTypeBlock2(d.chainParser)
 	if err := d.ConnectBlock(block2); err != nil {
 		t.Fatal(err)
 	}
-	verifyAfterUTXOBlock2(t, d)
+	verifyAfterBitcoinTypeBlock2(t, d)
 
 	// get transactions for various addresses / low-high ranges
 	verifyGetTransactions(t, d, dbtestdata.Addr2, 0, 1000000, []txidVoutOutput{
@@ -532,27 +532,27 @@ func TestRocksDB_Index_UTXO(t *testing.T) {
 		}
 	}
 
-	// DisconnectBlock for UTXO chains is not possible
+	// DisconnectBlock for BitcoinType chains is not possible
 	err = d.DisconnectBlock(block2)
-	if err == nil || err.Error() != "DisconnectBlock is not supported for UTXO chains" {
+	if err == nil || err.Error() != "DisconnectBlock is not supported for BitcoinType chains" {
 		t.Fatal(err)
 	}
-	verifyAfterUTXOBlock2(t, d)
+	verifyAfterBitcoinTypeBlock2(t, d)
 
 	// try to disconnect both blocks, however only the last one is kept, it is not possible
-	err = d.DisconnectBlockRangeUTXO(225493, 225494)
+	err = d.DisconnectBlockRangeBitcoinType(225493, 225494)
 	if err == nil || err.Error() != "Cannot disconnect blocks with height 225493 and lower. It is necessary to rebuild index." {
 		t.Fatal(err)
 	}
-	verifyAfterUTXOBlock2(t, d)
+	verifyAfterBitcoinTypeBlock2(t, d)
 
 	// disconnect the 2nd block, verify that the db contains only data from the 1st block with restored unspentTxs
 	// and that the cached tx is removed
-	err = d.DisconnectBlockRangeUTXO(225494, 225494)
+	err = d.DisconnectBlockRangeBitcoinType(225494, 225494)
 	if err != nil {
 		t.Fatal(err)
 	}
-	verifyAfterUTXOBlock1(t, d, true)
+	verifyAfterBitcoinTypeOBlock1(t, d, true)
 	if err := checkColumn(d, cfTransactions, []keyPair{}); err != nil {
 		{
 			t.Fatal(err)
@@ -563,7 +563,7 @@ func TestRocksDB_Index_UTXO(t *testing.T) {
 	if err := d.ConnectBlock(block2); err != nil {
 		t.Fatal(err)
 	}
-	verifyAfterUTXOBlock2(t, d)
+	verifyAfterBitcoinTypeBlock2(t, d)
 
 	// test public methods for address balance and tx addresses
 
@@ -627,7 +627,7 @@ func TestRocksDB_Index_UTXO(t *testing.T) {
 
 }
 
-func Test_BulkConnect_UTXO(t *testing.T) {
+func Test_BulkConnect_BitcoinType(t *testing.T) {
 	d := setupRocksDB(t, &testBitcoinParser{
 		BitcoinParser: bitcoinTestnetParser(),
 	})
@@ -642,7 +642,7 @@ func Test_BulkConnect_UTXO(t *testing.T) {
 		t.Fatal("DB not in DbStateInconsistent")
 	}
 
-	if err := bc.ConnectBlock(dbtestdata.GetTestUTXOBlock1(d.chainParser), false); err != nil {
+	if err := bc.ConnectBlock(dbtestdata.GetTestBitcoinTypeBlock1(d.chainParser), false); err != nil {
 		t.Fatal(err)
 	}
 	if err := checkColumn(d, cfBlockTxs, []keyPair{}); err != nil {
@@ -651,7 +651,7 @@ func Test_BulkConnect_UTXO(t *testing.T) {
 		}
 	}
 
-	if err := bc.ConnectBlock(dbtestdata.GetTestUTXOBlock2(d.chainParser), true); err != nil {
+	if err := bc.ConnectBlock(dbtestdata.GetTestBitcoinTypeBlock2(d.chainParser), true); err != nil {
 		t.Fatal(err)
 	}
 
@@ -663,7 +663,7 @@ func Test_BulkConnect_UTXO(t *testing.T) {
 		t.Fatal("DB not in DbStateOpen")
 	}
 
-	verifyAfterUTXOBlock2(t, d)
+	verifyAfterBitcoinTypeBlock2(t, d)
 }
 
 func Test_packBigint_unpackBigint(t *testing.T) {

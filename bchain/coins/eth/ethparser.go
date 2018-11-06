@@ -7,12 +7,10 @@ import (
 	"math/big"
 	"strconv"
 
+	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-
 	"github.com/golang/protobuf/proto"
 	"github.com/juju/errors"
-
-	ethcommon "github.com/ethereum/go-ethereum/common"
 )
 
 // EthereumParser handle
@@ -293,7 +291,7 @@ func (p *EthereumParser) UnpackBlockHash(buf []byte) (string, error) {
 	return hexutil.Encode(buf), nil
 }
 
-// IsUTXOChain returns true if the block chain is UTXO type, otherwise false
-func (p *EthereumParser) IsUTXOChain() bool {
-	return false
+// GetChainType returns TypeEthereum
+func (p *EthereumParser) GetChainType() bchain.ChainType {
+	return bchain.ChainEthereumType
 }

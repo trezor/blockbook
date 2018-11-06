@@ -125,9 +125,9 @@ func (p *BaseParser) UnpackBlockHash(buf []byte) (string, error) {
 	return hex.EncodeToString(buf), nil
 }
 
-// IsUTXOChain returns true if the block chain is UTXO type, otherwise false
-func (p *BaseParser) IsUTXOChain() bool {
-	return true
+// GetChainType is type of the blockchain, default is ChainBitcoinType
+func (p *BaseParser) GetChainType() ChainType {
+	return ChainBitcoinType
 }
 
 // PackTx packs transaction to byte array using protobuf

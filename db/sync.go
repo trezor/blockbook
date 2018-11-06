@@ -393,9 +393,9 @@ func (w *SyncWorker) getBlockChain(out chan blockResult, done chan struct{}) {
 // DisconnectBlocks removes all data belonging to blocks in range lower-higher,
 func (w *SyncWorker) DisconnectBlocks(lower uint32, higher uint32, hashes []string) error {
 	glog.Infof("sync: disconnecting blocks %d-%d", lower, higher)
-	// if the chain is UTXO, always use DisconnectBlockRange
-	if w.chain.GetChainParser().IsUTXOChain() {
-		return w.db.DisconnectBlockRangeUTXO(lower, higher)
+	// if the chain is ChainBitcoinType, always use DisconnectBlockRange
+	if w.chain.GetChainParser().GetChainType() == bchain.ChainBitcoinType {
+		return w.db.DisconnectBlockRangeBitcoinType(lower, higher)
 	}
 	blocks := make([]*bchain.Block, len(hashes))
 	var err error
