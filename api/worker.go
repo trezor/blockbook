@@ -20,6 +20,7 @@ type Worker struct {
 	txCache     *db.TxCache
 	chain       bchain.BlockChain
 	chainParser bchain.BlockChainParser
+	chainType   bchain.ChainType
 	is          *common.InternalState
 }
 
@@ -30,6 +31,7 @@ func NewWorker(db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxCache, is 
 		txCache:     txCache,
 		chain:       chain,
 		chainParser: chain.GetChainParser(),
+		chainType:   chain.GetChainParser().GetChainType(),
 		is:          is,
 	}
 	return w, nil
@@ -105,9 +107,11 @@ func (w *Worker) GetTransaction(txid string, spendingTxs bool) (*Tx, error) {
 	var ta *db.TxAddresses
 	var blockhash string
 	if bchainTx.Confirmations > 0 {
-		ta, err = w.db.GetTxAddresses(txid)
-		if err != nil {
-			return nil, errors.Annotatef(err, "GetTxAddresses %v", txid)
+		if w.chainType == bchain.ChainBitcoinType {
+			ta, err = w.db.GetTxAddresses(txid)
+			if err != nil {
+				return nil, errors.Annotatef(err, "GetTxAddresses %v", txid)
+			}
 		}
 		blockhash, err = w.db.GetBlockHash(height)
 		if err != nil {
@@ -124,45 +128,56 @@ func (w *Worker) GetTransaction(txid string, spendingTxs bool) (*Tx, error) {
 		vin.Vout = bchainVin.Vout
 		vin.Sequence = int64(bchainVin.Sequence)
 		vin.ScriptSig.Hex = bchainVin.ScriptSig.Hex
-		//  bchainVin.Txid=="" is coinbase transaction
-		if bchainVin.Txid != "" {
-			// load spending addresses from TxAddresses
-			tas, err := w.db.GetTxAddresses(bchainVin.Txid)
-			if err != nil {
-				return nil, errors.Annotatef(err, "GetTxAddresses %v", bchainVin.Txid)
-			}
-			if tas == nil {
-				// mempool transactions are not in TxAddresses but confirmed should be there, log a problem
-				if bchainTx.Confirmations > 0 {
-					glog.Warning("DB inconsistency:  tx ", bchainVin.Txid, ": not found in txAddresses")
-				}
-				// try to load from backend
-				otx, _, err := w.txCache.GetTransaction(bchainVin.Txid)
+		if w.chainType == bchain.ChainBitcoinType {
+			//  bchainVin.Txid=="" is coinbase transaction
+			if bchainVin.Txid != "" {
+				// load spending addresses from TxAddresses
+				tas, err := w.db.GetTxAddresses(bchainVin.Txid)
 				if err != nil {
-					return nil, errors.Annotatef(err, "txCache.GetTransaction %v", bchainVin.Txid)
+					return nil, errors.Annotatef(err, "GetTxAddresses %v", bchainVin.Txid)
 				}
-				if len(otx.Vout) > int(vin.Vout) {
-					vout := &otx.Vout[vin.Vout]
-					vin.ValueSat = vout.ValueSat
-					vin.AddrDesc, vin.Addresses, vin.Searchable, err = w.getAddressesFromVout(vout)
+				if tas == nil {
+					// mempool transactions are not in TxAddresses but confirmed should be there, log a problem
+					if bchainTx.Confirmations > 0 {
+						glog.Warning("DB inconsistency:  tx ", bchainVin.Txid, ": not found in txAddresses")
+					}
+					// try to load from backend
+					otx, _, err := w.txCache.GetTransaction(bchainVin.Txid)
 					if err != nil {
-						glog.Errorf("getAddressesFromVout error %v, vout %+v", err, vout)
+						return nil, errors.Annotatef(err, "txCache.GetTransaction %v", bchainVin.Txid)
+					}
+					if len(otx.Vout) > int(vin.Vout) {
+						vout := &otx.Vout[vin.Vout]
+						vin.ValueSat = vout.ValueSat
+						vin.AddrDesc, vin.Addresses, vin.Searchable, err = w.getAddressesFromVout(vout)
+						if err != nil {
+							glog.Errorf("getAddressesFromVout error %v, vout %+v", err, vout)
+						}
+					}
+				} else {
+					if len(tas.Outputs) > int(vin.Vout) {
+						output := &tas.Outputs[vin.Vout]
+						vin.ValueSat = output.ValueSat
+						vin.Value = w.chainParser.AmountToDecimalString(&vin.ValueSat)
+						vin.AddrDesc = output.AddrDesc
+						vin.Addresses, vin.Searchable, err = output.Addresses(w.chainParser)
+						if err != nil {
+							glog.Errorf("output.Addresses error %v, tx %v, output %v", err, bchainVin.Txid, i)
+						}
 					}
 				}
-			} else {
-				if len(tas.Outputs) > int(vin.Vout) {
-					output := &tas.Outputs[vin.Vout]
-					vin.ValueSat = output.ValueSat
-					vin.Value = w.chainParser.AmountToDecimalString(&vin.ValueSat)
-					vin.AddrDesc = output.AddrDesc
-					vin.Addresses, vin.Searchable, err = output.Addresses(w.chainParser)
-					if err != nil {
-						glog.Errorf("output.Addresses error %v, tx %v, output %v", err, bchainVin.Txid, i)
-					}
-				}
+				vin.Value = w.chainParser.AmountToDecimalString(&vin.ValueSat)
+				valInSat.Add(&valInSat, &vin.ValueSat)
 			}
-			vin.Value = w.chainParser.AmountToDecimalString(&vin.ValueSat)
-			valInSat.Add(&valInSat, &vin.ValueSat)
+		} else if w.chainType == bchain.ChainEthereumType {
+			if len(bchainVin.Addresses) > 0 {
+				vin.AddrDesc, err = w.chainParser.GetAddrDescFromAddress(bchainVin.Addresses[0])
+				if err != nil {
+					glog.Errorf("GetAddrDescFromAddress error %v, tx %v, bchainVin %v", err, bchainTx.Txid, bchainVin)
+				}
+				vin.Addresses = bchainVin.Addresses
+				vin.Searchable = true
+			}
 		}
 	}
 	vouts := make([]Vout, len(bchainTx.Vout))

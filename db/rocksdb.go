@@ -301,9 +301,11 @@ func (d *RocksDB) writeBlock(block *bchain.Block, op int) error {
 			return err
 		}
 	} else if chainType == bchain.ChainEthereumType {
-		if err := d.writeAddressesTypeEthereum(wb, block, op); err != nil {
+		if err := d.writeAddressesEthereumType(wb, block, op); err != nil {
 			return err
 		}
+	} else {
+		return errors.New("Unknown chain type")
 	}
 
 	return d.db.Write(d.wo, wb)
@@ -861,7 +863,7 @@ func (d *RocksDB) addAddrDescToRecords(op int, wb *gorocksdb.WriteBatch, records
 	return nil
 }
 
-func (d *RocksDB) writeAddressesTypeEthereum(wb *gorocksdb.WriteBatch, block *bchain.Block, op int) error {
+func (d *RocksDB) writeAddressesEthereumType(wb *gorocksdb.WriteBatch, block *bchain.Block, op int) error {
 	addresses := make(map[string][]outpoint)
 	for _, tx := range block.Txs {
 		btxID, err := d.chainParser.PackTxid(tx.Txid)
