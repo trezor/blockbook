@@ -8,7 +8,7 @@ It is generated from these files:
 	tx.proto
 
 It has these top-level messages:
-	ProtoTransaction
+	ProtoCompleteTransaction
 */
 package eth
 
@@ -27,149 +27,234 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
-type ProtoTransaction struct {
-	AccountNonce     uint64 `protobuf:"varint,1,opt,name=AccountNonce" json:"AccountNonce,omitempty"`
-	Price            []byte `protobuf:"bytes,2,opt,name=Price,proto3" json:"Price,omitempty"`
-	GasLimit         uint64 `protobuf:"varint,3,opt,name=GasLimit" json:"GasLimit,omitempty"`
-	Value            []byte `protobuf:"bytes,4,opt,name=Value,proto3" json:"Value,omitempty"`
-	Payload          []byte `protobuf:"bytes,5,opt,name=Payload,proto3" json:"Payload,omitempty"`
-	Hash             []byte `protobuf:"bytes,6,opt,name=Hash,proto3" json:"Hash,omitempty"`
-	BlockNumber      uint32 `protobuf:"varint,7,opt,name=BlockNumber" json:"BlockNumber,omitempty"`
-	BlockTime        uint64 `protobuf:"varint,8,opt,name=BlockTime" json:"BlockTime,omitempty"`
-	To               []byte `protobuf:"bytes,9,opt,name=To,proto3" json:"To,omitempty"`
-	From             []byte `protobuf:"bytes,10,opt,name=From,proto3" json:"From,omitempty"`
-	TransactionIndex uint32 `protobuf:"varint,11,opt,name=TransactionIndex" json:"TransactionIndex,omitempty"`
-	V                []byte `protobuf:"bytes,12,opt,name=V,proto3" json:"V,omitempty"`
-	R                []byte `protobuf:"bytes,13,opt,name=R,proto3" json:"R,omitempty"`
-	S                []byte `protobuf:"bytes,14,opt,name=S,proto3" json:"S,omitempty"`
+type ProtoCompleteTransaction struct {
+	BlockNumber uint32                                `protobuf:"varint,1,opt,name=BlockNumber" json:"BlockNumber,omitempty"`
+	BlockTime   uint64                                `protobuf:"varint,2,opt,name=BlockTime" json:"BlockTime,omitempty"`
+	Tx          *ProtoCompleteTransaction_TxType      `protobuf:"bytes,3,opt,name=Tx" json:"Tx,omitempty"`
+	Receipt     *ProtoCompleteTransaction_ReceiptType `protobuf:"bytes,4,opt,name=Receipt" json:"Receipt,omitempty"`
 }
 
-func (m *ProtoTransaction) Reset()                    { *m = ProtoTransaction{} }
-func (m *ProtoTransaction) String() string            { return proto.CompactTextString(m) }
-func (*ProtoTransaction) ProtoMessage()               {}
-func (*ProtoTransaction) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
+func (m *ProtoCompleteTransaction) Reset()                    { *m = ProtoCompleteTransaction{} }
+func (m *ProtoCompleteTransaction) String() string            { return proto.CompactTextString(m) }
+func (*ProtoCompleteTransaction) ProtoMessage()               {}
+func (*ProtoCompleteTransaction) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
 
-func (m *ProtoTransaction) GetAccountNonce() uint64 {
-	if m != nil {
-		return m.AccountNonce
-	}
-	return 0
-}
-
-func (m *ProtoTransaction) GetPrice() []byte {
-	if m != nil {
-		return m.Price
-	}
-	return nil
-}
-
-func (m *ProtoTransaction) GetGasLimit() uint64 {
-	if m != nil {
-		return m.GasLimit
-	}
-	return 0
-}
-
-func (m *ProtoTransaction) GetValue() []byte {
-	if m != nil {
-		return m.Value
-	}
-	return nil
-}
-
-func (m *ProtoTransaction) GetPayload() []byte {
-	if m != nil {
-		return m.Payload
-	}
-	return nil
-}
-
-func (m *ProtoTransaction) GetHash() []byte {
-	if m != nil {
-		return m.Hash
-	}
-	return nil
-}
-
-func (m *ProtoTransaction) GetBlockNumber() uint32 {
+func (m *ProtoCompleteTransaction) GetBlockNumber() uint32 {
 	if m != nil {
 		return m.BlockNumber
 	}
 	return 0
 }
 
-func (m *ProtoTransaction) GetBlockTime() uint64 {
+func (m *ProtoCompleteTransaction) GetBlockTime() uint64 {
 	if m != nil {
 		return m.BlockTime
 	}
 	return 0
 }
 
-func (m *ProtoTransaction) GetTo() []byte {
+func (m *ProtoCompleteTransaction) GetTx() *ProtoCompleteTransaction_TxType {
+	if m != nil {
+		return m.Tx
+	}
+	return nil
+}
+
+func (m *ProtoCompleteTransaction) GetReceipt() *ProtoCompleteTransaction_ReceiptType {
+	if m != nil {
+		return m.Receipt
+	}
+	return nil
+}
+
+type ProtoCompleteTransaction_TxType struct {
+	AccountNonce     uint64 `protobuf:"varint,1,opt,name=AccountNonce" json:"AccountNonce,omitempty"`
+	Price            []byte `protobuf:"bytes,2,opt,name=Price,proto3" json:"Price,omitempty"`
+	GasLimit         uint64 `protobuf:"varint,3,opt,name=GasLimit" json:"GasLimit,omitempty"`
+	Value            []byte `protobuf:"bytes,4,opt,name=Value,proto3" json:"Value,omitempty"`
+	Payload          []byte `protobuf:"bytes,5,opt,name=Payload,proto3" json:"Payload,omitempty"`
+	Hash             []byte `protobuf:"bytes,6,opt,name=Hash,proto3" json:"Hash,omitempty"`
+	To               []byte `protobuf:"bytes,7,opt,name=To,proto3" json:"To,omitempty"`
+	From             []byte `protobuf:"bytes,8,opt,name=From,proto3" json:"From,omitempty"`
+	TransactionIndex uint32 `protobuf:"varint,9,opt,name=TransactionIndex" json:"TransactionIndex,omitempty"`
+}
+
+func (m *ProtoCompleteTransaction_TxType) Reset()         { *m = ProtoCompleteTransaction_TxType{} }
+func (m *ProtoCompleteTransaction_TxType) String() string { return proto.CompactTextString(m) }
+func (*ProtoCompleteTransaction_TxType) ProtoMessage()    {}
+func (*ProtoCompleteTransaction_TxType) Descriptor() ([]byte, []int) {
+	return fileDescriptor0, []int{0, 0}
+}
+
+func (m *ProtoCompleteTransaction_TxType) GetAccountNonce() uint64 {
+	if m != nil {
+		return m.AccountNonce
+	}
+	return 0
+}
+
+func (m *ProtoCompleteTransaction_TxType) GetPrice() []byte {
+	if m != nil {
+		return m.Price
+	}
+	return nil
+}
+
+func (m *ProtoCompleteTransaction_TxType) GetGasLimit() uint64 {
+	if m != nil {
+		return m.GasLimit
+	}
+	return 0
+}
+
+func (m *ProtoCompleteTransaction_TxType) GetValue() []byte {
+	if m != nil {
+		return m.Value
+	}
+	return nil
+}
+
+func (m *ProtoCompleteTransaction_TxType) GetPayload() []byte {
+	if m != nil {
+		return m.Payload
+	}
+	return nil
+}
+
+func (m *ProtoCompleteTransaction_TxType) GetHash() []byte {
+	if m != nil {
+		return m.Hash
+	}
+	return nil
+}
+
+func (m *ProtoCompleteTransaction_TxType) GetTo() []byte {
 	if m != nil {
 		return m.To
 	}
 	return nil
 }
 
-func (m *ProtoTransaction) GetFrom() []byte {
+func (m *ProtoCompleteTransaction_TxType) GetFrom() []byte {
 	if m != nil {
 		return m.From
 	}
 	return nil
 }
 
-func (m *ProtoTransaction) GetTransactionIndex() uint32 {
+func (m *ProtoCompleteTransaction_TxType) GetTransactionIndex() uint32 {
 	if m != nil {
 		return m.TransactionIndex
 	}
 	return 0
 }
 
-func (m *ProtoTransaction) GetV() []byte {
+type ProtoCompleteTransaction_ReceiptType struct {
+	GasUsed []byte                                          `protobuf:"bytes,1,opt,name=GasUsed,proto3" json:"GasUsed,omitempty"`
+	Status  []byte                                          `protobuf:"bytes,2,opt,name=Status,proto3" json:"Status,omitempty"`
+	Log     []*ProtoCompleteTransaction_ReceiptType_LogType `protobuf:"bytes,3,rep,name=Log" json:"Log,omitempty"`
+}
+
+func (m *ProtoCompleteTransaction_ReceiptType) Reset()         { *m = ProtoCompleteTransaction_ReceiptType{} }
+func (m *ProtoCompleteTransaction_ReceiptType) String() string { return proto.CompactTextString(m) }
+func (*ProtoCompleteTransaction_ReceiptType) ProtoMessage()    {}
+func (*ProtoCompleteTransaction_ReceiptType) Descriptor() ([]byte, []int) {
+	return fileDescriptor0, []int{0, 1}
+}
+
+func (m *ProtoCompleteTransaction_ReceiptType) GetGasUsed() []byte {
 	if m != nil {
-		return m.V
+		return m.GasUsed
 	}
 	return nil
 }
 
-func (m *ProtoTransaction) GetR() []byte {
+func (m *ProtoCompleteTransaction_ReceiptType) GetStatus() []byte {
 	if m != nil {
-		return m.R
+		return m.Status
 	}
 	return nil
 }
 
-func (m *ProtoTransaction) GetS() []byte {
+func (m *ProtoCompleteTransaction_ReceiptType) GetLog() []*ProtoCompleteTransaction_ReceiptType_LogType {
 	if m != nil {
-		return m.S
+		return m.Log
+	}
+	return nil
+}
+
+type ProtoCompleteTransaction_ReceiptType_LogType struct {
+	Address []byte   `protobuf:"bytes,1,opt,name=Address,proto3" json:"Address,omitempty"`
+	Data    []byte   `protobuf:"bytes,2,opt,name=Data,proto3" json:"Data,omitempty"`
+	Topics  [][]byte `protobuf:"bytes,3,rep,name=Topics,proto3" json:"Topics,omitempty"`
+}
+
+func (m *ProtoCompleteTransaction_ReceiptType_LogType) Reset() {
+	*m = ProtoCompleteTransaction_ReceiptType_LogType{}
+}
+func (m *ProtoCompleteTransaction_ReceiptType_LogType) String() string {
+	return proto.CompactTextString(m)
+}
+func (*ProtoCompleteTransaction_ReceiptType_LogType) ProtoMessage() {}
+func (*ProtoCompleteTransaction_ReceiptType_LogType) Descriptor() ([]byte, []int) {
+	return fileDescriptor0, []int{0, 1, 0}
+}
+
+func (m *ProtoCompleteTransaction_ReceiptType_LogType) GetAddress() []byte {
+	if m != nil {
+		return m.Address
+	}
+	return nil
+}
+
+func (m *ProtoCompleteTransaction_ReceiptType_LogType) GetData() []byte {
+	if m != nil {
+		return m.Data
+	}
+	return nil
+}
+
+func (m *ProtoCompleteTransaction_ReceiptType_LogType) GetTopics() [][]byte {
+	if m != nil {
+		return m.Topics
 	}
 	return nil
 }
 
 func init() {
-	proto.RegisterType((*ProtoTransaction)(nil), "eth.ProtoTransaction")
+	proto.RegisterType((*ProtoCompleteTransaction)(nil), "eth.ProtoCompleteTransaction")
+	proto.RegisterType((*ProtoCompleteTransaction_TxType)(nil), "eth.ProtoCompleteTransaction.TxType")
+	proto.RegisterType((*ProtoCompleteTransaction_ReceiptType)(nil), "eth.ProtoCompleteTransaction.ReceiptType")
+	proto.RegisterType((*ProtoCompleteTransaction_ReceiptType_LogType)(nil), "eth.ProtoCompleteTransaction.ReceiptType.LogType")
 }
 
 func init() { proto.RegisterFile("tx.proto", fileDescriptor0) }
 
 var fileDescriptor0 = []byte{
-	// 262 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x64, 0x90, 0xbd, 0x6a, 0xeb, 0x40,
-	0x10, 0x85, 0x59, 0x59, 0xb6, 0xe5, 0xb1, 0x6c, 0xcc, 0x70, 0x8b, 0xe1, 0x92, 0x42, 0xb8, 0x12,
-	0x29, 0xd2, 0xe4, 0x09, 0x92, 0x22, 0x3f, 0x10, 0x8c, 0x90, 0x85, 0xfa, 0xf5, 0x7a, 0xc1, 0x22,
-	0x92, 0x26, 0x48, 0x2b, 0x70, 0x5e, 0x38, 0xcf, 0x11, 0x76, 0x44, 0x12, 0x87, 0x74, 0xf3, 0x7d,
-	0x70, 0xf6, 0x2c, 0x07, 0x22, 0x77, 0xbe, 0x79, 0xeb, 0xd8, 0x31, 0x4e, 0xac, 0x3b, 0x6d, 0x3f,
-	0x02, 0xd8, 0x64, 0x1e, 0x8b, 0x4e, 0xb7, 0xbd, 0x36, 0xae, 0xe2, 0x16, 0xb7, 0x10, 0xdf, 0x19,
-	0xc3, 0x43, 0xeb, 0x76, 0xdc, 0x1a, 0x4b, 0x2a, 0x51, 0x69, 0x98, 0xff, 0x72, 0xf8, 0x0f, 0xa6,
-	0x59, 0x57, 0x19, 0x4b, 0x41, 0xa2, 0xd2, 0x38, 0x1f, 0x01, 0xff, 0x43, 0xf4, 0xa8, 0xfb, 0x97,
-	0xaa, 0xa9, 0x1c, 0x4d, 0x24, 0xf5, 0xcd, 0x3e, 0x51, 0xea, 0x7a, 0xb0, 0x14, 0x8e, 0x09, 0x01,
-	0x24, 0x98, 0x67, 0xfa, 0xbd, 0x66, 0x7d, 0xa4, 0xa9, 0xf8, 0x2f, 0x44, 0x84, 0xf0, 0x49, 0xf7,
-	0x27, 0x9a, 0x89, 0x96, 0x1b, 0x13, 0x58, 0xde, 0xd7, 0x6c, 0x5e, 0x77, 0x43, 0x73, 0xb0, 0x1d,
-	0xcd, 0x13, 0x95, 0xae, 0xf2, 0x4b, 0x85, 0x57, 0xb0, 0x10, 0x2c, 0xaa, 0xc6, 0x52, 0x24, 0x5f,
-	0xf8, 0x11, 0xb8, 0x86, 0xa0, 0x60, 0x5a, 0xc8, 0x8b, 0x41, 0xc1, 0xbe, 0xe3, 0xa1, 0xe3, 0x86,
-	0x60, 0xec, 0xf0, 0x37, 0x5e, 0xc3, 0xe6, 0x62, 0x8c, 0xe7, 0xf6, 0x68, 0xcf, 0xb4, 0x94, 0xa2,
-	0x3f, 0x1e, 0x63, 0x50, 0x25, 0xc5, 0x12, 0x56, 0xa5, 0xa7, 0x9c, 0x56, 0x23, 0xe5, 0x9e, 0xf6,
-	0xb4, 0x1e, 0x69, 0x7f, 0x98, 0xc9, 0xe8, 0xb7, 0x9f, 0x01, 0x00, 0x00, 0xff, 0xff, 0x15, 0xc8,
-	0xe4, 0x30, 0x80, 0x01, 0x00, 0x00,
+	// 393 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x8c, 0x92, 0xdf, 0x8a, 0xd4, 0x30,
+	0x14, 0xc6, 0xe9, 0x9f, 0x69, 0x67, 0x4f, 0xab, 0x48, 0x10, 0x09, 0xc5, 0x8b, 0xb2, 0x78, 0x51,
+	0xbd, 0x28, 0xb8, 0xfa, 0x02, 0xeb, 0x88, 0xab, 0x30, 0xac, 0x43, 0x8c, 0xde, 0x67, 0xd3, 0xb0,
+	0x53, 0x6c, 0x9b, 0xd2, 0xa4, 0xd0, 0x7d, 0x1d, 0xdf, 0xc9, 0x17, 0xf1, 0x09, 0x24, 0xa7, 0xad,
+	0x8e, 0x88, 0xb2, 0x77, 0xe7, 0xf7, 0x71, 0xbe, 0xc9, 0xf7, 0x9d, 0x29, 0x6c, 0xed, 0x54, 0xf6,
+	0x83, 0xb6, 0x9a, 0x04, 0xca, 0x1e, 0xcf, 0xbf, 0x6d, 0x80, 0x1e, 0x1c, 0xee, 0x74, 0xdb, 0x37,
+	0xca, 0x2a, 0x3e, 0x88, 0xce, 0x08, 0x69, 0x6b, 0xdd, 0x91, 0x1c, 0x92, 0x37, 0x8d, 0x96, 0x5f,
+	0xaf, 0xc7, 0xf6, 0x46, 0x0d, 0xd4, 0xcb, 0xbd, 0xe2, 0x01, 0x3b, 0x95, 0xc8, 0x53, 0x38, 0x43,
+	0xe4, 0x75, 0xab, 0xa8, 0x9f, 0x7b, 0x45, 0xc8, 0x7e, 0x0b, 0xe4, 0x35, 0xf8, 0x7c, 0xa2, 0x41,
+	0xee, 0x15, 0xc9, 0xc5, 0xb3, 0x52, 0xd9, 0x63, 0xf9, 0xaf, 0xa7, 0x4a, 0x3e, 0xf1, 0xbb, 0x5e,
+	0x31, 0x9f, 0x4f, 0x64, 0x07, 0x31, 0x53, 0x52, 0xd5, 0xbd, 0xa5, 0x21, 0x5a, 0x9f, 0xff, 0xdf,
+	0xba, 0x2c, 0xa3, 0x7f, 0x75, 0x66, 0x3f, 0x3c, 0x88, 0xe6, 0xdf, 0x24, 0xe7, 0x90, 0x5e, 0x4a,
+	0xa9, 0xc7, 0xce, 0x5e, 0xeb, 0x4e, 0x2a, 0xac, 0x11, 0xb2, 0x3f, 0x34, 0xf2, 0x18, 0x36, 0x87,
+	0xa1, 0x96, 0x73, 0x87, 0x94, 0xcd, 0x40, 0x32, 0xd8, 0x5e, 0x09, 0xb3, 0xaf, 0xdb, 0xda, 0x62,
+	0x8b, 0x90, 0xfd, 0x62, 0xe7, 0xf8, 0x22, 0x9a, 0x51, 0x61, 0xc6, 0x94, 0xcd, 0x40, 0x28, 0xc4,
+	0x07, 0x71, 0xd7, 0x68, 0x51, 0xd1, 0x0d, 0xea, 0x2b, 0x12, 0x02, 0xe1, 0x7b, 0x61, 0x8e, 0x34,
+	0x42, 0x19, 0x67, 0xf2, 0x10, 0x7c, 0xae, 0x69, 0x8c, 0x8a, 0xcf, 0xb5, 0xdb, 0x79, 0x37, 0xe8,
+	0x96, 0x6e, 0xe7, 0x1d, 0x37, 0x93, 0x17, 0xf0, 0xe8, 0xa4, 0xec, 0x87, 0xae, 0x52, 0x13, 0x3d,
+	0xc3, 0x3f, 0xe2, 0x2f, 0x3d, 0xfb, 0xee, 0x41, 0x72, 0x72, 0x0d, 0x97, 0xe6, 0x4a, 0x98, 0xcf,
+	0x46, 0x55, 0x58, 0x3a, 0x65, 0x2b, 0x92, 0x27, 0x10, 0x7d, 0xb2, 0xc2, 0x8e, 0x66, 0x29, 0xbc,
+	0x10, 0xd9, 0x41, 0xb0, 0xd7, 0xb7, 0x34, 0xc8, 0x83, 0x22, 0xb9, 0x78, 0x79, 0xef, 0xbb, 0x97,
+	0x7b, 0x7d, 0x8b, 0xf7, 0x77, 0xee, 0xec, 0x23, 0xc4, 0x0b, 0xbb, 0x04, 0x97, 0x55, 0x35, 0x28,
+	0x63, 0xd6, 0x04, 0x0b, 0xba, 0xae, 0x6f, 0x85, 0x15, 0xcb, 0xfb, 0x38, 0xbb, 0x54, 0x5c, 0xf7,
+	0xb5, 0x34, 0x18, 0x20, 0x65, 0x0b, 0xdd, 0x44, 0xf8, 0xc1, 0xbe, 0xfa, 0x19, 0x00, 0x00, 0xff,
+	0xff, 0x84, 0x73, 0x4b, 0xa3, 0xbc, 0x02, 0x00, 0x00,
 }

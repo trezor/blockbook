@@ -9,6 +9,7 @@ import (
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/juju/errors"
 )
@@ -38,16 +39,33 @@ type rpcTransaction struct {
 	BlockHash        *ethcommon.Hash `json:"blockHash,omitempty"`
 	From             string          `json:"from"`
 	TransactionIndex string          `json:"transactionIndex"`
-	// Signature values
-	V string `json:"v" gencodec:"required"`
-	R string `json:"r" gencodec:"required"`
-	S string `json:"s" gencodec:"required"`
+	// Signature values - ignored
+	// V string `json:"v" gencodec:"required"`
+	// R string `json:"r" gencodec:"required"`
+	// S string `json:"s" gencodec:"required"`
+}
+
+type rpcLog struct {
+	Address ethcommon.Address `json:"address" gencodec:"required"`
+	Topics  []string          `json:"topics" gencodec:"required"`
+	Data    string            `json:"data" gencodec:"required"`
+}
+
+type rpcReceipt struct {
+	GasUsed string    `json:"gasUsed"      gencodec:"required"`
+	Status  string    `json:"status"`
+	Logs    []*rpcLog `json:"logs"         gencodec:"required"`
+}
+
+type completeTransaction struct {
+	Tx      *rpcTransaction `json:"tx"`
+	Receipt *rpcReceipt     `json:"receipt,omitempty"`
 }
 
 type rpcBlock struct {
 	Hash         ethcommon.Hash   `json:"hash"`
+	Size         string           `json:"size"`
 	Transactions []rpcTransaction `json:"transactions"`
-	UncleHashes  []ethcommon.Hash `json:"uncles"`
 }
 
 func ethHashToHash(h ethcommon.Hash) string {
@@ -61,7 +79,7 @@ func ethNumber(n string) (int64, error) {
 	return 0, errors.Errorf("Not a number: '%v'", n)
 }
 
-func (p *EthereumParser) ethTxToTx(tx *rpcTransaction, blocktime int64, confirmations uint32) (*bchain.Tx, error) {
+func (p *EthereumParser) ethTxToTx(tx *rpcTransaction, receipt *rpcReceipt, blocktime int64, confirmations uint32) (*bchain.Tx, error) {
 	txid := ethHashToHash(tx.Hash)
 	var (
 		fa, ta []string
@@ -73,15 +91,21 @@ func (p *EthereumParser) ethTxToTx(tx *rpcTransaction, blocktime int64, confirma
 	if len(tx.To) > 2 {
 		ta = []string{tx.To}
 	}
-	// temporarily, the complete rpcTransaction without BlockHash is marshalled and hex encoded to bchain.Tx.Hex
+
+	// completeTransaction without BlockHash is marshalled and hex encoded to bchain.Tx.Hex
 	bh := tx.BlockHash
 	tx.BlockHash = nil
-	b, err := json.Marshal(tx)
+	ct := completeTransaction{
+		Tx:      tx,
+		Receipt: receipt,
+	}
+	b, err := json.Marshal(ct)
 	if err != nil {
 		return nil, err
 	}
 	tx.BlockHash = bh
 	h := hex.EncodeToString(b)
+	glog.Info(h)
 	vs, err := hexutil.DecodeBig(tx.Value)
 	if err != nil {
 		return nil, err
@@ -181,79 +205,96 @@ func (p *EthereumParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) (
 	if err != nil {
 		return nil, err
 	}
-	var r rpcTransaction
+	var r completeTransaction
 	var n uint64
 	err = json.Unmarshal(b, &r)
 	if err != nil {
 		return nil, err
 	}
-	pt := &ProtoTransaction{}
-	if pt.AccountNonce, err = hexutil.DecodeUint64(r.AccountNonce); err != nil {
-		return nil, errors.Annotatef(err, "AccountNonce %v", r.AccountNonce)
+	pt := &ProtoCompleteTransaction{}
+	if pt.Tx.AccountNonce, err = hexutil.DecodeUint64(r.Tx.AccountNonce); err != nil {
+		return nil, errors.Annotatef(err, "AccountNonce %v", r.Tx.AccountNonce)
 	}
-	if n, err = hexutil.DecodeUint64(r.BlockNumber); err != nil {
-		return nil, errors.Annotatef(err, "BlockNumber %v", r.BlockNumber)
+	if n, err = hexutil.DecodeUint64(r.Tx.BlockNumber); err != nil {
+		return nil, errors.Annotatef(err, "BlockNumber %v", r.Tx.BlockNumber)
 	}
 	pt.BlockNumber = uint32(n)
 	pt.BlockTime = uint64(blockTime)
-	if pt.From, err = hexDecode(r.From); err != nil {
-		return nil, errors.Annotatef(err, "From %v", r.From)
+	if pt.Tx.From, err = hexDecode(r.Tx.From); err != nil {
+		return nil, errors.Annotatef(err, "From %v", r.Tx.From)
 	}
-	if pt.GasLimit, err = hexutil.DecodeUint64(r.GasLimit); err != nil {
-		return nil, errors.Annotatef(err, "GasLimit %v", r.GasLimit)
+	if pt.Tx.GasLimit, err = hexutil.DecodeUint64(r.Tx.GasLimit); err != nil {
+		return nil, errors.Annotatef(err, "GasLimit %v", r.Tx.GasLimit)
 	}
-	pt.Hash = r.Hash.Bytes()
-	if pt.Payload, err = hexDecode(r.Payload); err != nil {
-		return nil, errors.Annotatef(err, "Payload %v", r.Payload)
+	pt.Tx.Hash = r.Tx.Hash.Bytes()
+	if pt.Tx.Payload, err = hexDecode(r.Tx.Payload); err != nil {
+		return nil, errors.Annotatef(err, "Payload %v", r.Tx.Payload)
 	}
-	if pt.Price, err = hexDecodeBig(r.Price); err != nil {
-		return nil, errors.Annotatef(err, "Price %v", r.Price)
+	if pt.Tx.Price, err = hexDecodeBig(r.Tx.Price); err != nil {
+		return nil, errors.Annotatef(err, "Price %v", r.Tx.Price)
 	}
-	if pt.R, err = hexDecodeBig(r.R); err != nil {
-		return nil, errors.Annotatef(err, "R %v", r.R)
+	// if pt.R, err = hexDecodeBig(r.R); err != nil {
+	// 	return nil, errors.Annotatef(err, "R %v", r.R)
+	// }
+	// if pt.S, err = hexDecodeBig(r.S); err != nil {
+	// 	return nil, errors.Annotatef(err, "S %v", r.S)
+	// }
+	// if pt.V, err = hexDecodeBig(r.V); err != nil {
+	// 	return nil, errors.Annotatef(err, "V %v", r.V)
+	// }
+	if pt.Tx.To, err = hexDecode(r.Tx.To); err != nil {
+		return nil, errors.Annotatef(err, "To %v", r.Tx.To)
 	}
-	if pt.S, err = hexDecodeBig(r.S); err != nil {
-		return nil, errors.Annotatef(err, "S %v", r.S)
+	if n, err = hexutil.DecodeUint64(r.Tx.TransactionIndex); err != nil {
+		return nil, errors.Annotatef(err, "TransactionIndex %v", r.Tx.TransactionIndex)
 	}
-	if pt.V, err = hexDecodeBig(r.V); err != nil {
-		return nil, errors.Annotatef(err, "V %v", r.V)
-	}
-	if pt.To, err = hexDecode(r.To); err != nil {
-		return nil, errors.Annotatef(err, "To %v", r.To)
-	}
-	if n, err = hexutil.DecodeUint64(r.TransactionIndex); err != nil {
-		return nil, errors.Annotatef(err, "TransactionIndex %v", r.TransactionIndex)
-	}
-	pt.TransactionIndex = uint32(n)
-	if pt.Value, err = hexDecodeBig(r.Value); err != nil {
-		return nil, errors.Annotatef(err, "Value %v", r.Value)
+	pt.Tx.TransactionIndex = uint32(n)
+	if pt.Tx.Value, err = hexDecodeBig(r.Tx.Value); err != nil {
+		return nil, errors.Annotatef(err, "Value %v", r.Tx.Value)
 	}
 	return proto.Marshal(pt)
 }
 
 // UnpackTx unpacks transaction from byte array
 func (p *EthereumParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
-	var pt ProtoTransaction
+	var pt ProtoCompleteTransaction
 	err := proto.Unmarshal(buf, &pt)
 	if err != nil {
 		return nil, 0, err
 	}
-	r := rpcTransaction{
-		AccountNonce:     hexutil.EncodeUint64(pt.AccountNonce),
-		BlockNumber:      hexutil.EncodeUint64(uint64(pt.BlockNumber)),
-		From:             hexutil.Encode(pt.From),
-		GasLimit:         hexutil.EncodeUint64(pt.GasLimit),
-		Hash:             ethcommon.BytesToHash(pt.Hash),
-		Payload:          hexutil.Encode(pt.Payload),
-		Price:            hexEncodeBig(pt.Price),
-		R:                hexEncodeBig(pt.R),
-		S:                hexEncodeBig(pt.S),
-		V:                hexEncodeBig(pt.V),
-		To:               hexutil.Encode(pt.To),
-		TransactionIndex: hexutil.EncodeUint64(uint64(pt.TransactionIndex)),
-		Value:            hexEncodeBig(pt.Value),
+	rt := rpcTransaction{
+		AccountNonce: hexutil.EncodeUint64(pt.Tx.AccountNonce),
+		BlockNumber:  hexutil.EncodeUint64(uint64(pt.BlockNumber)),
+		From:         hexutil.Encode(pt.Tx.From),
+		GasLimit:     hexutil.EncodeUint64(pt.Tx.GasLimit),
+		Hash:         ethcommon.BytesToHash(pt.Tx.Hash),
+		Payload:      hexutil.Encode(pt.Tx.Payload),
+		Price:        hexEncodeBig(pt.Tx.Price),
+		// R:                hexEncodeBig(pt.R),
+		// S:                hexEncodeBig(pt.S),
+		// V:                hexEncodeBig(pt.V),
+		To:               hexutil.Encode(pt.Tx.To),
+		TransactionIndex: hexutil.EncodeUint64(uint64(pt.Tx.TransactionIndex)),
+		Value:            hexEncodeBig(pt.Tx.Value),
 	}
-	tx, err := p.ethTxToTx(&r, int64(pt.BlockTime), 0)
+	logs := make([]*rpcLog, len(pt.Receipt.Log))
+	for i, l := range pt.Receipt.Log {
+		topics := make([]string, len(l.Topics))
+		for j, t := range l.Topics {
+			topics[j] = hexutil.Encode(t)
+		}
+		logs[i] = &rpcLog{
+			Address: ethcommon.BytesToAddress(l.Address),
+			Data:    hexutil.Encode(l.Data),
+			Topics:  topics,
+		}
+	}
+	rr := rpcReceipt{
+		GasUsed: hexEncodeBig(pt.Receipt.GasUsed),
+		Status:  hexEncodeBig(pt.Receipt.Status),
+		Logs:    logs,
+	}
+	tx, err := p.ethTxToTx(&rt, &rr, int64(pt.BlockTime), 0)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -303,14 +344,14 @@ func GetHeightFromTx(tx *bchain.Tx) (uint32, error) {
 	if err != nil {
 		return 0, err
 	}
-	var r rpcTransaction
+	var ct completeTransaction
 	var n uint64
-	err = json.Unmarshal(b, &r)
+	err = json.Unmarshal(b, &ct)
 	if err != nil {
 		return 0, err
 	}
-	if n, err = hexutil.DecodeUint64(r.BlockNumber); err != nil {
-		return 0, errors.Annotatef(err, "BlockNumber %v", r.BlockNumber)
+	if n, err = hexutil.DecodeUint64(ct.Tx.BlockNumber); err != nil {
+		return 0, errors.Annotatef(err, "BlockNumber %v", ct.Tx.BlockNumber)
 	}
 	return uint32(n), nil
 }

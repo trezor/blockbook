@@ -12,6 +12,7 @@ import (
 
 	ethereum "github.com/ethereum/go-ethereum"
 	ethcommon "github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -423,12 +424,6 @@ func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error
 		return nil, errors.Annotatef(err, "hash %v, height %v", hash, height)
 	}
 	// Quick-verify transaction and uncle lists. This mostly helps with debugging the server.
-	if head.UncleHash == ethtypes.EmptyUncleHash && len(body.UncleHashes) > 0 {
-		return nil, errors.Annotatef(fmt.Errorf("server returned non-empty uncle list but block header indicates no uncles"), "hash %v, height %v", hash, height)
-	}
-	if head.UncleHash != ethtypes.EmptyUncleHash && len(body.UncleHashes) == 0 {
-		return nil, errors.Annotatef(fmt.Errorf("server returned empty uncle list but block header indicates uncles"), "hash %v, height %v", hash, height)
-	}
 	if head.TxHash == ethtypes.EmptyRootHash && len(body.Transactions) > 0 {
 		return nil, errors.Annotatef(fmt.Errorf("server returned non-empty transaction list but block header indicates no transactions"), "hash %v, height %v", hash, height)
 	}
@@ -439,11 +434,16 @@ func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error
 	if err != nil {
 		return nil, errors.Annotatef(err, "hash %v, height %v", hash, height)
 	}
-	// TODO - this is probably not the correct size
-	bbh.Size = len(raw)
+	bigSize, err := hexutil.DecodeBig(body.Size)
+	if err != nil {
+		glog.Error("invalid size of block ", body.Hash, ": ", body.Size)
+	} else {
+		bbh.Size = int(bigSize.Int64())
+	}
+	// TODO - get ERC20 events
 	btxs := make([]bchain.Tx, len(body.Transactions))
 	for i, tx := range body.Transactions {
-		btx, err := b.Parser.ethTxToTx(&tx, int64(head.Time.Uint64()), uint32(bbh.Confirmations))
+		btx, err := b.Parser.ethTxToTx(&tx, nil, int64(head.Time.Uint64()), uint32(bbh.Confirmations))
 		if err != nil {
 			return nil, errors.Annotatef(err, "hash %v, height %v, txid %v", hash, height, tx.Hash.String())
 		}
@@ -473,32 +473,38 @@ func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
 	defer cancel()
 	var tx *rpcTransaction
-	err := b.rpc.CallContext(ctx, &tx, "eth_getTransactionByHash", ethcommon.HexToHash(txid))
+	hash := ethcommon.HexToHash(txid)
+	err := b.rpc.CallContext(ctx, &tx, "eth_getTransactionByHash", hash)
 	if err != nil {
 		return nil, err
 	} else if tx == nil {
 		return nil, ethereum.NotFound
-	} else if tx.R == "" {
-		if !b.isETC {
-			return nil, errors.Annotatef(fmt.Errorf("server returned transaction without signature"), "txid %v", txid)
-		} else {
-			glog.Warning("server returned transaction without signature, txid ", txid)
-		}
 	}
+	//  else if tx.R == "" {
+	// 	if !b.isETC {
+	// 		return nil, errors.Annotatef(fmt.Errorf("server returned transaction without signature"), "txid %v", txid)
+	// 	}
+	// 	glog.Warning("server returned transaction without signature, txid ", txid)
+	// }
 	var btx *bchain.Tx
 	if tx.BlockNumber == "" {
 		// mempool tx
-		btx, err = b.Parser.ethTxToTx(tx, 0, 0)
+		btx, err = b.Parser.ethTxToTx(tx, nil, 0, 0)
 		if err != nil {
 			return nil, errors.Annotatef(err, "txid %v", txid)
 		}
 	} else {
 		// non mempool tx - we must read the block header to get the block time
-		n, err := ethNumber(tx.BlockNumber)
+		h, err := b.client.HeaderByHash(ctx, *tx.BlockHash)
 		if err != nil {
 			return nil, errors.Annotatef(err, "txid %v", txid)
 		}
-		h, err := b.client.HeaderByHash(ctx, *tx.BlockHash)
+		var receipt rpcReceipt
+		err = b.rpc.CallContext(ctx, &receipt, "eth_getTransactionReceipt", hash)
+		if err != nil {
+			return nil, errors.Annotatef(err, "txid %v", txid)
+		}
+		n, err := ethNumber(tx.BlockNumber)
 		if err != nil {
 			return nil, errors.Annotatef(err, "txid %v", txid)
 		}
@@ -506,7 +512,7 @@ func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 		if err != nil {
 			return nil, errors.Annotatef(err, "txid %v", txid)
 		}
-		btx, err = b.Parser.ethTxToTx(tx, h.Time.Int64(), confirmations)
+		btx, err = b.Parser.ethTxToTx(tx, &receipt, h.Time.Int64(), confirmations)
 		if err != nil {
 			return nil, errors.Annotatef(err, "txid %v", txid)
 		}
