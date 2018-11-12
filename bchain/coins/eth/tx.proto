@@ -4,7 +4,7 @@ syntax = "proto3";
 	message ProtoCompleteTransaction {
         message TxType {
             uint64 AccountNonce = 1;
-            bytes Price = 2;
+            bytes GasPrice = 2;
             uint64 GasLimit = 3;
             bytes Value = 4;
             bytes Payload = 5;

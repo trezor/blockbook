@@ -246,18 +246,22 @@ func (b *EthereumRPC) Shutdown(ctx context.Context) error {
 	return nil
 }
 
+// IsTestnet returns true if the network is testnet
 func (b *EthereumRPC) IsTestnet() bool {
 	return b.Testnet
 }
 
+// GetNetworkName returns network name
 func (b *EthereumRPC) GetNetworkName() string {
 	return b.Network
 }
 
+// GetCoinName returns coin name
 func (b *EthereumRPC) GetCoinName() string {
 	return b.ChainConfig.CoinName
 }
 
+// GetSubversion returns empty string, ethereum does not have subversion
 func (b *EthereumRPC) GetSubversion() string {
 	return ""
 }

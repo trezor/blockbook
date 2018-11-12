@@ -29,7 +29,7 @@ func NewEthereumParser() *EthereumParser {
 
 type rpcTransaction struct {
 	AccountNonce     string          `json:"nonce"    gencodec:"required"`
-	Price            string          `json:"gasPrice" gencodec:"required"`
+	GasPrice         string          `json:"gasPrice" gencodec:"required"`
 	GasLimit         string          `json:"gas"      gencodec:"required"`
 	To               string          `json:"to"       rlp:"nil"` // nil means contract creation
 	Value            string          `json:"value"    gencodec:"required"`
@@ -105,7 +105,9 @@ func (p *EthereumParser) ethTxToTx(tx *rpcTransaction, receipt *rpcReceipt, bloc
 	}
 	tx.BlockHash = bh
 	h := hex.EncodeToString(b)
-	glog.Info(h)
+	if receipt != nil {
+		glog.Info(tx.Hash.Hex(), ": ", h)
+	}
 	vs, err := hexutil.DecodeBig(tx.Value)
 	if err != nil {
 		return nil, err
@@ -212,6 +214,7 @@ func (p *EthereumParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) (
 		return nil, err
 	}
 	pt := &ProtoCompleteTransaction{}
+	pt.Tx = &ProtoCompleteTransaction_TxType{}
 	if pt.Tx.AccountNonce, err = hexutil.DecodeUint64(r.Tx.AccountNonce); err != nil {
 		return nil, errors.Annotatef(err, "AccountNonce %v", r.Tx.AccountNonce)
 	}
@@ -230,8 +233,8 @@ func (p *EthereumParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) (
 	if pt.Tx.Payload, err = hexDecode(r.Tx.Payload); err != nil {
 		return nil, errors.Annotatef(err, "Payload %v", r.Tx.Payload)
 	}
-	if pt.Tx.Price, err = hexDecodeBig(r.Tx.Price); err != nil {
-		return nil, errors.Annotatef(err, "Price %v", r.Tx.Price)
+	if pt.Tx.GasPrice, err = hexDecodeBig(r.Tx.GasPrice); err != nil {
+		return nil, errors.Annotatef(err, "Price %v", r.Tx.GasPrice)
 	}
 	// if pt.R, err = hexDecodeBig(r.R); err != nil {
 	// 	return nil, errors.Annotatef(err, "R %v", r.R)
@@ -252,6 +255,36 @@ func (p *EthereumParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) (
 	if pt.Tx.Value, err = hexDecodeBig(r.Tx.Value); err != nil {
 		return nil, errors.Annotatef(err, "Value %v", r.Tx.Value)
 	}
+	if r.Receipt != nil {
+		pt.Receipt = &ProtoCompleteTransaction_ReceiptType{}
+		if pt.Receipt.GasUsed, err = hexDecodeBig(r.Receipt.GasUsed); err != nil {
+			return nil, errors.Annotatef(err, "GasUsed %v", r.Receipt.GasUsed)
+		}
+		if pt.Receipt.Status, err = hexDecodeBig(r.Receipt.Status); err != nil {
+			return nil, errors.Annotatef(err, "Status %v", r.Receipt.Status)
+		}
+		ptLogs := make([]*ProtoCompleteTransaction_ReceiptType_LogType, len(r.Receipt.Logs))
+		for i, l := range r.Receipt.Logs {
+			d, err := hexutil.Decode(l.Data)
+			if err != nil {
+				return nil, errors.Annotatef(err, "Data cannot be decoded %v", l)
+			}
+			t := make([][]byte, len(l.Topics))
+			for j, s := range l.Topics {
+				t[j], err = hexutil.Decode(s)
+				if err != nil {
+					return nil, errors.Annotatef(err, "Topic cannot be decoded %v", l)
+				}
+			}
+			ptLogs[i] = &ProtoCompleteTransaction_ReceiptType_LogType{
+				Address: l.Address.Bytes(),
+				Data:    d,
+				Topics:  t,
+			}
+
+		}
+		pt.Receipt.Log = ptLogs
+	}
 	return proto.Marshal(pt)
 }
 
@@ -269,7 +302,7 @@ func (p *EthereumParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 		GasLimit:     hexutil.EncodeUint64(pt.Tx.GasLimit),
 		Hash:         ethcommon.BytesToHash(pt.Tx.Hash),
 		Payload:      hexutil.Encode(pt.Tx.Payload),
-		Price:        hexEncodeBig(pt.Tx.Price),
+		GasPrice:     hexEncodeBig(pt.Tx.GasPrice),
 		// R:                hexEncodeBig(pt.R),
 		// S:                hexEncodeBig(pt.S),
 		// V:                hexEncodeBig(pt.V),
@@ -277,24 +310,27 @@ func (p *EthereumParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 		TransactionIndex: hexutil.EncodeUint64(uint64(pt.Tx.TransactionIndex)),
 		Value:            hexEncodeBig(pt.Tx.Value),
 	}
-	logs := make([]*rpcLog, len(pt.Receipt.Log))
-	for i, l := range pt.Receipt.Log {
-		topics := make([]string, len(l.Topics))
-		for j, t := range l.Topics {
-			topics[j] = hexutil.Encode(t)
+	var rr *rpcReceipt
+	if pt.Receipt != nil {
+		logs := make([]*rpcLog, len(pt.Receipt.Log))
+		for i, l := range pt.Receipt.Log {
+			topics := make([]string, len(l.Topics))
+			for j, t := range l.Topics {
+				topics[j] = hexutil.Encode(t)
+			}
+			logs[i] = &rpcLog{
+				Address: ethcommon.BytesToAddress(l.Address),
+				Data:    hexutil.Encode(l.Data),
+				Topics:  topics,
+			}
 		}
-		logs[i] = &rpcLog{
-			Address: ethcommon.BytesToAddress(l.Address),
-			Data:    hexutil.Encode(l.Data),
-			Topics:  topics,
+		rr = &rpcReceipt{
+			GasUsed: hexEncodeBig(pt.Receipt.GasUsed),
+			Status:  hexEncodeBig(pt.Receipt.Status),
+			Logs:    logs,
 		}
 	}
-	rr := rpcReceipt{
-		GasUsed: hexEncodeBig(pt.Receipt.GasUsed),
-		Status:  hexEncodeBig(pt.Receipt.Status),
-		Logs:    logs,
-	}
-	tx, err := p.ethTxToTx(&rt, &rr, int64(pt.BlockTime), 0)
+	tx, err := p.ethTxToTx(&rt, rr, int64(pt.BlockTime), 0)
 	if err != nil {
 		return nil, 0, err
 	}
