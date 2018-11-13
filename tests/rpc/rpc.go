@@ -166,6 +166,8 @@ func testGetTransaction(t *testing.T, h *TestHandler) {
 			continue
 		}
 		got.Confirmations = 0
+		// CoinSpecificData are not specified in the fixtures
+		got.CoinSpecificData = nil
 
 		if !reflect.DeepEqual(got, want) {
 			t.Errorf("GetTransaction() got %+v, want %+v", got, want)
