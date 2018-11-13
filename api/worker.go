@@ -5,6 +5,7 @@ import (
 	"blockbook/common"
 	"blockbook/db"
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"strconv"
@@ -82,7 +83,7 @@ func (w *Worker) setSpendingTxToVout(vout *Vout, txid string, height uint32) err
 // GetSpendingTxid returns transaction id of transaction that spent given output
 func (w *Worker) GetSpendingTxid(txid string, n int) (string, error) {
 	start := time.Now()
-	tx, err := w.GetTransaction(txid, false)
+	tx, err := w.GetTransaction(txid, false, false)
 	if err != nil {
 		return "", err
 	}
@@ -98,7 +99,7 @@ func (w *Worker) GetSpendingTxid(txid string, n int) (string, error) {
 }
 
 // GetTransaction reads transaction data from txid
-func (w *Worker) GetTransaction(txid string, spendingTxs bool) (*Tx, error) {
+func (w *Worker) GetTransaction(txid string, spendingTxs bool, specificData bool) (*Tx, error) {
 	start := time.Now()
 	bchainTx, height, err := w.txCache.GetTransaction(txid)
 	if err != nil {
@@ -210,24 +211,32 @@ func (w *Worker) GetTransaction(txid string, spendingTxs bool) (*Tx, error) {
 	}
 	// for now do not return size, we would have to compute vsize of segwit transactions
 	// size:=len(bchainTx.Hex) / 2
+	var sd json.RawMessage
+	if specificData {
+		sd, err = w.chain.GetTransactionSpecific(bchainTx)
+		if err != nil {
+			return nil, err
+		}
+	}
 	r := &Tx{
-		Blockhash:     blockhash,
-		Blockheight:   int(height),
-		Blocktime:     bchainTx.Blocktime,
-		Confirmations: bchainTx.Confirmations,
-		Fees:          w.chainParser.AmountToDecimalString(&feesSat),
-		FeesSat:       feesSat,
-		Locktime:      bchainTx.LockTime,
-		Time:          bchainTx.Time,
-		Txid:          bchainTx.Txid,
-		ValueIn:       w.chainParser.AmountToDecimalString(&valInSat),
-		ValueInSat:    valInSat,
-		ValueOut:      w.chainParser.AmountToDecimalString(&valOutSat),
-		ValueOutSat:   valOutSat,
-		Version:       bchainTx.Version,
-		Hex:           bchainTx.Hex,
-		Vin:           vins,
-		Vout:          vouts,
+		Blockhash:        blockhash,
+		Blockheight:      int(height),
+		Blocktime:        bchainTx.Blocktime,
+		Confirmations:    bchainTx.Confirmations,
+		Fees:             w.chainParser.AmountToDecimalString(&feesSat),
+		FeesSat:          feesSat,
+		Locktime:         bchainTx.LockTime,
+		Time:             bchainTx.Time,
+		Txid:             bchainTx.Txid,
+		ValueIn:          w.chainParser.AmountToDecimalString(&valInSat),
+		ValueInSat:       valInSat,
+		ValueOut:         w.chainParser.AmountToDecimalString(&valOutSat),
+		ValueOutSat:      valOutSat,
+		Version:          bchainTx.Version,
+		Hex:              bchainTx.Hex,
+		Vin:              vins,
+		Vout:             vouts,
+		CoinSpecificData: sd,
 	}
 	if spendingTxs {
 		glog.Info("GetTransaction ", txid, " finished in ", time.Since(start))
@@ -426,7 +435,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, onlyTxids b
 	// load mempool transactions
 	var uBalSat big.Int
 	for _, tx := range txm {
-		tx, err := w.GetTransaction(tx, false)
+		tx, err := w.GetTransaction(tx, false, false)
 		// mempool transaction may fail
 		if err != nil {
 			glog.Error("GetTransaction in mempool ", tx, ": ", err)

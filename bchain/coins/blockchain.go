@@ -187,9 +187,9 @@ func (c *blockChainWithMetrics) GetTransaction(txid string) (v *bchain.Tx, err e
 	return c.b.GetTransaction(txid)
 }
 
-func (c *blockChainWithMetrics) GetTransactionSpecific(txid string) (v json.RawMessage, err error) {
+func (c *blockChainWithMetrics) GetTransactionSpecific(tx *bchain.Tx) (v json.RawMessage, err error) {
 	defer func(s time.Time) { c.observeRPCLatency("GetTransactionSpecific", s, err) }(time.Now())
-	return c.b.GetTransactionSpecific(txid)
+	return c.b.GetTransactionSpecific(tx)
 }
 
 func (c *blockChainWithMetrics) GetTransactionForMempool(txid string) (v *bchain.Tx, err error) {

@@ -199,6 +199,8 @@ func TestEthereumParser_UnpackTx(t *testing.T) {
 				t.Errorf("EthereumParser.UnpackTx() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
+			// CoinSpecificData are not set in want struct
+			got.CoinSpecificData = nil
 			// DeepEqual compares empty nil slices as not equal
 			if fmt.Sprint(got) != fmt.Sprint(tt.want) {
 				t.Errorf("EthereumParser.UnpackTx() got = %+v, want %+v", got, tt.want)

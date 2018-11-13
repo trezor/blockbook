@@ -447,7 +447,7 @@ func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error
 	// TODO - get ERC20 events
 	btxs := make([]bchain.Tx, len(body.Transactions))
 	for i, tx := range body.Transactions {
-		btx, err := b.Parser.ethTxToTx(&tx, nil, int64(head.Time.Uint64()), uint32(bbh.Confirmations))
+		btx, err := b.Parser.ethTxToTx(&tx, nil, int64(head.Time.Uint64()), uint32(bbh.Confirmations), false)
 		if err != nil {
 			return nil, errors.Annotatef(err, "hash %v, height %v, txid %v", hash, height, tx.Hash.String())
 		}
@@ -493,7 +493,7 @@ func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 	var btx *bchain.Tx
 	if tx.BlockNumber == "" {
 		// mempool tx
-		btx, err = b.Parser.ethTxToTx(tx, nil, 0, 0)
+		btx, err = b.Parser.ethTxToTx(tx, nil, 0, 0, true)
 		if err != nil {
 			return nil, errors.Annotatef(err, "txid %v", txid)
 		}
@@ -516,7 +516,7 @@ func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 		if err != nil {
 			return nil, errors.Annotatef(err, "txid %v", txid)
 		}
-		btx, err = b.Parser.ethTxToTx(tx, &receipt, h.Time.Int64(), confirmations)
+		btx, err = b.Parser.ethTxToTx(tx, &receipt, h.Time.Int64(), confirmations, true)
 		if err != nil {
 			return nil, errors.Annotatef(err, "txid %v", txid)
 		}
@@ -525,17 +525,20 @@ func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 }
 
 // GetTransactionSpecific returns json as returned by backend, with all coin specific data
-func (b *EthereumRPC) GetTransactionSpecific(txid string) (json.RawMessage, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
-	defer cancel()
-	var tx json.RawMessage
-	err := b.rpc.CallContext(ctx, &tx, "eth_getTransactionByHash", ethcommon.HexToHash(txid))
-	if err != nil {
-		return nil, err
-	} else if tx == nil {
-		return nil, ethereum.NotFound
+func (b *EthereumRPC) GetTransactionSpecific(tx *bchain.Tx) (json.RawMessage, error) {
+	csd, ok := tx.CoinSpecificData.(completeTransaction)
+	if !ok {
+		ntx, err := b.GetTransaction(tx.Txid)
+		if err != nil {
+			return nil, err
+		}
+		csd, ok = ntx.CoinSpecificData.(completeTransaction)
+		if !ok {
+			return nil, errors.New("Cannot get CoinSpecificData")
+		}
 	}
-	return tx, nil
+	m, err := json.Marshal(&csd)
+	return json.RawMessage(m), err
 }
 
 type rpcMempoolBlock struct {
