@@ -75,9 +75,10 @@ type Tx struct {
 	Vin      []Vin  `json:"vin"`
 	Vout     []Vout `json:"vout"`
 	// BlockHash     string `json:"blockhash,omitempty"`
-	Confirmations uint32 `json:"confirmations,omitempty"`
-	Time          int64  `json:"time,omitempty"`
-	Blocktime     int64  `json:"blocktime,omitempty"`
+	Confirmations    uint32      `json:"confirmations,omitempty"`
+	Time             int64       `json:"time,omitempty"`
+	Blocktime        int64       `json:"blocktime,omitempty"`
+	CoinSpecificData interface{} `json:"-"`
 }
 
 // Block is block header and list of transactions
@@ -185,7 +186,7 @@ type BlockChain interface {
 	GetMempool() ([]string, error)
 	GetTransaction(txid string) (*Tx, error)
 	GetTransactionForMempool(txid string) (*Tx, error)
-	GetTransactionSpecific(txid string) (json.RawMessage, error)
+	GetTransactionSpecific(tx *Tx) (json.RawMessage, error)
 	EstimateSmartFee(blocks int, conservative bool) (big.Int, error)
 	EstimateFee(blocks int) (big.Int, error)
 	SendRawTransaction(tx string) (string, error)

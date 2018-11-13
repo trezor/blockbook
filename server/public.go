@@ -335,7 +335,6 @@ type TemplateData struct {
 	Address          *api.Address
 	AddrStr          string
 	Tx               *api.Tx
-	TxSpecific       json.RawMessage
 	Error            *api.APIError
 	Blocks           *api.Blocks
 	Block            *api.Block
@@ -391,23 +390,17 @@ func setTxToTemplateData(td *TemplateData, tx *api.Tx) *TemplateData {
 
 func (s *PublicServer) explorerTx(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
 	var tx *api.Tx
-	var txSpecific json.RawMessage
 	var err error
 	s.metrics.ExplorerViews.With(common.Labels{"action": "tx"}).Inc()
 	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
 		txid := r.URL.Path[i+1:]
-		tx, err = s.api.GetTransaction(txid, false)
-		if err != nil {
-			return errorTpl, nil, err
-		}
-		txSpecific, err = s.chain.GetTransactionSpecific(txid)
+		tx, err = s.api.GetTransaction(txid, false, true)
 		if err != nil {
 			return errorTpl, nil, err
 		}
 	}
 	data := s.newTemplateData()
 	data.Tx = tx
-	data.TxSpecific = txSpecific
 	return txTpl, data, nil
 }
 
@@ -520,7 +513,7 @@ func (s *PublicServer) explorerSearch(w http.ResponseWriter, r *http.Request) (t
 			http.Redirect(w, r, joinURL("/block/", block.Hash), 302)
 			return noTpl, nil, nil
 		}
-		tx, err = s.api.GetTransaction(q, false)
+		tx, err = s.api.GetTransaction(q, false, false)
 		if err == nil {
 			http.Redirect(w, r, joinURL("/tx/", tx.Txid), 302)
 			return noTpl, nil, nil
@@ -655,7 +648,7 @@ func (s *PublicServer) apiTx(r *http.Request) (interface{}, error) {
 				return nil, api.NewAPIError("Parameter 'spending' cannot be converted to boolean", true)
 			}
 		}
-		tx, err = s.api.GetTransaction(txid, spendingTxs)
+		tx, err = s.api.GetTransaction(txid, spendingTxs, false)
 	}
 	return tx, err
 }
@@ -666,7 +659,7 @@ func (s *PublicServer) apiTxSpecific(r *http.Request) (interface{}, error) {
 	s.metrics.ExplorerViews.With(common.Labels{"action": "api-tx-specific"}).Inc()
 	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
 		txid := r.URL.Path[i+1:]
-		tx, err = s.chain.GetTransactionSpecific(txid)
+		tx, err = s.chain.GetTransactionSpecific(&bchain.Tx{Txid: txid})
 	}
 	return tx, err
 }

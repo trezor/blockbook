@@ -79,7 +79,7 @@ func ethNumber(n string) (int64, error) {
 	return 0, errors.Errorf("Not a number: '%v'", n)
 }
 
-func (p *EthereumParser) ethTxToTx(tx *rpcTransaction, receipt *rpcReceipt, blocktime int64, confirmations uint32) (*bchain.Tx, error) {
+func (p *EthereumParser) ethTxToTx(tx *rpcTransaction, receipt *rpcReceipt, blocktime int64, confirmations uint32, marshallHex bool) (*bchain.Tx, error) {
 	txid := ethHashToHash(tx.Hash)
 	var (
 		fa, ta []string
@@ -91,22 +91,24 @@ func (p *EthereumParser) ethTxToTx(tx *rpcTransaction, receipt *rpcReceipt, bloc
 	if len(tx.To) > 2 {
 		ta = []string{tx.To}
 	}
-
-	// completeTransaction without BlockHash is marshalled and hex encoded to bchain.Tx.Hex
-	bh := tx.BlockHash
-	tx.BlockHash = nil
 	ct := completeTransaction{
 		Tx:      tx,
 		Receipt: receipt,
 	}
-	b, err := json.Marshal(ct)
-	if err != nil {
-		return nil, err
-	}
-	tx.BlockHash = bh
-	h := hex.EncodeToString(b)
-	if receipt != nil {
-		glog.Info(tx.Hash.Hex(), ": ", h)
+	var h string
+	if marshallHex {
+		// completeTransaction without BlockHash is marshalled and hex encoded to bchain.Tx.Hex
+		bh := tx.BlockHash
+		tx.BlockHash = nil
+		b, err := json.Marshal(ct)
+		if err != nil {
+			return nil, err
+		}
+		tx.BlockHash = bh
+		h = hex.EncodeToString(b)
+		if receipt != nil {
+			glog.Info(tx.Hash.Hex(), ": ", h)
+		}
 	}
 	vs, err := hexutil.DecodeBig(tx.Value)
 	if err != nil {
@@ -139,6 +141,7 @@ func (p *EthereumParser) ethTxToTx(tx *rpcTransaction, receipt *rpcReceipt, bloc
 				},
 			},
 		},
+		CoinSpecificData: ct,
 	}, nil
 }
 
@@ -330,7 +333,7 @@ func (p *EthereumParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 			Logs:    logs,
 		}
 	}
-	tx, err := p.ethTxToTx(&rt, rr, int64(pt.BlockTime), 0)
+	tx, err := p.ethTxToTx(&rt, rr, int64(pt.BlockTime), 0, true)
 	if err != nil {
 		return nil, 0, err
 	}

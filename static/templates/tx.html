@@ -1,4 +1,4 @@
-{{define "specific"}}{{$cs := .CoinShortcut}}{{$tx := .Tx}}{{$txSpecific := .TxSpecific}}
+{{define "specific"}}{{$cs := .CoinShortcut}}{{$tx := .Tx}}
 <h1>Transaction</h1>
 <div class="alert alert-data ellipsis">
     <span class="data">{{$tx.Txid}}</span>
@@ -47,7 +47,7 @@
         <pre id="txSpecific"></pre>
     </div>
     <script type="text/javascript">
-        txSpecific = {{ $txSpecific }};
+        txSpecific = {{$tx.CoinSpecificData}};
         function syntaxHighlight(json) {
             json = JSON.stringify(json, undefined, 2);
             json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');

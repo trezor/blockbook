@@ -141,8 +141,8 @@ func (c *fakeBlockChain) GetTransaction(txid string) (v *bchain.Tx, err error) {
 	return nil, errors.New("Not found")
 }
 
-func (c *fakeBlockChain) GetTransactionSpecific(txid string) (v json.RawMessage, err error) {
-	tx, err := c.GetTransaction(txid)
+func (c *fakeBlockChain) GetTransactionSpecific(tx *bchain.Tx) (v json.RawMessage, err error) {
+	tx, err = c.GetTransaction(tx.Txid)
 	if err != nil {
 		return nil, err
 	}
