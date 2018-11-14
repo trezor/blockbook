@@ -9,7 +9,6 @@ import (
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/juju/errors"
 )
@@ -27,34 +26,43 @@ func NewEthereumParser() *EthereumParser {
 	}}
 }
 
+type rpcHeader struct {
+	Hash       ethcommon.Hash `json:"hash"`
+	Difficulty string         `json:"difficulty"`
+	Number     string         `json:"number"`
+	Time       string         `json:"timestamp"`
+	Size       string         `json:"size"`
+	Nonce      string         `json:"nonce"`
+}
+
 type rpcTransaction struct {
-	AccountNonce     string          `json:"nonce"    gencodec:"required"`
-	GasPrice         string          `json:"gasPrice" gencodec:"required"`
-	GasLimit         string          `json:"gas"      gencodec:"required"`
+	AccountNonce     string          `json:"nonce"`
+	GasPrice         string          `json:"gasPrice"`
+	GasLimit         string          `json:"gas"`
 	To               string          `json:"to"       rlp:"nil"` // nil means contract creation
-	Value            string          `json:"value"    gencodec:"required"`
-	Payload          string          `json:"input"    gencodec:"required"`
+	Value            string          `json:"value"`
+	Payload          string          `json:"input"`
 	Hash             ethcommon.Hash  `json:"hash" rlp:"-"`
 	BlockNumber      string          `json:"blockNumber"`
 	BlockHash        *ethcommon.Hash `json:"blockHash,omitempty"`
 	From             string          `json:"from"`
 	TransactionIndex string          `json:"transactionIndex"`
 	// Signature values - ignored
-	// V string `json:"v" gencodec:"required"`
-	// R string `json:"r" gencodec:"required"`
-	// S string `json:"s" gencodec:"required"`
+	// V string `json:"v"`
+	// R string `json:"r"`
+	// S string `json:"s"`
 }
 
 type rpcLog struct {
-	Address ethcommon.Address `json:"address" gencodec:"required"`
-	Topics  []string          `json:"topics" gencodec:"required"`
-	Data    string            `json:"data" gencodec:"required"`
+	Address ethcommon.Address `json:"address"`
+	Topics  []string          `json:"topics"`
+	Data    string            `json:"data"`
 }
 
 type rpcReceipt struct {
-	GasUsed string    `json:"gasUsed"      gencodec:"required"`
+	GasUsed string    `json:"gasUsed"`
 	Status  string    `json:"status"`
-	Logs    []*rpcLog `json:"logs"         gencodec:"required"`
+	Logs    []*rpcLog `json:"logs"`
 }
 
 type completeTransaction struct {
@@ -62,14 +70,12 @@ type completeTransaction struct {
 	Receipt *rpcReceipt     `json:"receipt,omitempty"`
 }
 
-type rpcBlock struct {
-	Hash         ethcommon.Hash   `json:"hash"`
-	Size         string           `json:"size"`
+type rpcBlockTransactions struct {
 	Transactions []rpcTransaction `json:"transactions"`
 }
 
-func ethHashToHash(h ethcommon.Hash) string {
-	return h.Hex()
+type rpcBlockTxids struct {
+	Transactions []string `json:"transactions"`
 }
 
 func ethNumber(n string) (int64, error) {
@@ -80,7 +86,7 @@ func ethNumber(n string) (int64, error) {
 }
 
 func (p *EthereumParser) ethTxToTx(tx *rpcTransaction, receipt *rpcReceipt, blocktime int64, confirmations uint32, marshallHex bool) (*bchain.Tx, error) {
-	txid := ethHashToHash(tx.Hash)
+	txid := tx.Hash.Hex()
 	var (
 		fa, ta []string
 		err    error
@@ -106,9 +112,6 @@ func (p *EthereumParser) ethTxToTx(tx *rpcTransaction, receipt *rpcReceipt, bloc
 		}
 		tx.BlockHash = bh
 		h = hex.EncodeToString(b)
-		if receipt != nil {
-			glog.Info(tx.Hash.Hex(), ": ", h)
-		}
 	}
 	vs, err := hexutil.DecodeBig(tx.Value)
 	if err != nil {

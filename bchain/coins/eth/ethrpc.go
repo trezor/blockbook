@@ -12,7 +12,6 @@ import (
 
 	ethereum "github.com/ethereum/go-ethereum"
 	ethcommon "github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -287,7 +286,7 @@ func (b *EthereumRPC) GetChainInfo() (*bchain.ChainInfo, error) {
 	}
 	rv := &bchain.ChainInfo{
 		Blocks:          int(h.Number.Int64()),
-		Bestblockhash:   ethHashToHash(h.Hash()),
+		Bestblockhash:   h.Hash().Hex(),
 		Difficulty:      h.Difficulty.String(),
 		Version:         ver,
 		ProtocolVersion: protocol,
@@ -329,7 +328,7 @@ func (b *EthereumRPC) GetBestBlockHash() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return ethHashToHash(h.Hash()), nil
+	return h.Hash().Hex(), nil
 }
 
 // GetBestBlockHeight returns height of the tip of the best-block-chain
@@ -338,7 +337,6 @@ func (b *EthereumRPC) GetBestBlockHeight() (uint32, error) {
 	if err != nil {
 		return 0, err
 	}
-	// TODO - can it grow over 2^32 ?
 	return uint32(h.Number.Uint64()), nil
 }
 
@@ -355,37 +353,46 @@ func (b *EthereumRPC) GetBlockHash(height uint32) (string, error) {
 		}
 		return "", errors.Annotatef(err, "height %v", height)
 	}
-	return ethHashToHash(h.Hash()), nil
+	return h.Hash().Hex(), nil
 }
 
-func (b *EthereumRPC) ethHeaderToBlockHeader(h *ethtypes.Header) (*bchain.BlockHeader, error) {
-	hn := h.Number.Uint64()
-	c, err := b.computeConfirmations(hn)
+func (b *EthereumRPC) ethHeaderToBlockHeader(h *rpcHeader) (*bchain.BlockHeader, error) {
+	height, err := ethNumber(h.Number)
+	if err != nil {
+		return nil, err
+	}
+	c, err := b.computeConfirmations(uint64(height))
+	if err != nil {
+		return nil, err
+	}
+	time, err := ethNumber(h.Time)
+	if err != nil {
+		return nil, err
+	}
+	size, err := ethNumber(h.Size)
 	if err != nil {
 		return nil, err
 	}
 	return &bchain.BlockHeader{
-		Hash:          ethHashToHash(h.Hash()),
-		Height:        uint32(hn),
+		Hash:          h.Hash.Hex(),
+		Height:        uint32(height),
 		Confirmations: int(c),
-		Time:          int64(h.Time.Uint64()),
-		// Next
-		// Prev
+		Time:          time,
+		Size:          int(size),
 	}, nil
 }
 
 // GetBlockHeader returns header of block with given hash
 func (b *EthereumRPC) GetBlockHeader(hash string) (*bchain.BlockHeader, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
-	defer cancel()
-	h, err := b.client.HeaderByHash(ctx, ethcommon.HexToHash(hash))
+	raw, err := b.getBlockRaw(hash, 0, false)
 	if err != nil {
-		if err == ethereum.NotFound {
-			return nil, bchain.ErrBlockNotFound
-		}
+		return nil, err
+	}
+	var h rpcHeader
+	if err := json.Unmarshal(raw, &h); err != nil {
 		return nil, errors.Annotatef(err, "hash %v", hash)
 	}
-	return b.ethHeaderToBlockHeader(h)
+	return b.ethHeaderToBlockHeader(&h)
 }
 
 func (b *EthereumRPC) computeConfirmations(n uint64) (uint32, error) {
@@ -398,56 +405,50 @@ func (b *EthereumRPC) computeConfirmations(n uint64) (uint32, error) {
 	return uint32(bn - n + 1), nil
 }
 
-// GetBlock returns block with given hash or height, hash has precedence if both passed
-func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
+func (b *EthereumRPC) getBlockRaw(hash string, height uint32, fullTxs bool) (json.RawMessage, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
 	defer cancel()
 	var raw json.RawMessage
 	var err error
 	if hash != "" {
-		err = b.rpc.CallContext(ctx, &raw, "eth_getBlockByHash", ethcommon.HexToHash(hash), true)
+		if hash == "pending" {
+			err = b.rpc.CallContext(ctx, &raw, "eth_getBlockByNumber", hash, fullTxs)
+		} else {
+			err = b.rpc.CallContext(ctx, &raw, "eth_getBlockByHash", ethcommon.HexToHash(hash), fullTxs)
+		}
 	} else {
-
-		err = b.rpc.CallContext(ctx, &raw, "eth_getBlockByNumber", fmt.Sprintf("%#x", height), true)
+		err = b.rpc.CallContext(ctx, &raw, "eth_getBlockByNumber", fmt.Sprintf("%#x", height), fullTxs)
 	}
 	if err != nil {
 		return nil, errors.Annotatef(err, "hash %v, height %v", hash, height)
 	} else if len(raw) == 0 {
 		return nil, bchain.ErrBlockNotFound
 	}
-	// Decode header and transactions.
-	var head *ethtypes.Header
-	var body rpcBlock
+	return raw, nil
+}
+
+// GetBlock returns block with given hash or height, hash has precedence if both passed
+func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
+	raw, err := b.getBlockRaw(hash, height, true)
+	if err != nil {
+		return nil, err
+	}
+	var head rpcHeader
 	if err := json.Unmarshal(raw, &head); err != nil {
 		return nil, errors.Annotatef(err, "hash %v, height %v", hash, height)
 	}
-	if head == nil {
-		return nil, bchain.ErrBlockNotFound
-	}
+	var body rpcBlockTransactions
 	if err := json.Unmarshal(raw, &body); err != nil {
 		return nil, errors.Annotatef(err, "hash %v, height %v", hash, height)
 	}
-	// Quick-verify transaction and uncle lists. This mostly helps with debugging the server.
-	if head.TxHash == ethtypes.EmptyRootHash && len(body.Transactions) > 0 {
-		return nil, errors.Annotatef(fmt.Errorf("server returned non-empty transaction list but block header indicates no transactions"), "hash %v, height %v", hash, height)
-	}
-	if head.TxHash != ethtypes.EmptyRootHash && len(body.Transactions) == 0 {
-		return nil, errors.Annotatef(fmt.Errorf("server returned empty transaction list but block header indicates transactions"), "hash %v, height %v", hash, height)
-	}
-	bbh, err := b.ethHeaderToBlockHeader(head)
+	bbh, err := b.ethHeaderToBlockHeader(&head)
 	if err != nil {
 		return nil, errors.Annotatef(err, "hash %v, height %v", hash, height)
-	}
-	bigSize, err := hexutil.DecodeBig(body.Size)
-	if err != nil {
-		glog.Error("invalid size of block ", body.Hash, ": ", body.Size)
-	} else {
-		bbh.Size = int(bigSize.Int64())
 	}
 	// TODO - get ERC20 events
 	btxs := make([]bchain.Tx, len(body.Transactions))
 	for i, tx := range body.Transactions {
-		btx, err := b.Parser.ethTxToTx(&tx, nil, int64(head.Time.Uint64()), uint32(bbh.Confirmations), false)
+		btx, err := b.Parser.ethTxToTx(&tx, nil, bbh.Time, uint32(bbh.Confirmations), false)
 		if err != nil {
 			return nil, errors.Annotatef(err, "hash %v, height %v, txid %v", hash, height, tx.Hash.String())
 		}
@@ -462,8 +463,25 @@ func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error
 
 // GetBlockInfo returns extended header (more info than in bchain.BlockHeader) with a list of txids
 func (b *EthereumRPC) GetBlockInfo(hash string) (*bchain.BlockInfo, error) {
-	// TODO - implement
-	return nil, errors.New("Not implemented yet")
+	raw, err := b.getBlockRaw(hash, 0, false)
+	if err != nil {
+		return nil, err
+	}
+	var head rpcHeader
+	var txs rpcBlockTxids
+	if err := json.Unmarshal(raw, &head); err != nil {
+		return nil, errors.Annotatef(err, "hash %v", hash)
+	}
+	if err = json.Unmarshal(raw, &txs); err != nil {
+		return nil, err
+	}
+	bch, err := b.ethHeaderToBlockHeader(&head)
+	return &bchain.BlockInfo{
+		BlockHeader: *bch,
+		Difficulty:  json.Number(head.Difficulty),
+		Nonce:       json.Number(head.Nonce),
+		Txids:       txs.Transactions,
+	}, nil
 }
 
 // GetTransactionForMempool returns a transaction by the transaction ID.
@@ -484,12 +502,6 @@ func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 	} else if tx == nil {
 		return nil, ethereum.NotFound
 	}
-	//  else if tx.R == "" {
-	// 	if !b.isETC {
-	// 		return nil, errors.Annotatef(fmt.Errorf("server returned transaction without signature"), "txid %v", txid)
-	// 	}
-	// 	glog.Warning("server returned transaction without signature, txid ", txid)
-	// }
 	var btx *bchain.Tx
 	if tx.BlockNumber == "" {
 		// mempool tx
@@ -499,8 +511,18 @@ func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 		}
 	} else {
 		// non mempool tx - we must read the block header to get the block time
-		h, err := b.client.HeaderByHash(ctx, *tx.BlockHash)
+		raw, err := b.getBlockRaw(tx.BlockHash.Hex(), 0, false)
 		if err != nil {
+			return nil, err
+		}
+		var ht struct {
+			Time string `json:"timestamp"`
+		}
+		if err := json.Unmarshal(raw, &ht); err != nil {
+			return nil, errors.Annotatef(err, "hash %v", hash)
+		}
+		var time int64
+		if time, err = ethNumber(ht.Time); err != nil {
 			return nil, errors.Annotatef(err, "txid %v", txid)
 		}
 		var receipt rpcReceipt
@@ -516,7 +538,7 @@ func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 		if err != nil {
 			return nil, errors.Annotatef(err, "txid %v", txid)
 		}
-		btx, err = b.Parser.ethTxToTx(tx, &receipt, h.Time.Int64(), confirmations, true)
+		btx, err = b.Parser.ethTxToTx(tx, &receipt, time, confirmations, true)
 		if err != nil {
 			return nil, errors.Annotatef(err, "txid %v", txid)
 		}
@@ -541,23 +563,16 @@ func (b *EthereumRPC) GetTransactionSpecific(tx *bchain.Tx) (json.RawMessage, er
 	return json.RawMessage(m), err
 }
 
-type rpcMempoolBlock struct {
-	Transactions []string `json:"transactions"`
-}
-
 // GetMempool returns transactions in mempool
 func (b *EthereumRPC) GetMempool() ([]string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
-	defer cancel()
-	var raw json.RawMessage
-	var err error
-	err = b.rpc.CallContext(ctx, &raw, "eth_getBlockByNumber", "pending", false)
+	raw, err := b.getBlockRaw("pending", 0, false)
 	if err != nil {
 		return nil, err
-	} else if len(raw) == 0 {
+	}
+	if len(raw) == 0 {
 		return nil, bchain.ErrBlockNotFound
 	}
-	var body rpcMempoolBlock
+	var body rpcBlockTxids
 	if err := json.Unmarshal(raw, &body); err != nil {
 		return nil, err
 	}
