@@ -45,7 +45,7 @@ func (w *Worker) getAddressesFromVout(vout *bchain.Vout) (bchain.AddressDescript
 }
 
 // setSpendingTxToVout is helper function, that finds transaction that spent given output and sets it to the output
-// there is not an index, it must be found using addresses -> txaddresses -> tx
+// there is no direct index for the operation, it must be found using addresses -> txaddresses -> tx
 func (w *Worker) setSpendingTxToVout(vout *Vout, txid string, height uint32) error {
 	err := w.db.GetAddrDescTransactions(vout.ScriptPubKey.AddrDesc, height, ^uint32(0), func(t string, index uint32, isOutput bool) error {
 		if isOutput == false {
@@ -102,12 +102,13 @@ func (w *Worker) GetTransaction(txid string, spendingTxs bool) (*Tx, error) {
 	if err != nil {
 		return nil, NewAPIError(fmt.Sprintf("Tx not found, %v", err), true)
 	}
-	ta, err := w.db.GetTxAddresses(txid)
-	if err != nil {
-		return nil, errors.Annotatef(err, "GetTxAddresses %v", txid)
-	}
+	var ta *db.TxAddresses
 	var blockhash string
 	if bchainTx.Confirmations > 0 {
+		ta, err = w.db.GetTxAddresses(txid)
+		if err != nil {
+			return nil, errors.Annotatef(err, "GetTxAddresses %v", txid)
+		}
 		blockhash, err = w.db.GetBlockHash(height)
 		if err != nil {
 			return nil, errors.Annotatef(err, "GetBlockHash %v", height)
@@ -473,6 +474,95 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, onlyTxids b
 		Txids:                   txids,
 	}
 	glog.Info("GetAddress ", address, " finished in ", time.Since(start))
+	return r, nil
+}
+
+// GetAddressUtxo returns unspent outputs for given address
+func (w *Worker) GetAddressUtxo(address string) ([]AddressUtxo, error) {
+	start := time.Now()
+	addrDesc, err := w.chainParser.GetAddrDescFromAddress(address)
+	if err != nil {
+		return nil, NewAPIError(fmt.Sprintf("Invalid address, %v", err), true)
+	}
+	var r []AddressUtxo
+	// get utxo from mempool
+	txm, err := w.getAddressTxids(addrDesc, true)
+	if err != nil {
+		return nil, errors.Annotatef(err, "getAddressTxids %v true", address)
+	}
+	for _, txid := range txm {
+		bchainTx, _, err := w.txCache.GetTransaction(txid)
+		// mempool transaction may fail
+		if err != nil {
+			glog.Error("GetTransaction in mempool ", txid, ": ", err)
+		} else {
+			for i := range bchainTx.Vout {
+				bchainVout := &bchainTx.Vout[i]
+				vad, err := w.chainParser.GetAddrDescFromVout(bchainVout)
+				if err == nil && bytes.Equal(addrDesc, vad) {
+					r = append(r, AddressUtxo{
+						Txid:      bchainTx.Txid,
+						Vout:      uint32(i),
+						AmountSat: bchainVout.ValueSat,
+						Amount:    w.chainParser.AmountToDecimalString(&bchainVout.ValueSat),
+					})
+				}
+			}
+		}
+	}
+	// get utxo from index
+	ba, err := w.db.GetAddrDescBalance(addrDesc)
+	if err != nil {
+		return nil, NewAPIError(fmt.Sprintf("Address not found, %v", err), true)
+	}
+	// ba can be nil if the address is only in mempool!
+	if ba != nil && ba.BalanceSat.Uint64() > 0 {
+		type outpoint struct {
+			txid string
+			vout uint32
+		}
+		txids := make([]outpoint, 0)
+		err = w.db.GetAddrDescTransactions(addrDesc, 0, ^uint32(0), func(txid string, vout uint32, isOutput bool) error {
+			if isOutput {
+				txids = append(txids, outpoint{txid, vout})
+			}
+			return nil
+		})
+		var lastTxid string
+		var ta *db.TxAddresses
+		total := ba.BalanceSat
+		b, _, err := w.db.GetBestBlock()
+		bestheight := int(b)
+		for i := len(txids) - 1; i >= 0 && total.Int64() > 0; i-- {
+			o := txids[i]
+			if lastTxid != o.txid {
+				ta, err = w.db.GetTxAddresses(o.txid)
+				if err != nil {
+					return nil, err
+				}
+				lastTxid = o.txid
+			}
+			if ta == nil {
+				glog.Warning("DB inconsistency:  tx ", o.txid, ": not found in txAddresses")
+			} else {
+				if len(ta.Outputs) <= int(o.vout) {
+					glog.Warning("DB inconsistency:  txAddresses ", o.txid, " does not have enough outputs")
+				} else {
+					v := ta.Outputs[o.vout].ValueSat
+					r = append(r, AddressUtxo{
+						Txid:          o.txid,
+						Vout:          o.vout,
+						AmountSat:     v,
+						Amount:        w.chainParser.AmountToDecimalString(&v),
+						Height:        int(ta.Height),
+						Confirmations: bestheight - int(ta.Height) + 1,
+					})
+					total.Sub(&total, &v)
+				}
+			}
+		}
+	}
+	glog.Info("GetAddressUtxo ", address, ", ", len(r), " utxos, finished in ", time.Since(start))
 	return r, nil
 }
 

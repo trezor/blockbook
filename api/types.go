@@ -111,6 +111,16 @@ type Address struct {
 	Txids                   []string `json:"transactions,omitempty"`
 }
 
+// AddressUtxo holds information about address and its transactions
+type AddressUtxo struct {
+	Txid          string  `json:"txid"`
+	Vout          uint32  `json:"vout"`
+	Amount        string  `json:"amount"`
+	AmountSat     big.Int `json:"satoshis"`
+	Height        int     `json:"height,omitempty"`
+	Confirmations int     `json:"confirmations"`
+}
+
 // Blocks is list of blocks with paging information
 type Blocks struct {
 	Paging
