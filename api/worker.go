@@ -490,6 +490,7 @@ func (w *Worker) GetAddressUtxo(address string) ([]AddressUtxo, error) {
 	if err != nil {
 		return nil, errors.Annotatef(err, "getAddressTxids %v true", address)
 	}
+	txm = UniqueTxidsInReverse(txm)
 	for _, txid := range txm {
 		bchainTx, _, err := w.txCache.GetTransaction(txid)
 		// mempool transaction may fail
