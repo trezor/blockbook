@@ -210,7 +210,7 @@ type resultAddressTxids struct {
 }
 
 func (s *SocketIoServer) getAddressTxids(addr []string, opts *addrOpts) (res resultAddressTxids, err error) {
-	txids := make([]string, 0)
+	txids := make([]string, 0, 8)
 	lower, higher := uint32(opts.End), uint32(opts.Start)
 	for _, address := range addr {
 		if !opts.QueryMempoolOnly {
@@ -381,7 +381,7 @@ func (s *SocketIoServer) getAddressHistory(addr []string, opts *addrOpts) (res r
 	}
 	txids := txr.Result
 	res.Result.TotalCount = len(txids)
-	res.Result.Items = make([]addressHistoryItem, 0)
+	res.Result.Items = make([]addressHistoryItem, 0, 8)
 	to := len(txids)
 	if to > opts.To {
 		to = opts.To

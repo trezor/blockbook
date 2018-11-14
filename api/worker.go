@@ -222,7 +222,7 @@ func (w *Worker) GetTransaction(txid string, spendingTxs bool) (*Tx, error) {
 
 func (w *Worker) getAddressTxids(addrDesc bchain.AddressDescriptor, mempool bool) ([]string, error) {
 	var err error
-	txids := make([]string, 0)
+	txids := make([]string, 0, 4)
 	if !mempool {
 		err = w.db.GetAddrDescTransactions(addrDesc, 0, ^uint32(0), func(txid string, vout uint32, isOutput bool) error {
 			txids = append(txids, txid)
@@ -484,7 +484,7 @@ func (w *Worker) GetAddressUtxo(address string) ([]AddressUtxo, error) {
 	if err != nil {
 		return nil, NewAPIError(fmt.Sprintf("Invalid address, %v", err), true)
 	}
-	var r []AddressUtxo
+	r := make([]AddressUtxo, 0, 8)
 	// get utxo from mempool
 	txm, err := w.getAddressTxids(addrDesc, true)
 	if err != nil {
@@ -516,16 +516,17 @@ func (w *Worker) GetAddressUtxo(address string) ([]AddressUtxo, error) {
 	if err != nil {
 		return nil, NewAPIError(fmt.Sprintf("Address not found, %v", err), true)
 	}
+	var checksum big.Int
 	// ba can be nil if the address is only in mempool!
 	if ba != nil && ba.BalanceSat.Uint64() > 0 {
 		type outpoint struct {
 			txid string
 			vout uint32
 		}
-		txids := make([]outpoint, 0)
+		outpoints := make([]outpoint, 0, 8)
 		err = w.db.GetAddrDescTransactions(addrDesc, 0, ^uint32(0), func(txid string, vout uint32, isOutput bool) error {
 			if isOutput {
-				txids = append(txids, outpoint{txid, vout})
+				outpoints = append(outpoints, outpoint{txid, vout})
 			}
 			return nil
 		})
@@ -534,14 +535,14 @@ func (w *Worker) GetAddressUtxo(address string) ([]AddressUtxo, error) {
 		}
 		var lastTxid string
 		var ta *db.TxAddresses
-		total := ba.BalanceSat
+		checksum = ba.BalanceSat
 		b, _, err := w.db.GetBestBlock()
 		if err != nil {
 			return nil, err
 		}
 		bestheight := int(b)
-		for i := len(txids) - 1; i >= 0 && total.Int64() > 0; i-- {
-			o := txids[i]
+		for i := len(outpoints) - 1; i >= 0 && checksum.Int64() > 0; i-- {
+			o := outpoints[i]
 			if lastTxid != o.txid {
 				ta, err = w.db.GetTxAddresses(o.txid)
 				if err != nil {
@@ -555,19 +556,24 @@ func (w *Worker) GetAddressUtxo(address string) ([]AddressUtxo, error) {
 				if len(ta.Outputs) <= int(o.vout) {
 					glog.Warning("DB inconsistency:  txAddresses ", o.txid, " does not have enough outputs")
 				} else {
-					v := ta.Outputs[o.vout].ValueSat
-					r = append(r, AddressUtxo{
-						Txid:          o.txid,
-						Vout:          o.vout,
-						AmountSat:     v,
-						Amount:        w.chainParser.AmountToDecimalString(&v),
-						Height:        int(ta.Height),
-						Confirmations: bestheight - int(ta.Height) + 1,
-					})
-					total.Sub(&total, &v)
+					if !ta.Outputs[o.vout].Spent {
+						v := ta.Outputs[o.vout].ValueSat
+						r = append(r, AddressUtxo{
+							Txid:          o.txid,
+							Vout:          o.vout,
+							AmountSat:     v,
+							Amount:        w.chainParser.AmountToDecimalString(&v),
+							Height:        int(ta.Height),
+							Confirmations: bestheight - int(ta.Height) + 1,
+						})
+						checksum.Sub(&checksum, &v)
+					}
 				}
 			}
 		}
+	}
+	if checksum.Uint64() != 0 {
+		glog.Warning("DB inconsistency:  ", address, ": checksum is not zero")
 	}
 	glog.Info("GetAddressUtxo ", address, ", ", len(r), " utxos, finished in ", time.Since(start))
 	return r, nil
