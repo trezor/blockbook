@@ -529,10 +529,16 @@ func (w *Worker) GetAddressUtxo(address string) ([]AddressUtxo, error) {
 			}
 			return nil
 		})
+		if err != nil {
+			return nil, err
+		}
 		var lastTxid string
 		var ta *db.TxAddresses
 		total := ba.BalanceSat
 		b, _, err := w.db.GetBestBlock()
+		if err != nil {
+			return nil, err
+		}
 		bestheight := int(b)
 		for i := len(txids) - 1; i >= 0 && total.Int64() > 0; i-- {
 			o := txids[i]
