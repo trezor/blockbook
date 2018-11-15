@@ -691,7 +691,15 @@ func (s *PublicServer) apiAddressUtxo(r *http.Request) (interface{}, error) {
 	var err error
 	s.metrics.ExplorerViews.With(common.Labels{"action": "api-address"}).Inc()
 	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
-		utxo, err = s.api.GetAddressUtxo(r.URL.Path[i+1:])
+		onlyConfirmed := false
+		c := r.URL.Query().Get("confirmed")
+		if len(c) > 0 {
+			onlyConfirmed, err = strconv.ParseBool(c)
+			if err != nil {
+				return nil, api.NewAPIError("Parameter 'confirmed' cannot be converted to boolean", true)
+			}
+		}
+		utxo, err = s.api.GetAddressUtxo(r.URL.Path[i+1:], onlyConfirmed)
 	}
 	return utxo, err
 }
