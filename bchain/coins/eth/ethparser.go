@@ -27,26 +27,26 @@ func NewEthereumParser() *EthereumParser {
 }
 
 type rpcHeader struct {
-	Hash       ethcommon.Hash `json:"hash"`
-	Difficulty string         `json:"difficulty"`
-	Number     string         `json:"number"`
-	Time       string         `json:"timestamp"`
-	Size       string         `json:"size"`
-	Nonce      string         `json:"nonce"`
+	Hash       string `json:"hash"`
+	Difficulty string `json:"difficulty"`
+	Number     string `json:"number"`
+	Time       string `json:"timestamp"`
+	Size       string `json:"size"`
+	Nonce      string `json:"nonce"`
 }
 
 type rpcTransaction struct {
-	AccountNonce     string          `json:"nonce"`
-	GasPrice         string          `json:"gasPrice"`
-	GasLimit         string          `json:"gas"`
-	To               string          `json:"to"       rlp:"nil"` // nil means contract creation
-	Value            string          `json:"value"`
-	Payload          string          `json:"input"`
-	Hash             ethcommon.Hash  `json:"hash" rlp:"-"`
-	BlockNumber      string          `json:"blockNumber"`
-	BlockHash        *ethcommon.Hash `json:"blockHash,omitempty"`
-	From             string          `json:"from"`
-	TransactionIndex string          `json:"transactionIndex"`
+	AccountNonce     string `json:"nonce"`
+	GasPrice         string `json:"gasPrice"`
+	GasLimit         string `json:"gas"`
+	To               string `json:"to"` // nil means contract creation
+	Value            string `json:"value"`
+	Payload          string `json:"input"`
+	Hash             string `json:"hash"`
+	BlockNumber      string `json:"blockNumber"`
+	BlockHash        string `json:"blockHash,omitempty"`
+	From             string `json:"from"`
+	TransactionIndex string `json:"transactionIndex"`
 	// Signature values - ignored
 	// V string `json:"v"`
 	// R string `json:"r"`
@@ -57,6 +57,11 @@ type rpcLog struct {
 	Address ethcommon.Address `json:"address"`
 	Topics  []string          `json:"topics"`
 	Data    string            `json:"data"`
+}
+
+type rpcLogWithTxHash struct {
+	rpcLog
+	Hash string `json:"transactionHash"`
 }
 
 type rpcReceipt struct {
@@ -86,7 +91,7 @@ func ethNumber(n string) (int64, error) {
 }
 
 func (p *EthereumParser) ethTxToTx(tx *rpcTransaction, receipt *rpcReceipt, blocktime int64, confirmations uint32, marshallHex bool) (*bchain.Tx, error) {
-	txid := tx.Hash.Hex()
+	txid := tx.Hash
 	var (
 		fa, ta []string
 		err    error
@@ -105,7 +110,7 @@ func (p *EthereumParser) ethTxToTx(tx *rpcTransaction, receipt *rpcReceipt, bloc
 	if marshallHex {
 		// completeTransaction without BlockHash is marshalled and hex encoded to bchain.Tx.Hex
 		bh := tx.BlockHash
-		tx.BlockHash = nil
+		tx.BlockHash = ""
 		b, err := json.Marshal(ct)
 		if err != nil {
 			return nil, err
@@ -235,7 +240,9 @@ func (p *EthereumParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) (
 	if pt.Tx.GasLimit, err = hexutil.DecodeUint64(r.Tx.GasLimit); err != nil {
 		return nil, errors.Annotatef(err, "GasLimit %v", r.Tx.GasLimit)
 	}
-	pt.Tx.Hash = r.Tx.Hash.Bytes()
+	if pt.Tx.Hash, err = hexDecode(r.Tx.Hash); err != nil {
+		return nil, errors.Annotatef(err, "Hash %v", r.Tx.Hash)
+	}
 	if pt.Tx.Payload, err = hexDecode(r.Tx.Payload); err != nil {
 		return nil, errors.Annotatef(err, "Payload %v", r.Tx.Payload)
 	}
@@ -306,7 +313,7 @@ func (p *EthereumParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 		BlockNumber:  hexutil.EncodeUint64(uint64(pt.BlockNumber)),
 		From:         hexutil.Encode(pt.Tx.From),
 		GasLimit:     hexutil.EncodeUint64(pt.Tx.GasLimit),
-		Hash:         ethcommon.BytesToHash(pt.Tx.Hash),
+		Hash:         hexutil.Encode(pt.Tx.Hash),
 		Payload:      hexutil.Encode(pt.Tx.Payload),
 		GasPrice:     hexEncodeBig(pt.Tx.GasPrice),
 		// R:                hexEncodeBig(pt.R),

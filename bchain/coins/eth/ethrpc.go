@@ -374,7 +374,7 @@ func (b *EthereumRPC) ethHeaderToBlockHeader(h *rpcHeader) (*bchain.BlockHeader,
 		return nil, err
 	}
 	return &bchain.BlockHeader{
-		Hash:          h.Hash.Hex(),
+		Hash:          h.Hash,
 		Height:        uint32(height),
 		Confirmations: int(c),
 		Time:          time,
@@ -427,6 +427,25 @@ func (b *EthereumRPC) getBlockRaw(hash string, height uint32, fullTxs bool) (jso
 	return raw, nil
 }
 
+func (b *EthereumRPC) getERC20EventsForBlock(blockNumber string) (map[string][]*rpcLog, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
+	defer cancel()
+	var logs []rpcLogWithTxHash
+	err := b.rpc.CallContext(ctx, &logs, "eth_getLogs", map[string]interface{}{
+		"fromBlock": blockNumber,
+		"toBlock":   blockNumber,
+		"topics":    []string{erc20EventTransferSignature},
+	})
+	if err != nil {
+		return nil, errors.Annotatef(err, "blockNumber %v", blockNumber)
+	}
+	r := make(map[string][]*rpcLog)
+	for _, l := range logs {
+		r[l.Hash] = append(r[l.Hash], &l.rpcLog)
+	}
+	return r, nil
+}
+
 // GetBlock returns block with given hash or height, hash has precedence if both passed
 func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 	raw, err := b.getBlockRaw(hash, height, true)
@@ -445,12 +464,16 @@ func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error
 	if err != nil {
 		return nil, errors.Annotatef(err, "hash %v, height %v", hash, height)
 	}
-	// TODO - get ERC20 events
+	// get ERC20 events
+	logs, err := b.getERC20EventsForBlock(head.Number)
+	if err != nil {
+		return nil, err
+	}
 	btxs := make([]bchain.Tx, len(body.Transactions))
 	for i, tx := range body.Transactions {
-		btx, err := b.Parser.ethTxToTx(&tx, nil, bbh.Time, uint32(bbh.Confirmations), false)
+		btx, err := b.Parser.ethTxToTx(&tx, &rpcReceipt{Logs: logs[tx.Hash]}, bbh.Time, uint32(bbh.Confirmations), false)
 		if err != nil {
-			return nil, errors.Annotatef(err, "hash %v, height %v, txid %v", hash, height, tx.Hash.String())
+			return nil, errors.Annotatef(err, "hash %v, height %v, txid %v", hash, height, tx.Hash)
 		}
 		btxs[i] = *btx
 	}
@@ -511,7 +534,7 @@ func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 		}
 	} else {
 		// non mempool tx - we must read the block header to get the block time
-		raw, err := b.getBlockRaw(tx.BlockHash.Hex(), 0, false)
+		raw, err := b.getBlockRaw(tx.BlockHash, 0, false)
 		if err != nil {
 			return nil, err
 		}
