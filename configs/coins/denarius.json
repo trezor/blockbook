@@ -1,0 +1,67 @@
+{
+  "coin": {
+      "name": "Denarius",
+      "shortcut": "D",
+      "label": "Denarius",
+      "alias": "denarius"
+  },
+  "ports": {
+    "backend_rpc": 8046,
+    "backend_message_queue": 38346,
+    "blockbook_internal": 9046,
+    "blockbook_public": 9146
+  },
+  "ipc": {
+    "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
+    "rpc_user": "rpc",
+    "rpc_pass": "rpcp",
+    "rpc_timeout": 25,
+    "message_queue_binding_template": "tcp://127.0.0.1:{{.Ports.BackendMessageQueue}}"
+  },
+  "backend": {
+    "package_name": "backend-denarius",
+    "package_revision": "satoshilabs-1",
+    "system_user": "denarius",
+    "version": "3.1.0",
+    "binary_url": "https://github.com/carsenk/denarius/releases/download/v3.1.0/denariusd-v3.1-ubuntu1604.tar.gz",
+    "verification_type": "sha256",
+    "verification_source": "683cb25359ba43a99c63ea62eac5b50434243abdc41ce3933e8125d89297fa56",
+    "extract_command": "tar -C backend --strip 1 -xf",
+    "exclude_files": [
+        "bin/denarius-qt"
+    ],
+    "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/denariusd -datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -conf={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf -pid=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",
+    "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/*.log",
+    "postinst_script_template": "",
+    "service_type": "forking",
+    "service_additional_params_template": "",
+    "protect_memory": false,
+    "mainnet": true,
+    "config_file": "bitcoin.conf",
+    "additional_params": {
+        "whitelist": "127.0.0.1",
+        "rpcthreads": 16,
+        "upnp": 0,
+        "discover": 0
+    }
+  },
+  "blockbook": {
+    "package_name": "blockbook-denarius",
+    "system_user": "blockbook-denarius",
+    "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
+    "public_binding_template": ":{{.Ports.BlockbookPublic}}",
+    "explorer_url": "https://chainz.cryptoid.info/d/",
+    "additional_params": "-resyncindexperiod=30011 -resyncmempoolperiod=2011",
+    "block_chain": {
+      "parse": true,
+      "mempool_workers": 8,
+      "mempool_sub_workers": 2,
+      "block_addresses_to_keep": 300,
+      "additional_params": {}
+    }
+  },
+  "meta": {
+    "package_maintainer": "Carsen Klock",
+    "package_maintainer_email": "admin@denarius.io"
+  }
+}
