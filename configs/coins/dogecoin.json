@@ -22,14 +22,13 @@
     "package_name": "backend-dogecoin",
     "package_revision": "satoshilabs-1",
     "system_user": "dogecoin",
-    "version": "1.14-alpha-4",
-    "binary_url": "https://doge1.trezor.io/builds/dogecoin-1.14-alpha-4-linux64.tar.gz",
+    "version": "1.14-beta-1",
+    "binary_url": "https://github.com/dogecoin/dogecoin/releases/download/v1.14-beta-1/dogecoin-1.14.2-x86_64-linux-gnu.tar.gz",
     "verification_type": "sha256",
-    "verification_source": "a428d761683707adbf344efe525f5e9a82f88dd7d43d9287209af4ca40297306",
+    "verification_source": "09871d8ff2ab5e0f05df2bdf5eba64c178229d030dd7c8473b08e6ed45d3327f",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
-        "bin/dogecoin-qt",
-        "bin/test_dogecoin-qt"
+        "bin/dogecoin-qt"
     ],
     "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/dogecoind -datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -conf={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf -pid=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",
     "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/*.log",
