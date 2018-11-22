@@ -637,7 +637,7 @@ func (d *RocksDB) getBlockTxs(height uint32) ([]blockTxs, error) {
 	}
 	defer val.Free()
 	buf := val.Data()
-	bt := make([]blockTxs, 0)
+	bt := make([]blockTxs, 0, 8)
 	for i := 0; i < len(buf); {
 		if len(buf)-i < pl {
 			glog.Error("rocksdb: Inconsistent data in blockTxs ", hex.EncodeToString(buf))
@@ -796,7 +796,7 @@ func unpackTxOutput(to *TxOutput, buf []byte) int {
 }
 
 func (d *RocksDB) packOutpoints(outpoints []outpoint) []byte {
-	buf := make([]byte, 0)
+	buf := make([]byte, 0, 32)
 	bvout := make([]byte, vlq.MaxLen32)
 	for _, o := range outpoints {
 		l := packVarint32(o.index, bvout)
@@ -808,7 +808,7 @@ func (d *RocksDB) packOutpoints(outpoints []outpoint) []byte {
 
 func (d *RocksDB) unpackOutpoints(buf []byte) ([]outpoint, error) {
 	txidUnpackedLen := d.chainParser.PackedTxidLen()
-	outpoints := make([]outpoint, 0)
+	outpoints := make([]outpoint, 0, 8)
 	for i := 0; i < len(buf); {
 		btxID := append([]byte(nil), buf[i:i+txidUnpackedLen]...)
 		i += txidUnpackedLen

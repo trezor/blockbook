@@ -409,6 +409,15 @@ func httpTests(t *testing.T, ts *httptest.Server) {
 			},
 		},
 		{
+			name:        "apiAddressUtxo",
+			r:           newGetRequest(ts.URL + "/api/utxo/mtR97eM2HPWVM6c8FGLGcukgaHHQv7THoL"),
+			status:      http.StatusOK,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`[{"txid":"7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25","vout":1,"amount":"9172.83951061","satoshis":917283951061,"height":225494,"confirmations":1}]`,
+			},
+		},
+		{
 			name:        "apiSendTx",
 			r:           newGetRequest(ts.URL + "/api/sendtx/1234567890"),
 			status:      http.StatusBadRequest,

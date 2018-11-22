@@ -129,6 +129,7 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 	serveMux.HandleFunc(path+"api/tx/", s.jsonHandler(s.apiTx))
 	serveMux.HandleFunc(path+"api/tx-specific/", s.jsonHandler(s.apiTxSpecific))
 	serveMux.HandleFunc(path+"api/address/", s.jsonHandler(s.apiAddress))
+	serveMux.HandleFunc(path+"api/utxo/", s.jsonHandler(s.apiAddressUtxo))
 	serveMux.HandleFunc(path+"api/block/", s.jsonHandler(s.apiBlock))
 	serveMux.HandleFunc(path+"api/sendtx/", s.jsonHandler(s.apiSendTx))
 	serveMux.HandleFunc(path+"api/estimatefee/", s.jsonHandler(s.apiEstimateFee))
@@ -215,7 +216,7 @@ func (s *PublicServer) jsonHandler(handler func(r *http.Request) (interface{}, e
 		}()
 		data, err = handler(r)
 		if err != nil || data == nil {
-			if apiErr, ok := err.(*api.ApiError); ok {
+			if apiErr, ok := err.(*api.APIError); ok {
 				if apiErr.Public {
 					data = jsonError{apiErr.Error(), http.StatusBadRequest}
 				} else {
@@ -251,7 +252,7 @@ func (s *PublicServer) newTemplateData() *TemplateData {
 
 func (s *PublicServer) newTemplateDataWithError(text string) *TemplateData {
 	td := s.newTemplateData()
-	td.Error = &api.ApiError{Text: text}
+	td.Error = &api.APIError{Text: text}
 	return td
 }
 
@@ -290,7 +291,7 @@ func (s *PublicServer) htmlTemplateHandler(handler func(w http.ResponseWriter, r
 		t, data, err = handler(w, r)
 		if err != nil || (data == nil && t != noTpl) {
 			t = errorInternalTpl
-			if apiErr, ok := err.(*api.ApiError); ok {
+			if apiErr, ok := err.(*api.APIError); ok {
 				data = s.newTemplateData()
 				data.Error = apiErr
 				if apiErr.Public {
@@ -336,7 +337,7 @@ type TemplateData struct {
 	AddrStr          string
 	Tx               *api.Tx
 	TxSpecific       json.RawMessage
-	Error            *api.ApiError
+	Error            *api.APIError
 	Blocks           *api.Blocks
 	Block            *api.Block
 	Info             *api.SystemInfo
@@ -427,7 +428,7 @@ func (s *PublicServer) explorerSpendingTx(w http.ResponseWriter, r *http.Request
 		}
 	}
 	if err == nil {
-		err = api.NewApiError("Transaction not found", true)
+		err = api.NewAPIError("Transaction not found", true)
 	}
 	return errorTpl, nil, err
 }
@@ -531,7 +532,7 @@ func (s *PublicServer) explorerSearch(w http.ResponseWriter, r *http.Request) (t
 			return noTpl, nil, nil
 		}
 	}
-	return errorTpl, nil, api.NewApiError(fmt.Sprintf("No matching records found for '%v'", q), true)
+	return errorTpl, nil, api.NewAPIError(fmt.Sprintf("No matching records found for '%v'", q), true)
 }
 
 func (s *PublicServer) explorerSendTx(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
@@ -547,7 +548,7 @@ func (s *PublicServer) explorerSendTx(w http.ResponseWriter, r *http.Request) (t
 			res, err := s.chain.SendRawTransaction(hex)
 			if err != nil {
 				data.SendTxHex = hex
-				data.Error = &api.ApiError{Text: err.Error(), Public: true}
+				data.Error = &api.APIError{Text: err.Error(), Public: true}
 				return sendTransactionTpl, data, nil
 			}
 			data.Status = "Transaction sent, result " + res
@@ -652,7 +653,7 @@ func (s *PublicServer) apiTx(r *http.Request) (interface{}, error) {
 		if len(p) > 0 {
 			spendingTxs, err = strconv.ParseBool(p)
 			if err != nil {
-				return nil, api.NewApiError("Parameter 'spending' cannot be converted to boolean", true)
+				return nil, api.NewAPIError("Parameter 'spending' cannot be converted to boolean", true)
 			}
 		}
 		tx, err = s.api.GetTransaction(txid, spendingTxs)
@@ -685,6 +686,24 @@ func (s *PublicServer) apiAddress(r *http.Request) (interface{}, error) {
 	return address, err
 }
 
+func (s *PublicServer) apiAddressUtxo(r *http.Request) (interface{}, error) {
+	var utxo []api.AddressUtxo
+	var err error
+	s.metrics.ExplorerViews.With(common.Labels{"action": "api-address"}).Inc()
+	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
+		onlyConfirmed := false
+		c := r.URL.Query().Get("confirmed")
+		if len(c) > 0 {
+			onlyConfirmed, err = strconv.ParseBool(c)
+			if err != nil {
+				return nil, api.NewAPIError("Parameter 'confirmed' cannot be converted to boolean", true)
+			}
+		}
+		utxo, err = s.api.GetAddressUtxo(r.URL.Path[i+1:], onlyConfirmed)
+	}
+	return utxo, err
+}
+
 func (s *PublicServer) apiBlock(r *http.Request) (interface{}, error) {
 	var block *api.Block
 	var err error
@@ -711,7 +730,7 @@ func (s *PublicServer) apiSendTx(r *http.Request) (interface{}, error) {
 	if r.Method == http.MethodPost {
 		data, err := ioutil.ReadAll(r.Body)
 		if err != nil {
-			return nil, api.NewApiError("Missing tx blob", true)
+			return nil, api.NewAPIError("Missing tx blob", true)
 		}
 		hex = string(data)
 	} else {
@@ -722,11 +741,11 @@ func (s *PublicServer) apiSendTx(r *http.Request) (interface{}, error) {
 	if len(hex) > 0 {
 		res.Result, err = s.chain.SendRawTransaction(hex)
 		if err != nil {
-			return nil, api.NewApiError(err.Error(), true)
+			return nil, api.NewAPIError(err.Error(), true)
 		}
 		return res, nil
 	}
-	return nil, api.NewApiError("Missing tx blob", true)
+	return nil, api.NewAPIError("Missing tx blob", true)
 }
 
 type resultEstimateFeeAsString struct {
@@ -741,14 +760,14 @@ func (s *PublicServer) apiEstimateFee(r *http.Request) (interface{}, error) {
 		if len(b) > 0 {
 			blocks, err := strconv.Atoi(b)
 			if err != nil {
-				return nil, api.NewApiError("Parameter 'number of blocks' is not a number", true)
+				return nil, api.NewAPIError("Parameter 'number of blocks' is not a number", true)
 			}
 			conservative := true
 			c := r.URL.Query().Get("conservative")
 			if len(c) > 0 {
 				conservative, err = strconv.ParseBool(c)
 				if err != nil {
-					return nil, api.NewApiError("Parameter 'conservative' cannot be converted to boolean", true)
+					return nil, api.NewAPIError("Parameter 'conservative' cannot be converted to boolean", true)
 				}
 			}
 			var fee big.Int
@@ -763,5 +782,5 @@ func (s *PublicServer) apiEstimateFee(r *http.Request) (interface{}, error) {
 			return res, nil
 		}
 	}
-	return nil, api.NewApiError("Missing parameter 'number of blocks'", true)
+	return nil, api.NewAPIError("Missing parameter 'number of blocks'", true)
 }
