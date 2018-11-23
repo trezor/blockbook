@@ -273,39 +273,20 @@ const (
 
 // ConnectBlock indexes addresses in the block and stores them in db
 func (d *RocksDB) ConnectBlock(block *bchain.Block) error {
-	return d.writeBlock(block, opInsert)
-}
-
-// DisconnectBlock removes addresses in the block from the db
-func (d *RocksDB) DisconnectBlock(block *bchain.Block) error {
-	return d.writeBlock(block, opDelete)
-}
-
-func (d *RocksDB) writeBlock(block *bchain.Block, op int) error {
 	wb := gorocksdb.NewWriteBatch()
 	defer wb.Destroy()
 
 	if glog.V(2) {
-		switch op {
-		case opInsert:
-			glog.Infof("rocksdb: insert %d %s", block.Height, block.Hash)
-		case opDelete:
-			glog.Infof("rocksdb: delete %d %s", block.Height, block.Hash)
-		}
+		glog.Infof("rocksdb: insert %d %s", block.Height, block.Hash)
 	}
 
 	chainType := d.chainParser.GetChainType()
 
-	if err := d.writeHeightFromBlock(wb, block, op); err != nil {
+	if err := d.writeHeightFromBlock(wb, block, opInsert); err != nil {
 		return err
 	}
 	addresses := make(map[string][]outpoint)
 	if chainType == bchain.ChainBitcoinType {
-		if op == opDelete {
-			// block does not contain mapping tx-> input address, which is necessary to recreate
-			// unspentTxs; therefore it is not possible to DisconnectBlocks this way
-			return errors.New("DisconnectBlock is not supported for BitcoinType chains")
-		}
 		txAddressesMap := make(map[string]*TxAddresses)
 		balances := make(map[string]*AddrBalance)
 		if err := d.processAddressesBitcoinType(block, addresses, txAddressesMap, balances); err != nil {
@@ -680,8 +661,7 @@ func (d *RocksDB) getBlockTxs(height uint32) ([]blockTxs, error) {
 			glog.Error("rocksdb: Inconsistent data in blockTxs ", hex.EncodeToString(buf))
 			return nil, errors.New("Inconsistent data in blockTxs")
 		}
-		txid := make([]byte, pl)
-		copy(txid, buf[i:])
+		txid := append([]byte(nil), buf[i:i+pl]...)
 		i += pl
 		o, ol, err := d.unpackNOutpoints(buf[i:])
 		if err != nil {
@@ -812,8 +792,7 @@ func unpackTxAddresses(buf []byte) (*TxAddresses, error) {
 
 func unpackTxInput(ti *TxInput, buf []byte) int {
 	al, l := unpackVaruint(buf)
-	ti.AddrDesc = make([]byte, al)
-	copy(ti.AddrDesc, buf[l:l+int(al)])
+	ti.AddrDesc = append([]byte(nil), buf[l:l+int(al)]...)
 	al += uint(l)
 	ti.ValueSat, l = unpackBigint(buf[al:])
 	return l + int(al)
@@ -825,8 +804,7 @@ func unpackTxOutput(to *TxOutput, buf []byte) int {
 		to.Spent = true
 		al = ^al
 	}
-	to.AddrDesc = make([]byte, al)
-	copy(to.AddrDesc, buf[l:l+al])
+	to.AddrDesc = append([]byte(nil), buf[l:l+al]...)
 	al += l
 	to.ValueSat, l = unpackBigint(buf[al:])
 	return l + al
@@ -1004,51 +982,6 @@ func (d *RocksDB) writeHeight(wb *gorocksdb.WriteBatch, height uint32, bi *Block
 
 // Disconnect blocks
 
-func (d *RocksDB) allAddressesScan(lower uint32, higher uint32) ([][]byte, [][]byte, error) {
-	glog.Infof("db: doing full scan of addresses column")
-	addrKeys := [][]byte{}
-	addrValues := [][]byte{}
-	var totalOutputs, count uint64
-	var seekKey []byte
-	for {
-		var key []byte
-		it := d.db.NewIteratorCF(d.ro, d.cfh[cfAddresses])
-		if totalOutputs == 0 {
-			it.SeekToFirst()
-		} else {
-			it.Seek(seekKey)
-			it.Next()
-		}
-		for count = 0; it.Valid() && count < refreshIterator; it.Next() {
-			totalOutputs++
-			count++
-			key = it.Key().Data()
-			l := len(key)
-			if l > packedHeightBytes {
-				height := unpackUint(key[l-packedHeightBytes : l])
-				if height >= lower && height <= higher {
-					addrKey := make([]byte, len(key))
-					copy(addrKey, key)
-					addrKeys = append(addrKeys, addrKey)
-					value := it.Value().Data()
-					addrValue := make([]byte, len(value))
-					copy(addrValue, value)
-					addrValues = append(addrValues, addrValue)
-				}
-			}
-		}
-		seekKey = make([]byte, len(key))
-		copy(seekKey, key)
-		valid := it.Valid()
-		it.Close()
-		if !valid {
-			break
-		}
-	}
-	glog.Infof("rocksdb: scanned %d addresses, found %d to disconnect", totalOutputs, len(addrKeys))
-	return addrKeys, addrValues, nil
-}
-
 func (d *RocksDB) disconnectTxAddresses(wb *gorocksdb.WriteBatch, height uint32, txid string, inputs []outpoint, txa *TxAddresses,
 	txAddressesToUpdate map[string]*TxAddresses, balances map[string]*AddrBalance) error {
 	addresses := make(map[string]struct{})
@@ -1136,9 +1069,8 @@ func (d *RocksDB) disconnectTxAddresses(wb *gorocksdb.WriteBatch, height uint32,
 }
 
 // DisconnectBlockRangeBitcoinType removes all data belonging to blocks in range lower-higher
-// if they are in the range kept in the cfBlockTxids column
+// it is able to disconnect only blocks for which there are data in the blockTxs column
 func (d *RocksDB) DisconnectBlockRangeBitcoinType(lower uint32, higher uint32) error {
-	glog.Infof("db: disconnecting blocks %d-%d", lower, higher)
 	blocks := make([][]blockTxs, higher-lower+1)
 	for height := lower; height <= higher; height++ {
 		blockTxs, err := d.getBlockTxs(height)

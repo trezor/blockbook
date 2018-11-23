@@ -65,8 +65,7 @@ func (d *RocksDB) GetAddrDescContracts(addrDesc bchain.AddressDescriptor) (*Addr
 			return nil, errors.New("Invalid data stored in cfAddressContracts for AddrDesc " + addrDesc.String())
 		}
 		txs, l := unpackVaruint(buf[eth.EthereumTypeAddressDescriptorLen:])
-		contract := make(bchain.AddressDescriptor, eth.EthereumTypeAddressDescriptorLen)
-		copy(contract, buf[:eth.EthereumTypeAddressDescriptorLen])
+		contract := append(bchain.AddressDescriptor(nil), buf[:eth.EthereumTypeAddressDescriptorLen]...)
 		c = append(c, AddrContract{
 			Contract: contract,
 			Txs:      txs,
@@ -76,6 +75,15 @@ func (d *RocksDB) GetAddrDescContracts(addrDesc bchain.AddressDescriptor) (*Addr
 	return &AddrContracts{
 		EthTxs:    et,
 		Contracts: c}, nil
+}
+
+func findContractInAddressContracts(contract bchain.AddressDescriptor, contracts []AddrContract) (int, bool) {
+	for i := range contracts {
+		if bytes.Equal(contract, contracts[i].Contract) {
+			return i, true
+		}
+	}
+	return 0, false
 }
 
 func (d *RocksDB) addToAddressesAndContractsEthereumType(addrDesc bchain.AddressDescriptor, btxID []byte, index int32, contract bchain.AddressDescriptor, addresses map[string][]outpoint, addressContracts map[string]*AddrContracts) error {
@@ -99,14 +107,7 @@ func (d *RocksDB) addToAddressesAndContractsEthereumType(addrDesc bchain.Address
 		ac.EthTxs++
 	} else {
 		// locate the contract and set i to the index in the array of contracts
-		var i int
-		var found bool
-		for i = range ac.Contracts {
-			if bytes.Equal(contract, ac.Contracts[i].Contract) {
-				found = true
-				break
-			}
-		}
+		i, found := findContractInAddressContracts(contract, ac.Contracts)
 		if !found {
 			i = len(ac.Contracts)
 			ac.Contracts = append(ac.Contracts, AddrContract{Contract: contract})
@@ -240,31 +241,159 @@ func (d *RocksDB) storeAndCleanupBlockTxsEthereumType(wb *gorocksdb.WriteBatch, 
 	return d.cleanupBlockTxs(wb, block)
 }
 
-// DisconnectBlockRangeNonUTXO performs full range scan to remove a range of blocks
-// it is very slow operation
-func (d *RocksDB) DisconnectBlockRangeNonUTXO(lower uint32, higher uint32) error {
-	glog.Infof("db: disconnecting blocks %d-%d", lower, higher)
-	addrKeys, _, err := d.allAddressesScan(lower, higher)
+func (d *RocksDB) getBlockTxsEthereumType(height uint32) ([]ethBlockTx, error) {
+	pl := d.chainParser.PackedTxidLen()
+	val, err := d.db.GetCF(d.ro, d.cfh[cfBlockTxs], packUint(height))
 	if err != nil {
-		return err
+		return nil, err
 	}
-	glog.Infof("rocksdb: about to disconnect %d addresses ", len(addrKeys))
+	defer val.Free()
+	buf := val.Data()
+	bt := make([]ethBlockTx, 0, 8)
+	getAddress := func(i int) (bchain.AddressDescriptor, int, error) {
+		if len(buf)-i < eth.EthereumTypeAddressDescriptorLen {
+			glog.Error("rocksdb: Inconsistent data in blockTxs ", hex.EncodeToString(buf))
+			return nil, 0, errors.New("Inconsistent data in blockTxs")
+		}
+		a := append(bchain.AddressDescriptor(nil), buf[i:i+eth.EthereumTypeAddressDescriptorLen]...)
+		// return null addresses as nil
+		for _, b := range a {
+			if b != 0 {
+				return a, i + eth.EthereumTypeAddressDescriptorLen, nil
+			}
+		}
+		return nil, i + eth.EthereumTypeAddressDescriptorLen, nil
+	}
+	var from, to bchain.AddressDescriptor
+	for i := 0; i < len(buf); {
+		if len(buf)-i < pl {
+			glog.Error("rocksdb: Inconsistent data in blockTxs ", hex.EncodeToString(buf))
+			return nil, errors.New("Inconsistent data in blockTxs")
+		}
+		txid := append([]byte(nil), buf[i:i+pl]...)
+		i += pl
+		from, i, err = getAddress(i)
+		if err != nil {
+			return nil, err
+		}
+		to, i, err = getAddress(i)
+		if err != nil {
+			return nil, err
+		}
+		cc, l := unpackVaruint(buf[i:])
+		i += l
+		contracts := make([]ethBlockTxContract, cc)
+		for j := range contracts {
+			contracts[j].addr, i, err = getAddress(i)
+			if err != nil {
+				return nil, err
+			}
+			contracts[j].contract, i, err = getAddress(i)
+			if err != nil {
+				return nil, err
+			}
+		}
+		bt = append(bt, ethBlockTx{
+			btxID:     txid,
+			from:      from,
+			to:        to,
+			contracts: contracts,
+		})
+	}
+	return bt, nil
+}
+
+func (d *RocksDB) disconnectBlockTxsEthereumType(wb *gorocksdb.WriteBatch, height uint32, blockTxs []ethBlockTx, contracts map[string]*AddrContracts) error {
+	glog.Info("Disconnecting block ", height, " containing ", len(blockTxs), " transactions")
+	addresses := make(map[string]struct{})
+	disconnectAddress := func(addrDesc, contract bchain.AddressDescriptor) error {
+		var err error
+		s := string(addrDesc)
+		addresses[s] = struct{}{}
+		c, fc := contracts[s]
+		if !fc {
+			c, err = d.GetAddrDescContracts(addrDesc)
+			if err != nil {
+				return err
+			}
+			contracts[s] = c
+		}
+		if c != nil {
+			if contract == nil {
+				if c.EthTxs > 0 {
+					c.EthTxs--
+				} else {
+					glog.Warning("AddressContracts ", addrDesc, ", EthTxs would be negative")
+				}
+			} else {
+				i, found := findContractInAddressContracts(contract, c.Contracts)
+				if found {
+					if c.Contracts[i].Txs > 0 {
+						c.Contracts[i].Txs--
+						if c.Contracts[i].Txs == 0 {
+							c.Contracts = append(c.Contracts[:i], c.Contracts[i+1:]...)
+						}
+					} else {
+						glog.Warning("AddressContracts ", addrDesc, ", contract ", i, " Txs would be negative")
+					}
+				} else {
+					glog.Warning("AddressContracts ", addrDesc, ", contract ", contract, " not found")
+				}
+			}
+		} else {
+			glog.Warning("AddressContracts ", addrDesc, " not found")
+		}
+		return nil
+	}
+	for i := range blockTxs {
+		blockTx := &blockTxs[i]
+		if err := disconnectAddress(blockTx.from, nil); err != nil {
+			return err
+		}
+		if err := disconnectAddress(blockTx.to, nil); err != nil {
+			return err
+		}
+		for _, c := range blockTx.contracts {
+			if err := disconnectAddress(c.addr, c.contract); err != nil {
+				return err
+			}
+		}
+		wb.DeleteCF(d.cfh[cfTransactions], blockTx.btxID)
+	}
+	for a := range addresses {
+		key := packAddressKey([]byte(a), height)
+		wb.DeleteCF(d.cfh[cfAddresses], key)
+	}
+	return nil
+}
+
+// DisconnectBlockRangeEthereumType removes all data belonging to blocks in range lower-higher
+// it is able to disconnect only blocks for which there are data in the blockTxs column
+func (d *RocksDB) DisconnectBlockRangeEthereumType(lower uint32, higher uint32) error {
+	blocks := make([][]ethBlockTx, higher-lower+1)
+	for height := lower; height <= higher; height++ {
+		blockTxs, err := d.getBlockTxsEthereumType(height)
+		if err != nil {
+			return err
+		}
+		if len(blockTxs) == 0 {
+			return errors.Errorf("Cannot disconnect blocks with height %v and lower. It is necessary to rebuild index.", height)
+		}
+		blocks[height-lower] = blockTxs
+	}
 	wb := gorocksdb.NewWriteBatch()
 	defer wb.Destroy()
-	for _, addrKey := range addrKeys {
-		if glog.V(2) {
-			glog.Info("address ", hex.EncodeToString(addrKey))
+	contracts := make(map[string]*AddrContracts)
+	for height := higher; height >= lower; height-- {
+		if err := d.disconnectBlockTxsEthereumType(wb, height, blocks[height-lower], contracts); err != nil {
+			return err
 		}
-		// delete address:height from the index
-		wb.DeleteCF(d.cfh[cfAddresses], addrKey)
+		key := packUint(height)
+		wb.DeleteCF(d.cfh[cfBlockTxs], key)
+		wb.DeleteCF(d.cfh[cfHeight], key)
 	}
-	for height := lower; height <= higher; height++ {
-		if glog.V(2) {
-			glog.Info("height ", height)
-		}
-		wb.DeleteCF(d.cfh[cfHeight], packUint(height))
-	}
-	err = d.db.Write(d.wo, wb)
+	d.storeAddressContracts(wb, contracts)
+	err := d.db.Write(d.wo, wb)
 	if err == nil {
 		glog.Infof("rocksdb: blocks %d-%d disconnected", lower, higher)
 	}

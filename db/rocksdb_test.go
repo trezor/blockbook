@@ -9,7 +9,6 @@ import (
 	"blockbook/tests/dbtestdata"
 	"encoding/binary"
 	"encoding/hex"
-	"fmt"
 	"io/ioutil"
 	"math/big"
 	"os"
@@ -415,7 +414,7 @@ func testTxCache(t *testing.T, d *RocksDB, b *bchain.Block, tx *bchain.Tx) {
 	}
 	// Confirmations are not stored in the DB, set them from input tx
 	gtx.Confirmations = tx.Confirmations
-	if fmt.Sprint(gtx) != fmt.Sprint(tx) {
+	if !reflect.DeepEqual(gtx, tx) {
 		t.Errorf("GetTx: %v, want %v", gtx, tx)
 	}
 	if err := d.DeleteTx(tx.Txid); err != nil {
@@ -429,9 +428,8 @@ func testTxCache(t *testing.T, d *RocksDB, b *bchain.Block, tx *bchain.Tx) {
 // 2) GetTransactions for various addresses / low-high ranges
 // 3) GetBestBlock, GetBlockHash
 // 4) Test tx caching functionality
-// 5) Disconnect block 2 - expect error
-// 6) Disconnect the block 2 using BlockTxs column
-// 7) Reconnect block 2 and check
+// 5) Disconnect the block 2 using BlockTxs column
+// 6) Reconnect block 2 and check
 // After each step, the content of DB is examined and any difference against expected state is regarded as failure
 func TestRocksDB_Index_BitcoinType(t *testing.T) {
 	d := setupRocksDB(t, &testBitcoinParser{
@@ -513,7 +511,7 @@ func TestRocksDB_Index_BitcoinType(t *testing.T) {
 		Height: 225494,
 	}
 	if !reflect.DeepEqual(info, iw) {
-		t.Errorf("GetAddressBalance() = %+v, want %+v", info, iw)
+		t.Errorf("GetBlockInfo() = %+v, want %+v", info, iw)
 	}
 
 	// Test tx caching functionality, leave one tx in db to test cleanup in DisconnectBlock
@@ -531,13 +529,6 @@ func TestRocksDB_Index_BitcoinType(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-
-	// DisconnectBlock for BitcoinType chains is not possible
-	err = d.DisconnectBlock(block2)
-	if err == nil || err.Error() != "DisconnectBlock is not supported for BitcoinType chains" {
-		t.Fatal(err)
-	}
-	verifyAfterBitcoinTypeBlock2(t, d)
 
 	// try to disconnect both blocks, however only the last one is kept, it is not possible
 	err = d.DisconnectBlockRangeBitcoinType(225493, 225494)
@@ -566,7 +557,6 @@ func TestRocksDB_Index_BitcoinType(t *testing.T) {
 	verifyAfterBitcoinTypeBlock2(t, d)
 
 	// test public methods for address balance and tx addresses
-
 	ab, err := d.GetAddressBalance(dbtestdata.Addr5)
 	if err != nil {
 		t.Fatal(err)
@@ -848,17 +838,17 @@ func Test_packTxAddresses_unpackTxAddresses(t *testing.T) {
 				Height: 123456789,
 				Inputs: []TxInput{
 					{
-						AddrDesc: []byte{},
+						AddrDesc: []byte(nil),
 						ValueSat: *big.NewInt(1234),
 					},
 				},
 				Outputs: []TxOutput{
 					{
-						AddrDesc: []byte{},
+						AddrDesc: []byte(nil),
 						ValueSat: *big.NewInt(5678),
 					},
 					{
-						AddrDesc: []byte{},
+						AddrDesc: []byte(nil),
 						ValueSat: *big.NewInt(98),
 						Spent:    true,
 					},

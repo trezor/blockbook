@@ -66,6 +66,7 @@ func GetTestBitcoinTypeBlock1(parser bchain.BlockChainParser) *bchain.Block {
 		Txs: []bchain.Tx{
 			bchain.Tx{
 				Txid: TxidB1T1,
+				Vin:  []bchain.Vin{},
 				Vout: []bchain.Vout{
 					bchain.Vout{
 						N: 0,

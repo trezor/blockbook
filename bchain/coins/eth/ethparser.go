@@ -235,6 +235,7 @@ func (p *EthereumParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) (
 	if pt.Tx.AccountNonce, err = hexutil.DecodeUint64(r.Tx.AccountNonce); err != nil {
 		return nil, errors.Annotatef(err, "AccountNonce %v", r.Tx.AccountNonce)
 	}
+	// pt.BlockNumber = height
 	if n, err = hexutil.DecodeUint64(r.Tx.BlockNumber); err != nil {
 		return nil, errors.Annotatef(err, "BlockNumber %v", r.Tx.BlockNumber)
 	}
