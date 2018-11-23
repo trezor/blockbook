@@ -31,10 +31,11 @@ const (
 
 // Configuration represents json config file
 type Configuration struct {
-	CoinName     string `json:"coin_name"`
-	CoinShortcut string `json:"coin_shortcut"`
-	RPCURL       string `json:"rpc_url"`
-	RPCTimeout   int    `json:"rpc_timeout"`
+	CoinName             string `json:"coin_name"`
+	CoinShortcut         string `json:"coin_shortcut"`
+	RPCURL               string `json:"rpc_url"`
+	RPCTimeout           int    `json:"rpc_timeout"`
+	BlockAddressesToKeep int    `json:"block_addresses_to_keep"`
 }
 
 // EthereumRPC is an interface to JSON-RPC eth service.
@@ -65,6 +66,10 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 	if err != nil {
 		return nil, errors.Annotatef(err, "Invalid configuration file")
 	}
+	// keep at least 100 mappings block->addresses to allow rollback
+	if c.BlockAddressesToKeep < 100 {
+		c.BlockAddressesToKeep = 100
+	}
 	rc, err := rpc.Dial(c.RPCURL)
 	if err != nil {
 		return nil, err
@@ -78,7 +83,7 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 	}
 
 	// always create parser
-	s.Parser = NewEthereumParser()
+	s.Parser = NewEthereumParser(c.BlockAddressesToKeep)
 	s.timeout = time.Duration(c.RPCTimeout) * time.Second
 
 	// detect ethereum classic

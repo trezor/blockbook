@@ -59,13 +59,21 @@ const (
 	cfDefault = iota
 	cfHeight
 	cfAddresses
-	cfTxAddresses
-	cfAddressBalance
 	cfBlockTxs
 	cfTransactions
+	// BitcoinType
+	cfAddressBalance
+	cfTxAddresses
+	// EthereumType
+	cfAddressContracts = cfAddressBalance
 )
 
-var cfNames = []string{"default", "height", "addresses", "txAddresses", "addressBalance", "blockTxs", "transactions"}
+// common columns
+var cfNames = []string{"default", "height", "addresses", "blockTxs", "transactions"}
+
+// type specific columns
+var cfNamesBitcoinType = []string{"addressBalance", "txAddresses"}
+var cfNamesEthereumType = []string{"addressContracts"}
 
 func openDB(path string, c *gorocksdb.Cache, openFiles int) (*gorocksdb.DB, []*gorocksdb.ColumnFamilyHandle, error) {
 	// opts with bloom filter
@@ -73,9 +81,14 @@ func openDB(path string, c *gorocksdb.Cache, openFiles int) (*gorocksdb.DB, []*g
 	// opts for addresses without bloom filter
 	// from documentation: if most of your queries are executed using iterators, you shouldn't set bloom filter
 	optsAddresses := createAndSetDBOptions(0, c, openFiles)
-	// default, height, addresses, txAddresses, addressBalance, blockTxids, transactions
-	fcOptions := []*gorocksdb.Options{opts, opts, optsAddresses, opts, opts, opts, opts}
-	db, cfh, err := gorocksdb.OpenDbColumnFamilies(opts, path, cfNames, fcOptions)
+	// default, height, addresses, blockTxids, transactions
+	cfOptions := []*gorocksdb.Options{opts, opts, optsAddresses, opts, opts}
+	// append type specific options
+	count := len(cfNames) - len(cfOptions)
+	for i := 0; i < count; i++ {
+		cfOptions = append(cfOptions, opts)
+	}
+	db, cfh, err := gorocksdb.OpenDbColumnFamilies(opts, path, cfNames, cfOptions)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -86,6 +99,16 @@ func openDB(path string, c *gorocksdb.Cache, openFiles int) (*gorocksdb.DB, []*g
 // needs to be called to release it.
 func NewRocksDB(path string, cacheSize, maxOpenFiles int, parser bchain.BlockChainParser, metrics *common.Metrics) (d *RocksDB, err error) {
 	glog.Infof("rocksdb: opening %s, required data version %v, cache size %v, max open files %v", path, dbVersion, cacheSize, maxOpenFiles)
+
+	chainType := parser.GetChainType()
+	if chainType == bchain.ChainBitcoinType {
+		cfNames = append(cfNames, cfNamesBitcoinType...)
+	} else if chainType == bchain.ChainEthereumType {
+		cfNames = append(cfNames, cfNamesEthereumType...)
+	} else {
+		return nil, errors.New("Unknown chain type")
+	}
+
 	c := gorocksdb.NewLRUCache(cacheSize)
 	db, cfh, err := openDB(path, c, maxOpenFiles)
 	if err != nil {
@@ -276,19 +299,16 @@ func (d *RocksDB) writeBlock(block *bchain.Block, op int) error {
 	if err := d.writeHeightFromBlock(wb, block, op); err != nil {
 		return err
 	}
+	addresses := make(map[string][]outpoint)
 	if chainType == bchain.ChainBitcoinType {
 		if op == opDelete {
 			// block does not contain mapping tx-> input address, which is necessary to recreate
 			// unspentTxs; therefore it is not possible to DisconnectBlocks this way
 			return errors.New("DisconnectBlock is not supported for BitcoinType chains")
 		}
-		addresses := make(map[string][]outpoint)
 		txAddressesMap := make(map[string]*TxAddresses)
 		balances := make(map[string]*AddrBalance)
 		if err := d.processAddressesBitcoinType(block, addresses, txAddressesMap, balances); err != nil {
-			return err
-		}
-		if err := d.storeAddresses(wb, block.Height, addresses); err != nil {
 			return err
 		}
 		if err := d.storeTxAddresses(wb, txAddressesMap); err != nil {
@@ -301,11 +321,22 @@ func (d *RocksDB) writeBlock(block *bchain.Block, op int) error {
 			return err
 		}
 	} else if chainType == bchain.ChainEthereumType {
-		if err := d.writeAddressesEthereumType(wb, block, op); err != nil {
+		addressContracts := make(map[string]*AddrContracts)
+		blockTxs, err := d.processAddressesEthereumType(block, addresses, addressContracts)
+		if err != nil {
+			return err
+		}
+		if err := d.storeAddressContracts(wb, addressContracts); err != nil {
+			return err
+		}
+		if err := d.storeAndCleanupBlockTxsEthereumType(wb, block, blockTxs); err != nil {
 			return err
 		}
 	} else {
 		return errors.New("Unknown chain type")
+	}
+	if err := d.storeAddresses(wb, block.Height, addresses); err != nil {
+		return err
 	}
 
 	return d.db.Write(d.wo, wb)
@@ -579,6 +610,26 @@ func (d *RocksDB) storeBalances(wb *gorocksdb.WriteBatch, abm map[string]*AddrBa
 	return nil
 }
 
+func (d *RocksDB) cleanupBlockTxs(wb *gorocksdb.WriteBatch, block *bchain.Block) error {
+	keep := d.chainParser.KeepBlockAddresses()
+	// cleanup old block address
+	if block.Height > uint32(keep) {
+		for rh := block.Height - uint32(keep); rh < block.Height; rh-- {
+			key := packUint(rh)
+			val, err := d.db.GetCF(d.ro, d.cfh[cfBlockTxs], key)
+			if err != nil {
+				return err
+			}
+			if val.Size() == 0 {
+				break
+			}
+			val.Free()
+			d.db.DeleteCF(d.wo, d.cfh[cfBlockTxs], key)
+		}
+	}
+	return nil
+}
+
 func (d *RocksDB) storeAndCleanupBlockTxs(wb *gorocksdb.WriteBatch, block *bchain.Block) error {
 	pl := d.chainParser.PackedTxidLen()
 	buf := make([]byte, 0, pl*len(block.Txs))
@@ -612,23 +663,7 @@ func (d *RocksDB) storeAndCleanupBlockTxs(wb *gorocksdb.WriteBatch, block *bchai
 	}
 	key := packUint(block.Height)
 	wb.PutCF(d.cfh[cfBlockTxs], key, buf)
-	keep := d.chainParser.KeepBlockAddresses()
-	// cleanup old block address
-	if block.Height > uint32(keep) {
-		for rh := block.Height - uint32(keep); rh < block.Height; rh-- {
-			key = packUint(rh)
-			val, err := d.db.GetCF(d.ro, d.cfh[cfBlockTxs], key)
-			if err != nil {
-				return err
-			}
-			if val.Size() == 0 {
-				break
-			}
-			val.Free()
-			d.db.DeleteCF(d.wo, d.cfh[cfBlockTxs], key)
-		}
-	}
-	return nil
+	return d.cleanupBlockTxs(wb, block)
 }
 
 func (d *RocksDB) getBlockTxs(height uint32) ([]blockTxs, error) {
@@ -842,74 +877,6 @@ func (d *RocksDB) unpackNOutpoints(buf []byte) ([]outpoint, int, error) {
 		}
 	}
 	return outpoints, p, nil
-}
-
-func (d *RocksDB) addAddrDescToRecords(op int, wb *gorocksdb.WriteBatch, records map[string][]outpoint, addrDesc bchain.AddressDescriptor, btxid []byte, vout int32, bh uint32) error {
-	if len(addrDesc) > 0 {
-		if len(addrDesc) > maxAddrDescLen {
-			glog.Infof("rocksdb: block %d, skipping addrDesc of length %d", bh, len(addrDesc))
-		} else {
-			strAddrDesc := string(addrDesc)
-			records[strAddrDesc] = append(records[strAddrDesc], outpoint{
-				btxID: btxid,
-				index: vout,
-			})
-			if op == opDelete {
-				// remove transactions from cache
-				d.internalDeleteTx(wb, btxid)
-			}
-		}
-	}
-	return nil
-}
-
-func (d *RocksDB) writeAddressesEthereumType(wb *gorocksdb.WriteBatch, block *bchain.Block, op int) error {
-	addresses := make(map[string][]outpoint)
-	for _, tx := range block.Txs {
-		btxID, err := d.chainParser.PackTxid(tx.Txid)
-		if err != nil {
-			return err
-		}
-		for _, output := range tx.Vout {
-			addrDesc, err := d.chainParser.GetAddrDescFromVout(&output)
-			if err != nil {
-				// do not log ErrAddressMissing, transactions can be without to address (for example eth contracts)
-				if err != bchain.ErrAddressMissing {
-					glog.Warningf("rocksdb: addrDesc: %v - height %d, tx %v, output %v", err, block.Height, tx.Txid, output)
-				}
-				continue
-			}
-			err = d.addAddrDescToRecords(op, wb, addresses, addrDesc, btxID, int32(output.N), block.Height)
-			if err != nil {
-				return err
-			}
-		}
-		// store inputs in format txid ^index
-		for _, input := range tx.Vin {
-			for i, a := range input.Addresses {
-				addrDesc, err := d.chainParser.GetAddrDescFromAddress(a)
-				if err != nil {
-					glog.Warningf("rocksdb: addrDesc: %v - %d %s", err, block.Height, addrDesc)
-					continue
-				}
-				err = d.addAddrDescToRecords(op, wb, addresses, addrDesc, btxID, int32(^i), block.Height)
-				if err != nil {
-					return err
-				}
-			}
-		}
-	}
-	for addrDesc, outpoints := range addresses {
-		key := packAddressKey(bchain.AddressDescriptor(addrDesc), block.Height)
-		switch op {
-		case opInsert:
-			val := d.packOutpoints(outpoints)
-			wb.PutCF(d.cfh[cfAddresses], key, val)
-		case opDelete:
-			wb.DeleteCF(d.cfh[cfAddresses], key)
-		}
-	}
-	return nil
 }
 
 // Block index
@@ -1223,37 +1190,6 @@ func (d *RocksDB) DisconnectBlockRangeBitcoinType(lower uint32, higher uint32) e
 		wb.DeleteCF(d.cfh[cfTxAddresses], b)
 	}
 	err := d.db.Write(d.wo, wb)
-	if err == nil {
-		glog.Infof("rocksdb: blocks %d-%d disconnected", lower, higher)
-	}
-	return err
-}
-
-// DisconnectBlockRangeNonUTXO performs full range scan to remove a range of blocks
-// it is very slow operation
-func (d *RocksDB) DisconnectBlockRangeNonUTXO(lower uint32, higher uint32) error {
-	glog.Infof("db: disconnecting blocks %d-%d", lower, higher)
-	addrKeys, _, err := d.allAddressesScan(lower, higher)
-	if err != nil {
-		return err
-	}
-	glog.Infof("rocksdb: about to disconnect %d addresses ", len(addrKeys))
-	wb := gorocksdb.NewWriteBatch()
-	defer wb.Destroy()
-	for _, addrKey := range addrKeys {
-		if glog.V(2) {
-			glog.Info("address ", hex.EncodeToString(addrKey))
-		}
-		// delete address:height from the index
-		wb.DeleteCF(d.cfh[cfAddresses], addrKey)
-	}
-	for height := lower; height <= higher; height++ {
-		if glog.V(2) {
-			glog.Info("height ", height)
-		}
-		wb.DeleteCF(d.cfh[cfHeight], packUint(height))
-	}
-	err = d.db.Write(d.wo, wb)
 	if err == nil {
 		glog.Infof("rocksdb: blocks %d-%d disconnected", lower, higher)
 	}

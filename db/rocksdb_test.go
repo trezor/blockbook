@@ -33,6 +33,10 @@ func TestMain(m *testing.M) {
 	os.Exit(c)
 }
 
+type testBitcoinParser struct {
+	*btc.BitcoinParser
+}
+
 func bitcoinTestnetParser() *btc.BitcoinParser {
 	return btc.NewBitcoinParser(
 		btc.GetChainParams("test"),
@@ -48,7 +52,7 @@ func setupRocksDB(t *testing.T, p bchain.BlockChainParser) *RocksDB {
 	if err != nil {
 		t.Fatal(err)
 	}
-	is, err := d.LoadInternalState("btc-testnet")
+	is, err := d.LoadInternalState("coin-unittest")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,7 +155,7 @@ func checkColumn(d *RocksDB, col int, kp []keyPair) error {
 	return nil
 }
 
-func verifyAfterBitcoinTypeOBlock1(t *testing.T, d *RocksDB, afterDisconnect bool) {
+func verifyAfterBitcoinTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect bool) {
 	if err := checkColumn(d, cfHeight, []keyPair{
 		keyPair{
 			"000370d5",
@@ -388,10 +392,6 @@ func verifyGetTransactions(t *testing.T, d *RocksDB, addr string, low, high uint
 	}
 }
 
-type testBitcoinParser struct {
-	*btc.BitcoinParser
-}
-
 // override PackTx and UnpackTx to default BaseParser functionality
 // BitcoinParser uses tx hex which is not available for the test transactions
 func (p *testBitcoinParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) ([]byte, error) {
@@ -444,7 +444,7 @@ func TestRocksDB_Index_BitcoinType(t *testing.T) {
 	if err := d.ConnectBlock(block1); err != nil {
 		t.Fatal(err)
 	}
-	verifyAfterBitcoinTypeOBlock1(t, d, false)
+	verifyAfterBitcoinTypeBlock1(t, d, false)
 
 	// connect 2nd block - use some outputs from the 1st block as the inputs and 1 input uses tx from the same block
 	block2 := dbtestdata.GetTestBitcoinTypeBlock2(d.chainParser)
@@ -552,7 +552,7 @@ func TestRocksDB_Index_BitcoinType(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	verifyAfterBitcoinTypeOBlock1(t, d, true)
+	verifyAfterBitcoinTypeBlock1(t, d, true)
 	if err := checkColumn(d, cfTransactions, []keyPair{}); err != nil {
 		{
 			t.Fatal(err)

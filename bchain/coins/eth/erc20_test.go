@@ -3,25 +3,24 @@
 package eth
 
 import (
+	fmt "fmt"
 	"math/big"
-	"reflect"
+	"strings"
 	"testing"
-
-	ethcommon "github.com/ethereum/go-ethereum/common"
 )
 
 func TestErc20_erc20GetTransfersFromLog(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    []*rpcLog
-		want    []erc20Transfer
+		want    []Erc20Transfer
 		wantErr bool
 	}{
 		{
 			name: "1",
 			args: []*rpcLog{
 				&rpcLog{
-					Address: ethcommon.HexToAddress("0x76a45e8976499ab9ae223cc584019341d5a84e96"),
+					Address: "0x76a45e8976499ab9ae223cc584019341d5a84e96",
 					Topics: []string{
 						"0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
 						"0x0000000000000000000000002aacf811ac1a60081ea39f7783c0d26c500871a8",
@@ -30,11 +29,11 @@ func TestErc20_erc20GetTransfersFromLog(t *testing.T) {
 					Data: "0x0000000000000000000000000000000000000000000000000000000000000123",
 				},
 			},
-			want: []erc20Transfer{
+			want: []Erc20Transfer{
 				{
-					Contract: ethcommon.HexToAddress("0x76a45e8976499ab9ae223cc584019341d5a84e96"),
-					From:     ethcommon.HexToAddress("0x2aacf811ac1a60081ea39f7783c0d26c500871a8"),
-					To:       ethcommon.HexToAddress("0xe9a5216ff992cfa01594d43501a56e12769eb9d2"),
+					Contract: "0x76a45e8976499ab9ae223cc584019341d5a84e96",
+					From:     "0x2aacf811ac1a60081ea39f7783c0d26c500871a8",
+					To:       "0xe9a5216ff992cfa01594d43501a56e12769eb9d2",
 					Tokens:   *big.NewInt(0x123),
 				},
 			},
@@ -43,7 +42,7 @@ func TestErc20_erc20GetTransfersFromLog(t *testing.T) {
 			name: "2",
 			args: []*rpcLog{
 				&rpcLog{ // Transfer
-					Address: ethcommon.HexToAddress("0x0d0f936ee4c93e25944694d6c121de94d9760f11"),
+					Address: "0x0d0f936ee4c93e25944694d6c121de94d9760f11",
 					Topics: []string{
 						"0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
 						"0x0000000000000000000000006f44cceb49b4a5812d54b6f494fc2febf25511ed",
@@ -52,7 +51,7 @@ func TestErc20_erc20GetTransfersFromLog(t *testing.T) {
 					Data: "0x0000000000000000000000000000000000000000000000006a8313d60b1f606b",
 				},
 				&rpcLog{ // Transfer
-					Address: ethcommon.HexToAddress("0xc778417e063141139fce010982780140aa0cd5ab"),
+					Address: "0xc778417e063141139fce010982780140aa0cd5ab",
 					Topics: []string{
 						"0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
 						"0x0000000000000000000000004bda106325c335df99eab7fe363cac8a0ba2a24d",
@@ -61,7 +60,7 @@ func TestErc20_erc20GetTransfersFromLog(t *testing.T) {
 					Data: "0x000000000000000000000000000000000000000000000000000308fd0e798ac0",
 				},
 				&rpcLog{ // not Transfer
-					Address: ethcommon.HexToAddress("0x479cc461fecd078f766ecc58533d6f69580cf3ac"),
+					Address: "0x479cc461fecd078f766ecc58533d6f69580cf3ac",
 					Topics: []string{
 						"0x0d0b9391970d9a25552f37d436d2aae2925e2bfe1b2a923754bada030c498cb3",
 						"0x0000000000000000000000006f44cceb49b4a5812d54b6f494fc2febf25511ed",
@@ -71,7 +70,7 @@ func TestErc20_erc20GetTransfersFromLog(t *testing.T) {
 					Data: "0x0000000000000000000000004bda106325c335df99eab7fe363cac8a0ba2a24d0000000000000",
 				},
 				&rpcLog{ // not Transfer
-					Address: ethcommon.HexToAddress("0x0d0f936ee4c93e25944694d6c121de94d9760f11"),
+					Address: "0x0d0f936ee4c93e25944694d6c121de94d9760f11",
 					Topics: []string{
 						"0x0d0b9391970d9a25552f37d436d2aae2925e2bfe1b2a923754bada030c498cb3",
 						"0x0000000000000000000000007b62eb7fe80350dc7ec945c0b73242cb9877fb1b",
@@ -80,17 +79,17 @@ func TestErc20_erc20GetTransfersFromLog(t *testing.T) {
 					Data: "0x0000000000000000000000004bda106325c335df99eab7fe363cac8a0ba2a24d000000000000000000000000c778417e063141139fce010982780140aa0cd5ab0000000000000000000000000d0f936ee4c93e25944694d6c121de94d9760f1100000000000000000000000000000000000000000000000000031855667df7a80000000000000000000000000000000000000000000000006a8313d60b1f800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
 				},
 			},
-			want: []erc20Transfer{
+			want: []Erc20Transfer{
 				{
-					Contract: ethcommon.HexToAddress("0x0d0f936ee4c93e25944694d6c121de94d9760f11"),
-					From:     ethcommon.HexToAddress("0x6f44cceb49b4a5812d54b6f494fc2febf25511ed"),
-					To:       ethcommon.HexToAddress("0x4bda106325c335df99eab7fe363cac8a0ba2a24d"),
+					Contract: "0x0d0f936ee4c93e25944694d6c121de94d9760f11",
+					From:     "0x6f44cceb49b4a5812d54b6f494fc2febf25511ed",
+					To:       "0x4bda106325c335df99eab7fe363cac8a0ba2a24d",
 					Tokens:   *big.NewInt(0x6a8313d60b1f606b),
 				},
 				{
-					Contract: ethcommon.HexToAddress("0xc778417e063141139fce010982780140aa0cd5ab"),
-					From:     ethcommon.HexToAddress("0x4bda106325c335df99eab7fe363cac8a0ba2a24d"),
-					To:       ethcommon.HexToAddress("0x6f44cceb49b4a5812d54b6f494fc2febf25511ed"),
+					Contract: "0xc778417e063141139fce010982780140aa0cd5ab",
+					From:     "0x4bda106325c335df99eab7fe363cac8a0ba2a24d",
+					To:       "0x6f44cceb49b4a5812d54b6f494fc2febf25511ed",
 					Tokens:   *big.NewInt(0x308fd0e798ac0),
 				},
 			},
@@ -103,7 +102,8 @@ func TestErc20_erc20GetTransfersFromLog(t *testing.T) {
 				t.Errorf("erc20GetTransfersFromLog error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if !reflect.DeepEqual(got, tt.want) {
+			// the addresses could have different case
+			if strings.ToLower(fmt.Sprint(got)) != strings.ToLower(fmt.Sprint(tt.want)) {
 				t.Errorf("erc20GetTransfersFromLog = %+v, want %+v", got, tt.want)
 			}
 		})

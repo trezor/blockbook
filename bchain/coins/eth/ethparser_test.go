@@ -32,9 +32,10 @@ func TestEthParser_GetAddrDescFromAddress(t *testing.T) {
 			want: "47526228d673e9f079630d6cdaff5a2ed13e0e60",
 		},
 		{
-			name: "odd address",
-			args: args{address: "7526228d673e9f079630d6cdaff5a2ed13e0e60"},
-			want: "07526228d673e9f079630d6cdaff5a2ed13e0e60",
+			name:    "address of wrong length",
+			args:    args{address: "7526228d673e9f079630d6cdaff5a2ed13e0e60"},
+			want:    "",
+			wantErr: true,
 		},
 		{
 			name:    "ErrAddressMissing",
@@ -51,7 +52,7 @@ func TestEthParser_GetAddrDescFromAddress(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := NewEthereumParser()
+			p := NewEthereumParser(1)
 			got, err := p.GetAddrDescFromAddress(tt.args.address)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("EthParser.GetAddrDescFromAddress() error = %v, wantErr %v", err, tt.wantErr)
@@ -146,7 +147,7 @@ func TestEthereumParser_PackTx(t *testing.T) {
 			want: testTxPacked2,
 		},
 	}
-	p := NewEthereumParser()
+	p := NewEthereumParser(1)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := p.PackTx(tt.args.tx, tt.args.height, tt.args.blockTime)
@@ -187,7 +188,7 @@ func TestEthereumParser_UnpackTx(t *testing.T) {
 			want1: 2871048,
 		},
 	}
-	p := NewEthereumParser()
+	p := NewEthereumParser(1)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			b, err := hex.DecodeString(tt.args.hex)

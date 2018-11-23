@@ -25,25 +25,26 @@ var erc20abi = `[{"constant":true,"inputs":[],"name":"name","outputs":[{"name":"
 // doing the parsing/processing without using go-ethereum/accounts/abi library, it is simple to get data from Transfer event
 const erc20EventTransferSignature = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
 
-type erc20Transfer struct {
-	Contract ethcommon.Address
-	From     ethcommon.Address
-	To       ethcommon.Address
+// Erc20Transfer contains a single Erc20 token transfer
+type Erc20Transfer struct {
+	Contract string
+	From     string
+	To       string
 	Tokens   big.Int
 }
 
-func addressFromPaddedHex(s string) (*ethcommon.Address, error) {
+func addressFromPaddedHex(s string) (string, error) {
 	var t big.Int
 	_, ok := t.SetString(s, 0)
 	if !ok {
-		return nil, errors.New("Data is not a number")
+		return "", errors.New("Data is not a number")
 	}
 	a := ethcommon.BigToAddress(&t)
-	return &a, nil
+	return a.String(), nil
 }
 
-func erc20GetTransfersFromLog(logs []*rpcLog) ([]erc20Transfer, error) {
-	var r []erc20Transfer
+func erc20GetTransfersFromLog(logs []*rpcLog) ([]Erc20Transfer, error) {
+	var r []Erc20Transfer
 	for _, l := range logs {
 		if len(l.Topics) == 3 && l.Topics[0] == erc20EventTransferSignature {
 			var t big.Int
@@ -59,10 +60,10 @@ func erc20GetTransfersFromLog(logs []*rpcLog) ([]erc20Transfer, error) {
 			if err != nil {
 				return nil, err
 			}
-			r = append(r, erc20Transfer{
+			r = append(r, Erc20Transfer{
 				Contract: l.Address,
-				From:     *from,
-				To:       *to,
+				From:     from,
+				To:       to,
 				Tokens:   t,
 			})
 		}

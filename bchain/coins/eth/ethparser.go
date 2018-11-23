@@ -7,11 +7,14 @@ import (
 	"math/big"
 	"strconv"
 
-	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/juju/errors"
 )
+
+// EthereumTypeAddressDescriptorLen - in case of EthereumType, the AddressDescriptor has fixed length
+const EthereumTypeAddressDescriptorLen = 20
 
 // EthereumParser handle
 type EthereumParser struct {
@@ -19,9 +22,9 @@ type EthereumParser struct {
 }
 
 // NewEthereumParser returns new EthereumParser instance
-func NewEthereumParser() *EthereumParser {
+func NewEthereumParser(b int) *EthereumParser {
 	return &EthereumParser{&bchain.BaseParser{
-		BlockAddressesToKeep: 0,
+		BlockAddressesToKeep: b,
 		AmountDecimalPoint:   18,
 	}}
 }
@@ -54,9 +57,9 @@ type rpcTransaction struct {
 }
 
 type rpcLog struct {
-	Address ethcommon.Address `json:"address"`
-	Topics  []string          `json:"topics"`
-	Data    string            `json:"data"`
+	Address string   `json:"address"`
+	Topics  []string `json:"topics"`
+	Data    string   `json:"data"`
 }
 
 type rpcLogWithTxHash struct {
@@ -171,7 +174,10 @@ func (p *EthereumParser) GetAddrDescFromAddress(address string) (bchain.AddressD
 	if has0xPrefix(address) {
 		address = address[2:]
 	}
-	if len(address) == 0 {
+	if len(address) != EthereumTypeAddressDescriptorLen*2 {
+		if len(address) != 0 {
+			glog.Warning("Ignoring address ", address)
+		}
 		return nil, bchain.ErrAddressMissing
 	}
 	if len(address)&1 == 1 {
@@ -278,6 +284,10 @@ func (p *EthereumParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) (
 		}
 		ptLogs := make([]*ProtoCompleteTransaction_ReceiptType_LogType, len(r.Receipt.Logs))
 		for i, l := range r.Receipt.Logs {
+			a, err := hexutil.Decode(l.Address)
+			if err != nil {
+				return nil, errors.Annotatef(err, "Address cannot be decoded %v", l)
+			}
 			d, err := hexutil.Decode(l.Data)
 			if err != nil {
 				return nil, errors.Annotatef(err, "Data cannot be decoded %v", l)
@@ -290,7 +300,7 @@ func (p *EthereumParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) (
 				}
 			}
 			ptLogs[i] = &ProtoCompleteTransaction_ReceiptType_LogType{
-				Address: l.Address.Bytes(),
+				Address: a,
 				Data:    d,
 				Topics:  t,
 			}
@@ -332,7 +342,7 @@ func (p *EthereumParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 				topics[j] = hexutil.Encode(t)
 			}
 			logs[i] = &rpcLog{
-				Address: ethcommon.BytesToAddress(l.Address),
+				Address: hexutil.Encode(l.Address),
 				Data:    hexutil.Encode(l.Data),
 				Topics:  topics,
 			}
@@ -388,19 +398,39 @@ func (p *EthereumParser) GetChainType() bchain.ChainType {
 
 // GetHeightFromTx returns ethereum specific data from bchain.Tx
 func GetHeightFromTx(tx *bchain.Tx) (uint32, error) {
-	// TODO -  temporary implementation - will use bchain.Tx.SpecificData field
-	b, err := hex.DecodeString(tx.Hex)
-	if err != nil {
-		return 0, err
+	var bn string
+	csd, ok := tx.CoinSpecificData.(completeTransaction)
+	if !ok {
+		b, err := hex.DecodeString(tx.Hex)
+		if err != nil {
+			return 0, err
+		}
+		var ct completeTransaction
+		err = json.Unmarshal(b, &ct)
+		if err != nil {
+			return 0, err
+		}
+		bn = ct.Tx.BlockNumber
+	} else {
+		bn = csd.Tx.BlockNumber
 	}
-	var ct completeTransaction
-	var n uint64
-	err = json.Unmarshal(b, &ct)
+	n, err := hexutil.DecodeUint64(bn)
 	if err != nil {
-		return 0, err
-	}
-	if n, err = hexutil.DecodeUint64(ct.Tx.BlockNumber); err != nil {
-		return 0, errors.Annotatef(err, "BlockNumber %v", ct.Tx.BlockNumber)
+		return 0, errors.Annotatef(err, "BlockNumber %v", bn)
 	}
 	return uint32(n), nil
+}
+
+// GetErc20FromTx returns Erc20 data from bchain.Tx
+func GetErc20FromTx(tx *bchain.Tx) ([]Erc20Transfer, error) {
+	var r []Erc20Transfer
+	var err error
+	csd, ok := tx.CoinSpecificData.(completeTransaction)
+	if ok {
+		r, err = erc20GetTransfersFromLog(csd.Receipt.Logs)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return r, nil
 }
