@@ -4,6 +4,7 @@ import (
 	"blockbook/bchain"
 	"blockbook/common"
 	"blockbook/db"
+	"encoding/json"
 	"math/big"
 	"time"
 )
@@ -70,25 +71,26 @@ type Vout struct {
 
 // Tx holds information about a transaction
 type Tx struct {
-	Txid             string      `json:"txid"`
-	Version          int32       `json:"version,omitempty"`
-	Locktime         uint32      `json:"locktime,omitempty"`
-	Vin              []Vin       `json:"vin"`
-	Vout             []Vout      `json:"vout"`
-	Blockhash        string      `json:"blockhash,omitempty"`
-	Blockheight      int         `json:"blockheight"`
-	Confirmations    uint32      `json:"confirmations"`
-	Time             int64       `json:"time,omitempty"`
-	Blocktime        int64       `json:"blocktime"`
-	ValueOut         string      `json:"valueOut"`
-	ValueOutSat      big.Int     `json:"-"`
-	Size             int         `json:"size,omitempty"`
-	ValueIn          string      `json:"valueIn"`
-	ValueInSat       big.Int     `json:"-"`
-	Fees             string      `json:"fees"`
-	FeesSat          big.Int     `json:"-"`
-	Hex              string      `json:"hex"`
-	CoinSpecificData interface{} `json:"-"`
+	Txid             string          `json:"txid"`
+	Version          int32           `json:"version,omitempty"`
+	Locktime         uint32          `json:"locktime,omitempty"`
+	Vin              []Vin           `json:"vin"`
+	Vout             []Vout          `json:"vout"`
+	Blockhash        string          `json:"blockhash,omitempty"`
+	Blockheight      int             `json:"blockheight"`
+	Confirmations    uint32          `json:"confirmations"`
+	Time             int64           `json:"time,omitempty"`
+	Blocktime        int64           `json:"blocktime"`
+	ValueOut         string          `json:"valueOut"`
+	ValueOutSat      big.Int         `json:"-"`
+	Size             int             `json:"size,omitempty"`
+	ValueIn          string          `json:"valueIn"`
+	ValueInSat       big.Int         `json:"-"`
+	Fees             string          `json:"fees"`
+	FeesSat          big.Int         `json:"-"`
+	Hex              string          `json:"hex"`
+	CoinSpecificData interface{}     `json:"-"`
+	CoinSpecificJSON json.RawMessage `json:"-"`
 }
 
 // Paging contains information about paging for address, blocks and block
@@ -98,18 +100,27 @@ type Paging struct {
 	ItemsOnPage int `json:"itemsOnPage"`
 }
 
+type Erc20Token struct {
+	Contract string `json:"contract"`
+	Txs      int    `json:"txs"`
+	Name     string `json:"name"`
+	Symbol   string `json:"symbol"`
+	Value    string `json:"value"`
+}
+
 // Address holds information about address and its transactions
 type Address struct {
 	Paging
-	AddrStr                 string   `json:"addrStr"`
-	Balance                 string   `json:"balance"`
-	TotalReceived           string   `json:"totalReceived"`
-	TotalSent               string   `json:"totalSent"`
-	UnconfirmedBalance      string   `json:"unconfirmedBalance"`
-	UnconfirmedTxApperances int      `json:"unconfirmedTxApperances"`
-	TxApperances            int      `json:"txApperances"`
-	Transactions            []*Tx    `json:"txs,omitempty"`
-	Txids                   []string `json:"transactions,omitempty"`
+	AddrStr                 string        `json:"addrStr"`
+	Balance                 string        `json:"balance"`
+	TotalReceived           string        `json:"totalReceived"`
+	TotalSent               string        `json:"totalSent"`
+	UnconfirmedBalance      string        `json:"unconfirmedBalance"`
+	UnconfirmedTxApperances int           `json:"unconfirmedTxApperances"`
+	TxApperances            int           `json:"txApperances"`
+	Transactions            []*Tx         `json:"txs,omitempty"`
+	Txids                   []string      `json:"transactions,omitempty"`
+	Erc20Tokens             []*Erc20Token `json:"erc20tokens,omitempty"`
 }
 
 // AddressUtxo holds information about address and its transactions

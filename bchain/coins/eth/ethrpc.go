@@ -445,7 +445,8 @@ func (b *EthereumRPC) getERC20EventsForBlock(blockNumber string) (map[string][]*
 		return nil, errors.Annotatef(err, "blockNumber %v", blockNumber)
 	}
 	r := make(map[string][]*rpcLog)
-	for _, l := range logs {
+	for i := range logs {
+		l := &logs[i]
 		r[l.Hash] = append(r[l.Hash], &l.rpcLog)
 	}
 	return r, nil

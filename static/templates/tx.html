@@ -47,7 +47,7 @@
         <pre id="txSpecific"></pre>
     </div>
     <script type="text/javascript">
-        txSpecific = {{$tx.CoinSpecificData}};
+        txSpecific = {{$tx.CoinSpecificJSON}};
         function syntaxHighlight(json) {
             json = JSON.stringify(json, undefined, 2);
             json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');

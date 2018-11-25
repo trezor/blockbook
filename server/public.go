@@ -435,7 +435,7 @@ func (s *PublicServer) explorerAddress(w http.ResponseWriter, r *http.Request) (
 		if ec != nil {
 			page = 0
 		}
-		address, err = s.api.GetAddress(r.URL.Path[i+1:], page, txsOnPage, false)
+		address, err = s.api.GetAddress(r.URL.Path[i+1:], page, txsOnPage, false, false)
 		if err != nil {
 			return errorTpl, nil, err
 		}
@@ -519,7 +519,7 @@ func (s *PublicServer) explorerSearch(w http.ResponseWriter, r *http.Request) (t
 			http.Redirect(w, r, joinURL("/tx/", tx.Txid), 302)
 			return noTpl, nil, nil
 		}
-		address, err = s.api.GetAddress(q, 0, 1, true)
+		address, err = s.api.GetAddress(q, 0, 1, true, true)
 		if err == nil {
 			http.Redirect(w, r, joinURL("/address/", address.AddrStr), 302)
 			return noTpl, nil, nil
@@ -674,7 +674,7 @@ func (s *PublicServer) apiAddress(r *http.Request) (interface{}, error) {
 		if ec != nil {
 			page = 0
 		}
-		address, err = s.api.GetAddress(r.URL.Path[i+1:], page, txsInAPI, true)
+		address, err = s.api.GetAddress(r.URL.Path[i+1:], page, txsInAPI, true, false)
 	}
 	return address, err
 }
