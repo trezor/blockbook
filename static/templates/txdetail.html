@@ -24,7 +24,7 @@
                                     {{if and (ne $a $addr) $vin.Searchable}}<a href="/address/{{$a}}">{{$a}}</a>{{else}}{{$a}}{{end}}
                                 </span>
                                 {{- else -}}
-                                <span class="float-left">No Inputs (Newly Generated Coins)</span>
+                                <span class="float-left">{{- if $vin.ScriptSig.Hex -}}Unparsed address{{- else -}}No Inputs (Newly Generated Coins){{- end -}}</span>
                                 {{- end -}}{{- if $vin.Addresses -}}
                                 <span class="float-right{{if stringInSlice $addr $vin.Addresses}} text-danger{{end}}">{{formatAmount $vin.Value}} {{$cs}}</span>
                                 {{- end -}}

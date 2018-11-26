@@ -380,6 +380,9 @@ func formatTime(t time.Time) string {
 // for now return the string as it is
 // in future could be used to do coin specific formatting
 func formatAmount(a string) string {
+	if a == "" {
+		return "0"
+	}
 	return a
 }
 
