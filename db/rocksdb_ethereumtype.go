@@ -249,6 +249,11 @@ func (d *RocksDB) getBlockTxsEthereumType(height uint32) ([]ethBlockTx, error) {
 	}
 	defer val.Free()
 	buf := val.Data()
+	// nil data means the key was not found in DB
+	if buf == nil {
+		return nil, nil
+	}
+	// buf can be empty slice, this means the block did not contain any transactions
 	bt := make([]ethBlockTx, 0, 8)
 	getAddress := func(i int) (bchain.AddressDescriptor, int, error) {
 		if len(buf)-i < eth.EthereumTypeAddressDescriptorLen {
@@ -306,8 +311,12 @@ func (d *RocksDB) getBlockTxsEthereumType(height uint32) ([]ethBlockTx, error) {
 func (d *RocksDB) disconnectBlockTxsEthereumType(wb *gorocksdb.WriteBatch, height uint32, blockTxs []ethBlockTx, contracts map[string]*AddrContracts) error {
 	glog.Info("Disconnecting block ", height, " containing ", len(blockTxs), " transactions")
 	addresses := make(map[string]struct{})
-	disconnectAddress := func(addrDesc, contract bchain.AddressDescriptor) error {
+	disconnectAddress := func(btxID []byte, addrDesc, contract bchain.AddressDescriptor) error {
 		var err error
+		// do not process empty address
+		if len(addrDesc) == 0 {
+			return nil
+		}
 		s := string(addrDesc)
 		addresses[s] = struct{}{}
 		c, fc := contracts[s]
@@ -323,7 +332,7 @@ func (d *RocksDB) disconnectBlockTxsEthereumType(wb *gorocksdb.WriteBatch, heigh
 				if c.EthTxs > 0 {
 					c.EthTxs--
 				} else {
-					glog.Warning("AddressContracts ", addrDesc, ", EthTxs would be negative")
+					glog.Warning("AddressContracts ", addrDesc, ", EthTxs would be negative, tx ", hex.EncodeToString(btxID))
 				}
 			} else {
 				i, found := findContractInAddressContracts(contract, c.Contracts)
@@ -334,27 +343,27 @@ func (d *RocksDB) disconnectBlockTxsEthereumType(wb *gorocksdb.WriteBatch, heigh
 							c.Contracts = append(c.Contracts[:i], c.Contracts[i+1:]...)
 						}
 					} else {
-						glog.Warning("AddressContracts ", addrDesc, ", contract ", i, " Txs would be negative")
+						glog.Warning("AddressContracts ", addrDesc, ", contract ", i, " Txs would be negative, tx ", hex.EncodeToString(btxID))
 					}
 				} else {
-					glog.Warning("AddressContracts ", addrDesc, ", contract ", contract, " not found")
+					glog.Warning("AddressContracts ", addrDesc, ", contract ", contract, " not found, tx ", hex.EncodeToString(btxID))
 				}
 			}
 		} else {
-			glog.Warning("AddressContracts ", addrDesc, " not found")
+			glog.Warning("AddressContracts ", addrDesc, " not found, tx ", hex.EncodeToString(btxID))
 		}
 		return nil
 	}
 	for i := range blockTxs {
 		blockTx := &blockTxs[i]
-		if err := disconnectAddress(blockTx.from, nil); err != nil {
+		if err := disconnectAddress(blockTx.btxID, blockTx.from, nil); err != nil {
 			return err
 		}
-		if err := disconnectAddress(blockTx.to, nil); err != nil {
+		if err := disconnectAddress(blockTx.btxID, blockTx.to, nil); err != nil {
 			return err
 		}
 		for _, c := range blockTx.contracts {
-			if err := disconnectAddress(c.addr, c.contract); err != nil {
+			if err := disconnectAddress(blockTx.btxID, c.addr, c.contract); err != nil {
 				return err
 			}
 		}
@@ -376,7 +385,8 @@ func (d *RocksDB) DisconnectBlockRangeEthereumType(lower uint32, higher uint32) 
 		if err != nil {
 			return err
 		}
-		if len(blockTxs) == 0 {
+		// nil blockTxs means blockTxs were not found in db
+		if blockTxs == nil {
 			return errors.Errorf("Cannot disconnect blocks with height %v and lower. It is necessary to rebuild index.", height)
 		}
 		blocks[height-lower] = blockTxs
