@@ -1,9 +1,15 @@
 package eth
 
 import (
+	"blockbook/bchain"
+	"context"
+	"encoding/hex"
 	"math/big"
+	"sync"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/golang/glog"
 	"github.com/juju/errors"
 )
 
@@ -24,14 +30,21 @@ var erc20abi = `[{"constant":true,"inputs":[],"name":"name","outputs":[{"name":"
 
 // doing the parsing/processing without using go-ethereum/accounts/abi library, it is simple to get data from Transfer event
 const erc20EventTransferSignature = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
+const erc20NameSignature = "0x06fdde03"
+const erc20SymbolSignature = "0x95d89b41"
+const erc20DecimalsSignature = "0x313ce567"
+const erc20BalanceOf = "0x70a08231"
 
-// Erc20Transfer contains a single Erc20 token transfer
+// Erc20Transfer contains a single ERC20 token transfer
 type Erc20Transfer struct {
 	Contract string
 	From     string
 	To       string
 	Tokens   big.Int
 }
+
+var cachedContracts = make(map[string]bchain.Erc20Contract)
+var cachedContractsMux sync.Mutex
 
 func addressFromPaddedHex(s string) (string, error) {
 	var t big.Int
@@ -67,6 +80,110 @@ func erc20GetTransfersFromLog(logs []*rpcLog) ([]Erc20Transfer, error) {
 				Tokens:   t,
 			})
 		}
+	}
+	return r, nil
+}
+
+func (b *EthereumRPC) ethCall(data, to string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
+	defer cancel()
+	var r string
+	err := b.rpc.CallContext(ctx, &r, "eth_call", map[string]interface{}{
+		"data": data,
+		"to":   to,
+	}, "latest")
+	if err != nil {
+		return "", err
+	}
+	return r, nil
+}
+
+func parseErc20NumericProperty(contractDesc bchain.AddressDescriptor, data string) *big.Int {
+	if has0xPrefix(data) {
+		data = data[2:]
+	}
+	if len(data) == 64 {
+		var n big.Int
+		_, ok := n.SetString(data, 16)
+		if ok {
+			return &n
+		}
+	}
+	glog.Warning("Cannot parse '", data, "' for contract ", contractDesc)
+	return nil
+}
+
+func parseErc20StringProperty(contractDesc bchain.AddressDescriptor, data string) string {
+	if has0xPrefix(data) {
+		data = data[2:]
+	}
+	if len(data) == 192 {
+		n := parseErc20NumericProperty(contractDesc, data[64:128])
+		if n != nil {
+			l := n.Uint64()
+			if l <= 32 {
+				b, err := hex.DecodeString(data[128 : 128+2*l])
+				if err == nil {
+					return string(b)
+				}
+			}
+		}
+	}
+	glog.Warning("Cannot parse '", data, "' for contract ", contractDesc)
+	return ""
+}
+
+// EthereumTypeGetErc20ContractInfo returns information about ERC20 contract
+func (b *EthereumRPC) EthereumTypeGetErc20ContractInfo(contractDesc bchain.AddressDescriptor) (*bchain.Erc20Contract, error) {
+	cds := string(contractDesc)
+	cachedContractsMux.Lock()
+	contract, found := cachedContracts[cds]
+	cachedContractsMux.Unlock()
+	if !found {
+		address := hexutil.Encode(contractDesc)
+		data, err := b.ethCall(erc20NameSignature, address)
+		if err != nil {
+			return nil, err
+		}
+		name := parseErc20StringProperty(contractDesc, data)
+		data, err = b.ethCall(erc20SymbolSignature, address)
+		if err != nil {
+			return nil, err
+		}
+		symbol := parseErc20StringProperty(contractDesc, data)
+		data, err = b.ethCall(erc20DecimalsSignature, address)
+		if err != nil {
+			return nil, err
+		}
+		contract = bchain.Erc20Contract{
+			Name:   name,
+			Symbol: symbol,
+		}
+		d := parseErc20NumericProperty(contractDesc, data)
+		if d != nil {
+			contract.Decimals = int(uint8(d.Uint64()))
+		} else {
+			contract.Decimals = EtherAmountDecimalPoint
+		}
+		cachedContractsMux.Lock()
+		cachedContracts[cds] = contract
+		cachedContractsMux.Unlock()
+	}
+	return &contract, nil
+}
+
+// EthereumTypeGetErc20ContractBalance returns balance of ERC20 contract for given address
+func (b *EthereumRPC) EthereumTypeGetErc20ContractBalance(addrDesc, contractDesc bchain.AddressDescriptor) (*big.Int, error) {
+	addr := hexutil.Encode(addrDesc)
+	contract := hexutil.Encode(contractDesc)
+	req := erc20BalanceOf + "0000000000000000000000000000000000000000000000000000000000000000"[len(addr)-2:] + addr[2:]
+	data, err := b.ethCall(req, contract)
+	if err != nil {
+		return nil, err
+	}
+	r := parseErc20NumericProperty(contractDesc, data)
+	if r == nil {
+		return nil, errors.New("Invalid balance")
 	}
 	return r, nil
 }

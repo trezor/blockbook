@@ -11,6 +11,7 @@ import (
 	"math/big"
 	"net"
 	"net/http"
+	"runtime/debug"
 	"time"
 
 	"github.com/btcsuite/btcd/wire"
@@ -20,13 +21,11 @@ import (
 
 // BitcoinRPC is an interface to JSON-RPC bitcoind service.
 type BitcoinRPC struct {
+	*bchain.BaseChain
 	client       http.Client
 	rpcURL       string
 	user         string
 	password     string
-	Parser       bchain.BlockChainParser
-	Testnet      bool
-	Network      string
 	Mempool      *bchain.MempoolBitcoinType
 	ParseBlocks  bool
 	pushHandler  func(bchain.NotificationType)
@@ -84,6 +83,7 @@ func NewBitcoinRPC(config json.RawMessage, pushHandler func(bchain.NotificationT
 	}
 
 	s := &BitcoinRPC{
+		BaseChain:    &bchain.BaseChain{},
 		client:       http.Client{Timeout: time.Duration(c.RPCTimeout) * time.Second, Transport: transport},
 		rpcURL:       c.RPCURL,
 		user:         c.RPCUser,
@@ -156,14 +156,6 @@ func (b *BitcoinRPC) Shutdown(ctx context.Context) error {
 		}
 	}
 	return nil
-}
-
-func (b *BitcoinRPC) IsTestnet() bool {
-	return b.Testnet
-}
-
-func (b *BitcoinRPC) GetNetworkName() string {
-	return b.Network
 }
 
 func (b *BitcoinRPC) GetCoinName() string {
@@ -837,6 +829,7 @@ func safeDecodeResponse(body io.ReadCloser, res interface{}) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			glog.Error("unmarshal json recovered from panic: ", r, "; data: ", string(data))
+			debug.PrintStack()
 			if len(data) > 0 && len(data) < 2048 {
 				err = errors.Errorf("Error: %v", string(data))
 			} else {
@@ -880,9 +873,4 @@ func (b *BitcoinRPC) Call(req interface{}, res interface{}) error {
 		return nil
 	}
 	return safeDecodeResponse(httpRes.Body, &res)
-}
-
-// GetChainParser returns BlockChainParser
-func (b *BitcoinRPC) GetChainParser() bchain.BlockChainParser {
-	return b.Parser
 }

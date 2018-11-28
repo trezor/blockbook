@@ -68,7 +68,7 @@ func (m *MempoolEthereumType) Resync(onNewTxAddr OnNewTxAddrFunc) (int, error) {
 		if !exists {
 			tx, err := m.chain.GetTransactionForMempool(txid)
 			if err != nil {
-				glog.Error("cannot get transaction ", txid, ": ", err)
+				glog.Warning("cannot get transaction ", txid, ": ", err)
 				continue
 			}
 			io = make([]addrIndex, 0, len(tx.Vout)+len(tx.Vin))

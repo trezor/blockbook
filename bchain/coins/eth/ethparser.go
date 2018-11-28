@@ -16,6 +16,9 @@ import (
 // EthereumTypeAddressDescriptorLen - in case of EthereumType, the AddressDescriptor has fixed length
 const EthereumTypeAddressDescriptorLen = 20
 
+// EtherAmountDecimalPoint defines number of decimal points in Ether amounts
+const EtherAmountDecimalPoint = 18
+
 // EthereumParser handle
 type EthereumParser struct {
 	*bchain.BaseParser
@@ -25,7 +28,7 @@ type EthereumParser struct {
 func NewEthereumParser(b int) *EthereumParser {
 	return &EthereumParser{&bchain.BaseParser{
 		BlockAddressesToKeep: b,
-		AmountDecimalPoint:   18,
+		AmountDecimalPoint:   EtherAmountDecimalPoint,
 	}}
 }
 
@@ -434,4 +437,37 @@ func GetErc20FromTx(tx *bchain.Tx) ([]Erc20Transfer, error) {
 		}
 	}
 	return r, nil
+}
+
+// EthereumTxData contains ethereum specific transaction data
+type EthereumTxData struct {
+	Status      int      `json:"status"` // 1 OK, 0 Fail, -1 pending
+	Nonce       uint64   `json:"nonce"`
+	GasLimit    *big.Int `json:"gaslimit"`
+	GasUsed     *big.Int `json:"gasused"`
+	GasPrice    string   `json:"gasprice"`
+	GasPriceNum *big.Int `json:"-"`
+}
+
+// GetEthereumTxData returns EthereumTxData from bchain.Tx
+func GetEthereumTxData(tx *bchain.Tx) *EthereumTxData {
+	etd := EthereumTxData{Status: -1}
+	csd, ok := tx.CoinSpecificData.(completeTransaction)
+	if ok {
+		if csd.Tx != nil {
+			etd.Nonce, _ = hexutil.DecodeUint64(csd.Tx.AccountNonce)
+			etd.GasLimit, _ = hexutil.DecodeBig(csd.Tx.GasLimit)
+			etd.GasPriceNum, _ = hexutil.DecodeBig(csd.Tx.GasPrice)
+			etd.GasPrice = bchain.AmountToDecimalString(etd.GasPriceNum, EtherAmountDecimalPoint)
+		}
+		if csd.Receipt != nil {
+			if csd.Receipt.Status == "0x1" {
+				etd.Status = 1
+			} else {
+				etd.Status = 0
+			}
+			etd.GasUsed, _ = hexutil.DecodeBig(csd.Receipt.GasUsed)
+		}
+	}
+	return &etd
 }

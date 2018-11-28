@@ -2,6 +2,7 @@ package api
 
 import (
 	"blockbook/bchain"
+	"blockbook/bchain/coins/eth"
 	"blockbook/common"
 	"blockbook/db"
 	"encoding/json"
@@ -69,28 +70,49 @@ type Vout struct {
 	SpentHeight  int          `json:"spentHeight,omitempty"`
 }
 
+// Erc20Token contains info about ERC20 token held by an address
+type Erc20Token struct {
+	Contract string `json:"contract"`
+	Txs      int    `json:"txs"`
+	Name     string `json:"name"`
+	Symbol   string `json:"symbol"`
+	Balance  string `json:"balance"`
+}
+
+// Erc20Transfer contains info about ERC20 transfer done in a transaction
+type Erc20Transfer struct {
+	From     string `json:"from"`
+	To       string `json:"to"`
+	Contract string `json:"contract"`
+	Name     string `json:"name"`
+	Symbol   string `json:"symbol"`
+	Tokens   string `json:"tokens"`
+}
+
 // Tx holds information about a transaction
 type Tx struct {
-	Txid             string          `json:"txid"`
-	Version          int32           `json:"version,omitempty"`
-	Locktime         uint32          `json:"locktime,omitempty"`
-	Vin              []Vin           `json:"vin"`
-	Vout             []Vout          `json:"vout"`
-	Blockhash        string          `json:"blockhash,omitempty"`
-	Blockheight      int             `json:"blockheight"`
-	Confirmations    uint32          `json:"confirmations"`
-	Time             int64           `json:"time,omitempty"`
-	Blocktime        int64           `json:"blocktime"`
-	ValueOut         string          `json:"valueOut"`
-	ValueOutSat      big.Int         `json:"-"`
-	Size             int             `json:"size,omitempty"`
-	ValueIn          string          `json:"valueIn"`
-	ValueInSat       big.Int         `json:"-"`
-	Fees             string          `json:"fees"`
-	FeesSat          big.Int         `json:"-"`
-	Hex              string          `json:"hex"`
-	CoinSpecificData interface{}     `json:"-"`
-	CoinSpecificJSON json.RawMessage `json:"-"`
+	Txid             string              `json:"txid"`
+	Version          int32               `json:"version,omitempty"`
+	Locktime         uint32              `json:"locktime,omitempty"`
+	Vin              []Vin               `json:"vin"`
+	Vout             []Vout              `json:"vout"`
+	Blockhash        string              `json:"blockhash,omitempty"`
+	Blockheight      int                 `json:"blockheight"`
+	Confirmations    uint32              `json:"confirmations"`
+	Time             int64               `json:"time,omitempty"`
+	Blocktime        int64               `json:"blocktime"`
+	ValueOut         string              `json:"valueOut"`
+	ValueOutSat      big.Int             `json:"-"`
+	Size             int                 `json:"size,omitempty"`
+	ValueIn          string              `json:"valueIn"`
+	ValueInSat       big.Int             `json:"-"`
+	Fees             string              `json:"fees"`
+	FeesSat          big.Int             `json:"-"`
+	Hex              string              `json:"hex"`
+	CoinSpecificData interface{}         `json:"-"`
+	CoinSpecificJSON json.RawMessage     `json:"-"`
+	Erc20Transfers   []Erc20Transfer     `json:"erc20transfers,omitempty"`
+	EthereumSpecific *eth.EthereumTxData `json:"ethereumspecific,omitempty"`
 }
 
 // Paging contains information about paging for address, blocks and block
@@ -98,14 +120,6 @@ type Paging struct {
 	Page        int `json:"page"`
 	TotalPages  int `json:"totalPages"`
 	ItemsOnPage int `json:"itemsOnPage"`
-}
-
-type Erc20Token struct {
-	Contract string `json:"contract"`
-	Txs      int    `json:"txs"`
-	Name     string `json:"name"`
-	Symbol   string `json:"symbol"`
-	Value    string `json:"value"`
 }
 
 // Address holds information about address and its transactions

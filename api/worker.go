@@ -2,6 +2,7 @@ package api
 
 import (
 	"blockbook/bchain"
+	"blockbook/bchain/coins/eth"
 	"blockbook/common"
 	"blockbook/db"
 	"bytes"
@@ -106,6 +107,8 @@ func (w *Worker) GetTransaction(txid string, spendingTxs bool, specificJSON bool
 		return nil, NewAPIError(fmt.Sprintf("Tx not found, %v", err), true)
 	}
 	var ta *db.TxAddresses
+	var erc20t []Erc20Transfer
+	var ethSpecific *eth.EthereumTxData
 	var blockhash string
 	if bchainTx.Confirmations > 0 {
 		if w.chainType == bchain.ChainBitcoinType {
@@ -204,10 +207,45 @@ func (w *Worker) GetTransaction(txid string, spendingTxs bool, specificJSON bool
 			}
 		}
 	}
-	// for coinbase transactions valIn is 0
-	feesSat.Sub(&valInSat, &valOutSat)
-	if feesSat.Sign() == -1 {
-		feesSat.SetUint64(0)
+	if w.chainType == bchain.ChainBitcoinType {
+		// for coinbase transactions valIn is 0
+		feesSat.Sub(&valInSat, &valOutSat)
+		if feesSat.Sign() == -1 {
+			feesSat.SetUint64(0)
+		}
+	} else if w.chainType == bchain.ChainEthereumType {
+		ets, err := eth.GetErc20FromTx(bchainTx)
+		if err != nil {
+			glog.Errorf("GetErc20FromTx error %v, %v", err, bchainTx)
+		}
+		erc20t = make([]Erc20Transfer, len(ets))
+		for i := range ets {
+			e := &ets[i]
+			cd, err := w.chainParser.GetAddrDescFromAddress(e.Contract)
+			if err != nil {
+				glog.Errorf("GetAddrDescFromAddress error %v, contract %v", err, e.Contract)
+				continue
+			}
+			erc20c, err := w.chain.EthereumTypeGetErc20ContractInfo(cd)
+			if err != nil {
+				glog.Errorf("GetErc20ContractInfo error %v, contract %v", err, e.Contract)
+				erc20c = &bchain.Erc20Contract{}
+			}
+			erc20t[i] = Erc20Transfer{
+				Contract: e.Contract,
+				From:     e.From,
+				To:       e.To,
+				Tokens:   bchain.AmountToDecimalString(&e.Tokens, erc20c.Decimals),
+				Name:     erc20c.Name,
+				Symbol:   erc20c.Symbol,
+			}
+		}
+		ethSpecific = eth.GetEthereumTxData(bchainTx)
+		feesSat.Mul(ethSpecific.GasPriceNum, ethSpecific.GasUsed)
+		if len(bchainTx.Vout) > 0 {
+			valInSat = bchainTx.Vout[0].ValueSat
+		}
+		valOutSat = valInSat
 	}
 	// for now do not return size, we would have to compute vsize of segwit transactions
 	// size:=len(bchainTx.Hex) / 2
@@ -238,6 +276,8 @@ func (w *Worker) GetTransaction(txid string, spendingTxs bool, specificJSON bool
 		Vout:             vouts,
 		CoinSpecificData: bchainTx.CoinSpecificData,
 		CoinSpecificJSON: sj,
+		Erc20Transfers:   erc20t,
+		EthereumSpecific: ethSpecific,
 	}
 	if spendingTxs {
 		glog.Info("GetTransaction ", txid, " finished in ", time.Since(start))

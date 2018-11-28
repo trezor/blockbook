@@ -159,6 +159,16 @@ func (ad AddressDescriptor) String() string {
 	return "ad:" + hex.EncodeToString(ad)
 }
 
+// EthereumType specific
+
+// Erc20Contract contains info about ERC20 contract
+type Erc20Contract struct {
+	Contract string
+	Name     string
+	Symbol   string
+	Decimals int
+}
+
 // OnNewBlockFunc is used to send notification about a new block
 type OnNewBlockFunc func(hash string, height uint32)
 
@@ -197,6 +207,10 @@ type BlockChain interface {
 	GetMempoolEntry(txid string) (*MempoolEntry, error)
 	// parser
 	GetChainParser() BlockChainParser
+	// EthereumType specific
+	EthereumTypeGetBalance(addrDesc AddressDescriptor) (*big.Int, error)
+	EthereumTypeGetErc20ContractInfo(contractDesc AddressDescriptor) (*Erc20Contract, error)
+	EthereumTypeGetErc20ContractBalance(addrDesc, contractDesc AddressDescriptor) (*big.Int, error)
 }
 
 // BlockChainParser defines common interface to parsing and conversions of block chain data

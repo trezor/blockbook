@@ -40,12 +40,11 @@ type Configuration struct {
 
 // EthereumRPC is an interface to JSON-RPC eth service.
 type EthereumRPC struct {
+	*bchain.BaseChain
 	client               *ethclient.Client
 	rpc                  *rpc.Client
 	timeout              time.Duration
 	Parser               *EthereumParser
-	Testnet              bool
-	Network              string
 	Mempool              *bchain.MempoolEthereumType
 	bestHeaderMu         sync.Mutex
 	bestHeader           *ethtypes.Header
@@ -77,6 +76,7 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 	ec := ethclient.NewClient(rc)
 
 	s := &EthereumRPC{
+		BaseChain:   &bchain.BaseChain{},
 		client:      ec,
 		rpc:         rc,
 		ChainConfig: &c,
@@ -248,16 +248,6 @@ func (b *EthereumRPC) Shutdown(ctx context.Context) error {
 	close(b.chanNewBlock)
 	glog.Info("rpc: shutdown")
 	return nil
-}
-
-// IsTestnet returns true if the network is testnet
-func (b *EthereumRPC) IsTestnet() bool {
-	return b.Testnet
-}
-
-// GetNetworkName returns network name
-func (b *EthereumRPC) GetNetworkName() string {
-	return b.Network
 }
 
 // GetCoinName returns coin name
@@ -650,6 +640,13 @@ func (b *EthereumRPC) SendRawTransaction(hex string) (string, error) {
 		return "", errors.New("SendRawTransaction: failed, empty result")
 	}
 	return result, nil
+}
+
+// EthereumTypeGetBalance returns current balance of an address
+func (b *EthereumRPC) EthereumTypeGetBalance(addrDesc bchain.AddressDescriptor) (*big.Int, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
+	defer cancel()
+	return b.client.BalanceAt(ctx, ethcommon.BytesToAddress(addrDesc), nil)
 }
 
 // ResyncMempool gets mempool transactions and maps output scripts to transactions.

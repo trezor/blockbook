@@ -239,3 +239,18 @@ func (c *blockChainWithMetrics) GetMempoolEntry(txid string) (v *bchain.MempoolE
 func (c *blockChainWithMetrics) GetChainParser() bchain.BlockChainParser {
 	return c.b.GetChainParser()
 }
+
+func (c *blockChainWithMetrics) EthereumTypeGetBalance(addrDesc bchain.AddressDescriptor) (v *big.Int, err error) {
+	defer func(s time.Time) { c.observeRPCLatency("EthereumTypeGetBalance", s, err) }(time.Now())
+	return c.b.EthereumTypeGetBalance(addrDesc)
+}
+
+func (c *blockChainWithMetrics) EthereumTypeGetErc20ContractInfo(contractDesc bchain.AddressDescriptor) (v *bchain.Erc20Contract, err error) {
+	defer func(s time.Time) { c.observeRPCLatency("EthereumTypeGetErc20ContractInfo", s, err) }(time.Now())
+	return c.b.EthereumTypeGetErc20ContractInfo(contractDesc)
+}
+
+func (c *blockChainWithMetrics) EthereumTypeGetErc20ContractBalance(addrDesc, contractDesc bchain.AddressDescriptor) (v *big.Int, err error) {
+	defer func(s time.Time) { c.observeRPCLatency("EthereumTypeGetErc20ContractInfo", s, err) }(time.Now())
+	return c.b.EthereumTypeGetErc20ContractBalance(addrDesc, contractDesc)
+}

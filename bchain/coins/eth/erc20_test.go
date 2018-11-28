@@ -1,4 +1,4 @@
-// +build unittest
+// build unittest
 
 package eth
 
@@ -108,5 +108,32 @@ func TestErc20_erc20GetTransfersFromLog(t *testing.T) {
 			}
 		})
 	}
+}
 
+func TestErc20_parseErc20StringProperty(t *testing.T) {
+	tests := []struct {
+		name string
+		args string
+		want string
+	}{
+		{
+			name: "1",
+			args: "0x0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000758504c4f44444500000000000000000000000000000000000000000000000000",
+			want: "XPLODDE",
+		},
+		{
+			name: "1",
+			args: "0x0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000758504c4f44444500000000000000000000000000000000000000000000000000",
+			want: "XPLODDE",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parseErc20StringProperty(nil, tt.args)
+			// the addresses could have different case
+			if got != tt.want {
+				t.Errorf("parseErc20StringProperty = %v, want %v", got, tt.want)
+			}
+		})
+	}
 }
