@@ -241,7 +241,10 @@ func (w *Worker) GetTransaction(txid string, spendingTxs bool, specificJSON bool
 			}
 		}
 		ethSpecific = eth.GetEthereumTxData(bchainTx)
-		feesSat.Mul(ethSpecific.GasPriceNum, ethSpecific.GasUsed)
+		// mempool txs do not have fees yet
+		if ethSpecific.GasUsed != nil {
+			feesSat.Mul(ethSpecific.GasPriceNum, ethSpecific.GasUsed)
+		}
 		if len(bchainTx.Vout) > 0 {
 			valInSat = bchainTx.Vout[0].ValueSat
 		}

@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"reflect"
 	"runtime"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -81,7 +82,7 @@ func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bch
 		is:               is,
 		debug:            debugMode,
 	}
-	s.templates = parseTemplates()
+	s.templates = s.parseTemplates()
 
 	// map only basic functions, the rest is enabled by method MapFullPublicInterface
 	serveMux.Handle(path+"favicon.ico", http.FileServer(http.Dir("./static/")))
@@ -202,6 +203,7 @@ func (s *PublicServer) jsonHandler(handler func(r *http.Request) (interface{}, e
 		defer func() {
 			if e := recover(); e != nil {
 				glog.Error(getFunctionName(handler), " recovered from panic: ", e)
+				debug.PrintStack()
 				if s.debug {
 					data = jsonError{fmt.Sprint("Internal server error: recovered from panic ", e), http.StatusInternalServerError}
 				} else {
@@ -264,6 +266,7 @@ func (s *PublicServer) htmlTemplateHandler(handler func(w http.ResponseWriter, r
 		defer func() {
 			if e := recover(); e != nil {
 				glog.Error(getFunctionName(handler), " recovered from panic: ", e)
+				debug.PrintStack()
 				t = errorInternalTpl
 				if s.debug {
 					data = s.newTemplateDataWithError(fmt.Sprint("Internal server error: recovered from panic ", e))
@@ -286,7 +289,7 @@ func (s *PublicServer) htmlTemplateHandler(handler func(w http.ResponseWriter, r
 		if s.debug {
 			// reload templates on each request
 			// to reflect changes during development
-			s.templates = parseTemplates()
+			s.templates = s.parseTemplates()
 		}
 		t, data, err = handler(w, r)
 		if err != nil || (data == nil && t != noTpl) {
@@ -349,7 +352,7 @@ type TemplateData struct {
 	Status           string
 }
 
-func parseTemplates() []*template.Template {
+func (s *PublicServer) parseTemplates() []*template.Template {
 	templateFuncMap := template.FuncMap{
 		"formatTime":          formatTime,
 		"formatUnixTime":      formatUnixTime,
@@ -361,11 +364,17 @@ func parseTemplates() []*template.Template {
 	t[errorTpl] = template.Must(template.New("error").Funcs(templateFuncMap).ParseFiles("./static/templates/error.html", "./static/templates/base.html"))
 	t[errorInternalTpl] = template.Must(template.New("error").Funcs(templateFuncMap).ParseFiles("./static/templates/error.html", "./static/templates/base.html"))
 	t[indexTpl] = template.Must(template.New("index").Funcs(templateFuncMap).ParseFiles("./static/templates/index.html", "./static/templates/base.html"))
-	t[txTpl] = template.Must(template.New("tx").Funcs(templateFuncMap).ParseFiles("./static/templates/tx.html", "./static/templates/txdetail.html", "./static/templates/base.html"))
-	t[addressTpl] = template.Must(template.New("address").Funcs(templateFuncMap).ParseFiles("./static/templates/address.html", "./static/templates/txdetail.html", "./static/templates/paging.html", "./static/templates/base.html"))
 	t[blocksTpl] = template.Must(template.New("blocks").Funcs(templateFuncMap).ParseFiles("./static/templates/blocks.html", "./static/templates/paging.html", "./static/templates/base.html"))
-	t[blockTpl] = template.Must(template.New("block").Funcs(templateFuncMap).ParseFiles("./static/templates/block.html", "./static/templates/txdetail.html", "./static/templates/paging.html", "./static/templates/base.html"))
 	t[sendTransactionTpl] = template.Must(template.New("block").Funcs(templateFuncMap).ParseFiles("./static/templates/sendtx.html", "./static/templates/base.html"))
+	if s.chainParser.GetChainType() == bchain.ChainEthereumType {
+		t[txTpl] = template.Must(template.New("tx").Funcs(templateFuncMap).ParseFiles("./static/templates/tx.html", "./static/templates/txdetail_ethereumtype.html", "./static/templates/base.html"))
+		t[addressTpl] = template.Must(template.New("address").Funcs(templateFuncMap).ParseFiles("./static/templates/address.html", "./static/templates/txdetail_ethereumtype.html", "./static/templates/paging.html", "./static/templates/base.html"))
+		t[blockTpl] = template.Must(template.New("block").Funcs(templateFuncMap).ParseFiles("./static/templates/block.html", "./static/templates/txdetail_ethereumtype.html", "./static/templates/paging.html", "./static/templates/base.html"))
+	} else {
+		t[txTpl] = template.Must(template.New("tx").Funcs(templateFuncMap).ParseFiles("./static/templates/tx.html", "./static/templates/txdetail.html", "./static/templates/base.html"))
+		t[addressTpl] = template.Must(template.New("address").Funcs(templateFuncMap).ParseFiles("./static/templates/address.html", "./static/templates/txdetail.html", "./static/templates/paging.html", "./static/templates/base.html"))
+		t[blockTpl] = template.Must(template.New("block").Funcs(templateFuncMap).ParseFiles("./static/templates/block.html", "./static/templates/txdetail.html", "./static/templates/paging.html", "./static/templates/base.html"))
+	}
 	return t
 }
 

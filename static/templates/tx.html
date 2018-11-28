@@ -7,20 +7,46 @@
 <div class="data-div">
     <table class="table data-table">
         <tbody>
-            {{if $tx.Confirmations}}
+            {{- if $tx.Confirmations -}}
             <tr>
                 <td style="width: 25%;">Mined Time</td>
                 <td class="data">{{formatUnixTime $tx.Blocktime}}</td>
-            </tr>{{end}}
+            </tr>{{end -}}
             <tr>
                 <td style="width: 25%;">In Block</td>
                 <td class="ellipsis data">{{if $tx.Confirmations}}{{$tx.Blockhash}}{{else}}Unconfirmed{{end}}</td>
             </tr>
-            {{if $tx.Confirmations}}
+            {{- if $tx.Confirmations -}}
             <tr>
                 <td>In Block Height</td>
                 <td class="data"><a href="/block/{{$tx.Blockheight}}">{{$tx.Blockheight}}</a></td>
             </tr>{{end}}
+            {{- if $tx.EthereumSpecific -}}
+            <tr>
+                <td>Status</td>
+                {{- if $tx.EthereumSpecific.Status -}}
+                {{- if ne $tx.EthereumSpecific.Status 1 -}}
+                <td class="data">Pending</td>
+                {{- else -}}
+                <td class="data  text-success">Success</td>
+                {{- end -}}
+                {{- else -}}
+                <td class="data text-danger">Fail</td>
+                {{- end -}}
+            </tr>
+            <tr>
+                <td>Value</td>
+                <td class="data">{{formatAmount $tx.ValueOut}} {{$cs}}</td>
+            </tr>
+            <tr>
+                <td>Gas Used / Limit</td>
+                <td class="data">{{if $tx.EthereumSpecific.GasUsed}}{{$tx.EthereumSpecific.GasUsed}}{{else}}pending{{end}} / {{$tx.EthereumSpecific.GasLimit}}</td>
+            </tr>
+            <tr>
+                <td>Gas Price</td>
+                <td class="data">{{formatAmount $tx.EthereumSpecific.GasPrice}} {{$cs}}</td>
+            </tr>
+            {{- else -}}
             <tr>
                 <td>Total Input</td>
                 <td class="data">{{formatAmount $tx.ValueIn}} {{$cs}}</td>
@@ -29,11 +55,12 @@
                 <td>Total Output</td>
                 <td class="data">{{formatAmount $tx.ValueOut}} {{$cs}}</td>
             </tr>
-            {{if $tx.Fees}}
+            {{- end -}}
+            {{- if $tx.Fees -}}
             <tr>
                 <td>Fees</td>
                 <td class="data">{{formatAmount $tx.Fees}} {{$cs}}</td>
-            </tr>{{end}}
+            </tr>{{end -}}
         </tbody>
     </table>
 </div>

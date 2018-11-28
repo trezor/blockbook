@@ -1,0 +1,129 @@
+{{define "txdetail"}}{{$cs := .CoinShortcut}}{{$addr := .AddrStr}}{{$tx := .Tx}}
+<div class="alert alert-data">
+    <div class="row line-bot">
+        <div class="col-xs-7 col-md-8 ellipsis">
+            <a href="/tx/{{$tx.Txid}}">{{$tx.Txid}}</a>
+        </div>
+        {{- if $tx.Confirmations -}}
+        <div class="col-xs-5 col-md-4 text-muted text-right">mined {{formatUnixTime $tx.Blocktime}}</div>
+        {{- end -}}
+    </div>
+    <div class="row line-mid">
+        <div class="col-md-4">
+            <div class="row">
+                <table class="table data-table">
+                    <tbody>
+                        {{- range $vin := $tx.Vin -}}
+                        <tr>
+                            <td>
+                                {{- range $a := $vin.Addresses -}}
+                                <span class="ellipsis float-left">
+                                    {{if and (ne $a $addr) $vin.Searchable}}<a href="/address/{{$a}}">{{$a}}</a>{{else}}{{$a}}{{end}}
+                                </span>
+                                {{- else -}}
+                                <span class="float-left">Unparsed address</span>
+                                {{- end -}}
+                            </td>
+                        </tr>
+                        {{- else -}}
+                        <tr>
+                            <td>No Inputs</td>
+                        </tr>
+                        {{- end -}}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="col-md-1 col-xs-12 text-center">
+            <svg class="octicon" viewBox="0 0 8 16">
+                <path fill-rule="evenodd" d="M7.5 8l-5 5L1 11.5 4.75 8 1 4.5 2.5 3l5 5z"></path>
+            </svg>
+        </div>
+        <div class="col-md-4">
+            <div class="row">
+                <table class="table data-table">
+                    <tbody>
+                        {{- range $vout := $tx.Vout -}}
+                        <tr>
+                            <td>
+                                {{- range $a := $vout.ScriptPubKey.Addresses -}}
+                                <span class="ellipsis float-left">
+                                    {{- if and (ne $a $addr) $vout.ScriptPubKey.Searchable}}<a href="/address/{{$a}}">{{$a}}</a>{{else}}{{$a}}{{- end -}}
+                                </span>
+                                {{- else -}}
+                                <span class="float-left">Unparsed address</span>
+                                {{- end -}}
+                            </td>
+                        </tr>
+                        {{- else -}}
+                        <tr>
+                            <td>No Outputs</td>
+                        </tr>
+                        {{- end -}}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="col-md-3 text-right" style="padding: .4rem 0;">
+            {{formatAmount $tx.ValueOut}} {{$cs}}
+        </div>
+    </div>
+    {{- if $tx.Erc20Transfers -}}
+    <div class="row line-top" style="padding: 15px 0 6px 15px;">
+        ERC20 Token Transfers
+    </div>
+    {{- range $erc20 := $tx.Erc20Transfers -}}
+    <div class="row" style="padding: 2px 15px;">
+        <div class="col-md-4">
+            <div class="row">
+                <table class="table data-table">
+                    <tbody>
+                        <tr>
+                            <td>
+                                <span class="ellipsis float-left">{{if ne $erc20.From $addr}}<a href="/address/{{$erc20.From}}">{{$erc20.From}}</a>{{else}}{{$erc20.From}}{{end}}</span>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="col-md-1 col-xs-12 text-center">
+            <svg class="octicon" viewBox="0 0 8 16">
+                <path fill-rule="evenodd" d="M7.5 8l-5 5L1 11.5 4.75 8 1 4.5 2.5 3l5 5z"></path>
+            </svg>
+        </div>
+        <div class="col-md-4">
+            <div class="row">
+                <table class="table data-table">
+                    <tbody>
+                        <tr>
+                            <td>
+                                <span class="ellipsis float-left">{{if ne $erc20.To $addr}}<a href="/address/{{$erc20.From}}">{{$erc20.To}}</a>{{else}}{{$erc20.To}}{{end}}</span>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="col-md-3 text-right" style="padding: .4rem 0;">{{formatAmount $erc20.Tokens}} {{$erc20.Symbol}}</div>
+    </div>
+    {{- end -}}
+    <div class="row" style="padding: 6px 15px;"></div>
+    {{- end -}}
+    <div class="row line-top">
+        <div class="col-xs-6 col-sm-4 col-md-4">
+            {{- if $tx.Fees -}}
+            <span class="txvalues txvalues-default">Fee: {{formatAmount $tx.Fees}} {{$cs}}</span>
+            {{- end -}}
+        </div>
+        <div class="col-xs-6 col-sm-8 col-md-8 text-right">
+            {{- if $tx.Confirmations -}}
+            <span class="txvalues txvalues-success">{{$tx.Confirmations}} Confirmations</span>
+            {{- else -}}
+            <span class="txvalues txvalues-danger ng-hide">Unconfirmed Transaction!</span>
+            {{- end -}}
+            <span class="txvalues txvalues-primary">{{formatAmount $tx.ValueOut}} {{$cs}}</span>
+        </div>
+    </div>
+</div>
+{{end}}

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"math/big"
 	"net/http"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -161,6 +162,7 @@ func (s *SocketIoServer) onMessage(c *gosocketio.Channel, req map[string]json.Ra
 	defer func() {
 		if r := recover(); r != nil {
 			glog.Error(c.Id(), " onMessage ", method, " recovered from panic: ", r)
+			debug.PrintStack()
 			e := resultError{}
 			e.Error.Message = "Internal error"
 			rv = e
@@ -664,6 +666,7 @@ func (s *SocketIoServer) onSubscribe(c *gosocketio.Channel, req []byte) interfac
 	defer func() {
 		if r := recover(); r != nil {
 			glog.Error(c.Id(), " onSubscribe recovered from panic: ", r)
+			debug.PrintStack()
 		}
 	}()
 

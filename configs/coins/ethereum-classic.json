@@ -40,7 +40,7 @@
     "system_user": "blockbook-ethereum-classic",
     "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
     "public_binding_template": ":{{.Ports.BlockbookPublic}}",
-    "explorer_url": "https://gastracker.io/",
+    "explorer_url": "",
     "additional_params": "-resyncindexperiod=4441",
     "block_chain": {
       "parse": true,

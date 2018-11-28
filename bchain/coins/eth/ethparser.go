@@ -430,7 +430,7 @@ func GetErc20FromTx(tx *bchain.Tx) ([]Erc20Transfer, error) {
 	var r []Erc20Transfer
 	var err error
 	csd, ok := tx.CoinSpecificData.(completeTransaction)
-	if ok {
+	if ok && csd.Receipt != nil {
 		r, err = erc20GetTransfersFromLog(csd.Receipt.Logs)
 		if err != nil {
 			return nil, err
