@@ -595,13 +595,14 @@ func (d *RocksDB) cleanupBlockTxs(wb *gorocksdb.WriteBatch, block *bchain.Block)
 	keep := d.chainParser.KeepBlockAddresses()
 	// cleanup old block address
 	if block.Height > uint32(keep) {
-		for rh := block.Height - uint32(keep); rh < block.Height; rh-- {
+		for rh := block.Height - uint32(keep); rh > 0; rh-- {
 			key := packUint(rh)
 			val, err := d.db.GetCF(d.ro, d.cfh[cfBlockTxs], key)
 			if err != nil {
 				return err
 			}
-			if val.Size() == 0 {
+			// nil data means the key was not found in DB
+			if val.Data() == nil {
 				break
 			}
 			val.Free()
