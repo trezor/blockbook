@@ -72,9 +72,7 @@ func (d *RocksDB) GetAddrDescContracts(addrDesc bchain.AddressDescriptor) (*Addr
 		})
 		buf = buf[eth.EthereumTypeAddressDescriptorLen+l:]
 	}
-	return &AddrContracts{
-		EthTxs:    et,
-		Contracts: c}, nil
+	return &AddrContracts{EthTxs: et, Contracts: c}, nil
 }
 
 func findContractInAddressContracts(contract bchain.AddressDescriptor, contracts []AddrContract) (int, bool) {

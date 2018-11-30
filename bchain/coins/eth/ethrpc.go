@@ -529,7 +529,7 @@ func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 			return nil, errors.Annotatef(err, "txid %v", txid)
 		}
 	} else {
-		// non mempool tx - we must read the block header to get the block time
+		// non mempool tx - read the block header to get the block time
 		raw, err := b.getBlockRaw(tx.BlockHash, 0, false)
 		if err != nil {
 			return nil, err
@@ -545,9 +545,24 @@ func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 			return nil, errors.Annotatef(err, "txid %v", txid)
 		}
 		var receipt rpcReceipt
-		err = b.rpc.CallContext(ctx, &receipt, "eth_getTransactionReceipt", hash)
-		if err != nil {
-			return nil, errors.Annotatef(err, "txid %v", txid)
+		if b.isETC {
+			var etcReceipt rpcEtcReceipt
+			err = b.rpc.CallContext(ctx, &etcReceipt, "eth_getTransactionReceipt", hash)
+			if err != nil {
+				return nil, errors.Annotatef(err, "txid %v", txid)
+			}
+			receipt.GasUsed = etcReceipt.GasUsed
+			receipt.Logs = etcReceipt.Logs
+			if etcReceipt.Status == 0 {
+				receipt.Status = "0x0"
+			} else {
+				receipt.Status = "0x1"
+			}
+		} else {
+			err = b.rpc.CallContext(ctx, &receipt, "eth_getTransactionReceipt", hash)
+			if err != nil {
+				return nil, errors.Annotatef(err, "txid %v", txid)
+			}
 		}
 		n, err := ethNumber(tx.BlockNumber)
 		if err != nil {

@@ -8,7 +8,6 @@ import (
 	"strconv"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/juju/errors"
 )
@@ -73,6 +72,12 @@ type rpcLogWithTxHash struct {
 type rpcReceipt struct {
 	GasUsed string    `json:"gasUsed"`
 	Status  string    `json:"status"`
+	Logs    []*rpcLog `json:"logs"`
+}
+
+type rpcEtcReceipt struct {
+	GasUsed string    `json:"gasUsed"`
+	Status  int       `json:"status"`
 	Logs    []*rpcLog `json:"logs"`
 }
 
@@ -178,13 +183,7 @@ func (p *EthereumParser) GetAddrDescFromAddress(address string) (bchain.AddressD
 		address = address[2:]
 	}
 	if len(address) != EthereumTypeAddressDescriptorLen*2 {
-		if len(address) != 0 {
-			glog.Warning("Ignoring address ", address)
-		}
 		return nil, bchain.ErrAddressMissing
-	}
-	if len(address)&1 == 1 {
-		address = "0" + address
 	}
 	return hex.DecodeString(address)
 }
