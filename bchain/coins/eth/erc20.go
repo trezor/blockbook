@@ -43,7 +43,7 @@ type Erc20Transfer struct {
 	Tokens   big.Int
 }
 
-var cachedContracts = make(map[string]bchain.Erc20Contract)
+var cachedContracts = make(map[string]*bchain.Erc20Contract)
 var cachedContractsMux sync.Mutex
 
 func addressFromPaddedHex(s string) (string, error) {
@@ -146,30 +146,38 @@ func (b *EthereumRPC) EthereumTypeGetErc20ContractInfo(contractDesc bchain.Addre
 			return nil, err
 		}
 		name := parseErc20StringProperty(contractDesc, data)
-		data, err = b.ethCall(erc20SymbolSignature, address)
-		if err != nil {
-			return nil, err
-		}
-		symbol := parseErc20StringProperty(contractDesc, data)
-		data, err = b.ethCall(erc20DecimalsSignature, address)
-		if err != nil {
-			return nil, err
-		}
-		contract = bchain.Erc20Contract{
-			Name:   name,
-			Symbol: symbol,
-		}
-		d := parseErc20NumericProperty(contractDesc, data)
-		if d != nil {
-			contract.Decimals = int(uint8(d.Uint64()))
+		if name != "" {
+			data, err = b.ethCall(erc20SymbolSignature, address)
+			if err != nil {
+				return nil, err
+			}
+			symbol := parseErc20StringProperty(contractDesc, data)
+			data, err = b.ethCall(erc20DecimalsSignature, address)
+			if err != nil {
+				return nil, err
+			}
+			if name == "" {
+				name = address
+			}
+			contract = &bchain.Erc20Contract{
+				Contract: address,
+				Name:     name,
+				Symbol:   symbol,
+			}
+			d := parseErc20NumericProperty(contractDesc, data)
+			if d != nil {
+				contract.Decimals = int(uint8(d.Uint64()))
+			} else {
+				contract.Decimals = EtherAmountDecimalPoint
+			}
 		} else {
-			contract.Decimals = EtherAmountDecimalPoint
+			contract = nil
 		}
 		cachedContractsMux.Lock()
 		cachedContracts[cds] = contract
 		cachedContractsMux.Unlock()
 	}
-	return &contract, nil
+	return contract, nil
 }
 
 // EthereumTypeGetErc20ContractBalance returns balance of ERC20 contract for given address

@@ -247,6 +247,7 @@ func (s *PublicServer) newTemplateData() *TemplateData {
 		CoinName:         s.is.Coin,
 		CoinShortcut:     s.is.CoinShortcut,
 		CoinLabel:        s.is.CoinLabel,
+		ChainType:        s.chainParser.GetChainType(),
 		InternalExplorer: s.internalExplorer && !s.is.InitialSync,
 		TOSLink:          api.Text.TOSLink,
 	}
@@ -336,6 +337,7 @@ type TemplateData struct {
 	CoinShortcut     string
 	CoinLabel        string
 	InternalExplorer bool
+	ChainType        bchain.ChainType
 	Address          *api.Address
 	AddrStr          string
 	Tx               *api.Tx
@@ -447,7 +449,7 @@ func (s *PublicServer) explorerAddress(w http.ResponseWriter, r *http.Request) (
 		if ec != nil {
 			page = 0
 		}
-		address, err = s.api.GetAddress(r.URL.Path[i+1:], page, txsOnPage, false, false)
+		address, err = s.api.GetAddress(r.URL.Path[i+1:], page, txsOnPage, api.TxHistory)
 		if err != nil {
 			return errorTpl, nil, err
 		}
@@ -531,7 +533,7 @@ func (s *PublicServer) explorerSearch(w http.ResponseWriter, r *http.Request) (t
 			http.Redirect(w, r, joinURL("/tx/", tx.Txid), 302)
 			return noTpl, nil, nil
 		}
-		address, err = s.api.GetAddress(q, 0, 1, true, true)
+		address, err = s.api.GetAddress(q, 0, 1, api.ExistOnly)
 		if err == nil {
 			http.Redirect(w, r, joinURL("/address/", address.AddrStr), 302)
 			return noTpl, nil, nil
@@ -686,7 +688,7 @@ func (s *PublicServer) apiAddress(r *http.Request) (interface{}, error) {
 		if ec != nil {
 			page = 0
 		}
-		address, err = s.api.GetAddress(r.URL.Path[i+1:], page, txsInAPI, true, false)
+		address, err = s.api.GetAddress(r.URL.Path[i+1:], page, txsInAPI, api.TxidHistory)
 	}
 	return address, err
 }

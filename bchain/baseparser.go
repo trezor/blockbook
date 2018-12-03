@@ -56,6 +56,9 @@ func (p *BaseParser) AmountToBigInt(n json.Number) (big.Int, error) {
 
 // AmountToDecimalString converts amount in big.Int to string with decimal point in the place defined by the parameter d
 func AmountToDecimalString(a *big.Int, d int) string {
+	if a == nil {
+		return ""
+	}
 	n := a.String()
 	var s string
 	if n[0] == '-' {

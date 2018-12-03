@@ -163,10 +163,10 @@ func (ad AddressDescriptor) String() string {
 
 // Erc20Contract contains info about ERC20 contract
 type Erc20Contract struct {
-	Contract string
-	Name     string
-	Symbol   string
-	Decimals int
+	Contract string `json:"contract"`
+	Name     string `json:"name"`
+	Symbol   string `json:"symbol"`
+	Decimals int    `json:"decimals"`
 }
 
 // OnNewBlockFunc is used to send notification about a new block

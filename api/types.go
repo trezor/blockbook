@@ -10,6 +10,20 @@ import (
 	"time"
 )
 
+// GetAddressOption specifies what data returns GetAddress api call
+type GetAddressOption int
+
+const (
+	// ExistOnly - only that address is indexed
+	ExistOnly GetAddressOption = iota
+	// BalancesOnly - only balances
+	BalancesOnly
+	// TxidHistory - balances and txids, subject to paging
+	TxidHistory
+	// TxHistory - balances and full tx data, subject to paging
+	TxHistory
+)
+
 // APIError extends error by information if the error details should be returned to the end user
 type APIError struct {
 	Text   string
@@ -125,16 +139,17 @@ type Paging struct {
 // Address holds information about address and its transactions
 type Address struct {
 	Paging
-	AddrStr                 string        `json:"addrStr"`
-	Balance                 string        `json:"balance"`
-	TotalReceived           string        `json:"totalReceived"`
-	TotalSent               string        `json:"totalSent"`
-	UnconfirmedBalance      string        `json:"unconfirmedBalance"`
-	UnconfirmedTxApperances int           `json:"unconfirmedTxApperances"`
-	TxApperances            int           `json:"txApperances"`
-	Transactions            []*Tx         `json:"txs,omitempty"`
-	Txids                   []string      `json:"transactions,omitempty"`
-	Erc20Tokens             []*Erc20Token `json:"erc20tokens,omitempty"`
+	AddrStr                 string                `json:"addrStr"`
+	Balance                 string                `json:"balance"`
+	TotalReceived           string                `json:"totalReceived,omitempty"`
+	TotalSent               string                `json:"totalSent,omitempty"`
+	UnconfirmedBalance      string                `json:"unconfirmedBalance"`
+	UnconfirmedTxApperances int                   `json:"unconfirmedTxApperances"`
+	TxApperances            int                   `json:"txApperances"`
+	Transactions            []*Tx                 `json:"txs,omitempty"`
+	Txids                   []string              `json:"transactions,omitempty"`
+	Erc20Contract           *bchain.Erc20Contract `json:"erc20contract,omitempty"`
+	Erc20Tokens             []Erc20Token          `json:"erc20tokens,omitempty"`
 }
 
 // AddressUtxo holds information about address and its transactions

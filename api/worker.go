@@ -229,7 +229,9 @@ func (w *Worker) GetTransaction(txid string, spendingTxs bool, specificJSON bool
 			erc20c, err := w.chain.EthereumTypeGetErc20ContractInfo(cd)
 			if err != nil {
 				glog.Errorf("GetErc20ContractInfo error %v, contract %v", err, e.Contract)
-				erc20c = &bchain.Erc20Contract{}
+			}
+			if erc20c == nil {
+				erc20c = &bchain.Erc20Contract{Name: e.Contract}
 			}
 			erc20t[i] = Erc20Transfer{
 				Contract: e.Contract,
@@ -418,8 +420,67 @@ func computePaging(count, page, itemsOnPage int) (Paging, int, int, int) {
 	}, from, to, page
 }
 
+func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescriptor, option GetAddressOption) (*db.AddrBalance, []Erc20Token, *bchain.Erc20Contract, error) {
+	var (
+		ba     *db.AddrBalance
+		erc20t []Erc20Token
+		ci     *bchain.Erc20Contract
+	)
+	ca, err := w.db.GetAddrDescContracts(addrDesc)
+	if err != nil {
+		return nil, nil, nil, NewAPIError(fmt.Sprintf("Address not found, %v", err), true)
+	}
+	if ca != nil {
+		ba = &db.AddrBalance{
+			Txs: uint32(ca.EthTxs),
+		}
+		// do not read balances etc in case of ExistOnly option
+		if option != ExistOnly {
+			var b *big.Int
+			b, err = w.chain.EthereumTypeGetBalance(addrDesc)
+			if err != nil {
+				return nil, nil, nil, errors.Annotatef(err, "EthereumTypeGetBalance %v", addrDesc)
+			}
+			if b != nil {
+				ba.BalanceSat = *b
+			}
+			erc20t = make([]Erc20Token, len(ca.Contracts))
+			for i, c := range ca.Contracts {
+				ci, err := w.chain.EthereumTypeGetErc20ContractInfo(c.Contract)
+				if err != nil {
+					return nil, nil, nil, errors.Annotatef(err, "EthereumTypeGetErc20ContractInfo %v", c.Contract)
+				}
+				if ci == nil {
+					ci = &bchain.Erc20Contract{}
+					addresses, _, _ := w.chainParser.GetAddressesFromAddrDesc(c.Contract)
+					if len(addresses) > 0 {
+						ci.Contract = addresses[0]
+						ci.Name = addresses[0]
+					}
+				}
+				b, err = w.chain.EthereumTypeGetErc20ContractBalance(addrDesc, c.Contract)
+				if err != nil {
+					return nil, nil, nil, errors.Annotatef(err, "EthereumTypeGetErc20ContractBalance %v %v", addrDesc, c.Contract)
+				}
+				erc20t[i] = Erc20Token{
+					Balance:  bchain.AmountToDecimalString(b, ci.Decimals),
+					Contract: ci.Contract,
+					Name:     ci.Name,
+					Symbol:   ci.Symbol,
+					Txs:      int(c.Txs),
+				}
+			}
+			ci, err = w.chain.EthereumTypeGetErc20ContractInfo(addrDesc)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+		}
+	}
+	return ba, erc20t, ci, nil
+}
+
 // GetAddress computes address value and gets transactions for given address
-func (w *Worker) GetAddress(address string, page int, txsOnPage int, onlyTxids, existOnly bool) (*Address, error) {
+func (w *Worker) GetAddress(address string, page int, txsOnPage int, option GetAddressOption) (*Address, error) {
 	start := time.Now()
 	page--
 	if page < 0 {
@@ -430,15 +491,15 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, onlyTxids, 
 		return nil, NewAPIError(fmt.Sprintf("Invalid address, %v", err), true)
 	}
 	var (
-		ba *db.AddrBalance
-		ca *db.AddrContracts
+		ba     *db.AddrBalance
+		erc20t []Erc20Token
+		erc20c *bchain.Erc20Contract
 	)
 	if w.chainType == bchain.ChainEthereumType {
-		ca, err = w.db.GetAddrDescContracts(addrDesc)
+		ba, erc20t, erc20c, err = w.getEthereumTypeAddressBalances(addrDesc, option)
 		if err != nil {
-			return nil, NewAPIError(fmt.Sprintf("Address not found, %v", err), true)
+			return nil, err
 		}
-		glog.Infof("%+v", ca)
 	} else {
 		// ba can be nil if the address is only in mempool!
 		ba, err = w.db.GetAddrDescBalance(addrDesc)
@@ -447,7 +508,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, onlyTxids, 
 		}
 	}
 	// if only check that the address exist, return if we have the address
-	if existOnly && ba != nil {
+	if option == ExistOnly && ba != nil {
 		return &Address{AddrStr: address}, nil
 	}
 	// convert the address to the format defined by the parser
@@ -460,7 +521,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, onlyTxids, 
 	}
 	txc, err := w.getAddressTxids(addrDesc, false)
 	if err != nil {
-		return nil, errors.Annotatef(err, "getAddressTxids %v false", address)
+		return nil, errors.Annotatef(err, "getAddressTxids %v false", addrDesc)
 	}
 	txc = UniqueTxidsInReverse(txc)
 	var txm []string
@@ -471,11 +532,11 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, onlyTxids, 
 	}
 	txm, err = w.getAddressTxids(addrDesc, true)
 	if err != nil {
-		return nil, errors.Annotatef(err, "getAddressTxids %v true", address)
+		return nil, errors.Annotatef(err, "getAddressTxids %v true", addrDesc)
 	}
 	txm = UniqueTxidsInReverse(txm)
 	// check if the address exist
-	if len(txc)+len(txm) == 0 {
+	if len(txc)+len(txm) == 0 || option == ExistOnly {
 		return &Address{
 			AddrStr: address,
 		}, nil
@@ -487,7 +548,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, onlyTxids, 
 	pg, from, to, page := computePaging(len(txc), page, txsOnPage)
 	var txs []*Tx
 	var txids []string
-	if onlyTxids {
+	if option == TxidHistory {
 		txids = make([]string, len(txm)+to-from)
 	} else {
 		txs = make([]*Tx, len(txm)+to-from)
@@ -504,7 +565,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, onlyTxids, 
 			uBalSat.Add(&uBalSat, tx.getAddrVoutValue(addrDesc))
 			uBalSat.Sub(&uBalSat, tx.getAddrVinValue(addrDesc))
 			if page == 0 {
-				if onlyTxids {
+				if option == TxidHistory {
 					txids[txi] = tx.Txid
 				} else {
 					txs[txi] = tx
@@ -513,12 +574,12 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, onlyTxids, 
 			}
 		}
 	}
-	if len(txc) != int(ba.Txs) {
+	if len(txc) != int(ba.Txs) && w.chainType == bchain.ChainBitcoinType {
 		glog.Warning("DB inconsistency for address ", address, ": number of txs from column addresses ", len(txc), ", from addressBalance ", ba.Txs)
 	}
 	for i := from; i < to; i++ {
 		txid := txc[i]
-		if onlyTxids {
+		if option == TxidHistory {
 			txids[txi] = txid
 		} else {
 			if w.chainType == bchain.ChainEthereumType {
@@ -548,7 +609,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, onlyTxids, 
 		}
 		txi++
 	}
-	if onlyTxids {
+	if option == TxidHistory {
 		txids = txids[:txi]
 	} else {
 		txs = txs[:txi]
@@ -564,6 +625,8 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, onlyTxids, 
 		UnconfirmedTxApperances: len(txm),
 		Transactions:            txs,
 		Txids:                   txids,
+		Erc20Contract:           erc20c,
+		Erc20Tokens:             erc20t,
 	}
 	glog.Info("GetAddress ", address, " finished in ", time.Since(start))
 	return r, nil
