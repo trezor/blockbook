@@ -370,6 +370,7 @@ func (b *EthereumRPC) ethHeaderToBlockHeader(h *rpcHeader) (*bchain.BlockHeader,
 	}
 	return &bchain.BlockHeader{
 		Hash:          h.Hash,
+		Prev:          h.ParentHash,
 		Height:        uint32(height),
 		Confirmations: int(c),
 		Time:          time,

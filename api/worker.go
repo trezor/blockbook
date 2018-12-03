@@ -824,24 +824,37 @@ func (w *Worker) GetBlock(bid string, page int, txsOnPage int) (*Block, error) {
 		return nil, errors.Annotatef(err, "GetBestBlock")
 	}
 	pg, from, to, page := computePaging(txCount, page, txsOnPage)
-	glog.Info("GetBlock ", bid, ", page ", page, " finished in ", time.Since(start))
 	txs := make([]*Tx, to-from)
 	txi := 0
 	for i := from; i < to; i++ {
 		txid := bi.Txids[i]
-		ta, err := w.db.GetTxAddresses(txid)
-		if err != nil {
-			return nil, errors.Annotatef(err, "GetTxAddresses %v", txid)
+		if w.chainType == bchain.ChainBitcoinType {
+			ta, err := w.db.GetTxAddresses(txid)
+			if err != nil {
+				return nil, errors.Annotatef(err, "GetTxAddresses %v", txid)
+			}
+			if ta == nil {
+				glog.Warning("DB inconsistency:  tx ", txid, ": not found in txAddresses")
+				continue
+			}
+			txs[txi] = w.txFromTxAddress(txid, ta, dbi, bestheight)
+		} else {
+			txs[txi], err = w.GetTransaction(txid, false, false)
+			if err != nil {
+				return nil, err
+			}
 		}
-		if ta == nil {
-			glog.Warning("DB inconsistency:  tx ", txid, ": not found in txAddresses")
-			continue
-		}
-		txs[txi] = w.txFromTxAddress(txid, ta, dbi, bestheight)
 		txi++
+	}
+	if bi.Prev == "" && bi.Height != 0 {
+		bi.Prev, _ = w.db.GetBlockHash(bi.Height - 1)
+	}
+	if bi.Next == "" && bi.Height != bestheight {
+		bi.Next, _ = w.db.GetBlockHash(bi.Height + 1)
 	}
 	txs = txs[:txi]
 	bi.Txids = nil
+	glog.Info("GetBlock ", bid, ", page ", page, " finished in ", time.Since(start))
 	return &Block{
 		Paging:       pg,
 		BlockInfo:    *bi,

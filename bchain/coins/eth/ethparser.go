@@ -33,6 +33,7 @@ func NewEthereumParser(b int) *EthereumParser {
 
 type rpcHeader struct {
 	Hash       string `json:"hash"`
+	ParentHash string `json:"parentHash"`
 	Difficulty string `json:"difficulty"`
 	Number     string `json:"number"`
 	Time       string `json:"timestamp"`

@@ -3,9 +3,9 @@
 <div class="alert alert-data ellipsis">
     <span class="data">{{$b.Hash}}</span>
 </div>
-<div class="h-container">
-    <h3 class="h-container-6">Summary</h3>
-    <nav class="h-container-6">
+<div class="row h-container">
+    <h3 class="col-md-6 col-sm-12">Summary</h3>
+    <nav class="col-md-6 col-sm-12">
         <ul class="pagination justify-content-end">
             <li class="page-item">{{if $b.Prev}}<a class="page-link" href="/block/{{$b.Prev}}">Previous Block</a>{{else}}<span class="page-link text-muted disabled">Previous Block</span>{{end}}</li>
             <li class="page-item">{{if $b.Next}}<a class="page-link" href="/block/{{$b.Next}}">Next Block</a>{{else}}<span class="page-link text-muted disabled">Next Block</span>{{end}}</li>
@@ -67,9 +67,9 @@
     </div>
 </div>
 {{- if $b.Transactions -}}
-<div class="h-container">
-    <h3 class="h-container-6">Transactions</h3>
-    <nav class="h-container-6">{{template "paging" $data}}</nav>
+<div class="row h-container">
+    <h3 class="col-md-6 col-sm-12">Transactions</h3>
+    <nav class="col-md-6 col-sm-12">{{template "paging" $data}}</nav>
 </div>
 <div class="data-div">
     {{- range $tx := $b.Transactions}}{{$data := setTxToTemplateData $data $tx}}{{template "txdetail" $data}}{{end -}}
