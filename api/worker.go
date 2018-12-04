@@ -557,6 +557,8 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option GetA
 			TotalReceived: w.chainParser.AmountToDecimalString(ba.ReceivedSat()),
 			TotalSent:     w.chainParser.AmountToDecimalString(&ba.SentSat),
 			TxApperances:  int(ba.Txs),
+			Erc20Contract: erc20c,
+			Erc20Tokens:   erc20t,
 		}, nil
 	}
 	bestheight, _, err := w.db.GetBestBlock()

@@ -118,11 +118,11 @@ func parseErc20StringProperty(contractDesc bchain.AddressDescriptor, data string
 	if has0xPrefix(data) {
 		data = data[2:]
 	}
-	if len(data) == 192 {
+	if len(data) > 128 {
 		n := parseErc20NumericProperty(contractDesc, data[64:128])
 		if n != nil {
 			l := n.Uint64()
-			if l <= 32 {
+			if 2*int(l) <= len(data)-128 {
 				b, err := hex.DecodeString(data[128 : 128+2*l])
 				if err == nil {
 					return string(b)
