@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/hex"
 	"math/big"
+	"strings"
 	"sync"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
@@ -74,9 +75,9 @@ func erc20GetTransfersFromLog(logs []*rpcLog) ([]Erc20Transfer, error) {
 				return nil, err
 			}
 			r = append(r, Erc20Transfer{
-				Contract: l.Address,
-				From:     from,
-				To:       to,
+				Contract: strings.ToLower(l.Address),
+				From:     strings.ToLower(from),
+				To:       strings.ToLower(to),
 				Tokens:   t,
 			})
 		}

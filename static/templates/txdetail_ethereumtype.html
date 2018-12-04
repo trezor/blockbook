@@ -3,6 +3,7 @@
     <div class="row line-bot">
         <div class="col-xs-7 col-md-8 ellipsis">
             <a href="/tx/{{$tx.Txid}}">{{$tx.Txid}}</a>
+            {{if eq $tx.EthereumSpecific.Status 1}}<span class="text-success">✔</span>{{end}}{{if eq $tx.EthereumSpecific.Status 0}}<span class="text-danger">✘</span>{{end}}
         </div>
         {{- if $tx.Confirmations -}}
         <div class="col-xs-5 col-md-4 text-muted text-right">mined {{formatUnixTime $tx.Blocktime}}</div>
@@ -98,7 +99,7 @@
                     <tbody>
                         <tr>
                             <td>
-                                <span class="ellipsis float-left">{{if ne $erc20.To $addr}}<a href="/address/{{$erc20.From}}">{{$erc20.To}}</a>{{else}}{{$erc20.To}}{{end}}</span>
+                                <span class="ellipsis float-left">{{if ne $erc20.To $addr}}<a href="/address/{{$erc20.To}}">{{$erc20.To}}</a>{{else}}{{$erc20.To}}{{end}}</span>
                             </td>
                         </tr>
                     </tbody>
