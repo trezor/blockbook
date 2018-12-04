@@ -52,7 +52,7 @@
       "parse": true,
       "mempool_workers": 8,
       "mempool_sub_workers": 2,
-      "block_addresses_to_keep": 300,
+      "block_addresses_to_keep": 1000,
       "additional_params": {}
     }
   },
