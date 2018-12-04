@@ -349,6 +349,7 @@ type TemplateData struct {
 	PrevPage         int
 	NextPage         int
 	PagingRange      []int
+	PageParams       template.URL
 	TOSLink          string
 	SendTxHex        string
 	Status           string
@@ -442,6 +443,8 @@ func (s *PublicServer) explorerSpendingTx(w http.ResponseWriter, r *http.Request
 
 func (s *PublicServer) explorerAddress(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
 	var address *api.Address
+	var filter string
+	var fn = api.AddressFilterNone
 	var err error
 	s.metrics.ExplorerViews.With(common.Labels{"action": "address"}).Inc()
 	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
@@ -449,7 +452,21 @@ func (s *PublicServer) explorerAddress(w http.ResponseWriter, r *http.Request) (
 		if ec != nil {
 			page = 0
 		}
-		address, err = s.api.GetAddress(r.URL.Path[i+1:], page, txsOnPage, api.TxHistory)
+		filter = r.URL.Query().Get("filter")
+		if len(filter) > 0 {
+			if filter == "inputs" {
+				fn = api.AddressFilterInputs
+			} else if filter == "outputs" {
+				fn = api.AddressFilterOutputs
+			} else {
+				fn, ec = strconv.Atoi(filter)
+				if ec != nil || fn < 0 {
+					filter = ""
+					fn = api.AddressFilterNone
+				}
+			}
+		}
+		address, err = s.api.GetAddress(r.URL.Path[i+1:], page, txsOnPage, api.TxHistory, fn)
 		if err != nil {
 			return errorTpl, nil, err
 		}
@@ -459,6 +476,10 @@ func (s *PublicServer) explorerAddress(w http.ResponseWriter, r *http.Request) (
 	data.Address = address
 	data.Page = address.Page
 	data.PagingRange, data.PrevPage, data.NextPage = getPagingRange(address.Page, address.TotalPages)
+	if filter != "" {
+		data.PageParams = template.URL("&filter=" + filter)
+		data.Address.Filter = filter
+	}
 	return addressTpl, data, nil
 }
 
@@ -533,7 +554,7 @@ func (s *PublicServer) explorerSearch(w http.ResponseWriter, r *http.Request) (t
 			http.Redirect(w, r, joinURL("/tx/", tx.Txid), 302)
 			return noTpl, nil, nil
 		}
-		address, err = s.api.GetAddress(q, 0, 1, api.ExistOnly)
+		address, err = s.api.GetAddress(q, 0, 1, api.ExistOnly, api.AddressFilterNone)
 		if err == nil {
 			http.Redirect(w, r, joinURL("/address/", address.AddrStr), 302)
 			return noTpl, nil, nil
@@ -688,7 +709,7 @@ func (s *PublicServer) apiAddress(r *http.Request) (interface{}, error) {
 		if ec != nil {
 			page = 0
 		}
-		address, err = s.api.GetAddress(r.URL.Path[i+1:], page, txsInAPI, api.TxidHistory)
+		address, err = s.api.GetAddress(r.URL.Path[i+1:], page, txsInAPI, api.TxidHistory, api.AddressFilterNone)
 	}
 	return address, err
 }

@@ -28,7 +28,7 @@
                                 <tr>
                                     <th>Contract</th>
                                     <th>Tokens</th>
-                                    <th  style="width: 15%;">No. Txs</th>
+                                    <th style="width: 15%;">No. Txs</th>
                                 </tr>
                                 {{- range $et := $addr.Erc20Tokens -}}
                                 <tr>
@@ -88,10 +88,23 @@
         </tbody>
     </table>
 </div>
-{{- end}}{{if $addr.Transactions -}}
+{{- end}}{{if or $addr.Transactions $addr.Filter -}}
 <div class="row h-container">
     <h3 class="col-md-6 col-sm-12">Transactions</h3>
-    <nav class="col-md-6 col-sm-12">{{template "paging" $data}}</nav>
+    <div class="col-md-6 col-sm-12">
+        <select style="float: left;margin-top: 6px;" onchange="self.location='?filter='+options[selectedIndex].value">
+            <option>All</option>
+            <option {{if eq $addr.Filter "inputs" -}} selected{{end}} value="inputs">Inputs</option>
+            <option {{if eq $addr.Filter "outputs" -}} selected{{end}} value="outputs">Outputs</option>
+            {{- if $addr.Erc20Tokens -}}
+            <option {{if eq $addr.Filter "0" -}} selected{{end}} value="0">Non-contract</option>
+            {{- range $et := $addr.Erc20Tokens -}}
+            <option {{if eq $addr.Filter $et.ContractIndex -}} selected{{end}} value="{{$et.ContractIndex}}">{{$et.Name}}</option>
+            {{- end -}}
+            {{- end -}}
+        </select>
+        <nav>{{template "paging" $data}}</nav>
+    </div>
 </div>
 <div class="data-div">
     {{- range $tx := $addr.Transactions}}{{$data := setTxToTemplateData $data $tx}}{{template "txdetail" $data}}{{end -}}

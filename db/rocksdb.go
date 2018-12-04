@@ -208,7 +208,7 @@ func (e *StopIteration) Error() string {
 
 // GetTransactions finds all input/output transactions for address
 // Transaction are passed to callback function.
-func (d *RocksDB) GetTransactions(address string, lower uint32, higher uint32, fn func(txid string, vout uint32, isOutput bool) error) (err error) {
+func (d *RocksDB) GetTransactions(address string, lower uint32, higher uint32, fn func(txid string, vout int32, isOutput bool) error) (err error) {
 	if glog.V(1) {
 		glog.Infof("rocksdb: address get %s %d-%d ", address, lower, higher)
 	}
@@ -221,7 +221,7 @@ func (d *RocksDB) GetTransactions(address string, lower uint32, higher uint32, f
 
 // GetAddrDescTransactions finds all input/output transactions for address descriptor
 // Transaction are passed to callback function.
-func (d *RocksDB) GetAddrDescTransactions(addrDesc bchain.AddressDescriptor, lower uint32, higher uint32, fn func(txid string, vout uint32, isOutput bool) error) (err error) {
+func (d *RocksDB) GetAddrDescTransactions(addrDesc bchain.AddressDescriptor, lower uint32, higher uint32, fn func(txid string, vout int32, isOutput bool) error) (err error) {
 	kstart := packAddressKey(addrDesc, lower)
 	kstop := packAddressKey(addrDesc, higher)
 
@@ -242,13 +242,13 @@ func (d *RocksDB) GetAddrDescTransactions(addrDesc bchain.AddressDescriptor, low
 			glog.Infof("rocksdb: output %s: %s", hex.EncodeToString(key), hex.EncodeToString(val))
 		}
 		for _, o := range outpoints {
-			var vout uint32
+			var vout int32
 			var isOutput bool
 			if o.index < 0 {
-				vout = uint32(^o.index)
+				vout = int32(^o.index)
 				isOutput = false
 			} else {
-				vout = uint32(o.index)
+				vout = int32(o.index)
 				isOutput = true
 			}
 			tx, err := d.chainParser.UnpackTxid(o.btxID)

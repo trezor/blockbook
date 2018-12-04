@@ -86,11 +86,12 @@ type Vout struct {
 
 // Erc20Token contains info about ERC20 token held by an address
 type Erc20Token struct {
-	Contract string `json:"contract"`
-	Txs      int    `json:"txs"`
-	Name     string `json:"name"`
-	Symbol   string `json:"symbol"`
-	Balance  string `json:"balance"`
+	Contract      string `json:"contract"`
+	Txs           int    `json:"txs"`
+	Name          string `json:"name"`
+	Symbol        string `json:"symbol"`
+	Balance       string `json:"balance"`
+	ContractIndex string `json:"-"`
 }
 
 // Erc20Transfer contains info about ERC20 transfer done in a transaction
@@ -136,6 +137,15 @@ type Paging struct {
 	ItemsOnPage int `json:"itemsOnPage"`
 }
 
+// AddressFilterNone disables filtering of transactions
+const AddressFilterNone = -1
+
+// AddressFilterInputs specifies that only txs where the address is as input are returned
+const AddressFilterInputs = -2
+
+// AddressFilterOutputs specifies that only txs where the address is as output are returned
+const AddressFilterOutputs = -3
+
 // Address holds information about address and its transactions
 type Address struct {
 	Paging
@@ -150,12 +160,13 @@ type Address struct {
 	Txids                   []string              `json:"transactions,omitempty"`
 	Erc20Contract           *bchain.Erc20Contract `json:"erc20contract,omitempty"`
 	Erc20Tokens             []Erc20Token          `json:"erc20tokens,omitempty"`
+	Filter                  string                `json:"-"`
 }
 
 // AddressUtxo holds information about address and its transactions
 type AddressUtxo struct {
 	Txid          string  `json:"txid"`
-	Vout          uint32  `json:"vout"`
+	Vout          int32   `json:"vout"`
 	Amount        string  `json:"amount"`
 	AmountSat     big.Int `json:"satoshis"`
 	Height        int     `json:"height,omitempty"`

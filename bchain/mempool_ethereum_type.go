@@ -12,7 +12,7 @@ type MempoolEthereumType struct {
 	chain           BlockChain
 	mux             sync.Mutex
 	txToInputOutput map[string][]addrIndex
-	addrDescToTx    map[string][]outpoint
+	addrDescToTx    map[string][]Outpoint
 }
 
 // NewMempoolEthereumType creates new mempool handler.
@@ -21,7 +21,7 @@ func NewMempoolEthereumType(chain BlockChain) *MempoolEthereumType {
 }
 
 // GetTransactions returns slice of mempool transactions for given address
-func (m *MempoolEthereumType) GetTransactions(address string) ([]string, error) {
+func (m *MempoolEthereumType) GetTransactions(address string) ([]Outpoint, error) {
 	parser := m.chain.GetChainParser()
 	addrDesc, err := parser.GetAddrDescFromAddress(address)
 	if err != nil {
@@ -31,18 +31,13 @@ func (m *MempoolEthereumType) GetTransactions(address string) ([]string, error) 
 }
 
 // GetAddrDescTransactions returns slice of mempool transactions for given address descriptor
-func (m *MempoolEthereumType) GetAddrDescTransactions(addrDesc AddressDescriptor) ([]string, error) {
+func (m *MempoolEthereumType) GetAddrDescTransactions(addrDesc AddressDescriptor) ([]Outpoint, error) {
 	m.mux.Lock()
 	defer m.mux.Unlock()
-	outpoints := m.addrDescToTx[string(addrDesc)]
-	txs := make([]string, 0, len(outpoints))
-	for _, o := range outpoints {
-		txs = append(txs, o.txid)
-	}
-	return txs, nil
+	return append([]Outpoint(nil), m.addrDescToTx[string(addrDesc)]...), nil
 }
 
-func (m *MempoolEthereumType) updateMappings(newTxToInputOutput map[string][]addrIndex, newAddrDescToTx map[string][]outpoint) {
+func (m *MempoolEthereumType) updateMappings(newTxToInputOutput map[string][]addrIndex, newAddrDescToTx map[string][]Outpoint) {
 	m.mux.Lock()
 	defer m.mux.Unlock()
 	m.txToInputOutput = newTxToInputOutput
@@ -62,7 +57,7 @@ func (m *MempoolEthereumType) Resync(onNewTxAddr OnNewTxAddrFunc) (int, error) {
 	parser := m.chain.GetChainParser()
 	// allocate slightly larger capacity of the maps
 	newTxToInputOutput := make(map[string][]addrIndex, len(m.txToInputOutput)+5)
-	newAddrDescToTx := make(map[string][]outpoint, len(m.addrDescToTx)+5)
+	newAddrDescToTx := make(map[string][]Outpoint, len(m.addrDescToTx)+5)
 	for _, txid := range txs {
 		io, exists := m.txToInputOutput[txid]
 		if !exists {
@@ -105,7 +100,7 @@ func (m *MempoolEthereumType) Resync(onNewTxAddr OnNewTxAddrFunc) (int, error) {
 		}
 		newTxToInputOutput[txid] = io
 		for _, si := range io {
-			newAddrDescToTx[si.addrDesc] = append(newAddrDescToTx[si.addrDesc], outpoint{txid, si.n})
+			newAddrDescToTx[si.addrDesc] = append(newAddrDescToTx[si.addrDesc], Outpoint{txid, si.n})
 		}
 	}
 	m.updateMappings(newTxToInputOutput, newAddrDescToTx)

@@ -545,7 +545,7 @@ func waitForSignalAndShutdown(internal *server.InternalServer, public *server.Pu
 	}
 }
 
-func printResult(txid string, vout uint32, isOutput bool) error {
+func printResult(txid string, vout int32, isOutput bool) error {
 	glog.Info(txid, vout, isOutput)
 	return nil
 }

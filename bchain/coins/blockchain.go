@@ -221,12 +221,12 @@ func (c *blockChainWithMetrics) ResyncMempool(onNewTxAddr bchain.OnNewTxAddrFunc
 	return count, err
 }
 
-func (c *blockChainWithMetrics) GetMempoolTransactions(address string) (v []string, err error) {
+func (c *blockChainWithMetrics) GetMempoolTransactions(address string) (v []bchain.Outpoint, err error) {
 	defer func(s time.Time) { c.observeRPCLatency("GetMempoolTransactions", s, err) }(time.Now())
 	return c.b.GetMempoolTransactions(address)
 }
 
-func (c *blockChainWithMetrics) GetMempoolTransactionsForAddrDesc(addrDesc bchain.AddressDescriptor) (v []string, err error) {
+func (c *blockChainWithMetrics) GetMempoolTransactionsForAddrDesc(addrDesc bchain.AddressDescriptor) (v []bchain.Outpoint, err error) {
 	defer func(s time.Time) { c.observeRPCLatency("GetMempoolTransactionsForAddrDesc", s, err) }(time.Now())
 	return c.b.GetMempoolTransactionsForAddrDesc(addrDesc)
 }

@@ -673,12 +673,12 @@ func (b *EthereumRPC) ResyncMempool(onNewTxAddr bchain.OnNewTxAddrFunc) (int, er
 }
 
 // GetMempoolTransactions returns slice of mempool transactions for given address
-func (b *EthereumRPC) GetMempoolTransactions(address string) ([]string, error) {
+func (b *EthereumRPC) GetMempoolTransactions(address string) ([]bchain.Outpoint, error) {
 	return b.Mempool.GetTransactions(address)
 }
 
 // GetMempoolTransactionsForAddrDesc returns slice of mempool transactions for given address descriptor
-func (b *EthereumRPC) GetMempoolTransactionsForAddrDesc(addrDesc bchain.AddressDescriptor) ([]string, error) {
+func (b *EthereumRPC) GetMempoolTransactionsForAddrDesc(addrDesc bchain.AddressDescriptor) ([]bchain.Outpoint, error) {
 	return b.Mempool.GetAddrDescTransactions(addrDesc)
 }
 

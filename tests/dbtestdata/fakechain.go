@@ -182,12 +182,12 @@ func (c *fakeBlockChain) ResyncMempool(onNewTxAddr bchain.OnNewTxAddrFunc) (coun
 	return 0, errors.New("Not implemented")
 }
 
-func (c *fakeBlockChain) GetMempoolTransactions(address string) (v []string, err error) {
+func (c *fakeBlockChain) GetMempoolTransactions(address string) (v []bchain.Outpoint, err error) {
 	return nil, errors.New("Not implemented")
 }
 
-func (c *fakeBlockChain) GetMempoolTransactionsForAddrDesc(addrDesc bchain.AddressDescriptor) (v []string, err error) {
-	return []string{}, nil
+func (c *fakeBlockChain) GetMempoolTransactionsForAddrDesc(addrDesc bchain.AddressDescriptor) (v []bchain.Outpoint, err error) {
+	return []bchain.Outpoint{}, nil
 }
 
 func (c *fakeBlockChain) GetMempoolEntry(txid string) (v *bchain.MempoolEntry, err error) {

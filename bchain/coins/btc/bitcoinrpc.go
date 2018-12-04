@@ -709,12 +709,12 @@ func (b *BitcoinRPC) ResyncMempool(onNewTxAddr bchain.OnNewTxAddrFunc) (int, err
 }
 
 // GetMempoolTransactions returns slice of mempool transactions for given address
-func (b *BitcoinRPC) GetMempoolTransactions(address string) ([]string, error) {
+func (b *BitcoinRPC) GetMempoolTransactions(address string) ([]bchain.Outpoint, error) {
 	return b.Mempool.GetTransactions(address)
 }
 
 // GetMempoolTransactionsForAddrDesc returns slice of mempool transactions for given address descriptor
-func (b *BitcoinRPC) GetMempoolTransactionsForAddrDesc(addrDesc bchain.AddressDescriptor) ([]string, error) {
+func (b *BitcoinRPC) GetMempoolTransactionsForAddrDesc(addrDesc bchain.AddressDescriptor) ([]bchain.Outpoint, error) {
 	return b.Mempool.GetAddrDescTransactions(addrDesc)
 }
 

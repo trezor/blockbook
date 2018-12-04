@@ -33,6 +33,12 @@ var (
 	ErrTxidMissing = errors.New("Txid missing")
 )
 
+// Outpoint is txid together with output (or input) index
+type Outpoint struct {
+	Txid string
+	Vout int32
+}
+
 // ScriptSig contains data about input script
 type ScriptSig struct {
 	// Asm string `json:"asm"`
@@ -202,8 +208,8 @@ type BlockChain interface {
 	SendRawTransaction(tx string) (string, error)
 	// mempool
 	ResyncMempool(onNewTxAddr OnNewTxAddrFunc) (int, error)
-	GetMempoolTransactions(address string) ([]string, error)
-	GetMempoolTransactionsForAddrDesc(addrDesc AddressDescriptor) ([]string, error)
+	GetMempoolTransactions(address string) ([]Outpoint, error)
+	GetMempoolTransactionsForAddrDesc(addrDesc AddressDescriptor) ([]Outpoint, error)
 	GetMempoolEntry(txid string) (*MempoolEntry, error)
 	// parser
 	GetChainParser() BlockChainParser

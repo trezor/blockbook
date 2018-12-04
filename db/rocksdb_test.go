@@ -371,13 +371,13 @@ func verifyAfterBitcoinTypeBlock2(t *testing.T, d *RocksDB) {
 
 type txidVoutOutput struct {
 	txid     string
-	vout     uint32
+	vout     int32
 	isOutput bool
 }
 
 func verifyGetTransactions(t *testing.T, d *RocksDB, addr string, low, high uint32, wantTxids []txidVoutOutput, wantErr error) {
 	gotTxids := make([]txidVoutOutput, 0)
-	addToTxids := func(txid string, vout uint32, isOutput bool) error {
+	addToTxids := func(txid string, vout int32, isOutput bool) error {
 		gotTxids = append(gotTxids, txidVoutOutput{txid, vout, isOutput})
 		return nil
 	}

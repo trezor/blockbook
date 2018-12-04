@@ -216,7 +216,7 @@ func (s *SocketIoServer) getAddressTxids(addr []string, opts *addrOpts) (res res
 	lower, higher := uint32(opts.End), uint32(opts.Start)
 	for _, address := range addr {
 		if !opts.QueryMempoolOnly {
-			err = s.db.GetTransactions(address, lower, higher, func(txid string, vout uint32, isOutput bool) error {
+			err = s.db.GetTransactions(address, lower, higher, func(txid string, vout int32, isOutput bool) error {
 				txids = append(txids, txid)
 				return nil
 			})
@@ -224,11 +224,13 @@ func (s *SocketIoServer) getAddressTxids(addr []string, opts *addrOpts) (res res
 				return res, err
 			}
 		} else {
-			m, err := s.chain.GetMempoolTransactions(address)
+			o, err := s.chain.GetMempoolTransactions(address)
 			if err != nil {
 				return res, err
 			}
-			txids = append(txids, m...)
+			for _, m := range o {
+				txids = append(txids, m.Txid)
+			}
 		}
 	}
 	res.Result = api.UniqueTxidsInReverse(txids)

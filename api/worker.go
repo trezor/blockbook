@@ -51,7 +51,7 @@ func (w *Worker) getAddressesFromVout(vout *bchain.Vout) (bchain.AddressDescript
 // setSpendingTxToVout is helper function, that finds transaction that spent given output and sets it to the output
 // there is no direct index for the operation, it must be found using addresses -> txaddresses -> tx
 func (w *Worker) setSpendingTxToVout(vout *Vout, txid string, height uint32) error {
-	err := w.db.GetAddrDescTransactions(vout.ScriptPubKey.AddrDesc, height, ^uint32(0), func(t string, index uint32, isOutput bool) error {
+	err := w.db.GetAddrDescTransactions(vout.ScriptPubKey.AddrDesc, height, ^uint32(0), func(t string, index int32, isOutput bool) error {
 		if isOutput == false {
 			tsp, err := w.db.GetTxAddresses(t)
 			if err != nil {
@@ -290,24 +290,37 @@ func (w *Worker) GetTransaction(txid string, spendingTxs bool, specificJSON bool
 	return r, nil
 }
 
-func (w *Worker) getAddressTxids(addrDesc bchain.AddressDescriptor, mempool bool) ([]string, error) {
+func (w *Worker) getAddressTxids(addrDesc bchain.AddressDescriptor, mempool bool, filter int) ([]string, error) {
 	var err error
 	txids := make([]string, 0, 4)
-	if !mempool {
-		err = w.db.GetAddrDescTransactions(addrDesc, 0, ^uint32(0), func(txid string, vout uint32, isOutput bool) error {
+	addFilteredTxid := func(txid string, vout int32, isOutput bool) error {
+		if filter == AddressFilterNone ||
+			(filter == AddressFilterInputs && !isOutput) ||
+			(filter == AddressFilterOutputs && isOutput) ||
+			(vout == int32(filter)) {
 			txids = append(txids, txid)
-			// glog.Info(txid, " ", vout, " ", isOutput)
-			return nil
-		})
+		}
+		return nil
+	}
+	if mempool {
+		o, err := w.chain.GetMempoolTransactionsForAddrDesc(addrDesc)
 		if err != nil {
 			return nil, err
+		}
+		for _, m := range o {
+			vout := m.Vout
+			isOutput := true
+			if vout < 0 {
+				isOutput = false
+				vout = ^vout
+			}
+			addFilteredTxid(m.Txid, vout, isOutput)
 		}
 	} else {
-		m, err := w.chain.GetMempoolTransactionsForAddrDesc(addrDesc)
+		err = w.db.GetAddrDescTransactions(addrDesc, 0, ^uint32(0), addFilteredTxid)
 		if err != nil {
 			return nil, err
 		}
-		txids = append(txids, m...)
 	}
 	return txids, nil
 }
@@ -463,11 +476,12 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 					return nil, nil, nil, errors.Annotatef(err, "EthereumTypeGetErc20ContractBalance %v %v", addrDesc, c.Contract)
 				}
 				erc20t[i] = Erc20Token{
-					Balance:  bchain.AmountToDecimalString(b, ci.Decimals),
-					Contract: ci.Contract,
-					Name:     ci.Name,
-					Symbol:   ci.Symbol,
-					Txs:      int(c.Txs),
+					Balance:       bchain.AmountToDecimalString(b, ci.Decimals),
+					Contract:      ci.Contract,
+					Name:          ci.Name,
+					Symbol:        ci.Symbol,
+					Txs:           int(c.Txs),
+					ContractIndex: strconv.Itoa(i + 1),
 				}
 			}
 			ci, err = w.chain.EthereumTypeGetErc20ContractInfo(addrDesc)
@@ -480,7 +494,7 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 }
 
 // GetAddress computes address value and gets transactions for given address
-func (w *Worker) GetAddress(address string, page int, txsOnPage int, option GetAddressOption) (*Address, error) {
+func (w *Worker) GetAddress(address string, page int, txsOnPage int, option GetAddressOption, filter int) (*Address, error) {
 	start := time.Now()
 	page--
 	if page < 0 {
@@ -519,7 +533,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option GetA
 	if len(addresses) == 1 {
 		address = addresses[0]
 	}
-	txc, err := w.getAddressTxids(addrDesc, false)
+	txc, err := w.getAddressTxids(addrDesc, false, filter)
 	if err != nil {
 		return nil, errors.Annotatef(err, "getAddressTxids %v false", addrDesc)
 	}
@@ -530,7 +544,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option GetA
 		ba = &db.AddrBalance{}
 		page = 0
 	}
-	txm, err = w.getAddressTxids(addrDesc, true)
+	txm, err = w.getAddressTxids(addrDesc, true, filter)
 	if err != nil {
 		return nil, errors.Annotatef(err, "getAddressTxids %v true", addrDesc)
 	}
@@ -538,7 +552,11 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option GetA
 	// check if the address exist
 	if len(txc)+len(txm) == 0 || option == ExistOnly {
 		return &Address{
-			AddrStr: address,
+			AddrStr:       address,
+			Balance:       w.chainParser.AmountToDecimalString(&ba.BalanceSat),
+			TotalReceived: w.chainParser.AmountToDecimalString(ba.ReceivedSat()),
+			TotalSent:     w.chainParser.AmountToDecimalString(&ba.SentSat),
+			TxApperances:  int(ba.Txs),
 		}, nil
 	}
 	bestheight, _, err := w.db.GetBestBlock()
@@ -574,7 +592,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option GetA
 			}
 		}
 	}
-	if len(txc) != int(ba.Txs) && w.chainType == bchain.ChainBitcoinType {
+	if len(txc) != int(ba.Txs) && w.chainType == bchain.ChainBitcoinType && filter == AddressFilterNone {
 		glog.Warning("DB inconsistency for address ", address, ": number of txs from column addresses ", len(txc), ", from addressBalance ", ba.Txs)
 	}
 	for i := from; i < to; i++ {
@@ -620,7 +638,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option GetA
 		Balance:                 w.chainParser.AmountToDecimalString(&ba.BalanceSat),
 		TotalReceived:           w.chainParser.AmountToDecimalString(ba.ReceivedSat()),
 		TotalSent:               w.chainParser.AmountToDecimalString(&ba.SentSat),
-		TxApperances:            len(txc),
+		TxApperances:            int(ba.Txs),
 		UnconfirmedBalance:      w.chainParser.AmountToDecimalString(&uBalSat),
 		UnconfirmedTxApperances: len(txm),
 		Transactions:            txs,
@@ -643,7 +661,7 @@ func (w *Worker) GetAddressUtxo(address string, onlyConfirmed bool) ([]AddressUt
 	r := make([]AddressUtxo, 0, 8)
 	if !onlyConfirmed {
 		// get utxo from mempool
-		txm, err := w.getAddressTxids(addrDesc, true)
+		txm, err := w.getAddressTxids(addrDesc, true, AddressFilterNone)
 		if err != nil {
 			return nil, errors.Annotatef(err, "getAddressTxids %v true", address)
 		}
@@ -675,7 +693,7 @@ func (w *Worker) GetAddressUtxo(address string, onlyConfirmed bool) ([]AddressUt
 						if !e {
 							r = append(r, AddressUtxo{
 								Txid:      bchainTx.Txid,
-								Vout:      uint32(i),
+								Vout:      int32(i),
 								AmountSat: vout.ValueSat,
 								Amount:    w.chainParser.AmountToDecimalString(&vout.ValueSat),
 							})
@@ -693,14 +711,10 @@ func (w *Worker) GetAddressUtxo(address string, onlyConfirmed bool) ([]AddressUt
 	var checksum big.Int
 	// ba can be nil if the address is only in mempool!
 	if ba != nil && ba.BalanceSat.Uint64() > 0 {
-		type outpoint struct {
-			txid string
-			vout uint32
-		}
-		outpoints := make([]outpoint, 0, 8)
-		err = w.db.GetAddrDescTransactions(addrDesc, 0, ^uint32(0), func(txid string, vout uint32, isOutput bool) error {
+		outpoints := make([]bchain.Outpoint, 0, 8)
+		err = w.db.GetAddrDescTransactions(addrDesc, 0, ^uint32(0), func(txid string, vout int32, isOutput bool) error {
 			if isOutput {
-				outpoints = append(outpoints, outpoint{txid, vout})
+				outpoints = append(outpoints, bchain.Outpoint{txid, vout})
 			}
 			return nil
 		})
@@ -717,27 +731,27 @@ func (w *Worker) GetAddressUtxo(address string, onlyConfirmed bool) ([]AddressUt
 		bestheight := int(b)
 		for i := len(outpoints) - 1; i >= 0 && checksum.Int64() > 0; i-- {
 			o := outpoints[i]
-			if lastTxid != o.txid {
-				ta, err = w.db.GetTxAddresses(o.txid)
+			if lastTxid != o.Txid {
+				ta, err = w.db.GetTxAddresses(o.Txid)
 				if err != nil {
 					return nil, err
 				}
-				lastTxid = o.txid
+				lastTxid = o.Txid
 			}
 			if ta == nil {
-				glog.Warning("DB inconsistency:  tx ", o.txid, ": not found in txAddresses")
+				glog.Warning("DB inconsistency:  tx ", o.Txid, ": not found in txAddresses")
 			} else {
-				if len(ta.Outputs) <= int(o.vout) {
-					glog.Warning("DB inconsistency:  txAddresses ", o.txid, " does not have enough outputs")
+				if len(ta.Outputs) <= int(o.Vout) {
+					glog.Warning("DB inconsistency:  txAddresses ", o.Txid, " does not have enough outputs")
 				} else {
-					if !ta.Outputs[o.vout].Spent {
-						v := ta.Outputs[o.vout].ValueSat
+					if !ta.Outputs[o.Vout].Spent {
+						v := ta.Outputs[o.Vout].ValueSat
 						// report only outpoints that are not spent in mempool
-						_, e := spentInMempool[o.txid+strconv.Itoa(int(o.vout))]
+						_, e := spentInMempool[o.Txid+strconv.Itoa(int(o.Vout))]
 						if !e {
 							r = append(r, AddressUtxo{
-								Txid:          o.txid,
-								Vout:          o.vout,
+								Txid:          o.Txid,
+								Vout:          o.Vout,
 								AmountSat:     v,
 								Amount:        w.chainParser.AmountToDecimalString(&v),
 								Height:        int(ta.Height),
