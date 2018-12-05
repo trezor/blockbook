@@ -1,9 +1,9 @@
 {
   "coin": {
-      "name": "Liquid",
-      "shortcut": "L-BTC",
-      "label": "Liquid",
-      "alias": "Liquid"
+    "name": "Liquid",
+    "shortcut": "L-BTC",
+    "label": "Liquid",
+    "alias": "liquid"
   },
   "ports": {
     "backend_rpc": 8046,
@@ -28,10 +28,10 @@
     "verification_source": "ea2836aa267b32b29e890acdd5e724b4be225c34891fd26426ce741c12c1e166",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
-        "bin/test_elements"
+      "bin/test_elements"
     ],
     "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/liquidd -datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -conf={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf -pid=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",
-    "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/*.log",
+    "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/liquidv1/*.log",
     "postinst_script_template": "",
     "service_type": "forking",
     "service_additional_params_template": "",
@@ -40,7 +40,10 @@
     "server_config_file": "bitcoin_like.conf",
     "client_config_file": "bitcoin_like_client.conf",
     "additional_params": {
-        "deprecatedrpc": "estimatefee"
+      "deprecatedrpc": "estimatefee",
+      "mainchainrpcport": "8030",
+      "mainchainrpcuser": "rpc",
+      "mainchainrpcpassword": "rpc"
     }
   },
   "blockbook": {
@@ -59,7 +62,7 @@
     }
   },
   "meta": {
-    "package_maintainer": "Jakub Matys",
-    "package_maintainer_email": "jakub.matys@satoshilabs.com"
+    "package_maintainer": "Martin Bohm",
+    "package_maintainer_email": "martin.bohm@satoshilabs.com"
   }
 }
