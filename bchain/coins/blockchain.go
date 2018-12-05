@@ -11,6 +11,7 @@ import (
 	"blockbook/bchain/coins/eth"
 	"blockbook/bchain/coins/gamecredits"
 	"blockbook/bchain/coins/grs"
+	"blockbook/bchain/coins/liquid"
 	"blockbook/bchain/coins/litecoin"
 	"blockbook/bchain/coins/monacoin"
 	"blockbook/bchain/coins/myriad"
