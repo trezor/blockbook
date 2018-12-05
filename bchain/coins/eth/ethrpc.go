@@ -547,17 +547,26 @@ func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 		}
 		var receipt rpcReceipt
 		if b.isETC {
+			var rawReceipt json.RawMessage
 			var etcReceipt rpcEtcReceipt
-			err = b.rpc.CallContext(ctx, &etcReceipt, "eth_getTransactionReceipt", hash)
+			err = b.rpc.CallContext(ctx, &rawReceipt, "eth_getTransactionReceipt", hash)
 			if err != nil {
 				return nil, errors.Annotatef(err, "txid %v", txid)
 			}
-			receipt.GasUsed = etcReceipt.GasUsed
-			receipt.Logs = etcReceipt.Logs
-			if etcReceipt.Status == 0 {
-				receipt.Status = "0x0"
+			err = json.Unmarshal(rawReceipt, &etcReceipt)
+			if err == nil {
+				receipt.GasUsed = etcReceipt.GasUsed
+				receipt.Logs = etcReceipt.Logs
+				if etcReceipt.Status == 0 {
+					receipt.Status = "0x0"
+				} else {
+					receipt.Status = "0x1"
+				}
 			} else {
-				receipt.Status = "0x1"
+				err = json.Unmarshal(rawReceipt, &receipt)
+				if err != nil {
+					return nil, errors.Annotatef(err, "unmarshal receipt for txid %v, %v", txid, string(rawReceipt))
+				}
 			}
 		} else {
 			err = b.rpc.CallContext(ctx, &receipt, "eth_getTransactionReceipt", hash)
