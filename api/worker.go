@@ -448,7 +448,7 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 			Txs: uint32(ca.EthTxs),
 		}
 		// do not read balances etc in case of ExistOnly option
-		if option != ExistOnly {
+		if option != Basic {
 			var b *big.Int
 			b, err = w.chain.EthereumTypeGetBalance(addrDesc)
 			if err != nil {
@@ -526,7 +526,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option GetA
 		}
 	}
 	// if only check that the address exist, return if we have the address
-	if option == ExistOnly && ba != nil {
+	if option == Basic && ba != nil {
 		return &Address{AddrStr: address}, nil
 	}
 	// convert the address to the format defined by the parser
@@ -554,7 +554,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option GetA
 	}
 	txm = UniqueTxidsInReverse(txm)
 	// check if the address exist
-	if len(txc)+len(txm) == 0 || option == ExistOnly {
+	if len(txc)+len(txm) == 0 || option == Basic {
 		return &Address{
 			AddrStr:       address,
 			Balance:       w.chainParser.AmountToDecimalString(&ba.BalanceSat),

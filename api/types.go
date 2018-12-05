@@ -14,10 +14,10 @@ import (
 type GetAddressOption int
 
 const (
-	// ExistOnly - only that address is indexed
-	ExistOnly GetAddressOption = iota
-	// BalancesOnly - only balances
-	BalancesOnly
+	// Basic - only that address is indexed and some basic info
+	Basic GetAddressOption = iota
+	// Balance - only balances
+	Balance
 	// TxidHistory - balances and txids, subject to paging
 	TxidHistory
 	// TxHistory - balances and full tx data, subject to paging
@@ -90,7 +90,9 @@ type Erc20Token struct {
 	Txs           int    `json:"txs"`
 	Name          string `json:"name"`
 	Symbol        string `json:"symbol"`
-	Balance       string `json:"balance"`
+	Decimal       int    `json:"decimal"`
+	Balance       string `json:"balance,omitempty"`
+	BalanceSat    string `json:"balanceSat,omitempty"`
 	ContractIndex string `json:"-"`
 }
 
@@ -123,7 +125,7 @@ type Tx struct {
 	ValueInSat       big.Int             `json:"-"`
 	Fees             string              `json:"fees"`
 	FeesSat          big.Int             `json:"-"`
-	Hex              string              `json:"hex"`
+	Hex              string              `json:"hex,omitempty"`
 	CoinSpecificData interface{}         `json:"-"`
 	CoinSpecificJSON json.RawMessage     `json:"-"`
 	Erc20Transfers   []Erc20Transfer     `json:"erc20transfers,omitempty"`
@@ -132,9 +134,9 @@ type Tx struct {
 
 // Paging contains information about paging for address, blocks and block
 type Paging struct {
-	Page        int `json:"page"`
-	TotalPages  int `json:"totalPages"`
-	ItemsOnPage int `json:"itemsOnPage"`
+	Page        int `json:"page,omitempty"`
+	TotalPages  int `json:"totalPages,omitempty"`
+	ItemsOnPage int `json:"itemsOnPage,omitempty"`
 }
 
 // AddressFilterNone disables filtering of transactions
@@ -158,6 +160,7 @@ type Address struct {
 	TxApperances            int                   `json:"txApperances"`
 	Transactions            []*Tx                 `json:"txs,omitempty"`
 	Txids                   []string              `json:"transactions,omitempty"`
+	Nonce                   string                `json:"nonce,omitempty"`
 	Erc20Contract           *bchain.Erc20Contract `json:"erc20contract,omitempty"`
 	Erc20Tokens             []Erc20Token          `json:"erc20tokens,omitempty"`
 	Filter                  string                `json:"-"`

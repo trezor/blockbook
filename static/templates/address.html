@@ -92,7 +92,7 @@
 <div class="row h-container">
     <h3 class="col-md-6 col-sm-12">Transactions</h3>
     <div class="col-md-6 col-sm-12">
-        <select style="float: left;margin-top: 6px;" onchange="self.location='?filter='+options[selectedIndex].value">
+        <select style="float: left;margin-top: 6px;max-width: 30%;" onchange="self.location='?filter='+options[selectedIndex].value">
             <option>All</option>
             <option {{if eq $addr.Filter "inputs" -}} selected{{end}} value="inputs">Inputs</option>
             <option {{if eq $addr.Filter "outputs" -}} selected{{end}} value="outputs">Outputs</option>
