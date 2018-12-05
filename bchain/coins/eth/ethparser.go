@@ -3,7 +3,6 @@ package eth
 import (
 	"blockbook/bchain"
 	"encoding/hex"
-	"encoding/json"
 	"math/big"
 	"strconv"
 
@@ -102,7 +101,7 @@ func ethNumber(n string) (int64, error) {
 	return 0, errors.Errorf("Not a number: '%v'", n)
 }
 
-func (p *EthereumParser) ethTxToTx(tx *rpcTransaction, receipt *rpcReceipt, blocktime int64, confirmations uint32, marshallHex bool) (*bchain.Tx, error) {
+func (p *EthereumParser) ethTxToTx(tx *rpcTransaction, receipt *rpcReceipt, blocktime int64, confirmations uint32) (*bchain.Tx, error) {
 	txid := tx.Hash
 	var (
 		fa, ta []string
@@ -118,18 +117,6 @@ func (p *EthereumParser) ethTxToTx(tx *rpcTransaction, receipt *rpcReceipt, bloc
 		Tx:      tx,
 		Receipt: receipt,
 	}
-	var h string
-	if marshallHex {
-		// completeTransaction without BlockHash is marshalled and hex encoded to bchain.Tx.Hex
-		bh := tx.BlockHash
-		tx.BlockHash = ""
-		b, err := json.Marshal(ct)
-		if err != nil {
-			return nil, err
-		}
-		tx.BlockHash = bh
-		h = hex.EncodeToString(b)
-	}
 	vs, err := hexutil.DecodeBig(tx.Value)
 	if err != nil {
 		return nil, err
@@ -137,7 +124,7 @@ func (p *EthereumParser) ethTxToTx(tx *rpcTransaction, receipt *rpcReceipt, bloc
 	return &bchain.Tx{
 		Blocktime:     blocktime,
 		Confirmations: confirmations,
-		Hex:           h,
+		// Hex
 		// LockTime
 		Time: blocktime,
 		Txid: txid,
@@ -223,15 +210,11 @@ func hexEncodeBig(b []byte) string {
 
 // PackTx packs transaction to byte array
 func (p *EthereumParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) ([]byte, error) {
-	b, err := hex.DecodeString(tx.Hex)
-	if err != nil {
-		return nil, err
-	}
-	var r completeTransaction
+	var err error
 	var n uint64
-	err = json.Unmarshal(b, &r)
-	if err != nil {
-		return nil, err
+	r, ok := tx.CoinSpecificData.(completeTransaction)
+	if !ok {
+		return nil, errors.New("Missing CoinSpecificData")
 	}
 	pt := &ProtoCompleteTransaction{}
 	pt.Tx = &ProtoCompleteTransaction_TxType{}
@@ -357,7 +340,7 @@ func (p *EthereumParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 			Logs:    logs,
 		}
 	}
-	tx, err := p.ethTxToTx(&rt, rr, int64(pt.BlockTime), 0, true)
+	tx, err := p.ethTxToTx(&rt, rr, int64(pt.BlockTime), 0)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -405,19 +388,9 @@ func GetHeightFromTx(tx *bchain.Tx) (uint32, error) {
 	var bn string
 	csd, ok := tx.CoinSpecificData.(completeTransaction)
 	if !ok {
-		b, err := hex.DecodeString(tx.Hex)
-		if err != nil {
-			return 0, err
-		}
-		var ct completeTransaction
-		err = json.Unmarshal(b, &ct)
-		if err != nil {
-			return 0, err
-		}
-		bn = ct.Tx.BlockNumber
-	} else {
-		bn = csd.Tx.BlockNumber
+		return 0, errors.New("Missing CoinSpecificData")
 	}
+	bn = csd.Tx.BlockNumber
 	n, err := hexutil.DecodeUint64(bn)
 	if err != nil {
 		return 0, errors.Annotatef(err, "BlockNumber %v", bn)
