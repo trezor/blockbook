@@ -186,6 +186,7 @@ func (p *BaseParser) PackTx(tx *Tx, height uint32, blockTime int64) ([]byte, err
 		Locktime:  tx.LockTime,
 		Vin:       pti,
 		Vout:      pto,
+		Version:   tx.Version,
 	}
 	if pt.Hex, err = hex.DecodeString(tx.Hex); err != nil {
 		return nil, errors.Annotatef(err, "Hex %v", tx.Hex)
@@ -245,6 +246,7 @@ func (p *BaseParser) UnpackTx(buf []byte) (*Tx, uint32, error) {
 		Txid:      txid,
 		Vin:       vin,
 		Vout:      vout,
+		Version:   pt.Version,
 	}
 	return &tx, pt.Height, nil
 }

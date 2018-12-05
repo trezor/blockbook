@@ -23,4 +23,5 @@ syntax = "proto3";
         uint32 Height = 5;
         repeated VinType Vin = 6;
         repeated VoutType Vout = 7;
+        int32 Version = 8;
     }
