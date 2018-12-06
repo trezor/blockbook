@@ -1,5 +1,5 @@
 {{define "txdetail"}}{{$cs := .CoinShortcut}}{{$addr := .AddrStr}}{{$tx := .Tx}}
-<div class="alert alert-data">
+<div class="alert alert-data"{{if eq $tx.EthereumSpecific.Status 0}} style="background-color: #faf2ee;"{{end}}>
     <div class="row line-bot">
         <div class="col-xs-7 col-md-8 ellipsis">
             <a href="/tx/{{$tx.Txid}}">{{$tx.Txid}}</a>
@@ -70,7 +70,7 @@
         </div>
     </div>
     {{- if $tx.Erc20Transfers -}}
-    <div class="row line-top" style="padding: 15px 0 6px 15px;">
+    <div class="row line-top" style="padding: 15px 0 6px 15px;font-weight: bold;">
         ERC20 Token Transfers
     </div>
     {{- range $erc20 := $tx.Erc20Transfers -}}

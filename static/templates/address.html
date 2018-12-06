@@ -19,6 +19,10 @@
                     <td>Non-contract Transactions</td>
                     <td class="data">{{$addr.TxApperances}}</td>
                 </tr>
+                <tr>
+                    <td>Nonce</td>
+                    <td class="data">{{$addr.Nonce}}</td>
+                </tr>
                 {{- if $addr.Erc20Tokens -}}
                 <tr>
                     <td>ERC20 Tokens</td>
@@ -90,19 +94,19 @@
 </div>
 {{- end}}{{if or $addr.Transactions $addr.Filter -}}
 <div class="row h-container">
-    <h3 class="col-md-6 col-sm-12">Transactions</h3>
-    <div class="col-md-6 col-sm-12">
-        <select style="float: left;margin-top: 6px;max-width: 30%;" onchange="self.location='?filter='+options[selectedIndex].value">
-            <option>All</option>
-            <option {{if eq $addr.Filter "inputs" -}} selected{{end}} value="inputs">Inputs</option>
-            <option {{if eq $addr.Filter "outputs" -}} selected{{end}} value="outputs">Outputs</option>
-            {{- if $addr.Erc20Tokens -}}
-            <option {{if eq $addr.Filter "0" -}} selected{{end}} value="0">Non-contract</option>
-            {{- range $et := $addr.Erc20Tokens -}}
-            <option {{if eq $addr.Filter $et.ContractIndex -}} selected{{end}} value="{{$et.ContractIndex}}">{{$et.Name}}</option>
-            {{- end -}}
-            {{- end -}}
-        </select>
+    <h3 class="col-md-3">Transactions</h3>
+    <select class="col-md-2" style="background-color: #eaeaea;" onchange="self.location='?filter='+options[selectedIndex].value">
+        <option>All</option>
+        <option {{if eq $addr.Filter "inputs" -}} selected{{end}} value="inputs">Inputs</option>
+        <option {{if eq $addr.Filter "outputs" -}} selected{{end}} value="outputs">Outputs</option>
+        {{- if $addr.Erc20Tokens -}}
+        <option {{if eq $addr.Filter "0" -}} selected{{end}} value="0">Non-contract</option>
+        {{- range $et := $addr.Erc20Tokens -}}
+        <option {{if eq $addr.Filter $et.ContractIndex -}} selected{{end}} value="{{$et.ContractIndex}}">{{$et.Name}}</option>
+        {{- end -}}
+        {{- end -}}
+    </select>
+    <div class="col-md-7">
         <nav>{{template "paging" $data}}</nav>
     </div>
 </div>
