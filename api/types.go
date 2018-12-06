@@ -90,7 +90,7 @@ type Erc20Token struct {
 	Txs           int    `json:"txs"`
 	Name          string `json:"name"`
 	Symbol        string `json:"symbol"`
-	Decimal       int    `json:"decimal"`
+	Decimals      int    `json:"decimals"`
 	Balance       string `json:"balance,omitempty"`
 	BalanceSat    string `json:"balanceSat,omitempty"`
 	ContractIndex string `json:"-"`
@@ -153,9 +153,11 @@ type Address struct {
 	Paging
 	AddrStr                 string                `json:"addrStr"`
 	Balance                 string                `json:"balance"`
+	BalanceSat              string                `json:"balanceSat"`
 	TotalReceived           string                `json:"totalReceived,omitempty"`
 	TotalSent               string                `json:"totalSent,omitempty"`
 	UnconfirmedBalance      string                `json:"unconfirmedBalance"`
+	UnconfirmedBalanceSat   string                `json:"unconfirmedBalanceSat"`
 	UnconfirmedTxApperances int                   `json:"unconfirmedTxApperances"`
 	TxApperances            int                   `json:"txApperances"`
 	Transactions            []*Tx                 `json:"txs,omitempty"`

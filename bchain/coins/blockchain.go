@@ -247,6 +247,11 @@ func (c *blockChainWithMetrics) EthereumTypeGetBalance(addrDesc bchain.AddressDe
 	return c.b.EthereumTypeGetBalance(addrDesc)
 }
 
+func (c *blockChainWithMetrics) EthereumTypeGetNonce(addrDesc bchain.AddressDescriptor) (v uint64, err error) {
+	defer func(s time.Time) { c.observeRPCLatency("EthereumTypeGetNonce", s, err) }(time.Now())
+	return c.b.EthereumTypeGetNonce(addrDesc)
+}
+
 func (c *blockChainWithMetrics) EthereumTypeGetErc20ContractInfo(contractDesc bchain.AddressDescriptor) (v *bchain.Erc20Contract, err error) {
 	defer func(s time.Time) { c.observeRPCLatency("EthereumTypeGetErc20ContractInfo", s, err) }(time.Now())
 	return c.b.EthereumTypeGetErc20ContractInfo(contractDesc)

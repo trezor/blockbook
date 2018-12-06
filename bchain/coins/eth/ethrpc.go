@@ -674,6 +674,13 @@ func (b *EthereumRPC) EthereumTypeGetBalance(addrDesc bchain.AddressDescriptor) 
 	return b.client.BalanceAt(ctx, ethcommon.BytesToAddress(addrDesc), nil)
 }
 
+// EthereumTypeGetNonce returns current balance of an address
+func (b *EthereumRPC) EthereumTypeGetNonce(addrDesc bchain.AddressDescriptor) (uint64, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
+	defer cancel()
+	return b.client.NonceAt(ctx, ethcommon.BytesToAddress(addrDesc), nil)
+}
+
 // ResyncMempool gets mempool transactions and maps output scripts to transactions.
 // ResyncMempool is not reentrant, it should be called from a single thread.
 // Return value is number of transactions in mempool

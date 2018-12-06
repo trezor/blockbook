@@ -405,7 +405,7 @@ func httpTests(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"page":1,"totalPages":1,"itemsOnPage":1000,"addrStr":"mv9uLThosiEnGRbVPS7Vhyw6VssbVRsiAw","balance":"0","totalReceived":"12345.67890123","totalSent":"12345.67890123","unconfirmedBalance":"0","unconfirmedTxApperances":0,"txApperances":2,"transactions":["7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25","effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75"]}`,
+				`{"page":1,"totalPages":1,"itemsOnPage":1000,"addrStr":"mv9uLThosiEnGRbVPS7Vhyw6VssbVRsiAw","balance":"0","balanceSat":"0","totalReceived":"12345.67890123","totalSent":"12345.67890123","unconfirmedBalance":"0","unconfirmedBalanceSat":"0","unconfirmedTxApperances":0,"txApperances":2,"transactions":["7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25","effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75"]}`,
 			},
 		},
 		{

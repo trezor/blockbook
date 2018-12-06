@@ -34,6 +34,11 @@ func (b *BaseChain) EthereumTypeGetBalance(addrDesc AddressDescriptor) (*big.Int
 	return nil, errors.New("Not supported")
 }
 
+// EthereumTypeGetNonce is not supported
+func (b *BaseChain) EthereumTypeGetNonce(addrDesc AddressDescriptor) (uint64, error) {
+	return 0, errors.New("Not supported")
+}
+
 // EthereumTypeGetErc20ContractInfo is not supported
 func (b *BaseChain) EthereumTypeGetErc20ContractInfo(contractDesc AddressDescriptor) (*Erc20Contract, error) {
 	return nil, errors.New("Not supported")
