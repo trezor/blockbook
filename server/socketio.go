@@ -103,13 +103,6 @@ var onMessageHandlers = map[string]func(*SocketIoServer, json.RawMessage) (inter
 		}
 		return
 	},
-	"getAccountInfo": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
-		req, err := unmarshalGetAccountInfoRequest(params)
-		if err == nil {
-			rv, err = s.getAccountInfo(req)
-		}
-		return
-	},
 	"getBlockHeader": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
 		height, hash, err := unmarshalGetBlockHeader(params)
 		if err == nil {
@@ -212,22 +205,6 @@ func unmarshalGetAddressRequest(params []byte) (addr []string, opts addrOpts, er
 	}
 	err = json.Unmarshal(p[1], &opts)
 	return
-}
-
-type accountInfoReq struct {
-	Descriptor string `json:"descriptor"`
-	Details    string `json:"details"`
-	PageSize   int    `json:"pageSize"`
-	Page       int    `json:"page"`
-}
-
-func unmarshalGetAccountInfoRequest(params []byte) (*accountInfoReq, error) {
-	var r accountInfoReq
-	err := json.Unmarshal(params, &r)
-	if err != nil {
-		return nil, err
-	}
-	return &r, nil
 }
 
 type resultAddressTxids struct {
@@ -682,24 +659,6 @@ func (s *SocketIoServer) getMempoolEntry(txid string) (res resultGetMempoolEntry
 	}
 	res.Result = entry
 	return
-}
-
-func (s *SocketIoServer) getAccountInfo(req *accountInfoReq) (res *api.Address, err error) {
-	if s.chainParser.GetChainType() == bchain.ChainEthereumType {
-		var opt api.GetAddressOption
-		switch req.Details {
-		case "balance":
-			opt = api.Balance
-		case "txids":
-			opt = api.TxidHistory
-		case "txs":
-			opt = api.TxHistory
-		default:
-			opt = api.Basic
-		}
-		return s.api.GetAddress(req.Descriptor, req.Page, req.PageSize, opt, api.AddressFilterNone)
-	}
-	return nil, errors.New("Not implemented")
 }
 
 // onSubscribe expects two event subscriptions based on the req parameter (including the doublequotes):

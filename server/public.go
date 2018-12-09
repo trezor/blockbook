@@ -31,6 +31,7 @@ type PublicServer struct {
 	binding          string
 	certFiles        string
 	socketio         *SocketIoServer
+	websocket        *WebsocketServer
 	https            *http.Server
 	db               *db.RocksDB
 	txCache          *db.TxCache
@@ -59,6 +60,11 @@ func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bch
 		return nil, err
 	}
 
+	websocket, err := NewWebsocketServer(db, chain, txCache, metrics, is)
+	if err != nil {
+		return nil, err
+	}
+
 	addr, path := splitBinding(binding)
 	serveMux := http.NewServeMux()
 	https := &http.Server{
@@ -72,6 +78,7 @@ func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bch
 		https:            https,
 		api:              api,
 		socketio:         socketio,
+		websocket:        websocket,
 		db:               db,
 		txCache:          txCache,
 		chain:            chain,
@@ -109,8 +116,9 @@ func (s *PublicServer) Run() error {
 func (s *PublicServer) ConnectFullPublicInterface() {
 	serveMux := s.https.Handler.(*http.ServeMux)
 	_, path := splitBinding(s.binding)
-	// support for tests of socket.io interface
-	serveMux.Handle(path+"test.html", http.FileServer(http.Dir("./static/")))
+	// support for test pages
+	serveMux.Handle(path+"test-socketio.html", http.FileServer(http.Dir("./static/")))
+	serveMux.Handle(path+"test-websocket.html", http.FileServer(http.Dir("./static/")))
 	if s.internalExplorer {
 		// internal explorer handlers
 		serveMux.HandleFunc(path+"tx/", s.htmlTemplateHandler(s.explorerTx))
@@ -136,6 +144,8 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 	serveMux.HandleFunc(path+"api/estimatefee/", s.jsonHandler(s.apiEstimateFee))
 	// socket.io interface
 	serveMux.Handle(path+"socket.io/", s.socketio.GetHandler())
+	// websocket interface
+	serveMux.Handle(path+"websocket", s.websocket.GetHandler())
 }
 
 // Close closes the server
@@ -153,6 +163,7 @@ func (s *PublicServer) Shutdown(ctx context.Context) error {
 // OnNewBlock notifies users subscribed to bitcoind/hashblock about new block
 func (s *PublicServer) OnNewBlock(hash string, height uint32) {
 	s.socketio.OnNewBlockHash(hash)
+	s.websocket.OnNewBlock(hash, height)
 }
 
 // OnNewTxAddr notifies users subscribed to bitcoind/addresstxid about new block
