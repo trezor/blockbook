@@ -10,7 +10,7 @@
             margin-top: 1%;
         }
     </style>
-    <title>Blockbook test websocket</title>
+    <title>Blockbook Websocket Test Page</title>
     <script>
         var ws;
         var messageID;
@@ -130,8 +130,8 @@
             var id = subscribe(method, params, function (result) {
                 document.getElementById('subscribeAddressResult').innerText += JSON.stringify(result).replace(/,/g, ", ") + "\n";
             });
-            document.getElementById('subscribeAddressIds').innerText += id+" ";
-         }
+            document.getElementById('subscribeAddressIds').innerText += " " + id ;
+        }
 
         function getBlockHeader() {
             var param = document.getElementById('getBlockHeaderParam').value.trim();
@@ -188,7 +188,7 @@
 <body>
     <div class="container">
         <div class="row justify-content-center">
-            <h1>Socket.io tester</h1>
+            <h1>Blockbook Websocket Test Page</h1>
         </div>
         <div class="row">
             <div class="col">
@@ -223,6 +223,7 @@
             <div class="col" id="getAccountInfoResult">
             </div>
         </div>
+        <!-- 
         <div class="row">
             <div class="col">
                 <input class="btn btn-secondary" type="button" value="getBlockHeader" onclick="getBlockHeader()">
@@ -257,6 +258,7 @@
             <div class="col-10" id="getInfoResult">
             </div>
         </div>
+         -->
         <div class="row">
             <div class="col">
                 <input class="btn btn-secondary" type="button" value="sendTransaction" onclick="sendTransaction()">
@@ -293,7 +295,7 @@
             </div>
         </div>
         <div class="row">
-            <div class="col" id="subscribeAddressTxidResult">
+            <div class="col" id="subscribeAddressResult">
             </div>
         </div>
     </div>

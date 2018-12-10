@@ -79,7 +79,7 @@ func (m *MempoolEthereumType) Resync(onNewTxAddr OnNewTxAddrFunc) (int, error) {
 					io = append(io, addrIndex{string(addrDesc), int32(output.N)})
 				}
 				if onNewTxAddr != nil {
-					onNewTxAddr(tx.Txid, addrDesc, true)
+					onNewTxAddr(tx, addrDesc, true)
 				}
 			}
 			for _, input := range tx.Vin {
@@ -92,7 +92,7 @@ func (m *MempoolEthereumType) Resync(onNewTxAddr OnNewTxAddrFunc) (int, error) {
 						}
 						io = append(io, addrIndex{string(addrDesc), int32(^i)})
 						if onNewTxAddr != nil {
-							onNewTxAddr(tx.Txid, addrDesc, false)
+							onNewTxAddr(tx, addrDesc, false)
 						}
 					}
 				}

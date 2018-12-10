@@ -167,8 +167,9 @@ func (s *PublicServer) OnNewBlock(hash string, height uint32) {
 }
 
 // OnNewTxAddr notifies users subscribed to bitcoind/addresstxid about new block
-func (s *PublicServer) OnNewTxAddr(txid string, desc bchain.AddressDescriptor, isOutput bool) {
-	s.socketio.OnNewTxAddr(txid, desc, isOutput)
+func (s *PublicServer) OnNewTxAddr(tx *bchain.Tx, desc bchain.AddressDescriptor, isOutput bool) {
+	s.socketio.OnNewTxAddr(tx.Txid, desc, isOutput)
+	s.websocket.OnNewTxAddr(tx, desc, isOutput)
 }
 
 func (s *PublicServer) txRedirect(w http.ResponseWriter, r *http.Request) {

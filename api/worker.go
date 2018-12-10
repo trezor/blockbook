@@ -101,20 +101,25 @@ func (w *Worker) GetSpendingTxid(txid string, n int) (string, error) {
 
 // GetTransaction reads transaction data from txid
 func (w *Worker) GetTransaction(txid string, spendingTxs bool, specificJSON bool) (*Tx, error) {
-	start := time.Now()
 	bchainTx, height, err := w.txCache.GetTransaction(txid)
 	if err != nil {
 		return nil, NewAPIError(fmt.Sprintf("Tx not found, %v", err), true)
 	}
+	return w.GetTransactionFromBchainTx(bchainTx, height, spendingTxs, specificJSON)
+}
+
+// GetTransactionFromBchainTx reads transaction data from txid
+func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height uint32, spendingTxs bool, specificJSON bool) (*Tx, error) {
+	var err error
 	var ta *db.TxAddresses
 	var erc20t []Erc20Transfer
 	var ethSpecific *eth.EthereumTxData
 	var blockhash string
 	if bchainTx.Confirmations > 0 {
 		if w.chainType == bchain.ChainBitcoinType {
-			ta, err = w.db.GetTxAddresses(txid)
+			ta, err = w.db.GetTxAddresses(bchainTx.Txid)
 			if err != nil {
-				return nil, errors.Annotatef(err, "GetTxAddresses %v", txid)
+				return nil, errors.Annotatef(err, "GetTxAddresses %v", bchainTx.Txid)
 			}
 		}
 		blockhash, err = w.db.GetBlockHash(height)
@@ -283,9 +288,6 @@ func (w *Worker) GetTransaction(txid string, spendingTxs bool, specificJSON bool
 		CoinSpecificJSON: sj,
 		Erc20Transfers:   erc20t,
 		EthereumSpecific: ethSpecific,
-	}
-	if spendingTxs {
-		glog.Info("GetTransaction ", txid, " finished in ", time.Since(start))
 	}
 	return r, nil
 }

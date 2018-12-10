@@ -197,6 +197,15 @@ func (s *WebsocketServer) onConnect(c *websocketChannel) {
 
 func (s *WebsocketServer) onDisconnect(c *websocketChannel) {
 	s.unsubscribeNewBlock(c)
+	s.addressSubscriptionsLock.Lock()
+	defer s.addressSubscriptionsLock.Unlock()
+	for _, sa := range s.addressSubscriptions {
+		for sc := range sa {
+			if sc == c {
+				delete(sa, c)
+			}
+		}
+	}
 	glog.Info("Client disconnected ", c.id, ", ", c.ip)
 	s.metrics.WebsocketClients.Dec()
 }
@@ -225,6 +234,20 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *webs
 	},
 	"unsubscribeNewBlock": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
 		rv, err = s.unsubscribeNewBlock(c)
+		return
+	},
+	"subscribeAddress": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
+		ad, err := s.unmarshalAddress(req.Params)
+		if err == nil {
+			rv, err = s.subscribeAddress(c, ad, req)
+		}
+		return
+	},
+	"unsubscribeAddress": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
+		ad, err := s.unmarshalAddress(req.Params)
+		if err == nil {
+			rv, err = s.unsubscribeAddress(c, ad)
+		}
 		return
 	},
 }
@@ -325,6 +348,39 @@ func (s *WebsocketServer) unsubscribeNewBlock(c *websocketChannel) (res interfac
 	return
 }
 
+func (s *WebsocketServer) unmarshalAddress(params []byte) (bchain.AddressDescriptor, error) {
+	r := struct {
+		Address string `json:"address"`
+	}{}
+	err := json.Unmarshal(params, &r)
+	if err != nil {
+		return nil, err
+	}
+	return s.chainParser.GetAddrDescFromAddress(r.Address)
+}
+
+func (s *WebsocketServer) subscribeAddress(c *websocketChannel, addrDesc bchain.AddressDescriptor, req *websocketReq) (res interface{}, err error) {
+	s.addressSubscriptionsLock.Lock()
+	defer s.addressSubscriptionsLock.Unlock()
+	as, ok := s.addressSubscriptions[string(addrDesc)]
+	if !ok {
+		as = make(map[*websocketChannel]string)
+		s.addressSubscriptions[string(addrDesc)] = as
+	}
+	as[c] = req.ID
+	return
+}
+
+func (s *WebsocketServer) unsubscribeAddress(c *websocketChannel, addrDesc bchain.AddressDescriptor) (res interface{}, err error) {
+	s.addressSubscriptionsLock.Lock()
+	defer s.addressSubscriptionsLock.Unlock()
+	as, ok := s.addressSubscriptions[string(addrDesc)]
+	if ok {
+		delete(as, c)
+	}
+	return
+}
+
 // OnNewBlock is a callback that broadcasts info about new block to subscribed clients
 func (s *WebsocketServer) OnNewBlock(hash string, height uint32) {
 	s.newBlockSubscriptionsLock.Lock()
@@ -345,4 +401,50 @@ func (s *WebsocketServer) OnNewBlock(hash string, height uint32) {
 		}
 	}
 	glog.Info("broadcasting new block ", height, " ", hash, " to ", len(s.newBlockSubscriptions), " channels")
+}
+
+// OnNewTxAddr is a callback that broadcasts info about a tx affecting subscribed address
+func (s *WebsocketServer) OnNewTxAddr(tx *bchain.Tx, addrDesc bchain.AddressDescriptor, isOutput bool) {
+	// check if there is any subscription but release lock immediately, GetTransactionFromBchainTx may take some time
+	s.addressSubscriptionsLock.Lock()
+	as, ok := s.addressSubscriptions[string(addrDesc)]
+	s.addressSubscriptionsLock.Unlock()
+	if ok && len(as) > 0 {
+		addr, _, err := s.chainParser.GetAddressesFromAddrDesc(addrDesc)
+		if err != nil {
+			glog.Error("GetAddressesFromAddrDesc error ", err, " for ", addrDesc)
+			return
+		}
+		if len(addr) == 1 {
+			atx, err := s.api.GetTransactionFromBchainTx(tx, 0, false, false)
+			if err != nil {
+				glog.Error("GetTransactionFromBchainTx error ", err, " for ", tx.Txid)
+				return
+			}
+			data := struct {
+				Address string  `json:"address"`
+				Input   bool    `json:"input"`
+				Tx      *api.Tx `json:"tx"`
+			}{
+				Address: addr[0],
+				Input:   !isOutput,
+				Tx:      atx,
+			}
+			// get the list of subscriptions again, this time keep the lock
+			s.addressSubscriptionsLock.Lock()
+			defer s.addressSubscriptionsLock.Unlock()
+			as, ok = s.addressSubscriptions[string(addrDesc)]
+			if ok {
+				for c, id := range as {
+					if c.IsAlive() {
+						c.out <- &websocketRes{
+							ID:   id,
+							Data: &data,
+						}
+					}
+				}
+				glog.Info("broadcasting new tx ", tx.Txid, " for addr ", addr[0], " to ", len(as), " channels")
+			}
+		}
+	}
 }

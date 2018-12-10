@@ -122,7 +122,7 @@ func (m *MempoolBitcoinType) getTxAddrs(txid string, chanInput chan Outpoint, ch
 			io = append(io, addrIndex{string(addrDesc), int32(output.N)})
 		}
 		if m.onNewTxAddr != nil {
-			m.onNewTxAddr(tx.Txid, addrDesc, true)
+			m.onNewTxAddr(tx, addrDesc, true)
 		}
 	}
 	dispatched := 0
