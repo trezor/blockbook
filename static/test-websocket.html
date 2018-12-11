@@ -16,8 +16,10 @@
         var messageID;
         var pendingMessages;
         var subscriptions;
+        var subscriptionNewBlockId;
+        var subscriptionAddressesId;
         function send(method, params, callback) {
-            id = messageID.toString();
+            var id = messageID.toString();
             messageID++;
             pendingMessages[id] = callback;
             var req = {
@@ -29,7 +31,7 @@
             return id;
         }
         function subscribe(method, params, callback) {
-            id = messageID.toString();
+            var id = messageID.toString();
             messageID++;
             subscriptions[id] = callback;
             var req = {
@@ -40,12 +42,25 @@
             ws.send(JSON.stringify(req));
             return id;
         }
+        function unsubscribe(method, id, params, callback) {
+            delete subscriptions[id];
+            pendingMessages[id] = callback;
+            var req = {
+                id,
+                method,
+                params
+            }
+            ws.send(JSON.stringify(req));
+            return id;
+        }
         function connect(server) {
             messageID = 0;
-            pendingMessages = {}
-            subscriptions = {}
+            pendingMessages = {};
+            subscriptions = {};
+            subscribeNewBlockId = "";
+            subscribeAddressesId = "";
             if (server.startsWith("http")) {
-                server.replace("http", "ws");
+                server = server.replace("http", "ws");
             }
             if (!server.endsWith("/websocket")) {
                 server += "/websocket";
@@ -115,22 +130,57 @@
             const method = 'subscribeNewBlock';
             const params = {
             };
-            var id = subscribe(method, params, function (result) {
+            if (subscribeNewBlockId) {
+                delete subscriptions[subscribeNewBlockId];
+                subscribeNewBlockId = "";
+            }
+            subscribeNewBlockId = subscribe(method, params, function (result) {
                 document.getElementById('subscribeNewBlockResult').innerText += JSON.stringify(result).replace(/,/g, ", ") + "\n";
+                document.getElementById('subscribeNewBlockId').innerText = subscribeNewBlockId;
+                document.getElementById('unsubscribeNewBlockButton').setAttribute("style", "display: inherit;");
             });
-            document.getElementById('subscribeNewBlockId').innerText = id;
         }
 
-        function subscribeAddress() {
-            const method = 'subscribeAddress';
-            var address = document.getElementById('subscribeAddressName').value;
+        function unsubscribeNewBlock() {
+            const method = 'unsubscribeNewBlock';
             const params = {
-                address
             };
-            var id = subscribe(method, params, function (result) {
-                document.getElementById('subscribeAddressResult').innerText += JSON.stringify(result).replace(/,/g, ", ") + "\n";
+            unsubscribe(method, subscribeNewBlockId, params, function (result) {
+                subscribeNewBlockId = "";
+                document.getElementById('subscribeNewBlockResult').innerText += JSON.stringify(result).replace(/,/g, ", ") + "\n";
+                document.getElementById('subscribeNewBlockId').innerText = "";
+                document.getElementById('unsubscribeNewBlockButton').setAttribute("style", "display: none;");
             });
-            document.getElementById('subscribeAddressIds').innerText += " " + id ;
+        }
+
+        function subscribeAddresses() {
+            const method = 'subscribeAddresses';
+            var addresses = document.getElementById('subscribeAddressesName').value.split(",");
+            addresses = addresses.map(s => s.trim());
+            const params = {
+                addresses
+            };
+            if (subscribeAddressesId) {
+                delete subscriptions[subscribeAddressesId];
+                subscribeAddressesId = "";
+            }
+            subscribeAddressesId = subscribe(method, params, function (result) {
+                document.getElementById('subscribeAddressesResult').innerText += JSON.stringify(result).replace(/,/g, ", ") + "\n";
+                document.getElementById('subscribeAddressesIds').innerText = subscribeAddressesId;
+                document.getElementById('unsubscribeAddressesButton').setAttribute("style", "display: inherit;");
+            });
+        }
+
+        function unsubscribeAddresses() {
+            const method = 'unsubscribeAddresses';
+            const params = {
+            };
+            unsubscribe(method, subscribeAddressesId, params, function (result) {
+                subscribeAddressesId = "";
+                document.getElementById('subscribeAddressesResult').innerText += JSON.stringify(result).replace(/,/g, ", ") + "\n";
+                document.getElementById('subscribeAddressesIds').innerText = "";
+                document.getElementById('unsubscribeAddressesButton').setAttribute("style", "display: none;");
+            });
         }
 
         function getBlockHeader() {
@@ -276,8 +326,11 @@
             <div class="col">
                 <input class="btn btn-secondary" type="button" value="subscribe new block" onclick="subscribeNewBlock()">
             </div>
-            <div class="col-8">
+            <div class="col-4">
                 <span id="subscribeNewBlockId"></span>
+            </div>
+            <div class="col">
+                <input class="btn btn-secondary" id="unsubscribeNewBlockButton" style="display: none;" type="button" value="unsubscribe" onclick="unsubscribeNewBlock()">
             </div>
         </div>
         <div class="row">
@@ -285,23 +338,25 @@
         </div>
         <div class="row">
             <div class="col">
-                <input class="btn btn-secondary" type="button" value="subscribe address" onclick="subscribeAddress()">
+                <input class="btn btn-secondary" type="button" value="subscribe address" onclick="subscribeAddresses()">
             </div>
             <div class="col-8">
-                <input type="text" class="form-control" id="subscribeAddressName" value="2MzTmvPJLZaLzD9XdN3jMtQA5NexC3rAPww">
+                <input type="text" class="form-control" id="subscribeAddressesName" value="0x65513ecd11fd3a5b1fefdcc6a500b025008405a2,0xbdfeff9a1f4a1bdf483d680046344316019c58cf">
             </div>
             <div class="col">
-                <span id="subscribeAddressIds"></span>
+                <span id="subscribeAddressesIds"></span>
             </div>
-        </div>
+            <div class="col">
+                    <input class="btn btn-secondary" id="unsubscribeAddressesButton" style="display: none;" type="button" value="unsubscribe" onclick="unsubscribeAddresses()">
+                </div>
+            </div>
         <div class="row">
-            <div class="col" id="subscribeAddressResult">
-            </div>
+            <div class="col" id="subscribeAddressesResult"></div>
         </div>
     </div>
 </body>
 <script>
-    document.getElementById('serverAddress').value = window.location.protocol.replace("http", "ws") + "//" + window.location.host;
+    document.getElementById('serverAddress').value = window.location.protocol + "//" + window.location.host;
 </script>
 
 </html>

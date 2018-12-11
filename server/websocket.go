@@ -197,15 +197,7 @@ func (s *WebsocketServer) onConnect(c *websocketChannel) {
 
 func (s *WebsocketServer) onDisconnect(c *websocketChannel) {
 	s.unsubscribeNewBlock(c)
-	s.addressSubscriptionsLock.Lock()
-	defer s.addressSubscriptionsLock.Unlock()
-	for _, sa := range s.addressSubscriptions {
-		for sc := range sa {
-			if sc == c {
-				delete(sa, c)
-			}
-		}
-	}
+	s.unsubscribeAddresses(c)
 	glog.Info("Client disconnected ", c.id, ", ", c.ip)
 	s.metrics.WebsocketClients.Dec()
 }
@@ -229,26 +221,20 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *webs
 		return
 	},
 	"subscribeNewBlock": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
-		rv, err = s.subscribeNewBlock(c, req)
-		return
+		return s.subscribeNewBlock(c, req)
 	},
 	"unsubscribeNewBlock": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
-		rv, err = s.unsubscribeNewBlock(c)
-		return
+		return s.unsubscribeNewBlock(c)
 	},
-	"subscribeAddress": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
-		ad, err := s.unmarshalAddress(req.Params)
+	"subscribeAddresses": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
+		ad, err := s.unmarshalAddresses(req.Params)
 		if err == nil {
-			rv, err = s.subscribeAddress(c, ad, req)
+			rv, err = s.subscribeAddresses(c, ad, req)
 		}
 		return
 	},
-	"unsubscribeAddress": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
-		ad, err := s.unmarshalAddress(req.Params)
-		if err == nil {
-			rv, err = s.unsubscribeAddress(c, ad)
-		}
-		return
+	"unsubscribeAddresses": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
+		return s.unsubscribeAddresses(c)
 	},
 }
 
@@ -334,51 +320,72 @@ func (s *WebsocketServer) sendTransaction(tx string) (res resultSendTransaction,
 	return
 }
 
+type subscriptionResponse struct {
+	Subscribed bool `json:"subscribed"`
+}
+
 func (s *WebsocketServer) subscribeNewBlock(c *websocketChannel, req *websocketReq) (res interface{}, err error) {
 	s.newBlockSubscriptionsLock.Lock()
 	defer s.newBlockSubscriptionsLock.Unlock()
 	s.newBlockSubscriptions[c] = req.ID
-	return
+	return &subscriptionResponse{true}, nil
 }
 
 func (s *WebsocketServer) unsubscribeNewBlock(c *websocketChannel) (res interface{}, err error) {
 	s.newBlockSubscriptionsLock.Lock()
 	defer s.newBlockSubscriptionsLock.Unlock()
 	delete(s.newBlockSubscriptions, c)
-	return
+	return &subscriptionResponse{false}, nil
 }
 
-func (s *WebsocketServer) unmarshalAddress(params []byte) (bchain.AddressDescriptor, error) {
+func (s *WebsocketServer) unmarshalAddresses(params []byte) ([]bchain.AddressDescriptor, error) {
 	r := struct {
-		Address string `json:"address"`
+		Addresses []string `json:"addresses"`
 	}{}
 	err := json.Unmarshal(params, &r)
 	if err != nil {
 		return nil, err
 	}
-	return s.chainParser.GetAddrDescFromAddress(r.Address)
+	rv := make([]bchain.AddressDescriptor, len(r.Addresses))
+	for i, a := range r.Addresses {
+		ad, err := s.chainParser.GetAddrDescFromAddress(a)
+		if err != nil {
+			return nil, err
+		}
+		rv[i] = ad
+	}
+	return rv, nil
 }
 
-func (s *WebsocketServer) subscribeAddress(c *websocketChannel, addrDesc bchain.AddressDescriptor, req *websocketReq) (res interface{}, err error) {
+func (s *WebsocketServer) subscribeAddresses(c *websocketChannel, addrDesc []bchain.AddressDescriptor, req *websocketReq) (res interface{}, err error) {
+	// unsubscribe all previous subscriptions
+	s.unsubscribeAddresses(c)
 	s.addressSubscriptionsLock.Lock()
 	defer s.addressSubscriptionsLock.Unlock()
-	as, ok := s.addressSubscriptions[string(addrDesc)]
-	if !ok {
-		as = make(map[*websocketChannel]string)
-		s.addressSubscriptions[string(addrDesc)] = as
+	for i := range addrDesc {
+		ads := string(addrDesc[i])
+		as, ok := s.addressSubscriptions[ads]
+		if !ok {
+			as = make(map[*websocketChannel]string)
+			s.addressSubscriptions[ads] = as
+		}
+		as[c] = req.ID
 	}
-	as[c] = req.ID
-	return
+	return &subscriptionResponse{true}, nil
 }
 
-func (s *WebsocketServer) unsubscribeAddress(c *websocketChannel, addrDesc bchain.AddressDescriptor) (res interface{}, err error) {
+// unsubscribeAddresses unsubscribes all address subscriptions by this channel
+func (s *WebsocketServer) unsubscribeAddresses(c *websocketChannel) (res interface{}, err error) {
 	s.addressSubscriptionsLock.Lock()
 	defer s.addressSubscriptionsLock.Unlock()
-	as, ok := s.addressSubscriptions[string(addrDesc)]
-	if ok {
-		delete(as, c)
+	for _, sa := range s.addressSubscriptions {
+		for sc := range sa {
+			if sc == c {
+				delete(sa, c)
+			}
+		}
 	}
-	return
+	return &subscriptionResponse{false}, nil
 }
 
 // OnNewBlock is a callback that broadcasts info about new block to subscribed clients
