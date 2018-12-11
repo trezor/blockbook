@@ -136,9 +136,9 @@
             }
             subscribeNewBlockId = subscribe(method, params, function (result) {
                 document.getElementById('subscribeNewBlockResult').innerText += JSON.stringify(result).replace(/,/g, ", ") + "\n";
-                document.getElementById('subscribeNewBlockId').innerText = subscribeNewBlockId;
-                document.getElementById('unsubscribeNewBlockButton').setAttribute("style", "display: inherit;");
             });
+            document.getElementById('subscribeNewBlockId').innerText = subscribeNewBlockId;
+            document.getElementById('unsubscribeNewBlockButton').setAttribute("style", "display: inherit;");
         }
 
         function unsubscribeNewBlock() {
@@ -166,9 +166,9 @@
             }
             subscribeAddressesId = subscribe(method, params, function (result) {
                 document.getElementById('subscribeAddressesResult').innerText += JSON.stringify(result).replace(/,/g, ", ") + "\n";
-                document.getElementById('subscribeAddressesIds').innerText = subscribeAddressesId;
-                document.getElementById('unsubscribeAddressesButton').setAttribute("style", "display: inherit;");
             });
+            document.getElementById('subscribeAddressesIds').innerText = subscribeAddressesId;
+            document.getElementById('unsubscribeAddressesButton').setAttribute("style", "display: inherit;");
         }
 
         function unsubscribeAddresses() {
@@ -347,9 +347,9 @@
                 <span id="subscribeAddressesIds"></span>
             </div>
             <div class="col">
-                    <input class="btn btn-secondary" id="unsubscribeAddressesButton" style="display: none;" type="button" value="unsubscribe" onclick="unsubscribeAddresses()">
-                </div>
+                <input class="btn btn-secondary" id="unsubscribeAddressesButton" style="display: none;" type="button" value="unsubscribe" onclick="unsubscribeAddresses()">
             </div>
+        </div>
         <div class="row">
             <div class="col" id="subscribeAddressesResult"></div>
         </div>

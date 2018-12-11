@@ -76,6 +76,7 @@ func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxC
 		upgrader: &websocket.Upgrader{
 			ReadBufferSize:  1024 * 32,
 			WriteBufferSize: 1024 * 32,
+			CheckOrigin:     checkOrigin,
 		},
 		db:                    db,
 		txCache:               txCache,
@@ -88,6 +89,11 @@ func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxC
 		addressSubscriptions:  make(map[string]map[*websocketChannel]string),
 	}
 	return s, nil
+}
+
+// allow all origins, at least for now
+func checkOrigin(r *http.Request) bool {
+	return true
 }
 
 // ServeHTTP sets up handler of websocket channel

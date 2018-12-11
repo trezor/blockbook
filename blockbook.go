@@ -505,10 +505,10 @@ func onNewTxAddr(tx *bchain.Tx, desc bchain.AddressDescriptor, isOutput bool) {
 }
 
 func pushSynchronizationHandler(nt bchain.NotificationType) {
+	glog.V(1).Info("MQ: notification ", nt)
 	if atomic.LoadInt32(&inShutdown) != 0 {
 		return
 	}
-	glog.V(1).Info("MQ: notification ", nt)
 	if nt == bchain.NotificationNewBlock {
 		chanSyncIndex <- struct{}{}
 	} else if nt == bchain.NotificationNewTx {
