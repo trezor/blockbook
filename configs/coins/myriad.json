@@ -23,9 +23,9 @@
     "package_revision": "satoshilabs-1",
     "system_user": "myriad",
     "version": "0.16.3.0",
-    "binary_url": "https://github.com/myriadteam/myriadcoin/releases/download/v0.16.3.0-beta1/myriadcoin-0.16.3.0-beta1-x86_64-linux-gnu.tar.gz",
+    "binary_url": "https://github.com/myriadteam/myriadcoin/releases/download/v0.16.3.0/myriadcoin-0.16.3.0-x86_64-linux-gnu.tar.gz",
     "verification_type": "sha256",
-    "verification_source": "8bb5143f54b47cefc780d93b9ea2d4079a5b4743730d1247cd582628119ae6ae",
+    "verification_source": "a97b1e98a691666f6c2a61624050aebf7a894c4766cec031cae1ae7afba9a019",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
         "bin/myriadcoin-qt"
