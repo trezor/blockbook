@@ -369,11 +369,12 @@ type TemplateData struct {
 
 func (s *PublicServer) parseTemplates() []*template.Template {
 	templateFuncMap := template.FuncMap{
-		"formatTime":          formatTime,
-		"formatUnixTime":      formatUnixTime,
-		"formatAmount":        formatAmount,
-		"setTxToTemplateData": setTxToTemplateData,
-		"stringInSlice":       stringInSlice,
+		"formatTime":               formatTime,
+		"formatUnixTime":           formatUnixTime,
+		"formatAmount":             s.formatAmount,
+		"formatAmountWithDecimals": formatAmountWithDecimals,
+		"setTxToTemplateData":      setTxToTemplateData,
+		"stringInSlice":            stringInSlice,
 	}
 	t := make([]*template.Template, tplCount)
 	t[errorTpl] = template.Must(template.New("error").Funcs(templateFuncMap).ParseFiles("./static/templates/error.html", "./static/templates/base.html"))
@@ -403,11 +404,18 @@ func formatTime(t time.Time) string {
 
 // for now return the string as it is
 // in future could be used to do coin specific formatting
-func formatAmount(a string) string {
-	if a == "" {
+func (s *PublicServer) formatAmount(a *api.Amount) string {
+	if a == nil {
 		return "0"
 	}
-	return a
+	return s.chainParser.AmountToDecimalString((*big.Int)(a))
+}
+
+func formatAmountWithDecimals(a *api.Amount, d int) string {
+	if a == nil {
+		return "0"
+	}
+	return bchain.AmountToDecimalString((*big.Int)(a), d)
 }
 
 // called from template to support txdetail.html functionality

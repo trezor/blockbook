@@ -91,7 +91,7 @@ func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxC
 	return s, nil
 }
 
-// allow all origins, at least for now
+// allow all origins
 func checkOrigin(r *http.Request) bool {
 	return true
 }

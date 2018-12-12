@@ -59,7 +59,7 @@ func (w *Worker) setSpendingTxToVout(vout *Vout, txid string, height uint32) err
 			} else if tsp == nil {
 				glog.Warning("DB inconsistency:  tx ", t, ": not found in txAddresses")
 			} else if len(tsp.Inputs) > int(index) {
-				if tsp.Inputs[index].ValueSat.Cmp(&vout.ValueSat) == 0 {
+				if tsp.Inputs[index].ValueSat.Cmp((*big.Int)(vout.ValueSat)) == 0 {
 					spentTx, spentHeight, err := w.txCache.GetTransaction(t)
 					if err != nil {
 						glog.Warning("Tx ", t, ": not found")
@@ -113,7 +113,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height uint32, 
 	var err error
 	var ta *db.TxAddresses
 	var erc20t []Erc20Transfer
-	var ethSpecific *eth.EthereumTxData
+	var ethSpecific *EthereumSpecific
 	var blockhash string
 	if bchainTx.Confirmations > 0 {
 		if w.chainType == bchain.ChainBitcoinType {
@@ -157,7 +157,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height uint32, 
 					}
 					if len(otx.Vout) > int(vin.Vout) {
 						vout := &otx.Vout[vin.Vout]
-						vin.ValueSat = vout.ValueSat
+						vin.ValueSat = (*Amount)(&vout.ValueSat)
 						vin.AddrDesc, vin.Addresses, vin.Searchable, err = w.getAddressesFromVout(vout)
 						if err != nil {
 							glog.Errorf("getAddressesFromVout error %v, vout %+v", err, vout)
@@ -166,8 +166,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height uint32, 
 				} else {
 					if len(tas.Outputs) > int(vin.Vout) {
 						output := &tas.Outputs[vin.Vout]
-						vin.ValueSat = output.ValueSat
-						vin.Value = w.chainParser.AmountToDecimalString(&vin.ValueSat)
+						vin.ValueSat = (*Amount)(&output.ValueSat)
 						vin.AddrDesc = output.AddrDesc
 						vin.Addresses, vin.Searchable, err = output.Addresses(w.chainParser)
 						if err != nil {
@@ -175,8 +174,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height uint32, 
 						}
 					}
 				}
-				vin.Value = w.chainParser.AmountToDecimalString(&vin.ValueSat)
-				valInSat.Add(&valInSat, &vin.ValueSat)
+				valInSat.Add(&valInSat, (*big.Int)(vin.ValueSat))
 			}
 		} else if w.chainType == bchain.ChainEthereumType {
 			if len(bchainVin.Addresses) > 0 {
@@ -194,8 +192,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height uint32, 
 		bchainVout := &bchainTx.Vout[i]
 		vout := &vouts[i]
 		vout.N = i
-		vout.ValueSat = bchainVout.ValueSat
-		vout.Value = w.chainParser.AmountToDecimalString(&bchainVout.ValueSat)
+		vout.ValueSat = (*Amount)(&bchainVout.ValueSat)
 		valOutSat.Add(&valOutSat, &bchainVout.ValueSat)
 		vout.ScriptPubKey.Hex = bchainVout.ScriptPubKey.Hex
 		vout.ScriptPubKey.AddrDesc, vout.ScriptPubKey.Addresses, vout.ScriptPubKey.Searchable, err = w.getAddressesFromVout(bchainVout)
@@ -242,20 +239,28 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height uint32, 
 				Contract: e.Contract,
 				From:     e.From,
 				To:       e.To,
-				Tokens:   bchain.AmountToDecimalString(&e.Tokens, erc20c.Decimals),
+				Decimals: erc20c.Decimals,
+				Tokens:   (*Amount)(&e.Tokens),
 				Name:     erc20c.Name,
 				Symbol:   erc20c.Symbol,
 			}
 		}
-		ethSpecific = eth.GetEthereumTxData(bchainTx)
+		ethTxData := eth.GetEthereumTxData(bchainTx)
 		// mempool txs do not have fees yet
-		if ethSpecific.GasUsed != nil {
-			feesSat.Mul(ethSpecific.GasPriceNum, ethSpecific.GasUsed)
+		if ethTxData.GasUsed != nil {
+			feesSat.Mul(ethTxData.GasPrice, ethTxData.GasUsed)
 		}
 		if len(bchainTx.Vout) > 0 {
 			valInSat = bchainTx.Vout[0].ValueSat
 		}
 		valOutSat = valInSat
+		ethSpecific = &EthereumSpecific{
+			GasLimit: ethTxData.GasLimit,
+			GasPrice: (*Amount)(ethTxData.GasPrice),
+			GasUsed:  ethTxData.GasUsed,
+			Nonce:    ethTxData.Nonce,
+			Status:   ethTxData.Status,
+		}
 	}
 	// for now do not return size, we would have to compute vsize of segwit transactions
 	// size:=len(bchainTx.Hex) / 2
@@ -271,15 +276,12 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height uint32, 
 		Blockheight:      int(height),
 		Blocktime:        bchainTx.Blocktime,
 		Confirmations:    bchainTx.Confirmations,
-		Fees:             w.chainParser.AmountToDecimalString(&feesSat),
-		FeesSat:          feesSat,
+		FeesSat:          (*Amount)(&feesSat),
 		Locktime:         bchainTx.LockTime,
 		Time:             bchainTx.Time,
 		Txid:             bchainTx.Txid,
-		ValueIn:          w.chainParser.AmountToDecimalString(&valInSat),
-		ValueInSat:       valInSat,
-		ValueOut:         w.chainParser.AmountToDecimalString(&valOutSat),
-		ValueOutSat:      valOutSat,
+		ValueInSat:       (*Amount)(&valInSat),
+		ValueOutSat:      (*Amount)(&valOutSat),
 		Version:          bchainTx.Version,
 		Hex:              bchainTx.Hex,
 		Vin:              vins,
@@ -331,7 +333,7 @@ func (t *Tx) getAddrVoutValue(addrDesc bchain.AddressDescriptor) *big.Int {
 	var val big.Int
 	for _, vout := range t.Vout {
 		if bytes.Equal(vout.ScriptPubKey.AddrDesc, addrDesc) {
-			val.Add(&val, &vout.ValueSat)
+			val.Add(&val, (*big.Int)(vout.ValueSat))
 		}
 	}
 	return &val
@@ -341,7 +343,7 @@ func (t *Tx) getAddrVinValue(addrDesc bchain.AddressDescriptor) *big.Int {
 	var val big.Int
 	for _, vin := range t.Vin {
 		if bytes.Equal(vin.AddrDesc, addrDesc) {
-			val.Add(&val, &vin.ValueSat)
+			val.Add(&val, (*big.Int)(vin.ValueSat))
 		}
 	}
 	return &val
@@ -371,9 +373,8 @@ func (w *Worker) txFromTxAddress(txid string, ta *db.TxAddresses, bi *db.BlockIn
 		tai := &ta.Inputs[i]
 		vin := &vins[i]
 		vin.N = i
-		vin.ValueSat = tai.ValueSat
-		vin.Value = w.chainParser.AmountToDecimalString(&vin.ValueSat)
-		valInSat.Add(&valInSat, &vin.ValueSat)
+		vin.ValueSat = (*Amount)(&tai.ValueSat)
+		valInSat.Add(&valInSat, &tai.ValueSat)
 		vin.Addresses, vin.Searchable, err = tai.Addresses(w.chainParser)
 		if err != nil {
 			glog.Errorf("tai.Addresses error %v, tx %v, input %v, tai %+v", err, txid, i, tai)
@@ -384,9 +385,8 @@ func (w *Worker) txFromTxAddress(txid string, ta *db.TxAddresses, bi *db.BlockIn
 		tao := &ta.Outputs[i]
 		vout := &vouts[i]
 		vout.N = i
-		vout.ValueSat = tao.ValueSat
-		vout.Value = w.chainParser.AmountToDecimalString(&vout.ValueSat)
-		valOutSat.Add(&valOutSat, &vout.ValueSat)
+		vout.ValueSat = (*Amount)(&tao.ValueSat)
+		valOutSat.Add(&valOutSat, &tao.ValueSat)
 		vout.ScriptPubKey.Addresses, vout.ScriptPubKey.Searchable, err = tao.Addresses(w.chainParser)
 		if err != nil {
 			glog.Errorf("tai.Addresses error %v, tx %v, output %v, tao %+v", err, txid, i, tao)
@@ -403,11 +403,11 @@ func (w *Worker) txFromTxAddress(txid string, ta *db.TxAddresses, bi *db.BlockIn
 		Blockheight:   int(ta.Height),
 		Blocktime:     bi.Time,
 		Confirmations: bestheight - ta.Height + 1,
-		Fees:          w.chainParser.AmountToDecimalString(&feesSat),
+		FeesSat:       (*Amount)(&feesSat),
 		Time:          bi.Time,
 		Txid:          txid,
-		ValueIn:       w.chainParser.AmountToDecimalString(&valInSat),
-		ValueOut:      w.chainParser.AmountToDecimalString(&valOutSat),
+		ValueInSat:    (*Amount)(&valInSat),
+		ValueOutSat:   (*Amount)(&valOutSat),
 		Vin:           vins,
 		Vout:          vouts,
 	}
@@ -486,14 +486,8 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 			} else {
 				b = nil
 			}
-			var balance, balanceSat string
-			if b != nil {
-				balance = bchain.AmountToDecimalString(b, ci.Decimals)
-				balanceSat = b.String()
-			}
 			erc20t[i] = Erc20Token{
-				Balance:       balance,
-				BalanceSat:    balanceSat,
+				BalanceSat:    (*Amount)(b),
 				Contract:      ci.Contract,
 				Name:          ci.Name,
 				Symbol:        ci.Symbol,
@@ -522,15 +516,16 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option GetA
 		return nil, NewAPIError(fmt.Sprintf("Invalid address, %v", err), true)
 	}
 	var (
-		ba                              *db.AddrBalance
-		erc20t                          []Erc20Token
-		erc20c                          *bchain.Erc20Contract
-		txm                             []string
-		txs                             []*Tx
-		txids                           []string
-		pg                              Paging
-		uBalSat                         big.Int
-		totalReceived, totalSent, nonce string
+		ba                       *db.AddrBalance
+		erc20t                   []Erc20Token
+		erc20c                   *bchain.Erc20Contract
+		txm                      []string
+		txs                      []*Tx
+		txids                    []string
+		pg                       Paging
+		uBalSat                  big.Int
+		totalReceived, totalSent *big.Int
+		nonce                    string
 	)
 	if w.chainType == bchain.ChainEthereumType {
 		var n uint64
@@ -646,19 +641,17 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option GetA
 		}
 	}
 	if w.chainType == bchain.ChainBitcoinType {
-		totalReceived = w.chainParser.AmountToDecimalString(ba.ReceivedSat())
-		totalSent = w.chainParser.AmountToDecimalString(&ba.SentSat)
+		totalReceived = ba.ReceivedSat()
+		totalSent = &ba.SentSat
 	}
 	r := &Address{
 		Paging:                  pg,
 		AddrStr:                 address,
-		Balance:                 w.chainParser.AmountToDecimalString(&ba.BalanceSat),
-		BalanceSat:              ba.BalanceSat.String(),
-		TotalReceived:           totalReceived,
-		TotalSent:               totalSent,
+		BalanceSat:              (*Amount)(&ba.BalanceSat),
+		TotalReceivedSat:        (*Amount)(totalReceived),
+		TotalSentSat:            (*Amount)(totalSent),
 		TxApperances:            int(ba.Txs),
-		UnconfirmedBalance:      w.chainParser.AmountToDecimalString(&uBalSat),
-		UnconfirmedBalanceSat:   uBalSat.String(),
+		UnconfirmedBalanceSat:   (*Amount)(&uBalSat),
 		UnconfirmedTxApperances: len(txm),
 		Transactions:            txs,
 		Txids:                   txids,
@@ -714,8 +707,7 @@ func (w *Worker) GetAddressUtxo(address string, onlyConfirmed bool) ([]AddressUt
 							r = append(r, AddressUtxo{
 								Txid:      bchainTx.Txid,
 								Vout:      int32(i),
-								AmountSat: vout.ValueSat,
-								Amount:    w.chainParser.AmountToDecimalString(&vout.ValueSat),
+								AmountSat: (*Amount)(&vout.ValueSat),
 							})
 						}
 					}
@@ -734,7 +726,7 @@ func (w *Worker) GetAddressUtxo(address string, onlyConfirmed bool) ([]AddressUt
 		outpoints := make([]bchain.Outpoint, 0, 8)
 		err = w.db.GetAddrDescTransactions(addrDesc, 0, ^uint32(0), func(txid string, vout int32, isOutput bool) error {
 			if isOutput {
-				outpoints = append(outpoints, bchain.Outpoint{txid, vout})
+				outpoints = append(outpoints, bchain.Outpoint{Txid: txid, Vout: vout})
 			}
 			return nil
 		})
@@ -772,8 +764,7 @@ func (w *Worker) GetAddressUtxo(address string, onlyConfirmed bool) ([]AddressUt
 							r = append(r, AddressUtxo{
 								Txid:          o.Txid,
 								Vout:          o.Vout,
-								AmountSat:     v,
-								Amount:        w.chainParser.AmountToDecimalString(&v),
+								AmountSat:     (*Amount)(&v),
 								Height:        int(ta.Height),
 								Confirmations: bestheight - int(ta.Height) + 1,
 							})

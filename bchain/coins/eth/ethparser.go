@@ -414,12 +414,11 @@ func GetErc20FromTx(tx *bchain.Tx) ([]Erc20Transfer, error) {
 
 // EthereumTxData contains ethereum specific transaction data
 type EthereumTxData struct {
-	Status      int      `json:"status"` // 1 OK, 0 Fail, -1 pending
-	Nonce       uint64   `json:"nonce"`
-	GasLimit    *big.Int `json:"gaslimit"`
-	GasUsed     *big.Int `json:"gasused"`
-	GasPrice    string   `json:"gasprice"`
-	GasPriceNum *big.Int `json:"-"`
+	Status   int      `json:"status"` // 1 OK, 0 Fail, -1 pending
+	Nonce    uint64   `json:"nonce"`
+	GasLimit *big.Int `json:"gaslimit"`
+	GasUsed  *big.Int `json:"gasused"`
+	GasPrice *big.Int `json:"gasprice"`
 }
 
 // GetEthereumTxData returns EthereumTxData from bchain.Tx
@@ -430,8 +429,7 @@ func GetEthereumTxData(tx *bchain.Tx) *EthereumTxData {
 		if csd.Tx != nil {
 			etd.Nonce, _ = hexutil.DecodeUint64(csd.Tx.AccountNonce)
 			etd.GasLimit, _ = hexutil.DecodeBig(csd.Tx.GasLimit)
-			etd.GasPriceNum, _ = hexutil.DecodeBig(csd.Tx.GasPrice)
-			etd.GasPrice = bchain.AmountToDecimalString(etd.GasPriceNum, EtherAmountDecimalPoint)
+			etd.GasPrice, _ = hexutil.DecodeBig(csd.Tx.GasPrice)
 		}
 		if csd.Receipt != nil {
 			if csd.Receipt.Status == "0x1" {

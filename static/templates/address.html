@@ -1,6 +1,6 @@
 {{define "specific"}}{{$cs := .CoinShortcut}}{{$addr := .Address}}{{$data := .}}
 <h1>{{if $addr.Erc20Contract}}Contract {{$addr.Erc20Contract.Name}} ({{$addr.Erc20Contract.Symbol}}){{else}}Address{{end}}
-    <small class="text-muted">{{formatAmount $addr.Balance}} {{$cs}}</small>
+    <small class="text-muted">{{formatAmount $addr.BalanceSat}} {{$cs}}</small>
 </h1>
 <div class="alert alert-data ellipsis">
     <span class="data">{{$addr.AddrStr}}</span>
@@ -13,7 +13,7 @@
                 {{- if eq .ChainType 1 -}}
                 <tr>
                     <td style="width: 25%;">Balance</td>
-                    <td class="data">{{formatAmount $addr.Balance}} {{$cs}}</td>
+                    <td class="data">{{formatAmount $addr.BalanceSat}} {{$cs}}</td>
                 </tr>
                 <tr>
                     <td>Non-contract Transactions</td>
@@ -37,7 +37,7 @@
                                 {{- range $et := $addr.Erc20Tokens -}}
                                 <tr>
                                     <td class="data ellipsis"><a href="/address/{{$et.Contract}}">{{$et.Name}}</a></td>
-                                    <td class="data">{{formatAmount $et.Balance}} {{$et.Symbol}}</td>
+                                    <td class="data">{{formatAmountWithDecimals $et.BalanceSat $et.Decimals}} {{$et.Symbol}}</td>
                                     <td class="data">{{$et.Txs}}</td>
                                 </tr>
                                 {{- end -}}
@@ -50,15 +50,15 @@
                 {{- else -}}
                 <tr>
                     <td style="width: 25%;">Total Received</td>
-                    <td class="data">{{formatAmount $addr.TotalReceived}} {{$cs}}</td>
+                    <td class="data">{{formatAmount $addr.TotalReceivedSat}} {{$cs}}</td>
                 </tr>
                 <tr>
                     <td>Total Sent</td>
-                    <td class="data">{{formatAmount $addr.TotalSent}} {{$cs}}</td>
+                    <td class="data">{{formatAmount $addr.TotalSentSat}} {{$cs}}</td>
                 </tr>
                 <tr>
                     <td>Final Balance</td>
-                    <td class="data">{{formatAmount $addr.Balance}} {{$cs}}</td>
+                    <td class="data">{{formatAmount $addr.BalanceSat}} {{$cs}}</td>
                 </tr>
                 <tr>
                     <td>No. Transactions</td>
@@ -83,7 +83,7 @@
         <tbody>
             <tr>
                 <td style="width: 25%;">Unconfirmed Balance</td>
-                <td class="data">{{formatAmount $addr.UnconfirmedBalance}} {{$cs}}</td>
+                <td class="data">{{formatAmount $addr.UnconfirmedBalanceSat}} {{$cs}}</td>
             </tr>
             <tr>
                 <td>No. Transactions</td>

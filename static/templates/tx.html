@@ -36,7 +36,7 @@
             </tr>
             <tr>
                 <td>Value</td>
-                <td class="data">{{formatAmount $tx.ValueOut}} {{$cs}}</td>
+                <td class="data">{{formatAmount $tx.ValueOutSat}} {{$cs}}</td>
             </tr>
             <tr>
                 <td>Gas Used / Limit</td>
@@ -49,17 +49,17 @@
             {{- else -}}
             <tr>
                 <td>Total Input</td>
-                <td class="data">{{formatAmount $tx.ValueIn}} {{$cs}}</td>
+                <td class="data">{{formatAmount $tx.ValueInSat}} {{$cs}}</td>
             </tr>
             <tr>
                 <td>Total Output</td>
-                <td class="data">{{formatAmount $tx.ValueOut}} {{$cs}}</td>
+                <td class="data">{{formatAmount $tx.ValueOutSat}} {{$cs}}</td>
             </tr>
             {{- end -}}
-            {{- if $tx.Fees -}}
+            {{- if $tx.FeesSat -}}
             <tr>
                 <td>Fees</td>
-                <td class="data">{{formatAmount $tx.Fees}} {{$cs}}</td>
+                <td class="data">{{formatAmount $tx.FeesSat}} {{$cs}}</td>
             </tr>{{end -}}
         </tbody>
     </table>

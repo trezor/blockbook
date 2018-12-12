@@ -312,7 +312,7 @@ func txToResTx(tx *api.Tx) resTx {
 			Script:      &script,
 			Sequence:    int64(vin.Sequence),
 			OutputIndex: int(vin.Vout),
-			Satoshis:    vin.ValueSat.Int64(),
+			Satoshis:    (*big.Int)(vin.ValueSat).Int64(),
 		}
 		if len(vin.Addresses) > 0 {
 			a := vin.Addresses[0]
@@ -325,7 +325,7 @@ func txToResTx(tx *api.Tx) resTx {
 		vout := &tx.Vout[i]
 		script := vout.ScriptPubKey.Hex
 		output := txOutputs{
-			Satoshis: vout.ValueSat.Int64(),
+			Satoshis: (*big.Int)(vout.ValueSat).Int64(),
 			Script:   &script,
 		}
 		if len(vout.ScriptPubKey.Addresses) > 0 {
@@ -342,15 +342,15 @@ func txToResTx(tx *api.Tx) resTx {
 	}
 	return resTx{
 		BlockTimestamp: tx.Blocktime,
-		FeeSatoshis:    tx.FeesSat.Int64(),
+		FeeSatoshis:    (*big.Int)(tx.FeesSat).Int64(),
 		Hash:           tx.Txid,
 		Height:         h,
 		Hex:            tx.Hex,
 		Inputs:         inputs,
-		InputSatoshis:  tx.ValueInSat.Int64(),
+		InputSatoshis:  (*big.Int)(tx.ValueInSat).Int64(),
 		Locktime:       int(tx.Locktime),
 		Outputs:        outputs,
-		OutputSatoshis: tx.ValueOutSat.Int64(),
+		OutputSatoshis: (*big.Int)(tx.ValueOutSat).Int64(),
 		Version:        int(tx.Version),
 	}
 }
@@ -407,7 +407,7 @@ func (s *SocketIoServer) getAddressHistory(addr []string, opts *addrOpts) (res r
 					ads[a] = hi
 				}
 				hi.InputIndexes = append(hi.InputIndexes, int(vin.N))
-				totalSat.Sub(&totalSat, &vin.ValueSat)
+				totalSat.Sub(&totalSat, (*big.Int)(vin.ValueSat))
 			}
 		}
 		for i := range tx.Vout {
@@ -420,7 +420,7 @@ func (s *SocketIoServer) getAddressHistory(addr []string, opts *addrOpts) (res r
 					ads[a] = hi
 				}
 				hi.OutputIndexes = append(hi.OutputIndexes, int(vout.N))
-				totalSat.Add(&totalSat, &vout.ValueSat)
+				totalSat.Add(&totalSat, (*big.Int)(vout.ValueSat))
 			}
 		}
 		ahi := addressHistoryItem{}

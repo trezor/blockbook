@@ -66,7 +66,7 @@
             </div>
         </div>
         <div class="col-md-3 text-right" style="padding: .4rem 0;">
-            {{formatAmount $tx.ValueOut}} {{$cs}}
+            {{formatAmount $tx.ValueOutSat}} {{$cs}}
         </div>
     </div>
     {{- if $tx.Erc20Transfers -}}
@@ -106,15 +106,15 @@
                 </table>
             </div>
         </div>
-        <div class="col-md-3 text-right" style="padding: .4rem 0;">{{formatAmount $erc20.Tokens}} {{$erc20.Symbol}}</div>
+        <div class="col-md-3 text-right" style="padding: .4rem 0;">{{formatAmountWithDecimals $erc20.Tokens $erc20.Decimals}} {{$erc20.Symbol}}</div>
     </div>
     {{- end -}}
     <div class="row" style="padding: 6px 15px;"></div>
     {{- end -}}
     <div class="row line-top">
         <div class="col-xs-6 col-sm-4 col-md-4">
-            {{- if $tx.Fees -}}
-            <span class="txvalues txvalues-default">Fee: {{formatAmount $tx.Fees}} {{$cs}}</span>
+            {{- if $tx.FeesSat -}}
+            <span class="txvalues txvalues-default">Fee: {{formatAmount $tx.FeesSat}} {{$cs}}</span>
             {{- end -}}
         </div>
         <div class="col-xs-6 col-sm-8 col-md-8 text-right">
@@ -123,7 +123,7 @@
             {{- else -}}
             <span class="txvalues txvalues-danger ng-hide">Unconfirmed Transaction!</span>
             {{- end -}}
-            <span class="txvalues txvalues-primary">{{formatAmount $tx.ValueOut}} {{$cs}}</span>
+            <span class="txvalues txvalues-primary">{{formatAmount $tx.ValueOutSat}} {{$cs}}</span>
         </div>
     </div>
 </div>

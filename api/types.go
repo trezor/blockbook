@@ -2,7 +2,6 @@ package api
 
 import (
 	"blockbook/bchain"
-	"blockbook/bchain/coins/eth"
 	"blockbook/common"
 	"blockbook/db"
 	"encoding/json"
@@ -42,6 +41,17 @@ func NewAPIError(s string, public bool) error {
 	}
 }
 
+// Amount is datatype holding amounts
+type Amount big.Int
+
+// MarshalJSON Amount serialization
+func (a *Amount) MarshalJSON() (out []byte, err error) {
+	if a == nil {
+		return []byte(`"0"`), nil
+	}
+	return []byte(`"` + (*big.Int)(a).String() + `"`), nil
+}
+
 // ScriptSig contains input script
 type ScriptSig struct {
 	Hex string `json:"hex"`
@@ -58,8 +68,7 @@ type Vin struct {
 	AddrDesc   bchain.AddressDescriptor `json:"-"`
 	Addresses  []string                 `json:"addresses"`
 	Searchable bool                     `json:"-"`
-	Value      string                   `json:"value"`
-	ValueSat   big.Int                  `json:"-"`
+	ValueSat   *Amount                  `json:"value,omitempty"`
 }
 
 // ScriptPubKey contains output script and addresses derived from it
@@ -74,8 +83,7 @@ type ScriptPubKey struct {
 
 // Vout contains information about single transaction output
 type Vout struct {
-	Value        string       `json:"value"`
-	ValueSat     big.Int      `json:"-"`
+	ValueSat     *Amount      `json:"value,omitempty"`
 	N            int          `json:"n"`
 	ScriptPubKey ScriptPubKey `json:"scriptPubKey"`
 	Spent        bool         `json:"spent"`
@@ -86,50 +94,57 @@ type Vout struct {
 
 // Erc20Token contains info about ERC20 token held by an address
 type Erc20Token struct {
-	Contract      string `json:"contract"`
-	Txs           int    `json:"txs"`
-	Name          string `json:"name"`
-	Symbol        string `json:"symbol"`
-	Decimals      int    `json:"decimals"`
-	Balance       string `json:"balance,omitempty"`
-	BalanceSat    string `json:"balanceSat,omitempty"`
-	ContractIndex string `json:"-"`
+	Contract      string  `json:"contract"`
+	Txs           int     `json:"txs"`
+	Name          string  `json:"name"`
+	Symbol        string  `json:"symbol"`
+	Decimals      int     `json:"decimals"`
+	BalanceSat    *Amount `json:"balance,omitempty"`
+	ContractIndex string  `json:"-"`
 }
 
 // Erc20Transfer contains info about ERC20 transfer done in a transaction
 type Erc20Transfer struct {
-	From     string `json:"from"`
-	To       string `json:"to"`
-	Contract string `json:"contract"`
-	Name     string `json:"name"`
-	Symbol   string `json:"symbol"`
-	Tokens   string `json:"tokens"`
+	From     string  `json:"from"`
+	To       string  `json:"to"`
+	Contract string  `json:"contract"`
+	Name     string  `json:"name"`
+	Symbol   string  `json:"symbol"`
+	Decimals int     `json:"decimals"`
+	Tokens   *Amount `json:"tokens"`
+}
+
+// EthereumSpecific contains ethereum specific transaction data
+type EthereumSpecific struct {
+	Status   int      `json:"status"` // 1 OK, 0 Fail, -1 pending
+	Nonce    uint64   `json:"nonce"`
+	GasLimit *big.Int `json:"gaslimit"`
+	GasUsed  *big.Int `json:"gasused"`
+	GasPrice *Amount  `json:"gasprice"`
 }
 
 // Tx holds information about a transaction
 type Tx struct {
-	Txid             string              `json:"txid"`
-	Version          int32               `json:"version,omitempty"`
-	Locktime         uint32              `json:"locktime,omitempty"`
-	Vin              []Vin               `json:"vin"`
-	Vout             []Vout              `json:"vout"`
-	Blockhash        string              `json:"blockhash,omitempty"`
-	Blockheight      int                 `json:"blockheight"`
-	Confirmations    uint32              `json:"confirmations"`
-	Time             int64               `json:"time,omitempty"`
-	Blocktime        int64               `json:"blocktime"`
-	ValueOut         string              `json:"valueOut"`
-	ValueOutSat      big.Int             `json:"-"`
-	Size             int                 `json:"size,omitempty"`
-	ValueIn          string              `json:"valueIn"`
-	ValueInSat       big.Int             `json:"-"`
-	Fees             string              `json:"fees"`
-	FeesSat          big.Int             `json:"-"`
-	Hex              string              `json:"hex,omitempty"`
-	CoinSpecificData interface{}         `json:"-"`
-	CoinSpecificJSON json.RawMessage     `json:"-"`
-	Erc20Transfers   []Erc20Transfer     `json:"erc20transfers,omitempty"`
-	EthereumSpecific *eth.EthereumTxData `json:"ethereumspecific,omitempty"`
+	Txid             string            `json:"txid"`
+	Version          int32             `json:"version,omitempty"`
+	Locktime         uint32            `json:"locktime,omitempty"`
+	Vin              []Vin             `json:"vin"`
+	Vout             []Vout            `json:"vout"`
+	Blockhash        string            `json:"blockhash,omitempty"`
+	Blockheight      int               `json:"blockheight"`
+	Confirmations    uint32            `json:"confirmations"`
+	Time             int64             `json:"time,omitempty"`
+	Blocktime        int64             `json:"blocktime"`
+	ValueOut         string            `json:"valueOut"`
+	ValueOutSat      *Amount           `json:"-"`
+	Size             int               `json:"size,omitempty"`
+	ValueInSat       *Amount           `json:"valueIn,omitempty"`
+	FeesSat          *Amount           `json:"fees,omitempty"`
+	Hex              string            `json:"hex,omitempty"`
+	CoinSpecificData interface{}       `json:"-"`
+	CoinSpecificJSON json.RawMessage   `json:"-"`
+	Erc20Transfers   []Erc20Transfer   `json:"erc20transfers,omitempty"`
+	EthereumSpecific *EthereumSpecific `json:"ethereumspecific,omitempty"`
 }
 
 // Paging contains information about paging for address, blocks and block
@@ -152,16 +167,14 @@ const AddressFilterOutputs = -3
 type Address struct {
 	Paging
 	AddrStr                 string                `json:"addrStr"`
-	Balance                 string                `json:"balance"`
-	BalanceSat              string                `json:"balanceSat"`
-	TotalReceived           string                `json:"totalReceived,omitempty"`
-	TotalSent               string                `json:"totalSent,omitempty"`
-	UnconfirmedBalance      string                `json:"unconfirmedBalance"`
-	UnconfirmedBalanceSat   string                `json:"unconfirmedBalanceSat"`
+	BalanceSat              *Amount               `json:"balance"`
+	TotalReceivedSat        *Amount               `json:"totalReceived,omitempty"`
+	TotalSentSat            *Amount               `json:"totalSent,omitempty"`
+	UnconfirmedBalanceSat   *Amount               `json:"unconfirmedBalance"`
 	UnconfirmedTxApperances int                   `json:"unconfirmedTxApperances"`
 	TxApperances            int                   `json:"txApperances"`
-	Transactions            []*Tx                 `json:"txs,omitempty"`
-	Txids                   []string              `json:"transactions,omitempty"`
+	Transactions            []*Tx                 `json:"transactions,omitempty"`
+	Txids                   []string              `json:"txids,omitempty"`
 	Nonce                   string                `json:"nonce,omitempty"`
 	Erc20Contract           *bchain.Erc20Contract `json:"erc20contract,omitempty"`
 	Erc20Tokens             []Erc20Token          `json:"erc20tokens,omitempty"`
@@ -172,8 +185,7 @@ type Address struct {
 type AddressUtxo struct {
 	Txid          string  `json:"txid"`
 	Vout          int32   `json:"vout"`
-	Amount        string  `json:"amount"`
-	AmountSat     big.Int `json:"satoshis"`
+	AmountSat     *Amount `json:"value"`
 	Height        int     `json:"height,omitempty"`
 	Confirmations int     `json:"confirmations"`
 }
