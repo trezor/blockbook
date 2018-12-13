@@ -227,6 +227,8 @@ type BlockChainParser interface {
 	// KeepBlockAddresses returns number of blocks which are to be kept in blockTxs column
 	// to be used for rollbacks
 	KeepBlockAddresses() int
+	// AmountDecimals returns number of decimal places in coin amounts
+	AmountDecimals() int
 	// AmountToDecimalString converts amount in big.Int to string with decimal point in the correct place
 	AmountToDecimalString(a *big.Int) string
 	// AmountToBigInt converts amount in json.Number (string) to big.Int

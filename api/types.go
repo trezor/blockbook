@@ -52,6 +52,26 @@ func (a *Amount) MarshalJSON() (out []byte, err error) {
 	return []byte(`"` + (*big.Int)(a).String() + `"`), nil
 }
 
+func (a *Amount) String() string {
+	if a == nil {
+		return ""
+	}
+	return (*big.Int)(a).String()
+}
+
+// DecimalString returns amount with decimal point placed according to parameter d
+func (a *Amount) DecimalString(d int) string {
+	return bchain.AmountToDecimalString((*big.Int)(a), d)
+}
+
+// AsBigInt returns big.Int type for the Amount (empty if Amount is nil)
+func (a *Amount) AsBigInt() big.Int {
+	if a == nil {
+		return *new(big.Int)
+	}
+	return big.Int(*a)
+}
+
 // ScriptSig contains input script
 type ScriptSig struct {
 	Hex string `json:"hex"`
@@ -135,8 +155,7 @@ type Tx struct {
 	Confirmations    uint32            `json:"confirmations"`
 	Time             int64             `json:"time,omitempty"`
 	Blocktime        int64             `json:"blocktime"`
-	ValueOut         string            `json:"valueOut"`
-	ValueOutSat      *Amount           `json:"-"`
+	ValueOutSat      *Amount           `json:"valueOut,omitempty"`
 	Size             int               `json:"size,omitempty"`
 	ValueInSat       *Amount           `json:"valueIn,omitempty"`
 	FeesSat          *Amount           `json:"fees,omitempty"`
@@ -219,6 +238,7 @@ type BlockbookInfo struct {
 	InSyncMempool     bool                         `json:"inSyncMempool"`
 	LastMempoolTime   time.Time                    `json:"lastMempoolTime"`
 	MempoolSize       int                          `json:"mempoolSize"`
+	Decimals          int                          `json:"decimals"`
 	DbSize            int64                        `json:"dbSize"`
 	DbSizeFromColumns int64                        `json:"dbSizeFromColumns,omitempty"`
 	DbColumns         []common.InternalStateColumn `json:"dbColumns,omitempty"`

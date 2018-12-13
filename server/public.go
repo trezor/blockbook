@@ -26,6 +26,12 @@ const txsOnPage = 25
 const blocksOnPage = 50
 const txsInAPI = 1000
 
+const (
+	_ = iota
+	apiV1
+	apiV2
+)
+
 // PublicServer is a handle to public http server
 type PublicServer struct {
 	binding          string
@@ -97,7 +103,7 @@ func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bch
 	// default handler
 	serveMux.HandleFunc(path, s.htmlTemplateHandler(s.explorerIndex))
 	// default API handler
-	serveMux.HandleFunc(path+"api/", s.jsonHandler(s.apiIndex))
+	serveMux.HandleFunc(path+"api/", s.jsonHandler(s.apiIndex, apiV2))
 
 	return s, nil
 }
@@ -134,14 +140,42 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 		serveMux.HandleFunc(path+"address/", s.addressRedirect)
 	}
 	// API calls
-	serveMux.HandleFunc(path+"api/block-index/", s.jsonHandler(s.apiBlockIndex))
-	serveMux.HandleFunc(path+"api/tx/", s.jsonHandler(s.apiTx))
-	serveMux.HandleFunc(path+"api/tx-specific/", s.jsonHandler(s.apiTxSpecific))
-	serveMux.HandleFunc(path+"api/address/", s.jsonHandler(s.apiAddress))
-	serveMux.HandleFunc(path+"api/utxo/", s.jsonHandler(s.apiAddressUtxo))
-	serveMux.HandleFunc(path+"api/block/", s.jsonHandler(s.apiBlock))
-	serveMux.HandleFunc(path+"api/sendtx/", s.jsonHandler(s.apiSendTx))
-	serveMux.HandleFunc(path+"api/estimatefee/", s.jsonHandler(s.apiEstimateFee))
+	// default api without version can be changed to different version at any time
+	// use versioned api for stability
+
+	var apiDefault int
+	// ethereum supports only api V2
+	if s.chainParser.GetChainType() == bchain.ChainEthereumType {
+		apiDefault = apiV2
+	} else {
+		apiDefault = apiV1
+		// legacy v1 format
+		serveMux.HandleFunc(path+"api/v1/block-index/", s.jsonHandler(s.apiBlockIndex, apiV1))
+		serveMux.HandleFunc(path+"api/v1/tx-specific/", s.jsonHandler(s.apiTxSpecific, apiV1))
+		serveMux.HandleFunc(path+"api/v1/tx/", s.jsonHandler(s.apiTx, apiV1))
+		serveMux.HandleFunc(path+"api/v1/address/", s.jsonHandler(s.apiAddress, apiV1))
+		serveMux.HandleFunc(path+"api/v1/utxo/", s.jsonHandler(s.apiAddressUtxo, apiV1))
+		serveMux.HandleFunc(path+"api/v1/block/", s.jsonHandler(s.apiBlock, apiV1))
+		serveMux.HandleFunc(path+"api/v1/sendtx/", s.jsonHandler(s.apiSendTx, apiV1))
+		serveMux.HandleFunc(path+"api/v1/estimatefee/", s.jsonHandler(s.apiEstimateFee, apiV1))
+	}
+	serveMux.HandleFunc(path+"api/block-index/", s.jsonHandler(s.apiBlockIndex, apiDefault))
+	serveMux.HandleFunc(path+"api/tx-specific/", s.jsonHandler(s.apiTxSpecific, apiDefault))
+	serveMux.HandleFunc(path+"api/tx/", s.jsonHandler(s.apiTx, apiDefault))
+	serveMux.HandleFunc(path+"api/address/", s.jsonHandler(s.apiAddress, apiDefault))
+	serveMux.HandleFunc(path+"api/utxo/", s.jsonHandler(s.apiAddressUtxo, apiDefault))
+	serveMux.HandleFunc(path+"api/block/", s.jsonHandler(s.apiBlock, apiDefault))
+	serveMux.HandleFunc(path+"api/sendtx/", s.jsonHandler(s.apiSendTx, apiDefault))
+	serveMux.HandleFunc(path+"api/estimatefee/", s.jsonHandler(s.apiEstimateFee, apiDefault))
+	// v2 format
+	serveMux.HandleFunc(path+"api/v2/block-index/", s.jsonHandler(s.apiBlockIndex, apiV2))
+	serveMux.HandleFunc(path+"api/v2/tx-specific/", s.jsonHandler(s.apiTxSpecific, apiV2))
+	serveMux.HandleFunc(path+"api/v2/tx/", s.jsonHandler(s.apiTx, apiV2))
+	serveMux.HandleFunc(path+"api/v2/address/", s.jsonHandler(s.apiAddress, apiV2))
+	serveMux.HandleFunc(path+"api/v2/utxo/", s.jsonHandler(s.apiAddressUtxo, apiV2))
+	serveMux.HandleFunc(path+"api/v2/block/", s.jsonHandler(s.apiBlock, apiV2))
+	serveMux.HandleFunc(path+"api/v2/sendtx/", s.jsonHandler(s.apiSendTx, apiV2))
+	serveMux.HandleFunc(path+"api/v2/estimatefee/", s.jsonHandler(s.apiEstimateFee, apiV2))
 	// socket.io interface
 	serveMux.Handle(path+"socket.io/", s.socketio.GetHandler())
 	// websocket interface
@@ -204,7 +238,7 @@ func getFunctionName(i interface{}) string {
 	return runtime.FuncForPC(reflect.ValueOf(i).Pointer()).Name()
 }
 
-func (s *PublicServer) jsonHandler(handler func(r *http.Request) (interface{}, error)) func(w http.ResponseWriter, r *http.Request) {
+func (s *PublicServer) jsonHandler(handler func(r *http.Request, apiVersion int) (interface{}, error), apiVersion int) func(w http.ResponseWriter, r *http.Request) {
 	type jsonError struct {
 		Text       string `json:"error"`
 		HTTPStatus int    `json:"-"`
@@ -228,7 +262,7 @@ func (s *PublicServer) jsonHandler(handler func(r *http.Request) (interface{}, e
 			}
 			json.NewEncoder(w).Encode(data)
 		}()
-		data, err = handler(r)
+		data, err = handler(r, apiVersion)
 		if err != nil || data == nil {
 			if apiErr, ok := err.(*api.APIError); ok {
 				if apiErr.Public {
@@ -415,7 +449,7 @@ func formatAmountWithDecimals(a *api.Amount, d int) string {
 	if a == nil {
 		return "0"
 	}
-	return bchain.AmountToDecimalString((*big.Int)(a), d)
+	return a.DecimalString(d)
 }
 
 // called from template to support txdetail.html functionality
@@ -659,12 +693,12 @@ func getPagingRange(page int, total int) ([]int, int, int) {
 	return r, pp, np
 }
 
-func (s *PublicServer) apiIndex(r *http.Request) (interface{}, error) {
+func (s *PublicServer) apiIndex(r *http.Request, apiVersion int) (interface{}, error) {
 	s.metrics.ExplorerViews.With(common.Labels{"action": "api-index"}).Inc()
 	return s.api.GetSystemInfo(false)
 }
 
-func (s *PublicServer) apiBlockIndex(r *http.Request) (interface{}, error) {
+func (s *PublicServer) apiBlockIndex(r *http.Request, apiVersion int) (interface{}, error) {
 	type resBlockIndex struct {
 		BlockHash string `json:"blockHash"`
 	}
@@ -690,7 +724,7 @@ func (s *PublicServer) apiBlockIndex(r *http.Request) (interface{}, error) {
 	}, nil
 }
 
-func (s *PublicServer) apiTx(r *http.Request) (interface{}, error) {
+func (s *PublicServer) apiTx(r *http.Request, apiVersion int) (interface{}, error) {
 	var tx *api.Tx
 	var err error
 	s.metrics.ExplorerViews.With(common.Labels{"action": "api-tx"}).Inc()
@@ -705,11 +739,14 @@ func (s *PublicServer) apiTx(r *http.Request) (interface{}, error) {
 			}
 		}
 		tx, err = s.api.GetTransaction(txid, spendingTxs, false)
+		if err == nil && apiVersion == apiV1 {
+			return s.api.TxToV1(tx), nil
+		}
 	}
 	return tx, err
 }
 
-func (s *PublicServer) apiTxSpecific(r *http.Request) (interface{}, error) {
+func (s *PublicServer) apiTxSpecific(r *http.Request, apiVersion int) (interface{}, error) {
 	var tx json.RawMessage
 	var err error
 	s.metrics.ExplorerViews.With(common.Labels{"action": "api-tx-specific"}).Inc()
@@ -720,7 +757,7 @@ func (s *PublicServer) apiTxSpecific(r *http.Request) (interface{}, error) {
 	return tx, err
 }
 
-func (s *PublicServer) apiAddress(r *http.Request) (interface{}, error) {
+func (s *PublicServer) apiAddress(r *http.Request, apiVersion int) (interface{}, error) {
 	var address *api.Address
 	var err error
 	s.metrics.ExplorerViews.With(common.Labels{"action": "api-address"}).Inc()
@@ -730,11 +767,14 @@ func (s *PublicServer) apiAddress(r *http.Request) (interface{}, error) {
 			page = 0
 		}
 		address, err = s.api.GetAddress(r.URL.Path[i+1:], page, txsInAPI, api.TxidHistory, api.AddressFilterNone)
+		if err == nil && apiVersion == apiV1 {
+			return s.api.AddressToV1(address), nil
+		}
 	}
 	return address, err
 }
 
-func (s *PublicServer) apiAddressUtxo(r *http.Request) (interface{}, error) {
+func (s *PublicServer) apiAddressUtxo(r *http.Request, apiVersion int) (interface{}, error) {
 	var utxo []api.AddressUtxo
 	var err error
 	s.metrics.ExplorerViews.With(common.Labels{"action": "api-address"}).Inc()
@@ -748,11 +788,14 @@ func (s *PublicServer) apiAddressUtxo(r *http.Request) (interface{}, error) {
 			}
 		}
 		utxo, err = s.api.GetAddressUtxo(r.URL.Path[i+1:], onlyConfirmed)
+		if err == nil && apiVersion == apiV1 {
+			return s.api.AddressUtxoToV1(utxo), nil
+		}
 	}
 	return utxo, err
 }
 
-func (s *PublicServer) apiBlock(r *http.Request) (interface{}, error) {
+func (s *PublicServer) apiBlock(r *http.Request, apiVersion int) (interface{}, error) {
 	var block *api.Block
 	var err error
 	s.metrics.ExplorerViews.With(common.Labels{"action": "api-block"}).Inc()
@@ -762,6 +805,9 @@ func (s *PublicServer) apiBlock(r *http.Request) (interface{}, error) {
 			page = 0
 		}
 		block, err = s.api.GetBlock(r.URL.Path[i+1:], page, txsInAPI)
+		if err == nil && apiVersion == apiV1 {
+			return s.api.BlockToV1(block), nil
+		}
 	}
 	return block, err
 }
@@ -770,7 +816,7 @@ type resultSendTransaction struct {
 	Result string `json:"result"`
 }
 
-func (s *PublicServer) apiSendTx(r *http.Request) (interface{}, error) {
+func (s *PublicServer) apiSendTx(r *http.Request, apiVersion int) (interface{}, error) {
 	var err error
 	var res resultSendTransaction
 	var hex string
@@ -800,7 +846,7 @@ type resultEstimateFeeAsString struct {
 	Result string `json:"result"`
 }
 
-func (s *PublicServer) apiEstimateFee(r *http.Request) (interface{}, error) {
+func (s *PublicServer) apiEstimateFee(r *http.Request, apiVersion int) (interface{}, error) {
 	var res resultEstimateFeeAsString
 	s.metrics.ExplorerViews.With(common.Labels{"action": "api-estimatefee"}).Inc()
 	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {

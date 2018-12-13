@@ -918,6 +918,7 @@ func (w *Worker) GetSystemInfo(internal bool) (*SystemInfo, error) {
 		InSyncMempool:     ms,
 		LastMempoolTime:   mt,
 		MempoolSize:       msz,
+		Decimals:          w.chainParser.AmountDecimals(),
 		DbSize:            w.db.DatabaseSizeOnDisk(),
 		DbSizeFromColumns: dbs,
 		DbColumns:         dbc,

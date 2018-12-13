@@ -86,6 +86,11 @@ func (p *BaseParser) AmountToDecimalString(a *big.Int) string {
 	return AmountToDecimalString(a, p.AmountDecimalPoint)
 }
 
+// AmountDecimals returns number of decimal places in amounts
+func (p *BaseParser) AmountDecimals() int {
+	return p.AmountDecimalPoint
+}
+
 // ParseTxFromJson parses JSON message containing transaction and returns Tx struct
 func (p *BaseParser) ParseTxFromJson(msg json.RawMessage) (*Tx, error) {
 	var tx Tx
