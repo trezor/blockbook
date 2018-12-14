@@ -284,10 +284,13 @@ func (s *WebsocketServer) onRequest(c *websocketChannel, req *websocketReq) {
 }
 
 type accountInfoReq struct {
-	Descriptor string `json:"descriptor"`
-	Details    string `json:"details"`
-	PageSize   int    `json:"pageSize"`
-	Page       int    `json:"page"`
+	Descriptor     string `json:"descriptor"`
+	Details        string `json:"details"`
+	PageSize       int    `json:"pageSize"`
+	Page           int    `json:"page"`
+	FromHeight     int    `json:"from"`
+	ToHeight       int    `json:"to"`
+	ContractFilter string `json:"contractFilter"`
 }
 
 func unmarshalGetAccountInfoRequest(params []byte) (*accountInfoReq, error) {
@@ -312,7 +315,13 @@ func (s *WebsocketServer) getAccountInfo(req *accountInfoReq) (res *api.Address,
 		default:
 			opt = api.Basic
 		}
-		return s.api.GetAddress(req.Descriptor, req.Page, req.PageSize, opt, api.AddressFilterNone)
+
+		return s.api.GetAddress(req.Descriptor, req.Page, req.PageSize, opt, &api.AddressFilter{
+			FromHeight: uint32(req.FromHeight),
+			ToHeight:   uint32(req.ToHeight),
+			Contract:   req.ContractFilter,
+			Vout:       api.AddressFilterVoutOff,
+		})
 	}
 	return nil, errors.New("Not implemented")
 }

@@ -102,6 +102,9 @@
             const selectDetails = document.getElementById('getAccountInfoDetails');
             const details = selectDetails.options[selectDetails.selectedIndex].value;
             const page = parseInt(document.getElementById("getAccountInfoPage").value);
+            const from = parseInt(document.getElementById("getAccountInfoFrom").value);
+            const to = parseInt(document.getElementById("getAccountInfoTo").value);
+            const contractFilter = document.getElementById("getAccountInfoContract").value.trim();
             const pageSize = 10;
             const method = 'getAccountInfo';
             const params = {
@@ -109,6 +112,9 @@
                 details,
                 page,
                 pageSize,
+                from,
+                to,
+                contractFilter
             };
             send(method, params, function (result) {
                 document.getElementById('getAccountInfoResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
@@ -257,14 +263,19 @@
             </div>
             <div class="col-8">
                 <div class="row" style="margin: 0;">
-                    <input type="text" style="width: 67.7%" class="form-control" id="getAccountInfoDescriptor" value="0x103262f243e6f67d12d6a4ea0d45302c1fa4bb0a">
+                    <input type="text" style="width: 79%" class="form-control" id="getAccountInfoDescriptor" value="0x65513ecd11fd3a5b1fefdcc6a500b025008405a2">
                     <select id="getAccountInfoDetails" style="width: 20%; margin-left: 5px;">
                         <option value="basic">Basic</option>
                         <option value="balance">Balance</option>
                         <option value="txids">Txids</option>
                         <option value="txs">Transactions</option>
                     </select>
-                    <input type="text" style="width: 10%; margin-left: 5px; margin-right: 5px;" class="form-control" id="getAccountInfoPage" value="0">
+                </div>
+                <div class="row" style="margin: 0; margin-top: 5px;">
+                    <input type="text" placeholder="page" style="width: 10%; margin-right: 5px;" class="form-control" id="getAccountInfoPage">
+                    <input type="text" placeholder="from" style="width: 15%;margin-left: 5px;margin-right: 5px;" class="form-control" id="getAccountInfoFrom">
+                    <input type="text" placeholder="to" style="width: 15%; margin-left: 5px; margin-right: 5px;" class="form-control" id="getAccountInfoTo">
+                    <input type="text" placeholder="contract" style="width: 55%; margin-left: 5px; margin-right: 5px;" class="form-control" id="getAccountInfoContract">
                 </div>
             </div>
             <div class="col form-inline"></div>

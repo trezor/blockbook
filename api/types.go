@@ -74,14 +74,14 @@ func (a *Amount) AsBigInt() big.Int {
 
 // ScriptSig contains input script
 type ScriptSig struct {
-	Hex string `json:"hex"`
+	Hex string `json:"hex,omitempty"`
 	Asm string `json:"asm,omitempty"`
 }
 
 // Vin contains information about single transaction input
 type Vin struct {
-	Txid       string                   `json:"txid"`
-	Vout       uint32                   `json:"vout"`
+	Txid       string                   `json:"txid,omitempty"`
+	Vout       uint32                   `json:"vout,omitempty"`
 	Sequence   int64                    `json:"sequence,omitempty"`
 	N          int                      `json:"n"`
 	ScriptSig  ScriptSig                `json:"scriptSig"`
@@ -93,7 +93,7 @@ type Vin struct {
 
 // ScriptPubKey contains output script and addresses derived from it
 type ScriptPubKey struct {
-	Hex        string                   `json:"hex"`
+	Hex        string                   `json:"hex,omitempty"`
 	Asm        string                   `json:"asm,omitempty"`
 	AddrDesc   bchain.AddressDescriptor `json:"-"`
 	Addresses  []string                 `json:"addresses"`
@@ -106,7 +106,7 @@ type Vout struct {
 	ValueSat     *Amount      `json:"value,omitempty"`
 	N            int          `json:"n"`
 	ScriptPubKey ScriptPubKey `json:"scriptPubKey"`
-	Spent        bool         `json:"spent"`
+	Spent        bool         `json:"spent,omitempty"`
 	SpentTxID    string       `json:"spentTxId,omitempty"`
 	SpentIndex   int          `json:"spentIndex,omitempty"`
 	SpentHeight  int          `json:"spentHeight,omitempty"`
@@ -115,7 +115,7 @@ type Vout struct {
 // Erc20Token contains info about ERC20 token held by an address
 type Erc20Token struct {
 	Contract      string  `json:"contract"`
-	Txs           int     `json:"txs"`
+	Transfers     int     `json:"transfers"`
 	Name          string  `json:"name"`
 	Symbol        string  `json:"symbol"`
 	Decimals      int     `json:"decimals"`
@@ -155,8 +155,8 @@ type Tx struct {
 	Confirmations    uint32            `json:"confirmations"`
 	Time             int64             `json:"time,omitempty"`
 	Blocktime        int64             `json:"blocktime"`
-	ValueOutSat      *Amount           `json:"valueOut,omitempty"`
 	Size             int               `json:"size,omitempty"`
+	ValueOutSat      *Amount           `json:"valueOut,omitempty"`
 	ValueInSat       *Amount           `json:"valueIn,omitempty"`
 	FeesSat          *Amount           `json:"fees,omitempty"`
 	Hex              string            `json:"hex,omitempty"`
@@ -173,14 +173,21 @@ type Paging struct {
 	ItemsOnPage int `json:"itemsOnPage,omitempty"`
 }
 
-// AddressFilterNone disables filtering of transactions
-const AddressFilterNone = -1
+const (
+	// AddressFilterVoutOff disables filtering of transactions by vout
+	AddressFilterVoutOff = -1
+	// AddressFilterVoutInputs specifies that only txs where the address is as input are returned
+	AddressFilterVoutInputs = -2
+	// AddressFilterVoutOutputs specifies that only txs where the address is as output are returned
+	AddressFilterVoutOutputs = -3
+)
 
-// AddressFilterInputs specifies that only txs where the address is as input are returned
-const AddressFilterInputs = -2
-
-// AddressFilterOutputs specifies that only txs where the address is as output are returned
-const AddressFilterOutputs = -3
+type AddressFilter struct {
+	Vout       int
+	Contract   string
+	FromHeight uint32
+	ToHeight   uint32
+}
 
 // Address holds information about address and its transactions
 type Address struct {
