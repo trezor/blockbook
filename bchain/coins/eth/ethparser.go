@@ -412,9 +412,16 @@ func GetErc20FromTx(tx *bchain.Tx) ([]Erc20Transfer, error) {
 	return r, nil
 }
 
+const (
+	txStatusUnknown = iota - 2
+	txStatusPending
+	txStatusFailure
+	txStatusOK
+)
+
 // EthereumTxData contains ethereum specific transaction data
 type EthereumTxData struct {
-	Status   int      `json:"status"` // 1 OK, 0 Fail, -1 pending
+	Status   int      `json:"status"` // 1 OK, 0 Fail, -1 pending, -2 unknown
 	Nonce    uint64   `json:"nonce"`
 	GasLimit *big.Int `json:"gaslimit"`
 	GasUsed  *big.Int `json:"gasused"`
@@ -423,7 +430,7 @@ type EthereumTxData struct {
 
 // GetEthereumTxData returns EthereumTxData from bchain.Tx
 func GetEthereumTxData(tx *bchain.Tx) *EthereumTxData {
-	etd := EthereumTxData{Status: -1}
+	etd := EthereumTxData{Status: txStatusPending}
 	csd, ok := tx.CoinSpecificData.(completeTransaction)
 	if ok {
 		if csd.Tx != nil {
@@ -432,10 +439,13 @@ func GetEthereumTxData(tx *bchain.Tx) *EthereumTxData {
 			etd.GasPrice, _ = hexutil.DecodeBig(csd.Tx.GasPrice)
 		}
 		if csd.Receipt != nil {
-			if csd.Receipt.Status == "0x1" {
-				etd.Status = 1
-			} else {
-				etd.Status = 0
+			switch csd.Receipt.Status {
+			case "0x1":
+				etd.Status = txStatusOK
+			case "": // old transactions did not set status
+				etd.Status = txStatusUnknown
+			default:
+				etd.Status = txStatusFailure
 			}
 			etd.GasUsed, _ = hexutil.DecodeBig(csd.Receipt.GasUsed)
 		}
