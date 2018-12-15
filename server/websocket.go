@@ -60,6 +60,7 @@ type WebsocketServer struct {
 	metrics                   *common.Metrics
 	is                        *common.InternalState
 	api                       *api.Worker
+	block0hash                string
 	newBlockSubscriptions     map[*websocketChannel]string
 	newBlockSubscriptionsLock sync.Mutex
 	addressSubscriptions      map[string]map[*websocketChannel]string
@@ -69,6 +70,10 @@ type WebsocketServer struct {
 // NewWebsocketServer creates new websocket interface to blockbook and returns its handle
 func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxCache, metrics *common.Metrics, is *common.InternalState) (*WebsocketServer, error) {
 	api, err := api.NewWorker(db, chain, txCache, is)
+	if err != nil {
+		return nil, err
+	}
+	b0, err := db.GetBlockHash(0)
 	if err != nil {
 		return nil, err
 	}
@@ -85,6 +90,7 @@ func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxC
 		metrics:               metrics,
 		is:                    is,
 		api:                   api,
+		block0hash:            b0,
 		newBlockSubscriptions: make(map[*websocketChannel]string),
 		addressSubscriptions:  make(map[string]map[*websocketChannel]string),
 	}
@@ -216,6 +222,9 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *webs
 		}
 		return
 	},
+	"getInfo": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
+		return s.getInfo()
+	},
 	"sendTransaction": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
 		r := struct {
 			Hex string `json:"hex"`
@@ -303,27 +312,52 @@ func unmarshalGetAccountInfoRequest(params []byte) (*accountInfoReq, error) {
 }
 
 func (s *WebsocketServer) getAccountInfo(req *accountInfoReq) (res *api.Address, err error) {
-	if s.chainParser.GetChainType() == bchain.ChainEthereumType {
-		var opt api.GetAddressOption
-		switch req.Details {
-		case "balance":
-			opt = api.Balance
-		case "txids":
-			opt = api.TxidHistory
-		case "txs":
-			opt = api.TxHistory
-		default:
-			opt = api.Basic
-		}
-
-		return s.api.GetAddress(req.Descriptor, req.Page, req.PageSize, opt, &api.AddressFilter{
-			FromHeight: uint32(req.FromHeight),
-			ToHeight:   uint32(req.ToHeight),
-			Contract:   req.ContractFilter,
-			Vout:       api.AddressFilterVoutOff,
-		})
+	var opt api.GetAddressOption
+	switch req.Details {
+	case "balance":
+		opt = api.Balance
+	case "txids":
+		opt = api.TxidHistory
+	case "txs":
+		opt = api.TxHistory
+	default:
+		opt = api.Basic
 	}
-	return nil, errors.New("Not implemented")
+
+	return s.api.GetAddress(req.Descriptor, req.Page, req.PageSize, opt, &api.AddressFilter{
+		FromHeight: uint32(req.FromHeight),
+		ToHeight:   uint32(req.ToHeight),
+		Contract:   req.ContractFilter,
+		Vout:       api.AddressFilterVoutOff,
+	})
+}
+
+func (s *WebsocketServer) getInfo() (interface{}, error) {
+	vi := common.GetVersionInfo()
+	height, hash, err := s.db.GetBestBlock()
+	if err != nil {
+		return nil, err
+	}
+	type info struct {
+		Name       string `json:"name"`
+		Shortcut   string `json:"shortcut"`
+		Decimals   int    `json:"decimals"`
+		Version    string `json:"version"`
+		BestHeight int    `json:"bestheight"`
+		BestHash   string `json:"besthash"`
+		Block0Hash string `json:"block0hash"`
+		Testnet    bool   `json:"testnet"`
+	}
+	return &info{
+		Name:       s.is.Coin,
+		Shortcut:   s.is.CoinShortcut,
+		Decimals:   s.chainParser.AmountDecimals(),
+		BestHeight: int(height),
+		BestHash:   hash,
+		Version:    vi.Version,
+		Block0Hash: s.block0hash,
+		Testnet:    s.chain.IsTestnet(),
+	}, nil
 }
 
 func (s *WebsocketServer) sendTransaction(tx string) (res resultSendTransaction, err error) {
