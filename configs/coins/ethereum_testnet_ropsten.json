@@ -1,8 +1,8 @@
 {
   "coin": {
       "name": "Ethereum Testnet Ropsten",
-      "shortcut": "tETH",
-      "label": "Ethereum Testnet Ropsten",
+      "shortcut": "tROP",
+      "label": "Ethereum Ropsten",
       "alias": "ethereum_testnet_ropsten"
   },
   "ports": {
