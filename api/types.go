@@ -19,6 +19,8 @@ const (
 	Balance
 	// TxidHistory - balances and txids, subject to paging
 	TxidHistory
+	// TxHistoryLight - balances and easily obtained tx data (not requiring request to backend), subject to paging
+	TxHistoryLight
 	// TxHistory - balances and full tx data, subject to paging
 	TxHistory
 )

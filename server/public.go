@@ -520,7 +520,7 @@ func (s *PublicServer) explorerAddress(w http.ResponseWriter, r *http.Request) (
 				}
 			}
 		}
-		address, err = s.api.GetAddress(r.URL.Path[i+1:], page, txsOnPage, api.TxHistory, &api.AddressFilter{Vout: fn})
+		address, err = s.api.GetAddress(r.URL.Path[i+1:], page, txsOnPage, api.TxHistoryLight, &api.AddressFilter{Vout: fn})
 		if err != nil {
 			return errorTpl, nil, err
 		}

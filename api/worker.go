@@ -564,7 +564,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option GetA
 		}
 	}
 	// get tx history if requested by option or check mempool if there are some transactions for a new address
-	if option == TxidHistory || option == TxHistory || ba == nil {
+	if option >= TxidHistory || ba == nil {
 		// convert the address to the format defined by the parser
 		addresses, _, err := w.chainParser.GetAddressesFromAddrDesc(addrDesc)
 		if err != nil {
@@ -583,7 +583,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option GetA
 			ba = &db.AddrBalance{}
 			page = 0
 		}
-		if option == TxidHistory || option == TxHistory {
+		if option >= TxidHistory {
 			txc, err := w.getAddressTxids(addrDesc, false, filter)
 			if err != nil {
 				return nil, errors.Annotatef(err, "getAddressTxids %v false", addrDesc)
@@ -601,7 +601,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option GetA
 				txs = make([]*Tx, len(txm)+to-from)
 			}
 			txi := 0
-			// load mempool transactions
+			// get mempool transactions
 			for _, txid := range txm {
 				tx, err := w.GetTransaction(txid, false, false)
 				// mempool transaction may fail
@@ -620,17 +620,14 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option GetA
 					}
 				}
 			}
+			// get confirmed transactions
 			for i := from; i < to; i++ {
 				txid := txc[i]
 				if option == TxidHistory {
 					txids[txi] = txid
 				} else {
-					if w.chainType == bchain.ChainEthereumType {
-						txs[txi], err = w.GetTransaction(txid, false, true)
-						if err != nil {
-							return nil, errors.Annotatef(err, "GetTransaction %v", txid)
-						}
-					} else {
+					// only ChainBitcoinType supports TxHistoryLight
+					if option == TxHistoryLight && w.chainType == bchain.ChainBitcoinType {
 						ta, err := w.db.GetTxAddresses(txid)
 						if err != nil {
 							return nil, errors.Annotatef(err, "GetTxAddresses %v", txid)
@@ -648,13 +645,18 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option GetA
 							continue
 						}
 						txs[txi] = w.txFromTxAddress(txid, ta, bi, bestheight)
+					} else {
+						txs[txi], err = w.GetTransaction(txid, false, true)
+						if err != nil {
+							return nil, errors.Annotatef(err, "GetTransaction %v", txid)
+						}
 					}
 				}
 				txi++
 			}
 			if option == TxidHistory {
 				txids = txids[:txi]
-			} else if option == TxHistory {
+			} else if option >= TxHistoryLight {
 				txs = txs[:txi]
 			}
 		}
