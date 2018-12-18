@@ -97,6 +97,15 @@
             };
         }
 
+        function getInfo() {
+            const method = 'getInfo';
+            const params = {
+            };
+            send(method, params, function (result) {
+                document.getElementById('getInfoResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
+            });
+        }
+
         function getAccountInfo() {
             const descriptor = document.getElementById('getAccountInfoDescriptor').value.trim();
             const selectDetails = document.getElementById('getAccountInfoDetails');
@@ -121,13 +130,31 @@
             });
         }
 
-        function getInfo() {
-            const method = 'getInfo';
-            const params = {
-            };
-            send(method, params, function (result) {
-                document.getElementById('getInfoResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
-            });
+        function estimateFee() {
+            try {
+                var blocks = document.getElementById('estimateFeeBlocks').value.split(",");
+                var specific = document.getElementById('estimateFeeSpecific').value.trim();
+                if (specific) {
+                    // example for bitcoin type: {"conservative": false,"txsize":1234}
+                    // example for ethereum type: {"from":"0x65513ecd11fd3a5b1fefdcc6a500b025008405a2","to":"0x65513ecd11fd3a5b1fefdcc6a500b025008405a2","data":"0xabcd"}
+                    specific = JSON.parse(specific)
+                }
+                else {
+                    specific = undefined;
+                }
+                blocks = blocks.map(s => parseInt(s.trim()));
+                const method = 'estimateFee';
+                const params = {
+                    blocks,
+                    specific
+                };
+                send(method, params, function (result) {
+                    document.getElementById('estimateFeeResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
+                });
+            }
+            catch (e) {
+                document.getElementById('estimateFeeResult').innerText = e;
+            }
         }
 
         function sendTransaction() {
@@ -198,41 +225,6 @@
             });
         }
 
-        function getBlockHeader() {
-            var param = document.getElementById('getBlockHeaderParam').value.trim();
-            lookupBlockHash(isHash(param) ? param : parseInt(param), function (result) {
-                console.log('getBlockHeader sent successfully');
-                console.log(result);
-                document.getElementById('getBlockHeaderResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
-            });
-        }
-
-        function isHash(str) {
-            var re = /[0-9A-Fa-f]{64}/g;
-            return re.test(str);
-        }
-
-        function lookupBlockHash(heightOrHash, f) {
-            const method = 'getBlockHeader';
-            const params = [heightOrHash];
-            return socket.send({ method, params }, f);
-        }
-
-        function estimateFee() {
-            var blocks = document.getElementById('estimateFeeBlocks').value.trim();
-            estimateTxFee(parseInt(blocks), function (result) {
-                console.log('estimateFee sent successfully');
-                console.log(result);
-                document.getElementById('estimateFeeResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
-            });
-        }
-
-        function estimateTxFee(blocks, f) {
-            const method = 'estimateFee';
-            const params = [blocks];
-            return socket.send({ method, params }, f);
-        }
-
     </script>
 </head>
 
@@ -250,6 +242,13 @@
             </div>
             <div class="col form-inline">
                 <label id="connectionStatus">not connected</label>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <input class="btn btn-secondary" type="button" value="getInfo" onclick="getInfo()">
+            </div>
+            <div class="col-10" id="getInfoResult">
             </div>
         </div>
         <div class="row">
@@ -279,41 +278,24 @@
             <div class="col" id="getAccountInfoResult">
             </div>
         </div>
-        <!-- 
-        <div class="row">
-            <div class="col">
-                <input class="btn btn-secondary" type="button" value="getBlockHeader" onclick="getBlockHeader()">
-            </div>
-            <div class="col-8">
-                <input type="text" class="form-control" id="getBlockHeaderParam" value="0">
-            </div>
-            <div class="col">
-            </div>
-        </div>
-        <div class="row">
-            <div class="col" id="getBlockHeaderResult">
-            </div>
-        </div>
         <div class="row">
             <div class="col">
                 <input class="btn btn-secondary" type="button" value="estimateFee" onclick="estimateFee()">
             </div>
             <div class="col-8">
-                <input type="text" class="form-control" id="estimateFeeBlocks" value="20">
+                <div class="row" style="margin: 0;">
+                    <input type="text" placeholder="comma separated list of block targets" class="form-control" id="estimateFeeBlocks" value="2,5,10,20">
+                </div>
+                <div class="row" style="margin: 0; margin-top: 5px;">
+                    <input type="text" placeholder="tx specific JSON" class="form-control" id="estimateFeeSpecific" value="">
+                </div>
             </div>
             <div class="col"></div>
         </div>
         <div class="row">
             <div class="col" id="estimateFeeResult">
             </div>
-        </div>-->
-        <div class="row">
-            <div class="col">
-                <input class="btn btn-secondary" type="button" value="getInfo" onclick="getInfo()">
-            </div>
-            <div class="col-10" id="getInfoResult">
-            </div>
-        </div>     
+        </div>
         <div class="row">
             <div class="col">
                 <input class="btn btn-secondary" type="button" value="sendTransaction" onclick="sendTransaction()">

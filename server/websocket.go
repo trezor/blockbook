@@ -6,8 +6,10 @@ import (
 	"blockbook/common"
 	"blockbook/db"
 	"encoding/json"
+	"math/big"
 	"net/http"
 	"runtime/debug"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -225,6 +227,9 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *webs
 	"getInfo": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
 		return s.getInfo()
 	},
+	"estimateFee": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
+		return s.estimateFee(c, req.Params)
+	},
 	"sendTransaction": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
 		r := struct {
 			Hex string `json:"hex"`
@@ -360,6 +365,72 @@ func (s *WebsocketServer) getInfo() (interface{}, error) {
 	}, nil
 }
 
+func (s *WebsocketServer) estimateFee(c *websocketChannel, params []byte) (interface{}, error) {
+	type estimateFeeReq struct {
+		Blocks   []int                  `json:"blocks"`
+		Specific map[string]interface{} `json:"specific"`
+	}
+	type estimateFeeRes struct {
+		FeePerTx   string `json:"feePerTx,omitempty"`
+		FeePerUnit string `json:"feePerUnit,omitempty"`
+		FeeLimit   string `json:"feeLimit,omitempty"`
+	}
+	var r estimateFeeReq
+	err := json.Unmarshal(params, &r)
+	if err != nil {
+		return nil, err
+	}
+	res := make([]estimateFeeRes, len(r.Blocks))
+	if s.chainParser.GetChainType() == bchain.ChainEthereumType {
+		gas, err := s.chain.EthereumTypeEstimateGas(r.Specific)
+		if err != nil {
+			return nil, err
+		}
+		sg := strconv.FormatUint(gas, 10)
+		for i, b := range r.Blocks {
+			fee, err := s.chain.EstimateSmartFee(b, true)
+			if err != nil {
+				return nil, err
+			}
+			res[i].FeePerUnit = fee.String()
+			res[i].FeeLimit = sg
+			fee.Mul(&fee, new(big.Int).SetUint64(gas))
+			res[i].FeePerTx = fee.String()
+		}
+	} else {
+		conservative := true
+		v, ok := r.Specific["conservative"]
+		if ok {
+			vc, ok := v.(bool)
+			if ok {
+				conservative = vc
+			}
+		}
+		txSize := 0
+		v, ok = r.Specific["txsize"]
+		if ok {
+			f, ok := v.(float64)
+			if ok {
+				txSize = int(f)
+			}
+		}
+		for i, b := range r.Blocks {
+			fee, err := s.chain.EstimateSmartFee(b, conservative)
+			if err != nil {
+				return nil, err
+			}
+			res[i].FeePerUnit = fee.String()
+			if txSize > 0 {
+				fee.Mul(&fee, big.NewInt(int64(txSize)))
+				fee.Add(&fee, big.NewInt(500))
+				fee.Div(&fee, big.NewInt(1000))
+				res[i].FeePerTx = fee.String()
+			}
+		}
+	}
+	return res, nil
+}
+
 func (s *WebsocketServer) sendTransaction(tx string) (res resultSendTransaction, err error) {
 	txid, err := s.chain.SendRawTransaction(tx)
 	if err != nil {
@@ -461,7 +532,7 @@ func (s *WebsocketServer) OnNewBlock(hash string, height uint32) {
 
 // OnNewTxAddr is a callback that broadcasts info about a tx affecting subscribed address
 func (s *WebsocketServer) OnNewTxAddr(tx *bchain.Tx, addrDesc bchain.AddressDescriptor, isOutput bool) {
-	// check if there is any subscription but release lock immediately, GetTransactionFromBchainTx may take some time
+	// check if there is any subscription but release the lock immediately, GetTransactionFromBchainTx may take some time
 	s.addressSubscriptionsLock.Lock()
 	as, ok := s.addressSubscriptions[string(addrDesc)]
 	s.addressSubscriptionsLock.Unlock()

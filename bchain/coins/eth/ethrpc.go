@@ -632,18 +632,42 @@ func (b *EthereumRPC) EstimateFee(blocks int) (big.Int, error) {
 func (b *EthereumRPC) EstimateSmartFee(blocks int, conservative bool) (big.Int, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
 	defer cancel()
-	// TODO - what parameters of msg to use to get better estimate, maybe more data from the wallet are needed
-	a := ethcommon.HexToAddress("0x1234567890123456789012345678901234567890")
-	msg := ethereum.CallMsg{
-		To: &a,
-	}
-	g, err := b.client.EstimateGas(ctx, msg)
 	var r big.Int
-	if err != nil {
-		return r, err
+	gp, err := b.client.SuggestGasPrice(ctx)
+	if err == nil && b != nil {
+		r = *gp
 	}
-	r.SetUint64(g)
-	return r, nil
+	return r, err
+}
+
+func getStringFromMap(p string, params map[string]interface{}) (string, bool) {
+	v, ok := params[p]
+	if ok {
+		s, ok := v.(string)
+		return s, ok
+	}
+	return "", false
+}
+
+// EthereumTypeEstimateGas returns estimation of gas consumption for given transaction parameters
+func (b *EthereumRPC) EthereumTypeEstimateGas(params map[string]interface{}) (uint64, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
+	defer cancel()
+	msg := ethereum.CallMsg{}
+	s, ok := getStringFromMap("from", params)
+	if ok && len(s) > 0 {
+		msg.From = ethcommon.HexToAddress(s)
+	}
+	s, ok = getStringFromMap("to", params)
+	if ok && len(s) > 0 {
+		a := ethcommon.HexToAddress(s)
+		msg.To = &a
+	}
+	s, ok = getStringFromMap("data", params)
+	if ok && len(s) > 0 {
+		msg.Data = ethcommon.FromHex(s)
+	}
+	return b.client.EstimateGas(ctx, msg)
 }
 
 // SendRawTransaction sends raw transaction
