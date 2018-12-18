@@ -30,7 +30,8 @@ var erc20abi = `[{"constant":true,"inputs":[],"name":"name","outputs":[{"name":"
 {"constant":true,"inputs":[],"name":"version","outputs":[{"name":"","type":"string"}],"payable":false,"type":"function","signature":"0x54fd4d50"}]`
 
 // doing the parsing/processing without using go-ethereum/accounts/abi library, it is simple to get data from Transfer event
-const erc20EventTransferSignature = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
+const erc20TransferMethodSignature = "0xa9059cbb"
+const erc20TransferEventSignature = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
 const erc20NameSignature = "0x06fdde03"
 const erc20SymbolSignature = "0x95d89b41"
 const erc20DecimalsSignature = "0x313ce567"
@@ -49,7 +50,12 @@ var cachedContractsMux sync.Mutex
 
 func addressFromPaddedHex(s string) (string, error) {
 	var t big.Int
-	_, ok := t.SetString(s, 0)
+	var ok bool
+	if has0xPrefix(s) {
+		_, ok = t.SetString(s[2:], 16)
+	} else {
+		_, ok = t.SetString(s, 16)
+	}
 	if !ok {
 		return "", errors.New("Data is not a number")
 	}
@@ -60,7 +66,7 @@ func addressFromPaddedHex(s string) (string, error) {
 func erc20GetTransfersFromLog(logs []*rpcLog) ([]Erc20Transfer, error) {
 	var r []Erc20Transfer
 	for _, l := range logs {
-		if len(l.Topics) == 3 && l.Topics[0] == erc20EventTransferSignature {
+		if len(l.Topics) == 3 && l.Topics[0] == erc20TransferEventSignature {
 			var t big.Int
 			_, ok := t.SetString(l.Data, 0)
 			if !ok {
@@ -81,6 +87,28 @@ func erc20GetTransfersFromLog(logs []*rpcLog) ([]Erc20Transfer, error) {
 				Tokens:   t,
 			})
 		}
+	}
+	return r, nil
+}
+
+func erc20GetTransfersFromTx(tx *rpcTransaction) ([]Erc20Transfer, error) {
+	var r []Erc20Transfer
+	if len(tx.Payload) == 128+len(erc20TransferMethodSignature) && strings.HasPrefix(tx.Payload, erc20TransferMethodSignature) {
+		to, err := addressFromPaddedHex(tx.Payload[len(erc20TransferMethodSignature) : 64+len(erc20TransferMethodSignature)])
+		if err != nil {
+			return nil, err
+		}
+		var t big.Int
+		_, ok := t.SetString(tx.Payload[len(erc20TransferMethodSignature)+64:], 16)
+		if !ok {
+			return nil, errors.New("Data is not a number")
+		}
+		r = append(r, Erc20Transfer{
+			Contract: strings.ToLower(tx.To),
+			From:     strings.ToLower(tx.From),
+			To:       strings.ToLower(to),
+			Tokens:   t,
+		})
 	}
 	return r, nil
 }

@@ -3,6 +3,7 @@
 package eth
 
 import (
+	"blockbook/tests/dbtestdata"
 	fmt "fmt"
 	"math/big"
 	"strings"
@@ -133,6 +134,48 @@ func TestErc20_parseErc20StringProperty(t *testing.T) {
 			// the addresses could have different case
 			if got != tt.want {
 				t.Errorf("parseErc20StringProperty = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestErc20_erc20GetTransfersFromTx(t *testing.T) {
+	p := NewEthereumParser(1)
+	b := dbtestdata.GetTestEthereumTypeBlock1(p)
+	bn, _ := new(big.Int).SetString("21e19e0c9bab2400000", 16)
+	tests := []struct {
+		name string
+		args *rpcTransaction
+		want []Erc20Transfer
+	}{
+		{
+			name: "0",
+			args: (b.Txs[0].CoinSpecificData.(completeTransaction)).Tx,
+			want: []Erc20Transfer{},
+		},
+		{
+			name: "1",
+			args: (b.Txs[1].CoinSpecificData.(completeTransaction)).Tx,
+			want: []Erc20Transfer{
+				{
+					Contract: "0x4af4114f73d1c1c903ac9e0361b379d1291808a2",
+					From:     "0x20cd153de35d469ba46127a0c8f18626b59a256a",
+					To:       "0x555ee11fbddc0e49a9bab358a8941ad95ffdb48f",
+					Tokens:   *bn,
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := erc20GetTransfersFromTx(tt.args)
+			if err != nil {
+				t.Errorf("erc20GetTransfersFromTx error = %v", err)
+				return
+			}
+			// the addresses could have different case
+			if strings.ToLower(fmt.Sprint(got)) != strings.ToLower(fmt.Sprint(tt.want)) {
+				t.Errorf("erc20GetTransfersFromTx = %+v, want %+v", got, tt.want)
 			}
 		})
 	}

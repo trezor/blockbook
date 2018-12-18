@@ -430,7 +430,7 @@ func (b *EthereumRPC) getERC20EventsForBlock(blockNumber string) (map[string][]*
 	err := b.rpc.CallContext(ctx, &logs, "eth_getLogs", map[string]interface{}{
 		"fromBlock": blockNumber,
 		"toBlock":   blockNumber,
-		"topics":    []string{erc20EventTransferSignature},
+		"topics":    []string{erc20TransferEventSignature},
 	})
 	if err != nil {
 		return nil, errors.Annotatef(err, "blockNumber %v", blockNumber)
