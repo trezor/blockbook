@@ -24,7 +24,7 @@
                                     {{if and (ne $a $addr) $vin.Searchable}}<a href="/address/{{$a}}">{{$a}}</a>{{else}}{{$a}}{{end}}
                                 </span>
                                 {{- else -}}
-                                <span class="float-left">{{- if $vin.ScriptSig.Hex -}}Unparsed address{{- else -}}No Inputs (Newly Generated Coins){{- end -}}</span>
+                                <span class="float-left">{{- if $vin.Hex -}}Unparsed address{{- else -}}No Inputs (Newly Generated Coins){{- end -}}</span>
                                 {{- end -}}{{- if $vin.Addresses -}}
                                 <span class="float-right{{if stringInSlice $addr $vin.Addresses}} text-danger{{end}}">{{formatAmount $vin.ValueSat}} {{$cs}}</span>
                                 {{- end -}}
@@ -51,14 +51,14 @@
                         {{- range $vout := $tx.Vout -}}
                         <tr>
                             <td>
-                                {{- range $a := $vout.ScriptPubKey.Addresses -}}
+                                {{- range $a := $vout.Addresses -}}
                                 <span class="ellipsis float-left">
-                                    {{- if and (ne $a $addr) $vout.ScriptPubKey.Searchable}}<a href="/address/{{$a}}">{{$a}}</a>{{else}}{{$a}}{{- end -}}
+                                    {{- if and (ne $a $addr) $vout.Searchable}}<a href="/address/{{$a}}">{{$a}}</a>{{else}}{{$a}}{{- end -}}
                                 </span>
                                 {{- else -}}
                                 <span class="float-left">Unparsed address</span>
                                 {{- end -}}
-                                <span class="float-right{{if stringInSlice $addr $vout.ScriptPubKey.Addresses}} text-success{{end}}">
+                                <span class="float-right{{if stringInSlice $addr $vout.Addresses}} text-success{{end}}">
                                     {{formatAmount $vout.ValueSat}} {{$cs}} {{if $vout.Spent}}<a class="text-danger" href="{{if $vout.SpentTxID}}/tx/{{$vout.SpentTxID}}{{else}}/spending/{{$tx.Txid}}/{{$vout.N}}{{end}}" title="Spent">➡</a>{{else -}}
                                     <span class="text-success" title="Unspent"> <b>×</b></span>
                                     {{- end -}}

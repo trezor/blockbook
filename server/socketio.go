@@ -306,7 +306,7 @@ func txToResTx(tx *api.Tx) resTx {
 	for i := range tx.Vin {
 		vin := &tx.Vin[i]
 		txid := vin.Txid
-		script := vin.ScriptSig.Hex
+		script := vin.Hex
 		input := txInputs{
 			Txid:        &txid,
 			Script:      &script,
@@ -323,13 +323,13 @@ func txToResTx(tx *api.Tx) resTx {
 	outputs := make([]txOutputs, len(tx.Vout))
 	for i := range tx.Vout {
 		vout := &tx.Vout[i]
-		script := vout.ScriptPubKey.Hex
+		script := vout.Hex
 		output := txOutputs{
 			Satoshis: (*big.Int)(vout.ValueSat).Int64(),
 			Script:   &script,
 		}
-		if len(vout.ScriptPubKey.Addresses) > 0 {
-			a := vout.ScriptPubKey.Addresses[0]
+		if len(vout.Addresses) > 0 {
+			a := vout.Addresses[0]
 			output.Address = &a
 		}
 		outputs[i] = output
@@ -412,7 +412,7 @@ func (s *SocketIoServer) getAddressHistory(addr []string, opts *addrOpts) (res r
 		}
 		for i := range tx.Vout {
 			vout := &tx.Vout[i]
-			a := addressInSlice(vout.ScriptPubKey.Addresses, addr)
+			a := addressInSlice(vout.Addresses, addr)
 			if a != "" {
 				hi := ads[a]
 				if hi == nil {

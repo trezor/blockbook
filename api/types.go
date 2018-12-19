@@ -74,44 +74,34 @@ func (a *Amount) AsBigInt() big.Int {
 	return big.Int(*a)
 }
 
-// ScriptSig contains input script
-type ScriptSig struct {
-	Hex string `json:"hex,omitempty"`
-	Asm string `json:"asm,omitempty"`
-}
-
 // Vin contains information about single transaction input
 type Vin struct {
 	Txid       string                   `json:"txid,omitempty"`
 	Vout       uint32                   `json:"vout,omitempty"`
 	Sequence   int64                    `json:"sequence,omitempty"`
 	N          int                      `json:"n"`
-	ScriptSig  ScriptSig                `json:"scriptSig"`
 	AddrDesc   bchain.AddressDescriptor `json:"-"`
 	Addresses  []string                 `json:"addresses"`
 	Searchable bool                     `json:"-"`
 	ValueSat   *Amount                  `json:"value,omitempty"`
-}
-
-// ScriptPubKey contains output script and addresses derived from it
-type ScriptPubKey struct {
 	Hex        string                   `json:"hex,omitempty"`
 	Asm        string                   `json:"asm,omitempty"`
-	AddrDesc   bchain.AddressDescriptor `json:"-"`
-	Addresses  []string                 `json:"addresses"`
-	Searchable bool                     `json:"-"`
-	Type       string                   `json:"type,omitempty"`
 }
 
 // Vout contains information about single transaction output
 type Vout struct {
-	ValueSat     *Amount      `json:"value,omitempty"`
-	N            int          `json:"n"`
-	ScriptPubKey ScriptPubKey `json:"scriptPubKey"`
-	Spent        bool         `json:"spent,omitempty"`
-	SpentTxID    string       `json:"spentTxId,omitempty"`
-	SpentIndex   int          `json:"spentIndex,omitempty"`
-	SpentHeight  int          `json:"spentHeight,omitempty"`
+	ValueSat    *Amount                  `json:"value,omitempty"`
+	N           int                      `json:"n"`
+	Spent       bool                     `json:"spent,omitempty"`
+	SpentTxID   string                   `json:"spentTxId,omitempty"`
+	SpentIndex  int                      `json:"spentIndex,omitempty"`
+	SpentHeight int                      `json:"spentHeight,omitempty"`
+	Hex         string                   `json:"hex,omitempty"`
+	Asm         string                   `json:"asm,omitempty"`
+	AddrDesc    bchain.AddressDescriptor `json:"-"`
+	Addresses   []string                 `json:"addresses"`
+	Searchable  bool                     `json:"-"`
+	Type        string                   `json:"type,omitempty"`
 }
 
 // Erc20Token contains info about ERC20 token held by an address
@@ -158,7 +148,7 @@ type Tx struct {
 	Time             int64             `json:"time,omitempty"`
 	Blocktime        int64             `json:"blocktime"`
 	Size             int               `json:"size,omitempty"`
-	ValueOutSat      *Amount           `json:"valueOut,omitempty"`
+	ValueOutSat      *Amount           `json:"value"`
 	ValueInSat       *Amount           `json:"valueIn,omitempty"`
 	FeesSat          *Amount           `json:"fees,omitempty"`
 	Hex              string            `json:"hex,omitempty"`

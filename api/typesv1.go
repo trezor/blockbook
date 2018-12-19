@@ -5,13 +5,19 @@ import (
 	"math/big"
 )
 
+// ScriptSigV1 is used for legacy api v1
+type ScriptSigV1 struct {
+	Hex string `json:"hex,omitempty"`
+	Asm string `json:"asm,omitempty"`
+}
+
 // VinV1 is used for legacy api v1
 type VinV1 struct {
 	Txid       string                   `json:"txid"`
 	Vout       uint32                   `json:"vout"`
 	Sequence   int64                    `json:"sequence,omitempty"`
 	N          int                      `json:"n"`
-	ScriptSig  ScriptSig                `json:"scriptSig"`
+	ScriptSig  ScriptSigV1              `json:"scriptSig"`
 	AddrDesc   bchain.AddressDescriptor `json:"-"`
 	Addresses  []string                 `json:"addresses"`
 	Searchable bool                     `json:"-"`
@@ -19,16 +25,26 @@ type VinV1 struct {
 	ValueSat   big.Int                  `json:"-"`
 }
 
+// ScriptPubKeyV1 is used for legacy api v1
+type ScriptPubKeyV1 struct {
+	Hex        string                   `json:"hex,omitempty"`
+	Asm        string                   `json:"asm,omitempty"`
+	AddrDesc   bchain.AddressDescriptor `json:"-"`
+	Addresses  []string                 `json:"addresses"`
+	Searchable bool                     `json:"-"`
+	Type       string                   `json:"type,omitempty"`
+}
+
 // VoutV1 is used for legacy api v1
 type VoutV1 struct {
-	Value        string       `json:"value"`
-	ValueSat     big.Int      `json:"-"`
-	N            int          `json:"n"`
-	ScriptPubKey ScriptPubKey `json:"scriptPubKey"`
-	Spent        bool         `json:"spent"`
-	SpentTxID    string       `json:"spentTxId,omitempty"`
-	SpentIndex   int          `json:"spentIndex,omitempty"`
-	SpentHeight  int          `json:"spentHeight,omitempty"`
+	Value        string         `json:"value"`
+	ValueSat     big.Int        `json:"-"`
+	N            int            `json:"n"`
+	ScriptPubKey ScriptPubKeyV1 `json:"scriptPubKey"`
+	Spent        bool           `json:"spent"`
+	SpentTxID    string         `json:"spentTxId,omitempty"`
+	SpentIndex   int            `json:"spentIndex,omitempty"`
+	SpentHeight  int            `json:"spentHeight,omitempty"`
 }
 
 // TxV1 is used for legacy api v1
@@ -92,10 +108,13 @@ func (w *Worker) TxToV1(tx *Tx) *TxV1 {
 	for i := range tx.Vin {
 		v := &tx.Vin[i]
 		vinV1[i] = VinV1{
-			AddrDesc:   v.AddrDesc,
-			Addresses:  v.Addresses,
-			N:          v.N,
-			ScriptSig:  v.ScriptSig,
+			AddrDesc:  v.AddrDesc,
+			Addresses: v.Addresses,
+			N:         v.N,
+			ScriptSig: ScriptSigV1{
+				Asm: v.Asm,
+				Hex: v.Hex,
+			},
 			Searchable: v.Searchable,
 			Sequence:   v.Sequence,
 			Txid:       v.Txid,
@@ -108,14 +127,21 @@ func (w *Worker) TxToV1(tx *Tx) *TxV1 {
 	for i := range tx.Vout {
 		v := &tx.Vout[i]
 		voutV1[i] = VoutV1{
-			N:            v.N,
-			ScriptPubKey: v.ScriptPubKey,
-			Spent:        v.Spent,
-			SpentHeight:  v.SpentHeight,
-			SpentIndex:   v.SpentIndex,
-			SpentTxID:    v.SpentTxID,
-			Value:        v.ValueSat.DecimalString(d),
-			ValueSat:     v.ValueSat.AsBigInt(),
+			N: v.N,
+			ScriptPubKey: ScriptPubKeyV1{
+				AddrDesc:   v.AddrDesc,
+				Addresses:  v.Addresses,
+				Asm:        v.Asm,
+				Hex:        v.Hex,
+				Searchable: v.Searchable,
+				Type:       v.Type,
+			},
+			Spent:       v.Spent,
+			SpentHeight: v.SpentHeight,
+			SpentIndex:  v.SpentIndex,
+			SpentTxID:   v.SpentTxID,
+			Value:       v.ValueSat.DecimalString(d),
+			ValueSat:    v.ValueSat.AsBigInt(),
 		}
 	}
 	return &TxV1{
