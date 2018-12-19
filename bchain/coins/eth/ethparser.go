@@ -398,9 +398,9 @@ func GetHeightFromTx(tx *bchain.Tx) (uint32, error) {
 	return uint32(n), nil
 }
 
-// GetErc20FromTx returns Erc20 data from bchain.Tx
-func GetErc20FromTx(tx *bchain.Tx) ([]Erc20Transfer, error) {
-	var r []Erc20Transfer
+// EthereumTypeGetErc20FromTx returns Erc20 data from bchain.Tx
+func (p *EthereumParser) EthereumTypeGetErc20FromTx(tx *bchain.Tx) ([]bchain.Erc20Transfer, error) {
+	var r []bchain.Erc20Transfer
 	var err error
 	csd, ok := tx.CoinSpecificData.(completeTransaction)
 	if ok {

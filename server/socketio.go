@@ -722,15 +722,12 @@ func (s *SocketIoServer) OnNewBlockHash(hash string) {
 }
 
 // OnNewTxAddr notifies users subscribed to bitcoind/addresstxid about new block
-func (s *SocketIoServer) OnNewTxAddr(txid string, desc bchain.AddressDescriptor, isOutput bool) {
+func (s *SocketIoServer) OnNewTxAddr(txid string, desc bchain.AddressDescriptor) {
 	addr, searchable, err := s.chainParser.GetAddressesFromAddrDesc(desc)
 	if err != nil {
 		glog.Error("GetAddressesFromAddrDesc error ", err, " for descriptor ", desc)
 	} else if searchable && len(addr) == 1 {
 		data := map[string]interface{}{"address": addr[0], "txid": txid}
-		if !isOutput {
-			data["input"] = true
-		}
 		c := s.server.BroadcastTo("bitcoind/addresstxid-"+string(desc), "bitcoind/addresstxid", data)
 		if c > 0 {
 			glog.Info("broadcasting new txid ", txid, " for addr ", addr[0], " to ", c, " channels")

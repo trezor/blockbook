@@ -255,3 +255,8 @@ func (p *BaseParser) UnpackTx(buf []byte) (*Tx, uint32, error) {
 	}
 	return &tx, pt.Height, nil
 }
+
+// EthereumTypeGetErc20FromTx is unsupported
+func (p *BaseParser) EthereumTypeGetErc20FromTx(tx *Tx) ([]Erc20Transfer, error) {
+	return nil, errors.New("Not supported")
+}

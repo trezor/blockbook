@@ -3,6 +3,7 @@
 package eth
 
 import (
+	"blockbook/bchain"
 	"blockbook/tests/dbtestdata"
 	fmt "fmt"
 	"math/big"
@@ -146,17 +147,17 @@ func TestErc20_erc20GetTransfersFromTx(t *testing.T) {
 	tests := []struct {
 		name string
 		args *rpcTransaction
-		want []Erc20Transfer
+		want []bchain.Erc20Transfer
 	}{
 		{
 			name: "0",
 			args: (b.Txs[0].CoinSpecificData.(completeTransaction)).Tx,
-			want: []Erc20Transfer{},
+			want: []bchain.Erc20Transfer{},
 		},
 		{
 			name: "1",
 			args: (b.Txs[1].CoinSpecificData.(completeTransaction)).Tx,
-			want: []Erc20Transfer{
+			want: []bchain.Erc20Transfer{
 				{
 					Contract: "0x4af4114f73d1c1c903ac9e0361b379d1291808a2",
 					From:     "0x20cd153de35d469ba46127a0c8f18626b59a256a",

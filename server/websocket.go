@@ -531,7 +531,7 @@ func (s *WebsocketServer) OnNewBlock(hash string, height uint32) {
 }
 
 // OnNewTxAddr is a callback that broadcasts info about a tx affecting subscribed address
-func (s *WebsocketServer) OnNewTxAddr(tx *bchain.Tx, addrDesc bchain.AddressDescriptor, isOutput bool) {
+func (s *WebsocketServer) OnNewTxAddr(tx *bchain.Tx, addrDesc bchain.AddressDescriptor) {
 	// check if there is any subscription but release the lock immediately, GetTransactionFromBchainTx may take some time
 	s.addressSubscriptionsLock.Lock()
 	as, ok := s.addressSubscriptions[string(addrDesc)]
@@ -550,11 +550,9 @@ func (s *WebsocketServer) OnNewTxAddr(tx *bchain.Tx, addrDesc bchain.AddressDesc
 			}
 			data := struct {
 				Address string  `json:"address"`
-				Input   bool    `json:"input"`
 				Tx      *api.Tx `json:"tx"`
 			}{
 				Address: addr[0],
-				Input:   !isOutput,
 				Tx:      atx,
 			}
 			// get the list of subscriptions again, this time keep the lock

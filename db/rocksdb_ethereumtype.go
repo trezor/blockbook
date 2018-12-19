@@ -174,7 +174,7 @@ func (d *RocksDB) processAddressesEthereumType(block *bchain.Block, addresses ma
 			blockTx.from = addrDesc
 		}
 		// store erc20 transfers
-		erc20, err := eth.GetErc20FromTx(&tx)
+		erc20, err := d.chainParser.EthereumTypeGetErc20FromTx(&tx)
 		if err != nil {
 			glog.Warningf("rocksdb: GetErc20FromTx %v - height %d, tx %v", err, block.Height, tx.Txid)
 		}

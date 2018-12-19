@@ -37,14 +37,6 @@ const erc20SymbolSignature = "0x95d89b41"
 const erc20DecimalsSignature = "0x313ce567"
 const erc20BalanceOf = "0x70a08231"
 
-// Erc20Transfer contains a single ERC20 token transfer
-type Erc20Transfer struct {
-	Contract string
-	From     string
-	To       string
-	Tokens   big.Int
-}
-
 var cachedContracts = make(map[string]*bchain.Erc20Contract)
 var cachedContractsMux sync.Mutex
 
@@ -63,8 +55,8 @@ func addressFromPaddedHex(s string) (string, error) {
 	return a.String(), nil
 }
 
-func erc20GetTransfersFromLog(logs []*rpcLog) ([]Erc20Transfer, error) {
-	var r []Erc20Transfer
+func erc20GetTransfersFromLog(logs []*rpcLog) ([]bchain.Erc20Transfer, error) {
+	var r []bchain.Erc20Transfer
 	for _, l := range logs {
 		if len(l.Topics) == 3 && l.Topics[0] == erc20TransferEventSignature {
 			var t big.Int
@@ -80,7 +72,7 @@ func erc20GetTransfersFromLog(logs []*rpcLog) ([]Erc20Transfer, error) {
 			if err != nil {
 				return nil, err
 			}
-			r = append(r, Erc20Transfer{
+			r = append(r, bchain.Erc20Transfer{
 				Contract: strings.ToLower(l.Address),
 				From:     strings.ToLower(from),
 				To:       strings.ToLower(to),
@@ -91,8 +83,8 @@ func erc20GetTransfersFromLog(logs []*rpcLog) ([]Erc20Transfer, error) {
 	return r, nil
 }
 
-func erc20GetTransfersFromTx(tx *rpcTransaction) ([]Erc20Transfer, error) {
-	var r []Erc20Transfer
+func erc20GetTransfersFromTx(tx *rpcTransaction) ([]bchain.Erc20Transfer, error) {
+	var r []bchain.Erc20Transfer
 	if len(tx.Payload) == 128+len(erc20TransferMethodSignature) && strings.HasPrefix(tx.Payload, erc20TransferMethodSignature) {
 		to, err := addressFromPaddedHex(tx.Payload[len(erc20TransferMethodSignature) : 64+len(erc20TransferMethodSignature)])
 		if err != nil {
@@ -103,7 +95,7 @@ func erc20GetTransfersFromTx(tx *rpcTransaction) ([]Erc20Transfer, error) {
 		if !ok {
 			return nil, errors.New("Data is not a number")
 		}
-		r = append(r, Erc20Transfer{
+		r = append(r, bchain.Erc20Transfer{
 			Contract: strings.ToLower(tx.To),
 			From:     strings.ToLower(tx.From),
 			To:       strings.ToLower(to),

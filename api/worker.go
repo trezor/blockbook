@@ -218,7 +218,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height uint32, 
 		}
 		pValInSat = &valInSat
 	} else if w.chainType == bchain.ChainEthereumType {
-		ets, err := eth.GetErc20FromTx(bchainTx)
+		ets, err := w.chainParser.EthereumTypeGetErc20FromTx(bchainTx)
 		if err != nil {
 			glog.Errorf("GetErc20FromTx error %v, %v", err, bchainTx)
 		}

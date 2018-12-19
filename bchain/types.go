@@ -175,11 +175,19 @@ type Erc20Contract struct {
 	Decimals int    `json:"decimals"`
 }
 
+// Erc20Transfer contains a single ERC20 token transfer
+type Erc20Transfer struct {
+	Contract string
+	From     string
+	To       string
+	Tokens   big.Int
+}
+
 // OnNewBlockFunc is used to send notification about a new block
 type OnNewBlockFunc func(hash string, height uint32)
 
 // OnNewTxAddrFunc is used to send notification about a new transaction/address
-type OnNewTxAddrFunc func(tx *Tx, desc AddressDescriptor, isOutput bool)
+type OnNewTxAddrFunc func(tx *Tx, desc AddressDescriptor)
 
 // BlockChain defines common interface to block chain daemon
 type BlockChain interface {
@@ -252,4 +260,6 @@ type BlockChainParser interface {
 	PackBlockHash(hash string) ([]byte, error)
 	UnpackBlockHash(buf []byte) (string, error)
 	ParseBlock(b []byte) (*Block, error)
+	// EthereumType specific
+	EthereumTypeGetErc20FromTx(tx *Tx) ([]Erc20Transfer, error)
 }

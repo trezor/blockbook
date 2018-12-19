@@ -44,6 +44,18 @@ func (m *MempoolEthereumType) updateMappings(newTxToInputOutput map[string][]add
 	m.addrDescToTx = newAddrDescToTx
 }
 
+func appendAddress(io []addrIndex, i int32, a string, parser BlockChainParser) []addrIndex {
+	if len(a) > 0 {
+		addrDesc, err := parser.GetAddrDescFromAddress(a)
+		if err != nil {
+			glog.Error("error in input addrDesc in ", a, ": ", err)
+			return io
+		}
+		io = append(io, addrIndex{string(addrDesc), i})
+	}
+	return io
+}
+
 // Resync gets mempool transactions and maps outputs to transactions.
 // Resync is not reentrant, it should be called from a single thread.
 // Read operations (GetTransactions) are safe.
@@ -78,22 +90,27 @@ func (m *MempoolEthereumType) Resync(onNewTxAddr OnNewTxAddrFunc) (int, error) {
 				if len(addrDesc) > 0 {
 					io = append(io, addrIndex{string(addrDesc), int32(output.N)})
 				}
-				if onNewTxAddr != nil {
-					onNewTxAddr(tx, addrDesc, true)
-				}
 			}
 			for _, input := range tx.Vin {
 				for i, a := range input.Addresses {
-					if len(a) > 0 {
-						addrDesc, err := parser.GetAddrDescFromAddress(a)
-						if err != nil {
-							glog.Error("error in input addrDesc in ", txid, " ", a, ": ", err)
-							continue
-						}
-						io = append(io, addrIndex{string(addrDesc), int32(^i)})
-						if onNewTxAddr != nil {
-							onNewTxAddr(tx, addrDesc, false)
-						}
+					appendAddress(io, ^int32(i), a, parser)
+				}
+			}
+			t, err := parser.EthereumTypeGetErc20FromTx(tx)
+			if err != nil {
+				glog.Error("GetErc20FromTx for tx ", txid, ", ", err)
+			} else {
+				for i := range t {
+					io = appendAddress(io, ^int32(i+1), t[i].From, parser)
+					io = appendAddress(io, int32(i+1), t[i].To, parser)
+				}
+			}
+			if onNewTxAddr != nil {
+				sent := make(map[string]struct{})
+				for _, si := range io {
+					if _, found := sent[si.addrDesc]; !found {
+						onNewTxAddr(tx, AddressDescriptor(si.addrDesc))
+						sent[si.addrDesc] = struct{}{}
 					}
 				}
 			}
