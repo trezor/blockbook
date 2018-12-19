@@ -1,4 +1,4 @@
-// build unittest
+// +build unittest
 
 package eth
 
@@ -15,7 +15,7 @@ func TestErc20_erc20GetTransfersFromLog(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    []*rpcLog
-		want    []Erc20Transfer
+		want    []bchain.Erc20Transfer
 		wantErr bool
 	}{
 		{
@@ -31,7 +31,7 @@ func TestErc20_erc20GetTransfersFromLog(t *testing.T) {
 					Data: "0x0000000000000000000000000000000000000000000000000000000000000123",
 				},
 			},
-			want: []Erc20Transfer{
+			want: []bchain.Erc20Transfer{
 				{
 					Contract: "0x76a45e8976499ab9ae223cc584019341d5a84e96",
 					From:     "0x2aacf811ac1a60081ea39f7783c0d26c500871a8",
@@ -81,7 +81,7 @@ func TestErc20_erc20GetTransfersFromLog(t *testing.T) {
 					Data: "0x0000000000000000000000004bda106325c335df99eab7fe363cac8a0ba2a24d000000000000000000000000c778417e063141139fce010982780140aa0cd5ab0000000000000000000000000d0f936ee4c93e25944694d6c121de94d9760f1100000000000000000000000000000000000000000000000000031855667df7a80000000000000000000000000000000000000000000000006a8313d60b1f800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
 				},
 			},
-			want: []Erc20Transfer{
+			want: []bchain.Erc20Transfer{
 				{
 					Contract: "0x0d0f936ee4c93e25944694d6c121de94d9760f11",
 					From:     "0x6f44cceb49b4a5812d54b6f494fc2febf25511ed",
