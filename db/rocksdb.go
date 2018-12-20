@@ -222,10 +222,10 @@ func (d *RocksDB) GetTransactions(address string, lower uint32, higher uint32, f
 }
 
 // GetAddrDescTransactions finds all input/output transactions for address descriptor
-// Transaction are passed to callback function.
+// Transaction are passed to callback function in the order from newest block to the oldest
 func (d *RocksDB) GetAddrDescTransactions(addrDesc bchain.AddressDescriptor, lower uint32, higher uint32, fn func(txid string, vout int32, isOutput bool) error) (err error) {
-	kstart := packAddressKey(addrDesc, lower)
-	kstop := packAddressKey(addrDesc, higher)
+	kstart := packAddressKey(addrDesc, higher)
+	kstop := packAddressKey(addrDesc, lower)
 
 	it := d.db.NewIteratorCF(d.ro, d.cfh[cfAddresses])
 	defer it.Close()
@@ -1370,10 +1370,10 @@ func (d *RocksDB) ComputeInternalStateColumnStats(stopCompute chan os.Signal) er
 // Helpers
 
 func packAddressKey(addrDesc bchain.AddressDescriptor, height uint32) []byte {
-	bheight := packUint(height)
-	buf := make([]byte, 0, len(addrDesc)+len(bheight))
-	buf = append(buf, addrDesc...)
-	buf = append(buf, bheight...)
+	buf := make([]byte, len(addrDesc)+packedHeightBytes)
+	copy(buf, addrDesc)
+	// pack height as binary complement to achieve ordering from newest to oldest block
+	binary.BigEndian.PutUint32(buf[len(addrDesc):], ^height)
 	return buf
 }
 
@@ -1382,7 +1382,8 @@ func unpackAddressKey(key []byte) ([]byte, uint32, error) {
 	if i <= 0 {
 		return nil, 0, errors.New("Invalid address key")
 	}
-	return key[:i], unpackUint(key[i : i+packedHeightBytes]), nil
+	// height is packed in binary complement, convert it
+	return key[:i], ^unpackUint(key[i : i+packedHeightBytes]), nil
 }
 
 func packUint(i uint32) []byte {

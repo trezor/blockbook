@@ -233,7 +233,7 @@ func (s *SocketIoServer) getAddressTxids(addr []string, opts *addrOpts) (res res
 			}
 		}
 	}
-	res.Result = api.UniqueTxidsInReverse(txids)
+	res.Result = api.GetUniqueTxids(txids)
 	return res, nil
 }
 

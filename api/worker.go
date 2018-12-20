@@ -355,20 +355,20 @@ func (t *Tx) getAddrVinValue(addrDesc bchain.AddressDescriptor) *big.Int {
 	return &val
 }
 
-// UniqueTxidsInReverse reverts the order of transactions (so that newest are first) and removes duplicate transactions
-func UniqueTxidsInReverse(txids []string) []string {
-	i := len(txids)
-	ut := make([]string, i)
+// GetUniqueTxids removes duplicate transactions
+func GetUniqueTxids(txids []string) []string {
+	ut := make([]string, len(txids))
 	txidsMap := make(map[string]struct{})
+	i := 0
 	for _, txid := range txids {
 		_, e := txidsMap[txid]
 		if !e {
-			i--
 			ut[i] = txid
+			i++
 			txidsMap[txid] = struct{}{}
 		}
 	}
-	return ut[i:]
+	return ut[0:i]
 }
 
 func (w *Worker) txFromTxAddress(txid string, ta *db.TxAddresses, bi *db.BlockInfo, bestheight uint32) *Tx {
@@ -578,7 +578,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option GetA
 		if err != nil {
 			return nil, errors.Annotatef(err, "getAddressTxids %v true", addrDesc)
 		}
-		txm = UniqueTxidsInReverse(txm)
+		txm = GetUniqueTxids(txm)
 		// if there are only unconfirmed transactions, there is no paging
 		if ba == nil {
 			ba = &db.AddrBalance{}
@@ -589,7 +589,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option GetA
 			if err != nil {
 				return nil, errors.Annotatef(err, "getAddressTxids %v false", addrDesc)
 			}
-			txc = UniqueTxidsInReverse(txc)
+			txc = GetUniqueTxids(txc)
 			bestheight, _, err := w.db.GetBestBlock()
 			if err != nil {
 				return nil, errors.Annotatef(err, "GetBestBlock")
@@ -700,7 +700,7 @@ func (w *Worker) GetAddressUtxo(address string, onlyConfirmed bool) ([]AddressUt
 		if err != nil {
 			return nil, errors.Annotatef(err, "getAddressTxids %v true", address)
 		}
-		txm = UniqueTxidsInReverse(txm)
+		txm = GetUniqueTxids(txm)
 		mc := make([]*bchain.Tx, len(txm))
 		for i, txid := range txm {
 			// get mempool txs and process their inputs to detect spends between mempool txs
