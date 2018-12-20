@@ -11,6 +11,10 @@ type Metrics struct {
 	SocketIOSubscribes    *prometheus.CounterVec
 	SocketIOClients       prometheus.Gauge
 	SocketIOReqDuration   *prometheus.HistogramVec
+	WebsocketRequests     *prometheus.CounterVec
+	WebsocketSubscribes   *prometheus.CounterVec
+	WebsocketClients      prometheus.Gauge
+	WebsocketReqDuration  *prometheus.HistogramVec
 	IndexResyncDuration   prometheus.Histogram
 	MempoolResyncDuration prometheus.Histogram
 	TxCacheEfficiency     *prometheus.CounterVec
@@ -48,7 +52,7 @@ func GetMetrics(coin string) (*Metrics, error) {
 	metrics.SocketIOClients = prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Name:        "blockbook_socketio_clients",
-			Help:        "Number of currently connected clients",
+			Help:        "Number of currently connected socketio clients",
 			ConstLabels: Labels{"coin": coin},
 		},
 	)
@@ -56,6 +60,38 @@ func GetMetrics(coin string) (*Metrics, error) {
 		prometheus.HistogramOpts{
 			Name:        "blockbook_socketio_req_duration",
 			Help:        "Socketio request duration by method (in microseconds)",
+			Buckets:     []float64{1, 5, 10, 25, 50, 75, 100, 250},
+			ConstLabels: Labels{"coin": coin},
+		},
+		[]string{"method"},
+	)
+	metrics.WebsocketRequests = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name:        "blockbook_websocket_requests",
+			Help:        "Total number of websocket requests by method and status",
+			ConstLabels: Labels{"coin": coin},
+		},
+		[]string{"method", "status"},
+	)
+	metrics.WebsocketSubscribes = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name:        "blockbook_websocket_subscribes",
+			Help:        "Total number of websocket subscribes by channel and status",
+			ConstLabels: Labels{"coin": coin},
+		},
+		[]string{"channel", "status"},
+	)
+	metrics.WebsocketClients = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name:        "blockbook_websocket_clients",
+			Help:        "Number of currently connected websocket clients",
+			ConstLabels: Labels{"coin": coin},
+		},
+	)
+	metrics.WebsocketReqDuration = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:        "blockbook_websocket_req_duration",
+			Help:        "Websocket request duration by method (in microseconds)",
 			Buckets:     []float64{1, 5, 10, 25, 50, 75, 100, 250},
 			ConstLabels: Labels{"coin": coin},
 		},

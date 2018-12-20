@@ -78,10 +78,12 @@
                     <td>Difficulty</td>
                     <td class="data">{{$be.Difficulty}}</td>
                 </tr>
+                {{- if $be.Timeoffset -}}
                 <tr>
                     <td>Timeoffset</td>
                     <td class="data">{{$be.Timeoffset}}</td>
                 </tr>
+                {{- end -}}
                 {{- if $be.SizeOnDisk -}}
                 <tr>
                     <td>Size On Disk</td>

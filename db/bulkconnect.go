@@ -22,7 +22,7 @@ type bulkAddresses struct {
 // BulkConnect is used to connect blocks in bulk, faster but if interrupted inconsistent way
 type BulkConnect struct {
 	d                  *RocksDB
-	isUTXO             bool
+	chainType          bchain.ChainType
 	bulkAddresses      []bulkAddresses
 	bulkAddressesCount int
 	txAddressesMap     map[string]*TxAddresses
@@ -42,7 +42,7 @@ const (
 func (d *RocksDB) InitBulkConnect() (*BulkConnect, error) {
 	bc := &BulkConnect{
 		d:              d,
-		isUTXO:         d.chainParser.IsUTXOChain(),
+		chainType:      d.chainParser.GetChainType(),
 		txAddressesMap: make(map[string]*TxAddresses),
 		balances:       make(map[string]*AddrBalance),
 	}
@@ -168,11 +168,12 @@ func (b *BulkConnect) storeBulkAddresses(wb *gorocksdb.WriteBatch) error {
 // ConnectBlock connects block in bulk mode
 func (b *BulkConnect) ConnectBlock(block *bchain.Block, storeBlockTxs bool) error {
 	b.height = block.Height
-	if !b.isUTXO {
+	// for non bitcoin types connect blocks in non bulk mode
+	if b.chainType != bchain.ChainBitcoinType {
 		return b.d.ConnectBlock(block)
 	}
 	addresses := make(map[string][]outpoint)
-	if err := b.d.processAddressesUTXO(block, addresses, b.txAddressesMap, b.balances); err != nil {
+	if err := b.d.processAddressesBitcoinType(block, addresses, b.txAddressesMap, b.balances); err != nil {
 		return err
 	}
 	var storeAddressesChan, storeBalancesChan chan error

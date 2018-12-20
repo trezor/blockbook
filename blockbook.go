@@ -498,17 +498,17 @@ func storeInternalStateLoop() {
 	glog.Info("storeInternalStateLoop stopped")
 }
 
-func onNewTxAddr(txid string, desc bchain.AddressDescriptor, isOutput bool) {
+func onNewTxAddr(tx *bchain.Tx, desc bchain.AddressDescriptor) {
 	for _, c := range callbacksOnNewTxAddr {
-		c(txid, desc, isOutput)
+		c(tx, desc)
 	}
 }
 
 func pushSynchronizationHandler(nt bchain.NotificationType) {
+	glog.V(1).Info("MQ: notification ", nt)
 	if atomic.LoadInt32(&inShutdown) != 0 {
 		return
 	}
-	glog.V(1).Info("MQ: notification ", nt)
 	if nt == bchain.NotificationNewBlock {
 		chanSyncIndex <- struct{}{}
 	} else if nt == bchain.NotificationNewTx {
@@ -545,7 +545,7 @@ func waitForSignalAndShutdown(internal *server.InternalServer, public *server.Pu
 	}
 }
 
-func printResult(txid string, vout uint32, isOutput bool) error {
+func printResult(txid string, vout int32, isOutput bool) error {
 	glog.Info(txid, vout, isOutput)
 	return nil
 }

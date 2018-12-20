@@ -1,32 +1,28 @@
 {{define "txdetail"}}{{$cs := .CoinShortcut}}{{$addr := .AddrStr}}{{$tx := .Tx}}
-<div class="alert alert-data">
+<div class="alert alert-data"{{if eq $tx.EthereumSpecific.Status 0}} style="background-color: #faf2ee;"{{end}}>
     <div class="row line-bot">
         <div class="col-xs-7 col-md-8 ellipsis">
             <a href="/tx/{{$tx.Txid}}">{{$tx.Txid}}</a>
+            {{if eq $tx.EthereumSpecific.Status 1}}<span class="text-success">✔</span>{{end}}{{if eq $tx.EthereumSpecific.Status 0}}<span class="text-danger">✘</span>{{end}}
         </div>
         {{- if $tx.Confirmations -}}
         <div class="col-xs-5 col-md-4 text-muted text-right">mined {{formatUnixTime $tx.Blocktime}}</div>
         {{- end -}}
     </div>
     <div class="row line-mid">
-        <div class="col-md-5">
+        <div class="col-md-4">
             <div class="row">
                 <table class="table data-table">
                     <tbody>
                         {{- range $vin := $tx.Vin -}}
                         <tr>
                             <td>
-                                {{- if $vin.Txid -}}
-                                <a class="float-left text-muted" href="/tx/{{$vin.Txid}}" title="Outpoint {{$vin.Txid}},{{$vin.Vout}}">➡&nbsp;</a>
-                                {{- end -}}
                                 {{- range $a := $vin.Addresses -}}
                                 <span class="ellipsis float-left">
                                     {{if and (ne $a $addr) $vin.Searchable}}<a href="/address/{{$a}}">{{$a}}</a>{{else}}{{$a}}{{end}}
                                 </span>
                                 {{- else -}}
-                                <span class="float-left">{{- if $vin.Hex -}}Unparsed address{{- else -}}No Inputs (Newly Generated Coins){{- end -}}</span>
-                                {{- end -}}{{- if $vin.Addresses -}}
-                                <span class="float-right{{if stringInSlice $addr $vin.Addresses}} text-danger{{end}}">{{formatAmount $vin.ValueSat}} {{$cs}}</span>
+                                <span class="float-left">Unparsed address</span>
                                 {{- end -}}
                             </td>
                         </tr>
@@ -44,7 +40,7 @@
                 <path fill-rule="evenodd" d="M7.5 8l-5 5L1 11.5 4.75 8 1 4.5 2.5 3l5 5z"></path>
             </svg>
         </div>
-        <div class="col-md-6">
+        <div class="col-md-4">
             <div class="row">
                 <table class="table data-table">
                     <tbody>
@@ -58,11 +54,6 @@
                                 {{- else -}}
                                 <span class="float-left">Unparsed address</span>
                                 {{- end -}}
-                                <span class="float-right{{if stringInSlice $addr $vout.Addresses}} text-success{{end}}">
-                                    {{formatAmount $vout.ValueSat}} {{$cs}} {{if $vout.Spent}}<a class="text-danger" href="{{if $vout.SpentTxID}}/tx/{{$vout.SpentTxID}}{{else}}/spending/{{$tx.Txid}}/{{$vout.N}}{{end}}" title="Spent">➡</a>{{else -}}
-                                    <span class="text-success" title="Unspent"> <b>×</b></span>
-                                    {{- end -}}
-                                </span>
                             </td>
                         </tr>
                         {{- else -}}
@@ -74,7 +65,52 @@
                 </table>
             </div>
         </div>
+        <div class="col-md-3 text-right" style="padding: .4rem 0;">
+            {{formatAmount $tx.ValueOutSat}} {{$cs}}
+        </div>
     </div>
+    {{- if $tx.TokenTransfers -}}
+    <div class="row line-top" style="padding: 15px 0 6px 15px;font-weight: bold;">
+        ERC20 Token Transfers
+    </div>
+    {{- range $erc20 := $tx.TokenTransfers -}}
+    <div class="row" style="padding: 2px 15px;">
+        <div class="col-md-4">
+            <div class="row">
+                <table class="table data-table">
+                    <tbody>
+                        <tr>
+                            <td>
+                                <span class="ellipsis float-left">{{if ne $erc20.From $addr}}<a href="/address/{{$erc20.From}}">{{$erc20.From}}</a>{{else}}{{$erc20.From}}{{end}}</span>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="col-md-1 col-xs-12 text-center">
+            <svg class="octicon" viewBox="0 0 8 16">
+                <path fill-rule="evenodd" d="M7.5 8l-5 5L1 11.5 4.75 8 1 4.5 2.5 3l5 5z"></path>
+            </svg>
+        </div>
+        <div class="col-md-4">
+            <div class="row">
+                <table class="table data-table">
+                    <tbody>
+                        <tr>
+                            <td>
+                                <span class="ellipsis float-left">{{if ne $erc20.To $addr}}<a href="/address/{{$erc20.To}}">{{$erc20.To}}</a>{{else}}{{$erc20.To}}{{end}}</span>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="col-md-3 text-right" style="padding: .4rem 0;">{{formatAmountWithDecimals $erc20.Value $erc20.Decimals}} {{$erc20.Symbol}}</div>
+    </div>
+    {{- end -}}
+    <div class="row" style="padding: 6px 15px;"></div>
+    {{- end -}}
     <div class="row line-top">
         <div class="col-xs-6 col-sm-4 col-md-4">
             {{- if $tx.FeesSat -}}
