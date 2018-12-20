@@ -115,15 +115,16 @@ type Erc20Token struct {
 	ContractIndex string  `json:"-"`
 }
 
-// Erc20Transfer contains info about ERC20 transfer done in a transaction
-type Erc20Transfer struct {
+// TokenTransfer contains info about a token transfer done in a transaction
+type TokenTransfer struct {
+	Type     string  `json:"type"`
 	From     string  `json:"from"`
 	To       string  `json:"to"`
-	Contract string  `json:"contract"`
+	Token    string  `json:"token"`
 	Name     string  `json:"name"`
 	Symbol   string  `json:"symbol"`
 	Decimals int     `json:"decimals"`
-	Tokens   *Amount `json:"tokens"`
+	Value    *Amount `json:"value"`
 }
 
 // EthereumSpecific contains ethereum specific transaction data
@@ -154,7 +155,7 @@ type Tx struct {
 	Hex              string            `json:"hex,omitempty"`
 	CoinSpecificData interface{}       `json:"-"`
 	CoinSpecificJSON json.RawMessage   `json:"-"`
-	Erc20Transfers   []Erc20Transfer   `json:"erc20transfers,omitempty"`
+	TokenTransfers   []TokenTransfer   `json:"tokentransfers,omitempty"`
 	EthereumSpecific *EthereumSpecific `json:"ethereumspecific,omitempty"`
 }
 
@@ -174,6 +175,7 @@ const (
 	AddressFilterVoutOutputs = -3
 )
 
+// AddressFilter is used to filter data returned from GetAddress api method
 type AddressFilter struct {
 	Vout       int
 	Contract   string
