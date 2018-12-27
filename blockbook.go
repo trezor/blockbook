@@ -67,6 +67,7 @@ var (
 	noTxCache = flag.Bool("notxcache", false, "disable tx cache")
 
 	computeColumnStats = flag.Bool("computedbstats", false, "compute column stats and exit")
+	dbStatsPeriodHours = flag.Int("dbstatsperiod", 24, "period of db stats collection in hours, 0 disables stats collection")
 
 	// resync index at least each resyncIndexPeriodMs (could be more often if invoked by message from ZeroMQ)
 	resyncIndexPeriodMs = flag.Int("resyncindexperiod", 935093, "resync index period in milliseconds")
@@ -467,13 +468,17 @@ func storeInternalStateLoop() {
 	}()
 	var computeRunning bool
 	lastCompute := time.Now()
-	// randomize the duration between ComputeInternalStateColumnStats to avoid peaks after reboot of machine with multiple blockbooks
-	computePeriod := 23*time.Hour + time.Duration(rand.Float64()*float64((4*time.Hour).Nanoseconds()))
 	lastAppInfo := time.Now()
 	logAppInfoPeriod := 15 * time.Minute
-	glog.Info("storeInternalStateLoop starting with db stats recompute period ", computePeriod)
+	// randomize the duration between ComputeInternalStateColumnStats to avoid peaks after reboot of machine with multiple blockbooks
+	computePeriod := time.Duration(*dbStatsPeriodHours)*time.Hour + time.Duration(rand.Float64()*float64((4*time.Hour).Nanoseconds()))
+	if (*dbStatsPeriodHours) > 0 {
+		glog.Info("storeInternalStateLoop starting with db stats recompute period ", computePeriod)
+	} else {
+		glog.Info("storeInternalStateLoop starting with db stats compute disabled")
+	}
 	tickAndDebounce(storeInternalStatePeriodMs*time.Millisecond, (storeInternalStatePeriodMs-1)*time.Millisecond, chanStoreInternalState, func() {
-		if !computeRunning && lastCompute.Add(computePeriod).Before(time.Now()) {
+		if (*dbStatsPeriodHours) > 0 && !computeRunning && lastCompute.Add(computePeriod).Before(time.Now()) {
 			computeRunning = true
 			go func() {
 				err := index.ComputeInternalStateColumnStats(stopCompute)
