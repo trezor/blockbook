@@ -25,7 +25,7 @@
     "version": "2.0.0",
     "binary_url": "https://github.com/KotoDevelopers/koto/releases/download/v2.0.0/koto-2.0.0-linux64.tar.gz",
     "verification_type": "sha256",
-    "verification_source": "414b854cbf2ea47bec30b06ba4c70dd06d6686221944f833bcf1b7f86fc755d9",
+    "verification_source": "da983c7e4478ef68fdc960277152b01d65d96848a8c2ad6c09a6a4ca74aefd26",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
         "koto-qt"
