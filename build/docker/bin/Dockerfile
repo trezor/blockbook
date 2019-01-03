@@ -9,7 +9,7 @@ RUN apt-get update && \
                        liblz4-dev graphviz && \
     apt-get clean
 
-ENV GOLANG_VERSION=go1.10.linux-amd64
+ENV GOLANG_VERSION=go1.11.4.linux-amd64
 ENV ROCKSDB_VERSION=v5.17.2
 ENV GOPATH=/go
 ENV PATH=$PATH:$GOPATH/bin
