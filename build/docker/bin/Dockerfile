@@ -10,7 +10,7 @@ RUN apt-get update && \
     apt-get clean
 
 ENV GOLANG_VERSION=go1.10.linux-amd64
-ENV ROCKSDB_VERSION=v5.15.10
+ENV ROCKSDB_VERSION=v5.17.2
 ENV GOPATH=/go
 ENV PATH=$PATH:$GOPATH/bin
 ENV CGO_CFLAGS="-I/opt/rocksdb/include"
