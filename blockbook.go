@@ -44,8 +44,6 @@ var (
 	blockUntil     = flag.Int("blockuntil", -1, "height of the final block")
 	rollbackHeight = flag.Int("rollback", -1, "rollback to the given height and quit")
 
-	queryAddress = flag.String("address", "", "query contents of this address")
-
 	synchronize = flag.Bool("sync", false, "synchronizes until tip, if together with zeromq, keeps index synchronized")
 	repair      = flag.Bool("repair", false, "repair the database")
 	prof        = flag.String("prof", "", "http server binding [address]:port of the interface to profiling data /debug/pprof/ (default no profiling)")
@@ -319,14 +317,8 @@ func main() {
 		}
 		height := uint32(*blockFrom)
 		until := uint32(*blockUntil)
-		address := *queryAddress
 
-		if address != "" {
-			if err = index.GetTransactions(address, height, until, printResult); err != nil {
-				glog.Error("GetTransactions ", err)
-				return
-			}
-		} else if !*synchronize {
+		if !*synchronize {
 			if err = syncWorker.ConnectBlocksParallel(height, until); err != nil {
 				glog.Error("connectBlocksParallel ", err)
 				return

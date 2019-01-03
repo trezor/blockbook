@@ -216,7 +216,7 @@ func (s *SocketIoServer) getAddressTxids(addr []string, opts *addrOpts) (res res
 	lower, higher := uint32(opts.End), uint32(opts.Start)
 	for _, address := range addr {
 		if !opts.QueryMempoolOnly {
-			err = s.db.GetTransactions(address, lower, higher, func(txid string, vout int32, isOutput bool) error {
+			err = s.db.GetTransactions(address, lower, higher, func(txid string, height uint32, indexes []int32) error {
 				txids = append(txids, txid)
 				return nil
 			})

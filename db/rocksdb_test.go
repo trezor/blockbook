@@ -103,6 +103,19 @@ func addressKeyHex(a string, height uint32, d *RocksDB) string {
 	return dbtestdata.AddressToPubKeyHex(a, d.chainParser) + uintToHex(^height)
 }
 
+func txIndexesHex(tx string, indexes []int32) string {
+	buf := make([]byte, vlq.MaxLen32)
+	for i, index := range indexes {
+		index <<= 1
+		if i == len(indexes)-1 {
+			index |= 1
+		}
+		l := packVarint32(index, buf)
+		tx += hex.EncodeToString(buf[:l])
+	}
+	return tx
+}
+
 // keyPair is used to compare given key value in DB with expected
 // for more complicated compares it is possible to specify CompareFunc
 type keyPair struct {
@@ -172,11 +185,11 @@ func verifyAfterBitcoinTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect bool
 	}
 	// the vout is encoded as signed varint, i.e. value * 2 for non negative values
 	if err := checkColumn(d, cfAddresses, []keyPair{
-		keyPair{addressKeyHex(dbtestdata.Addr1, 225493, d), dbtestdata.TxidB1T1 + "00", nil},
-		keyPair{addressKeyHex(dbtestdata.Addr2, 225493, d), dbtestdata.TxidB1T1 + "02", nil},
-		keyPair{addressKeyHex(dbtestdata.Addr3, 225493, d), dbtestdata.TxidB1T2 + "00", nil},
-		keyPair{addressKeyHex(dbtestdata.Addr4, 225493, d), dbtestdata.TxidB1T2 + "02", nil},
-		keyPair{addressKeyHex(dbtestdata.Addr5, 225493, d), dbtestdata.TxidB1T2 + "04", nil},
+		keyPair{addressKeyHex(dbtestdata.Addr1, 225493, d), txIndexesHex(dbtestdata.TxidB1T1, []int32{0}), nil},
+		keyPair{addressKeyHex(dbtestdata.Addr2, 225493, d), txIndexesHex(dbtestdata.TxidB1T1, []int32{1}), nil},
+		keyPair{addressKeyHex(dbtestdata.Addr3, 225493, d), txIndexesHex(dbtestdata.TxidB1T2, []int32{0}), nil},
+		keyPair{addressKeyHex(dbtestdata.Addr4, 225493, d), txIndexesHex(dbtestdata.TxidB1T2, []int32{1}), nil},
+		keyPair{addressKeyHex(dbtestdata.Addr5, 225493, d), txIndexesHex(dbtestdata.TxidB1T2, []int32{2}), nil},
 	}); err != nil {
 		{
 			t.Fatal(err)
@@ -257,20 +270,20 @@ func verifyAfterBitcoinTypeBlock2(t *testing.T, d *RocksDB) {
 		}
 	}
 	if err := checkColumn(d, cfAddresses, []keyPair{
-		keyPair{addressKeyHex(dbtestdata.Addr1, 225493, d), dbtestdata.TxidB1T1 + "00", nil},
-		keyPair{addressKeyHex(dbtestdata.Addr2, 225493, d), dbtestdata.TxidB1T1 + "02", nil},
-		keyPair{addressKeyHex(dbtestdata.Addr3, 225493, d), dbtestdata.TxidB1T2 + "00", nil},
-		keyPair{addressKeyHex(dbtestdata.Addr4, 225493, d), dbtestdata.TxidB1T2 + "02", nil},
-		keyPair{addressKeyHex(dbtestdata.Addr5, 225493, d), dbtestdata.TxidB1T2 + "04", nil},
-		keyPair{addressKeyHex(dbtestdata.Addr6, 225494, d), dbtestdata.TxidB2T1 + "00" + dbtestdata.TxidB2T2 + "01", nil},
-		keyPair{addressKeyHex(dbtestdata.Addr7, 225494, d), dbtestdata.TxidB2T1 + "02", nil},
-		keyPair{addressKeyHex(dbtestdata.Addr8, 225494, d), dbtestdata.TxidB2T2 + "00", nil},
-		keyPair{addressKeyHex(dbtestdata.Addr9, 225494, d), dbtestdata.TxidB2T2 + "02", nil},
-		keyPair{addressKeyHex(dbtestdata.Addr3, 225494, d), dbtestdata.TxidB2T1 + "01", nil},
-		keyPair{addressKeyHex(dbtestdata.Addr2, 225494, d), dbtestdata.TxidB2T1 + "03", nil},
-		keyPair{addressKeyHex(dbtestdata.Addr5, 225494, d), dbtestdata.TxidB2T3 + "00" + dbtestdata.TxidB2T3 + "01", nil},
-		keyPair{addressKeyHex(dbtestdata.AddrA, 225494, d), dbtestdata.TxidB2T4 + "00", nil},
-		keyPair{addressKeyHex(dbtestdata.Addr4, 225494, d), dbtestdata.TxidB2T2 + "03", nil},
+		keyPair{addressKeyHex(dbtestdata.Addr1, 225493, d), txIndexesHex(dbtestdata.TxidB1T1, []int32{0}), nil},
+		keyPair{addressKeyHex(dbtestdata.Addr2, 225493, d), txIndexesHex(dbtestdata.TxidB1T1, []int32{1}), nil},
+		keyPair{addressKeyHex(dbtestdata.Addr3, 225493, d), txIndexesHex(dbtestdata.TxidB1T2, []int32{0}), nil},
+		keyPair{addressKeyHex(dbtestdata.Addr4, 225493, d), txIndexesHex(dbtestdata.TxidB1T2, []int32{1}), nil},
+		keyPair{addressKeyHex(dbtestdata.Addr5, 225493, d), txIndexesHex(dbtestdata.TxidB1T2, []int32{2}), nil},
+		keyPair{addressKeyHex(dbtestdata.Addr6, 225494, d), txIndexesHex(dbtestdata.TxidB2T1, []int32{0}) + txIndexesHex(dbtestdata.TxidB2T2, []int32{^0}), nil},
+		keyPair{addressKeyHex(dbtestdata.Addr7, 225494, d), txIndexesHex(dbtestdata.TxidB2T1, []int32{1}), nil},
+		keyPair{addressKeyHex(dbtestdata.Addr8, 225494, d), txIndexesHex(dbtestdata.TxidB2T2, []int32{0}), nil},
+		keyPair{addressKeyHex(dbtestdata.Addr9, 225494, d), txIndexesHex(dbtestdata.TxidB2T2, []int32{1}), nil},
+		keyPair{addressKeyHex(dbtestdata.Addr3, 225494, d), txIndexesHex(dbtestdata.TxidB2T1, []int32{^0}), nil},
+		keyPair{addressKeyHex(dbtestdata.Addr2, 225494, d), txIndexesHex(dbtestdata.TxidB2T1, []int32{^1}), nil},
+		keyPair{addressKeyHex(dbtestdata.Addr5, 225494, d), txIndexesHex(dbtestdata.TxidB2T3, []int32{0, ^0}), nil},
+		keyPair{addressKeyHex(dbtestdata.AddrA, 225494, d), txIndexesHex(dbtestdata.TxidB2T4, []int32{0}), nil},
+		keyPair{addressKeyHex(dbtestdata.Addr4, 225494, d), txIndexesHex(dbtestdata.TxidB2T2, []int32{^1}), nil},
 	}); err != nil {
 		{
 			t.Fatal(err)
@@ -373,16 +386,17 @@ func verifyAfterBitcoinTypeBlock2(t *testing.T, d *RocksDB) {
 	}
 }
 
-type txidVoutOutput struct {
-	txid     string
-	vout     int32
-	isOutput bool
+type txidIndex struct {
+	txid  string
+	index int32
 }
 
-func verifyGetTransactions(t *testing.T, d *RocksDB, addr string, low, high uint32, wantTxids []txidVoutOutput, wantErr error) {
-	gotTxids := make([]txidVoutOutput, 0)
-	addToTxids := func(txid string, vout int32, isOutput bool) error {
-		gotTxids = append(gotTxids, txidVoutOutput{txid, vout, isOutput})
+func verifyGetTransactions(t *testing.T, d *RocksDB, addr string, low, high uint32, wantTxids []txidIndex, wantErr error) {
+	gotTxids := make([]txidIndex, 0)
+	addToTxids := func(txid string, height uint32, indexes []int32) error {
+		for _, index := range indexes {
+			gotTxids = append(gotTxids, txidIndex{txid, index})
+		}
 		return nil
 	}
 	if err := d.GetTransactions(addr, low, high, addToTxids); err != nil {
@@ -456,21 +470,21 @@ func TestRocksDB_Index_BitcoinType(t *testing.T) {
 	verifyAfterBitcoinTypeBlock2(t, d)
 
 	// get transactions for various addresses / low-high ranges
-	verifyGetTransactions(t, d, dbtestdata.Addr2, 0, 1000000, []txidVoutOutput{
-		txidVoutOutput{dbtestdata.TxidB2T1, 1, false},
-		txidVoutOutput{dbtestdata.TxidB1T1, 1, true},
+	verifyGetTransactions(t, d, dbtestdata.Addr2, 0, 1000000, []txidIndex{
+		{dbtestdata.TxidB2T1, ^1},
+		{dbtestdata.TxidB1T1, 1},
 	}, nil)
-	verifyGetTransactions(t, d, dbtestdata.Addr2, 225493, 225493, []txidVoutOutput{
-		txidVoutOutput{dbtestdata.TxidB1T1, 1, true},
+	verifyGetTransactions(t, d, dbtestdata.Addr2, 225493, 225493, []txidIndex{
+		{dbtestdata.TxidB1T1, 1},
 	}, nil)
-	verifyGetTransactions(t, d, dbtestdata.Addr2, 225494, 1000000, []txidVoutOutput{
-		txidVoutOutput{dbtestdata.TxidB2T1, 1, false},
+	verifyGetTransactions(t, d, dbtestdata.Addr2, 225494, 1000000, []txidIndex{
+		{dbtestdata.TxidB2T1, ^1},
 	}, nil)
-	verifyGetTransactions(t, d, dbtestdata.Addr2, 500000, 1000000, []txidVoutOutput{}, nil)
-	verifyGetTransactions(t, d, dbtestdata.Addr8, 0, 1000000, []txidVoutOutput{
-		txidVoutOutput{dbtestdata.TxidB2T2, 0, true},
+	verifyGetTransactions(t, d, dbtestdata.Addr2, 500000, 1000000, []txidIndex{}, nil)
+	verifyGetTransactions(t, d, dbtestdata.Addr8, 0, 1000000, []txidIndex{
+		{dbtestdata.TxidB2T2, 0},
 	}, nil)
-	verifyGetTransactions(t, d, "mtGXQvBowMkBpnhLckhxhbwYK44Gs9eBad", 500000, 1000000, []txidVoutOutput{}, errors.New("checksum mismatch"))
+	verifyGetTransactions(t, d, "mtGXQvBowMkBpnhLckhxhbwYK44Gs9eBad", 500000, 1000000, []txidIndex{}, errors.New("checksum mismatch"))
 
 	// GetBestBlock
 	height, hash, err := d.GetBestBlock()

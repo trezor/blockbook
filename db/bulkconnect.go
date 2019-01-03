@@ -16,7 +16,7 @@ import (
 
 type bulkAddresses struct {
 	bi        BlockInfo
-	addresses map[string][]outpoint
+	addresses addressesMap
 }
 
 // BulkConnect is used to connect blocks in bulk, faster but if interrupted inconsistent way
@@ -40,17 +40,21 @@ const (
 
 // InitBulkConnect initializes bulk connect and switches DB to inconsistent state
 func (d *RocksDB) InitBulkConnect() (*BulkConnect, error) {
-	bc := &BulkConnect{
+	b := &BulkConnect{
 		d:              d,
 		chainType:      d.chainParser.GetChainType(),
 		txAddressesMap: make(map[string]*TxAddresses),
 		balances:       make(map[string]*AddrBalance),
 	}
-	if err := d.SetInconsistentState(true); err != nil {
-		return nil, err
+	if b.chainType == bchain.ChainBitcoinType {
+		if err := d.SetInconsistentState(true); err != nil {
+			return nil, err
+		}
+		glog.Info("rocksdb: bulk connect init, db set to inconsistent state")
+	} else {
+		glog.Info("rocksdb: bulk connect init")
 	}
-	glog.Info("rocksdb: bulk connect init, db set to inconsistent state")
-	return bc, nil
+	return b, nil
 }
 
 func (b *BulkConnect) storeTxAddresses(wb *gorocksdb.WriteBatch, all bool) (int, int, error) {
@@ -172,7 +176,7 @@ func (b *BulkConnect) ConnectBlock(block *bchain.Block, storeBlockTxs bool) erro
 	if b.chainType != bchain.ChainBitcoinType {
 		return b.d.ConnectBlock(block)
 	}
-	addresses := make(map[string][]outpoint)
+	addresses := make(addressesMap)
 	if err := b.d.processAddressesBitcoinType(block, addresses, b.txAddressesMap, b.balances); err != nil {
 		return err
 	}

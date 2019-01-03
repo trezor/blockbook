@@ -51,25 +51,29 @@ func (w *Worker) getAddressesFromVout(vout *bchain.Vout) (bchain.AddressDescript
 // setSpendingTxToVout is helper function, that finds transaction that spent given output and sets it to the output
 // there is no direct index for the operation, it must be found using addresses -> txaddresses -> tx
 func (w *Worker) setSpendingTxToVout(vout *Vout, txid string, height uint32) error {
-	err := w.db.GetAddrDescTransactions(vout.AddrDesc, height, ^uint32(0), func(t string, index int32, isOutput bool) error {
-		if isOutput == false {
-			tsp, err := w.db.GetTxAddresses(t)
-			if err != nil {
-				return err
-			} else if tsp == nil {
-				glog.Warning("DB inconsistency:  tx ", t, ": not found in txAddresses")
-			} else if len(tsp.Inputs) > int(index) {
-				if tsp.Inputs[index].ValueSat.Cmp((*big.Int)(vout.ValueSat)) == 0 {
-					spentTx, spentHeight, err := w.txCache.GetTransaction(t)
-					if err != nil {
-						glog.Warning("Tx ", t, ": not found")
-					} else {
-						if len(spentTx.Vin) > int(index) {
-							if spentTx.Vin[index].Txid == txid {
-								vout.SpentTxID = t
-								vout.SpentHeight = int(spentHeight)
-								vout.SpentIndex = int(index)
-								return &db.StopIteration{}
+	err := w.db.GetAddrDescTransactions(vout.AddrDesc, height, ^uint32(0), func(t string, height uint32, indexes []int32) error {
+		for _, index := range indexes {
+			// take only inputs
+			if index < 0 {
+				index = ^index
+				tsp, err := w.db.GetTxAddresses(t)
+				if err != nil {
+					return err
+				} else if tsp == nil {
+					glog.Warning("DB inconsistency:  tx ", t, ": not found in txAddresses")
+				} else if len(tsp.Inputs) > int(index) {
+					if tsp.Inputs[index].ValueSat.Cmp((*big.Int)(vout.ValueSat)) == 0 {
+						spentTx, spentHeight, err := w.txCache.GetTransaction(t)
+						if err != nil {
+							glog.Warning("Tx ", t, ": not found")
+						} else {
+							if len(spentTx.Vin) > int(index) {
+								if spentTx.Vin[index].Txid == txid {
+									vout.SpentTxID = t
+									vout.SpentHeight = int(spentHeight)
+									vout.SpentIndex = int(index)
+									return &db.StopIteration{}
+								}
 							}
 						}
 					}
@@ -299,35 +303,50 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height uint32, 
 func (w *Worker) getAddressTxids(addrDesc bchain.AddressDescriptor, mempool bool, filter *AddressFilter) ([]string, error) {
 	var err error
 	txids := make([]string, 0, 4)
-	addFilteredTxid := func(txid string, vout int32, isOutput bool) error {
-		if filter.Vout == AddressFilterVoutOff ||
-			(filter.Vout == AddressFilterVoutInputs && !isOutput) ||
-			(filter.Vout == AddressFilterVoutOutputs && isOutput) ||
-			(vout == int32(filter.Vout)) {
+	var callback db.GetTransactionsCallback
+	if filter.Vout == AddressFilterVoutOff {
+		callback = func(txid string, height uint32, indexes []int32) error {
 			txids = append(txids, txid)
+			return nil
 		}
-		return nil
+	} else {
+		callback = func(txid string, height uint32, indexes []int32) error {
+			for _, index := range indexes {
+				vout := index
+				if vout < 0 {
+					vout = ^vout
+				}
+				if (filter.Vout == AddressFilterVoutInputs && index < 0) ||
+					(filter.Vout == AddressFilterVoutOutputs && index >= 0) ||
+					(vout == int32(filter.Vout)) {
+					txids = append(txids, txid)
+					break
+				}
+			}
+			return nil
+		}
 	}
 	if mempool {
+		uniqueTxs := make(map[string]struct{})
 		o, err := w.chain.GetMempoolTransactionsForAddrDesc(addrDesc)
 		if err != nil {
 			return nil, err
 		}
 		for _, m := range o {
-			vout := m.Vout
-			isOutput := true
-			if vout < 0 {
-				isOutput = false
-				vout = ^vout
+			if _, found := uniqueTxs[m.Txid]; !found {
+				l := len(txids)
+				callback(m.Txid, 0, []int32{m.Vout})
+				if len(txids) > l {
+					uniqueTxs[m.Txid] = struct{}{}
+				}
 			}
-			addFilteredTxid(m.Txid, vout, isOutput)
 		}
 	} else {
 		to := filter.ToHeight
 		if to == 0 {
 			to = ^uint32(0)
 		}
-		err = w.db.GetAddrDescTransactions(addrDesc, filter.FromHeight, to, addFilteredTxid)
+		err = w.db.GetAddrDescTransactions(addrDesc, filter.FromHeight, to, callback)
 		if err != nil {
 			return nil, err
 		}
@@ -454,7 +473,7 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 	}
 	if ca != nil {
 		ba = &db.AddrBalance{
-			Txs: uint32(ca.EthTxs),
+			Txs: uint32(ca.TotalTxs),
 		}
 		var b *big.Int
 		b, err = w.chain.EthereumTypeGetBalance(addrDesc)
@@ -578,7 +597,6 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option GetA
 		if err != nil {
 			return nil, errors.Annotatef(err, "getAddressTxids %v true", addrDesc)
 		}
-		txm = GetUniqueTxids(txm)
 		// if there are only unconfirmed transactions, there is no paging
 		if ba == nil {
 			ba = &db.AddrBalance{}
@@ -589,7 +607,6 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option GetA
 			if err != nil {
 				return nil, errors.Annotatef(err, "getAddressTxids %v false", addrDesc)
 			}
-			txc = GetUniqueTxids(txc)
 			bestheight, _, err := w.db.GetBestBlock()
 			if err != nil {
 				return nil, errors.Annotatef(err, "GetBestBlock")
@@ -700,7 +717,6 @@ func (w *Worker) GetAddressUtxo(address string, onlyConfirmed bool) ([]AddressUt
 		if err != nil {
 			return nil, errors.Annotatef(err, "getAddressTxids %v true", address)
 		}
-		txm = GetUniqueTxids(txm)
 		mc := make([]*bchain.Tx, len(txm))
 		for i, txid := range txm {
 			// get mempool txs and process their inputs to detect spends between mempool txs
@@ -746,9 +762,12 @@ func (w *Worker) GetAddressUtxo(address string, onlyConfirmed bool) ([]AddressUt
 	// ba can be nil if the address is only in mempool!
 	if ba != nil && ba.BalanceSat.Uint64() > 0 {
 		outpoints := make([]bchain.Outpoint, 0, 8)
-		err = w.db.GetAddrDescTransactions(addrDesc, 0, ^uint32(0), func(txid string, vout int32, isOutput bool) error {
-			if isOutput {
-				outpoints = append(outpoints, bchain.Outpoint{Txid: txid, Vout: vout})
+		err = w.db.GetAddrDescTransactions(addrDesc, 0, ^uint32(0), func(txid string, height uint32, indexes []int32) error {
+			for _, index := range indexes {
+				// take only outputs
+				if index >= 0 {
+					outpoints = append(outpoints, bchain.Outpoint{Txid: txid, Vout: index})
+				}
 			}
 			return nil
 		})

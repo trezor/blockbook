@@ -18,10 +18,11 @@ type AddrContract struct {
 	Txs      uint
 }
 
-// AddrContracts is array of contracts with
+// AddrContracts contains number of transactions and contracts for an address
 type AddrContracts struct {
-	EthTxs    uint
-	Contracts []AddrContract
+	TotalTxs       uint
+	NonContractTxs uint
+	Contracts      []AddrContract
 }
 
 func (d *RocksDB) storeAddressContracts(wb *gorocksdb.WriteBatch, acm map[string]*AddrContracts) error {
@@ -29,11 +30,13 @@ func (d *RocksDB) storeAddressContracts(wb *gorocksdb.WriteBatch, acm map[string
 	varBuf := make([]byte, vlq.MaxLen64)
 	for addrDesc, acs := range acm {
 		// address with 0 contracts is removed from db - happens on disconnect
-		if acs == nil || (acs.EthTxs == 0 && len(acs.Contracts) == 0) {
+		if acs == nil || (acs.NonContractTxs == 0 && len(acs.Contracts) == 0) {
 			wb.DeleteCF(d.cfh[cfAddressContracts], bchain.AddressDescriptor(addrDesc))
 		} else {
 			buf = buf[:0]
-			l := packVaruint(acs.EthTxs, varBuf)
+			l := packVaruint(acs.TotalTxs, varBuf)
+			buf = append(buf, varBuf[:l]...)
+			l = packVaruint(acs.NonContractTxs, varBuf)
 			buf = append(buf, varBuf[:l]...)
 			for _, ac := range acs.Contracts {
 				buf = append(buf, ac.Contract...)
@@ -57,9 +60,11 @@ func (d *RocksDB) GetAddrDescContracts(addrDesc bchain.AddressDescriptor) (*Addr
 	if len(buf) == 0 {
 		return nil, nil
 	}
-	c := make([]AddrContract, 0, 4)
-	et, l := unpackVaruint(buf)
+	tt, l := unpackVaruint(buf)
 	buf = buf[l:]
+	nct, l := unpackVaruint(buf)
+	buf = buf[l:]
+	c := make([]AddrContract, 0, 4)
 	for len(buf) > 0 {
 		if len(buf) < eth.EthereumTypeAddressDescriptorLen {
 			return nil, errors.New("Invalid data stored in cfAddressContracts for AddrDesc " + addrDesc.String())
@@ -72,7 +77,11 @@ func (d *RocksDB) GetAddrDescContracts(addrDesc bchain.AddressDescriptor) (*Addr
 		})
 		buf = buf[eth.EthereumTypeAddressDescriptorLen+l:]
 	}
-	return &AddrContracts{EthTxs: et, Contracts: c}, nil
+	return &AddrContracts{
+		TotalTxs:       tt,
+		NonContractTxs: nct,
+		Contracts:      c,
+	}, nil
 }
 
 func findContractInAddressContracts(contract bchain.AddressDescriptor, contracts []AddrContract) (int, bool) {
@@ -84,7 +93,7 @@ func findContractInAddressContracts(contract bchain.AddressDescriptor, contracts
 	return 0, false
 }
 
-func (d *RocksDB) addToAddressesAndContractsEthereumType(addrDesc bchain.AddressDescriptor, btxID []byte, index int32, contract bchain.AddressDescriptor, addresses map[string][]outpoint, addressContracts map[string]*AddrContracts) error {
+func (d *RocksDB) addToAddressesAndContractsEthereumType(addrDesc bchain.AddressDescriptor, btxID []byte, index int32, contract bchain.AddressDescriptor, addresses addressesMap, addressContracts map[string]*AddrContracts, addTxCount bool) error {
 	var err error
 	strAddrDesc := string(addrDesc)
 	ac, e := addressContracts[strAddrDesc]
@@ -102,7 +111,9 @@ func (d *RocksDB) addToAddressesAndContractsEthereumType(addrDesc bchain.Address
 		d.cbs.balancesHit++
 	}
 	if contract == nil {
-		ac.EthTxs++
+		if addTxCount {
+			ac.NonContractTxs++
+		}
 	} else {
 		// locate the contract and set i to the index in the array of contracts
 		i, found := findContractInAddressContracts(contract, ac.Contracts)
@@ -116,12 +127,14 @@ func (d *RocksDB) addToAddressesAndContractsEthereumType(addrDesc bchain.Address
 		} else {
 			index = int32(i + 1)
 		}
-		ac.Contracts[i].Txs++
+		if addTxCount {
+			ac.Contracts[i].Txs++
+		}
 	}
-	addresses[strAddrDesc] = append(addresses[strAddrDesc], outpoint{
-		btxID: btxID,
-		index: index,
-	})
+	counted := addToAddressesMap(addresses, strAddrDesc, btxID, index)
+	if !counted {
+		ac.TotalTxs++
+	}
 	return nil
 }
 
@@ -135,7 +148,7 @@ type ethBlockTx struct {
 	contracts []ethBlockTxContract
 }
 
-func (d *RocksDB) processAddressesEthereumType(block *bchain.Block, addresses map[string][]outpoint, addressContracts map[string]*AddrContracts) ([]ethBlockTx, error) {
+func (d *RocksDB) processAddressesEthereumType(block *bchain.Block, addresses addressesMap, addressContracts map[string]*AddrContracts) ([]ethBlockTx, error) {
 	blockTxs := make([]ethBlockTx, len(block.Txs))
 	for txi, tx := range block.Txs {
 		btxID, err := d.chainParser.PackTxid(tx.Txid)
@@ -144,9 +157,10 @@ func (d *RocksDB) processAddressesEthereumType(block *bchain.Block, addresses ma
 		}
 		blockTx := &blockTxs[txi]
 		blockTx.btxID = btxID
+		var from, to bchain.AddressDescriptor
 		// there is only one output address in EthereumType transaction, store it in format txid 0
 		if len(tx.Vout) == 1 && len(tx.Vout[0].ScriptPubKey.Addresses) == 1 {
-			addrDesc, err := d.chainParser.GetAddrDescFromAddress(tx.Vout[0].ScriptPubKey.Addresses[0])
+			to, err = d.chainParser.GetAddrDescFromAddress(tx.Vout[0].ScriptPubKey.Addresses[0])
 			if err != nil {
 				// do not log ErrAddressMissing, transactions can be without to address (for example eth contracts)
 				if err != bchain.ErrAddressMissing {
@@ -154,24 +168,24 @@ func (d *RocksDB) processAddressesEthereumType(block *bchain.Block, addresses ma
 				}
 				continue
 			}
-			if err = d.addToAddressesAndContractsEthereumType(addrDesc, btxID, 0, nil, addresses, addressContracts); err != nil {
+			if err = d.addToAddressesAndContractsEthereumType(to, btxID, 0, nil, addresses, addressContracts, true); err != nil {
 				return nil, err
 			}
-			blockTx.to = addrDesc
+			blockTx.to = to
 		}
 		// there is only one input address in EthereumType transaction, store it in format txid ^0
 		if len(tx.Vin) == 1 && len(tx.Vin[0].Addresses) == 1 {
-			addrDesc, err := d.chainParser.GetAddrDescFromAddress(tx.Vin[0].Addresses[0])
+			from, err = d.chainParser.GetAddrDescFromAddress(tx.Vin[0].Addresses[0])
 			if err != nil {
 				if err != bchain.ErrAddressMissing {
 					glog.Warningf("rocksdb: addrDesc: %v - height %d, tx %v, input", err, block.Height, tx.Txid)
 				}
 				continue
 			}
-			if err = d.addToAddressesAndContractsEthereumType(addrDesc, btxID, ^int32(0), nil, addresses, addressContracts); err != nil {
+			if err = d.addToAddressesAndContractsEthereumType(from, btxID, ^int32(0), nil, addresses, addressContracts, !bytes.Equal(from, to)); err != nil {
 				return nil, err
 			}
-			blockTx.from = addrDesc
+			blockTx.from = from
 		}
 		// store erc20 transfers
 		erc20, err := d.chainParser.EthereumTypeGetErc20FromTx(&tx)
@@ -179,6 +193,7 @@ func (d *RocksDB) processAddressesEthereumType(block *bchain.Block, addresses ma
 			glog.Warningf("rocksdb: GetErc20FromTx %v - height %d, tx %v", err, block.Height, tx.Txid)
 		}
 		blockTx.contracts = make([]ethBlockTxContract, len(erc20)*2)
+		j := 0
 		for i, t := range erc20 {
 			var contract, from, to bchain.AddressDescriptor
 			contract, err = d.chainParser.GetAddrDescFromAddress(t.Contract)
@@ -192,19 +207,26 @@ func (d *RocksDB) processAddressesEthereumType(block *bchain.Block, addresses ma
 				glog.Warningf("rocksdb: GetErc20FromTx %v - height %d, tx %v, transfer %v", err, block.Height, tx.Txid, t)
 				continue
 			}
-			if err = d.addToAddressesAndContractsEthereumType(from, btxID, ^int32(i), contract, addresses, addressContracts); err != nil {
+			if err = d.addToAddressesAndContractsEthereumType(from, btxID, ^int32(i), contract, addresses, addressContracts, true); err != nil {
 				return nil, err
 			}
-			bc := &blockTx.contracts[i*2]
+			eq := bytes.Equal(from, to)
+			bc := &blockTx.contracts[j]
+			j++
 			bc.addr = from
 			bc.contract = contract
-			if err = d.addToAddressesAndContractsEthereumType(to, btxID, int32(i), contract, addresses, addressContracts); err != nil {
+			if err = d.addToAddressesAndContractsEthereumType(to, btxID, int32(i), contract, addresses, addressContracts, !eq); err != nil {
 				return nil, err
 			}
-			bc = &blockTx.contracts[i*2+1]
-			bc.addr = to
-			bc.contract = contract
+			// add to address to blockTx.contracts only if it is different from from address
+			if !eq {
+				bc = &blockTx.contracts[j]
+				j++
+				bc.addr = to
+				bc.contract = contract
+			}
 		}
+		blockTx.contracts = blockTx.contracts[:j]
 	}
 	return blockTxs, nil
 }
@@ -308,7 +330,7 @@ func (d *RocksDB) getBlockTxsEthereumType(height uint32) ([]ethBlockTx, error) {
 
 func (d *RocksDB) disconnectBlockTxsEthereumType(wb *gorocksdb.WriteBatch, height uint32, blockTxs []ethBlockTx, contracts map[string]*AddrContracts) error {
 	glog.Info("Disconnecting block ", height, " containing ", len(blockTxs), " transactions")
-	addresses := make(map[string]struct{})
+	addresses := make(map[string]map[string]struct{})
 	disconnectAddress := func(btxID []byte, addrDesc, contract bchain.AddressDescriptor) error {
 		var err error
 		// do not process empty address
@@ -316,7 +338,19 @@ func (d *RocksDB) disconnectBlockTxsEthereumType(wb *gorocksdb.WriteBatch, heigh
 			return nil
 		}
 		s := string(addrDesc)
-		addresses[s] = struct{}{}
+		txid := string(btxID)
+		// find if tx for this address was already encountered
+		mtx, ftx := addresses[s]
+		if !ftx {
+			mtx = make(map[string]struct{})
+			mtx[txid] = struct{}{}
+			addresses[s] = mtx
+		} else {
+			_, ftx = mtx[txid]
+			if !ftx {
+				mtx[txid] = struct{}{}
+			}
+		}
 		c, fc := contracts[s]
 		if !fc {
 			c, err = d.GetAddrDescContracts(addrDesc)
@@ -326,9 +360,12 @@ func (d *RocksDB) disconnectBlockTxsEthereumType(wb *gorocksdb.WriteBatch, heigh
 			contracts[s] = c
 		}
 		if c != nil {
+			if !ftx {
+				c.TotalTxs--
+			}
 			if contract == nil {
-				if c.EthTxs > 0 {
-					c.EthTxs--
+				if c.NonContractTxs > 0 {
+					c.NonContractTxs--
 				} else {
 					glog.Warning("AddressContracts ", addrDesc, ", EthTxs would be negative, tx ", hex.EncodeToString(btxID))
 				}
@@ -357,8 +394,11 @@ func (d *RocksDB) disconnectBlockTxsEthereumType(wb *gorocksdb.WriteBatch, heigh
 		if err := disconnectAddress(blockTx.btxID, blockTx.from, nil); err != nil {
 			return err
 		}
-		if err := disconnectAddress(blockTx.btxID, blockTx.to, nil); err != nil {
-			return err
+		// if from==to, tx is counted only once and does not have to be disconnected again
+		if !bytes.Equal(blockTx.from, blockTx.to) {
+			if err := disconnectAddress(blockTx.btxID, blockTx.to, nil); err != nil {
+				return err
+			}
 		}
 		for _, c := range blockTx.contracts {
 			if err := disconnectAddress(blockTx.btxID, c.addr, c.contract); err != nil {
