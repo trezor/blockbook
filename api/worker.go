@@ -658,31 +658,21 @@ func (w *Worker) GetBlock(bid string, page int, txsOnPage int) (*Block, error) {
 		}
 		return nil, NewAPIError(fmt.Sprintf("Block not found, %v", err), true)
 	}
-	dbi := &db.BlockInfo{
-		Hash:   bi.Hash,
-		Height: bi.Height,
-		Time:   bi.Time,
-	}
+
 	txCount := len(bi.Txids)
-	bestheight, _, err := w.db.GetBestBlock()
-	if err != nil {
-		return nil, errors.Annotatef(err, "GetBestBlock")
-	}
 	pg, from, to, page := computePaging(txCount, page, txsOnPage)
 	glog.Info("GetBlock ", bid, ", page ", page, " finished in ", time.Since(start))
 	txs := make([]*Tx, to-from)
 	txi := 0
 	for i := from; i < to; i++ {
 		txid := bi.Txids[i]
-		ta, err := w.db.GetTxAddresses(txid)
+		tx, err := w.GetTransaction(txid, false)
+
 		if err != nil {
-			return nil, errors.Annotatef(err, "GetTxAddresses %v", txid)
+			return nil, errors.Annotatef(err, "GetTransaction %v", txid)
 		}
-		if ta == nil {
-			glog.Warning("DB inconsistency:  tx ", txid, ": not found in txAddresses")
-			continue
-		}
-		txs[txi] = w.txFromTxAddress(txid, ta, dbi, bestheight)
+
+		txs[txi] = tx
 		txi++
 	}
 	txs = txs[:txi]
