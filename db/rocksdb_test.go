@@ -19,8 +19,8 @@ import (
 	"testing"
 
 	vlq "github.com/bsm/go-vlq"
-	"github.com/jakm/btcutil/chaincfg"
 	"github.com/juju/errors"
+	"github.com/martinboehm/btcutil/chaincfg"
 )
 
 // simplified explanation of signed varint packing, used in many index data structures

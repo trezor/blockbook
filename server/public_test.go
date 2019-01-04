@@ -18,7 +18,7 @@ import (
 	"time"
 
 	"github.com/golang/glog"
-	"github.com/jakm/btcutil/chaincfg"
+	"github.com/martinboehm/btcutil/chaincfg"
 	"github.com/martinboehm/golang-socketio"
 	"github.com/martinboehm/golang-socketio/transport"
 )
