@@ -13,10 +13,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/btcsuite/btcd/wire"
-
 	"github.com/golang/glog"
 	"github.com/juju/errors"
+	"github.com/martinboehm/btcd/wire"
 )
 
 // BitcoinRPC is an interface to JSON-RPC bitcoind service.
