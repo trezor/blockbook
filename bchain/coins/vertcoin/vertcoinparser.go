@@ -3,8 +3,8 @@ package vertcoin
 import (
 	"blockbook/bchain/coins/btc"
 
-	"github.com/btcsuite/btcd/wire"
-	"github.com/jakm/btcutil/chaincfg"
+	"github.com/martinboehm/btcd/wire"
+	"github.com/martinboehm/btcutil/chaincfg"
 )
 
 const (

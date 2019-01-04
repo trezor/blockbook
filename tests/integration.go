@@ -20,7 +20,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jakm/btcutil/chaincfg"
+	"github.com/martinboehm/btcutil/chaincfg"
 )
 
 type TestFunc func(t *testing.T, coin string, chain bchain.BlockChain, testConfig json.RawMessage)

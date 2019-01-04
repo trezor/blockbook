@@ -8,8 +8,8 @@ import (
 	"math/big"
 
 	"github.com/golang/glog"
-	"github.com/jakm/bchutil"
 	"github.com/juju/errors"
+	"github.com/martinboehm/bchutil"
 )
 
 // BCashRPC is an interface to JSON-RPC bitcoind service.

@@ -21,9 +21,9 @@
 
 [[projects]]
   branch = "master"
-  name = "github.com/btcsuite/btcd"
+  name = "github.com/martinboehm/btcd"
   packages = ["blockchain","btcec","chaincfg","chaincfg/chainhash","database","txscript","wire"]
-  revision = "2be2f12b358dc57d70b8f501b00be450192efbc3"
+  revision = "8e7c0427fee5d4778c5d4eb987150369e3ca1d0e"
 
 [[projects]]
   branch = "master"
@@ -33,7 +33,7 @@
 
 [[projects]]
   branch = "master"
-  name = "github.com/btcsuite/btcutil"
+  name = "github.com/martinboehm/btcutil"
   packages = [".","base58","bech32"]
   revision = "501929d3d046174c3d39f0ea54ece471aa17238c"
 
@@ -93,15 +93,15 @@
 
 [[projects]]
   branch = "master"
-  name = "github.com/jakm/bchutil"
+  name = "github.com/martinboehm/bchutil"
   packages = ["."]
-  revision = "5a273ca8a96628732c07ff5cfb9f3e7d965241e8"
+  revision = "6373f11b6efe1ea81e8713b8788a695b2c144d38"
 
 [[projects]]
   branch = "master"
-  name = "github.com/jakm/btcutil"
+  name = "github.com/martinboehm/btcutil"
   packages = [".","base58","bech32","chaincfg","txscript"]
-  revision = "224b76333062172edefdeb502123fdda12205f76"
+  revision = "613fec26904062ae125fb073762af3a77c77b6c7"
 
 [[projects]]
   branch = "master"
