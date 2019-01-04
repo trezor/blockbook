@@ -227,6 +227,16 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *webs
 	"getInfo": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
 		return s.getInfo()
 	},
+	"getBlockHash": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
+		r := struct {
+			Height int `json:"height"`
+		}{}
+		err = json.Unmarshal(req.Params, &r)
+		if err == nil {
+			rv, err = s.getBlockHash(r.Height)
+		}
+		return
+	},
 	"estimateFee": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
 		return s.estimateFee(c, req.Params)
 	},
@@ -362,6 +372,19 @@ func (s *WebsocketServer) getInfo() (interface{}, error) {
 		Version:    vi.Version,
 		Block0Hash: s.block0hash,
 		Testnet:    s.chain.IsTestnet(),
+	}, nil
+}
+
+func (s *WebsocketServer) getBlockHash(height int) (interface{}, error) {
+	h, err := s.db.GetBlockHash(uint32(height))
+	if err != nil {
+		return nil, err
+	}
+	type hash struct {
+		Hash string `json:"hash"`
+	}
+	return &hash{
+		Hash: h,
 	}, nil
 }
 

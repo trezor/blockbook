@@ -106,6 +106,17 @@
             });
         }
 
+        function getBlockHash() {
+            const method = 'getBlockHash';
+            const height = parseInt(document.getElementById("getBlockHashHeight").value);
+            const params = {
+                height
+            };
+            send(method, params, function (result) {
+                document.getElementById('getBlockHashResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
+            });
+        }
+
         function getAccountInfo() {
             const descriptor = document.getElementById('getAccountInfoDescriptor').value.trim();
             const selectDetails = document.getElementById('getAccountInfoDetails');
@@ -250,6 +261,19 @@
             </div>
             <div class="col-10" id="getInfoResult">
             </div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <input class="btn btn-secondary" type="button" value="getBlockHash" onclick="getBlockHash()">
+            </div>
+            <div class="col-8">
+                <input type="text" class="form-control" placeholder="height" id="getBlockHashHeight" value="0">
+            </div>
+            <div class="col">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col" id="getBlockHashResult"></div>
         </div>
         <div class="row">
             <div class="col">
