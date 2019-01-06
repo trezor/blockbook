@@ -24,15 +24,15 @@
     "system_user": "koto",
     "version": "2.0.2",
     "binary_url": "https://github.com/KotoDevelopers/koto/releases/download/v2.0.2/koto-2.0.2-linux64.tar.gz",
-    "verification_type": "gpg-sha256",
+    "verification_type": "gpg",
     "verification_source": "https://github.com/KotoDevelopers/koto/releases/download/v2.0.2/koto-2.0.2-linux64.tar.gz.asc",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
-        "koto-qt"
+        "bin/koto-qt"
     ],
-    "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/kotod -datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -conf={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf -pid=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",
+    "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/kotod -datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -conf={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf -pid=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",
     "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/testnet3/*.log",
-    "postinst_script_template": "HOME={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend {{.Env.BackendInstallPath}}/{{.Coin.Alias}}s/koto-fetch-params --testnet",
+    "postinst_script_template": "HOME={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/koto-fetch-params --testnet",
     "service_type": "forking",
     "service_additional_params_template": "Environment=\"HOME={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend\"",
     "protect_memory": false,
