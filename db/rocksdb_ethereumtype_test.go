@@ -34,7 +34,7 @@ func verifyAfterEthereumTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect boo
 	}
 	if err := checkColumn(d, cfAddresses, []keyPair{
 		keyPair{addressKeyHex(dbtestdata.EthAddr3e, 4321000, d), txIndexesHex(dbtestdata.EthTxidB1T1, []int32{^0}), nil},
-		keyPair{addressKeyHex(dbtestdata.EthAddr55, 4321000, d), txIndexesHex(dbtestdata.EthTxidB1T1, []int32{0}) + txIndexesHex(dbtestdata.EthTxidB1T2, []int32{1}), nil},
+		keyPair{addressKeyHex(dbtestdata.EthAddr55, 4321000, d), txIndexesHex(dbtestdata.EthTxidB1T2, []int32{1}) + txIndexesHex(dbtestdata.EthTxidB1T1, []int32{0}), nil},
 		keyPair{addressKeyHex(dbtestdata.EthAddr20, 4321000, d), txIndexesHex(dbtestdata.EthTxidB1T2, []int32{^0, ^1}), nil},
 		keyPair{addressKeyHex(dbtestdata.EthAddrContract4a, 4321000, d), txIndexesHex(dbtestdata.EthTxidB1T2, []int32{0}), nil},
 	}); err != nil {
@@ -98,10 +98,10 @@ func verifyAfterEthereumTypeBlock2(t *testing.T, d *RocksDB) {
 	}
 	if err := checkColumn(d, cfAddresses, []keyPair{
 		keyPair{addressKeyHex(dbtestdata.EthAddr3e, 4321000, d), txIndexesHex(dbtestdata.EthTxidB1T1, []int32{^0}), nil},
-		keyPair{addressKeyHex(dbtestdata.EthAddr55, 4321000, d), txIndexesHex(dbtestdata.EthTxidB1T1, []int32{0}) + txIndexesHex(dbtestdata.EthTxidB1T2, []int32{1}), nil},
+		keyPair{addressKeyHex(dbtestdata.EthAddr55, 4321000, d), txIndexesHex(dbtestdata.EthTxidB1T2, []int32{1}) + txIndexesHex(dbtestdata.EthTxidB1T1, []int32{0}), nil},
 		keyPair{addressKeyHex(dbtestdata.EthAddr20, 4321000, d), txIndexesHex(dbtestdata.EthTxidB1T2, []int32{^0, ^1}), nil},
 		keyPair{addressKeyHex(dbtestdata.EthAddrContract4a, 4321000, d), txIndexesHex(dbtestdata.EthTxidB1T2, []int32{0}), nil},
-		keyPair{addressKeyHex(dbtestdata.EthAddr55, 4321001, d), txIndexesHex(dbtestdata.EthTxidB2T1, []int32{^0}) + txIndexesHex(dbtestdata.EthTxidB2T2, []int32{^2, 1}), nil},
+		keyPair{addressKeyHex(dbtestdata.EthAddr55, 4321001, d), txIndexesHex(dbtestdata.EthTxidB2T2, []int32{^2, 1}) + txIndexesHex(dbtestdata.EthTxidB2T1, []int32{^0}), nil},
 		keyPair{addressKeyHex(dbtestdata.EthAddr9f, 4321001, d), txIndexesHex(dbtestdata.EthTxidB2T1, []int32{0}), nil},
 		keyPair{addressKeyHex(dbtestdata.EthAddr4b, 4321001, d), txIndexesHex(dbtestdata.EthTxidB2T2, []int32{^0, 1, ^2, 2, ^1}), nil},
 		keyPair{addressKeyHex(dbtestdata.EthAddr7b, 4321001, d), txIndexesHex(dbtestdata.EthTxidB2T2, []int32{^1, 2}), nil},
@@ -183,11 +183,11 @@ func TestRocksDB_Index_EthereumType(t *testing.T) {
 
 	// get transactions for various addresses / low-high ranges
 	verifyGetTransactions(t, d, "0x"+dbtestdata.EthAddr55, 0, 10000000, []txidIndex{
-		{"0x" + dbtestdata.EthTxidB2T1, ^0},
 		{"0x" + dbtestdata.EthTxidB2T2, ^2},
 		{"0x" + dbtestdata.EthTxidB2T2, 1},
-		{"0x" + dbtestdata.EthTxidB1T1, 0},
+		{"0x" + dbtestdata.EthTxidB2T1, ^0},
 		{"0x" + dbtestdata.EthTxidB1T2, 1},
+		{"0x" + dbtestdata.EthTxidB1T1, 0},
 	}, nil)
 	verifyGetTransactions(t, d, "mtGXQvBowMkBpnhLckhxhbwYK44Gs9eBad", 500000, 1000000, []txidIndex{}, errors.New("Address missing"))
 

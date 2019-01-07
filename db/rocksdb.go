@@ -828,7 +828,9 @@ func unpackTxOutput(to *TxOutput, buf []byte) int {
 func (d *RocksDB) packTxIndexes(txi []txIndexes) []byte {
 	buf := make([]byte, 0, 32)
 	bvout := make([]byte, vlq.MaxLen32)
-	for _, t := range txi {
+	// store the txs in reverse order for ordering from newest to oldest
+	for j := len(txi) - 1; j >= 0; j-- {
+		t := &txi[j]
 		buf = append(buf, []byte(t.btxID)...)
 		for i, index := range t.indexes {
 			index <<= 1
