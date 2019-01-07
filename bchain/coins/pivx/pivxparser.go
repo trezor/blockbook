@@ -38,14 +38,18 @@ func init() {
 type PivXParser struct {
 	*btc.BitcoinParser
 	baseparser *bchain.BaseParser
+	BitcoinOutputScriptToAddressesFunc btc.OutputScriptToAddressesFunc
 }
 
 // NewPivXParser returns new PivXParser instance
 func NewPivXParser(params *chaincfg.Params, c *btc.Configuration) *PivXParser {
-	return &PivXParser{
+	p := &PivXParser{
 		BitcoinParser: btc.NewBitcoinParser(params, c),
 		baseparser:    &bchain.BaseParser{},
 	}
+	p.BitcoinOutputScriptToAddressesFunc = p.OutputScriptToAddressesFunc
+	p.OutputScriptToAddressesFunc = p.outputScriptToAddresses
+	return p
 }
 
 // GetChainParams contains network parameters for the main PivX network
@@ -216,6 +220,29 @@ func (p *PivXParser) ParseTxFromJson(msg json.RawMessage) (*bchain.Tx, error) {
 	}
 
 	return &tx, nil
+}
+
+// outputScriptToAddresses converts ScriptPubKey to bitcoin addresses
+func (p *PivXParser) outputScriptToAddresses(script []byte) ([]string, bool, error) {
+	if (isZeroCoinSpendScript(script) || isZeroCoinMintScript(script)) {
+		hexScript := hex.EncodeToString(script)
+		anonAddr := "Anonymous [" + hexScript[0:32] + "...]"
+		return []string{anonAddr}, false, nil
+	}
+
+	rv, s, _ :=  p.BitcoinOutputScriptToAddressesFunc(script)
+	return rv, s, nil
+}
+
+// Checks if script is OP_ZEROCOINMINT
+func isZeroCoinMintScript(signatureScript []byte) bool {
+	OP_ZEROCOINMINT := byte(0xc1)
+
+	if (len(signatureScript) > 1 && signatureScript[0] == OP_ZEROCOINMINT) {
+		return true
+	}
+
+	return false
 }
 
 // Checks if script is OP_ZEROCOINSPEND
