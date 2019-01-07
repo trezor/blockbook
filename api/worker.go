@@ -242,7 +242,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height uint32, 
 				erc20c = &bchain.Erc20Contract{Name: e.Contract}
 			}
 			tokens[i] = TokenTransfer{
-				Type:     "ERC20",
+				Type:     ERC20TokenType,
 				Token:    e.Contract,
 				From:     e.From,
 				To:       e.To,
@@ -460,16 +460,16 @@ func computePaging(count, page, itemsOnPage int) (Paging, int, int, int) {
 	}, from, to, page
 }
 
-func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescriptor, option GetAddressOption, filter *AddressFilter) (*db.AddrBalance, []Erc20Token, *bchain.Erc20Contract, uint64, error) {
+func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescriptor, option GetAddressOption, filter *AddressFilter) (*db.AddrBalance, []Token, *bchain.Erc20Contract, uint64, int, error) {
 	var (
 		ba     *db.AddrBalance
-		erc20t []Erc20Token
+		tokens []Token
 		ci     *bchain.Erc20Contract
 		n      uint64
 	)
 	ca, err := w.db.GetAddrDescContracts(addrDesc)
 	if err != nil {
-		return nil, nil, nil, 0, NewAPIError(fmt.Sprintf("Address not found, %v", err), true)
+		return nil, nil, nil, 0, 0, NewAPIError(fmt.Sprintf("Address not found, %v", err), true)
 	}
 	if ca != nil {
 		ba = &db.AddrBalance{
@@ -478,23 +478,23 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 		var b *big.Int
 		b, err = w.chain.EthereumTypeGetBalance(addrDesc)
 		if err != nil {
-			return nil, nil, nil, 0, errors.Annotatef(err, "EthereumTypeGetBalance %v", addrDesc)
+			return nil, nil, nil, 0, 0, errors.Annotatef(err, "EthereumTypeGetBalance %v", addrDesc)
 		}
 		if b != nil {
 			ba.BalanceSat = *b
 		}
 		n, err = w.chain.EthereumTypeGetNonce(addrDesc)
 		if err != nil {
-			return nil, nil, nil, 0, errors.Annotatef(err, "EthereumTypeGetNonce %v", addrDesc)
+			return nil, nil, nil, 0, 0, errors.Annotatef(err, "EthereumTypeGetNonce %v", addrDesc)
 		}
 		var filterDesc bchain.AddressDescriptor
 		if filter.Contract != "" {
 			filterDesc, err = w.chainParser.GetAddrDescFromAddress(filter.Contract)
 			if err != nil {
-				return nil, nil, nil, 0, NewAPIError(fmt.Sprintf("Invalid contract filter, %v", err), true)
+				return nil, nil, nil, 0, 0, NewAPIError(fmt.Sprintf("Invalid contract filter, %v", err), true)
 			}
 		}
-		erc20t = make([]Erc20Token, len(ca.Contracts))
+		tokens = make([]Token, len(ca.Contracts))
 		var j int
 		for i, c := range ca.Contracts {
 			if len(filterDesc) > 0 {
@@ -506,7 +506,7 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 			}
 			ci, err := w.chain.EthereumTypeGetErc20ContractInfo(c.Contract)
 			if err != nil {
-				return nil, nil, nil, 0, errors.Annotatef(err, "EthereumTypeGetErc20ContractInfo %v", c.Contract)
+				return nil, nil, nil, 0, 0, errors.Annotatef(err, "EthereumTypeGetErc20ContractInfo %v", c.Contract)
 			}
 			if ci == nil {
 				ci = &bchain.Erc20Contract{}
@@ -526,7 +526,8 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 			} else {
 				b = nil
 			}
-			erc20t[j] = Erc20Token{
+			tokens[j] = Token{
+				Type:          ERC20TokenType,
 				BalanceSat:    (*Amount)(b),
 				Contract:      ci.Contract,
 				Name:          ci.Name,
@@ -537,13 +538,13 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 			}
 			j++
 		}
-		erc20t = erc20t[:j]
+		tokens = tokens[:j]
 		ci, err = w.chain.EthereumTypeGetErc20ContractInfo(addrDesc)
 		if err != nil {
-			return nil, nil, nil, 0, err
+			return nil, nil, nil, 0, 0, err
 		}
 	}
-	return ba, erc20t, ci, n, nil
+	return ba, tokens, ci, n, int(ca.NonContractTxs), nil
 }
 
 // GetAddress computes address value and gets transactions for given address
@@ -559,7 +560,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option GetA
 	}
 	var (
 		ba                       *db.AddrBalance
-		erc20t                   []Erc20Token
+		tokens                   []Token
 		erc20c                   *bchain.Erc20Contract
 		txm                      []string
 		txs                      []*Tx
@@ -568,10 +569,11 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option GetA
 		uBalSat                  big.Int
 		totalReceived, totalSent *big.Int
 		nonce                    string
+		nonTokenTxs              int
 	)
 	if w.chainType == bchain.ChainEthereumType {
 		var n uint64
-		ba, erc20t, erc20c, n, err = w.getEthereumTypeAddressBalances(addrDesc, option, filter)
+		ba, tokens, erc20c, n, nonTokenTxs, err = w.getEthereumTypeAddressBalances(addrDesc, option, filter)
 		if err != nil {
 			return nil, err
 		}
@@ -684,19 +686,20 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option GetA
 		totalSent = &ba.SentSat
 	}
 	r := &Address{
-		Paging:                  pg,
-		AddrStr:                 address,
-		BalanceSat:              (*Amount)(&ba.BalanceSat),
-		TotalReceivedSat:        (*Amount)(totalReceived),
-		TotalSentSat:            (*Amount)(totalSent),
-		TxApperances:            int(ba.Txs),
-		UnconfirmedBalanceSat:   (*Amount)(&uBalSat),
-		UnconfirmedTxApperances: len(txm),
-		Transactions:            txs,
-		Txids:                   txids,
-		Erc20Contract:           erc20c,
-		Erc20Tokens:             erc20t,
-		Nonce:                   nonce,
+		Paging:                pg,
+		AddrStr:               address,
+		BalanceSat:            (*Amount)(&ba.BalanceSat),
+		TotalReceivedSat:      (*Amount)(totalReceived),
+		TotalSentSat:          (*Amount)(totalSent),
+		Txs:                   int(ba.Txs),
+		NonTokenTxs:           nonTokenTxs,
+		UnconfirmedBalanceSat: (*Amount)(&uBalSat),
+		UnconfirmedTxs:        len(txm),
+		Transactions:          txs,
+		Txids:                 txids,
+		Tokens:                tokens,
+		Erc20Contract:         erc20c,
+		Nonce:                 nonce,
 	}
 	glog.Info("GetAddress ", address, " finished in ", time.Since(start))
 	return r, nil

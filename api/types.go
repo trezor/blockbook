@@ -104,27 +104,34 @@ type Vout struct {
 	Type        string                   `json:"type,omitempty"`
 }
 
-// Erc20Token contains info about ERC20 token held by an address
-type Erc20Token struct {
-	Contract      string  `json:"contract"`
-	Transfers     int     `json:"transfers"`
-	Name          string  `json:"name"`
-	Symbol        string  `json:"symbol"`
-	Decimals      int     `json:"decimals"`
-	BalanceSat    *Amount `json:"balance,omitempty"`
-	ContractIndex string  `json:"-"`
+// TokenType specifies type of token
+type TokenType string
+
+// ERC20TokenType is Ethereum ERC20 token
+const ERC20TokenType TokenType = "ERC20"
+
+// Token contains info about tokens held by an address
+type Token struct {
+	Type          TokenType `json:"type"`
+	Contract      string    `json:"contract"`
+	Transfers     int       `json:"transfers"`
+	Name          string    `json:"name"`
+	Symbol        string    `json:"symbol"`
+	Decimals      int       `json:"decimals"`
+	BalanceSat    *Amount   `json:"balance,omitempty"`
+	ContractIndex string    `json:"-"`
 }
 
 // TokenTransfer contains info about a token transfer done in a transaction
 type TokenTransfer struct {
-	Type     string  `json:"type"`
-	From     string  `json:"from"`
-	To       string  `json:"to"`
-	Token    string  `json:"token"`
-	Name     string  `json:"name"`
-	Symbol   string  `json:"symbol"`
-	Decimals int     `json:"decimals"`
-	Value    *Amount `json:"value"`
+	Type     TokenType `json:"type"`
+	From     string    `json:"from"`
+	To       string    `json:"to"`
+	Token    string    `json:"token"`
+	Name     string    `json:"name"`
+	Symbol   string    `json:"symbol"`
+	Decimals int       `json:"decimals"`
+	Value    *Amount   `json:"value"`
 }
 
 // EthereumSpecific contains ethereum specific transaction data
@@ -186,19 +193,20 @@ type AddressFilter struct {
 // Address holds information about address and its transactions
 type Address struct {
 	Paging
-	AddrStr                 string                `json:"addrStr"`
-	BalanceSat              *Amount               `json:"balance"`
-	TotalReceivedSat        *Amount               `json:"totalReceived,omitempty"`
-	TotalSentSat            *Amount               `json:"totalSent,omitempty"`
-	UnconfirmedBalanceSat   *Amount               `json:"unconfirmedBalance"`
-	UnconfirmedTxApperances int                   `json:"unconfirmedTxApperances"`
-	TxApperances            int                   `json:"txApperances"`
-	Transactions            []*Tx                 `json:"transactions,omitempty"`
-	Txids                   []string              `json:"txids,omitempty"`
-	Nonce                   string                `json:"nonce,omitempty"`
-	Erc20Contract           *bchain.Erc20Contract `json:"erc20contract,omitempty"`
-	Erc20Tokens             []Erc20Token          `json:"erc20tokens,omitempty"`
-	Filter                  string                `json:"-"`
+	AddrStr               string                `json:"addrStr"`
+	BalanceSat            *Amount               `json:"balance"`
+	TotalReceivedSat      *Amount               `json:"totalReceived,omitempty"`
+	TotalSentSat          *Amount               `json:"totalSent,omitempty"`
+	UnconfirmedBalanceSat *Amount               `json:"unconfirmedBalance"`
+	UnconfirmedTxs        int                   `json:"unconfirmedTxs"`
+	Txs                   int                   `json:"txs"`
+	NonTokenTxs           int                   `json:"nontokenTxs,omitempty"`
+	Transactions          []*Tx                 `json:"transactions,omitempty"`
+	Txids                 []string              `json:"txids,omitempty"`
+	Nonce                 string                `json:"nonce,omitempty"`
+	Tokens                []Token               `json:"tokens,omitempty"`
+	Erc20Contract         *bchain.Erc20Contract `json:"erc20contract,omitempty"`
+	Filter                string                `json:"-"`
 }
 
 // AddressUtxo holds information about address and its transactions

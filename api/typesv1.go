@@ -184,10 +184,10 @@ func (w *Worker) AddressToV1(a *Address) *AddressV1 {
 		TotalReceived:           a.TotalReceivedSat.DecimalString(d),
 		TotalSent:               a.TotalSentSat.DecimalString(d),
 		Transactions:            w.transactionsToV1(a.Transactions),
-		TxApperances:            a.TxApperances,
+		TxApperances:            a.Txs,
 		Txids:                   a.Txids,
 		UnconfirmedBalance:      a.UnconfirmedBalanceSat.DecimalString(d),
-		UnconfirmedTxApperances: a.UnconfirmedTxApperances,
+		UnconfirmedTxApperances: a.UnconfirmedTxs,
 	}
 }
 
