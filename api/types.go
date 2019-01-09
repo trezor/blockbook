@@ -9,6 +9,8 @@ import (
 	"time"
 )
 
+const maxInt = int(^uint(0) >> 1)
+
 // GetAddressOption specifies what data returns GetAddress api call
 type GetAddressOption int
 

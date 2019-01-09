@@ -300,13 +300,16 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height uint32, 
 	return r, nil
 }
 
-func (w *Worker) getAddressTxids(addrDesc bchain.AddressDescriptor, mempool bool, filter *AddressFilter) ([]string, error) {
+func (w *Worker) getAddressTxids(addrDesc bchain.AddressDescriptor, mempool bool, filter *AddressFilter, maxResults int) ([]string, error) {
 	var err error
 	txids := make([]string, 0, 4)
 	var callback db.GetTransactionsCallback
 	if filter.Vout == AddressFilterVoutOff {
 		callback = func(txid string, height uint32, indexes []int32) error {
 			txids = append(txids, txid)
+			if len(txids) >= maxResults {
+				return &db.StopIteration{}
+			}
 			return nil
 		}
 	} else {
@@ -320,6 +323,9 @@ func (w *Worker) getAddressTxids(addrDesc bchain.AddressDescriptor, mempool bool
 					(filter.Vout == AddressFilterVoutOutputs && index >= 0) ||
 					(vout == int32(filter.Vout)) {
 					txids = append(txids, txid)
+					if len(txids) >= maxResults {
+						return &db.StopIteration{}
+					}
 					break
 				}
 			}
@@ -460,16 +466,19 @@ func computePaging(count, page, itemsOnPage int) (Paging, int, int, int) {
 	}, from, to, page
 }
 
-func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescriptor, option GetAddressOption, filter *AddressFilter) (*db.AddrBalance, []Token, *bchain.Erc20Contract, uint64, int, error) {
+func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescriptor, option GetAddressOption, filter *AddressFilter) (*db.AddrBalance, []Token, *bchain.Erc20Contract, uint64, int, int, error) {
 	var (
-		ba     *db.AddrBalance
-		tokens []Token
-		ci     *bchain.Erc20Contract
-		n      uint64
+		ba             *db.AddrBalance
+		tokens         []Token
+		ci             *bchain.Erc20Contract
+		n              uint64
+		nonContractTxs int
 	)
+	// unknown number of results for paging
+	totalResults := -1
 	ca, err := w.db.GetAddrDescContracts(addrDesc)
 	if err != nil {
-		return nil, nil, nil, 0, 0, NewAPIError(fmt.Sprintf("Address not found, %v", err), true)
+		return nil, nil, nil, 0, 0, 0, NewAPIError(fmt.Sprintf("Address not found, %v", err), true)
 	}
 	if ca != nil {
 		ba = &db.AddrBalance{
@@ -478,20 +487,20 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 		var b *big.Int
 		b, err = w.chain.EthereumTypeGetBalance(addrDesc)
 		if err != nil {
-			return nil, nil, nil, 0, 0, errors.Annotatef(err, "EthereumTypeGetBalance %v", addrDesc)
+			return nil, nil, nil, 0, 0, 0, errors.Annotatef(err, "EthereumTypeGetBalance %v", addrDesc)
 		}
 		if b != nil {
 			ba.BalanceSat = *b
 		}
 		n, err = w.chain.EthereumTypeGetNonce(addrDesc)
 		if err != nil {
-			return nil, nil, nil, 0, 0, errors.Annotatef(err, "EthereumTypeGetNonce %v", addrDesc)
+			return nil, nil, nil, 0, 0, 0, errors.Annotatef(err, "EthereumTypeGetNonce %v", addrDesc)
 		}
 		var filterDesc bchain.AddressDescriptor
 		if filter.Contract != "" {
 			filterDesc, err = w.chainParser.GetAddrDescFromAddress(filter.Contract)
 			if err != nil {
-				return nil, nil, nil, 0, 0, NewAPIError(fmt.Sprintf("Invalid contract filter, %v", err), true)
+				return nil, nil, nil, 0, 0, 0, NewAPIError(fmt.Sprintf("Invalid contract filter, %v", err), true)
 			}
 		}
 		tokens = make([]Token, len(ca.Contracts))
@@ -501,12 +510,12 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 				if !bytes.Equal(filterDesc, c.Contract) {
 					continue
 				}
-				// filter only transactions by this contract
+				// filter only transactions of this contract
 				filter.Vout = i + 1
 			}
 			ci, err := w.chain.EthereumTypeGetErc20ContractInfo(c.Contract)
 			if err != nil {
-				return nil, nil, nil, 0, 0, errors.Annotatef(err, "EthereumTypeGetErc20ContractInfo %v", c.Contract)
+				return nil, nil, nil, 0, 0, 0, errors.Annotatef(err, "EthereumTypeGetErc20ContractInfo %v", c.Contract)
 			}
 			if ci == nil {
 				ci = &bchain.Erc20Contract{}
@@ -541,10 +550,21 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 		tokens = tokens[:j]
 		ci, err = w.chain.EthereumTypeGetErc20ContractInfo(addrDesc)
 		if err != nil {
-			return nil, nil, nil, 0, 0, err
+			return nil, nil, nil, 0, 0, 0, err
 		}
+		if filter.FromHeight == 0 && filter.ToHeight == 0 {
+			// compute total results for paging
+			if filter.Vout == AddressFilterVoutOff {
+				totalResults = int(ca.TotalTxs)
+			} else if filter.Vout == 0 {
+				totalResults = int(ca.NonContractTxs)
+			} else if filter.Vout > 0 && filter.Vout-1 < len(ca.Contracts) {
+				totalResults = int(ca.Contracts[filter.Vout-1].Txs)
+			}
+		}
+		nonContractTxs = int(ca.NonContractTxs)
 	}
-	return ba, tokens, ci, n, int(ca.NonContractTxs), nil
+	return ba, tokens, ci, n, nonContractTxs, totalResults, nil
 }
 
 // GetAddress computes address value and gets transactions for given address
@@ -570,10 +590,11 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option GetA
 		totalReceived, totalSent *big.Int
 		nonce                    string
 		nonTokenTxs              int
+		totalResults             int
 	)
 	if w.chainType == bchain.ChainEthereumType {
 		var n uint64
-		ba, tokens, erc20c, n, nonTokenTxs, err = w.getEthereumTypeAddressBalances(addrDesc, option, filter)
+		ba, tokens, erc20c, n, nonTokenTxs, totalResults, err = w.getEthereumTypeAddressBalances(addrDesc, option, filter)
 		if err != nil {
 			return nil, err
 		}
@@ -583,6 +604,14 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option GetA
 		ba, err = w.db.GetAddrDescBalance(addrDesc)
 		if err != nil {
 			return nil, NewAPIError(fmt.Sprintf("Address not found, %v", err), true)
+		}
+		if ba != nil {
+			// totalResults is known only if there is no filter
+			if filter.Vout == AddressFilterVoutOff && filter.FromHeight == 0 && filter.ToHeight == 0 {
+				totalResults = int(ba.Txs)
+			} else {
+				totalResults = -1
+			}
 		}
 	}
 	// get tx history if requested by option or check mempool if there are some transactions for a new address
@@ -595,9 +624,12 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option GetA
 		if len(addresses) == 1 {
 			address = addresses[0]
 		}
-		txm, err = w.getAddressTxids(addrDesc, true, filter)
-		if err != nil {
-			return nil, errors.Annotatef(err, "getAddressTxids %v true", addrDesc)
+		// get txs from mempool only if blockheight filter is off
+		if filter.FromHeight == 0 && filter.ToHeight == 0 {
+			txm, err = w.getAddressTxids(addrDesc, true, filter, maxInt)
+			if err != nil {
+				return nil, errors.Annotatef(err, "getAddressTxids %v true", addrDesc)
+			}
 		}
 		// if there are only unconfirmed transactions, there is no paging
 		if ba == nil {
@@ -605,7 +637,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option GetA
 			page = 0
 		}
 		if option >= TxidHistory {
-			txc, err := w.getAddressTxids(addrDesc, false, filter)
+			txc, err := w.getAddressTxids(addrDesc, false, filter, (page+1)*txsOnPage)
 			if err != nil {
 				return nil, errors.Annotatef(err, "getAddressTxids %v false", addrDesc)
 			}
@@ -615,6 +647,13 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option GetA
 			}
 			var from, to int
 			pg, from, to, page = computePaging(len(txc), page, txsOnPage)
+			if len(txc) >= txsOnPage {
+				if totalResults < 0 {
+					pg.TotalPages = -1
+				} else {
+					pg, _, _, _ = computePaging(totalResults, page, txsOnPage)
+				}
+			}
 			if option == TxidHistory {
 				txids = make([]string, len(txm)+to-from)
 			} else {
@@ -654,7 +693,8 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option GetA
 						}
 						if ta == nil {
 							glog.Warning("DB inconsistency:  tx ", txid, ": not found in txAddresses")
-							continue
+							// as fallback, provide empty TxAddresses to return at least something
+							ta = &db.TxAddresses{}
 						}
 						bi, err := w.db.GetBlockInfo(ta.Height)
 						if err != nil {
@@ -662,7 +702,8 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option GetA
 						}
 						if bi == nil {
 							glog.Warning("DB inconsistency:  block height ", ta.Height, ": not found in db")
-							continue
+							// provide empty BlockInfo to return the rest of tx data
+							bi = &db.BlockInfo{}
 						}
 						txs[txi] = w.txFromTxAddress(txid, ta, bi, bestheight)
 					} else {
@@ -716,7 +757,7 @@ func (w *Worker) GetAddressUtxo(address string, onlyConfirmed bool) ([]AddressUt
 	r := make([]AddressUtxo, 0, 8)
 	if !onlyConfirmed {
 		// get utxo from mempool
-		txm, err := w.getAddressTxids(addrDesc, true, &AddressFilter{Vout: AddressFilterVoutOff})
+		txm, err := w.getAddressTxids(addrDesc, true, &AddressFilter{Vout: AddressFilterVoutOff}, maxInt)
 		if err != nil {
 			return nil, errors.Annotatef(err, "getAddressTxids %v true", address)
 		}

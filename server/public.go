@@ -640,55 +640,59 @@ func (s *PublicServer) explorerSendTx(w http.ResponseWriter, r *http.Request) (t
 }
 
 func getPagingRange(page int, total int) ([]int, int, int) {
-	if total < 2 {
+	// total==-1 means total is unknown, show only prev/next buttons
+	if total >= 0 && total < 2 {
 		return nil, 0, 0
 	}
+	var r []int
 	pp, np := page-1, page+1
-	if np > total {
-		np = total
-	}
 	if pp < 1 {
 		pp = 1
 	}
-	r := make([]int, 0, 8)
-	if total < 6 {
-		for i := 1; i <= total; i++ {
-			r = append(r, i)
+	if total > 0 {
+		if np > total {
+			np = total
 		}
-	} else {
-		r = append(r, 1)
-		if page > 3 {
-			r = append(r, 0)
-		}
-		if pp == 1 {
-			if page == 1 {
-				r = append(r, np)
-				r = append(r, np+1)
-				r = append(r, np+2)
-			} else {
-				r = append(r, page)
-				r = append(r, np)
-				r = append(r, np+1)
-			}
-		} else if np == total {
-			if page == total {
-				r = append(r, pp-2)
-				r = append(r, pp-1)
-				r = append(r, pp)
-			} else {
-				r = append(r, pp-1)
-				r = append(r, pp)
-				r = append(r, page)
+		r = make([]int, 0, 8)
+		if total < 6 {
+			for i := 1; i <= total; i++ {
+				r = append(r, i)
 			}
 		} else {
-			r = append(r, pp)
-			r = append(r, page)
-			r = append(r, np)
+			r = append(r, 1)
+			if page > 3 {
+				r = append(r, 0)
+			}
+			if pp == 1 {
+				if page == 1 {
+					r = append(r, np)
+					r = append(r, np+1)
+					r = append(r, np+2)
+				} else {
+					r = append(r, page)
+					r = append(r, np)
+					r = append(r, np+1)
+				}
+			} else if np == total {
+				if page == total {
+					r = append(r, pp-2)
+					r = append(r, pp-1)
+					r = append(r, pp)
+				} else {
+					r = append(r, pp-1)
+					r = append(r, pp)
+					r = append(r, page)
+				}
+			} else {
+				r = append(r, pp)
+				r = append(r, page)
+				r = append(r, np)
+			}
+			if page <= total-3 {
+				r = append(r, 0)
+			}
+			r = append(r, total)
 		}
-		if page <= total-3 {
-			r = append(r, 0)
-		}
-		r = append(r, total)
 	}
 	return r, pp, np
 }
