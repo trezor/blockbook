@@ -1,0 +1,77 @@
+{
+  "coin": {
+      "name": "Zcoin",
+      "shortcut": "XZC",
+      "label": "Zcoin",
+      "alias": "zcoin"
+  },
+  "ports": {
+    "backend_rpc": 8047,
+    "backend_message_queue": 38347,
+    "blockbook_internal": 9047,
+    "blockbook_public": 9147
+  },
+  "ipc": {
+    "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
+    "rpc_user": "rpc",
+    "rpc_pass": "rpc",
+    "rpc_timeout": 25,
+    "message_queue_binding_template": "tcp://127.0.0.1:{{.Ports.BackendMessageQueue}}"
+  },
+  "backend": {
+    "package_name": "backend-zcoin",
+    "package_revision": "satoshilabs-1",
+    "system_user": "zcoin",
+    "version": "0.13.7.6",
+    "binary_url": "https://github.com/zcoinofficial/zcoin/releases/download/v0.13.7.6/zcoin-0.13.7.6-linux64.tar.gz",
+    "verification_type": "sha256",
+    "verification_source": "d1567283a4c530ef5a9297857d47c17541be182f5feabb3e2ce607c0d1a67511",
+    "extract_command": "tar -C backend --strip 1 -xf",
+    "exclude_files": [
+      "bin/test_bitcoin",
+      "bin/tor",
+      "bin/tor-gencert",
+      "bin/tor-resolve",
+      "bin/torify",
+      "bin/zcoin-qt",
+      "etc/tor/torrc.sample",
+      "include/bitcoinconsensus.h",
+      "lib/libbitcoinconsensus.so",
+      "lib/libbitcoinconsensus.so.0",
+      "lib/libbitcoinconsensus.so.0.0.0",
+      "share/tor/geoip",
+      "share/tor/geoip6"
+    ],
+    "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/zcoind -datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -conf={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf -pid=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",
+    "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/*.log",
+    "postinst_script_template": "",
+    "service_type": "forking",
+    "service_additional_params_template": "",
+    "protect_memory": true,
+    "mainnet": true,
+    "server_config_file": "zcoin.conf",
+    "client_config_file": "zcoin_client.conf",
+    "additional_params": {
+        "deprecatedrpc": "estimatefee"
+    }
+  },
+  "blockbook": {
+    "package_name": "blockbook-zcoin",
+    "system_user": "blockbook-zcoin",
+    "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
+    "public_binding_template": ":{{.Ports.BlockbookPublic}}",
+    "explorer_url": "",
+    "additional_params": "",
+    "block_chain": {
+      "parse": true,
+      "mempool_workers": 8,
+      "mempool_sub_workers": 2,
+      "block_addresses_to_keep": 300,
+      "additional_params": {}
+    }
+  },
+  "meta": {
+    "package_maintainer": "Putta Khunchalee",
+    "package_maintainer_email": "putta@zcoin.io"
+  }
+}
