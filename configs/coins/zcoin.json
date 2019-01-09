@@ -24,8 +24,8 @@
     "system_user": "zcoin",
     "version": "0.13.7.6",
     "binary_url": "https://github.com/zcoinofficial/zcoin/releases/download/v0.13.7.6/zcoin-0.13.7.6-linux64.tar.gz",
-    "verification_type": "sha256",
-    "verification_source": "d1567283a4c530ef5a9297857d47c17541be182f5feabb3e2ce607c0d1a67511",
+    "verification_type": "gpg-sha256",
+    "verification_source": "https://github.com/zcoinofficial/zcoin/releases/download/v0.13.7.6/SHA256SUMS.asc",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
       "bin/test_bitcoin",
