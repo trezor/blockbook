@@ -12,7 +12,9 @@ import (
 	"io/ioutil"
 	"math/big"
 	"net/http"
+	"path/filepath"
 	"reflect"
+	"regexp"
 	"runtime"
 	"runtime/debug"
 	"strconv"
@@ -410,20 +412,58 @@ func (s *PublicServer) parseTemplates() []*template.Template {
 		"setTxToTemplateData":      setTxToTemplateData,
 		"stringInSlice":            stringInSlice,
 	}
-	t := make([]*template.Template, tplCount)
-	t[errorTpl] = template.Must(template.New("error").Funcs(templateFuncMap).ParseFiles("./static/templates/error.html", "./static/templates/base.html"))
-	t[errorInternalTpl] = template.Must(template.New("error").Funcs(templateFuncMap).ParseFiles("./static/templates/error.html", "./static/templates/base.html"))
-	t[indexTpl] = template.Must(template.New("index").Funcs(templateFuncMap).ParseFiles("./static/templates/index.html", "./static/templates/base.html"))
-	t[blocksTpl] = template.Must(template.New("blocks").Funcs(templateFuncMap).ParseFiles("./static/templates/blocks.html", "./static/templates/paging.html", "./static/templates/base.html"))
-	t[sendTransactionTpl] = template.Must(template.New("block").Funcs(templateFuncMap).ParseFiles("./static/templates/sendtx.html", "./static/templates/base.html"))
-	if s.chainParser.GetChainType() == bchain.ChainEthereumType {
-		t[txTpl] = template.Must(template.New("tx").Funcs(templateFuncMap).ParseFiles("./static/templates/tx.html", "./static/templates/txdetail_ethereumtype.html", "./static/templates/base.html"))
-		t[addressTpl] = template.Must(template.New("address").Funcs(templateFuncMap).ParseFiles("./static/templates/address.html", "./static/templates/txdetail_ethereumtype.html", "./static/templates/paging.html", "./static/templates/base.html"))
-		t[blockTpl] = template.Must(template.New("block").Funcs(templateFuncMap).ParseFiles("./static/templates/block.html", "./static/templates/txdetail_ethereumtype.html", "./static/templates/paging.html", "./static/templates/base.html"))
+	var createTemplate func(filenames ...string) *template.Template
+	if s.debug {
+		createTemplate = func(filenames ...string) *template.Template {
+			if len(filenames) == 0 {
+				panic("Missing templates")
+			}
+			return template.Must(template.New(filepath.Base(filenames[0])).Funcs(templateFuncMap).ParseFiles(filenames...))
+		}
 	} else {
-		t[txTpl] = template.Must(template.New("tx").Funcs(templateFuncMap).ParseFiles("./static/templates/tx.html", "./static/templates/txdetail.html", "./static/templates/base.html"))
-		t[addressTpl] = template.Must(template.New("address").Funcs(templateFuncMap).ParseFiles("./static/templates/address.html", "./static/templates/txdetail.html", "./static/templates/paging.html", "./static/templates/base.html"))
-		t[blockTpl] = template.Must(template.New("block").Funcs(templateFuncMap).ParseFiles("./static/templates/block.html", "./static/templates/txdetail.html", "./static/templates/paging.html", "./static/templates/base.html"))
+		createTemplate = func(filenames ...string) *template.Template {
+			if len(filenames) == 0 {
+				panic("Missing templates")
+			}
+			t := template.New(filepath.Base(filenames[0])).Funcs(templateFuncMap)
+			for _, filename := range filenames {
+				b, err := ioutil.ReadFile(filename)
+				if err != nil {
+					panic(err)
+				}
+				// perform very simple minification - replace leading spaces used as formatting and new lines
+				r := regexp.MustCompile(`\n\s*`)
+				b = r.ReplaceAll(b, []byte{})
+				s := string(b)
+				name := filepath.Base(filename)
+				var tt *template.Template
+				if name == t.Name() {
+					tt = t
+				} else {
+					tt = t.New(name)
+				}
+				_, err = tt.Parse(s)
+				if err != nil {
+					panic(err)
+				}
+			}
+			return t
+		}
+	}
+	t := make([]*template.Template, tplCount)
+	t[errorTpl] = createTemplate("./static/templates/error.html", "./static/templates/base.html")
+	t[errorInternalTpl] = createTemplate("./static/templates/error.html", "./static/templates/base.html")
+	t[indexTpl] = createTemplate("./static/templates/index.html", "./static/templates/base.html")
+	t[blocksTpl] = createTemplate("./static/templates/blocks.html", "./static/templates/paging.html", "./static/templates/base.html")
+	t[sendTransactionTpl] = createTemplate("./static/templates/sendtx.html", "./static/templates/base.html")
+	if s.chainParser.GetChainType() == bchain.ChainEthereumType {
+		t[txTpl] = createTemplate("./static/templates/tx.html", "./static/templates/txdetail_ethereumtype.html", "./static/templates/base.html")
+		t[addressTpl] = createTemplate("./static/templates/address.html", "./static/templates/txdetail_ethereumtype.html", "./static/templates/paging.html", "./static/templates/base.html")
+		t[blockTpl] = createTemplate("./static/templates/block.html", "./static/templates/txdetail_ethereumtype.html", "./static/templates/paging.html", "./static/templates/base.html")
+	} else {
+		t[txTpl] = createTemplate("./static/templates/tx.html", "./static/templates/txdetail.html", "./static/templates/base.html")
+		t[addressTpl] = createTemplate("./static/templates/address.html", "./static/templates/txdetail.html", "./static/templates/paging.html", "./static/templates/base.html")
+		t[blockTpl] = createTemplate("./static/templates/block.html", "./static/templates/txdetail.html", "./static/templates/paging.html", "./static/templates/base.html")
 	}
 	return t
 }
