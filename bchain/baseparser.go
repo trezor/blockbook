@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/gogo/protobuf/proto"
+	"github.com/golang/glog"
 	"github.com/juju/errors"
 )
 
@@ -24,6 +25,16 @@ func (p *BaseParser) ParseBlock(b []byte) (*Block, error) {
 // ParseTx parses byte array containing transaction and returns Tx struct - currently not implemented
 func (p *BaseParser) ParseTx(b []byte) (*Tx, error) {
 	return nil, errors.New("ParseTx: not implemented")
+}
+
+// GetAddrDescForUnknownInput returns nil AddressDescriptor
+func (p *BaseParser) GetAddrDescForUnknownInput(block *Block, tx *Tx, input int) AddressDescriptor {
+	var iTxid string
+	if len(tx.Vin) > input {
+		iTxid = tx.Vin[input].Txid
+	}
+	glog.Warningf("height %d, tx %v, input tx %v not found in txAddresses", block.Height, tx.Txid, iTxid)
+	return nil
 }
 
 const zeros = "0000000000000000000000000000000000000000"

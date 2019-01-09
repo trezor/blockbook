@@ -256,6 +256,7 @@ type BlockChainParser interface {
 	ParseTxFromJson(json.RawMessage) (*Tx, error)
 	PackTx(tx *Tx, height uint32, blockTime int64) ([]byte, error)
 	UnpackTx(buf []byte) (*Tx, uint32, error)
+	GetAddrDescForUnknownInput(block *Block, tx *Tx, input int) AddressDescriptor
 	// blocks
 	PackBlockHash(hash string) ([]byte, error)
 	UnpackBlockHash(buf []byte) (string, error)

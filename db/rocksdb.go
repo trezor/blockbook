@@ -13,7 +13,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/bsm/go-vlq"
+	vlq "github.com/bsm/go-vlq"
 	"github.com/golang/glog"
 	"github.com/juju/errors"
 	"github.com/tecbot/gorocksdb"
@@ -490,7 +490,8 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses add
 					return err
 				}
 				if ita == nil {
-					glog.Warningf("rocksdb: height %d, tx %v, input tx %v not found in txAddresses", block.Height, tx.Txid, input.Txid)
+					// allow parser to process unknown input, some coins may implement special handling, default is to log warning
+					tai.AddrDesc = d.chainParser.GetAddrDescForUnknownInput(block, tx, i)
 					continue
 				}
 				txAddressesMap[stxID] = ita
