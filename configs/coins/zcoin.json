@@ -6,10 +6,10 @@
       "alias": "zcoin"
   },
   "ports": {
-    "backend_rpc": 8047,
-    "backend_message_queue": 38347,
-    "blockbook_internal": 9047,
-    "blockbook_public": 9147
+    "backend_rpc": 8050,
+    "backend_message_queue": 38350,
+    "blockbook_internal": 9050,
+    "blockbook_public": 9150
   },
   "ipc": {
     "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
