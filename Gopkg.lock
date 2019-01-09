@@ -32,12 +32,6 @@
   revision = "84c8d2346e9fc8c7b947e243b9c24e6df9fd206a"
 
 [[projects]]
-  branch = "master"
-  name = "github.com/martinboehm/btcutil"
-  packages = [".","base58","bech32"]
-  revision = "501929d3d046174c3d39f0ea54ece471aa17238c"
-
-[[projects]]
   name = "github.com/deckarep/golang-set"
   packages = ["."]
   revision = "1d4478f51bed434f1dadf96dcd9b43aabac66795"
