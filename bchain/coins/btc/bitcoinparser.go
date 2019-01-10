@@ -154,6 +154,7 @@ func (p *BitcoinParser) outputScriptToAddresses(script []byte) ([]string, bool, 
 	return rv, s, nil
 }
 
+// TxFromMsgTx converts bitcoin wire Tx to bchain.Tx
 func (p *BitcoinParser) TxFromMsgTx(t *wire.MsgTx, parseAddresses bool) bchain.Tx {
 	vin := make([]bchain.Vin, len(t.TxIn))
 	for i, in := range t.TxIn {

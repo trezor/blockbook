@@ -74,7 +74,7 @@ func (p *LiquidParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 
 // GetAddrDescForUnknownInput processes inputs that were not found in txAddresses - they are bitcoin transactions
 // create a special script for the input in the form OP_INVALIDOPCODE <txid> <vout varint>
-func (p *LiquidParser) GetAddrDescForUnknownInput(block *bchain.Block, tx *bchain.Tx, input int) bchain.AddressDescriptor {
+func (p *LiquidParser) GetAddrDescForUnknownInput(tx *bchain.Tx, input int) bchain.AddressDescriptor {
 	var iTxid string
 	s := make([]byte, 0, 40)
 	if len(tx.Vin) > input {
@@ -88,7 +88,7 @@ func (p *LiquidParser) GetAddrDescForUnknownInput(block *bchain.Block, tx *bchai
 			s = append(s, buf[:l]...)
 		}
 	}
-	glog.Info("height ", block.Height, ", tx ", tx.Txid, ", encountered Bitcoin tx ", iTxid)
+	glog.Info("tx ", tx.Txid, ", encountered Bitcoin tx ", iTxid)
 	return s
 }
 

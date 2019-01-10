@@ -107,7 +107,10 @@ func (w *Worker) GetSpendingTxid(txid string, n int) (string, error) {
 func (w *Worker) GetTransaction(txid string, spendingTxs bool, specificJSON bool) (*Tx, error) {
 	bchainTx, height, err := w.txCache.GetTransaction(txid)
 	if err != nil {
-		return nil, NewAPIError(fmt.Sprintf("Tx not found, %v", err), true)
+		if err == bchain.ErrTxNotFound {
+			return nil, NewAPIError(fmt.Sprintf("Transaction '%v' not found", txid), true)
+		}
+		return nil, NewAPIError(fmt.Sprintf("Transaction '%v' not found (%v)", txid, err), true)
 	}
 	return w.GetTransactionFromBchainTx(bchainTx, height, spendingTxs, specificJSON)
 }
@@ -158,6 +161,11 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height uint32, 
 					// try to load from backend
 					otx, _, err := w.txCache.GetTransaction(bchainVin.Txid)
 					if err != nil {
+						if err == bchain.ErrTxNotFound {
+							// try to get AddrDesc using coin specific handling and continue processing the tx
+							vin.AddrDesc = w.chainParser.GetAddrDescForUnknownInput(bchainTx, i)
+							continue
+						}
 						return nil, errors.Annotatef(err, "txCache.GetTransaction %v", bchainVin.Txid)
 					}
 					if len(otx.Vout) > int(vin.Vout) {

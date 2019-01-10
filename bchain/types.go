@@ -31,6 +31,8 @@ var (
 	// ErrTxidMissing is returned if txid is not specified
 	// for example coinbase transactions in Bitcoin
 	ErrTxidMissing = errors.New("Txid missing")
+	// ErrTxNotFound is returned if transaction was not found
+	ErrTxNotFound = errors.New("Tx not found")
 )
 
 // Outpoint is txid together with output (or input) index
@@ -256,7 +258,7 @@ type BlockChainParser interface {
 	ParseTxFromJson(json.RawMessage) (*Tx, error)
 	PackTx(tx *Tx, height uint32, blockTime int64) ([]byte, error)
 	UnpackTx(buf []byte) (*Tx, uint32, error)
-	GetAddrDescForUnknownInput(block *Block, tx *Tx, input int) AddressDescriptor
+	GetAddrDescForUnknownInput(tx *Tx, input int) AddressDescriptor
 	// blocks
 	PackBlockHash(hash string) ([]byte, error)
 	UnpackBlockHash(buf []byte) (string, error)

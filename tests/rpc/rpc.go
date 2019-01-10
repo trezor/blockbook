@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/deckarep/golang-set"
+	mapset "github.com/deckarep/golang-set"
 	"github.com/juju/errors"
 )
 
@@ -351,7 +351,7 @@ func getTxid2addrs(t *testing.T, h *TestHandler, txs []string) map[string][]stri
 	for i := range txs {
 		tx, err := h.Chain.GetTransactionForMempool(txs[i])
 		if err != nil {
-			if isMissingTx(err) {
+			if err == bchain.ErrTxNotFound {
 				continue
 			}
 			t.Fatal(err)
@@ -368,20 +368,6 @@ func getTxid2addrs(t *testing.T, h *TestHandler, txs []string) map[string][]stri
 		}
 	}
 	return txid2addrs
-}
-
-func isMissingTx(err error) bool {
-	switch e1 := err.(type) {
-	case *errors.Err:
-		switch e2 := e1.Cause().(type) {
-		case *bchain.RPCError:
-			if e2.Code == -5 { // "No such mempool or blockchain transaction"
-				return true
-			}
-		}
-	}
-
-	return false
 }
 
 func intersect(a, b []string) []string {

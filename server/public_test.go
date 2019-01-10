@@ -19,7 +19,7 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/martinboehm/btcutil/chaincfg"
-	"github.com/martinboehm/golang-socketio"
+	gosocketio "github.com/martinboehm/golang-socketio"
 	"github.com/martinboehm/golang-socketio/transport"
 )
 
@@ -388,7 +388,7 @@ func httpTests_BitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusBadRequest,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"error":"Tx not found, Not found"}`,
+				`{"error":"Transaction '1232e48aeabdd9b75def7b48d756ba304713c2aba7b522bf9dbc893fc4231b07' not found"}`,
 			},
 		},
 		{
@@ -406,7 +406,7 @@ func httpTests_BitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusBadRequest,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"error":"Tx not found, Not found"}`,
+				`{"error":"Transaction '1232e48aeabdd9b75def7b48d756ba304713c2aba7b522bf9dbc893fc4231b07' not found"}`,
 			},
 		},
 		{

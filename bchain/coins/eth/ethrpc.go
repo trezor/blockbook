@@ -520,7 +520,7 @@ func (b *EthereumRPC) GetBlockInfo(hash string) (*bchain.BlockInfo, error) {
 func (b *EthereumRPC) GetTransactionForMempool(txid string) (*bchain.Tx, error) {
 	tx, err := b.GetTransaction(txid)
 	// it there is an error getting the tx or the tx is confirmed, remove it from pending transactions
-	if err != nil || (tx != nil && tx.Confirmations > 0) {
+	if err == bchain.ErrTxNotFound || (tx != nil && tx.Confirmations > 0) {
 		b.pendingTransactionsLock.Lock()
 		delete(b.pendingTransactions, txid)
 		b.pendingTransactionsLock.Unlock()
@@ -538,7 +538,7 @@ func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 	if err != nil {
 		return nil, err
 	} else if tx == nil {
-		return nil, ethereum.NotFound
+		return nil, bchain.ErrTxNotFound
 	}
 	var btx *bchain.Tx
 	if tx.BlockNumber == "" {

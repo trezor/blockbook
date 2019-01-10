@@ -28,12 +28,12 @@ func (p *BaseParser) ParseTx(b []byte) (*Tx, error) {
 }
 
 // GetAddrDescForUnknownInput returns nil AddressDescriptor
-func (p *BaseParser) GetAddrDescForUnknownInput(block *Block, tx *Tx, input int) AddressDescriptor {
+func (p *BaseParser) GetAddrDescForUnknownInput(tx *Tx, input int) AddressDescriptor {
 	var iTxid string
 	if len(tx.Vin) > input {
 		iTxid = tx.Vin[input].Txid
 	}
-	glog.Warningf("height %d, tx %v, input tx %v not found in txAddresses", block.Height, tx.Txid, iTxid)
+	glog.Warningf("tx %v, input tx %v not found in txAddresses", tx.Txid, iTxid)
 	return nil
 }
 
