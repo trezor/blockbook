@@ -154,19 +154,23 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height uint32, 
 					return nil, errors.Annotatef(err, "GetTxAddresses %v", bchainVin.Txid)
 				}
 				if tas == nil {
-					// mempool transactions are not in TxAddresses but confirmed should be there, log a problem
-					if bchainTx.Confirmations > 0 {
-						glog.Warning("DB inconsistency:  tx ", bchainVin.Txid, ": not found in txAddresses")
-					}
 					// try to load from backend
 					otx, _, err := w.txCache.GetTransaction(bchainVin.Txid)
 					if err != nil {
 						if err == bchain.ErrTxNotFound {
 							// try to get AddrDesc using coin specific handling and continue processing the tx
 							vin.AddrDesc = w.chainParser.GetAddrDescForUnknownInput(bchainTx, i)
+							vin.Addresses, vin.Searchable, err = w.chainParser.GetAddressesFromAddrDesc(vin.AddrDesc)
+							if err != nil {
+								glog.Warning("GetAddressesFromAddrDesc tx ", bchainVin.Txid, ", addrDesc ", vin.AddrDesc, ": ", err)
+							}
 							continue
 						}
 						return nil, errors.Annotatef(err, "txCache.GetTransaction %v", bchainVin.Txid)
+					}
+					// mempool transactions are not in TxAddresses but confirmed should be there, log a problem
+					if bchainTx.Confirmations > 0 {
+						glog.Warning("DB inconsistency:  tx ", bchainVin.Txid, ": not found in txAddresses")
 					}
 					if len(otx.Vout) > int(vin.Vout) {
 						vout := &otx.Vout[vin.Vout]
