@@ -49,8 +49,8 @@
     "service_additional_params_template": "",
     "protect_memory": true,
     "mainnet": true,
-    "server_config_file": "zcoin.conf",
-    "client_config_file": "zcoin_client.conf",
+    "server_config_file": "bitcoin_like.conf",
+    "client_config_file": "bitcoin_like_client.conf",
     "additional_params": {
         "deprecatedrpc": "estimatefee"
     }
