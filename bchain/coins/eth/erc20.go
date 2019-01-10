@@ -130,7 +130,9 @@ func parseErc20NumericProperty(contractDesc bchain.AddressDescriptor, data strin
 			return &n
 		}
 	}
-	glog.Warning("Cannot parse '", data, "' for contract ", contractDesc)
+	if glog.V(1) {
+		glog.Warning("Cannot parse '", data, "' for contract ", contractDesc)
+	}
 	return nil
 }
 
@@ -150,7 +152,9 @@ func parseErc20StringProperty(contractDesc bchain.AddressDescriptor, data string
 			}
 		}
 	}
-	glog.Warning("Cannot parse '", data, "' for contract ", contractDesc)
+	if glog.V(1) {
+		glog.Warning("Cannot parse '", data, "' for contract ", contractDesc)
+	}
 	return ""
 }
 
@@ -176,9 +180,6 @@ func (b *EthereumRPC) EthereumTypeGetErc20ContractInfo(contractDesc bchain.Addre
 			data, err = b.ethCall(erc20DecimalsSignature, address)
 			if err != nil {
 				return nil, err
-			}
-			if name == "" {
-				name = address
 			}
 			contract = &bchain.Erc20Contract{
 				Contract: address,

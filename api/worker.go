@@ -513,6 +513,7 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 				// filter only transactions of this contract
 				filter.Vout = i + 1
 			}
+			validContract := true
 			ci, err := w.chain.EthereumTypeGetErc20ContractInfo(c.Contract)
 			if err != nil {
 				return nil, nil, nil, 0, 0, 0, errors.Annotatef(err, "EthereumTypeGetErc20ContractInfo %v", c.Contract)
@@ -524,9 +525,10 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 					ci.Contract = addresses[0]
 					ci.Name = addresses[0]
 				}
+				validContract = false
 			}
 			// do not read contract balances etc in case of Basic option
-			if option != Basic {
+			if option != Basic && validContract {
 				b, err = w.chain.EthereumTypeGetErc20ContractBalance(addrDesc, c.Contract)
 				if err != nil {
 					// return nil, nil, nil, errors.Annotatef(err, "EthereumTypeGetErc20ContractBalance %v %v", addrDesc, c.Contract)

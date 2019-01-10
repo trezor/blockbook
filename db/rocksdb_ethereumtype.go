@@ -6,7 +6,7 @@ import (
 	"bytes"
 	"encoding/hex"
 
-	"github.com/bsm/go-vlq"
+	vlq "github.com/bsm/go-vlq"
 	"github.com/golang/glog"
 	"github.com/juju/errors"
 	"github.com/tecbot/gorocksdb"
@@ -93,6 +93,15 @@ func findContractInAddressContracts(contract bchain.AddressDescriptor, contracts
 	return 0, false
 }
 
+func isZeroAddress(addrDesc bchain.AddressDescriptor) bool {
+	for _, b := range addrDesc {
+		if b != 0 {
+			return false
+		}
+	}
+	return true
+}
+
 func (d *RocksDB) addToAddressesAndContractsEthereumType(addrDesc bchain.AddressDescriptor, btxID []byte, index int32, contract bchain.AddressDescriptor, addresses addressesMap, addressContracts map[string]*AddrContracts, addTxCount bool) error {
 	var err error
 	strAddrDesc := string(addrDesc)
@@ -115,20 +124,23 @@ func (d *RocksDB) addToAddressesAndContractsEthereumType(addrDesc bchain.Address
 			ac.NonContractTxs++
 		}
 	} else {
-		// locate the contract and set i to the index in the array of contracts
-		i, found := findContractInAddressContracts(contract, ac.Contracts)
-		if !found {
-			i = len(ac.Contracts)
-			ac.Contracts = append(ac.Contracts, AddrContract{Contract: contract})
-		}
-		// index 0 is for ETH transfers, contract indexes start with 1
-		if index < 0 {
-			index = ^int32(i + 1)
-		} else {
-			index = int32(i + 1)
-		}
-		if addTxCount {
-			ac.Contracts[i].Txs++
+		// do not store contracts for 0x0000000000000000000000000000000000000000 address
+		if !isZeroAddress(addrDesc) {
+			// locate the contract and set i to the index in the array of contracts
+			i, found := findContractInAddressContracts(contract, ac.Contracts)
+			if !found {
+				i = len(ac.Contracts)
+				ac.Contracts = append(ac.Contracts, AddrContract{Contract: contract})
+			}
+			// index 0 is for ETH transfers, contract indexes start with 1
+			if index < 0 {
+				index = ^int32(i + 1)
+			} else {
+				index = int32(i + 1)
+			}
+			if addTxCount {
+				ac.Contracts[i].Txs++
+			}
 		}
 	}
 	counted := addToAddressesMap(addresses, strAddrDesc, btxID, index)
