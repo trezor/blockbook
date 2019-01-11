@@ -5,6 +5,7 @@ import (
 	"blockbook/bchain/coins/btc"
 	"encoding/hex"
 	"encoding/json"
+	"math/big"
 
 	"github.com/golang/glog"
 	"github.com/juju/errors"
@@ -25,6 +26,8 @@ func NewZcoinRPC(config json.RawMessage, pushHandler func(bchain.NotificationTyp
 	}
 
 	zc.ChainConfig.Parse = true
+	zc.ChainConfig.SupportsEstimateFee = true
+	zc.ChainConfig.SupportsEstimateSmartFee = false
 	zc.ParseBlocks = true
 
 	return zc, nil
@@ -138,6 +141,35 @@ func (zc *ZcoinRPC) GetTransactionSpecific(txid string) (json.RawMessage, error)
 		return nil, errors.Annotatef(res.Error, "txid %v", txid)
 	}
 	return res.Result, nil
+}
+
+func (zc *ZcoinRPC) EstimateFee(blocks int) (big.Int, error) {
+	glog.V(1).Info("rpc: estimatefee ", blocks)
+
+	res := btc.ResEstimateFee{}
+	req := btc.CmdEstimateFee{Method: "estimatefee"}
+	req.Params.Blocks = blocks
+	err := zc.Call(&req, &res)
+
+	var r big.Int
+	if err != nil {
+		return r, err
+	}
+	if res.Error != nil {
+		return r, res.Error
+	}
+
+	// -1 mean zero fee
+	if res.Result == "-1" {
+		return r, nil
+	}
+
+	r, err = zc.Parser.AmountToBigInt(res.Result)
+	if err != nil {
+		return r, err
+	}
+
+	return r, nil
 }
 
 func isErrBlockNotFound(err *bchain.RPCError) bool {
