@@ -20,6 +20,7 @@ import (
 var (
 	testTx1, testTx2, testTx3                   bchain.Tx
 	testTxPacked1, testTxPacked2, testTxPacked3 string
+	rawBlock1, rawBlock2                        string
 )
 
 func readHexs(path string) []string {
@@ -33,6 +34,10 @@ func readHexs(path string) []string {
 }
 
 func init() {
+	rawBlocks := readHexs("./testdata/rawblock.hex")
+	rawBlock1 = rawBlocks[0]
+	rawBlock2 = rawBlocks[1]
+
 	hextxs := readHexs("./testdata/txs.hex")
 	rawTestTx1 := hextxs[0]
 	rawTestTx2 := hextxs[1]
@@ -419,6 +424,72 @@ func TestUnpackTx(t *testing.T) {
 			}
 			if got1 != tt.want1 {
 				t.Errorf("unpackTx() got1 = %v, want %v", got1, tt.want1)
+			}
+		})
+	}
+}
+
+func TestParseBlock(t *testing.T) {
+	type args struct {
+		rawBlock string
+		parser   *ZcoinParser
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    *bchain.Block
+		wantTxs int
+		wantErr bool
+	}{
+		{
+			name: "normal-block",
+			args: args{
+				rawBlock: rawBlock1,
+				parser:   NewZcoinParser(GetChainParams("main"), &btc.Configuration{}),
+			},
+			want: &bchain.Block{
+				BlockHeader: bchain.BlockHeader{
+					Size: 200286,
+					Time: 1547120622,
+				},
+			},
+			wantTxs: 3,
+			wantErr: false,
+		},
+		{
+			name: "spend-block",
+			args: args{
+				rawBlock: rawBlock2,
+				parser:   NewZcoinParser(GetChainParams("main"), &btc.Configuration{}),
+			},
+			want: &bchain.Block{
+				BlockHeader: bchain.BlockHeader{
+					Size: 25298,
+					Time: 1482107572,
+				},
+			},
+			wantTxs: 4,
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b, _ := hex.DecodeString(tt.args.rawBlock)
+			got, err := tt.args.parser.ParseBlock(b)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("parseBlock() error = %+v", err)
+			}
+
+			if got != nil {
+
+				if !reflect.DeepEqual(got.BlockHeader, tt.want.BlockHeader) {
+					t.Errorf("parseBlock() got = %v, want %v", got.BlockHeader, tt.want.BlockHeader)
+				}
+
+				if len(got.Txs) != tt.wantTxs {
+					t.Errorf("parseBlock() txs length got = %d, want %d", len(got.Txs), tt.wantTxs)
+				}
 			}
 		})
 	}
