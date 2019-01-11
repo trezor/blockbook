@@ -29,6 +29,7 @@ func NewZcoinRPC(config json.RawMessage, pushHandler func(bchain.NotificationTyp
 	zc.ChainConfig.SupportsEstimateFee = true
 	zc.ChainConfig.SupportsEstimateSmartFee = false
 	zc.ParseBlocks = true
+	zc.RPCMarshaler = btc.JSONMarshalerV1{}
 
 	return zc, nil
 }
@@ -71,7 +72,7 @@ func (zc *ZcoinRPC) GetBlockInfo(hash string) (*bchain.BlockInfo, error) {
 		return nil, errors.Annotatef(err, "hash %v", hash)
 	}
 	if res.Error != nil {
-		if isErrBlockNotFound(res.Error) {
+		if btc.IsErrBlockNotFound(res.Error) {
 			return nil, bchain.ErrBlockNotFound
 		}
 		return nil, errors.Annotatef(res.Error, "hash %v", hash)
@@ -92,7 +93,7 @@ func (zc *ZcoinRPC) GetBlockRaw(hash string) ([]byte, error) {
 		return nil, errors.Annotatef(err, "hash %v", hash)
 	}
 	if res.Error != nil {
-		if isErrBlockNotFound(res.Error) {
+		if btc.IsErrBlockNotFound(res.Error) {
 			return nil, bchain.ErrBlockNotFound
 		}
 		return nil, errors.Annotatef(res.Error, "hash %v", hash)
@@ -170,11 +171,6 @@ func (zc *ZcoinRPC) EstimateFee(blocks int) (big.Int, error) {
 	}
 
 	return r, nil
-}
-
-func isErrBlockNotFound(err *bchain.RPCError) bool {
-	return err.Message == "Block not found" ||
-		err.Message == "Block height out of range"
 }
 
 type cmdGetBlock struct {

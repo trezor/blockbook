@@ -454,7 +454,7 @@ func (b *BitcoinRPC) GetChainInfo() (*bchain.ChainInfo, error) {
 	return rv, nil
 }
 
-func isErrBlockNotFound(err *bchain.RPCError) bool {
+func IsErrBlockNotFound(err *bchain.RPCError) bool {
 	return err.Message == "Block not found" ||
 		err.Message == "Block height out of range"
 }
@@ -472,7 +472,7 @@ func (b *BitcoinRPC) GetBlockHash(height uint32) (string, error) {
 		return "", errors.Annotatef(err, "height %v", height)
 	}
 	if res.Error != nil {
-		if isErrBlockNotFound(res.Error) {
+		if IsErrBlockNotFound(res.Error) {
 			return "", bchain.ErrBlockNotFound
 		}
 		return "", errors.Annotatef(res.Error, "height %v", height)
@@ -494,7 +494,7 @@ func (b *BitcoinRPC) GetBlockHeader(hash string) (*bchain.BlockHeader, error) {
 		return nil, errors.Annotatef(err, "hash %v", hash)
 	}
 	if res.Error != nil {
-		if isErrBlockNotFound(res.Error) {
+		if IsErrBlockNotFound(res.Error) {
 			return nil, bchain.ErrBlockNotFound
 		}
 		return nil, errors.Annotatef(res.Error, "hash %v", hash)
@@ -548,7 +548,7 @@ func (b *BitcoinRPC) GetBlockInfo(hash string) (*bchain.BlockInfo, error) {
 		return nil, errors.Annotatef(err, "hash %v", hash)
 	}
 	if res.Error != nil {
-		if isErrBlockNotFound(res.Error) {
+		if IsErrBlockNotFound(res.Error) {
 			return nil, bchain.ErrBlockNotFound
 		}
 		return nil, errors.Annotatef(res.Error, "hash %v", hash)
@@ -586,7 +586,7 @@ func (b *BitcoinRPC) GetBlockRaw(hash string) ([]byte, error) {
 		return nil, errors.Annotatef(err, "hash %v", hash)
 	}
 	if res.Error != nil {
-		if isErrBlockNotFound(res.Error) {
+		if IsErrBlockNotFound(res.Error) {
 			return nil, bchain.ErrBlockNotFound
 		}
 		return nil, errors.Annotatef(res.Error, "hash %v", hash)
@@ -608,7 +608,7 @@ func (b *BitcoinRPC) GetBlockFull(hash string) (*bchain.Block, error) {
 		return nil, errors.Annotatef(err, "hash %v", hash)
 	}
 	if res.Error != nil {
-		if isErrBlockNotFound(res.Error) {
+		if IsErrBlockNotFound(res.Error) {
 			return nil, bchain.ErrBlockNotFound
 		}
 		return nil, errors.Annotatef(res.Error, "hash %v", hash)
