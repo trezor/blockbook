@@ -31,7 +31,8 @@ type PortInfoSlice []*PortInfo
 
 type Config struct {
 	Coin struct {
-		Name string `json:"name"`
+		Name  string `json:"name"`
+		Label string `json:"label"`
 	}
 	Ports map[string]uint16 `json:"ports"`
 }
@@ -154,7 +155,11 @@ func loadPortInfo(dir string) (PortInfoSlice, error) {
 			return nil, fmt.Errorf("%s: json: %s", path, err)
 		}
 
-		item := &PortInfo{CoinName: v.Coin.Name, BackendServicePorts: map[string]uint16{}}
+		name := v.Coin.Label
+		if len(name) == 0 {
+			name = v.Coin.Name
+		}
+		item := &PortInfo{CoinName: name, BackendServicePorts: map[string]uint16{}}
 		for k, v := range v.Ports {
 			if v == 0 {
 				continue
