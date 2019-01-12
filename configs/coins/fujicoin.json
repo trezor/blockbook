@@ -6,10 +6,10 @@
       "alias": "fujicoin"
   },
   "ports": {
-    "backend_rpc": 8047,
-    "backend_message_queue": 38347,
-    "blockbook_internal": 9047,
-    "blockbook_public": 9147
+    "backend_rpc": 8048,
+    "backend_message_queue": 38348,
+    "blockbook_internal": 9048,
+    "blockbook_public": 9148
   },
   "ipc": {
     "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
