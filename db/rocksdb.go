@@ -1049,9 +1049,13 @@ func (d *RocksDB) disconnectTxAddresses(wb *gorocksdb.WriteBatch, height uint32,
 				if err != nil {
 					return err
 				}
-				txAddressesToUpdate[s] = sa
+				if sa != nil {
+					txAddressesToUpdate[s] = sa
+				}
 			}
-			sa.Outputs[inputs[i].index].Spent = false
+			if sa != nil {
+				sa.Outputs[inputs[i].index].Spent = false
+			}
 		}
 	}
 	for _, t := range txa.Outputs {
