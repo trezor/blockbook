@@ -678,18 +678,21 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option GetA
 			for _, txid := range txm {
 				tx, err := w.GetTransaction(txid, false, false)
 				// mempool transaction may fail
-				if err != nil {
-					glog.Error("GetTransaction in mempool ", tx, ": ", err)
+				if err != nil || tx == nil {
+					glog.Warning("GetTransaction in mempool: ", err)
 				} else {
-					uBalSat.Add(&uBalSat, tx.getAddrVoutValue(addrDesc))
-					uBalSat.Sub(&uBalSat, tx.getAddrVinValue(addrDesc))
-					if page == 0 {
-						if option == TxidHistory {
-							txids[txi] = tx.Txid
-						} else {
-							txs[txi] = tx
+					// skip already confirmed txs, mempool may be out of sync
+					if tx.Confirmations == 0 {
+						uBalSat.Add(&uBalSat, tx.getAddrVoutValue(addrDesc))
+						uBalSat.Sub(&uBalSat, tx.getAddrVinValue(addrDesc))
+						if page == 0 {
+							if option == TxidHistory {
+								txids[txi] = tx.Txid
+							} else {
+								txs[txi] = tx
+							}
+							txi++
 						}
-						txi++
 					}
 				}
 			}

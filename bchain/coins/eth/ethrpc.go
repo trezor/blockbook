@@ -519,7 +519,7 @@ func (b *EthereumRPC) GetBlockInfo(hash string) (*bchain.BlockInfo, error) {
 // It could be optimized for mempool, i.e. without block time and confirmations
 func (b *EthereumRPC) GetTransactionForMempool(txid string) (*bchain.Tx, error) {
 	tx, err := b.GetTransaction(txid)
-	// it there is an error getting the tx or the tx is confirmed, remove it from pending transactions
+	// if there is an error getting the tx or the tx is confirmed, remove it from pending transactions
 	if err == bchain.ErrTxNotFound || (tx != nil && tx.Confirmations > 0) {
 		b.pendingTransactionsLock.Lock()
 		delete(b.pendingTransactions, txid)
