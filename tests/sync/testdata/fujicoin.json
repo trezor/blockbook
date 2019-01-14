@@ -91,7 +91,7 @@
                             },
                             {
                                 "value": 385.54800875,
-                                "n": 6
+                                "n": 6,
                                 "scriptPubKey": {
                                     "hex": "76a914d1269d2d57be5da78d2980126fd3d453fbd7fc4288ac"
                                 }
