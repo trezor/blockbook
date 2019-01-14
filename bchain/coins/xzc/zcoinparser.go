@@ -21,7 +21,7 @@ const (
 	TestnetMagic wire.BitcoinNet = 0xcffcbeea
 	RegtestMagic wire.BitcoinNet = 0xfabfb5da
 
-	ZCGenesisBlockTime     = 1414776286
+	GenesisBlockTime       = 1414776286
 	SwitchToMTPBlockHeader = 1544443200
 	MTPL                   = 64
 )
@@ -33,22 +33,23 @@ var (
 )
 
 func init() {
+	// mainnet
 	MainNetParams = chaincfg.MainNetParams
 	MainNetParams.Net = MainnetMagic
 
-	// Address encoding magics
 	MainNetParams.AddressMagicLen = 1
 	MainNetParams.PubKeyHashAddrID = []byte{0x52}
 	MainNetParams.ScriptHashAddrID = []byte{0x07}
 
+	// testnet
 	TestNetParams = chaincfg.TestNet3Params
 	TestNetParams.Net = TestnetMagic
 
-	// Address encoding magics
 	TestNetParams.AddressMagicLen = 1
 	TestNetParams.PubKeyHashAddrID = []byte{0x41}
 	TestNetParams.ScriptHashAddrID = []byte{0xb2}
 
+	// regtest
 	RegtestParams = chaincfg.RegressionNetParams
 	RegtestParams.Net = RegtestMagic
 }
@@ -56,14 +57,12 @@ func init() {
 // ZcoinParser handle
 type ZcoinParser struct {
 	*btc.BitcoinParser
-	baseparser *bchain.BaseParser
 }
 
 // NewZcoinParser returns new ZcoinParser instance
 func NewZcoinParser(params *chaincfg.Params, c *btc.Configuration) *ZcoinParser {
 	return &ZcoinParser{
 		BitcoinParser: btc.NewBitcoinParser(params, c),
-		baseparser:    &bchain.BaseParser{},
 	}
 }
 
@@ -104,89 +103,100 @@ func (p *ZcoinParser) GetAddressesFromAddrDesc(addrDesc bchain.AddressDescriptor
 
 // PackTx packs transaction to byte array using protobuf
 func (p *ZcoinParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) ([]byte, error) {
-	return p.baseparser.PackTx(tx, height, blockTime)
+	return p.BaseParser.PackTx(tx, height, blockTime)
 }
 
 // UnpackTx unpacks transaction from protobuf byte array
 func (p *ZcoinParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
-	return p.baseparser.UnpackTx(buf)
+	return p.BaseParser.UnpackTx(buf)
 }
 
 // ParseBlock parses raw block to our Block struct
 func (p *ZcoinParser) ParseBlock(b []byte) (*bchain.Block, error) {
-	buf := bytes.NewReader(b)
+	reader := bytes.NewReader(b)
 
-	blockHeader, err := parseBlockHeader(buf)
+	// parse standard block header first
+	header, err := parseBlockHeader(reader)
 	if err != nil {
 		return nil, err
 	}
 
-	var mtpBlockHeader = &MTPBlockHeader{}
-	var mtpHashData = &MTPHashData{}
-	if isMTP(blockHeader) {
-		err = binary.Read(buf, binary.LittleEndian, mtpBlockHeader)
+	// then MTP header
+	if isMTP(header) {
+		mtpHeader := MTPBlockHeader{}
+		mtpHashData := MTPHashData{}
+
+		// header
+		err = binary.Read(reader, binary.LittleEndian, &mtpHeader)
 		if err != nil {
-			fmt.Printf("y\n")
-			return nil, err
-		}
-		err = binary.Read(buf, binary.LittleEndian, mtpHashData)
-		if err != nil {
-			fmt.Printf("y\n")
 			return nil, err
 		}
 
-		// var nProofMTP [MTPL * 3]uint8
+		// hash data
+		err = binary.Read(reader, binary.LittleEndian, &mtpHashData)
+		if err != nil {
+			return nil, err
+		}
+
+		// proof
 		for i := 0; i < MTPL*3; i++ {
 			var numberProofBlocks uint8
-			err = binary.Read(buf, binary.LittleEndian, &numberProofBlocks)
+
+			err = binary.Read(reader, binary.LittleEndian, &numberProofBlocks)
 			if err != nil {
 				return nil, err
 			}
 
 			for j := uint8(0); j < numberProofBlocks; j++ {
 				var mtpData [16]uint8
-				err = binary.Read(buf, binary.LittleEndian, mtpData[:])
+
+				err = binary.Read(reader, binary.LittleEndian, mtpData[:])
 				if err != nil {
 					return nil, err
 				}
-				// discard nProofMTP: dont need it now
 			}
 		}
 	}
 
 	// parse txs
-	txCount, err := wire.ReadVarInt(buf, 0)
+	ntx, err := wire.ReadVarInt(reader, 0)
 	if err != nil {
 		return nil, err
 	}
 
-	var txs = make([]bchain.Tx, txCount)
-	for i := uint64(0); i < txCount; i++ {
+	txs := make([]bchain.Tx, ntx)
+
+	for i := uint64(0); i < ntx; i++ {
 		tx := wire.MsgTx{}
-		err := tx.BtcDecode(buf, 0, wire.WitnessEncoding)
+
+		err := tx.BtcDecode(reader, 0, wire.WitnessEncoding)
 		if err != nil {
 			return nil, err
 		}
+
 		txs[i] = p.TxFromMsgTx(&tx, false)
 	}
 
 	return &bchain.Block{
 		BlockHeader: bchain.BlockHeader{
 			Size: len(b),
-			Time: blockHeader.Timestamp.Unix(),
+			Time: header.Timestamp.Unix(),
 		},
 		Txs: txs,
 	}, nil
 }
 
-func parseBlockHeader(buf io.Reader) (*wire.BlockHeader, error) {
-	var h = &wire.BlockHeader{}
-	err := h.Deserialize(buf)
+func parseBlockHeader(r io.Reader) (*wire.BlockHeader, error) {
+	h := &wire.BlockHeader{}
+	err := h.Deserialize(r)
 	return h, err
 }
 
 func isMTP(h *wire.BlockHeader) bool {
-	return h.Timestamp.Unix() > ZCGenesisBlockTime && h.Timestamp.Unix() >= SwitchToMTPBlockHeader
+	epoch := h.Timestamp.Unix()
+
+	// the genesis block never be MTP block
+	return epoch > GenesisBlockTime && epoch >= SwitchToMTPBlockHeader
 }
 
 type MTPHashData struct {
