@@ -237,6 +237,16 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *webs
 		}
 		return
 	},
+	"getAccountUtxo": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
+		r := struct {
+			Descriptor string `json:"descriptor"`
+		}{}
+		err = json.Unmarshal(req.Params, &r)
+		if err == nil {
+			rv, err = s.getAccountUtxo(r.Descriptor)
+		}
+		return
+	},
 	"estimateFee": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
 		return s.estimateFee(c, req.Params)
 	},
@@ -338,13 +348,16 @@ func (s *WebsocketServer) getAccountInfo(req *accountInfoReq) (res *api.Address,
 	default:
 		opt = api.Basic
 	}
-
 	return s.api.GetAddress(req.Descriptor, req.Page, req.PageSize, opt, &api.AddressFilter{
 		FromHeight: uint32(req.FromHeight),
 		ToHeight:   uint32(req.ToHeight),
 		Contract:   req.ContractFilter,
 		Vout:       api.AddressFilterVoutOff,
 	})
+}
+
+func (s *WebsocketServer) getAccountUtxo(descriptor string) (interface{}, error) {
+	return s.api.GetAddressUtxo(descriptor, false)
 }
 
 func (s *WebsocketServer) getInfo() (interface{}, error) {

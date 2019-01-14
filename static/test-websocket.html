@@ -141,6 +141,17 @@
             });
         }
 
+        function getAccountUtxo() {
+            const descriptor = document.getElementById('getAccountUtxoDescriptor').value.trim();
+            const method = 'getAccountUtxo';
+            const params = {
+                descriptor,
+            };
+            send(method, params, function (result) {
+                document.getElementById('getAccountUtxoResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
+            });
+        }
+
         function estimateFee() {
             try {
                 var blocks = document.getElementById('estimateFeeBlocks').value.split(",");
@@ -300,6 +311,21 @@
         </div>
         <div class="row">
             <div class="col" id="getAccountInfoResult">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <input class="btn btn-secondary" type="button" value="getAccountUtxo" onclick="getAccountUtxo()">
+            </div>
+            <div class="col-8">
+                <div class="row" style="margin: 0;">
+                    <input type="text" placeholder="descriptor" style="width: 79%" class="form-control" id="getAccountUtxoDescriptor" value="0xba98d6a5ac827632e3457de7512d211e4ff7e8bd">
+                 </div>
+            </div>
+            <div class="col form-inline"></div>
+        </div>
+        <div class="row">
+            <div class="col" id="getAccountUtxoResult">
             </div>
         </div>
         <div class="row">

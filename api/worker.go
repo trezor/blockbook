@@ -765,6 +765,9 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option GetA
 
 // GetAddressUtxo returns unspent outputs for given address
 func (w *Worker) GetAddressUtxo(address string, onlyConfirmed bool) ([]AddressUtxo, error) {
+	if w.chainType != bchain.ChainBitcoinType {
+		return nil, NewAPIError("Not supported", true)
+	}
 	start := time.Now()
 	addrDesc, err := w.chainParser.GetAddrDescFromAddress(address)
 	if err != nil {
