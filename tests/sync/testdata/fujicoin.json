@@ -356,15 +356,15 @@
         "fakeBlocks": {
             "1010920": {
                 "height": 2372330,
-                "hash": "5fd042c8a35c77b9a0aedb3fce92d51b472d37cc339db3960cc3babe57ee722d"
+                "hash": "3a4830c63a38871c17a3a33da08f11e53466dc2cf5c502c6cda2e703a5e56b54"
             },
             "1010921": {
                 "height": 2372331,
-                "hash": "d686bbd9e30ccc88844ab71f95902dd61b9ba6e39d3e6b3ce6742da5e4ce25e3"
+                "hash": "f153627ee953415433f920da2a858230fea4e62357a9ef934faedbec947f8684"
             },
             "1010922": {
                 "height": 2372332,
-                "hash": "590ed929c0c230530b93ff63172a5c1f4da5fa4d81dbe2d045d13c9ad4118882"
+                "hash": "1cf8fbdcc498391ba17aa77273d367d33348339fd10261d45f6754b5ac2529c6"
             }
         },
         "realBlocks": {
