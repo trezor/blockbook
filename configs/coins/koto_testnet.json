@@ -1,7 +1,7 @@
 {
   "coin": {
       "name": "Koto Testnet",
-      "shortcut": "TAK",
+      "shortcut": "TOKO",
       "label": "Koto Testnet",
       "alias": "koto_testnet"
   },
@@ -9,7 +9,7 @@
     "backend_rpc": 18049,
     "backend_message_queue": 48349,
     "blockbook_internal": 19049,
-    "blockbook_public": 19164
+    "blockbook_public": 19149
   },
   "ipc": {
     "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
