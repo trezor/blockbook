@@ -19,6 +19,7 @@
 | GameCredits              | 9044                    | 9144                  | 8044             | 38344                       |
 | Groestlcoin              | 9045                    | 9145                  | 8045             | 38345                       |
 | Bitcoin Cash SV          | 9046                    | 9146                  | 8046             | 38346                       |
+| Fujicoin                 | 9048                    | 9148                  | 8048             | 38348                       |
 | Bitcoin Testnet          | 19030                   | 19130                 | 18030            | 48330                       |
 | Bitcoin Cash Testnet     | 19031                   | 19131                 | 18031            | 48331                       |
 | Zcash Testnet            | 19032                   | 19132                 | 18032            | 48332                       |
