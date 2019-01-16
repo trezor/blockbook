@@ -100,8 +100,8 @@ func (p *ZcoinParser) GetAddressesFromAddrDesc(addrDesc bchain.AddressDescriptor
 		return []string{"Zeromint"}, false, nil
 	}
 
-	if len(addrDesc) > 0 && addrDesc[0] == OpZeroCoinMint {
-		return []string{"Zeromint"}, false, nil
+	if len(addrDesc) > 0 && addrDesc[0] == OpZeroCoinSpend {
+		return []string{"Zerospend"}, false, nil
 	}
 
 	return p.OutputScriptToAddressesFunc(addrDesc)
