@@ -5,9 +5,7 @@ import (
 	"blockbook/bchain/coins/btc"
 	"bytes"
 	"encoding/binary"
-	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"io"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -16,7 +14,8 @@ import (
 )
 
 const (
-	OpZeroCoinMint = 0xc1
+	OpZeroCoinMint  = 0xc1
+	OpZeroCoinSpend = 0xc2
 
 	MainnetMagic wire.BitcoinNet = 0xe3d9fef1
 	TestnetMagic wire.BitcoinNet = 0xcffcbeea
@@ -98,7 +97,11 @@ func GetChainParams(chain string) *chaincfg.Params {
 // GetAddressesFromAddrDesc returns addresses for given address descriptor with flag if the addresses are searchable
 func (p *ZcoinParser) GetAddressesFromAddrDesc(addrDesc bchain.AddressDescriptor) ([]string, bool, error) {
 	if len(addrDesc) > 0 && addrDesc[0] == OpZeroCoinMint {
-		return []string{fmt.Sprintf("OP_ZEROCOINMINT %d %s", addrDesc[5], hex.EncodeToString(addrDesc[6:]))}, false, nil
+		return []string{"Zeromint"}, false, nil
+	}
+
+	if len(addrDesc) > 0 && addrDesc[0] == OpZeroCoinMint {
+		return []string{"Zeromint"}, false, nil
 	}
 
 	return p.OutputScriptToAddressesFunc(addrDesc)
@@ -179,7 +182,7 @@ func (p *ZcoinParser) ParseBlock(b []byte) (*bchain.Block, error) {
 
 		btx := p.TxFromMsgTx(&tx, false)
 
-		p.parseZcoinVins(&btx)
+		p.parseZcoinTx(&btx)
 
 		txs[i] = btx
 	}
@@ -211,12 +214,12 @@ func (p *ZcoinParser) ParseTxFromJson(msg json.RawMessage) (*bchain.Tx, error) {
 		vout.JsonValue = ""
 	}
 
-	p.parseZcoinVins(&tx)
+	p.parseZcoinTx(&tx)
 
 	return &tx, nil
 }
 
-func (p *ZcoinParser) parseZcoinVins(tx *bchain.Tx) error {
+func (p *ZcoinParser) parseZcoinTx(tx *bchain.Tx) error {
 	for i := range tx.Vin {
 		vin := &tx.Vin[i]
 
@@ -225,11 +228,11 @@ func (p *ZcoinParser) parseZcoinVins(tx *bchain.Tx) error {
 		if vin.Txid == SpendTxID {
 			vin.Coinbase = vin.Txid
 			vin.Txid = ""
-			vin.ScriptSig.Hex = ""
 			vin.Sequence = 0
 			vin.Vout = 0
 		}
 	}
+
 	return nil
 }
 

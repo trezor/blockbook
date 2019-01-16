@@ -377,7 +377,7 @@ func TestGetAddressesFromAddrDescForMint(t *testing.T) {
 		{
 			name:    "OP_ZEROCOINMINT size hex",
 			args:    args{script: "c10280004c80f767f3ee79953c67a7ed386dcccf1243619eb4bbbe414a3982dd94a83c1b69ac52d6ab3b653a3e05c4e4516c8dfe1e58ada40461bc5835a4a0d0387a51c29ac11b72ae25bbcdef745f50ad08f08b3e9bc2c31a35444398a490e65ac090e9f341f1abdebe47e57e8237ac25d098e951b4164a35caea29f30acb50b12e4425df28"},
-			want:    []string{"OP_ZEROCOINMINT 128 f767f3ee79953c67a7ed386dcccf1243619eb4bbbe414a3982dd94a83c1b69ac52d6ab3b653a3e05c4e4516c8dfe1e58ada40461bc5835a4a0d0387a51c29ac11b72ae25bbcdef745f50ad08f08b3e9bc2c31a35444398a490e65ac090e9f341f1abdebe47e57e8237ac25d098e951b4164a35caea29f30acb50b12e4425df28"},
+			want:    []string{"Zeromint"},
 			want2:   false,
 			wantErr: false,
 		},
