@@ -282,10 +282,10 @@
             "2372314": {
                 "height": 2372314,
                 "hash": "bbabd94fcd915d7ba7f8925b80b29f05e0021edf5ae66bbd639fc81a6ce91135",
-                "noTxs": 4,
+                "noTxs": 3,
                 "txDetails": [
                     {
-                        "txid": "87771b0e84b9b3d3120593ad1725fcbc5b17ac6744f1cfbddb717144df89d67e",
+                        "txid": "fc4524f96c31505468973b99f67e3aabcebb7a62f7aeb91b1e9ebff02f1df980",
                         "version": 2,
                         "vin": [
                             {
