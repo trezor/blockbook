@@ -9,6 +9,7 @@ import (
 	"blockbook/bchain/coins/digibyte"
 	"blockbook/bchain/coins/dogecoin"
 	"blockbook/bchain/coins/eth"
+	"blockbook/bchain/coins/fujicoin"
 	"blockbook/bchain/coins/gamecredits"
 	"blockbook/bchain/coins/grs"
 	"blockbook/bchain/coins/liquid"
@@ -63,6 +64,7 @@ func init() {
 	BlockChainFactories["Groestlcoin"] = grs.NewGroestlcoinRPC
 	BlockChainFactories["Groestlcoin Testnet"] = grs.NewGroestlcoinRPC
 	BlockChainFactories["PIVX"] = pivx.NewPivXRPC
+	BlockChainFactories["Fujicoin"] = fujicoin.NewFujicoinRPC
 }
 
 // GetCoinNameFromConfig gets coin name and coin shortcut from config file
