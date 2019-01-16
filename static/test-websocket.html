@@ -152,6 +152,17 @@
             });
         }
 
+        function getTransaction() {
+            const txid = document.getElementById('getTransactionTxid').value.trim();
+            const method = 'getTransaction';
+            const params = {
+                txid,
+            };
+            send(method, params, function (result) {
+                document.getElementById('getTransactionResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
+            });
+        }
+
         function estimateFee() {
             try {
                 var blocks = document.getElementById('estimateFeeBlocks').value.split(",");
@@ -292,7 +303,7 @@
             </div>
             <div class="col-8">
                 <div class="row" style="margin: 0;">
-                    <input type="text" style="width: 79%" class="form-control" id="getAccountInfoDescriptor" value="0xba98d6a5ac827632e3457de7512d211e4ff7e8bd">
+                    <input type="text" placeholder="descriptor" style="width: 79%" class="form-control" id="getAccountInfoDescriptor" value="0xba98d6a5ac827632e3457de7512d211e4ff7e8bd">
                     <select id="getAccountInfoDetails" style="width: 20%; margin-left: 5px;">
                         <option value="basic">Basic</option>
                         <option value="balance">Balance</option>
@@ -319,13 +330,28 @@
             </div>
             <div class="col-8">
                 <div class="row" style="margin: 0;">
-                    <input type="text" placeholder="descriptor" style="width: 79%" class="form-control" id="getAccountUtxoDescriptor" value="0xba98d6a5ac827632e3457de7512d211e4ff7e8bd">
+                    <input type="text" placeholder="descriptor" class="form-control" id="getAccountUtxoDescriptor" value="0xba98d6a5ac827632e3457de7512d211e4ff7e8bd">
                  </div>
             </div>
             <div class="col form-inline"></div>
         </div>
         <div class="row">
             <div class="col" id="getAccountUtxoResult">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <input class="btn btn-secondary" type="button" value="getTransaction" onclick="getTransaction()">
+            </div>
+            <div class="col-8">
+                <div class="row" style="margin: 0;">
+                    <input type="text" placeholder="txid" class="form-control" id="getTransactionTxid" value="0xb266c89f9bfefa4aa2fca4e65b7d6c918d5407f464be781c2803f3546d34a574">
+                 </div>
+            </div>
+            <div class="col form-inline"></div>
+        </div>
+        <div class="row">
+            <div class="col" id="getTransactionResult">
             </div>
         </div>
         <div class="row">

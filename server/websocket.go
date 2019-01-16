@@ -247,6 +247,16 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *webs
 		}
 		return
 	},
+	"getTransaction": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
+		r := struct {
+			Txid string `json:"txid"`
+		}{}
+		err = json.Unmarshal(req.Params, &r)
+		if err == nil {
+			rv, err = s.getTransaction(r.Txid)
+		}
+		return
+	},
 	"estimateFee": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
 		return s.estimateFee(c, req.Params)
 	},
@@ -358,6 +368,10 @@ func (s *WebsocketServer) getAccountInfo(req *accountInfoReq) (res *api.Address,
 
 func (s *WebsocketServer) getAccountUtxo(descriptor string) (interface{}, error) {
 	return s.api.GetAddressUtxo(descriptor, false)
+}
+
+func (s *WebsocketServer) getTransaction(txid string) (interface{}, error) {
+	return s.api.GetTransaction(txid, false, false)
 }
 
 func (s *WebsocketServer) getInfo() (interface{}, error) {
