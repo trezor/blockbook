@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 
@@ -24,6 +25,8 @@ const (
 	GenesisBlockTime       = 1414776286
 	SwitchToMTPBlockHeader = 1544443200
 	MTPL                   = 64
+
+	SpendTxID = "0000000000000000000000000000000000000000000000000000000000000000"
 )
 
 var (
@@ -174,7 +177,11 @@ func (p *ZcoinParser) ParseBlock(b []byte) (*bchain.Block, error) {
 			return nil, err
 		}
 
-		txs[i] = p.TxFromMsgTx(&tx, false)
+		btx := p.TxFromMsgTx(&tx, false)
+
+		p.parseZcoinVins(&btx)
+
+		txs[i] = btx
 	}
 
 	return &bchain.Block{
@@ -184,6 +191,46 @@ func (p *ZcoinParser) ParseBlock(b []byte) (*bchain.Block, error) {
 		},
 		Txs: txs,
 	}, nil
+}
+
+// ParseTxFromJson parses JSON message containing transaction and returns Tx struct
+func (p *ZcoinParser) ParseTxFromJson(msg json.RawMessage) (*bchain.Tx, error) {
+	var tx bchain.Tx
+	err := json.Unmarshal(msg, &tx)
+	if err != nil {
+		return nil, err
+	}
+
+	for i := range tx.Vout {
+		vout := &tx.Vout[i]
+		// convert vout.JsonValue to big.Int and clear it, it is only temporary value used for unmarshal
+		vout.ValueSat, err = p.AmountToBigInt(vout.JsonValue)
+		if err != nil {
+			return nil, err
+		}
+		vout.JsonValue = ""
+	}
+
+	p.parseZcoinVins(&tx)
+
+	return &tx, nil
+}
+
+func (p *ZcoinParser) parseZcoinVins(tx *bchain.Tx) error {
+	for i := range tx.Vin {
+		vin := &tx.Vin[i]
+
+		// FIXME: right now we treat zerocoin spend vin as coinbase
+		// change this after blockbook support special type of vin
+		if vin.Txid == SpendTxID {
+			vin.Coinbase = vin.Txid
+			vin.Txid = ""
+			vin.ScriptSig.Hex = ""
+			vin.Sequence = 0
+			vin.Vout = 0
+		}
+	}
+	return nil
 }
 
 func parseBlockHeader(r io.Reader) (*wire.BlockHeader, error) {
