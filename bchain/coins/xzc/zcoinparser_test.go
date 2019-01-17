@@ -3,8 +3,6 @@
 package xzc
 
 import (
-	"blockbook/bchain"
-	"blockbook/bchain/coins/btc"
 	"bytes"
 	"encoding/hex"
 	"encoding/json"
@@ -15,7 +13,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jakm/btcutil/chaincfg"
+	"blockbook/bchain"
+	"blockbook/bchain/coins/btc"
+	"github.com/martinboehm/btcutil/chaincfg"
 )
 
 var (

@@ -5,7 +5,6 @@ import (
 	"blockbook/bchain/coins/btc"
 	"encoding/hex"
 	"encoding/json"
-	"math/big"
 
 	"github.com/golang/glog"
 	"github.com/juju/errors"
@@ -16,11 +15,13 @@ type ZcoinRPC struct {
 }
 
 func NewZcoinRPC(config json.RawMessage, pushHandler func(bchain.NotificationType)) (bchain.BlockChain, error) {
+	// init base implementation
 	bc, err := btc.NewBitcoinRPC(config, pushHandler)
 	if err != nil {
 		return nil, err
 	}
 
+	// init zcoin implementation
 	zc := &ZcoinRPC{
 		BitcoinRPC: bc.(*btc.BitcoinRPC),
 	}
@@ -59,6 +60,41 @@ func (zc *ZcoinRPC) Initialize() error {
 	return nil
 }
 
+func (zc *ZcoinRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
+	var err error
+
+	if hash == "" {
+		hash, err = zc.GetBlockHash(height)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// optimization
+	if height > 0 {
+		return zc.GetBlockWithoutHeader(hash, height)
+	}
+
+	header, err := zc.GetBlockHeader(hash)
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := zc.GetBlockRaw(hash)
+	if err != nil {
+		return nil, err
+	}
+
+	block, err := zc.Parser.ParseBlock(data)
+	if err != nil {
+		return nil, errors.Annotatef(err, "hash %v", hash)
+	}
+
+	block.BlockHeader = *header
+
+	return block, nil
+}
+
 func (zc *ZcoinRPC) GetBlockInfo(hash string) (*bchain.BlockInfo, error) {
 	glog.V(1).Info("rpc: getblock (verbosity=true) ", hash)
 
@@ -78,6 +114,23 @@ func (zc *ZcoinRPC) GetBlockInfo(hash string) (*bchain.BlockInfo, error) {
 		return nil, errors.Annotatef(res.Error, "hash %v", hash)
 	}
 	return &res.Result, nil
+}
+
+func (zc *ZcoinRPC) GetBlockWithoutHeader(hash string, height uint32) (*bchain.Block, error) {
+	data, err := zc.GetBlockRaw(hash)
+	if err != nil {
+		return nil, err
+	}
+
+	block, err := zc.Parser.ParseBlock(data)
+	if err != nil {
+		return nil, errors.Annotatef(err, "%v %v", height, hash)
+	}
+
+	block.BlockHeader.Hash = hash
+	block.BlockHeader.Height = height
+
+	return block, nil
 }
 
 func (zc *ZcoinRPC) GetBlockRaw(hash string) ([]byte, error) {
@@ -113,6 +166,9 @@ func (zc *ZcoinRPC) GetTransactionForMempool(txid string) (*bchain.Tx, error) {
 		return nil, errors.Annotatef(err, "txid %v", txid)
 	}
 	if res.Error != nil {
+		if btc.IsMissingTx(res.Error) {
+			return nil, bchain.ErrTxNotFound
+		}
 		return nil, errors.Annotatef(res.Error, "txid %v", txid)
 	}
 	data, err := hex.DecodeString(res.Result)
@@ -126,7 +182,29 @@ func (zc *ZcoinRPC) GetTransactionForMempool(txid string) (*bchain.Tx, error) {
 	return tx, nil
 }
 
-func (zc *ZcoinRPC) GetTransactionSpecific(txid string) (json.RawMessage, error) {
+func (zc *ZcoinRPC) GetTransaction(txid string) (*bchain.Tx, error) {
+	r, err := zc.getRawTransaction(txid)
+	if err != nil {
+		return nil, err
+	}
+
+	tx, err := zc.Parser.ParseTxFromJson(r)
+	tx.CoinSpecificData = r
+	if err != nil {
+		return nil, errors.Annotatef(err, "txid %v", txid)
+	}
+
+	return tx, nil
+}
+
+func (zc *ZcoinRPC) GetTransactionSpecific(tx *bchain.Tx) (json.RawMessage, error) {
+	if csd, ok := tx.CoinSpecificData.(json.RawMessage); ok {
+		return csd, nil
+	}
+	return zc.getRawTransaction(tx.Txid)
+}
+
+func (zc *ZcoinRPC) getRawTransaction(txid string) (json.RawMessage, error) {
 	glog.V(1).Info("rpc: getrawtransaction ", txid)
 
 	res := btc.ResGetRawTransaction{}
@@ -139,38 +217,12 @@ func (zc *ZcoinRPC) GetTransactionSpecific(txid string) (json.RawMessage, error)
 		return nil, errors.Annotatef(err, "txid %v", txid)
 	}
 	if res.Error != nil {
+		if btc.IsMissingTx(res.Error) {
+			return nil, bchain.ErrTxNotFound
+		}
 		return nil, errors.Annotatef(res.Error, "txid %v", txid)
 	}
 	return res.Result, nil
-}
-
-func (zc *ZcoinRPC) EstimateFee(blocks int) (big.Int, error) {
-	glog.V(1).Info("rpc: estimatefee ", blocks)
-
-	res := btc.ResEstimateFee{}
-	req := btc.CmdEstimateFee{Method: "estimatefee"}
-	req.Params.Blocks = blocks
-	err := zc.Call(&req, &res)
-
-	var r big.Int
-	if err != nil {
-		return r, err
-	}
-	if res.Error != nil {
-		return r, res.Error
-	}
-
-	// -1 mean zero fee
-	if res.Result == "-1" {
-		return r, nil
-	}
-
-	r, err = zc.Parser.AmountToBigInt(res.Result)
-	if err != nil {
-		return r, err
-	}
-
-	return r, nil
 }
 
 type cmdGetBlock struct {

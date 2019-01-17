@@ -633,7 +633,7 @@ func (b *BitcoinRPC) GetMempool() ([]string, error) {
 	return res.Result, nil
 }
 
-func isMissingTx(err *bchain.RPCError) bool {
+func IsMissingTx(err *bchain.RPCError) bool {
 	if err.Code == -5 { // "No such mempool or blockchain transaction"
 		return true
 	}
@@ -654,7 +654,7 @@ func (b *BitcoinRPC) GetTransactionForMempool(txid string) (*bchain.Tx, error) {
 		return nil, errors.Annotatef(err, "txid %v", txid)
 	}
 	if res.Error != nil {
-		if isMissingTx(res.Error) {
+		if IsMissingTx(res.Error) {
 			return nil, bchain.ErrTxNotFound
 		}
 		return nil, errors.Annotatef(res.Error, "txid %v", txid)
@@ -706,7 +706,7 @@ func (b *BitcoinRPC) getRawTransaction(txid string) (json.RawMessage, error) {
 		return nil, errors.Annotatef(err, "txid %v", txid)
 	}
 	if res.Error != nil {
-		if isMissingTx(res.Error) {
+		if IsMissingTx(res.Error) {
 			return nil, bchain.ErrTxNotFound
 		}
 		return nil, errors.Annotatef(res.Error, "txid %v", txid)
