@@ -19,6 +19,7 @@ import (
 	"blockbook/bchain/coins/namecoin"
 	"blockbook/bchain/coins/pivx"
 	"blockbook/bchain/coins/vertcoin"
+	"blockbook/bchain/coins/xzc"
 	"blockbook/bchain/coins/zec"
 	"blockbook/common"
 	"context"
@@ -64,6 +65,7 @@ func init() {
 	BlockChainFactories["Groestlcoin"] = grs.NewGroestlcoinRPC
 	BlockChainFactories["Groestlcoin Testnet"] = grs.NewGroestlcoinRPC
 	BlockChainFactories["PIVX"] = pivx.NewPivXRPC
+	BlockChainFactories["Zcoin"] = xzc.NewZcoinRPC
 	BlockChainFactories["Fujicoin"] = fujicoin.NewFujicoinRPC
 }
 
