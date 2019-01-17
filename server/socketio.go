@@ -15,7 +15,7 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/juju/errors"
-	"github.com/martinboehm/golang-socketio"
+	gosocketio "github.com/martinboehm/golang-socketio"
 	"github.com/martinboehm/golang-socketio/transport"
 )
 
@@ -312,7 +312,7 @@ func txToResTx(tx *api.Tx) resTx {
 			Script:      &script,
 			Sequence:    int64(vin.Sequence),
 			OutputIndex: int(vin.Vout),
-			Satoshis:    (*big.Int)(vin.ValueSat).Int64(),
+			Satoshis:    vin.ValueSat.AsInt64(),
 		}
 		if len(vin.Addresses) > 0 {
 			a := vin.Addresses[0]
@@ -325,7 +325,7 @@ func txToResTx(tx *api.Tx) resTx {
 		vout := &tx.Vout[i]
 		script := vout.Hex
 		output := txOutputs{
-			Satoshis: (*big.Int)(vout.ValueSat).Int64(),
+			Satoshis: vout.ValueSat.AsInt64(),
 			Script:   &script,
 		}
 		if len(vout.Addresses) > 0 {
@@ -342,15 +342,15 @@ func txToResTx(tx *api.Tx) resTx {
 	}
 	return resTx{
 		BlockTimestamp: tx.Blocktime,
-		FeeSatoshis:    (*big.Int)(tx.FeesSat).Int64(),
+		FeeSatoshis:    tx.FeesSat.AsInt64(),
 		Hash:           tx.Txid,
 		Height:         h,
 		Hex:            tx.Hex,
 		Inputs:         inputs,
-		InputSatoshis:  (*big.Int)(tx.ValueInSat).Int64(),
+		InputSatoshis:  tx.ValueInSat.AsInt64(),
 		Locktime:       int(tx.Locktime),
 		Outputs:        outputs,
-		OutputSatoshis: (*big.Int)(tx.ValueOutSat).Int64(),
+		OutputSatoshis: tx.ValueOutSat.AsInt64(),
 		Version:        int(tx.Version),
 	}
 }
@@ -407,7 +407,9 @@ func (s *SocketIoServer) getAddressHistory(addr []string, opts *addrOpts) (res r
 					ads[a] = hi
 				}
 				hi.InputIndexes = append(hi.InputIndexes, int(vin.N))
-				totalSat.Sub(&totalSat, (*big.Int)(vin.ValueSat))
+				if vin.ValueSat != nil {
+					totalSat.Sub(&totalSat, (*big.Int)(vin.ValueSat))
+				}
 			}
 		}
 		for i := range tx.Vout {
@@ -420,7 +422,9 @@ func (s *SocketIoServer) getAddressHistory(addr []string, opts *addrOpts) (res r
 					ads[a] = hi
 				}
 				hi.OutputIndexes = append(hi.OutputIndexes, int(vout.N))
-				totalSat.Add(&totalSat, (*big.Int)(vout.ValueSat))
+				if vout.ValueSat != nil {
+					totalSat.Add(&totalSat, (*big.Int)(vout.ValueSat))
+				}
 			}
 		}
 		ahi := addressHistoryItem{}

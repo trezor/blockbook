@@ -76,6 +76,16 @@ func (a *Amount) AsBigInt() big.Int {
 	return big.Int(*a)
 }
 
+// AsInt64 returns Amount as int64 (0 if Amount is nil).
+// It is used only for legacy interfaces (socket.io)
+// and generally not recommended to use for possible loss of precision.
+func (a *Amount) AsInt64() int64 {
+	if a == nil {
+		return 0
+	}
+	return (*big.Int)(a).Int64()
+}
+
 // Vin contains information about single transaction input
 type Vin struct {
 	Txid       string                   `json:"txid,omitempty"`

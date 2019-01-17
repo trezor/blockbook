@@ -191,7 +191,9 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height uint32, 
 						}
 					}
 				}
-				valInSat.Add(&valInSat, (*big.Int)(vin.ValueSat))
+				if vin.ValueSat != nil {
+					valInSat.Add(&valInSat, (*big.Int)(vin.ValueSat))
+				}
 			}
 		} else if w.chainType == bchain.ChainEthereumType {
 			if len(bchainVin.Addresses) > 0 {
