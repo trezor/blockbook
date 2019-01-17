@@ -154,7 +154,7 @@ func (w *Worker) TxToV1(tx *Tx) *TxV1 {
 		Hex:           tx.Hex,
 		Locktime:      tx.Locktime,
 		Size:          tx.Size,
-		Time:          tx.Time,
+		Time:          tx.Blocktime,
 		Txid:          tx.Txid,
 		ValueIn:       tx.ValueInSat.DecimalString(d),
 		ValueInSat:    tx.ValueInSat.AsBigInt(),

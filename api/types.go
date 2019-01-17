@@ -93,11 +93,12 @@ type Vin struct {
 	Sequence   int64                    `json:"sequence,omitempty"`
 	N          int                      `json:"n"`
 	AddrDesc   bchain.AddressDescriptor `json:"-"`
-	Addresses  []string                 `json:"addresses"`
+	Addresses  []string                 `json:"addresses,omitempty"`
 	Searchable bool                     `json:"-"`
 	ValueSat   *Amount                  `json:"value,omitempty"`
 	Hex        string                   `json:"hex,omitempty"`
 	Asm        string                   `json:"asm,omitempty"`
+	Coinbase   string                   `json:"coinbase,omitempty"`
 }
 
 // Vout contains information about single transaction output
@@ -165,7 +166,6 @@ type Tx struct {
 	Blockhash        string            `json:"blockhash,omitempty"`
 	Blockheight      int               `json:"blockheight"`
 	Confirmations    uint32            `json:"confirmations"`
-	Time             int64             `json:"time,omitempty"`
 	Blocktime        int64             `json:"blocktime"`
 	Size             int               `json:"size,omitempty"`
 	ValueOutSat      *Amount           `json:"value"`
@@ -205,7 +205,7 @@ type AddressFilter struct {
 // Address holds information about address and its transactions
 type Address struct {
 	Paging
-	AddrStr               string                `json:"addrStr"`
+	AddrStr               string                `json:"address"`
 	BalanceSat            *Amount               `json:"balance"`
 	TotalReceivedSat      *Amount               `json:"totalReceived,omitempty"`
 	TotalSentSat          *Amount               `json:"totalSent,omitempty"`

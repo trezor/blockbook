@@ -145,6 +145,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height uint32, 
 		vin.Vout = bchainVin.Vout
 		vin.Sequence = int64(bchainVin.Sequence)
 		vin.Hex = bchainVin.ScriptSig.Hex
+		vin.Coinbase = bchainVin.Coinbase
 		if w.chainType == bchain.ChainBitcoinType {
 			//  bchainVin.Txid=="" is coinbase transaction
 			if bchainVin.Txid != "" {
@@ -298,7 +299,6 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height uint32, 
 		Confirmations:    bchainTx.Confirmations,
 		FeesSat:          (*Amount)(&feesSat),
 		Locktime:         bchainTx.LockTime,
-		Time:             bchainTx.Time,
 		Txid:             bchainTx.Txid,
 		ValueInSat:       (*Amount)(pValInSat),
 		ValueOutSat:      (*Amount)(&valOutSat),
@@ -449,7 +449,6 @@ func (w *Worker) txFromTxAddress(txid string, ta *db.TxAddresses, bi *db.BlockIn
 		Blocktime:     bi.Time,
 		Confirmations: bestheight - ta.Height + 1,
 		FeesSat:       (*Amount)(&feesSat),
-		Time:          bi.Time,
 		Txid:          txid,
 		ValueInSat:    (*Amount)(&valInSat),
 		ValueOutSat:   (*Amount)(&valOutSat),
