@@ -6,10 +6,10 @@
       "alias": "koto_testnet"
   },
   "ports": {
-    "backend_rpc": 18049,
-    "backend_message_queue": 48349,
-    "blockbook_internal": 19049,
-    "blockbook_public": 19149
+    "backend_rpc": 18051,
+    "backend_message_queue": 48351,
+    "blockbook_internal": 19051,
+    "blockbook_public": 19151
   },
   "ipc": {
     "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
