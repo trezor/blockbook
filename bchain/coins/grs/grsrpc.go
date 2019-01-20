@@ -79,7 +79,7 @@ func (g *GroestlcoinRPC) GetBlock(hash string, height uint32) (*bchain.Block, er
 	for _, txid := range res.Result.Txids {
 		tx, err := g.GetTransaction(txid)
 		if err != nil {
-			if isInvalidTx(err) {
+			if err == bchain.ErrTxNotFound {
 				glog.Errorf("rpc: getblock: skipping transanction in block %s due error: %s", hash, err)
 				continue
 			}
@@ -92,20 +92,6 @@ func (g *GroestlcoinRPC) GetBlock(hash string, height uint32) (*bchain.Block, er
 		Txs:         txs,
 	}
 	return block, nil
-}
-
-func isInvalidTx(err error) bool {
-	switch e1 := err.(type) {
-	case *errors.Err:
-		switch e2 := e1.Cause().(type) {
-		case *bchain.RPCError:
-			if e2.Code == -5 { // "No information available about transaction"
-				return true
-			}
-		}
-	}
-
-	return false
 }
 
 // GetTransactionForMempool returns a transaction by the transaction ID.
