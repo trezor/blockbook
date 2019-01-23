@@ -177,14 +177,14 @@ func testGetTransaction(t *testing.T, h *TestHandler) {
 func testGetTransactionForMempool(t *testing.T, h *TestHandler) {
 	for txid, want := range h.TestData.TxDetails {
 		// reset fields that are not parsed by BlockChainParser
-		want.Confirmations, want.Blocktime, want.Time = 0, 0, 0
+		want.Confirmations, want.Blocktime, want.Time, want.CoinSpecificData = 0, 0, 0, nil
 
 		got, err := h.Chain.GetTransactionForMempool(txid)
 		if err != nil {
 			t.Fatal(err)
 		}
 		// transactions parsed from JSON may contain additional data
-		got.Confirmations, got.Blocktime, got.Time = 0, 0, 0
+		got.Confirmations, got.Blocktime, got.Time, got.CoinSpecificData = 0, 0, 0, nil
 		if !reflect.DeepEqual(got, want) {
 			t.Errorf("GetTransactionForMempool() got %+v, want %+v", got, want)
 		}
