@@ -29,8 +29,7 @@ func init() {
 		Time:      1525189571,
 		Txid:      "97f944e3558cc784f4013b3753ce9570fe4707893eda724b12eb4c69686113a6",
 		LockTime:  0,
-		Vin: []bchain.Vin{
-		},
+		Vin:       []bchain.Vin{},
 		Vout: []bchain.Vout{
 			{
 				ValueSat: *big.NewInt(9800018691),

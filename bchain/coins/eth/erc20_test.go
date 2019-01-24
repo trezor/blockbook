@@ -21,7 +21,7 @@ func TestErc20_erc20GetTransfersFromLog(t *testing.T) {
 		{
 			name: "1",
 			args: []*rpcLog{
-				&rpcLog{
+				{
 					Address: "0x76a45e8976499ab9ae223cc584019341d5a84e96",
 					Topics: []string{
 						"0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
@@ -43,7 +43,7 @@ func TestErc20_erc20GetTransfersFromLog(t *testing.T) {
 		{
 			name: "2",
 			args: []*rpcLog{
-				&rpcLog{ // Transfer
+				{ // Transfer
 					Address: "0x0d0f936ee4c93e25944694d6c121de94d9760f11",
 					Topics: []string{
 						"0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
@@ -52,7 +52,7 @@ func TestErc20_erc20GetTransfersFromLog(t *testing.T) {
 					},
 					Data: "0x0000000000000000000000000000000000000000000000006a8313d60b1f606b",
 				},
-				&rpcLog{ // Transfer
+				{ // Transfer
 					Address: "0xc778417e063141139fce010982780140aa0cd5ab",
 					Topics: []string{
 						"0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
@@ -61,7 +61,7 @@ func TestErc20_erc20GetTransfersFromLog(t *testing.T) {
 					},
 					Data: "0x000000000000000000000000000000000000000000000000000308fd0e798ac0",
 				},
-				&rpcLog{ // not Transfer
+				{ // not Transfer
 					Address: "0x479cc461fecd078f766ecc58533d6f69580cf3ac",
 					Topics: []string{
 						"0x0d0b9391970d9a25552f37d436d2aae2925e2bfe1b2a923754bada030c498cb3",
@@ -71,7 +71,7 @@ func TestErc20_erc20GetTransfersFromLog(t *testing.T) {
 					},
 					Data: "0x0000000000000000000000004bda106325c335df99eab7fe363cac8a0ba2a24d0000000000000",
 				},
-				&rpcLog{ // not Transfer
+				{ // not Transfer
 					Address: "0x0d0f936ee4c93e25944694d6c121de94d9760f11",
 					Topics: []string{
 						"0x0d0b9391970d9a25552f37d436d2aae2925e2bfe1b2a923754bada030c498cb3",

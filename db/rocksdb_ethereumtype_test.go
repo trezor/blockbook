@@ -22,7 +22,7 @@ func ethereumTestnetParser() *eth.EthereumParser {
 
 func verifyAfterEthereumTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect bool) {
 	if err := checkColumn(d, cfHeight, []keyPair{
-		keyPair{
+		{
 			"0041eee8",
 			"c7b98df95acfd11c51ba25611a39e004fe56c8fdfc1582af99354fcd09c17b11" + uintToHex(1534858022) + varuintToHex(2) + varuintToHex(31839),
 			nil,
@@ -33,10 +33,10 @@ func verifyAfterEthereumTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect boo
 		}
 	}
 	if err := checkColumn(d, cfAddresses, []keyPair{
-		keyPair{addressKeyHex(dbtestdata.EthAddr3e, 4321000, d), txIndexesHex(dbtestdata.EthTxidB1T1, []int32{^0}), nil},
-		keyPair{addressKeyHex(dbtestdata.EthAddr55, 4321000, d), txIndexesHex(dbtestdata.EthTxidB1T2, []int32{1}) + txIndexesHex(dbtestdata.EthTxidB1T1, []int32{0}), nil},
-		keyPair{addressKeyHex(dbtestdata.EthAddr20, 4321000, d), txIndexesHex(dbtestdata.EthTxidB1T2, []int32{^0, ^1}), nil},
-		keyPair{addressKeyHex(dbtestdata.EthAddrContract4a, 4321000, d), txIndexesHex(dbtestdata.EthTxidB1T2, []int32{0}), nil},
+		{addressKeyHex(dbtestdata.EthAddr3e, 4321000, d), txIndexesHex(dbtestdata.EthTxidB1T1, []int32{^0}), nil},
+		{addressKeyHex(dbtestdata.EthAddr55, 4321000, d), txIndexesHex(dbtestdata.EthTxidB1T2, []int32{1}) + txIndexesHex(dbtestdata.EthTxidB1T1, []int32{0}), nil},
+		{addressKeyHex(dbtestdata.EthAddr20, 4321000, d), txIndexesHex(dbtestdata.EthTxidB1T2, []int32{^0, ^1}), nil},
+		{addressKeyHex(dbtestdata.EthAddrContract4a, 4321000, d), txIndexesHex(dbtestdata.EthTxidB1T2, []int32{0}), nil},
 	}); err != nil {
 		{
 			t.Fatal(err)
@@ -44,10 +44,10 @@ func verifyAfterEthereumTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect boo
 	}
 
 	if err := checkColumn(d, cfAddressContracts, []keyPair{
-		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr3e, d.chainParser), "0101", nil},
-		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr55, d.chainParser), "0201" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser) + "01", nil},
-		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr20, d.chainParser), "0101" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser) + "01", nil},
-		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser), "0101", nil},
+		{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr3e, d.chainParser), "0101", nil},
+		{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr55, d.chainParser), "0201" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser) + "01", nil},
+		{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr20, d.chainParser), "0101" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser) + "01", nil},
+		{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser), "0101", nil},
 	}); err != nil {
 		{
 			t.Fatal(err)
@@ -59,7 +59,7 @@ func verifyAfterEthereumTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect boo
 		blockTxsKp = []keyPair{}
 	} else {
 		blockTxsKp = []keyPair{
-			keyPair{
+			{
 				"0041eee8",
 				dbtestdata.EthTxidB1T1 +
 					dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr3e, d.chainParser) + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr55, d.chainParser) + "00" +
@@ -81,12 +81,12 @@ func verifyAfterEthereumTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect boo
 
 func verifyAfterEthereumTypeBlock2(t *testing.T, d *RocksDB) {
 	if err := checkColumn(d, cfHeight, []keyPair{
-		keyPair{
+		{
 			"0041eee8",
 			"c7b98df95acfd11c51ba25611a39e004fe56c8fdfc1582af99354fcd09c17b11" + uintToHex(1534858022) + varuintToHex(2) + varuintToHex(31839),
 			nil,
 		},
-		keyPair{
+		{
 			"0041eee9",
 			"2b57e15e93a0ed197417a34c2498b7187df79099572c04a6b6e6ff418f74e6ee" + uintToHex(1534859988) + varuintToHex(2) + varuintToHex(2345678),
 			nil,
@@ -97,15 +97,15 @@ func verifyAfterEthereumTypeBlock2(t *testing.T, d *RocksDB) {
 		}
 	}
 	if err := checkColumn(d, cfAddresses, []keyPair{
-		keyPair{addressKeyHex(dbtestdata.EthAddr3e, 4321000, d), txIndexesHex(dbtestdata.EthTxidB1T1, []int32{^0}), nil},
-		keyPair{addressKeyHex(dbtestdata.EthAddr55, 4321000, d), txIndexesHex(dbtestdata.EthTxidB1T2, []int32{1}) + txIndexesHex(dbtestdata.EthTxidB1T1, []int32{0}), nil},
-		keyPair{addressKeyHex(dbtestdata.EthAddr20, 4321000, d), txIndexesHex(dbtestdata.EthTxidB1T2, []int32{^0, ^1}), nil},
-		keyPair{addressKeyHex(dbtestdata.EthAddrContract4a, 4321000, d), txIndexesHex(dbtestdata.EthTxidB1T2, []int32{0}), nil},
-		keyPair{addressKeyHex(dbtestdata.EthAddr55, 4321001, d), txIndexesHex(dbtestdata.EthTxidB2T2, []int32{^2, 1}) + txIndexesHex(dbtestdata.EthTxidB2T1, []int32{^0}), nil},
-		keyPair{addressKeyHex(dbtestdata.EthAddr9f, 4321001, d), txIndexesHex(dbtestdata.EthTxidB2T1, []int32{0}), nil},
-		keyPair{addressKeyHex(dbtestdata.EthAddr4b, 4321001, d), txIndexesHex(dbtestdata.EthTxidB2T2, []int32{^0, 1, ^2, 2, ^1}), nil},
-		keyPair{addressKeyHex(dbtestdata.EthAddr7b, 4321001, d), txIndexesHex(dbtestdata.EthTxidB2T2, []int32{^1, 2}), nil},
-		keyPair{addressKeyHex(dbtestdata.EthAddrContract47, 4321001, d), txIndexesHex(dbtestdata.EthTxidB2T2, []int32{0}), nil},
+		{addressKeyHex(dbtestdata.EthAddr3e, 4321000, d), txIndexesHex(dbtestdata.EthTxidB1T1, []int32{^0}), nil},
+		{addressKeyHex(dbtestdata.EthAddr55, 4321000, d), txIndexesHex(dbtestdata.EthTxidB1T2, []int32{1}) + txIndexesHex(dbtestdata.EthTxidB1T1, []int32{0}), nil},
+		{addressKeyHex(dbtestdata.EthAddr20, 4321000, d), txIndexesHex(dbtestdata.EthTxidB1T2, []int32{^0, ^1}), nil},
+		{addressKeyHex(dbtestdata.EthAddrContract4a, 4321000, d), txIndexesHex(dbtestdata.EthTxidB1T2, []int32{0}), nil},
+		{addressKeyHex(dbtestdata.EthAddr55, 4321001, d), txIndexesHex(dbtestdata.EthTxidB2T2, []int32{^2, 1}) + txIndexesHex(dbtestdata.EthTxidB2T1, []int32{^0}), nil},
+		{addressKeyHex(dbtestdata.EthAddr9f, 4321001, d), txIndexesHex(dbtestdata.EthTxidB2T1, []int32{0}), nil},
+		{addressKeyHex(dbtestdata.EthAddr4b, 4321001, d), txIndexesHex(dbtestdata.EthTxidB2T2, []int32{^0, 1, ^2, 2, ^1}), nil},
+		{addressKeyHex(dbtestdata.EthAddr7b, 4321001, d), txIndexesHex(dbtestdata.EthTxidB2T2, []int32{^1, 2}), nil},
+		{addressKeyHex(dbtestdata.EthAddrContract47, 4321001, d), txIndexesHex(dbtestdata.EthTxidB2T2, []int32{0}), nil},
 	}); err != nil {
 		{
 			t.Fatal(err)
@@ -113,14 +113,14 @@ func verifyAfterEthereumTypeBlock2(t *testing.T, d *RocksDB) {
 	}
 
 	if err := checkColumn(d, cfAddressContracts, []keyPair{
-		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr3e, d.chainParser), "0101", nil},
-		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr55, d.chainParser), "0402" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser) + "02" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract0d, d.chainParser) + "01", nil},
-		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr20, d.chainParser), "0101" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser) + "01", nil},
-		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser), "0101", nil},
-		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr9f, d.chainParser), "0101", nil},
-		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr4b, d.chainParser), "0101" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract0d, d.chainParser) + "02" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser) + "02", nil},
-		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr7b, d.chainParser), "0100" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser) + "01" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract0d, d.chainParser) + "01", nil},
-		keyPair{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract47, d.chainParser), "0101", nil},
+		{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr3e, d.chainParser), "0101", nil},
+		{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr55, d.chainParser), "0402" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser) + "02" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract0d, d.chainParser) + "01", nil},
+		{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr20, d.chainParser), "0101" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser) + "01", nil},
+		{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser), "0101", nil},
+		{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr9f, d.chainParser), "0101", nil},
+		{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr4b, d.chainParser), "0101" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract0d, d.chainParser) + "02" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser) + "02", nil},
+		{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr7b, d.chainParser), "0100" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser) + "01" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract0d, d.chainParser) + "01", nil},
+		{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract47, d.chainParser), "0101", nil},
 	}); err != nil {
 		{
 			t.Fatal(err)
@@ -128,7 +128,7 @@ func verifyAfterEthereumTypeBlock2(t *testing.T, d *RocksDB) {
 	}
 
 	if err := checkColumn(d, cfBlockTxs, []keyPair{
-		keyPair{
+		{
 			"0041eee9",
 			dbtestdata.EthTxidB2T1 +
 				dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr55, d.chainParser) + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr9f, d.chainParser) + "00" +
@@ -249,7 +249,7 @@ func TestRocksDB_Index_EthereumType(t *testing.T) {
 	// check that there is only the last tx in the cache
 	packedTx, err := d.chainParser.PackTx(&block2.Txs[1], block2.Height, block2.Txs[1].Blocktime)
 	if err := checkColumn(d, cfTransactions, []keyPair{
-		keyPair{dbtestdata.EthTxidB2T2, hex.EncodeToString(packedTx), nil},
+		{dbtestdata.EthTxidB2T2, hex.EncodeToString(packedTx), nil},
 	}); err != nil {
 		{
 			t.Fatal(err)

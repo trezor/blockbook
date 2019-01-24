@@ -11,11 +11,12 @@ import (
 	"encoding/json"
 
 	"math/big"
+
 	"github.com/martinboehm/btcd/blockchain"
 
+	"github.com/juju/errors"
 	"github.com/martinboehm/btcd/wire"
 	"github.com/martinboehm/btcutil/chaincfg"
-	"github.com/juju/errors"
 )
 
 const (
@@ -37,7 +38,7 @@ func init() {
 // PivXParser handle
 type PivXParser struct {
 	*btc.BitcoinParser
-	baseparser *bchain.BaseParser
+	baseparser                         *bchain.BaseParser
 	BitcoinOutputScriptToAddressesFunc btc.OutputScriptToAddressesFunc
 }
 
@@ -73,9 +74,9 @@ func (p *PivXParser) ParseBlock(b []byte) (*bchain.Block, error) {
 		return nil, errors.Annotatef(err, "Deserialize")
 	}
 
-	if (h.Version > 3) {
+	if h.Version > 3 {
 		// Skip past AccumulatorCheckpoint which was added in pivx block version 4
-		_, err = r.Seek(32, io.SeekCurrent)
+		r.Seek(32, io.SeekCurrent)
 	}
 
 	err = utils.DecodeTransactions(r, 0, wire.WitnessEncoding, &w)
@@ -125,7 +126,7 @@ func (p *PivXParser) TxFromMsgTx(t *wire.MsgTx, parseAddresses bool) bchain.Tx {
 	for i, in := range t.TxIn {
 
 		// extra check to not confuse Tx with single OP_ZEROCOINSPEND input as a coinbase Tx
-		if (!isZeroCoinSpendScript(in.SignatureScript) && blockchain.IsCoinBaseTx(t)) {
+		if !isZeroCoinSpendScript(in.SignatureScript) && blockchain.IsCoinBaseTx(t) {
 			vin[i] = bchain.Vin{
 				Coinbase: hex.EncodeToString(in.SignatureScript),
 				Sequence: in.Sequence,
@@ -198,7 +199,7 @@ func (p *PivXParser) ParseTxFromJson(msg json.RawMessage) (*bchain.Tx, error) {
 		}
 		vout.JsonValue = ""
 
-		if(vout.ScriptPubKey.Addresses == nil) {
+		if vout.ScriptPubKey.Addresses == nil {
 			vout.ScriptPubKey.Addresses = []string{}
 		}
 	}
@@ -206,16 +207,15 @@ func (p *PivXParser) ParseTxFromJson(msg json.RawMessage) (*bchain.Tx, error) {
 	return &tx, nil
 }
 
-
 // outputScriptToAddresses converts ScriptPubKey to bitcoin addresses
 func (p *PivXParser) outputScriptToAddresses(script []byte) ([]string, bool, error) {
-	if (isZeroCoinSpendScript(script) || isZeroCoinMintScript(script)) {
+	if isZeroCoinSpendScript(script) || isZeroCoinMintScript(script) {
 		hexScript := hex.EncodeToString(script)
 		anonAddr := "Anonymous " + hexScript
 		return []string{anonAddr}, false, nil
 	}
 
-	rv, s, _ :=  p.BitcoinOutputScriptToAddressesFunc(script)
+	rv, s, _ := p.BitcoinOutputScriptToAddressesFunc(script)
 	return rv, s, nil
 }
 
@@ -223,7 +223,7 @@ func (p *PivXParser) GetAddrDescForUnknownInput(tx *bchain.Tx, input int) bchain
 	if len(tx.Vin) > input {
 		scriptHex := tx.Vin[input].ScriptSig.Hex
 
-		if(scriptHex != "") {
+		if scriptHex != "" {
 			script, _ := hex.DecodeString(scriptHex)
 			return script
 		}
@@ -237,7 +237,7 @@ func (p *PivXParser) GetAddrDescForUnknownInput(tx *bchain.Tx, input int) bchain
 func isZeroCoinMintScript(signatureScript []byte) bool {
 	OP_ZEROCOINMINT := byte(0xc1)
 
-	if (len(signatureScript) > 1 && signatureScript[0] == OP_ZEROCOINMINT) {
+	if len(signatureScript) > 1 && signatureScript[0] == OP_ZEROCOINMINT {
 		return true
 	}
 
@@ -248,7 +248,7 @@ func isZeroCoinMintScript(signatureScript []byte) bool {
 func isZeroCoinSpendScript(signatureScript []byte) bool {
 	OP_ZEROCOINSPEND := byte(0xc2)
 
-	if (len(signatureScript) >= 100 && signatureScript[0] == OP_ZEROCOINSPEND) {
+	if len(signatureScript) >= 100 && signatureScript[0] == OP_ZEROCOINSPEND {
 		return true
 	}
 

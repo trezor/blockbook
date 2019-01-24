@@ -36,6 +36,7 @@ import (
 
 type blockChainFactory func(config json.RawMessage, pushHandler func(bchain.NotificationType)) (bchain.BlockChain, error)
 
+// BlockChainFactories is a map of constructors of coin RPC interfaces
 var BlockChainFactories = make(map[string]blockChainFactory)
 
 func init() {

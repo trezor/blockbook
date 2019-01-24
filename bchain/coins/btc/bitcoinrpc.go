@@ -857,6 +857,7 @@ func safeDecodeResponse(body io.ReadCloser, res interface{}) (err error) {
 	return json.Unmarshal(data, &res)
 }
 
+// Call calls Backend RPC interface, using RPCMarshaler interface to marshall the request
 func (b *BitcoinRPC) Call(req interface{}, res interface{}) error {
 	httpData, err := b.RPCMarshaler.Marshal(req)
 	if err != nil {

@@ -507,6 +507,9 @@ func (b *EthereumRPC) GetBlockInfo(hash string) (*bchain.BlockInfo, error) {
 		return nil, err
 	}
 	bch, err := b.ethHeaderToBlockHeader(&head)
+	if err != nil {
+		return nil, err
+	}
 	return &bchain.BlockInfo{
 		BlockHeader: *bch,
 		Difficulty:  json.Number(head.Difficulty),

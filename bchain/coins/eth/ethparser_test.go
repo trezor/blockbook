@@ -142,7 +142,7 @@ func init() {
 				GasUsed: "0xcb39",
 				Status:  "0x1",
 				Logs: []*rpcLog{
-					&rpcLog{
+					{
 						Address: "0x4af4114f73d1c1c903ac9e0361b379d1291808a2",
 						Data:    "0x00000000000000000000000000000000000000000000021e19e0c9bab2400000",
 						Topics: []string{

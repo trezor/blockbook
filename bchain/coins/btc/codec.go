@@ -6,12 +6,15 @@ import (
 	"reflect"
 )
 
+// RPCMarshaler is used for marshalling requests to Bitcoin Type RPC interfaces
 type RPCMarshaler interface {
 	Marshal(v interface{}) ([]byte, error)
 }
 
+// JSONMarshalerV2 is used for marshalling requests to newer Bitcoin Type RPC interfaces
 type JSONMarshalerV2 struct{}
 
+// Marshal converts struct passed by parameter to JSON
 func (JSONMarshalerV2) Marshal(v interface{}) ([]byte, error) {
 	d, err := json.Marshal(v)
 	if err != nil {
@@ -20,10 +23,13 @@ func (JSONMarshalerV2) Marshal(v interface{}) ([]byte, error) {
 	return d, nil
 }
 
-var InvalidValue = errors.New("Invalid value to marshal")
+// ErrInvalidValue is error returned by JSONMarshalerV1.Marshal if the passed structure contains invalid value
+var ErrInvalidValue = errors.New("Invalid value to marshal")
 
+// JSONMarshalerV1 is used for marshalling requests to legacy Bitcoin Type RPC interfaces
 type JSONMarshalerV1 struct{}
 
+// Marshal converts struct passed by parameter to JSON
 func (JSONMarshalerV1) Marshal(v interface{}) ([]byte, error) {
 	u := cmdUntypedParams{}
 
@@ -50,7 +56,7 @@ func (JSONMarshalerV1) Marshal(v interface{}) ([]byte, error) {
 
 			f := v.FieldByName("Method")
 			if !f.IsValid() || f.Kind() != reflect.String {
-				return nil, InvalidValue
+				return nil, ErrInvalidValue
 			}
 			u.Method = f.String()
 
@@ -69,7 +75,7 @@ func (JSONMarshalerV1) Marshal(v interface{}) ([]byte, error) {
 						arr[i] = f.Field(i).Interface()
 					}
 				default:
-					return nil, InvalidValue
+					return nil, ErrInvalidValue
 				}
 				u.Params = arr
 			}

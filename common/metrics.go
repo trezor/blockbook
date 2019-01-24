@@ -6,6 +6,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+// Metrics holds prometheus collectors for various metrics collected by Blockbook
 type Metrics struct {
 	SocketIORequests      *prometheus.CounterVec
 	SocketIOSubscribes    *prometheus.CounterVec
@@ -28,8 +29,10 @@ type Metrics struct {
 	BlockbookAppInfo      *prometheus.GaugeVec
 }
 
+// Labels represents a collection of label name -> value mappings.
 type Labels = prometheus.Labels
 
+// GetMetrics returns struct holding prometheus collectors for various metrics collected by Blockbook
 func GetMetrics(coin string) (*Metrics, error) {
 	metrics := Metrics{}
 

@@ -12,7 +12,8 @@ type fakeBlockChain struct {
 	*bchain.BaseChain
 }
 
-func NewFakeBlockChain(parser bchain.BlockChainParser) (*fakeBlockChain, error) {
+// NewFakeBlockChain returns mocked blockchain RPC interface used for tests
+func NewFakeBlockChain(parser bchain.BlockChainParser) (bchain.BlockChain, error) {
 	return &fakeBlockChain{&bchain.BaseChain{Parser: parser}}, nil
 }
 
