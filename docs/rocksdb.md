@@ -1,74 +1,115 @@
 # Data storage in RocksDB
 
-**Blockbook** stores data the key-value store RocksDB. Each index is stored in its own column family.
+**Blockbook** stores data the key-value store [RocksDB](https://github.com/facebook/rocksdb/wiki). As there are multiple indexes, Blockbook uses RocksDB **column families** feature to store indexes separately.
 
->Database content is described in golang pseudo types in the form *(name type)*. 
+>The database structure is described in golang pseudo types in the form *(name type)*. 
 >
 >Operators used in the description: 
->- -> mapping from key to value. 
->- \+ concatenation, 
->- [] array
+>- *->* mapping from key to value. 
+>- *\+* concatenation, 
+>- *[]* array
 >
 >Types used in the description:
->- []byte - array of bytes
->- uint32 - unsigned integer, stored as array of 4 bytes in big endian*
->- vint, vuint - variable length signed/unsigned int
->- addrDesc - address descriptor, abstraction of an address. In all bitcoin like coins it is output script. Stored as variable length array of bytes.
->- bigInt - unsigned big integer, stored as length of array (1 byte) followed by array of bytes of big int, i.e. *(int_len byte)+(int_value []byte)*. Zero is stored as one byte containing 0.
+>- *[]byte* - array of bytes
+>- *uint32* - unsigned integer, stored as array of 4 bytes in big endian*
+>- *vint*, *vuint* - variable length signed/unsigned int
+>- *addrDesc* - address descriptor, abstraction of an address.
+For Bitcoin type coins it is the transaction output script, stored as variable length array of bytes. 
+For Ethereum type coins it is fixed size array of 20 bytes.
+>- *bigInt* - unsigned big integer, stored as length of the array (1 byte) followed by array of bytes of big int, i.e. *(int_len byte)+(int_value []byte)*. Zero is stored as one byte containing 0.
 
-**Column families:**
+**Database structure:**
+
+The database structure described here is of Blockbook version **0.2.0** (data format version 4). 
+
+The database structure for **Bitcoin type** and **Ethereum type** coins is slightly different. Column families used for both types:
+- default, height, addresses, transactions, blockTxs
+
+Column families used only by **Bitcoin type** coins:
+- addressBalance, txAddresses
+
+Column families used only by **Ethereum type** coins:
+- addressContracts
+
+**Column families description:**
 
 - **default**
 
-  stores internal state in json format, under the key *internalState*. 
+  Stores internal state in json format, under the key *internalState*. 
   
   Most important internal state values are:
   - coin - which coin is indexed in DB
-  - data format version - currently 3
+  - data format version - currently 4
   - dbState - closed, open, inconsistent
     
-  Blockbook is on startup checking these values and does not allow to run against wrong coin, data format version and in inconsistent state.
+  Blockbook is on startup checking these values and does not allow to run against wrong coin, data format version and in inconsistent state. The database must be recreated if the internal state does not match.
 
 - **height** 
 
-    maps *block height* to *block hash* and additional data about block
+    Maps *block height* to *block hash* and additional data about block.
     ```
     (height uint32) -> (hash [32]byte)+(time uint32)+(nr_txs vuint)+(size vuint)
     ```
 
 - **addresses**
 
-    maps *addrDesc+block height* to  *array of outpoints* (array of transactions with input/output index). Input/output is recognized by the sign of the number, output is positive, input is negative, with operation bitwise complement ^ performed on the number.
+    Maps *addrDesc+block height* to *array of transactions with array of input/output indexes*.
+    
+    The *block height* in the key is stored as bitwise complement ^ of the height to sort the keys in the order from newest to oldest.
+    
+    As there can be multiple inputs/outputs for the same address in one transaction, each txid is followed by variable length array of input/output indexes.
+    The index values in the array are multiplied by two, the last element of the array has the lowest bit set to 1.
+    Input or output is distinguished by the sign of the index, output is positive, input is negative (by operation bitwise complement ^ performed on the number).   
     ```
-    (addrDesc []byte)+(height uint32) -> []((txid [32]byte)+(index vint))
+    (addrDesc []byte)+(^height uint32) -> []((txid [32]byte)+[](index vint))
     ```
 
-- **addressBalance**
+- **addressBalance** (used only by Bitcoin type coins)
 
-    maps *addrDesc* to *number of transactions*, *sent amount* and *total balance* of given address
+    Maps *addrDesc* to *number of transactions*, *sent amount* and *total balance* of given address.
     ```
     (addrDesc []byte) -> (nr_txs vuint)+(sent_amount bigInt)+(balance bigInt)
     ```
 
-- **txAddresses**
+- **txAddresses** (used only by Bitcoin type coins)
 
-    maps *txid* to *block height* and array of *input addrDesc* with *amounts* and array of *output addrDesc* with *amounts*, with flag if output is spent. In case of spent output, *addrDesc_len* is negative (negative sign is achieved by bitwise complement ^).
+    Maps *txid* to *block height* and array of *input addrDesc* with *amounts* and array of *output addrDesc* with *amounts*, with flag if output is spent. In case of spent output, *addrDesc_len* is negative (negative sign is achieved by bitwise complement ^).
     ```
     (txid []byte) -> (height vuint)+
                      (nr_inputs vuint)+[]((addrDesc_len vuint)+(addrDesc []byte)+(amount bigInt))+
                      (nr_outputs vuint)+[]((addrDesc_len vint)+(addrDesc []byte)+(amount bigInt))
     ```
 
+- **addressContracts** (used only by Ethereum type coins)
+
+    Maps *addrDesc* to *total number of transactions*, *number of non contract transactions* and array of *contracts* with *number of transfers* of given address.
+    ```
+    (addrDesc []byte) -> (total_txs vuint)+(non-contract_txs vuint)+[]((contractAddrDesc []byte)+(nr_transfers vuint))
+    ```
+
 - **blockTxs**
 
-    maps *block height* to an array of *txids* and *input points* in the block - only last 300 (by default) blocks are kept, the column is used in case of rollback.
+    Maps *block height* to data necessary for blockchain rollback. Only last 300 (by default) blocks are kept. 
+    The content of value data differs for Bitcoin and Ethereum types.
+
+    - Bitcoin type
+
+    The value is an array of *txids* and *input points* in the block.
     ```
     (height uint32) -> []((txid [32]byte)+(nr_inputs vuint)+[]((txid [32]byte)+(index vint)))
     ```
 
+    - Ethereum type
+    
+    The value is an array of transaction data. For each transaction is stored *txid*,
+     *from* and *to* address descriptors and array of *contract address descriptors* with *transfer address descriptors*.
+    ```
+    (height uint32) -> []((txid [32]byte)+(from addrDesc)+(to addrDesc)+(nr_contracts vuint)+[]((contract addrDesc)+(addr addrDesc)))
+    ```
+
 - **transactions**
 
-    transaction cache, *txdata* is generated by coin specific parser function PackTx
+    Transaction cache, *txdata* is generated by coin specific parser function PackTx.
     ```
     (txid []byte) -> (txdata []byte)
     ```
