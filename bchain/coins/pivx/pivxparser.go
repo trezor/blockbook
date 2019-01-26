@@ -20,19 +20,30 @@ import (
 )
 
 const (
-	MainnetMagic wire.BitcoinNet = 0xe9fdc490
+   // Net Magics
+   MainnetMagic wire.BitcoinNet = 0xe9fdc490
+   TestnetMagic wire.BitcoinNet = 0xba657645
 )
 
 var (
 	MainNetParams chaincfg.Params
+   TestNetParams chaincfg.Params
 )
 
 func init() {
-	MainNetParams = chaincfg.MainNetParams
-	MainNetParams.Net = MainnetMagic
-	MainNetParams.PubKeyHashAddrID = []byte{30}
-	MainNetParams.ScriptHashAddrID = []byte{13}
-	MainNetParams.PrivateKeyID = []byte{212}
+   // PIVX mainnet Address encoding magics
+   MainNetParams = chaincfg.MainNetParams
+   MainNetParams.Net = MainnetMagic
+   MainNetParams.PubKeyHashAddrID = []byte{30}    // starting with 'D'
+   MainNetParams.ScriptHashAddrID = []byte{13}
+   MainNetParams.PrivateKeyID = []byte{212}
+
+   // PIVX testnet Address encoding magics
+   TestNetParams = chaincfg.TestNet3Params
+   TestNetParams.Net = TestnetMagic
+   TestNetParams.PubKeyHashAddrID = []byte{139}   // starting with 'x' or 'y'
+   TestNetParams.ScriptHashAddrID = []byte{19}
+   TestNetParams.PrivateKeyID = []byte{239}
 }
 
 // PivXParser handle
@@ -57,11 +68,19 @@ func NewPivXParser(params *chaincfg.Params, c *btc.Configuration) *PivXParser {
 func GetChainParams(chain string) *chaincfg.Params {
 	if !chaincfg.IsRegistered(&MainNetParams) {
 		err := chaincfg.Register(&MainNetParams)
+      	if err == nil {
+			err = chaincfg.Register(&TestNetParams)
+		}
 		if err != nil {
 			panic(err)
 		}
 	}
-	return &MainNetParams
+	switch chain {
+   	case "test":
+		return &TestNetParams
+   	default:
+		return &MainNetParams
+   	}
 }
 
 // ParseBlock parses raw block to our Block struct
