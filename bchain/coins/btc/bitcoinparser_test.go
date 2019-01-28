@@ -417,3 +417,75 @@ func Test_UnpackTx(t *testing.T) {
 		})
 	}
 }
+
+func Test_DeriveAddressDescriptors(t *testing.T) {
+	btcMainParser := NewBitcoinParser(GetChainParams("main"), &Configuration{XPubMagic: 76067358, XPubMagicSegwitP2sh: 77429938, XPubMagicSegwitNative: 78792518})
+	type args struct {
+		xpub      string
+		change    uint32
+		fromIndex uint32
+		toIndex   uint32
+		parser    *BitcoinParser
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    []string
+		wantErr bool
+	}{
+		{
+			name: "m/44'/0'/0'",
+			args: args{
+				xpub:      "xpub6BosfCnifzxcFwrSzQiqu2DBVTshkCXacvNsWGYJVVhhawA7d4R5WSWGFNbi8Aw6ZRc1brxMyWMzG3DSSSSoekkudhUd9yLb6qx39T9nMdj",
+				change:    0,
+				fromIndex: 0,
+				toIndex:   1,
+				parser:    btcMainParser,
+			},
+			want: []string{"1LqBGSKuX5yYUonjxT5qGfpUsXKYYWeabA"},
+		},
+		{
+			name: "m/49'/0'/0'",
+			args: args{
+				xpub:      "ypub6Ww3ibxVfGzLrAH1PNcjyAWenMTbbAosGNB6VvmSEgytSER9azLDWCxoJwW7Ke7icmizBMXrzBx9979FfaHxHcrArf3zbeJJJUZPf663zsP",
+				change:    0,
+				fromIndex: 0,
+				toIndex:   1,
+				parser:    btcMainParser,
+			},
+			want: []string{"37VucYSaXLCAsxYyAPfbSi9eh4iEcbShgf"},
+		},
+		{
+			name: "m/84'/0'/0'",
+			args: args{
+				xpub:      "zpub6rFR7y4Q2AijBEqTUquhVz398htDFrtymD9xYYfG1m4wAcvPhXNfE3EfH1r1ADqtfSdVCToUG868RvUUkgDKf31mGDtKsAYz2oz2AGutZYs",
+				change:    0,
+				fromIndex: 0,
+				toIndex:   1,
+				parser:    btcMainParser,
+			},
+			want: []string{"bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.args.parser.DeriveAddressDescriptors(tt.args.xpub, tt.args.change, tt.args.fromIndex, tt.args.toIndex)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("DeriveAddressDescriptors() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			gotAddresses := make([]string, len(got))
+			for i, ad := range got {
+				aa, _, err := tt.args.parser.GetAddressesFromAddrDesc(ad)
+				if err != nil || len(aa) != 1 {
+					t.Errorf("DeriveAddressDescriptors() got incorrect address descriptor %v, error %v", ad, err)
+					return
+				}
+				gotAddresses[i] = aa[0]
+			}
+			if !reflect.DeepEqual(gotAddresses, tt.want) {
+				t.Errorf("DeriveAddressDescriptors() = %v, want %v", gotAddresses, tt.want)
+			}
+		})
+	}
+}
