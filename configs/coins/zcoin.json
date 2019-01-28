@@ -1,9 +1,9 @@
 {
   "coin": {
-      "name": "Zcoin",
-      "shortcut": "XZC",
-      "label": "Zcoin",
-      "alias": "zcoin"
+    "name": "Zcoin",
+    "shortcut": "XZC",
+    "label": "Zcoin",
+    "alias": "zcoin"
   },
   "ports": {
     "backend_rpc": 8050,
@@ -52,7 +52,7 @@
     "server_config_file": "bitcoin_like.conf",
     "client_config_file": "bitcoin_like_client.conf",
     "additional_params": {
-        "deprecatedrpc": "estimatefee"
+      "deprecatedrpc": "estimatefee"
     }
   },
   "blockbook": {
@@ -66,6 +66,7 @@
       "mempool_workers": 8,
       "mempool_sub_workers": 2,
       "block_addresses_to_keep": 300,
+      "xpub_magic": 76067358,
       "additional_params": {}
     }
   },

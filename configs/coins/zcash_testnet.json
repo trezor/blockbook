@@ -1,9 +1,9 @@
 {
   "coin": {
-      "name": "Zcash Testnet",
-      "shortcut": "TAZ",
-      "label": "Zcash Testnet",
-      "alias": "zcash_testnet"
+    "name": "Zcash Testnet",
+    "shortcut": "TAZ",
+    "label": "Zcash Testnet",
+    "alias": "zcash_testnet"
   },
   "ports": {
     "backend_rpc": 18032,
@@ -38,9 +38,9 @@
     "server_config_file": "bitcoin_like.conf",
     "client_config_file": "bitcoin_like_client.conf",
     "additional_params": {
-        "addnode": [
-            "testnet.z.cash"
-        ]
+      "addnode": [
+        "testnet.z.cash"
+      ]
     }
   },
   "blockbook": {
@@ -55,6 +55,7 @@
       "mempool_workers": 4,
       "mempool_sub_workers": 8,
       "block_addresses_to_keep": 300,
+      "xpub_magic": 70617039,
       "additional_params": {}
     }
   },
