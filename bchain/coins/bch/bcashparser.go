@@ -5,10 +5,10 @@ import (
 	"blockbook/bchain/coins/btc"
 	"fmt"
 
-	"github.com/jakm/bchutil"
-	"github.com/jakm/btcutil"
-	"github.com/jakm/btcutil/chaincfg"
-	"github.com/jakm/btcutil/txscript"
+	"github.com/martinboehm/bchutil"
+	"github.com/martinboehm/btcutil"
+	"github.com/martinboehm/btcutil/chaincfg"
+	"github.com/martinboehm/btcutil/txscript"
 	"github.com/schancel/cashaddr-converter/address"
 )
 

@@ -21,10 +21,10 @@
     "package_name": "backend-ethereum",
     "package_revision": "satoshilabs-1",
     "system_user": "ethereum",
-    "version": "1.8.20-24d727b6",
-    "binary_url": "https://gethstore.blob.core.windows.net/builds/geth-linux-amd64-1.8.20-24d727b6.tar.gz",
+    "version": "1.8.21-9dc5d1a9",
+    "binary_url": "https://gethstore.blob.core.windows.net/builds/geth-linux-amd64-1.8.21-9dc5d1a9.tar.gz",
     "verification_type": "gpg",
-    "verification_source": "https://gethstore.blob.core.windows.net/builds/geth-linux-amd64-1.8.20-24d727b6.tar.gz.asc",
+    "verification_source": "https://gethstore.blob.core.windows.net/builds/geth-linux-amd64-1.8.21-9dc5d1a9.tar.gz.asc",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [],
     "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/geth --ipcdisable --syncmode full --cache 1024 --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --port 38336 --ws --wsaddr 0.0.0.0 --wsport {{.Ports.BackendRPC}} --wsorigins \"*\" --rpc --rpcport 8136 -rpcaddr 0.0.0.0 --rpccorsdomain \"*\" --rpcvhosts \"*\" 2>>{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
@@ -42,7 +42,7 @@
     "system_user": "blockbook-ethereum",
     "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
     "public_binding_template": ":{{.Ports.BlockbookPublic}}",
-    "explorer_url": "https://etherscan.io/",
+    "explorer_url": "",
     "additional_params": "",
     "block_chain": {
       "parse": true,
@@ -53,7 +53,7 @@
     }
   },
   "meta": {
-    "package_maintainer": "Jakub Matys",
-    "package_maintainer_email": "jakub.matys@satoshilabs.com"
+    "package_maintainer": "Petr Kracik",
+    "package_maintainer_email": "petr.kracik@satoshilabs.com"
   }
 }

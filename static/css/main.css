@@ -214,6 +214,11 @@ h3 {
     font-weight: bold;
 }
 
+table.data-table table.data-table th {
+    border-top: 0;
+    font-weight: normal;
+}
+
 .alert .data-table {
     margin: 0;
 }
@@ -239,19 +244,7 @@ h3 {
     font-size: 14px;
 }
 
-.h-container {
-    display: -webkit-box;
-    display: -ms-flexbox;
-    -ms-flex-wrap: wrap;
-    flex-wrap: wrap;
-}
-
-.h-container-6 {
-    width: 50%;
-    margin: 0;
-}
-
-.h-container ul {
+.h-container ul, .h-container h3 {
     margin: 0;
 }
 

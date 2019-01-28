@@ -7,21 +7,21 @@ import (
 	"github.com/golang/glog"
 )
 
-// NonUTXOMempool is mempool handle of non UTXO chains
-type NonUTXOMempool struct {
+// MempoolEthereumType is mempool handle of EthereumType chains
+type MempoolEthereumType struct {
 	chain           BlockChain
 	mux             sync.Mutex
 	txToInputOutput map[string][]addrIndex
-	addrDescToTx    map[string][]outpoint
+	addrDescToTx    map[string][]Outpoint
 }
 
-// NewNonUTXOMempool creates new mempool handler.
-func NewNonUTXOMempool(chain BlockChain) *NonUTXOMempool {
-	return &NonUTXOMempool{chain: chain}
+// NewMempoolEthereumType creates new mempool handler.
+func NewMempoolEthereumType(chain BlockChain) *MempoolEthereumType {
+	return &MempoolEthereumType{chain: chain}
 }
 
 // GetTransactions returns slice of mempool transactions for given address
-func (m *NonUTXOMempool) GetTransactions(address string) ([]string, error) {
+func (m *MempoolEthereumType) GetTransactions(address string) ([]Outpoint, error) {
 	parser := m.chain.GetChainParser()
 	addrDesc, err := parser.GetAddrDescFromAddress(address)
 	if err != nil {
@@ -31,28 +31,35 @@ func (m *NonUTXOMempool) GetTransactions(address string) ([]string, error) {
 }
 
 // GetAddrDescTransactions returns slice of mempool transactions for given address descriptor
-func (m *NonUTXOMempool) GetAddrDescTransactions(addrDesc AddressDescriptor) ([]string, error) {
+func (m *MempoolEthereumType) GetAddrDescTransactions(addrDesc AddressDescriptor) ([]Outpoint, error) {
 	m.mux.Lock()
 	defer m.mux.Unlock()
-	outpoints := m.addrDescToTx[string(addrDesc)]
-	txs := make([]string, 0, len(outpoints))
-	for _, o := range outpoints {
-		txs = append(txs, o.txid)
-	}
-	return txs, nil
+	return append([]Outpoint(nil), m.addrDescToTx[string(addrDesc)]...), nil
 }
 
-func (m *NonUTXOMempool) updateMappings(newTxToInputOutput map[string][]addrIndex, newAddrDescToTx map[string][]outpoint) {
+func (m *MempoolEthereumType) updateMappings(newTxToInputOutput map[string][]addrIndex, newAddrDescToTx map[string][]Outpoint) {
 	m.mux.Lock()
 	defer m.mux.Unlock()
 	m.txToInputOutput = newTxToInputOutput
 	m.addrDescToTx = newAddrDescToTx
 }
 
+func appendAddress(io []addrIndex, i int32, a string, parser BlockChainParser) []addrIndex {
+	if len(a) > 0 {
+		addrDesc, err := parser.GetAddrDescFromAddress(a)
+		if err != nil {
+			glog.Error("error in input addrDesc in ", a, ": ", err)
+			return io
+		}
+		io = append(io, addrIndex{string(addrDesc), i})
+	}
+	return io
+}
+
 // Resync gets mempool transactions and maps outputs to transactions.
 // Resync is not reentrant, it should be called from a single thread.
 // Read operations (GetTransactions) are safe.
-func (m *NonUTXOMempool) Resync(onNewTxAddr OnNewTxAddrFunc) (int, error) {
+func (m *MempoolEthereumType) Resync(onNewTxAddr OnNewTxAddrFunc) (int, error) {
 	start := time.Now()
 	glog.V(1).Info("Mempool: resync")
 	txs, err := m.chain.GetMempool()
@@ -62,13 +69,13 @@ func (m *NonUTXOMempool) Resync(onNewTxAddr OnNewTxAddrFunc) (int, error) {
 	parser := m.chain.GetChainParser()
 	// allocate slightly larger capacity of the maps
 	newTxToInputOutput := make(map[string][]addrIndex, len(m.txToInputOutput)+5)
-	newAddrDescToTx := make(map[string][]outpoint, len(m.addrDescToTx)+5)
+	newAddrDescToTx := make(map[string][]Outpoint, len(m.addrDescToTx)+5)
 	for _, txid := range txs {
 		io, exists := m.txToInputOutput[txid]
 		if !exists {
 			tx, err := m.chain.GetTransactionForMempool(txid)
 			if err != nil {
-				glog.Error("cannot get transaction ", txid, ": ", err)
+				glog.Warning("cannot get transaction ", txid, ": ", err)
 				continue
 			}
 			io = make([]addrIndex, 0, len(tx.Vout)+len(tx.Vin))
@@ -83,29 +90,34 @@ func (m *NonUTXOMempool) Resync(onNewTxAddr OnNewTxAddrFunc) (int, error) {
 				if len(addrDesc) > 0 {
 					io = append(io, addrIndex{string(addrDesc), int32(output.N)})
 				}
-				if onNewTxAddr != nil {
-					onNewTxAddr(tx.Txid, addrDesc, true)
-				}
 			}
 			for _, input := range tx.Vin {
 				for i, a := range input.Addresses {
-					if len(a) > 0 {
-						addrDesc, err := parser.GetAddrDescFromAddress(a)
-						if err != nil {
-							glog.Error("error in input addrDesc in ", txid, " ", a, ": ", err)
-							continue
-						}
-						io = append(io, addrIndex{string(addrDesc), int32(^i)})
-						if onNewTxAddr != nil {
-							onNewTxAddr(tx.Txid, addrDesc, false)
-						}
+					appendAddress(io, ^int32(i), a, parser)
+				}
+			}
+			t, err := parser.EthereumTypeGetErc20FromTx(tx)
+			if err != nil {
+				glog.Error("GetErc20FromTx for tx ", txid, ", ", err)
+			} else {
+				for i := range t {
+					io = appendAddress(io, ^int32(i+1), t[i].From, parser)
+					io = appendAddress(io, int32(i+1), t[i].To, parser)
+				}
+			}
+			if onNewTxAddr != nil {
+				sent := make(map[string]struct{})
+				for _, si := range io {
+					if _, found := sent[si.addrDesc]; !found {
+						onNewTxAddr(tx, AddressDescriptor(si.addrDesc))
+						sent[si.addrDesc] = struct{}{}
 					}
 				}
 			}
 		}
 		newTxToInputOutput[txid] = io
 		for _, si := range io {
-			newAddrDescToTx[si.addrDesc] = append(newAddrDescToTx[si.addrDesc], outpoint{txid, si.n})
+			newAddrDescToTx[si.addrDesc] = append(newAddrDescToTx[si.addrDesc], Outpoint{txid, si.n})
 		}
 	}
 	m.updateMappings(newTxToInputOutput, newAddrDescToTx)

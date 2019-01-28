@@ -56,7 +56,7 @@ func createAndSetDBOptions(bloomBits int, c *gorocksdb.Cache, maxOpenFiles int) 
 	if bloomBits > 0 {
 		blockOpts.SetFilterPolicy(gorocksdb.NewBloomFilter(bloomBits))
 	}
-	C.rocksdb_block_based_options_set_format_version(cNativeBlockOpts, 3)
+	C.rocksdb_block_based_options_set_format_version(cNativeBlockOpts, 4)
 
 	opts := gorocksdb.NewDefaultOptions()
 	opts.SetBlockBasedTableFactory(blockOpts)

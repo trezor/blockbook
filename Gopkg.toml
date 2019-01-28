@@ -27,11 +27,11 @@
 
 [[constraint]]
   branch = "master"
-  name = "github.com/btcsuite/btcd"
+  name = "github.com/martinboehm/btcd"
 
 [[constraint]]
   branch = "master"
-  name = "github.com/btcsuite/btcutil"
+  name = "github.com/martinboehm/btcutil"
 
 [[constraint]]
   branch = "master"
@@ -71,4 +71,4 @@
 
 [[constraint]]
   branch = "master"
-  name = "github.com/cpacia/bchutil"
+  name = "github.com/martinboehm/bchutil"

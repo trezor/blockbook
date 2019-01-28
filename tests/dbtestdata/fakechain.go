@@ -9,11 +9,12 @@ import (
 )
 
 type fakeBlockChain struct {
-	parser bchain.BlockChainParser
+	*bchain.BaseChain
 }
 
-func NewFakeBlockChain(parser bchain.BlockChainParser) (*fakeBlockChain, error) {
-	return &fakeBlockChain{parser: parser}, nil
+// NewFakeBlockChain returns mocked blockchain RPC interface used for tests
+func NewFakeBlockChain(parser bchain.BlockChainParser) (bchain.BlockChain, error) {
+	return &fakeBlockChain{&bchain.BaseChain{Parser: parser}}, nil
 }
 
 func (c *fakeBlockChain) Initialize() error {
@@ -45,26 +46,26 @@ func (c *fakeBlockChain) GetChainInfo() (v *bchain.ChainInfo, err error) {
 		Chain:         c.GetNetworkName(),
 		Blocks:        2,
 		Headers:       2,
-		Bestblockhash: GetTestUTXOBlock2(c.parser).BlockHeader.Hash,
+		Bestblockhash: GetTestBitcoinTypeBlock2(c.Parser).BlockHeader.Hash,
 		Version:       "001001",
 		Subversion:    c.GetSubversion(),
 	}, nil
 }
 
 func (c *fakeBlockChain) GetBestBlockHash() (v string, err error) {
-	return GetTestUTXOBlock2(c.parser).BlockHeader.Hash, nil
+	return GetTestBitcoinTypeBlock2(c.Parser).BlockHeader.Hash, nil
 }
 
 func (c *fakeBlockChain) GetBestBlockHeight() (v uint32, err error) {
-	return GetTestUTXOBlock2(c.parser).BlockHeader.Height, nil
+	return GetTestBitcoinTypeBlock2(c.Parser).BlockHeader.Height, nil
 }
 
 func (c *fakeBlockChain) GetBlockHash(height uint32) (v string, err error) {
-	b1 := GetTestUTXOBlock1(c.parser)
+	b1 := GetTestBitcoinTypeBlock1(c.Parser)
 	if height == b1.BlockHeader.Height {
 		return b1.BlockHeader.Hash, nil
 	}
-	b2 := GetTestUTXOBlock2(c.parser)
+	b2 := GetTestBitcoinTypeBlock2(c.Parser)
 	if height == b2.BlockHeader.Height {
 		return b2.BlockHeader.Hash, nil
 	}
@@ -72,11 +73,11 @@ func (c *fakeBlockChain) GetBlockHash(height uint32) (v string, err error) {
 }
 
 func (c *fakeBlockChain) GetBlockHeader(hash string) (v *bchain.BlockHeader, err error) {
-	b1 := GetTestUTXOBlock1(c.parser)
+	b1 := GetTestBitcoinTypeBlock1(c.Parser)
 	if hash == b1.BlockHeader.Hash {
 		return &b1.BlockHeader, nil
 	}
-	b2 := GetTestUTXOBlock2(c.parser)
+	b2 := GetTestBitcoinTypeBlock2(c.Parser)
 	if hash == b2.BlockHeader.Hash {
 		return &b2.BlockHeader, nil
 	}
@@ -84,11 +85,11 @@ func (c *fakeBlockChain) GetBlockHeader(hash string) (v *bchain.BlockHeader, err
 }
 
 func (c *fakeBlockChain) GetBlock(hash string, height uint32) (v *bchain.Block, err error) {
-	b1 := GetTestUTXOBlock1(c.parser)
+	b1 := GetTestBitcoinTypeBlock1(c.Parser)
 	if hash == b1.BlockHeader.Hash || height == b1.BlockHeader.Height {
 		return b1, nil
 	}
-	b2 := GetTestUTXOBlock2(c.parser)
+	b2 := GetTestBitcoinTypeBlock2(c.Parser)
 	if hash == b2.BlockHeader.Hash || height == b2.BlockHeader.Height {
 		return b2, nil
 	}
@@ -106,11 +107,11 @@ func getBlockInfo(b *bchain.Block) *bchain.BlockInfo {
 }
 
 func (c *fakeBlockChain) GetBlockInfo(hash string) (v *bchain.BlockInfo, err error) {
-	b1 := GetTestUTXOBlock1(c.parser)
+	b1 := GetTestBitcoinTypeBlock1(c.Parser)
 	if hash == b1.BlockHeader.Hash {
 		return getBlockInfo(b1), nil
 	}
-	b2 := GetTestUTXOBlock2(c.parser)
+	b2 := GetTestBitcoinTypeBlock2(c.Parser)
 	if hash == b2.BlockHeader.Hash {
 		return getBlockInfo(b2), nil
 	}
@@ -131,18 +132,18 @@ func getTxInBlock(b *bchain.Block, txid string) *bchain.Tx {
 }
 
 func (c *fakeBlockChain) GetTransaction(txid string) (v *bchain.Tx, err error) {
-	v = getTxInBlock(GetTestUTXOBlock1(c.parser), txid)
+	v = getTxInBlock(GetTestBitcoinTypeBlock1(c.Parser), txid)
 	if v == nil {
-		v = getTxInBlock(GetTestUTXOBlock2(c.parser), txid)
+		v = getTxInBlock(GetTestBitcoinTypeBlock2(c.Parser), txid)
 	}
 	if v != nil {
 		return v, nil
 	}
-	return nil, errors.New("Not found")
+	return nil, bchain.ErrTxNotFound
 }
 
-func (c *fakeBlockChain) GetTransactionSpecific(txid string) (v json.RawMessage, err error) {
-	tx, err := c.GetTransaction(txid)
+func (c *fakeBlockChain) GetTransactionSpecific(tx *bchain.Tx) (v json.RawMessage, err error) {
+	tx, err = c.GetTransaction(tx.Txid)
 	if err != nil {
 		return nil, err
 	}
@@ -182,12 +183,12 @@ func (c *fakeBlockChain) ResyncMempool(onNewTxAddr bchain.OnNewTxAddrFunc) (coun
 	return 0, errors.New("Not implemented")
 }
 
-func (c *fakeBlockChain) GetMempoolTransactions(address string) (v []string, err error) {
+func (c *fakeBlockChain) GetMempoolTransactions(address string) (v []bchain.Outpoint, err error) {
 	return nil, errors.New("Not implemented")
 }
 
-func (c *fakeBlockChain) GetMempoolTransactionsForAddrDesc(addrDesc bchain.AddressDescriptor) (v []string, err error) {
-	return []string{}, nil
+func (c *fakeBlockChain) GetMempoolTransactionsForAddrDesc(addrDesc bchain.AddressDescriptor) (v []bchain.Outpoint, err error) {
+	return []bchain.Outpoint{}, nil
 }
 
 func (c *fakeBlockChain) GetMempoolEntry(txid string) (v *bchain.MempoolEntry, err error) {
@@ -195,5 +196,5 @@ func (c *fakeBlockChain) GetMempoolEntry(txid string) (v *bchain.MempoolEntry, e
 }
 
 func (c *fakeBlockChain) GetChainParser() bchain.BlockChainParser {
-	return c.parser
+	return c.Parser
 }

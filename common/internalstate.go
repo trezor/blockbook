@@ -150,9 +150,7 @@ func (is *InternalState) GetDBColumnStatValues(c int) (int64, int64, int64) {
 func (is *InternalState) GetAllDBColumnStats() []InternalStateColumn {
 	is.mux.Lock()
 	defer is.mux.Unlock()
-	rv := make([]InternalStateColumn, len(is.DbColumns))
-	copy(rv, is.DbColumns)
-	return rv
+	return append(is.DbColumns[:0:0], is.DbColumns...)
 }
 
 // DBSizeTotal sums the computed sizes of all columns

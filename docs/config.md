@@ -75,8 +75,8 @@ Good examples of coin configuration are
        Exception is *addnode* key that contains list of nodes that is expanded as addnode=item lines.
 
 * `blockbook` – Definition of Blockbook package, configuration and service.
-    * `package_name` – Name of package. See convention note in [build guide](/docs/build.md#on-naming-conventions-and-versioning).
-    * `system_user` – User used to run Blockbook service. See convention note in [build guide](/docs/build.md#on-naming-conventions-and-versioning).
+    * `package_name` – Name of package. See convention note in the [build guide](/docs/build.md#on-naming-conventions-and-versioning).
+    * `system_user` – User used to run Blockbook service. See convention note in the [build guide](/docs/build.md#on-naming-conventions-and-versioning).
     * `internal_binding_template` – Template for *-internal* parameter. See note on templates below.
     * `public_binding_template` – Template for *-public* parameter. See note on templates below.
     * `explorer_url` – URL of blockchain explorer. Leave empty for internal explorer.
@@ -86,8 +86,8 @@ Good examples of coin configuration are
         * `parse` – Use binary parser for block decoding if *true* else call verbose back-end RPC method that returns
            JSON. Note that verbose method is slow and not every coin support it. However there are coin implementations
            that don't support binary parsing (e.g. ZCash).
-        * `mempool_workers` – Number of workers for UTXO mempool.
-        * `mempool_sub_workers` – Number of subworkers for UTXO mempool.
+        * `mempool_workers` – Number of workers for BitcoinType mempool.
+        * `mempool_sub_workers` – Number of subworkers for BitcoinType mempool.
         * `block_addresses_to_keep` – Number of blocks that are to be kept in blockaddresses column.
         * `additional_params` – Object of coin-specific params.
 
@@ -108,8 +108,8 @@ as well. Note that dot at the beginning is mandatory. Go template syntax is full
 Since Blockbook is an open-source project and we don't prevent anybody from running independent instances, it is possible
 to alter built-in text that is specific for Trezor. Text fields that could be updated are:
 
- * about – A note about instance shown on the Application status page and returned by an API.
- * tos – A link to Terms of service shown as the footer on the Explorer pages.
+ * [about](/build/text/about) – A note about instance shown on the Application status page and returned by an API.
+ * [tos_link](/build/text/tos_link) – A link to Terms of service shown as the footer on the Explorer pages.
 
 Text data are stored as plain text files in *build/text* directory and are embedded to binary during build. A change of
 theese files is mean for a private purpose and PRs that would update them won't be accepted.

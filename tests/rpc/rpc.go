@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/deckarep/golang-set"
+	mapset "github.com/deckarep/golang-set"
 	"github.com/juju/errors"
 )
 
@@ -166,6 +166,8 @@ func testGetTransaction(t *testing.T, h *TestHandler) {
 			continue
 		}
 		got.Confirmations = 0
+		// CoinSpecificData are not specified in the fixtures
+		got.CoinSpecificData = nil
 
 		if !reflect.DeepEqual(got, want) {
 			t.Errorf("GetTransaction() got %+v, want %+v", got, want)
@@ -175,14 +177,14 @@ func testGetTransaction(t *testing.T, h *TestHandler) {
 func testGetTransactionForMempool(t *testing.T, h *TestHandler) {
 	for txid, want := range h.TestData.TxDetails {
 		// reset fields that are not parsed by BlockChainParser
-		want.Confirmations, want.Blocktime, want.Time = 0, 0, 0
+		want.Confirmations, want.Blocktime, want.Time, want.CoinSpecificData = 0, 0, 0, nil
 
 		got, err := h.Chain.GetTransactionForMempool(txid)
 		if err != nil {
 			t.Fatal(err)
 		}
 		// transactions parsed from JSON may contain additional data
-		got.Confirmations, got.Blocktime, got.Time = 0, 0, 0
+		got.Confirmations, got.Blocktime, got.Time, got.CoinSpecificData = 0, 0, 0, nil
 		if !reflect.DeepEqual(got, want) {
 			t.Errorf("GetTransactionForMempool() got %+v, want %+v", got, want)
 		}
@@ -218,7 +220,7 @@ func testMempoolSync(t *testing.T, h *TestHandler) {
 				if err != nil {
 					t.Fatalf("address %q: %s", a, err)
 				}
-				if !containsString(got, txid) {
+				if !containsTx(got, txid) {
 					t.Errorf("ResyncMempool() - for address %s, transaction %s wasn't found in mempool", a, txid)
 					return
 				}
@@ -349,7 +351,7 @@ func getTxid2addrs(t *testing.T, h *TestHandler, txs []string) map[string][]stri
 	for i := range txs {
 		tx, err := h.Chain.GetTransactionForMempool(txs[i])
 		if err != nil {
-			if isMissingTx(err) {
+			if err == bchain.ErrTxNotFound {
 				continue
 			}
 			t.Fatal(err)
@@ -366,20 +368,6 @@ func getTxid2addrs(t *testing.T, h *TestHandler, txs []string) map[string][]stri
 		}
 	}
 	return txid2addrs
-}
-
-func isMissingTx(err error) bool {
-	switch e1 := err.(type) {
-	case *errors.Err:
-		switch e2 := e1.Cause().(type) {
-		case *bchain.RPCError:
-			if e2.Code == -5 { // "No such mempool or blockchain transaction"
-				return true
-			}
-		}
-	}
-
-	return false
 }
 
 func intersect(a, b []string) []string {
@@ -399,9 +387,9 @@ func intersect(a, b []string) []string {
 	return res
 }
 
-func containsString(slice []string, s string) bool {
-	for i := range slice {
-		if slice[i] == s {
+func containsTx(o []bchain.Outpoint, tx string) bool {
+	for i := range o {
+		if o[i].Txid == tx {
 			return true
 		}
 	}

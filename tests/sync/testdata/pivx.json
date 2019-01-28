@@ -1,0 +1,274 @@
+{
+  "connectBlocks": {
+    "syncRanges": [{ "lower": 863801, "upper": 863801 }],
+    "blocks": {
+      "863801": {
+        "height": 863801,
+        "hash": "84c3697c0a0cfdeb8499d69da97151ed8babfd44cdf59d5b7d5e2dcc4870bdf9",
+        "noTxs": 4,
+        "txDetails": [
+          {
+            "hex": "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff0603392e0d0101ffffffff0100000000000000000000000000",
+            "txid": "64215f794d731e78714de663cdb83e2cf233800e5d4d2cc3d4c235bc4301651f",
+            "version": 1,
+            "locktime": 0,
+            "vin": [
+              {
+                "coinbase": "03392e0d0101",
+                "sequence": 4294967295
+              }
+            ],
+            "vout": [
+              {
+                "value": 0,
+                "n": 0,
+                "scriptPubKey": {
+                  "asm": "",
+                  "hex": "",
+                  "type": "nonstandard"
+                }
+              }
+            ],
+            "blockhash": "84c3697c0a0cfdeb8499d69da97151ed8babfd44cdf59d5b7d5e2dcc4870bdf9",
+            "confirmations": 696596,
+            "time": 1508218661,
+            "blocktime": 1508218661
+          },
+          {
+            "txid": "275915c605b5581acaaa5757b05a8a38c1e1aa6be49a8ab051301db9c8fac502",
+            "version": 1,
+            "locktime": 0,
+            "vin": [
+              {
+                "txid": "d182548f1e3dd98a16fcec20c63d1a7c08da586c9e7a51a128c1127518d1a974",
+                "vout": 1,
+                "scriptSig": {
+                  "asm": "3045022100ab7a97ba8dde60216ec72264b042631df8776a9a9504337f18d36d05408579b302203429a01dd94bbc62ad42d02e2fab23e62384ad70af19b8e13bc6ce9a610748dc01",
+                  "hex": "483045022100ab7a97ba8dde60216ec72264b042631df8776a9a9504337f18d36d05408579b302203429a01dd94bbc62ad42d02e2fab23e62384ad70af19b8e13bc6ce9a610748dc01"
+                },
+                "sequence": 4294967295
+              }
+            ],
+            "vout": [
+              {
+                "value": 0,
+                "n": 0,
+                "scriptPubKey": {
+                  "asm": "",
+                  "hex": "",
+                  "type": "nonstandard"
+                }
+              },
+              {
+                "value": 2654.99854617,
+                "n": 1,
+                "scriptPubKey": {
+                  "asm": "025828d51aa0212ea822e6dcf8449b0687e0767c47d5e6f86dc957369821390071 OP_CHECKSIG",
+                  "hex": "21025828d51aa0212ea822e6dcf8449b0687e0767c47d5e6f86dc957369821390071ac",
+                  "reqSigs": 1,
+                  "type": "pubkey",
+                  "addresses": ["D7Vvc9VjKRgXDjLgcJViGAqajMebXwFaQz"]
+                }
+              },
+              {
+                "value": 2.295,
+                "n": 2,
+                "scriptPubKey": {
+                  "asm": "OP_DUP OP_HASH160 3b8953e9abcf1765dfea4ec9865d130f8f53a6cd OP_EQUALVERIFY OP_CHECKSIG",
+                  "hex": "76a9143b8953e9abcf1765dfea4ec9865d130f8f53a6cd88ac",
+                  "reqSigs": 1,
+                  "type": "pubkeyhash",
+                  "addresses": ["DAZtvH5zmP3qqLhx3QdRaQipL69n84uMb7"]
+                }
+              }
+            ],
+            "blockhash": "84c3697c0a0cfdeb8499d69da97151ed8babfd44cdf59d5b7d5e2dcc4870bdf9",
+            "confirmations": 696596,
+            "time": 1508218661,
+            "blocktime": 1508218661
+          },
+          {
+            "txid": "ffcbfcea3a996e2496bb29bfd3462f1d8a9d55302f44545984830f0a455e79bf",
+            "version": 1,
+            "locktime": 0,
+            "vin": [
+              {
+                "txid": "1a59166aec662dfb9311dae22b11368b78fc3ce68bbf0cad1f5584ddfe29aee6",
+                "vout": 37,
+                "scriptSig": {
+                  "asm": "304402205db3a97ec8793bc1431f90920b19fd11de334b45a2669740d432f06c40a5b93802203e35145b2ceb25544eb950ae654b3271d7f040ff092c2c0c2f26a0a2a05297a101 023f2ad5a047f48a540d3e521299f6e0c3999dd0b18d83842108cb729ccc11b4a6",
+                  "hex": "47304402205db3a97ec8793bc1431f90920b19fd11de334b45a2669740d432f06c40a5b93802203e35145b2ceb25544eb950ae654b3271d7f040ff092c2c0c2f26a0a2a05297a10121023f2ad5a047f48a540d3e521299f6e0c3999dd0b18d83842108cb729ccc11b4a6"
+                },
+                "sequence": 4294967295
+              }
+            ],
+            "vout": [
+              {
+                "value": 50,
+                "n": 0,
+                "scriptPubKey": {
+                  "asm": "OP_ZEROCOINMINT 128 e3e3034c52ffec6b861c9bc0aafc35898b1772548138866bb4d1fdbe8331bd73bf118e36d69db6f44e4622f52e6da2ee973afd36fc7d762b9f18d78857d096dc2d3577a526f40974405289c6301d9df2c7ace8dfec580c5247c30acaf220ff7ec86cb5aa42c749c719cd41c0a00dee951a0d0c977dfff9b5b10885a1a0506570",
+                  "hex": "c10280004c80e3e3034c52ffec6b861c9bc0aafc35898b1772548138866bb4d1fdbe8331bd73bf118e36d69db6f44e4622f52e6da2ee973afd36fc7d762b9f18d78857d096dc2d3577a526f40974405289c6301d9df2c7ace8dfec580c5247c30acaf220ff7ec86cb5aa42c749c719cd41c0a00dee951a0d0c977dfff9b5b10885a1a0506570",
+                  "type": "zerocoinmint"
+                }
+              },
+              {
+                "value": 49.991,
+                "n": 1,
+                "scriptPubKey": {
+                  "asm": "OP_DUP OP_HASH160 6c7afd9a36aa90435033b101d86a49e2dd33bc96 OP_EQUALVERIFY OP_CHECKSIG",
+                  "hex": "76a9146c7afd9a36aa90435033b101d86a49e2dd33bc9688ac",
+                  "reqSigs": 1,
+                  "type": "pubkeyhash",
+                  "addresses": ["DF2grWqS22duV6zjybPsjn3DHr1fuh4AFt"]
+                }
+              }
+            ],
+            "blockhash": "84c3697c0a0cfdeb8499d69da97151ed8babfd44cdf59d5b7d5e2dcc4870bdf9",
+            "confirmations": 696596,
+            "time": 1508218661,
+            "blocktime": 1508218661
+          },
+          {
+            "txid": "bd4cfa6d63326dd1bf881cdc46f77e96efcef54e39d2b4e34749ecf65c26e772",
+            "version": 1,
+            "locktime": 0,
+            "vin": [
+              {
+                "txid": "eb151efd7054b92af313fdcad3e96be958466784e2a426ecd1cb2ea42bdc26bf",
+                "vout": 8,
+                "scriptSig": {
+                  "asm": "3045022100ab05f2b6fa212b924a1da7fba59b4f88988594df4dc6f49569ad40c101f1528f022035951603ce08c056a5a62b1d2926a621d57f56875feae5bee22a4e4e533d351401 03961ce992b67e570147aa9abf4b095892b4d4c2265508abbd2c3942d7485bd361",
+                  "hex": "483045022100ab05f2b6fa212b924a1da7fba59b4f88988594df4dc6f49569ad40c101f1528f022035951603ce08c056a5a62b1d2926a621d57f56875feae5bee22a4e4e533d3514012103961ce992b67e570147aa9abf4b095892b4d4c2265508abbd2c3942d7485bd361"
+                },
+                "sequence": 4294967295
+              },
+              {
+                "txid": "3432767329aa76f70f99aa21a21601108a474f354d0fc7b222b2bdbec8b8dbfb",
+                "vout": 1,
+                "scriptSig": {
+                  "asm": "3045022100a8abf366cb1a1f322c241f23dc1e97ea4d6520c1f861d6893d480945c6a11e4902207d20b250119e48923cb952fd37f5980fb1357d1b4d5492fd8eb7e57118f1ccc301",
+                  "hex": "483045022100a8abf366cb1a1f322c241f23dc1e97ea4d6520c1f861d6893d480945c6a11e4902207d20b250119e48923cb952fd37f5980fb1357d1b4d5492fd8eb7e57118f1ccc301"
+                },
+                "sequence": 4294967295
+              },
+              {
+                "txid": "4bea64cdcd1cfcbf322247a31009fa78378aa08d323fd8c808db05f4ed370537",
+                "vout": 1,
+                "scriptSig": {
+                  "asm": "30440220404278668d56b3922c03523d40fa38d8e9f01017f9834f8fee8605f920fdb6ef0220122ff839258555e2c580e0654ba3bc180fd23ab9687878b9d262cf67f8ace0eb01",
+                  "hex": "4730440220404278668d56b3922c03523d40fa38d8e9f01017f9834f8fee8605f920fdb6ef0220122ff839258555e2c580e0654ba3bc180fd23ab9687878b9d262cf67f8ace0eb01"
+                },
+                "sequence": 4294967295
+              }
+            ],
+            "vout": [
+              {
+                "value": 5000,
+                "n": 0,
+                "scriptPubKey": {
+                  "asm": "OP_ZEROCOINMINT 128 bf24c8600b8c52ab4c9c2beb23d5b4678b1428d0a7a1a4b0f272773ef9aff94dd80411e0f1f16645ef78ac99a8cb8ff318e9ec7fb5998d69f0c4b5f65a580fb14ab00fe0f1d734d946d8e512af87af736a63e89988f8e8e20e6853eb724b7c1628d3ceb4ea03f1f5abdb946f27dcafdbd14b552a6e7f7802fc35bc2225b42e61",
+                  "hex": "c10280004c80bf24c8600b8c52ab4c9c2beb23d5b4678b1428d0a7a1a4b0f272773ef9aff94dd80411e0f1f16645ef78ac99a8cb8ff318e9ec7fb5998d69f0c4b5f65a580fb14ab00fe0f1d734d946d8e512af87af736a63e89988f8e8e20e6853eb724b7c1628d3ceb4ea03f1f5abdb946f27dcafdbd14b552a6e7f7802fc35bc2225b42e61",
+                  "type": "zerocoinmint"
+                }
+              },
+              {
+                "value": 1000,
+                "n": 1,
+                "scriptPubKey": {
+                  "asm": "OP_ZEROCOINMINT 129 31152da13cf56e8dd2414d0c5aec2eae511d35d7d7036c3670e06369d889771fb1dd40eb952b624a9a808675a89250a2508b021235ddbf2084e19e5f9061fecd663cd803ebf1cc85abb95ef06be7c31c8289f4c0c053ae272b5c18d8b99f39aba9be166b288f26693bec6c5398b8a6b6112c76d9f8d0aa957ac8f9090a3156c200",
+                  "hex": "c10281004c8131152da13cf56e8dd2414d0c5aec2eae511d35d7d7036c3670e06369d889771fb1dd40eb952b624a9a808675a89250a2508b021235ddbf2084e19e5f9061fecd663cd803ebf1cc85abb95ef06be7c31c8289f4c0c053ae272b5c18d8b99f39aba9be166b288f26693bec6c5398b8a6b6112c76d9f8d0aa957ac8f9090a3156c200",
+                  "type": "zerocoinmint"
+                }
+              },
+              {
+                "value": 500,
+                "n": 2,
+                "scriptPubKey": {
+                  "asm": "OP_ZEROCOINMINT 128 ab395dcfcc9d0d7245b5dc0da2aa20981735116ec8585627a595336590771a1b5350f97d6fb80f5efdadc13cfe99ea478056034ca0964721b66a5d696211ae036ff8645805cdef2dcb77fcca53ae935bfcf8288e91ca7737245e36230173cc5310117777e7e48d90aa17cc5261548b8be639d28b72876b6dc3afecc841200f7f",
+                  "hex": "c10280004c80ab395dcfcc9d0d7245b5dc0da2aa20981735116ec8585627a595336590771a1b5350f97d6fb80f5efdadc13cfe99ea478056034ca0964721b66a5d696211ae036ff8645805cdef2dcb77fcca53ae935bfcf8288e91ca7737245e36230173cc5310117777e7e48d90aa17cc5261548b8be639d28b72876b6dc3afecc841200f7f",
+                  "type": "zerocoinmint"
+                }
+              },
+              {
+                "value": 100,
+                "n": 3,
+                "scriptPubKey": {
+                  "asm": "OP_ZEROCOINMINT 128 ff2b65fca5c36a4dd3b7ff9a193324cfc589cbc7412c80d0c93ca34cea3a6f0301c61aa6976ef7324711b4d6644558eaa951d34d017677d1186c326fbb8fdb4ae58c93d10d8d16142d5b25a1cc679e5ba8c3ff582f21b552539e4fc5b986f4cf994bf1bb3b6adcb6e441f5feb7be31599bf545ce583d01c29d1c8f057d0aec54",
+                  "hex": "c10280004c80ff2b65fca5c36a4dd3b7ff9a193324cfc589cbc7412c80d0c93ca34cea3a6f0301c61aa6976ef7324711b4d6644558eaa951d34d017677d1186c326fbb8fdb4ae58c93d10d8d16142d5b25a1cc679e5ba8c3ff582f21b552539e4fc5b986f4cf994bf1bb3b6adcb6e441f5feb7be31599bf545ce583d01c29d1c8f057d0aec54",
+                  "type": "zerocoinmint"
+                }
+              },
+              {
+                "value": 50,
+                "n": 4,
+                "scriptPubKey": {
+                  "asm": "OP_ZEROCOINMINT 129 6bbb23f619a38a8db29e0c2f75808ea286c1f1f2ce99e293f1e6936602dcec37c0bfa7a6be6330a0f576c396f67cc4368ee50cd0dcaa2f4a89f7a3d7b22a1f8454a3fb4c50fff3dab474a2d489ae0a4906878c8e6355aac95f23611eed4d0645e5920a38c168feba3c103638184409b695b322ab6dd3346d82586f154729b1b900",
+                  "hex": "c10281004c816bbb23f619a38a8db29e0c2f75808ea286c1f1f2ce99e293f1e6936602dcec37c0bfa7a6be6330a0f576c396f67cc4368ee50cd0dcaa2f4a89f7a3d7b22a1f8454a3fb4c50fff3dab474a2d489ae0a4906878c8e6355aac95f23611eed4d0645e5920a38c168feba3c103638184409b695b322ab6dd3346d82586f154729b1b900",
+                  "type": "zerocoinmint"
+                }
+              },
+              {
+                "value": 10,
+                "n": 5,
+                "scriptPubKey": {
+                  "asm": "OP_ZEROCOINMINT 129 7d4e07354e18be2b7cf56d839000832e25952638f7ff0110279f63dcabc05eb2339fbcc5f5e42ab6f5ffa878d2142afe305729e1bd2fdc2f6f27f7ad3160751ece1a96b98f8b4d2c998d858a67448eaf693de15b0780b5ea060acfd81c6cfe04bf0ed883e12b8571d1fb5adb3ae06abe99bfc0bc2588a5e9603a3b2cc023a88100",
+                  "hex": "c10281004c817d4e07354e18be2b7cf56d839000832e25952638f7ff0110279f63dcabc05eb2339fbcc5f5e42ab6f5ffa878d2142afe305729e1bd2fdc2f6f27f7ad3160751ece1a96b98f8b4d2c998d858a67448eaf693de15b0780b5ea060acfd81c6cfe04bf0ed883e12b8571d1fb5adb3ae06abe99bfc0bc2588a5e9603a3b2cc023a88100",
+                  "type": "zerocoinmint"
+                }
+              },
+              {
+                "value": 5,
+                "n": 6,
+                "scriptPubKey": {
+                  "asm": "OP_ZEROCOINMINT 128 b182b775351d0a2ed26ad8dd36879fdac81de2d89c4c1f2ff0230832904f8f56ec78c3d6ad5afc1b137b8c47712b9f9d2b34fa11ef1d1a9748d914842672d9188c17601304540e4b8ec7cffb212d06e0bc69956a7ad828378887cbf535e558db91b2109ccfe4af9f859cd104cc4c65382f3884a54163464e45ea6fa7168de027",
+                  "hex": "c10280004c80b182b775351d0a2ed26ad8dd36879fdac81de2d89c4c1f2ff0230832904f8f56ec78c3d6ad5afc1b137b8c47712b9f9d2b34fa11ef1d1a9748d914842672d9188c17601304540e4b8ec7cffb212d06e0bc69956a7ad828378887cbf535e558db91b2109ccfe4af9f859cd104cc4c65382f3884a54163464e45ea6fa7168de027",
+                  "type": "zerocoinmint"
+                }
+              },
+              {
+                "value": 1,
+                "n": 7,
+                "scriptPubKey": {
+                  "asm": "OP_ZEROCOINMINT 128 8dffa29073b184676895dbea7da434cdc27e501187b779c92abca1d806bec86fdee2c2ae16e4eb27571b3d4145c21bfd639343dc77259aedfe6d56502579735bbe2642c3a3e52532c48f5a136767c9815dd2076d0b6bcd9be2d3a63238c8f4a434460106b0e207f1059ae01fc972a60694b8351154167eb4a043da196b3a711e",
+                  "hex": "c10280004c808dffa29073b184676895dbea7da434cdc27e501187b779c92abca1d806bec86fdee2c2ae16e4eb27571b3d4145c21bfd639343dc77259aedfe6d56502579735bbe2642c3a3e52532c48f5a136767c9815dd2076d0b6bcd9be2d3a63238c8f4a434460106b0e207f1059ae01fc972a60694b8351154167eb4a043da196b3a711e",
+                  "type": "zerocoinmint"
+                }
+              },
+              {
+                "value": 28.51241166,
+                "n": 8,
+                "scriptPubKey": {
+                  "asm": "OP_DUP OP_HASH160 693155e0e4882ba26feeedfdffd9af2f9e8040d0 OP_EQUALVERIFY OP_CHECKSIG",
+                  "hex": "76a914693155e0e4882ba26feeedfdffd9af2f9e8040d088ac",
+                  "reqSigs": 1,
+                  "type": "pubkeyhash",
+                  "addresses": ["DEjJbHhPsqZZZnVDaXb9p3wM5Ws28Abkg7"]
+                }
+              }
+            ],
+            "blockhash": "84c3697c0a0cfdeb8499d69da97151ed8babfd44cdf59d5b7d5e2dcc4870bdf9",
+            "confirmations": 696594,
+            "time": 1508218661,
+            "blocktime": 1508218661
+          }
+        ]
+      }
+    }
+  },
+  "handleFork": {
+    "syncRanges": [{ "lower": 863801, "upper": 863801 }],
+    "fakeBlocks": {
+      "863801": {
+        "height": 863801,
+        "hash": "915a2413d358f373be303f242aa92619e6e0eeb16856217140f8749b86acea79"
+      }
+    },
+    "realBlocks": {
+      "863801": {
+        "height": 863801,
+        "hash": "84c3697c0a0cfdeb8499d69da97151ed8babfd44cdf59d5b7d5e2dcc4870bdf9"
+      }
+    }
+  }
+}

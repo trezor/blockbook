@@ -1,11 +1,11 @@
-{{- define "paging"}}{{$data := . -}}{{if $data.PagingRange -}}
+{{- define "paging"}}{{$data := .}}{{if $data.PrevPage -}}
 <ul class="pagination justify-content-end">
-    <li class="page-item"><a class="page-link" href="?page={{$data.PrevPage}}">&lt;</a></li>
+    <li class="page-item"><a class="page-link" href="?page={{$data.PrevPage}}{{$data.PageParams}}">&lt;</a></li>
     {{- range $p := $data.PagingRange -}}
     <li class="page-item{{if eq $data.Page $p}} active{{end}}">
-        {{- if $p}}<a class="page-link" href="?page={{$p}}">{{$p}}</a>
-        {{- else -}}<span class="page-text">...</span>{{- end -}}
+        {{- if $p}}<a class="page-link" href="?page={{$p}}{{$data.PageParams}}">{{$p}}</a>
+        {{- else}}<span class="page-text">...</span>{{end -}}
     </li>{{- end -}}
-    <li class="page-item"><a class="page-link" href="?page={{$data.NextPage}}">&gt;</a></li>
+    <li class="page-item"><a class="page-link" href="?page={{$data.NextPage}}{{$data.PageParams}}">&gt;</a></li>
 </ul>
-{{- end -}}{{- end -}}
+{{- end}}{{end -}}

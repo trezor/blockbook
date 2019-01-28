@@ -18,8 +18,8 @@ import (
 	"time"
 
 	"github.com/golang/glog"
-	"github.com/jakm/btcutil/chaincfg"
-	"github.com/martinboehm/golang-socketio"
+	"github.com/martinboehm/btcutil/chaincfg"
+	gosocketio "github.com/martinboehm/golang-socketio"
 	"github.com/martinboehm/golang-socketio/transport"
 )
 
@@ -48,10 +48,10 @@ func setupRocksDB(t *testing.T, parser bchain.BlockChainParser) (*db.RocksDB, *c
 	}
 	d.SetInternalState(is)
 	// import data
-	if err := d.ConnectBlock(dbtestdata.GetTestUTXOBlock1(parser)); err != nil {
+	if err := d.ConnectBlock(dbtestdata.GetTestBitcoinTypeBlock1(parser)); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.ConnectBlock(dbtestdata.GetTestUTXOBlock2(parser)); err != nil {
+	if err := d.ConnectBlock(dbtestdata.GetTestBitcoinTypeBlock2(parser)); err != nil {
 		t.Fatal(err)
 	}
 	return d, is, tmp
@@ -131,7 +131,7 @@ func newPostRequest(u string, body string) *http.Request {
 	return r
 }
 
-func httpTests(t *testing.T, ts *httptest.Server) {
+func httpTests_BitcoinType(t *testing.T, ts *httptest.Server) {
 	tests := []struct {
 		name        string
 		r           *http.Request
@@ -359,6 +359,7 @@ func httpTests(t *testing.T, ts *httptest.Server) {
 			body: []string{
 				`{"blockbook":{"coin":"Fakecoin"`,
 				`"bestHeight":225494`,
+				`"decimals":8`,
 				`"backend":{"chain":"fakecoin","blocks":2,"headers":2,"bestblockhash":"00000000eb0443fd7dc4a1ed5c686a8e995057805f9a161d9a5a77a95e72b7b6"`,
 				`"version":"001001","subversion":"/Fakecoin:0.0.1/"`,
 			},
@@ -373,21 +374,39 @@ func httpTests(t *testing.T, ts *httptest.Server) {
 			},
 		},
 		{
-			name:        "apiTx",
-			r:           newGetRequest(ts.URL + "/api/tx/05e2e48aeabdd9b75def7b48d756ba304713c2aba7b522bf9dbc893fc4231b07"),
+			name:        "apiTx v1",
+			r:           newGetRequest(ts.URL + "/api/v1/tx/05e2e48aeabdd9b75def7b48d756ba304713c2aba7b522bf9dbc893fc4231b07"),
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"txid":"05e2e48aeabdd9b75def7b48d756ba304713c2aba7b522bf9dbc893fc4231b07","vin":[{"txid":"effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75","vout":2,"n":0,"scriptSig":{"hex":""},"addresses":["2NEVv9LJmAnY99W1pFoc5UJjVdypBqdnvu1"],"value":"0.00009876"}],"vout":[{"value":"0.00009","n":0,"scriptPubKey":{"hex":"a914e921fc4912a315078f370d959f2c4f7b6d2a683c87","addresses":["2NEVv9LJmAnY99W1pFoc5UJjVdypBqdnvu1"]},"spent":false}],"blockhash":"00000000eb0443fd7dc4a1ed5c686a8e995057805f9a161d9a5a77a95e72b7b6","blockheight":225494,"confirmations":1,"time":22549400002,"blocktime":22549400002,"valueOut":"0.00009","valueIn":"0.00009876","fees":"0.00000876","hex":""}`,
+				`{"txid":"05e2e48aeabdd9b75def7b48d756ba304713c2aba7b522bf9dbc893fc4231b07","vin":[{"txid":"effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75","vout":2,"n":0,"scriptSig":{},"addresses":["2NEVv9LJmAnY99W1pFoc5UJjVdypBqdnvu1"],"value":"0.00009876"}],"vout":[{"value":"0.00009","n":0,"scriptPubKey":{"hex":"a914e921fc4912a315078f370d959f2c4f7b6d2a683c87","addresses":["2NEVv9LJmAnY99W1pFoc5UJjVdypBqdnvu1"]},"spent":false}],"blockhash":"00000000eb0443fd7dc4a1ed5c686a8e995057805f9a161d9a5a77a95e72b7b6","blockheight":225494,"confirmations":1,"time":22549400002,"blocktime":22549400002,"valueOut":"0.00009","valueIn":"0.00009876","fees":"0.00000876","hex":""}`,
 			},
 		},
 		{
-			name:        "apiTx - not found",
-			r:           newGetRequest(ts.URL + "/api/tx/1232e48aeabdd9b75def7b48d756ba304713c2aba7b522bf9dbc893fc4231b07"),
+			name:        "apiTx - not found v1",
+			r:           newGetRequest(ts.URL + "/api/v1/tx/1232e48aeabdd9b75def7b48d756ba304713c2aba7b522bf9dbc893fc4231b07"),
 			status:      http.StatusBadRequest,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"error":"Tx not found, Not found"}`,
+				`{"error":"Transaction '1232e48aeabdd9b75def7b48d756ba304713c2aba7b522bf9dbc893fc4231b07' not found"}`,
+			},
+		},
+		{
+			name:        "apiTx v2",
+			r:           newGetRequest(ts.URL + "/api/v2/tx/05e2e48aeabdd9b75def7b48d756ba304713c2aba7b522bf9dbc893fc4231b07"),
+			status:      http.StatusOK,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`{"txid":"05e2e48aeabdd9b75def7b48d756ba304713c2aba7b522bf9dbc893fc4231b07","vin":[{"txid":"effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75","vout":2,"n":0,"addresses":["2NEVv9LJmAnY99W1pFoc5UJjVdypBqdnvu1"],"value":"9876"}],"vout":[{"value":"9000","n":0,"hex":"a914e921fc4912a315078f370d959f2c4f7b6d2a683c87","addresses":["2NEVv9LJmAnY99W1pFoc5UJjVdypBqdnvu1"]}],"blockhash":"00000000eb0443fd7dc4a1ed5c686a8e995057805f9a161d9a5a77a95e72b7b6","blockheight":225494,"confirmations":1,"blocktime":22549400002,"value":"9000","valueIn":"9876","fees":"876"}`,
+			},
+		},
+		{
+			name:        "apiTx - not found v2",
+			r:           newGetRequest(ts.URL + "/api/v2/tx/1232e48aeabdd9b75def7b48d756ba304713c2aba7b522bf9dbc893fc4231b07"),
+			status:      http.StatusBadRequest,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`{"error":"Transaction '1232e48aeabdd9b75def7b48d756ba304713c2aba7b522bf9dbc893fc4231b07' not found"}`,
 			},
 		},
 		{
@@ -396,12 +415,12 @@ func httpTests(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"hex":"","txid":"00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840","version":0,"locktime":0,"vin":null,"vout":[{"ValueSat":100000000,"value":0,"n":0,"scriptPubKey":{"hex":"76a914010d39800f86122416e28f485029acf77507169288ac","addresses":null}},{"ValueSat":12345,"value":0,"n":1,"scriptPubKey":{"hex":"76a9148bdf0aa3c567aa5975c2e61321b8bebbe7293df688ac","addresses":null}}],"confirmations":2,"time":22549300000,"blocktime":22549300000}`,
+				`{"hex":"","txid":"00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840","version":0,"locktime":0,"vin":[],"vout":[{"ValueSat":100000000,"value":0,"n":0,"scriptPubKey":{"hex":"76a914010d39800f86122416e28f485029acf77507169288ac","addresses":null}},{"ValueSat":12345,"value":0,"n":1,"scriptPubKey":{"hex":"76a9148bdf0aa3c567aa5975c2e61321b8bebbe7293df688ac","addresses":null}}],"confirmations":2,"time":22549300000,"blocktime":22549300000}`,
 			},
 		},
 		{
-			name:        "apiAddress",
-			r:           newGetRequest(ts.URL + "/api/address/mv9uLThosiEnGRbVPS7Vhyw6VssbVRsiAw"),
+			name:        "apiAddress v1",
+			r:           newGetRequest(ts.URL + "/api/v1/address/mv9uLThosiEnGRbVPS7Vhyw6VssbVRsiAw"),
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
@@ -409,12 +428,30 @@ func httpTests(t *testing.T, ts *httptest.Server) {
 			},
 		},
 		{
-			name:        "apiAddressUtxo",
-			r:           newGetRequest(ts.URL + "/api/utxo/mtR97eM2HPWVM6c8FGLGcukgaHHQv7THoL"),
+			name:        "apiAddress v2",
+			r:           newGetRequest(ts.URL + "/api/v2/address/mv9uLThosiEnGRbVPS7Vhyw6VssbVRsiAw"),
+			status:      http.StatusOK,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`{"page":1,"totalPages":1,"itemsOnPage":1000,"address":"mv9uLThosiEnGRbVPS7Vhyw6VssbVRsiAw","balance":"0","totalReceived":"1234567890123","totalSent":"1234567890123","unconfirmedBalance":"0","unconfirmedTxs":0,"txs":2,"txids":["7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25","effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75"]}`,
+			},
+		},
+		{
+			name:        "apiAddressUtxo v1",
+			r:           newGetRequest(ts.URL + "/api/v1/utxo/mtR97eM2HPWVM6c8FGLGcukgaHHQv7THoL"),
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
 				`[{"txid":"7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25","vout":1,"amount":"9172.83951061","satoshis":917283951061,"height":225494,"confirmations":1}]`,
+			},
+		},
+		{
+			name:        "apiAddressUtxo v2",
+			r:           newGetRequest(ts.URL + "/api/v2/utxo/mtR97eM2HPWVM6c8FGLGcukgaHHQv7THoL"),
+			status:      http.StatusOK,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`[{"txid":"7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25","vout":1,"value":"917283951061","height":225494,"confirmations":1}]`,
 			},
 		},
 		{
@@ -475,7 +512,7 @@ func httpTests(t *testing.T, ts *httptest.Server) {
 			b := string(bb)
 			for _, c := range tt.body {
 				if !strings.Contains(b, c) {
-					t.Errorf("Page body does not contain %v, body %v", c, b)
+					t.Errorf("got %v, want to contain %v", b, c)
 					break
 				}
 			}
@@ -483,7 +520,7 @@ func httpTests(t *testing.T, ts *httptest.Server) {
 	}
 }
 
-func socketioTests(t *testing.T, ts *httptest.Server) {
+func socketioTests_BitcoinType(t *testing.T, ts *httptest.Server) {
 	type socketioReq struct {
 		Method string        `json:"method"`
 		Params []interface{} `json:"params"`
@@ -578,13 +615,13 @@ func socketioTests(t *testing.T, ts *httptest.Server) {
 				t.Errorf("Socketio error %v", err)
 			}
 			if resp != tt.want {
-				t.Errorf("Socketio resp %v, want %v", resp, tt.want)
+				t.Errorf("got %v, want %v", resp, tt.want)
 			}
 		})
 	}
 }
 
-func Test_PublicServer_UTXO(t *testing.T) {
+func Test_PublicServer_BitcoinType(t *testing.T) {
 	s, dbpath := setupPublicHTTPServer(t)
 	defer closeAndDestroyPublicServer(t, s, dbpath)
 	s.ConnectFullPublicInterface()
@@ -592,7 +629,6 @@ func Test_PublicServer_UTXO(t *testing.T) {
 	ts := httptest.NewServer(s.https.Handler)
 	defer ts.Close()
 
-	httpTests(t, ts)
-	socketioTests(t, ts)
-
+	httpTests_BitcoinType(t, ts)
+	socketioTests_BitcoinType(t, ts)
 }

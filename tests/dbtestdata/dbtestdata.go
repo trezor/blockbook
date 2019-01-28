@@ -54,7 +54,7 @@ func AddressToPubKeyHex(addr string, parser bchain.BlockChainParser) string {
 	return hex.EncodeToString(b)
 }
 
-func GetTestUTXOBlock1(parser bchain.BlockChainParser) *bchain.Block {
+func GetTestBitcoinTypeBlock1(parser bchain.BlockChainParser) *bchain.Block {
 	return &bchain.Block{
 		BlockHeader: bchain.BlockHeader{
 			Height:        225493,
@@ -64,17 +64,18 @@ func GetTestUTXOBlock1(parser bchain.BlockChainParser) *bchain.Block {
 			Confirmations: 2,
 		},
 		Txs: []bchain.Tx{
-			bchain.Tx{
+			{
 				Txid: TxidB1T1,
+				Vin:  []bchain.Vin{},
 				Vout: []bchain.Vout{
-					bchain.Vout{
+					{
 						N: 0,
 						ScriptPubKey: bchain.ScriptPubKey{
 							Hex: AddressToPubKeyHex(Addr1, parser),
 						},
 						ValueSat: *SatB1T1A1,
 					},
-					bchain.Vout{
+					{
 						N: 1,
 						ScriptPubKey: bchain.ScriptPubKey{
 							Hex: AddressToPubKeyHex(Addr2, parser),
@@ -86,24 +87,24 @@ func GetTestUTXOBlock1(parser bchain.BlockChainParser) *bchain.Block {
 				Time:          22549300000,
 				Confirmations: 2,
 			},
-			bchain.Tx{
+			{
 				Txid: TxidB1T2,
 				Vout: []bchain.Vout{
-					bchain.Vout{
+					{
 						N: 0,
 						ScriptPubKey: bchain.ScriptPubKey{
 							Hex: AddressToPubKeyHex(Addr3, parser),
 						},
 						ValueSat: *SatB1T2A3,
 					},
-					bchain.Vout{
+					{
 						N: 1,
 						ScriptPubKey: bchain.ScriptPubKey{
 							Hex: AddressToPubKeyHex(Addr4, parser),
 						},
 						ValueSat: *SatB1T2A4,
 					},
-					bchain.Vout{
+					{
 						N: 2,
 						ScriptPubKey: bchain.ScriptPubKey{
 							Hex: AddressToPubKeyHex(Addr5, parser),
@@ -119,7 +120,7 @@ func GetTestUTXOBlock1(parser bchain.BlockChainParser) *bchain.Block {
 	}
 }
 
-func GetTestUTXOBlock2(parser bchain.BlockChainParser) *bchain.Block {
+func GetTestBitcoinTypeBlock2(parser bchain.BlockChainParser) *bchain.Block {
 	return &bchain.Block{
 		BlockHeader: bchain.BlockHeader{
 			Height:        225494,
@@ -129,29 +130,29 @@ func GetTestUTXOBlock2(parser bchain.BlockChainParser) *bchain.Block {
 			Confirmations: 1,
 		},
 		Txs: []bchain.Tx{
-			bchain.Tx{
+			{
 				Txid: TxidB2T1,
 				Vin: []bchain.Vin{
 					// addr3
-					bchain.Vin{
+					{
 						Txid: TxidB1T2,
 						Vout: 0,
 					},
 					// addr2
-					bchain.Vin{
+					{
 						Txid: TxidB1T1,
 						Vout: 1,
 					},
 				},
 				Vout: []bchain.Vout{
-					bchain.Vout{
+					{
 						N: 0,
 						ScriptPubKey: bchain.ScriptPubKey{
 							Hex: AddressToPubKeyHex(Addr6, parser),
 						},
 						ValueSat: *SatB2T1A6,
 					},
-					bchain.Vout{
+					{
 						N: 1,
 						ScriptPubKey: bchain.ScriptPubKey{
 							Hex: AddressToPubKeyHex(Addr7, parser),
@@ -163,29 +164,29 @@ func GetTestUTXOBlock2(parser bchain.BlockChainParser) *bchain.Block {
 				Time:          22549400000,
 				Confirmations: 1,
 			},
-			bchain.Tx{
+			{
 				Txid: TxidB2T2,
 				Vin: []bchain.Vin{
 					// spending an output in the same block - addr6
-					bchain.Vin{
+					{
 						Txid: TxidB2T1,
 						Vout: 0,
 					},
 					// spending an output in the previous block - addr4
-					bchain.Vin{
+					{
 						Txid: TxidB1T2,
 						Vout: 1,
 					},
 				},
 				Vout: []bchain.Vout{
-					bchain.Vout{
+					{
 						N: 0,
 						ScriptPubKey: bchain.ScriptPubKey{
 							Hex: AddressToPubKeyHex(Addr8, parser),
 						},
 						ValueSat: *SatB2T2A8,
 					},
-					bchain.Vout{
+					{
 						N: 1,
 						ScriptPubKey: bchain.ScriptPubKey{
 							Hex: AddressToPubKeyHex(Addr9, parser),
@@ -198,17 +199,17 @@ func GetTestUTXOBlock2(parser bchain.BlockChainParser) *bchain.Block {
 				Confirmations: 1,
 			},
 			// transaction from the same address in the previous block
-			bchain.Tx{
+			{
 				Txid: TxidB2T3,
 				Vin: []bchain.Vin{
 					// addr5
-					bchain.Vin{
+					{
 						Txid: TxidB1T2,
 						Vout: 2,
 					},
 				},
 				Vout: []bchain.Vout{
-					bchain.Vout{
+					{
 						N: 0,
 						ScriptPubKey: bchain.ScriptPubKey{
 							Hex: AddressToPubKeyHex(Addr5, parser),
@@ -221,22 +222,22 @@ func GetTestUTXOBlock2(parser bchain.BlockChainParser) *bchain.Block {
 				Confirmations: 1,
 			},
 			// mining transaction
-			bchain.Tx{
+			{
 				Txid: TxidB2T4,
 				Vin: []bchain.Vin{
-					bchain.Vin{
+					{
 						Coinbase: "03bf1e1504aede765b726567696f6e312f50726f6a65637420425443506f6f6c2f01000001bf7e000000000000",
 					},
 				},
 				Vout: []bchain.Vout{
-					bchain.Vout{
+					{
 						N: 0,
 						ScriptPubKey: bchain.ScriptPubKey{
 							Hex: AddressToPubKeyHex(AddrA, parser),
 						},
 						ValueSat: *SatB2T4AA,
 					},
-					bchain.Vout{
+					{
 						N:            1,
 						ScriptPubKey: bchain.ScriptPubKey{},
 						ValueSat:     *SatZero,

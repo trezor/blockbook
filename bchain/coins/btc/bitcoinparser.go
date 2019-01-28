@@ -8,11 +8,11 @@ import (
 	"math/big"
 
 	vlq "github.com/bsm/go-vlq"
-	"github.com/btcsuite/btcd/blockchain"
-	"github.com/btcsuite/btcd/wire"
-	"github.com/jakm/btcutil"
-	"github.com/jakm/btcutil/chaincfg"
-	"github.com/jakm/btcutil/txscript"
+	"github.com/martinboehm/btcd/blockchain"
+	"github.com/martinboehm/btcd/wire"
+	"github.com/martinboehm/btcutil"
+	"github.com/martinboehm/btcutil/chaincfg"
+	"github.com/martinboehm/btcutil/txscript"
 )
 
 // OutputScriptToAddressesFunc converts ScriptPubKey to bitcoin addresses
@@ -154,6 +154,7 @@ func (p *BitcoinParser) outputScriptToAddresses(script []byte) ([]string, bool, 
 	return rv, s, nil
 }
 
+// TxFromMsgTx converts bitcoin wire Tx to bchain.Tx
 func (p *BitcoinParser) TxFromMsgTx(t *wire.MsgTx, parseAddresses bool) bchain.Tx {
 	vin := make([]bchain.Vin, len(t.TxIn))
 	for i, in := range t.TxIn {
