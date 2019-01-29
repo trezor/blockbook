@@ -299,8 +299,32 @@ func (p *BitcoinParser) addrDescFromExtKey(extKey *hdkeychain.ExtendedKey) (bcha
 	return txscript.PayToAddrScript(a)
 }
 
-// DeriveAddressDescriptors derives address descriptors from given xpub
-func (p *BitcoinParser) DeriveAddressDescriptors(xpub string, change uint32, fromIndex uint32, toIndex uint32) ([]bchain.AddressDescriptor, error) {
+// DeriveAddressDescriptors derives address descriptors from given xpub for listed indexes
+func (p *BitcoinParser) DeriveAddressDescriptors(xpub string, change uint32, indexes []uint32) ([]bchain.AddressDescriptor, error) {
+	extKey, err := hdkeychain.NewKeyFromString(xpub)
+	if err != nil {
+		return nil, err
+	}
+	changeExtKey, err := extKey.Child(change)
+	if err != nil {
+		return nil, err
+	}
+	ad := make([]bchain.AddressDescriptor, len(indexes))
+	for i, index := range indexes {
+		indexExtKey, err := changeExtKey.Child(index)
+		if err != nil {
+			return nil, err
+		}
+		ad[i], err = p.addrDescFromExtKey(indexExtKey)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return ad, nil
+}
+
+// DeriveAddressDescriptorsFromTo derives address descriptors from given xpub for addresses in index range
+func (p *BitcoinParser) DeriveAddressDescriptorsFromTo(xpub string, change uint32, fromIndex uint32, toIndex uint32) ([]bchain.AddressDescriptor, error) {
 	if toIndex <= fromIndex {
 		return nil, errors.New("toIndex<=fromIndex")
 	}

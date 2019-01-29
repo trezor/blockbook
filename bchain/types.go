@@ -264,7 +264,8 @@ type BlockChainParser interface {
 	UnpackBlockHash(buf []byte) (string, error)
 	ParseBlock(b []byte) (*Block, error)
 	// xpub
-	DeriveAddressDescriptors(xpub string, change uint32, fromIndex uint32, toIndex uint32) ([]AddressDescriptor, error)
+	DeriveAddressDescriptors(xpub string, change uint32, indexes []uint32) ([]AddressDescriptor, error)
+	DeriveAddressDescriptorsFromTo(xpub string, change uint32, fromIndex uint32, toIndex uint32) ([]AddressDescriptor, error)
 	// EthereumType specific
 	EthereumTypeGetErc20FromTx(tx *Tx) ([]Erc20Transfer, error)
 }
