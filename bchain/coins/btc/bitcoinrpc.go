@@ -613,6 +613,20 @@ func (b *BitcoinRPC) GetBlockFull(hash string) (*bchain.Block, error) {
 		}
 		return nil, errors.Annotatef(res.Error, "hash %v", hash)
 	}
+
+	for i := range res.Result.Txs {
+		tx := &res.Result.Txs[i]
+		for j := range tx.Vout {
+			vout := &tx.Vout[j]
+			// convert vout.JsonValue to big.Int and clear it, it is only temporary value used for unmarshal
+			vout.ValueSat, err = b.Parser.AmountToBigInt(vout.JsonValue)
+			if err != nil {
+				return nil, err
+			}
+			vout.JsonValue = ""
+		}
+	}
+
 	return &res.Result, nil
 }
 
