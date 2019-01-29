@@ -657,12 +657,12 @@ func IsMissingTx(err *bchain.RPCError) bool {
 // GetTransactionForMempool returns a transaction by the transaction ID
 // It could be optimized for mempool, i.e. without block time and confirmations
 func (b *BitcoinRPC) GetTransactionForMempool(txid string) (*bchain.Tx, error) {
-	glog.V(1).Info("rpc: getrawtransaction nonverbose ", txid)
+	glog.V(1).Info("rpc: getrawtransaction", txid)
 
-	res := ResGetRawTransactionNonverbose{}
+	res := ResGetRawTransaction{}
 	req := CmdGetRawTransaction{Method: "getrawtransaction"}
 	req.Params.Txid = txid
-	req.Params.Verbose = false
+	req.Params.Verbose = !b.ParseBlocks
 	err := b.Call(&req, &res)
 	if err != nil {
 		return nil, errors.Annotatef(err, "txid %v", txid)
@@ -673,7 +673,13 @@ func (b *BitcoinRPC) GetTransactionForMempool(txid string) (*bchain.Tx, error) {
 		}
 		return nil, errors.Annotatef(res.Error, "txid %v", txid)
 	}
-	data, err := hex.DecodeString(res.Result)
+
+	if !b.ParseBlocks {
+		return b.Parser.ParseTxFromJson(res.Result)
+	}
+
+	data := make([]byte, hex.DecodedLen(len(res.Result)))
+	_, err = hex.Decode(res.Result, data)
 	if err != nil {
 		return nil, errors.Annotatef(err, "txid %v", txid)
 	}
