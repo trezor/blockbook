@@ -19,7 +19,7 @@ func TestMain(m *testing.M) {
 	os.Exit(c)
 }
 
-func Test_GetAddrDescFromAddress(t *testing.T) {
+func TestGetAddrDescFromAddress(t *testing.T) {
 	type args struct {
 		address string
 	}
@@ -77,7 +77,7 @@ func Test_GetAddrDescFromAddress(t *testing.T) {
 	}
 }
 
-func Test_GetAddrDescFromVout(t *testing.T) {
+func TestGetAddrDescFromVout(t *testing.T) {
 	type args struct {
 		vout bchain.Vout
 	}
@@ -141,7 +141,7 @@ func Test_GetAddrDescFromVout(t *testing.T) {
 	}
 }
 
-func Test_GetAddressesFromAddrDesc(t *testing.T) {
+func TestGetAddressesFromAddrDesc(t *testing.T) {
 	type args struct {
 		script string
 	}
@@ -316,7 +316,7 @@ func init() {
 	}
 }
 
-func Test_PackTx(t *testing.T) {
+func TestPackTx(t *testing.T) {
 	type args struct {
 		tx        bchain.Tx
 		height    uint32
@@ -367,7 +367,7 @@ func Test_PackTx(t *testing.T) {
 	}
 }
 
-func Test_UnpackTx(t *testing.T) {
+func TestUnpackTx(t *testing.T) {
 	type args struct {
 		packedTx string
 		parser   *BitcoinParser
@@ -418,7 +418,7 @@ func Test_UnpackTx(t *testing.T) {
 	}
 }
 
-func Test_DeriveAddressDescriptors(t *testing.T) {
+func TestDeriveAddressDescriptors(t *testing.T) {
 	btcMainParser := NewBitcoinParser(GetChainParams("main"), &Configuration{XPubMagic: 76067358, XPubMagicSegwitP2sh: 77429938, XPubMagicSegwitNative: 78792518})
 	type args struct {
 		xpub    string
@@ -486,8 +486,9 @@ func Test_DeriveAddressDescriptors(t *testing.T) {
 	}
 }
 
-func Test_DeriveAddressDescriptorsFromTo(t *testing.T) {
+func TestDeriveAddressDescriptorsFromTo(t *testing.T) {
 	btcMainParser := NewBitcoinParser(GetChainParams("main"), &Configuration{XPubMagic: 76067358, XPubMagicSegwitP2sh: 77429938, XPubMagicSegwitNative: 78792518})
+	btcTestnetsParser := NewBitcoinParser(GetChainParams("test"), &Configuration{XPubMagic: 70617039, XPubMagicSegwitP2sh: 71979618, XPubMagicSegwitNative: 73342198})
 	type args struct {
 		xpub      string
 		change    uint32
@@ -534,6 +535,17 @@ func Test_DeriveAddressDescriptorsFromTo(t *testing.T) {
 			},
 			want: []string{"bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu"},
 		},
+		{
+			name: "m/49'/1'/0'",
+			args: args{
+				xpub:      "upub5DR1Mg5nykixzYjFXWW5GghAU7dDqoPVJ2jrqFbL8sJ7Hs7jn69MP7KBnnmxn88GeZtnH8PRKV9w5MMSFX8AdEAoXY8Qd8BJPoXtpMeHMxJ",
+				change:    0,
+				fromIndex: 0,
+				toIndex:   10,
+				parser:    btcTestnetsParser,
+			},
+			want: []string{"2N4Q5FhU2497BryFfUgbqkAJE87aKHUhXMp", "2Mt7P2BAfE922zmfXrdcYTLyR7GUvbwSEns", "2N6aUMgQk8y1zvoq6FeWFyotyj75WY9BGsu", "2NA7tbZWM9BcRwBuebKSQe2xbhhF1paJwBM", "2N8RZMzvrUUnpLmvACX9ysmJ2MX3GK5jcQM", "2MvUUSiQZDSqyeSdofKX9KrSCio1nANPDTe", "2NBXaWu1HazjoUVgrXgcKNoBLhtkkD9Gmet", "2N791Ttf89tMVw2maj86E1Y3VgxD9Mc7PU7", "2NCJmwEq8GJm8t8GWWyBXAfpw7F2qZEVP5Y", "2NEgW71hWKer2XCSA8ZCC2VnWpB77L6bk68"},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -555,5 +567,26 @@ func Test_DeriveAddressDescriptorsFromTo(t *testing.T) {
 				t.Errorf("DeriveAddressDescriptorsFromTo() = %v, want %v", gotAddresses, tt.want)
 			}
 		})
+	}
+}
+
+func BenchmarkDeriveAddressDescriptorsFromToXpub(b *testing.B) {
+	btcMainParser := NewBitcoinParser(GetChainParams("main"), &Configuration{XPubMagic: 76067358, XPubMagicSegwitP2sh: 77429938, XPubMagicSegwitNative: 78792518})
+	for i := 0; i < b.N; i++ {
+		btcMainParser.DeriveAddressDescriptorsFromTo("xpub6BosfCnifzxcFwrSzQiqu2DBVTshkCXacvNsWGYJVVhhawA7d4R5WSWGFNbi8Aw6ZRc1brxMyWMzG3DSSSSoekkudhUd9yLb6qx39T9nMdj", 1, 0, 100)
+	}
+}
+
+func BenchmarkDeriveAddressDescriptorsFromToYpub(b *testing.B) {
+	btcMainParser := NewBitcoinParser(GetChainParams("main"), &Configuration{XPubMagic: 76067358, XPubMagicSegwitP2sh: 77429938, XPubMagicSegwitNative: 78792518})
+	for i := 0; i < b.N; i++ {
+		btcMainParser.DeriveAddressDescriptorsFromTo("ypub6Ww3ibxVfGzLrAH1PNcjyAWenMTbbAosGNB6VvmSEgytSER9azLDWCxoJwW7Ke7icmizBMXrzBx9979FfaHxHcrArf3zbeJJJUZPf663zsP", 1, 0, 100)
+	}
+}
+
+func BenchmarkDeriveAddressDescriptorsFromToZpub(b *testing.B) {
+	btcMainParser := NewBitcoinParser(GetChainParams("main"), &Configuration{XPubMagic: 76067358, XPubMagicSegwitP2sh: 77429938, XPubMagicSegwitNative: 78792518})
+	for i := 0; i < b.N; i++ {
+		btcMainParser.DeriveAddressDescriptorsFromTo("zpub6rFR7y4Q2AijBEqTUquhVz398htDFrtymD9xYYfG1m4wAcvPhXNfE3EfH1r1ADqtfSdVCToUG868RvUUkgDKf31mGDtKsAYz2oz2AGutZYs", 1, 0, 100)
 	}
 }
