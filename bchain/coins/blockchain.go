@@ -3,6 +3,7 @@ package coins
 import (
 	"blockbook/bchain"
 	"blockbook/bchain/coins/bch"
+	"blockbook/bchain/coins/bellcoin"
 	"blockbook/bchain/coins/btc"
 	"blockbook/bchain/coins/btg"
 	"blockbook/bchain/coins/dash"
@@ -71,6 +72,7 @@ func init() {
 	BlockChainFactories["PIVX"] = pivx.NewPivXRPC
 	BlockChainFactories["Zcoin"] = xzc.NewZcoinRPC
 	BlockChainFactories["Fujicoin"] = fujicoin.NewFujicoinRPC
+	BlockChainFactories["Bellcoin"] = bellcoin.NewBellcoinRPC
 }
 
 // GetCoinNameFromConfig gets coin name and coin shortcut from config file
