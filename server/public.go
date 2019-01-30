@@ -131,6 +131,7 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 		// internal explorer handlers
 		serveMux.HandleFunc(path+"tx/", s.htmlTemplateHandler(s.explorerTx))
 		serveMux.HandleFunc(path+"address/", s.htmlTemplateHandler(s.explorerAddress))
+		serveMux.HandleFunc(path+"xpub/", s.htmlTemplateHandler(s.explorerXpub))
 		serveMux.HandleFunc(path+"search/", s.htmlTemplateHandler(s.explorerSearch))
 		serveMux.HandleFunc(path+"blocks", s.htmlTemplateHandler(s.explorerBlocks))
 		serveMux.HandleFunc(path+"block/", s.htmlTemplateHandler(s.explorerBlock))
@@ -165,6 +166,7 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 	serveMux.HandleFunc(path+"api/tx-specific/", s.jsonHandler(s.apiTxSpecific, apiDefault))
 	serveMux.HandleFunc(path+"api/tx/", s.jsonHandler(s.apiTx, apiDefault))
 	serveMux.HandleFunc(path+"api/address/", s.jsonHandler(s.apiAddress, apiDefault))
+	serveMux.HandleFunc(path+"api/xpub/", s.jsonHandler(s.apiXpub, apiDefault))
 	serveMux.HandleFunc(path+"api/utxo/", s.jsonHandler(s.apiAddressUtxo, apiDefault))
 	serveMux.HandleFunc(path+"api/block/", s.jsonHandler(s.apiBlock, apiDefault))
 	serveMux.HandleFunc(path+"api/sendtx/", s.jsonHandler(s.apiSendTx, apiDefault))
@@ -174,6 +176,7 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 	serveMux.HandleFunc(path+"api/v2/tx-specific/", s.jsonHandler(s.apiTxSpecific, apiV2))
 	serveMux.HandleFunc(path+"api/v2/tx/", s.jsonHandler(s.apiTx, apiV2))
 	serveMux.HandleFunc(path+"api/v2/address/", s.jsonHandler(s.apiAddress, apiV2))
+	serveMux.HandleFunc(path+"api/v2/xpub/", s.jsonHandler(s.apiXpub, apiV2))
 	serveMux.HandleFunc(path+"api/v2/utxo/", s.jsonHandler(s.apiAddressUtxo, apiV2))
 	serveMux.HandleFunc(path+"api/v2/block/", s.jsonHandler(s.apiBlock, apiV2))
 	serveMux.HandleFunc(path+"api/v2/sendtx/", s.jsonHandler(s.apiSendTx, apiV2))
@@ -372,6 +375,7 @@ const (
 	indexTpl
 	txTpl
 	addressTpl
+	xpubTpl
 	blocksTpl
 	blockTpl
 	sendTransactionTpl
@@ -465,6 +469,7 @@ func (s *PublicServer) parseTemplates() []*template.Template {
 		t[addressTpl] = createTemplate("./static/templates/address.html", "./static/templates/txdetail.html", "./static/templates/paging.html", "./static/templates/base.html")
 		t[blockTpl] = createTemplate("./static/templates/block.html", "./static/templates/txdetail.html", "./static/templates/paging.html", "./static/templates/base.html")
 	}
+	t[xpubTpl] = createTemplate("./static/templates/xpub.html", "./static/templates/txdetail.html", "./static/templates/paging.html", "./static/templates/base.html")
 	return t
 }
 
@@ -577,6 +582,48 @@ func (s *PublicServer) explorerAddress(w http.ResponseWriter, r *http.Request) (
 	return addressTpl, data, nil
 }
 
+func (s *PublicServer) explorerXpub(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
+	var address *api.Address
+	var filter string
+	var fn = api.AddressFilterVoutOff
+	var err error
+	s.metrics.ExplorerViews.With(common.Labels{"action": "xpub"}).Inc()
+	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
+		page, ec := strconv.Atoi(r.URL.Query().Get("page"))
+		if ec != nil {
+			page = 0
+		}
+		filter = r.URL.Query().Get("filter")
+		if len(filter) > 0 {
+			if filter == "inputs" {
+				fn = api.AddressFilterVoutInputs
+			} else if filter == "outputs" {
+				fn = api.AddressFilterVoutOutputs
+			} else {
+				fn, ec = strconv.Atoi(filter)
+				if ec != nil || fn < 0 {
+					filter = ""
+					fn = api.AddressFilterVoutOff
+				}
+			}
+		}
+		address, err = s.api.GetAddressForXpub(r.URL.Path[i+1:], page, txsOnPage, api.TxHistoryLight, &api.AddressFilter{Vout: fn})
+		if err != nil {
+			return errorTpl, nil, err
+		}
+	}
+	data := s.newTemplateData()
+	data.AddrStr = address.AddrStr
+	data.Address = address
+	data.Page = address.Page
+	data.PagingRange, data.PrevPage, data.NextPage = getPagingRange(address.Page, address.TotalPages)
+	if filter != "" {
+		data.PageParams = template.URL("&filter=" + filter)
+		data.Address.Filter = filter
+	}
+	return xpubTpl, data, nil
+}
+
 func (s *PublicServer) explorerBlocks(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
 	var blocks *api.Blocks
 	var err error
@@ -638,6 +685,11 @@ func (s *PublicServer) explorerSearch(w http.ResponseWriter, r *http.Request) (t
 	var err error
 	s.metrics.ExplorerViews.With(common.Labels{"action": "search"}).Inc()
 	if len(q) > 0 {
+		address, err = s.api.GetAddressForXpub(q, 0, 1, api.Basic, &api.AddressFilter{Vout: api.AddressFilterVoutOff})
+		if err == nil {
+			http.Redirect(w, r, joinURL("/xpub/", address.AddrStr), 302)
+			return noTpl, nil, nil
+		}
 		block, err = s.api.GetBlock(q, 0, 1)
 		if err == nil {
 			http.Redirect(w, r, joinURL("/block/", block.Hash), 302)
@@ -811,6 +863,23 @@ func (s *PublicServer) apiAddress(r *http.Request, apiVersion int) (interface{},
 			page = 0
 		}
 		address, err = s.api.GetAddress(r.URL.Path[i+1:], page, txsInAPI, api.TxidHistory, &api.AddressFilter{Vout: api.AddressFilterVoutOff})
+		if err == nil && apiVersion == apiV1 {
+			return s.api.AddressToV1(address), nil
+		}
+	}
+	return address, err
+}
+
+func (s *PublicServer) apiXpub(r *http.Request, apiVersion int) (interface{}, error) {
+	var address *api.Address
+	var err error
+	s.metrics.ExplorerViews.With(common.Labels{"action": "api-xpub"}).Inc()
+	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
+		page, ec := strconv.Atoi(r.URL.Query().Get("page"))
+		if ec != nil {
+			page = 0
+		}
+		address, err = s.api.GetAddressForXpub(r.URL.Path[i+1:], page, txsInAPI, api.TxidHistory, &api.AddressFilter{Vout: api.AddressFilterVoutOff})
 		if err == nil && apiVersion == apiV1 {
 			return s.api.AddressToV1(address), nil
 		}

@@ -5,6 +5,7 @@ import (
 	"blockbook/common"
 	"blockbook/db"
 	"encoding/json"
+	"errors"
 	"math/big"
 	"time"
 )
@@ -26,6 +27,9 @@ const (
 	// TxHistory - balances and full tx data, subject to paging
 	TxHistory
 )
+
+// ErrUnsupportedXpub is returned when coin type does not support xpub address derivation or provided string is not an xpub
+var ErrUnsupportedXpub = errors.New("XPUB not supported")
 
 // APIError extends error by information if the error details should be returned to the end user
 type APIError struct {
@@ -122,6 +126,9 @@ type TokenType string
 
 // ERC20TokenType is Ethereum ERC20 token
 const ERC20TokenType TokenType = "ERC20"
+
+// XPUBAddressTokenType is address derived from xpub
+const XPUBAddressTokenType TokenType = "XPUBAddress"
 
 // Token contains info about tokens held by an address
 type Token struct {
