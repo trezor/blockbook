@@ -13,7 +13,7 @@ import (
 )
 
 const xpubLen = 111
-const derivedAddressesBlock = 20
+const defaultAddressesGap = 20
 
 var cachedXpubs = make(map[string]*xpubData)
 var cachedXpubsMux sync.Mutex
@@ -31,6 +31,7 @@ type xpubAddress struct {
 }
 
 type xpubData struct {
+	gap             int
 	dataHeight      uint32
 	dataHash        string
 	txs             uint32
@@ -116,6 +117,50 @@ func (w *Worker) derivedAddressBalance(data *xpubData, ad *xpubAddress) (bool, e
 	return false, nil
 }
 
+func (w *Worker) scanAddresses(xpub string, data *xpubData, addresses []xpubAddress, gap int, change int, minDerivedIndex int, fork bool) (int, []xpubAddress, error) {
+	// rescan known addresses
+	lastUsed := 0
+	for i := range addresses {
+		ad := &addresses[i]
+		if fork {
+			ad.bottomHeight = 0
+		}
+		used, err := w.derivedAddressBalance(data, ad)
+		if err != nil {
+			return 0, nil, err
+		}
+		if used {
+			lastUsed = i
+		}
+	}
+	// derive new addresses as necessary
+	missing := len(addresses) - lastUsed
+	for missing < gap {
+		from := len(addresses)
+		to := from + gap - missing
+		if to < minDerivedIndex {
+			to = minDerivedIndex
+		}
+		descriptors, err := w.chainParser.DeriveAddressDescriptorsFromTo(xpub, uint32(change), uint32(from), uint32(to))
+		if err != nil {
+			return 0, nil, err
+		}
+		for i, a := range descriptors {
+			ad := xpubAddress{addrDesc: a}
+			used, err := w.derivedAddressBalance(data, &ad)
+			if err != nil {
+				return 0, nil, err
+			}
+			if used {
+				lastUsed = i + from
+			}
+			addresses = append(addresses, ad)
+		}
+		missing = len(addresses) - lastUsed
+	}
+	return lastUsed, addresses, nil
+}
+
 func (w *Worker) tokenFromXpubAddress(ad *xpubAddress, changeIndex int, index int) Token {
 	a, _, _ := w.chainParser.GetAddressesFromAddrDesc(ad.addrDesc)
 	var address string
@@ -133,11 +178,16 @@ func (w *Worker) tokenFromXpubAddress(ad *xpubAddress, changeIndex int, index in
 }
 
 // GetAddressForXpub computes address value and gets transactions for given address
-func (w *Worker) GetAddressForXpub(xpub string, page int, txsOnPage int, option GetAddressOption, filter *AddressFilter) (*Address, error) {
+func (w *Worker) GetAddressForXpub(xpub string, page int, txsOnPage int, option GetAddressOption, filter *AddressFilter, gap int) (*Address, error) {
 	if w.chainType != bchain.ChainBitcoinType || len(xpub) != xpubLen {
 		return nil, ErrUnsupportedXpub
 	}
 	start := time.Now()
+	if gap <= 0 {
+		gap = defaultAddressesGap
+	}
+	// gap is increased one as there must be gap of empty addresses before the derivation is stopped
+	gap++
 	var processedHash string
 	cachedXpubsMux.Lock()
 	data, found := cachedXpubs[xpub]
@@ -152,8 +202,8 @@ func (w *Worker) GetAddressForXpub(xpub string, page int, txsOnPage int, option 
 			break
 		}
 		fork := false
-		if !found {
-			data = &xpubData{}
+		if !found || data.gap != gap {
+			data = &xpubData{gap: gap}
 		} else {
 			hash, err := w.db.GetBlockHash(data.dataHeight)
 			if err != nil {
@@ -169,72 +219,14 @@ func (w *Worker) GetAddressForXpub(xpub string, page int, txsOnPage int, option 
 		if data.dataHeight < bestheight {
 			data.dataHeight = bestheight
 			data.dataHash = besthash
-			// rescan known addresses
-			lastUsed := 0
-			for i := range data.addresses {
-				ad := &data.addresses[i]
-				if fork {
-					ad.bottomHeight = 0
-				}
-				used, err := w.derivedAddressBalance(data, ad)
-				if err != nil {
-					return nil, err
-				}
-				if used {
-					lastUsed = i
-				}
+			var lastUsedIndex int
+			lastUsedIndex, data.addresses, err = w.scanAddresses(xpub, data, data.addresses, gap, 0, 0, fork)
+			if err != nil {
+				return nil, err
 			}
-			// derive new addresses as necessary
-			missing := len(data.addresses) - lastUsed
-			for missing < derivedAddressesBlock {
-				from := len(data.addresses)
-				descriptors, err := w.chainParser.DeriveAddressDescriptorsFromTo(xpub, 0, uint32(from), uint32(from+derivedAddressesBlock-missing))
-				if err != nil {
-					return nil, err
-				}
-				for i, a := range descriptors {
-					ad := xpubAddress{addrDesc: a}
-					used, err := w.derivedAddressBalance(data, &ad)
-					if err != nil {
-						return nil, err
-					}
-					if used {
-						lastUsed = i + from
-					}
-					data.addresses = append(data.addresses, ad)
-				}
-				missing = len(data.addresses) - lastUsed
-			}
-			// check and generate change addresses
-			ca := data.changeAddresses
-			data.changeAddresses = make([]xpubAddress, len(data.addresses))
-			copy(data.changeAddresses, ca)
-			changeIndexes := []uint32{}
-			for i, ad := range data.addresses {
-				if ad.balance != nil {
-					if data.changeAddresses[i].addrDesc == nil {
-						changeIndexes = append(changeIndexes, uint32(i))
-					} else {
-						_, err := w.derivedAddressBalance(data, &ad)
-						if err != nil {
-							return nil, err
-						}
-					}
-				}
-			}
-			if len(changeIndexes) > 0 {
-				descriptors, err := w.chainParser.DeriveAddressDescriptors(xpub, 1, changeIndexes)
-				if err != nil {
-					return nil, err
-				}
-				for i, a := range descriptors {
-					ad := &data.changeAddresses[changeIndexes[i]]
-					ad.addrDesc = a
-					_, err := w.derivedAddressBalance(data, ad)
-					if err != nil {
-						return nil, err
-					}
-				}
+			_, data.changeAddresses, err = w.scanAddresses(xpub, data, data.changeAddresses, gap, 1, lastUsedIndex, fork)
+			if err != nil {
+				return nil, err
 			}
 		}
 	}
@@ -242,12 +234,16 @@ func (w *Worker) GetAddressForXpub(xpub string, page int, txsOnPage int, option 
 	cachedXpubs[xpub] = data
 	cachedXpubsMux.Unlock()
 	tokens := make([]Token, 0, 4)
-	for i, ad := range data.addresses {
+	for i := range data.addresses {
+		ad := &data.addresses[i]
 		if ad.balance != nil {
-			tokens = append(tokens, w.tokenFromXpubAddress(&ad, 0, i))
+			tokens = append(tokens, w.tokenFromXpubAddress(ad, 0, i))
 		}
-		if data.changeAddresses[i].balance != nil {
-			tokens = append(tokens, w.tokenFromXpubAddress(&data.changeAddresses[i], 1, i))
+	}
+	for i := range data.changeAddresses {
+		ad := &data.changeAddresses[i]
+		if ad.balance != nil {
+			tokens = append(tokens, w.tokenFromXpubAddress(ad, 1, i))
 		}
 	}
 	var totalReceived big.Int
@@ -267,6 +263,6 @@ func (w *Worker) GetAddressForXpub(xpub string, page int, txsOnPage int, option 
 		// Erc20Contract:         erc20c,
 		// Nonce:                 nonce,
 	}
-	glog.Info("GetAddressForXpub ", xpub[:10], ", ", len(data.addresses), " derived addresses, ", data.txs, " total txs finished in ", time.Since(start))
+	glog.Info("GetAddressForXpub ", xpub[:10], ", ", len(data.addresses)+len(data.changeAddresses), " derived addresses, ", data.txs, " total txs finished in ", time.Since(start))
 	return &addr, nil
 }
