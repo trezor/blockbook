@@ -233,17 +233,24 @@ func (w *Worker) GetAddressForXpub(xpub string, page int, txsOnPage int, option 
 	cachedXpubsMux.Lock()
 	cachedXpubs[xpub] = data
 	cachedXpubsMux.Unlock()
+	totalTokens := 0
 	tokens := make([]Token, 0, 4)
 	for i := range data.addresses {
 		ad := &data.addresses[i]
 		if ad.balance != nil {
-			tokens = append(tokens, w.tokenFromXpubAddress(ad, 0, i))
+			totalTokens++
+			if filter.AllTokens || !IsZeroBigInt(&ad.balance.BalanceSat) {
+				tokens = append(tokens, w.tokenFromXpubAddress(ad, 0, i))
+			}
 		}
 	}
 	for i := range data.changeAddresses {
 		ad := &data.changeAddresses[i]
 		if ad.balance != nil {
-			tokens = append(tokens, w.tokenFromXpubAddress(ad, 1, i))
+			totalTokens++
+			if filter.AllTokens || !IsZeroBigInt(&ad.balance.BalanceSat) {
+				tokens = append(tokens, w.tokenFromXpubAddress(ad, 1, i))
+			}
 		}
 	}
 	var totalReceived big.Int
@@ -259,7 +266,8 @@ func (w *Worker) GetAddressForXpub(xpub string, page int, txsOnPage int, option 
 		// UnconfirmedTxs:        len(txm),
 		// Transactions:          txs,
 		// Txids:                 txids,
-		Tokens: tokens,
+		TotalTokens: totalTokens,
+		Tokens:      tokens,
 		// Erc20Contract:         erc20c,
 		// Nonce:                 nonce,
 	}

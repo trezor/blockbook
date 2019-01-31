@@ -25,9 +25,13 @@
                     <td>No. Transactions</td>
                     <td class="data">{{$addr.Txs}}</td>
                 </tr>
+                <tr>
+                    <td>Total XPUB addresses</td>
+                    <td class="data">{{$addr.TotalTokens}}</td>
+                </tr>
                 {{- if $addr.Tokens -}}
                 <tr>
-                    <td>XPUB addresses</td>
+                    <td>{{if $data.AllTokens}}XPUB Addresses{{else}}Nonzero XPUB Addresses{{end}}</td>
                     <td style="padding: 0;">
                         <table class="table data-table">
                             <tbody>
@@ -43,6 +47,11 @@
                                     <td class="data">{{formatAmount $t.BalanceSat}} {{$cs}}</td>
                                     <td class="data">{{$t.Transfers}}</td>
                                     <td class="data">{{$t.Contract}}</td>
+                                </tr>
+                                {{- end -}}
+                                {{- if not $data.AllTokens -}}
+                                <tr>
+                                    <td colspan="4"><a href="?alladdresses=true">Show all XPUB addresses</a></td>
                                 </tr>
                                 {{- end -}}
                             </tbody>

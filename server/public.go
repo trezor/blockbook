@@ -405,6 +405,7 @@ type TemplateData struct {
 	TOSLink          string
 	SendTxHex        string
 	Status           string
+	AllTokens        bool
 }
 
 func (s *PublicServer) parseTemplates() []*template.Template {
@@ -582,36 +583,40 @@ func (s *PublicServer) explorerAddress(w http.ResponseWriter, r *http.Request) (
 	return addressTpl, data, nil
 }
 
+func (s *PublicServer) getAddressForXpub(r *http.Request, xpub string, pageSize int, option api.GetAddressOption) (*api.Address, error) {
+	var fn = api.AddressFilterVoutOff
+	page, ec := strconv.Atoi(r.URL.Query().Get("page"))
+	if ec != nil {
+		page = 0
+	}
+	filter := r.URL.Query().Get("filter")
+	if len(filter) > 0 {
+		if filter == "inputs" {
+			fn = api.AddressFilterVoutInputs
+		} else if filter == "outputs" {
+			fn = api.AddressFilterVoutOutputs
+		} else {
+			fn, ec = strconv.Atoi(filter)
+			if ec != nil || fn < 0 {
+				filter = ""
+				fn = api.AddressFilterVoutOff
+			}
+		}
+	}
+	gap, ec := strconv.Atoi(r.URL.Query().Get("gap"))
+	if ec != nil {
+		gap = 0
+	}
+	allAddresses, _ := strconv.ParseBool(r.URL.Query().Get("alladdresses"))
+	return s.api.GetAddressForXpub(xpub, page, pageSize, option, &api.AddressFilter{Vout: fn, AllTokens: allAddresses}, gap)
+}
+
 func (s *PublicServer) explorerXpub(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
 	var address *api.Address
-	var filter string
-	var fn = api.AddressFilterVoutOff
 	var err error
 	s.metrics.ExplorerViews.With(common.Labels{"action": "xpub"}).Inc()
 	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
-		page, ec := strconv.Atoi(r.URL.Query().Get("page"))
-		if ec != nil {
-			page = 0
-		}
-		filter = r.URL.Query().Get("filter")
-		if len(filter) > 0 {
-			if filter == "inputs" {
-				fn = api.AddressFilterVoutInputs
-			} else if filter == "outputs" {
-				fn = api.AddressFilterVoutOutputs
-			} else {
-				fn, ec = strconv.Atoi(filter)
-				if ec != nil || fn < 0 {
-					filter = ""
-					fn = api.AddressFilterVoutOff
-				}
-			}
-		}
-		gap, ec := strconv.Atoi(r.URL.Query().Get("gap"))
-		if ec != nil {
-			gap = 0
-		}
-		address, err = s.api.GetAddressForXpub(r.URL.Path[i+1:], page, txsOnPage, api.TxHistoryLight, &api.AddressFilter{Vout: fn}, gap)
+		address, err = s.getAddressForXpub(r, r.URL.Path[i+1:], txsOnPage, api.TxHistoryLight)
 		if err != nil {
 			return errorTpl, nil, err
 		}
@@ -621,10 +626,13 @@ func (s *PublicServer) explorerXpub(w http.ResponseWriter, r *http.Request) (tpl
 	data.Address = address
 	data.Page = address.Page
 	data.PagingRange, data.PrevPage, data.NextPage = getPagingRange(address.Page, address.TotalPages)
+	filter := r.URL.Query().Get("filter")
 	if filter != "" {
 		data.PageParams = template.URL("&filter=" + filter)
 		data.Address.Filter = filter
 	}
+	allAddresses := r.URL.Query().Get("alladdresses")
+	data.AllTokens, _ = strconv.ParseBool(allAddresses)
 	return xpubTpl, data, nil
 }
 
@@ -879,15 +887,7 @@ func (s *PublicServer) apiXpub(r *http.Request, apiVersion int) (interface{}, er
 	var err error
 	s.metrics.ExplorerViews.With(common.Labels{"action": "api-xpub"}).Inc()
 	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
-		page, ec := strconv.Atoi(r.URL.Query().Get("page"))
-		if ec != nil {
-			page = 0
-		}
-		gap, ec := strconv.Atoi(r.URL.Query().Get("gap"))
-		if ec != nil {
-			gap = 0
-		}
-		address, err = s.api.GetAddressForXpub(r.URL.Path[i+1:], page, txsInAPI, api.TxidHistory, &api.AddressFilter{Vout: api.AddressFilterVoutOff}, gap)
+		address, err = s.getAddressForXpub(r, r.URL.Path[i+1:], txsInAPI, api.TxidHistory)
 		if err == nil && apiVersion == apiV1 {
 			return s.api.AddressToV1(address), nil
 		}

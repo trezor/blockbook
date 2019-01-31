@@ -52,6 +52,11 @@ func NewAPIError(s string, public bool) error {
 // Amount is datatype holding amounts
 type Amount big.Int
 
+// IsZeroBigInt if big int has zero value
+func IsZeroBigInt(b *big.Int) bool {
+	return len(b.Bits()) == 0
+}
+
 // MarshalJSON Amount serialization
 func (a *Amount) MarshalJSON() (out []byte, err error) {
 	if a == nil {
@@ -207,6 +212,7 @@ type AddressFilter struct {
 	Contract   string
 	FromHeight uint32
 	ToHeight   uint32
+	AllTokens  bool
 }
 
 // Address holds information about address and its transactions
@@ -223,6 +229,7 @@ type Address struct {
 	Transactions          []*Tx                 `json:"transactions,omitempty"`
 	Txids                 []string              `json:"txids,omitempty"`
 	Nonce                 string                `json:"nonce,omitempty"`
+	TotalTokens           int                   `json:"totalTokens,omitempty"`
 	Tokens                []Token               `json:"tokens,omitempty"`
 	Erc20Contract         *bchain.Erc20Contract `json:"erc20contract,omitempty"`
 	Filter                string                `json:"-"`

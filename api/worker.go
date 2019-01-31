@@ -825,7 +825,7 @@ func (w *Worker) GetAddressUtxo(address string, onlyConfirmed bool) ([]AddressUt
 	}
 	var checksum big.Int
 	// ba can be nil if the address is only in mempool!
-	if ba != nil && ba.BalanceSat.Uint64() > 0 {
+	if ba != nil && !IsZeroBigInt(&ba.BalanceSat) {
 		outpoints := make([]bchain.Outpoint, 0, 8)
 		err = w.db.GetAddrDescTransactions(addrDesc, 0, ^uint32(0), func(txid string, height uint32, indexes []int32) error {
 			for _, index := range indexes {
