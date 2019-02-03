@@ -10,6 +10,7 @@ import (
 	"time"
 )
 
+const maxUint32 = ^uint32(0)
 const maxInt = int(^uint(0) >> 1)
 
 // GetAddressOption specifies what data returns GetAddress api call

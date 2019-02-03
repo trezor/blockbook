@@ -26,12 +26,12 @@
                     <td class="data">{{$addr.Txs}}</td>
                 </tr>
                 <tr>
-                    <td>Total XPUB addresses</td>
+                    <td>Total XPUB Addresses</td>
                     <td class="data">{{$addr.TotalTokens}}</td>
                 </tr>
                 {{- if $addr.Tokens -}}
                 <tr>
-                    <td>{{if $data.AllTokens}}XPUB Addresses{{else}}Nonzero XPUB Addresses{{end}}</td>
+                    <td>{{if $data.AllTokens}}XPUB Addresses{{else}}XPUB Addresses with Balance{{end}}</td>
                     <td style="padding: 0;">
                         <table class="table data-table">
                             <tbody>
@@ -93,12 +93,6 @@
         <option>All</option>
         <option {{if eq $addr.Filter "inputs" -}} selected{{end}} value="inputs">Inputs</option>
         <option {{if eq $addr.Filter "outputs" -}} selected{{end}} value="outputs">Outputs</option>
-        {{- if $addr.Tokens -}}
-        <option {{if eq $addr.Filter "0" -}} selected{{end}} value="0">Non-contract</option>
-        {{- range $t := $addr.Tokens -}}
-        <option {{if eq $addr.Filter $t.ContractIndex -}} selected{{end}} value="{{$t.ContractIndex}}">{{$t.Name}}</option>
-        {{- end -}}
-        {{- end -}}
     </select>
     <div class="col-md-7">
         <nav>{{template "paging" $data}}</nav>

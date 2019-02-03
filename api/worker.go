@@ -582,6 +582,39 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 	return ba, tokens, ci, n, nonContractTxs, totalResults, nil
 }
 
+func (w *Worker) txFromTxid(txid string, bestheight uint32, option GetAddressOption) (*Tx, error) {
+	var tx *Tx
+	var err error
+	// only ChainBitcoinType supports TxHistoryLight
+	if option == TxHistoryLight && w.chainType == bchain.ChainBitcoinType {
+		ta, err := w.db.GetTxAddresses(txid)
+		if err != nil {
+			return nil, errors.Annotatef(err, "GetTxAddresses %v", txid)
+		}
+		if ta == nil {
+			glog.Warning("DB inconsistency:  tx ", txid, ": not found in txAddresses")
+			// as fallback, provide empty TxAddresses to return at least something
+			ta = &db.TxAddresses{}
+		}
+		bi, err := w.db.GetBlockInfo(ta.Height)
+		if err != nil {
+			return nil, errors.Annotatef(err, "GetBlockInfo %v", ta.Height)
+		}
+		if bi == nil {
+			glog.Warning("DB inconsistency:  block height ", ta.Height, ": not found in db")
+			// provide empty BlockInfo to return the rest of tx data
+			bi = &db.BlockInfo{}
+		}
+		tx = w.txFromTxAddress(txid, ta, bi, bestheight)
+	} else {
+		tx, err = w.GetTransaction(txid, false, true)
+		if err != nil {
+			return nil, errors.Annotatef(err, "GetTransaction %v", txid)
+		}
+	}
+	return tx, nil
+}
+
 // GetAddress computes address value and gets transactions for given address
 func (w *Worker) GetAddress(address string, page int, txsOnPage int, option GetAddressOption, filter *AddressFilter) (*Address, error) {
 	start := time.Now()
@@ -703,32 +736,8 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option GetA
 				if option == TxidHistory {
 					txids[txi] = txid
 				} else {
-					// only ChainBitcoinType supports TxHistoryLight
-					if option == TxHistoryLight && w.chainType == bchain.ChainBitcoinType {
-						ta, err := w.db.GetTxAddresses(txid)
-						if err != nil {
-							return nil, errors.Annotatef(err, "GetTxAddresses %v", txid)
-						}
-						if ta == nil {
-							glog.Warning("DB inconsistency:  tx ", txid, ": not found in txAddresses")
-							// as fallback, provide empty TxAddresses to return at least something
-							ta = &db.TxAddresses{}
-						}
-						bi, err := w.db.GetBlockInfo(ta.Height)
-						if err != nil {
-							return nil, errors.Annotatef(err, "GetBlockInfo %v", ta.Height)
-						}
-						if bi == nil {
-							glog.Warning("DB inconsistency:  block height ", ta.Height, ": not found in db")
-							// provide empty BlockInfo to return the rest of tx data
-							bi = &db.BlockInfo{}
-						}
-						txs[txi] = w.txFromTxAddress(txid, ta, bi, bestheight)
-					} else {
-						txs[txi], err = w.GetTransaction(txid, false, true)
-						if err != nil {
-							return nil, errors.Annotatef(err, "GetTransaction %v", txid)
-						}
+					if txs[txi], err = w.txFromTxid(txid, bestheight, option); err != nil {
+						return nil, err
 					}
 				}
 				txi++
