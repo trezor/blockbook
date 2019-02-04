@@ -1,4 +1,4 @@
-{{define "txdetail"}}{{$cs := .CoinShortcut}}{{$addr := .AddrStr}}{{$tx := .Tx}}
+{{define "txdetail"}}{{$cs := .CoinShortcut}}{{$addr := .AddrStr}}{{$tx := .Tx}}{{$data := .}}
 <div class="alert alert-data">
     <div class="row line-bot">
         <div class="col-xs-7 col-md-8 ellipsis">
@@ -10,23 +10,23 @@
     </div>
     <div class="row line-mid">
         <div class="col-md-5">
-            <div class="row">
+            <div class="row tx-in">
                 <table class="table data-table">
                     <tbody>
                         {{- range $vin := $tx.Vin -}}
-                        <tr>
+                        <tr{{if isOwnAddress $data $vin.Addresses}} class="tx-own"{{end}}>
                             <td>
                                 {{- if $vin.Txid -}}
                                 <a class="float-left text-muted" href="/tx/{{$vin.Txid}}" title="Outpoint {{$vin.Txid}},{{$vin.Vout}}">➡&nbsp;</a>
                                 {{- end -}}
                                 {{- range $a := $vin.Addresses -}}
-                                <span class="ellipsis float-left">
+                                <span class="ellipsis tx-addr">
                                     {{if and (ne $a $addr) $vin.Searchable}}<a href="/address/{{$a}}">{{$a}}</a>{{else}}{{$a}}{{end}}
                                 </span>
                                 {{- else -}}
-                                <span class="float-left">{{- if $vin.Hex -}}Unparsed address{{- else -}}No Inputs (Newly Generated Coins){{- end -}}</span>
+                                <span class="tx-addr">{{- if $vin.Hex -}}Unparsed address{{- else -}}No Inputs (Newly Generated Coins){{- end -}}</span>
                                 {{- end -}}{{- if $vin.Addresses -}}
-                                <span class="float-right{{if stringInSlice $addr $vin.Addresses}} text-danger{{end}}">{{formatAmount $vin.ValueSat}} {{$cs}}</span>
+                                <span class="tx-amt">{{formatAmount $vin.ValueSat}} {{$cs}}</span>
                                 {{- end -}}
                             </td>
                         </tr>
@@ -45,20 +45,20 @@
             </svg>
         </div>
         <div class="col-md-6">
-            <div class="row">
+            <div class="row tx-out">
                 <table class="table data-table">
                     <tbody>
                         {{- range $vout := $tx.Vout -}}
-                        <tr>
+                        <tr{{if isOwnAddress $data $vout.Addresses}} class="tx-own"{{end}}>
                             <td>
                                 {{- range $a := $vout.Addresses -}}
-                                <span class="ellipsis float-left">
+                                <span class="ellipsis tx-addr">
                                     {{- if and (ne $a $addr) $vout.Searchable}}<a href="/address/{{$a}}">{{$a}}</a>{{else}}{{$a}}{{- end -}}
                                 </span>
                                 {{- else -}}
-                                <span class="float-left">Unparsed address</span>
+                                <span class="tx-addr">Unparsed address</span>
                                 {{- end -}}
-                                <span class="float-right{{if stringInSlice $addr $vout.Addresses}} text-success{{end}}">
+                                <span class="tx-amt">
                                     {{formatAmount $vout.ValueSat}} {{$cs}} {{if $vout.Spent}}<a class="text-danger" href="{{if $vout.SpentTxID}}/tx/{{$vout.SpentTxID}}{{else}}/spending/{{$tx.Txid}}/{{$vout.N}}{{end}}" title="Spent">➡</a>{{else -}}
                                     <span class="text-success" title="Unspent"> <b>×</b></span>
                                     {{- end -}}

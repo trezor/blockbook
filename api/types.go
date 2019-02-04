@@ -233,7 +233,9 @@ type Address struct {
 	TotalTokens           int                   `json:"totalTokens,omitempty"`
 	Tokens                []Token               `json:"tokens,omitempty"`
 	Erc20Contract         *bchain.Erc20Contract `json:"erc20contract,omitempty"`
-	Filter                string                `json:"-"`
+	// helpers for explorer
+	Filter        string              `json:"-"`
+	XPubAddresses map[string]struct{} `json:"-"`
 }
 
 // AddressUtxo holds information about address and its transactions

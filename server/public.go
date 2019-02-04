@@ -415,7 +415,7 @@ func (s *PublicServer) parseTemplates() []*template.Template {
 		"formatAmount":             s.formatAmount,
 		"formatAmountWithDecimals": formatAmountWithDecimals,
 		"setTxToTemplateData":      setTxToTemplateData,
-		"stringInSlice":            stringInSlice,
+		"isOwnAddress":             isOwnAddress,
 	}
 	var createTemplate func(filenames ...string) *template.Template
 	if s.debug {
@@ -502,6 +502,23 @@ func formatAmountWithDecimals(a *api.Amount, d int) string {
 func setTxToTemplateData(td *TemplateData, tx *api.Tx) *TemplateData {
 	td.Tx = tx
 	return td
+}
+
+// returns true if addresses are "own",
+// i.e. either the address of the address detail or belonging to the xpub
+func isOwnAddress(td *TemplateData, addresses []string) bool {
+	if len(addresses) == 1 {
+		a := addresses[0]
+		if a == td.AddrStr {
+			return true
+		}
+		if td.Address != nil && td.Address.XPubAddresses != nil {
+			if _, found := td.Address.XPubAddresses[a]; found {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (s *PublicServer) explorerTx(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {

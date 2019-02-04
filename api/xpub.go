@@ -235,6 +235,10 @@ func (w *Worker) GetAddressForXpub(xpub string, page int, txsOnPage int, option 
 	}
 	// gap is increased one as there must be gap of empty addresses before the derivation is stopped
 	gap++
+	page--
+	if page < 0 {
+		page = 0
+	}
 	var processedHash string
 	cachedXpubsMux.Lock()
 	data, found := cachedXpubs[xpub]
@@ -305,7 +309,7 @@ func (w *Worker) GetAddressForXpub(xpub string, page int, txsOnPage int, option 
 	if option >= TxidHistory {
 		txc := make(xpubTxids, 0, 32)
 		var addTxids func(ad *xpubAddress)
-		if filter.FromHeight != 0 || filter.ToHeight != 0 || filter.Vout != AddressFilterVoutOff {
+		if filter.FromHeight == 0 && filter.ToHeight == 0 && filter.Vout == AddressFilterVoutOff {
 			addTxids = func(ad *xpubAddress) {
 				txc = append(txc, ad.txids...)
 			}
@@ -372,13 +376,21 @@ func (w *Worker) GetAddressForXpub(xpub string, page int, txsOnPage int, option 
 		}
 	}
 	totalTokens := 0
+	xpubAddresses := make(map[string]struct{})
 	tokens := make([]Token, 0, 4)
 	for i := range data.addresses {
 		ad := &data.addresses[i]
 		if ad.balance != nil {
 			totalTokens++
 			if filter.AllTokens || !IsZeroBigInt(&ad.balance.BalanceSat) {
-				tokens = append(tokens, w.tokenFromXpubAddress(ad, 0, i))
+				t := w.tokenFromXpubAddress(ad, 0, i)
+				tokens = append(tokens, t)
+				xpubAddresses[t.Name] = struct{}{}
+			} else {
+				a, _, _ := w.chainParser.GetAddressesFromAddrDesc(ad.addrDesc)
+				if len(a) > 0 {
+					xpubAddresses[a[0]] = struct{}{}
+				}
 			}
 		}
 	}
@@ -387,7 +399,14 @@ func (w *Worker) GetAddressForXpub(xpub string, page int, txsOnPage int, option 
 		if ad.balance != nil {
 			totalTokens++
 			if filter.AllTokens || !IsZeroBigInt(&ad.balance.BalanceSat) {
-				tokens = append(tokens, w.tokenFromXpubAddress(ad, 1, i))
+				t := w.tokenFromXpubAddress(ad, 1, i)
+				tokens = append(tokens, t)
+				xpubAddresses[t.Name] = struct{}{}
+			} else {
+				a, _, _ := w.chainParser.GetAddressesFromAddrDesc(ad.addrDesc)
+				if len(a) > 0 {
+					xpubAddresses[a[0]] = struct{}{}
+				}
 			}
 		}
 	}
@@ -402,10 +421,11 @@ func (w *Worker) GetAddressForXpub(xpub string, page int, txsOnPage int, option 
 		Txs:              int(data.txs),
 		// UnconfirmedBalanceSat: (*Amount)(&uBalSat),
 		// UnconfirmedTxs:        len(txm),
-		Transactions: txs,
-		Txids:        txids,
-		TotalTokens:  totalTokens,
-		Tokens:       tokens,
+		Transactions:  txs,
+		Txids:         txids,
+		TotalTokens:   totalTokens,
+		Tokens:        tokens,
+		XPubAddresses: xpubAddresses,
 	}
 	glog.Info("GetAddressForXpub ", xpub[:16], ", ", len(data.addresses)+len(data.changeAddresses), " derived addresses, ", data.txs, " total txs finished in ", time.Since(start))
 	return &addr, nil
