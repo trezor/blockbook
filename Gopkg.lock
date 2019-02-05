@@ -95,7 +95,7 @@
   branch = "master"
   name = "github.com/martinboehm/btcutil"
   packages = [".","base58","bech32","chaincfg","hdkeychain","txscript"]
-  revision = "520c2dbb6e0420531b6ae148845280378516e971"
+  revision = "63034958e64b209cb9294128309dbaed497cde7b"
 
 [[projects]]
   branch = "master"

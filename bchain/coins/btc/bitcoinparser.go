@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"math/big"
+	"strconv"
 
 	vlq "github.com/bsm/go-vlq"
 	"github.com/juju/errors"
@@ -28,6 +29,7 @@ type BitcoinParser struct {
 	XPubMagic                   uint32
 	XPubMagicSegwitP2sh         uint32
 	XPubMagicSegwitNative       uint32
+	Slip44                      uint32
 }
 
 // NewBitcoinParser returns new BitcoinParser instance
@@ -41,6 +43,7 @@ func NewBitcoinParser(params *chaincfg.Params, c *Configuration) *BitcoinParser 
 		XPubMagic:             c.XPubMagic,
 		XPubMagicSegwitP2sh:   c.XPubMagicSegwitP2sh,
 		XPubMagicSegwitNative: c.XPubMagicSegwitNative,
+		Slip44:                c.Slip44,
 	}
 	p.OutputScriptToAddressesFunc = p.outputScriptToAddresses
 	return p
@@ -348,4 +351,30 @@ func (p *BitcoinParser) DeriveAddressDescriptorsFromTo(xpub string, change uint3
 		}
 	}
 	return ad, nil
+}
+
+// DerivationBasePath returns base path of xpub
+func (p *BitcoinParser) DerivationBasePath(xpub string) (string, error) {
+	extKey, err := hdkeychain.NewKeyFromString(xpub)
+	if err != nil {
+		return "", err
+	}
+	var c, bip string
+	cn := extKey.ChildNum()
+	if cn >= 0x80000000 {
+		cn -= 0x80000000
+		c = "'"
+	}
+	c = strconv.Itoa(int(cn)) + c
+	if extKey.Depth() != 3 {
+		return "unknown/" + c, nil
+	}
+	if extKey.Version() == p.XPubMagicSegwitP2sh {
+		bip = "49"
+	} else if extKey.Version() == p.XPubMagicSegwitNative {
+		bip = "84"
+	} else {
+		bip = "44"
+	}
+	return "m/" + bip + "'/" + strconv.Itoa(int(p.Slip44)) + "'/" + c, nil
 }

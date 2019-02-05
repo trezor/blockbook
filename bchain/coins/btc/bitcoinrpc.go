@@ -54,6 +54,7 @@ type Configuration struct {
 	XPubMagic                uint32 `json:"xpub_magic,omitempty"`
 	XPubMagicSegwitP2sh      uint32 `json:"xpub_magic_segwit_p2sh,omitempty"`
 	XPubMagicSegwitNative    uint32 `json:"xpub_magic_segwit_native,omitempty"`
+	Slip44                   uint32 `json:"slip44,omitempty"`
 }
 
 // NewBitcoinRPC returns new BitcoinRPC instance.

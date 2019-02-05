@@ -27,6 +27,7 @@ type trezorCommonDef struct {
 	XPubMagic             uint32 `json:"xpub_magic"`
 	XPubMagicSegwitP2sh   uint32 `json:"xpub_magic_segwit_p2sh"`
 	XPubMagicSegwitNative uint32 `json:"xpub_magic_segwit_native"`
+	Slip44                uint32 `json:"slip44,omitempty"`
 }
 
 func getTrezorCommonDef(coin string) (*trezorCommonDef, error) {
@@ -108,6 +109,9 @@ func main() {
 				}
 				if tcd.XPubMagicSegwitNative != 0 {
 					config.Blockbook.BlockChain.XPubMagicSegwitNative = tcd.XPubMagicSegwitNative
+				}
+				if tcd.Slip44 != 0 {
+					config.Blockbook.BlockChain.Slip44 = tcd.Slip44
 				}
 				err = writeConfig(coin, config)
 				if err == nil {

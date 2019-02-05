@@ -267,6 +267,11 @@ func (p *BaseParser) UnpackTx(buf []byte) (*Tx, uint32, error) {
 	return &tx, pt.Height, nil
 }
 
+// DerivationBasePath is unsupported
+func (p *BaseParser) DerivationBasePath(xpub string) (string, error) {
+	return "", errors.New("Not supported")
+}
+
 // DeriveAddressDescriptors is unsupported
 func (p *BaseParser) DeriveAddressDescriptors(xpub string, change uint32, indexes []uint32) ([]AddressDescriptor, error) {
 	return nil, errors.New("Not supported")

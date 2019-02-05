@@ -590,3 +590,72 @@ func BenchmarkDeriveAddressDescriptorsFromToZpub(b *testing.B) {
 		btcMainParser.DeriveAddressDescriptorsFromTo("zpub6rFR7y4Q2AijBEqTUquhVz398htDFrtymD9xYYfG1m4wAcvPhXNfE3EfH1r1ADqtfSdVCToUG868RvUUkgDKf31mGDtKsAYz2oz2AGutZYs", 1, 0, 100)
 	}
 }
+
+func TestBitcoinParser_DerivationBasePath(t *testing.T) {
+	btcMainParser := NewBitcoinParser(GetChainParams("main"), &Configuration{XPubMagic: 76067358, XPubMagicSegwitP2sh: 77429938, XPubMagicSegwitNative: 78792518, Slip44: 0})
+	btcTestnetsParser := NewBitcoinParser(GetChainParams("test"), &Configuration{XPubMagic: 70617039, XPubMagicSegwitP2sh: 71979618, XPubMagicSegwitNative: 73342198, Slip44: 1})
+	zecMainParser := NewBitcoinParser(GetChainParams("main"), &Configuration{XPubMagic: 76067358, Slip44: 133})
+	type args struct {
+		xpub   string
+		parser *BitcoinParser
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    string
+		wantErr bool
+	}{
+		{
+			name: "m/84'/0'/0'",
+			args: args{
+				xpub:   "zpub6rFR7y4Q2AijBEqTUquhVz398htDFrtymD9xYYfG1m4wAcvPhXNfE3EfH1r1ADqtfSdVCToUG868RvUUkgDKf31mGDtKsAYz2oz2AGutZYs",
+				parser: btcMainParser,
+			},
+			want: "m/84'/0'/0'",
+		},
+		{
+			name: "m/49'/0'/55 - not hardened account",
+			args: args{
+				xpub:   "ypub6XKbB5DJRAbW4TRJLp4uXQXG3ob5BtByXsNZFBjq9qcbzrczjVXfCz5cEo1SFDexmeWRnbCMDaRgaW4m9d2nBaa8FvUQCu3n9G1UBR8WhbT",
+				parser: btcMainParser,
+			},
+			want: "m/49'/0'/55",
+		},
+		{
+			name: "m/49'/0' - incomplete path, without account",
+			args: args{
+				xpub:   "ypub6UzM8PUqxcSoqC9gumfoiFhE8Qt84HbGpCD4eVJfJAojXTVtBxeddvTWJGJhGoaVBNJLmEgMdLXHgaLVJa4xEvk2tcokkdZhFdkxMLUE9sB",
+				parser: btcMainParser,
+			},
+			want: "unknown/0'",
+		},
+		{
+			name: "m/49'/1'/0'",
+			args: args{
+				xpub:   "upub5DR1Mg5nykixzYjFXWW5GghAU7dDqoPVJ2jrqFbL8sJ7Hs7jn69MP7KBnnmxn88GeZtnH8PRKV9w5MMSFX8AdEAoXY8Qd8BJPoXtpMeHMxJ",
+				parser: btcTestnetsParser,
+			},
+			want: "m/49'/1'/0'",
+		},
+		{
+			name: "m/44'/133'/12'",
+			args: args{
+				xpub:   "xpub6CQdEahwhKRTLYpP6cyb7ZaGb3r4tVdyPX6dC1PfrNuByrCkWDgUkmpD28UdV9QccKgY1ZiAbGv1Fakcg2LxdFVSTNKHcjdRjqhjPK8Trkb",
+				parser: zecMainParser,
+			},
+			want: "m/44'/133'/12'",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.args.parser.DerivationBasePath(tt.args.xpub)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("BitcoinParser.DerivationBasePath() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("BitcoinParser.DerivationBasePath() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

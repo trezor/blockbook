@@ -39,14 +39,14 @@
                                     <th style="width: 50%;">Address</th>
                                     <th>Balance</th>
                                     <th style="width: 8%;">Txs</th>
-                                    <th style="width: 8%;">Path</th>
+                                    <th style="width: 18%;">Path</th>
                                 </tr>
                                 {{- range $t := $addr.Tokens -}}
                                 <tr>
                                     <td class="data ellipsis"><a href="/address/{{$t.Name}}">{{$t.Name}}</a></td>
                                     <td class="data">{{formatAmount $t.BalanceSat}} {{$cs}}</td>
                                     <td class="data">{{$t.Transfers}}</td>
-                                    <td class="data">{{$t.Contract}}</td>
+                                    <td>{{$t.Contract}}</td>
                                 </tr>
                                 {{- end -}}
                                 {{- if not $data.AllTokens -}}
