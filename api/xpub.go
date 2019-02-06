@@ -126,6 +126,7 @@ func (w *Worker) xpubCheckAndLoadTxids(ad *xpubAddress, filter *AddressFilter, m
 			}
 			return err
 		}
+		return nil
 	}
 	// unless the filter is completely off, load all txids
 	if filter.FromHeight != 0 || filter.ToHeight != 0 || filter.Vout != AddressFilterVoutOff {
@@ -302,12 +303,12 @@ func (w *Worker) GetAddressForXpub(xpub string, page int, txsOnPage int, option 
 		}
 		if option >= TxidHistory {
 			for i := range data.addresses {
-				if err = w.xpubCheckAndLoadTxids(&data.addresses[i], filter, bestheight, txsOnPage); err != nil {
+				if err = w.xpubCheckAndLoadTxids(&data.addresses[i], filter, bestheight, (page+1)*txsOnPage); err != nil {
 					return nil, err
 				}
 			}
 			for i := range data.changeAddresses {
-				if err = w.xpubCheckAndLoadTxids(&data.changeAddresses[i], filter, bestheight, txsOnPage); err != nil {
+				if err = w.xpubCheckAndLoadTxids(&data.changeAddresses[i], filter, bestheight, (page+1)*txsOnPage); err != nil {
 					return nil, err
 				}
 			}
