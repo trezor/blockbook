@@ -615,16 +615,28 @@ func (w *Worker) txFromTxid(txid string, bestheight uint32, option GetAddressOpt
 	return tx, nil
 }
 
+func (w *Worker) getAddrDescAndNormalizeAddress(address string) (bchain.AddressDescriptor, string, error) {
+	addrDesc, err := w.chainParser.GetAddrDescFromAddress(address)
+	if err != nil {
+		return nil, "", NewAPIError(fmt.Sprintf("Invalid address, %v", err), true)
+	}
+	// convert the address to the format defined by the parser
+	addresses, _, err := w.chainParser.GetAddressesFromAddrDesc(addrDesc)
+	if err != nil {
+		glog.V(2).Infof("GetAddressesFromAddrDesc error %v, %v", err, addrDesc)
+	}
+	if len(addresses) == 1 {
+		address = addresses[0]
+	}
+	return addrDesc, address, nil
+}
+
 // GetAddress computes address value and gets transactions for given address
 func (w *Worker) GetAddress(address string, page int, txsOnPage int, option GetAddressOption, filter *AddressFilter) (*Address, error) {
 	start := time.Now()
 	page--
 	if page < 0 {
 		page = 0
-	}
-	addrDesc, err := w.chainParser.GetAddrDescFromAddress(address)
-	if err != nil {
-		return nil, NewAPIError(fmt.Sprintf("Invalid address, %v", err), true)
 	}
 	var (
 		ba                       *db.AddrBalance
@@ -640,6 +652,10 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option GetA
 		nonTokenTxs              int
 		totalResults             int
 	)
+	addrDesc, address, err := w.getAddrDescAndNormalizeAddress(address)
+	if err != nil {
+		return nil, err
+	}
 	if w.chainType == bchain.ChainEthereumType {
 		var n uint64
 		ba, tokens, erc20c, n, nonTokenTxs, totalResults, err = w.getEthereumTypeAddressBalances(addrDesc, option, filter)
@@ -662,90 +678,67 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option GetA
 			}
 		}
 	}
-	// get tx history if requested by option or check mempool if there are some transactions for a new address
-	if option >= TxidHistory || ba == nil {
-		// convert the address to the format defined by the parser
-		addresses, _, err := w.chainParser.GetAddressesFromAddrDesc(addrDesc)
+	// if there are only unconfirmed transactions, there is no paging
+	if ba == nil {
+		ba = &db.AddrBalance{}
+		page = 0
+	}
+	// process mempool, only if blockheight filter is off
+	if filter.FromHeight == 0 && filter.ToHeight == 0 {
+		txm, err = w.getAddressTxids(addrDesc, true, filter, maxInt)
 		if err != nil {
-			glog.V(2).Infof("GetAddressesFromAddrDesc error %v, %v", err, addrDesc)
+			return nil, errors.Annotatef(err, "getAddressTxids %v true", addrDesc)
 		}
-		if len(addresses) == 1 {
-			address = addresses[0]
-		}
-		// get txs from mempool only if blockheight filter is off
-		if filter.FromHeight == 0 && filter.ToHeight == 0 {
-			txm, err = w.getAddressTxids(addrDesc, true, filter, maxInt)
-			if err != nil {
-				return nil, errors.Annotatef(err, "getAddressTxids %v true", addrDesc)
-			}
-		}
-		// if there are only unconfirmed transactions, there is no paging
-		if ba == nil {
-			ba = &db.AddrBalance{}
-			page = 0
-		}
-		if option >= TxidHistory {
-			txc, err := w.getAddressTxids(addrDesc, false, filter, (page+1)*txsOnPage)
-			if err != nil {
-				return nil, errors.Annotatef(err, "getAddressTxids %v false", addrDesc)
-			}
-			bestheight, _, err := w.db.GetBestBlock()
-			if err != nil {
-				return nil, errors.Annotatef(err, "GetBestBlock")
-			}
-			var from, to int
-			pg, from, to, page = computePaging(len(txc), page, txsOnPage)
-			if len(txc) >= txsOnPage {
-				if totalResults < 0 {
-					pg.TotalPages = -1
-				} else {
-					pg, _, _, _ = computePaging(totalResults, page, txsOnPage)
-				}
-			}
-			if option == TxidHistory {
-				txids = make([]string, len(txm)+to-from)
+		for _, txid := range txm {
+			tx, err := w.GetTransaction(txid, false, false)
+			// mempool transaction may fail
+			if err != nil || tx == nil {
+				glog.Warning("GetTransaction in mempool: ", err)
 			} else {
-				txs = make([]*Tx, len(txm)+to-from)
-			}
-			txi := 0
-			// get mempool transactions
-			for _, txid := range txm {
-				tx, err := w.GetTransaction(txid, false, false)
-				// mempool transaction may fail
-				if err != nil || tx == nil {
-					glog.Warning("GetTransaction in mempool: ", err)
-				} else {
-					// skip already confirmed txs, mempool may be out of sync
-					if tx.Confirmations == 0 {
-						uBalSat.Add(&uBalSat, tx.getAddrVoutValue(addrDesc))
-						uBalSat.Sub(&uBalSat, tx.getAddrVinValue(addrDesc))
-						if page == 0 {
-							if option == TxidHistory {
-								txids[txi] = tx.Txid
-							} else {
-								txs[txi] = tx
-							}
-							txi++
+				// skip already confirmed txs, mempool may be out of sync
+				if tx.Confirmations == 0 {
+					uBalSat.Add(&uBalSat, tx.getAddrVoutValue(addrDesc))
+					uBalSat.Sub(&uBalSat, tx.getAddrVinValue(addrDesc))
+					if page == 0 {
+						if option == TxidHistory {
+							txids = append(txids, tx.Txid)
+						} else if option >= TxHistoryLight {
+							txs = append(txs, tx)
 						}
 					}
 				}
 			}
-			// get confirmed transactions
-			for i := from; i < to; i++ {
-				txid := txc[i]
-				if option == TxidHistory {
-					txids[txi] = txid
-				} else {
-					if txs[txi], err = w.txFromTxid(txid, bestheight, option); err != nil {
-						return nil, err
-					}
-				}
-				txi++
+		}
+	}
+	// get tx history if requested by option or check mempool if there are some transactions for a new address
+	if option >= TxidHistory {
+		txc, err := w.getAddressTxids(addrDesc, false, filter, (page+1)*txsOnPage)
+		if err != nil {
+			return nil, errors.Annotatef(err, "getAddressTxids %v false", addrDesc)
+		}
+		bestheight, _, err := w.db.GetBestBlock()
+		if err != nil {
+			return nil, errors.Annotatef(err, "GetBestBlock")
+		}
+		var from, to int
+		pg, from, to, page = computePaging(len(txc), page, txsOnPage)
+		if len(txc) >= txsOnPage {
+			if totalResults < 0 {
+				pg.TotalPages = -1
+			} else {
+				pg, _, _, _ = computePaging(totalResults, page, txsOnPage)
 			}
+		}
+		for i := from; i < to; i++ {
+			txid := txc[i]
 			if option == TxidHistory {
-				txids = txids[:txi]
-			} else if option >= TxHistoryLight {
-				txs = txs[:txi]
+				txids = append(txids, txid)
+			} else {
+				tx, err := w.txFromTxid(txid, bestheight, option)
+				if err != nil {
+					return nil, err
+				}
+				txs = append(txs, tx)
 			}
 		}
 	}
