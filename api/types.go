@@ -213,7 +213,10 @@ type AddressFilter struct {
 	Contract   string
 	FromHeight uint32
 	ToHeight   uint32
-	AllTokens  bool
+	// AllTokens set to true will include xpub addresses with zero balance
+	AllTokens bool
+	// OnlyConfirmed set to true will ignore mempool transactions; mempool is also ignored if FromHeight/ToHeight filter is specified
+	OnlyConfirmed bool
 }
 
 // Address holds information about address and its transactions
@@ -238,13 +241,33 @@ type Address struct {
 	XPubAddresses map[string]struct{} `json:"-"`
 }
 
-// AddressUtxo holds information about address and its transactions
-type AddressUtxo struct {
+// Utxo is one unspent transaction output
+type Utxo struct {
 	Txid          string  `json:"txid"`
 	Vout          int32   `json:"vout"`
 	AmountSat     *Amount `json:"value"`
 	Height        int     `json:"height,omitempty"`
 	Confirmations int     `json:"confirmations"`
+	Address       string  `json:"address,omitempty"`
+	Path          string  `json:"path,omitempty"`
+}
+
+// Utxos is array of Utxo
+type Utxos []Utxo
+
+func (a Utxos) Len() int      { return len(a) }
+func (a Utxos) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+func (a Utxos) Less(i, j int) bool {
+	// sort in reverse order, unconfirmed (height==0) utxos on top
+	hi := a[i].Height
+	hj := a[j].Height
+	if hi == 0 {
+		hi = maxInt
+	}
+	if hj == 0 {
+		hj = maxInt
+	}
+	return hi >= hj
 }
 
 // Blocks is list of blocks with paging information

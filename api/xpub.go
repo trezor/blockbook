@@ -19,7 +19,7 @@ const defaultAddressesGap = 20
 const txInput = 1
 const txOutput = 2
 
-var cachedXpubs = make(map[string]*xpubData)
+var cachedXpubs = make(map[string]xpubData)
 var cachedXpubsMux sync.Mutex
 
 type xpubTxid struct {
@@ -216,63 +216,52 @@ func (w *Worker) tokenFromXpubAddress(data *xpubData, ad *xpubAddress, changeInd
 	if len(a) > 0 {
 		address = a[0]
 	}
+	var balance *big.Int
+	var transfers int
+	if ad.balance != nil {
+		balance = &ad.balance.BalanceSat
+		transfers = int(ad.balance.Txs)
+	}
 	return Token{
 		Type:       XPUBAddressTokenType,
 		Name:       address,
 		Decimals:   w.chainParser.AmountDecimals(),
-		BalanceSat: (*Amount)(&ad.balance.BalanceSat),
-		Transfers:  int(ad.balance.Txs),
+		BalanceSat: (*Amount)(balance),
+		Transfers:  transfers,
 		Contract:   fmt.Sprintf("%s/%d/%d", data.basePath, changeIndex, index),
 	}
 }
 
-// GetAddressForXpub computes address value and gets transactions for given address
-func (w *Worker) GetAddressForXpub(xpub string, page int, txsOnPage int, option GetAddressOption, filter *AddressFilter, gap int) (*Address, error) {
+func (w *Worker) getXpubData(xpub string, page int, txsOnPage int, option GetAddressOption, filter *AddressFilter, gap int) (*xpubData, uint32, error) {
 	if w.chainType != bchain.ChainBitcoinType || len(xpub) != xpubLen {
-		return nil, ErrUnsupportedXpub
+		return nil, 0, ErrUnsupportedXpub
 	}
-	start := time.Now()
+	var (
+		err        error
+		bestheight uint32
+		besthash   string
+	)
 	if gap <= 0 {
 		gap = defaultAddressesGap
 	}
 	// gap is increased one as there must be gap of empty addresses before the derivation is stopped
 	gap++
-	page--
-	if page < 0 {
-		page = 0
-	}
 	var processedHash string
 	cachedXpubsMux.Lock()
 	data, found := cachedXpubs[xpub]
 	cachedXpubsMux.Unlock()
-	type mempoolMap struct {
-		tx          *Tx
-		inputOutput byte
-	}
-	var (
-		txc          xpubTxids
-		txmMap       map[string]*Tx
-		txs          []*Tx
-		txids        []string
-		pg           Paging
-		totalResults int
-		err          error
-		bestheight   uint32
-		besthash     string
-		uBalSat      big.Int
-	)
 	// to load all data for xpub may take some time, do it in a loop to process a possible new block
 	for {
 		bestheight, besthash, err = w.db.GetBestBlock()
 		if err != nil {
-			return nil, errors.Annotatef(err, "GetBestBlock")
+			return nil, 0, errors.Annotatef(err, "GetBestBlock")
 		}
 		if besthash == processedHash {
 			break
 		}
 		fork := false
 		if !found || data.gap != gap {
-			data = &xpubData{gap: gap}
+			data = xpubData{gap: gap}
 			data.basePath, err = w.chainParser.DerivationBasePath(xpub)
 			if err != nil {
 				glog.Warning("DerivationBasePath error", err)
@@ -281,7 +270,7 @@ func (w *Worker) GetAddressForXpub(xpub string, page int, txsOnPage int, option 
 		} else {
 			hash, err := w.db.GetBlockHash(data.dataHeight)
 			if err != nil {
-				return nil, err
+				return nil, 0, err
 			}
 			if hash != data.dataHash {
 				// in case of for reset all cached data
@@ -296,21 +285,20 @@ func (w *Worker) GetAddressForXpub(xpub string, page int, txsOnPage int, option 
 			data.sentSat = *new(big.Int)
 			data.txs = 0
 			var lastUsedIndex int
-			lastUsedIndex, data.addresses, err = w.xpubScanAddresses(xpub, data, data.addresses, gap, 0, 0, fork)
+			lastUsedIndex, data.addresses, err = w.xpubScanAddresses(xpub, &data, data.addresses, gap, 0, 0, fork)
 			if err != nil {
-				return nil, err
+				return nil, 0, err
 			}
-			_, data.changeAddresses, err = w.xpubScanAddresses(xpub, data, data.changeAddresses, gap, 1, lastUsedIndex, fork)
+			_, data.changeAddresses, err = w.xpubScanAddresses(xpub, &data, data.changeAddresses, gap, 1, lastUsedIndex, fork)
 			if err != nil {
-				return nil, err
+				return nil, 0, err
 			}
-			glog.Info("Scanned ", len(data.addresses)+len(data.changeAddresses), " addresses in ", time.Since(start))
 		}
 		if option >= TxidHistory {
 			for _, da := range [][]xpubAddress{data.addresses, data.changeAddresses} {
 				for i := range da {
 					if err = w.xpubCheckAndLoadTxids(&da[i], filter, bestheight, (page+1)*txsOnPage); err != nil {
-						return nil, err
+						return nil, 0, err
 					}
 				}
 			}
@@ -319,6 +307,34 @@ func (w *Worker) GetAddressForXpub(xpub string, page int, txsOnPage int, option 
 	cachedXpubsMux.Lock()
 	cachedXpubs[xpub] = data
 	cachedXpubsMux.Unlock()
+	return &data, bestheight, nil
+}
+
+// GetXpubAddress computes address value and gets transactions for given address
+func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option GetAddressOption, filter *AddressFilter, gap int) (*Address, error) {
+	start := time.Now()
+	page--
+	if page < 0 {
+		page = 0
+	}
+	type mempoolMap struct {
+		tx          *Tx
+		inputOutput byte
+	}
+	var (
+		txc          xpubTxids
+		txmMap       map[string]*Tx
+		txs          []*Tx
+		txids        []string
+		pg           Paging
+		totalResults int
+		err          error
+		uBalSat      big.Int
+	)
+	data, bestheight, err := w.getXpubData(xpub, page, txsOnPage, option, filter, gap)
+	if err != nil {
+		return nil, err
+	}
 	// setup filtering of txids
 	var useTxids func(txid *xpubTxid, ad *xpubAddress) bool
 	var addTxids func(ad *xpubAddress)
@@ -354,7 +370,7 @@ func (w *Worker) GetAddressForXpub(xpub string, page int, txsOnPage int, option 
 		totalResults = -1
 	}
 	// process mempool, only if blockheight filter is off
-	if filter.FromHeight == 0 && filter.ToHeight == 0 {
+	if filter.FromHeight == 0 && filter.ToHeight == 0 && !filter.OnlyConfirmed {
 		txmMap = make(map[string]*Tx)
 		for _, da := range [][]xpubAddress{data.addresses, data.changeAddresses} {
 			for i := range da {
@@ -429,22 +445,14 @@ func (w *Worker) GetAddressForXpub(xpub string, page int, txsOnPage int, option 
 	for ci, da := range [][]xpubAddress{data.addresses, data.changeAddresses} {
 		for i := range da {
 			ad := &da[i]
-			var t *Token
+			token := w.tokenFromXpubAddress(data, ad, ci, i)
 			if ad.balance != nil {
 				totalTokens++
 				if filter.AllTokens || !IsZeroBigInt(&ad.balance.BalanceSat) {
-					token := w.tokenFromXpubAddress(data, ad, ci, i)
 					tokens = append(tokens, token)
-					t = &token
-					xpubAddresses[t.Name] = struct{}{}
 				}
 			}
-			if t == nil {
-				a, _, _ := w.chainParser.GetAddressesFromAddrDesc(ad.addrDesc)
-				if len(a) > 0 {
-					xpubAddresses[a[0]] = struct{}{}
-				}
-			}
+			xpubAddresses[token.Name] = struct{}{}
 		}
 	}
 	var totalReceived big.Int
@@ -464,6 +472,48 @@ func (w *Worker) GetAddressForXpub(xpub string, page int, txsOnPage int, option 
 		Tokens:                tokens,
 		XPubAddresses:         xpubAddresses,
 	}
-	glog.Info("GetAddressForXpub ", xpub[:16], ", ", len(data.addresses)+len(data.changeAddresses), " derived addresses, ", data.txs, " total txs, loaded ", len(txc), " txids, finished in ", time.Since(start))
+	glog.Info("GetXpubAddress ", xpub[:16], ", ", len(data.addresses)+len(data.changeAddresses), " derived addresses, ", data.txs, " total txs, loaded ", len(txc), " txids, finished in ", time.Since(start))
 	return &addr, nil
+}
+
+// GetXpubUtxo returns unspent outputs for given xpub
+func (w *Worker) GetXpubUtxo(xpub string, onlyConfirmed bool, gap int) (Utxos, error) {
+	start := time.Now()
+	data, _, err := w.getXpubData(xpub, 0, 1, Basic, &AddressFilter{
+		Vout:          AddressFilterVoutOff,
+		AllTokens:     false,
+		OnlyConfirmed: onlyConfirmed,
+	}, gap)
+	if err != nil {
+		return nil, err
+	}
+	r := make(Utxos, 0, 8)
+	for ci, da := range [][]xpubAddress{data.addresses, data.changeAddresses} {
+		for i := range da {
+			ad := &da[i]
+			onlyMempool := false
+			if ad.balance == nil {
+				if onlyConfirmed {
+					continue
+				}
+				onlyMempool = true
+			}
+			utxos, err := w.getAddrDescUtxo(ad.addrDesc, ad.balance, onlyConfirmed, onlyMempool)
+			if err != nil {
+				return nil, err
+			}
+			if len(utxos) > 0 {
+				t := w.tokenFromXpubAddress(data, ad, ci, i)
+				for j := range utxos {
+					a := &utxos[j]
+					a.Address = t.Name
+					a.Path = t.Contract
+				}
+				r = append(r, utxos...)
+			}
+		}
+	}
+	sort.Stable(r)
+	glog.Info("GetXpubUtxo ", xpub[:16], ", ", len(r), " utxos, finished in ", time.Since(start))
+	return r, nil
 }

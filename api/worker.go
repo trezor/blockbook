@@ -684,7 +684,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option GetA
 		page = 0
 	}
 	// process mempool, only if blockheight filter is off
-	if filter.FromHeight == 0 && filter.ToHeight == 0 {
+	if filter.FromHeight == 0 && filter.ToHeight == 0 && !filter.OnlyConfirmed {
 		txm, err = w.getAddressTxids(addrDesc, true, filter, maxInt)
 		if err != nil {
 			return nil, errors.Annotatef(err, "getAddressTxids %v true", addrDesc)
@@ -766,126 +766,138 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option GetA
 	return r, nil
 }
 
+func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *db.AddrBalance, onlyConfirmed bool, onlyMempool bool) (Utxos, error) {
+	var err error
+	r := make(Utxos, 0, 8)
+	spentInMempool := make(map[string]struct{})
+	if !onlyConfirmed {
+		// get utxo from mempool
+		txm, err := w.getAddressTxids(addrDesc, true, &AddressFilter{Vout: AddressFilterVoutOff}, maxInt)
+		if err != nil {
+			return nil, err
+		}
+		if len(txm) > 0 {
+			mc := make([]*bchain.Tx, len(txm))
+			for i, txid := range txm {
+				// get mempool txs and process their inputs to detect spends between mempool txs
+				bchainTx, _, err := w.txCache.GetTransaction(txid)
+				// mempool transaction may fail
+				if err != nil {
+					glog.Error("GetTransaction in mempool ", txid, ": ", err)
+				} else {
+					mc[i] = bchainTx
+					// get outputs spent by the mempool tx
+					for i := range bchainTx.Vin {
+						vin := &bchainTx.Vin[i]
+						spentInMempool[vin.Txid+strconv.Itoa(int(vin.Vout))] = struct{}{}
+					}
+				}
+			}
+			for _, bchainTx := range mc {
+				if bchainTx != nil {
+					for i := range bchainTx.Vout {
+						vout := &bchainTx.Vout[i]
+						vad, err := w.chainParser.GetAddrDescFromVout(vout)
+						if err == nil && bytes.Equal(addrDesc, vad) {
+							// report only outpoints that are not spent in mempool
+							_, e := spentInMempool[bchainTx.Txid+strconv.Itoa(i)]
+							if !e {
+								r = append(r, Utxo{
+									Txid:      bchainTx.Txid,
+									Vout:      int32(i),
+									AmountSat: (*Amount)(&vout.ValueSat),
+								})
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	if !onlyMempool {
+		// get utxo from index
+		if ba == nil {
+			ba, err = w.db.GetAddrDescBalance(addrDesc)
+			if err != nil {
+				return nil, NewAPIError(fmt.Sprintf("Address not found, %v", err), true)
+			}
+		}
+		// ba can be nil if the address is only in mempool!
+		if ba != nil && !IsZeroBigInt(&ba.BalanceSat) {
+			outpoints := make([]bchain.Outpoint, 0, 8)
+			err = w.db.GetAddrDescTransactions(addrDesc, 0, ^uint32(0), func(txid string, height uint32, indexes []int32) error {
+				for _, index := range indexes {
+					// take only outputs
+					if index >= 0 {
+						outpoints = append(outpoints, bchain.Outpoint{Txid: txid, Vout: index})
+					}
+				}
+				return nil
+			})
+			if err != nil {
+				return nil, err
+			}
+			var lastTxid string
+			var ta *db.TxAddresses
+			var checksum big.Int
+			checksum.Set(&ba.BalanceSat)
+			b, _, err := w.db.GetBestBlock()
+			if err != nil {
+				return nil, err
+			}
+			bestheight := int(b)
+			for i := len(outpoints) - 1; i >= 0 && checksum.Int64() > 0; i-- {
+				o := outpoints[i]
+				if lastTxid != o.Txid {
+					ta, err = w.db.GetTxAddresses(o.Txid)
+					if err != nil {
+						return nil, err
+					}
+					lastTxid = o.Txid
+				}
+				if ta == nil {
+					glog.Warning("DB inconsistency:  tx ", o.Txid, ": not found in txAddresses")
+				} else {
+					if len(ta.Outputs) <= int(o.Vout) {
+						glog.Warning("DB inconsistency:  txAddresses ", o.Txid, " does not have enough outputs")
+					} else {
+						if !ta.Outputs[o.Vout].Spent {
+							v := ta.Outputs[o.Vout].ValueSat
+							// report only outpoints that are not spent in mempool
+							_, e := spentInMempool[o.Txid+strconv.Itoa(int(o.Vout))]
+							if !e {
+								r = append(r, Utxo{
+									Txid:          o.Txid,
+									Vout:          o.Vout,
+									AmountSat:     (*Amount)(&v),
+									Height:        int(ta.Height),
+									Confirmations: bestheight - int(ta.Height) + 1,
+								})
+							}
+							checksum.Sub(&checksum, &v)
+						}
+					}
+				}
+			}
+			if checksum.Uint64() != 0 {
+				glog.Warning("DB inconsistency:  ", addrDesc, ": checksum is not zero")
+			}
+		}
+	}
+	return r, nil
+}
+
 // GetAddressUtxo returns unspent outputs for given address
-func (w *Worker) GetAddressUtxo(address string, onlyConfirmed bool) ([]AddressUtxo, error) {
+func (w *Worker) GetAddressUtxo(address string, onlyConfirmed bool) (Utxos, error) {
 	if w.chainType != bchain.ChainBitcoinType {
 		return nil, NewAPIError("Not supported", true)
 	}
 	start := time.Now()
 	addrDesc, err := w.chainParser.GetAddrDescFromAddress(address)
 	if err != nil {
-		return nil, NewAPIError(fmt.Sprintf("Invalid address, %v", err), true)
+		return nil, NewAPIError(fmt.Sprintf("Invalid address '%v', %v", address, err), true)
 	}
-	spentInMempool := make(map[string]struct{})
-	r := make([]AddressUtxo, 0, 8)
-	if !onlyConfirmed {
-		// get utxo from mempool
-		txm, err := w.getAddressTxids(addrDesc, true, &AddressFilter{Vout: AddressFilterVoutOff}, maxInt)
-		if err != nil {
-			return nil, errors.Annotatef(err, "getAddressTxids %v true", address)
-		}
-		mc := make([]*bchain.Tx, len(txm))
-		for i, txid := range txm {
-			// get mempool txs and process their inputs to detect spends between mempool txs
-			bchainTx, _, err := w.txCache.GetTransaction(txid)
-			// mempool transaction may fail
-			if err != nil {
-				glog.Error("GetTransaction in mempool ", txid, ": ", err)
-			} else {
-				mc[i] = bchainTx
-				// get outputs spent by the mempool tx
-				for i := range bchainTx.Vin {
-					vin := &bchainTx.Vin[i]
-					spentInMempool[vin.Txid+strconv.Itoa(int(vin.Vout))] = struct{}{}
-				}
-			}
-		}
-		for _, bchainTx := range mc {
-			if bchainTx != nil {
-				for i := range bchainTx.Vout {
-					vout := &bchainTx.Vout[i]
-					vad, err := w.chainParser.GetAddrDescFromVout(vout)
-					if err == nil && bytes.Equal(addrDesc, vad) {
-						// report only outpoints that are not spent in mempool
-						_, e := spentInMempool[bchainTx.Txid+strconv.Itoa(i)]
-						if !e {
-							r = append(r, AddressUtxo{
-								Txid:      bchainTx.Txid,
-								Vout:      int32(i),
-								AmountSat: (*Amount)(&vout.ValueSat),
-							})
-						}
-					}
-				}
-			}
-		}
-	}
-	// get utxo from index
-	ba, err := w.db.GetAddrDescBalance(addrDesc)
-	if err != nil {
-		return nil, NewAPIError(fmt.Sprintf("Address not found, %v", err), true)
-	}
-	var checksum big.Int
-	// ba can be nil if the address is only in mempool!
-	if ba != nil && !IsZeroBigInt(&ba.BalanceSat) {
-		outpoints := make([]bchain.Outpoint, 0, 8)
-		err = w.db.GetAddrDescTransactions(addrDesc, 0, ^uint32(0), func(txid string, height uint32, indexes []int32) error {
-			for _, index := range indexes {
-				// take only outputs
-				if index >= 0 {
-					outpoints = append(outpoints, bchain.Outpoint{Txid: txid, Vout: index})
-				}
-			}
-			return nil
-		})
-		if err != nil {
-			return nil, err
-		}
-		var lastTxid string
-		var ta *db.TxAddresses
-		checksum = ba.BalanceSat
-		b, _, err := w.db.GetBestBlock()
-		if err != nil {
-			return nil, err
-		}
-		bestheight := int(b)
-		for i := len(outpoints) - 1; i >= 0 && checksum.Int64() > 0; i-- {
-			o := outpoints[i]
-			if lastTxid != o.Txid {
-				ta, err = w.db.GetTxAddresses(o.Txid)
-				if err != nil {
-					return nil, err
-				}
-				lastTxid = o.Txid
-			}
-			if ta == nil {
-				glog.Warning("DB inconsistency:  tx ", o.Txid, ": not found in txAddresses")
-			} else {
-				if len(ta.Outputs) <= int(o.Vout) {
-					glog.Warning("DB inconsistency:  txAddresses ", o.Txid, " does not have enough outputs")
-				} else {
-					if !ta.Outputs[o.Vout].Spent {
-						v := ta.Outputs[o.Vout].ValueSat
-						// report only outpoints that are not spent in mempool
-						_, e := spentInMempool[o.Txid+strconv.Itoa(int(o.Vout))]
-						if !e {
-							r = append(r, AddressUtxo{
-								Txid:          o.Txid,
-								Vout:          o.Vout,
-								AmountSat:     (*Amount)(&v),
-								Height:        int(ta.Height),
-								Confirmations: bestheight - int(ta.Height) + 1,
-							})
-						}
-						checksum.Sub(&checksum, &v)
-					}
-				}
-			}
-		}
-	}
-	if checksum.Uint64() != 0 {
-		glog.Warning("DB inconsistency:  ", address, ": checksum is not zero")
-	}
+	r, err := w.getAddrDescUtxo(addrDesc, nil, onlyConfirmed, false)
 	glog.Info("GetAddressUtxo ", address, ", ", len(r), " utxos, finished in ", time.Since(start))
 	return r, nil
 }

@@ -157,7 +157,7 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 		serveMux.HandleFunc(path+"api/v1/tx-specific/", s.jsonHandler(s.apiTxSpecific, apiV1))
 		serveMux.HandleFunc(path+"api/v1/tx/", s.jsonHandler(s.apiTx, apiV1))
 		serveMux.HandleFunc(path+"api/v1/address/", s.jsonHandler(s.apiAddress, apiV1))
-		serveMux.HandleFunc(path+"api/v1/utxo/", s.jsonHandler(s.apiAddressUtxo, apiV1))
+		serveMux.HandleFunc(path+"api/v1/utxo/", s.jsonHandler(s.apiUtxo, apiV1))
 		serveMux.HandleFunc(path+"api/v1/block/", s.jsonHandler(s.apiBlock, apiV1))
 		serveMux.HandleFunc(path+"api/v1/sendtx/", s.jsonHandler(s.apiSendTx, apiV1))
 		serveMux.HandleFunc(path+"api/v1/estimatefee/", s.jsonHandler(s.apiEstimateFee, apiV1))
@@ -167,7 +167,7 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 	serveMux.HandleFunc(path+"api/tx/", s.jsonHandler(s.apiTx, apiDefault))
 	serveMux.HandleFunc(path+"api/address/", s.jsonHandler(s.apiAddress, apiDefault))
 	serveMux.HandleFunc(path+"api/xpub/", s.jsonHandler(s.apiXpub, apiDefault))
-	serveMux.HandleFunc(path+"api/utxo/", s.jsonHandler(s.apiAddressUtxo, apiDefault))
+	serveMux.HandleFunc(path+"api/utxo/", s.jsonHandler(s.apiUtxo, apiDefault))
 	serveMux.HandleFunc(path+"api/block/", s.jsonHandler(s.apiBlock, apiDefault))
 	serveMux.HandleFunc(path+"api/sendtx/", s.jsonHandler(s.apiSendTx, apiDefault))
 	serveMux.HandleFunc(path+"api/estimatefee/", s.jsonHandler(s.apiEstimateFee, apiDefault))
@@ -177,7 +177,7 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 	serveMux.HandleFunc(path+"api/v2/tx/", s.jsonHandler(s.apiTx, apiV2))
 	serveMux.HandleFunc(path+"api/v2/address/", s.jsonHandler(s.apiAddress, apiV2))
 	serveMux.HandleFunc(path+"api/v2/xpub/", s.jsonHandler(s.apiXpub, apiV2))
-	serveMux.HandleFunc(path+"api/v2/utxo/", s.jsonHandler(s.apiAddressUtxo, apiV2))
+	serveMux.HandleFunc(path+"api/v2/utxo/", s.jsonHandler(s.apiUtxo, apiV2))
 	serveMux.HandleFunc(path+"api/v2/block/", s.jsonHandler(s.apiBlock, apiV2))
 	serveMux.HandleFunc(path+"api/v2/sendtx/", s.jsonHandler(s.apiSendTx, apiV2))
 	serveMux.HandleFunc(path+"api/v2/estimatefee/", s.jsonHandler(s.apiEstimateFee, apiV2))
@@ -625,7 +625,7 @@ func (s *PublicServer) getAddressForXpub(r *http.Request, xpub string, pageSize 
 		gap = 0
 	}
 	allAddresses, _ := strconv.ParseBool(r.URL.Query().Get("alladdresses"))
-	return s.api.GetAddressForXpub(xpub, page, pageSize, option, &api.AddressFilter{Vout: fn, AllTokens: allAddresses}, gap)
+	return s.api.GetXpubAddress(xpub, page, pageSize, option, &api.AddressFilter{Vout: fn, AllTokens: allAddresses}, gap)
 }
 
 func (s *PublicServer) explorerXpub(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
@@ -714,7 +714,7 @@ func (s *PublicServer) explorerSearch(w http.ResponseWriter, r *http.Request) (t
 	var err error
 	s.metrics.ExplorerViews.With(common.Labels{"action": "search"}).Inc()
 	if len(q) > 0 {
-		address, err = s.api.GetAddressForXpub(q, 0, 1, api.Basic, &api.AddressFilter{Vout: api.AddressFilterVoutOff}, 0)
+		address, err = s.api.GetXpubAddress(q, 0, 1, api.Basic, &api.AddressFilter{Vout: api.AddressFilterVoutOff}, 0)
 		if err == nil {
 			http.Redirect(w, r, joinURL("/xpub/", address.AddrStr), 302)
 			return noTpl, nil, nil
@@ -912,10 +912,9 @@ func (s *PublicServer) apiXpub(r *http.Request, apiVersion int) (interface{}, er
 	return address, err
 }
 
-func (s *PublicServer) apiAddressUtxo(r *http.Request, apiVersion int) (interface{}, error) {
-	var utxo []api.AddressUtxo
+func (s *PublicServer) apiUtxo(r *http.Request, apiVersion int) (interface{}, error) {
+	var utxo []api.Utxo
 	var err error
-	s.metrics.ExplorerViews.With(common.Labels{"action": "api-address"}).Inc()
 	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
 		onlyConfirmed := false
 		c := r.URL.Query().Get("confirmed")
@@ -925,7 +924,17 @@ func (s *PublicServer) apiAddressUtxo(r *http.Request, apiVersion int) (interfac
 				return nil, api.NewAPIError("Parameter 'confirmed' cannot be converted to boolean", true)
 			}
 		}
-		utxo, err = s.api.GetAddressUtxo(r.URL.Path[i+1:], onlyConfirmed)
+		gap, ec := strconv.Atoi(r.URL.Query().Get("gap"))
+		if ec != nil {
+			gap = 0
+		}
+		utxo, err = s.api.GetXpubUtxo(r.URL.Path[i+1:], onlyConfirmed, gap)
+		if err == nil {
+			s.metrics.ExplorerViews.With(common.Labels{"action": "api-xpub-utxo"}).Inc()
+		} else {
+			utxo, err = s.api.GetAddressUtxo(r.URL.Path[i+1:], onlyConfirmed)
+			s.metrics.ExplorerViews.With(common.Labels{"action": "api-address-utxo"}).Inc()
+		}
 		if err == nil && apiVersion == apiV1 {
 			return s.api.AddressUtxoToV1(utxo), nil
 		}
