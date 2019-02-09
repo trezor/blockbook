@@ -11,7 +11,8 @@
     },
     "bellcoin": {
         "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",
-                "EstimateSmartFee", "EstimateFee"]
+                "EstimateSmartFee", "EstimateFee"],
+        "sync": ["ConnectBlocksParallel", "ConnectBlocks", "HandleFork"]
     },
     "bgold": {
         "sync": ["ConnectBlocksParallel", "ConnectBlocks", "HandleFork"]
