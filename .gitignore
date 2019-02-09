@@ -11,3 +11,4 @@ build
 !build/docker
 .bin-image
 .deb-image
+\.idea/
