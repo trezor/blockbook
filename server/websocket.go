@@ -317,10 +317,10 @@ func (s *WebsocketServer) onRequest(c *websocketChannel, req *websocketReq) {
 	}
 	if err == nil {
 		glog.V(1).Info("Client ", c.id, " onRequest ", req.Method, " success")
-		s.metrics.SocketIORequests.With(common.Labels{"method": req.Method, "status": "success"}).Inc()
+		s.metrics.WebsocketRequests.With(common.Labels{"method": req.Method, "status": "success"}).Inc()
 	} else {
 		glog.Error("Client ", c.id, " onMessage ", req.Method, ": ", errors.ErrorStack(err))
-		s.metrics.SocketIORequests.With(common.Labels{"method": req.Method, "status": err.Error()}).Inc()
+		s.metrics.WebsocketRequests.With(common.Labels{"method": req.Method, "status": err.Error()}).Inc()
 		e := resultError{}
 		e.Error.Message = err.Error()
 		data = e
@@ -358,16 +358,26 @@ func (s *WebsocketServer) getAccountInfo(req *accountInfoReq) (res *api.Address,
 	default:
 		opt = api.Basic
 	}
-	return s.api.GetAddress(req.Descriptor, req.Page, req.PageSize, opt, &api.AddressFilter{
+	filter := api.AddressFilter{
 		FromHeight: uint32(req.FromHeight),
 		ToHeight:   uint32(req.ToHeight),
 		Contract:   req.ContractFilter,
 		Vout:       api.AddressFilterVoutOff,
-	})
+		AllTokens:  true,
+	}
+	a, err := s.api.GetXpubAddress(req.Descriptor, req.Page, req.PageSize, opt, &filter, 0)
+	if err != nil {
+		return s.api.GetAddress(req.Descriptor, req.Page, req.PageSize, opt, &filter)
+	}
+	return a, nil
 }
 
 func (s *WebsocketServer) getAccountUtxo(descriptor string) (interface{}, error) {
-	return s.api.GetAddressUtxo(descriptor, false)
+	utxo, err := s.api.GetXpubUtxo(descriptor, false, 0)
+	if err != nil {
+		return s.api.GetAddressUtxo(descriptor, false)
+	}
+	return utxo, nil
 }
 
 func (s *WebsocketServer) getTransaction(txid string) (interface{}, error) {

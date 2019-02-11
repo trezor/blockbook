@@ -600,7 +600,7 @@ func (s *PublicServer) explorerAddress(w http.ResponseWriter, r *http.Request) (
 	return addressTpl, data, nil
 }
 
-func (s *PublicServer) getAddressForXpub(r *http.Request, xpub string, pageSize int, option api.GetAddressOption) (*api.Address, error) {
+func (s *PublicServer) getXpubAddress(r *http.Request, xpub string, pageSize int, option api.GetAddressOption) (*api.Address, error) {
 	var fn = api.AddressFilterVoutOff
 	page, ec := strconv.Atoi(r.URL.Query().Get("page"))
 	if ec != nil {
@@ -633,7 +633,7 @@ func (s *PublicServer) explorerXpub(w http.ResponseWriter, r *http.Request) (tpl
 	var err error
 	s.metrics.ExplorerViews.With(common.Labels{"action": "xpub"}).Inc()
 	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
-		address, err = s.getAddressForXpub(r, r.URL.Path[i+1:], txsOnPage, api.TxHistoryLight)
+		address, err = s.getXpubAddress(r, r.URL.Path[i+1:], txsOnPage, api.TxHistoryLight)
 		if err != nil {
 			return errorTpl, nil, err
 		}
@@ -904,7 +904,7 @@ func (s *PublicServer) apiXpub(r *http.Request, apiVersion int) (interface{}, er
 	var err error
 	s.metrics.ExplorerViews.With(common.Labels{"action": "api-xpub"}).Inc()
 	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
-		address, err = s.getAddressForXpub(r, r.URL.Path[i+1:], txsInAPI, api.TxidHistory)
+		address, err = s.getXpubAddress(r, r.URL.Path[i+1:], txsInAPI, api.TxidHistory)
 		if err == nil && apiVersion == apiV1 {
 			return s.api.AddressToV1(address), nil
 		}

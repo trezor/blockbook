@@ -112,7 +112,7 @@ func (w *Worker) xpubCheckAndLoadTxids(ad *xpubAddress, filter *AddressFilter, m
 	if ad.balance == nil {
 		return nil
 	}
-	// if completely read, check if there are not some new txs and load if necessary
+	// if completely loaded, check if there are not some new txs and load if necessary
 	if ad.complete {
 		if ad.balance.Txs != ad.txs {
 			newTxids, _, err := w.xpubGetAddressTxids(ad.addrDesc, false, ad.maxHeight+1, maxHeight, maxInt)
@@ -129,10 +129,12 @@ func (w *Worker) xpubCheckAndLoadTxids(ad *xpubAddress, filter *AddressFilter, m
 		return nil
 	}
 	// unless the filter is completely off, load all txids
+	// could be optimized to reflect filter.FromHeight, filter.ToHeight but this way it is simple and robust
+	fromHeight := uint32(0)
 	if filter.FromHeight != 0 || filter.ToHeight != 0 || filter.Vout != AddressFilterVoutOff {
 		maxResults = maxInt
 	}
-	newTxids, complete, err := w.xpubGetAddressTxids(ad.addrDesc, false, 0, maxHeight, maxResults)
+	newTxids, complete, err := w.xpubGetAddressTxids(ad.addrDesc, false, fromHeight, maxHeight, maxResults)
 	if err != nil {
 		return err
 	}
