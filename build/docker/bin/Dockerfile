@@ -1,6 +1,6 @@
 # initialize from the image
 
-FROM ubuntu:18.04
+FROM debina:9
 
 RUN apt-get update && \
     apt-get upgrade -y && \
