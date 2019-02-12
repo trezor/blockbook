@@ -218,19 +218,23 @@ func (w *Worker) tokenFromXpubAddress(data *xpubData, ad *xpubAddress, changeInd
 	if len(a) > 0 {
 		address = a[0]
 	}
-	var balance *big.Int
+	var balance, totalReceived, totalSent *big.Int
 	var transfers int
 	if ad.balance != nil {
 		balance = &ad.balance.BalanceSat
+		totalSent = &ad.balance.SentSat
+		totalReceived = ad.balance.ReceivedSat()
 		transfers = int(ad.balance.Txs)
 	}
 	return Token{
-		Type:       XPUBAddressTokenType,
-		Name:       address,
-		Decimals:   w.chainParser.AmountDecimals(),
-		BalanceSat: (*Amount)(balance),
-		Transfers:  transfers,
-		Contract:   fmt.Sprintf("%s/%d/%d", data.basePath, changeIndex, index),
+		Type:             XPUBAddressTokenType,
+		Name:             address,
+		Decimals:         w.chainParser.AmountDecimals(),
+		BalanceSat:       (*Amount)(balance),
+		TotalReceivedSat: (*Amount)(totalReceived),
+		TotalSentSat:     (*Amount)(totalSent),
+		Transfers:        transfers,
+		Path:             fmt.Sprintf("%s/%d/%d", data.basePath, changeIndex, index),
 	}
 }
 
@@ -371,8 +375,8 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Get
 		}
 		totalResults = -1
 	}
-	// process mempool, only if blockheight filter is off
-	if filter.FromHeight == 0 && filter.ToHeight == 0 && !filter.OnlyConfirmed {
+	// process mempool, only if ToHeight is not specified
+	if filter.ToHeight == 0 && !filter.OnlyConfirmed {
 		txmMap = make(map[string]*Tx)
 		for _, da := range [][]xpubAddress{data.addresses, data.changeAddresses} {
 			for i := range da {
@@ -442,19 +446,27 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Get
 		}
 	}
 	totalTokens := 0
-	xpubAddresses := make(map[string]struct{})
-	tokens := make([]Token, 0, 4)
+	var tokens []Token
+	var xpubAddresses map[string]struct{}
+	if option != Basic {
+		tokens = make([]Token, 0, 4)
+		xpubAddresses = make(map[string]struct{})
+	}
 	for ci, da := range [][]xpubAddress{data.addresses, data.changeAddresses} {
 		for i := range da {
 			ad := &da[i]
-			token := w.tokenFromXpubAddress(data, ad, ci, i)
 			if ad.balance != nil {
 				totalTokens++
-				if filter.AllTokens || !IsZeroBigInt(&ad.balance.BalanceSat) {
+			}
+			if option != Basic {
+				token := w.tokenFromXpubAddress(data, ad, ci, i)
+				if filter.TokenLevel == TokenDetailDiscovered ||
+					filter.TokenLevel == TokenDetailUsed && ad.balance != nil ||
+					filter.TokenLevel == TokenDetailNonzeroBalance && ad.balance != nil && !IsZeroBigInt(&ad.balance.BalanceSat) {
 					tokens = append(tokens, token)
 				}
+				xpubAddresses[token.Name] = struct{}{}
 			}
-			xpubAddresses[token.Name] = struct{}{}
 		}
 	}
 	var totalReceived big.Int
@@ -483,7 +495,6 @@ func (w *Worker) GetXpubUtxo(xpub string, onlyConfirmed bool, gap int) (Utxos, e
 	start := time.Now()
 	data, _, err := w.getXpubData(xpub, 0, 1, Basic, &AddressFilter{
 		Vout:          AddressFilterVoutOff,
-		AllTokens:     false,
 		OnlyConfirmed: onlyConfirmed,
 	}, gap)
 	if err != nil {
@@ -509,7 +520,7 @@ func (w *Worker) GetXpubUtxo(xpub string, onlyConfirmed bool, gap int) (Utxos, e
 				for j := range utxos {
 					a := &utxos[j]
 					a.Address = t.Name
-					a.Path = t.Contract
+					a.Path = t.Path
 				}
 				r = append(r, utxos...)
 			}

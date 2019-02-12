@@ -385,27 +385,27 @@ const (
 
 // TemplateData is used to transfer data to the templates
 type TemplateData struct {
-	CoinName         string
-	CoinShortcut     string
-	CoinLabel        string
-	InternalExplorer bool
-	ChainType        bchain.ChainType
-	Address          *api.Address
-	AddrStr          string
-	Tx               *api.Tx
-	Error            *api.APIError
-	Blocks           *api.Blocks
-	Block            *api.Block
-	Info             *api.SystemInfo
-	Page             int
-	PrevPage         int
-	NextPage         int
-	PagingRange      []int
-	PageParams       template.URL
-	TOSLink          string
-	SendTxHex        string
-	Status           string
-	AllTokens        bool
+	CoinName             string
+	CoinShortcut         string
+	CoinLabel            string
+	InternalExplorer     bool
+	ChainType            bchain.ChainType
+	Address              *api.Address
+	AddrStr              string
+	Tx                   *api.Tx
+	Error                *api.APIError
+	Blocks               *api.Blocks
+	Block                *api.Block
+	Info                 *api.SystemInfo
+	Page                 int
+	PrevPage             int
+	NextPage             int
+	PagingRange          []int
+	PageParams           template.URL
+	TOSLink              string
+	SendTxHex            string
+	Status               string
+	NonZeroBalanceTokens bool
 }
 
 func (s *PublicServer) parseTemplates() []*template.Template {
@@ -600,7 +600,7 @@ func (s *PublicServer) explorerAddress(w http.ResponseWriter, r *http.Request) (
 	return addressTpl, data, nil
 }
 
-func (s *PublicServer) getXpubAddress(r *http.Request, xpub string, pageSize int, option api.GetAddressOption) (*api.Address, error) {
+func (s *PublicServer) getXpubAddress(r *http.Request, xpub string, pageSize int, option api.GetAddressOption) (*api.Address, api.TokenDetailLevel, error) {
 	var fn = api.AddressFilterVoutOff
 	page, ec := strconv.Atoi(r.URL.Query().Get("page"))
 	if ec != nil {
@@ -624,16 +624,26 @@ func (s *PublicServer) getXpubAddress(r *http.Request, xpub string, pageSize int
 	if ec != nil {
 		gap = 0
 	}
-	allAddresses, _ := strconv.ParseBool(r.URL.Query().Get("alladdresses"))
-	return s.api.GetXpubAddress(xpub, page, pageSize, option, &api.AddressFilter{Vout: fn, AllTokens: allAddresses}, gap)
+	tokenLevel := api.TokenDetailNonzeroBalance
+	switch r.URL.Query().Get("tokenlevel") {
+	case "discovered":
+		tokenLevel = api.TokenDetailDiscovered
+	case "used":
+		tokenLevel = api.TokenDetailUsed
+	case "nonzero":
+		tokenLevel = api.TokenDetailNonzeroBalance
+	}
+	a, err := s.api.GetXpubAddress(xpub, page, pageSize, option, &api.AddressFilter{Vout: fn, TokenLevel: tokenLevel}, gap)
+	return a, tokenLevel, err
 }
 
 func (s *PublicServer) explorerXpub(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
 	var address *api.Address
+	var tokenLevel api.TokenDetailLevel
 	var err error
 	s.metrics.ExplorerViews.With(common.Labels{"action": "xpub"}).Inc()
 	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
-		address, err = s.getXpubAddress(r, r.URL.Path[i+1:], txsOnPage, api.TxHistoryLight)
+		address, tokenLevel, err = s.getXpubAddress(r, r.URL.Path[i+1:], txsOnPage, api.TxHistoryLight)
 		if err != nil {
 			return errorTpl, nil, err
 		}
@@ -648,8 +658,7 @@ func (s *PublicServer) explorerXpub(w http.ResponseWriter, r *http.Request) (tpl
 		data.PageParams = template.URL("&filter=" + filter)
 		data.Address.Filter = filter
 	}
-	allAddresses := r.URL.Query().Get("alladdresses")
-	data.AllTokens, _ = strconv.ParseBool(allAddresses)
+	data.NonZeroBalanceTokens = tokenLevel == api.TokenDetailNonzeroBalance
 	return xpubTpl, data, nil
 }
 
@@ -904,7 +913,7 @@ func (s *PublicServer) apiXpub(r *http.Request, apiVersion int) (interface{}, er
 	var err error
 	s.metrics.ExplorerViews.With(common.Labels{"action": "api-xpub"}).Inc()
 	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
-		address, err = s.getXpubAddress(r, r.URL.Path[i+1:], txsInAPI, api.TxidHistory)
+		address, _, err = s.getXpubAddress(r, r.URL.Path[i+1:], txsInAPI, api.TxidHistory)
 		if err == nil && apiVersion == apiV1 {
 			return s.api.AddressToV1(address), nil
 		}

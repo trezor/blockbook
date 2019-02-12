@@ -31,7 +31,7 @@
                 </tr>
                 {{- if $addr.TotalTokens -}}
                 <tr>
-                    <td>{{if $data.AllTokens}}XPUB Addresses{{else}}XPUB Addresses with Balance{{end}}</td>
+                    <td>{{if $data.NonZeroBalanceTokens}}XPUB Addresses with Balance{{else}}XPUB Addresses{{end}}</td>
                     <td style="padding: 0;">
                         <table class="table data-table">
                             <tbody>
@@ -46,12 +46,12 @@
                                     <td class="data ellipsis"><a href="/address/{{$t.Name}}">{{$t.Name}}</a></td>
                                     <td class="data">{{formatAmount $t.BalanceSat}} {{$cs}}</td>
                                     <td class="data">{{$t.Transfers}}</td>
-                                    <td>{{$t.Contract}}</td>
+                                    <td>{{$t.Path}}</td>
                                 </tr>
                                 {{- end -}}
-                                {{- if not $data.AllTokens -}}
+                                {{- if $data.NonZeroBalanceTokens -}}
                                 <tr>
-                                    <td colspan="4"><a href="?alladdresses=true">Show all XPUB addresses</a></td>
+                                    <td colspan="4"><a href="?tokenlevel=used">Show all XPUB addresses</a></td>
                                 </tr>
                                 {{- end -}}
                             </tbody>

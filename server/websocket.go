@@ -349,8 +349,8 @@ func unmarshalGetAccountInfoRequest(params []byte) (*accountInfoReq, error) {
 func (s *WebsocketServer) getAccountInfo(req *accountInfoReq) (res *api.Address, err error) {
 	var opt api.GetAddressOption
 	switch req.Details {
-	case "balance":
-		opt = api.Balance
+	case "tokens":
+		opt = api.Tokens
 	case "txids":
 		opt = api.TxidHistory
 	case "txs":
@@ -363,7 +363,7 @@ func (s *WebsocketServer) getAccountInfo(req *accountInfoReq) (res *api.Address,
 		ToHeight:   uint32(req.ToHeight),
 		Contract:   req.ContractFilter,
 		Vout:       api.AddressFilterVoutOff,
-		AllTokens:  true,
+		TokenLevel: api.TokenDetailDiscovered,
 	}
 	a, err := s.api.GetXpubAddress(req.Descriptor, req.Page, req.PageSize, opt, &filter, 0)
 	if err != nil {

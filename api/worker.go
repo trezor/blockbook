@@ -51,7 +51,7 @@ func (w *Worker) getAddressesFromVout(vout *bchain.Vout) (bchain.AddressDescript
 // setSpendingTxToVout is helper function, that finds transaction that spent given output and sets it to the output
 // there is no direct index for the operation, it must be found using addresses -> txaddresses -> tx
 func (w *Worker) setSpendingTxToVout(vout *Vout, txid string, height uint32) error {
-	err := w.db.GetAddrDescTransactions(vout.AddrDesc, height, ^uint32(0), func(t string, height uint32, indexes []int32) error {
+	err := w.db.GetAddrDescTransactions(vout.AddrDesc, height, maxUint32, func(t string, height uint32, indexes []int32) error {
 		for _, index := range indexes {
 			// take only inputs
 			if index < 0 {
@@ -364,7 +364,7 @@ func (w *Worker) getAddressTxids(addrDesc bchain.AddressDescriptor, mempool bool
 	} else {
 		to := filter.ToHeight
 		if to == 0 {
-			to = ^uint32(0)
+			to = maxUint32
 		}
 		err = w.db.GetAddrDescTransactions(addrDesc, filter.FromHeight, to, callback)
 		if err != nil {
@@ -683,8 +683,8 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option GetA
 		ba = &db.AddrBalance{}
 		page = 0
 	}
-	// process mempool, only if blockheight filter is off
-	if filter.FromHeight == 0 && filter.ToHeight == 0 && !filter.OnlyConfirmed {
+	// process mempool, only if toHeight is not specified
+	if filter.ToHeight == 0 && !filter.OnlyConfirmed {
 		txm, err = w.getAddressTxids(addrDesc, true, filter, maxInt)
 		if err != nil {
 			return nil, errors.Annotatef(err, "getAddressTxids %v true", addrDesc)
@@ -825,7 +825,7 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *db.AddrB
 		// ba can be nil if the address is only in mempool!
 		if ba != nil && !IsZeroBigInt(&ba.BalanceSat) {
 			outpoints := make([]bchain.Outpoint, 0, 8)
-			err = w.db.GetAddrDescTransactions(addrDesc, 0, ^uint32(0), func(txid string, height uint32, indexes []int32) error {
+			err = w.db.GetAddrDescTransactions(addrDesc, 0, maxUint32, func(txid string, height uint32, indexes []int32) error {
 				for _, index := range indexes {
 					// take only outputs
 					if index >= 0 {
@@ -943,7 +943,7 @@ func (w *Worker) GetBlock(bid string, page int, txsOnPage int) (*Block, error) {
 	// if it's a number, must be less than int32
 	var hash string
 	height, err := strconv.Atoi(bid)
-	if err == nil && height < int(^uint32(0)) {
+	if err == nil && height < int(maxUint32) {
 		hash, err = w.db.GetBlockHash(uint32(height))
 		if err != nil {
 			hash = bid

@@ -19,13 +19,13 @@ type GetAddressOption int
 const (
 	// Basic - only that address is indexed and some basic info
 	Basic GetAddressOption = iota
-	// Balance - only balances
-	Balance
-	// TxidHistory - balances and txids, subject to paging
+	// Tokens - basic info + tokens
+	Tokens
+	// TxidHistory - basic + tokens + txids, subject to paging
 	TxidHistory
-	// TxHistoryLight - balances and easily obtained tx data (not requiring request to backend), subject to paging
+	// TxHistoryLight - basic + tokens + easily obtained tx data (not requiring request to backend), subject to paging
 	TxHistoryLight
-	// TxHistory - balances and full tx data, subject to paging
+	// TxHistory - basic + tokens + full tx data, subject to paging
 	TxHistory
 )
 
@@ -138,14 +138,17 @@ const XPUBAddressTokenType TokenType = "XPUBAddress"
 
 // Token contains info about tokens held by an address
 type Token struct {
-	Type          TokenType `json:"type"`
-	Contract      string    `json:"contract"`
-	Transfers     int       `json:"transfers"`
-	Name          string    `json:"name"`
-	Symbol        string    `json:"symbol"`
-	Decimals      int       `json:"decimals"`
-	BalanceSat    *Amount   `json:"balance,omitempty"`
-	ContractIndex string    `json:"-"`
+	Type             TokenType `json:"type"`
+	Name             string    `json:"name"`
+	Path             string    `json:"path,omitempty"`
+	Contract         string    `json:"contract,omitempty"`
+	Transfers        int       `json:"transfers"`
+	Symbol           string    `json:"symbol,omitempty"`
+	Decimals         int       `json:"decimals,omitempty"`
+	BalanceSat       *Amount   `json:"balance,omitempty"`
+	TotalReceivedSat *Amount   `json:"totalReceived,omitempty"`
+	TotalSentSat     *Amount   `json:"totalSent,omitempty"`
+	ContractIndex    string    `json:"-"`
 }
 
 // TokenTransfer contains info about a token transfer done in a transaction
@@ -198,6 +201,9 @@ type Paging struct {
 	ItemsOnPage int `json:"itemsOnPage,omitempty"`
 }
 
+// TokenDetailLevel specifies detail level of tokens returned by GetAddress and GetXpubAddress
+type TokenDetailLevel int
+
 const (
 	// AddressFilterVoutOff disables filtering of transactions by vout
 	AddressFilterVoutOff = -1
@@ -205,6 +211,13 @@ const (
 	AddressFilterVoutInputs = -2
 	// AddressFilterVoutOutputs specifies that only txs where the address is as output are returned
 	AddressFilterVoutOutputs = -3
+
+	// TokenDetailNonzeroBalance - use to return only tokens with nonzero balance
+	TokenDetailNonzeroBalance TokenDetailLevel = 0
+	// TokenDetailUsed - use to return tokens with some transfers (even if they have zero balance now)
+	TokenDetailUsed TokenDetailLevel = 1
+	// TokenDetailDiscovered - use to return all discovered tokens
+	TokenDetailDiscovered TokenDetailLevel = 2
 )
 
 // AddressFilter is used to filter data returned from GetAddress api method
@@ -213,8 +226,7 @@ type AddressFilter struct {
 	Contract   string
 	FromHeight uint32
 	ToHeight   uint32
-	// AllTokens set to true will include xpub addresses with zero balance
-	AllTokens bool
+	TokenLevel TokenDetailLevel
 	// OnlyConfirmed set to true will ignore mempool transactions; mempool is also ignored if FromHeight/ToHeight filter is specified
 	OnlyConfirmed bool
 }
