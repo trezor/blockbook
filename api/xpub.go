@@ -325,7 +325,7 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Get
 	var (
 		txc      xpubTxids
 		txmMap   map[string]*Tx
-		txcMap   map[string]struct{}
+		txCount  int
 		txs      []*Tx
 		txids    []string
 		pg       Paging
@@ -397,18 +397,25 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Get
 			}
 		}
 	}
-	txCount := int(data.txCountEstimate)
 	if option >= TxidHistory {
-		txcMap = make(map[string]struct{})
+		txcMap := make(map[string]bool)
 		txc = make(xpubTxids, 0, 32)
 		for _, da := range [][]xpubAddress{data.addresses, data.changeAddresses} {
 			for i := range da {
 				ad := &da[i]
 				for _, txid := range ad.txids {
-					_, foundTx := txcMap[txid.txid]
-					if !foundTx && (useTxids == nil || useTxids(&txid, ad)) {
-						txcMap[txid.txid] = struct{}{}
-						txc = append(txc, txid)
+					added, foundTx := txcMap[txid.txid]
+					// count txs regardless of filter but only once
+					if !foundTx {
+						txCount++
+					}
+					// add tx only once
+					if !added {
+						add := useTxids == nil || useTxids(&txid, ad)
+						txcMap[txid.txid] = add
+						if add {
+							txc = append(txc, txid)
+						}
 					}
 				}
 			}
@@ -441,6 +448,8 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Get
 				txs = append(txs, tx)
 			}
 		}
+	} else {
+		txCount = int(data.txCountEstimate)
 	}
 	totalTokens := 0
 	var tokens []Token
