@@ -26,10 +26,10 @@
                     <td class="data">{{$addr.Txs}}</td>
                 </tr>
                 <tr>
-                    <td>Total XPUB Addresses</td>
+                    <td>Used XPUB Addresses</td>
                     <td class="data">{{$addr.TotalTokens}}</td>
                 </tr>
-                {{- if $addr.TotalTokens -}}
+                {{- if $addr.Tokens -}}
                 <tr>
                     <td>{{if $data.NonZeroBalanceTokens}}XPUB Addresses with Balance{{else}}XPUB Addresses{{end}}</td>
                     <td style="padding: 0;">

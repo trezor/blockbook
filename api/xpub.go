@@ -48,7 +48,7 @@ type xpubData struct {
 	basePath        string
 	dataHeight      uint32
 	dataHash        string
-	txs             uint32
+	txCountEstimate uint32
 	sentSat         big.Int
 	balanceSat      big.Int
 	addresses       []xpubAddress
@@ -108,7 +108,7 @@ func (w *Worker) xpubGetAddressTxids(addrDesc bchain.AddressDescriptor, mempool 
 }
 
 func (w *Worker) xpubCheckAndLoadTxids(ad *xpubAddress, filter *AddressFilter, maxHeight uint32, maxResults int) error {
-	// skip if not discovered
+	// skip if not used
 	if ad.balance == nil {
 		return nil
 	}
@@ -128,13 +128,8 @@ func (w *Worker) xpubCheckAndLoadTxids(ad *xpubAddress, filter *AddressFilter, m
 		}
 		return nil
 	}
-	// unless the filter is completely off, load all txids
-	// could be optimized to reflect filter.FromHeight, filter.ToHeight but this way it is simple and robust
-	fromHeight := uint32(0)
-	if filter.FromHeight != 0 || filter.ToHeight != 0 || filter.Vout != AddressFilterVoutOff {
-		maxResults = maxInt
-	}
-	newTxids, complete, err := w.xpubGetAddressTxids(ad.addrDesc, false, fromHeight, maxHeight, maxResults)
+	// load all txids to get paging correctly
+	newTxids, complete, err := w.xpubGetAddressTxids(ad.addrDesc, false, 0, maxHeight, maxInt)
 	if err != nil {
 		return err
 	}
@@ -156,7 +151,7 @@ func (w *Worker) xpubDerivedAddressBalance(data *xpubData, ad *xpubAddress) (boo
 		return false, err
 	}
 	if ad.balance != nil {
-		data.txs += ad.balance.Txs
+		data.txCountEstimate += ad.balance.Txs
 		data.sentSat.Add(&data.sentSat, &ad.balance.SentSat)
 		data.balanceSat.Add(&data.balanceSat, &ad.balance.BalanceSat)
 		return true, nil
@@ -289,7 +284,7 @@ func (w *Worker) getXpubData(xpub string, page int, txsOnPage int, option GetAdd
 			data.dataHash = besthash
 			data.balanceSat = *new(big.Int)
 			data.sentSat = *new(big.Int)
-			data.txs = 0
+			data.txCountEstimate = 0
 			var lastUsedIndex int
 			lastUsedIndex, data.addresses, err = w.xpubScanAddresses(xpub, &data, data.addresses, gap, 0, 0, fork)
 			if err != nil {
@@ -328,14 +323,15 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Get
 		inputOutput byte
 	}
 	var (
-		txc          xpubTxids
-		txmMap       map[string]*Tx
-		txs          []*Tx
-		txids        []string
-		pg           Paging
-		totalResults int
-		err          error
-		uBalSat      big.Int
+		txc      xpubTxids
+		txmMap   map[string]*Tx
+		txcMap   map[string]struct{}
+		txs      []*Tx
+		txids    []string
+		pg       Paging
+		filtered bool
+		err      error
+		uBalSat  big.Int
 	)
 	data, bestheight, err := w.getXpubData(xpub, page, txsOnPage, option, filter, gap)
 	if err != nil {
@@ -343,13 +339,7 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Get
 	}
 	// setup filtering of txids
 	var useTxids func(txid *xpubTxid, ad *xpubAddress) bool
-	var addTxids func(ad *xpubAddress)
-	if filter.FromHeight == 0 && filter.ToHeight == 0 && filter.Vout == AddressFilterVoutOff {
-		addTxids = func(ad *xpubAddress) {
-			txc = append(txc, ad.txids...)
-		}
-		totalResults = int(data.txs)
-	} else {
+	if !(filter.FromHeight == 0 && filter.ToHeight == 0 && filter.Vout == AddressFilterVoutOff) {
 		toHeight := maxUint32
 		if filter.ToHeight != 0 {
 			toHeight = filter.ToHeight
@@ -366,14 +356,7 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Get
 			}
 			return true
 		}
-		addTxids = func(ad *xpubAddress) {
-			for _, txid := range ad.txids {
-				if useTxids(&txid, ad) {
-					txc = append(txc, txid)
-				}
-			}
-		}
-		totalResults = -1
+		filtered = true
 	}
 	// process mempool, only if ToHeight is not specified
 	if filter.ToHeight == 0 && !filter.OnlyConfirmed {
@@ -414,14 +397,28 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Get
 			}
 		}
 	}
+	txCount := int(data.txCountEstimate)
 	if option >= TxidHistory {
+		txcMap = make(map[string]struct{})
 		txc = make(xpubTxids, 0, 32)
 		for _, da := range [][]xpubAddress{data.addresses, data.changeAddresses} {
 			for i := range da {
-				addTxids(&da[i])
+				ad := &da[i]
+				for _, txid := range ad.txids {
+					_, foundTx := txcMap[txid.txid]
+					if !foundTx && (useTxids == nil || useTxids(&txid, ad)) {
+						txcMap[txid.txid] = struct{}{}
+						txc = append(txc, txid)
+					}
+				}
 			}
 		}
 		sort.Stable(txc)
+		txCount = len(txcMap)
+		totalResults := txCount
+		if filtered {
+			totalResults = -1
+		}
 		var from, to int
 		pg, from, to, page = computePaging(len(txc), page, txsOnPage)
 		if len(txc) >= txsOnPage {
@@ -477,7 +474,7 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Get
 		BalanceSat:            (*Amount)(&data.balanceSat),
 		TotalReceivedSat:      (*Amount)(&totalReceived),
 		TotalSentSat:          (*Amount)(&data.sentSat),
-		Txs:                   int(data.txs),
+		Txs:                   txCount,
 		UnconfirmedBalanceSat: (*Amount)(&uBalSat),
 		UnconfirmedTxs:        len(txmMap),
 		Transactions:          txs,
@@ -486,7 +483,7 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Get
 		Tokens:                tokens,
 		XPubAddresses:         xpubAddresses,
 	}
-	glog.Info("GetXpubAddress ", xpub[:16], ", ", len(data.addresses)+len(data.changeAddresses), " derived addresses, ", data.txs, " total txs, loaded ", len(txc), " txids, finished in ", time.Since(start))
+	glog.Info("GetXpubAddress ", xpub[:16], ", ", len(data.addresses)+len(data.changeAddresses), " derived addresses, ", txCount, " confirmed txs, finished in ", time.Since(start))
 	return &addr, nil
 }
 
