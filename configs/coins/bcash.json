@@ -22,10 +22,10 @@
     "package_name": "backend-bcash",
     "package_revision": "satoshilabs-1",
     "system_user": "bcash",
-    "version": "0.18.7",
-    "binary_url": "https://download.bitcoinabc.org/0.18.7/linux/bitcoin-abc-0.18.7-x86_64-linux-gnu.tar.gz",
+    "version": "0.18.8",
+    "binary_url": "https://download.bitcoinabc.org/0.18.8/linux/bitcoin-abc-0.18.8-x86_64-linux-gnu.tar.gz",
     "verification_type": "sha256",
-    "verification_source": "943101fc28159c10b139a97dc8939112740ba34be38fd98d413d6c7a33859132",
+    "verification_source": "b58a04be81a6670aadce6c7d51f6afa00304fbd50dc70b47a74a93b814144ac1",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
         "bin/bitcoin-qt"
