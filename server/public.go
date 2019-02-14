@@ -416,6 +416,7 @@ func (s *PublicServer) parseTemplates() []*template.Template {
 		"formatAmountWithDecimals": formatAmountWithDecimals,
 		"setTxToTemplateData":      setTxToTemplateData,
 		"isOwnAddress":             isOwnAddress,
+		"isOwnAddresses":           isOwnAddresses,
 	}
 	var createTemplate func(filenames ...string) *template.Template
 	if s.debug {
@@ -504,19 +505,25 @@ func setTxToTemplateData(td *TemplateData, tx *api.Tx) *TemplateData {
 	return td
 }
 
-// returns true if addresses are "own",
+// returns true if address is "own",
 // i.e. either the address of the address detail or belonging to the xpub
-func isOwnAddress(td *TemplateData, addresses []string) bool {
-	if len(addresses) == 1 {
-		a := addresses[0]
-		if a == td.AddrStr {
+func isOwnAddress(td *TemplateData, a string) bool {
+	if a == td.AddrStr {
+		return true
+	}
+	if td.Address != nil && td.Address.XPubAddresses != nil {
+		if _, found := td.Address.XPubAddresses[a]; found {
 			return true
 		}
-		if td.Address != nil && td.Address.XPubAddresses != nil {
-			if _, found := td.Address.XPubAddresses[a]; found {
-				return true
-			}
-		}
+	}
+	return false
+}
+
+// returns true if addresses are "own",
+// i.e. either the address of the address detail or belonging to the xpub
+func isOwnAddresses(td *TemplateData, addresses []string) bool {
+	if len(addresses) == 1 {
+		return isOwnAddress(td, addresses[0])
 	}
 	return false
 }

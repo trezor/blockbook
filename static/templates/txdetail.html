@@ -14,7 +14,7 @@
                 <table class="table data-table">
                     <tbody>
                         {{- range $vin := $tx.Vin -}}
-                        <tr{{if isOwnAddress $data $vin.Addresses}} class="tx-own"{{end}}>
+                        <tr{{if isOwnAddresses $data $vin.Addresses}} class="tx-own"{{end}}>
                             <td>
                                 {{- if $vin.Txid -}}
                                 <a class="float-left text-muted" href="/tx/{{$vin.Txid}}" title="Outpoint {{$vin.Txid}},{{$vin.Vout}}">➡&nbsp;</a>
@@ -49,7 +49,7 @@
                 <table class="table data-table">
                     <tbody>
                         {{- range $vout := $tx.Vout -}}
-                        <tr{{if isOwnAddress $data $vout.Addresses}} class="tx-own"{{end}}>
+                        <tr{{if isOwnAddresses $data $vout.Addresses}} class="tx-own"{{end}}>
                             <td>
                                 {{- range $a := $vout.Addresses -}}
                                 <span class="ellipsis tx-addr">
