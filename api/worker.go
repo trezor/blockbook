@@ -493,14 +493,13 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 	if err != nil {
 		return nil, nil, nil, 0, 0, 0, NewAPIError(fmt.Sprintf("Address not found, %v", err), true)
 	}
+	b, err := w.chain.EthereumTypeGetBalance(addrDesc)
+	if err != nil {
+		return nil, nil, nil, 0, 0, 0, errors.Annotatef(err, "EthereumTypeGetBalance %v", addrDesc)
+	}
 	if ca != nil {
 		ba = &db.AddrBalance{
 			Txs: uint32(ca.TotalTxs),
-		}
-		var b *big.Int
-		b, err = w.chain.EthereumTypeGetBalance(addrDesc)
-		if err != nil {
-			return nil, nil, nil, 0, 0, 0, errors.Annotatef(err, "EthereumTypeGetBalance %v", addrDesc)
 		}
 		if b != nil {
 			ba.BalanceSat = *b
@@ -578,6 +577,13 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 			}
 		}
 		nonContractTxs = int(ca.NonContractTxs)
+	} else {
+		// addresses without any normal transactions can have internal transactions and therefore balance
+		if b != nil {
+			ba = &db.AddrBalance{
+				BalanceSat: *b,
+			}
+		}
 	}
 	return ba, tokens, ci, n, nonContractTxs, totalResults, nil
 }
