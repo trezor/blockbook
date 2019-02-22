@@ -1168,7 +1168,7 @@ func dirSize(path string) (int64, error) {
 func (d *RocksDB) DatabaseSizeOnDisk() int64 {
 	size, err := dirSize(d.path)
 	if err != nil {
-		glog.Error("rocksdb: DatabaseSizeOnDisk: ", err)
+		glog.Warning("rocksdb: DatabaseSizeOnDisk: ", err)
 		return 0
 	}
 	return size
