@@ -1,6 +1,7 @@
 stages:
   - build
   - test
+  - backend-deploy-and-test
 
 build:
   stage: build
@@ -25,3 +26,25 @@ integration-test:
   tags:
     - blockbook
   script: make test-integration ARGS="-run='TestIntegration/(bcash|bgold|bitcoin|dash|dogecoin|litecoin|vertcoin|zcash)=main/'"
+
+backend-deploy-and-test-bitcoin:
+  stage: backend-deploy-and-test
+  only:
+    refs:
+      - master
+    changes:
+      - configs/coins/bitcoin.json
+  tags:
+    - blockbook
+  script: ./contrib/scripts/backend-deploy-and-test.sh bitcoin bitcoin=main debug.log 
+
+backend-deploy-and-test-bitcoin_testnet:
+  stage: backend-deploy-and-test
+  only:
+    refs:
+      - master
+    changes:
+      - configs/coins/bitcoin_testnet.json
+  tags:
+    - blockbook
+  script: ./contrib/scripts/backend-deploy-and-test.sh bitcoin_testnet bitcoin=test testnet3/debug.log 
