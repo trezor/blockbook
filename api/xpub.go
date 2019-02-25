@@ -15,6 +15,7 @@ import (
 
 const xpubLen = 111
 const defaultAddressesGap = 20
+const maxAddressesGap = 10000
 
 const txInput = 1
 const txOutput = 2
@@ -244,6 +245,9 @@ func (w *Worker) getXpubData(xpub string, page int, txsOnPage int, option GetAdd
 	)
 	if gap <= 0 {
 		gap = defaultAddressesGap
+	} else if gap > maxAddressesGap {
+		// limit the maximum gap to protect against unreasonably big values that could cause high load of the server
+		gap = maxAddressesGap
 	}
 	// gap is increased one as there must be gap of empty addresses before the derivation is stopped
 	gap++
