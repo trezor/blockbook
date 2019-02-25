@@ -36,7 +36,7 @@ backend-deploy-and-test-bitcoin:
       - configs/coins/bitcoin.json
   tags:
     - blockbook
-  script: ./contrib/scripts/backend-deploy-and-test.sh bitcoin bitcoin=main debug.log 
+  script: ./contrib/scripts/backend-deploy-and-test.sh bitcoin
 
 backend-deploy-and-test-bitcoin_testnet:
   stage: backend-deploy-and-test
@@ -47,4 +47,4 @@ backend-deploy-and-test-bitcoin_testnet:
       - configs/coins/bitcoin_testnet.json
   tags:
     - blockbook
-  script: ./contrib/scripts/backend-deploy-and-test.sh bitcoin_testnet bitcoin=test testnet3/debug.log 
+  script: ./contrib/scripts/backend-deploy-and-test.sh bitcoin_testnet bitcoin-testnet bitcoin=test testnet3/debug.log 
