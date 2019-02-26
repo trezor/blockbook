@@ -20,6 +20,9 @@ const maxAddressesGap = 10000
 const txInput = 1
 const txOutput = 2
 
+const xpubCacheSize = 512
+const xpubCacheExpirationSeconds = 7200
+
 var cachedXpubs = make(map[string]xpubData)
 var cachedXpubsMux sync.Mutex
 
@@ -46,6 +49,7 @@ type xpubAddress struct {
 
 type xpubData struct {
 	gap             int
+	accessed        int64
 	basePath        string
 	dataHeight      uint32
 	dataHash        string
@@ -234,6 +238,28 @@ func (w *Worker) tokenFromXpubAddress(data *xpubData, ad *xpubAddress, changeInd
 	}
 }
 
+func evictXpubCacheItems() {
+	var oldestKey string
+	oldest := maxInt64
+	now := time.Now().Unix()
+	count := 0
+	for k, v := range cachedXpubs {
+		if v.accessed+xpubCacheExpirationSeconds < now {
+			delete(cachedXpubs, k)
+			count++
+		}
+		if v.accessed < oldest {
+			oldestKey = k
+			oldest = v.accessed
+		}
+	}
+	if oldestKey != "" && oldest+xpubCacheExpirationSeconds >= now {
+		delete(cachedXpubs, oldestKey)
+		count++
+	}
+	glog.Info("Evicted ", count, " items from xpub cache, oldest item accessed at ", time.Unix(oldest, 0), ", cache size ", len(cachedXpubs))
+}
+
 func (w *Worker) getXpubData(xpub string, page int, txsOnPage int, option GetAddressOption, filter *AddressFilter, gap int) (*xpubData, uint32, error) {
 	if w.chainType != bchain.ChainBitcoinType || len(xpub) != xpubLen {
 		return nil, 0, ErrUnsupportedXpub
@@ -309,7 +335,11 @@ func (w *Worker) getXpubData(xpub string, page int, txsOnPage int, option GetAdd
 			}
 		}
 	}
+	data.accessed = time.Now().Unix()
 	cachedXpubsMux.Lock()
+	if len(cachedXpubs) >= xpubCacheSize {
+		evictXpubCacheItems()
+	}
 	cachedXpubs[xpub] = data
 	cachedXpubsMux.Unlock()
 	return &data, bestheight, nil

@@ -12,6 +12,7 @@ import (
 
 const maxUint32 = ^uint32(0)
 const maxInt = int(^uint(0) >> 1)
+const maxInt64 = int64(^uint64(0) >> 1)
 
 // GetAddressOption specifies what data returns GetAddress api call
 type GetAddressOption int
