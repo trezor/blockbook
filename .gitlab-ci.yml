@@ -1,6 +1,7 @@
 stages:
   - build
   - test
+  - backend-deploy-and-test
 
 build:
   stage: build
@@ -25,3 +26,113 @@ integration-test:
   tags:
     - blockbook
   script: make test-integration ARGS="-run='TestIntegration/(bcash|bgold|bitcoin|dash|dogecoin|litecoin|vertcoin|zcash)=main/'"
+
+backend-deploy-and-test-bcash:
+  stage: backend-deploy-and-test
+  only:
+    refs:
+      - master
+    changes:
+      - configs/coins/bcash.json
+  tags:
+    - blockbook
+  script: ./contrib/scripts/backend-deploy-and-test.sh bcash
+
+backend-deploy-and-test-bgold:
+  stage: backend-deploy-and-test
+  only:
+    refs:
+      - master
+    changes:
+      - configs/coins/bgold.json
+  tags:
+    - blockbook
+  script: ./contrib/scripts/backend-deploy-and-test.sh bgold
+
+backend-deploy-and-test-bitcoin:
+  stage: backend-deploy-and-test
+  only:
+    refs:
+      - master
+    changes:
+      - configs/coins/bitcoin.json
+  tags:
+    - blockbook
+  script: ./contrib/scripts/backend-deploy-and-test.sh bitcoin
+
+backend-deploy-and-test-dash:
+  stage: backend-deploy-and-test
+  only:
+    refs:
+      - master
+    changes:
+      - configs/coins/dash.json
+  tags:
+    - blockbook
+  script: ./contrib/scripts/backend-deploy-and-test.sh dash
+
+backend-deploy-and-test-dogecoin:
+  stage: backend-deploy-and-test
+  only:
+    refs:
+      - master
+    changes:
+      - configs/coins/dogecoin.json
+  tags:
+    - blockbook
+  script: ./contrib/scripts/backend-deploy-and-test.sh dogecoin
+
+backend-deploy-and-test-litecoin:
+  stage: backend-deploy-and-test
+  only:
+    refs:
+      - master
+    changes:
+      - configs/coins/litecoin.json
+  tags:
+    - blockbook
+  script: ./contrib/scripts/backend-deploy-and-test.sh litecoin
+
+backend-deploy-and-test-vertcoin:
+  stage: backend-deploy-and-test
+  only:
+    refs:
+      - master
+    changes:
+      - configs/coins/vertcoin.json
+  tags:
+    - blockbook
+  script: ./contrib/scripts/backend-deploy-and-test.sh vertcoin
+
+backend-deploy-and-test-zcash:
+  stage: backend-deploy-and-test
+  only:
+    refs:
+      - master
+    changes:
+      - configs/coins/zcash.json
+  tags:
+    - blockbook
+  script: ./contrib/scripts/backend-deploy-and-test.sh zcash
+
+backend-deploy-and-test-bitcoin_testnet:
+  stage: backend-deploy-and-test
+  only:
+    refs:
+      - master
+    changes:
+      - configs/coins/bitcoin_testnet.json
+  tags:
+    - blockbook
+  script: ./contrib/scripts/backend-deploy-and-test.sh bitcoin_testnet bitcoin-testnet bitcoin=test testnet3/debug.log 
+
+backend-deploy-and-test-ethereum_testnet_ropsten:
+  stage: backend-deploy-and-test
+  only:
+    refs:
+      - master
+    changes:
+      - configs/coins/ethereum_testnet_ropsten.json
+  tags:
+    - blockbook
+  script: ./contrib/scripts/backend-deploy-and-test.sh ethereum_testnet_ropsten ethereum-testnet-ropsten ethereum=test ethereum_testnet_ropsten.log 
