@@ -1,6 +1,7 @@
 package dash
 
 import (
+	"blockbook/bchain"
 	"blockbook/bchain/coins/btc"
 
 	"github.com/martinboehm/btcd/wire"
@@ -45,11 +46,15 @@ func init() {
 // DashParser handle
 type DashParser struct {
 	*btc.BitcoinParser
+	baseparser *bchain.BaseParser
 }
 
 // NewDashParser returns new DashParser instance
 func NewDashParser(params *chaincfg.Params, c *btc.Configuration) *DashParser {
-	return &DashParser{BitcoinParser: btc.NewBitcoinParser(params, c)}
+	return &DashParser{
+		BitcoinParser: btc.NewBitcoinParser(params, c),
+		baseparser:    &bchain.BaseParser{},
+	}
 }
 
 // GetChainParams contains network parameters for the main Dash network,
@@ -76,4 +81,14 @@ func GetChainParams(chain string) *chaincfg.Params {
 	default:
 		return &MainNetParams
 	}
+}
+
+// PackTx packs transaction to byte array using protobuf
+func (p *DashParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) ([]byte, error) {
+	return p.baseparser.PackTx(tx, height, blockTime)
+}
+
+// UnpackTx unpacks transaction from protobuf byte array
+func (p *DashParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
+	return p.baseparser.UnpackTx(buf)
 }
