@@ -347,16 +347,18 @@ func unmarshalGetAccountInfoRequest(params []byte) (*accountInfoReq, error) {
 }
 
 func (s *WebsocketServer) getAccountInfo(req *accountInfoReq) (res *api.Address, err error) {
-	var opt api.GetAddressOption
+	var opt api.AccountDetails
 	switch req.Details {
 	case "tokens":
-		opt = api.Tokens
+		opt = api.AccountDetailsTokens
+	case "tokenBalances":
+		opt = api.AccountDetailsTokenBalances
 	case "txids":
-		opt = api.TxidHistory
+		opt = api.AccountDetailsTxidHistory
 	case "txs":
-		opt = api.TxHistory
+		opt = api.AccountDetailsTxHistory
 	default:
-		opt = api.Basic
+		opt = api.AccountDetailsBasic
 	}
 	filter := api.AddressFilter{
 		FromHeight: uint32(req.FromHeight),

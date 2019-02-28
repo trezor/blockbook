@@ -14,20 +14,22 @@ const maxUint32 = ^uint32(0)
 const maxInt = int(^uint(0) >> 1)
 const maxInt64 = int64(^uint64(0) >> 1)
 
-// GetAddressOption specifies what data returns GetAddress api call
-type GetAddressOption int
+// AccountDetails specifies what data returns GetAddress and GetXpub calls
+type AccountDetails int
 
 const (
-	// Basic - only that address is indexed and some basic info
-	Basic GetAddressOption = iota
-	// Tokens - basic info + tokens
-	Tokens
-	// TxidHistory - basic + tokens + txids, subject to paging
-	TxidHistory
-	// TxHistoryLight - basic + tokens + easily obtained tx data (not requiring request to backend), subject to paging
-	TxHistoryLight
-	// TxHistory - basic + tokens + full tx data, subject to paging
-	TxHistory
+	// AccountDetailsBasic - only that address is indexed and some basic info
+	AccountDetailsBasic AccountDetails = iota
+	// AccountDetailsTokens - basic info + tokens
+	AccountDetailsTokens
+	// AccountDetailsTokenBalances - basic info + token with balance
+	AccountDetailsTokenBalances
+	// AccountDetailsTxidHistory - basic + token balances + txids, subject to paging
+	AccountDetailsTxidHistory
+	// AccountDetailsTxHistoryLight - basic + tokens + easily obtained tx data (not requiring requests to backend), subject to paging
+	AccountDetailsTxHistoryLight
+	// AccountDetailsTxHistory - basic + tokens + full tx data, subject to paging
+	AccountDetailsTxHistory
 )
 
 // ErrUnsupportedXpub is returned when coin type does not support xpub address derivation or provided string is not an xpub

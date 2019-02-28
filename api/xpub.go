@@ -212,7 +212,7 @@ func (w *Worker) xpubScanAddresses(xpub string, data *xpubData, addresses []xpub
 	return lastUsed, addresses, nil
 }
 
-func (w *Worker) tokenFromXpubAddress(data *xpubData, ad *xpubAddress, changeIndex int, index int) Token {
+func (w *Worker) tokenFromXpubAddress(data *xpubData, ad *xpubAddress, changeIndex int, index int, option AccountDetails) Token {
 	a, _, _ := w.chainParser.GetAddressesFromAddrDesc(ad.addrDesc)
 	var address string
 	if len(a) > 0 {
@@ -221,10 +221,12 @@ func (w *Worker) tokenFromXpubAddress(data *xpubData, ad *xpubAddress, changeInd
 	var balance, totalReceived, totalSent *big.Int
 	var transfers int
 	if ad.balance != nil {
-		balance = &ad.balance.BalanceSat
-		totalSent = &ad.balance.SentSat
-		totalReceived = ad.balance.ReceivedSat()
 		transfers = int(ad.balance.Txs)
+		if option >= AccountDetailsTokenBalances {
+			balance = &ad.balance.BalanceSat
+			totalSent = &ad.balance.SentSat
+			totalReceived = ad.balance.ReceivedSat()
+		}
 	}
 	return Token{
 		Type:             XPUBAddressTokenType,
@@ -260,7 +262,7 @@ func evictXpubCacheItems() {
 	glog.Info("Evicted ", count, " items from xpub cache, oldest item accessed at ", time.Unix(oldest, 0), ", cache size ", len(cachedXpubs))
 }
 
-func (w *Worker) getXpubData(xpub string, page int, txsOnPage int, option GetAddressOption, filter *AddressFilter, gap int) (*xpubData, uint32, error) {
+func (w *Worker) getXpubData(xpub string, page int, txsOnPage int, option AccountDetails, filter *AddressFilter, gap int) (*xpubData, uint32, error) {
 	if w.chainType != bchain.ChainBitcoinType || len(xpub) != xpubLen {
 		return nil, 0, ErrUnsupportedXpub
 	}
@@ -325,7 +327,7 @@ func (w *Worker) getXpubData(xpub string, page int, txsOnPage int, option GetAdd
 				return nil, 0, err
 			}
 		}
-		if option >= TxidHistory {
+		if option >= AccountDetailsTxidHistory {
 			for _, da := range [][]xpubAddress{data.addresses, data.changeAddresses} {
 				for i := range da {
 					if err = w.xpubCheckAndLoadTxids(&da[i], filter, bestheight, (page+1)*txsOnPage); err != nil {
@@ -346,7 +348,7 @@ func (w *Worker) getXpubData(xpub string, page int, txsOnPage int, option GetAdd
 }
 
 // GetXpubAddress computes address value and gets transactions for given address
-func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option GetAddressOption, filter *AddressFilter, gap int) (*Address, error) {
+func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option AccountDetails, filter *AddressFilter, gap int) (*Address, error) {
 	start := time.Now()
 	page--
 	if page < 0 {
@@ -419,9 +421,9 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Get
 						uBalSat.Add(&uBalSat, tx.getAddrVoutValue(ad.addrDesc))
 						uBalSat.Sub(&uBalSat, tx.getAddrVinValue(ad.addrDesc))
 						if page == 0 && !foundTx && (useTxids == nil || useTxids(&txid, ad)) {
-							if option == TxidHistory {
+							if option == AccountDetailsTxidHistory {
 								txids = append(txids, tx.Txid)
-							} else if option >= TxHistoryLight {
+							} else if option >= AccountDetailsTxHistoryLight {
 								txs = append(txs, tx)
 							}
 						}
@@ -431,7 +433,7 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Get
 			}
 		}
 	}
-	if option >= TxidHistory {
+	if option >= AccountDetailsTxidHistory {
 		txcMap := make(map[string]bool)
 		txc = make(xpubTxids, 0, 32)
 		for _, da := range [][]xpubAddress{data.addresses, data.changeAddresses} {
@@ -472,7 +474,7 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Get
 		// get confirmed transactions
 		for i := from; i < to; i++ {
 			xpubTxid := &txc[i]
-			if option == TxidHistory {
+			if option == AccountDetailsTxidHistory {
 				txids = append(txids, xpubTxid.txid)
 			} else {
 				tx, err := w.txFromTxid(xpubTxid.txid, bestheight, option)
@@ -488,7 +490,7 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Get
 	totalTokens := 0
 	var tokens []Token
 	var xpubAddresses map[string]struct{}
-	if option != Basic {
+	if option > AccountDetailsBasic {
 		tokens = make([]Token, 0, 4)
 		xpubAddresses = make(map[string]struct{})
 	}
@@ -498,8 +500,8 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Get
 			if ad.balance != nil {
 				totalTokens++
 			}
-			if option != Basic {
-				token := w.tokenFromXpubAddress(data, ad, ci, i)
+			if option > AccountDetailsBasic {
+				token := w.tokenFromXpubAddress(data, ad, ci, i, option)
 				if filter.TokenLevel == TokenDetailDiscovered ||
 					filter.TokenLevel == TokenDetailUsed && ad.balance != nil ||
 					filter.TokenLevel == TokenDetailNonzeroBalance && ad.balance != nil && !IsZeroBigInt(&ad.balance.BalanceSat) {
@@ -533,7 +535,7 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Get
 // GetXpubUtxo returns unspent outputs for given xpub
 func (w *Worker) GetXpubUtxo(xpub string, onlyConfirmed bool, gap int) (Utxos, error) {
 	start := time.Now()
-	data, _, err := w.getXpubData(xpub, 0, 1, Basic, &AddressFilter{
+	data, _, err := w.getXpubData(xpub, 0, 1, AccountDetailsBasic, &AddressFilter{
 		Vout:          AddressFilterVoutOff,
 		OnlyConfirmed: onlyConfirmed,
 	}, gap)
@@ -556,7 +558,7 @@ func (w *Worker) GetXpubUtxo(xpub string, onlyConfirmed bool, gap int) (Utxos, e
 				return nil, err
 			}
 			if len(utxos) > 0 {
-				t := w.tokenFromXpubAddress(data, ad, ci, i)
+				t := w.tokenFromXpubAddress(data, ad, ci, i, AccountDetailsTokens)
 				for j := range utxos {
 					a := &utxos[j]
 					a.Address = t.Name

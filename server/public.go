@@ -590,7 +590,7 @@ func (s *PublicServer) explorerAddress(w http.ResponseWriter, r *http.Request) (
 				}
 			}
 		}
-		address, err = s.api.GetAddress(r.URL.Path[i+1:], page, txsOnPage, api.TxHistoryLight, &api.AddressFilter{Vout: fn})
+		address, err = s.api.GetAddress(r.URL.Path[i+1:], page, txsOnPage, api.AccountDetailsTxHistoryLight, &api.AddressFilter{Vout: fn})
 		if err != nil {
 			return errorTpl, nil, err
 		}
@@ -607,7 +607,7 @@ func (s *PublicServer) explorerAddress(w http.ResponseWriter, r *http.Request) (
 	return addressTpl, data, nil
 }
 
-func (s *PublicServer) getXpubAddress(r *http.Request, xpub string, pageSize int, option api.GetAddressOption) (*api.Address, api.TokenDetailLevel, error) {
+func (s *PublicServer) getXpubAddress(r *http.Request, xpub string, pageSize int, option api.AccountDetails) (*api.Address, api.TokenDetailLevel, error) {
 	var fn = api.AddressFilterVoutOff
 	page, ec := strconv.Atoi(r.URL.Query().Get("page"))
 	if ec != nil {
@@ -650,7 +650,7 @@ func (s *PublicServer) explorerXpub(w http.ResponseWriter, r *http.Request) (tpl
 	var err error
 	s.metrics.ExplorerViews.With(common.Labels{"action": "xpub"}).Inc()
 	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
-		address, tokenLevel, err = s.getXpubAddress(r, r.URL.Path[i+1:], txsOnPage, api.TxHistoryLight)
+		address, tokenLevel, err = s.getXpubAddress(r, r.URL.Path[i+1:], txsOnPage, api.AccountDetailsTxHistoryLight)
 		if err != nil {
 			return errorTpl, nil, err
 		}
@@ -730,7 +730,7 @@ func (s *PublicServer) explorerSearch(w http.ResponseWriter, r *http.Request) (t
 	var err error
 	s.metrics.ExplorerViews.With(common.Labels{"action": "search"}).Inc()
 	if len(q) > 0 {
-		address, err = s.api.GetXpubAddress(q, 0, 1, api.Basic, &api.AddressFilter{Vout: api.AddressFilterVoutOff}, 0)
+		address, err = s.api.GetXpubAddress(q, 0, 1, api.AccountDetailsBasic, &api.AddressFilter{Vout: api.AddressFilterVoutOff}, 0)
 		if err == nil {
 			http.Redirect(w, r, joinURL("/xpub/", address.AddrStr), 302)
 			return noTpl, nil, nil
@@ -745,7 +745,7 @@ func (s *PublicServer) explorerSearch(w http.ResponseWriter, r *http.Request) (t
 			http.Redirect(w, r, joinURL("/tx/", tx.Txid), 302)
 			return noTpl, nil, nil
 		}
-		address, err = s.api.GetAddress(q, 0, 1, api.Basic, &api.AddressFilter{Vout: api.AddressFilterVoutOff})
+		address, err = s.api.GetAddress(q, 0, 1, api.AccountDetailsBasic, &api.AddressFilter{Vout: api.AddressFilterVoutOff})
 		if err == nil {
 			http.Redirect(w, r, joinURL("/address/", address.AddrStr), 302)
 			return noTpl, nil, nil
@@ -907,7 +907,7 @@ func (s *PublicServer) apiAddress(r *http.Request, apiVersion int) (interface{},
 		if ec != nil {
 			page = 0
 		}
-		address, err = s.api.GetAddress(r.URL.Path[i+1:], page, txsInAPI, api.TxidHistory, &api.AddressFilter{Vout: api.AddressFilterVoutOff})
+		address, err = s.api.GetAddress(r.URL.Path[i+1:], page, txsInAPI, api.AccountDetailsTxidHistory, &api.AddressFilter{Vout: api.AddressFilterVoutOff})
 		if err == nil && apiVersion == apiV1 {
 			return s.api.AddressToV1(address), nil
 		}
@@ -920,7 +920,7 @@ func (s *PublicServer) apiXpub(r *http.Request, apiVersion int) (interface{}, er
 	var err error
 	s.metrics.ExplorerViews.With(common.Labels{"action": "api-xpub"}).Inc()
 	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
-		address, _, err = s.getXpubAddress(r, r.URL.Path[i+1:], txsInAPI, api.TxidHistory)
+		address, _, err = s.getXpubAddress(r, r.URL.Path[i+1:], txsInAPI, api.AccountDetailsTxidHistory)
 		if err == nil && apiVersion == apiV1 {
 			return s.api.AddressToV1(address), nil
 		}

@@ -479,7 +479,7 @@ func computePaging(count, page, itemsOnPage int) (Paging, int, int, int) {
 	}, from, to, page
 }
 
-func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescriptor, option GetAddressOption, filter *AddressFilter) (*db.AddrBalance, []Token, *bchain.Erc20Contract, uint64, int, int, error) {
+func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescriptor, details AccountDetails, filter *AddressFilter) (*db.AddrBalance, []Token, *bchain.Erc20Contract, uint64, int, int, error) {
 	var (
 		ba             *db.AddrBalance
 		tokens         []Token
@@ -516,53 +516,55 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 				return nil, nil, nil, 0, 0, 0, NewAPIError(fmt.Sprintf("Invalid contract filter, %v", err), true)
 			}
 		}
-		tokens = make([]Token, len(ca.Contracts))
-		var j int
-		for i, c := range ca.Contracts {
-			if len(filterDesc) > 0 {
-				if !bytes.Equal(filterDesc, c.Contract) {
-					continue
+		if details > AccountDetailsBasic {
+			tokens = make([]Token, len(ca.Contracts))
+			var j int
+			for i, c := range ca.Contracts {
+				if len(filterDesc) > 0 {
+					if !bytes.Equal(filterDesc, c.Contract) {
+						continue
+					}
+					// filter only transactions of this contract
+					filter.Vout = i + 1
 				}
-				// filter only transactions of this contract
-				filter.Vout = i + 1
-			}
-			validContract := true
-			ci, err := w.chain.EthereumTypeGetErc20ContractInfo(c.Contract)
-			if err != nil {
-				return nil, nil, nil, 0, 0, 0, errors.Annotatef(err, "EthereumTypeGetErc20ContractInfo %v", c.Contract)
-			}
-			if ci == nil {
-				ci = &bchain.Erc20Contract{}
-				addresses, _, _ := w.chainParser.GetAddressesFromAddrDesc(c.Contract)
-				if len(addresses) > 0 {
-					ci.Contract = addresses[0]
-					ci.Name = addresses[0]
-				}
-				validContract = false
-			}
-			// do not read contract balances etc in case of Basic option
-			if option != Basic && validContract {
-				b, err = w.chain.EthereumTypeGetErc20ContractBalance(addrDesc, c.Contract)
+				validContract := true
+				ci, err := w.chain.EthereumTypeGetErc20ContractInfo(c.Contract)
 				if err != nil {
-					// return nil, nil, nil, errors.Annotatef(err, "EthereumTypeGetErc20ContractBalance %v %v", addrDesc, c.Contract)
-					glog.Warningf("EthereumTypeGetErc20ContractBalance addr %v, contract %v, %v", addrDesc, c.Contract, err)
+					return nil, nil, nil, 0, 0, 0, errors.Annotatef(err, "EthereumTypeGetErc20ContractInfo %v", c.Contract)
 				}
-			} else {
-				b = nil
+				if ci == nil {
+					ci = &bchain.Erc20Contract{}
+					addresses, _, _ := w.chainParser.GetAddressesFromAddrDesc(c.Contract)
+					if len(addresses) > 0 {
+						ci.Contract = addresses[0]
+						ci.Name = addresses[0]
+					}
+					validContract = false
+				}
+				// do not read contract balances etc in case of Basic option
+				if details >= AccountDetailsTokenBalances && validContract {
+					b, err = w.chain.EthereumTypeGetErc20ContractBalance(addrDesc, c.Contract)
+					if err != nil {
+						// return nil, nil, nil, errors.Annotatef(err, "EthereumTypeGetErc20ContractBalance %v %v", addrDesc, c.Contract)
+						glog.Warningf("EthereumTypeGetErc20ContractBalance addr %v, contract %v, %v", addrDesc, c.Contract, err)
+					}
+				} else {
+					b = nil
+				}
+				tokens[j] = Token{
+					Type:          ERC20TokenType,
+					BalanceSat:    (*Amount)(b),
+					Contract:      ci.Contract,
+					Name:          ci.Name,
+					Symbol:        ci.Symbol,
+					Transfers:     int(c.Txs),
+					Decimals:      ci.Decimals,
+					ContractIndex: strconv.Itoa(i + 1),
+				}
+				j++
 			}
-			tokens[j] = Token{
-				Type:          ERC20TokenType,
-				BalanceSat:    (*Amount)(b),
-				Contract:      ci.Contract,
-				Name:          ci.Name,
-				Symbol:        ci.Symbol,
-				Transfers:     int(c.Txs),
-				Decimals:      ci.Decimals,
-				ContractIndex: strconv.Itoa(i + 1),
-			}
-			j++
+			tokens = tokens[:j]
 		}
-		tokens = tokens[:j]
 		ci, err = w.chain.EthereumTypeGetErc20ContractInfo(addrDesc)
 		if err != nil {
 			return nil, nil, nil, 0, 0, 0, err
@@ -582,11 +584,11 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 	return ba, tokens, ci, n, nonContractTxs, totalResults, nil
 }
 
-func (w *Worker) txFromTxid(txid string, bestheight uint32, option GetAddressOption) (*Tx, error) {
+func (w *Worker) txFromTxid(txid string, bestheight uint32, option AccountDetails) (*Tx, error) {
 	var tx *Tx
 	var err error
 	// only ChainBitcoinType supports TxHistoryLight
-	if option == TxHistoryLight && w.chainType == bchain.ChainBitcoinType {
+	if option == AccountDetailsTxHistoryLight && w.chainType == bchain.ChainBitcoinType {
 		ta, err := w.db.GetTxAddresses(txid)
 		if err != nil {
 			return nil, errors.Annotatef(err, "GetTxAddresses %v", txid)
@@ -632,7 +634,7 @@ func (w *Worker) getAddrDescAndNormalizeAddress(address string) (bchain.AddressD
 }
 
 // GetAddress computes address value and gets transactions for given address
-func (w *Worker) GetAddress(address string, page int, txsOnPage int, option GetAddressOption, filter *AddressFilter) (*Address, error) {
+func (w *Worker) GetAddress(address string, page int, txsOnPage int, option AccountDetails, filter *AddressFilter) (*Address, error) {
 	start := time.Now()
 	page--
 	if page < 0 {
@@ -700,9 +702,9 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option GetA
 					uBalSat.Add(&uBalSat, tx.getAddrVoutValue(addrDesc))
 					uBalSat.Sub(&uBalSat, tx.getAddrVinValue(addrDesc))
 					if page == 0 {
-						if option == TxidHistory {
+						if option == AccountDetailsTxidHistory {
 							txids = append(txids, tx.Txid)
-						} else if option >= TxHistoryLight {
+						} else if option >= AccountDetailsTxHistoryLight {
 							txs = append(txs, tx)
 						}
 					}
@@ -711,7 +713,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option GetA
 		}
 	}
 	// get tx history if requested by option or check mempool if there are some transactions for a new address
-	if option >= TxidHistory {
+	if option >= AccountDetailsTxidHistory {
 		txc, err := w.getAddressTxids(addrDesc, false, filter, (page+1)*txsOnPage)
 		if err != nil {
 			return nil, errors.Annotatef(err, "getAddressTxids %v false", addrDesc)
@@ -731,7 +733,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option GetA
 		}
 		for i := from; i < to; i++ {
 			txid := txc[i]
-			if option == TxidHistory {
+			if option == AccountDetailsTxidHistory {
 				txids = append(txids, txid)
 			} else {
 				tx, err := w.txFromTxid(txid, bestheight, option)
