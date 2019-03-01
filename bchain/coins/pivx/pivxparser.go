@@ -26,7 +26,7 @@ const (
 
 	// Zerocoin op codes
 	OP_ZEROCOINMINT  = 0xc1
-	OP_ZEROCOINSPEND  = 0xc2
+	OP_ZEROCOINSPEND = 0xc2
 )
 
 var (
@@ -38,14 +38,14 @@ func init() {
 	// PIVX mainnet Address encoding magics
 	MainNetParams = chaincfg.MainNetParams
 	MainNetParams.Net = MainnetMagic
-	MainNetParams.PubKeyHashAddrID = []byte{30}    // starting with 'D'
+	MainNetParams.PubKeyHashAddrID = []byte{30} // starting with 'D'
 	MainNetParams.ScriptHashAddrID = []byte{13}
 	MainNetParams.PrivateKeyID = []byte{212}
 
 	// PIVX testnet Address encoding magics
 	TestNetParams = chaincfg.TestNet3Params
 	TestNetParams.Net = TestnetMagic
-	TestNetParams.PubKeyHashAddrID = []byte{139}   // starting with 'x' or 'y'
+	TestNetParams.PubKeyHashAddrID = []byte{139} // starting with 'x' or 'y'
 	TestNetParams.ScriptHashAddrID = []byte{19}
 	TestNetParams.PrivateKeyID = []byte{239}
 }
@@ -72,7 +72,7 @@ func NewPivXParser(params *chaincfg.Params, c *btc.Configuration) *PivXParser {
 func GetChainParams(chain string) *chaincfg.Params {
 	if !chaincfg.IsRegistered(&MainNetParams) {
 		err := chaincfg.Register(&MainNetParams)
-      	if err == nil {
+		if err == nil {
 			err = chaincfg.Register(&TestNetParams)
 		}
 		if err != nil {
@@ -80,11 +80,11 @@ func GetChainParams(chain string) *chaincfg.Params {
 		}
 	}
 	switch chain {
-   	case "test":
+	case "test":
 		return &TestNetParams
-   	default:
+	default:
 		return &MainNetParams
-   	}
+	}
 }
 
 // ParseBlock parses raw block to our Block struct
