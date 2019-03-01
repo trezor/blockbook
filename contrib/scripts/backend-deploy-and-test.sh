@@ -28,6 +28,6 @@ sudo /usr/bin/dpkg -i "${PACKAGE}" || exit 1
 sudo /bin/systemctl restart "backend-${SERVICE}" || exit 1
 
 echo "Waiting for backend startup for ${BACKEND_TIMEOUT}"
-timeout ${BACKEND_TIMEOUT} tail -f "/opt/coins/data/${COIN}/backend/${LOGFILE}"
+sudo -u bitcoin /usr/bin/timeout ${BACKEND_TIMEOUT} /usr/bin/tail -f "/opt/coins/data/${COIN}/backend/${LOGFILE}"
 
 make test-integration ARGS="-v -run=TestIntegration/${COIN_TEST}"
