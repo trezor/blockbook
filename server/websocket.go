@@ -317,10 +317,10 @@ func (s *WebsocketServer) onRequest(c *websocketChannel, req *websocketReq) {
 	}
 	if err == nil {
 		glog.V(1).Info("Client ", c.id, " onRequest ", req.Method, " success")
-		s.metrics.SocketIORequests.With(common.Labels{"method": req.Method, "status": "success"}).Inc()
+		s.metrics.WebsocketRequests.With(common.Labels{"method": req.Method, "status": "success"}).Inc()
 	} else {
 		glog.Error("Client ", c.id, " onMessage ", req.Method, ": ", errors.ErrorStack(err))
-		s.metrics.SocketIORequests.With(common.Labels{"method": req.Method, "status": err.Error()}).Inc()
+		s.metrics.WebsocketRequests.With(common.Labels{"method": req.Method, "status": err.Error()}).Inc()
 		e := resultError{}
 		e.Error.Message = err.Error()
 		data = e
@@ -347,27 +347,39 @@ func unmarshalGetAccountInfoRequest(params []byte) (*accountInfoReq, error) {
 }
 
 func (s *WebsocketServer) getAccountInfo(req *accountInfoReq) (res *api.Address, err error) {
-	var opt api.GetAddressOption
+	var opt api.AccountDetails
 	switch req.Details {
-	case "balance":
-		opt = api.Balance
+	case "tokens":
+		opt = api.AccountDetailsTokens
+	case "tokenBalances":
+		opt = api.AccountDetailsTokenBalances
 	case "txids":
-		opt = api.TxidHistory
+		opt = api.AccountDetailsTxidHistory
 	case "txs":
-		opt = api.TxHistory
+		opt = api.AccountDetailsTxHistory
 	default:
-		opt = api.Basic
+		opt = api.AccountDetailsBasic
 	}
-	return s.api.GetAddress(req.Descriptor, req.Page, req.PageSize, opt, &api.AddressFilter{
+	filter := api.AddressFilter{
 		FromHeight: uint32(req.FromHeight),
 		ToHeight:   uint32(req.ToHeight),
 		Contract:   req.ContractFilter,
 		Vout:       api.AddressFilterVoutOff,
-	})
+		TokenLevel: api.TokenDetailDiscovered,
+	}
+	a, err := s.api.GetXpubAddress(req.Descriptor, req.Page, req.PageSize, opt, &filter, 0)
+	if err != nil {
+		return s.api.GetAddress(req.Descriptor, req.Page, req.PageSize, opt, &filter)
+	}
+	return a, nil
 }
 
 func (s *WebsocketServer) getAccountUtxo(descriptor string) (interface{}, error) {
-	return s.api.GetAddressUtxo(descriptor, false)
+	utxo, err := s.api.GetXpubUtxo(descriptor, false, 0)
+	if err != nil {
+		return s.api.GetAddressUtxo(descriptor, false)
+	}
+	return utxo, nil
 }
 
 func (s *WebsocketServer) getTransaction(txid string) (interface{}, error) {

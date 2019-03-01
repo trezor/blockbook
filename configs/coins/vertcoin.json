@@ -1,9 +1,9 @@
 {
   "coin": {
-      "name": "Vertcoin",
-      "shortcut": "VTC",
-      "label": "Vertcoin",
-      "alias": "vertcoin"
+    "name": "Vertcoin",
+    "shortcut": "VTC",
+    "label": "Vertcoin",
+    "alias": "vertcoin"
   },
   "ports": {
     "backend_rpc": 8040,
@@ -38,7 +38,7 @@
     "server_config_file": "bitcoin_like.conf",
     "client_config_file": "bitcoin_like_client.conf",
     "additional_params": {
-        "whitelist": "127.0.0.1"
+      "whitelist": "127.0.0.1"
     }
   },
   "blockbook": {
@@ -53,6 +53,9 @@
       "mempool_workers": 8,
       "mempool_sub_workers": 2,
       "block_addresses_to_keep": 1000,
+      "xpub_magic": 76067358,
+      "xpub_magic_segwit_p2sh": 77429938,
+      "slip44": 28,
       "additional_params": {}
     }
   },

@@ -19,7 +19,7 @@ func TestMain(m *testing.M) {
 	os.Exit(c)
 }
 
-func Test_GetAddrDescFromAddress(t *testing.T) {
+func TestGetAddrDescFromAddress(t *testing.T) {
 	type args struct {
 		address string
 	}
@@ -77,7 +77,7 @@ func Test_GetAddrDescFromAddress(t *testing.T) {
 	}
 }
 
-func Test_GetAddrDescFromVout(t *testing.T) {
+func TestGetAddrDescFromVout(t *testing.T) {
 	type args struct {
 		vout bchain.Vout
 	}
@@ -141,7 +141,7 @@ func Test_GetAddrDescFromVout(t *testing.T) {
 	}
 }
 
-func Test_GetAddressesFromAddrDesc(t *testing.T) {
+func TestGetAddressesFromAddrDesc(t *testing.T) {
 	type args struct {
 		script string
 	}
@@ -316,7 +316,7 @@ func init() {
 	}
 }
 
-func Test_PackTx(t *testing.T) {
+func TestPackTx(t *testing.T) {
 	type args struct {
 		tx        bchain.Tx
 		height    uint32
@@ -367,7 +367,7 @@ func Test_PackTx(t *testing.T) {
 	}
 }
 
-func Test_UnpackTx(t *testing.T) {
+func TestUnpackTx(t *testing.T) {
 	type args struct {
 		packedTx string
 		parser   *BitcoinParser
@@ -413,6 +413,248 @@ func Test_UnpackTx(t *testing.T) {
 			}
 			if got1 != tt.want1 {
 				t.Errorf("unpackTx() got1 = %v, want %v", got1, tt.want1)
+			}
+		})
+	}
+}
+
+func TestDeriveAddressDescriptors(t *testing.T) {
+	btcMainParser := NewBitcoinParser(GetChainParams("main"), &Configuration{XPubMagic: 76067358, XPubMagicSegwitP2sh: 77429938, XPubMagicSegwitNative: 78792518})
+	type args struct {
+		xpub    string
+		change  uint32
+		indexes []uint32
+		parser  *BitcoinParser
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    []string
+		wantErr bool
+	}{
+		{
+			name: "m/44'/0'/0'",
+			args: args{
+				xpub:    "xpub6BosfCnifzxcFwrSzQiqu2DBVTshkCXacvNsWGYJVVhhawA7d4R5WSWGFNbi8Aw6ZRc1brxMyWMzG3DSSSSoekkudhUd9yLb6qx39T9nMdj",
+				change:  0,
+				indexes: []uint32{0, 1234},
+				parser:  btcMainParser,
+			},
+			want: []string{"1LqBGSKuX5yYUonjxT5qGfpUsXKYYWeabA", "1P9w11dXAmG3QBjKLAvCsek8izs1iR2iFi"},
+		},
+		{
+			name: "m/49'/0'/0'",
+			args: args{
+				xpub:    "ypub6Ww3ibxVfGzLrAH1PNcjyAWenMTbbAosGNB6VvmSEgytSER9azLDWCxoJwW7Ke7icmizBMXrzBx9979FfaHxHcrArf3zbeJJJUZPf663zsP",
+				change:  0,
+				indexes: []uint32{0, 1234},
+				parser:  btcMainParser,
+			},
+			want: []string{"37VucYSaXLCAsxYyAPfbSi9eh4iEcbShgf", "367meFzJ9KqDLm9PX6U8Z8RdmkSNBuxX8T"},
+		},
+		{
+			name: "m/84'/0'/0'",
+			args: args{
+				xpub:    "zpub6rFR7y4Q2AijBEqTUquhVz398htDFrtymD9xYYfG1m4wAcvPhXNfE3EfH1r1ADqtfSdVCToUG868RvUUkgDKf31mGDtKsAYz2oz2AGutZYs",
+				change:  0,
+				indexes: []uint32{0, 1234},
+				parser:  btcMainParser,
+			},
+			want: []string{"bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu", "bc1q4nm6g46ujzyjaeusralaz2nfv2rf04jjfyamkw"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.args.parser.DeriveAddressDescriptors(tt.args.xpub, tt.args.change, tt.args.indexes)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("DeriveAddressDescriptorsFromTo() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			gotAddresses := make([]string, len(got))
+			for i, ad := range got {
+				aa, _, err := tt.args.parser.GetAddressesFromAddrDesc(ad)
+				if err != nil || len(aa) != 1 {
+					t.Errorf("DeriveAddressDescriptorsFromTo() got incorrect address descriptor %v, error %v", ad, err)
+					return
+				}
+				gotAddresses[i] = aa[0]
+			}
+			if !reflect.DeepEqual(gotAddresses, tt.want) {
+				t.Errorf("DeriveAddressDescriptorsFromTo() = %v, want %v", gotAddresses, tt.want)
+			}
+		})
+	}
+}
+
+func TestDeriveAddressDescriptorsFromTo(t *testing.T) {
+	btcMainParser := NewBitcoinParser(GetChainParams("main"), &Configuration{XPubMagic: 76067358, XPubMagicSegwitP2sh: 77429938, XPubMagicSegwitNative: 78792518})
+	btcTestnetsParser := NewBitcoinParser(GetChainParams("test"), &Configuration{XPubMagic: 70617039, XPubMagicSegwitP2sh: 71979618, XPubMagicSegwitNative: 73342198})
+	type args struct {
+		xpub      string
+		change    uint32
+		fromIndex uint32
+		toIndex   uint32
+		parser    *BitcoinParser
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    []string
+		wantErr bool
+	}{
+		{
+			name: "m/44'/0'/0'",
+			args: args{
+				xpub:      "xpub6BosfCnifzxcFwrSzQiqu2DBVTshkCXacvNsWGYJVVhhawA7d4R5WSWGFNbi8Aw6ZRc1brxMyWMzG3DSSSSoekkudhUd9yLb6qx39T9nMdj",
+				change:    0,
+				fromIndex: 0,
+				toIndex:   1,
+				parser:    btcMainParser,
+			},
+			want: []string{"1LqBGSKuX5yYUonjxT5qGfpUsXKYYWeabA"},
+		},
+		{
+			name: "m/49'/0'/0'",
+			args: args{
+				xpub:      "ypub6Ww3ibxVfGzLrAH1PNcjyAWenMTbbAosGNB6VvmSEgytSER9azLDWCxoJwW7Ke7icmizBMXrzBx9979FfaHxHcrArf3zbeJJJUZPf663zsP",
+				change:    0,
+				fromIndex: 0,
+				toIndex:   1,
+				parser:    btcMainParser,
+			},
+			want: []string{"37VucYSaXLCAsxYyAPfbSi9eh4iEcbShgf"},
+		},
+		{
+			name: "m/84'/0'/0'",
+			args: args{
+				xpub:      "zpub6rFR7y4Q2AijBEqTUquhVz398htDFrtymD9xYYfG1m4wAcvPhXNfE3EfH1r1ADqtfSdVCToUG868RvUUkgDKf31mGDtKsAYz2oz2AGutZYs",
+				change:    0,
+				fromIndex: 0,
+				toIndex:   1,
+				parser:    btcMainParser,
+			},
+			want: []string{"bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu"},
+		},
+		{
+			name: "m/49'/1'/0'",
+			args: args{
+				xpub:      "upub5DR1Mg5nykixzYjFXWW5GghAU7dDqoPVJ2jrqFbL8sJ7Hs7jn69MP7KBnnmxn88GeZtnH8PRKV9w5MMSFX8AdEAoXY8Qd8BJPoXtpMeHMxJ",
+				change:    0,
+				fromIndex: 0,
+				toIndex:   10,
+				parser:    btcTestnetsParser,
+			},
+			want: []string{"2N4Q5FhU2497BryFfUgbqkAJE87aKHUhXMp", "2Mt7P2BAfE922zmfXrdcYTLyR7GUvbwSEns", "2N6aUMgQk8y1zvoq6FeWFyotyj75WY9BGsu", "2NA7tbZWM9BcRwBuebKSQe2xbhhF1paJwBM", "2N8RZMzvrUUnpLmvACX9ysmJ2MX3GK5jcQM", "2MvUUSiQZDSqyeSdofKX9KrSCio1nANPDTe", "2NBXaWu1HazjoUVgrXgcKNoBLhtkkD9Gmet", "2N791Ttf89tMVw2maj86E1Y3VgxD9Mc7PU7", "2NCJmwEq8GJm8t8GWWyBXAfpw7F2qZEVP5Y", "2NEgW71hWKer2XCSA8ZCC2VnWpB77L6bk68"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.args.parser.DeriveAddressDescriptorsFromTo(tt.args.xpub, tt.args.change, tt.args.fromIndex, tt.args.toIndex)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("DeriveAddressDescriptorsFromTo() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			gotAddresses := make([]string, len(got))
+			for i, ad := range got {
+				aa, _, err := tt.args.parser.GetAddressesFromAddrDesc(ad)
+				if err != nil || len(aa) != 1 {
+					t.Errorf("DeriveAddressDescriptorsFromTo() got incorrect address descriptor %v, error %v", ad, err)
+					return
+				}
+				gotAddresses[i] = aa[0]
+			}
+			if !reflect.DeepEqual(gotAddresses, tt.want) {
+				t.Errorf("DeriveAddressDescriptorsFromTo() = %v, want %v", gotAddresses, tt.want)
+			}
+		})
+	}
+}
+
+func BenchmarkDeriveAddressDescriptorsFromToXpub(b *testing.B) {
+	btcMainParser := NewBitcoinParser(GetChainParams("main"), &Configuration{XPubMagic: 76067358, XPubMagicSegwitP2sh: 77429938, XPubMagicSegwitNative: 78792518})
+	for i := 0; i < b.N; i++ {
+		btcMainParser.DeriveAddressDescriptorsFromTo("xpub6BosfCnifzxcFwrSzQiqu2DBVTshkCXacvNsWGYJVVhhawA7d4R5WSWGFNbi8Aw6ZRc1brxMyWMzG3DSSSSoekkudhUd9yLb6qx39T9nMdj", 1, 0, 100)
+	}
+}
+
+func BenchmarkDeriveAddressDescriptorsFromToYpub(b *testing.B) {
+	btcMainParser := NewBitcoinParser(GetChainParams("main"), &Configuration{XPubMagic: 76067358, XPubMagicSegwitP2sh: 77429938, XPubMagicSegwitNative: 78792518})
+	for i := 0; i < b.N; i++ {
+		btcMainParser.DeriveAddressDescriptorsFromTo("ypub6Ww3ibxVfGzLrAH1PNcjyAWenMTbbAosGNB6VvmSEgytSER9azLDWCxoJwW7Ke7icmizBMXrzBx9979FfaHxHcrArf3zbeJJJUZPf663zsP", 1, 0, 100)
+	}
+}
+
+func BenchmarkDeriveAddressDescriptorsFromToZpub(b *testing.B) {
+	btcMainParser := NewBitcoinParser(GetChainParams("main"), &Configuration{XPubMagic: 76067358, XPubMagicSegwitP2sh: 77429938, XPubMagicSegwitNative: 78792518})
+	for i := 0; i < b.N; i++ {
+		btcMainParser.DeriveAddressDescriptorsFromTo("zpub6rFR7y4Q2AijBEqTUquhVz398htDFrtymD9xYYfG1m4wAcvPhXNfE3EfH1r1ADqtfSdVCToUG868RvUUkgDKf31mGDtKsAYz2oz2AGutZYs", 1, 0, 100)
+	}
+}
+
+func TestBitcoinParser_DerivationBasePath(t *testing.T) {
+	btcMainParser := NewBitcoinParser(GetChainParams("main"), &Configuration{XPubMagic: 76067358, XPubMagicSegwitP2sh: 77429938, XPubMagicSegwitNative: 78792518, Slip44: 0})
+	btcTestnetsParser := NewBitcoinParser(GetChainParams("test"), &Configuration{XPubMagic: 70617039, XPubMagicSegwitP2sh: 71979618, XPubMagicSegwitNative: 73342198, Slip44: 1})
+	zecMainParser := NewBitcoinParser(GetChainParams("main"), &Configuration{XPubMagic: 76067358, Slip44: 133})
+	type args struct {
+		xpub   string
+		parser *BitcoinParser
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    string
+		wantErr bool
+	}{
+		{
+			name: "m/84'/0'/0'",
+			args: args{
+				xpub:   "zpub6rFR7y4Q2AijBEqTUquhVz398htDFrtymD9xYYfG1m4wAcvPhXNfE3EfH1r1ADqtfSdVCToUG868RvUUkgDKf31mGDtKsAYz2oz2AGutZYs",
+				parser: btcMainParser,
+			},
+			want: "m/84'/0'/0'",
+		},
+		{
+			name: "m/49'/0'/55 - not hardened account",
+			args: args{
+				xpub:   "ypub6XKbB5DJRAbW4TRJLp4uXQXG3ob5BtByXsNZFBjq9qcbzrczjVXfCz5cEo1SFDexmeWRnbCMDaRgaW4m9d2nBaa8FvUQCu3n9G1UBR8WhbT",
+				parser: btcMainParser,
+			},
+			want: "m/49'/0'/55",
+		},
+		{
+			name: "m/49'/0' - incomplete path, without account",
+			args: args{
+				xpub:   "ypub6UzM8PUqxcSoqC9gumfoiFhE8Qt84HbGpCD4eVJfJAojXTVtBxeddvTWJGJhGoaVBNJLmEgMdLXHgaLVJa4xEvk2tcokkdZhFdkxMLUE9sB",
+				parser: btcMainParser,
+			},
+			want: "unknown/0'",
+		},
+		{
+			name: "m/49'/1'/0'",
+			args: args{
+				xpub:   "upub5DR1Mg5nykixzYjFXWW5GghAU7dDqoPVJ2jrqFbL8sJ7Hs7jn69MP7KBnnmxn88GeZtnH8PRKV9w5MMSFX8AdEAoXY8Qd8BJPoXtpMeHMxJ",
+				parser: btcTestnetsParser,
+			},
+			want: "m/49'/1'/0'",
+		},
+		{
+			name: "m/44'/133'/12'",
+			args: args{
+				xpub:   "xpub6CQdEahwhKRTLYpP6cyb7ZaGb3r4tVdyPX6dC1PfrNuByrCkWDgUkmpD28UdV9QccKgY1ZiAbGv1Fakcg2LxdFVSTNKHcjdRjqhjPK8Trkb",
+				parser: zecMainParser,
+			},
+			want: "m/44'/133'/12'",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.args.parser.DerivationBasePath(tt.args.xpub)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("BitcoinParser.DerivationBasePath() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("BitcoinParser.DerivationBasePath() = %v, want %v", got, tt.want)
 			}
 		})
 	}

@@ -292,15 +292,6 @@ type resultGetAddressHistory struct {
 	} `json:"result"`
 }
 
-func stringInSlice(a string, list []string) bool {
-	for _, b := range list {
-		if b == a {
-			return true
-		}
-	}
-	return false
-}
-
 func txToResTx(tx *api.Tx) resTx {
 	inputs := make([]txInputs, len(tx.Vin))
 	for i := range tx.Vin {

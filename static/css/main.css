@@ -182,6 +182,26 @@ h3 {
     text-transform: uppercase;
 }
 
+.tx-own {
+    background-color: #fbf8f0;
+}
+
+.tx-amt {
+    float: right!important;
+}
+
+.tx-in .tx-own .tx-amt {
+    color: #dc3545!important;
+}
+
+.tx-out .tx-own .tx-amt {
+    color: #28a745!important;
+}
+
+.tx-addr {
+    float: left!important;
+}
+
 .ellipsis {
     overflow: hidden;
     text-overflow: ellipsis;
@@ -283,5 +303,5 @@ table.data-table table.data-table th {
 }
 
 .key {
-    color: #333 ;
+    color: #333;
 }

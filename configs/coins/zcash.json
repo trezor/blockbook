@@ -1,9 +1,9 @@
 {
   "coin": {
-      "name": "Zcash",
-      "shortcut": "ZEC",
-      "label": "Zcash",
-      "alias": "zcash"
+    "name": "Zcash",
+    "shortcut": "ZEC",
+    "label": "Zcash",
+    "alias": "zcash"
   },
   "ports": {
     "backend_rpc": 8032,
@@ -38,9 +38,9 @@
     "server_config_file": "bitcoin_like.conf",
     "client_config_file": "bitcoin_like_client.conf",
     "additional_params": {
-        "addnode": [
-            "mainnet.z.cash"
-        ]
+      "addnode": [
+        "mainnet.z.cash"
+      ]
     }
   },
   "blockbook": {
@@ -55,6 +55,8 @@
       "mempool_workers": 4,
       "mempool_sub_workers": 8,
       "block_addresses_to_keep": 300,
+      "xpub_magic": 76067358,
+      "slip44": 133,
       "additional_params": {}
     }
   },

@@ -1,9 +1,9 @@
 {
   "coin": {
-      "name": "Bcash Testnet",
-      "shortcut": "TBCH",
-      "label": "Bitcoin Cash Testnet",
-      "alias": "bcash_testnet"
+    "name": "Bcash Testnet",
+    "shortcut": "TBCH",
+    "label": "Bitcoin Cash Testnet",
+    "alias": "bcash_testnet"
   },
   "ports": {
     "backend_rpc": 18031,
@@ -28,7 +28,7 @@
     "verification_source": "788001fd5ce8ca0bd61e8a92f10d22b7a49695c3651c60fad11358ba29309a1b",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
-        "bin/bitcoin-qt"
+      "bin/bitcoin-qt"
     ],
     "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/bitcoind -datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -conf={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf -pid=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",
     "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/testnet3/*.log",
@@ -54,6 +54,8 @@
       "mempool_workers": 8,
       "mempool_sub_workers": 2,
       "block_addresses_to_keep": 300,
+      "xpub_magic": 70617039,
+      "slip44": 1,
       "additional_params": {}
     }
   },
