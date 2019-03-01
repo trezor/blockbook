@@ -204,8 +204,8 @@ type Paging struct {
 	ItemsOnPage int `json:"itemsOnPage,omitempty"`
 }
 
-// TokenDetailLevel specifies detail level of tokens returned by GetAddress and GetXpubAddress
-type TokenDetailLevel int
+// TokensToReturn specifies what tokens are returned by GetAddress and GetXpubAddress
+type TokensToReturn int
 
 const (
 	// AddressFilterVoutOff disables filtering of transactions by vout
@@ -215,21 +215,21 @@ const (
 	// AddressFilterVoutOutputs specifies that only txs where the address is as output are returned
 	AddressFilterVoutOutputs = -3
 
-	// TokenDetailNonzeroBalance - use to return only tokens with nonzero balance
-	TokenDetailNonzeroBalance TokenDetailLevel = 0
-	// TokenDetailUsed - use to return tokens with some transfers (even if they have zero balance now)
-	TokenDetailUsed TokenDetailLevel = 1
-	// TokenDetailDiscovered - use to return all discovered tokens
-	TokenDetailDiscovered TokenDetailLevel = 2
+	// TokensToReturnNonzeroBalance - return only tokens with nonzero balance
+	TokensToReturnNonzeroBalance TokensToReturn = 0
+	// TokensToReturnUsed - return tokens with some transfers (even if they have zero balance now)
+	TokensToReturnUsed TokensToReturn = 1
+	// TokensToReturnDerived - return all derived tokens
+	TokensToReturnDerived TokensToReturn = 2
 )
 
 // AddressFilter is used to filter data returned from GetAddress api method
 type AddressFilter struct {
-	Vout       int
-	Contract   string
-	FromHeight uint32
-	ToHeight   uint32
-	TokenLevel TokenDetailLevel
+	Vout           int
+	Contract       string
+	FromHeight     uint32
+	ToHeight       uint32
+	TokensToReturn TokensToReturn
 	// OnlyConfirmed set to true will ignore mempool transactions; mempool is also ignored if FromHeight/ToHeight filter is specified
 	OnlyConfirmed bool
 }

@@ -906,6 +906,9 @@ func (w *Worker) GetAddressUtxo(address string, onlyConfirmed bool) (Utxos, erro
 		return nil, NewAPIError(fmt.Sprintf("Invalid address '%v', %v", address, err), true)
 	}
 	r, err := w.getAddrDescUtxo(addrDesc, nil, onlyConfirmed, false)
+	if err != nil {
+		return nil, err
+	}
 	glog.Info("GetAddressUtxo ", address, ", ", len(r), " utxos, finished in ", time.Since(start))
 	return r, nil
 }

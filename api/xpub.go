@@ -502,9 +502,9 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 			}
 			if option > AccountDetailsBasic {
 				token := w.tokenFromXpubAddress(data, ad, ci, i, option)
-				if filter.TokenLevel == TokenDetailDiscovered ||
-					filter.TokenLevel == TokenDetailUsed && ad.balance != nil ||
-					filter.TokenLevel == TokenDetailNonzeroBalance && ad.balance != nil && !IsZeroBigInt(&ad.balance.BalanceSat) {
+				if filter.TokensToReturn == TokensToReturnDerived ||
+					filter.TokensToReturn == TokensToReturnUsed && ad.balance != nil ||
+					filter.TokensToReturn == TokensToReturnNonzeroBalance && ad.balance != nil && !IsZeroBigInt(&ad.balance.BalanceSat) {
 					tokens = append(tokens, token)
 				}
 				xpubAddresses[token.Name] = struct{}{}

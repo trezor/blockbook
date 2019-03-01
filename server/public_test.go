@@ -461,7 +461,7 @@ func httpTests_BitcoinType(t *testing.T, ts *httptest.Server) {
 			},
 		},
 		{
-			name:        "apiXpub v2 tokenlevel=nonzero",
+			name:        "apiXpub v2 tokens=nonzero",
 			r:           newGetRequest(ts.URL + "/api/v2/xpub/" + dbtestdata.Xpub),
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
@@ -470,8 +470,8 @@ func httpTests_BitcoinType(t *testing.T, ts *httptest.Server) {
 			},
 		},
 		{
-			name:        "apiXpub v2 tokenlevel=used",
-			r:           newGetRequest(ts.URL + "/api/v2/xpub/" + dbtestdata.Xpub + "?tokenlevel=used"),
+			name:        "apiXpub v2 tokens=used",
+			r:           newGetRequest(ts.URL + "/api/v2/xpub/" + dbtestdata.Xpub + "?tokens=used"),
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
@@ -479,8 +479,8 @@ func httpTests_BitcoinType(t *testing.T, ts *httptest.Server) {
 			},
 		},
 		{
-			name:        "apiXpub v2 tokenlevel=discovered",
-			r:           newGetRequest(ts.URL + "/api/v2/xpub/" + dbtestdata.Xpub + "?tokenlevel=discovered"),
+			name:        "apiXpub v2 tokens=derived",
+			r:           newGetRequest(ts.URL + "/api/v2/xpub/" + dbtestdata.Xpub + "?tokens=derived"),
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{

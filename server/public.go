@@ -607,7 +607,7 @@ func (s *PublicServer) explorerAddress(w http.ResponseWriter, r *http.Request) (
 	return addressTpl, data, nil
 }
 
-func (s *PublicServer) getXpubAddress(r *http.Request, xpub string, pageSize int, option api.AccountDetails) (*api.Address, api.TokenDetailLevel, error) {
+func (s *PublicServer) getXpubAddress(r *http.Request, xpub string, pageSize int, option api.AccountDetails) (*api.Address, api.TokensToReturn, error) {
 	var fn = api.AddressFilterVoutOff
 	page, ec := strconv.Atoi(r.URL.Query().Get("page"))
 	if ec != nil {
@@ -622,7 +622,6 @@ func (s *PublicServer) getXpubAddress(r *http.Request, xpub string, pageSize int
 		} else {
 			fn, ec = strconv.Atoi(filter)
 			if ec != nil || fn < 0 {
-				filter = ""
 				fn = api.AddressFilterVoutOff
 			}
 		}
@@ -631,26 +630,26 @@ func (s *PublicServer) getXpubAddress(r *http.Request, xpub string, pageSize int
 	if ec != nil {
 		gap = 0
 	}
-	tokenLevel := api.TokenDetailNonzeroBalance
-	switch r.URL.Query().Get("tokenlevel") {
-	case "discovered":
-		tokenLevel = api.TokenDetailDiscovered
+	tokensToReturn := api.TokensToReturnNonzeroBalance
+	switch r.URL.Query().Get("tokens") {
+	case "derived":
+		tokensToReturn = api.TokensToReturnDerived
 	case "used":
-		tokenLevel = api.TokenDetailUsed
+		tokensToReturn = api.TokensToReturnUsed
 	case "nonzero":
-		tokenLevel = api.TokenDetailNonzeroBalance
+		tokensToReturn = api.TokensToReturnNonzeroBalance
 	}
-	a, err := s.api.GetXpubAddress(xpub, page, pageSize, option, &api.AddressFilter{Vout: fn, TokenLevel: tokenLevel}, gap)
-	return a, tokenLevel, err
+	a, err := s.api.GetXpubAddress(xpub, page, pageSize, option, &api.AddressFilter{Vout: fn, TokensToReturn: tokensToReturn}, gap)
+	return a, tokensToReturn, err
 }
 
 func (s *PublicServer) explorerXpub(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
 	var address *api.Address
-	var tokenLevel api.TokenDetailLevel
+	var tokensToReturn api.TokensToReturn
 	var err error
 	s.metrics.ExplorerViews.With(common.Labels{"action": "xpub"}).Inc()
 	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
-		address, tokenLevel, err = s.getXpubAddress(r, r.URL.Path[i+1:], txsOnPage, api.AccountDetailsTxHistoryLight)
+		address, tokensToReturn, err = s.getXpubAddress(r, r.URL.Path[i+1:], txsOnPage, api.AccountDetailsTxHistoryLight)
 		if err != nil {
 			return errorTpl, nil, err
 		}
@@ -665,7 +664,7 @@ func (s *PublicServer) explorerXpub(w http.ResponseWriter, r *http.Request) (tpl
 		data.PageParams = template.URL("&filter=" + filter)
 		data.Address.Filter = filter
 	}
-	data.NonZeroBalanceTokens = tokenLevel == api.TokenDetailNonzeroBalance
+	data.NonZeroBalanceTokens = tokensToReturn == api.TokensToReturnNonzeroBalance
 	return xpubTpl, data, nil
 }
 

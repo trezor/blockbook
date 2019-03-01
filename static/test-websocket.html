@@ -125,9 +125,11 @@
             const contractFilter = document.getElementById("getAccountInfoContract").value.trim();
             const pageSize = 10;
             const method = 'getAccountInfo';
+            const tokens = "derived"; // could be "nonzero", "used", default is "derived" i.e. all
             const params = {
                 descriptor,
                 details,
+                tokens,
                 page,
                 pageSize,
                 from,

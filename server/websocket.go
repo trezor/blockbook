@@ -330,6 +330,7 @@ func (s *WebsocketServer) onRequest(c *websocketChannel, req *websocketReq) {
 type accountInfoReq struct {
 	Descriptor     string `json:"descriptor"`
 	Details        string `json:"details"`
+	Tokens         string `json:"tokens"`
 	PageSize       int    `json:"pageSize"`
 	Page           int    `json:"page"`
 	FromHeight     int    `json:"from"`
@@ -360,12 +361,21 @@ func (s *WebsocketServer) getAccountInfo(req *accountInfoReq) (res *api.Address,
 	default:
 		opt = api.AccountDetailsBasic
 	}
+	var tokensToReturn api.TokensToReturn
+	switch req.Tokens {
+	case "used":
+		tokensToReturn = api.TokensToReturnUsed
+	case "nonzero":
+		tokensToReturn = api.TokensToReturnNonzeroBalance
+	default:
+		tokensToReturn = api.TokensToReturnDerived
+	}
 	filter := api.AddressFilter{
-		FromHeight: uint32(req.FromHeight),
-		ToHeight:   uint32(req.ToHeight),
-		Contract:   req.ContractFilter,
-		Vout:       api.AddressFilterVoutOff,
-		TokenLevel: api.TokenDetailDiscovered,
+		FromHeight:     uint32(req.FromHeight),
+		ToHeight:       uint32(req.ToHeight),
+		Contract:       req.ContractFilter,
+		Vout:           api.AddressFilterVoutOff,
+		TokensToReturn: tokensToReturn,
 	}
 	a, err := s.api.GetXpubAddress(req.Descriptor, req.Page, req.PageSize, opt, &filter, 0)
 	if err != nil {
