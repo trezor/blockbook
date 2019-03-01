@@ -37,6 +37,7 @@ type TestData struct {
 	BlockHeight uint32                `json:"blockHeight"`
 	BlockHash   string                `json:"blockHash"`
 	BlockTime   int64                 `json:"blockTime"`
+	BlockSize   int                   `json:"blockSize"`
 	BlockTxs    []string              `json:"blockTxs"`
 	TxDetails   map[string]*bchain.Tx `json:"txDetails"`
 }
@@ -314,6 +315,7 @@ func testGetBlockHeader(t *testing.T, h *TestHandler) {
 		Hash:   h.TestData.BlockHash,
 		Height: h.TestData.BlockHeight,
 		Time:   h.TestData.BlockTime,
+		Size:   h.TestData.BlockSize,
 	}
 
 	got, err := h.Chain.GetBlockHeader(h.TestData.BlockHash)
