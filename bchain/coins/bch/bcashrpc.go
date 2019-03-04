@@ -27,6 +27,7 @@ func NewBCashRPC(config json.RawMessage, pushHandler func(bchain.NotificationTyp
 	s := &BCashRPC{
 		b.(*btc.BitcoinRPC),
 	}
+	s.ChainConfig.SupportsEstimateSmartFee = false
 
 	return s, nil
 }
