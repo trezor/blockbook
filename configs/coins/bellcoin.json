@@ -23,9 +23,9 @@
       "package_revision": "satoshilabs-1",
       "system_user": "bellcoin",
       "version": "1.0.2",
-      "binary_url": "https://github.com/yutotetuota/bellcoin/releases/download/1.0.2/bellcoin-1.0.2-x86_64-linux-gnu.tar.gz",
+      "binary_url": "https://github.com/y-chan/bellcoin/releases/download/1.0.2/bellcoin-1.0.2-x86_64-linux-gnu.tar.gz",
       "verification_type": "gpg-sha256",
-      "verification_source": "https://github.com/yutotetuota/bellcoin/releases/download/1.0.2/bellcoin-1.0.2.asc",
+      "verification_source": "https://github.com/y-chan/bellcoin/releases/download/1.0.2/bellcoin-1.0.2.asc",
       "extract_command": "tar -C backend --strip 1 -xf",
       "exclude_files": [
           "bellcoin-qt"
