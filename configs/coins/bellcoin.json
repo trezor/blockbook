@@ -24,8 +24,8 @@
       "system_user": "bellcoin",
       "version": "1.0.2",
       "binary_url": "https://github.com/y-chan/bellcoin/releases/download/1.0.2/bellcoin-1.0.2-x86_64-linux-gnu.tar.gz",
-      "verification_type": "gpg-sha256",
-      "verification_source": "https://github.com/y-chan/bellcoin/releases/download/1.0.2/bellcoin-1.0.2.asc",
+      "verification_type": "sha256",
+      "verification_source": "e959d7e9977ee50d99de2bc50a6d662626816794d3b6721d03f945e589bf8bfd",
       "extract_command": "tar -C backend --strip 1 -xf",
       "exclude_files": [
           "bellcoin-qt"
