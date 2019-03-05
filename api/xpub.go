@@ -34,9 +34,17 @@ type xpubTxid struct {
 
 type xpubTxids []xpubTxid
 
-func (a xpubTxids) Len() int           { return len(a) }
-func (a xpubTxids) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a xpubTxids) Less(i, j int) bool { return a[i].height >= a[j].height }
+func (a xpubTxids) Len() int      { return len(a) }
+func (a xpubTxids) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+func (a xpubTxids) Less(i, j int) bool {
+	// if the heights are equal, make inputs less than outputs
+	hi := a[i].height
+	hj := a[j].height
+	if hi == hj {
+		return (a[i].inputOutput & txInput) >= (a[j].inputOutput & txInput)
+	}
+	return hi > hj
+}
 
 type xpubAddress struct {
 	addrDesc  bchain.AddressDescriptor

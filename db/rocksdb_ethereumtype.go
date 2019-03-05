@@ -219,7 +219,7 @@ func (d *RocksDB) processAddressesEthereumType(block *bchain.Block, addresses ad
 				glog.Warningf("rocksdb: GetErc20FromTx %v - height %d, tx %v, transfer %v", err, block.Height, tx.Txid, t)
 				continue
 			}
-			if err = d.addToAddressesAndContractsEthereumType(from, btxID, ^int32(i), contract, addresses, addressContracts, true); err != nil {
+			if err = d.addToAddressesAndContractsEthereumType(to, btxID, int32(i), contract, addresses, addressContracts, true); err != nil {
 				return nil, err
 			}
 			eq := bytes.Equal(from, to)
@@ -227,7 +227,7 @@ func (d *RocksDB) processAddressesEthereumType(block *bchain.Block, addresses ad
 			j++
 			bc.addr = from
 			bc.contract = contract
-			if err = d.addToAddressesAndContractsEthereumType(to, btxID, int32(i), contract, addresses, addressContracts, !eq); err != nil {
+			if err = d.addToAddressesAndContractsEthereumType(from, btxID, ^int32(i), contract, addresses, addressContracts, !eq); err != nil {
 				return nil, err
 			}
 			// add to address to blockTx.contracts only if it is different from from address
