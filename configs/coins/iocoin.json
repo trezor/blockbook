@@ -13,7 +13,7 @@
   },
   "ipc": {
     "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
-    "rpc_user": "rpc",
+    "rpc_user": "rpcuser",
     "rpc_pass": "rpcpass",
     "rpc_timeout": 25,
     "message_queue_binding_template": "tcp://206.189.115.69:{{.Ports.BackendMessageQueue}}"
