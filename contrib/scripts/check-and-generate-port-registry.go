@@ -237,7 +237,7 @@ func writeMarkdown(output string, slice PortInfoSlice) error {
 
 	out := os.Stdout
 	if output != "stdout" {
-		out, err = os.OpenFile(output, os.O_CREATE|os.O_WRONLY, 0644)
+		out, err = os.OpenFile(output, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 		if err != nil {
 			return err
 		}

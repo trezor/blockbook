@@ -1,0 +1,105 @@
+{{define "specific"}}{{$cs := .CoinShortcut}}{{$addr := .Address}}{{$data := .}}
+<h1>XPUB <small class="text-muted">{{formatAmount $addr.BalanceSat}} {{$cs}}</small>
+</h1>
+<div class="alert alert-data ellipsis">
+    <span class="data">{{$addr.AddrStr}}</span>
+</div>
+<h3>Confirmed</h3>
+<div class="data-div row">
+    <div class="col-md-10">
+        <table class="table data-table">
+            <tbody>
+                <tr>
+                    <td style="width: 25%;">Total Received</td>
+                    <td class="data">{{formatAmount $addr.TotalReceivedSat}} {{$cs}}</td>
+                </tr>
+                <tr>
+                    <td>Total Sent</td>
+                    <td class="data">{{formatAmount $addr.TotalSentSat}} {{$cs}}</td>
+                </tr>
+                <tr>
+                    <td>Final Balance</td>
+                    <td class="data">{{formatAmount $addr.BalanceSat}} {{$cs}}</td>
+                </tr>
+                <tr>
+                    <td>No. Transactions</td>
+                    <td class="data">{{$addr.Txs}}</td>
+                </tr>
+                <tr>
+                    <td>Used XPUB Addresses</td>
+                    <td class="data">{{$addr.TotalTokens}}</td>
+                </tr>
+                {{- if or $addr.Tokens $addr.TotalTokens -}}
+                <tr>
+                    <td>{{if $data.NonZeroBalanceTokens}}XPUB Addresses with Balance{{else}}XPUB Addresses{{end}}</td>
+                    <td style="padding: 0;">
+                        <table class="table data-table">
+                            <tbody>
+                                <tr>
+                                    <th style="width: 50%;">Address</th>
+                                    <th>Balance</th>
+                                    <th style="width: 8%;">Txs</th>
+                                    <th style="width: 18%;">Path</th>
+                                </tr>
+                                {{- range $t := $addr.Tokens -}}
+                                <tr>
+                                    <td class="data ellipsis"><a href="/address/{{$t.Name}}">{{$t.Name}}</a></td>
+                                    <td class="data">{{formatAmount $t.BalanceSat}} {{$cs}}</td>
+                                    <td class="data">{{$t.Transfers}}</td>
+                                    <td>{{$t.Path}}</td>
+                                </tr>
+                                {{- end -}}
+                                {{- if $data.NonZeroBalanceTokens -}}
+                                <tr>
+                                    <td colspan="4"><a href="?tokens=used">Show all XPUB addresses</a></td>
+                                </tr>
+                                {{- end -}}
+                            </tbody>
+                        </table>
+                    </td>
+                </tr>
+                {{- end -}}
+            </tbody>
+        </table>
+    </div>
+    <div class="col-md-2">
+        <div id="qrcode" style="width: 160px; height: 160px;"></div>
+        <script type="text/javascript" src="/static/js/qrcode.min.js"></script>
+        <script type="text/javascript">
+            new QRCode(document.getElementById("qrcode"), { text: "{{$addr.AddrStr}}", width: 160, height: 160 });
+        </script>
+    </div>
+</div>
+{{- if $addr.UnconfirmedTxs -}}
+<h3>Unconfirmed</h3>
+<div class="data-div">
+    <table class="table data-table">
+        <tbody>
+            <tr>
+                <td style="width: 25%;">Unconfirmed Balance</td>
+                <td class="data">{{formatAmount $addr.UnconfirmedBalanceSat}} {{$cs}}</td>
+            </tr>
+            <tr>
+                <td>No. Transactions</td>
+                <td class="data">{{$addr.UnconfirmedTxs}}</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+{{- end}}{{if or $addr.Transactions $addr.Filter -}}
+<div class="row h-container">
+    <h3 class="col-md-3">Transactions</h3>
+    <select class="col-md-2" style="background-color: #eaeaea;" onchange="self.location='?filter='+options[selectedIndex].value">
+        <option>All</option>
+        <option {{if eq $addr.Filter "inputs" -}} selected{{end}} value="inputs">Inputs</option>
+        <option {{if eq $addr.Filter "outputs" -}} selected{{end}} value="outputs">Outputs</option>
+    </select>
+    <div class="col-md-7">
+        <nav>{{template "paging" $data}}</nav>
+    </div>
+</div>
+<div class="data-div">
+    {{- range $tx := $addr.Transactions}}{{$data := setTxToTemplateData $data $tx}}{{template "txdetail" $data}}{{end -}}
+</div>
+<nav>{{template "paging" $data }}</nav>
+{{end}}{{end}}

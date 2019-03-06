@@ -268,6 +268,21 @@ func (p *BaseParser) UnpackTx(buf []byte) (*Tx, uint32, error) {
 	return &tx, pt.Height, nil
 }
 
+// DerivationBasePath is unsupported
+func (p *BaseParser) DerivationBasePath(xpub string) (string, error) {
+	return "", errors.New("Not supported")
+}
+
+// DeriveAddressDescriptors is unsupported
+func (p *BaseParser) DeriveAddressDescriptors(xpub string, change uint32, indexes []uint32) ([]AddressDescriptor, error) {
+	return nil, errors.New("Not supported")
+}
+
+// DeriveAddressDescriptorsFromTo is unsupported
+func (p *BaseParser) DeriveAddressDescriptorsFromTo(xpub string, change uint32, fromIndex uint32, toIndex uint32) ([]AddressDescriptor, error) {
+	return nil, errors.New("Not supported")
+}
+
 // EthereumTypeGetErc20FromTx is unsupported
 func (p *BaseParser) EthereumTypeGetErc20FromTx(tx *Tx) ([]Erc20Transfer, error) {
 	return nil, errors.New("Not supported")

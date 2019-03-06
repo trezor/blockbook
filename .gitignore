@@ -6,8 +6,10 @@ notes.txt
 debug*
 .vscode
 docker/blockbook
-build
-!build/templates
-!build/docker
+build/pkg-defs
+build/blockbook
+build/ldb
+build/sst_dump
+build/*.deb
 .bin-image
 .deb-image

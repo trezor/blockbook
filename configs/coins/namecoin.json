@@ -1,9 +1,9 @@
 {
   "coin": {
-      "name": "Namecoin",
-      "shortcut": "NMC",
-      "label": "Namecoin",
-      "alias": "namecoin"
+    "name": "Namecoin",
+    "shortcut": "NMC",
+    "label": "Namecoin",
+    "alias": "namecoin"
   },
   "ports": {
     "backend_rpc": 8039,
@@ -28,7 +28,7 @@
     "verification_source": "14ebaaf6f22f69b057a5bcb9b6959548f0a3f1b62cc113f19581d2297044827e",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
-        "bin/namecoin-qt"
+      "bin/namecoin-qt"
     ],
     "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/namecoind -datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -conf={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf -pid=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",
     "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/*.log",
@@ -40,14 +40,14 @@
     "server_config_file": "bitcoin_like.conf",
     "client_config_file": "bitcoin_like_client.conf",
     "additional_params": {
-        "whitelist": "127.0.0.1",
-        "upnp": 0,
-        "discover": 0,
-        "whitelistrelay": 1,
-        "listenonion": 0,
-        "addnode": [
-            "45.24.110.177:8334"
-        ]
+      "addnode": [
+        "45.24.110.177:8334"
+      ],
+      "discover": 0,
+      "listenonion": 0,
+      "upnp": 0,
+      "whitelist": "127.0.0.1",
+      "whitelistrelay": 1
     }
   },
   "blockbook": {
@@ -62,6 +62,8 @@
       "mempool_workers": 8,
       "mempool_sub_workers": 2,
       "block_addresses_to_keep": 300,
+      "xpub_magic": 76067358,
+      "slip44": 7,
       "additional_params": {}
     }
   },

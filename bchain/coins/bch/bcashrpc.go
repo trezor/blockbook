@@ -5,7 +5,6 @@ import (
 	"blockbook/bchain/coins/btc"
 	"encoding/hex"
 	"encoding/json"
-	"math/big"
 
 	"github.com/golang/glog"
 	"github.com/juju/errors"
@@ -27,6 +26,7 @@ func NewBCashRPC(config json.RawMessage, pushHandler func(bchain.NotificationTyp
 	s := &BCashRPC{
 		b.(*btc.BitcoinRPC),
 	}
+	s.ChainConfig.SupportsEstimateSmartFee = false
 
 	return s, nil
 }
@@ -155,30 +155,6 @@ func (b *BCashRPC) GetBlockInfo(hash string) (*bchain.BlockInfo, error) {
 // GetBlockFull returns block with given hash.
 func (b *BCashRPC) GetBlockFull(hash string) (*bchain.Block, error) {
 	return nil, errors.New("Not implemented")
-}
-
-// EstimateSmartFee returns fee estimation.
-func (b *BCashRPC) EstimateSmartFee(blocks int, conservative bool) (big.Int, error) {
-	glog.V(1).Info("rpc: estimatesmartfee ", blocks)
-
-	res := btc.ResEstimateSmartFee{}
-	req := cmdEstimateSmartFee{Method: "estimatesmartfee"}
-	req.Params.Blocks = blocks
-	// conservative param is omitted
-	err := b.Call(&req, &res)
-
-	var r big.Int
-	if err != nil {
-		return r, err
-	}
-	if res.Error != nil {
-		return r, res.Error
-	}
-	r, err = b.Parser.AmountToBigInt(res.Result.Feerate)
-	if err != nil {
-		return r, err
-	}
-	return r, nil
 }
 
 func isErrBlockNotFound(err *bchain.RPCError) bool {

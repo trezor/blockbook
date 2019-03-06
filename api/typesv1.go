@@ -192,7 +192,7 @@ func (w *Worker) AddressToV1(a *Address) *AddressV1 {
 }
 
 // AddressUtxoToV1 converts []AddressUtxo to []AddressUtxoV1
-func (w *Worker) AddressUtxoToV1(au []AddressUtxo) []AddressUtxoV1 {
+func (w *Worker) AddressUtxoToV1(au Utxos) []AddressUtxoV1 {
 	d := w.chainParser.AmountDecimals()
 	v1 := make([]AddressUtxoV1, len(au))
 	for i := range au {

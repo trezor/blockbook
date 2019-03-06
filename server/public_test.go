@@ -60,7 +60,13 @@ func setupRocksDB(t *testing.T, parser bchain.BlockChainParser) (*db.RocksDB, *c
 func setupPublicHTTPServer(t *testing.T) (*PublicServer, string) {
 	parser := btc.NewBitcoinParser(
 		btc.GetChainParams("test"),
-		&btc.Configuration{BlockAddressesToKeep: 1})
+		&btc.Configuration{
+			BlockAddressesToKeep:  1,
+			XPubMagic:             70617039,
+			XPubMagicSegwitP2sh:   71979618,
+			XPubMagicSegwitNative: 73342198,
+			Slip44:                1,
+		})
 
 	d, is, path := setupRocksDB(t, parser)
 	// setup internal state and match BestHeight to test data
@@ -151,7 +157,7 @@ func httpTests_BitcoinType(t *testing.T, ts *httptest.Server) {
 				`td class="data">0 FAKE</td>`,
 				`<a href="/address/mzVznVsCHkVHX9UN8WPFASWUUHtxnNn4Jj">mzVznVsCHkVHX9UN8WPFASWUUHtxnNn4Jj</a>`,
 				`13.60030331 FAKE`,
-				`<td><span class="float-left">No Inputs (Newly Generated Coins)</span></td>`,
+				`<td><span class="tx-addr">No Inputs (Newly Generated Coins)</span></td>`,
 				`</html>`,
 			},
 		},
@@ -168,8 +174,8 @@ func httpTests_BitcoinType(t *testing.T, ts *httptest.Server) {
 				`<td class="data">0.00012345 FAKE</td>`,
 				`<a href="/tx/7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25">7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25</a>`,
 				`3172.83951061 FAKE <a class="text-danger" href="/spending/7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25/0" title="Spent">➡</a></span>`,
-				`<td><span class="ellipsis float-left"><a href="/address/mtR97eM2HPWVM6c8FGLGcukgaHHQv7THoL">mtR97eM2HPWVM6c8FGLGcukgaHHQv7THoL</a></span><span class="float-right">`,
-				`td><span class="ellipsis float-left"><a href="/address/mtR97eM2HPWVM6c8FGLGcukgaHHQv7THoL">mtR97eM2HPWVM6c8FGLGcukgaHHQv7THoL</a></span><span class="float-right">`,
+				`<td><span class="ellipsis tx-addr"><a href="/address/mtR97eM2HPWVM6c8FGLGcukgaHHQv7THoL">mtR97eM2HPWVM6c8FGLGcukgaHHQv7THoL</a></span><span class="tx-amt">`,
+				`td><span class="ellipsis tx-addr"><a href="/address/mtR97eM2HPWVM6c8FGLGcukgaHHQv7THoL">mtR97eM2HPWVM6c8FGLGcukgaHHQv7THoL</a></span><span class="tx-amt">`,
 				`9172.83951061 FAKE <span class="text-success" title="Unspent"> <b>×</b></span></span>`,
 				`<a href="/tx/00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840">00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840</a>`,
 				`</html>`,
@@ -290,7 +296,7 @@ func httpTests_BitcoinType(t *testing.T, ts *httptest.Server) {
 				`td class="data">0 FAKE</td>`,
 				`<a href="/address/mzVznVsCHkVHX9UN8WPFASWUUHtxnNn4Jj">mzVznVsCHkVHX9UN8WPFASWUUHtxnNn4Jj</a>`,
 				`13.60030331 FAKE`,
-				`<td><span class="float-left">No Inputs (Newly Generated Coins)</span></td>`,
+				`<td><span class="tx-addr">No Inputs (Newly Generated Coins)</span></td>`,
 				`</html>`,
 			},
 		},
@@ -307,10 +313,28 @@ func httpTests_BitcoinType(t *testing.T, ts *httptest.Server) {
 				`<td class="data">0.00012345 FAKE</td>`,
 				`<a href="/tx/7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25">7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25</a>`,
 				`3172.83951061 FAKE <a class="text-danger" href="/spending/7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25/0" title="Spent">➡</a></span>`,
-				`<td><span class="ellipsis float-left"><a href="/address/mtR97eM2HPWVM6c8FGLGcukgaHHQv7THoL">mtR97eM2HPWVM6c8FGLGcukgaHHQv7THoL</a></span><span class="float-right">`,
-				`td><span class="ellipsis float-left"><a href="/address/mtR97eM2HPWVM6c8FGLGcukgaHHQv7THoL">mtR97eM2HPWVM6c8FGLGcukgaHHQv7THoL</a></span><span class="float-right">`,
+				`<td><span class="ellipsis tx-addr"><a href="/address/mtR97eM2HPWVM6c8FGLGcukgaHHQv7THoL">mtR97eM2HPWVM6c8FGLGcukgaHHQv7THoL</a></span><span class="tx-amt">`,
+				`td><span class="ellipsis tx-addr"><a href="/address/mtR97eM2HPWVM6c8FGLGcukgaHHQv7THoL">mtR97eM2HPWVM6c8FGLGcukgaHHQv7THoL</a></span><span class="tx-amt">`,
 				`9172.83951061 FAKE <span class="text-success" title="Unspent"> <b>×</b></span></span>`,
 				`<a href="/tx/00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840">00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840</a>`,
+				`</html>`,
+			},
+		},
+		{
+			name:        "explorerSearch xpub",
+			r:           newGetRequest(ts.URL + "/search?q=" + dbtestdata.Xpub),
+			status:      http.StatusOK,
+			contentType: "text/html; charset=utf-8",
+			body: []string{
+				`<a href="/" class="nav-link">Fake Coin Explorer</a>`,
+				`<h1>XPUB <small class="text-muted">1186.419755 FAKE</small></h1><div class="alert alert-data ellipsis"><span class="data">upub5E1xjDmZ7Hhej6LPpS8duATdKXnRYui7bDYj6ehfFGzWDZtmCmQkZhc3Zb7kgRLtHWd16QFxyP86JKL3ShZEBFX88aciJ3xyocuyhZZ8g6q</span></div>`,
+				`<td style="width: 25%;">Total Received</td><td class="data">1186.41975501 FAKE</td>`,
+				`<td>Total Sent</td><td class="data">0.00000001 FAKE</td>`,
+				`<td>Used XPUB Addresses</td><td class="data">2</td>`,
+				`<td class="data ellipsis"><a href="/address/2N6utyMZfPNUb1Bk8oz7p2JqJrXkq83gegu">2N6utyMZfPNUb1Bk8oz7p2JqJrXkq83gegu</a></td><td class="data">1186.419755 FAKE</td><td class="data">1</td><td>m/49&#39;/1&#39;/33&#39;/1/3</td>`,
+				`<div class="col-xs-7 col-md-8 ellipsis"><a href="/tx/3d90d15ed026dc45e19ffb52875ed18fa9e8012ad123d7f7212176e2b0ebdb71">3d90d15ed026dc45e19ffb52875ed18fa9e8012ad123d7f7212176e2b0ebdb71</a></div>`,
+				`<div class="col-xs-7 col-md-8 ellipsis"><a href="/tx/effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75">effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75</a></div>`,
+				`<td><span class="ellipsis tx-addr"><a href="/address/2NEVv9LJmAnY99W1pFoc5UJjVdypBqdnvu1">2NEVv9LJmAnY99W1pFoc5UJjVdypBqdnvu1</a></span><span class="tx-amt">0.00009876 FAKE <a class="text-danger" href="/spending/effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75/2" title="Spent">➡</a></span></td>`,
 				`</html>`,
 			},
 		},
@@ -437,7 +461,34 @@ func httpTests_BitcoinType(t *testing.T, ts *httptest.Server) {
 			},
 		},
 		{
-			name:        "apiAddressUtxo v1",
+			name:        "apiXpub v2 tokens=nonzero",
+			r:           newGetRequest(ts.URL + "/api/v2/xpub/" + dbtestdata.Xpub),
+			status:      http.StatusOK,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`{"page":1,"totalPages":1,"itemsOnPage":1000,"address":"upub5E1xjDmZ7Hhej6LPpS8duATdKXnRYui7bDYj6ehfFGzWDZtmCmQkZhc3Zb7kgRLtHWd16QFxyP86JKL3ShZEBFX88aciJ3xyocuyhZZ8g6q","balance":"118641975500","totalReceived":"118641975501","totalSent":"1","unconfirmedBalance":"0","unconfirmedTxs":0,"txs":2,"txids":["3d90d15ed026dc45e19ffb52875ed18fa9e8012ad123d7f7212176e2b0ebdb71","effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75"],"totalTokens":2,"tokens":[{"type":"XPUBAddress","name":"2N6utyMZfPNUb1Bk8oz7p2JqJrXkq83gegu","path":"m/49'/1'/33'/1/3","transfers":1,"decimals":8,"balance":"118641975500","totalReceived":"118641975500","totalSent":"0"}]}`,
+			},
+		},
+		{
+			name:        "apiXpub v2 tokens=used",
+			r:           newGetRequest(ts.URL + "/api/v2/xpub/" + dbtestdata.Xpub + "?tokens=used"),
+			status:      http.StatusOK,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`{"page":1,"totalPages":1,"itemsOnPage":1000,"address":"upub5E1xjDmZ7Hhej6LPpS8duATdKXnRYui7bDYj6ehfFGzWDZtmCmQkZhc3Zb7kgRLtHWd16QFxyP86JKL3ShZEBFX88aciJ3xyocuyhZZ8g6q","balance":"118641975500","totalReceived":"118641975501","totalSent":"1","unconfirmedBalance":"0","unconfirmedTxs":0,"txs":2,"txids":["3d90d15ed026dc45e19ffb52875ed18fa9e8012ad123d7f7212176e2b0ebdb71","effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75"],"totalTokens":2,"tokens":[{"type":"XPUBAddress","name":"2MzmAKayJmja784jyHvRUW1bXPget1csRRG","path":"m/49'/1'/33'/0/0","transfers":2,"decimals":8,"balance":"0","totalReceived":"1","totalSent":"1"},{"type":"XPUBAddress","name":"2N6utyMZfPNUb1Bk8oz7p2JqJrXkq83gegu","path":"m/49'/1'/33'/1/3","transfers":1,"decimals":8,"balance":"118641975500","totalReceived":"118641975500","totalSent":"0"}]}`,
+			},
+		},
+		{
+			name:        "apiXpub v2 tokens=derived",
+			r:           newGetRequest(ts.URL + "/api/v2/xpub/" + dbtestdata.Xpub + "?tokens=derived"),
+			status:      http.StatusOK,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`{"page":1,"totalPages":1,"itemsOnPage":1000,"address":"upub5E1xjDmZ7Hhej6LPpS8duATdKXnRYui7bDYj6ehfFGzWDZtmCmQkZhc3Zb7kgRLtHWd16QFxyP86JKL3ShZEBFX88aciJ3xyocuyhZZ8g6q","balance":"118641975500","totalReceived":"118641975501","totalSent":"1","unconfirmedBalance":"0","unconfirmedTxs":0,"txs":2,"txids":["3d90d15ed026dc45e19ffb52875ed18fa9e8012ad123d7f7212176e2b0ebdb71","effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75"],"totalTokens":2,"tokens":[{"type":"XPUBAddress","name":"2MzmAKayJmja784jyHvRUW1bXPget1csRRG","path":"m/49'/1'/33'/0/0","transfers":2,"decimals":8,"balance":"0","totalReceived":"1","totalSent":"1"},{"type":"XPUBAddress","name":"2MsYfbi6ZdVXLDNrYAQ11ja9Sd3otMk4Pmj","path":"m/49'/1'/33'/0/1","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2MuAZNAjLSo6RLFad2fvHSfgqBD7BoEVy4T","path":"m/49'/1'/33'/0/2","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2NEqKzw3BosGnBE9by5uaDy5QgwjHac4Zbg","path":"m/49'/1'/33'/0/3","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2Mw7vJNC8zUK6VNN4CEjtoTYmuNPLewxZzV","path":"m/49'/1'/33'/0/4","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2N1kvo97NFASPXiwephZUxE9PRXunjTxEc4","path":"m/49'/1'/33'/0/5","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2MuWrWMzoBt8VDFNvPmpJf42M1GTUs85fPx","path":"m/49'/1'/33'/0/6","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2MuVZ2Ca6Da9zmYynt49Rx7uikAgubGcymF","path":"m/49'/1'/33'/0/7","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2MzRGWDUmrPP9HwYu4B43QGCTLwoop5cExa","path":"m/49'/1'/33'/0/8","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2N5C9EEWJzyBXhpyPHqa3UNed73Amsi5b3L","path":"m/49'/1'/33'/0/9","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2MzNawz2zjwq1L85GDE3YydEJGJYfXxaWkk","path":"m/49'/1'/33'/0/10","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2N7NdeuAMgL57WE7QCeV2gTWi2Um8iAu5dA","path":"m/49'/1'/33'/0/11","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2N8JQEP6DSHEZHNsSDPA1gHMUq9YFndhkfV","path":"m/49'/1'/33'/0/12","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2Mvbn3YXqKZVpQKugaoQrfjSYPvz76RwZkC","path":"m/49'/1'/33'/0/13","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2N8MRNxCfwUY9TSW27X9ooGYtqgrGCfLRHx","path":"m/49'/1'/33'/0/14","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2N6HvwrHC113KYZAmCtJ9XJNWgaTcnFunCM","path":"m/49'/1'/33'/0/15","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2NEo3oNyHUoi7rmRWee7wki37jxPWsWCopJ","path":"m/49'/1'/33'/0/16","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2Mzm5KY8qdFbDHsQfy4akXbFvbR3FAwDuVo","path":"m/49'/1'/33'/0/17","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2NGMwftmQCogp6XZNGvgiybz3WZysvsJzqC","path":"m/49'/1'/33'/0/18","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2N3fJrrefndYjLGycvFFfYgevpZtcRKCkRD","path":"m/49'/1'/33'/0/19","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2N1T7TnHBwfdpBoyw53EGUL7vuJmb2mU6jF","path":"m/49'/1'/33'/0/20","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2MzSBtRWHbBjeUcu3H5VRDqkvz5sfmDxJKo","path":"m/49'/1'/33'/1/0","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2MtShtAJYb1afWduUTwF1SixJjan7urZKke","path":"m/49'/1'/33'/1/1","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2N3cP668SeqyBEr9gnB4yQEmU3VyxeRYith","path":"m/49'/1'/33'/1/2","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2N6utyMZfPNUb1Bk8oz7p2JqJrXkq83gegu","path":"m/49'/1'/33'/1/3","transfers":1,"decimals":8,"balance":"118641975500","totalReceived":"118641975500","totalSent":"0"},{"type":"XPUBAddress","name":"2NEzatauNhf9kPTwwj6ZfYKjUdy52j4hVUL","path":"m/49'/1'/33'/1/4","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2N4RjsDp4LBpkNqyF91aNjgpF9CwDwBkJZq","path":"m/49'/1'/33'/1/5","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2N8XygTmQc4NoBBPEy3yybnfCYhsxFtzPDY","path":"m/49'/1'/33'/1/6","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2N5BjBomZvb48sccK2vwLMiQ5ETKp1fdPVn","path":"m/49'/1'/33'/1/7","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2MybMwbZRPCGU3SMWPwQCpDkbcQFw5Hbwen","path":"m/49'/1'/33'/1/8","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2N7HexL4dyAQc7Th4iqcCW4hZuyiZsLWf74","path":"m/49'/1'/33'/1/9","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2NF6X5FDGWrQj4nQrfP6hA77zB5WAc1DGup","path":"m/49'/1'/33'/1/10","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2N4ZRPdvc7BVioBTohy4F6QtxreqcjNj26b","path":"m/49'/1'/33'/1/11","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2Mtfho1rLmevh4qTnkYWxZEFCWteDMtTcUF","path":"m/49'/1'/33'/1/12","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2NFUCphKYvmMcNZRZrF261mRX6iADVB9Qms","path":"m/49'/1'/33'/1/13","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2N5kBNMB8qgxE4Y4f8J19fScsE49J4aNvoJ","path":"m/49'/1'/33'/1/14","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2NANWCaefhCKdXMcW8NbZnnrFRDvhJN2wPy","path":"m/49'/1'/33'/1/15","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2NFHw7Yo2Bz8D2wGAYHW9qidbZFLpfJ72qB","path":"m/49'/1'/33'/1/16","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2NBDSsBgy5PpFniLCb1eAFHcSxgxwPSDsZa","path":"m/49'/1'/33'/1/17","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2NDWCSQHogc7sCuc2WoYt9PX2i2i6a5k6dX","path":"m/49'/1'/33'/1/18","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2N8vNyDP7iSDjm3BKpXrbDjAxyphqfvnJz8","path":"m/49'/1'/33'/1/19","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2N4tFKLurSbMusAyq1tv4tzymVjveAFV1Vb","path":"m/49'/1'/33'/1/20","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2NBx5WwjAr2cH6Yqrp3Vsf957HtRKwDUVdX","path":"m/49'/1'/33'/1/21","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2NBu1seHTaFhQxbcW5L5BkZzqFLGmZqpxsa","path":"m/49'/1'/33'/1/22","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2NCDLoea22jGsXuarfT1n2QyCUh6RFhAPnT","path":"m/49'/1'/33'/1/23","transfers":0,"decimals":8}]}`,
+			},
+		},
+		{
+			name:        "apiUtxo v1",
 			r:           newGetRequest(ts.URL + "/api/v1/utxo/mtR97eM2HPWVM6c8FGLGcukgaHHQv7THoL"),
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
@@ -446,12 +497,21 @@ func httpTests_BitcoinType(t *testing.T, ts *httptest.Server) {
 			},
 		},
 		{
-			name:        "apiAddressUtxo v2",
+			name:        "apiUtxo v2",
 			r:           newGetRequest(ts.URL + "/api/v2/utxo/mtR97eM2HPWVM6c8FGLGcukgaHHQv7THoL"),
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
 				`[{"txid":"7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25","vout":1,"value":"917283951061","height":225494,"confirmations":1}]`,
+			},
+		},
+		{
+			name:        "apiUtxo v2 xpub",
+			r:           newGetRequest(ts.URL + "/api/v2/utxo/" + dbtestdata.Xpub),
+			status:      http.StatusOK,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`[{"txid":"3d90d15ed026dc45e19ffb52875ed18fa9e8012ad123d7f7212176e2b0ebdb71","vout":0,"value":"118641975500","height":225494,"confirmations":1,"address":"2N6utyMZfPNUb1Bk8oz7p2JqJrXkq83gegu","path":"m/49'/1'/33'/1/3"}]`,
 			},
 		},
 		{
@@ -599,7 +659,7 @@ func socketioTests_BitcoinType(t *testing.T, ts *httptest.Server) {
 		{
 			name: "getDetailedTransaction",
 			req:  socketioReq{"getDetailedTransaction", []interface{}{"3d90d15ed026dc45e19ffb52875ed18fa9e8012ad123d7f7212176e2b0ebdb71"}},
-			want: `{"result":{"hex":"","height":225494,"blockTimestamp":22549400001,"version":0,"hash":"3d90d15ed026dc45e19ffb52875ed18fa9e8012ad123d7f7212176e2b0ebdb71","inputs":[{"txid":"7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25","outputIndex":0,"script":"","sequence":0,"address":"mzB8cYrfRwFRFAGTDzV8LkUQy5BQicxGhX","satoshis":317283951061},{"txid":"effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75","outputIndex":1,"script":"","sequence":0,"address":"2Mz1CYoppGGsLNUGF2YDhTif6J661JitALS","satoshis":1}],"inputSatoshis":317283951062,"outputs":[{"satoshis":118641975500,"script":"76a914b434eb0c1a3b7a02e8a29cc616e791ef1e0bf51f88ac","address":"mwwoKQE5Lb1G4picHSHDQKg8jw424PF9SC"},{"satoshis":198641975500,"script":"76a9143f8ba3fda3ba7b69f5818086e12223c6dd25e3c888ac","address":"mmJx9Y8ayz9h14yd9fgCW1bUKoEpkBAquP"}],"outputSatoshis":317283951000,"feeSatoshis":62}}`,
+			want: `{"result":{"hex":"","height":225494,"blockTimestamp":22549400001,"version":0,"hash":"3d90d15ed026dc45e19ffb52875ed18fa9e8012ad123d7f7212176e2b0ebdb71","inputs":[{"txid":"7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25","outputIndex":0,"script":"","sequence":0,"address":"mzB8cYrfRwFRFAGTDzV8LkUQy5BQicxGhX","satoshis":317283951061},{"txid":"effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75","outputIndex":1,"script":"","sequence":0,"address":"2MzmAKayJmja784jyHvRUW1bXPget1csRRG","satoshis":1}],"inputSatoshis":317283951062,"outputs":[{"satoshis":118641975500,"script":"a91495e9fbe306449c991d314afe3c3567d5bf78efd287","address":"2N6utyMZfPNUb1Bk8oz7p2JqJrXkq83gegu"},{"satoshis":198641975500,"script":"76a9143f8ba3fda3ba7b69f5818086e12223c6dd25e3c888ac","address":"mmJx9Y8ayz9h14yd9fgCW1bUKoEpkBAquP"}],"outputSatoshis":317283951000,"feeSatoshis":62}}`,
 		},
 		{
 			name: "sendTransaction",
