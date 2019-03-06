@@ -427,7 +427,9 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 					}
 					// skip already confirmed txs, mempool may be out of sync
 					if tx.Confirmations == 0 {
-						unconfirmedTxs++
+						if !foundTx {
+							unconfirmedTxs++
+						}
 						uBalSat.Add(&uBalSat, tx.getAddrVoutValue(ad.addrDesc))
 						uBalSat.Sub(&uBalSat, tx.getAddrVinValue(ad.addrDesc))
 						if page == 0 && !foundTx && (useTxids == nil || useTxids(&txid, ad)) {
