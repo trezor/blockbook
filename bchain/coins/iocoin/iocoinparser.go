@@ -10,8 +10,9 @@ import (
 	"github.com/martinboehm/btcutil/chaincfg"
 )
 
+//XXXX TESTNET
 const (
-	MainnetMagic wire.BitcoinNet = 0xfeb4bef9
+	MainnetMagic wire.BitcoinNet = 0xfabfb5da
 )
 
 var (
