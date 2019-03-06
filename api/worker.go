@@ -657,6 +657,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 		uBalSat                  big.Int
 		totalReceived, totalSent *big.Int
 		nonce                    string
+		unconfirmedTxs           int
 		nonTokenTxs              int
 		totalResults             int
 	)
@@ -705,6 +706,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 			} else {
 				// skip already confirmed txs, mempool may be out of sync
 				if tx.Confirmations == 0 {
+					unconfirmedTxs++
 					uBalSat.Add(&uBalSat, tx.getAddrVoutValue(addrDesc))
 					uBalSat.Sub(&uBalSat, tx.getAddrVinValue(addrDesc))
 					if page == 0 {
@@ -763,7 +765,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 		Txs:                   int(ba.Txs),
 		NonTokenTxs:           nonTokenTxs,
 		UnconfirmedBalanceSat: (*Amount)(&uBalSat),
-		UnconfirmedTxs:        len(txm),
+		UnconfirmedTxs:        unconfirmedTxs,
 		Transactions:          txs,
 		Txids:                 txids,
 		Tokens:                tokens,

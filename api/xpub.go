@@ -367,15 +367,16 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 		inputOutput byte
 	}
 	var (
-		txc      xpubTxids
-		txmMap   map[string]*Tx
-		txCount  int
-		txs      []*Tx
-		txids    []string
-		pg       Paging
-		filtered bool
-		err      error
-		uBalSat  big.Int
+		txc            xpubTxids
+		txmMap         map[string]*Tx
+		txCount        int
+		txs            []*Tx
+		txids          []string
+		pg             Paging
+		filtered       bool
+		err            error
+		uBalSat        big.Int
+		unconfirmedTxs int
 	)
 	data, bestheight, err := w.getXpubData(xpub, page, txsOnPage, option, filter, gap)
 	if err != nil {
@@ -426,6 +427,7 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 					}
 					// skip already confirmed txs, mempool may be out of sync
 					if tx.Confirmations == 0 {
+						unconfirmedTxs++
 						uBalSat.Add(&uBalSat, tx.getAddrVoutValue(ad.addrDesc))
 						uBalSat.Sub(&uBalSat, tx.getAddrVinValue(ad.addrDesc))
 						if page == 0 && !foundTx && (useTxids == nil || useTxids(&txid, ad)) {
@@ -529,7 +531,7 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 		TotalSentSat:          (*Amount)(&data.sentSat),
 		Txs:                   txCount,
 		UnconfirmedBalanceSat: (*Amount)(&uBalSat),
-		UnconfirmedTxs:        len(txmMap),
+		UnconfirmedTxs:        unconfirmedTxs,
 		Transactions:          txs,
 		Txids:                 txids,
 		TotalTokens:           totalTokens,
