@@ -12,22 +12,31 @@ import (
 	"github.com/schancel/cashaddr-converter/address"
 )
 
+// AddressFormat type is used to specify different formats of address
 type AddressFormat = uint8
 
 const (
+	// Legacy AddressFormat is the same as Bitcoin
 	Legacy AddressFormat = iota
+	// CashAddr AddressFormat is new Bitcoin Cash standard
 	CashAddr
 )
 
 const (
+	// MainNetPrefix is CashAddr prefix for mainnet
 	MainNetPrefix = "bitcoincash:"
+	// TestNetPrefix is CashAddr prefix for testnet
 	TestNetPrefix = "bchtest:"
+	// RegTestPrefix is CashAddr prefix for regtest
 	RegTestPrefix = "bchreg:"
 )
 
 var (
+	// MainNetParams are parser parameters for mainnet
 	MainNetParams chaincfg.Params
+	// TestNetParams are parser parameters for testnet
 	TestNetParams chaincfg.Params
+	// RegtestParams are parser parameters for regtest
 	RegtestParams chaincfg.Params
 )
 
@@ -118,17 +127,16 @@ func (p *BCashParser) addressToOutputScript(address string) ([]byte, error) {
 			return nil, err
 		}
 		return script, nil
-	} else {
-		da, err := btcutil.DecodeAddress(address, p.Params)
-		if err != nil {
-			return nil, err
-		}
-		script, err := txscript.PayToAddrScript(da)
-		if err != nil {
-			return nil, err
-		}
-		return script, nil
 	}
+	da, err := btcutil.DecodeAddress(address, p.Params)
+	if err != nil {
+		return nil, err
+	}
+	script, err := txscript.PayToAddrScript(da)
+	if err != nil {
+		return nil, err
+	}
+	return script, nil
 }
 
 func isCashAddr(addr string) bool {
@@ -163,9 +171,8 @@ func (p *BCashParser) outputScriptToAddresses(script []byte) ([]string, bool, er
 				return []string{or}, false, nil
 			}
 			return []string{}, false, nil
-		} else {
-			return nil, false, err
 		}
+		return nil, false, err
 	}
 	// EncodeAddress returns CashAddr address
 	addr := a.EncodeAddress()
