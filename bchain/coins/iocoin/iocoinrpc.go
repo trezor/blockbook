@@ -90,3 +90,12 @@ func (b *IocoinRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) 
 	}
 	return block, nil
 }
+func (b *IocoinRPC) GetBestBlockHeight() (uint32, error) {
+	res := 0
+	req := btc.CmdGetBlock{Method: "getblockcount"}
+	var err = b.Call(&req, &res)
+		if err != nil {
+			return 0, err
+		}
+	return uint32(res), nil
+}
