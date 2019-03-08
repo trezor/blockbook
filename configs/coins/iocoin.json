@@ -16,15 +16,15 @@
     "rpc_user": "rpcuser",
     "rpc_pass": "rpcpass",
     "rpc_timeout": 25,
-    "message_queue_binding_template": "tcp://206.189.115.69:{{.Ports.BackendMessageQueue}}"
+    "message_queue_binding_template": "tcp://134.209.27.213:{{.Ports.BackendMessageQueue}}"
   },
   "backend": {
     "package_name": "backend-iocoin",
     "package_revision": "iocoin-1",
     "system_user": "ioc",
     "version": "0.0.1",
-    "binary_url": "http://206.189.115.69/dist/iocoin-0.0.1.tar.gz",
-    "extract_command": "tar -C backend --strip 1 -xf",
+    "binary_url": "https://github.com/IOCoin/DIONS/releases/download/debian-bin-delta/iocoin-0.0.1.tar.gz",
+    "extract_command": "tar -C backend -xf",
     "exclude_files": [
     ],
     "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/iocoind -datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -conf={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf -pid=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",
