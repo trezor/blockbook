@@ -75,7 +75,7 @@ func (b *IocoinRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) 
 		}
 	}
 	res := btc.ResGetBlockThin{}
-	req := btc.CmdGetBlock{Method: "getblock"}
+	req := CmdGetBlock{Method: "getblock"}
 	req.Params.BlockHash = hash
 	err = b.Call(&req, &res)
 	glog.Info("XXXX get tx ids ")
@@ -125,3 +125,20 @@ func (b *IocoinRPC) getRawTransaction(txid string) (json.RawMessage, error) {
 	}
 	return res.Result, nil
 }*/
+func (b* IocoinRPC) GetBlockInfo(hash string) (*bchain.BlockInfo, error) {
+	glog.V(1).Info("rpc: getblock (verbosity=true) ", hash)
+
+	res := btc.ResGetBlockInfo{}
+	req := CmdGetBlock{Method: "getblock"}
+	req.Params.BlockHash = hash
+	err := b.Call(&req, &res)
+
+	if err != nil {
+	}
+	if res.Error != nil {
+		if btc.IsErrBlockNotFound(res.Error) {
+			return nil, bchain.ErrBlockNotFound
+		}
+	}
+	return &res.Result, nil
+}
