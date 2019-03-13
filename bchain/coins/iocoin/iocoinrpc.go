@@ -13,6 +13,13 @@ type IocoinRPC struct {
 	*btc.BitcoinRPC
 }
 
+type CmdGetBlock struct {
+	Method string `json:"method"`
+	Params struct {
+		BlockHash string `json:"blockhash"`
+	} `json:"params"`
+}
+
 // NewIocoinRPC returns new IocoinRPC instance.
 func NewIocoinRPC(config json.RawMessage, pushHandler func(bchain.NotificationType)) (bchain.BlockChain, error) {
 	b, err := btc.NewBitcoinRPC(config, pushHandler)
@@ -70,10 +77,11 @@ func (b *IocoinRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) 
 	res := btc.ResGetBlockThin{}
 	req := btc.CmdGetBlock{Method: "getblock"}
 	req.Params.BlockHash = hash
-	req.Params.Verbosity = 1
 	err = b.Call(&req, &res)
+	glog.Info("XXXX get tx ids ")
 	txs := make([]bchain.Tx, 0, len(res.Result.Txids))
 	for _, txid := range res.Result.Txids {
+		  glog.Info("XXXX txid ", txid)
 		tx, err := b.GetTransaction(txid)
 		if err != nil {
 			if err == bchain.ErrTxNotFound {
@@ -90,12 +98,30 @@ func (b *IocoinRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) 
 	}
 	return block, nil
 }
-func (b *IocoinRPC) GetBestBlockHeight() (uint32, error) {
-	res := 0
-	req := btc.CmdGetBlock{Method: "getblockcount"}
-	var err = b.Call(&req, &res)
-		if err != nil {
-			return 0, err
-		}
-	return uint32(res), nil
+/*func (b *IocoinRPC) GetTransaction(txid string) (*bchain.Tx, error) {
+	  glog.Info("XXXX gettransaction");
+	r, err := b.getRawTransaction(txid)
+	if err != nil {
+		return nil, err
+	}
+	tx, err := b.Parser.ParseTxFromJson(r)
+	//tx.CoinSpecificData = r
+	//if err != nil {
+//		return nil, errors.Annotatef(err, "txid %v", txid)
+//	}
+	return tx, nil
 }
+
+func (b *IocoinRPC) getRawTransaction(txid string) (json.RawMessage, error) {
+	glog.Info("XXXX rpc: getrawtransaction ", txid)
+
+	res := btc.ResGetRawTransaction{}
+	req := btc.CmdGetRawTransaction{Method: "getrawtransaction"}
+	req.Params.Txid = txid
+	req.Params.Verbose = true
+	err := b.Call(&req, &res)
+	if res.Error != nil {
+		  return nil, err
+	}
+	return res.Result, nil
+}*/
