@@ -387,6 +387,9 @@ func (s *WebsocketServer) getAccountInfo(req *accountInfoReq) (res *api.Address,
 		Vout:           api.AddressFilterVoutOff,
 		TokensToReturn: tokensToReturn,
 	}
+	if req.PageSize == 0 {
+		req.PageSize = txsOnPage
+	}
 	a, err := s.api.GetXpubAddress(req.Descriptor, req.Page, req.PageSize, opt, &filter, 0)
 	if err != nil {
 		return s.api.GetAddress(req.Descriptor, req.Page, req.PageSize, opt, &filter)
