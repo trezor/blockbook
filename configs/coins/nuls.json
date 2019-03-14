@@ -1,0 +1,67 @@
+{
+  "coin": {
+    "name": "NULS",
+    "shortcut": "NULS",
+    "label": "NULS",
+    "alias": "nuls"
+  },
+  "ports": {
+    "backend_rpc": 6001,
+    "backend_message_queue": 38332,
+    "blockbook_internal": 9032,
+    "blockbook_public": 9132
+  },
+  "ipc": {
+    "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
+    "rpc_user": "rpc",
+    "rpc_pass": "rpc",
+    "rpc_timeout": 25,
+    "message_queue_binding_template": "tcp://127.0.0.1:{{.Ports.BackendMessageQueue}}"
+  },
+  "backend": {
+    "package_name": "backend-nuls",
+    "package_revision": "1.0-1",
+    "system_user": "nuls",
+    "version": "1.2.0",
+    "binary_url": "https://nuls-usa-west.oss-us-west-1.aliyuncs.com/1.2.0/NULS-Wallet-linux64-1.2.0.tar.gz",
+    "verification_type": "sha256",
+    "verification_source": "91940effc79ab1a73f590f0cd65bf8da0236008737b5bb00dbdc80265ecdc93b",
+    "extract_command": "tar -C backend --strip 0 -xf",
+    "exclude_files": [],
+    "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/start.sh",
+    "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/*.log",
+    "postinst_script_template": "",
+    "service_type": "forking",
+    "service_additional_params_template": "",
+    "protect_memory": false,
+    "mainnet": true,
+    "server_config_file": "bitcoin_like.conf",
+    "client_config_file": "bitcoin_like_client.conf",
+    "additional_params": {
+      "addnode": [
+        "mainnet.nuls"
+      ]
+    }
+  },
+  "blockbook": {
+    "package_name": "blockbook-nuls",
+    "system_user": "blockbook-nuls",
+    "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
+    "public_binding_template": ":{{.Ports.BlockbookPublic}}",
+    "explorer_url": "",
+    "additional_params": "",
+    "block_chain": {
+      "parse": true,
+      "mempool_workers": 4,
+      "mempool_sub_workers": 8,
+      "block_addresses_to_keep": 300,
+      "xpub_magic": 76067358,
+      "slip44": 133,
+      "additional_params": {}
+    }
+  },
+  "meta": {
+    "package_maintainer": "NULS Core Team",
+    "package_maintainer_email": "ln@nuls.io"
+  }
+}
