@@ -330,6 +330,10 @@ func (n *NulsRPC) GetBlockInfo(hash string) (*bchain.BlockInfo, error) {
 		return nil, error
 	}
 
+	if !getBlock.Success {
+		return nil, bchain.ErrBlockNotFound
+	}
+
 	nexHash, _ := n.GetBlockHash(uint32(getBlock.Data.Height + 1))
 
 	header := bchain.BlockHeader{
