@@ -255,6 +255,11 @@ func (n *NulsRPC) GetBlockHash(height uint32) (string, error) {
 	if error != nil {
 		return "", error
 	}
+
+	if !blockHeader.Success {
+		return "", bchain.ErrBlockNotFound
+	}
+
 	return blockHeader.Data.Hash, nil
 }
 func (n *NulsRPC) GetBlockHeader(hash string) (*bchain.BlockHeader, error) {
@@ -262,6 +267,10 @@ func (n *NulsRPC) GetBlockHeader(hash string) (*bchain.BlockHeader, error) {
 	error := n.Call("/api/block/header/hash/"+hash, &blockHeader)
 	if error != nil {
 		return nil, error
+	}
+
+	if !blockHeader.Success {
+		return nil, bchain.ErrBlockNotFound
 	}
 
 	nexHash, _ := n.GetBlockHash(uint32(blockHeader.Data.Height + 1))
@@ -287,6 +296,10 @@ func (n *NulsRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 	error := n.Call("/api/block/hash/"+hash, &getBlock)
 	if error != nil {
 		return nil, error
+	}
+
+	if !getBlock.Success {
+		return nil, bchain.ErrBlockNotFound
 	}
 
 	nexHash, _ := n.GetBlockHash(uint32(getBlock.Data.Height + 1))
