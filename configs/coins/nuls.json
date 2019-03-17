@@ -8,8 +8,8 @@
   "ports": {
     "backend_rpc": 6001,
     "backend_message_queue": 38332,
-    "blockbook_internal": 9032,
-    "blockbook_public": 9132
+    "blockbook_internal": 9053,
+    "blockbook_public": 9153
   },
   "ipc": {
     "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
