@@ -22,8 +22,8 @@ var (
 func init() {
 	MainNetParams = chaincfg.MainNetParams
 	MainNetParams.Net = MainnetMagic
-	MainNetParams.PubKeyHashAddrID = []byte{52}
-	MainNetParams.ScriptHashAddrID = []byte{13}
+	MainNetParams.PubKeyHashAddrID = []byte{111}
+	MainNetParams.ScriptHashAddrID = []byte{96}
 }
 
 // IocoinParser handle
