@@ -565,70 +565,48 @@ func (s *PublicServer) explorerSpendingTx(w http.ResponseWriter, r *http.Request
 	return errorTpl, nil, err
 }
 
-func (s *PublicServer) explorerAddress(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
-	var address *api.Address
-	var filter string
-	var fn = api.AddressFilterVoutOff
-	var err error
-	s.metrics.ExplorerViews.With(common.Labels{"action": "address"}).Inc()
-	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
-		page, ec := strconv.Atoi(r.URL.Query().Get("page"))
-		if ec != nil {
-			page = 0
-		}
-		filter = r.URL.Query().Get("filter")
-		if len(filter) > 0 {
-			if filter == "inputs" {
-				fn = api.AddressFilterVoutInputs
-			} else if filter == "outputs" {
-				fn = api.AddressFilterVoutOutputs
-			} else {
-				fn, ec = strconv.Atoi(filter)
-				if ec != nil || fn < 0 {
-					filter = ""
-					fn = api.AddressFilterVoutOff
-				}
-			}
-		}
-		address, err = s.api.GetAddress(r.URL.Path[i+1:], page, txsOnPage, api.AccountDetailsTxHistoryLight, &api.AddressFilter{Vout: fn})
-		if err != nil {
-			return errorTpl, nil, err
-		}
-	}
-	data := s.newTemplateData()
-	data.AddrStr = address.AddrStr
-	data.Address = address
-	data.Page = address.Page
-	data.PagingRange, data.PrevPage, data.NextPage = getPagingRange(address.Page, address.TotalPages)
-	if filter != "" {
-		data.PageParams = template.URL("&filter=" + filter)
-		data.Address.Filter = filter
-	}
-	return addressTpl, data, nil
-}
-
-func (s *PublicServer) getXpubAddress(r *http.Request, xpub string, pageSize int, option api.AccountDetails) (*api.Address, api.TokensToReturn, error) {
-	var fn = api.AddressFilterVoutOff
+func (s *PublicServer) getAddressQueryParams(r *http.Request, accountDetails api.AccountDetails, maxPageSize int) (int, int, api.AccountDetails, *api.AddressFilter, string, int) {
+	var voutFilter = api.AddressFilterVoutOff
 	page, ec := strconv.Atoi(r.URL.Query().Get("page"))
 	if ec != nil {
 		page = 0
 	}
-	filter := r.URL.Query().Get("filter")
-	if len(filter) > 0 {
-		if filter == "inputs" {
-			fn = api.AddressFilterVoutInputs
-		} else if filter == "outputs" {
-			fn = api.AddressFilterVoutOutputs
+	pageSize, ec := strconv.Atoi(r.URL.Query().Get("pageSize"))
+	if ec != nil || pageSize > maxPageSize {
+		pageSize = maxPageSize
+	}
+	from, ec := strconv.Atoi(r.URL.Query().Get("from"))
+	if ec != nil {
+		from = 0
+	}
+	to, ec := strconv.Atoi(r.URL.Query().Get("to"))
+	if ec != nil {
+		to = 0
+	}
+	filterParam := r.URL.Query().Get("filter")
+	if len(filterParam) > 0 {
+		if filterParam == "inputs" {
+			voutFilter = api.AddressFilterVoutInputs
+		} else if filterParam == "outputs" {
+			voutFilter = api.AddressFilterVoutOutputs
 		} else {
-			fn, ec = strconv.Atoi(filter)
-			if ec != nil || fn < 0 {
-				fn = api.AddressFilterVoutOff
+			voutFilter, ec = strconv.Atoi(filterParam)
+			if ec != nil || voutFilter < 0 {
+				voutFilter = api.AddressFilterVoutOff
 			}
 		}
 	}
-	gap, ec := strconv.Atoi(r.URL.Query().Get("gap"))
-	if ec != nil {
-		gap = 0
+	switch r.URL.Query().Get("details") {
+	case "basic":
+		accountDetails = api.AccountDetailsBasic
+	case "tokens":
+		accountDetails = api.AccountDetailsTokens
+	case "tokenBalances":
+		accountDetails = api.AccountDetailsTokenBalances
+	case "txids":
+		accountDetails = api.AccountDetailsTxidHistory
+	case "txs":
+		accountDetails = api.AccountDetailsTxHistory
 	}
 	tokensToReturn := api.TokensToReturnNonzeroBalance
 	switch r.URL.Query().Get("tokens") {
@@ -639,32 +617,72 @@ func (s *PublicServer) getXpubAddress(r *http.Request, xpub string, pageSize int
 	case "nonzero":
 		tokensToReturn = api.TokensToReturnNonzeroBalance
 	}
-	a, err := s.api.GetXpubAddress(xpub, page, pageSize, option, &api.AddressFilter{Vout: fn, TokensToReturn: tokensToReturn}, gap)
-	return a, tokensToReturn, err
+	gap, ec := strconv.Atoi(r.URL.Query().Get("gap"))
+	if ec != nil {
+		gap = 0
+	}
+	return page, pageSize, accountDetails, &api.AddressFilter{
+		Vout:           voutFilter,
+		TokensToReturn: tokensToReturn,
+		FromHeight:     uint32(from),
+		ToHeight:       uint32(to),
+	}, filterParam, gap
 }
 
-func (s *PublicServer) explorerXpub(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
-	var address *api.Address
-	var tokensToReturn api.TokensToReturn
-	var err error
-	s.metrics.ExplorerViews.With(common.Labels{"action": "xpub"}).Inc()
-	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
-		address, tokensToReturn, err = s.getXpubAddress(r, r.URL.Path[i+1:], txsOnPage, api.AccountDetailsTxHistoryLight)
-		if err != nil {
-			return errorTpl, nil, err
-		}
+func (s *PublicServer) explorerAddress(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
+	var addressParam string
+	i := strings.LastIndexByte(r.URL.Path, '/')
+	if i > 0 {
+		addressParam = r.URL.Path[i+1:]
+	}
+	if len(addressParam) == 0 {
+		return errorTpl, nil, api.NewAPIError("Missing address", true)
+	}
+	s.metrics.ExplorerViews.With(common.Labels{"action": "address"}).Inc()
+	page, _, _, filter, filterParam, _ := s.getAddressQueryParams(r, api.AccountDetailsTxHistoryLight, txsOnPage)
+	// do not allow details to be changed by query params
+	address, err := s.api.GetAddress(addressParam, page, txsOnPage, api.AccountDetailsTxHistoryLight, filter)
+	if err != nil {
+		return errorTpl, nil, err
 	}
 	data := s.newTemplateData()
 	data.AddrStr = address.AddrStr
 	data.Address = address
 	data.Page = address.Page
 	data.PagingRange, data.PrevPage, data.NextPage = getPagingRange(address.Page, address.TotalPages)
-	filter := r.URL.Query().Get("filter")
-	if filter != "" {
-		data.PageParams = template.URL("&filter=" + filter)
-		data.Address.Filter = filter
+	if filterParam != "" {
+		data.PageParams = template.URL("&filter=" + filterParam)
+		data.Address.Filter = filterParam
 	}
-	data.NonZeroBalanceTokens = tokensToReturn == api.TokensToReturnNonzeroBalance
+	return addressTpl, data, nil
+}
+
+func (s *PublicServer) explorerXpub(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
+	var xpub string
+	i := strings.LastIndexByte(r.URL.Path, '/')
+	if i > 0 {
+		xpub = r.URL.Path[i+1:]
+	}
+	if len(xpub) == 0 {
+		return errorTpl, nil, api.NewAPIError("Missing xpub", true)
+	}
+	s.metrics.ExplorerViews.With(common.Labels{"action": "xpub"}).Inc()
+	page, _, _, filter, filterParam, gap := s.getAddressQueryParams(r, api.AccountDetailsTxHistoryLight, txsOnPage)
+	// do not allow txsOnPage and details to be changed by query params
+	address, err := s.api.GetXpubAddress(xpub, page, txsOnPage, api.AccountDetailsTxHistoryLight, filter, gap)
+	if err != nil {
+		return errorTpl, nil, err
+	}
+	data := s.newTemplateData()
+	data.AddrStr = address.AddrStr
+	data.Address = address
+	data.Page = address.Page
+	data.PagingRange, data.PrevPage, data.NextPage = getPagingRange(address.Page, address.TotalPages)
+	if filterParam != "" {
+		data.PageParams = template.URL("&filter=" + filterParam)
+		data.Address.Filter = filterParam
+	}
+	data.NonZeroBalanceTokens = filter.TokensToReturn == api.TokensToReturnNonzeroBalance
 	return xpubTpl, data, nil
 }
 
@@ -865,64 +883,84 @@ func (s *PublicServer) apiBlockIndex(r *http.Request, apiVersion int) (interface
 }
 
 func (s *PublicServer) apiTx(r *http.Request, apiVersion int) (interface{}, error) {
+	var txid string
+	i := strings.LastIndexByte(r.URL.Path, '/')
+	if i > 0 {
+		txid = r.URL.Path[i+1:]
+	}
+	if len(txid) == 0 {
+		return nil, api.NewAPIError("Missing txid", true)
+	}
 	var tx *api.Tx
 	var err error
 	s.metrics.ExplorerViews.With(common.Labels{"action": "api-tx"}).Inc()
-	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
-		txid := r.URL.Path[i+1:]
-		spendingTxs := false
-		p := r.URL.Query().Get("spending")
-		if len(p) > 0 {
-			spendingTxs, err = strconv.ParseBool(p)
-			if err != nil {
-				return nil, api.NewAPIError("Parameter 'spending' cannot be converted to boolean", true)
-			}
+	spendingTxs := false
+	p := r.URL.Query().Get("spending")
+	if len(p) > 0 {
+		spendingTxs, err = strconv.ParseBool(p)
+		if err != nil {
+			return nil, api.NewAPIError("Parameter 'spending' cannot be converted to boolean", true)
 		}
-		tx, err = s.api.GetTransaction(txid, spendingTxs, false)
-		if err == nil && apiVersion == apiV1 {
-			return s.api.TxToV1(tx), nil
-		}
+	}
+	tx, err = s.api.GetTransaction(txid, spendingTxs, false)
+	if err == nil && apiVersion == apiV1 {
+		return s.api.TxToV1(tx), nil
 	}
 	return tx, err
 }
 
 func (s *PublicServer) apiTxSpecific(r *http.Request, apiVersion int) (interface{}, error) {
+	var txid string
+	i := strings.LastIndexByte(r.URL.Path, '/')
+	if i > 0 {
+		txid = r.URL.Path[i+1:]
+	}
+	if len(txid) == 0 {
+		return nil, api.NewAPIError("Missing txid", true)
+	}
 	var tx json.RawMessage
 	var err error
 	s.metrics.ExplorerViews.With(common.Labels{"action": "api-tx-specific"}).Inc()
-	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
-		txid := r.URL.Path[i+1:]
-		tx, err = s.chain.GetTransactionSpecific(&bchain.Tx{Txid: txid})
-	}
+	tx, err = s.chain.GetTransactionSpecific(&bchain.Tx{Txid: txid})
 	return tx, err
 }
 
 func (s *PublicServer) apiAddress(r *http.Request, apiVersion int) (interface{}, error) {
+	var addressParam string
+	i := strings.LastIndexByte(r.URL.Path, '/')
+	if i > 0 {
+		addressParam = r.URL.Path[i+1:]
+	}
+	if len(addressParam) == 0 {
+		return nil, api.NewAPIError("Missing address", true)
+	}
 	var address *api.Address
 	var err error
 	s.metrics.ExplorerViews.With(common.Labels{"action": "api-address"}).Inc()
-	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
-		page, ec := strconv.Atoi(r.URL.Query().Get("page"))
-		if ec != nil {
-			page = 0
-		}
-		address, err = s.api.GetAddress(r.URL.Path[i+1:], page, txsInAPI, api.AccountDetailsTxidHistory, &api.AddressFilter{Vout: api.AddressFilterVoutOff})
-		if err == nil && apiVersion == apiV1 {
-			return s.api.AddressToV1(address), nil
-		}
+	page, pageSize, details, filter, _, _ := s.getAddressQueryParams(r, api.AccountDetailsTxidHistory, txsInAPI)
+	address, err = s.api.GetAddress(addressParam, page, pageSize, details, filter)
+	if err == nil && apiVersion == apiV1 {
+		return s.api.AddressToV1(address), nil
 	}
 	return address, err
 }
 
 func (s *PublicServer) apiXpub(r *http.Request, apiVersion int) (interface{}, error) {
+	var xpub string
+	i := strings.LastIndexByte(r.URL.Path, '/')
+	if i > 0 {
+		xpub = r.URL.Path[i+1:]
+	}
+	if len(xpub) == 0 {
+		return nil, api.NewAPIError("Missing xpub", true)
+	}
 	var address *api.Address
 	var err error
 	s.metrics.ExplorerViews.With(common.Labels{"action": "api-xpub"}).Inc()
-	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
-		address, _, err = s.getXpubAddress(r, r.URL.Path[i+1:], txsInAPI, api.AccountDetailsTxidHistory)
-		if err == nil && apiVersion == apiV1 {
-			return s.api.AddressToV1(address), nil
-		}
+	page, pageSize, details, filter, _, gap := s.getAddressQueryParams(r, api.AccountDetailsTxidHistory, txsInAPI)
+	address, err = s.api.GetXpubAddress(xpub, page, pageSize, details, filter, gap)
+	if err == nil && apiVersion == apiV1 {
+		return s.api.AddressToV1(address), nil
 	}
 	return address, err
 }
