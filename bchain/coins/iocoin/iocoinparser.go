@@ -10,20 +10,26 @@ import (
 	"github.com/martinboehm/btcutil/chaincfg"
 )
 
-//XXXX TESTNET
 const (
-	MainnetMagic wire.BitcoinNet =  0xffc4bbdf
+	MainnetMagic wire.BitcoinNet =  0xfec3bade
+	TestnetMagic wire.BitcoinNet =  0xffc4bbdf
 )
 
 var (
 	MainNetParams chaincfg.Params
+	TestNetParams chaincfg.Params
 )
 
 func init() {
 	MainNetParams = chaincfg.MainNetParams
 	MainNetParams.Net = MainnetMagic
-	MainNetParams.PubKeyHashAddrID = []byte{111}
-	MainNetParams.ScriptHashAddrID = []byte{96}
+	MainNetParams.PubKeyHashAddrID = []byte{103}
+	MainNetParams.ScriptHashAddrID = []byte{85}
+
+	TestNetParams = chaincfg.TestNet3Params
+	TestNetParams.Net = TestnetMagic
+	TestNetParams.PubKeyHashAddrID = []byte{111} // starting with 'x' or 'y'
+	TestNetParams.ScriptHashAddrID = []byte{96}
 }
 
 // IocoinParser handle
@@ -41,11 +47,16 @@ func NewIocoinParser(params *chaincfg.Params, c *btc.Configuration) *IocoinParse
 func GetChainParams(chain string) *chaincfg.Params {
 	if !chaincfg.IsRegistered(&MainNetParams) {
 		err := chaincfg.Register(&MainNetParams)
+		if err == nil {
+			err = chaincfg.Register(&TestNetParams)
+		}
 		if err != nil {
 			panic(err)
 		}
 	}
 	switch chain {
+	case "test":
+		return &TestNetParams
 	default:
 		return &MainNetParams
 	}
