@@ -95,33 +95,6 @@ func (b *IocoinRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) 
 	}
 	return block, nil
 }
-/*func (b *IocoinRPC) GetTransaction(txid string) (*bchain.Tx, error) {
-	  glog.Info("XXXX gettransaction");
-	r, err := b.getRawTransaction(txid)
-	if err != nil {
-		return nil, err
-	}
-	tx, err := b.Parser.ParseTxFromJson(r)
-	//tx.CoinSpecificData = r
-	//if err != nil {
-//		return nil, errors.Annotatef(err, "txid %v", txid)
-//	}
-	return tx, nil
-}
-
-func (b *IocoinRPC) getRawTransaction(txid string) (json.RawMessage, error) {
-	glog.Info("XXXX rpc: getrawtransaction ", txid)
-
-	res := btc.ResGetRawTransaction{}
-	req := btc.CmdGetRawTransaction{Method: "getrawtransaction"}
-	req.Params.Txid = txid
-	req.Params.Verbose = true
-	err := b.Call(&req, &res)
-	if res.Error != nil {
-		  return nil, err
-	}
-	return res.Result, nil
-}*/
 func (b* IocoinRPC) GetBlockInfo(hash string) (*bchain.BlockInfo, error) {
 	glog.V(1).Info("rpc: getblock (verbosity=true) ", hash)
 
