@@ -295,7 +295,7 @@ type Blocks struct {
 type Block struct {
 	Paging
 	bchain.BlockInfo
-	TxCount      int   `json:"TxCount"`
+	TxCount      int   `json:"txCount"`
 	Transactions []*Tx `json:"txs,omitempty"`
 }
 
