@@ -265,7 +265,10 @@ func (s *PublicServer) jsonHandler(handler func(r *http.Request, apiVersion int)
 			if e, isError := data.(jsonError); isError {
 				w.WriteHeader(e.HTTPStatus)
 			}
-			json.NewEncoder(w).Encode(data)
+			err = json.NewEncoder(w).Encode(data)
+			if err != nil {
+				glog.Warning("json encode ", err)
+			}
 		}()
 		data, err = handler(r, apiVersion)
 		if err != nil || data == nil {
