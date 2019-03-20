@@ -856,7 +856,7 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *db.AddrB
 				return nil, err
 			}
 			bestheight := int(b)
-			for i := len(outpoints) - 1; i >= 0 && checksum.Int64() > 0; i-- {
+			for i := 0; i < len(outpoints) && checksum.Int64() > 0; i++ {
 				o := outpoints[i]
 				if lastTxid != o.Txid {
 					ta, err = w.db.GetTxAddresses(o.Txid)
