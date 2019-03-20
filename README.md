@@ -41,3 +41,6 @@ List of all implemented coins is in [the registry of ports](/docs/ports.md).
 
 Blockbook stores data the key-value store RocksDB. Database format is described [here](/docs/rocksdb.md).
 
+# API
+
+Blockbook API is described [here](/docs/api.md).
