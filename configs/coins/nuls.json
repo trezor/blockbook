@@ -6,7 +6,7 @@
     "alias": "nuls"
   },
   "ports": {
-    "backend_rpc": 6001,
+    "backend_rpc": 8053,
     "backend_message_queue": 38353,
     "blockbook_internal": 9053,
     "blockbook_public": 9153
@@ -22,13 +22,13 @@
     "package_name": "backend-nuls",
     "package_revision": "1.0-1",
     "system_user": "nuls",
-    "version": "1.2.0",
-    "binary_url": "https://nuls-usa-west.oss-us-west-1.aliyuncs.com/1.2.0/NULS-Wallet-linux64-1.2.0.tar.gz",
+    "version": "1.2.1",
+    "binary_url": "http://47.52.78.92/nuls-wallet/NULS-Wallet-linux64-1.2.1.tar.gz",
     "verification_type": "sha256",
-    "verification_source": "91940effc79ab1a73f590f0cd65bf8da0236008737b5bb00dbdc80265ecdc93b",
+    "verification_source": "938dd0399481741e3755f911931287100f4956ca9e067d185bc34965129475f8",
     "extract_command": "tar -C backend --strip 0 -xf",
     "exclude_files": [],
-    "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/start.sh",
+    "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/nuls.sh --port {{.Ports.BackendRPC}} --dataDir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --pid-file /run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",
     "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/*.log",
     "postinst_script_template": "",
     "service_type": "forking",
