@@ -16,7 +16,7 @@
     "rpc_user": "rpcuser",
     "rpc_pass": "rpcpass",
     "rpc_timeout": 25,
-    "message_queue_binding_template": "tcp://134.209.27.213:{{.Ports.BackendMessageQueue}}"
+    "message_queue_binding_template": "tcp://127.0.0.1:{{.Ports.BackendMessageQueue}}"
   },
   "backend": {
     "package_name": "backend-iocoin",
@@ -57,7 +57,7 @@
     }
   },
   "meta": {
-    "package_maintainer": "dh",
+    "package_maintainer": "iocrypto",
     "package_maintainer_email": ""
   }
 }
