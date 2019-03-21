@@ -25,7 +25,7 @@
     "version": "1.2.1",
     "binary_url": "http://47.52.78.92/nuls-wallet/NULS-Wallet-linux64-1.2.1.tar.gz",
     "verification_type": "sha256",
-    "verification_source": "938dd0399481741e3755f911931287100f4956ca9e067d185bc34965129475f8",
+    "verification_source": "8732e94415e9b6d51e9c7e1921002b4e43d78e2b12f2de636af53a562b4f4381",
     "extract_command": "tar -C backend --strip 0 -xf",
     "exclude_files": [],
     "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/nuls.sh --port {{.Ports.BackendRPC}} --dataDir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --pid-file /run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",
