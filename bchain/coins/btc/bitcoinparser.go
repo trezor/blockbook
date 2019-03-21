@@ -126,7 +126,7 @@ func (p *BitcoinParser) TryParseOPReturn(script []byte) string {
 		if l == len(data) {
 			var ed string
 
-			ed = p.tryOmniParser(data)
+			ed = p.tryParseOmni(data)
 			if ed != "" {
 				return ed
 			}
@@ -155,30 +155,30 @@ var omniCurrencyMap = map[uint32]string{
 	31: "TetherUS",
 }
 
-// try to parse Omni transaction from script to human-readable string
-func (p *BitcoinParser) tryOmniParser(data []byte) string {
+// tryParseOmni tries to extract Omni simple send transaction from script
+func (p *BitcoinParser) tryParseOmni(data []byte) string {
 
-	// Currently only simple send transaction is supported, see
+	// currently only simple send transaction version 0 is supported, see
 	// https://github.com/OmniLayer/spec#transfer-coins-simple-send
-	if len(data) != 20 && data[0] != 111 {
+	if len(data) != 20 && data[0] != 'o' {
 		return ""
 	}
 	// omni (4) <tx_version> (2) <tx_type> (2)
-	omni_header := []byte{111, 109, 110, 105, 0, 0, 0, 0}
-	if bytes.Compare(data[0:8], omni_header) != 0 {
+	omniHeader := []byte{'o', 'm', 'n', 'i', 0, 0, 0, 0}
+	if bytes.Compare(data[0:8], omniHeader) != 0 {
 		return ""
 	}
 
-	currency_id := binary.BigEndian.Uint32(data[8:12])
-	currency, ok := omniCurrencyMap[currency_id]
+	currencyID := binary.BigEndian.Uint32(data[8:12])
+	currency, ok := omniCurrencyMap[currencyID]
 	if !ok {
 		return ""
 	}
 	amount := new(big.Int)
 	amount.SetBytes(data[12:])
-	amount_str := p.AmountToDecimalString(amount)
+	amountStr := p.AmountToDecimalString(amount)
 
-	ed := "OMNI Simple Send " + amount_str + " " + currency + " (#" + strconv.Itoa(int(currency_id)) + ")"
+	ed := "OMNI Simple Send " + amountStr + " " + currency + " (#" + strconv.Itoa(int(currencyID)) + ")"
 	return ed
 }
 
