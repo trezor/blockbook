@@ -6,9 +6,10 @@ import (
 	"blockbook/bchain/coins/utils"
 	"bytes"
 	"encoding/json"
+	"io"
+
 	"github.com/martinboehm/btcd/wire"
 	"github.com/martinboehm/btcutil/chaincfg"
-	"io"
 )
 
 const (
@@ -71,6 +72,9 @@ func GetChainParams(chain string) *chaincfg.Params {
 func parseBlockHeader(r io.Reader) (*wire.BlockHeader, error) {
 	h := &wire.BlockHeader{}
 	err := h.Deserialize(r)
+	if err != nil {
+		return nil, err
+	}
 
 	// hash_state_root 32
 	// hash_utxo_root 32

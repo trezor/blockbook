@@ -13,7 +13,7 @@ type BGoldRPC struct {
 	*btc.BitcoinRPC
 }
 
-// NewBCashRPC returns new BGoldRPC instance.
+// NewBGoldRPC returns new BGoldRPC instance.
 func NewBGoldRPC(config json.RawMessage, pushHandler func(bchain.NotificationType)) (bchain.BlockChain, error) {
 	b, err := btc.NewBitcoinRPC(config, pushHandler)
 	if err != nil {
