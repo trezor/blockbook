@@ -215,6 +215,8 @@ func TestGetAddressesFromAddrDesc(t *testing.T) {
 			want2:   false,
 			wantErr: false,
 		},
+
+		// TODO test case for omni
 	}
 
 	parser := NewBitcoinParser(GetChainParams("main"), &Configuration{})

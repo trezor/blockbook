@@ -124,6 +124,9 @@ func TryParseOPReturn(script []byte) string {
 			data = script[2:]
 		}
 		if l == len(data) {
+
+			// TODO try parse OMNI
+
 			isASCII := true
 			for _, c := range data {
 				if c < 32 || c > 127 {
