@@ -105,7 +105,7 @@ func (p *BitcoinParser) addressToOutputScript(address string) ([]byte, error) {
 }
 
 // TryParseOPReturn tries to process OP_RETURN script and return its string representation
-func TryParseOPReturn(script []byte) string {
+func (p *BitcoinParser) TryParseOPReturn(script []byte) string {
 	if len(script) > 1 && script[0] == txscript.OP_RETURN {
 		// trying 2 variants of OP_RETURN data
 		// 1) OP_RETURN OP_PUSHDATA1 <datalen> <data>
@@ -124,8 +124,12 @@ func TryParseOPReturn(script []byte) string {
 			data = script[2:]
 		}
 		if l == len(data) {
+			var ed string
 
-			// TODO try parse OMNI
+			ed = p.tryOmniParser(data)
+			if ed != "" {
+				return ed
+			}
 
 			isASCII := true
 			for _, c := range data {
@@ -134,7 +138,6 @@ func TryParseOPReturn(script []byte) string {
 					break
 				}
 			}
-			var ed string
 			if isASCII {
 				ed = "(" + string(data) + ")"
 			} else {
@@ -144,6 +147,39 @@ func TryParseOPReturn(script []byte) string {
 		}
 	}
 	return ""
+}
+
+var omniCurrencyMap = map[uint32]string{
+	1:  "Omni",
+	2:  "Test Omni",
+	31: "TetherUS",
+}
+
+// try to parse Omni transaction from script to human-readable string
+func (p *BitcoinParser) tryOmniParser(data []byte) string {
+
+	// Currently only simple send transaction is supported, see
+	// https://github.com/OmniLayer/spec#transfer-coins-simple-send
+	if len(data) != 20 && data[0] != 111 {
+		return ""
+	}
+	// omni (4) <tx_version> (2) <tx_type> (2)
+	omni_header := []byte{111, 109, 110, 105, 0, 0, 0, 0}
+	if bytes.Compare(data[0:8], omni_header) != 0 {
+		return ""
+	}
+
+	currency_id := binary.BigEndian.Uint32(data[8:12])
+	currency, ok := omniCurrencyMap[currency_id]
+	if !ok {
+		return ""
+	}
+	amount := new(big.Int)
+	amount.SetBytes(data[12:])
+	amount_str := p.AmountToDecimalString(amount)
+
+	ed := "OMNI Simple Send " + amount_str + " " + currency + " (#" + strconv.Itoa(int(currency_id)) + ")"
+	return ed
 }
 
 // outputScriptToAddresses converts ScriptPubKey to addresses with a flag that the addresses are searchable
@@ -160,7 +196,7 @@ func (p *BitcoinParser) outputScriptToAddresses(script []byte) ([]string, bool, 
 	if sc == txscript.PubKeyHashTy || sc == txscript.WitnessV0PubKeyHashTy || sc == txscript.ScriptHashTy || sc == txscript.WitnessV0ScriptHashTy {
 		s = true
 	} else if len(rv) == 0 {
-		or := TryParseOPReturn(script)
+		or := p.TryParseOPReturn(script)
 		if or != "" {
 			rv = []string{or}
 		}
