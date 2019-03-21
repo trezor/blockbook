@@ -166,7 +166,7 @@ func (p *BCashParser) outputScriptToAddresses(script []byte) ([]string, bool, er
 		// do not return unknown script type error as error
 		if err.Error() == "unknown script type" {
 			// try OP_RETURN script
-			or := btc.TryParseOPReturn(script)
+			or := p.TryParseOPReturn(script)
 			if or != "" {
 				return []string{or}, false, nil
 			}
