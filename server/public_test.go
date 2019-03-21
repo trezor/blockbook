@@ -588,7 +588,7 @@ func httpTests_BitcoinType(t *testing.T, ts *httptest.Server) {
 		},
 		{
 			name:        "apiSendTx",
-			r:           newGetRequest(ts.URL + "/api/sendtx/1234567890"),
+			r:           newGetRequest(ts.URL + "/api/v2/sendtx/1234567890"),
 			status:      http.StatusBadRequest,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
@@ -597,7 +597,7 @@ func httpTests_BitcoinType(t *testing.T, ts *httptest.Server) {
 		},
 		{
 			name:        "apiSendTx POST",
-			r:           newPostRequest(ts.URL+"/api/sendtx/", "123456"),
+			r:           newPostRequest(ts.URL+"/api/v2/sendtx/", "123456"),
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
@@ -606,7 +606,7 @@ func httpTests_BitcoinType(t *testing.T, ts *httptest.Server) {
 		},
 		{
 			name:        "apiSendTx POST empty",
-			r:           newPostRequest(ts.URL+"/api/sendtx", ""),
+			r:           newPostRequest(ts.URL+"/api/v2/sendtx", ""),
 			status:      http.StatusBadRequest,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
@@ -620,6 +620,15 @@ func httpTests_BitcoinType(t *testing.T, ts *httptest.Server) {
 			contentType: "application/json; charset=utf-8",
 			body: []string{
 				`{"result":"0.00012299"}`,
+			},
+		},
+		{
+			name:        "apiGetBlock",
+			r:           newGetRequest(ts.URL + "/api/v2/block/225493"),
+			status:      http.StatusOK,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`{"page":1,"totalPages":1,"itemsOnPage":1000,"hash":"0000000076fbbed90fd75b0e18856aa35baa984e9c9d444cf746ad85e94e2997","previousblockhash":"","nextblockhash":"00000000eb0443fd7dc4a1ed5c686a8e995057805f9a161d9a5a77a95e72b7b6","height":225493,"confirmations":2,"size":1234567,"time":1534858021,"version":0,"merkleroot":"","nonce":"","bits":"","difficulty":"","txCount":2,"txs":[{"txid":"00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840","vin":[],"vout":[{"value":"100000000","n":0,"addresses":["mfcWp7DB6NuaZsExybTTXpVgWz559Np4Ti"]},{"value":"12345","n":1,"spent":true,"addresses":["mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz"]}],"blockhash":"0000000076fbbed90fd75b0e18856aa35baa984e9c9d444cf746ad85e94e2997","blockheight":225493,"confirmations":2,"blocktime":1534858021,"value":"100012345","valueIn":"0","fees":"0"},{"txid":"effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75","vin":[],"vout":[{"value":"1234567890123","n":0,"spent":true,"addresses":["mv9uLThosiEnGRbVPS7Vhyw6VssbVRsiAw"]},{"value":"1","n":1,"spent":true,"addresses":["2MzmAKayJmja784jyHvRUW1bXPget1csRRG"]},{"value":"9876","n":2,"spent":true,"addresses":["2NEVv9LJmAnY99W1pFoc5UJjVdypBqdnvu1"]}],"blockhash":"0000000076fbbed90fd75b0e18856aa35baa984e9c9d444cf746ad85e94e2997","blockheight":225493,"confirmations":2,"blocktime":1534858021,"value":"1234567900000","valueIn":"0","fees":"0"}]}`,
 			},
 		},
 	}

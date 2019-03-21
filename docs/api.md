@@ -399,9 +399,9 @@ Response:
   "time": 1553096617,
   "version": 6422787,
   "merkleroot": "6783f6083788c4f69b8af23bd2e4a194cf36ac34d590dfd97e510fe7aebc72c8",
-  "nonce": 0,
+  "nonce": "0",
   "bits": "1a063f3b",
-  "difficulty": 2685605.260733312,
+  "difficulty": "2685605.260733312",
   "txCount": 2,
   "txs": [
     {

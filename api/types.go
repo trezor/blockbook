@@ -291,10 +291,21 @@ type Blocks struct {
 	Blocks []db.BlockInfo `json:"blocks"`
 }
 
+// BlockInfo contains extended block header data and a list of block txids
+type BlockInfo struct {
+	bchain.BlockHeader
+	Version    json.Number `json:"version"`
+	MerkleRoot string      `json:"merkleroot"`
+	Nonce      string      `json:"nonce"`
+	Bits       string      `json:"bits"`
+	Difficulty string      `json:"difficulty"`
+	Txids      []string    `json:"tx,omitempty"`
+}
+
 // Block contains information about block
 type Block struct {
 	Paging
-	bchain.BlockInfo
+	BlockInfo
 	TxCount      int   `json:"txCount"`
 	Transactions []*Tx `json:"txs,omitempty"`
 }

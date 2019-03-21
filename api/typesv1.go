@@ -96,8 +96,8 @@ type AddressUtxoV1 struct {
 // BlockV1 contains information about block
 type BlockV1 struct {
 	Paging
-	bchain.BlockInfo
-	TxCount      int     `json:"TxCount"`
+	BlockInfo
+	TxCount      int     `json:"txCount"`
 	Transactions []*TxV1 `json:"txs,omitempty"`
 }
 

@@ -1014,8 +1014,16 @@ func (w *Worker) GetBlock(bid string, page int, txsOnPage int) (*Block, error) {
 	bi.Txids = nil
 	glog.Info("GetBlock ", bid, ", page ", page, " finished in ", time.Since(start))
 	return &Block{
-		Paging:       pg,
-		BlockInfo:    *bi,
+		Paging: pg,
+		BlockInfo: BlockInfo{
+			BlockHeader: bi.BlockHeader,
+			Bits:        bi.Bits,
+			Difficulty:  string(bi.Difficulty),
+			MerkleRoot:  bi.MerkleRoot,
+			Nonce:       string(bi.Nonce),
+			Txids:       bi.Txids,
+			Version:     bi.Version,
+		},
 		TxCount:      txCount,
 		Transactions: txs,
 	}, nil
