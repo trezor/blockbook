@@ -36,6 +36,7 @@
     "mainnet": true,
     "server_config_file": "bitcoin_like.conf",
     "additional_params": {
+      "staking": "0",
       "mainchainrpcport": "{{.Ports.BackendRPC}}",
       "mainchainrpcuser": "rpcuser",
       "mainchainrpcpassword": "rpcpass",
