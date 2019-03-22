@@ -6,10 +6,10 @@
       "alias": "iocoin"
   },
   "ports": {
-    "backend_rpc": 33765,
-    "backend_message_queue": 33764,
-    "blockbook_internal": 9030,
-    "blockbook_public": 9130
+    "backend_rpc": 8054,
+    "backend_message_queue": 38354,
+    "blockbook_internal": 9054,
+    "blockbook_public": 9154
   },
   "ipc": {
     "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
@@ -36,7 +36,7 @@
     "mainnet": true,
     "server_config_file": "iocoin.conf",
     "additional_params": {
-      "mainchainrpcport": "33765",
+      "mainchainrpcport": "{{.Ports.BackendRPC}}",
       "mainchainrpcuser": "rpcuser",
       "mainchainrpcpassword": "rpcpass"
     }
