@@ -34,11 +34,14 @@
     "service_additional_params_template": "",
     "protect_memory": true,
     "mainnet": true,
-    "server_config_file": "iocoin.conf",
+    "server_config_file": "bitcoin_like.conf",
     "additional_params": {
       "mainchainrpcport": "{{.Ports.BackendRPC}}",
       "mainchainrpcuser": "rpcuser",
-      "mainchainrpcpassword": "rpcpass"
+      "mainchainrpcpassword": "rpcpass",
+      "mainchainnodeamer": "amer.supernode.iocoin.io",
+      "mainchainnodeemea": "emea.supernode.iocoin.io",
+      "mainchainnodeapac": "apac.supernode.iocoin.io"
     }
   },
   "blockbook": {
