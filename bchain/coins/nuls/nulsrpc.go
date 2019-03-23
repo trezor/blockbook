@@ -288,12 +288,17 @@ func (n *NulsRPC) GetBlockHeader(hash string) (*bchain.BlockHeader, error) {
 }
 
 func (n *NulsRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
-	if hash == "" {
+	if hash == "" && height < 0 {
 		return nil, bchain.ErrBlockNotFound
 	}
 
+	url := "/api/block/hash/" + hash
+	if hash == "" {
+		url = "/api/block/height/" + strconv.Itoa(int(height))
+	}
+
 	getBlock := CmdGetBlock{}
-	error := n.Call("/api/block/hash/"+hash, &getBlock)
+	error := n.Call(url, &getBlock)
 	if error != nil {
 		return nil, error
 	}
@@ -396,8 +401,10 @@ func (n *NulsRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 	hexBytys, e := n.GetTransactionSpecific(tx)
 
 	if e == nil {
-		tx.Hex = string(hexBytys)
-		tx.CoinSpecificData = hexBytys
+		var hex string
+		json.Unmarshal(hexBytys, &hex)
+		tx.Hex = hex
+		tx.CoinSpecificData = hex
 	}
 	return tx, nil
 }
@@ -431,7 +438,9 @@ func (n *NulsRPC) GetTransactionSpecific(tx *bchain.Tx) (json.RawMessage, error)
 	}
 	hexBytes := make([]byte, len(txBytes)*2)
 	hex.Encode(hexBytes, txBytes)
-	return json.RawMessage(hexBytes), nil
+
+	m, err := json.Marshal(string(hexBytes))
+	return json.RawMessage(m), err
 }
 
 func (n *NulsRPC) EstimateSmartFee(blocks int, conservative bool) (big.Int, error) {

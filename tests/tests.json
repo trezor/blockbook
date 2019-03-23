@@ -127,6 +127,7 @@
         "sync": ["ConnectBlocksParallel", "ConnectBlocks", "HandleFork"]
     },
     "nuls": {
-        "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "GetBestBlockHash", "GetBestBlockHeight", "GetBlockHeader"]
+        "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "GetBestBlockHash", "GetBestBlockHeight", "GetBlockHeader"],
+        "sync": ["ConnectBlocksParallel", "ConnectBlocks", "HandleFork"]
     }
 }
