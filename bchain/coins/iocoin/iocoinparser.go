@@ -78,15 +78,15 @@ func (p *IocoinParser) ParseBlock(b []byte) (*bchain.Block, error) {
 		}
 	}
 
-	err = utils.DecodeTransactions(r, 0, wire.WitnessEncoding, &w)
-	if err != nil {
-		return nil, err
-	}
+	//err = utils.DecodeTransactions(r, 0, wire.WitnessEncoding, &w)
+	//if err != nil {
+        //  return nil, err
+        //}
 
 	txs := make([]bchain.Tx, len(w.Transactions))
-	for ti, t := range w.Transactions {
-		txs[ti] = p.TxFromMsgTx(t, false)
-	}
+	//XXXX for ti, t := range w.Transactions {
+//XXXX 		txs[ti] = p.TxFromMsgTx(t, false)
+//XXXX 	}
 
 	return &bchain.Block{
 		BlockHeader: bchain.BlockHeader{
