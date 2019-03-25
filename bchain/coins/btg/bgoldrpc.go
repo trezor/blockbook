@@ -29,10 +29,11 @@ func NewBGoldRPC(config json.RawMessage, pushHandler func(bchain.NotificationTyp
 
 // Initialize initializes BGoldRPC instance.
 func (b *BGoldRPC) Initialize() error {
-	chainName, err := b.GetChainInfoAndInitializeMempool(b)
+	ci, err := b.GetChainInfo()
 	if err != nil {
 		return err
 	}
+	chainName := ci.Chain
 
 	params := GetChainParams(chainName)
 

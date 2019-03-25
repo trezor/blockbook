@@ -163,7 +163,7 @@ func (m *MempoolBitcoinType) Resync(onNewTxAddr OnNewTxAddrFunc) (int, error) {
 	start := time.Now()
 	glog.V(1).Info("mempool: resync")
 	m.onNewTxAddr = onNewTxAddr
-	txs, err := m.chain.GetMempool()
+	txs, err := m.chain.GetMempoolTransactions()
 	if err != nil {
 		return 0, err
 	}

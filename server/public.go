@@ -45,6 +45,7 @@ type PublicServer struct {
 	txCache          *db.TxCache
 	chain            bchain.BlockChain
 	chainParser      bchain.BlockChainParser
+	mempool          bchain.Mempool
 	api              *api.Worker
 	explorerURL      string
 	internalExplorer bool
@@ -56,19 +57,19 @@ type PublicServer struct {
 
 // NewPublicServer creates new public server http interface to blockbook and returns its handle
 // only basic functionality is mapped, to map all functions, call
-func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxCache, explorerURL string, metrics *common.Metrics, is *common.InternalState, debugMode bool) (*PublicServer, error) {
+func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, txCache *db.TxCache, explorerURL string, metrics *common.Metrics, is *common.InternalState, debugMode bool) (*PublicServer, error) {
 
-	api, err := api.NewWorker(db, chain, txCache, is)
+	api, err := api.NewWorker(db, chain, mempool, txCache, is)
 	if err != nil {
 		return nil, err
 	}
 
-	socketio, err := NewSocketIoServer(db, chain, txCache, metrics, is)
+	socketio, err := NewSocketIoServer(db, chain, mempool, txCache, metrics, is)
 	if err != nil {
 		return nil, err
 	}
 
-	websocket, err := NewWebsocketServer(db, chain, txCache, metrics, is)
+	websocket, err := NewWebsocketServer(db, chain, mempool, txCache, metrics, is)
 	if err != nil {
 		return nil, err
 	}
@@ -91,6 +92,7 @@ func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bch
 		txCache:          txCache,
 		chain:            chain,
 		chainParser:      chain.GetChainParser(),
+		mempool:          mempool,
 		explorerURL:      explorerURL,
 		internalExplorer: explorerURL == "",
 		metrics:          metrics,

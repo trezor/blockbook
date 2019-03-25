@@ -62,7 +62,7 @@ func appendAddress(io []addrIndex, i int32, a string, parser BlockChainParser) [
 func (m *MempoolEthereumType) Resync(onNewTxAddr OnNewTxAddrFunc) (int, error) {
 	start := time.Now()
 	glog.V(1).Info("Mempool: resync")
-	txs, err := m.chain.GetMempool()
+	txs, err := m.chain.GetMempoolTransactions()
 	if err != nil {
 		return 0, err
 	}

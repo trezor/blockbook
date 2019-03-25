@@ -23,13 +23,14 @@ type InternalServer struct {
 	txCache     *db.TxCache
 	chain       bchain.BlockChain
 	chainParser bchain.BlockChainParser
+	mempool     bchain.Mempool
 	is          *common.InternalState
 	api         *api.Worker
 }
 
 // NewInternalServer creates new internal http interface to blockbook and returns its handle
-func NewInternalServer(binding, certFiles string, db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxCache, is *common.InternalState) (*InternalServer, error) {
-	api, err := api.NewWorker(db, chain, txCache, is)
+func NewInternalServer(binding, certFiles string, db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, txCache *db.TxCache, is *common.InternalState) (*InternalServer, error) {
+	api, err := api.NewWorker(db, chain, mempool, txCache, is)
 	if err != nil {
 		return nil, err
 	}
@@ -47,6 +48,7 @@ func NewInternalServer(binding, certFiles string, db *db.RocksDB, chain bchain.B
 		txCache:     txCache,
 		chain:       chain,
 		chainParser: chain.GetChainParser(),
+		mempool:     mempool,
 		is:          is,
 		api:         api,
 	}

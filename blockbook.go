@@ -82,6 +82,7 @@ var (
 	chanSyncMempoolDone        = make(chan struct{})
 	chanStoreInternalStateDone = make(chan struct{})
 	chain                      bchain.BlockChain
+	mempool                    bchain.Mempool
 	index                      *db.RocksDB
 	txCache                    *db.TxCache
 	metrics                    *common.Metrics
@@ -98,26 +99,27 @@ func init() {
 	glog.CopyStandardLogTo("INFO")
 }
 
-func getBlockChainWithRetry(coin string, configfile string, pushHandler func(bchain.NotificationType), metrics *common.Metrics, seconds int) (bchain.BlockChain, error) {
+func getBlockChainWithRetry(coin string, configfile string, pushHandler func(bchain.NotificationType), metrics *common.Metrics, seconds int) (bchain.BlockChain, bchain.Mempool, error) {
 	var chain bchain.BlockChain
+	var mempool bchain.Mempool
 	var err error
 	timer := time.NewTimer(time.Second)
 	for i := 0; ; i++ {
-		if chain, err = coins.NewBlockChain(coin, configfile, pushHandler, metrics); err != nil {
+		if chain, mempool, err = coins.NewBlockChain(coin, configfile, pushHandler, metrics); err != nil {
 			if i < seconds {
 				glog.Error("rpc: ", err, " Retrying...")
 				select {
 				case <-chanOsSignal:
-					return nil, errors.New("Interrupted")
+					return nil, nil, errors.New("Interrupted")
 				case <-timer.C:
 					timer.Reset(time.Second)
 					continue
 				}
 			} else {
-				return nil, err
+				return nil, nil, err
 			}
 		}
-		return chain, nil
+		return chain, mempool, nil
 	}
 }
 
@@ -162,7 +164,7 @@ func main() {
 		glog.Fatal("metrics: ", err)
 	}
 
-	if chain, err = getBlockChainWithRetry(coin, *blockchain, pushSynchronizationHandler, metrics, 60); err != nil {
+	if chain, mempool, err = getBlockChainWithRetry(coin, *blockchain, pushSynchronizationHandler, metrics, 60); err != nil {
 		glog.Fatal("rpc: ", err)
 	}
 
@@ -209,29 +211,7 @@ func main() {
 	}
 
 	if *rollbackHeight >= 0 {
-		bestHeight, bestHash, err := index.GetBestBlock()
-		if err != nil {
-			glog.Error("rollbackHeight: ", err)
-			return
-		}
-		if uint32(*rollbackHeight) > bestHeight {
-			glog.Infof("nothing to rollback, rollbackHeight %d, bestHeight: %d", *rollbackHeight, bestHeight)
-		} else {
-			hashes := []string{bestHash}
-			for height := bestHeight - 1; height >= uint32(*rollbackHeight); height-- {
-				hash, err := index.GetBlockHash(height)
-				if err != nil {
-					glog.Error("rollbackHeight: ", err)
-					return
-				}
-				hashes = append(hashes, hash)
-			}
-			err = syncWorker.DisconnectBlocks(uint32(*rollbackHeight), bestHeight, hashes)
-			if err != nil {
-				glog.Error("rollbackHeight: ", err)
-				return
-			}
-		}
+		performRollback()
 		return
 	}
 
@@ -247,7 +227,7 @@ func main() {
 
 	var internalServer *server.InternalServer
 	if *internalBinding != "" {
-		internalServer, err = server.NewInternalServer(*internalBinding, *certFiles, index, chain, txCache, internalState)
+		internalServer, err = server.NewInternalServer(*internalBinding, *certFiles, index, chain, mempool, txCache, internalState)
 		if err != nil {
 			glog.Error("https: ", err)
 			return
@@ -268,7 +248,7 @@ func main() {
 	var publicServer *server.PublicServer
 	if *publicBinding != "" {
 		// start public server in limited functionality, extend it after sync is finished by calling ConnectFullPublicInterface
-		publicServer, err = server.NewPublicServer(*publicBinding, *certFiles, index, chain, txCache, *explorerURL, metrics, internalState, *debugMode)
+		publicServer, err = server.NewPublicServer(*publicBinding, *certFiles, index, chain, mempool, txCache, *explorerURL, metrics, internalState, *debugMode)
 		if err != nil {
 			glog.Error("socketio: ", err)
 			return
@@ -295,8 +275,14 @@ func main() {
 			glog.Error("resyncIndex ", err)
 			return
 		}
+		// initialize mempool after the initial sync is complete
+		err = chain.InitializeMempool()
+		if err != nil {
+			glog.Error("initializeMempool ", err)
+			return
+		}
 		var mempoolCount int
-		if mempoolCount, err = chain.ResyncMempool(nil); err != nil {
+		if mempoolCount, err = mempool.Resync(nil); err != nil {
 			glog.Error("resyncMempool ", err)
 			return
 		}
@@ -341,8 +327,34 @@ func main() {
 	}
 }
 
+func performRollback() {
+	bestHeight, bestHash, err := index.GetBestBlock()
+	if err != nil {
+		glog.Error("rollbackHeight: ", err)
+		return
+	}
+	if uint32(*rollbackHeight) > bestHeight {
+		glog.Infof("nothing to rollback, rollbackHeight %d, bestHeight: %d", *rollbackHeight, bestHeight)
+	} else {
+		hashes := []string{bestHash}
+		for height := bestHeight - 1; height >= uint32(*rollbackHeight); height-- {
+			hash, err := index.GetBlockHash(height)
+			if err != nil {
+				glog.Error("rollbackHeight: ", err)
+				return
+			}
+			hashes = append(hashes, hash)
+		}
+		err = syncWorker.DisconnectBlocks(uint32(*rollbackHeight), bestHeight, hashes)
+		if err != nil {
+			glog.Error("rollbackHeight: ", err)
+			return
+		}
+	}
+}
+
 func blockbookAppInfoMetric(db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxCache, is *common.InternalState, metrics *common.Metrics) error {
-	api, err := api.NewWorker(db, chain, txCache, is)
+	api, err := api.NewWorker(db, chain, mempool, txCache, is)
 	if err != nil {
 		return err
 	}
@@ -442,7 +454,7 @@ func syncMempoolLoop() {
 	// resync mempool about every minute if there are no chanSyncMempool requests, with debounce 1 second
 	tickAndDebounce(time.Duration(*resyncMempoolPeriodMs)*time.Millisecond, debounceResyncMempoolMs*time.Millisecond, chanSyncMempool, func() {
 		internalState.StartedMempoolSync()
-		if count, err := chain.ResyncMempool(onNewTxAddr); err != nil {
+		if count, err := mempool.Resync(onNewTxAddr); err != nil {
 			glog.Error("syncMempoolLoop ", errors.ErrorStack(err))
 		} else {
 			internalState.FinishedMempoolSync(count)

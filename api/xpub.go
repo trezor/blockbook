@@ -92,7 +92,7 @@ func (w *Worker) xpubGetAddressTxids(addrDesc bchain.AddressDescriptor, mempool 
 	}
 	if mempool {
 		uniqueTxs := make(map[string]int)
-		o, err := w.chain.GetMempoolTransactionsForAddrDesc(addrDesc)
+		o, err := w.mempool.GetAddrDescTransactions(addrDesc)
 		if err != nil {
 			return nil, false, err
 		}

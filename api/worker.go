@@ -23,17 +23,19 @@ type Worker struct {
 	chain       bchain.BlockChain
 	chainParser bchain.BlockChainParser
 	chainType   bchain.ChainType
+	mempool     bchain.Mempool
 	is          *common.InternalState
 }
 
 // NewWorker creates new api worker
-func NewWorker(db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxCache, is *common.InternalState) (*Worker, error) {
+func NewWorker(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, txCache *db.TxCache, is *common.InternalState) (*Worker, error) {
 	w := &Worker{
 		db:          db,
 		txCache:     txCache,
 		chain:       chain,
 		chainParser: chain.GetChainParser(),
 		chainType:   chain.GetChainParser().GetChainType(),
+		mempool:     mempool,
 		is:          is,
 	}
 	return w, nil
@@ -348,7 +350,7 @@ func (w *Worker) getAddressTxids(addrDesc bchain.AddressDescriptor, mempool bool
 	}
 	if mempool {
 		uniqueTxs := make(map[string]struct{})
-		o, err := w.chain.GetMempoolTransactionsForAddrDesc(addrDesc)
+		o, err := w.mempool.GetAddrDescTransactions(addrDesc)
 		if err != nil {
 			return nil, err
 		}

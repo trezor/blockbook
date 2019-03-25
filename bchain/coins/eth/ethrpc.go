@@ -160,11 +160,24 @@ func (b *EthereumRPC) Initialize() error {
 	}
 	glog.Info("rpc: block chain ", b.Network)
 
+	return nil
+}
+
+// CreateMempool creates mempool if not already created, however does not initialize it
+func (b *EthereumRPC) CreateMempool() (bchain.Mempool, error) {
+	if b.Mempool == nil {
+		b.Mempool = bchain.NewMempoolEthereumType(b)
+	}
+	return b.Mempool, nil
+}
+
+// InitializeMempool creates subscriptions to newHeads and newPendingTransactions
+func (b *EthereumRPC) InitializeMempool() error {
 	if b.isETC {
 		glog.Info(b.ChainConfig.CoinName, " does not support subscription to newHeads")
 	} else {
 		// subscriptions
-		if err = b.subscribe(func() (*rpc.ClientSubscription, error) {
+		if err := b.subscribe(func() (*rpc.ClientSubscription, error) {
 			// invalidate the previous subscription - it is either the first one or there was an error
 			b.newBlockSubscription = nil
 			ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
@@ -180,7 +193,8 @@ func (b *EthereumRPC) Initialize() error {
 			return err
 		}
 	}
-	if err = b.subscribe(func() (*rpc.ClientSubscription, error) {
+
+	if err := b.subscribe(func() (*rpc.ClientSubscription, error) {
 		// invalidate the previous subscription - it is either the first one or there was an error
 		b.newTxSubscription = nil
 		ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
@@ -195,10 +209,6 @@ func (b *EthereumRPC) Initialize() error {
 	}); err != nil {
 		return err
 	}
-
-	// create mempool
-	b.Mempool = bchain.NewMempoolEthereumType(b)
-
 	return nil
 }
 
@@ -628,8 +638,8 @@ func (b *EthereumRPC) GetTransactionSpecific(tx *bchain.Tx) (json.RawMessage, er
 	return json.RawMessage(m), err
 }
 
-// GetMempool returns transactions in mempool
-func (b *EthereumRPC) GetMempool() ([]string, error) {
+// GetMempoolTransactions returns transactions in mempool
+func (b *EthereumRPC) GetMempoolTransactions() ([]string, error) {
 	raw, err := b.getBlockRaw("pending", 0, false)
 	if err != nil {
 		return nil, err
@@ -735,28 +745,6 @@ func (b *EthereumRPC) EthereumTypeGetNonce(addrDesc bchain.AddressDescriptor) (u
 	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
 	defer cancel()
 	return b.client.NonceAt(ctx, ethcommon.BytesToAddress(addrDesc), nil)
-}
-
-// ResyncMempool gets mempool transactions and maps output scripts to transactions.
-// ResyncMempool is not reentrant, it should be called from a single thread.
-// Return value is number of transactions in mempool
-func (b *EthereumRPC) ResyncMempool(onNewTxAddr bchain.OnNewTxAddrFunc) (int, error) {
-	return b.Mempool.Resync(onNewTxAddr)
-}
-
-// GetMempoolTransactions returns slice of mempool transactions for given address
-func (b *EthereumRPC) GetMempoolTransactions(address string) ([]bchain.Outpoint, error) {
-	return b.Mempool.GetTransactions(address)
-}
-
-// GetMempoolTransactionsForAddrDesc returns slice of mempool transactions for given address descriptor
-func (b *EthereumRPC) GetMempoolTransactionsForAddrDesc(addrDesc bchain.AddressDescriptor) ([]bchain.Outpoint, error) {
-	return b.Mempool.GetAddrDescTransactions(addrDesc)
-}
-
-// GetMempoolEntry is not supported by etherem
-func (b *EthereumRPC) GetMempoolEntry(txid string) (*bchain.MempoolEntry, error) {
-	return nil, errors.New("GetMempoolEntry: not supported")
 }
 
 // GetChainParser returns ethereum BlockChainParser
