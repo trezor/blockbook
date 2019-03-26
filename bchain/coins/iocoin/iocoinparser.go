@@ -3,10 +3,11 @@ package iocoin
 import (
 	"blockbook/bchain"
 	"blockbook/bchain/coins/btc"
-	"blockbook/bchain/coins/utils"
+	//"blockbook/bchain/coins/utils"
 	"bytes"
 
 	"github.com/martinboehm/btcd/wire"
+	"github.com/golang/glog"
 	"github.com/martinboehm/btcutil/chaincfg"
 )
 
@@ -66,27 +67,44 @@ func GetChainParams(chain string) *chaincfg.Params {
 // it has special handling for Auxpow blocks that cannot be parsed by standard btc wire parser
 func (p *IocoinParser) ParseBlock(b []byte) (*bchain.Block, error) {
 	r := bytes.NewReader(b)
-	w := wire.MsgBlock{}
+	//w := wire.MsgBlock{}
 	h := wire.BlockHeader{}
 	err := h.Deserialize(r)
 	if err != nil {
 		return nil, err
 	}
-	if (h.Version & utils.VersionAuxpow) != 0 {
-		if err = utils.SkipAuxpow(r); err != nil {
-			return nil, err
-		}
-	}
+        glog.Info(" h.Version ", h.Version)
+	//if (h.Version & utils.VersionAuxpow) != 0 {
+	//	if err = utils.SkipAuxpow(r); err != nil {
+	//		return nil, err
+	//	}
+	//}
 
 	//err = utils.DecodeTransactions(r, 0, wire.WitnessEncoding, &w)
 	//if err != nil {
         //  return nil, err
         //}
+	ntx, err := wire.ReadVarInt(r, 0)
+	if err != nil {
+		return nil, err
+	}
+	glog.Info("XXXX ntx ", ntx)
 
-	txs := make([]bchain.Tx, len(w.Transactions))
-	//XXXX for ti, t := range w.Transactions {
-//XXXX 		txs[ti] = p.TxFromMsgTx(t, false)
-//XXXX 	}
+	//txs := make([]bchain.Tx, len(w.Transactions))
+	txs := make([]bchain.Tx, ntx)
+	for i := uint64(0); i < ntx; i++ {
+		tx := wire.MsgTx{}
+
+		err := tx.BtcDecode(r, 0, wire.WitnessEncoding)
+		if err != nil {
+			return nil, err
+		}
+
+		btx := p.TxFromMsgTx(&tx, false)
+
+
+		txs[i] = btx
+	}
 
 	return &bchain.Block{
 		BlockHeader: bchain.BlockHeader{
