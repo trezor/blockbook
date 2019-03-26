@@ -1,7 +1,7 @@
 {
   "coin": {
     "name": "Qtum Testnet",
-    "shortcut": "TQTUM",
+    "shortcut": "tQTUM",
     "label": "Qtum Testnet",
     "alias": "qtum_testnet"
   },
