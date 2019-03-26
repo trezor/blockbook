@@ -288,11 +288,9 @@ func (n *NulsRPC) GetBlockHeader(hash string) (*bchain.BlockHeader, error) {
 }
 
 func (n *NulsRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
-	if hash == "" && height < 0 {
-		return nil, bchain.ErrBlockNotFound
-	}
 
 	url := "/api/block/hash/" + hash
+
 	if hash == "" {
 		url = "/api/block/height/" + strconv.Itoa(int(height))
 	}
