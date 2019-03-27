@@ -99,30 +99,6 @@ func init() {
 	glog.CopyStandardLogTo("INFO")
 }
 
-func getBlockChainWithRetry(coin string, configfile string, pushHandler func(bchain.NotificationType), metrics *common.Metrics, seconds int) (bchain.BlockChain, bchain.Mempool, error) {
-	var chain bchain.BlockChain
-	var mempool bchain.Mempool
-	var err error
-	timer := time.NewTimer(time.Second)
-	for i := 0; ; i++ {
-		if chain, mempool, err = coins.NewBlockChain(coin, configfile, pushHandler, metrics); err != nil {
-			if i < seconds {
-				glog.Error("rpc: ", err, " Retrying...")
-				select {
-				case <-chanOsSignal:
-					return nil, nil, errors.New("Interrupted")
-				case <-timer.C:
-					timer.Reset(time.Second)
-					continue
-				}
-			} else {
-				return nil, nil, err
-			}
-		}
-		return chain, mempool, nil
-	}
-}
-
 func main() {
 	flag.Parse()
 
@@ -227,45 +203,20 @@ func main() {
 
 	var internalServer *server.InternalServer
 	if *internalBinding != "" {
-		internalServer, err = server.NewInternalServer(*internalBinding, *certFiles, index, chain, mempool, txCache, internalState)
+		internalServer, err = startInternalServer()
 		if err != nil {
-			glog.Error("https: ", err)
+			glog.Error("internal server: ", err)
 			return
 		}
-		go func() {
-			err = internalServer.Run()
-			if err != nil {
-				if err.Error() == "http: Server closed" {
-					glog.Info("internal server: closed")
-				} else {
-					glog.Error(err)
-					return
-				}
-			}
-		}()
 	}
 
 	var publicServer *server.PublicServer
 	if *publicBinding != "" {
-		// start public server in limited functionality, extend it after sync is finished by calling ConnectFullPublicInterface
-		publicServer, err = server.NewPublicServer(*publicBinding, *certFiles, index, chain, mempool, txCache, *explorerURL, metrics, internalState, *debugMode)
+		publicServer, err = startPublicServer()
 		if err != nil {
-			glog.Error("socketio: ", err)
+			glog.Error("public server: ", err)
 			return
 		}
-		go func() {
-			err = publicServer.Run()
-			if err != nil {
-				if err.Error() == "http: Server closed" {
-					glog.Info("public server: closed")
-				} else {
-					glog.Error(err)
-					return
-				}
-			}
-		}()
-		callbacksOnNewBlock = append(callbacksOnNewBlock, publicServer.OnNewBlock)
-		callbacksOnNewTxAddr = append(callbacksOnNewTxAddr, publicServer.OnNewTxAddr)
 	}
 
 	if *synchronize {
@@ -293,7 +244,7 @@ func main() {
 	}
 	go storeInternalStateLoop()
 
-	if *publicBinding != "" {
+	if publicServer != nil {
 		// start full public interface
 		publicServer.ConnectFullPublicInterface()
 	}
@@ -325,6 +276,71 @@ func main() {
 		<-chanSyncMempoolDone
 		<-chanStoreInternalStateDone
 	}
+}
+
+func getBlockChainWithRetry(coin string, configfile string, pushHandler func(bchain.NotificationType), metrics *common.Metrics, seconds int) (bchain.BlockChain, bchain.Mempool, error) {
+	var chain bchain.BlockChain
+	var mempool bchain.Mempool
+	var err error
+	timer := time.NewTimer(time.Second)
+	for i := 0; ; i++ {
+		if chain, mempool, err = coins.NewBlockChain(coin, configfile, pushHandler, metrics); err != nil {
+			if i < seconds {
+				glog.Error("rpc: ", err, " Retrying...")
+				select {
+				case <-chanOsSignal:
+					return nil, nil, errors.New("Interrupted")
+				case <-timer.C:
+					timer.Reset(time.Second)
+					continue
+				}
+			} else {
+				return nil, nil, err
+			}
+		}
+		return chain, mempool, nil
+	}
+}
+
+func startInternalServer() (*server.InternalServer, error) {
+	internalServer, err := server.NewInternalServer(*internalBinding, *certFiles, index, chain, mempool, txCache, internalState)
+	if err != nil {
+		return nil, err
+	}
+	go func() {
+		err = internalServer.Run()
+		if err != nil {
+			if err.Error() == "http: Server closed" {
+				glog.Info("internal server: closed")
+			} else {
+				glog.Error(err)
+				return
+			}
+		}
+	}()
+	return internalServer, nil
+}
+
+func startPublicServer() (*server.PublicServer, error) {
+	// start public server in limited functionality, extend it after sync is finished by calling ConnectFullPublicInterface
+	publicServer, err := server.NewPublicServer(*publicBinding, *certFiles, index, chain, mempool, txCache, *explorerURL, metrics, internalState, *debugMode)
+	if err != nil {
+		return nil, err
+	}
+	go func() {
+		err = publicServer.Run()
+		if err != nil {
+			if err.Error() == "http: Server closed" {
+				glog.Info("public server: closed")
+			} else {
+				glog.Error(err)
+				return
+			}
+		}
+	}()
+	callbacksOnNewBlock = append(callbacksOnNewBlock, publicServer.OnNewBlock)
+	callbacksOnNewTxAddr = append(callbacksOnNewTxAddr, publicServer.OnNewTxAddr)
+	return publicServer, err
 }
 
 func performRollback() {
