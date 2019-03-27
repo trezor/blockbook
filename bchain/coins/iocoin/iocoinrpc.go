@@ -62,4 +62,39 @@ func (b *IocoinRPC) Initialize() error {
 
 	return nil
 }
+// GetBlock returns block with given hash.
+func (b *IocoinRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
+	res := btc.ResGetBlockThin{}
+	req := btc.CmdGetBlock{Method: "getblock"}
+	req.Params.BlockHash = hash
+	req.Params.Verbosity = 1
+	err := b.Call(&req, &res)
+		if err != nil {
+			return nil, err
+		}
+	txs := make([]bchain.Tx, 0, len(res.Result.Txids))
+	for _, txid := range res.Result.Txids {
+		tx, err := b.GetTransaction(txid)
+		if err != nil {
+			if err == bchain.ErrTxNotFound {
+				glog.Errorf("rpc: getblock: skipping transanction in block %s due error: %s", hash, err)
+				continue
+			}
+			return nil, err
+		}
+		txs = append(txs, *tx)
+	}
+	block := &bchain.Block{
+		BlockHeader: res.Result.BlockHeader,
+		Txs:         txs,
+	}
+	return block, nil
+
+}
+func (p *IocoinParser) GetAddrDescFromVout(output *bchain.Vout) (bchain.AddressDescriptor, error) {
+	if len(output.ScriptPubKey.Addresses) != 1 {
+		return nil, bchain.ErrAddressMissing
+	}
+	return p.GetAddrDescFromAddress(output.ScriptPubKey.Addresses[0])
+}
 
