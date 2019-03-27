@@ -12,8 +12,8 @@
                     {
                         "hex": "",
                         "txid": "00208f0b652c397e761e0e2e1fc31f8b1b4f7fe28a1f35af382886c4d95c8dcb9715",
-                        "blocktime": 1553317770000,
-                        "time": 1553317770000,
+                        "blocktime": 1553317770,
+                        "time": 1553317770,
                         "version": 0,
                         "vin": [],
                         "vout": [
@@ -162,8 +162,8 @@
                     {
                         "hex": "",
                         "txid": "0020ecd57d05aa56098114d2284cf48ab6edceab2351aa43add3af09b3a956fb458e",
-                        "blocktime": 1553317780000,
-                        "time": 1553317780000,
+                        "blocktime": 1553317780,
+                        "time": 1553317780,
                         "version": 0,
                         "vin": [],
                         "vout": [
@@ -188,8 +188,8 @@
                     {
                         "hex": "",
                         "txid": "002011a00b4561f8bb278d8e4744550368b217d61013fcd1eebc61f44a1c6a164765",
-                        "blocktime": 1553317790000,
-                        "time": 1553317790000,
+                        "blocktime": 1553317790,
+                        "time": 1553317790,
                         "version": 0,
                         "vin": [],
                         "vout": [
@@ -383,8 +383,8 @@
                     {
                         "hex": "",
                         "txid": "00206d1d22475202bbb81faba6b0e9ba22fe35c7e9d1e542d3284c5002c5a2ef7ca5",
-                        "blocktime": 1553318050000,
-                        "time": 1553318050000,
+                        "blocktime": 1553318050,
+                        "time": 1553318050,
                         "version": 0,
                         "vin": [],
                         "vout": [
@@ -438,8 +438,8 @@
                     {
                         "hex": "",
                         "txid": "0020643416a8b1dad09ee2c1bb2d12aa88eef77a6462a6bd16c39fd3971d67d66919",
-                        "blocktime": 1553318050000,
-                        "time": 1553318045440,
+                        "blocktime": 1553318050,
+                        "time": 1553318045,
                         "version": 0,
                         "vin": [
                             {
@@ -473,8 +473,8 @@
                     {
                         "hex": "",
                         "txid": "00204882a15d826d4401aa765510243f455f7f6a05b0e77a9edd420d366cabd98818",
-                        "blocktime": 1553319870000,
-                        "time": 1553319870000,
+                        "blocktime": 1553319870,
+                        "time": 1553319870,
                         "version": 0,
                         "vin": [],
                         "vout": [

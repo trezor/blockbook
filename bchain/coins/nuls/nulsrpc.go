@@ -262,9 +262,20 @@ func (n *NulsRPC) GetBlockHash(height uint32) (string, error) {
 
 	return blockHeader.Data.Hash, nil
 }
+
 func (n *NulsRPC) GetBlockHeader(hash string) (*bchain.BlockHeader, error) {
+	uri := "/api/block/header/hash/" + hash
+	return n.getBlobkHeader(uri)
+}
+
+func (n *NulsRPC) GetBlockHeaderByHeight(height uint32) (*bchain.BlockHeader, error) {
+	uri := "/api/block/header/height/" + strconv.Itoa(int(height))
+	return n.getBlobkHeader(uri)
+}
+
+func (n *NulsRPC) getBlobkHeader(uri string) (*bchain.BlockHeader, error) {
 	blockHeader := CmdGetBlockHeader{}
-	error := n.Call("/api/block/header/hash/"+hash, &blockHeader)
+	error := n.Call(uri, &blockHeader)
 	if error != nil {
 		return nil, error
 	}
@@ -282,7 +293,7 @@ func (n *NulsRPC) GetBlockHeader(hash string) (*bchain.BlockHeader, error) {
 		Height:        uint32(blockHeader.Data.Height),
 		Confirmations: blockHeader.Data.ConfirmCount,
 		Size:          blockHeader.Data.Size,
-		Time:          blockHeader.Data.Time,
+		Time:          blockHeader.Data.Time / 1000,
 	}
 	return header, nil
 }
@@ -314,7 +325,7 @@ func (n *NulsRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 		Height:        uint32(getBlock.Data.Height),
 		Confirmations: getBlock.Data.ConfirmCount,
 		Size:          getBlock.Data.Size,
-		Time:          getBlock.Data.Time,
+		Time:          getBlock.Data.Time / 1000,
 	}
 
 	var txs []bchain.Tx
@@ -324,7 +335,7 @@ func (n *NulsRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 		if err != nil {
 			return nil, err
 		}
-		tx.Blocktime = getBlock.Data.Time
+		tx.Blocktime = header.Time
 		txs = append(txs, *tx)
 	}
 
@@ -359,7 +370,7 @@ func (n *NulsRPC) GetBlockInfo(hash string) (*bchain.BlockInfo, error) {
 		Height:        uint32(getBlock.Data.Height),
 		Confirmations: getBlock.Data.ConfirmCount,
 		Size:          getBlock.Data.Size,
-		Time:          getBlock.Data.Time,
+		Time:          getBlock.Data.Time / 1000,
 	}
 
 	var txIds []string
@@ -392,12 +403,22 @@ func (n *NulsRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 		return nil, error
 	}
 
+	if !getTx.Success {
+		return nil, bchain.ErrTxNotFound
+	}
+
 	tx, err := converTx(getTx.Tx)
 	if err != nil {
 		return nil, err
 	}
-	hexBytys, e := n.GetTransactionSpecific(tx)
 
+	blockHeaderHeight := getTx.Tx.BlockHeight
+	blockHeader, e := n.GetBlockHeaderByHeight(uint32(blockHeaderHeight))
+	if blockHeader != nil {
+		tx.Blocktime = blockHeader.Time
+	}
+
+	hexBytys, e := n.GetTransactionSpecific(tx)
 	if e == nil {
 		var hex string
 		json.Unmarshal(hexBytys, &hex)
@@ -607,7 +628,7 @@ func converTx(rawTx Tx) (*bchain.Tx, error) {
 		Vin:           vins,
 		Vout:          vouts,
 		Confirmations: uint32(rawTx.ConfirmCount),
-		Time:          rawTx.Time,
+		Time:          rawTx.Time / 1000,
 	}
 
 	return tx, nil
