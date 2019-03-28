@@ -343,7 +343,7 @@ func (p *BitcoinParser) addrDescFromExtKey(extKey *hdkeychain.ExtendedKey) (bcha
 
 // DeriveAddressDescriptors derives address descriptors from given xpub for listed indexes
 func (p *BitcoinParser) DeriveAddressDescriptors(xpub string, change uint32, indexes []uint32) ([]bchain.AddressDescriptor, error) {
-	extKey, err := hdkeychain.NewKeyFromString(xpub)
+	extKey, err := hdkeychain.NewKeyFromString(xpub, p.Params.Base58CksumHasher)
 	if err != nil {
 		return nil, err
 	}
@@ -370,7 +370,7 @@ func (p *BitcoinParser) DeriveAddressDescriptorsFromTo(xpub string, change uint3
 	if toIndex <= fromIndex {
 		return nil, errors.New("toIndex<=fromIndex")
 	}
-	extKey, err := hdkeychain.NewKeyFromString(xpub)
+	extKey, err := hdkeychain.NewKeyFromString(xpub, p.Params.Base58CksumHasher)
 	if err != nil {
 		return nil, err
 	}
@@ -394,7 +394,7 @@ func (p *BitcoinParser) DeriveAddressDescriptorsFromTo(xpub string, change uint3
 
 // DerivationBasePath returns base path of xpub
 func (p *BitcoinParser) DerivationBasePath(xpub string) (string, error) {
-	extKey, err := hdkeychain.NewKeyFromString(xpub)
+	extKey, err := hdkeychain.NewKeyFromString(xpub, p.Params.Base58CksumHasher)
 	if err != nil {
 		return "", err
 	}
