@@ -194,3 +194,9 @@ func (b *BCashRPC) EstimateFee(blocks int) (big.Int, error) {
 	}
 	return r, nil
 }
+
+// EstimateSmartFee returns fee estimation
+func (b *BCashRPC) EstimateSmartFee(blocks int, conservative bool) (big.Int, error) {
+	// EstimateSmartFee is not supported by bcash
+	return b.EstimateFee(blocks)
+}
