@@ -20,6 +20,7 @@ import (
 	"blockbook/bchain/coins/monacoin"
 	"blockbook/bchain/coins/myriad"
 	"blockbook/bchain/coins/namecoin"
+	"blockbook/bchain/coins/nuls"
 	"blockbook/bchain/coins/pivx"
 	"blockbook/bchain/coins/qtum"
 	"blockbook/bchain/coins/vertcoin"
@@ -79,6 +80,7 @@ func init() {
 	BlockChainFactories["Bellcoin"] = bellcoin.NewBellcoinRPC
 	BlockChainFactories["Qtum"] = qtum.NewQtumRPC
 	BlockChainFactories["Qtum Testnet"] = qtum.NewQtumRPC
+	BlockChainFactories["NULS"] = nuls.NewNulsRPC
 }
 
 // GetCoinNameFromConfig gets coin name and coin shortcut from config file
