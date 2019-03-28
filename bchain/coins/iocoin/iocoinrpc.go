@@ -91,10 +91,4 @@ func (b *IocoinRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) 
 	return block, nil
 
 }
-func (p *IocoinParser) GetAddrDescFromVout(output *bchain.Vout) (bchain.AddressDescriptor, error) {
-	if len(output.ScriptPubKey.Addresses) != 1 {
-		return nil, bchain.ErrAddressMissing
-	}
-	return p.GetAddrDescFromAddress(output.ScriptPubKey.Addresses[0])
-}
 
