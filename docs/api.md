@@ -269,7 +269,13 @@ Response:
 
 #### Get xpub
 
-Returns balances and transactions of an xpub, applicable only for Bitcoin-type coins. Xpub must be in BIP44, BIP49 or BIP84 format (the BIP number is detected by the prefix of xpub) with level 3 derivation path, i.e. *m/purpose'/coin_type'/account'/*. Blockbook completes the *change/address_index* part of the path when deriving addresses. The returned transactions are sorted by block height, newest blocks first.
+Returns balances and transactions of an xpub, applicable only for Bitcoin-type coins. 
+
+Blockbook supports BIP44, BIP49 and BIP84 derivation schemes. It expects xpub at level 3 derivation path, i.e. *m/purpose'/coin_type'/account'/*. Blockbook completes the *change/address_index* part of the path when deriving addresses. 
+
+The BIP version is determined by the prefix of the xpub. The prefixes for each coin are defined by fields `xpub_magic`, `xpub_magic_segwit_p2sh`, `xpub_magic_segwit_native` in the [trezor-common](https://github.com/trezor/trezor-common/tree/master/defs/bitcoin) library. If the prefix is not recognized, Blockbook defaults to BIP44 derivation scheme.
+
+The returned transactions are sorted by block height, newest blocks first.
 
 ```
 GET /api/v2/xpub/<xpub>[?page=<page>&pageSize=<size>&from=<block height>&to=<block height>&details=<basic|tokens|tokenBalances|txids|txs>&tokens=<nonzero|used|derived>]
