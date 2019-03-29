@@ -172,7 +172,10 @@ func (b *EthereumRPC) CreateMempool() (bchain.Mempool, error) {
 }
 
 // InitializeMempool creates subscriptions to newHeads and newPendingTransactions
-func (b *EthereumRPC) InitializeMempool() error {
+func (b *EthereumRPC) InitializeMempool(addrDescForOutpoint bchain.AddrDescForOutpointFunc) error {
+	if b.Mempool == nil {
+		return errors.New("Mempool not created")
+	}
 	if b.isETC {
 		glog.Info(b.ChainConfig.CoinName, " does not support subscription to newHeads")
 	} else {

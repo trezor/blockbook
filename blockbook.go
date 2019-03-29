@@ -227,7 +227,11 @@ func main() {
 			return
 		}
 		// initialize mempool after the initial sync is complete
-		err = chain.InitializeMempool()
+		var addrDescForOutpoint bchain.AddrDescForOutpointFunc
+		if chain.GetChainParser().GetChainType() == bchain.ChainBitcoinType {
+			addrDescForOutpoint = index.AddrDescForOutpoint
+		}
+		err = chain.InitializeMempool(addrDescForOutpoint)
 		if err != nil {
 			glog.Error("initializeMempool ", err)
 			return

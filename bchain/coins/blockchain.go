@@ -152,8 +152,8 @@ func (c *blockChainWithMetrics) CreateMempool() (bchain.Mempool, error) {
 	return c.b.CreateMempool()
 }
 
-func (c *blockChainWithMetrics) InitializeMempool() error {
-	return c.b.InitializeMempool()
+func (c *blockChainWithMetrics) InitializeMempool(addrDescForOutpoint bchain.AddrDescForOutpointFunc) error {
+	return c.b.InitializeMempool(addrDescForOutpoint)
 }
 
 func (c *blockChainWithMetrics) Shutdown(ctx context.Context) error {

@@ -19,13 +19,14 @@ type txidio struct {
 
 // MempoolBitcoinType is mempool handle.
 type MempoolBitcoinType struct {
-	chain           BlockChain
-	mux             sync.Mutex
-	txToInputOutput map[string][]addrIndex
-	addrDescToTx    map[string][]Outpoint
-	chanTxid        chan string
-	chanAddrIndex   chan txidio
-	onNewTxAddr     OnNewTxAddrFunc
+	chain               BlockChain
+	mux                 sync.Mutex
+	txToInputOutput     map[string][]addrIndex
+	addrDescToTx        map[string][]Outpoint
+	chanTxid            chan string
+	chanAddrIndex       chan txidio
+	onNewTxAddr         OnNewTxAddrFunc
+	AddrDescForOutpoint AddrDescForOutpointFunc
 }
 
 // NewMempoolBitcoinType creates new mempool handler.
@@ -86,19 +87,25 @@ func (m *MempoolBitcoinType) updateMappings(newTxToInputOutput map[string][]addr
 }
 
 func (m *MempoolBitcoinType) getInputAddress(input Outpoint) *addrIndex {
-	itx, err := m.chain.GetTransactionForMempool(input.Txid)
-	if err != nil {
-		glog.Error("cannot get transaction ", input.Txid, ": ", err)
-		return nil
+	var addrDesc AddressDescriptor
+	if m.AddrDescForOutpoint != nil {
+		addrDesc = m.AddrDescForOutpoint(input)
 	}
-	if int(input.Vout) >= len(itx.Vout) {
-		glog.Error("Vout len in transaction ", input.Txid, " ", len(itx.Vout), " input.Vout=", input.Vout)
-		return nil
-	}
-	addrDesc, err := m.chain.GetChainParser().GetAddrDescFromVout(&itx.Vout[input.Vout])
-	if err != nil {
-		glog.Error("error in addrDesc in ", input.Txid, " ", input.Vout, ": ", err)
-		return nil
+	if addrDesc == nil {
+		itx, err := m.chain.GetTransactionForMempool(input.Txid)
+		if err != nil {
+			glog.Error("cannot get transaction ", input.Txid, ": ", err)
+			return nil
+		}
+		if int(input.Vout) >= len(itx.Vout) {
+			glog.Error("Vout len in transaction ", input.Txid, " ", len(itx.Vout), " input.Vout=", input.Vout)
+			return nil
+		}
+		addrDesc, err = m.chain.GetChainParser().GetAddrDescFromVout(&itx.Vout[input.Vout])
+		if err != nil {
+			glog.Error("error in addrDesc in ", input.Txid, " ", input.Vout, ": ", err)
+			return nil
+		}
 	}
 	return &addrIndex{string(addrDesc), ^input.Vout}
 
