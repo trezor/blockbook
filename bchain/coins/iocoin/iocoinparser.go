@@ -1,7 +1,7 @@
 package iocoin
 
 import (
-//	"blockbook/bchain"
+	"blockbook/bchain"
 	"blockbook/bchain/coins/btc"
 
 	"github.com/martinboehm/btcd/wire"
@@ -35,11 +35,16 @@ func init() {
 // IocoinParser handle
 type IocoinParser struct {
 	*btc.BitcoinParser
+	baseparser                         *bchain.BaseParser
 }
 
 // NewIocoinParser returns new IocoinParser instance
 func NewIocoinParser(params *chaincfg.Params, c *btc.Configuration) *IocoinParser {
-	return &IocoinParser{BitcoinParser: btc.NewBitcoinParser(params, c)}
+	p := &IocoinParser{
+		BitcoinParser: btc.NewBitcoinParser(params, c),
+		baseparser:    &bchain.BaseParser{},
+	}
+  return p
 }
 
 // GetChainParams contains network parameters for the main Iocoin network,
@@ -60,4 +65,12 @@ func GetChainParams(chain string) *chaincfg.Params {
 	default:
 		return &MainNetParams
 	}
+}
+func (p *IocoinParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) ([]byte, error) {
+	return p.baseparser.PackTx(tx, height, blockTime)
+}
+
+// UnpackTx unpacks transaction from protobuf byte array
+func (p *IocoinParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
+	return p.baseparser.UnpackTx(buf)
 }
