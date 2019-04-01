@@ -25,7 +25,7 @@ func (c *fakeBlockChain) Initialize() error {
 	return nil
 }
 
-func (c *fakeBlockChain) InitializeMempool(addrDescForOutpoint bchain.AddrDescForOutpointFunc) error {
+func (c *fakeBlockChain) InitializeMempool(addrDescForOutpoint bchain.AddrDescForOutpointFunc, onNewTxAddr bchain.OnNewTxAddrFunc) error {
 	return nil
 }
 

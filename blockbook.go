@@ -231,13 +231,13 @@ func main() {
 		if chain.GetChainParser().GetChainType() == bchain.ChainBitcoinType {
 			addrDescForOutpoint = index.AddrDescForOutpoint
 		}
-		err = chain.InitializeMempool(addrDescForOutpoint)
+		err = chain.InitializeMempool(addrDescForOutpoint, onNewTxAddr)
 		if err != nil {
 			glog.Error("initializeMempool ", err)
 			return
 		}
 		var mempoolCount int
-		if mempoolCount, err = mempool.Resync(nil); err != nil {
+		if mempoolCount, err = mempool.Resync(); err != nil {
 			glog.Error("resyncMempool ", err)
 			return
 		}
@@ -250,6 +250,8 @@ func main() {
 
 	if publicServer != nil {
 		// start full public interface
+		callbacksOnNewBlock = append(callbacksOnNewBlock, publicServer.OnNewBlock)
+		callbacksOnNewTxAddr = append(callbacksOnNewTxAddr, publicServer.OnNewTxAddr)
 		publicServer.ConnectFullPublicInterface()
 	}
 
@@ -342,8 +344,6 @@ func startPublicServer() (*server.PublicServer, error) {
 			}
 		}
 	}()
-	callbacksOnNewBlock = append(callbacksOnNewBlock, publicServer.OnNewBlock)
-	callbacksOnNewTxAddr = append(callbacksOnNewTxAddr, publicServer.OnNewTxAddr)
 	return publicServer, err
 }
 
@@ -474,7 +474,7 @@ func syncMempoolLoop() {
 	// resync mempool about every minute if there are no chanSyncMempool requests, with debounce 1 second
 	tickAndDebounce(time.Duration(*resyncMempoolPeriodMs)*time.Millisecond, debounceResyncMempoolMs*time.Millisecond, chanSyncMempool, func() {
 		internalState.StartedMempoolSync()
-		if count, err := mempool.Resync(onNewTxAddr); err != nil {
+		if count, err := mempool.Resync(); err != nil {
 			glog.Error("syncMempoolLoop ", errors.ErrorStack(err))
 		} else {
 			internalState.FinishedMempoolSync(count)

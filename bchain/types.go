@@ -202,7 +202,7 @@ type BlockChain interface {
 	// create mempool but do not initialize it
 	CreateMempool() (Mempool, error)
 	// initialize mempool, create ZeroMQ (or other) subscription
-	InitializeMempool(AddrDescForOutpointFunc) error
+	InitializeMempool(AddrDescForOutpointFunc, OnNewTxAddrFunc) error
 	// shutdown mempool, ZeroMQ and block chain connections
 	Shutdown(ctx context.Context) error
 	// chain info
@@ -278,7 +278,7 @@ type BlockChainParser interface {
 
 // Mempool defines common interface to mempool
 type Mempool interface {
-	Resync(onNewTxAddr OnNewTxAddrFunc) (int, error)
+	Resync() (int, error)
 	GetTransactions(address string) ([]Outpoint, error)
 	GetAddrDescTransactions(addrDesc AddressDescriptor) ([]Outpoint, error)
 }

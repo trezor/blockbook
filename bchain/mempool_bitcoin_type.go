@@ -12,6 +12,11 @@ type addrIndex struct {
 	n        int32
 }
 
+type txEntry struct {
+	addrIndexes []addrIndex
+	time        uint32
+}
+
 type txidio struct {
 	txid string
 	io   []addrIndex
@@ -21,11 +26,11 @@ type txidio struct {
 type MempoolBitcoinType struct {
 	chain               BlockChain
 	mux                 sync.Mutex
-	txToInputOutput     map[string][]addrIndex
+	txEntries           map[string]txEntry
 	addrDescToTx        map[string][]Outpoint
 	chanTxid            chan string
 	chanAddrIndex       chan txidio
-	onNewTxAddr         OnNewTxAddrFunc
+	OnNewTxAddr         OnNewTxAddrFunc
 	AddrDescForOutpoint AddrDescForOutpointFunc
 }
 
@@ -79,10 +84,10 @@ func (m *MempoolBitcoinType) GetAddrDescTransactions(addrDesc AddressDescriptor)
 	return append([]Outpoint(nil), m.addrDescToTx[string(addrDesc)]...), nil
 }
 
-func (m *MempoolBitcoinType) updateMappings(newTxToInputOutput map[string][]addrIndex, newAddrDescToTx map[string][]Outpoint) {
+func (m *MempoolBitcoinType) updateMappings(newTxEntries map[string]txEntry, newAddrDescToTx map[string][]Outpoint) {
 	m.mux.Lock()
 	defer m.mux.Unlock()
-	m.txToInputOutput = newTxToInputOutput
+	m.txEntries = newTxEntries
 	m.addrDescToTx = newAddrDescToTx
 }
 
@@ -128,8 +133,8 @@ func (m *MempoolBitcoinType) getTxAddrs(txid string, chanInput chan Outpoint, ch
 		if len(addrDesc) > 0 {
 			io = append(io, addrIndex{string(addrDesc), int32(output.N)})
 		}
-		if m.onNewTxAddr != nil {
-			m.onNewTxAddr(tx, addrDesc)
+		if m.OnNewTxAddr != nil {
+			m.OnNewTxAddr(tx, addrDesc)
 		}
 	}
 	dispatched := 0
@@ -166,37 +171,37 @@ func (m *MempoolBitcoinType) getTxAddrs(txid string, chanInput chan Outpoint, ch
 // Resync gets mempool transactions and maps outputs to transactions.
 // Resync is not reentrant, it should be called from a single thread.
 // Read operations (GetTransactions) are safe.
-func (m *MempoolBitcoinType) Resync(onNewTxAddr OnNewTxAddrFunc) (int, error) {
+func (m *MempoolBitcoinType) Resync() (int, error) {
 	start := time.Now()
 	glog.V(1).Info("mempool: resync")
-	m.onNewTxAddr = onNewTxAddr
 	txs, err := m.chain.GetMempoolTransactions()
 	if err != nil {
 		return 0, err
 	}
 	glog.V(2).Info("mempool: resync ", len(txs), " txs")
 	// allocate slightly larger capacity of the maps
-	newTxToInputOutput := make(map[string][]addrIndex, len(m.txToInputOutput)+5)
+	newTxEntries := make(map[string]txEntry, len(m.txEntries)+5)
 	newAddrDescToTx := make(map[string][]Outpoint, len(m.addrDescToTx)+5)
 	dispatched := 0
-	onNewData := func(txid string, io []addrIndex) {
-		if len(io) > 0 {
-			newTxToInputOutput[txid] = io
-			for _, si := range io {
+	txTime := uint32(time.Now().Unix())
+	onNewData := func(txid string, entry txEntry) {
+		if len(entry.addrIndexes) > 0 {
+			newTxEntries[txid] = entry
+			for _, si := range entry.addrIndexes {
 				newAddrDescToTx[si.addrDesc] = append(newAddrDescToTx[si.addrDesc], Outpoint{txid, si.n})
 			}
 		}
 	}
 	// get transaction in parallel using goroutines created in NewUTXOMempool
 	for _, txid := range txs {
-		io, exists := m.txToInputOutput[txid]
+		io, exists := m.txEntries[txid]
 		if !exists {
 		loop:
 			for {
 				select {
 				// store as many processed transactions as possible
 				case tio := <-m.chanAddrIndex:
-					onNewData(tio.txid, tio.io)
+					onNewData(tio.txid, txEntry{tio.io, txTime})
 					dispatched--
 				// send transaction to be processed
 				case m.chanTxid <- txid:
@@ -210,10 +215,9 @@ func (m *MempoolBitcoinType) Resync(onNewTxAddr OnNewTxAddrFunc) (int, error) {
 	}
 	for i := 0; i < dispatched; i++ {
 		tio := <-m.chanAddrIndex
-		onNewData(tio.txid, tio.io)
+		onNewData(tio.txid, txEntry{tio.io, txTime})
 	}
-	m.updateMappings(newTxToInputOutput, newAddrDescToTx)
-	m.onNewTxAddr = nil
-	glog.Info("mempool: resync finished in ", time.Since(start), ", ", len(m.txToInputOutput), " transactions in mempool")
-	return len(m.txToInputOutput), nil
+	m.updateMappings(newTxEntries, newAddrDescToTx)
+	glog.Info("mempool: resync finished in ", time.Since(start), ", ", len(m.txEntries), " transactions in mempool")
+	return len(m.txEntries), nil
 }

@@ -152,8 +152,8 @@ func (c *blockChainWithMetrics) CreateMempool() (bchain.Mempool, error) {
 	return c.b.CreateMempool()
 }
 
-func (c *blockChainWithMetrics) InitializeMempool(addrDescForOutpoint bchain.AddrDescForOutpointFunc) error {
-	return c.b.InitializeMempool(addrDescForOutpoint)
+func (c *blockChainWithMetrics) InitializeMempool(addrDescForOutpoint bchain.AddrDescForOutpointFunc, onNewTxAddr bchain.OnNewTxAddrFunc) error {
+	return c.b.InitializeMempool(addrDescForOutpoint, onNewTxAddr)
 }
 
 func (c *blockChainWithMetrics) Shutdown(ctx context.Context) error {
@@ -293,9 +293,9 @@ func (c *mempoolWithMetrics) observeRPCLatency(method string, start time.Time, e
 	c.m.RPCLatency.With(common.Labels{"method": method, "error": e}).Observe(float64(time.Since(start)) / 1e6) // in milliseconds
 }
 
-func (c *mempoolWithMetrics) Resync(onNewTxAddr bchain.OnNewTxAddrFunc) (count int, err error) {
+func (c *mempoolWithMetrics) Resync() (count int, err error) {
 	defer func(s time.Time) { c.observeRPCLatency("ResyncMempool", s, err) }(time.Now())
-	count, err = c.mempool.Resync(onNewTxAddr)
+	count, err = c.mempool.Resync()
 	if err == nil {
 		c.m.MempoolSize.Set(float64(count))
 	}

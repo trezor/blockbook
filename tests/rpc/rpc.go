@@ -200,7 +200,7 @@ func testMempoolSync(t *testing.T, h *TestHandler) {
 	for i := 0; i < 3; i++ {
 		txs := getMempool(t, h)
 
-		n, err := h.Mempool.Resync(nil)
+		n, err := h.Mempool.Resync()
 		if err != nil {
 			t.Fatal(err)
 		}
