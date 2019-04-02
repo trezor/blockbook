@@ -1,6 +1,7 @@
 package bchain
 
 import (
+	"sort"
 	"sync"
 	"time"
 
@@ -220,4 +221,36 @@ func (m *MempoolBitcoinType) Resync() (int, error) {
 	m.updateMappings(newTxEntries, newAddrDescToTx)
 	glog.Info("mempool: resync finished in ", time.Since(start), ", ", len(m.txEntries), " transactions in mempool")
 	return len(m.txEntries), nil
+}
+
+func (a MempoolTxidEntries) Len() int      { return len(a) }
+func (a MempoolTxidEntries) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+func (a MempoolTxidEntries) Less(i, j int) bool {
+	// if the Time is equal, sort by txid to make the order defined
+	hi := a[i].Time
+	hj := a[j].Time
+	if hi == hj {
+		return a[i].Txid > a[j].Txid
+	}
+	// order in reverse
+	return hi > hj
+}
+
+func getAllEntries(txEntries map[string]txEntry) MempoolTxidEntries {
+	a := make(MempoolTxidEntries, len(txEntries))
+	i := 0
+	for txid, entry := range txEntries {
+		a[i] = MempoolTxidEntry{
+			Txid: txid,
+			Time: entry.time,
+		}
+		i++
+	}
+	sort.Sort(a)
+	return a
+}
+
+// GetAllEntries returns all mempool entries sorted by fist seen time in descending order
+func (m *MempoolBitcoinType) GetAllEntries() MempoolTxidEntries {
+	return getAllEntries(m.txEntries)
 }

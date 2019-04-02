@@ -185,6 +185,15 @@ type Erc20Transfer struct {
 	Tokens   big.Int
 }
 
+// MempoolTxidEntry contains mempool txid with first seen time
+type MempoolTxidEntry struct {
+	Txid string
+	Time uint32
+}
+
+// MempoolTxidEntries is array of MempoolTxidEntry
+type MempoolTxidEntries []MempoolTxidEntry
+
 // OnNewBlockFunc is used to send notification about a new block
 type OnNewBlockFunc func(hash string, height uint32)
 
@@ -281,4 +290,5 @@ type Mempool interface {
 	Resync() (int, error)
 	GetTransactions(address string) ([]Outpoint, error)
 	GetAddrDescTransactions(addrDesc AddressDescriptor) ([]Outpoint, error)
+	GetAllEntries() MempoolTxidEntries
 }

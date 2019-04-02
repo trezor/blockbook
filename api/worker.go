@@ -1070,3 +1070,26 @@ func (w *Worker) GetSystemInfo(internal bool) (*SystemInfo, error) {
 	glog.Info("GetSystemInfo finished in ", time.Since(start))
 	return &SystemInfo{bi, ci}, nil
 }
+
+// GetMempool returns a page of mempool txids
+func (w *Worker) GetMempool(page int, itemsOnPage int) (*MempoolTxids, error) {
+	page--
+	if page < 0 {
+		page = 0
+	}
+	entries := w.mempool.GetAllEntries()
+	pg, from, to, page := computePaging(len(entries), page, itemsOnPage)
+	r := &MempoolTxids{
+		Paging:      pg,
+		MempoolSize: len(entries),
+	}
+	r.Mempool = make([]MempoolTxid, to-from)
+	for i := from; i < to; i++ {
+		entry := &entries[i]
+		r.Mempool[i-from] = MempoolTxid{
+			Txid: entry.Txid,
+			Time: int64(entry.Time),
+		}
+	}
+	return r, nil
+}

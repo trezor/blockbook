@@ -311,3 +311,8 @@ func (c *mempoolWithMetrics) GetAddrDescTransactions(addrDesc bchain.AddressDesc
 	defer func(s time.Time) { c.observeRPCLatency("GetMempoolTransactionsForAddrDesc", s, err) }(time.Now())
 	return c.mempool.GetAddrDescTransactions(addrDesc)
 }
+
+func (c *mempoolWithMetrics) GetAllEntries() (v bchain.MempoolTxidEntries) {
+	defer func(s time.Time) { c.observeRPCLatency("GetAllEntries", s, nil) }(time.Now())
+	return c.mempool.GetAllEntries()
+}

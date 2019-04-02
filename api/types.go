@@ -337,3 +337,16 @@ type SystemInfo struct {
 	Blockbook *BlockbookInfo    `json:"blockbook"`
 	Backend   *bchain.ChainInfo `json:"backend"`
 }
+
+// MempoolTxid contains information about a transaction in mempool
+type MempoolTxid struct {
+	Time int64  `json:"time"`
+	Txid string `json:"txid"`
+}
+
+// MempoolTxids contains a list of mempool txids with paging information
+type MempoolTxids struct {
+	Paging
+	Mempool     []MempoolTxid `json:"mempool"`
+	MempoolSize int           `json:"mempoolSize"`
+}

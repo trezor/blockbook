@@ -137,3 +137,8 @@ func (m *MempoolEthereumType) Resync() (int, error) {
 	glog.Info("Mempool: resync finished in ", time.Since(start), ", ", len(m.txEntries), " transactions in mempool")
 	return len(m.txEntries), nil
 }
+
+// GetAllEntries returns all mempool entries sorted by fist seen time in descending order
+func (m *MempoolEthereumType) GetAllEntries() MempoolTxidEntries {
+	return getAllEntries(m.txEntries)
+}
