@@ -1,7 +1,6 @@
 package bchain
 
 import (
-	"sync"
 	"time"
 
 	"github.com/golang/glog"
@@ -9,40 +8,12 @@ import (
 
 // MempoolEthereumType is mempool handle of EthereumType chains
 type MempoolEthereumType struct {
-	chain        BlockChain
-	mux          sync.Mutex
-	txEntries    map[string]txEntry
-	addrDescToTx map[string][]Outpoint
-	OnNewTxAddr  OnNewTxAddrFunc
+	BaseMempool
 }
 
 // NewMempoolEthereumType creates new mempool handler.
 func NewMempoolEthereumType(chain BlockChain) *MempoolEthereumType {
-	return &MempoolEthereumType{chain: chain}
-}
-
-// GetTransactions returns slice of mempool transactions for given address
-func (m *MempoolEthereumType) GetTransactions(address string) ([]Outpoint, error) {
-	parser := m.chain.GetChainParser()
-	addrDesc, err := parser.GetAddrDescFromAddress(address)
-	if err != nil {
-		return nil, err
-	}
-	return m.GetAddrDescTransactions(addrDesc)
-}
-
-// GetAddrDescTransactions returns slice of mempool transactions for given address descriptor
-func (m *MempoolEthereumType) GetAddrDescTransactions(addrDesc AddressDescriptor) ([]Outpoint, error) {
-	m.mux.Lock()
-	defer m.mux.Unlock()
-	return append([]Outpoint(nil), m.addrDescToTx[string(addrDesc)]...), nil
-}
-
-func (m *MempoolEthereumType) updateMappings(newTxEntries map[string]txEntry, newAddrDescToTx map[string][]Outpoint) {
-	m.mux.Lock()
-	defer m.mux.Unlock()
-	m.txEntries = newTxEntries
-	m.addrDescToTx = newAddrDescToTx
+	return &MempoolEthereumType{BaseMempool: BaseMempool{chain: chain}}
 }
 
 func appendAddress(io []addrIndex, i int32, a string, parser BlockChainParser) []addrIndex {
@@ -136,9 +107,4 @@ func (m *MempoolEthereumType) Resync() (int, error) {
 	m.updateMappings(newTxEntries, newAddrDescToTx)
 	glog.Info("Mempool: resync finished in ", time.Since(start), ", ", len(m.txEntries), " transactions in mempool")
 	return len(m.txEntries), nil
-}
-
-// GetAllEntries returns all mempool entries sorted by fist seen time in descending order
-func (m *MempoolEthereumType) GetAllEntries() MempoolTxidEntries {
-	return getAllEntries(m.txEntries)
 }
