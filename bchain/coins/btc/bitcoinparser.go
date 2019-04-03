@@ -160,7 +160,7 @@ func (p *BitcoinParser) tryParseOmni(data []byte) string {
 
 	// currently only simple send transaction version 0 is supported, see
 	// https://github.com/OmniLayer/spec#transfer-coins-simple-send
-	if len(data) != 20 && data[0] != 'o' {
+	if len(data) != 20 || data[0] != 'o' {
 		return ""
 	}
 	// omni (4) <tx_version> (2) <tx_type> (2)
