@@ -294,6 +294,10 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height uint32, 
 			return nil, err
 		}
 	}
+	// for mempool transaction get first seen time
+	if bchainTx.Confirmations == 0 {
+		bchainTx.Blocktime = int64(w.mempool.GetTransactionTime(bchainTx.Txid))
+	}
 	r := &Tx{
 		Blockhash:        blockhash,
 		Blockheight:      int(height),

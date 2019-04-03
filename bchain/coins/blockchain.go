@@ -316,3 +316,7 @@ func (c *mempoolWithMetrics) GetAllEntries() (v bchain.MempoolTxidEntries) {
 	defer func(s time.Time) { c.observeRPCLatency("GetAllEntries", s, nil) }(time.Now())
 	return c.mempool.GetAllEntries()
 }
+
+func (c *mempoolWithMetrics) GetTransactionTime(txid string) uint32 {
+	return c.mempool.GetTransactionTime(txid)
+}
