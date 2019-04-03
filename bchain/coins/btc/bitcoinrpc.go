@@ -131,9 +131,9 @@ func (b *BitcoinRPC) Initialize() error {
 }
 
 // CreateMempool creates mempool if not already created, however does not initialize it
-func (b *BitcoinRPC) CreateMempool() (bchain.Mempool, error) {
+func (b *BitcoinRPC) CreateMempool(chain bchain.BlockChain) (bchain.Mempool, error) {
 	if b.Mempool == nil {
-		b.Mempool = bchain.NewMempoolBitcoinType(b, b.ChainConfig.MempoolWorkers, b.ChainConfig.MempoolSubWorkers)
+		b.Mempool = bchain.NewMempoolBitcoinType(chain, b.ChainConfig.MempoolWorkers, b.ChainConfig.MempoolSubWorkers)
 	}
 	return b.Mempool, nil
 }

@@ -164,9 +164,9 @@ func (b *EthereumRPC) Initialize() error {
 }
 
 // CreateMempool creates mempool if not already created, however does not initialize it
-func (b *EthereumRPC) CreateMempool() (bchain.Mempool, error) {
+func (b *EthereumRPC) CreateMempool(chain bchain.BlockChain) (bchain.Mempool, error) {
 	if b.Mempool == nil {
-		b.Mempool = bchain.NewMempoolEthereumType(b)
+		b.Mempool = bchain.NewMempoolEthereumType(chain)
 	}
 	return b.Mempool, nil
 }

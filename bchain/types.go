@@ -209,7 +209,7 @@ type BlockChain interface {
 	// initialize the block chain connector
 	Initialize() error
 	// create mempool but do not initialize it
-	CreateMempool() (Mempool, error)
+	CreateMempool(BlockChain) (Mempool, error)
 	// initialize mempool, create ZeroMQ (or other) subscription
 	InitializeMempool(AddrDescForOutpointFunc, OnNewTxAddrFunc) error
 	// shutdown mempool, ZeroMQ and block chain connections

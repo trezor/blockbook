@@ -169,7 +169,7 @@ func initBlockChain(coinName string, cfg json.RawMessage) (bchain.BlockChain, bc
 		return nil, nil, fmt.Errorf("BlockChain initialization failed: %s", err)
 	}
 
-	mempool, err := cli.CreateMempool()
+	mempool, err := cli.CreateMempool(cli)
 	if err != nil {
 		return nil, nil, fmt.Errorf("Mempool creation failed: %s", err)
 	}

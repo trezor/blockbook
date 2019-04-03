@@ -85,7 +85,7 @@ func setupPublicHTTPServer(t *testing.T) (*PublicServer, string) {
 		glog.Fatal("fakechain: ", err)
 	}
 
-	mempool, err := chain.CreateMempool()
+	mempool, err := chain.CreateMempool(chain)
 	if err != nil {
 		glog.Fatal("mempool: ", err)
 	}

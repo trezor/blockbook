@@ -17,8 +17,8 @@ func NewFakeBlockChain(parser bchain.BlockChainParser) (bchain.BlockChain, error
 	return &fakeBlockChain{&bchain.BaseChain{Parser: parser}}, nil
 }
 
-func (b *fakeBlockChain) CreateMempool() (bchain.Mempool, error) {
-	return bchain.NewMempoolBitcoinType(b, 1, 1), nil
+func (b *fakeBlockChain) CreateMempool(chain bchain.BlockChain) (bchain.Mempool, error) {
+	return bchain.NewMempoolBitcoinType(chain, 1, 1), nil
 }
 
 func (c *fakeBlockChain) Initialize() error {

@@ -124,7 +124,7 @@ func NewBlockChain(coin string, configfile string, pushHandler func(bchain.Notif
 	if err != nil {
 		return nil, nil, err
 	}
-	mempool, err := bc.CreateMempool()
+	mempool, err := bc.CreateMempool(bc)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -148,8 +148,8 @@ func (c *blockChainWithMetrics) Initialize() error {
 	return c.b.Initialize()
 }
 
-func (c *blockChainWithMetrics) CreateMempool() (bchain.Mempool, error) {
-	return c.b.CreateMempool()
+func (c *blockChainWithMetrics) CreateMempool(chain bchain.BlockChain) (bchain.Mempool, error) {
+	return c.b.CreateMempool(chain)
 }
 
 func (c *blockChainWithMetrics) InitializeMempool(addrDescForOutpoint bchain.AddrDescForOutpointFunc, onNewTxAddr bchain.OnNewTxAddrFunc) error {
