@@ -39,11 +39,17 @@ func (m *BaseMempool) GetTransactions(address string) ([]Outpoint, error) {
 	return m.GetAddrDescTransactions(addrDesc)
 }
 
-// GetAddrDescTransactions returns slice of mempool transactions for given address descriptor
+// GetAddrDescTransactions returns slice of mempool transactions for given address descriptor, in reverse order
 func (m *BaseMempool) GetAddrDescTransactions(addrDesc AddressDescriptor) ([]Outpoint, error) {
 	m.mux.Lock()
 	defer m.mux.Unlock()
-	return append([]Outpoint(nil), m.addrDescToTx[string(addrDesc)]...), nil
+	outpoints := m.addrDescToTx[string(addrDesc)]
+	rv := make([]Outpoint, len(outpoints))
+	for i, j := len(outpoints)-1, 0; i >= 0; i-- {
+		rv[j] = outpoints[i]
+		j++
+	}
+	return rv, nil
 }
 
 func (a MempoolTxidEntries) Len() int      { return len(a) }
@@ -83,4 +89,13 @@ func getAllEntries(txEntries map[string]txEntry) MempoolTxidEntries {
 // GetAllEntries returns all mempool entries sorted by fist seen time in descending order
 func (m *BaseMempool) GetAllEntries() MempoolTxidEntries {
 	return getAllEntries(m.txEntries)
+}
+
+// GetTransactionTime returns first seen time of a transaction
+func (m *BaseMempool) GetTransactionTime(txid string) uint32 {
+	e, found := m.txEntries[txid]
+	if !found {
+		return 0
+	}
+	return e.time
 }
