@@ -67,33 +67,33 @@ func (a MempoolTxidEntries) Less(i, j int) bool {
 
 func (m *BaseMempool) updateMappings(newTxEntries map[string]txEntry, newAddrDescToTx map[string][]Outpoint) {
 	m.mux.Lock()
-	defer m.mux.Unlock()
 	m.txEntries = newTxEntries
 	m.addrDescToTx = newAddrDescToTx
+	m.mux.Unlock()
 }
 
-func getAllEntries(txEntries map[string]txEntry) MempoolTxidEntries {
-	a := make(MempoolTxidEntries, len(txEntries))
+// GetAllEntries returns all mempool entries sorted by fist seen time in descending order
+func (m *BaseMempool) GetAllEntries() MempoolTxidEntries {
+	entries := make(MempoolTxidEntries, len(m.txEntries))
 	i := 0
-	for txid, entry := range txEntries {
-		a[i] = MempoolTxidEntry{
+	m.mux.Lock()
+	for txid, entry := range m.txEntries {
+		entries[i] = MempoolTxidEntry{
 			Txid: txid,
 			Time: entry.time,
 		}
 		i++
 	}
-	sort.Sort(a)
-	return a
-}
-
-// GetAllEntries returns all mempool entries sorted by fist seen time in descending order
-func (m *BaseMempool) GetAllEntries() MempoolTxidEntries {
-	return getAllEntries(m.txEntries)
+	m.mux.Unlock()
+	sort.Sort(entries)
+	return entries
 }
 
 // GetTransactionTime returns first seen time of a transaction
 func (m *BaseMempool) GetTransactionTime(txid string) uint32 {
+	m.mux.Lock()
 	e, found := m.txEntries[txid]
+	m.mux.Unlock()
 	if !found {
 		return 0
 	}

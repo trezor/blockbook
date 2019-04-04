@@ -6,14 +6,25 @@ import (
 	"github.com/golang/glog"
 )
 
+const mempoolTimeoutTime = 24 * time.Hour
+const mempoolTimeoutRunPeriod = 10 * time.Minute
+
 // MempoolEthereumType is mempool handle of EthereumType chains
 type MempoolEthereumType struct {
 	BaseMempool
+	nextTimeoutRun time.Time
 }
 
 // NewMempoolEthereumType creates new mempool handler.
 func NewMempoolEthereumType(chain BlockChain) *MempoolEthereumType {
-	return &MempoolEthereumType{BaseMempool: BaseMempool{chain: chain}}
+	return &MempoolEthereumType{
+		BaseMempool: BaseMempool{
+			chain:        chain,
+			txEntries:    make(map[string]txEntry),
+			addrDescToTx: make(map[string][]Outpoint),
+		},
+		nextTimeoutRun: time.Now().Add(mempoolTimeoutTime),
+	}
 }
 
 func appendAddress(io []addrIndex, i int32, a string, parser BlockChainParser) []addrIndex {
@@ -76,35 +87,80 @@ func (m *MempoolEthereumType) createTxEntry(txid string, txTime uint32) (txEntry
 	return txEntry{addrIndexes: addrIndexes, time: txTime}, true
 }
 
-// Resync gets mempool transactions and maps outputs to transactions.
-// Resync is not reentrant, it should be called from a single thread.
-// Read operations (GetTransactions) are safe.
+// Resync ethereum type removes timed out transactions and returns number of transactions in mempool.
+// Transactions are added/removed by AddTransactionToMempool/RemoveTransactionFromMempool methods
 func (m *MempoolEthereumType) Resync() (int, error) {
-	start := time.Now()
-	glog.V(1).Info("Mempool: resync")
-	txs, err := m.chain.GetMempoolTransactions()
-	if err != nil {
-		return 0, err
-	}
-	// allocate slightly larger capacity of the maps
-	newTxEntries := make(map[string]txEntry, len(m.txEntries)+5)
-	newAddrDescToTx := make(map[string][]Outpoint, len(m.addrDescToTx)+5)
-	txTime := uint32(time.Now().Unix())
-	var ok bool
-	for _, txid := range txs {
-		entry, exists := m.txEntries[txid]
-		if !exists {
-			entry, ok = m.createTxEntry(txid, txTime)
-			if !ok {
-				continue
+	m.mux.Lock()
+	entries := len(m.txEntries)
+	now := time.Now()
+	if m.nextTimeoutRun.Before(now) {
+		threshold := now.Add(-mempoolTimeoutTime)
+		for txid, entry := range m.txEntries {
+			if time.Unix(int64(entry.time), 0).Before(threshold) {
+				m.removeEntryFromMempool(txid, entry)
 			}
 		}
-		newTxEntries[txid] = entry
+		removed := entries - len(m.txEntries)
+		entries = len(m.txEntries)
+		glog.Info("Mempool: cleanup, removed ", removed, " transactions from mempool")
+		m.nextTimeoutRun = now.Add(mempoolTimeoutRunPeriod)
+	}
+	m.mux.Unlock()
+	glog.Info("Mempool: resync ", entries, " transactions in mempool")
+	return entries, nil
+}
+
+// AddTransactionToMempool adds transactions to mempool
+func (m *MempoolEthereumType) AddTransactionToMempool(txid string) {
+	m.mux.Lock()
+	_, exists := m.txEntries[txid]
+	m.mux.Unlock()
+	if glog.V(1) {
+		glog.Info("AddTransactionToMempool ", txid, ", existed ", exists)
+	}
+	if !exists {
+		entry, ok := m.createTxEntry(txid, uint32(time.Now().Unix()))
+		if !ok {
+			return
+		}
+		m.mux.Lock()
+		m.txEntries[txid] = entry
 		for _, si := range entry.addrIndexes {
-			newAddrDescToTx[si.addrDesc] = append(newAddrDescToTx[si.addrDesc], Outpoint{txid, si.n})
+			m.addrDescToTx[si.addrDesc] = append(m.addrDescToTx[si.addrDesc], Outpoint{txid, si.n})
+		}
+		m.mux.Unlock()
+	}
+}
+
+func (m *MempoolEthereumType) removeEntryFromMempool(txid string, entry txEntry) {
+	delete(m.txEntries, txid)
+	for _, si := range entry.addrIndexes {
+		outpoints, found := m.addrDescToTx[si.addrDesc]
+		if found {
+			newOutpoints := make([]Outpoint, 0, len(outpoints)-1)
+			for _, o := range outpoints {
+				if o.Txid != txid {
+					newOutpoints = append(newOutpoints, o)
+				}
+			}
+			if len(newOutpoints) > 0 {
+				m.addrDescToTx[si.addrDesc] = newOutpoints
+			} else {
+				delete(m.addrDescToTx, si.addrDesc)
+			}
 		}
 	}
-	m.updateMappings(newTxEntries, newAddrDescToTx)
-	glog.Info("Mempool: resync finished in ", time.Since(start), ", ", len(m.txEntries), " transactions in mempool")
-	return len(m.txEntries), nil
+}
+
+// RemoveTransactionFromMempool removes transaction from mempool
+func (m *MempoolEthereumType) RemoveTransactionFromMempool(txid string) {
+	m.mux.Lock()
+	entry, exists := m.txEntries[txid]
+	if glog.V(1) {
+		glog.Info("RemoveTransactionFromMempool ", txid, ", existed ", exists)
+	}
+	if exists {
+		m.removeEntryFromMempool(txid, entry)
+	}
+	m.mux.Unlock()
 }
