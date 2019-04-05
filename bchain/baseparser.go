@@ -170,8 +170,9 @@ func (p *BaseParser) PackTx(tx *Tx, height uint32, blockTime int64) ([]byte, err
 		if err != nil {
 			return nil, errors.Annotatef(err, "Vin %v Hex %v", i, vi.ScriptSig.Hex)
 		}
+		// coinbase txs do not have Vin.txid
 		itxid, err := p.PackTxid(vi.Txid)
-		if err != nil {
+		if err != nil && err != ErrTxidMissing {
 			return nil, errors.Annotatef(err, "Vin %v Txid %v", i, vi.Txid)
 		}
 		pti[i] = &ProtoTransaction_VinType{
@@ -265,6 +266,21 @@ func (p *BaseParser) UnpackTx(buf []byte) (*Tx, uint32, error) {
 		Version:   pt.Version,
 	}
 	return &tx, pt.Height, nil
+}
+
+// DerivationBasePath is unsupported
+func (p *BaseParser) DerivationBasePath(xpub string) (string, error) {
+	return "", errors.New("Not supported")
+}
+
+// DeriveAddressDescriptors is unsupported
+func (p *BaseParser) DeriveAddressDescriptors(xpub string, change uint32, indexes []uint32) ([]AddressDescriptor, error) {
+	return nil, errors.New("Not supported")
+}
+
+// DeriveAddressDescriptorsFromTo is unsupported
+func (p *BaseParser) DeriveAddressDescriptorsFromTo(xpub string, change uint32, fromIndex uint32, toIndex uint32) ([]AddressDescriptor, error) {
+	return nil, errors.New("Not supported")
 }
 
 // EthereumTypeGetErc20FromTx is unsupported

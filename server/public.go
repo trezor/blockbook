@@ -131,6 +131,7 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 		// internal explorer handlers
 		serveMux.HandleFunc(path+"tx/", s.htmlTemplateHandler(s.explorerTx))
 		serveMux.HandleFunc(path+"address/", s.htmlTemplateHandler(s.explorerAddress))
+		serveMux.HandleFunc(path+"xpub/", s.htmlTemplateHandler(s.explorerXpub))
 		serveMux.HandleFunc(path+"search/", s.htmlTemplateHandler(s.explorerSearch))
 		serveMux.HandleFunc(path+"blocks", s.htmlTemplateHandler(s.explorerBlocks))
 		serveMux.HandleFunc(path+"block/", s.htmlTemplateHandler(s.explorerBlock))
@@ -156,7 +157,7 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 		serveMux.HandleFunc(path+"api/v1/tx-specific/", s.jsonHandler(s.apiTxSpecific, apiV1))
 		serveMux.HandleFunc(path+"api/v1/tx/", s.jsonHandler(s.apiTx, apiV1))
 		serveMux.HandleFunc(path+"api/v1/address/", s.jsonHandler(s.apiAddress, apiV1))
-		serveMux.HandleFunc(path+"api/v1/utxo/", s.jsonHandler(s.apiAddressUtxo, apiV1))
+		serveMux.HandleFunc(path+"api/v1/utxo/", s.jsonHandler(s.apiUtxo, apiV1))
 		serveMux.HandleFunc(path+"api/v1/block/", s.jsonHandler(s.apiBlock, apiV1))
 		serveMux.HandleFunc(path+"api/v1/sendtx/", s.jsonHandler(s.apiSendTx, apiV1))
 		serveMux.HandleFunc(path+"api/v1/estimatefee/", s.jsonHandler(s.apiEstimateFee, apiV1))
@@ -165,7 +166,8 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 	serveMux.HandleFunc(path+"api/tx-specific/", s.jsonHandler(s.apiTxSpecific, apiDefault))
 	serveMux.HandleFunc(path+"api/tx/", s.jsonHandler(s.apiTx, apiDefault))
 	serveMux.HandleFunc(path+"api/address/", s.jsonHandler(s.apiAddress, apiDefault))
-	serveMux.HandleFunc(path+"api/utxo/", s.jsonHandler(s.apiAddressUtxo, apiDefault))
+	serveMux.HandleFunc(path+"api/xpub/", s.jsonHandler(s.apiXpub, apiDefault))
+	serveMux.HandleFunc(path+"api/utxo/", s.jsonHandler(s.apiUtxo, apiDefault))
 	serveMux.HandleFunc(path+"api/block/", s.jsonHandler(s.apiBlock, apiDefault))
 	serveMux.HandleFunc(path+"api/sendtx/", s.jsonHandler(s.apiSendTx, apiDefault))
 	serveMux.HandleFunc(path+"api/estimatefee/", s.jsonHandler(s.apiEstimateFee, apiDefault))
@@ -174,7 +176,8 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 	serveMux.HandleFunc(path+"api/v2/tx-specific/", s.jsonHandler(s.apiTxSpecific, apiV2))
 	serveMux.HandleFunc(path+"api/v2/tx/", s.jsonHandler(s.apiTx, apiV2))
 	serveMux.HandleFunc(path+"api/v2/address/", s.jsonHandler(s.apiAddress, apiV2))
-	serveMux.HandleFunc(path+"api/v2/utxo/", s.jsonHandler(s.apiAddressUtxo, apiV2))
+	serveMux.HandleFunc(path+"api/v2/xpub/", s.jsonHandler(s.apiXpub, apiV2))
+	serveMux.HandleFunc(path+"api/v2/utxo/", s.jsonHandler(s.apiUtxo, apiV2))
 	serveMux.HandleFunc(path+"api/v2/block/", s.jsonHandler(s.apiBlock, apiV2))
 	serveMux.HandleFunc(path+"api/v2/sendtx/", s.jsonHandler(s.apiSendTx, apiV2))
 	serveMux.HandleFunc(path+"api/v2/estimatefee/", s.jsonHandler(s.apiEstimateFee, apiV2))
@@ -262,7 +265,10 @@ func (s *PublicServer) jsonHandler(handler func(r *http.Request, apiVersion int)
 			if e, isError := data.(jsonError); isError {
 				w.WriteHeader(e.HTTPStatus)
 			}
-			json.NewEncoder(w).Encode(data)
+			err = json.NewEncoder(w).Encode(data)
+			if err != nil {
+				glog.Warning("json encode ", err)
+			}
 		}()
 		data, err = handler(r, apiVersion)
 		if err != nil || data == nil {
@@ -372,6 +378,7 @@ const (
 	indexTpl
 	txTpl
 	addressTpl
+	xpubTpl
 	blocksTpl
 	blockTpl
 	sendTransactionTpl
@@ -381,26 +388,27 @@ const (
 
 // TemplateData is used to transfer data to the templates
 type TemplateData struct {
-	CoinName         string
-	CoinShortcut     string
-	CoinLabel        string
-	InternalExplorer bool
-	ChainType        bchain.ChainType
-	Address          *api.Address
-	AddrStr          string
-	Tx               *api.Tx
-	Error            *api.APIError
-	Blocks           *api.Blocks
-	Block            *api.Block
-	Info             *api.SystemInfo
-	Page             int
-	PrevPage         int
-	NextPage         int
-	PagingRange      []int
-	PageParams       template.URL
-	TOSLink          string
-	SendTxHex        string
-	Status           string
+	CoinName             string
+	CoinShortcut         string
+	CoinLabel            string
+	InternalExplorer     bool
+	ChainType            bchain.ChainType
+	Address              *api.Address
+	AddrStr              string
+	Tx                   *api.Tx
+	Error                *api.APIError
+	Blocks               *api.Blocks
+	Block                *api.Block
+	Info                 *api.SystemInfo
+	Page                 int
+	PrevPage             int
+	NextPage             int
+	PagingRange          []int
+	PageParams           template.URL
+	TOSLink              string
+	SendTxHex            string
+	Status               string
+	NonZeroBalanceTokens bool
 }
 
 func (s *PublicServer) parseTemplates() []*template.Template {
@@ -410,7 +418,8 @@ func (s *PublicServer) parseTemplates() []*template.Template {
 		"formatAmount":             s.formatAmount,
 		"formatAmountWithDecimals": formatAmountWithDecimals,
 		"setTxToTemplateData":      setTxToTemplateData,
-		"stringInSlice":            stringInSlice,
+		"isOwnAddress":             isOwnAddress,
+		"isOwnAddresses":           isOwnAddresses,
 	}
 	var createTemplate func(filenames ...string) *template.Template
 	if s.debug {
@@ -465,6 +474,7 @@ func (s *PublicServer) parseTemplates() []*template.Template {
 		t[addressTpl] = createTemplate("./static/templates/address.html", "./static/templates/txdetail.html", "./static/templates/paging.html", "./static/templates/base.html")
 		t[blockTpl] = createTemplate("./static/templates/block.html", "./static/templates/txdetail.html", "./static/templates/paging.html", "./static/templates/base.html")
 	}
+	t[xpubTpl] = createTemplate("./static/templates/xpub.html", "./static/templates/txdetail.html", "./static/templates/paging.html", "./static/templates/base.html")
 	return t
 }
 
@@ -496,6 +506,29 @@ func formatAmountWithDecimals(a *api.Amount, d int) string {
 func setTxToTemplateData(td *TemplateData, tx *api.Tx) *TemplateData {
 	td.Tx = tx
 	return td
+}
+
+// returns true if address is "own",
+// i.e. either the address of the address detail or belonging to the xpub
+func isOwnAddress(td *TemplateData, a string) bool {
+	if a == td.AddrStr {
+		return true
+	}
+	if td.Address != nil && td.Address.XPubAddresses != nil {
+		if _, found := td.Address.XPubAddresses[a]; found {
+			return true
+		}
+	}
+	return false
+}
+
+// returns true if addresses are "own",
+// i.e. either the address of the address detail or belonging to the xpub
+func isOwnAddresses(td *TemplateData, addresses []string) bool {
+	if len(addresses) == 1 {
+		return isOwnAddress(td, addresses[0])
+	}
+	return false
 }
 
 func (s *PublicServer) explorerTx(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
@@ -535,46 +568,125 @@ func (s *PublicServer) explorerSpendingTx(w http.ResponseWriter, r *http.Request
 	return errorTpl, nil, err
 }
 
-func (s *PublicServer) explorerAddress(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
-	var address *api.Address
-	var filter string
-	var fn = api.AddressFilterVoutOff
-	var err error
-	s.metrics.ExplorerViews.With(common.Labels{"action": "address"}).Inc()
-	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
-		page, ec := strconv.Atoi(r.URL.Query().Get("page"))
-		if ec != nil {
-			page = 0
-		}
-		filter = r.URL.Query().Get("filter")
-		if len(filter) > 0 {
-			if filter == "inputs" {
-				fn = api.AddressFilterVoutInputs
-			} else if filter == "outputs" {
-				fn = api.AddressFilterVoutOutputs
-			} else {
-				fn, ec = strconv.Atoi(filter)
-				if ec != nil || fn < 0 {
-					filter = ""
-					fn = api.AddressFilterVoutOff
-				}
+func (s *PublicServer) getAddressQueryParams(r *http.Request, accountDetails api.AccountDetails, maxPageSize int) (int, int, api.AccountDetails, *api.AddressFilter, string, int) {
+	var voutFilter = api.AddressFilterVoutOff
+	page, ec := strconv.Atoi(r.URL.Query().Get("page"))
+	if ec != nil {
+		page = 0
+	}
+	pageSize, ec := strconv.Atoi(r.URL.Query().Get("pageSize"))
+	if ec != nil || pageSize > maxPageSize {
+		pageSize = maxPageSize
+	}
+	from, ec := strconv.Atoi(r.URL.Query().Get("from"))
+	if ec != nil {
+		from = 0
+	}
+	to, ec := strconv.Atoi(r.URL.Query().Get("to"))
+	if ec != nil {
+		to = 0
+	}
+	filterParam := r.URL.Query().Get("filter")
+	if len(filterParam) > 0 {
+		if filterParam == "inputs" {
+			voutFilter = api.AddressFilterVoutInputs
+		} else if filterParam == "outputs" {
+			voutFilter = api.AddressFilterVoutOutputs
+		} else {
+			voutFilter, ec = strconv.Atoi(filterParam)
+			if ec != nil || voutFilter < 0 {
+				voutFilter = api.AddressFilterVoutOff
 			}
 		}
-		address, err = s.api.GetAddress(r.URL.Path[i+1:], page, txsOnPage, api.TxHistoryLight, &api.AddressFilter{Vout: fn})
-		if err != nil {
-			return errorTpl, nil, err
-		}
+	}
+	switch r.URL.Query().Get("details") {
+	case "basic":
+		accountDetails = api.AccountDetailsBasic
+	case "tokens":
+		accountDetails = api.AccountDetailsTokens
+	case "tokenBalances":
+		accountDetails = api.AccountDetailsTokenBalances
+	case "txids":
+		accountDetails = api.AccountDetailsTxidHistory
+	case "txs":
+		accountDetails = api.AccountDetailsTxHistory
+	}
+	tokensToReturn := api.TokensToReturnNonzeroBalance
+	switch r.URL.Query().Get("tokens") {
+	case "derived":
+		tokensToReturn = api.TokensToReturnDerived
+	case "used":
+		tokensToReturn = api.TokensToReturnUsed
+	case "nonzero":
+		tokensToReturn = api.TokensToReturnNonzeroBalance
+	}
+	gap, ec := strconv.Atoi(r.URL.Query().Get("gap"))
+	if ec != nil {
+		gap = 0
+	}
+	return page, pageSize, accountDetails, &api.AddressFilter{
+		Vout:           voutFilter,
+		TokensToReturn: tokensToReturn,
+		FromHeight:     uint32(from),
+		ToHeight:       uint32(to),
+	}, filterParam, gap
+}
+
+func (s *PublicServer) explorerAddress(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
+	var addressParam string
+	i := strings.LastIndexByte(r.URL.Path, '/')
+	if i > 0 {
+		addressParam = r.URL.Path[i+1:]
+	}
+	if len(addressParam) == 0 {
+		return errorTpl, nil, api.NewAPIError("Missing address", true)
+	}
+	s.metrics.ExplorerViews.With(common.Labels{"action": "address"}).Inc()
+	page, _, _, filter, filterParam, _ := s.getAddressQueryParams(r, api.AccountDetailsTxHistoryLight, txsOnPage)
+	// do not allow details to be changed by query params
+	address, err := s.api.GetAddress(addressParam, page, txsOnPage, api.AccountDetailsTxHistoryLight, filter)
+	if err != nil {
+		return errorTpl, nil, err
 	}
 	data := s.newTemplateData()
 	data.AddrStr = address.AddrStr
 	data.Address = address
 	data.Page = address.Page
 	data.PagingRange, data.PrevPage, data.NextPage = getPagingRange(address.Page, address.TotalPages)
-	if filter != "" {
-		data.PageParams = template.URL("&filter=" + filter)
-		data.Address.Filter = filter
+	if filterParam != "" {
+		data.PageParams = template.URL("&filter=" + filterParam)
+		data.Address.Filter = filterParam
 	}
 	return addressTpl, data, nil
+}
+
+func (s *PublicServer) explorerXpub(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
+	var xpub string
+	i := strings.LastIndexByte(r.URL.Path, '/')
+	if i > 0 {
+		xpub = r.URL.Path[i+1:]
+	}
+	if len(xpub) == 0 {
+		return errorTpl, nil, api.NewAPIError("Missing xpub", true)
+	}
+	s.metrics.ExplorerViews.With(common.Labels{"action": "xpub"}).Inc()
+	page, _, _, filter, filterParam, gap := s.getAddressQueryParams(r, api.AccountDetailsTxHistoryLight, txsOnPage)
+	// do not allow txsOnPage and details to be changed by query params
+	address, err := s.api.GetXpubAddress(xpub, page, txsOnPage, api.AccountDetailsTxHistoryLight, filter, gap)
+	if err != nil {
+		return errorTpl, nil, err
+	}
+	data := s.newTemplateData()
+	data.AddrStr = address.AddrStr
+	data.Address = address
+	data.Page = address.Page
+	data.PagingRange, data.PrevPage, data.NextPage = getPagingRange(address.Page, address.TotalPages)
+	if filterParam != "" {
+		data.PageParams = template.URL("&filter=" + filterParam)
+		data.Address.Filter = filterParam
+	}
+	data.NonZeroBalanceTokens = filter.TokensToReturn == api.TokensToReturnNonzeroBalance
+	return xpubTpl, data, nil
 }
 
 func (s *PublicServer) explorerBlocks(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
@@ -638,6 +750,11 @@ func (s *PublicServer) explorerSearch(w http.ResponseWriter, r *http.Request) (t
 	var err error
 	s.metrics.ExplorerViews.With(common.Labels{"action": "search"}).Inc()
 	if len(q) > 0 {
+		address, err = s.api.GetXpubAddress(q, 0, 1, api.AccountDetailsBasic, &api.AddressFilter{Vout: api.AddressFilterVoutOff}, 0)
+		if err == nil {
+			http.Redirect(w, r, joinURL("/xpub/", address.AddrStr), 302)
+			return noTpl, nil, nil
+		}
 		block, err = s.api.GetBlock(q, 0, 1)
 		if err == nil {
 			http.Redirect(w, r, joinURL("/block/", block.Hash), 302)
@@ -648,7 +765,7 @@ func (s *PublicServer) explorerSearch(w http.ResponseWriter, r *http.Request) (t
 			http.Redirect(w, r, joinURL("/tx/", tx.Txid), 302)
 			return noTpl, nil, nil
 		}
-		address, err = s.api.GetAddress(q, 0, 1, api.Basic, &api.AddressFilter{Vout: api.AddressFilterVoutOff})
+		address, err = s.api.GetAddress(q, 0, 1, api.AccountDetailsBasic, &api.AddressFilter{Vout: api.AddressFilterVoutOff})
 		if err == nil {
 			http.Redirect(w, r, joinURL("/address/", address.AddrStr), 302)
 			return noTpl, nil, nil
@@ -769,59 +886,91 @@ func (s *PublicServer) apiBlockIndex(r *http.Request, apiVersion int) (interface
 }
 
 func (s *PublicServer) apiTx(r *http.Request, apiVersion int) (interface{}, error) {
+	var txid string
+	i := strings.LastIndexByte(r.URL.Path, '/')
+	if i > 0 {
+		txid = r.URL.Path[i+1:]
+	}
+	if len(txid) == 0 {
+		return nil, api.NewAPIError("Missing txid", true)
+	}
 	var tx *api.Tx
 	var err error
 	s.metrics.ExplorerViews.With(common.Labels{"action": "api-tx"}).Inc()
-	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
-		txid := r.URL.Path[i+1:]
-		spendingTxs := false
-		p := r.URL.Query().Get("spending")
-		if len(p) > 0 {
-			spendingTxs, err = strconv.ParseBool(p)
-			if err != nil {
-				return nil, api.NewAPIError("Parameter 'spending' cannot be converted to boolean", true)
-			}
+	spendingTxs := false
+	p := r.URL.Query().Get("spending")
+	if len(p) > 0 {
+		spendingTxs, err = strconv.ParseBool(p)
+		if err != nil {
+			return nil, api.NewAPIError("Parameter 'spending' cannot be converted to boolean", true)
 		}
-		tx, err = s.api.GetTransaction(txid, spendingTxs, false)
-		if err == nil && apiVersion == apiV1 {
-			return s.api.TxToV1(tx), nil
-		}
+	}
+	tx, err = s.api.GetTransaction(txid, spendingTxs, false)
+	if err == nil && apiVersion == apiV1 {
+		return s.api.TxToV1(tx), nil
 	}
 	return tx, err
 }
 
 func (s *PublicServer) apiTxSpecific(r *http.Request, apiVersion int) (interface{}, error) {
+	var txid string
+	i := strings.LastIndexByte(r.URL.Path, '/')
+	if i > 0 {
+		txid = r.URL.Path[i+1:]
+	}
+	if len(txid) == 0 {
+		return nil, api.NewAPIError("Missing txid", true)
+	}
 	var tx json.RawMessage
 	var err error
 	s.metrics.ExplorerViews.With(common.Labels{"action": "api-tx-specific"}).Inc()
-	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
-		txid := r.URL.Path[i+1:]
-		tx, err = s.chain.GetTransactionSpecific(&bchain.Tx{Txid: txid})
-	}
+	tx, err = s.chain.GetTransactionSpecific(&bchain.Tx{Txid: txid})
 	return tx, err
 }
 
 func (s *PublicServer) apiAddress(r *http.Request, apiVersion int) (interface{}, error) {
+	var addressParam string
+	i := strings.LastIndexByte(r.URL.Path, '/')
+	if i > 0 {
+		addressParam = r.URL.Path[i+1:]
+	}
+	if len(addressParam) == 0 {
+		return nil, api.NewAPIError("Missing address", true)
+	}
 	var address *api.Address
 	var err error
 	s.metrics.ExplorerViews.With(common.Labels{"action": "api-address"}).Inc()
-	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
-		page, ec := strconv.Atoi(r.URL.Query().Get("page"))
-		if ec != nil {
-			page = 0
-		}
-		address, err = s.api.GetAddress(r.URL.Path[i+1:], page, txsInAPI, api.TxidHistory, &api.AddressFilter{Vout: api.AddressFilterVoutOff})
-		if err == nil && apiVersion == apiV1 {
-			return s.api.AddressToV1(address), nil
-		}
+	page, pageSize, details, filter, _, _ := s.getAddressQueryParams(r, api.AccountDetailsTxidHistory, txsInAPI)
+	address, err = s.api.GetAddress(addressParam, page, pageSize, details, filter)
+	if err == nil && apiVersion == apiV1 {
+		return s.api.AddressToV1(address), nil
 	}
 	return address, err
 }
 
-func (s *PublicServer) apiAddressUtxo(r *http.Request, apiVersion int) (interface{}, error) {
-	var utxo []api.AddressUtxo
+func (s *PublicServer) apiXpub(r *http.Request, apiVersion int) (interface{}, error) {
+	var xpub string
+	i := strings.LastIndexByte(r.URL.Path, '/')
+	if i > 0 {
+		xpub = r.URL.Path[i+1:]
+	}
+	if len(xpub) == 0 {
+		return nil, api.NewAPIError("Missing xpub", true)
+	}
+	var address *api.Address
 	var err error
-	s.metrics.ExplorerViews.With(common.Labels{"action": "api-address"}).Inc()
+	s.metrics.ExplorerViews.With(common.Labels{"action": "api-xpub"}).Inc()
+	page, pageSize, details, filter, _, gap := s.getAddressQueryParams(r, api.AccountDetailsTxidHistory, txsInAPI)
+	address, err = s.api.GetXpubAddress(xpub, page, pageSize, details, filter, gap)
+	if err == nil && apiVersion == apiV1 {
+		return s.api.AddressToV1(address), nil
+	}
+	return address, err
+}
+
+func (s *PublicServer) apiUtxo(r *http.Request, apiVersion int) (interface{}, error) {
+	var utxo []api.Utxo
+	var err error
 	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
 		onlyConfirmed := false
 		c := r.URL.Query().Get("confirmed")
@@ -831,7 +980,17 @@ func (s *PublicServer) apiAddressUtxo(r *http.Request, apiVersion int) (interfac
 				return nil, api.NewAPIError("Parameter 'confirmed' cannot be converted to boolean", true)
 			}
 		}
-		utxo, err = s.api.GetAddressUtxo(r.URL.Path[i+1:], onlyConfirmed)
+		gap, ec := strconv.Atoi(r.URL.Query().Get("gap"))
+		if ec != nil {
+			gap = 0
+		}
+		utxo, err = s.api.GetXpubUtxo(r.URL.Path[i+1:], onlyConfirmed, gap)
+		if err == nil {
+			s.metrics.ExplorerViews.With(common.Labels{"action": "api-xpub-utxo"}).Inc()
+		} else {
+			utxo, err = s.api.GetAddressUtxo(r.URL.Path[i+1:], onlyConfirmed)
+			s.metrics.ExplorerViews.With(common.Labels{"action": "api-address-utxo"}).Inc()
+		}
 		if err == nil && apiVersion == apiV1 {
 			return s.api.AddressUtxoToV1(utxo), nil
 		}

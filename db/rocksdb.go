@@ -353,37 +353,44 @@ type outpoint struct {
 	index int32
 }
 
+// TxInput holds input data of the transaction in TxAddresses
 type TxInput struct {
 	AddrDesc bchain.AddressDescriptor
 	ValueSat big.Int
 }
 
+// Addresses converts AddressDescriptor of the input to array of strings
 func (ti *TxInput) Addresses(p bchain.BlockChainParser) ([]string, bool, error) {
 	return p.GetAddressesFromAddrDesc(ti.AddrDesc)
 }
 
+// TxOutput holds output data of the transaction in TxAddresses
 type TxOutput struct {
 	AddrDesc bchain.AddressDescriptor
 	Spent    bool
 	ValueSat big.Int
 }
 
+// Addresses converts AddressDescriptor of the output to array of strings
 func (to *TxOutput) Addresses(p bchain.BlockChainParser) ([]string, bool, error) {
 	return p.GetAddressesFromAddrDesc(to.AddrDesc)
 }
 
+// TxAddresses stores transaction inputs and outputs with amounts
 type TxAddresses struct {
 	Height  uint32
 	Inputs  []TxInput
 	Outputs []TxOutput
 }
 
+// AddrBalance stores number of transactions and balances of an address
 type AddrBalance struct {
 	Txs        uint32
 	SentSat    big.Int
 	BalanceSat big.Int
 }
 
+// ReceivedSat computes received amount from total balance and sent amount
 func (ab *AddrBalance) ReceivedSat() *big.Int {
 	var r big.Int
 	r.Add(&ab.BalanceSat, &ab.SentSat)
@@ -547,15 +554,18 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses add
 	return nil
 }
 
+// addToAddressesMap maintains mapping between addresses and transactions in one block
+// the method assumes that outpus in the block are processed before the inputs
+// the return value is true if the tx was processed before, to not to count the tx multiple times
 func addToAddressesMap(addresses addressesMap, strAddrDesc string, btxID []byte, index int32) bool {
-	// check that the address was used already in this block
+	// check that the address was already processed in this block
 	// if not found, it has certainly not been counted
 	at, found := addresses[strAddrDesc]
 	if found {
-		// check that the address was already used in this tx
+		// if the tx is already in the slice, append the index to the array of indexes
 		for i, t := range at {
 			if bytes.Equal(btxID, t.btxID) {
-				at[i].indexes = append(at[i].indexes, index)
+				at[i].indexes = append(t.indexes, index)
 				return true
 			}
 		}

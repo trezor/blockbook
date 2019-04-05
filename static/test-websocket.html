@@ -125,9 +125,11 @@
             const contractFilter = document.getElementById("getAccountInfoContract").value.trim();
             const pageSize = 10;
             const method = 'getAccountInfo';
+            const tokens = "derived"; // could be "nonzero", "used", default is "derived" i.e. all
             const params = {
                 descriptor,
                 details,
+                tokens,
                 page,
                 pageSize,
                 from,
@@ -158,6 +160,17 @@
             };
             send(method, params, function (result) {
                 document.getElementById('getTransactionResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
+            });
+        }
+
+        function getTransactionSpecific() {
+            const txid = document.getElementById('getTransactionSpecificTxid').value.trim();
+            const method = 'getTransactionSpecific';
+            const params = {
+                txid,
+            };
+            send(method, params, function (result) {
+                document.getElementById('getTransactionSpecificResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
             });
         }
 
@@ -304,7 +317,8 @@
                     <input type="text" placeholder="descriptor" style="width: 79%" class="form-control" id="getAccountInfoDescriptor" value="0xba98d6a5ac827632e3457de7512d211e4ff7e8bd">
                     <select id="getAccountInfoDetails" style="width: 20%; margin-left: 5px;">
                         <option value="basic">Basic</option>
-                        <option value="balance">Balance</option>
+                        <option value="tokens">Tokens</option>
+                        <option value="tokenBalances">TokenBalances</option>
                         <option value="txids">Txids</option>
                         <option value="txs">Transactions</option>
                     </select>
@@ -350,6 +364,21 @@
         </div>
         <div class="row">
             <div class="col" id="getTransactionResult">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <input class="btn btn-secondary" type="button" value="getTransactionSpecific" onclick="getTransactionSpecific()">
+            </div>
+            <div class="col-8">
+                <div class="row" style="margin: 0;">
+                    <input type="text" placeholder="txid" class="form-control" id="getTransactionSpecificTxid" value="0xb266c89f9bfefa4aa2fca4e65b7d6c918d5407f464be781c2803f3546d34a574">
+                 </div>
+            </div>
+            <div class="col form-inline"></div>
+        </div>
+        <div class="row">
+            <div class="col" id="getTransactionSpecificResult">
             </div>
         </div>
         <div class="row">

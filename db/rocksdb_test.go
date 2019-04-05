@@ -484,6 +484,10 @@ func TestRocksDB_Index_BitcoinType(t *testing.T) {
 	verifyGetTransactions(t, d, dbtestdata.Addr8, 0, 1000000, []txidIndex{
 		{dbtestdata.TxidB2T2, 0},
 	}, nil)
+	verifyGetTransactions(t, d, dbtestdata.Addr6, 0, 1000000, []txidIndex{
+		{dbtestdata.TxidB2T2, ^0},
+		{dbtestdata.TxidB2T1, 0},
+	}, nil)
 	verifyGetTransactions(t, d, "mtGXQvBowMkBpnhLckhxhbwYK44Gs9eBad", 500000, 1000000, []txidIndex{}, errors.New("checksum mismatch"))
 
 	// GetBestBlock

@@ -51,6 +51,10 @@ type Configuration struct {
 	AddressFormat            string `json:"address_format"`
 	SupportsEstimateFee      bool   `json:"supports_estimate_fee"`
 	SupportsEstimateSmartFee bool   `json:"supports_estimate_smart_fee"`
+	XPubMagic                uint32 `json:"xpub_magic,omitempty"`
+	XPubMagicSegwitP2sh      uint32 `json:"xpub_magic_segwit_p2sh,omitempty"`
+	XPubMagicSegwitNative    uint32 `json:"xpub_magic_segwit_native,omitempty"`
+	Slip44                   uint32 `json:"slip44,omitempty"`
 }
 
 // NewBitcoinRPC returns new BitcoinRPC instance.

@@ -15,6 +15,7 @@ import (
 
 	"blockbook/bchain"
 	"blockbook/bchain/coins/btc"
+
 	"github.com/martinboehm/btcutil/chaincfg"
 )
 
@@ -58,6 +59,7 @@ func init() {
 	testTxPacked1 = testTxPackeds[0]
 	testTxPacked2 = testTxPackeds[1]
 	testTxPacked3 = testTxPackeds[2]
+	testTxPacked4 = testTxPackeds[3]
 
 	testTx1 = bchain.Tx{
 		Hex:       rawTestTx1,
@@ -458,7 +460,7 @@ func TestPackTx(t *testing.T) {
 				parser:    NewZcoinParser(GetChainParams("main"), &btc.Configuration{}),
 			},
 			want:    testTxPacked4,
-			wantErr: true,
+			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
@@ -521,16 +523,16 @@ func TestUnpackTx(t *testing.T) {
 			want1:   126202,
 			wantErr: false,
 		},
-		// {
-		// 	name: "xzc-4",
-		// 	args: args{
-		// 		packedTx: testTxPacked4,
-		// 		parser:   NewZcoinParser(GetChainParams("main"), &btc.Configuration{}),
-		// 	},
-		// 	want:    &testTx4,
-		// 	want1:   100001,
-		// 	wantErr: false,
-		// },
+		{
+			name: "xzc-coinbase",
+			args: args{
+				packedTx: testTxPacked4,
+				parser:   NewZcoinParser(GetChainParams("main"), &btc.Configuration{}),
+			},
+			want:    &testTx4,
+			want1:   100001,
+			wantErr: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

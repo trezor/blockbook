@@ -27,7 +27,7 @@ Developer build guide is [here](/docs/build.md).
 
 Contribution guide is [here](CONTRIBUTING.md).
 
-# Implemented coins
+## Implemented coins
 
 Blockbook currently supports over 20 coins, among them:
 - Bitcoin, Litecoin, Bitcoin Cash, Bgold, ZCash, Dash, Ethereum, Ethereum Classic
@@ -37,7 +37,10 @@ Testnets for some coins are also supported, for example:
 
 List of all implemented coins is in [the registry of ports](/docs/ports.md).
 
-# Data storage in RocksDB
+## Data storage in RocksDB
 
 Blockbook stores data the key-value store RocksDB. Database format is described [here](/docs/rocksdb.md).
 
+## API
+
+Blockbook API is described [here](/docs/api.md).

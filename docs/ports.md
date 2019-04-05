@@ -8,7 +8,7 @@
 | Dash                 | 9033                    | 9133                  | 8033             | 38333                       |
 | Litecoin             | 9034                    | 9134                  | 8034             | 38334                       |
 | Bitcoin Gold         | 9035                    | 9135                  | 8035             | 38335                       |
-| Ethereum             | 9036                    | 9136                  | 8036             | 38336 p2p, 8136 http        |
+| Ethereum             | 9036                    | 9136                  | 8036             | 8136 http, 38336 p2p        |
 | Ethereum Classic     | 9037                    | 9137                  | 8037             |                             |
 | Dogecoin             | 9038                    | 9138                  | 8038             | 38338                       |
 | Namecoin             | 9039                    | 9139                  | 8039             | 38339                       |
@@ -24,8 +24,11 @@
 | PIVX                 | 9049                    | 9149                  | 8049             | 38349                       |
 | Zcoin                | 9050                    | 9150                  | 8050             | 38350                       |
 | Koto                 | 9051                    | 9151                  | 8051             | 38351                       |
+| Bellcoin             | 9052                    | 9152                  | 8052             | 38352                       |
+| NULS                 | 9053                    | 9153                  | 8053             | 38353                       |
 | Flo                  | 9066                    | 9166                  | 8066             | 38366                       |
 | Polis                | 9067                    | 9167                  | 8067             | 38367                       |
+| Qtum                 | 9088                    | 9188                  | 8088             | 38388                       |
 | Bitcoin Testnet      | 19030                   | 19130                 | 18030            | 48330                       |
 | Bitcoin Cash Testnet | 19031                   | 19131                 | 18031            | 48331                       |
 | Zcash Testnet        | 19032                   | 19132                 | 18032            | 48332                       |
@@ -38,5 +41,6 @@
 | PIVX Testnet         | 19049                   | 19149                 | 18049            | 48349                       |
 | Koto Testnet         | 19051                   | 19151                 | 18051            | 48351                       |
 | Flo Testnet          | 19066                   | 19166                 | 18066            | 48366                       |
+| Qtum Testnet         | 19088                   | 19188                 | 18088            | 48388                       |
 
 > NOTE: This document is generated from coin definitions in `configs/coins`.
