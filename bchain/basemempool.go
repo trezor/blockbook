@@ -65,11 +65,24 @@ func (a MempoolTxidEntries) Less(i, j int) bool {
 	return hi > hj
 }
 
-func (m *BaseMempool) updateMappings(newTxEntries map[string]txEntry, newAddrDescToTx map[string][]Outpoint) {
-	m.mux.Lock()
-	m.txEntries = newTxEntries
-	m.addrDescToTx = newAddrDescToTx
-	m.mux.Unlock()
+func (m *BaseMempool) removeEntryFromMempool(txid string, entry txEntry) {
+	delete(m.txEntries, txid)
+	for _, si := range entry.addrIndexes {
+		outpoints, found := m.addrDescToTx[si.addrDesc]
+		if found {
+			newOutpoints := make([]Outpoint, 0, len(outpoints)-1)
+			for _, o := range outpoints {
+				if o.Txid != txid {
+					newOutpoints = append(newOutpoints, o)
+				}
+			}
+			if len(newOutpoints) > 0 {
+				m.addrDescToTx[si.addrDesc] = newOutpoints
+			} else {
+				delete(m.addrDescToTx, si.addrDesc)
+			}
+		}
+	}
 }
 
 // GetAllEntries returns all mempool entries sorted by fist seen time in descending order

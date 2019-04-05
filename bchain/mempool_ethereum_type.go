@@ -132,26 +132,6 @@ func (m *MempoolEthereumType) AddTransactionToMempool(txid string) {
 	}
 }
 
-func (m *MempoolEthereumType) removeEntryFromMempool(txid string, entry txEntry) {
-	delete(m.txEntries, txid)
-	for _, si := range entry.addrIndexes {
-		outpoints, found := m.addrDescToTx[si.addrDesc]
-		if found {
-			newOutpoints := make([]Outpoint, 0, len(outpoints)-1)
-			for _, o := range outpoints {
-				if o.Txid != txid {
-					newOutpoints = append(newOutpoints, o)
-				}
-			}
-			if len(newOutpoints) > 0 {
-				m.addrDescToTx[si.addrDesc] = newOutpoints
-			} else {
-				delete(m.addrDescToTx, si.addrDesc)
-			}
-		}
-	}
-}
-
 // RemoveTransactionFromMempool removes transaction from mempool
 func (m *MempoolEthereumType) RemoveTransactionFromMempool(txid string) {
 	m.mux.Lock()
