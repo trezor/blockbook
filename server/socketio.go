@@ -328,13 +328,15 @@ func txToResTx(tx *api.Tx) resTx {
 		outputs[i] = output
 	}
 	var h int
+	var blocktime int64
 	if tx.Confirmations == 0 {
 		h = -1
 	} else {
 		h = int(tx.Blockheight)
+		blocktime = tx.Blocktime
 	}
 	return resTx{
-		BlockTimestamp: tx.Blocktime,
+		BlockTimestamp: blocktime,
 		FeeSatoshis:    tx.FeesSat.AsInt64(),
 		Hash:           tx.Txid,
 		Height:         h,
