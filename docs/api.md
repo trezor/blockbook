@@ -167,6 +167,10 @@ Response for Ethereum-type coins. There is always only one *vin*, only one *vout
 }
 ```
 
+A note about the `blocktime` field:
+- for already mined transaction (`confirmations > 0`), the field `blocktime` contains time of the block
+- for transactions in mempool (`confirmations == 0`), the field contains time when the running instance of Blockbook was first time notified about the transaction. This time may be different in different instances of Blockbook.
+
 #### Get transaction specific
 
 Returns transaction data in the exact format as returned by backend, including all coin specific fields:
