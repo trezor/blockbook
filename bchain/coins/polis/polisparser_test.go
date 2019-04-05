@@ -1,8 +1,5 @@
 // +build unittest
 
-
-// +build unittest
-
 package polis
 
 import (
