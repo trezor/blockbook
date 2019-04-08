@@ -71,13 +71,7 @@ func NewBCashParser(params *chaincfg.Params, c *btc.Configuration) (*BCashParser
 		return nil, fmt.Errorf("Unknown address format: %s", c.AddressFormat)
 	}
 	p := &BCashParser{
-		BitcoinParser: &btc.BitcoinParser{
-			BaseParser: &bchain.BaseParser{
-				BlockAddressesToKeep: c.BlockAddressesToKeep,
-				AmountDecimalPoint:   8,
-			},
-			Params: params,
-		},
+		BitcoinParser: btc.NewBitcoinParser(params, c),
 		AddressFormat: format,
 	}
 	p.OutputScriptToAddressesFunc = p.outputScriptToAddresses
