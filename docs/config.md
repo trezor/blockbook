@@ -12,8 +12,8 @@ automatically, there is sometimes necessary see intermediate step. You can gener
 generated to *build/pkg-defs* directory.
 
 Good examples of coin configuration are
-[*configs/coins/bitcoin.json*](configs/coins/bitcoin.json) and
-[*configs/coins/ethereum.json*](configs/coins/ethereum.json) for Bitcoin-like coins and different coins, respectively.
+[*configs/coins/bitcoin.json*](/configs/coins/bitcoin.json) and
+[*configs/coins/ethereum.json*](/configs/coins/ethereum.json) for Bitcoin-like coins and different coins, respectively.
 
 ## Description of coin definition
 
@@ -60,12 +60,12 @@ Good examples of coin configuration are
        service unit. See note on templates below.
     * `logrotate_files_template` – Template that define log files rotated by logrotate daemon. See note on templates
        below.
-    * `postinst_script_template` – Additional steps in postinst script. See [ZCash definition](configs/coins/zcash.json)
+    * `postinst_script_template` – Additional steps in postinst script. See [ZCash definition](/configs/coins/zcash.json)
        for more information.
     * `service_type` – Type of service. Services that daemonize must have *forking* type and write their PID to
        *PIDFile*. Services that don't support daemonization must have *simple* type. See examples above.
     * `service_additional_params_template` – Additional parameters in service unit. See
-       [ZCash definition](configs/coins/zcash.json) for more information.
+       [ZCash definition](/configs/coins/zcash.json) for more information.
     * `protect_memory` – Enables *MemoryDenyWriteExecute* option in service unit if *true*.
     * `mainnet` – Set *false* for testnet back-end.
     * `config_file` – Name of template of back-end configuration file. Templates are defined in *build/backend/config*.
@@ -80,7 +80,7 @@ Good examples of coin configuration are
     * `internal_binding_template` – Template for *-internal* parameter. See note on templates below.
     * `public_binding_template` – Template for *-public* parameter. See note on templates below.
     * `explorer_url` – URL of blockchain explorer. Leave empty for internal explorer.
-    * `additional_params` – Additional params of exec command (see [Dogecoin definition](configs/coins/dogecoin.json)).
+    * `additional_params` – Additional params of exec command (see [Dogecoin definition](/configs/coins/dogecoin.json)).
     * `block_chain` – Configuration of BlockChain type that ensures communication with back-end service. All options
        must be tweaked for each individual coin separely.
         * `parse` – Use binary parser for block decoding if *true* else call verbose back-end RPC method that returns
