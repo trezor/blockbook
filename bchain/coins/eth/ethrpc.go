@@ -31,11 +31,13 @@ const (
 
 // Configuration represents json config file
 type Configuration struct {
-	CoinName             string `json:"coin_name"`
-	CoinShortcut         string `json:"coin_shortcut"`
-	RPCURL               string `json:"rpc_url"`
-	RPCTimeout           int    `json:"rpc_timeout"`
-	BlockAddressesToKeep int    `json:"block_addresses_to_keep"`
+	CoinName                    string `json:"coin_name"`
+	CoinShortcut                string `json:"coin_shortcut"`
+	RPCURL                      string `json:"rpc_url"`
+	RPCTimeout                  int    `json:"rpc_timeout"`
+	BlockAddressesToKeep        int    `json:"block_addresses_to_keep"`
+	MempoolTxTimeoutHours       int    `json:"mempoolTxTimeoutHours"`
+	QueryBackendOnMempoolResync bool   `json:"queryBackendOnMempoolResync"`
 }
 
 // EthereumRPC is an interface to JSON-RPC eth service.
@@ -162,7 +164,8 @@ func (b *EthereumRPC) Initialize() error {
 // CreateMempool creates mempool if not already created, however does not initialize it
 func (b *EthereumRPC) CreateMempool(chain bchain.BlockChain) (bchain.Mempool, error) {
 	if b.Mempool == nil {
-		b.Mempool = bchain.NewMempoolEthereumType(chain)
+		b.Mempool = bchain.NewMempoolEthereumType(chain, b.ChainConfig.MempoolTxTimeoutHours, b.ChainConfig.QueryBackendOnMempoolResync)
+		glog.Info("mempool created, MempoolTxTimeoutHours=", b.ChainConfig.MempoolTxTimeoutHours, ", QueryBackendOnMempoolResync=", b.ChainConfig.QueryBackendOnMempoolResync)
 	}
 	return b.Mempool, nil
 }

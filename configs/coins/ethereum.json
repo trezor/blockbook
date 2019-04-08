@@ -1,9 +1,9 @@
 {
   "coin": {
-      "name": "Ethereum",
-      "shortcut": "ETH",
-      "label": "Ethereum",
-      "alias": "ethereum"
+    "name": "Ethereum",
+    "shortcut": "ETH",
+    "label": "Ethereum",
+    "alias": "ethereum"
   },
   "ports": {
     "backend_rpc": 8036,
@@ -49,7 +49,10 @@
       "mempool_workers": 8,
       "mempool_sub_workers": 2,
       "block_addresses_to_keep": 300,
-      "additional_params": {}
+      "additional_params": {
+        "mempoolTxTimeoutHours": 48,
+        "queryBackendOnMempoolResync": false
+      }
     }
   },
   "meta": {

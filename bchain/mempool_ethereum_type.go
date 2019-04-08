@@ -6,24 +6,28 @@ import (
 	"github.com/golang/glog"
 )
 
-const mempoolTimeoutTime = 24 * time.Hour
 const mempoolTimeoutRunPeriod = 10 * time.Minute
 
 // MempoolEthereumType is mempool handle of EthereumType chains
 type MempoolEthereumType struct {
 	BaseMempool
-	nextTimeoutRun time.Time
+	mempoolTimeoutTime   time.Duration
+	queryBackendOnResync bool
+	nextTimeoutRun       time.Time
 }
 
 // NewMempoolEthereumType creates new mempool handler.
-func NewMempoolEthereumType(chain BlockChain) *MempoolEthereumType {
+func NewMempoolEthereumType(chain BlockChain, mempoolTxTimeoutHours int, queryBackendOnResync bool) *MempoolEthereumType {
+	mempoolTimeoutTime := time.Duration(mempoolTxTimeoutHours) * time.Hour
 	return &MempoolEthereumType{
 		BaseMempool: BaseMempool{
 			chain:        chain,
 			txEntries:    make(map[string]txEntry),
 			addrDescToTx: make(map[string][]Outpoint),
 		},
-		nextTimeoutRun: time.Now().Add(mempoolTimeoutTime),
+		mempoolTimeoutTime:   mempoolTimeoutTime,
+		queryBackendOnResync: queryBackendOnResync,
+		nextTimeoutRun:       time.Now().Add(mempoolTimeoutTime),
 	}
 }
 
@@ -90,11 +94,20 @@ func (m *MempoolEthereumType) createTxEntry(txid string, txTime uint32) (txEntry
 // Resync ethereum type removes timed out transactions and returns number of transactions in mempool.
 // Transactions are added/removed by AddTransactionToMempool/RemoveTransactionFromMempool methods
 func (m *MempoolEthereumType) Resync() (int, error) {
+	if m.queryBackendOnResync {
+		txs, err := m.chain.GetMempoolTransactions()
+		if err != nil {
+			return 0, err
+		}
+		for _, txid := range txs {
+			m.AddTransactionToMempool(txid)
+		}
+	}
 	m.mux.Lock()
 	entries := len(m.txEntries)
 	now := time.Now()
 	if m.nextTimeoutRun.Before(now) {
-		threshold := now.Add(-mempoolTimeoutTime)
+		threshold := now.Add(-m.mempoolTimeoutTime)
 		for txid, entry := range m.txEntries {
 			if time.Unix(int64(entry.time), 0).Before(threshold) {
 				m.removeEntryFromMempool(txid, entry)

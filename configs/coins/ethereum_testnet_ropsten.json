@@ -1,9 +1,9 @@
 {
   "coin": {
-      "name": "Ethereum Testnet Ropsten",
-      "shortcut": "tROP",
-      "label": "Ethereum Ropsten",
-      "alias": "ethereum_testnet_ropsten"
+    "name": "Ethereum Testnet Ropsten",
+    "shortcut": "tROP",
+    "label": "Ethereum Ropsten",
+    "alias": "ethereum_testnet_ropsten"
   },
   "ports": {
     "backend_rpc": 18036,
@@ -48,7 +48,10 @@
       "mempool_workers": 8,
       "mempool_sub_workers": 2,
       "block_addresses_to_keep": 300,
-      "additional_params": {}
+      "additional_params": {
+        "mempoolTxTimeoutHours": 12,
+        "queryBackendOnMempoolResync": false
+      }
     }
   },
   "meta": {

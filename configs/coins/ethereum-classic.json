@@ -1,9 +1,9 @@
 {
   "coin": {
-      "name": "Ethereum Classic",
-      "shortcut": "ETC",
-      "label": "Ethereum Classic",
-      "alias": "ethereum-classic"
+    "name": "Ethereum Classic",
+    "shortcut": "ETC",
+    "label": "Ethereum Classic",
+    "alias": "ethereum-classic"
   },
   "ports": {
     "backend_rpc": 8037,
@@ -41,13 +41,16 @@
     "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
     "public_binding_template": ":{{.Ports.BlockbookPublic}}",
     "explorer_url": "",
-    "additional_params": "-resyncindexperiod=4441",
+    "additional_params": "-resyncindexperiod=4441 -resyncmempoolperiod=2011",
     "block_chain": {
       "parse": true,
       "mempool_workers": 8,
       "mempool_sub_workers": 2,
       "block_addresses_to_keep": 300,
-      "additional_params": {}
+      "additional_params": {
+        "mempoolTxTimeoutHours": 48,
+        "queryBackendOnMempoolResync": true
+      }
     }
   },
   "meta": {
