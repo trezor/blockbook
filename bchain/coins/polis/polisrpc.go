@@ -31,10 +31,11 @@ func NewPolisRPC(config json.RawMessage, pushHandler func(bchain.NotificationTyp
 
 // Initialize initializes PolisRPC instance.
 func (b *PolisRPC) Initialize() error {
-	chainName, err := b.GetChainInfoAndInitializeMempool(b)
+	ci, err := b.GetChainInfo()
 	if err != nil {
 		return err
 	}
+	chainName := ci.Chain
 
 	params := GetChainParams(chainName)
 
