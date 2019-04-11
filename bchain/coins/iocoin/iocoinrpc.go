@@ -64,11 +64,19 @@ func (b *IocoinRPC) Initialize() error {
 }
 // GetBlock returns block with given hash.
 func (b *IocoinRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
+	var err error
+	if hash == "" {
+		hash, err = b.GetBlockHash(height)
+		if err != nil {
+                  return nil, bchain.ErrBlockNotFound 
+                }
+	}
 	res := btc.ResGetBlockThin{}
 	req := btc.CmdGetBlock{Method: "getblock"}
 	req.Params.BlockHash = hash
 	req.Params.Verbosity = 1
-	err := b.Call(&req, &res)
+	err = b.Call(&req, &res)
+	glog.Errorf("rpc: getblock: block %s error: %s", hash, err)
 		if err != nil {
 			return nil, err
 		}
