@@ -65,6 +65,7 @@ func (a MempoolTxidEntries) Less(i, j int) bool {
 	return hi > hj
 }
 
+// removeEntryFromMempool removes entry from mempool structs. The caller is responsible for locking!
 func (m *BaseMempool) removeEntryFromMempool(txid string, entry txEntry) {
 	delete(m.txEntries, txid)
 	for _, si := range entry.addrIndexes {
@@ -87,9 +88,9 @@ func (m *BaseMempool) removeEntryFromMempool(txid string, entry txEntry) {
 
 // GetAllEntries returns all mempool entries sorted by fist seen time in descending order
 func (m *BaseMempool) GetAllEntries() MempoolTxidEntries {
-	entries := make(MempoolTxidEntries, len(m.txEntries))
 	i := 0
 	m.mux.Lock()
+	entries := make(MempoolTxidEntries, len(m.txEntries))
 	for txid, entry := range m.txEntries {
 		entries[i] = MempoolTxidEntry{
 			Txid: txid,
