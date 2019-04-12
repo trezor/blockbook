@@ -76,10 +76,10 @@ func (b *IocoinRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) 
 	req.Params.BlockHash = hash
 	req.Params.Verbosity = 1
 	err = b.Call(&req, &res)
-	glog.Errorf("rpc: getblock: block %s error: %s", hash, err)
-		if err != nil {
-			return nil, err
-		}
+	if err != nil {
+		glog.Errorf("rpc: getblock: block %s error: %v", hash, err)
+		return nil, err
+	}
 	txs := make([]bchain.Tx, 0, len(res.Result.Txids))
 	for _, txid := range res.Result.Txids {
 		tx, err := b.GetTransaction(txid)
