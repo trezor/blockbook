@@ -119,34 +119,40 @@ func main() {
 
 	if *repair {
 		if err := db.RepairRocksDB(*dbPath); err != nil {
-			glog.Fatalf("RepairRocksDB %s: %v", *dbPath, err)
+			glog.Errorf("RepairRocksDB %s: %v", *dbPath, err)
+			return
 		}
 		return
 	}
 
 	if *blockchain == "" {
-		glog.Fatal("Missing blockchaincfg configuration parameter")
+		glog.Error("Missing blockchaincfg configuration parameter")
+		return
 	}
 
 	coin, coinShortcut, coinLabel, err := coins.GetCoinNameFromConfig(*blockchain)
 	if err != nil {
-		glog.Fatal("config: ", err)
+		glog.Error("config: ", err)
+		return
 	}
 
 	// gspt.SetProcTitle("blockbook-" + normalizeName(coin))
 
 	metrics, err = common.GetMetrics(coin)
 	if err != nil {
-		glog.Fatal("metrics: ", err)
+		glog.Error("metrics: ", err)
+		return
 	}
 
 	if chain, mempool, err = getBlockChainWithRetry(coin, *blockchain, pushSynchronizationHandler, metrics, 60); err != nil {
-		glog.Fatal("rpc: ", err)
+		glog.Error("rpc: ", err)
+		return
 	}
 
 	index, err = db.NewRocksDB(*dbPath, *dbCache, *dbMaxOpenFiles, chain.GetChainParser(), metrics)
 	if err != nil {
-		glog.Fatal("rocksDB: ", err)
+		glog.Error("rocksDB: ", err)
+		return
 	}
 	defer index.Close()
 
@@ -176,14 +182,16 @@ func main() {
 
 	syncWorker, err = db.NewSyncWorker(index, chain, *syncWorkers, *syncChunk, *blockFrom, *dryRun, chanOsSignal, metrics, internalState)
 	if err != nil {
-		glog.Fatalf("NewSyncWorker %v", err)
+		glog.Errorf("NewSyncWorker %v", err)
+		return
 	}
 
 	// set the DbState to open at this moment, after all important workers are initialized
 	internalState.DbState = common.DbStateOpen
 	err = index.StoreInternalState(internalState)
 	if err != nil {
-		glog.Fatal("internalState: ", err)
+		glog.Error("internalState: ", err)
+		return
 	}
 
 	if *rollbackHeight >= 0 {
