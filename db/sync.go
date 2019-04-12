@@ -63,11 +63,15 @@ func (w *SyncWorker) ResyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 		if err == nil {
 			w.is.FinishedSync(bh)
 		}
-		return nil
+		return err
 	case errSynced:
 		// this is not actually error but flag that resync wasn't necessary
 		w.is.FinishedSyncNoChange()
 		w.metrics.IndexDBSize.Set(float64(w.db.DatabaseSizeOnDisk()))
+		if initialSync {
+			d := time.Since(start)
+			glog.Info("resync: finished in ", d)
+		}
 		return nil
 	}
 
@@ -113,7 +117,8 @@ func (w *SyncWorker) resyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 	}
 	// if parallel operation is enabled and the number of blocks to be connected is large,
 	// use parallel routine to load majority of blocks
-	if w.syncWorkers > 1 {
+	// use parallel sync only in case of initial sync because it puts the db to inconsistent state
+	if w.syncWorkers > 1 && initialSync {
 		remoteBestHeight, err := w.chain.GetBestBlockHeight()
 		if err != nil {
 			return err
