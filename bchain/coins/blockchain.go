@@ -17,6 +17,7 @@ import (
 	"blockbook/bchain/coins/koto"
 	"blockbook/bchain/coins/liquid"
 	"blockbook/bchain/coins/litecoin"
+	"blockbook/bchain/coins/lux"
 	"blockbook/bchain/coins/monacoin"
 	"blockbook/bchain/coins/myriad"
 	"blockbook/bchain/coins/namecoin"
@@ -62,6 +63,7 @@ func init() {
 	BlockChainFactories["Koto Testnet"] = koto.NewKotoRPC
 	BlockChainFactories["Litecoin"] = litecoin.NewLitecoinRPC
 	BlockChainFactories["Litecoin Testnet"] = litecoin.NewLitecoinRPC
+	BlockChainFactories["Lux"] = lux.NewLuxRPC
 	BlockChainFactories["Dogecoin"] = dogecoin.NewDogecoinRPC
 	BlockChainFactories["Vertcoin"] = vertcoin.NewVertcoinRPC
 	BlockChainFactories["Vertcoin Testnet"] = vertcoin.NewVertcoinRPC
