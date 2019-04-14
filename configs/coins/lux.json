@@ -1,8 +1,8 @@
 {
   "coin": {
-    "name": "LUX",
+    "name": "Lux",
     "shortcut": "LUX",
-    "label": "LUX",
+    "label": "Lux",
     "alias": "lux"
   },
   "ports": {
