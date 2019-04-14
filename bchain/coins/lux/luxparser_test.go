@@ -33,7 +33,7 @@
 			args:    args{address: "LViS5Ziwf5kh97A3dRQxT68gK7mtErJoAJ"},
 			want:    "76a91473141fef01a297fe8555aa749f83988b0f89f15588ac",
 			wantErr: false,
-		}
+		},
 	}
 	parser := NewLuxParser(GetChainParams("main"), &btc.Configuration{})
 
