@@ -178,7 +178,7 @@ func (p *BitcoinParser) tryParseOmni(data []byte) string {
 	amount.SetBytes(data[12:])
 	amountStr := p.AmountToDecimalString(amount)
 
-	ed := "OMNI Simple Send " + amountStr + " " + currency + " (#" + strconv.Itoa(int(currencyID)) + ")"
+	ed := "OMNI Simple Send: " + amountStr + " " + currency + " (#" + strconv.Itoa(int(currencyID)) + ")"
 	return ed
 }
 
