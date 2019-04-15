@@ -26,6 +26,7 @@ import (
 
 const txsOnPage = 25
 const blocksOnPage = 50
+const mempoolTxsOnPage = 50
 const txsInAPI = 1000
 
 const (
@@ -45,6 +46,7 @@ type PublicServer struct {
 	txCache          *db.TxCache
 	chain            bchain.BlockChain
 	chainParser      bchain.BlockChainParser
+	mempool          bchain.Mempool
 	api              *api.Worker
 	explorerURL      string
 	internalExplorer bool
@@ -56,19 +58,19 @@ type PublicServer struct {
 
 // NewPublicServer creates new public server http interface to blockbook and returns its handle
 // only basic functionality is mapped, to map all functions, call
-func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxCache, explorerURL string, metrics *common.Metrics, is *common.InternalState, debugMode bool) (*PublicServer, error) {
+func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, txCache *db.TxCache, explorerURL string, metrics *common.Metrics, is *common.InternalState, debugMode bool) (*PublicServer, error) {
 
-	api, err := api.NewWorker(db, chain, txCache, is)
+	api, err := api.NewWorker(db, chain, mempool, txCache, is)
 	if err != nil {
 		return nil, err
 	}
 
-	socketio, err := NewSocketIoServer(db, chain, txCache, metrics, is)
+	socketio, err := NewSocketIoServer(db, chain, mempool, txCache, metrics, is)
 	if err != nil {
 		return nil, err
 	}
 
-	websocket, err := NewWebsocketServer(db, chain, txCache, metrics, is)
+	websocket, err := NewWebsocketServer(db, chain, mempool, txCache, metrics, is)
 	if err != nil {
 		return nil, err
 	}
@@ -91,6 +93,7 @@ func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bch
 		txCache:          txCache,
 		chain:            chain,
 		chainParser:      chain.GetChainParser(),
+		mempool:          mempool,
 		explorerURL:      explorerURL,
 		internalExplorer: explorerURL == "",
 		metrics:          metrics,
@@ -137,6 +140,7 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 		serveMux.HandleFunc(path+"block/", s.htmlTemplateHandler(s.explorerBlock))
 		serveMux.HandleFunc(path+"spending/", s.htmlTemplateHandler(s.explorerSpendingTx))
 		serveMux.HandleFunc(path+"sendtx", s.htmlTemplateHandler(s.explorerSendTx))
+		serveMux.HandleFunc(path+"mempool", s.htmlTemplateHandler(s.explorerMempool))
 	} else {
 		// redirect to wallet requests for tx and address, possibly to external site
 		serveMux.HandleFunc(path+"tx/", s.txRedirect)
@@ -382,6 +386,7 @@ const (
 	blocksTpl
 	blockTpl
 	sendTransactionTpl
+	mempoolTpl
 
 	tplCount
 )
@@ -400,6 +405,7 @@ type TemplateData struct {
 	Blocks               *api.Blocks
 	Block                *api.Block
 	Info                 *api.SystemInfo
+	MempoolTxids         *api.MempoolTxids
 	Page                 int
 	PrevPage             int
 	NextPage             int
@@ -475,6 +481,7 @@ func (s *PublicServer) parseTemplates() []*template.Template {
 		t[blockTpl] = createTemplate("./static/templates/block.html", "./static/templates/txdetail.html", "./static/templates/paging.html", "./static/templates/base.html")
 	}
 	t[xpubTpl] = createTemplate("./static/templates/xpub.html", "./static/templates/txdetail.html", "./static/templates/paging.html", "./static/templates/base.html")
+	t[mempoolTpl] = createTemplate("./static/templates/mempool.html", "./static/templates/paging.html", "./static/templates/base.html")
 	return t
 }
 
@@ -794,6 +801,25 @@ func (s *PublicServer) explorerSendTx(w http.ResponseWriter, r *http.Request) (t
 		}
 	}
 	return sendTransactionTpl, data, nil
+}
+
+func (s *PublicServer) explorerMempool(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
+	var mempoolTxids *api.MempoolTxids
+	var err error
+	s.metrics.ExplorerViews.With(common.Labels{"action": "mempool"}).Inc()
+	page, ec := strconv.Atoi(r.URL.Query().Get("page"))
+	if ec != nil {
+		page = 0
+	}
+	mempoolTxids, err = s.api.GetMempool(page, mempoolTxsOnPage)
+	if err != nil {
+		return errorTpl, nil, err
+	}
+	data := s.newTemplateData()
+	data.MempoolTxids = mempoolTxids
+	data.Page = mempoolTxids.Page
+	data.PagingRange, data.PrevPage, data.NextPage = getPagingRange(mempoolTxids.Page, mempoolTxids.TotalPages)
+	return mempoolTpl, data, nil
 }
 
 func getPagingRange(page int, total int) ([]int, int, int) {

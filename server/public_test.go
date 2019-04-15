@@ -85,6 +85,11 @@ func setupPublicHTTPServer(t *testing.T) (*PublicServer, string) {
 		glog.Fatal("fakechain: ", err)
 	}
 
+	mempool, err := chain.CreateMempool(chain)
+	if err != nil {
+		glog.Fatal("mempool: ", err)
+	}
+
 	// caching is switched off because test transactions do not have hex data
 	txCache, err := db.NewTxCache(d, chain, metrics, is, false)
 	if err != nil {
@@ -92,7 +97,7 @@ func setupPublicHTTPServer(t *testing.T) (*PublicServer, string) {
 	}
 
 	// s.Run is never called, binding can be to any port
-	s, err := NewPublicServer("localhost:12345", "", d, chain, txCache, "", metrics, is, false)
+	s, err := NewPublicServer("localhost:12345", "", d, chain, mempool, txCache, "", metrics, is, false)
 	if err != nil {
 		t.Fatal(err)
 	}

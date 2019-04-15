@@ -218,7 +218,7 @@ func TestGetAddressesFromAddrDesc(t *testing.T) {
 		{
 			name:    "OP_RETURN omni simple send tether",
 			args:    args{script: "6a146f6d6e69000000000000001f00000709bb647351"},
-			want:    []string{"OMNI Simple Send 77383.80022609 TetherUS (#31)"},
+			want:    []string{"OMNI Simple Send: 77383.80022609 TetherUS (#31)"},
 			want2:   false,
 			wantErr: false,
 		},

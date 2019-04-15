@@ -36,10 +36,11 @@ func NewZcoinRPC(config json.RawMessage, pushHandler func(bchain.NotificationTyp
 }
 
 func (zc *ZcoinRPC) Initialize() error {
-	chainName, err := zc.GetChainInfoAndInitializeMempool(zc)
+	ci, err := zc.GetChainInfo()
 	if err != nil {
 		return err
 	}
+	chainName := ci.Chain
 
 	params := GetChainParams(chainName)
 

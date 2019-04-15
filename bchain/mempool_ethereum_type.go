@@ -1,47 +1,34 @@
 package bchain
 
 import (
-	"sync"
 	"time"
 
 	"github.com/golang/glog"
 )
 
+const mempoolTimeoutRunPeriod = 10 * time.Minute
+
 // MempoolEthereumType is mempool handle of EthereumType chains
 type MempoolEthereumType struct {
-	chain           BlockChain
-	mux             sync.Mutex
-	txToInputOutput map[string][]addrIndex
-	addrDescToTx    map[string][]Outpoint
+	BaseMempool
+	mempoolTimeoutTime   time.Duration
+	queryBackendOnResync bool
+	nextTimeoutRun       time.Time
 }
 
 // NewMempoolEthereumType creates new mempool handler.
-func NewMempoolEthereumType(chain BlockChain) *MempoolEthereumType {
-	return &MempoolEthereumType{chain: chain}
-}
-
-// GetTransactions returns slice of mempool transactions for given address
-func (m *MempoolEthereumType) GetTransactions(address string) ([]Outpoint, error) {
-	parser := m.chain.GetChainParser()
-	addrDesc, err := parser.GetAddrDescFromAddress(address)
-	if err != nil {
-		return nil, err
+func NewMempoolEthereumType(chain BlockChain, mempoolTxTimeoutHours int, queryBackendOnResync bool) *MempoolEthereumType {
+	mempoolTimeoutTime := time.Duration(mempoolTxTimeoutHours) * time.Hour
+	return &MempoolEthereumType{
+		BaseMempool: BaseMempool{
+			chain:        chain,
+			txEntries:    make(map[string]txEntry),
+			addrDescToTx: make(map[string][]Outpoint),
+		},
+		mempoolTimeoutTime:   mempoolTimeoutTime,
+		queryBackendOnResync: queryBackendOnResync,
+		nextTimeoutRun:       time.Now().Add(mempoolTimeoutTime),
 	}
-	return m.GetAddrDescTransactions(addrDesc)
-}
-
-// GetAddrDescTransactions returns slice of mempool transactions for given address descriptor
-func (m *MempoolEthereumType) GetAddrDescTransactions(addrDesc AddressDescriptor) ([]Outpoint, error) {
-	m.mux.Lock()
-	defer m.mux.Unlock()
-	return append([]Outpoint(nil), m.addrDescToTx[string(addrDesc)]...), nil
-}
-
-func (m *MempoolEthereumType) updateMappings(newTxToInputOutput map[string][]addrIndex, newAddrDescToTx map[string][]Outpoint) {
-	m.mux.Lock()
-	defer m.mux.Unlock()
-	m.txToInputOutput = newTxToInputOutput
-	m.addrDescToTx = newAddrDescToTx
 }
 
 func appendAddress(io []addrIndex, i int32, a string, parser BlockChainParser) []addrIndex {
@@ -56,73 +43,117 @@ func appendAddress(io []addrIndex, i int32, a string, parser BlockChainParser) [
 	return io
 }
 
-// Resync gets mempool transactions and maps outputs to transactions.
-// Resync is not reentrant, it should be called from a single thread.
-// Read operations (GetTransactions) are safe.
-func (m *MempoolEthereumType) Resync(onNewTxAddr OnNewTxAddrFunc) (int, error) {
-	start := time.Now()
-	glog.V(1).Info("Mempool: resync")
-	txs, err := m.chain.GetMempool()
+func (m *MempoolEthereumType) createTxEntry(txid string, txTime uint32) (txEntry, bool) {
+	tx, err := m.chain.GetTransactionForMempool(txid)
 	if err != nil {
-		return 0, err
+		if err != ErrTxNotFound {
+			glog.Warning("cannot get transaction ", txid, ": ", err)
+		}
+		return txEntry{}, false
 	}
 	parser := m.chain.GetChainParser()
-	// allocate slightly larger capacity of the maps
-	newTxToInputOutput := make(map[string][]addrIndex, len(m.txToInputOutput)+5)
-	newAddrDescToTx := make(map[string][]Outpoint, len(m.addrDescToTx)+5)
-	for _, txid := range txs {
-		io, exists := m.txToInputOutput[txid]
-		if !exists {
-			tx, err := m.chain.GetTransactionForMempool(txid)
-			if err != nil {
-				if err != ErrTxNotFound {
-					glog.Warning("cannot get transaction ", txid, ": ", err)
-				}
-				continue
+	addrIndexes := make([]addrIndex, 0, len(tx.Vout)+len(tx.Vin))
+	for _, output := range tx.Vout {
+		addrDesc, err := parser.GetAddrDescFromVout(&output)
+		if err != nil {
+			if err != ErrAddressMissing {
+				glog.Error("error in output addrDesc in ", txid, " ", output.N, ": ", err)
 			}
-			io = make([]addrIndex, 0, len(tx.Vout)+len(tx.Vin))
-			for _, output := range tx.Vout {
-				addrDesc, err := parser.GetAddrDescFromVout(&output)
-				if err != nil {
-					if err != ErrAddressMissing {
-						glog.Error("error in output addrDesc in ", txid, " ", output.N, ": ", err)
-					}
-					continue
-				}
-				if len(addrDesc) > 0 {
-					io = append(io, addrIndex{string(addrDesc), int32(output.N)})
-				}
-			}
-			for _, input := range tx.Vin {
-				for i, a := range input.Addresses {
-					appendAddress(io, ^int32(i), a, parser)
-				}
-			}
-			t, err := parser.EthereumTypeGetErc20FromTx(tx)
-			if err != nil {
-				glog.Error("GetErc20FromTx for tx ", txid, ", ", err)
-			} else {
-				for i := range t {
-					io = appendAddress(io, ^int32(i+1), t[i].From, parser)
-					io = appendAddress(io, int32(i+1), t[i].To, parser)
-				}
-			}
-			if onNewTxAddr != nil {
-				sent := make(map[string]struct{})
-				for _, si := range io {
-					if _, found := sent[si.addrDesc]; !found {
-						onNewTxAddr(tx, AddressDescriptor(si.addrDesc))
-						sent[si.addrDesc] = struct{}{}
-					}
-				}
-			}
+			continue
 		}
-		newTxToInputOutput[txid] = io
-		for _, si := range io {
-			newAddrDescToTx[si.addrDesc] = append(newAddrDescToTx[si.addrDesc], Outpoint{txid, si.n})
+		if len(addrDesc) > 0 {
+			addrIndexes = append(addrIndexes, addrIndex{string(addrDesc), int32(output.N)})
 		}
 	}
-	m.updateMappings(newTxToInputOutput, newAddrDescToTx)
-	glog.Info("Mempool: resync finished in ", time.Since(start), ", ", len(m.txToInputOutput), " transactions in mempool")
-	return len(m.txToInputOutput), nil
+	for _, input := range tx.Vin {
+		for i, a := range input.Addresses {
+			addrIndexes = appendAddress(addrIndexes, ^int32(i), a, parser)
+		}
+	}
+	t, err := parser.EthereumTypeGetErc20FromTx(tx)
+	if err != nil {
+		glog.Error("GetErc20FromTx for tx ", txid, ", ", err)
+	} else {
+		for i := range t {
+			addrIndexes = appendAddress(addrIndexes, ^int32(i+1), t[i].From, parser)
+			addrIndexes = appendAddress(addrIndexes, int32(i+1), t[i].To, parser)
+		}
+	}
+	if m.OnNewTxAddr != nil {
+		sent := make(map[string]struct{})
+		for _, si := range addrIndexes {
+			if _, found := sent[si.addrDesc]; !found {
+				m.OnNewTxAddr(tx, AddressDescriptor(si.addrDesc))
+				sent[si.addrDesc] = struct{}{}
+			}
+		}
+	}
+	return txEntry{addrIndexes: addrIndexes, time: txTime}, true
+}
+
+// Resync ethereum type removes timed out transactions and returns number of transactions in mempool.
+// Transactions are added/removed by AddTransactionToMempool/RemoveTransactionFromMempool methods
+func (m *MempoolEthereumType) Resync() (int, error) {
+	if m.queryBackendOnResync {
+		txs, err := m.chain.GetMempoolTransactions()
+		if err != nil {
+			return 0, err
+		}
+		for _, txid := range txs {
+			m.AddTransactionToMempool(txid)
+		}
+	}
+	m.mux.Lock()
+	entries := len(m.txEntries)
+	now := time.Now()
+	if m.nextTimeoutRun.Before(now) {
+		threshold := now.Add(-m.mempoolTimeoutTime)
+		for txid, entry := range m.txEntries {
+			if time.Unix(int64(entry.time), 0).Before(threshold) {
+				m.removeEntryFromMempool(txid, entry)
+			}
+		}
+		removed := entries - len(m.txEntries)
+		entries = len(m.txEntries)
+		glog.Info("Mempool: cleanup, removed ", removed, " transactions from mempool")
+		m.nextTimeoutRun = now.Add(mempoolTimeoutRunPeriod)
+	}
+	m.mux.Unlock()
+	glog.Info("Mempool: resync ", entries, " transactions in mempool")
+	return entries, nil
+}
+
+// AddTransactionToMempool adds transactions to mempool
+func (m *MempoolEthereumType) AddTransactionToMempool(txid string) {
+	m.mux.Lock()
+	_, exists := m.txEntries[txid]
+	m.mux.Unlock()
+	if glog.V(1) {
+		glog.Info("AddTransactionToMempool ", txid, ", existed ", exists)
+	}
+	if !exists {
+		entry, ok := m.createTxEntry(txid, uint32(time.Now().Unix()))
+		if !ok {
+			return
+		}
+		m.mux.Lock()
+		m.txEntries[txid] = entry
+		for _, si := range entry.addrIndexes {
+			m.addrDescToTx[si.addrDesc] = append(m.addrDescToTx[si.addrDesc], Outpoint{txid, si.n})
+		}
+		m.mux.Unlock()
+	}
+}
+
+// RemoveTransactionFromMempool removes transaction from mempool
+func (m *MempoolEthereumType) RemoveTransactionFromMempool(txid string) {
+	m.mux.Lock()
+	entry, exists := m.txEntries[txid]
+	if glog.V(1) {
+		glog.Info("RemoveTransactionFromMempool ", txid, ", existed ", exists)
+	}
+	if exists {
+		m.removeEntryFromMempool(txid, entry)
+	}
+	m.mux.Unlock()
 }

@@ -27,10 +27,11 @@ func NewGroestlcoinRPC(config json.RawMessage, pushHandler func(bchain.Notificat
 
 // Initialize initializes GroestlcoinRPC instance.
 func (g *GroestlcoinRPC) Initialize() error {
-	chainName, err := g.GetChainInfoAndInitializeMempool(g)
+	ci, err := g.GetChainInfo()
 	if err != nil {
 		return err
 	}
+	chainName := ci.Chain
 
 	params := GetChainParams(chainName)
 

@@ -5,9 +5,8 @@ import (
 	"blockbook/bchain/coins/btc"
 	"bytes"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
-	"github.com/gobuffalo/packr/v2/file/resolver/encoding/hex"
-	"github.com/juju/errors"
 	"io"
 	"io/ioutil"
 	"math/big"
@@ -16,6 +15,8 @@ import (
 	"runtime/debug"
 	"strconv"
 	"time"
+
+	"github.com/juju/errors"
 
 	"github.com/golang/glog"
 )
