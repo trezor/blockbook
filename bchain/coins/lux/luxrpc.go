@@ -111,10 +111,11 @@ func NewLuxRPC(config json.RawMessage, pushHandler func(bchain.NotificationType)
 
  // Initialize initializes LuxRPC instance.
 func (b *LuxRPC) Initialize() error {
-	chainName, err := b.GetChainInfoAndInitializeMempool(b)
-	if err != nil {
-		return err
-	}
+    ci, err := b.GetChainInfo()
+    if err != nil {
+        return err
+    }
+    chainName := ci.Chain
 
  	params := GetChainParams(chainName)
 
