@@ -1022,13 +1022,19 @@ func (w *Worker) GetBlock(bid string, page int, txsOnPage int) (*Block, error) {
 	return &Block{
 		Paging: pg,
 		BlockInfo: BlockInfo{
-			BlockHeader: bi.BlockHeader,
-			Bits:        bi.Bits,
-			Difficulty:  string(bi.Difficulty),
-			MerkleRoot:  bi.MerkleRoot,
-			Nonce:       string(bi.Nonce),
-			Txids:       bi.Txids,
-			Version:     bi.Version,
+			Hash:          bi.Hash,
+			Prev:          bi.Prev,
+			Next:          bi.Next,
+			Height:        bi.Height,
+			Confirmations: bi.Confirmations,
+			Size:          bi.Size,
+			Time:          bi.Time,
+			Bits:          bi.Bits,
+			Difficulty:    string(bi.Difficulty),
+			MerkleRoot:    bi.MerkleRoot,
+			Nonce:         string(bi.Nonce),
+			Txids:         bi.Txids,
+			Version:       bi.Version,
 		},
 		TxCount:      txCount,
 		Transactions: txs,
@@ -1043,15 +1049,15 @@ func (w *Worker) GetSystemInfo(internal bool) (*SystemInfo, error) {
 		return nil, errors.Annotatef(err, "GetChainInfo")
 	}
 	vi := common.GetVersionInfo()
-	ss, bh, st := w.is.GetSyncState()
-	ms, mt, msz := w.is.GetMempoolSyncState()
-	var dbc []common.InternalStateColumn
-	var dbs int64
+	inSync, bestHeight, lastBlockTime := w.is.GetSyncState()
+	inSyncMempool, lastMempoolTime, mempoolSize := w.is.GetMempoolSyncState()
+	var columnStats []common.InternalStateColumn
+	var internalDBSize int64
 	if internal {
-		dbc = w.is.GetAllDBColumnStats()
-		dbs = w.is.DBSizeTotal()
+		columnStats = w.is.GetAllDBColumnStats()
+		internalDBSize = w.is.DBSizeTotal()
 	}
-	bi := &BlockbookInfo{
+	blockbookInfo := &BlockbookInfo{
 		Coin:              w.is.Coin,
 		Host:              w.is.Host,
 		Version:           vi.Version,
@@ -1059,20 +1065,33 @@ func (w *Worker) GetSystemInfo(internal bool) (*SystemInfo, error) {
 		BuildTime:         vi.BuildTime,
 		SyncMode:          w.is.SyncMode,
 		InitialSync:       w.is.InitialSync,
-		InSync:            ss,
-		BestHeight:        bh,
-		LastBlockTime:     st,
-		InSyncMempool:     ms,
-		LastMempoolTime:   mt,
-		MempoolSize:       msz,
+		InSync:            inSync,
+		BestHeight:        bestHeight,
+		LastBlockTime:     lastBlockTime,
+		InSyncMempool:     inSyncMempool,
+		LastMempoolTime:   lastMempoolTime,
+		MempoolSize:       mempoolSize,
 		Decimals:          w.chainParser.AmountDecimals(),
 		DbSize:            w.db.DatabaseSizeOnDisk(),
-		DbSizeFromColumns: dbs,
-		DbColumns:         dbc,
+		DbSizeFromColumns: internalDBSize,
+		DbColumns:         columnStats,
 		About:             Text.BlockbookAbout,
 	}
+	backendInfo := &BackendInfo{
+		Bestblockhash:   ci.Bestblockhash,
+		Blocks:          ci.Blocks,
+		Chain:           ci.Chain,
+		Difficulty:      ci.Difficulty,
+		Headers:         ci.Headers,
+		ProtocolVersion: ci.ProtocolVersion,
+		SizeOnDisk:      ci.SizeOnDisk,
+		Subversion:      ci.Subversion,
+		Timeoffset:      ci.Timeoffset,
+		Version:         ci.Version,
+		Warnings:        ci.Warnings,
+	}
 	glog.Info("GetSystemInfo finished in ", time.Since(start))
-	return &SystemInfo{bi, ci}, nil
+	return &SystemInfo{blockbookInfo, backendInfo}, nil
 }
 
 // GetMempool returns a page of mempool txids

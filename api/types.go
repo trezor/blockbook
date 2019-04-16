@@ -170,22 +170,22 @@ type TokenTransfer struct {
 type EthereumSpecific struct {
 	Status   int      `json:"status"` // 1 OK, 0 Fail, -1 pending
 	Nonce    uint64   `json:"nonce"`
-	GasLimit *big.Int `json:"gaslimit"`
-	GasUsed  *big.Int `json:"gasused"`
-	GasPrice *Amount  `json:"gasprice"`
+	GasLimit *big.Int `json:"gasLimit"`
+	GasUsed  *big.Int `json:"gasUsed"`
+	GasPrice *Amount  `json:"gasPrice"`
 }
 
 // Tx holds information about a transaction
 type Tx struct {
 	Txid             string            `json:"txid"`
 	Version          int32             `json:"version,omitempty"`
-	Locktime         uint32            `json:"locktime,omitempty"`
+	Locktime         uint32            `json:"lockTime,omitempty"`
 	Vin              []Vin             `json:"vin"`
 	Vout             []Vout            `json:"vout"`
-	Blockhash        string            `json:"blockhash,omitempty"`
-	Blockheight      int               `json:"blockheight"`
+	Blockhash        string            `json:"blockHash,omitempty"`
+	Blockheight      int               `json:"blockHeight"`
 	Confirmations    uint32            `json:"confirmations"`
-	Blocktime        int64             `json:"blocktime"`
+	Blocktime        int64             `json:"blockTime"`
 	Size             int               `json:"size,omitempty"`
 	ValueOutSat      *Amount           `json:"value"`
 	ValueInSat       *Amount           `json:"valueIn,omitempty"`
@@ -193,8 +193,8 @@ type Tx struct {
 	Hex              string            `json:"hex,omitempty"`
 	CoinSpecificData interface{}       `json:"-"`
 	CoinSpecificJSON json.RawMessage   `json:"-"`
-	TokenTransfers   []TokenTransfer   `json:"tokentransfers,omitempty"`
-	EthereumSpecific *EthereumSpecific `json:"ethereumspecific,omitempty"`
+	TokenTransfers   []TokenTransfer   `json:"tokenTransfers,omitempty"`
+	EthereumSpecific *EthereumSpecific `json:"ethereumSpecific,omitempty"`
 }
 
 // Paging contains information about paging for address, blocks and block
@@ -244,13 +244,13 @@ type Address struct {
 	UnconfirmedBalanceSat *Amount               `json:"unconfirmedBalance"`
 	UnconfirmedTxs        int                   `json:"unconfirmedTxs"`
 	Txs                   int                   `json:"txs"`
-	NonTokenTxs           int                   `json:"nontokenTxs,omitempty"`
+	NonTokenTxs           int                   `json:"nonTokenTxs,omitempty"`
 	Transactions          []*Tx                 `json:"transactions,omitempty"`
 	Txids                 []string              `json:"txids,omitempty"`
 	Nonce                 string                `json:"nonce,omitempty"`
 	TotalTokens           int                   `json:"totalTokens,omitempty"`
 	Tokens                []Token               `json:"tokens,omitempty"`
-	Erc20Contract         *bchain.Erc20Contract `json:"erc20contract,omitempty"`
+	Erc20Contract         *bchain.Erc20Contract `json:"erc20Contract,omitempty"`
 	// helpers for explorer
 	Filter        string              `json:"-"`
 	XPubAddresses map[string]struct{} `json:"-"`
@@ -293,13 +293,19 @@ type Blocks struct {
 
 // BlockInfo contains extended block header data and a list of block txids
 type BlockInfo struct {
-	bchain.BlockHeader
-	Version    json.Number `json:"version"`
-	MerkleRoot string      `json:"merkleroot"`
-	Nonce      string      `json:"nonce"`
-	Bits       string      `json:"bits"`
-	Difficulty string      `json:"difficulty"`
-	Txids      []string    `json:"tx,omitempty"`
+	Hash          string      `json:"hash"`
+	Prev          string      `json:"previousBlockHash,omitempty"`
+	Next          string      `json:"nextBlockHash,omitempty"`
+	Height        uint32      `json:"height"`
+	Confirmations int         `json:"confirmations"`
+	Size          int         `json:"size"`
+	Time          int64       `json:"time,omitempty"`
+	Version       json.Number `json:"version"`
+	MerkleRoot    string      `json:"merkleRoot"`
+	Nonce         string      `json:"nonce"`
+	Bits          string      `json:"bits"`
+	Difficulty    string      `json:"difficulty"`
+	Txids         []string    `json:"tx,omitempty"`
 }
 
 // Block contains information about block
@@ -315,10 +321,10 @@ type BlockbookInfo struct {
 	Coin              string                       `json:"coin"`
 	Host              string                       `json:"host"`
 	Version           string                       `json:"version"`
-	GitCommit         string                       `json:"gitcommit"`
-	BuildTime         string                       `json:"buildtime"`
+	GitCommit         string                       `json:"gitCommit"`
+	BuildTime         string                       `json:"buildTime"`
 	SyncMode          bool                         `json:"syncMode"`
-	InitialSync       bool                         `json:"initialsync"`
+	InitialSync       bool                         `json:"initialSync"`
 	InSync            bool                         `json:"inSync"`
 	BestHeight        uint32                       `json:"bestHeight"`
 	LastBlockTime     time.Time                    `json:"lastBlockTime"`
@@ -332,10 +338,25 @@ type BlockbookInfo struct {
 	About             string                       `json:"about"`
 }
 
+// BackendInfo is used to get information about blockchain
+type BackendInfo struct {
+	Chain           string  `json:"chain"`
+	Blocks          int     `json:"blocks"`
+	Headers         int     `json:"headers"`
+	Bestblockhash   string  `json:"bestBlockHash"`
+	Difficulty      string  `json:"difficulty"`
+	SizeOnDisk      int64   `json:"sizeOnDisk"`
+	Version         string  `json:"version"`
+	Subversion      string  `json:"subversion"`
+	ProtocolVersion string  `json:"protocolVersion"`
+	Timeoffset      float64 `json:"timeOffset"`
+	Warnings        string  `json:"warnings"`
+}
+
 // SystemInfo contains information about the running blockbook and backend instance
 type SystemInfo struct {
-	Blockbook *BlockbookInfo    `json:"blockbook"`
-	Backend   *bchain.ChainInfo `json:"backend"`
+	Blockbook *BlockbookInfo `json:"blockbook"`
+	Backend   *BackendInfo   `json:"backend"`
 }
 
 // MempoolTxid contains information about a transaction in mempool
