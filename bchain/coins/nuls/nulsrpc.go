@@ -21,7 +21,7 @@ import (
 	"github.com/golang/glog"
 )
 
-// NulsRPC is an interface to JSON-RPC bitcoind service.
+// NulsRPC is an interface to JSON-RPC bitcoind service
 type NulsRPC struct {
 	*btc.BitcoinRPC
 	client   http.Client
@@ -30,7 +30,7 @@ type NulsRPC struct {
 	password string
 }
 
-// NewNulsRPC returns new NulsRPC instance.
+// NewNulsRPC returns new NulsRPC instance
 func NewNulsRPC(config json.RawMessage, pushHandler func(bchain.NotificationType)) (bchain.BlockChain, error) {
 	b, err := btc.NewBitcoinRPC(config, pushHandler)
 	if err != nil {
@@ -101,7 +101,7 @@ type CmdGetVersionInfo struct {
 		MyVersion      string `json:"myVersion"`
 		NewestVersion  string `json:"newestVersion"`
 		NetworkVersion int    `json:"networkVersion"`
-		Infromation    string `json:"infromation"`
+		Information    string `json:"information"`
 	} `json:"data"`
 }
 
@@ -227,7 +227,7 @@ func (n *NulsRPC) GetChainInfo() (*bchain.ChainInfo, error) {
 		Subversion:      versionInfo.Data.NewestVersion,
 		ProtocolVersion: strconv.Itoa(versionInfo.Data.NetworkVersion),
 		Timeoffset:      0,
-		Warnings:        versionInfo.Data.Infromation,
+		Warnings:        versionInfo.Data.Information,
 	}
 	return chainInfo, nil
 }
@@ -414,7 +414,8 @@ func (n *NulsRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 	}
 
 	blockHeaderHeight := getTx.Tx.BlockHeight
-	blockHeader, e := n.GetBlockHeaderByHeight(uint32(blockHeaderHeight))
+	// shouldn't it check the error here?
+	blockHeader, _ := n.GetBlockHeaderByHeight(uint32(blockHeaderHeight))
 	if blockHeader != nil {
 		tx.Blocktime = blockHeader.Time
 	}

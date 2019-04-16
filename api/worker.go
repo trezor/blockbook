@@ -1101,7 +1101,7 @@ func (w *Worker) GetMempool(page int, itemsOnPage int) (*MempoolTxids, error) {
 		page = 0
 	}
 	entries := w.mempool.GetAllEntries()
-	pg, from, to, page := computePaging(len(entries), page, itemsOnPage)
+	pg, from, to, _ := computePaging(len(entries), page, itemsOnPage)
 	r := &MempoolTxids{
 		Paging:      pg,
 		MempoolSize: len(entries),

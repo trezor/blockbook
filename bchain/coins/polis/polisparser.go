@@ -2,16 +2,19 @@ package polis
 
 import (
 	"blockbook/bchain/coins/btc"
+
 	"github.com/martinboehm/btcd/wire"
 	"github.com/martinboehm/btcutil/chaincfg"
 )
 
+// magic numbers
 const (
 	MainnetMagic wire.BitcoinNet = 0xbd6b0cbf
 	TestnetMagic wire.BitcoinNet = 0xffcae2ce
 	RegtestMagic wire.BitcoinNet = 0xdcb7c1fc
 )
 
+// chain parameters
 var (
 	MainNetParams chaincfg.Params
 	TestNetParams chaincfg.Params

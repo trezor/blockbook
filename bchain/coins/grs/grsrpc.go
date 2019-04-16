@@ -9,10 +9,12 @@ import (
 	"github.com/juju/errors"
 )
 
+// GroestlcoinRPC is an interface to JSON-RPC service
 type GroestlcoinRPC struct {
 	*btc.BitcoinRPC
 }
 
+// NewGroestlcoinRPC returns new GroestlcoinRPC instance
 func NewGroestlcoinRPC(config json.RawMessage, pushHandler func(bchain.NotificationType)) (bchain.BlockChain, error) {
 	b, err := btc.NewBitcoinRPC(config, pushHandler)
 	if err != nil {
