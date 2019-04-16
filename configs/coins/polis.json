@@ -22,10 +22,10 @@
     "package_name": "backend-polis",
     "package_revision": "satoshilabs-1",
     "system_user": "polis",
-    "version": "1.4.10",
-    "binary_url": "https://github.com/polispay/polis/releases/download/v1.4.10/poliscore-1.4.10-x86_64-linux-gnu.tar.gz",
+    "version": "1.4.11",
+    "binary_url": "https://github.com/polispay/polis/releases/download/v1.4.11/poliscore-1.4.11-x86_64-linux-gnu.tar.gz",
     "verification_type": "sha256",
-    "verification_source": "9688beeb4c789c2b20f4277f7363fcc986fb0e6cc75127179663272642fafcd3",
+    "verification_source": "c9d8c2ca3aaea699c129e0543f143cb35e5c00259ea55b0e2ed2b5dd76b28f3e",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
        "bin/polis-qt"
@@ -52,7 +52,7 @@
     "additional_params": "",
     "block_chain": {
       "parse": true,
-      "subversion": "/Polis Core:1.4.10/",
+      "subversion": "/Polis Core:1.4.11/",
       "mempool_workers": 8,
       "mempool_sub_workers": 2,
       "block_addresses_to_keep": 300,
