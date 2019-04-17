@@ -1,7 +1,7 @@
 {
   "coin": {
     "name": "Litecoin Testnet",
-    "shortcut": "TLTC",
+    "shortcut": "tLTC",
     "label": "Litecoin Testnet",
     "alias": "litecoin_testnet"
   },

@@ -58,11 +58,14 @@
       "xpub_magic": 76067358,
       "xpub_magic_segwit_p2sh": 77429938,
       "xpub_magic_segwit_native": 78792518,
-      "additional_params": {}
+      "additional_params": {
+        "alternativeEstimateFee": "whatthefee",
+        "alternativeEstimateFeeParams": "{\"url\": \"https://whatthefee.io/data.json\", \"periodSeconds\": 60}"
+      }
     }
   },
   "meta": {
-    "package_maintainer": "Jakub Matys",
-    "package_maintainer_email": "jakub.matys@satoshilabs.com"
+    "package_maintainer": "Martin Bohm",
+    "package_maintainer_email": "martin.bohm@satoshilabs.com"
   }
 }
