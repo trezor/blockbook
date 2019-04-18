@@ -426,9 +426,9 @@ func (s *WebsocketServer) getInfo() (interface{}, error) {
 		Shortcut   string `json:"shortcut"`
 		Decimals   int    `json:"decimals"`
 		Version    string `json:"version"`
-		BestHeight int    `json:"bestheight"`
-		BestHash   string `json:"besthash"`
-		Block0Hash string `json:"block0hash"`
+		BestHeight int    `json:"bestHeight"`
+		BestHash   string `json:"bestHash"`
+		Block0Hash string `json:"block0Hash"`
 		Testnet    bool   `json:"testnet"`
 	}
 	return &info{
