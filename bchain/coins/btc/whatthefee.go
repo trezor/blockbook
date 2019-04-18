@@ -4,6 +4,7 @@ import (
 	"blockbook/bchain"
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"math"
 	"net/http"
 	"strconv"
@@ -67,23 +68,29 @@ func InitWhatTheFee(chain bchain.BlockChain, params string) error {
 func whatTheFeeDownloader() {
 	period := time.Duration(whatTheFee.params.PeriodSeconds) * time.Second
 	timer := time.NewTimer(period)
+	counter := 0
 	for {
 		var data whatTheFeeServiceResult
 		err := whatTheFeeGetData(&data)
 		if err != nil {
 			glog.Error("whatTheFeeGetData ", err)
 		} else {
-			whatTheFeeProcessData(&data)
+			if whatTheFeeProcessData(&data) {
+				if counter%60 == 0 {
+					whatTheFeeCompareToDefault()
+				}
+				counter++
+			}
 		}
 		<-timer.C
 		timer.Reset(period)
 	}
 }
 
-func whatTheFeeProcessData(data *whatTheFeeServiceResult) {
+func whatTheFeeProcessData(data *whatTheFeeServiceResult) bool {
 	if len(data.Index) == 0 || len(data.Index) != len(data.Data) || len(data.Columns) == 0 {
 		glog.Errorf("invalid data %+v", data)
-		return
+		return false
 	}
 	whatTheFee.mux.Lock()
 	defer whatTheFee.mux.Unlock()
@@ -92,7 +99,7 @@ func whatTheFeeProcessData(data *whatTheFeeServiceResult) {
 	for i, blocks := range data.Index {
 		if len(data.Columns) != len(data.Data[i]) {
 			glog.Errorf("invalid data %+v", data)
-			return
+			return false
 		}
 		fees := make([]int, len(data.Columns))
 		for j, l := range data.Data[i] {
@@ -105,6 +112,7 @@ func whatTheFeeProcessData(data *whatTheFeeServiceResult) {
 	}
 	whatTheFee.lastSync = time.Now()
 	glog.Infof("%+v", whatTheFee.fees)
+	return true
 }
 
 func whatTheFeeGetData(res interface{}) error {
@@ -120,10 +128,30 @@ func whatTheFeeGetData(res interface{}) error {
 	if err != nil {
 		return err
 	}
-	// if server returns HTTP error code it might not return json with response
-	// handle both cases
 	if httpRes.StatusCode != 200 {
 		return errors.New("whatthefee.io returned status " + strconv.Itoa(httpRes.StatusCode))
 	}
 	return safeDecodeResponse(httpRes.Body, &res)
+}
+
+func whatTheFeeCompareToDefault() {
+	output := ""
+	for _, fee := range whatTheFee.fees {
+		output += fmt.Sprint(fee.blocks, ",")
+		for _, wtf := range fee.feesPerKB {
+			output += fmt.Sprint(wtf, ",")
+		}
+		conservative, err := whatTheFee.chain.EstimateSmartFee(fee.blocks, true)
+		if err != nil {
+			glog.Error(err)
+			return
+		}
+		economical, err := whatTheFee.chain.EstimateSmartFee(fee.blocks, false)
+		if err != nil {
+			glog.Error(err)
+			return
+		}
+		output += fmt.Sprint(conservative.String(), ",", economical.String(), "\n")
+	}
+	glog.Info("whatTheFeeCompareToDefault\n", output)
 }
