@@ -26,6 +26,7 @@ import (
 	"blockbook/bchain/coins/qtum"
 	"blockbook/bchain/coins/vertcoin"
 	"blockbook/bchain/coins/viacoin"
+	"blockbook/bchain/coins/vipstarcoin"
 	"blockbook/bchain/coins/xzc"
 	"blockbook/bchain/coins/zec"
 	"blockbook/common"
@@ -85,6 +86,7 @@ func init() {
 	BlockChainFactories["Viacoin"] = viacoin.NewViacoinRPC
 	BlockChainFactories["Qtum Testnet"] = qtum.NewQtumRPC
 	BlockChainFactories["NULS"] = nuls.NewNulsRPC
+	BlockChainFactories["VIPSTARCOIN"] = viacoin.NewViacoinRPC
 }
 
 // GetCoinNameFromConfig gets coin name and coin shortcut from config file
