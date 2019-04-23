@@ -1,7 +1,12 @@
 package vipstarcoin
 
 import (
+	"blockbook/bchain"
 	"blockbook/bchain/coins/btc"
+	"blockbook/bchain/coins/utils"
+	"bytes"
+	"encoding/json"
+	"io"
 
 	"github.com/martinboehm/btcd/wire"
 	"github.com/martinboehm/btcutil/chaincfg"
