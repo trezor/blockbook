@@ -23,8 +23,8 @@ func NewVIPSTARCOINRPC(config json.RawMessage, pushHandler func(bchain.Notificat
 	s := &VIPSTARCOINRPC{
 		b.(*btc.BitcoinRPC),
 	}
-	s.RPCMarshaler = btc.JSONMarshalerV2{}
-	s.ChainConfig.SupportsEstimateFee = false
+	s.RPCMarshaler = btc.JSONMarshalerV1{}
+	s.ChainConfig.SupportsEstimateSmartFee = true
 
 	return s, nil
 }
@@ -55,4 +55,10 @@ func (b *VIPSTARCOINRPC) Initialize() error {
 	glog.Info("rpc: block chain ", params.Name)
 
 	return nil
+}
+
+// GetTransactionForMempool returns a transaction by the transaction ID
+// It could be optimized for mempool, i.e. without block time and confirmations
+func (b *VIPSTARCOINRPC) GetTransactionForMempool(txid string) (*bchain.Tx, error) {
+	return b.GetTransaction(txid)
 }
