@@ -6,10 +6,10 @@
         "alias": "VIPSTARCOIN"
     },
     "ports": {
-      "backend_rpc": 8090,
-      "backend_message_queue": 38390,
-      "blockbook_internal": 9090,
-      "blockbook_public": 9190
+      "backend_rpc": 8056,
+      "backend_message_queue": 38356,
+      "blockbook_internal": 9056,
+      "blockbook_public": 9156
     },
     "ipc": {
       "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
