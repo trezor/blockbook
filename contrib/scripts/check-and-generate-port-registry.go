@@ -19,6 +19,7 @@ const (
 	outputFile = "docs/ports.md"
 )
 
+// PortInfo contains backend and blockbook ports
 type PortInfo struct {
 	CoinName              string
 	BlockbookInternalPort uint16
@@ -27,11 +28,14 @@ type PortInfo struct {
 	BackendServicePorts   map[string]uint16
 }
 
+// PortInfoSlice is self describing
 type PortInfoSlice []*PortInfo
 
+// Config contains coin configuration
 type Config struct {
 	Coin struct {
-		Name string `json:"name"`
+		Name  string `json:"name"`
+		Label string `json:"label"`
 	}
 	Ports map[string]uint16 `json:"ports"`
 }
@@ -154,7 +158,11 @@ func loadPortInfo(dir string) (PortInfoSlice, error) {
 			return nil, fmt.Errorf("%s: json: %s", path, err)
 		}
 
-		item := &PortInfo{CoinName: v.Coin.Name, BackendServicePorts: map[string]uint16{}}
+		name := v.Coin.Label
+		if len(name) == 0 {
+			name = v.Coin.Name
+		}
+		item := &PortInfo{CoinName: name, BackendServicePorts: map[string]uint16{}}
 		for k, v := range v.Ports {
 			if v == 0 {
 				continue
@@ -232,7 +240,7 @@ func writeMarkdown(output string, slice PortInfoSlice) error {
 
 	out := os.Stdout
 	if output != "stdout" {
-		out, err = os.OpenFile(output, os.O_CREATE|os.O_WRONLY, 0644)
+		out, err = os.OpenFile(output, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 		if err != nil {
 			return err
 		}

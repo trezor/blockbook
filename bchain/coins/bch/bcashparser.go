@@ -5,29 +5,38 @@ import (
 	"blockbook/bchain/coins/btc"
 	"fmt"
 
-	"github.com/jakm/bchutil"
-	"github.com/jakm/btcutil"
-	"github.com/jakm/btcutil/chaincfg"
-	"github.com/jakm/btcutil/txscript"
+	"github.com/martinboehm/bchutil"
+	"github.com/martinboehm/btcutil"
+	"github.com/martinboehm/btcutil/chaincfg"
+	"github.com/martinboehm/btcutil/txscript"
 	"github.com/schancel/cashaddr-converter/address"
 )
 
+// AddressFormat type is used to specify different formats of address
 type AddressFormat = uint8
 
 const (
+	// Legacy AddressFormat is the same as Bitcoin
 	Legacy AddressFormat = iota
+	// CashAddr AddressFormat is new Bitcoin Cash standard
 	CashAddr
 )
 
 const (
+	// MainNetPrefix is CashAddr prefix for mainnet
 	MainNetPrefix = "bitcoincash:"
+	// TestNetPrefix is CashAddr prefix for testnet
 	TestNetPrefix = "bchtest:"
+	// RegTestPrefix is CashAddr prefix for regtest
 	RegTestPrefix = "bchreg:"
 )
 
 var (
+	// MainNetParams are parser parameters for mainnet
 	MainNetParams chaincfg.Params
+	// TestNetParams are parser parameters for testnet
 	TestNetParams chaincfg.Params
+	// RegtestParams are parser parameters for regtest
 	RegtestParams chaincfg.Params
 )
 
@@ -62,13 +71,7 @@ func NewBCashParser(params *chaincfg.Params, c *btc.Configuration) (*BCashParser
 		return nil, fmt.Errorf("Unknown address format: %s", c.AddressFormat)
 	}
 	p := &BCashParser{
-		BitcoinParser: &btc.BitcoinParser{
-			BaseParser: &bchain.BaseParser{
-				BlockAddressesToKeep: c.BlockAddressesToKeep,
-				AmountDecimalPoint:   8,
-			},
-			Params: params,
-		},
+		BitcoinParser: btc.NewBitcoinParser(params, c),
 		AddressFormat: format,
 	}
 	p.OutputScriptToAddressesFunc = p.outputScriptToAddresses
@@ -118,17 +121,16 @@ func (p *BCashParser) addressToOutputScript(address string) ([]byte, error) {
 			return nil, err
 		}
 		return script, nil
-	} else {
-		da, err := btcutil.DecodeAddress(address, p.Params)
-		if err != nil {
-			return nil, err
-		}
-		script, err := txscript.PayToAddrScript(da)
-		if err != nil {
-			return nil, err
-		}
-		return script, nil
 	}
+	da, err := btcutil.DecodeAddress(address, p.Params)
+	if err != nil {
+		return nil, err
+	}
+	script, err := txscript.PayToAddrScript(da)
+	if err != nil {
+		return nil, err
+	}
+	return script, nil
 }
 
 func isCashAddr(addr string) bool {
@@ -158,14 +160,13 @@ func (p *BCashParser) outputScriptToAddresses(script []byte) ([]string, bool, er
 		// do not return unknown script type error as error
 		if err.Error() == "unknown script type" {
 			// try OP_RETURN script
-			or := btc.TryParseOPReturn(script)
+			or := p.TryParseOPReturn(script)
 			if or != "" {
 				return []string{or}, false, nil
 			}
 			return []string{}, false, nil
-		} else {
-			return nil, false, err
 		}
+		return nil, false, err
 	}
 	// EncodeAddress returns CashAddr address
 	addr := a.EncodeAddress()

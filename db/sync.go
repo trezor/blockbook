@@ -45,6 +45,9 @@ func NewSyncWorker(db *RocksDB, chain bchain.BlockChain, syncWorkers, syncChunk 
 
 var errSynced = errors.New("synced")
 
+// ErrSyncInterrupted is returned when synchronization is interrupted by OS signal
+var ErrSyncInterrupted = errors.New("ErrSyncInterrupted")
+
 // ResyncIndex synchronizes index to the top of the blockchain
 // onNewBlock is called when new block is connected, but not in initial parallel sync
 func (w *SyncWorker) ResyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync bool) error {
@@ -63,11 +66,15 @@ func (w *SyncWorker) ResyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 		if err == nil {
 			w.is.FinishedSync(bh)
 		}
-		return nil
+		return err
 	case errSynced:
 		// this is not actually error but flag that resync wasn't necessary
 		w.is.FinishedSyncNoChange()
 		w.metrics.IndexDBSize.Set(float64(w.db.DatabaseSizeOnDisk()))
+		if initialSync {
+			d := time.Since(start)
+			glog.Info("resync: finished in ", d)
+		}
 		return nil
 	}
 
@@ -113,7 +120,8 @@ func (w *SyncWorker) resyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 	}
 	// if parallel operation is enabled and the number of blocks to be connected is large,
 	// use parallel routine to load majority of blocks
-	if w.syncWorkers > 1 {
+	// use parallel sync only in case of initial sync because it puts the db to inconsistent state
+	if w.syncWorkers > 1 && initialSync {
 		remoteBestHeight, err := w.chain.GetBestBlockHeight()
 		if err != nil {
 			return err
@@ -197,7 +205,8 @@ func (w *SyncWorker) connectBlocks(onNewBlock bchain.OnNewBlockFunc, initialSync
 		for {
 			select {
 			case <-w.chanOsSignal:
-				return errors.Errorf("connectBlocks interrupted at height %d", lastRes.block.Height)
+				glog.Info("connectBlocks interrupted at height ", lastRes.block.Height)
+				return ErrSyncInterrupted
 			case res := <-bch:
 				if res == empty {
 					break ConnectLoop
@@ -320,7 +329,8 @@ ConnectLoop:
 	for h := lower; h <= higher; {
 		select {
 		case <-w.chanOsSignal:
-			err = errors.Errorf("connectBlocksParallel interrupted at height %d", h)
+			glog.Info("connectBlocksParallel interrupted at height ", h)
+			err = ErrSyncInterrupted
 			// signal all workers to terminate their loops (error loops are interrupted below)
 			close(terminating)
 			break ConnectLoop
@@ -393,26 +403,11 @@ func (w *SyncWorker) getBlockChain(out chan blockResult, done chan struct{}) {
 // DisconnectBlocks removes all data belonging to blocks in range lower-higher,
 func (w *SyncWorker) DisconnectBlocks(lower uint32, higher uint32, hashes []string) error {
 	glog.Infof("sync: disconnecting blocks %d-%d", lower, higher)
-	// if the chain is UTXO, always use DisconnectBlockRange
-	if w.chain.GetChainParser().IsUTXOChain() {
-		return w.db.DisconnectBlockRangeUTXO(lower, higher)
+	ct := w.chain.GetChainParser().GetChainType()
+	if ct == bchain.ChainBitcoinType {
+		return w.db.DisconnectBlockRangeBitcoinType(lower, higher)
+	} else if ct == bchain.ChainEthereumType {
+		return w.db.DisconnectBlockRangeEthereumType(lower, higher)
 	}
-	blocks := make([]*bchain.Block, len(hashes))
-	var err error
-	// try to get all blocks first to see if we can avoid full scan
-	for i, hash := range hashes {
-		blocks[i], err = w.chain.GetBlock(hash, 0)
-		if err != nil {
-			// cannot get a block, we must do full range scan
-			return w.db.DisconnectBlockRangeNonUTXO(lower, higher)
-		}
-	}
-	// got all blocks to be disconnected, disconnect them one after another
-	for i, block := range blocks {
-		glog.Info("Disconnecting block ", (int(higher) - i), " ", block.Hash)
-		if err = w.db.DisconnectBlock(block); err != nil {
-			return err
-		}
-	}
-	return nil
+	return errors.New("Unknown chain type")
 }

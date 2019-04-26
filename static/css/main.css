@@ -182,6 +182,26 @@ h3 {
     text-transform: uppercase;
 }
 
+.tx-own {
+    background-color: #fbf8f0;
+}
+
+.tx-amt {
+    float: right!important;
+}
+
+.tx-in .tx-own .tx-amt {
+    color: #dc3545!important;
+}
+
+.tx-out .tx-own .tx-amt {
+    color: #28a745!important;
+}
+
+.tx-addr {
+    float: left!important;
+}
+
 .ellipsis {
     overflow: hidden;
     text-overflow: ellipsis;
@@ -214,6 +234,11 @@ h3 {
     font-weight: bold;
 }
 
+table.data-table table.data-table th {
+    border-top: 0;
+    font-weight: normal;
+}
+
 .alert .data-table {
     margin: 0;
 }
@@ -239,20 +264,13 @@ h3 {
     font-size: 14px;
 }
 
-.h-container {
-    display: -webkit-box;
-    display: -ms-flexbox;
-    -ms-flex-wrap: wrap;
-    flex-wrap: wrap;
-}
-
-.h-container-6 {
-    width: 50%;
+.h-container ul, .h-container h3 {
     margin: 0;
 }
 
-.h-container ul {
-    margin: 0;
+.h-container h5 {
+    margin-top: 6px;
+    margin-bottom: 0;
 }
 
 .page-link {
@@ -290,5 +308,5 @@ h3 {
 }
 
 .key {
-    color: #333 ;
+    color: #333;
 }

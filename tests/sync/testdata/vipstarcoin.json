@@ -1,0 +1,96 @@
+{
+    "connectBlocks": {
+        "syncRanges": [
+            {"lower": 538519, "upper": 538539}
+        ],
+        "blocks": {
+            "538539": {
+                "height": 538539,
+                "hash": "7f0cf13f99d7c96c0f2334433516e5d3621b34f60d76ee9dc98698b855a319fd",
+                "noTxs": 3,
+                "txDetails": [
+                    {
+			"hex": "0200000001ceebca2fcfb99dcd667d795a99badc9dd37fb5c4738e6d137ed5126b444479b70100000049483045022100e6ebe75139a56532c0795a10f3457e5f9b05b8a625cd36abfa27688a236882e602207fbbaf6045761ba67af3107e4e557a62309067f32a02183d846e16bfac81b6eb01ffffffff040000000000000000008062f92dda160000232103069114b4f300ed8836a5ff75054a4a3a2bc21e0b51ea4d1f41f7e61f51472dadacc01c132eda160000232103069114b4f300ed8836a5ff75054a4a3a2bc21e0b51ea4d1f41f7e61f51472dadac80769000000000001976a914b5749d2f105a91593b956a121fcf94e59278d56288ac00000000",
+			"txid": "5ac7264773b2e44648e0861e1d19e3a727824ac9ad1cc2030710c62ad6cd53a1",
+                        "version": 2,
+                        "vin": [
+                            {
+				"txid": "b77944446b12d57e136d8e73c4b57fd39ddcba995a797d66cd9db9cf2fcaebce",
+                                "vout": 1,
+                                "sequence": 4294967295,
+                                "scriptSig": {
+				    "hex": "483045022100e6ebe75139a56532c0795a10f3457e5f9b05b8a625cd36abfa27688a236882e602207fbbaf6045761ba67af3107e4e557a62309067f32a02183d846e16bfac81b6eb01"
+                                }
+                            }
+                        ],
+                        "vout": [
+                            {
+				"value": 0.00000000,
+                                "n": 0,
+                                "scriptPubKey": {
+				    "hex": ""
+                                }
+                            },
+                            {
+				"value": 251263.30000000,
+                                "n": 1,
+                                "scriptPubKey": {
+				    "hex": "2103069114b4f300ed8836a5ff75054a4a3a2bc21e0b51ea4d1f41f7e61f51472dadac"
+                                }
+                            },
+                            {
+                                "value": 251263.31686080,
+                                "n": 2,
+                                "scriptPubKey": {
+                                    "hex": "2103069114b4f300ed8836a5ff75054a4a3a2bc21e0b51ea4d1f41f7e61f51472dadac"
+                                }
+                            },
+                            {
+                                "value": 0.09467520,
+                                "n": 3,
+                                "scriptPubKey": {
+                                    "hex": "76a914b5749d2f105a91593b956a121fcf94e59278d56288ac"
+                                }
+                            }
+                        ],
+			"time": 1555935872,
+			"blocktime": 1555935872
+                    }
+                ]
+            }
+        }
+    },
+    "handleFork": {
+        "syncRanges": [
+            {"lower": 538519, "upper": 538538}
+        ],
+        "fakeBlocks": {
+            "538536": {
+                "height": 538536,
+                "hash": "00000000000389fc8b2989ae94a083ad6091cd9cfd9bc92ad02989e2a940e49b"
+            },
+            "538537": {
+                "height": 538537,
+                "hash": "7ef85808d790718fdf0e12e056f7bb4e1fa5f5ff2dd2f45878c07cc7f2199e81"
+            },
+            "538538": {
+                "height": 538538,
+                "hash": "0000000000235d6c42a23810896a078e2fb41850cad11fd003a9d412eb1487d3"
+            }
+        },
+        "realBlocks": {
+            "538536": {
+                "height": 538536,
+                "hash": "434ad83e19ccaa4fe769559b7f98564b5cfb30f72819a003372394633b01368a"
+            },
+            "538537": {
+                "height": 538537,
+                "hash": "1fe91c1b068f202158517249463e19d297a7d89ad1db4011c70cf6e89123b39f"
+            },
+            "538538": {
+                "height": 538538,
+                "hash": "0000000000ad20d8225f83a4572a20129fcb186de3b2733b6ce0a46dd17c0c74"
+            }
+        }
+    }
+}

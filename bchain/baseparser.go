@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/gogo/protobuf/proto"
+	"github.com/golang/glog"
 	"github.com/juju/errors"
 )
 
@@ -26,6 +27,16 @@ func (p *BaseParser) ParseTx(b []byte) (*Tx, error) {
 	return nil, errors.New("ParseTx: not implemented")
 }
 
+// GetAddrDescForUnknownInput returns nil AddressDescriptor
+func (p *BaseParser) GetAddrDescForUnknownInput(tx *Tx, input int) AddressDescriptor {
+	var iTxid string
+	if len(tx.Vin) > input {
+		iTxid = tx.Vin[input].Txid
+	}
+	glog.Warningf("tx %v, input tx %v not found in txAddresses", tx.Txid, iTxid)
+	return nil
+}
+
 const zeros = "0000000000000000000000000000000000000000"
 
 // AmountToBigInt converts amount in json.Number (string) to big.Int
@@ -34,10 +45,14 @@ func (p *BaseParser) AmountToBigInt(n json.Number) (big.Int, error) {
 	var r big.Int
 	s := string(n)
 	i := strings.IndexByte(s, '.')
+	d := p.AmountDecimalPoint
+	if d > len(zeros) {
+		d = len(zeros)
+	}
 	if i == -1 {
-		s = s + zeros[:p.AmountDecimalPoint]
+		s = s + zeros[:d]
 	} else {
-		z := p.AmountDecimalPoint - len(s) + i + 1
+		z := d - len(s) + i + 1
 		if z > 0 {
 			s = s[:i] + s[i+1:] + zeros[:z]
 		} else {
@@ -50,18 +65,24 @@ func (p *BaseParser) AmountToBigInt(n json.Number) (big.Int, error) {
 	return r, nil
 }
 
-// AmountToDecimalString converts amount in big.Int to string with decimal point in the correct place
-func (p *BaseParser) AmountToDecimalString(a *big.Int) string {
+// AmountToDecimalString converts amount in big.Int to string with decimal point in the place defined by the parameter d
+func AmountToDecimalString(a *big.Int, d int) string {
+	if a == nil {
+		return ""
+	}
 	n := a.String()
 	var s string
 	if n[0] == '-' {
 		n = n[1:]
 		s = "-"
 	}
-	if len(n) <= p.AmountDecimalPoint {
-		n = zeros[:p.AmountDecimalPoint-len(n)+1] + n
+	if d > len(zeros) {
+		d = len(zeros)
 	}
-	i := len(n) - p.AmountDecimalPoint
+	if len(n) <= d {
+		n = zeros[:d-len(n)+1] + n
+	}
+	i := len(n) - d
 	ad := strings.TrimRight(n[i:], "0")
 	if len(ad) > 0 {
 		n = n[:i] + "." + ad
@@ -69,6 +90,16 @@ func (p *BaseParser) AmountToDecimalString(a *big.Int) string {
 		n = n[:i]
 	}
 	return s + n
+}
+
+// AmountToDecimalString converts amount in big.Int to string with decimal point in the correct place
+func (p *BaseParser) AmountToDecimalString(a *big.Int) string {
+	return AmountToDecimalString(a, p.AmountDecimalPoint)
+}
+
+// AmountDecimals returns number of decimal places in amounts
+func (p *BaseParser) AmountDecimals() int {
+	return p.AmountDecimalPoint
 }
 
 // ParseTxFromJson parses JSON message containing transaction and returns Tx struct
@@ -125,9 +156,9 @@ func (p *BaseParser) UnpackBlockHash(buf []byte) (string, error) {
 	return hex.EncodeToString(buf), nil
 }
 
-// IsUTXOChain returns true if the block chain is UTXO type, otherwise false
-func (p *BaseParser) IsUTXOChain() bool {
-	return true
+// GetChainType is type of the blockchain, default is ChainBitcoinType
+func (p *BaseParser) GetChainType() ChainType {
+	return ChainBitcoinType
 }
 
 // PackTx packs transaction to byte array using protobuf
@@ -139,8 +170,9 @@ func (p *BaseParser) PackTx(tx *Tx, height uint32, blockTime int64) ([]byte, err
 		if err != nil {
 			return nil, errors.Annotatef(err, "Vin %v Hex %v", i, vi.ScriptSig.Hex)
 		}
+		// coinbase txs do not have Vin.txid
 		itxid, err := p.PackTxid(vi.Txid)
-		if err != nil {
+		if err != nil && err != ErrTxidMissing {
 			return nil, errors.Annotatef(err, "Vin %v Txid %v", i, vi.Txid)
 		}
 		pti[i] = &ProtoTransaction_VinType{
@@ -171,6 +203,7 @@ func (p *BaseParser) PackTx(tx *Tx, height uint32, blockTime int64) ([]byte, err
 		Locktime:  tx.LockTime,
 		Vin:       pti,
 		Vout:      pto,
+		Version:   tx.Version,
 	}
 	if pt.Hex, err = hex.DecodeString(tx.Hex); err != nil {
 		return nil, errors.Annotatef(err, "Hex %v", tx.Hex)
@@ -230,6 +263,27 @@ func (p *BaseParser) UnpackTx(buf []byte) (*Tx, uint32, error) {
 		Txid:      txid,
 		Vin:       vin,
 		Vout:      vout,
+		Version:   pt.Version,
 	}
 	return &tx, pt.Height, nil
+}
+
+// DerivationBasePath is unsupported
+func (p *BaseParser) DerivationBasePath(xpub string) (string, error) {
+	return "", errors.New("Not supported")
+}
+
+// DeriveAddressDescriptors is unsupported
+func (p *BaseParser) DeriveAddressDescriptors(xpub string, change uint32, indexes []uint32) ([]AddressDescriptor, error) {
+	return nil, errors.New("Not supported")
+}
+
+// DeriveAddressDescriptorsFromTo is unsupported
+func (p *BaseParser) DeriveAddressDescriptorsFromTo(xpub string, change uint32, fromIndex uint32, toIndex uint32) ([]AddressDescriptor, error) {
+	return nil, errors.New("Not supported")
+}
+
+// EthereumTypeGetErc20FromTx is unsupported
+func (p *BaseParser) EthereumTypeGetErc20FromTx(tx *Tx) ([]Erc20Transfer, error) {
+	return nil, errors.New("Not supported")
 }

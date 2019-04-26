@@ -1,0 +1,71 @@
+{
+  "connectBlocks": {
+    "syncRanges": [
+      {"lower": 1503776, "upper": 1503796}
+    ],
+    "blocks": {
+      "1503796": {
+        "height": 1503796,
+        "hash": "f907e10100b3ec0be53c4dd40d0efb563a9d1de1d2b7a156ffec03b8d364ffb4",
+        "noTxs": 1,
+        "txDetails": [
+          {
+            "txid": "d819588eab648eb7d99f2acc2e4cf21c546a5b15d7090620f703fd9a0d384e59",
+            "version": 1,
+            "vin": [
+              {
+                "coinbase": "0334f2160101",
+                "sequence": 4294967295
+              }
+            ],
+            "vout": [
+              {
+                "value": 5.00000000,
+                "n": 0,
+                "scriptPubKey": {
+                  "hex": "76a914d02029d9dffe8f7cbe08122cacb8f57596132f3488ac"
+                }
+              }
+            ],
+            "hex": "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff060334f2160101ffffffff010065cd1d000000001976a914d02029d9dffe8f7cbe08122cacb8f57596132f3488ac00000000",
+            "time": 1442385302,
+            "blocktime": 1442385302
+          }
+        ]
+      }
+    }
+  },
+  "handleFork": {
+    "syncRanges": [
+      {"lower": 1503790, "upper": 1503796}
+    ],
+    "fakeBlocks": {
+      "1503794": {
+        "height": 1503794,
+        "hash": "a1b30026cfd15e4f46c5ffbd57f615d71e5c5d2366b079131123bf055d9e812f"
+      },
+      "1503795": {
+        "height": 1503795,
+        "hash": "2d92315148dd3568c1a9ab7bf6bd893ed0ca012372f69e139e026453f23d92c4"
+      },
+      "1503796": {
+        "height": 1503796,
+        "hash": "dbc84d9af0a74252f337cbcc2fdd6295db53c2cea2bd94ba8afe66f24bc53a5b"
+      }
+    },
+    "realBlocks": {
+      "1503794": {
+        "height": 1503794,
+        "hash": "9f1ad78ac7a7f4bf2ca32a2be4117495510ec517525209c854b51d9b7bfefa95"
+      },
+      "1503795": {
+        "height": 1503795,
+        "hash": "88084fc69161eb5868bd146d78fb10fe7d80a474029b23728809e0a744bcf5dd"
+      },
+      "1503796": {
+        "height": 1503796,
+        "hash": "f907e10100b3ec0be53c4dd40d0efb563a9d1de1d2b7a156ffec03b8d364ffb4"
+      }
+    }
+  }
+}

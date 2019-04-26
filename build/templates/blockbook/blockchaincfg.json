@@ -3,9 +3,8 @@
 {{- if .Blockbook.BlockChain.AdditionalParams}}
 {{- range $name, $value := .Blockbook.BlockChain.AdditionalParams}}
     "{{$name}}": {{jsonToString $value}},
-{{- end}}
+{{- end -}}
 {{end}}
-
     "coin_name": "{{.Coin.Name}}",
     "coin_shortcut": "{{.Coin.Shortcut}}",
     "coin_label": "{{.Coin.Label}}",
@@ -17,6 +16,11 @@
     "message_queue_binding": "{{template "IPC.MessageQueueBindingTemplate" .}}",
     "subversion": "{{.Blockbook.BlockChain.Subversion}}",
     "address_format": "{{.Blockbook.BlockChain.AddressFormat}}",
+{{if .Blockbook.BlockChain.XPubMagic}}    "xpub_magic": {{.Blockbook.BlockChain.XPubMagic}},
+{{end}}{{if .Blockbook.BlockChain.XPubMagicSegwitP2sh}}    "xpub_magic_segwit_p2sh": {{.Blockbook.BlockChain.XPubMagicSegwitP2sh}},
+{{end}}{{if .Blockbook.BlockChain.XPubMagicSegwitNative}}    "xpub_magic_segwit_native": {{.Blockbook.BlockChain.XPubMagicSegwitNative}},
+{{end}}{{if .Blockbook.BlockChain.Slip44}}    "slip44": {{.Blockbook.BlockChain.Slip44}},
+{{end}}
     "mempool_workers": {{.Blockbook.BlockChain.MempoolWorkers}},
     "mempool_sub_workers": {{.Blockbook.BlockChain.MempoolSubWorkers}},
     "block_addresses_to_keep": {{.Blockbook.BlockChain.BlockAddressesToKeep}}

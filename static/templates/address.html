@@ -1,6 +1,5 @@
 {{define "specific"}}{{$cs := .CoinShortcut}}{{$addr := .Address}}{{$data := .}}
-<h1>Address
-    <small class="text-muted">{{formatAmount $addr.Balance}} {{$cs}}</small>
+<h1>{{if $addr.Erc20Contract}}Contract {{$addr.Erc20Contract.Name}} ({{$addr.Erc20Contract.Symbol}}){{else}}Address{{end}} <small class="text-muted">{{formatAmount $addr.BalanceSat}} {{$cs}}</small>
 </h1>
 <div class="alert alert-data ellipsis">
     <span class="data">{{$addr.AddrStr}}</span>
@@ -10,22 +9,65 @@
     <div class="col-md-10">
         <table class="table data-table">
             <tbody>
+                {{- if eq .ChainType 1 -}}
+                <tr>
+                    <td style="width: 25%;">Balance</td>
+                    <td class="data">{{formatAmount $addr.BalanceSat}} {{$cs}}</td>
+                </tr>
+                <tr>
+                    <td>Transactions</td>
+                    <td class="data">{{$addr.Txs}}</td>
+                </tr>
+                <tr>
+                    <td>Non-contract Transactions</td>
+                    <td class="data">{{$addr.NonTokenTxs}}</td>
+                </tr>
+                <tr>
+                    <td>Nonce</td>
+                    <td class="data">{{$addr.Nonce}}</td>
+                </tr>
+                {{- if $addr.Tokens -}}
+                <tr>
+                    <td>ERC20 Tokens</td>
+                    <td style="padding: 0;">
+                        <table class="table data-table">
+                            <tbody>
+                                <tr>
+                                    <th>Contract</th>
+                                    <th>Tokens</th>
+                                    <th style="width: 15%;">Transfers</th>
+                                </tr>
+                                {{- range $t := $addr.Tokens -}}
+                                <tr>
+                                    <td class="data ellipsis">{{if $t.Contract}}<a href="/address/{{$t.Contract}}">{{$t.Name}}</a>{{else}}{{$t.Name}}{{end}}</td>
+                                    <td class="data">{{formatAmountWithDecimals $t.BalanceSat $t.Decimals}} {{$t.Symbol}}</td>
+                                    <td class="data">{{$t.Transfers}}</td>
+                                </tr>
+                                {{- end -}}
+                            </tbody>
+                        </table>
+                    </td>
+                </tr>
+                {{- end -}}
+                </tr>
+                {{- else -}}
                 <tr>
                     <td style="width: 25%;">Total Received</td>
-                    <td class="data">{{formatAmount $addr.TotalReceived}} {{$cs}}</td>
+                    <td class="data">{{formatAmount $addr.TotalReceivedSat}} {{$cs}}</td>
                 </tr>
                 <tr>
                     <td>Total Sent</td>
-                    <td class="data">{{formatAmount $addr.TotalSent}} {{$cs}}</td>
+                    <td class="data">{{formatAmount $addr.TotalSentSat}} {{$cs}}</td>
                 </tr>
                 <tr>
                     <td>Final Balance</td>
-                    <td class="data">{{formatAmount $addr.Balance}} {{$cs}}</td>
+                    <td class="data">{{formatAmount $addr.BalanceSat}} {{$cs}}</td>
                 </tr>
                 <tr>
                     <td>No. Transactions</td>
-                    <td class="data">{{$addr.TxApperances}}</td>
+                    <td class="data">{{$addr.Txs}}</td>
                 </tr>
+                {{- end -}}
             </tbody>
         </table>
     </div>
@@ -37,26 +79,39 @@
         </script>
     </div>
 </div>
-{{- if $addr.UnconfirmedTxApperances -}}
+{{- if $addr.UnconfirmedTxs -}}
 <h3>Unconfirmed</h3>
 <div class="data-div">
     <table class="table data-table">
         <tbody>
             <tr>
                 <td style="width: 25%;">Unconfirmed Balance</td>
-                <td class="data">{{formatAmount $addr.UnconfirmedBalance}} {{$cs}}</td>
+                <td class="data">{{formatAmount $addr.UnconfirmedBalanceSat}} {{$cs}}</td>
             </tr>
             <tr>
                 <td>No. Transactions</td>
-                <td class="data">{{$addr.UnconfirmedTxApperances}}</td>
+                <td class="data">{{$addr.UnconfirmedTxs}}</td>
             </tr>
         </tbody>
     </table>
 </div>
-{{- end}}{{if $addr.Transactions -}}
-<div class="h-container">
-    <h3 class="h-container-6">Transactions</h3>
-    <nav class="h-container-6">{{template "paging" $data}}</nav>
+{{- end}}{{if or $addr.Transactions $addr.Filter -}}
+<div class="row h-container">
+    <h3 class="col-md-3">Transactions</h3>
+    <select class="col-md-2" style="background-color: #eaeaea;" onchange="self.location='?filter='+options[selectedIndex].value">
+        <option>All</option>
+        <option {{if eq $addr.Filter "inputs" -}} selected{{end}} value="inputs">Inputs</option>
+        <option {{if eq $addr.Filter "outputs" -}} selected{{end}} value="outputs">Outputs</option>
+        {{- if $addr.Tokens -}}
+        <option {{if eq $addr.Filter "0" -}} selected{{end}} value="0">Non-contract</option>
+        {{- range $t := $addr.Tokens -}}
+        <option {{if eq $addr.Filter $t.ContractIndex -}} selected{{end}} value="{{$t.ContractIndex}}">{{$t.Name}}</option>
+        {{- end -}}
+        {{- end -}}
+    </select>
+    <div class="col-md-7">
+        <nav>{{template "paging" $data}}</nav>
+    </div>
 </div>
 <div class="data-div">
     {{- range $tx := $addr.Transactions}}{{$data := setTxToTemplateData $data $tx}}{{template "txdetail" $data}}{{end -}}
