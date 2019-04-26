@@ -6,15 +6,17 @@ import (
 	"blockbook/bchain/coins/utils"
 	"bytes"
 
-	"github.com/btcsuite/btcd/wire"
-	"github.com/jakm/btcutil/chaincfg"
+	"github.com/martinboehm/btcd/wire"
+	"github.com/martinboehm/btcutil/chaincfg"
 )
 
 const (
+	// MainnetMagic is mainnet network constant
 	MainnetMagic wire.BitcoinNet = 0xfeb4bef9
 )
 
 var (
+	// MainNetParams are parser parameters for mainnet
 	MainNetParams chaincfg.Params
 )
 

@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+    <style>
+        .row {
+            margin-top: 1%;
+        }
+    </style>
+    <title>Blockbook Websocket Test Page</title>
+    <script>
+        var ws;
+        var messageID;
+        var pendingMessages;
+        var subscriptions;
+        function send(method, params, callback) {
+            var id = messageID.toString();
+            messageID++;
+            pendingMessages[id] = callback;
+            var req = {
+                id,
+                method,
+                params
+            }
+            ws.send(JSON.stringify(req));
+            return id;
+        }
+        function subscribe(method, params, callback) {
+            var id = messageID.toString();
+            messageID++;
+            subscriptions[id] = callback;
+            var req = {
+                id,
+                method,
+                params
+            }
+            ws.send(JSON.stringify(req));
+            return id;
+        }
+        function unsubscribe(method, id, params, callback) {
+            delete subscriptions[id];
+            pendingMessages[id] = callback;
+            var req = {
+                id,
+                method,
+                params
+            }
+            ws.send(JSON.stringify(req));
+            return id;
+        }
+        function connect(server) {
+            messageID = 0;
+            pendingMessages = {};
+            subscriptions = {};
+            subscribeNewBlockId = "";
+            subscribeAddressesId = "";
+            if (server.startsWith("http")) {
+                server = server.replace("http", "ws");
+            }
+            if (!server.endsWith("/websocket")) {
+                server += "/websocket";
+            }
+            ws = new WebSocket(server);
+            ws.onopen = function (e) {
+                console.log('socket connected', e);
+                document.getElementById('connectionStatus').innerText = "connected";
+            };
+            ws.onclose = function (e) {
+                console.log('socket closed', e);
+                document.getElementById('connectionStatus').innerText = "disconnected";
+            };
+            ws.onerror = function (e) {
+                console.log('socket error ', e);
+                document.getElementById('connectionStatus').innerText = "error";
+            };
+            ws.onmessage = function (e) {
+                console.log('resp ' + e.data);
+                var resp = JSON.parse(e.data);
+                var f = pendingMessages[resp.id];
+                if (f != undefined) {
+                    delete pendingMessages[resp.id];
+                    f(resp.data);
+                } else {
+                    f = subscriptions[resp.id];
+                    if (f != undefined) {
+                        f(resp.data);
+                    }
+                    else {
+                        console.log("unkown response " + resp.id);
+                    }
+                }
+            };
+        }
+
+        function getInfo() {
+            const method = 'getInfo';
+            const params = {
+            };
+            send(method, params, function (result) {
+                document.getElementById('getInfoResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
+            });
+        }
+
+        function getBlockHash() {
+            const method = 'getBlockHash';
+            const height = parseInt(document.getElementById("getBlockHashHeight").value);
+            const params = {
+                height
+            };
+            send(method, params, function (result) {
+                document.getElementById('getBlockHashResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
+            });
+        }
+
+        function getAccountInfo() {
+            const descriptor = document.getElementById('getAccountInfoDescriptor').value.trim();
+            const selectDetails = document.getElementById('getAccountInfoDetails');
+            const details = selectDetails.options[selectDetails.selectedIndex].value;
+            const page = parseInt(document.getElementById("getAccountInfoPage").value);
+            const from = parseInt(document.getElementById("getAccountInfoFrom").value);
+            const to = parseInt(document.getElementById("getAccountInfoTo").value);
+            const contractFilter = document.getElementById("getAccountInfoContract").value.trim();
+            const pageSize = 10;
+            const method = 'getAccountInfo';
+            const tokens = "derived"; // could be "nonzero", "used", default is "derived" i.e. all
+            const params = {
+                descriptor,
+                details,
+                tokens,
+                page,
+                pageSize,
+                from,
+                to,
+                contractFilter
+            };
+            send(method, params, function (result) {
+                document.getElementById('getAccountInfoResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
+            });
+        }
+
+        function getAccountUtxo() {
+            const descriptor = document.getElementById('getAccountUtxoDescriptor').value.trim();
+            const method = 'getAccountUtxo';
+            const params = {
+                descriptor,
+            };
+            send(method, params, function (result) {
+                document.getElementById('getAccountUtxoResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
+            });
+        }
+
+        function getTransaction() {
+            const txid = document.getElementById('getTransactionTxid').value.trim();
+            const method = 'getTransaction';
+            const params = {
+                txid,
+            };
+            send(method, params, function (result) {
+                document.getElementById('getTransactionResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
+            });
+        }
+
+        function getTransactionSpecific() {
+            const txid = document.getElementById('getTransactionSpecificTxid').value.trim();
+            const method = 'getTransactionSpecific';
+            const params = {
+                txid,
+            };
+            send(method, params, function (result) {
+                document.getElementById('getTransactionSpecificResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
+            });
+        }
+
+        function estimateFee() {
+            try {
+                var blocks = document.getElementById('estimateFeeBlocks').value.split(",");
+                var specific = document.getElementById('estimateFeeSpecific').value.trim();
+                if (specific) {
+                    // example for bitcoin type: {"conservative": false,"txsize":1234}
+                    // example for ethereum type: {"from":"0x65513ecd11fd3a5b1fefdcc6a500b025008405a2","to":"0x65513ecd11fd3a5b1fefdcc6a500b025008405a2","data":"0xabcd"}
+                    specific = JSON.parse(specific)
+                }
+                else {
+                    specific = undefined;
+                }
+                blocks = blocks.map(s => parseInt(s.trim()));
+                const method = 'estimateFee';
+                const params = {
+                    blocks,
+                    specific
+                };
+                send(method, params, function (result) {
+                    document.getElementById('estimateFeeResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
+                });
+            }
+            catch (e) {
+                document.getElementById('estimateFeeResult').innerText = e;
+            }
+        }
+
+        function sendTransaction() {
+            var hex = document.getElementById('sendTransactionHex').value.trim();
+            const method = 'sendTransaction';
+            const params = {
+                hex,
+            };
+            send(method, params, function (result) {
+                document.getElementById('sendTransactionResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
+            });
+        }
+
+        function subscribeNewBlock() {
+            const method = 'subscribeNewBlock';
+            const params = {
+            };
+            if (subscribeNewBlockId) {
+                delete subscriptions[subscribeNewBlockId];
+                subscribeNewBlockId = "";
+            }
+            subscribeNewBlockId = subscribe(method, params, function (result) {
+                document.getElementById('subscribeNewBlockResult').innerText += JSON.stringify(result).replace(/,/g, ", ") + "\n";
+            });
+            document.getElementById('subscribeNewBlockId').innerText = subscribeNewBlockId;
+            document.getElementById('unsubscribeNewBlockButton').setAttribute("style", "display: inherit;");
+        }
+
+        function unsubscribeNewBlock() {
+            const method = 'unsubscribeNewBlock';
+            const params = {
+            };
+            unsubscribe(method, subscribeNewBlockId, params, function (result) {
+                subscribeNewBlockId = "";
+                document.getElementById('subscribeNewBlockResult').innerText += JSON.stringify(result).replace(/,/g, ", ") + "\n";
+                document.getElementById('subscribeNewBlockId').innerText = "";
+                document.getElementById('unsubscribeNewBlockButton').setAttribute("style", "display: none;");
+            });
+        }
+
+        function subscribeAddresses() {
+            const method = 'subscribeAddresses';
+            var addresses = document.getElementById('subscribeAddressesName').value.split(",");
+            addresses = addresses.map(s => s.trim());
+            const params = {
+                addresses
+            };
+            if (subscribeAddressesId) {
+                delete subscriptions[subscribeAddressesId];
+                subscribeAddressesId = "";
+            }
+            subscribeAddressesId = subscribe(method, params, function (result) {
+                document.getElementById('subscribeAddressesResult').innerText += JSON.stringify(result).replace(/,/g, ", ") + "\n";
+            });
+            document.getElementById('subscribeAddressesIds').innerText = subscribeAddressesId;
+            document.getElementById('unsubscribeAddressesButton').setAttribute("style", "display: inherit;");
+        }
+
+        function unsubscribeAddresses() {
+            const method = 'unsubscribeAddresses';
+            const params = {
+            };
+            unsubscribe(method, subscribeAddressesId, params, function (result) {
+                subscribeAddressesId = "";
+                document.getElementById('subscribeAddressesResult').innerText += JSON.stringify(result).replace(/,/g, ", ") + "\n";
+                document.getElementById('subscribeAddressesIds').innerText = "";
+                document.getElementById('unsubscribeAddressesButton').setAttribute("style", "display: none;");
+            });
+        }
+
+    </script>
+</head>
+
+<body>
+    <div class="container">
+        <div class="row justify-content-center">
+            <h1>Blockbook Websocket Test Page</h1>
+        </div>
+        <div class="row">
+            <div class="col">
+                <input class="btn btn-secondary" type="button" value="Login" onclick="connect(document.getElementById('serverAddress').value)">
+            </div>
+            <div class="col-8">
+                <input type="text" class="form-control" id="serverAddress" value="">
+            </div>
+            <div class="col form-inline">
+                <label id="connectionStatus">not connected</label>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <input class="btn btn-secondary" type="button" value="getInfo" onclick="getInfo()">
+            </div>
+            <div class="col-10" id="getInfoResult">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <input class="btn btn-secondary" type="button" value="getBlockHash" onclick="getBlockHash()">
+            </div>
+            <div class="col-8">
+                <input type="text" class="form-control" placeholder="height" id="getBlockHashHeight" value="0">
+            </div>
+            <div class="col">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col" id="getBlockHashResult"></div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <input class="btn btn-secondary" type="button" value="getAccountInfo" onclick="getAccountInfo()">
+            </div>
+            <div class="col-8">
+                <div class="row" style="margin: 0;">
+                    <input type="text" placeholder="descriptor" style="width: 79%" class="form-control" id="getAccountInfoDescriptor" value="0xba98d6a5ac827632e3457de7512d211e4ff7e8bd">
+                    <select id="getAccountInfoDetails" style="width: 20%; margin-left: 5px;">
+                        <option value="basic">Basic</option>
+                        <option value="tokens">Tokens</option>
+                        <option value="tokenBalances">TokenBalances</option>
+                        <option value="txids">Txids</option>
+                        <option value="txs">Transactions</option>
+                    </select>
+                </div>
+                <div class="row" style="margin: 0; margin-top: 5px;">
+                    <input type="text" placeholder="page" style="width: 10%; margin-right: 5px;" class="form-control" id="getAccountInfoPage">
+                    <input type="text" placeholder="from" style="width: 15%;margin-left: 5px;margin-right: 5px;" class="form-control" id="getAccountInfoFrom">
+                    <input type="text" placeholder="to" style="width: 15%; margin-left: 5px; margin-right: 5px;" class="form-control" id="getAccountInfoTo">
+                    <input type="text" placeholder="contract" style="width: 55%; margin-left: 5px; margin-right: 5px;" class="form-control" id="getAccountInfoContract">
+                </div>
+            </div>
+            <div class="col form-inline"></div>
+        </div>
+        <div class="row">
+            <div class="col" id="getAccountInfoResult">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <input class="btn btn-secondary" type="button" value="getAccountUtxo" onclick="getAccountUtxo()">
+            </div>
+            <div class="col-8">
+                <div class="row" style="margin: 0;">
+                    <input type="text" placeholder="descriptor" class="form-control" id="getAccountUtxoDescriptor" value="0xba98d6a5ac827632e3457de7512d211e4ff7e8bd">
+                 </div>
+            </div>
+            <div class="col form-inline"></div>
+        </div>
+        <div class="row">
+            <div class="col" id="getAccountUtxoResult">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <input class="btn btn-secondary" type="button" value="getTransaction" onclick="getTransaction()">
+            </div>
+            <div class="col-8">
+                <div class="row" style="margin: 0;">
+                    <input type="text" placeholder="txid" class="form-control" id="getTransactionTxid" value="0xb266c89f9bfefa4aa2fca4e65b7d6c918d5407f464be781c2803f3546d34a574">
+                 </div>
+            </div>
+            <div class="col form-inline"></div>
+        </div>
+        <div class="row">
+            <div class="col" id="getTransactionResult">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <input class="btn btn-secondary" type="button" value="getTransactionSpecific" onclick="getTransactionSpecific()">
+            </div>
+            <div class="col-8">
+                <div class="row" style="margin: 0;">
+                    <input type="text" placeholder="txid" class="form-control" id="getTransactionSpecificTxid" value="0xb266c89f9bfefa4aa2fca4e65b7d6c918d5407f464be781c2803f3546d34a574">
+                 </div>
+            </div>
+            <div class="col form-inline"></div>
+        </div>
+        <div class="row">
+            <div class="col" id="getTransactionSpecificResult">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <input class="btn btn-secondary" type="button" value="estimateFee" onclick="estimateFee()">
+            </div>
+            <div class="col-8">
+                <div class="row" style="margin: 0;">
+                    <input type="text" placeholder="comma separated list of block targets" class="form-control" id="estimateFeeBlocks" value="2,5,10,20">
+                </div>
+                <div class="row" style="margin: 0; margin-top: 5px;">
+                    <input type="text" placeholder="tx specific JSON" class="form-control" id="estimateFeeSpecific" value="">
+                </div>
+            </div>
+            <div class="col"></div>
+        </div>
+        <div class="row">
+            <div class="col" id="estimateFeeResult">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <input class="btn btn-secondary" type="button" value="sendTransaction" onclick="sendTransaction()">
+            </div>
+            <div class="col-8">
+                <input type="text" class="form-control" id="sendTransactionHex" value="010000000001019d64f0c72a0d206001decbffaa722eb1044534c74eee7a5df8318e42a4323ec10000000017160014550da1f5d25a9dae2eafd6902b4194c4c6500af6ffffffff02809698000000000017a914cd668d781ece600efa4b2404dc91fd26b8b8aed8870553d7360000000017a914246655bdbd54c7e477d0ea2375e86e0db2b8f80a8702473044022076aba4ad559616905fa51d4ddd357fc1fdb428d40cb388e042cdd1da4a1b7357022011916f90c712ead9a66d5f058252efd280439ad8956a967e95d437d246710bc9012102a80a5964c5612bb769ef73147b2cf3c149bc0fd4ecb02f8097629c94ab013ffd00000000">
+            </div>
+            <div class="col">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col" id="sendTransactionResult"></div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <input class="btn btn-secondary" type="button" value="subscribe new block" onclick="subscribeNewBlock()">
+            </div>
+            <div class="col-4">
+                <span id="subscribeNewBlockId"></span>
+            </div>
+            <div class="col">
+                <input class="btn btn-secondary" id="unsubscribeNewBlockButton" style="display: none;" type="button" value="unsubscribe" onclick="unsubscribeNewBlock()">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col" id="subscribeNewBlockResult"></div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <input class="btn btn-secondary" type="button" value="subscribe address" onclick="subscribeAddresses()">
+            </div>
+            <div class="col-8">
+                <input type="text" class="form-control" id="subscribeAddressesName" value="0xba98d6a5ac827632e3457de7512d211e4ff7e8bd,0x73d0385f4d8e00c5e6504c6030f47bf6212736a8">
+            </div>
+            <div class="col">
+                <span id="subscribeAddressesIds"></span>
+            </div>
+            <div class="col">
+                <input class="btn btn-secondary" id="unsubscribeAddressesButton" style="display: none;" type="button" value="unsubscribe" onclick="unsubscribeAddresses()">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col" id="subscribeAddressesResult"></div>
+        </div>
+    </div>
+</body>
+<script>
+    document.getElementById('serverAddress').value = window.location.protocol + "//" + window.location.host;
+</script>
+
+</html>

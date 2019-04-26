@@ -1,15 +1,15 @@
 # Blockbook Contributor Guide
 
-Blockbook is back-end service for Trezor wallet. Although it is open source, design and development of core packages
+Blockbook is back-end service for Trezor wallet. Although it is open source, the design and development of the core packages
 is done by Trezor developers in order to keep Blockbook compatible with Trezor.
 
 Bug fixes and support for new coins are welcome. Please take note that non-fixing pull requests that change base
-packages or another coin code will not be accepted. If you will have to change some of existing code, please file
+packages or another coin code will not be accepted. If you have a need to change some of the existing code, please file
 an issue and discuss your request with Blockbook maintainers.
 
 ## Development environment
 
-Instructions to set up your development environment and build Blockbook are described in separated
+Instructions to set up your development environment and build Blockbook are described in a separate
 [document](/docs/build.md).
 
 ## How can I contribute?
@@ -25,8 +25,7 @@ updates. Do not leave random "+1" or "I have this too" comments, as they only cl
 resolving it. However, if you have ways to reproduce the issue or have additional information that may help resolving
 the issue, please leave a comment.
 
-Include information about Blockbook instance which is exposed at internal HTTP port. Ports are listed in
-[port registry](/docs/ports.md). For example execute `curl -k https://localhost:9030` for Bitcoin.
+Include information about the Blockbook instance, which is shown at the Blockbook status page or returned by API call. For example execute `curl -k https://<server name>:<public port>/api` to get JSON containing details about Blockbook and Backend installation.  Ports are listed in the [port registry](/docs/ports.md). 
 
 Also include the steps required to reproduce the problem if possible and applicable. This information will help us
 review and fix your issue faster. When sending lengthy log-files, consider posting them as a gist
@@ -34,35 +33,35 @@ review and fix your issue faster. When sending lengthy log-files, consider posti
 
 ### Adding coin support
 
+> **Important notice**: Although we are happy for support of new coins, we do not have enough capacity to run them all
+> on our infrastructure. We run Blockbook instances only for selected number of coins. If you want to have Blockbook
+> instance for your coin, you will have to deploy it to your own server.
+
 Trezor harware wallet supports over 500 coins, see https://trezor.io/coins/. You are free to add support for any of
-them to Blockbook. Actually implemented coins are listed [here](/docs/ports.md).
+them to Blockbook. Currently implemented coins are listed [here](/docs/ports.md).
 
-You should follow few steps bellow to get smooth merge of your PR.
-
-> Although we are happy for support of new coins we have not enough capacity to run them all on our infrastructure.
-> Actually we can run Blockbook instances only for coins supported by Trezor wallet. If you want to have Blockbook
-> instance for your coin, you will have to deploy your own server.
+You should follow the steps below to get smooth merge of your PR.
 
 #### Add coin definition
 
-Coin definitions are stored in JSON files in *configs/coins* directory. They are single source of Blockbook
+Coin definitions are stored in JSON files in *configs/coins* directory. They are the single source of Blockbook
 configuration, Blockbook and back-end package definition and build metadata. Since Blockbook supports only single
 coin index per running instance, every coin (including testnet) must have single definition file.
 
 All options of coin definition are described in [config.md](/docs/config.md).
 
 Because most of coins are fork of Bitcoin and they have similar way to install and configure their daemon, we use
-templates to generate package definition and configuration files during build process. Similarly, there templates for Blockbook
+templates to generate package definition and configuration files during build process. Similarly, there are templates for Blockbook
 package. Templates are filled with data from coin definition. Although normally all package definitions are generated automatically
-during the build process, sometimes there is a reason to see them. You can create them by calling
+during the build process, sometimes there is a reason to check what was generated. You can create them by calling
 `go run build/templates/generate.go coin`, where *coin* is name of definition file without .json extension. Files are
 generated to *build/pkg-defs* directory.
 
 Good examples of coin configuration are
 [*configs/coins/bitcoin.json*](configs/coins/bitcoin.json) and
-[*configs/coins/ethereum.json*](configs/coins/ethereum.json) for Bitcoin-like coins and different coins, respectively.
+[*configs/coins/ethereum.json*](configs/coins/ethereum.json) for Bitcoin type coins and Ethereum type coins, respectively.
 
-Usually you have to update only few options that differ from Bitcoin definition. At first there is base information
+Usually you have to update only a few options that differ from the Bitcoin definition. At first there is base information
 about coin in section *coin* – name, alias etc. Then update port information in *port* section. We keep port series as
 listed in [the port registry](/docs/ports.md). Select next port numbers in the series. Port numbers must be unique across all
 port definitions.
@@ -109,15 +108,15 @@ different concept than Bitcoin.
 
 ##### BlockChain interface
 
-Type that implements *bchain.BlockChain* interface ensures communication with block chain network. Because
-it calls node RPCs it usually has suffix RPC.
+Type that implements *bchain.BlockChain* interface ensures communication with the block chain network. Because
+it calls node RPCs, it usually has suffix RPC.
 
 Initialization of object is separated into two stages. At first there is called factory method (details described
-in next section) and then *bchain.BlockChain.Initialize()* method. Separated initialization method allows you call
+in the next section) and then *bchain.BlockChain.Initialize()* method. Separated initialization method allows you call
 inherited methods during initialization. However it is common practice override fields of embedded structure in factory
 method.
 
-During initialization, there is usually loaded chain information, registered message queue callback and created mempool
+Initialization routine usually loads chain information, registers message queue callback and creates mempool
 and parser objects.
 
 BitcoinRPC uses *btc.RPCMarshaller* ([btc/codec.go](/bchain/coins/btc/codec.go)) in order to distinguish API version of
@@ -136,7 +135,7 @@ must correspond to *coin.name* in coin definition file (see above).
 Configuration passed to factory method is coin specific. For types that embed *btc.BitcoinRPC,* configuration must
 contain at least fields referred in *btc.Configuration* ([btc/bitcoinrpc.go](/bchain/coins/btc/bitcoinrpc.go)).
 
-For types that embed base struct it is common practise call factory method of embedded type in order to
+For types that embed base struct it is common practice to call factory method of the embedded type in order to
 create & initialize it. It is much more robust than simple struct composition.
 
 For example see [zec/zcashrpc.go](/bchain/coins/zec/zcashrpc.go).
@@ -146,7 +145,7 @@ For example see [zec/zcashrpc.go](/bchain/coins/zec/zcashrpc.go).
 Type that implements *bchain.BlockChainParser* interface ensures parsing and conversions of block chain data. It is
 initialized by *bchain.BlockChain* during initialization.
 
-There are several groups of methods defined in *bchian.BlockChainParser*:
+There are several groups of methods defined in *bchain.BlockChainParser*:
 
 * *GetAddrDescFromVout* and *GetAddrDescFromAddress* – Convert transaction addresses to *Address Descriptor* that is used as database ID.
   Most of coins use output script as *Address Descriptor*.
@@ -168,9 +167,9 @@ different approach for address representation than Bitcoin.
 
 #### Add tests
 
-Add unit tests and integration tests. PR without passing tests won't be accepted. 
-Tests are described [here](/docs/testing.md).
+Add unit tests and integration tests. **Pull requests without passing tests will not be accepted**. 
+How to implement tests is described [here](/docs/testing.md).
 
 #### Deploy public server
 
-Deploy Blockbook server on public IP address. Blockbook maintainers will check implementation before merging.
+Deploy Blockbook server on public IP address. Blockbook maintainers will check your implementation before merging.

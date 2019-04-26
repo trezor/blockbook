@@ -1,21 +1,28 @@
 package dash
 
 import (
+	"blockbook/bchain"
 	"blockbook/bchain/coins/btc"
 
-	"github.com/btcsuite/btcd/wire"
-	"github.com/jakm/btcutil/chaincfg"
+	"github.com/martinboehm/btcd/wire"
+	"github.com/martinboehm/btcutil/chaincfg"
 )
 
 const (
+	// MainnetMagic is mainnet network constant
 	MainnetMagic wire.BitcoinNet = 0xbd6b0cbf
+	// TestnetMagic is testnet network constant
 	TestnetMagic wire.BitcoinNet = 0xffcae2ce
+	// RegtestMagic is regtest network constant
 	RegtestMagic wire.BitcoinNet = 0xdcb7c1fc
 )
 
 var (
+	// MainNetParams are parser parameters for mainnet
 	MainNetParams chaincfg.Params
+	// TestNetParams are parser parameters for testnet
 	TestNetParams chaincfg.Params
+	// RegtestParams are parser parameters for regtest
 	RegtestParams chaincfg.Params
 )
 
@@ -45,11 +52,15 @@ func init() {
 // DashParser handle
 type DashParser struct {
 	*btc.BitcoinParser
+	baseparser *bchain.BaseParser
 }
 
 // NewDashParser returns new DashParser instance
 func NewDashParser(params *chaincfg.Params, c *btc.Configuration) *DashParser {
-	return &DashParser{BitcoinParser: btc.NewBitcoinParser(params, c)}
+	return &DashParser{
+		BitcoinParser: btc.NewBitcoinParser(params, c),
+		baseparser:    &bchain.BaseParser{},
+	}
 }
 
 // GetChainParams contains network parameters for the main Dash network,
@@ -76,4 +87,14 @@ func GetChainParams(chain string) *chaincfg.Params {
 	default:
 		return &MainNetParams
 	}
+}
+
+// PackTx packs transaction to byte array using protobuf
+func (p *DashParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) ([]byte, error) {
+	return p.baseparser.PackTx(tx, height, blockTime)
+}
+
+// UnpackTx unpacks transaction from protobuf byte array
+func (p *DashParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
+	return p.baseparser.UnpackTx(buf)
 }

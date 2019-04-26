@@ -15,7 +15,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/jakm/btcutil/chaincfg"
+	"github.com/martinboehm/btcutil/chaincfg"
 )
 
 func TestMain(m *testing.M) {
@@ -276,7 +276,7 @@ type testBlock struct {
 
 var testParseBlockTxs = map[int]testBlock{
 	// block without auxpow
-	12345: testBlock{
+	12345: {
 		size: 8582,
 		time: 1387104223,
 		txs: []string{
@@ -314,7 +314,7 @@ var testParseBlockTxs = map[int]testBlock{
 		},
 	},
 	// 1st block with auxpow
-	371337: testBlock{
+	371337: {
 		size: 1704,
 		time: 1410464577,
 		txs: []string{
@@ -327,7 +327,7 @@ var testParseBlockTxs = map[int]testBlock{
 		},
 	},
 	// block with auxpow
-	567890: testBlock{
+	567890: {
 		size: 3833,
 		time: 1422855443,
 		txs: []string{
@@ -343,7 +343,7 @@ var testParseBlockTxs = map[int]testBlock{
 		},
 	},
 	// recent block
-	2264125: testBlock{
+	2264125: {
 		size: 8531,
 		time: 1529099968,
 		txs: []string{

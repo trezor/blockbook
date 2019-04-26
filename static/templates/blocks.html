@@ -1,6 +1,5 @@
 {{define "specific"}}{{$blocks := .Blocks}}{{$data := .}}
-<h1>Blocks
-    <small class="text-muted">by date</small>
+<h1>Blocks <small class="text-muted">by date</small>
 </h1>
 {{if $blocks.Blocks -}}
 <nav>{{template "paging" $data }}</nav>

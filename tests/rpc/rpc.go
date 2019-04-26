@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/deckarep/golang-set"
+	mapset "github.com/deckarep/golang-set"
 	"github.com/juju/errors"
 )
 
@@ -30,6 +30,7 @@ var testMap = map[string]func(t *testing.T, th *TestHandler){
 
 type TestHandler struct {
 	Chain    bchain.BlockChain
+	Mempool  bchain.Mempool
 	TestData *TestData
 }
 
@@ -37,11 +38,12 @@ type TestData struct {
 	BlockHeight uint32                `json:"blockHeight"`
 	BlockHash   string                `json:"blockHash"`
 	BlockTime   int64                 `json:"blockTime"`
+	BlockSize   int                   `json:"blockSize"`
 	BlockTxs    []string              `json:"blockTxs"`
 	TxDetails   map[string]*bchain.Tx `json:"txDetails"`
 }
 
-func IntegrationTest(t *testing.T, coin string, chain bchain.BlockChain, testConfig json.RawMessage) {
+func IntegrationTest(t *testing.T, coin string, chain bchain.BlockChain, mempool bchain.Mempool, testConfig json.RawMessage) {
 	tests, err := getTests(testConfig)
 	if err != nil {
 		t.Fatalf("Failed loading of test list: %s", err)
@@ -53,7 +55,11 @@ func IntegrationTest(t *testing.T, coin string, chain bchain.BlockChain, testCon
 		t.Fatalf("Failed loading of test data: %s", err)
 	}
 
-	h := TestHandler{Chain: chain, TestData: td}
+	h := TestHandler{
+		Chain:    chain,
+		Mempool:  mempool,
+		TestData: td,
+	}
 
 	for _, test := range tests {
 		if f, found := testMap[test]; found {
@@ -166,6 +172,8 @@ func testGetTransaction(t *testing.T, h *TestHandler) {
 			continue
 		}
 		got.Confirmations = 0
+		// CoinSpecificData are not specified in the fixtures
+		got.CoinSpecificData = nil
 
 		if !reflect.DeepEqual(got, want) {
 			t.Errorf("GetTransaction() got %+v, want %+v", got, want)
@@ -175,14 +183,14 @@ func testGetTransaction(t *testing.T, h *TestHandler) {
 func testGetTransactionForMempool(t *testing.T, h *TestHandler) {
 	for txid, want := range h.TestData.TxDetails {
 		// reset fields that are not parsed by BlockChainParser
-		want.Confirmations, want.Blocktime, want.Time = 0, 0, 0
+		want.Confirmations, want.Blocktime, want.Time, want.CoinSpecificData = 0, 0, 0, nil
 
 		got, err := h.Chain.GetTransactionForMempool(txid)
 		if err != nil {
 			t.Fatal(err)
 		}
 		// transactions parsed from JSON may contain additional data
-		got.Confirmations, got.Blocktime, got.Time = 0, 0, 0
+		got.Confirmations, got.Blocktime, got.Time, got.CoinSpecificData = 0, 0, 0, nil
 		if !reflect.DeepEqual(got, want) {
 			t.Errorf("GetTransactionForMempool() got %+v, want %+v", got, want)
 		}
@@ -192,7 +200,7 @@ func testMempoolSync(t *testing.T, h *TestHandler) {
 	for i := 0; i < 3; i++ {
 		txs := getMempool(t, h)
 
-		n, err := h.Chain.ResyncMempool(nil)
+		n, err := h.Mempool.Resync()
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -214,11 +222,11 @@ func testMempoolSync(t *testing.T, h *TestHandler) {
 
 		for txid, addrs := range txid2addrs {
 			for _, a := range addrs {
-				got, err := h.Chain.GetMempoolTransactions(a)
+				got, err := h.Mempool.GetTransactions(a)
 				if err != nil {
 					t.Fatalf("address %q: %s", a, err)
 				}
-				if !containsString(got, txid) {
+				if !containsTx(got, txid) {
 					t.Errorf("ResyncMempool() - for address %s, transaction %s wasn't found in mempool", a, txid)
 					return
 				}
@@ -312,6 +320,7 @@ func testGetBlockHeader(t *testing.T, h *TestHandler) {
 		Hash:   h.TestData.BlockHash,
 		Height: h.TestData.BlockHeight,
 		Time:   h.TestData.BlockTime,
+		Size:   h.TestData.BlockSize,
 	}
 
 	got, err := h.Chain.GetBlockHeader(h.TestData.BlockHash)
@@ -333,7 +342,7 @@ func testGetBlockHeader(t *testing.T, h *TestHandler) {
 }
 
 func getMempool(t *testing.T, h *TestHandler) []string {
-	txs, err := h.Chain.GetMempool()
+	txs, err := h.Chain.GetMempoolTransactions()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -349,7 +358,7 @@ func getTxid2addrs(t *testing.T, h *TestHandler, txs []string) map[string][]stri
 	for i := range txs {
 		tx, err := h.Chain.GetTransactionForMempool(txs[i])
 		if err != nil {
-			if isMissingTx(err) {
+			if err == bchain.ErrTxNotFound {
 				continue
 			}
 			t.Fatal(err)
@@ -366,20 +375,6 @@ func getTxid2addrs(t *testing.T, h *TestHandler, txs []string) map[string][]stri
 		}
 	}
 	return txid2addrs
-}
-
-func isMissingTx(err error) bool {
-	switch e1 := err.(type) {
-	case *errors.Err:
-		switch e2 := e1.Cause().(type) {
-		case *bchain.RPCError:
-			if e2.Code == -5 { // "No such mempool or blockchain transaction"
-				return true
-			}
-		}
-	}
-
-	return false
 }
 
 func intersect(a, b []string) []string {
@@ -399,9 +394,9 @@ func intersect(a, b []string) []string {
 	return res
 }
 
-func containsString(slice []string, s string) bool {
-	for i := range slice {
-		if slice[i] == s {
+func containsTx(o []bchain.Outpoint, tx string) bool {
+	for i := range o {
+		if o[i].Txid == tx {
 			return true
 		}
 	}

@@ -4,19 +4,25 @@ import (
 	"blockbook/bchain"
 	"blockbook/bchain/coins/btc"
 
-	"github.com/btcsuite/btcd/wire"
-	"github.com/jakm/btcutil/chaincfg"
+	"github.com/martinboehm/btcd/wire"
+	"github.com/martinboehm/btcutil/chaincfg"
 )
 
 const (
+	// MainnetMagic is mainnet network constant
 	MainnetMagic wire.BitcoinNet = 0x6427e924
+	// TestnetMagic is testnet network constant
 	TestnetMagic wire.BitcoinNet = 0xbff91afa
+	// RegtestMagic is regtest network constant
 	RegtestMagic wire.BitcoinNet = 0x5f3fe8aa
 )
 
 var (
+	// MainNetParams are parser parameters for mainnet
 	MainNetParams chaincfg.Params
+	// TestNetParams are parser parameters for testnet
 	TestNetParams chaincfg.Params
+	// RegtestParams are parser parameters for regtest
 	RegtestParams chaincfg.Params
 )
 

@@ -8,18 +8,22 @@ import (
 	"encoding/binary"
 	"io"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/btcsuite/btcd/wire"
-	"github.com/jakm/btcutil/chaincfg"
+	"github.com/martinboehm/btcd/chaincfg/chainhash"
+	"github.com/martinboehm/btcd/wire"
+	"github.com/martinboehm/btcutil/chaincfg"
 )
 
 const (
+	// MainnetMagic is mainnet network constant
 	MainnetMagic wire.BitcoinNet = 0x446d47e1
+	// TestnetMagic is testnet network constant
 	TestnetMagic wire.BitcoinNet = 0x456e48e2
 )
 
 var (
+	// MainNetParams are parser parameters for mainnet
 	MainNetParams chaincfg.Params
+	// TestNetParams are parser parameters for testnet
 	TestNetParams chaincfg.Params
 )
 

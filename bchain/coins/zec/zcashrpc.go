@@ -9,10 +9,12 @@ import (
 	"github.com/juju/errors"
 )
 
+// ZCashRPC is an interface to JSON-RPC bitcoind service
 type ZCashRPC struct {
 	*btc.BitcoinRPC
 }
 
+// NewZCashRPC returns new ZCashRPC instance
 func NewZCashRPC(config json.RawMessage, pushHandler func(bchain.NotificationType)) (bchain.BlockChain, error) {
 	b, err := btc.NewBitcoinRPC(config, pushHandler)
 	if err != nil {
@@ -26,12 +28,13 @@ func NewZCashRPC(config json.RawMessage, pushHandler func(bchain.NotificationTyp
 	return z, nil
 }
 
-// Initialize initializes ZCashRPC instance.
+// Initialize initializes ZCashRPC instance
 func (z *ZCashRPC) Initialize() error {
-	chainName, err := z.GetChainInfoAndInitializeMempool(z)
+	ci, err := z.GetChainInfo()
 	if err != nil {
 		return err
 	}
+	chainName := ci.Chain
 
 	params := GetChainParams(chainName)
 
@@ -80,7 +83,7 @@ func (z *ZCashRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 	for _, txid := range res.Result.Txids {
 		tx, err := z.GetTransaction(txid)
 		if err != nil {
-			if isInvalidTx(err) {
+			if err == bchain.ErrTxNotFound {
 				glog.Errorf("rpc: getblock: skipping transanction in block %s due error: %s", hash, err)
 				continue
 			}
@@ -93,20 +96,6 @@ func (z *ZCashRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 		Txs:         txs,
 	}
 	return block, nil
-}
-
-func isInvalidTx(err error) bool {
-	switch e1 := err.(type) {
-	case *errors.Err:
-		switch e2 := e1.Cause().(type) {
-		case *bchain.RPCError:
-			if e2.Code == -5 { // "No information available about transaction"
-				return true
-			}
-		}
-	}
-
-	return false
 }
 
 // GetTransactionForMempool returns a transaction by the transaction ID.

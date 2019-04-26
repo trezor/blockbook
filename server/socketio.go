@@ -8,13 +8,14 @@ import (
 	"encoding/json"
 	"math/big"
 	"net/http"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/golang/glog"
 	"github.com/juju/errors"
-	"github.com/martinboehm/golang-socketio"
+	gosocketio "github.com/martinboehm/golang-socketio"
 	"github.com/martinboehm/golang-socketio/transport"
 )
 
@@ -25,14 +26,15 @@ type SocketIoServer struct {
 	txCache     *db.TxCache
 	chain       bchain.BlockChain
 	chainParser bchain.BlockChainParser
+	mempool     bchain.Mempool
 	metrics     *common.Metrics
 	is          *common.InternalState
 	api         *api.Worker
 }
 
 // NewSocketIoServer creates new SocketIo interface to blockbook and returns its handle
-func NewSocketIoServer(db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxCache, metrics *common.Metrics, is *common.InternalState) (*SocketIoServer, error) {
-	api, err := api.NewWorker(db, chain, txCache, is)
+func NewSocketIoServer(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, txCache *db.TxCache, metrics *common.Metrics, is *common.InternalState) (*SocketIoServer, error) {
+	api, err := api.NewWorker(db, chain, mempool, txCache, is)
 	if err != nil {
 		return nil, err
 	}
@@ -63,6 +65,7 @@ func NewSocketIoServer(db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxCa
 		txCache:     txCache,
 		chain:       chain,
 		chainParser: chain.GetChainParser(),
+		mempool:     mempool,
 		metrics:     metrics,
 		is:          is,
 		api:         api,
@@ -161,6 +164,7 @@ func (s *SocketIoServer) onMessage(c *gosocketio.Channel, req map[string]json.Ra
 	defer func() {
 		if r := recover(); r != nil {
 			glog.Error(c.Id(), " onMessage ", method, " recovered from panic: ", r)
+			debug.PrintStack()
 			e := resultError{}
 			e.Error.Message = "Internal error"
 			rv = e
@@ -214,7 +218,7 @@ func (s *SocketIoServer) getAddressTxids(addr []string, opts *addrOpts) (res res
 	lower, higher := uint32(opts.End), uint32(opts.Start)
 	for _, address := range addr {
 		if !opts.QueryMempoolOnly {
-			err = s.db.GetTransactions(address, lower, higher, func(txid string, vout uint32, isOutput bool) error {
+			err = s.db.GetTransactions(address, lower, higher, func(txid string, height uint32, indexes []int32) error {
 				txids = append(txids, txid)
 				return nil
 			})
@@ -222,14 +226,16 @@ func (s *SocketIoServer) getAddressTxids(addr []string, opts *addrOpts) (res res
 				return res, err
 			}
 		} else {
-			m, err := s.chain.GetMempoolTransactions(address)
+			o, err := s.mempool.GetTransactions(address)
 			if err != nil {
 				return res, err
 			}
-			txids = append(txids, m...)
+			for _, m := range o {
+				txids = append(txids, m.Txid)
+			}
 		}
 	}
-	res.Result = api.UniqueTxidsInReverse(txids)
+	res.Result = api.GetUniqueTxids(txids)
 	return res, nil
 }
 
@@ -288,27 +294,18 @@ type resultGetAddressHistory struct {
 	} `json:"result"`
 }
 
-func stringInSlice(a string, list []string) bool {
-	for _, b := range list {
-		if b == a {
-			return true
-		}
-	}
-	return false
-}
-
 func txToResTx(tx *api.Tx) resTx {
 	inputs := make([]txInputs, len(tx.Vin))
 	for i := range tx.Vin {
 		vin := &tx.Vin[i]
 		txid := vin.Txid
-		script := vin.ScriptSig.Hex
+		script := vin.Hex
 		input := txInputs{
 			Txid:        &txid,
 			Script:      &script,
 			Sequence:    int64(vin.Sequence),
 			OutputIndex: int(vin.Vout),
-			Satoshis:    vin.ValueSat.Int64(),
+			Satoshis:    vin.ValueSat.AsInt64(),
 		}
 		if len(vin.Addresses) > 0 {
 			a := vin.Addresses[0]
@@ -319,34 +316,36 @@ func txToResTx(tx *api.Tx) resTx {
 	outputs := make([]txOutputs, len(tx.Vout))
 	for i := range tx.Vout {
 		vout := &tx.Vout[i]
-		script := vout.ScriptPubKey.Hex
+		script := vout.Hex
 		output := txOutputs{
-			Satoshis: vout.ValueSat.Int64(),
+			Satoshis: vout.ValueSat.AsInt64(),
 			Script:   &script,
 		}
-		if len(vout.ScriptPubKey.Addresses) > 0 {
-			a := vout.ScriptPubKey.Addresses[0]
+		if len(vout.Addresses) > 0 {
+			a := vout.Addresses[0]
 			output.Address = &a
 		}
 		outputs[i] = output
 	}
 	var h int
+	var blocktime int64
 	if tx.Confirmations == 0 {
 		h = -1
 	} else {
 		h = int(tx.Blockheight)
+		blocktime = tx.Blocktime
 	}
 	return resTx{
-		BlockTimestamp: tx.Blocktime,
-		FeeSatoshis:    tx.FeesSat.Int64(),
+		BlockTimestamp: blocktime,
+		FeeSatoshis:    tx.FeesSat.AsInt64(),
 		Hash:           tx.Txid,
 		Height:         h,
 		Hex:            tx.Hex,
 		Inputs:         inputs,
-		InputSatoshis:  tx.ValueInSat.Int64(),
+		InputSatoshis:  tx.ValueInSat.AsInt64(),
 		Locktime:       int(tx.Locktime),
 		Outputs:        outputs,
-		OutputSatoshis: tx.ValueOutSat.Int64(),
+		OutputSatoshis: tx.ValueOutSat.AsInt64(),
 		Version:        int(tx.Version),
 	}
 }
@@ -387,7 +386,7 @@ func (s *SocketIoServer) getAddressHistory(addr []string, opts *addrOpts) (res r
 		to = opts.To
 	}
 	for txi := opts.From; txi < to; txi++ {
-		tx, err := s.api.GetTransaction(txids[txi], false)
+		tx, err := s.api.GetTransaction(txids[txi], false, false)
 		if err != nil {
 			return res, err
 		}
@@ -403,12 +402,14 @@ func (s *SocketIoServer) getAddressHistory(addr []string, opts *addrOpts) (res r
 					ads[a] = hi
 				}
 				hi.InputIndexes = append(hi.InputIndexes, int(vin.N))
-				totalSat.Sub(&totalSat, &vin.ValueSat)
+				if vin.ValueSat != nil {
+					totalSat.Sub(&totalSat, (*big.Int)(vin.ValueSat))
+				}
 			}
 		}
 		for i := range tx.Vout {
 			vout := &tx.Vout[i]
-			a := addressInSlice(vout.ScriptPubKey.Addresses, addr)
+			a := addressInSlice(vout.Addresses, addr)
 			if a != "" {
 				hi := ads[a]
 				if hi == nil {
@@ -416,7 +417,9 @@ func (s *SocketIoServer) getAddressHistory(addr []string, opts *addrOpts) (res r
 					ads[a] = hi
 				}
 				hi.OutputIndexes = append(hi.OutputIndexes, int(vout.N))
-				totalSat.Add(&totalSat, &vout.ValueSat)
+				if vout.ValueSat != nil {
+					totalSat.Add(&totalSat, (*big.Int)(vout.ValueSat))
+				}
 			}
 		}
 		ahi := addressHistoryItem{}
@@ -579,10 +582,7 @@ type resultGetInfo struct {
 }
 
 func (s *SocketIoServer) getInfo() (res resultGetInfo, err error) {
-	height, _, err := s.db.GetBestBlock()
-	if err != nil {
-		return
-	}
+	_, height, _ := s.is.GetSyncState()
 	res.Result.Blocks = int(height)
 	res.Result.Testnet = s.chain.IsTestnet()
 	res.Result.Network = s.chain.GetNetworkName()
@@ -627,7 +627,7 @@ type resultGetDetailedTransaction struct {
 }
 
 func (s *SocketIoServer) getDetailedTransaction(txid string) (res resultGetDetailedTransaction, err error) {
-	tx, err := s.api.GetTransaction(txid, false)
+	tx, err := s.api.GetTransaction(txid, false, false)
 	if err != nil {
 		return res, err
 	}
@@ -664,6 +664,7 @@ func (s *SocketIoServer) onSubscribe(c *gosocketio.Channel, req []byte) interfac
 	defer func() {
 		if r := recover(); r != nil {
 			glog.Error(c.Id(), " onSubscribe recovered from panic: ", r)
+			debug.PrintStack()
 		}
 	}()
 
@@ -720,15 +721,12 @@ func (s *SocketIoServer) OnNewBlockHash(hash string) {
 }
 
 // OnNewTxAddr notifies users subscribed to bitcoind/addresstxid about new block
-func (s *SocketIoServer) OnNewTxAddr(txid string, desc bchain.AddressDescriptor, isOutput bool) {
+func (s *SocketIoServer) OnNewTxAddr(txid string, desc bchain.AddressDescriptor) {
 	addr, searchable, err := s.chainParser.GetAddressesFromAddrDesc(desc)
 	if err != nil {
 		glog.Error("GetAddressesFromAddrDesc error ", err, " for descriptor ", desc)
 	} else if searchable && len(addr) == 1 {
 		data := map[string]interface{}{"address": addr[0], "txid": txid}
-		if !isOutput {
-			data["input"] = true
-		}
 		c := s.server.BroadcastTo("bitcoind/addresstxid-"+string(desc), "bitcoind/addresstxid", data)
 		if c > 0 {
 			glog.Info("broadcasting new txid ", txid, " for addr ", addr[0], " to ", c, " channels")

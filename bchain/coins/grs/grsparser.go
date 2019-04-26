@@ -4,9 +4,9 @@ import (
 	"blockbook/bchain"
 	"blockbook/bchain/coins/btc"
 
-	"github.com/btcsuite/btcd/wire"
-	"github.com/jakm/btcutil/base58"
-	"github.com/jakm/btcutil/chaincfg"
+	"github.com/martinboehm/btcd/wire"
+	"github.com/martinboehm/btcutil/base58"
+	"github.com/martinboehm/btcutil/chaincfg"
 )
 
 const (

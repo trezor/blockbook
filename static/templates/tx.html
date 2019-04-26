@@ -1,4 +1,4 @@
-{{define "specific"}}{{$cs := .CoinShortcut}}{{$tx := .Tx}}{{$txSpecific := .TxSpecific}}
+{{define "specific"}}{{$cs := .CoinShortcut}}{{$tx := .Tx}}
 <h1>Transaction</h1>
 <div class="alert alert-data ellipsis">
     <span class="data">{{$tx.Txid}}</span>
@@ -7,33 +7,64 @@
 <div class="data-div">
     <table class="table data-table">
         <tbody>
-            {{if $tx.Confirmations}}
+            {{- if $tx.Confirmations -}}
             <tr>
                 <td style="width: 25%;">Mined Time</td>
                 <td class="data">{{formatUnixTime $tx.Blocktime}}</td>
-            </tr>{{end}}
+            </tr>{{end -}}
             <tr>
                 <td style="width: 25%;">In Block</td>
                 <td class="ellipsis data">{{if $tx.Confirmations}}{{$tx.Blockhash}}{{else}}Unconfirmed{{end}}</td>
             </tr>
-            {{if $tx.Confirmations}}
+            {{- if $tx.Confirmations -}}
             <tr>
                 <td>In Block Height</td>
                 <td class="data"><a href="/block/{{$tx.Blockheight}}">{{$tx.Blockheight}}</a></td>
             </tr>{{end}}
+            {{- if $tx.EthereumSpecific -}}
+            <tr>
+                <td>Status</td>
+                {{- if $tx.EthereumSpecific.Status -}}
+                {{- if eq $tx.EthereumSpecific.Status 1 -}}
+                <td class="data text-success">Success</td>
+                {{- else -}}
+                {{- if eq $tx.EthereumSpecific.Status -1 -}}
+                <td class="data">Pending</td>
+                {{- else -}}
+                <td class="data">Unknown</td>
+                {{- end -}}
+                {{- end -}}
+                {{- else -}}
+                <td class="data text-danger">Fail</td>
+                {{- end -}}
+            </tr>
+            <tr>
+                <td>Value</td>
+                <td class="data">{{formatAmount $tx.ValueOutSat}} {{$cs}}</td>
+            </tr>
+            <tr>
+                <td>Gas Used / Limit</td>
+                <td class="data">{{if $tx.EthereumSpecific.GasUsed}}{{$tx.EthereumSpecific.GasUsed}}{{else}}pending{{end}} / {{$tx.EthereumSpecific.GasLimit}}</td>
+            </tr>
+            <tr>
+                <td>Gas Price</td>
+                <td class="data">{{formatAmount $tx.EthereumSpecific.GasPrice}} {{$cs}}</td>
+            </tr>
+            {{- else -}}
             <tr>
                 <td>Total Input</td>
-                <td class="data">{{formatAmount $tx.ValueIn}} {{$cs}}</td>
+                <td class="data">{{formatAmount $tx.ValueInSat}} {{$cs}}</td>
             </tr>
             <tr>
                 <td>Total Output</td>
-                <td class="data">{{formatAmount $tx.ValueOut}} {{$cs}}</td>
+                <td class="data">{{formatAmount $tx.ValueOutSat}} {{$cs}}</td>
             </tr>
-            {{if $tx.Fees}}
+            {{- end -}}
+            {{- if $tx.FeesSat -}}
             <tr>
                 <td>Fees</td>
-                <td class="data">{{formatAmount $tx.Fees}} {{$cs}}</td>
-            </tr>{{end}}
+                <td class="data">{{formatAmount $tx.FeesSat}} {{$cs}}</td>
+            </tr>{{end -}}
         </tbody>
     </table>
 </div>
@@ -47,7 +78,7 @@
         <pre id="txSpecific"></pre>
     </div>
     <script type="text/javascript">
-        txSpecific = {{ $txSpecific }};
+        txSpecific = {{$tx.CoinSpecificJSON}};
         function syntaxHighlight(json) {
             json = JSON.stringify(json, undefined, 2);
             json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');

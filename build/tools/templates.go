@@ -13,18 +13,6 @@ import (
 )
 
 type Config struct {
-	Meta struct {
-		BuildDatetime          string // generated field
-		PackageMaintainer      string `json:"package_maintainer"`
-		PackageMaintainerEmail string `json:"package_maintainer_email"`
-	}
-	Env struct {
-		Version              string `json:"version"`
-		BackendInstallPath   string `json:"backend_install_path"`
-		BackendDataPath      string `json:"backend_data_path"`
-		BlockbookInstallPath string `json:"blockbook_install_path"`
-		BlockbookDataPath    string `json:"blockbook_data_path"`
-	} `json:"env"`
 	Coin struct {
 		Name     string `json:"name"`
 		Shortcut string `json:"shortcut"`
@@ -63,7 +51,7 @@ type Config struct {
 		Mainnet                         bool        `json:"mainnet"`
 		ServerConfigFile                string      `json:"server_config_file"`
 		ClientConfigFile                string      `json:"client_config_file"`
-		AdditionalParams                interface{} `json:"additional_params"`
+		AdditionalParams                interface{} `json:"additional_params,omitempty"`
 	} `json:"backend"`
 	Blockbook struct {
 		PackageName             string `json:"package_name"`
@@ -73,16 +61,32 @@ type Config struct {
 		ExplorerURL             string `json:"explorer_url"`
 		AdditionalParams        string `json:"additional_params"`
 		BlockChain              struct {
-			Parse                bool                       `json:"parse"`
-			Subversion           string                     `json:"subversion"`
-			AddressFormat        string                     `json:"address_format"`
-			MempoolWorkers       int                        `json:"mempool_workers"`
-			MempoolSubWorkers    int                        `json:"mempool_sub_workers"`
-			BlockAddressesToKeep int                        `json:"block_addresses_to_keep"`
-			AdditionalParams     map[string]json.RawMessage `json:"additional_params"`
+			Parse                 bool   `json:"parse,omitempty"`
+			Subversion            string `json:"subversion,omitempty"`
+			AddressFormat         string `json:"address_format,omitempty"`
+			MempoolWorkers        int    `json:"mempool_workers"`
+			MempoolSubWorkers     int    `json:"mempool_sub_workers"`
+			BlockAddressesToKeep  int    `json:"block_addresses_to_keep"`
+			XPubMagic             uint32 `json:"xpub_magic,omitempty"`
+			XPubMagicSegwitP2sh   uint32 `json:"xpub_magic_segwit_p2sh,omitempty"`
+			XPubMagicSegwitNative uint32 `json:"xpub_magic_segwit_native,omitempty"`
+			Slip44                uint32 `json:"slip44,omitempty"`
+
+			AdditionalParams map[string]json.RawMessage `json:"additional_params"`
 		} `json:"block_chain"`
 	} `json:"blockbook"`
-	IntegrationTests map[string][]string `json:"integration_tests"`
+	Meta struct {
+		BuildDatetime          string `json:"-"` // generated field
+		PackageMaintainer      string `json:"package_maintainer"`
+		PackageMaintainerEmail string `json:"package_maintainer_email"`
+	} `json:"meta"`
+	Env struct {
+		Version              string `json:"version"`
+		BackendInstallPath   string `json:"backend_install_path"`
+		BackendDataPath      string `json:"backend_data_path"`
+		BlockbookInstallPath string `json:"blockbook_install_path"`
+		BlockbookDataPath    string `json:"blockbook_data_path"`
+	} `json:"-"`
 }
 
 func jsonToString(msg json.RawMessage) (string, error) {
@@ -266,7 +270,7 @@ func makeOutputDir(path string) error {
 }
 
 func writeTemplate(path string, info os.FileInfo, templ *template.Template, config *Config) error {
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, info.Mode())
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, info.Mode())
 	if err != nil {
 		return err
 	}

@@ -9,6 +9,11 @@
                 "EstimateFee", "GetBestBlockHash", "GetBestBlockHeight", "GetBlockHeader"],
         "sync": ["ConnectBlocksParallel", "ConnectBlocks", "HandleFork"]
     },
+    "bellcoin": {
+        "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",
+                "EstimateSmartFee", "EstimateFee"],
+        "sync": ["ConnectBlocksParallel", "ConnectBlocks", "HandleFork"]
+    },
     "bgold": {
         "sync": ["ConnectBlocksParallel", "ConnectBlocks", "HandleFork"]
     },
@@ -44,6 +49,16 @@
         "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "EstimateFee", "GetBestBlockHash", "GetBestBlockHeight",
                 "GetBlockHeader"]
     },
+    "flo": {
+        "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",
+                "EstimateSmartFee", "EstimateFee", "GetBestBlockHash", "GetBestBlockHeight", "GetBlockHeader"],
+        "sync": ["ConnectBlocksParallel", "ConnectBlocks", "HandleFork"]
+    },
+    "fujicoin": {
+        "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",
+                "EstimateSmartFee", "EstimateFee", "GetBestBlockHash", "GetBestBlockHeight", "GetBlockHeader"],
+        "sync": ["ConnectBlocksParallel", "ConnectBlocks", "HandleFork"]
+    },
     "gamecredits": {
         "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",
                 "EstimateSmartFee", "EstimateFee"],
@@ -54,6 +69,16 @@
                  "EstimateSmartFee", "EstimateFee", "GetBestBlockHash", "GetBestBlockHeight", "GetBlockHeader"],
         "sync": ["ConnectBlocksParallel", "ConnectBlocks", "HandleFork"]
     },
+    "koto": {
+        "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",
+                "EstimateSmartFee", "EstimateFee", "GetBestBlockHash", "GetBestBlockHeight", "GetBlockHeader"],
+        "sync": ["ConnectBlocksParallel", "ConnectBlocks", "HandleFork"]
+    },
+    "koto_testnet": {
+        "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",
+                "EstimateSmartFee", "EstimateFee", "GetBestBlockHash", "GetBestBlockHeight", "GetBlockHeader"],
+        "sync": ["ConnectBlocksParallel", "ConnectBlocks", "HandleFork"]
+    },
     "litecoin": {
         "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",
                 "EstimateSmartFee", "EstimateFee"],
@@ -61,8 +86,9 @@
     },
     "monacoin": {
         "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",
-                "EstimateSmartFee", "EstimateFee"]
-    },
+                "EstimateSmartFee", "EstimateFee", "GetBestBlockHash", "GetBestBlockHeight", "GetBlockHeader"],
+        "sync": ["ConnectBlocksParallel", "ConnectBlocks", "HandleFork"]
+   },
     "myriad": {
         "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",
                 "EstimateSmartFee", "EstimateFee", "GetBestBlockHash", "GetBestBlockHeight", "GetBlockHeader"]
@@ -85,5 +111,39 @@
         "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",
                 "EstimateSmartFee", "EstimateFee", "GetBestBlockHash", "GetBestBlockHeight", "GetBlockHeader"],
         "sync": ["ConnectBlocksParallel", "ConnectBlocks", "HandleFork"]
-    }
+    },
+    "pivx": {
+        "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",
+                "EstimateSmartFee", "EstimateFee", "GetBestBlockHash", "GetBestBlockHeight", "GetBlockHeader"],
+        "sync": ["ConnectBlocksParallel", "ConnectBlocks", "HandleFork"]
+    },
+    "polis": {
+        "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",
+            "EstimateSmartFee", "EstimateFee", "GetBestBlockHash", "GetBestBlockHeight", "GetBlockHeader"],
+        "sync": ["ConnectBlocksParallel", "ConnectBlocks"]
+    },
+    "zcoin": {
+        "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",
+                "EstimateFee", "GetBestBlockHash", "GetBestBlockHeight", "GetBlockHeader"],
+        "sync": ["ConnectBlocksParallel", "ConnectBlocks", "HandleFork"]
+    },
+    "qtum": {
+        "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",
+            "EstimateSmartFee", "GetBestBlockHash", "GetBestBlockHeight", "GetBlockHeader"],
+        "sync": ["ConnectBlocksParallel", "ConnectBlocks", "HandleFork"]
+    },
+    "viacoin": {
+        "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",
+            "EstimateSmartFee", "GetBestBlockHash", "GetBestBlockHeight", "GetBlockHeader"],
+        "sync": ["ConnectBlocksParallel", "ConnectBlocks", "HandleFork"]
+    },
+    "nuls": {
+        "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "GetBestBlockHash", "GetBestBlockHeight", "GetBlockHeader"],
+        "sync": ["ConnectBlocksParallel", "ConnectBlocks", "HandleFork"]
+    },
+    "vipstarcoin": {
+        "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",
+            "EstimateFee", "GetBestBlockHash", "GetBestBlockHeight", "GetBlockHeader"],
+        "sync": ["ConnectBlocksParallel", "ConnectBlocks", "HandleFork"]
+   }
 }

@@ -9,6 +9,16 @@ import (
 	"math/big"
 )
 
+// ChainType is type of the blockchain
+type ChainType int
+
+const (
+	// ChainBitcoinType is blockchain derived from bitcoin
+	ChainBitcoinType = ChainType(iota)
+	// ChainEthereumType is blockchain derived from ethereum
+	ChainEthereumType
+)
+
 // errors with specific meaning returned by blockchain rpc
 var (
 	// ErrBlockNotFound is returned when block is not found
@@ -21,13 +31,23 @@ var (
 	// ErrTxidMissing is returned if txid is not specified
 	// for example coinbase transactions in Bitcoin
 	ErrTxidMissing = errors.New("Txid missing")
+	// ErrTxNotFound is returned if transaction was not found
+	ErrTxNotFound = errors.New("Tx not found")
 )
 
+// Outpoint is txid together with output (or input) index
+type Outpoint struct {
+	Txid string
+	Vout int32
+}
+
+// ScriptSig contains data about input script
 type ScriptSig struct {
 	// Asm string `json:"asm"`
 	Hex string `json:"hex"`
 }
 
+// Vin contains data about tx output
 type Vin struct {
 	Coinbase  string    `json:"coinbase"`
 	Txid      string    `json:"txid"`
@@ -37,6 +57,7 @@ type Vin struct {
 	Addresses []string  `json:"addresses"`
 }
 
+// ScriptPubKey contains data about output script
 type ScriptPubKey struct {
 	// Asm       string   `json:"asm"`
 	Hex string `json:"hex,omitempty"`
@@ -44,6 +65,7 @@ type ScriptPubKey struct {
 	Addresses []string `json:"addresses"`
 }
 
+// Vout contains data about tx output
 type Vout struct {
 	ValueSat     big.Int
 	JsonValue    json.Number  `json:"value"`
@@ -61,11 +83,13 @@ type Tx struct {
 	Vin      []Vin  `json:"vin"`
 	Vout     []Vout `json:"vout"`
 	// BlockHash     string `json:"blockhash,omitempty"`
-	Confirmations uint32 `json:"confirmations,omitempty"`
-	Time          int64  `json:"time,omitempty"`
-	Blocktime     int64  `json:"blocktime,omitempty"`
+	Confirmations    uint32      `json:"confirmations,omitempty"`
+	Time             int64       `json:"time,omitempty"`
+	Blocktime        int64       `json:"blocktime,omitempty"`
+	CoinSpecificData interface{} `json:"-"`
 }
 
+// Block is block header and list of transactions
 type Block struct {
 	BlockHeader
 	Txs []Tx `json:"tx"`
@@ -93,6 +117,7 @@ type BlockInfo struct {
 	Txids      []string    `json:"tx,omitempty"`
 }
 
+// MempoolEntry is used to get data about mempool entry
 type MempoolEntry struct {
 	Size            uint32 `json:"size"`
 	FeeSat          big.Int
@@ -110,6 +135,7 @@ type MempoolEntry struct {
 	Depends         []string    `json:"depends"`
 }
 
+// ChainInfo is used to get information about blockchain
 type ChainInfo struct {
 	Chain           string  `json:"chain"`
 	Blocks          int     `json:"blocks"`
@@ -124,6 +150,7 @@ type ChainInfo struct {
 	Warnings        string  `json:"warnings"`
 }
 
+// RPCError defines rpc error returned by backend
 type RPCError struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
@@ -140,16 +167,52 @@ func (ad AddressDescriptor) String() string {
 	return "ad:" + hex.EncodeToString(ad)
 }
 
+// EthereumType specific
+
+// Erc20Contract contains info about ERC20 contract
+type Erc20Contract struct {
+	Contract string `json:"contract"`
+	Name     string `json:"name"`
+	Symbol   string `json:"symbol"`
+	Decimals int    `json:"decimals"`
+}
+
+// Erc20Transfer contains a single ERC20 token transfer
+type Erc20Transfer struct {
+	Contract string
+	From     string
+	To       string
+	Tokens   big.Int
+}
+
+// MempoolTxidEntry contains mempool txid with first seen time
+type MempoolTxidEntry struct {
+	Txid string
+	Time uint32
+}
+
+// MempoolTxidEntries is array of MempoolTxidEntry
+type MempoolTxidEntries []MempoolTxidEntry
+
 // OnNewBlockFunc is used to send notification about a new block
 type OnNewBlockFunc func(hash string, height uint32)
 
 // OnNewTxAddrFunc is used to send notification about a new transaction/address
-type OnNewTxAddrFunc func(txid string, desc AddressDescriptor, isOutput bool)
+type OnNewTxAddrFunc func(tx *Tx, desc AddressDescriptor)
+
+// AddrDescForOutpointFunc defines function that returns address descriptorfor given outpoint or nil if outpoint not found
+type AddrDescForOutpointFunc func(outpoint Outpoint) AddressDescriptor
 
 // BlockChain defines common interface to block chain daemon
 type BlockChain interface {
 	// life-cycle methods
+	// initialize the block chain connector
 	Initialize() error
+	// create mempool but do not initialize it
+	CreateMempool(BlockChain) (Mempool, error)
+	// initialize mempool, create ZeroMQ (or other) subscription
+	InitializeMempool(AddrDescForOutpointFunc, OnNewTxAddrFunc) error
+	// shutdown mempool, ZeroMQ and block chain connections
 	Shutdown(ctx context.Context) error
 	// chain info
 	IsTestnet() bool
@@ -164,32 +227,33 @@ type BlockChain interface {
 	GetBlockHeader(hash string) (*BlockHeader, error)
 	GetBlock(hash string, height uint32) (*Block, error)
 	GetBlockInfo(hash string) (*BlockInfo, error)
-	GetMempool() ([]string, error)
+	GetMempoolTransactions() ([]string, error)
 	GetTransaction(txid string) (*Tx, error)
 	GetTransactionForMempool(txid string) (*Tx, error)
-	GetTransactionSpecific(txid string) (json.RawMessage, error)
+	GetTransactionSpecific(tx *Tx) (json.RawMessage, error)
 	EstimateSmartFee(blocks int, conservative bool) (big.Int, error)
 	EstimateFee(blocks int) (big.Int, error)
 	SendRawTransaction(tx string) (string, error)
-	// mempool
-	ResyncMempool(onNewTxAddr OnNewTxAddrFunc) (int, error)
-	GetMempoolTransactions(address string) ([]string, error)
-	GetMempoolTransactionsForAddrDesc(addrDesc AddressDescriptor) ([]string, error)
 	GetMempoolEntry(txid string) (*MempoolEntry, error)
 	// parser
 	GetChainParser() BlockChainParser
+	// EthereumType specific
+	EthereumTypeGetBalance(addrDesc AddressDescriptor) (*big.Int, error)
+	EthereumTypeGetNonce(addrDesc AddressDescriptor) (uint64, error)
+	EthereumTypeEstimateGas(params map[string]interface{}) (uint64, error)
+	EthereumTypeGetErc20ContractInfo(contractDesc AddressDescriptor) (*Erc20Contract, error)
+	EthereumTypeGetErc20ContractBalance(addrDesc, contractDesc AddressDescriptor) (*big.Int, error)
 }
 
 // BlockChainParser defines common interface to parsing and conversions of block chain data
 type BlockChainParser interface {
-	// chain configuration description
-	// UTXO chains need "inputs" column in db, that map transactions to transactions that spend them
-	// non UTXO chains have mapping of address to input and output transactions directly in "outputs" column in db
-	IsUTXOChain() bool
-	// KeepBlockAddresses returns number of blocks which are to be kept in blockaddresses column
-	// and used in case of fork
-	// if 0 the blockaddresses column is not used at all (usually non UTXO chains)
+	// type of the blockchain
+	GetChainType() ChainType
+	// KeepBlockAddresses returns number of blocks which are to be kept in blockTxs column
+	// to be used for rollbacks
 	KeepBlockAddresses() int
+	// AmountDecimals returns number of decimal places in coin amounts
+	AmountDecimals() int
 	// AmountToDecimalString converts amount in big.Int to string with decimal point in the correct place
 	AmountToDecimalString(a *big.Int) string
 	// AmountToBigInt converts amount in json.Number (string) to big.Int
@@ -208,8 +272,24 @@ type BlockChainParser interface {
 	ParseTxFromJson(json.RawMessage) (*Tx, error)
 	PackTx(tx *Tx, height uint32, blockTime int64) ([]byte, error)
 	UnpackTx(buf []byte) (*Tx, uint32, error)
+	GetAddrDescForUnknownInput(tx *Tx, input int) AddressDescriptor
 	// blocks
 	PackBlockHash(hash string) ([]byte, error)
 	UnpackBlockHash(buf []byte) (string, error)
 	ParseBlock(b []byte) (*Block, error)
+	// xpub
+	DerivationBasePath(xpub string) (string, error)
+	DeriveAddressDescriptors(xpub string, change uint32, indexes []uint32) ([]AddressDescriptor, error)
+	DeriveAddressDescriptorsFromTo(xpub string, change uint32, fromIndex uint32, toIndex uint32) ([]AddressDescriptor, error)
+	// EthereumType specific
+	EthereumTypeGetErc20FromTx(tx *Tx) ([]Erc20Transfer, error)
+}
+
+// Mempool defines common interface to mempool
+type Mempool interface {
+	Resync() (int, error)
+	GetTransactions(address string) ([]Outpoint, error)
+	GetAddrDescTransactions(addrDesc AddressDescriptor) ([]Outpoint, error)
+	GetAllEntries() MempoolTxidEntries
+	GetTransactionTime(txid string) uint32
 }

@@ -6,8 +6,8 @@ import (
 	"blockbook/bchain/coins/utils"
 	"bytes"
 
-	"github.com/btcsuite/btcd/wire"
-	"github.com/jakm/btcutil/chaincfg"
+	"github.com/martinboehm/btcd/wire"
+	"github.com/martinboehm/btcutil/chaincfg"
 )
 
 const (

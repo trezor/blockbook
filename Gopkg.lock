@@ -21,21 +21,15 @@
 
 [[projects]]
   branch = "master"
-  name = "github.com/btcsuite/btcd"
+  name = "github.com/martinboehm/btcd"
   packages = ["blockchain","btcec","chaincfg","chaincfg/chainhash","database","txscript","wire"]
-  revision = "2be2f12b358dc57d70b8f501b00be450192efbc3"
+  revision = "8e7c0427fee5d4778c5d4eb987150369e3ca1d0e"
 
 [[projects]]
   branch = "master"
   name = "github.com/btcsuite/btclog"
   packages = ["."]
   revision = "84c8d2346e9fc8c7b947e243b9c24e6df9fd206a"
-
-[[projects]]
-  branch = "master"
-  name = "github.com/btcsuite/btcutil"
-  packages = [".","base58","bech32"]
-  revision = "501929d3d046174c3d39f0ea54ece471aa17238c"
 
 [[projects]]
   name = "github.com/deckarep/golang-set"
@@ -46,8 +40,8 @@
 [[projects]]
   name = "github.com/ethereum/go-ethereum"
   packages = [".","common","common/hexutil","common/math","core/types","crypto","crypto/secp256k1","crypto/sha3","ethclient","ethdb","log","metrics","p2p/netutil","params","rlp","rpc","trie"]
-  revision = "89451f7c382ad2185987ee369f16416f89c28a7d"
-  version = "v1.8.15"
+  revision = "8bbe72075e4e16442c4e28d999edee12e294329e"
+  version = "v1.8.17"
 
 [[projects]]
   name = "github.com/go-stack/stack"
@@ -93,15 +87,15 @@
 
 [[projects]]
   branch = "master"
-  name = "github.com/jakm/bchutil"
+  name = "github.com/martinboehm/bchutil"
   packages = ["."]
-  revision = "5a273ca8a96628732c07ff5cfb9f3e7d965241e8"
+  revision = "6373f11b6efe1ea81e8713b8788a695b2c144d38"
 
 [[projects]]
   branch = "master"
-  name = "github.com/jakm/btcutil"
-  packages = [".","base58","bech32","chaincfg","txscript"]
-  revision = "224b76333062172edefdeb502123fdda12205f76"
+  name = "github.com/martinboehm/btcutil"
+  packages = [".","base58","bech32","chaincfg","hdkeychain","txscript"]
+  revision = "225ed00dbbd5cb8d8b3949a0ee7c9ea540754585"
 
 [[projects]]
   branch = "master"
