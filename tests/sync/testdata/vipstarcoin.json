@@ -62,7 +62,7 @@
     },
     "handleFork": {
         "syncRanges": [
-            {"lower": 538519, "upper": 538539}
+            {"lower": 538519, "upper": 538538}
         ],
         "fakeBlocks": {
             "538536": {
@@ -76,10 +76,6 @@
             "538538": {
                 "height": 538538,
                 "hash": "0000000000235d6c42a23810896a078e2fb41850cad11fd003a9d412eb1487d3"
-            },
-            "538539": {
-                "height": 538539,
-                "hash": "cede97c7d51795621b2839d745c291b8853eb064c037a00c3edbbf9d754cc600"
             }
         },
         "realBlocks": {
@@ -94,10 +90,6 @@
             "538538": {
                 "height": 538538,
                 "hash": "0000000000ad20d8225f83a4572a20129fcb186de3b2733b6ce0a46dd17c0c74"
-            },
-            "538539": {
-                "height": 538539,
-                "hash": "7f0cf13f99d7c96c0f2334433516e5d3621b34f60d76ee9dc98698b855a319fd"
             }
         }
     }
