@@ -32,10 +32,11 @@ func NewMonetaryUnitRPC(config json.RawMessage, pushHandler func(bchain.Notifica
 
 // Initialize initializes MonetaryUnitRPC instance.
 func (b *MonetaryUnitRPC) Initialize() error {
-	chainName, err := b.GetChainInfoAndInitializeMempool(b)
+	ci, err := b.GetChainInfo()
 	if err != nil {
 		return err
 	}
+	chainName := ci.Chain
 
 	glog.Info("Chain name ", chainName)
 	params := GetChainParams(chainName)
@@ -43,8 +44,14 @@ func (b *MonetaryUnitRPC) Initialize() error {
 	// always create parser
 	b.Parser = NewMonetaryUnitParser(params, b.ChainConfig)
 
-	b.Testnet = false
-	b.Network = "livenet"
+	// parameters for getInfo request
+	if params.Net == MainnetMagic {
+		b.Testnet = false
+		b.Network = "livenet"
+	} else {
+		b.Testnet = true
+		b.Network = "testnet"
+	}
 
 	glog.Info("rpc: block chain ", params.Name)
 
