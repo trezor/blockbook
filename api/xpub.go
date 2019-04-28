@@ -495,7 +495,7 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 			if option == AccountDetailsTxidHistory {
 				txids = append(txids, xpubTxid.txid)
 			} else {
-				tx, err := w.txFromTxid(xpubTxid.txid, bestheight, option)
+				tx, err := w.txFromTxid(xpubTxid.txid, bestheight, option, nil)
 				if err != nil {
 					return nil, err
 				}

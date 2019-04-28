@@ -45,8 +45,8 @@ func NewSyncWorker(db *RocksDB, chain bchain.BlockChain, syncWorkers, syncChunk 
 
 var errSynced = errors.New("synced")
 
-// ErrSyncInterrupted is returned when synchronization is interrupted by OS signal
-var ErrSyncInterrupted = errors.New("ErrSyncInterrupted")
+// ErrOperationInterrupted is returned when operation is interrupted by OS signal
+var ErrOperationInterrupted = errors.New("ErrOperationInterrupted")
 
 // ResyncIndex synchronizes index to the top of the blockchain
 // onNewBlock is called when new block is connected, but not in initial parallel sync
@@ -206,7 +206,7 @@ func (w *SyncWorker) connectBlocks(onNewBlock bchain.OnNewBlockFunc, initialSync
 			select {
 			case <-w.chanOsSignal:
 				glog.Info("connectBlocks interrupted at height ", lastRes.block.Height)
-				return ErrSyncInterrupted
+				return ErrOperationInterrupted
 			case res := <-bch:
 				if res == empty {
 					break ConnectLoop
@@ -330,7 +330,7 @@ ConnectLoop:
 		select {
 		case <-w.chanOsSignal:
 			glog.Info("connectBlocksParallel interrupted at height ", h)
-			err = ErrSyncInterrupted
+			err = ErrOperationInterrupted
 			// signal all workers to terminate their loops (error loops are interrupted below)
 			close(terminating)
 			break ConnectLoop

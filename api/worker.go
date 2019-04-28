@@ -8,7 +8,10 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"math"
 	"math/big"
+	"os"
+	"sort"
 	"strconv"
 	"time"
 
@@ -596,7 +599,7 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 	return ba, tokens, ci, n, nonContractTxs, totalResults, nil
 }
 
-func (w *Worker) txFromTxid(txid string, bestheight uint32, option AccountDetails) (*Tx, error) {
+func (w *Worker) txFromTxid(txid string, bestheight uint32, option AccountDetails, blockInfo *db.BlockInfo) (*Tx, error) {
 	var tx *Tx
 	var err error
 	// only ChainBitcoinType supports TxHistoryLight
@@ -610,16 +613,18 @@ func (w *Worker) txFromTxid(txid string, bestheight uint32, option AccountDetail
 			// as fallback, provide empty TxAddresses to return at least something
 			ta = &db.TxAddresses{}
 		}
-		bi, err := w.db.GetBlockInfo(ta.Height)
-		if err != nil {
-			return nil, errors.Annotatef(err, "GetBlockInfo %v", ta.Height)
+		if blockInfo == nil {
+			blockInfo, err = w.db.GetBlockInfo(ta.Height)
+			if err != nil {
+				return nil, errors.Annotatef(err, "GetBlockInfo %v", ta.Height)
+			}
+			if blockInfo == nil {
+				glog.Warning("DB inconsistency:  block height ", ta.Height, ": not found in db")
+				// provide empty BlockInfo to return the rest of tx data
+				blockInfo = &db.BlockInfo{}
+			}
 		}
-		if bi == nil {
-			glog.Warning("DB inconsistency:  block height ", ta.Height, ": not found in db")
-			// provide empty BlockInfo to return the rest of tx data
-			bi = &db.BlockInfo{}
-		}
-		tx = w.txFromTxAddress(txid, ta, bi, bestheight)
+		tx = w.txFromTxAddress(txid, ta, blockInfo, bestheight)
 	} else {
 		tx, err = w.GetTransaction(txid, false, true)
 		if err != nil {
@@ -750,7 +755,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 			if option == AccountDetailsTxidHistory {
 				txids = append(txids, txid)
 			} else {
-				tx, err := w.txFromTxid(txid, bestheight, option)
+				tx, err := w.txFromTxid(txid, bestheight, option, nil)
 				if err != nil {
 					return nil, err
 				}
@@ -991,22 +996,9 @@ func (w *Worker) GetBlock(bid string, page int, txsOnPage int) (*Block, error) {
 	txs := make([]*Tx, to-from)
 	txi := 0
 	for i := from; i < to; i++ {
-		txid := bi.Txids[i]
-		if w.chainType == bchain.ChainBitcoinType {
-			ta, err := w.db.GetTxAddresses(txid)
-			if err != nil {
-				return nil, errors.Annotatef(err, "GetTxAddresses %v", txid)
-			}
-			if ta == nil {
-				glog.Warning("DB inconsistency:  tx ", txid, ": not found in txAddresses")
-				continue
-			}
-			txs[txi] = w.txFromTxAddress(txid, ta, dbi, bestheight)
-		} else {
-			txs[txi], err = w.GetTransaction(txid, false, false)
-			if err != nil {
-				return nil, err
-			}
+		txs[txi], err = w.txFromTxid(bi.Txids[i], bestheight, AccountDetailsTxHistoryLight, dbi)
+		if err != nil {
+			return nil, err
 		}
 		txi++
 	}
@@ -1039,6 +1031,66 @@ func (w *Worker) GetBlock(bid string, page int, txsOnPage int) (*Block, error) {
 		TxCount:      txCount,
 		Transactions: txs,
 	}, nil
+}
+
+// ComputeFeeStats computes fee distribution in defined blocks and logs them to log
+func (w *Worker) ComputeFeeStats(blockFrom, blockTo int, stopCompute chan os.Signal) error {
+	bestheight, _, err := w.db.GetBestBlock()
+	if err != nil {
+		return errors.Annotatef(err, "GetBestBlock")
+	}
+	for block := blockFrom; block <= blockTo; block++ {
+		hash, err := w.db.GetBlockHash(uint32(block))
+		if err != nil {
+			return err
+		}
+		bi, err := w.chain.GetBlockInfo(hash)
+		if err != nil {
+			return err
+		}
+		// process only blocks with enough transactions
+		if len(bi.Txids) > 20 {
+			dbi := &db.BlockInfo{
+				Hash:   bi.Hash,
+				Height: bi.Height,
+				Time:   bi.Time,
+			}
+			txids := bi.Txids
+			if w.chainType == bchain.ChainBitcoinType {
+				// skip the coinbase transaction
+				txids = txids[1:]
+			}
+			fees := make([]int64, len(txids))
+			sum := int64(0)
+			for i, txid := range txids {
+				select {
+				case <-stopCompute:
+					glog.Info("ComputeFeeStats interrupted at height ", block)
+					return db.ErrOperationInterrupted
+				default:
+					tx, err := w.txFromTxid(txid, bestheight, AccountDetailsTxHistoryLight, dbi)
+					if err != nil {
+						return err
+					}
+					fee := tx.FeesSat.AsInt64()
+					fees[i] = fee
+					sum += fee
+				}
+			}
+			sort.Slice(fees, func(i, j int) bool { return fees[i] < fees[j] })
+			step := float64(len(fees)) / 10
+			percentils := ""
+			for i := float64(0); i < float64(len(fees)+1); i += step {
+				ii := int(math.Round(i))
+				if ii >= len(fees) {
+					ii = len(fees) - 1
+				}
+				percentils += "," + strconv.FormatInt(fees[ii], 10)
+			}
+			glog.Info(block, ",", time.Unix(bi.Time, 0).Format(time.RFC3339), ",", len(bi.Txids), ",", sum, ",", float64(sum)/float64(len(bi.Txids)), percentils)
+		}
+	}
+	return nil
 }
 
 // GetSystemInfo returns information about system

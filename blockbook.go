@@ -68,8 +68,9 @@ var (
 
 	noTxCache = flag.Bool("notxcache", false, "disable tx cache")
 
-	computeColumnStats = flag.Bool("computedbstats", false, "compute column stats and exit")
-	dbStatsPeriodHours = flag.Int("dbstatsperiod", 24, "period of db stats collection in hours, 0 disables stats collection")
+	computeColumnStats  = flag.Bool("computedbstats", false, "compute column stats and exit")
+	computeFeeStatsFlag = flag.Bool("computedfeestats", false, "compute fee stats for blocks in blockheight-blockuntil range and exit")
+	dbStatsPeriodHours  = flag.Int("dbstatsperiod", 24, "period of db stats collection in hours, 0 disables stats collection")
 
 	// resync index at least each resyncIndexPeriodMs (could be more often if invoked by message from ZeroMQ)
 	resyncIndexPeriodMs = flag.Int("resyncindexperiod", 935093, "resync index period in milliseconds")
@@ -179,6 +180,16 @@ func mainWithExitCode() int {
 		glog.Warning("internalState: database was left in open state, possibly previous ungraceful shutdown")
 	}
 
+	if *computeFeeStatsFlag {
+		internalState.DbState = common.DbStateOpen
+		err = computeFeeStats(chanOsSignal, *blockFrom, *blockUntil, index, chain, txCache, internalState, metrics)
+		if err != nil && err != db.ErrOperationInterrupted {
+			glog.Error("computeFeeStats: ", err)
+			return exitCodeFatal
+		}
+		return exitCodeOK
+	}
+
 	if *computeColumnStats {
 		internalState.DbState = common.DbStateOpen
 		err = index.ComputeInternalStateColumnStats(chanOsSignal)
@@ -244,7 +255,7 @@ func mainWithExitCode() int {
 		internalState.SyncMode = true
 		internalState.InitialSync = true
 		if err := syncWorker.ResyncIndex(nil, true); err != nil {
-			if err != db.ErrSyncInterrupted {
+			if err != db.ErrOperationInterrupted {
 				glog.Error("resyncIndex ", err)
 				return exitCodeFatal
 			}
@@ -288,7 +299,7 @@ func mainWithExitCode() int {
 
 		if !*synchronize {
 			if err = syncWorker.ConnectBlocksParallel(height, until); err != nil {
-				if err != db.ErrSyncInterrupted {
+				if err != db.ErrOperationInterrupted {
 					glog.Error("connectBlocksParallel ", err)
 					return exitCodeFatal
 				}
@@ -612,4 +623,17 @@ func normalizeName(s string) string {
 	s = strings.ToLower(s)
 	s = strings.Replace(s, " ", "-", -1)
 	return s
+}
+
+// computeFeeStats computes fee distribution in defined blocks
+func computeFeeStats(stopCompute chan os.Signal, blockFrom, blockTo int, db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxCache, is *common.InternalState, metrics *common.Metrics) error {
+	start := time.Now()
+	glog.Info("computeFeeStats start")
+	api, err := api.NewWorker(db, chain, mempool, txCache, is)
+	if err != nil {
+		return err
+	}
+	err = api.ComputeFeeStats(blockFrom, blockTo, stopCompute)
+	glog.Info("computeFeeStats finished in ", time.Since(start))
+	return err
 }
