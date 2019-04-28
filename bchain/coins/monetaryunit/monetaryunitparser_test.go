@@ -150,34 +150,34 @@ func Test_GetAddressesFromAddrDesc(t *testing.T) {
 var (
         testTx1 bchain.Tx
 
-        testTxPacked1 = "0a2021d4e2d8ee1ce3e80b8e2e0b9acdfaab38713eb26c4c12ed9bdad7879da8c43c12d3010100000001ae3ae1ebb77f55d611fb9385ca84afa09eb70950f730d0d025bc4eaa37f7ecf7010000004948304502210098a4a6e595a9c4f4b807029fa35afca75a987861353aa1a9f3519e450a9e99480220135c73dc4777b543ecc985689b89e1af1b4ba16b3841bbff3a08fbbf3868f14601ffffffff03000000000000000000bfb323fb0d000000232103f52407e34c2697a91b9fede95247dbb20755f9fefe78924b6502956f6e3d2961ac00d2496b000000001976a91476a0ad606d14cd79ae30c3391a6eb54be4adffed88ac0000000018e6b092e605200028f48d1b32770a001220f7ecf737aa4ebc25d0d030f75009b79ea0af84ca8593fb11d6557fb7ebe13aae1801224948304502210098a4a6e595a9c4f4b807029fa35afca75a987861353aa1a9f3519e450a9e99480220135c73dc4777b543ecc985689b89e1af1b4ba16b3841bbff3a08fbbf3868f1460128ffffffff0f3a520a050dfb23b3bf10011a232103f52407e34c2697a91b9fede95247dbb20755f9fefe78924b6502956f6e3d2961ac2222375371467035656e6761343936585448426f4a684348427170524b70674d6750774a3a470a046b49d20010021a1976a91476a0ad606d14cd79ae30c3391a6eb54be4adffed88ac222237644474795264517a745336386979474366505531596d516969514c714e375642574001"
+	testTxPacked1 = "0a20f05ba72a05c4900ff2a00a0403697750201e41267aeea8a589a7dc7bcc57076e12d30101000000010c396f3768565c707addf85ecf47e04cefb2721d95afd977e13f25904de8336a0100000049483045022100fe1b79f38ca4b9dc2fbc50eac6c9bf050ae5a3ee37da05b950918230eb0a8c7c0220477173b60ec00a8b4b28d5db9fc5d8259eea35f91bbdd60089c5ec1be7b05f3b01ffffffff03000000000000000000dd400def140000002321025d145b77df04c40ceb88ea36828755f8275dc5fecf19d3ecccce2d8198c3407cac00d2496b000000001976a914afe70b2e1bf4199298ed8281767bae22970b415088ac0000000018e6b092e605200028f48d1b32770a0012206a33e84d90253fe177d9af951d72b2ef4ce047cf5ef8dd7a705c5668376f390c18012249483045022100fe1b79f38ca4b9dc2fbc50eac6c9bf050ae5a3ee37da05b950918230eb0a8c7c0220477173b60ec00a8b4b28d5db9fc5d8259eea35f91bbdd60089c5ec1be7b05f3b0128ffffffff0f3a520a0514ef0d40dd10011a2321025d145b77df04c40ceb88ea36828755f8275dc5fecf19d3ecccce2d8198c3407cac22223764396a4e79716835694b555a566e516a6d7a6d4541513878444b777a4536536e673a470a046b49d20010021a1976a914afe70b2e1bf4199298ed8281767bae22970b415088ac22223769536a6e57436f41556d4a347656584d6b61457561736e5658537a5a7166504c324001"
 )
 
 func init() {
         testTx1 = bchain.Tx{
-                Hex:       "0100000001ae3ae1ebb77f55d611fb9385ca84afa09eb70950f730d0d025bc4eaa37f7ecf7010000004948304502210098a4a6e595a9c4f4b807029fa35afca75a987861353aa1a9f3519e450a9e99480220135c73dc4777b543ecc985689b89e1af1b4ba16b3841bbff3a08fbbf3868f14601ffffffff03000000000000000000bfb323fb0d000000232103f52407e34c2697a91b9fede95247dbb20755f9fefe78924b6502956f6e3d2961ac00d2496b000000001976a91476a0ad606d14cd79ae30c3391a6eb54be4adffed88ac00000000",
-                Blocktime: 1556386279,
-                Txid:      "21d4e2d8ee1ce3e80b8e2e0b9acdfaab38713eb26c4c12ed9bdad7879da8c43c",
+		Hex:       "01000000010c396f3768565c707addf85ecf47e04cefb2721d95afd977e13f25904de8336a0100000049483045022100fe1b79f38ca4b9dc2fbc50eac6c9bf050ae5a3ee37da05b950918230eb0a8c7c0220477173b60ec00a8b4b28d5db9fc5d8259eea35f91bbdd60089c5ec1be7b05f3b01ffffffff03000000000000000000dd400def140000002321025d145b77df04c40ceb88ea36828755f8275dc5fecf19d3ecccce2d8198c3407cac00d2496b000000001976a914afe70b2e1bf4199298ed8281767bae22970b415088ac00000000",
+                Blocktime: 1556387942,
+                Txid:      "f05ba72a05c4900ff2a00a0403697750201e41267aeea8a589a7dc7bcc57076e",
                 LockTime:  0,
                 Version:   1,
 		Vin: []bchain.Vin{
                         {
                                 ScriptSig: bchain.ScriptSig{
-                                        Hex: "48304502210098a4a6e595a9c4f4b807029fa35afca75a987861353aa1a9f3519e450a9e99480220135c73dc4777b543ecc985689b89e1af1b4ba16b3841bbff3a08fbbf3868f14601",
+					Hex: "483045022100fe1b79f38ca4b9dc2fbc50eac6c9bf050ae5a3ee37da05b950918230eb0a8c7c0220477173b60ec00a8b4b28d5db9fc5d8259eea35f91bbdd60089c5ec1be7b05f3b01",
                                 },
-                                Txid:     "f7ecf737aa4ebc25d0d030f75009b79ea0af84ca8593fb11d6557fb7ebe13aae",
+                                Txid:     "6a33e84d90253fe177d9af951d72b2ef4ce047cf5ef8dd7a705c5668376f390c",
                                 Vout:     1,
                                 Sequence: 4294967295,
                         },
                 },
                 Vout: []bchain.Vout{
                         {
-                                ValueSat: *big.NewInt(60047995839),
+                                ValueSat: *big.NewInt(89909969117),
                                 N:        1,
                                 ScriptPubKey: bchain.ScriptPubKey{
-                                        Hex: "2103f52407e34c2697a91b9fede95247dbb20755f9fefe78924b6502956f6e3d2961ac",
+                                    Hex: "21025d145b77df04c40ceb88ea36828755f8275dc5fecf19d3ecccce2d8198c3407cac",
                                         Addresses: []string{
-                                                "7SqFp5enga496XTHBoJhCHBqpRKpgMgPwJ",
+                                                "7d9jNyqh5iKUZVnQjmzmEAQ8xDKwzE6Sng",
                                         },
                                 },
                         },
@@ -185,9 +185,9 @@ func init() {
                                 ValueSat: *big.NewInt(1800000000),
                                 N:        2,
                                 ScriptPubKey: bchain.ScriptPubKey{
-                                        Hex: "76a91476a0ad606d14cd79ae30c3391a6eb54be4adffed88ac",
+                                        Hex: "76a914afe70b2e1bf4199298ed8281767bae22970b415088ac",
                                         Addresses: []string{
-                                                "7dDtyRdQztS68iyGCfPU1YmQiiQLqN7VBW",
+                                                "7iSjnWCoAUmJ4vVXMkaEuasnVXSzZqfPL2",
 						},
                                 },
                         },
@@ -212,8 +212,8 @@ func Test_PackTx(t *testing.T) {
                         name: "monetaryunit-1",
                         args: args{
                                 tx:        testTx1,
-                                height:    444106,
-                                blockTime: 1556386279,
+                                height:    444148,
+				blockTime: 1556387942,
                                 parser:    NewMonetaryUnitParser(GetChainParams("main"), &btc.Configuration{}),
                         },
 			want:    testTxPacked1,
@@ -254,7 +254,7 @@ func Test_UnpackTx(t *testing.T) {
                                 parser:   NewMonetaryUnitParser(GetChainParams("main"), &btc.Configuration{}),
                         },
                         want:    &testTx1,
-                        want1:   444106,
+                        want1:   444148,
                         wantErr: false,
                 },
         }
