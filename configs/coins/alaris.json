@@ -1,0 +1,65 @@
+{
+  "coin": {
+    "name": "Alaris",
+    "shortcut": "ALA",
+    "label": "Alaris",
+    "alias": "alaris"
+  },
+  "ports": {
+    "backend_rpc": 8336,
+    "backend_message_queue": 38353,
+    "blockbook_internal": 9053,
+    "blockbook_public": 9153
+  },
+  "ipc": {
+    "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
+    "rpc_user": "rpc",
+    "rpc_pass": "rpc",
+    "rpc_timeout": 25,
+    "message_queue_binding_template": "tcp://127.0.0.1:{{.Ports.BackendMessageQueue}}"
+  },
+  "backend": {
+    "package_name": "backend-alaris",
+    "package_revision": "satoshilabs-1",
+    "system_user": "alaris",
+    "version": "0.16.3",
+    "binary_url": "https://github.com/ScriptProdigy/Alaris/releases/download/v0.16/alaris-i686-pc-linux-gnu.tar.gz",
+    "verification_type": "gpg-sha256",
+    "verification_source": "https://download.litecoin.org/litecoin-0.16.3/linux/litecoin-0.16.3-linux-signatures.asc",
+    "extract_command": "tar -C backend --strip 1 -xf",
+    "exclude_files": [
+      "bin/alaris-qt"
+    ],
+    "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/alarisd -datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -conf={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf -pid=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",
+    "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/*.log",
+    "postinst_script_template": "",
+    "service_type": "forking",
+    "service_additional_params_template": "",
+    "protect_memory": true,
+    "mainnet": true,
+    "server_config_file": "bitcoin_like.conf",
+    "client_config_file": "bitcoin_like_client.conf",
+    "additional_params": {
+      "whitelist": "127.0.0.1"
+    }
+  },
+  "blockbook": {
+    "package_name": "blockbook-alaris",
+    "system_user": "blockbook-alaris",
+    "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
+    "public_binding_template": ":{{.Ports.BlockbookPublic}}",
+    "explorer_url": "",
+    "additional_params": "",
+    "block_chain": {
+      "parse": true,
+      "mempool_workers": 8,
+      "mempool_sub_workers": 2,
+      "block_addresses_to_keep": 300,
+      "additional_params": {}
+    }
+  },
+  "meta": {
+    "package_maintainer": "Matt Smith",
+    "package_maintainer_email": "matt.joseph.smith@gmail.com"
+  }
+}

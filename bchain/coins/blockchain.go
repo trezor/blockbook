@@ -2,6 +2,7 @@ package coins
 
 import (
 	"blockbook/bchain"
+	"blockbook/bchain/coins/alaris"
 	"blockbook/bchain/coins/bch"
 	"blockbook/bchain/coins/bellcoin"
 	"blockbook/bchain/coins/btc"
@@ -53,6 +54,8 @@ func init() {
 	BlockChainFactories["Ethereum"] = eth.NewEthereumRPC
 	BlockChainFactories["Ethereum Classic"] = eth.NewEthereumRPC
 	BlockChainFactories["Ethereum Testnet Ropsten"] = eth.NewEthereumRPC
+	BlockChainFactories["Alaris"] = alaris.NewAlarisRPC
+        BlockChainFactories["Alaris Testnet"] = alaris.NewAlarisRPC
 	BlockChainFactories["Bcash"] = bch.NewBCashRPC
 	BlockChainFactories["Bcash Testnet"] = bch.NewBCashRPC
 	BlockChainFactories["Bgold"] = btg.NewBGoldRPC
