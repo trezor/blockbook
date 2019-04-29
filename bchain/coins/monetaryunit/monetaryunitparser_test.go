@@ -159,7 +159,8 @@ func init() {
                 Blocktime: 1556387942,
                 Txid:      "f05ba72a05c4900ff2a00a0403697750201e41267aeea8a589a7dc7bcc57076e",
                 LockTime:  0,
-                Version:   1,
+                Time:	   1556387942,
+		Version:   1,
 		Vin: []bchain.Vin{
                         {
                                 ScriptSig: bchain.ScriptSig{
@@ -249,7 +250,7 @@ func Test_UnpackTx(t *testing.T) {
         }{
                 {
                         name: "monetaryunit-1",
-                        args: args{
+			args: args{
                                 packedTx: testTxPacked1,
                                 parser:   NewMonetaryUnitParser(GetChainParams("main"), &btc.Configuration{}),
                         },
