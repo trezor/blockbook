@@ -10,10 +10,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 
-	"math/big"
-
-	"github.com/martinboehm/btcd/blockchain"
-
 	"github.com/juju/errors"
 	"github.com/martinboehm/btcd/wire"
 	"github.com/martinboehm/btcutil/chaincfg"
