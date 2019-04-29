@@ -172,6 +172,16 @@ func init() {
                         },
                 },
                 Vout: []bchain.Vout{
+			{
+                                ValueSat: *big.NewInt(0),
+                                N:        0,
+                                ScriptPubKey: bchain.ScriptPubKey{
+                                    Hex: "",
+                                        Addresses: []string{
+                                                "",
+                                        },
+                                },
+                        },
                         {
                                 ValueSat: *big.NewInt(89909969117),
                                 N:        1,
