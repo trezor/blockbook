@@ -184,13 +184,3 @@ func (p *MonetaryUnitParser) GetAddrDescForUnknownInput(tx *bchain.Tx, input int
 	s := make([]byte, 10)
 	return s
 }
-
-// Checks if script is OP_ZEROCOINMINT
-func isZeroCoinMintScript(signatureScript []byte) bool {
-	return len(signatureScript) > 1 && signatureScript[0] == OP_ZEROCOINMINT
-}
-
-// Checks if script is OP_ZEROCOINSPEND
-func isZeroCoinSpendScript(signatureScript []byte) bool {
-	return len(signatureScript) >= 100 && signatureScript[0] == OP_ZEROCOINSPEND
-}
