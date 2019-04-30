@@ -19,7 +19,7 @@ import (
 	"github.com/tecbot/gorocksdb"
 )
 
-const dbVersion = 4
+const dbVersion = 5
 
 const packedHeightBytes = 4
 const maxAddrDescLen = 1024
@@ -383,11 +383,20 @@ type TxAddresses struct {
 	Outputs []TxOutput
 }
 
+// Utxo holds information about unspent transaction output
+type Utxo struct {
+	BtxID    []byte
+	Vout     int32
+	Height   uint32
+	ValueSat big.Int
+}
+
 // AddrBalance stores number of transactions and balances of an address
 type AddrBalance struct {
 	Txs        uint32
 	SentSat    big.Int
 	BalanceSat big.Int
+	Utxos      []Utxo
 }
 
 // ReceivedSat computes received amount from total balance and sent amount
@@ -422,7 +431,7 @@ func (d *RocksDB) GetAndResetConnectBlockStats() string {
 func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses addressesMap, txAddressesMap map[string]*TxAddresses, balances map[string]*AddrBalance) error {
 	blockTxIDs := make([][]byte, len(block.Txs))
 	blockTxAddresses := make([]*TxAddresses, len(block.Txs))
-	// first process all outputs so that inputs can point to txs in this block
+	// first process all outputs so that inputs can refer to txs in this block
 	for txi := range block.Txs {
 		tx := &block.Txs[txi]
 		btxID, err := d.chainParser.PackTxid(tx.Txid)

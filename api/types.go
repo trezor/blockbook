@@ -265,6 +265,7 @@ type Utxo struct {
 	Confirmations int     `json:"confirmations"`
 	Address       string  `json:"address,omitempty"`
 	Path          string  `json:"path,omitempty"`
+	Locktime      uint32  `json:"lockTime,omitempty"`
 }
 
 // Utxos is array of Utxo
