@@ -18,6 +18,7 @@ import (
 	"blockbook/bchain/coins/liquid"
 	"blockbook/bchain/coins/litecoin"
 	"blockbook/bchain/coins/monacoin"
+	"blockbook/bchain/coins/monetaryunit"
 	"blockbook/bchain/coins/myriad"
 	"blockbook/bchain/coins/namecoin"
 	"blockbook/bchain/coins/nuls"
@@ -70,6 +71,7 @@ func init() {
 	BlockChainFactories["Namecoin"] = namecoin.NewNamecoinRPC
 	BlockChainFactories["Monacoin"] = monacoin.NewMonacoinRPC
 	BlockChainFactories["Monacoin Testnet"] = monacoin.NewMonacoinRPC
+	BlockChainFactories["MonetaryUnit"] = monetaryunit.NewMonetaryUnitRPC
 	BlockChainFactories["DigiByte"] = digibyte.NewDigiByteRPC
 	BlockChainFactories["Myriad"] = myriad.NewMyriadRPC
 	BlockChainFactories["Liquid"] = liquid.NewLiquidRPC
