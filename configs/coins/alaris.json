@@ -6,10 +6,10 @@
     "alias": "alaris"
   },
   "ports": {
-    "backend_rpc": 8336,
-    "backend_message_queue": 38353,
-    "blockbook_internal": 9053,
-    "blockbook_public": 9153
+    "backend_rpc": 8358,
+    "backend_message_queue": 38358,
+    "blockbook_internal": 9058,
+    "blockbook_public": 9158
   },
   "ipc": {
     "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
