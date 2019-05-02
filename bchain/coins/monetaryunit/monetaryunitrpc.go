@@ -61,6 +61,21 @@ func (b *MonetaryUnitRPC) Initialize() error {
 // Get Block
 func (b *MonetaryUnitRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 
+        if height == 0 {
+                var err error
+                if hash == "" {
+                        hash, err = b.GetBlockHash(height)
+                        if err != nil {
+                                return nil, err
+                        }
+                }
+                if !b.ParseBlocks {
+                        return b.GetBlockFull(hash)
+                }
+                return b.GetBlockWithoutHeader(hash, height)
+
+        }
+
         var err error
         if hash == "" && height > 0 {
                 hash, err = b.GetBlockHash(height)
