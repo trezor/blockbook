@@ -29,6 +29,8 @@ const (
 	Addr8 = "2N6utyMZfPNUb1Bk8oz7p2JqJrXkq83gegu" // a91495e9fbe306449c991d314afe3c3567d5bf78efd287, xpub m/49'/1'/33'/1/3
 	Addr9 = "mmJx9Y8ayz9h14yd9fgCW1bUKoEpkBAquP"  // 76a9143f8ba3fda3ba7b69f5818086e12223c6dd25e3c888ac
 	AddrA = "mzVznVsCHkVHX9UN8WPFASWUUHtxnNn4Jj"  // 76a914d03c0d863d189b23b061a95ad32940b65837609f88ac
+
+	TxidB2T1Output3OpReturn = "6a072020f1686f6a20"
 )
 
 // Amounts in satoshis
@@ -165,6 +167,13 @@ func GetTestBitcoinTypeBlock2(parser bchain.BlockChainParser) *bchain.Block {
 							Hex: AddressToPubKeyHex(Addr7, parser),
 						},
 						ValueSat: *SatB2T1A7,
+					},
+					{
+						N: 2,
+						ScriptPubKey: bchain.ScriptPubKey{
+							Hex: TxidB2T1Output3OpReturn, // OP_RETURN script
+						},
+						ValueSat: *SatZero,
 					},
 				},
 				Blocktime:     22549400000,

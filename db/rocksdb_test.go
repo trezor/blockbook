@@ -315,9 +315,10 @@ func verifyAfterBitcoinTypeBlock2(t *testing.T, d *RocksDB) {
 				"02" +
 				inputAddressToPubKeyHexWithLength(dbtestdata.Addr3, t, d) + bigintToHex(dbtestdata.SatB1T2A3) +
 				inputAddressToPubKeyHexWithLength(dbtestdata.Addr2, t, d) + bigintToHex(dbtestdata.SatB1T1A2) +
-				"02" +
+				"03" +
 				spentAddressToPubKeyHexWithLength(dbtestdata.Addr6, t, d) + bigintToHex(dbtestdata.SatB2T1A6) +
-				addressToPubKeyHexWithLength(dbtestdata.Addr7, t, d) + bigintToHex(dbtestdata.SatB2T1A7),
+				addressToPubKeyHexWithLength(dbtestdata.Addr7, t, d) + bigintToHex(dbtestdata.SatB2T1A7) +
+				hex.EncodeToString([]byte{byte(len(dbtestdata.TxidB2T1Output3OpReturn))}) + dbtestdata.TxidB2T1Output3OpReturn + bigintToHex(dbtestdata.SatZero),
 			nil,
 		},
 		{
@@ -623,6 +624,14 @@ func TestRocksDB_Index_BitcoinType(t *testing.T) {
 				AddrDesc: addressToAddrDesc(dbtestdata.Addr7, d.chainParser),
 				Spent:    false,
 				ValueSat: *dbtestdata.SatB2T1A7,
+			},
+			{
+				AddrDesc: func() []byte {
+					b, _ := hex.DecodeString(dbtestdata.TxidB2T1Output3OpReturn)
+					return b
+				}(),
+				Spent:    false,
+				ValueSat: *dbtestdata.SatZero,
 			},
 		},
 	}

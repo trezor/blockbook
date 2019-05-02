@@ -459,25 +459,27 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses add
 				continue
 			}
 			tao.AddrDesc = addrDesc
-			strAddrDesc := string(addrDesc)
-			ab, e := balances[strAddrDesc]
-			if !e {
-				ab, err = d.GetAddrDescBalance(addrDesc)
-				if err != nil {
-					return err
+			if d.chainParser.IsAddrDescIndexable(addrDesc) {
+				strAddrDesc := string(addrDesc)
+				balance, e := balances[strAddrDesc]
+				if !e {
+					balance, err = d.GetAddrDescBalance(addrDesc)
+					if err != nil {
+						return err
+					}
+					if balance == nil {
+						balance = &AddrBalance{}
+					}
+					balances[strAddrDesc] = balance
+					d.cbs.balancesMiss++
+				} else {
+					d.cbs.balancesHit++
 				}
-				if ab == nil {
-					ab = &AddrBalance{}
+				balance.BalanceSat.Add(&balance.BalanceSat, &output.ValueSat)
+				counted := addToAddressesMap(addresses, strAddrDesc, btxID, int32(i))
+				if !counted {
+					balance.Txs++
 				}
-				balances[strAddrDesc] = ab
-				d.cbs.balancesMiss++
-			} else {
-				d.cbs.balancesHit++
-			}
-			ab.BalanceSat.Add(&ab.BalanceSat, &output.ValueSat)
-			counted := addToAddressesMap(addresses, strAddrDesc, btxID, int32(i))
-			if !counted {
-				ab.Txs++
 			}
 		}
 	}
@@ -519,45 +521,47 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses add
 				glog.Warningf("rocksdb: height %d, tx %v, input tx %v vout %v is out of bounds of stored tx", block.Height, tx.Txid, input.Txid, input.Vout)
 				continue
 			}
-			ot := &ita.Outputs[int(input.Vout)]
-			if ot.Spent {
+			spentOutput := &ita.Outputs[int(input.Vout)]
+			if spentOutput.Spent {
 				glog.Warningf("rocksdb: height %d, tx %v, input tx %v vout %v is double spend", block.Height, tx.Txid, input.Txid, input.Vout)
 			}
-			tai.AddrDesc = ot.AddrDesc
-			tai.ValueSat = ot.ValueSat
+			tai.AddrDesc = spentOutput.AddrDesc
+			tai.ValueSat = spentOutput.ValueSat
 			// mark the output as spent in tx
-			ot.Spent = true
-			if len(ot.AddrDesc) == 0 {
+			spentOutput.Spent = true
+			if len(spentOutput.AddrDesc) == 0 {
 				if !logged {
 					glog.Warningf("rocksdb: height %d, tx %v, input tx %v vout %v skipping empty address", block.Height, tx.Txid, input.Txid, input.Vout)
 					logged = true
 				}
 				continue
 			}
-			strAddrDesc := string(ot.AddrDesc)
-			ab, e := balances[strAddrDesc]
-			if !e {
-				ab, err = d.GetAddrDescBalance(ot.AddrDesc)
-				if err != nil {
-					return err
+			if d.chainParser.IsAddrDescIndexable(spentOutput.AddrDesc) {
+				strAddrDesc := string(spentOutput.AddrDesc)
+				balance, e := balances[strAddrDesc]
+				if !e {
+					balance, err = d.GetAddrDescBalance(spentOutput.AddrDesc)
+					if err != nil {
+						return err
+					}
+					if balance == nil {
+						balance = &AddrBalance{}
+					}
+					balances[strAddrDesc] = balance
+					d.cbs.balancesMiss++
+				} else {
+					d.cbs.balancesHit++
 				}
-				if ab == nil {
-					ab = &AddrBalance{}
+				counted := addToAddressesMap(addresses, strAddrDesc, spendingTxid, ^int32(i))
+				if !counted {
+					balance.Txs++
 				}
-				balances[strAddrDesc] = ab
-				d.cbs.balancesMiss++
-			} else {
-				d.cbs.balancesHit++
+				balance.BalanceSat.Sub(&balance.BalanceSat, &spentOutput.ValueSat)
+				if balance.BalanceSat.Sign() < 0 {
+					d.resetValueSatToZero(&balance.BalanceSat, spentOutput.AddrDesc, "balance")
+				}
+				balance.SentSat.Add(&balance.SentSat, &spentOutput.ValueSat)
 			}
-			counted := addToAddressesMap(addresses, strAddrDesc, spendingTxid, ^int32(i))
-			if !counted {
-				ab.Txs++
-			}
-			ab.BalanceSat.Sub(&ab.BalanceSat, &ot.ValueSat)
-			if ab.BalanceSat.Sign() < 0 {
-				d.resetValueSatToZero(&ab.BalanceSat, ot.AddrDesc, "balance")
-			}
-			ab.SentSat.Add(&ab.SentSat, &ot.ValueSat)
 		}
 	}
 	return nil
