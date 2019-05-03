@@ -71,7 +71,8 @@ const (
 )
 
 // common columns
-var cfNames = []string{"default", "height", "addresses", "blockTxs", "transactions"}
+var cfNames []string
+var cfBaseNames = []string{"default", "height", "addresses", "blockTxs", "transactions"}
 
 // type specific columns
 var cfNamesBitcoinType = []string{"addressBalance", "txAddresses"}
@@ -102,6 +103,7 @@ func openDB(path string, c *gorocksdb.Cache, openFiles int) (*gorocksdb.DB, []*g
 func NewRocksDB(path string, cacheSize, maxOpenFiles int, parser bchain.BlockChainParser, metrics *common.Metrics) (d *RocksDB, err error) {
 	glog.Infof("rocksdb: opening %s, required data version %v, cache size %v, max open files %v", path, dbVersion, cacheSize, maxOpenFiles)
 
+	cfNames = append([]string{}, cfBaseNames...)
 	chainType := parser.GetChainType()
 	if chainType == bchain.ChainBitcoinType {
 		cfNames = append(cfNames, cfNamesBitcoinType...)
@@ -476,6 +478,12 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses add
 					d.cbs.balancesHit++
 				}
 				balance.BalanceSat.Add(&balance.BalanceSat, &output.ValueSat)
+				balance.Utxos = append(balance.Utxos, Utxo{
+					BtxID:    btxID,
+					Vout:     int32(i),
+					Height:   block.Height,
+					ValueSat: output.ValueSat,
+				})
 				counted := addToAddressesMap(addresses, strAddrDesc, btxID, int32(i))
 				if !counted {
 					balance.Txs++
@@ -557,6 +565,7 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses add
 					balance.Txs++
 				}
 				balance.BalanceSat.Sub(&balance.BalanceSat, &spentOutput.ValueSat)
+				balance.Utxos = removeUtxo(balance.Utxos, btxID, int32(input.Vout), spentOutput.AddrDesc)
 				if balance.BalanceSat.Sign() < 0 {
 					d.resetValueSatToZero(&balance.BalanceSat, spentOutput.AddrDesc, "balance")
 				}
@@ -565,6 +574,16 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses add
 		}
 	}
 	return nil
+}
+
+func removeUtxo(utxos []Utxo, btxID []byte, vout int32, addrDesc bchain.AddressDescriptor) []Utxo {
+	for i, utxo := range utxos {
+		if utxo.Vout == vout && bytes.Compare(utxo.BtxID, btxID) == 0 {
+			return append(utxos[:i], utxos[i+1:]...)
+		}
+	}
+	glog.Errorf("Utxo %s:%d not found in addrDesc %s", hex.EncodeToString(btxID), vout, addrDesc)
+	return utxos
 }
 
 // addToAddressesMap maintains mapping between addresses and transactions in one block
@@ -611,19 +630,16 @@ func (d *RocksDB) storeTxAddresses(wb *gorocksdb.WriteBatch, am map[string]*TxAd
 }
 
 func (d *RocksDB) storeBalances(wb *gorocksdb.WriteBatch, abm map[string]*AddrBalance) error {
-	// allocate buffer big enough for number of txs + 2 bigints
-	buf := make([]byte, vlq.MaxLen32+2*maxPackedBigintBytes)
+	// allocate buffer initial buffer
+	buf := make([]byte, 1024)
+	varBuf := make([]byte, maxPackedBigintBytes)
 	for addrDesc, ab := range abm {
-		// balance with 0 transactions is removed from db - happens in disconnect
+		// balance with 0 transactions is removed from db - happens on disconnect
 		if ab == nil || ab.Txs <= 0 {
 			wb.DeleteCF(d.cfh[cfAddressBalance], bchain.AddressDescriptor(addrDesc))
 		} else {
-			l := packVaruint(uint(ab.Txs), buf)
-			ll := packBigint(&ab.SentSat, buf[l:])
-			l += ll
-			ll = packBigint(&ab.BalanceSat, buf[l:])
-			l += ll
-			wb.PutCF(d.cfh[cfAddressBalance], bchain.AddressDescriptor(addrDesc), buf[:l])
+			buf = packAddrBalance(ab, buf, varBuf)
+			wb.PutCF(d.cfh[cfAddressBalance], bchain.AddressDescriptor(addrDesc), buf)
 		}
 	}
 	return nil
@@ -728,14 +744,7 @@ func (d *RocksDB) GetAddrDescBalance(addrDesc bchain.AddressDescriptor) (*AddrBa
 	if len(buf) < 3 {
 		return nil, nil
 	}
-	txs, l := unpackVaruint(buf)
-	sentSat, sl := unpackBigint(buf[l:])
-	balanceSat, _ := unpackBigint(buf[l+sl:])
-	return &AddrBalance{
-		Txs:        uint32(txs),
-		SentSat:    sentSat,
-		BalanceSat: balanceSat,
-	}, nil
+	return unpackAddrBalance(buf, d.chainParser.PackedTxidLen())
 }
 
 // GetAddressBalance returns address balance for an address or nil if address not found
@@ -826,6 +835,56 @@ func appendTxOutput(txo *TxOutput, buf []byte, varBuf []byte) []byte {
 	buf = append(buf, txo.AddrDesc...)
 	l = packBigint(&txo.ValueSat, varBuf)
 	buf = append(buf, varBuf[:l]...)
+	return buf
+}
+
+func unpackAddrBalance(buf []byte, txidUnpackedLen int) (*AddrBalance, error) {
+	txs, l := unpackVaruint(buf)
+	sentSat, sl := unpackBigint(buf[l:])
+	balanceSat, bl := unpackBigint(buf[l+sl:])
+	l = l + sl + bl
+	utxos := make([]Utxo, 0)
+	for len(buf[l:]) >= txidUnpackedLen+3 {
+		btxID := append([]byte(nil), buf[l:l+txidUnpackedLen]...)
+		l += txidUnpackedLen
+		vout, ll := unpackVaruint(buf[l:])
+		l += ll
+		height, ll := unpackVaruint(buf[l:])
+		l += ll
+		valueSat, ll := unpackBigint(buf[l:])
+		l += ll
+		utxos = append(utxos, Utxo{
+			BtxID:    btxID,
+			Vout:     int32(vout),
+			Height:   uint32(height),
+			ValueSat: valueSat,
+		})
+	}
+	return &AddrBalance{
+		Txs:        uint32(txs),
+		SentSat:    sentSat,
+		BalanceSat: balanceSat,
+		Utxos:      utxos,
+	}, nil
+}
+
+func packAddrBalance(ab *AddrBalance, buf, varBuf []byte) []byte {
+	buf = buf[:0]
+	l := packVaruint(uint(ab.Txs), varBuf)
+	buf = append(buf, varBuf[:l]...)
+	l = packBigint(&ab.SentSat, varBuf)
+	buf = append(buf, varBuf[:l]...)
+	l = packBigint(&ab.BalanceSat, varBuf)
+	buf = append(buf, varBuf[:l]...)
+	for _, utxo := range ab.Utxos {
+		buf = append(buf, utxo.BtxID...)
+		l = packVaruint(uint(utxo.Vout), varBuf)
+		buf = append(buf, varBuf[:l]...)
+		l = packVaruint(uint(utxo.Height), varBuf)
+		buf = append(buf, varBuf[:l]...)
+		l = packBigint(&utxo.ValueSat, varBuf)
+		buf = append(buf, varBuf[:l]...)
+	}
 	return buf
 }
 
