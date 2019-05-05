@@ -23,7 +23,7 @@
     "package_revision": "satoshilabs-1",
     "system_user": "polis",
     "version": "1.4.12",
-    "binary_url": "https://github.com/polispay/polis/releases/download/1.4.12/poliscore-v1.4.12-x86_64-linux-gnu.tar.gz",
+    "binary_url": "https://github.com/polispay/polis/releases/download/1.4.12/poliscore-1.4.12-x86_64-linux-gnu.tar.gz",
     "verification_type": "sha256",
     "verification_source": "3431fed5241fbfbccc2d70fcd0107c2b85a08f1e94cfe97d4731eaec2a9c5e22",
     "extract_command": "tar -C backend --strip 1 -xf",
