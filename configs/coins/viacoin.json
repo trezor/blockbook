@@ -1,0 +1,72 @@
+{
+  "coin": {
+    "name": "Viacoin",
+    "shortcut": "VIA",
+    "label": "Viacoin",
+    "alias": "viacoin"
+  },
+  "ports": {
+    "backend_rpc": 8055,
+    "backend_message_queue": 38355,
+    "blockbook_internal": 9055,
+    "blockbook_public": 9155
+  },
+  "ipc": {
+    "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
+    "rpc_user": "rpc",
+    "rpc_pass": "rpcp",
+    "rpc_timeout": 25,
+    "message_queue_binding_template": "tcp://127.0.0.1:{{.Ports.BackendMessageQueue}}"
+  },
+  "backend": {
+    "package_name": "backend-viacoin",
+    "package_revision": "satoshilabs-1",
+    "system_user": "viacoin",
+    "version": "1.14-beta-1",
+    "binary_url": "https://github.com/viacoin/viacoin/releases/download/v0.15.2/viacoin-0.15.2-x86_64-linux-gnu.tar.gz",
+    "verification_type": "sha256",
+    "verification_source": "bdbd432645a8b4baadddb7169ea4bef3d03f80dc2ce53dce5783d8582ac63bab",
+    "extract_command": "tar -C backend --strip 1 -xf",
+    "exclude_files": [
+      "bin/viacoin-qt"
+    ],
+    "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/viacoind -datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -conf={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf -pid=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",
+    "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/*.log",
+    "postinst_script_template": "",
+    "service_type": "forking",
+    "service_additional_params_template": "",
+    "protect_memory": false,
+    "mainnet": true,
+    "server_config_file": "bitcoin_like.conf",
+    "client_config_file": "bitcoin_like_client.conf",
+    "additional_params": {
+      "discover": 0,
+      "rpcthreads": 16,
+      "upnp": 0,
+      "whitelist": "127.0.0.1"
+    }
+  },
+  "blockbook": {
+    "package_name": "blockbook-viacoin",
+    "system_user": "blockbook-viacoin",
+    "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
+    "public_binding_template": ":{{.Ports.BlockbookPublic}}",
+    "explorer_url": "",
+    "additional_params": "-resyncindexperiod=30011 -resyncmempoolperiod=2011",
+    "block_chain": {
+      "parse": true,
+      "mempool_workers": 8,
+      "mempool_sub_workers": 2,
+      "block_addresses_to_keep": 300,
+      "xpub_magic": 76067358,
+      "xpub_magic_segwit_p2sh": 77429938,
+      "xpub_magic_segwit_native": 78792518,
+      "slip44": 14,
+      "additional_params": {}
+    }
+  },
+  "meta": {
+    "package_maintainer": "Romano",
+    "package_maintainer_email": "romanornr@gmail.com"
+  }
+}
