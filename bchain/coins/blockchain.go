@@ -89,6 +89,7 @@ func init() {
 	BlockChainFactories["Qtum Testnet"] = qtum.NewQtumRPC
 	BlockChainFactories["NULS"] = nuls.NewNulsRPC
 	BlockChainFactories["VIPSTARCOIN"] = vipstarcoin.NewVIPSTARCOINRPC
+	BlockChainFactories["ZelCash"] = zec.NewZCashRPC
 }
 
 // GetCoinNameFromConfig gets coin name and coin shortcut from config file
