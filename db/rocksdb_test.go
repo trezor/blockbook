@@ -664,6 +664,14 @@ func TestRocksDB_Index_BitcoinType(t *testing.T) {
 		Txs:        2,
 		SentSat:    *dbtestdata.SatB1T2A5,
 		BalanceSat: *dbtestdata.SatB2T3A5,
+		Utxos: []Utxo{
+			Utxo{
+				BtxID:    hexToBytes(dbtestdata.TxidB2T3),
+				Vout:     0,
+				Height:   225494,
+				ValueSat: *dbtestdata.SatB2T3A5,
+			},
+		},
 	}
 	if !reflect.DeepEqual(ab, abw) {
 		t.Errorf("GetAddressBalance() = %+v, want %+v", ab, abw)
