@@ -827,6 +827,7 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *db.AddrB
 									Txid:      bchainTx.Txid,
 									Vout:      int32(i),
 									AmountSat: (*Amount)(&vout.ValueSat),
+									Locktime:  bchainTx.LockTime,
 								})
 							}
 						}
@@ -844,61 +845,32 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *db.AddrB
 			}
 		}
 		// ba can be nil if the address is only in mempool!
-		if ba != nil && !IsZeroBigInt(&ba.BalanceSat) {
-			outpoints := make([]bchain.Outpoint, 0, 8)
-			err = w.db.GetAddrDescTransactions(addrDesc, 0, maxUint32, func(txid string, height uint32, indexes []int32) error {
-				for _, index := range indexes {
-					// take only outputs
-					if index >= 0 {
-						outpoints = append(outpoints, bchain.Outpoint{Txid: txid, Vout: index})
-					}
-				}
-				return nil
-			})
-			if err != nil {
-				return nil, err
-			}
-			var lastTxid string
-			var ta *db.TxAddresses
-			var checksum big.Int
-			checksum.Set(&ba.BalanceSat)
+		if ba != nil && len(ba.Utxos) > 0 {
 			b, _, err := w.db.GetBestBlock()
 			if err != nil {
 				return nil, err
 			}
 			bestheight := int(b)
-			for i := 0; i < len(outpoints) && checksum.Int64() > 0; i++ {
-				o := outpoints[i]
-				if lastTxid != o.Txid {
-					ta, err = w.db.GetTxAddresses(o.Txid)
-					if err != nil {
-						return nil, err
-					}
-					lastTxid = o.Txid
+			var checksum big.Int
+			checksum.Set(&ba.BalanceSat)
+			// go backwards to get the newest first
+			for i := len(ba.Utxos) - 1; i >= 0; i-- {
+				utxo := &ba.Utxos[i]
+				txid, err := w.chainParser.UnpackTxid(utxo.BtxID)
+				if err != nil {
+					return nil, err
 				}
-				if ta == nil {
-					glog.Warning("DB inconsistency:  tx ", o.Txid, ": not found in txAddresses")
-				} else {
-					if len(ta.Outputs) <= int(o.Vout) {
-						glog.Warning("DB inconsistency:  txAddresses ", o.Txid, " does not have enough outputs")
-					} else {
-						if !ta.Outputs[o.Vout].Spent {
-							v := ta.Outputs[o.Vout].ValueSat
-							// report only outpoints that are not spent in mempool
-							_, e := spentInMempool[o.Txid+strconv.Itoa(int(o.Vout))]
-							if !e {
-								r = append(r, Utxo{
-									Txid:          o.Txid,
-									Vout:          o.Vout,
-									AmountSat:     (*Amount)(&v),
-									Height:        int(ta.Height),
-									Confirmations: bestheight - int(ta.Height) + 1,
-								})
-							}
-							checksum.Sub(&checksum, &v)
-						}
-					}
+				_, e := spentInMempool[txid+strconv.Itoa(int(utxo.Vout))]
+				if !e {
+					r = append(r, Utxo{
+						Txid:          txid,
+						Vout:          utxo.Vout,
+						AmountSat:     (*Amount)(&utxo.ValueSat),
+						Height:        int(utxo.Height),
+						Confirmations: bestheight - int(utxo.Height) + 1,
+					})
 				}
+				checksum.Sub(&checksum, &utxo.ValueSat)
 			}
 			if checksum.Uint64() != 0 {
 				glog.Warning("DB inconsistency:  ", addrDesc, ": checksum is not zero")
