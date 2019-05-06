@@ -69,7 +69,7 @@ var (
 	noTxCache = flag.Bool("notxcache", false, "disable tx cache")
 
 	computeColumnStats  = flag.Bool("computedbstats", false, "compute column stats and exit")
-	computeFeeStatsFlag = flag.Bool("computedfeestats", false, "compute fee stats for blocks in blockheight-blockuntil range and exit")
+	computeFeeStatsFlag = flag.Bool("computefeestats", false, "compute fee stats for blocks in blockheight-blockuntil range and exit")
 	dbStatsPeriodHours  = flag.Int("dbstatsperiod", 24, "period of db stats collection in hours, 0 disables stats collection")
 
 	// resync index at least each resyncIndexPeriodMs (could be more often if invoked by message from ZeroMQ)
