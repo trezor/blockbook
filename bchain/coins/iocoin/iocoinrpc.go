@@ -31,7 +31,8 @@ func NewIocoinRPC(config json.RawMessage, pushHandler func(bchain.NotificationTy
 		b.(*btc.BitcoinRPC),
 	}
 	s.RPCMarshaler = btc.JSONMarshalerV1{}
-	s.ChainConfig.SupportsEstimateFee = false
+	s.ChainConfig.SupportsEstimateFee = true
+	s.ChainConfig.SupportsEstimateSmartFee = false
 
 	return s, nil
 }
