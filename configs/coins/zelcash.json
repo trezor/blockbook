@@ -6,10 +6,10 @@
     "alias": "zelcash"
   },
   "ports": {
-    "backend_rpc": 16124,
-    "backend_message_queue": 38368,
-    "blockbook_internal": 9068,
-    "blockbook_public": 9168
+    "backend_rpc": 8058,
+    "backend_message_queue": 38358,
+    "blockbook_internal": 9058,
+    "blockbook_public": 9158
   },
   "ipc": {
     "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
