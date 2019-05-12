@@ -656,7 +656,7 @@ func TestRocksDB_Index_BitcoinType(t *testing.T) {
 	verifyAfterBitcoinTypeBlock2(t, d)
 
 	// test public methods for address balance and tx addresses
-	ab, err := d.GetAddressBalance(dbtestdata.Addr5)
+	ab, err := d.GetAddressBalance(dbtestdata.Addr5, AddressBalanceDetailUTXO)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1060,7 +1060,7 @@ func Test_packAddrBalance_unpackAddrBalance(t *testing.T) {
 			if !reflect.DeepEqual(hex, tt.hex) {
 				t.Errorf("packTxAddresses() = %v, want %v", hex, tt.hex)
 			}
-			got1, err := unpackAddrBalance(b, parser.PackedTxidLen())
+			got1, err := unpackAddrBalance(b, parser.PackedTxidLen(), AddressBalanceDetailUTXO)
 			if err != nil {
 				t.Errorf("unpackTxAddresses() error = %v", err)
 				return

@@ -160,7 +160,7 @@ func (w *Worker) xpubCheckAndLoadTxids(ad *xpubAddress, filter *AddressFilter, m
 
 func (w *Worker) xpubDerivedAddressBalance(data *xpubData, ad *xpubAddress) (bool, error) {
 	var err error
-	if ad.balance, err = w.db.GetAddrDescBalance(ad.addrDesc); err != nil {
+	if ad.balance, err = w.db.GetAddrDescBalance(ad.addrDesc, db.AddressBalanceDetailUTXO); err != nil {
 		return false, err
 	}
 	if ad.balance != nil {

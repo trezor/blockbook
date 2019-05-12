@@ -685,7 +685,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 		nonce = strconv.Itoa(int(n))
 	} else {
 		// ba can be nil if the address is only in mempool!
-		ba, err = w.db.GetAddrDescBalance(addrDesc)
+		ba, err = w.db.GetAddrDescBalance(addrDesc, db.AddressBalanceDetailNoUTXO)
 		if err != nil {
 			return nil, NewAPIError(fmt.Sprintf("Address not found, %v", err), true)
 		}
@@ -839,7 +839,7 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *db.AddrB
 	if !onlyMempool {
 		// get utxo from index
 		if ba == nil {
-			ba, err = w.db.GetAddrDescBalance(addrDesc)
+			ba, err = w.db.GetAddrDescBalance(addrDesc, db.AddressBalanceDetailUTXO)
 			if err != nil {
 				return nil, NewAPIError(fmt.Sprintf("Address not found, %v", err), true)
 			}
