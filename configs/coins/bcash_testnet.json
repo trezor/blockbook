@@ -23,9 +23,9 @@
     "package_revision": "satoshilabs-1",
     "system_user": "bcash",
     "version": "0.19.4",
-    "binary_url": "https://download.bitcoinabc.org/0.19.4/linux/bitcoin-abc-0.19.4-x86_64-linux-gnu.tar.gz",
+    "binary_url": "https://download.bitcoinabc.org/0.19.5/linux/bitcoin-abc-0.19.5-x86_64-linux-gnu.tar.gz",
     "verification_type": "sha256",
-    "verification_source": "0455ae2a8106fc1f20f8229e10baac4c7a496bc680974fa8fad05268189682c6",
+    "verification_source": "6b95bc75dd0f40eb86076bae002a87a1878b4f12614dfeeefa888ea4fdaebf8a",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
       "bin/bitcoin-qt"
@@ -49,7 +49,7 @@
     "additional_params": "",
     "block_chain": {
       "parse": true,
-      "subversion": "/Bitcoin ABC:0.17.1/",
+      "subversion": "/Bitcoin ABC:0.19.5/",
       "address_format": "cashaddr",
       "mempool_workers": 8,
       "mempool_sub_workers": 2,
