@@ -17,7 +17,15 @@ func NewFakeBlockChain(parser bchain.BlockChainParser) (bchain.BlockChain, error
 	return &fakeBlockChain{&bchain.BaseChain{Parser: parser}}, nil
 }
 
+func (b *fakeBlockChain) CreateMempool(chain bchain.BlockChain) (bchain.Mempool, error) {
+	return bchain.NewMempoolBitcoinType(chain, 1, 1), nil
+}
+
 func (c *fakeBlockChain) Initialize() error {
+	return nil
+}
+
+func (c *fakeBlockChain) InitializeMempool(addrDescForOutpoint bchain.AddrDescForOutpointFunc, onNewTxAddr bchain.OnNewTxAddrFunc) error {
 	return nil
 }
 
@@ -118,10 +126,6 @@ func (c *fakeBlockChain) GetBlockInfo(hash string) (v *bchain.BlockInfo, err err
 	return nil, bchain.ErrBlockNotFound
 }
 
-func (c *fakeBlockChain) GetMempool() (v []string, err error) {
-	return nil, errors.New("Not implemented")
-}
-
 func getTxInBlock(b *bchain.Block, txid string) *bchain.Tx {
 	for _, tx := range b.Txs {
 		if tx.Txid == txid {
@@ -179,22 +183,12 @@ func (c *fakeBlockChain) SendRawTransaction(tx string) (v string, err error) {
 	return "", errors.New("Invalid data")
 }
 
-func (c *fakeBlockChain) ResyncMempool(onNewTxAddr bchain.OnNewTxAddrFunc) (count int, err error) {
-	return 0, errors.New("Not implemented")
-}
-
-func (c *fakeBlockChain) GetMempoolTransactions(address string) (v []bchain.Outpoint, err error) {
-	return nil, errors.New("Not implemented")
-}
-
-func (c *fakeBlockChain) GetMempoolTransactionsForAddrDesc(addrDesc bchain.AddressDescriptor) (v []bchain.Outpoint, err error) {
-	return []bchain.Outpoint{}, nil
-}
-
-func (c *fakeBlockChain) GetMempoolEntry(txid string) (v *bchain.MempoolEntry, err error) {
-	return nil, errors.New("Not implemented")
-}
-
+// GetChainParser returns parser for the blockchain
 func (c *fakeBlockChain) GetChainParser() bchain.BlockChainParser {
 	return c.Parser
+}
+
+// GetMempoolTransactions returns transactions in mempool
+func (b *fakeBlockChain) GetMempoolTransactions() ([]string, error) {
+	return nil, errors.New("Not implemented")
 }

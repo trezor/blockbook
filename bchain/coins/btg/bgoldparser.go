@@ -14,12 +14,16 @@ import (
 )
 
 const (
+	// MainnetMagic is mainnet network constant
 	MainnetMagic wire.BitcoinNet = 0x446d47e1
+	// TestnetMagic is testnet network constant
 	TestnetMagic wire.BitcoinNet = 0x456e48e2
 )
 
 var (
+	// MainNetParams are parser parameters for mainnet
 	MainNetParams chaincfg.Params
+	// TestNetParams are parser parameters for testnet
 	TestNetParams chaincfg.Params
 )
 

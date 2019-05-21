@@ -22,10 +22,10 @@
     "package_name": "backend-digibyte",
     "package_revision": "satoshilabs-1",
     "system_user": "digibyte",
-    "version": "6.16.5.1",
-    "binary_url": "https://github.com/digibyte/digibyte/releases/download/v6.16.5.1/digibyte-6.16.5-x86_64-linux-gnu.tar.gz",
+    "version": "7.17.2",
+    "binary_url": "https://github.com/digibyte/digibyte/releases/download/v7.17.2/digibyte-7.17.2-x86_64-linux-gnu.tar.gz",
     "verification_type": "sha256",
-    "verification_source": "dd6bed0228087fbb51f08be55cbc08a0e3251acfe1be3249b634447837ecd857",
+    "verification_source": "caa8ecc42cbebbd2c43e742c7ecc2dd21d76a9e2db23676af428b67b131f6413",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
       "bin/digibyte-qt"
@@ -57,12 +57,13 @@
       "block_addresses_to_keep": 300,
       "xpub_magic": 76067358,
       "xpub_magic_segwit_p2sh": 77429938,
+      "xpub_magic_segwit_native": 78792518,
       "slip44": 20,
       "additional_params": {}
     }
   },
   "meta": {
-    "package_maintainer": "Martin Boehm",
+    "package_maintainer": "Martin Bohm",
     "package_maintainer_email": "martin.bohm@satoshilabs.com"
   }
 }

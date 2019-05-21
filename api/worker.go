@@ -23,17 +23,19 @@ type Worker struct {
 	chain       bchain.BlockChain
 	chainParser bchain.BlockChainParser
 	chainType   bchain.ChainType
+	mempool     bchain.Mempool
 	is          *common.InternalState
 }
 
 // NewWorker creates new api worker
-func NewWorker(db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxCache, is *common.InternalState) (*Worker, error) {
+func NewWorker(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, txCache *db.TxCache, is *common.InternalState) (*Worker, error) {
 	w := &Worker{
 		db:          db,
 		txCache:     txCache,
 		chain:       chain,
 		chainParser: chain.GetChainParser(),
 		chainType:   chain.GetChainParser().GetChainType(),
+		mempool:     mempool,
 		is:          is,
 	}
 	return w, nil
@@ -292,6 +294,10 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height uint32, 
 			return nil, err
 		}
 	}
+	// for mempool transaction get first seen time
+	if bchainTx.Confirmations == 0 {
+		bchainTx.Blocktime = int64(w.mempool.GetTransactionTime(bchainTx.Txid))
+	}
 	r := &Tx{
 		Blockhash:        blockhash,
 		Blockheight:      int(height),
@@ -348,7 +354,7 @@ func (w *Worker) getAddressTxids(addrDesc bchain.AddressDescriptor, mempool bool
 	}
 	if mempool {
 		uniqueTxs := make(map[string]struct{})
-		o, err := w.chain.GetMempoolTransactionsForAddrDesc(addrDesc)
+		o, err := w.mempool.GetAddrDescTransactions(addrDesc)
 		if err != nil {
 			return nil, err
 		}
@@ -856,7 +862,7 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *db.AddrB
 				return nil, err
 			}
 			bestheight := int(b)
-			for i := len(outpoints) - 1; i >= 0 && checksum.Int64() > 0; i-- {
+			for i := 0; i < len(outpoints) && checksum.Int64() > 0; i++ {
 				o := outpoints[i]
 				if lastTxid != o.Txid {
 					ta, err = w.db.GetTxAddresses(o.Txid)
@@ -1014,8 +1020,16 @@ func (w *Worker) GetBlock(bid string, page int, txsOnPage int) (*Block, error) {
 	bi.Txids = nil
 	glog.Info("GetBlock ", bid, ", page ", page, " finished in ", time.Since(start))
 	return &Block{
-		Paging:       pg,
-		BlockInfo:    *bi,
+		Paging: pg,
+		BlockInfo: BlockInfo{
+			BlockHeader: bi.BlockHeader,
+			Bits:        bi.Bits,
+			Difficulty:  string(bi.Difficulty),
+			MerkleRoot:  bi.MerkleRoot,
+			Nonce:       string(bi.Nonce),
+			Txids:       bi.Txids,
+			Version:     bi.Version,
+		},
 		TxCount:      txCount,
 		Transactions: txs,
 	}, nil
@@ -1059,4 +1073,27 @@ func (w *Worker) GetSystemInfo(internal bool) (*SystemInfo, error) {
 	}
 	glog.Info("GetSystemInfo finished in ", time.Since(start))
 	return &SystemInfo{bi, ci}, nil
+}
+
+// GetMempool returns a page of mempool txids
+func (w *Worker) GetMempool(page int, itemsOnPage int) (*MempoolTxids, error) {
+	page--
+	if page < 0 {
+		page = 0
+	}
+	entries := w.mempool.GetAllEntries()
+	pg, from, to, page := computePaging(len(entries), page, itemsOnPage)
+	r := &MempoolTxids{
+		Paging:      pg,
+		MempoolSize: len(entries),
+	}
+	r.Mempool = make([]MempoolTxid, to-from)
+	for i := from; i < to; i++ {
+		entry := &entries[i]
+		r.Mempool[i-from] = MempoolTxid{
+			Txid: entry.Txid,
+			Time: int64(entry.Time),
+		}
+	}
+	return r, nil
 }

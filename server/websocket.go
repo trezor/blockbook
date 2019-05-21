@@ -59,6 +59,7 @@ type WebsocketServer struct {
 	txCache                   *db.TxCache
 	chain                     bchain.BlockChain
 	chainParser               bchain.BlockChainParser
+	mempool                   bchain.Mempool
 	metrics                   *common.Metrics
 	is                        *common.InternalState
 	api                       *api.Worker
@@ -70,8 +71,8 @@ type WebsocketServer struct {
 }
 
 // NewWebsocketServer creates new websocket interface to blockbook and returns its handle
-func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxCache, metrics *common.Metrics, is *common.InternalState) (*WebsocketServer, error) {
-	api, err := api.NewWorker(db, chain, txCache, is)
+func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, txCache *db.TxCache, metrics *common.Metrics, is *common.InternalState) (*WebsocketServer, error) {
+	api, err := api.NewWorker(db, chain, mempool, txCache, is)
 	if err != nil {
 		return nil, err
 	}
@@ -89,6 +90,7 @@ func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxC
 		txCache:               txCache,
 		chain:                 chain,
 		chainParser:           chain.GetChainParser(),
+		mempool:               mempool,
 		metrics:               metrics,
 		is:                    is,
 		api:                   api,
@@ -386,6 +388,9 @@ func (s *WebsocketServer) getAccountInfo(req *accountInfoReq) (res *api.Address,
 		Contract:       req.ContractFilter,
 		Vout:           api.AddressFilterVoutOff,
 		TokensToReturn: tokensToReturn,
+	}
+	if req.PageSize == 0 {
+		req.PageSize = txsOnPage
 	}
 	a, err := s.api.GetXpubAddress(req.Descriptor, req.Page, req.PageSize, opt, &filter, 0)
 	if err != nil {

@@ -5,6 +5,7 @@ import (
 	"blockbook/bchain/coins/btc"
 	"encoding/hex"
 	"encoding/json"
+	"math/big"
 
 	"github.com/golang/glog"
 	"github.com/juju/errors"
@@ -33,10 +34,11 @@ func NewBCashRPC(config json.RawMessage, pushHandler func(bchain.NotificationTyp
 
 // Initialize initializes BCashRPC instance.
 func (b *BCashRPC) Initialize() error {
-	chainName, err := b.GetChainInfoAndInitializeMempool(b)
+	ci, err := b.GetChainInfo()
 	if err != nil {
 		return err
 	}
+	chainName := ci.Chain
 
 	params := GetChainParams(chainName)
 
@@ -160,4 +162,42 @@ func (b *BCashRPC) GetBlockFull(hash string) (*bchain.Block, error) {
 func isErrBlockNotFound(err *bchain.RPCError) bool {
 	return err.Message == "Block not found" ||
 		err.Message == "Block height out of range"
+}
+
+// EstimateFee returns fee estimation
+func (b *BCashRPC) EstimateFee(blocks int) (big.Int, error) {
+	//  from version BitcoinABC version 0.19.1 EstimateFee does not support parameter Blocks
+	if b.ChainConfig.CoinShortcut == "BCHSV" {
+		return b.BitcoinRPC.EstimateFee(blocks)
+	}
+
+	glog.V(1).Info("rpc: estimatefee ", blocks)
+
+	res := btc.ResEstimateFee{}
+	req := struct {
+		Method string `json:"method"`
+	}{
+		Method: "estimatefee",
+	}
+
+	err := b.Call(&req, &res)
+
+	var r big.Int
+	if err != nil {
+		return r, err
+	}
+	if res.Error != nil {
+		return r, res.Error
+	}
+	r, err = b.Parser.AmountToBigInt(res.Result)
+	if err != nil {
+		return r, err
+	}
+	return r, nil
+}
+
+// EstimateSmartFee returns fee estimation
+func (b *BCashRPC) EstimateSmartFee(blocks int, conservative bool) (big.Int, error) {
+	// EstimateSmartFee is not supported by bcash
+	return b.EstimateFee(blocks)
 }

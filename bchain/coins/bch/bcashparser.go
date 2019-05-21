@@ -71,13 +71,7 @@ func NewBCashParser(params *chaincfg.Params, c *btc.Configuration) (*BCashParser
 		return nil, fmt.Errorf("Unknown address format: %s", c.AddressFormat)
 	}
 	p := &BCashParser{
-		BitcoinParser: &btc.BitcoinParser{
-			BaseParser: &bchain.BaseParser{
-				BlockAddressesToKeep: c.BlockAddressesToKeep,
-				AmountDecimalPoint:   8,
-			},
-			Params: params,
-		},
+		BitcoinParser: btc.NewBitcoinParser(params, c),
 		AddressFormat: format,
 	}
 	p.OutputScriptToAddressesFunc = p.outputScriptToAddresses
@@ -166,7 +160,7 @@ func (p *BCashParser) outputScriptToAddresses(script []byte) ([]string, bool, er
 		// do not return unknown script type error as error
 		if err.Error() == "unknown script type" {
 			// try OP_RETURN script
-			or := btc.TryParseOPReturn(script)
+			or := p.TryParseOPReturn(script)
 			if or != "" {
 				return []string{or}, false, nil
 			}

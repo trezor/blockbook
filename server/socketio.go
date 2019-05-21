@@ -26,14 +26,15 @@ type SocketIoServer struct {
 	txCache     *db.TxCache
 	chain       bchain.BlockChain
 	chainParser bchain.BlockChainParser
+	mempool     bchain.Mempool
 	metrics     *common.Metrics
 	is          *common.InternalState
 	api         *api.Worker
 }
 
 // NewSocketIoServer creates new SocketIo interface to blockbook and returns its handle
-func NewSocketIoServer(db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxCache, metrics *common.Metrics, is *common.InternalState) (*SocketIoServer, error) {
-	api, err := api.NewWorker(db, chain, txCache, is)
+func NewSocketIoServer(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, txCache *db.TxCache, metrics *common.Metrics, is *common.InternalState) (*SocketIoServer, error) {
+	api, err := api.NewWorker(db, chain, mempool, txCache, is)
 	if err != nil {
 		return nil, err
 	}
@@ -64,6 +65,7 @@ func NewSocketIoServer(db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxCa
 		txCache:     txCache,
 		chain:       chain,
 		chainParser: chain.GetChainParser(),
+		mempool:     mempool,
 		metrics:     metrics,
 		is:          is,
 		api:         api,
@@ -224,7 +226,7 @@ func (s *SocketIoServer) getAddressTxids(addr []string, opts *addrOpts) (res res
 				return res, err
 			}
 		} else {
-			o, err := s.chain.GetMempoolTransactions(address)
+			o, err := s.mempool.GetTransactions(address)
 			if err != nil {
 				return res, err
 			}
@@ -326,13 +328,15 @@ func txToResTx(tx *api.Tx) resTx {
 		outputs[i] = output
 	}
 	var h int
+	var blocktime int64
 	if tx.Confirmations == 0 {
 		h = -1
 	} else {
 		h = int(tx.Blockheight)
+		blocktime = tx.Blocktime
 	}
 	return resTx{
-		BlockTimestamp: tx.Blocktime,
+		BlockTimestamp: blocktime,
 		FeeSatoshis:    tx.FeesSat.AsInt64(),
 		Hash:           tx.Txid,
 		Height:         h,

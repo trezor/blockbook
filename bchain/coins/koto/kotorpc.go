@@ -28,10 +28,11 @@ func NewKotoRPC(config json.RawMessage, pushHandler func(bchain.NotificationType
 
 // Initialize initializes KotoRPC instance.
 func (z *KotoRPC) Initialize() error {
-	chainName, err := z.GetChainInfoAndInitializeMempool(z)
+	ci, err := z.GetChainInfo()
 	if err != nil {
 		return err
 	}
+	chainName := ci.Chain
 
 	params := GetChainParams(chainName)
 

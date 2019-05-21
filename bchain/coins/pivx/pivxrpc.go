@@ -32,10 +32,11 @@ func NewPivXRPC(config json.RawMessage, pushHandler func(bchain.NotificationType
 
 // Initialize initializes PivXRPC instance.
 func (b *PivXRPC) Initialize() error {
-	chainName, err := b.GetChainInfoAndInitializeMempool(b)
+	ci, err := b.GetChainInfo()
 	if err != nil {
 		return err
 	}
+	chainName := ci.Chain
 
 	glog.Info("Chain name ", chainName)
 	params := GetChainParams(chainName)

@@ -4,6 +4,7 @@ import (
 	"blockbook/bchain"
 	"blockbook/bchain/coins/btc"
 	"encoding/json"
+
 	"github.com/golang/glog"
 )
 
@@ -30,10 +31,11 @@ func NewQtumRPC(config json.RawMessage, pushHandler func(bchain.NotificationType
 
 // Initialize initializes QtumRPC instance.
 func (b *QtumRPC) Initialize() error {
-	chainName, err := b.GetChainInfoAndInitializeMempool(b)
+	ci, err := b.GetChainInfo()
 	if err != nil {
 		return err
 	}
+	chainName := ci.Chain
 
 	params := GetChainParams(chainName)
 

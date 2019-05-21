@@ -1,7 +1,7 @@
 {
   "coin": {
     "name": "Qtum Testnet",
-    "shortcut": "TQTUM",
+    "shortcut": "tQTUM",
     "label": "Qtum Testnet",
     "alias": "qtum_testnet"
   },
@@ -22,10 +22,10 @@
     "package_name": "backend-qtum-testnet",
     "package_revision": "satoshilabs-1",
     "system_user": "qtum",
-    "version": "0.17.2",
-    "binary_url": "https://github.com/qtumproject/qtum/releases/download/mainnet-ignition-v0.17.2/qtum-0.17.2-x86_64-linux-gnu.tar.gz",
+    "version": "0.17.5",
+    "binary_url": "https://github.com/qtumproject/qtum/releases/download/mainnet-ignition-v0.17.5/qtum-0.17.5-x86_64-linux-gnu.tar.gz",
     "verification_type": "sha256",
-    "verification_source": "f51926bf704c541e3ead5e5a14da6a4807cb7b761c23830aa37f044824e4fb33",
+    "verification_source": "824bb5963056ff03c1546ed857193960ca9560f5b15ec664a3970978c9267542",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
       "bin/qtum-qt"

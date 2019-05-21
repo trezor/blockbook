@@ -19,6 +19,7 @@ const (
 	outputFile = "docs/ports.md"
 )
 
+// PortInfo contains backend and blockbook ports
 type PortInfo struct {
 	CoinName              string
 	BlockbookInternalPort uint16
@@ -27,8 +28,10 @@ type PortInfo struct {
 	BackendServicePorts   map[string]uint16
 }
 
+// PortInfoSlice is self describing
 type PortInfoSlice []*PortInfo
 
+// Config contains coin configuration
 type Config struct {
 	Coin struct {
 		Name  string `json:"name"`

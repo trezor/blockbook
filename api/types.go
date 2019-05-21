@@ -291,11 +291,22 @@ type Blocks struct {
 	Blocks []db.BlockInfo `json:"blocks"`
 }
 
+// BlockInfo contains extended block header data and a list of block txids
+type BlockInfo struct {
+	bchain.BlockHeader
+	Version    json.Number `json:"version"`
+	MerkleRoot string      `json:"merkleroot"`
+	Nonce      string      `json:"nonce"`
+	Bits       string      `json:"bits"`
+	Difficulty string      `json:"difficulty"`
+	Txids      []string    `json:"tx,omitempty"`
+}
+
 // Block contains information about block
 type Block struct {
 	Paging
-	bchain.BlockInfo
-	TxCount      int   `json:"TxCount"`
+	BlockInfo
+	TxCount      int   `json:"txCount"`
 	Transactions []*Tx `json:"txs,omitempty"`
 }
 
@@ -325,4 +336,17 @@ type BlockbookInfo struct {
 type SystemInfo struct {
 	Blockbook *BlockbookInfo    `json:"blockbook"`
 	Backend   *bchain.ChainInfo `json:"backend"`
+}
+
+// MempoolTxid contains information about a transaction in mempool
+type MempoolTxid struct {
+	Time int64  `json:"time"`
+	Txid string `json:"txid"`
+}
+
+// MempoolTxids contains a list of mempool txids with paging information
+type MempoolTxids struct {
+	Paging
+	Mempool     []MempoolTxid `json:"mempool"`
+	MempoolSize int           `json:"mempoolSize"`
 }

@@ -185,16 +185,34 @@ type Erc20Transfer struct {
 	Tokens   big.Int
 }
 
+// MempoolTxidEntry contains mempool txid with first seen time
+type MempoolTxidEntry struct {
+	Txid string
+	Time uint32
+}
+
+// MempoolTxidEntries is array of MempoolTxidEntry
+type MempoolTxidEntries []MempoolTxidEntry
+
 // OnNewBlockFunc is used to send notification about a new block
 type OnNewBlockFunc func(hash string, height uint32)
 
 // OnNewTxAddrFunc is used to send notification about a new transaction/address
 type OnNewTxAddrFunc func(tx *Tx, desc AddressDescriptor)
 
+// AddrDescForOutpointFunc defines function that returns address descriptorfor given outpoint or nil if outpoint not found
+type AddrDescForOutpointFunc func(outpoint Outpoint) AddressDescriptor
+
 // BlockChain defines common interface to block chain daemon
 type BlockChain interface {
 	// life-cycle methods
+	// initialize the block chain connector
 	Initialize() error
+	// create mempool but do not initialize it
+	CreateMempool(BlockChain) (Mempool, error)
+	// initialize mempool, create ZeroMQ (or other) subscription
+	InitializeMempool(AddrDescForOutpointFunc, OnNewTxAddrFunc) error
+	// shutdown mempool, ZeroMQ and block chain connections
 	Shutdown(ctx context.Context) error
 	// chain info
 	IsTestnet() bool
@@ -209,17 +227,13 @@ type BlockChain interface {
 	GetBlockHeader(hash string) (*BlockHeader, error)
 	GetBlock(hash string, height uint32) (*Block, error)
 	GetBlockInfo(hash string) (*BlockInfo, error)
-	GetMempool() ([]string, error)
+	GetMempoolTransactions() ([]string, error)
 	GetTransaction(txid string) (*Tx, error)
 	GetTransactionForMempool(txid string) (*Tx, error)
 	GetTransactionSpecific(tx *Tx) (json.RawMessage, error)
 	EstimateSmartFee(blocks int, conservative bool) (big.Int, error)
 	EstimateFee(blocks int) (big.Int, error)
 	SendRawTransaction(tx string) (string, error)
-	// mempool
-	ResyncMempool(onNewTxAddr OnNewTxAddrFunc) (int, error)
-	GetMempoolTransactions(address string) ([]Outpoint, error)
-	GetMempoolTransactionsForAddrDesc(addrDesc AddressDescriptor) ([]Outpoint, error)
 	GetMempoolEntry(txid string) (*MempoolEntry, error)
 	// parser
 	GetChainParser() BlockChainParser
@@ -269,4 +283,13 @@ type BlockChainParser interface {
 	DeriveAddressDescriptorsFromTo(xpub string, change uint32, fromIndex uint32, toIndex uint32) ([]AddressDescriptor, error)
 	// EthereumType specific
 	EthereumTypeGetErc20FromTx(tx *Tx) ([]Erc20Transfer, error)
+}
+
+// Mempool defines common interface to mempool
+type Mempool interface {
+	Resync() (int, error)
+	GetTransactions(address string) ([]Outpoint, error)
+	GetAddrDescTransactions(addrDesc AddressDescriptor) ([]Outpoint, error)
+	GetAllEntries() MempoolTxidEntries
+	GetTransactionTime(txid string) uint32
 }

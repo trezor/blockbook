@@ -34,10 +34,11 @@ func NewDashRPC(config json.RawMessage, pushHandler func(bchain.NotificationType
 
 // Initialize initializes DashRPC instance.
 func (b *DashRPC) Initialize() error {
-	chainName, err := b.GetChainInfoAndInitializeMempool(b)
+	ci, err := b.GetChainInfo()
 	if err != nil {
 		return err
 	}
+	chainName := ci.Chain
 
 	params := GetChainParams(chainName)
 
