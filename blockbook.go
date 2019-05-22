@@ -496,7 +496,12 @@ func syncIndexLoop() {
 	// resync index about every 15 minutes if there are no chanSyncIndex requests, with debounce 1 second
 	tickAndDebounce(time.Duration(*resyncIndexPeriodMs)*time.Millisecond, debounceResyncIndexMs*time.Millisecond, chanSyncIndex, func() {
 		if err := syncWorker.ResyncIndex(onNewBlockHash, false); err != nil {
-			glog.Error("syncIndexLoop ", errors.ErrorStack(err))
+			glog.Error("syncIndexLoop ", errors.ErrorStack(err), ", will retry...")
+			// retry once in case of random network error, after a slight delay
+			time.Sleep(time.Millisecond * 2500)
+			if err := syncWorker.ResyncIndex(onNewBlockHash, false); err != nil {
+				glog.Error("syncIndexLoop ", errors.ErrorStack(err))
+			}
 		}
 	})
 	glog.Info("syncIndexLoop stopped")
