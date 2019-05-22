@@ -25,7 +25,7 @@ Socket.io interface is provided at `/socket.io/`. The interface also can be expl
 
 The legacy API is provided as is and will not be further developed.
 
-The legacy API is currently (Blockbook v0.2.1) also accessible without the */v1/* prefix, however in the future versions the version less access will be removed.
+The legacy API is currently (Blockbook v0.3.0) also accessible without the */v1/* prefix, however in the future versions the version less access will be removed.
 
 ## API V2
 
@@ -41,6 +41,7 @@ Common principles used in API V2:
 
 The following methods are supported:
 
+- [Status](#status)
 - [Get block hash](#get-block-hash)
 - [Get transaction](#get-transaction)
 - [Get transaction specific](#get-transaction-specific)
@@ -49,6 +50,50 @@ The following methods are supported:
 - [Get utxo](#get-utxo)
 - [Get block](#get-block)
 - [Send transaction](#send-transaction)
+
+#### Status page
+Status page returns current status of Blockbook and connected backend.
+```
+GET /api
+```
+
+Response:
+
+```javascript
+{
+  "blockbook": {
+    "coin": "Bitcoin",
+    "host": "blockbook",
+    "version": "0.3.0",
+    "gitCommit": "3d9ad91",
+    "buildTime": "2019-05-17T14:34:00+00:00",
+    "syncMode": true,
+    "initialSync": false,
+    "inSync": true,
+    "bestHeight": 577261,
+    "lastBlockTime": "2019-05-22T18:03:33.547762973+02:00",
+    "inSyncMempool": true,
+    "lastMempoolTime": "2019-05-22T18:10:10.27929383+02:00",
+    "mempoolSize": 17348,
+    "decimals": 8,
+    "dbSize": 191887866502,
+    "about": "Blockbook - blockchain indexer for TREZOR wallet https://trezor.io/. Do not use for any other purpose."
+  },
+  "backend": {
+    "chain": "main",
+    "blocks": 577261,
+    "headers": 577261,
+    "bestBlockHash": "0000000000000000000ca8c902aa58b3118a7f35d093e25a07f17bcacd91cabf",
+    "difficulty": "6704632680587.417",
+    "sizeOnDisk": 250504188580,
+    "version": "180000",
+    "subversion": "/Satoshi:0.18.0/",
+    "protocolVersion": "70015",
+    "timeOffset": 0,
+    "warnings": ""
+  }
+}
+```
 
 #### Get block hash
 ```
@@ -106,10 +151,10 @@ Response for Bitcoin-type coins:
       ]
     }
   ],
-  "blockhash": "78d1f3de899a10dd2e580704226ebf9508e95e1706f177fc9c31c47f245d2502",
-  "blockheight": 2647927,
+  "blockHash": "78d1f3de899a10dd2e580704226ebf9508e95e1706f177fc9c31c47f245d2502",
+  "blockHeight": 2647927,
   "confirmations": 1,
-  "blocktime": 1553088212,
+  "blockTime": 1553088212,
   "value": "55795008999999",
   "valueIn": "55795108999999",
   "fees": "100000000",
@@ -117,7 +162,7 @@ Response for Bitcoin-type coins:
 }
 ```
 
-Response for Ethereum-type coins. There is always only one *vin*, only one *vout*, possibly an array of *tokentransfers* and *ethereumspecific* part. Missing is *hex* field:
+Response for Ethereum-type coins. There is always only one *vin*, only one *vout*, possibly an array of *tokenTransfers* and *ethereumSpecific* part. Missing is *hex* field:
 
 ```javascript
 {
@@ -139,13 +184,13 @@ Response for Ethereum-type coins. There is always only one *vin*, only one *vout
       ]
     }
   ],
-  "blockhash": "0x39df7fb0893200e1e78c04f98691637a89b64e7a3edd96c16f2537e2fd56c414",
-  "blockheight": 5241585,
+  "blockHash": "0x39df7fb0893200e1e78c04f98691637a89b64e7a3edd96c16f2537e2fd56c414",
+  "blockHeight": 5241585,
   "confirmations": 3,
-  "blocktime": 1553088337,
+  "blockTime": 1553088337,
   "value": "0",
   "fees": "402501000000000",
-  "tokentransfers": [
+  "tokenTransfers": [
     {
       "type": "ERC20",
       "from": "0x9c2e011c0ce0d75c2b62b9c5a0ba0a7456593803",
@@ -157,18 +202,18 @@ Response for Ethereum-type coins. There is always only one *vin*, only one *vout
       "value": "133800000"
     }
   ],
-  "ethereumspecific": {
+  "ethereumSpecific": {
     "status": 1,
     "nonce": 2830,
-    "gaslimit": 36591,
-    "gasused": 36591,
-    "gasprice": "11000000000"
+    "gasLimit": 36591,
+    "gasUsed": 36591,
+    "gasPrice": "11000000000"
   }
 }
 ```
 
-A note about the `blocktime` field:
-- for already mined transaction (`confirmations > 0`), the field `blocktime` contains time of the block
+A note about the `blockTime` field:
+- for already mined transaction (`confirmations > 0`), the field `blockTime` contains time of the block
 - for transactions in mempool (`confirmations == 0`), the field contains time when the running instance of Blockbook was first time notified about the transaction. This time may be different in different instances of Blockbook.
 
 #### Get transaction specific
@@ -179,7 +224,7 @@ Returns transaction data in the exact format as returned by backend, including a
 GET /api/v2/tx-specific/<txid>
 ```
 
-Response:
+Example response:
 
 ```javascript
 {
@@ -353,6 +398,8 @@ Note: *totalTokens* always returns total number of **used** addresses of xpub.
 
 Returns array of unspent transaction outputs of address or xpub, applicable only for Bitcoin-type coins. By default, the list contains both confirmed and unconfirmed transactions. The query parameter *confirmed=true* disables return of unconfirmed transactions. The returned utxos are sorted by block height, newest blocks first. For xpubs the response also contains address and derivation path of the utxo.
 
+Unconfirmed utxos do not have field *height*, the field *confirmations* has value *0* and may contain field *lockTime*, if not zero.
+
 ```
 GET /api/v2/utxo/<address|xpub>[?confirmed=true]
 ```
@@ -365,8 +412,8 @@ Response:
     "txid": "13d26cd939bf5d155b1c60054e02d9c9b832a85e6ec4f2411be44b6b5a2842e9",
     "vout": 0,
     "value": "1422303206539",
-    "height": 2648082,
-    "confirmations": 8
+    "confirmations": 0,
+    "lockTime": 2648100
   },
   {
     "txid": "de4f379fdc3ea9be063e60340461a014f372a018d70c3db35701654e7066b3ef",
@@ -401,14 +448,14 @@ Response:
   "totalPages": 1,
   "itemsOnPage": 1000,
   "hash": "760f8ed32894ccce9c1ea11c8a019cadaa82bcb434b25c30102dd7e43f326217",
-  "previousblockhash": "786a1f9f38493d32fd9f9c104d748490a070bc74a83809103bcadd93ae98288f",
-  "nextblockhash": "151615691b209de41dda4798a07e62db8429488554077552ccb1c4f8c7e9f57a",
+  "previousBlockHash": "786a1f9f38493d32fd9f9c104d748490a070bc74a83809103bcadd93ae98288f",
+  "nextBlockHash": "151615691b209de41dda4798a07e62db8429488554077552ccb1c4f8c7e9f57a",
   "height": 2648059,
   "confirmations": 47,
   "size": 951,
   "time": 1553096617,
   "version": 6422787,
-  "merkleroot": "6783f6083788c4f69b8af23bd2e4a194cf36ac34d590dfd97e510fe7aebc72c8",
+  "merkleRoot": "6783f6083788c4f69b8af23bd2e4a194cf36ac34d590dfd97e510fe7aebc72c8",
   "nonce": "0",
   "bits": "1a063f3b",
   "difficulty": "2685605.260733312",
@@ -431,10 +478,10 @@ Response:
           ]
         }
       ],
-      "blockhash": "760f8ed32894ccce9c1ea11c8a019cadaa82bcb434b25c30102dd7e43f326217",
-      "blockheight": 2648059,
+      "blockHash": "760f8ed32894ccce9c1ea11c8a019cadaa82bcb434b25c30102dd7e43f326217",
+      "blockHeight": 2648059,
       "confirmations": 47,
-      "blocktime": 1553096617,
+      "blockTime": 1553096617,
       "value": "1000100000000",
       "valueIn": "0",
       "fees": "0"
@@ -467,10 +514,10 @@ Response:
           ]
         }
       ],
-      "blockhash": "760f8ed32894ccce9c1ea11c8a019cadaa82bcb434b25c30102dd7e43f326217",
-      "blockheight": 2648059,
+      "blockHash": "760f8ed32894ccce9c1ea11c8a019cadaa82bcb434b25c30102dd7e43f326217",
+      "blockHeight": 2648059,
       "confirmations": 47,
-      "blocktime": 1553096617,
+      "blockTime": 1553096617,
       "value": "1277495845202",
       "valueIn": "1277595845202",
       "fees": "100000000"
@@ -508,4 +555,22 @@ or in case of error
 
 ### Websocket API
 
-Websocket interface is provided at `/websocket/`. The interface also can be explored using Blockbook Websocket Test Page found at `/test-websocket.html`.
+Websocket interface is provided at `/websocket/`. The interface can be explored using Blockbook Websocket Test Page found at `/test-websocket.html`.
+
+The websocket interface provides the following requests:
+
+- getInfo
+- getBlockHash
+- getAccountInfo
+- getAccountUtxo
+- getTransaction
+- getTransactionSpecific
+- estimateFee
+- sendTransaction
+
+The client can subscribe to the following events:
+
+- new block added to blockchain
+- new transaction for given address (list of addresses)
+
+There can be always only one subscription of given event per connection, i.e. new list of addresses replaces previous list of addresses.
