@@ -523,10 +523,10 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses add
 				if err != nil {
 					// do not log ErrAddressMissing, transactions can be without to address (for example eth contracts)
 					if err != bchain.ErrAddressMissing {
-						glog.Warningf("rocksdb: addrDesc: %v - height %d, tx %v, output %v", err, block.Height, tx.Txid, output)
+						glog.Warningf("rocksdb: addrDesc: %v - height %d, tx %v, output %v, error %v", err, block.Height, tx.Txid, output, err)
 					}
 				} else {
-					glog.Infof("rocksdb: height %d, tx %v, vout %v, skipping addrDesc of length %d", block.Height, tx.Txid, i, len(addrDesc))
+					glog.V(1).Infof("rocksdb: height %d, tx %v, vout %v, skipping addrDesc of length %d", block.Height, tx.Txid, i, len(addrDesc))
 				}
 				continue
 			}
@@ -609,7 +609,7 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses add
 			spentOutput.Spent = true
 			if len(spentOutput.AddrDesc) == 0 {
 				if !logged {
-					glog.Warningf("rocksdb: height %d, tx %v, input tx %v vout %v skipping empty address", block.Height, tx.Txid, input.Txid, input.Vout)
+					glog.V(1).Infof("rocksdb: height %d, tx %v, input tx %v vout %v skipping empty address", block.Height, tx.Txid, input.Txid, input.Vout)
 					logged = true
 				}
 				continue
