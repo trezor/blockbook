@@ -967,6 +967,9 @@ func (w *Worker) GetBlock(bid string, page int, txsOnPage int) (*Block, error) {
 	} else {
 		hash = bid
 	}
+	if hash == "" {
+		return nil, NewAPIError("Block not found", true)
+	}
 	bi, err := w.chain.GetBlockInfo(hash)
 	if err != nil {
 		if err == bchain.ErrBlockNotFound {
