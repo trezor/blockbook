@@ -51,9 +51,11 @@ func setupRocksDB(t *testing.T, parser bchain.BlockChainParser) (*db.RocksDB, *c
 	if err := d.ConnectBlock(dbtestdata.GetTestBitcoinTypeBlock1(parser)); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.ConnectBlock(dbtestdata.GetTestBitcoinTypeBlock2(parser)); err != nil {
+	block2 := dbtestdata.GetTestBitcoinTypeBlock2(parser)
+	if err := d.ConnectBlock(block2); err != nil {
 		t.Fatal(err)
 	}
+	is.FinishedSync(block2.Height)
 	return d, is, tmp
 }
 
@@ -73,7 +75,6 @@ func setupPublicHTTPServer(t *testing.T) (*PublicServer, string) {
 	is.Coin = "Fakecoin"
 	is.CoinLabel = "Fake Coin"
 	is.CoinShortcut = "FAKE"
-	is.BestHeight = 225494
 
 	metrics, err := common.GetMetrics("Fakecoin")
 	if err != nil {

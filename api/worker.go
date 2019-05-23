@@ -176,7 +176,11 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height uint32, 
 					}
 					// mempool transactions are not in TxAddresses but confirmed should be there, log a problem
 					if bchainTx.Confirmations > 0 {
-						glog.Warning("DB inconsistency:  tx ", bchainVin.Txid, ": not found in txAddresses")
+						inSync, _, _ := w.is.GetSyncState()
+						// backend can report tx as confirmed, however blockbook is still syncing (!inSync), in this case do not log a problem
+						if bchainTx.Confirmations != 1 || inSync {
+							glog.Warning("DB inconsistency:  tx ", bchainVin.Txid, ": not found in txAddresses")
+						}
 					}
 					if len(otx.Vout) > int(vin.Vout) {
 						vout := &otx.Vout[vin.Vout]
@@ -610,21 +614,25 @@ func (w *Worker) txFromTxid(txid string, bestheight uint32, option AccountDetail
 		}
 		if ta == nil {
 			glog.Warning("DB inconsistency:  tx ", txid, ": not found in txAddresses")
-			// as fallback, provide empty TxAddresses to return at least something
-			ta = &db.TxAddresses{}
-		}
-		if blockInfo == nil {
-			blockInfo, err = w.db.GetBlockInfo(ta.Height)
+			// as fallback, get tx from backend
+			tx, err = w.GetTransaction(txid, false, true)
 			if err != nil {
-				return nil, errors.Annotatef(err, "GetBlockInfo %v", ta.Height)
+				return nil, errors.Annotatef(err, "GetTransaction %v", txid)
 			}
+		} else {
 			if blockInfo == nil {
-				glog.Warning("DB inconsistency:  block height ", ta.Height, ": not found in db")
-				// provide empty BlockInfo to return the rest of tx data
-				blockInfo = &db.BlockInfo{}
+				blockInfo, err = w.db.GetBlockInfo(ta.Height)
+				if err != nil {
+					return nil, errors.Annotatef(err, "GetBlockInfo %v", ta.Height)
+				}
+				if blockInfo == nil {
+					glog.Warning("DB inconsistency:  block height ", ta.Height, ": not found in db")
+					// provide empty BlockInfo to return the rest of tx data
+					blockInfo = &db.BlockInfo{}
+				}
 			}
+			tx = w.txFromTxAddress(txid, ta, blockInfo, bestheight)
 		}
-		tx = w.txFromTxAddress(txid, ta, blockInfo, bestheight)
 	} else {
 		tx, err = w.GetTransaction(txid, false, true)
 		if err != nil {
@@ -787,7 +795,19 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 	return r, nil
 }
 
+func (w *Worker) waitForBackendSync() {
+	// wait a short time if blockbook is synchronizing with backend
+	inSync, _, _ := w.is.GetSyncState()
+	count := 30
+	for !inSync && count > 0 {
+		time.Sleep(time.Millisecond * 100)
+		count--
+		inSync, _, _ = w.is.GetSyncState()
+	}
+}
+
 func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *db.AddrBalance, onlyConfirmed bool, onlyMempool bool) (Utxos, error) {
+	w.waitForBackendSync()
 	var err error
 	r := make(Utxos, 0, 8)
 	spentInMempool := make(map[string]struct{})
