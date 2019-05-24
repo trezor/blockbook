@@ -8,16 +8,19 @@ import (
 	"blockbook/common"
 	"blockbook/db"
 	"blockbook/tests/dbtestdata"
+	"encoding/json"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/golang/glog"
+	"github.com/gorilla/websocket"
 	"github.com/martinboehm/btcutil/chaincfg"
 	gosocketio "github.com/martinboehm/golang-socketio"
 	"github.com/martinboehm/golang-socketio/transport"
@@ -143,7 +146,7 @@ func newPostRequest(u string, body string) *http.Request {
 	return r
 }
 
-func httpTests_BitcoinType(t *testing.T, ts *httptest.Server) {
+func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 	tests := []struct {
 		name        string
 		r           *http.Request
@@ -667,7 +670,7 @@ func httpTests_BitcoinType(t *testing.T, ts *httptest.Server) {
 	}
 }
 
-func socketioTests_BitcoinType(t *testing.T, ts *httptest.Server) {
+func socketioTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 	type socketioReq struct {
 		Method string        `json:"method"`
 		Params []interface{} `json:"params"`
@@ -768,6 +771,220 @@ func socketioTests_BitcoinType(t *testing.T, ts *httptest.Server) {
 	}
 }
 
+func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
+	type websocketReq struct {
+		ID     string      `json:"id"`
+		Method string      `json:"method"`
+		Params interface{} `json:"params,omitempty"`
+	}
+	type websocketResp struct {
+		ID string `json:"id"`
+	}
+	url := strings.Replace(ts.URL, "http://", "ws://", 1) + "/websocket"
+	s, _, err := websocket.DefaultDialer.Dial(url, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	tests := []struct {
+		name string
+		req  websocketReq
+		want string
+	}{
+		{
+			name: "getInfo",
+			req: websocketReq{
+				Method: "getInfo",
+			},
+			want: `{"id":"0","data":{"name":"Fakecoin","shortcut":"FAKE","decimals":8,"version":"unknown","bestHeight":225494,"bestHash":"00000000eb0443fd7dc4a1ed5c686a8e995057805f9a161d9a5a77a95e72b7b6","block0Hash":"","testnet":true}}`,
+		},
+		{
+			name: "getBlockHash",
+			req: websocketReq{
+				Method: "getBlockHash",
+				Params: map[string]interface{}{
+					"height": 225494,
+				},
+			},
+			want: `{"id":"1","data":{"hash":"00000000eb0443fd7dc4a1ed5c686a8e995057805f9a161d9a5a77a95e72b7b6"}}`,
+		},
+		{
+			name: "getAccountInfo",
+			req: websocketReq{
+				Method: "getAccountInfo",
+				Params: map[string]interface{}{
+					"descriptor": dbtestdata.Xpub,
+					"details":    "txs",
+				},
+			},
+			want: `{"id":"2","data":{"page":1,"totalPages":1,"itemsOnPage":25,"address":"upub5E1xjDmZ7Hhej6LPpS8duATdKXnRYui7bDYj6ehfFGzWDZtmCmQkZhc3Zb7kgRLtHWd16QFxyP86JKL3ShZEBFX88aciJ3xyocuyhZZ8g6q","balance":"118641975500","totalReceived":"118641975501","totalSent":"1","unconfirmedBalance":"0","unconfirmedTxs":0,"txs":2,"transactions":[{"txid":"3d90d15ed026dc45e19ffb52875ed18fa9e8012ad123d7f7212176e2b0ebdb71","vin":[{"txid":"7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25","n":0,"addresses":["mzB8cYrfRwFRFAGTDzV8LkUQy5BQicxGhX"],"value":"317283951061"},{"txid":"effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75","vout":1,"n":1,"addresses":["2MzmAKayJmja784jyHvRUW1bXPget1csRRG"],"value":"1"}],"vout":[{"value":"118641975500","n":0,"hex":"a91495e9fbe306449c991d314afe3c3567d5bf78efd287","addresses":["2N6utyMZfPNUb1Bk8oz7p2JqJrXkq83gegu"]},{"value":"198641975500","n":1,"hex":"76a9143f8ba3fda3ba7b69f5818086e12223c6dd25e3c888ac","addresses":["mmJx9Y8ayz9h14yd9fgCW1bUKoEpkBAquP"]}],"blockHash":"00000000eb0443fd7dc4a1ed5c686a8e995057805f9a161d9a5a77a95e72b7b6","blockHeight":225494,"confirmations":1,"blockTime":22549400001,"value":"317283951000","valueIn":"317283951062","fees":"62"},{"txid":"effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75","vin":[],"vout":[{"value":"1234567890123","n":0,"spent":true,"hex":"76a914a08eae93007f22668ab5e4a9c83c8cd1c325e3e088ac","addresses":["mv9uLThosiEnGRbVPS7Vhyw6VssbVRsiAw"]},{"value":"1","n":1,"spent":true,"hex":"a91452724c5178682f70e0ba31c6ec0633755a3b41d987","addresses":["2MzmAKayJmja784jyHvRUW1bXPget1csRRG"]},{"value":"9876","n":2,"spent":true,"hex":"a914e921fc4912a315078f370d959f2c4f7b6d2a683c87","addresses":["2NEVv9LJmAnY99W1pFoc5UJjVdypBqdnvu1"]}],"blockHash":"0000000076fbbed90fd75b0e18856aa35baa984e9c9d444cf746ad85e94e2997","blockHeight":225493,"confirmations":2,"blockTime":22549300001,"value":"1234567900000","valueIn":"0","fees":"0"}],"totalTokens":2,"tokens":[{"type":"XPUBAddress","name":"2MzmAKayJmja784jyHvRUW1bXPget1csRRG","path":"m/49'/1'/33'/0/0","transfers":2,"decimals":8,"balance":"0","totalReceived":"1","totalSent":"1"},{"type":"XPUBAddress","name":"2MsYfbi6ZdVXLDNrYAQ11ja9Sd3otMk4Pmj","path":"m/49'/1'/33'/0/1","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2MuAZNAjLSo6RLFad2fvHSfgqBD7BoEVy4T","path":"m/49'/1'/33'/0/2","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2NEqKzw3BosGnBE9by5uaDy5QgwjHac4Zbg","path":"m/49'/1'/33'/0/3","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2Mw7vJNC8zUK6VNN4CEjtoTYmuNPLewxZzV","path":"m/49'/1'/33'/0/4","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2N1kvo97NFASPXiwephZUxE9PRXunjTxEc4","path":"m/49'/1'/33'/0/5","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2MuWrWMzoBt8VDFNvPmpJf42M1GTUs85fPx","path":"m/49'/1'/33'/0/6","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2MuVZ2Ca6Da9zmYynt49Rx7uikAgubGcymF","path":"m/49'/1'/33'/0/7","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2MzRGWDUmrPP9HwYu4B43QGCTLwoop5cExa","path":"m/49'/1'/33'/0/8","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2N5C9EEWJzyBXhpyPHqa3UNed73Amsi5b3L","path":"m/49'/1'/33'/0/9","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2MzNawz2zjwq1L85GDE3YydEJGJYfXxaWkk","path":"m/49'/1'/33'/0/10","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2N7NdeuAMgL57WE7QCeV2gTWi2Um8iAu5dA","path":"m/49'/1'/33'/0/11","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2N8JQEP6DSHEZHNsSDPA1gHMUq9YFndhkfV","path":"m/49'/1'/33'/0/12","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2Mvbn3YXqKZVpQKugaoQrfjSYPvz76RwZkC","path":"m/49'/1'/33'/0/13","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2N8MRNxCfwUY9TSW27X9ooGYtqgrGCfLRHx","path":"m/49'/1'/33'/0/14","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2N6HvwrHC113KYZAmCtJ9XJNWgaTcnFunCM","path":"m/49'/1'/33'/0/15","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2NEo3oNyHUoi7rmRWee7wki37jxPWsWCopJ","path":"m/49'/1'/33'/0/16","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2Mzm5KY8qdFbDHsQfy4akXbFvbR3FAwDuVo","path":"m/49'/1'/33'/0/17","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2NGMwftmQCogp6XZNGvgiybz3WZysvsJzqC","path":"m/49'/1'/33'/0/18","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2N3fJrrefndYjLGycvFFfYgevpZtcRKCkRD","path":"m/49'/1'/33'/0/19","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2N1T7TnHBwfdpBoyw53EGUL7vuJmb2mU6jF","path":"m/49'/1'/33'/0/20","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2MzSBtRWHbBjeUcu3H5VRDqkvz5sfmDxJKo","path":"m/49'/1'/33'/1/0","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2MtShtAJYb1afWduUTwF1SixJjan7urZKke","path":"m/49'/1'/33'/1/1","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2N3cP668SeqyBEr9gnB4yQEmU3VyxeRYith","path":"m/49'/1'/33'/1/2","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2N6utyMZfPNUb1Bk8oz7p2JqJrXkq83gegu","path":"m/49'/1'/33'/1/3","transfers":1,"decimals":8,"balance":"118641975500","totalReceived":"118641975500","totalSent":"0"},{"type":"XPUBAddress","name":"2NEzatauNhf9kPTwwj6ZfYKjUdy52j4hVUL","path":"m/49'/1'/33'/1/4","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2N4RjsDp4LBpkNqyF91aNjgpF9CwDwBkJZq","path":"m/49'/1'/33'/1/5","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2N8XygTmQc4NoBBPEy3yybnfCYhsxFtzPDY","path":"m/49'/1'/33'/1/6","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2N5BjBomZvb48sccK2vwLMiQ5ETKp1fdPVn","path":"m/49'/1'/33'/1/7","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2MybMwbZRPCGU3SMWPwQCpDkbcQFw5Hbwen","path":"m/49'/1'/33'/1/8","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2N7HexL4dyAQc7Th4iqcCW4hZuyiZsLWf74","path":"m/49'/1'/33'/1/9","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2NF6X5FDGWrQj4nQrfP6hA77zB5WAc1DGup","path":"m/49'/1'/33'/1/10","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2N4ZRPdvc7BVioBTohy4F6QtxreqcjNj26b","path":"m/49'/1'/33'/1/11","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2Mtfho1rLmevh4qTnkYWxZEFCWteDMtTcUF","path":"m/49'/1'/33'/1/12","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2NFUCphKYvmMcNZRZrF261mRX6iADVB9Qms","path":"m/49'/1'/33'/1/13","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2N5kBNMB8qgxE4Y4f8J19fScsE49J4aNvoJ","path":"m/49'/1'/33'/1/14","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2NANWCaefhCKdXMcW8NbZnnrFRDvhJN2wPy","path":"m/49'/1'/33'/1/15","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2NFHw7Yo2Bz8D2wGAYHW9qidbZFLpfJ72qB","path":"m/49'/1'/33'/1/16","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2NBDSsBgy5PpFniLCb1eAFHcSxgxwPSDsZa","path":"m/49'/1'/33'/1/17","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2NDWCSQHogc7sCuc2WoYt9PX2i2i6a5k6dX","path":"m/49'/1'/33'/1/18","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2N8vNyDP7iSDjm3BKpXrbDjAxyphqfvnJz8","path":"m/49'/1'/33'/1/19","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2N4tFKLurSbMusAyq1tv4tzymVjveAFV1Vb","path":"m/49'/1'/33'/1/20","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2NBx5WwjAr2cH6Yqrp3Vsf957HtRKwDUVdX","path":"m/49'/1'/33'/1/21","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2NBu1seHTaFhQxbcW5L5BkZzqFLGmZqpxsa","path":"m/49'/1'/33'/1/22","transfers":0,"decimals":8},{"type":"XPUBAddress","name":"2NCDLoea22jGsXuarfT1n2QyCUh6RFhAPnT","path":"m/49'/1'/33'/1/23","transfers":0,"decimals":8}]}}`,
+		},
+		{
+			name: "getAccountInfo",
+			req: websocketReq{
+				Method: "getAccountInfo",
+				Params: map[string]interface{}{
+					"descriptor": dbtestdata.Addr4,
+					"details":    "txids",
+				},
+			},
+			want: `{"id":"3","data":{"page":1,"totalPages":1,"itemsOnPage":25,"address":"2MzmAKayJmja784jyHvRUW1bXPget1csRRG","balance":"0","totalReceived":"1","totalSent":"1","unconfirmedBalance":"0","unconfirmedTxs":0,"txs":2,"txids":["3d90d15ed026dc45e19ffb52875ed18fa9e8012ad123d7f7212176e2b0ebdb71","effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75"]}}`,
+		},
+		{
+			name: "getAccountUtxo",
+			req: websocketReq{
+				Method: "getAccountUtxo",
+				Params: map[string]interface{}{
+					"descriptor": dbtestdata.Addr1,
+				},
+			},
+			want: `{"id":"4","data":[{"txid":"00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840","vout":0,"value":"100000000","height":225493,"confirmations":2}]}`,
+		},
+		{
+			name: "getAccountUtxo",
+			req: websocketReq{
+				Method: "getAccountUtxo",
+				Params: map[string]interface{}{
+					"descriptor": dbtestdata.Addr4,
+				},
+			},
+			want: `{"id":"5","data":[]}`,
+		},
+		{
+			name: "getTransaction",
+			req: websocketReq{
+				Method: "getTransaction",
+				Params: map[string]interface{}{
+					"txid": dbtestdata.TxidB2T2,
+				},
+			},
+			want: `{"id":"6","data":{"txid":"3d90d15ed026dc45e19ffb52875ed18fa9e8012ad123d7f7212176e2b0ebdb71","vin":[{"txid":"7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25","n":0,"addresses":["mzB8cYrfRwFRFAGTDzV8LkUQy5BQicxGhX"],"value":"317283951061"},{"txid":"effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75","vout":1,"n":1,"addresses":["2MzmAKayJmja784jyHvRUW1bXPget1csRRG"],"value":"1"}],"vout":[{"value":"118641975500","n":0,"hex":"a91495e9fbe306449c991d314afe3c3567d5bf78efd287","addresses":["2N6utyMZfPNUb1Bk8oz7p2JqJrXkq83gegu"]},{"value":"198641975500","n":1,"hex":"76a9143f8ba3fda3ba7b69f5818086e12223c6dd25e3c888ac","addresses":["mmJx9Y8ayz9h14yd9fgCW1bUKoEpkBAquP"]}],"blockHash":"00000000eb0443fd7dc4a1ed5c686a8e995057805f9a161d9a5a77a95e72b7b6","blockHeight":225494,"confirmations":1,"blockTime":22549400001,"value":"317283951000","valueIn":"317283951062","fees":"62"}}`,
+		},
+		{
+			name: "getTransaction",
+			req: websocketReq{
+				Method: "getTransaction",
+				Params: map[string]interface{}{
+					"txid": "not a tx",
+				},
+			},
+			want: `{"id":"7","data":{"error":{"message":"Transaction 'not a tx' not found"}}}`,
+		},
+		{
+			name: "getTransactionSpecific",
+			req: websocketReq{
+				Method: "getTransactionSpecific",
+				Params: map[string]interface{}{
+					"txid": dbtestdata.TxidB2T2,
+				},
+			},
+			want: `{"id":"8","data":{"hex":"","txid":"3d90d15ed026dc45e19ffb52875ed18fa9e8012ad123d7f7212176e2b0ebdb71","version":0,"locktime":0,"vin":[{"coinbase":"","txid":"7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25","vout":0,"scriptSig":{"hex":""},"sequence":0,"addresses":null},{"coinbase":"","txid":"effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75","vout":1,"scriptSig":{"hex":""},"sequence":0,"addresses":null}],"vout":[{"ValueSat":118641975500,"value":0,"n":0,"scriptPubKey":{"hex":"a91495e9fbe306449c991d314afe3c3567d5bf78efd287","addresses":null}},{"ValueSat":198641975500,"value":0,"n":1,"scriptPubKey":{"hex":"76a9143f8ba3fda3ba7b69f5818086e12223c6dd25e3c888ac","addresses":null}}],"confirmations":1,"time":22549400001,"blocktime":22549400001}}`,
+		},
+		{
+			name: "estimateFee",
+			req: websocketReq{
+				Method: "estimateFee",
+				Params: map[string]interface{}{
+					"blocks": []int{2, 5, 10, 20},
+					"specific": map[string]interface{}{
+						"conservative": false,
+						"txsize":       1234,
+					},
+				},
+			},
+			want: `{"id":"9","data":[{"feePerTx":"246","feePerUnit":"199"},{"feePerTx":"616","feePerUnit":"499"},{"feePerTx":"1233","feePerUnit":"999"},{"feePerTx":"2467","feePerUnit":"1999"}]}`,
+		},
+		{
+			name: "sendTransaction",
+			req: websocketReq{
+				Method: "sendTransaction",
+				Params: map[string]interface{}{
+					"hex": "123456",
+				},
+			},
+			want: `{"id":"10","data":{"result":"9876"}}`,
+		},
+		{
+			name: "subscribeNewBlock",
+			req: websocketReq{
+				Method: "subscribeNewBlock",
+			},
+			want: `{"id":"11","data":{"subscribed":true}}`,
+		},
+		{
+			name: "unsubscribeNewBlock",
+			req: websocketReq{
+				Method: "unsubscribeNewBlock",
+			},
+			want: `{"id":"12","data":{"subscribed":false}}`,
+		},
+		{
+			name: "subscribeAddresses",
+			req: websocketReq{
+				Method: "subscribeAddresses",
+				Params: map[string]interface{}{
+					"addresses": []string{dbtestdata.Addr1, dbtestdata.Addr2},
+				},
+			},
+			want: `{"id":"13","data":{"subscribed":true}}`,
+		},
+		{
+			name: "unsubscribeAddresses",
+			req: websocketReq{
+				Method: "unsubscribeAddresses",
+			},
+			want: `{"id":"14","data":{"subscribed":false}}`,
+		},
+	}
+
+	// send all requests at once
+	for i, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.req.ID = strconv.Itoa(i)
+			err = s.WriteJSON(tt.req)
+			if err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+
+	// wait for all responses
+	done := make(chan struct{})
+
+	go func() {
+		defer close(done)
+		for i := 0; i < len(tests); i++ {
+			_, message, err := s.ReadMessage()
+			if err != nil {
+				t.Fatal(err)
+			}
+			var resp websocketResp
+			err = json.Unmarshal(message, &resp)
+			if err != nil {
+				t.Fatal(err)
+			}
+			id, err := strconv.Atoi(resp.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := strings.TrimSpace(string(message))
+			if got != tests[id].want {
+				t.Errorf("%s: got %v, want %v", tests[id].name, got, tests[id].want)
+			} else {
+				tests[id].want = "already checked, should not check twice"
+			}
+		}
+	}()
+
+	select {
+	case <-done:
+		break
+	case <-time.After(time.Second * 10):
+		t.Error("Timeout while waiting for websocket responses")
+	}
+}
+
 func Test_PublicServer_BitcoinType(t *testing.T) {
 	s, dbpath := setupPublicHTTPServer(t)
 	defer closeAndDestroyPublicServer(t, s, dbpath)
@@ -776,6 +993,7 @@ func Test_PublicServer_BitcoinType(t *testing.T) {
 	ts := httptest.NewServer(s.https.Handler)
 	defer ts.Close()
 
-	httpTests_BitcoinType(t, ts)
-	socketioTests_BitcoinType(t, ts)
+	httpTestsBitcoinType(t, ts)
+	socketioTestsBitcoinType(t, ts)
+	websocketTestsBitcoinType(t, ts)
 }
