@@ -505,7 +505,7 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 	} else {
 		txCount = int(data.txCountEstimate)
 	}
-	totalTokens := 0
+	usedTokens := 0
 	var tokens []Token
 	var xpubAddresses map[string]struct{}
 	if option > AccountDetailsBasic {
@@ -516,7 +516,7 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 		for i := range da {
 			ad := &da[i]
 			if ad.balance != nil {
-				totalTokens++
+				usedTokens++
 			}
 			if option > AccountDetailsBasic {
 				token := w.tokenFromXpubAddress(data, ad, ci, i, option)
@@ -542,7 +542,7 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 		UnconfirmedTxs:        unconfirmedTxs,
 		Transactions:          txs,
 		Txids:                 txids,
-		TotalTokens:           totalTokens,
+		UsedTokens:            usedTokens,
 		Tokens:                tokens,
 		XPubAddresses:         xpubAddresses,
 	}

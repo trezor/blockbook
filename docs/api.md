@@ -366,7 +366,7 @@ Response:
     "57833d50969208091bd6c950599a1b5cf9d66d992ae8a8d3560fb943b98ebb23",
     "9cfd6295f20e74ddca6dd816c8eb71a91e4da70fe396aca6f8ce09dc2947839f",
   ],
-  "totalTokens": 2,
+  "usedTokens": 2,
   "tokens": [
     {
       "type": "XPUBAddress",
@@ -392,7 +392,7 @@ Response:
 }
 ```
 
-Note: *totalTokens* always returns total number of **used** addresses of xpub.
+Note: *usedTokens* always returns total number of **used** addresses of xpub.
 
 #### Get utxo
 

@@ -248,7 +248,7 @@ type Address struct {
 	Transactions          []*Tx                 `json:"transactions,omitempty"`
 	Txids                 []string              `json:"txids,omitempty"`
 	Nonce                 string                `json:"nonce,omitempty"`
-	TotalTokens           int                   `json:"totalTokens,omitempty"`
+	UsedTokens            int                   `json:"usedTokens,omitempty"`
 	Tokens                []Token               `json:"tokens,omitempty"`
 	Erc20Contract         *bchain.Erc20Contract `json:"erc20Contract,omitempty"`
 	// helpers for explorer
