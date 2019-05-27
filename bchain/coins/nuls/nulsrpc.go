@@ -17,7 +17,7 @@ import (
 	"time"
 
 	"github.com/juju/errors"
-	
+
 	"github.com/golang/glog"
 )
 
@@ -389,7 +389,7 @@ func (n *NulsRPC) GetBlockInfo(hash string) (*bchain.BlockInfo, error) {
 	return blockInfo, nil
 }
 
-func (n *NulsRPC) GetMempool() ([]string, error) {
+func (n *NulsRPC) GetMempoolTransactions() ([]string, error) {
 	return nil, nil
 }
 
@@ -490,14 +490,6 @@ func (n *NulsRPC) SendRawTransaction(tx string) (string, error) {
 	}
 
 	return broadcast.Data.Value, nil
-}
-
-func (n *NulsRPC) GetMempoolTransactionsForAddrDesc(addrDesc bchain.AddressDescriptor) ([]bchain.Outpoint, error) {
-	return nil, nil
-}
-
-func (n *NulsRPC) ResyncMempool(onNewTxAddr bchain.OnNewTxAddrFunc) (int, error) {
-	return 0, nil
 }
 
 // Call calls Backend RPC interface, using RPCMarshaler interface to marshall the request
