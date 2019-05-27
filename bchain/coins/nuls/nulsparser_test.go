@@ -346,10 +346,12 @@ func TestUnpackTx(t *testing.T) {
 
 func TestDeriveAddressDescriptorsFromTo(t *testing.T) {
 
+	parser := NewNulsParser(GetChainParams("main"), &btc.Configuration{})
+	
 	// test xpub xprv math ,and get private key
 	xprv := "xprv9yEvwSfPanK5gLYVnYvNyF2CEWJx1RsktQtKDeT6jnCnqASBiPCvFYHFSApXv39bZbF6hRaha1kWQBVhN1xjo7NHuhAn5uUfzy79TBuGiHh"
 	xpub := "xpub6CEHLxCHR9sNtpcxtaTPLNxvnY9SQtbcFdov22riJ7jmhxmLFvXAoLbjHSzwXwNNuxC1jUP6tsHzFV9rhW9YKELfmR9pJaKFaM8C3zMPgjw"
-	extKey, err := hdkeychain.NewKeyFromString(xprv)
+	extKey, err := hdkeychain.NewKeyFromString(xprv, parser.Params.Base58CksumHasher)
 	if err != nil {
 		t.Errorf("DeriveAddressDescriptorsFromTo() error = %v", err)
 		return
@@ -477,8 +479,6 @@ func TestDeriveAddressDescriptorsFromTo(t *testing.T) {
 			wantErr: false,
 		},
 	}
-
-	parser := NewNulsParser(GetChainParams("main"), &btc.Configuration{})
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
