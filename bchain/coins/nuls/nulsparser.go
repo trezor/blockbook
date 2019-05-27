@@ -7,7 +7,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
-	"github.com/bsm/go-vlq"
+	vlq "github.com/bsm/go-vlq"
 	"github.com/martinboehm/btcutil/base58"
 
 	"github.com/martinboehm/btcd/wire"
@@ -15,6 +15,7 @@ import (
 	"github.com/martinboehm/btcutil/hdkeychain"
 )
 
+// magic numbers
 const (
 	MainnetMagic wire.BitcoinNet = 0xbd6b0cbf
 	TestnetMagic wire.BitcoinNet = 0xffcae2ce
@@ -23,6 +24,7 @@ const (
 	AddressHashLength = 24
 )
 
+// chain parameters
 var (
 	MainNetParams chaincfg.Params
 	TestNetParams chaincfg.Params
@@ -147,6 +149,7 @@ func (p *NulsParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 	return tx, height, nil
 }
 
+// ParseTx parses tx from blob
 func (p *NulsParser) ParseTx(b []byte) (*bchain.Tx, error) {
 	tx := bchain.Tx{}
 	err := json.Unmarshal(b, &tx)

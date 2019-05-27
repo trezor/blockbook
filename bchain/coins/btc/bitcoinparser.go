@@ -91,6 +91,15 @@ func (p *BitcoinParser) GetScriptFromAddrDesc(addrDesc bchain.AddressDescriptor)
 	return addrDesc, nil
 }
 
+// IsAddrDescIndexable returns true if AddressDescriptor should be added to index
+// empty or OP_RETURN scripts are not indexed
+func (p *BitcoinParser) IsAddrDescIndexable(addrDesc bchain.AddressDescriptor) bool {
+	if len(addrDesc) == 0 || addrDesc[0] == txscript.OP_RETURN {
+		return false
+	}
+	return true
+}
+
 // addressToOutputScript converts bitcoin address to ScriptPubKey
 func (p *BitcoinParser) addressToOutputScript(address string) ([]byte, error) {
 	da, err := btcutil.DecodeAddress(address, p.Params)
