@@ -300,6 +300,18 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *webs
 	},
 }
 
+func sendResponse(c *websocketChannel, req *websocketReq, data interface{}) {
+	defer func() {
+		if r := recover(); r != nil {
+			glog.Error("Client ", c.id, ", onRequest ", req.Method, " recovered from panic: ", r)
+		}
+	}()
+	c.out <- &websocketRes{
+		ID:   req.ID,
+		Data: data,
+	}
+}
+
 func (s *WebsocketServer) onRequest(c *websocketChannel, req *websocketReq) {
 	var err error
 	var data interface{}
@@ -313,10 +325,7 @@ func (s *WebsocketServer) onRequest(c *websocketChannel, req *websocketReq) {
 		}
 		// nil data means no response
 		if data != nil {
-			c.out <- &websocketRes{
-				ID:   req.ID,
-				Data: data,
-			}
+			sendResponse(c, req, data)
 		}
 	}()
 	t := time.Now()
@@ -426,9 +435,9 @@ func (s *WebsocketServer) getInfo() (interface{}, error) {
 		Shortcut   string `json:"shortcut"`
 		Decimals   int    `json:"decimals"`
 		Version    string `json:"version"`
-		BestHeight int    `json:"bestheight"`
-		BestHash   string `json:"besthash"`
-		Block0Hash string `json:"block0hash"`
+		BestHeight int    `json:"bestHeight"`
+		BestHash   string `json:"bestHash"`
+		Block0Hash string `json:"block0Hash"`
 		Testnet    bool   `json:"testnet"`
 	}
 	return &info{

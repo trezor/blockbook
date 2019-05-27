@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 )
 
+// Addresses
 const (
 	EthAddr3e         = "3e3a3d69dc66ba10737f531ed088954a9ec89d97"
 	EthAddr55         = "555ee11fbddc0e49a9bab358a8941ad95ffdb48f"
@@ -42,6 +43,7 @@ func unpackTxs(packed []string, parser bchain.BlockChainParser) []bchain.Tx {
 	return r
 }
 
+// GetTestEthereumTypeBlock1 returns block #1
 func GetTestEthereumTypeBlock1(parser bchain.BlockChainParser) *bchain.Block {
 	return &bchain.Block{
 		BlockHeader: bchain.BlockHeader{
@@ -55,6 +57,7 @@ func GetTestEthereumTypeBlock1(parser bchain.BlockChainParser) *bchain.Block {
 	}
 }
 
+// GetTestEthereumTypeBlock2 returns block #2
 func GetTestEthereumTypeBlock2(parser bchain.BlockChainParser) *bchain.Block {
 	return &bchain.Block{
 		BlockHeader: bchain.BlockHeader{
