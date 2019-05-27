@@ -468,9 +468,8 @@ func (ab *AddrBalance) markUtxoAsSpent(btxID []byte, vout int32) {
 						// mark utxo as spent by setting vout=-1
 						utxo.Vout = -1
 						return
-					} else {
-						break
 					}
+					break
 				}
 			}
 		}

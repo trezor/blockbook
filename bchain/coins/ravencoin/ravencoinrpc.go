@@ -31,7 +31,7 @@ func NewRavencoinRPC(config json.RawMessage, pushHandler func(bchain.Notificatio
 
 // Initialize initializes RavencoinRPC instance.
 func (b *RavencoinRPC) Initialize() error {
-  ci, err := b.GetChainInfo()
+	ci, err := b.GetChainInfo()
 	if err != nil {
 		return err
 	}

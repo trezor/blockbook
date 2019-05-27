@@ -665,7 +665,7 @@ func TestRocksDB_Index_BitcoinType(t *testing.T) {
 		SentSat:    *dbtestdata.SatB1T2A5,
 		BalanceSat: *dbtestdata.SatB2T3A5,
 		Utxos: []Utxo{
-			Utxo{
+			{
 				BtxID:    hexToBytes(dbtestdata.TxidB2T3),
 				Vout:     0,
 				Height:   225494,
