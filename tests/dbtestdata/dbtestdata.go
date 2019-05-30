@@ -8,6 +8,7 @@ import (
 	"github.com/golang/glog"
 )
 
+// Txids, Xpubs and Addresses
 const (
 	TxidB1T1 = "00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840"
 	TxidB1T2 = "effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75"
@@ -28,8 +29,11 @@ const (
 	Addr8 = "2N6utyMZfPNUb1Bk8oz7p2JqJrXkq83gegu" // a91495e9fbe306449c991d314afe3c3567d5bf78efd287, xpub m/49'/1'/33'/1/3
 	Addr9 = "mmJx9Y8ayz9h14yd9fgCW1bUKoEpkBAquP"  // 76a9143f8ba3fda3ba7b69f5818086e12223c6dd25e3c888ac
 	AddrA = "mzVznVsCHkVHX9UN8WPFASWUUHtxnNn4Jj"  // 76a914d03c0d863d189b23b061a95ad32940b65837609f88ac
+
+	TxidB2T1Output3OpReturn = "6a072020f1686f6a20"
 )
 
+// Amounts in satoshis
 var (
 	SatZero   = big.NewInt(0)
 	SatB1T1A1 = big.NewInt(100000000)
@@ -45,6 +49,7 @@ var (
 	SatB2T4AA = big.NewInt(1360030331)
 )
 
+// AddressToPubKeyHex is a utility conversion function
 func AddressToPubKeyHex(addr string, parser bchain.BlockChainParser) string {
 	if addr == "" {
 		return ""
@@ -56,6 +61,7 @@ func AddressToPubKeyHex(addr string, parser bchain.BlockChainParser) string {
 	return hex.EncodeToString(b)
 }
 
+// GetTestBitcoinTypeBlock1 returns block #1
 func GetTestBitcoinTypeBlock1(parser bchain.BlockChainParser) *bchain.Block {
 	return &bchain.Block{
 		BlockHeader: bchain.BlockHeader{
@@ -122,6 +128,7 @@ func GetTestBitcoinTypeBlock1(parser bchain.BlockChainParser) *bchain.Block {
 	}
 }
 
+// GetTestBitcoinTypeBlock2 returns block #2
 func GetTestBitcoinTypeBlock2(parser bchain.BlockChainParser) *bchain.Block {
 	return &bchain.Block{
 		BlockHeader: bchain.BlockHeader{
@@ -160,6 +167,13 @@ func GetTestBitcoinTypeBlock2(parser bchain.BlockChainParser) *bchain.Block {
 							Hex: AddressToPubKeyHex(Addr7, parser),
 						},
 						ValueSat: *SatB2T1A7,
+					},
+					{
+						N: 2,
+						ScriptPubKey: bchain.ScriptPubKey{
+							Hex: TxidB2T1Output3OpReturn, // OP_RETURN script
+						},
+						ValueSat: *SatZero,
 					},
 				},
 				Blocktime:     22549400000,

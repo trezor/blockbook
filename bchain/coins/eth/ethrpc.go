@@ -245,7 +245,7 @@ func (b *EthereumRPC) subscribe(f func() (*rpc.ClientSubscription, error)) error
 				return
 			}
 			glog.Error("Subscription error ", e)
-			timer := time.NewTimer(time.Second)
+			timer := time.NewTimer(time.Second * 2)
 			// try in 1 second interval to resubscribe
 			for {
 				select {
@@ -260,7 +260,8 @@ func (b *EthereumRPC) subscribe(f func() (*rpc.ClientSubscription, error)) error
 						s = ns
 						continue Loop
 					}
-					timer.Reset(time.Second)
+					glog.Error("Resubscribe error ", e)
+					timer.Reset(time.Second * 2)
 				}
 			}
 		}

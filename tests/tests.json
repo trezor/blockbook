@@ -150,5 +150,20 @@
         "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",
                 "EstimateSmartFee", "EstimateFee", "GetBestBlockHash", "GetBestBlockHeight", "GetBlockHeader"],
         "sync": ["ConnectBlocksParallel", "ConnectBlocks", "HandleFork"]
+    },
+    "zelcash": {
+        "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",
+                "EstimateSmartFee", "EstimateFee", "GetBestBlockHash", "GetBestBlockHeight", "GetBlockHeader"],
+        "sync": ["ConnectBlocksParallel", "ConnectBlocks", "HandleFork"]
+    },
+    "ravencoin": {
+        "rpc":  ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",
+                 "EstimateSmartFee", "GetBestBlockHash", "GetBestBlockHeight", "GetBlockHeader"],
+        "sync": ["ConnectBlocksParallel", "ConnectBlocks", "HandleFork"]
+    },
+    "ritocoin": {
+        "rpc":  ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",
+                 "EstimateSmartFee", "GetBestBlockHash", "GetBestBlockHeight", "GetBlockHeader"],
+        "sync": ["ConnectBlocksParallel", "ConnectBlocks", "HandleFork"]
     }
 }

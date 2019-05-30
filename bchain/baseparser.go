@@ -268,6 +268,12 @@ func (p *BaseParser) UnpackTx(buf []byte) (*Tx, uint32, error) {
 	return &tx, pt.Height, nil
 }
 
+// IsAddrDescIndexable returns true if AddressDescriptor should be added to index
+// by default all AddressDescriptors are indexable
+func (p *BaseParser) IsAddrDescIndexable(addrDesc AddressDescriptor) bool {
+	return true
+}
+
 // DerivationBasePath is unsupported
 func (p *BaseParser) DerivationBasePath(xpub string) (string, error) {
 	return "", errors.New("Not supported")

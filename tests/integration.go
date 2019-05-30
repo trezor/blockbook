@@ -19,6 +19,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/martinboehm/btcutil/chaincfg"
 )
@@ -81,7 +82,7 @@ func runTests(t *testing.T, coin string, cfg map[string]json.RawMessage) {
 		if err == notConnectedError {
 			t.Fatal(err)
 		}
-		t.Fatalf("Cannot make blockchain config: %s", err)
+		t.Fatalf("Cannot init blockchain: %s", err)
 	}
 
 	for test, c := range cfg {
@@ -153,7 +154,7 @@ func initBlockChain(coinName string, cfg json.RawMessage) (bchain.BlockChain, bc
 		return nil, nil, fmt.Errorf("Factory function not found")
 	}
 
-	cli, err := factory(cfg, func(_ bchain.NotificationType) {})
+	chain, err := factory(cfg, func(_ bchain.NotificationType) {})
 	if err != nil {
 		if isNetError(err) {
 			return nil, nil, notConnectedError
@@ -161,25 +162,32 @@ func initBlockChain(coinName string, cfg json.RawMessage) (bchain.BlockChain, bc
 		return nil, nil, fmt.Errorf("Factory function failed: %s", err)
 	}
 
-	err = cli.Initialize()
-	if err != nil {
+	for i := 0; ; i++ {
+		err = chain.Initialize()
+		if err == nil {
+			break
+		}
 		if isNetError(err) {
 			return nil, nil, notConnectedError
 		}
-		return nil, nil, fmt.Errorf("BlockChain initialization failed: %s", err)
+		// wait max 5 minutes for backend to startup
+		if i > 5*60 {
+			return nil, nil, fmt.Errorf("BlockChain initialization failed: %s", err)
+		}
+		time.Sleep(time.Millisecond * 1000)
 	}
 
-	mempool, err := cli.CreateMempool(cli)
+	mempool, err := chain.CreateMempool(chain)
 	if err != nil {
 		return nil, nil, fmt.Errorf("Mempool creation failed: %s", err)
 	}
 
-	err = cli.InitializeMempool(nil, nil)
+	err = chain.InitializeMempool(nil, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("Mempool initialization failed: %s", err)
 	}
 
-	return cli, mempool, nil
+	return chain, mempool, nil
 }
 
 func isNetError(err error) bool {

@@ -71,6 +71,17 @@ backend-deploy-and-test-dash:
     - blockbook
   script: ./contrib/scripts/backend-deploy-and-test.sh dash
 
+backend-deploy-and-test-digibyte:
+  stage: backend-deploy-and-test
+  only:
+    refs:
+      - master
+    changes:
+      - configs/coins/digibyte.json
+  tags:
+    - blockbook
+  script: ./contrib/scripts/backend-deploy-and-test.sh digibyte
+
 backend-deploy-and-test-dogecoin:
   stage: backend-deploy-and-test
   only:
