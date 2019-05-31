@@ -1,0 +1,67 @@
+{
+    "coin": {
+      "name": "Decred",
+      "shortcut": "DCR",
+      "label": "Decred",
+      "alias": "dcr"
+    },
+    "ports": {
+      "backend_rpc": 19109,
+      "backend_message_queue": 38888,
+      "blockbook_internal": 10108,
+      "blockbook_public": 11108
+    },
+    "ipc": {
+      "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
+      "rpc_user": "root",
+      "rpc_pass": "shweini",
+      "rpc_timeout": 25,
+      "message_queue_binding_template": "tcp://127.0.0.1:{{.Ports.BackendMessageQueue}}"
+    },
+    "backend": {
+      "package_name": "backend-decred",
+      "package_revision": "decred-1",
+      "system_user": "decred",
+      "version": "1.4.0",
+      "binary_url": "https://github.com/decred/decred-binaries/releases/download/v1.4.0/decred-linux-amd64-v1.4.0.tar.gz",
+      "verification_type": "sha256",
+      "verification_source": "36375985df1ba9a45bc11b4f6cdaed4f14ff6e5e9c46e17ef6e4f70a3349aba2",
+      "extract_command": "tar -C backend --strip 1 -xf",
+      "exclude_files": [],
+      "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/dcrd --datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -C={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf",
+      "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/*.log",
+      "postinst_script_template": "",
+      "service_type": "forking",
+      "service_additional_params_template": "",
+      "protect_memory": false,
+      "mainnet": true,
+      "server_config_file": "bitcoin_like.conf",
+      "client_config_file": "bitcoin_like_client.conf",
+      "additional_params": {
+        "rpcmaxclients": 16,
+        "upnp": 0,
+        "whitelist": "127.0.0.1"
+      }
+    },
+    "blockbook": {
+      "package_name": "blockbook-decred",
+      "system_user": "blockbook-decred",
+      "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
+      "public_binding_template": ":{{.Ports.BlockbookPublic}}",
+      "explorer_url": "https://mainnet.decred.org/",
+      "additional_params": "",
+      "block_chain": {
+        "parse": true,
+        "mempool_workers": 8,
+        "mempool_sub_workers": 2,
+        "block_addresses_to_keep": 300,
+        "xpub_magic": 49990397,
+        "slip44": 3,
+        "additional_params": {}
+      }
+    },
+    "meta": {
+      "package_maintainer": "Ugwueze Michael",
+      "package_maintainer_email": "code.maestro64@gmail.com"
+    }
+  }

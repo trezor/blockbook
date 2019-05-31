@@ -1,0 +1,19 @@
+{
+    "coin_name": "Decred",
+    "coin_shortcut": "DCR",
+    "coin_label": "Decred",
+    "rpc_url": "http://127.0.0.1:19109",
+    "rpc_user": "root",
+    "rpc_pass": "shweini",
+    "rpc_timeout": 25,
+    "parse": true,
+    "message_queue_binding": "tcp://127.0.0.1:38888",
+    "subversion": "",
+    "address_format": "",
+    "xpub_magic": 49990397,
+    "slip44": 3,
+
+    "mempool_workers": 8,
+    "mempool_sub_workers": 2,
+    "block_addresses_to_keep": 3000000000000000000
+}
