@@ -59,6 +59,7 @@ type WebsocketServer struct {
 	txCache                   *db.TxCache
 	chain                     bchain.BlockChain
 	chainParser               bchain.BlockChainParser
+	mempool                   bchain.Mempool
 	metrics                   *common.Metrics
 	is                        *common.InternalState
 	api                       *api.Worker
@@ -70,8 +71,8 @@ type WebsocketServer struct {
 }
 
 // NewWebsocketServer creates new websocket interface to blockbook and returns its handle
-func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxCache, metrics *common.Metrics, is *common.InternalState) (*WebsocketServer, error) {
-	api, err := api.NewWorker(db, chain, txCache, is)
+func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, txCache *db.TxCache, metrics *common.Metrics, is *common.InternalState) (*WebsocketServer, error) {
+	api, err := api.NewWorker(db, chain, mempool, txCache, is)
 	if err != nil {
 		return nil, err
 	}
@@ -89,6 +90,7 @@ func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxC
 		txCache:               txCache,
 		chain:                 chain,
 		chainParser:           chain.GetChainParser(),
+		mempool:               mempool,
 		metrics:               metrics,
 		is:                    is,
 		api:                   api,
@@ -298,6 +300,18 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *webs
 	},
 }
 
+func sendResponse(c *websocketChannel, req *websocketReq, data interface{}) {
+	defer func() {
+		if r := recover(); r != nil {
+			glog.Error("Client ", c.id, ", onRequest ", req.Method, " recovered from panic: ", r)
+		}
+	}()
+	c.out <- &websocketRes{
+		ID:   req.ID,
+		Data: data,
+	}
+}
+
 func (s *WebsocketServer) onRequest(c *websocketChannel, req *websocketReq) {
 	var err error
 	var data interface{}
@@ -311,10 +325,7 @@ func (s *WebsocketServer) onRequest(c *websocketChannel, req *websocketReq) {
 		}
 		// nil data means no response
 		if data != nil {
-			c.out <- &websocketRes{
-				ID:   req.ID,
-				Data: data,
-			}
+			sendResponse(c, req, data)
 		}
 	}()
 	t := time.Now()
@@ -387,6 +398,9 @@ func (s *WebsocketServer) getAccountInfo(req *accountInfoReq) (res *api.Address,
 		Vout:           api.AddressFilterVoutOff,
 		TokensToReturn: tokensToReturn,
 	}
+	if req.PageSize == 0 {
+		req.PageSize = txsOnPage
+	}
 	a, err := s.api.GetXpubAddress(req.Descriptor, req.Page, req.PageSize, opt, &filter, 0)
 	if err != nil {
 		return s.api.GetAddress(req.Descriptor, req.Page, req.PageSize, opt, &filter)
@@ -421,9 +435,9 @@ func (s *WebsocketServer) getInfo() (interface{}, error) {
 		Shortcut   string `json:"shortcut"`
 		Decimals   int    `json:"decimals"`
 		Version    string `json:"version"`
-		BestHeight int    `json:"bestheight"`
-		BestHash   string `json:"besthash"`
-		Block0Hash string `json:"block0hash"`
+		BestHeight int    `json:"bestHeight"`
+		BestHash   string `json:"bestHash"`
+		Block0Hash string `json:"block0Hash"`
 		Testnet    bool   `json:"testnet"`
 	}
 	return &info{

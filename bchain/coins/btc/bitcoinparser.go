@@ -91,6 +91,15 @@ func (p *BitcoinParser) GetScriptFromAddrDesc(addrDesc bchain.AddressDescriptor)
 	return addrDesc, nil
 }
 
+// IsAddrDescIndexable returns true if AddressDescriptor should be added to index
+// empty or OP_RETURN scripts are not indexed
+func (p *BitcoinParser) IsAddrDescIndexable(addrDesc bchain.AddressDescriptor) bool {
+	if len(addrDesc) == 0 || addrDesc[0] == txscript.OP_RETURN {
+		return false
+	}
+	return true
+}
+
 // addressToOutputScript converts bitcoin address to ScriptPubKey
 func (p *BitcoinParser) addressToOutputScript(address string) ([]byte, error) {
 	da, err := btcutil.DecodeAddress(address, p.Params)
@@ -105,7 +114,7 @@ func (p *BitcoinParser) addressToOutputScript(address string) ([]byte, error) {
 }
 
 // TryParseOPReturn tries to process OP_RETURN script and return its string representation
-func TryParseOPReturn(script []byte) string {
+func (p *BitcoinParser) TryParseOPReturn(script []byte) string {
 	if len(script) > 1 && script[0] == txscript.OP_RETURN {
 		// trying 2 variants of OP_RETURN data
 		// 1) OP_RETURN OP_PUSHDATA1 <datalen> <data>
@@ -124,6 +133,13 @@ func TryParseOPReturn(script []byte) string {
 			data = script[2:]
 		}
 		if l == len(data) {
+			var ed string
+
+			ed = p.tryParseOmni(data)
+			if ed != "" {
+				return ed
+			}
+
 			isASCII := true
 			for _, c := range data {
 				if c < 32 || c > 127 {
@@ -131,7 +147,6 @@ func TryParseOPReturn(script []byte) string {
 					break
 				}
 			}
-			var ed string
 			if isASCII {
 				ed = "(" + string(data) + ")"
 			} else {
@@ -141,6 +156,39 @@ func TryParseOPReturn(script []byte) string {
 		}
 	}
 	return ""
+}
+
+var omniCurrencyMap = map[uint32]string{
+	1:  "Omni",
+	2:  "Test Omni",
+	31: "TetherUS",
+}
+
+// tryParseOmni tries to extract Omni simple send transaction from script
+func (p *BitcoinParser) tryParseOmni(data []byte) string {
+
+	// currently only simple send transaction version 0 is supported, see
+	// https://github.com/OmniLayer/spec#transfer-coins-simple-send
+	if len(data) != 20 || data[0] != 'o' {
+		return ""
+	}
+	// omni (4) <tx_version> (2) <tx_type> (2)
+	omniHeader := []byte{'o', 'm', 'n', 'i', 0, 0, 0, 0}
+	if bytes.Compare(data[0:8], omniHeader) != 0 {
+		return ""
+	}
+
+	currencyID := binary.BigEndian.Uint32(data[8:12])
+	currency, ok := omniCurrencyMap[currencyID]
+	if !ok {
+		return ""
+	}
+	amount := new(big.Int)
+	amount.SetBytes(data[12:])
+	amountStr := p.AmountToDecimalString(amount)
+
+	ed := "OMNI Simple Send: " + amountStr + " " + currency + " (#" + strconv.Itoa(int(currencyID)) + ")"
+	return ed
 }
 
 // outputScriptToAddresses converts ScriptPubKey to addresses with a flag that the addresses are searchable
@@ -157,7 +205,7 @@ func (p *BitcoinParser) outputScriptToAddresses(script []byte) ([]string, bool, 
 	if sc == txscript.PubKeyHashTy || sc == txscript.WitnessV0PubKeyHashTy || sc == txscript.ScriptHashTy || sc == txscript.WitnessV0ScriptHashTy {
 		s = true
 	} else if len(rv) == 0 {
-		or := TryParseOPReturn(script)
+		or := p.TryParseOPReturn(script)
 		if or != "" {
 			rv = []string{or}
 		}
@@ -304,7 +352,7 @@ func (p *BitcoinParser) addrDescFromExtKey(extKey *hdkeychain.ExtendedKey) (bcha
 
 // DeriveAddressDescriptors derives address descriptors from given xpub for listed indexes
 func (p *BitcoinParser) DeriveAddressDescriptors(xpub string, change uint32, indexes []uint32) ([]bchain.AddressDescriptor, error) {
-	extKey, err := hdkeychain.NewKeyFromString(xpub)
+	extKey, err := hdkeychain.NewKeyFromString(xpub, p.Params.Base58CksumHasher)
 	if err != nil {
 		return nil, err
 	}
@@ -331,7 +379,7 @@ func (p *BitcoinParser) DeriveAddressDescriptorsFromTo(xpub string, change uint3
 	if toIndex <= fromIndex {
 		return nil, errors.New("toIndex<=fromIndex")
 	}
-	extKey, err := hdkeychain.NewKeyFromString(xpub)
+	extKey, err := hdkeychain.NewKeyFromString(xpub, p.Params.Base58CksumHasher)
 	if err != nil {
 		return nil, err
 	}
@@ -355,7 +403,7 @@ func (p *BitcoinParser) DeriveAddressDescriptorsFromTo(xpub string, change uint3
 
 // DerivationBasePath returns base path of xpub
 func (p *BitcoinParser) DerivationBasePath(xpub string) (string, error) {
-	extKey, err := hdkeychain.NewKeyFromString(xpub)
+	extKey, err := hdkeychain.NewKeyFromString(xpub, p.Params.Base58CksumHasher)
 	if err != nil {
 		return "", err
 	}

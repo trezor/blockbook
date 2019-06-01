@@ -268,6 +268,11 @@ table.data-table table.data-table th {
     margin: 0;
 }
 
+.h-container h5 {
+    margin-top: 6px;
+    margin-bottom: 0;
+}
+
 .page-link {
     color: #428bca;
 }

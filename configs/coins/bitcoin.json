@@ -22,10 +22,10 @@
     "package_name": "backend-bitcoin",
     "package_revision": "satoshilabs-1",
     "system_user": "bitcoin",
-    "version": "0.17.1",
-    "binary_url": "https://bitcoin.org/bin/bitcoin-core-0.17.1/bitcoin-0.17.1-x86_64-linux-gnu.tar.gz",
+    "version": "0.18.0",
+    "binary_url": "https://bitcoin.org/bin/bitcoin-core-0.18.0/bitcoin-0.18.0-x86_64-linux-gnu.tar.gz",
     "verification_type": "gpg-sha256",
-    "verification_source": "https://bitcoin.org/bin/bitcoin-core-0.17.1/SHA256SUMS.asc",
+    "verification_source": "https://bitcoin.org/bin/bitcoin-core-0.18.0/SHA256SUMS.asc",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
       "bin/bitcoin-qt"
@@ -58,11 +58,14 @@
       "xpub_magic": 76067358,
       "xpub_magic_segwit_p2sh": 77429938,
       "xpub_magic_segwit_native": 78792518,
-      "additional_params": {}
+      "additional_params": {
+        "alternativeEstimateFee": "whatthefee-disabled",
+        "alternativeEstimateFeeParams": "{\"url\": \"https://whatthefee.io/data.json\", \"periodSeconds\": 60}"
+      }
     }
   },
   "meta": {
-    "package_maintainer": "Jakub Matys",
-    "package_maintainer_email": "jakub.matys@satoshilabs.com"
+    "package_maintainer": "Martin Bohm",
+    "package_maintainer_email": "martin.bohm@satoshilabs.com"
   }
 }

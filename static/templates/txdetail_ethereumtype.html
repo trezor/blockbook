@@ -5,9 +5,7 @@
             <a href="/tx/{{$tx.Txid}}">{{$tx.Txid}}</a>
             {{if eq $tx.EthereumSpecific.Status 1}}<span class="text-success"> ✔</span>{{end}}{{if eq $tx.EthereumSpecific.Status 0}}<span class="text-danger"> ✘</span>{{end}}
         </div>
-        {{- if $tx.Confirmations -}}
-        <div class="col-xs-5 col-md-4 text-muted text-right">mined {{formatUnixTime $tx.Blocktime}}</div>
-        {{- end -}}
+        {{- if $tx.Blocktime}}<div class="col-xs-5 col-md-4 text-muted text-right">{{if $tx.Confirmations}}mined{{else}}first seen{{end}} {{formatUnixTime $tx.Blocktime}}</div>{{end -}}
     </div>
     <div class="row line-mid">
         <div class="col-md-4">

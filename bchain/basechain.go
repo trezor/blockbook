@@ -29,6 +29,11 @@ func (b *BaseChain) GetNetworkName() string {
 	return b.Network
 }
 
+// GetMempoolEntry is not supported by default
+func (b *BaseChain) GetMempoolEntry(txid string) (*MempoolEntry, error) {
+	return nil, errors.New("GetMempoolEntry: not supported")
+}
+
 // EthereumTypeGetBalance is not supported
 func (b *BaseChain) EthereumTypeGetBalance(addrDesc AddressDescriptor) (*big.Int, error) {
 	return nil, errors.New("Not supported")

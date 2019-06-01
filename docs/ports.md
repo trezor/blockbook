@@ -25,7 +25,16 @@
 | Zcoin                | 9050                    | 9150                  | 8050             | 38350                       |
 | Koto                 | 9051                    | 9151                  | 8051             | 38351                       |
 | Bellcoin             | 9052                    | 9152                  | 8052             | 38352                       |
+| NULS                 | 9053                    | 9153                  | 8053             | 38353                       |
+| Viacoin              | 9055                    | 9155                  | 8055             | 38355                       |
+| VIPSTARCOIN          | 9056                    | 9156                  | 8056             | 38356                       |
+| MonetaryUnit         | 9057                    | 9157                  | 8057             | 38357                       |
+| ZelCash              | 9058                    | 9158                  | 8058             | 38358                       |
+| Ravencoin            | 9059                    | 9159                  | 8059             | 38359                       |
+| Ritocoin             | 9060                    | 9160                  | 8060             | 38360                       |
 | Flo                  | 9066                    | 9166                  | 8066             | 38366                       |
+| Polis                | 9067                    | 9167                  | 8067             | 38367                       |
+| Qtum                 | 9088                    | 9188                  | 8088             | 38388                       |
 | Bitcoin Testnet      | 19030                   | 19130                 | 18030            | 48330                       |
 | Bitcoin Cash Testnet | 19031                   | 19131                 | 18031            | 48331                       |
 | Zcash Testnet        | 19032                   | 19132                 | 18032            | 48332                       |
@@ -38,5 +47,6 @@
 | PIVX Testnet         | 19049                   | 19149                 | 18049            | 48349                       |
 | Koto Testnet         | 19051                   | 19151                 | 18051            | 48351                       |
 | Flo Testnet          | 19066                   | 19166                 | 18066            | 48366                       |
+| Qtum Testnet         | 19088                   | 19188                 | 18088            | 48388                       |
 
 > NOTE: This document is generated from coin definitions in `configs/coins`.

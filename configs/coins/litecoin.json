@@ -22,10 +22,10 @@
     "package_name": "backend-litecoin",
     "package_revision": "satoshilabs-1",
     "system_user": "litecoin",
-    "version": "0.16.3",
-    "binary_url": "https://download.litecoin.org/litecoin-0.16.3/linux/litecoin-0.16.3-x86_64-linux-gnu.tar.gz",
+    "version": "0.17.1",
+    "binary_url": "https://download.litecoin.org/litecoin-0.17.1/linux/litecoin-0.17.1-x86_64-linux-gnu.tar.gz",
     "verification_type": "gpg-sha256",
-    "verification_source": "https://download.litecoin.org/litecoin-0.16.3/linux/litecoin-0.16.3-linux-signatures.asc",
+    "verification_source": "https://download.litecoin.org/litecoin-0.17.1/linux/litecoin-0.17.1-linux-signatures.asc",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
       "bin/litecoin-qt"
@@ -57,12 +57,13 @@
       "block_addresses_to_keep": 300,
       "xpub_magic": 27108450,
       "xpub_magic_segwit_p2sh": 28471030,
+      "xpub_magic_segwit_native": 78792518,
       "slip44": 2,
       "additional_params": {}
     }
   },
   "meta": {
-    "package_maintainer": "Jakub Matys",
-    "package_maintainer_email": "jakub.matys@satoshilabs.com"
+    "package_maintainer": "IT",
+    "package_maintainer_email": "it@satoshilabs.com"
   }
 }

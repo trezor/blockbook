@@ -45,6 +45,9 @@ func NewSyncWorker(db *RocksDB, chain bchain.BlockChain, syncWorkers, syncChunk 
 
 var errSynced = errors.New("synced")
 
+// ErrOperationInterrupted is returned when operation is interrupted by OS signal
+var ErrOperationInterrupted = errors.New("ErrOperationInterrupted")
+
 // ResyncIndex synchronizes index to the top of the blockchain
 // onNewBlock is called when new block is connected, but not in initial parallel sync
 func (w *SyncWorker) ResyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync bool) error {
@@ -63,11 +66,15 @@ func (w *SyncWorker) ResyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 		if err == nil {
 			w.is.FinishedSync(bh)
 		}
-		return nil
+		return err
 	case errSynced:
 		// this is not actually error but flag that resync wasn't necessary
 		w.is.FinishedSyncNoChange()
 		w.metrics.IndexDBSize.Set(float64(w.db.DatabaseSizeOnDisk()))
+		if initialSync {
+			d := time.Since(start)
+			glog.Info("resync: finished in ", d)
+		}
 		return nil
 	}
 
@@ -113,7 +120,8 @@ func (w *SyncWorker) resyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 	}
 	// if parallel operation is enabled and the number of blocks to be connected is large,
 	// use parallel routine to load majority of blocks
-	if w.syncWorkers > 1 {
+	// use parallel sync only in case of initial sync because it puts the db to inconsistent state
+	if w.syncWorkers > 1 && initialSync {
 		remoteBestHeight, err := w.chain.GetBestBlockHeight()
 		if err != nil {
 			return err
@@ -197,7 +205,8 @@ func (w *SyncWorker) connectBlocks(onNewBlock bchain.OnNewBlockFunc, initialSync
 		for {
 			select {
 			case <-w.chanOsSignal:
-				return errors.Errorf("connectBlocks interrupted at height %d", lastRes.block.Height)
+				glog.Info("connectBlocks interrupted at height ", lastRes.block.Height)
+				return ErrOperationInterrupted
 			case res := <-bch:
 				if res == empty {
 					break ConnectLoop
@@ -320,7 +329,8 @@ ConnectLoop:
 	for h := lower; h <= higher; {
 		select {
 		case <-w.chanOsSignal:
-			err = errors.Errorf("connectBlocksParallel interrupted at height %d", h)
+			glog.Info("connectBlocksParallel interrupted at height ", h)
+			err = ErrOperationInterrupted
 			// signal all workers to terminate their loops (error loops are interrupted below)
 			close(terminating)
 			break ConnectLoop

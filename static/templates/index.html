@@ -44,6 +44,10 @@
                     <td class="data">{{formatTime $bb.LastMempoolTime}}</td>
                 </tr>
                 <tr>
+                    <td>Transactions in Mempool</td>
+                    <td class="data">{{if .InternalExplorer}}<a href="/mempool">{{$bb.MempoolSize}}</a>{{else}}{{$bb.MempoolSize}}{{end}}</td>
+                </tr>
+                <tr>
                     <td>Size On Disk</td>
                     <td class="data">{{$bb.DbSize}}</td>
                 </tr>

@@ -215,6 +215,27 @@ func TestGetAddressesFromAddrDesc(t *testing.T) {
 			want2:   false,
 			wantErr: false,
 		},
+		{
+			name:    "OP_RETURN omni simple send tether",
+			args:    args{script: "6a146f6d6e69000000000000001f00000709bb647351"},
+			want:    []string{"OMNI Simple Send: 77383.80022609 TetherUS (#31)"},
+			want2:   false,
+			wantErr: false,
+		},
+		{
+			name:    "OP_RETURN omni simple send not supported coin",
+			args:    args{script: "6a146f6d6e69000000000000000300000709bb647351"},
+			want:    []string{"OP_RETURN 6f6d6e69000000000000000300000709bb647351"},
+			want2:   false,
+			wantErr: false,
+		},
+		{
+			name:    "OP_RETURN omni not supported version",
+			args:    args{script: "6a146f6d6e69010000000000000300000709bb647351"},
+			want:    []string{"OP_RETURN 6f6d6e69010000000000000300000709bb647351"},
+			want2:   false,
+			wantErr: false,
+		},
 	}
 
 	parser := NewBitcoinParser(GetChainParams("main"), &Configuration{})

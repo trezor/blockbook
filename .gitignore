@@ -13,3 +13,4 @@ build/sst_dump
 build/*.deb
 .bin-image
 .deb-image
+\.idea/

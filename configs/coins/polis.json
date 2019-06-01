@@ -1,0 +1,68 @@
+{
+  "coin": {
+    "name": "Polis",
+    "shortcut": "POLIS",
+    "label": "Polis",
+    "alias": "polis"
+  },
+  "ports": {
+    "backend_rpc": 8067,
+    "backend_message_queue": 38367,
+    "blockbook_internal": 9067,
+    "blockbook_public": 9167
+  },
+  "ipc": {
+    "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
+    "rpc_user": "rpc",
+    "rpc_pass": "rpc",
+    "rpc_timeout": 25,
+    "message_queue_binding_template": "tcp://127.0.0.1:{{.Ports.BackendMessageQueue}}"
+  },
+  "backend": {
+    "package_name": "backend-polis",
+    "package_revision": "satoshilabs-1",
+    "system_user": "polis",
+    "version": "1.4.15",
+    "binary_url": "https://github.com/polispay/polis/releases/download/v1.4.15/poliscore-1.4.15-x86_64-linux-gnu.tar.gz",
+    "verification_type": "sha256",
+    "verification_source": "9601dcb0d82a7e034ab6da5628867e2fe9b9f46961a026f186ee208d931c9da8",
+    "extract_command": "tar -C backend --strip 1 -xf",
+    "exclude_files": [
+      "bin/polis-qt"
+    ],
+    "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/polisd -datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -conf={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf -pid=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",
+    "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/*.log",
+    "postinst_script_template": "",
+    "service_type": "forking",
+    "service_additional_params_template": "",
+    "protect_memory": true,
+    "mainnet": true,
+    "server_config_file": "bitcoin_like.conf",
+    "client_config_file": "bitcoin_like_client.conf",
+    "additional_params": {
+      "mempoolexpiry": 72
+    }
+  },
+  "blockbook": {
+    "package_name": "blockbook-polis",
+    "system_user": "blockbook-polis",
+    "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
+    "public_binding_template": ":{{.Ports.BlockbookPublic}}",
+    "explorer_url": "",
+    "additional_params": "",
+    "block_chain": {
+      "parse": true,
+      "subversion": "/Polis Core:1.4.15/",
+      "mempool_workers": 8,
+      "mempool_sub_workers": 2,
+      "block_addresses_to_keep": 300,
+      "xpub_magic": 65166718,
+      "slip44": 1997,
+      "additional_params": {}
+    }
+  },
+  "meta": {
+    "package_maintainer": "Enrique Berrueta",
+    "package_maintainer_email": "eabz@polispay.org"
+  }
+}

@@ -262,7 +262,7 @@ func Test_PackTx(t *testing.T) {
 			name: "Bellcoin-1",
 			args: args{
 				tx:        testTx1,
-				height:    	205708,
+				height:    205708,
 				blockTime: 1549095010,
 				parser:    NewBellcoinParser(GetChainParams("main"), &btc.Configuration{}),
 			},
@@ -304,7 +304,7 @@ func Test_UnpackTx(t *testing.T) {
 				parser:   NewBellcoinParser(GetChainParams("main"), &btc.Configuration{}),
 			},
 			want:    &testTx1,
-			want1:   	205708,
+			want1:   205708,
 			wantErr: false,
 		},
 	}

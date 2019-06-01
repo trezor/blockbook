@@ -1,9 +1,9 @@
 {
   "coin": {
-      "name": "Ethereum",
-      "shortcut": "ETH",
-      "label": "Ethereum",
-      "alias": "ethereum"
+    "name": "Ethereum",
+    "shortcut": "ETH",
+    "label": "Ethereum",
+    "alias": "ethereum"
   },
   "ports": {
     "backend_rpc": 8036,
@@ -21,10 +21,10 @@
     "package_name": "backend-ethereum",
     "package_revision": "satoshilabs-1",
     "system_user": "ethereum",
-    "version": "1.8.23-c9427004",
-    "binary_url": "https://gethstore.blob.core.windows.net/builds/geth-linux-amd64-1.8.23-c9427004.tar.gz",
+    "version": "1.8.27-4bcc0a37",
+    "binary_url": "https://gethstore.blob.core.windows.net/builds/geth-linux-amd64-1.8.27-4bcc0a37.tar.gz",
     "verification_type": "gpg",
-    "verification_source": "https://gethstore.blob.core.windows.net/builds/geth-linux-amd64-1.8.23-c9427004.tar.gz.asc",
+    "verification_source": "https://gethstore.blob.core.windows.net/builds/geth-linux-amd64-1.8.27-4bcc0a37.tar.gz.asc",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [],
     "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/geth --ipcdisable --syncmode full --cache 1024 --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --port 38336 --ws --wsaddr 0.0.0.0 --wsport {{.Ports.BackendRPC}} --wsorigins \"*\" --rpc --rpcport 8136 -rpcaddr 0.0.0.0 --rpccorsdomain \"*\" --rpcvhosts \"*\" 2>>{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
@@ -49,7 +49,10 @@
       "mempool_workers": 8,
       "mempool_sub_workers": 2,
       "block_addresses_to_keep": 300,
-      "additional_params": {}
+      "additional_params": {
+        "mempoolTxTimeoutHours": 48,
+        "queryBackendOnMempoolResync": false
+      }
     }
   },
   "meta": {

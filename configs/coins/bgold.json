@@ -250,6 +250,7 @@
       "block_addresses_to_keep": 300,
       "xpub_magic": 76067358,
       "xpub_magic_segwit_p2sh": 77429938,
+      "xpub_magic_segwit_native": 78792518,
       "slip44": 156,
       "additional_params": {}
     }

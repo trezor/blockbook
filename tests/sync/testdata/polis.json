@@ -1,0 +1,78 @@
+{
+    "connectBlocks": {
+        "syncRanges": [
+            {"lower": 248706, "upper": 248726}
+        ],
+        "blocks": {
+            "300900": {
+                "height": 300900,
+                "hash": "427125bf9fe38a04cbe6e23b1ccfdd9aa9aec2e32350300e6f5e96ecd24926bb",
+                "noTxs": 2,
+                "txDetails": [
+                    {
+                        "hex": "02000000010000000000000000000000000000000000000000000000000000000000000000ffffffff06036497040101ffffffff0100000000000000000000000000",
+                        "txid": "25144a48788e97f64aebb7c9f79452be07d45d212068b83f90787f657c8f4051",
+                        "version": 2,
+                        "vin": [
+                            {
+                                "coinbase": "036497040101",
+                                "sequence": 4294967295
+                            }
+                        ],
+                        "vout": [
+                            {
+                                "value": 0.00000000,
+                                "n": 0,
+                                "scriptPubKey": {
+                                    "hex": ""
+                                }
+                            }
+                        ],
+                        "time": 1551720401,
+                        "blocktime": 1551720401
+                    },
+                    {
+                        "hex": "02000000013cfcafa26d96e9735ae5dacbe7ab9e3e1e13c472ac63bc27ac5ee4c799d20d9f0100000000ffffffff030000000000000000006ca53bdf0a0000001976a914e744aa894a8de0f200f8a00f58d2367c7523cae788ac0020aa44000000001976a914fec8380fd18ca3ad8c1c42938e102ee3ffac6fc188ac00000000",
+                        "txid": "5174a1980cee089ca868758ffd396d71e742f34d9c7bada21d294b54e6819a4f",
+                        "version": 2,
+                        "vin": [
+                            {
+                                "txid": "9f0dd299c7e45eac27bc63ac72c4131e3e9eabe7cbdae55a73e9966da2affc3c",
+                                "vout": 1,
+                                "scriptSig": {
+                                    "hex": ""
+                                },
+                                "sequence": 4294967295
+                            }
+                        ],
+                        "vout": [
+                            {
+                                "value": 0.00000000,
+                                "n": 0,
+                                "scriptPubKey": {
+                                    "hex": ""
+                                }
+                            },
+                            {
+                                "value": 466.94901100,
+                                "n": 1,
+                                "scriptPubKey": {
+                                    "hex": "76a914e744aa894a8de0f200f8a00f58d2367c7523cae788ac"
+                                }
+                            },
+                            {
+                                "value": 11.52000000,
+                                "n": 2,
+                                "scriptPubKey": {
+                                    "hex": "76a914fec8380fd18ca3ad8c1c42938e102ee3ffac6fc188ac"
+                                }
+                            }
+                        ],
+                        "time": 1551720401,
+                        "blocktime": 1551720401
+                    }
+                ]
+            }
+        }
+    }
+}

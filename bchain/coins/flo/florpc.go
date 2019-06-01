@@ -4,6 +4,7 @@ import (
 	"blockbook/bchain"
 	"blockbook/bchain/coins/btc"
 	"encoding/json"
+
 	"github.com/juju/errors"
 
 	"github.com/golang/glog"
@@ -32,10 +33,11 @@ func NewFloRPC(config json.RawMessage, pushHandler func(bchain.NotificationType)
 
 // Initialize initializes FloRPC instance.
 func (f *FloRPC) Initialize() error {
-	chainName, err := f.GetChainInfoAndInitializeMempool(f)
+	ci, err := f.GetChainInfo()
 	if err != nil {
 		return err
 	}
+	chainName := ci.Chain
 
 	glog.Info("Chain name ", chainName)
 	params := GetChainParams(chainName)

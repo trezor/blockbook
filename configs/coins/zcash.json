@@ -22,10 +22,10 @@
     "package_name": "backend-zcash",
     "package_revision": "satoshilabs-1",
     "system_user": "zcash",
-    "version": "2.0.3",
-    "binary_url": "https://z.cash/downloads/zcash-2.0.3-linux64.tar.gz",
+    "version": "2.0.5-2",
+    "binary_url": "https://z.cash/downloads/zcash-2.0.5-2-linux64.tar.gz",
     "verification_type": "sha256",
-    "verification_source": "529900fa311509274cc3912ae886a3b8e193ae8a91801f810c3ca58f44bd1730",
+    "verification_source": "19755c5bffbb91be095add1b6e6e724b4c1c6f0c9c1f43353d51512cdd92e2a1",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [],
     "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/zcashd -datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -conf={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf -pid=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",
@@ -61,7 +61,7 @@
     }
   },
   "meta": {
-    "package_maintainer": "Petr Kracik",
-    "package_maintainer_email": "petr.kracik@satoshilabs.com"
+    "package_maintainer": "IT Admin",
+    "package_maintainer_email": "it@satoshilabs.com"
   }
 }

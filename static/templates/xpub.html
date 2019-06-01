@@ -27,10 +27,10 @@
                 </tr>
                 <tr>
                     <td>Used XPUB Addresses</td>
-                    <td class="data">{{$addr.TotalTokens}}</td>
+                    <td class="data">{{$addr.UsedTokens}}</td>
                 </tr>
-                {{- if or $addr.Tokens $addr.TotalTokens -}}
-                <tr>
+                 <tr>
+                    {{- if or $addr.Tokens $addr.UsedTokens -}}
                     <td>{{if $data.NonZeroBalanceTokens}}XPUB Addresses with Balance{{else}}XPUB Addresses{{end}}</td>
                     <td style="padding: 0;">
                         <table class="table data-table">
@@ -51,15 +51,17 @@
                                 {{- end -}}
                                 {{- if $data.NonZeroBalanceTokens -}}
                                 <tr>
-                                    <td colspan="4"><a href="?tokens=used">Show all XPUB addresses</a></td>
+                                    <td colspan="4"><a href="?tokens=used" style="float: left; margin-right: 30px;">Show used XPUB addresses</a><a href="?tokens=derived" style="float: left;">Show derived XPUB addresses</a></td>
                                 </tr>
                                 {{- end -}}
                             </tbody>
                         </table>
                     </td>
+                    {{- else -}}
+                    <td></td><td><a href="?tokens=derived" style="float: left;">Show derived XPUB addresses</a></td>
+                    {{- end -}}
                 </tr>
-                {{- end -}}
-            </tbody>
+        </tbody>
         </table>
     </div>
     <div class="col-md-2">

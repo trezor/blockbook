@@ -11,12 +11,12 @@ import (
 
 const firstBlockWithSpecialTransactions = 1028160
 
-// DashRPC is an interface to JSON-RPC bitcoind service.
+// DashRPC is an interface to JSON-RPC bitcoind service
 type DashRPC struct {
 	*btc.BitcoinRPC
 }
 
-// NewDashRPC returns new DashRPC instance.
+// NewDashRPC returns new DashRPC instance
 func NewDashRPC(config json.RawMessage, pushHandler func(bchain.NotificationType)) (bchain.BlockChain, error) {
 	b, err := btc.NewBitcoinRPC(config, pushHandler)
 	if err != nil {
@@ -34,10 +34,11 @@ func NewDashRPC(config json.RawMessage, pushHandler func(bchain.NotificationType
 
 // Initialize initializes DashRPC instance.
 func (b *DashRPC) Initialize() error {
-	chainName, err := b.GetChainInfoAndInitializeMempool(b)
+	ci, err := b.GetChainInfo()
 	if err != nil {
 		return err
 	}
+	chainName := ci.Chain
 
 	params := GetChainParams(chainName)
 
@@ -58,7 +59,7 @@ func (b *DashRPC) Initialize() error {
 	return nil
 }
 
-// GetBlock returns block with given hash.
+// GetBlock returns block with given hash
 func (b *DashRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 	if hash == "" && height < firstBlockWithSpecialTransactions {
 		return b.BitcoinRPC.GetBlock(hash, height)
@@ -108,6 +109,6 @@ func (b *DashRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 
 // GetTransactionForMempool returns a transaction by the transaction ID.
 // It could be optimized for mempool, i.e. without block time and confirmations
-func (z *DashRPC) GetTransactionForMempool(txid string) (*bchain.Tx, error) {
-	return z.GetTransaction(txid)
+func (b *DashRPC) GetTransactionForMempool(txid string) (*bchain.Tx, error) {
+	return b.GetTransaction(txid)
 }

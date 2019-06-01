@@ -22,10 +22,10 @@
     "package_name": "backend-bcash",
     "package_revision": "satoshilabs-1",
     "system_user": "bcash",
-    "version": "0.19.0",
-    "binary_url": "https://download.bitcoinabc.org/0.19.0/linux/bitcoin-abc-0.19.0-x86_64-linux-gnu.tar.gz",
+    "version": "0.19.6",
+    "binary_url": "https://download.bitcoinabc.org/0.19.6/linux/bitcoin-abc-0.19.6-x86_64-linux-gnu.tar.gz",
     "verification_type": "sha256",
-    "verification_source": "788001fd5ce8ca0bd61e8a92f10d22b7a49695c3651c60fad11358ba29309a1b",
+    "verification_source": "b84aad1c0061fcafdef1b89cb75e2fc79be8f0a872fad8b1c40eebe59652a2d2",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
       "bin/bitcoin-qt"
@@ -49,7 +49,7 @@
     "additional_params": "",
     "block_chain": {
       "parse": true,
-      "subversion": "/Bitcoin ABC:0.17.1/",
+      "subversion": "/Bitcoin ABC:0.19.6/",
       "address_format": "cashaddr",
       "mempool_workers": 8,
       "mempool_sub_workers": 2,
@@ -60,7 +60,7 @@
     }
   },
   "meta": {
-    "package_maintainer": "Petr Kracik",
-    "package_maintainer_email": "petr.kracik@satoshilabs.com"
+    "package_maintainer": "IT",
+    "package_maintainer_email": "it@satoshilabs.com"
   }
 }

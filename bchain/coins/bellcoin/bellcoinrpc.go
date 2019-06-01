@@ -31,10 +31,11 @@ func NewBellcoinRPC(config json.RawMessage, pushHandler func(bchain.Notification
 
 // Initialize initializes BellcoinRPC instance.
 func (b *BellcoinRPC) Initialize() error {
-	chainName, err := b.GetChainInfoAndInitializeMempool(b)
+	ci, err := b.GetChainInfo()
 	if err != nil {
 		return err
 	}
+	chainName := ci.Chain
 
 	glog.Info("Chain name ", chainName)
 	params := GetChainParams(chainName)
