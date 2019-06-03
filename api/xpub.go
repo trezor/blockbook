@@ -101,7 +101,7 @@ func (w *Worker) xpubGetAddressTxids(addrDesc bchain.AddressDescriptor, mempool 
 				l = len(txs)
 				callback(m.Txid, 0, []int32{m.Vout})
 				if len(txs) > l {
-					uniqueTxs[m.Txid] = l - 1
+					uniqueTxs[m.Txid] = l
 				}
 			} else {
 				if m.Vout < 0 {
