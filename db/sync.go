@@ -78,7 +78,7 @@ func (w *SyncWorker) ResyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 		return nil
 	}
 
-	w.metrics.IndexResyncErrors.With(common.Labels{"error": err.Error()}).Inc()
+	w.metrics.IndexResyncErrors.With(common.Labels{"error": "failure"}).Inc()
 
 	return err
 }
@@ -300,7 +300,7 @@ func (w *SyncWorker) ConnectBlocksParallel(lower, higher uint32) error {
 						return
 					}
 					glog.Error("getBlockWorker ", i, " connect block error ", err, ". Retrying...")
-					w.metrics.IndexResyncErrors.With(common.Labels{"error": err.Error()}).Inc()
+					w.metrics.IndexResyncErrors.With(common.Labels{"error": "failure"}).Inc()
 					time.Sleep(time.Millisecond * 500)
 				} else {
 					break
@@ -338,7 +338,7 @@ ConnectLoop:
 			hash, err = w.chain.GetBlockHash(h)
 			if err != nil {
 				glog.Error("GetBlockHash error ", err)
-				w.metrics.IndexResyncErrors.With(common.Labels{"error": err.Error()}).Inc()
+				w.metrics.IndexResyncErrors.With(common.Labels{"error": "failure"}).Inc()
 				time.Sleep(time.Millisecond * 500)
 				continue
 			}

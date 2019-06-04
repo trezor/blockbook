@@ -341,7 +341,7 @@ func (s *WebsocketServer) onRequest(c *websocketChannel, req *websocketReq) {
 		s.metrics.WebsocketRequests.With(common.Labels{"method": req.Method, "status": "success"}).Inc()
 	} else {
 		glog.Error("Client ", c.id, " onMessage ", req.Method, ": ", errors.ErrorStack(err))
-		s.metrics.WebsocketRequests.With(common.Labels{"method": req.Method, "status": err.Error()}).Inc()
+		s.metrics.WebsocketRequests.With(common.Labels{"method": req.Method, "status": "failure"}).Inc()
 		e := resultError{}
 		e.Error.Message = err.Error()
 		data = e
