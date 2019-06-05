@@ -58,6 +58,12 @@
         <h3>Backend</h3>
         <table class="table data-table">
             <tbody>
+                {{- if $be.BackendError -}}
+                <tr>
+                    <td style="width: 30%;">Backend Error</td>
+                    <td class="data text-danger">{{$be.BackendError}}</td>
+                </tr>
+                {{- end -}}
                 <tr>
                     <td style="width: 30%;">Chain</td>
                     <td class="data">{{$be.Chain}}</td>

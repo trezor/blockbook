@@ -1091,13 +1091,18 @@ func (w *Worker) ComputeFeeStats(blockFrom, blockTo int, stopCompute chan os.Sig
 // GetSystemInfo returns information about system
 func (w *Worker) GetSystemInfo(internal bool) (*SystemInfo, error) {
 	start := time.Now()
-	ci, err := w.chain.GetChainInfo()
-	if err != nil {
-		return nil, errors.Annotatef(err, "GetChainInfo")
-	}
 	vi := common.GetVersionInfo()
 	inSync, bestHeight, lastBlockTime := w.is.GetSyncState()
 	inSyncMempool, lastMempoolTime, mempoolSize := w.is.GetMempoolSyncState()
+	ci, err := w.chain.GetChainInfo()
+	var backendError string
+	if err != nil {
+		backendError = errors.Annotatef(err, "GetChainInfo").Error()
+		ci = &bchain.ChainInfo{}
+		// set not in sync in case of backend error
+		inSync = false
+		inSyncMempool = false
+	}
 	var columnStats []common.InternalStateColumn
 	var internalDBSize int64
 	if internal {
@@ -1125,7 +1130,8 @@ func (w *Worker) GetSystemInfo(internal bool) (*SystemInfo, error) {
 		About:             Text.BlockbookAbout,
 	}
 	backendInfo := &BackendInfo{
-		Bestblockhash:   ci.Bestblockhash,
+		BackendError:    backendError,
+		BestBlockHash:   ci.Bestblockhash,
 		Blocks:          ci.Blocks,
 		Chain:           ci.Chain,
 		Difficulty:      ci.Difficulty,

@@ -341,17 +341,18 @@ type BlockbookInfo struct {
 
 // BackendInfo is used to get information about blockchain
 type BackendInfo struct {
-	Chain           string  `json:"chain"`
-	Blocks          int     `json:"blocks"`
-	Headers         int     `json:"headers"`
-	Bestblockhash   string  `json:"bestBlockHash"`
-	Difficulty      string  `json:"difficulty"`
-	SizeOnDisk      int64   `json:"sizeOnDisk"`
-	Version         string  `json:"version"`
-	Subversion      string  `json:"subversion"`
-	ProtocolVersion string  `json:"protocolVersion"`
-	Timeoffset      float64 `json:"timeOffset"`
-	Warnings        string  `json:"warnings"`
+	BackendError    string  `json:"error,omitempty"`
+	Chain           string  `json:"chain,omitempty"`
+	Blocks          int     `json:"blocks,omitempty"`
+	Headers         int     `json:"headers,omitempty"`
+	BestBlockHash   string  `json:"bestBlockHash,omitempty"`
+	Difficulty      string  `json:"difficulty,omitempty"`
+	SizeOnDisk      int64   `json:"sizeOnDisk,omitempty"`
+	Version         string  `json:"version,omitempty"`
+	Subversion      string  `json:"subversion,omitempty"`
+	ProtocolVersion string  `json:"protocolVersion,omitempty"`
+	Timeoffset      float64 `json:"timeOffset,omitempty"`
+	Warnings        string  `json:"warnings,omitempty"`
 }
 
 // SystemInfo contains information about the running blockbook and backend instance
