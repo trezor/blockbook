@@ -370,7 +370,8 @@ func (b *EthereumRPC) getBestHeader() (*ethtypes.Header, error) {
 		}
 	}
 	// if the best header was not updated for 15 minutes, there could be a subscription problem, reconnect RPC
-	if b.bestHeaderTime.Add(15 * time.Minute).Before(time.Now()) {
+	// do it only in case of normal operation, not initial synchronization
+	if b.bestHeaderTime.Add(15*time.Minute).Before(time.Now()) && !b.bestHeaderTime.IsZero() && b.mempoolInitialized {
 		err := b.reconnectRPC()
 		if err != nil {
 			return nil, err
