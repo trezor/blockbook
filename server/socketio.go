@@ -184,7 +184,7 @@ func (s *SocketIoServer) onMessage(c *gosocketio.Channel, req map[string]json.Ra
 		s.metrics.SocketIORequests.With(common.Labels{"method": method, "status": "success"}).Inc()
 		return rv
 	}
-	glog.Error(c.Id(), " onMessage ", method, ": ", errors.ErrorStack(err))
+	glog.Error(c.Id(), " onMessage ", method, ": ", errors.ErrorStack(err), ", data ", string(params))
 	s.metrics.SocketIORequests.With(common.Labels{"method": method, "status": "failure"}).Inc()
 	e := resultError{}
 	e.Error.Message = err.Error()
