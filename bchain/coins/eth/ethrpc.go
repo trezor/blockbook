@@ -327,13 +327,13 @@ func (b *EthereumRPC) GetSubversion() string {
 
 // GetChainInfo returns information about the connected backend
 func (b *EthereumRPC) GetChainInfo() (*bchain.ChainInfo, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
-	defer cancel()
-	id, err := b.client.NetworkID(ctx)
+	h, err := b.getBestHeader()
 	if err != nil {
 		return nil, err
 	}
-	h, err := b.getBestHeader()
+	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
+	defer cancel()
+	id, err := b.client.NetworkID(ctx)
 	if err != nil {
 		return nil, err
 	}

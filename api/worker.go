@@ -1097,6 +1097,7 @@ func (w *Worker) GetSystemInfo(internal bool) (*SystemInfo, error) {
 	ci, err := w.chain.GetChainInfo()
 	var backendError string
 	if err != nil {
+		glog.Error("GetChainInfo error ", err)
 		backendError = errors.Annotatef(err, "GetChainInfo").Error()
 		ci = &bchain.ChainInfo{}
 		// set not in sync in case of backend error
