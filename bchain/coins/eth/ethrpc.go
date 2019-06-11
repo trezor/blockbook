@@ -74,6 +74,9 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 	}
 
 	rc, ec, err := openRPC(c.RPCURL)
+	if err != nil {
+		return nil, err
+	}
 
 	s := &EthereumRPC{
 		BaseChain:   &bchain.BaseChain{},
@@ -384,6 +387,7 @@ func (b *EthereumRPC) getBestHeader() (*ethtypes.Header, error) {
 		defer cancel()
 		b.bestHeader, err = b.client.HeaderByNumber(ctx, nil)
 		if err != nil {
+			b.bestHeader = nil
 			return nil, err
 		}
 		b.bestHeaderTime = time.Now()
