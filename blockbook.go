@@ -15,6 +15,7 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -105,6 +106,13 @@ func init() {
 }
 
 func main() {
+	defer func() {
+		if e := recover(); e != nil {
+			glog.Error("main recovered from panic: ", e)
+			debug.PrintStack()
+			os.Exit(-1)
+		}
+	}()
 	os.Exit(mainWithExitCode())
 }
 

@@ -31,7 +31,7 @@ func NewRitocoinRPC(config json.RawMessage, pushHandler func(bchain.Notification
 
 // Initialize initializes RitocoinRPC instance.
 func (b *RitocoinRPC) Initialize() error {
-  ci, err := b.GetChainInfo()
+	ci, err := b.GetChainInfo()
 	if err != nil {
 		return err
 	}
