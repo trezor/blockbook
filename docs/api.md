@@ -108,6 +108,8 @@ Response:
 }
 ```
 
+_Note: Blockbook always follows the main chain of the backend it is attached to. See notes on **Get Block** below_ 
+
 #### Get transaction
 Get transaction returns "normalized" data about transaction, which has the same general structure for all supported coins. It does not return coin specific fields (for example information about Zcash shielded addresses).
 ```
@@ -525,6 +527,7 @@ Response:
   ]
 }
 ```
+_Note: Blockbook always follows the main chain of the backend it is attached to. If there is a rollback-reorg in the backend, Blockbook will also do rollback. When you ask for block by height, you will always get the main chain block.If you ask for block by hash, you may get the block from another fork but it is not guaranteed (backend may not keep it)_
 
 #### Send transaction
 
@@ -574,3 +577,5 @@ The client can subscribe to the following events:
 - new transaction for given address (list of addresses)
 
 There can be always only one subscription of given event per connection, i.e. new list of addresses replaces previous list of addresses.
+
+_Note: If there is reorg on backend(blockchain), you will get a new block hash with the same or even smaller height if the reorg is deeper_
