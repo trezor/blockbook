@@ -31,7 +31,7 @@ RUN apt-get update && \
 `# install rocksdb` \
     cd /opt && \
     git clone -b $ROCKSDB_VERSION --depth 1 https://github.com/facebook/rocksdb.git && \
-    cd /opt/rocksdb && CFLAGS=-fPIC CXXFLAGS=-fPIC make -j 4 release && \
+    cd /opt/rocksdb && CFLAGS=-fPIC CXXFLAGS=-fPIC make -j$(nproc) release && \
     strip /opt/rocksdb/ldb /opt/rocksdb/sst_dump && \
     cp /opt/rocksdb/ldb /opt/rocksdb/sst_dump /build && \
 \
