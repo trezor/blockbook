@@ -2,6 +2,7 @@
 
 FROM debian:9
 
+ENV DEBIAN_FRONTEND="noninteractive"
 ENV GOLANG_VERSION="go1.12.4.linux-amd64"
 ENV ROCKSDB_VERSION="v5.18.3"
 ENV GOPATH="/go"
