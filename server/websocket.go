@@ -357,6 +357,7 @@ type accountInfoReq struct {
 	FromHeight     int    `json:"from"`
 	ToHeight       int    `json:"to"`
 	ContractFilter string `json:"contractFilter"`
+	Gap            int    `json:"gap"`
 }
 
 func unmarshalGetAccountInfoRequest(params []byte) (*accountInfoReq, error) {
@@ -401,7 +402,7 @@ func (s *WebsocketServer) getAccountInfo(req *accountInfoReq) (res *api.Address,
 	if req.PageSize == 0 {
 		req.PageSize = txsOnPage
 	}
-	a, err := s.api.GetXpubAddress(req.Descriptor, req.Page, req.PageSize, opt, &filter, 0)
+	a, err := s.api.GetXpubAddress(req.Descriptor, req.Page, req.PageSize, opt, &filter, req.Gap)
 	if err != nil {
 		return s.api.GetAddress(req.Descriptor, req.Page, req.PageSize, opt, &filter)
 	}

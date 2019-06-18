@@ -135,6 +135,7 @@
                 from,
                 to,
                 contractFilter
+                // default gap=20
             };
             send(method, params, function (result) {
                 document.getElementById('getAccountInfoResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
