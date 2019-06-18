@@ -19,20 +19,26 @@ import (
 
 const (
 	MainnetMagic wire.BitcoinNet = 0xd9b400f9
+	TestnetMagic wire.BitcoinNet = 0xb194aa75
 )
 
 var (
 	// MainNetParams are parser parameters for mainnet
 	MainNetParams chaincfg.Params
-	// TestNetParams are parser parameters for testnet
-	TestNetParams chaincfg.Params
+	// TestNet3Params are parser parameters for testnet
+	TestNet3Params chaincfg.Params
 )
 
 func init() {
 	MainNetParams = chaincfg.MainNetParams
 	MainNetParams.Net = MainnetMagic
-	MainNetParams.PubKeyHashAddrID = []byte{0x13, 0x86}
+	MainNetParams.PubKeyHashAddrID = []byte{0x07, 0x3f}
 	MainNetParams.ScriptHashAddrID = []byte{0x07, 0x1a}
+
+	TestNet3Params = chaincfg.TestNet3Params
+	TestNet3Params.Net = TestnetMagic
+	TestNet3Params.PubKeyHashAddrID = []byte{0x0f, 0x21}
+	TestNet3Params.ScriptHashAddrID = []byte{0x0e, 0xfc}
 }
 
 // DecredParser handle
@@ -48,36 +54,40 @@ func NewDecredParser(params *chaincfg.Params, c *btc.Configuration) *DecredParse
 // GetChainParams contains network parameters for the main Decred network,
 // and the test Decred network
 func GetChainParams(chain string) *chaincfg.Params {
-	if !chaincfg.IsRegistered(&MainNetParams) {
-		err := chaincfg.Register(&MainNetParams)
-		if err != nil {
+	var param *chaincfg.Params
+
+	switch chain {
+	case "testnet3":
+		param = &TestNet3Params
+	default:
+		param = &MainNetParams
+	}
+
+	if !chaincfg.IsRegistered(param) {
+		if err := chaincfg.Register(param); err != nil {
 			panic(err)
 		}
 	}
-	switch chain {
-	default:
-		return &MainNetParams
-	}
+	return param
 }
 
 // ParseBlock parses raw block to our Block struct
 // it has special handling for Auxpow blocks that cannot be parsed by standard btc wire parser
 func (p *DecredParser) ParseBlock(b []byte) (*bchain.Block, error) {
 	r := bytes.NewReader(b)
-	w := wire.MsgBlock{}
 	h := wire.BlockHeader{}
-	err := h.Deserialize(r)
-	if err != nil {
+	if err := h.Deserialize(r); err != nil {
 		return nil, err
 	}
+
 	if (h.Version & utils.VersionAuxpow) != 0 {
-		if err = utils.SkipAuxpow(r); err != nil {
+		if err := utils.SkipAuxpow(r); err != nil {
 			return nil, err
 		}
 	}
 
-	err = utils.DecodeTransactions(r, 0, wire.WitnessEncoding, &w)
-	if err != nil {
+	var w wire.MsgBlock
+	if err := utils.DecodeTransactions(r, 0, wire.WitnessEncoding, &w); err != nil {
 		return nil, err
 	}
 
@@ -96,38 +106,33 @@ func (p *DecredParser) ParseBlock(b []byte) (*bchain.Block, error) {
 }
 
 func (p *DecredParser) ParseTxFromJson(jsonTx json.RawMessage) (*bchain.Tx, error) {
-	getTxResult := GetTransactionResult{}
-	err := json.Unmarshal([]byte(jsonTx), &getTxResult.Result)
-	if err != nil {
+	var getTxResult GetTransactionResult
+	if err := json.Unmarshal([]byte(jsonTx), &getTxResult.Result); err != nil {
 		return nil, err
 	}
 
-	var vins = make([]bchain.Vin, 0)
-	var vouts []bchain.Vout
-
-	for _, input := range getTxResult.Result.Vin {
-		vin := bchain.Vin{
+	vins := make([]bchain.Vin, len(getTxResult.Result.Vin))
+	for index, input := range getTxResult.Result.Vin {
+		vins[index] = bchain.Vin{
 			Coinbase:  input.Coinbase,
 			Txid:      input.Txid,
 			Vout:      input.Vout,
 			ScriptSig: bchain.ScriptSig{},
 			Sequence:  input.Sequence,
-			Addresses: []string{},
+			// Addresses: []string{},
 		}
-		vins = append(vins, vin)
 	}
 
-	for _, output := range getTxResult.Result.Vout {
-		valueSat := *big.NewInt(int64(output.Value * 100000000))
-		vout := bchain.Vout{
-			ValueSat: valueSat,
+	vouts := make([]bchain.Vout, len(getTxResult.Result.Vout))
+	for index, output := range getTxResult.Result.Vout {
+		vouts[index] = bchain.Vout{
+			ValueSat: *big.NewInt(int64(output.Value * 100000000)),
 			N:        output.N,
 			ScriptPubKey: bchain.ScriptPubKey{
 				Hex:       output.ScriptPubKey.Hex,
 				Addresses: output.ScriptPubKey.Addresses,
 			},
 		}
-		vouts = append(vouts, vout)
 	}
 
 	tx := &bchain.Tx{
@@ -160,7 +165,14 @@ func (p *DecredParser) GetAddrDescFromVout(output *bchain.Vout) (bchain.AddressD
 		return nil, err
 	}
 
-	scriptClass, addresses, _, err := txscript.ExtractPkScriptAddrs(txscript.DefaultScriptVersion, script, &dch.TestNet3Params)
+	var params dch.Params
+	if p.Params.Name == "mainnet" {
+		params = dch.MainNetParams
+	} else {
+		params = dch.TestNet3Params
+	}
+
+	scriptClass, addresses, _, err := txscript.ExtractPkScriptAddrs(txscript.DefaultScriptVersion, script, &params)
 	if err != nil {
 		return nil, err
 	}

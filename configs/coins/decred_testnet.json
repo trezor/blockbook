@@ -6,7 +6,7 @@
       "alias": "dcr"
     },
     "ports": {
-      "backend_rpc": 9109,
+      "backend_rpc": 19109,
       "backend_message_queue": 38888,
       "blockbook_internal": 10108,
       "blockbook_public": 11108
@@ -48,7 +48,7 @@
       "system_user": "blockbook-decred",
       "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
       "public_binding_template": ":{{.Ports.BlockbookPublic}}",
-      "explorer_url": "https://mainnet.decred.org/",
+      "explorer_url": "https://testnet.dcrdata.org/",
       "additional_params": "",
       "block_chain": {
         "parse": true,

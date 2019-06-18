@@ -12,10 +12,12 @@ import (
 	"net/http"
 	"runtime/debug"
 	"strconv"
+	"strings"
 	"time"
 
 	"blockbook/bchain/coins/btc"
 
+	"github.com/decred/dcrd/dcrjson"
 	"github.com/golang/glog"
 	"github.com/juju/errors"
 )
@@ -290,6 +292,8 @@ type EstimateFeeResult struct {
 }
 
 type SendRawTransactionResult struct {
+	Error  Error  `json:"error"`
+	Result string `json:"result"`
 }
 
 type DecodeRawTransactionResult struct {
@@ -309,26 +313,28 @@ func (d *DecredRPC) GetChainInfo() (*bchain.ChainInfo, error) {
 		ID:     1,
 		Method: "getblockchaininfo",
 	}
-	blockchainInfoResult := GetBlockChainInfoResult{}
-	err := d.Call(blockchainInfoRequest, &blockchainInfoResult)
-	if err != nil {
+
+	var blockchainInfoResult GetBlockChainInfoResult
+	if err := d.Call(blockchainInfoRequest, &blockchainInfoResult); err != nil {
 		return nil, err
 	}
+
 	if blockchainInfoResult.Error.Message != "" {
-		return nil, fmt.Errorf("Error fetching blockchain info: %s", blockchainInfoResult.Error.Message)
+		return nil, mapToStandardErr("Error fetching blockchain info: %s", blockchainInfoResult.Error)
 	}
 
 	infoChainRequest := GenericCmd{
 		ID:     2,
 		Method: "getinfo",
 	}
-	infoChainResult := &GetInfoChainResult{}
-	err = d.Call(infoChainRequest, infoChainResult)
-	if err != nil {
+
+	var infoChainResult GetInfoChainResult
+	if err := d.Call(infoChainRequest, &infoChainResult); err != nil {
 		return nil, err
 	}
+
 	if infoChainResult.Error.Message != "" {
-		return nil, fmt.Errorf("Error fetching network info: %s", infoChainResult.Error.Message)
+		return nil, mapToStandardErr("Error fetching network info: %s", infoChainResult.Error)
 	}
 
 	chainInfo := &bchain.ChainInfo{
@@ -352,16 +358,17 @@ func (d *DecredRPC) getBestBlock() (*GetBestBlockResult, error) {
 		ID:     1,
 		Method: "getbestblock",
 	}
-	bestBlockResult := &GetBestBlockResult{}
-	err := d.Call(bestBlockRequest, bestBlockResult)
-	if err != nil {
+
+	var bestBlockResult GetBestBlockResult
+	if err := d.Call(bestBlockRequest, &bestBlockResult); err != nil {
 		return nil, err
 	}
+
 	if bestBlockResult.Error.Message != "" {
-		return nil, fmt.Errorf("Error fetching best block: %s", bestBlockResult.Error.Message)
+		return nil, mapToStandardErr("Error fetching best block: %s", bestBlockResult.Error)
 	}
 
-	return bestBlockResult, err
+	return &bestBlockResult, nil
 }
 
 func (d *DecredRPC) GetBestBlockHash() (string, error) {
@@ -388,16 +395,17 @@ func (d *DecredRPC) GetBlockHash(height uint32) (string, error) {
 		Method: "getblockhash",
 		Params: []interface{}{height},
 	}
-	blockHashResult := GetBlockHashResult{}
-	err := d.Call(blockHashRequest, &blockHashResult)
-	if err != nil {
+
+	var blockHashResult GetBlockHashResult
+	if err := d.Call(blockHashRequest, &blockHashResult); err != nil {
 		return "", err
 	}
+
 	if blockHashResult.Error.Message != "" {
-		return "", fmt.Errorf("Error fetching block hash: %s", blockHashResult.Error.Message)
+		return "", mapToStandardErr("Error fetching block hash: %s", blockHashResult.Error)
 	}
 
-	return blockHashResult.Result, err
+	return blockHashResult.Result, nil
 }
 
 func (d *DecredRPC) GetBlockHeader(hash string) (*bchain.BlockHeader, error) {
@@ -407,13 +415,13 @@ func (d *DecredRPC) GetBlockHeader(hash string) (*bchain.BlockHeader, error) {
 		Params: []interface{}{hash},
 	}
 
-	blockHeader := &GetBlockHeaderResult{}
-	err := d.Call(blockHeaderRequest, blockHeader)
-	if err != nil {
+	var blockHeader GetBlockHeaderResult
+	if err := d.Call(blockHeaderRequest, &blockHeader); err != nil {
 		return nil, err
 	}
+
 	if blockHeader.Error.Message != "" {
-		return nil, fmt.Errorf("Error fetching block info: %s", blockHeader.Error.Message)
+		return nil, mapToStandardErr("Error fetching block info: %s", blockHeader.Error)
 	}
 
 	header := &bchain.BlockHeader{
@@ -441,13 +449,14 @@ func (d *DecredRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) 
 			Method: "getblockhash",
 			Params: []interface{}{height},
 		}
-		getHashResult := &GetBlockHashResult{}
-		err := d.Call(getHashRequest, getHashResult)
-		if err != nil {
+
+		var getHashResult GetBlockHashResult
+		if err := d.Call(getHashRequest, &getHashResult); err != nil {
 			return nil, err
 		}
+
 		if getHashResult.Error.Message != "" {
-			return nil, fmt.Errorf("Error fetching block hash: %s", getHashResult.Error.Message)
+			return nil, mapToStandardErr("Error fetching block hash: %s", getHashResult.Error)
 		}
 		requestHash = getHashResult.Result
 	}
@@ -467,22 +476,19 @@ func (d *DecredRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) 
 		Time:          block.Result.Time,
 	}
 
-	bchainBlock := &bchain.Block{
-		BlockHeader: header,
-	}
+	bchainBlock := &bchain.Block{BlockHeader: header}
 
-	for _, txId := range block.Result.Tx {
+	for _, txID := range block.Result.Tx {
 		if block.Result.Height == 0 {
 			continue
 		}
 
-		tx, err := d.GetTransaction(txId)
+		tx, err := d.GetTransaction(txID)
 		if err != nil {
 			return nil, err
 		}
 
 		bchainBlock.Txs = append(bchainBlock.Txs, *tx)
-
 	}
 
 	return bchainBlock, nil
@@ -494,16 +500,17 @@ func (d *DecredRPC) getBlock(hash string) (*GetBlockResult, error) {
 		Method: "getblock",
 		Params: []interface{}{hash},
 	}
-	block := &GetBlockResult{}
-	err := d.Call(blockRequest, block)
-	if err != nil {
+
+	var block GetBlockResult
+	if err := d.Call(blockRequest, &block); err != nil {
 		return nil, err
 	}
+
 	if block.Error.Message != "" {
-		return nil, fmt.Errorf("Error fetching block info: %s", block.Error.Message)
+		return nil, mapToStandardErr("Error fetching block info: %s", block.Error)
 	}
 
-	return block, err
+	return &block, nil
 }
 
 func (d *DecredRPC) decodeRawTransaction(txHex string) (*bchain.Tx, error) {
@@ -512,13 +519,14 @@ func (d *DecredRPC) decodeRawTransaction(txHex string) (*bchain.Tx, error) {
 		Method: "decoderawtransaction",
 		Params: []interface{}{txHex},
 	}
-	decodeRawTxResult := &DecodeRawTransactionResult{}
-	err := d.Call(decodeRawTxRequest, &decodeRawTxResult)
-	if err != nil {
+
+	var decodeRawTxResult DecodeRawTransactionResult
+	if err := d.Call(decodeRawTxRequest, &decodeRawTxResult); err != nil {
 		return nil, err
 	}
+
 	if decodeRawTxResult.Error.Message != "" {
-		return nil, fmt.Errorf("Error decoding raw tx: %s", decodeRawTxResult.Error.Message)
+		return nil, mapToStandardErr("Error decoding raw tx: %s", decodeRawTxResult.Error)
 	}
 
 	tx := &bchain.Tx{
@@ -564,6 +572,7 @@ func (d *DecredRPC) GetMempoolTransactions() ([]string, error) {
 	return nil, nil
 }
 
+// GetTransaction returns a transaction by the transaction ID
 func (d *DecredRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 	r, err := d.getRawTransaction(txid)
 	if err != nil {
@@ -578,6 +587,7 @@ func (d *DecredRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 	return tx, nil
 }
 
+// getRawTransaction returns json as returned by backend, with all coin specific data
 func (d *DecredRPC) getRawTransaction(txid string) (json.RawMessage, error) {
 	if txid == "" {
 		return nil, bchain.ErrTxidMissing
@@ -589,13 +599,14 @@ func (d *DecredRPC) getRawTransaction(txid string) (json.RawMessage, error) {
 		Method: "getrawtransaction",
 		Params: []interface{}{txid, &verbose},
 	}
-	getTxResult := &GetTransactionResult{}
-	err := d.Call(getTxRequest, &getTxResult)
-	if err != nil {
+
+	var getTxResult GetTransactionResult
+	if err := d.Call(getTxRequest, &getTxResult); err != nil {
 		return nil, err
 	}
+
 	if getTxResult.Error.Message != "" {
-		return nil, fmt.Errorf("Error fetching transaction: %s", getTxResult.Error.Message)
+		return nil, mapToStandardErr("Error fetching transaction: %s", getTxResult.Error)
 	}
 
 	bytes, err := json.Marshal(getTxResult.Result)
@@ -614,25 +625,27 @@ func (d *DecredRPC) GetTransactionSpecific(tx *bchain.Tx) (json.RawMessage, erro
 	return d.getRawTransaction(tx.Txid)
 }
 
+// EstimateSmartFee returns fee estimation
 func (d *DecredRPC) EstimateSmartFee(blocks int, conservative bool) (big.Int, error) {
 	estimateSmartFeeRequest := GenericCmd{
 		ID:     1,
 		Method: "estimatesmartfee",
 		Params: []interface{}{blocks},
 	}
-	estimateSmartFeeResult := EstimateSmartFeeResult{}
 
-	err := d.Call(estimateSmartFeeRequest, &estimateSmartFeeResult)
-	if err != nil {
+	var smartFeeEstimate EstimateSmartFeeResult
+	if err := d.Call(estimateSmartFeeRequest, &smartFeeEstimate); err != nil {
 		return *big.NewInt(0), nil
 	}
-	if estimateSmartFeeResult.Error.Message != "" {
-		return *big.NewInt(0), fmt.Errorf("Error fetching smart fee estimate: %s", estimateSmartFeeResult.Error.Message)
+
+	if smartFeeEstimate.Error.Message != "" {
+		return *big.NewInt(0), mapToStandardErr("Error fetching smart fee estimate: %s", smartFeeEstimate.Error)
 	}
 
-	return *big.NewInt(int64(estimateSmartFeeResult.Result.FeeRate)), nil
+	return *big.NewInt(int64(smartFeeEstimate.Result.FeeRate)), nil
 }
 
+// EstimateFee returns fee estimation.
 func (d *DecredRPC) EstimateFee(blocks int) (big.Int, error) {
 	estimateFeeRequest := GenericCmd{
 		ID:     1,
@@ -640,13 +653,16 @@ func (d *DecredRPC) EstimateFee(blocks int) (big.Int, error) {
 		Params: []interface{}{blocks},
 	}
 
-	estimateFeeResult := EstimateFeeResult{}
-	err := d.Call(estimateFeeRequest, &estimateFeeResult)
-	if err != nil {
+	var feeEstimate EstimateFeeResult
+	if err := d.Call(estimateFeeRequest, &feeEstimate); err != nil {
 		return *big.NewInt(0), err
 	}
 
-	r, err := d.Parser.AmountToBigInt(estimateFeeResult.Result)
+	if feeEstimate.Error.Message != "" {
+		return *big.NewInt(0), mapToStandardErr("Error fetching fee estimate: %s", feeEstimate.Error)
+	}
+
+	r, err := d.Parser.AmountToBigInt(feeEstimate.Result)
 	if err != nil {
 		return r, err
 	}
@@ -661,13 +677,17 @@ func (d *DecredRPC) SendRawTransaction(tx string) (string, error) {
 		Params: []interface{}{tx},
 	}
 
-	var res string
-	err := d.Call(sendRawTxRequest, res)
+	var sendRawTxResult SendRawTransactionResult
+	err := d.Call(sendRawTxRequest, &sendRawTxResult)
 	if err != nil {
 		return "", err
 	}
 
-	return res, nil
+	if sendRawTxResult.Error.Message != "" {
+		return "", mapToStandardErr("error sending raw transaction: %s", sendRawTxResult.Error)
+	}
+
+	return sendRawTxResult.Result, nil
 }
 
 // Call calls Backend RPC interface, using RPCMarshaler interface to marshall the request
@@ -695,8 +715,7 @@ func (d *DecredRPC) Call(req interface{}, res interface{}) error {
 	// if server returns HTTP error code it might not return json with response
 	// handle both cases
 	if httpRes.StatusCode != 200 {
-		err = safeDecodeResponse(httpRes.Body, &res)
-		if err != nil {
+		if err = safeDecodeResponse(httpRes.Body, &res); err != nil {
 			return errors.Errorf("%v %v", httpRes.Status, err)
 		}
 		return nil
@@ -724,4 +743,22 @@ func safeDecodeResponse(body io.ReadCloser, res *interface{}) (err error) {
 
 	error := json.Unmarshal(data, res)
 	return error
+}
+
+// mapToStandardErr map the dcrd API Message errors to the standard error messages
+// supported by trezor. Dcrd errors to be mapped are listed here:
+// https://github.com/decred/dcrd/blob/2f5e47371263b996bb99e8dc3484f659309bd83a/dcrjson/jsonerr.go
+func mapToStandardErr(customPrefix string, err Error) error {
+	switch {
+	case strings.Contains(err.Message, dcrjson.ErrBlockNotFound.Message) || // Block not found
+		strings.Contains(err.Message, dcrjson.ErrOutOfRange.Message) || // Block number out of range
+		strings.Contains(err.Message, dcrjson.ErrBestBlockHash.Message): // Error getting best block hash
+		return bchain.ErrBlockNotFound
+	case strings.Contains(err.Message, dcrjson.ErrNoTxInfo.Message): // No information available about transaction
+		return bchain.ErrTxNotFound
+	case strings.Contains(err.Message, dcrjson.ErrInvalidTxVout.Message): // Output index number (vout) does not exist for transaction
+		return bchain.ErrTxidMissing
+	default:
+		return fmt.Errorf(customPrefix, err.Message)
+	}
 }
