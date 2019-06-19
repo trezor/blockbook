@@ -25,7 +25,7 @@
     "version": "0.19.8",
     "binary_url": "https://download.bitcoinabc.org/0.19.8/linux/bitcoin-abc-0.19.8-x86_64-linux-gnu.tar.gz",
     "verification_type": "sha256",
-    "verification_source": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "verification_source": "cc40101ffe44340dcc82c6de2bc92040368a857548da133d7f1eb7a45a4c63f5",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
       "bin/bitcoin-qt"
