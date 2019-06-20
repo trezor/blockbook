@@ -13,6 +13,7 @@ import (
 	"runtime/debug"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"blockbook/bchain/coins/btc"
@@ -22,11 +23,17 @@ import (
 	"github.com/juju/errors"
 )
 
+// voteBitYes defines the vote bit set when a given block validates the previous
+// block
+const voteBitYes = 0x0001
+
 type DecredRPC struct {
 	*btc.BitcoinRPC
+	mtx         sync.Mutex
 	client      http.Client
 	rpcURL      string
 	rpcUser     string
+	bestBlock   uint32
 	rpcPassword string
 }
 
@@ -38,8 +45,7 @@ func NewDecredRPC(config json.RawMessage, pushHandler func(bchain.NotificationTy
 	}
 
 	var c btc.Configuration
-	err = json.Unmarshal(config, &c)
-	if err != nil {
+	if err = json.Unmarshal(config, &c); err != nil {
 		return nil, errors.Annotate(err, "Invalid configuration file")
 	}
 
@@ -150,7 +156,7 @@ type GetBestBlockResult struct {
 	Error  Error `json:"error"`
 	Result struct {
 		Hash   string `json:"hash"`
-		Height int64  `json:"height"`
+		Height uint32 `json:"height"`
 	} `json:"result"`
 }
 
@@ -165,7 +171,7 @@ type GetBlockResult struct {
 		Hash          string      `json:"hash"`
 		Confirmations int64       `json:"confirmations"`
 		Size          int32       `json:"size"`
-		Height        int64       `json:"height"`
+		Height        uint32      `json:"height"`
 		Version       json.Number `json:"version"`
 		MerkleRoot    string      `json:"merkleroot"`
 		StakeRoot     string      `json:"stakeroot"`
@@ -353,6 +359,9 @@ func (d *DecredRPC) GetChainInfo() (*bchain.ChainInfo, error) {
 	return chainInfo, nil
 }
 
+// getBestBlock returns details for the block mined immediately before the
+// official dcrd chain's bestblock i.e. it has a minimum of 1 confirmation.
+// The chain's best block is not returned as its block validity is not guarranteed.
 func (d *DecredRPC) getBestBlock() (*GetBestBlockResult, error) {
 	bestBlockRequest := GenericCmd{
 		ID:     1,
@@ -368,9 +377,20 @@ func (d *DecredRPC) getBestBlock() (*GetBestBlockResult, error) {
 		return nil, mapToStandardErr("Error fetching best block: %s", bestBlockResult.Error)
 	}
 
+	// remove the block with less than 1 confirming block
+	bestBlockResult.Result.Height--
+	validBlockHash, err := d.getBlockHashByHeight(bestBlockResult.Result.Height)
+	if err != nil {
+		return nil, err
+	}
+
+	bestBlockResult.Result.Hash = validBlockHash.Result
+
 	return &bestBlockResult, nil
 }
 
+// GetBestBlockHash returns the block hash of the most recent block to be mined
+// and has a minimum of 1 confirming block.
 func (d *DecredRPC) GetBestBlockHash() (string, error) {
 	bestBlock, err := d.getBestBlock()
 	if err != nil {
@@ -380,6 +400,8 @@ func (d *DecredRPC) GetBestBlockHash() (string, error) {
 	return bestBlock.Result.Hash, nil
 }
 
+// GetBestBlockHeight returns the block height of the most recent block to be mined
+// and has a minimum of 1 confirming block.
 func (d *DecredRPC) GetBestBlockHeight() (uint32, error) {
 	bestBlock, err := d.getBestBlock()
 	if err != nil {
@@ -389,7 +411,17 @@ func (d *DecredRPC) GetBestBlockHeight() (uint32, error) {
 	return uint32(bestBlock.Result.Height), err
 }
 
+// GetBlockHash returns the block hash of the block at the provided height.
 func (d *DecredRPC) GetBlockHash(height uint32) (string, error) {
+	blockHashResult, err := d.getBlockHashByHeight(height)
+	if err != nil {
+		return "", err
+	}
+
+	return blockHashResult.Result, nil
+}
+
+func (d *DecredRPC) getBlockHashByHeight(height uint32) (*GetBlockHashResult, error) {
 	blockHashRequest := GenericCmd{
 		ID:     1,
 		Method: "getblockhash",
@@ -398,16 +430,17 @@ func (d *DecredRPC) GetBlockHash(height uint32) (string, error) {
 
 	var blockHashResult GetBlockHashResult
 	if err := d.Call(blockHashRequest, &blockHashResult); err != nil {
-		return "", err
+		return nil, err
 	}
 
 	if blockHashResult.Error.Message != "" {
-		return "", mapToStandardErr("Error fetching block hash: %s", blockHashResult.Error)
+		return nil, mapToStandardErr("Error fetching block hash: %s", blockHashResult.Error)
 	}
 
-	return blockHashResult.Result, nil
+	return &blockHashResult, nil
 }
 
+// GetBlockHeader returns the block header of the block the provided block hash.
 func (d *DecredRPC) GetBlockHeader(hash string) (*bchain.BlockHeader, error) {
 	blockHeaderRequest := GenericCmd{
 		ID:     1,
@@ -441,27 +474,38 @@ func (d *DecredRPC) GetBlockHeaderByHeight(height uint32) (*bchain.BlockHeader, 
 	return nil, nil
 }
 
+// GetBlock returns the block retreived using the provided block hash by default
+// or using the block height if an empty hash string was provided. If the
+// requested block has less than 2 confirmation bchain.ErrBlockNotFound error
+// is returned. This rule is in places to guarrantee that only validated block
+// details (txs) are saved to the db. Access to the bestBlock height is threadsafe.
 func (d *DecredRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
-	requestHash := hash
-	if requestHash == "" {
-		getHashRequest := GenericCmd{
-			ID:     1,
-			Method: "getblockhash",
-			Params: []interface{}{height},
+	// Confirm if the block at provided height has at least 2 confirming blocks.
+	d.mtx.Lock()
+	var bestBlockHeight = d.bestBlock
+	if height > bestBlockHeight {
+		bestBlock, err := d.getBestBlock()
+		if err != nil || height > bestBlock.Result.Height {
+			// If an error occured or the current height doesn't have a minimum
+			// of two confirming blocks (greater than best block), quit.
+			d.mtx.Unlock()
+			return nil, bchain.ErrBlockNotFound
 		}
 
-		var getHashResult GetBlockHashResult
-		if err := d.Call(getHashRequest, &getHashResult); err != nil {
+		d.bestBlock = bestBlock.Result.Height
+		bestBlockHeight = bestBlock.Result.Height
+	}
+	d.mtx.Unlock() // Releases the lock soonest possible
+
+	if hash == "" {
+		getHashResult, err := d.getBlockHashByHeight(height)
+		if err != nil {
 			return nil, err
 		}
-
-		if getHashResult.Error.Message != "" {
-			return nil, mapToStandardErr("Error fetching block hash: %s", getHashResult.Error)
-		}
-		requestHash = getHashResult.Result
+		hash = getHashResult.Result
 	}
 
-	block, err := d.getBlock(requestHash)
+	block, err := d.getBlock(hash)
 	if err != nil {
 		return nil, err
 	}
@@ -470,7 +514,7 @@ func (d *DecredRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) 
 		Hash:          block.Result.Hash,
 		Prev:          block.Result.PreviousHash,
 		Next:          block.Result.NextHash,
-		Height:        uint32(block.Result.Height),
+		Height:        block.Result.Height,
 		Confirmations: int(block.Result.Confirmations),
 		Size:          int(block.Result.Size),
 		Time:          block.Result.Time,
@@ -478,17 +522,31 @@ func (d *DecredRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) 
 
 	bchainBlock := &bchain.Block{BlockHeader: header}
 
-	for _, txID := range block.Result.Tx {
-		if block.Result.Height == 0 {
-			continue
-		}
+	// Check the current block validity by fetch the next block
+	nextBlockHashResult, err := d.getBlockHashByHeight(height + 1)
+	if err != nil {
+		return nil, err
+	}
 
-		tx, err := d.GetTransaction(txID)
-		if err != nil {
-			return nil, err
-		}
+	nextBlock, err := d.getBlock(nextBlockHashResult.Result)
+	if err != nil {
+		return nil, err
+	}
 
-		bchainBlock.Txs = append(bchainBlock.Txs, *tx)
+	// If the Votesbits set equals to voteBitYes append the regular transactions.
+	if nextBlock.Result.VoteBits == voteBitYes {
+		for _, txID := range block.Result.Tx {
+			if block.Result.Height == 0 {
+				continue
+			}
+
+			tx, err := d.GetTransaction(txID)
+			if err != nil {
+				return nil, err
+			}
+
+			bchainBlock.Txs = append(bchainBlock.Txs, *tx)
+		}
 	}
 
 	return bchainBlock, nil
@@ -549,7 +607,7 @@ func (d *DecredRPC) GetBlockInfo(hash string) (*bchain.BlockInfo, error) {
 		Hash:          block.Result.Hash,
 		Prev:          block.Result.PreviousHash,
 		Next:          block.Result.NextHash,
-		Height:        uint32(block.Result.Height),
+		Height:        block.Result.Height,
 		Confirmations: int(block.Result.Confirmations),
 		Size:          int(block.Result.Size),
 		Time:          int64(block.Result.Time),

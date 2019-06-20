@@ -10,15 +10,16 @@ import (
 	"blockbook/bchain/coins/btc"
 	"blockbook/bchain/coins/utils"
 
+	cfg "github.com/decred/dcrd/chaincfg"
 	"github.com/decred/dcrd/txscript"
 	"github.com/martinboehm/btcd/wire"
 	"github.com/martinboehm/btcutil/chaincfg"
-
-	dch "github.com/decred/dcrd/chaincfg"
 )
 
 const (
+	// MainnetMagic is mainnet network constant
 	MainnetMagic wire.BitcoinNet = 0xd9b400f9
+	// TestnetMagic is testnet network constant
 	TestnetMagic wire.BitcoinNet = 0xb194aa75
 )
 
@@ -44,15 +45,19 @@ func init() {
 // DecredParser handle
 type DecredParser struct {
 	*btc.BitcoinParser
+	baseParser *bchain.BaseParser
 }
 
 // NewDecredParser returns new DecredParser instance
 func NewDecredParser(params *chaincfg.Params, c *btc.Configuration) *DecredParser {
-	return &DecredParser{BitcoinParser: btc.NewBitcoinParser(params, c)}
+	return &DecredParser{
+		BitcoinParser: btc.NewBitcoinParser(params, c),
+		baseParser:    &bchain.BaseParser{},
+	}
 }
 
 // GetChainParams contains network parameters for the main Decred network,
-// and the test Decred network
+// and the test Decred network.
 func GetChainParams(chain string) *chaincfg.Params {
 	var param *chaincfg.Params
 
@@ -71,8 +76,7 @@ func GetChainParams(chain string) *chaincfg.Params {
 	return param
 }
 
-// ParseBlock parses raw block to our Block struct
-// it has special handling for Auxpow blocks that cannot be parsed by standard btc wire parser
+// ParseBlock parses raw block to our Block struct.
 func (p *DecredParser) ParseBlock(b []byte) (*bchain.Block, error) {
 	r := bytes.NewReader(b)
 	h := wire.BlockHeader{}
@@ -165,11 +169,11 @@ func (p *DecredParser) GetAddrDescFromVout(output *bchain.Vout) (bchain.AddressD
 		return nil, err
 	}
 
-	var params dch.Params
+	var params cfg.Params
 	if p.Params.Name == "mainnet" {
-		params = dch.MainNetParams
+		params = cfg.MainNetParams
 	} else {
-		params = dch.TestNet3Params
+		params = cfg.TestNet3Params
 	}
 
 	scriptClass, addresses, _, err := txscript.ExtractPkScriptAddrs(txscript.DefaultScriptVersion, script, &params)
@@ -199,4 +203,14 @@ func (p *DecredParser) GetAddressesFromAddrDesc(addrDesc bchain.AddressDescripto
 	}
 
 	return addrs, true, nil
+}
+
+// PackTx packs transaction to byte array using protobuf
+func (p *DecredParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) ([]byte, error) {
+	return p.baseParser.PackTx(tx, height, blockTime)
+}
+
+// UnpackTx unpacks transaction from protobuf byte array
+func (p *DecredParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
+	return p.baseParser.UnpackTx(buf)
 }
