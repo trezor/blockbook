@@ -2,9 +2,9 @@
 
 FROM debian:9
 
-RUN apt-get update -qq && \
-    apt-get upgrade -y -qq && \
-    apt-get install -y -qq build-essential git wget pkg-config lxc-dev libzmq3-dev \
+RUN apt-get update && \
+    apt-get upgrade -y && \
+    apt-get install -y build-essential git wget pkg-config lxc-dev libzmq3-dev \
                        libgflags-dev libsnappy-dev zlib1g-dev libbz2-dev \
                        liblz4-dev graphviz && \
     apt-get clean
@@ -19,7 +19,7 @@ ENV CGO_LDFLAGS="-L/opt/rocksdb -lrocksdb -lstdc++ -lm -lz -lbz2 -lsnappy -llz4"
 RUN mkdir /build
 
 # install and configure go
-RUN cd /opt && wget -nv https://storage.googleapis.com/golang/$GOLANG_VERSION.tar.gz && \
+RUN cd /opt && wget https://storage.googleapis.com/golang/$GOLANG_VERSION.tar.gz && \
     tar xf $GOLANG_VERSION.tar.gz
 RUN ln -s /opt/go/bin/go /usr/bin/go
 RUN mkdir -p $GOPATH
@@ -41,9 +41,9 @@ RUN \
     cleanup() { rm -rf $GOPATH/src/blockbook; } && \
     trap cleanup EXIT && \
     cd $GOPATH/src && \
-    git clone -b add-integration-tests https://github.com/dmigwi/blockbook.git && \
+    git clone https://github.com/trezor/blockbook.git && \
     cd blockbook && \
-    dep ensure --vendor-only && \
+    dep ensure -vendor-only && \
     cp -r vendor /build/vendor
 
 ADD Makefile /build/Makefile

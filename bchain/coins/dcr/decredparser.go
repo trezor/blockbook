@@ -162,6 +162,9 @@ func (p *DecredParser) ParseTxFromJson(jsonTx json.RawMessage) (*bchain.Tx, erro
 		Time:          getTxResult.Result.Time,
 		Blocktime:     getTxResult.Result.Blocktime,
 	}
+
+	tx.CoinSpecificData = getTxResult.Result.TxExtraInfo
+
 	return tx, nil
 }
 

@@ -55,7 +55,7 @@
         "subversion":"/Decred dcrd:1.4.0",
         "mempool_workers": 8,
         "mempool_sub_workers": 2,
-        "block_addresses_to_keep": 300,
+        "block_addresses_to_keep": 30,
         "xpub_magic": 49990397,
         "slip44": 3,
         "additional_params": {}
