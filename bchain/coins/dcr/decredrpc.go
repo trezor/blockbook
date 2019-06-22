@@ -464,7 +464,7 @@ func (d *DecredRPC) GetBlockHeader(hash string) (*bchain.BlockHeader, error) {
 		Height:        blockHeader.Result.Height,
 		Confirmations: int(blockHeader.Result.Confirmations),
 		Size:          int(blockHeader.Result.Size),
-		Time:          blockHeader.Result.Time / 1000,
+		Time:          blockHeader.Result.Time,
 	}
 
 	return header, nil

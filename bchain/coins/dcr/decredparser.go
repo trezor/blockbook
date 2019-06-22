@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"encoding/json"
+	"math"
 	"math/big"
 
 	"blockbook/bchain"
@@ -117,11 +118,16 @@ func (p *DecredParser) ParseTxFromJson(jsonTx json.RawMessage) (*bchain.Tx, erro
 
 	vins := make([]bchain.Vin, len(getTxResult.Result.Vin))
 	for index, input := range getTxResult.Result.Vin {
+		hexData := bchain.ScriptSig{}
+		if input.ScriptSig != nil {
+			hexData.Hex = input.ScriptSig.Hex
+		}
+
 		vins[index] = bchain.Vin{
 			Coinbase:  input.Coinbase,
 			Txid:      input.Txid,
 			Vout:      input.Vout,
-			ScriptSig: bchain.ScriptSig{},
+			ScriptSig: hexData,
 			Sequence:  input.Sequence,
 			// Addresses: []string{},
 		}
@@ -129,12 +135,18 @@ func (p *DecredParser) ParseTxFromJson(jsonTx json.RawMessage) (*bchain.Tx, erro
 
 	vouts := make([]bchain.Vout, len(getTxResult.Result.Vout))
 	for index, output := range getTxResult.Result.Vout {
+		addr := output.ScriptPubKey.Addresses
+		// If nulldata type found make asm field the address data.
+		if output.ScriptPubKey.Type == "nulldata" {
+			addr = []string{output.ScriptPubKey.Asm}
+		}
+
 		vouts[index] = bchain.Vout{
-			ValueSat: *big.NewInt(int64(output.Value * 100000000)),
+			ValueSat: *big.NewInt(int64(math.Round(output.Value * 1e8))),
 			N:        output.N,
 			ScriptPubKey: bchain.ScriptPubKey{
 				Hex:       output.ScriptPubKey.Hex,
-				Addresses: output.ScriptPubKey.Addresses,
+				Addresses: addr,
 			},
 		}
 	}
@@ -147,7 +159,7 @@ func (p *DecredParser) ParseTxFromJson(jsonTx json.RawMessage) (*bchain.Tx, erro
 		Vin:           vins,
 		Vout:          vouts,
 		Confirmations: uint32(getTxResult.Result.Confirmations),
-		Time:          getTxResult.Result.Time / 1000,
+		Time:          getTxResult.Result.Time,
 		Blocktime:     getTxResult.Result.Blocktime,
 	}
 	return tx, nil

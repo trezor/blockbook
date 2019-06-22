@@ -1,9 +1,9 @@
 {
     "coin": {
       "name": "Decred Testnet",
-      "shortcut": "DCR",
+      "shortcut": "tDCR",
       "label": "Decred Testnet",
-      "alias": "dcr"
+      "alias": "decred_testnet"
     },
     "ports": {
       "backend_rpc": 19109,
@@ -19,8 +19,8 @@
       "message_queue_binding_template": "tcp://127.0.0.1:{{.Ports.BackendMessageQueue}}"
     },
     "backend": {
-      "package_name": "backend-decred",
-      "package_revision": "decred-1",
+      "package_name": "backend-decred-testnet",
+      "package_revision": "decred-testnet-1",
       "system_user": "decred",
       "version": "1.4.0",
       "binary_url": "https://github.com/decred/decred-binaries/releases/download/v1.4.0/decred-linux-amd64-v1.4.0.tar.gz",
@@ -28,7 +28,7 @@
       "verification_source": "36375985df1ba9a45bc11b4f6cdaed4f14ff6e5e9c46e17ef6e4f70a3349aba2",
       "extract_command": "tar -C backend --strip 1 -xf",
       "exclude_files": [],
-      "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/dcrd --datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -C={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf",
+      "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/dcrd --datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --rpcuser={{.IPC.RPCUser}} --rpcpass={{.IPC.RPCPass}} -C={{.Env.BackendDataPath}}/{{.Coin.Alias}}/dcrd.conf --nofilelogging --appdata={{.Env.BackendDataPath}}/{{.Coin.Alias}} --notls --txindex --addrindex --testnet",
       "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/*.log",
       "postinst_script_template": "",
       "service_type": "forking",
@@ -44,14 +44,15 @@
       }
     },
     "blockbook": {
-      "package_name": "blockbook-decred",
-      "system_user": "blockbook-decred",
+      "package_name": "blockbook-decred-testnet",
+      "system_user": "blockbook-decred-testnet",
       "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
       "public_binding_template": ":{{.Ports.BlockbookPublic}}",
       "explorer_url": "https://testnet.dcrdata.org/",
       "additional_params": "",
       "block_chain": {
         "parse": true,
+        "subversion":"/Decred dcrd:1.4.0",
         "mempool_workers": 8,
         "mempool_sub_workers": 2,
         "block_addresses_to_keep": 300,
