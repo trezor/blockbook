@@ -2,9 +2,9 @@
 
 FROM debian:9
 
-RUN apt-get update && \
-    apt-get upgrade -y && \
-    apt-get install -y build-essential git wget pkg-config lxc-dev libzmq3-dev \
+RUN apt-get update -qq && \
+    apt-get upgrade -qq -y && \
+    apt-get install -qq -y build-essential git wget pkg-config lxc-dev libzmq3-dev \
                        libgflags-dev libsnappy-dev zlib1g-dev libbz2-dev \
                        liblz4-dev graphviz && \
     apt-get clean
@@ -19,7 +19,7 @@ ENV CGO_LDFLAGS="-L/opt/rocksdb -lrocksdb -lstdc++ -lm -lz -lbz2 -lsnappy -llz4"
 RUN mkdir /build
 
 # install and configure go
-RUN cd /opt && wget https://storage.googleapis.com/golang/$GOLANG_VERSION.tar.gz && \
+RUN cd /opt && wget -nv https://storage.googleapis.com/golang/$GOLANG_VERSION.tar.gz && \
     tar xf $GOLANG_VERSION.tar.gz
 RUN ln -s /opt/go/bin/go /usr/bin/go
 RUN mkdir -p $GOPATH
