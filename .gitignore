@@ -1,4 +1,5 @@
 vendor/
+.vendor*
 data*/
 profile/
 blockbook

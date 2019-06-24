@@ -43,7 +43,7 @@ RUN \
     cd $GOPATH/src && \
     git clone https://github.com/trezor/blockbook.git && \
     cd blockbook && \
-    dep ensure -vendor-only && \
+    dep ensure --vendor-only && \
     cp -r vendor /build/vendor
 
 ADD Makefile /build/Makefile
