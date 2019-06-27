@@ -4,6 +4,7 @@ import (
 	"blockbook/bchain"
 	"blockbook/bchain/coins/btc"
 	"encoding/json"
+	"math/big"
 
 	"github.com/golang/glog"
 )
@@ -11,6 +12,7 @@ import (
 // QtumRPC is an interface to JSON-RPC bitcoind service.
 type QtumRPC struct {
 	*btc.BitcoinRPC
+	minFeeRate *big.Int // satoshi per kb
 }
 
 // NewQtumRPC returns new QtumRPC instance.
@@ -22,6 +24,7 @@ func NewQtumRPC(config json.RawMessage, pushHandler func(bchain.NotificationType
 
 	s := &QtumRPC{
 		b.(*btc.BitcoinRPC),
+		big.NewInt(400000),
 	}
 	s.RPCMarshaler = btc.JSONMarshalerV1{}
 	s.ChainConfig.SupportsEstimateSmartFee = true
@@ -60,4 +63,15 @@ func (b *QtumRPC) Initialize() error {
 // It could be optimized for mempool, i.e. without block time and confirmations
 func (b *QtumRPC) GetTransactionForMempool(txid string) (*bchain.Tx, error) {
 	return b.GetTransaction(txid)
+}
+
+// EstimateSmartFee returns fee estimation
+func (b *QtumRPC) EstimateSmartFee(blocks int, conservative bool) (big.Int, error) {
+	feeRate, err := b.BitcoinRPC.EstimateSmartFee(blocks, conservative)
+	if err != nil {
+		if b.minFeeRate.Cmp(&feeRate) == 1 {
+			feeRate = *b.minFeeRate
+		}
+	}
+	return feeRate, err
 }
