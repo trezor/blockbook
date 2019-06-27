@@ -6,10 +6,10 @@
       "alias": "decred"
     },
     "ports": {
-      "backend_rpc": 9109,
-      "backend_message_queue": 38888,
-      "blockbook_internal": 10108,
-      "blockbook_public": 11108
+      "backend_rpc": 8061,
+      "backend_message_queue": 38361,
+      "blockbook_internal": 9061,
+      "blockbook_public": 9161
     },
     "ipc": {
       "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
@@ -28,7 +28,7 @@
       "verification_source": "36375985df1ba9a45bc11b4f6cdaed4f14ff6e5e9c46e17ef6e4f70a3349aba2",
       "extract_command": "tar -C backend --strip 1 -xf",
       "exclude_files": [],
-      "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/dcrd --datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --rpcuser={{.IPC.RPCUser}} --rpcpass={{.IPC.RPCPass}} -C={{.Env.BackendDataPath}}/{{.Coin.Alias}}/dcrd.conf --nofilelogging --appdata={{.Env.BackendDataPath}}/{{.Coin.Alias}} --notls --txindex --addrindex",
+      "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/dcrd --datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --rpcuser={{.IPC.RPCUser}} --rpcpass={{.IPC.RPCPass}} -C={{.Env.BackendDataPath}}/{{.Coin.Alias}}/dcrd.conf --nofilelogging --appdata={{.Env.BackendDataPath}}/{{.Coin.Alias}} --notls --txindex --addrindex --rpclisten=[127.0.0.1]:8061",
       "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/*.log",
       "postinst_script_template": "",
       "service_type": "forking",
