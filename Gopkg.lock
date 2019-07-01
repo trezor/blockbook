@@ -8,6 +8,25 @@
   revision = "790653ac190c4029ee200e82a8f21b5d1afaf7d6"
 
 [[projects]]
+  digest = "1:8b13694e3e7b33c6f389f367b6a001a1184b051e34880fdd9e58a2207d9f6573"
+  name = "github.com/allegro/bigcache"
+  packages = [
+    ".",
+    "queue",
+  ]
+  pruneopts = ""
+  revision = "69ea0af04088faa57adb9ac683934277141e92a5"
+  version = "v2.0.0"
+
+[[projects]]
+  branch = "master"
+  digest = "1:10f6df61e4d3de150f3c11c3c6791c5702382c7f4aa983bcab9f49a73fea44a3"
+  name = "github.com/aristanetworks/goarista"
+  packages = ["monotime"]
+  pruneopts = ""
+  revision = "8e7d5b18fe7ad671e07097d5445dbc70422663b2"
+
+[[projects]]
   branch = "master"
   name = "github.com/beorn7/perks"
   packages = ["quantile"]
@@ -40,8 +59,8 @@
 [[projects]]
   name = "github.com/ethereum/go-ethereum"
   packages = [".","common","common/hexutil","common/math","core/types","crypto","crypto/secp256k1","crypto/sha3","ethclient","ethdb","log","metrics","p2p/netutil","params","rlp","rpc","trie"]
-  revision = "8bbe72075e4e16442c4e28d999edee12e294329e"
-  version = "v1.8.17"
+  revision = "24d727b6d6e2c0cde222fa12155c4a6db5caaf2e"
+  version = "v1.8.20"
 
 [[projects]]
   name = "github.com/go-stack/stack"
@@ -184,7 +203,7 @@
 [[projects]]
   branch = "master"
   name = "golang.org/x/crypto"
-  packages = ["ripemd160"]
+  packages = ["ripemd160", "sha3"]
   revision = "d6449816ce06963d9d136eee5a56fca5b0616e7e"
 
 [[projects]]
