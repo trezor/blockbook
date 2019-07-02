@@ -28,6 +28,13 @@
 
 [[projects]]
   branch = "master"
+  name = "github.com/agl/ed25519"
+  packages = [".","edwards25519"]
+  revision = "5312a61534124124185d41f09206b9fef1d88403"
+
+
+[[projects]]
+  branch = "master"
   name = "github.com/beorn7/perks"
   packages = ["quantile"]
   revision = "3a771d992973f24aa725d07868b467d1ddfceafb"
@@ -49,6 +56,12 @@
   name = "github.com/btcsuite/btclog"
   packages = ["."]
   revision = "84c8d2346e9fc8c7b947e243b9c24e6df9fd206a"
+
+  [[projects]]
+  branch = "master"
+  name = "github.com/dchest/blake256"
+  packages = ["."]
+  revision = "dee3fe6eb0e98dc774a94fc231f85baf7c29d360"
 
 [[projects]]
   name = "github.com/deckarep/golang-set"
