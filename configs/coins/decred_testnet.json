@@ -49,7 +49,7 @@
       "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
       "public_binding_template": ":{{.Ports.BlockbookPublic}}",
       "explorer_url": "https://testnet.dcrdata.org/",
-      "additional_params": "",
+      "additional_params": "-resyncindexperiod=300111 -resyncmempoolperiod=60111",
       "block_chain": {
         "parse": true,
         "subversion":"/Decred dcrd:1.4.0",
@@ -62,7 +62,7 @@
       }
     },
     "meta": {
-      "package_maintainer": "Ugwueze Michael",
-      "package_maintainer_email": "code.maestro64@gmail.com"
+      "package_maintainer": "dmigwi",
+      "package_maintainer_email": "migwindungu0@gmail.com"
     }
   }
