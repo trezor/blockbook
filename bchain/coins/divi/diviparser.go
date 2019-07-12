@@ -18,9 +18,7 @@ import (
 )
 
 const (
-	// MainnetMagic = "network messages
-	// so the messages can be identified
-	// to belong to a specific coin"
+	// MainnetMagic = "network messages so the messages can be identified to belong to a specific coin"
 	// Source https://github.com/DiviProject/Divi/blob/master0/divi/src/chainparams.cpp#L128-L136
 	MainnetMagic wire.BitcoinNet = 0x8f8da0df
 )
@@ -136,16 +134,6 @@ func (p *DivicoinParser) ParseTx(b []byte) (*bchain.Tx, error) {
 func (p *DivicoinParser) TxFromMsgTx(t *wire.MsgTx, parseAddresses bool) bchain.Tx {
 	vin := make([]bchain.Vin, len(t.TxIn))
 	for i, in := range t.TxIn {
-
-		/* extra check to not confuse Tx with single OP_ZEROCOINSPEND input as a coinbase Tx
-		if !isZeroCoinSpendScript(in.SignatureScript) && blockchain.IsCoinBaseTx(t) {
-			vin[i] = bchain.Vin{
-				Coinbase: hex.EncodeToString(in.SignatureScript),
-				Sequence: in.Sequence,
-			}
-			break
-		}*/
-
 		s := bchain.ScriptSig{
 			Hex: hex.EncodeToString(in.SignatureScript),
 			// missing: Asm,
@@ -221,13 +209,6 @@ func (p *DivicoinParser) ParseTxFromJSON(msg json.RawMessage) (*bchain.Tx, error
 
 // outputScriptToAddresses converts ScriptPubKey to bitcoin addresses
 func (p *DivicoinParser) outputScriptToAddresses(script []byte) ([]string, bool, error) {
-	/*if isZeroCoinSpendScript(script) {
-		return []string{"Zerocoin Spend"}, false, nil
-	}
-	if isZeroCoinMintScript(script) {
-		return []string{"Zerocoin Mint"}, false, nil
-	}*/
-
 	rv, s, _ := p.BitcoinOutputScriptToAddressesFunc(script)
 	return rv, s, nil
 }
@@ -246,13 +227,3 @@ func (p *DivicoinParser) GetAddrDescForUnknownInput(tx *bchain.Tx, input int) bc
 	s := make([]byte, 10)
 	return s
 }
-
-/* Checks if script is OP_ZEROCOINMINT
-func isZeroCoinMintScript(signatureScript []byte) bool {
-	return len(signatureScript) > 1 && signatureScript[0] == OP_ZEROCOINMINT
-}*/
-
-/* Checks if script is OP_ZEROCOINSPEND
-func isZeroCoinSpendScript(signatureScript []byte) bool {
-	return len(signatureScript) >= 100 && signatureScript[0] == OP_ZEROCOINSPEND
-}*/
