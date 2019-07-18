@@ -17,7 +17,7 @@ func NewFakeBlockChain(parser bchain.BlockChainParser) (bchain.BlockChain, error
 	return &fakeBlockChain{&bchain.BaseChain{Parser: parser}}, nil
 }
 
-func (b *fakeBlockChain) CreateMempool(chain bchain.BlockChain) (bchain.Mempool, error) {
+func (c *fakeBlockChain) CreateMempool(chain bchain.BlockChain) (bchain.Mempool, error) {
 	return bchain.NewMempoolBitcoinType(chain, 1, 1), nil
 }
 
@@ -189,6 +189,6 @@ func (c *fakeBlockChain) GetChainParser() bchain.BlockChainParser {
 }
 
 // GetMempoolTransactions returns transactions in mempool
-func (b *fakeBlockChain) GetMempoolTransactions() ([]string, error) {
+func (c *fakeBlockChain) GetMempoolTransactions() ([]string, error) {
 	return nil, errors.New("Not implemented")
 }

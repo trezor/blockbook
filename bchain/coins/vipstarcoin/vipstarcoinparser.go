@@ -12,11 +12,13 @@ import (
 	"github.com/martinboehm/btcutil/chaincfg"
 )
 
+// magic numbers
 const (
 	MainnetMagic wire.BitcoinNet = 0x012ce7b5
 	TestnetMagic wire.BitcoinNet = 0x1a2b3c4d
 )
 
+// chain parameters
 var (
 	MainNetParams chaincfg.Params
 	TestNetParams chaincfg.Params
@@ -96,6 +98,7 @@ func parseBlockHeader(r io.Reader) (*wire.BlockHeader, error) {
 	return h, err
 }
 
+// ParseBlock parses block from byte array
 func (p *VIPSTARCOINParser) ParseBlock(b []byte) (*bchain.Block, error) {
 	r := bytes.NewReader(b)
 	w := wire.MsgBlock{}

@@ -4,11 +4,11 @@ import (
 	"blockbook/bchain"
 	"blockbook/bchain/coins/btc"
 	"encoding/json"
+
 	"github.com/golang/glog"
 )
 
 // ViacoinRPC is an interface to JSON-RPC bitcoind service
-
 type ViacoinRPC struct {
 	*btc.BitcoinRPC
 }

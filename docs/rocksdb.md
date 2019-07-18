@@ -10,17 +10,18 @@
 >- *[]* array
 >
 >Types used in the description:
->- *[]byte* - array of bytes
+>- *[]byte* - variable length array of bytes
+>- *[32]byte* - fixed length array of bytes (32 bytes long in this case)
 >- *uint32* - unsigned integer, stored as array of 4 bytes in big endian*
 >- *vint*, *vuint* - variable length signed/unsigned int
 >- *addrDesc* - address descriptor, abstraction of an address.
 For Bitcoin type coins it is the transaction output script, stored as variable length array of bytes. 
 For Ethereum type coins it is fixed size array of 20 bytes.
->- *bigInt* - unsigned big integer, stored as length of the array (1 byte) followed by array of bytes of big int, i.e. *(int_len byte)+(int_value []byte)*. Zero is stored as one byte containing 0.
+>- *bigInt* - unsigned big integer, stored as length of the array (1 byte) followed by array of bytes of big int, i.e. *(int_len byte)+(int_value []byte)*. Zero is stored as one byte of value 0.
 
 **Database structure:**
 
-The database structure described here is of Blockbook version **0.2.0** (data format version 4). 
+The database structure described here is of Blockbook version **0.3.1** (internal data format version 5). 
 
 The database structure for **Bitcoin type** and **Ethereum type** coins is slightly different. Column families used for both types:
 - default, height, addresses, transactions, blockTxs
@@ -39,10 +40,10 @@ Column families used only by **Ethereum type** coins:
   
   Most important internal state values are:
   - coin - which coin is indexed in DB
-  - data format version - currently 4
+  - data format version - currently 5
   - dbState - closed, open, inconsistent
     
-  Blockbook is on startup checking these values and does not allow to run against wrong coin, data format version and in inconsistent state. The database must be recreated if the internal state does not match.
+  Blockbook is checking on startup these values and does not allow to run against wrong coin, data format version and in inconsistent state. The database must be recreated if the internal state does not match.
 
 - **height** 
 
@@ -66,9 +67,10 @@ Column families used only by **Ethereum type** coins:
 
 - **addressBalance** (used only by Bitcoin type coins)
 
-    Maps *addrDesc* to *number of transactions*, *sent amount* and *total balance* of given address.
+    Maps *addrDesc* to *number of transactions*, *sent amount*, *total balance* and a list of *unspent transactions outputs (UTXOs)*, ordered from oldest to newest
     ```
-    (addrDesc []byte) -> (nr_txs vuint)+(sent_amount bigInt)+(balance bigInt)
+    (addrDesc []byte) -> (nr_txs vuint)+(sent_amount bigInt)+(balance bigInt)+
+                         []((txid [32]byte)+(vout vuint)+(block_height vuint)+(block_height vuint)+(amount bigInt))
     ```
 
 - **txAddresses** (used only by Bitcoin type coins)
@@ -113,3 +115,6 @@ Column families used only by **Ethereum type** coins:
     ```
     (txid []byte) -> (txdata []byte)
     ```
+
+
+The `txid` field as specified in this documentation is a byte array of fixed size with length 32 bytes (*[32]byte*), however some coins may define other fixed size lengths.

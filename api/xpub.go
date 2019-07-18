@@ -101,7 +101,7 @@ func (w *Worker) xpubGetAddressTxids(addrDesc bchain.AddressDescriptor, mempool 
 				l = len(txs)
 				callback(m.Txid, 0, []int32{m.Vout})
 				if len(txs) > l {
-					uniqueTxs[m.Txid] = l - 1
+					uniqueTxs[m.Txid] = l
 				}
 			} else {
 				if m.Vout < 0 {
@@ -160,7 +160,7 @@ func (w *Worker) xpubCheckAndLoadTxids(ad *xpubAddress, filter *AddressFilter, m
 
 func (w *Worker) xpubDerivedAddressBalance(data *xpubData, ad *xpubAddress) (bool, error) {
 	var err error
-	if ad.balance, err = w.db.GetAddrDescBalance(ad.addrDesc); err != nil {
+	if ad.balance, err = w.db.GetAddrDescBalance(ad.addrDesc, db.AddressBalanceDetailUTXO); err != nil {
 		return false, err
 	}
 	if ad.balance != nil {
@@ -495,7 +495,7 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 			if option == AccountDetailsTxidHistory {
 				txids = append(txids, xpubTxid.txid)
 			} else {
-				tx, err := w.txFromTxid(xpubTxid.txid, bestheight, option)
+				tx, err := w.txFromTxid(xpubTxid.txid, bestheight, option, nil)
 				if err != nil {
 					return nil, err
 				}
@@ -505,7 +505,7 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 	} else {
 		txCount = int(data.txCountEstimate)
 	}
-	totalTokens := 0
+	usedTokens := 0
 	var tokens []Token
 	var xpubAddresses map[string]struct{}
 	if option > AccountDetailsBasic {
@@ -516,7 +516,7 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 		for i := range da {
 			ad := &da[i]
 			if ad.balance != nil {
-				totalTokens++
+				usedTokens++
 			}
 			if option > AccountDetailsBasic {
 				token := w.tokenFromXpubAddress(data, ad, ci, i, option)
@@ -542,7 +542,7 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 		UnconfirmedTxs:        unconfirmedTxs,
 		Transactions:          txs,
 		Txids:                 txids,
-		TotalTokens:           totalTokens,
+		UsedTokens:            usedTokens,
 		Tokens:                tokens,
 		XPubAddresses:         xpubAddresses,
 	}
