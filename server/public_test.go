@@ -949,6 +949,13 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			},
 			want: `{"id":"15","data":{"subscribed":false}}`,
 		},
+		{
+			name: "websocket ping",
+			req: websocketReq{
+				Method: "ping",
+			},
+			want: `{"id":"16","data":{}}`,
+		},
 	}
 
 	// send all requests at once

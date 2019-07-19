@@ -579,6 +579,7 @@ The websocket interface provides the following requests:
 - getTransactionSpecific
 - estimateFee
 - sendTransaction
+- ping
 
 The client can subscribe to the following events:
 
