@@ -22,10 +22,10 @@
     "package_name": "backend-bcash-testnet",
     "package_revision": "satoshilabs-1",
     "system_user": "bcash",
-    "version": "0.19.6",
-    "binary_url": "https://download.bitcoinabc.org/0.19.6/linux/bitcoin-abc-0.19.6-x86_64-linux-gnu.tar.gz",
+    "version": "0.19.10",
+    "binary_url": "https://download.bitcoinabc.org/0.19.10/linux/bitcoin-abc-0.19.10-x86_64-linux-gnu.tar.gz",
     "verification_type": "sha256",
-    "verification_source": "b84aad1c0061fcafdef1b89cb75e2fc79be8f0a872fad8b1c40eebe59652a2d2",
+    "verification_source": "e9997d9122b7524f9eb522856b9ec54d9e07b63d9852b3e5a0646fc0df2a5efb",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
       "bin/bitcoin-qt"
@@ -37,8 +37,8 @@
     "service_additional_params_template": "",
     "protect_memory": true,
     "mainnet": false,
-    "server_config_file": "bitcoin_like.conf",
-    "client_config_file": "bitcoin_like_client.conf"
+    "server_config_file": "bitcoin.conf",
+    "client_config_file": "bitcoin_client.conf"
   },
   "blockbook": {
     "package_name": "blockbook-bcash-testnet",
@@ -49,7 +49,7 @@
     "additional_params": "",
     "block_chain": {
       "parse": true,
-      "subversion": "/Bitcoin ABC:0.19.6/",
+      "subversion": "/Bitcoin ABC:0.19.10/",
       "address_format": "cashaddr",
       "mempool_workers": 8,
       "mempool_sub_workers": 2,

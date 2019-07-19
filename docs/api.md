@@ -77,7 +77,7 @@ Response:
     "mempoolSize": 17348,
     "decimals": 8,
     "dbSize": 191887866502,
-    "about": "Blockbook - blockchain indexer for TREZOR wallet https://trezor.io/. Do not use for any other purpose."
+    "about": "Blockbook - blockchain indexer for Trezor wallet https://trezor.io/. Do not use for any other purpose."
   },
   "backend": {
     "chain": "main",
@@ -108,6 +108,8 @@ Response:
 }
 ```
 
+_Note: Blockbook always follows the main chain of the backend it is attached to. See notes on **Get Block** below_ 
+
 #### Get transaction
 Get transaction returns "normalized" data about transaction, which has the same general structure for all supported coins. It does not return coin specific fields (for example information about Zcash shielded addresses).
 ```
@@ -129,6 +131,7 @@ Response for Bitcoin-type coins:
       "addresses": [
         "DDhUv8JZGmSxKYV95NLnbRTUKni9cDZD3S"
       ],
+      "isAddress": true,
       "value": "55795108999999",
       "hex": "473...2c7ec77bb982"
     }
@@ -140,7 +143,8 @@ Response for Bitcoin-type coins:
       "hex": "76a914feaca9d9fa7120c7c587c00c639bb18d40faadd388ac",
       "addresses": [
         "DUMh1rPrXTrCN2Z9EHsLPg7b78rACHB2h7"
-      ]
+      ],
+      "isAddress": true
     },
     {
       "value": "209329999999",
@@ -148,7 +152,8 @@ Response for Bitcoin-type coins:
       "hex": "76a914ea8984be785868391d92f49c14933f47c152ea0a88ac",
       "addresses": [
         "DSXDQ6rnwLX47WFRnemctoXPHA9pLMxqXn"
-      ]
+      ],
+      "isAddress": true
     }
   ],
   "blockHash": "78d1f3de899a10dd2e580704226ebf9508e95e1706f177fc9c31c47f245d2502",
@@ -172,7 +177,8 @@ Response for Ethereum-type coins. There is always only one *vin*, only one *vout
       "n": 0,
       "addresses": [
         "0x9c2e011c0ce0d75c2b62b9c5a0ba0a7456593803"
-      ]
+      ],
+      "isAddress": true
     }
   ],
   "vout": [
@@ -181,7 +187,8 @@ Response for Ethereum-type coins. There is always only one *vin*, only one *vout
       "n": 0,
       "addresses": [
         "0xc32ae45504ee9482db99cfa21066a59e877bc0e6"
-      ]
+      ],
+      "isAddress": true
     }
   ],
   "blockHash": "0x39df7fb0893200e1e78c04f98691637a89b64e7a3edd96c16f2537e2fd56c414",
@@ -475,7 +482,8 @@ Response:
           "n": 0,
           "addresses": [
             "D6ravJL6Fgxtgp8k2XZZt1QfUmwwGuLwQJ"
-          ]
+          ],
+          "isAddress": true
         }
       ],
       "blockHash": "760f8ed32894ccce9c1ea11c8a019cadaa82bcb434b25c30102dd7e43f326217",
@@ -494,6 +502,7 @@ Response:
           "addresses": [
             "9sLa1AKzjWuNTe1CkLh5GDYyRP9enb1Spp"
           ],
+          "isAddress": true,
           "value": "1277595845202"
         }
       ],
@@ -503,7 +512,8 @@ Response:
           "n": 0,
           "addresses": [
             "DMnjrbcCEoeyvr7GEn8DS4ZXQjwq7E2zQU"
-          ]
+          ],
+          "isAddress": true
         },
         {
           "value": "1267595845202",
@@ -511,7 +521,8 @@ Response:
           "spent": true,
           "addresses": [
             "9sLa1AKzjWuNTe1CkLh5GDYyRP9enb1Spp"
-          ]
+          ],
+          "isAddress": true
         }
       ],
       "blockHash": "760f8ed32894ccce9c1ea11c8a019cadaa82bcb434b25c30102dd7e43f326217",
@@ -525,6 +536,7 @@ Response:
   ]
 }
 ```
+_Note: Blockbook always follows the main chain of the backend it is attached to. If there is a rollback-reorg in the backend, Blockbook will also do rollback. When you ask for block by height, you will always get the main chain block. If you ask for block by hash, you may get the block from another fork but it is not guaranteed (backend may not keep it)_
 
 #### Send transaction
 
@@ -574,3 +586,5 @@ The client can subscribe to the following events:
 - new transaction for given address (list of addresses)
 
 There can be always only one subscription of given event per connection, i.e. new list of addresses replaces previous list of addresses.
+
+_Note: If there is reorg on the backend (blockchain), you will get a new block hash with the same or even smaller height if the reorg is deeper_

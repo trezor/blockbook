@@ -8,6 +8,32 @@
   revision = "790653ac190c4029ee200e82a8f21b5d1afaf7d6"
 
 [[projects]]
+  digest = "1:8b13694e3e7b33c6f389f367b6a001a1184b051e34880fdd9e58a2207d9f6573"
+  name = "github.com/allegro/bigcache"
+  packages = [
+    ".",
+    "queue",
+  ]
+  pruneopts = ""
+  revision = "69ea0af04088faa57adb9ac683934277141e92a5"
+  version = "v2.0.0"
+
+[[projects]]
+  branch = "master"
+  digest = "1:10f6df61e4d3de150f3c11c3c6791c5702382c7f4aa983bcab9f49a73fea44a3"
+  name = "github.com/aristanetworks/goarista"
+  packages = ["monotime"]
+  pruneopts = ""
+  revision = "8e7d5b18fe7ad671e07097d5445dbc70422663b2"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/agl/ed25519"
+  packages = [".","edwards25519"]
+  revision = "5312a61534124124185d41f09206b9fef1d88403"
+
+
+[[projects]]
   branch = "master"
   name = "github.com/beorn7/perks"
   packages = ["quantile"]
@@ -31,6 +57,12 @@
   packages = ["."]
   revision = "84c8d2346e9fc8c7b947e243b9c24e6df9fd206a"
 
+  [[projects]]
+  branch = "master"
+  name = "github.com/dchest/blake256"
+  packages = ["."]
+  revision = "dee3fe6eb0e98dc774a94fc231f85baf7c29d360"
+
 [[projects]]
   name = "github.com/deckarep/golang-set"
   packages = ["."]
@@ -38,10 +70,28 @@
   version = "v1.7"
 
 [[projects]]
+  branch = "master"
+  name = "github.com/decred/base58"
+  packages = ["."]
+  revision = "dbeddd8aab76c31eb2ea98351a63fa2c6bf46888"
+
+[[projects]]
+  name = "github.com/decred/dcrd"
+  packages = ["chaincfg","chaincfg/chainec","chaincfg/chainhash","dcrec","dcrec/edwards","dcrec/secp256k1","dcrec/secp256k1/schnorr","dcrjson","dcrutil","txscript","wire"]
+  revision = "0fe564967f03160b9dbe0a147420d8aa13371d12"
+  version = "v1.3.0"
+
+[[projects]]
+  name = "github.com/decred/slog"
+  packages = ["."]
+  revision = "fbd821ef791ba2b8ae945f5d44f4e49396d230c5"
+  version = "v1.0.0"
+
+[[projects]]
   name = "github.com/ethereum/go-ethereum"
   packages = [".","common","common/hexutil","common/math","core/types","crypto","crypto/secp256k1","crypto/sha3","ethclient","ethdb","log","metrics","p2p/netutil","params","rlp","rpc","trie"]
-  revision = "8bbe72075e4e16442c4e28d999edee12e294329e"
-  version = "v1.8.17"
+  revision = "24d727b6d6e2c0cde222fa12155c4a6db5caaf2e"
+  version = "v1.8.20"
 
 [[projects]]
   name = "github.com/go-stack/stack"
@@ -184,7 +234,7 @@
 [[projects]]
   branch = "master"
   name = "golang.org/x/crypto"
-  packages = ["ripemd160"]
+  packages = ["ripemd160", "sha3"]
   revision = "d6449816ce06963d9d136eee5a56fca5b0616e7e"
 
 [[projects]]
@@ -208,6 +258,41 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "3a7b863bec3806ba9460f3961e2d6e8ff4b77e5f66d196b1f79bd37fa6bf8d82"
+  input-imports = [
+    "github.com/bsm/go-vlq",
+    "github.com/deckarep/golang-set",
+    "github.com/decred/dcrd/chaincfg",
+    "github.com/decred/dcrd/dcrjson",
+    "github.com/decred/dcrd/txscript",
+    "github.com/ethereum/go-ethereum",
+    "github.com/ethereum/go-ethereum/common",
+    "github.com/ethereum/go-ethereum/common/hexutil",
+    "github.com/ethereum/go-ethereum/core/types",
+    "github.com/ethereum/go-ethereum/ethclient",
+    "github.com/ethereum/go-ethereum/rpc",
+    "github.com/gobuffalo/packr",
+    "github.com/gogo/protobuf/proto",
+    "github.com/golang/glog",
+    "github.com/golang/protobuf/proto",
+    "github.com/gorilla/websocket",
+    "github.com/juju/errors",
+    "github.com/martinboehm/bchutil",
+    "github.com/martinboehm/btcd/blockchain",
+    "github.com/martinboehm/btcd/chaincfg/chainhash",
+    "github.com/martinboehm/btcd/txscript",
+    "github.com/martinboehm/btcd/wire",
+    "github.com/martinboehm/btcutil",
+    "github.com/martinboehm/btcutil/base58",
+    "github.com/martinboehm/btcutil/chaincfg",
+    "github.com/martinboehm/btcutil/hdkeychain",
+    "github.com/martinboehm/btcutil/txscript",
+    "github.com/martinboehm/golang-socketio",
+    "github.com/martinboehm/golang-socketio/transport",
+    "github.com/pebbe/zmq4",
+    "github.com/prometheus/client_golang/prometheus",
+    "github.com/prometheus/client_golang/prometheus/promhttp",
+    "github.com/schancel/cashaddr-converter/address",
+    "github.com/tecbot/gorocksdb",
+  ]
   solver-name = "gps-cdcl"
   solver-version = 1

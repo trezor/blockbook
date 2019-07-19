@@ -101,17 +101,17 @@ func (a *Amount) AsInt64() int64 {
 
 // Vin contains information about single transaction input
 type Vin struct {
-	Txid       string                   `json:"txid,omitempty"`
-	Vout       uint32                   `json:"vout,omitempty"`
-	Sequence   int64                    `json:"sequence,omitempty"`
-	N          int                      `json:"n"`
-	AddrDesc   bchain.AddressDescriptor `json:"-"`
-	Addresses  []string                 `json:"addresses,omitempty"`
-	Searchable bool                     `json:"-"`
-	ValueSat   *Amount                  `json:"value,omitempty"`
-	Hex        string                   `json:"hex,omitempty"`
-	Asm        string                   `json:"asm,omitempty"`
-	Coinbase   string                   `json:"coinbase,omitempty"`
+	Txid      string                   `json:"txid,omitempty"`
+	Vout      uint32                   `json:"vout,omitempty"`
+	Sequence  int64                    `json:"sequence,omitempty"`
+	N         int                      `json:"n"`
+	AddrDesc  bchain.AddressDescriptor `json:"-"`
+	Addresses []string                 `json:"addresses,omitempty"`
+	IsAddress bool                     `json:"isAddress"`
+	ValueSat  *Amount                  `json:"value,omitempty"`
+	Hex       string                   `json:"hex,omitempty"`
+	Asm       string                   `json:"asm,omitempty"`
+	Coinbase  string                   `json:"coinbase,omitempty"`
 }
 
 // Vout contains information about single transaction output
@@ -126,7 +126,7 @@ type Vout struct {
 	Asm         string                   `json:"asm,omitempty"`
 	AddrDesc    bchain.AddressDescriptor `json:"-"`
 	Addresses   []string                 `json:"addresses"`
-	Searchable  bool                     `json:"-"`
+	IsAddress   bool                     `json:"isAddress"`
 	Type        string                   `json:"type,omitempty"`
 }
 
