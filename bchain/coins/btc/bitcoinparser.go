@@ -24,12 +24,13 @@ type OutputScriptToAddressesFunc func(script []byte) ([]string, bool, error)
 // BitcoinParser handle
 type BitcoinParser struct {
 	*bchain.BaseParser
-	Params                      *chaincfg.Params
-	OutputScriptToAddressesFunc OutputScriptToAddressesFunc
-	XPubMagic                   uint32
-	XPubMagicSegwitP2sh         uint32
-	XPubMagicSegwitNative       uint32
-	Slip44                      uint32
+	Params                       *chaincfg.Params
+	OutputScriptToAddressesFunc  OutputScriptToAddressesFunc
+	XPubMagic                    uint32
+	XPubMagicSegwitP2sh          uint32
+	XPubMagicSegwitNative        uint32
+	Slip44                       uint32
+	minimumCoinbaseConfirmations int
 }
 
 // NewBitcoinParser returns new BitcoinParser instance
@@ -39,11 +40,12 @@ func NewBitcoinParser(params *chaincfg.Params, c *Configuration) *BitcoinParser 
 			BlockAddressesToKeep: c.BlockAddressesToKeep,
 			AmountDecimalPoint:   8,
 		},
-		Params:                params,
-		XPubMagic:             c.XPubMagic,
-		XPubMagicSegwitP2sh:   c.XPubMagicSegwitP2sh,
-		XPubMagicSegwitNative: c.XPubMagicSegwitNative,
-		Slip44:                c.Slip44,
+		Params:                       params,
+		XPubMagic:                    c.XPubMagic,
+		XPubMagicSegwitP2sh:          c.XPubMagicSegwitP2sh,
+		XPubMagicSegwitNative:        c.XPubMagicSegwitNative,
+		Slip44:                       c.Slip44,
+		minimumCoinbaseConfirmations: c.MinimumCoinbaseConfirmations,
 	}
 	p.OutputScriptToAddressesFunc = p.outputScriptToAddresses
 	return p
@@ -324,6 +326,11 @@ func (p *BitcoinParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 	tx.Blocktime = bt
 
 	return tx, height, nil
+}
+
+// MinimumCoinbaseConfirmations returns minimum number of confirmations a coinbase transaction must have before it can be spent
+func (p *BitcoinParser) MinimumCoinbaseConfirmations() int {
+	return p.minimumCoinbaseConfirmations
 }
 
 func (p *BitcoinParser) addrDescFromExtKey(extKey *hdkeychain.ExtendedKey) (bchain.AddressDescriptor, error) {

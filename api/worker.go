@@ -843,11 +843,16 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *db.AddrB
 							// report only outpoints that are not spent in mempool
 							_, e := spentInMempool[bchainTx.Txid+strconv.Itoa(i)]
 							if !e {
+								coinbase := false
+								if len(bchainTx.Vin) == 1 && len(bchainTx.Vin[0].Coinbase) > 0 {
+									coinbase = true
+								}
 								r = append(r, Utxo{
 									Txid:      bchainTx.Txid,
 									Vout:      int32(i),
 									AmountSat: (*Amount)(&vout.ValueSat),
 									Locktime:  bchainTx.LockTime,
+									Coinbase:  coinbase,
 								})
 							}
 						}
@@ -882,12 +887,25 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *db.AddrB
 				}
 				_, e := spentInMempool[txid+strconv.Itoa(int(utxo.Vout))]
 				if !e {
+					confirmations := bestheight - int(utxo.Height) + 1
+					coinbase := false
+					// for performance reasons, check coinbase transactions only in minimim confirmantion range
+					if confirmations < w.chainParser.MinimumCoinbaseConfirmations() {
+						ta, err := w.db.GetTxAddresses(txid)
+						if err != nil {
+							return nil, err
+						}
+						if len(ta.Inputs) == 1 && len(ta.Inputs[0].AddrDesc) == 0 && IsZeroBigInt(&ta.Inputs[0].ValueSat) {
+							coinbase = true
+						}
+					}
 					r = append(r, Utxo{
 						Txid:          txid,
 						Vout:          utxo.Vout,
 						AmountSat:     (*Amount)(&utxo.ValueSat),
 						Height:        int(utxo.Height),
-						Confirmations: bestheight - int(utxo.Height) + 1,
+						Confirmations: confirmations,
+						Coinbase:      coinbase,
 					})
 				}
 				checksum.Sub(&checksum, &utxo.ValueSat)
