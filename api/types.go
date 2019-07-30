@@ -191,6 +191,7 @@ type Tx struct {
 	ValueInSat       *Amount           `json:"valueIn,omitempty"`
 	FeesSat          *Amount           `json:"fees,omitempty"`
 	Hex              string            `json:"hex,omitempty"`
+	Rbf              bool              `json:"rbf,omitempty"`
 	CoinSpecificData interface{}       `json:"-"`
 	CoinSpecificJSON json.RawMessage   `json:"-"`
 	TokenTransfers   []TokenTransfer   `json:"tokenTransfers,omitempty"`

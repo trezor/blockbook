@@ -142,6 +142,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height uint32, 
 	var valInSat, valOutSat, feesSat big.Int
 	var pValInSat *big.Int
 	vins := make([]Vin, len(bchainTx.Vin))
+	rbf := false
 	for i := range bchainTx.Vin {
 		bchainVin := &bchainTx.Vin[i]
 		vin := &vins[i]
@@ -149,6 +150,10 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height uint32, 
 		vin.N = i
 		vin.Vout = bchainVin.Vout
 		vin.Sequence = int64(bchainVin.Sequence)
+		// detect explicit Replace-by-Fee transactions as defined by BIP125
+		if bchainTx.Confirmations == 0 && bchainVin.Sequence < 0xffffffff-1 {
+			rbf = true
+		}
 		vin.Hex = bchainVin.ScriptSig.Hex
 		vin.Coinbase = bchainVin.Coinbase
 		if w.chainType == bchain.ChainBitcoinType {
@@ -317,6 +322,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height uint32, 
 		ValueOutSat:      (*Amount)(&valOutSat),
 		Version:          bchainTx.Version,
 		Hex:              bchainTx.Hex,
+		Rbf:              rbf,
 		Vin:              vins,
 		Vout:             vouts,
 		CoinSpecificData: bchainTx.CoinSpecificData,
