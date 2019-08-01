@@ -2,18 +2,24 @@ package dcr
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"math"
 	"math/big"
+	"strconv"
 
 	"blockbook/bchain"
 	"blockbook/bchain/coins/btc"
 	"blockbook/bchain/coins/utils"
 
 	cfg "github.com/decred/dcrd/chaincfg"
+	"github.com/decred/dcrd/dcrutil"
+	"github.com/decred/dcrd/hdkeychain"
 	"github.com/decred/dcrd/txscript"
+	"github.com/juju/errors"
 	"github.com/martinboehm/btcd/wire"
+	"github.com/martinboehm/btcutil/base58"
 	"github.com/martinboehm/btcutil/chaincfg"
 )
 
@@ -36,25 +42,35 @@ func init() {
 	MainNetParams.Net = MainnetMagic
 	MainNetParams.PubKeyHashAddrID = []byte{0x07, 0x3f}
 	MainNetParams.ScriptHashAddrID = []byte{0x07, 0x1a}
+	MainNetParams.Base58CksumHasher = base58.Blake256D
 
 	TestNet3Params = chaincfg.TestNet3Params
 	TestNet3Params.Net = TestnetMagic
 	TestNet3Params.PubKeyHashAddrID = []byte{0x0f, 0x21}
 	TestNet3Params.ScriptHashAddrID = []byte{0x0e, 0xfc}
+	TestNet3Params.Base58CksumHasher = base58.Blake256D
 }
 
 // DecredParser handle
 type DecredParser struct {
 	*btc.BitcoinParser
 	baseParser *bchain.BaseParser
+	netConfig  *cfg.Params
 }
 
 // NewDecredParser returns new DecredParser instance
 func NewDecredParser(params *chaincfg.Params, c *btc.Configuration) *DecredParser {
-	return &DecredParser{
+	d := &DecredParser{
 		BitcoinParser: btc.NewBitcoinParser(params, c),
 		baseParser:    &bchain.BaseParser{},
 	}
+
+	if d.BitcoinParser.Params.Name == "testnet3" {
+		d.netConfig = &cfg.TestNet3Params
+	} else {
+		d.netConfig = &cfg.MainNetParams
+	}
+	return d
 }
 
 // GetChainParams contains network parameters for the main Decred network,
@@ -184,14 +200,7 @@ func (p *DecredParser) GetAddrDescFromVout(output *bchain.Vout) (bchain.AddressD
 		return nil, err
 	}
 
-	var params cfg.Params
-	if p.Params.Name == "mainnet" {
-		params = cfg.MainNetParams
-	} else {
-		params = cfg.TestNet3Params
-	}
-
-	scriptClass, addresses, _, err := txscript.ExtractPkScriptAddrs(txscript.DefaultScriptVersion, script, &params)
+	scriptClass, addresses, _, err := txscript.ExtractPkScriptAddrs(txscript.DefaultScriptVersion, script, p.netConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -228,4 +237,129 @@ func (p *DecredParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) ([]
 // UnpackTx unpacks transaction from protobuf byte array
 func (p *DecredParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 	return p.baseParser.UnpackTx(buf)
+}
+
+// *************************************************//
+func (p *DecredParser) addrDescFromExtKey(extKey *hdkeychain.ExtendedKey, version uint32) (bchain.AddressDescriptor, error) {
+	var a dcrutil.Address
+	var err error
+
+	pbKey, err := extKey.ECPubKey()
+	if err != nil {
+		return nil, err
+	}
+
+	pubKey := pbKey.Serialize()
+
+	if version == p.XPubMagicSegwitP2sh {
+		// redeemScript <witness version: OP_0><len pubKeyHash: 20><20-byte-pubKeyHash>
+		pubKeyHash := dcrutil.Hash160(pubKey)
+		redeemScript := make([]byte, len(pubKeyHash)+2)
+		redeemScript[0] = 0
+		redeemScript[1] = byte(len(pubKeyHash))
+		copy(redeemScript[2:], pubKeyHash)
+		hash := dcrutil.Hash160(redeemScript)
+		a, err = dcrutil.NewAddressScriptHashFromHash(hash, p.netConfig)
+	} else if version == p.XPubMagicSegwitNative {
+		// a, err = dcrutil.NewAddressWitnessPubKeyHash(btcutil.BlakeHash160(pubKey), p.Params)
+	} else {
+		// default to P2PKH address
+		a, err = extKey.Address(p.netConfig)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return txscript.PayToAddrScript(a)
+}
+
+// DeriveAddressDescriptors derives address descriptors from given xpub for listed indexes
+func (p *DecredParser) DeriveAddressDescriptors(xpub string, change uint32, indexes []uint32) ([]bchain.AddressDescriptor, error) {
+	extKey, err := hdkeychain.NewKeyFromString(xpub)
+	if err != nil {
+		return nil, err
+	}
+	changeExtKey, err := extKey.Child(change)
+	if err != nil {
+		return nil, err
+	}
+
+	version, _, _ := p.decodeXpub(xpub)
+
+	ad := make([]bchain.AddressDescriptor, len(indexes))
+	for i, index := range indexes {
+		indexExtKey, err := changeExtKey.Child(index)
+		if err != nil {
+			return nil, err
+		}
+		ad[i], err = p.addrDescFromExtKey(indexExtKey, version)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return ad, nil
+}
+
+// DeriveAddressDescriptorsFromTo derives address descriptors from given xpub for addresses in index range
+func (p *DecredParser) DeriveAddressDescriptorsFromTo(xpub string, change uint32, fromIndex uint32, toIndex uint32) ([]bchain.AddressDescriptor, error) {
+	if toIndex <= fromIndex {
+		return nil, errors.New("toIndex<=fromIndex")
+	}
+	extKey, err := hdkeychain.NewKeyFromString(xpub)
+	if err != nil {
+		return nil, err
+	}
+	changeExtKey, err := extKey.Child(change)
+	if err != nil {
+		return nil, err
+	}
+
+	version, _, _ := p.decodeXpub(xpub)
+
+	ad := make([]bchain.AddressDescriptor, toIndex-fromIndex)
+	for index := fromIndex; index < toIndex; index++ {
+		indexExtKey, err := changeExtKey.Child(index)
+		if err != nil {
+			return nil, err
+		}
+		ad[index-fromIndex], err = p.addrDescFromExtKey(indexExtKey, version)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return ad, nil
+}
+
+// DerivationBasePath returns base path of xpub
+func (p *DecredParser) DerivationBasePath(xpub string) (string, error) {
+	var c, bip string
+	version, cn, depth := p.decodeXpub(xpub)
+
+	if cn >= 0x80000000 {
+		cn -= 0x80000000
+		c = "'"
+	}
+
+	c = strconv.Itoa(int(cn)) + c
+	if depth != 3 {
+		return "unknown/" + c, nil
+	}
+
+	if version == p.XPubMagicSegwitP2sh {
+		bip = "49"
+	} else if version == p.XPubMagicSegwitNative {
+		bip = "84"
+	} else {
+		bip = "44"
+	}
+	return "m/" + bip + "'/" + strconv.Itoa(int(p.Slip44)) + "'/" + c, nil
+}
+
+func (p *DecredParser) decodeXpub(xpub string) (version, childNum uint32, depth uint16) {
+	decoded := base58.Decode(xpub)
+	payload := decoded[:len(decoded)-4]
+	version = binary.BigEndian.Uint32(payload[:4])
+	depth = uint16(payload[4:5][0])
+	childNum = binary.BigEndian.Uint32(payload[9:13])
+
+	return
 }

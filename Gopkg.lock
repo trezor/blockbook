@@ -78,8 +78,8 @@
 [[projects]]
   name = "github.com/decred/dcrd"
   packages = ["chaincfg","chaincfg/chainec","chaincfg/chainhash","dcrec","dcrec/edwards","dcrec/secp256k1","dcrec/secp256k1/schnorr","dcrjson","dcrutil","txscript","wire"]
-  revision = "0fe564967f03160b9dbe0a147420d8aa13371d12"
-  version = "v1.3.0"
+  revision = "e3e8c47c68b010dbddeb783ebad32a3a4993dd71"
+  branch = "master"
 
 [[projects]]
   name = "github.com/decred/slog"
@@ -145,7 +145,7 @@
   branch = "master"
   name = "github.com/martinboehm/btcutil"
   packages = [".","base58","bech32","chaincfg","hdkeychain","txscript"]
-  revision = "225ed00dbbd5cb8d8b3949a0ee7c9ea540754585"
+  revision = "a7b7a55592485f5972902f1caf076a434b079e29"
 
 [[projects]]
   branch = "master"
