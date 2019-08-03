@@ -22,10 +22,10 @@
     "package_name": "backend-ritocoin",
     "package_revision": "satoshilabs-1",
     "system_user": "ritocoin",
-    "version": "2.2.2.0",
-    "binary_url": "https://github.com/RitoProject/Ritocoin/releases/download/v2.2.2.0/rito-2.2.2.0-x86_64-linux-gnu.tar.gz",
+    "version": "2.4.0.0",
+    "binary_url": "https://github.com/RitoProject/Ritocoin/releases/download/v2.4.0.0/rito-2.4.0.0-x86_64-linux-gnu.tar.gz",
     "verification_type": "sha256",
-    "verification_source": "fd0e2c36f05ff59f97ed425e04dd16b589f12994d4f32aabf491783f98101aa6",
+    "verification_source": "1ac67215516e77acd8223363800fd40d557f5c02cf0bfbbc35ecd543a5e07ee0",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
       "bin/rito-qt"
