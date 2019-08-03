@@ -14,7 +14,7 @@ import (
 	"blockbook/bchain/coins/utils"
 
 	cfg "github.com/decred/dcrd/chaincfg"
-	"github.com/decred/dcrd/dcrutil"
+	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/hdkeychain"
 	"github.com/decred/dcrd/txscript"
 	"github.com/juju/errors"
@@ -183,23 +183,18 @@ func (p *DecredParser) ParseTxFromJson(jsonTx json.RawMessage) (*bchain.Tx, erro
 	return tx, nil
 }
 
-// GetAddrDescForUnknownInput returns nil AddressDescriptor
+// GetAddrDescForUnknownInput returns nil AddressDescriptor.
 func (p *DecredParser) GetAddrDescForUnknownInput(tx *bchain.Tx, input int) bchain.AddressDescriptor {
 	return nil
 }
 
+// GetAddrDescFromAddress returns internal address representation of a given address.
 func (p *DecredParser) GetAddrDescFromAddress(address string) (bchain.AddressDescriptor, error) {
-	da, err := dcrutil.DecodeAddress(address)
-	if err != nil {
-		return nil, err
-	}
-	script, err := txscript.PayToAddrScript(da)
-	if err != nil {
-		return nil, err
-	}
-	return script, nil
+	addressByte := []byte(address)
+	return bchain.AddressDescriptor(addressByte), nil
 }
 
+// GetAddrDescFromVout returns internal address representation of a given transaction output.
 func (p *DecredParser) GetAddrDescFromVout(output *bchain.Vout) (bchain.AddressDescriptor, error) {
 	script, err := hex.DecodeString(output.ScriptPubKey.Hex)
 	if err != nil {
@@ -219,27 +214,17 @@ func (p *DecredParser) GetAddrDescFromVout(output *bchain.Vout) (bchain.AddressD
 
 	var addressByte []byte
 	for i := range addresses {
-		addressByte = append(addressByte, addresses[i].ScriptAddress()...)
+		addressByte = append(addressByte, addresses[i].String()...)
 	}
-
 	return bchain.AddressDescriptor(addressByte), nil
 }
 
+// GetAddressesFromAddrDesc returns addresses obtained from the internal address representation
 func (p *DecredParser) GetAddressesFromAddrDesc(addrDesc bchain.AddressDescriptor) ([]string, bool, error) {
 	var addrs []string
-	scriptClass, addresses, _, err := txscript.ExtractPkScriptAddrs(txscript.DefaultScriptVersion, addrDesc, p.netConfig)
-	if err != nil {
-		return addrs, false, err
+	if addrDesc != nil {
+		addrs = append(addrs, string(addrDesc))
 	}
-
-	if scriptClass.String() == "nulldata" {
-		return addrs, true, nil
-	}
-
-	for i := range addresses {
-		addrs = append(addrs, addresses[i].String())
-	}
-
 	return addrs, true, nil
 }
 
@@ -254,15 +239,17 @@ func (p *DecredParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 }
 
 func (p *DecredParser) addrDescFromExtKey(extKey *hdkeychain.ExtendedKey) (bchain.AddressDescriptor, error) {
-	var a, err = extKey.Address(p.netConfig)
+	var addr, err = extKey.Address(p.netConfig)
 	if err != nil {
 		return nil, err
 	}
-	return txscript.PayToAddrScript(a)
+	return p.GetAddrDescFromAddress(addr.String())
 }
 
-// DeriveAddressDescriptors derives address descriptors from given xpub for listed indexes
-func (p *DecredParser) DeriveAddressDescriptors(xpub string, change uint32, indexes []uint32) ([]bchain.AddressDescriptor, error) {
+// DeriveAddressDescriptors derives address descriptors from given xpub for
+// listed indexes
+func (p *DecredParser) DeriveAddressDescriptors(xpub string, change uint32,
+	indexes []uint32) ([]bchain.AddressDescriptor, error) {
 	extKey, err := hdkeychain.NewKeyFromString(xpub)
 	if err != nil {
 		return nil, err
@@ -287,8 +274,10 @@ func (p *DecredParser) DeriveAddressDescriptors(xpub string, change uint32, inde
 	return ad, nil
 }
 
-// DeriveAddressDescriptorsFromTo derives address descriptors from given xpub for addresses in index range
-func (p *DecredParser) DeriveAddressDescriptorsFromTo(xpub string, change uint32, fromIndex uint32, toIndex uint32) ([]bchain.AddressDescriptor, error) {
+// DeriveAddressDescriptorsFromTo derives address descriptors from given xpub for
+// addresses in index range
+func (p *DecredParser) DeriveAddressDescriptorsFromTo(xpub string, change uint32,
+	fromIndex uint32, toIndex uint32) ([]bchain.AddressDescriptor, error) {
 	if toIndex <= fromIndex {
 		return nil, errors.New("toIndex<=fromIndex")
 	}
@@ -315,23 +304,19 @@ func (p *DecredParser) DeriveAddressDescriptorsFromTo(xpub string, change uint32
 	return ad, nil
 }
 
-// DerivationBasePath returns base path of xpub which takes the
+// DerivationBasePath returns base path of xpub which whose full format is
+// m/44'/<coin type>'/<account>'/<branch>/<address index>. This function only
+// returns a path up to m/44'/<coin type>'/<account>'/ whereby the rest of the
+// other details (<branch>/<address index>) are populated automatically.
 func (p *DecredParser) DerivationBasePath(xpub string) (string, error) {
-	var c, bip string
-	version, cn, depth := p.decodeXpub(xpub)
-	extKey, err := hdkeychain.NewKeyFromString(xpub)
+	var c string
+	cn, depth, err := p.decodeXpub(xpub)
 	if err != nil {
 		return "", err
 	}
 
-	addr, err := extKey.Address(p.netConfig)
-	if err != nil {
-		return "", err
-	}
-	addr.DSA(p.netConfig)
-
-	if cn >= 0x80000000 {
-		cn -= 0x80000000
+	if cn >= hdkeychain.HardenedKeyStart {
+		cn -= hdkeychain.HardenedKeyStart
 		c = "'"
 	}
 
@@ -340,20 +325,31 @@ func (p *DecredParser) DerivationBasePath(xpub string) (string, error) {
 		return "unknown/" + c, nil
 	}
 
-	if version == p.XPubMagicSegwitP2sh {
-		bip = "49"
-	} else {
-		bip = "44"
-	}
-	return "m/" + bip + "'/" + strconv.Itoa(int(p.Slip44)) + "'/" + c, nil
+	return "m/44'/" + strconv.Itoa(int(p.Slip44)) + "'/" + c, nil
 }
 
-func (p *DecredParser) decodeXpub(xpub string) (version, childNum uint32, depth uint16) {
+func (p *DecredParser) decodeXpub(xpub string) (childNum uint32, depth uint16, err error) {
 	decoded := base58.Decode(xpub)
+
+	// serializedKeyLen is the length of a serialized public or private
+	// extended key.  It consists of 4 bytes version, 1 byte depth, 4 bytes
+	// fingerprint, 4 bytes child number, 32 bytes chain code, and 33 bytes
+	// public/private key data.
+	serializedKeyLen := 4 + 1 + 4 + 4 + 32 + 33 // 78 bytes
+	if len(decoded) != serializedKeyLen+4 {
+		err = errors.New("invalid extended key length")
+		return
+	}
+
 	payload := decoded[:len(decoded)-4]
-	version = binary.BigEndian.Uint32(payload[:4])
+	checkSum := decoded[len(decoded)-4:]
+	expectedCheckSum := chainhash.HashB(chainhash.HashB(payload))[:4]
+	if !bytes.Equal(checkSum, expectedCheckSum) {
+		err = errors.New("bad checksum value")
+		return
+	}
+
 	depth = uint16(payload[4:5][0])
 	childNum = binary.BigEndian.Uint32(payload[9:13])
-
 	return
 }
