@@ -75,7 +75,7 @@ func (p *BitcoinParser) GetAddrDescFromVout(output *bchain.Vout) (bchain.Address
 	}
 	// convert possible P2PK script to P2PKH
 	// so that all transactions by given public key are indexed together
-	return txscript.ConvertP2PKtoP2PKH(ad)
+	return txscript.ConvertP2PKtoP2PKH(p.Params.Base58CksumHasher, ad)
 }
 
 // GetAddrDescFromAddress returns internal address representation (descriptor) of given address
