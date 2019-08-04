@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	parser *DecredParser
+	testnetParser, mainnetParser *DecredParser
 
 	testTx1 = bchain.Tx{
 		Hex:       "01000000012372568fe80d2f9b2ab17226158dd5732d9926dc705371eaf40ab748c9e3d9720200000001ffffffff02644b252d0000000000001976a914a862f83733cc368f386a651e03d844a5bd6116d588acacdf63090000000000001976a91491dc5d18370939b3414603a0729bcb3a38e4ef7688ac000000000000000001e48d893600000000bb3d0000020000006a4730440220378e1442cc17fa7e49184518713eedd30e13e42147e077859557da6ffbbd40c702205f85563c28b6287f9c9110e6864dd18acfd92d85509ea846913c28b6e8a7f940012102bbbd7aadef33f2d2bdd9b0c5ba278815f5d66a6a01d2c019fb73f697662038b5",
@@ -93,7 +93,8 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	parser = NewDecredParser(GetChainParams("testnet3"), &btc.Configuration{})
+	testnetParser = NewDecredParser(GetChainParams("testnet3"), &btc.Configuration{})
+	mainnetParser = NewDecredParser(GetChainParams("mainnet"), &btc.Configuration{})
 	exitCode := m.Run()
 	os.Exit(exitCode)
 }
@@ -130,7 +131,7 @@ func TestGetAddrDescFromAddress(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := parser.GetAddrDescFromAddress(tt.args.address)
+			got, err := testnetParser.GetAddrDescFromAddress(tt.args.address)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("GetAddrDescFromAddress() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -174,7 +175,7 @@ func TestGetAddrDescFromVout(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := parser.GetAddrDescFromVout(&tt.args.vout)
+			got, err := testnetParser.GetAddrDescFromVout(&tt.args.vout)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("GetAddrDescFromVout() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -223,7 +224,7 @@ func TestGetAddressesFromAddrDesc(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			b, _ := hex.DecodeString(tt.args.script)
-			got, got2, err := parser.GetAddressesFromAddrDesc(b)
+			got, got2, err := testnetParser.GetAddressesFromAddrDesc(b)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("GetAddressesFromAddrDesc() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -232,6 +233,166 @@ func TestGetAddressesFromAddrDesc(t *testing.T) {
 			}
 			if !reflect.DeepEqual(got2, tt.want2) {
 				t.Errorf("GetAddressesFromAddrDesc() = %v, want %v", got2, tt.want2)
+			}
+		})
+	}
+}
+
+func TestDeriveAddressDescriptors(t *testing.T) {
+	type args struct {
+		xpub    string
+		change  uint32
+		indexes []uint32
+		parser  *DecredParser
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    []string
+		wantErr bool
+	}{
+		{
+			name: "m/44'/42'/0'",
+			args: args{
+				xpub:    "dpubZFYFpu8cZxwrApmtot59LZLChk5JcdB8xCxVQ4pcsTig4fscH3EfAkhxcKKhXBQH6SGyYs2VDidoomA5qukTWMaHDkBsAtnpodAHm61ozbD",
+				change:  0,
+				indexes: []uint32{0, 5},
+				parser:  mainnetParser,
+			},
+			want: []string{"DsUPx4NgAJzUQFRXnn2XZnWwEeQkQpwhqFD", "DsaT4kaGCeJU1Fef721J2DNt8UgcrmE2UsD"},
+		},
+		{
+			name: "m/44'/42'/1'",
+			args: args{
+				xpub:    "dpubZFYFpu8cZxwrESo75eazNjVHtC4nWJqL5aXxExZHKnyvZxKirkpypbgeJhVzhTdfnK2986DLjich4JQqcSaSyxu5KSoZ25KJ67j4mQJ9iqx",
+				change:  0,
+				indexes: []uint32{0, 5},
+				parser:  mainnetParser,
+			},
+			want: []string{"DsX5px9k9XZKFNP2Z9kyZBbfHgecm1ftNz6", "Dshjbo35CSWwNo7xMgG7UM8AWykwEjJ5DCP"},
+		},
+		{
+			name: "m/44'/1'/0'",
+			args: args{
+				xpub:    "tpubVossdTiJthe9xZZ5rz47szxN6ncpLJ4XmtJS26hKciDUPtboikdwHKZPWfo4FWYuLRZ6MNkLjyPRKhxqjStBTV2BE1LCULznpqsFakkPfPr",
+				change:  0,
+				indexes: []uint32{0, 2},
+				parser:  testnetParser,
+			},
+			want: []string{"TsboBwzpaH831s9J63XDcDx5GbKLcwv9ujo", "TsXrNt9nP3kBUM2Wr3rQGoPrpL7RMMSJyJH"},
+		},
+		{
+			name: "m/44'/1'/1'",
+			args: args{
+				xpub:    "tpubVossdTiJtheA1fQniKn9EN1JE1Eq1kBofaq2KwywrvuNhAk1KsEM7J2r8anhMJUmmcn9Wmoh73EctpW7Vxs3gS8cbF7N3m4zVjzuyvBj3qC",
+				change:  0,
+				indexes: []uint32{0, 3},
+				parser:  testnetParser,
+			},
+			want: []string{"TsndBjzcwZVjoZEuqYKwiMbCJH9QpkEekg4", "TsbrkVdFciW3Lfh1W8qjwRY9uSbdiBmY4VP"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.args.parser.DeriveAddressDescriptors(tt.args.xpub, tt.args.change, tt.args.indexes)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("DeriveAddressDescriptorsFromTo() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			gotAddresses := make([]string, len(got))
+			for i, ad := range got {
+				aa, _, err := tt.args.parser.GetAddressesFromAddrDesc(ad)
+				if err != nil || len(aa) != 1 {
+					t.Errorf("DeriveAddressDescriptorsFromTo() got incorrect address descriptor %v, error %v", ad, err)
+					return
+				}
+				gotAddresses[i] = aa[0]
+			}
+			if !reflect.DeepEqual(gotAddresses, tt.want) {
+				t.Errorf("DeriveAddressDescriptorsFromTo() = %v, want %v", gotAddresses, tt.want)
+			}
+		})
+	}
+}
+
+func TestDeriveAddressDescriptorsFromTo(t *testing.T) {
+	type args struct {
+		xpub      string
+		change    uint32
+		fromIndex uint32
+		toIndex   uint32
+		parser    *DecredParser
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    []string
+		wantErr bool
+	}{
+		{
+			name: "m/44'/42'/2'",
+			args: args{
+				xpub:      "dpubZFYFpu8cZxwrGnWbdHmvsAcTaMve4W9EAUiSHzXp1c5hQvfeWgk7LxsE5LqopwfxV62CoB51fxw97YaNpdA3tdo4GHbLxtUzRmYcUtVPYUi",
+				change:    0,
+				fromIndex: 0,
+				toIndex:   1,
+				parser:    mainnetParser,
+			},
+			want: []string{"Dshtd1N7pKw814wgWXUq5qFVC5ENQ9oSGK7"},
+		},
+		{
+			name: "m/44'/42'/1'",
+			args: args{
+				xpub:      "dpubZFYFpu8cZxwrESo75eazNjVHtC4nWJqL5aXxExZHKnyvZxKirkpypbgeJhVzhTdfnK2986DLjich4JQqcSaSyxu5KSoZ25KJ67j4mQJ9iqx",
+				change:    0,
+				fromIndex: 0,
+				toIndex:   1,
+				parser:    mainnetParser,
+			},
+			want: []string{"DsX5px9k9XZKFNP2Z9kyZBbfHgecm1ftNz6"},
+		},
+		{
+			name: "m/44'/1'/2'",
+			args: args{
+				xpub:      "tpubVossdTiJtheA51AuNQZtqvKUbhM867Von8XBadxX3tRkDm71kyyi6U966jDPEw9RnQjNcQLwxYSnQ9kBjZxrxfmSbByRbz7D1PLjgAPmL42",
+				change:    0,
+				fromIndex: 0,
+				toIndex:   1,
+				parser:    testnetParser,
+			},
+			want: []string{"TsSpo87rBG21PLvvbzFk2Ust2Dbyvjfn8pQ"},
+		},
+		{
+			name: "m/44'/1'/1'",
+			args: args{
+				xpub:      "tpubVossdTiJtheA1fQniKn9EN1JE1Eq1kBofaq2KwywrvuNhAk1KsEM7J2r8anhMJUmmcn9Wmoh73EctpW7Vxs3gS8cbF7N3m4zVjzuyvBj3qC",
+				change:    0,
+				fromIndex: 0,
+				toIndex:   5,
+				parser:    testnetParser,
+			},
+			want: []string{"TsndBjzcwZVjoZEuqYKwiMbCJH9QpkEekg4", "TshWHbnPAVCDARTcCfTEQyL9SzeHxxexX4J", "TspE6pMdC937UHHyfYJpTiKi6vPj5rVnWiG",
+				"TsbrkVdFciW3Lfh1W8qjwRY9uSbdiBmY4VP", "TsagMXjC4Xj6ckPEJh8f1RKHU4cEzTtdVW6"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.args.parser.DeriveAddressDescriptorsFromTo(tt.args.xpub, tt.args.change, tt.args.fromIndex, tt.args.toIndex)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("DeriveAddressDescriptorsFromTo() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			gotAddresses := make([]string, len(got))
+			for i, ad := range got {
+				aa, _, err := tt.args.parser.GetAddressesFromAddrDesc(ad)
+				if err != nil || len(aa) != 1 {
+					t.Errorf("DeriveAddressDescriptorsFromTo() got incorrect address descriptor %v, error %v", ad, err)
+					return
+				}
+				gotAddresses[i] = aa[0]
+			}
+			if !reflect.DeepEqual(gotAddresses, tt.want) {
+				t.Errorf("DeriveAddressDescriptorsFromTo() = %v, want %v", gotAddresses, tt.want)
 			}
 		})
 	}

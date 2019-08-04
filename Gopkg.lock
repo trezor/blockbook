@@ -79,7 +79,7 @@
   name = "github.com/decred/dcrd"
   packages = ["chaincfg","chaincfg/chainec","chaincfg/chainhash","dcrec","dcrec/edwards","dcrec/secp256k1","dcrec/secp256k1/schnorr","dcrjson","dcrutil","txscript","wire"]
   revision = "e3e8c47c68b010dbddeb783ebad32a3a4993dd71"
-  branch = "master"
+  version = "v1.4.0"
 
 [[projects]]
   name = "github.com/decred/slog"
