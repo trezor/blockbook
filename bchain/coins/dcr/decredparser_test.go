@@ -93,8 +93,8 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	testnetParser = NewDecredParser(GetChainParams("testnet3"), &btc.Configuration{})
-	mainnetParser = NewDecredParser(GetChainParams("mainnet"), &btc.Configuration{})
+	testnetParser = NewDecredParser(GetChainParams("testnet3"), &btc.Configuration{Slip44: 1})
+	mainnetParser = NewDecredParser(GetChainParams("mainnet"), &btc.Configuration{Slip44: 42})
 	exitCode := m.Run()
 	os.Exit(exitCode)
 }
@@ -393,6 +393,49 @@ func TestDeriveAddressDescriptorsFromTo(t *testing.T) {
 			}
 			if !reflect.DeepEqual(gotAddresses, tt.want) {
 				t.Errorf("DeriveAddressDescriptorsFromTo() = %v, want %v", gotAddresses, tt.want)
+			}
+		})
+	}
+}
+
+func TestDerivationBasePath(t *testing.T) {
+	tests := []struct {
+		name   string
+		xpub   string
+		parser *DecredParser
+	}{
+		{
+			name:   "m/44'/42'/2'",
+			xpub:   "dpubZFYFpu8cZxwrGnWbdHmvsAcTaMve4W9EAUiSHzXp1c5hQvfeWgk7LxsE5LqopwfxV62CoB51fxw97YaNpdA3tdo4GHbLxtUzRmYcUtVPYUi",
+			parser: mainnetParser,
+		},
+		{
+			name:   "m/44'/42'/1'",
+			xpub:   "dpubZFYFpu8cZxwrESo75eazNjVHtC4nWJqL5aXxExZHKnyvZxKirkpypbgeJhVzhTdfnK2986DLjich4JQqcSaSyxu5KSoZ25KJ67j4mQJ9iqx",
+			parser: mainnetParser,
+		},
+		{
+			name:   "m/44'/1'/2'",
+			xpub:   "tpubVossdTiJtheA51AuNQZtqvKUbhM867Von8XBadxX3tRkDm71kyyi6U966jDPEw9RnQjNcQLwxYSnQ9kBjZxrxfmSbByRbz7D1PLjgAPmL42",
+			parser: testnetParser,
+		},
+		{
+			name:   "m/44'/1'/1'",
+			xpub:   "tpubVossdTiJtheA1fQniKn9EN1JE1Eq1kBofaq2KwywrvuNhAk1KsEM7J2r8anhMJUmmcn9Wmoh73EctpW7Vxs3gS8cbF7N3m4zVjzuyvBj3qC",
+			parser: testnetParser,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.parser.DerivationBasePath(tt.xpub)
+			if err != nil {
+				t.Errorf("DerivationBasePath() expected no error but got %v", err)
+				return
+			}
+
+			if got != tt.name {
+				t.Errorf("DerivationBasePath() = %v, want %v", got, tt.name)
 			}
 		})
 	}
