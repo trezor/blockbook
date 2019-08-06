@@ -198,6 +198,13 @@ type Tx struct {
 	EthereumSpecific *EthereumSpecific `json:"ethereumSpecific,omitempty"`
 }
 
+type FeeStats struct {
+	TxCount         int       `json:"txCount"`
+	TotalFeesSat    *Amount   `json:"totalFeesSat"`
+	AverageFeePerKb int64     `json:"averageFeePerKb"`
+	Deciles         [11]int64 `json:"deciles"`
+}
+
 // Paging contains information about paging for address, blocks and block
 type Paging struct {
 	Page        int `json:"page,omitempty"`
