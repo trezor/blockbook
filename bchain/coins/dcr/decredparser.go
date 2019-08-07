@@ -172,6 +172,7 @@ func (p *DecredParser) ParseTxFromJson(jsonTx json.RawMessage) (*bchain.Tx, erro
 		Txid:          getTxResult.Result.Txid,
 		Version:       getTxResult.Result.Version,
 		LockTime:      getTxResult.Result.LockTime,
+		BlockHeight:   getTxResult.Result.BlockHeight,
 		Vin:           vins,
 		Vout:          vouts,
 		Confirmations: uint32(getTxResult.Result.Confirmations),
