@@ -89,13 +89,6 @@ type Tx struct {
 	CoinSpecificData interface{} `json:"-"`
 }
 
-// Extends Tx with an additional Size and Vsize info
-type TxSpecific struct {
-	*Tx
-	Vsize int `json:"vsize,omitempty"`
-	Size  int `json:"size,omitempty"`
-}
-
 // Block is block header and list of transactions
 type Block struct {
 	BlockHeader

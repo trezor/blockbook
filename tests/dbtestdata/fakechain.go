@@ -147,11 +147,18 @@ func (c *fakeBlockChain) GetTransaction(txid string) (v *bchain.Tx, err error) {
 }
 
 func (c *fakeBlockChain) GetTransactionSpecific(tx *bchain.Tx) (v json.RawMessage, err error) {
+	// txSpecific extends Tx with an additional Size and Vsize info
+	type txSpecific struct {
+		*bchain.Tx
+		Vsize int `json:"vsize,omitempty"`
+		Size  int `json:"size,omitempty"`
+	}
+
 	tx, err = c.GetTransaction(tx.Txid)
 	if err != nil {
 		return nil, err
 	}
-	txS := bchain.TxSpecific{Tx: tx}
+	txS := txSpecific{Tx: tx}
 
 	if tx.Txid == "7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25" {
 		txS.Vsize = 206

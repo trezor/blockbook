@@ -972,7 +972,7 @@ func (w *Worker) GetBlocks(page int, blocksOnPage int) (*Blocks, error) {
 	return r, nil
 }
 
-func (w *Worker) GetBlockInfoFromBlockID(bid string) (*bchain.BlockInfo, error) {
+func (w *Worker) getBlockInfoFromBlockID(bid string) (*bchain.BlockInfo, error) {
 	// try to decide if passed string (bid) is block height or block hash
 	// if it's a number, must be less than int32
 	var hash string
@@ -992,8 +992,17 @@ func (w *Worker) GetBlockInfoFromBlockID(bid string) (*bchain.BlockInfo, error) 
 	return bi, err
 }
 
+// GetFeeStats returns statistics about block fees
 func (w *Worker) GetFeeStats(bid string) (*FeeStats, error) {
-	bi, err := w.GetBlockInfoFromBlockID(bid)
+	// txSpecific extends Tx with an additional Size and Vsize info
+	type txSpecific struct {
+		*bchain.Tx
+		Vsize int `json:"vsize,omitempty"`
+		Size  int `json:"size,omitempty"`
+	}
+
+	start := time.Now()
+	bi, err := w.getBlockInfoFromBlockID(bid)
 	if err != nil {
 		if err == bchain.ErrBlockNotFound {
 			return nil, NewAPIError("Block not found", true)
@@ -1001,37 +1010,35 @@ func (w *Worker) GetFeeStats(bid string) (*FeeStats, error) {
 		return nil, NewAPIError(fmt.Sprintf("Block not found, %v", err), true)
 	}
 
-	n := len(bi.Txids) - 1
-	feesPerKb := make([]int64, n)
+	feesPerKb := make([]int64, 0, len(bi.Txids))
 	totalFeesSat := big.NewInt(0)
 	averageFeePerKb := int64(0)
-	txCount := 0
 
-	for i, txid := range bi.Txids {
+	for _, txid := range bi.Txids {
 		// Get a raw JSON with transaction details, including size, vsize, hex
-		txSpecificJson, err := w.chain.GetTransactionSpecific(&bchain.Tx{Txid: txid})
+		txSpecificJSON, err := w.chain.GetTransactionSpecific(&bchain.Tx{Txid: txid})
 		if err != nil {
 			return nil, errors.Annotatef(err, "GetTransactionSpecific")
 		}
 
 		// Serialize the raw JSON into TxSpecific struct
-		var txSpecific bchain.TxSpecific
-		err = json.Unmarshal(txSpecificJson, &txSpecific)
+		var txSpec txSpecific
+		err = json.Unmarshal(txSpecificJSON, &txSpec)
 		if err != nil {
 			return nil, errors.Annotatef(err, "Unmarshal")
 		}
 
 		// Calculate the TX size in bytes
 		txSize := 0
-		if txSpecific.Vsize > 0 {
-			txSize = txSpecific.Vsize
-		} else if txSpecific.Size > 0 {
-			txSize = txSpecific.Size
-		} else if txSpecific.Hex != "" {
-			txSize = len(txSpecific.Hex) / 2
+		if txSpec.Vsize > 0 {
+			txSize = txSpec.Vsize
+		} else if txSpec.Size > 0 {
+			txSize = txSpec.Size
+		} else if txSpec.Hex != "" {
+			txSize = len(txSpec.Hex) / 2
 		} else {
-			err_msg := "Cannot determine the transaction size from neither Vsize, Size nor Hex! Txid: " + txid
-			return nil, NewAPIError(err_msg, true)
+			errMsg := "Cannot determine the transaction size from neither Vsize, Size nor Hex! Txid: " + txid
+			return nil, NewAPIError(errMsg, true)
 		}
 
 		// Get values of TX inputs and outputs
@@ -1050,7 +1057,6 @@ func (w *Worker) GetFeeStats(bid string) (*FeeStats, error) {
 		if feeSat.Cmp(big.NewInt(0)) == 0 {
 			continue
 		}
-		txCount += 1
 
 		for _, output := range txAddresses.Outputs {
 			feeSat = feeSat.Sub(feeSat, &output.ValueSat)
@@ -1060,8 +1066,9 @@ func (w *Worker) GetFeeStats(bid string) (*FeeStats, error) {
 		// Convert feeSat to fee per kilobyte and add to an array for percentile calculation
 		feePerKb := int64(float64(feeSat.Int64()) / float64(txSize) * 1000)
 		averageFeePerKb += feePerKb
-		feesPerKb[i] = feePerKb
+		feesPerKb = append(feesPerKb, feePerKb)
 	}
+	n := len(feesPerKb)
 	averageFeePerKb /= int64(n)
 
 	// Sort fees and calculate the deciles
@@ -1076,12 +1083,13 @@ func (w *Worker) GetFeeStats(bid string) (*FeeStats, error) {
 		}
 		deciles[k] = feesPerKb[index]
 	}
+	glog.Info("GetFeeStats ", bid, " (", len(feesPerKb), " txs) finished in ", time.Since(start))
 
 	return &FeeStats{
-		TxCount:         txCount,
+		TxCount:         len(feesPerKb),
 		AverageFeePerKb: averageFeePerKb,
 		TotalFeesSat:    (*Amount)(totalFeesSat),
-		Deciles:         deciles,
+		DecilesFeePerKb: deciles,
 	}, nil
 }
 
@@ -1092,7 +1100,7 @@ func (w *Worker) GetBlock(bid string, page int, txsOnPage int) (*Block, error) {
 	if page < 0 {
 		page = 0
 	}
-	bi, err := w.GetBlockInfoFromBlockID(bid)
+	bi, err := w.getBlockInfoFromBlockID(bid)
 	if err != nil {
 		if err == bchain.ErrBlockNotFound {
 			return nil, NewAPIError("Block not found", true)
