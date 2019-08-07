@@ -457,7 +457,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"txCount":3,"totalFeesSat":"1284","averageFeePerKb":1398,"deciles":[155,155,155,155,1679,1679,1679,2361,2361,2361,2361]}`,
+				`{"txCount":3,"totalFeesSat":"1284","averageFeePerKb":1398,"decilesFeePerKb":[155,155,155,155,1679,1679,1679,2361,2361,2361,2361]}`,
 			},
 		},
 		{
