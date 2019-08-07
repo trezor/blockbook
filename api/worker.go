@@ -1063,26 +1063,31 @@ func (w *Worker) GetFeeStats(bid string) (*FeeStats, error) {
 		}
 		totalFeesSat.Add(totalFeesSat, feeSat)
 
-		// Convert feeSat to fee per kilobyte and add to an array for percentile calculation
+		// Convert feeSat to fee per kilobyte and add to an array for decile calculation
 		feePerKb := int64(float64(feeSat.Int64()) / float64(txSize) * 1000)
 		averageFeePerKb += feePerKb
 		feesPerKb = append(feesPerKb, feePerKb)
 	}
-	n := len(feesPerKb)
-	averageFeePerKb /= int64(n)
 
-	// Sort fees and calculate the deciles
-	sort.Slice(feesPerKb, func(i, j int) bool { return feesPerKb[i] < feesPerKb[j] })
 	var deciles [11]int64
-	for k := 0; k <= 10; k++ {
-		index := int(math.Floor(0.5+float64(k)*float64(n+1)/10)) - 1
-		if index < 0 {
-			index = 0
-		} else if index >= n {
-			index = n - 1
+	n := len(feesPerKb)
+
+	if n > 0 {
+		averageFeePerKb /= int64(n)
+
+		// Sort fees and calculate the deciles
+		sort.Slice(feesPerKb, func(i, j int) bool { return feesPerKb[i] < feesPerKb[j] })
+		for k := 0; k <= 10; k++ {
+			index := int(math.Floor(0.5+float64(k)*float64(n+1)/10)) - 1
+			if index < 0 {
+				index = 0
+			} else if index >= n {
+				index = n - 1
+			}
+			deciles[k] = feesPerKb[index]
 		}
-		deciles[k] = feesPerKb[index]
 	}
+
 	glog.Info("GetFeeStats ", bid, " (", len(feesPerKb), " txs) finished in ", time.Since(start))
 
 	return &FeeStats{
