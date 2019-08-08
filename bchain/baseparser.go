@@ -161,6 +161,11 @@ func (p *BaseParser) GetChainType() ChainType {
 	return ChainBitcoinType
 }
 
+// MinimumCoinbaseConfirmations returns minimum number of confirmations a coinbase transaction must have before it can be spent
+func (p *BaseParser) MinimumCoinbaseConfirmations() int {
+	return 0
+}
+
 // PackTx packs transaction to byte array using protobuf
 func (p *BaseParser) PackTx(tx *Tx, height uint32, blockTime int64) ([]byte, error) {
 	var err error

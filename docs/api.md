@@ -407,6 +407,8 @@ Returns array of unspent transaction outputs of address or xpub, applicable only
 
 Unconfirmed utxos do not have field *height*, the field *confirmations* has value *0* and may contain field *lockTime*, if not zero.
 
+Coinbase utxos do have field *coinbase* set to true, however due to performance reasons only up to minimum coinbase confirmations limit (100). After this limit, utxos are not detected as coinbase.
+
 ```
 GET /api/v2/utxo/<address|xpub>[?confirmed=true]
 ```
@@ -421,6 +423,14 @@ Response:
     "value": "1422303206539",
     "confirmations": 0,
     "lockTime": 2648100
+  },
+  {
+    "txid": "a79e396a32e10856c97b95f43da7e9d2b9a11d446f7638dbd75e5e7603128cac",
+    "vout": 1,
+    "value": "39748685",
+    "height": 2648043,
+    "confirmations": 47,
+    "coinbase": true
   },
   {
     "txid": "de4f379fdc3ea9be063e60340461a014f372a018d70c3db35701654e7066b3ef",
@@ -579,6 +589,7 @@ The websocket interface provides the following requests:
 - getTransactionSpecific
 - estimateFee
 - sendTransaction
+- ping
 
 The client can subscribe to the following events:
 

@@ -142,6 +142,7 @@ func testGetBlockHash(t *testing.T, h *TestHandler) {
 		t.Errorf("GetBlockHash() got %q, want %q", hash, h.TestData.BlockHash)
 	}
 }
+
 func testGetBlock(t *testing.T, h *TestHandler) {
 	blk, err := h.Chain.GetBlock(h.TestData.BlockHash, 0)
 	if err != nil {
@@ -159,6 +160,7 @@ func testGetBlock(t *testing.T, h *TestHandler) {
 		}
 	}
 }
+
 func testGetTransaction(t *testing.T, h *TestHandler) {
 	for txid, want := range h.TestData.TxDetails {
 		got, err := h.Chain.GetTransaction(txid)
@@ -175,11 +177,15 @@ func testGetTransaction(t *testing.T, h *TestHandler) {
 		// CoinSpecificData are not specified in the fixtures
 		got.CoinSpecificData = nil
 
+		normalizeEmptyAddresses(want)
+		normalizeEmptyAddresses(got)
+
 		if !reflect.DeepEqual(got, want) {
-			t.Errorf("GetTransaction() got %+v, want %+v", got, want)
+			t.Errorf("GetTransaction() got %+#v, want %+#v", got, want)
 		}
 	}
 }
+
 func testGetTransactionForMempool(t *testing.T, h *TestHandler) {
 	for txid, want := range h.TestData.TxDetails {
 		// reset fields that are not parsed by BlockChainParser
@@ -189,13 +195,32 @@ func testGetTransactionForMempool(t *testing.T, h *TestHandler) {
 		if err != nil {
 			t.Fatal(err)
 		}
+
+		normalizeEmptyAddresses(want)
+		normalizeEmptyAddresses(got)
+
 		// transactions parsed from JSON may contain additional data
 		got.Confirmations, got.Blocktime, got.Time, got.CoinSpecificData = 0, 0, 0, nil
 		if !reflect.DeepEqual(got, want) {
-			t.Errorf("GetTransactionForMempool() got %+v, want %+v", got, want)
+			t.Errorf("GetTransactionForMempool() got %+#v, want %+#v", got, want)
 		}
 	}
 }
+
+// empty slice can be either []slice{} or nil; reflect.DeepEqual treats them as different value
+func normalizeEmptyAddresses(tx *bchain.Tx) {
+	for i := range tx.Vin {
+		if len(tx.Vin[i].Addresses) == 0 {
+			tx.Vin[i].Addresses = nil
+		}
+	}
+	for i := range tx.Vout {
+		if len(tx.Vout[i].ScriptPubKey.Addresses) == 0 {
+			tx.Vout[i].ScriptPubKey.Addresses = nil
+		}
+	}
+}
+
 func testMempoolSync(t *testing.T, h *TestHandler) {
 	for i := 0; i < 3; i++ {
 		txs := getMempool(t, h)
@@ -238,6 +263,7 @@ func testMempoolSync(t *testing.T, h *TestHandler) {
 	}
 	t.Skip("Skipping test, all attempts to sync mempool failed due to network state changes")
 }
+
 func testEstimateSmartFee(t *testing.T, h *TestHandler) {
 	for _, blocks := range []int{1, 2, 3, 5, 10} {
 		fee, err := h.Chain.EstimateSmartFee(blocks, true)
@@ -252,6 +278,7 @@ func testEstimateSmartFee(t *testing.T, h *TestHandler) {
 		}
 	}
 }
+
 func testEstimateFee(t *testing.T, h *TestHandler) {
 	for _, blocks := range []int{1, 2, 3, 5, 10} {
 		fee, err := h.Chain.EstimateFee(blocks)
@@ -266,6 +293,7 @@ func testEstimateFee(t *testing.T, h *TestHandler) {
 		}
 	}
 }
+
 func testGetBestBlockHash(t *testing.T, h *TestHandler) {
 	for i := 0; i < 3; i++ {
 		hash, err := h.Chain.GetBestBlockHash()
@@ -297,6 +325,7 @@ func testGetBestBlockHash(t *testing.T, h *TestHandler) {
 	}
 	t.Error("GetBestBlockHash() didn't get the best hash")
 }
+
 func testGetBestBlockHeight(t *testing.T, h *TestHandler) {
 	for i := 0; i < 3; i++ {
 		height, err := h.Chain.GetBestBlockHeight()
@@ -315,6 +344,7 @@ func testGetBestBlockHeight(t *testing.T, h *TestHandler) {
 	}
 	t.Error("GetBestBlockHeigh() didn't get the the best heigh")
 }
+
 func testGetBlockHeader(t *testing.T, h *TestHandler) {
 	want := &bchain.BlockHeader{
 		Hash:   h.TestData.BlockHash,
@@ -337,7 +367,7 @@ func testGetBlockHeader(t *testing.T, h *TestHandler) {
 	got.Prev, got.Next = "", ""
 
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("GetBlockHeader() got=%+v, want=%+v", got, want)
+		t.Errorf("GetBlockHeader() got=%+#v, want=%+#v", got, want)
 	}
 }
 

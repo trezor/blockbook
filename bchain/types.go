@@ -254,6 +254,8 @@ type BlockChainParser interface {
 	KeepBlockAddresses() int
 	// AmountDecimals returns number of decimal places in coin amounts
 	AmountDecimals() int
+	// MinimumCoinbaseConfirmations returns minimum number of confirmations a coinbase transaction must have before it can be spent
+	MinimumCoinbaseConfirmations() int
 	// AmountToDecimalString converts amount in big.Int to string with decimal point in the correct place
 	AmountToDecimalString(a *big.Int) string
 	// AmountToBigInt converts amount in json.Number (string) to big.Int

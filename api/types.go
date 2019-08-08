@@ -191,10 +191,19 @@ type Tx struct {
 	ValueInSat       *Amount           `json:"valueIn,omitempty"`
 	FeesSat          *Amount           `json:"fees,omitempty"`
 	Hex              string            `json:"hex,omitempty"`
+	Rbf              bool              `json:"rbf,omitempty"`
 	CoinSpecificData interface{}       `json:"-"`
 	CoinSpecificJSON json.RawMessage   `json:"-"`
 	TokenTransfers   []TokenTransfer   `json:"tokenTransfers,omitempty"`
 	EthereumSpecific *EthereumSpecific `json:"ethereumSpecific,omitempty"`
+}
+
+// FeeStats contains detailed block fee statistics
+type FeeStats struct {
+	TxCount         int       `json:"txCount"`
+	TotalFeesSat    *Amount   `json:"totalFeesSat"`
+	AverageFeePerKb int64     `json:"averageFeePerKb"`
+	DecilesFeePerKb [11]int64 `json:"decilesFeePerKb"`
 }
 
 // Paging contains information about paging for address, blocks and block
@@ -266,6 +275,7 @@ type Utxo struct {
 	Address       string  `json:"address,omitempty"`
 	Path          string  `json:"path,omitempty"`
 	Locktime      uint32  `json:"lockTime,omitempty"`
+	Coinbase      bool    `json:"coinbase,omitempty"`
 }
 
 // Utxos is array of Utxo

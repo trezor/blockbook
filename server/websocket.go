@@ -298,6 +298,10 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *webs
 	"unsubscribeAddresses": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
 		return s.unsubscribeAddresses(c)
 	},
+	"ping": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
+		r := struct{}{}
+		return r, nil
+	},
 }
 
 func sendResponse(c *websocketChannel, req *websocketReq, data interface{}) {

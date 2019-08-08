@@ -16,6 +16,8 @@ import (
 const (
 	OpZeroCoinMint  = 0xc1
 	OpZeroCoinSpend = 0xc2
+	OpSigmaMint		= 0xc3
+	OpSigmaSpend	= 0xc4
 
 	MainnetMagic wire.BitcoinNet = 0xe3d9fef1
 	TestnetMagic wire.BitcoinNet = 0xcffcbeea
@@ -96,12 +98,18 @@ func GetChainParams(chain string) *chaincfg.Params {
 
 // GetAddressesFromAddrDesc returns addresses for given address descriptor with flag if the addresses are searchable
 func (p *ZcoinParser) GetAddressesFromAddrDesc(addrDesc bchain.AddressDescriptor) ([]string, bool, error) {
-	if len(addrDesc) > 0 && addrDesc[0] == OpZeroCoinMint {
-		return []string{"Zeromint"}, false, nil
-	}
 
-	if len(addrDesc) > 0 && addrDesc[0] == OpZeroCoinSpend {
-		return []string{"Zerospend"}, false, nil
+	if len(addrDesc) > 0 {
+		switch addrDesc[0] {
+		case OpZeroCoinMint:
+			return []string{"Zeromint"}, false, nil
+		case OpZeroCoinSpend:
+			return []string{"Zerospend"}, false, nil
+		case OpSigmaMint:
+			return []string{"Sigmamint"}, false, nil
+		case OpSigmaSpend:
+			return []string{"Sigmaspend"}, false, nil
+		}
 	}
 
 	return p.OutputScriptToAddressesFunc(addrDesc)

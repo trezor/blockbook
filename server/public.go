@@ -185,6 +185,7 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 	serveMux.HandleFunc(path+"api/v2/block/", s.jsonHandler(s.apiBlock, apiV2))
 	serveMux.HandleFunc(path+"api/v2/sendtx/", s.jsonHandler(s.apiSendTx, apiV2))
 	serveMux.HandleFunc(path+"api/v2/estimatefee/", s.jsonHandler(s.apiEstimateFee, apiV2))
+	serveMux.HandleFunc(path+"api/v2/feestats/", s.jsonHandler(s.apiFeeStats, apiV2))
 	// socket.io interface
 	serveMux.Handle(path+"socket.io/", s.socketio.GetHandler())
 	// websocket interface
@@ -1039,6 +1040,16 @@ func (s *PublicServer) apiBlock(r *http.Request, apiVersion int) (interface{}, e
 		}
 	}
 	return block, err
+}
+
+func (s *PublicServer) apiFeeStats(r *http.Request, apiVersion int) (interface{}, error) {
+	var feeStats *api.FeeStats
+	var err error
+	s.metrics.ExplorerViews.With(common.Labels{"action": "api-feestats"}).Inc()
+	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
+		feeStats, err = s.api.GetFeeStats(r.URL.Path[i+1:])
+	}
+	return feeStats, err
 }
 
 type resultSendTransaction struct {
