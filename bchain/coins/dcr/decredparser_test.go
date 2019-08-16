@@ -54,6 +54,47 @@ var (
 	}
 
 	testTx2 = bchain.Tx{
+		Hex:       "0100000001193c189c71dff482b70ccb10ec9cf0ea3421a7fc51e4c7b0cf59c98a293a2f960200000000ffffffff027c87f00b0000000000001976a91418f10131a859912119c4a8510199f87f0a4cec2488ac9889495f0000000000001976a914631fb783b1e06c3f6e71777e16da6de13450465e88ac0000000000000000015ced3d6b0000000030740000000000006a47304402204e6afc21f6d065b9c082dad81a5f29136320e2b54c6cdf6b8722e4507e1a8d8902203933c5e592df3b0bbb0568f121f48ef6cbfae9cf479a57229742b5780dedc57a012103b89bb443b6ab17724458285b302291b082c59e5a022f273af0f61d47a414a537",
+		Txid:      "7058766ffef2e9cee61ee4b7604a39bc91c3000cb951c4f93f3307f6e0bf4def",
+		Blocktime: 1463843967,
+		Time:      1463843967,
+		LockTime:  0,
+		Version:   1,
+		Vin: []bchain.Vin{
+			{
+				Txid:     "962f3a298ac959cfb0c7e451fca72134eaf09cec10cb0cb782f4df719c183c19",
+				Vout:     2,
+				Sequence: 4294967295,
+				ScriptSig: bchain.ScriptSig{
+					Hex: "47304402204e6afc21f6d065b9c082dad81a5f29136320e2b54c6cdf6b8722e4507e1a8d8902203933c5e592df3b0bbb0568f121f48ef6cbfae9cf479a57229742b5780dedc57a012103b89bb443b6ab17724458285b302291b082c59e5a022f273af0f61d47a414a537",
+				},
+			},
+		},
+		Vout: []bchain.Vout{
+			{
+				ValueSat: *big.NewInt(200312700),
+				N:        0,
+				ScriptPubKey: bchain.ScriptPubKey{
+					Hex: "76a91418f10131a859912119c4a8510199f87f0a4cec2488ac",
+					Addresses: []string{
+						"DsTEnRLDEjQNeQ4A47fdS2pqtaFrGNzkqNa",
+					},
+				},
+			},
+			{
+				ValueSat: *big.NewInt(1598654872),
+				N:        1,
+				ScriptPubKey: bchain.ScriptPubKey{
+					Hex: "76a914631fb783b1e06c3f6e71777e16da6de13450465e88ac",
+					Addresses: []string{
+						"Dsa12P9VnCd55hTnUXpvGgFKSeGkFkzRvYb",
+					},
+				},
+			},
+		},
+	}
+
+	testTx3 = bchain.Tx{
 		Hex:       "0100000001c56d80756eaa7fc6e3542b29f596c60a9bcc959cf04d5f6e6b12749e241ece290200000001ffffffff02cf20b42d0000000000001976a9140799daa3cd36b44def220886802eb99e10c4a7c488ac0c25c7070000000000001976a9140b102deb3314213164cb6322211225365658407e88ac000000000000000001afa87b3500000000e33d0000000000006a47304402201ff342e5aa55b6030171f85729221ca0b81938826cc09449b77752e6e3b615be0220281e160b618e57326b95a0e0c3ac7a513bd041aba63cbace2f71919e111cfdba01210290a8de6665c8caac2bb8ca1aabd3dc09a334f997f97bd894772b1e51cab003d9",
 		Blocktime: 1535638326,
 		Time:      1535638326,
@@ -439,4 +480,57 @@ func TestDerivationBasePath(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestPackAndUnpack(t *testing.T) {
+	tests := []struct {
+		name   string
+		txInfo *bchain.Tx
+		height uint32
+		parser *DecredParser
+	}{
+		{
+			name:   "Test_1",
+			txInfo: &testTx1,
+			height: 15819,
+			parser: testnetParser,
+		},
+		{
+			name:   "Test_2",
+			txInfo: &testTx2,
+			height: 300000,
+			parser: mainnetParser,
+		},
+		{
+			name:   "Test_3",
+			txInfo: &testTx3,
+			height: 15859,
+			parser: testnetParser,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			packedTx, err := tt.parser.PackTx(tt.txInfo, tt.height, tt.txInfo.Blocktime)
+			if err != nil {
+				t.Errorf("PackTx() expected no error but got %v", err)
+				return
+			}
+
+			unpackedtx, gotHeight, err := tt.parser.UnpackTx(packedTx)
+			if err != nil {
+				t.Errorf("PackTx() expected no error but got %v", err)
+				return
+			}
+
+			if !reflect.DeepEqual(tt.txInfo, unpackedtx) {
+				t.Errorf("TestPackAndUnpack() expected the raw tx and the unpacked tx to match but they didn't")
+			}
+
+			if gotHeight != tt.height {
+				t.Errorf("TestPackAndUnpack() = got height %v, but want %v", gotHeight, tt.height)
+			}
+		})
+	}
+
 }
