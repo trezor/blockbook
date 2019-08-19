@@ -70,7 +70,7 @@ Column families used only by **Ethereum type** coins:
     Maps *addrDesc* to *number of transactions*, *sent amount*, *total balance* and a list of *unspent transactions outputs (UTXOs)*, ordered from oldest to newest
     ```
     (addrDesc []byte) -> (nr_txs vuint)+(sent_amount bigInt)+(balance bigInt)+
-                         []((txid [32]byte)+(vout vuint)+(block_height vuint)+(block_height vuint)+(amount bigInt))
+                         []((txid [32]byte)+(vout vuint)+(block_height vuint)+(amount bigInt))
     ```
 
 - **txAddresses** (used only by Bitcoin type coins)
