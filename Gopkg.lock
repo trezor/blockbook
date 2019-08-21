@@ -78,8 +78,8 @@
 [[projects]]
   name = "github.com/decred/dcrd"
   packages = ["chaincfg","chaincfg/chainec","chaincfg/chainhash","dcrec","dcrec/edwards","dcrec/secp256k1","dcrec/secp256k1/schnorr","dcrjson","dcrutil","txscript","wire"]
-  revision = "0fe564967f03160b9dbe0a147420d8aa13371d12"
-  version = "v1.3.0"
+  revision = "e3e8c47c68b010dbddeb783ebad32a3a4993dd71"
+  version = "v1.4.0"
 
 [[projects]]
   name = "github.com/decred/slog"
