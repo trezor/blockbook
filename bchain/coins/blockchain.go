@@ -9,6 +9,7 @@ import (
 	"blockbook/bchain/coins/dash"
 	"blockbook/bchain/coins/dcr"
 	"blockbook/bchain/coins/digibyte"
+	"blockbook/bchain/coins/divi"
 	"blockbook/bchain/coins/dogecoin"
 	"blockbook/bchain/coins/eth"
 	"blockbook/bchain/coins/flo"
@@ -97,6 +98,7 @@ func init() {
 	BlockChainFactories["ZelCash"] = zec.NewZCashRPC
 	BlockChainFactories["Ravencoin"] = ravencoin.NewRavencoinRPC
 	BlockChainFactories["Ritocoin"] = ritocoin.NewRitocoinRPC
+	BlockChainFactories["Divi"] = divi.NewDiviRPC
 }
 
 // GetCoinNameFromConfig gets coin name and coin shortcut from config file
