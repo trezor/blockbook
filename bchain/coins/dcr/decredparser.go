@@ -125,6 +125,7 @@ func (p *DecredParser) ParseBlock(b []byte) (*bchain.Block, error) {
 	}, nil
 }
 
+// ParseTxFromJson parses JSON message containing transaction and returns Tx struct
 func (p *DecredParser) ParseTxFromJson(jsonTx json.RawMessage) (*bchain.Tx, error) {
 	var getTxResult GetTransactionResult
 	if err := json.Unmarshal([]byte(jsonTx), &getTxResult.Result); err != nil {

@@ -291,7 +291,7 @@ func Test_UnpackTx(t *testing.T) {
 type testBlock struct {
 	size int
 	time int64
-	tx  []string
+	tx   []string
 }
 
 var testParseBlockTxs = map[int]testBlock{

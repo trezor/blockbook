@@ -1047,7 +1047,7 @@ func (w *Worker) GetFeeStats(bid string) (*FeeStats, error) {
 			return nil, errors.Annotatef(err, "GetTxAddresses")
 		}
 
-		// Caclulate total fees in Satoshis
+		// Calculate total fees in Satoshis
 		feeSat := big.NewInt(0)
 		for _, input := range txAddresses.Inputs {
 			feeSat = feeSat.Add(&input.ValueSat, feeSat)

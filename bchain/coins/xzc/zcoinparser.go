@@ -16,8 +16,8 @@ import (
 const (
 	OpZeroCoinMint  = 0xc1
 	OpZeroCoinSpend = 0xc2
-	OpSigmaMint		= 0xc3
-	OpSigmaSpend	= 0xc4
+	OpSigmaMint     = 0xc3
+	OpSigmaSpend    = 0xc4
 
 	MainnetMagic wire.BitcoinNet = 0xe3d9fef1
 	TestnetMagic wire.BitcoinNet = 0xcffcbeea
