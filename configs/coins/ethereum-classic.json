@@ -19,10 +19,10 @@
     "package_name": "backend-ethereum-classic",
     "package_revision": "satoshilabs-1",
     "system_user": "ethereum-classic",
-    "version": "5.5.2-be43774",
-    "binary_url": "https://github.com/ethereumproject/go-ethereum/releases/download/v5.5.2/geth-classic-linux-v5.5.2-be43774.tar.gz",
+    "version": "6.0.9",
+    "binary_url": "https://github.com/etclabscore/go-ethereum/releases/download/v6.0.9/geth-classic-v6.0.9-linux.tar.gz",
     "verification_type": "sha256",
-    "verification_source": "01663085cfe8854bff2a2abd2cc51414fcfdb28a5ab5e22e5b7fe5487de0678a",
+    "verification_source": "fca005e755ca0840d5679d18af22d15a8f20a0a1f49939ae427f2ac7ed0de1b3",
     "extract_command": "tar -C backend -xf",
     "exclude_files": [],
     "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/geth --ipcdisable --cache 1024 --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --port 38337 --ws --wsaddr 0.0.0.0 --wsport {{.Ports.BackendRPC}} --wsorigins \"*\" --rpc --rpcport 8137 -rpcaddr 0.0.0.0 --rpccorsdomain \"*\" 2>>{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
@@ -54,7 +54,7 @@
     }
   },
   "meta": {
-    "package_maintainer": "Petr Kracik",
-    "package_maintainer_email": "petr.kracik@satoshilabs.com"
+    "package_maintainer": "IT",
+    "package_maintainer_email": "it@satoshilabs.com"
   }
 }
