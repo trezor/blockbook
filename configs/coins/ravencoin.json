@@ -22,7 +22,7 @@
     "package_name": "backend-ravencoin",
     "package_revision": "satoshilabs-1",
     "system_user": "ravencoin",
-    "version": "2.4.0.0",
+    "version": "2.5.0.0",
     "binary_url": "https://github.com/RavenProject/Ravencoin/releases/download/v2.5.0/raven-2.5.0.0-x86_64-linux-gnu.tar.gz",
     "verification_type": "sha256",
     "verification_source": "35238cb6c8218bceb0ee07fc5f99608dc1f8797c01ffcab1700a14945b3836ee",
