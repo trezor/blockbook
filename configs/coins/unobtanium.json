@@ -28,8 +28,7 @@
     "verification_source": "f972d5bb2ee778b224d1f7a6004c510bbedc92e5882937412781389b1da9a38c",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
-        "bin/unobtanium-qt",
-        "bin/test_unobtanium-qt"
+        "bin/unobtanium-qt"
     ],
     "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/unobtaniumd -datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -conf={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf -pid=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",
     "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/*.log",
@@ -38,8 +37,8 @@
     "service_additional_params_template": "",
     "protect_memory": false,
     "mainnet": true,
-    "server_config_file": "bitcoin.conf",
-    "client_config_file": "bitcoin_client.conf",
+    "server_config_file": "bitcoin_like.conf",
+    "client_config_file": "bitcoin_like_client.conf",
     "additional_params": {
       "reindex": 1,
       "discover": 0,
