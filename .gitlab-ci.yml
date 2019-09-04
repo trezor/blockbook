@@ -104,6 +104,17 @@ backend-deploy-and-test-litecoin:
     - blockbook
   script: ./contrib/scripts/backend-deploy-and-test.sh litecoin
 
+backend-deploy-and-test-namecoin:
+  stage: backend-deploy-and-test
+  only:
+    refs:
+      - master
+    changes:
+      - configs/coins/namecoin.json
+  tags:
+    - blockbook
+  script: ./contrib/scripts/backend-deploy-and-test.sh namecoin
+
 backend-deploy-and-test-vertcoin:
   stage: backend-deploy-and-test
   only:

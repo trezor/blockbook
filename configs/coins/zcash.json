@@ -22,10 +22,17 @@
     "package_name": "backend-zcash",
     "package_revision": "satoshilabs-1",
     "system_user": "zcash",
+<<<<<<< HEAD
     "version": "2.0.7-2",
     "binary_url": "https://z.cash/downloads/zcash-2.0.7-2-linux64-debian-stretch.tar.gz",
     "verification_type": "sha256",
     "verification_source": "597d169606ed2d1b621d80f39c06291ff01d57cae8f178c0d6e90df1a27405ed",
+=======
+    "version": "2.0.7",
+    "binary_url": "https://z.cash/downloads/zcash-2.0.7-linux64-debian-stretch.tar.gz",
+    "verification_type": "sha256",
+    "verification_source": "92c84bb5a95e40f46a720ff112f710d42f3f820887869f362133be7f609e0479",
+>>>>>>> master
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [],
     "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/zcashd -datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -conf={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf -pid=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",
