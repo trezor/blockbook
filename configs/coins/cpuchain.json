@@ -6,7 +6,7 @@
     "alias": "CPUchain"
   },
   "ports": {
-    "backend_rpc": 19707,
+    "backend_rpc": 8090,
     "backend_message_queue": 38390,
     "blockbook_internal": 9090,
     "blockbook_public": 9190
