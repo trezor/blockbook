@@ -183,7 +183,7 @@
     },
     "unobtanium": {
         "rpc":  ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",
-                  "GetBestBlockHash", "GetBestBlockHeight", "GetBlockHeader"],
+                  "GetBestBlockHash", "GetBestBlockHeight"],
         "sync": ["ConnectBlocksParallel", "ConnectBlocks"]
     }
 }
