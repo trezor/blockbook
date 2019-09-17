@@ -28,7 +28,7 @@
     "verification_source": "36375985df1ba9a45bc11b4f6cdaed4f14ff6e5e9c46e17ef6e4f70a3349aba2",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [],
-    "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/dcrd --datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -C={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf",
+    "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/dcrd --datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --appdata={{.Env.BackendDataPath}}/{{.Coin.Alias}} -C={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf",
     "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/*.log",
     "postinst_script_template": "",
     "service_type": "simple",
