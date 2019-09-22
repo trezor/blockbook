@@ -17,6 +17,7 @@ import (
 	"blockbook/bchain/coins/fujicoin"
 	"blockbook/bchain/coins/gamecredits"
 	"blockbook/bchain/coins/grs"
+	"blockbook/bchain/coins/hatch"
 	"blockbook/bchain/coins/koto"
 	"blockbook/bchain/coins/liquid"
 	"blockbook/bchain/coins/litecoin"
@@ -69,6 +70,8 @@ func init() {
 	BlockChainFactories["Decred"] = dcr.NewDecredRPC
 	BlockChainFactories["Decred Testnet"] = dcr.NewDecredRPC
 	BlockChainFactories["GameCredits"] = gamecredits.NewGameCreditsRPC
+	BlockChainFactories["Hatch"] = hatch.NewHatchRPC
+	BlockChainFactories["Hatch Testnet"] = hatch.NewHatchRPC
 	BlockChainFactories["Koto"] = koto.NewKotoRPC
 	BlockChainFactories["Koto Testnet"] = koto.NewKotoRPC
 	BlockChainFactories["Litecoin"] = litecoin.NewLitecoinRPC

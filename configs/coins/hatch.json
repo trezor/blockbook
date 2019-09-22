@@ -1,0 +1,68 @@
+{
+  "coin": {
+    "name": "Hatch",
+    "shortcut": "HATCH",
+    "label": "Hatch",
+    "alias": "hatch"
+  },
+  "ports": {
+    "backend_rpc": 8091,
+    "backend_message_queue": 38391,
+    "blockbook_internal": 9091,
+    "blockbook_public": 9191
+  },
+  "ipc": {
+    "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
+    "rpc_user": "rpc",
+    "rpc_pass": "rpc",
+    "rpc_timeout": 25,
+    "message_queue_binding_template": "tcp://127.0.0.1:{{.Ports.BackendMessageQueue}}"
+  },
+  "backend": {
+    "package_name": "backend-hatch",
+    "package_revision": "satoshilabs-1",
+    "system_user": "hatch",
+    "version": "0.14.0.3",
+    "binary_url": "https://github.com/hatchpay/hatch/releases/download/v0.14.0.3/hatchcore-0.14.0.3-x86_64-linux-gnu.tar.gz",
+    "verification_type": "gpg-sha256",
+    "verification_source": "https://github.com/hatchpay/hatch/releases/download/v0.14.0.3/SHA256SUMS.asc",
+    "extract_command": "tar -C backend --strip 1 -xf",
+    "exclude_files": [
+      "bin/hatch-qt"
+    ],
+    "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/hatchd -datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -conf={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf -pid=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",
+    "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/*.log",
+    "postinst_script_template": "",
+    "service_type": "forking",
+    "service_additional_params_template": "",
+    "protect_memory": true,
+    "mainnet": true,
+    "server_config_file": "bitcoin_like.conf",
+    "client_config_file": "bitcoin_like_client.conf",
+    "additional_params": {
+      "mempoolexpiry": 72
+    }
+  },
+  "blockbook": {
+    "package_name": "blockbook-hatch",
+    "system_user": "blockbook-hatch",
+    "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
+    "public_binding_template": ":{{.Ports.BlockbookPublic}}",
+    "explorer_url": "",
+    "additional_params": "",
+    "block_chain": {
+      "parse": true,
+      "subversion": "/Hatch Core:0.14.0.3/",
+      "mempool_workers": 8,
+      "mempool_sub_workers": 2,
+      "block_addresses_to_keep": 300,
+      "xpub_magic": 50221772,
+      "slip44": 88888888,
+      "additional_params": {}
+    }
+  },
+  "meta": {
+    "package_maintainer": "Hatch Support",
+    "package_maintainer_email": "support@hatch.ga"
+  }
+}
