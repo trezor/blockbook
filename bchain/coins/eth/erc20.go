@@ -2,11 +2,13 @@ package eth
 
 import (
 	"blockbook/bchain"
+	"bytes"
 	"context"
 	"encoding/hex"
 	"math/big"
 	"strings"
 	"sync"
+	"unicode/utf8"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/golang/glog"
@@ -148,6 +150,18 @@ func parseErc20StringProperty(contractDesc bchain.AddressDescriptor, data string
 				if err == nil {
 					return string(b)
 				}
+			}
+		}
+	} else if len(data) == 64 {
+		// allow string properties as 32 bytes of UTF-8 data
+		b, err := hex.DecodeString(data)
+		if err == nil {
+			i := bytes.Index(b, []byte{0})
+			if i > 0 {
+				b = b[:i]
+			}
+			if utf8.Valid(b) {
+				return string(b)
 			}
 		}
 	}
