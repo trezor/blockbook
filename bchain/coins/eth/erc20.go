@@ -9,7 +9,6 @@ import (
 	"sync"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/golang/glog"
 	"github.com/juju/errors"
 )
@@ -165,7 +164,7 @@ func (b *EthereumRPC) EthereumTypeGetErc20ContractInfo(contractDesc bchain.Addre
 	contract, found := cachedContracts[cds]
 	cachedContractsMux.Unlock()
 	if !found {
-		address := hexutil.Encode(contractDesc)
+		address := EIP55Address(contractDesc)
 		data, err := b.ethCall(erc20NameSignature, address)
 		if err != nil {
 			return nil, err
@@ -204,8 +203,8 @@ func (b *EthereumRPC) EthereumTypeGetErc20ContractInfo(contractDesc bchain.Addre
 
 // EthereumTypeGetErc20ContractBalance returns balance of ERC20 contract for given address
 func (b *EthereumRPC) EthereumTypeGetErc20ContractBalance(addrDesc, contractDesc bchain.AddressDescriptor) (*big.Int, error) {
-	addr := hexutil.Encode(addrDesc)
-	contract := hexutil.Encode(contractDesc)
+	addr := EIP55Address(addrDesc)
+	contract := EIP55Address(contractDesc)
 	req := erc20BalanceOf + "0000000000000000000000000000000000000000000000000000000000000000"[len(addr)-2:] + addr[2:]
 	data, err := b.ethCall(req, contract)
 	if err != nil {

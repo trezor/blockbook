@@ -235,7 +235,7 @@
   branch = "master"
   name = "golang.org/x/crypto"
   packages = ["ripemd160", "sha3"]
-  revision = "d6449816ce06963d9d136eee5a56fca5b0616e7e"
+  revision = "a832865fa7ada6126f4c6124ac49f71be71bff2a"
 
 [[projects]]
   branch = "master"
