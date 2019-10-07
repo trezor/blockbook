@@ -77,6 +77,7 @@ const (
 	cfAddresses
 	cfBlockTxs
 	cfTransactions
+	cfFiatRates
 	// BitcoinType
 	cfAddressBalance
 	cfTxAddresses
@@ -86,7 +87,7 @@ const (
 
 // common columns
 var cfNames []string
-var cfBaseNames = []string{"default", "height", "addresses", "blockTxs", "transactions"}
+var cfBaseNames = []string{"default", "height", "addresses", "blockTxs", "transactions", "fiatRates"}
 
 // type specific columns
 var cfNamesBitcoinType = []string{"addressBalance", "txAddresses"}
@@ -99,7 +100,7 @@ func openDB(path string, c *gorocksdb.Cache, openFiles int) (*gorocksdb.DB, []*g
 	// from documentation: if most of your queries are executed using iterators, you shouldn't set bloom filter
 	optsAddresses := createAndSetDBOptions(0, c, openFiles)
 	// default, height, addresses, blockTxids, transactions
-	cfOptions := []*gorocksdb.Options{opts, opts, optsAddresses, opts, opts}
+	cfOptions := []*gorocksdb.Options{opts, opts, optsAddresses, opts, opts, opts}
 	// append type specific options
 	count := len(cfNames) - len(cfOptions)
 	for i := 0; i < count; i++ {

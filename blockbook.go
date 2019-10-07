@@ -8,7 +8,9 @@ import (
 	"blockbook/db"
 	"blockbook/server"
 	"context"
+	"encoding/json"
 	"flag"
+	"io/ioutil"
 	"log"
 	"math/rand"
 	"net/http"
@@ -317,6 +319,8 @@ func mainWithExitCode() int {
 	}
 
 	if internalServer != nil || publicServer != nil || chain != nil {
+		// start fiat rates downloader only if not shutting down immediately
+		initFiatRatesDownloader(*blockchain)
 		waitForSignalAndShutdown(internalServer, publicServer, chain, 10*time.Second)
 	}
 
@@ -649,4 +653,24 @@ func computeFeeStats(stopCompute chan os.Signal, blockFrom, blockTo int, db *db.
 	err = api.ComputeFeeStats(blockFrom, blockTo, stopCompute)
 	glog.Info("computeFeeStats finished in ", time.Since(start))
 	return err
+}
+
+func initFiatRatesDownloader(configfile string) {
+	data, err := ioutil.ReadFile(configfile)
+	if err != nil {
+		glog.Errorf("Error reading file %v, %v", configfile, err)
+		return
+	}
+	var config struct {
+		FiatRates       string `json:"fiat_rates"`
+		FiatRatesParams string `json:"fiat_rates_params"`
+	}
+	err = json.Unmarshal(data, &config)
+	if err != nil {
+		glog.Errorf("Error parsing file %v, %v", configfile, err)
+	}
+	if config.FiatRates == "coingecko" {
+		// coingecko:=fiat.NewCoingeckoDownloader(config.FiatRatesParams)
+		// go coingecko.Run()
+	}
 }
