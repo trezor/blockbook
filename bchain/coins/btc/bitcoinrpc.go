@@ -55,8 +55,8 @@ type Configuration struct {
 	XPubMagicSegwitP2sh          uint32 `json:"xpub_magic_segwit_p2sh,omitempty"`
 	XPubMagicSegwitNative        uint32 `json:"xpub_magic_segwit_native,omitempty"`
 	Slip44                       uint32 `json:"slip44,omitempty"`
-	AlternativeEstimateFee       string `json:"alternativeEstimateFee,omitempty"`
-	AlternativeEstimateFeeParams string `json:"alternativeEstimateFeeParams,omitempty"`
+	AlternativeEstimateFee       string `json:"alternative_estimate_fee,omitempty"`
+	AlternativeEstimateFeeParams string `json:"alternative_estimate_fee_params,omitempty"`
 	MinimumCoinbaseConfirmations int    `json:"minimumCoinbaseConfirmations,omitempty"`
 }
 
