@@ -76,15 +76,16 @@ func Test_GetAddrDescFromAddress_Mainnet(t *testing.T) {
 var (
 	testTx1 bchain.Tx
 
-	testTxPacked1 = "001505388bd489d0220100000015cc175d016012730925e8e7eaff1a7cbd18e255f749e936730c001ca4b900a9a93230abbd0100000048473044022066a828d9d7d3e03dba2ad028bfdcad4e989ab76f11a7a033702759c37525bd8502206480c14e3c39a1d244e00c4113557bd9651d8b2b944426d88f8d7f95f8957c5601ffffffff03000000000000000000c0be295804000000232102bdb95d89f07e3a29305f3c8de86ec211ed77b7e15cf314c85c532a6b71c2ce07acfbf73a5804000000232102bdb95d89f07e3a29305f3c8de86ec211ed77b7e15cf314c85c532a6b71c2ce07ac00000000"
+	testTxPacked1 = "0a206ba18524d81af732d0226ffdb63d2bcdc0d58a35ac97b5ad731057932d324e1412b401010000001134415d0114caae2bf9a7808aee0798e6245a347405d46c8131dbf55cbbbc689bbee367e902000000484730440220280f3fa80b4e93834fe0a8d9884105310eaa8d36d77b9aff113b6c498138e5bb02204578409f0a14fa1950ea4951314fd495fd503b42a6325efb5c139a6c8253912401ffffffff0200000000000000000005f22f5904000000232102bdb95d89f07e3a29305f3c8de86ec211ed77b7e15cf314c85c532a6b71c2ce07ac000000001891e884ea05200028b88a5432760a001220e967e3be9b68bcbb5cf5db31816cd40574345a24e69807ee8a80a7f92baeca14180222484730440220280f3fa80b4e93834fe0a8d9884105310eaa8d36d77b9aff113b6c498138e5bb02204578409f0a14fa1950ea4951314fd495fd503b42a6325efb5c139a6c825391240128ffffffff0f3a0210003a520a0504583af7fb10011a232102bdb95d89f07e3a29305f3c8de86ec211ed77b7e15cf314c85c532a6b71c2ce07ac2222446d343835624e4a6169474a6d4556746832426e5a345931796763756644736934454001"
 )
 
 func init() {
 	testTx1 = bchain.Tx{
-		Hex:       "0100000015cc175d016012730925e8e7eaff1a7cbd18e255f749e936730c001ca4b900a9a93230abbd0100000048473044022066a828d9d7d3e03dba2ad028bfdcad4e989ab76f11a7a033702759c37525bd8502206480c14e3c39a1d244e00c4113557bd9651d8b2b944426d88f8d7f95f8957c5601ffffffff03000000000000000000c0be295804000000232102bdb95d89f07e3a29305f3c8de86ec211ed77b7e15cf314c85c532a6b71c2ce07acfbf73a5804000000232102bdb95d89f07e3a29305f3c8de86ec211ed77b7e15cf314c85c532a6b71c2ce07ac00000000",
+		Hex:       "010000001134415d0114caae2bf9a7808aee0798e6245a347405d46c8131dbf55cbbbc689bbee367e902000000484730440220280f3fa80b4e93834fe0a8d9884105310eaa8d36d77b9aff113b6c498138e5bb02204578409f0a14fa1950ea4951314fd495fd503b42a6325efb5c139a6c8253912401ffffffff0200000000000000000005f22f5904000000232102bdb95d89f07e3a29305f3c8de86ec211ed77b7e15cf314c85c532a6b71c2ce07ac00000000",
 		Blocktime: 1564554257,
 		Txid:      "6ba18524d81af732d0226ffdb63d2bcdc0d58a35ac97b5ad731057932d324e14",
 		LockTime:  0,
+		Time:      1564554257,
 		Version:   1,
 		Vin: []bchain.Vin{
 			{
@@ -159,43 +160,43 @@ func Test_PackTx(t *testing.T) {
 	}
 }
 
-//func Test_UnpackTx(t *testing.T) {
-//	type args struct {
-//		packedTx string
-//		parser   *DeepOnionParser
-//	}
-//	tests := []struct {
-//		name    string
-//		args    args
-//		want    *bchain.Tx
-//		want1   uint32
-//		wantErr bool
-//	}{
-//		{
-//			name: "deeponion-1",
-//			args: args{
-//				packedTx: testTxPacked1,
-//				parser:   NewDeepOnionParser(GetChainParams("main"), &btc.Configuration{}),
-//			},
-//			want:    &testTx1,
-//			want1:   1377592,
-//			wantErr: false,
-//		},
-//	}
-//	for _, tt := range tests {
-//		t.Run(tt.name, func(t *testing.T) {
-//			b, _ := hex.DecodeString(tt.args.packedTx)
-//			got, got1, err := tt.args.parser.UnpackTx(b)
-//			if (err != nil) != tt.wantErr {
-//				t.Errorf("unpackTx(1) error = %v, wantErr %v", err, tt.wantErr)
-//				return
-//			}
-//			if !reflect.DeepEqual(got, tt.want) {
-//				t.Errorf("unpackTx(2) got = %v, want %v", got, tt.want)
-//			}
-//			if got1 != tt.want1 {
-//				t.Errorf("unpackTx(3) got1 = %v, want %v", got1, tt.want1)
-//			}
-//		})
-//	}
-//}
+func Test_UnpackTx(t *testing.T) {
+	type args struct {
+		packedTx string
+		parser   *DeepOnionParser
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    *bchain.Tx
+		want1   uint32
+		wantErr bool
+	}{
+		{
+			name: "deeponion-1",
+			args: args{
+				packedTx: testTxPacked1,
+				parser:   NewDeepOnionParser(GetChainParams("main"), &btc.Configuration{}),
+			},
+			want:    &testTx1,
+			want1:   1377592,
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b, _ := hex.DecodeString(tt.args.packedTx)
+			got, got1, err := tt.args.parser.UnpackTx(b)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("unpackTx(1) error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+    			t.Errorf("unpackTx(2) got = %v, want %v", got, tt.want)
+			}
+			if got1 != tt.want1 {
+				t.Errorf("unpackTx(3) got1 = %v, want %v", got1, tt.want1)
+			}
+		})
+	}
+}
