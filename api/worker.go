@@ -121,7 +121,7 @@ func (w *Worker) GetTransaction(txid string, spendingTxs bool, specificJSON bool
 }
 
 // GetTransactionFromBchainTx reads transaction data from txid
-func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height uint32, spendingTxs bool, specificJSON bool) (*Tx, error) {
+func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spendingTxs bool, specificJSON bool) (*Tx, error) {
 	var err error
 	var ta *db.TxAddresses
 	var tokens []TokenTransfer
@@ -134,7 +134,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height uint32, 
 				return nil, errors.Annotatef(err, "GetTxAddresses %v", bchainTx.Txid)
 			}
 		}
-		blockhash, err = w.db.GetBlockHash(height)
+		blockhash, err = w.db.GetBlockHash(uint32(height))
 		if err != nil {
 			return nil, errors.Annotatef(err, "GetBlockHash %v", height)
 		}
@@ -236,7 +236,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height uint32, 
 		if ta != nil {
 			vout.Spent = ta.Outputs[i].Spent
 			if spendingTxs && vout.Spent {
-				err = w.setSpendingTxToVout(vout, bchainTx.Txid, height)
+				err = w.setSpendingTxToVout(vout, bchainTx.Txid, uint32(height))
 				if err != nil {
 					glog.Errorf("setSpendingTxToVout error %v, %v, output %v", err, vout.AddrDesc, vout.N)
 				}
@@ -312,7 +312,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height uint32, 
 	}
 	r := &Tx{
 		Blockhash:        blockhash,
-		Blockheight:      int(height),
+		Blockheight:      height,
 		Blocktime:        bchainTx.Blocktime,
 		Confirmations:    bchainTx.Confirmations,
 		FeesSat:          (*Amount)(&feesSat),
