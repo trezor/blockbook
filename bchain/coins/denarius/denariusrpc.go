@@ -109,6 +109,7 @@ func (b *DenariusRPC) Initialize() error {
 }
 
 // GetBlock returns block with given hash.
+/*
 func (d *DenariusRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 	var err error
 	if hash == "" && height > 0 {
@@ -151,6 +152,7 @@ func (d *DenariusRPC) GetBlock(hash string, height uint32) (*bchain.Block, error
 	}
 	return block, nil
 }
+*/
 
 func isInvalidTx(err error) bool {
 	switch e1 := err.(type) {
