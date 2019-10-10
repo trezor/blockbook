@@ -184,8 +184,8 @@ func (s *SocketIoServer) onMessage(c *gosocketio.Channel, req map[string]json.Ra
 		s.metrics.SocketIORequests.With(common.Labels{"method": method, "status": "success"}).Inc()
 		return rv
 	}
-	glog.Error(c.Id(), " onMessage ", method, ": ", errors.ErrorStack(err))
-	s.metrics.SocketIORequests.With(common.Labels{"method": method, "status": err.Error()}).Inc()
+	glog.Error(c.Id(), " onMessage ", method, ": ", errors.ErrorStack(err), ", data ", string(params))
+	s.metrics.SocketIORequests.With(common.Labels{"method": method, "status": "failure"}).Inc()
 	e := resultError{}
 	e.Error.Message = err.Error()
 	return e
@@ -670,7 +670,7 @@ func (s *SocketIoServer) onSubscribe(c *gosocketio.Channel, req []byte) interfac
 
 	onError := func(id, sc, err, detail string) {
 		glog.Error(id, " onSubscribe ", err, ": ", detail)
-		s.metrics.SocketIOSubscribes.With(common.Labels{"channel": sc, "status": err}).Inc()
+		s.metrics.SocketIOSubscribes.With(common.Labels{"channel": sc, "status": "failure"}).Inc()
 	}
 
 	r := string(req)

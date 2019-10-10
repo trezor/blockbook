@@ -2,14 +2,15 @@ package eth
 
 import (
 	"blockbook/bchain"
+	"bytes"
 	"context"
 	"encoding/hex"
 	"math/big"
 	"strings"
 	"sync"
+	"unicode/utf8"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/golang/glog"
 	"github.com/juju/errors"
 )
@@ -151,6 +152,18 @@ func parseErc20StringProperty(contractDesc bchain.AddressDescriptor, data string
 				}
 			}
 		}
+	} else if len(data) == 64 {
+		// allow string properties as 32 bytes of UTF-8 data
+		b, err := hex.DecodeString(data)
+		if err == nil {
+			i := bytes.Index(b, []byte{0})
+			if i > 0 {
+				b = b[:i]
+			}
+			if utf8.Valid(b) {
+				return string(b)
+			}
+		}
 	}
 	if glog.V(1) {
 		glog.Warning("Cannot parse '", data, "' for contract ", contractDesc)
@@ -165,7 +178,7 @@ func (b *EthereumRPC) EthereumTypeGetErc20ContractInfo(contractDesc bchain.Addre
 	contract, found := cachedContracts[cds]
 	cachedContractsMux.Unlock()
 	if !found {
-		address := hexutil.Encode(contractDesc)
+		address := EIP55Address(contractDesc)
 		data, err := b.ethCall(erc20NameSignature, address)
 		if err != nil {
 			return nil, err
@@ -204,8 +217,8 @@ func (b *EthereumRPC) EthereumTypeGetErc20ContractInfo(contractDesc bchain.Addre
 
 // EthereumTypeGetErc20ContractBalance returns balance of ERC20 contract for given address
 func (b *EthereumRPC) EthereumTypeGetErc20ContractBalance(addrDesc, contractDesc bchain.AddressDescriptor) (*big.Int, error) {
-	addr := hexutil.Encode(addrDesc)
-	contract := hexutil.Encode(contractDesc)
+	addr := EIP55Address(addrDesc)
+	contract := EIP55Address(contractDesc)
 	req := erc20BalanceOf + "0000000000000000000000000000000000000000000000000000000000000000"[len(addr)-2:] + addr[2:]
 	data, err := b.ethCall(req, contract)
 	if err != nil {

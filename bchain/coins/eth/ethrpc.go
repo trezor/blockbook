@@ -72,11 +72,11 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 	if c.BlockAddressesToKeep < 100 {
 		c.BlockAddressesToKeep = 100
 	}
-	rc, err := rpc.Dial(c.RPCURL)
+
+	rc, ec, err := openRPC(c.RPCURL)
 	if err != nil {
 		return nil, err
 	}
-	ec := ethclient.NewClient(rc)
 
 	s := &EthereumRPC{
 		BaseChain:   &bchain.BaseChain{},
@@ -133,6 +133,15 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 	return s, nil
 }
 
+func openRPC(url string) (*rpc.Client, *ethclient.Client, error) {
+	rc, err := rpc.Dial(url)
+	if err != nil {
+		return nil, nil, err
+	}
+	ec := ethclient.NewClient(rc)
+	return rc, ec, nil
+}
+
 // Initialize initializes ethereum rpc interface
 func (b *EthereumRPC) Initialize() error {
 	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
@@ -187,6 +196,16 @@ func (b *EthereumRPC) InitializeMempool(addrDescForOutpoint bchain.AddrDescForOu
 
 	b.Mempool.OnNewTxAddr = onNewTxAddr
 
+	if err = b.subscribeEvents(); err != nil {
+		return err
+	}
+
+	b.mempoolInitialized = true
+
+	return nil
+}
+
+func (b *EthereumRPC) subscribeEvents() error {
 	if b.isETC {
 		glog.Info(b.ChainConfig.CoinName, " does not support subscription to newHeads")
 	} else {
@@ -224,8 +243,6 @@ func (b *EthereumRPC) InitializeMempool(addrDescForOutpoint bchain.AddrDescForOu
 		return err
 	}
 
-	b.mempoolInitialized = true
-
 	return nil
 }
 
@@ -245,8 +262,8 @@ func (b *EthereumRPC) subscribe(f func() (*rpc.ClientSubscription, error)) error
 				return
 			}
 			glog.Error("Subscription error ", e)
-			timer := time.NewTimer(time.Second)
-			// try in 1 second interval to resubscribe
+			timer := time.NewTimer(time.Second * 2)
+			// try in 2 second interval to resubscribe
 			for {
 				select {
 				case e = <-s.Err():
@@ -260,7 +277,8 @@ func (b *EthereumRPC) subscribe(f func() (*rpc.ClientSubscription, error)) error
 						s = ns
 						continue Loop
 					}
-					timer.Reset(time.Second)
+					glog.Error("Resubscribe error ", err)
+					timer.Reset(time.Second * 2)
 				}
 			}
 		}
@@ -268,8 +286,7 @@ func (b *EthereumRPC) subscribe(f func() (*rpc.ClientSubscription, error)) error
 	return nil
 }
 
-// Shutdown cleans up rpc interface to ethereum
-func (b *EthereumRPC) Shutdown(ctx context.Context) error {
+func (b *EthereumRPC) closeRPC() {
 	if b.newBlockSubscription != nil {
 		b.newBlockSubscription.Unsubscribe()
 	}
@@ -279,6 +296,23 @@ func (b *EthereumRPC) Shutdown(ctx context.Context) error {
 	if b.rpc != nil {
 		b.rpc.Close()
 	}
+}
+
+func (b *EthereumRPC) reconnectRPC() error {
+	glog.Info("Reconnecting RPC")
+	b.closeRPC()
+	rc, ec, err := openRPC(b.ChainConfig.RPCURL)
+	if err != nil {
+		return err
+	}
+	b.rpc = rc
+	b.client = ec
+	return b.subscribeEvents()
+}
+
+// Shutdown cleans up rpc interface to ethereum
+func (b *EthereumRPC) Shutdown(ctx context.Context) error {
+	b.closeRPC()
 	close(b.chanNewBlock)
 	glog.Info("rpc: shutdown")
 	return nil
@@ -296,13 +330,13 @@ func (b *EthereumRPC) GetSubversion() string {
 
 // GetChainInfo returns information about the connected backend
 func (b *EthereumRPC) GetChainInfo() (*bchain.ChainInfo, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
-	defer cancel()
-	id, err := b.client.NetworkID(ctx)
+	h, err := b.getBestHeader()
 	if err != nil {
 		return nil, err
 	}
-	h, err := b.getBestHeader()
+	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
+	defer cancel()
+	id, err := b.client.NetworkID(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -338,12 +372,22 @@ func (b *EthereumRPC) getBestHeader() (*ethtypes.Header, error) {
 			b.bestHeader = nil
 		}
 	}
+	// if the best header was not updated for 15 minutes, there could be a subscription problem, reconnect RPC
+	// do it only in case of normal operation, not initial synchronization
+	if b.bestHeaderTime.Add(15*time.Minute).Before(time.Now()) && !b.bestHeaderTime.IsZero() && b.mempoolInitialized {
+		err := b.reconnectRPC()
+		if err != nil {
+			return nil, err
+		}
+		b.bestHeader = nil
+	}
 	if b.bestHeader == nil {
 		var err error
 		ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
 		defer cancel()
 		b.bestHeader, err = b.client.HeaderByNumber(ctx, nil)
 		if err != nil {
+			b.bestHeader = nil
 			return nil, err
 		}
 		b.bestHeaderTime = time.Now()

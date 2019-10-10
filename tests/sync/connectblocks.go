@@ -25,7 +25,7 @@ func testConnectBlocks(t *testing.T, h *TestHandler) {
 					close(ch)
 				}
 			}, true)
-			if err != nil && err != db.ErrSyncInterrupted {
+			if err != nil && err != db.ErrOperationInterrupted {
 				t.Fatal(err)
 			}
 

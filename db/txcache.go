@@ -36,7 +36,7 @@ func NewTxCache(db *RocksDB, chain bchain.BlockChain, metrics *common.Metrics, i
 
 // GetTransaction returns transaction either from RocksDB or if not present from blockchain
 // it the transaction is confirmed, it is stored in the RocksDB
-func (c *TxCache) GetTransaction(txid string) (*bchain.Tx, uint32, error) {
+func (c *TxCache) GetTransaction(txid string) (*bchain.Tx, int, error) {
 	var tx *bchain.Tx
 	var h uint32
 	var err error
@@ -50,7 +50,7 @@ func (c *TxCache) GetTransaction(txid string) (*bchain.Tx, uint32, error) {
 			_, bestheight, _ := c.is.GetSyncState()
 			tx.Confirmations = bestheight - h + 1
 			c.metrics.TxCacheEfficiency.With(common.Labels{"status": "hit"}).Inc()
-			return tx, h, nil
+			return tx, int(h), nil
 		}
 	}
 	tx, err = c.chain.GetTransaction(txid)
@@ -65,13 +65,20 @@ func (c *TxCache) GetTransaction(txid string) (*bchain.Tx, uint32, error) {
 			if err != nil {
 				return nil, 0, err
 			}
-			// the transaction may me not yet indexed, in that case get the height from the backend
-			if ta == nil {
-				h, err = c.chain.GetBestBlockHeight()
-				if err != nil {
-					return nil, 0, err
+			switch {
+			case ta == nil:
+				// the transaction may not yet be indexed, in that case:
+				if tx.BlockHeight > 0 {
+					// Check if the tx height value is set.
+					h = tx.BlockHeight
+				} else {
+					// Get the height from the backend's bestblock.
+					h, err = c.chain.GetBestBlockHeight()
+					if err != nil {
+						return nil, 0, err
+					}
 				}
-			} else {
+			default:
 				h = ta.Height
 			}
 		} else if c.chainType == bchain.ChainEthereumType {
@@ -90,7 +97,7 @@ func (c *TxCache) GetTransaction(txid string) (*bchain.Tx, uint32, error) {
 			}
 		}
 	} else {
-		h = 0
+		return tx, -1, nil
 	}
-	return tx, h, nil
+	return tx, int(h), nil
 }

@@ -298,6 +298,22 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *webs
 	"unsubscribeAddresses": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
 		return s.unsubscribeAddresses(c)
 	},
+	"ping": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
+		r := struct{}{}
+		return r, nil
+	},
+}
+
+func sendResponse(c *websocketChannel, req *websocketReq, data interface{}) {
+	defer func() {
+		if r := recover(); r != nil {
+			glog.Error("Client ", c.id, ", onRequest ", req.Method, " recovered from panic: ", r)
+		}
+	}()
+	c.out <- &websocketRes{
+		ID:   req.ID,
+		Data: data,
+	}
 }
 
 func (s *WebsocketServer) onRequest(c *websocketChannel, req *websocketReq) {
@@ -313,10 +329,7 @@ func (s *WebsocketServer) onRequest(c *websocketChannel, req *websocketReq) {
 		}
 		// nil data means no response
 		if data != nil {
-			c.out <- &websocketRes{
-				ID:   req.ID,
-				Data: data,
-			}
+			sendResponse(c, req, data)
 		}
 	}()
 	t := time.Now()
@@ -331,8 +344,8 @@ func (s *WebsocketServer) onRequest(c *websocketChannel, req *websocketReq) {
 		glog.V(1).Info("Client ", c.id, " onRequest ", req.Method, " success")
 		s.metrics.WebsocketRequests.With(common.Labels{"method": req.Method, "status": "success"}).Inc()
 	} else {
-		glog.Error("Client ", c.id, " onMessage ", req.Method, ": ", errors.ErrorStack(err))
-		s.metrics.WebsocketRequests.With(common.Labels{"method": req.Method, "status": err.Error()}).Inc()
+		glog.Error("Client ", c.id, " onMessage ", req.Method, ": ", errors.ErrorStack(err), ", data ", string(req.Params))
+		s.metrics.WebsocketRequests.With(common.Labels{"method": req.Method, "status": "failure"}).Inc()
 		e := resultError{}
 		e.Error.Message = err.Error()
 		data = e
@@ -348,6 +361,7 @@ type accountInfoReq struct {
 	FromHeight     int    `json:"from"`
 	ToHeight       int    `json:"to"`
 	ContractFilter string `json:"contractFilter"`
+	Gap            int    `json:"gap"`
 }
 
 func unmarshalGetAccountInfoRequest(params []byte) (*accountInfoReq, error) {
@@ -392,7 +406,7 @@ func (s *WebsocketServer) getAccountInfo(req *accountInfoReq) (res *api.Address,
 	if req.PageSize == 0 {
 		req.PageSize = txsOnPage
 	}
-	a, err := s.api.GetXpubAddress(req.Descriptor, req.Page, req.PageSize, opt, &filter, 0)
+	a, err := s.api.GetXpubAddress(req.Descriptor, req.Page, req.PageSize, opt, &filter, req.Gap)
 	if err != nil {
 		return s.api.GetAddress(req.Descriptor, req.Page, req.PageSize, opt, &filter)
 	}
@@ -426,9 +440,9 @@ func (s *WebsocketServer) getInfo() (interface{}, error) {
 		Shortcut   string `json:"shortcut"`
 		Decimals   int    `json:"decimals"`
 		Version    string `json:"version"`
-		BestHeight int    `json:"bestheight"`
-		BestHash   string `json:"besthash"`
-		Block0Hash string `json:"block0hash"`
+		BestHeight int    `json:"bestHeight"`
+		BestHash   string `json:"bestHash"`
+		Block0Hash string `json:"block0Hash"`
 		Testnet    bool   `json:"testnet"`
 	}
 	return &info{

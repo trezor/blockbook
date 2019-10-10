@@ -6,10 +6,10 @@
       "alias": "denarius"
   },
   "ports": {
-    "backend_rpc": 8089,
-    "backend_message_queue": 38389,
-    "blockbook_internal": 9089,
-    "blockbook_public": 9189
+    "backend_rpc": 8093,
+    "backend_message_queue": 38393,
+    "blockbook_internal": 9093,
+    "blockbook_public": 9193
   },
   "ipc": {
     "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",

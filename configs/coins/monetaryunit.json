@@ -25,7 +25,7 @@
     "version": "2.1.4",
     "binary_url": "https://github.com/muecoin/MUE/releases/download/v2.1.4/mon-2.1.4-x86_64-linux-gnu.tar.gz",
     "verification_type": "sha256",
-    "verification_source": "1c6885f3e5bb1efcc8c84e7910ec57bf76573983f2026ea7c5a7a919b7abcc11",
+    "verification_source": "1aa4bf650676e28457866c4403608783cb1df047951caf43d9fc8ce9632d6151",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
       "bin/monetaryunit-qt"
