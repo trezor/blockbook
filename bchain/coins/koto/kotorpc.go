@@ -9,10 +9,12 @@ import (
 	"github.com/juju/errors"
 )
 
+// KotoRPC is an interface to JSON-RPC bitcoind service
 type KotoRPC struct {
 	*btc.BitcoinRPC
 }
 
+// NewKotoRPC returns new LitecoinRPC instance
 func NewKotoRPC(config json.RawMessage, pushHandler func(bchain.NotificationType)) (bchain.BlockChain, error) {
 	b, err := btc.NewBitcoinRPC(config, pushHandler)
 	if err != nil {

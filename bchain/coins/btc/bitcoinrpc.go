@@ -36,25 +36,28 @@ type BitcoinRPC struct {
 
 // Configuration represents json config file
 type Configuration struct {
-	CoinName                 string `json:"coin_name"`
-	CoinShortcut             string `json:"coin_shortcut"`
-	RPCURL                   string `json:"rpc_url"`
-	RPCUser                  string `json:"rpc_user"`
-	RPCPass                  string `json:"rpc_pass"`
-	RPCTimeout               int    `json:"rpc_timeout"`
-	Parse                    bool   `json:"parse"`
-	MessageQueueBinding      string `json:"message_queue_binding"`
-	Subversion               string `json:"subversion"`
-	BlockAddressesToKeep     int    `json:"block_addresses_to_keep"`
-	MempoolWorkers           int    `json:"mempool_workers"`
-	MempoolSubWorkers        int    `json:"mempool_sub_workers"`
-	AddressFormat            string `json:"address_format"`
-	SupportsEstimateFee      bool   `json:"supports_estimate_fee"`
-	SupportsEstimateSmartFee bool   `json:"supports_estimate_smart_fee"`
-	XPubMagic                uint32 `json:"xpub_magic,omitempty"`
-	XPubMagicSegwitP2sh      uint32 `json:"xpub_magic_segwit_p2sh,omitempty"`
-	XPubMagicSegwitNative    uint32 `json:"xpub_magic_segwit_native,omitempty"`
-	Slip44                   uint32 `json:"slip44,omitempty"`
+	CoinName                     string `json:"coin_name"`
+	CoinShortcut                 string `json:"coin_shortcut"`
+	RPCURL                       string `json:"rpc_url"`
+	RPCUser                      string `json:"rpc_user"`
+	RPCPass                      string `json:"rpc_pass"`
+	RPCTimeout                   int    `json:"rpc_timeout"`
+	Parse                        bool   `json:"parse"`
+	MessageQueueBinding          string `json:"message_queue_binding"`
+	Subversion                   string `json:"subversion"`
+	BlockAddressesToKeep         int    `json:"block_addresses_to_keep"`
+	MempoolWorkers               int    `json:"mempool_workers"`
+	MempoolSubWorkers            int    `json:"mempool_sub_workers"`
+	AddressFormat                string `json:"address_format"`
+	SupportsEstimateFee          bool   `json:"supports_estimate_fee"`
+	SupportsEstimateSmartFee     bool   `json:"supports_estimate_smart_fee"`
+	XPubMagic                    uint32 `json:"xpub_magic,omitempty"`
+	XPubMagicSegwitP2sh          uint32 `json:"xpub_magic_segwit_p2sh,omitempty"`
+	XPubMagicSegwitNative        uint32 `json:"xpub_magic_segwit_native,omitempty"`
+	Slip44                       uint32 `json:"slip44,omitempty"`
+	AlternativeEstimateFee       string `json:"alternativeEstimateFee,omitempty"`
+	AlternativeEstimateFeeParams string `json:"alternativeEstimateFeeParams,omitempty"`
+	MinimumCoinbaseConfirmations int    `json:"minimumCoinbaseConfirmations,omitempty"`
 }
 
 // NewBitcoinRPC returns new BitcoinRPC instance.
@@ -68,6 +71,10 @@ func NewBitcoinRPC(config json.RawMessage, pushHandler func(bchain.NotificationT
 	// keep at least 100 mappings block->addresses to allow rollback
 	if c.BlockAddressesToKeep < 100 {
 		c.BlockAddressesToKeep = 100
+	}
+	// default MinimumCoinbaseConfirmations is 100
+	if c.MinimumCoinbaseConfirmations == 0 {
+		c.MinimumCoinbaseConfirmations = 100
 	}
 	// at least 1 mempool worker/subworker for synchronous mempool synchronization
 	if c.MempoolWorkers < 1 {
@@ -126,6 +133,14 @@ func (b *BitcoinRPC) Initialize() error {
 	}
 
 	glog.Info("rpc: block chain ", params.Name)
+
+	if b.ChainConfig.AlternativeEstimateFee == "whatthefee" {
+		if err = InitWhatTheFee(b, b.ChainConfig.AlternativeEstimateFeeParams); err != nil {
+			glog.Error("InitWhatTheFee error ", err, " Reverting to default estimateFee functionality")
+			// disable AlternativeEstimateFee logic
+			b.ChainConfig.AlternativeEstimateFee = ""
+		}
+	}
 
 	return nil
 }

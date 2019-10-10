@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 if [ $# -ne 1 ] && [ $# -ne 4 ]
 then

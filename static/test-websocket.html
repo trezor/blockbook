@@ -104,6 +104,15 @@
             });
         }
 
+        function ping() {
+            const method = 'ping';
+            const params = {
+            };
+            send(method, params, function (result) {
+                document.getElementById('pingResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
+            });
+        }
+
         function getBlockHash() {
             const method = 'getBlockHash';
             const height = parseInt(document.getElementById("getBlockHashHeight").value);
@@ -135,6 +144,7 @@
                 from,
                 to,
                 contractFilter
+                // default gap=20
             };
             send(method, params, function (result) {
                 document.getElementById('getAccountInfoResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
@@ -293,6 +303,13 @@
                 <input class="btn btn-secondary" type="button" value="getInfo" onclick="getInfo()">
             </div>
             <div class="col-10" id="getInfoResult">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <input class="btn btn-secondary" type="button" value="ping" onclick="ping()">
+            </div>
+            <div class="col-10" id="pingResult">
             </div>
         </div>
         <div class="row">

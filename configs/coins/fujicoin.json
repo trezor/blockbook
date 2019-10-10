@@ -23,7 +23,7 @@
     "package_revision": "satoshilabs-1",
     "system_user": "fujicoin",
     "version": "0.16.3",
-    "binary_url": "https://www.fujicoin.org/fujicoin/3.0/fujicoin-3.0-v0.16.3.tar.gz",
+    "binary_url": "https://www.fujicoin.org/fujicoin/3.0/fujicoin-blockbook.tar.gz",
     "verification_type": "gpg-sha256",
     "verification_source": "https://www.fujicoin.org/fujicoin/3.0/SHA256SUMS.asc",
     "extract_command": "tar -C backend -xf",

@@ -76,12 +76,13 @@ type Vout struct {
 // Tx is blockchain transaction
 // unnecessary fields are commented out to avoid overhead
 type Tx struct {
-	Hex      string `json:"hex"`
-	Txid     string `json:"txid"`
-	Version  int32  `json:"version"`
-	LockTime uint32 `json:"locktime"`
-	Vin      []Vin  `json:"vin"`
-	Vout     []Vout `json:"vout"`
+	Hex         string `json:"hex"`
+	Txid        string `json:"txid"`
+	Version     int32  `json:"version"`
+	LockTime    uint32 `json:"locktime"`
+	Vin         []Vin  `json:"vin"`
+	Vout        []Vout `json:"vout"`
+	BlockHeight uint32 `json:"blockHeight,omitempty"`
 	// BlockHash     string `json:"blockhash,omitempty"`
 	Confirmations    uint32      `json:"confirmations,omitempty"`
 	Time             int64       `json:"time,omitempty"`
@@ -254,6 +255,8 @@ type BlockChainParser interface {
 	KeepBlockAddresses() int
 	// AmountDecimals returns number of decimal places in coin amounts
 	AmountDecimals() int
+	// MinimumCoinbaseConfirmations returns minimum number of confirmations a coinbase transaction must have before it can be spent
+	MinimumCoinbaseConfirmations() int
 	// AmountToDecimalString converts amount in big.Int to string with decimal point in the correct place
 	AmountToDecimalString(a *big.Int) string
 	// AmountToBigInt converts amount in json.Number (string) to big.Int
@@ -264,6 +267,7 @@ type BlockChainParser interface {
 	GetAddrDescFromAddress(address string) (AddressDescriptor, error)
 	GetAddressesFromAddrDesc(addrDesc AddressDescriptor) ([]string, bool, error)
 	GetScriptFromAddrDesc(addrDesc AddressDescriptor) ([]byte, error)
+	IsAddrDescIndexable(addrDesc AddressDescriptor) bool
 	// transactions
 	PackedTxidLen() int
 	PackTxid(txid string) ([]byte, error)

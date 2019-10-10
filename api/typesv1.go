@@ -13,26 +13,26 @@ type ScriptSigV1 struct {
 
 // VinV1 is used for legacy api v1
 type VinV1 struct {
-	Txid       string                   `json:"txid"`
-	Vout       uint32                   `json:"vout"`
-	Sequence   int64                    `json:"sequence,omitempty"`
-	N          int                      `json:"n"`
-	ScriptSig  ScriptSigV1              `json:"scriptSig"`
-	AddrDesc   bchain.AddressDescriptor `json:"-"`
-	Addresses  []string                 `json:"addresses"`
-	Searchable bool                     `json:"-"`
-	Value      string                   `json:"value"`
-	ValueSat   big.Int                  `json:"-"`
+	Txid      string                   `json:"txid"`
+	Vout      uint32                   `json:"vout"`
+	Sequence  int64                    `json:"sequence,omitempty"`
+	N         int                      `json:"n"`
+	ScriptSig ScriptSigV1              `json:"scriptSig"`
+	AddrDesc  bchain.AddressDescriptor `json:"-"`
+	Addresses []string                 `json:"addresses"`
+	IsAddress bool                     `json:"-"`
+	Value     string                   `json:"value"`
+	ValueSat  big.Int                  `json:"-"`
 }
 
 // ScriptPubKeyV1 is used for legacy api v1
 type ScriptPubKeyV1 struct {
-	Hex        string                   `json:"hex,omitempty"`
-	Asm        string                   `json:"asm,omitempty"`
-	AddrDesc   bchain.AddressDescriptor `json:"-"`
-	Addresses  []string                 `json:"addresses"`
-	Searchable bool                     `json:"-"`
-	Type       string                   `json:"type,omitempty"`
+	Hex       string                   `json:"hex,omitempty"`
+	Asm       string                   `json:"asm,omitempty"`
+	AddrDesc  bchain.AddressDescriptor `json:"-"`
+	Addresses []string                 `json:"addresses"`
+	IsAddress bool                     `json:"-"`
+	Type      string                   `json:"type,omitempty"`
 }
 
 // VoutV1 is used for legacy api v1
@@ -115,12 +115,12 @@ func (w *Worker) TxToV1(tx *Tx) *TxV1 {
 				Asm: v.Asm,
 				Hex: v.Hex,
 			},
-			Searchable: v.Searchable,
-			Sequence:   v.Sequence,
-			Txid:       v.Txid,
-			Value:      v.ValueSat.DecimalString(d),
-			ValueSat:   v.ValueSat.AsBigInt(),
-			Vout:       v.Vout,
+			IsAddress: v.IsAddress,
+			Sequence:  v.Sequence,
+			Txid:      v.Txid,
+			Value:     v.ValueSat.DecimalString(d),
+			ValueSat:  v.ValueSat.AsBigInt(),
+			Vout:      v.Vout,
 		}
 	}
 	voutV1 := make([]VoutV1, len(tx.Vout))
@@ -129,12 +129,12 @@ func (w *Worker) TxToV1(tx *Tx) *TxV1 {
 		voutV1[i] = VoutV1{
 			N: v.N,
 			ScriptPubKey: ScriptPubKeyV1{
-				AddrDesc:   v.AddrDesc,
-				Addresses:  v.Addresses,
-				Asm:        v.Asm,
-				Hex:        v.Hex,
-				Searchable: v.Searchable,
-				Type:       v.Type,
+				AddrDesc:  v.AddrDesc,
+				Addresses: v.Addresses,
+				Asm:       v.Asm,
+				Hex:       v.Hex,
+				IsAddress: v.IsAddress,
+				Type:      v.Type,
 			},
 			Spent:       v.Spent,
 			SpentHeight: v.SpentHeight,

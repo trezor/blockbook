@@ -6,19 +6,25 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
-	"github.com/bsm/go-vlq"
+	"errors"
+	vlq "github.com/bsm/go-vlq"
 	"github.com/martinboehm/btcutil/base58"
 
 	"github.com/martinboehm/btcd/wire"
 	"github.com/martinboehm/btcutil/chaincfg"
+	"github.com/martinboehm/btcutil/hdkeychain"
 )
 
+// magic numbers
 const (
 	MainnetMagic wire.BitcoinNet = 0xbd6b0cbf
 	TestnetMagic wire.BitcoinNet = 0xffcae2ce
 	RegtestMagic wire.BitcoinNet = 0xdcb7c1fc
+
+	AddressHashLength = 24
 )
 
+// chain parameters
 var (
 	MainNetParams chaincfg.Params
 	TestNetParams chaincfg.Params
@@ -30,8 +36,11 @@ func init() {
 	MainNetParams.Net = MainnetMagic
 
 	// Address encoding magics
-	MainNetParams.PubKeyHashAddrID = []byte{38} // base58 prefix: G
-	MainNetParams.ScriptHashAddrID = []byte{10} // base58 prefix: W
+	MainNetParams.AddressMagicLen = 3
+
+	// Address encoding magics
+	MainNetParams.PubKeyHashAddrID = []byte{4, 35, 1} // base58 prefix: Ns
+	MainNetParams.ScriptHashAddrID = []byte{4, 35, 1} // base58 prefix: Ns
 
 	TestNetParams = chaincfg.TestNet3Params
 	TestNetParams.Net = TestnetMagic
@@ -140,6 +149,7 @@ func (p *NulsParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 	return tx, height, nil
 }
 
+// ParseTx parses tx from blob
 func (p *NulsParser) ParseTx(b []byte) (*bchain.Tx, error) {
 	tx := bchain.Tx{}
 	err := json.Unmarshal(b, &tx)
@@ -148,4 +158,47 @@ func (p *NulsParser) ParseTx(b []byte) (*bchain.Tx, error) {
 		return nil, err
 	}
 	return &tx, err
+}
+
+// DeriveAddressDescriptorsFromTo derives address descriptors from given xpub for addresses in index range
+func (p *NulsParser) DeriveAddressDescriptorsFromTo(xpub string, change uint32, fromIndex uint32, toIndex uint32) ([]bchain.AddressDescriptor, error) {
+	if toIndex <= fromIndex {
+		return nil, errors.New("toIndex<=fromIndex")
+	}
+	extKey, err := hdkeychain.NewKeyFromString(xpub, p.Params.Base58CksumHasher)
+	if err != nil {
+		return nil, err
+	}
+	changeExtKey, err := extKey.Child(change)
+	if err != nil {
+		return nil, err
+	}
+	ad := make([]bchain.AddressDescriptor, toIndex-fromIndex)
+	for index := fromIndex; index < toIndex; index++ {
+		indexExtKey, err := changeExtKey.Child(index)
+		if err != nil {
+			return nil, err
+		}
+		s, err := indexExtKey.Address(p.Params)
+
+		if err != nil && indexExtKey != nil {
+			return nil, err
+		}
+		addHashs := make([]byte, AddressHashLength)
+		copy(addHashs[0:3], p.Params.PubKeyHashAddrID)
+		copy(addHashs[3:], s.ScriptAddress())
+		copy(addHashs[23:], []byte{p.xor(addHashs[0:23])})
+
+		//addressStr := base58.Encode(addHashs)
+		ad[index-fromIndex] = addHashs
+	}
+	return ad, nil
+}
+
+func (p *NulsParser) xor(body []byte) byte {
+	var xor byte = 0x00
+	for i := 0; i < len(body); i++ {
+		xor ^= body[i]
+	}
+	return xor
 }

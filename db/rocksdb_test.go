@@ -99,6 +99,11 @@ func uintToHex(i uint32) string {
 	return hex.EncodeToString(buf)
 }
 
+func hexToBytes(h string) []byte {
+	b, _ := hex.DecodeString(h)
+	return b
+}
+
 func addressKeyHex(a string, height uint32, d *RocksDB) string {
 	return dbtestdata.AddressToPubKeyHex(a, d.chainParser) + uintToHex(^height)
 }
@@ -221,11 +226,36 @@ func verifyAfterBitcoinTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect bool
 		}
 	}
 	if err := checkColumn(d, cfAddressBalance, []keyPair{
-		{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr1, d.chainParser), "01" + bigintToHex(dbtestdata.SatZero) + bigintToHex(dbtestdata.SatB1T1A1), nil},
-		{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr2, d.chainParser), "01" + bigintToHex(dbtestdata.SatZero) + bigintToHex(dbtestdata.SatB1T1A2), nil},
-		{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr3, d.chainParser), "01" + bigintToHex(dbtestdata.SatZero) + bigintToHex(dbtestdata.SatB1T2A3), nil},
-		{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr4, d.chainParser), "01" + bigintToHex(dbtestdata.SatZero) + bigintToHex(dbtestdata.SatB1T2A4), nil},
-		{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr5, d.chainParser), "01" + bigintToHex(dbtestdata.SatZero) + bigintToHex(dbtestdata.SatB1T2A5), nil},
+		{
+			dbtestdata.AddressToPubKeyHex(dbtestdata.Addr1, d.chainParser),
+			"01" + bigintToHex(dbtestdata.SatZero) + bigintToHex(dbtestdata.SatB1T1A1) +
+				dbtestdata.TxidB1T1 + varuintToHex(0) + varuintToHex(225493) + bigintToHex(dbtestdata.SatB1T1A1),
+			nil,
+		},
+		{
+			dbtestdata.AddressToPubKeyHex(dbtestdata.Addr2, d.chainParser),
+			"01" + bigintToHex(dbtestdata.SatZero) + bigintToHex(dbtestdata.SatB1T1A2) +
+				dbtestdata.TxidB1T1 + varuintToHex(1) + varuintToHex(225493) + bigintToHex(dbtestdata.SatB1T1A2),
+			nil,
+		},
+		{
+			dbtestdata.AddressToPubKeyHex(dbtestdata.Addr3, d.chainParser),
+			"01" + bigintToHex(dbtestdata.SatZero) + bigintToHex(dbtestdata.SatB1T2A3) +
+				dbtestdata.TxidB1T2 + varuintToHex(0) + varuintToHex(225493) + bigintToHex(dbtestdata.SatB1T2A3),
+			nil,
+		},
+		{
+			dbtestdata.AddressToPubKeyHex(dbtestdata.Addr4, d.chainParser),
+			"01" + bigintToHex(dbtestdata.SatZero) + bigintToHex(dbtestdata.SatB1T2A4) +
+				dbtestdata.TxidB1T2 + varuintToHex(1) + varuintToHex(225493) + bigintToHex(dbtestdata.SatB1T2A4),
+			nil,
+		},
+		{
+			dbtestdata.AddressToPubKeyHex(dbtestdata.Addr5, d.chainParser),
+			"01" + bigintToHex(dbtestdata.SatZero) + bigintToHex(dbtestdata.SatB1T2A5) +
+				dbtestdata.TxidB1T2 + varuintToHex(2) + varuintToHex(225493) + bigintToHex(dbtestdata.SatB1T2A5),
+			nil,
+		},
 	}); err != nil {
 		{
 			t.Fatal(err)
@@ -315,9 +345,10 @@ func verifyAfterBitcoinTypeBlock2(t *testing.T, d *RocksDB) {
 				"02" +
 				inputAddressToPubKeyHexWithLength(dbtestdata.Addr3, t, d) + bigintToHex(dbtestdata.SatB1T2A3) +
 				inputAddressToPubKeyHexWithLength(dbtestdata.Addr2, t, d) + bigintToHex(dbtestdata.SatB1T1A2) +
-				"02" +
+				"03" +
 				spentAddressToPubKeyHexWithLength(dbtestdata.Addr6, t, d) + bigintToHex(dbtestdata.SatB2T1A6) +
-				addressToPubKeyHexWithLength(dbtestdata.Addr7, t, d) + bigintToHex(dbtestdata.SatB2T1A7),
+				addressToPubKeyHexWithLength(dbtestdata.Addr7, t, d) + bigintToHex(dbtestdata.SatB2T1A7) +
+				hex.EncodeToString([]byte{byte(len(dbtestdata.TxidB2T1Output3OpReturn))}) + dbtestdata.TxidB2T1Output3OpReturn + bigintToHex(dbtestdata.SatZero),
 			nil,
 		},
 		{
@@ -355,16 +386,62 @@ func verifyAfterBitcoinTypeBlock2(t *testing.T, d *RocksDB) {
 		}
 	}
 	if err := checkColumn(d, cfAddressBalance, []keyPair{
-		{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr1, d.chainParser), "01" + bigintToHex(dbtestdata.SatZero) + bigintToHex(dbtestdata.SatB1T1A1), nil},
-		{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr2, d.chainParser), "02" + bigintToHex(dbtestdata.SatB1T1A2) + bigintToHex(dbtestdata.SatZero), nil},
-		{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr3, d.chainParser), "02" + bigintToHex(dbtestdata.SatB1T2A3) + bigintToHex(dbtestdata.SatZero), nil},
-		{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr4, d.chainParser), "02" + bigintToHex(dbtestdata.SatB1T2A4) + bigintToHex(dbtestdata.SatZero), nil},
-		{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr5, d.chainParser), "02" + bigintToHex(dbtestdata.SatB1T2A5) + bigintToHex(dbtestdata.SatB2T3A5), nil},
-		{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr6, d.chainParser), "02" + bigintToHex(dbtestdata.SatB2T1A6) + bigintToHex(dbtestdata.SatZero), nil},
-		{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr7, d.chainParser), "01" + bigintToHex(dbtestdata.SatZero) + bigintToHex(dbtestdata.SatB2T1A7), nil},
-		{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr8, d.chainParser), "01" + bigintToHex(dbtestdata.SatZero) + bigintToHex(dbtestdata.SatB2T2A8), nil},
-		{dbtestdata.AddressToPubKeyHex(dbtestdata.Addr9, d.chainParser), "01" + bigintToHex(dbtestdata.SatZero) + bigintToHex(dbtestdata.SatB2T2A9), nil},
-		{dbtestdata.AddressToPubKeyHex(dbtestdata.AddrA, d.chainParser), "01" + bigintToHex(dbtestdata.SatZero) + bigintToHex(dbtestdata.SatB2T4AA), nil},
+		{
+			dbtestdata.AddressToPubKeyHex(dbtestdata.Addr1, d.chainParser),
+			"01" + bigintToHex(dbtestdata.SatZero) + bigintToHex(dbtestdata.SatB1T1A1) +
+				dbtestdata.TxidB1T1 + varuintToHex(0) + varuintToHex(225493) + bigintToHex(dbtestdata.SatB1T1A1),
+			nil,
+		},
+		{
+			dbtestdata.AddressToPubKeyHex(dbtestdata.Addr2, d.chainParser),
+			"02" + bigintToHex(dbtestdata.SatB1T1A2) + bigintToHex(dbtestdata.SatZero),
+			nil,
+		},
+		{
+			dbtestdata.AddressToPubKeyHex(dbtestdata.Addr3, d.chainParser),
+			"02" + bigintToHex(dbtestdata.SatB1T2A3) + bigintToHex(dbtestdata.SatZero),
+			nil,
+		},
+		{
+			dbtestdata.AddressToPubKeyHex(dbtestdata.Addr4, d.chainParser),
+			"02" + bigintToHex(dbtestdata.SatB1T2A4) + bigintToHex(dbtestdata.SatZero),
+			nil,
+		},
+		{
+			dbtestdata.AddressToPubKeyHex(dbtestdata.Addr5, d.chainParser),
+			"02" + bigintToHex(dbtestdata.SatB1T2A5) + bigintToHex(dbtestdata.SatB2T3A5) +
+				dbtestdata.TxidB2T3 + varuintToHex(0) + varuintToHex(225494) + bigintToHex(dbtestdata.SatB2T3A5),
+			nil,
+		},
+		{
+			dbtestdata.AddressToPubKeyHex(dbtestdata.Addr6, d.chainParser),
+			"02" + bigintToHex(dbtestdata.SatB2T1A6) + bigintToHex(dbtestdata.SatZero),
+			nil,
+		},
+		{
+			dbtestdata.AddressToPubKeyHex(dbtestdata.Addr7, d.chainParser),
+			"01" + bigintToHex(dbtestdata.SatZero) + bigintToHex(dbtestdata.SatB2T1A7) +
+				dbtestdata.TxidB2T1 + varuintToHex(1) + varuintToHex(225494) + bigintToHex(dbtestdata.SatB2T1A7),
+			nil,
+		},
+		{
+			dbtestdata.AddressToPubKeyHex(dbtestdata.Addr8, d.chainParser),
+			"01" + bigintToHex(dbtestdata.SatZero) + bigintToHex(dbtestdata.SatB2T2A8) +
+				dbtestdata.TxidB2T2 + varuintToHex(0) + varuintToHex(225494) + bigintToHex(dbtestdata.SatB2T2A8),
+			nil,
+		},
+		{
+			dbtestdata.AddressToPubKeyHex(dbtestdata.Addr9, d.chainParser),
+			"01" + bigintToHex(dbtestdata.SatZero) + bigintToHex(dbtestdata.SatB2T2A9) +
+				dbtestdata.TxidB2T2 + varuintToHex(1) + varuintToHex(225494) + bigintToHex(dbtestdata.SatB2T2A9),
+			nil,
+		},
+		{
+			dbtestdata.AddressToPubKeyHex(dbtestdata.AddrA, d.chainParser),
+			"01" + bigintToHex(dbtestdata.SatZero) + bigintToHex(dbtestdata.SatB2T4AA) +
+				dbtestdata.TxidB2T4 + varuintToHex(0) + varuintToHex(225494) + bigintToHex(dbtestdata.SatB2T4AA),
+			nil,
+		},
 	}); err != nil {
 		{
 			t.Fatal(err)
@@ -579,7 +656,7 @@ func TestRocksDB_Index_BitcoinType(t *testing.T) {
 	verifyAfterBitcoinTypeBlock2(t, d)
 
 	// test public methods for address balance and tx addresses
-	ab, err := d.GetAddressBalance(dbtestdata.Addr5)
+	ab, err := d.GetAddressBalance(dbtestdata.Addr5, AddressBalanceDetailUTXO)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -587,6 +664,14 @@ func TestRocksDB_Index_BitcoinType(t *testing.T) {
 		Txs:        2,
 		SentSat:    *dbtestdata.SatB1T2A5,
 		BalanceSat: *dbtestdata.SatB2T3A5,
+		Utxos: []Utxo{
+			{
+				BtxID:    hexToBytes(dbtestdata.TxidB2T3),
+				Vout:     0,
+				Height:   225494,
+				ValueSat: *dbtestdata.SatB2T3A5,
+			},
+		},
 	}
 	if !reflect.DeepEqual(ab, abw) {
 		t.Errorf("GetAddressBalance() = %+v, want %+v", ab, abw)
@@ -623,6 +708,11 @@ func TestRocksDB_Index_BitcoinType(t *testing.T) {
 				AddrDesc: addressToAddrDesc(dbtestdata.Addr7, d.chainParser),
 				Spent:    false,
 				ValueSat: *dbtestdata.SatB2T1A7,
+			},
+			{
+				AddrDesc: hexToBytes(dbtestdata.TxidB2T1Output3OpReturn),
+				Spent:    false,
+				ValueSat: *dbtestdata.SatZero,
 			},
 		},
 	}
@@ -896,6 +986,81 @@ func Test_packTxAddresses_unpackTxAddresses(t *testing.T) {
 				t.Errorf("packTxAddresses() = %v, want %v", hex, tt.hex)
 			}
 			got1, err := unpackTxAddresses(b)
+			if err != nil {
+				t.Errorf("unpackTxAddresses() error = %v", err)
+				return
+			}
+			if !reflect.DeepEqual(got1, tt.data) {
+				t.Errorf("unpackTxAddresses() = %+v, want %+v", got1, tt.data)
+			}
+		})
+	}
+}
+
+func Test_packAddrBalance_unpackAddrBalance(t *testing.T) {
+	parser := bitcoinTestnetParser()
+	tests := []struct {
+		name string
+		hex  string
+		data *AddrBalance
+	}{
+		{
+			name: "no utxos",
+			hex:  "7b060b44cc1af8520514faf980ac",
+			data: &AddrBalance{
+				BalanceSat: *big.NewInt(90110001324),
+				SentSat:    *big.NewInt(12390110001234),
+				Txs:        123,
+				Utxos:      []Utxo{},
+			},
+		},
+		{
+			name: "utxos",
+			hex:  "7b060b44cc1af8520514faf980ac00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa38400c87c440060b2fd12177a6effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac750098faf659010105e2e48aeabdd9b75def7b48d756ba304713c2aba7b522bf9dbc893fc4231b0782c6df6d84ccd88552087e9cba87a275ffff",
+			data: &AddrBalance{
+				BalanceSat: *big.NewInt(90110001324),
+				SentSat:    *big.NewInt(12390110001234),
+				Txs:        123,
+				Utxos: []Utxo{
+					{
+						BtxID:    hexToBytes(dbtestdata.TxidB1T1),
+						Vout:     12,
+						Height:   123456,
+						ValueSat: *big.NewInt(12390110001234 - 90110001324),
+					},
+					{
+						BtxID:    hexToBytes(dbtestdata.TxidB1T2),
+						Vout:     0,
+						Height:   52345689,
+						ValueSat: *big.NewInt(1),
+					},
+					{
+						BtxID:    hexToBytes(dbtestdata.TxidB2T3),
+						Vout:     5353453,
+						Height:   1234567890,
+						ValueSat: *big.NewInt(9123372036854775807),
+					},
+				},
+			},
+		},
+		{
+			name: "empty",
+			hex:  "000000",
+			data: &AddrBalance{
+				Utxos: []Utxo{},
+			},
+		},
+	}
+	varBuf := make([]byte, maxPackedBigintBytes)
+	buf := make([]byte, 32)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b := packAddrBalance(tt.data, buf, varBuf)
+			hex := hex.EncodeToString(b)
+			if !reflect.DeepEqual(hex, tt.hex) {
+				t.Errorf("packTxAddresses() = %v, want %v", hex, tt.hex)
+			}
+			got1, err := unpackAddrBalance(b, parser.PackedTxidLen(), AddressBalanceDetailUTXO)
 			if err != nil {
 				t.Errorf("unpackTxAddresses() error = %v", err)
 				return

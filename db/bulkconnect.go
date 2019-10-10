@@ -32,10 +32,10 @@ type BulkConnect struct {
 }
 
 const (
-	maxBulkAddresses          = 200000
+	maxBulkAddresses          = 80000
 	maxBulkTxAddresses        = 500000
 	partialStoreAddresses     = maxBulkTxAddresses / 10
-	maxBulkBalances           = 800000
+	maxBulkBalances           = 700000
 	partialStoreBalances      = maxBulkBalances / 10
 	maxBulkAddrContracts      = 1200000
 	partialStoreAddrContracts = maxBulkAddrContracts / 10

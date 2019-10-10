@@ -45,8 +45,8 @@ func NewSyncWorker(db *RocksDB, chain bchain.BlockChain, syncWorkers, syncChunk 
 
 var errSynced = errors.New("synced")
 
-// ErrSyncInterrupted is returned when synchronization is interrupted by OS signal
-var ErrSyncInterrupted = errors.New("ErrSyncInterrupted")
+// ErrOperationInterrupted is returned when operation is interrupted by OS signal
+var ErrOperationInterrupted = errors.New("ErrOperationInterrupted")
 
 // ResyncIndex synchronizes index to the top of the blockchain
 // onNewBlock is called when new block is connected, but not in initial parallel sync
@@ -78,7 +78,7 @@ func (w *SyncWorker) ResyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 		return nil
 	}
 
-	w.metrics.IndexResyncErrors.With(common.Labels{"error": err.Error()}).Inc()
+	w.metrics.IndexResyncErrors.With(common.Labels{"error": "failure"}).Inc()
 
 	return err
 }
@@ -206,7 +206,7 @@ func (w *SyncWorker) connectBlocks(onNewBlock bchain.OnNewBlockFunc, initialSync
 			select {
 			case <-w.chanOsSignal:
 				glog.Info("connectBlocks interrupted at height ", lastRes.block.Height)
-				return ErrSyncInterrupted
+				return ErrOperationInterrupted
 			case res := <-bch:
 				if res == empty {
 					break ConnectLoop
@@ -300,7 +300,7 @@ func (w *SyncWorker) ConnectBlocksParallel(lower, higher uint32) error {
 						return
 					}
 					glog.Error("getBlockWorker ", i, " connect block error ", err, ". Retrying...")
-					w.metrics.IndexResyncErrors.With(common.Labels{"error": err.Error()}).Inc()
+					w.metrics.IndexResyncErrors.With(common.Labels{"error": "failure"}).Inc()
 					time.Sleep(time.Millisecond * 500)
 				} else {
 					break
@@ -330,7 +330,7 @@ ConnectLoop:
 		select {
 		case <-w.chanOsSignal:
 			glog.Info("connectBlocksParallel interrupted at height ", h)
-			err = ErrSyncInterrupted
+			err = ErrOperationInterrupted
 			// signal all workers to terminate their loops (error loops are interrupted below)
 			close(terminating)
 			break ConnectLoop
@@ -338,7 +338,7 @@ ConnectLoop:
 			hash, err = w.chain.GetBlockHash(h)
 			if err != nil {
 				glog.Error("GetBlockHash error ", err)
-				w.metrics.IndexResyncErrors.With(common.Labels{"error": err.Error()}).Inc()
+				w.metrics.IndexResyncErrors.With(common.Labels{"error": "failure"}).Inc()
 				time.Sleep(time.Millisecond * 500)
 				continue
 			}

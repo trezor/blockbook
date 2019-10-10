@@ -5,15 +5,18 @@ import (
 	"blockbook/bchain/coins/btc"
 	"blockbook/bchain/coins/utils"
 	"bytes"
+
 	"github.com/martinboehm/btcd/wire"
 	"github.com/martinboehm/btcutil/chaincfg"
 )
 
+// magic numbers
 const (
 	MainnetMagic wire.BitcoinNet = 0xcbc6680f
 	RegtestMagic wire.BitcoinNet = 0x377b972d
 )
 
+// chain parameters
 var (
 	MainNetParams chaincfg.Params
 	RegtestParams chaincfg.Params

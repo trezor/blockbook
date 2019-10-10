@@ -3,6 +3,7 @@
     <div class="row line-bot">
         <div class="col-xs-7 col-md-8 ellipsis">
             <a href="/tx/{{$tx.Txid}}">{{$tx.Txid}}</a>
+            {{- if $tx.Rbf}}<span title="Replace-by-Fee (RBF) transaction, could be overriden"> ⚠️</span>{{end -}}
         </div>
         {{- if $tx.Blocktime}}<div class="col-xs-5 col-md-4 text-muted text-right">{{if $tx.Confirmations}}mined{{else}}first seen{{end}} {{formatUnixTime $tx.Blocktime}}</div>{{end -}}
     </div>
@@ -19,7 +20,7 @@
                                 {{- end -}}
                                 {{- range $a := $vin.Addresses -}}
                                 <span class="ellipsis tx-addr">
-                                    {{if and (ne $a $addr) $vin.Searchable}}<a href="/address/{{$a}}">{{$a}}</a>{{else}}{{$a}}{{end}}
+                                    {{if and (ne $a $addr) $vin.IsAddress}}<a href="/address/{{$a}}">{{$a}}</a>{{else}}{{$a}}{{end}}
                                 </span>
                                 {{- else -}}
                                 <span class="tx-addr">{{- if $vin.Hex -}}Unparsed address{{- else -}}No Inputs (Newly Generated Coins){{- end -}}</span>
@@ -51,7 +52,7 @@
                             <td>
                                 {{- range $a := $vout.Addresses -}}
                                 <span class="ellipsis tx-addr">
-                                    {{- if and (ne $a $addr) $vout.Searchable}}<a href="/address/{{$a}}">{{$a}}</a>{{else}}{{$a}}{{- end -}}
+                                    {{- if and (ne $a $addr) $vout.IsAddress}}<a href="/address/{{$a}}">{{$a}}</a>{{else}}{{$a}}{{- end -}}
                                 </span>
                                 {{- else -}}
                                 <span class="tx-addr">Unparsed address</span>
