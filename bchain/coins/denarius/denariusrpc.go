@@ -24,7 +24,7 @@ func NewDenariusRPC(config json.RawMessage, pushHandler func(bchain.Notification
 		b.(*btc.BitcoinRPC),
 	}
 	d.RPCMarshaler = btc.JSONMarshalerV1{}
-
+	d.ChainConfig.SupportsEstimateSmartFee = false
 	return d, nil
 }
 
