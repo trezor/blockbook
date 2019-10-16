@@ -23,9 +23,9 @@
     "package_revision": "satoshilabs-1",
     "system_user": "cpuchain",
     "version": "0.16.3",
-    "binary_url": "https://github.com/cpuchain/cpuchain/releases/download/v0.16.3/cpuchain-0.16.3-x86_64-linux-gnu.tar.gz",
+    "binary_url": "https://github.com/cpuchain/cpuchain/releases/download/v0.18.1/cpuchain-0.18.1-x86_64-linux-gnu.tar.gz",
     "verification_type": "gpg-sha256",
-    "verification_source": "https://github.com/cpuchain/cpuchain/releases/download/v0.16.3/SHA256SUMS.asc",
+    "verification_source": "https://github.com/cpuchain/cpuchain/releases/download/v0.18.1/SHA256SUMS.asc",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
       "bin/cpuchain-qt"
@@ -52,7 +52,7 @@
     "additional_params": "",
     "block_chain": {
       "parse": true,
-      "subversion": "/CPUchain:0.16.3/",
+      "subversion": "/CPUchain:0.18.1/",
       "mempool_workers": 8,
       "mempool_sub_workers": 2,
       "block_addresses_to_keep": 300,
