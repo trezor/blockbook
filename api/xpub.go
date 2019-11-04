@@ -589,3 +589,8 @@ func (w *Worker) GetXpubUtxo(xpub string, onlyConfirmed bool, gap int) (Utxos, e
 	glog.Info("GetXpubUtxo ", xpub[:16], ", ", len(r), " utxos, finished in ", time.Since(start))
 	return r, nil
 }
+
+// GetUtxoBalanceHistory returns history of balance for given xpub
+func (w *Worker) GetUtxoBalanceHistory(xpub string, gap int) ([]BalanceHistory, error) {
+	return nil, errors.New("not implemented")
+}

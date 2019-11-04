@@ -801,6 +801,80 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 	return r, nil
 }
 
+// GetBalanceHistory returns history of balance for given address
+func (w *Worker) GetBalanceHistory(address string) ([]BalanceHistory, error) {
+	var bh []BalanceHistory
+	var b BalanceHistory
+	var bi *db.BlockInfo
+	var balance big.Int
+	start := time.Now()
+	addrDesc, _, err := w.getAddrDescAndNormalizeAddress(address)
+	if err != nil {
+		return nil, err
+	}
+	txs, err := w.getAddressTxids(addrDesc, false, &AddressFilter{Vout: AddressFilterVoutOff}, maxInt)
+	if err != nil {
+		return nil, err
+	}
+	for txi := len(txs) - 1; txi >= 0; txi-- {
+		ta, err := w.db.GetTxAddresses(txs[txi])
+		if err != nil {
+			return nil, err
+		}
+		if ta == nil {
+			glog.Warning("DB inconsistency:  tx ", txs[txi], ": not found in txAddresses")
+			continue
+		}
+		counted := false
+		if bi == nil || bi.Height != ta.Height {
+			bi, err = w.db.GetBlockInfo(ta.Height)
+			if err != nil {
+				return nil, err
+			}
+		}
+		hour := bi.Time - bi.Time%3600
+		if b.Time != hour {
+			if b.Txs != 0 {
+				b.BalanceSat = (*Amount)(new(big.Int).Set(&balance))
+				bh = append(bh, b)
+			}
+			b = BalanceHistory{
+				Time:        hour,
+				SentSat:     &Amount{},
+				ReceivedSat: &Amount{},
+			}
+		}
+		for i := range ta.Inputs {
+			tai := &ta.Inputs[i]
+			if bytes.Equal(addrDesc, tai.AddrDesc) {
+				(*big.Int)(b.SentSat).Add((*big.Int)(b.SentSat), &tai.ValueSat)
+				balance.Sub(&balance, &tai.ValueSat)
+				if !counted {
+					counted = true
+					b.Txs++
+				}
+			}
+		}
+		for i := range ta.Outputs {
+			tao := &ta.Outputs[i]
+			if bytes.Equal(addrDesc, tao.AddrDesc) {
+				(*big.Int)(b.ReceivedSat).Add((*big.Int)(b.ReceivedSat), &tao.ValueSat)
+				balance.Add(&balance, &tao.ValueSat)
+				if !counted {
+					counted = true
+					b.Txs++
+				}
+			}
+		}
+	}
+	if b.Txs != 0 {
+		b.BalanceSat = (*Amount)(&balance)
+		bh = append(bh, b)
+	}
+	glog.Info("GetBalanceHistory ", address, ", count ", len(bh), " finished in ", time.Since(start))
+	return bh, nil
+}
+
 func (w *Worker) waitForBackendSync() {
 	// wait a short time if blockbook is synchronizing with backend
 	inSync, _, _ := w.is.GetSyncState()

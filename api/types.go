@@ -296,6 +296,15 @@ func (a Utxos) Less(i, j int) bool {
 	return hi >= hj
 }
 
+// BalanceHistory contains info about one point in time of balance history
+type BalanceHistory struct {
+	Time        int64   `json:"blockTime"`
+	Txs         int     `json:"txs"`
+	ReceivedSat *Amount `json:"received"`
+	SentSat     *Amount `json:"sent"`
+	BalanceSat  *Amount `json:"balance"`
+}
+
 // Blocks is list of blocks with paging information
 type Blocks struct {
 	Paging

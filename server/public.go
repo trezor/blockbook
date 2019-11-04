@@ -175,6 +175,7 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 	serveMux.HandleFunc(path+"api/block/", s.jsonHandler(s.apiBlock, apiDefault))
 	serveMux.HandleFunc(path+"api/sendtx/", s.jsonHandler(s.apiSendTx, apiDefault))
 	serveMux.HandleFunc(path+"api/estimatefee/", s.jsonHandler(s.apiEstimateFee, apiDefault))
+	serveMux.HandleFunc(path+"api/balancehistory/", s.jsonHandler(s.apiBalanceHistory, apiDefault))
 	// v2 format
 	serveMux.HandleFunc(path+"api/v2/block-index/", s.jsonHandler(s.apiBlockIndex, apiV2))
 	serveMux.HandleFunc(path+"api/v2/tx-specific/", s.jsonHandler(s.apiTxSpecific, apiV2))
@@ -186,6 +187,7 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 	serveMux.HandleFunc(path+"api/v2/sendtx/", s.jsonHandler(s.apiSendTx, apiV2))
 	serveMux.HandleFunc(path+"api/v2/estimatefee/", s.jsonHandler(s.apiEstimateFee, apiV2))
 	serveMux.HandleFunc(path+"api/v2/feestats/", s.jsonHandler(s.apiFeeStats, apiV2))
+	serveMux.HandleFunc(path+"api/v2/balancehistory/", s.jsonHandler(s.apiBalanceHistory, apiDefault))
 	// socket.io interface
 	serveMux.Handle(path+"socket.io/", s.socketio.GetHandler())
 	// websocket interface
@@ -1023,6 +1025,25 @@ func (s *PublicServer) apiUtxo(r *http.Request, apiVersion int) (interface{}, er
 		}
 	}
 	return utxo, err
+}
+
+func (s *PublicServer) apiBalanceHistory(r *http.Request, apiVersion int) (interface{}, error) {
+	var history []api.BalanceHistory
+	var err error
+	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
+		gap, ec := strconv.Atoi(r.URL.Query().Get("gap"))
+		if ec != nil {
+			gap = 0
+		}
+		history, err = s.api.GetUtxoBalanceHistory(r.URL.Path[i+1:], gap)
+		if err == nil {
+			s.metrics.ExplorerViews.With(common.Labels{"action": "api-xpub-balancehistory"}).Inc()
+		} else {
+			history, err = s.api.GetBalanceHistory(r.URL.Path[i+1:])
+			s.metrics.ExplorerViews.With(common.Labels{"action": "api-address-balancehistory"}).Inc()
+		}
+	}
+	return history, err
 }
 
 func (s *PublicServer) apiBlock(r *http.Request, apiVersion int) (interface{}, error) {
