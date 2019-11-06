@@ -23,9 +23,9 @@
     "package_revision": "satoshilabs-1",
     "system_user": "ritocoin",
     "version": "2.4.0.0",
-    "binary_url": "https://github.com/RitoProject/Ritocoin/releases/download/v2.4.0.0/rito-2.4.0.0-x86_64-linux-gnu.tar.gz",
+    "binary_url": "https://github.com/RitoProject/Ritocoin/releases/download/2.4.1.0/rito-2.4.1.0-x86_64-linux-gnu.tar.gz",
     "verification_type": "sha256",
-    "verification_source": "1ac67215516e77acd8223363800fd40d557f5c02cf0bfbbc35ecd543a5e07ee0",
+    "verification_source": "753f8a536080af1f2348e255a1cf7115039b22f6753d278931ddd5473906bc39",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
       "bin/rito-qt"
