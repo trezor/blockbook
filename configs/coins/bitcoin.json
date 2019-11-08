@@ -62,7 +62,7 @@
         "alternative_estimate_fee": "whatthefee-disabled",
         "alternative_estimate_fee_params": "{\"url\": \"https://whatthefee.io/data.json\", \"periodSeconds\": 60}",
         "fiat_rates": "coingecko",
-        "fiat_rates_params": "{\"coin\": \"bitcoin\", \"periodSeconds\": 60}"
+        "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"bitcoin\", \"periodSeconds\": 60}"
       }
     }
   },
