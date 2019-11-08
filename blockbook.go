@@ -6,6 +6,7 @@ import (
 	"blockbook/bchain/coins"
 	"blockbook/common"
 	"blockbook/db"
+	"blockbook/fiat"
 	"blockbook/server"
 	"context"
 	"encoding/json"
@@ -320,7 +321,7 @@ func mainWithExitCode() int {
 
 	if internalServer != nil || publicServer != nil || chain != nil {
 		// start fiat rates downloader only if not shutting down immediately
-		initFiatRatesDownloader(*blockchain)
+		initFiatRatesDownloader(index, *blockchain)
 		waitForSignalAndShutdown(internalServer, publicServer, chain, 10*time.Second)
 	}
 
@@ -655,22 +656,33 @@ func computeFeeStats(stopCompute chan os.Signal, blockFrom, blockTo int, db *db.
 	return err
 }
 
-func initFiatRatesDownloader(configfile string) {
+func initFiatRatesDownloader(db *db.RocksDB, configfile string) {
 	data, err := ioutil.ReadFile(configfile)
 	if err != nil {
 		glog.Errorf("Error reading file %v, %v", configfile, err)
 		return
 	}
+
 	var config struct {
 		FiatRates       string `json:"fiat_rates"`
 		FiatRatesParams string `json:"fiat_rates_params"`
 	}
+
 	err = json.Unmarshal(data, &config)
 	if err != nil {
-		glog.Errorf("Error parsing file %v, %v", configfile, err)
+		glog.Errorf("Error parsing config file %v, %v", configfile, err)
+		return
+	}
+
+	if config.FiatRates == "" || config.FiatRatesParams == "" {
+		glog.Errorf("Error parsing FiatRates config from %v - empty parameter(s)", configfile)
+		return
 	}
 	if config.FiatRates == "coingecko" {
-		// coingecko:=fiat.NewCoingeckoDownloader(config.FiatRatesParams)
-		// go coingecko.Run()
+		coingecko, err := fiat.NewCoingeckoDownloader(db, config.FiatRatesParams)
+		if err != nil {
+			glog.Errorf("NewCoingeckoDownloader error: %v", err)
+		}
+		go coingecko.Run()
 	}
 }
