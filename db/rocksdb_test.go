@@ -16,6 +16,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	vlq "github.com/bsm/go-vlq"
 	"github.com/juju/errors"
@@ -1069,5 +1070,29 @@ func Test_packAddrBalance_unpackAddrBalance(t *testing.T) {
 				t.Errorf("unpackTxAddresses() = %+v, want %+v", got1, tt.data)
 			}
 		})
+	}
+}
+
+func TestRocksTickers(t *testing.T) {
+	d := setupRocksDB(t, &testBitcoinParser{
+		BitcoinParser: bitcoinTestnetParser(),
+	})
+	defer closeAndDestroyRocksDB(t, d)
+
+	key1 := time.Now()
+	time.Sleep(1 * time.Second)
+	key2 := time.Now()
+	time.Sleep(1 * time.Second)
+	key3 := time.Now()
+
+	d.StoreTicker(key2, "aaa")
+	d.StoreTicker(key3, "bbb")
+
+	_, val, err := d.FindTicker(key1) // should find the closest key (key2)
+	if err != nil {
+		t.Errorf("TestRocksTickers err: %+v", err)
+	}
+	if val == nil {
+		t.Errorf("Empty value")
 	}
 }
