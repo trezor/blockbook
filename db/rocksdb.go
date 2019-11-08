@@ -147,6 +147,43 @@ func (d *RocksDB) closeDB() error {
 	return nil
 }
 
+// StoreTicker stores ticker data at the specified time
+func (d *RocksDB) StoreTicker(tickerTime time.Time, tickerData string) error {
+	timeFormat := "20060102030405" // YYYYMMDDhhmmss
+	tickerTimeFormatted := tickerTime.Format(timeFormat)
+	glog.Infof("Storing ticker: %v (%v)\n", tickerTimeFormatted, tickerData)
+
+	err := d.db.PutCF(d.wo, d.cfh[cfFiatRates], []byte(tickerTimeFormatted), []byte(tickerData))
+	if err != nil {
+		glog.Error("Error storing ticker: ", err)
+		return err
+	}
+	return nil
+}
+
+// FindTicker gets FiatRates data closest to the specified timestamp
+func (d *RocksDB) FindTicker(tickerTime time.Time) ([]byte, []byte, error) {
+	timeFormat := "20060102030405" // YYYYMMDDhhmmss
+	tickerTimeFormatted := tickerTime.Format(timeFormat)
+	glog.Infof("Getting ticker: %v\n", tickerTimeFormatted)
+
+	it := d.db.NewIteratorCF(d.ro, d.cfh[cfFiatRates])
+	defer it.Close()
+
+	var val []byte
+	var key []byte
+	for it.Seek([]byte(tickerTimeFormatted)); it.Valid(); it.Next() {
+		key = it.Key().Data()
+		val = it.Value().Data()
+		break
+	}
+	if err := it.Err(); err != nil {
+		glog.Error("Iterator error: ", err)
+		return nil, nil, err
+	}
+	return key, val, nil
+}
+
 // Close releases the RocksDB environment opened in NewRocksDB.
 func (d *RocksDB) Close() error {
 	if d.db != nil {
