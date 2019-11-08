@@ -57,6 +57,8 @@ type Configuration struct {
 	Slip44                       uint32 `json:"slip44,omitempty"`
 	AlternativeEstimateFee       string `json:"alternative_estimate_fee,omitempty"`
 	AlternativeEstimateFeeParams string `json:"alternative_estimate_fee_params,omitempty"`
+	FiatRates                    string `json:"fiat_rates,omitempty"`
+	FiatRatesParams              string `json:"fiat_rates_params,omitempty"`
 	MinimumCoinbaseConfirmations int    `json:"minimumCoinbaseConfirmations,omitempty"`
 }
 
