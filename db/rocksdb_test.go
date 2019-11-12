@@ -1,4 +1,4 @@
-// +build unittest
+// build unittest
 
 package db
 
@@ -1079,20 +1079,37 @@ func TestRocksTickers(t *testing.T) {
 	})
 	defer closeAndDestroyRocksDB(t, d)
 
+	// Test valid formats
+	for _, date := range []string{"20190130", "2019013012", "201901301250", "20190130125030"} {
+		_, err := convertDate(date)
+		if err != nil {
+			t.Errorf("%v", err)
+		}
+	}
+
+	// Test invalid formats
+	for _, date := range []string{"01102019", "10201901", "", "abc", "20190130xxx"} {
+		_, err := convertDate(date)
+		if err == nil {
+			t.Errorf("Wrongly-formatted date \"%v\" marked as valid!", date)
+		}
+	}
+
+	// Test storing & finding tickers
 	key1 := time.Now()
 	time.Sleep(1 * time.Second)
 	key2 := time.Now()
 	time.Sleep(1 * time.Second)
 	key3 := time.Now()
 
-	d.StoreTicker(key2, "aaa")
-	d.StoreTicker(key3, "bbb")
+	d.StoreTicker(key2, "{ticker data 1}")
+	d.StoreTicker(key3, "{ticker data 2}")
 
 	_, val, err := d.FindTicker(key1) // should find the closest key (key2)
 	if err != nil {
 		t.Errorf("TestRocksTickers err: %+v", err)
 	}
-	if val == nil {
+	if val == "" {
 		t.Errorf("Empty value")
 	}
 }

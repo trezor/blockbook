@@ -30,6 +30,9 @@ const maxAddrDescLen = 1024
 // when doing huge scan, it is better to close it and reopen from time to time to free the resources
 const refreshIterator = 5000000
 
+// CoinGeckoTimeFormat is a format string for storing FiatRates timestamps in rocksdb
+const CoinGeckoTimeFormat = "20060102030405" // YYYYMMDDhhmmss
+
 // RepairRocksDB calls RocksDb db repair function
 func RepairRocksDB(name string) error {
 	glog.Infof("rocksdb: repair")
@@ -147,12 +150,21 @@ func (d *RocksDB) closeDB() error {
 	return nil
 }
 
+// convertDate checks if the date is in correct format and returns the Time object
+// possible formats: YYYYMMDDhhmmss, YYYYMMDDhhmm, YYYYMMDDhh, YYYYMMDD
+func convertDate(date string) (*time.Time, error) {
+	for format := CoinGeckoTimeFormat; len(format) >= 8; format = format[:len(format)-2] {
+		convertedDate, err := time.Parse(format, date)
+		if err == nil {
+			return &convertedDate, nil
+		}
+	}
+	return nil, errors.New("Date " + date + " does not match any of available formats")
+}
+
 // StoreTicker stores ticker data at the specified time
 func (d *RocksDB) StoreTicker(tickerTime time.Time, tickerData string) error {
-	timeFormat := "20060102030405" // YYYYMMDDhhmmss
-	tickerTimeFormatted := tickerTime.Format(timeFormat)
-	glog.Infof("Storing ticker: %v (%v)\n", tickerTimeFormatted, tickerData)
-
+	tickerTimeFormatted := tickerTime.Format(CoinGeckoTimeFormat)
 	err := d.db.PutCF(d.wo, d.cfh[cfFiatRates], []byte(tickerTimeFormatted), []byte(tickerData))
 	if err != nil {
 		glog.Error("Error storing ticker: ", err)
@@ -162,24 +174,38 @@ func (d *RocksDB) StoreTicker(tickerTime time.Time, tickerData string) error {
 }
 
 // FindTicker gets FiatRates data closest to the specified timestamp
-func (d *RocksDB) FindTicker(tickerTime time.Time) ([]byte, []byte, error) {
-	timeFormat := "20060102030405" // YYYYMMDDhhmmss
-	tickerTimeFormatted := tickerTime.Format(timeFormat)
-	glog.Infof("Getting ticker: %v\n", tickerTimeFormatted)
-
+func (d *RocksDB) FindTicker(tickerTime time.Time) (string, string, error) {
+	tickerTimeFormatted := tickerTime.Format(CoinGeckoTimeFormat)
 	it := d.db.NewIteratorCF(d.ro, d.cfh[cfFiatRates])
 	defer it.Close()
 
-	var val []byte
-	var key []byte
+	var key, val string
 	for it.Seek([]byte(tickerTimeFormatted)); it.Valid(); it.Next() {
-		key = it.Key().Data()
-		val = it.Value().Data()
+		key = string(it.Key().Data())
+		val = string(it.Value().Data())
 		break
 	}
 	if err := it.Err(); err != nil {
-		glog.Error("Iterator error: ", err)
-		return nil, nil, err
+		glog.Error("FindTicker Iterator error: ", err)
+		return "", "", err
+	}
+	return key, val, nil
+}
+
+// FindLastTicker gets the last FiatRates record
+func (d *RocksDB) FindLastTicker() (string, string, error) {
+	it := d.db.NewIteratorCF(d.ro, d.cfh[cfFiatRates])
+	defer it.Close()
+
+	var key, val string
+	for it.SeekToLast(); it.Valid(); it.Next() {
+		key = string(it.Key().Data())
+		val = string(it.Value().Data())
+		break
+	}
+	if err := it.Err(); err != nil {
+		glog.Error("FindLastTicker Iterator error: ", err)
+		return "", "", err
 	}
 	return key, val, nil
 }
