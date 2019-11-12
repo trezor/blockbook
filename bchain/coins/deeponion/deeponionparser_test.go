@@ -103,7 +103,6 @@ func init() {
 				N:        0,
 				ScriptPubKey: bchain.ScriptPubKey{
 					Hex: "",
-					Addresses: []string{},
 				},
 			},
 			{
