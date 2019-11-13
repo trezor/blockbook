@@ -186,6 +186,7 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 	serveMux.HandleFunc(path+"api/v2/sendtx/", s.jsonHandler(s.apiSendTx, apiV2))
 	serveMux.HandleFunc(path+"api/v2/estimatefee/", s.jsonHandler(s.apiEstimateFee, apiV2))
 	serveMux.HandleFunc(path+"api/v2/feestats/", s.jsonHandler(s.apiFeeStats, apiV2))
+	serveMux.HandleFunc(path+"api/v2/tickers/", s.jsonHandler(s.apiTickers, apiV2))
 	// socket.io interface
 	serveMux.Handle(path+"socket.io/", s.socketio.GetHandler())
 	// websocket interface
@@ -1090,6 +1091,57 @@ func (s *PublicServer) apiSendTx(r *http.Request, apiVersion int) (interface{}, 
 
 type resultEstimateFeeAsString struct {
 	Result string `json:"result"`
+}
+
+type resultTickersAsString struct {
+	Timestamp string `json:"timestamp"`
+	Rates     string `json:"rates"`
+}
+
+// apiTickers returns CoinGecko ticker prices for the specified block or date.
+func (s *PublicServer) apiTickers(r *http.Request, apiVersion int) (interface{}, error) {
+	params := strings.Split(r.URL.Path, "/")
+	currency := params[len(params)-1]
+	ticker := &db.CoinGeckoTicker{}
+	var err error
+
+	if currency == "" {
+		return nil, api.NewAPIError("Currency not specified.", true)
+	}
+
+	if block := r.URL.Query().Get("block"); block != "" {
+		// Get tickers for specified block
+		bi, err := s.api.GetBlockInfoFromBlockID(block)
+		if err != nil {
+			if err == bchain.ErrBlockNotFound {
+				return nil, api.NewAPIError(fmt.Sprintf("Block %v not found", block), true)
+			}
+			return nil, api.NewAPIError(fmt.Sprintf("Block %v not found, error: %v", block, err), true)
+		}
+		dbi := &db.BlockInfo{Time: bi.Time}
+		ticker, err = s.db.FindTicker(time.Unix(dbi.Time, 0))
+	} else if date := r.URL.Query().Get("date"); date != "" {
+		// Get tickers for specified date
+		date, err := db.ConvertDate(date)
+		if err != nil {
+			possibleFormats := "Possible formats are: YYYYMMDDhhmmss, YYYYMMDDhhmm, YYYYMMDDhh, YYYYMMDD"
+			return nil, api.NewAPIError(fmt.Sprintf("Error converting date \"%v\": %v. "+possibleFormats, date, err), true)
+		}
+		ticker, err = s.db.FindTicker(*date)
+	} else {
+		// No parameters - get the latest available ticker
+		ticker, err = s.db.FindLastTicker()
+	}
+	if err != nil {
+		return nil, api.NewAPIError(fmt.Sprintf("Error finding ticker: %v", err), true)
+	}
+
+	result := &resultTickersAsString{
+		Timestamp: ticker.Timestamp,
+		Rates:     ticker.Rates,
+	}
+	ret, _ := json.Marshal(result) // TODO: should I handle error here?
+	return ret, err
 }
 
 func (s *PublicServer) apiEstimateFee(r *http.Request, apiVersion int) (interface{}, error) {
