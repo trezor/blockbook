@@ -972,7 +972,7 @@ func (w *Worker) GetBlocks(page int, blocksOnPage int) (*Blocks, error) {
 	return r, nil
 }
 
-func (w *Worker) getBlockInfoFromBlockID(bid string) (*bchain.BlockInfo, error) {
+func (w *Worker) GetBlockInfoFromBlockID(bid string) (*bchain.BlockInfo, error) {
 	// try to decide if passed string (bid) is block height or block hash
 	// if it's a number, must be less than int32
 	var hash string
@@ -1002,7 +1002,7 @@ func (w *Worker) GetFeeStats(bid string) (*FeeStats, error) {
 	}
 
 	start := time.Now()
-	bi, err := w.getBlockInfoFromBlockID(bid)
+	bi, err := w.GetBlockInfoFromBlockID(bid)
 	if err != nil {
 		if err == bchain.ErrBlockNotFound {
 			return nil, NewAPIError("Block not found", true)
@@ -1105,7 +1105,7 @@ func (w *Worker) GetBlock(bid string, page int, txsOnPage int) (*Block, error) {
 	if page < 0 {
 		page = 0
 	}
-	bi, err := w.getBlockInfoFromBlockID(bid)
+	bi, err := w.GetBlockInfoFromBlockID(bid)
 	if err != nil {
 		if err == bchain.ErrBlockNotFound {
 			return nil, NewAPIError("Block not found", true)
