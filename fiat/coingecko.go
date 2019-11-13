@@ -11,7 +11,7 @@ import (
 	"github.com/golang/glog"
 )
 
-// CoingeckoDownloader TODO
+// CoingeckoDownloader stores CoinGecko API parameters
 type CoingeckoDownloader struct {
 	url                string
 	coin               string
@@ -43,14 +43,14 @@ func NewCoingeckoDownloader(db *db.RocksDB, params string, test bool) (*Coingeck
 	cg.httpTimeoutSeconds = 15 * time.Second
 	cg.url = cgParams.URL
 	cg.coin = cgParams.Coin
-	cg.periodSeconds = cgParams.PeriodSeconds // time period for syncing the latest market data
+	cg.periodSeconds = cgParams.PeriodSeconds // Time period for syncing the latest market data
 	cg.db = db
 	cg.test = test
 	return cg, err
 }
 
 // GetMarketData retrieves the response from coingecko API at the specified date.
-// If timestamp is nil, fetch the current market data.
+// If timestamp is nil, it fetches the latest market data available.
 func (cg *CoingeckoDownloader) GetMarketData(timestamp *time.Time) ([]byte, error) {
 	requestURL := cg.url + "/coins/" + cg.coin
 	if timestamp != nil {
@@ -102,7 +102,7 @@ func (cg *CoingeckoDownloader) GetMarketData(timestamp *time.Time) ([]byte, erro
 func (cg *CoingeckoDownloader) GetData(timestamp *time.Time) (string, error) {
 	bodyBytes, err := cg.GetMarketData(timestamp)
 	if err != nil {
-		return "", err // TODO: wait and try again (N times)?
+		return "", err
 	}
 
 	type CoinGeckoResponse struct {
@@ -181,7 +181,7 @@ func (cg *CoingeckoDownloader) FindEarliestMarketData() (*time.Time, error) {
 func (cg *CoingeckoDownloader) SyncLatest() error {
 	period := time.Duration(cg.periodSeconds) * time.Second
 	if cg.test {
-		// use lesser period for tests
+		// Use lesser period for tests
 		period = time.Duration(2) * time.Second
 	}
 	timer := time.NewTimer(period)
@@ -189,6 +189,7 @@ func (cg *CoingeckoDownloader) SyncLatest() error {
 		currentTime := time.Now()
 		data, err := cg.GetData(nil)
 		if err != nil {
+			// Do not exit on GET error, log it, wait and try again
 			glog.Errorf("Sync GetData error: %v", err)
 			<-timer.C
 			timer.Reset(period)
