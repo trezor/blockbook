@@ -679,10 +679,14 @@ func initFiatRatesDownloader(db *db.RocksDB, configfile string) {
 		return
 	}
 	if config.FiatRates == "coingecko" {
-		coingecko, err := fiat.NewCoingeckoDownloader(db, config.FiatRatesParams)
+		coingecko, err := fiat.NewCoingeckoDownloader(db, config.FiatRatesParams, false)
 		if err != nil {
-			glog.Errorf("NewCoingeckoDownloader error: %v", err)
+			glog.Errorf("NewCoingeckoDownloader Init error: %v", err)
+			return
 		}
-		go coingecko.Run()
+		err = go coingecko.Run()
+		if err != nil {
+			glog.Errorf("CoinGeckoDownloader Run error: %v", err)
+		}
 	}
 }
