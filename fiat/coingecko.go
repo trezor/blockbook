@@ -190,7 +190,9 @@ func (cg *CoingeckoDownloader) SyncLatest() error {
 		data, err := cg.GetData(nil)
 		if err != nil {
 			glog.Errorf("Sync GetData error: %v", err)
-			return err
+			<-timer.C
+			timer.Reset(period)
+			continue
 		}
 
 		err = cg.db.StoreTicker(currentTime, data)
@@ -198,12 +200,11 @@ func (cg *CoingeckoDownloader) SyncLatest() error {
 			glog.Errorf("Sync StoreTicker error for time %v", currentTime)
 			return err
 		}
-		<-timer.C
-		timer.Reset(period)
-
 		if cg.test {
 			break
 		}
+		<-timer.C
+		timer.Reset(period)
 	}
 	return nil
 }
