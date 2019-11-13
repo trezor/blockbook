@@ -1081,7 +1081,7 @@ func TestRocksTickers(t *testing.T) {
 
 	// Test valid formats
 	for _, date := range []string{"20190130", "2019013012", "201901301250", "20190130125030"} {
-		_, err := convertDate(date)
+		_, err := ConvertDate(date)
 		if err != nil {
 			t.Errorf("%v", err)
 		}
@@ -1089,7 +1089,7 @@ func TestRocksTickers(t *testing.T) {
 
 	// Test invalid formats
 	for _, date := range []string{"01102019", "10201901", "", "abc", "20190130xxx"} {
-		_, err := convertDate(date)
+		_, err := ConvertDate(date)
 		if err == nil {
 			t.Errorf("Wrongly-formatted date \"%v\" marked as valid!", date)
 		}
