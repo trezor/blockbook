@@ -1105,11 +1105,11 @@ func TestRocksTickers(t *testing.T) {
 	d.StoreTicker(key2, "{ticker data 1}")
 	d.StoreTicker(key3, "{ticker data 2}")
 
-	_, val, err := d.FindTicker(key1) // should find the closest key (key2)
+	ticker, err := d.FindTicker(key1) // should find the closest key (key2)
 	if err != nil {
 		t.Errorf("TestRocksTickers err: %+v", err)
 	}
-	if val == "" {
-		t.Errorf("Empty value")
+	if ticker.Rates == "" {
+		t.Errorf("Empty rates")
 	}
 }
