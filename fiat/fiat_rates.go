@@ -49,9 +49,44 @@ func NewFiatRatesDownloader(db *db.RocksDB, params string, test bool) (*RatesDow
 	return rd, err
 }
 
+// Run starts the FiatRates downloader. If there are tickers available, it continues from the last record.
+// If there are no tickers, it finds the earliest market data available on API and downloads historical data.
+// When historical data is downloaded, it continues to fetch the latest ticker prices.
+func (rd *RatesDownloader) Run() error {
+	var timestamp *time.Time
+
+	// Check if there are any tickers stored in database
+	ticker, err := rd.db.FindLastTicker()
+	if err != nil {
+		glog.Errorf("RatesDownloader FindTicker error: %v", err)
+		return err
+	}
+
+	if len(ticker.Rates) == 0 {
+		// If no tickers found, start downloading from the beginning
+		timestamp, err = rd.findEarliestMarketData()
+		if err != nil {
+			glog.Errorf("Error looking up earliest market data: %v", err)
+			return err
+		}
+		if rd.test {
+			// When testing, start from 2 days ago instead of the beginning (2013)
+			*timestamp = time.Now().Add(time.Duration(-24*2) * time.Hour)
+		}
+	} else {
+		// If found, continue downloading data from the last available record
+		timestamp, err = db.ConvertDate(ticker.Timestamp)
+		if err != nil {
+			glog.Errorf("Timestamp conversion error: %v", err)
+			return err
+		}
+	}
+	return rd.sync(timestamp)
+}
+
 // GetMarketData retrieves the response from fiatRates API at the specified date.
 // If timestamp is nil, it fetches the latest market data available.
-func (rd *RatesDownloader) GetMarketData(timestamp *time.Time) ([]byte, error) {
+func (rd *RatesDownloader) getMarketData(timestamp *time.Time) ([]byte, error) {
 	requestURL := rd.url + "/coins/" + rd.coin
 	if timestamp != nil {
 		requestURL += "/history"
@@ -99,8 +134,8 @@ func (rd *RatesDownloader) GetMarketData(timestamp *time.Time) ([]byte, error) {
 
 // GetData gets fiat rates from API at the specified date and returns JSON string.
 // If timestamp is nil, it will download the latest market data.
-func (rd *RatesDownloader) GetData(timestamp *time.Time) (string, error) {
-	bodyBytes, err := rd.GetMarketData(timestamp)
+func (rd *RatesDownloader) getData(timestamp *time.Time) (string, error) {
+	bodyBytes, err := rd.getMarketData(timestamp)
 	if err != nil {
 		return "", err
 	}
@@ -127,8 +162,8 @@ func (rd *RatesDownloader) GetData(timestamp *time.Time) (string, error) {
 }
 
 // MarketDataExists checks if there's data available for the specific timestamp.
-func (rd *RatesDownloader) MarketDataExists(timestamp *time.Time) (bool, error) {
-	resp, err := rd.GetMarketData(timestamp)
+func (rd *RatesDownloader) marketDataExists(timestamp *time.Time) (bool, error) {
+	resp, err := rd.getMarketData(timestamp)
 	if err != nil {
 		glog.Error("Error getting market data: ", err)
 		return false, err
@@ -148,7 +183,7 @@ func (rd *RatesDownloader) MarketDataExists(timestamp *time.Time) (bool, error) 
 }
 
 // FindEarliestMarketData uses binary search to find the oldest market data available on API.
-func (rd *RatesDownloader) FindEarliestMarketData() (*time.Time, error) {
+func (rd *RatesDownloader) findEarliestMarketData() (*time.Time, error) {
 	minDateString := "03-01-2009"
 	minDate, err := time.Parse(rd.timeFormat, minDateString)
 	if err != nil {
@@ -158,7 +193,7 @@ func (rd *RatesDownloader) FindEarliestMarketData() (*time.Time, error) {
 	maxDate := time.Now().Add(time.Duration(-24) * time.Hour) // today's historical tickers may not be ready yet, so set to yesterday
 	currentDate := maxDate
 	for {
-		dataExists, err := rd.MarketDataExists(&currentDate)
+		dataExists, err := rd.marketDataExists(&currentDate)
 		if err != nil {
 			return nil, err
 		}
@@ -178,7 +213,7 @@ func (rd *RatesDownloader) FindEarliestMarketData() (*time.Time, error) {
 }
 
 // SyncLatest downloads the latest data every rd.PeriodSeconds
-func (rd *RatesDownloader) SyncLatest() error {
+func (rd *RatesDownloader) syncLatest() error {
 	period := time.Duration(rd.periodSeconds) * time.Second
 	if rd.test {
 		// Use lesser period for tests
@@ -187,7 +222,7 @@ func (rd *RatesDownloader) SyncLatest() error {
 	timer := time.NewTimer(period)
 	for {
 		currentTime := time.Now()
-		data, err := rd.GetData(nil)
+		data, err := rd.getData(nil)
 		if err != nil {
 			// Do not exit on GET error, log it, wait and try again
 			glog.Errorf("Sync GetData error: %v", err)
@@ -212,11 +247,11 @@ func (rd *RatesDownloader) SyncLatest() error {
 
 // Sync downloads all the historical data since the specified timestamp till today,
 // then continues to download the latest rates
-func (rd *RatesDownloader) Sync(timestamp *time.Time) error {
+func (rd *RatesDownloader) sync(timestamp *time.Time) error {
 	period := time.Duration(1) * time.Second
 	timer := time.NewTimer(period)
 	for {
-		data, err := rd.GetData(timestamp)
+		data, err := rd.getData(timestamp)
 		if err != nil {
 			glog.Errorf("SyncHistorical GetData error: %v", err)
 			return err
@@ -237,40 +272,5 @@ func (rd *RatesDownloader) Sync(timestamp *time.Time) error {
 		<-timer.C
 		timer.Reset(period)
 	}
-	return rd.SyncLatest()
-}
-
-// Run starts the FiatRates downloader. If there are tickers available, it continues from the last record.
-// If there are no tickers, it finds the earliest market data available on API and downloads historical data.
-// When historical data is downloaded, it continues to fetch the latest ticker prices.
-func (rd *RatesDownloader) Run() error {
-	var timestamp *time.Time
-
-	// Check if there are any tickers stored in database
-	ticker, err := rd.db.FindLastTicker()
-	if err != nil {
-		glog.Errorf("RatesDownloader FindTicker error: %v", err)
-		return err
-	}
-
-	if len(ticker.Rates) == 0 {
-		// If no tickers found, start downloading from the beginning
-		timestamp, err = rd.FindEarliestMarketData()
-		if err != nil {
-			glog.Errorf("Error looking up earliest market data: %v", err)
-			return err
-		}
-		if rd.test {
-			// When testing, start from 2 days ago instead of the beginning (2013)
-			*timestamp = time.Now().Add(time.Duration(-24*2) * time.Hour)
-		}
-	} else {
-		// If found, continue downloading data from the last available record
-		timestamp, err = db.ConvertDate(ticker.Timestamp)
-		if err != nil {
-			glog.Errorf("Timestamp conversion error: %v", err)
-			return err
-		}
-	}
-	return rd.Sync(timestamp)
+	return rd.syncLatest()
 }
