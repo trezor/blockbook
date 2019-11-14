@@ -6,10 +6,10 @@
     "alias": "verge"
   },
   "ports": {
-    "backend_rpc": 8042,
-    "backend_message_queue": 38342,
-    "blockbook_internal": 9042,
-    "blockbook_public": 9142
+    "backend_rpc": 8054,
+    "backend_message_queue": 38354,
+    "blockbook_internal": 9054,
+    "blockbook_public": 9154
   },
   "ipc": {
     "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
