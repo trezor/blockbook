@@ -675,7 +675,7 @@ func initFiatRatesDownloader(db *db.RocksDB, configfile string) {
 	}
 
 	if config.FiatRates == "" || config.FiatRatesParams == "" {
-		glog.Infof("Error parsing FiatRates config from %v - empty parameter(s)", configfile)
+		glog.Infof("FiatRates config (%v) is empty, so the functionality is disabled.", configfile)
 	}
 	if config.FiatRates == "coingecko" {
 		fiatRates, err := fiat.NewFiatRatesDownloader(db, config.FiatRatesParams, false)
