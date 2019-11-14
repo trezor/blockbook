@@ -675,18 +675,14 @@ func initFiatRatesDownloader(db *db.RocksDB, configfile string) {
 	}
 
 	if config.FiatRates == "" || config.FiatRatesParams == "" {
-		glog.Errorf("Error parsing FiatRates config from %v - empty parameter(s)", configfile)
-		return
+		glog.Infof("Error parsing FiatRates config from %v - empty parameter(s)", configfile)
 	}
 	if config.FiatRates == "coingecko" {
-		coingecko, err := fiat.NewCoingeckoDownloader(db, config.FiatRatesParams, false)
+		fiatRates, err := fiat.NewFiatRatesDownloader(db, config.FiatRatesParams, false)
 		if err != nil {
-			glog.Errorf("NewCoingeckoDownloader Init error: %v", err)
+			glog.Errorf("NewFiatRatesDownloader Init error: %v", err)
 			return
 		}
-		err = go coingecko.Run()
-		if err != nil {
-			glog.Errorf("CoinGeckoDownloader Run error: %v", err)
-		}
+		go fiatRates.Run()
 	}
 }

@@ -1,4 +1,4 @@
-//build unittest
+// +build unittest
 
 package fiat
 
@@ -61,7 +61,7 @@ func bitcoinTestnetParser() *btc.BitcoinParser {
 		&btc.Configuration{BlockAddressesToKeep: 1})
 }
 
-func TestCoinGecko(t *testing.T) {
+func TestFiatRates(t *testing.T) {
 	d, _, tmp := setupRocksDB(t, &testBitcoinParser{
 		BitcoinParser: bitcoinTestnetParser(),
 	})
@@ -72,12 +72,12 @@ func TestCoinGecko(t *testing.T) {
     "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"bitcoin\", \"periodSeconds\": 60}"
 	}`
 
-	type coinGeckoParams struct {
+	type fiatRatesConfig struct {
 		FiatRates       string `json:"fiat_rates"`
 		FiatRatesParams string `json:"fiat_rates_params"`
 	}
 
-	var config coinGeckoParams
+	var config fiatRatesConfig
 	err := json.Unmarshal([]byte(configJSON), &config)
 	if err != nil {
 		t.Errorf("Error parsing config: %v", err)
@@ -87,15 +87,14 @@ func TestCoinGecko(t *testing.T) {
 		t.Errorf("Error parsing FiatRates config - empty parameter")
 		return
 	}
-	var coingecko *CoingeckoDownloader
-	coingecko, err = NewCoingeckoDownloader(d, config.FiatRatesParams, true)
+	fiatRates, err := NewFiatRatesDownloader(d, config.FiatRatesParams, true)
 	if err != nil {
-		t.Errorf("Coingecko init error: %v\n", err)
+		t.Errorf("FiatRates init error: %v\n", err)
 	}
 	if config.FiatRates == "coingecko" {
-		err = coingecko.Run()
+		err = fiatRates.Run()
 		if err != nil {
-			t.Errorf("Error running CoinGeckoDownloader: %v", err)
+			t.Errorf("Error running FiatRatesDownloader: %v", err)
 		}
 	}
 }
