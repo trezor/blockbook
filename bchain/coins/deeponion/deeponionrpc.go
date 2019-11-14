@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 
 	"github.com/golang/glog"
+	"github.com/juju/errors"
 )
 
 // DeepOnionRPC is an interface to JSON-RPC bitcoind service.
@@ -56,3 +57,48 @@ func (b *DeepOnionRPC) Initialize() error {
 
 	return nil
 }
+
+// GetBlock returns block with given hash.
+func (s *DeepOnionRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
+        var err error
+        if hash == "" && height > 0 {
+                hash, err = s.GetBlockHash(height)
+                if err != nil {
+                        return nil, err
+                }
+        }
+
+        glog.V(1).Info("rpc: getblock (verbosity=1) ", hash)
+
+        res := btc.ResGetBlockThin{}
+        req := btc.CmdGetBlock{Method: "getblock"}
+        req.Params.BlockHash = hash
+        req.Params.Verbosity = 1
+        err = s.Call(&req, &res)
+
+        if err != nil {
+                return nil, errors.Annotatef(err, "hash %v", hash)
+        }
+        if res.Error != nil {
+                return nil, errors.Annotatef(res.Error, "hash %v", hash)
+        }
+
+        txs := make([]bchain.Tx, 0, len(res.Result.Txids))
+        for _, txid := range res.Result.Txids {
+                tx, err := s.GetTransaction(txid)
+                if err != nil {
+                        if err == bchain.ErrTxNotFound {
+                                glog.Errorf("rpc: getblock: skipping transanction in block %s due error: %s", hash, err)
+                                continue
+                        }
+                        return nil, err
+                }
+                txs = append(txs, *tx)
+        }
+        block := &bchain.Block{
+                BlockHeader: res.Result.BlockHeader,
+                Txs:         txs,
+        }
+        return block, nil
+}
+
