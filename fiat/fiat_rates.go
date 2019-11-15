@@ -56,7 +56,7 @@ func (rd *RatesDownloader) Run() error {
 	var timestamp *time.Time
 
 	// Check if there are any tickers stored in database
-	ticker, err := rd.db.FindLastTicker()
+	ticker, err := rd.db.FiatRatesFindLastTicker()
 	if err != nil {
 		glog.Errorf("RatesDownloader FindTicker error: %v", err)
 		return err
@@ -75,11 +75,7 @@ func (rd *RatesDownloader) Run() error {
 		}
 	} else {
 		// If found, continue downloading data from the last available record
-		timestamp, err = db.ConvertDate(ticker.Timestamp)
-		if err != nil {
-			glog.Errorf("Timestamp conversion error: %v", err)
-			return err
-		}
+		timestamp = &ticker.Timestamp
 	}
 	return rd.sync(timestamp)
 }
@@ -134,15 +130,16 @@ func (rd *RatesDownloader) getMarketData(timestamp *time.Time) ([]byte, error) {
 
 // GetData gets fiat rates from API at the specified date and returns JSON string.
 // If timestamp is nil, it will download the latest market data.
-func (rd *RatesDownloader) getData(timestamp *time.Time) (string, error) {
+func (rd *RatesDownloader) getData(timestamp *time.Time) (*db.CurrencyRatesTicker, error) {
+	ticker := &db.CurrencyRatesTicker{Timestamp: time.Now()}
 	bodyBytes, err := rd.getMarketData(timestamp)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	type FiatRatesResponse struct {
 		MarketData struct {
-			Prices map[string]interface{} `json:"current_price"`
+			Prices map[string]float64 `json:"current_price"`
 		} `json:"market_data"`
 	}
 
@@ -150,15 +147,15 @@ func (rd *RatesDownloader) getData(timestamp *time.Time) (string, error) {
 	err = json.Unmarshal(bodyBytes, &data)
 	if err != nil {
 		glog.Errorf("Error parsing FiatRates response: %v", err)
-		return "", err
+		return nil, err
 	}
 
-	jsonString, err := json.Marshal(data.MarketData.Prices)
+	ticker.Rates = data.MarketData.Prices
 	if err != nil {
 		glog.Errorf("Error marshalling FiatRates prices: %v", err)
-		return "", err
+		return nil, err
 	}
-	return string(jsonString), nil
+	return ticker, nil
 }
 
 // MarketDataExists checks if there's data available for the specific timestamp.
@@ -221,8 +218,7 @@ func (rd *RatesDownloader) syncLatest() error {
 	}
 	timer := time.NewTimer(period)
 	for {
-		currentTime := time.Now()
-		data, err := rd.getData(nil)
+		ticker, err := rd.getData(nil)
 		if err != nil {
 			// Do not exit on GET error, log it, wait and try again
 			glog.Errorf("Sync GetData error: %v", err)
@@ -230,10 +226,9 @@ func (rd *RatesDownloader) syncLatest() error {
 			timer.Reset(period)
 			continue
 		}
-
-		err = rd.db.StoreTicker(currentTime, data)
+		err = rd.db.FiatRatesStoreTicker(ticker)
 		if err != nil {
-			glog.Errorf("Sync StoreTicker error for time %v", currentTime)
+			glog.Errorf("Sync StoreTicker error %v", err)
 			return err
 		}
 		if rd.test {
@@ -251,13 +246,13 @@ func (rd *RatesDownloader) sync(timestamp *time.Time) error {
 	period := time.Duration(1) * time.Second
 	timer := time.NewTimer(period)
 	for {
-		data, err := rd.getData(timestamp)
+		ticker, err := rd.getData(timestamp)
 		if err != nil {
 			glog.Errorf("SyncHistorical GetData error: %v", err)
 			return err
 		}
 
-		err = rd.db.StoreTicker(*timestamp, data)
+		err = rd.db.FiatRatesStoreTicker(ticker)
 		if err != nil {
 			glog.Errorf("SyncHistorical error storing ticker for %v", timestamp)
 			return err

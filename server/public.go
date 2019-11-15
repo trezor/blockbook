@@ -1119,15 +1119,15 @@ func (s *PublicServer) apiTickers(r *http.Request, apiVersion int) (interface{},
 			return nil, api.NewAPIError(fmt.Sprintf("Block %v not found, error: %v", block, err), true)
 		}
 		dbi := &db.BlockInfo{Time: bi.Time}
-		ticker, err = s.db.FindTicker(time.Unix(dbi.Time, 0))
+		ticker, err = s.db.FiatRatesFindTicker(time.Unix(dbi.Time, 0))
 	} else if date := r.URL.Query().Get("date"); date != "" {
 		// Get tickers for specified date
-		date, err := db.ConvertDate(date)
+		date, err := db.FiatRatesConvertDate(date)
 		if err != nil {
 			possibleFormats := "Possible formats are: YYYYMMDDhhmmss, YYYYMMDDhhmm, YYYYMMDDhh, YYYYMMDD"
 			return nil, api.NewAPIError(fmt.Sprintf("Error converting date \"%v\": %v. "+possibleFormats, date, err), true)
 		}
-		ticker, err = s.db.FindTicker(*date)
+		ticker, err = s.db.FiatRatesFindTicker(*date)
 	} else {
 		// No parameters - get the latest available ticker
 		ticker, err = s.db.FindLastTicker()

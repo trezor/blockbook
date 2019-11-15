@@ -1081,7 +1081,7 @@ func TestRocksTickers(t *testing.T) {
 
 	// Test valid formats
 	for _, date := range []string{"20190130", "2019013012", "201901301250", "20190130125030"} {
-		_, err := ConvertDate(date)
+		_, err := FiatRatesConvertDate(date)
 		if err != nil {
 			t.Errorf("%v", err)
 		}
@@ -1089,27 +1089,54 @@ func TestRocksTickers(t *testing.T) {
 
 	// Test invalid formats
 	for _, date := range []string{"01102019", "10201901", "", "abc", "20190130xxx"} {
-		_, err := ConvertDate(date)
+		_, err := FiatRatesConvertDate(date)
 		if err == nil {
 			t.Errorf("Wrongly-formatted date \"%v\" marked as valid!", date)
 		}
 	}
 
 	// Test storing & finding tickers
-	key1 := time.Now()
+	key := time.Now()
 	time.Sleep(1 * time.Second)
-	key2 := time.Now()
+
+	ticker1 := &CurrencyRatesTicker{
+		time.Now(),
+		map[string]float64{
+			"usd": 20000,
+		},
+	}
+	ts := ticker1.Timestamp
+	ticker1.Timestamp = time.Date(ts.Year(), ts.Month(), ts.Day(), ts.Hour(), ts.Minute(), ts.Second(), 0, ts.Location()) // strip ms from the timestamp for exact match
+
 	time.Sleep(1 * time.Second)
-	key3 := time.Now()
+	ticker2 := &CurrencyRatesTicker{
+		time.Now(),
+		map[string]float64{
+			"usd": 20000,
+		},
+	}
+	ts = ticker2.Timestamp
+	ticker2.Timestamp = time.Date(ts.Year(), ts.Month(), ts.Day(), ts.Hour(), ts.Minute(), ts.Second(), 0, ts.Location())
 
-	d.StoreTicker(key2, "{ticker data 1}")
-	d.StoreTicker(key3, "{ticker data 2}")
+	d.FiatRatesStoreTicker(ticker1)
+	d.FiatRatesStoreTicker(ticker2)
 
-	ticker, err := d.FindTicker(key1) // should find the closest key (key2)
+	ticker, err := d.FiatRatesFindTicker(&key) // should find the closest key (ticker1)
 	if err != nil {
 		t.Errorf("TestRocksTickers err: %+v", err)
-	}
-	if ticker.Rates == "" {
+	} else if ticker.Rates == nil {
 		t.Errorf("Empty rates")
+	} else if ticker.Timestamp != ticker1.Timestamp.UTC() {
+		t.Errorf("Incorrect ticker found. Expected: %v, found: %v", ticker1.Timestamp.UTC(), ticker.Timestamp)
 	}
+
+	ticker, err = d.FiatRatesFindLastTicker() // should find the last key (ticker2)
+	if err != nil {
+		t.Errorf("TestRocksTickers err: %+v", err)
+	} else if ticker.Rates == nil {
+		t.Errorf("Empty rates")
+	} else if ticker.Timestamp != ticker2.Timestamp.UTC() {
+		t.Errorf("Incorrect ticker found. Expected: %v, found: %v", ticker2.Timestamp.UTC(), ticker.Timestamp)
+	}
+
 }
