@@ -102,3 +102,8 @@ func (s *DeepOnionRPC) GetBlock(hash string, height uint32) (*bchain.Block, erro
         return block, nil
 }
 
+// GetTransactionForMempool returns a transaction by the transaction ID.
+// It could be optimized for mempool, i.e. without block time and confirmations
+func (s *DeepOnionRPC) GetTransactionForMempool(txid string) (*bchain.Tx, error) {
+        return s.GetTransaction(txid)
+}
