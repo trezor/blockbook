@@ -23,9 +23,9 @@
     "package_revision": "satoshilabs-1",
     "system_user": "verge",
     "version": "6.0",
-    "binary_url": "https://github.com/vergecurrency/VERGE/releases/download/untagged-dfd3b5b116116d330bc7/verge-6.0.0-x86_64-linux-gnu.tar.gz",
+    "binary_url": "https://github.com/vergecurrency/VERGE/releases/download/v6.0.0/verge-6.0.0-x86_64-linux-gnu.tar.gz",
     "verification_type": "sha512",
-    "verification_source": "fda540cb90fa49ecdd74cdd686518f5b95ed8faab885a9107421e9f61fa3a2ca",
+    "verification_source": "c9d3fbce999a88d8a484248fa67df9b0e566aa79e57c05a5a7dae4e4443544dd",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
       "bin/verge-qt"
