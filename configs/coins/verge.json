@@ -24,7 +24,7 @@
     "system_user": "verge",
     "version": "6.0",
     "binary_url": "https://github.com/vergecurrency/VERGE/releases/download/v6.0.0/verge-6.0.0-x86_64-linux-gnu.tar.gz",
-    "verification_type": "sha512",
+    "verification_type": "sha256",
     "verification_source": "c9d3fbce999a88d8a484248fa67df9b0e566aa79e57c05a5a7dae4e4443544dd",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
