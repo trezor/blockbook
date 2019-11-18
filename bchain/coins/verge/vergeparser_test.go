@@ -87,18 +87,17 @@ var (
 func init() {
 	testTx1 = bchain.Tx{
 		Hex:       "01000000015952b77fedb7233936a48df90e5423d62539efcd3f61a2466501d6ca26554d5e000000006b483045022100fad176fc354e976e0250ca880085f98c7072d5ccd2978d462f981c7c14495a9102207e60e2fa7b58991909f7528aaf3efb4acc5000da299b84b5d7b065b2ef1a2ac601210322e516129a8e55c043a7ac1d01f3c8fc192b88c32f03746f558432fe6a601e05ffffffff0217930054020000001976a914d9eff329b03348487fb9688a77c6b8081794fd2288ac29a9750f0a0000001976a914ad554bde320ae4b3d755ec32e706d8b327ecdd5688acc0cf6a00",
-		Blocktime: 1532239774,
-		Txid:      "0dcf2530419b9ef525a69f6a15e4d699be1dc9a4ac643c9581b6c57acf25eabf",
-		LockTime:  7000000,
+		Blocktime: 1574116520,
+		Txid:      "f27ed64e32e3796c2797e17de233483bea579940a9a2a3e2178a7712da62d9d4",
+		LockTime:  3608595,
 		Version:   1,
 		Vin: []bchain.Vin{
 			{
 				ScriptSig: bchain.ScriptSig{
-					Hex: "483045022100fad176fc354e976e0250ca880085f98c7072d5ccd2978d462f981c7c14495a9102207e60e2fa7b58991909f7528aaf3efb4acc5000da299b84b5d7b065b2ef1a2ac601210322e516129a8e55c043a7ac1d01f3c8fc192b88c32f03746f558432fe6a601e05",
-				},
-				Txid:     "5e4d5526cad6016546a2613fcdef3925d623540ef98da4363923b7ed7fb75259",
-				Vout:     0,
-				Sequence: 4294967295,
+				Hex: "47304402201350850167a4e18c4b28867aca9c35250ff6f8b3e830c26a1e0b747c1a28f73c0220188243adc5034dc27c6b50a1f20590168b068c4407cd2a5c7875f4f4c7a2c73b012102cd39c0fabc1e5ad696afb7d8df37d128810662358600280f535572b81c3fa24c",
+				Txid:     "746d8cfa0e6acfc500c3246d098218d0e59de2b765e6d174d0108579b24dfd55",
+				Vout:     1,
+				Sequence: 4294967294,
 			},
 		},
 		Vout: []bchain.Vout{
@@ -106,9 +105,9 @@ func init() {
 				ValueSat: *big.NewInt(9999258391),
 				N:        0,
 				ScriptPubKey: bchain.ScriptPubKey{
-					Hex: "76a914d9eff329b03348487fb9688a77c6b8081794fd2288ac",
+					Hex: "76a914ce2809bbb7fedefa334740afc6b37b499880c2e488ac",
 					Addresses: []string{
-						"DR1Scto7rRpTCAyNY6DFhRsZgG2vZ6rxLx",
+						"DPw9hfaW4FJVE1Xy55NeUHNcukaAnnZLWj",
 					},
 				},
 			},
@@ -116,9 +115,9 @@ func init() {
 				ValueSat: *big.NewInt(43209042217),
 				N:        1,
 				ScriptPubKey: bchain.ScriptPubKey{
-					Hex: "76a914ad554bde320ae4b3d755ec32e706d8b327ecdd5688ac",
+					Hex: "76a9142c915b6cc7aafcc10cd5e81c3322a3e26a30144588ac",
 					Addresses: []string{
-						"DLwbcwUY5dwsdF9ezk8Uoga9V8eMB1Kb6B",
+						"D9CkQHjZa1qVSer2e1iUNNwskrGVTReNJG",
 					},
 				},
 			},
@@ -144,7 +143,7 @@ func Test_PackTx(t *testing.T) {
 			args: args{
 				tx:        testTx1,
 				height:    7000002,
-				blockTime: 1532239774,
+				blockTime: 1574116520,
 				parser:    NewVergeParser(GetChainParams("main"), &btc.Configuration{}),
 			},
 			want:    testTxPacked1,
