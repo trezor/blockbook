@@ -20,7 +20,6 @@ func TestMain(m *testing.M) {
 	os.Exit(c)
 }
 
-
 func Test_GetAddrDescFromAddress_Mainnet(t *testing.T) {
 	type args struct {
 		address string
@@ -191,7 +190,7 @@ func Test_UnpackTx(t *testing.T) {
 				return
 			}
 			if !reflect.DeepEqual(got, tt.want) {
-    			t.Errorf("unpackTx(2) got = %v, want %v", got, tt.want)
+				t.Errorf("unpackTx(2) got = %v, want %v", got, tt.want)
 			}
 			if got1 != tt.want1 {
 				t.Errorf("unpackTx(3) got1 = %v, want %v", got1, tt.want1)
