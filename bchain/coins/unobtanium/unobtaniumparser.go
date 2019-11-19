@@ -27,11 +27,6 @@ func init() {
 	// Mainnet address encoding magics
 	MainNetParams.PubKeyHashAddrID = []byte{130}
 	MainNetParams.ScriptHashAddrID = []byte{30}
-
-	err := chaincfg.Register(&MainNetParams)
-	if err != nil {
-		panic(err)
-	}
 }
 
 // UnobtaniumParser handle
@@ -44,7 +39,14 @@ func NewUnobtaniumParser(params *chaincfg.Params, c *btc.Configuration) *Unobtan
 	return &UnobtaniumParser{BitcoinParser: btc.NewBitcoinParser(params, c)}
 }
 
+// GetChainParams returns network parameters
 func GetChainParams(chain string) *chaincfg.Params {
+	if !chaincfg.IsRegistered(&MainNetParams) {
+		err := chaincfg.Register(&MainNetParams)
+		if err != nil {
+			panic(err)
+		}
+	}
 	switch chain {
 	default:
 		return &MainNetParams
