@@ -682,6 +682,9 @@ func (s *PublicServer) explorerXpub(w http.ResponseWriter, r *http.Request) (tpl
 	// do not allow txsOnPage and details to be changed by query params
 	address, err := s.api.GetXpubAddress(xpub, page, txsOnPage, api.AccountDetailsTxHistoryLight, filter, gap)
 	if err != nil {
+		if err == api.ErrUnsupportedXpub {
+			err = api.NewAPIError("XPUB functionality is not supported", true)
+		}
 		return errorTpl, nil, err
 	}
 	data := s.newTemplateData()
@@ -991,6 +994,9 @@ func (s *PublicServer) apiXpub(r *http.Request, apiVersion int) (interface{}, er
 	address, err = s.api.GetXpubAddress(xpub, page, pageSize, details, filter, gap)
 	if err == nil && apiVersion == apiV1 {
 		return s.api.AddressToV1(address), nil
+	}
+	if err == api.ErrUnsupportedXpub {
+		err = api.NewAPIError("XPUB functionality is not supported", true)
 	}
 	return address, err
 }
