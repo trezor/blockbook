@@ -38,14 +38,6 @@ func init() {
 	RegtestParams.PubKeyHashAddrID = []byte{111} // base58 prefix: m or n
 	RegtestParams.ScriptHashAddrID = []byte{196} // base58 prefix: 2
 	RegtestParams.Bech32HRPSegwit = "tvia"
-
-	err := chaincfg.Register(&MainNetParams)
-	if err == nil {
-		err = chaincfg.Register(&RegtestParams)
-	}
-	if err != nil {
-		panic(err)
-	}
 }
 
 // ViacoinParser handle
@@ -58,7 +50,18 @@ func NewViacoinParser(params *chaincfg.Params, c *btc.Configuration) *ViacoinPar
 	return &ViacoinParser{BitcoinParser: btc.NewBitcoinParser(params, c)}
 }
 
+// GetChainParams returns network parameters
 func GetChainParams(chain string) *chaincfg.Params {
+	if !chaincfg.IsRegistered(&MainNetParams) {
+		err := chaincfg.Register(&MainNetParams)
+		if err == nil {
+			err = chaincfg.Register(&RegtestParams)
+		}
+		if err != nil {
+			panic(err)
+		}
+	}
+
 	switch chain {
 	case "regtest":
 		return &RegtestParams
