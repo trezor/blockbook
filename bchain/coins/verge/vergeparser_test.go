@@ -32,14 +32,14 @@ func TestAddressToOutputScript_Mainnet(t *testing.T) {
 	}{
 		{
 			name:    "pubkeyhash1",
-			args:    args{address: "DFDe9ne77eEUKUijjG4EpDwW9vDxckGgHN"},
-			want:    "76a9146e8d4f7f0dfeb5d69b9a2cf914a1a2e276312b2188ac",
+			args:    args{address: "DPw9hfaW4FJVE1Xy55NeUHNcukaAnnZLWj"},
+			want:    "76a914ce2809bbb7fedefa334740afc6b37b499880c2e488ac",
 			wantErr: false,
 		},
 		{
 			name:    "pubkeyhash2",
-			args:    args{address: "DPUnoXeaSDnNtQTa7U3nEMTYBVgJ6wVgCh"},
-			want:    "76a914c92bc70927a752deb91cf0361dcdb60bdac6a1d588ac",
+			args:    args{address: "D9CkQHjZa1qVSer2e1iUNNwskrGVTReNJG"},
+			want:    "76a9142c915b6cc7aafcc10cd5e81c3322a3e26a30144588ac",
 			wantErr: false,
 		},
 		{
