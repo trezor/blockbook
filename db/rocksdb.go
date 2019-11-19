@@ -348,8 +348,11 @@ func (d *RocksDB) ConnectBlock(block *bchain.Block) error {
 	if err := d.storeAddresses(wb, block.Height, addresses); err != nil {
 		return err
 	}
-
-	return d.db.Write(d.wo, wb)
+	if err := d.db.Write(d.wo, wb); err != nil {
+		return err
+	}
+	d.is.AppendBlockTime(uint32(block.Time))
+	return nil
 }
 
 // Addresses index
@@ -1334,6 +1337,7 @@ func (d *RocksDB) DisconnectBlockRangeBitcoinType(lower uint32, higher uint32) e
 	}
 	err := d.db.Write(d.wo, wb)
 	if err == nil {
+		d.is.RemoveLastBlockTimes(int(higher-lower) + 1)
 		glog.Infof("rocksdb: blocks %d-%d disconnected", lower, higher)
 	}
 	return err
@@ -1448,6 +1452,32 @@ func (d *RocksDB) internalDeleteTx(wb *gorocksdb.WriteBatch, key []byte) {
 // internal state
 const internalStateKey = "internalState"
 
+func (d *RocksDB) loadBlockTimes() ([]uint32, error) {
+	var times []uint32
+	it := d.db.NewIteratorCF(d.ro, d.cfh[cfHeight])
+	defer it.Close()
+	counter := uint32(0)
+	time := uint32(0)
+	for it.SeekToFirst(); it.Valid(); it.Next() {
+		height := unpackUint(it.Key().Data())
+		if height > counter {
+			glog.Warning("gap in cfHeight: expecting ", counter, ", got ", height)
+			for ; counter < height; counter++ {
+				times = append(times, time)
+			}
+		}
+		counter++
+		info, err := d.unpackBlockInfo(it.Value().Data())
+		if err != nil {
+			return nil, err
+		}
+		time = uint32(info.Time)
+		times = append(times, time)
+	}
+	glog.Info("loaded ", len(times), " block times")
+	return times, nil
+}
+
 // LoadInternalState loads from db internal state or initializes a new one if not yet stored
 func (d *RocksDB) LoadInternalState(rpcCoin string) (*common.InternalState, error) {
 	val, err := d.db.GetCF(d.ro, d.cfh[cfDefault], []byte(internalStateKey))
@@ -1493,6 +1523,10 @@ func (d *RocksDB) LoadInternalState(rpcCoin string) (*common.InternalState, erro
 		}
 	}
 	is.DbColumns = nc
+	is.BlockTimes, err = d.loadBlockTimes()
+	if err != nil {
+		return nil, err
+	}
 	// after load, reset the synchronization data
 	is.IsSynchronized = false
 	is.IsMempoolSynchronized = false

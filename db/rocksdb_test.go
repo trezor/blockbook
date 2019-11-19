@@ -532,6 +532,10 @@ func TestRocksDB_Index_BitcoinType(t *testing.T) {
 	})
 	defer closeAndDestroyRocksDB(t, d)
 
+	if len(d.is.BlockTimes) != 0 {
+		t.Fatal("Expecting is.BlockTimes 0, got ", len(d.is.BlockTimes))
+	}
+
 	// connect 1st block - will log warnings about missing UTXO transactions in txAddresses column
 	block1 := dbtestdata.GetTestBitcoinTypeBlock1(d.chainParser)
 	if err := d.ConnectBlock(block1); err != nil {
@@ -539,12 +543,20 @@ func TestRocksDB_Index_BitcoinType(t *testing.T) {
 	}
 	verifyAfterBitcoinTypeBlock1(t, d, false)
 
+	if len(d.is.BlockTimes) != 1 {
+		t.Fatal("Expecting is.BlockTimes 1, got ", len(d.is.BlockTimes))
+	}
+
 	// connect 2nd block - use some outputs from the 1st block as the inputs and 1 input uses tx from the same block
 	block2 := dbtestdata.GetTestBitcoinTypeBlock2(d.chainParser)
 	if err := d.ConnectBlock(block2); err != nil {
 		t.Fatal(err)
 	}
 	verifyAfterBitcoinTypeBlock2(t, d)
+
+	if len(d.is.BlockTimes) != 2 {
+		t.Fatal("Expecting is.BlockTimes 1, got ", len(d.is.BlockTimes))
+	}
 
 	// get transactions for various addresses / low-high ranges
 	verifyGetTransactions(t, d, dbtestdata.Addr2, 0, 1000000, []txidIndex{
@@ -649,11 +661,19 @@ func TestRocksDB_Index_BitcoinType(t *testing.T) {
 		}
 	}
 
+	if len(d.is.BlockTimes) != 1 {
+		t.Fatal("Expecting is.BlockTimes 1, got ", len(d.is.BlockTimes))
+	}
+
 	// connect block again and verify the state of db
 	if err := d.ConnectBlock(block2); err != nil {
 		t.Fatal(err)
 	}
 	verifyAfterBitcoinTypeBlock2(t, d)
+
+	if len(d.is.BlockTimes) != 2 {
+		t.Fatal("Expecting is.BlockTimes 1, got ", len(d.is.BlockTimes))
+	}
 
 	// test public methods for address balance and tx addresses
 	ab, err := d.GetAddressBalance(dbtestdata.Addr5, AddressBalanceDetailUTXO)
@@ -744,6 +764,10 @@ func Test_BulkConnect_BitcoinType(t *testing.T) {
 		t.Fatal("DB not in DbStateInconsistent")
 	}
 
+	if len(d.is.BlockTimes) != 0 {
+		t.Fatal("Expecting is.BlockTimes 0, got ", len(d.is.BlockTimes))
+	}
+
 	if err := bc.ConnectBlock(dbtestdata.GetTestBitcoinTypeBlock1(d.chainParser), false); err != nil {
 		t.Fatal(err)
 	}
@@ -766,6 +790,10 @@ func Test_BulkConnect_BitcoinType(t *testing.T) {
 	}
 
 	verifyAfterBitcoinTypeBlock2(t, d)
+
+	if len(d.is.BlockTimes) != 225495 {
+		t.Fatal("Expecting is.BlockTimes 225495, got ", len(d.is.BlockTimes))
+	}
 }
 
 func Test_packBigint_unpackBigint(t *testing.T) {

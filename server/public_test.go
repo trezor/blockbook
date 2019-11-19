@@ -50,8 +50,13 @@ func setupRocksDB(t *testing.T, parser bchain.BlockChainParser) (*db.RocksDB, *c
 		t.Fatal(err)
 	}
 	d.SetInternalState(is)
+	block1 := dbtestdata.GetTestBitcoinTypeBlock1(parser)
+	// setup internal state BlockTimes
+	for i := uint32(0); i < block1.Height; i++ {
+		is.BlockTimes = append(is.BlockTimes, 0)
+	}
 	// import data
-	if err := d.ConnectBlock(dbtestdata.GetTestBitcoinTypeBlock1(parser)); err != nil {
+	if err := d.ConnectBlock(block1); err != nil {
 		t.Fatal(err)
 	}
 	block2 := dbtestdata.GetTestBitcoinTypeBlock2(parser)
@@ -610,7 +615,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`[{"blockTime":1521514800,"txs":1,"received":"12345","sent":"0","balance":"12345"},{"blockTime":1521594000,"txs":1,"received":"0","sent":"12345","balance":"0"}]`,
+				`[{"blockTime":1521514800,"txs":1,"received":"12345","sent":"0"},{"blockTime":1521594000,"txs":1,"received":"0","sent":"12345"}]`,
 			},
 		},
 		{
@@ -619,7 +624,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`[{"blockTime":1521514800,"txs":1,"received":"9876","sent":"0","balance":"9876"},{"blockTime":1521594000,"txs":1,"received":"9000","sent":"9876","balance":"9000"}]`,
+				`[{"blockTime":1521514800,"txs":1,"received":"9876","sent":"0"},{"blockTime":1521594000,"txs":1,"received":"9000","sent":"9876"}]`,
 			},
 		},
 		{

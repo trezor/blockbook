@@ -302,7 +302,6 @@ type BalanceHistory struct {
 	Txs         int     `json:"txs"`
 	ReceivedSat *Amount `json:"received"`
 	SentSat     *Amount `json:"sent"`
-	BalanceSat  *Amount `json:"balance"`
 }
 
 // Blocks is list of blocks with paging information

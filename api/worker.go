@@ -802,17 +802,26 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 }
 
 // GetBalanceHistory returns history of balance for given address
-func (w *Worker) GetBalanceHistory(address string) ([]BalanceHistory, error) {
-	var bh []BalanceHistory
-	var b BalanceHistory
-	var bi *db.BlockInfo
-	var balance big.Int
+func (w *Worker) GetBalanceHistory(address string, fromTime, toTime time.Time) ([]BalanceHistory, error) {
+	var bhs []BalanceHistory
+	bh := BalanceHistory{
+		SentSat:     &Amount{},
+		ReceivedSat: &Amount{},
+	}
 	start := time.Now()
 	addrDesc, _, err := w.getAddrDescAndNormalizeAddress(address)
 	if err != nil {
 		return nil, err
 	}
-	txs, err := w.getAddressTxids(addrDesc, false, &AddressFilter{Vout: AddressFilterVoutOff}, maxInt)
+	fromHeight := uint32(0)
+	toHeight := maxInt
+	if !fromTime.IsZero() {
+		fromHeight = w.is.GetBlockHeightOfTime(uint32(fromTime.Unix()))
+	}
+	if !toTime.IsZero() {
+		toHeight = int(w.is.GetBlockHeightOfTime(uint32(toTime.Unix())))
+	}
+	txs, err := w.getAddressTxids(addrDesc, false, &AddressFilter{Vout: AddressFilterVoutOff, FromHeight: fromHeight}, toHeight)
 	if err != nil {
 		return nil, err
 	}
@@ -826,19 +835,13 @@ func (w *Worker) GetBalanceHistory(address string) ([]BalanceHistory, error) {
 			continue
 		}
 		counted := false
-		if bi == nil || bi.Height != ta.Height {
-			bi, err = w.db.GetBlockInfo(ta.Height)
-			if err != nil {
-				return nil, err
+		time := int64(w.is.GetBlockTime(ta.Height))
+		hour := time - time%3600
+		if bh.Time != hour {
+			if bh.Txs != 0 {
+				bhs = append(bhs, bh)
 			}
-		}
-		hour := bi.Time - bi.Time%3600
-		if b.Time != hour {
-			if b.Txs != 0 {
-				b.BalanceSat = (*Amount)(new(big.Int).Set(&balance))
-				bh = append(bh, b)
-			}
-			b = BalanceHistory{
+			bh = BalanceHistory{
 				Time:        hour,
 				SentSat:     &Amount{},
 				ReceivedSat: &Amount{},
@@ -847,32 +850,29 @@ func (w *Worker) GetBalanceHistory(address string) ([]BalanceHistory, error) {
 		for i := range ta.Inputs {
 			tai := &ta.Inputs[i]
 			if bytes.Equal(addrDesc, tai.AddrDesc) {
-				(*big.Int)(b.SentSat).Add((*big.Int)(b.SentSat), &tai.ValueSat)
-				balance.Sub(&balance, &tai.ValueSat)
+				(*big.Int)(bh.SentSat).Add((*big.Int)(bh.SentSat), &tai.ValueSat)
 				if !counted {
 					counted = true
-					b.Txs++
+					bh.Txs++
 				}
 			}
 		}
 		for i := range ta.Outputs {
 			tao := &ta.Outputs[i]
 			if bytes.Equal(addrDesc, tao.AddrDesc) {
-				(*big.Int)(b.ReceivedSat).Add((*big.Int)(b.ReceivedSat), &tao.ValueSat)
-				balance.Add(&balance, &tao.ValueSat)
+				(*big.Int)(bh.ReceivedSat).Add((*big.Int)(bh.ReceivedSat), &tao.ValueSat)
 				if !counted {
 					counted = true
-					b.Txs++
+					bh.Txs++
 				}
 			}
 		}
 	}
-	if b.Txs != 0 {
-		b.BalanceSat = (*Amount)(&balance)
-		bh = append(bh, b)
+	if bh.Txs != 0 {
+		bhs = append(bhs, bh)
 	}
-	glog.Info("GetBalanceHistory ", address, ", count ", len(bh), " finished in ", time.Since(start))
-	return bh, nil
+	glog.Info("GetBalanceHistory ", address, ", count ", len(bhs), " finished in ", time.Since(start))
+	return bhs, nil
 }
 
 func (w *Worker) waitForBackendSync() {

@@ -1035,17 +1035,26 @@ func (s *PublicServer) apiUtxo(r *http.Request, apiVersion int) (interface{}, er
 
 func (s *PublicServer) apiBalanceHistory(r *http.Request, apiVersion int) (interface{}, error) {
 	var history []api.BalanceHistory
+	var fromTime, toTime time.Time
 	var err error
 	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
 		gap, ec := strconv.Atoi(r.URL.Query().Get("gap"))
 		if ec != nil {
 			gap = 0
 		}
+		t := r.URL.Query().Get("from")
+		if t != "" {
+			fromTime, _ = time.Parse("2006-02-01", t)
+		}
+		t = r.URL.Query().Get("to")
+		if t != "" {
+			toTime, _ = time.Parse("2006-02-01", t)
+		}
 		history, err = s.api.GetUtxoBalanceHistory(r.URL.Path[i+1:], gap)
 		if err == nil {
 			s.metrics.ExplorerViews.With(common.Labels{"action": "api-xpub-balancehistory"}).Inc()
 		} else {
-			history, err = s.api.GetBalanceHistory(r.URL.Path[i+1:])
+			history, err = s.api.GetBalanceHistory(r.URL.Path[i+1:], fromTime, toTime)
 			s.metrics.ExplorerViews.With(common.Labels{"action": "api-address-balancehistory"}).Inc()
 		}
 	}
