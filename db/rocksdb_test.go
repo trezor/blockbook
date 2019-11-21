@@ -1,4 +1,4 @@
-// +build unittest
+// build unittest
 
 package db
 
@@ -1101,7 +1101,6 @@ func TestRocksTickers(t *testing.T) {
 	time.Sleep(1 * time.Second)
 
 	ts := time.Now().UTC()
-	ts = time.Date(ts.Year(), ts.Month(), ts.Day(), ts.Hour(), ts.Minute(), ts.Second(), 0, ts.Location()) // strip ms from the timestamp for exact match
 
 	ticker1 := &CurrencyRatesTicker{
 		Timestamp: &ts,
@@ -1112,7 +1111,6 @@ func TestRocksTickers(t *testing.T) {
 
 	time.Sleep(1 * time.Second)
 	ts2 := time.Now().UTC()
-	ts2 = time.Date(ts2.Year(), ts2.Month(), ts2.Day(), ts2.Hour(), ts2.Minute(), ts2.Second(), 0, ts2.Location()) // strip ms from the timestamp for exact match
 
 	ticker2 := &CurrencyRatesTicker{
 		Timestamp: &ts2,
