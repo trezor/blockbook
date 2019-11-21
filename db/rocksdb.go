@@ -37,7 +37,7 @@ const FiatRatesTimeFormat = "20060102150405" // YYYYMMDDhhmmss
 // CurrencyRatesTicker contains coin ticker data fetched from API
 type CurrencyRatesTicker struct {
 	Timestamp time.Time // return as unix timestamp in API
-	Rates     map[string]float64
+	Rates     map[string]json.Number
 }
 
 // RepairRocksDB calls RocksDb db repair function
@@ -1804,4 +1804,39 @@ func unpackBigint(buf []byte) (big.Int, int) {
 	l := int(buf[0]) + 1
 	r.SetBytes(buf[1:l])
 	return r, l
+}
+
+// InitTestFiatRates initializes test data for /api/v2/tickers endpoint
+func (d *RocksDB) InitTestFiatRates() error {
+	convertedDate, err := FiatRatesConvertDate("20191121140000")
+	if err != nil {
+		return err
+	}
+	ticker := &CurrencyRatesTicker{
+		Timestamp: *convertedDate,
+		Rates: map[string]json.Number{
+			"usd": "7814.5",
+			"eur": "7100.0",
+		},
+	}
+	err = d.FiatRatesStoreTicker(ticker)
+	if err != nil {
+		return err
+	}
+	convertedDate, err = FiatRatesConvertDate("20191121143015")
+	if err != nil {
+		return err
+	}
+	ticker = &CurrencyRatesTicker{
+		Timestamp: *convertedDate,
+		Rates: map[string]json.Number{
+			"usd": "7914.5",
+			"eur": "7134.1",
+		},
+	}
+	err = d.FiatRatesStoreTicker(ticker)
+	if err != nil {
+		return err
+	}
+	return nil
 }

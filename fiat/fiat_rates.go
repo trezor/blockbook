@@ -139,7 +139,7 @@ func (rd *RatesDownloader) getData(timestamp *time.Time) (*db.CurrencyRatesTicke
 
 	type FiatRatesResponse struct {
 		MarketData struct {
-			Prices map[string]float64 `json:"current_price"`
+			Prices map[string]json.Number `json:"current_price"`
 		} `json:"market_data"`
 	}
 
@@ -149,12 +149,7 @@ func (rd *RatesDownloader) getData(timestamp *time.Time) (*db.CurrencyRatesTicke
 		glog.Errorf("Error parsing FiatRates response: %v", err)
 		return nil, err
 	}
-
 	ticker.Rates = data.MarketData.Prices
-	if err != nil {
-		glog.Errorf("Error marshalling FiatRates prices: %v", err)
-		return nil, err
-	}
 	return ticker, nil
 }
 

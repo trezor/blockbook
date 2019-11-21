@@ -9,6 +9,7 @@ import (
 	"blockbook/tests/dbtestdata"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"io/ioutil"
 	"math/big"
 	"os"
@@ -1100,9 +1101,9 @@ func TestRocksTickers(t *testing.T) {
 	time.Sleep(1 * time.Second)
 
 	ticker1 := &CurrencyRatesTicker{
-		time.Now(),
-		map[string]float64{
-			"usd": 20000,
+		Timestamp: time.Now(),
+		Rates: map[string]json.Number{
+			"usd": "20000",
 		},
 	}
 	ts := ticker1.Timestamp
@@ -1110,9 +1111,9 @@ func TestRocksTickers(t *testing.T) {
 
 	time.Sleep(1 * time.Second)
 	ticker2 := &CurrencyRatesTicker{
-		time.Now(),
-		map[string]float64{
-			"usd": 20000,
+		Timestamp: time.Now(),
+		Rates: map[string]json.Number{
+			"usd": "30000",
 		},
 	}
 	ts = ticker2.Timestamp

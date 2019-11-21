@@ -58,6 +58,9 @@ func setupRocksDB(t *testing.T, parser bchain.BlockChainParser) (*db.RocksDB, *c
 	if err := d.ConnectBlock(block2); err != nil {
 		t.Fatal(err)
 	}
+	if err := d.InitTestFiatRates(); err != nil {
+		t.Fatal(err)
+	}
 	is.FinishedSync(block2.Height)
 	return d, is, tmp
 }
@@ -458,6 +461,42 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			contentType: "application/json; charset=utf-8",
 			body: []string{
 				`{"txCount":3,"totalFeesSat":"1284","averageFeePerKb":1398,"decilesFeePerKb":[155,155,155,155,1679,1679,1679,2361,2361,2361,2361]}`,
+			},
+		},
+		{
+			name:        "apiFiatRates get last rate",
+			r:           newGetRequest(ts.URL + "/api/v2/tickers"),
+			status:      http.StatusOK,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`{"timestamp":"20191121143015","rates":{"eur":7134.1,"usd":7914.5}}`,
+			},
+		},
+		{
+			name:        "apiFiatRates get exact rate",
+			r:           newGetRequest(ts.URL + "/api/v2/tickers?date=20191121140000"),
+			status:      http.StatusOK,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`{"timestamp":"20191121140000","rates":{"eur":7100.0,"usd":7814.5}}`,
+			},
+		},
+		{
+			name:        "apiFiatRates get closest rate",
+			r:           newGetRequest(ts.URL + "/api/v2/tickers?date=20191121130000"),
+			status:      http.StatusOK,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`{"timestamp":"20191121140000","rates":{"eur":7100.0,"usd":7814.5}}`,
+			},
+		},
+		{
+			name:        "apiFiatRates get rate by block height",
+			r:           newGetRequest(ts.URL + "/api/v2/tickers?block=225494"),
+			status:      http.StatusOK,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`{"timestamp":"20191121140000","rates":{"eur":7100.0,"usd":7814.5}}`,
 			},
 		},
 		{

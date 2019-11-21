@@ -1094,20 +1094,21 @@ type resultEstimateFeeAsString struct {
 }
 
 type resultTickersAsString struct {
-	Timestamp string `json:"timestamp"`
-	Rates     string `json:"rates"`
+	Timestamp string                 `json:"timestamp"`
+	Rates     map[string]json.Number `json:"rates"`
 }
 
 // apiTickers returns CoinGecko ticker prices for the specified block or date.
 func (s *PublicServer) apiTickers(r *http.Request, apiVersion int) (interface{}, error) {
-	params := strings.Split(r.URL.Path, "/")
-	currency := params[len(params)-1]
-	ticker := &db.CoinGeckoTicker{}
+	//params := strings.Split(r.URL.Path, "/")
+	//currency := params[len(params)-1]
+	ticker := &db.CurrencyRatesTicker{}
 	var err error
 
-	if currency == "" {
-		return nil, api.NewAPIError("Currency not specified.", true)
-	}
+	//if currency == "" {
+	//	return nil, api.NewAPIError("Currency not specified.", true)
+	//}
+	// TODO: check if chosen currency is available
 
 	if block := r.URL.Query().Get("block"); block != "" {
 		// Get tickers for specified block
@@ -1118,8 +1119,9 @@ func (s *PublicServer) apiTickers(r *http.Request, apiVersion int) (interface{},
 			}
 			return nil, api.NewAPIError(fmt.Sprintf("Block %v not found, error: %v", block, err), true)
 		}
-		dbi := &db.BlockInfo{Time: bi.Time}
-		ticker, err = s.db.FiatRatesFindTicker(time.Unix(dbi.Time, 0))
+		dbi := &db.BlockInfo{Time: bi.Time} // get timestamp from block
+		tm := time.Unix(dbi.Time, 0)        // convert it to Time object
+		ticker, err = s.db.FiatRatesFindTicker(&tm)
 	} else if date := r.URL.Query().Get("date"); date != "" {
 		// Get tickers for specified date
 		date, err := db.FiatRatesConvertDate(date)
@@ -1127,21 +1129,21 @@ func (s *PublicServer) apiTickers(r *http.Request, apiVersion int) (interface{},
 			possibleFormats := "Possible formats are: YYYYMMDDhhmmss, YYYYMMDDhhmm, YYYYMMDDhh, YYYYMMDD"
 			return nil, api.NewAPIError(fmt.Sprintf("Error converting date \"%v\": %v. "+possibleFormats, date, err), true)
 		}
-		ticker, err = s.db.FiatRatesFindTicker(*date)
+		ticker, err = s.db.FiatRatesFindTicker(date)
 	} else {
 		// No parameters - get the latest available ticker
-		ticker, err = s.db.FindLastTicker()
+		ticker, err = s.db.FiatRatesFindLastTicker()
 	}
 	if err != nil {
 		return nil, api.NewAPIError(fmt.Sprintf("Error finding ticker: %v", err), true)
 	}
 
+	timeFormatted := ticker.Timestamp.UTC().Format(db.FiatRatesTimeFormat)
 	result := &resultTickersAsString{
-		Timestamp: ticker.Timestamp,
+		Timestamp: timeFormatted,
 		Rates:     ticker.Rates,
 	}
-	ret, _ := json.Marshal(result) // TODO: should I handle error here?
-	return ret, err
+	return result, err
 }
 
 func (s *PublicServer) apiEstimateFee(r *http.Request, apiVersion int) (interface{}, error) {
