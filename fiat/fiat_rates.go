@@ -75,7 +75,7 @@ func (rd *RatesDownloader) Run() error {
 		}
 	} else {
 		// If found, continue downloading data from the last available record
-		timestamp = &ticker.Timestamp
+		timestamp = ticker.Timestamp
 	}
 	return rd.sync(timestamp)
 }
@@ -131,7 +131,8 @@ func (rd *RatesDownloader) getMarketData(timestamp *time.Time) ([]byte, error) {
 // GetData gets fiat rates from API at the specified date and returns JSON string.
 // If timestamp is nil, it will download the latest market data.
 func (rd *RatesDownloader) getData(timestamp *time.Time) (*db.CurrencyRatesTicker, error) {
-	ticker := &db.CurrencyRatesTicker{Timestamp: time.Now()}
+	timeNow := time.Now().UTC()
+	ticker := &db.CurrencyRatesTicker{Timestamp: &timeNow}
 	bodyBytes, err := rd.getMarketData(timestamp)
 	if err != nil {
 		return nil, err

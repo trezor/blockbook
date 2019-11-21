@@ -1100,44 +1100,44 @@ func TestRocksTickers(t *testing.T) {
 	key := time.Now()
 	time.Sleep(1 * time.Second)
 
+	ts := time.Now().UTC()
+	ts = time.Date(ts.Year(), ts.Month(), ts.Day(), ts.Hour(), ts.Minute(), ts.Second(), 0, ts.Location()) // strip ms from the timestamp for exact match
+
 	ticker1 := &CurrencyRatesTicker{
-		Timestamp: time.Now(),
+		Timestamp: &ts,
 		Rates: map[string]json.Number{
 			"usd": "20000",
 		},
 	}
-	ts := ticker1.Timestamp
-	ticker1.Timestamp = time.Date(ts.Year(), ts.Month(), ts.Day(), ts.Hour(), ts.Minute(), ts.Second(), 0, ts.Location()) // strip ms from the timestamp for exact match
 
 	time.Sleep(1 * time.Second)
+	ts2 := time.Now().UTC()
+	ts2 = time.Date(ts2.Year(), ts2.Month(), ts2.Day(), ts2.Hour(), ts2.Minute(), ts2.Second(), 0, ts2.Location()) // strip ms from the timestamp for exact match
+
 	ticker2 := &CurrencyRatesTicker{
-		Timestamp: time.Now(),
+		Timestamp: &ts2,
 		Rates: map[string]json.Number{
 			"usd": "30000",
 		},
 	}
-	ts = ticker2.Timestamp
-	ticker2.Timestamp = time.Date(ts.Year(), ts.Month(), ts.Day(), ts.Hour(), ts.Minute(), ts.Second(), 0, ts.Location())
-
 	d.FiatRatesStoreTicker(ticker1)
 	d.FiatRatesStoreTicker(ticker2)
 
 	ticker, err := d.FiatRatesFindTicker(&key) // should find the closest key (ticker1)
 	if err != nil {
 		t.Errorf("TestRocksTickers err: %+v", err)
-	} else if ticker.Rates == nil {
+	} else if len(ticker.Rates) == 0 {
 		t.Errorf("Empty rates")
-	} else if ticker.Timestamp != ticker1.Timestamp.UTC() {
-		t.Errorf("Incorrect ticker found. Expected: %v, found: %v", ticker1.Timestamp.UTC(), ticker.Timestamp)
+	} else if ticker.Timestamp.Format(FiatRatesTimeFormat) != ticker1.Timestamp.Format(FiatRatesTimeFormat) {
+		t.Errorf("Incorrect ticker found. Expected: %v, found: %+v", ticker1.Timestamp, ticker.Timestamp)
 	}
 
 	ticker, err = d.FiatRatesFindLastTicker() // should find the last key (ticker2)
 	if err != nil {
 		t.Errorf("TestRocksTickers err: %+v", err)
-	} else if ticker.Rates == nil {
+	} else if len(ticker.Rates) == 0 {
 		t.Errorf("Empty rates")
-	} else if ticker.Timestamp != ticker2.Timestamp.UTC() {
-		t.Errorf("Incorrect ticker found. Expected: %v, found: %v", ticker2.Timestamp.UTC(), ticker.Timestamp)
+	} else if ticker.Timestamp.Format(FiatRatesTimeFormat) != ticker2.Timestamp.Format(FiatRatesTimeFormat) {
+		t.Errorf("Incorrect ticker found. Expected: %v, found: %+v", ticker1.Timestamp, ticker.Timestamp)
 	}
-
 }

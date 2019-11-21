@@ -1021,6 +1021,9 @@ func (w *Worker) GetFiatRatesForBlockID(bid string, currency string) (*db.Result
 	if err != nil {
 		return nil, NewAPIError(fmt.Sprintf("Error finding ticker: %v", err), true)
 	}
+	if len(ticker.Rates) == 0 {
+		return nil, NewAPIError(fmt.Sprintf("No %s rates available for %s", currency, tm), true)
+	}
 	result, err := w.getFiatRatesResult(currency, ticker)
 	if err != nil {
 		return nil, err
@@ -1028,7 +1031,7 @@ func (w *Worker) GetFiatRatesForBlockID(bid string, currency string) (*db.Result
 	return result, nil
 }
 
-// GetCurrentFiatRates returns fiat rates for block height or block hash
+// GetCurrentFiatRates returns current fiat rates
 func (w *Worker) GetCurrentFiatRates(currency string) (*db.ResultTickerAsString, error) {
 	if currency == "" {
 		return nil, NewAPIError("Missing or empty \"currency\" parameter", true)
@@ -1044,7 +1047,7 @@ func (w *Worker) GetCurrentFiatRates(currency string) (*db.ResultTickerAsString,
 	return result, nil
 }
 
-// GetFiatRatesForDate returns fiat rates for block height or block hash
+// GetFiatRatesForDate returns fiat rates for the specific date
 func (w *Worker) GetFiatRatesForDate(dateString string, currency string) (*db.ResultTickerAsString, error) {
 	if currency == "" {
 		return nil, NewAPIError("Missing or empty \"currency\" parameter", true)
@@ -1056,6 +1059,9 @@ func (w *Worker) GetFiatRatesForDate(dateString string, currency string) (*db.Re
 	ticker, err := w.db.FiatRatesFindTicker(date)
 	if err != nil {
 		return nil, NewAPIError(fmt.Sprintf("Error finding ticker: %v", err), true)
+	}
+	if len(ticker.Rates) == 0 {
+		return nil, NewAPIError(fmt.Sprintf("No %s rates available for %s", currency, date), true)
 	}
 	result, err := w.getFiatRatesResult(currency, ticker)
 	if err != nil {

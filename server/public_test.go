@@ -500,6 +500,15 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			},
 		},
 		{
+			name:        "apiFiatRates future date",
+			r:           newGetRequest(ts.URL + "/api/v2/tickers?currency=usd&date=20200101000000"),
+			status:      http.StatusBadRequest,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`{"error":"No usd rates available for 2020-01-01 00:00:00 +0000 UTC"}`,
+			},
+		},
+		{
 			name:        "apiFiatRates get EUR rate (exact date)",
 			r:           newGetRequest(ts.URL + "/api/v2/tickers?date=20191121140000&currency=eur"),
 			status:      http.StatusOK,

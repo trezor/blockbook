@@ -36,7 +36,7 @@ const FiatRatesTimeFormat = "20060102150405" // YYYYMMDDhhmmss
 
 // CurrencyRatesTicker contains coin ticker data fetched from API
 type CurrencyRatesTicker struct {
-	Timestamp time.Time // return as unix timestamp in API
+	Timestamp *time.Time // return as unix timestamp in API
 	Rates     map[string]json.Number
 }
 
@@ -206,7 +206,8 @@ func (d *RocksDB) FiatRatesFindTicker(tickerTime *time.Time) (*CurrencyRatesTick
 			glog.Error("FiatRatesFindTicker time parse error: ", err)
 			return nil, err
 		}
-		ticker.Timestamp = timeObj.UTC()
+		timeObj = timeObj.UTC()
+		ticker.Timestamp = &timeObj
 		err = json.Unmarshal(it.Value().Data(), &ticker.Rates)
 		if err != nil {
 			glog.Error("FiatRatesFindTicker error unpacking rates: ", err)
@@ -233,7 +234,8 @@ func (d *RocksDB) FiatRatesFindLastTicker() (*CurrencyRatesTicker, error) {
 			glog.Error("FiatRatesFindTicker time parse error: ", err)
 			return nil, err
 		}
-		ticker.Timestamp = timeObj.UTC()
+		timeObj = timeObj.UTC()
+		ticker.Timestamp = &timeObj
 		err = json.Unmarshal(it.Value().Data(), &ticker.Rates)
 		if err != nil {
 			glog.Error("FiatRatesFindTicker error unpacking rates: ", err)
@@ -1821,7 +1823,7 @@ func (d *RocksDB) InitTestFiatRates() error {
 		return err
 	}
 	ticker := &CurrencyRatesTicker{
-		Timestamp: *convertedDate,
+		Timestamp: convertedDate,
 		Rates: map[string]json.Number{
 			"usd": "7814.5",
 			"eur": "7100.0",
@@ -1836,7 +1838,7 @@ func (d *RocksDB) InitTestFiatRates() error {
 		return err
 	}
 	ticker = &CurrencyRatesTicker{
-		Timestamp: *convertedDate,
+		Timestamp: convertedDate,
 		Rates: map[string]json.Number{
 			"usd": "7914.5",
 			"eur": "7134.1",
