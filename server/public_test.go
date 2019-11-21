@@ -464,39 +464,93 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			},
 		},
 		{
-			name:        "apiFiatRates get last rate",
+			name:        "apiFiatRates missing currency",
 			r:           newGetRequest(ts.URL + "/api/v2/tickers"),
-			status:      http.StatusOK,
+			status:      http.StatusBadRequest,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"timestamp":"20191121143015","rates":{"eur":7134.1,"usd":7914.5}}`,
+				`{"error":"Missing or empty \"currency\" parameter"}`,
 			},
 		},
 		{
-			name:        "apiFiatRates get exact rate",
-			r:           newGetRequest(ts.URL + "/api/v2/tickers?date=20191121140000"),
+			name:        "apiFiatRates get last rate",
+			r:           newGetRequest(ts.URL + "/api/v2/tickers?currency=usd"),
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"timestamp":"20191121140000","rates":{"eur":7100.0,"usd":7814.5}}`,
+				`{"data_timestamp":"20191121143015","rates":{"usd":7914.5}}`,
+			},
+		},
+		{
+			name:        "apiFiatRates get rate by exact date",
+			r:           newGetRequest(ts.URL + "/api/v2/tickers?currency=usd&date=20191121140000"),
+			status:      http.StatusOK,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`{"data_timestamp":"20191121140000","rates":{"usd":7814.5}}`,
+			},
+		},
+		{
+			name:        "apiFiatRates incorrect date",
+			r:           newGetRequest(ts.URL + "/api/v2/tickers?currency=usd&date=yesterday"),
+			status:      http.StatusBadRequest,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`{"error":"Date \"yesterday\" does not match any of available formats. Possible formats are: YYYYMMDDhhmmss, YYYYMMDDhhmm, YYYYMMDDhh, YYYYMMDD"}`,
+			},
+		},
+		{
+			name:        "apiFiatRates get EUR rate (exact date)",
+			r:           newGetRequest(ts.URL + "/api/v2/tickers?date=20191121140000&currency=eur"),
+			status:      http.StatusOK,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`{"data_timestamp":"20191121140000","rates":{"eur":7100.0,"usd":7814.5}}`,
 			},
 		},
 		{
 			name:        "apiFiatRates get closest rate",
-			r:           newGetRequest(ts.URL + "/api/v2/tickers?date=20191121130000"),
+			r:           newGetRequest(ts.URL + "/api/v2/tickers?date=20191121130000&currency=usd"),
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"timestamp":"20191121140000","rates":{"eur":7100.0,"usd":7814.5}}`,
+				`{"data_timestamp":"20191121140000","rates":{"usd":7814.5}}`,
 			},
 		},
 		{
 			name:        "apiFiatRates get rate by block height",
-			r:           newGetRequest(ts.URL + "/api/v2/tickers?block=225494"),
+			r:           newGetRequest(ts.URL + "/api/v2/tickers?block=225494&currency=usd"),
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"timestamp":"20191121140000","rates":{"eur":7100.0,"usd":7814.5}}`,
+				`{"data_timestamp":"20191121140000","rates":{"usd":7814.5}}`,
+			},
+		},
+		{
+			name:        "apiFiatRates get rate for EUR",
+			r:           newGetRequest(ts.URL + "/api/v2/tickers?date=20191121140000&currency=eur"),
+			status:      http.StatusOK,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`{"data_timestamp":"20191121140000","rates":{"eur":7100.0,"usd":7814.5}}`,
+			},
+		},
+		{
+			name:        "apiFiatRates get exact rate for an incorrect currency",
+			r:           newGetRequest(ts.URL + "/api/v2/tickers?date=20191121140000&currency=does_not_exist"),
+			status:      http.StatusBadRequest,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`{"error":"Currency \"does_not_exist\" is not available for timestamp 20191121140000. Available currencies are: eur, usd."}`,
+			},
+		},
+		{
+			name:        "apiTickerList",
+			r:           newGetRequest(ts.URL + "/api/v2/tickers-list"),
+			status:      http.StatusOK,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`{"available_currencies":["eur","usd"]}`,
 			},
 		},
 		{

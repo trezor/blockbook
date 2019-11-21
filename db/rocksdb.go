@@ -166,7 +166,9 @@ func FiatRatesConvertDate(date string) (*time.Time, error) {
 			return &convertedDate, nil
 		}
 	}
-	return nil, errors.New("Date " + date + " does not match any of available formats")
+	msg := "Date \"" + date + "\" does not match any of available formats. "
+	msg += "Possible formats are: YYYYMMDDhhmmss, YYYYMMDDhhmm, YYYYMMDDhh, YYYYMMDD"
+	return nil, errors.New(msg)
 }
 
 // FiatRatesStoreTicker stores ticker data at the specified time
