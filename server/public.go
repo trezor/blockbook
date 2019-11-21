@@ -1091,17 +1091,9 @@ func (s *PublicServer) apiSendTx(r *http.Request, apiVersion int) (interface{}, 
 	return nil, api.NewAPIError("Missing tx blob", true)
 }
 
-type resultEstimateFeeAsString struct {
-	Result string `json:"result"`
-}
-
-type resultTickersAsString struct {
-	Timestamp string                 `json:"data_timestamp"`
-	Rates     map[string]json.Number `json:"rates"`
-}
-
 // apiTickersList returns a list of available FiatRates currencies
 func (s *PublicServer) apiTickersList(r *http.Request, apiVersion int) (interface{}, error) {
+	s.metrics.ExplorerViews.With(common.Labels{"action": "api-tickers-list"}).Inc()
 	ticker, err := s.db.FiatRatesFindLastTicker()
 	if err != nil {
 		return nil, api.NewAPIError(fmt.Sprintf("Error finding last ticker: %v", err), true)
@@ -1118,69 +1110,31 @@ func (s *PublicServer) apiTickersList(r *http.Request, apiVersion int) (interfac
 
 // apiTickers returns FiatRates ticker prices for the specified block or date.
 func (s *PublicServer) apiTickers(r *http.Request, apiVersion int) (interface{}, error) {
-	ticker := &db.CurrencyRatesTicker{}
+	var result *db.ResultTickerAsString
 	var err error
-
 	currency := strings.ToLower(r.URL.Query().Get("currency"))
-	if currency == "" {
-		return nil, api.NewAPIError("Missing or empty \"currency\" parameter", true)
-	}
 
 	if block := r.URL.Query().Get("block"); block != "" {
-		// Get tickers for specified block
+		// Get tickers for specified block height or block hash
 		s.metrics.ExplorerViews.With(common.Labels{"action": "api-tickers-block"}).Inc()
-		bi, err := s.api.GetBlockInfoFromBlockID(block)
-		if err != nil {
-			if err == bchain.ErrBlockNotFound {
-				return nil, api.NewAPIError(fmt.Sprintf("Block %v not found", block), true)
-			}
-			return nil, api.NewAPIError(fmt.Sprintf("Block %v not found, error: %v", block, err), true)
-		}
-		dbi := &db.BlockInfo{Time: bi.Time} // get timestamp from block
-		tm := time.Unix(dbi.Time, 0)        // convert it to Time object
-		ticker, err = s.db.FiatRatesFindTicker(&tm)
-	} else if dateString := r.URL.Query().Get("date"); dateString != "" {
+		result, err = s.api.GetFiatRatesForBlockID(block, currency)
+	} else if date := r.URL.Query().Get("date"); date != "" {
 		// Get tickers for specified date
 		s.metrics.ExplorerViews.With(common.Labels{"action": "api-tickers-date"}).Inc()
-		date, err := db.FiatRatesConvertDate(dateString)
-		if err != nil {
-			return nil, api.NewAPIError(fmt.Sprintf("%v", err), true)
-		}
-		ticker, err = s.db.FiatRatesFindTicker(date)
+		result, err = s.api.GetFiatRatesForDate(date, currency)
 	} else {
 		// No parameters - get the latest available ticker
 		s.metrics.ExplorerViews.With(common.Labels{"action": "api-tickers-last"}).Inc()
-		ticker, err = s.db.FiatRatesFindLastTicker()
+		result, err = s.api.GetCurrentFiatRates(currency)
 	}
 	if err != nil {
-		return nil, api.NewAPIError(fmt.Sprintf("Error finding ticker: %v", err), true)
+		return nil, err
 	}
+	return result, nil
+}
 
-	resultRates := make(map[string]json.Number)
-	timeFormatted := ticker.Timestamp.Format(db.FiatRatesTimeFormat)
-
-	// Check if both USD rate and the desired currency rate exist in the result
-	for _, currencySymbol := range []string{"usd", currency} {
-		if _, found := ticker.Rates[currencySymbol]; !found {
-			availableCurrencies := make([]string, 0, len(ticker.Rates))
-			for availableCurrency := range ticker.Rates {
-				availableCurrencies = append(availableCurrencies, string(availableCurrency))
-			}
-			sort.Strings(availableCurrencies) // sort to get deterministic results
-			availableCurrenciesString := strings.Join(availableCurrencies, ", ")
-			return nil, api.NewAPIError(fmt.Sprintf("Currency %q is not available for timestamp %s. Available currencies are: %s.", currency, timeFormatted, availableCurrenciesString), true)
-		}
-		resultRates[currencySymbol] = ticker.Rates[currencySymbol]
-		if currencySymbol == "usd" && currency == "usd" {
-			break
-		}
-	}
-
-	result := &resultTickersAsString{
-		Timestamp: timeFormatted,
-		Rates:     resultRates,
-	}
-	return result, err
+type resultEstimateFeeAsString struct {
+	Result string `json:"result"`
 }
 
 func (s *PublicServer) apiEstimateFee(r *http.Request, apiVersion int) (interface{}, error) {

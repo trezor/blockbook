@@ -40,6 +40,12 @@ type CurrencyRatesTicker struct {
 	Rates     map[string]json.Number
 }
 
+// ResultTickerAsString contains formatted CurrencyRatesTicker data
+type ResultTickerAsString struct {
+	Timestamp string                 `json:"data_timestamp"`
+	Rates     map[string]json.Number `json:"rates"`
+}
+
 // RepairRocksDB calls RocksDb db repair function
 func RepairRocksDB(name string) error {
 	glog.Infof("rocksdb: repair")

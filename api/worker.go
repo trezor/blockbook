@@ -13,6 +13,7 @@ import (
 	"os"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/golang/glog"
@@ -972,6 +973,98 @@ func (w *Worker) GetBlocks(page int, blocksOnPage int) (*Blocks, error) {
 	return r, nil
 }
 
+// getFiatRatesResult checks if CurrencyRatesTicker contains all necessary data and returns formatted result
+func (w *Worker) getFiatRatesResult(currency string, ticker *db.CurrencyRatesTicker) (*db.ResultTickerAsString, error) {
+	resultRates := make(map[string]json.Number)
+	timeFormatted := ticker.Timestamp.Format(db.FiatRatesTimeFormat)
+
+	// Check if both USD rate and the desired currency rate exist in the result
+	for _, currencySymbol := range []string{"usd", currency} {
+		if _, found := ticker.Rates[currencySymbol]; !found {
+			availableCurrencies := make([]string, 0, len(ticker.Rates))
+			for availableCurrency := range ticker.Rates {
+				availableCurrencies = append(availableCurrencies, string(availableCurrency))
+			}
+			sort.Strings(availableCurrencies) // sort to get deterministic results
+			availableCurrenciesString := strings.Join(availableCurrencies, ", ")
+			return nil, NewAPIError(fmt.Sprintf("Currency %q is not available for timestamp %s. Available currencies are: %s.", currency, timeFormatted, availableCurrenciesString), true)
+		}
+		resultRates[currencySymbol] = ticker.Rates[currencySymbol]
+		if currencySymbol == "usd" && currency == "usd" {
+			break
+		}
+	}
+
+	result := &db.ResultTickerAsString{
+		Timestamp: timeFormatted,
+		Rates:     resultRates,
+	}
+	return result, nil
+}
+
+// GetFiatRatesForBlockID returns fiat rates for block height or block hash
+func (w *Worker) GetFiatRatesForBlockID(bid string, currency string) (*db.ResultTickerAsString, error) {
+	if currency == "" {
+		return nil, NewAPIError("Missing or empty \"currency\" parameter", true)
+	}
+	ticker := &db.CurrencyRatesTicker{}
+	bi, err := w.GetBlockInfoFromBlockID(bid)
+	if err != nil {
+		if err == bchain.ErrBlockNotFound {
+			return nil, NewAPIError(fmt.Sprintf("Block %v not fosnd", bid), true)
+		}
+		return nil, NewAPIError(fmt.Sprintf("Block %v not found, error: %v", bid, err), true)
+	}
+	dbi := &db.BlockInfo{Time: bi.Time} // get timestamp from block
+	tm := time.Unix(dbi.Time, 0)        // convert it to Time object
+	ticker, err = w.db.FiatRatesFindTicker(&tm)
+	if err != nil {
+		return nil, NewAPIError(fmt.Sprintf("Error finding ticker: %v", err), true)
+	}
+	result, err := w.getFiatRatesResult(currency, ticker)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// GetCurrentFiatRates returns fiat rates for block height or block hash
+func (w *Worker) GetCurrentFiatRates(currency string) (*db.ResultTickerAsString, error) {
+	if currency == "" {
+		return nil, NewAPIError("Missing or empty \"currency\" parameter", true)
+	}
+	ticker, err := w.db.FiatRatesFindLastTicker()
+	if err != nil {
+		return nil, NewAPIError(fmt.Sprintf("Error finding ticker: %v", err), true)
+	}
+	result, err := w.getFiatRatesResult(currency, ticker)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// GetFiatRatesForDate returns fiat rates for block height or block hash
+func (w *Worker) GetFiatRatesForDate(dateString string, currency string) (*db.ResultTickerAsString, error) {
+	if currency == "" {
+		return nil, NewAPIError("Missing or empty \"currency\" parameter", true)
+	}
+	date, err := db.FiatRatesConvertDate(dateString)
+	if err != nil {
+		return nil, NewAPIError(fmt.Sprintf("%v", err), true)
+	}
+	ticker, err := w.db.FiatRatesFindTicker(date)
+	if err != nil {
+		return nil, NewAPIError(fmt.Sprintf("Error finding ticker: %v", err), true)
+	}
+	result, err := w.getFiatRatesResult(currency, ticker)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// GetBlockInfoFromBlockID returns block info from block height or block hash
 func (w *Worker) GetBlockInfoFromBlockID(bid string) (*bchain.BlockInfo, error) {
 	// try to decide if passed string (bid) is block height or block hash
 	// if it's a number, must be less than int32
