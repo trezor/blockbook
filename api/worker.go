@@ -1011,15 +1011,15 @@ func (w *Worker) GetFiatRatesForBlockID(bid string, currency string) (*db.Result
 	bi, err := w.GetBlockInfoFromBlockID(bid)
 	if err != nil {
 		if err == bchain.ErrBlockNotFound {
-			return nil, NewAPIError(fmt.Sprintf("Block %v not fosnd", bid), true)
+			return nil, NewAPIError(fmt.Sprintf("Block %v not found", bid), true)
 		}
-		return nil, NewAPIError(fmt.Sprintf("Block %v not found, error: %v", bid, err), true)
+		return nil, NewAPIError(fmt.Sprintf("Block %v not found, error: %v", bid, err), false)
 	}
 	dbi := &db.BlockInfo{Time: bi.Time} // get timestamp from block
 	tm := time.Unix(dbi.Time, 0)        // convert it to Time object
 	ticker, err = w.db.FiatRatesFindTicker(&tm)
 	if err != nil {
-		return nil, NewAPIError(fmt.Sprintf("Error finding ticker: %v", err), true)
+		return nil, NewAPIError(fmt.Sprintf("Error finding ticker: %v", err), false)
 	} else if ticker == nil {
 		return nil, NewAPIError(fmt.Sprintf("No tickers available for %s (%s)", tm, currency), true)
 	}
@@ -1037,7 +1037,7 @@ func (w *Worker) GetCurrentFiatRates(currency string) (*db.ResultTickerAsString,
 	}
 	ticker, err := w.db.FiatRatesFindLastTicker()
 	if err != nil {
-		return nil, NewAPIError(fmt.Sprintf("Error finding ticker: %v", err), true)
+		return nil, NewAPIError(fmt.Sprintf("Error finding ticker: %v", err), false)
 	} else if ticker == nil {
 		return nil, NewAPIError(fmt.Sprintf("No tickers found!"), true)
 	}
@@ -1059,7 +1059,7 @@ func (w *Worker) GetFiatRatesForDate(dateString string, currency string) (*db.Re
 	}
 	ticker, err := w.db.FiatRatesFindTicker(date)
 	if err != nil {
-		return nil, NewAPIError(fmt.Sprintf("Error finding ticker: %v", err), true)
+		return nil, NewAPIError(fmt.Sprintf("Error finding ticker: %v", err), false)
 	} else if ticker == nil {
 		return nil, NewAPIError(fmt.Sprintf("No tickers available for %s (%s)", date, currency), true)
 	}
