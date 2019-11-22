@@ -58,7 +58,7 @@ func setupRocksDB(t *testing.T, parser bchain.BlockChainParser) (*db.RocksDB, *c
 	if err := d.ConnectBlock(block2); err != nil {
 		t.Fatal(err)
 	}
-	if err := d.InitTestFiatRates(); err != nil {
+	if err := InitTestFiatRates(d); err != nil {
 		t.Fatal(err)
 	}
 	is.FinishedSync(block2.Height)
@@ -147,6 +147,41 @@ func newPostRequest(u string, body string) *http.Request {
 	}
 	r.Header.Add("Content-Type", "application/octet-stream")
 	return r
+}
+
+// InitTestFiatRates initializes test data for /api/v2/tickers endpoint
+func InitTestFiatRates(d *db.RocksDB) error {
+	convertedDate, err := db.FiatRatesConvertDate("20191121140000")
+	if err != nil {
+		return err
+	}
+	ticker := &db.CurrencyRatesTicker{
+		Timestamp: convertedDate,
+		Rates: map[string]json.Number{
+			"usd": "7814.5",
+			"eur": "7100.0",
+		},
+	}
+	err = d.FiatRatesStoreTicker(ticker)
+	if err != nil {
+		return err
+	}
+	convertedDate, err = db.FiatRatesConvertDate("20191121143015")
+	if err != nil {
+		return err
+	}
+	ticker = &db.CurrencyRatesTicker{
+		Timestamp: convertedDate,
+		Rates: map[string]json.Number{
+			"usd": "7914.5",
+			"eur": "7134.1",
+		},
+	}
+	err = d.FiatRatesStoreTicker(ticker)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {

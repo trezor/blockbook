@@ -1826,39 +1826,3 @@ func unpackBigint(buf []byte) (big.Int, int) {
 	r.SetBytes(buf[1:l])
 	return r, l
 }
-
-// TODO: I don't think this should be here
-// InitTestFiatRates initializes test data for /api/v2/tickers endpoint
-func (d *RocksDB) InitTestFiatRates() error {
-	convertedDate, err := FiatRatesConvertDate("20191121140000")
-	if err != nil {
-		return err
-	}
-	ticker := &CurrencyRatesTicker{
-		Timestamp: convertedDate,
-		Rates: map[string]json.Number{
-			"usd": "7814.5",
-			"eur": "7100.0",
-		},
-	}
-	err = d.FiatRatesStoreTicker(ticker)
-	if err != nil {
-		return err
-	}
-	convertedDate, err = FiatRatesConvertDate("20191121143015")
-	if err != nil {
-		return err
-	}
-	ticker = &CurrencyRatesTicker{
-		Timestamp: convertedDate,
-		Rates: map[string]json.Number{
-			"usd": "7914.5",
-			"eur": "7134.1",
-		},
-	}
-	err = d.FiatRatesStoreTicker(ticker)
-	if err != nil {
-		return err
-	}
-	return nil
-}
