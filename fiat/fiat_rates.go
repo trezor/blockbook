@@ -15,11 +15,12 @@ import (
 type RatesDownloader struct {
 	url                string
 	coin               string
-	periodSeconds      int
+	periodSeconds      time.Duration
 	db                 *db.RocksDB
 	timeFormat         string
 	httpTimeoutSeconds time.Duration
 	test               bool
+	testStartTime      time.Time // a starting timestamp for tests to be deterministic (time.Now() otherwise)
 }
 
 // NewFiatRatesDownloader initiallizes the downloader for FiatRates API.
@@ -43,9 +44,10 @@ func NewFiatRatesDownloader(db *db.RocksDB, params string, test bool) (*RatesDow
 	rd.httpTimeoutSeconds = 15 * time.Second
 	rd.url = rdParams.URL
 	rd.coin = rdParams.Coin
-	rd.periodSeconds = rdParams.PeriodSeconds // Time period for syncing the latest market data
+	rd.periodSeconds = time.Duration(rdParams.PeriodSeconds) * time.Second
 	rd.db = db
 	rd.test = test
+	rd.testStartTime = time.Date(2019, 11, 22, 16, 0, 0, 0, time.UTC)
 	return rd, err
 }
 
@@ -101,7 +103,7 @@ func (rd *RatesDownloader) Run() error {
 		}
 		if rd.test {
 			// When testing, start from 2 days ago instead of the beginning (2013)
-			*timestamp = time.Now().Add(time.Duration(-24*2) * time.Hour)
+			*timestamp = rd.testStartTime.Add(time.Duration(-24*2) * time.Hour)
 		}
 	} else {
 		// If found, continue downloading data from the last available record
@@ -162,6 +164,9 @@ func (rd *RatesDownloader) getMarketData(timestamp *time.Time) ([]byte, error) {
 // If timestamp is nil, it will download the latest market data.
 func (rd *RatesDownloader) getData(timestamp *time.Time) (*db.CurrencyRatesTicker, error) {
 	timeNow := time.Now().UTC()
+	if rd.test {
+		timeNow = rd.testStartTime
+	}
 	ticker := &db.CurrencyRatesTicker{Timestamp: &timeNow}
 	bodyBytes, err := rd.getMarketData(timestamp)
 	if err != nil {
@@ -214,6 +219,9 @@ func (rd *RatesDownloader) findEarliestMarketData() (*time.Time, error) {
 		return nil, err
 	}
 	maxDate := time.Now().Add(time.Duration(-24) * time.Hour) // today's historical tickers may not be ready yet, so set to yesterday
+	if rd.test {
+		maxDate = rd.testStartTime //.Add(time.Duration(-24) * time.Hour)
+	}
 	currentDate := maxDate
 	for {
 		dataExists, err := rd.marketDataExists(&currentDate)
@@ -237,19 +245,14 @@ func (rd *RatesDownloader) findEarliestMarketData() (*time.Time, error) {
 
 // SyncLatest downloads the latest data every rd.PeriodSeconds
 func (rd *RatesDownloader) syncLatest() error {
-	period := time.Duration(rd.periodSeconds) * time.Second
-	if rd.test {
-		// Use lesser period for tests
-		period = time.Duration(2) * time.Second
-	}
-	timer := time.NewTimer(period)
+	timer := time.NewTimer(rd.periodSeconds)
 	for {
 		ticker, err := rd.getData(nil)
 		if err != nil {
 			// Do not exit on GET error, log it, wait and try again
 			glog.Errorf("Sync GetData error: %v", err)
 			<-timer.C
-			timer.Reset(period)
+			timer.Reset(rd.periodSeconds)
 			continue
 		}
 		err = rd.db.FiatRatesStoreTicker(ticker)
@@ -258,10 +261,11 @@ func (rd *RatesDownloader) syncLatest() error {
 			return err
 		}
 		if rd.test {
+			// when testing, sync once and exit
 			break
 		}
 		<-timer.C
-		timer.Reset(period)
+		timer.Reset(rd.periodSeconds)
 	}
 	return nil
 }
@@ -286,7 +290,12 @@ func (rd *RatesDownloader) sync(timestamp *time.Time) error {
 
 		*timestamp = timestamp.Add(time.Hour * 24) // go to the next day
 
-		if time.Now().Sub(*timestamp) < time.Duration(time.Hour*24) {
+		timeNow := time.Now()
+		if rd.test {
+			timeNow = rd.testStartTime
+		}
+
+		if timeNow.Sub(*timestamp) < time.Duration(time.Hour*24) {
 			break
 		}
 

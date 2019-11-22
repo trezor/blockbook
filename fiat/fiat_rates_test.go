@@ -8,7 +8,10 @@ import (
 	"blockbook/common"
 	"blockbook/db"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
 
@@ -61,16 +64,60 @@ func bitcoinTestnetParser() *btc.BitcoinParser {
 		&btc.Configuration{BlockAddressesToKeep: 1})
 }
 
+// getFiatRatesMockData reads a stub JSON response from a file and returns its content as string
+func getFiatRatesMockData(dateParam string) (string, error) {
+	var filename string
+	if dateParam == "current" {
+		filename = "fiat/mock_data/current.json"
+	} else {
+		filename = "fiat/mock_data/" + dateParam + ".json"
+	}
+	mockFile, err := os.Open(filename)
+	if err != nil {
+		glog.Errorf("Cannot open file %v", filename)
+		return "", err
+	}
+	b, err := ioutil.ReadAll(mockFile)
+	if err != nil {
+		glog.Errorf("Cannot read file %v", filename)
+		return "", err
+	}
+	return string(b), nil
+}
+
 func TestFiatRates(t *testing.T) {
 	d, _, tmp := setupRocksDB(t, &testBitcoinParser{
 		BitcoinParser: bitcoinTestnetParser(),
 	})
 	defer closeAndDestroyRocksDB(t, d, tmp)
 
-	configJSON := `{
-    "fiat_rates": "coingecko",
-    "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"bitcoin\", \"periodSeconds\": 60}"
-	}`
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var err error
+		var mockData string
+
+		if r.URL.Path == "/ping" {
+			w.WriteHeader(200)
+		} else if r.URL.Path == "/coins/bitcoin/history" {
+			date := r.URL.Query()["date"][0]
+			mockData, err = getFiatRatesMockData(date) // get stub rates by date
+		} else if r.URL.Path == "/coins/bitcoin" {
+			mockData, err = getFiatRatesMockData("current") // get "latest" stub rates
+		} else {
+			t.Errorf("Unknown URL path: %v", r.URL.Path)
+		}
+
+		if err != nil {
+			t.Errorf("Error loading stub data: %v", err)
+		}
+		fmt.Fprintln(w, mockData)
+	}))
+	defer mockServer.Close()
+
+	// real CoinGecko API
+	//configJSON := `{"fiat_rates": "coingecko", "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"bitcoin\", \"periodSeconds\": 60}"}`
+
+	// mocked CoinGecko API
+	configJSON := `{"fiat_rates": "coingecko", "fiat_rates_params": "{\"url\": \"` + mockServer.URL + `\", \"coin\": \"bitcoin\", \"periodSeconds\": 60}"}`
 
 	type fiatRatesConfig struct {
 		FiatRates       string `json:"fiat_rates"`
