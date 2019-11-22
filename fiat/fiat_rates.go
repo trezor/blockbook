@@ -220,7 +220,7 @@ func (rd *RatesDownloader) findEarliestMarketData() (*time.Time, error) {
 	}
 	maxDate := time.Now().Add(time.Duration(-24) * time.Hour) // today's historical tickers may not be ready yet, so set to yesterday
 	if rd.test {
-		maxDate = rd.testStartTime //.Add(time.Duration(-24) * time.Hour)
+		maxDate = rd.testStartTime
 	}
 	currentDate := maxDate
 	for {
