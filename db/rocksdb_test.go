@@ -1097,21 +1097,18 @@ func TestRocksTickers(t *testing.T) {
 	}
 
 	// Test storing & finding tickers
-	key := time.Now()
-	time.Sleep(1 * time.Second)
+	key, _ := time.Parse(FiatRatesTimeFormat, "20190627000000")
+	futureKey, _ := time.Parse(FiatRatesTimeFormat, "20190630000000")
 
-	ts := time.Now().UTC()
-
+	ts1, _ := time.Parse(FiatRatesTimeFormat, "20190628000000")
 	ticker1 := &CurrencyRatesTicker{
-		Timestamp: &ts,
+		Timestamp: &ts1,
 		Rates: map[string]json.Number{
 			"usd": "20000",
 		},
 	}
 
-	time.Sleep(1 * time.Second)
-	ts2 := time.Now().UTC()
-
+	ts2, _ := time.Parse(FiatRatesTimeFormat, "20190629000000")
 	ticker2 := &CurrencyRatesTicker{
 		Timestamp: &ts2,
 		Rates: map[string]json.Number{
@@ -1139,9 +1136,7 @@ func TestRocksTickers(t *testing.T) {
 		t.Errorf("Incorrect ticker found. Expected: %v, found: %+v", ticker1.Timestamp, ticker.Timestamp)
 	}
 
-	time.Sleep(1 * time.Second)
-	key2 := time.Now()
-	ticker, err = d.FiatRatesFindTicker(&key2) // should not find anything (future date)
+	ticker, err = d.FiatRatesFindTicker(&futureKey) // should not find anything
 	if err != nil {
 		t.Errorf("TestRocksTickers err: %+v", err)
 	} else if ticker != nil {
