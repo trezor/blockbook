@@ -44,7 +44,7 @@ func NewFiatRatesDownloader(db *db.RocksDB, params string, test bool) (*RatesDow
 	rd.httpTimeoutSeconds = 15 * time.Second
 	rd.url = rdParams.URL
 	rd.coin = rdParams.Coin
-	rd.periodSeconds = time.Duration(rdParams.PeriodSeconds) * time.Second
+	rd.periodSeconds = time.Duration(rdParams.PeriodSeconds) * time.Second // Time period for syncing the latest market data
 	rd.db = db
 	rd.test = test
 	rd.testStartTime = time.Date(2019, 11, 22, 16, 0, 0, 0, time.UTC)
