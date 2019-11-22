@@ -505,7 +505,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusBadRequest,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"error":"No usd rates available for 2020-01-01 00:00:00 +0000 UTC"}`,
+				`{"error":"No tickers available for 2020-01-01 00:00:00 +0000 UTC (usd)"}`,
 			},
 		},
 		{

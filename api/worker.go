@@ -1020,9 +1020,8 @@ func (w *Worker) GetFiatRatesForBlockID(bid string, currency string) (*db.Result
 	ticker, err = w.db.FiatRatesFindTicker(&tm)
 	if err != nil {
 		return nil, NewAPIError(fmt.Sprintf("Error finding ticker: %v", err), true)
-	}
-	if len(ticker.Rates) == 0 {
-		return nil, NewAPIError(fmt.Sprintf("No %s rates available for %s", currency, tm), true)
+	} else if ticker == nil {
+		return nil, NewAPIError(fmt.Sprintf("No tickers available for %s (%s)", tm, currency), true)
 	}
 	result, err := w.getFiatRatesResult(currency, ticker)
 	if err != nil {
@@ -1039,6 +1038,8 @@ func (w *Worker) GetCurrentFiatRates(currency string) (*db.ResultTickerAsString,
 	ticker, err := w.db.FiatRatesFindLastTicker()
 	if err != nil {
 		return nil, NewAPIError(fmt.Sprintf("Error finding ticker: %v", err), true)
+	} else if ticker == nil {
+		return nil, NewAPIError(fmt.Sprintf("No tickers found!"), true)
 	}
 	result, err := w.getFiatRatesResult(currency, ticker)
 	if err != nil {
@@ -1059,9 +1060,8 @@ func (w *Worker) GetFiatRatesForDate(dateString string, currency string) (*db.Re
 	ticker, err := w.db.FiatRatesFindTicker(date)
 	if err != nil {
 		return nil, NewAPIError(fmt.Sprintf("Error finding ticker: %v", err), true)
-	}
-	if len(ticker.Rates) == 0 {
-		return nil, NewAPIError(fmt.Sprintf("No %s rates available for %s", currency, date), true)
+	} else if ticker == nil {
+		return nil, NewAPIError(fmt.Sprintf("No tickers available for %s (%s)", date, currency), true)
 	}
 	result, err := w.getFiatRatesResult(currency, ticker)
 	if err != nil {

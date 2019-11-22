@@ -1,4 +1,4 @@
-// build unittest
+// +build unittest
 
 package db
 
@@ -1124,8 +1124,8 @@ func TestRocksTickers(t *testing.T) {
 	ticker, err := d.FiatRatesFindTicker(&key) // should find the closest key (ticker1)
 	if err != nil {
 		t.Errorf("TestRocksTickers err: %+v", err)
-	} else if len(ticker.Rates) == 0 {
-		t.Errorf("Empty rates")
+	} else if ticker == nil {
+		t.Errorf("Ticker not found")
 	} else if ticker.Timestamp.Format(FiatRatesTimeFormat) != ticker1.Timestamp.Format(FiatRatesTimeFormat) {
 		t.Errorf("Incorrect ticker found. Expected: %v, found: %+v", ticker1.Timestamp, ticker.Timestamp)
 	}
@@ -1133,9 +1133,18 @@ func TestRocksTickers(t *testing.T) {
 	ticker, err = d.FiatRatesFindLastTicker() // should find the last key (ticker2)
 	if err != nil {
 		t.Errorf("TestRocksTickers err: %+v", err)
-	} else if len(ticker.Rates) == 0 {
-		t.Errorf("Empty rates")
+	} else if ticker == nil {
+		t.Errorf("Ticker not found")
 	} else if ticker.Timestamp.Format(FiatRatesTimeFormat) != ticker2.Timestamp.Format(FiatRatesTimeFormat) {
 		t.Errorf("Incorrect ticker found. Expected: %v, found: %+v", ticker1.Timestamp, ticker.Timestamp)
+	}
+
+	time.Sleep(1 * time.Second)
+	key2 := time.Now()
+	ticker, err = d.FiatRatesFindTicker(&key2) // should not find anything (future date)
+	if err != nil {
+		t.Errorf("TestRocksTickers err: %+v", err)
+	} else if ticker != nil {
+		t.Errorf("Ticker found, but the timestamp is older than the last ticker entry.")
 	}
 }

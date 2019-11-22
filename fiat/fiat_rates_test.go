@@ -68,7 +68,7 @@ func TestFiatRates(t *testing.T) {
 	defer closeAndDestroyRocksDB(t, d, tmp)
 
 	configJSON := `{
-	"fiat_rates": "coingecko",
+    "fiat_rates": "coingecko",
     "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"bitcoin\", \"periodSeconds\": 60}"
 	}`
 

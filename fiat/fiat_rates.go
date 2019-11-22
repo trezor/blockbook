@@ -92,7 +92,7 @@ func (rd *RatesDownloader) Run() error {
 		return err
 	}
 
-	if len(ticker.Rates) == 0 {
+	if ticker == nil {
 		// If no tickers found, start downloading from the beginning
 		timestamp, err = rd.findEarliestMarketData()
 		if err != nil {

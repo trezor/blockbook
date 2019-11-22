@@ -179,6 +179,11 @@ func FiatRatesConvertDate(date string) (*time.Time, error) {
 
 // FiatRatesStoreTicker stores ticker data at the specified time
 func (d *RocksDB) FiatRatesStoreTicker(ticker *CurrencyRatesTicker) error {
+	if len(ticker.Rates) == 0 {
+		return errors.New("Error storing ticker: empty rates")
+	} else if ticker.Timestamp == nil {
+		return errors.New("Error storing ticker: empty timestamp")
+	}
 	ratesMarshalled, err := json.Marshal(ticker.Rates)
 	if err != nil {
 		glog.Error("Error marshalling ticker rates: ", err)
@@ -219,7 +224,7 @@ func (d *RocksDB) FiatRatesFindTicker(tickerTime *time.Time) (*CurrencyRatesTick
 		glog.Error("FiatRatesFindTicker Iterator error: ", err)
 		return nil, err
 	}
-	if len(ticker.Rates) == 0 {
+	if !it.Valid() {
 		return nil, nil // ticker not found
 	}
 	return ticker, nil
@@ -1819,6 +1824,7 @@ func unpackBigint(buf []byte) (big.Int, int) {
 	return r, l
 }
 
+// TODO: I don't think this should be here
 // InitTestFiatRates initializes test data for /api/v2/tickers endpoint
 func (d *RocksDB) InitTestFiatRates() error {
 	convertedDate, err := FiatRatesConvertDate("20191121140000")
