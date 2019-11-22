@@ -1096,7 +1096,9 @@ func (s *PublicServer) apiTickersList(r *http.Request, apiVersion int) (interfac
 	s.metrics.ExplorerViews.With(common.Labels{"action": "api-tickers-list"}).Inc()
 	ticker, err := s.db.FiatRatesFindLastTicker()
 	if err != nil {
-		return nil, api.NewAPIError(fmt.Sprintf("Error finding last ticker: %v", err), true)
+		return nil, api.NewAPIError(fmt.Sprintf("Error finding last ticker: %v", err), false)
+	} else if ticker == nil {
+		return nil, api.NewAPIError(fmt.Sprintf("No tickers found."), true)
 	}
 	keys := make([]string, 0, len(ticker.Rates))
 	for k := range ticker.Rates {
