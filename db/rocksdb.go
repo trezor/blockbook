@@ -217,7 +217,10 @@ func (d *RocksDB) FiatRatesFindTicker(tickerTime *time.Time) (*CurrencyRatesTick
 	}
 	if err := it.Err(); err != nil {
 		glog.Error("FiatRatesFindTicker Iterator error: ", err)
-		return ticker, err
+		return nil, err
+	}
+	if len(ticker.Rates) == 0 {
+		return nil, nil // ticker not found
 	}
 	return ticker, nil
 }

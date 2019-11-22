@@ -49,11 +49,41 @@ func NewFiatRatesDownloader(db *db.RocksDB, params string, test bool) (*RatesDow
 	return rd, err
 }
 
+// Ping checks the API server availability
+func (rd *RatesDownloader) Ping() error {
+	requestURL := rd.url + "/ping"
+	req, err := http.NewRequest("GET", requestURL, nil)
+	if err != nil {
+		glog.Errorf("Error creating a new request for %v: %v", requestURL, err)
+		return err
+	}
+	req.Close = true
+	req.Header.Set("accept", "application/json")
+
+	client := &http.Client{
+		Timeout: rd.httpTimeoutSeconds,
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return errors.New("API unavailable. Invalid response status: " + string(resp.Status))
+	}
+	return nil
+}
+
 // Run starts the FiatRates downloader. If there are tickers available, it continues from the last record.
 // If there are no tickers, it finds the earliest market data available on API and downloads historical data.
 // When historical data is downloaded, it continues to fetch the latest ticker prices.
 func (rd *RatesDownloader) Run() error {
 	var timestamp *time.Time
+
+	if err := rd.Ping(); err != nil {
+		glog.Errorf("RatesDownloader Ping error: %v", err)
+		return err
+	}
 
 	// Check if there are any tickers stored in database
 	ticker, err := rd.db.FiatRatesFindLastTicker()
