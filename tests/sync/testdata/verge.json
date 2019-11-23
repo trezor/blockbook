@@ -1,0 +1,38 @@
+{
+  "connectBlocks": {
+    "syncRanges": [
+      {"lower": 3619384, "upper": 3619404}
+    ],
+    "blocks": {
+      "3619404": {
+        "height": 3619404,
+        "hash": "00000000002067d35fe4b3af4f06cbda84f7aa0a0224c8ffe458feba37cc0248",
+        "noTxs": 1,
+        "txDetails": [
+          {
+            "txid": "074849990d6d83086660c4d8ece1fd978a66d8a96eb0d79fbac5eb0f966c565c",
+            "version": 2,
+            "vin": [
+              {
+                "coinbase": "034c3a37043db8d85d0881003fbd040000007969696d7000",
+                "sequence": 0
+              }
+            ],
+            "vout": [
+              {
+                "value": 730.000000,
+                "n": 0,
+                "scriptPubKey": {
+                  "hex": "210394a20d91e4caae837db9e2753c679151925c02c111ef576843cd0473354cc36fac"
+                }
+              }
+            ],
+            "hex": "020000003cb8d85d010000000000000000000000000000000000000000000000000000000000000000ffffffff18034c3a37043db8d85d0881003fbd040000007969696d7000000000000180ea822b0000000023210394a20d91e4caae837db9e2753c679151925c02c111ef576843cd0473354cc36fac00000000",
+            "time": 1574484028,
+            "blocktime": 1574484028
+          }
+        ]
+      }
+    }
+  }
+}
