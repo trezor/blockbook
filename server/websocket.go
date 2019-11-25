@@ -302,6 +302,38 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *webs
 		r := struct{}{}
 		return r, nil
 	},
+	"getCurrentFiatRates": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
+		r := struct {
+			Currency string `json:"currency"`
+		}{}
+		err = json.Unmarshal(req.Params, &r)
+		if err == nil {
+			rv, err = s.getCurrentFiatRates(r.Currency)
+		}
+		return
+	},
+	"getFiatRatesForBlockID": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
+		r := struct {
+			BlockID  string `json:"block_id"`
+			Currency string `json:"currency"`
+		}{}
+		err = json.Unmarshal(req.Params, &r)
+		if err == nil {
+			rv, err = s.getFiatRatesForBlockID(r.BlockID, r.Currency)
+		}
+		return
+	},
+	"getFiatRatesForDate": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
+		r := struct {
+			Date     string `json:"date"`
+			Currency string `json:"currency"`
+		}{}
+		err = json.Unmarshal(req.Params, &r)
+		if err == nil {
+			rv, err = s.getFiatRatesForDate(r.Date, r.Currency)
+		}
+		return
+	},
 }
 
 func sendResponse(c *websocketChannel, req *websocketReq, data interface{}) {
@@ -677,4 +709,19 @@ func (s *WebsocketServer) OnNewTxAddr(tx *bchain.Tx, addrDesc bchain.AddressDesc
 			}
 		}
 	}
+}
+
+func (s *WebsocketServer) getCurrentFiatRates(currency string) (interface{}, error) {
+	ret, err := s.api.GetCurrentFiatRates(currency)
+	return ret, err
+}
+
+func (s *WebsocketServer) getFiatRatesForBlockID(bid string, currency string) (interface{}, error) {
+	ret, err := s.api.GetFiatRatesForBlockID(bid, currency)
+	return ret, err
+}
+
+func (s *WebsocketServer) getFiatRatesForDate(date string, currency string) (interface{}, error) {
+	ret, err := s.api.GetFiatRatesForDate(date, currency)
+	return ret, err
 }

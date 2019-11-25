@@ -1102,6 +1102,112 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			},
 			want: `{"id":"16","data":{}}`,
 		},
+		{
+			name: "websocket getCurrentFiatRates no currency",
+			req: websocketReq{
+				Method: "getCurrentFiatRates",
+				Params: map[string]interface{}{
+					"": "",
+				},
+			},
+			want: `{"id":"17","data":{"error":{"message":"Missing or empty \"currency\" parameter"}}}`,
+		},
+		{
+			name: "websocket getCurrentFiatRates usd",
+			req: websocketReq{
+				Method: "getCurrentFiatRates",
+				Params: map[string]interface{}{
+					"currency": "usd",
+				},
+			},
+			want: `{"id":"18","data":{"data_timestamp":"20191121143015","rates":{"usd":7914.5}}}`,
+		},
+		{
+			name: "websocket getCurrentFiatRates eur",
+			req: websocketReq{
+				Method: "getCurrentFiatRates",
+				Params: map[string]interface{}{
+					"currency": "eur",
+				},
+			},
+			want: `{"id":"19","data":{"data_timestamp":"20191121143015","rates":{"eur":7134.1,"usd":7914.5}}}`,
+		},
+		{
+			name: "websocket getCurrentFiatRates incorrect currency",
+			req: websocketReq{
+				Method: "getCurrentFiatRates",
+				Params: map[string]interface{}{
+					"currency": "does-not-exist",
+				},
+			},
+			want: `{"id":"20","data":{"error":{"message":"Currency \"does-not-exist\" is not available for timestamp 20191121143015. Available currencies are: eur, usd."}}}`,
+		},
+		{
+			name: "websocket getFiatRatesForBlockID usd",
+			req: websocketReq{
+				Method: "getFiatRatesForBlockID",
+				Params: map[string]interface{}{
+					"block_id": "225494",
+					"currency": "usd",
+				},
+			},
+			want: `{"id":"21","data":{"data_timestamp":"20191121140000","rates":{"usd":7814.5}}}`,
+		},
+		{
+			name: "websocket getFiatRatesForBlockID eur",
+			req: websocketReq{
+				Method: "getFiatRatesForBlockID",
+				Params: map[string]interface{}{
+					"block_id": "225494",
+					"currency": "eur",
+				},
+			},
+			want: `{"id":"22","data":{"data_timestamp":"20191121140000","rates":{"eur":7100.0,"usd":7814.5}}}`,
+		},
+		{
+			name: "websocket getFiatRatesForDate incorrect date",
+			req: websocketReq{
+				Method: "getFiatRatesForDate",
+				Params: map[string]interface{}{
+					"date":     "yesterday",
+					"currency": "usd",
+				},
+			},
+			want: `{"id":"23","data":{"error":{"message":"Date \"yesterday\" does not match any of available formats. Possible formats are: YYYYMMDDhhmmss, YYYYMMDDhhmm, YYYYMMDDhh, YYYYMMDD"}}}`,
+		},
+		{
+			name: "websocket getFiatRatesForDate incorrect (future) date",
+			req: websocketReq{
+				Method: "getFiatRatesForDate",
+				Params: map[string]interface{}{
+					"date":     "20200101000000",
+					"currency": "usd",
+				},
+			},
+			want: `{"id":"24","data":{"error":{"message":"No tickers available for 2020-01-01 00:00:00 +0000 UTC (usd)"}}}`,
+		},
+		{
+			name: "websocket getFiatRatesForDate exact date",
+			req: websocketReq{
+				Method: "getFiatRatesForDate",
+				Params: map[string]interface{}{
+					"date":     "20191121140000",
+					"currency": "usd",
+				},
+			},
+			want: `{"id":"25","data":{"data_timestamp":"20191121140000","rates":{"usd":7814.5}}}`,
+		},
+		{
+			name: "websocket getFiatRatesForDate closest date, eur",
+			req: websocketReq{
+				Method: "getFiatRatesForDate",
+				Params: map[string]interface{}{
+					"date":     "20191121130000",
+					"currency": "eur",
+				},
+			},
+			want: `{"id":"26","data":{"data_timestamp":"20191121140000","rates":{"eur":7100.0,"usd":7814.5}}}`,
+		},
 	}
 
 	// send all requests at once
