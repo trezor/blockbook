@@ -17,7 +17,6 @@ import (
 	"regexp"
 	"runtime"
 	"runtime/debug"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -1094,20 +1093,8 @@ func (s *PublicServer) apiSendTx(r *http.Request, apiVersion int) (interface{}, 
 // apiTickersList returns a list of available FiatRates currencies
 func (s *PublicServer) apiTickersList(r *http.Request, apiVersion int) (interface{}, error) {
 	s.metrics.ExplorerViews.With(common.Labels{"action": "api-tickers-list"}).Inc()
-	ticker, err := s.db.FiatRatesFindLastTicker()
-	if err != nil {
-		return nil, api.NewAPIError(fmt.Sprintf("Error finding last ticker: %v", err), false)
-	} else if ticker == nil {
-		return nil, api.NewAPIError(fmt.Sprintf("No tickers found."), true)
-	}
-	keys := make([]string, 0, len(ticker.Rates))
-	for k := range ticker.Rates {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys) // sort to get deterministic results
-	result := make(map[string][]string)
-	result["available_currencies"] = keys
-	return result, nil
+	result, err := s.api.GetFiatRatesTickersList()
+	return result, err
 }
 
 // apiTickers returns FiatRates ticker prices for the specified block or date.

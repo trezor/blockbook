@@ -334,6 +334,10 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *webs
 		}
 		return
 	},
+	"getFiatRatesTickersList": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
+		rv, err = s.getFiatRatesTickersList()
+		return
+	},
 }
 
 func sendResponse(c *websocketChannel, req *websocketReq, data interface{}) {
@@ -723,5 +727,10 @@ func (s *WebsocketServer) getFiatRatesForBlockID(bid string, currency string) (i
 
 func (s *WebsocketServer) getFiatRatesForDate(date string, currency string) (interface{}, error) {
 	ret, err := s.api.GetFiatRatesForDate(date, currency)
+	return ret, err
+}
+
+func (s *WebsocketServer) getFiatRatesTickersList() (interface{}, error) {
+	ret, err := s.api.GetFiatRatesTickersList()
 	return ret, err
 }

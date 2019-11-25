@@ -46,6 +46,11 @@ type ResultTickerAsString struct {
 	Rates     map[string]json.Number `json:"rates"`
 }
 
+// ResultTickerListAsString contains formatted data about available currency tickers
+type ResultTickerListAsString struct {
+	Tickers []string `json:"available_currencies"`
+}
+
 // RepairRocksDB calls RocksDb db repair function
 func RepairRocksDB(name string) error {
 	glog.Infof("rocksdb: repair")

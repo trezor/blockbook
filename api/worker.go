@@ -1070,6 +1070,23 @@ func (w *Worker) GetFiatRatesForDate(dateString string, currency string) (*db.Re
 	return result, nil
 }
 
+// GetFiatRatesTickersList returns the list of available fiatRates tickers
+func (w *Worker) GetFiatRatesTickersList() (*db.ResultTickerListAsString, error) {
+	ticker, err := w.db.FiatRatesFindLastTicker()
+	if err != nil {
+		return nil, NewAPIError(fmt.Sprintf("Error finding last ticker: %v", err), false)
+	} else if ticker == nil {
+		return nil, NewAPIError(fmt.Sprintf("No tickers found."), true)
+	}
+	keys := make([]string, 0, len(ticker.Rates))
+	for k := range ticker.Rates {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys) // sort to get deterministic results
+	result := &db.ResultTickerListAsString{Tickers: keys}
+	return result, nil
+}
+
 // GetBlockInfoFromBlockID returns block info from block height or block hash
 func (w *Worker) GetBlockInfoFromBlockID(bid string) (*bchain.BlockInfo, error) {
 	// try to decide if passed string (bid) is block height or block hash

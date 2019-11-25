@@ -1208,6 +1208,13 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			},
 			want: `{"id":"26","data":{"data_timestamp":"20191121140000","rates":{"eur":7100.0,"usd":7814.5}}}`,
 		},
+		{
+			name: "websocket getTickersList",
+			req: websocketReq{
+				Method: "getFiatRatesTickersList",
+			},
+			want: `{"id":"27","data":{"available_currencies":["eur","usd"]}}`,
+		},
 	}
 
 	// send all requests at once
