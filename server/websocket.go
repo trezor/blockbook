@@ -323,14 +323,14 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *webs
 		}
 		return
 	},
-	"getFiatRatesForDate": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
+	"getFiatRatesForDates": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
 		r := struct {
-			Date     string `json:"date"`
-			Currency string `json:"currency"`
+			Dates    []string `json:"dates"`
+			Currency string   `json:"currency"`
 		}{}
 		err = json.Unmarshal(req.Params, &r)
 		if err == nil {
-			rv, err = s.getFiatRatesForDate(r.Date, r.Currency)
+			rv, err = s.getFiatRatesForDates(r.Dates, r.Currency)
 		}
 		return
 	},
@@ -725,8 +725,8 @@ func (s *WebsocketServer) getFiatRatesForBlockID(bid string, currency string) (i
 	return ret, err
 }
 
-func (s *WebsocketServer) getFiatRatesForDate(date string, currency string) (interface{}, error) {
-	ret, err := s.api.GetFiatRatesForDate(date, currency)
+func (s *WebsocketServer) getFiatRatesForDates(dates []string, currency string) (interface{}, error) {
+	ret, err := s.api.GetFiatRatesForDates(dates, currency)
 	return ret, err
 }
 

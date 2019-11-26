@@ -1048,26 +1048,38 @@ func (w *Worker) GetCurrentFiatRates(currency string) (*db.ResultTickerAsString,
 	return result, nil
 }
 
-// GetFiatRatesForDate returns fiat rates for the specific date
-func (w *Worker) GetFiatRatesForDate(dateString string, currency string) (*db.ResultTickerAsString, error) {
+// GetFiatRatesForDates returns fiat rates for each of the provided dates
+func (w *Worker) GetFiatRatesForDates(dateStrings []string, currency string) (*db.ResultTickersAsString, error) {
 	if currency == "" {
 		return nil, NewAPIError("Missing or empty \"currency\" parameter", true)
+	} else if len(dateStrings) == 0 {
+		return nil, NewAPIError("No dates provided", true)
 	}
-	date, err := db.FiatRatesConvertDate(dateString)
-	if err != nil {
-		return nil, NewAPIError(fmt.Sprintf("%v", err), true)
+
+	ret := &db.ResultTickersAsString{}
+	for _, dateString := range dateStrings {
+		date, err := db.FiatRatesConvertDate(dateString)
+		if err != nil {
+			ret.Tickers = append(ret.Tickers, db.ResultTickerAsString{Error: fmt.Sprintf("%v", err)})
+			continue
+		}
+		ticker, err := w.db.FiatRatesFindTicker(date)
+		if err != nil {
+			glog.Errorf("Error finding ticker by date %v. Error: %v", dateString, err)
+			ret.Tickers = append(ret.Tickers, db.ResultTickerAsString{Error: "Ticker not found."})
+			continue
+		} else if ticker == nil {
+			ret.Tickers = append(ret.Tickers, db.ResultTickerAsString{Error: fmt.Sprintf("No tickers available for %s (%s)", date, currency)})
+			continue
+		}
+		result, err := w.getFiatRatesResult(currency, ticker)
+		if err != nil {
+			ret.Tickers = append(ret.Tickers, db.ResultTickerAsString{Error: fmt.Sprintf("%v", err)})
+			continue
+		}
+		ret.Tickers = append(ret.Tickers, *result)
 	}
-	ticker, err := w.db.FiatRatesFindTicker(date)
-	if err != nil {
-		return nil, NewAPIError(fmt.Sprintf("Error finding ticker: %v", err), false)
-	} else if ticker == nil {
-		return nil, NewAPIError(fmt.Sprintf("No tickers available for %s (%s)", date, currency), true)
-	}
-	result, err := w.getFiatRatesResult(currency, ticker)
-	if err != nil {
-		return nil, err
-	}
-	return result, nil
+	return ret, nil
 }
 
 // GetFiatRatesTickersList returns the list of available fiatRates tickers

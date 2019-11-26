@@ -1110,7 +1110,11 @@ func (s *PublicServer) apiTickers(r *http.Request, apiVersion int) (interface{},
 	} else if date := r.URL.Query().Get("date"); date != "" {
 		// Get tickers for specified date
 		s.metrics.ExplorerViews.With(common.Labels{"action": "api-tickers-date"}).Inc()
-		result, err = s.api.GetFiatRatesForDate(date, currency)
+		resultTickers, err := s.api.GetFiatRatesForDates([]string{date}, currency)
+		if err != nil {
+			return nil, err
+		}
+		result = &resultTickers.Tickers[0]
 	} else {
 		// No parameters - get the latest available ticker
 		s.metrics.ExplorerViews.With(common.Labels{"action": "api-tickers-last"}).Inc()
