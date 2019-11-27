@@ -19,13 +19,12 @@ type RatesDownloader struct {
 	db                 *db.RocksDB
 	timeFormat         string
 	httpTimeoutSeconds time.Duration
-	test               bool
-	testStartTime      time.Time // a starting timestamp for tests to be deterministic (time.Now() otherwise)
+	startTime          *time.Time // a starting timestamp for tests to be deterministic (time.Now() for production)
 }
 
 // NewFiatRatesDownloader initiallizes the downloader for FiatRates API.
-// If the "test" flag is true, then downloader will sync only the last few days instead of the whole history.
-func NewFiatRatesDownloader(db *db.RocksDB, params string, test bool) (*RatesDownloader, error) {
+// If the startTime is nil, the downloader will start from the beginning.
+func NewFiatRatesDownloader(db *db.RocksDB, params string, startTime *time.Time) (*RatesDownloader, error) {
 	var rd = &RatesDownloader{}
 	type fiatRatesParams struct {
 		URL           string `json:"url"`
@@ -46,8 +45,12 @@ func NewFiatRatesDownloader(db *db.RocksDB, params string, test bool) (*RatesDow
 	rd.coin = rdParams.Coin
 	rd.periodSeconds = time.Duration(rdParams.PeriodSeconds) * time.Second // Time period for syncing the latest market data
 	rd.db = db
-	rd.test = test
-	rd.testStartTime = time.Date(2019, 11, 22, 16, 0, 0, 0, time.UTC)
+	if startTime == nil {
+		timeNow := time.Now().UTC()
+		rd.startTime = &timeNow
+	} else {
+		rd.startTime = startTime // If startTime is nil, time.Now() will be used
+	}
 	return rd, err
 }
 
@@ -101,15 +104,20 @@ func (rd *RatesDownloader) Run() error {
 			glog.Errorf("Error looking up earliest market data: %v", err)
 			return err
 		}
-		if rd.test {
-			// When testing, start from 2 days ago instead of the beginning (2013)
-			*timestamp = rd.testStartTime.Add(time.Duration(-24*2) * time.Hour)
-		}
 	} else {
 		// If found, continue downloading data from the last available record
 		timestamp = ticker.Timestamp
 	}
-	return rd.sync(timestamp)
+	err = rd.syncHistorical(timestamp)
+	if err != nil {
+		glog.Errorf("RatesDownloader syncHistorical error: %v", err)
+		return err
+	}
+	if err := rd.syncLatest(); err != nil {
+		glog.Errorf("RatesDownloader syncLatest error: %v", err)
+		return err
+	}
+	return nil
 }
 
 // GetMarketData retrieves the response from fiatRates API at the specified date.
@@ -163,11 +171,7 @@ func (rd *RatesDownloader) getMarketData(timestamp *time.Time) ([]byte, error) {
 // GetData gets fiat rates from API at the specified date and returns JSON string.
 // If timestamp is nil, it will download the latest market data.
 func (rd *RatesDownloader) getData(timestamp *time.Time) (*db.CurrencyRatesTicker, error) {
-	timeNow := time.Now().UTC()
-	if rd.test {
-		timeNow = rd.testStartTime
-	}
-	ticker := &db.CurrencyRatesTicker{Timestamp: &timeNow}
+	ticker := &db.CurrencyRatesTicker{Timestamp: rd.startTime}
 	bodyBytes, err := rd.getMarketData(timestamp)
 	if err != nil {
 		return nil, err
@@ -218,10 +222,7 @@ func (rd *RatesDownloader) findEarliestMarketData() (*time.Time, error) {
 		glog.Error("Error parsing date: ", err)
 		return nil, err
 	}
-	maxDate := time.Now().Add(time.Duration(-24) * time.Hour) // today's historical tickers may not be ready yet, so set to yesterday
-	if rd.test {
-		maxDate = rd.testStartTime
-	}
+	maxDate := rd.startTime.Add(time.Duration(-24) * time.Hour) // today's historical tickers may not be ready yet, so set to yesterday
 	currentDate := maxDate
 	for {
 		dataExists, err := rd.marketDataExists(&currentDate)
@@ -243,14 +244,14 @@ func (rd *RatesDownloader) findEarliestMarketData() (*time.Time, error) {
 	}
 }
 
-// SyncLatest downloads the latest data every rd.PeriodSeconds
+// syncLatest downloads the latest FiatRates data every rd.PeriodSeconds
 func (rd *RatesDownloader) syncLatest() error {
 	timer := time.NewTimer(rd.periodSeconds)
 	for {
 		ticker, err := rd.getData(nil)
 		if err != nil {
 			// Do not exit on GET error, log it, wait and try again
-			glog.Errorf("Sync GetData error: %v", err)
+			glog.Warningf("Sync GetData error: %v", err)
 			<-timer.C
 			timer.Reset(rd.periodSeconds)
 			continue
@@ -260,19 +261,14 @@ func (rd *RatesDownloader) syncLatest() error {
 			glog.Errorf("Sync StoreTicker error %v", err)
 			return err
 		}
-		if rd.test {
-			// when testing, sync once and exit
-			break
-		}
 		<-timer.C
 		timer.Reset(rd.periodSeconds)
 	}
-	return nil
 }
 
-// Sync downloads all the historical data since the specified timestamp till today,
+// syncHistorical downloads all the historical data since the specified timestamp till today,
 // then continues to download the latest rates
-func (rd *RatesDownloader) sync(timestamp *time.Time) error {
+func (rd *RatesDownloader) syncHistorical(timestamp *time.Time) error {
 	period := time.Duration(1) * time.Second
 	timer := time.NewTimer(period)
 	for {
@@ -290,17 +286,12 @@ func (rd *RatesDownloader) sync(timestamp *time.Time) error {
 
 		*timestamp = timestamp.Add(time.Hour * 24) // go to the next day
 
-		timeNow := time.Now()
-		if rd.test {
-			timeNow = rd.testStartTime
-		}
-
-		if timeNow.Sub(*timestamp) < time.Duration(time.Hour*24) {
+		if rd.startTime.Sub(*timestamp) < time.Duration(time.Hour*24) {
 			break
 		}
 
 		<-timer.C
 		timer.Reset(period)
 	}
-	return rd.syncLatest()
+	return nil
 }

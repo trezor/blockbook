@@ -14,6 +14,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/golang/glog"
 	"github.com/martinboehm/btcutil/chaincfg"
@@ -134,14 +135,42 @@ func TestFiatRates(t *testing.T) {
 		t.Errorf("Error parsing FiatRates config - empty parameter")
 		return
 	}
-	fiatRates, err := NewFiatRatesDownloader(d, config.FiatRatesParams, true)
+	testStartTime := time.Date(2019, 11, 22, 16, 0, 0, 0, time.UTC)
+	fiatRates, err := NewFiatRatesDownloader(d, config.FiatRatesParams, &testStartTime)
 	if err != nil {
 		t.Errorf("FiatRates init error: %v\n", err)
 	}
 	if config.FiatRates == "coingecko" {
-		err = fiatRates.Run()
+		timestamp, err := fiatRates.findEarliestMarketData()
 		if err != nil {
-			t.Errorf("Error running FiatRatesDownloader: %v", err)
+			t.Errorf("Error looking up earliest market data: %v", err)
+			return
+		}
+		earliestTimestamp, _ := time.Parse(db.FiatRatesTimeFormat, "20130429000000")
+		if *timestamp != earliestTimestamp {
+			t.Errorf("Incorrect earliest available timestamp found. Wanted: %v, got: %v", earliestTimestamp, timestamp)
+			return
+		}
+
+		// After verifying that findEarliestMarketData works correctly,
+		// set the earliest available timestamp to 2 days ago for easier testing
+		*timestamp = fiatRates.startTime.Add(time.Duration(-24*2) * time.Hour)
+
+		err = fiatRates.syncHistorical(timestamp)
+		if err != nil {
+			t.Errorf("RatesDownloader syncHistorical error: %v", err)
+			return
+		}
+		ticker, err := fiatRates.getData(nil)
+		if err != nil {
+			// Do not exit on GET error, log it, wait and try again
+			glog.Errorf("Sync GetData error: %v", err)
+			return
+		}
+		err = fiatRates.db.FiatRatesStoreTicker(ticker)
+		if err != nil {
+			glog.Errorf("Sync StoreTicker error %v", err)
+			return
 		}
 	}
 }
