@@ -1044,11 +1044,12 @@ func (s *PublicServer) apiBalanceHistory(r *http.Request, apiVersion int) (inter
 		}
 		t := r.URL.Query().Get("from")
 		if t != "" {
-			fromTime, _ = time.Parse("2006-02-01", t)
+			fromTime, _ = time.Parse("2006-01-02", t)
 		}
 		t = r.URL.Query().Get("to")
 		if t != "" {
-			toTime, _ = time.Parse("2006-02-01", t)
+			// time.RFC3339
+			toTime, _ = time.Parse("2006-01-02", t)
 		}
 		history, err = s.api.GetUtxoBalanceHistory(r.URL.Path[i+1:], gap)
 		if err == nil {

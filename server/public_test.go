@@ -628,6 +628,15 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			},
 		},
 		{
+			name:        "apiBalanceHistory Addr2 v2 from=2018-03-20&to=2018-03-21",
+			r:           newGetRequest(ts.URL + "/api/v2/balancehistory/mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz?from=2018-03-20&to=2018-03-21"),
+			status:      http.StatusOK,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`[{"blockTime":1521514800,"txs":1,"received":"12345","sent":"0"}]`,
+			},
+		},
+		{
 			name:        "apiSendTx",
 			r:           newGetRequest(ts.URL + "/api/v2/sendtx/1234567890"),
 			status:      http.StatusBadRequest,
