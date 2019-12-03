@@ -801,14 +801,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 	return r, nil
 }
 
-// GetBalanceHistory returns history of balance for given address
-func (w *Worker) GetBalanceHistory(address string, fromTime, toTime time.Time) (BalanceHistories, error) {
-	bhs := make(BalanceHistories, 0)
-	start := time.Now()
-	addrDesc, _, err := w.getAddrDescAndNormalizeAddress(address)
-	if err != nil {
-		return nil, err
-	}
+func (w *Worker) balanceHistoryHeightsFromTo(fromTime, toTime time.Time) (uint32, uint32, uint32, uint32) {
 	fromUnix := uint32(0)
 	toUnix := maxUint32
 	fromHeight := uint32(0)
@@ -821,6 +814,53 @@ func (w *Worker) GetBalanceHistory(address string, fromTime, toTime time.Time) (
 		toUnix = uint32(toTime.Unix())
 		toHeight = w.is.GetBlockHeightOfTime(toUnix)
 	}
+	return fromUnix, fromHeight, toUnix, toHeight
+}
+
+func (w *Worker) balanceHistoryForTxid(addrDesc bchain.AddressDescriptor, txid string, fromUnix, toUnix uint32) (*BalanceHistory, error) {
+	ta, err := w.db.GetTxAddresses(txid)
+	if err != nil {
+		return nil, err
+	}
+	if ta == nil {
+		glog.Warning("DB inconsistency:  tx ", txid, ": not found in txAddresses")
+		return nil, nil
+	}
+	time := w.is.GetBlockTime(ta.Height)
+	if time < fromUnix || time >= toUnix {
+		return nil, nil
+	}
+	bh := BalanceHistory{
+		Time:        time,
+		Txs:         1,
+		SentSat:     &Amount{},
+		ReceivedSat: &Amount{},
+		Txid:        txid,
+	}
+	for i := range ta.Inputs {
+		tai := &ta.Inputs[i]
+		if bytes.Equal(addrDesc, tai.AddrDesc) {
+			(*big.Int)(bh.SentSat).Add((*big.Int)(bh.SentSat), &tai.ValueSat)
+		}
+	}
+	for i := range ta.Outputs {
+		tao := &ta.Outputs[i]
+		if bytes.Equal(addrDesc, tao.AddrDesc) {
+			(*big.Int)(bh.ReceivedSat).Add((*big.Int)(bh.ReceivedSat), &tao.ValueSat)
+		}
+	}
+	return &bh, nil
+}
+
+// GetBalanceHistory returns history of balance for given address
+func (w *Worker) GetBalanceHistory(address string, fromTime, toTime time.Time) (BalanceHistories, error) {
+	bhs := make(BalanceHistories, 0)
+	start := time.Now()
+	addrDesc, _, err := w.getAddrDescAndNormalizeAddress(address)
+	if err != nil {
+		return nil, err
+	}
+	fromUnix, fromHeight, toUnix, toHeight := w.balanceHistoryHeightsFromTo(fromTime, toTime)
 	if fromHeight >= toHeight {
 		return bhs, nil
 	}
@@ -829,41 +869,16 @@ func (w *Worker) GetBalanceHistory(address string, fromTime, toTime time.Time) (
 		return nil, err
 	}
 	for txi := len(txs) - 1; txi >= 0; txi-- {
-		ta, err := w.db.GetTxAddresses(txs[txi])
+		bh, err := w.balanceHistoryForTxid(addrDesc, txs[txi], fromUnix, toUnix)
 		if err != nil {
 			return nil, err
 		}
-		if ta == nil {
-			glog.Warning("DB inconsistency:  tx ", txs[txi], ": not found in txAddresses")
-			continue
+		if bh != nil {
+			bhs = append(bhs, *bh)
 		}
-		time := w.is.GetBlockTime(ta.Height)
-		if time < fromUnix || time >= toUnix {
-			continue
-		}
-		bh := BalanceHistory{
-			Time:        time,
-			Txs:         1,
-			SentSat:     &Amount{},
-			ReceivedSat: &Amount{},
-			Txid:        txs[txi],
-		}
-		for i := range ta.Inputs {
-			tai := &ta.Inputs[i]
-			if bytes.Equal(addrDesc, tai.AddrDesc) {
-				(*big.Int)(bh.SentSat).Add((*big.Int)(bh.SentSat), &tai.ValueSat)
-			}
-		}
-		for i := range ta.Outputs {
-			tao := &ta.Outputs[i]
-			if bytes.Equal(addrDesc, tao.AddrDesc) {
-				(*big.Int)(bh.ReceivedSat).Add((*big.Int)(bh.ReceivedSat), &tao.ValueSat)
-			}
-		}
-		bhs = append(bhs, bh)
 	}
 	bha := bhs.SortAndAggregate(3600)
-	glog.Info("GetBalanceHistory ", address, ", count ", len(bha), " finished in ", time.Since(start))
+	glog.Info("GetBalanceHistory ", address, ", blocks ", fromHeight, "-", toHeight, ", count ", len(bha), " finished in ", time.Since(start))
 	return bha, nil
 }
 

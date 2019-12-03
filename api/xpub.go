@@ -591,6 +591,38 @@ func (w *Worker) GetXpubUtxo(xpub string, onlyConfirmed bool, gap int) (Utxos, e
 }
 
 // GetUtxoBalanceHistory returns history of balance for given xpub
-func (w *Worker) GetUtxoBalanceHistory(xpub string, gap int) ([]BalanceHistory, error) {
-	return nil, errors.New("not implemented")
+func (w *Worker) GetUtxoBalanceHistory(xpub string, fromTime, toTime time.Time, gap int) (BalanceHistories, error) {
+	bhs := make(BalanceHistories, 0)
+	start := time.Now()
+	fromUnix, fromHeight, toUnix, toHeight := w.balanceHistoryHeightsFromTo(fromTime, toTime)
+	if fromHeight >= toHeight {
+		return bhs, nil
+	}
+	data, _, err := w.getXpubData(xpub, 0, 1, AccountDetailsTxidHistory, &AddressFilter{
+		Vout:          AddressFilterVoutOff,
+		OnlyConfirmed: true,
+		FromHeight:    fromHeight,
+		ToHeight:      toHeight,
+	}, gap)
+	if err != nil {
+		return nil, err
+	}
+	for _, da := range [][]xpubAddress{data.addresses, data.changeAddresses} {
+		for i := range da {
+			ad := &da[i]
+			txids := ad.txids
+			for txi := len(txids) - 1; txi >= 0; txi-- {
+				bh, err := w.balanceHistoryForTxid(ad.addrDesc, txids[txi].txid, fromUnix, toUnix)
+				if err != nil {
+					return nil, err
+				}
+				if bh != nil {
+					bhs = append(bhs, *bh)
+				}
+			}
+		}
+	}
+	bha := bhs.SortAndAggregate(3600)
+	glog.Info("GetUtxoBalanceHistory ", xpub[:16], ", blocks ", fromHeight, "-", toHeight, ", count ", len(bha), ", finished in ", time.Since(start))
+	return bha, nil
 }

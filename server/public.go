@@ -1051,7 +1051,7 @@ func (s *PublicServer) apiBalanceHistory(r *http.Request, apiVersion int) (inter
 			// time.RFC3339
 			toTime, _ = time.Parse("2006-01-02", t)
 		}
-		history, err = s.api.GetUtxoBalanceHistory(r.URL.Path[i+1:], gap)
+		history, err = s.api.GetUtxoBalanceHistory(r.URL.Path[i+1:], fromTime, toTime, gap)
 		if err == nil {
 			s.metrics.ExplorerViews.With(common.Labels{"action": "api-xpub-balancehistory"}).Inc()
 		} else {

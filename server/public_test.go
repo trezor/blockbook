@@ -637,6 +637,33 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			},
 		},
 		{
+			name:        "apiBalanceHistory xpub v2",
+			r:           newGetRequest(ts.URL + "/api/v2/balancehistory/" + dbtestdata.Xpub),
+			status:      http.StatusOK,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`[{"blockTime":1521514800,"txs":1,"received":"1","sent":"0"},{"blockTime":1521594000,"txs":1,"received":"118641975500","sent":"1"}]`,
+			},
+		},
+		{
+			name:        "apiBalanceHistory xpub v2 from=2018-03-20&to=2018-03-21",
+			r:           newGetRequest(ts.URL + "/api/v2/balancehistory/" + dbtestdata.Xpub + "?from=2018-03-20&to=2018-03-21"),
+			status:      http.StatusOK,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`[{"blockTime":1521514800,"txs":1,"received":"1","sent":"0"}]`,
+			},
+		},
+		{
+			name:        "apiBalanceHistory xpub v2 from=2018-03-21",
+			r:           newGetRequest(ts.URL + "/api/v2/balancehistory/" + dbtestdata.Xpub + "?from=2018-03-21"),
+			status:      http.StatusOK,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`[{"blockTime":1521594000,"txs":1,"received":"118641975500","sent":"1"}]`,
+			},
+		},
+		{
 			name:        "apiSendTx",
 			r:           newGetRequest(ts.URL + "/api/v2/sendtx/1234567890"),
 			status:      http.StatusBadRequest,
