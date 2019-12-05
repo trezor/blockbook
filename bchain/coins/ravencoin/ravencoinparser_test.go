@@ -41,7 +41,19 @@ func Test_GetAddrDescFromAddress_Mainnet(t *testing.T) {
 			args:    args{address: "RTq37kPJqMS36tZYunxo2abrBMLeYSCAaa"},
 			want:    "76a914cb78181d62d312fdb9aacca433570150dcf0dec288ac",
 			wantErr: false,
-		}
+		},
+		{
+			name:    "P2SH1",
+			args:    args{address: "rCzjkBoY2duVn2WizKxfBedTVWAg6UhfLZ"},
+			want:    "a9144a2a40987c74578ee517d426aa2c43fc568f7e0887",
+			wantErr: false,
+		},
+		{
+			name:    "P2SH2",
+			args:    args{address: "rDzGemZkv9FbDDh5pvWfr7TWtMUnNRRE7T"},
+			want:    "a914550bc2fcc1992afade4d298326ee6a03ab975a9387",
+			wantErr: false,
+		},
 	}
 	parser := NewRavencoinParser(GetChainParams("main"), &btc.Configuration{})
 
