@@ -42,18 +42,6 @@ func TestAddressToOutputScript_Mainnet(t *testing.T) {
 			want:    "76a9142c915b6cc7aafcc10cd5e81c3322a3e26a30144588ac",
 			wantErr: false,
 		},
-		{
-			name:    "scripthash1",
-			args:    args{address: "SgbK2hJXBUccpQgj41fR4VMZqVPesPZgzC"},
-			want:    "a914d3b07c1aaea886f8ceddedec440623f812e49ddc87",
-			wantErr: false,
-		},
-		{
-			name:    "scripthash2",
-			args:    args{address: "SRrevBM5bfZNpFJ4MhzaNfkTghYKoTB6LV"},
-			want:    "a914320d7056c33fd8d0f5bb9cf42d74133dc28d89bb87",
-			wantErr: false,
-		},
 	}
 	parser := NewVergeParser(GetChainParams("main"), &btc.Configuration{})
 
