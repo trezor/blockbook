@@ -54,12 +54,6 @@ func TestAddressToOutputScript_Mainnet(t *testing.T) {
 			want:    "a914320d7056c33fd8d0f5bb9cf42d74133dc28d89bb87",
 			wantErr: false,
 		},
-		{
-			name:    "witness_v0_keyhash",
-			args:    args{address: "dgb1qwdzu3cxvcte7g5f8ze4dsn83wf6x8zdvw927dx"},
-			want:    "00147345c8e0ccc2f3e45127166ad84cf172746389ac",
-			wantErr: false,
-		},
 	}
 	parser := NewVergeParser(GetChainParams("main"), &btc.Configuration{})
 
