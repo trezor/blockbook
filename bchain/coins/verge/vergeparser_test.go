@@ -85,7 +85,7 @@ func init() {
 		},
 		Vout: []bchain.Vout{
 			{
-				ValueSat: *big.NewInt(9999258391),
+				ValueSat: *big.NewInt(3388988),
 				N:        0,
 				ScriptPubKey: bchain.ScriptPubKey{
 					Hex: "76a914ce2809bbb7fedefa334740afc6b37b499880c2e488ac",
@@ -95,7 +95,7 @@ func init() {
 				},
 			},
 			{
-				ValueSat: *big.NewInt(43209042217),
+				ValueSat: *big.NewInt(1306676214),
 				N:        1,
 				ScriptPubKey: bchain.ScriptPubKey{
 					Hex: "76a9142c915b6cc7aafcc10cd5e81c3322a3e26a30144588ac",
