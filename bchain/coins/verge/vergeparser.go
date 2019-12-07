@@ -1,6 +1,7 @@
 package verge
 
 import (
+	"blockbook/bchain"
 	"blockbook/bchain/coins/btc"
 
 	"github.com/martinboehm/btcd/wire"
@@ -28,11 +29,17 @@ func init() {
 // VergeParser handle
 type VergeParser struct {
 	*btc.BitcoinParser
+	baseparser *bchain.BaseParser
 }
 
 // NewVergeParser returns new VergeParser instance
 func NewVergeParser(params *chaincfg.Params, c *btc.Configuration) *VergeParser {
-	return &VergeParser{BitcoinParser: btc.NewBitcoinParser(params, c)}
+	return &VergeParser{
+		BitcoinParser: btc.NewBitcoinParser(params, c),
+		baseparser: &bchain.BaseParser{
+			AmountDecimalPoint: 6,
+		},
+	}
 }
 
 // GetChainParams contains network parameters for the main Verge network
@@ -44,4 +51,14 @@ func GetChainParams(chain string) *chaincfg.Params {
 		}
 	}
 	return &MainNetParams
+}
+
+// PackTx packs transaction to byte array using protobuf
+func (p *VergeParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) ([]byte, error) {
+	return p.baseparser.PackTx(tx, height, blockTime)
+}
+
+// UnpackTx unpacks transaction from protobuf byte array
+func (p *VergeParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
+	return p.baseparser.UnpackTx(buf)
 }
