@@ -34,14 +34,12 @@ type VergeParser struct {
 
 // NewVergeParser returns new VergeParser instance
 func NewVergeParser(params *chaincfg.Params, c *btc.Configuration) *VergeParser {
-	p := &VergeParser{
+	return &VergeParser{
 		BitcoinParser: btc.NewBitcoinParser(params, c),
 		baseparser: &bchain.BaseParser{
 			AmountDecimalPoint: 6,
 		},
 	}
-
-	return p
 }
 
 // GetChainParams contains network parameters for the main Verge network
