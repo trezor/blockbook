@@ -1008,7 +1008,7 @@ func (w *Worker) GetFiatRatesForBlockID(bid string, currency string) (*db.Result
 		return nil, NewAPIError("Missing or empty \"currency\" parameter", true)
 	}
 	ticker := &db.CurrencyRatesTicker{}
-	bi, err := w.GetBlockInfoFromBlockID(bid)
+	bi, err := w.getBlockInfoFromBlockID(bid)
 	if err != nil {
 		if err == bchain.ErrBlockNotFound {
 			return nil, NewAPIError(fmt.Sprintf("Block %v not found", bid), true)
@@ -1112,8 +1112,8 @@ func (w *Worker) GetFiatRatesTickersList(dateString string) (*db.ResultTickerLis
 	}, nil
 }
 
-// GetBlockInfoFromBlockID returns block info from block height or block hash
-func (w *Worker) GetBlockInfoFromBlockID(bid string) (*bchain.BlockInfo, error) {
+// getBlockInfoFromBlockID returns block info from block height or block hash
+func (w *Worker) getBlockInfoFromBlockID(bid string) (*bchain.BlockInfo, error) {
 	// try to decide if passed string (bid) is block height or block hash
 	// if it's a number, must be less than int32
 	var hash string
@@ -1143,7 +1143,7 @@ func (w *Worker) GetFeeStats(bid string) (*FeeStats, error) {
 	}
 
 	start := time.Now()
-	bi, err := w.GetBlockInfoFromBlockID(bid)
+	bi, err := w.getBlockInfoFromBlockID(bid)
 	if err != nil {
 		if err == bchain.ErrBlockNotFound {
 			return nil, NewAPIError("Block not found", true)
@@ -1246,7 +1246,7 @@ func (w *Worker) GetBlock(bid string, page int, txsOnPage int) (*Block, error) {
 	if page < 0 {
 		page = 0
 	}
-	bi, err := w.GetBlockInfoFromBlockID(bid)
+	bi, err := w.getBlockInfoFromBlockID(bid)
 	if err != nil {
 		if err == bchain.ErrBlockNotFound {
 			return nil, NewAPIError("Block not found", true)
