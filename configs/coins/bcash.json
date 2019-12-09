@@ -56,7 +56,10 @@
       "block_addresses_to_keep": 300,
       "xpub_magic": 76067358,
       "slip44": 145,
-      "additional_params": {}
+      "additional_params": {
+        "fiat_rates": "coingecko",
+        "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"bitcoin-cash\", \"periodSeconds\": 60}"
+      }
     }
   },
   "meta": {
