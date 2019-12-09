@@ -59,41 +59,11 @@ func NewFiatRatesDownloader(db *db.RocksDB, params string, startTime *time.Time,
 	return rd, err
 }
 
-// Ping checks the API server availability
-func (rd *RatesDownloader) Ping() error {
-	requestURL := rd.url + "/ping"
-	req, err := http.NewRequest("GET", requestURL, nil)
-	if err != nil {
-		glog.Errorf("Error creating a new request for %v: %v", requestURL, err)
-		return err
-	}
-	req.Close = true
-	req.Header.Set("accept", "application/json")
-
-	client := &http.Client{
-		Timeout: rd.httpTimeoutSeconds,
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return errors.New("API unavailable. Invalid response status: " + string(resp.Status))
-	}
-	return nil
-}
-
 // Run starts the FiatRates downloader. If there are tickers available, it continues from the last record.
 // If there are no tickers, it finds the earliest market data available on API and downloads historical data.
 // When historical data is downloaded, it continues to fetch the latest ticker prices.
 func (rd *RatesDownloader) Run() error {
 	var timestamp *time.Time
-
-	if err := rd.Ping(); err != nil {
-		glog.Errorf("RatesDownloader Ping error: %v", err)
-		return err
-	}
 
 	// Check if there are any tickers stored in database
 	glog.Infof("Finding last available ticker...")
@@ -238,9 +208,15 @@ func (rd *RatesDownloader) findEarliestMarketData() (*time.Time, error) {
 	maxDate := rd.startTime.Add(time.Duration(-24) * time.Hour) // today's historical tickers may not be ready yet, so set to yesterday
 	currentDate := maxDate
 	for {
-		dataExists, err := rd.marketDataExists(&currentDate)
-		if err != nil {
-			return nil, err
+		var dataExists bool = false
+		for {
+			dataExists, err = rd.marketDataExists(&currentDate)
+			if err != nil {
+				glog.Errorf("Error checking if market data exists for date %v. Error: %v. Retrying in %v seconds.", currentDate, err, rd.periodSeconds)
+				timer := time.NewTimer(rd.periodSeconds)
+				<-timer.C
+			}
+			break
 		}
 		dateDiff := currentDate.Sub(minDate)
 		if dataExists {
@@ -264,7 +240,7 @@ func (rd *RatesDownloader) syncLatest() error {
 		ticker, err := rd.getData(nil)
 		if err != nil {
 			// Do not exit on GET error, log it, wait and try again
-			glog.Warningf("Sync GetData error: %v", err)
+			glog.Errorf("syncLatest GetData error: %v", err)
 			<-timer.C
 			timer.Reset(rd.periodSeconds)
 			continue
@@ -272,10 +248,9 @@ func (rd *RatesDownloader) syncLatest() error {
 		glog.Infof("syncLatest: storing ticker for %v", ticker.Timestamp)
 		err = rd.db.FiatRatesStoreTicker(ticker)
 		if err != nil {
-			glog.Errorf("syncLatest StoreTicker error %v", err)
-			return err
-		}
-		if rd.callbackOnNewTicker != nil {
+			// If there's an error storing ticker (like missing rates), log it, wait and try again
+			glog.Errorf("syncLatest StoreTicker error: %v", err)
+		} else if rd.callbackOnNewTicker != nil {
 			rd.callbackOnNewTicker(ticker)
 		}
 		<-timer.C
@@ -295,13 +270,17 @@ func (rd *RatesDownloader) syncHistorical(timestamp *time.Time) error {
 
 		ticker, err := rd.getData(timestamp)
 		if err != nil {
-			glog.Errorf("SyncHistorical GetData error: %v", err)
-			return err
+			// Do not exit on GET error, log it, wait and try again
+			glog.Errorf("syncHistorical GetData error: %v", err)
+			<-timer.C
+			timer.Reset(rd.periodSeconds)
+			continue
 		}
 
 		glog.Infof("syncHistorical: storing ticker for %v", ticker.Timestamp)
 		err = rd.db.FiatRatesStoreTicker(ticker)
 		if err != nil {
+			// If there's an error storing ticker (like missing rates), log it and continue to the next day
 			glog.Errorf("syncHistorical error storing ticker for %v: %v", timestamp, err)
 		}
 
