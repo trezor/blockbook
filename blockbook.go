@@ -84,23 +84,24 @@ var (
 )
 
 var (
-	chanSyncIndex              = make(chan struct{})
-	chanSyncMempool            = make(chan struct{})
-	chanStoreInternalState     = make(chan struct{})
-	chanSyncIndexDone          = make(chan struct{})
-	chanSyncMempoolDone        = make(chan struct{})
-	chanStoreInternalStateDone = make(chan struct{})
-	chain                      bchain.BlockChain
-	mempool                    bchain.Mempool
-	index                      *db.RocksDB
-	txCache                    *db.TxCache
-	metrics                    *common.Metrics
-	syncWorker                 *db.SyncWorker
-	internalState              *common.InternalState
-	callbacksOnNewBlock        []bchain.OnNewBlockFunc
-	callbacksOnNewTxAddr       []bchain.OnNewTxAddrFunc
-	chanOsSignal               chan os.Signal
-	inShutdown                 int32
+	chanSyncIndex                 = make(chan struct{})
+	chanSyncMempool               = make(chan struct{})
+	chanStoreInternalState        = make(chan struct{})
+	chanSyncIndexDone             = make(chan struct{})
+	chanSyncMempoolDone           = make(chan struct{})
+	chanStoreInternalStateDone    = make(chan struct{})
+	chain                         bchain.BlockChain
+	mempool                       bchain.Mempool
+	index                         *db.RocksDB
+	txCache                       *db.TxCache
+	metrics                       *common.Metrics
+	syncWorker                    *db.SyncWorker
+	internalState                 *common.InternalState
+	callbacksOnNewBlock           []bchain.OnNewBlockFunc
+	callbacksOnNewTxAddr          []bchain.OnNewTxAddrFunc
+	callbacksOnNewFiatRatesTicker []fiat.OnNewFiatRatesTicker
+	chanOsSignal                  chan os.Signal
+	inShutdown                    int32
 )
 
 func init() {
@@ -298,6 +299,7 @@ func mainWithExitCode() int {
 		// start full public interface
 		callbacksOnNewBlock = append(callbacksOnNewBlock, publicServer.OnNewBlock)
 		callbacksOnNewTxAddr = append(callbacksOnNewTxAddr, publicServer.OnNewTxAddr)
+		callbacksOnNewFiatRatesTicker = append(callbacksOnNewFiatRatesTicker, publicServer.OnNewFiatRatesTicker)
 		publicServer.ConnectFullPublicInterface()
 	}
 
@@ -526,6 +528,12 @@ func onNewBlockHash(hash string, height uint32) {
 	}
 }
 
+func onNewFiatRatesTicker(ticker *db.CurrencyRatesTicker) {
+	for _, c := range callbacksOnNewFiatRatesTicker {
+		c(ticker)
+	}
+}
+
 func syncMempoolLoop() {
 	defer close(chanSyncMempoolDone)
 	glog.Info("syncMempoolLoop starting")
@@ -677,11 +685,12 @@ func initFiatRatesDownloader(db *db.RocksDB, configfile string) {
 	if config.FiatRates == "" || config.FiatRatesParams == "" {
 		glog.Infof("FiatRates config (%v) is empty, so the functionality is disabled.", configfile)
 	} else if config.FiatRates == "coingecko" {
-		fiatRates, err := fiat.NewFiatRatesDownloader(db, config.FiatRatesParams, nil)
+		fiatRates, err := fiat.NewFiatRatesDownloader(db, config.FiatRatesParams, nil, onNewFiatRatesTicker)
 		if err != nil {
 			glog.Errorf("NewFiatRatesDownloader Init error: %v", err)
 			return
 		}
+		glog.Infof("Starting %v FiatRates downloader...", config.FiatRates)
 		go fiatRates.Run()
 	}
 }

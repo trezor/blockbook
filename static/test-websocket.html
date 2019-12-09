@@ -278,8 +278,70 @@
             });
         }
 
-        // TODO: add fiatRates tests
+        function getFiatRatesForDates() {
+            const method = 'getFiatRatesForDates';
+            var dates = document.getElementById('getFiatRatesForDatesList').value.split(",");
+            var currency = document.getElementById('getFiatRatesForDatesCurrency').value;
+            dates = dates.map(s => s.trim());
+            const params = {
+                dates,
+                "currency": currency
+            };
+            send(method, params, function (result) {
+                document.getElementById('getFiatRatesForDatesResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
+            });
+        }
 
+        function getCurrentFiatRates() {
+            const method = 'getCurrentFiatRates';
+            var currency = document.getElementById('getCurrentFiatRatesCurrency').value;
+            const params = {
+                "currency": currency
+            };
+            send(method, params, function (result) {
+                document.getElementById('getCurrentFiatRatesResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
+            });
+        }
+
+        function getFiatRatesTickersList() {
+            const method = 'getFiatRatesTickersList';
+            var date = document.getElementById('getFiatRatesTickersListDate').value;
+            const params = {
+                date,
+            };
+            send(method, params, function (result) {
+                document.getElementById('getFiatRatesTickersListResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
+            });
+        }
+
+        function subscribeNewFiatRatesTicker() {
+            const method = 'subscribeFiatRates';
+            var currency = document.getElementById('subscribeFiatRatesCurrency').value;
+            const params = {
+                "currency": currency
+            };
+            if (subscribeNewFiatRatesTickerId) {
+                delete subscriptions[subscribeNewFiatRatesTickerId];
+                subscribeNewFiatRatesTickerId = "";
+            }
+            subscribeNewFiatRatesTickerId = subscribe(method, params, function (result) {
+                document.getElementById('subscribeNewFiatRatesTickerResult').innerText += JSON.stringify(result).replace(/,/g, ", ") + "\n";
+            });
+            document.getElementById('subscribeNewFiatRatesTickerId').innerText = subscribeNewFiatRatesTickerId;
+            document.getElementById('unsubscribeNewFiatRatesTickerButton').setAttribute("style", "display: inherit;");
+        }
+
+        function unsubscribeNewFiatRatesTicker() {
+            const method = 'unsubscribeFiatRates';
+            const params = {
+            };
+            unsubscribe(method, subscribeNewFiatRatesTickerId, params, function (result) {
+                subscribeNewFiatRatesTickerId = "";
+                document.getElementById('subscribeNewFiatRatesTickerResult').innerText += JSON.stringify(result).replace(/,/g, ", ") + "\n";
+                document.getElementById('subscribeNewFiatRatesTickerId').innerText = "";
+                document.getElementById('unsubscribeNewFiatRatesTickerButton').setAttribute("style", "display: none;");
+            });
+        }
     </script>
 </head>
 
@@ -460,6 +522,59 @@
         </div>
         <div class="row">
             <div class="col" id="subscribeAddressesResult"></div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <input class="btn btn-secondary" type="button" value="get fiat rates for dates" onclick="getFiatRatesForDates()">
+            </div>
+            <div class="col-8">
+                <input type="text" class="form-control" id="getFiatRatesForDatesCurrency" value="usd">
+            </div>
+            <div class="col-8">
+                <input type="text" class="form-control" id="getFiatRatesForDatesList" value="20191121140000,20191121143015">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col" id="getFiatRatesForDatesResult"></div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <input class="btn btn-secondary" type="button" value="get current firat rates" onclick="getCurrentFiatRates()">
+            </div>
+            <div class="col-8">
+                <input type="text" class="form-control" id="getCurrentFiatRatesCurrency" value="usd">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col" id="getCurrentFiatRatesResult"></div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <input class="btn btn-secondary" type="button" value="get fiat rates tickers" onclick="getFiatRatesTickersList()">
+            </div>
+            <div class="col-8">
+                <input type="text" class="form-control" id="getFiatRatesTickersListDate" value="20191121140000">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col" id="getFiatRatesTickersListResult"></div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <input class="btn btn-secondary" type="button" value="subscribe new fiat rates" onclick="subscribeNewFiatRatesTicker()">
+            </div>
+            <div class="col-4">
+                <span id="subscribeNewFiatRatesTickerId"></span>
+            </div>
+            <div class="col-8">
+                <input type="text" class="form-control" id="subscribeFiatRatesCurrency" value="usd">
+            </div>
+            <div class="col">
+                <input class="btn btn-secondary" id="unsubscribeNewFiatRatesTickerButton" style="display: none;" type="button" value="unsubscribe" onclick="unsubscribeNewFiatRatesTicker()">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col" id="subscribeNewFiatRatesTickerResult"></div>
         </div>
     </div>
 </body>

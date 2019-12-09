@@ -54,7 +54,9 @@ type ResultTickersAsString struct {
 
 // ResultTickerListAsString contains formatted data about available currency tickers
 type ResultTickerListAsString struct {
-	Tickers []string `json:"available_currencies"`
+	Timestamp string   `json:"data_timestamp,omitempty"`
+	Tickers   []string `json:"available_currencies"`
+	Error     string   `json:"error,omitempty"`
 }
 
 // RepairRocksDB calls RocksDb db repair function

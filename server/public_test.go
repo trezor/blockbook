@@ -590,11 +590,11 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 		},
 		{
 			name:        "apiTickerList",
-			r:           newGetRequest(ts.URL + "/api/v2/tickers-list"),
+			r:           newGetRequest(ts.URL + "/api/v2/tickers-list?date=20191121140000"),
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"available_currencies":["eur","usd"]}`,
+				`{"data_timestamp":"20191121140000","available_currencies":["eur","usd"]}`,
 			},
 		},
 		{
@@ -1244,8 +1244,11 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			name: "websocket getTickersList",
 			req: websocketReq{
 				Method: "getFiatRatesTickersList",
+				Params: map[string]interface{}{
+					"date": "20191121140000",
+				},
 			},
-			want: `{"id":"30","data":{"available_currencies":["eur","usd"]}}`,
+			want: `{"id":"30","data":{"data_timestamp":"20191121140000","available_currencies":["eur","usd"]}}`,
 		},
 	}
 

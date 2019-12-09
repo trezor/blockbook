@@ -212,6 +212,11 @@ func (s *PublicServer) OnNewBlock(hash string, height uint32) {
 	s.websocket.OnNewBlock(hash, height)
 }
 
+// OnNewFiatRatesTicker notifies users subscribed to bitcoind/fiatrates about new ticker
+func (s *PublicServer) OnNewFiatRatesTicker(ticker *db.CurrencyRatesTicker) {
+	s.websocket.OnNewFiatRatesTicker(ticker)
+}
+
 // OnNewTxAddr notifies users subscribed to bitcoind/addresstxid about new block
 func (s *PublicServer) OnNewTxAddr(tx *bchain.Tx, desc bchain.AddressDescriptor) {
 	s.socketio.OnNewTxAddr(tx.Txid, desc)
@@ -1093,7 +1098,8 @@ func (s *PublicServer) apiSendTx(r *http.Request, apiVersion int) (interface{}, 
 // apiTickersList returns a list of available FiatRates currencies
 func (s *PublicServer) apiTickersList(r *http.Request, apiVersion int) (interface{}, error) {
 	s.metrics.ExplorerViews.With(common.Labels{"action": "api-tickers-list"}).Inc()
-	result, err := s.api.GetFiatRatesTickersList()
+	date := strings.ToLower(r.URL.Query().Get("date"))
+	result, err := s.api.GetFiatRatesTickersList(date)
 	return result, err
 }
 

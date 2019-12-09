@@ -11,20 +11,24 @@ import (
 	"github.com/golang/glog"
 )
 
+// OnNewFiatRatesTicker is used to send notification about a new FiatRates ticker
+type OnNewFiatRatesTicker func(ticker *db.CurrencyRatesTicker)
+
 // RatesDownloader stores FiatRates API parameters
 type RatesDownloader struct {
-	url                string
-	coin               string
-	periodSeconds      time.Duration
-	db                 *db.RocksDB
-	timeFormat         string
-	httpTimeoutSeconds time.Duration
-	startTime          *time.Time // a starting timestamp for tests to be deterministic (time.Now() for production)
+	url                 string
+	coin                string
+	periodSeconds       time.Duration
+	db                  *db.RocksDB
+	timeFormat          string
+	httpTimeoutSeconds  time.Duration
+	startTime           *time.Time // a starting timestamp for tests to be deterministic (time.Now() for production)
+	callbackOnNewTicker OnNewFiatRatesTicker
 }
 
 // NewFiatRatesDownloader initiallizes the downloader for FiatRates API.
 // If the startTime is nil, the downloader will start from the beginning.
-func NewFiatRatesDownloader(db *db.RocksDB, params string, startTime *time.Time) (*RatesDownloader, error) {
+func NewFiatRatesDownloader(db *db.RocksDB, params string, startTime *time.Time, callback OnNewFiatRatesTicker) (*RatesDownloader, error) {
 	var rd = &RatesDownloader{}
 	type fiatRatesParams struct {
 		URL           string `json:"url"`
@@ -45,6 +49,7 @@ func NewFiatRatesDownloader(db *db.RocksDB, params string, startTime *time.Time)
 	rd.coin = rdParams.Coin
 	rd.periodSeconds = time.Duration(rdParams.PeriodSeconds) * time.Second // Time period for syncing the latest market data
 	rd.db = db
+	rd.callbackOnNewTicker = callback
 	if startTime == nil {
 		timeNow := time.Now().UTC()
 		rd.startTime = &timeNow
@@ -91,6 +96,7 @@ func (rd *RatesDownloader) Run() error {
 	}
 
 	// Check if there are any tickers stored in database
+	glog.Infof("Finding last available ticker...")
 	ticker, err := rd.db.FiatRatesFindLastTicker()
 	if err != nil {
 		glog.Errorf("RatesDownloader FindTicker error: %v", err)
@@ -99,13 +105,15 @@ func (rd *RatesDownloader) Run() error {
 
 	if ticker == nil {
 		// If no tickers found, start downloading from the beginning
+		glog.Infof("No tickers found! Looking up the earliest market data available on API and downloading from there.")
 		timestamp, err = rd.findEarliestMarketData()
 		if err != nil {
 			glog.Errorf("Error looking up earliest market data: %v", err)
 			return err
 		}
 	} else {
-		// If found, continue downloading data from the last available record
+		// If found, continue downloading data from the next day of the last available record
+		glog.Infof("Last available ticker: %v", ticker.Timestamp)
 		timestamp = ticker.Timestamp
 	}
 	err = rd.syncHistorical(timestamp)
@@ -171,7 +179,12 @@ func (rd *RatesDownloader) getMarketData(timestamp *time.Time) ([]byte, error) {
 // GetData gets fiat rates from API at the specified date and returns JSON string.
 // If timestamp is nil, it will download the latest market data.
 func (rd *RatesDownloader) getData(timestamp *time.Time) (*db.CurrencyRatesTicker, error) {
-	ticker := &db.CurrencyRatesTicker{Timestamp: rd.startTime}
+	if timestamp == nil {
+		timeNow := time.Now()
+		timestamp = &timeNow
+	}
+	timestampUTC := timestamp.UTC()
+	ticker := &db.CurrencyRatesTicker{Timestamp: &timestampUTC}
 	bodyBytes, err := rd.getMarketData(timestamp)
 	if err != nil {
 		return nil, err
@@ -256,10 +269,14 @@ func (rd *RatesDownloader) syncLatest() error {
 			timer.Reset(rd.periodSeconds)
 			continue
 		}
+		glog.Infof("syncLatest: storing ticker for %v", ticker.Timestamp)
 		err = rd.db.FiatRatesStoreTicker(ticker)
 		if err != nil {
-			glog.Errorf("Sync StoreTicker error %v", err)
+			glog.Errorf("syncLatest StoreTicker error %v", err)
 			return err
+		}
+		if rd.callbackOnNewTicker != nil {
+			rd.callbackOnNewTicker(ticker)
 		}
 		<-timer.C
 		timer.Reset(rd.periodSeconds)
@@ -272,23 +289,23 @@ func (rd *RatesDownloader) syncHistorical(timestamp *time.Time) error {
 	period := time.Duration(1) * time.Second
 	timer := time.NewTimer(period)
 	for {
+		if rd.startTime.Sub(*timestamp) < time.Duration(time.Hour*24) {
+			break
+		}
+
 		ticker, err := rd.getData(timestamp)
 		if err != nil {
 			glog.Errorf("SyncHistorical GetData error: %v", err)
 			return err
 		}
 
+		glog.Infof("syncHistorical: storing ticker for %v", ticker.Timestamp)
 		err = rd.db.FiatRatesStoreTicker(ticker)
 		if err != nil {
-			glog.Errorf("SyncHistorical error storing ticker for %v", timestamp)
-			return err
+			glog.Errorf("syncHistorical error storing ticker for %v: %v", timestamp, err)
 		}
 
 		*timestamp = timestamp.Add(time.Hour * 24) // go to the next day
-
-		if rd.startTime.Sub(*timestamp) < time.Duration(time.Hour*24) {
-			break
-		}
 
 		<-timer.C
 		timer.Reset(period)
