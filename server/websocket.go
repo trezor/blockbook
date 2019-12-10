@@ -784,9 +784,8 @@ func (s *WebsocketServer) broadcastTicker(coin string, rate json.Number) {
 	}
 }
 
-// OnNewFiatRatesTicker is a callback that broadcasts info about fiat rates affecting subscribed coin
+// OnNewFiatRatesTicker is a callback that broadcasts info about fiat rates affecting subscribed currency
 func (s *WebsocketServer) OnNewFiatRatesTicker(ticker *db.CurrencyRatesTicker) {
-	// check if there is any subscription but release the lock immediately, GetTransactionFromBchainTx may take some time
 	for currency, rate := range ticker.Rates {
 		s.broadcastTicker(currency, rate)
 	}
