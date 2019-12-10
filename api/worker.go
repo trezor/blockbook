@@ -818,15 +818,34 @@ func (w *Worker) balanceHistoryHeightsFromTo(fromTime, toTime time.Time) (uint32
 }
 
 func (w *Worker) balanceHistoryForTxid(addrDesc bchain.AddressDescriptor, txid string, fromUnix, toUnix uint32) (*BalanceHistory, error) {
-	ta, err := w.db.GetTxAddresses(txid)
-	if err != nil {
-		return nil, err
+	var time uint32
+	var err error
+	var ta *db.TxAddresses
+	var bchainTx *bchain.Tx
+	var height uint32
+	if w.chainType == bchain.ChainBitcoinType {
+		ta, err = w.db.GetTxAddresses(txid)
+		if err != nil {
+			return nil, err
+		}
+		if ta == nil {
+			glog.Warning("DB inconsistency:  tx ", txid, ": not found in txAddresses")
+			return nil, nil
+		}
+		height = ta.Height
+	} else if w.chainType == bchain.ChainEthereumType {
+		var h int
+		bchainTx, h, err = w.txCache.GetTransaction(txid)
+		if err != nil {
+			return nil, err
+		}
+		if bchainTx == nil {
+			glog.Warning("Inconsistency:  tx ", txid, ": not found in the blockchain")
+			return nil, nil
+		}
+		height = uint32(h)
 	}
-	if ta == nil {
-		glog.Warning("DB inconsistency:  tx ", txid, ": not found in txAddresses")
-		return nil, nil
-	}
-	time := w.is.GetBlockTime(ta.Height)
+	time = w.is.GetBlockTime(height)
 	if time < fromUnix || time >= toUnix {
 		return nil, nil
 	}
@@ -837,16 +856,58 @@ func (w *Worker) balanceHistoryForTxid(addrDesc bchain.AddressDescriptor, txid s
 		ReceivedSat: &Amount{},
 		Txid:        txid,
 	}
-	for i := range ta.Inputs {
-		tai := &ta.Inputs[i]
-		if bytes.Equal(addrDesc, tai.AddrDesc) {
-			(*big.Int)(bh.SentSat).Add((*big.Int)(bh.SentSat), &tai.ValueSat)
+	if w.chainType == bchain.ChainBitcoinType {
+		for i := range ta.Inputs {
+			tai := &ta.Inputs[i]
+			if bytes.Equal(addrDesc, tai.AddrDesc) {
+				(*big.Int)(bh.SentSat).Add((*big.Int)(bh.SentSat), &tai.ValueSat)
+			}
 		}
-	}
-	for i := range ta.Outputs {
-		tao := &ta.Outputs[i]
-		if bytes.Equal(addrDesc, tao.AddrDesc) {
-			(*big.Int)(bh.ReceivedSat).Add((*big.Int)(bh.ReceivedSat), &tao.ValueSat)
+		for i := range ta.Outputs {
+			tao := &ta.Outputs[i]
+			if bytes.Equal(addrDesc, tao.AddrDesc) {
+				(*big.Int)(bh.ReceivedSat).Add((*big.Int)(bh.ReceivedSat), &tao.ValueSat)
+			}
+		}
+	} else if w.chainType == bchain.ChainEthereumType {
+		var value big.Int
+		ethTxData := eth.GetEthereumTxData(bchainTx)
+		// add received amount only for OK transactions
+		if ethTxData.Status == 1 {
+			if len(bchainTx.Vout) > 0 {
+				bchainVout := &bchainTx.Vout[0]
+				value = bchainVout.ValueSat
+				if len(bchainVout.ScriptPubKey.Addresses) > 0 {
+					txAddrDesc, err := w.chainParser.GetAddrDescFromAddress(bchainVout.ScriptPubKey.Addresses[0])
+					if err != nil {
+						return nil, err
+					}
+					if bytes.Equal(addrDesc, txAddrDesc) {
+						(*big.Int)(bh.ReceivedSat).Add((*big.Int)(bh.ReceivedSat), &value)
+					}
+				}
+			}
+		}
+		for i := range bchainTx.Vin {
+			bchainVin := &bchainTx.Vin[i]
+			if len(bchainVin.Addresses) > 0 {
+				txAddrDesc, err := w.chainParser.GetAddrDescFromAddress(bchainVin.Addresses[0])
+				if err != nil {
+					return nil, err
+				}
+				if bytes.Equal(addrDesc, txAddrDesc) {
+					// add sent amount only for OK transactions, however fees always
+					if ethTxData.Status == 1 {
+						(*big.Int)(bh.SentSat).Add((*big.Int)(bh.SentSat), &value)
+					}
+					var feesSat big.Int
+					// mempool txs do not have fees yet
+					if ethTxData.GasUsed != nil {
+						feesSat.Mul(ethTxData.GasPrice, ethTxData.GasUsed)
+					}
+					(*big.Int)(bh.SentSat).Add((*big.Int)(bh.SentSat), &feesSat)
+				}
+			}
 		}
 	}
 	return &bh, nil
