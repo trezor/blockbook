@@ -4,8 +4,7 @@ import (
 	"blockbook/db"
 	"encoding/json"
 	"errors"
-	"io/ioutil"
-	"net/http"
+	"fmt"
 	"time"
 
 	"github.com/golang/glog"
@@ -14,21 +13,25 @@ import (
 // OnNewFiatRatesTicker is used to send notification about a new FiatRates ticker
 type OnNewFiatRatesTicker func(ticker *db.CurrencyRatesTicker)
 
+// RatesDownloaderInterface provides method signatures for specific fiat rates downloaders
+type RatesDownloaderInterface interface {
+	getTicker(timestamp *time.Time) (*db.CurrencyRatesTicker, error)
+	marketDataExists(timestamp *time.Time) (bool, error)
+}
+
 // RatesDownloader stores FiatRates API parameters
 type RatesDownloader struct {
-	url                 string
-	coin                string
 	periodSeconds       time.Duration
 	db                  *db.RocksDB
-	timeFormat          string
-	httpTimeoutSeconds  time.Duration
 	startTime           *time.Time // a starting timestamp for tests to be deterministic (time.Now() for production)
+	timeFormat          string
 	callbackOnNewTicker OnNewFiatRatesTicker
+	downloader          RatesDownloaderInterface
 }
 
 // NewFiatRatesDownloader initiallizes the downloader for FiatRates API.
 // If the startTime is nil, the downloader will start from the beginning.
-func NewFiatRatesDownloader(db *db.RocksDB, params string, startTime *time.Time, callback OnNewFiatRatesTicker) (*RatesDownloader, error) {
+func NewFiatRatesDownloader(db *db.RocksDB, apiType string, params string, startTime *time.Time, callback OnNewFiatRatesTicker) (*RatesDownloader, error) {
 	var rd = &RatesDownloader{}
 	type fiatRatesParams struct {
 		URL           string `json:"url"`
@@ -43,10 +46,7 @@ func NewFiatRatesDownloader(db *db.RocksDB, params string, startTime *time.Time,
 	if rdParams.URL == "" || rdParams.PeriodSeconds == 0 {
 		return nil, errors.New("Missing parameters")
 	}
-	rd.timeFormat = "02-01-2006" // Layout string for FiatRates date formatting (DD-MM-YYYY)
-	rd.httpTimeoutSeconds = 15 * time.Second
-	rd.url = rdParams.URL
-	rd.coin = rdParams.Coin
+	rd.timeFormat = "02-01-2006"                                           // Layout string for FiatRates date formatting (DD-MM-YYYY)
 	rd.periodSeconds = time.Duration(rdParams.PeriodSeconds) * time.Second // Time period for syncing the latest market data
 	rd.db = db
 	rd.callbackOnNewTicker = callback
@@ -56,7 +56,12 @@ func NewFiatRatesDownloader(db *db.RocksDB, params string, startTime *time.Time,
 	} else {
 		rd.startTime = startTime // If startTime is nil, time.Now() will be used
 	}
-	return rd, err
+	if apiType == "coingecko" {
+		rd.downloader = NewCoinGeckoDownloader(rdParams.URL, rdParams.Coin, rd.timeFormat)
+	} else {
+		return nil, fmt.Errorf("NewFiatRatesDownloader: incorrect API type %q", apiType)
+	}
+	return rd, nil
 }
 
 // Run starts the FiatRates downloader. If there are tickers available, it continues from the last record.
@@ -98,105 +103,6 @@ func (rd *RatesDownloader) Run() error {
 	return nil
 }
 
-// GetMarketData retrieves the response from fiatRates API at the specified date.
-// If timestamp is nil, it fetches the latest market data available.
-func (rd *RatesDownloader) getMarketData(timestamp *time.Time) ([]byte, error) {
-	requestURL := rd.url + "/coins/" + rd.coin
-	if timestamp != nil {
-		requestURL += "/history"
-	}
-
-	req, err := http.NewRequest("GET", requestURL, nil)
-	if err != nil {
-		glog.Errorf("Error creating a new request for %v: %v", requestURL, err)
-		return nil, err
-	}
-	req.Close = true
-	req.Header.Set("Content-Type", "application/json")
-
-	// Add query parameters
-	q := req.URL.Query()
-	if timestamp == nil {
-		q.Add("market_data", "true")
-		q.Add("localization", "false")
-		q.Add("tickers", "false")
-		q.Add("community_data", "false")
-		q.Add("developer_data", "false")
-	} else {
-		timestampFormatted := timestamp.Format(rd.timeFormat)
-		q.Add("date", timestampFormatted)
-	}
-	req.URL.RawQuery = q.Encode()
-
-	client := &http.Client{
-		Timeout: rd.httpTimeoutSeconds,
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, errors.New("Invalid response status: " + string(resp.Status))
-	}
-	bodyBytes, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-	return bodyBytes, nil
-}
-
-// GetData gets fiat rates from API at the specified date and returns JSON string.
-// If timestamp is nil, it will download the latest market data.
-func (rd *RatesDownloader) getData(timestamp *time.Time) (*db.CurrencyRatesTicker, error) {
-	if timestamp == nil {
-		timeNow := time.Now()
-		timestamp = &timeNow
-	}
-	timestampUTC := timestamp.UTC()
-	ticker := &db.CurrencyRatesTicker{Timestamp: &timestampUTC}
-	bodyBytes, err := rd.getMarketData(timestamp)
-	if err != nil {
-		return nil, err
-	}
-
-	type FiatRatesResponse struct {
-		MarketData struct {
-			Prices map[string]json.Number `json:"current_price"`
-		} `json:"market_data"`
-	}
-
-	var data FiatRatesResponse
-	err = json.Unmarshal(bodyBytes, &data)
-	if err != nil {
-		glog.Errorf("Error parsing FiatRates response: %v", err)
-		return nil, err
-	}
-	ticker.Rates = data.MarketData.Prices
-	return ticker, nil
-}
-
-// MarketDataExists checks if there's data available for the specific timestamp.
-func (rd *RatesDownloader) marketDataExists(timestamp *time.Time) (bool, error) {
-	resp, err := rd.getMarketData(timestamp)
-	if err != nil {
-		glog.Error("Error getting market data: ", err)
-		return false, err
-	}
-	type FiatRatesResponse struct {
-		MarketData struct {
-			Prices map[string]interface{} `json:"current_price"`
-		} `json:"market_data"`
-	}
-	var data FiatRatesResponse
-	err = json.Unmarshal(resp, &data)
-	if err != nil {
-		glog.Errorf("Error parsing FiatRates response: %v", err)
-		return false, err
-	}
-	return len(data.MarketData.Prices) != 0, nil
-}
-
 // FindEarliestMarketData uses binary search to find the oldest market data available on API.
 func (rd *RatesDownloader) findEarliestMarketData() (*time.Time, error) {
 	minDateString := "03-01-2009"
@@ -210,7 +116,7 @@ func (rd *RatesDownloader) findEarliestMarketData() (*time.Time, error) {
 	for {
 		var dataExists bool = false
 		for {
-			dataExists, err = rd.marketDataExists(&currentDate)
+			dataExists, err = rd.downloader.marketDataExists(&currentDate)
 			if err != nil {
 				glog.Errorf("Error checking if market data exists for date %v. Error: %v. Retrying in %v seconds.", currentDate, err, rd.periodSeconds)
 				timer := time.NewTimer(rd.periodSeconds)
@@ -237,7 +143,7 @@ func (rd *RatesDownloader) findEarliestMarketData() (*time.Time, error) {
 func (rd *RatesDownloader) syncLatest() error {
 	timer := time.NewTimer(rd.periodSeconds)
 	for {
-		ticker, err := rd.getData(nil)
+		ticker, err := rd.downloader.getTicker(nil)
 		if err != nil {
 			// Do not exit on GET error, log it, wait and try again
 			glog.Errorf("syncLatest GetData error: %v", err)
@@ -268,7 +174,7 @@ func (rd *RatesDownloader) syncHistorical(timestamp *time.Time) error {
 			break
 		}
 
-		ticker, err := rd.getData(timestamp)
+		ticker, err := rd.downloader.getTicker(timestamp)
 		if err != nil {
 			// Do not exit on GET error, log it, wait and try again
 			glog.Errorf("syncHistorical GetData error: %v", err)

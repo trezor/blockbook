@@ -136,7 +136,7 @@ func TestFiatRates(t *testing.T) {
 		return
 	}
 	testStartTime := time.Date(2019, 11, 22, 16, 0, 0, 0, time.UTC)
-	fiatRates, err := NewFiatRatesDownloader(d, config.FiatRatesParams, &testStartTime, nil)
+	fiatRates, err := NewFiatRatesDownloader(d, config.FiatRates, config.FiatRatesParams, &testStartTime, nil)
 	if err != nil {
 		t.Errorf("FiatRates init error: %v\n", err)
 	}
@@ -161,7 +161,7 @@ func TestFiatRates(t *testing.T) {
 			t.Errorf("RatesDownloader syncHistorical error: %v", err)
 			return
 		}
-		ticker, err := fiatRates.getData(fiatRates.startTime)
+		ticker, err := fiatRates.downloader.getTicker(fiatRates.startTime)
 		if err != nil {
 			// Do not exit on GET error, log it, wait and try again
 			glog.Errorf("Sync GetData error: %v", err)
