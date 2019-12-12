@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io/ioutil"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/golang/glog"
@@ -47,6 +48,11 @@ func (cg *Coingecko) makeRequest(timestamp *time.Time) ([]byte, error) {
 
 	// Add query parameters
 	q := req.URL.Query()
+
+	// Add a unix timestamp to query parameters to get uncached responses
+	currentTimestamp := strconv.FormatInt(time.Now().UTC().UnixNano(), 10)
+	q.Add("current_timestamp", currentTimestamp)
+
 	if timestamp == nil {
 		q.Add("market_data", "true")
 		q.Add("localization", "false")
@@ -80,12 +86,13 @@ func (cg *Coingecko) makeRequest(timestamp *time.Time) ([]byte, error) {
 // GetData gets fiat rates from API at the specified date and returns a CurrencyRatesTicker
 // If timestamp is nil, it will download the current fiat rates.
 func (cg *Coingecko) getTicker(timestamp *time.Time) (*db.CurrencyRatesTicker, error) {
+	dataTimestamp := timestamp
 	if timestamp == nil {
 		timeNow := time.Now()
-		timestamp = &timeNow
+		dataTimestamp = &timeNow
 	}
-	timestampUTC := timestamp.UTC()
-	ticker := &db.CurrencyRatesTicker{Timestamp: &timestampUTC}
+	dataTimestampUTC := dataTimestamp.UTC()
+	ticker := &db.CurrencyRatesTicker{Timestamp: &dataTimestampUTC}
 	bodyBytes, err := cg.makeRequest(timestamp)
 	if err != nil {
 		return nil, err
