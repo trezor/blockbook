@@ -157,7 +157,7 @@ func (rd *RatesDownloader) syncLatest() error {
 
 		if sameTickerCounter < 5 && reflect.DeepEqual(ticker.Rates, lastTickerRates) {
 			// If rates are the same as previous, do not store them
-			glog.Infof("syncLatest: ticker rates are the same, skipping...")
+			glog.Infof("syncLatest: ticker rates for %v are the same as previous, skipping...", ticker.Timestamp)
 			<-timer.C
 			timer.Reset(rd.periodSeconds)
 			sameTickerCounter++
