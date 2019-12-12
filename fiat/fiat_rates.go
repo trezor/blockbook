@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"time"
 
 	"github.com/golang/glog"
@@ -142,6 +143,8 @@ func (rd *RatesDownloader) findEarliestMarketData() (*time.Time, error) {
 // syncLatest downloads the latest FiatRates data every rd.PeriodSeconds
 func (rd *RatesDownloader) syncLatest() error {
 	timer := time.NewTimer(rd.periodSeconds)
+	var lastTickerRates map[string]json.Number = nil
+	sameTickerCounter := 0
 	for {
 		ticker, err := rd.downloader.getTicker(nil)
 		if err != nil {
@@ -151,6 +154,18 @@ func (rd *RatesDownloader) syncLatest() error {
 			timer.Reset(rd.periodSeconds)
 			continue
 		}
+
+		if sameTickerCounter < 5 && reflect.DeepEqual(ticker.Rates, lastTickerRates) {
+			// If rates are the same as previous, do not store them
+			glog.Infof("syncLatest: ticker rates are the same, skipping...")
+			<-timer.C
+			timer.Reset(rd.periodSeconds)
+			sameTickerCounter++
+			continue
+		}
+		lastTickerRates = ticker.Rates
+		sameTickerCounter = 0
+
 		glog.Infof("syncLatest: storing ticker for %v", ticker.Timestamp)
 		err = rd.db.FiatRatesStoreTicker(ticker)
 		if err != nil {
