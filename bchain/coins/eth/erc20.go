@@ -74,9 +74,9 @@ func erc20GetTransfersFromLog(logs []*rpcLog) ([]bchain.Erc20Transfer, error) {
 				return nil, err
 			}
 			r = append(r, bchain.Erc20Transfer{
-				Contract: strings.ToLower(l.Address),
-				From:     strings.ToLower(from),
-				To:       strings.ToLower(to),
+				Contract: EIP55AddressFromAddress(l.Address),
+				From:     EIP55AddressFromAddress(from),
+				To:       EIP55AddressFromAddress(to),
 				Tokens:   t,
 			})
 		}
@@ -97,9 +97,9 @@ func erc20GetTransfersFromTx(tx *rpcTransaction) ([]bchain.Erc20Transfer, error)
 			return nil, errors.New("Data is not a number")
 		}
 		r = append(r, bchain.Erc20Transfer{
-			Contract: strings.ToLower(tx.To),
-			From:     strings.ToLower(tx.From),
-			To:       strings.ToLower(to),
+			Contract: EIP55AddressFromAddress(tx.To),
+			From:     EIP55AddressFromAddress(tx.From),
+			To:       EIP55AddressFromAddress(to),
 			Tokens:   t,
 		})
 	}

@@ -175,6 +175,7 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 	serveMux.HandleFunc(path+"api/block/", s.jsonHandler(s.apiBlock, apiDefault))
 	serveMux.HandleFunc(path+"api/sendtx/", s.jsonHandler(s.apiSendTx, apiDefault))
 	serveMux.HandleFunc(path+"api/estimatefee/", s.jsonHandler(s.apiEstimateFee, apiDefault))
+	serveMux.HandleFunc(path+"api/balancehistory/", s.jsonHandler(s.apiBalanceHistory, apiDefault))
 	// v2 format
 	serveMux.HandleFunc(path+"api/v2/block-index/", s.jsonHandler(s.apiBlockIndex, apiV2))
 	serveMux.HandleFunc(path+"api/v2/tx-specific/", s.jsonHandler(s.apiTxSpecific, apiV2))
@@ -186,6 +187,7 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 	serveMux.HandleFunc(path+"api/v2/sendtx/", s.jsonHandler(s.apiSendTx, apiV2))
 	serveMux.HandleFunc(path+"api/v2/estimatefee/", s.jsonHandler(s.apiEstimateFee, apiV2))
 	serveMux.HandleFunc(path+"api/v2/feestats/", s.jsonHandler(s.apiFeeStats, apiV2))
+	serveMux.HandleFunc(path+"api/v2/balancehistory/", s.jsonHandler(s.apiBalanceHistory, apiDefault))
 	serveMux.HandleFunc(path+"api/v2/tickers/", s.jsonHandler(s.apiTickers, apiV2))
 	serveMux.HandleFunc(path+"api/v2/tickers-list/", s.jsonHandler(s.apiTickersList, apiV2))
 	// socket.io interface
@@ -1036,6 +1038,36 @@ func (s *PublicServer) apiUtxo(r *http.Request, apiVersion int) (interface{}, er
 		}
 	}
 	return utxo, err
+}
+
+func (s *PublicServer) apiBalanceHistory(r *http.Request, apiVersion int) (interface{}, error) {
+	var history []api.BalanceHistory
+	var fromTime, toTime time.Time
+	var err error
+	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
+		gap, ec := strconv.Atoi(r.URL.Query().Get("gap"))
+		if ec != nil {
+			gap = 0
+		}
+		t := r.URL.Query().Get("from")
+		if t != "" {
+			fromTime, _ = time.Parse("2006-01-02", t)
+		}
+		t = r.URL.Query().Get("to")
+		if t != "" {
+			// time.RFC3339
+			toTime, _ = time.Parse("2006-01-02", t)
+		}
+		fiat := r.URL.Query().Get("fiatcurrency")
+		history, err = s.api.GetXpubBalanceHistory(r.URL.Path[i+1:], fromTime, toTime, fiat, gap)
+		if err == nil {
+			s.metrics.ExplorerViews.With(common.Labels{"action": "api-xpub-balancehistory"}).Inc()
+		} else {
+			history, err = s.api.GetBalanceHistory(r.URL.Path[i+1:], fromTime, toTime, fiat)
+			s.metrics.ExplorerViews.With(common.Labels{"action": "api-address-balancehistory"}).Inc()
+		}
+	}
+	return history, err
 }
 
 func (s *PublicServer) apiBlock(r *http.Request, apiVersion int) (interface{}, error) {

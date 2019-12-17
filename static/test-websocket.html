@@ -161,6 +161,25 @@
             });
         }
 
+        function getBalanceHistory() {
+            const descriptor = document.getElementById('getBalanceHistoryDescriptor').value.trim();
+            const from = document.getElementById("getBalanceHistoryFrom").value.trim();
+            const to = document.getElementById("getBalanceHistoryTo").value.trim();
+            const fiat = document.getElementById("getBalanceHistoryFiat").value.trim();
+            const method = 'getBalanceHistory';
+            const params = {
+                descriptor,
+                from,
+                to,
+                fiat
+                // default gap=20
+            };
+            send(method, params, function (result) {
+                document.getElementById('getBalanceHistoryResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
+            });
+        }
+
+
         function getTransaction() {
             const txid = document.getElementById('getTransactionTxid').value.trim();
             const method = 'getTransaction';
@@ -433,6 +452,26 @@
         </div>
         <div class="row">
             <div class="col">
+                <input class="btn btn-secondary" type="button" value="getBalanceHistory" onclick="getBalanceHistory()">
+            </div>
+            <div class="col-8">
+                <div class="row" style="margin: 0;">
+                    <input type="text" placeholder="descriptor" class="form-control" id="getBalanceHistoryDescriptor" value="0xba98d6a5ac827632e3457de7512d211e4ff7e8bd">
+                </div>
+                <div class="row" style="margin: 0; margin-top: 5px;">
+                    <input type="text" placeholder="from YYYY-MM-DD" style="width: 30%;margin-left: 5px;margin-right: 5px;" class="form-control" id="getBalanceHistoryFrom">
+                    <input type="text" placeholder="to YYYY-MM-DD" style="width: 30%; margin-left: 5px; margin-right: 5px;" class="form-control" id="getBalanceHistoryTo">
+                    <input type="text" placeholder="fiat" style="width: 20%; margin-left: 5px; margin-right: 5px;" class="form-control" id="getBalanceHistoryFiat">
+                </div>
+            </div>
+            <div class="col form-inline"></div>
+        </div>
+        <div class="row">
+            <div class="col" id="getBalanceHistoryResult">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col">
                 <input class="btn btn-secondary" type="button" value="getTransaction" onclick="getTransaction()">
             </div>
             <div class="col-8">
@@ -493,6 +532,42 @@
             <div class="col" id="sendTransactionResult"></div>
         </div>
         <div class="row">
+            <div class="col-2">
+                <input class="btn btn-secondary" type="button" value="get fiat rates for dates" onclick="getFiatRatesForDates()">
+            </div>
+            <div class="col-1">
+                <input type="text" class="form-control" id="getFiatRatesForDatesCurrency" value="usd">
+            </div>
+            <div class="col-7">
+                <input type="text" class="form-control" id="getFiatRatesForDatesList" value="20191121140000,20191121143015">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col" id="getFiatRatesForDatesResult"></div>
+        </div>
+        <div class="row">
+            <div class="col-2">
+                <input class="btn btn-secondary" type="button" value="get current fiat rates" onclick="getCurrentFiatRates()">
+            </div>
+            <div class="col-1">
+                <input type="text" class="form-control" id="getCurrentFiatRatesCurrency" value="usd">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col" id="getCurrentFiatRatesResult"></div>
+        </div>
+        <div class="row">
+            <div class="col-2">
+                <input class="btn btn-secondary" type="button" value="get fiat rates tickers" onclick="getFiatRatesTickersList()">
+            </div>
+            <div class="col-8">
+                <input type="text" class="form-control" id="getFiatRatesTickersListDate" value="20191121140000">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col" id="getFiatRatesTickersListResult"></div>
+        </div>
+        <div class="row">
             <div class="col">
                 <input class="btn btn-secondary" type="button" value="subscribe new block" onclick="subscribeNewBlock()">
             </div>
@@ -524,52 +599,16 @@
             <div class="col" id="subscribeAddressesResult"></div>
         </div>
         <div class="row">
-            <div class="col">
-                <input class="btn btn-secondary" type="button" value="get fiat rates for dates" onclick="getFiatRatesForDates()">
-            </div>
-            <div class="col-8">
-                <input type="text" class="form-control" id="getFiatRatesForDatesCurrency" value="usd">
-            </div>
-            <div class="col-8">
-                <input type="text" class="form-control" id="getFiatRatesForDatesList" value="20191121140000,20191121143015">
-            </div>
-        </div>
-        <div class="row">
-            <div class="col" id="getFiatRatesForDatesResult"></div>
-        </div>
-        <div class="row">
-            <div class="col">
-                <input class="btn btn-secondary" type="button" value="get current firat rates" onclick="getCurrentFiatRates()">
-            </div>
-            <div class="col-8">
-                <input type="text" class="form-control" id="getCurrentFiatRatesCurrency" value="usd">
-            </div>
-        </div>
-        <div class="row">
-            <div class="col" id="getCurrentFiatRatesResult"></div>
-        </div>
-        <div class="row">
-            <div class="col">
-                <input class="btn btn-secondary" type="button" value="get fiat rates tickers" onclick="getFiatRatesTickersList()">
-            </div>
-            <div class="col-8">
-                <input type="text" class="form-control" id="getFiatRatesTickersListDate" value="20191121140000">
-            </div>
-        </div>
-        <div class="row">
-            <div class="col" id="getFiatRatesTickersListResult"></div>
-        </div>
-        <div class="row">
-            <div class="col">
+            <div class="col-3">
                 <input class="btn btn-secondary" type="button" value="subscribe new fiat rates" onclick="subscribeNewFiatRatesTicker()">
             </div>
-            <div class="col-4">
+            <div class="col-1">
                 <span id="subscribeNewFiatRatesTickerId"></span>
             </div>
-            <div class="col-8">
+            <div class="col-1">
                 <input type="text" class="form-control" id="subscribeFiatRatesCurrency" value="usd">
             </div>
-            <div class="col">
+            <div class="col-5">
                 <input class="btn btn-secondary" id="unsubscribeNewFiatRatesTickerButton" style="display: none;" type="button" value="unsubscribe" onclick="unsubscribeNewFiatRatesTicker()">
             </div>
         </div>
@@ -577,6 +616,7 @@
             <div class="col" id="subscribeNewFiatRatesTickerResult"></div>
         </div>
     </div>
+    <br><br>
 </body>
 <script>
     document.getElementById('serverAddress').value = window.location.protocol + "//" + window.location.host;
