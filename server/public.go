@@ -186,6 +186,8 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 	serveMux.HandleFunc(path+"api/v2/sendtx/", s.jsonHandler(s.apiSendTx, apiV2))
 	serveMux.HandleFunc(path+"api/v2/estimatefee/", s.jsonHandler(s.apiEstimateFee, apiV2))
 	serveMux.HandleFunc(path+"api/v2/feestats/", s.jsonHandler(s.apiFeeStats, apiV2))
+	serveMux.HandleFunc(path+"api/v2/tickers/", s.jsonHandler(s.apiTickers, apiV2))
+	serveMux.HandleFunc(path+"api/v2/tickers-list/", s.jsonHandler(s.apiTickersList, apiV2))
 	// socket.io interface
 	serveMux.Handle(path+"socket.io/", s.socketio.GetHandler())
 	// websocket interface
@@ -208,6 +210,11 @@ func (s *PublicServer) Shutdown(ctx context.Context) error {
 func (s *PublicServer) OnNewBlock(hash string, height uint32) {
 	s.socketio.OnNewBlockHash(hash)
 	s.websocket.OnNewBlock(hash, height)
+}
+
+// OnNewFiatRatesTicker notifies users subscribed to bitcoind/fiatrates about new ticker
+func (s *PublicServer) OnNewFiatRatesTicker(ticker *db.CurrencyRatesTicker) {
+	s.websocket.OnNewFiatRatesTicker(ticker)
 }
 
 // OnNewTxAddr notifies users subscribed to bitcoind/addresstxid about new block
@@ -1086,6 +1093,43 @@ func (s *PublicServer) apiSendTx(r *http.Request, apiVersion int) (interface{}, 
 		return res, nil
 	}
 	return nil, api.NewAPIError("Missing tx blob", true)
+}
+
+// apiTickersList returns a list of available FiatRates currencies
+func (s *PublicServer) apiTickersList(r *http.Request, apiVersion int) (interface{}, error) {
+	s.metrics.ExplorerViews.With(common.Labels{"action": "api-tickers-list"}).Inc()
+	date := strings.ToLower(r.URL.Query().Get("date"))
+	result, err := s.api.GetFiatRatesTickersList(date)
+	return result, err
+}
+
+// apiTickers returns FiatRates ticker prices for the specified block or date.
+func (s *PublicServer) apiTickers(r *http.Request, apiVersion int) (interface{}, error) {
+	var result *db.ResultTickerAsString
+	var err error
+	currency := strings.ToLower(r.URL.Query().Get("currency"))
+
+	if block := r.URL.Query().Get("block"); block != "" {
+		// Get tickers for specified block height or block hash
+		s.metrics.ExplorerViews.With(common.Labels{"action": "api-tickers-block"}).Inc()
+		result, err = s.api.GetFiatRatesForBlockID(block, currency)
+	} else if date := r.URL.Query().Get("date"); date != "" {
+		// Get tickers for specified date
+		s.metrics.ExplorerViews.With(common.Labels{"action": "api-tickers-date"}).Inc()
+		resultTickers, err := s.api.GetFiatRatesForDates([]string{date}, currency)
+		if err != nil {
+			return nil, err
+		}
+		result = &resultTickers.Tickers[0]
+	} else {
+		// No parameters - get the latest available ticker
+		s.metrics.ExplorerViews.With(common.Labels{"action": "api-tickers-last"}).Inc()
+		result, err = s.api.GetCurrentFiatRates(currency)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 type resultEstimateFeeAsString struct {
