@@ -299,10 +299,11 @@ func (a Utxos) Less(i, j int) bool {
 
 // BalanceHistory contains info about one point in time of balance history
 type BalanceHistory struct {
-	Time        uint32  `json:"blockTime"`
+	Time        uint32  `json:"time"`
 	Txs         uint32  `json:"txs"`
 	ReceivedSat *Amount `json:"received"`
 	SentSat     *Amount `json:"sent"`
+	FiatRate    string  `json:"fiatrate,omitempty"`
 	Txid        string  `json:"txid,omitempty"`
 }
 

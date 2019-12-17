@@ -253,6 +253,36 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *webs
 		}
 		return
 	},
+	"getBalanceHistory": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
+		r := struct {
+			Descriptor string `json:"descriptor"`
+			From       string `json:"from"`
+			To         string `json:"to"`
+			Fiat       string `json:"fiat"`
+			Gap        int    `json:"gap"`
+		}{}
+		err = json.Unmarshal(req.Params, &r)
+		if err == nil {
+			var fromTime, toTime time.Time
+			if r.From != "" {
+				fromTime, err = time.Parse("2006-01-02", r.From)
+				if err != nil {
+					return
+				}
+			}
+			if r.To != "" {
+				toTime, err = time.Parse("2006-01-02", r.To)
+				if err != nil {
+					return
+				}
+			}
+			rv, err = s.api.GetXpubBalanceHistory(r.Descriptor, fromTime, toTime, r.Gap)
+			if err != nil {
+				rv, err = s.api.GetBalanceHistory(r.Descriptor, fromTime, toTime)
+			}
+		}
+		return
+	},
 	"getTransaction": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
 		r := struct {
 			Txid string `json:"txid"`

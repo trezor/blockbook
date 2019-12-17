@@ -752,7 +752,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`[{"blockTime":1521514800,"txs":1,"received":"12345","sent":"0"},{"blockTime":1521594000,"txs":1,"received":"0","sent":"12345"}]`,
+				`[{"time":1521514800,"txs":1,"received":"12345","sent":"0"},{"time":1521594000,"txs":1,"received":"0","sent":"12345"}]`,
 			},
 		},
 		{
@@ -761,7 +761,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`[{"blockTime":1521514800,"txs":1,"received":"9876","sent":"0"},{"blockTime":1521594000,"txs":1,"received":"9000","sent":"9876"}]`,
+				`[{"time":1521514800,"txs":1,"received":"9876","sent":"0"},{"time":1521594000,"txs":1,"received":"9000","sent":"9876"}]`,
 			},
 		},
 		{
@@ -770,7 +770,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`[{"blockTime":1521514800,"txs":1,"received":"12345","sent":"0"}]`,
+				`[{"time":1521514800,"txs":1,"received":"12345","sent":"0"}]`,
 			},
 		},
 		{
@@ -779,7 +779,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`[{"blockTime":1521514800,"txs":1,"received":"1","sent":"0"},{"blockTime":1521594000,"txs":1,"received":"118641975500","sent":"1"}]`,
+				`[{"time":1521514800,"txs":1,"received":"1","sent":"0"},{"time":1521594000,"txs":1,"received":"118641975500","sent":"1"}]`,
 			},
 		},
 		{
@@ -788,7 +788,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`[{"blockTime":1521514800,"txs":1,"received":"1","sent":"0"}]`,
+				`[{"time":1521514800,"txs":1,"received":"1","sent":"0"}]`,
 			},
 		},
 		{
@@ -797,7 +797,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`[{"blockTime":1521594000,"txs":1,"received":"118641975500","sent":"1"}]`,
+				`[{"time":1521594000,"txs":1,"received":"118641975500","sent":"1"}]`,
 			},
 		},
 		{
@@ -1308,6 +1308,38 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 				},
 			},
 			want: `{"id":"30","data":{"data_timestamp":"20191121140000","available_currencies":["eur","usd"]}}`,
+		},
+		{
+			name: "websocket getBalanceHistory Addr2",
+			req: websocketReq{
+				Method: "getBalanceHistory",
+				Params: map[string]interface{}{
+					"descriptor": "mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz",
+				},
+			},
+			want: `{"id":"31","data":[{"time":1521514800,"txs":1,"received":"12345","sent":"0"},{"time":1521594000,"txs":1,"received":"0","sent":"12345"}]}`,
+		},
+		{
+			name: "websocket getBalanceHistory xpub",
+			req: websocketReq{
+				Method: "getBalanceHistory",
+				Params: map[string]interface{}{
+					"descriptor": dbtestdata.Xpub,
+				},
+			},
+			want: `{"id":"32","data":[{"time":1521514800,"txs":1,"received":"1","sent":"0"},{"time":1521594000,"txs":1,"received":"118641975500","sent":"1"}]}`,
+		},
+		{
+			name: "websocket getBalanceHistory xpub from=2018-03-20&to=2018-03-21",
+			req: websocketReq{
+				Method: "getBalanceHistory",
+				Params: map[string]interface{}{
+					"descriptor": dbtestdata.Xpub,
+					"from":       "2018-03-20",
+					"to":         "2018-03-21",
+				},
+			},
+			want: `{"id":"33","data":[{"time":1521514800,"txs":1,"received":"1","sent":"0"}]}`,
 		},
 	}
 

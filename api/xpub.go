@@ -590,8 +590,8 @@ func (w *Worker) GetXpubUtxo(xpub string, onlyConfirmed bool, gap int) (Utxos, e
 	return r, nil
 }
 
-// GetUtxoBalanceHistory returns history of balance for given xpub
-func (w *Worker) GetUtxoBalanceHistory(xpub string, fromTime, toTime time.Time, gap int) (BalanceHistories, error) {
+// GetXpubBalanceHistory returns history of balance for given xpub
+func (w *Worker) GetXpubBalanceHistory(xpub string, fromTime, toTime time.Time, gap int) (BalanceHistories, error) {
 	bhs := make(BalanceHistories, 0)
 	start := time.Now()
 	fromUnix, fromHeight, toUnix, toHeight := w.balanceHistoryHeightsFromTo(fromTime, toTime)
