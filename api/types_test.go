@@ -66,7 +66,7 @@ func TestBalanceHistories_SortAndAggregate(t *testing.T) {
 		{
 			name: "one",
 			a: []BalanceHistory{
-				BalanceHistory{
+				{
 					ReceivedSat: (*Amount)(big.NewInt(1)),
 					SentSat:     (*Amount)(big.NewInt(2)),
 					Time:        1521514812,
@@ -76,7 +76,7 @@ func TestBalanceHistories_SortAndAggregate(t *testing.T) {
 			},
 			groupByTime: 3600,
 			want: []BalanceHistory{
-				BalanceHistory{
+				{
 					ReceivedSat: (*Amount)(big.NewInt(1)),
 					SentSat:     (*Amount)(big.NewInt(2)),
 					Time:        1521514800,
@@ -87,42 +87,42 @@ func TestBalanceHistories_SortAndAggregate(t *testing.T) {
 		{
 			name: "aggregate",
 			a: []BalanceHistory{
-				BalanceHistory{
+				{
 					ReceivedSat: (*Amount)(big.NewInt(1)),
 					SentSat:     (*Amount)(big.NewInt(2)),
 					Time:        1521504812,
 					Txid:        "0011223344556677889900112233445566778899001122334455667788990011",
 					Txs:         1,
 				},
-				BalanceHistory{
+				{
 					ReceivedSat: (*Amount)(big.NewInt(3)),
 					SentSat:     (*Amount)(big.NewInt(4)),
 					Time:        1521504812,
 					Txid:        "00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840",
 					Txs:         1,
 				},
-				BalanceHistory{
+				{
 					ReceivedSat: (*Amount)(big.NewInt(5)),
 					SentSat:     (*Amount)(big.NewInt(6)),
 					Time:        1521514812,
 					Txid:        "00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840",
 					Txs:         1,
 				},
-				BalanceHistory{
+				{
 					ReceivedSat: (*Amount)(big.NewInt(7)),
 					SentSat:     (*Amount)(big.NewInt(8)),
 					Time:        1521504812,
 					Txid:        "00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840",
 					Txs:         1,
 				},
-				BalanceHistory{
+				{
 					ReceivedSat: (*Amount)(big.NewInt(9)),
 					SentSat:     (*Amount)(big.NewInt(10)),
 					Time:        1521534812,
 					Txid:        "0011223344556677889900112233445566778899001122334455667788990011",
 					Txs:         1,
 				},
-				BalanceHistory{
+				{
 					ReceivedSat: (*Amount)(big.NewInt(11)),
 					SentSat:     (*Amount)(big.NewInt(12)),
 					Time:        1521534812,
@@ -132,19 +132,19 @@ func TestBalanceHistories_SortAndAggregate(t *testing.T) {
 			},
 			groupByTime: 3600,
 			want: []BalanceHistory{
-				BalanceHistory{
+				{
 					ReceivedSat: (*Amount)(big.NewInt(11)),
 					SentSat:     (*Amount)(big.NewInt(14)),
 					Time:        1521504000,
 					Txs:         2,
 				},
-				BalanceHistory{
+				{
 					ReceivedSat: (*Amount)(big.NewInt(5)),
 					SentSat:     (*Amount)(big.NewInt(6)),
 					Time:        1521514800,
 					Txs:         1,
 				},
-				BalanceHistory{
+				{
 					ReceivedSat: (*Amount)(big.NewInt(20)),
 					SentSat:     (*Amount)(big.NewInt(22)),
 					Time:        1521532800,

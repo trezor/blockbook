@@ -1149,7 +1149,7 @@ func (w *Worker) GetFiatRatesForBlockID(bid string, currency string) (*db.Result
 	if currency == "" {
 		return nil, NewAPIError("Missing or empty \"currency\" parameter", true)
 	}
-	ticker := &db.CurrencyRatesTicker{}
+	var ticker *db.CurrencyRatesTicker
 	bi, err := w.getBlockInfoFromBlockID(bid)
 	if err != nil {
 		if err == bchain.ErrBlockNotFound {
