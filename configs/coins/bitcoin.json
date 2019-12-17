@@ -59,8 +59,10 @@
       "xpub_magic_segwit_p2sh": 77429938,
       "xpub_magic_segwit_native": 78792518,
       "additional_params": {
-        "alternativeEstimateFee": "whatthefee-disabled",
-        "alternativeEstimateFeeParams": "{\"url\": \"https://whatthefee.io/data.json\", \"periodSeconds\": 60}"
+        "alternative_estimate_fee": "whatthefee-disabled",
+        "alternative_estimate_fee_params": "{\"url\": \"https://whatthefee.io/data.json\", \"periodSeconds\": 60}",
+        "fiat_rates": "coingecko",
+        "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"bitcoin\", \"periodSeconds\": 60}"
       }
     }
   },
