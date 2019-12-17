@@ -276,9 +276,9 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *webs
 					return
 				}
 			}
-			rv, err = s.api.GetXpubBalanceHistory(r.Descriptor, fromTime, toTime, r.Gap)
+			rv, err = s.api.GetXpubBalanceHistory(r.Descriptor, fromTime, toTime, r.Fiat, r.Gap)
 			if err != nil {
-				rv, err = s.api.GetBalanceHistory(r.Descriptor, fromTime, toTime)
+				rv, err = s.api.GetBalanceHistory(r.Descriptor, fromTime, toTime, r.Fiat)
 			}
 		}
 		return

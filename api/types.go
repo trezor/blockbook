@@ -303,7 +303,7 @@ type BalanceHistory struct {
 	Txs         uint32  `json:"txs"`
 	ReceivedSat *Amount `json:"received"`
 	SentSat     *Amount `json:"sent"`
-	FiatRate    string  `json:"fiatrate,omitempty"`
+	FiatRate    string  `json:"fiatRate,omitempty"`
 	Txid        string  `json:"txid,omitempty"`
 }
 

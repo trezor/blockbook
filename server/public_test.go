@@ -154,39 +154,54 @@ func newPostRequest(u string, body string) *http.Request {
 	return r
 }
 
-// InitTestFiatRates initializes test data for /api/v2/tickers endpoint
-func InitTestFiatRates(d *db.RocksDB) error {
-	convertedDate, err := db.FiatRatesConvertDate("20191121140000")
+func insertFiatRate(date string, rates map[string]json.Number, d *db.RocksDB) error {
+	convertedDate, err := db.FiatRatesConvertDate(date)
 	if err != nil {
 		return err
 	}
 	ticker := &db.CurrencyRatesTicker{
 		Timestamp: convertedDate,
-		Rates: map[string]json.Number{
-			"usd": "7814.5",
-			"eur": "7100.0",
-		},
+		Rates:     rates,
 	}
-	err = d.FiatRatesStoreTicker(ticker)
-	if err != nil {
+	return d.FiatRatesStoreTicker(ticker)
+}
+
+// InitTestFiatRates initializes test data for /api/v2/tickers endpoint
+func InitTestFiatRates(d *db.RocksDB) error {
+	if err := insertFiatRate("20180320020000", map[string]json.Number{
+		"usd": "2000.0",
+		"eur": "1300.0",
+	}, d); err != nil {
 		return err
 	}
-	convertedDate, err = db.FiatRatesConvertDate("20191121143015")
-	if err != nil {
+	if err := insertFiatRate("20180320030000", map[string]json.Number{
+		"usd": "2001.0",
+		"eur": "1301.0",
+	}, d); err != nil {
 		return err
 	}
-	ticker = &db.CurrencyRatesTicker{
-		Timestamp: convertedDate,
-		Rates: map[string]json.Number{
-			"usd": "7914.5",
-			"eur": "7134.1",
-		},
-	}
-	err = d.FiatRatesStoreTicker(ticker)
-	if err != nil {
+	if err := insertFiatRate("20180320040000", map[string]json.Number{
+		"usd": "2002.0",
+		"eur": "1302.0",
+	}, d); err != nil {
 		return err
 	}
-	return nil
+	if err := insertFiatRate("20180321055521", map[string]json.Number{
+		"usd": "2003.0",
+		"eur": "1303.0",
+	}, d); err != nil {
+		return err
+	}
+	if err := insertFiatRate("20191121140000", map[string]json.Number{
+		"usd": "7814.5",
+		"eur": "7100.0",
+	}, d); err != nil {
+		return err
+	}
+	return insertFiatRate("20191121143015", map[string]json.Number{
+		"usd": "7914.5",
+		"eur": "7134.1",
+	}, d)
 }
 
 func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
@@ -572,7 +587,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"data_timestamp":"20191121140000","rates":{"usd":7814.5}}`,
+				`{"data_timestamp":"20180321055521","rates":{"usd":2003.0}}`,
 			},
 		},
 		{
@@ -590,7 +605,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"error":"Currency \"does_not_exist\" is not available for timestamp 20191121140000. Available currencies are: eur, usd."}`,
+				`{"error":"Currency \"does_not_exist\" is not available for timestamp 20191121140000. Available currencies are: eur,usd"}`,
 			},
 		},
 		{
@@ -765,6 +780,15 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			},
 		},
 		{
+			name:        "apiBalanceHistory Addr5 v2 fiatcurrency=eur",
+			r:           newGetRequest(ts.URL + "/api/v2/balancehistory/2NEVv9LJmAnY99W1pFoc5UJjVdypBqdnvu1?fiatcurrency=eur"),
+			status:      http.StatusOK,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`[{"time":1521514800,"txs":1,"received":"9876","sent":"0","fiatRate":"1301.0"},{"time":1521594000,"txs":1,"received":"9000","sent":"9876","fiatRate":"1303.0"}]`,
+			},
+		},
+		{
 			name:        "apiBalanceHistory Addr2 v2 from=2018-03-20&to=2018-03-21",
 			r:           newGetRequest(ts.URL + "/api/v2/balancehistory/mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz?from=2018-03-20&to=2018-03-21"),
 			status:      http.StatusOK,
@@ -789,6 +813,15 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			contentType: "application/json; charset=utf-8",
 			body: []string{
 				`[{"time":1521514800,"txs":1,"received":"1","sent":"0"}]`,
+			},
+		},
+		{
+			name:        "apiBalanceHistory xpub v2 from=2018-03-20&to=2018-03-21&fiatcurrency=usd",
+			r:           newGetRequest(ts.URL + "/api/v2/balancehistory/" + dbtestdata.Xpub + "?from=2018-03-20&to=2018-03-21&fiatcurrency=usd"),
+			status:      http.StatusOK,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`[{"time":1521514800,"txs":1,"received":"1","sent":"0","fiatRate":"2001.0"}]`,
 			},
 		},
 		{
@@ -1199,7 +1232,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 					"currency": "does-not-exist",
 				},
 			},
-			want: `{"id":"20","data":{"error":{"message":"Currency \"does-not-exist\" is not available for timestamp 20191121143015. Available currencies are: eur, usd."}}}`,
+			want: `{"id":"20","data":{"error":{"message":"Currency \"does-not-exist\" is not available for timestamp 20191121143015. Available currencies are: eur,usd"}}}`,
 		},
 		{
 			name: "websocket getFiatRatesForDates missing date",
@@ -1330,16 +1363,17 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			want: `{"id":"32","data":[{"time":1521514800,"txs":1,"received":"1","sent":"0"},{"time":1521594000,"txs":1,"received":"118641975500","sent":"1"}]}`,
 		},
 		{
-			name: "websocket getBalanceHistory xpub from=2018-03-20&to=2018-03-21",
+			name: "websocket getBalanceHistory xpub from=2018-03-20&to=2018-03-21&fiat=usd",
 			req: websocketReq{
 				Method: "getBalanceHistory",
 				Params: map[string]interface{}{
 					"descriptor": dbtestdata.Xpub,
 					"from":       "2018-03-20",
 					"to":         "2018-03-21",
+					"fiat":       "usd",
 				},
 			},
-			want: `{"id":"33","data":[{"time":1521514800,"txs":1,"received":"1","sent":"0"}]}`,
+			want: `{"id":"33","data":[{"time":1521514800,"txs":1,"received":"1","sent":"0","fiatRate":"2001.0"}]}`,
 		},
 	}
 

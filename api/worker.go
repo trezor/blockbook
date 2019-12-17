@@ -914,8 +914,26 @@ func (w *Worker) balanceHistoryForTxid(addrDesc bchain.AddressDescriptor, txid s
 	return &bh, nil
 }
 
+func (w *Worker) setFiatRateToBalanceHistories(histories BalanceHistories, fiat string) error {
+	for i := range histories {
+		bh := &histories[i]
+		t := time.Unix(int64(bh.Time), 0)
+		ticker, err := w.db.FiatRatesFindTicker(&t)
+		if err != nil {
+			glog.Errorf("Error finding ticker by date %v. Error: %v", t, err)
+			continue
+		} else if ticker == nil {
+			continue
+		}
+		if rate, found := ticker.Rates[fiat]; found {
+			bh.FiatRate = string(rate)
+		}
+	}
+	return nil
+}
+
 // GetBalanceHistory returns history of balance for given address
-func (w *Worker) GetBalanceHistory(address string, fromTime, toTime time.Time) (BalanceHistories, error) {
+func (w *Worker) GetBalanceHistory(address string, fromTime, toTime time.Time, fiat string) (BalanceHistories, error) {
 	bhs := make(BalanceHistories, 0)
 	start := time.Now()
 	addrDesc, _, err := w.getAddrDescAndNormalizeAddress(address)
@@ -940,6 +958,12 @@ func (w *Worker) GetBalanceHistory(address string, fromTime, toTime time.Time) (
 		}
 	}
 	bha := bhs.SortAndAggregate(3600)
+	if fiat != "" {
+		err = w.setFiatRateToBalanceHistories(bha, fiat)
+		if err != nil {
+			return nil, err
+		}
+	}
 	glog.Info("GetBalanceHistory ", address, ", blocks ", fromHeight, "-", toHeight, ", count ", len(bha), " finished in ", time.Since(start))
 	return bha, nil
 }
@@ -1117,29 +1141,27 @@ func (w *Worker) GetBlocks(page int, blocksOnPage int) (*Blocks, error) {
 
 // getFiatRatesResult checks if CurrencyRatesTicker contains all necessary data and returns formatted result
 func (w *Worker) getFiatRatesResult(currency string, ticker *db.CurrencyRatesTicker) (*db.ResultTickerAsString, error) {
-	resultRates := make(map[string]json.Number)
+	rates := make(map[string]json.Number, 2)
 	timeFormatted := ticker.Timestamp.Format(db.FiatRatesTimeFormat)
-
-	// Check if both USD rate and the desired currency rate exist in the result
-	for _, currencySymbol := range []string{"usd", currency} {
-		if _, found := ticker.Rates[currencySymbol]; !found {
-			availableCurrencies := make([]string, 0, len(ticker.Rates))
-			for availableCurrency := range ticker.Rates {
-				availableCurrencies = append(availableCurrencies, string(availableCurrency))
-			}
-			sort.Strings(availableCurrencies) // sort to get deterministic results
-			availableCurrenciesString := strings.Join(availableCurrencies, ", ")
-			return nil, NewAPIError(fmt.Sprintf("Currency %q is not available for timestamp %s. Available currencies are: %s.", currency, timeFormatted, availableCurrenciesString), true)
+	if rate, found := ticker.Rates[currency]; !found {
+		availableCurrencies := make([]string, 0, len(ticker.Rates))
+		for availableCurrency := range ticker.Rates {
+			availableCurrencies = append(availableCurrencies, availableCurrency)
 		}
-		resultRates[currencySymbol] = ticker.Rates[currencySymbol]
-		if currencySymbol == "usd" && currency == "usd" {
-			break
+		sort.Strings(availableCurrencies) // sort to get deterministic results
+		return nil, NewAPIError(fmt.Sprintf("Currency %q is not available for timestamp %s. Available currencies are: %s", currency, timeFormatted, strings.Join(availableCurrencies, ",")), true)
+	} else {
+		rates[currency] = rate
+	}
+	// add default usd currency
+	if currency != "usd" {
+		if rate, found := ticker.Rates["usd"]; found {
+			rates["usd"] = rate
 		}
 	}
-
 	result := &db.ResultTickerAsString{
 		Timestamp: timeFormatted,
-		Rates:     resultRates,
+		Rates:     rates,
 	}
 	return result, nil
 }

@@ -163,8 +163,8 @@
 
         function getBalanceHistory() {
             const descriptor = document.getElementById('getBalanceHistoryDescriptor').value.trim();
-            const from = parseInt(document.getElementById("getBalanceHistoryFrom").value);
-            const to = parseInt(document.getElementById("getBalanceHistoryTo").value);
+            const from = document.getElementById("getBalanceHistoryFrom").value.trim();
+            const to = document.getElementById("getBalanceHistoryTo").value.trim();
             const fiat = document.getElementById("getBalanceHistoryFiat").value.trim();
             const method = 'getBalanceHistory';
             const params = {
