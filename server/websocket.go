@@ -359,14 +359,14 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *webs
 		}
 		return
 	},
-	"getFiatRatesForDates": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
+	"getFiatRatesForTimestamps": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
 		r := struct {
-			Dates    []string `json:"dates"`
-			Currency string   `json:"currency"`
+			Timestamps []string `json:"timestamps"`
+			Currency   string   `json:"currency"`
 		}{}
 		err = json.Unmarshal(req.Params, &r)
 		if err == nil {
-			rv, err = s.getFiatRatesForDates(r.Dates, r.Currency)
+			rv, err = s.getFiatRatesForTimestamps(r.Timestamps, r.Currency)
 		}
 		return
 	},
@@ -698,6 +698,9 @@ func (s *WebsocketServer) subscribeFiatRates(c *websocketChannel, currency strin
 	s.fiatRatesSubscriptionsLock.Lock()
 	defer s.fiatRatesSubscriptionsLock.Unlock()
 
+	if currency == "" {
+		currency = "!ALL!"
+	}
 	as, ok := s.fiatRatesSubscriptions[currency]
 	if !ok {
 		as = make(map[*websocketChannel]string)
@@ -788,18 +791,18 @@ func (s *WebsocketServer) OnNewTxAddr(tx *bchain.Tx, addrDesc bchain.AddressDesc
 	}
 }
 
-func (s *WebsocketServer) broadcastTicker(coin string, rate json.Number) {
+func (s *WebsocketServer) broadcastTicker(currency string, rates map[string]json.Number) {
 	s.fiatRatesSubscriptionsLock.Lock()
 	defer s.fiatRatesSubscriptionsLock.Unlock()
-	as, ok := s.fiatRatesSubscriptions[coin]
+	as, ok := s.fiatRatesSubscriptions[currency]
 	if ok && len(as) > 0 {
 		data := struct {
-			Rate interface{} `json:"rate"`
+			Rates interface{} `json:"rates"`
 		}{
-			Rate: rate,
+			Rates: rates,
 		}
 		// get the list of subscriptions again, this time keep the lock
-		as, ok = s.fiatRatesSubscriptions[coin]
+		as, ok = s.fiatRatesSubscriptions[currency]
 		if ok {
 			for c, id := range as {
 				if c.IsAlive() {
@@ -809,7 +812,7 @@ func (s *WebsocketServer) broadcastTicker(coin string, rate json.Number) {
 					}
 				}
 			}
-			glog.Info("broadcasting new rate ", rate, " for coin ", coin, " to ", len(as), " channels")
+			glog.Info("broadcasting new rates for currency ", currency, " to ", len(as), " channels")
 		}
 	}
 }
@@ -817,8 +820,9 @@ func (s *WebsocketServer) broadcastTicker(coin string, rate json.Number) {
 // OnNewFiatRatesTicker is a callback that broadcasts info about fiat rates affecting subscribed currency
 func (s *WebsocketServer) OnNewFiatRatesTicker(ticker *db.CurrencyRatesTicker) {
 	for currency, rate := range ticker.Rates {
-		s.broadcastTicker(currency, rate)
+		s.broadcastTicker(currency, map[string]json.Number{currency: rate})
 	}
+	s.broadcastTicker("!ALL!", ticker.Rates)
 }
 
 func (s *WebsocketServer) getCurrentFiatRates(currency string) (interface{}, error) {
@@ -826,12 +830,12 @@ func (s *WebsocketServer) getCurrentFiatRates(currency string) (interface{}, err
 	return ret, err
 }
 
-func (s *WebsocketServer) getFiatRatesForDates(dates []string, currency string) (interface{}, error) {
-	ret, err := s.api.GetFiatRatesForDates(dates, currency)
+func (s *WebsocketServer) getFiatRatesForTimestamps(timestamps []string, currency string) (interface{}, error) {
+	ret, err := s.api.GetFiatRatesForTimestamps(timestamps, currency)
 	return ret, err
 }
 
-func (s *WebsocketServer) getFiatRatesTickersList(date string) (interface{}, error) {
-	ret, err := s.api.GetFiatRatesTickersList(date)
+func (s *WebsocketServer) getFiatRatesTickersList(timestamp string) (interface{}, error) {
+	ret, err := s.api.GetFiatRatesTickersList(timestamp)
 	return ret, err
 }

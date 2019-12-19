@@ -297,17 +297,17 @@
             });
         }
 
-        function getFiatRatesForDates() {
-            const method = 'getFiatRatesForDates';
-            var dates = document.getElementById('getFiatRatesForDatesList').value.split(",");
-            var currency = document.getElementById('getFiatRatesForDatesCurrency').value;
-            dates = dates.map(s => s.trim());
+        function getFiatRatesForTimestamps() {
+            const method = 'getFiatRatesForTimestamps';
+            var timestamps = document.getElementById('getFiatRatesForTimestampsList').value.split(",");
+            var currency = document.getElementById('getFiatRatesForTimestampsCurrency').value;
+            timestamps = timestamps.map(s => s.trim());
             const params = {
-                dates,
+                timestamps,
                 "currency": currency
             };
             send(method, params, function (result) {
-                document.getElementById('getFiatRatesForDatesResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
+                document.getElementById('getFiatRatesForTimestampsResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
             });
         }
 
@@ -533,24 +533,24 @@
         </div>
         <div class="row">
             <div class="col-2">
-                <input class="btn btn-secondary" type="button" value="get fiat rates for dates" onclick="getFiatRatesForDates()">
+                <input class="btn btn-secondary" type="button" value="get fiat rates for dates" onclick="getFiatRatesForTimestamps()">
             </div>
             <div class="col-1">
-                <input type="text" class="form-control" id="getFiatRatesForDatesCurrency" value="usd">
+                <input type="text" class="form-control" id="getFiatRatesForTimestampsCurrency" value="usd">
             </div>
             <div class="col-7">
-                <input type="text" class="form-control" id="getFiatRatesForDatesList" value="20191121140000,20191121143015">
+                <input type="text" class="form-control" id="getFiatRatesForTimestampsList" value="1575288000,1575550800">
             </div>
         </div>
         <div class="row">
-            <div class="col" id="getFiatRatesForDatesResult"></div>
+            <div class="col" id="getFiatRatesForTimestampsResult"></div>
         </div>
         <div class="row">
             <div class="col-2">
                 <input class="btn btn-secondary" type="button" value="get current fiat rates" onclick="getCurrentFiatRates()">
             </div>
             <div class="col-1">
-                <input type="text" class="form-control" id="getCurrentFiatRatesCurrency" value="usd">
+                <input type="text" class="form-control" id="getCurrentFiatRatesCurrency" placeholder="usd">
             </div>
         </div>
         <div class="row">
@@ -561,7 +561,7 @@
                 <input class="btn btn-secondary" type="button" value="get fiat rates tickers" onclick="getFiatRatesTickersList()">
             </div>
             <div class="col-8">
-                <input type="text" class="form-control" id="getFiatRatesTickersListDate" value="20191121140000">
+                <input type="text" class="form-control" id="getFiatRatesTickersListDate" value="1576591569" placeholder="Unix timestamp">
             </div>
         </div>
         <div class="row">

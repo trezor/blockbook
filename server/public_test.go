@@ -521,10 +521,10 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 		{
 			name:        "apiFiatRates missing currency",
 			r:           newGetRequest(ts.URL + "/api/v2/tickers"),
-			status:      http.StatusBadRequest,
+			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"error":"Missing or empty \"currency\" parameter"}`,
+				`{"ts":1574346615,"rates":{"eur":7134.1,"usd":7914.5}}`,
 			},
 		},
 		{
@@ -533,52 +533,52 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"data_timestamp":"20191121143015","rates":{"usd":7914.5}}`,
+				`{"ts":1574346615,"rates":{"usd":7914.5}}`,
 			},
 		},
 		{
-			name:        "apiFiatRates get rate by exact date",
-			r:           newGetRequest(ts.URL + "/api/v2/tickers?currency=usd&date=20191121140000"),
+			name:        "apiFiatRates get rate by exact timestamp",
+			r:           newGetRequest(ts.URL + "/api/v2/tickers?currency=usd&timestamp=1574344800"),
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"data_timestamp":"20191121140000","rates":{"usd":7814.5}}`,
+				`{"ts":1574344800,"rates":{"usd":7814.5}}`,
 			},
 		},
 		{
-			name:        "apiFiatRates incorrect date",
-			r:           newGetRequest(ts.URL + "/api/v2/tickers?currency=usd&date=yesterday"),
+			name:        "apiFiatRates incorrect timestamp",
+			r:           newGetRequest(ts.URL + "/api/v2/tickers?currency=usd&timestamp=yesterday"),
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"error":"Date \"yesterday\" does not match any of available formats. Possible formats are: YYYYMMDDhhmmss, YYYYMMDDhhmm, YYYYMMDDhh, YYYYMMDD"}`,
+				`{"error":"\"yesterday\" is not a valid Unix timestamp."}`,
 			},
 		},
 		{
-			name:        "apiFiatRates future date",
-			r:           newGetRequest(ts.URL + "/api/v2/tickers?currency=usd&date=20200101000000"),
+			name:        "apiFiatRates future timestamp",
+			r:           newGetRequest(ts.URL + "/api/v2/tickers?currency=usd&timestamp=7980386400"),
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"error":"No tickers available for 2020-01-01 00:00:00 +0000 UTC (usd)"}`,
+				`{"ts":7980386400,"error":"No tickers available for currency \"usd\""}`,
 			},
 		},
 		{
-			name:        "apiFiatRates get EUR rate (exact date)",
-			r:           newGetRequest(ts.URL + "/api/v2/tickers?date=20191121140000&currency=eur"),
+			name:        "apiFiatRates get EUR rate (exact timestamp)",
+			r:           newGetRequest(ts.URL + "/api/v2/tickers?timestamp=1574344800&currency=eur"),
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"data_timestamp":"20191121140000","rates":{"eur":7100.0,"usd":7814.5}}`,
+				`{"ts":1574344800,"rates":{"eur":7100.0}}`,
 			},
 		},
 		{
 			name:        "apiFiatRates get closest rate",
-			r:           newGetRequest(ts.URL + "/api/v2/tickers?date=20191121130000&currency=usd"),
+			r:           newGetRequest(ts.URL + "/api/v2/tickers?timestamp=1357045200&currency=usd"),
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"data_timestamp":"20191121140000","rates":{"usd":7814.5}}`,
+				`{"ts":1521511200,"rates":{"usd":2000.0}}`,
 			},
 		},
 		{
@@ -587,34 +587,34 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"data_timestamp":"20180321055521","rates":{"usd":2003.0}}`,
+				`{"ts":1521611721,"rates":{"usd":2003.0}}`,
 			},
 		},
 		{
 			name:        "apiFiatRates get rate for EUR",
-			r:           newGetRequest(ts.URL + "/api/v2/tickers?date=20191121140000&currency=eur"),
+			r:           newGetRequest(ts.URL + "/api/v2/tickers?timestamp=1574346615&currency=eur"),
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"data_timestamp":"20191121140000","rates":{"eur":7100.0,"usd":7814.5}}`,
+				`{"ts":1574346615,"rates":{"eur":7134.1}}`,
 			},
 		},
 		{
 			name:        "apiFiatRates get exact rate for an incorrect currency",
-			r:           newGetRequest(ts.URL + "/api/v2/tickers?date=20191121140000&currency=does_not_exist"),
+			r:           newGetRequest(ts.URL + "/api/v2/tickers?timestamp=1574346615&currency=does_not_exist"),
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"error":"Currency \"does_not_exist\" is not available for timestamp 20191121140000. Available currencies are: eur,usd"}`,
+				`{"error":"Currency \"does_not_exist\" is not available for timestamp 1574346615."}`,
 			},
 		},
 		{
 			name:        "apiTickerList",
-			r:           newGetRequest(ts.URL + "/api/v2/tickers-list?date=20191121140000"),
+			r:           newGetRequest(ts.URL + "/api/v2/tickers-list?timestamp=1574346615"),
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"data_timestamp":"20191121140000","available_currencies":["eur","usd"]}`,
+				`{"data_timestamp":1574346615,"available_currencies":["eur","usd"]}`,
 			},
 		},
 		{
@@ -1202,7 +1202,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 					"": "",
 				},
 			},
-			want: `{"id":"17","data":{"error":{"message":"Missing or empty \"currency\" parameter"}}}`,
+			want: `{"id":"17","data":{"ts":1574346615,"rates":{"eur":7134.1,"usd":7914.5}}}`,
 		},
 		{
 			name: "websocket getCurrentFiatRates usd",
@@ -1212,7 +1212,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 					"currency": "usd",
 				},
 			},
-			want: `{"id":"18","data":{"data_timestamp":"20191121143015","rates":{"usd":7914.5}}}`,
+			want: `{"id":"18","data":{"ts":1574346615,"rates":{"usd":7914.5}}}`,
 		},
 		{
 			name: "websocket getCurrentFiatRates eur",
@@ -1222,7 +1222,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 					"currency": "eur",
 				},
 			},
-			want: `{"id":"19","data":{"data_timestamp":"20191121143015","rates":{"eur":7134.1,"usd":7914.5}}}`,
+			want: `{"id":"19","data":{"ts":1574346615,"rates":{"eur":7134.1}}}`,
 		},
 		{
 			name: "websocket getCurrentFiatRates incorrect currency",
@@ -1232,115 +1232,115 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 					"currency": "does-not-exist",
 				},
 			},
-			want: `{"id":"20","data":{"error":{"message":"Currency \"does-not-exist\" is not available for timestamp 20191121143015. Available currencies are: eur,usd"}}}`,
+			want: `{"id":"20","data":{"error":{"message":"Currency \"does-not-exist\" is not available for timestamp 1574346615."}}}`,
 		},
 		{
-			name: "websocket getFiatRatesForDates missing date",
+			name: "websocket getFiatRatesForTimestamps missing date",
 			req: websocketReq{
-				Method: "getFiatRatesForDates",
+				Method: "getFiatRatesForTimestamps",
 				Params: map[string]interface{}{
 					"currency": "usd",
 				},
 			},
-			want: `{"id":"21","data":{"error":{"message":"No dates provided"}}}`,
+			want: `{"id":"21","data":{"error":{"message":"No timestamps provided"}}}`,
 		},
 		{
-			name: "websocket getFiatRatesForDates incorrect date",
+			name: "websocket getFiatRatesForTimestamps incorrect date",
 			req: websocketReq{
-				Method: "getFiatRatesForDates",
+				Method: "getFiatRatesForTimestamps",
 				Params: map[string]interface{}{
-					"currency": "usd",
-					"dates":    []string{"yesterday"},
+					"currency":   "usd",
+					"timestamps": []string{"yesterday"},
 				},
 			},
-			want: `{"id":"22","data":{"tickers":[{"error":"Date \"yesterday\" does not match any of available formats. Possible formats are: YYYYMMDDhhmmss, YYYYMMDDhhmm, YYYYMMDDhh, YYYYMMDD"}]}}`,
+			want: `{"id":"22","data":{"tickers":[{"error":"\"yesterday\" is not a valid Unix timestamp."}]}}`,
 		},
 		{
-			name: "websocket getFiatRatesForDates incorrect (future) date",
+			name: "websocket getFiatRatesForTimestamps incorrect (future) date",
 			req: websocketReq{
-				Method: "getFiatRatesForDates",
+				Method: "getFiatRatesForTimestamps",
 				Params: map[string]interface{}{
-					"currency": "usd",
-					"dates":    []string{"20200101000000"},
+					"currency":   "usd",
+					"timestamps": []string{"7885693815"},
 				},
 			},
-			want: `{"id":"23","data":{"tickers":[{"error":"No tickers available for 2020-01-01 00:00:00 +0000 UTC (usd)"}]}}`,
+			want: `{"id":"23","data":{"tickers":[{"ts":7885693815,"error":"No tickers available for currency \"usd\""}]}}`,
 		},
 		{
-			name: "websocket getFiatRatesForDates exact date",
+			name: "websocket getFiatRatesForTimestamps exact date",
 			req: websocketReq{
-				Method: "getFiatRatesForDates",
+				Method: "getFiatRatesForTimestamps",
 				Params: map[string]interface{}{
-					"currency": "usd",
-					"dates":    []string{"20191121140000"},
+					"currency":   "usd",
+					"timestamps": []string{"1574346615"},
 				},
 			},
-			want: `{"id":"24","data":{"tickers":[{"data_timestamp":"20191121140000","rates":{"usd":7814.5}}]}}`,
+			want: `{"id":"24","data":{"tickers":[{"ts":1574346615,"rates":{"usd":7914.5}}]}}`,
 		},
 		{
-			name: "websocket getFiatRatesForDates closest date, eur",
+			name: "websocket getFiatRatesForTimestamps closest date, eur",
 			req: websocketReq{
-				Method: "getFiatRatesForDates",
+				Method: "getFiatRatesForTimestamps",
 				Params: map[string]interface{}{
-					"currency": "eur",
-					"dates":    []string{"20191121130000"},
+					"currency":   "eur",
+					"timestamps": []string{"1521507600"},
 				},
 			},
-			want: `{"id":"25","data":{"tickers":[{"data_timestamp":"20191121140000","rates":{"eur":7100.0,"usd":7814.5}}]}}`,
+			want: `{"id":"25","data":{"tickers":[{"ts":1521511200,"rates":{"eur":1300.0}}]}}`,
 		},
 		{
-			name: "websocket getFiatRatesForDates multiple dates usd",
+			name: "websocket getFiatRatesForTimestamps multiple timestamps usd",
 			req: websocketReq{
-				Method: "getFiatRatesForDates",
+				Method: "getFiatRatesForTimestamps",
 				Params: map[string]interface{}{
-					"currency": "usd",
-					"dates":    []string{"20191121140000", "20191121143015"},
+					"currency":   "usd",
+					"timestamps": []string{"1570346615", "1574346615"},
 				},
 			},
-			want: `{"id":"26","data":{"tickers":[{"data_timestamp":"20191121140000","rates":{"usd":7814.5}},{"data_timestamp":"20191121143015","rates":{"usd":7914.5}}]}}`,
+			want: `{"id":"26","data":{"tickers":[{"ts":1574344800,"rates":{"usd":7814.5}},{"ts":1574346615,"rates":{"usd":7914.5}}]}}`,
 		},
 		{
-			name: "websocket getFiatRatesForDates multiple dates eur",
+			name: "websocket getFiatRatesForTimestamps multiple timestamps eur",
 			req: websocketReq{
-				Method: "getFiatRatesForDates",
+				Method: "getFiatRatesForTimestamps",
 				Params: map[string]interface{}{
-					"currency": "eur",
-					"dates":    []string{"20191121140000", "20191121143015"},
+					"currency":   "eur",
+					"timestamps": []string{"1570346615", "1574346615"},
 				},
 			},
-			want: `{"id":"27","data":{"tickers":[{"data_timestamp":"20191121140000","rates":{"eur":7100.0,"usd":7814.5}},{"data_timestamp":"20191121143015","rates":{"eur":7134.1,"usd":7914.5}}]}}`,
+			want: `{"id":"27","data":{"tickers":[{"ts":1574344800,"rates":{"eur":7100.0}},{"ts":1574346615,"rates":{"eur":7134.1}}]}}`,
 		},
 		{
-			name: "websocket getFiatRatesForDates multiple dates with an error",
+			name: "websocket getFiatRatesForTimestamps multiple timestamps with an error",
 			req: websocketReq{
-				Method: "getFiatRatesForDates",
+				Method: "getFiatRatesForTimestamps",
 				Params: map[string]interface{}{
-					"currency": "usd",
-					"dates":    []string{"20191121140000", "20191121143015", "not-a-real-date"},
+					"currency":   "usd",
+					"timestamps": []string{"1570346615", "1574346615", "not-a-real-date"},
 				},
 			},
-			want: `{"id":"28","data":{"tickers":[{"data_timestamp":"20191121140000","rates":{"usd":7814.5}},{"data_timestamp":"20191121143015","rates":{"usd":7914.5}},{"error":"Date \"not-a-real-date\" does not match any of available formats. Possible formats are: YYYYMMDDhhmmss, YYYYMMDDhhmm, YYYYMMDDhh, YYYYMMDD"}]}}`,
+			want: `{"id":"28","data":{"tickers":[{"ts":1574344800,"rates":{"usd":7814.5}},{"ts":1574346615,"rates":{"usd":7914.5}},{"error":"\"not-a-real-date\" is not a valid Unix timestamp."}]}}`,
 		},
 		{
-			name: "websocket getFiatRatesForDates multiple errors",
+			name: "websocket getFiatRatesForTimestamps multiple errors",
 			req: websocketReq{
-				Method: "getFiatRatesForDates",
+				Method: "getFiatRatesForTimestamps",
 				Params: map[string]interface{}{
-					"currency": "usd",
-					"dates":    []string{"20200101000000", "not-a-real-date"},
+					"currency":   "usd",
+					"timestamps": []string{"7832854800", "not-a-real-date"},
 				},
 			},
-			want: `{"id":"29","data":{"tickers":[{"error":"No tickers available for 2020-01-01 00:00:00 +0000 UTC (usd)"},{"error":"Date \"not-a-real-date\" does not match any of available formats. Possible formats are: YYYYMMDDhhmmss, YYYYMMDDhhmm, YYYYMMDDhh, YYYYMMDD"}]}}`,
+			want: `{"id":"29","data":{"tickers":[{"ts":7832854800,"error":"No tickers available for currency \"usd\""},{"error":"\"not-a-real-date\" is not a valid Unix timestamp."}]}}`,
 		},
 		{
 			name: "websocket getTickersList",
 			req: websocketReq{
 				Method: "getFiatRatesTickersList",
 				Params: map[string]interface{}{
-					"date": "20191121140000",
+					"date": "1570346615",
 				},
 			},
-			want: `{"id":"30","data":{"data_timestamp":"20191121140000","available_currencies":["eur","usd"]}}`,
+			want: `{"id":"30","data":{"data_timestamp":1574344800,"available_currencies":["eur","usd"]}}`,
 		},
 		{
 			name: "websocket getBalanceHistory Addr2",
