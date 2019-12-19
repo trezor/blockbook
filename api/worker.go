@@ -925,7 +925,7 @@ func (w *Worker) setFiatRateToBalanceHistories(histories BalanceHistories, fiat 
 			continue
 		}
 		if rate, found := ticker.Rates[fiat]; found {
-			bh.FiatRate = string(rate)
+			bh.FiatRate = rate
 		}
 	}
 	return nil
@@ -1153,7 +1153,7 @@ func (w *Worker) getFiatRatesResult(currency string, ticker *db.CurrencyRatesTic
 			Rates:     ticker.Rates,
 		}, nil
 	}
-	rates := make(map[string]json.Number, 1)
+	rates := make(map[string]float64, 1)
 	timestamp := ticker.Timestamp.UTC().Unix()
 	if rate, found := ticker.Rates[currency]; !found {
 		return nil, NewAPIError(fmt.Sprintf("Currency %q is not available for timestamp %d.", currency, timestamp), true)

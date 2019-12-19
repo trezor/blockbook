@@ -143,7 +143,7 @@ func (rd *RatesDownloader) findEarliestMarketData() (*time.Time, error) {
 // syncLatest downloads the latest FiatRates data every rd.PeriodSeconds
 func (rd *RatesDownloader) syncLatest() error {
 	timer := time.NewTimer(rd.periodSeconds)
-	var lastTickerRates map[string]json.Number = nil
+	var lastTickerRates map[string]float64 = nil
 	sameTickerCounter := 0
 	for {
 		ticker, err := rd.downloader.getTicker(nil)

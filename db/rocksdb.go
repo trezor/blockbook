@@ -37,14 +37,14 @@ const FiatRatesTimeFormat = "20060102150405" // YYYYMMDDhhmmss
 // CurrencyRatesTicker contains coin ticker data fetched from API
 type CurrencyRatesTicker struct {
 	Timestamp *time.Time // return as unix timestamp in API
-	Rates     map[string]json.Number
+	Rates     map[string]float64
 }
 
 // ResultTickerAsString contains formatted CurrencyRatesTicker data
 type ResultTickerAsString struct {
-	Timestamp int64                  `json:"ts,omitempty"`
-	Rates     map[string]json.Number `json:"rates,omitempty"`
-	Error     string                 `json:"error,omitempty"`
+	Timestamp int64              `json:"ts,omitempty"`
+	Rates     map[string]float64 `json:"rates,omitempty"`
+	Error     string             `json:"error,omitempty"`
 }
 
 // ResultTickersAsString contains a formatted CurrencyRatesTicker list

@@ -9,7 +9,6 @@ import (
 	"blockbook/tests/dbtestdata"
 	"encoding/binary"
 	"encoding/hex"
-	"encoding/json"
 	"io/ioutil"
 	"math/big"
 	"os"
@@ -1131,20 +1130,26 @@ func TestRocksTickers(t *testing.T) {
 	ts1, _ := time.Parse(FiatRatesTimeFormat, "20190628000000")
 	ticker1 := &CurrencyRatesTicker{
 		Timestamp: &ts1,
-		Rates: map[string]json.Number{
-			"usd": "20000",
+		Rates: map[string]float64{
+			"usd": 20000,
 		},
 	}
 
 	ts2, _ := time.Parse(FiatRatesTimeFormat, "20190629000000")
 	ticker2 := &CurrencyRatesTicker{
 		Timestamp: &ts2,
-		Rates: map[string]json.Number{
-			"usd": "30000",
+		Rates: map[string]float64{
+			"usd": 30000,
 		},
 	}
-	d.FiatRatesStoreTicker(ticker1)
+	err := d.FiatRatesStoreTicker(ticker1)
+	if err != nil {
+		t.Errorf("Error storing ticker! %v", err)
+	}
 	d.FiatRatesStoreTicker(ticker2)
+	if err != nil {
+		t.Errorf("Error storing ticker! %v", err)
+	}
 
 	ticker, err := d.FiatRatesFindTicker(&key) // should find the closest key (ticker1)
 	if err != nil {

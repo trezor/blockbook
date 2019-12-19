@@ -154,7 +154,7 @@ func newPostRequest(u string, body string) *http.Request {
 	return r
 }
 
-func insertFiatRate(date string, rates map[string]json.Number, d *db.RocksDB) error {
+func insertFiatRate(date string, rates map[string]float64, d *db.RocksDB) error {
 	convertedDate, err := db.FiatRatesConvertDate(date)
 	if err != nil {
 		return err
@@ -168,39 +168,39 @@ func insertFiatRate(date string, rates map[string]json.Number, d *db.RocksDB) er
 
 // InitTestFiatRates initializes test data for /api/v2/tickers endpoint
 func InitTestFiatRates(d *db.RocksDB) error {
-	if err := insertFiatRate("20180320020000", map[string]json.Number{
-		"usd": "2000.0",
-		"eur": "1300.0",
+	if err := insertFiatRate("20180320020000", map[string]float64{
+		"usd": 2000.0,
+		"eur": 1300.0,
 	}, d); err != nil {
 		return err
 	}
-	if err := insertFiatRate("20180320030000", map[string]json.Number{
-		"usd": "2001.0",
-		"eur": "1301.0",
+	if err := insertFiatRate("20180320030000", map[string]float64{
+		"usd": 2001.0,
+		"eur": 1301.0,
 	}, d); err != nil {
 		return err
 	}
-	if err := insertFiatRate("20180320040000", map[string]json.Number{
-		"usd": "2002.0",
-		"eur": "1302.0",
+	if err := insertFiatRate("20180320040000", map[string]float64{
+		"usd": 2002.0,
+		"eur": 1302.0,
 	}, d); err != nil {
 		return err
 	}
-	if err := insertFiatRate("20180321055521", map[string]json.Number{
-		"usd": "2003.0",
-		"eur": "1303.0",
+	if err := insertFiatRate("20180321055521", map[string]float64{
+		"usd": 2003.0,
+		"eur": 1303.0,
 	}, d); err != nil {
 		return err
 	}
-	if err := insertFiatRate("20191121140000", map[string]json.Number{
-		"usd": "7814.5",
-		"eur": "7100.0",
+	if err := insertFiatRate("20191121140000", map[string]float64{
+		"usd": 7814.5,
+		"eur": 7100.0,
 	}, d); err != nil {
 		return err
 	}
-	return insertFiatRate("20191121143015", map[string]json.Number{
-		"usd": "7914.5",
-		"eur": "7134.1",
+	return insertFiatRate("20191121143015", map[string]float64{
+		"usd": 7914.5,
+		"eur": 7134.1,
 	}, d)
 }
 
@@ -569,7 +569,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"ts":1574344800,"rates":{"eur":7100.0}}`,
+				`{"ts":1574344800,"rates":{"eur":7100}}`,
 			},
 		},
 		{
@@ -578,7 +578,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"ts":1521511200,"rates":{"usd":2000.0}}`,
+				`{"ts":1521511200,"rates":{"usd":2000}}`,
 			},
 		},
 		{
@@ -587,7 +587,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"ts":1521611721,"rates":{"usd":2003.0}}`,
+				`{"ts":1521611721,"rates":{"usd":2003}}`,
 			},
 		},
 		{
@@ -785,7 +785,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`[{"time":1521514800,"txs":1,"received":"9876","sent":"0","fiatRate":"1301.0"},{"time":1521594000,"txs":1,"received":"9000","sent":"9876","fiatRate":"1303.0"}]`,
+				`[{"time":1521514800,"txs":1,"received":"9876","sent":"0","fiatRate":1301},{"time":1521594000,"txs":1,"received":"9000","sent":"9876","fiatRate":1303}]`,
 			},
 		},
 		{
@@ -821,7 +821,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`[{"time":1521514800,"txs":1,"received":"1","sent":"0","fiatRate":"2001.0"}]`,
+				`[{"time":1521514800,"txs":1,"received":"1","sent":"0","fiatRate":2001}]`,
 			},
 		},
 		{
@@ -1286,7 +1286,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 					"timestamps": []string{"1521507600"},
 				},
 			},
-			want: `{"id":"25","data":{"tickers":[{"ts":1521511200,"rates":{"eur":1300.0}}]}}`,
+			want: `{"id":"25","data":{"tickers":[{"ts":1521511200,"rates":{"eur":1300}}]}}`,
 		},
 		{
 			name: "websocket getFiatRatesForTimestamps multiple timestamps usd",
@@ -1308,7 +1308,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 					"timestamps": []string{"1570346615", "1574346615"},
 				},
 			},
-			want: `{"id":"27","data":{"tickers":[{"ts":1574344800,"rates":{"eur":7100.0}},{"ts":1574346615,"rates":{"eur":7134.1}}]}}`,
+			want: `{"id":"27","data":{"tickers":[{"ts":1574344800,"rates":{"eur":7100}},{"ts":1574346615,"rates":{"eur":7134.1}}]}}`,
 		},
 		{
 			name: "websocket getFiatRatesForTimestamps multiple timestamps with an error",
@@ -1373,7 +1373,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 					"fiat":       "usd",
 				},
 			},
-			want: `{"id":"33","data":[{"time":1521514800,"txs":1,"received":"1","sent":"0","fiatRate":"2001.0"}]}`,
+			want: `{"id":"33","data":[{"time":1521514800,"txs":1,"received":"1","sent":"0","fiatRate":2001}]}`,
 		},
 	}
 

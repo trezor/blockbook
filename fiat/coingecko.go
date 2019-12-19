@@ -100,7 +100,7 @@ func (cg *Coingecko) getTicker(timestamp *time.Time) (*db.CurrencyRatesTicker, e
 
 	type FiatRatesResponse struct {
 		MarketData struct {
-			Prices map[string]json.Number `json:"current_price"`
+			Prices map[string]float64 `json:"current_price"`
 		} `json:"market_data"`
 	}
 

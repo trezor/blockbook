@@ -791,7 +791,7 @@ func (s *WebsocketServer) OnNewTxAddr(tx *bchain.Tx, addrDesc bchain.AddressDesc
 	}
 }
 
-func (s *WebsocketServer) broadcastTicker(currency string, rates map[string]json.Number) {
+func (s *WebsocketServer) broadcastTicker(currency string, rates map[string]float64) {
 	s.fiatRatesSubscriptionsLock.Lock()
 	defer s.fiatRatesSubscriptionsLock.Unlock()
 	as, ok := s.fiatRatesSubscriptions[currency]
@@ -820,7 +820,7 @@ func (s *WebsocketServer) broadcastTicker(currency string, rates map[string]json
 // OnNewFiatRatesTicker is a callback that broadcasts info about fiat rates affecting subscribed currency
 func (s *WebsocketServer) OnNewFiatRatesTicker(ticker *db.CurrencyRatesTicker) {
 	for currency, rate := range ticker.Rates {
-		s.broadcastTicker(currency, map[string]json.Number{currency: rate})
+		s.broadcastTicker(currency, map[string]float64{currency: rate})
 	}
 	s.broadcastTicker("!ALL!", ticker.Rates)
 }
