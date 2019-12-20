@@ -364,8 +364,8 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *webs
 	},
 	"getFiatRatesForTimestamps": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
 		r := struct {
-			Timestamps []string `json:"timestamps"`
-			Currency   string   `json:"currency"`
+			Timestamps []int64 `json:"timestamps"`
+			Currency   string  `json:"currency"`
 		}{}
 		err = json.Unmarshal(req.Params, &r)
 		if err == nil {
@@ -375,11 +375,11 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *webs
 	},
 	"getFiatRatesTickersList": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
 		r := struct {
-			Date string `json:"date"`
+			Timestamp int64 `json:"timestamp"`
 		}{}
 		err = json.Unmarshal(req.Params, &r)
 		if err == nil {
-			rv, err = s.getFiatRatesTickersList(r.Date)
+			rv, err = s.getFiatRatesTickersList(r.Timestamp)
 		}
 		return
 	},
@@ -833,12 +833,13 @@ func (s *WebsocketServer) getCurrentFiatRates(currency string) (interface{}, err
 	return ret, err
 }
 
-func (s *WebsocketServer) getFiatRatesForTimestamps(timestamps []string, currency string) (interface{}, error) {
+func (s *WebsocketServer) getFiatRatesForTimestamps(timestamps []int64, currency string) (interface{}, error) {
 	ret, err := s.api.GetFiatRatesForTimestamps(timestamps, currency)
 	return ret, err
 }
 
-func (s *WebsocketServer) getFiatRatesTickersList(timestamp string) (interface{}, error) {
+func (s *WebsocketServer) getFiatRatesTickersList(timestamp int64) (interface{}, error) {
+	glog.Errorf("ts: %v", timestamp)
 	ret, err := s.api.GetFiatRatesTickersList(timestamp)
 	return ret, err
 }

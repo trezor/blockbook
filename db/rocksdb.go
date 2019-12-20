@@ -42,8 +42,9 @@ type CurrencyRatesTicker struct {
 
 // ResultTickerAsString contains formatted CurrencyRatesTicker data
 type ResultTickerAsString struct {
-	Timestamp int64              `json:"ts,omitempty"`
+	Timestamp int64              `json:"rate_ts,omitempty"`
 	Rates     map[string]float64 `json:"rates,omitempty"`
+	Rate      float64            `json:"rate,omitempty"`
 	Error     string             `json:"error,omitempty"`
 }
 
@@ -188,17 +189,6 @@ func FiatRatesConvertDate(date string) (*time.Time, error) {
 	msg := "Date \"" + date + "\" does not match any of available formats. "
 	msg += "Possible formats are: YYYYMMDDhhmmss, YYYYMMDDhhmm, YYYYMMDDhh, YYYYMMDD"
 	return nil, errors.New(msg)
-}
-
-// FiatRatesTimestampToTime converts the unix timestamp string to a Time object
-func FiatRatesTimestampToTime(timestamp string) (*time.Time, error) {
-	i, err := strconv.ParseInt(timestamp, 10, 64)
-	if err != nil {
-		return nil, err
-	}
-	ts := time.Unix(i, 0)
-	ts = ts.UTC()
-	return &ts, nil
 }
 
 // FiatRatesStoreTicker stores ticker data at the specified time

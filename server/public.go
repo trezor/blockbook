@@ -1130,7 +1130,11 @@ func (s *PublicServer) apiSendTx(r *http.Request, apiVersion int) (interface{}, 
 // apiTickersList returns a list of available FiatRates currencies
 func (s *PublicServer) apiTickersList(r *http.Request, apiVersion int) (interface{}, error) {
 	s.metrics.ExplorerViews.With(common.Labels{"action": "api-tickers-list"}).Inc()
-	timestamp := strings.ToLower(r.URL.Query().Get("timestamp"))
+	timestampString := strings.ToLower(r.URL.Query().Get("timestamp"))
+	timestamp, err := strconv.ParseInt(timestampString, 10, 64)
+	if err != nil {
+		return nil, api.NewAPIError("Parameter \"timestamp\" is not a valid Unix timestamp.", true)
+	}
 	result, err := s.api.GetFiatRatesTickersList(timestamp)
 	return result, err
 }
@@ -1145,10 +1149,16 @@ func (s *PublicServer) apiTickers(r *http.Request, apiVersion int) (interface{},
 		// Get tickers for specified block height or block hash
 		s.metrics.ExplorerViews.With(common.Labels{"action": "api-tickers-block"}).Inc()
 		result, err = s.api.GetFiatRatesForBlockID(block, currency)
-	} else if timestamp := r.URL.Query().Get("timestamp"); timestamp != "" {
+	} else if timestampString := r.URL.Query().Get("timestamp"); timestampString != "" {
 		// Get tickers for specified timestamp
 		s.metrics.ExplorerViews.With(common.Labels{"action": "api-tickers-date"}).Inc()
-		resultTickers, err := s.api.GetFiatRatesForTimestamps([]string{timestamp}, currency)
+
+		timestamp, err := strconv.ParseInt(timestampString, 10, 64)
+		if err != nil {
+			return nil, api.NewAPIError("Parameter \"timestamp\" is not a valid Unix timestamp.", true)
+		}
+
+		resultTickers, err := s.api.GetFiatRatesForTimestamps([]int64{timestamp}, currency)
 		if err != nil {
 			return nil, err
 		}
