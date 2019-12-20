@@ -1145,6 +1145,25 @@ func (w *Worker) GetBlocks(page int, blocksOnPage int) (*Blocks, error) {
 	return r, nil
 }
 
+// getFiatRatesResults checks if CurrencyRatesTicker contains all necessary data and returns formatted result
+func (w *Worker) getFiatRatesResults(currency string, ticker *db.CurrencyRatesTicker) (*db.ResultTickerAsString, error) {
+	if currency == "" {
+		return &db.ResultTickerAsString{
+			Timestamp: ticker.Timestamp.UTC().Unix(),
+			Rates:     ticker.Rates,
+		}, nil
+	}
+	timestamp := ticker.Timestamp.UTC().Unix()
+	if rate, found := ticker.Rates[currency]; !found {
+		return nil, NewAPIError(fmt.Sprintf("Currency %q is not available for timestamp %d.", currency, timestamp), true)
+	} else {
+		return &db.ResultTickerAsString{
+			Timestamp: timestamp,
+			Rates:     map[string]float64{currency: rate},
+		}, nil
+	}
+}
+
 // getFiatRatesResult checks if CurrencyRatesTicker contains all necessary data and returns formatted result
 func (w *Worker) getFiatRatesResult(currency string, ticker *db.CurrencyRatesTicker) (*db.ResultTickerAsString, error) {
 	if currency == "" {

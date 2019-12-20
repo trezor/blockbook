@@ -839,7 +839,6 @@ func (s *WebsocketServer) getFiatRatesForTimestamps(timestamps []int64, currency
 }
 
 func (s *WebsocketServer) getFiatRatesTickersList(timestamp int64) (interface{}, error) {
-	glog.Errorf("ts: %v", timestamp)
 	ret, err := s.api.GetFiatRatesTickersList(timestamp)
 	return ret, err
 }
