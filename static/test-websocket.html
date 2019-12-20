@@ -301,7 +301,7 @@
             const method = 'getFiatRatesForTimestamps';
             var timestamps = document.getElementById('getFiatRatesForTimestampsList').value.split(",");
             var currency = document.getElementById('getFiatRatesForTimestampsCurrency').value;
-            timestamps = timestamps.map(s => s.trim());
+            timestamps = timestamps.map(Number);
             const params = {
                 timestamps,
                 "currency": currency
@@ -324,9 +324,10 @@
 
         function getFiatRatesTickersList() {
             const method = 'getFiatRatesTickersList';
-            var date = document.getElementById('getFiatRatesTickersListDate').value;
+            var timestamp = document.getElementById('getFiatRatesTickersListDate').value;
+            timestamp = parseInt(timestamp);
             const params = {
-                date,
+                timestamp,
             };
             send(method, params, function (result) {
                 document.getElementById('getFiatRatesTickersListResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
