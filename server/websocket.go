@@ -23,6 +23,9 @@ const upgradeFailed = "Upgrade failed: "
 const outChannelSize = 500
 const defaultTimeout = 60 * time.Second
 
+// allRates is a special "currency" parameter that means all available currencies
+const allFiatRates = "!ALL!"
+
 var (
 	// ErrorMethodNotAllowed is returned when client tries to upgrade method other than GET
 	ErrorMethodNotAllowed = errors.New("Method not allowed")
@@ -699,7 +702,7 @@ func (s *WebsocketServer) subscribeFiatRates(c *websocketChannel, currency strin
 	defer s.fiatRatesSubscriptionsLock.Unlock()
 
 	if currency == "" {
-		currency = "!ALL!"
+		currency = allFiatRates
 	}
 	as, ok := s.fiatRatesSubscriptions[currency]
 	if !ok {
@@ -822,7 +825,7 @@ func (s *WebsocketServer) OnNewFiatRatesTicker(ticker *db.CurrencyRatesTicker) {
 	for currency, rate := range ticker.Rates {
 		s.broadcastTicker(currency, map[string]float64{currency: rate})
 	}
-	s.broadcastTicker("!ALL!", ticker.Rates)
+	s.broadcastTicker(allFiatRates, ticker.Rates)
 }
 
 func (s *WebsocketServer) getCurrentFiatRates(currency string) (interface{}, error) {
