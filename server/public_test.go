@@ -218,7 +218,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "text/html; charset=utf-8",
 			body: []string{
-				`<a href="/" class="nav-link">Fake Coin Explorer</a>`,
+				`<a class="navbar-brand" href="/">Fake Coin Explorer</a>`,
 				`<h1>Transaction</h1>`,
 				`<span class="data">fdd824a780cbb718eeb766eb05d83fdefc793a27082cd5e67f856d69798cf7db</span>`,
 				`td class="data">0 FAKE</td>`,
@@ -234,7 +234,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "text/html; charset=utf-8",
 			body: []string{
-				`<a href="/" class="nav-link">Fake Coin Explorer</a>`,
+				`<a class="navbar-brand" href="/">Fake Coin Explorer</a>`,
 				`<h1>Address`,
 				`<small class="text-muted">0 FAKE</small>`,
 				`<span class="data">mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz</span>`,
@@ -254,7 +254,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "text/html; charset=utf-8",
 			body: []string{
-				`<a href="/" class="nav-link">Fake Coin Explorer</a>`,
+				`<a class="navbar-brand" href="/">Fake Coin Explorer</a>`,
 				`<h1>Transaction</h1>`,
 				`<span class="data">3d90d15ed026dc45e19ffb52875ed18fa9e8012ad123d7f7212176e2b0ebdb71</span>`,
 				`<td class="data">0.00000062 FAKE</td>`,
@@ -267,7 +267,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "text/html; charset=utf-8",
 			body: []string{
-				`<a href="/" class="nav-link">Fake Coin Explorer</a>`,
+				`<a class="navbar-brand" href="/">Fake Coin Explorer</a>`,
 				`<h1>Error</h1>`,
 				`<h4>Transaction not found</h4>`,
 				`</html>`,
@@ -279,7 +279,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "text/html; charset=utf-8",
 			body: []string{
-				`<a href="/" class="nav-link">Fake Coin Explorer</a>`,
+				`<a class="navbar-brand" href="/">Fake Coin Explorer</a>`,
 				`<h1>Blocks`,
 				`<td><a href="/block/225494">225494</a></td>`,
 				`<td class="ellipsis">00000000eb0443fd7dc4a1ed5c686a8e995057805f9a161d9a5a77a95e72b7b6</td>`,
@@ -295,7 +295,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "text/html; charset=utf-8",
 			body: []string{
-				`<a href="/" class="nav-link">Fake Coin Explorer</a>`,
+				`<a class="navbar-brand" href="/">Fake Coin Explorer</a>`,
 				`<h1>Block 225494</h1>`,
 				`<span class="data">00000000eb0443fd7dc4a1ed5c686a8e995057805f9a161d9a5a77a95e72b7b6</span>`,
 				`<td class="data">4</td>`, // number of transactions
@@ -311,7 +311,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "text/html; charset=utf-8",
 			body: []string{
-				`<a href="/" class="nav-link">Fake Coin Explorer</a>`,
+				`<a class="navbar-brand" href="/">Fake Coin Explorer</a>`,
 				`<h1>Application status</h1>`,
 				`<h3 class="bg-warning text-white" style="padding: 20px;">Synchronization with backend is disabled, the state of index is not up to date.</h3>`,
 				`<a href="/block/225494">225494</a>`,
@@ -325,7 +325,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "text/html; charset=utf-8",
 			body: []string{
-				`<a href="/" class="nav-link">Fake Coin Explorer</a>`,
+				`<a class="navbar-brand" href="/">Fake Coin Explorer</a>`,
 				`<h1>Block 225494</h1>`,
 				`<span class="data">00000000eb0443fd7dc4a1ed5c686a8e995057805f9a161d9a5a77a95e72b7b6</span>`,
 				`<td class="data">4</td>`, // number of transactions
@@ -341,7 +341,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "text/html; charset=utf-8",
 			body: []string{
-				`<a href="/" class="nav-link">Fake Coin Explorer</a>`,
+				`<a class="navbar-brand" href="/">Fake Coin Explorer</a>`,
 				`<h1>Block 225494</h1>`,
 				`<span class="data">00000000eb0443fd7dc4a1ed5c686a8e995057805f9a161d9a5a77a95e72b7b6</span>`,
 				`<td class="data">4</td>`, // number of transactions
@@ -357,7 +357,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "text/html; charset=utf-8",
 			body: []string{
-				`<a href="/" class="nav-link">Fake Coin Explorer</a>`,
+				`<a class="navbar-brand" href="/">Fake Coin Explorer</a>`,
 				`<h1>Transaction</h1>`,
 				`<span class="data">fdd824a780cbb718eeb766eb05d83fdefc793a27082cd5e67f856d69798cf7db</span>`,
 				`td class="data">0 FAKE</td>`,
@@ -373,7 +373,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "text/html; charset=utf-8",
 			body: []string{
-				`<a href="/" class="nav-link">Fake Coin Explorer</a>`,
+				`<a class="navbar-brand" href="/">Fake Coin Explorer</a>`,
 				`<h1>Address`,
 				`<small class="text-muted">0 FAKE</small>`,
 				`<span class="data">mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz</span>`,
@@ -393,7 +393,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "text/html; charset=utf-8",
 			body: []string{
-				`<a href="/" class="nav-link">Fake Coin Explorer</a>`,
+				`<a class="navbar-brand" href="/">Fake Coin Explorer</a>`,
 				`<h1>XPUB <small class="text-muted">1186.419755 FAKE</small></h1><div class="alert alert-data ellipsis"><span class="data">upub5E1xjDmZ7Hhej6LPpS8duATdKXnRYui7bDYj6ehfFGzWDZtmCmQkZhc3Zb7kgRLtHWd16QFxyP86JKL3ShZEBFX88aciJ3xyocuyhZZ8g6q</span></div>`,
 				`<td style="width: 25%;">Total Received</td><td class="data">1186.41975501 FAKE</td>`,
 				`<td>Total Sent</td><td class="data">0.00000001 FAKE</td>`,
@@ -411,7 +411,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "text/html; charset=utf-8",
 			body: []string{
-				`<a href="/" class="nav-link">Fake Coin Explorer</a>`,
+				`<a class="navbar-brand" href="/">Fake Coin Explorer</a>`,
 				`<h1>Error</h1>`,
 				`<h4>No matching records found for &#39;1234&#39;</h4>`,
 				`</html>`,
@@ -423,7 +423,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "text/html; charset=utf-8",
 			body: []string{
-				`<a href="/" class="nav-link">Fake Coin Explorer</a>`,
+				`<a class="navbar-brand" href="/">Fake Coin Explorer</a>`,
 				`<h1>Send Raw Transaction</h1>`,
 				`<textarea class="form-control" rows="8" name="hex"></textarea>`,
 				`</html>`,
@@ -435,7 +435,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "text/html; charset=utf-8",
 			body: []string{
-				`<a href="/" class="nav-link">Fake Coin Explorer</a>`,
+				`<a class="navbar-brand" href="/">Fake Coin Explorer</a>`,
 				`<h1>Send Raw Transaction</h1>`,
 				`<textarea class="form-control" rows="8" name="hex">12341234</textarea>`,
 				`<div class="alert alert-danger">Invalid data</div>`,
