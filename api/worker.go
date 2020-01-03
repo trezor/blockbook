@@ -982,7 +982,10 @@ func (w *Worker) waitForBackendSync() {
 func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *db.AddrBalance, onlyConfirmed bool, onlyMempool bool) (Utxos, error) {
 	w.waitForBackendSync()
 	var err error
-	r := make(Utxos, 0, 8)
+	utxos := make(Utxos, 0, 8)
+	// store txids from mempool so that they are not added twice in case of import of new block while processing utxos, issue #275
+	inMempool := make(map[string]struct{})
+	// outputs could be spent in mempool, record and check mempool spends
 	spentInMempool := make(map[string]struct{})
 	if !onlyConfirmed {
 		// get utxo from mempool
@@ -1020,13 +1023,14 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *db.AddrB
 								if len(bchainTx.Vin) == 1 && len(bchainTx.Vin[0].Coinbase) > 0 {
 									coinbase = true
 								}
-								r = append(r, Utxo{
+								utxos = append(utxos, Utxo{
 									Txid:      bchainTx.Txid,
 									Vout:      int32(i),
 									AmountSat: (*Amount)(&vout.ValueSat),
 									Locktime:  bchainTx.LockTime,
 									Coinbase:  coinbase,
 								})
+								inMempool[bchainTx.Txid] = struct{}{}
 							}
 						}
 					}
@@ -1062,7 +1066,7 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *db.AddrB
 				if !e {
 					confirmations := bestheight - int(utxo.Height) + 1
 					coinbase := false
-					// for performance reasons, check coinbase transactions only in minimim confirmantion range
+					// for performance reasons, check coinbase transactions only in minimum confirmantion range
 					if confirmations < w.chainParser.MinimumCoinbaseConfirmations() {
 						ta, err := w.db.GetTxAddresses(txid)
 						if err != nil {
@@ -1072,14 +1076,17 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *db.AddrB
 							coinbase = true
 						}
 					}
-					r = append(r, Utxo{
-						Txid:          txid,
-						Vout:          utxo.Vout,
-						AmountSat:     (*Amount)(&utxo.ValueSat),
-						Height:        int(utxo.Height),
-						Confirmations: confirmations,
-						Coinbase:      coinbase,
-					})
+					_, e = inMempool[txid]
+					if !e {
+						utxos = append(utxos, Utxo{
+							Txid:          txid,
+							Vout:          utxo.Vout,
+							AmountSat:     (*Amount)(&utxo.ValueSat),
+							Height:        int(utxo.Height),
+							Confirmations: confirmations,
+							Coinbase:      coinbase,
+						})
+					}
 				}
 				checksum.Sub(&checksum, &utxo.ValueSat)
 			}
@@ -1088,7 +1095,7 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *db.AddrB
 			}
 		}
 	}
-	return r, nil
+	return utxos, nil
 }
 
 // GetAddressUtxo returns unspent outputs for given address
