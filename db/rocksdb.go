@@ -42,7 +42,7 @@ type CurrencyRatesTicker struct {
 
 // ResultTickerAsString contains formatted CurrencyRatesTicker data
 type ResultTickerAsString struct {
-	Timestamp int64              `json:"rateTs,omitempty"`
+	Timestamp int64              `json:"ts,omitempty"`
 	Rates     map[string]float64 `json:"rates,omitempty"`
 	Rate      float64            `json:"rate,omitempty"`
 	Error     string             `json:"error,omitempty"`
@@ -55,7 +55,7 @@ type ResultTickersAsString struct {
 
 // ResultTickerListAsString contains formatted data about available currency tickers
 type ResultTickerListAsString struct {
-	Timestamp int64    `json:"dataTimestamp,omitempty"`
+	Timestamp int64   `json:"ts,omitempty"`
 	Tickers   []string `json:"available_currencies"`
 	Error     string   `json:"error,omitempty"`
 }
