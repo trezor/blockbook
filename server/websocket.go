@@ -263,6 +263,7 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *webs
 			To         string `json:"to"`
 			Fiat       string `json:"fiat"`
 			Gap        int    `json:"gap"`
+			GroupBy    uint32 `json:"groupBy"`
 		}{}
 		err = json.Unmarshal(req.Params, &r)
 		if err == nil {
@@ -279,9 +280,9 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *webs
 					return
 				}
 			}
-			rv, err = s.api.GetXpubBalanceHistory(r.Descriptor, fromTime, toTime, r.Fiat, r.Gap)
+			rv, err = s.api.GetXpubBalanceHistory(r.Descriptor, fromTime, toTime, r.Fiat, r.Gap, r.GroupBy)
 			if err != nil {
-				rv, err = s.api.GetBalanceHistory(r.Descriptor, fromTime, toTime, r.Fiat)
+				rv, err = s.api.GetBalanceHistory(r.Descriptor, fromTime, toTime, r.Fiat, r.GroupBy)
 			}
 		}
 		return
