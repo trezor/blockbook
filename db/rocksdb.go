@@ -55,7 +55,7 @@ type ResultTickersAsString struct {
 
 // ResultTickerListAsString contains formatted data about available currency tickers
 type ResultTickerListAsString struct {
-	Timestamp int64   `json:"ts,omitempty"`
+	Timestamp int64    `json:"ts,omitempty"`
 	Tickers   []string `json:"available_currencies"`
 	Error     string   `json:"error,omitempty"`
 }
