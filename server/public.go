@@ -1060,8 +1060,10 @@ func (s *PublicServer) apiBalanceHistory(r *http.Request, apiVersion int) (inter
 		}
 		var groupBy uint32
 		i, err := strconv.ParseUint(r.URL.Query().Get("groupBy"), 10, 32)
-		if err == nil || i <= 0 {
+		if err != nil || i <= 0 {
 			groupBy = 3600
+		} else {
+			groupBy = uint32(i)
 		}
 		fiat := r.URL.Query().Get("fiatcurrency")
 
