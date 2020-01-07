@@ -932,7 +932,7 @@ func (w *Worker) setFiatRateToBalanceHistories(histories BalanceHistories, fiat 
 }
 
 // GetBalanceHistory returns history of balance for given address
-func (w *Worker) GetBalanceHistory(address string, fromTime, toTime time.Time, fiat string) (BalanceHistories, error) {
+func (w *Worker) GetBalanceHistory(address string, fromTime, toTime time.Time, fiat string, groupBy uint32) (BalanceHistories, error) {
 	bhs := make(BalanceHistories, 0)
 	start := time.Now()
 	addrDesc, _, err := w.getAddrDescAndNormalizeAddress(address)
@@ -956,7 +956,7 @@ func (w *Worker) GetBalanceHistory(address string, fromTime, toTime time.Time, f
 			bhs = append(bhs, *bh)
 		}
 	}
-	bha := bhs.SortAndAggregate(3600)
+	bha := bhs.SortAndAggregate(groupBy)
 	if fiat != "" {
 		err = w.setFiatRateToBalanceHistories(bha, fiat)
 		if err != nil {
