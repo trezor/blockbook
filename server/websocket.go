@@ -280,6 +280,9 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *webs
 					return
 				}
 			}
+			if r.GroupBy <= 0 {
+				r.GroupBy = 3600
+			}
 			rv, err = s.api.GetXpubBalanceHistory(r.Descriptor, fromTime, toTime, r.Fiat, r.Gap, r.GroupBy)
 			if err != nil {
 				rv, err = s.api.GetBalanceHistory(r.Descriptor, fromTime, toTime, r.Fiat, r.GroupBy)
