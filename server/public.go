@@ -1058,20 +1058,17 @@ func (s *PublicServer) apiBalanceHistory(r *http.Request, apiVersion int) (inter
 			// time.RFC3339
 			toTime, _ = time.Parse("2006-01-02", t)
 		}
-		var groupBy uint32
-		i, err := strconv.ParseUint(r.URL.Query().Get("groupBy"), 10, 32)
-		if err != nil || i <= 0 {
+		var groupBy uint64
+		groupBy, err = strconv.ParseUint(r.URL.Query().Get("groupBy"), 10, 32)
+		if err != nil || groupBy == 0 {
 			groupBy = 3600
-		} else {
-			groupBy = uint32(i)
 		}
 		fiat := r.URL.Query().Get("fiatcurrency")
-
-		history, err = s.api.GetXpubBalanceHistory(r.URL.Path[i+1:], fromTime, toTime, fiat, gap, groupBy)
+		history, err = s.api.GetXpubBalanceHistory(r.URL.Path[i+1:], fromTime, toTime, fiat, gap, uint32(groupBy))
 		if err == nil {
 			s.metrics.ExplorerViews.With(common.Labels{"action": "api-xpub-balancehistory"}).Inc()
 		} else {
-			history, err = s.api.GetBalanceHistory(r.URL.Path[i+1:], fromTime, toTime, fiat, groupBy)
+			history, err = s.api.GetBalanceHistory(r.URL.Path[i+1:], fromTime, toTime, fiat, uint32(groupBy))
 			s.metrics.ExplorerViews.With(common.Labels{"action": "api-address-balancehistory"}).Inc()
 		}
 	}
