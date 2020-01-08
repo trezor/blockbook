@@ -50,6 +50,9 @@ The following methods are supported:
 - [Get utxo](#get-utxo)
 - [Get block](#get-block)
 - [Send transaction](#send-transaction)
+- [Tickers list](#tickers-list)
+- [Tickers](#tickers)
+- [Balance history](#balance-history)
 
 #### Status page
 Status page returns current status of Blockbook and connected backend.
@@ -575,6 +578,109 @@ or in case of error
 }
 ```
 
+#### Tickers list
+
+Returns a list of available currency rate tickers for the specified timestamp.
+
+```
+GET /api/v2/tickers-list/?timestamp=<timestamp>
+```
+
+The query parameters:
+- *timestamp*: specifies a UNIX timestamp to return available tickers for.
+
+Example response:
+
+```javascript
+{
+  "ts":1574346615,
+  "available_currencies": [
+    "eur",
+    "usd"
+  ]
+}
+```
+
+#### Tickers
+
+Returns currency rate for the specified currency and date. If the currency is not available for that specific timestamp, the closest rate will be returned.
+All responses contain an actual rate timestamp.
+
+```
+GET /api/v2/tickers/[?currency=<currency>&timestamp=<timestamp>]
+```
+
+The optional query parameters:
+- *currency*: specifies a currency of returned rate ("usd", "eur", "eth"...). If not specified, all available currencies will be returned.
+- *timestamp*: a UNIX timestamp that specifies a date to return currency rates for. If not specified, the last available rate will be returned.
+
+Example response (no parameters):
+
+```javascript
+{
+  "ts":1574346615,
+  "rates": {
+    "eur":7134.1,
+    "usd":7914.5
+    }
+}
+```
+
+Example response (currency=usd):
+
+```javascript
+{
+  "ts":1574346615,
+  "rate":7914.5
+}
+```
+
+Example error response (e.g. rate unavailable, incorrect currency...):
+```javascript
+{
+  "ts":7980386400,
+  "rate":-1
+}
+```
+
+#### Balance history
+
+Returns a balance history for the specified XPUB or address.
+
+```
+GET /api/v2/balancehistory/<XPUB | address>?from=<dateFrom>&to=<dateTo>[&fiatcurrency=<currency>&gap=<gap>&groupBy=<groupBySeconds>]
+```
+
+Query parameters:
+- *from*: specifies a start date, format is YYYY-MM-DD.
+- *to*: specifies an end date, same format. 
+
+The optional query parameters:
+- *fiatcurrency*: if specified, the response will contain calculated fiat amounts at the time of transaction.
+- *gap*: TODO
+- *groupBy*: an interval in seconds, to group results by. Default is 3600 seconds.
+
+Example response (fiatcurrency=usd):
+
+```javascript
+[
+  {
+    "time":1397768400,
+    "txs":1,
+    "received":"6169114",
+    "sent":"0",
+    "fiatRate":478.2312
+  },
+  {
+    "time":1397772000,
+    "txs":1,
+    "received":"0",
+    "sent":"6169114",
+    "fiatRate":479.1233
+  }
+]
+```
+
 ### Websocket API
 
 Websocket interface is provided at `/websocket/`. The interface can be explored using Blockbook Websocket Test Page found at `/test-websocket.html`.
@@ -587,6 +693,10 @@ The websocket interface provides the following requests:
 - getAccountUtxo
 - getTransaction
 - getTransactionSpecific
+- getBalanceHistory
+- getCurrentFiatRates
+- getFiatRatesTickersList
+- getFiatRatesForTimestamps
 - estimateFee
 - sendTransaction
 - ping
@@ -595,7 +705,9 @@ The client can subscribe to the following events:
 
 - new block added to blockchain
 - new transaction for given address (list of addresses)
+- new currency rate ticker
 
 There can be always only one subscription of given event per connection, i.e. new list of addresses replaces previous list of addresses.
 
 _Note: If there is reorg on the backend (blockchain), you will get a new block hash with the same or even smaller height if the reorg is deeper_
+
