@@ -680,7 +680,7 @@ Example response (fiatcurrency=usd):
 ]
 ```
 
-Example response (fiatcurrency=usd&groupBy=100000):
+Example response (fiatcurrency=usd&groupBy=86400):
 
 ```javascript
 [
