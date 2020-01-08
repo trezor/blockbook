@@ -166,12 +166,14 @@
             const from = document.getElementById("getBalanceHistoryFrom").value.trim();
             const to = document.getElementById("getBalanceHistoryTo").value.trim();
             const fiat = document.getElementById("getBalanceHistoryFiat").value.trim();
+            const groupBy = parseInt(document.getElementById("getBalanceHistoryGroupBy").value);
             const method = 'getBalanceHistory';
             const params = {
                 descriptor,
                 from,
                 to,
-                fiat
+                fiat,
+                groupBy
                 // default gap=20
             };
             send(method, params, function (result) {
@@ -462,7 +464,8 @@
                 <div class="row" style="margin: 0; margin-top: 5px;">
                     <input type="text" placeholder="from YYYY-MM-DD" style="width: 30%;margin-left: 5px;margin-right: 5px;" class="form-control" id="getBalanceHistoryFrom">
                     <input type="text" placeholder="to YYYY-MM-DD" style="width: 30%; margin-left: 5px; margin-right: 5px;" class="form-control" id="getBalanceHistoryTo">
-                    <input type="text" placeholder="fiat" style="width: 20%; margin-left: 5px; margin-right: 5px;" class="form-control" id="getBalanceHistoryFiat">
+                    <input type="text" placeholder="fiat" style="width: 10%; margin-left: 5px; margin-right: 5px;" class="form-control" id="getBalanceHistoryFiat">
+                    <input type="text" placeholder="group by (sec)" style="width: 20%; margin-left: 5px; margin-right: 5px;" class="form-control" id="getBalanceHistoryGroupBy">
                 </div>
             </div>
             <div class="col form-inline"></div>
