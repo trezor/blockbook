@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"runtime/debug"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -283,9 +284,9 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *webs
 			if r.GroupBy <= 0 {
 				r.GroupBy = 3600
 			}
-			rv, err = s.api.GetXpubBalanceHistory(r.Descriptor, fromTime, toTime, r.Fiat, r.Gap, r.GroupBy)
+			rv, err = s.api.GetXpubBalanceHistory(r.Descriptor, fromTime, toTime, strings.ToLower(r.Fiat), r.Gap, r.GroupBy)
 			if err != nil {
-				rv, err = s.api.GetBalanceHistory(r.Descriptor, fromTime, toTime, r.Fiat, r.GroupBy)
+				rv, err = s.api.GetBalanceHistory(r.Descriptor, fromTime, toTime, strings.ToLower(r.Fiat), r.GroupBy)
 			}
 		}
 		return
@@ -347,7 +348,7 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *webs
 		if err != nil {
 			return nil, err
 		}
-		return s.subscribeFiatRates(c, r.Currency, req)
+		return s.subscribeFiatRates(c, strings.ToLower(r.Currency), req)
 	},
 	"unsubscribeFiatRates": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
 		return s.unsubscribeFiatRates(c)
@@ -362,7 +363,7 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *webs
 		}{}
 		err = json.Unmarshal(req.Params, &r)
 		if err == nil {
-			rv, err = s.getCurrentFiatRates(r.Currency)
+			rv, err = s.getCurrentFiatRates(strings.ToLower(r.Currency))
 		}
 		return
 	},
@@ -373,7 +374,7 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *webs
 		}{}
 		err = json.Unmarshal(req.Params, &r)
 		if err == nil {
-			rv, err = s.getFiatRatesForTimestamps(r.Timestamps, r.Currency)
+			rv, err = s.getFiatRatesForTimestamps(r.Timestamps, strings.ToLower(r.Currency))
 		}
 		return
 	},
