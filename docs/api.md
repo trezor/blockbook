@@ -648,7 +648,7 @@ Example error response (e.g. rate unavailable, incorrect currency...):
 Returns a balance history for the specified XPUB or address.
 
 ```
-GET /api/v2/balancehistory/<XPUB | address>?from=<dateFrom>&to=<dateTo>[&fiatcurrency=<currency>&gap=<gap>&groupBy=<groupBySeconds>]
+GET /api/v2/balancehistory/<XPUB | address>?from=<dateFrom>&to=<dateTo>[&fiatcurrency=<currency>&groupBy=<groupBySeconds>]
 ```
 
 Query parameters:
@@ -657,7 +657,6 @@ Query parameters:
 
 The optional query parameters:
 - *fiatcurrency*: if specified, the response will contain calculated fiat amounts at the time of transaction.
-- *gap*: TODO
 - *groupBy*: an interval in seconds, to group results by. Default is 3600 seconds.
 
 Example response (fiatcurrency=usd):
@@ -677,6 +676,20 @@ Example response (fiatcurrency=usd):
     "received":"0",
     "sent":"6169114",
     "fiatRate":479.1233
+  }
+]
+```
+
+Example response (fiatcurrency=usd&groupBy=100000):
+
+```javascript
+[
+  {
+    "time":1397700000,
+    "txs":2,
+    "received":"6169114",
+    "sent":"6169114",
+    "fiatRate":478.2312
   }
 ]
 ```
