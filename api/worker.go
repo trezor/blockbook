@@ -801,6 +801,172 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 	return r, nil
 }
 
+func (w *Worker) balanceHistoryHeightsFromTo(fromTime, toTime time.Time) (uint32, uint32, uint32, uint32) {
+	fromUnix := uint32(0)
+	toUnix := maxUint32
+	fromHeight := uint32(0)
+	toHeight := maxUint32
+	if !fromTime.IsZero() {
+		fromUnix = uint32(fromTime.Unix())
+		fromHeight = w.is.GetBlockHeightOfTime(fromUnix)
+	}
+	if !toTime.IsZero() {
+		toUnix = uint32(toTime.Unix())
+		toHeight = w.is.GetBlockHeightOfTime(toUnix)
+	}
+	return fromUnix, fromHeight, toUnix, toHeight
+}
+
+func (w *Worker) balanceHistoryForTxid(addrDesc bchain.AddressDescriptor, txid string, fromUnix, toUnix uint32) (*BalanceHistory, error) {
+	var time uint32
+	var err error
+	var ta *db.TxAddresses
+	var bchainTx *bchain.Tx
+	var height uint32
+	if w.chainType == bchain.ChainBitcoinType {
+		ta, err = w.db.GetTxAddresses(txid)
+		if err != nil {
+			return nil, err
+		}
+		if ta == nil {
+			glog.Warning("DB inconsistency:  tx ", txid, ": not found in txAddresses")
+			return nil, nil
+		}
+		height = ta.Height
+	} else if w.chainType == bchain.ChainEthereumType {
+		var h int
+		bchainTx, h, err = w.txCache.GetTransaction(txid)
+		if err != nil {
+			return nil, err
+		}
+		if bchainTx == nil {
+			glog.Warning("Inconsistency:  tx ", txid, ": not found in the blockchain")
+			return nil, nil
+		}
+		height = uint32(h)
+	}
+	time = w.is.GetBlockTime(height)
+	if time < fromUnix || time >= toUnix {
+		return nil, nil
+	}
+	bh := BalanceHistory{
+		Time:        time,
+		Txs:         1,
+		SentSat:     &Amount{},
+		ReceivedSat: &Amount{},
+		Txid:        txid,
+	}
+	if w.chainType == bchain.ChainBitcoinType {
+		for i := range ta.Inputs {
+			tai := &ta.Inputs[i]
+			if bytes.Equal(addrDesc, tai.AddrDesc) {
+				(*big.Int)(bh.SentSat).Add((*big.Int)(bh.SentSat), &tai.ValueSat)
+			}
+		}
+		for i := range ta.Outputs {
+			tao := &ta.Outputs[i]
+			if bytes.Equal(addrDesc, tao.AddrDesc) {
+				(*big.Int)(bh.ReceivedSat).Add((*big.Int)(bh.ReceivedSat), &tao.ValueSat)
+			}
+		}
+	} else if w.chainType == bchain.ChainEthereumType {
+		var value big.Int
+		ethTxData := eth.GetEthereumTxData(bchainTx)
+		// add received amount only for OK transactions
+		if ethTxData.Status == 1 {
+			if len(bchainTx.Vout) > 0 {
+				bchainVout := &bchainTx.Vout[0]
+				value = bchainVout.ValueSat
+				if len(bchainVout.ScriptPubKey.Addresses) > 0 {
+					txAddrDesc, err := w.chainParser.GetAddrDescFromAddress(bchainVout.ScriptPubKey.Addresses[0])
+					if err != nil {
+						return nil, err
+					}
+					if bytes.Equal(addrDesc, txAddrDesc) {
+						(*big.Int)(bh.ReceivedSat).Add((*big.Int)(bh.ReceivedSat), &value)
+					}
+				}
+			}
+		}
+		for i := range bchainTx.Vin {
+			bchainVin := &bchainTx.Vin[i]
+			if len(bchainVin.Addresses) > 0 {
+				txAddrDesc, err := w.chainParser.GetAddrDescFromAddress(bchainVin.Addresses[0])
+				if err != nil {
+					return nil, err
+				}
+				if bytes.Equal(addrDesc, txAddrDesc) {
+					// add sent amount only for OK transactions, however fees always
+					if ethTxData.Status == 1 {
+						(*big.Int)(bh.SentSat).Add((*big.Int)(bh.SentSat), &value)
+					}
+					var feesSat big.Int
+					// mempool txs do not have fees yet
+					if ethTxData.GasUsed != nil {
+						feesSat.Mul(ethTxData.GasPrice, ethTxData.GasUsed)
+					}
+					(*big.Int)(bh.SentSat).Add((*big.Int)(bh.SentSat), &feesSat)
+				}
+			}
+		}
+	}
+	return &bh, nil
+}
+
+func (w *Worker) setFiatRateToBalanceHistories(histories BalanceHistories, fiat string) error {
+	for i := range histories {
+		bh := &histories[i]
+		t := time.Unix(int64(bh.Time), 0)
+		ticker, err := w.db.FiatRatesFindTicker(&t)
+		if err != nil {
+			glog.Errorf("Error finding ticker by date %v. Error: %v", t, err)
+			continue
+		} else if ticker == nil {
+			continue
+		}
+		if rate, found := ticker.Rates[fiat]; found {
+			bh.FiatRate = rate
+		}
+	}
+	return nil
+}
+
+// GetBalanceHistory returns history of balance for given address
+func (w *Worker) GetBalanceHistory(address string, fromTime, toTime time.Time, fiat string, groupBy uint32) (BalanceHistories, error) {
+	bhs := make(BalanceHistories, 0)
+	start := time.Now()
+	addrDesc, _, err := w.getAddrDescAndNormalizeAddress(address)
+	if err != nil {
+		return nil, err
+	}
+	fromUnix, fromHeight, toUnix, toHeight := w.balanceHistoryHeightsFromTo(fromTime, toTime)
+	if fromHeight >= toHeight {
+		return bhs, nil
+	}
+	txs, err := w.getAddressTxids(addrDesc, false, &AddressFilter{Vout: AddressFilterVoutOff, FromHeight: fromHeight, ToHeight: toHeight}, maxInt)
+	if err != nil {
+		return nil, err
+	}
+	for txi := len(txs) - 1; txi >= 0; txi-- {
+		bh, err := w.balanceHistoryForTxid(addrDesc, txs[txi], fromUnix, toUnix)
+		if err != nil {
+			return nil, err
+		}
+		if bh != nil {
+			bhs = append(bhs, *bh)
+		}
+	}
+	bha := bhs.SortAndAggregate(groupBy)
+	if fiat != "" {
+		err = w.setFiatRateToBalanceHistories(bha, fiat)
+		if err != nil {
+			return nil, err
+		}
+	}
+	glog.Info("GetBalanceHistory ", address, ", blocks ", fromHeight, "-", toHeight, ", count ", len(bha), " finished in ", time.Since(start))
+	return bha, nil
+}
+
 func (w *Worker) waitForBackendSync() {
 	// wait a short time if blockbook is synchronizing with backend
 	inSync, _, _ := w.is.GetSyncState()
@@ -815,7 +981,10 @@ func (w *Worker) waitForBackendSync() {
 func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *db.AddrBalance, onlyConfirmed bool, onlyMempool bool) (Utxos, error) {
 	w.waitForBackendSync()
 	var err error
-	r := make(Utxos, 0, 8)
+	utxos := make(Utxos, 0, 8)
+	// store txids from mempool so that they are not added twice in case of import of new block while processing utxos, issue #275
+	inMempool := make(map[string]struct{})
+	// outputs could be spent in mempool, record and check mempool spends
 	spentInMempool := make(map[string]struct{})
 	if !onlyConfirmed {
 		// get utxo from mempool
@@ -853,13 +1022,14 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *db.AddrB
 								if len(bchainTx.Vin) == 1 && len(bchainTx.Vin[0].Coinbase) > 0 {
 									coinbase = true
 								}
-								r = append(r, Utxo{
+								utxos = append(utxos, Utxo{
 									Txid:      bchainTx.Txid,
 									Vout:      int32(i),
 									AmountSat: (*Amount)(&vout.ValueSat),
 									Locktime:  bchainTx.LockTime,
 									Coinbase:  coinbase,
 								})
+								inMempool[bchainTx.Txid] = struct{}{}
 							}
 						}
 					}
@@ -895,7 +1065,7 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *db.AddrB
 				if !e {
 					confirmations := bestheight - int(utxo.Height) + 1
 					coinbase := false
-					// for performance reasons, check coinbase transactions only in minimim confirmantion range
+					// for performance reasons, check coinbase transactions only in minimum confirmantion range
 					if confirmations < w.chainParser.MinimumCoinbaseConfirmations() {
 						ta, err := w.db.GetTxAddresses(txid)
 						if err != nil {
@@ -905,14 +1075,17 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *db.AddrB
 							coinbase = true
 						}
 					}
-					r = append(r, Utxo{
-						Txid:          txid,
-						Vout:          utxo.Vout,
-						AmountSat:     (*Amount)(&utxo.ValueSat),
-						Height:        int(utxo.Height),
-						Confirmations: confirmations,
-						Coinbase:      coinbase,
-					})
+					_, e = inMempool[txid]
+					if !e {
+						utxos = append(utxos, Utxo{
+							Txid:          txid,
+							Vout:          utxo.Vout,
+							AmountSat:     (*Amount)(&utxo.ValueSat),
+							Height:        int(utxo.Height),
+							Confirmations: confirmations,
+							Coinbase:      coinbase,
+						})
+					}
 				}
 				checksum.Sub(&checksum, &utxo.ValueSat)
 			}
@@ -921,7 +1094,7 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *db.AddrB
 			}
 		}
 	}
-	return r, nil
+	return utxos, nil
 }
 
 // GetAddressUtxo returns unspent outputs for given address
@@ -972,6 +1145,140 @@ func (w *Worker) GetBlocks(page int, blocksOnPage int) (*Blocks, error) {
 	return r, nil
 }
 
+// getFiatRatesResults checks if CurrencyRatesTicker contains all necessary data and returns formatted result
+func (w *Worker) getFiatRatesResults(currency string, ticker *db.CurrencyRatesTicker) (*db.ResultTickerAsString, error) {
+	if currency == "" {
+		return &db.ResultTickerAsString{
+			Timestamp: ticker.Timestamp.UTC().Unix(),
+			Rates:     ticker.Rates,
+		}, nil
+	}
+	timestamp := ticker.Timestamp.UTC().Unix()
+	if rate, found := ticker.Rates[currency]; !found {
+		return nil, NewAPIError(fmt.Sprintf("Currency %q is not available for timestamp %d.", currency, timestamp), true)
+	} else {
+		return &db.ResultTickerAsString{
+			Timestamp: timestamp,
+			Rates:     map[string]float64{currency: rate},
+		}, nil
+	}
+}
+
+// getFiatRatesResult checks if CurrencyRatesTicker contains all necessary data and returns formatted result
+func (w *Worker) getFiatRatesResult(currency string, ticker *db.CurrencyRatesTicker) (*db.ResultTickerAsString, error) {
+	if currency == "" {
+		return &db.ResultTickerAsString{
+			Timestamp: ticker.Timestamp.UTC().Unix(),
+			Rates:     ticker.Rates,
+		}, nil
+	}
+	timestamp := ticker.Timestamp.UTC().Unix()
+	if rate, found := ticker.Rates[currency]; !found {
+		return nil, NewAPIError(fmt.Sprintf("Currency %q is not available for timestamp %d.", currency, timestamp), true)
+	} else {
+		return &db.ResultTickerAsString{
+			Timestamp: timestamp,
+			Rate:      rate,
+		}, nil
+	}
+}
+
+// GetFiatRatesForBlockID returns fiat rates for block height or block hash
+func (w *Worker) GetFiatRatesForBlockID(bid string, currency string) (*db.ResultTickerAsString, error) {
+	var ticker *db.CurrencyRatesTicker
+	bi, err := w.getBlockInfoFromBlockID(bid)
+	if err != nil {
+		if err == bchain.ErrBlockNotFound {
+			return nil, NewAPIError(fmt.Sprintf("Block %v not found", bid), true)
+		}
+		return nil, NewAPIError(fmt.Sprintf("Block %v not found, error: %v", bid, err), false)
+	}
+	dbi := &db.BlockInfo{Time: bi.Time} // get Unix timestamp from block
+	tm := time.Unix(dbi.Time, 0)        // convert it to Time object
+	ticker, err = w.db.FiatRatesFindTicker(&tm)
+	if err != nil {
+		return nil, NewAPIError(fmt.Sprintf("Error finding ticker: %v", err), false)
+	} else if ticker == nil {
+		return nil, NewAPIError(fmt.Sprintf("No tickers available for %s (%s)", tm, currency), true)
+	}
+	result, err := w.getFiatRatesResult(currency, ticker)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// GetCurrentFiatRates returns current fiat rates
+func (w *Worker) GetCurrentFiatRates(currency string) (*db.ResultTickerAsString, error) {
+	ticker, err := w.db.FiatRatesFindLastTicker()
+	if err != nil {
+		return nil, NewAPIError(fmt.Sprintf("Error finding ticker: %v", err), false)
+	} else if ticker == nil {
+		return nil, NewAPIError(fmt.Sprintf("No tickers found!"), true)
+	}
+	result, err := w.getFiatRatesResult(currency, ticker)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// GetFiatRatesForTimestamps returns fiat rates for each of the provided dates
+func (w *Worker) GetFiatRatesForTimestamps(timestamps []int64, currency string) (*db.ResultTickersAsString, error) {
+	if currency == "" {
+		return nil, NewAPIError("Missing or empty \"currency\" parameter.", true)
+	} else if len(timestamps) == 0 {
+		return nil, NewAPIError("No timestamps provided", true)
+	}
+
+	ret := &db.ResultTickersAsString{}
+	for _, timestamp := range timestamps {
+		date := time.Unix(timestamp, 0)
+		date = date.UTC()
+		ticker, err := w.db.FiatRatesFindTicker(&date)
+		if err != nil {
+			glog.Errorf("Error finding ticker for date %v. Error: %v", date, err)
+			ret.Tickers = append(ret.Tickers, db.ResultTickerAsString{Timestamp: date.Unix(), Rate: -1})
+			continue
+		} else if ticker == nil {
+			ret.Tickers = append(ret.Tickers, db.ResultTickerAsString{Timestamp: date.Unix(), Rate: -1})
+			continue
+		}
+		result, err := w.getFiatRatesResult(currency, ticker)
+		if err != nil {
+			ret.Tickers = append(ret.Tickers, db.ResultTickerAsString{Timestamp: date.Unix(), Rate: -1})
+			continue
+		}
+		ret.Tickers = append(ret.Tickers, *result)
+	}
+	return ret, nil
+}
+
+// GetFiatRatesTickersList returns the list of available fiatRates tickers
+func (w *Worker) GetFiatRatesTickersList(timestamp int64) (*db.ResultTickerListAsString, error) {
+	date := time.Unix(timestamp, 0)
+	date = date.UTC()
+
+	ticker, err := w.db.FiatRatesFindTicker(&date)
+	if err != nil {
+		return nil, NewAPIError(fmt.Sprintf("Error finding ticker: %v", err), false)
+	} else if ticker == nil {
+		return nil, NewAPIError(fmt.Sprintf("No tickers found for date %v.", date), true)
+	}
+
+	keys := make([]string, 0, len(ticker.Rates))
+	for k := range ticker.Rates {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys) // sort to get deterministic results
+
+	return &db.ResultTickerListAsString{
+		Timestamp: timestamp,
+		Tickers:   keys,
+	}, nil
+}
+
+// getBlockInfoFromBlockID returns block info from block height or block hash
 func (w *Worker) getBlockInfoFromBlockID(bid string) (*bchain.BlockInfo, error) {
 	// try to decide if passed string (bid) is block height or block hash
 	// if it's a number, must be less than int32

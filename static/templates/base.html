@@ -14,10 +14,10 @@
 <body>
     <header id="header">
         <div class="container">
-            <nav class="navbar navbar-expand navbar-dark bg-trezor">
+            <nav class="navbar navbar-expand-md navbar-dark bg-trezor">
                 <a class="navbar-brand" href="/" title="Home">
-                    <div alt="Trezor Wallet" class="trezor-logo-svg-white">
-                        <svg width="100" height="42" version="1.1" id="logotyp" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" x="0px" y="0px" viewBox="0 0 163.7 41.9" space="preserve">
+                    <div alt="Trezor Wallet" style="margin-top: 3px;">
+                        <svg width="100" version="1.1" id="logotyp" xmlns="http://www.w3.org/2000/svg" xlink="http://www.w3.org/1999/xlink" x="0px" y="0px" viewBox="0 0 163.7 41.9" space="preserve">
                             <polygon points="101.1,12.8 118.2,12.8 118.2,17.3 108.9,29.9 118.2,29.9 118.2,35.2 101.1,35.2 101.1,30.7 110.4,18.1 101.1,18.1"></polygon>
                             <path d="M158.8,26.9c2.1-0.8,4.3-2.9,4.3-6.6c0-4.5-3.1-7.4-7.7-7.4h-10.5v22.3h5.8v-7.5h2.2l4.1,7.5h6.7L158.8,26.9z M154.7,22.5h-4V18h4c1.5,0,2.5,0.9,2.5,2.2C157.2,21.6,156.2,22.5,154.7,22.5z"></path>
                             <path d="M130.8,12.5c-6.8,0-11.6,4.9-11.6,11.5s4.9,11.5,11.6,11.5s11.7-4.9,11.7-11.5S137.6,12.5,130.8,12.5z M130.8,30.3c-3.4,0-5.7-2.6-5.7-6.3c0-3.8,2.3-6.3,5.7-6.3c3.4,0,5.8,2.6,5.8,6.3C136.6,27.7,134.2,30.3,130.8,30.3z"></path>
@@ -28,35 +28,40 @@
                         </svg>
                     </div>
                 </a>
-                <span class="navbar-text ml-md-auto">
-                    <a href="/" class="nav-link">{{.CoinLabel}} Explorer</a>
-                </span>
-                {{- if .InternalExplorer -}}
-                <ul class="navbar-nav flex-row ml-md-auto d-none d-lg-flex">
-                    <li class="nav-item">
-                        <a href="/blocks" class="nav-link">Blocks</a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="/" class="nav-link">Status</a>
-                    </li>
-                </ul>
-                <span class="d-none ml-md-auto d-md-flex navbar-form navbar-left">
-                    <form id="search" action="/search" method="get">
-                        <input name="q" type="text" class="form-control" placeholder="Search for block, transaction, address or xpub" focus="true">
-                    </form>
-                </span>
-                {{- end -}}
-                <ul class="navbar-nav flex-row ml-md-auto d-none d-lg-flex ">
-                    <li class="nav-item">
-                        <a href="https://trezor.io/" class="nav-link">Trezor</a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="https://wallet.trezor.io/" class="nav-link">Wallet</a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="https://trezor.io/support" class="nav-link">Support</a>
-                    </li>
-                </ul>
+                <a class="navbar-brand" href="/">
+                    {{.CoinLabel}} Explorer
+                </a>
+                <button class="navbar-toggler" type="button" onclick="if(document.getElementById('toggler').className.indexOf('show')>0){document.getElementById('toggler').className='navbar-collapse collapse'}else{document.getElementById('toggler').className='navbar-collapse show'}">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="navbar-collapse collapse" id="toggler">
+                    {{- if .InternalExplorer -}}
+                    <ul class="navbar-nav ml-md-auto">
+                        <li class="nav-item">
+                            <a href="/blocks" class="nav-link">Blocks</a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="/" class="nav-link">Status</a>
+                        </li>
+                    </ul>
+                    <span class="navbar-form ml-md-auto">
+                        <form id="search" action="/search" method="get">
+                            <input name="q" type="text" class="form-control" placeholder="Search for block, transaction, address or xpub" focus="true">
+                        </form>
+                    </span>
+                    {{- end -}}
+                    <ul class="navbar-nav ml-md-auto">
+                        <li class="nav-item">
+                            <a href="https://trezor.io/" class="nav-link">Trezor</a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="https://wallet.trezor.io/" class="nav-link">Wallet</a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="https://trezor.io/support" class="nav-link">Support</a>
+                        </li>
+                    </ul>
+                </div>
             </nav>
         </div>
     </header>
@@ -68,22 +73,18 @@
     <footer id="footer" class="footer">
         <div class="container">
             <nav class="navbar navbar-expand-lg navbar-dark bg-trezor">
-                <ul class="navbar-nav flex-row">
-                    <li class="nav-item">
-                        <a class="nav-link" href="http://satoshilabs.com/" target="_blank" rel="noopener noreferrer">© 2019 SatoshiLabs</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{- .TOSLink -}}" target="_blank" rel="noopener noreferrer">Terms</a>
-                    </li>
-                </ul>
-                <span class="d-none ml-md-auto d-md-flex navbar-form navbar-nav">
+                <span class="navbar-nav">
+                    <a class="nav-link" href="https://satoshilabs.com/" target="_blank" rel="noopener noreferrer">© 2020 SatoshiLabs</a>
+                </span>
+                <span class="navbar-nav ml-md-auto">
+                    <a class="nav-link" href="{{- .TOSLink -}}" target="_blank" rel="noopener noreferrer">Terms</a>
+                </span>
+                <span class="navbar-nav ml-md-auto">
                     <a href="/sendtx" class="nav-link">Send Transaction</a>
                 </span>
-                <ul class="navbar-nav flex-row ml-md-auto d-none d-md-flex">
-                    <li class="nav-item active">
-                        <a class="nav-link" rel="noopener noreferrer" href="http://shop.trezor.io">Don't have a Trezor? Get one!</a>
-                    </li>
-                </ul>
+                <span class="navbar-nav ml-md-auto d-md-flex d-none">
+                    <a class="nav-link active" rel="noopener noreferrer" href="http://shop.trezor.io">Don't have a Trezor? Get one!</a>
+                </span>
             </nav>
         </div>
     </footer>

@@ -98,7 +98,7 @@ func jsonToString(msg json.RawMessage) (string, error) {
 }
 
 func generateRPCAuth(user, pass string) (string, error) {
-	cmd := exec.Command("/bin/bash", "-c", "build/scripts/rpcauth.py \"$0\" \"$1\" | sed -n -e 2p", user, pass)
+	cmd := exec.Command("/usr/bin/env", "bash", "-c", "build/scripts/rpcauth.py \"$0\" \"$1\" | sed -n -e 2p", user, pass)
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	err := cmd.Run()
