@@ -1,310 +1,311 @@
 html, body {
-    height: 100%;
+  height: 100%;
 }
 
 body {
-    width: 100%;
-    min-height: 100%;
-    background-color: #ffffff;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Helvetica Neue", Arial, sans-serif;
-    font-size: 11px;
+  width: 100%;
+  min-height: 100%;
+  background-color: #ffffff;
+  font-family: 'Lato';
+  font-size: 11px;
 }
 
 a {
-    color: #428bca;
-    text-decoration: none;
+  color: #5A5A5A;
+  text-decoration: none;
 }
 
 h1 small {
-    font-size: 65%;
+  font-size: 65%;
 }
 
 h3 {
-    margin-top: 20px;
+  margin-top: 20px;
 }
 
 .octicon {
-    color: #777;
-    display: inline-block;
-    vertical-align: text-top;
-    fill: currentColor;
-    height: 16px;
+  color: #ADADAD;
+  display: inline-block;
+  vertical-align: text-top;
+  fill: currentColor;
+  height: 16px;
+}
+
+.r3c-logo {
+height: 2.5rem;
+width: auto;
 }
 
 .navbar-form {
-    padding-bottom: 1px;
+  padding-bottom: 1px;
 }
 
 .navbar-form .form-control {
-    background-color: gray;
-    color: #fff;
-    border-radius: 3px;
-    -webkit-border-radius: 3px;
-    -moz-border-radius: 3px;
-    border: 0;
-    -webkit-box-shadow: 1px 1px 0 0 rgba(255, 255, 255, .41), inset 1px 1px 3px 0 rgba(0, 0, 0, .10);
-    -moz-box-shadow: 1px 1px 0 0 rgba(255, 255, 255, .41), inset 1px 1px 3px 0 rgba(0, 0, 0, .10);
-    box-shadow: 1px 1px 0 0 rgba(255, 255, 255, .41), inset 1px 1px 3px 0 rgba(0, 0, 0, .10);
+  background-color: #5A5A5A;
+  color: #fff;
+  border-radius: 3px;
+  -webkit-border-radius: 3px;
+  -moz-border-radius: 3px;
+  border: 0;
+  -webkit-box-shadow: 1px 1px 0 0 rgba(255, 255, 255, .41), inset 1px 1px 3px 0 rgba(0, 0, 0, .10);
+  -moz-box-shadow: 1px 1px 0 0 rgba(255, 255, 255, .41), inset 1px 1px 3px 0 rgba(0, 0, 0, .10);
+  box-shadow: 1px 1px 0 0 rgba(255, 255, 255, .41), inset 1px 1px 3px 0 rgba(0, 0, 0, .10);
 }
 
 @media (min-width: 768px) {
-    .container {
-        max-width: 750px;
-    }
+  .container {
+      max-width: 750px;
+  }
 }
 
 @media (min-width: 992px) {
-    body {
-        font-size: 12px;
-    }
-    .container {
-        max-width: 970px;
-    }
-    .octicon {
-        height: 24px;
-    }
-    .navbar-form .form-control {
-        width: 230px;
-    }
+  body {
+      font-size: 12px;
+  }
+  .container {
+      max-width: 970px;
+  }
+  .octicon {
+      height: 24px;
+  }
+  .navbar-form .form-control {
+      width: 230px;
+  }
 }
 
 @media (min-width: 1200px) {
-    body {
-        font-size: 14px;
-    }
-    .container {
-        max-width: 1170px;
-    }
-    .octicon {
-        height: 32px;
-    }
-    .navbar-form .form-control {
-        width: 360px;
-    }
+  body {
+      font-size: 14px;
+  }
+  .container {
+      max-width: 1170px;
+  }
+  .octicon {
+      height: 32px;
+  }
+  .navbar-form .form-control {
+      width: 360px;
+  }
 }
 
 #header {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    margin: 0;
-    padding-bottom: 0;
-    padding-top: 0;
-    background-color: #212121;
-    border: 0;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  margin: 0;
+  padding-bottom: 0;
+  padding-top: 0;
+  background-color: black;
+  border: 0;
 }
 
 .bg-trezor {
-    background-color: #212121!important;
-    padding-top: 3px;
-    padding-bottom: 2px;
-    z-index: 2;
+  background-color: black !important;
+  padding-top: 3px;
+  padding-bottom: 2px;
+  z-index: 2;
 }
 
 .bg-trezor .navbar-brand {
-    color: rgba(255, 255, 255);
-    font-weight: bold;
-    font-size: 19px;
-    fill: #FFFFFF;
+  color: rgba(255, 255, 255);
+  font-weight: bold;
+  font-size: 19px;
+  fill: #FFFFFF;
 }
 
 @media (max-width: 768px) {
-    .navbar {
-        font-size: 14px;
-    }
-    .bg-trezor .navbar-brand {
-        font-weight: normal;
-        font-size: 14px;
-    }
+  .navbar {
+      font-size: 14px;
+  }
+  .bg-trezor .navbar-brand {
+      font-weight: normal;
+      font-size: 14px;
+  }
 }
 
 #wrap {
-    min-height: 100%;
-    height: auto;
-    padding: 75px 0;
-    margin: 0 auto -42px;
+  min-height: 100%;
+  height: auto;
+  padding: 75px 0;
+  margin: 0 auto -42px;
 }
 
 #footer {
-    background-color: #212121;
-    color: #fff;
-    height: 42px;
-    overflow: hidden;
+  background-color: black;
+  color: #fff;
+  height: 42px;
+  overflow: hidden;
 }
 
 .alert-data {
-    color: #383d41;
-    background-color: #f4f4f4;
-    border-color: #d6d8db;
-    padding: 15px;
+  color: #5A5A5A;
+  background-color: white;
+  border-color: #ADADAD;
+  padding: 15px;
 }
 
 .line-top {
-    border-top: 1px solid #EAEAEA;
-    padding: 10px 0 0;
+  border-top: 1px solid #ADADAD;
+  padding: 10px 0 0;
 }
 
 .line-mid {
-    padding: 15px;
+  padding: 15px;
 }
 
 .line-bot {
-    border-bottom: 2px solid #EAEAEA;
-    padding: 0 0 15px;
+  border-bottom: 2px solid #ADADAD;
+  padding: 0 0 15px;
 }
 
 .txvalues {
-    display: inline-block;
-    padding: .7em 2em;
-    font-size: 13px;
-    font-weight: 100;
-    color: #fff;
-    text-align: center;
-    white-space: nowrap;
-    vertical-align: baseline;
-    border-radius: .25em;
-    margin-top: 5px;
+  display: inline-block;
+  padding: .7em 2em;
+  font-size: 13px;
+  font-weight: 100;
+  color: #fff;
+  text-align: center;
+  white-space: nowrap;
+  vertical-align: baseline;
+  border-radius: .25em;
+  margin-top: 5px;
 }
 
 .txvalues:not(:last-child) {
-    margin-right: 5px;
+  margin-right: 5px;
 }
 
 .txvalues-default {
-    background-color: #EBEBEB;
-    color: #333;
+  background-color: white;
+  color: black;
 }
 
 .txvalues-success {
-    background-color: dimgray;
+  background-color: #5A5A5A;
 }
 
 .txvalues-primary {
-    background-color: #000;
+  background-color: black;
 }
 
 .txvalues-danger {
-    background-color: #AC0015;
-    text-transform: uppercase;
+  background-color: #5A5A5A;
+  text-transform: uppercase;
 }
 
 .tx-own {
-    background-color: #fbf8f0;
+  background-color: white;
 }
 
 .tx-amt {
-    float: right!important;
+  float: right!important;
 }
 
 .tx-in .tx-own .tx-amt {
-    color: #dc3545!important;
+  color: #5A5A5A!important;
 }
 
 .tx-out .tx-own .tx-amt {
-    color: #28a745!important;
+  color: #5A5A5A!important;
 }
 
 .tx-addr {
-    float: left!important;
+  float: left!important;
 }
 
 .ellipsis {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .data-div {
-    margin: 20px 0 30px 0;
+  margin: 20px 0 30px 0;
 }
 
 .data-div .col-md-10 {
-    padding-left: 0;
+  padding-left: 0;
 }
 
 .data-table {
-    table-layout: fixed;
-    border-radius: .25rem;
-    background: white;
+  table-layout: fixed;
+  border-radius: .25rem;
+  background: white;
 }
 
 .data-table td, .data-table th {
-    padding: .4rem;
+  padding: .4rem;
 }
 
 .data-table span.ellipsis {
-    max-width: 100%;
+  max-width: 100%;
 }
 
 .data {
-    font-weight: bold;
+  font-weight: bold;
 }
 
 table.data-table table.data-table th {
-    border-top: 0;
-    font-weight: normal;
+  border-top: 0;
+  font-weight: normal;
 }
 
 .alert .data-table {
-    margin: 0;
+  margin: 0;
 }
 
 ::-webkit-input-placeholder {
-    color: #CCC!important;
-    font-style: italic;
-    font-size: 14px;
+  color: #ADADAD!important;
+  font-style: italic;
+  font-size: 14px;
 }
 
 ::-moz-placeholder {
-    color: #CCC!important;
-    font-style: italic;
-    font-size: 14px;
+  color: #ADADAD!important;
+  font-style: italic;
+  font-size: 14px;
 }
 
 .h-container ul, .h-container h3 {
-    margin: 0;
+  margin: 0;
 }
 
 .h-container h5 {
-    margin-top: 6px;
-    margin-bottom: 0;
+  margin-top: 6px;
+  margin-bottom: 0;
 }
 
 .page-link {
-    color: #428bca;
+  color: #5A5A5A;
 }
 
 .page-text {
-    display: block;
-    padding: .5rem .3rem;
-    line-height: 1.25;
-}
-
-.page-link {
-    color: #428bca;
+  display: block;
+  padding: .5rem .3rem;
+  line-height: 1.25;
 }
 
 .page-item.active .page-link {
-    background-color: #428bca;
+  background-color: #5A5A5A;
 }
 
 #txSpecific {
-    margin: 0;
+  margin: 0;
 }
 
 .string {
-    color: darkgreen;
+  color: 5A5A5A;
 }
 
 .number, .boolean {
-    color: darkred;
+  color: 5A5A5A;
 }
 
 .null {
-    color: red;
+  color: 5A5A5A;
 }
 
 .key {
-    color: #333;
+  color: #5A5A5A;
 }
