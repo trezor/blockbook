@@ -1,3 +1,26 @@
+@font-face {
+  font-family: 'Lato';
+  src: url('fonts/Lato-Italic.eot');
+  src: url('fonts/Lato-Italic.eot?#iefix') format('embedded-opentype'),
+       url('fonts/Lato-Italic.woff2') format('woff2'),
+       url('fonts/Lato-Italic.woff') format('woff'),
+       url('fonts/Lato-Italic.ttf') format('truetype');
+  font-style: italic;
+  font-weight: normal;
+  text-rendering: optimizeLegibility;
+}
+@font-face {
+  font-family: 'Lato';
+  src: url('fonts/Lato-Regular.eot');
+  src: url('fonts/Lato-Regular.eot?#iefix') format('embedded-opentype'),
+       url('fonts/Lato-Regular.woff2') format('woff2'),
+       url('fonts/Lato-Regular.woff') format('woff'),
+       url('fonts/Lato-Regular.ttf') format('truetype');
+  font-style: normal;
+  font-weight: normal;
+  text-rendering: optimizeLegibility;
+}
+
 html, body {
   height: 100%;
 }
@@ -12,6 +35,11 @@ body {
 
 a {
   color: #5A5A5A;
+  text-decoration: none;
+}
+
+a:hover {
+  color: #ADADAD;
   text-decoration: none;
 }
 
@@ -182,7 +210,7 @@ width: auto;
 }
 
 .txvalues-success {
-  background-color: #5A5A5A;
+  background-color: #ADADAD;
 }
 
 .txvalues-primary {
@@ -276,18 +304,31 @@ table.data-table table.data-table th {
   margin-bottom: 0;
 }
 
+.page-item.active .page-link {
+  border-color: #5A5A5A;
+  background-color: #ADADAD;
+}
+
 .page-link {
   color: #5A5A5A;
+}
+
+.page-link:hover {
+  color: black;
+  text-decoration: none;
+  background-color: #ADADAD;
+  border-color: #5A5A5A;
+}
+
+.page-link:focus {
+  z-index: 2;
+  outline: 0;
 }
 
 .page-text {
   display: block;
   padding: .5rem .3rem;
   line-height: 1.25;
-}
-
-.page-item.active .page-link {
-  background-color: #5A5A5A;
 }
 
 #txSpecific {
@@ -308,4 +349,29 @@ table.data-table table.data-table th {
 
 .key {
   color: #5A5A5A;
+}
+
+.r3c-text-success {
+  color: #ADADAD;
+}
+
+.r3c-text-danger {
+  color: #5A5A5A;
+}
+
+.r3c-alert-success {
+  color: #ADADAD;
+  background-color: white;
+  border-color: #ADADAD;
+}
+
+r3c-alert-danger {
+  color: #5A5A5A;
+  background-color: white;
+  border-color: #5A5A5A;
+}
+
+.btn {
+  color: white;
+  background-color: black;
 }

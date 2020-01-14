@@ -26,7 +26,7 @@
                 <td>Status</td>
                 {{- if $tx.EthereumSpecific.Status -}}
                 {{- if eq $tx.EthereumSpecific.Status 1 -}}
-                <td class="data text-success">Success</td>
+                <td class="data r3c-text-success">Success</td>
                 {{- else -}}
                 {{- if eq $tx.EthereumSpecific.Status -1 -}}
                 <td class="data">Pending</td>
@@ -35,7 +35,7 @@
                 {{- end -}}
                 {{- end -}}
                 {{- else -}}
-                <td class="data text-danger">Fail</td>
+                <td class="data r3c-text-danger">Fail</td>
                 {{- end -}}
             </tr>
             <tr>

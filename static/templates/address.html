@@ -98,7 +98,7 @@
 {{- end}}{{if or $addr.Transactions $addr.Filter -}}
 <div class="row h-container">
     <h3 class="col-md-3">Transactions</h3>
-    <select class="col-md-2" style="background-color: #eaeaea;" onchange="self.location='?filter='+options[selectedIndex].value">
+    <select class="col-md-2" style="background-color: white;" onchange="self.location='?filter='+options[selectedIndex].value">
         <option>All</option>
         <option {{if eq $addr.Filter "inputs" -}} selected{{end}} value="inputs">Inputs</option>
         <option {{if eq $addr.Filter "outputs" -}} selected{{end}} value="outputs">Outputs</option>
