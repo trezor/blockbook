@@ -21,11 +21,11 @@
                 </tr>
                 <tr>
                     <td>Version / Commit / Build</td>
-                    <td class="data">{{$bb.Version}} / <a href="https://github.com/trezor/blockbook/commit/{{$bb.GitCommit}}" target="_blank" rel="noopener noreferrer">{{$bb.GitCommit}}</a> / {{$bb.BuildTime}}</td>
+                    <td class="data">{{$bb.Version}} / <a href="https://github.com/RiddleAndCode/blockbook/commit/{{$bb.GitCommit}}" target="_blank" rel="noopener noreferrer">{{$bb.GitCommit}}</a> / {{$bb.BuildTime}}</td>
                 </tr>
                 <tr>
                     <td>Synchronized</td>
-                    <td class="data {{if not $bb.InSync}}text-danger{{else}}text-success{{end}}">{{$bb.InSync}}</td>
+                    <td class="data {{if not $bb.InSync}}r3c-text-danger{{else}}r3c-text-success{{end}}">{{$bb.InSync}}</td>
                 </tr>
                 <tr>
                     <td>Last Block</td>
@@ -37,7 +37,7 @@
                 </tr>
                 <tr>
                     <td>Mempool in Sync</td>
-                    <td class="data {{if not $bb.InSyncMempool}}text-danger{{else}}text-success{{end}}">{{$bb.InSyncMempool}}</td>
+                    <td class="data {{if not $bb.InSyncMempool}}r3c-text-danger{{else}}r3c-text-success{{end}}">{{$bb.InSyncMempool}}</td>
                 </tr>
                 <tr>
                     <td>Last Mempool Update</td>
@@ -61,7 +61,7 @@
                 {{- if $be.BackendError -}}
                 <tr>
                     <td style="width: 30%;">Backend Error</td>
-                    <td class="data text-danger">{{$be.BackendError}}</td>
+                    <td class="data r3c-text-danger">{{$be.BackendError}}</td>
                 </tr>
                 {{- end -}}
                 <tr>

@@ -58,8 +58,8 @@
                                 <span class="tx-addr">Unparsed address</span>
                                 {{- end -}}
                                 <span class="tx-amt">
-                                    {{formatAmount $vout.ValueSat}} {{$cs}} {{if $vout.Spent}}<a class="text-danger" href="{{if $vout.SpentTxID}}/tx/{{$vout.SpentTxID}}{{else}}/spending/{{$tx.Txid}}/{{$vout.N}}{{end}}" title="Spent">➡</a>{{else -}}
-                                    <span class="text-success" title="Unspent"> <b>×</b></span>
+                                    {{formatAmount $vout.ValueSat}} {{$cs}} {{if $vout.Spent}}<a class="r3c-text-danger" href="{{if $vout.SpentTxID}}/tx/{{$vout.SpentTxID}}{{else}}/spending/{{$tx.Txid}}/{{$vout.N}}{{end}}" title="Spent">➡</a>{{else -}}
+                                    <span class="r3c-text-success" title="Unspent"> <b>×</b></span>
                                     {{- end -}}
                                 </span>
                             </td>
