@@ -1,5 +1,5 @@
 {{define "txdetail"}}{{$cs := .CoinShortcut}}{{$addr := .AddrStr}}{{$tx := .Tx}}{{$data := .}}
-<div class="alert alert-data"{{if eq $tx.EthereumSpecific.Status 0}} style="background-color: #faf2ee;"{{end}}>
+<div class="alert alert-data"{{if eq $tx.EthereumSpecific.Status 0}} style="background-color: white;"{{end}}>
     <div class="row line-bot">
         <div class="col-xs-7 col-md-8 ellipsis">
             <a href="/tx/{{$tx.Txid}}">{{$tx.Txid}}</a>
