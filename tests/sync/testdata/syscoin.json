@@ -70,15 +70,15 @@
     "fakeBlocks": {
       "336606": {
         "height": 336606,
-        "hash": "a1b30026cfd15e4f46c5ffbd57f615d71e5c5d2366b079131123bf055d9e812f"
+        "hash": "1f398e465dfea00151b363dcd0afe7a0ed01e3b9c98da24f543aa000265ad5e1"
       },
       "336607": {
         "height": 336607,
-        "hash": "2d92315148dd3568c1a9ab7bf6bd893ed0ca012372f69e139e026453f23d92c4"
+        "hash": "0247f3b181a964e3d932032eab3bf3c5092ca272ecaa994af1e891ef6671e410"
       },
       "336608": {
         "height": 336608,
-        "hash": "dbc84d9af0a74252f337cbcc2fdd6295db53c2cea2bd94ba8afe66f24bc53a5b"
+        "hash": "5adc411c74907a170979da47306e989d29dc41647bbdc6e5dfeae484a82223a5"
       }
     },
     "realBlocks": {
