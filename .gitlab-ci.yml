@@ -25,7 +25,7 @@ integration-test:
     - schedules
   tags:
     - blockbook
-  script: make test-integration ARGS="-run='TestIntegration/(bcash|bgold|bitcoin|dash|dogecoin|litecoin|vertcoin|zcash)=main/'"
+  script: make test-integration ARGS="-run='TestIntegration/(bcash|bgold|bitcoin|dash|dogecoin|litecoin|vertcoin|zcash|syscoin)=main/'"
 
 backend-deploy-and-test-bcash:
   stage: backend-deploy-and-test
@@ -158,3 +158,25 @@ backend-deploy-and-test-ethereum_testnet_ropsten:
   tags:
     - blockbook
   script: ./contrib/scripts/backend-deploy-and-test.sh ethereum_testnet_ropsten ethereum-testnet-ropsten ethereum=test ethereum_testnet_ropsten.log 
+
+backend-deploy-and-test-syscoin:
+  stage: backend-deploy-and-test
+  only:
+    refs:
+      - master
+    changes:
+      - configs/coins/syscoin.json
+  tags:
+    - blockbook
+  script: ./contrib/scripts/backend-deploy-and-test.sh syscoin
+
+backend-deploy-and-test-syscoin_testnet:
+  stage: backend-deploy-and-test
+  only:
+    refs:
+      - master
+    changes:
+      - configs/coins/syscoin_testnet.json
+  tags:
+    - blockbook
+  script: ./contrib/scripts/backend-deploy-and-test.sh syscoin_testnet syscoin-testnet syscoin=test testnet3/debug.log 
