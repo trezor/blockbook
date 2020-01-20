@@ -38,6 +38,7 @@ import (
 	"blockbook/bchain/coins/vipstarcoin"
 	"blockbook/bchain/coins/xzc"
 	"blockbook/bchain/coins/zec"
+	"blockbook/bchain/coins/sys"
 	"blockbook/common"
 	"context"
 	"encoding/json"
@@ -107,6 +108,8 @@ func init() {
 	BlockChainFactories["Unobtanium"] = unobtanium.NewUnobtaniumRPC
 	BlockChainFactories["DeepOnion"] = deeponion.NewDeepOnionRPC
 	BlockChainFactories["Bitcore"] = bitcore.NewBitcoreRPC
+	BlockChainFactories["Syscoin"] = sys.NewSyscoinRPC
+	BlockChainFactories["Syscoin Testnet"] = sys.NewSyscoinRPC
 }
 
 // GetCoinNameFromConfig gets coin name and coin shortcut from config file
