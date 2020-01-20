@@ -59,7 +59,7 @@ func Test_GetAddrDescFromAddress_Mainnet(t *testing.T) {
 			args:    args{address: "sys1qsvdeu7gje7d2hurh0wpypwddjaqj2smmadnczutt0xwyp7q9z2csa7hp20"},
 			want:    "0020831b9e7912cf9aabf0777b8240b9ad974125437beb6781716b799c40f80512b1",
 			wantErr: false,
-		}
+		},
 	}
 	parser := NewSyscoinParser(GetChainParams("main"), &btc.Configuration{})
 
