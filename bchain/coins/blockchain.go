@@ -108,8 +108,8 @@ func init() {
 	BlockChainFactories["Unobtanium"] = unobtanium.NewUnobtaniumRPC
 	BlockChainFactories["DeepOnion"] = deeponion.NewDeepOnionRPC
 	BlockChainFactories["Bitcore"] = bitcore.NewBitcoreRPC
-	BlockChainFactories["Syscoin"] = sys.NewSyscoinRPC
-	BlockChainFactories["Syscoin Testnet"] = sys.NewSyscoinRPC
+	BlockChainFactories["Syscoin"] = syscoin.NewSyscoinRPC
+	BlockChainFactories["Syscoin Testnet"] = syscoin.NewSyscoinRPC
 }
 
 // GetCoinNameFromConfig gets coin name and coin shortcut from config file
