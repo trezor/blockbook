@@ -24,7 +24,7 @@ func NewSyscoinRPC(config json.RawMessage, pushHandler func(notificationType bch
 		b.(*btc.BitcoinRPC),
 	}
 	s.RPCMarshaler = btc.JSONMarshalerV2{}
-	s.ChainConfig.SupportsEstimateSmartFee = false
+	s.ChainConfig.SupportsEstimateFee = false
 
 	return s, nil
 }
