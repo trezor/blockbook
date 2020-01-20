@@ -43,11 +43,15 @@ func init() {
 // SyscoinParser handle
 type SyscoinParser struct {
 	*btc.BitcoinParser
+	baseparser *bchain.BaseParser
 }
 
-// NewSyscoinParser returns new VertcoinParser instance
+// NewSyscoinParser returns new SyscoinParser instance
 func NewSyscoinParser(params *chaincfg.Params, c *btc.Configuration) *SyscoinParser {
-	return &SyscoinParser{BitcoinParser: btc.NewBitcoinParser(params, c)}
+	return &SyscoinParser{
+		BitcoinParser: btc.NewBitcoinParser(params, c),
+		baseparser:    &bchain.BaseParser{},
+	}
 }
 
 // GetChainParams returns network parameters
@@ -104,4 +108,13 @@ func (p *SyscoinParser) ParseBlock(b []byte) (*bchain.Block, error) {
 		},
 		Txs: txs,
 	}, nil
+}
+// PackTx packs transaction to byte array using protobuf
+func (p *SyscoinParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) ([]byte, error) {
+	return p.baseparser.PackTx(tx, height, blockTime)
+}
+
+// UnpackTx unpacks transaction from protobuf byte array
+func (p *SyscoinParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
+	return p.baseparser.UnpackTx(buf)
 }
