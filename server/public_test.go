@@ -785,7 +785,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`[{"time":1521514800,"txs":1,"received":"9876","sent":"0","fiatRate":1301},{"time":1521594000,"txs":1,"received":"9000","sent":"9876","fiatRate":1303}]`,
+				`[{"time":1521514800,"txs":1,"received":"9876","sent":"0","rates":{"eur":1301}},{"time":1521594000,"txs":1,"received":"9000","sent":"9876","rates":{"eur":1303}}]`,
 			},
 		},
 		{
@@ -821,7 +821,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`[{"time":1521514800,"txs":1,"received":"1","sent":"0","fiatRate":2001}]`,
+				`[{"time":1521514800,"txs":1,"received":"1","sent":"0","rates":{"usd":2001}}]`,
 			},
 		},
 		{
@@ -1363,17 +1363,43 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			want: `{"id":"32","data":[{"time":1521514800,"txs":1,"received":"1","sent":"0"},{"time":1521594000,"txs":1,"received":"118641975500","sent":"1"}]}`,
 		},
 		{
-			name: "websocket getBalanceHistory xpub from=1521504000&to=1521590400&fiat=usd",
+			name: "websocket getBalanceHistory xpub from=1521504000&to=1521590400 currencies=[usd]",
 			req: websocketReq{
 				Method: "getBalanceHistory",
 				Params: map[string]interface{}{
 					"descriptor": dbtestdata.Xpub,
 					"from":       1521504000,
 					"to":         1521590400,
-					"fiat":       "usd",
+					"currencies": []string{"usd"},
 				},
 			},
-			want: `{"id":"33","data":[{"time":1521514800,"txs":1,"received":"1","sent":"0","fiatRate":2001}]}`,
+			want: `{"id":"33","data":[{"time":1521514800,"txs":1,"received":"1","sent":"0","rates":{"usd":2001}}]}`,
+		},
+		{
+			name: "websocket getBalanceHistory xpub from=1521504000&to=1521590400 currencies=[usd, eur, incorrect]",
+			req: websocketReq{
+				Method: "getBalanceHistory",
+				Params: map[string]interface{}{
+					"descriptor": dbtestdata.Xpub,
+					"from":       1521504000,
+					"to":         1521590400,
+					"currencies": []string{"usd", "eur", "incorrect"},
+				},
+			},
+			want: `{"id":"34","data":[{"time":1521514800,"txs":1,"received":"1","sent":"0","rates":{"eur":1301,"incorrect":-1,"usd":2001}}]}`,
+		},
+		{
+			name: "websocket getBalanceHistory xpub from=1521504000&to=1521590400 currencies=[]",
+			req: websocketReq{
+				Method: "getBalanceHistory",
+				Params: map[string]interface{}{
+					"descriptor": dbtestdata.Xpub,
+					"from":       1521504000,
+					"to":         1521590400,
+					"currencies": []string{},
+				},
+			},
+			want: `{"id":"35","data":[{"time":1521514800,"txs":1,"received":"1","sent":"0"}]}`,
 		},
 	}
 

@@ -591,7 +591,7 @@ func (w *Worker) GetXpubUtxo(xpub string, onlyConfirmed bool, gap int) (Utxos, e
 }
 
 // GetXpubBalanceHistory returns history of balance for given xpub
-func (w *Worker) GetXpubBalanceHistory(xpub string, fromTimestamp, toTimestamp int64, fiat string, gap int, groupBy uint32) (BalanceHistories, error) {
+func (w *Worker) GetXpubBalanceHistory(xpub string, fromTimestamp, toTimestamp int64, currencies []string, gap int, groupBy uint32) (BalanceHistories, error) {
 	bhs := make(BalanceHistories, 0)
 	start := time.Now()
 	fromUnix, fromHeight, toUnix, toHeight := w.balanceHistoryHeightsFromTo(fromTimestamp, toTimestamp)
@@ -623,8 +623,8 @@ func (w *Worker) GetXpubBalanceHistory(xpub string, fromTimestamp, toTimestamp i
 		}
 	}
 	bha := bhs.SortAndAggregate(groupBy)
-	if fiat != "" {
-		err = w.setFiatRateToBalanceHistories(bha, fiat)
+	if len(currencies) > 0 {
+		err = w.setFiatRateToBalanceHistories(bha, currencies)
 		if err != nil {
 			return nil, err
 		}
