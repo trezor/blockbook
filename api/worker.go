@@ -13,6 +13,7 @@ import (
 	"os"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/golang/glog"
@@ -913,7 +914,7 @@ func (w *Worker) balanceHistoryForTxid(addrDesc bchain.AddressDescriptor, txid s
 	return &bh, nil
 }
 
-func (w *Worker) setFiatRateToBalanceHistories(histories BalanceHistories, fiat string) error {
+func (w *Worker) setFiatRateToBalanceHistories(histories BalanceHistories, currencies []string) error {
 	for i := range histories {
 		bh := &histories[i]
 		t := time.Unix(int64(bh.Time), 0)
@@ -924,15 +925,24 @@ func (w *Worker) setFiatRateToBalanceHistories(histories BalanceHistories, fiat 
 		} else if ticker == nil {
 			continue
 		}
-		if rate, found := ticker.Rates[fiat]; found {
-			bh.FiatRate = rate
+		if len(currencies) > 0 {
+			rates := make(map[string]float64)
+			for _, currency := range currencies {
+				currency = strings.ToLower(currency)
+				if rate, found := ticker.Rates[currency]; found {
+					rates[currency] = rate
+				} else {
+					rates[currency] = -1
+				}
+			}
+			bh.FiatRates = rates
 		}
 	}
 	return nil
 }
 
 // GetBalanceHistory returns history of balance for given address
-func (w *Worker) GetBalanceHistory(address string, fromTimestamp, toTimestamp int64, fiat string, groupBy uint32) (BalanceHistories, error) {
+func (w *Worker) GetBalanceHistory(address string, fromTimestamp, toTimestamp int64, currencies []string, groupBy uint32) (BalanceHistories, error) {
 	bhs := make(BalanceHistories, 0)
 	start := time.Now()
 	addrDesc, _, err := w.getAddrDescAndNormalizeAddress(address)
@@ -957,8 +967,8 @@ func (w *Worker) GetBalanceHistory(address string, fromTimestamp, toTimestamp in
 		}
 	}
 	bha := bhs.SortAndAggregate(groupBy)
-	if fiat != "" {
-		err = w.setFiatRateToBalanceHistories(bha, fiat)
+	if len(currencies) > 0 {
+		err = w.setFiatRateToBalanceHistories(bha, currencies)
 		if err != nil {
 			return nil, err
 		}
@@ -1143,25 +1153,6 @@ func (w *Worker) GetBlocks(page int, blocksOnPage int) (*Blocks, error) {
 	}
 	glog.Info("GetBlocks page ", page, " finished in ", time.Since(start))
 	return r, nil
-}
-
-// getFiatRatesResults checks if CurrencyRatesTicker contains all necessary data and returns formatted result
-func (w *Worker) getFiatRatesResults(currency string, ticker *db.CurrencyRatesTicker) (*db.ResultTickerAsString, error) {
-	if currency == "" {
-		return &db.ResultTickerAsString{
-			Timestamp: ticker.Timestamp.UTC().Unix(),
-			Rates:     ticker.Rates,
-		}, nil
-	}
-	timestamp := ticker.Timestamp.UTC().Unix()
-	if rate, found := ticker.Rates[currency]; !found {
-		return nil, NewAPIError(fmt.Sprintf("Currency %q is not available for timestamp %d.", currency, timestamp), true)
-	} else {
-		return &db.ResultTickerAsString{
-			Timestamp: timestamp,
-			Rates:     map[string]float64{currency: rate},
-		}, nil
-	}
 }
 
 // getFiatRatesResult checks if CurrencyRatesTicker contains all necessary data and returns formatted result
