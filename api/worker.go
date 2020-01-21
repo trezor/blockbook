@@ -1273,7 +1273,7 @@ func (w *Worker) GetFiatRatesTickersList(timestamp int64) (*db.ResultTickerListA
 	sort.Strings(keys) // sort to get deterministic results
 
 	return &db.ResultTickerListAsString{
-		Timestamp: timestamp,
+		Timestamp: ticker.Timestamp.Unix(),
 		Tickers:   keys,
 	}, nil
 }
