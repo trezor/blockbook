@@ -49,7 +49,7 @@
     "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
     "public_binding_template": ":{{.Ports.BlockbookPublic}}",
     "explorer_url": "",
-    "additional_params": "-dbcache=1073741824 -txindex=0",
+    "additional_params": "-dbcache=1073741824",
     "block_chain": {
       "parse": true,
       "mempool_workers": 8,
