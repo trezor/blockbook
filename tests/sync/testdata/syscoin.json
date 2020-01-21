@@ -1,21 +1,25 @@
 {
   "connectBlocks": {
     "syncRanges": [
-      {"lower": 336588, "upper": 336608}
+      {"lower": 338536, "upper": 338556}
     ],
     "blocks": {
-      "336608": {
-        "height": 336608,
-        "hash": "87471a9f50d62a486f1980d78a73e4ed8fb9c9f4026ba010e3a94e2c78b5282d",
-        "noTxs": 1,
+      "338556": {
+        "height": 338556,
+        "hash": "dfdc68177847e56c9b7d52240388a414020c55aa078eef1ad44dd85a64719d32",
+        "noTxs": 2,
         "txDetails": [
           {
-            "txid": "3aa6ad5bff4abb864d00e70ac9fb08e73c9c18366cf1cb5f9b51e60e7b724606",
-            "version": 1,
+            "txid": "37c6c0e5098e1a88a076b2324d2c8f55e1b437974628996c938cc801eb73f863",
+            "version": 2,
             "vin": [
               {
-                "coinbase": "03e0220501010fe4b883e5bda9e7a59ee4bb99e9b1bc205b323032302d30312d32305430353a32373a31332e3536363537333933325a5d",
-                "sequence": 4294967295
+                  "txid": "4a6d9b8a4e56509aa905b0d6eb1a7de423abd1ae5865c5bda5b847bb4d56aa88",
+                  "vout": 1,
+                  "sequence": 4294967294,
+                  "scriptSig": {
+                      "hex": ""
+                  }
               }
             ],
             "vout": [
@@ -55,9 +59,9 @@
                   }
                 }
               ],
-            "hex": "020000000001010000000000000000000000000000000000000000000000000000000000000000ffffffff3703e0220501010fe4b883e5bda9e7a59ee4bb99e9b1bc205b323032302d30312d32305430353a32373a31332e3536363537333933325a5dffffffff0310eda1330000000023210214a5f15a73686b64cf27405e018e2f06e0501b52f4ff98282badd9d6948fb57dac30c7e59a000000001976a9145011d1df35c5e60c10ce045f6516df5b77d7ed5d88ac0000000000000000266a24aa21a9ede2f61c3f71d1defd3fa999dfa36953755c690689799962b48bebd836974e8cf90120000000000000000000000000000000000000000000000000000000000000000000000000",
-            "time": 1579498033,
-            "blocktime": 1579498033
+            "hex": "0200000000010188aa564dbb47b8a5bdc56558aed1ab23e47d1aebd6b005a99a50564e8a9b6d4a0100000000feffffff0246540000000000001976a9144b92dbc7787cc53b5aa02bc026bd27c5dd5b1d9388acba2c0100000000001600145289b9d8a0ca01b67add80368c19aa7824ea6d0c024730440220273cc6457461811b9f43d7177446a758e072a76856f8e7e63003451ce437fc87022078c2c3d848b77974fde258f34778d71fed3de7fd05d497f498b0ee1ea7d7af90012103a9774ef26a02d3bfa66dc261fb4be75594795d8f600d150e3ba8f61d61f4f9867a2a0500",
+            "time": 1579614501,
+            "blocktime": 1579614501
           }
         ]
       }
@@ -65,33 +69,33 @@
   },
   "handleFork": {
     "syncRanges": [
-      {"lower": 336602, "upper": 336608}
+      {"lower": 338550, "upper": 338556}
     ],
     "fakeBlocks": {
-      "336606": {
-        "height": 336606,
-        "hash": "1f398e465dfea00151b363dcd0afe7a0ed01e3b9c98da24f543aa000265ad5e1"
+      "338554": {
+        "height": 338554,
+        "hash": "fe8a4943f01564fa1a43a926b5d3703fca19df5b6d6326e16aa69cd06ca89296"
       },
-      "336607": {
-        "height": 336607,
-        "hash": "0247f3b181a964e3d932032eab3bf3c5092ca272ecaa994af1e891ef6671e410"
+      "338555": {
+        "height": 338555,
+        "hash": "f54f896242d7fba28e81c734fb3336fc37645c152db0fefd805ba2cfca7fe263"
       },
-      "336608": {
-        "height": 336608,
-        "hash": "5adc411c74907a170979da47306e989d29dc41647bbdc6e5dfeae484a82223a5"
+      "338556": {
+        "height": 338556,
+        "hash": "53e2453121bd0b07b6b62648fc106b4e2e900cf09d0a971288b8d87c562fba78"
       }
     },
     "realBlocks": {
-      "336606": {
-        "height": 336606,
+      "338554": {
+        "height": 338554,
         "hash": "08200a00ac856ab6bd0825b788d1552af0f791aaba05cb4b6d110adcaefba4bd"
       },
-      "336607": {
-        "height": 336607,
+      "338555": {
+        "height": 338555,
         "hash": "09efc928bb4e22ef3c96aacb0f6bb65d4e75cbaf828e9fc9dd9d8c3ef98a486b"
       },
-      "336608": {
-        "height": 336608,
+      "338556": {
+        "height": 338556,
         "hash": "87471a9f50d62a486f1980d78a73e4ed8fb9c9f4026ba010e3a94e2c78b5282d"
       }
     }
