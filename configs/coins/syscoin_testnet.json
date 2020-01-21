@@ -38,7 +38,7 @@
     "protect_memory": true,
     "mainnet": false,
     "server_config_file": "syscoin.conf",
-    "client_config_file": "syscoin_client.conf",
+    "client_config_file": "bitcoin_client.conf",
     "additional_params": {
       "deprecatedrpc": "estimatefee"
     }
