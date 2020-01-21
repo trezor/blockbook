@@ -789,8 +789,8 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			},
 		},
 		{
-			name:        "apiBalanceHistory Addr2 v2 from=2018-03-20&to=2018-03-21",
-			r:           newGetRequest(ts.URL + "/api/v2/balancehistory/mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz?from=2018-03-20&to=2018-03-21"),
+			name:        "apiBalanceHistory Addr2 v2 from=1521504000&to=1521590400",
+			r:           newGetRequest(ts.URL + "/api/v2/balancehistory/mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz?from=1521504000&to=1521590400"),
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
@@ -807,8 +807,8 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			},
 		},
 		{
-			name:        "apiBalanceHistory xpub v2 from=2018-03-20&to=2018-03-21",
-			r:           newGetRequest(ts.URL + "/api/v2/balancehistory/" + dbtestdata.Xpub + "?from=2018-03-20&to=2018-03-21"),
+			name:        "apiBalanceHistory xpub v2 from=1521504000&to=1521590400",
+			r:           newGetRequest(ts.URL + "/api/v2/balancehistory/" + dbtestdata.Xpub + "?from=1521504000&to=1521590400"),
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
@@ -816,8 +816,8 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			},
 		},
 		{
-			name:        "apiBalanceHistory xpub v2 from=2018-03-20&to=2018-03-21&fiatcurrency=usd",
-			r:           newGetRequest(ts.URL + "/api/v2/balancehistory/" + dbtestdata.Xpub + "?from=2018-03-20&to=2018-03-21&fiatcurrency=usd"),
+			name:        "apiBalanceHistory xpub v2 from=1521504000&to=1521590400&fiatcurrency=usd",
+			r:           newGetRequest(ts.URL + "/api/v2/balancehistory/" + dbtestdata.Xpub + "?from=1521504000&to=1521590400&fiatcurrency=usd"),
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
@@ -825,8 +825,8 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			},
 		},
 		{
-			name:        "apiBalanceHistory xpub v2 from=2018-03-21",
-			r:           newGetRequest(ts.URL + "/api/v2/balancehistory/" + dbtestdata.Xpub + "?from=2018-03-21"),
+			name:        "apiBalanceHistory xpub v2 from=1521590400",
+			r:           newGetRequest(ts.URL + "/api/v2/balancehistory/" + dbtestdata.Xpub + "?from=1521590400"),
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
@@ -1340,7 +1340,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 					"timestamp": 1570346615,
 				},
 			},
-			want: `{"id":"30","data":{"ts":1570346615,"available_currencies":["eur","usd"]}}`,
+			want: `{"id":"30","data":{"ts":1574344800,"available_currencies":["eur","usd"]}}`,
 		},
 		{
 			name: "websocket getBalanceHistory Addr2",
@@ -1363,13 +1363,13 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			want: `{"id":"32","data":[{"time":1521514800,"txs":1,"received":"1","sent":"0"},{"time":1521594000,"txs":1,"received":"118641975500","sent":"1"}]}`,
 		},
 		{
-			name: "websocket getBalanceHistory xpub from=2018-03-20&to=2018-03-21&fiat=usd",
+			name: "websocket getBalanceHistory xpub from=1521504000&to=1521590400&fiat=usd",
 			req: websocketReq{
 				Method: "getBalanceHistory",
 				Params: map[string]interface{}{
 					"descriptor": dbtestdata.Xpub,
-					"from":       "2018-03-20",
-					"to":         "2018-03-21",
+					"from":       1521504000,
+					"to":         1521590400,
 					"fiat":       "usd",
 				},
 			},

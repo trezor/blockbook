@@ -260,33 +260,26 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *webs
 	"getBalanceHistory": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
 		r := struct {
 			Descriptor string `json:"descriptor"`
-			From       string `json:"from"`
-			To         string `json:"to"`
+			From       int64  `json:"from"`
+			To         int64  `json:"to"`
 			Fiat       string `json:"fiat"`
 			Gap        int    `json:"gap"`
 			GroupBy    uint32 `json:"groupBy"`
 		}{}
 		err = json.Unmarshal(req.Params, &r)
 		if err == nil {
-			var fromTime, toTime time.Time
-			if r.From != "" {
-				fromTime, err = time.Parse("2006-01-02", r.From)
-				if err != nil {
-					return
-				}
+			if r.From <= 0 {
+				r.From = 0
 			}
-			if r.To != "" {
-				toTime, err = time.Parse("2006-01-02", r.To)
-				if err != nil {
-					return
-				}
+			if r.To <= 0 {
+				r.To = 0
 			}
 			if r.GroupBy <= 0 {
 				r.GroupBy = 3600
 			}
-			rv, err = s.api.GetXpubBalanceHistory(r.Descriptor, fromTime, toTime, strings.ToLower(r.Fiat), r.Gap, r.GroupBy)
+			rv, err = s.api.GetXpubBalanceHistory(r.Descriptor, r.From, r.To, strings.ToLower(r.Fiat), r.Gap, r.GroupBy)
 			if err != nil {
-				rv, err = s.api.GetBalanceHistory(r.Descriptor, fromTime, toTime, strings.ToLower(r.Fiat), r.GroupBy)
+				rv, err = s.api.GetBalanceHistory(r.Descriptor, r.From, r.To, strings.ToLower(r.Fiat), r.GroupBy)
 			}
 		}
 		return
