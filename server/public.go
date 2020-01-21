@@ -1042,21 +1042,26 @@ func (s *PublicServer) apiUtxo(r *http.Request, apiVersion int) (interface{}, er
 
 func (s *PublicServer) apiBalanceHistory(r *http.Request, apiVersion int) (interface{}, error) {
 	var history []api.BalanceHistory
-	var fromTime, toTime time.Time
+	var fromTimestamp, toTimestamp int64
 	var err error
 	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
 		gap, ec := strconv.Atoi(r.URL.Query().Get("gap"))
 		if ec != nil {
 			gap = 0
 		}
-		t := r.URL.Query().Get("from")
-		if t != "" {
-			fromTime, _ = time.Parse("2006-01-02", t)
+		from := r.URL.Query().Get("from")
+		if from != "" {
+			fromTimestamp, err = strconv.ParseInt(from, 10, 64)
+			if err != nil {
+				return history, err
+			}
 		}
-		t = r.URL.Query().Get("to")
-		if t != "" {
-			// time.RFC3339
-			toTime, _ = time.Parse("2006-01-02", t)
+		to := r.URL.Query().Get("to")
+		if to != "" {
+			toTimestamp, err = strconv.ParseInt(to, 10, 64)
+			if err != nil {
+				return history, err
+			}
 		}
 		var groupBy uint64
 		groupBy, err = strconv.ParseUint(r.URL.Query().Get("groupBy"), 10, 32)
@@ -1064,11 +1069,11 @@ func (s *PublicServer) apiBalanceHistory(r *http.Request, apiVersion int) (inter
 			groupBy = 3600
 		}
 		fiat := r.URL.Query().Get("fiatcurrency")
-		history, err = s.api.GetXpubBalanceHistory(r.URL.Path[i+1:], fromTime, toTime, fiat, gap, uint32(groupBy))
+		history, err = s.api.GetXpubBalanceHistory(r.URL.Path[i+1:], fromTimestamp, toTimestamp, fiat, gap, uint32(groupBy))
 		if err == nil {
 			s.metrics.ExplorerViews.With(common.Labels{"action": "api-xpub-balancehistory"}).Inc()
 		} else {
-			history, err = s.api.GetBalanceHistory(r.URL.Path[i+1:], fromTime, toTime, fiat, uint32(groupBy))
+			history, err = s.api.GetBalanceHistory(r.URL.Path[i+1:], fromTimestamp, toTimestamp, fiat, uint32(groupBy))
 			s.metrics.ExplorerViews.With(common.Labels{"action": "api-address-balancehistory"}).Inc()
 		}
 	}

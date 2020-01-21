@@ -801,17 +801,17 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 	return r, nil
 }
 
-func (w *Worker) balanceHistoryHeightsFromTo(fromTime, toTime time.Time) (uint32, uint32, uint32, uint32) {
+func (w *Worker) balanceHistoryHeightsFromTo(fromTimestamp, toTimestamp int64) (uint32, uint32, uint32, uint32) {
 	fromUnix := uint32(0)
 	toUnix := maxUint32
 	fromHeight := uint32(0)
 	toHeight := maxUint32
-	if !fromTime.IsZero() {
-		fromUnix = uint32(fromTime.Unix())
+	if fromTimestamp != 0 {
+		fromUnix = uint32(fromTimestamp)
 		fromHeight = w.is.GetBlockHeightOfTime(fromUnix)
 	}
-	if !toTime.IsZero() {
-		toUnix = uint32(toTime.Unix())
+	if toTimestamp != 0 {
+		toUnix = uint32(toTimestamp)
 		toHeight = w.is.GetBlockHeightOfTime(toUnix)
 	}
 	return fromUnix, fromHeight, toUnix, toHeight
@@ -932,14 +932,14 @@ func (w *Worker) setFiatRateToBalanceHistories(histories BalanceHistories, fiat 
 }
 
 // GetBalanceHistory returns history of balance for given address
-func (w *Worker) GetBalanceHistory(address string, fromTime, toTime time.Time, fiat string, groupBy uint32) (BalanceHistories, error) {
+func (w *Worker) GetBalanceHistory(address string, fromTimestamp, toTimestamp int64, fiat string, groupBy uint32) (BalanceHistories, error) {
 	bhs := make(BalanceHistories, 0)
 	start := time.Now()
 	addrDesc, _, err := w.getAddrDescAndNormalizeAddress(address)
 	if err != nil {
 		return nil, err
 	}
-	fromUnix, fromHeight, toUnix, toHeight := w.balanceHistoryHeightsFromTo(fromTime, toTime)
+	fromUnix, fromHeight, toUnix, toHeight := w.balanceHistoryHeightsFromTo(fromTimestamp, toTimestamp)
 	if fromHeight >= toHeight {
 		return bhs, nil
 	}
@@ -1208,7 +1208,7 @@ func (w *Worker) GetFiatRatesForBlockID(bid string, currency string) (*db.Result
 	return result, nil
 }
 
-// GetCurrentFiatRates returns current fiat rates
+// GetCurrentFiatRates returns last available fiat rates
 func (w *Worker) GetCurrentFiatRates(currency string) (*db.ResultTickerAsString, error) {
 	ticker, err := w.db.FiatRatesFindLastTicker()
 	if err != nil {
