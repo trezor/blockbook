@@ -623,11 +623,9 @@ func (w *Worker) GetXpubBalanceHistory(xpub string, fromTimestamp, toTimestamp i
 		}
 	}
 	bha := bhs.SortAndAggregate(groupBy)
-	if len(currencies) > 0 {
-		err = w.setFiatRateToBalanceHistories(bha, currencies)
-		if err != nil {
-			return nil, err
-		}
+	err = w.setFiatRateToBalanceHistories(bha, currencies)
+	if err != nil {
+		return nil, err
 	}
 	glog.Info("GetUtxoBalanceHistory ", xpub[:16], ", blocks ", fromHeight, "-", toHeight, ", count ", len(bha), ", finished in ", time.Since(start))
 	return bha, nil
