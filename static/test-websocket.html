@@ -302,11 +302,12 @@
         function getFiatRatesForTimestamps() {
             const method = 'getFiatRatesForTimestamps';
             var timestamps = document.getElementById('getFiatRatesForTimestampsList').value.split(",");
-            var currency = document.getElementById('getFiatRatesForTimestampsCurrency').value;
+            var currencies = document.getElementById('getFiatRatesForTimestampsCurrency').value.split(",");
+            console.log(currencies);
             timestamps = timestamps.map(Number);
             const params = {
                 timestamps,
-                "currency": currency
+                'currencies': currencies
             };
             send(method, params, function (result) {
                 document.getElementById('getFiatRatesForTimestampsResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
@@ -315,9 +316,9 @@
 
         function getCurrentFiatRates() {
             const method = 'getCurrentFiatRates';
-            var currency = document.getElementById('getCurrentFiatRatesCurrency').value;
+            var currencies = document.getElementById('getCurrentFiatRatesCurrency').value.split(",");
             const params = {
-                "currency": currency
+                "currencies": currencies
             };
             send(method, params, function (result) {
                 document.getElementById('getCurrentFiatRatesResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
@@ -540,7 +541,7 @@
                 <input class="btn btn-secondary" type="button" value="get fiat rates for dates" onclick="getFiatRatesForTimestamps()">
             </div>
             <div class="col-1">
-                <input type="text" class="form-control" id="getFiatRatesForTimestampsCurrency" value="usd">
+                <input type="text" class="form-control" id="getFiatRatesForTimestampsCurrency" placeholder="usd,eur">
             </div>
             <div class="col-7">
                 <input type="text" class="form-control" id="getFiatRatesForTimestampsList" value="1575288000,1575550800">

@@ -352,22 +352,22 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *webs
 	},
 	"getCurrentFiatRates": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
 		r := struct {
-			Currency string `json:"currency"`
+			Currencies []string `json:"currencies"`
 		}{}
 		err = json.Unmarshal(req.Params, &r)
 		if err == nil {
-			rv, err = s.getCurrentFiatRates(strings.ToLower(r.Currency))
+			rv, err = s.getCurrentFiatRates(r.Currencies)
 		}
 		return
 	},
 	"getFiatRatesForTimestamps": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
 		r := struct {
-			Timestamps []int64 `json:"timestamps"`
-			Currency   string  `json:"currency"`
+			Timestamps []int64  `json:"timestamps"`
+			Currencies []string `json:"currencies"`
 		}{}
 		err = json.Unmarshal(req.Params, &r)
 		if err == nil {
-			rv, err = s.getFiatRatesForTimestamps(r.Timestamps, strings.ToLower(r.Currency))
+			rv, err = s.getFiatRatesForTimestamps(r.Timestamps, r.Currencies)
 		}
 		return
 	},
@@ -826,13 +826,13 @@ func (s *WebsocketServer) OnNewFiatRatesTicker(ticker *db.CurrencyRatesTicker) {
 	s.broadcastTicker(allFiatRates, ticker.Rates)
 }
 
-func (s *WebsocketServer) getCurrentFiatRates(currency string) (interface{}, error) {
-	ret, err := s.api.GetCurrentFiatRates(currency)
+func (s *WebsocketServer) getCurrentFiatRates(currencies []string) (interface{}, error) {
+	ret, err := s.api.GetCurrentFiatRates(currencies)
 	return ret, err
 }
 
-func (s *WebsocketServer) getFiatRatesForTimestamps(timestamps []int64, currency string) (interface{}, error) {
-	ret, err := s.api.GetFiatRatesForTimestamps(timestamps, currency)
+func (s *WebsocketServer) getFiatRatesForTimestamps(timestamps []int64, currencies []string) (interface{}, error) {
+	ret, err := s.api.GetFiatRatesForTimestamps(timestamps, currencies)
 	return ret, err
 }
 
