@@ -303,7 +303,6 @@
             const method = 'getFiatRatesForTimestamps';
             var timestamps = document.getElementById('getFiatRatesForTimestampsList').value.split(",");
             var currencies = document.getElementById('getFiatRatesForTimestampsCurrency').value.split(",");
-            console.log(currencies);
             timestamps = timestamps.map(Number);
             const params = {
                 timestamps,
