@@ -1265,6 +1265,17 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			want: `{"id":"22","data":{"error":{"message":"json: cannot unmarshal string into Go struct field .timestamps of type int64"}}}`,
 		},
 		{
+			name: "websocket getFiatRatesForTimestamps empty currency",
+			req: websocketReq{
+				Method: "getFiatRatesForTimestamps",
+				Params: map[string]interface{}{
+					"timestamps": []int64{7885693815},
+					"currencies": []string{""},
+				},
+			},
+			want: `{"id":"23","data":{"tickers":[{"ts":7885693815,"rates":{}}]}}`,
+		},
+		{
 			name: "websocket getFiatRatesForTimestamps incorrect (future) date",
 			req: websocketReq{
 				Method: "getFiatRatesForTimestamps",
@@ -1273,7 +1284,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 					"timestamps": []int64{7885693815},
 				},
 			},
-			want: `{"id":"23","data":{"tickers":[{"ts":7885693815,"rates":{"usd":-1}}]}}`,
+			want: `{"id":"24","data":{"tickers":[{"ts":7885693815,"rates":{"usd":-1}}]}}`,
 		},
 		{
 			name: "websocket getFiatRatesForTimestamps exact date",
@@ -1284,7 +1295,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 					"timestamps": []int64{1574346615},
 				},
 			},
-			want: `{"id":"24","data":{"tickers":[{"ts":1574346615,"rates":{"usd":7914.5}}]}}`,
+			want: `{"id":"25","data":{"tickers":[{"ts":1574346615,"rates":{"usd":7914.5}}]}}`,
 		},
 		{
 			name: "websocket getFiatRatesForTimestamps closest date, eur",
@@ -1295,7 +1306,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 					"timestamps": []int64{1521507600},
 				},
 			},
-			want: `{"id":"25","data":{"tickers":[{"ts":1521511200,"rates":{"eur":1300}}]}}`,
+			want: `{"id":"26","data":{"tickers":[{"ts":1521511200,"rates":{"eur":1300}}]}}`,
 		},
 		{
 			name: "websocket getFiatRatesForTimestamps multiple timestamps usd",
@@ -1306,7 +1317,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 					"timestamps": []int64{1570346615, 1574346615},
 				},
 			},
-			want: `{"id":"26","data":{"tickers":[{"ts":1574344800,"rates":{"usd":7814.5}},{"ts":1574346615,"rates":{"usd":7914.5}}]}}`,
+			want: `{"id":"27","data":{"tickers":[{"ts":1574344800,"rates":{"usd":7814.5}},{"ts":1574346615,"rates":{"usd":7914.5}}]}}`,
 		},
 		{
 			name: "websocket getFiatRatesForTimestamps multiple timestamps eur",
@@ -1317,7 +1328,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 					"timestamps": []int64{1570346615, 1574346615},
 				},
 			},
-			want: `{"id":"27","data":{"tickers":[{"ts":1574344800,"rates":{"eur":7100}},{"ts":1574346615,"rates":{"eur":7134.1}}]}}`,
+			want: `{"id":"28","data":{"tickers":[{"ts":1574344800,"rates":{"eur":7100}},{"ts":1574346615,"rates":{"eur":7134.1}}]}}`,
 		},
 		{
 			name: "websocket getFiatRatesForTimestamps multiple timestamps with an error",
@@ -1328,7 +1339,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 					"timestamps": []int64{1570346615, 1574346615, 2000000000},
 				},
 			},
-			want: `{"id":"28","data":{"tickers":[{"ts":1574344800,"rates":{"usd":7814.5}},{"ts":1574346615,"rates":{"usd":7914.5}},{"ts":2000000000,"rates":{"usd":-1}}]}}`,
+			want: `{"id":"29","data":{"tickers":[{"ts":1574344800,"rates":{"usd":7814.5}},{"ts":1574346615,"rates":{"usd":7914.5}},{"ts":2000000000,"rates":{"usd":-1}}]}}`,
 		},
 		{
 			name: "websocket getFiatRatesForTimestamps multiple errors",
@@ -1339,7 +1350,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 					"timestamps": []int64{7832854800, 2000000000},
 				},
 			},
-			want: `{"id":"29","data":{"tickers":[{"ts":7832854800,"rates":{"usd":-1}},{"ts":2000000000,"rates":{"usd":-1}}]}}`,
+			want: `{"id":"30","data":{"tickers":[{"ts":7832854800,"rates":{"usd":-1}},{"ts":2000000000,"rates":{"usd":-1}}]}}`,
 		},
 		{
 			name: "websocket getTickersList",
@@ -1349,7 +1360,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 					"timestamp": 1570346615,
 				},
 			},
-			want: `{"id":"30","data":{"ts":1574344800,"available_currencies":["eur","usd"]}}`,
+			want: `{"id":"31","data":{"ts":1574344800,"available_currencies":["eur","usd"]}}`,
 		},
 		{
 			name: "websocket getBalanceHistory Addr2",
@@ -1359,7 +1370,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 					"descriptor": "mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz",
 				},
 			},
-			want: `{"id":"31","data":[{"time":1521514800,"txs":1,"received":"12345","sent":"0","rates":{"eur":1301,"usd":2001}},{"time":1521594000,"txs":1,"received":"0","sent":"12345","rates":{"eur":1303,"usd":2003}}]}`,
+			want: `{"id":"32","data":[{"time":1521514800,"txs":1,"received":"12345","sent":"0","rates":{"eur":1301,"usd":2001}},{"time":1521594000,"txs":1,"received":"0","sent":"12345","rates":{"eur":1303,"usd":2003}}]}`,
 		},
 		{
 			name: "websocket getBalanceHistory xpub",
@@ -1369,7 +1380,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 					"descriptor": dbtestdata.Xpub,
 				},
 			},
-			want: `{"id":"32","data":[{"time":1521514800,"txs":1,"received":"1","sent":"0","rates":{"eur":1301,"usd":2001}},{"time":1521594000,"txs":1,"received":"118641975500","sent":"1","rates":{"eur":1303,"usd":2003}}]}`,
+			want: `{"id":"33","data":[{"time":1521514800,"txs":1,"received":"1","sent":"0","rates":{"eur":1301,"usd":2001}},{"time":1521594000,"txs":1,"received":"118641975500","sent":"1","rates":{"eur":1303,"usd":2003}}]}`,
 		},
 		{
 			name: "websocket getBalanceHistory xpub from=1521504000&to=1521590400 currencies=[usd]",
@@ -1382,7 +1393,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 					"currencies": []string{"usd"},
 				},
 			},
-			want: `{"id":"33","data":[{"time":1521514800,"txs":1,"received":"1","sent":"0","rates":{"usd":2001}}]}`,
+			want: `{"id":"34","data":[{"time":1521514800,"txs":1,"received":"1","sent":"0","rates":{"usd":2001}}]}`,
 		},
 		{
 			name: "websocket getBalanceHistory xpub from=1521504000&to=1521590400 currencies=[usd, eur, incorrect]",
@@ -1395,7 +1406,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 					"currencies": []string{"usd", "eur", "incorrect"},
 				},
 			},
-			want: `{"id":"34","data":[{"time":1521514800,"txs":1,"received":"1","sent":"0","rates":{"eur":1301,"incorrect":-1,"usd":2001}}]}`,
+			want: `{"id":"35","data":[{"time":1521514800,"txs":1,"received":"1","sent":"0","rates":{"eur":1301,"incorrect":-1,"usd":2001}}]}`,
 		},
 		{
 			name: "websocket getBalanceHistory xpub from=1521504000&to=1521590400 currencies=[]",
@@ -1408,7 +1419,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 					"currencies": []string{},
 				},
 			},
-			want: `{"id":"35","data":[{"time":1521514800,"txs":1,"received":"1","sent":"0","rates":{"eur":1301,"usd":2001}}]}`,
+			want: `{"id":"36","data":[{"time":1521514800,"txs":1,"received":"1","sent":"0","rates":{"eur":1301,"usd":2001}}]}`,
 		},
 	}
 
