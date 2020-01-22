@@ -4,6 +4,7 @@ import (
 	"blockbook/bchain"
 	"blockbook/bchain/coins/bch"
 	"blockbook/bchain/coins/bellcoin"
+	"blockbook/bchain/coins/bitcloud"
 	"blockbook/bchain/coins/bitcore"
 	"blockbook/bchain/coins/btc"
 	"blockbook/bchain/coins/btg"
@@ -107,6 +108,7 @@ func init() {
 	BlockChainFactories["Unobtanium"] = unobtanium.NewUnobtaniumRPC
 	BlockChainFactories["DeepOnion"] = deeponion.NewDeepOnionRPC
 	BlockChainFactories["Bitcore"] = bitcore.NewBitcoreRPC
+	BlockChainFactories["Bitcloud"] = bitcloud.NewBitcloudRPC
 }
 
 // GetCoinNameFromConfig gets coin name and coin shortcut from config file

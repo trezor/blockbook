@@ -1,0 +1,66 @@
+{
+  "coin": {
+      "name": "Bitcloud",
+      "shortcut": "BTDX",
+      "label": "Bitcloud",
+      "alias": "bitcloud"
+  },
+  "ports": {
+    "backend_rpc": 8062,
+    "backend_message_queue": 38362,
+    "blockbook_internal": 9062,
+    "blockbook_public": 9162
+  },
+  "ipc": {
+    "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
+    "rpc_user": "rpc",
+    "rpc_pass": "BBin2teEdMr6BGccyGE625F3vQFhW2Uewc1N3h6wkQhw",
+    "rpc_timeout": 25,
+    "message_queue_binding_template": "tcp://127.0.0.1:{{.Ports.BackendMessageQueue}}"
+  },
+  "backend": {
+    "package_name": "backend-bitcloud",
+    "package_revision": "satoshilabs-1",
+    "system_user": "bitcloud",
+    "version": "2.1.0.1",
+    "binary_url": "https://github.com/dalijolijo/Bitcloud/releases/download/2.1.0.1/bitcloudd-2.1.0.1-x86_64-linux-gnu_no-wallet.tar.gz",
+    "verification_type": "sha256",
+    "verification_source": "0b7da89d0666a27d2b061d5f14e8120ace48073efa750c8975e7036a2414aa57",
+    "extract_command": "tar -C backend -xf",
+    "exclude_files": [],
+    "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/bitcloudd --nochown --quiet --target . -- -datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -conf={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf -pid=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",
+    "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/*.log",
+    "postinst_script_template": "",
+    "service_type": "forking",
+    "service_additional_params_template": "",
+    "protect_memory": true,
+    "mainnet": true,
+    "server_config_file": "bitcoin_like.conf",
+    "client_config_file": "bitcoin_like_client.conf",
+    "additional_params": {
+      "whitelist": "127.0.0.1"
+    }
+  },
+  "blockbook": {
+    "package_name": "blockbook-bitcloud",
+    "system_user": "blockbook-bitcloud",
+    "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
+    "public_binding_template": ":{{.Ports.BlockbookPublic}}",
+    "explorer_url": "",
+    "additional_params": "",
+    "block_chain": {
+      "parse": true,
+      "mempool_workers": 8,
+      "mempool_sub_workers": 2,
+      "block_addresses_to_keep": 300,
+      "additional_params": {
+        "fiat_rates": "coingecko",
+        "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"bitcloud\", \"periodSeconds\": 60}"
+      }
+    }
+  },
+  "meta": {
+    "package_maintainer": "LIMXTEC",
+    "package_maintainer_email": "info@limxtec.org"
+  }
+}
