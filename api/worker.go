@@ -925,7 +925,9 @@ func (w *Worker) setFiatRateToBalanceHistories(histories BalanceHistories, curre
 		} else if ticker == nil {
 			continue
 		}
-		if len(currencies) > 0 {
+		if len(currencies) == 0 {
+			bh.FiatRates = ticker.Rates
+		} else {
 			rates := make(map[string]float64)
 			for _, currency := range currencies {
 				currency = strings.ToLower(currency)
@@ -967,11 +969,9 @@ func (w *Worker) GetBalanceHistory(address string, fromTimestamp, toTimestamp in
 		}
 	}
 	bha := bhs.SortAndAggregate(groupBy)
-	if len(currencies) > 0 {
-		err = w.setFiatRateToBalanceHistories(bha, currencies)
-		if err != nil {
-			return nil, err
-		}
+	err = w.setFiatRateToBalanceHistories(bha, currencies)
+	if err != nil {
+		return nil, err
 	}
 	glog.Info("GetBalanceHistory ", address, ", blocks ", fromHeight, "-", toHeight, ", count ", len(bha), " finished in ", time.Since(start))
 	return bha, nil
