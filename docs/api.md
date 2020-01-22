@@ -618,10 +618,10 @@ Example response (no parameters):
 
 ```javascript
 {
-  "ts":1574346615,
+  "ts": 1574346615,
   "rates": {
-    "eur":7134.1,
-    "usd":7914.5
+    "eur": 7134.1,
+    "usd": 7914.5
     }
 }
 ```
@@ -630,8 +630,10 @@ Example response (currency=usd):
 
 ```javascript
 {
-  "ts":1574346615,
-  "rate":7914.5
+  "ts": 1574346615,
+  "rates": {
+    "usd": 7914.5
+  }
 }
 ```
 
@@ -639,7 +641,9 @@ Example error response (e.g. rate unavailable, incorrect currency...):
 ```javascript
 {
   "ts":7980386400,
-  "rate":-1
+  "rates": {
+    "usd": -1
+  }
 }
 ```
 

@@ -533,7 +533,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"ts":1574346615,"rate":7914.5}`,
+				`{"ts":1574346615,"rates":{"usd":7914.5}}`,
 			},
 		},
 		{
@@ -542,7 +542,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"ts":1574344800,"rate":7814.5}`,
+				`{"ts":1574344800,"rates":{"usd":7814.5}}`,
 			},
 		},
 		{
@@ -560,7 +560,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"ts":7980386400,"rate":-1}`,
+				`{"ts":7980386400,"rates":{"usd":-1}}`,
 			},
 		},
 		{
@@ -569,7 +569,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"ts":1574344800,"rate":7100}`,
+				`{"ts":1574344800,"rates":{"eur":7100}}`,
 			},
 		},
 		{
@@ -578,7 +578,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"ts":1521511200,"rate":2000}`,
+				`{"ts":1521511200,"rates":{"usd":2000}}`,
 			},
 		},
 		{
@@ -587,7 +587,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"ts":1521611721,"rate":2003}`,
+				`{"ts":1521611721,"rates":{"usd":2003}}`,
 			},
 		},
 		{
@@ -596,7 +596,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"ts":1574346615,"rate":7134.1}`,
+				`{"ts":1574346615,"rates":{"eur":7134.1}}`,
 			},
 		},
 		{
@@ -605,7 +605,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"ts":1574346615,"rate":-1}`,
+				`{"ts":1574346615,"rates":{"does_not_exist":-1}}`,
 			},
 		},
 		{
@@ -1212,7 +1212,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 					"currencies": []string{"usd"},
 				},
 			},
-			want: `{"id":"18","data":{"ts":1574346615,"rate":7914.5}}`,
+			want: `{"id":"18","data":{"ts":1574346615,"rates":{"usd":7914.5}}}`,
 		},
 		{
 			name: "websocket getCurrentFiatRates eur",
@@ -1222,7 +1222,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 					"currencies": []string{"eur"},
 				},
 			},
-			want: `{"id":"19","data":{"ts":1574346615,"rate":7134.1}}`,
+			want: `{"id":"19","data":{"ts":1574346615,"rates":{"eur":7134.1}}}`,
 		},
 		{
 			name: "websocket getCurrentFiatRates incorrect currency",
@@ -1232,7 +1232,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 					"currencies": []string{"does-not-exist"},
 				},
 			},
-			want: `{"id":"20","data":{"error":{"message":"Currency \"does-not-exist\" is not available for timestamp 1574346615."}}}`,
+			want: `{"id":"20","data":{"ts":1574346615,"rates":{"does-not-exist":-1}}}`,
 		},
 		{
 			name: "websocket getFiatRatesForTimestamps missing date",
@@ -1264,7 +1264,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 					"timestamps": []int64{7885693815},
 				},
 			},
-			want: `{"id":"23","data":{"tickers":[{"ts":7885693815,"rate":-1}]}}`,
+			want: `{"id":"23","data":{"tickers":[{"ts":7885693815,"rates":{"usd":-1}}]}}`,
 		},
 		{
 			name: "websocket getFiatRatesForTimestamps exact date",
@@ -1275,7 +1275,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 					"timestamps": []int64{1574346615},
 				},
 			},
-			want: `{"id":"24","data":{"tickers":[{"ts":1574346615,"rate":7914.5}]}}`,
+			want: `{"id":"24","data":{"tickers":[{"ts":1574346615,"rates":{"usd":7914.5}}]}}`,
 		},
 		{
 			name: "websocket getFiatRatesForTimestamps closest date, eur",
@@ -1286,7 +1286,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 					"timestamps": []int64{1521507600},
 				},
 			},
-			want: `{"id":"25","data":{"tickers":[{"ts":1521511200,"rate":1300}]}}`,
+			want: `{"id":"25","data":{"tickers":[{"ts":1521511200,"rates":{"eur":1300}}]}}`,
 		},
 		{
 			name: "websocket getFiatRatesForTimestamps multiple timestamps usd",
@@ -1297,7 +1297,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 					"timestamps": []int64{1570346615, 1574346615},
 				},
 			},
-			want: `{"id":"26","data":{"tickers":[{"ts":1574344800,"rate":7814.5},{"ts":1574346615,"rate":7914.5}]}}`,
+			want: `{"id":"26","data":{"tickers":[{"ts":1574344800,"rates":{"usd":7814.5}},{"ts":1574346615,"rates":{"usd":7914.5}}]}}`,
 		},
 		{
 			name: "websocket getFiatRatesForTimestamps multiple timestamps eur",
@@ -1308,7 +1308,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 					"timestamps": []int64{1570346615, 1574346615},
 				},
 			},
-			want: `{"id":"27","data":{"tickers":[{"ts":1574344800,"rate":7100},{"ts":1574346615,"rate":7134.1}]}}`,
+			want: `{"id":"27","data":{"tickers":[{"ts":1574344800,"rates":{"eur":7100}},{"ts":1574346615,"rates":{"eur":7134.1}}]}}`,
 		},
 		{
 			name: "websocket getFiatRatesForTimestamps multiple timestamps with an error",
@@ -1319,7 +1319,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 					"timestamps": []int64{1570346615, 1574346615, 2000000000},
 				},
 			},
-			want: `{"id":"28","data":{"tickers":[{"ts":1574344800,"rate":7814.5},{"ts":1574346615,"rate":7914.5},{"ts":2000000000,"rate":-1}]}}`,
+			want: `{"id":"28","data":{"tickers":[{"ts":1574344800,"rates":{"usd":7814.5}},{"ts":1574346615,"rates":{"usd":7914.5}},{"ts":2000000000,"rates":{"usd":-1}}]}}`,
 		},
 		{
 			name: "websocket getFiatRatesForTimestamps multiple errors",
@@ -1330,7 +1330,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 					"timestamps": []int64{7832854800, 2000000000},
 				},
 			},
-			want: `{"id":"29","data":{"tickers":[{"ts":7832854800,"rate":-1},{"ts":2000000000,"rate":-1}]}}`,
+			want: `{"id":"29","data":{"tickers":[{"ts":7832854800,"rates":{"usd":-1}},{"ts":2000000000,"rates":{"usd":-1}}]}}`,
 		},
 		{
 			name: "websocket getTickersList",
