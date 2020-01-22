@@ -564,6 +564,15 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			},
 		},
 		{
+			name:        "apiFiatRates future timestamp, all currencies",
+			r:           newGetRequest(ts.URL + "/api/v2/tickers?timestamp=7980386400"),
+			status:      http.StatusOK,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`{"ts":7980386400,"rates":{}}`,
+			},
+		},
+		{
 			name:        "apiFiatRates get EUR rate (exact timestamp)",
 			r:           newGetRequest(ts.URL + "/api/v2/tickers?timestamp=1574344800&currency=eur"),
 			status:      http.StatusOK,
