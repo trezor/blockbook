@@ -1,4 +1,4 @@
-// build unittest
+// +build unittest
 
 package server
 
@@ -1195,11 +1195,11 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			want: `{"id":"16","data":{}}`,
 		},
 		{
-			name: "websocket getCurrentFiatRates no currency",
+			name: "websocket getCurrentFiatRates all currencies",
 			req: websocketReq{
 				Method: "getCurrentFiatRates",
 				Params: map[string]interface{}{
-					"": "",
+					"currencies": []string{},
 				},
 			},
 			want: `{"id":"17","data":{"ts":1574346615,"rates":{"eur":7134.1,"usd":7914.5}}}`,
@@ -1209,7 +1209,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			req: websocketReq{
 				Method: "getCurrentFiatRates",
 				Params: map[string]interface{}{
-					"currency": "usd",
+					"currencies": []string{"usd"},
 				},
 			},
 			want: `{"id":"18","data":{"ts":1574346615,"rate":7914.5}}`,
@@ -1219,7 +1219,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			req: websocketReq{
 				Method: "getCurrentFiatRates",
 				Params: map[string]interface{}{
-					"currency": "eur",
+					"currencies": []string{"eur"},
 				},
 			},
 			want: `{"id":"19","data":{"ts":1574346615,"rate":7134.1}}`,
@@ -1229,7 +1229,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			req: websocketReq{
 				Method: "getCurrentFiatRates",
 				Params: map[string]interface{}{
-					"currency": "does-not-exist",
+					"currencies": []string{"does-not-exist"},
 				},
 			},
 			want: `{"id":"20","data":{"error":{"message":"Currency \"does-not-exist\" is not available for timestamp 1574346615."}}}`,
@@ -1239,7 +1239,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			req: websocketReq{
 				Method: "getFiatRatesForTimestamps",
 				Params: map[string]interface{}{
-					"currency": "usd",
+					"currencies": []string{"usd"},
 				},
 			},
 			want: `{"id":"21","data":{"error":{"message":"No timestamps provided"}}}`,
@@ -1249,7 +1249,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			req: websocketReq{
 				Method: "getFiatRatesForTimestamps",
 				Params: map[string]interface{}{
-					"currency":   "usd",
+					"currencies": []string{"usd"},
 					"timestamps": []string{"yesterday"},
 				},
 			},
@@ -1260,7 +1260,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			req: websocketReq{
 				Method: "getFiatRatesForTimestamps",
 				Params: map[string]interface{}{
-					"currency":   "usd",
+					"currencies": []string{"usd"},
 					"timestamps": []int64{7885693815},
 				},
 			},
@@ -1271,7 +1271,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			req: websocketReq{
 				Method: "getFiatRatesForTimestamps",
 				Params: map[string]interface{}{
-					"currency":   "usd",
+					"currencies": []string{"usd"},
 					"timestamps": []int64{1574346615},
 				},
 			},
@@ -1282,7 +1282,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			req: websocketReq{
 				Method: "getFiatRatesForTimestamps",
 				Params: map[string]interface{}{
-					"currency":   "eur",
+					"currencies": []string{"eur"},
 					"timestamps": []int64{1521507600},
 				},
 			},
@@ -1293,7 +1293,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			req: websocketReq{
 				Method: "getFiatRatesForTimestamps",
 				Params: map[string]interface{}{
-					"currency":   "usd",
+					"currencies": []string{"usd"},
 					"timestamps": []int64{1570346615, 1574346615},
 				},
 			},
@@ -1304,7 +1304,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			req: websocketReq{
 				Method: "getFiatRatesForTimestamps",
 				Params: map[string]interface{}{
-					"currency":   "eur",
+					"currencies": []string{"eur"},
 					"timestamps": []int64{1570346615, 1574346615},
 				},
 			},
@@ -1315,7 +1315,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			req: websocketReq{
 				Method: "getFiatRatesForTimestamps",
 				Params: map[string]interface{}{
-					"currency":   "usd",
+					"currencies": []string{"usd"},
 					"timestamps": []int64{1570346615, 1574346615, 2000000000},
 				},
 			},
@@ -1326,7 +1326,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			req: websocketReq{
 				Method: "getFiatRatesForTimestamps",
 				Params: map[string]interface{}{
-					"currency":   "usd",
+					"currencies": []string{"usd"},
 					"timestamps": []int64{7832854800, 2000000000},
 				},
 			},
