@@ -168,6 +168,14 @@ func (ad AddressDescriptor) String() string {
 	return "ad:" + hex.EncodeToString(ad)
 }
 
+// AddressDescriptorFromString converts string created by AddressDescriptor.String to AddressDescriptor
+func AddressDescriptorFromString(s string) (AddressDescriptor, error) {
+	if len(s) > 3 && s[0:3] == "ad:" {
+		return hex.DecodeString(s[3:])
+	}
+	return nil, errors.New("Not AddressDescriptor")
+}
+
 // EthereumType specific
 
 // Erc20Contract contains info about ERC20 contract

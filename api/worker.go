@@ -652,7 +652,12 @@ func (w *Worker) txFromTxid(txid string, bestheight uint32, option AccountDetail
 func (w *Worker) getAddrDescAndNormalizeAddress(address string) (bchain.AddressDescriptor, string, error) {
 	addrDesc, err := w.chainParser.GetAddrDescFromAddress(address)
 	if err != nil {
-		return nil, "", NewAPIError(fmt.Sprintf("Invalid address, %v", err), true)
+		var errAd error
+		// try if the address is not address descriptor converted to string
+		addrDesc, errAd = bchain.AddressDescriptorFromString(address)
+		if errAd != nil {
+			return nil, "", NewAPIError(fmt.Sprintf("Invalid address, %v", err), true)
+		}
 	}
 	// convert the address to the format defined by the parser
 	addresses, _, err := w.chainParser.GetAddressesFromAddrDesc(addrDesc)
