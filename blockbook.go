@@ -54,6 +54,7 @@ var (
 
 	synchronize = flag.Bool("sync", false, "synchronizes until tip, if together with zeromq, keeps index synchronized")
 	repair      = flag.Bool("repair", false, "repair the database")
+	fixUtxo     = flag.Bool("fixutxo", false, "check and fix utxo db and exit")
 	prof        = flag.String("prof", "", "http server binding [address]:port of the interface to profiling data /debug/pprof/ (default no profiling)")
 
 	syncChunk   = flag.Int("chunk", 100, "block chunk size for processing in bulk mode")
@@ -177,6 +178,15 @@ func mainWithExitCode() int {
 		return exitCodeFatal
 	}
 	defer index.Close()
+
+	if *fixUtxo {
+		err = index.FixUtxos(chanOsSignal)
+		if err != nil {
+			glog.Error("fixUtxos: ", err)
+			return exitCodeFatal
+		}
+		return exitCodeOK
+	}
 
 	internalState, err = newInternalState(coin, coinShortcut, coinLabel, index)
 	if err != nil {
@@ -556,6 +566,7 @@ func storeInternalStateLoop() {
 		close(stopCompute)
 		close(chanStoreInternalStateDone)
 	}()
+	signal.Notify(stopCompute, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 	var computeRunning bool
 	lastCompute := time.Now()
 	lastAppInfo := time.Now()
