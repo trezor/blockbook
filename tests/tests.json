@@ -200,5 +200,15 @@
         "rpc":  ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",
                   "GetBestBlockHash", "GetBestBlockHeight"],
         "sync": ["ConnectBlocksParallel", "ConnectBlocks"]
+    },
+    "omotenashicoin": {
+        "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",
+                "EstimateSmartFee", "EstimateFee", "GetBestBlockHash", "GetBestBlockHeight"],
+        "sync": ["ConnectBlocksParallel", "ConnectBlocks"]
+    },
+    "omotenashicoin_testnet": {
+        "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",
+                "EstimateSmartFee", "EstimateFee", "GetBestBlockHash", "GetBestBlockHeight"],
+        "sync": ["ConnectBlocksParallel", "ConnectBlocks"]
     }
 }
