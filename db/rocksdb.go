@@ -1807,6 +1807,9 @@ func (d *RocksDB) fixUtxo(addrDesc bchain.AddressDescriptor, ba *AddrBalance) (b
 								bTxid, _ := d.chainParser.PackTxid(txid)
 								checksumFromTxs.Add(&checksumFromTxs, &tao.ValueSat)
 								utxos = append(utxos, Utxo{BtxID: bTxid, Height: height, Vout: index, ValueSat: tao.ValueSat})
+								if checksumFromTxs.Cmp(&ba.BalanceSat) == 0 {
+									return &StopIteration{}
+								}
 							}
 						}
 					}
@@ -1819,6 +1822,11 @@ func (d *RocksDB) fixUtxo(addrDesc bchain.AddressDescriptor, ba *AddrBalance) (b
 		}
 		fixed := false
 		if checksumFromTxs.Cmp(&ba.BalanceSat) == 0 {
+			// reverse the utxos as they are added in descending order by height
+			for i := len(utxos)/2 - 1; i >= 0; i-- {
+				opp := len(utxos) - 1 - i
+				utxos[i], utxos[opp] = utxos[opp], utxos[i]
+			}
 			ba.Utxos = utxos
 			wb := gorocksdb.NewWriteBatch()
 			err = d.storeBalances(wb, map[string]*AddrBalance{string(addrDesc): ba})
