@@ -1204,6 +1204,15 @@ func (d *RocksDB) packBlockInfo(block *BlockInfo) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	pl := d.chainParser.PackedTxidLen()
+	if len(b) != pl {
+		glog.Warning("Non standard block hash for height ", block.Height, ", hash [", block.Hash, "]")
+		if len(b) > pl {
+			b = b[:pl]
+		} else {
+			b = append(b, make([]byte, len(b)-pl)...)
+		}
+	}
 	packed = append(packed, b...)
 	packed = append(packed, packUint(uint32(block.Time))...)
 	l := packVaruint(uint(block.Txs), varBuf)
@@ -1606,7 +1615,9 @@ func (d *RocksDB) loadBlockTimes() ([]uint32, error) {
 		if err != nil {
 			return nil, err
 		}
-		time = uint32(info.Time)
+		if info != nil {
+			time = uint32(info.Time)
+		}
 		times = append(times, time)
 	}
 	glog.Info("loaded ", len(times), " block times")
