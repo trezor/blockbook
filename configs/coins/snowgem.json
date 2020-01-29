@@ -23,7 +23,7 @@
     "package_revision": "satoshilabs-1",
     "system_user": "snowgem",
     "version": "3.0.4-7",
-    "binary_url": "https://github.com/Snowgem/Snowgem/releases/download/v3000457-20190909/snowgem-ubuntu18.04-3000457-20190926.zip",
+    "binary_url": "https://github.com/Snowgem/Snowgem/releases/download/v3000457-20190909/snowgem-debian9.11.0-3000457-20190926.zip",
     "verification_type": "sha256",
     "verification_source": "361558eec861f89c88f8ea975d70a086a9c6f4b29ee23fb52fc60641398099ab",
     "extract_command": "unzip -j -d backend",
