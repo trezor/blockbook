@@ -580,14 +580,14 @@ or in case of error
 
 #### Tickers list
 
-Returns a list of available currency rate tickers for the specified timestamp.
+Returns a list of available currency rate tickers for the specified date, along with an actual data timestamp.
 
 ```
 GET /api/v2/tickers-list/?timestamp=<timestamp>
 ```
 
 The query parameters:
-- *timestamp*: specifies a UNIX timestamp to return available tickers for.
+- *timestamp*: specifies a Unix timestamp to return available tickers for.
 
 Example response:
 
@@ -603,7 +603,7 @@ Example response:
 
 #### Tickers
 
-Returns currency rate for the specified currency and date. If the currency is not available for that specific timestamp, the closest rate will be returned.
+Returns currency rate for the specified currency and date. If the currency is not available for that specific timestamp, the next closest rate will be returned.
 All responses contain an actual rate timestamp.
 
 ```
@@ -612,16 +612,16 @@ GET /api/v2/tickers/[?currency=<currency>&timestamp=<timestamp>]
 
 The optional query parameters:
 - *currency*: specifies a currency of returned rate ("usd", "eur", "eth"...). If not specified, all available currencies will be returned.
-- *timestamp*: a UNIX timestamp that specifies a date to return currency rates for. If not specified, the last available rate will be returned.
+- *timestamp*: a Unix timestamp that specifies a date to return currency rates for. If not specified, the last available rate will be returned.
 
 Example response (no parameters):
 
 ```javascript
 {
-  "ts":1574346615,
+  "ts": 1574346615,
   "rates": {
-    "eur":7134.1,
-    "usd":7914.5
+    "eur": 7134.1,
+    "usd": 7914.5
     }
 }
 ```
@@ -630,8 +630,10 @@ Example response (currency=usd):
 
 ```javascript
 {
-  "ts":1574346615,
-  "rate":7914.5
+  "ts": 1574346615,
+  "rates": {
+    "usd": 7914.5
+  }
 }
 ```
 
@@ -639,7 +641,9 @@ Example error response (e.g. rate unavailable, incorrect currency...):
 ```javascript
 {
   "ts":7980386400,
-  "rate":-1
+  "rates": {
+    "usd": -1
+  }
 }
 ```
 
@@ -652,44 +656,78 @@ GET /api/v2/balancehistory/<XPUB | address>?from=<dateFrom>&to=<dateTo>[&fiatcur
 ```
 
 Query parameters:
-- *from*: specifies a start date, format is YYYY-MM-DD.
-- *to*: specifies an end date, same format. 
+- *from*: specifies a start date as a Unix timestamp
+- *to*: specifies an end date as a Unix timestamp
 
 The optional query parameters:
-- *fiatcurrency*: if specified, the response will contain calculated fiat amounts at the time of transaction.
+- *fiatcurrency*: if specified, the response will contain fiat rate at the time of transaction. If not, all available currencies will be returned.
 - *groupBy*: an interval in seconds, to group results by. Default is 3600 seconds.
+
+Example response (fiatcurrency not specified):
+```javascript
+[
+  {
+    "time": 1578391200,
+    "txs": 5,
+    "received": "5000000",
+    "sent": "0",
+    "rates": {
+      "usd": 7855.9,
+      "eur": 6838.13,
+      ...
+    }
+  },
+  {
+    "time": 1578488400,
+    "txs": 1,
+    "received": "0",
+    "sent": "5000000",
+    "rates": {
+      "usd": 8283.11,
+      "eur": 7464.45,
+      ...
+    }
+  }
+]
+```
 
 Example response (fiatcurrency=usd):
 
 ```javascript
 [
   {
-    "time":1397768400,
-    "txs":1,
-    "received":"6169114",
-    "sent":"0",
-    "fiatRate":478.2312
+    "time": 1578391200,
+    "txs": 5,
+    "received": "5000000",
+    "sent": "0",
+    "rates": {
+      "usd": 7855.9
+    }
   },
   {
-    "time":1397772000,
-    "txs":1,
-    "received":"0",
-    "sent":"6169114",
-    "fiatRate":479.1233
+    "time": 1578488400,
+    "txs": 1,
+    "received": "0",
+    "sent": "5000000",
+    "rates": {
+      "usd": 8283.11
+    }
   }
 ]
 ```
 
-Example response (fiatcurrency=usd&groupBy=86400):
+Example response (fiatcurrency=usd&groupBy=172800):
 
 ```javascript
 [
   {
-    "time":1397700000,
-    "txs":2,
-    "received":"6169114",
-    "sent":"6169114",
-    "fiatRate":478.2312
+    "time": 1578355200,
+    "txs": 6,
+    "received": "5000000",
+    "sent": "5000000",
+    "rates": {
+      "usd": 7734.45
+    }
   }
 ]
 ```

@@ -1042,21 +1042,26 @@ func (s *PublicServer) apiUtxo(r *http.Request, apiVersion int) (interface{}, er
 
 func (s *PublicServer) apiBalanceHistory(r *http.Request, apiVersion int) (interface{}, error) {
 	var history []api.BalanceHistory
-	var fromTime, toTime time.Time
+	var fromTimestamp, toTimestamp int64
 	var err error
 	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
 		gap, ec := strconv.Atoi(r.URL.Query().Get("gap"))
 		if ec != nil {
 			gap = 0
 		}
-		t := r.URL.Query().Get("from")
-		if t != "" {
-			fromTime, _ = time.Parse("2006-01-02", t)
+		from := r.URL.Query().Get("from")
+		if from != "" {
+			fromTimestamp, err = strconv.ParseInt(from, 10, 64)
+			if err != nil {
+				return history, err
+			}
 		}
-		t = r.URL.Query().Get("to")
-		if t != "" {
-			// time.RFC3339
-			toTime, _ = time.Parse("2006-01-02", t)
+		to := r.URL.Query().Get("to")
+		if to != "" {
+			toTimestamp, err = strconv.ParseInt(to, 10, 64)
+			if err != nil {
+				return history, err
+			}
 		}
 		var groupBy uint64
 		groupBy, err = strconv.ParseUint(r.URL.Query().Get("groupBy"), 10, 32)
@@ -1064,11 +1069,15 @@ func (s *PublicServer) apiBalanceHistory(r *http.Request, apiVersion int) (inter
 			groupBy = 3600
 		}
 		fiat := r.URL.Query().Get("fiatcurrency")
-		history, err = s.api.GetXpubBalanceHistory(r.URL.Path[i+1:], fromTime, toTime, fiat, gap, uint32(groupBy))
+		var fiatArray []string
+		if fiat != "" {
+			fiatArray = []string{fiat}
+		}
+		history, err = s.api.GetXpubBalanceHistory(r.URL.Path[i+1:], fromTimestamp, toTimestamp, fiatArray, gap, uint32(groupBy))
 		if err == nil {
 			s.metrics.ExplorerViews.With(common.Labels{"action": "api-xpub-balancehistory"}).Inc()
 		} else {
-			history, err = s.api.GetBalanceHistory(r.URL.Path[i+1:], fromTime, toTime, fiat, uint32(groupBy))
+			history, err = s.api.GetBalanceHistory(r.URL.Path[i+1:], fromTimestamp, toTimestamp, fiatArray, uint32(groupBy))
 			s.metrics.ExplorerViews.With(common.Labels{"action": "api-address-balancehistory"}).Inc()
 		}
 	}
@@ -1148,12 +1157,17 @@ func (s *PublicServer) apiTickersList(r *http.Request, apiVersion int) (interfac
 func (s *PublicServer) apiTickers(r *http.Request, apiVersion int) (interface{}, error) {
 	var result *db.ResultTickerAsString
 	var err error
+
 	currency := strings.ToLower(r.URL.Query().Get("currency"))
+	var currencies []string
+	if currency != "" {
+		currencies = []string{currency}
+	}
 
 	if block := r.URL.Query().Get("block"); block != "" {
 		// Get tickers for specified block height or block hash
 		s.metrics.ExplorerViews.With(common.Labels{"action": "api-tickers-block"}).Inc()
-		result, err = s.api.GetFiatRatesForBlockID(block, currency)
+		result, err = s.api.GetFiatRatesForBlockID(block, currencies)
 	} else if timestampString := r.URL.Query().Get("timestamp"); timestampString != "" {
 		// Get tickers for specified timestamp
 		s.metrics.ExplorerViews.With(common.Labels{"action": "api-tickers-date"}).Inc()
@@ -1163,7 +1177,7 @@ func (s *PublicServer) apiTickers(r *http.Request, apiVersion int) (interface{},
 			return nil, api.NewAPIError("Parameter \"timestamp\" is not a valid Unix timestamp.", true)
 		}
 
-		resultTickers, err := s.api.GetFiatRatesForTimestamps([]int64{timestamp}, currency)
+		resultTickers, err := s.api.GetFiatRatesForTimestamps([]int64{timestamp}, currencies)
 		if err != nil {
 			return nil, err
 		}
@@ -1171,7 +1185,7 @@ func (s *PublicServer) apiTickers(r *http.Request, apiVersion int) (interface{},
 	} else {
 		// No parameters - get the latest available ticker
 		s.metrics.ExplorerViews.With(common.Labels{"action": "api-tickers-last"}).Inc()
-		result, err = s.api.GetCurrentFiatRates(currency)
+		result, err = s.api.GetCurrentFiatRates(currencies)
 	}
 	if err != nil {
 		return nil, err

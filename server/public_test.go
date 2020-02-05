@@ -533,7 +533,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"ts":1574346615,"rate":7914.5}`,
+				`{"ts":1574346615,"rates":{"usd":7914.5}}`,
 			},
 		},
 		{
@@ -542,7 +542,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"ts":1574344800,"rate":7814.5}`,
+				`{"ts":1574344800,"rates":{"usd":7814.5}}`,
 			},
 		},
 		{
@@ -560,7 +560,16 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"ts":7980386400,"rate":-1}`,
+				`{"ts":7980386400,"rates":{"usd":-1}}`,
+			},
+		},
+		{
+			name:        "apiFiatRates future timestamp, all currencies",
+			r:           newGetRequest(ts.URL + "/api/v2/tickers?timestamp=7980386400"),
+			status:      http.StatusOK,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`{"ts":7980386400,"rates":{}}`,
 			},
 		},
 		{
@@ -569,7 +578,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"ts":1574344800,"rate":7100}`,
+				`{"ts":1574344800,"rates":{"eur":7100}}`,
 			},
 		},
 		{
@@ -578,7 +587,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"ts":1521511200,"rate":2000}`,
+				`{"ts":1521511200,"rates":{"usd":2000}}`,
 			},
 		},
 		{
@@ -587,7 +596,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"ts":1521611721,"rate":2003}`,
+				`{"ts":1521611721,"rates":{"usd":2003}}`,
 			},
 		},
 		{
@@ -596,7 +605,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"ts":1574346615,"rate":7134.1}`,
+				`{"ts":1574346615,"rates":{"eur":7134.1}}`,
 			},
 		},
 		{
@@ -605,7 +614,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"ts":1574346615,"rate":-1}`,
+				`{"ts":1574346615,"rates":{"does_not_exist":-1}}`,
 			},
 		},
 		{
@@ -767,7 +776,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`[{"time":1521514800,"txs":1,"received":"12345","sent":"0"},{"time":1521594000,"txs":1,"received":"0","sent":"12345"}]`,
+				`[{"time":1521514800,"txs":1,"received":"12345","sent":"0","rates":{"eur":1301,"usd":2001}},{"time":1521594000,"txs":1,"received":"0","sent":"12345","rates":{"eur":1303,"usd":2003}}]`,
 			},
 		},
 		{
@@ -776,7 +785,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`[{"time":1521514800,"txs":1,"received":"9876","sent":"0"},{"time":1521594000,"txs":1,"received":"9000","sent":"9876"}]`,
+				`[{"time":1521514800,"txs":1,"received":"9876","sent":"0","rates":{"eur":1301,"usd":2001}},{"time":1521594000,"txs":1,"received":"9000","sent":"9876","rates":{"eur":1303,"usd":2003}}]`,
 			},
 		},
 		{
@@ -785,16 +794,16 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`[{"time":1521514800,"txs":1,"received":"9876","sent":"0","fiatRate":1301},{"time":1521594000,"txs":1,"received":"9000","sent":"9876","fiatRate":1303}]`,
+				`[{"time":1521514800,"txs":1,"received":"9876","sent":"0","rates":{"eur":1301}},{"time":1521594000,"txs":1,"received":"9000","sent":"9876","rates":{"eur":1303}}]`,
 			},
 		},
 		{
-			name:        "apiBalanceHistory Addr2 v2 from=2018-03-20&to=2018-03-21",
-			r:           newGetRequest(ts.URL + "/api/v2/balancehistory/mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz?from=2018-03-20&to=2018-03-21"),
+			name:        "apiBalanceHistory Addr2 v2 from=1521504000&to=1521590400",
+			r:           newGetRequest(ts.URL + "/api/v2/balancehistory/mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz?from=1521504000&to=1521590400"),
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`[{"time":1521514800,"txs":1,"received":"12345","sent":"0"}]`,
+				`[{"time":1521514800,"txs":1,"received":"12345","sent":"0","rates":{"eur":1301,"usd":2001}}]`,
 			},
 		},
 		{
@@ -803,34 +812,34 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`[{"time":1521514800,"txs":1,"received":"1","sent":"0"},{"time":1521594000,"txs":1,"received":"118641975500","sent":"1"}]`,
+				`[{"time":1521514800,"txs":1,"received":"1","sent":"0","rates":{"eur":1301,"usd":2001}},{"time":1521594000,"txs":1,"received":"118641975500","sent":"1","rates":{"eur":1303,"usd":2003}}]`,
 			},
 		},
 		{
-			name:        "apiBalanceHistory xpub v2 from=2018-03-20&to=2018-03-21",
-			r:           newGetRequest(ts.URL + "/api/v2/balancehistory/" + dbtestdata.Xpub + "?from=2018-03-20&to=2018-03-21"),
+			name:        "apiBalanceHistory xpub v2 from=1521504000&to=1521590400",
+			r:           newGetRequest(ts.URL + "/api/v2/balancehistory/" + dbtestdata.Xpub + "?from=1521504000&to=1521590400"),
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`[{"time":1521514800,"txs":1,"received":"1","sent":"0"}]`,
+				`[{"time":1521514800,"txs":1,"received":"1","sent":"0","rates":{"eur":1301,"usd":2001}}]`,
 			},
 		},
 		{
-			name:        "apiBalanceHistory xpub v2 from=2018-03-20&to=2018-03-21&fiatcurrency=usd",
-			r:           newGetRequest(ts.URL + "/api/v2/balancehistory/" + dbtestdata.Xpub + "?from=2018-03-20&to=2018-03-21&fiatcurrency=usd"),
+			name:        "apiBalanceHistory xpub v2 from=1521504000&to=1521590400&fiatcurrency=usd",
+			r:           newGetRequest(ts.URL + "/api/v2/balancehistory/" + dbtestdata.Xpub + "?from=1521504000&to=1521590400&fiatcurrency=usd"),
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`[{"time":1521514800,"txs":1,"received":"1","sent":"0","fiatRate":2001}]`,
+				`[{"time":1521514800,"txs":1,"received":"1","sent":"0","rates":{"usd":2001}}]`,
 			},
 		},
 		{
-			name:        "apiBalanceHistory xpub v2 from=2018-03-21",
-			r:           newGetRequest(ts.URL + "/api/v2/balancehistory/" + dbtestdata.Xpub + "?from=2018-03-21"),
+			name:        "apiBalanceHistory xpub v2 from=1521590400",
+			r:           newGetRequest(ts.URL + "/api/v2/balancehistory/" + dbtestdata.Xpub + "?from=1521590400"),
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`[{"time":1521594000,"txs":1,"received":"118641975500","sent":"1"}]`,
+				`[{"time":1521594000,"txs":1,"received":"118641975500","sent":"1","rates":{"eur":1303,"usd":2003}}]`,
 			},
 		},
 		{
@@ -1195,11 +1204,11 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			want: `{"id":"16","data":{}}`,
 		},
 		{
-			name: "websocket getCurrentFiatRates no currency",
+			name: "websocket getCurrentFiatRates all currencies",
 			req: websocketReq{
 				Method: "getCurrentFiatRates",
 				Params: map[string]interface{}{
-					"": "",
+					"currencies": []string{},
 				},
 			},
 			want: `{"id":"17","data":{"ts":1574346615,"rates":{"eur":7134.1,"usd":7914.5}}}`,
@@ -1209,37 +1218,37 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			req: websocketReq{
 				Method: "getCurrentFiatRates",
 				Params: map[string]interface{}{
-					"currency": "usd",
+					"currencies": []string{"usd"},
 				},
 			},
-			want: `{"id":"18","data":{"ts":1574346615,"rate":7914.5}}`,
+			want: `{"id":"18","data":{"ts":1574346615,"rates":{"usd":7914.5}}}`,
 		},
 		{
 			name: "websocket getCurrentFiatRates eur",
 			req: websocketReq{
 				Method: "getCurrentFiatRates",
 				Params: map[string]interface{}{
-					"currency": "eur",
+					"currencies": []string{"eur"},
 				},
 			},
-			want: `{"id":"19","data":{"ts":1574346615,"rate":7134.1}}`,
+			want: `{"id":"19","data":{"ts":1574346615,"rates":{"eur":7134.1}}}`,
 		},
 		{
 			name: "websocket getCurrentFiatRates incorrect currency",
 			req: websocketReq{
 				Method: "getCurrentFiatRates",
 				Params: map[string]interface{}{
-					"currency": "does-not-exist",
+					"currencies": []string{"does-not-exist"},
 				},
 			},
-			want: `{"id":"20","data":{"error":{"message":"Currency \"does-not-exist\" is not available for timestamp 1574346615."}}}`,
+			want: `{"id":"20","data":{"ts":1574346615,"rates":{"does-not-exist":-1}}}`,
 		},
 		{
 			name: "websocket getFiatRatesForTimestamps missing date",
 			req: websocketReq{
 				Method: "getFiatRatesForTimestamps",
 				Params: map[string]interface{}{
-					"currency": "usd",
+					"currencies": []string{"usd"},
 				},
 			},
 			want: `{"id":"21","data":{"error":{"message":"No timestamps provided"}}}`,
@@ -1249,88 +1258,99 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			req: websocketReq{
 				Method: "getFiatRatesForTimestamps",
 				Params: map[string]interface{}{
-					"currency":   "usd",
+					"currencies": []string{"usd"},
 					"timestamps": []string{"yesterday"},
 				},
 			},
 			want: `{"id":"22","data":{"error":{"message":"json: cannot unmarshal string into Go struct field .timestamps of type int64"}}}`,
 		},
 		{
+			name: "websocket getFiatRatesForTimestamps empty currency",
+			req: websocketReq{
+				Method: "getFiatRatesForTimestamps",
+				Params: map[string]interface{}{
+					"timestamps": []int64{7885693815},
+					"currencies": []string{""},
+				},
+			},
+			want: `{"id":"23","data":{"tickers":[{"ts":7885693815,"rates":{}}]}}`,
+		},
+		{
 			name: "websocket getFiatRatesForTimestamps incorrect (future) date",
 			req: websocketReq{
 				Method: "getFiatRatesForTimestamps",
 				Params: map[string]interface{}{
-					"currency":   "usd",
+					"currencies": []string{"usd"},
 					"timestamps": []int64{7885693815},
 				},
 			},
-			want: `{"id":"23","data":{"tickers":[{"ts":7885693815,"rate":-1}]}}`,
+			want: `{"id":"24","data":{"tickers":[{"ts":7885693815,"rates":{"usd":-1}}]}}`,
 		},
 		{
 			name: "websocket getFiatRatesForTimestamps exact date",
 			req: websocketReq{
 				Method: "getFiatRatesForTimestamps",
 				Params: map[string]interface{}{
-					"currency":   "usd",
+					"currencies": []string{"usd"},
 					"timestamps": []int64{1574346615},
 				},
 			},
-			want: `{"id":"24","data":{"tickers":[{"ts":1574346615,"rate":7914.5}]}}`,
+			want: `{"id":"25","data":{"tickers":[{"ts":1574346615,"rates":{"usd":7914.5}}]}}`,
 		},
 		{
 			name: "websocket getFiatRatesForTimestamps closest date, eur",
 			req: websocketReq{
 				Method: "getFiatRatesForTimestamps",
 				Params: map[string]interface{}{
-					"currency":   "eur",
+					"currencies": []string{"eur"},
 					"timestamps": []int64{1521507600},
 				},
 			},
-			want: `{"id":"25","data":{"tickers":[{"ts":1521511200,"rate":1300}]}}`,
+			want: `{"id":"26","data":{"tickers":[{"ts":1521511200,"rates":{"eur":1300}}]}}`,
 		},
 		{
 			name: "websocket getFiatRatesForTimestamps multiple timestamps usd",
 			req: websocketReq{
 				Method: "getFiatRatesForTimestamps",
 				Params: map[string]interface{}{
-					"currency":   "usd",
+					"currencies": []string{"usd"},
 					"timestamps": []int64{1570346615, 1574346615},
 				},
 			},
-			want: `{"id":"26","data":{"tickers":[{"ts":1574344800,"rate":7814.5},{"ts":1574346615,"rate":7914.5}]}}`,
+			want: `{"id":"27","data":{"tickers":[{"ts":1574344800,"rates":{"usd":7814.5}},{"ts":1574346615,"rates":{"usd":7914.5}}]}}`,
 		},
 		{
 			name: "websocket getFiatRatesForTimestamps multiple timestamps eur",
 			req: websocketReq{
 				Method: "getFiatRatesForTimestamps",
 				Params: map[string]interface{}{
-					"currency":   "eur",
+					"currencies": []string{"eur"},
 					"timestamps": []int64{1570346615, 1574346615},
 				},
 			},
-			want: `{"id":"27","data":{"tickers":[{"ts":1574344800,"rate":7100},{"ts":1574346615,"rate":7134.1}]}}`,
+			want: `{"id":"28","data":{"tickers":[{"ts":1574344800,"rates":{"eur":7100}},{"ts":1574346615,"rates":{"eur":7134.1}}]}}`,
 		},
 		{
 			name: "websocket getFiatRatesForTimestamps multiple timestamps with an error",
 			req: websocketReq{
 				Method: "getFiatRatesForTimestamps",
 				Params: map[string]interface{}{
-					"currency":   "usd",
+					"currencies": []string{"usd"},
 					"timestamps": []int64{1570346615, 1574346615, 2000000000},
 				},
 			},
-			want: `{"id":"28","data":{"tickers":[{"ts":1574344800,"rate":7814.5},{"ts":1574346615,"rate":7914.5},{"ts":2000000000,"rate":-1}]}}`,
+			want: `{"id":"29","data":{"tickers":[{"ts":1574344800,"rates":{"usd":7814.5}},{"ts":1574346615,"rates":{"usd":7914.5}},{"ts":2000000000,"rates":{"usd":-1}}]}}`,
 		},
 		{
 			name: "websocket getFiatRatesForTimestamps multiple errors",
 			req: websocketReq{
 				Method: "getFiatRatesForTimestamps",
 				Params: map[string]interface{}{
-					"currency":   "usd",
+					"currencies": []string{"usd"},
 					"timestamps": []int64{7832854800, 2000000000},
 				},
 			},
-			want: `{"id":"29","data":{"tickers":[{"ts":7832854800,"rate":-1},{"ts":2000000000,"rate":-1}]}}`,
+			want: `{"id":"30","data":{"tickers":[{"ts":7832854800,"rates":{"usd":-1}},{"ts":2000000000,"rates":{"usd":-1}}]}}`,
 		},
 		{
 			name: "websocket getTickersList",
@@ -1340,7 +1360,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 					"timestamp": 1570346615,
 				},
 			},
-			want: `{"id":"30","data":{"ts":1570346615,"available_currencies":["eur","usd"]}}`,
+			want: `{"id":"31","data":{"ts":1574344800,"available_currencies":["eur","usd"]}}`,
 		},
 		{
 			name: "websocket getBalanceHistory Addr2",
@@ -1350,7 +1370,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 					"descriptor": "mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz",
 				},
 			},
-			want: `{"id":"31","data":[{"time":1521514800,"txs":1,"received":"12345","sent":"0"},{"time":1521594000,"txs":1,"received":"0","sent":"12345"}]}`,
+			want: `{"id":"32","data":[{"time":1521514800,"txs":1,"received":"12345","sent":"0","rates":{"eur":1301,"usd":2001}},{"time":1521594000,"txs":1,"received":"0","sent":"12345","rates":{"eur":1303,"usd":2003}}]}`,
 		},
 		{
 			name: "websocket getBalanceHistory xpub",
@@ -1360,20 +1380,46 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 					"descriptor": dbtestdata.Xpub,
 				},
 			},
-			want: `{"id":"32","data":[{"time":1521514800,"txs":1,"received":"1","sent":"0"},{"time":1521594000,"txs":1,"received":"118641975500","sent":"1"}]}`,
+			want: `{"id":"33","data":[{"time":1521514800,"txs":1,"received":"1","sent":"0","rates":{"eur":1301,"usd":2001}},{"time":1521594000,"txs":1,"received":"118641975500","sent":"1","rates":{"eur":1303,"usd":2003}}]}`,
 		},
 		{
-			name: "websocket getBalanceHistory xpub from=2018-03-20&to=2018-03-21&fiat=usd",
+			name: "websocket getBalanceHistory xpub from=1521504000&to=1521590400 currencies=[usd]",
 			req: websocketReq{
 				Method: "getBalanceHistory",
 				Params: map[string]interface{}{
 					"descriptor": dbtestdata.Xpub,
-					"from":       "2018-03-20",
-					"to":         "2018-03-21",
-					"fiat":       "usd",
+					"from":       1521504000,
+					"to":         1521590400,
+					"currencies": []string{"usd"},
 				},
 			},
-			want: `{"id":"33","data":[{"time":1521514800,"txs":1,"received":"1","sent":"0","fiatRate":2001}]}`,
+			want: `{"id":"34","data":[{"time":1521514800,"txs":1,"received":"1","sent":"0","rates":{"usd":2001}}]}`,
+		},
+		{
+			name: "websocket getBalanceHistory xpub from=1521504000&to=1521590400 currencies=[usd, eur, incorrect]",
+			req: websocketReq{
+				Method: "getBalanceHistory",
+				Params: map[string]interface{}{
+					"descriptor": dbtestdata.Xpub,
+					"from":       1521504000,
+					"to":         1521590400,
+					"currencies": []string{"usd", "eur", "incorrect"},
+				},
+			},
+			want: `{"id":"35","data":[{"time":1521514800,"txs":1,"received":"1","sent":"0","rates":{"eur":1301,"incorrect":-1,"usd":2001}}]}`,
+		},
+		{
+			name: "websocket getBalanceHistory xpub from=1521504000&to=1521590400 currencies=[]",
+			req: websocketReq{
+				Method: "getBalanceHistory",
+				Params: map[string]interface{}{
+					"descriptor": dbtestdata.Xpub,
+					"from":       1521504000,
+					"to":         1521590400,
+					"currencies": []string{},
+				},
+			},
+			want: `{"id":"36","data":[{"time":1521514800,"txs":1,"received":"1","sent":"0","rates":{"eur":1301,"usd":2001}}]}`,
 		},
 	}
 

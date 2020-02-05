@@ -13,6 +13,7 @@ import (
 	"os"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/golang/glog"
@@ -801,17 +802,17 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 	return r, nil
 }
 
-func (w *Worker) balanceHistoryHeightsFromTo(fromTime, toTime time.Time) (uint32, uint32, uint32, uint32) {
+func (w *Worker) balanceHistoryHeightsFromTo(fromTimestamp, toTimestamp int64) (uint32, uint32, uint32, uint32) {
 	fromUnix := uint32(0)
 	toUnix := maxUint32
 	fromHeight := uint32(0)
 	toHeight := maxUint32
-	if !fromTime.IsZero() {
-		fromUnix = uint32(fromTime.Unix())
+	if fromTimestamp != 0 {
+		fromUnix = uint32(fromTimestamp)
 		fromHeight = w.is.GetBlockHeightOfTime(fromUnix)
 	}
-	if !toTime.IsZero() {
-		toUnix = uint32(toTime.Unix())
+	if toTimestamp != 0 {
+		toUnix = uint32(toTimestamp)
 		toHeight = w.is.GetBlockHeightOfTime(toUnix)
 	}
 	return fromUnix, fromHeight, toUnix, toHeight
@@ -913,7 +914,7 @@ func (w *Worker) balanceHistoryForTxid(addrDesc bchain.AddressDescriptor, txid s
 	return &bh, nil
 }
 
-func (w *Worker) setFiatRateToBalanceHistories(histories BalanceHistories, fiat string) error {
+func (w *Worker) setFiatRateToBalanceHistories(histories BalanceHistories, currencies []string) error {
 	for i := range histories {
 		bh := &histories[i]
 		t := time.Unix(int64(bh.Time), 0)
@@ -924,22 +925,34 @@ func (w *Worker) setFiatRateToBalanceHistories(histories BalanceHistories, fiat 
 		} else if ticker == nil {
 			continue
 		}
-		if rate, found := ticker.Rates[fiat]; found {
-			bh.FiatRate = rate
+		if len(currencies) == 0 {
+			bh.FiatRates = ticker.Rates
+		} else {
+			rates := make(map[string]float64)
+			for _, currency := range currencies {
+				currency = strings.ToLower(currency)
+				if rate, found := ticker.Rates[currency]; found {
+					rates[currency] = rate
+				} else {
+					rates[currency] = -1
+				}
+			}
+			bh.FiatRates = rates
 		}
 	}
 	return nil
 }
 
 // GetBalanceHistory returns history of balance for given address
-func (w *Worker) GetBalanceHistory(address string, fromTime, toTime time.Time, fiat string, groupBy uint32) (BalanceHistories, error) {
+func (w *Worker) GetBalanceHistory(address string, fromTimestamp, toTimestamp int64, currencies []string, groupBy uint32) (BalanceHistories, error) {
+	currencies = removeEmpty(currencies)
 	bhs := make(BalanceHistories, 0)
 	start := time.Now()
 	addrDesc, _, err := w.getAddrDescAndNormalizeAddress(address)
 	if err != nil {
 		return nil, err
 	}
-	fromUnix, fromHeight, toUnix, toHeight := w.balanceHistoryHeightsFromTo(fromTime, toTime)
+	fromUnix, fromHeight, toUnix, toHeight := w.balanceHistoryHeightsFromTo(fromTimestamp, toTimestamp)
 	if fromHeight >= toHeight {
 		return bhs, nil
 	}
@@ -957,11 +970,9 @@ func (w *Worker) GetBalanceHistory(address string, fromTime, toTime time.Time, f
 		}
 	}
 	bha := bhs.SortAndAggregate(groupBy)
-	if fiat != "" {
-		err = w.setFiatRateToBalanceHistories(bha, fiat)
-		if err != nil {
-			return nil, err
-		}
+	err = w.setFiatRateToBalanceHistories(bha, currencies)
+	if err != nil {
+		return nil, err
 	}
 	glog.Info("GetBalanceHistory ", address, ", blocks ", fromHeight, "-", toHeight, ", count ", len(bha), " finished in ", time.Since(start))
 	return bha, nil
@@ -1090,7 +1101,7 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *db.AddrB
 				checksum.Sub(&checksum, &utxo.ValueSat)
 			}
 			if checksum.Uint64() != 0 {
-				glog.Warning("DB inconsistency:  ", addrDesc, ": checksum is not zero")
+				glog.Warning("DB inconsistency:  ", addrDesc, ": checksum is not zero, checksum=", checksum.Int64())
 			}
 		}
 	}
@@ -1145,46 +1156,45 @@ func (w *Worker) GetBlocks(page int, blocksOnPage int) (*Blocks, error) {
 	return r, nil
 }
 
-// getFiatRatesResults checks if CurrencyRatesTicker contains all necessary data and returns formatted result
-func (w *Worker) getFiatRatesResults(currency string, ticker *db.CurrencyRatesTicker) (*db.ResultTickerAsString, error) {
-	if currency == "" {
-		return &db.ResultTickerAsString{
-			Timestamp: ticker.Timestamp.UTC().Unix(),
-			Rates:     ticker.Rates,
-		}, nil
+// removeEmpty removes empty strings from a slice
+func removeEmpty(stringSlice []string) []string {
+	var ret []string
+	for _, str := range stringSlice {
+		if str != "" {
+			ret = append(ret, str)
+		}
 	}
-	timestamp := ticker.Timestamp.UTC().Unix()
-	if rate, found := ticker.Rates[currency]; !found {
-		return nil, NewAPIError(fmt.Sprintf("Currency %q is not available for timestamp %d.", currency, timestamp), true)
-	} else {
-		return &db.ResultTickerAsString{
-			Timestamp: timestamp,
-			Rates:     map[string]float64{currency: rate},
-		}, nil
-	}
+	return ret
 }
 
 // getFiatRatesResult checks if CurrencyRatesTicker contains all necessary data and returns formatted result
-func (w *Worker) getFiatRatesResult(currency string, ticker *db.CurrencyRatesTicker) (*db.ResultTickerAsString, error) {
-	if currency == "" {
+func (w *Worker) getFiatRatesResult(currencies []string, ticker *db.CurrencyRatesTicker) (*db.ResultTickerAsString, error) {
+	currencies = removeEmpty(currencies)
+	if len(currencies) == 0 {
+		// Return all available ticker rates
 		return &db.ResultTickerAsString{
 			Timestamp: ticker.Timestamp.UTC().Unix(),
 			Rates:     ticker.Rates,
 		}, nil
 	}
-	timestamp := ticker.Timestamp.UTC().Unix()
-	if rate, found := ticker.Rates[currency]; !found {
-		return nil, NewAPIError(fmt.Sprintf("Currency %q is not available for timestamp %d.", currency, timestamp), true)
-	} else {
-		return &db.ResultTickerAsString{
-			Timestamp: timestamp,
-			Rate:      rate,
-		}, nil
+	// Check if currencies from the list are available in the ticker rates
+	rates := make(map[string]float64)
+	for _, currency := range currencies {
+		currency = strings.ToLower(currency)
+		if rate, found := ticker.Rates[currency]; found {
+			rates[currency] = rate
+		} else {
+			rates[currency] = -1
+		}
 	}
+	return &db.ResultTickerAsString{
+		Timestamp: ticker.Timestamp.UTC().Unix(),
+		Rates:     rates,
+	}, nil
 }
 
 // GetFiatRatesForBlockID returns fiat rates for block height or block hash
-func (w *Worker) GetFiatRatesForBlockID(bid string, currency string) (*db.ResultTickerAsString, error) {
+func (w *Worker) GetFiatRatesForBlockID(bid string, currencies []string) (*db.ResultTickerAsString, error) {
 	var ticker *db.CurrencyRatesTicker
 	bi, err := w.getBlockInfoFromBlockID(bid)
 	if err != nil {
@@ -1199,37 +1209,46 @@ func (w *Worker) GetFiatRatesForBlockID(bid string, currency string) (*db.Result
 	if err != nil {
 		return nil, NewAPIError(fmt.Sprintf("Error finding ticker: %v", err), false)
 	} else if ticker == nil {
-		return nil, NewAPIError(fmt.Sprintf("No tickers available for %s (%s)", tm, currency), true)
+		return nil, NewAPIError(fmt.Sprintf("No tickers available for %s", tm), true)
 	}
-	result, err := w.getFiatRatesResult(currency, ticker)
+	result, err := w.getFiatRatesResult(currencies, ticker)
 	if err != nil {
 		return nil, err
 	}
 	return result, nil
 }
 
-// GetCurrentFiatRates returns current fiat rates
-func (w *Worker) GetCurrentFiatRates(currency string) (*db.ResultTickerAsString, error) {
+// GetCurrentFiatRates returns last available fiat rates
+func (w *Worker) GetCurrentFiatRates(currencies []string) (*db.ResultTickerAsString, error) {
 	ticker, err := w.db.FiatRatesFindLastTicker()
 	if err != nil {
 		return nil, NewAPIError(fmt.Sprintf("Error finding ticker: %v", err), false)
 	} else if ticker == nil {
 		return nil, NewAPIError(fmt.Sprintf("No tickers found!"), true)
 	}
-	result, err := w.getFiatRatesResult(currency, ticker)
+	result, err := w.getFiatRatesResult(currencies, ticker)
 	if err != nil {
 		return nil, err
 	}
 	return result, nil
 }
 
+// makeErrorRates returns a map of currrencies, with each value equal to -1
+// used when there was an error finding ticker
+func makeErrorRates(currencies []string) map[string]float64 {
+	rates := make(map[string]float64)
+	for _, currency := range currencies {
+		rates[strings.ToLower(currency)] = -1
+	}
+	return rates
+}
+
 // GetFiatRatesForTimestamps returns fiat rates for each of the provided dates
-func (w *Worker) GetFiatRatesForTimestamps(timestamps []int64, currency string) (*db.ResultTickersAsString, error) {
-	if currency == "" {
-		return nil, NewAPIError("Missing or empty \"currency\" parameter.", true)
-	} else if len(timestamps) == 0 {
+func (w *Worker) GetFiatRatesForTimestamps(timestamps []int64, currencies []string) (*db.ResultTickersAsString, error) {
+	if len(timestamps) == 0 {
 		return nil, NewAPIError("No timestamps provided", true)
 	}
+	currencies = removeEmpty(currencies)
 
 	ret := &db.ResultTickersAsString{}
 	for _, timestamp := range timestamps {
@@ -1238,15 +1257,15 @@ func (w *Worker) GetFiatRatesForTimestamps(timestamps []int64, currency string) 
 		ticker, err := w.db.FiatRatesFindTicker(&date)
 		if err != nil {
 			glog.Errorf("Error finding ticker for date %v. Error: %v", date, err)
-			ret.Tickers = append(ret.Tickers, db.ResultTickerAsString{Timestamp: date.Unix(), Rate: -1})
+			ret.Tickers = append(ret.Tickers, db.ResultTickerAsString{Timestamp: date.Unix(), Rates: makeErrorRates(currencies)})
 			continue
 		} else if ticker == nil {
-			ret.Tickers = append(ret.Tickers, db.ResultTickerAsString{Timestamp: date.Unix(), Rate: -1})
+			ret.Tickers = append(ret.Tickers, db.ResultTickerAsString{Timestamp: date.Unix(), Rates: makeErrorRates(currencies)})
 			continue
 		}
-		result, err := w.getFiatRatesResult(currency, ticker)
+		result, err := w.getFiatRatesResult(currencies, ticker)
 		if err != nil {
-			ret.Tickers = append(ret.Tickers, db.ResultTickerAsString{Timestamp: date.Unix(), Rate: -1})
+			ret.Tickers = append(ret.Tickers, db.ResultTickerAsString{Timestamp: date.Unix(), Rates: makeErrorRates(currencies)})
 			continue
 		}
 		ret.Tickers = append(ret.Tickers, *result)
@@ -1273,7 +1292,7 @@ func (w *Worker) GetFiatRatesTickersList(timestamp int64) (*db.ResultTickerListA
 	sort.Strings(keys) // sort to get deterministic results
 
 	return &db.ResultTickerListAsString{
-		Timestamp: timestamp,
+		Timestamp: ticker.Timestamp.Unix(),
 		Tickers:   keys,
 	}, nil
 }
