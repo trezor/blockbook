@@ -167,6 +167,10 @@ func TestRocksDB_Index_EthereumType(t *testing.T) {
 	})
 	defer closeAndDestroyRocksDB(t, d)
 
+	if len(d.is.BlockTimes) != 0 {
+		t.Fatal("Expecting is.BlockTimes 0, got ", len(d.is.BlockTimes))
+	}
+
 	// connect 1st block
 	block1 := dbtestdata.GetTestEthereumTypeBlock1(d.chainParser)
 	if err := d.ConnectBlock(block1); err != nil {
@@ -174,12 +178,20 @@ func TestRocksDB_Index_EthereumType(t *testing.T) {
 	}
 	verifyAfterEthereumTypeBlock1(t, d, false)
 
+	if len(d.is.BlockTimes) != 1 {
+		t.Fatal("Expecting is.BlockTimes 1, got ", len(d.is.BlockTimes))
+	}
+
 	// connect 2nd block
 	block2 := dbtestdata.GetTestEthereumTypeBlock2(d.chainParser)
 	if err := d.ConnectBlock(block2); err != nil {
 		t.Fatal(err)
 	}
 	verifyAfterEthereumTypeBlock2(t, d)
+
+	if len(d.is.BlockTimes) != 2 {
+		t.Fatal("Expecting is.BlockTimes 2, got ", len(d.is.BlockTimes))
+	}
 
 	// get transactions for various addresses / low-high ranges
 	verifyGetTransactions(t, d, "0x"+dbtestdata.EthAddr55, 0, 10000000, []txidIndex{
@@ -275,10 +287,18 @@ func TestRocksDB_Index_EthereumType(t *testing.T) {
 		}
 	}
 
+	if len(d.is.BlockTimes) != 1 {
+		t.Fatal("Expecting is.BlockTimes 1, got ", len(d.is.BlockTimes))
+	}
+
 	// connect block again and verify the state of db
 	if err := d.ConnectBlock(block2); err != nil {
 		t.Fatal(err)
 	}
 	verifyAfterEthereumTypeBlock2(t, d)
+
+	if len(d.is.BlockTimes) != 2 {
+		t.Fatal("Expecting is.BlockTimes 2, got ", len(d.is.BlockTimes))
+	}
 
 }

@@ -6,7 +6,7 @@
 </div>
 <h3>Confirmed</h3>
 <div class="data-div row">
-    <div class="col-md-10">
+    <div class="col-lg-10">
         <table class="table data-table">
             <tbody>
                 <tr>
@@ -64,8 +64,8 @@
         </tbody>
         </table>
     </div>
-    <div class="col-md-2">
-        <div id="qrcode" style="width: 160px; height: 160px;"></div>
+    <div class="col-lg-2">
+        <div id="qrcode" style="width: 160px; height: 160px; float: right; padding-left: 10px;"></div>
         <script type="text/javascript" src="/static/js/qrcode.min.js"></script>
         <script type="text/javascript">
             new QRCode(document.getElementById("qrcode"), { text: "{{$addr.AddrStr}}", width: 160, height: 160 });

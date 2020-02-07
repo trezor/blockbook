@@ -22,10 +22,10 @@
     "package_name": "backend-dash-testnet",
     "package_revision": "satoshilabs-1",
     "system_user": "dash",
-    "version": "0.14.0.3",
-    "binary_url": "https://github.com/dashpay/dash/releases/download/v0.14.0.3/dashcore-0.14.0.3-x86_64-linux-gnu.tar.gz",
+    "version": "0.14.0.5",
+    "binary_url": "https://github.com/dashpay/dash/releases/download/v0.14.0.5/dashcore-0.14.0.5-x86_64-linux-gnu.tar.gz",
     "verification_type": "gpg-sha256",
-    "verification_source": "https://github.com/dashpay/dash/releases/download/v0.14.0.3/SHA256SUMS.asc",
+    "verification_source": "https://github.com/dashpay/dash/releases/download/v0.14.0.5/SHA256SUMS.asc",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
       "bin/dash-qt"
@@ -52,7 +52,7 @@
     "additional_params": "",
     "block_chain": {
       "parse": true,
-      "subversion": "/Dash Core:0.14.0.3/",
+      "subversion": "/Dash Core:0.14.0.5/",
       "mempool_workers": 8,
       "mempool_sub_workers": 2,
       "block_addresses_to_keep": 300,

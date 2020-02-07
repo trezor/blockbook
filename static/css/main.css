@@ -87,7 +87,6 @@ h3 {
     position: absolute;
     top: 0;
     left: 0;
-    height: 53px;
     width: 100%;
     margin: 0;
     padding-bottom: 0;
@@ -98,31 +97,39 @@ h3 {
 
 .bg-trezor {
     background-color: #212121!important;
-    height: 53px;
+    padding-top: 3px;
+    padding-bottom: 2px;
+    z-index: 2;
 }
 
-.bg-trezor .navbar-text {
+.bg-trezor .navbar-brand {
     color: rgba(255, 255, 255);
     font-weight: bold;
     font-size: 19px;
+    fill: #FFFFFF;
 }
 
-.trezor-logo-svg-white svg {
-    fill: #FFFFFF;
-    margin-top: 6px;
+@media (max-width: 768px) {
+    .navbar {
+        font-size: 14px;
+    }
+    .bg-trezor .navbar-brand {
+        font-weight: normal;
+        font-size: 14px;
+    }
 }
 
 #wrap {
     min-height: 100%;
     height: auto;
     padding: 75px 0;
-    margin: 0 auto -53px;
+    margin: 0 auto -42px;
 }
 
 #footer {
     background-color: #212121;
     color: #fff;
-    height: 53px;
+    height: 42px;
     overflow: hidden;
 }
 
@@ -241,15 +248,6 @@ table.data-table table.data-table th {
 
 .alert .data-table {
     margin: 0;
-}
-
-.navbar-nav .nav-link {
-    padding-right: 0;
-    padding-left: .25rem;
-}
-
-.navbar-text .nav-link {
-    padding: 0;
 }
 
 ::-webkit-input-placeholder {

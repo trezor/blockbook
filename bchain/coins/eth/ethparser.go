@@ -202,6 +202,15 @@ func EIP55Address(addrDesc bchain.AddressDescriptor) string {
 	return string(result)
 }
 
+// EIP55AddressFromAddress returns an EIP55-compliant hex string representation of the address
+func EIP55AddressFromAddress(address string) string {
+	b, err := hex.DecodeString(address)
+	if err != nil {
+		return address
+	}
+	return EIP55Address(b)
+}
+
 // GetAddressesFromAddrDesc returns addresses for given address descriptor with flag if the addresses are searchable
 func (p *EthereumParser) GetAddressesFromAddrDesc(addrDesc bchain.AddressDescriptor) ([]string, bool, error) {
 	return []string{EIP55Address(addrDesc)}, true, nil

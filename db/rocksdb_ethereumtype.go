@@ -455,6 +455,7 @@ func (d *RocksDB) DisconnectBlockRangeEthereumType(lower uint32, higher uint32) 
 	d.storeAddressContracts(wb, contracts)
 	err := d.db.Write(d.wo, wb)
 	if err == nil {
+		d.is.RemoveLastBlockTimes(int(higher-lower) + 1)
 		glog.Infof("rocksdb: blocks %d-%d disconnected", lower, higher)
 	}
 	return err

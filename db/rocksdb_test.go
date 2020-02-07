@@ -16,6 +16,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	vlq "github.com/bsm/go-vlq"
 	"github.com/juju/errors"
@@ -180,7 +181,7 @@ func verifyAfterBitcoinTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect bool
 	if err := checkColumn(d, cfHeight, []keyPair{
 		{
 			"000370d5",
-			"0000000076fbbed90fd75b0e18856aa35baa984e9c9d444cf746ad85e94e2997" + uintToHex(1534858021) + varuintToHex(2) + varuintToHex(1234567),
+			"0000000076fbbed90fd75b0e18856aa35baa984e9c9d444cf746ad85e94e2997" + uintToHex(1521515026) + varuintToHex(2) + varuintToHex(1234567),
 			nil,
 		},
 	}); err != nil {
@@ -286,12 +287,12 @@ func verifyAfterBitcoinTypeBlock2(t *testing.T, d *RocksDB) {
 	if err := checkColumn(d, cfHeight, []keyPair{
 		{
 			"000370d5",
-			"0000000076fbbed90fd75b0e18856aa35baa984e9c9d444cf746ad85e94e2997" + uintToHex(1534858021) + varuintToHex(2) + varuintToHex(1234567),
+			"0000000076fbbed90fd75b0e18856aa35baa984e9c9d444cf746ad85e94e2997" + uintToHex(1521515026) + varuintToHex(2) + varuintToHex(1234567),
 			nil,
 		},
 		{
 			"000370d6",
-			"00000000eb0443fd7dc4a1ed5c686a8e995057805f9a161d9a5a77a95e72b7b6" + uintToHex(1534859123) + varuintToHex(4) + varuintToHex(2345678),
+			"00000000eb0443fd7dc4a1ed5c686a8e995057805f9a161d9a5a77a95e72b7b6" + uintToHex(1521595678) + varuintToHex(4) + varuintToHex(2345678),
 			nil,
 		},
 	}); err != nil {
@@ -532,6 +533,10 @@ func TestRocksDB_Index_BitcoinType(t *testing.T) {
 	})
 	defer closeAndDestroyRocksDB(t, d)
 
+	if len(d.is.BlockTimes) != 0 {
+		t.Fatal("Expecting is.BlockTimes 0, got ", len(d.is.BlockTimes))
+	}
+
 	// connect 1st block - will log warnings about missing UTXO transactions in txAddresses column
 	block1 := dbtestdata.GetTestBitcoinTypeBlock1(d.chainParser)
 	if err := d.ConnectBlock(block1); err != nil {
@@ -539,12 +544,20 @@ func TestRocksDB_Index_BitcoinType(t *testing.T) {
 	}
 	verifyAfterBitcoinTypeBlock1(t, d, false)
 
+	if len(d.is.BlockTimes) != 1 {
+		t.Fatal("Expecting is.BlockTimes 1, got ", len(d.is.BlockTimes))
+	}
+
 	// connect 2nd block - use some outputs from the 1st block as the inputs and 1 input uses tx from the same block
 	block2 := dbtestdata.GetTestBitcoinTypeBlock2(d.chainParser)
 	if err := d.ConnectBlock(block2); err != nil {
 		t.Fatal(err)
 	}
 	verifyAfterBitcoinTypeBlock2(t, d)
+
+	if len(d.is.BlockTimes) != 2 {
+		t.Fatal("Expecting is.BlockTimes 1, got ", len(d.is.BlockTimes))
+	}
 
 	// get transactions for various addresses / low-high ranges
 	verifyGetTransactions(t, d, dbtestdata.Addr2, 0, 1000000, []txidIndex{
@@ -606,7 +619,7 @@ func TestRocksDB_Index_BitcoinType(t *testing.T) {
 		Hash:   "00000000eb0443fd7dc4a1ed5c686a8e995057805f9a161d9a5a77a95e72b7b6",
 		Txs:    4,
 		Size:   2345678,
-		Time:   1534859123,
+		Time:   1521595678,
 		Height: 225494,
 	}
 	if !reflect.DeepEqual(info, iw) {
@@ -649,11 +662,19 @@ func TestRocksDB_Index_BitcoinType(t *testing.T) {
 		}
 	}
 
+	if len(d.is.BlockTimes) != 1 {
+		t.Fatal("Expecting is.BlockTimes 1, got ", len(d.is.BlockTimes))
+	}
+
 	// connect block again and verify the state of db
 	if err := d.ConnectBlock(block2); err != nil {
 		t.Fatal(err)
 	}
 	verifyAfterBitcoinTypeBlock2(t, d)
+
+	if len(d.is.BlockTimes) != 2 {
+		t.Fatal("Expecting is.BlockTimes 1, got ", len(d.is.BlockTimes))
+	}
 
 	// test public methods for address balance and tx addresses
 	ab, err := d.GetAddressBalance(dbtestdata.Addr5, AddressBalanceDetailUTXO)
@@ -744,6 +765,10 @@ func Test_BulkConnect_BitcoinType(t *testing.T) {
 		t.Fatal("DB not in DbStateInconsistent")
 	}
 
+	if len(d.is.BlockTimes) != 0 {
+		t.Fatal("Expecting is.BlockTimes 0, got ", len(d.is.BlockTimes))
+	}
+
 	if err := bc.ConnectBlock(dbtestdata.GetTestBitcoinTypeBlock1(d.chainParser), false); err != nil {
 		t.Fatal(err)
 	}
@@ -766,6 +791,10 @@ func Test_BulkConnect_BitcoinType(t *testing.T) {
 	}
 
 	verifyAfterBitcoinTypeBlock2(t, d)
+
+	if len(d.is.BlockTimes) != 225495 {
+		t.Fatal("Expecting is.BlockTimes 225495, got ", len(d.is.BlockTimes))
+	}
 }
 
 func Test_packBigint_unpackBigint(t *testing.T) {
@@ -1069,5 +1098,81 @@ func Test_packAddrBalance_unpackAddrBalance(t *testing.T) {
 				t.Errorf("unpackTxAddresses() = %+v, want %+v", got1, tt.data)
 			}
 		})
+	}
+}
+
+func TestRocksTickers(t *testing.T) {
+	d := setupRocksDB(t, &testBitcoinParser{
+		BitcoinParser: bitcoinTestnetParser(),
+	})
+	defer closeAndDestroyRocksDB(t, d)
+
+	// Test valid formats
+	for _, date := range []string{"20190130", "2019013012", "201901301250", "20190130125030"} {
+		_, err := FiatRatesConvertDate(date)
+		if err != nil {
+			t.Errorf("%v", err)
+		}
+	}
+
+	// Test invalid formats
+	for _, date := range []string{"01102019", "10201901", "", "abc", "20190130xxx"} {
+		_, err := FiatRatesConvertDate(date)
+		if err == nil {
+			t.Errorf("Wrongly-formatted date \"%v\" marked as valid!", date)
+		}
+	}
+
+	// Test storing & finding tickers
+	key, _ := time.Parse(FiatRatesTimeFormat, "20190627000000")
+	futureKey, _ := time.Parse(FiatRatesTimeFormat, "20190630000000")
+
+	ts1, _ := time.Parse(FiatRatesTimeFormat, "20190628000000")
+	ticker1 := &CurrencyRatesTicker{
+		Timestamp: &ts1,
+		Rates: map[string]float64{
+			"usd": 20000,
+		},
+	}
+
+	ts2, _ := time.Parse(FiatRatesTimeFormat, "20190629000000")
+	ticker2 := &CurrencyRatesTicker{
+		Timestamp: &ts2,
+		Rates: map[string]float64{
+			"usd": 30000,
+		},
+	}
+	err := d.FiatRatesStoreTicker(ticker1)
+	if err != nil {
+		t.Errorf("Error storing ticker! %v", err)
+	}
+	d.FiatRatesStoreTicker(ticker2)
+	if err != nil {
+		t.Errorf("Error storing ticker! %v", err)
+	}
+
+	ticker, err := d.FiatRatesFindTicker(&key) // should find the closest key (ticker1)
+	if err != nil {
+		t.Errorf("TestRocksTickers err: %+v", err)
+	} else if ticker == nil {
+		t.Errorf("Ticker not found")
+	} else if ticker.Timestamp.Format(FiatRatesTimeFormat) != ticker1.Timestamp.Format(FiatRatesTimeFormat) {
+		t.Errorf("Incorrect ticker found. Expected: %v, found: %+v", ticker1.Timestamp, ticker.Timestamp)
+	}
+
+	ticker, err = d.FiatRatesFindLastTicker() // should find the last key (ticker2)
+	if err != nil {
+		t.Errorf("TestRocksTickers err: %+v", err)
+	} else if ticker == nil {
+		t.Errorf("Ticker not found")
+	} else if ticker.Timestamp.Format(FiatRatesTimeFormat) != ticker2.Timestamp.Format(FiatRatesTimeFormat) {
+		t.Errorf("Incorrect ticker found. Expected: %v, found: %+v", ticker1.Timestamp, ticker.Timestamp)
+	}
+
+	ticker, err = d.FiatRatesFindTicker(&futureKey) // should not find anything
+	if err != nil {
+		t.Errorf("TestRocksTickers err: %+v", err)
+	} else if ticker != nil {
+		t.Errorf("Ticker found, but the timestamp is older than the last ticker entry.")
 	}
 }

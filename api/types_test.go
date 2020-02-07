@@ -49,3 +49,115 @@ func TestAmount_MarshalJSON(t *testing.T) {
 		})
 	}
 }
+
+func TestBalanceHistories_SortAndAggregate(t *testing.T) {
+	tests := []struct {
+		name        string
+		a           BalanceHistories
+		groupByTime uint32
+		want        BalanceHistories
+	}{
+		{
+			name:        "empty",
+			a:           []BalanceHistory{},
+			groupByTime: 3600,
+			want:        []BalanceHistory{},
+		},
+		{
+			name: "one",
+			a: []BalanceHistory{
+				{
+					ReceivedSat: (*Amount)(big.NewInt(1)),
+					SentSat:     (*Amount)(big.NewInt(2)),
+					Time:        1521514812,
+					Txid:        "00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840",
+					Txs:         1,
+				},
+			},
+			groupByTime: 3600,
+			want: []BalanceHistory{
+				{
+					ReceivedSat: (*Amount)(big.NewInt(1)),
+					SentSat:     (*Amount)(big.NewInt(2)),
+					Time:        1521514800,
+					Txs:         1,
+				},
+			},
+		},
+		{
+			name: "aggregate",
+			a: []BalanceHistory{
+				{
+					ReceivedSat: (*Amount)(big.NewInt(1)),
+					SentSat:     (*Amount)(big.NewInt(2)),
+					Time:        1521504812,
+					Txid:        "0011223344556677889900112233445566778899001122334455667788990011",
+					Txs:         1,
+				},
+				{
+					ReceivedSat: (*Amount)(big.NewInt(3)),
+					SentSat:     (*Amount)(big.NewInt(4)),
+					Time:        1521504812,
+					Txid:        "00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840",
+					Txs:         1,
+				},
+				{
+					ReceivedSat: (*Amount)(big.NewInt(5)),
+					SentSat:     (*Amount)(big.NewInt(6)),
+					Time:        1521514812,
+					Txid:        "00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840",
+					Txs:         1,
+				},
+				{
+					ReceivedSat: (*Amount)(big.NewInt(7)),
+					SentSat:     (*Amount)(big.NewInt(8)),
+					Time:        1521504812,
+					Txid:        "00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840",
+					Txs:         1,
+				},
+				{
+					ReceivedSat: (*Amount)(big.NewInt(9)),
+					SentSat:     (*Amount)(big.NewInt(10)),
+					Time:        1521534812,
+					Txid:        "0011223344556677889900112233445566778899001122334455667788990011",
+					Txs:         1,
+				},
+				{
+					ReceivedSat: (*Amount)(big.NewInt(11)),
+					SentSat:     (*Amount)(big.NewInt(12)),
+					Time:        1521534812,
+					Txid:        "1122334455667788990011223344556677889900112233445566778899001100",
+					Txs:         1,
+				},
+			},
+			groupByTime: 3600,
+			want: []BalanceHistory{
+				{
+					ReceivedSat: (*Amount)(big.NewInt(11)),
+					SentSat:     (*Amount)(big.NewInt(14)),
+					Time:        1521504000,
+					Txs:         2,
+				},
+				{
+					ReceivedSat: (*Amount)(big.NewInt(5)),
+					SentSat:     (*Amount)(big.NewInt(6)),
+					Time:        1521514800,
+					Txs:         1,
+				},
+				{
+					ReceivedSat: (*Amount)(big.NewInt(20)),
+					SentSat:     (*Amount)(big.NewInt(22)),
+					Time:        1521532800,
+					Txs:         2,
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.a.SortAndAggregate(tt.groupByTime); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("BalanceHistories.SortAndAggregate() = %+v, want %+v", got, tt.want)
+			}
+		})
+	}
+}

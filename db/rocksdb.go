@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"os"
@@ -29,6 +30,34 @@ const maxAddrDescLen = 1024
 // iterator creates snapshot, which takes lots of resources
 // when doing huge scan, it is better to close it and reopen from time to time to free the resources
 const refreshIterator = 5000000
+
+// FiatRatesTimeFormat is a format string for storing FiatRates timestamps in rocksdb
+const FiatRatesTimeFormat = "20060102150405" // YYYYMMDDhhmmss
+
+// CurrencyRatesTicker contains coin ticker data fetched from API
+type CurrencyRatesTicker struct {
+	Timestamp *time.Time // return as unix timestamp in API
+	Rates     map[string]float64
+}
+
+// ResultTickerAsString contains formatted CurrencyRatesTicker data
+type ResultTickerAsString struct {
+	Timestamp int64              `json:"ts,omitempty"`
+	Rates     map[string]float64 `json:"rates"`
+	Error     string             `json:"error,omitempty"`
+}
+
+// ResultTickersAsString contains a formatted CurrencyRatesTicker list
+type ResultTickersAsString struct {
+	Tickers []ResultTickerAsString `json:"tickers"`
+}
+
+// ResultTickerListAsString contains formatted data about available currency tickers
+type ResultTickerListAsString struct {
+	Timestamp int64    `json:"ts,omitempty"`
+	Tickers   []string `json:"available_currencies"`
+	Error     string   `json:"error,omitempty"`
+}
 
 // RepairRocksDB calls RocksDb db repair function
 func RepairRocksDB(name string) error {
@@ -77,6 +106,7 @@ const (
 	cfAddresses
 	cfBlockTxs
 	cfTransactions
+	cfFiatRates
 	// BitcoinType
 	cfAddressBalance
 	cfTxAddresses
@@ -86,7 +116,7 @@ const (
 
 // common columns
 var cfNames []string
-var cfBaseNames = []string{"default", "height", "addresses", "blockTxs", "transactions"}
+var cfBaseNames = []string{"default", "height", "addresses", "blockTxs", "transactions", "fiatRates"}
 
 // type specific columns
 var cfNamesBitcoinType = []string{"addressBalance", "txAddresses"}
@@ -99,7 +129,7 @@ func openDB(path string, c *gorocksdb.Cache, openFiles int) (*gorocksdb.DB, []*g
 	// from documentation: if most of your queries are executed using iterators, you shouldn't set bloom filter
 	optsAddresses := createAndSetDBOptions(0, c, openFiles)
 	// default, height, addresses, blockTxids, transactions
-	cfOptions := []*gorocksdb.Options{opts, opts, optsAddresses, opts, opts}
+	cfOptions := []*gorocksdb.Options{opts, opts, optsAddresses, opts, opts, opts}
 	// append type specific options
 	count := len(cfNames) - len(cfOptions)
 	for i := 0; i < count; i++ {
@@ -144,6 +174,104 @@ func (d *RocksDB) closeDB() error {
 	d.db.Close()
 	d.db = nil
 	return nil
+}
+
+// FiatRatesConvertDate checks if the date is in correct format and returns the Time object.
+// Possible formats are: YYYYMMDDhhmmss, YYYYMMDDhhmm, YYYYMMDDhh, YYYYMMDD
+func FiatRatesConvertDate(date string) (*time.Time, error) {
+	for format := FiatRatesTimeFormat; len(format) >= 8; format = format[:len(format)-2] {
+		convertedDate, err := time.Parse(format, date)
+		if err == nil {
+			return &convertedDate, nil
+		}
+	}
+	msg := "Date \"" + date + "\" does not match any of available formats. "
+	msg += "Possible formats are: YYYYMMDDhhmmss, YYYYMMDDhhmm, YYYYMMDDhh, YYYYMMDD"
+	return nil, errors.New(msg)
+}
+
+// FiatRatesStoreTicker stores ticker data at the specified time
+func (d *RocksDB) FiatRatesStoreTicker(ticker *CurrencyRatesTicker) error {
+	if len(ticker.Rates) == 0 {
+		return errors.New("Error storing ticker: empty rates")
+	} else if ticker.Timestamp == nil {
+		return errors.New("Error storing ticker: empty timestamp")
+	}
+	ratesMarshalled, err := json.Marshal(ticker.Rates)
+	if err != nil {
+		glog.Error("Error marshalling ticker rates: ", err)
+		return err
+	}
+	timeFormatted := ticker.Timestamp.UTC().Format(FiatRatesTimeFormat)
+	err = d.db.PutCF(d.wo, d.cfh[cfFiatRates], []byte(timeFormatted), ratesMarshalled)
+	if err != nil {
+		glog.Error("Error storing ticker: ", err)
+		return err
+	}
+	return nil
+}
+
+// FiatRatesFindTicker gets FiatRates data closest to the specified timestamp
+func (d *RocksDB) FiatRatesFindTicker(tickerTime *time.Time) (*CurrencyRatesTicker, error) {
+	ticker := &CurrencyRatesTicker{}
+	tickerTimeFormatted := tickerTime.UTC().Format(FiatRatesTimeFormat)
+	it := d.db.NewIteratorCF(d.ro, d.cfh[cfFiatRates])
+	defer it.Close()
+
+	for it.Seek([]byte(tickerTimeFormatted)); it.Valid(); it.Next() {
+		timeObj, err := time.Parse(FiatRatesTimeFormat, string(it.Key().Data()))
+		if err != nil {
+			glog.Error("FiatRatesFindTicker time parse error: ", err)
+			return nil, err
+		}
+		timeObj = timeObj.UTC()
+		ticker.Timestamp = &timeObj
+		err = json.Unmarshal(it.Value().Data(), &ticker.Rates)
+		if err != nil {
+			glog.Error("FiatRatesFindTicker error unpacking rates: ", err)
+			return nil, err
+		}
+		break
+	}
+	if err := it.Err(); err != nil {
+		glog.Error("FiatRatesFindTicker Iterator error: ", err)
+		return nil, err
+	}
+	if !it.Valid() {
+		return nil, nil // ticker not found
+	}
+	return ticker, nil
+}
+
+// FiatRatesFindLastTicker gets the last FiatRates record
+func (d *RocksDB) FiatRatesFindLastTicker() (*CurrencyRatesTicker, error) {
+	ticker := &CurrencyRatesTicker{}
+	it := d.db.NewIteratorCF(d.ro, d.cfh[cfFiatRates])
+	defer it.Close()
+
+	for it.SeekToLast(); it.Valid(); it.Next() {
+		timeObj, err := time.Parse(FiatRatesTimeFormat, string(it.Key().Data()))
+		if err != nil {
+			glog.Error("FiatRatesFindTicker time parse error: ", err)
+			return nil, err
+		}
+		timeObj = timeObj.UTC()
+		ticker.Timestamp = &timeObj
+		err = json.Unmarshal(it.Value().Data(), &ticker.Rates)
+		if err != nil {
+			glog.Error("FiatRatesFindTicker error unpacking rates: ", err)
+			return nil, err
+		}
+		break
+	}
+	if err := it.Err(); err != nil {
+		glog.Error("FiatRatesFindLastTicker Iterator error: ", err)
+		return ticker, err
+	}
+	if !it.Valid() {
+		return nil, nil // ticker not found
+	}
+	return ticker, nil
 }
 
 // Close releases the RocksDB environment opened in NewRocksDB.
@@ -348,8 +476,11 @@ func (d *RocksDB) ConnectBlock(block *bchain.Block) error {
 	if err := d.storeAddresses(wb, block.Height, addresses); err != nil {
 		return err
 	}
-
-	return d.db.Write(d.wo, wb)
+	if err := d.db.Write(d.wo, wb); err != nil {
+		return err
+	}
+	d.is.AppendBlockTime(uint32(block.Time))
+	return nil
 }
 
 // Addresses index
@@ -1334,6 +1465,7 @@ func (d *RocksDB) DisconnectBlockRangeBitcoinType(lower uint32, higher uint32) e
 	}
 	err := d.db.Write(d.wo, wb)
 	if err == nil {
+		d.is.RemoveLastBlockTimes(int(higher-lower) + 1)
 		glog.Infof("rocksdb: blocks %d-%d disconnected", lower, higher)
 	}
 	return err
@@ -1448,6 +1580,32 @@ func (d *RocksDB) internalDeleteTx(wb *gorocksdb.WriteBatch, key []byte) {
 // internal state
 const internalStateKey = "internalState"
 
+func (d *RocksDB) loadBlockTimes() ([]uint32, error) {
+	var times []uint32
+	it := d.db.NewIteratorCF(d.ro, d.cfh[cfHeight])
+	defer it.Close()
+	counter := uint32(0)
+	time := uint32(0)
+	for it.SeekToFirst(); it.Valid(); it.Next() {
+		height := unpackUint(it.Key().Data())
+		if height > counter {
+			glog.Warning("gap in cfHeight: expecting ", counter, ", got ", height)
+			for ; counter < height; counter++ {
+				times = append(times, time)
+			}
+		}
+		counter++
+		info, err := d.unpackBlockInfo(it.Value().Data())
+		if err != nil {
+			return nil, err
+		}
+		time = uint32(info.Time)
+		times = append(times, time)
+	}
+	glog.Info("loaded ", len(times), " block times")
+	return times, nil
+}
+
 // LoadInternalState loads from db internal state or initializes a new one if not yet stored
 func (d *RocksDB) LoadInternalState(rpcCoin string) (*common.InternalState, error) {
 	val, err := d.db.GetCF(d.ro, d.cfh[cfDefault], []byte(internalStateKey))
@@ -1493,6 +1651,10 @@ func (d *RocksDB) LoadInternalState(rpcCoin string) (*common.InternalState, erro
 		}
 	}
 	is.DbColumns = nc
+	is.BlockTimes, err = d.loadBlockTimes()
+	if err != nil {
+		return nil, err
+	}
 	// after load, reset the synchronization data
 	is.IsSynchronized = false
 	is.IsMempoolSynchronized = false
