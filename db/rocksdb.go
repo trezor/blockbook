@@ -564,6 +564,10 @@ func (ab *AddrBalance) ReceivedSat() *big.Int {
 // addUtxo
 func (ab *AddrBalance) addUtxo(u *Utxo) {
 	ab.Utxos = append(ab.Utxos, *u)
+	ab.manageUtxoMap(u)
+}
+
+func (ab *AddrBalance) manageUtxoMap(u *Utxo) {
 	l := len(ab.Utxos)
 	if l >= 16 {
 		if len(ab.utxosMap) == 0 {
@@ -583,9 +587,45 @@ func (ab *AddrBalance) addUtxo(u *Utxo) {
 	}
 }
 
+// on disconnect, the added utxos must be inserted in the right position so that utxosMap index works
+func (ab *AddrBalance) addUtxoInDisconnect(u *Utxo) {
+	insert := -1
+	if len(ab.utxosMap) > 0 {
+		if i, e := ab.utxosMap[string(u.BtxID)]; e {
+			insert = i
+		}
+	} else {
+		for i := range ab.Utxos {
+			utxo := &ab.Utxos[i]
+			if *(*int)(unsafe.Pointer(&utxo.BtxID[0])) == *(*int)(unsafe.Pointer(&u.BtxID[0])) && bytes.Equal(utxo.BtxID, u.BtxID) {
+				insert = i
+				break
+			}
+		}
+	}
+	if insert > -1 {
+		// check if it is necessary to insert the utxo into the array
+		for i := insert; i < len(ab.Utxos); i++ {
+			utxo := &ab.Utxos[i]
+			// either the vout is greater than the inserted vout or it is a different tx
+			if utxo.Vout > u.Vout || *(*int)(unsafe.Pointer(&utxo.BtxID[0])) != *(*int)(unsafe.Pointer(&u.BtxID[0])) || !bytes.Equal(utxo.BtxID, u.BtxID) {
+				// found the right place, insert the utxo
+				ab.Utxos = append(ab.Utxos, *u)
+				copy(ab.Utxos[i+1:], ab.Utxos[i:])
+				ab.Utxos[i] = *u
+				// reset utxosMap after insert, the index will have to be rebuilt if needed
+				ab.utxosMap = nil
+				return
+			}
+		}
+	}
+	ab.Utxos = append(ab.Utxos, *u)
+	ab.manageUtxoMap(u)
+}
+
 // markUtxoAsSpent finds outpoint btxID:vout in utxos and marks it as spent
 // for small number of utxos the linear search is done, for larger number there is a hashmap index
-// it is much faster than removing the utxo from the slice as it would cause in memory copy operations
+// it is much faster than removing the utxo from the slice as it would cause in memory reallocations
 func (ab *AddrBalance) markUtxoAsSpent(btxID []byte, vout int32) {
 	if len(ab.utxosMap) == 0 {
 		for i := range ab.Utxos {
@@ -1360,7 +1400,7 @@ func (d *RocksDB) disconnectTxAddressesInputs(wb *gorocksdb.WriteBatch, btxID []
 						d.resetValueSatToZero(&balance.SentSat, t.AddrDesc, "sent amount")
 					}
 					balance.BalanceSat.Add(&balance.BalanceSat, &t.ValueSat)
-					balance.Utxos = append(balance.Utxos, Utxo{
+					balance.addUtxoInDisconnect(&Utxo{
 						BtxID:    input.btxID,
 						Vout:     input.index,
 						Height:   inputHeight,
@@ -1420,8 +1460,7 @@ func (d *RocksDB) disconnectBlock(height uint32, blockTxs []blockTxs) error {
 		s := string(addrDesc)
 		b, fb := balances[s]
 		if !fb {
-			// do not use addressBalanceDetailUTXOIndexed as the utxo may be in wrong order for the helper map
-			b, err = d.GetAddrDescBalance(addrDesc, AddressBalanceDetailUTXO)
+			b, err = d.GetAddrDescBalance(addrDesc, addressBalanceDetailUTXOIndexed)
 			if err != nil {
 				return nil, err
 			}
