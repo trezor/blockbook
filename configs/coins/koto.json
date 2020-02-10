@@ -22,10 +22,10 @@
     "package_name": "backend-koto",
     "package_revision": "satoshilabs-1",
     "system_user": "koto",
-    "version": "2.1.0-1",
-    "binary_url": "https://github.com/KotoDevelopers/koto/releases/download/v2.1.0-1/koto-2.1.0-1-linux64.tar.gz",
+    "version": "2.1.1-1",
+    "binary_url": "https://github.com/KotoDevelopers/koto/releases/download/v2.1.1-1/koto-2.1.1-1-linux64.tar.gz",
     "verification_type": "gpg",
-    "verification_source": "https://github.com/KotoDevelopers/koto/releases/download/v2.1.0-1/koto-2.1.0-1-linux64.tar.gz.asc",
+    "verification_source": "https://github.com/KotoDevelopers/koto/releases/download/v2.1.1-1/koto-2.1.1-1-linux64.tar.gz.asc",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
       "bin/koto-qt"
