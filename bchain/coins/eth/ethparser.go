@@ -76,12 +76,6 @@ type rpcReceipt struct {
 	Logs    []*rpcLog `json:"logs"`
 }
 
-type rpcEtcReceipt struct {
-	GasUsed string    `json:"gasUsed"`
-	Status  int       `json:"status"`
-	Logs    []*rpcLog `json:"logs"`
-}
-
 type completeTransaction struct {
 	Tx      *rpcTransaction `json:"tx"`
 	Receipt *rpcReceipt     `json:"receipt,omitempty"`
