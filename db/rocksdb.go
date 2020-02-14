@@ -1849,7 +1849,28 @@ func (d *RocksDB) ComputeInternalStateColumnStats(stopCompute chan os.Signal) er
 	return nil
 }
 
-func (d *RocksDB) fixUtxo(addrDesc bchain.AddressDescriptor, ba *AddrBalance) (bool, error) {
+func reorderUtxo(utxos []Utxo, index int) {
+	var from, to int
+	for from = index; from >= 0; from-- {
+		if !bytes.Equal(utxos[from].BtxID, utxos[index].BtxID) {
+			break
+		}
+	}
+	from++
+	for to = index + 1; to < len(utxos); to++ {
+		if !bytes.Equal(utxos[to].BtxID, utxos[index].BtxID) {
+			break
+		}
+	}
+	toSort := utxos[from:to]
+	sort.SliceStable(toSort, func(i, j int) bool {
+		return toSort[i].Vout < toSort[j].Vout
+	})
+
+}
+
+func (d *RocksDB) fixUtxo(addrDesc bchain.AddressDescriptor, ba *AddrBalance) (bool, bool, error) {
+	reorder := false
 	var checksum big.Int
 	var prevUtxo *Utxo
 	for i := range ba.Utxos {
@@ -1857,7 +1878,8 @@ func (d *RocksDB) fixUtxo(addrDesc bchain.AddressDescriptor, ba *AddrBalance) (b
 		checksum.Add(&checksum, &utxo.ValueSat)
 		if prevUtxo != nil {
 			if prevUtxo.Vout > utxo.Vout && *(*int)(unsafe.Pointer(&utxo.BtxID[0])) == *(*int)(unsafe.Pointer(&prevUtxo.BtxID[0])) && bytes.Equal(utxo.BtxID, prevUtxo.BtxID) {
-				glog.Error("FixUtxo: addrDesc ", addrDesc, ", needs reorder")
+				reorderUtxo(ba.Utxos, i)
+				reorder = true
 			}
 		}
 		prevUtxo = utxo
@@ -1899,7 +1921,7 @@ func (d *RocksDB) fixUtxo(addrDesc bchain.AddressDescriptor, ba *AddrBalance) (b
 			return nil
 		})
 		if err != nil {
-			return false, err
+			return false, false, err
 		}
 		fixed := false
 		if checksumFromTxs.Cmp(&ba.BalanceSat) == 0 {
@@ -1916,13 +1938,23 @@ func (d *RocksDB) fixUtxo(addrDesc bchain.AddressDescriptor, ba *AddrBalance) (b
 			}
 			wb.Destroy()
 			if err != nil {
-				return false, errors.Errorf("balance %s, checksum %s, from txa %s, txs %d, error storing fixed utxos %v", ba.BalanceSat.String(), checksum.String(), checksumFromTxs.String(), ba.Txs, err)
+				return false, false, errors.Errorf("balance %s, checksum %s, from txa %s, txs %d, error storing fixed utxos %v", ba.BalanceSat.String(), checksum.String(), checksumFromTxs.String(), ba.Txs, err)
 			}
 			fixed = true
 		}
-		return fixed, errors.Errorf("balance %s, checksum %s, from txa %s, txs %d", ba.BalanceSat.String(), checksum.String(), checksumFromTxs.String(), ba.Txs)
+		return fixed, false, errors.Errorf("balance %s, checksum %s, from txa %s, txs %d", ba.BalanceSat.String(), checksum.String(), checksumFromTxs.String(), ba.Txs)
+	} else if reorder {
+		wb := gorocksdb.NewWriteBatch()
+		err := d.storeBalances(wb, map[string]*AddrBalance{string(addrDesc): ba})
+		if err == nil {
+			err = d.db.Write(d.wo, wb)
+		}
+		wb.Destroy()
+		if err != nil {
+			return false, false, errors.Errorf("error storing reordered utxos %v", err)
+		}
 	}
-	return false, nil
+	return false, reorder, nil
 }
 
 // FixUtxos checks and fixes possible
@@ -1968,13 +2000,16 @@ func (d *RocksDB) FixUtxos(stop chan os.Signal) error {
 				errorsCount++
 				continue
 			}
-			fixed, err := d.fixUtxo(addrDesc, ba)
+			fixed, reordered, err := d.fixUtxo(addrDesc, ba)
 			if err != nil {
 				errorsCount++
 				glog.Error("FixUtxos: row ", row, ", addrDesc ", addrDesc, ", error ", err, ", fixed ", fixed)
 				if fixed {
 					fixedCount++
 				}
+			} else if reordered {
+				glog.Error("FixUtxos: row ", row, ", addrDesc ", addrDesc, " reordered")
+				fixedCount++
 			}
 		}
 		seekKey = append([]byte{}, addrDesc...)

@@ -1314,6 +1314,175 @@ func TestAddrBalance_utxo_methods(t *testing.T) {
 
 }
 
+func Test_reorderUtxo(t *testing.T) {
+	utxos := []Utxo{
+		{
+			BtxID: hexToBytes(dbtestdata.TxidB1T1),
+			Vout:  3,
+		},
+		{
+			BtxID: hexToBytes(dbtestdata.TxidB1T1),
+			Vout:  1,
+		},
+		{
+			BtxID: hexToBytes(dbtestdata.TxidB1T1),
+			Vout:  0,
+		},
+		{
+			BtxID: hexToBytes(dbtestdata.TxidB1T2),
+			Vout:  0,
+		},
+		{
+			BtxID: hexToBytes(dbtestdata.TxidB1T2),
+			Vout:  2,
+		},
+		{
+			BtxID: hexToBytes(dbtestdata.TxidB1T2),
+			Vout:  1,
+		},
+		{
+			BtxID: hexToBytes(dbtestdata.TxidB2T1),
+			Vout:  2,
+		},
+		{
+			BtxID: hexToBytes(dbtestdata.TxidB2T1),
+			Vout:  0,
+		},
+	}
+	tests := []struct {
+		name  string
+		utxos []Utxo
+		index int
+		want  []Utxo
+	}{
+		{
+			name:  "middle",
+			utxos: utxos,
+			index: 4,
+			want: []Utxo{
+				{
+					BtxID: hexToBytes(dbtestdata.TxidB1T1),
+					Vout:  3,
+				},
+				{
+					BtxID: hexToBytes(dbtestdata.TxidB1T1),
+					Vout:  1,
+				},
+				{
+					BtxID: hexToBytes(dbtestdata.TxidB1T1),
+					Vout:  0,
+				},
+				{
+					BtxID: hexToBytes(dbtestdata.TxidB1T2),
+					Vout:  0,
+				},
+				{
+					BtxID: hexToBytes(dbtestdata.TxidB1T2),
+					Vout:  1,
+				},
+				{
+					BtxID: hexToBytes(dbtestdata.TxidB1T2),
+					Vout:  2,
+				},
+				{
+					BtxID: hexToBytes(dbtestdata.TxidB2T1),
+					Vout:  2,
+				},
+				{
+					BtxID: hexToBytes(dbtestdata.TxidB2T1),
+					Vout:  0,
+				},
+			},
+		},
+		{
+			name:  "start",
+			utxos: utxos,
+			index: 1,
+			want: []Utxo{
+				{
+					BtxID: hexToBytes(dbtestdata.TxidB1T1),
+					Vout:  0,
+				},
+				{
+					BtxID: hexToBytes(dbtestdata.TxidB1T1),
+					Vout:  1,
+				},
+				{
+					BtxID: hexToBytes(dbtestdata.TxidB1T1),
+					Vout:  3,
+				},
+				{
+					BtxID: hexToBytes(dbtestdata.TxidB1T2),
+					Vout:  0,
+				},
+				{
+					BtxID: hexToBytes(dbtestdata.TxidB1T2),
+					Vout:  1,
+				},
+				{
+					BtxID: hexToBytes(dbtestdata.TxidB1T2),
+					Vout:  2,
+				},
+				{
+					BtxID: hexToBytes(dbtestdata.TxidB2T1),
+					Vout:  2,
+				},
+				{
+					BtxID: hexToBytes(dbtestdata.TxidB2T1),
+					Vout:  0,
+				},
+			},
+		},
+		{
+			name:  "end",
+			utxos: utxos,
+			index: 6,
+			want: []Utxo{
+				{
+					BtxID: hexToBytes(dbtestdata.TxidB1T1),
+					Vout:  0,
+				},
+				{
+					BtxID: hexToBytes(dbtestdata.TxidB1T1),
+					Vout:  1,
+				},
+				{
+					BtxID: hexToBytes(dbtestdata.TxidB1T1),
+					Vout:  3,
+				},
+				{
+					BtxID: hexToBytes(dbtestdata.TxidB1T2),
+					Vout:  0,
+				},
+				{
+					BtxID: hexToBytes(dbtestdata.TxidB1T2),
+					Vout:  1,
+				},
+				{
+					BtxID: hexToBytes(dbtestdata.TxidB1T2),
+					Vout:  2,
+				},
+				{
+					BtxID: hexToBytes(dbtestdata.TxidB2T1),
+					Vout:  0,
+				},
+				{
+					BtxID: hexToBytes(dbtestdata.TxidB2T1),
+					Vout:  2,
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reorderUtxo(tt.utxos, tt.index)
+			if !reflect.DeepEqual(tt.utxos, tt.want) {
+				t.Errorf("reorderUtxo %s, got %+v, want %+v", tt.name, tt.utxos, tt.want)
+			}
+		})
+	}
+}
+
 func TestRocksTickers(t *testing.T) {
 	d := setupRocksDB(t, &testBitcoinParser{
 		BitcoinParser: bitcoinTestnetParser(),
