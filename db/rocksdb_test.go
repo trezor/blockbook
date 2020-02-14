@@ -1148,19 +1148,19 @@ func TestAddrBalance_utxo_methods(t *testing.T) {
 		SentSat:    *big.NewInt(10000),
 		BalanceSat: *big.NewInt(1000),
 		Utxos: []Utxo{
-			Utxo{
+			{
 				BtxID:    hexToBytes(dbtestdata.TxidB1T1),
 				Vout:     1,
 				Height:   5000,
 				ValueSat: *big.NewInt(100),
 			},
-			Utxo{
+			{
 				BtxID:    hexToBytes(dbtestdata.TxidB1T1),
 				Vout:     4,
 				Height:   5000,
 				ValueSat: *big.NewInt(100),
 			},
-			Utxo{
+			{
 				BtxID:    hexToBytes(dbtestdata.TxidB1T2),
 				Vout:     0,
 				Height:   5001,
@@ -1208,49 +1208,49 @@ func TestAddrBalance_utxo_methods(t *testing.T) {
 		SentSat:    *big.NewInt(10000),
 		BalanceSat: *big.NewInt(1000),
 		Utxos: []Utxo{
-			Utxo{
+			{
 				BtxID:    hexToBytes(dbtestdata.TxidB1T1),
 				Vout:     0,
 				Height:   5000,
 				ValueSat: *big.NewInt(100),
 			},
-			Utxo{
+			{
 				BtxID:    hexToBytes(dbtestdata.TxidB1T1),
 				Vout:     1,
 				Height:   5000,
 				ValueSat: *big.NewInt(100),
 			},
-			Utxo{
+			{
 				BtxID:    hexToBytes(dbtestdata.TxidB1T1),
 				Vout:     2,
 				Height:   5000,
 				ValueSat: *big.NewInt(100),
 			},
-			Utxo{
+			{
 				BtxID:    hexToBytes(dbtestdata.TxidB1T1),
 				Vout:     4,
 				Height:   5000,
 				ValueSat: *big.NewInt(100),
 			},
-			Utxo{
+			{
 				BtxID:    hexToBytes(dbtestdata.TxidB1T1),
 				Vout:     10,
 				Height:   5000,
 				ValueSat: *big.NewInt(100),
 			},
-			Utxo{
+			{
 				BtxID:    hexToBytes(dbtestdata.TxidB1T2),
 				Vout:     0,
 				Height:   5001,
 				ValueSat: *big.NewInt(800),
 			},
-			Utxo{
+			{
 				BtxID:    hexToBytes(dbtestdata.TxidB2T1),
 				Vout:     0,
 				Height:   5003,
 				ValueSat: *big.NewInt(800),
 			},
-			Utxo{
+			{
 				BtxID:    hexToBytes(dbtestdata.TxidB2T1),
 				Vout:     1,
 				Height:   5003,

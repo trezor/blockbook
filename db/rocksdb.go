@@ -1477,7 +1477,7 @@ func (d *RocksDB) disconnectBlock(height uint32, blockTxs []blockTxs) error {
 		sBtxID := string(btxID)
 		a, exist := blockAddressesTxs[sAddrDesc]
 		if !exist {
-			blockAddressesTxs[sAddrDesc] = map[string]struct{}{sBtxID: struct{}{}}
+			blockAddressesTxs[sAddrDesc] = map[string]struct{}{sBtxID: {}}
 		} else {
 			_, exist = a[sBtxID]
 			if !exist {
@@ -1851,8 +1851,16 @@ func (d *RocksDB) ComputeInternalStateColumnStats(stopCompute chan os.Signal) er
 
 func (d *RocksDB) fixUtxo(addrDesc bchain.AddressDescriptor, ba *AddrBalance) (bool, error) {
 	var checksum big.Int
+	var prevUtxo *Utxo
 	for i := range ba.Utxos {
-		checksum.Add(&checksum, &ba.Utxos[i].ValueSat)
+		utxo := &ba.Utxos[i]
+		checksum.Add(&checksum, &utxo.ValueSat)
+		if prevUtxo != nil {
+			if prevUtxo.Vout > utxo.Vout && *(*int)(unsafe.Pointer(&utxo.BtxID[0])) == *(*int)(unsafe.Pointer(&prevUtxo.BtxID[0])) && bytes.Equal(utxo.BtxID, prevUtxo.BtxID) {
+				glog.Error("FixUtxo: addrDesc ", addrDesc, ", needs reorder")
+			}
+		}
+		prevUtxo = utxo
 	}
 	if checksum.Cmp(&ba.BalanceSat) != 0 {
 		var checksumFromTxs big.Int
