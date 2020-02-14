@@ -1884,6 +1884,14 @@ func (d *RocksDB) fixUtxo(addrDesc bchain.AddressDescriptor, ba *AddrBalance) (b
 		}
 		prevUtxo = utxo
 	}
+	if reorder {
+		// get the checksum again after reorder
+		checksum.SetInt64(0)
+		for i := range ba.Utxos {
+			utxo := &ba.Utxos[i]
+			checksum.Add(&checksum, &utxo.ValueSat)
+		}
+	}
 	if checksum.Cmp(&ba.BalanceSat) != 0 {
 		var checksumFromTxs big.Int
 		var utxos []Utxo
