@@ -179,21 +179,31 @@ func mainWithExitCode() int {
 	}
 	defer index.Close()
 
-	if *fixUtxo {
-		err = index.FixUtxos(chanOsSignal)
-		if err != nil {
-			glog.Error("fixUtxos: ", err)
-			return exitCodeFatal
-		}
-		return exitCodeOK
-	}
-
 	internalState, err = newInternalState(coin, coinShortcut, coinLabel, index)
 	if err != nil {
 		glog.Error("internalState: ", err)
 		return exitCodeFatal
 	}
+
+	// fix possible inconsistencies in the UTXO index
+	if *fixUtxo || !internalState.UtxoChecked {
+		err = index.FixUtxos(chanOsSignal)
+		if err != nil {
+			glog.Error("fixUtxos: ", err)
+			return exitCodeFatal
+		}
+		internalState.UtxoChecked = true
+	}
 	index.SetInternalState(internalState)
+	if *fixUtxo {
+		err = index.StoreInternalState(internalState)
+		if err != nil {
+			glog.Error("StoreInternalState: ", err)
+			return exitCodeFatal
+		}
+		return exitCodeOK
+	}
+
 	if internalState.DbState != common.DbStateClosed {
 		if internalState.DbState == common.DbStateInconsistent {
 			glog.Error("internalState: database is in inconsistent state and cannot be used")

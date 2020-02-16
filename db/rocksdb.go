@@ -1707,7 +1707,7 @@ func (d *RocksDB) LoadInternalState(rpcCoin string) (*common.InternalState, erro
 	data := val.Data()
 	var is *common.InternalState
 	if len(data) == 0 {
-		is = &common.InternalState{Coin: rpcCoin}
+		is = &common.InternalState{Coin: rpcCoin, UtxoChecked: true}
 	} else {
 		is, err = common.UnpackInternalState(data)
 		if err != nil {
