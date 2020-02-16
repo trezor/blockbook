@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"runtime/debug"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -22,6 +23,9 @@ import (
 const upgradeFailed = "Upgrade failed: "
 const outChannelSize = 500
 const defaultTimeout = 60 * time.Second
+
+// allRates is a special "currency" parameter that means all available currencies
+const allFiatRates = "!ALL!"
 
 var (
 	// ErrorMethodNotAllowed is returned when client tries to upgrade method other than GET
@@ -53,21 +57,23 @@ type websocketChannel struct {
 
 // WebsocketServer is a handle to websocket server
 type WebsocketServer struct {
-	socket                    *websocket.Conn
-	upgrader                  *websocket.Upgrader
-	db                        *db.RocksDB
-	txCache                   *db.TxCache
-	chain                     bchain.BlockChain
-	chainParser               bchain.BlockChainParser
-	mempool                   bchain.Mempool
-	metrics                   *common.Metrics
-	is                        *common.InternalState
-	api                       *api.Worker
-	block0hash                string
-	newBlockSubscriptions     map[*websocketChannel]string
-	newBlockSubscriptionsLock sync.Mutex
-	addressSubscriptions      map[string]map[*websocketChannel]string
-	addressSubscriptionsLock  sync.Mutex
+	socket                     *websocket.Conn
+	upgrader                   *websocket.Upgrader
+	db                         *db.RocksDB
+	txCache                    *db.TxCache
+	chain                      bchain.BlockChain
+	chainParser                bchain.BlockChainParser
+	mempool                    bchain.Mempool
+	metrics                    *common.Metrics
+	is                         *common.InternalState
+	api                        *api.Worker
+	block0hash                 string
+	newBlockSubscriptions      map[*websocketChannel]string
+	newBlockSubscriptionsLock  sync.Mutex
+	addressSubscriptions       map[string]map[*websocketChannel]string
+	addressSubscriptionsLock   sync.Mutex
+	fiatRatesSubscriptions     map[string]map[*websocketChannel]string
+	fiatRatesSubscriptionsLock sync.Mutex
 }
 
 // NewWebsocketServer creates new websocket interface to blockbook and returns its handle
@@ -86,17 +92,18 @@ func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.
 			WriteBufferSize: 1024 * 32,
 			CheckOrigin:     checkOrigin,
 		},
-		db:                    db,
-		txCache:               txCache,
-		chain:                 chain,
-		chainParser:           chain.GetChainParser(),
-		mempool:               mempool,
-		metrics:               metrics,
-		is:                    is,
-		api:                   api,
-		block0hash:            b0,
-		newBlockSubscriptions: make(map[*websocketChannel]string),
-		addressSubscriptions:  make(map[string]map[*websocketChannel]string),
+		db:                     db,
+		txCache:                txCache,
+		chain:                  chain,
+		chainParser:            chain.GetChainParser(),
+		mempool:                mempool,
+		metrics:                metrics,
+		is:                     is,
+		api:                    api,
+		block0hash:             b0,
+		newBlockSubscriptions:  make(map[*websocketChannel]string),
+		addressSubscriptions:   make(map[string]map[*websocketChannel]string),
+		fiatRatesSubscriptions: make(map[string]map[*websocketChannel]string),
 	}
 	return s, nil
 }
@@ -214,6 +221,7 @@ func (s *WebsocketServer) onConnect(c *websocketChannel) {
 func (s *WebsocketServer) onDisconnect(c *websocketChannel) {
 	s.unsubscribeNewBlock(c)
 	s.unsubscribeAddresses(c)
+	s.unsubscribeFiatRates(c)
 	glog.Info("Client disconnected ", c.id, ", ", c.ip)
 	s.metrics.WebsocketClients.Dec()
 }
@@ -246,6 +254,33 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *webs
 		err = json.Unmarshal(req.Params, &r)
 		if err == nil {
 			rv, err = s.getAccountUtxo(r.Descriptor)
+		}
+		return
+	},
+	"getBalanceHistory": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
+		r := struct {
+			Descriptor string   `json:"descriptor"`
+			From       int64    `json:"from"`
+			To         int64    `json:"to"`
+			Currencies []string `json:"currencies"`
+			Gap        int      `json:"gap"`
+			GroupBy    uint32   `json:"groupBy"`
+		}{}
+		err = json.Unmarshal(req.Params, &r)
+		if err == nil {
+			if r.From <= 0 {
+				r.From = 0
+			}
+			if r.To <= 0 {
+				r.To = 0
+			}
+			if r.GroupBy <= 0 {
+				r.GroupBy = 3600
+			}
+			rv, err = s.api.GetXpubBalanceHistory(r.Descriptor, r.From, r.To, r.Currencies, r.Gap, r.GroupBy)
+			if err != nil {
+				rv, err = s.api.GetBalanceHistory(r.Descriptor, r.From, r.To, r.Currencies, r.GroupBy)
+			}
 		}
 		return
 	},
@@ -298,9 +333,53 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *webs
 	"unsubscribeAddresses": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
 		return s.unsubscribeAddresses(c)
 	},
+	"subscribeFiatRates": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
+		r := struct {
+			Currency string `json:"currency"`
+		}{}
+		err = json.Unmarshal(req.Params, &r)
+		if err != nil {
+			return nil, err
+		}
+		return s.subscribeFiatRates(c, strings.ToLower(r.Currency), req)
+	},
+	"unsubscribeFiatRates": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
+		return s.unsubscribeFiatRates(c)
+	},
 	"ping": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
 		r := struct{}{}
 		return r, nil
+	},
+	"getCurrentFiatRates": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
+		r := struct {
+			Currencies []string `json:"currencies"`
+		}{}
+		err = json.Unmarshal(req.Params, &r)
+		if err == nil {
+			rv, err = s.getCurrentFiatRates(r.Currencies)
+		}
+		return
+	},
+	"getFiatRatesForTimestamps": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
+		r := struct {
+			Timestamps []int64  `json:"timestamps"`
+			Currencies []string `json:"currencies"`
+		}{}
+		err = json.Unmarshal(req.Params, &r)
+		if err == nil {
+			rv, err = s.getFiatRatesForTimestamps(r.Timestamps, r.Currencies)
+		}
+		return
+	},
+	"getFiatRatesTickersList": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
+		r := struct {
+			Timestamp int64 `json:"timestamp"`
+		}{}
+		err = json.Unmarshal(req.Params, &r)
+		if err == nil {
+			rv, err = s.getFiatRatesTickersList(r.Timestamp)
+		}
+		return
 	},
 }
 
@@ -613,6 +692,39 @@ func (s *WebsocketServer) unsubscribeAddresses(c *websocketChannel) (res interfa
 	return &subscriptionResponse{false}, nil
 }
 
+// subscribeFiatRates subscribes all FiatRates subscriptions by this channel
+func (s *WebsocketServer) subscribeFiatRates(c *websocketChannel, currency string, req *websocketReq) (res interface{}, err error) {
+	// unsubscribe all previous subscriptions
+	s.unsubscribeFiatRates(c)
+	s.fiatRatesSubscriptionsLock.Lock()
+	defer s.fiatRatesSubscriptionsLock.Unlock()
+
+	if currency == "" {
+		currency = allFiatRates
+	}
+	as, ok := s.fiatRatesSubscriptions[currency]
+	if !ok {
+		as = make(map[*websocketChannel]string)
+		s.fiatRatesSubscriptions[currency] = as
+	}
+	as[c] = req.ID
+	return &subscriptionResponse{true}, nil
+}
+
+// unsubscribeFiatRates unsubscribes all FiatRates subscriptions by this channel
+func (s *WebsocketServer) unsubscribeFiatRates(c *websocketChannel) (res interface{}, err error) {
+	s.fiatRatesSubscriptionsLock.Lock()
+	defer s.fiatRatesSubscriptionsLock.Unlock()
+	for _, sa := range s.fiatRatesSubscriptions {
+		for sc := range sa {
+			if sc == c {
+				delete(sa, c)
+			}
+		}
+	}
+	return &subscriptionResponse{false}, nil
+}
+
 // OnNewBlock is a callback that broadcasts info about new block to subscribed clients
 func (s *WebsocketServer) OnNewBlock(hash string, height uint32) {
 	s.newBlockSubscriptionsLock.Lock()
@@ -640,8 +752,9 @@ func (s *WebsocketServer) OnNewTxAddr(tx *bchain.Tx, addrDesc bchain.AddressDesc
 	// check if there is any subscription but release the lock immediately, GetTransactionFromBchainTx may take some time
 	s.addressSubscriptionsLock.Lock()
 	as, ok := s.addressSubscriptions[string(addrDesc)]
+	lenAs := len(as)
 	s.addressSubscriptionsLock.Unlock()
-	if ok && len(as) > 0 {
+	if ok && lenAs > 0 {
 		addr, _, err := s.chainParser.GetAddressesFromAddrDesc(addrDesc)
 		if err != nil {
 			glog.Error("GetAddressesFromAddrDesc error ", err, " for ", addrDesc)
@@ -677,4 +790,53 @@ func (s *WebsocketServer) OnNewTxAddr(tx *bchain.Tx, addrDesc bchain.AddressDesc
 			}
 		}
 	}
+}
+
+func (s *WebsocketServer) broadcastTicker(currency string, rates map[string]float64) {
+	s.fiatRatesSubscriptionsLock.Lock()
+	defer s.fiatRatesSubscriptionsLock.Unlock()
+	as, ok := s.fiatRatesSubscriptions[currency]
+	if ok && len(as) > 0 {
+		data := struct {
+			Rates interface{} `json:"rates"`
+		}{
+			Rates: rates,
+		}
+		// get the list of subscriptions again, this time keep the lock
+		as, ok = s.fiatRatesSubscriptions[currency]
+		if ok {
+			for c, id := range as {
+				if c.IsAlive() {
+					c.out <- &websocketRes{
+						ID:   id,
+						Data: &data,
+					}
+				}
+			}
+			glog.Info("broadcasting new rates for currency ", currency, " to ", len(as), " channels")
+		}
+	}
+}
+
+// OnNewFiatRatesTicker is a callback that broadcasts info about fiat rates affecting subscribed currency
+func (s *WebsocketServer) OnNewFiatRatesTicker(ticker *db.CurrencyRatesTicker) {
+	for currency, rate := range ticker.Rates {
+		s.broadcastTicker(currency, map[string]float64{currency: rate})
+	}
+	s.broadcastTicker(allFiatRates, ticker.Rates)
+}
+
+func (s *WebsocketServer) getCurrentFiatRates(currencies []string) (interface{}, error) {
+	ret, err := s.api.GetCurrentFiatRates(currencies)
+	return ret, err
+}
+
+func (s *WebsocketServer) getFiatRatesForTimestamps(timestamps []int64, currencies []string) (interface{}, error) {
+	ret, err := s.api.GetFiatRatesForTimestamps(timestamps, currencies)
+	return ret, err
+}
+
+func (s *WebsocketServer) getFiatRatesTickersList(timestamp int64) (interface{}, error) {
+	ret, err := s.api.GetFiatRatesTickersList(timestamp)
+	return ret, err
 }

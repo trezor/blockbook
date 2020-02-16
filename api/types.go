@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"math/big"
+	"sort"
 	"time"
 )
 
@@ -294,6 +295,69 @@ func (a Utxos) Less(i, j int) bool {
 		hj = maxInt
 	}
 	return hi >= hj
+}
+
+// BalanceHistory contains info about one point in time of balance history
+type BalanceHistory struct {
+	Time        uint32             `json:"time"`
+	Txs         uint32             `json:"txs"`
+	ReceivedSat *Amount            `json:"received"`
+	SentSat     *Amount            `json:"sent"`
+	FiatRates   map[string]float64 `json:"rates,omitempty"`
+	Txid        string             `json:"txid,omitempty"`
+}
+
+// BalanceHistories is array of BalanceHistory
+type BalanceHistories []BalanceHistory
+
+func (a BalanceHistories) Len() int      { return len(a) }
+func (a BalanceHistories) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+func (a BalanceHistories) Less(i, j int) bool {
+	ti := a[i].Time
+	tj := a[j].Time
+	if ti == tj {
+		return a[i].Txid < a[j].Txid
+	}
+	return ti < tj
+}
+
+// SortAndAggregate sums BalanceHistories to groups defined by parameter groupByTime
+func (a BalanceHistories) SortAndAggregate(groupByTime uint32) BalanceHistories {
+	bhs := make(BalanceHistories, 0)
+	if len(a) > 0 {
+		bha := BalanceHistory{
+			SentSat:     &Amount{},
+			ReceivedSat: &Amount{},
+		}
+		sort.Sort(a)
+		for i := range a {
+			bh := &a[i]
+			time := bh.Time - bh.Time%groupByTime
+			if bha.Time != time {
+				if bha.Time != 0 {
+					// in aggregate, do not return txid as it could multiple of them
+					bha.Txid = ""
+					bhs = append(bhs, bha)
+				}
+				bha = BalanceHistory{
+					Time:        time,
+					SentSat:     &Amount{},
+					ReceivedSat: &Amount{},
+				}
+			}
+			if bha.Txid != bh.Txid {
+				bha.Txs += bh.Txs
+				bha.Txid = bh.Txid
+			}
+			(*big.Int)(bha.SentSat).Add((*big.Int)(bha.SentSat), (*big.Int)(bh.SentSat))
+			(*big.Int)(bha.ReceivedSat).Add((*big.Int)(bha.ReceivedSat), (*big.Int)(bh.ReceivedSat))
+		}
+		if bha.Txs > 0 {
+			bha.Txid = ""
+			bhs = append(bhs, bha)
+		}
+	}
+	return bhs
 }
 
 // Blocks is list of blocks with paging information

@@ -50,6 +50,9 @@ The following methods are supported:
 - [Get utxo](#get-utxo)
 - [Get block](#get-block)
 - [Send transaction](#send-transaction)
+- [Tickers list](#tickers-list)
+- [Tickers](#tickers)
+- [Balance history](#balance-history)
 
 #### Status page
 Status page returns current status of Blockbook and connected backend.
@@ -575,6 +578,160 @@ or in case of error
 }
 ```
 
+#### Tickers list
+
+Returns a list of available currency rate tickers for the specified date, along with an actual data timestamp.
+
+```
+GET /api/v2/tickers-list/?timestamp=<timestamp>
+```
+
+The query parameters:
+- *timestamp*: specifies a Unix timestamp to return available tickers for.
+
+Example response:
+
+```javascript
+{
+  "ts":1574346615,
+  "available_currencies": [
+    "eur",
+    "usd"
+  ]
+}
+```
+
+#### Tickers
+
+Returns currency rate for the specified currency and date. If the currency is not available for that specific timestamp, the next closest rate will be returned.
+All responses contain an actual rate timestamp.
+
+```
+GET /api/v2/tickers/[?currency=<currency>&timestamp=<timestamp>]
+```
+
+The optional query parameters:
+- *currency*: specifies a currency of returned rate ("usd", "eur", "eth"...). If not specified, all available currencies will be returned.
+- *timestamp*: a Unix timestamp that specifies a date to return currency rates for. If not specified, the last available rate will be returned.
+
+Example response (no parameters):
+
+```javascript
+{
+  "ts": 1574346615,
+  "rates": {
+    "eur": 7134.1,
+    "usd": 7914.5
+    }
+}
+```
+
+Example response (currency=usd):
+
+```javascript
+{
+  "ts": 1574346615,
+  "rates": {
+    "usd": 7914.5
+  }
+}
+```
+
+Example error response (e.g. rate unavailable, incorrect currency...):
+```javascript
+{
+  "ts":7980386400,
+  "rates": {
+    "usd": -1
+  }
+}
+```
+
+#### Balance history
+
+Returns a balance history for the specified XPUB or address.
+
+```
+GET /api/v2/balancehistory/<XPUB | address>?from=<dateFrom>&to=<dateTo>[&fiatcurrency=<currency>&groupBy=<groupBySeconds>]
+```
+
+Query parameters:
+- *from*: specifies a start date as a Unix timestamp
+- *to*: specifies an end date as a Unix timestamp
+
+The optional query parameters:
+- *fiatcurrency*: if specified, the response will contain fiat rate at the time of transaction. If not, all available currencies will be returned.
+- *groupBy*: an interval in seconds, to group results by. Default is 3600 seconds.
+
+Example response (fiatcurrency not specified):
+```javascript
+[
+  {
+    "time": 1578391200,
+    "txs": 5,
+    "received": "5000000",
+    "sent": "0",
+    "rates": {
+      "usd": 7855.9,
+      "eur": 6838.13,
+      ...
+    }
+  },
+  {
+    "time": 1578488400,
+    "txs": 1,
+    "received": "0",
+    "sent": "5000000",
+    "rates": {
+      "usd": 8283.11,
+      "eur": 7464.45,
+      ...
+    }
+  }
+]
+```
+
+Example response (fiatcurrency=usd):
+
+```javascript
+[
+  {
+    "time": 1578391200,
+    "txs": 5,
+    "received": "5000000",
+    "sent": "0",
+    "rates": {
+      "usd": 7855.9
+    }
+  },
+  {
+    "time": 1578488400,
+    "txs": 1,
+    "received": "0",
+    "sent": "5000000",
+    "rates": {
+      "usd": 8283.11
+    }
+  }
+]
+```
+
+Example response (fiatcurrency=usd&groupBy=172800):
+
+```javascript
+[
+  {
+    "time": 1578355200,
+    "txs": 6,
+    "received": "5000000",
+    "sent": "5000000",
+    "rates": {
+      "usd": 7734.45
+    }
+  }
+]
+```
+
 ### Websocket API
 
 Websocket interface is provided at `/websocket/`. The interface can be explored using Blockbook Websocket Test Page found at `/test-websocket.html`.
@@ -587,6 +744,10 @@ The websocket interface provides the following requests:
 - getAccountUtxo
 - getTransaction
 - getTransactionSpecific
+- getBalanceHistory
+- getCurrentFiatRates
+- getFiatRatesTickersList
+- getFiatRatesForTimestamps
 - estimateFee
 - sendTransaction
 - ping
@@ -595,7 +756,9 @@ The client can subscribe to the following events:
 
 - new block added to blockchain
 - new transaction for given address (list of addresses)
+- new currency rate ticker
 
 There can be always only one subscription of given event per connection, i.e. new list of addresses replaces previous list of addresses.
 
 _Note: If there is reorg on the backend (blockchain), you will get a new block hash with the same or even smaller height if the reorg is deeper_
+

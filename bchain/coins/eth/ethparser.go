@@ -76,12 +76,6 @@ type rpcReceipt struct {
 	Logs    []*rpcLog `json:"logs"`
 }
 
-type rpcEtcReceipt struct {
-	GasUsed string    `json:"gasUsed"`
-	Status  int       `json:"status"`
-	Logs    []*rpcLog `json:"logs"`
-}
-
 type completeTransaction struct {
 	Tx      *rpcTransaction `json:"tx"`
 	Receipt *rpcReceipt     `json:"receipt,omitempty"`
@@ -200,6 +194,15 @@ func EIP55Address(addrDesc bchain.AddressDescriptor) string {
 		}
 	}
 	return string(result)
+}
+
+// EIP55AddressFromAddress returns an EIP55-compliant hex string representation of the address
+func EIP55AddressFromAddress(address string) string {
+	b, err := hex.DecodeString(address)
+	if err != nil {
+		return address
+	}
+	return EIP55Address(b)
 }
 
 // GetAddressesFromAddrDesc returns addresses for given address descriptor with flag if the addresses are searchable
