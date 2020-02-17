@@ -1898,30 +1898,34 @@ func (d *RocksDB) fixUtxo(addrDesc bchain.AddressDescriptor, ba *AddrBalance) (b
 		err := d.GetAddrDescTransactions(addrDesc, 0, ^uint32(0), func(txid string, height uint32, indexes []int32) error {
 			var ta *TxAddresses
 			var err error
+			// sort the indexes so that the utxos are appended in the reverse order
+			sort.Slice(indexes, func(i, j int) bool {
+				return indexes[i] > indexes[j]
+			})
 			for _, index := range indexes {
 				// take only outputs
-				if index >= 0 {
-					if ta == nil {
-						ta, err = d.GetTxAddresses(txid)
-						if err != nil {
-							return err
-						}
+				if index < 0 {
+					break
+				}
+				if ta == nil {
+					ta, err = d.GetTxAddresses(txid)
+					if err != nil {
+						return err
 					}
-					if ta == nil {
-						return errors.New("DB inconsistency:  tx " + txid + ": not found in txAddresses")
-					} else {
-						if len(ta.Outputs) <= int(index) {
-							glog.Warning("DB inconsistency:  txAddresses " + txid + " does not have enough outputs")
-						} else {
-							tao := &ta.Outputs[index]
-							if !tao.Spent {
-								bTxid, _ := d.chainParser.PackTxid(txid)
-								checksumFromTxs.Add(&checksumFromTxs, &tao.ValueSat)
-								utxos = append(utxos, Utxo{BtxID: bTxid, Height: height, Vout: index, ValueSat: tao.ValueSat})
-								if checksumFromTxs.Cmp(&ba.BalanceSat) == 0 {
-									return &StopIteration{}
-								}
-							}
+				}
+				if ta == nil {
+					return errors.New("DB inconsistency:  tx " + txid + ": not found in txAddresses")
+				}
+				if len(ta.Outputs) <= int(index) {
+					glog.Warning("DB inconsistency:  txAddresses " + txid + " does not have enough outputs")
+				} else {
+					tao := &ta.Outputs[index]
+					if !tao.Spent {
+						bTxid, _ := d.chainParser.PackTxid(txid)
+						checksumFromTxs.Add(&checksumFromTxs, &tao.ValueSat)
+						utxos = append(utxos, Utxo{BtxID: bTxid, Height: height, Vout: index, ValueSat: tao.ValueSat})
+						if checksumFromTxs.Cmp(&ba.BalanceSat) == 0 {
+							return &StopIteration{}
 						}
 					}
 				}
