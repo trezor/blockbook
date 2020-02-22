@@ -36,7 +36,10 @@
     "protect_memory": true,
     "mainnet": true,
     "server_config_file": "bitcoin_like.conf",
-    "client_config_file": "bitcoin_like_client.conf"
+    "client_config_file": "bitcoin_like_client.conf",
+    "additional_params": {
+      "usecashaddr": 0
+    }
   },
   "blockbook": {
     "package_name": "blockbook-bcashsv",
@@ -48,7 +51,6 @@
     "block_chain": {
       "parse": true,
       "subversion": "/Bitcoin SV:0.2.1/",
-      "address_format": "cashaddr",
       "mempool_workers": 8,
       "mempool_sub_workers": 2,
       "block_addresses_to_keep": 300,
