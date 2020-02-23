@@ -158,7 +158,7 @@ func NewRocksDB(path string, cacheSize, maxOpenFiles int, parser bchain.BlockCha
 		return nil, errors.New("Unknown chain type")
 	}
 
-	c := gorocksdb.NewLRUCache(cacheSize)
+	c := gorocksdb.NewLRUCache(uint64(cacheSize))
 	db, cfh, err := openDB(path, c, maxOpenFiles)
 	if err != nil {
 		return nil, err
@@ -338,8 +338,8 @@ func (d *RocksDB) GetMemoryStats() string {
 		pinnedCacheUsage int
 		columns          []columnStats
 	}{
-		cacheUsage:       d.cache.GetUsage(),
-		pinnedCacheUsage: d.cache.GetPinnedUsage(),
+		cacheUsage:       int(d.cache.GetUsage()),
+		pinnedCacheUsage: int(d.cache.GetPinnedUsage()),
 		columns:          cs,
 	}
 	total = m.cacheUsage + indexAndFilter + memtable
