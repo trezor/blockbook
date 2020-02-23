@@ -38,7 +38,10 @@
     "server_config_file": "bitcoin_like.conf",
     "client_config_file": "bitcoin_like_client.conf",
     "additional_params": {
-      "usecashaddr": 0
+      "usecashaddr": 0,
+      "excessiveblocksize":1000000000,
+      "maxstackmemoryusageconsensus":100000000,
+      "daemon":1
     }
   },
   "blockbook": {
@@ -50,7 +53,7 @@
     "additional_params": "",
     "block_chain": {
       "parse": true,
-      "subversion": "/Bitcoin SV:0.2.1/",
+      "subversion": "/Bitcoin SV:1.0.1/",
       "mempool_workers": 8,
       "mempool_sub_workers": 2,
       "block_addresses_to_keep": 300,
