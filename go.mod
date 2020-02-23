@@ -3,10 +3,8 @@ module github.com/trezor/blockbook
 go 1.12
 
 require (
-	github.com/Groestlcoin/go-groestl-hash v0.0.0-20181012171753-790653ac190c // indirect
 	github.com/allegro/bigcache v1.2.1 // indirect
 	github.com/aristanetworks/goarista v0.0.0-20200214154357-2151774b0d85 // indirect
-	github.com/dchest/blake256 v1.1.0 // indirect
 	github.com/deckarep/golang-set v1.7.1 // indirect
 	github.com/elastic/gosigar v0.10.5 // indirect
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
