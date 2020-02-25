@@ -6,7 +6,7 @@ BUILDTIME = $(shell date --iso-8601=seconds)
 LDFLAGS := -X blockbook/common.version=$(VERSION) -X blockbook/common.gitcommit=$(GITCOMMIT) -X blockbook/common.buildtime=$(BUILDTIME)
 BLOCKBOOK_SRC := $(GOPATH)/src/github.com/trezor/blockbook
 ARGS ?=
-TAGS = ""
+TAGS = "--tags unittest"
 
 all: build tools
 
@@ -25,24 +25,22 @@ tools:
 	chown $(PACKAGER) /out/{ldb,sst_dump}
 
 test: prepare-sources generate-data
-	TAGS = 'unittest'
-	echo $(CURDIR)
-	cd $(BLOCKBOOK_SRC) && bash /build/run_test.sh
+	TAGS="--tags unittest" \
+	$(MAKE) tests-run
 
 test-integration: prepare-sources generate-data
-    TAGS = 'integration'
-	echo $(CURDIR)
-	cd $(BLOCKBOOK_SRC) && bash /build/run_test.sh
+	TAGS="--tags integration" \
+	$(MAKE) tests-run
 
 test-all: prepare-sources generate-data
-	TAGS = 'unittest integration'
-	echo $(CURDIR)
-	cd $(BLOCKBOOK_SRC) && bash /build/run_test.sh
+	TAGS="--tags unittest integration" \
+	$(MAKE) tests-run
 
 prepare-sources:
 	@ [ -n "`ls /src 2> /dev/null`" ] || (echo "/src doesn't exist or is empty" 1>&2 && exit 1)
 	rm -rf $(BLOCKBOOK_SRC)
-	cp -r /src/github.com/trezor/$(BLOCKBOOK_SRC)
+	mkdir -p $(BLOCKBOOK_SRC)
+	cp -r /src/* $(BLOCKBOOK_SRC)
 	$(MAKE) prepare-vendor
 
 prepare-vendor:
@@ -55,3 +53,12 @@ prepare-vendor:
 
 generate-data:
 	cd $(BLOCKBOOK_SRC) && packr clean && packr
+
+tests-run:
+	cd $(BLOCKBOOK_SRC)
+	ls -las $(BLOCKBOOK_SRC)
+	for i in $(find . -name go.mod -type f -print | grep -v "^./vendor"); do \
+		module=$(dirname ${i}); \
+		echo ${module}; \
+		(cd ${module} && go test $(TAGS) $(ARGS) ./..); \
+	done

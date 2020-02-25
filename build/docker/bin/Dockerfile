@@ -37,15 +37,14 @@ RUN go get github.com/golang/dep/cmd/dep
 RUN go get github.com/gobuffalo/packr/...
 
 # download pre-loaded depencencies
-RUN \
-    cleanup() { rm -rf $GOPATH/src/github.com/trezor/blockbook; } && \
-    trap cleanup EXIT && \
-    mkdir -p $GOPATH/src/github.com/trezor && \
-    cd $GOPATH/src/github.com/trezor && \
-    git clone -b gomodules-support https://github.com/dmigwi/blockbook.git && \
-    cd blockbook
-    # dep ensure -vendor-only && \
-    # cp -r vendor /build/vendor
+# RUN \
+#     cleanup() { rm -rf $GOPATH/src/blockbook; } && \
+#     trap cleanup EXIT && \
+#     cd $GOPATH/src && \
+#     git clone https://github.com/trezor/blockbook.git && \
+#     cd blockbook && \
+#     dep ensure -vendor-only && \
+#     cp -r vendor /build/vendor
 
 ADD Makefile /build/Makefile
 
