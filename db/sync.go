@@ -1,8 +1,6 @@
 package db
 
 import (
-	"blockbook/bchain"
-	"blockbook/common"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -10,6 +8,8 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/juju/errors"
+	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/common"
 )
 
 // SyncWorker is handle to SyncWorker

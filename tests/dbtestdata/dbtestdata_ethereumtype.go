@@ -1,8 +1,9 @@
 package dbtestdata
 
 import (
-	"blockbook/bchain"
 	"encoding/hex"
+
+	"github.com/trezor/blockbook/bchain"
 )
 
 // Addresses

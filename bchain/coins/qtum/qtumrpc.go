@@ -1,12 +1,12 @@
 package qtum
 
 import (
-	"blockbook/bchain"
-	"blockbook/bchain/coins/btc"
 	"encoding/json"
 	"math/big"
 
 	"github.com/golang/glog"
+	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/bchain/coins/btc"
 )
 
 // QtumRPC is an interface to JSON-RPC bitcoind service.

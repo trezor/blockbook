@@ -3,14 +3,15 @@
 package bitcore
 
 import (
-	"blockbook/bchain"
-	"blockbook/bchain/coins/btc"
 	"encoding/hex"
-	"github.com/martinboehm/btcutil/chaincfg"
 	"math/big"
 	"os"
 	"reflect"
 	"testing"
+
+	"github.com/martinboehm/btcutil/chaincfg"
+	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/bchain/coins/btc"
 )
 
 func TestMain(m *testing.M) {
