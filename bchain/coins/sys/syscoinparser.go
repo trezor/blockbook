@@ -2,9 +2,6 @@ package syscoin
 
 import (
 	"encoding/json"
-	"blockbook/bchain"
-	"blockbook/bchain/coins/btc"
-	"blockbook/bchain/coins/utils"
 	"bytes"
 	"math/big"
 	"github.com/martinboehm/btcd/wire"
@@ -12,6 +9,9 @@ import (
 	"github.com/martinboehm/btcutil/txscript"
 	vlq "github.com/bsm/go-vlq"
 	"github.com/juju/errors"
+	"github.com/syscoin/blockbook/bchain"
+	"github.com/syscoin/blockbook/bchain/coins/btc"
+	"github.com/syscoin/blockbook/bchain/coins/utils"
 )
 
 // magic numbers

@@ -3,11 +3,6 @@
 package server
 
 import (
-	"blockbook/bchain"
-	"blockbook/bchain/coins/btc"
-	"blockbook/common"
-	"blockbook/db"
-	"blockbook/tests/dbtestdata"
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
@@ -24,6 +19,11 @@ import (
 	"github.com/martinboehm/btcutil/chaincfg"
 	gosocketio "github.com/martinboehm/golang-socketio"
 	"github.com/martinboehm/golang-socketio/transport"
+	"github.com/syscoin/blockbook/bchain"
+	"github.com/syscoin/blockbook/bchain/coins/btc"
+	"github.com/syscoin/blockbook/common"
+	"github.com/syscoin/blockbook/db"
+	"github.com/syscoin/blockbook/tests/dbtestdata"
 )
 
 func TestMain(m *testing.M) {

@@ -3,14 +3,13 @@
 package db
 
 import (
-	"blockbook/bchain"
-	"blockbook/bchain/coins/eth"
-	"blockbook/tests/dbtestdata"
 	"encoding/hex"
 	"reflect"
 	"testing"
 
 	"github.com/juju/errors"
+	"github.com/syscoin/blockbook/bchain/coins/eth"
+	"github.com/syscoin/blockbook/tests/dbtestdata"
 )
 
 type testEthereumParser struct {

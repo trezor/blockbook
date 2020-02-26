@@ -1,16 +1,15 @@
 package liquid
 
 import (
-	"blockbook/bchain"
-	"blockbook/bchain/coins/btc"
 	"strconv"
 
 	vlq "github.com/bsm/go-vlq"
 	"github.com/golang/glog"
-
 	"github.com/martinboehm/btcd/txscript"
 	"github.com/martinboehm/btcd/wire"
 	"github.com/martinboehm/btcutil/chaincfg"
+	"github.com/syscoin/blockbook/bchain"
+	"github.com/syscoin/blockbook/bchain/coins/btc"
 )
 
 const (

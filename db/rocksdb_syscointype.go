@@ -1,7 +1,6 @@
 package db
 
 import (
-	"blockbook/bchain"
 	"bytes"
 	"strings"
 	"math/big"
@@ -11,6 +10,7 @@ import (
 	"encoding/hex"
 	"time"
 	"fmt"
+	"github.com/syscoin/blockbook/bchain"
 )
 var AssetCache map[uint32]bchain.Asset
 var SetupAssetCacheFirstTime bool = true

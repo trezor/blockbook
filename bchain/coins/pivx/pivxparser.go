@@ -1,22 +1,19 @@
 package pivx
 
 import (
-	"blockbook/bchain"
-	"blockbook/bchain/coins/btc"
-	"blockbook/bchain/coins/utils"
 	"bytes"
-	"io"
-
 	"encoding/hex"
 	"encoding/json"
-
+	"io"
 	"math/big"
 
-	"github.com/martinboehm/btcd/blockchain"
-
 	"github.com/juju/errors"
+	"github.com/martinboehm/btcd/blockchain"
 	"github.com/martinboehm/btcd/wire"
 	"github.com/martinboehm/btcutil/chaincfg"
+	"github.com/syscoin/blockbook/bchain"
+	"github.com/syscoin/blockbook/bchain/coins/btc"
+	"github.com/syscoin/blockbook/bchain/coins/utils"
 )
 
 // magic numbers

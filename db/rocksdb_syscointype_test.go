@@ -3,11 +3,6 @@
 package db
 
 import (
-	"blockbook/bchain"
-	"blockbook/common"
-	"blockbook/bchain/coins/btc"
-	"blockbook/bchain/coins/sys"
-	"blockbook/tests/dbtestdata"
 	"math/big"
 	"reflect"
 	"fmt"
@@ -17,6 +12,11 @@ import (
 	"github.com/juju/errors"
 	"encoding/hex"
 	vlq "github.com/bsm/go-vlq"
+	"github.com/syscoin/blockbook/bchain"
+	"github.com/syscoin/blockbook/common"
+	"github.com/syscoin/blockbook/bchain/coins/btc"
+	"github.com/syscoin/blockbook/bchain/coins/sys"
+	"github.com/syscoin/blockbook/tests/dbtestdata"
 )
 
 type testSyscoinParser struct {

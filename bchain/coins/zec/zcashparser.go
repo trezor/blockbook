@@ -1,11 +1,10 @@
 package zec
 
 import (
-	"blockbook/bchain"
-	"blockbook/bchain/coins/btc"
-
 	"github.com/martinboehm/btcd/wire"
 	"github.com/martinboehm/btcutil/chaincfg"
+	"github.com/syscoin/blockbook/bchain"
+	"github.com/syscoin/blockbook/bchain/coins/btc"
 )
 
 const (

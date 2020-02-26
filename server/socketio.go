@@ -1,10 +1,6 @@
 package server
 
 import (
-	"blockbook/api"
-	"blockbook/bchain"
-	"blockbook/common"
-	"blockbook/db"
 	"encoding/json"
 	"encoding/hex"
 	"math/big"
@@ -18,6 +14,10 @@ import (
 	"github.com/juju/errors"
 	gosocketio "github.com/martinboehm/golang-socketio"
 	"github.com/martinboehm/golang-socketio/transport"
+	"github.com/syscoin/blockbook/api"
+	"github.com/syscoin/blockbook/bchain"
+	"github.com/syscoin/blockbook/common"
+	"github.com/syscoin/blockbook/db"
 )
 
 // SocketIoServer is handle to SocketIoServer

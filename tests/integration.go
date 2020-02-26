@@ -3,11 +3,6 @@
 package tests
 
 import (
-	"blockbook/bchain"
-	"blockbook/bchain/coins"
-	build "blockbook/build/tools"
-	"blockbook/tests/rpc"
-	"blockbook/tests/sync"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -22,6 +17,11 @@ import (
 	"time"
 
 	"github.com/martinboehm/btcutil/chaincfg"
+	"github.com/syscoin/blockbook/bchain"
+	"github.com/syscoin/blockbook/bchain/coins"
+	build "github.com/syscoin/blockbook/build/tools"
+	"github.com/syscoin/blockbook/tests/rpc"
+	"github.com/syscoin/blockbook/tests/sync"
 )
 
 type TestFunc func(t *testing.T, coin string, chain bchain.BlockChain, mempool bchain.Mempool, testConfig json.RawMessage)
