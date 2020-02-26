@@ -194,7 +194,7 @@ like macOS or Windows, please read instructions specific for each project.
 Setup go environment:
 
 ```
-wget https://dl.google.com/go/go1.14.2.linux-amd64.tar.tz && tar xf go1.14.2.linux-amd64.tar.gz
+wget https://dl.google.com/go/go1.14.2.linux-amd64.tar.gz && tar xf go1.14.2.linux-amd64.tar.gz
 sudo mv go /opt/go
 sudo ln -s /opt/go/bin/go /usr/bin/go
 # see `go help gopath` for details
