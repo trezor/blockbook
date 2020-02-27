@@ -4,7 +4,8 @@ VERSION ?= devel
 GITCOMMIT = $(shell cd /src && git describe --always --dirty)
 BUILDTIME = $(shell date --iso-8601=seconds)
 LDFLAGS := -X github.com/trezor/blockbook/common.version=$(VERSION) -X github.com/trezor/blockbook/common.gitcommit=$(GITCOMMIT) -X github.com/trezor/blockbook/common.buildtime=$(BUILDTIME)
-BLOCKBOOK_SRC := $(GOPATH)/src/github.com/trezor/blockbook
+BLOCKBOOK_BASE := $(GOPATH)/src/github.com/trezor
+BLOCKBOOK_SRC := $(BLOCKBOOK_BASE)/blockbook
 ARGS ?=
 
 all: build tools
@@ -35,6 +36,7 @@ test-all: prepare-sources generate-data
 prepare-sources:
 	@ [ -n "`ls /src 2> /dev/null`" ] || (echo "/src doesn't exist or is empty" 1>&2 && exit 1)
 	rm -rf $(BLOCKBOOK_SRC)
+	mkdir -p $(BLOCKBOOK_BASE)
 	cp -r /src $(BLOCKBOOK_SRC)
 	$(MAKE) prepare-vendor
 
