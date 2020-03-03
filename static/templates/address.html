@@ -100,8 +100,8 @@
     <h3 class="col-md-3">Transactions</h3>
     <select class="col-md-2" style="background-color: #eaeaea;" onchange="self.location='?filter='+options[selectedIndex].value">
         <option>All</option>
-        <option {{if eq $addr.Filter "inputs" -}} selected{{end}} value="inputs">Inputs</option>
-        <option {{if eq $addr.Filter "outputs" -}} selected{{end}} value="outputs">Outputs</option>
+        <option {{if eq $addr.Filter "inputs" -}} selected{{end}} value="inputs">Address on input side</option>
+        <option {{if eq $addr.Filter "outputs" -}} selected{{end}} value="outputs">Address on output side</option>
         {{- if $addr.Tokens -}}
         <option {{if eq $addr.Filter "0" -}} selected{{end}} value="0">Non-contract</option>
         {{- range $t := $addr.Tokens -}}

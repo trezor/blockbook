@@ -290,7 +290,7 @@ Example response:
 Returns balances and transactions of an address. The returned transactions are sorted by block height, newest blocks first.
 
 ```
-GET /api/v2/address/<address>[?page=<page>&pageSize=<size>&from=<block height>&to=<block height>&details=<basic|tokens|tokenBalances|txids|txs>]
+GET /api/v2/address/<address>[?page=<page>&pageSize=<size>&from=<block height>&to=<block height>&details=<basic|tokens|tokenBalances|txids|txs>&contract=<contract address>]
 ```
 
 The optional query parameters:
@@ -303,6 +303,7 @@ The optional query parameters:
     - *tokenBalances*: *basic* + tokens with balances + belonging to the address (applicable only to some coins)
     - *txids*: *tokenBalances* + list of txids, subject to  *from*, *to* filter and paging
     - *txs*:  *tokenBalances* + list of transaction with details, subject to  *from*, *to* filter and paging
+- *contract*: return only transactions which affect specified contract (applicable only to coins which support contracts)
 
 Response:
 
