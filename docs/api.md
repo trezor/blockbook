@@ -302,6 +302,7 @@ The optional query parameters:
     - *tokens*: *basic* + tokens belonging to the address (applicable only to some coins)
     - *tokenBalances*: *basic* + tokens with balances + belonging to the address (applicable only to some coins)
     - *txids*: *tokenBalances* + list of txids, subject to  *from*, *to* filter and paging
+    - *txslight*:  *tokenBalances* + list of transaction with limited details (only data from index), subject to  *from*, *to* filter and paging
     - *txs*:  *tokenBalances* + list of transaction with details, subject to  *from*, *to* filter and paging
 - *contract*: return only transactions which affect specified contract (applicable only to coins which support contracts)
 
