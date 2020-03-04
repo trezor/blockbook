@@ -116,5 +116,12 @@ Column families used only by **Ethereum type** coins:
     (txid []byte) -> (txdata []byte)
     ```
 
+- **fiatRates**
+
+    Stores fiat rates in json format.
+    ```
+    (timestamp YYYYMMDDhhmmss) -> (rates json)
+    ```
+
 
 The `txid` field as specified in this documentation is a byte array of fixed size with length 32 bytes (*[32]byte*), however some coins may define other fixed size lengths.
