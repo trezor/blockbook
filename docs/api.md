@@ -696,6 +696,34 @@ Example response (fiatcurrency not specified):
 ]
 ```
 
+Example response (fiatcurrency not specified):
+```javascript
+[
+  {
+    "time": 1578391200,
+    "txs": 5,
+    "received": "5000000",
+    "sent": "0",
+    "rates": {
+      "usd": 7855.9,
+      "eur": 6838.13,
+      ...
+    }
+  },
+  {
+    "time": 1578488400,
+    "txs": 1,
+    "received": "0",
+    "sent": "5000000",
+    "rates": {
+      "usd": 8283.11,
+      "eur": 7464.45,
+      ...
+    }
+  }
+]
+```
+
 Example response (fiatcurrency=usd):
 
 ```javascript
