@@ -237,7 +237,7 @@ func getTxInfo(tx *bchain.Tx) *txInfo {
 	return info
 }
 
-func getTaInfo(parser bchain.BlockChainParser, ta *db.TxAddresses) (*txInfo, error) {
+func getTaInfo(parser bchain.BlockChainParser, ta *bchain.TxAddresses) (*txInfo, error) {
 	info := &txInfo{inputs: []string{}, outputs: []string{}}
 
 	for i := range ta.Inputs {

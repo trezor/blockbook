@@ -3,6 +3,7 @@
 package api
 
 import (
+	"blockbook/bchain"
 	"encoding/json"
 	"math/big"
 	"reflect"
@@ -11,10 +12,10 @@ import (
 
 func TestAmount_MarshalJSON(t *testing.T) {
 	type amounts struct {
-		A1  Amount  `json:"a1"`
-		A2  Amount  `json:"a2,omitempty"`
-		PA1 *Amount `json:"pa1"`
-		PA2 *Amount `json:"pa2,omitempty"`
+		A1  bchain.Amount  `json:"a1"`
+		A2  bchain.Amount  `json:"a2,omitempty"`
+		PA1 *bchain.Amount `json:"pa1"`
+		PA2 *bchain.Amount `json:"pa2,omitempty"`
 	}
 	tests := []struct {
 		name string
@@ -28,10 +29,10 @@ func TestAmount_MarshalJSON(t *testing.T) {
 		{
 			name: "1",
 			a: amounts{
-				A1:  (Amount)(*big.NewInt(123456)),
-				A2:  (Amount)(*big.NewInt(787901)),
-				PA1: (*Amount)(big.NewInt(234567)),
-				PA2: (*Amount)(big.NewInt(890123)),
+				A1:  (bchain.Amount)(*big.NewInt(123456)),
+				A2:  (bchain.Amount)(*big.NewInt(787901)),
+				PA1: (*bchain.Amount)(big.NewInt(234567)),
+				PA2: (*bchain.Amount)(big.NewInt(890123)),
 			},
 			want: `{"a1":"123456","a2":"787901","pa1":"234567","pa2":"890123"}`,
 		},
@@ -67,8 +68,8 @@ func TestBalanceHistories_SortAndAggregate(t *testing.T) {
 			name: "one",
 			a: []BalanceHistory{
 				{
-					ReceivedSat: (*Amount)(big.NewInt(1)),
-					SentSat:     (*Amount)(big.NewInt(2)),
+					ReceivedSat: (*bchain.Amount)(big.NewInt(1)),
+					SentSat:     (*bchain.Amount)(big.NewInt(2)),
 					Time:        1521514812,
 					Txid:        "00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840",
 					Txs:         1,
@@ -77,8 +78,8 @@ func TestBalanceHistories_SortAndAggregate(t *testing.T) {
 			groupByTime: 3600,
 			want: []BalanceHistory{
 				{
-					ReceivedSat: (*Amount)(big.NewInt(1)),
-					SentSat:     (*Amount)(big.NewInt(2)),
+					ReceivedSat: (*bchain.Amount)(big.NewInt(1)),
+					SentSat:     (*bchain.Amount)(big.NewInt(2)),
 					Time:        1521514800,
 					Txs:         1,
 				},
@@ -88,43 +89,43 @@ func TestBalanceHistories_SortAndAggregate(t *testing.T) {
 			name: "aggregate",
 			a: []BalanceHistory{
 				{
-					ReceivedSat: (*Amount)(big.NewInt(1)),
-					SentSat:     (*Amount)(big.NewInt(2)),
+					ReceivedSat: (*bchain.Amount)(big.NewInt(1)),
+					SentSat:     (*bchain.Amount)(big.NewInt(2)),
 					Time:        1521504812,
 					Txid:        "0011223344556677889900112233445566778899001122334455667788990011",
 					Txs:         1,
 				},
 				{
-					ReceivedSat: (*Amount)(big.NewInt(3)),
-					SentSat:     (*Amount)(big.NewInt(4)),
+					ReceivedSat: (*bchain.Amount)(big.NewInt(3)),
+					SentSat:     (*bchain.Amount)(big.NewInt(4)),
 					Time:        1521504812,
 					Txid:        "00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840",
 					Txs:         1,
 				},
 				{
-					ReceivedSat: (*Amount)(big.NewInt(5)),
-					SentSat:     (*Amount)(big.NewInt(6)),
+					ReceivedSat: (*bchain.Amount)(big.NewInt(5)),
+					SentSat:     (*bchain.Amount)(big.NewInt(6)),
 					Time:        1521514812,
 					Txid:        "00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840",
 					Txs:         1,
 				},
 				{
-					ReceivedSat: (*Amount)(big.NewInt(7)),
-					SentSat:     (*Amount)(big.NewInt(8)),
+					ReceivedSat: (*bchain.Amount)(big.NewInt(7)),
+					SentSat:     (*bchain.Amount)(big.NewInt(8)),
 					Time:        1521504812,
 					Txid:        "00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840",
 					Txs:         1,
 				},
 				{
-					ReceivedSat: (*Amount)(big.NewInt(9)),
-					SentSat:     (*Amount)(big.NewInt(10)),
+					ReceivedSat: (*bchain.Amount)(big.NewInt(9)),
+					SentSat:     (*bchain.Amount)(big.NewInt(10)),
 					Time:        1521534812,
 					Txid:        "0011223344556677889900112233445566778899001122334455667788990011",
 					Txs:         1,
 				},
 				{
-					ReceivedSat: (*Amount)(big.NewInt(11)),
-					SentSat:     (*Amount)(big.NewInt(12)),
+					ReceivedSat: (*bchain.Amount)(big.NewInt(11)),
+					SentSat:     (*bchain.Amount)(big.NewInt(12)),
 					Time:        1521534812,
 					Txid:        "1122334455667788990011223344556677889900112233445566778899001100",
 					Txs:         1,
@@ -133,20 +134,20 @@ func TestBalanceHistories_SortAndAggregate(t *testing.T) {
 			groupByTime: 3600,
 			want: []BalanceHistory{
 				{
-					ReceivedSat: (*Amount)(big.NewInt(11)),
-					SentSat:     (*Amount)(big.NewInt(14)),
+					ReceivedSat: (*bchain.Amount)(big.NewInt(11)),
+					SentSat:     (*bchain.Amount)(big.NewInt(14)),
 					Time:        1521504000,
 					Txs:         2,
 				},
 				{
-					ReceivedSat: (*Amount)(big.NewInt(5)),
-					SentSat:     (*Amount)(big.NewInt(6)),
+					ReceivedSat: (*bchain.Amount)(big.NewInt(5)),
+					SentSat:     (*bchain.Amount)(big.NewInt(6)),
 					Time:        1521514800,
 					Txs:         1,
 				},
 				{
-					ReceivedSat: (*Amount)(big.NewInt(20)),
-					SentSat:     (*Amount)(big.NewInt(22)),
+					ReceivedSat: (*bchain.Amount)(big.NewInt(20)),
+					SentSat:     (*bchain.Amount)(big.NewInt(22)),
 					Time:        1521532800,
 					Txs:         2,
 				},

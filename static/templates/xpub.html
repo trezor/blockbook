@@ -41,14 +41,14 @@
                                     <th style="width: 8%;">Txs</th>
                                     <th style="width: 18%;">Path</th>
                                 </tr>
-                                {{- range $t := $addr.Tokens -}}
+                                {{- range $t := $addr.Tokens -}}{{- if $t -}}
                                 <tr>
                                     <td class="data ellipsis"><a href="/address/{{$t.Name}}">{{$t.Name}}</a></td>
                                     <td class="data">{{formatAmount $t.BalanceSat}} {{$cs}}</td>
                                     <td class="data">{{$t.Transfers}}</td>
                                     <td>{{$t.Path}}</td>
                                 </tr>
-                                {{- end -}}
+                                {{- end -}}{{- end -}}
                                 {{- if $data.NonZeroBalanceTokens -}}
                                 <tr>
                                     <td colspan="4"><a href="?tokens=used" style="float: left; margin-right: 30px;">Show used XPUB addresses</a><a href="?tokens=derived" style="float: left;">Show derived XPUB addresses</a></td>
@@ -91,12 +91,12 @@
 {{- end}}{{if or $addr.Transactions $addr.Filter -}}
 <div class="row h-container">
     <h3 class="col-md-3">Transactions</h3>
-    <select class="col-md-2" style="background-color: #eaeaea;" onchange="self.location='?filter='+options[selectedIndex].value">
+    <select class="col-md-3" style="background-color: #eaeaea;" onchange="self.location='?filter='+options[selectedIndex].value">
         <option>All</option>
-        <option {{if eq $addr.Filter "inputs" -}} selected{{end}} value="inputs">Inputs</option>
-        <option {{if eq $addr.Filter "outputs" -}} selected{{end}} value="outputs">Outputs</option>
+        <option {{if eq $addr.Filter "inputs" -}} selected{{end}} value="inputs">XPUB addresses on input side</option>
+        <option {{if eq $addr.Filter "outputs" -}} selected{{end}} value="outputs">XPUB addresses on output side</option>
     </select>
-    <div class="col-md-7">
+    <div class="col-md-6">
         <nav>{{template "paging" $data}}</nav>
     </div>
 </div>

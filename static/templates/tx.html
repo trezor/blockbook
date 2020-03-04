@@ -65,6 +65,29 @@
                 <td>Fees</td>
                 <td class="data">{{formatAmount $tx.FeesSat}} {{$cs}}</td>
             </tr>{{end -}}
+            {{- if $tx.TokenTransferSummary -}}
+            <tr>
+                <td>Tokens</td>
+                <td style="padding: 0;">
+                    <table class="table data-table">
+                        <tbody>
+                            <tr>
+                                <th>Asset</th>
+                                <th>Total Sent</th>
+                                <th>Fee</th>
+                            </tr>
+                            {{- range $tokenTransfer := $tx.TokenTransferSummary -}}{{if $tokenTransfer}}
+                            <tr>
+                                <td class="data ellipsis"><a href="/asset/{{$tokenTransfer.Token}}">{{$tokenTransfer.Token}}</a></td>
+                                <td class="data ellipsis">{{formatAmountWithDecimals $tokenTransfer.Value $tokenTransfer.Decimals}} {{$tokenTransfer.Symbol}}{{- if eq $tokenTransfer.Type "SPTUnallocated" -}}<span title="Unallocated balance, owned by asset"> ⚠️</span>{{- end -}}</td>
+                                <td class="data ellipsis">{{formatAmountWithDecimals $tokenTransfer.Fee $tokenTransfer.Decimals}} {{$tokenTransfer.Symbol}}</td>
+                            </tr>
+                            {{- end -}}{{- end -}}
+                        </tbody>
+                    </table>
+                </td>
+            </tr>
+            {{- end -}}
         </tbody>
     </table>
 </div>

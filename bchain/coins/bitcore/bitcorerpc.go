@@ -4,8 +4,8 @@ import (
 	"blockbook/bchain"
 	"blockbook/bchain/coins/btc"
 	"encoding/json"
-	"github.com/juju/errors"
 	"github.com/golang/glog"
+	"github.com/juju/errors"
 )
 
 // BitcoreRPC is an interface to JSON-RPC bitcoind service.
@@ -56,7 +56,6 @@ func (b *BitcoreRPC) Initialize() error {
 	return nil
 }
 
-
 // GetBlock returns block with given hash.
 
 func (f *BitcoreRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
@@ -90,7 +89,7 @@ func (f *BitcoreRPC) GetBlock(hash string, height uint32) (*bchain.Block, error)
 	return block, nil
 }
 
- // GetBlockFull returns block with given hash
+// GetBlockFull returns block with given hash
 func (f *BitcoreRPC) GetBlockFull(hash string) (*bchain.Block, error) {
 	glog.V(1).Info("rpc: getblock (verbosity=2) ", hash)
 
@@ -126,9 +125,8 @@ func (f *BitcoreRPC) GetBlockFull(hash string) (*bchain.Block, error) {
 	return &res.Result, nil
 }
 
- // GetTransactionForMempool returns a transaction by the transaction ID.
+// GetTransactionForMempool returns a transaction by the transaction ID.
 // It could be optimized for mempool, i.e. without block time and confirmations
 func (f *BitcoreRPC) GetTransactionForMempool(txid string) (*bchain.Tx, error) {
 	return f.GetTransaction(txid)
 }
-

@@ -34,13 +34,13 @@ func (d *RocksDB) storeAddressContracts(wb *gorocksdb.WriteBatch, acm map[string
 			wb.DeleteCF(d.cfh[cfAddressContracts], bchain.AddressDescriptor(addrDesc))
 		} else {
 			buf = buf[:0]
-			l := packVaruint(acs.TotalTxs, varBuf)
+			l := d.chainParser.PackVaruint(acs.TotalTxs, varBuf)
 			buf = append(buf, varBuf[:l]...)
-			l = packVaruint(acs.NonContractTxs, varBuf)
+			l = d.chainParser.PackVaruint(acs.NonContractTxs, varBuf)
 			buf = append(buf, varBuf[:l]...)
 			for _, ac := range acs.Contracts {
 				buf = append(buf, ac.Contract...)
-				l = packVaruint(ac.Txs, varBuf)
+				l = d.chainParser.PackVaruint(ac.Txs, varBuf)
 				buf = append(buf, varBuf[:l]...)
 			}
 			wb.PutCF(d.cfh[cfAddressContracts], bchain.AddressDescriptor(addrDesc), buf)
@@ -60,16 +60,16 @@ func (d *RocksDB) GetAddrDescContracts(addrDesc bchain.AddressDescriptor) (*Addr
 	if len(buf) == 0 {
 		return nil, nil
 	}
-	tt, l := unpackVaruint(buf)
+	tt, l := d.chainParser.UnpackVaruint(buf)
 	buf = buf[l:]
-	nct, l := unpackVaruint(buf)
+	nct, l := d.chainParser.UnpackVaruint(buf)
 	buf = buf[l:]
 	c := make([]AddrContract, 0, 4)
 	for len(buf) > 0 {
 		if len(buf) < eth.EthereumTypeAddressDescriptorLen {
 			return nil, errors.New("Invalid data stored in cfAddressContracts for AddrDesc " + addrDesc.String())
 		}
-		txs, l := unpackVaruint(buf[eth.EthereumTypeAddressDescriptorLen:])
+		txs, l := d.chainParser.UnpackVaruint(buf[eth.EthereumTypeAddressDescriptorLen:])
 		contract := append(bchain.AddressDescriptor(nil), buf[:eth.EthereumTypeAddressDescriptorLen]...)
 		c = append(c, AddrContract{
 			Contract: contract,
@@ -102,7 +102,7 @@ func isZeroAddress(addrDesc bchain.AddressDescriptor) bool {
 	return true
 }
 
-func (d *RocksDB) addToAddressesAndContractsEthereumType(addrDesc bchain.AddressDescriptor, btxID []byte, index int32, contract bchain.AddressDescriptor, addresses addressesMap, addressContracts map[string]*AddrContracts, addTxCount bool) error {
+func (d *RocksDB) addToAddressesAndContractsEthereumType(addrDesc bchain.AddressDescriptor, btxID []byte, index int32, contract bchain.AddressDescriptor, addresses bchain.AddressesMap, addressContracts map[string]*AddrContracts, addTxCount bool) error {
 	var err error
 	strAddrDesc := string(addrDesc)
 	ac, e := addressContracts[strAddrDesc]
@@ -160,7 +160,7 @@ type ethBlockTx struct {
 	contracts []ethBlockTxContract
 }
 
-func (d *RocksDB) processAddressesEthereumType(block *bchain.Block, addresses addressesMap, addressContracts map[string]*AddrContracts) ([]ethBlockTx, error) {
+func (d *RocksDB) processAddressesEthereumType(block *bchain.Block, addresses bchain.AddressesMap, addressContracts map[string]*AddrContracts) ([]ethBlockTx, error) {
 	blockTxs := make([]ethBlockTx, len(block.Txs))
 	for txi, tx := range block.Txs {
 		btxID, err := d.chainParser.PackTxid(tx.Txid)
@@ -260,7 +260,7 @@ func (d *RocksDB) storeAndCleanupBlockTxsEthereumType(wb *gorocksdb.WriteBatch, 
 		buf = append(buf, blockTx.btxID...)
 		appendAddress(blockTx.from)
 		appendAddress(blockTx.to)
-		l := packVaruint(uint(len(blockTx.contracts)), varBuf)
+		l := d.chainParser.PackVaruint(uint(len(blockTx.contracts)), varBuf)
 		buf = append(buf, varBuf[:l]...)
 		for j := range blockTx.contracts {
 			c := &blockTx.contracts[j]
@@ -268,14 +268,14 @@ func (d *RocksDB) storeAndCleanupBlockTxsEthereumType(wb *gorocksdb.WriteBatch, 
 			appendAddress(c.contract)
 		}
 	}
-	key := packUint(block.Height)
+	key := d.chainParser.PackUint(block.Height)
 	wb.PutCF(d.cfh[cfBlockTxs], key, buf)
 	return d.cleanupBlockTxs(wb, block)
 }
 
 func (d *RocksDB) getBlockTxsEthereumType(height uint32) ([]ethBlockTx, error) {
 	pl := d.chainParser.PackedTxidLen()
-	val, err := d.db.GetCF(d.ro, d.cfh[cfBlockTxs], packUint(height))
+	val, err := d.db.GetCF(d.ro, d.cfh[cfBlockTxs], d.chainParser.PackUint(height))
 	if err != nil {
 		return nil, err
 	}
@@ -317,7 +317,7 @@ func (d *RocksDB) getBlockTxsEthereumType(height uint32) ([]ethBlockTx, error) {
 		if err != nil {
 			return nil, err
 		}
-		cc, l := unpackVaruint(buf[i:])
+		cc, l := d.chainParser.UnpackVaruint(buf[i:])
 		i += l
 		contracts := make([]ethBlockTxContract, cc)
 		for j := range contracts {
@@ -420,7 +420,7 @@ func (d *RocksDB) disconnectBlockTxsEthereumType(wb *gorocksdb.WriteBatch, heigh
 		wb.DeleteCF(d.cfh[cfTransactions], blockTx.btxID)
 	}
 	for a := range addresses {
-		key := packAddressKey([]byte(a), height)
+		key := d.chainParser.PackAddressKey([]byte(a), height)
 		wb.DeleteCF(d.cfh[cfAddresses], key)
 	}
 	return nil
@@ -448,7 +448,7 @@ func (d *RocksDB) DisconnectBlockRangeEthereumType(lower uint32, higher uint32) 
 		if err := d.disconnectBlockTxsEthereumType(wb, height, blocks[height-lower], contracts); err != nil {
 			return err
 		}
-		key := packUint(height)
+		key := d.chainParser.PackUint(height)
 		wb.DeleteCF(d.cfh[cfBlockTxs], key)
 		wb.DeleteCF(d.cfh[cfHeight], key)
 	}

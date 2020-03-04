@@ -259,34 +259,27 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *webs
 	},
 	"getBalanceHistory": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
 		r := struct {
-			Descriptor string `json:"descriptor"`
-			From       string `json:"from"`
-			To         string `json:"to"`
-			Fiat       string `json:"fiat"`
-			Gap        int    `json:"gap"`
-			GroupBy    uint32 `json:"groupBy"`
+			Descriptor string   `json:"descriptor"`
+			From       int64    `json:"from"`
+			To         int64    `json:"to"`
+			Currencies []string `json:"currencies"`
+			Gap        int      `json:"gap"`
+			GroupBy    uint32   `json:"groupBy"`
 		}{}
 		err = json.Unmarshal(req.Params, &r)
 		if err == nil {
-			var fromTime, toTime time.Time
-			if r.From != "" {
-				fromTime, err = time.Parse("2006-01-02", r.From)
-				if err != nil {
-					return
-				}
+			if r.From <= 0 {
+				r.From = 0
 			}
-			if r.To != "" {
-				toTime, err = time.Parse("2006-01-02", r.To)
-				if err != nil {
-					return
-				}
+			if r.To <= 0 {
+				r.To = 0
 			}
 			if r.GroupBy <= 0 {
 				r.GroupBy = 3600
 			}
-			rv, err = s.api.GetXpubBalanceHistory(r.Descriptor, fromTime, toTime, strings.ToLower(r.Fiat), r.Gap, r.GroupBy)
+			rv, err = s.api.GetXpubBalanceHistory(r.Descriptor, r.From, r.To, r.Currencies, r.Gap, r.GroupBy, api.AddressFilterVoutOff)
 			if err != nil {
-				rv, err = s.api.GetBalanceHistory(r.Descriptor, fromTime, toTime, strings.ToLower(r.Fiat), r.GroupBy)
+				rv, err = s.api.GetBalanceHistory(r.Descriptor, r.From, r.To, r.Currencies, r.GroupBy)
 			}
 		}
 		return
@@ -359,22 +352,22 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *webs
 	},
 	"getCurrentFiatRates": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
 		r := struct {
-			Currency string `json:"currency"`
+			Currencies []string `json:"currencies"`
 		}{}
 		err = json.Unmarshal(req.Params, &r)
 		if err == nil {
-			rv, err = s.getCurrentFiatRates(strings.ToLower(r.Currency))
+			rv, err = s.getCurrentFiatRates(r.Currencies)
 		}
 		return
 	},
 	"getFiatRatesForTimestamps": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
 		r := struct {
-			Timestamps []int64 `json:"timestamps"`
-			Currency   string  `json:"currency"`
+			Timestamps []int64  `json:"timestamps"`
+			Currencies []string `json:"currencies"`
 		}{}
 		err = json.Unmarshal(req.Params, &r)
 		if err == nil {
-			rv, err = s.getFiatRatesForTimestamps(r.Timestamps, strings.ToLower(r.Currency))
+			rv, err = s.getFiatRatesForTimestamps(r.Timestamps, r.Currencies)
 		}
 		return
 	},
@@ -468,6 +461,8 @@ func (s *WebsocketServer) getAccountInfo(req *accountInfoReq) (res *api.Address,
 		opt = api.AccountDetailsTokenBalances
 	case "txids":
 		opt = api.AccountDetailsTxidHistory
+	case "txslight":
+		opt = api.AccountDetailsTxHistoryLight
 	case "txs":
 		opt = api.AccountDetailsTxHistory
 	default:
@@ -833,13 +828,13 @@ func (s *WebsocketServer) OnNewFiatRatesTicker(ticker *db.CurrencyRatesTicker) {
 	s.broadcastTicker(allFiatRates, ticker.Rates)
 }
 
-func (s *WebsocketServer) getCurrentFiatRates(currency string) (interface{}, error) {
-	ret, err := s.api.GetCurrentFiatRates(currency)
+func (s *WebsocketServer) getCurrentFiatRates(currencies []string) (interface{}, error) {
+	ret, err := s.api.GetCurrentFiatRates(currencies)
 	return ret, err
 }
 
-func (s *WebsocketServer) getFiatRatesForTimestamps(timestamps []int64, currency string) (interface{}, error) {
-	ret, err := s.api.GetFiatRatesForTimestamps(timestamps, currency)
+func (s *WebsocketServer) getFiatRatesForTimestamps(timestamps []int64, currencies []string) (interface{}, error) {
+	ret, err := s.api.GetFiatRatesForTimestamps(timestamps, currencies)
 	return ret, err
 }
 

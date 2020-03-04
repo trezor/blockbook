@@ -58,3 +58,8 @@ func (b *BaseChain) EthereumTypeGetErc20ContractInfo(contractDesc AddressDescrip
 func (b *BaseChain) EthereumTypeGetErc20ContractBalance(addrDesc, contractDesc AddressDescriptor) (*big.Int, error) {
 	return nil, errors.New("Not supported")
 }
+
+func (b *BaseChain) AssetAllocationSend(asset int, sender string, receiver string, amount string) (interface{}, error) {
+	return "", errors.New("Not supported")
+}
+

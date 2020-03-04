@@ -134,6 +134,8 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 		// internal explorer handlers
 		serveMux.HandleFunc(path+"tx/", s.htmlTemplateHandler(s.explorerTx))
 		serveMux.HandleFunc(path+"address/", s.htmlTemplateHandler(s.explorerAddress))
+		serveMux.HandleFunc(path+"asset/", s.htmlTemplateHandler(s.explorerAsset))
+		serveMux.HandleFunc(path+"assets/", s.htmlTemplateHandler(s.explorerAssets))
 		serveMux.HandleFunc(path+"xpub/", s.htmlTemplateHandler(s.explorerXpub))
 		serveMux.HandleFunc(path+"search/", s.htmlTemplateHandler(s.explorerSearch))
 		serveMux.HandleFunc(path+"blocks", s.htmlTemplateHandler(s.explorerBlocks))
@@ -181,6 +183,9 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 	serveMux.HandleFunc(path+"api/v2/tx-specific/", s.jsonHandler(s.apiTxSpecific, apiV2))
 	serveMux.HandleFunc(path+"api/v2/tx/", s.jsonHandler(s.apiTx, apiV2))
 	serveMux.HandleFunc(path+"api/v2/address/", s.jsonHandler(s.apiAddress, apiV2))
+	serveMux.HandleFunc(path+"api/v2/asset/", s.jsonHandler(s.apiAsset, apiV2))
+	serveMux.HandleFunc(path+"api/v2/assetallocationsend/", s.jsonHandler(s.apiAssetAllocationSend, apiV2)) // temporary will be removed in future
+	serveMux.HandleFunc(path+"api/v2/assets/", s.jsonHandler(s.apiAssets, apiV2))
 	serveMux.HandleFunc(path+"api/v2/xpub/", s.jsonHandler(s.apiXpub, apiV2))
 	serveMux.HandleFunc(path+"api/v2/utxo/", s.jsonHandler(s.apiUtxo, apiV2))
 	serveMux.HandleFunc(path+"api/v2/block/", s.jsonHandler(s.apiBlock, apiV2))
@@ -233,6 +238,11 @@ func (s *PublicServer) txRedirect(w http.ResponseWriter, r *http.Request) {
 func (s *PublicServer) addressRedirect(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, joinURL(s.explorerURL, r.URL.Path), 302)
 	s.metrics.ExplorerViews.With(common.Labels{"action": "address-redirect"}).Inc()
+}
+
+func (s *PublicServer) assetRedirect(w http.ResponseWriter, r *http.Request) {
+	http.Redirect(w, r, joinURL(s.explorerURL, r.URL.Path), 302)
+	s.metrics.ExplorerViews.With(common.Labels{"action": "asset-redirect"}).Inc()
 }
 
 func splitBinding(binding string) (addr string, path string) {
@@ -392,6 +402,8 @@ const (
 	indexTpl
 	txTpl
 	addressTpl
+	assetTpl
+	assetsTpl
 	xpubTpl
 	blocksTpl
 	blockTpl
@@ -400,7 +412,10 @@ const (
 
 	tplCount
 )
-
+type AssetUpdateFlag struct {
+	Value 		string
+	Description string
+}
 // TemplateData is used to transfer data to the templates
 type TemplateData struct {
 	CoinName             string
@@ -410,6 +425,9 @@ type TemplateData struct {
 	ChainType            bchain.ChainType
 	Address              *api.Address
 	AddrStr              string
+	Asset				 *api.Asset
+	Assets				 *api.Assets
+	AssetUpdateFlags	 []AssetUpdateFlag
 	Tx                   *api.Tx
 	Error                *api.APIError
 	Blocks               *api.Blocks
@@ -433,6 +451,8 @@ func (s *PublicServer) parseTemplates() []*template.Template {
 		"formatUnixTime":           formatUnixTime,
 		"formatAmount":             s.formatAmount,
 		"formatAmountWithDecimals": formatAmountWithDecimals,
+		"formatPercentage": 		formatPercentage,
+		"isAssetUpdateFlagSet":     isAssetUpdateFlagSet,
 		"setTxToTemplateData":      setTxToTemplateData,
 		"isOwnAddress":             isOwnAddress,
 		"isOwnAddresses":           isOwnAddresses,
@@ -488,6 +508,8 @@ func (s *PublicServer) parseTemplates() []*template.Template {
 	} else {
 		t[txTpl] = createTemplate("./static/templates/tx.html", "./static/templates/txdetail.html", "./static/templates/base.html")
 		t[addressTpl] = createTemplate("./static/templates/address.html", "./static/templates/txdetail.html", "./static/templates/paging.html", "./static/templates/base.html")
+		t[assetTpl] = createTemplate("./static/templates/asset.html", "./static/templates/txdetail.html", "./static/templates/paging.html", "./static/templates/base.html")
+		t[assetsTpl] = createTemplate("./static/templates/assets.html", "./static/templates/paging.html", "./static/templates/base.html")
 		t[blockTpl] = createTemplate("./static/templates/block.html", "./static/templates/txdetail.html", "./static/templates/paging.html", "./static/templates/base.html")
 	}
 	t[xpubTpl] = createTemplate("./static/templates/xpub.html", "./static/templates/txdetail.html", "./static/templates/paging.html", "./static/templates/base.html")
@@ -505,18 +527,37 @@ func formatTime(t time.Time) string {
 
 // for now return the string as it is
 // in future could be used to do coin specific formatting
-func (s *PublicServer) formatAmount(a *api.Amount) string {
+func (s *PublicServer) formatAmount(a *bchain.Amount) string {
 	if a == nil {
 		return "0"
 	}
 	return s.chainParser.AmountToDecimalString((*big.Int)(a))
 }
 
-func formatAmountWithDecimals(a *api.Amount, d int) string {
+func formatAmountWithDecimals(a *bchain.Amount, d int) string {
 	if a == nil {
 		return "0"
 	}
 	return a.DecimalString(d)
+}
+
+func formatPercentage(a string) string {
+	if f, err := strconv.ParseFloat(a, 32); err == nil {
+		f = f*100
+		return fmt.Sprintf("%.5f%%", f)
+	}
+	return "0%"
+}
+
+func isAssetUpdateFlagSet(td *TemplateData, f string, mask uint8) bool {
+	for index, updateFlag := range td.AssetUpdateFlags {
+		if updateFlag.Value == f {
+			ival := uint(1) << uint(index)
+			imask := uint(mask)
+			return (ival & imask) == ival
+		}
+	}
+	return false
 }
 
 // called from template to support txdetail.html functionality
@@ -625,6 +666,8 @@ func (s *PublicServer) getAddressQueryParams(r *http.Request, accountDetails api
 		accountDetails = api.AccountDetailsTokenBalances
 	case "txids":
 		accountDetails = api.AccountDetailsTxidHistory
+	case "txslight":
+		accountDetails = api.AccountDetailsTxHistoryLight
 	case "txs":
 		accountDetails = api.AccountDetailsTxHistory
 	}
@@ -641,11 +684,70 @@ func (s *PublicServer) getAddressQueryParams(r *http.Request, accountDetails api
 	if ec != nil {
 		gap = 0
 	}
+	contract := r.URL.Query().Get("contract")
 	return page, pageSize, accountDetails, &api.AddressFilter{
 		Vout:           voutFilter,
 		TokensToReturn: tokensToReturn,
 		FromHeight:     uint32(from),
 		ToHeight:       uint32(to),
+		Contract:       contract,
+	}, filterParam, gap
+}
+
+func (s *PublicServer) getAssetQueryParams(r *http.Request, accountDetails api.AccountDetails, maxPageSize int) (int, int, api.AccountDetails, *api.AssetFilter, string, int) {
+	page, ec := strconv.Atoi(r.URL.Query().Get("page"))
+	if ec != nil {
+		page = 0
+	}
+	pageSize, ec := strconv.Atoi(r.URL.Query().Get("pageSize"))
+	if ec != nil || pageSize > maxPageSize {
+		pageSize = maxPageSize
+	}
+	from, ec := strconv.Atoi(r.URL.Query().Get("from"))
+	if ec != nil {
+		from = 0
+	}
+	to, ec := strconv.Atoi(r.URL.Query().Get("to"))
+	if ec != nil {
+		to = 0
+	}
+	filterParam := r.URL.Query().Get("filter")
+	assetsMask := bchain.AssetAllMask
+	if len(filterParam) > 0 {
+		if filterParam == "transfers" {
+			assetsMask = bchain.AssetAllocationSendMask
+		} else if filterParam == "non-transfers" {
+			// everything but allocation send
+			assetsMask = bchain.AssetActivateMask | bchain.AssetUpdateMask | bchain.AssetTransferMask | bchain.AssetSendMask | 
+			bchain.AssetSyscoinBurnToAllocationMask | bchain.AssetAllocationBurnToSyscoinMask | bchain.AssetAllocationBurnToEthereumMask | 
+			bchain.AssetAllocationMintMask | bchain.AssetAllocationLockMask
+		} else {
+			var mask, ec = strconv.Atoi(filterParam)
+			if ec == nil {
+				assetsMask = bchain.AssetsMask(mask)
+			}
+		}
+	}
+	switch r.URL.Query().Get("details") {
+	case "basic":
+		accountDetails = api.AccountDetailsBasic
+	case "tokens":
+		accountDetails = api.AccountDetailsTokens
+	case "tokenBalances":
+		accountDetails = api.AccountDetailsTokenBalances
+	case "txids":
+		accountDetails = api.AccountDetailsTxidHistory
+	case "txs":
+		accountDetails = api.AccountDetailsTxHistory
+	}
+	gap, ec := strconv.Atoi(r.URL.Query().Get("gap"))
+	if ec != nil {
+		gap = 0
+	}
+	return page, pageSize, accountDetails, &api.AssetFilter{
+		FromHeight:     uint32(from),
+		ToHeight:       uint32(to),
+		AssetsMask:		assetsMask,
 	}, filterParam, gap
 }
 
@@ -670,11 +772,62 @@ func (s *PublicServer) explorerAddress(w http.ResponseWriter, r *http.Request) (
 	data.Address = address
 	data.Page = address.Page
 	data.PagingRange, data.PrevPage, data.NextPage = getPagingRange(address.Page, address.TotalPages)
+	if filterParam == "" && filter.Vout > -1 {
+		filterParam = strconv.Itoa(filter.Vout)
+	}
 	if filterParam != "" {
 		data.PageParams = template.URL("&filter=" + filterParam)
 		data.Address.Filter = filterParam
 	}
 	return addressTpl, data, nil
+}
+
+func (s *PublicServer) explorerAsset(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
+	var assetParam string
+	i := strings.LastIndexByte(r.URL.Path, '/')
+	if i > 0 {
+		assetParam = r.URL.Path[i+1:]
+	}
+	if len(assetParam) == 0 {
+		return errorTpl, nil, api.NewAPIError("Missing asset", true)
+	}
+	s.metrics.ExplorerViews.With(common.Labels{"action": "asset"}).Inc()
+	page, _, _, filter, filterParam, _ := s.getAssetQueryParams(r, api.AccountDetailsTxHistoryLight, txsOnPage)
+	// do not allow details to be changed by query params
+	asset, err := s.api.GetAsset(assetParam, page, txsOnPage, api.AccountDetailsTxHistoryLight, filter)
+	if err != nil {
+		return errorTpl, nil, err
+	}
+	data := s.newTemplateData()
+	data.Asset = asset
+	data.AssetUpdateFlags = []AssetUpdateFlag{{Value: "Admin", Description: "God mode flag, governs Flags field below"},{Value: "Data", Description: "Can you update the public data field for this asset?"},{Value: "Contract", Description: "Can you update the smart contract field for this asset?"},{Value: "Supply", Description: "Can you update the supply for this asset?"},{Value: "Flags", Description: "Can you allowed to update the UpdateFlags field for this asset?"}}
+	data.Page = asset.Page
+	data.PagingRange, data.PrevPage, data.NextPage = getPagingRange(asset.Page, asset.TotalPages)
+	if filterParam != "" {
+		data.PageParams = template.URL("&filter=" + filterParam)
+		data.Asset.Filter = filterParam
+	}
+	return assetTpl, data, nil
+}
+
+func (s *PublicServer) explorerAssets(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
+	var assetParam string
+	i := strings.LastIndexByte(r.URL.Path, '/')
+	if i > 0 {
+		assetParam = r.URL.Path[i+1:]
+	}
+	if len(assetParam) == 0 {
+		return errorTpl, nil, api.NewAPIError("Missing asset", true)
+	}
+	s.metrics.ExplorerViews.With(common.Labels{"action": "asset"}).Inc()
+	page, _, _, _, _, _ := s.getAssetQueryParams(r, api.AccountDetailsTxHistoryLight, txsOnPage)
+	// do not allow details to be changed by query params
+	assets := s.api.FindAssets(assetParam, page, txsOnPage)
+	data := s.newTemplateData()
+	data.Assets = assets
+	data.Page = assets.Page
+	data.PagingRange, data.PrevPage, data.NextPage = getPagingRange(assets.Page, assets.TotalPages)
+	return assetsTpl, data, nil
 }
 
 func (s *PublicServer) explorerXpub(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
@@ -766,6 +919,8 @@ func (s *PublicServer) explorerSearch(w http.ResponseWriter, r *http.Request) (t
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 	var tx *api.Tx
 	var address *api.Address
+	var asset *api.Asset
+	var findAssets *api.Assets
 	var block *api.Block
 	var err error
 	s.metrics.ExplorerViews.With(common.Labels{"action": "search"}).Inc()
@@ -788,6 +943,22 @@ func (s *PublicServer) explorerSearch(w http.ResponseWriter, r *http.Request) (t
 		address, err = s.api.GetAddress(q, 0, 1, api.AccountDetailsBasic, &api.AddressFilter{Vout: api.AddressFilterVoutOff})
 		if err == nil {
 			http.Redirect(w, r, joinURL("/address/", address.AddrStr), 302)
+			return noTpl, nil, nil
+		}
+
+		findAssets = s.api.FindAssets(q, 0, 2)
+		if len(findAssets.AssetDetails) > 0 {
+			if len(findAssets.AssetDetails) == 1 {
+				http.Redirect(w, r, joinURL("/asset/", strconv.FormatUint(uint64(findAssets.AssetDetails[0].AssetGuid), 10)), 302)
+				return noTpl, nil, nil
+			} else {
+				http.Redirect(w, r, joinURL("/assets/", q), 302)
+				return noTpl, nil, nil
+			}
+		}
+		asset, err = s.api.GetAsset(q, 0, 1, api.AccountDetailsBasic, &api.AssetFilter{AssetsMask: bchain.AssetAllMask})
+		if err == nil {
+			http.Redirect(w, r, joinURL("/asset/", strconv.FormatUint(uint64(asset.AssetDetails.AssetGuid), 10)), 302)
 			return noTpl, nil, nil
 		}
 	}
@@ -986,6 +1157,55 @@ func (s *PublicServer) apiAddress(r *http.Request, apiVersion int) (interface{},
 	}
 	return address, err
 }
+// will be removed once syscoinjs is updated to do client side create tx
+func (s *PublicServer) apiAssetAllocationSend(r *http.Request, apiVersion int) (interface{}, error) {
+	var assetParam string
+	i := strings.LastIndexByte(r.URL.Path, '/')
+	if i > 0 {
+		assetParam = r.URL.Path[i+1:]
+	}
+	if len(assetParam) == 0 {
+		return nil, api.NewAPIError("Missing asset", true)
+	}
+	s.metrics.ExplorerViews.With(common.Labels{"action": "api-assetallocationsend"}).Inc()
+	from := r.URL.Query().Get("from")
+	to := r.URL.Query().Get("to")
+	amount := r.URL.Query().Get("amount")
+	return s.api.AssetAllocationSend(assetParam, from, to, amount)
+}
+
+func (s *PublicServer) apiAsset(r *http.Request, apiVersion int) (interface{}, error) {
+	var assetParam string
+	i := strings.LastIndexByte(r.URL.Path, '/')
+	if i > 0 {
+		assetParam = r.URL.Path[i+1:]
+	}
+	if len(assetParam) == 0 {
+		return nil, api.NewAPIError("Missing asset", true)
+	}
+	var asset *api.Asset
+	var err error
+	s.metrics.ExplorerViews.With(common.Labels{"action": "api-asset"}).Inc()
+	page, pageSize, details, filter, _, _ := s.getAssetQueryParams(r, api.AccountDetailsTxidHistory, txsInAPI)
+	asset, err = s.api.GetAsset(assetParam, page, pageSize, details, filter)
+	return asset, err
+}
+
+func (s *PublicServer) apiAssets(r *http.Request, apiVersion int) (interface{}, error) {
+	var assetParam string
+	i := strings.LastIndexByte(r.URL.Path, '/')
+	if i > 0 {
+		assetParam = r.URL.Path[i+1:]
+	}
+	if len(assetParam) == 0 {
+		return nil, api.NewAPIError("Missing asset", true)
+	}
+	var assets *api.Assets
+	s.metrics.ExplorerViews.With(common.Labels{"action": "api-assets"}).Inc()
+	page, pageSize, _, _, _, _ := s.getAssetQueryParams(r, api.AccountDetailsTxidHistory, txsInAPI)
+	assets = s.api.FindAssets(assetParam, page, pageSize)
+	return assets, nil
+}
 
 func (s *PublicServer) apiXpub(r *http.Request, apiVersion int) (interface{}, error) {
 	var xpub string
@@ -1042,21 +1262,26 @@ func (s *PublicServer) apiUtxo(r *http.Request, apiVersion int) (interface{}, er
 
 func (s *PublicServer) apiBalanceHistory(r *http.Request, apiVersion int) (interface{}, error) {
 	var history []api.BalanceHistory
-	var fromTime, toTime time.Time
+	var fromTimestamp, toTimestamp int64
 	var err error
 	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
 		gap, ec := strconv.Atoi(r.URL.Query().Get("gap"))
 		if ec != nil {
 			gap = 0
 		}
-		t := r.URL.Query().Get("from")
-		if t != "" {
-			fromTime, _ = time.Parse("2006-01-02", t)
+		from := r.URL.Query().Get("from")
+		if from != "" {
+			fromTimestamp, err = strconv.ParseInt(from, 10, 64)
+			if err != nil {
+				return history, err
+			}
 		}
-		t = r.URL.Query().Get("to")
-		if t != "" {
-			// time.RFC3339
-			toTime, _ = time.Parse("2006-01-02", t)
+		to := r.URL.Query().Get("to")
+		if to != "" {
+			toTimestamp, err = strconv.ParseInt(to, 10, 64)
+			if err != nil {
+				return history, err
+			}
 		}
 		var groupBy uint64
 		groupBy, err = strconv.ParseUint(r.URL.Query().Get("groupBy"), 10, 32)
@@ -1064,11 +1289,24 @@ func (s *PublicServer) apiBalanceHistory(r *http.Request, apiVersion int) (inter
 			groupBy = 3600
 		}
 		fiat := r.URL.Query().Get("fiatcurrency")
-		history, err = s.api.GetXpubBalanceHistory(r.URL.Path[i+1:], fromTime, toTime, fiat, gap, uint32(groupBy))
+		var fiatArray []string
+		if fiat != "" {
+			fiatArray = []string{fiat}
+		}
+		voutFilter := api.AddressFilterVoutOff
+		filterParam := r.URL.Query().Get("filter")
+		if len(filterParam) > 0 {
+			voutFilter, ec = strconv.Atoi(filterParam)
+			if ec != nil || voutFilter < 0 {
+				voutFilter = api.AddressFilterVoutOff
+			}
+		}
+
+		history, err = s.api.GetXpubBalanceHistory(r.URL.Path[i+1:], fromTimestamp, toTimestamp, fiatArray, gap, uint32(groupBy), voutFilter)
 		if err == nil {
 			s.metrics.ExplorerViews.With(common.Labels{"action": "api-xpub-balancehistory"}).Inc()
 		} else {
-			history, err = s.api.GetBalanceHistory(r.URL.Path[i+1:], fromTime, toTime, fiat, uint32(groupBy))
+			history, err = s.api.GetBalanceHistory(r.URL.Path[i+1:], fromTimestamp, toTimestamp, fiatArray, uint32(groupBy))
 			s.metrics.ExplorerViews.With(common.Labels{"action": "api-address-balancehistory"}).Inc()
 		}
 	}
@@ -1148,12 +1386,17 @@ func (s *PublicServer) apiTickersList(r *http.Request, apiVersion int) (interfac
 func (s *PublicServer) apiTickers(r *http.Request, apiVersion int) (interface{}, error) {
 	var result *db.ResultTickerAsString
 	var err error
+
 	currency := strings.ToLower(r.URL.Query().Get("currency"))
+	var currencies []string
+	if currency != "" {
+		currencies = []string{currency}
+	}
 
 	if block := r.URL.Query().Get("block"); block != "" {
 		// Get tickers for specified block height or block hash
 		s.metrics.ExplorerViews.With(common.Labels{"action": "api-tickers-block"}).Inc()
-		result, err = s.api.GetFiatRatesForBlockID(block, currency)
+		result, err = s.api.GetFiatRatesForBlockID(block, currencies)
 	} else if timestampString := r.URL.Query().Get("timestamp"); timestampString != "" {
 		// Get tickers for specified timestamp
 		s.metrics.ExplorerViews.With(common.Labels{"action": "api-tickers-date"}).Inc()
@@ -1163,7 +1406,7 @@ func (s *PublicServer) apiTickers(r *http.Request, apiVersion int) (interface{},
 			return nil, api.NewAPIError("Parameter \"timestamp\" is not a valid Unix timestamp.", true)
 		}
 
-		resultTickers, err := s.api.GetFiatRatesForTimestamps([]int64{timestamp}, currency)
+		resultTickers, err := s.api.GetFiatRatesForTimestamps([]int64{timestamp}, currencies)
 		if err != nil {
 			return nil, err
 		}
@@ -1171,7 +1414,7 @@ func (s *PublicServer) apiTickers(r *http.Request, apiVersion int) (interface{},
 	} else {
 		// No parameters - get the latest available ticker
 		s.metrics.ExplorerViews.With(common.Labels{"action": "api-tickers-last"}).Inc()
-		result, err = s.api.GetCurrentFiatRates(currency)
+		result, err = s.api.GetCurrentFiatRates(currencies)
 	}
 	if err != nil {
 		return nil, err

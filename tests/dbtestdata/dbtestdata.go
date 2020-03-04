@@ -35,18 +35,19 @@ const (
 
 // Amounts in satoshis
 var (
-	SatZero   = big.NewInt(0)
-	SatB1T1A1 = big.NewInt(100000000)
-	SatB1T1A2 = big.NewInt(12345)
-	SatB1T2A3 = big.NewInt(1234567890123)
-	SatB1T2A4 = big.NewInt(1)
-	SatB1T2A5 = big.NewInt(9876)
-	SatB2T1A6 = big.NewInt(317283951061)
-	SatB2T1A7 = big.NewInt(917283951061)
-	SatB2T2A8 = big.NewInt(118641975500)
-	SatB2T2A9 = big.NewInt(198641975500)
-	SatB2T3A5 = big.NewInt(9000)
-	SatB2T4AA = big.NewInt(1360030331)
+	SatZero         = big.NewInt(0)
+	SatB1T1A1       = big.NewInt(100000000)
+	SatB1T1A2       = big.NewInt(12345)
+	SatB1T1A2Double = big.NewInt(12345 * 2)
+	SatB1T2A3       = big.NewInt(1234567890123)
+	SatB1T2A4       = big.NewInt(1)
+	SatB1T2A5       = big.NewInt(9876)
+	SatB2T1A6       = big.NewInt(317283951061)
+	SatB2T1A7       = big.NewInt(917283951061)
+	SatB2T2A8       = big.NewInt(118641975500)
+	SatB2T2A9       = big.NewInt(198641975500)
+	SatB2T3A5       = big.NewInt(9000)
+	SatB2T4AA       = big.NewInt(1360030331)
 )
 
 // AddressToPubKeyHex is a utility conversion function
@@ -85,6 +86,13 @@ func GetTestBitcoinTypeBlock1(parser bchain.BlockChainParser) *bchain.Block {
 					},
 					{
 						N: 1,
+						ScriptPubKey: bchain.ScriptPubKey{
+							Hex: AddressToPubKeyHex(Addr2, parser),
+						},
+						ValueSat: *SatB1T1A2,
+					},
+					{
+						N: 2,
 						ScriptPubKey: bchain.ScriptPubKey{
 							Hex: AddressToPubKeyHex(Addr2, parser),
 						},

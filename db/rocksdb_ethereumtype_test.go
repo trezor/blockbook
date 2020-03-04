@@ -3,6 +3,7 @@
 package db
 
 import (
+	"blockbook/bchain"
 	"blockbook/bchain/coins/eth"
 	"blockbook/tests/dbtestdata"
 	"encoding/hex"
@@ -33,10 +34,10 @@ func verifyAfterEthereumTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect boo
 		}
 	}
 	if err := checkColumn(d, cfAddresses, []keyPair{
-		{addressKeyHex(dbtestdata.EthAddr3e, 4321000, d), txIndexesHex(dbtestdata.EthTxidB1T1, []int32{^0}), nil},
-		{addressKeyHex(dbtestdata.EthAddr55, 4321000, d), txIndexesHex(dbtestdata.EthTxidB1T2, []int32{1}) + txIndexesHex(dbtestdata.EthTxidB1T1, []int32{0}), nil},
-		{addressKeyHex(dbtestdata.EthAddr20, 4321000, d), txIndexesHex(dbtestdata.EthTxidB1T2, []int32{^0, ^1}), nil},
-		{addressKeyHex(dbtestdata.EthAddrContract4a, 4321000, d), txIndexesHex(dbtestdata.EthTxidB1T2, []int32{0}), nil},
+		{addressKeyHex(dbtestdata.EthAddr3e, 4321000, d), txIndexesHex(dbtestdata.EthTxidB1T1, []int32{^0}, d), nil},
+		{addressKeyHex(dbtestdata.EthAddr55, 4321000, d), txIndexesHex(dbtestdata.EthTxidB1T2, []int32{1}, d) + txIndexesHex(dbtestdata.EthTxidB1T1, []int32{0}, d), nil},
+		{addressKeyHex(dbtestdata.EthAddr20, 4321000, d), txIndexesHex(dbtestdata.EthTxidB1T2, []int32{^0, ^1}, d), nil},
+		{addressKeyHex(dbtestdata.EthAddrContract4a, 4321000, d), txIndexesHex(dbtestdata.EthTxidB1T2, []int32{0}, d), nil},
 	}); err != nil {
 		{
 			t.Fatal(err)
@@ -97,15 +98,15 @@ func verifyAfterEthereumTypeBlock2(t *testing.T, d *RocksDB) {
 		}
 	}
 	if err := checkColumn(d, cfAddresses, []keyPair{
-		{addressKeyHex(dbtestdata.EthAddr3e, 4321000, d), txIndexesHex(dbtestdata.EthTxidB1T1, []int32{^0}), nil},
-		{addressKeyHex(dbtestdata.EthAddr55, 4321000, d), txIndexesHex(dbtestdata.EthTxidB1T2, []int32{1}) + txIndexesHex(dbtestdata.EthTxidB1T1, []int32{0}), nil},
-		{addressKeyHex(dbtestdata.EthAddr20, 4321000, d), txIndexesHex(dbtestdata.EthTxidB1T2, []int32{^0, ^1}), nil},
-		{addressKeyHex(dbtestdata.EthAddrContract4a, 4321000, d), txIndexesHex(dbtestdata.EthTxidB1T2, []int32{0}), nil},
-		{addressKeyHex(dbtestdata.EthAddr55, 4321001, d), txIndexesHex(dbtestdata.EthTxidB2T2, []int32{^2, 1}) + txIndexesHex(dbtestdata.EthTxidB2T1, []int32{^0}), nil},
-		{addressKeyHex(dbtestdata.EthAddr9f, 4321001, d), txIndexesHex(dbtestdata.EthTxidB2T1, []int32{0}), nil},
-		{addressKeyHex(dbtestdata.EthAddr4b, 4321001, d), txIndexesHex(dbtestdata.EthTxidB2T2, []int32{^0, 1, ^2, 2, ^1}), nil},
-		{addressKeyHex(dbtestdata.EthAddr7b, 4321001, d), txIndexesHex(dbtestdata.EthTxidB2T2, []int32{^1, 2}), nil},
-		{addressKeyHex(dbtestdata.EthAddrContract47, 4321001, d), txIndexesHex(dbtestdata.EthTxidB2T2, []int32{0}), nil},
+		{addressKeyHex(dbtestdata.EthAddr3e, 4321000, d), txIndexesHex(dbtestdata.EthTxidB1T1, []int32{^0}, d), nil},
+		{addressKeyHex(dbtestdata.EthAddr55, 4321000, d), txIndexesHex(dbtestdata.EthTxidB1T2, []int32{1}, d) + txIndexesHex(dbtestdata.EthTxidB1T1, []int32{0}, d), nil},
+		{addressKeyHex(dbtestdata.EthAddr20, 4321000, d), txIndexesHex(dbtestdata.EthTxidB1T2, []int32{^0, ^1}, d), nil},
+		{addressKeyHex(dbtestdata.EthAddrContract4a, 4321000, d), txIndexesHex(dbtestdata.EthTxidB1T2, []int32{0}, d), nil},
+		{addressKeyHex(dbtestdata.EthAddr55, 4321001, d), txIndexesHex(dbtestdata.EthTxidB2T2, []int32{^2, 1}, d) + txIndexesHex(dbtestdata.EthTxidB2T1, []int32{^0}, d), nil},
+		{addressKeyHex(dbtestdata.EthAddr9f, 4321001, d), txIndexesHex(dbtestdata.EthTxidB2T1, []int32{0}, d), nil},
+		{addressKeyHex(dbtestdata.EthAddr4b, 4321001, d), txIndexesHex(dbtestdata.EthTxidB2T2, []int32{^0, 1, ^2, 2, ^1}, d), nil},
+		{addressKeyHex(dbtestdata.EthAddr7b, 4321001, d), txIndexesHex(dbtestdata.EthTxidB2T2, []int32{^1, 2}, d), nil},
+		{addressKeyHex(dbtestdata.EthAddrContract47, 4321001, d), txIndexesHex(dbtestdata.EthTxidB2T2, []int32{0}, d), nil},
 	}); err != nil {
 		{
 			t.Fatal(err)
@@ -238,7 +239,7 @@ func TestRocksDB_Index_EthereumType(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	iw := &BlockInfo{
+	iw := &bchain.DbBlockInfo{
 		Hash:   "0x2b57e15e93a0ed197417a34c2498b7187df79099572c04a6b6e6ff418f74e6ee",
 		Txs:    2,
 		Size:   2345678,

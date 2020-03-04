@@ -41,11 +41,14 @@
 | CPUchain             | 9090                    | 9190                  | 8090             | 38390                       |
 | DeepOnion            | 9091                    | 9191                  | 8091             | 38391                       |
 | Unobtanium           | 9092                    | 9192                  | 65535            | 38392                       |
+| Syscoin              | 9093                    | 9193                  | 8092             | 38393                       |
+| Omotenashicoin       | 9094                    | 9194                  | 8094             | 38394                       |
 | Bitcoin Testnet      | 19030                   | 19130                 | 18030            | 48330                       |
 | Bitcoin Cash Testnet | 19031                   | 19131                 | 18031            | 48331                       |
 | Zcash Testnet        | 19032                   | 19132                 | 18032            | 48332                       |
 | Dash Testnet         | 19033                   | 19133                 | 18033            | 48333                       |
 | Litecoin Testnet     | 19034                   | 19134                 | 18034            | 48334                       |
+| Syscoin Testnet      | 19035                   | 19135                 | 18035            | 48335                       |
 | Ethereum Ropsten     | 19036                   | 19136                 | 18036            | 48336 p2p                   |
 | Vertcoin Testnet     | 19040                   | 19140                 | 18040            | 48340                       |
 | Monacoin Testnet     | 19041                   | 19141                 | 18041            | 48341                       |
@@ -55,5 +58,6 @@
 | Decred Testnet       | 19061                   | 19161                 | 18061            | 48361                       |
 | Flo Testnet          | 19066                   | 19166                 | 18066            | 48366                       |
 | Qtum Testnet         | 19088                   | 19188                 | 18088            | 48388                       |
+| OmotenashicoinTestnet| 19089                   | 19189                 | 18089            | 48389                       |
 
 > NOTE: This document is generated from coin definitions in `configs/coins`.

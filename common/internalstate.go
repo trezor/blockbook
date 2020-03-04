@@ -53,6 +53,8 @@ type InternalState struct {
 	LastMempoolSync       time.Time `json:"lastMempoolSync"`
 
 	DbColumns []InternalStateColumn `json:"dbColumns"`
+
+	UtxoChecked bool `json:"utxoChecked"`
 }
 
 // StartedSync signals start of synchronization

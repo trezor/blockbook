@@ -6,10 +6,10 @@
     "alias": "syscoin_testnet"
   },
   "ports": {
-    "backend_rpc": 18888,
-    "backend_message_queue": 48888,
-    "blockbook_internal": 19888,
-    "blockbook_public": 19999
+    "backend_rpc": 18035,
+    "backend_message_queue": 48335,
+    "blockbook_internal": 19135,
+    "blockbook_public": 19035
   },
   "ipc": {
     "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",

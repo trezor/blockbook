@@ -6,11 +6,11 @@ import (
 	"blockbook/bchain"
 	"blockbook/bchain/coins/btc"
 	"encoding/hex"
+	"github.com/martinboehm/btcutil/chaincfg"
 	"math/big"
 	"os"
 	"reflect"
 	"testing"
-	"github.com/martinboehm/btcutil/chaincfg"
 )
 
 func TestMain(m *testing.M) {
@@ -76,7 +76,6 @@ func Test_GetAddrDescFromAddress_Mainnet(t *testing.T) {
 		})
 	}
 }
-
 
 var (
 	testTx1 bchain.Tx
@@ -207,4 +206,3 @@ func Test_UnpackTx(t *testing.T) {
 		})
 	}
 }
-

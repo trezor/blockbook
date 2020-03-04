@@ -1,0 +1,132 @@
+{{define "specific"}}{{$cs := .CoinShortcut}}{{$asset := .Asset}}{{$data := .}}
+<h1>Asset <small class="text-muted">{{$asset.AssetDetails.Symbol}}</small></h1>
+<div class="alert alert-data ellipsis">
+    <span class="data">{{$asset.AssetDetails.AssetGuid}}</span>
+</div>
+<h3>Details</h3>
+<div class="data-div row">
+    <div class="col-lg-10">
+        <table class="table data-table">
+            <tbody>
+                <tr>
+                    <td style="width: 25%;">Address</td>
+                    <td class="data">{{$asset.AssetDetails.WitnessAddress}}</td>
+                </tr>
+                {{- if $asset.AssetDetails.PubData.description -}}
+                <tr>
+                    <td>Description</td>
+                    <td class="data">{{$asset.AssetDetails.PubData.description}}</td>
+                </tr>
+                {{- end -}}
+                <tr>
+                    <td>Transactions</td>
+                    <td class="data">{{$asset.Txs}}</td>
+                </tr>
+                <tr>
+                    <td>ERC20 Contract</td>
+                    <td class="data"><a href="https://etherscan.io/address/{{$asset.AssetDetails.Contract}}">{{$asset.AssetDetails.Contract}}</a></td>
+                </tr>
+                <tr>
+                    <td>Balance</td>
+                    <td class="data">{{formatAmountWithDecimals $asset.AssetDetails.Balance $asset.AssetDetails.Decimals}} {{$asset.AssetDetails.Symbol}}</td>
+                </tr>
+                <tr>
+                    <td>Total Supply</td>
+                    <td class="data">{{formatAmountWithDecimals $asset.AssetDetails.TotalSupply $asset.AssetDetails.Decimals}} {{$asset.AssetDetails.Symbol}}</td>
+                </tr>
+                <tr>
+                    <td>Max Supply</td>
+                    <td class="data">{{formatAmountWithDecimals $asset.AssetDetails.MaxSupply $asset.AssetDetails.Decimals}} {{$asset.AssetDetails.Symbol}}</td>
+                </tr>
+                <tr>
+                    <td>Decimals</td>
+                    <td class="data">{{$asset.AssetDetails.Decimals}}</td>
+                </tr>
+                <tr>
+                        <td>Update Flags</td>
+                        <td style="padding: 0;">
+                            <table class="table data-table">
+                                <tbody>
+                                    <tr>
+                                        <th>Flag</th>
+                                        <th>Set</th>
+                                    </tr>
+                                    {{- range $f := $data.AssetUpdateFlags -}}
+                                    <tr>
+                                        <td title="{{$f.Description}}" class="data">{{$f.Value}}</td>
+                                        <td class="data">
+                                            {{if isAssetUpdateFlagSet $data $f.Value $asset.AssetDetails.UpdateFlags}}
+                                            <span title="{{$f.Description}}" class="text-success">✔</span>
+                                            {{else}}
+                                            <span title="{{$f.Description}}" class="text-danger">✘</span>
+                                            {{end}}
+                                        </td>
+                                    </tr>
+                                    {{- end -}}
+                                </tbody>
+                            </table>
+                        </td>
+                    </tr>
+                {{- if $asset.AssetDetails.PubData.aux_fees -}}
+                <tr>
+                    <td>Aux Fees</td>
+                    <td style="padding: 0;">
+                        <table class="table data-table">
+                            <tbody>
+                                <tr>
+                                    <th>Address</th>
+                                    <th>Bound</th>
+                                    <th>Percentage</th>
+                                </tr>
+                                {{- range $f := $asset.AssetDetails.PubData.aux_fees.fee_struct -}}{{- if $f -}}
+                                <tr>
+                                    <td class="data ellipsis"><a href="/address/{{$asset.AssetDetails.PubData.aux_fees.address}}">{{$asset.AssetDetails.PubData.aux_fees.address}}</a></td>
+                                    <td class="data">{{index $f 0}} {{$asset.AssetDetails.Symbol}}</td>
+                                    <td class="data">{{formatPercentage (index $f 1)}}</td>
+                                </tr>
+                                {{- end -}}{{- end -}}
+                            </tbody>
+                        </table>
+                    </td>
+                </tr>
+                {{- end -}}
+            </tbody>
+        </table>
+    </div>
+    <div class="col-lg-2">
+        <div id="qrcode" style="width: 160px; height: 160px; float: right; padding-left: 10px;"></div>
+        <script type="text/javascript" src="/static/js/qrcode.min.js"></script>
+        <script type="text/javascript">
+            new QRCode(document.getElementById("qrcode"), { text: "{{$asset.AssetDetails.AssetGuid}}", width: 160, height: 160 });
+        </script>
+    </div>
+</div>
+{{- if $asset.UnconfirmedTxs -}}
+<h3>Unconfirmed</h3>
+<div class="data-div">
+    <table class="table data-table">
+        <tbody>
+            <tr>
+                <td>No. Transactions</td>
+                <td class="data">{{$asset.UnconfirmedTxs}}</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+{{- end}}{{if or $asset.Transactions $asset.Filter -}}
+<div class="row h-container">
+    <h3 class="col-md-3">Transactions</h3>
+    <select class="col-md-2" style="background-color: #eaeaea;" onchange="self.location='?filter='+options[selectedIndex].value">
+        <option>All</option>
+        <option {{if eq $asset.Filter "transfers" -}} selected{{end}} value="transfers">Transfers</option>
+        <option {{if eq $asset.Filter "non-transfers" -}} selected{{end}} value="non-transfers">Non-Transfers</option>
+    </select>
+    <div class="col-md-7">
+        <nav>{{template "paging" $data}}</nav>
+    </div>
+</div>
+<div class="data-div">
+    {{- range $tx := $asset.Transactions}}{{$data := setTxToTemplateData $data $tx}}{{template "txdetail" $data}}{{end -}}
+</div>
+<nav>{{template "paging" $data }}</nav>
+{{end}}{{end}}

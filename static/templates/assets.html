@@ -1,0 +1,35 @@
+{{define "specific"}}{{$cs := .CoinShortcut}}{{$assets := .Assets}}{{$data := .}}
+<h1>Assets <small class="text-muted">Filtered by <b>{{$assets.Filter}}</b></small>
+</h1>
+<div class="row h-container">
+    <h5 class="col-md-6 col-sm-12">{{$assets.NumAssets}} Assets found</h5>
+    <nav class="col-md-6 col-sm-12">{{template "paging" $data }}</nav>
+</div>
+<div class="data-div">
+    <table class="table table-striped data-table table-hover">
+        <thead>
+            <tr>
+                <th>Asset</th>
+                <th>Address</th>
+                <th>Transactions</th>
+                <th>Contract</th>
+                <th>Total Supply</th>
+                <th>Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{- range $assetDetails := $assets.AssetDetails -}}{{- if $assetDetails -}}
+            <tr>
+                <td class="data">{{$assetDetails.Symbol}} (<a href="/asset/{{$assetDetails.AssetGuid}}">{{$assetDetails.AssetGuid}}</a>)</td>
+                <td class="data ellipsis">{{$assetDetails.WitnessAddress}}</td>
+                <td class="data">{{$assetDetails.Txs}}</td>
+                <td class="data ellipsis"><a href="https://etherscan.io/address/{{$assetDetails.Contract}}">{{$assetDetails.Contract}}</a></td>
+                <td class="data">{{formatAmountWithDecimals $assetDetails.TotalSupply $assetDetails.Decimals}} {{$assetDetails.Symbol}}</td>
+                <td class="data ellipsis">{{- if $assetDetails.PubData.description}}{{$assetDetails.PubData.description}}{{else}}{{- end -}}</td>
+            </tr>
+            {{- end -}}{{- end -}}
+        </tbody>
+    </table>
+</div>
+<nav>{{template "paging" $data }}</nav>
+{{end}}

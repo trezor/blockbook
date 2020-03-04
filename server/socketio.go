@@ -6,6 +6,7 @@ import (
 	"blockbook/common"
 	"blockbook/db"
 	"encoding/json"
+	"encoding/hex"
 	"math/big"
 	"net/http"
 	"runtime/debug"
@@ -90,6 +91,15 @@ type addrOpts struct {
 	To               int  `json:"to"`
 }
 
+type assetOpts struct {
+	Start            int  `json:"start"`
+	End              int  `json:"end"`
+	QueryMempoolOnly bool `json:"queryMempoolOnly"`
+	From             int  `json:"from"`
+	To               int  `json:"to"`
+	AssetsMask 	     bchain.AssetsMask
+}
+
 var onMessageHandlers = map[string]func(*SocketIoServer, json.RawMessage) (interface{}, error){
 	"getAddressTxids": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
 		addr, opts, err := unmarshalGetAddressRequest(params)
@@ -102,6 +112,20 @@ var onMessageHandlers = map[string]func(*SocketIoServer, json.RawMessage) (inter
 		addr, opts, err := unmarshalGetAddressRequest(params)
 		if err == nil {
 			rv, err = s.getAddressHistory(addr, &opts)
+		}
+		return
+	},
+	"getAssetTxids": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
+		asset, opts, err := unmarshalGetAssetRequest(params)
+		if err == nil {
+			rv, err = s.getAssetTxids(asset, &opts)
+		}
+		return
+	},
+	"getAssetHistory": func(s *SocketIoServer, params json.RawMessage) (rv interface{}, err error) {
+		asset, opts, err := unmarshalGetAssetRequest(params)
+		if err == nil {
+			rv, err = s.getAssetHistory(asset, &opts)
 		}
 		return
 	},
@@ -209,6 +233,24 @@ func unmarshalGetAddressRequest(params []byte) (addr []string, opts addrOpts, er
 	return
 }
 
+func unmarshalGetAssetRequest(params []byte) (asset string, opts assetOpts, err error) {
+	var p []json.RawMessage
+	err = json.Unmarshal(params, &p)
+	if err != nil {
+		return
+	}
+	if len(p) != 2 {
+		err = errors.New("incorrect number of parameters")
+		return
+	}
+	err = json.Unmarshal(p[0], &asset)
+	if err != nil {
+		return
+	}
+	err = json.Unmarshal(p[1], &opts)
+	return
+}
+
 type resultAddressTxids struct {
 	Result []string `json:"result"`
 }
@@ -234,6 +276,36 @@ func (s *SocketIoServer) getAddressTxids(addr []string, opts *addrOpts) (res res
 				txids = append(txids, m.Txid)
 			}
 		}
+	}
+	res.Result = api.GetUniqueTxids(txids)
+	return res, nil
+}
+
+func (s *SocketIoServer) getAssetTxids(asset string, opts *assetOpts) (res resultAddressTxids, err error) {
+	txids := make([]string, 0, 8)
+	lower, higher := uint32(opts.End), uint32(opts.Start)
+	assetBitMask := opts.AssetsMask
+	assetGuid, err := strconv.Atoi(asset)
+	if err != nil {
+		return res, err
+	}
+	if !opts.QueryMempoolOnly {
+		err = s.db.GetTxAssets(uint32(assetGuid), lower, higher, assetBitMask, func(txidsIn []string) error {
+			txids = append(txids, txidsIn...)
+			return nil
+		})
+		if err != nil {
+			return res, err
+		}
+	} else {
+		// TODO: for now don't have mempool storage of asset txids per guid, will do in future
+		/*o, err := s.mempool.GetTxAssets(asset)
+		if err != nil {
+			return res, err
+		}
+		for _, m := range o {
+			txids = append(txids, m.Txid)
+		}*/
 	}
 	res.Result = api.GetUniqueTxids(txids)
 	return res, nil
@@ -277,7 +349,8 @@ type resTx struct {
 	InputSatoshis  int64       `json:"inputSatoshis,omitempty"`
 	Outputs        []txOutputs `json:"outputs"`
 	OutputSatoshis int64       `json:"outputSatoshis,omitempty"`
-	FeeSatoshis    int64       `json:"feeSatoshis,omitempty"`
+	FeeSatoshis    int64       `json:"feeSatoshis,omitempty"`		   
+	TokenTransferSummary []*bchain.TokenTransferSummary   `json:"tokenTransfers,omitempty"`
 }
 
 type addressHistoryItem struct {
@@ -285,6 +358,7 @@ type addressHistoryItem struct {
 	Satoshis      int64                             `json:"satoshis"`
 	Confirmations int                               `json:"confirmations"`
 	Tx            resTx                             `json:"tx"`
+	Tokens	      []*api.TokenBalanceHistory 		`json:"tokens,omitempty"`	
 }
 
 type resultGetAddressHistory struct {
@@ -293,8 +367,15 @@ type resultGetAddressHistory struct {
 		Items      []addressHistoryItem `json:"items"`
 	} `json:"result"`
 }
-
+type resultGetAssetHistory struct {
+	Result struct {
+		TotalCount int                  `json:"totalCount"`
+		AssetDetails  *api.AssetSpecific `json:"asset"`
+		Items      []addressHistoryItem `json:"items"`
+	} `json:"result"`
+}
 func txToResTx(tx *api.Tx) resTx {
+	var resultTx resTx 
 	inputs := make([]txInputs, len(tx.Vin))
 	for i := range tx.Vin {
 		vin := &tx.Vin[i]
@@ -327,6 +408,9 @@ func txToResTx(tx *api.Tx) resTx {
 		}
 		outputs[i] = output
 	}
+	if len(tx.TokenTransferSummary) > 0 {
+		resultTx.TokenTransferSummary = tx.TokenTransferSummary
+	}
 	var h int
 	var blocktime int64
 	if tx.Confirmations == 0 {
@@ -335,19 +419,18 @@ func txToResTx(tx *api.Tx) resTx {
 		h = int(tx.Blockheight)
 		blocktime = tx.Blocktime
 	}
-	return resTx{
-		BlockTimestamp: blocktime,
-		FeeSatoshis:    tx.FeesSat.AsInt64(),
-		Hash:           tx.Txid,
-		Height:         h,
-		Hex:            tx.Hex,
-		Inputs:         inputs,
-		InputSatoshis:  tx.ValueInSat.AsInt64(),
-		Locktime:       int(tx.Locktime),
-		Outputs:        outputs,
-		OutputSatoshis: tx.ValueOutSat.AsInt64(),
-		Version:        int(tx.Version),
-	}
+	resultTx.BlockTimestamp = blocktime
+	resultTx.FeeSatoshis =    tx.FeesSat.AsInt64()
+	resultTx.Hash =           tx.Txid
+	resultTx.Height =         h
+	resultTx.Hex =            tx.Hex
+	resultTx.Inputs =         inputs
+	resultTx.InputSatoshis =  tx.ValueInSat.AsInt64()
+	resultTx.Locktime =       int(tx.Locktime)
+	resultTx.Outputs =        outputs
+	resultTx.OutputSatoshis = tx.ValueOutSat.AsInt64()
+	resultTx.Version =        int(tx.Version)
+	return resultTx
 }
 
 func addressInSlice(s, t []string) string {
@@ -385,6 +468,7 @@ func (s *SocketIoServer) getAddressHistory(addr []string, opts *addrOpts) (res r
 	if to > opts.To {
 		to = opts.To
 	}
+	ahi := addressHistoryItem{}
 	for txi := opts.From; txi < to; txi++ {
 		tx, err := s.api.GetTransaction(txids[txi], false, false)
 		if err != nil {
@@ -422,11 +506,131 @@ func (s *SocketIoServer) getAddressHistory(addr []string, opts *addrOpts) (res r
 				}
 			}
 		}
-		ahi := addressHistoryItem{}
+		if len(tx.TokenTransferSummary) > 0 {
+			mapTokens := map[uint32]*api.TokenBalanceHistory{}
+			for _, summary := range tx.TokenTransferSummary {
+				assetGuid, err := strconv.Atoi(summary.Token)
+				if err != nil {
+					return res, err
+				}
+				a := addressInSlice([]string{summary.From}, addr)
+				var b string = ""
+				for _, tokenTransferRecipient := range summary.Recipients {
+					if a == "" {
+						b = addressInSlice([]string{tokenTransferRecipient.To}, addr)
+					}
+					if a != "" || b != "" {
+						token, ok := mapTokens[uint32(assetGuid)]
+						if !ok {
+							token = &api.TokenBalanceHistory{AssetGuid: uint32(assetGuid), ReceivedSat: &bchain.Amount{}, SentSat: &bchain.Amount{}}
+							mapTokens[uint32(assetGuid)] = token
+						}
+						if a != "" {
+							(*big.Int)(token.ReceivedSat).Add((*big.Int)(token.ReceivedSat), (*big.Int)(tokenTransferRecipient.Value))
+						} else {
+							(*big.Int)(token.SentSat).Add((*big.Int)(token.SentSat), (*big.Int)(tokenTransferRecipient.Value))
+						}
+					}
+				}
+			}
+			ahi.Tokens = make([]*api.TokenBalanceHistory, len(mapTokens))
+			var i int = 0
+			for _, v := range mapTokens {
+				ahi.Tokens[i] = v
+				i++
+			}
+		}
 		ahi.Addresses = ads
 		ahi.Confirmations = int(tx.Confirmations)
 		ahi.Satoshis = totalSat.Int64()
 		ahi.Tx = txToResTx(tx)
+		res.Result.Items = append(res.Result.Items, ahi)
+		// }
+	}
+	return
+}
+func (s *SocketIoServer) getAssetHistory(asset string, opts *assetOpts) (res resultGetAssetHistory, err error) {
+	txr, err := s.getAssetTxids(asset, opts)
+	if err != nil {
+		return
+	}
+	txids := txr.Result
+	res.Result.TotalCount = len(txids)
+	res.Result.Items = make([]addressHistoryItem, 0, 8)
+	to := len(txids)
+	if to > opts.To {
+		to = opts.To
+	}
+	ahi := addressHistoryItem{}
+	for txi := opts.From; txi < to; txi++ {
+		tx, err := s.api.GetTransaction(txids[txi], false, false)
+		if err != nil {
+			return res, err
+		}
+		if len(tx.TokenTransferSummary) == 0 {
+			return res, errors.New("Token transfer information empty in asset history tx response")
+		}
+		ads := make(map[string]*addressHistoryIndexes)
+		var totalSat big.Int
+		for i := range tx.Vin {
+			vin := &tx.Vin[i]
+			// use first summary response as from address to filter vin/vouts because From is the person who spends inputs and creates outputs in asset tx
+			a := addressInSlice(vin.Addresses, []string{tx.TokenTransferSummary[0].From})
+			if a != "" {
+				hi := ads[a]
+				if hi == nil {
+					hi = &addressHistoryIndexes{OutputIndexes: []int{}}
+					ads[a] = hi
+				}
+				hi.InputIndexes = append(hi.InputIndexes, int(vin.N))
+				if vin.ValueSat != nil {
+					totalSat.Sub(&totalSat, (*big.Int)(vin.ValueSat))
+				}
+			}
+		}
+		for i := range tx.Vout {
+			vout := &tx.Vout[i]
+			a := addressInSlice(vout.Addresses, []string{tx.TokenTransferSummary[0].From})
+			if a != "" {
+				hi := ads[a]
+				if hi == nil {
+					hi = &addressHistoryIndexes{InputIndexes: []int{}}
+					ads[a] = hi
+				}
+				hi.OutputIndexes = append(hi.OutputIndexes, int(vout.N))
+				if vout.ValueSat != nil {
+					totalSat.Add(&totalSat, (*big.Int)(vout.ValueSat))
+				}
+			}
+		}
+		ahi.Addresses = ads
+		guid, errAG := strconv.Atoi(asset)
+		if errAG != nil {
+			return res, errAG
+		}
+		assetGuid := uint32(guid)
+		dbAsset, errAsset := s.db.GetAsset(assetGuid, nil)
+		if errAsset != nil || dbAsset == nil {
+			if err == nil{
+				return res, errors.New("getAssetHistory Asset not found")
+			}
+			return res, errAsset
+		}
+		ahi.Confirmations = int(tx.Confirmations)
+		ahi.Satoshis = totalSat.Int64()
+		ahi.Tx = txToResTx(tx)
+		res.Result.AssetDetails =	&api.AssetSpecific{
+			AssetGuid:		assetGuid,
+			Symbol:			dbAsset.AssetObj.Symbol,
+			WitnessAddress: dbAsset.AssetObj.WitnessAddress.ToString("sys"),
+			Contract:		"0x" + hex.EncodeToString(dbAsset.AssetObj.Contract),
+			Balance:		(*bchain.Amount)(big.NewInt(dbAsset.AssetObj.Balance)),
+			TotalSupply:	(*bchain.Amount)(big.NewInt(dbAsset.AssetObj.TotalSupply)),
+			MaxSupply:		(*bchain.Amount)(big.NewInt(dbAsset.AssetObj.MaxSupply)),
+			Decimals:		int(dbAsset.AssetObj.Precision),
+			UpdateFlags:	dbAsset.AssetObj.UpdateFlags,
+		}
+		json.Unmarshal(dbAsset.AssetObj.PubData, &res.Result.AssetDetails.PubData)
 		res.Result.Items = append(res.Result.Items, ahi)
 		// }
 	}

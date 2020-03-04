@@ -67,11 +67,11 @@
             {{formatAmount $tx.ValueOutSat}} {{$cs}}
         </div>
     </div>
-    {{- if $tx.TokenTransfers -}}
+    {{- if $tx.TokenTransferSummary -}}
     <div class="row line-top" style="padding: 15px 0 6px 15px;font-weight: bold;">
         ERC20 Token Transfers
     </div>
-    {{- range $erc20 := $tx.TokenTransfers -}}
+    {{- range $erc20 := $tx.TokenTransferSummary -}}
     <div class="row" style="padding: 2px 15px;">
         <div class="col-md-4">
             <div class="row tx-in">

@@ -27,18 +27,19 @@ import (
 	"blockbook/bchain/coins/myriad"
 	"blockbook/bchain/coins/namecoin"
 	"blockbook/bchain/coins/nuls"
+	"blockbook/bchain/coins/omotenashicoin"
 	"blockbook/bchain/coins/pivx"
 	"blockbook/bchain/coins/polis"
 	"blockbook/bchain/coins/qtum"
 	"blockbook/bchain/coins/ravencoin"
 	"blockbook/bchain/coins/ritocoin"
+	"blockbook/bchain/coins/sys"
 	"blockbook/bchain/coins/unobtanium"
 	"blockbook/bchain/coins/vertcoin"
 	"blockbook/bchain/coins/viacoin"
 	"blockbook/bchain/coins/vipstarcoin"
 	"blockbook/bchain/coins/xzc"
 	"blockbook/bchain/coins/zec"
-	"blockbook/bchain/coins/sys"
 	"blockbook/common"
 	"context"
 	"encoding/json"
@@ -110,6 +111,8 @@ func init() {
 	BlockChainFactories["Bitcore"] = bitcore.NewBitcoreRPC
 	BlockChainFactories["Syscoin"] = syscoin.NewSyscoinRPC
 	BlockChainFactories["Syscoin Testnet"] = syscoin.NewSyscoinRPC
+	BlockChainFactories["Omotenashicoin"] = omotenashicoin.NewOmotenashiCoinRPC
+	BlockChainFactories["Omotenashicoin Testnet"] = omotenashicoin.NewOmotenashiCoinRPC
 }
 
 // GetCoinNameFromConfig gets coin name and coin shortcut from config file
@@ -307,6 +310,12 @@ func (c *blockChainWithMetrics) EthereumTypeGetErc20ContractInfo(contractDesc bc
 func (c *blockChainWithMetrics) EthereumTypeGetErc20ContractBalance(addrDesc, contractDesc bchain.AddressDescriptor) (v *big.Int, err error) {
 	defer func(s time.Time) { c.observeRPCLatency("EthereumTypeGetErc20ContractInfo", s, err) }(time.Now())
 	return c.b.EthereumTypeGetErc20ContractBalance(addrDesc, contractDesc)
+}
+
+func (c *blockChainWithMetrics) AssetAllocationSend(asset int, sender string, receiver string, amount string) (rawtx interface{}, err error) {
+	defer func(s time.Time) { c.observeRPCLatency("AssetAllocationSend", s, err) }(time.Now())
+	rawtx, err = c.b.AssetAllocationSend(asset, sender, receiver, amount)
+	return rawtx, err
 }
 
 type mempoolWithMetrics struct {
