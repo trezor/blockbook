@@ -41,7 +41,7 @@ RUN \
     cleanup() { rm -rf $GOPATH/src/blockbook; } && \
     trap cleanup EXIT && \
     cd $GOPATH/src && \
-    git clone https://github.com/trezor/blockbook.git && \
+    git clone https://github.com/syscoin/blockbook.git && \
     cd blockbook && \
     dep ensure -vendor-only && \
     cp -r vendor /build/vendor
