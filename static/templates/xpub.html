@@ -6,7 +6,7 @@
 </div>
 <h3>Confirmed</h3>
 <div class="data-div row">
-    <div class="col-md-10">
+    <div class="col-lg-10">
         <table class="table data-table">
             <tbody>
                 <tr>
@@ -64,8 +64,8 @@
         </tbody>
         </table>
     </div>
-    <div class="col-md-2">
-        <div id="qrcode" style="width: 160px; height: 160px;"></div>
+    <div class="col-lg-2">
+        <div id="qrcode" style="width: 160px; height: 160px; float: right; padding-left: 10px;"></div>
         <script type="text/javascript" src="/static/js/qrcode.min.js"></script>
         <script type="text/javascript">
             new QRCode(document.getElementById("qrcode"), { text: "{{$addr.AddrStr}}", width: 160, height: 160 });
@@ -91,12 +91,12 @@
 {{- end}}{{if or $addr.Transactions $addr.Filter -}}
 <div class="row h-container">
     <h3 class="col-md-3">Transactions</h3>
-    <select class="col-md-2" style="background-color: #eaeaea;" onchange="self.location='?filter='+options[selectedIndex].value">
+    <select class="col-md-3" style="background-color: #eaeaea;" onchange="self.location='?filter='+options[selectedIndex].value">
         <option>All</option>
-        <option {{if eq $addr.Filter "inputs" -}} selected{{end}} value="inputs">Inputs</option>
-        <option {{if eq $addr.Filter "outputs" -}} selected{{end}} value="outputs">Outputs</option>
+        <option {{if eq $addr.Filter "inputs" -}} selected{{end}} value="inputs">XPUB addresses on input side</option>
+        <option {{if eq $addr.Filter "outputs" -}} selected{{end}} value="outputs">XPUB addresses on output side</option>
     </select>
-    <div class="col-md-7">
+    <div class="col-md-6">
         <nav>{{template "paging" $data}}</nav>
     </div>
 </div>

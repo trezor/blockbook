@@ -19,8 +19,8 @@ import (
 	"github.com/martinboehm/btcutil/chaincfg"
 )
 
+// magic numbers
 const (
-	// Net Magics
 	MainnetMagic wire.BitcoinNet = 0xe9fdc490
 	TestnetMagic wire.BitcoinNet = 0xba657645
 
@@ -29,6 +29,7 @@ const (
 	OP_ZEROCOINSPEND = 0xc2
 )
 
+// chain parameters
 var (
 	MainNetParams chaincfg.Params
 	TestNetParams chaincfg.Params
@@ -97,8 +98,8 @@ func (p *PivXParser) ParseBlock(b []byte) (*bchain.Block, error) {
 		return nil, errors.Annotatef(err, "Deserialize")
 	}
 
-	if h.Version > 3 {
-		// Skip past AccumulatorCheckpoint which was added in pivx block version 4
+	if h.Version > 3 && h.Version < 7 {
+		// Skip past AccumulatorCheckpoint (block version 4, 5 and 6)
 		r.Seek(32, io.SeekCurrent)
 	}
 
@@ -143,7 +144,7 @@ func (p *PivXParser) ParseTx(b []byte) (*bchain.Tx, error) {
 	return &tx, nil
 }
 
-// Parses tx and adds handling for OP_ZEROCOINSPEND inputs
+// TxFromMsgTx parses tx and adds handling for OP_ZEROCOINSPEND inputs
 func (p *PivXParser) TxFromMsgTx(t *wire.MsgTx, parseAddresses bool) bchain.Tx {
 	vin := make([]bchain.Vin, len(t.TxIn))
 	for i, in := range t.TxIn {

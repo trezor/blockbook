@@ -47,6 +47,12 @@ func Test_GetAddrDescFromAddress_Mainnet(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name:    "P2PKH3",
+			args:    args{address: "DHobAps6DjZ5n4xMV75n7kJv299Zi85FCG"},
+			want:    "76a9148ae937291e72f7368421dbaa966c44950eb14db788ac",
+			wantErr: false,
+		},
+		{
 			name:    "P2SH1",
 			args:    args{address: "9tg1kVUk339Tk58ewu5T8QT82Z6cE4UvSU"},
 			want:    "a9141889a089400ea25d28694fd98aa7702b21eeeab187",
@@ -71,6 +77,81 @@ func Test_GetAddrDescFromAddress_Mainnet(t *testing.T) {
 			h := hex.EncodeToString(got)
 			if !reflect.DeepEqual(h, tt.want) {
 				t.Errorf("GetAddrDescFromAddress() = %v, want %v", h, tt.want)
+			}
+		})
+	}
+}
+
+func Test_GetAddressesFromAddrDesc_Mainnet(t *testing.T) {
+	type args struct {
+		script string
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    []string
+		want2   bool
+		wantErr bool
+	}{
+		{
+			name:    "P2PKH1",
+			args:    args{script: "76a9148841590909747c0f97af158f22fadacb1652522088ac"},
+			want:    []string{"DHZYinsaM9nW5piCMN639ELRKbZomThPnZ"},
+			want2:   true,
+			wantErr: false,
+		},
+		{
+			name:    "P2PKH2",
+			args:    args{script: "76a914efb6158f75743c611858fdfd0f4aaec6cc6196bc88ac"},
+			want:    []string{"DSzaAYEYyy9ngjoJ294r7jzFM3xhD6bKHK"},
+			want2:   true,
+			wantErr: false,
+		},
+		{
+			name:    "P2PKH3",
+			args:    args{script: "76a91450e86eeac599ad023b8981296d01b50bdabcdd9788ac"},
+			want:    []string{"DCWu3MLz9xBGFuuLyNDf6QjuGp49f5tfc9"},
+			want2:   true,
+			wantErr: false,
+		},
+		{
+			name:    "P2SH1",
+			args:    args{script: "a9141889a089400ea25d28694fd98aa7702b21eeeab187"},
+			want:    []string{"9tg1kVUk339Tk58ewu5T8QT82Z6cE4UvSU"},
+			want2:   true,
+			wantErr: false,
+		},
+		{
+			name:    "OP_RETURN ascii",
+			args:    args{script: "6a0461686f6a"},
+			want:    []string{"OP_RETURN (ahoj)"},
+			want2:   false,
+			wantErr: false,
+		},
+		{
+			name:    "OP_RETURN hex",
+			args:    args{script: "6a072020f1686f6a20"},
+			want:    []string{"OP_RETURN 2020f1686f6a20"},
+			want2:   false,
+			wantErr: false,
+		},
+	}
+
+	parser := NewDogecoinParser(GetChainParams("main"), &btc.Configuration{})
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b, _ := hex.DecodeString(tt.args.script)
+			got, got2, err := parser.GetAddressesFromAddrDesc(b)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GetAddressesFromAddrDesc() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("GetAddressesFromAddrDesc() = %v, want %v", got, tt.want)
+			}
+			if !reflect.DeepEqual(got2, tt.want2) {
+				t.Errorf("GetAddressesFromAddrDesc() = %v, want %v", got2, tt.want2)
 			}
 		})
 	}

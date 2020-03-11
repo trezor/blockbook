@@ -4,11 +4,15 @@ import (
 	"blockbook/bchain"
 	"blockbook/bchain/coins/bch"
 	"blockbook/bchain/coins/bellcoin"
+	"blockbook/bchain/coins/bitcore"
 	"blockbook/bchain/coins/btc"
 	"blockbook/bchain/coins/btg"
+	"blockbook/bchain/coins/cpuchain"
 	"blockbook/bchain/coins/dash"
 	"blockbook/bchain/coins/dcr"
+	"blockbook/bchain/coins/deeponion"
 	"blockbook/bchain/coins/digibyte"
+	"blockbook/bchain/coins/divi"
 	"blockbook/bchain/coins/dogecoin"
 	"blockbook/bchain/coins/eth"
 	"blockbook/bchain/coins/flo"
@@ -23,11 +27,13 @@ import (
 	"blockbook/bchain/coins/myriad"
 	"blockbook/bchain/coins/namecoin"
 	"blockbook/bchain/coins/nuls"
+	"blockbook/bchain/coins/omotenashicoin"
 	"blockbook/bchain/coins/pivx"
 	"blockbook/bchain/coins/polis"
 	"blockbook/bchain/coins/qtum"
 	"blockbook/bchain/coins/ravencoin"
 	"blockbook/bchain/coins/ritocoin"
+	"blockbook/bchain/coins/unobtanium"
 	"blockbook/bchain/coins/vertcoin"
 	"blockbook/bchain/coins/viacoin"
 	"blockbook/bchain/coins/vipstarcoin"
@@ -97,6 +103,13 @@ func init() {
 	BlockChainFactories["ZelCash"] = zec.NewZCashRPC
 	BlockChainFactories["Ravencoin"] = ravencoin.NewRavencoinRPC
 	BlockChainFactories["Ritocoin"] = ritocoin.NewRitocoinRPC
+	BlockChainFactories["Divi"] = divi.NewDiviRPC
+	BlockChainFactories["CPUchain"] = cpuchain.NewCPUchainRPC
+	BlockChainFactories["Unobtanium"] = unobtanium.NewUnobtaniumRPC
+	BlockChainFactories["DeepOnion"] = deeponion.NewDeepOnionRPC
+	BlockChainFactories["Bitcore"] = bitcore.NewBitcoreRPC
+	BlockChainFactories["Omotenashicoin"] = omotenashicoin.NewOmotenashiCoinRPC
+	BlockChainFactories["Omotenashicoin Testnet"] = omotenashicoin.NewOmotenashiCoinRPC
 }
 
 // GetCoinNameFromConfig gets coin name and coin shortcut from config file

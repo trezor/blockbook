@@ -491,11 +491,7 @@ func (d *DecredRPC) GetBlockHeader(hash string) (*bchain.BlockHeader, error) {
 	return header, nil
 }
 
-func (d *DecredRPC) GetBlockHeaderByHeight(height uint32) (*bchain.BlockHeader, error) {
-	return nil, nil
-}
-
-// GetBlock returns the block retreived using the provided block hash by default
+// GetBlock returns the block retrieved using the provided block hash by default
 // or using the block height if an empty hash string was provided. If the
 // requested block has less than 2 confirmation bchain.ErrBlockNotFound error
 // is returned. This rule is in places to guarrantee that only validated block
@@ -503,18 +499,16 @@ func (d *DecredRPC) GetBlockHeaderByHeight(height uint32) (*bchain.BlockHeader, 
 func (d *DecredRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 	// Confirm if the block at provided height has at least 2 confirming blocks.
 	d.mtx.Lock()
-	var bestBlockHeight = d.bestBlock
-	if height > bestBlockHeight {
+	if height > d.bestBlock {
 		bestBlock, err := d.getBestBlock()
 		if err != nil || height > bestBlock.Result.Height {
-			// If an error occured or the current height doesn't have a minimum
+			// If an error occurred or the current height doesn't have a minimum
 			// of two confirming blocks (greater than best block), quit.
 			d.mtx.Unlock()
 			return nil, bchain.ErrBlockNotFound
 		}
 
 		d.bestBlock = bestBlock.Result.Height
-		bestBlockHeight = bestBlock.Result.Height
 	}
 	d.mtx.Unlock() // Releases the lock soonest possible
 

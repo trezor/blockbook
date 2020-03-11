@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/golang/protobuf/proto"
 	"github.com/juju/errors"
+	"golang.org/x/crypto/sha3"
 )
 
 // EthereumTypeAddressDescriptorLen - in case of EthereumType, the AddressDescriptor has fixed length
@@ -75,12 +76,6 @@ type rpcReceipt struct {
 	Logs    []*rpcLog `json:"logs"`
 }
 
-type rpcEtcReceipt struct {
-	GasUsed string    `json:"gasUsed"`
-	Status  int       `json:"status"`
-	Logs    []*rpcLog `json:"logs"`
-}
-
 type completeTransaction struct {
 	Tx      *rpcTransaction `json:"tx"`
 	Receipt *rpcReceipt     `json:"receipt,omitempty"`
@@ -101,17 +96,30 @@ func ethNumber(n string) (int64, error) {
 	return 0, errors.Errorf("Not a number: '%v'", n)
 }
 
-func (p *EthereumParser) ethTxToTx(tx *rpcTransaction, receipt *rpcReceipt, blocktime int64, confirmations uint32) (*bchain.Tx, error) {
+func (p *EthereumParser) ethTxToTx(tx *rpcTransaction, receipt *rpcReceipt, blocktime int64, confirmations uint32, fixEIP55 bool) (*bchain.Tx, error) {
 	txid := tx.Hash
 	var (
 		fa, ta []string
 		err    error
 	)
 	if len(tx.From) > 2 {
+		if fixEIP55 {
+			tx.From = EIP55AddressFromAddress(tx.From)
+		}
 		fa = []string{tx.From}
 	}
 	if len(tx.To) > 2 {
+		if fixEIP55 {
+			tx.To = EIP55AddressFromAddress(tx.To)
+		}
 		ta = []string{tx.To}
+	}
+	if fixEIP55 && receipt != nil && receipt.Logs != nil {
+		for _, l := range receipt.Logs {
+			if len(l.Address) > 2 {
+				l.Address = EIP55AddressFromAddress(l.Address)
+			}
+		}
 	}
 	ct := completeTransaction{
 		Tx:      tx,
@@ -176,9 +184,46 @@ func (p *EthereumParser) GetAddrDescFromAddress(address string) (bchain.AddressD
 	return hex.DecodeString(address)
 }
 
+// EIP55Address returns an EIP55-compliant hex string representation of the address
+func EIP55Address(addrDesc bchain.AddressDescriptor) string {
+	raw := hexutil.Encode(addrDesc)
+	if len(raw) != 42 {
+		return raw
+	}
+	sha := sha3.NewLegacyKeccak256()
+	result := []byte(raw)
+	sha.Write(result[2:])
+	hash := sha.Sum(nil)
+
+	for i := 2; i < len(result); i++ {
+		hashByte := hash[(i-2)>>1]
+		if i%2 == 0 {
+			hashByte = hashByte >> 4
+		} else {
+			hashByte &= 0xf
+		}
+		if result[i] > '9' && hashByte > 7 {
+			result[i] -= 32
+		}
+	}
+	return string(result)
+}
+
+// EIP55AddressFromAddress returns an EIP55-compliant hex string representation of the address
+func EIP55AddressFromAddress(address string) string {
+	if has0xPrefix(address) {
+		address = address[2:]
+	}
+	b, err := hex.DecodeString(address)
+	if err != nil {
+		return address
+	}
+	return EIP55Address(b)
+}
+
 // GetAddressesFromAddrDesc returns addresses for given address descriptor with flag if the addresses are searchable
 func (p *EthereumParser) GetAddressesFromAddrDesc(addrDesc bchain.AddressDescriptor) ([]string, bool, error) {
-	return []string{hexutil.Encode(addrDesc)}, true, nil
+	return []string{EIP55Address(addrDesc)}, true, nil
 }
 
 // GetScriptFromAddrDesc returns output script for given address descriptor
@@ -308,7 +353,7 @@ func (p *EthereumParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 	rt := rpcTransaction{
 		AccountNonce: hexutil.EncodeUint64(pt.Tx.AccountNonce),
 		BlockNumber:  hexutil.EncodeUint64(uint64(pt.BlockNumber)),
-		From:         hexutil.Encode(pt.Tx.From),
+		From:         EIP55Address(pt.Tx.From),
 		GasLimit:     hexutil.EncodeUint64(pt.Tx.GasLimit),
 		Hash:         hexutil.Encode(pt.Tx.Hash),
 		Payload:      hexutil.Encode(pt.Tx.Payload),
@@ -316,7 +361,7 @@ func (p *EthereumParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 		// R:                hexEncodeBig(pt.R),
 		// S:                hexEncodeBig(pt.S),
 		// V:                hexEncodeBig(pt.V),
-		To:               hexutil.Encode(pt.Tx.To),
+		To:               EIP55Address(pt.Tx.To),
 		TransactionIndex: hexutil.EncodeUint64(uint64(pt.Tx.TransactionIndex)),
 		Value:            hexEncodeBig(pt.Tx.Value),
 	}
@@ -329,7 +374,7 @@ func (p *EthereumParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 				topics[j] = hexutil.Encode(t)
 			}
 			logs[i] = &rpcLog{
-				Address: hexutil.Encode(l.Address),
+				Address: EIP55Address(l.Address),
 				Data:    hexutil.Encode(l.Data),
 				Topics:  topics,
 			}
@@ -340,7 +385,7 @@ func (p *EthereumParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 			Logs:    logs,
 		}
 	}
-	tx, err := p.ethTxToTx(&rt, rr, int64(pt.BlockTime), 0)
+	tx, err := p.ethTxToTx(&rt, rr, int64(pt.BlockTime), 0, false)
 	if err != nil {
 		return nil, 0, err
 	}

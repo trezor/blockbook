@@ -151,7 +151,7 @@ func isCashAddr(addr string) bool {
 func (p *BCashParser) outputScriptToAddresses(script []byte) ([]string, bool, error) {
 	// convert possible P2PK script to P2PK, which bchutil can process
 	var err error
-	script, err = txscript.ConvertP2PKtoP2PKH(script)
+	script, err = txscript.ConvertP2PKtoP2PKH(p.Params.Base58CksumHasher, script)
 	if err != nil {
 		return nil, false, err
 	}
