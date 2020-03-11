@@ -1,0 +1,36 @@
+{
+	"connectBlocks": {
+		"syncRanges": [
+			{"lower": 600, "upper": 600}
+		],
+		"blocks": {
+			"600": {
+				"height": 600,
+				"hash": "0000001d9724d92f0db8da3ce321b13bd780ae53251afc636ad149d0a64a8b0d",
+				"noTxs": 1,
+				"txDetails": [
+					{
+						"hex": "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff050258020101ffffffff0100e87648170000002321024a9c0d55966c7a46d8ac15830c6c26555a2b570a3e78c51534ccc8dadc7943c8ac00000000",
+						"txid": "54af08185cf5c5d312ebd9865b4b224c6120801b209343cfb9dc3332af28a2a5",
+						"version": 1,
+						"vin": [
+							{
+								"coinbase": "0258020101",
+								"sequence": 4294967295
+							}
+						],
+						"vout": [
+							{
+								"value": 1000,
+								"n": 0,
+								"scriptPubKey": {
+									"hex": "21024a9c0d55966c7a46d8ac15830c6c26555a2b570a3e78c51534ccc8dadc7943c8ac"
+								}
+							}
+						]
+					}
+				]
+			}
+		}
+	}
+}

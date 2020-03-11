@@ -236,7 +236,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			body: []string{
 				`<a class="navbar-brand" href="/">Fake Coin Explorer</a>`,
 				`<h1>Address`,
-				`<small class="text-muted">0 FAKE</small>`,
+				`<small class="text-muted">0.00012345 FAKE</small>`,
 				`<span class="data">mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz</span>`,
 				`<td class="data">0.00012345 FAKE</td>`,
 				`<a href="/tx/7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25">7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25</a>`,
@@ -375,7 +375,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			body: []string{
 				`<a class="navbar-brand" href="/">Fake Coin Explorer</a>`,
 				`<h1>Address`,
-				`<small class="text-muted">0 FAKE</small>`,
+				`<small class="text-muted">0.00012345 FAKE</small>`,
 				`<span class="data">mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz</span>`,
 				`<td class="data">0.00012345 FAKE</td>`,
 				`<a href="/tx/7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25">7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25</a>`,
@@ -506,7 +506,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"hex":"","txid":"00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840","version":0,"locktime":0,"vin":[],"vout":[{"ValueSat":100000000,"value":0,"n":0,"scriptPubKey":{"hex":"76a914010d39800f86122416e28f485029acf77507169288ac","addresses":null}},{"ValueSat":12345,"value":0,"n":1,"scriptPubKey":{"hex":"76a9148bdf0aa3c567aa5975c2e61321b8bebbe7293df688ac","addresses":null}}],"confirmations":2,"time":1521515026,"blocktime":1521515026}`,
+				`{"hex":"","txid":"00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840","version":0,"locktime":0,"vin":[],"vout":[{"ValueSat":100000000,"value":0,"n":0,"scriptPubKey":{"hex":"76a914010d39800f86122416e28f485029acf77507169288ac","addresses":null}},{"ValueSat":12345,"value":0,"n":1,"scriptPubKey":{"hex":"76a9148bdf0aa3c567aa5975c2e61321b8bebbe7293df688ac","addresses":null}},{"ValueSat":12345,"value":0,"n":2,"scriptPubKey":{"hex":"76a9148bdf0aa3c567aa5975c2e61321b8bebbe7293df688ac","addresses":null}}],"confirmations":2,"time":1521515026,"blocktime":1521515026}`,
 			},
 		},
 		{
@@ -776,7 +776,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`[{"time":1521514800,"txs":1,"received":"12345","sent":"0","rates":{"eur":1301,"usd":2001}},{"time":1521594000,"txs":1,"received":"0","sent":"12345","rates":{"eur":1303,"usd":2003}}]`,
+				`[{"time":1521514800,"txs":1,"received":"24690","sent":"0","rates":{"eur":1301,"usd":2001}},{"time":1521594000,"txs":1,"received":"0","sent":"12345","rates":{"eur":1303,"usd":2003}}]`,
 			},
 		},
 		{
@@ -803,7 +803,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`[{"time":1521514800,"txs":1,"received":"12345","sent":"0","rates":{"eur":1301,"usd":2001}}]`,
+				`[{"time":1521514800,"txs":1,"received":"24690","sent":"0","rates":{"eur":1301,"usd":2001}}]`,
 			},
 		},
 		{
@@ -884,7 +884,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"page":1,"totalPages":1,"itemsOnPage":1000,"hash":"0000000076fbbed90fd75b0e18856aa35baa984e9c9d444cf746ad85e94e2997","nextBlockHash":"00000000eb0443fd7dc4a1ed5c686a8e995057805f9a161d9a5a77a95e72b7b6","height":225493,"confirmations":2,"size":1234567,"time":1521515026,"version":0,"merkleRoot":"","nonce":"","bits":"","difficulty":"","txCount":2,"txs":[{"txid":"00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840","vin":[],"vout":[{"value":"100000000","n":0,"addresses":["mfcWp7DB6NuaZsExybTTXpVgWz559Np4Ti"],"isAddress":true},{"value":"12345","n":1,"spent":true,"addresses":["mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz"],"isAddress":true}],"blockHash":"0000000076fbbed90fd75b0e18856aa35baa984e9c9d444cf746ad85e94e2997","blockHeight":225493,"confirmations":2,"blockTime":1521515026,"value":"100012345","valueIn":"0","fees":"0"},{"txid":"effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75","vin":[],"vout":[{"value":"1234567890123","n":0,"spent":true,"addresses":["mv9uLThosiEnGRbVPS7Vhyw6VssbVRsiAw"],"isAddress":true},{"value":"1","n":1,"spent":true,"addresses":["2MzmAKayJmja784jyHvRUW1bXPget1csRRG"],"isAddress":true},{"value":"9876","n":2,"spent":true,"addresses":["2NEVv9LJmAnY99W1pFoc5UJjVdypBqdnvu1"],"isAddress":true}],"blockHash":"0000000076fbbed90fd75b0e18856aa35baa984e9c9d444cf746ad85e94e2997","blockHeight":225493,"confirmations":2,"blockTime":1521515026,"value":"1234567900000","valueIn":"0","fees":"0"}]}`,
+				`{"page":1,"totalPages":1,"itemsOnPage":1000,"hash":"0000000076fbbed90fd75b0e18856aa35baa984e9c9d444cf746ad85e94e2997","nextBlockHash":"00000000eb0443fd7dc4a1ed5c686a8e995057805f9a161d9a5a77a95e72b7b6","height":225493,"confirmations":2,"size":1234567,"time":1521515026,"version":0,"merkleRoot":"","nonce":"","bits":"","difficulty":"","txCount":2,"txs":[{"txid":"00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840","vin":[],"vout":[{"value":"100000000","n":0,"addresses":["mfcWp7DB6NuaZsExybTTXpVgWz559Np4Ti"],"isAddress":true},{"value":"12345","n":1,"spent":true,"addresses":["mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz"],"isAddress":true},{"value":"12345","n":2,"addresses":["mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz"],"isAddress":true}],"blockHash":"0000000076fbbed90fd75b0e18856aa35baa984e9c9d444cf746ad85e94e2997","blockHeight":225493,"confirmations":2,"blockTime":1521515026,"value":"100024690","valueIn":"0","fees":"0"},{"txid":"effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75","vin":[],"vout":[{"value":"1234567890123","n":0,"spent":true,"addresses":["mv9uLThosiEnGRbVPS7Vhyw6VssbVRsiAw"],"isAddress":true},{"value":"1","n":1,"spent":true,"addresses":["2MzmAKayJmja784jyHvRUW1bXPget1csRRG"],"isAddress":true},{"value":"9876","n":2,"spent":true,"addresses":["2NEVv9LJmAnY99W1pFoc5UJjVdypBqdnvu1"],"isAddress":true}],"blockHash":"0000000076fbbed90fd75b0e18856aa35baa984e9c9d444cf746ad85e94e2997","blockHeight":225493,"confirmations":2,"blockTime":1521515026,"value":"1234567900000","valueIn":"0","fees":"0"}]}`,
 			},
 		},
 	}
@@ -986,7 +986,7 @@ func socketioTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 					"to":           5,
 				},
 			}},
-			want: `{"result":{"totalCount":2,"items":[{"addresses":{"mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz":{"inputIndexes":[1],"outputIndexes":[]}},"satoshis":-12345,"confirmations":1,"tx":{"hex":"","height":225494,"blockTimestamp":1521595678,"version":0,"hash":"7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25","inputs":[{"txid":"effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75","outputIndex":0,"script":"","sequence":0,"address":"mv9uLThosiEnGRbVPS7Vhyw6VssbVRsiAw","satoshis":1234567890123},{"txid":"00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840","outputIndex":1,"script":"","sequence":0,"address":"mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz","satoshis":12345}],"inputSatoshis":1234567902468,"outputs":[{"satoshis":317283951061,"script":"76a914ccaaaf374e1b06cb83118453d102587b4273d09588ac","address":"mzB8cYrfRwFRFAGTDzV8LkUQy5BQicxGhX"},{"satoshis":917283951061,"script":"76a9148d802c045445df49613f6a70ddd2e48526f3701f88ac","address":"mtR97eM2HPWVM6c8FGLGcukgaHHQv7THoL"},{"satoshis":0,"script":"6a072020f1686f6a20","address":"OP_RETURN 2020f1686f6a20"}],"outputSatoshis":1234567902122,"feeSatoshis":346}},{"addresses":{"mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz":{"inputIndexes":[],"outputIndexes":[1]}},"satoshis":12345,"confirmations":2,"tx":{"hex":"","height":225493,"blockTimestamp":1521515026,"version":0,"hash":"00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840","inputs":[],"outputs":[{"satoshis":100000000,"script":"76a914010d39800f86122416e28f485029acf77507169288ac","address":"mfcWp7DB6NuaZsExybTTXpVgWz559Np4Ti"},{"satoshis":12345,"script":"76a9148bdf0aa3c567aa5975c2e61321b8bebbe7293df688ac","address":"mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz"}],"outputSatoshis":100012345}}]}}`,
+			want: `{"result":{"totalCount":2,"items":[{"addresses":{"mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz":{"inputIndexes":[1],"outputIndexes":[]}},"satoshis":-12345,"confirmations":1,"tx":{"hex":"","height":225494,"blockTimestamp":1521595678,"version":0,"hash":"7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25","inputs":[{"txid":"effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75","outputIndex":0,"script":"","sequence":0,"address":"mv9uLThosiEnGRbVPS7Vhyw6VssbVRsiAw","satoshis":1234567890123},{"txid":"00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840","outputIndex":1,"script":"","sequence":0,"address":"mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz","satoshis":12345}],"inputSatoshis":1234567902468,"outputs":[{"satoshis":317283951061,"script":"76a914ccaaaf374e1b06cb83118453d102587b4273d09588ac","address":"mzB8cYrfRwFRFAGTDzV8LkUQy5BQicxGhX"},{"satoshis":917283951061,"script":"76a9148d802c045445df49613f6a70ddd2e48526f3701f88ac","address":"mtR97eM2HPWVM6c8FGLGcukgaHHQv7THoL"},{"satoshis":0,"script":"6a072020f1686f6a20","address":"OP_RETURN 2020f1686f6a20"}],"outputSatoshis":1234567902122,"feeSatoshis":346}},{"addresses":{"mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz":{"inputIndexes":[],"outputIndexes":[1,2]}},"satoshis":24690,"confirmations":2,"tx":{"hex":"","height":225493,"blockTimestamp":1521515026,"version":0,"hash":"00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840","inputs":[],"outputs":[{"satoshis":100000000,"script":"76a914010d39800f86122416e28f485029acf77507169288ac","address":"mfcWp7DB6NuaZsExybTTXpVgWz559Np4Ti"},{"satoshis":12345,"script":"76a9148bdf0aa3c567aa5975c2e61321b8bebbe7293df688ac","address":"mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz"},{"satoshis":12345,"script":"76a9148bdf0aa3c567aa5975c2e61321b8bebbe7293df688ac","address":"mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz"}],"outputSatoshis":100024690}}]}}`,
 		},
 		{
 			name: "socketio getBlockHeader",
@@ -1370,7 +1370,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 					"descriptor": "mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz",
 				},
 			},
-			want: `{"id":"32","data":[{"time":1521514800,"txs":1,"received":"12345","sent":"0","rates":{"eur":1301,"usd":2001}},{"time":1521594000,"txs":1,"received":"0","sent":"12345","rates":{"eur":1303,"usd":2003}}]}`,
+			want: `{"id":"32","data":[{"time":1521514800,"txs":1,"received":"24690","sent":"0","rates":{"eur":1301,"usd":2001}},{"time":1521594000,"txs":1,"received":"0","sent":"12345","rates":{"eur":1303,"usd":2003}}]}`,
 		},
 		{
 			name: "websocket getBalanceHistory xpub",

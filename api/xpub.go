@@ -304,8 +304,7 @@ func (w *Worker) getXpubData(xpub string, page int, txsOnPage int, option Accoun
 			data = xpubData{gap: gap}
 			data.basePath, err = w.chainParser.DerivationBasePath(xpub)
 			if err != nil {
-				glog.Warning("DerivationBasePath error", err)
-				data.basePath = "unknown"
+				return nil, 0, err
 			}
 		} else {
 			hash, err := w.db.GetBlockHash(data.dataHeight)

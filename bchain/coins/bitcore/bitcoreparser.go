@@ -80,4 +80,3 @@ func (p *BitcoreParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) ([
 func (p *BitcoreParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 	return p.baseparser.UnpackTx(buf)
 }
-

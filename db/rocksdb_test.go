@@ -192,7 +192,7 @@ func verifyAfterBitcoinTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect bool
 	// the vout is encoded as signed varint, i.e. value * 2 for non negative values
 	if err := checkColumn(d, cfAddresses, []keyPair{
 		{addressKeyHex(dbtestdata.Addr1, 225493, d), txIndexesHex(dbtestdata.TxidB1T1, []int32{0}), nil},
-		{addressKeyHex(dbtestdata.Addr2, 225493, d), txIndexesHex(dbtestdata.TxidB1T1, []int32{1}), nil},
+		{addressKeyHex(dbtestdata.Addr2, 225493, d), txIndexesHex(dbtestdata.TxidB1T1, []int32{1, 2}), nil},
 		{addressKeyHex(dbtestdata.Addr3, 225493, d), txIndexesHex(dbtestdata.TxidB1T2, []int32{0}), nil},
 		{addressKeyHex(dbtestdata.Addr4, 225493, d), txIndexesHex(dbtestdata.TxidB1T2, []int32{1}), nil},
 		{addressKeyHex(dbtestdata.Addr5, 225493, d), txIndexesHex(dbtestdata.TxidB1T2, []int32{2}), nil},
@@ -206,8 +206,9 @@ func verifyAfterBitcoinTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect bool
 			dbtestdata.TxidB1T1,
 			varuintToHex(225493) +
 				"00" +
-				"02" +
+				"03" +
 				addressToPubKeyHexWithLength(dbtestdata.Addr1, t, d) + bigintToHex(dbtestdata.SatB1T1A1) +
+				addressToPubKeyHexWithLength(dbtestdata.Addr2, t, d) + bigintToHex(dbtestdata.SatB1T1A2) +
 				addressToPubKeyHexWithLength(dbtestdata.Addr2, t, d) + bigintToHex(dbtestdata.SatB1T1A2),
 			nil,
 		},
@@ -235,8 +236,9 @@ func verifyAfterBitcoinTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect bool
 		},
 		{
 			dbtestdata.AddressToPubKeyHex(dbtestdata.Addr2, d.chainParser),
-			"01" + bigintToHex(dbtestdata.SatZero) + bigintToHex(dbtestdata.SatB1T1A2) +
-				dbtestdata.TxidB1T1 + varuintToHex(1) + varuintToHex(225493) + bigintToHex(dbtestdata.SatB1T1A2),
+			"01" + bigintToHex(dbtestdata.SatZero) + bigintToHex(dbtestdata.SatB1T1A2Double) +
+				dbtestdata.TxidB1T1 + varuintToHex(1) + varuintToHex(225493) + bigintToHex(dbtestdata.SatB1T1A2) +
+				dbtestdata.TxidB1T1 + varuintToHex(2) + varuintToHex(225493) + bigintToHex(dbtestdata.SatB1T1A2),
 			nil,
 		},
 		{
@@ -302,7 +304,7 @@ func verifyAfterBitcoinTypeBlock2(t *testing.T, d *RocksDB) {
 	}
 	if err := checkColumn(d, cfAddresses, []keyPair{
 		{addressKeyHex(dbtestdata.Addr1, 225493, d), txIndexesHex(dbtestdata.TxidB1T1, []int32{0}), nil},
-		{addressKeyHex(dbtestdata.Addr2, 225493, d), txIndexesHex(dbtestdata.TxidB1T1, []int32{1}), nil},
+		{addressKeyHex(dbtestdata.Addr2, 225493, d), txIndexesHex(dbtestdata.TxidB1T1, []int32{1, 2}), nil},
 		{addressKeyHex(dbtestdata.Addr3, 225493, d), txIndexesHex(dbtestdata.TxidB1T2, []int32{0}), nil},
 		{addressKeyHex(dbtestdata.Addr4, 225493, d), txIndexesHex(dbtestdata.TxidB1T2, []int32{1}), nil},
 		{addressKeyHex(dbtestdata.Addr5, 225493, d), txIndexesHex(dbtestdata.TxidB1T2, []int32{2}), nil},
@@ -325,9 +327,10 @@ func verifyAfterBitcoinTypeBlock2(t *testing.T, d *RocksDB) {
 			dbtestdata.TxidB1T1,
 			varuintToHex(225493) +
 				"00" +
-				"02" +
+				"03" +
 				addressToPubKeyHexWithLength(dbtestdata.Addr1, t, d) + bigintToHex(dbtestdata.SatB1T1A1) +
-				spentAddressToPubKeyHexWithLength(dbtestdata.Addr2, t, d) + bigintToHex(dbtestdata.SatB1T1A2),
+				spentAddressToPubKeyHexWithLength(dbtestdata.Addr2, t, d) + bigintToHex(dbtestdata.SatB1T1A2) +
+				addressToPubKeyHexWithLength(dbtestdata.Addr2, t, d) + bigintToHex(dbtestdata.SatB1T1A2),
 			nil,
 		},
 		{
@@ -395,7 +398,8 @@ func verifyAfterBitcoinTypeBlock2(t *testing.T, d *RocksDB) {
 		},
 		{
 			dbtestdata.AddressToPubKeyHex(dbtestdata.Addr2, d.chainParser),
-			"02" + bigintToHex(dbtestdata.SatB1T1A2) + bigintToHex(dbtestdata.SatZero),
+			"02" + bigintToHex(dbtestdata.SatB1T1A2) + bigintToHex(dbtestdata.SatB1T1A2) +
+				dbtestdata.TxidB1T1 + varuintToHex(2) + varuintToHex(225493) + bigintToHex(dbtestdata.SatB1T1A2),
 			nil,
 		},
 		{
@@ -563,9 +567,11 @@ func TestRocksDB_Index_BitcoinType(t *testing.T) {
 	verifyGetTransactions(t, d, dbtestdata.Addr2, 0, 1000000, []txidIndex{
 		{dbtestdata.TxidB2T1, ^1},
 		{dbtestdata.TxidB1T1, 1},
+		{dbtestdata.TxidB1T1, 2},
 	}, nil)
 	verifyGetTransactions(t, d, dbtestdata.Addr2, 225493, 225493, []txidIndex{
 		{dbtestdata.TxidB1T1, 1},
+		{dbtestdata.TxidB1T1, 2},
 	}, nil)
 	verifyGetTransactions(t, d, dbtestdata.Addr2, 225494, 1000000, []txidIndex{
 		{dbtestdata.TxidB2T1, ^1},
@@ -1096,6 +1102,382 @@ func Test_packAddrBalance_unpackAddrBalance(t *testing.T) {
 			}
 			if !reflect.DeepEqual(got1, tt.data) {
 				t.Errorf("unpackTxAddresses() = %+v, want %+v", got1, tt.data)
+			}
+		})
+	}
+}
+
+func createUtxoMap(ab *AddrBalance) {
+	l := len(ab.Utxos)
+	ab.utxosMap = make(map[string]int, 32)
+	for i := 0; i < l; i++ {
+		s := string(ab.Utxos[i].BtxID)
+		if _, e := ab.utxosMap[s]; !e {
+			ab.utxosMap[s] = i
+		}
+	}
+}
+func TestAddrBalance_utxo_methods(t *testing.T) {
+	ab := &AddrBalance{
+		Txs:        10,
+		SentSat:    *big.NewInt(10000),
+		BalanceSat: *big.NewInt(1000),
+	}
+
+	// addUtxo
+	ab.addUtxo(&Utxo{
+		BtxID:    hexToBytes(dbtestdata.TxidB1T1),
+		Vout:     1,
+		Height:   5000,
+		ValueSat: *big.NewInt(100),
+	})
+	ab.addUtxo(&Utxo{
+		BtxID:    hexToBytes(dbtestdata.TxidB1T1),
+		Vout:     4,
+		Height:   5000,
+		ValueSat: *big.NewInt(100),
+	})
+	ab.addUtxo(&Utxo{
+		BtxID:    hexToBytes(dbtestdata.TxidB1T2),
+		Vout:     0,
+		Height:   5001,
+		ValueSat: *big.NewInt(800),
+	})
+	want := &AddrBalance{
+		Txs:        10,
+		SentSat:    *big.NewInt(10000),
+		BalanceSat: *big.NewInt(1000),
+		Utxos: []Utxo{
+			{
+				BtxID:    hexToBytes(dbtestdata.TxidB1T1),
+				Vout:     1,
+				Height:   5000,
+				ValueSat: *big.NewInt(100),
+			},
+			{
+				BtxID:    hexToBytes(dbtestdata.TxidB1T1),
+				Vout:     4,
+				Height:   5000,
+				ValueSat: *big.NewInt(100),
+			},
+			{
+				BtxID:    hexToBytes(dbtestdata.TxidB1T2),
+				Vout:     0,
+				Height:   5001,
+				ValueSat: *big.NewInt(800),
+			},
+		},
+	}
+	if !reflect.DeepEqual(ab, want) {
+		t.Errorf("addUtxo, got %+v, want %+v", ab, want)
+	}
+
+	// addUtxoInDisconnect
+	ab.addUtxoInDisconnect(&Utxo{
+		BtxID:    hexToBytes(dbtestdata.TxidB2T1),
+		Vout:     0,
+		Height:   5003,
+		ValueSat: *big.NewInt(800),
+	})
+	ab.addUtxoInDisconnect(&Utxo{
+		BtxID:    hexToBytes(dbtestdata.TxidB2T1),
+		Vout:     1,
+		Height:   5003,
+		ValueSat: *big.NewInt(800),
+	})
+	ab.addUtxoInDisconnect(&Utxo{
+		BtxID:    hexToBytes(dbtestdata.TxidB1T1),
+		Vout:     10,
+		Height:   5000,
+		ValueSat: *big.NewInt(100),
+	})
+	ab.addUtxoInDisconnect(&Utxo{
+		BtxID:    hexToBytes(dbtestdata.TxidB1T1),
+		Vout:     2,
+		Height:   5000,
+		ValueSat: *big.NewInt(100),
+	})
+	ab.addUtxoInDisconnect(&Utxo{
+		BtxID:    hexToBytes(dbtestdata.TxidB1T1),
+		Vout:     0,
+		Height:   5000,
+		ValueSat: *big.NewInt(100),
+	})
+	want = &AddrBalance{
+		Txs:        10,
+		SentSat:    *big.NewInt(10000),
+		BalanceSat: *big.NewInt(1000),
+		Utxos: []Utxo{
+			{
+				BtxID:    hexToBytes(dbtestdata.TxidB1T1),
+				Vout:     0,
+				Height:   5000,
+				ValueSat: *big.NewInt(100),
+			},
+			{
+				BtxID:    hexToBytes(dbtestdata.TxidB1T1),
+				Vout:     1,
+				Height:   5000,
+				ValueSat: *big.NewInt(100),
+			},
+			{
+				BtxID:    hexToBytes(dbtestdata.TxidB1T1),
+				Vout:     2,
+				Height:   5000,
+				ValueSat: *big.NewInt(100),
+			},
+			{
+				BtxID:    hexToBytes(dbtestdata.TxidB1T1),
+				Vout:     4,
+				Height:   5000,
+				ValueSat: *big.NewInt(100),
+			},
+			{
+				BtxID:    hexToBytes(dbtestdata.TxidB1T1),
+				Vout:     10,
+				Height:   5000,
+				ValueSat: *big.NewInt(100),
+			},
+			{
+				BtxID:    hexToBytes(dbtestdata.TxidB1T2),
+				Vout:     0,
+				Height:   5001,
+				ValueSat: *big.NewInt(800),
+			},
+			{
+				BtxID:    hexToBytes(dbtestdata.TxidB2T1),
+				Vout:     0,
+				Height:   5003,
+				ValueSat: *big.NewInt(800),
+			},
+			{
+				BtxID:    hexToBytes(dbtestdata.TxidB2T1),
+				Vout:     1,
+				Height:   5003,
+				ValueSat: *big.NewInt(800),
+			},
+		},
+	}
+	if !reflect.DeepEqual(ab, want) {
+		t.Errorf("addUtxoInDisconnect, got %+v, want %+v", ab, want)
+	}
+
+	// markUtxoAsSpent
+	ab.markUtxoAsSpent(hexToBytes(dbtestdata.TxidB2T1), 0)
+	want.Utxos[6].Vout = -1
+	if !reflect.DeepEqual(ab, want) {
+		t.Errorf("markUtxoAsSpent, got %+v, want %+v", ab, want)
+	}
+
+	// addUtxo with utxosMap
+	for i := 0; i < 20; i += 2 {
+		utxo := Utxo{
+			BtxID:    hexToBytes(dbtestdata.TxidB2T2),
+			Vout:     int32(i),
+			Height:   5009,
+			ValueSat: *big.NewInt(800),
+		}
+		ab.addUtxo(&utxo)
+		want.Utxos = append(want.Utxos, utxo)
+	}
+	createUtxoMap(want)
+	if !reflect.DeepEqual(ab, want) {
+		t.Errorf("addUtxo with utxosMap, got %+v, want %+v", ab, want)
+	}
+
+	// markUtxoAsSpent with utxosMap
+	ab.markUtxoAsSpent(hexToBytes(dbtestdata.TxidB2T1), 1)
+	want.Utxos[7].Vout = -1
+	if !reflect.DeepEqual(ab, want) {
+		t.Errorf("markUtxoAsSpent with utxosMap, got %+v, want %+v", ab, want)
+	}
+
+	// addUtxoInDisconnect with utxosMap
+	ab.addUtxoInDisconnect(&Utxo{
+		BtxID:    hexToBytes(dbtestdata.TxidB1T1),
+		Vout:     3,
+		Height:   5000,
+		ValueSat: *big.NewInt(100),
+	})
+	want.Utxos = append(want.Utxos, Utxo{})
+	copy(want.Utxos[3+1:], want.Utxos[3:])
+	want.Utxos[3] = Utxo{
+		BtxID:    hexToBytes(dbtestdata.TxidB1T1),
+		Vout:     3,
+		Height:   5000,
+		ValueSat: *big.NewInt(100),
+	}
+	want.utxosMap = nil
+	if !reflect.DeepEqual(ab, want) {
+		t.Errorf("addUtxoInDisconnect with utxosMap, got %+v, want %+v", ab, want)
+	}
+
+}
+
+func Test_reorderUtxo(t *testing.T) {
+	utxos := []Utxo{
+		{
+			BtxID: hexToBytes(dbtestdata.TxidB1T1),
+			Vout:  3,
+		},
+		{
+			BtxID: hexToBytes(dbtestdata.TxidB1T1),
+			Vout:  1,
+		},
+		{
+			BtxID: hexToBytes(dbtestdata.TxidB1T1),
+			Vout:  0,
+		},
+		{
+			BtxID: hexToBytes(dbtestdata.TxidB1T2),
+			Vout:  0,
+		},
+		{
+			BtxID: hexToBytes(dbtestdata.TxidB1T2),
+			Vout:  2,
+		},
+		{
+			BtxID: hexToBytes(dbtestdata.TxidB1T2),
+			Vout:  1,
+		},
+		{
+			BtxID: hexToBytes(dbtestdata.TxidB2T1),
+			Vout:  2,
+		},
+		{
+			BtxID: hexToBytes(dbtestdata.TxidB2T1),
+			Vout:  0,
+		},
+	}
+	tests := []struct {
+		name  string
+		utxos []Utxo
+		index int
+		want  []Utxo
+	}{
+		{
+			name:  "middle",
+			utxos: utxos,
+			index: 4,
+			want: []Utxo{
+				{
+					BtxID: hexToBytes(dbtestdata.TxidB1T1),
+					Vout:  3,
+				},
+				{
+					BtxID: hexToBytes(dbtestdata.TxidB1T1),
+					Vout:  1,
+				},
+				{
+					BtxID: hexToBytes(dbtestdata.TxidB1T1),
+					Vout:  0,
+				},
+				{
+					BtxID: hexToBytes(dbtestdata.TxidB1T2),
+					Vout:  0,
+				},
+				{
+					BtxID: hexToBytes(dbtestdata.TxidB1T2),
+					Vout:  1,
+				},
+				{
+					BtxID: hexToBytes(dbtestdata.TxidB1T2),
+					Vout:  2,
+				},
+				{
+					BtxID: hexToBytes(dbtestdata.TxidB2T1),
+					Vout:  2,
+				},
+				{
+					BtxID: hexToBytes(dbtestdata.TxidB2T1),
+					Vout:  0,
+				},
+			},
+		},
+		{
+			name:  "start",
+			utxos: utxos,
+			index: 1,
+			want: []Utxo{
+				{
+					BtxID: hexToBytes(dbtestdata.TxidB1T1),
+					Vout:  0,
+				},
+				{
+					BtxID: hexToBytes(dbtestdata.TxidB1T1),
+					Vout:  1,
+				},
+				{
+					BtxID: hexToBytes(dbtestdata.TxidB1T1),
+					Vout:  3,
+				},
+				{
+					BtxID: hexToBytes(dbtestdata.TxidB1T2),
+					Vout:  0,
+				},
+				{
+					BtxID: hexToBytes(dbtestdata.TxidB1T2),
+					Vout:  1,
+				},
+				{
+					BtxID: hexToBytes(dbtestdata.TxidB1T2),
+					Vout:  2,
+				},
+				{
+					BtxID: hexToBytes(dbtestdata.TxidB2T1),
+					Vout:  2,
+				},
+				{
+					BtxID: hexToBytes(dbtestdata.TxidB2T1),
+					Vout:  0,
+				},
+			},
+		},
+		{
+			name:  "end",
+			utxos: utxos,
+			index: 6,
+			want: []Utxo{
+				{
+					BtxID: hexToBytes(dbtestdata.TxidB1T1),
+					Vout:  0,
+				},
+				{
+					BtxID: hexToBytes(dbtestdata.TxidB1T1),
+					Vout:  1,
+				},
+				{
+					BtxID: hexToBytes(dbtestdata.TxidB1T1),
+					Vout:  3,
+				},
+				{
+					BtxID: hexToBytes(dbtestdata.TxidB1T2),
+					Vout:  0,
+				},
+				{
+					BtxID: hexToBytes(dbtestdata.TxidB1T2),
+					Vout:  1,
+				},
+				{
+					BtxID: hexToBytes(dbtestdata.TxidB1T2),
+					Vout:  2,
+				},
+				{
+					BtxID: hexToBytes(dbtestdata.TxidB2T1),
+					Vout:  0,
+				},
+				{
+					BtxID: hexToBytes(dbtestdata.TxidB2T1),
+					Vout:  2,
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reorderUtxo(tt.utxos, tt.index)
+			if !reflect.DeepEqual(tt.utxos, tt.want) {
+				t.Errorf("reorderUtxo %s, got %+v, want %+v", tt.name, tt.utxos, tt.want)
 			}
 		})
 	}
