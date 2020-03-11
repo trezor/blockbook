@@ -50,9 +50,7 @@
       "block_addresses_to_keep": 300,
       "additional_params": {
         "mempoolTxTimeoutHours": 12,
-        "queryBackendOnMempoolResync": false,
-        "fiat_rates": "coingecko",
-        "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"ethereum\", \"periodSeconds\": 60}"
+        "queryBackendOnMempoolResync": false
       }
     }
   },
