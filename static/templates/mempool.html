@@ -1,8 +1,8 @@
 {{define "specific"}}{{$txs := .MempoolTxids.Mempool}}{{$data := .}}
-<h1>Mempool Transactions <small class="text-muted">by first seen time</small>
+<h1>Mempool Transactions <small class="text-muted">by time of appearance</small>
 </h1>
 <div class="row h-container">
-    <h5 class="col-md-6 col-sm-12">{{$.MempoolTxids.MempoolSize}} Transactions in mempool</h5>
+    <h5 class="col-md-6 col-sm-12">{{$.MempoolTxids.MempoolSize}} transactions in mempool</h5>
     <nav class="col-md-6 col-sm-12">{{template "paging" $data }}</nav>
 </div>
 <div class="data-div">
@@ -10,7 +10,7 @@
         <thead>
             <tr>
                 <th style="width: 70%;">Transaction</th>
-                <th style="width: 30%;">First Seen Time</span></th>
+                <th style="width: 30%;">Time</th>
             </tr>
         </thead>
         <tbody>

@@ -625,6 +625,8 @@ func (s *PublicServer) getAddressQueryParams(r *http.Request, accountDetails api
 		accountDetails = api.AccountDetailsTokenBalances
 	case "txids":
 		accountDetails = api.AccountDetailsTxidHistory
+	case "txslight":
+		accountDetails = api.AccountDetailsTxHistoryLight
 	case "txs":
 		accountDetails = api.AccountDetailsTxHistory
 	}
@@ -641,11 +643,13 @@ func (s *PublicServer) getAddressQueryParams(r *http.Request, accountDetails api
 	if ec != nil {
 		gap = 0
 	}
+	contract := r.URL.Query().Get("contract")
 	return page, pageSize, accountDetails, &api.AddressFilter{
 		Vout:           voutFilter,
 		TokensToReturn: tokensToReturn,
 		FromHeight:     uint32(from),
 		ToHeight:       uint32(to),
+		Contract:       contract,
 	}, filterParam, gap
 }
 
@@ -670,6 +674,9 @@ func (s *PublicServer) explorerAddress(w http.ResponseWriter, r *http.Request) (
 	data.Address = address
 	data.Page = address.Page
 	data.PagingRange, data.PrevPage, data.NextPage = getPagingRange(address.Page, address.TotalPages)
+	if filterParam == "" && filter.Vout > -1 {
+		filterParam = strconv.Itoa(filter.Vout)
+	}
 	if filterParam != "" {
 		data.PageParams = template.URL("&filter=" + filterParam)
 		data.Address.Filter = filterParam

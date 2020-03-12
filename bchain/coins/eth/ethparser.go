@@ -76,12 +76,6 @@ type rpcReceipt struct {
 	Logs    []*rpcLog `json:"logs"`
 }
 
-type rpcEtcReceipt struct {
-	GasUsed string    `json:"gasUsed"`
-	Status  int       `json:"status"`
-	Logs    []*rpcLog `json:"logs"`
-}
-
 type completeTransaction struct {
 	Tx      *rpcTransaction `json:"tx"`
 	Receipt *rpcReceipt     `json:"receipt,omitempty"`
@@ -102,17 +96,30 @@ func ethNumber(n string) (int64, error) {
 	return 0, errors.Errorf("Not a number: '%v'", n)
 }
 
-func (p *EthereumParser) ethTxToTx(tx *rpcTransaction, receipt *rpcReceipt, blocktime int64, confirmations uint32) (*bchain.Tx, error) {
+func (p *EthereumParser) ethTxToTx(tx *rpcTransaction, receipt *rpcReceipt, blocktime int64, confirmations uint32, fixEIP55 bool) (*bchain.Tx, error) {
 	txid := tx.Hash
 	var (
 		fa, ta []string
 		err    error
 	)
 	if len(tx.From) > 2 {
+		if fixEIP55 {
+			tx.From = EIP55AddressFromAddress(tx.From)
+		}
 		fa = []string{tx.From}
 	}
 	if len(tx.To) > 2 {
+		if fixEIP55 {
+			tx.To = EIP55AddressFromAddress(tx.To)
+		}
 		ta = []string{tx.To}
+	}
+	if fixEIP55 && receipt != nil && receipt.Logs != nil {
+		for _, l := range receipt.Logs {
+			if len(l.Address) > 2 {
+				l.Address = EIP55AddressFromAddress(l.Address)
+			}
+		}
 	}
 	ct := completeTransaction{
 		Tx:      tx,
@@ -204,6 +211,9 @@ func EIP55Address(addrDesc bchain.AddressDescriptor) string {
 
 // EIP55AddressFromAddress returns an EIP55-compliant hex string representation of the address
 func EIP55AddressFromAddress(address string) string {
+	if has0xPrefix(address) {
+		address = address[2:]
+	}
 	b, err := hex.DecodeString(address)
 	if err != nil {
 		return address
@@ -375,7 +385,7 @@ func (p *EthereumParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 			Logs:    logs,
 		}
 	}
-	tx, err := p.ethTxToTx(&rt, rr, int64(pt.BlockTime), 0)
+	tx, err := p.ethTxToTx(&rt, rr, int64(pt.BlockTime), 0, false)
 	if err != nil {
 		return nil, 0, err
 	}
