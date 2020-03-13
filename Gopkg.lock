@@ -49,7 +49,7 @@
   branch = "master"
   name = "github.com/martinboehm/btcd"
   packages = ["blockchain","btcec","chaincfg","chaincfg/chainhash","database","txscript","wire"]
-  revision = "8e7c0427fee5d4778c5d4eb987150369e3ca1d0e"
+  revision = "83af86142d93bb4340e85352d6f8d974c196ffe9"
 
 [[projects]]
   branch = "master"
@@ -145,7 +145,7 @@
   branch = "master"
   name = "github.com/martinboehm/btcutil"
   packages = [".","base58","bech32","chaincfg","hdkeychain","txscript"]
-  revision = "a3d2b8457b77d37c3813742d4030e199b6e09111"
+  revision = "d7706467ae8f226fc75667a7da185964698d2373"
 
 [[projects]]
   branch = "master"
