@@ -136,7 +136,7 @@ func (w *Worker) xpubGetAddressTxids(addrDesc bchain.AddressDescriptor, mempool 
 					if vout == int32(filter.Vout) {
 						txs[l].inputOutput |= txVout
 					} else if filter.Vout == AddressFilterVoutTokens && w.chainParser.IsTxIndexAsset(vout) {
-						inputOutput |= txToken
+						txs[l].inputOutput |= txToken
 					}
 				}
 			}
