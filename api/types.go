@@ -174,6 +174,8 @@ const (
 	AddressFilterVoutInputs = -2
 	// AddressFilterVoutOutputs specifies that only txs where the address is as output are returned
 	AddressFilterVoutOutputs = -3
+	// AddressFilterVoutTokens specifies that only txs where the tokens are transferred are returned
+	AddressFilterVoutTokens = -4
 
 	// TokensToReturnNonzeroBalance - return only tokens with nonzero balance
 	TokensToReturnNonzeroBalance TokensToReturn = 0

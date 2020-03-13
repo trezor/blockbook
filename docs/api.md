@@ -290,7 +290,7 @@ Example response:
 Returns balances and transactions of an address. The returned transactions are sorted by block height, newest blocks first.
 
 ```
-GET /api/v2/address/<address>[?page=<page>&pageSize=<size>&from=<block height>&to=<block height>&details=<basic|tokens|tokenBalances|txids|txs>&filter=<token guid>&contract=<contract address>]
+GET /api/v2/address/<address>[?page=<page>&pageSize=<size>&from=<block height>&to=<block height>&details=<basic|tokens|tokenBalances|txids|txs>&filter=<inputs|outputs|tokens|0|uint32>&contract=<contract address>]
 ```
 
 The optional query parameters:
@@ -304,8 +304,13 @@ The optional query parameters:
     - *txids*: *tokenBalances* + list of txids, subject to  *from*, *to* filter and paging
     - *txslight*:  *tokenBalances* + list of transaction with limited details (only data from index), subject to  *from*, *to* filter and paging
     - *txs*:  *tokenBalances* + list of transaction with details, subject to  *from*, *to* filter and paging
-- *filter*: filter tokens by their GUID or 0 for non-token transfers. Set to the Token GUID (uint32) for coin types such as Syscoin, to filter transactions by that token. Set to 0 to show only non-token related transactions (applicable only to coins which support tokens)
-- *contract*: return only transactions which affect specified contract (applicable only to coins which support contracts)
+- *filter*: specifies what tokens (xpub addresses/tokens) are returned by the request (default *nonzero*)
+    - *inputs*: Return transactions sending inputs to this xpub
+    - *outputs*: Return transactions sending outputs to this xpub
+    - *tokens*: Only return token transfers
+    - *0*: Omit all token transfers. Returns only base coin transactions.
+    - *uint32*: Set to the Token GUID (uint32) for coin types such as Syscoin, to filter transactions by that token.  
+- *contract*: return only transactions which affect specified contract (applicable only to Ethereum)
 
 Response:
 
@@ -340,7 +345,7 @@ The BIP version is determined by the prefix of the xpub. The prefixes for each c
 The returned transactions are sorted by block height, newest blocks first.
 
 ```
-GET /api/v2/xpub/<xpub>[?page=<page>&pageSize=<size>&from=<block height>&to=<block height>&details=<basic|tokens|tokenBalances|txids|txs>&tokens=<nonzero|used|derived>&filter=<token guid>]
+GET /api/v2/xpub/<xpub>[?page=<page>&pageSize=<size>&from=<block height>&to=<block height>&details=<basic|tokens|tokenBalances|txids|txs>&tokens=<nonzero|used|derived>&filter=<inputs|outputs|tokens|0|uint32>]
 ```
 
 The optional query parameters:
@@ -357,7 +362,12 @@ The optional query parameters:
     - *nonzero*: return only addresses/tokens with nonzero balance
     - *used*: return addresses/tokens with at least one transaction
     - *derived*: return all derived addresses/tokens
-- *filter*: filter tokens by their GUID or 0 for non-token transfers. Set to the Token GUID (uint32) for coin types such as Syscoin, to filter transactions by that token. Set to 0 to show only non-token related transactions.
+- *filter*: specifies what tokens (xpub addresses/tokens) are returned by the request (default *nonzero*)
+    - *inputs*: Return transactions sending inputs to this address
+    - *outputs*: Return transactions sending outputs to this address
+    - *tokens*: Only return token transfers
+    - *0*: Omit all token transfers. Returns only base coin transactions. 
+    - *uint32*: Set to the Token GUID (uint32) for coin types such as Syscoin, to filter transactions by that token.  
 
 Response:
 

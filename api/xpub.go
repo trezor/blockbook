@@ -20,6 +20,7 @@ const maxAddressesGap = 10000
 const txInput = 1
 const txOutput = 2
 const txVout = 4
+const txToken = 8
 
 const xpubCacheSize = 512
 const xpubCacheExpirationSeconds = 7200
@@ -97,11 +98,15 @@ func (w *Worker) xpubGetAddressTxids(addrDesc bchain.AddressDescriptor, mempool 
 				}
 				if vout == int32(filter.Vout) {
 					inputOutput |= txVout
+				} else if filter.Vout == AddressFilterVoutTokens && w.chainParser.IsTxIndexAsset(vout) {
+					inputOutput |= txToken
 				}
 			}
-
 		}
-		txs = append(txs, xpubTxid{txid, height, inputOutput})
+		// if filtering only tokens we only care about those txs, this is to ensure totalPages works
+		if filter.Vout != AddressFilterVoutTokens || ((inputOutput&txToken) > 0) {
+			txs = append(txs, xpubTxid{txid, height, inputOutput})
+		}
 		return nil
 	}
 	if mempool {
@@ -130,6 +135,8 @@ func (w *Worker) xpubGetAddressTxids(addrDesc bchain.AddressDescriptor, mempool 
 					}
 					if vout == int32(filter.Vout) {
 						txs[l].inputOutput |= txVout
+					} else if filter.Vout == AddressFilterVoutTokens && w.chainParser.IsTxIndexAsset(vout) {
+						inputOutput |= txToken
 					}
 				}
 			}
@@ -480,14 +487,18 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 
 			if filter.Vout != AddressFilterVoutOff {
 				if filter.Vout == AddressFilterVoutInputs && txid.inputOutput&txInput == 0 ||
-					filter.Vout == AddressFilterVoutOutputs && txid.inputOutput&txOutput == 0 || 
+					filter.Vout == AddressFilterVoutOutputs && txid.inputOutput&txOutput == 0 ||
+					filter.Vout == AddressFilterVoutTokens && txid.inputOutput&txToken == 0 || 
 					txid.inputOutput&txVout == 0 {
 					return false
 				}
 			}
 			return true
 		}
-		filtered = true
+		// paging should work for AddressFilterVoutTokens
+		if filter.Vout != AddressFilterVoutTokens {
+			filtered = true
+		}
 	}
 	// process mempool, only if ToHeight is not specified
 	if filter.ToHeight == 0 && !filter.OnlyConfirmed {
@@ -544,11 +555,7 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 			for i := range da {
 				ad := &da[i]
 				for _, txid := range ad.txids {
-					added, foundTx := txcMap[txid.txid]
-					// count txs regardless of filter but only once
-					if !foundTx {
-						txCount++
-					}
+					added, _ := txcMap[txid.txid]
 					// add tx only once
 					if !added {
 						add := txidFilter == nil || txidFilter(&txid, ad)

@@ -208,6 +208,10 @@ func (p *SyscoinParser) IsSyscoinTx(nVersion int32) bool {
     return p.IsAssetTx(nVersion) || p.IsAssetAllocationTx(nVersion) || p.IsSyscoinMintTx(nVersion)
 }
 
+func (p *SyscoinParser) IsTxIndexAsset(txIndex int32) bool {
+    return txIndex > (SYSCOIN_TX_VERSION_ALLOCATION_BURN_TO_SYSCOIN*10)
+}
+
 // addressToOutputScript converts bitcoin address to ScriptPubKey
 func (p *SyscoinParser) addressToOutputScript(address string) ([]byte, error) {
 	if(address == "burn") {

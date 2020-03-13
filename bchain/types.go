@@ -707,6 +707,7 @@ type BlockChainParser interface {
 	EthereumTypeGetErc20FromTx(tx *Tx) ([]Erc20Transfer, error)
 	// SyscoinType specific
 	IsSyscoinTx(nVersion int32) bool
+	IsTxIndexAsset(txIndex int32) bool
 	IsSyscoinMintTx(nVersion int32) bool
 	IsAssetTx(nVersion int32) bool
 	IsAssetAllocationTx(nVersion int32) bool

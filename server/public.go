@@ -650,7 +650,9 @@ func (s *PublicServer) getAddressQueryParams(r *http.Request, accountDetails api
 			voutFilter = api.AddressFilterVoutInputs
 		} else if filterParam == "outputs" {
 			voutFilter = api.AddressFilterVoutOutputs
-		} else {
+		} else if filterParam == "tokens" {
+			voutFilter = api.AddressFilterVoutTokens
+		}  else {
 			voutFilter, ec = strconv.Atoi(filterParam)
 			if ec != nil || voutFilter < 0 {
 				voutFilter = api.AddressFilterVoutOff
