@@ -151,7 +151,7 @@ func (d *RocksDB) ConnectAssetOutput(sptData []byte, balances map[string]*bchain
 			From:     senderAddress,
 			To:       receiverAddress,
 			Value:    (*bchain.Amount)(totalSupplyDb),
-			Decimals: int(dBAsset.AssetObj.Precision),
+			Decimals: int32(dBAsset.AssetObj.Precision),
 			Symbol:   string(dBAsset.AssetObj.Symbol),
 			Fee:      (*bchain.Amount)(big.NewInt(0)),
 		}
@@ -197,8 +197,9 @@ func (d *RocksDB) ConnectAssetOutput(sptData []byte, balances map[string]*bchain
 			Type:     d.chainParser.GetAssetTypeFromVersion(version),
 			Token:    strAssetGuid,
 			From:     senderAddress,
+			To:       senderAddress,
 			Value:    (*bchain.Amount)(valueTo),
-			Decimals: int(dBAsset.AssetObj.Precision),
+			Decimals: int32(dBAsset.AssetObj.Precision),
 			Symbol:   string(dBAsset.AssetObj.Symbol),
 			Fee:       (*bchain.Amount)(big.NewInt(0)),
 		}
@@ -247,7 +248,8 @@ func (d *RocksDB) ConnectAssetAllocationOutput(sptData []byte, balances map[stri
 		Type:     d.chainParser.GetAssetTypeFromVersion(version),
 		Token:    strAssetGuid,
 		From:     senderAddress,
-		Decimals: int(dBAsset.AssetObj.Precision),
+		To:       senderAddress,
+		Decimals: int32(dBAsset.AssetObj.Precision),
 		Symbol:   string(dBAsset.AssetObj.Symbol),
 		Fee:       (*bchain.Amount)(big.NewInt(0)),
 	}
@@ -642,7 +644,7 @@ func (d *RocksDB) ConnectMintAssetOutput(sptData []byte, balances map[string]*bc
 		Token:    strAssetGuid,
 		From:     senderAddress,
 		Value:    (*bchain.Amount)(amount),
-		Decimals: int(dBAsset.AssetObj.Precision),
+		Decimals: int32(dBAsset.AssetObj.Precision),
 		Symbol:   string(dBAsset.AssetObj.Symbol),
 		Fee:       (*bchain.Amount)(big.NewInt(0)),
 	}

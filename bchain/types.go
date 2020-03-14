@@ -187,7 +187,7 @@ type Erc20Contract struct {
 	Contract string `json:"contract"`
 	Name     string `json:"name"`
 	Symbol   string `json:"symbol"`
-	Decimals int    `json:"decimals"`
+	Decimals int32    `json:"decimals"`
 }
 
 // Erc20Transfer contains a single ERC20 token transfer
@@ -452,7 +452,7 @@ func (a *Amount) String() string {
 }
 
 // DecimalString returns amount with decimal point placed according to parameter d
-func (a *Amount) DecimalString(d int) string {
+func (a *Amount) DecimalString(d int32) string {
 	return AmountToDecimalString((*big.Int)(a), d)
 }
 
@@ -508,7 +508,7 @@ type Token struct {
 	Contract         string    `json:"contract,omitempty"`
 	Transfers        uint32     `json:"transfers"`
 	Symbol           string    `json:"symbol,omitempty"`
-	Decimals         int       `json:"decimals,omitempty"`
+	Decimals         int32       `json:"decimals,omitempty"`
 	BalanceSat       *Amount   `json:"balance,omitempty"`
 	TotalReceivedSat *Amount   `json:"totalReceived,omitempty"`
 	TotalSentSat     *Amount   `json:"totalSent,omitempty"`
@@ -542,7 +542,7 @@ type TokenTransferSummary struct {
 	Token    string    `json:"token"`
 	Name     string    `json:"name"`
 	Symbol   string    `json:"symbol"`
-	Decimals int       `json:"decimals"`
+	Decimals int32       `json:"decimals"`
 	Value	 *Amount   `json:"totalAmount"`
 	Fee      *Amount   `json:"fee"`
 	Recipients []*TokenTransferRecipient `json:"recipients"`
@@ -640,7 +640,7 @@ type BlockChainParser interface {
 	// to be used for rollbacks
 	KeepBlockAddresses() int
 	// AmountDecimals returns number of decimal places in coin amounts
-	AmountDecimals() int
+	AmountDecimals() int32
 	// MinimumCoinbaseConfirmations returns minimum number of confirmations a coinbase transaction must have before it can be spent
 	MinimumCoinbaseConfirmations() int
 	// AmountToDecimalString converts amount in big.Int to string with decimal point in the correct place
