@@ -58,7 +58,7 @@ func (p *BaseParser) AmountToBigInt(n json.Number) (big.Int, error) {
 		if z > 0 {
 			s = s[:i] + s[i+1:] + zeros[:z]
 		} else {
-			s = s[:i] + s[i+1:len(s)+z]
+			s = s[:i] + s[i+1:int32(len(s))+z]
 		}
 	}
 	if _, ok := r.SetString(s, 10); !ok {
