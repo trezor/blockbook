@@ -457,8 +457,8 @@ func (p *SyscoinParser) UnpackTokenTransferSummary(tts *bchain.TokenTransferSumm
 	ll += l
 	tts.Symbol = string(append([]byte(nil), buf[ll:ll+int(al)]...))
 	ll += int(al)
-	Decimals, l = p.BaseParser.UnpackVaruint(buf[ll:])
-	ll += l
+	Decimals = buf[ll:ll+1]
+	ll += 1
 	tts.Decimals = int(Decimals)
 	Value, l = p.BaseParser.UnpackBigint(buf[ll:])
 	tts.Value = (*bchain.Amount)(&Value)
@@ -495,8 +495,7 @@ func (p *SyscoinParser) AppendTokenTransferSummary(tts *bchain.TokenTransferSumm
 	l = p.BaseParser.PackVaruint(uint(len(tts.Symbol)), varBuf)
 	buf = append(buf, varBuf[:l]...)
 	buf = append(buf, []byte(tts.Symbol)...)
-	l = p.BaseParser.PackVaruint(uint(tts.Decimals), varBuf)
-	buf = append(buf, varBuf[:l]...)
+	buf = append(buf, tts.Decimals)
 	l = p.BaseParser.PackBigint((*big.Int)(tts.Value), varBuf)
 	buf = append(buf, varBuf[:l]...)
 	l = p.BaseParser.PackBigint((*big.Int)(tts.Fee), varBuf)
