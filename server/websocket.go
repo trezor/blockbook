@@ -529,7 +529,7 @@ func (s *WebsocketServer) getInfo() (interface{}, error) {
 	return &info{
 		Name:       s.is.Coin,
 		Shortcut:   s.is.CoinShortcut,
-		Decimals:   int(s.chainParser.AmountDecimals()),
+		Decimals:   s.chainParser.AmountDecimals(),
 		BestHeight: int(height),
 		BestHash:   hash,
 		Version:    vi.Version,
