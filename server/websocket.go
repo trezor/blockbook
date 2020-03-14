@@ -684,10 +684,13 @@ func (s *WebsocketServer) subscribeAddresses(c *websocketChannel, addrDesc []bch
 func (s *WebsocketServer) unsubscribeAddresses(c *websocketChannel) (res interface{}, err error) {
 	s.addressSubscriptionsLock.Lock()
 	defer s.addressSubscriptionsLock.Unlock()
-	for _, sa := range s.addressSubscriptions {
+	for ads, sa := range s.addressSubscriptions {
 		for sc := range sa {
 			if sc == c {
 				delete(sa, c)
+				if len(sa) == 0 {
+					delete(s.addressSubscriptions, ads)
+				}
 			}
 		}
 	}
