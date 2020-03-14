@@ -1933,7 +1933,7 @@ func (w *Worker) GetSystemInfo(internal bool) (*SystemInfo, error) {
 		InSyncMempool:     inSyncMempool,
 		LastMempoolTime:   lastMempoolTime,
 		MempoolSize:       mempoolSize,
-		Decimals:          w.chainParser.AmountDecimals(),
+		Decimals:          int(w.chainParser.AmountDecimals()),
 		DbSize:            w.db.DatabaseSizeOnDisk(),
 		DbSizeFromColumns: internalDBSize,
 		DbColumns:         columnStats,

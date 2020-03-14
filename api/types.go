@@ -101,7 +101,7 @@ type AssetSpecific struct {
 	Balance 		*bchain.Amount
 	TotalSupply 	*bchain.Amount
 	MaxSupply 		*bchain.Amount
-	Decimals 		int
+	Decimals 		int32
 	UpdateFlags 	uint8
 }
 
@@ -113,7 +113,7 @@ type AssetsSpecific struct {
 	Symbol 			string
 	PubData 		map[string]interface{}
 	TotalSupply 	*bchain.Amount
-	Decimals 		int
+	Decimals 		int32
 	Txs				int
 }
 
