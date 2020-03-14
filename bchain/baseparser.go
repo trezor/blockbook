@@ -16,7 +16,7 @@ import (
 // BaseParser implements data parsing/handling functionality base for all other parsers
 type BaseParser struct {
 	BlockAddressesToKeep int
-	AmountDecimalPoint   int32
+	AmountDecimalPoint   int
 }
 
 // ParseBlock parses raw block to our Block struct - currently not implemented
@@ -68,7 +68,7 @@ func (p *BaseParser) AmountToBigInt(n json.Number) (big.Int, error) {
 }
 
 // AmountToDecimalString converts amount in big.Int to string with decimal point in the place defined by the parameter d
-func AmountToDecimalString(a *big.Int, d int32) string {
+func AmountToDecimalString(a *big.Int, d int) string {
 	if a == nil {
 		return ""
 	}
@@ -100,7 +100,7 @@ func (p *BaseParser) AmountToDecimalString(a *big.Int) string {
 }
 
 // AmountDecimals returns number of decimal places in amounts
-func (p *BaseParser) AmountDecimals() int32 {
+func (p *BaseParser) AmountDecimals() int {
 	return p.AmountDecimalPoint
 }
 

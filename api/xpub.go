@@ -292,7 +292,7 @@ func (w *Worker) tokenFromXpubAddress(data *xpubData, ad *xpubAddress, changeInd
 						tokens = append(tokens, &bchain.Token{
 							Type:             bchain.SPTUnallocatedTokenType,
 							Name:             address,
-							Decimals:         int32(dbAsset.AssetObj.Precision),
+							Decimals:         int(dbAsset.AssetObj.Precision),
 							Symbol:			  string(dbAsset.AssetObj.Symbol),
 							BalanceSat:       (*bchain.Amount)(ownerBalance),
 							TotalReceivedSat: (*bchain.Amount)(totalOwnerAssetReceived),
@@ -311,7 +311,7 @@ func (w *Worker) tokenFromXpubAddress(data *xpubData, ad *xpubAddress, changeInd
 				tokens = append(tokens, &bchain.Token{
 					Type:             bchain.SPTTokenType,
 					Name:             address,
-					Decimals:         int32(dbAsset.AssetObj.Precision),
+					Decimals:         int(dbAsset.AssetObj.Precision),
 					Symbol:			  string(dbAsset.AssetObj.Symbol),
 					BalanceSat:       (*bchain.Amount)(v.BalanceAssetSat),
 					TotalReceivedSat: (*bchain.Amount)(totalAssetReceived),

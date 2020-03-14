@@ -627,7 +627,7 @@ func (s *SocketIoServer) getAssetHistory(asset string, opts *assetOpts) (res res
 			Balance:		(*bchain.Amount)(big.NewInt(dbAsset.AssetObj.Balance)),
 			TotalSupply:	(*bchain.Amount)(big.NewInt(dbAsset.AssetObj.TotalSupply)),
 			MaxSupply:		(*bchain.Amount)(big.NewInt(dbAsset.AssetObj.MaxSupply)),
-			Decimals:		int32(dbAsset.AssetObj.Precision),
+			Decimals:		int(dbAsset.AssetObj.Precision),
 			UpdateFlags:	dbAsset.AssetObj.UpdateFlags,
 		}
 		json.Unmarshal(dbAsset.AssetObj.PubData, &res.Result.AssetDetails.PubData)

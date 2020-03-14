@@ -907,7 +907,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 					tokens = append(tokens, &bchain.Token{
 						Type:             bchain.SPTUnallocatedTokenType,
 						Name:             assetGuid + " (" + string(dbAsset.AssetObj.Symbol) + ")",
-						Decimals:         int32(dbAsset.AssetObj.Precision),
+						Decimals:         int(dbAsset.AssetObj.Precision),
 						Symbol:			  string(dbAsset.AssetObj.Symbol),
 						BalanceSat:       (*bchain.Amount)(ownerBalance),
 						TotalReceivedSat: (*bchain.Amount)(totalOwnerAssetReceived),
@@ -924,7 +924,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 			tokens = append(tokens, &bchain.Token{
 				Type:             bchain.SPTTokenType,
 				Name:             assetGuid + " (" + string(dbAsset.AssetObj.Symbol) + ")",
-				Decimals:         int32(dbAsset.AssetObj.Precision),
+				Decimals:         int(dbAsset.AssetObj.Precision),
 				Symbol:			  string(dbAsset.AssetObj.Symbol),
 				BalanceSat:       (*bchain.Amount)(v.BalanceAssetSat),
 				TotalReceivedSat: (*bchain.Amount)(totalAssetReceived),
@@ -976,7 +976,7 @@ func (w *Worker) FindAssets(filter string, page int, txsOnPage int) *Assets {
 			WitnessAddress: assetFiltered.AssetObj.WitnessAddress.ToString("sys"),
 			Contract:		"0x" + hex.EncodeToString(assetFiltered.AssetObj.Contract),
 			TotalSupply:	(*bchain.Amount)(big.NewInt(assetFiltered.AssetObj.TotalSupply)),
-			Decimals:		int32(assetFiltered.AssetObj.Precision),
+			Decimals:		int(assetFiltered.AssetObj.Precision),
 			Txs:			int(assetFiltered.Transactions),
 		}
 		json.Unmarshal(assetFiltered.AssetObj.PubData, &assetSpecific.PubData)
@@ -1102,7 +1102,7 @@ func (w *Worker) GetAsset(asset string, page int, txsOnPage int, option AccountD
 			Balance:		(*bchain.Amount)(big.NewInt(dbAsset.AssetObj.Balance)),
 			TotalSupply:	(*bchain.Amount)(big.NewInt(dbAsset.AssetObj.TotalSupply)),
 			MaxSupply:		(*bchain.Amount)(big.NewInt(dbAsset.AssetObj.MaxSupply)),
-			Decimals:		int32(dbAsset.AssetObj.Precision),
+			Decimals:		int(dbAsset.AssetObj.Precision),
 			UpdateFlags:	dbAsset.AssetObj.UpdateFlags,
 		},
 		Paging:                pg,
