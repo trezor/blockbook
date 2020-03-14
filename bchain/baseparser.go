@@ -48,13 +48,13 @@ func (p *BaseParser) AmountToBigInt(n json.Number) (big.Int, error) {
 	s := string(n)
 	i := strings.IndexByte(s, '.')
 	d := p.AmountDecimalPoint
-	if d > len(zeros) {
-		d = len(zeros)
+	if d > int32(len(zeros)) {
+		d = int32(len(zeros))
 	}
 	if i == -1 {
 		s = s + zeros[:d]
 	} else {
-		z := d - len(s) + i + 1
+		z := d - int32(len(s)) + int32(i) + 1
 		if z > 0 {
 			s = s[:i] + s[i+1:] + zeros[:z]
 		} else {
@@ -78,13 +78,13 @@ func AmountToDecimalString(a *big.Int, d int32) string {
 		n = n[1:]
 		s = "-"
 	}
-	if d > len(zeros) {
-		d = len(zeros)
+	if d > int32(len(zeros)) {
+		d = int32(len(zeros))
 	}
-	if len(n) <= d {
-		n = zeros[:d-len(n)+1] + n
+	if int32(len(n)) <= d {
+		n = zeros[:d-int32(len(n))+1] + n
 	}
-	i := len(n) - d
+	i := int32(len(n)) - d
 	ad := strings.TrimRight(n[i:], "0")
 	if len(ad) > 0 {
 		n = n[:i] + "." + ad
