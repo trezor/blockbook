@@ -534,7 +534,7 @@ func (s *PublicServer) formatAmount(a *bchain.Amount) string {
 	return s.chainParser.AmountToDecimalString((*big.Int)(a))
 }
 
-func formatAmountWithDecimals(a *bchain.Amount, d int32) string {
+func formatAmountWithDecimals(a *bchain.Amount, d int) string {
 	if a == nil {
 		return "0"
 	}
