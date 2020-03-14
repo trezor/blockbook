@@ -434,7 +434,7 @@ func (p *SyscoinParser) PackAddrBalance(ab *bchain.AddrBalance, buf, varBuf []by
 }
 
 func (p *SyscoinParser) UnpackTokenTransferSummary(tts *bchain.TokenTransferSummary, buf []byte) int {
-	var Decimals uint
+	var Decimals uint8
 	var Value big.Int
 	var Fee big.Int
 	var recipients uint
@@ -457,7 +457,7 @@ func (p *SyscoinParser) UnpackTokenTransferSummary(tts *bchain.TokenTransferSumm
 	ll += l
 	tts.Symbol = string(append([]byte(nil), buf[ll:ll+int(al)]...))
 	ll += int(al)
-	Decimals = buf[ll:ll+1]
+	Decimals = uint8(buf[ll:ll+1])
 	ll += 1
 	tts.Decimals = int(Decimals)
 	Value, l = p.BaseParser.UnpackBigint(buf[ll:])
