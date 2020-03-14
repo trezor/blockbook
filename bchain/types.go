@@ -504,14 +504,14 @@ func (a Assets) Less(i, j int) bool {
 type Token struct {
 	Type             TokenType `json:"type"`
 	Name             string    `json:"name"`
-	Path             string    `json:"path"`
-	Contract         string    `json:"contract"`
+	Path             string    `json:"path,omitempty"`
+	Contract         string    `json:"contract,omitempty"`
 	Transfers        uint32    `json:"transfers"`
-	Symbol           string    `json:"symbol"`
+	Symbol           string    `json:"symbol,omitempty"`
 	Decimals         int       `json:"decimals"`
-	BalanceSat       *Amount   `json:"balance"`
-	TotalReceivedSat *Amount   `json:"totalReceived"`
-	TotalSentSat     *Amount   `json:"totalSent"`
+	BalanceSat       *Amount   `json:"balance,omitempty"`
+	TotalReceivedSat *Amount   `json:"totalReceived,omitempty"`
+	TotalSentSat     *Amount   `json:"totalSent,omitempty"`
 	ContractIndex    string    `json:"-"`
 }
 type Tokens []*Token
