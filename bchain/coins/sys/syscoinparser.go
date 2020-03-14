@@ -459,7 +459,7 @@ func (p *SyscoinParser) UnpackTokenTransferSummary(tts *bchain.TokenTransferSumm
 	ll += int(al)
 	Decimals, l = p.BaseParser.UnpackVaruint(buf[ll:])
 	ll += l
-	tts.Decimals = int32(Decimals)
+	tts.Decimals = int(Decimals)
 	Value, l = p.BaseParser.UnpackBigint(buf[ll:])
 	tts.Value = (*bchain.Amount)(&Value)
 	ll += l

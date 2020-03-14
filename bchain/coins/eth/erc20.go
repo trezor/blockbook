@@ -201,7 +201,7 @@ func (b *EthereumRPC) EthereumTypeGetErc20ContractInfo(contractDesc bchain.Addre
 			}
 			d := parseErc20NumericProperty(contractDesc, data)
 			if d != nil {
-				contract.Decimals = int32(uint8(d.Uint64()))
+				contract.Decimals = int(uint8(d.Uint64()))
 			} else {
 				contract.Decimals = EtherAmountDecimalPoint
 			}
