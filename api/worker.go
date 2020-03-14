@@ -378,9 +378,6 @@ func (w *Worker) getAddressTxids(addrDesc bchain.AddressDescriptor, mempool bool
 				if vout < 0 {
 					vout = ^vout
 				}
-				if filter.Vout == AddressFilterVoutTokens && w.chainParser.IsTxIndexAsset(vout) {
-
-				}
 				if (filter.Vout == AddressFilterVoutInputs && index < 0) ||
 					(filter.Vout == AddressFilterVoutOutputs && index >= 0) ||
 					(filter.Vout == AddressFilterVoutTokens && w.chainParser.IsTxIndexAsset(vout)) || 

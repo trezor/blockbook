@@ -486,12 +486,13 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 			}
 
 			if filter.Vout != AddressFilterVoutOff {
-				if filter.Vout == AddressFilterVoutInputs && txid.inputOutput&txInput == 0 ||
-					filter.Vout == AddressFilterVoutOutputs && txid.inputOutput&txOutput == 0 ||
-					filter.Vout == AddressFilterVoutTokens && txid.inputOutput&txToken == 0 || 
-					txid.inputOutput&txVout == 0 {
-					return false
+				if (filter.Vout == AddressFilterVoutInputs && txid.inputOutput&txInput != 0) ||
+					(filter.Vout == AddressFilterVoutOutputs && txid.inputOutput&txOutput != 0) ||
+					(filter.Vout == AddressFilterVoutTokens && txid.inputOutput&txToken != 0) || 
+					(txid.inputOutput&txVout != 0) {
+					return true
 				}
+				return false
 			}
 			return true
 		}
