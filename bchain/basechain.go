@@ -3,6 +3,7 @@ package bchain
 import (
 	"errors"
 	"math/big"
+	"encoding/json"
 )
 
 // BaseChain is base type for bchain.BlockChain
