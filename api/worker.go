@@ -995,7 +995,10 @@ func (w *Worker) FindAssets(filter string, page int, txsOnPage int) *Assets {
 func (w *Worker) AssetAllocationSend(asset string, sender string, reciever string, amount string) (interface{}, error) {
 	var err error
 	var assetGuidInt int
-	assetGuidInt, err = strconv.Atoi(asset)	
+	assetGuidInt, err = strconv.Atoi(asset)
+	if err != nil {
+		return "", err
+	}
 	// txAssetSpecific extends Tx with prev vouts for signing purposes of segwit
 	type txAssetSpecific struct {
 		Tx *bchain.Tx  `json:"tx,omitempty"`
@@ -1005,20 +1008,20 @@ func (w *Worker) AssetAllocationSend(asset string, sender string, reciever strin
 	var txAssetSpec txAssetSpecific
 	res, err := w.chain.AssetAllocationSend(assetGuidInt, sender, reciever, amount)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	if err != nil {
-		return nil, errors.Annotatef(err, "Unmarshal")
+		return "", errors.Annotatef(err, "Unmarshal")
 	}
 	var txAllocation txAssetAllocation
 	err = json.Unmarshal(res, &txAssetSpec)
 	if err != nil {
-		return nil, errors.Annotatef(err, "Unmarshal")
+		return "", errors.Annotatef(err, "Unmarshal")
 	}
 
 	tx, err := w.chainParser.ParseTxFromJson(txAssetSpec.Hex)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	txAssetSpec.Tx = &tx
 	txAssetSpec.PrevVouts = make([]*Vout, len(tx.Vin))
@@ -1028,13 +1031,13 @@ func (w *Worker) AssetAllocationSend(asset string, sender string, reciever strin
 		// load spending addresses from TxAddresses
 		tas, err := w.db.GetTxAddresses(bchainVin.Txid)
 		if err != nil {
-			return nil, errors.Annotatef(err, "GetTxAddresses %v", bchainVin.Txid)
+			return "", errors.Annotatef(err, "GetTxAddresses %v", bchainVin.Txid)
 		}
 		if tas == nil {
 			// try to load from backend
 			otx, _, err := w.txCache.GetTransaction(bchainVin.Txid)
 			if err != nil {
-				return nil, errors.Annotatef(err, "txCache.GetTransaction %v", bchainVin.Txid)
+				return "", errors.Annotatef(err, "txCache.GetTransaction %v", bchainVin.Txid)
 			}
 			if len(otx.Vout) > int(bchainVin.N) {
 				vout = &otx.Vout[bchainVin.N]
@@ -1046,7 +1049,7 @@ func (w *Worker) AssetAllocationSend(asset string, sender string, reciever strin
 			}
 		}
 		if vout == nil {
-			return nil, errors.Annotatef(err, "Could not find vout for txid %v (%v)", bchainVin.Txid, i)
+			return "", errors.Annotatef(err, "Could not find vout for txid %v (%v)", bchainVin.Txid, i)
 		}
 		txAssetSpec.PrevVouts[i] = &vout
 	}
