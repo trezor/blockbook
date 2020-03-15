@@ -995,11 +995,54 @@ func (w *Worker) FindAssets(filter string, page int, txsOnPage int) *Assets {
 func (w *Worker) AssetAllocationSend(asset string, sender string, reciever string, amount string) (interface{}, error) {
 	var err error
 	var assetGuidInt int
-	assetGuidInt, err = strconv.Atoi(asset)
-	if err != nil {
-		return "", err
+	assetGuidInt, err = strconv.Atoi(asset)	
+	// txAssetSpecific extends Tx with prev vins as vouts for signing purposes of segwit
+	type txAssetSpecific struct {
+		Tx *bchain.Tx  `json:"tx"`
+		Vouts []*Vout  `json:"vouts"`
 	}
-	return w.chain.AssetAllocationSend(assetGuidInt, sender, reciever, amount)
+	var txAssetSpec txAssetSpecific
+	res, err := w.chain.AssetAllocationSend(assetGuidInt, sender, reciever, amount)
+	if err != nil {
+		return nil, err
+	}
+	hex := res["hex"]
+	tx, err := b.chainParser.ParseTxFromJson(hex)
+	if err != nil {
+		return nil, err
+	}
+	tx.Hex = hex
+	txAssetSpec.Tx = &tx
+	txAssetSpec.Vouts = make([]*Vout, len(tx.Vin))
+	for i := range tx.Vin {
+		bchainVin := &tx.Vin[i]
+		var vout *Vout
+		// load spending addresses from TxAddresses
+		tas, err := w.db.GetTxAddresses(bchainVin.Txid)
+		if err != nil {
+			return nil, errors.Annotatef(err, "GetTxAddresses %v", bchainVin.Txid)
+		}
+		if tas == nil {
+			// try to load from backend
+			otx, _, err := w.txCache.GetTransaction(bchainVin.Txid)
+			if err != nil {
+				return nil, errors.Annotatef(err, "txCache.GetTransaction %v", bchainVin.Txid)
+			}
+			if len(otx.Vout) > int(bchainVin.N) {
+				vout = &otx.Vout[bchainVin.N]
+			}
+		// maybe from mempool	
+		} else {
+			if len(tas.Outputs) > int(bchainVin.N) {
+				vout = &tas.Outputs[bchainVin.N]
+			}
+		}
+		if vout == nil {
+			return nil, errors.Annotatef(err, "Could not find vout for txid %v (%v)", bchainVin.Txid, i)
+		}
+		txAssetSpec.Vouts[i] = &vout
+	}
+	return txAssetSpec	
 }
 
 // GetAsset gets transactions for given asset
