@@ -996,24 +996,32 @@ func (w *Worker) AssetAllocationSend(asset string, sender string, reciever strin
 	var err error
 	var assetGuidInt int
 	assetGuidInt, err = strconv.Atoi(asset)	
-	// txAssetSpecific extends Tx with prev vins as vouts for signing purposes of segwit
+	// txAssetSpecific extends Tx with prev vouts for signing purposes of segwit
 	type txAssetSpecific struct {
-		Tx *bchain.Tx  `json:"tx"`
-		Vouts []*Vout  `json:"vouts"`
+		Tx *bchain.Tx  `json:"tx,omitempty"`
+		Hex	  string   `json:"hex"`
+		PrevVouts []*Vout  `json:"prevVouts,omitempty"`
 	}
 	var txAssetSpec txAssetSpecific
 	res, err := w.chain.AssetAllocationSend(assetGuidInt, sender, reciever, amount)
 	if err != nil {
 		return nil, err
 	}
-	hex := res["hex"]
-	tx, err := b.chainParser.ParseTxFromJson(hex)
+	if err != nil {
+		return nil, errors.Annotatef(err, "Unmarshal")
+	}
+	var txAllocation txAssetAllocation
+	err = json.Unmarshal(res, &txAssetSpec)
+	if err != nil {
+		return nil, errors.Annotatef(err, "Unmarshal")
+	}
+
+	tx, err := w.chainParser.ParseTxFromJson(txAssetSpec.Hex)
 	if err != nil {
 		return nil, err
 	}
-	tx.Hex = hex
 	txAssetSpec.Tx = &tx
-	txAssetSpec.Vouts = make([]*Vout, len(tx.Vin))
+	txAssetSpec.PrevVouts = make([]*Vout, len(tx.Vin))
 	for i := range tx.Vin {
 		bchainVin := &tx.Vin[i]
 		var vout *Vout
@@ -1040,9 +1048,9 @@ func (w *Worker) AssetAllocationSend(asset string, sender string, reciever strin
 		if vout == nil {
 			return nil, errors.Annotatef(err, "Could not find vout for txid %v (%v)", bchainVin.Txid, i)
 		}
-		txAssetSpec.Vouts[i] = &vout
+		txAssetSpec.PrevVouts[i] = &vout
 	}
-	return txAssetSpec	
+	return txAssetSpec, nil
 }
 
 // GetAsset gets transactions for given asset
