@@ -98,10 +98,10 @@ func (b *SyscoinRPC) AssetAllocationSend(asset int, sender string, receiver stri
 	err := b.Call(&req, &res)
 
 	if err != nil {
-		return "", errors.Annotatef(err, "asset %v", asset)
+		return nil, errors.Annotatef(err, "asset %v", asset)
 	}
 	if res.Error != nil {
-		return "", errors.Annotatef(res.Error, "asset %v", asset)
+		return nil, errors.Annotatef(res.Error, "asset %v", asset)
 	}
 	return res.Result, nil
 }
