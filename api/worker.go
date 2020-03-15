@@ -1013,7 +1013,6 @@ func (w *Worker) AssetAllocationSend(asset string, sender string, reciever strin
 	if err != nil {
 		return "", errors.Annotatef(err, "Unmarshal")
 	}
-	var txAllocation txAssetAllocation
 	err = json.Unmarshal(res, &txAssetSpec)
 	if err != nil {
 		return "", errors.Annotatef(err, "Unmarshal")
@@ -1039,19 +1038,19 @@ func (w *Worker) AssetAllocationSend(asset string, sender string, reciever strin
 			if err != nil {
 				return "", errors.Annotatef(err, "txCache.GetTransaction %v", bchainVin.Txid)
 			}
-			if len(otx.Vout) > int(bchainVin.N) {
-				vout = &otx.Vout[bchainVin.N]
+			if len(otx.Vout) > int(bchainVin.Vout) {
+				vout = &otx.Vout[bchainVin.Vout]
 			}
 		// maybe from mempool	
 		} else {
-			if len(tas.Outputs) > int(bchainVin.N) {
-				vout = &tas.Outputs[bchainVin.N]
+			if len(tas.Outputs) > int(bchainVin.Vout) {
+				vout = &tas.Outputs[bchainVin.Vout]
 			}
 		}
 		if vout == nil {
 			return "", errors.Annotatef(err, "Could not find vout for txid %v (%v)", bchainVin.Txid, i)
 		}
-		txAssetSpec.PrevVouts[i] = &vout
+		txAssetSpec.PrevVouts[i] = vout
 	}
 	return txAssetSpec, nil
 }

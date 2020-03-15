@@ -312,7 +312,7 @@ func (c *blockChainWithMetrics) EthereumTypeGetErc20ContractBalance(addrDesc, co
 	return c.b.EthereumTypeGetErc20ContractBalance(addrDesc, contractDesc)
 }
 
-func (c *blockChainWithMetrics) AssetAllocationSend(asset int, sender string, receiver string, amount string) (rawtx interface{}, err error) {
+func (c *blockChainWithMetrics) AssetAllocationSend(asset int, sender string, receiver string, amount string) (rawtx json.RawMessage, err error) {
 	defer func(s time.Time) { c.observeRPCLatency("AssetAllocationSend", s, err) }(time.Now())
 	rawtx, err = c.b.AssetAllocationSend(asset, sender, receiver, amount)
 	return rawtx, err

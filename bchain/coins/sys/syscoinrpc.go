@@ -86,7 +86,7 @@ type ResAssetAllocationSend struct {
 	Result interface{}      `json:"result"`
 }
 
-func (b *SyscoinRPC) AssetAllocationSend(asset int, sender string, receiver string, amount string) (interface{}, error) {
+func (b *SyscoinRPC) AssetAllocationSend(asset int, sender string, receiver string, amount string) (json.RawMessage, error) {
 	glog.V(1).Info("rpc: assetallocationsend ", asset)
 
 	res := ResAssetAllocationSend{}

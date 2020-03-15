@@ -629,7 +629,7 @@ type BlockChain interface {
 	EthereumTypeGetErc20ContractInfo(contractDesc AddressDescriptor) (*Erc20Contract, error)
 	EthereumTypeGetErc20ContractBalance(addrDesc, contractDesc AddressDescriptor) (*big.Int, error)
 	// will be removed soon as syscoin-js creates and signs txs on client side
-	AssetAllocationSend(asset int, sender string, receiver string, amount string) (interface{}, error)
+	AssetAllocationSend(asset int, sender string, receiver string, amount string) (json.RawMessage, error)
 }
 
 // BlockChainParser defines common interface to parsing and conversions of block chain data
