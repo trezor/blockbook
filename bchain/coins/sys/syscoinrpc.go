@@ -85,8 +85,8 @@ type CmdAssetAllocationSend struct {
 type CmdSendFrom struct {
 	Method string `json:"method"`
 	Params struct {
-		Sender   string `json:"address_sender"`
-		Receiver string `json:"address_receiver"`
+		Sender   string `json:"funding_address"`
+		Receiver string `json:"address"`
 		Amount   string `json:"amount"`
 	} `json:"params"`
 }
