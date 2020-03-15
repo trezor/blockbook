@@ -3,7 +3,6 @@ package bchain
 import (
 	"errors"
 	"math/big"
-	"encoding/json"
 )
 
 // BaseChain is base type for bchain.BlockChain
@@ -60,7 +59,7 @@ func (b *BaseChain) EthereumTypeGetErc20ContractBalance(addrDesc, contractDesc A
 	return nil, errors.New("Not supported")
 }
 
-func (b *BaseChain) AssetAllocationSend(asset int, sender string, receiver string, amount string) (*bchain.Tx, error) {
+func (b *BaseChain) AssetAllocationSend(asset int, sender string, receiver string, amount string) (*Tx, error) {
 	return nil, errors.New("Not supported")
 }
 
