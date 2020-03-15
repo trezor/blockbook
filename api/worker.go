@@ -1014,7 +1014,7 @@ func (w *Worker) AssetAllocationSend(asset string, sender string, reciever strin
 	if err != nil {
 		return nil, err
 	}
-	txAssetSpec.Tx, err = w.chainParser.ParseTxFromJson(txAssetSpec.Hex)
+	txAssetSpec.Tx, err = w.chainParser.ParseTxFromJson(json.RawMessage(txAssetSpec.Hex))
 	if err != nil {
 		return "", err
 	}
