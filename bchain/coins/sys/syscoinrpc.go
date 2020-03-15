@@ -86,7 +86,9 @@ type ResAssetAllocationSend struct {
 	Error  *bchain.RPCError `json:"error"`
 	Result json.RawMessage      `json:"result"`
 }
-
+type GetAssetAllocationSendHex struct {
+	Hex string `json:"hex"`
+}
 func (b *SyscoinRPC) AssetAllocationSend(asset int, sender string, receiver string, amount string) (*bchain.Tx, error) {
 	glog.V(1).Info("rpc: assetallocationsend ", asset)
 
@@ -104,7 +106,12 @@ func (b *SyscoinRPC) AssetAllocationSend(asset int, sender string, receiver stri
 	if res.Error != nil {
 		return nil, errors.Annotatef(res.Error, "asset %v", asset)
 	}
-	data, err := hex.DecodeString(res.Result)
+	var resHex GetAssetAllocationSendHex
+	err = json.Unmarshal(res.Result, &resHex)
+	if err != nil {
+		return nil, errors.Annotatef(err, "Unmarshal")
+	}
+	data, err := hex.DecodeString(resHex.Hex)
 	if err != nil {
 		return nil, errors.Annotatef(err, "asset %v", asset)
 	}
