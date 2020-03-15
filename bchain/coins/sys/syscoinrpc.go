@@ -119,5 +119,6 @@ func (b *SyscoinRPC) AssetAllocationSend(asset int, sender string, receiver stri
 	if err != nil {
 		return nil, errors.Annotatef(err, "asset %v", asset)
 	}
+	tx.CoinSpecificData = res.Result.TxExtraInfo
 	return tx, nil
 }
