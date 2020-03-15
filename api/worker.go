@@ -1011,14 +1011,13 @@ func (w *Worker) AssetAllocationSend(asset string, sender string, reciever strin
 		return "", err
 	}
 
-	tx, err := w.chainParser.ParseTxFromJson(txAssetSpec.Hex)
+	txAssetSpec.Tx, err = w.chainParser.ParseTxFromJson(txAssetSpec.Hex)
 	if err != nil {
 		return "", err
 	}
-	txAssetSpec.Tx = tx
-	txAssetSpec.PrevVouts = make([]*Vout, len(tx.Vin))
-	for i := range tx.Vin {
-		bchainVin := &tx.Vin[i]
+	txAssetSpec.PrevVouts = make([]*bchain.Vout, len(tx.Vin))
+	for i := range txAssetSpec.Tx.Vin {
+		bchainVin := &txAssetSpec.Tx.Vin[i]
 		var vout *Vout
 		// load spending addresses from TxAddresses
 		tas, err := w.db.GetTxAddresses(bchainVin.Txid)
