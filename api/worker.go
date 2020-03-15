@@ -1014,10 +1014,12 @@ func (w *Worker) AssetAllocationSend(asset string, sender string, reciever strin
 	if err != nil {
 		return nil, err
 	}
+	glog.Warning("hex: ", txAssetSpec.Hex)
 	txAssetSpec.Tx, err = w.chainParser.ParseTxFromJson(json.RawMessage(txAssetSpec.Hex))
 	if err != nil {
 		return "", err
 	}
+	glog.Warning("Tx: ", txAssetSpec.Tx)
 	txAssetSpec.PrevVouts = make([]*bchain.Vout, len(txAssetSpec.Tx.Vin))
 	for i := range txAssetSpec.Tx.Vin {
 		bchainVin := &txAssetSpec.Tx.Vin[i]
