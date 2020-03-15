@@ -6,10 +6,10 @@
       "alias": "bitcloud"
   },
   "ports": {
-    "backend_rpc": 8062,
-    "backend_message_queue": 38362,
-    "blockbook_internal": 9062,
-    "blockbook_public": 9162
+    "backend_rpc": 8063,
+    "backend_message_queue": 38363,
+    "blockbook_internal": 9063,
+    "blockbook_public": 9163
   },
   "ipc": {
     "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
