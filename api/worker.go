@@ -1021,7 +1021,7 @@ func (w *Worker) AssetAllocationSend(asset string, sender string, reciever strin
 		tx, _, err := w.txCache.GetTransaction(bchainVin.Txid)
 		if err != nil {
 			// try to load tx from core
-			tx, err = m.chain.GetTransactionForMempool(txid)
+			tx, err = w.chain.GetTransactionForMempool(bchainVin.Txid)
 			if err != nil {
 				return "", errors.Annotatef(err, "GetTransactionForMempool %v", bchainVin.Txid)
 			}
