@@ -83,7 +83,7 @@ type CmdAssetAllocationSend struct {
 }
 type ResAssetAllocationSend struct {
 	Error  *bchain.RPCError `json:"error"`
-	Result interface{}      `json:"result"`
+	Result json.RawMessage      `json:"result"`
 }
 
 func (b *SyscoinRPC) AssetAllocationSend(asset int, sender string, receiver string, amount string) (json.RawMessage, error) {
