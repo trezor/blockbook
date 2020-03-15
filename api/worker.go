@@ -1006,7 +1006,7 @@ func (w *Worker) AssetAllocationSend(asset string, sender string, reciever strin
 		PrevVouts []*bchain.Vout  `json:"prevVouts,omitempty"`
 	}
 	var txAssetSpec txAssetSpecific
-	txAssetSpec.Hex, err := w.chain.AssetAllocationSend(assetGuidInt, sender, reciever, amount)
+	txAssetSpec.Hex, err = w.chain.AssetAllocationSend(assetGuidInt, sender, reciever, amount)
 	if err != nil {
 		return "", err
 	}
