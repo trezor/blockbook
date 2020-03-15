@@ -129,8 +129,8 @@ func (b *SyscoinRPC) AssetAllocationSend(asset int, sender string, receiver stri
 	}
 	return tx, nil
 }
-func (b *SyscoinRPC) SendFrom(asset int, sender string, receiver string, amount string) (*bchain.Tx, error) {
-	glog.V(1).Info("rpc: sendfrom ", asset)
+func (b *SyscoinRPC) SendFrom(sender string, receiver string, amount string) (*bchain.Tx, error) {
+	glog.V(1).Info("rpc: sendfrom ", sender)
 
 	res := ResSyscoinSend{}
 	req := CmdSendFrom{Method: "sendfrom"}
@@ -143,7 +143,7 @@ func (b *SyscoinRPC) SendFrom(asset int, sender string, receiver string, amount 
 		return nil, err
 	}
 	if res.Error != nil {
-		return nil, errors.Annotatef(res.Error, "asset %v", asset)
+		return nil, res.Error
 	}
 	var resHex GetSyscoinTxHex
 	err = json.Unmarshal(res.Result, &resHex)
