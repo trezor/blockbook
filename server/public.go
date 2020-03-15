@@ -185,6 +185,7 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 	serveMux.HandleFunc(path+"api/v2/address/", s.jsonHandler(s.apiAddress, apiV2))
 	serveMux.HandleFunc(path+"api/v2/asset/", s.jsonHandler(s.apiAsset, apiV2))
 	serveMux.HandleFunc(path+"api/v2/assetallocationsend/", s.jsonHandler(s.apiAssetAllocationSend, apiV2)) // temporary will be removed in future
+	serveMux.HandleFunc(path+"api/v2/sendfrom/", s.jsonHandler(s.apiSendFrom, apiV2)) // temporary will be removed in future
 	serveMux.HandleFunc(path+"api/v2/assets/", s.jsonHandler(s.apiAssets, apiV2))
 	serveMux.HandleFunc(path+"api/v2/xpub/", s.jsonHandler(s.apiXpub, apiV2))
 	serveMux.HandleFunc(path+"api/v2/utxo/", s.jsonHandler(s.apiUtxo, apiV2))
