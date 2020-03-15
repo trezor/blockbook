@@ -1016,7 +1016,7 @@ func (w *Worker) AssetAllocationSend(asset string, sender string, reciever strin
 	}
 	data, err := hex.DecodeString(txAssetSpec.Hex)
 	if err != nil {
-		return nil, errors.Annotatef(err, "txid %v", txid)
+		return nil, err
 	}
 	txAssetSpec.Tx, err = w.chainParser.ParseTx(data)
 	if err != nil {
