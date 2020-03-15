@@ -1002,27 +1002,20 @@ func (w *Worker) AssetAllocationSend(asset string, sender string, reciever strin
 	// txAssetSpecific extends Tx with prev vouts for signing purposes of segwit
 	type txAssetSpecific struct {
 		Tx *bchain.Tx  `json:"tx,omitempty"`
-		Hex	  string   `json:"hex"`
-		PrevVouts []*Vout  `json:"prevVouts,omitempty"`
+		Hex	  json.RawMessage   `json:"hex"`
+		PrevVouts []*bchain.Vout  `json:"prevVouts,omitempty"`
 	}
 	var txAssetSpec txAssetSpecific
-	res, err := w.chain.AssetAllocationSend(assetGuidInt, sender, reciever, amount)
+	txAssetSpec.Hex, err := w.chain.AssetAllocationSend(assetGuidInt, sender, reciever, amount)
 	if err != nil {
 		return "", err
-	}
-	if err != nil {
-		return "", errors.Annotatef(err, "Unmarshal")
-	}
-	err = json.Unmarshal(res, &txAssetSpec)
-	if err != nil {
-		return "", errors.Annotatef(err, "Unmarshal")
 	}
 
 	tx, err := w.chainParser.ParseTxFromJson(txAssetSpec.Hex)
 	if err != nil {
 		return "", err
 	}
-	txAssetSpec.Tx = &tx
+	txAssetSpec.Tx = tx
 	txAssetSpec.PrevVouts = make([]*Vout, len(tx.Vin))
 	for i := range tx.Vin {
 		bchainVin := &tx.Vin[i]
