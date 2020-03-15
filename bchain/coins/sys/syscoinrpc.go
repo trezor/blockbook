@@ -86,7 +86,7 @@ type ResAssetAllocationSend struct {
 	Result json.RawMessage      `json:"result"`
 }
 
-func (b *SyscoinRPC) AssetAllocationSend(asset int, sender string, receiver string, amount string) (json.RawMessage, error) {
+func (b *SyscoinRPC) AssetAllocationSend(asset int, sender string, receiver string, amount string) (*bchain.Tx, error) {
 	glog.V(1).Info("rpc: assetallocationsend ", asset)
 
 	res := ResAssetAllocationSend{}
@@ -103,5 +103,13 @@ func (b *SyscoinRPC) AssetAllocationSend(asset int, sender string, receiver stri
 	if res.Error != nil {
 		return nil, errors.Annotatef(res.Error, "asset %v", asset)
 	}
-	return res.Result, nil
+	data, err := hex.DecodeString(res.Result)
+	if err != nil {
+		return nil, errors.Annotatef(err, "asset %v", asset)
+	}
+	tx, err := b.Parser.ParseTx(data)
+	if err != nil {
+		return nil, errors.Annotatef(err, "asset %v", asset)
+	}
+	return tx, nil
 }
