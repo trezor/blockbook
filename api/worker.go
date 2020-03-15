@@ -1010,39 +1010,27 @@ func (w *Worker) AssetAllocationSend(asset string, sender string, reciever strin
 	if err != nil {
 		return "", err
 	}
-
 	txAssetSpec.Tx, err = w.chainParser.ParseTxFromJson(txAssetSpec.Hex)
 	if err != nil {
 		return "", err
 	}
-	txAssetSpec.PrevVouts = make([]*bchain.Vout, len(tx.Vin))
+	txAssetSpec.PrevVouts = make([]*bchain.Vout, len(txAssetSpec.Tx.Vin))
 	for i := range txAssetSpec.Tx.Vin {
 		bchainVin := &txAssetSpec.Tx.Vin[i]
-		var vout *Vout
-		// load spending addresses from TxAddresses
-		tas, err := w.db.GetTxAddresses(bchainVin.Txid)
+		// try to load from cache
+		tx, _, err := w.txCache.GetTransaction(bchainVin.Txid)
 		if err != nil {
-			return "", errors.Annotatef(err, "GetTxAddresses %v", bchainVin.Txid)
-		}
-		if tas == nil {
-			// try to load from backend
-			otx, _, err := w.txCache.GetTransaction(bchainVin.Txid)
+			// try to load tx from core
+			tx, err = m.chain.GetTransactionForMempool(txid)
 			if err != nil {
-				return "", errors.Annotatef(err, "txCache.GetTransaction %v", bchainVin.Txid)
-			}
-			if len(otx.Vout) > int(bchainVin.Vout) {
-				vout = &otx.Vout[bchainVin.Vout]
-			}
-		// maybe from mempool	
-		} else {
-			if len(tas.Outputs) > int(bchainVin.Vout) {
-				vout = &tas.Outputs[bchainVin.Vout]
+				return "", errors.Annotatef(err, "GetTransactionForMempool %v", bchainVin.Txid)
 			}
 		}
-		if vout == nil {
+		if len(tx.Vout) > int(bchainVin.Vout) {
+			txAssetSpec.PrevVouts[i] = &tx.Vout[bchainVin.Vout]
+		} else {
 			return "", errors.Annotatef(err, "Could not find vout for txid %v (%v)", bchainVin.Txid, i)
 		}
-		txAssetSpec.PrevVouts[i] = vout
 	}
 	return txAssetSpec, nil
 }
