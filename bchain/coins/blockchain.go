@@ -318,6 +318,12 @@ func (c *blockChainWithMetrics) AssetAllocationSend(asset int, sender string, re
 	return tx, err
 }
 
+func (c *blockChainWithMetrics) SendFrom(sender string, receiver string, amount string) (tx *bchain.Tx, err error) {
+	defer func(s time.Time) { c.observeRPCLatency("SendFrom", s, err) }(time.Now())
+	tx, err = c.b.SendFrom(sender, receiver, amount)
+	return tx, err
+}
+
 type mempoolWithMetrics struct {
 	mempool bchain.Mempool
 	m       *common.Metrics

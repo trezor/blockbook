@@ -82,17 +82,25 @@ type CmdAssetAllocationSend struct {
 		Amount   string `json:"amount"`
 	} `json:"params"`
 }
-type ResAssetAllocationSend struct {
+type CmdSendFrom struct {
+	Method string `json:"method"`
+	Params struct {
+		Sender   string `json:"address_sender"`
+		Receiver string `json:"address_receiver"`
+		Amount   string `json:"amount"`
+	} `json:"params"`
+}
+type ResSyscoinSend struct {
 	Error  *bchain.RPCError `json:"error"`
 	Result json.RawMessage      `json:"result"`
 }
-type GetAssetAllocationSendHex struct {
+type GetSyscoinTxHex struct {
 	Hex string `json:"hex"`
 }
 func (b *SyscoinRPC) AssetAllocationSend(asset int, sender string, receiver string, amount string) (*bchain.Tx, error) {
 	glog.V(1).Info("rpc: assetallocationsend ", asset)
 
-	res := ResAssetAllocationSend{}
+	res := ResSyscoinSend{}
 	req := CmdAssetAllocationSend{Method: "assetallocationsend"}
 	req.Params.Asset = asset
 	req.Params.Sender = sender
@@ -106,7 +114,7 @@ func (b *SyscoinRPC) AssetAllocationSend(asset int, sender string, receiver stri
 	if res.Error != nil {
 		return nil, errors.Annotatef(res.Error, "asset %v", asset)
 	}
-	var resHex GetAssetAllocationSendHex
+	var resHex GetSyscoinTxHex
 	err = json.Unmarshal(res.Result, &resHex)
 	if err != nil {
 		return nil, errors.Annotatef(err, "Unmarshal")
@@ -118,6 +126,37 @@ func (b *SyscoinRPC) AssetAllocationSend(asset int, sender string, receiver stri
 	tx, err := b.Parser.ParseTx(data)
 	if err != nil {
 		return nil, errors.Annotatef(err, "asset %v", asset)
+	}
+	return tx, nil
+}
+func (b *SyscoinRPC) SendFrom(asset int, sender string, receiver string, amount string) (*bchain.Tx, error) {
+	glog.V(1).Info("rpc: sendfrom ", asset)
+
+	res := ResSyscoinSend{}
+	req := CmdSendFrom{Method: "sendfrom"}
+	req.Params.Sender = sender
+	req.Params.Receiver = receiver
+	req.Params.Amount = amount
+	err := b.Call(&req, &res)
+
+	if err != nil {
+		return nil, err
+	}
+	if res.Error != nil {
+		return nil, errors.Annotatef(res.Error, "asset %v", asset)
+	}
+	var resHex GetSyscoinTxHex
+	err = json.Unmarshal(res.Result, &resHex)
+	if err != nil {
+		return nil, err
+	}
+	data, err := hex.DecodeString(resHex.Hex)
+	if err != nil {
+		return nil, err
+	}
+	tx, err := b.Parser.ParseTx(data)
+	if err != nil {
+		return nil, err
 	}
 	return tx, nil
 }

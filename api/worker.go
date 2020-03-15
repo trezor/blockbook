@@ -1030,6 +1030,39 @@ func (w *Worker) AssetAllocationSend(asset string, sender string, reciever strin
 	return txAssetSpec, nil
 }
 
+func (w *Worker) SendFrom(sender string, reciever string, amount string) (interface{}, error) {
+	var err error
+	// txAssetSpecific extends Tx with prev vouts for signing purposes of segwit
+	type txSendSpecific struct {
+		Tx *bchain.Tx  `json:"tx,omitempty"`
+		PrevVouts []*bchain.Vout  `json:"prevVouts,omitempty"`
+	}
+	var txSendSpec txSendSpecific
+	txSendSpec.Tx, err = w.chain.SendFrom(sender, reciever, amount)
+	if err != nil {
+		return "", err
+	}
+	txSendSpec.PrevVouts = make([]*bchain.Vout, len(txSendSpec.Tx.Vin))
+	for i := range txSendSpec.Tx.Vin {
+		bchainVin := &txSendSpec.Tx.Vin[i]
+		// try to load from cache
+		tx, _, err := w.txCache.GetTransaction(bchainVin.Txid)
+		if err != nil {
+			// try to load tx from core
+			tx, err = w.chain.GetTransactionForMempool(bchainVin.Txid)
+			if err != nil {
+				return "", errors.Annotatef(err, "GetTransactionForMempool %v", bchainVin.Txid)
+			}
+		}
+		if len(tx.Vout) > int(bchainVin.Vout) {
+			txSendSpec.PrevVouts[i] = &tx.Vout[bchainVin.Vout]
+		} else {
+			return "", errors.Annotatef(err, "Could not find vout for txid %v (%v)", bchainVin.Txid, i)
+		}
+	}
+	return txSendSpec, nil
+}
+
 // GetAsset gets transactions for given asset
 func (w *Worker) GetAsset(asset string, page int, txsOnPage int, option AccountDetails, filter *AssetFilter) (*Asset, error) {
 	start := time.Now()

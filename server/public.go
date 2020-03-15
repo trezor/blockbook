@@ -1175,6 +1175,20 @@ func (s *PublicServer) apiAssetAllocationSend(r *http.Request, apiVersion int) (
 	amount := r.URL.Query().Get("amount")
 	return s.api.AssetAllocationSend(assetParam, from, to, amount)
 }
+func (s *PublicServer) apiSendFrom(r *http.Request, apiVersion int) (interface{}, error) {
+	var from string
+	i := strings.LastIndexByte(r.URL.Path, '/')
+	if i > 0 {
+		from = r.URL.Path[i+1:]
+	}
+	if len(from) == 0 {
+		return nil, api.NewAPIError("Missing from", true)
+	}
+	s.metrics.ExplorerViews.With(common.Labels{"action": "api-sendfrom"}).Inc()
+	to := r.URL.Query().Get("to")
+	amount := r.URL.Query().Get("amount")
+	return s.api.SendFrom(from, to, amount)
+}
 
 func (s *PublicServer) apiAsset(r *http.Request, apiVersion int) (interface{}, error) {
 	var assetParam string
