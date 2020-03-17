@@ -1001,19 +1001,17 @@ func (w *Worker) AssetAllocationSend(asset string, sender string, reciever strin
 	}
 	// txAssetSpecific extends Tx with prev vouts for signing purposes of segwit
 	type txAssetSpecific struct {
-		TxChain *bchain.Tx  `json:"txchain,omitempty"`
-		Tx		{}interface `json:"tx,omitempty"`
-		PrevVouts []bchain.Vout  `json:"prevVouts,omitempty"`
+		Tx *bchain.Tx  `json:"tx,omitempty"`
+		PrevVouts []*bchain.Vout  `json:"prevVouts,omitempty"`
 	}
 	var txAssetSpec txAssetSpecific
-	txAssetSpec.TxChain, err = w.chain.AssetAllocationSend(assetGuidInt, sender, reciever, amount)
+	txAssetSpec.Tx, err = w.chain.AssetAllocationSend(assetGuidInt, sender, reciever, amount)
 	if err != nil {
 		return "", err
 	}
-	txAssetSpec.Tx = txAssetSpec.TxChain.CoinSpecificJSON
-	txAssetSpec.PrevVouts = make([]*bchain.Vout, len(txAssetSpec.TxChain.Vin))
-	for i := range txAssetSpec.TxChain.Vin {
-		bchainVin := &txAssetSpec.TxChain.Vin[i]
+	txAssetSpec.PrevVouts = make([]*bchain.Vout, len(txAssetSpec.Tx.Vin))
+	for i := range txAssetSpec.Tx.Vin {
+		bchainVin := &txAssetSpec.Tx.Vin[i]
 		// try to load from cache
 		tx, _, err := w.txCache.GetTransaction(bchainVin.Txid)
 		if err != nil {
@@ -1024,12 +1022,11 @@ func (w *Worker) AssetAllocationSend(asset string, sender string, reciever strin
 			}
 		}
 		if len(tx.Vout) > int(bchainVin.Vout) {
-			txAssetSpec.PrevVouts[i] = tx.Vout[bchainVin.Vout]
+			txAssetSpec.PrevVouts[i] = &tx.Vout[bchainVin.Vout]
 		} else {
 			return "", errors.Annotatef(err, "Could not find vout for txid %v (%v)", bchainVin.Txid, i)
 		}
 	}
-	txAssetSpec.TxChain = nil
 	return txAssetSpec, nil
 }
 
@@ -1037,19 +1034,17 @@ func (w *Worker) SendFrom(sender string, reciever string, amount string) (interf
 	var err error
 	// txAssetSpecific extends Tx with prev vouts for signing purposes of segwit
 	type txSendSpecific struct {
-		TxChain *bchain.Tx  `json:"txchain,omitempty"`
-		Tx		{}interface `json:"tx,omitempty"`
-		PrevVouts []bchain.Vout  `json:"prevVouts,omitempty"`
+		Tx *bchain.Tx  `json:"tx,omitempty"`
+		PrevVouts []*bchain.Vout  `json:"prevVouts,omitempty"`
 	}
 	var txSendSpec txSendSpecific
-	txSendSpec.TxChain, err = w.chain.SendFrom(sender, reciever, amount)
+	txSendSpec.Tx, err = w.chain.SendFrom(sender, reciever, amount)
 	if err != nil {
 		return "", err
 	}
-	txAssetSpec.Tx = txAssetSpec.TxChain.CoinSpecificJSON
-	txSendSpec.PrevVouts = make([]*bchain.Vout, len(txSendSpec.TxChain.Vin))
-	for i := range txSendSpec.TxChain.Vin {
-		bchainVin := &txSendSpec.TxChain.Vin[i]
+	txSendSpec.PrevVouts = make([]*bchain.Vout, len(txSendSpec.Tx.Vin))
+	for i := range txSendSpec.Tx.Vin {
+		bchainVin := &txSendSpec.Tx.Vin[i]
 		// try to load from cache
 		tx, _, err := w.txCache.GetTransaction(bchainVin.Txid)
 		if err != nil {
@@ -1060,12 +1055,11 @@ func (w *Worker) SendFrom(sender string, reciever string, amount string) (interf
 			}
 		}
 		if len(tx.Vout) > int(bchainVin.Vout) {
-			txSendSpec.PrevVouts[i] = tx.Vout[bchainVin.Vout]
+			txSendSpec.PrevVouts[i] = &tx.Vout[bchainVin.Vout]
 		} else {
 			return "", errors.Annotatef(err, "Could not find vout for txid %v (%v)", bchainVin.Txid, i)
 		}
 	}
-	txAssetSpec.TxChain = nil
 	return txSendSpec, nil
 }
 

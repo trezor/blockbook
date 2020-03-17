@@ -97,12 +97,6 @@ type ResSyscoinSend struct {
 type GetSyscoinTxHex struct {
 	Hex string `json:"hex"`
 }
-type CmdDecodeRawTransaction struct {
-	Method string `json:"method"`
-	Params struct {
-		Hexstring    string `json:"hexstring"`
-	} `json:"params"`
-}
 func (b *SyscoinRPC) AssetAllocationSend(asset int, sender string, receiver string, amount string) (*bchain.Tx, error) {
 	glog.V(1).Info("rpc: assetallocationsend ", asset)
 
@@ -125,8 +119,6 @@ func (b *SyscoinRPC) AssetAllocationSend(asset int, sender string, receiver stri
 	if err != nil {
 		return nil, errors.Annotatef(err, "Unmarshal")
 	}
-
-
 	data, err := hex.DecodeString(resHex.Hex)
 	if err != nil {
 		return nil, errors.Annotatef(err, "asset %v", asset)
@@ -134,13 +126,6 @@ func (b *SyscoinRPC) AssetAllocationSend(asset int, sender string, receiver stri
 	tx, err := b.Parser.ParseTx(data)
 	if err != nil {
 		return nil, errors.Annotatef(err, "asset %v", asset)
-	}
-
-	req = CmdDecodeRawTransaction{Method: "decoderawtransaction"}
-	req.Params.Hexstring = resHex.Hex
-	err = b.Call(&req, &tx.CoinSpecificData)
-	if err != nil {
-		return nil, errors.Annotatef(err, "decoderawtransaction for asset %v", asset)
 	}
 	return tx, nil
 }
@@ -170,12 +155,6 @@ func (b *SyscoinRPC) SendFrom(sender string, receiver string, amount string) (*b
 		return nil, err
 	}
 	tx, err := b.Parser.ParseTx(data)
-	if err != nil {
-		return nil, err
-	}
-	req = CmdDecodeRawTransaction{Method: "decoderawtransaction"}
-	req.Params.Hexstring = resHex.Hex
-	err = b.Call(&req, &tx.CoinSpecificData)
 	if err != nil {
 		return nil, err
 	}
