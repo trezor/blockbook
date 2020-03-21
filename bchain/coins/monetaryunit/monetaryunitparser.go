@@ -1,18 +1,17 @@
 package monetaryunit
 
 import (
-	"blockbook/bchain"
-	"blockbook/bchain/coins/btc"
-	"blockbook/bchain/coins/utils"
 	"bytes"
-	"io"
-
 	"encoding/hex"
 	"encoding/json"
+	"io"
 
 	"github.com/juju/errors"
 	"github.com/martinboehm/btcd/wire"
 	"github.com/martinboehm/btcutil/chaincfg"
+	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/bchain/coins/btc"
+	"github.com/trezor/blockbook/bchain/coins/utils"
 )
 
 const (

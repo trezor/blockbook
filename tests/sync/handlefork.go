@@ -3,14 +3,15 @@
 package sync
 
 import (
-	"blockbook/bchain"
-	"blockbook/db"
 	"fmt"
 	"math/big"
 	"os"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/db"
 )
 
 func testHandleFork(t *testing.T, h *TestHandler) {

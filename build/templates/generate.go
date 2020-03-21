@@ -1,11 +1,12 @@
 package main
 
 import (
-	"blockbook/build/tools"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/trezor/blockbook/build/tools"
 )
 
 const (

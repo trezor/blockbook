@@ -3,8 +3,6 @@
 package monetaryunit
 
 import (
-	"blockbook/bchain"
-	"blockbook/bchain/coins/btc"
 	"encoding/hex"
 	"math/big"
 	"os"
@@ -12,6 +10,8 @@ import (
 	"testing"
 
 	"github.com/martinboehm/btcutil/chaincfg"
+	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/bchain/coins/btc"
 )
 
 func TestMain(m *testing.M) {

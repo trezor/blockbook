@@ -3,13 +3,14 @@
 package dcr
 
 import (
-	"blockbook/bchain"
-	"blockbook/bchain/coins/btc"
 	"encoding/hex"
 	"math/big"
 	"os"
 	"reflect"
 	"testing"
+
+	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/bchain/coins/btc"
 )
 
 var (

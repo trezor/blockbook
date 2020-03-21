@@ -1,11 +1,12 @@
 package dbtestdata
 
 import (
-	"blockbook/bchain"
 	"context"
 	"encoding/json"
 	"errors"
 	"math/big"
+
+	"github.com/trezor/blockbook/bchain"
 )
 
 type fakeBlockChain struct {

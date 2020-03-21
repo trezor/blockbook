@@ -1,14 +1,15 @@
 package api
 
 import (
-	"blockbook/bchain"
-	"blockbook/common"
-	"blockbook/db"
 	"encoding/json"
 	"errors"
 	"math/big"
 	"sort"
 	"time"
+
+	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/common"
+	"github.com/trezor/blockbook/db"
 )
 
 const maxUint32 = ^uint32(0)

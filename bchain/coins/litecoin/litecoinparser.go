@@ -1,10 +1,9 @@
 package litecoin
 
 import (
-	"blockbook/bchain/coins/btc"
-
 	"github.com/martinboehm/btcd/wire"
 	"github.com/martinboehm/btcutil/chaincfg"
+	"github.com/trezor/blockbook/bchain/coins/btc"
 )
 
 // magic numbers

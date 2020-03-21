@@ -1,11 +1,11 @@
 package ravencoin
 
 import (
-	"blockbook/bchain"
-	"blockbook/bchain/coins/btc"
 	"encoding/json"
 
 	"github.com/golang/glog"
+	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/bchain/coins/btc"
 )
 
 // RavencoinRPC is an interface to JSON-RPC bitcoind service.
