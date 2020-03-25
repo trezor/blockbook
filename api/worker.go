@@ -277,7 +277,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 			tokenTransferSummary, err := w.db.GetTokenTransferSummaryFromTx(bchainTx)
 			if err != nil {
 				glog.Errorf("GetTokenTransferSummaryFromTx error %v, %v", err, bchainTx)
-				return nil, errAddrDesc
+				return nil, err
 			}
 			if tokenTransferSummary != nil {
 				tokens = []*bchain.TokenTransferSummary{tokenTransferSummary}
