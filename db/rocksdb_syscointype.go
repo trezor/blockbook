@@ -974,6 +974,7 @@ func (d *RocksDB) GetTokenTransferSummaryFromTx(tx *bchain.Tx) (*bchain.TokenTra
 				glog.Warningf("rocksdb: ConnectSyscoinOutputs(GetTokenTransferSummaryFromTx): tx %v, output %v, error %v", tx.Txid, output, err)
 				return nil, err
 			}
+			break;
 		}
 	}
 	return ta.TokenTransferSummary, nil
