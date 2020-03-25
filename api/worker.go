@@ -274,8 +274,18 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 			}
 			tokens = []*bchain.TokenTransferSummary{ta.TokenTransferSummary}
 		} else {
-			tokens = nil
+			tokenTransferSummary, err := w.db.GetTokenTransferSummaryFromTx(bchainTx)
+			if err != nil {
+				glog.Errorf("GetTokenTransferSummaryFromTx error %v, %v", err, bchainTx)
+				return nil, errAddrDesc
+			}
+			if tokenTransferSummary != nil {
+				tokens = []*bchain.TokenTransferSummary{tokenTransferSummary}
+			} else {
+				tokens = nil
+			}
 		}
+		
 	} else if w.chainType == bchain.ChainEthereumType {
 		ets, err := w.chainParser.EthereumTypeGetErc20FromTx(bchainTx)
 		if err != nil {

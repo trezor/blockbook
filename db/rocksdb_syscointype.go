@@ -734,7 +734,7 @@ func (d *RocksDB) ConnectSyscoinOutputs(height uint32, blockHash string, addrDes
 	} else if d.chainParser.IsSyscoinMintTx(version) {
 		assetGuid, err = d.ConnectMintAssetOutput(sptData, balances, version, addresses, btxID, txAddresses, assets)
 	}
-	if assetGuid > 0 && err == nil {
+	if height > 0 && assetGuid > 0 && err == nil {
 		txAsset, ok := txAssets[blockHash]
 		if !ok {
 			txAsset = &bchain.TxAsset{Txs: []*bchain.TxAssetIndex{}, AssetGuid: assetGuid}
@@ -941,4 +941,39 @@ func (d *RocksDB) GetTxAssets(assetGuid uint32, lower uint32, higher uint32, ass
 		}
 	}
 	return nil
+}
+
+func (d *RocksDB) GetTokenTransferSummaryFromTx(tx *bchain.Tx) ([]*bchain.TokenTransferSummary, error) {
+	assets := make(map[uint32]*bchain.Asset)
+	txAssets := make(map[string]*bchain.TxAsset, 0)
+	balances := make(map[string]*bchain.AddrBalance)
+	addresses := make(bchain.AddressesMap)
+	btxID, err := d.chainParser.PackTxid(tx.Txid)
+	if err != nil {
+		return nil, err
+	}
+	ta := bchain.TxAddresses{Version: tx.Version, Height: 0}
+	isSyscoinTx := d.chainParser.IsSyscoinTx(tx.Version)
+	maxAddrDescLen := d.chainParser.GetMaxAddrLength()
+	for i, output := range tx.Vout {
+		addrDesc, err := d.chainParser.GetAddrDescFromVout(&output)
+		if err != nil || len(addrDesc) == 0 || len(addrDesc) > maxAddrDescLen {
+			if err != nil {
+				// do not log ErrAddressMissing, transactions can be without to address (for example eth contracts)
+				if err != bchain.ErrAddressMissing {
+					glog.Warningf("rocksdb: addrDesc: %v - height %d, tx %v, output %v, error %v", err, block.Height, tx.Txid, output, err)
+				}
+			} else {
+				glog.V(1).Infof("rocksdb: height %d, tx %v, vout %v, skipping addrDesc of length %d", block.Height, tx.Txid, i, len(addrDesc))
+			}
+			continue
+		} else if isSyscoinTx && addrDesc[0] == txscript.OP_RETURN {
+			err := d.ConnectSyscoinOutputs(0, "", addrDesc, balances, tx.Version, addresses, btxID, &ta, assets, txAssets)
+			if err != nil {
+				glog.Warningf("rocksdb: ConnectSyscoinOutputs: height %d, tx %v, output %v, error %v", block.Height, tx.Txid, output, err)
+				return nil, err
+			}
+		}
+	}
+	return ta.TokenTransferSummary, nil
 }
