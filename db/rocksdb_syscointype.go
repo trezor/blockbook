@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"encoding/hex"
 	"github.com/syscoin/btcd/wire"
+	"github.com/martinboehm/btcutil/txscript"
 	"time"
 )
 var AssetCache map[uint32]bchain.Asset
@@ -943,7 +944,7 @@ func (d *RocksDB) GetTxAssets(assetGuid uint32, lower uint32, higher uint32, ass
 	return nil
 }
 
-func (d *RocksDB) GetTokenTransferSummaryFromTx(tx *bchain.Tx) ([]*bchain.TokenTransferSummary, error) {
+func (d *RocksDB) GetTokenTransferSummaryFromTx(tx *bchain.Tx) (*bchain.TokenTransferSummary, error) {
 	assets := make(map[uint32]*bchain.Asset)
 	txAssets := make(map[string]*bchain.TxAsset, 0)
 	balances := make(map[string]*bchain.AddrBalance)
@@ -961,16 +962,16 @@ func (d *RocksDB) GetTokenTransferSummaryFromTx(tx *bchain.Tx) ([]*bchain.TokenT
 			if err != nil {
 				// do not log ErrAddressMissing, transactions can be without to address (for example eth contracts)
 				if err != bchain.ErrAddressMissing {
-					glog.Warningf("rocksdb: addrDesc: %v - height %d, tx %v, output %v, error %v", err, block.Height, tx.Txid, output, err)
+					glog.Warningf("rocksdb: addrDesc: %v - tx %v, output %v, error %v", err, tx.Txid, output, err)
 				}
 			} else {
-				glog.V(1).Infof("rocksdb: height %d, tx %v, vout %v, skipping addrDesc of length %d", block.Height, tx.Txid, i, len(addrDesc))
+				glog.V(1).Infof("rocksdb: tx %v, vout %v, skipping addrDesc of length %d", tx.Txid, i, len(addrDesc))
 			}
 			continue
 		} else if isSyscoinTx && addrDesc[0] == txscript.OP_RETURN {
 			err := d.ConnectSyscoinOutputs(0, "", addrDesc, balances, tx.Version, addresses, btxID, &ta, assets, txAssets)
 			if err != nil {
-				glog.Warningf("rocksdb: ConnectSyscoinOutputs: height %d, tx %v, output %v, error %v", block.Height, tx.Txid, output, err)
+				glog.Warningf("rocksdb: ConnectSyscoinOutputs(GetTokenTransferSummaryFromTx): tx %v, output %v, error %v", tx.Txid, output, err)
 				return nil, err
 			}
 		}
