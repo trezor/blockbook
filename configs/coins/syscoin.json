@@ -59,7 +59,7 @@
       "xpub_magic_segwit_p2sh": 77429938,
       "xpub_magic_segwit_native": 78792518,
       "slip44": 57,
-      "subversion": "/Satoshi:3/",
+      "subversion": "/Satoshi:4.1.3/",
       "additional_params": {
         "fiat_rates": "coingecko",
         "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"syscoin\", \"periodSeconds\": 60}"
