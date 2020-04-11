@@ -27,8 +27,8 @@ require (
 	github.com/juju/loggo v0.0.0-20190526231331-6e530bcce5d8 // indirect
 	github.com/juju/testing v0.0.0-20191001232224-ce9dec17d28b // indirect
 	github.com/martinboehm/bchutil v0.0.0-20190104112650-6373f11b6efe
-	github.com/martinboehm/btcd v0.0.0-20190104121910-8e7c0427fee5
-	github.com/martinboehm/btcutil v0.0.0-20191023112652-a3d2b8457b77
+	github.com/martinboehm/btcd v0.0.0-20200313230603-83af86142d93
+	github.com/martinboehm/btcutil v0.0.0-20200229134221-d7706467ae8f
 	github.com/martinboehm/golang-socketio v0.0.0-20180414165752-f60b0a8befde
 	github.com/mr-tron/base58 v1.1.3 // indirect
 	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
