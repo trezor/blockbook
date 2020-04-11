@@ -1,0 +1,72 @@
+{
+  "coin": {
+    "name": "SnowGem",
+    "shortcut": "XSG",
+    "label": "SnowGem",
+    "alias": "snowgem"
+  },
+  "ports": {
+    "backend_rpc": 8062,
+    "backend_message_queue": 38362,
+    "blockbook_internal": 9062,
+    "blockbook_public": 9162
+  },
+  "ipc": {
+    "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
+    "rpc_user": "rpc",
+    "rpc_pass": "rpc",
+    "rpc_timeout": 25,
+    "message_queue_binding_template": "tcp://127.0.0.1:{{.Ports.BackendMessageQueue}}"
+  },
+  "backend": {
+    "package_name": "backend-snowgem",
+    "package_revision": "satoshilabs-1",
+    "system_user": "snowgem",
+    "version": "3.0.4-7",
+    "binary_url": "https://github.com/Snowgem/Snowgem/releases/download/v3000457-20190909/snowgem-debian9.11.0-3000457-20190926.zip",
+    "verification_type": "sha256",
+    "verification_source": "c5583bd31c8de86b19c481cf2c6445ebc1129e74fafc05e205064eb776ca96d3",
+    "extract_command": "unzip -j -d backend",
+    "exclude_files": [],
+    "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/snowgemd -datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -conf={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf -pid=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",
+    "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/*.log",
+    "postinst_script_template": "HOME={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/fetch-params.sh",
+    "service_type": "forking",
+    "service_additional_params_template": "Environment=\"HOME={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend\"",
+    "protect_memory": false,
+    "mainnet": true,
+    "server_config_file": "bitcoin_like.conf",
+    "client_config_file": "bitcoin_like_client.conf",
+    "additional_params": {
+      "addnode": [
+        "seednode1.snowgem.org",
+        "seednode2.snowgem.org",
+        "seednode3.snowgem.org",
+        "explorer.snowgem.org",
+        "explorer1.snowgem.org",
+        "explorer2.snowgem.org"
+      ]
+    }
+  },
+  "blockbook": {
+    "package_name": "blockbook-snowgem",
+    "system_user": "blockbook-snowgem",
+    "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
+    "public_binding_template": ":{{.Ports.BlockbookPublic}}",
+    "explorer_url": "",
+    "additional_params": "",
+    "block_chain": {
+      "parse": true,
+      "mempool_workers": 4,
+      "mempool_sub_workers": 8,
+      "block_addresses_to_keep": 300,
+      "xpub_magic": 76067358,
+      "slip44": 410,
+      "additional_params": {}
+    }
+  },
+  "meta": {
+    "package_maintainer": "Amitabha",
+    "package_maintainer_email": "nedelcu.alexandru@yahoo.com"
+  }
+}
