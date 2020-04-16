@@ -4,12 +4,15 @@
 
 **Blockbook** is back-end service for Trezor wallet. Main features of **Blockbook** are:
 
-- index of addresses and address balances of the connected block chain
+- index of addresses/XPUBs and address/XPUB balances of the connected block chain (XPUB balances are useful for HD Wallet infrastructure)
+- Ability to filter based on pages, date ranges, token query filters
+- Full support for Syscoin SPT’s through indexing and filtering transactions
 - fast searches in the indexes
 - simple blockchain explorer
 - websocket, API and legacy Bitcore Insight compatible socket.io interfaces
-- support of multiple coins (Bitcoin and Ethereum type), with easy extensibility for other coins
-- scripts for easy creation of debian packages for backend and blockbook
+support of multiple coins (Syscoin/Bitcoin and Ethereum type), with easy extensibility for other coins
+scripts for easy creation of debian packages for backend and blockbook
+and blockbook
 
 ## Build and installation instructions
 
