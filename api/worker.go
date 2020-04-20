@@ -363,6 +363,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 			GasUsed:  ethTxData.GasUsed,
 			Nonce:    ethTxData.Nonce,
 			Status:   ethTxData.Status,
+			Data:     ethTxData.Data,
 		}
 	}
 	// for now do not return size, we would have to compute vsize of segwit transactions
