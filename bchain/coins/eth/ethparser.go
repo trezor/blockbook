@@ -475,6 +475,7 @@ type EthereumTxData struct {
 	GasLimit *big.Int `json:"gaslimit"`
 	GasUsed  *big.Int `json:"gasused"`
 	GasPrice *big.Int `json:"gasprice"`
+	Data     string   `json:"data"`
 }
 
 // GetEthereumTxData returns EthereumTxData from bchain.Tx
@@ -486,6 +487,7 @@ func GetEthereumTxData(tx *bchain.Tx) *EthereumTxData {
 			etd.Nonce, _ = hexutil.DecodeUint64(csd.Tx.AccountNonce)
 			etd.GasLimit, _ = hexutil.DecodeBig(csd.Tx.GasLimit)
 			etd.GasPrice, _ = hexutil.DecodeBig(csd.Tx.GasPrice)
+			etd.Data = csd.Tx.Payload
 		}
 		if csd.Receipt != nil {
 			switch csd.Receipt.Status {
