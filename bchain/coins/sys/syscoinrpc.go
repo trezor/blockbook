@@ -129,8 +129,10 @@ func (b *SyscoinRPC) AssetAllocationSend(asset int, sender string, receiver stri
 	if err != nil {
 		return nil, "", errors.Annotatef(err, "asset %v", asset)
 	}
-	raw := b.DecodeRawTransaction(resHex.Hex);
-
+	raw, err := b.DecodeRawTransaction(resHex.Hex);
+	if err != nil {
+		return nil, "", errors.Annotatef(err, "asset decode %v", asset)
+	}
 	rawMarshal, err := json.Marshal(&raw)
     if err != nil {
         return nil, "", errors.Annotatef(err, "asset %v", asset)
