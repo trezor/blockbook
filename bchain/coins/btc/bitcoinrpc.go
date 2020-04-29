@@ -784,7 +784,7 @@ func (b *BitcoinRPC) DecodeRawTransaction(hex string) (string, error) {
 	glog.V(1).Info("rpc: decodeRawTransaction ", hex)
 
 	res := ResDecodeRawTransaction{}
-	req := CmdDecodeRawTransaction{Method: "decodeRawTransaction"}
+	req := CmdDecodeRawTransaction{Method: "decoderawtransaction"}
 	req.Params.Hex = hex
 	err := b.Call(&req, &res)
 
@@ -806,7 +806,7 @@ func (b *BitcoinRPC) GetChainTips() (string, error) {
 	glog.V(1).Info("rpc: getChainTips")
 
 	res := ResGetChainTips{}
-	req := CmdGetChainTips{Method: "getChainTips"}
+	req := CmdGetChainTips{Method: "getchaintips"}
 	err := b.Call(&req, &res)
 
 	if err != nil {

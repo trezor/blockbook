@@ -139,7 +139,7 @@ func (b *SyscoinRPC) AssetAllocationSend(asset int, sender string, receiver stri
 	}
 	decodedRawString, err := b.DecodeRawTransaction(resHex.Hex);
 	if err != nil {
-		return nil, "", errors.Annotatef(err, "asset decode %v", asset)
+		return nil, "", errors.Annotatef(err, "asset decode %v", resHex.Hex)
 	}
 	return tx, decodedRawString, nil
 }
