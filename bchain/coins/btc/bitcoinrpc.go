@@ -363,7 +363,7 @@ type ResGetChainTips struct {
 	Result string  `json:"result"`
 }
 
-type CmdResGetChainTips struct {
+type CmdGetChainTips struct {
 	Method string `json:"method"`
 	Params struct {
 	} `json:"params"`

@@ -102,7 +102,7 @@ func (b *SyscoinRPC) GetChainTips() (string, error) {
 	glog.V(1).Info("rpc: getchaintips")
 	result, err := b.GetChainTips();
 	if err != nil {
-		return nil, "", errors.Annotatef(err, "asset decode %v", asset)
+		return "", err
 	}
 	return result, nil
 }
