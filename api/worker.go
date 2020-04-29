@@ -1002,7 +1002,7 @@ func (w *Worker) FindAssets(filter string, page int, txsOnPage int) *Assets {
 	return r
 }
 func (w *Worker) GetChainTips() (string, error) {
-	result, err = w.chain.GetChainTips()
+	result, err := w.chain.GetChainTips()
 	if err != nil {
 		return "", err
 	}
