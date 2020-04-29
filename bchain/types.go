@@ -630,6 +630,7 @@ type BlockChain interface {
 	EthereumTypeGetErc20ContractBalance(addrDesc, contractDesc AddressDescriptor) (*big.Int, error)
 	// will be removed soon as syscoin-js creates and signs txs on client side
 	AssetAllocationSend(asset int, sender string, receiver string, amount string) (*Tx,string, error)
+	GetChainTips() (string, error)
 	SendFrom(sender string, receiver string, amount string) (*Tx, error)
 }
 

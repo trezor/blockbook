@@ -348,13 +348,24 @@ type ResGetRawTransactionNonverbose struct {
 // decoderawtransaction
 type ResDecodeRawTransaction struct {
 	Error  *bchain.RPCError `json:"error"`
-	Result json.RawMessage  `json:"result"`
+	Result string  `json:"result"`
 }
 
 type CmdDecodeRawTransaction struct {
 	Method string `json:"method"`
 	Params struct {
 		Hex    string `json:"hexstring"`
+	} `json:"params"`
+}
+// getchaintips
+type ResGetChainTips struct {
+	Error  *bchain.RPCError `json:"error"`
+	Result string  `json:"result"`
+}
+
+type CmdResGetChainTips struct {
+	Method string `json:"method"`
+	Params struct {
 	} `json:"params"`
 }
 // estimatesmartfee
@@ -769,7 +780,7 @@ func (b *BitcoinRPC) getRawTransaction(txid string) (json.RawMessage, error) {
 }
 
 // getRawTransaction returns json as returned by backend, with all coin specific data
-func (b *BitcoinRPC) DecodeRawTransaction(hex string) (json.RawMessage, error) {
+func (b *BitcoinRPC) DecodeRawTransaction(hex string) (string, error) {
 	glog.V(1).Info("rpc: decodeRawTransaction ", hex)
 
 	res := ResDecodeRawTransaction{}
@@ -784,6 +795,24 @@ func (b *BitcoinRPC) DecodeRawTransaction(hex string) (json.RawMessage, error) {
 		if IsMissingTx(res.Error) {
 			return nil, bchain.ErrTxNotFound
 		}
+		return nil, errors.Annotatef(res.Error, "hex %v", hex)
+	}
+	return res.Result, nil
+}
+
+
+// getRawTransaction returns json as returned by backend, with all coin specific data
+func (b *BitcoinRPC) GetChainTips() (string, error) {
+	glog.V(1).Info("rpc: getChainTips ", hex)
+
+	res := ResGetChainTips{}
+	req := CmdGetChainTips{Method: "getChainTips"}
+	err := b.Call(&req, &res)
+
+	if err != nil {
+		return nil, errors.Annotatef(err, "hex %v", hex)
+	}
+	if res.Error != nil {
 		return nil, errors.Annotatef(res.Error, "hex %v", hex)
 	}
 	return res.Result, nil

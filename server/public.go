@@ -184,6 +184,7 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 	serveMux.HandleFunc(path+"api/v2/tx/", s.jsonHandler(s.apiTx, apiV2))
 	serveMux.HandleFunc(path+"api/v2/address/", s.jsonHandler(s.apiAddress, apiV2))
 	serveMux.HandleFunc(path+"api/v2/asset/", s.jsonHandler(s.apiAsset, apiV2))
+	serveMux.HandleFunc(path+"api/v2/getchaintips/", s.jsonHandler(s.apiGetChainTips, apiV2))
 	serveMux.HandleFunc(path+"api/v2/assetallocationsend/", s.jsonHandler(s.apiAssetAllocationSend, apiV2)) // temporary will be removed in future
 	serveMux.HandleFunc(path+"api/v2/sendfrom/", s.jsonHandler(s.apiSendFrom, apiV2)) // temporary will be removed in future
 	serveMux.HandleFunc(path+"api/v2/assets/", s.jsonHandler(s.apiAssets, apiV2))
@@ -1175,6 +1176,16 @@ func (s *PublicServer) apiAssetAllocationSend(r *http.Request, apiVersion int) (
 	to := r.URL.Query().Get("to")
 	amount := r.URL.Query().Get("amount")
 	return s.api.AssetAllocationSend(assetParam, from, to, amount)
+}
+func (s *PublicServer) apiGetChainTips(r *http.Request, apiVersion int) (interface{}, error) {
+	s.metrics.ExplorerViews.With(common.Labels{"action": "api-getchaintips"}).Inc()
+	type resultGetChainTips struct {
+		Result string `json:"result"`
+	}
+	var err error
+	var res resultGetChainTips
+	res.Result, err = s.api.GetChainTips()
+	return res, err
 }
 func (s *PublicServer) apiSendFrom(r *http.Request, apiVersion int) (interface{}, error) {
 	var from string

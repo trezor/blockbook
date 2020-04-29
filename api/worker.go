@@ -1001,7 +1001,13 @@ func (w *Worker) FindAssets(filter string, page int, txsOnPage int) *Assets {
 	glog.Info("FindAssets filter: ", filter, " finished in ", time.Since(start))
 	return r
 }
-
+func (w *Worker) GetChainTips() (string, error) {
+	result, err = w.chain.AssetAllocationSend(assetGuidInt, sender, reciever, amount)
+	if err != nil {
+		return "", err
+	}
+	return result, nil
+}
 func (w *Worker) AssetAllocationSend(asset string, sender string, reciever string, amount string) (interface{}, error) {
 	var err error
 	var assetGuidInt int

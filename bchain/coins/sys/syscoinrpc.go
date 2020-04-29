@@ -98,6 +98,14 @@ type GetSyscoinTxHex struct {
 	Hex string `json:"hex"`
 }
 
+func (b *SyscoinRPC) GetChainTips() (string, error) {
+	glog.V(1).Info("rpc: getchaintips")
+	result, err := b.GetChainTips();
+	if err != nil {
+		return nil, "", errors.Annotatef(err, "asset decode %v", asset)
+	}
+	return result, nil
+}
 func (b *SyscoinRPC) AssetAllocationSend(asset int, sender string, receiver string, amount string) (*bchain.Tx, string, error) {
 	glog.V(1).Info("rpc: assetallocationsend ", asset)
 
@@ -129,15 +137,10 @@ func (b *SyscoinRPC) AssetAllocationSend(asset int, sender string, receiver stri
 	if err != nil {
 		return nil, "", errors.Annotatef(err, "asset %v", asset)
 	}
-	raw, err := b.DecodeRawTransaction(resHex.Hex);
+	decodedRawString, err := b.DecodeRawTransaction(resHex.Hex);
 	if err != nil {
 		return nil, "", errors.Annotatef(err, "asset decode %v", asset)
 	}
-	rawMarshal, err := json.Marshal(&raw)
-    if err != nil {
-        return nil, "", errors.Annotatef(err, "asset %v", asset)
-    }
-	decodedRawString := string(rawMarshal)
 	return tx, decodedRawString, nil
 }
 func (b *SyscoinRPC) SendFrom(sender string, receiver string, amount string) (*bchain.Tx, error) {
