@@ -345,6 +345,18 @@ type ResGetRawTransactionNonverbose struct {
 	Result string           `json:"result"`
 }
 
+// decoderawtransaction
+type ResDecodeRawTransaction struct {
+	Error  *bchain.RPCError `json:"error"`
+	Result json.RawMessage  `json:"result"`
+}
+
+type CmdDecodeRawTransaction struct {
+	Method string `json:"method"`
+	Params struct {
+		Hex    string `json:"hexstring"`
+	} `json:"params"`
+}
 // estimatesmartfee
 
 type CmdEstimateSmartFee struct {
@@ -760,9 +772,9 @@ func (b *BitcoinRPC) getRawTransaction(txid string) (json.RawMessage, error) {
 func (b *BitcoinRPC) decodeRawTransaction(hex string) (json.RawMessage, error) {
 	glog.V(1).Info("rpc: decodeRawTransaction ", hex)
 
-	res := ResGetRawTransaction{}
-	req := CmdGetRawTransaction{Method: "decodeRawTransaction"}
-	req.Params.hexstring = hex
+	res := ResDecodeRawTransaction{}
+	req := CmdDecodeRawTransaction{Method: "decodeRawTransaction"}
+	req.Params.Hex = hex
 	err := b.Call(&req, &res)
 
 	if err != nil {
