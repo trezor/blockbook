@@ -185,8 +185,6 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 	serveMux.HandleFunc(path+"api/v2/address/", s.jsonHandler(s.apiAddress, apiV2))
 	serveMux.HandleFunc(path+"api/v2/asset/", s.jsonHandler(s.apiAsset, apiV2))
 	serveMux.HandleFunc(path+"api/v2/getchaintips/", s.jsonHandler(s.apiGetChainTips, apiV2))
-	serveMux.HandleFunc(path+"api/v2/assetallocationsend/", s.jsonHandler(s.apiAssetAllocationSend, apiV2)) // temporary will be removed in future
-	serveMux.HandleFunc(path+"api/v2/sendfrom/", s.jsonHandler(s.apiSendFrom, apiV2)) // temporary will be removed in future
 	serveMux.HandleFunc(path+"api/v2/assets/", s.jsonHandler(s.apiAssets, apiV2))
 	serveMux.HandleFunc(path+"api/v2/xpub/", s.jsonHandler(s.apiXpub, apiV2))
 	serveMux.HandleFunc(path+"api/v2/utxo/", s.jsonHandler(s.apiUtxo, apiV2))
@@ -724,7 +722,7 @@ func (s *PublicServer) getAssetQueryParams(r *http.Request, accountDetails api.A
 			// everything but allocation send
 			assetsMask = bchain.AssetActivateMask | bchain.AssetUpdateMask | bchain.AssetTransferMask | bchain.AssetSendMask | 
 			bchain.AssetSyscoinBurnToAllocationMask | bchain.AssetAllocationBurnToSyscoinMask | bchain.AssetAllocationBurnToEthereumMask | 
-			bchain.AssetAllocationMintMask | bchain.AssetAllocationLockMask
+			bchain.AssetAllocationMintMask
 		} else {
 			var mask, ec = strconv.Atoi(filterParam)
 			if ec == nil {
@@ -1161,22 +1159,6 @@ func (s *PublicServer) apiAddress(r *http.Request, apiVersion int) (interface{},
 	}
 	return address, err
 }
-// will be removed once syscoinjs is updated to do client side create tx
-func (s *PublicServer) apiAssetAllocationSend(r *http.Request, apiVersion int) (interface{}, error) {
-	var assetParam string
-	i := strings.LastIndexByte(r.URL.Path, '/')
-	if i > 0 {
-		assetParam = r.URL.Path[i+1:]
-	}
-	if len(assetParam) == 0 {
-		return nil, api.NewAPIError("Missing asset", true)
-	}
-	s.metrics.ExplorerViews.With(common.Labels{"action": "api-assetallocationsend"}).Inc()
-	from := r.URL.Query().Get("from")
-	to := r.URL.Query().Get("to")
-	amount := r.URL.Query().Get("amount")
-	return s.api.AssetAllocationSend(assetParam, from, to, amount)
-}
 func (s *PublicServer) apiGetChainTips(r *http.Request, apiVersion int) (interface{}, error) {
 	s.metrics.ExplorerViews.With(common.Labels{"action": "api-getchaintips"}).Inc()
 	type resultGetChainTips struct {
@@ -1186,20 +1168,6 @@ func (s *PublicServer) apiGetChainTips(r *http.Request, apiVersion int) (interfa
 	var res resultGetChainTips
 	res.Result, err = s.api.GetChainTips()
 	return res, err
-}
-func (s *PublicServer) apiSendFrom(r *http.Request, apiVersion int) (interface{}, error) {
-	var from string
-	i := strings.LastIndexByte(r.URL.Path, '/')
-	if i > 0 {
-		from = r.URL.Path[i+1:]
-	}
-	if len(from) == 0 {
-		return nil, api.NewAPIError("Missing from", true)
-	}
-	s.metrics.ExplorerViews.With(common.Labels{"action": "api-sendfrom"}).Inc()
-	to := r.URL.Query().Get("to")
-	amount := r.URL.Query().Get("amount")
-	return s.api.SendFrom(from, to, amount)
 }
 
 func (s *PublicServer) apiAsset(r *http.Request, apiVersion int) (interface{}, error) {

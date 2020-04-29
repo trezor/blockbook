@@ -73,23 +73,6 @@ func (b *SyscoinRPC) GetBlock(hash string, height uint32) (*bchain.Block, error)
 	return b.GetBlockWithoutHeader(hash, height)
 }
 
-type CmdAssetAllocationSend struct {
-	Method string `json:"method"`
-	Params struct {
-		Asset    int    `json:"asset_guid"`
-		Sender   string `json:"address_sender"`
-		Receiver string `json:"address_receiver"`
-		Amount   string `json:"amount"`
-	} `json:"params"`
-}
-type CmdSendFrom struct {
-	Method string `json:"method"`
-	Params struct {
-		Sender   string `json:"funding_address"`
-		Receiver string `json:"address"`
-		Amount   string `json:"amount"`
-	} `json:"params"`
-}
 type ResSyscoinSend struct {
 	Error  *bchain.RPCError `json:"error"`
 	Result json.RawMessage      `json:"result"`
@@ -105,72 +88,4 @@ func (b *SyscoinRPC) GetChainTips() (string, error) {
 		return "", err
 	}
 	return result, nil
-}
-func (b *SyscoinRPC) AssetAllocationSend(asset int, sender string, receiver string, amount string) (*bchain.Tx, string, error) {
-	glog.V(1).Info("rpc: assetallocationsend ", asset)
-
-	res := ResSyscoinSend{}
-	req := CmdAssetAllocationSend{Method: "assetallocationsend"}
-	req.Params.Asset = asset
-	req.Params.Sender = sender
-	req.Params.Receiver = receiver
-	req.Params.Amount = amount
-	err := b.Call(&req, &res)
-	
-	if err != nil {
-		return nil, "", errors.Annotatef(err, "asset %v", asset)
-	}
-	if res.Error != nil {
-		return nil, "", errors.Annotatef(res.Error, "asset %v", asset)
-	}
-	var resHex GetSyscoinTxHex
-	err = json.Unmarshal(res.Result, &resHex)
-	if err != nil {
-		return nil, "", errors.Annotatef(err, "Unmarshal")
-	}
-	
-	data, err := hex.DecodeString(resHex.Hex)
-	if err != nil {
-		return nil, "", errors.Annotatef(err, "asset %v", asset)
-	}
-	tx, err := b.Parser.ParseTx(data)
-	if err != nil {
-		return nil, "", errors.Annotatef(err, "asset %v", asset)
-	}
-	decodedRawString, err := b.DecodeRawTransaction(resHex.Hex);
-	if err != nil {
-		return nil, "", errors.Annotatef(err, "asset decode %v", resHex.Hex)
-	}
-	return tx, decodedRawString, nil
-}
-func (b *SyscoinRPC) SendFrom(sender string, receiver string, amount string) (*bchain.Tx, error) {
-	glog.V(1).Info("rpc: sendfrom ", sender)
-
-	res := ResSyscoinSend{}
-	req := CmdSendFrom{Method: "sendfrom"}
-	req.Params.Sender = sender
-	req.Params.Receiver = receiver
-	req.Params.Amount = amount
-	err := b.Call(&req, &res)
-
-	if err != nil {
-		return nil, err
-	}
-	if res.Error != nil {
-		return nil, res.Error
-	}
-	var resHex GetSyscoinTxHex
-	err = json.Unmarshal(res.Result, &resHex)
-	if err != nil {
-		return nil, err
-	}
-	data, err := hex.DecodeString(resHex.Hex)
-	if err != nil {
-		return nil, err
-	}
-	tx, err := b.Parser.ParseTx(data)
-	if err != nil {
-		return nil, err
-	}
-	return tx, nil
 }

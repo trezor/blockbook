@@ -27,7 +27,6 @@ const (
 	SYSCOIN_TX_VERSION_ALLOCATION_MINT int32 = 0x7406
 	SYSCOIN_TX_VERSION_ALLOCATION_BURN_TO_ETHEREUM int32 = 0x7407
 	SYSCOIN_TX_VERSION_ALLOCATION_SEND int32 = 0x7408
-	SYSCOIN_TX_VERSION_ALLOCATION_LOCK int32 = 0x7409
 )
 
 // chain parameters
@@ -148,8 +147,6 @@ func (p *SyscoinParser) GetAssetTypeFromVersion(nVersion int32) bchain.TokenType
 		return bchain.SPTAssetSyscoinBurnToAllocationType
 	case SYSCOIN_TX_VERSION_ALLOCATION_SEND:
 		return bchain.SPTAssetAllocationSendType
-	case SYSCOIN_TX_VERSION_ALLOCATION_LOCK:
-		return bchain.SPTAssetAllocationLockType
 	default:
 		return bchain.SPTUnknownType
 	}
@@ -175,8 +172,6 @@ func (p *SyscoinParser) GetAssetsMaskFromVersion(nVersion int32) bchain.AssetsMa
 		return bchain.AssetSyscoinBurnToAllocationMask
 	case SYSCOIN_TX_VERSION_ALLOCATION_SEND:
 		return bchain.AssetAllocationSendMask
-	case SYSCOIN_TX_VERSION_ALLOCATION_LOCK:
-		return bchain.AssetAllocationLockMask
 	default:
 		return bchain.AssetAllMask
 	}
@@ -192,8 +187,8 @@ func (p *SyscoinParser) IsAssetTx(nVersion int32) bool {
 
 // note assetsend in core is assettx but its deserialized as allocation, we just care about balances so we can do it in same code for allocations
 func (p *SyscoinParser) IsAssetAllocationTx(nVersion int32) bool {
-    return nVersion == SYSCOIN_TX_VERSION_ALLOCATION_BURN_TO_ETHEREUM || nVersion == SYSCOIN_TX_VERSION_ALLOCATION_BURN_TO_SYSCOIN || nVersion == SYSCOIN_TX_VERSION_SYSCOIN_BURN_TO_ALLOCATION ||
-        nVersion == SYSCOIN_TX_VERSION_ALLOCATION_SEND || nVersion == SYSCOIN_TX_VERSION_ALLOCATION_LOCK || nVersion == SYSCOIN_TX_VERSION_ASSET_SEND
+    return nVersion == SYSCOIN_TX_VERSION_ALLOCATION_BURN_TO_ETHEREUM || nVersion == SYSCOIN_TX_VERSION_ALLOCATION_BURN_TO_SYSCOIN ||
+        nVersion == SYSCOIN_TX_VERSION_ALLOCATION_SEND || nVersion == SYSCOIN_TX_VERSION_ASSET_SEND
 }
 
 func (p *SyscoinParser) IsAssetSendTx(nVersion int32) bool {
