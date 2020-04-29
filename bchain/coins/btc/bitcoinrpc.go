@@ -769,7 +769,7 @@ func (b *BitcoinRPC) getRawTransaction(txid string) (json.RawMessage, error) {
 }
 
 // getRawTransaction returns json as returned by backend, with all coin specific data
-func (b *BitcoinRPC) decodeRawTransaction(hex string) (json.RawMessage, error) {
+func (b *BitcoinRPC) DecodeRawTransaction(hex string) (json.RawMessage, error) {
 	glog.V(1).Info("rpc: decodeRawTransaction ", hex)
 
 	res := ResDecodeRawTransaction{}
