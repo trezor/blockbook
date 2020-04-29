@@ -227,6 +227,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 		vout.N = i
 		vout.ValueSat = (*bchain.Amount)(&bchainVout.ValueSat)
 		valOutSat.Add(&valOutSat, &bchainVout.ValueSat)
+		
 		vout.Hex = bchainVout.ScriptPubKey.Hex
 		vout.AddrDesc, vout.Addresses, vout.IsAddress, err = w.getAddressesFromVout(bchainVout)
 		if err != nil {
@@ -250,28 +251,6 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 		}
 		pValInSat = &valInSat
 		if ta != nil && ta.TokenTransferSummary != nil {
-			// fill in unspent-ness on recipients
-			for i := range ta.TokenTransferSummary.Recipients {
-				recipient := ta.TokenTransferSummary.Recipients[i]
-				recipient.Unspent = true
-				addrDescAsset, errAddrDesc := w.chainParser.GetAddrDescFromAddress(recipient.To)
-				if errAddrDesc != nil {
-					return nil, errAddrDesc
-				}
-				ba, errBalance := w.db.GetAddrDescBalance(addrDescAsset, bchain.AddressBalanceDetailNoUTXO)
-                if errBalance == nil {
-                    assetGuid, errAssetGuid := strconv.Atoi(ta.TokenTransferSummary.Token)
-                    if errAssetGuid != nil {
-                        return nil, errAssetGuid
-                    }
-                    baAsset, fetchedAsset := ba.AssetBalances[uint32(assetGuid)]
-                    if fetchedAsset {
-                        if baAsset.SentAssetSat.Int64() > 0 {
-                            recipient.Unspent = false
-                        }
-                    }
-                }
-			}
 			tokens = []*bchain.TokenTransferSummary{ta.TokenTransferSummary}
 		} else {
 			tokenTransferSummary, err := w.db.GetTokenTransferSummaryFromTx(bchainTx)
@@ -390,7 +369,6 @@ func (w *Worker) getAddressTxids(addrDesc bchain.AddressDescriptor, mempool bool
 				}
 				if (filter.Vout == AddressFilterVoutInputs && index < 0) ||
 					(filter.Vout == AddressFilterVoutOutputs && index >= 0) ||
-					(filter.Vout == AddressFilterVoutTokens && w.chainParser.IsTxIndexAsset(vout)) || 
 					(vout == int32(filter.Vout)) {
 					txids = append(txids, txid)
 					if len(txids) >= maxResults {
@@ -442,8 +420,7 @@ func (w *Worker) getAssetTxids(assetGuid uint32, mempool bool, filter *AssetFilt
 		return nil
 	}
 	if mempool {
-		// TODO: for now don't have mempool storage of asset txids per guid, will do in future
-		/*uniqueTxs := make(map[string]struct{})
+		uniqueTxs := make(map[string]struct{})
 		o, err := w.mempool.GetTxAssets(assetGuid)
 		if err != nil {
 			return nil, err
@@ -456,7 +433,7 @@ func (w *Worker) getAssetTxids(assetGuid uint32, mempool bool, filter *AssetFilt
 					uniqueTxs[m.Txid] = struct{}{}
 				}
 			}
-		}*/
+		}
 	} else {
 		to := filter.ToHeight
 		if to == 0 {
@@ -551,28 +528,6 @@ func (w *Worker) txFromTxAddress(txid string, ta *bchain.TxAddresses, bi *bchain
 		Vout:          vouts,
 	}
 	if ta.TokenTransferSummary != nil {
-		// fill in unspent-ness on recipients
-		for i := range ta.TokenTransferSummary.Recipients {
-			recipient := ta.TokenTransferSummary.Recipients[i]
-			recipient.Unspent = true
-			addrDescAsset, errAddrDesc := w.chainParser.GetAddrDescFromAddress(recipient.To)
-			if errAddrDesc != nil {
-				return nil
-			}
-			ba, errBalance := w.db.GetAddrDescBalance(addrDescAsset, bchain.AddressBalanceDetailNoUTXO)
-			if errBalance == nil {
-				assetGuid, errAssetGuid := strconv.Atoi(ta.TokenTransferSummary.Token)
-				if errAssetGuid != nil {
-					return nil
-				}
-				baAsset, fetchedAsset := ba.AssetBalances[uint32(assetGuid)]
-				if fetchedAsset {
-					if baAsset.SentAssetSat.Int64() > 0 {
-						recipient.Unspent = false
-					}
-				}
-			}
-		}
 		r.TokenTransferSummary = []*bchain.TokenTransferSummary{ta.TokenTransferSummary}
 	}
 	return r
