@@ -63,6 +63,10 @@ func (b *BaseChain) AssetAllocationSend(asset int, sender string, receiver strin
 	return nil, "", errors.New("Not supported")
 }
 
+func (b *BaseChain) GetChainTips() (string, error) {
+	return nil, "", errors.New("Not supported")
+}
+
 func (b *BaseChain) SendFrom(sender string, receiver string, amount string) (*Tx, error) {
 	return nil, errors.New("Not supported")
 }
