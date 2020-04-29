@@ -18,15 +18,14 @@ import (
 const (
 	MainnetMagic wire.BitcoinNet = 0xffcae2ce
 	RegtestMagic wire.BitcoinNet = 0xdab5bffa
-	SYSCOIN_TX_VERSION_ALLOCATION_BURN_TO_SYSCOIN int32 = 0x7400
-	SYSCOIN_TX_VERSION_SYSCOIN_BURN_TO_ALLOCATION int32 = 0x7401
-	SYSCOIN_TX_VERSION_ASSET_ACTIVATE int32 = 0x7402
-	SYSCOIN_TX_VERSION_ASSET_UPDATE int32 = 0x7403
-	SYSCOIN_TX_VERSION_ASSET_TRANSFER int32 = 0x7404
-	SYSCOIN_TX_VERSION_ASSET_SEND int32 = 0x7405
-	SYSCOIN_TX_VERSION_ALLOCATION_MINT int32 = 0x7406
-	SYSCOIN_TX_VERSION_ALLOCATION_BURN_TO_ETHEREUM int32 = 0x7407
-	SYSCOIN_TX_VERSION_ALLOCATION_SEND int32 = 0x7408
+	SYSCOIN_TX_VERSION_ALLOCATION_BURN_TO_SYSCOIN int32 = 128
+	SYSCOIN_TX_VERSION_SYSCOIN_BURN_TO_ALLOCATION int32 = 129
+	SYSCOIN_TX_VERSION_ASSET_ACTIVATE int32 = 130
+	SYSCOIN_TX_VERSION_ASSET_UPDATE int32 = 131
+	SYSCOIN_TX_VERSION_ASSET_SEND int32 = 132
+	SYSCOIN_TX_VERSION_ALLOCATION_MINT int32 = 133
+	SYSCOIN_TX_VERSION_ALLOCATION_BURN_TO_ETHEREUM int32 = 134
+	SYSCOIN_TX_VERSION_ALLOCATION_SEND int32 = 135
 )
 
 // chain parameters
@@ -133,8 +132,6 @@ func (p *SyscoinParser) GetAssetTypeFromVersion(nVersion int32) bchain.TokenType
 		return bchain.SPTAssetActivateType
 	case SYSCOIN_TX_VERSION_ASSET_UPDATE:
 		return bchain.SPTAssetUpdateType
-	case SYSCOIN_TX_VERSION_ASSET_TRANSFER:
-		return bchain.SPTAssetTransferType
 	case SYSCOIN_TX_VERSION_ASSET_SEND:
 		return bchain.SPTAssetSendType
 	case SYSCOIN_TX_VERSION_ALLOCATION_MINT:
@@ -158,8 +155,6 @@ func (p *SyscoinParser) GetAssetsMaskFromVersion(nVersion int32) bchain.AssetsMa
 		return bchain.AssetActivateMask
 	case SYSCOIN_TX_VERSION_ASSET_UPDATE:
 		return bchain.AssetUpdateMask
-	case SYSCOIN_TX_VERSION_ASSET_TRANSFER:
-		return bchain.AssetTransferMask
 	case SYSCOIN_TX_VERSION_ASSET_SEND:
 		return bchain.AssetSendMask
 	case SYSCOIN_TX_VERSION_ALLOCATION_MINT:
@@ -182,13 +177,13 @@ func (p *SyscoinParser) IsSyscoinMintTx(nVersion int32) bool {
 }
 
 func (p *SyscoinParser) IsAssetTx(nVersion int32) bool {
-    return nVersion == SYSCOIN_TX_VERSION_ASSET_ACTIVATE || nVersion == SYSCOIN_TX_VERSION_ASSET_UPDATE || nVersion == SYSCOIN_TX_VERSION_ASSET_TRANSFER
+    return nVersion == SYSCOIN_TX_VERSION_ASSET_ACTIVATE || nVersion == SYSCOIN_TX_VERSION_ASSET_UPDATE
 }
 
 // note assetsend in core is assettx but its deserialized as allocation, we just care about balances so we can do it in same code for allocations
 func (p *SyscoinParser) IsAssetAllocationTx(nVersion int32) bool {
-    return nVersion == SYSCOIN_TX_VERSION_ALLOCATION_BURN_TO_ETHEREUM || nVersion == SYSCOIN_TX_VERSION_ALLOCATION_BURN_TO_SYSCOIN ||
-        nVersion == SYSCOIN_TX_VERSION_ALLOCATION_SEND || nVersion == SYSCOIN_TX_VERSION_ASSET_SEND
+	return nVersion == SYSCOIN_TX_VERSION_ALLOCATION_BURN_TO_ETHEREUM || nVersion == SYSCOIN_TX_VERSION_ALLOCATION_BURN_TO_SYSCOIN || nVersion == SYSCOIN_TX_VERSION_SYSCOIN_BURN_TO_ALLOCATION ||
+	nVersion == SYSCOIN_TX_VERSION_ALLOCATION_SEND
 }
 
 func (p *SyscoinParser) IsAssetSendTx(nVersion int32) bool {
@@ -204,7 +199,7 @@ func (p *SyscoinParser) IsSyscoinTx(nVersion int32) bool {
 }
 
 func (p *SyscoinParser) IsTxIndexAsset(txIndex int32) bool {
-    return txIndex > (SYSCOIN_TX_VERSION_ALLOCATION_BURN_TO_SYSCOIN*10)
+    return txIndex > (SYSCOIN_TX_VERSION_ALLOCATION_SEND*10)
 }
 
 // addressToOutputScript converts bitcoin address to ScriptPubKey

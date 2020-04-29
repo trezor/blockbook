@@ -411,7 +411,6 @@ const SPTUnallocatedTokenType TokenType = "SPTUnallocated"
 const SPTUnknownType TokenType = "SPTUnknown"
 const SPTAssetActivateType TokenType = "SPTAssetActivate"
 const SPTAssetUpdateType TokenType = "SPTAssetUpdate"
-const SPTAssetTransferType TokenType = "SPTAssetTransfer"
 const SPTAssetSendType TokenType = "SPTAssetSend"
 const SPTAssetAllocationMintType TokenType = "SPTAssetAllocationMint"
 const SPTAssetAllocationSendType TokenType = "SPTAssetAllocationSend"
@@ -424,13 +423,12 @@ type AssetsMask uint32
 const AssetAllMask AssetsMask = 0
 const AssetActivateMask AssetsMask = 1
 const AssetUpdateMask AssetsMask = 2
-const AssetTransferMask AssetsMask = 4
-const AssetSendMask AssetsMask = 8
-const AssetSyscoinBurnToAllocationMask AssetsMask = 16
-const AssetAllocationBurnToSyscoinMask AssetsMask = 32
-const AssetAllocationBurnToEthereumMask AssetsMask = 64
-const AssetAllocationMintMask AssetsMask = 128
-const AssetAllocationSendMask AssetsMask = 256
+const AssetSendMask AssetsMask = 4
+const AssetSyscoinBurnToAllocationMask AssetsMask = 8
+const AssetAllocationBurnToSyscoinMask AssetsMask = 16
+const AssetAllocationBurnToEthereumMask AssetsMask = 32
+const AssetAllocationMintMask AssetsMask = 64
+const AssetAllocationSendMask AssetsMask = 128
 
 // Amount is datatype holding amounts
 type Amount big.Int
