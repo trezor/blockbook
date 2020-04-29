@@ -789,13 +789,13 @@ func (b *BitcoinRPC) DecodeRawTransaction(hex string) (string, error) {
 	err := b.Call(&req, &res)
 
 	if err != nil {
-		return nil, errors.Annotatef(err, "hex %v", hex)
+		return "", errors.Annotatef(err, "hex %v", hex)
 	}
 	if res.Error != nil {
 		if IsMissingTx(res.Error) {
-			return nil, bchain.ErrTxNotFound
+			return "", bchain.ErrTxNotFound
 		}
-		return nil, errors.Annotatef(res.Error, "hex %v", hex)
+		return "", errors.Annotatef(res.Error, "hex %v", hex)
 	}
 	return res.Result, nil
 }
@@ -803,17 +803,17 @@ func (b *BitcoinRPC) DecodeRawTransaction(hex string) (string, error) {
 
 // getRawTransaction returns json as returned by backend, with all coin specific data
 func (b *BitcoinRPC) GetChainTips() (string, error) {
-	glog.V(1).Info("rpc: getChainTips ", hex)
+	glog.V(1).Info("rpc: getChainTips")
 
 	res := ResGetChainTips{}
 	req := CmdGetChainTips{Method: "getChainTips"}
 	err := b.Call(&req, &res)
 
 	if err != nil {
-		return nil, errors.Annotatef(err, "hex %v", hex)
+		return "", err
 	}
 	if res.Error != nil {
-		return nil, errors.Annotatef(res.Error, "hex %v", hex)
+		return "", err
 	}
 	return res.Result, nil
 }
