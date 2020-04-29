@@ -1013,12 +1013,15 @@ func (w *Worker) AssetAllocationSend(asset string, sender string, reciever strin
 	type txAssetSpecific struct {
 		Tx *bchain.Tx  `json:"tx,omitempty"`
 		PrevVouts []*bchain.Vout  `json:"prevVouts,omitempty"`
+		DecodedTx string `json:"decodedTx,omitempty"`
 	}
 	var txAssetSpec txAssetSpecific
-	txAssetSpec.Tx, err = w.chain.AssetAllocationSend(assetGuidInt, sender, reciever, amount)
+	var rawDecoded string
+	txAssetSpec.Tx, rawDecoded, err = w.chain.AssetAllocationSend(assetGuidInt, sender, reciever, amount)
 	if err != nil {
 		return "", err
 	}
+	txAssetSpec.DecodedTx = rawDecoded
 	txAssetSpec.PrevVouts = make([]*bchain.Vout, len(txAssetSpec.Tx.Vin))
 	for i := range txAssetSpec.Tx.Vin {
 		bchainVin := &txAssetSpec.Tx.Vin[i]

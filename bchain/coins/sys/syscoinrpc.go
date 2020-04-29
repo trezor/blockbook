@@ -97,7 +97,8 @@ type ResSyscoinSend struct {
 type GetSyscoinTxHex struct {
 	Hex string `json:"hex"`
 }
-func (b *SyscoinRPC) AssetAllocationSend(asset int, sender string, receiver string, amount string) (*bchain.Tx, error) {
+
+func (b *SyscoinRPC) AssetAllocationSend(asset int, sender string, receiver string, amount string) (*bchain.Tx, string, error) {
 	glog.V(1).Info("rpc: assetallocationsend ", asset)
 
 	res := ResSyscoinSend{}
@@ -107,27 +108,35 @@ func (b *SyscoinRPC) AssetAllocationSend(asset int, sender string, receiver stri
 	req.Params.Receiver = receiver
 	req.Params.Amount = amount
 	err := b.Call(&req, &res)
-
+	
 	if err != nil {
-		return nil, errors.Annotatef(err, "asset %v", asset)
+		return nil, "", errors.Annotatef(err, "asset %v", asset)
 	}
 	if res.Error != nil {
-		return nil, errors.Annotatef(res.Error, "asset %v", asset)
+		return nil, "", errors.Annotatef(res.Error, "asset %v", asset)
 	}
 	var resHex GetSyscoinTxHex
 	err = json.Unmarshal(res.Result, &resHex)
 	if err != nil {
-		return nil, errors.Annotatef(err, "Unmarshal")
+		return nil, "", errors.Annotatef(err, "Unmarshal")
 	}
+	
 	data, err := hex.DecodeString(resHex.Hex)
 	if err != nil {
-		return nil, errors.Annotatef(err, "asset %v", asset)
+		return nil, "", errors.Annotatef(err, "asset %v", asset)
 	}
 	tx, err := b.Parser.ParseTx(data)
 	if err != nil {
-		return nil, errors.Annotatef(err, "asset %v", asset)
+		return nil, "", errors.Annotatef(err, "asset %v", asset)
 	}
-	return tx, nil
+	raw := b.decodeRawTransaction(resHex.Hex);
+
+	rawMarshal, err := json.Marshal(&raw)
+    if err != nil {
+        return nil, "", errors.Annotatef(err, "asset %v", asset)
+    }
+	decodedRawString := string(rawMarshal)
+	return tx, decodedRawString, nil
 }
 func (b *SyscoinRPC) SendFrom(sender string, receiver string, amount string) (*bchain.Tx, error) {
 	glog.V(1).Info("rpc: sendfrom ", sender)

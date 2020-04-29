@@ -756,6 +756,27 @@ func (b *BitcoinRPC) getRawTransaction(txid string) (json.RawMessage, error) {
 	return res.Result, nil
 }
 
+// getRawTransaction returns json as returned by backend, with all coin specific data
+func (b *BitcoinRPC) decodeRawTransaction(hex string) (json.RawMessage, error) {
+	glog.V(1).Info("rpc: decodeRawTransaction ", hex)
+
+	res := ResGetRawTransaction{}
+	req := CmdGetRawTransaction{Method: "decodeRawTransaction"}
+	req.Params.hexstring = hex
+	err := b.Call(&req, &res)
+
+	if err != nil {
+		return nil, errors.Annotatef(err, "hex %v", hex)
+	}
+	if res.Error != nil {
+		if IsMissingTx(res.Error) {
+			return nil, bchain.ErrTxNotFound
+		}
+		return nil, errors.Annotatef(res.Error, "hex %v", hex)
+	}
+	return res.Result, nil
+}
+
 // EstimateSmartFee returns fee estimation
 func (b *BitcoinRPC) EstimateSmartFee(blocks int, conservative bool) (big.Int, error) {
 	// use EstimateFee if EstimateSmartFee is not supported
