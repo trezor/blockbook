@@ -16,6 +16,7 @@ import (
 	"blockbook/bchain/coins/divi"
 	"blockbook/bchain/coins/dogecoin"
 	"blockbook/bchain/coins/eth"
+	"blockbook/bchain/coins/filecoin"
 	"blockbook/bchain/coins/flo"
 	"blockbook/bchain/coins/fujicoin"
 	"blockbook/bchain/coins/gamecredits"
@@ -114,6 +115,7 @@ func init() {
 	BlockChainFactories["Omotenashicoin"] = omotenashicoin.NewOmotenashiCoinRPC
 	BlockChainFactories["Omotenashicoin Testnet"] = omotenashicoin.NewOmotenashiCoinRPC
 	BlockChainFactories["BitZeny"] = bitzeny.NewBitZenyRPC
+	BlockChainFactories["Filecoin"] = bitzeny.NewFilecoinRPC
 }
 
 // GetCoinNameFromConfig gets coin name and coin shortcut from config file
