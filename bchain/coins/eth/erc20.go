@@ -145,24 +145,26 @@ func parseErc20StringProperty(contractDesc bchain.AddressDescriptor, data string
 		n := parseErc20NumericProperty(contractDesc, data[64:128])
 		if n != nil {
 			l := n.Uint64()
-			if 2*int(l) <= len(data)-128 {
+			if l > 0 && 2*int(l) <= len(data)-128 {
 				b, err := hex.DecodeString(data[128 : 128+2*l])
 				if err == nil {
 					return string(b)
 				}
 			}
 		}
-	} else if len(data) == 64 {
-		// allow string properties as 32 bytes of UTF-8 data
-		b, err := hex.DecodeString(data)
-		if err == nil {
-			i := bytes.Index(b, []byte{0})
-			if i > 0 {
-				b = b[:i]
-			}
-			if utf8.Valid(b) {
-				return string(b)
-			}
+	}
+	// allow string properties as UTF-8 data
+	b, err := hex.DecodeString(data)
+	if err == nil {
+		i := bytes.Index(b, []byte{0})
+		if i > 32 {
+			i = 32
+		}
+		if i > 0 {
+			b = b[:i]
+		}
+		if utf8.Valid(b) {
+			return string(b)
 		}
 	}
 	if glog.V(1) {
