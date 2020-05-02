@@ -8,6 +8,7 @@ import (
 type addrIndex struct {
 	addrDesc string
 	n        int32
+	AssetInfo *AssetInfo
 }
 
 type txEntry struct {
@@ -102,7 +103,23 @@ func (m *BaseMempool) GetAllEntries() MempoolTxidEntries {
 	sort.Sort(entries)
 	return entries
 }
-
+func (m *BaseMempool) GetTxAssets(assetGuid uint32) MempoolTxidEntries {
+	i := 0
+	m.mux.Lock()
+	entries := make(MempoolTxidEntries, 0)
+	for txid, entry := range m.txEntries {
+		if entry.AssetInfo != nil && entry.AssetInfo.AssetGuid == assetGuid {
+			entries = append(entries, MempoolTxidEntry{
+				Txid: txid,
+				Time: entry.time,
+			})
+			i++
+		}
+	}
+	m.mux.Unlock()
+	sort.Sort(entries)
+	return entries
+}
 // GetTransactionTime returns first seen time of a transaction
 func (m *BaseMempool) GetTransactionTime(txid string) uint32 {
 	m.mux.Lock()

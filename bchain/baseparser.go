@@ -323,12 +323,12 @@ func (p *BaseParser) IsAssetActivateTx(nVersion int32) bool {
 	return false
 }
 func (p *BaseParser) GetAssetsMaskFromVersion(nVersion int32) AssetsMask {
-	return AssetAllMask
+	return AllMask
 }
 func (p *BaseParser) GetAssetTypeFromVersion(nVersion int32) TokenType {
 	return SPTUnknownType
 }
-func (p *BaseParser) TryGetOPReturn(script []byte, nVersion int32) []byte {
+func (p *BaseParser) TryGetOPReturn(script []byte) []byte {
 	return nil
 }
 func (p *BaseParser) GetMaxAddrLength() int {
@@ -350,6 +350,27 @@ func (p *BaseParser) PackAssetTxIndex(txAsset *TxAsset) []byte {
 	return nil
 }
 func (p *BaseParser) UnpackAssetTxIndex(buf []byte) []*TxAssetIndex {
+	return nil
+}
+func (p *BaseParser) GetAssetFromTx(Tx * tx) (wire.AssetType, error) {
+	return nil, errors.New("Not supported")
+}
+func (p *BaseParser) GetAllocationFromTx(Tx * tx) (wire.AssetAllocationType, error) {
+	return nil, errors.New("Not supported")
+}
+func (p *BaseParser) LoadAssets(Tx * tx) error {
+	return errors.New("Not supported")
+}
+func (p *BaseParser) AppendAssetInfo(assetInfo *AssetInfo, buf []byte, varBuf []byte, details bool) []byte  {
+	return nil
+}
+func (p *BaseParser) UnpackAssetInfo(assetInfo *AssetInfo, buf []byte, details bool) int  {
+	return nil
+}
+func (p *BaseParser) AppendAssetInfoDetails(assetInfoDetails *AssetInfoDetails, buf []byte, varBuf []byte, details bool) []byte {
+	return nil
+}
+func (p *BaseParser) UnpackAssetInfoDetails(assetInfoDetails *AssetInfoDetails, buf []byte) int  {
 	return nil
 }
 const PackedHeightBytes = 4

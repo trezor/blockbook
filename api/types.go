@@ -73,6 +73,7 @@ type Vin struct {
 	Hex       string                   `json:"hex,omitempty"`
 	Asm       string                   `json:"asm,omitempty"`
 	Coinbase  string                   `json:"coinbase,omitempty"`
+	AssetInfo bchain.AssetInfo		   `json:"assetInfo,omitempty"`
 }
 
 // Vout contains information about single transaction output
@@ -89,12 +90,13 @@ type Vout struct {
 	Addresses   []string                 `json:"addresses"`
 	IsAddress   bool                     `json:"isAddress"`
 	Type        string                   `json:"type,omitempty"`
+	AssetInfo 	bchain.AssetInfo		 `json:"assetInfo,omitempty"`
 }
 
 // Contains SyscoinSpecific asset information hex decoded and pertinent to API display
 type AssetSpecific struct {
 	AssetGuid 		uint32
-	WitnessAddress 	string
+	AddrDesc    	bchain.AddressDescriptor
 	Contract 		string
 	Symbol 			string
 	PubData 		map[string]interface{}
@@ -108,7 +110,7 @@ type AssetSpecific struct {
 // Contains SyscoinSpecific assets information when searching for assets
 type AssetsSpecific struct {
 	AssetGuid 		uint32
-	WitnessAddress 	string
+	AddrDesc    	bchain.AddressDescriptor
 	Contract 		string
 	Symbol 			string
 	PubData 		map[string]interface{}
@@ -174,8 +176,6 @@ const (
 	AddressFilterVoutInputs = -2
 	// AddressFilterVoutOutputs specifies that only txs where the address is as output are returned
 	AddressFilterVoutOutputs = -3
-	// AddressFilterVoutTokens specifies that only txs where the tokens are transferred are returned
-	AddressFilterVoutTokens = -4
 
 	// TokensToReturnNonzeroBalance - return only tokens with nonzero balance
 	TokensToReturnNonzeroBalance TokensToReturn = 0
@@ -194,14 +194,7 @@ type AddressFilter struct {
 	TokensToReturn TokensToReturn
 	// OnlyConfirmed set to true will ignore mempool transactions; mempool is also ignored if FromHeight/ToHeight filter is specified
 	OnlyConfirmed bool
-}
-// AssetFilter is used to filter data returned from GetAsset api method
-type AssetFilter struct {
-	FromHeight     uint32
-	ToHeight       uint32
 	AssetsMask 	   bchain.AssetsMask
-	// OnlyConfirmed set to true will ignore mempool transactions; mempool is also ignored if FromHeight/ToHeight filter is specified
-	OnlyConfirmed bool
 }
 // Address holds information about address and its transactions
 type Address struct {
@@ -257,6 +250,7 @@ type Utxo struct {
 	Path          string  `json:"path,omitempty"`
 	Locktime      uint32  `json:"lockTime,omitempty"`
 	Coinbase      bool    `json:"coinbase,omitempty"`
+	AssetInfo	  bchain.AssetInfo  `json:"assetInfo,omitempty"`
 }
 
 // Utxos is array of Utxo

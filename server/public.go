@@ -645,20 +645,39 @@ func (s *PublicServer) getAddressQueryParams(r *http.Request, accountDetails api
 		to = 0
 	}
 	filterParam := r.URL.Query().Get("filter")
+	assetsMask := bchain.AllMask
 	if len(filterParam) > 0 {
 		if filterParam == "inputs" {
 			voutFilter = api.AddressFilterVoutInputs
 		} else if filterParam == "outputs" {
 			voutFilter = api.AddressFilterVoutOutputs
-		} else if filterParam == "tokens" {
-			voutFilter = api.AddressFilterVoutTokens
 		}  else {
 			voutFilter, ec = strconv.Atoi(filterParam)
 			if ec != nil || voutFilter < 0 {
 				voutFilter = api.AddressFilterVoutOff
 			}
 		}
+		if filterParam == "non-tokens" {
+			assetsMask = bchain.SyscoinMask
+		} else if filterParam == "token-only" {
+			assetsMask = bchain.AssetAllocationSendMask | bchain.AssetActivateMask | bchain.AssetUpdateMask | bchain.AssetTransferMask | bchain.AssetSendMask | 
+			bchain.AssetSyscoinBurnToAllocationMask | bchain.AssetAllocationBurnToSyscoinMask | bchain.AssetAllocationBurnToEthereumMask | 
+			bchain.AssetAllocationMintMask
+		} else if filterParam == "token-transfers" {
+			assetsMask = bchain.AssetAllocationSendMask
+		} else if filterParam == "non-token-transfers" {
+			// everything but allocation send
+			assetsMask = bchain.AssetActivateMask | bchain.AssetUpdateMask | bchain.AssetTransferMask | bchain.AssetSendMask | 
+			bchain.AssetSyscoinBurnToAllocationMask | bchain.AssetAllocationBurnToSyscoinMask | bchain.AssetAllocationBurnToEthereumMask | 
+			bchain.AssetAllocationMintMask
+		} else {
+			var mask, ec = strconv.Atoi(filterParam)
+			if ec == nil {
+				assetsMask = bchain.AssetsMask(mask)
+			}
+		}
 	}
+
 	switch r.URL.Query().Get("details") {
 	case "basic":
 		accountDetails = api.AccountDetailsBasic
@@ -693,62 +712,6 @@ func (s *PublicServer) getAddressQueryParams(r *http.Request, accountDetails api
 		FromHeight:     uint32(from),
 		ToHeight:       uint32(to),
 		Contract:       contract,
-	}, filterParam, gap
-}
-
-func (s *PublicServer) getAssetQueryParams(r *http.Request, accountDetails api.AccountDetails, maxPageSize int) (int, int, api.AccountDetails, *api.AssetFilter, string, int) {
-	page, ec := strconv.Atoi(r.URL.Query().Get("page"))
-	if ec != nil {
-		page = 0
-	}
-	pageSize, ec := strconv.Atoi(r.URL.Query().Get("pageSize"))
-	if ec != nil || pageSize > maxPageSize {
-		pageSize = maxPageSize
-	}
-	from, ec := strconv.Atoi(r.URL.Query().Get("from"))
-	if ec != nil {
-		from = 0
-	}
-	to, ec := strconv.Atoi(r.URL.Query().Get("to"))
-	if ec != nil {
-		to = 0
-	}
-	filterParam := r.URL.Query().Get("filter")
-	assetsMask := bchain.AssetAllMask
-	if len(filterParam) > 0 {
-		if filterParam == "transfers" {
-			assetsMask = bchain.AssetAllocationSendMask
-		} else if filterParam == "non-transfers" {
-			// everything but allocation send
-			assetsMask = bchain.AssetActivateMask | bchain.AssetUpdateMask | bchain.AssetTransferMask | bchain.AssetSendMask | 
-			bchain.AssetSyscoinBurnToAllocationMask | bchain.AssetAllocationBurnToSyscoinMask | bchain.AssetAllocationBurnToEthereumMask | 
-			bchain.AssetAllocationMintMask
-		} else {
-			var mask, ec = strconv.Atoi(filterParam)
-			if ec == nil {
-				assetsMask = bchain.AssetsMask(mask)
-			}
-		}
-	}
-	switch r.URL.Query().Get("details") {
-	case "basic":
-		accountDetails = api.AccountDetailsBasic
-	case "tokens":
-		accountDetails = api.AccountDetailsTokens
-	case "tokenBalances":
-		accountDetails = api.AccountDetailsTokenBalances
-	case "txids":
-		accountDetails = api.AccountDetailsTxidHistory
-	case "txs":
-		accountDetails = api.AccountDetailsTxHistory
-	}
-	gap, ec := strconv.Atoi(r.URL.Query().Get("gap"))
-	if ec != nil {
-		gap = 0
-	}
-	return page, pageSize, accountDetails, &api.AssetFilter{
-		FromHeight:     uint32(from),
-		ToHeight:       uint32(to),
 		AssetsMask:		assetsMask,
 	}, filterParam, gap
 }
@@ -794,7 +757,7 @@ func (s *PublicServer) explorerAsset(w http.ResponseWriter, r *http.Request) (tp
 		return errorTpl, nil, api.NewAPIError("Missing asset", true)
 	}
 	s.metrics.ExplorerViews.With(common.Labels{"action": "asset"}).Inc()
-	page, _, _, filter, filterParam, _ := s.getAssetQueryParams(r, api.AccountDetailsTxHistoryLight, txsOnPage)
+	page, _, _, filter, filterParam, _ := s.getAddressQueryParams(r, api.AccountDetailsTxHistoryLight, txsOnPage)
 	// do not allow details to be changed by query params
 	asset, err := s.api.GetAsset(assetParam, page, txsOnPage, api.AccountDetailsTxHistoryLight, filter)
 	if err != nil {
@@ -822,7 +785,7 @@ func (s *PublicServer) explorerAssets(w http.ResponseWriter, r *http.Request) (t
 		return errorTpl, nil, api.NewAPIError("Missing asset", true)
 	}
 	s.metrics.ExplorerViews.With(common.Labels{"action": "asset"}).Inc()
-	page, _, _, _, _, _ := s.getAssetQueryParams(r, api.AccountDetailsTxHistoryLight, txsOnPage)
+	page, _, _, _, _, _ := s.getAddressQueryParams(r, api.AccountDetailsTxHistoryLight, txsOnPage)
 	// do not allow details to be changed by query params
 	assets := s.api.FindAssets(assetParam, page, txsOnPage)
 	data := s.newTemplateData()
@@ -927,7 +890,7 @@ func (s *PublicServer) explorerSearch(w http.ResponseWriter, r *http.Request) (t
 	var err error
 	s.metrics.ExplorerViews.With(common.Labels{"action": "search"}).Inc()
 	if len(q) > 0 {
-		address, err = s.api.GetXpubAddress(q, 0, 1, api.AccountDetailsBasic, &api.AddressFilter{Vout: api.AddressFilterVoutOff}, 0)
+		address, err = s.api.GetXpubAddress(q, 0, 1, api.AccountDetailsBasic, &api.AddressFilter{AssetsMask: bchain.AssetAll, Vout: api.AddressFilterVoutOff}, 0)
 		if err == nil {
 			http.Redirect(w, r, joinURL("/xpub/", address.AddrStr), 302)
 			return noTpl, nil, nil
@@ -942,7 +905,7 @@ func (s *PublicServer) explorerSearch(w http.ResponseWriter, r *http.Request) (t
 			http.Redirect(w, r, joinURL("/tx/", tx.Txid), 302)
 			return noTpl, nil, nil
 		}
-		address, err = s.api.GetAddress(q, 0, 1, api.AccountDetailsBasic, &api.AddressFilter{Vout: api.AddressFilterVoutOff})
+		address, err = s.api.GetAddress(q, 0, 1, api.AccountDetailsBasic, &api.AddressFilter{AssetsMask: bchain.AssetAll, Vout: api.AddressFilterVoutOff})
 		if err == nil {
 			http.Redirect(w, r, joinURL("/address/", address.AddrStr), 302)
 			return noTpl, nil, nil
@@ -958,7 +921,7 @@ func (s *PublicServer) explorerSearch(w http.ResponseWriter, r *http.Request) (t
 				return noTpl, nil, nil
 			}
 		}
-		asset, err = s.api.GetAsset(q, 0, 1, api.AccountDetailsBasic, &api.AssetFilter{AssetsMask: bchain.AssetAllMask})
+		asset, err = s.api.GetAsset(q, 0, 1, api.AccountDetailsBasic, &api.AddressFilter{AssetsMask: bchain.AssetAll})
 		if err == nil {
 			http.Redirect(w, r, joinURL("/asset/", strconv.FormatUint(uint64(asset.AssetDetails.AssetGuid), 10)), 302)
 			return noTpl, nil, nil
@@ -1182,7 +1145,7 @@ func (s *PublicServer) apiAsset(r *http.Request, apiVersion int) (interface{}, e
 	var asset *api.Asset
 	var err error
 	s.metrics.ExplorerViews.With(common.Labels{"action": "api-asset"}).Inc()
-	page, pageSize, details, filter, _, _ := s.getAssetQueryParams(r, api.AccountDetailsTxidHistory, txsInAPI)
+	page, pageSize, details, filter, _, _ := s.getAddressQueryParams(r, api.AccountDetailsTxidHistory, txsInAPI)
 	asset, err = s.api.GetAsset(assetParam, page, pageSize, details, filter)
 	return asset, err
 }
@@ -1198,7 +1161,7 @@ func (s *PublicServer) apiAssets(r *http.Request, apiVersion int) (interface{}, 
 	}
 	var assets *api.Assets
 	s.metrics.ExplorerViews.With(common.Labels{"action": "api-assets"}).Inc()
-	page, pageSize, _, _, _, _ := s.getAssetQueryParams(r, api.AccountDetailsTxidHistory, txsInAPI)
+	page, pageSize, _, _, _, _ := s.getAddressQueryParams(r, api.AccountDetailsTxidHistory, txsInAPI)
 	assets = s.api.FindAssets(assetParam, page, pageSize)
 	return assets, nil
 }

@@ -25,7 +25,7 @@
                                 {{- else -}}
                                 <span class="tx-addr">{{- if $vin.Hex -}}Unparsed address{{- else -}}No Inputs (Newly Generated Coins){{- end -}}</span>
                                 {{- end -}}{{- if $vin.Addresses -}}
-                                <span class="tx-amt">{{formatAmount $vin.ValueSat}} {{$cs}}</span>
+                                <span class="tx-amt">{{formatAmount $vin.ValueSat}} {{$cs}} {{- $vin.AssetInfo }}{{formatAmountWithDecimals $vin.AssetInfo.ValueSat $vin.AssetInfo.Decimals}} <a href="/asset/{{$vin.AssetInfo.AssetGuid}}">{{$vin.AssetInfo.Symbol}}</a>{{- end -}}</span>
                                 {{- end -}}
                             </td>
                         </tr>
@@ -58,7 +58,7 @@
                                 <span class="tx-addr">Unparsed address</span>
                                 {{- end -}}
                                 <span class="tx-amt">
-                                    {{formatAmount $vout.ValueSat}} {{$cs}} {{if $vout.Spent}}<a class="text-danger" href="{{if $vout.SpentTxID}}/tx/{{$vout.SpentTxID}}{{else}}/spending/{{$tx.Txid}}/{{$vout.N}}{{end}}" title="Spent">➡</a>{{else -}}
+                                    {{formatAmount $vout.ValueSat}} {{$cs}} {{- $vout.AssetInfo }}{{formatAmountWithDecimals $vout.AssetInfo.ValueSat $vout.AssetInfo.Decimals}} <a href="/asset/{{$vout.AssetInfo.AssetGuid}}">{{$vout.AssetInfo.Symbol}}</a>{{- end -}} {{if $vout.Spent}}<a class="text-danger" href="{{if $vout.SpentTxID}}/tx/{{$vout.SpentTxID}}{{else}}/spending/{{$tx.Txid}}/{{$vout.N}}{{end}}" title="Spent">➡</a>{{else -}}
                                     <span class="text-success" title="Unspent"> <b>×</b></span>
                                     {{- end -}}
                                 </span>
@@ -74,67 +74,11 @@
             </div>
         </div>
     </div>
-    {{- range $tokenTransfer := $tx.TokenTransferSummary -}}{{if $tokenTransfer}}
-    <div class="row line-bot">
-        <div class="col-xs-7 col-md-8 ellipsis">
-                {{$tokenTransfer.Symbol}} (<a href="/asset/{{$tokenTransfer.Token}}">{{$tokenTransfer.Token}}</a>)
-        </div>
-        <div class="col-xs-5 col-md-4 text-muted text-right">{{$tokenTransfer.Type}}</div>
-    </div>
-    <div class="row line-mid">
-        <div class="col-md-5">
-            <div class="row tx-in">
-                <table class="table data-table">
-                    <tbody>
-                        <tr{{if isOwnAddress $data $tokenTransfer.From}} class="tx-own"{{end}}>
-                        <td>
-                            <span class="ellipsis tx-addr">
-                                <a href="/address/{{$tokenTransfer.From}}">{{$tokenTransfer.From}}</a>
-                            </span>
-                            <span class="tx-amt">{{formatAmountWithDecimals $tokenTransfer.Value $tokenTransfer.Decimals}} {{$tokenTransfer.Symbol}}</span>
-                        </td>
-                    </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-        <div class="col-md-1 col-xs-12 text-center">
-            <svg class="octicon" viewBox="0 0 8 16">
-                <path fill-rule="evenodd" d="M7.5 8l-5 5L1 11.5 4.75 8 1 4.5 2.5 3l5 5z"></path>
-            </svg>
-        </div>
-        <div class="col-md-6">
-            <div class="row tx-out">
-                <table class="table data-table">
-                    <tbody>
-                        {{- range $a := $tokenTransfer.Recipients -}}
-                        <tr{{if isOwnAddress $data $a.To}} class="tx-own"{{end}}>
-                            <td>
-                                <span class="ellipsis tx-addr">
-                                    <a href="/address/{{$a.To}}">{{$a.To}}</a>
-                                </span>
-                                <span class="tx-amt">
-                                    {{formatAmountWithDecimals $a.Value $tokenTransfer.Decimals}} {{$tokenTransfer.Symbol}} {{if not (isOwnAddress $data $a.To)}}{{if $a.Unspent}}<span class="text-success" title="Unspent"> <b>×</b></span>{{else -}}
-                                    <a class="text-danger" href="/address/{{$a.To}}?filter={{$tokenTransfer.Token}}" title="Spent">➡</a>
-                                    {{- end -}}{{- end -}}
-                                </span>
-                            </td>
-                        </tr>
-                        {{- end -}}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-    {{- end -}}{{- end -}}
     <div class="row line-top">
         <div class="col-xs-6 col-sm-4 col-md-4">
             {{- if $tx.FeesSat -}}
             <span class="txvalues txvalues-default">Fee: {{formatAmount $tx.FeesSat}} {{$cs}}</span>
             {{- end -}}
-            {{- range $tokenTransfer := $tx.TokenTransferSummary -}}{{if $tokenTransfer}}
-            <span class="txvalues txvalues-default">Fee: {{formatAmount $tokenTransfer.Fee}} {{$tokenTransfer.Symbol}}</span>
-            {{- end -}}{{- end -}}
         </div>
         <div class="col-xs-6 col-sm-8 col-md-8 text-right">
             {{- if $tx.Confirmations -}}

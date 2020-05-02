@@ -26,17 +26,6 @@ func syscoinTestParser() *syscoin.SyscoinParser {
 	&btc.Configuration{BlockAddressesToKeep: 1})
 }
 
-// pack varint for size of index and not do bitshifting approach because we need entire int32 range for asset guid's
-func txIndexesHexSyscoin(tx string, indexes []int32, d *RocksDB) string {
-	buf := make([]byte, vlq.MaxLen32)
-	l := d.chainParser.PackVaruint(uint(len(indexes)), buf)
-	tx += hex.EncodeToString(buf[:l])
-	for _, index := range indexes {
-		l = d.chainParser.PackVarint32(index, buf)
-		tx += hex.EncodeToString(buf[:l])
-	}
-	return tx
-}
 
 func verifyAfterSyscoinTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect bool) {
 	if err := checkColumn(d, cfHeight, []keyPair{
@@ -52,9 +41,9 @@ func verifyAfterSyscoinTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect bool
 	}
 	// the vout is encoded as signed varint, i.e. value * 2 for non negative values
 	if err := checkColumn(d, cfAddresses, []keyPair{
-		{addressKeyHex(dbtestdata.AddrS1, 249727, d), txIndexesHexSyscoin(dbtestdata.TxidS1T0, []int32{0}, d), nil},
-		{addressKeyHex(dbtestdata.AddrS2, 249727, d), txIndexesHexSyscoin(dbtestdata.TxidS1T0, []int32{1}, d), nil},
-		{addressKeyHex(dbtestdata.AddrS3, 249727, d), txIndexesHexSyscoin(dbtestdata.TxidS1T1, []int32{^1045909988, 1}, d), nil},
+		{addressKeyHex(dbtestdata.AddrS1, 249727, d), txIndexesHex(dbtestdata.TxidS1T0, []int32{0}, d), nil},
+		{addressKeyHex(dbtestdata.AddrS2, 249727, d), txIndexesHex(dbtestdata.TxidS1T0, []int32{1}, d), nil},
+		{addressKeyHex(dbtestdata.AddrS3, 249727, d), txIndexesHex(dbtestdata.TxidS1T1, []int32{^1045909988, 1}, d), nil},
 	}); err != nil {
 		{
 			t.Fatal(err)
@@ -125,13 +114,13 @@ func verifyAfterSyscoinTypeBlock2(t *testing.T, d *RocksDB) {
 		}
 	}
 	if err := checkColumn(d, cfAddresses, []keyPair{
-		{addressKeyHex(dbtestdata.AddrS1, 249727, d), txIndexesHexSyscoin(dbtestdata.TxidS1T0, []int32{0}, d), nil},
-		{addressKeyHex(dbtestdata.AddrS2, 249727, d), txIndexesHexSyscoin(dbtestdata.TxidS1T0, []int32{1}, d), nil},
-		{addressKeyHex(dbtestdata.AddrS3, 249727, d), txIndexesHexSyscoin(dbtestdata.TxidS1T1, []int32{^1045909988, 1}, d), nil},
-		{addressKeyHex(dbtestdata.AddrS4, 347314, d), txIndexesHexSyscoin(dbtestdata.TxidS2T0, []int32{0}, d), nil},
-		{addressKeyHex(dbtestdata.AddrS5, 347314, d), txIndexesHexSyscoin(dbtestdata.TxidS2T0, []int32{1}, d), nil},
-		{addressKeyHex(dbtestdata.AddrS3, 347314, d), txIndexesHexSyscoin(dbtestdata.TxidS2T1, []int32{^1045909988, 1}, d), nil},
-		{addressKeyHex(dbtestdata.AddrS6, 347314, d), txIndexesHexSyscoin(dbtestdata.TxidS2T1, []int32{1045909988}, d), nil},
+		{addressKeyHex(dbtestdata.AddrS1, 249727, d), txIndexesHex(dbtestdata.TxidS1T0, []int32{0}, d), nil},
+		{addressKeyHex(dbtestdata.AddrS2, 249727, d), txIndexesHex(dbtestdata.TxidS1T0, []int32{1}, d), nil},
+		{addressKeyHex(dbtestdata.AddrS3, 249727, d), txIndexesHex(dbtestdata.TxidS1T1, []int32{^1045909988, 1}, d), nil},
+		{addressKeyHex(dbtestdata.AddrS4, 347314, d), txIndexesHex(dbtestdata.TxidS2T0, []int32{0}, d), nil},
+		{addressKeyHex(dbtestdata.AddrS5, 347314, d), txIndexesHex(dbtestdata.TxidS2T0, []int32{1}, d), nil},
+		{addressKeyHex(dbtestdata.AddrS3, 347314, d), txIndexesHex(dbtestdata.TxidS2T1, []int32{^1045909988, 1}, d), nil},
+		{addressKeyHex(dbtestdata.AddrS6, 347314, d), txIndexesHex(dbtestdata.TxidS2T1, []int32{1045909988}, d), nil},
 	}); err != nil {
 		{
 			t.Fatal(err)
@@ -396,8 +385,8 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 		},
 		AssetBalances: map[uint32]*bchain.AssetBalance {
 			1045909988: &bchain.AssetBalance{
-				SentAssetSat: 	dbtestdata.SatAssetSent,
-				BalanceAssetSat: dbtestdata.SatZero,
+				SentSat: 	dbtestdata.SatSent,
+				BalanceSat: dbtestdata.SatZero,
 				Transfers:	2,
 			},
 		},

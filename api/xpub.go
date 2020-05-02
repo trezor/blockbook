@@ -20,7 +20,6 @@ const maxAddressesGap = 10000
 const txInput = 1
 const txOutput = 2
 const txVout = 4
-const txToken = 8
 
 const xpubCacheSize = 512
 const xpubCacheExpirationSeconds = 7200
@@ -98,15 +97,10 @@ func (w *Worker) xpubGetAddressTxids(addrDesc bchain.AddressDescriptor, mempool 
 				}
 				if vout == int32(filter.Vout) {
 					inputOutput |= txVout
-				} else if filter.Vout == AddressFilterVoutTokens && w.chainParser.IsTxIndexAsset(vout) {
-					inputOutput |= txToken
 				}
 			}
 		}
-		// if filtering only tokens we only care about those txs, this is to ensure totalPages works
-		if filter.Vout != AddressFilterVoutTokens || ((inputOutput&txToken) > 0) {
-			txs = append(txs, xpubTxid{txid, height, inputOutput})
-		}
+		txs = append(txs, xpubTxid{txid, height, inputOutput})
 		return nil
 	}
 	if mempool {
@@ -135,14 +129,12 @@ func (w *Worker) xpubGetAddressTxids(addrDesc bchain.AddressDescriptor, mempool 
 					}
 					if vout == int32(filter.Vout) {
 						txs[l].inputOutput |= txVout
-					} else if filter.Vout == AddressFilterVoutTokens && w.chainParser.IsTxIndexAsset(vout) {
-						txs[l].inputOutput |= txToken
 					}
 				}
 			}
 		}
 	} else {
-		err = w.db.GetAddrDescTransactions(addrDesc, fromHeight, toHeight, callback)
+		err = w.db.GetAddrDescTransactions(addrDesc, fromHeight, toHeight, filter.AssetsMask, callback)
 		if err != nil {
 			return nil, false, err
 		}
@@ -197,6 +189,7 @@ func (w *Worker) xpubDerivedAddressBalance(data *xpubData, ad *xpubAddress) (boo
 		data.txCountEstimate += ad.balance.Txs
 		data.sentSat.Add(&data.sentSat, &ad.balance.SentSat)
 		data.balanceSat.Add(&data.balanceSat, &ad.balance.BalanceSat)
+		// todo asset here?
 		return true, nil
 	}
 	return false, nil
@@ -280,14 +273,9 @@ func (w *Worker) tokenFromXpubAddress(data *xpubData, ad *xpubAddress, changeInd
 				}
 				if !ownerFound {
 					// add token as unallocated if address matches asset owner address
-					ownerAddress := dbAsset.AssetObj.WitnessAddress.ToString("sys")
-					ownerAddrDesc, e := w.chainParser.GetAddrDescFromAddress(ownerAddress)
-					if e != nil {
-						return nil, e
-					}
-					if bytes.Equal(ad.addrDesc, ownerAddrDesc) {
+					if bytes.Equal(ad.addrDesc, dbAsset.AddrDesc) {
 						ownerBalance := big.NewInt(dbAsset.AssetObj.Balance)
-						totalOwnerAssetReceived := bchain.ReceivedSatFromBalances(ownerBalance, v.SentAssetSat)
+						totalOwnerAssetReceived := bchain.ReceivedSatFromBalances(ownerBalance, v.SentSat)
 						assetGuid := strconv.FormatUint(uint64(k), 10)
 						tokens = append(tokens, &bchain.Token{
 							Type:             bchain.SPTUnallocatedTokenType,
@@ -296,16 +284,16 @@ func (w *Worker) tokenFromXpubAddress(data *xpubData, ad *xpubAddress, changeInd
 							Symbol:			  string(dbAsset.AssetObj.Symbol),
 							BalanceSat:       (*bchain.Amount)(ownerBalance),
 							TotalReceivedSat: (*bchain.Amount)(totalOwnerAssetReceived),
-							TotalSentSat:     (*bchain.Amount)(v.SentAssetSat),
+							TotalSentSat:     (*bchain.Amount)(v.SentSat),
 							Path:             fmt.Sprintf("%s/%d/%d", data.basePath, changeIndex, index),
-							Contract:		  assetGuid,
+							Contract:		  k,
 							Transfers:		  v.Transfers,
-							ContractIndex:    assetGuid,
+							ContractIndex:    k,
 						})
 						ownerFound = true
 					}
 				}
-				totalAssetReceived := bchain.ReceivedSatFromBalances(v.BalanceAssetSat, v.SentAssetSat)
+				totalAssetReceived := bchain.ReceivedSatFromBalances(v.BalanceSat, v.SentSat)
 				// add token as unallocated if address matches asset owner address other wise its allocated
 				assetGuid := strconv.FormatUint(uint64(k), 10)
 				tokens = append(tokens, &bchain.Token{
@@ -313,13 +301,13 @@ func (w *Worker) tokenFromXpubAddress(data *xpubData, ad *xpubAddress, changeInd
 					Name:             address,
 					Decimals:         int(dbAsset.AssetObj.Precision),
 					Symbol:			  string(dbAsset.AssetObj.Symbol),
-					BalanceSat:       (*bchain.Amount)(v.BalanceAssetSat),
+					BalanceSat:       (*bchain.Amount)(v.BalanceSat),
 					TotalReceivedSat: (*bchain.Amount)(totalAssetReceived),
-					TotalSentSat:     (*bchain.Amount)(v.SentAssetSat),
+					TotalSentSat:     (*bchain.Amount)(v.SentSat),
 					Path:             fmt.Sprintf("%s/%d/%d", data.basePath, changeIndex, index),
-					Contract:		  assetGuid,
+					Contract:		  k,
 					Transfers:		  v.Transfers,
-					ContractIndex:    assetGuid,
+					ContractIndex:    k,
 				})
 			}
 			sort.Sort(tokens)
@@ -488,7 +476,6 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 			if filter.Vout != AddressFilterVoutOff {
 				if (filter.Vout == AddressFilterVoutInputs && txid.inputOutput&txInput != 0) ||
 					(filter.Vout == AddressFilterVoutOutputs && txid.inputOutput&txOutput != 0) ||
-					(filter.Vout == AddressFilterVoutTokens && txid.inputOutput&txToken != 0) || 
 					(txid.inputOutput&txVout != 0) {
 					return true
 				}
@@ -496,10 +483,7 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 			}
 			return true
 		}
-		// paging should work for AddressFilterVoutTokens
-		if filter.Vout != AddressFilterVoutTokens {
-			filtered = true
-		}
+		filtered = true
 	}
 	// process mempool, only if ToHeight is not specified
 	if filter.ToHeight == 0 && !filter.OnlyConfirmed {
