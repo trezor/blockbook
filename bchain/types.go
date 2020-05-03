@@ -557,7 +557,7 @@ type TxAsset struct {
 	Height    uint32
 	Txs       []*TxAssetIndex
 }
-type TxAssetMap map[[]byte]]*TxAsset
+type TxAssetMap map[[]byte]*TxAsset
 
 // TxAddresses stores transaction inputs and outputs with amounts
 type TxAddresses struct {
