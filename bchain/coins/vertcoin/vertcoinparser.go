@@ -3,7 +3,7 @@ package vertcoin
 import (
 	"blockbook/bchain/coins/btc"
 
-	"github.com/martinboehm/btcd/wire"
+	"github.com/syscoin/btcd/wire"
 	"github.com/martinboehm/btcutil/chaincfg"
 )
 

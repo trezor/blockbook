@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/martinboehm/btcd/wire"
+	"github.com/syscoin/btcd/wire"
 )
 
 // minTxPayload is the minimum payload size for a transaction.  Note
