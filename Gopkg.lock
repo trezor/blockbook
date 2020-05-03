@@ -47,9 +47,15 @@
 
 [[projects]]
   branch = "master"
+  name = "github.com/martinboehm/btcd"
+  packages = ["blockchain","btcec","chaincfg","chaincfg/chainhash","database","txscript","wire"]
+  revision = "83af86142d93bb4340e85352d6f8d974c196ffe9"
+
+[[projects]]
+  branch = "master"
   name = "github.com/syscoin/btcd"
   packages = ["blockchain","btcec","chaincfg","chaincfg/chainhash","database","txscript","wire"]
-  revision = "883bf5c99c5b663d1159f2e440b89158b8f5fb06"
+  revision = "cf48ed28474824f99c429682edd24547e7a42f3c"
 
 [[projects]]
   branch = "master"
@@ -277,9 +283,9 @@
     "github.com/gorilla/websocket",
     "github.com/juju/errors",
     "github.com/martinboehm/bchutil",
-    "github.com/syscoin/btcd/blockchain",
-    "github.com/syscoin/btcd/chaincfg/chainhash",
-    "github.com/syscoin/btcd/txscript",
+    "github.com/martinboehm/btcd/blockchain",
+    "github.com/martinboehm/btcd/chaincfg/chainhash",
+    "github.com/martinboehm/btcd/txscript",
     "github.com/syscoin/btcd/wire",
     "github.com/martinboehm/btcutil",
     "github.com/martinboehm/btcutil/base58",

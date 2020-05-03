@@ -9,7 +9,7 @@ import (
 	"bytes"
 	"math/big"
 	"github.com/syscoin/btcd/wire"
-	"github.com/syscoin/btcd/blockchain"
+	"github.com/martinboehm/btcd/blockchain"
 	"github.com/martinboehm/btcutil/chaincfg"
 	"github.com/martinboehm/btcutil/txscript"
 	vlq "github.com/bsm/go-vlq"

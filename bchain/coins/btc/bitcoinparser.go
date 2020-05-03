@@ -11,7 +11,7 @@ import (
 	
 	vlq "github.com/bsm/go-vlq"
 	"github.com/juju/errors"
-	"github.com/syscoin/btcd/blockchain"
+	"github.com/martinboehm/btcd/blockchain"
 	"github.com/syscoin/btcd/wire"
 	"github.com/martinboehm/btcutil"
 	"github.com/martinboehm/btcutil/chaincfg"

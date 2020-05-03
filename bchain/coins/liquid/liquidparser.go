@@ -8,7 +8,7 @@ import (
 	vlq "github.com/bsm/go-vlq"
 	"github.com/golang/glog"
 
-	"github.com/syscoin/btcd/txscript"
+	"github.com/martinboehm/btcd/txscript"
 	"github.com/syscoin/btcd/wire"
 	"github.com/martinboehm/btcutil/chaincfg"
 )

@@ -8,7 +8,7 @@ import (
 	"encoding/binary"
 	"io"
 
-	"github.com/syscoin/btcd/chaincfg/chainhash"
+	"github.com/martinboehm/btcd/chaincfg/chainhash"
 	"github.com/syscoin/btcd/wire"
 	"github.com/martinboehm/btcutil/chaincfg"
 )
