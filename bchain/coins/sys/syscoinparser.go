@@ -360,7 +360,7 @@ func (p *SyscoinParser) LoadAssets(tx *bchain.Tx) error {
 		}
         for k, v := range allocation.voutAssets {
             nAsset := k
-            for ,voutAsset := range v {
+            for _,voutAsset := range v {
 				// store in vout
 				tx.vout[voutAsset.N].AssetInfo = bchain.AssetInfo{AssetGuid: nAsset, ValueSat: *big.NewInt(voutAsset.nValue)}
             }
