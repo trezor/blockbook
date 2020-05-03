@@ -298,7 +298,7 @@ func (p *SyscoinParser) TryGetOPReturn(script []byte) []byte {
 	}
 	return nil
 }
-func (p *SyscoinParser) GetAllocationFromTx(bchain.Tx * tx) (wire.AssetAllocationType, error) {
+func (p *SyscoinParser) GetAllocationFromTx(tx *bchain.Tx) (wire.AssetAllocationType, error) {
 	var sptData []byte
 	for i, output := range tx.Vout {
 		addrDesc, err := p.GetAddrDescFromVout(&output)
