@@ -12,7 +12,7 @@ import (
 
 	"math/big"
 
-	"github.com/martinboehm/btcd/blockchain"
+	"github.com/syscoin/btcd/blockchain"
 
 	"github.com/juju/errors"
 	"github.com/syscoin/btcd/wire"

@@ -27,7 +27,7 @@
 
 [[constraint]]
   branch = "master"
-  name = "github.com/martinboehm/btcd"
+  name = "github.com/syscoin/btcd"
 
 [[constraint]]
   branch = "master"
