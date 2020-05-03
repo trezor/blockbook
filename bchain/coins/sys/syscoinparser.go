@@ -94,57 +94,7 @@ func GetChainParams(chain string) *chaincfg.Params {
 }
 // TxFromMsgTx converts syscoin wire Tx to bchain.Tx
 func (p *SyscoinParser) TxFromMsgTx(t *wire.MsgTx, parseAddresses bool) bchain.Tx {
-	vin := make([]bchain.Vin, len(t.TxIn))
-	for i, in := range t.TxIn {
-		if blockchain.IsCoinBaseTx(t) {
-			vin[i] = bchain.Vin{
-				Coinbase: hex.EncodeToString(in.SignatureScript),
-				Sequence: in.Sequence,
-			}
-			break
-		}
-		s := bchain.ScriptSig{
-			Hex: hex.EncodeToString(in.SignatureScript),
-			// missing: Asm,
-		}
-		vin[i] = bchain.Vin{
-			Txid:      in.PreviousOutPoint.Hash.String(),
-			Vout:      in.PreviousOutPoint.Index,
-			Sequence:  in.Sequence,
-			ScriptSig: s,
-		}
-	}
-	vout := make([]bchain.Vout, len(t.TxOut))
-	for i, out := range t.TxOut {
-		addrs := []string{}
-		if parseAddresses {
-			addrs, _, _ = p.OutputScriptToAddressesFunc(out.PkScript)
-		}
-		s := bchain.ScriptPubKey{
-			Hex:       hex.EncodeToString(out.PkScript),
-			Addresses: addrs,
-			// missing: Asm,
-			// missing: Type,
-		}
-		var vs big.Int
-		vs.SetInt64(out.Value)
-		vout[i] = bchain.Vout{
-			ValueSat:     vs,
-			N:            uint32(i),
-			ScriptPubKey: s,
-		}
-	}
-	tx := bchain.Tx{
-		Txid:     t.TxHash().String(),
-		Version:  t.Version,
-		LockTime: t.LockTime,
-		Vin:      vin,
-		Vout:     vout,
-		// skip: BlockHash,
-		// skip: Confirmations,
-		// skip: Time,
-		// skip: Blocktime,
-	}
+	tx := p.BaseParser(t, parseAddresses)
 	p.LoadAssets(&tx)
 	return tx
 }
