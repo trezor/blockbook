@@ -1139,7 +1139,7 @@ func (d *RocksDB) disconnectBlock(height uint32, blockTxs []bchain.BlockTxs) err
 		sBtxID := string(btxID)
 		a, exist := blockAssetsTxs[asset]
 		if !exist {
-			blockAssetsTxs[asset] = map[uint32]struct{}{sBtxID: {}}
+			blockAssetsTxs[asset] = map[string]struct{}{sBtxID: {}}
 		} else {
 			_, exist = a[asset]
 			if !exist {

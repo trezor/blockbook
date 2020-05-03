@@ -9,7 +9,6 @@ import (
 	"bytes"
 	"math/big"
 	"github.com/syscoin/btcd/wire"
-	"github.com/martinboehm/btcd/wire"
 	"github.com/martinboehm/btcd/blockchain"
 	"github.com/martinboehm/btcutil/chaincfg"
 	"github.com/martinboehm/btcutil/txscript"
@@ -365,7 +364,7 @@ func (p *SyscoinParser) LoadAssets(tx *bchain.Tx) error {
             nAsset := k
             for _,voutAsset := range v {
 				// store in vout
-				tx.vout[voutAsset.N].AssetInfo = bchain.AssetInfo{AssetGuid: nAsset, ValueSat: *big.NewInt(voutAsset.nValue)}
+				tx.Vout[voutAsset.N].AssetInfo = bchain.AssetInfo{AssetGuid: nAsset, ValueSat: big.NewInt(voutAsset.nValue)}
             }
         }       
 	}
@@ -589,7 +588,7 @@ func (p *SyscoinParser) PackAddrBalance(ab *bchain.AddrBalance, buf, varBuf []by
 
 
 
-func (p *SyscoinParser) PackTxIndexes(txi []TxIndexes) []byte {
+func (p *SyscoinParser) PackTxIndexes(txi []bchain.TxIndexes) []byte {
 	buf := make([]byte, 0, 36)
 	bvout := make([]byte, vlq.MaxLen32)
 	// store the txs in reverse order for ordering from newest to oldest
