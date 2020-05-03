@@ -109,8 +109,8 @@ func (m *BaseMempool) GetTxAssets(assetGuid uint32) MempoolTxidEntries {
 	mapTxid := make(map[string]struct{})
 	entries := make(MempoolTxidEntries, 0)
 	for txid, entry := range m.txEntries {
-		for j := range entry.addrIndexes {
-			if _, found := mapTxid[txid]; !found {
+		if _, found := mapTxid[txid]; !found {
+			for j := range entry.addrIndexes {
 				addrIndex := &entry.addrIndexes[j]
 				if addrIndex.AssetInfo != nil && addrIndex.AssetInfo.AssetGuid == assetGuid {
 					mapTxid[txid] = struct{}{}
@@ -119,11 +119,11 @@ func (m *BaseMempool) GetTxAssets(assetGuid uint32) MempoolTxidEntries {
 						Time: entry.time,
 					})
 					i++
+					break
 				}
 			}
 		}
 	}
-		
 	m.mux.Unlock()
 	sort.Sort(entries)
 	return entries
