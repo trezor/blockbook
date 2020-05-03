@@ -368,7 +368,7 @@ func (p *BaseParser) AppendAssetInfo(assetInfo *AssetInfo, buf []byte, varBuf []
 func (p *BaseParser) UnpackAssetInfo(assetInfo *AssetInfo, buf []byte, details bool) int  {
 	return 0
 }
-func (p *BaseParser) AppendAssetInfoDetails(assetInfoDetails *AssetInfoDetails, buf []byte, varBuf []byte, details bool) []byte {
+func (p *BaseParser) AppendAssetInfoDetails(assetInfoDetails *AssetInfoDetails, buf []byte, varBuf []byte) []byte {
 	return nil
 }
 func (p *BaseParser) UnpackAssetInfoDetails(assetInfoDetails *AssetInfoDetails, buf []byte) int  {
