@@ -353,10 +353,10 @@ func (p *BaseParser) PackAssetTxIndex(txAsset *TxAsset) []byte {
 func (p *BaseParser) UnpackAssetTxIndex(buf []byte) []*TxAssetIndex {
 	return nil
 }
-func (p *BaseParser) GetAssetFromTx(tx *Tx) (wire.AssetType, error) {
+func (p *BaseParser) GetAssetFromTx(tx *Tx) (*wire.AssetType, error) {
 	return nil, errors.New("Not supported")
 }
-func (p *BaseParser) GetAllocationFromTx(tx *Tx) (wire.AssetAllocationType, error) {
+func (p *BaseParser) GetAllocationFromTx(tx *Tx) (*wire.AssetAllocationType, error) {
 	return nil, errors.New("Not supported")
 }
 func (p *BaseParser) LoadAssets(tx *Tx) error {

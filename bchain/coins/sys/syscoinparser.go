@@ -298,7 +298,7 @@ func (p *SyscoinParser) TryGetOPReturn(script []byte) []byte {
 	}
 	return nil
 }
-func (p *SyscoinParser) GetAllocationFromTx(tx *bchain.Tx) (wire.AssetAllocationType, error) {
+func (p *SyscoinParser) GetAllocationFromTx(tx *bchain.Tx) (*wire.AssetAllocationType, error) {
 	var sptData []byte
 	for i, output := range tx.Vout {
 		addrDesc, err := p.GetAddrDescFromVout(&output)
@@ -308,11 +308,11 @@ func (p *SyscoinParser) GetAllocationFromTx(tx *bchain.Tx) (wire.AssetAllocation
 		if(addrDesc[0] == txscript.OP_RETURN) {
 			script, err := p.GetScriptFromAddrDesc(addrDesc)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			sptData = p.TryGetOPReturn(script)
 			if sptData == nil {
-				return nil
+				return nil, errors.New("OP_RETURN empty")
 			}
 			break
 		}
@@ -323,9 +323,9 @@ func (p *SyscoinParser) GetAllocationFromTx(tx *bchain.Tx) (wire.AssetAllocation
 	if err != nil {
 		return nil, err
 	}
-	return assetAllocation, nil
+	return &assetAllocation, nil
 }
-func (p *SyscoinParser) GetAssetFromTx(tx *bchain.Tx) (wire.AssetType, error) {
+func (p *SyscoinParser) GetAssetFromTx(tx *bchain.Tx) (*wire.AssetType, error) {
 	var sptData []byte
 	for i, output := range tx.Vout {
 		addrDesc, err := p.GetAddrDescFromVout(&output)
@@ -335,11 +335,11 @@ func (p *SyscoinParser) GetAssetFromTx(tx *bchain.Tx) (wire.AssetType, error) {
 		if(addrDesc[0] == txscript.OP_RETURN) {
 			script, err := p.GetScriptFromAddrDesc(addrDesc)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			sptData = p.TryGetOPReturn(script)
 			if sptData == nil {
-				return nil
+				return nil, errors.New("OP_RETURN empty")
 			}
 			break
 		}
@@ -350,7 +350,7 @@ func (p *SyscoinParser) GetAssetFromTx(tx *bchain.Tx) (wire.AssetType, error) {
 	if err != nil {
 		return nil, err
 	}
-	return asset, nil
+	return &asset, nil
 }
 func (p *SyscoinParser) LoadAssets(tx *bchain.Tx) error {
     if p.IsSyscoinTx(tx.Version) {

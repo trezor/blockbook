@@ -150,9 +150,9 @@ func (d *RocksDB) ConnectSyscoinOutput(addrDesc bchain.AddressDescriptor, height
 				return err
 			}
 			if isActivate {
-				dBAsset = &asset
+				dBAsset = asset
 			}
-			err = d.ConnectAssetOutput(version, &asset, dBAsset)
+			err = d.ConnectAssetOutput(version, asset, dBAsset)
 			if err != nil {
 				return err
 			}
@@ -430,7 +430,7 @@ func addToAssetsMap(txassets bchain.TxAssetMap, assetGuid uint32, btxID []byte, 
 	// check that the asset was already processed in this block
 	// if not found, it has certainly not been counted
 	key := d.chainParser.PackAssetKey(assetGuid, height)
-	at, found := txassets[key]
+	at, found := txassets[string(key)]
 	if found {
 		// if the tx is already in the slice
 		for i, t := range at.Txs {

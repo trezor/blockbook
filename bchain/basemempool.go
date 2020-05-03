@@ -110,7 +110,7 @@ func (m *BaseMempool) GetTxAssets(assetGuid uint32) MempoolTxidEntries {
 	entries := make(MempoolTxidEntries, 0)
 	for txid, entry := range m.txEntries {
 		if _, found := mapTxid[txid]; !found {
-			for addrIndex := range addrIndexes {
+			for addrIndex := range entry.addrIndexes {
 				if addrIndex.AssetInfo != nil && addrIndex.AssetInfo.AssetGuid == assetGuid {
 					mapTxid[txid] = struct{}{}
 					entries = append(entries, MempoolTxidEntry{

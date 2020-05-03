@@ -557,7 +557,7 @@ type TxAsset struct {
 	Height    uint32
 	Txs       []*TxAssetIndex
 }
-type TxAssetMap map[[]byte]*TxAsset
+type TxAssetMap map[string]*TxAsset
 
 // TxAddresses stores transaction inputs and outputs with amounts
 type TxAddresses struct {
@@ -719,8 +719,8 @@ type BlockChainParser interface {
 	UnpackAssetTxIndex(buf []byte) []*TxAssetIndex
 	PackAsset(asset *Asset) ([]byte, error)
 	UnpackAsset(buf []byte) (*Asset, error)
-	GetAssetFromTx(tx *Tx) (wire.AssetType, error)
-	GetAllocationFromTx(tx *Tx) (wire.AssetAllocationType, error)
+	GetAssetFromTx(tx *Tx) (*wire.AssetType, error)
+	GetAllocationFromTx(tx *Tx) (*wire.AssetAllocationType, error)
 	LoadAssets(tx *Tx) error
 	AppendAssetInfo(assetInfo *AssetInfo, buf []byte, varBuf []byte, details bool) []byte
 	UnpackAssetInfo(assetInfo *AssetInfo, buf []byte, details bool) int
