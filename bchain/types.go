@@ -57,7 +57,7 @@ type AssetInfoDetails struct {
 type AssetInfo struct {
 	AssetGuid uint32 `json:"assetGuid"`
 	ValueSat *big.Int `json:"valueSat"`
-	Details *AssetInfoDetails `json:"details, omitempty"`
+	Details  *AssetInfoDetails `json:"details, omitempty"`
 }
 
 // Vin contains data about tx output
@@ -68,7 +68,7 @@ type Vin struct {
 	ScriptSig ScriptSig `json:"scriptSig"`
 	Sequence  uint32    `json:"sequence"`
 	Addresses []string  `json:"addresses"`
-	AssetInfo *bchain.AssetInfo		   `json:"assetInfo"`
+	AssetInfo  *AssetInfo		   `json:"assetInfo"`
 }
 
 // ScriptPubKey contains data about output script
@@ -85,7 +85,7 @@ type Vout struct {
 	JsonValue    json.Number  `json:"value"`
 	N            uint32       `json:"n"`
 	ScriptPubKey ScriptPubKey `json:"scriptPubKey"`
-	AssetInfo *bchain.AssetInfo		   `json:"assetInfo"`
+	AssetInfo    *AssetInfo	  `json:"assetInfo"`
 }
 
 // Tx is blockchain transaction
@@ -384,7 +384,7 @@ type AddressesMap map[string][]TxIndexes
 type TxInput struct {
 	AddrDesc AddressDescriptor
 	ValueSat big.Int
-	AssetInfo *bchain.AssetInfo
+	AssetInfo *AssetInfo
 }
 
 // BlockInfo holds information about blocks kept in column height
@@ -401,7 +401,7 @@ type TxOutput struct {
 	AddrDesc AddressDescriptor
 	Spent    bool
 	ValueSat big.Int
-	AssetInfo *bchain.AssetInfo
+	AssetInfo *AssetInfo
 }
 
 // Addresses converts AddressDescriptor of the input to array of strings
@@ -493,7 +493,7 @@ func (a *Amount) AsInt64() int64 {
 type Asset struct {
 	Transactions	uint32
 	AssetObj 		wire.AssetType
-	AddrDesc    	bchain.AddressDescriptor
+	AddrDesc    	AddressDescriptor
 }
 // Assets is array of Asset
 type Assets []Asset
