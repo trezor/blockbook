@@ -5,9 +5,12 @@ import (
 	"blockbook/bchain"
 	"blockbook/bchain/coins/btc"
 	"blockbook/bchain/coins/utils"
+	"encoding/hex"
 	"bytes"
 	"math/big"
 	"github.com/syscoin/btcd/wire"
+	"github.com/martinboehm/btcd/wire"
+	"github.com/martinboehm/btcd/blockchain"
 	"github.com/martinboehm/btcutil/chaincfg"
 	"github.com/martinboehm/btcutil/txscript"
 	vlq "github.com/bsm/go-vlq"
@@ -147,7 +150,7 @@ func (p *SyscoinParser) TxFromMsgTx(t *wire.MsgTx, parseAddresses bool) bchain.T
 	return tx
 }
 // ParseTxFromJson parses JSON message containing transaction and returns Tx struct
-func (p *SyscoinParser) ParseTxFromJson(msg json.RawMessage) (*Tx, error) {
+func (p *SyscoinParser) ParseTxFromJson(msg json.RawMessage) (*bchain.Tx, error) {
 	var tx bchain.Tx
 	err := json.Unmarshal(msg, &tx)
 	if err != nil {
@@ -586,7 +589,7 @@ func (p *SyscoinParser) PackAddrBalance(ab *bchain.AddrBalance, buf, varBuf []by
 
 
 
-func (p *BaseParser) PackTxIndexes(txi []TxIndexes) []byte {
+func (p *SyscoinParser) PackTxIndexes(txi []TxIndexes) []byte {
 	buf := make([]byte, 0, 36)
 	bvout := make([]byte, vlq.MaxLen32)
 	// store the txs in reverse order for ordering from newest to oldest

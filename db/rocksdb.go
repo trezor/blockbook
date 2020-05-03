@@ -981,7 +981,7 @@ func (d *RocksDB) writeHeight(wb *gorocksdb.WriteBatch, height uint32, bi *bchai
 func (d *RocksDB) disconnectTxAddressesInputs(wb *gorocksdb.WriteBatch, btxID []byte, inputs []bchain.DbOutpoint, txa *bchain.TxAddresses, txAddressesToUpdate map[string]*bchain.TxAddresses,
 	getAddressBalance func(addrDesc bchain.AddressDescriptor) (*bchain.AddrBalance, error),
 	addressFoundInTx func(addrDesc bchain.AddressDescriptor, btxID []byte) bool,
-	assetsFoundInTx func(asset uint32, btxID []byte) bool,
+	assetFoundInTx func(asset uint32, btxID []byte) bool,
 	assets map[uint32]*bchain.Asset) error {
 	var err error
 	var balance *bchain.AddrBalance
@@ -1030,13 +1030,13 @@ func (d *RocksDB) disconnectTxAddressesInputs(wb *gorocksdb.WriteBatch, btxID []
 						if balance.AssetBalances == nil {
 							return errors.New("DisconnectSyscoinInput asset balances was nil but not expected to be")
 						}
-						balanceAsset, ok := assetBalances[assetInfo.AssetGuid]
+						balanceAsset, ok := balance.AssetBalances[t.AssetInfo.AssetGuid]
 						if !ok {
 							return errors.New("DisconnectSyscoinInput asset balance not found")
 						}
-						err := d.DisconnectSyscoinInput(t.AddrDesc, txa.Version, balance.AssetBalances, btxID, assets, &t.AssetInfo, &utxo, assetFoundInTx)
+						err := d.DisconnectSyscoinInput(t.AddrDesc, txa.Version, balanceAsset, btxID, t.AssetInfo, &utxo, assets, assetFoundInTx)
 						if err != nil {
-							glog.Warningf("rocksdb: DisconnectSyscoinInput: tx %v, input %v, error %v", input.BtxID, input, err)
+							glog.Warningf("rocksdb: DisconnectSyscoinInput: tx %v, input %v, error %v", btxID, input, err)
 						}
 					}
 					balance.AddUtxoInDisconnect(&utxo)
@@ -1053,7 +1053,7 @@ func (d *RocksDB) disconnectTxAddressesInputs(wb *gorocksdb.WriteBatch, btxID []
 func (d *RocksDB) disconnectTxAddressesOutputs(wb *gorocksdb.WriteBatch, btxID []byte, txa *bchain.TxAddresses,
 	getAddressBalance func(addrDesc bchain.AddressDescriptor) (*bchain.AddrBalance, error),
 	addressFoundInTx func(addrDesc bchain.AddressDescriptor, btxID []byte) bool,
-	assetsFoundInTx func(asset uint32, btxID []byte) bool,
+	assetFoundInTx func(asset uint32, btxID []byte) bool,
 	assets map[uint32]*bchain.Asset) error {
 	for i, t := range txa.Outputs {
 		if len(t.AddrDesc) > 0 {
@@ -1133,17 +1133,17 @@ func (d *RocksDB) disconnectBlock(height uint32, blockTxs []bchain.BlockTxs) err
 		return exist
 	}
 	// all assets in the block are stored in blockAssetsTxs, together with a map of transactions where they appear
-	blockAssetsTxs := make(map[int32]map[string]struct{})
-	// assetsFoundInTx handles updates of the blockAssetsTxs map and returns true if the asset+tx was already encountered
-	assetFoundInTx := func(asset int32, btxID []byte) bool {
+	blockAssetsTxs := make(map[uint32]map[string]struct{})
+	// assetFoundInTx handles updates of the blockAssetsTxs map and returns true if the asset+tx was already encountered
+	assetFoundInTx := func(asset uint32, btxID []byte) bool {
 		sBtxID := string(btxID)
 		a, exist := blockAssetsTxs[asset]
 		if !exist {
-			blockAssetsTxs[asset] = map[int32]struct{}{sBtxID: {}}
+			blockAssetsTxs[asset] = map[uint32]struct{}{sBtxID: {}}
 		} else {
-			_, exist = a[sBtxID]
+			_, exist = a[asset]
 			if !exist {
-				a[sBtxID] = struct{}{}
+				a[asset] = struct{}{}
 			}
 		}
 		return exist
@@ -1184,7 +1184,7 @@ func (d *RocksDB) disconnectBlock(height uint32, blockTxs []bchain.BlockTxs) err
 		wb.DeleteCF(d.cfh[cfAddresses], key)
 		key = d.chainParser.PackAddressKey([]byte(a), height)
 	}
-	for a := range assetsFoundInTx {
+	for a := range blockAssetsTxs {
 		key := d.chainParser.PackAssetKey(a, height)
 		wb.DeleteCF(d.cfh[cfTxAssets], key)
 	}
