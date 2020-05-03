@@ -106,14 +106,20 @@ func (m *BaseMempool) GetAllEntries() MempoolTxidEntries {
 func (m *BaseMempool) GetTxAssets(assetGuid uint32) MempoolTxidEntries {
 	i := 0
 	m.mux.Lock()
+	mapTxid := make(map[string]struct{})
 	entries := make(MempoolTxidEntries, 0)
 	for txid, entry := range m.txEntries {
-		if entry.AssetInfo != nil && entry.AssetInfo.AssetGuid == assetGuid {
-			entries = append(entries, MempoolTxidEntry{
-				Txid: txid,
-				Time: entry.time,
-			})
-			i++
+		if _, found := mapTxid[txid]; !found {
+			for addrIndex := range addrIndexes {
+				if addrIndex.AssetInfo != nil && addrIndex.AssetInfo.AssetGuid == assetGuid {
+					mapTxid[txid] = struct{}{}
+					entries = append(entries, MempoolTxidEntry{
+						Txid: txid,
+						Time: entry.time,
+					})
+					i++
+				}
+			}
 		}
 	}
 	m.mux.Unlock()
