@@ -15,7 +15,7 @@ import (
 	"github.com/martinboehm/btcd/blockchain"
 
 	"github.com/juju/errors"
-	"github.com/syscoin/btcd/wire"
+	"github.com/martinboehm/btcd/wire"
 	"github.com/martinboehm/btcutil/chaincfg"
 )
 

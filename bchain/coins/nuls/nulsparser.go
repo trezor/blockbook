@@ -10,7 +10,7 @@ import (
 	vlq "github.com/bsm/go-vlq"
 	"github.com/martinboehm/btcutil/base58"
 
-	"github.com/syscoin/btcd/wire"
+	"github.com/martinboehm/btcd/wire"
 	"github.com/martinboehm/btcutil/chaincfg"
 	"github.com/martinboehm/btcutil/hdkeychain"
 )

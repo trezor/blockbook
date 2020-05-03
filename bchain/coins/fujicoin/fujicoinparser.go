@@ -3,7 +3,7 @@ package fujicoin
 import (
 	"blockbook/bchain/coins/btc"
 
-	"github.com/syscoin/btcd/wire"
+	"github.com/martinboehm/btcd/wire"
 	"github.com/martinboehm/btcutil/chaincfg"
 )
 
