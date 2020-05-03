@@ -1,15 +1,15 @@
 package syscoin
 
 import (
+	"encoding/json"
 	"blockbook/bchain"
 	"blockbook/bchain/coins/btc"
 	"blockbook/bchain/coins/utils"
 	"bytes"
 	"math/big"
-	"github.com/martinboehm/btcd/wire"
+	"github.com/syscoin/btcd/wire"
 	"github.com/martinboehm/btcutil/chaincfg"
 	"github.com/martinboehm/btcutil/txscript"
-	"github.com/martinboehm/btcutil"
 	vlq "github.com/bsm/go-vlq"
 	"github.com/juju/errors"
 )
@@ -148,7 +148,7 @@ func (p *SyscoinParser) TxFromMsgTx(t *wire.MsgTx, parseAddresses bool) bchain.T
 }
 // ParseTxFromJson parses JSON message containing transaction and returns Tx struct
 func (p *SyscoinParser) ParseTxFromJson(msg json.RawMessage) (*Tx, error) {
-	var tx Tx
+	var tx bchain.Tx
 	err := json.Unmarshal(msg, &tx)
 	if err != nil {
 		return nil, err
@@ -463,13 +463,13 @@ func (p *SyscoinParser) UnpackAssetInfo(assetInfo *bchain.AssetInfo, buf []byte,
 }
 
 func (p *SyscoinParser) AppendTxInput(txi *bchain.TxInput, buf []byte, varBuf []byte) []byte {
-	buf := p.BitcoinParser.AppendTxInput(txi, buf, varBuf)
+	buf = p.BitcoinParser.AppendTxInput(txi, buf, varBuf)
 	buf = p.AppendAssetInfo(&txi.AssetInfo, buf, varBuf, true)
 	return buf
 }
 
 func (p *SyscoinParser) AppendTxOutput(txo *bchain.TxOutput, buf []byte, varBuf []byte) []byte {
-	buf := p.BitcoinParser.AppendTxInput(txo, buf, varBuf)
+	buf = p.BitcoinParser.AppendTxInput(txo, buf, varBuf)
 	buf = p.AppendAssetInfo(&txi.AssetInfo, buf, varBuf, true)
 	return buf
 }
@@ -534,7 +534,7 @@ func (p *SyscoinParser) UnpackAddrBalance(buf []byte, txidUnpackedLen int, detai
 				Height:   uint32(height),
 				ValueSat: valueSat,
 			}
-			ll := p.UnpackAssetInfo(&u.AssetInfo, buf[l:], false)
+			ll = p.UnpackAssetInfo(&u.AssetInfo, buf[l:], false)
 			l += ll
 			if detail == bchain.AddressBalanceDetailUTXO {
 				ab.Utxos = append(ab.Utxos, u)

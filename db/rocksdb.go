@@ -13,7 +13,6 @@ import (
 	"sort"
 	"strconv"
 	"time"
-	"github.com/martinboehm/btcutil/txscript"
 	"unsafe"
 
 	vlq "github.com/bsm/go-vlq"
@@ -357,7 +356,7 @@ func (d *RocksDB) GetTransactions(address string, lower uint32, higher uint32, f
 	if err != nil {
 		return err
 	}
-	return d.GetAddrDescTransactions(addrDesc, lower, higher, fn)
+	return d.GetAddrDescTransactions(addrDesc, lower, higher, bchain.AllMask, fn)
 }
 
 // GetAddrDescTransactions finds all input/output transactions for address descriptor
@@ -390,7 +389,7 @@ func (d *RocksDB) GetAddrDescTransactions(addrDesc bchain.AddressDescriptor, low
 			return err
 		}
 		for len(val) > (txidUnpackedLen+4) {
-			mask := p.chainParser.UnpackUint(val[:4])
+			mask := d.chainParser.UnpackUint(val[:4])
 			val = val[4:]
 			tx, err := d.chainParser.UnpackTxid(val[:txidUnpackedLen])
 			if err != nil {

@@ -3,7 +3,6 @@ package db
 import (
 	"blockbook/bchain"
 	"bytes"
-	"strconv"
 	"strings"
 	"sort"
 	"math/big"
@@ -12,7 +11,6 @@ import (
 	"github.com/tecbot/gorocksdb"
 	"encoding/json"
 	"encoding/hex"
-	"github.com/martinboehm/btcutil/txscript"
 	"time"
 )
 var AssetCache map[uint32]bchain.Asset
@@ -116,7 +114,7 @@ func (d *RocksDB) DisconnectAssetOutput(version int32, asset *bchain.Asset, dbAs
 	return nil
 }
 
-func (d *RocksDB) ConnectSyscoinInput(height uint32, balanceAsset *bchain.AddrBalance, version int32, btxID []byte, assetInfo* bchain.AssetInfo, assets map[uint32]*bchain.Asset, txAssets bchain.TxAssetMap) error {
+func (d *RocksDB) ConnectSyscoinInput(height uint32, balanceAsset *bchain.AssetBalance, version int32, btxID []byte, assetInfo* bchain.AssetInfo, assets map[uint32]*bchain.Asset, txAssets bchain.TxAssetMap) error {
 	dBAsset, err := d.GetAsset(assetGuid, &assets)
 	if !d.chainParser.IsAssetActivateTx(version) && err != nil {
 		return err
@@ -137,7 +135,7 @@ func (d *RocksDB) ConnectSyscoinInput(height uint32, balanceAsset *bchain.AddrBa
 	return nil
 }
 
-func (d *RocksDB) ConnectSyscoinOutput(addrDesc bchain.AddressDescriptor, height uint32, balanceAsset *bchain.AddrBalance, version int32, btxID []byte, utxo* bchain.Utxo, assetInfo* bchain.AssetInfo, assets map[uint32]*bchain.Asset, txAssets bchain.TxAssetMap) error {
+func (d *RocksDB) ConnectSyscoinOutput(addrDesc bchain.AddressDescriptor, height uint32, balanceAsset *bchain.AssetBalance, version int32, btxID []byte, utxo* bchain.Utxo, assetInfo* bchain.AssetInfo, assets map[uint32]*bchain.Asset, txAssets bchain.TxAssetMap) error {
 	isActivate := d.chainParser.IsAssetActivateTx(version)
 	dBAsset, err := d.GetAsset(assetInfo.AssetGuid, &assets)
 	if !isActivate && err != nil {
@@ -178,7 +176,7 @@ func (d *RocksDB) ConnectSyscoinOutput(addrDesc bchain.AddressDescriptor, height
 }
 
 func (d *RocksDB) DisconnectSyscoinOutput(assetBalances map[uint32]*AssetBalance, version int32, btxID []byte, assets map[uint32]*bchain.Asset,  assetInfo *bchain.AssetInfo, assetFoundInTx func(asset uint32, btxID []byte) bool) error {
-	balanceAsset, ok := balance.AssetBalances[assetInfo.AssetGuid]
+	balanceAsset, ok := assetBalances[assetInfo.AssetGuid]
 	if !ok {
 		return errors.New("DisconnectSyscoinOutput asset balance not found")
 	}
@@ -229,7 +227,7 @@ func (d *RocksDB) DisconnectSyscoinOutput(assetBalances map[uint32]*AssetBalance
 	return nil
 }
 
-func (d *RocksDB) DisconnectSyscoinInput(addrDesc bchain.AddressDescriptor, version int32, balanceAsset *bchain.AddrBalance,  btxID []byte, assetInfo *bchain.AssetInfo, utxo *bchain.utxo, assets map[uint32]*bchain.Asset, assetFoundInTx func(asset uint32, btxID []byte) bool) error {
+func (d *RocksDB) DisconnectSyscoinInput(addrDesc bchain.AddressDescriptor, version int32, balanceAsset *bchain.AddrBalance,  btxID []byte, assetInfo *bchain.AssetInfo, utxo *bchain.Utxo, assets map[uint32]*bchain.Asset, assetFoundInTx func(asset uint32, btxID []byte) bool) error {
 	isActivate := d.chainParser.IsAssetActivateTx(version)
 	dBAsset, err := d.GetAsset(assetGuid, &assets)
 	if dBAsset == nil || err != nil {
