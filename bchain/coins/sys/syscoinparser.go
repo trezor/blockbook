@@ -94,27 +94,13 @@ func GetChainParams(chain string) *chaincfg.Params {
 }
 // TxFromMsgTx converts syscoin wire Tx to bchain.Tx
 func (p *SyscoinParser) TxFromMsgTx(t *wire.MsgTx, parseAddresses bool) bchain.Tx {
-	tx := p.BaseParser(t, parseAddresses)
+	tx := p.BaseParser.TxFromMsgTx(t, parseAddresses)
 	p.LoadAssets(&tx)
 	return tx
 }
 // ParseTxFromJson parses JSON message containing transaction and returns Tx struct
 func (p *SyscoinParser) ParseTxFromJson(msg json.RawMessage) (*bchain.Tx, error) {
-	var tx bchain.Tx
-	err := json.Unmarshal(msg, &tx)
-	if err != nil {
-		return nil, err
-	}
-
-	for i := range tx.Vout {
-		vout := &tx.Vout[i]
-		// convert vout.JsonValue to big.Int and clear it, it is only temporary value used for unmarshal
-		vout.ValueSat, err = p.AmountToBigInt(vout.JsonValue)
-		if err != nil {
-			return nil, err
-		}
-		vout.JsonValue = ""
-	}
+	tx := p.BaseParser.ParseTxFromJson(msg)
 	p.LoadAssets(&tx)
 	return &tx, nil
 }
