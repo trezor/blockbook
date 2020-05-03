@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/gogo/protobuf/proto"
+	"github.com/syscoin/btcd/wire"
 	"github.com/golang/glog"
 	"github.com/juju/errors"
 	vlq "github.com/bsm/go-vlq"
@@ -365,13 +366,13 @@ func (p *BaseParser) AppendAssetInfo(assetInfo *AssetInfo, buf []byte, varBuf []
 	return nil
 }
 func (p *BaseParser) UnpackAssetInfo(assetInfo *AssetInfo, buf []byte, details bool) int  {
-	return nil
+	return 0
 }
 func (p *BaseParser) AppendAssetInfoDetails(assetInfoDetails *AssetInfoDetails, buf []byte, varBuf []byte, details bool) []byte {
 	return nil
 }
 func (p *BaseParser) UnpackAssetInfoDetails(assetInfoDetails *AssetInfoDetails, buf []byte) int  {
-	return nil
+	return 0
 }
 const PackedHeightBytes = 4
 func (p *BaseParser) PackAddressKey(addrDesc AddressDescriptor, height uint32) []byte {

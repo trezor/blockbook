@@ -38,7 +38,7 @@ func appendAddress(io []addrIndex, i int32, a string, parser BlockChainParser) [
 			glog.Error("error in input addrDesc in ", a, ": ", err)
 			return io
 		}
-		io = append(io, addrIndex{string(addrDesc), i})
+		io = append(io, addrIndex{string(addrDesc), i, nil})
 	}
 	return io
 }
@@ -62,7 +62,7 @@ func (m *MempoolEthereumType) createTxEntry(txid string, txTime uint32) (txEntry
 			continue
 		}
 		if len(addrDesc) > 0 {
-			addrIndexes = append(addrIndexes, addrIndex{string(addrDesc), int32(output.N)})
+			addrIndexes = append(addrIndexes, addrIndex{string(addrDesc), int32(output.N), nil})
 		}
 	}
 	for _, input := range tx.Vin {

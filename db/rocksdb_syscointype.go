@@ -12,7 +12,6 @@ import (
 	"github.com/tecbot/gorocksdb"
 	"encoding/json"
 	"encoding/hex"
-	"github.com/syscoin/btcd/wire"
 	"github.com/martinboehm/btcutil/txscript"
 	"time"
 )

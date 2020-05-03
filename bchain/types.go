@@ -503,7 +503,7 @@ func (a Assets) Swap(i, j int)      {
 	a[i], a[j] = a[j], a[i] 
 }
 func (a Assets) Less(i, j int) bool { 
-	return a[i].AssetObj.Asset < a[j].AssetObj.Asset
+	return a[i].AssetObj.Symbol < a[j].AssetObj.Symbol
 }
 
 // Token contains info about tokens held by an address
