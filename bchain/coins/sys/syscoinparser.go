@@ -325,7 +325,7 @@ func (p *SyscoinParser) GetAllocationFromTx(tx *bchain.Tx) (wire.AssetAllocation
 	}
 	return assetAllocation, nil
 }
-func (p *SyscoinParser) GetAssetFromTx(bchain.Tx * tx) (wire.AssetType, error) {
+func (p *SyscoinParser) GetAssetFromTx(tx *bchain.Tx) (wire.AssetType, error) {
 	var sptData []byte
 	for i, output := range tx.Vout {
 		addrDesc, err := p.GetAddrDescFromVout(&output)
@@ -352,7 +352,7 @@ func (p *SyscoinParser) GetAssetFromTx(bchain.Tx * tx) (wire.AssetType, error) {
 	}
 	return asset, nil
 }
-func (p *SyscoinParser) LoadAssets(bchain.Tx* tx) error {
+func (p *SyscoinParser) LoadAssets(tx *bchain.Tx) error {
     if p.IsSyscoinTx(tx.Version) {
         allocation, err := p.GetAllocationFromTx(tx);
 		if err != nil {
