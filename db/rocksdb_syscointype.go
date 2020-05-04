@@ -145,7 +145,7 @@ func (d *RocksDB) ConnectAssetOutput(addrDescData *bchain.AddressDescriptor, add
 	}	
 	var dBAsset* bchain.Asset = nil
 	if !isActivate {
-		dBAsset, err := d.GetAsset(assetGuid, &assets)
+		dBAsset, err = d.GetAsset(assetGuid, &assets)
 		if  err != nil {
 			return err
 		}
@@ -435,7 +435,7 @@ func (d *RocksDB) addToAssetsMap(txassets bchain.TxAssetMap, assetGuid uint32, b
 	at, found := txassets[key]
 	if found {
 		// if the tx is already in the slice
-		for i, t := range at.Txs {
+		for _, t := range at.Txs {
 			if bytes.Equal(btxID, t.BtxID) {
 				return true
 			}
