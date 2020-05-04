@@ -665,7 +665,7 @@ func (s *PublicServer) getAddressQueryParams(r *http.Request, accountDetails api
 			assetsMask = bchain.AssetAllocationSendMask
 		} else if filterParam == "non-token-transfers" {
 			// everything but allocation send
-			assetsMask = bchain.AssetMask & ~bchain.AssetAllocationSendMask
+			assetsMask = bchain.AssetMask & ^bchain.AssetAllocationSendMask
 		} else {
 			var mask, ec = strconv.Atoi(filterParam)
 			if ec == nil {
