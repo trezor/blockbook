@@ -585,7 +585,8 @@ type TokenTransferSummary struct {
 	Name     string    `json:"name"`
 	Symbol   string    `json:"symbol"`
 	Decimals int       `json:"decimals"`
-	Value	 *Amount   `json:"totalAmount"`
+	Value	 *Amount   `json:"valueOut"`
+	ValueIn	 *Amount   `json:"valueIn"`
 	Fee      *Amount   `json:"fee"`
 }
 

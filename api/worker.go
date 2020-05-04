@@ -212,10 +212,11 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 					if vin.AssetInfo.AssetGuid > 0 {
 						tts, ok := mapTTS[vin.AssetInfo.AssetGuid]
 						if !ok {
+							assetGuid := strconv.FormatUint(uint64(vin.AssetInfo.AssetGuid), 10)
 							tts = &bchain.TokenTransferSummary{
 								Type:     w.chainParser.GetAssetTypeFromVersion(bchainTx.Version),
-								Token:    vin.AssetInfo.AssetGuid,
-								Decimals: vin.AssetInfo.Details.Precision,
+								Token:    assetGuid,
+								Decimals: vin.AssetInfo.Details.Decimals,
 								ValueIn:  (*bchain.Amount)(big.NewInt(0)),
 								Symbol:   vin.AssetInfo.Details.Symbol,
 							}
@@ -247,10 +248,11 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 		if vout.AssetInfo.AssetGuid > 0 {
 			tts, ok := mapTTS[vout.AssetInfo.AssetGuid]
 			if !ok {
+				assetGuid := strconv.FormatUint(uint64(vout.AssetInfo.AssetGuid), 10)
 				tts = &bchain.TokenTransferSummary{
 					Type:     w.chainParser.GetAssetTypeFromVersion(bchainTx.Version),
-					Token:    vout.AssetInfo.AssetGuid,
-					Decimals: vout.AssetInfo.Details.Precision,
+					Token:    assetGuid,
+					Decimals: vout.AssetInfo.Details.Decimals,
 					ValueIn:  (*bchain.Amount)(big.NewInt(0)),
 					Symbol:   vout.AssetInfo.Details.Symbol,
 				}
