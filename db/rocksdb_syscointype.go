@@ -9,7 +9,6 @@ import (
 	"github.com/golang/glog"
 	"github.com/juju/errors"
 	"github.com/tecbot/gorocksdb"
-	"encoding/json"
 	"encoding/hex"
 	"time"
 )
@@ -18,7 +17,7 @@ var SetupAssetCacheFirstTime bool = true
 // GetTxAssetsCallback is called by GetTransactions/GetTxAssets for each found tx
 type GetTxAssetsCallback func(txids []string) error
 
-func (d *RocksDB) ConnectAssetOutput(version int32, asset *bchain.Asset, dbAsset *bchain.Asset) error {
+func (d *RocksDB) ConnectAssetOutput(version int32, asset *bchain.Asset, dBAsset *bchain.Asset, assetInfo* bchain.AssetInfo) error {
 	// deduct the output value from the asset balance
 	if d.chainParser.IsAssetSendTx(version) {
 		balanceAssetSat := big.NewInt(dBAsset.AssetObj.Balance)
@@ -54,7 +53,7 @@ func (d *RocksDB) ConnectAssetOutput(version int32, asset *bchain.Asset, dbAsset
 	return nil
 }
 
-func (d *RocksDB) DisconnectAssetOutput(version int32, asset *bchain.Asset, dbAsset *bchain.Asset) error {
+func (d *RocksDB) DisconnectAssetOutput(version int32, asset *bchain.Asset, dbAsset *bchain.Asset, assetInfo* bchain.AssetInfo) error {
 	// add the output value to the asset balance
 	if d.chainParser.IsAssetSendTx(version) {
 		balanceAssetSat = big.NewInt(dBAsset.AssetObj.Balance)
@@ -129,7 +128,7 @@ func (d *RocksDB) ConnectSyscoinOutput(addrDesc bchain.AddressDescriptor, height
 			if isActivate {
 				dBAsset = asset
 			}
-			err = d.ConnectAssetOutput(version, asset, dBAsset)
+			err = d.ConnectAssetOutput(version, asset, dBAsset, assetInfo)
 			if err != nil {
 				return err
 			}
@@ -178,7 +177,7 @@ func (d *RocksDB) DisconnectSyscoinOutput(assetBalances map[uint32]*bchain.Asset
 		if err != nil {
 			return err
 		}
-		err = d.DisconnectAssetOutput(version, asset, dBAsset)
+		err = d.DisconnectAssetOutput(version, asset, dBAsset, assetInfo)
 		if err != nil {
 			return err
 		}

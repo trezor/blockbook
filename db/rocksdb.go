@@ -1077,7 +1077,7 @@ func (d *RocksDB) disconnectTxAddressesOutputs(wb *gorocksdb.WriteBatch, btxID [
 						if balance.AssetBalances == nil {
 							return errors.New("DisconnectSyscoinOutput asset balances was nil but not expected to be")
 						}
-						err := d.DisconnectSyscoinOutput(balance.AssetBalances, txa.Version, btxID, assets, &t.AssetInfo, assetFoundInTx)
+						err := d.DisconnectSyscoinOutput(balance.AssetBalances, txa.Version, btxID, assets, t.AssetInfo, assetFoundInTx)
 						if err != nil {
 							glog.Warningf("rocksdb: DisconnectSyscoinOutput: tx %v, output %v, error %v", btxID, t, err)
 						}
@@ -1141,9 +1141,9 @@ func (d *RocksDB) disconnectBlock(height uint32, blockTxs []bchain.BlockTxs) err
 		if !exist {
 			blockAssetsTxs[asset] = map[string]struct{}{sBtxID: {}}
 		} else {
-			_, exist = a[asset]
+			_, exist = a[sBtxID]
 			if !exist {
-				a[asset] = struct{}{}
+				a[sBtxID] = struct{}{}
 			}
 		}
 		return exist
