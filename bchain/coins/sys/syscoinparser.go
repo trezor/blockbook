@@ -333,7 +333,7 @@ func (p *SyscoinParser) UnpackAllocation(a *bchain.AssetAllocationType, buf []by
 func (p *SyscoinParser) UnpackAssetObj(a *bchain.AssetType, buf []byte) int {
 	l := p.UnpackAllocation(&a.Allocation, buf)
 	var ll int
-	a.Precision = uint8(*buf[l:l+1])
+	a.Precision = uint8(buf[l:l+1][0])
 	l += 1
 
 	a.Contract, ll = p.BaseParser.UnpackVarBytes(buf[l:])
@@ -346,7 +346,7 @@ func (p *SyscoinParser) UnpackAssetObj(a *bchain.AssetType, buf []byte) int {
 	a.Symbol = string(symbol)
 	l += ll
 
-	a.UpdateFlags = uint8(*buf[l:l+1])
+	a.UpdateFlags = uint8(buf[l:l+1][0])
 	l += 1
 
 	a.PrevContract, ll = p.BaseParser.UnpackVarBytes(buf[l:])
@@ -355,7 +355,7 @@ func (p *SyscoinParser) UnpackAssetObj(a *bchain.AssetType, buf []byte) int {
 	a.PrevPubData, ll = p.BaseParser.UnpackVarBytes(buf[l:])
 	l += ll
 
-	a.PrevUpdateFlags = uint8(*buf[l:l+1])
+	a.PrevUpdateFlags = uint8(buf[l:l+1][0])
 	l += 1
 
 	balance, ll := p.BaseParser.UnpackVarint(buf[l:])
@@ -376,7 +376,7 @@ func (p *SyscoinParser) UnpackAssetObj(a *bchain.AssetType, buf []byte) int {
 func (p *SyscoinParser) PackAssetObj(a *bchain.AssetType, buf []byte) []byte {
 	varBuf := make([]byte, 20)
 	buf = p.PackAllocation(&a.Allocation, buf)
-	buf = append(buf, []byte(a.Precision)...)
+	buf = append(buf, []byte{a.Precision}...)
 
 	buf = p.BaseParser.PackVarBytes(a.Contract, buf, varBuf)
 
@@ -384,13 +384,13 @@ func (p *SyscoinParser) PackAssetObj(a *bchain.AssetType, buf []byte) []byte {
 
 	buf = p.BaseParser.PackVarBytes([]byte(a.Symbol), buf, varBuf)
 
-	buf = append(buf, []byte(a.UpdateFlags)...)
+	buf = append(buf, []byte{a.UpdateFlags}...)
 
 	buf = p.BaseParser.PackVarBytes(a.PrevContract, buf, varBuf)
 
 	buf = p.BaseParser.PackVarBytes(a.PrevPubData, buf, varBuf)
 
-	buf = append(buf, []byte(a.PrevUpdateFlags)...)
+	buf = append(buf, []byte{a.PrevUpdateFlags}...)
 
 	l = p.BaseParser.PackVaruint(uint(CompressAmount(uint64(a.Balance))), varBuf)
 	buf = append(buf, varBuf[:l]...)

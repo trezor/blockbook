@@ -93,27 +93,27 @@ func (d *RocksDB) DisconnectAssetOutput(version int32, asset *bchain.Asset, dBAs
 }
 
 func (d *RocksDB) ConnectSyscoinInput(height uint32, balanceAsset *bchain.AssetBalance, version int32, btxID []byte, assetInfo* bchain.AssetInfo, assets map[uint32]*bchain.Asset, txAssets bchain.TxAssetMap) error {
-	dBAsset, err := d.GetAsset(assetGuid, &assets)
+	dBAsset, err := d.GetAsset(assetInfo.AssetGuid, &assets)
 	if !d.chainParser.IsAssetActivateTx(version) && err != nil {
 		return err
 	}
 	if dBAsset != nil {
-		assetInfo.Details = &bchain.AssetInfoDetails{Symbol: dBAsset.Symbol, Decimals: dBAsset.Precision}
-		counted := addToAssetsMap(txAssets, assetGuid, btxID, version, height)
+		assetInfo.Details = &bchain.AssetInfoDetails{Symbol: dBAsset.AssetObj.Symbol, Decimals: dBAsset.AssetObj.Precision}
+		counted := addToAssetsMap(txAssets, assetInfo.AssetGuid, btxID, version, height)
 		if !counted {
 			balanceAsset.Transfers++
 		}
-		assets[assetGuid] = dBAsset
+		assets[assetInfo.AssetGuid] = dBAsset
 	}
-	balanceAsset.BalanceSat.Sub(&balanceAsset.BalanceSat, assetInfo.ValueSat)
+	balanceAsset.BalanceSat.Sub(balanceAsset.BalanceSat, assetInfo.ValueSat)
 	if balanceAsset.BalanceSat.Sign() < 0 {
 		balanceAsset.BalanceSat.SetInt64(0)
 	}
-	balanceAsset.SentSat.Add(&balanceAsset.SentSat, assetInfo.ValueSat)
+	balanceAsset.SentSat.Add(balanceAsset.SentSat, assetInfo.ValueSat)
 	return nil
 }
 
-func (d *RocksDB) ConnectSyscoinOutput(addrDesc bchain.AddressDescriptor, height uint32, balanceAsset *bchain.AssetBalance, version int32, btxID []byte, utxo* bchain.Utxo, assetInfo* bchain.AssetInfo, assets map[uint32]*bchain.Asset, txAssets bchain.TxAssetMap) error {
+func (d *RocksDB) ConnectSyscoinOutput(tx *bchain.Tx, addrDesc bchain.AddressDescriptor, height uint32, balanceAsset *bchain.AssetBalance, version int32, btxID []byte, utxo* bchain.Utxo, assetInfo* bchain.AssetInfo, assets map[uint32]*bchain.Asset, txAssets bchain.TxAssetMap) error {
 	isActivate := d.chainParser.IsAssetActivateTx(version)
 	dBAsset, err := d.GetAsset(assetInfo.AssetGuid, &assets)
 	if !isActivate && err != nil {
@@ -126,7 +126,7 @@ func (d *RocksDB) ConnectSyscoinOutput(addrDesc bchain.AddressDescriptor, height
 				return err
 			}
 			if isActivate {
-				dBAsset = asset
+				dBAsset.AssetObj = asset
 			}
 			err = d.ConnectAssetOutput(version, asset, dBAsset, assetInfo)
 			if err != nil {
@@ -149,7 +149,7 @@ func (d *RocksDB) ConnectSyscoinOutput(addrDesc bchain.AddressDescriptor, height
 	} else {
 		return errors.New("ConnectSyscoinOutput: asset not found")
 	}
-	balanceAsset.BalanceSat.Add(&balanceAsset.BalanceSat, assetInfo.ValueSat)
+	balanceAsset.BalanceSat.Add(balanceAsset.BalanceSat, assetInfo.ValueSat)
 	return nil
 }
 
@@ -401,7 +401,7 @@ func (d *RocksDB) GetTxAssets(assetGuid uint32, lower uint32, higher uint32, ass
 
 // addToAssetsMap maintains mapping between assets and transactions in one block
 // the return value is true if the tx was processed before, to not to count the tx multiple times
-func addToAssetsMap(txassets bchain.TxAssetMap, assetGuid uint32, btxID []byte, version int32, height int32) bool {
+func addToAssetsMap(txassets bchain.TxAssetMap, assetGuid uint32, btxID []byte, version int32, height uint32) bool {
 	// check that the asset was already processed in this block
 	// if not found, it has certainly not been counted
 	key := d.chainParser.PackAssetKey(assetGuid, height)

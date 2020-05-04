@@ -573,7 +573,7 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses bch
 						balanceAsset = &bchain.AssetBalance{Transfers: 0, BalanceSat: big.NewInt(0), SentSat: big.NewInt(0)}
 						balance.AssetBalances[assetGuid] = balanceAsset
 					}
-					err = d.ConnectSyscoinOutput(addrDesc, block.Height, balanceAsset, tx.Version, btxID, &utxo, output.AssetInfo, assets, txAssets)
+					err = d.ConnectSyscoinOutput(tx, addrDesc, block.Height, balanceAsset, tx.Version, btxID, &utxo, output.AssetInfo, assets, txAssets)
 					if err != nil {
 						glog.Warningf("rocksdb: ConnectSyscoinOutput: height %d, tx %v, output %v, error %v", block.Height, tx.Txid, output, err)
 					}
