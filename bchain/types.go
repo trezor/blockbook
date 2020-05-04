@@ -447,7 +447,7 @@ const AssetAllocationBurnToSyscoinMask AssetsMask = 32
 const AssetAllocationBurnToEthereumMask AssetsMask = 64
 const AssetAllocationMintMask AssetsMask = 128
 const AssetAllocationSendMask AssetsMask = 256
-
+const AssetMask AssetsMask = AssetActivateMask | AssetUpdateMask | AssetSendMask | AssetSyscoinBurnToAllocationMask | AssetAllocationBurnToSyscoinMask | AssetAllocationBurnToEthereumMask | AssetAllocationMintMask | AssetAllocationSendMask
 // Amount is datatype holding amounts
 type Amount big.Int
 // MarshalJSON Amount serialization

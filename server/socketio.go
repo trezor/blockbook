@@ -298,10 +298,7 @@ func (s *SocketIoServer) getAssetTxids(asset string, opts *assetOpts) (res resul
 			return res, err
 		}
 	} else {
-		o, err := s.mempool.GetTxAssets(asset)
-		if err != nil {
-			return res, err
-		}
+		o := s.mempool.GetTxAssets(asset)
 		for _, m := range o {
 			txids = append(txids, m.Txid)
 		}
@@ -357,7 +354,7 @@ type addressHistoryItem struct {
 	Satoshis      int64                             `json:"satoshis"`
 	Confirmations int                               `json:"confirmations"`
 	Tx            resTx                             `json:"tx"`
-	Tokens	      []*api.TokenBalanceHistory 		`json:"tokens,omitempty"`	
+	Tokens	      map[uint32]*api.TokenBalanceHistory 		`json:"tokens,omitempty"`	
 }
 
 type resultGetAddressHistory struct {
@@ -468,7 +465,7 @@ func (s *SocketIoServer) getAddressHistory(addr []string, opts *addrOpts) (res r
 		to = opts.To
 	}
 	ahi := addressHistoryItem{}
-	mapTokens := map[uint32]*api.TokenBalanceHistory{}
+	ahi.Tokens := map[uint32]*api.TokenBalanceHistory{}
 	for txi := opts.From; txi < to; txi++ {
 		tx, err := s.api.GetTransaction(txids[txi], false, false)
 		if err != nil {
@@ -489,17 +486,16 @@ func (s *SocketIoServer) getAddressHistory(addr []string, opts *addrOpts) (res r
 				if vin.ValueSat != nil {
 					totalSat.Sub(&totalSat, (*big.Int)(vin.ValueSat))
 				}
-				if vout.AssetInfo.AssetGuid > 0 {
-					token, ok := mapTokens[uint32(vout.AssetInfo.AssetGuid)]
+				if vin.AssetInfo.AssetGuid > 0 {
+					token, ok := ahi.Tokens[uint32(vin.AssetInfo.AssetGuid)]
 					if !ok {
-						token = &api.TokenBalanceHistory{AssetGuid: uint32(vout.AssetInfo.AssetGuid), ReceivedSat: &bchain.Amount{}, SentSat: &bchain.Amount{}}
-						mapTokens[uint32(vout.AssetInfo.AssetGuid)] = token
+						token = &api.TokenBalanceHistory{AssetGuid: uint32(vin.AssetInfo.AssetGuid), ReceivedSat: &bchain.Amount{}, SentSat: &bchain.Amount{}}
+						ahi.Tokens[uint32(vin.AssetInfo.AssetGuid)] = token
 					}
-					(*big.Int)(token.SentSat).Add((*big.Int)(token.SentSat), vout.AssetInfo.ValueSat)
+					(*big.Int)(token.SentSat).Add((*big.Int)(token.SentSat), vin.AssetInfo.ValueSat)
 				}
 			}
 		}
-		mapTokens := map[uint32]*api.TokenBalanceHistory{}
 		for i := range tx.Vout {
 			vout := &tx.Vout[i]
 			a := addressInSlice(vout.Addresses, addr)
@@ -514,22 +510,17 @@ func (s *SocketIoServer) getAddressHistory(addr []string, opts *addrOpts) (res r
 					totalSat.Add(&totalSat, (*big.Int)(vout.ValueSat))
 				}
 				if vout.AssetInfo.AssetGuid > 0 {
-					token, ok := mapTokens[uint32(vout.AssetInfo.AssetGuid)]
+					token, ok := ahi.Tokens[uint32(vout.AssetInfo.AssetGuid)]
 					if !ok {
 						token = &api.TokenBalanceHistory{AssetGuid: uint32(vout.AssetInfo.AssetGuid), ReceivedSat: &bchain.Amount{}, SentSat: &bchain.Amount{}}
-						mapTokens[uint32(vout.AssetInfo.AssetGuid)] = token
+						ahi.Tokens[uint32(vout.AssetInfo.AssetGuid)] = token
 					}
 					(*big.Int)(token.ReceivedSat).Add((*big.Int)(token.ReceivedSat), vout.AssetInfo.ValueSat)
 				}
 			}
 		}
-		if len(mapTokens) > 0 {
-			ahi.Tokens = make([]*api.TokenBalanceHistory, len(mapTokens))
-			var i int = 0
-			for _, v := range mapTokens {
-				ahi.Tokens[i] = v
-				i++
-			}
+		if len(ahi.Tokens) <= 0 {
+			ahi.Tokens = nil
 		}
 		ahi.Addresses = ads
 		ahi.Confirmations = int(tx.Confirmations)
@@ -553,7 +544,7 @@ func (s *SocketIoServer) getAssetHistory(asset string, opts *assetOpts) (res res
 		to = opts.To
 	}
 	ahi := addressHistoryItem{}
-	mapTokens := map[uint32]*api.TokenBalanceHistory{}
+	ahi.Tokens := map[uint32]*api.TokenBalanceHistory{}
 	for txi := opts.From; txi < to; txi++ {
 		tx, err := s.api.GetTransaction(txids[txi], false, false)
 		if err != nil {
@@ -574,17 +565,16 @@ func (s *SocketIoServer) getAssetHistory(asset string, opts *assetOpts) (res res
 				if vin.ValueSat != nil {
 					totalSat.Sub(&totalSat, (*big.Int)(vin.ValueSat))
 				}
-				if vout.AssetInfo.AssetGuid > 0 {
-					token, ok := mapTokens[uint32(vout.AssetInfo.AssetGuid)]
+				if vin.AssetInfo.AssetGuid > 0 {
+					token, ok := ahi.Tokens[uint32(vin.AssetInfo.AssetGuid)]
 					if !ok {
 						token = &api.TokenBalanceHistory{AssetGuid: uint32(vout.AssetInfo.AssetGuid), ReceivedSat: &bchain.Amount{}, SentSat: &bchain.Amount{}}
-						mapTokens[uint32(vout.AssetInfo.AssetGuid)] = token
+						ahi.Tokens[uint32(vin.AssetInfo.AssetGuid)] = token
 					}
-					(*big.Int)(token.SentSat).Add((*big.Int)(token.SentSat), vout.AssetInfo.ValueSat)
+					(*big.Int)(token.SentSat).Add((*big.Int)(token.SentSat), vin.AssetInfo.ValueSat)
 				}
 			}
 		}
-		mapTokens := map[uint32]*api.TokenBalanceHistory{}
 		for i := range tx.Vout {
 			vout := &tx.Vout[i]
 			a := addressInSlice(vout.Addresses, addr)
@@ -599,10 +589,10 @@ func (s *SocketIoServer) getAssetHistory(asset string, opts *assetOpts) (res res
 					totalSat.Add(&totalSat, (*big.Int)(vout.ValueSat))
 				}
 				if vout.AssetInfo.AssetGuid > 0 {
-					token, ok := mapTokens[uint32(vout.AssetInfo.AssetGuid)]
+					token, ok := ahi.Tokens[uint32(vout.AssetInfo.AssetGuid)]
 					if !ok {
 						token = &api.TokenBalanceHistory{AssetGuid: uint32(vout.AssetInfo.AssetGuid), ReceivedSat: &bchain.Amount{}, SentSat: &bchain.Amount{}}
-						mapTokens[uint32(vout.AssetInfo.AssetGuid)] = token
+						ahi.Tokens[uint32(vout.AssetInfo.AssetGuid)] = token
 					}
 					(*big.Int)(token.ReceivedSat).Add((*big.Int)(token.ReceivedSat), vout.AssetInfo.ValueSat)
 				}
@@ -621,13 +611,8 @@ func (s *SocketIoServer) getAssetHistory(asset string, opts *assetOpts) (res res
 			}
 			return res, errAsset
 		}
-		if len(mapTokens) > 0 {
-			ahi.Tokens = make([]*api.TokenBalanceHistory, len(mapTokens))
-			var i int = 0
-			for _, v := range mapTokens {
-				ahi.Tokens[i] = v
-				i++
-			}
+		if len(ahi.Tokens) <= 0 {
+			ahi.Tokens = nil
 		}
 		ahi.Confirmations = int(tx.Confirmations)
 		ahi.Satoshis = totalSat.Int64()

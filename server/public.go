@@ -660,16 +660,12 @@ func (s *PublicServer) getAddressQueryParams(r *http.Request, accountDetails api
 		if filterParam == "non-tokens" {
 			assetsMask = bchain.SyscoinMask
 		} else if filterParam == "token-only" {
-			assetsMask = bchain.AssetAllocationSendMask | bchain.AssetActivateMask | bchain.AssetUpdateMask | bchain.AssetTransferMask | bchain.AssetSendMask | 
-			bchain.AssetSyscoinBurnToAllocationMask | bchain.AssetAllocationBurnToSyscoinMask | bchain.AssetAllocationBurnToEthereumMask | 
-			bchain.AssetAllocationMintMask
+			assetsMask = bchain.AssetMask
 		} else if filterParam == "token-transfers" {
 			assetsMask = bchain.AssetAllocationSendMask
 		} else if filterParam == "non-token-transfers" {
 			// everything but allocation send
-			assetsMask = bchain.AssetActivateMask | bchain.AssetUpdateMask | bchain.AssetTransferMask | bchain.AssetSendMask | 
-			bchain.AssetSyscoinBurnToAllocationMask | bchain.AssetAllocationBurnToSyscoinMask | bchain.AssetAllocationBurnToEthereumMask | 
-			bchain.AssetAllocationMintMask
+			assetsMask = bchain.AssetMask & ~bchain.AssetAllocationSendMask
 		} else {
 			var mask, ec = strconv.Atoi(filterParam)
 			if ec == nil {
@@ -890,7 +886,7 @@ func (s *PublicServer) explorerSearch(w http.ResponseWriter, r *http.Request) (t
 	var err error
 	s.metrics.ExplorerViews.With(common.Labels{"action": "search"}).Inc()
 	if len(q) > 0 {
-		address, err = s.api.GetXpubAddress(q, 0, 1, api.AccountDetailsBasic, &api.AddressFilter{AssetsMask: bchain.AssetAll, Vout: api.AddressFilterVoutOff}, 0)
+		address, err = s.api.GetXpubAddress(q, 0, 1, api.AccountDetailsBasic, &api.AddressFilter{AssetsMask: bchain.AllMask, Vout: api.AddressFilterVoutOff}, 0)
 		if err == nil {
 			http.Redirect(w, r, joinURL("/xpub/", address.AddrStr), 302)
 			return noTpl, nil, nil
@@ -905,7 +901,7 @@ func (s *PublicServer) explorerSearch(w http.ResponseWriter, r *http.Request) (t
 			http.Redirect(w, r, joinURL("/tx/", tx.Txid), 302)
 			return noTpl, nil, nil
 		}
-		address, err = s.api.GetAddress(q, 0, 1, api.AccountDetailsBasic, &api.AddressFilter{AssetsMask: bchain.AssetAll, Vout: api.AddressFilterVoutOff})
+		address, err = s.api.GetAddress(q, 0, 1, api.AccountDetailsBasic, &api.AddressFilter{AssetsMask: bchain.AllMask, Vout: api.AddressFilterVoutOff})
 		if err == nil {
 			http.Redirect(w, r, joinURL("/address/", address.AddrStr), 302)
 			return noTpl, nil, nil
@@ -921,7 +917,7 @@ func (s *PublicServer) explorerSearch(w http.ResponseWriter, r *http.Request) (t
 				return noTpl, nil, nil
 			}
 		}
-		asset, err = s.api.GetAsset(q, 0, 1, api.AccountDetailsBasic, &api.AddressFilter{AssetsMask: bchain.AssetAll})
+		asset, err = s.api.GetAsset(q, 0, 1, api.AccountDetailsBasic, &api.AddressFilter{AssetsMask: bchain.AssetMask})
 		if err == nil {
 			http.Redirect(w, r, joinURL("/asset/", strconv.FormatUint(uint64(asset.AssetDetails.AssetGuid), 10)), 302)
 			return noTpl, nil, nil
