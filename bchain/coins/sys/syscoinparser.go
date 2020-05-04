@@ -506,7 +506,7 @@ func (p *SyscoinParser) PackSyscoinBurnToEthereum(a *bchain.SyscoinBurnToEthereu
 
 func (p *SyscoinParser) GetAllocationFromTx(tx *bchain.Tx) (*bchain.AssetAllocationType, error) {
 	var sptData []byte
-	for i, output := range tx.Vout {
+	for _, output := range tx.Vout {
 		addrDesc, err := p.GetAddrDescFromVout(&output)
 		if err != nil || len(addrDesc) == 0 || len(addrDesc) > maxAddrDescLen {
 			continue
@@ -531,25 +531,7 @@ func (p *SyscoinParser) GetAllocationFromTx(tx *bchain.Tx) (*bchain.AssetAllocat
 	return &assetAllocation, nil
 }
 
-func (p *SyscoinParser) GetAssetFromTx(tx *bchain.Tx) (*bchain.AssetType, error) {
-	var sptData []byte
-	for i, output := range tx.Vout {
-		addrDesc, err := p.GetAddrDescFromVout(&output)
-		if err != nil || len(addrDesc) == 0 || len(addrDesc) > maxAddrDescLen {
-			continue
-		}
-		if(addrDesc[0] == txscript.OP_RETURN) {
-			script, err := p.GetScriptFromAddrDesc(addrDesc)
-			if err != nil {
-				return nil, err
-			}
-			sptData = p.TryGetOPReturn(script)
-			if sptData == nil {
-				return nil, errors.New("OP_RETURN empty")
-			}
-			break
-		}
-	}
+func (p *SyscoinParser) GetAssetFromData([]byte sptData) (*bchain.AssetType, error) {
 	var asset bchain.AssetType
 	l := p.UnpackAssetObj(&asset, sptData)
 	if l != len(sptData) {

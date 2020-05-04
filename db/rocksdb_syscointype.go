@@ -131,7 +131,7 @@ func (d *RocksDB) ConnectAllocationOutput(height uint32, balanceAsset *bchain.As
 }
 
 func (d *RocksDB) ConnectAssetOutput(addrDescData *bchain.AddressDescriptor, addrDesc *bchain.AddressDescriptor, isActivate bool, isAssetTx bool, assetGuid uint32, assets map[uint32]*bchain.Asset) error {
-	script, err := d.chainParser.GetScriptFromAddrDesc(addrDescData)
+	script, err := d.chainParser.GetScriptFromAddrDesc(*addrDescData)
 	if err != nil {
 		return err
 	}
@@ -139,7 +139,7 @@ func (d *RocksDB) ConnectAssetOutput(addrDescData *bchain.AddressDescriptor, add
 	if sptData == nil {
 		return nil
 	}
-	asset, err := d.chainParser.GetAssetFromData(tx)
+	asset, err := d.chainParser.GetAssetFromData(sptData)
 	if err != nil {
 		return err
 	}	
@@ -159,7 +159,7 @@ func (d *RocksDB) ConnectAssetOutput(addrDescData *bchain.AddressDescriptor, add
 			if err != nil {
 				return err
 			}
-			dBAsset.AddrDesc = addrDesc
+			dBAsset.AddrDesc = *addrDesc
 		} 
 		assets[assetGuid] = dBAsset
 	} else {
@@ -168,7 +168,7 @@ func (d *RocksDB) ConnectAssetOutput(addrDescData *bchain.AddressDescriptor, add
 	return nil
 }
 
-func (d *RocksDB) DisconnectAllocationOutput(assetBalances map[uint32]*bchain.AssetBalance, isActivate bool, btxID []byte, assets map[uint32]*bchain.Asset,  assetInfo *bchain.AssetInfo, assetFoundInTx func(asset uint32, btxID []byte) bool) error {
+func (d *RocksDB) DisconnectAllocationOutput(assetBalances map[uint32]*bchain.AssetBalance, isActivate bool, version int32, btxID []byte, assets map[uint32]*bchain.Asset,  assetInfo *bchain.AssetInfo, assetFoundInTx func(asset uint32, btxID []byte) bool) error {
 	var balanceAsset *bchain.AssetBalance
 	if assetBalances != nil {
 		var ok bool
@@ -209,7 +209,7 @@ func (d *RocksDB) DisconnectAllocationOutput(assetBalances map[uint32]*bchain.As
 	return nil
 }
 func (d *RocksDB) DisconnectAssetOutput(addrDesc *bchain.AddressDescriptor, isActivate bool, assets map[uint32]*bchain.Asset, assetGuid uint32) error {
-	script, err := d.chainParser.GetScriptFromAddrDesc(addrDesc)
+	script, err := d.chainParser.GetScriptFromAddrDesc(*addrDesc)
 	if err != nil {
 		return err
 	}

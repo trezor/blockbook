@@ -19,6 +19,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/juju/errors"
 	"github.com/tecbot/gorocksdb"
+	"github.com/martinboehm/btcutil/txscript"
 )
 
 const dbVersion = 5
@@ -585,7 +586,7 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses bch
 					// replace asset ownership with this addrDesc in ConnectAssetOutput, this should be the change address
 					if isAssetTx && output.AssetInfo.ValueSat.Int64() == 0 {
 						assetGuid = output.AssetInfo.AssetGuid
-						addrDesc = &t.AddrDesc
+						addrDesc = &addrDesc
 					}
 				}
 				balance.AddUtxo(&utxo)
@@ -1113,7 +1114,7 @@ func (d *RocksDB) disconnectTxAddressesOutputs(wb *gorocksdb.WriteBatch, btxID [
 						if balance.AssetBalances == nil {
 							return errors.New("DisconnectSyscoinOutput asset balances was nil but not expected to be")
 						}
-						err := d.DisconnectAllocationOutput(balance.AssetBalances, isActivate, btxID, assets, &t.AssetInfo, assetFoundInTx)
+						err := d.DisconnectAllocationOutput(balance.AssetBalances, isActivate, txa.Version, btxID, assets, &t.AssetInfo, assetFoundInTx)
 						if err != nil {
 							glog.Warningf("rocksdb: DisconnectSyscoinOutput: tx %v, output %v, error %v", btxID, t, err)
 						}
