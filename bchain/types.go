@@ -762,7 +762,7 @@ type BlockChainParser interface {
 	UnpackAssetTxIndex(buf []byte) []*TxAssetIndex
 	PackAsset(asset *Asset) []byte
 	UnpackAsset(buf []byte) *Asset
-	GetAssetFromData([]byte sptData) (*AssetType, error)
+	GetAssetFromData(sptData []byte) (*AssetType, error)
 	GetAllocationFromTx(tx *Tx) (*AssetAllocationType, error)
 	LoadAssets(tx *Tx) error
 	AppendAssetInfo(assetInfo *AssetInfo, buf []byte, varBuf []byte, details bool) []byte
