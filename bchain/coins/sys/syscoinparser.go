@@ -820,7 +820,7 @@ func (p *SyscoinParser) UnpackAsset(buf []byte) *bchain.Asset {
 	var asset bchain.Asset
 	transactions, l := p.BaseParser.UnpackVaruint(buf)
 	asset.Transactions = uint32(transactions)
-	asset.AddrDesc, ll := p.BaseParser.UnpackVarBytes(buf[l:])
+	asset.AddrDesc, ll = p.BaseParser.UnpackVarBytes(buf[l:])
 	l += ll
 	varBuf := buf[l:]
 	l := asset.AssetObj.Deserialize(varBuf)
