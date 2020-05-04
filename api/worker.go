@@ -127,6 +127,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 	var err error
 	var ta *bchain.TxAddresses
 	var tokens []*bchain.TokenTransferSummary
+	var mapTTS map[uint32]*bchain.TokenTransferSummary{}
 	var ethSpecific *EthereumSpecific
 	var blockhash string
 	if bchainTx.Confirmations > 0 {
@@ -144,6 +145,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 	var valInSat, valOutSat, feesSat big.Int
 	var pValInSat *big.Int
 	vins := make([]Vin, len(bchainTx.Vin))
+
 	rbf := false
 	for i := range bchainTx.Vin {
 		bchainVin := &bchainTx.Vin[i]
@@ -207,6 +209,20 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 				}
 				if vin.ValueSat != nil {
 					valInSat.Add(&valInSat, (*big.Int)(vin.ValueSat))
+					if vin.AssetInfo.AssetGuid > 0 {
+						tts, ok := mapTTS[vin.AssetInfo.AssetGuid]
+						if !ok {
+							tts = &bchain.TokenTransferSummary{
+								Type:     w.chainParser.GetAssetTypeFromVersion(bchainTx.Version),
+								Token:    vin.AssetInfo.AssetGuid,
+								Decimals: vin.AssetInfo.Details.Precision,
+								ValueIn:  (*bchain.Amount)(big.NewInt(0)),
+								Symbol:   vin.AssetInfo.Details.Symbol,
+							}
+							mapTTS[vin.AssetInfo.AssetGuid] = tts
+						}
+						(*big.Int)(tts.ValueIn).Add((*big.Int)(tts.ValueIn), (*big.Int)(vin.AssetInfo.ValueSat))
+					}
 				}
 			}
 		} else if w.chainType == bchain.ChainEthereumType {
@@ -227,6 +243,21 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 		vout.N = i
 		vout.ValueSat = (*bchain.Amount)(&bchainVout.ValueSat)
 		valOutSat.Add(&valOutSat, &bchainVout.ValueSat)
+		
+		if vout.AssetInfo.AssetGuid > 0 {
+			tts, ok := mapTTS[vout.AssetInfo.AssetGuid]
+			if !ok {
+				tts = &bchain.TokenTransferSummary{
+					Type:     w.chainParser.GetAssetTypeFromVersion(bchainTx.Version),
+					Token:    vout.AssetInfo.AssetGuid,
+					Decimals: vout.AssetInfo.Details.Precision,
+					ValueIn:  (*bchain.Amount)(big.NewInt(0)),
+					Symbol:   vout.AssetInfo.Details.Symbol,
+				}
+				mapTTS[vout.AssetInfo.AssetGuid] = tts
+			}
+			(*big.Int)(tts.Value).Add((*big.Int)(tts.Value), (*big.Int)(vout.AssetInfo.ValueSat))
+		}
 		
 		vout.Hex = bchainVout.ScriptPubKey.Hex
 		vout.AddrDesc, vout.Addresses, vout.IsAddress, err = w.getAddressesFromVout(bchainVout)
@@ -250,6 +281,14 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 			feesSat.SetUint64(0)
 		}
 		pValInSat = &valInSat
+		// flatten TTS Map
+		if len(mapTTS) > 0 {
+			tokens = make([]*bchain.TokenTransferSummary, len(mapTTS))
+			var i int = 0
+			for _, token := range mapTTS {
+				tokens[i++] = token
+			}
+		}
 		
 	} else if w.chainType == bchain.ChainEthereumType {
 		ets, err := w.chainParser.EthereumTypeGetErc20FromTx(bchainTx)
