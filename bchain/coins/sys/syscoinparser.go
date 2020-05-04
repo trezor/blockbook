@@ -632,7 +632,7 @@ func (p *SyscoinParser) UnpackAssetInfoDetails(assetInfoDetails *bchain.AssetInf
 	decimals, l := p.BaseParser.UnpackVarint32(buf)
 	symbolBytes := append([]byte(nil), buf[l:]...)
 	assetInfoDetails = &bchain.AssetInfoDetails{Symbol: string(symbolBytes), Decimals: decimals}
-	return l + al
+	return l + int(len(symbolBytes))
 }
 
 func (p *SyscoinParser) AppendAssetInfo(assetInfo *bchain.AssetInfo, buf []byte, varBuf []byte, details bool) []byte {
@@ -642,7 +642,7 @@ func (p *SyscoinParser) AppendAssetInfo(assetInfo *bchain.AssetInfo, buf []byte,
 		l := p.BaseParser.PackBigint(assetInfo.ValueSat, varBuf)
 		buf = append(buf, varBuf[:l]...)
 		if details {
-			buf = p.AppendAssetInfoDetails(txi.AssetInfo.Details, buf, varBuf)	
+			buf = p.AppendAssetInfoDetails(assetInfo.Details, buf, varBuf)	
 		}
 	}
 	return buf
@@ -671,7 +671,7 @@ func (p *SyscoinParser) AppendTxInput(txi *bchain.TxInput, buf []byte, varBuf []
 
 func (p *SyscoinParser) AppendTxOutput(txo *bchain.TxOutput, buf []byte, varBuf []byte) []byte {
 	buf = p.BitcoinParser.AppendTxInput(txo, buf, varBuf)
-	buf = p.AppendAssetInfo(&txi.AssetInfo, buf, varBuf, true)
+	buf = p.AppendAssetInfo(&txo.AssetInfo, buf, varBuf, true)
 	return buf
 }
 
@@ -822,6 +822,7 @@ func (p *SyscoinParser) PackAsset(asset *bchain.Asset) []byte {
 
 func (p *SyscoinParser) UnpackAsset(buf []byte) *bchain.Asset {
 	var asset bchain.Asset
+	var ll int
 	transactions, l := p.BaseParser.UnpackVaruint(buf)
 	asset.Transactions = uint32(transactions)
 	asset.AddrDesc, ll = p.BaseParser.UnpackVarBytes(buf[l:])
