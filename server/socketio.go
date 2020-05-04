@@ -298,7 +298,7 @@ func (s *SocketIoServer) getAssetTxids(asset string, opts *assetOpts) (res resul
 			return res, err
 		}
 	} else {
-		o := s.mempool.GetTxAssets(asset)
+		o := s.mempool.GetTxAssets(uint32(assetGuid))
 		for _, m := range o {
 			txids = append(txids, m.Txid)
 		}
@@ -545,6 +545,11 @@ func (s *SocketIoServer) getAssetHistory(asset string, opts *assetOpts) (res res
 	}
 	ahi := addressHistoryItem{}
 	ahi.Tokens = map[uint32]*api.TokenBalanceHistory{}
+	guid, errAG := strconv.Atoi(asset)
+	if errAG != nil {
+		return res, errAG
+	}
+	assetGuid := uint32(guid)
 	for txi := opts.From; txi < to; txi++ {
 		tx, err := s.api.GetTransaction(txids[txi], false, false)
 		if err != nil {
@@ -554,56 +559,60 @@ func (s *SocketIoServer) getAssetHistory(asset string, opts *assetOpts) (res res
 		var totalSat big.Int
 		for i := range tx.Vin {
 			vin := &tx.Vin[i]
-			a := addressInSlice(vin.Addresses, addr)
-			if a != "" {
-				hi := ads[a]
-				if hi == nil {
-					hi = &addressHistoryIndexes{OutputIndexes: []int{}}
-					ads[a] = hi
+			if vin.AssetInfo.AssetGuid == assetGuid {
+				a, s, err := w.chainParser.GetAddressesFromAddrDesc(vin.AddrDesc)
+				if err != nil {
+					return res, err
 				}
-				hi.InputIndexes = append(hi.InputIndexes, int(vin.N))
+				for addr := range a {
+					hi := ads[addr]
+					if hi == nil {
+						hi = &addressHistoryIndexes{OutputIndexes: []int{}}
+						ads[addr] = hi
+					}
+					hi.InputIndexes = append(hi.InputIndexes, int(vin.N))
+				}
 				if vin.ValueSat != nil {
 					totalSat.Sub(&totalSat, (*big.Int)(vin.ValueSat))
 				}
-				if vin.AssetInfo.AssetGuid > 0 {
-					token, ok := ahi.Tokens[uint32(vin.AssetInfo.AssetGuid)]
-					if !ok {
-						token = &api.TokenBalanceHistory{AssetGuid: uint32(vout.AssetInfo.AssetGuid), ReceivedSat: &bchain.Amount{}, SentSat: &bchain.Amount{}}
-						ahi.Tokens[uint32(vin.AssetInfo.AssetGuid)] = token
-					}
-					(*big.Int)(token.SentSat).Add((*big.Int)(token.SentSat), vin.AssetInfo.ValueSat)
+				token, ok := ahi.Tokens[uint32(vin.AssetInfo.AssetGuid)]
+				if !ok {
+					token = &api.TokenBalanceHistory{AssetGuid: uint32(vout.AssetInfo.AssetGuid), ReceivedSat: &bchain.Amount{}, SentSat: &bchain.Amount{}}
+					ahi.Tokens[uint32(vin.AssetInfo.AssetGuid)] = token
 				}
+				(*big.Int)(token.SentSat).Add((*big.Int)(token.SentSat), vin.AssetInfo.ValueSat)
 			}
 		}
 		for i := range tx.Vout {
 			vout := &tx.Vout[i]
 			a := addressInSlice(vout.Addresses, addr)
-			if a != "" {
-				hi := ads[a]
-				if hi == nil {
-					hi = &addressHistoryIndexes{InputIndexes: []int{}}
-					ads[a] = hi
+			if vout.AssetInfo.AssetGuid == assetGuid {
+				a, s, err := w.chainParser.GetAddressesFromAddrDesc(vout.AddrDesc)
+				if err != nil {
+					return res, err
 				}
-				hi.OutputIndexes = append(hi.OutputIndexes, int(vout.N))
+				for addr := range a {
+					hi := ads[addr]
+					if hi == nil {
+						hi = &addressHistoryIndexes{InputIndexes: []int{}}
+						ads[addr] = hi
+					}
+					hi.OutputIndexes = append(hi.OutputIndexes, int(vout.N))
+				}
 				if vout.ValueSat != nil {
 					totalSat.Add(&totalSat, (*big.Int)(vout.ValueSat))
 				}
-				if vout.AssetInfo.AssetGuid > 0 {
-					token, ok := ahi.Tokens[uint32(vout.AssetInfo.AssetGuid)]
-					if !ok {
-						token = &api.TokenBalanceHistory{AssetGuid: uint32(vout.AssetInfo.AssetGuid), ReceivedSat: &bchain.Amount{}, SentSat: &bchain.Amount{}}
-						ahi.Tokens[uint32(vout.AssetInfo.AssetGuid)] = token
-					}
-					(*big.Int)(token.ReceivedSat).Add((*big.Int)(token.ReceivedSat), vout.AssetInfo.ValueSat)
+
+				token, ok := ahi.Tokens[uint32(vout.AssetInfo.AssetGuid)]
+				if !ok {
+					token = &api.TokenBalanceHistory{AssetGuid: uint32(vout.AssetInfo.AssetGuid), ReceivedSat: &bchain.Amount{}, SentSat: &bchain.Amount{}}
+					ahi.Tokens[uint32(vout.AssetInfo.AssetGuid)] = token
 				}
+				(*big.Int)(token.ReceivedSat).Add((*big.Int)(token.ReceivedSat), vout.AssetInfo.ValueSat)
+				
 			}
 		}
 		ahi.Addresses = ads
-		guid, errAG := strconv.Atoi(asset)
-		if errAG != nil {
-			return res, errAG
-		}
-		assetGuid := uint32(guid)
 		dbAsset, errAsset := s.db.GetAsset(assetGuid, nil)
 		if errAsset != nil || dbAsset == nil {
 			if err == nil{
