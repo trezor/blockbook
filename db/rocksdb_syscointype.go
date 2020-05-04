@@ -203,7 +203,7 @@ func (d *RocksDB) DisconnectAllocationOutput(assetBalances map[uint32]*bchain.As
 	} else if isActivate {
 		// signals for removal from asset db
 		dBAsset.AssetObj.TotalSupply = -1
-		delete(assetBalances, assetGuid)
+		delete(assetBalances, assetInfo.AssetGuid)
 		// vout AssetGuid should be set to 0 so it won't serialize asset info or use asset info anywhere in API
 		assetInfo.AssetGuid = 0
 	}
@@ -261,7 +261,7 @@ func (d *RocksDB) DisconnectAssetInput(addrDesc *bchain.AddressDescriptor, asset
 	if dBAsset == nil || err != nil {
 		return err
 	}
-	dBAsset.AddrDesc = addrDesc
+	dBAsset.AddrDesc = *addrDesc
 	assets[assetGuid] = dBAsset
 	return nil
 }

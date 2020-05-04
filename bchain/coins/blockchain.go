@@ -362,5 +362,5 @@ func (c *mempoolWithMetrics) GetTransactionTime(txid string) uint32 {
 
 func (c *mempoolWithMetrics) GetTxAssets(assetGuid uint32) bchain.MempoolTxidEntries {
 	defer func(s time.Time) { c.observeRPCLatency("GetTxAssets", s, nil) }(time.Now())
-	return c.mempool.GetTransactionTime(assetGuid)
+	return c.mempool.GetTxAssets(assetGuid)
 }

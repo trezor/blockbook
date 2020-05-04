@@ -595,7 +595,7 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses bch
 				addrDescData = &addrDesc
 			}
 		}
-		if assetGuid > 0 && addrDesc != nil {
+		if assetGuid > 0 && addrDescOwner != nil && addrDescData != nil {
 			err := d.ConnectAssetOutput(addrDescData, addrDescOwner, isActivate, isAssetTx, assetGuid, assets)
 			if err != nil {
 				glog.Warningf("rocksdb: ConnectAssetOutput: tx %v, error %v", btxID, err)
