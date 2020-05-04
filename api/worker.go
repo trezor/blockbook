@@ -908,19 +908,26 @@ func (w *Worker) FindAssets(filter string, page int, txsOnPage int) *Assets {
 	var from, to int
 	var pg Paging
 	pg, from, to, page = computePaging(len(assetsFiltered), page, txsOnPage)
-	for i := from; i < to; i++ {
-		assetFiltered := assetsFiltered[i]
-		assetSpecific := AssetsSpecific{
-			AssetGuid:		assetFiltered.AssetObj.AssetGuid,
-			Symbol:			assetFiltered.AssetObj.Symbol,
-			AddrStr:		assetFiltered.AddrDesc.String(),
-			Contract:		"0x" + hex.EncodeToString(assetFiltered.AssetObj.Contract),
-			TotalSupply:	(*bchain.Amount)(big.NewInt(assetFiltered.AssetObj.TotalSupply)),
-			Decimals:		int(assetFiltered.AssetObj.Precision),
-			Txs:			int(assetFiltered.Transactions),
+	var i int = 0
+	for guid, asset := range assetsFiltered {
+		i++
+		if i < from {
+			continue
 		}
-		json.Unmarshal(assetFiltered.AssetObj.PubData, &assetSpecific.PubData)
-		assetDetails = append(assetDetails, &assetSpecific)
+		if i >= to {
+			break
+		}
+		assetSpecific := AssetsSpecific{
+			AssetGuid:		guid,
+			Symbol:			asset.AssetObj.Symbol,
+			AddrStr:		asset.AddrDesc.String(),
+			Contract:		"0x" + hex.EncodeToString(asset.AssetObj.Contract),
+			TotalSupply:	(*bchain.Amount)(big.NewInt(asset.AssetObj.TotalSupply)),
+			Decimals:		int(asset.AssetObj.Precision),
+			Txs:			int(asset.Transactions),
+		}
+		json.Unmarshal(asset.AssetObj.PubData, &assetSpecific.PubData)
+		assetDetails = append(assetDetails, &assetSpecific)	
 	}
 	r := &Assets{
 		AssetDetails:		assetDetails,

@@ -267,7 +267,7 @@ func (w *Worker) tokenFromXpubAddress(data *xpubData, ad *xpubAddress, changeInd
 			// for asset tokens
 			var ownerFound bool = false
 			for k, v := range ad.balance.AssetBalances {
-				dbAsset, errAsset := w.db.GetAsset(uint32(k), nil)
+				dbAsset, errAsset := w.db.GetAsset(k, nil)
 				if errAsset != nil || dbAsset == nil {
 					return nil, errAsset
 				}
@@ -286,9 +286,9 @@ func (w *Worker) tokenFromXpubAddress(data *xpubData, ad *xpubAddress, changeInd
 							TotalReceivedSat: (*bchain.Amount)(totalOwnerAssetReceived),
 							TotalSentSat:     (*bchain.Amount)(v.SentSat),
 							Path:             fmt.Sprintf("%s/%d/%d", data.basePath, changeIndex, index),
-							Contract:		  k,
+							Contract:		  assetGuid,
 							Transfers:		  v.Transfers,
-							ContractIndex:    k,
+							ContractIndex:    assetGuid,
 						})
 						ownerFound = true
 					}
@@ -305,9 +305,9 @@ func (w *Worker) tokenFromXpubAddress(data *xpubData, ad *xpubAddress, changeInd
 					TotalReceivedSat: (*bchain.Amount)(totalAssetReceived),
 					TotalSentSat:     (*bchain.Amount)(v.SentSat),
 					Path:             fmt.Sprintf("%s/%d/%d", data.basePath, changeIndex, index),
-					Contract:		  k,
+					Contract:		  assetGuid,
 					Transfers:		  v.Transfers,
-					ContractIndex:    k,
+					ContractIndex:    assetGuid,
 				})
 			}
 			sort.Sort(tokens)

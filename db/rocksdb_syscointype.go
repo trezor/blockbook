@@ -287,7 +287,7 @@ func (d *RocksDB) SetupAssetCache() error {
 }
 
 // find assets from cache that contain filter
-func (d *RocksDB) FindAssetsFromFilter(filter string) bchain.Assets {
+func (d *RocksDB) FindAssetsFromFilter(filter string) map[uint32]bchain.Asset {
 	start := time.Now()
 	if SetupAssetCacheFirstTime == true {
 		if err := d.SetupAssetCache(); err != nil {
@@ -296,18 +296,18 @@ func (d *RocksDB) FindAssetsFromFilter(filter string) bchain.Assets {
 		}
 		SetupAssetCacheFirstTime = false;
 	}
-	assets := make(bchain.Assets, 0)
+	assets := map[uint32]bchain.Asset{}
 	filterLower := strings.ToLower(filter)
 	filterLower = strings.Replace(filterLower, "0x", "", -1)
-	for _, assetCached := range AssetCache {
+	for guid, assetCached := range AssetCache {
 		symbolLower := strings.ToLower(assetCached.AssetObj.Symbol)
 		if strings.Contains(symbolLower, filterLower) {
-			assets = append(assets, assetCached)
+			assets[guid] = assetCached
 		} else if len(assetCached.AssetObj.Contract) > 0 && len(filterLower) > 5 {
 			contractStr := hex.EncodeToString(assetCached.AssetObj.Contract)
 			contractLower := strings.ToLower(contractStr)
 			if strings.Contains(contractLower, filterLower) {
-				assets = append(assets, assetCached)
+				assets[guid] = assetCached
 			}
 		}
 	}
