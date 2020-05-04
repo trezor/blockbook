@@ -311,7 +311,7 @@ func DecompressAmount(x uint64) uint64 {
 func (a *AssetAllocationType) Deserialize(buf []byte) int {
 	numAssets, l := p.BaseParser.UnpackVarint(buf)
 
-	a.BlockNumber, ll := p.BaseParser.UnpackVarint(buf[l:])
+	a.BlockNumber, ll = p.BaseParser.UnpackVarint(buf[l:])
 	l += ll
 
 	a.VoutAssets = make(map[uint32][]AssetOutType, numAssets)
