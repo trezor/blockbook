@@ -169,7 +169,7 @@ func (d *RocksDB) DisconnectSyscoinOutput(assetBalances map[uint32]*bchain.Asset
 		delete(assetBalances, assetInfo.AssetGuid)
 		// signals for removal from asset db
 		dBAsset.AssetObj.TotalSupply = -1
-		assetFoundInTx(assetGuid, btxID)
+		assetFoundInTx(assetInfo.AssetGuid, btxID)
 		assets[assetInfo.AssetGuid] = dBAsset
 		return nil
 	} else if d.chainParser.IsAssetTx(version) {
@@ -177,7 +177,7 @@ func (d *RocksDB) DisconnectSyscoinOutput(assetBalances map[uint32]*bchain.Asset
 		if err != nil {
 			return err
 		}
-		err = d.DisconnectAssetOutput(version, &asset, dBAsset, assetInfo)
+		err = d.DisconnectAssetOutput(version, asset, dBAsset, assetInfo)
 		if err != nil {
 			return err
 		}
@@ -190,24 +190,24 @@ func (d *RocksDB) DisconnectSyscoinOutput(assetBalances map[uint32]*bchain.Asset
 	}
 	
 
-	balanceAsset.BalanceSat.Sub(&balanceAsset.BalanceSat, assetInfo.ValueSat)
+	balanceAsset.BalanceSat.Sub(balanceAsset.BalanceSat, assetInfo.ValueSat)
 	if balanceAsset.BalanceSat.Sign() < 0 {
 		balanceAsset.BalanceSat.SetInt64(0)
 	}
 	
 	isAssetSend := d.chainParser.IsAssetSendTx(version)
 	if isAssetSend {
-		balanceAssetSat = big.NewInt(dBAsset.AssetObj.Balance)
+		balanceAssetSat := big.NewInt(dBAsset.AssetObj.Balance)
 		balanceAssetSat.Add(balanceAssetSat, assetInfo.ValueSat)
 		dBAsset.AssetObj.Balance = balanceAssetSat.Int64()
 	} 
-	assets[assetGuid] = dBAsset
+	assets[assetInfo.AssetGuid] = dBAsset
 	return nil
 }
 
 func (d *RocksDB) DisconnectSyscoinInput(addrDesc bchain.AddressDescriptor, version int32, balanceAsset *bchain.AssetBalance,  btxID []byte, assetInfo *bchain.AssetInfo, utxo *bchain.Utxo, assets map[uint32]*bchain.Asset, assetFoundInTx func(asset uint32, btxID []byte) bool) error {
 	isActivate := d.chainParser.IsAssetActivateTx(version)
-	dBAsset, err := d.GetAsset(assetGuid, &assets)
+	dBAsset, err := d.GetAsset(assetInfo.AssetGuid, &assets)
 	if dBAsset == nil || err != nil {
 		return err
 	}
@@ -221,18 +221,18 @@ func (d *RocksDB) DisconnectSyscoinInput(addrDesc bchain.AddressDescriptor, vers
 			dBAsset.AddrDesc = addrDesc
 		}
 	} 
-	exists := assetFoundInTx(assetGuid, btxID)
+	exists := assetFoundInTx(assetInfo.AssetGuid, btxID)
 	if !exists {
 		balanceAsset.Transfers--
 	}
 	
-	balanceAsset.SentSat.Sub(&balanceAsset.SentSat, assetInfo.ValueSat)
-	balanceAsset.BalanceSat.Add(&balanceAsset.BalanceSat, assetInfo.ValueSat)
+	balanceAsset.SentSat.Sub(balanceAsset.SentSat, assetInfo.ValueSat)
+	balanceAsset.BalanceSat.Add(balanceAsset.BalanceSat, assetInfo.ValueSat)
 	if balanceAsset.SentSat.Sign() < 0 {
 		balanceAsset.SentSat.SetInt64(0)
 	}
 	utxo.AssetInfo = assetInfo
-	assets[assetGuid] = dBAsset
+	assets[assetInfo.AssetGuid] = dBAsset
 	return nil
 }
 func (d *RocksDB) SetupAssetCache() error {

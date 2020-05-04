@@ -527,7 +527,7 @@ type MintSyscoinType struct {
 
 type SyscoinBurnToEthereumType struct {
 	Allocation AssetAllocationType
-	ethAddress []byte
+	EthAddress []byte
 }
 
 // encapuslates Syscoin SPT as well as aux fees object unmarshalled

@@ -414,7 +414,8 @@ func (p *SyscoinParser) PackAssetOut(a *bchain.AssetOutType, buf []byte, varBuf 
 func (p *SyscoinParser) UnpackAssetOut(a *bchain.AssetOutType, buf []byte) int {
 	var l int
 	var ll int
-	a.N, l = uint32(p.BaseParser.UnpackVaruint(buf[l:]))
+	n, l := p.BaseParser.UnpackVaruint(buf[l:])
+	a.N = uint32(n)
 	valueSat, ll := p.BaseParser.UnpackVarint(buf[l:])
 	l += ll
 	a.ValueSat = int64(DecompressAmount(uint64(valueSat)))
@@ -425,11 +426,12 @@ func (p *SyscoinParser) UnpackAssetOut(a *bchain.AssetOutType, buf []byte) int {
 func (p *SyscoinParser) UnpackMintSyscoin(a *bchain.MintSyscoinType, buf []byte) int {
 	l := p.UnpackAllocation(&a.Allocation, buf)
 	var ll int
-	bridgeTransferId, ll = p.BaseParser.UnpackVaruint(buf[l:])
+	bridgeTransferId, ll := p.BaseParser.UnpackVaruint(buf[l:])
 	a.BridgeTransferId = uint32(bridgeTransferId)
 	l += ll
 
-	a.BlockNumber, ll = p.BaseParser.UnpackVaruint(buf[l:])
+	blockNumber, ll := p.BaseParser.UnpackVaruint(buf[l:])
+	a.BlockNumber = uint32(blockNumber)
 	l += ll
 
 	a.TxValue, ll = p.BaseParser.UnpackVarBytes(buf[l:])
@@ -490,14 +492,14 @@ func (p *SyscoinParser) AppendMintSyscoin(a *bchain.MintSyscoinType, buf []byte)
 func (p *SyscoinParser) UnpackSyscoinBurnToEthereum(a *bchain.SyscoinBurnToEthereumType, buf []byte) int {
 	l := p.UnpackAllocation(&a.Allocation, buf)
 	var ll int
-	a.ethAddress, ll = p.BaseParser.UnpackVarBytes(buf[l:])
+	a.EthAddress, ll = p.BaseParser.UnpackVarBytes(buf[l:])
 	l += ll	
 	return l
 }
 
 func (p *SyscoinParser) PackSyscoinBurnToEthereum(a *bchain.SyscoinBurnToEthereumType, buf []byte) []byte {
 	buf = p.PackAllocation(&a.Allocation, buf)
-	buf = append(buf, a.ethAddress...)
+	buf = append(buf, a.EthAddress...)
 	return buf
 }
 
