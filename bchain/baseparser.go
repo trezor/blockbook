@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/gogo/protobuf/proto"
-	"github.com/syscoin/btcd/wire"
+	"github.com/martinboehm/btcd/wire"
 	"github.com/golang/glog"
 	"github.com/juju/errors"
 	vlq "github.com/bsm/go-vlq"
@@ -353,10 +353,10 @@ func (p *BaseParser) PackAssetTxIndex(txAsset *TxAsset) []byte {
 func (p *BaseParser) UnpackAssetTxIndex(buf []byte) []*TxAssetIndex {
 	return nil
 }
-func (p *BaseParser) GetAssetFromTx(tx *Tx) (*wire.AssetType, error) {
+func (p *BaseParser) GetAssetFromTx(tx *Tx) (*AssetType, error) {
 	return nil, errors.New("Not supported")
 }
-func (p *BaseParser) GetAllocationFromTx(tx *Tx) (*wire.AssetAllocationType, error) {
+func (p *BaseParser) GetAllocationFromTx(tx *Tx) (*AssetAllocationType, error) {
 	return nil, errors.New("Not supported")
 }
 func (p *BaseParser) LoadAssets(tx *Tx) error {
@@ -402,6 +402,16 @@ func (p *BaseParser) UnpackUint(buf []byte) uint32 {
 	return binary.BigEndian.Uint32(buf)
 }
 
+func (p *BaseParser) PackUintLE(i uint32) []byte {
+	buf := make([]byte, 4)
+	binary.LittleEndian.PutUint32(buf, i)
+	return buf
+}
+
+func (p *BaseParser) UnpackUintLE(buf []byte) uint32 {
+	return binary.LittleEndian.Uint32(buf)
+}
+
 func (p *BaseParser) PackVarint32(i int32, buf []byte) int {
 	return vlq.PutInt(buf, int64(i))
 }
@@ -427,6 +437,19 @@ func (p *BaseParser) UnpackVarint(buf []byte) (int, int) {
 func (p *BaseParser) UnpackVaruint(buf []byte) (uint, int) {
 	i, ofs := vlq.Uint(buf)
 	return uint(i), ofs
+}
+
+func (p *BaseParser) UnpackVarBytes(buf []byte) ([]byte], int) {
+	txvalue, l := p.BaseParser.UnpackVaruint(buf)
+	bufValue := append([]byte(nil), buf[:int(txvalue)]...)
+	return bufValue, (l+txvalue)
+}
+
+func (p *BaseParser) PackVarBytes(bufValue []byte, buf []byte, varBuf []byte) []byte] {
+	l := p.BaseParser.PackVaruint(uint(len(bufValue)), varBuf)
+	buf = append(buf, varBuf[:l]...)
+	buf = append(buf, bufValue...)
+	return buf
 }
 
 const (
@@ -566,11 +589,11 @@ func (p *BaseParser) UnpackBlockInfo(buf []byte) (*DbBlockInfo, error) {
 	return nil, errors.New("Not supported")
 }
 
-func (p *BaseParser) UnpackAsset(buf []byte) (*Asset, error) {
-	return nil, errors.New("Not supported")
+func (p *BaseParser) UnpackAsset(buf []byte) *Asset {
+	return nil
 }
 
-func (p *BaseParser) PackAsset(asset *Asset) ([]byte, error) {
-	return nil, errors.New("Not supported")
+func (p *BaseParser) PackAsset(asset *Asset) []byte {
+	return nil
 }
 

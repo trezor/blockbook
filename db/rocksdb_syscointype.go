@@ -247,10 +247,9 @@ func (d *RocksDB) SetupAssetCache() error {
 	defer it.Close()
 	for it.SeekToFirst(); it.Valid(); it.Next() {
 		assetKey := d.chainParser.UnpackUint(it.Key().Data())
-		assetDb, err := d.chainParser.UnpackAsset(it.Value().Data())
-		if err != nil {
-			glog.Info("SetupAssetCache: UnpackAsset failure ", assetKey, " err ", err)
-			return err
+		assetDb := d.chainParser.UnpackAsset(it.Value().Data())
+		if assetDb == nil {
+			return errors.New("SetupAssetCache: UnpackAsset failure ", assetKey)
 		}
 		AssetCache[assetKey] = *assetDb
 	}
@@ -346,9 +345,9 @@ func (d *RocksDB) GetAsset(guid uint32, assets *map[uint32]*bchain.Asset) (*bcha
 	if len(buf) == 0 {
 		return nil, nil
 	}
-	assetDb, err = d.chainParser.UnpackAsset(buf)
-	if err != nil {
-		return nil, err
+	assetDb = d.chainParser.UnpackAsset(buf)
+	if assetDb == nil {
+		return nil, errors.New("GetAsset: Could not unpack asset")
 	}
 	// cache miss, add it, we also add it on storeAsset but on API queries we should not have to wait until a block
 	// with this asset to store it in cache

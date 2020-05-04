@@ -53,12 +53,6 @@
 
 [[projects]]
   branch = "master"
-  name = "github.com/syscoin/btcd"
-  packages = ["blockchain","btcec","chaincfg","chaincfg/chainhash","database","txscript","wire"]
-  revision = "cf48ed28474824f99c429682edd24547e7a42f3c"
-
-[[projects]]
-  branch = "master"
   name = "github.com/btcsuite/btclog"
   packages = ["."]
   revision = "84c8d2346e9fc8c7b947e243b9c24e6df9fd206a"
@@ -287,7 +281,7 @@
     "github.com/martinboehm/btcd/chaincfg/chainhash",
     "github.com/martinboehm/btcd/txscript",
     "github.com/martinboehm/btcd/wire",
-    "github.com/syscoin/btcd/wire",
+    "github.com/martinboehm/btcd/wire",
     "github.com/martinboehm/btcutil",
     "github.com/martinboehm/btcutil/base58",
     "github.com/martinboehm/btcutil/bech32",
