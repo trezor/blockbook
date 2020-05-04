@@ -465,7 +465,7 @@ func (s *SocketIoServer) getAddressHistory(addr []string, opts *addrOpts) (res r
 		to = opts.To
 	}
 	ahi := addressHistoryItem{}
-	ahi.Tokens := map[uint32]*api.TokenBalanceHistory{}
+	ahi.Tokens = map[uint32]*api.TokenBalanceHistory{}
 	for txi := opts.From; txi < to; txi++ {
 		tx, err := s.api.GetTransaction(txids[txi], false, false)
 		if err != nil {
@@ -544,7 +544,7 @@ func (s *SocketIoServer) getAssetHistory(asset string, opts *assetOpts) (res res
 		to = opts.To
 	}
 	ahi := addressHistoryItem{}
-	ahi.Tokens := map[uint32]*api.TokenBalanceHistory{}
+	ahi.Tokens = map[uint32]*api.TokenBalanceHistory{}
 	for txi := opts.From; txi < to; txi++ {
 		tx, err := s.api.GetTransaction(txids[txi], false, false)
 		if err != nil {
