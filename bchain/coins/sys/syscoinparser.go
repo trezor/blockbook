@@ -92,13 +92,16 @@ func GetChainParams(chain string) *chaincfg.Params {
 }
 // TxFromMsgTx converts syscoin wire Tx to bchain.Tx
 func (p *SyscoinParser) TxFromMsgTx(t *wire.MsgTx, parseAddresses bool) bchain.Tx {
-	tx := p.BaseParser.TxFromMsgTx(t, parseAddresses)
+	tx := p.BitcoinParser.TxFromMsgTx(t, parseAddresses)
 	p.LoadAssets(&tx)
 	return tx
 }
 // ParseTxFromJson parses JSON message containing transaction and returns Tx struct
 func (p *SyscoinParser) ParseTxFromJson(msg json.RawMessage) (*bchain.Tx, error) {
-	tx := p.BaseParser.ParseTxFromJson(msg)
+	tx, err := p.BaseParser.ParseTxFromJson(msg)
+	if err != nil {
+		return nil, err
+	}
 	p.LoadAssets(&tx)
 	return &tx, nil
 }
@@ -293,7 +296,7 @@ func (p *SyscoinParser) PackAllocation(a *bchain.AssetAllocationType, buf []byte
 	l := p.BaseParser.PackVaruint(uint(len(a.VoutAssets)), varBuf)
 
 	for k, v := range a.VoutAssets {
-		varBufLE := p.BaseParser.PackUintLE(uint32(w))
+		varBufLE := p.BaseParser.PackUintLE(k)
 		buf = append(buf, varBufLE...)
 
 		l = p.BaseParser.PackVaruint(uint(len(v)), varBuf)
@@ -308,19 +311,15 @@ func (p *SyscoinParser) PackAllocation(a *bchain.AssetAllocationType, buf []byte
 
 func (p *SyscoinParser) UnpackAllocation(a *bchain.AssetAllocationType, buf []byte) int {
 	numAssets, l := p.BaseParser.UnpackVarint(buf)
-
-	a.BlockNumber, ll = p.BaseParser.UnpackVarint(buf[l:])
-	l += ll
-
-	a.VoutAssets = make(map[uint32][]AssetOutType, numAssets)
+	a.VoutAssets = make(map[uint32][]bchain.AssetOutType, numAssets)
 	for i := 0; i < int(numAssets); i++ {
 		assetGuid := p.BaseParser.UnpackUintLE(buf[l:])
 		l += 4
-		numOutputs, ll = p.BaseParser.UnpackVarint(buf)
+		numOutputs, ll := p.BaseParser.UnpackVarint(buf[l:])
 		l += ll
 		assetOutArray, ok := a.VoutAssets[assetGuid]
 		if !ok {
-			assetOutArray = make([]AssetOutType, numOutputs)
+			assetOutArray = make([]bchain.AssetOutType, numOutputs)
 			a.VoutAssets[assetGuid] = assetOutArray
 		}
 		for j := 0; j < int(numOutputs); j++ {
