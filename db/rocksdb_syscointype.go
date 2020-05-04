@@ -402,7 +402,8 @@ func (d *RocksDB) addToAssetsMap(txassets bchain.TxAssetMap, assetGuid uint32, b
 	// check that the asset was already processed in this block
 	// if not found, it has certainly not been counted
 	key := d.chainParser.PackAssetKey(assetGuid, height)
-	at, found := txassets[string(key)]
+	strKey := string(key)
+	at, found := txassets[strKey]
 	if found {
 		// if the tx is already in the slice
 		for i, t := range at.Txs {
@@ -412,9 +413,9 @@ func (d *RocksDB) addToAssetsMap(txassets bchain.TxAssetMap, assetGuid uint32, b
 		}
 	} else {
 		at = &bchain.TxAsset{Txs: []*bchain.TxAssetIndex{}}
-		txassets[blockHash] = at
+		txassets[strKey] = at
 	}
-	at.Txs = append(txAsset.Txs, &bchain.TxAssetIndex{Type: d.chainParser.GetAssetsMaskFromVersion(version), BtxID: btxID})
+	at.Txs = append(at.Txs, &bchain.TxAssetIndex{Type: d.chainParser.GetAssetsMaskFromVersion(version), BtxID: btxID})
 	at.Height = height
 	return false
 }
