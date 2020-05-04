@@ -98,7 +98,7 @@ func (d *RocksDB) ConnectSyscoinInput(height uint32, balanceAsset *bchain.AssetB
 		return err
 	}
 	if dBAsset != nil {
-		assetInfo.Details = &bchain.AssetInfoDetails{Symbol: dBAsset.AssetObj.Symbol, Decimals: uint32(dBAsset.AssetObj.Precision)}
+		assetInfo.Details = &bchain.AssetInfoDetails{Symbol: dBAsset.AssetObj.Symbol, Decimals: int32(dBAsset.AssetObj.Precision)}
 		counted := addToAssetsMap(txAssets, assetInfo.AssetGuid, btxID, version, height)
 		if !counted {
 			balanceAsset.Transfers++
@@ -133,19 +133,19 @@ func (d *RocksDB) ConnectSyscoinOutput(tx *bchain.Tx, addrDesc bchain.AddressDes
 				return err
 			}
 			// in an asset tx, the output of 0 value is the destination for the new ownership of the asset
-			if assetInfo.ValueSat.AsInt64() == 0 {
+			if assetInfo.ValueSat.Int64() == 0 {
 				dBAsset.AddrDesc = addrDesc
 			}
 		} 
-		utxo.AssetInfo.Details = &bchain.AssetInfoDetails{Symbol: dBAsset.Symbol, Decimals: dBAsset.Precision}
+		utxo.AssetInfo.Details = &bchain.AssetInfoDetails{Symbol: dBAsset.AssetObj.Symbol, Decimals: int32(dBAsset.AssetObj.Precision)}
 		assetInfo.Details = utxo.AssetInfo.Details
-		counted := addToAssetsMap(txAssets, assetGuid, btxID, version, height)
+		counted := addToAssetsMap(txAssets, assetInfo.AssetGuid, btxID, version, height)
 		if !counted {
 			// only count asset tx on output because inputs must have the same assets as outputs
 			dBAsset.Transactions++
 			balanceAsset.Transfers++
 		}
-		assets[assetGuid] = dBAsset
+		assets[assetInfo.AssetGuid] = dBAsset
 	} else {
 		return errors.New("ConnectSyscoinOutput: asset not found")
 	}
@@ -170,20 +170,20 @@ func (d *RocksDB) DisconnectSyscoinOutput(assetBalances map[uint32]*bchain.Asset
 		// signals for removal from asset db
 		dBAsset.AssetObj.TotalSupply = -1
 		assetFoundInTx(assetGuid, btxID)
-		assets[assetGuid] = dBAsset
+		assets[assetInfo.AssetGuid] = dBAsset
 		return nil
 	} else if d.chainParser.IsAssetTx(version) {
 		asset, err := d.chainParser.GetAssetFromTx(tx)
 		if err != nil {
 			return err
 		}
-		err = d.DisconnectAssetOutput(version, &asset.AssetObj, dBAsset, assetInfo)
+		err = d.DisconnectAssetOutput(version, &asset, dBAsset, assetInfo)
 		if err != nil {
 			return err
 		}
 	} 
 	// on activate we won't get here but its ok because DisconnectSyscoinInput will catch assetFoundInTx
-	exists := assetFoundInTx(assetGuid, btxID)
+	exists := assetFoundInTx(assetInfo.AssetGuid, btxID)
 	if !exists {
 		dBAsset.Transactions--
 		balanceAsset.Transfers--
@@ -217,7 +217,7 @@ func (d *RocksDB) DisconnectSyscoinInput(addrDesc bchain.AddressDescriptor, vers
 		return nil
 	} else if d.chainParser.IsAssetTx(version) {
 		// set the asset to be owned by the asset of 0 value
-		if assetInfo.ValueSat.AsInt64() == 0 {
+		if assetInfo.ValueSat.Int64() == 0 {
 			dBAsset.AddrDesc = addrDesc
 		}
 	} 
