@@ -26,6 +26,7 @@ const (
 	SYSCOIN_TX_VERSION_ALLOCATION_MINT int32 = 133
 	SYSCOIN_TX_VERSION_ALLOCATION_BURN_TO_ETHEREUM int32 = 134
 	SYSCOIN_TX_VERSION_ALLOCATION_SEND int32 = 135
+	const maxAddrDescLen = 1024
 )
 
 // chain parameters
@@ -505,7 +506,6 @@ func (p *SyscoinParser) PackSyscoinBurnToEthereum(a *bchain.SyscoinBurnToEthereu
 
 func (p *SyscoinParser) GetAllocationFromTx(tx *bchain.Tx) (*bchain.AssetAllocationType, error) {
 	var sptData []byte
-	const maxAddrDescLen = 1024
 	for i, output := range tx.Vout {
 		addrDesc, err := p.GetAddrDescFromVout(&output)
 		if err != nil || len(addrDesc) == 0 || len(addrDesc) > maxAddrDescLen {
@@ -567,7 +567,7 @@ func (p *SyscoinParser) LoadAssets(tx *bchain.Tx) error {
             nAsset := k
             for _,voutAsset := range v {
 				// store in vout
-				tx.Vout[voutAsset.N].AssetInfo = bchain.AssetInfo{AssetGuid: nAsset, ValueSat: big.NewInt(voutAsset.nValue)}
+				tx.Vout[voutAsset.N].AssetInfo = bchain.AssetInfo{AssetGuid: nAsset, ValueSat: big.NewInt(voutAsset.ValueSat)}
             }
         }       
 	}
@@ -622,7 +622,7 @@ func (p *SyscoinParser) UnpackAssetTxIndex(buf []byte) []*bchain.TxAssetIndex {
 }
 
 func (p *SyscoinParser) AppendAssetInfoDetails(assetInfoDetails *bchain.AssetInfoDetails, buf []byte, varBuf []byte) []byte {
-	l = d.chainParser.PackVarint32(assetInfoDetails.Decimals, varBuf)
+	l := p.BaseParser.PackVarint32(assetInfoDetails.Decimals, varBuf)
 	buf = append(buf, varBuf[:l]...)
 	buf = append(buf, []byte(assetInfoDetails.Symbol)...)
 	return buf

@@ -99,7 +99,7 @@ func (d *RocksDB) ConnectSyscoinInput(height uint32, balanceAsset *bchain.AssetB
 	}
 	if dBAsset != nil {
 		assetInfo.Details = &bchain.AssetInfoDetails{Symbol: dBAsset.AssetObj.Symbol, Decimals: int32(dBAsset.AssetObj.Precision)}
-		counted := addToAssetsMap(txAssets, assetInfo.AssetGuid, btxID, version, height)
+		counted := d.addToAssetsMap(txAssets, assetInfo.AssetGuid, btxID, version, height)
 		if !counted {
 			balanceAsset.Transfers++
 		}
@@ -139,7 +139,7 @@ func (d *RocksDB) ConnectSyscoinOutput(tx *bchain.Tx, addrDesc bchain.AddressDes
 		} 
 		utxo.AssetInfo.Details = &bchain.AssetInfoDetails{Symbol: dBAsset.AssetObj.Symbol, Decimals: int32(dBAsset.AssetObj.Precision)}
 		assetInfo.Details = utxo.AssetInfo.Details
-		counted := addToAssetsMap(txAssets, assetInfo.AssetGuid, btxID, version, height)
+		counted := d.addToAssetsMap(txAssets, assetInfo.AssetGuid, btxID, version, height)
 		if !counted {
 			// only count asset tx on output because inputs must have the same assets as outputs
 			dBAsset.Transactions++
@@ -248,7 +248,7 @@ func (d *RocksDB) SetupAssetCache() error {
 		assetKey := d.chainParser.UnpackUint(it.Key().Data())
 		assetDb := d.chainParser.UnpackAsset(it.Value().Data())
 		if assetDb == nil {
-			return errors.New("SetupAssetCache: UnpackAsset failure ", assetKey)
+			return errors.New("SetupAssetCache: UnpackAsset failure")
 		}
 		AssetCache[assetKey] = *assetDb
 	}
@@ -301,10 +301,7 @@ func (d *RocksDB) storeAssets(wb *gorocksdb.WriteBatch, assets map[uint32]*bchai
 			delete(AssetCache, guid)
 			wb.DeleteCF(d.cfh[cfAssets], key)
 		} else {
-			buf, err := d.chainParser.PackAsset(asset)
-			if err != nil {
-				return err
-			}
+			buf := d.chainParser.PackAsset(asset)
 			wb.PutCF(d.cfh[cfAssets], key, buf)
 		}
 	}
@@ -359,7 +356,7 @@ func (d *RocksDB) GetAsset(guid uint32, assets *map[uint32]*bchain.Asset) (*bcha
 func (d *RocksDB) storeTxAssets(wb *gorocksdb.WriteBatch, txassets bchain.TxAssetMap) error {
 	for key, txAsset := range txassets {
 		buf := d.chainParser.PackAssetTxIndex(txAsset)
-		wb.PutCF(d.cfh[cfTxAssets], key, buf)
+		wb.PutCF(d.cfh[cfTxAssets], []byte(key), buf)
 	}
 	return nil
 }
@@ -383,7 +380,7 @@ func (d *RocksDB) GetTxAssets(assetGuid uint32, lower uint32, higher uint32, ass
 			for _, txIndex := range txIndexes {
 				mask := uint32(txIndex.Type)
 				if (assetsBitMask == bchain.AllMask || (uint32(assetsBitMask) & mask) == mask) {
-					txids = append(txids, hex.EncodeToString(txIndex.Txid))
+					txids = append(txids, hex.EncodeToString(txIndex.BtxID))
 				}
 			}
 			if len(txids) > 0 {
@@ -401,7 +398,7 @@ func (d *RocksDB) GetTxAssets(assetGuid uint32, lower uint32, higher uint32, ass
 
 // addToAssetsMap maintains mapping between assets and transactions in one block
 // the return value is true if the tx was processed before, to not to count the tx multiple times
-func addToAssetsMap(txassets bchain.TxAssetMap, assetGuid uint32, btxID []byte, version int32, height uint32) bool {
+func (d *RocksDB) addToAssetsMap(txassets bchain.TxAssetMap, assetGuid uint32, btxID []byte, version int32, height uint32) bool {
 	// check that the asset was already processed in this block
 	// if not found, it has certainly not been counted
 	key := d.chainParser.PackAssetKey(assetGuid, height)

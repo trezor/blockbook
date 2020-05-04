@@ -67,7 +67,7 @@ type Vin struct {
 	ScriptSig ScriptSig `json:"scriptSig"`
 	Sequence  uint32    `json:"sequence"`
 	Addresses []string  `json:"addresses"`
-	AssetInfo  *AssetInfo		   `json:"assetInfo"`
+	AssetInfo  AssetInfo		   `json:"assetInfo"`
 }
 
 // ScriptPubKey contains data about output script
@@ -84,7 +84,7 @@ type Vout struct {
 	JsonValue    json.Number  `json:"value"`
 	N            uint32       `json:"n"`
 	ScriptPubKey ScriptPubKey `json:"scriptPubKey"`
-	AssetInfo    *AssetInfo	  `json:"assetInfo"`
+	AssetInfo    AssetInfo	  `json:"assetInfo"`
 }
 
 // Tx is blockchain transaction
@@ -383,7 +383,7 @@ type AddressesMap map[string][]TxIndexes
 type TxInput struct {
 	AddrDesc AddressDescriptor
 	ValueSat big.Int
-	AssetInfo *AssetInfo
+	AssetInfo AssetInfo
 }
 
 // BlockInfo holds information about blocks kept in column height
@@ -400,7 +400,7 @@ type TxOutput struct {
 	AddrDesc AddressDescriptor
 	Spent    bool
 	ValueSat big.Int
-	AssetInfo *AssetInfo
+	AssetInfo AssetInfo
 }
 
 // Addresses converts AddressDescriptor of the input to array of strings
