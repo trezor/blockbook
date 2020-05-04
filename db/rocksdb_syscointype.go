@@ -311,7 +311,6 @@ func (d *RocksDB) FindAssetsFromFilter(filter string) map[uint32]bchain.Asset {
 			}
 		}
 	}
-	sort.Sort(assets)
 	glog.Info("FindAssetsFromFilter finished in ", time.Since(start))
 	return assets
 }
