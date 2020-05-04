@@ -406,10 +406,7 @@ func (w *Worker) getAssetTxids(assetGuid uint32, mempool bool, filter *AddressFi
 	}
 	if mempool {
 		uniqueTxs := make(map[string]struct{})
-		o, err := w.mempool.GetTxAssets(assetGuid)
-		if err != nil {
-			return nil, err
-		}
+		o := w.mempool.GetTxAssets(assetGuid)
 		for _, m := range o {
 			if _, found := uniqueTxs[m.Txid]; !found {
 				l := len(txids)
@@ -511,9 +508,6 @@ func (w *Worker) txFromTxAddress(txid string, ta *bchain.TxAddresses, bi *bchain
 		ValueOutSat:   (*bchain.Amount)(&valOutSat),
 		Vin:           vins,
 		Vout:          vouts,
-	}
-	if ta.TokenTransferSummary != nil {
-		r.TokenTransferSummary = []*bchain.TokenTransferSummary{ta.TokenTransferSummary}
 	}
 	return r
 }
@@ -851,7 +845,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 					assetGuid := strconv.FormatUint(uint64(k), 10)
 					tokens = append(tokens, &bchain.Token{
 						Type:             bchain.SPTUnallocatedTokenType,
-						Address:		  dbAsset.AddrDesc.String(),
+						AddrStr:		  dbAsset.AddrDesc.String(),
 						Name:             assetGuid + " (" + string(dbAsset.AssetObj.Symbol) + ")",
 						Decimals:         int(dbAsset.AssetObj.Precision),
 						Symbol:			  string(dbAsset.AssetObj.Symbol),
@@ -917,9 +911,9 @@ func (w *Worker) FindAssets(filter string, page int, txsOnPage int) *Assets {
 	for i := from; i < to; i++ {
 		assetFiltered := assetsFiltered[i]
 		assetSpecific := AssetsSpecific{
-			AssetGuid:		assetFiltered.AssetObj.Asset,
+			AssetGuid:		assetFiltered.AssetObj.AssetGuid,
 			Symbol:			assetFiltered.AssetObj.Symbol,
-			Address:		assetFiltered.AddrDesc.String(),
+			AddrStr:		assetFiltered.AddrDesc.String(),
 			Contract:		"0x" + hex.EncodeToString(assetFiltered.AssetObj.Contract),
 			TotalSupply:	(*bchain.Amount)(big.NewInt(assetFiltered.AssetObj.TotalSupply)),
 			Decimals:		int(assetFiltered.AssetObj.Precision),
@@ -1040,7 +1034,7 @@ func (w *Worker) GetAsset(asset string, page int, txsOnPage int, option AccountD
 		AssetDetails:	&AssetSpecific{
 			AssetGuid:		assetGuid,
 			Symbol:			dbAsset.AssetObj.Symbol,
-			Address:		dbAsset.AddrDesc.String(),
+			AddrStr:		dbAsset.AddrDesc.String(),
 			Contract:		"0x" + hex.EncodeToString(dbAsset.AssetObj.Contract),
 			Balance:		(*bchain.Amount)(big.NewInt(dbAsset.AssetObj.Balance)),
 			TotalSupply:	(*bchain.Amount)(big.NewInt(dbAsset.AssetObj.TotalSupply)),
@@ -1116,15 +1110,11 @@ func (w *Worker) balanceHistoryForTxid(addrDesc bchain.AddressDescriptor, txid s
 	}
 	
 	if w.chainType == bchain.ChainBitcoinType {
-		var tokens map[uint32]*TokenBalanceHistory
 		for i := range ta.Inputs {
 			tai := &ta.Inputs[i]
 			if bytes.Equal(addrDesc, tai.AddrDesc) {
 				(*big.Int)(bh.SentSat).Add((*big.Int)(bh.SentSat), &tai.ValueSat)
 				if tai.AssetInfo.AssetGuid > 0 {
-					if tokens == nil {
-						tokens = map[uint32]*TokenBalanceHistory{}
-					}
 					bhaToken, ok := bh.Tokens[tai.AssetInfo.AssetGuid];
 					if !ok {
 						bhaToken = &TokenBalanceHistory{AssetGuid: tai.AssetInfo.AssetGuid, SentSat: &bchain.Amount{}, ReceivedSat: &bchain.Amount{}}
@@ -1139,9 +1129,6 @@ func (w *Worker) balanceHistoryForTxid(addrDesc bchain.AddressDescriptor, txid s
 			if bytes.Equal(addrDesc, tao.AddrDesc) {
 				(*big.Int)(bh.ReceivedSat).Add((*big.Int)(bh.ReceivedSat), &tao.ValueSat)
 				if tao.AssetInfo.AssetGuid > 0 {
-					if tokens == nil {
-						tokens = map[uint32]*TokenBalanceHistory{}
-					}
 					bhaToken, ok := bh.Tokens[tao.AssetInfo.AssetGuid];
 					if !ok {
 						bhaToken = &TokenBalanceHistory{AssetGuid: tao.AssetInfo.AssetGuid, SentSat: &bchain.Amount{}, ReceivedSat: &bchain.Amount{}}
@@ -1149,13 +1136,6 @@ func (w *Worker) balanceHistoryForTxid(addrDesc bchain.AddressDescriptor, txid s
 					}
 					(*big.Int)(bhaToken.ReceivedSat).Add((*big.Int)(bhaToken.ReceivedSat), tao.AssetInfo.ValueSat)
 				}
-			}
-		}
-		if tokens != nil {
-			ta.Tokens = make([]*TokenBalanceHistory)
-			// then flatten to array of token balances from the map
-			for _, token := range tokens {
-				ta.Tokens = append(ta.Tokens, token)
 			}
 		}	
 	} else if w.chainType == bchain.ChainEthereumType {
