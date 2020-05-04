@@ -10,7 +10,6 @@ import (
 	"unsafe"
 	"bytes"
 	"github.com/golang/glog"
-	"github.com/martinboehm/btcd/wire"
 )
 
 // ChainType is type of the blockchain

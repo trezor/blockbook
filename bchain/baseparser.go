@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/gogo/protobuf/proto"
-	"github.com/martinboehm/btcd/wire"
 	"github.com/golang/glog"
 	"github.com/juju/errors"
 	vlq "github.com/bsm/go-vlq"
@@ -440,13 +439,13 @@ func (p *BaseParser) UnpackVaruint(buf []byte) (uint, int) {
 }
 
 func (p *BaseParser) UnpackVarBytes(buf []byte) ([]byte, int) {
-	txvalue, l := p.BaseParser.UnpackVaruint(buf)
+	txvalue, l := p.UnpackVaruint(buf)
 	bufValue := append([]byte(nil), buf[:int(txvalue)]...)
 	return bufValue, (l+txvalue)
 }
 
 func (p *BaseParser) PackVarBytes(bufValue []byte, buf []byte, varBuf []byte) []byte {
-	l := p.BaseParser.PackVaruint(uint(len(bufValue)), varBuf)
+	l := p.PackVaruint(uint(len(bufValue)), varBuf)
 	buf = append(buf, varBuf[:l]...)
 	buf = append(buf, bufValue...)
 	return buf
