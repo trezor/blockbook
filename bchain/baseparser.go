@@ -382,7 +382,7 @@ func (p *BaseParser) UnpackSyscoinBurnToEthereum(a *SyscoinBurnToEthereumType, b
 func (p *BaseParser) AppendMintSyscoin(a *MintSyscoinType, buf []byte) []byte {
 	return nil
 }
-func (p *BaseParser) UnpackMintSyscoin(a *bchain.MintSyscoinType, buf []byte) int {
+func (p *BaseParser) UnpackMintSyscoin(a *MintSyscoinType, buf []byte) int {
 	return 0
 }
 func (p *BaseParser) UnpackAssetOut(a *AssetOutType) int {
