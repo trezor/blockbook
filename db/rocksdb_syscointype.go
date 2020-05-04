@@ -4,7 +4,6 @@ import (
 	"blockbook/bchain"
 	"bytes"
 	"strings"
-	"sort"
 	"math/big"
 	"github.com/golang/glog"
 	"github.com/juju/errors"
