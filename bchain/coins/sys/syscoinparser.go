@@ -385,7 +385,7 @@ func (a *AssetType) Serialize(buf []byte) []byte {
 
 	buf = p.BaseParser.PackVarBytes(a.PubData, buf, varBuf)
 
-	buf = p.BaseParser.PackVarBytes([]byte)(a.Symbol), buf, varBuf)
+	buf = p.BaseParser.PackVarBytes([]byte(a.Symbol), buf, varBuf)
 
 	buf = append(buf, []byte(a.UpdateFlags)...)
 
@@ -415,7 +415,7 @@ func (a *AssetOutType) Serialize(buf []byte, varBuf []byte) []byte {
 }
 
 func (a *AssetOutType) Deserialize() int {
-	a.N, l := uint32(p.BaseParser.UnpackVaruint(buf[l:]))
+	a.N, l = uint32(p.BaseParser.UnpackVaruint(buf[l:]))
 	valueSat, ll := p.BaseParser.UnpackVarint(buf[l:])
 	l += ll
 	a.ValueSat = int64(DecompressAmount(valueSat))
@@ -426,10 +426,10 @@ func (a *AssetOutType) Deserialize() int {
 func (a *MintSyscoinType) Deserialize(buf []byte) int {
 	l := a.Allocation.Deserialize(buf)
 
-	a.BridgeTransferId, ll := p.BaseParser.UnpackVaruint(buf[l:])
+	a.BridgeTransferId, ll = p.BaseParser.UnpackVaruint(buf[l:])
 	l += ll
 
-	a.BlockNumber, ll := p.BaseParser.UnpackVaruint(buf[l:])
+	a.BlockNumber, ll = p.BaseParser.UnpackVaruint(buf[l:])
 	l += ll
 
 	a.TxValue, ll = p.BaseParser.UnpackVarBytes(buf[l:])
