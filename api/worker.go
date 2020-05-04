@@ -127,7 +127,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 	var err error
 	var ta *bchain.TxAddresses
 	var tokens []*bchain.TokenTransferSummary
-	var mapTTS map[uint32]*bchain.TokenTransferSummary{}
+	mapTTS := map[uint32]*bchain.TokenTransferSummary{}
 	var ethSpecific *EthereumSpecific
 	var blockhash string
 	if bchainTx.Confirmations > 0 {
