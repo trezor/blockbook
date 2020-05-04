@@ -560,7 +560,7 @@ func (s *SocketIoServer) getAssetHistory(asset string, opts *assetOpts) (res res
 		for i := range tx.Vin {
 			vin := &tx.Vin[i]
 			if vin.AssetInfo.AssetGuid == assetGuid {
-				a, s, err := s.chainParser.GetAddressesFromAddrDesc(vin.AddrDesc)
+				a, _, err := s.chainParser.GetAddressesFromAddrDesc(vin.AddrDesc)
 				if err != nil {
 					return res, err
 				}
@@ -586,7 +586,7 @@ func (s *SocketIoServer) getAssetHistory(asset string, opts *assetOpts) (res res
 		for i := range tx.Vout {
 			vout := &tx.Vout[i]
 			if vout.AssetInfo.AssetGuid == assetGuid {
-				a, s, err := s.chainParser.GetAddressesFromAddrDesc(vout.AddrDesc)
+				a, _, err := s.chainParser.GetAddressesFromAddrDesc(vout.AddrDesc)
 				if err != nil {
 					return res, err
 				}
