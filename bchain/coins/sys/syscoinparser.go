@@ -102,8 +102,8 @@ func (p *SyscoinParser) ParseTxFromJson(msg json.RawMessage) (*bchain.Tx, error)
 	if err != nil {
 		return nil, err
 	}
-	p.LoadAssets(&tx)
-	return &tx, nil
+	p.LoadAssets(tx)
+	return tx, nil
 }
 // ParseBlock parses raw block to our Block struct
 // it has special handling for Auxpow blocks that cannot be parsed by standard btc wire parse
@@ -332,8 +332,8 @@ func (p *SyscoinParser) UnpackAllocation(a *bchain.AssetAllocationType, buf []by
 
 func (p *SyscoinParser) UnpackAssetObj(a *bchain.AssetType, buf []byte) int {
 	l := p.UnpackAllocation(&a.Allocation, buf)
-
-	a.Precision = buf[l:l+1]
+	var ll int
+	a.Precision = uint8(buf[l:l+1])
 	l += 1
 
 	a.Contract, ll = p.BaseParser.UnpackVarBytes(buf[l:])
@@ -355,7 +355,7 @@ func (p *SyscoinParser) UnpackAssetObj(a *bchain.AssetType, buf []byte) int {
 	a.PrevPubData, ll = p.BaseParser.UnpackVarBytes(buf[l:])
 	l += ll
 
-	a.PrevUpdateFlags = buf[l:l+1]
+	a.PrevUpdateFlags = uint8(buf[l:l+1])
 	l += 1
 
 	balance, ll := p.BaseParser.UnpackVarint(buf[l:])
@@ -411,7 +411,7 @@ func (p *SyscoinParser) PackAssetOut(a *bchain.AssetOutType, buf []byte, varBuf 
 	return buf
 }
 
-func (p *SyscoinParser) UnpackAssetOut(a *bchain.AssetOutType) int {
+func (p *SyscoinParser) UnpackAssetOut(a *bchain.AssetOutType, buf []byte) int {
 	a.N, l = uint32(p.BaseParser.UnpackVaruint(buf[l:]))
 	valueSat, ll := p.BaseParser.UnpackVarint(buf[l:])
 	l += ll

@@ -493,7 +493,7 @@ type AssetOutType struct {
 	ValueSat int64
 }
 type AssetAllocationType struct {
-	VoutAssets map[int32][]AssetOutType
+	VoutAssets map[uint32][]AssetOutType
 }
 
 type AssetType struct {
@@ -773,7 +773,7 @@ type BlockChainParser interface {
 	UnpackSyscoinBurnToEthereum(a *SyscoinBurnToEthereumType, buf []byte) int
 	AppendMintSyscoin(a *MintSyscoinType, buf []byte) []byte
 	UnpackMintSyscoin(a *MintSyscoinType, buf []byte) int 
-	UnpackAssetOut(a *AssetOutType) int
+	UnpackAssetOut(a *AssetOutType, buf []byte) int
 	PackAssetOut(a *AssetOutType, buf []byte, varBuf []byte) []byte
 	PackAssetObj(a *AssetType, buf []byte) []byte
 	UnpackAssetObj(a *AssetType, buf []byte) int

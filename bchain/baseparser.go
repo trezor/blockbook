@@ -385,7 +385,7 @@ func (p *BaseParser) AppendMintSyscoin(a *MintSyscoinType, buf []byte) []byte {
 func (p *BaseParser) UnpackMintSyscoin(a *MintSyscoinType, buf []byte) int {
 	return 0
 }
-func (p *BaseParser) UnpackAssetOut(a *AssetOutType) int {
+func (p *BaseParser) UnpackAssetOut(a *AssetOutType, buf []byte) int {
 	return 0
 }
 func (p *BaseParser) PackAssetOut(a *AssetOutType, buf []byte, varBuf []byte) []byte {
