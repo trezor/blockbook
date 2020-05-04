@@ -564,7 +564,7 @@ func (s *SocketIoServer) getAssetHistory(asset string, opts *assetOpts) (res res
 				if err != nil {
 					return res, err
 				}
-				for addr := range a {
+				for _, addr := range a {
 					hi := ads[addr]
 					if hi == nil {
 						hi = &addressHistoryIndexes{OutputIndexes: []int{}}
@@ -590,7 +590,7 @@ func (s *SocketIoServer) getAssetHistory(asset string, opts *assetOpts) (res res
 				if err != nil {
 					return res, err
 				}
-				for addr := range a {
+				for _, addr := range a {
 					hi := ads[addr]
 					if hi == nil {
 						hi = &addressHistoryIndexes{InputIndexes: []int{}}
