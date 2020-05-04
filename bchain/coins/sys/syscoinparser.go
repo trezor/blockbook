@@ -339,7 +339,7 @@ func (a *AssetType) Deserialize(buf []byte) int {
 	a.Precision = buf[l:l+1]
 	l += 1
 
-	a.Contract, ll := p.BaseParser.UnpackVarBytes(buf[l:])
+	a.Contract, ll = p.BaseParser.UnpackVarBytes(buf[l:])
 	l += ll
 	
 	a.PubData, ll = p.BaseParser.UnpackVarBytes(buf[l:])
