@@ -465,10 +465,10 @@ func (p *SyscoinParser) AppendMintSyscoin(a *bchain.MintSyscoinType, buf []byte)
 	varBuf := make([]byte, 4096)
 	buf = p.PackAllocation(&a.Allocation, buf)
 
-	l := p.BaseParser.PackVaruint(a.BridgeTransferId, varBuf)
+	l := p.BaseParser.PackVaruint(uint(a.BridgeTransferId), varBuf)
 	buf = append(buf, varBuf[:l]...)
 
-	l = p.BaseParser.PackVaruint(a.BlockNumber, varBuf)
+	l = p.BaseParser.PackVaruint(uint(a.BlockNumber), varBuf)
 	buf = append(buf, varBuf[:l]...)
 
 	buf = p.BaseParser.PackVarBytes(a.TxValue, buf, varBuf)
@@ -505,6 +505,7 @@ func (p *SyscoinParser) PackSyscoinBurnToEthereum(a *bchain.SyscoinBurnToEthereu
 
 func (p *SyscoinParser) GetAllocationFromTx(tx *bchain.Tx) (*bchain.AssetAllocationType, error) {
 	var sptData []byte
+	const maxAddrDescLen = 1024
 	for i, output := range tx.Vout {
 		addrDesc, err := p.GetAddrDescFromVout(&output)
 		if err != nil || len(addrDesc) == 0 || len(addrDesc) > maxAddrDescLen {
@@ -562,7 +563,7 @@ func (p *SyscoinParser) LoadAssets(tx *bchain.Tx) error {
 		if err != nil {
 			return err
 		}
-        for k, v := range allocation.voutAssets {
+        for k, v := range allocation.VoutAssets {
             nAsset := k
             for _,voutAsset := range v {
 				// store in vout
@@ -598,7 +599,7 @@ func (p *SyscoinParser) PackAssetTxIndex(txAsset *bchain.TxAsset) []byte {
 	for _, txAssetIndex := range txAsset.Txs {
 		varBuf = p.BaseParser.PackUint(uint32(txAssetIndex.Type))
 		buf = append(buf, varBuf...)
-		buf = append(buf, txAssetIndex.Txid...)
+		buf = append(buf, txAssetIndex.BtxID...)
 	}
 	return buf
 }
@@ -612,7 +613,7 @@ func (p *SyscoinParser) UnpackAssetTxIndex(buf []byte) []*bchain.TxAssetIndex {
 			var txIndex bchain.TxAssetIndex
 			txIndex.Type = bchain.AssetsMask(p.BaseParser.UnpackUint(buf[l:]))
 			l += 4
-			txIndex.Txid = append([]byte(nil), buf[l:l+32]...)
+			txIndex.BtxID = append([]byte(nil), buf[l:l+32]...)
 			l += 32
 			txAssetIndexes[i] = &txIndex
 		}

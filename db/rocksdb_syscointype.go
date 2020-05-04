@@ -231,7 +231,7 @@ func (d *RocksDB) DisconnectSyscoinInput(addrDesc bchain.AddressDescriptor, vers
 	if balanceAsset.SentSat.Sign() < 0 {
 		balanceAsset.SentSat.SetInt64(0)
 	}
-	utxo.AssetInfo = assetInfo
+	utxo.AssetInfo = *assetInfo
 	assets[assetInfo.AssetGuid] = dBAsset
 	return nil
 }
