@@ -286,7 +286,8 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 			tokens = make([]*bchain.TokenTransferSummary, len(mapTTS))
 			var i int = 0
 			for _, token := range mapTTS {
-				tokens[i++] = token
+				tokens[i] = token
+				i++
 			}
 		}
 		
