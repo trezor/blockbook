@@ -811,7 +811,7 @@ func (p *SyscoinParser) PackAsset(asset *bchain.Asset) []byte {
 	buf = append(buf, varBuf[:l]...)
 	l = p.BaseParser.PackVaruint(uint(len(asset.AddrDesc)), varBuf)
 	buf = append(buf, varBuf[:l]...)
-	buf = append(buf, []byte(asset.AddrDesc)...
+	buf = append(buf, []byte(asset.AddrDesc)...)
 	buf = asset.AssetObj.Serialize(buf)
 	return buf
 }
