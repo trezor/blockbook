@@ -560,7 +560,7 @@ func (s *SocketIoServer) getAssetHistory(asset string, opts *assetOpts) (res res
 		for i := range tx.Vin {
 			vin := &tx.Vin[i]
 			if vin.AssetInfo.AssetGuid == assetGuid {
-				a, s, err := w.chainParser.GetAddressesFromAddrDesc(vin.AddrDesc)
+				a, s, err := s.chainParser.GetAddressesFromAddrDesc(vin.AddrDesc)
 				if err != nil {
 					return res, err
 				}
@@ -577,7 +577,7 @@ func (s *SocketIoServer) getAssetHistory(asset string, opts *assetOpts) (res res
 				}
 				token, ok := ahi.Tokens[uint32(vin.AssetInfo.AssetGuid)]
 				if !ok {
-					token = &api.TokenBalanceHistory{AssetGuid: uint32(vout.AssetInfo.AssetGuid), ReceivedSat: &bchain.Amount{}, SentSat: &bchain.Amount{}}
+					token = &api.TokenBalanceHistory{AssetGuid: uint32(vin.AssetInfo.AssetGuid), ReceivedSat: &bchain.Amount{}, SentSat: &bchain.Amount{}}
 					ahi.Tokens[uint32(vin.AssetInfo.AssetGuid)] = token
 				}
 				(*big.Int)(token.SentSat).Add((*big.Int)(token.SentSat), vin.AssetInfo.ValueSat)
@@ -585,9 +585,8 @@ func (s *SocketIoServer) getAssetHistory(asset string, opts *assetOpts) (res res
 		}
 		for i := range tx.Vout {
 			vout := &tx.Vout[i]
-			a := addressInSlice(vout.Addresses, addr)
 			if vout.AssetInfo.AssetGuid == assetGuid {
-				a, s, err := w.chainParser.GetAddressesFromAddrDesc(vout.AddrDesc)
+				a, s, err := s.chainParser.GetAddressesFromAddrDesc(vout.AddrDesc)
 				if err != nil {
 					return res, err
 				}
