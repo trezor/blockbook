@@ -216,7 +216,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 							tts = &bchain.TokenTransferSummary{
 								Type:     w.chainParser.GetAssetTypeFromVersion(bchainTx.Version),
 								Token:    assetGuid,
-								Decimals: vin.AssetInfo.Details.Decimals,
+								Decimals: int(vin.AssetInfo.Details.Decimals),
 								ValueIn:  (*bchain.Amount)(big.NewInt(0)),
 								Symbol:   vin.AssetInfo.Details.Symbol,
 							}
@@ -252,7 +252,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 				tts = &bchain.TokenTransferSummary{
 					Type:     w.chainParser.GetAssetTypeFromVersion(bchainTx.Version),
 					Token:    assetGuid,
-					Decimals: vout.AssetInfo.Details.Decimals,
+					Decimals: int(vout.AssetInfo.Details.Decimals),
 					ValueIn:  (*bchain.Amount)(big.NewInt(0)),
 					Symbol:   vout.AssetInfo.Details.Symbol,
 				}
