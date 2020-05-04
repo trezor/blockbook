@@ -531,7 +531,7 @@ func (p *SyscoinParser) GetAllocationFromTx(tx *bchain.Tx) (*bchain.AssetAllocat
 	return &assetAllocation, nil
 }
 
-func (p *SyscoinParser) GetAssetFromData([]byte sptData) (*bchain.AssetType, error) {
+func (p *SyscoinParser) GetAssetFromData(sptData []byte) (*bchain.AssetType, error) {
 	var asset bchain.AssetType
 	l := p.UnpackAssetObj(&asset, sptData)
 	if l != len(sptData) {
