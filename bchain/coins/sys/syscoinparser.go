@@ -392,7 +392,7 @@ func (p *SyscoinParser) PackAssetObj(a *bchain.AssetType, buf []byte) []byte {
 
 	buf = append(buf, []byte{a.PrevUpdateFlags}...)
 
-	l = p.BaseParser.PackVaruint(uint(CompressAmount(uint64(a.Balance))), varBuf)
+	l := p.BaseParser.PackVaruint(uint(CompressAmount(uint64(a.Balance))), varBuf)
 	buf = append(buf, varBuf[:l]...)
 
 	l = p.BaseParser.PackVaruint(uint(CompressAmount(uint64(a.TotalSupply))), varBuf)
