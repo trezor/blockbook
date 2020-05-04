@@ -510,7 +510,7 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses bch
 	// first process all outputs so that inputs can refer to txs in this block
 	for txi := range block.Txs {
 		var addrDescData *bchain.AddressDescriptor = nil
-		var addrDesc *bchain.AddressDescriptor = nil
+		var addrDescOwner *bchain.AddressDescriptor = nil
 		var assetGuid uint32 = 0
 		tx := &block.Txs[txi]
 		isActivate := d.chainParser.IsAssetActivateTx(tx.Version)
@@ -586,7 +586,7 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses bch
 					// replace asset ownership with this addrDesc in ConnectAssetOutput, this should be the change address
 					if isAssetTx && output.AssetInfo.ValueSat.Int64() == 0 {
 						assetGuid = output.AssetInfo.AssetGuid
-						addrDesc = &addrDesc
+						addrDescOwner = &addrDesc
 					}
 				}
 				balance.AddUtxo(&utxo)
@@ -596,7 +596,7 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses bch
 			}
 		}
 		if assetGuid > 0 && addrDesc != nil {
-			err := d.ConnectAssetOutput(addrDescData, addrDesc, isActivate, isAssetTx, assetGuid, assets)
+			err := d.ConnectAssetOutput(addrDescData, addrDescOwner, isActivate, isAssetTx, assetGuid, assets)
 			if err != nil {
 				glog.Warningf("rocksdb: ConnectAssetOutput: tx %v, error %v", btxID, err)
 			}
