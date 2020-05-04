@@ -670,7 +670,7 @@ func (p *SyscoinParser) AppendTxInput(txi *bchain.TxInput, buf []byte, varBuf []
 }
 
 func (p *SyscoinParser) AppendTxOutput(txo *bchain.TxOutput, buf []byte, varBuf []byte) []byte {
-	buf = p.BitcoinParser.AppendTxInput(txo, buf, varBuf)
+	buf = p.BitcoinParser.AppendTxOutput(txo, buf, varBuf)
 	buf = p.AppendAssetInfo(&txo.AssetInfo, buf, varBuf, true)
 	return buf
 }

@@ -17,17 +17,8 @@ var SetupAssetCacheFirstTime bool = true
 // GetTxAssetsCallback is called by GetTransactions/GetTxAssets for each found tx
 type GetTxAssetsCallback func(txids []string) error
 
-func (d *RocksDB) ConnectAssetOutput(version int32, asset *bchain.AssetType, dBAsset *bchain.Asset, assetInfo* bchain.AssetInfo) error {
-	// deduct the output value from the asset balance
-	if d.chainParser.IsAssetSendTx(version) {
-		balanceAssetSat := big.NewInt(dBAsset.AssetObj.Balance)
-		balanceAssetSat.Sub(balanceAssetSat, assetInfo.ValueSat)
-		dBAsset.AssetObj.Balance = balanceAssetSat.Int64()
-		if dBAsset.AssetObj.Balance < 0 {
-			glog.Warningf("ConnectAssetOutput balance is negative %v, setting to 0...", dBAsset.AssetObj.Balance)
-			dBAsset.AssetObj.Balance = 0
-		}
-	} else if !d.chainParser.IsAssetActivateTx(version) {
+func (d *RocksDB) ConnectAssetOutputHelper(isActivate bool, asset *bchain.AssetType, dBAsset *bchain.Asset) error {
+	if !isActivate {
 		if asset.Balance > 0 {
 			valueTo := big.NewInt(asset.Balance)
 			balanceDb := big.NewInt(dBAsset.AssetObj.Balance)
@@ -53,46 +44,39 @@ func (d *RocksDB) ConnectAssetOutput(version int32, asset *bchain.AssetType, dBA
 	return nil
 }
 
-func (d *RocksDB) DisconnectAssetOutput(version int32, asset *bchain.AssetType, dBAsset *bchain.Asset, assetInfo* bchain.AssetInfo) error {
-	// add the output value to the asset balance
-	if d.chainParser.IsAssetSendTx(version) {
-		balanceAssetSat := big.NewInt(dBAsset.AssetObj.Balance)
-		balanceAssetSat.Add(balanceAssetSat, assetInfo.ValueSat)
-		dBAsset.AssetObj.Balance = balanceAssetSat.Int64()
-	} else if !d.chainParser.IsAssetActivateTx(version) {
-		if asset.Balance > 0 {
-			valueTo := big.NewInt(asset.Balance)
-			balanceDb := big.NewInt(dBAsset.AssetObj.Balance)
-			balanceDb.Sub(balanceDb, valueTo)
-			supplyDb := big.NewInt(dBAsset.AssetObj.TotalSupply)
-			supplyDb.Sub(supplyDb, valueTo)
-			dBAsset.AssetObj.Balance = balanceDb.Int64()
-			if dBAsset.AssetObj.Balance < 0 {
-				glog.Warningf("DisconnectAssetOutput balance is negative %v, setting to 0...", dBAsset.AssetObj.Balance)
-				dBAsset.AssetObj.Balance = 0
-			}
-			dBAsset.AssetObj.TotalSupply = supplyDb.Int64()
-			if dBAsset.AssetObj.TotalSupply < 0 {
-				glog.Warningf("DisconnectAssetOutput total supply is negative %v, setting to 0...", dBAsset.AssetObj.TotalSupply)
-				dBAsset.AssetObj.TotalSupply = 0
-			}
+func (d *RocksDB) DisconnectAssetOutputHelper(asset *bchain.AssetType, dBAsset *bchain.Asset) error {
+	if asset.Balance > 0 {
+		valueTo := big.NewInt(asset.Balance)
+		balanceDb := big.NewInt(dBAsset.AssetObj.Balance)
+		balanceDb.Sub(balanceDb, valueTo)
+		supplyDb := big.NewInt(dBAsset.AssetObj.TotalSupply)
+		supplyDb.Sub(supplyDb, valueTo)
+		dBAsset.AssetObj.Balance = balanceDb.Int64()
+		if dBAsset.AssetObj.Balance < 0 {
+			glog.Warningf("DisconnectAssetOutput balance is negative %v, setting to 0...", dBAsset.AssetObj.Balance)
+			dBAsset.AssetObj.Balance = 0
 		}
-		// logic follows core CheckAssetInputs()
-		// prev data is enforced to be correct (previous value) if value exists in the tx data
-		if len(asset.PubData) > 0 {
-			dBAsset.AssetObj.PubData = asset.PrevPubData
+		dBAsset.AssetObj.TotalSupply = supplyDb.Int64()
+		if dBAsset.AssetObj.TotalSupply < 0 {
+			glog.Warningf("DisconnectAssetOutput total supply is negative %v, setting to 0...", dBAsset.AssetObj.TotalSupply)
+			dBAsset.AssetObj.TotalSupply = 0
 		}
-		if len(asset.Contract) > 0 {
-			dBAsset.AssetObj.Contract = asset.PrevContract
-		}
-		if asset.UpdateFlags != dBAsset.AssetObj.UpdateFlags {
-			dBAsset.AssetObj.UpdateFlags = asset.PrevUpdateFlags
-		}
+	}
+	// logic follows core CheckAssetInputs()
+	// prev data is enforced to be correct (previous value) if value exists in the tx data
+	if len(asset.PubData) > 0 {
+		dBAsset.AssetObj.PubData = asset.PrevPubData
+	}
+	if len(asset.Contract) > 0 {
+		dBAsset.AssetObj.Contract = asset.PrevContract
+	}
+	if asset.UpdateFlags != dBAsset.AssetObj.UpdateFlags {
+		dBAsset.AssetObj.UpdateFlags = asset.PrevUpdateFlags
 	}
 	return nil
 }
 
-func (d *RocksDB) ConnectSyscoinInput(height uint32, balanceAsset *bchain.AssetBalance, version int32, btxID []byte, assetInfo* bchain.AssetInfo, assets map[uint32]*bchain.Asset, txAssets bchain.TxAssetMap) error {
+func (d *RocksDB) ConnectAllocationInput(height uint32, balanceAsset *bchain.AssetBalance, version int32, btxID []byte, assetInfo* bchain.AssetInfo, assets map[uint32]*bchain.Asset, txAssets bchain.TxAssetMap) error {
 	dBAsset, err := d.GetAsset(assetInfo.AssetGuid, &assets)
 	if !d.chainParser.IsAssetActivateTx(version) && err != nil {
 		return err
@@ -100,7 +84,7 @@ func (d *RocksDB) ConnectSyscoinInput(height uint32, balanceAsset *bchain.AssetB
 	if dBAsset != nil {
 		assetInfo.Details = &bchain.AssetInfoDetails{Symbol: dBAsset.AssetObj.Symbol, Decimals: int32(dBAsset.AssetObj.Precision)}
 		counted := d.addToAssetsMap(txAssets, assetInfo.AssetGuid, btxID, version, height)
-		if !counted {
+		if !counted && !d.chainParser.IsAssetTx(version) {
 			balanceAsset.Transfers++
 		}
 		assets[assetInfo.AssetGuid] = dBAsset
@@ -113,37 +97,30 @@ func (d *RocksDB) ConnectSyscoinInput(height uint32, balanceAsset *bchain.AssetB
 	return nil
 }
 
-func (d *RocksDB) ConnectSyscoinOutput(tx *bchain.Tx, addrDesc bchain.AddressDescriptor, height uint32, balanceAsset *bchain.AssetBalance, version int32, btxID []byte, utxo* bchain.Utxo, assetInfo* bchain.AssetInfo, assets map[uint32]*bchain.Asset, txAssets bchain.TxAssetMap) error {
-	isActivate := d.chainParser.IsAssetActivateTx(version)
+func (d *RocksDB) ConnectAllocationOutput(height uint32, balanceAsset *bchain.AssetBalance, isActivate bool, version int32, btxID []byte, utxo* bchain.Utxo, assetInfo* bchain.AssetInfo, assets map[uint32]*bchain.Asset, txAssets bchain.TxAssetMap) error {
 	dBAsset, err := d.GetAsset(assetInfo.AssetGuid, &assets)
 	if !isActivate && err != nil {
 		return err
 	}
-	if dBAsset != nil || isActivate {
-		if d.chainParser.IsAssetTx(version) {
-			asset, err := d.chainParser.GetAssetFromTx(tx)
-			if err != nil {
-				return err
-			}
-			if isActivate {
-				dBAsset.AssetObj = *asset
-			}
-			err = d.ConnectAssetOutput(version, asset, dBAsset, assetInfo)
-			if err != nil {
-				return err
-			}
-			// in an asset tx, the output of 0 value is the destination for the new ownership of the asset
-			if assetInfo.ValueSat.Int64() == 0 {
-				dBAsset.AddrDesc = addrDesc
-			}
-		} 
+	if dBAsset != nil {
 		utxo.AssetInfo.Details = &bchain.AssetInfoDetails{Symbol: dBAsset.AssetObj.Symbol, Decimals: int32(dBAsset.AssetObj.Precision)}
 		assetInfo.Details = utxo.AssetInfo.Details
 		counted := d.addToAssetsMap(txAssets, assetInfo.AssetGuid, btxID, version, height)
 		if !counted {
 			// only count asset tx on output because inputs must have the same assets as outputs
 			dBAsset.Transactions++
-			balanceAsset.Transfers++
+			if !isActivate {
+				balanceAsset.Transfers++
+			}
+		}
+		if d.chainParser.IsAssetSendTx(version) {
+			balanceAssetSat := big.NewInt(dBAsset.AssetObj.Balance)
+			balanceAssetSat.Sub(balanceAssetSat, assetInfo.ValueSat)
+			dBAsset.AssetObj.Balance = balanceAssetSat.Int64()
+			if dBAsset.AssetObj.Balance < 0 {
+				glog.Warningf("ConnectAssetOutput balance is negative %v, setting to 0...", dBAsset.AssetObj.Balance)
+				dBAsset.AssetObj.Balance = 0
+			}
 		}
 		assets[assetInfo.AssetGuid] = dBAsset
 	} else {
@@ -153,74 +130,121 @@ func (d *RocksDB) ConnectSyscoinOutput(tx *bchain.Tx, addrDesc bchain.AddressDes
 	return nil
 }
 
-func (d *RocksDB) DisconnectSyscoinOutput(assetBalances map[uint32]*bchain.AssetBalance, version int32, btxID []byte, assets map[uint32]*bchain.Asset,  assetInfo *bchain.AssetInfo, assetFoundInTx func(asset uint32, btxID []byte) bool) error {
-	balanceAsset, ok := assetBalances[assetInfo.AssetGuid]
-	if !ok {
-		return errors.New("DisconnectSyscoinOutput asset balance not found")
+func (d *RocksDB) ConnectAssetOutput(addrDescData *bchain.AddressDescriptor, addrDesc *bchain.AddressDescriptor, isActivate bool, isAssetTx bool, assetGuid uint32, assets map[uint32]*bchain.Asset) error {
+	script, err := d.chainParser.GetScriptFromAddrDesc(addrDescData)
+	if err != nil {
+		return err
 	}
-	isActivate := d.chainParser.IsAssetActivateTx(version)
+	sptData := d.chainParser.TryGetOPReturn(script)
+	if sptData == nil {
+		return nil
+	}
+	asset, err := d.chainParser.GetAssetFromData(tx)
+	if err != nil {
+		return err
+	}	
+	var dBAsset* bchain.Asset = nil
+	if !isActivate {
+		dBAsset, err := d.GetAsset(assetGuid, &assets)
+		if  err != nil {
+			return err
+		}
+	}
+	if dBAsset != nil || isActivate {
+		if isAssetTx {
+			if isActivate {
+				dBAsset.AssetObj = *asset
+			}
+			err = d.ConnectAssetOutputHelper(isActivate, asset, dBAsset)
+			if err != nil {
+				return err
+			}
+			dBAsset.AddrDesc = addrDesc
+		} 
+		assets[assetGuid] = dBAsset
+	} else {
+		return errors.New("ConnectSyscoinOutput: asset not found")
+	}
+	return nil
+}
+
+func (d *RocksDB) DisconnectAllocationOutput(assetBalances map[uint32]*bchain.AssetBalance, isActivate bool, btxID []byte, assets map[uint32]*bchain.Asset,  assetInfo *bchain.AssetInfo, assetFoundInTx func(asset uint32, btxID []byte) bool) error {
+	var balanceAsset *bchain.AssetBalance
+	if assetBalances != nil {
+		var ok bool
+		balanceAsset, ok = assetBalances[assetInfo.AssetGuid]
+		if !ok {
+			return errors.New("DisconnectAllocationOutput asset balance not found")
+		}
+	}
 	dBAsset, err := d.GetAsset(assetInfo.AssetGuid, &assets)
 	if dBAsset == nil || err != nil {
 		return err
 	}
-	if isActivate {
-		// vout AssetGuid should be set to 0 so it won't serialize asset info or use asset info anywhere in API
-		assetInfo.AssetGuid = 0
-		delete(assetBalances, assetInfo.AssetGuid)
-		// signals for removal from asset db
-		dBAsset.AssetObj.TotalSupply = -1
-		assetFoundInTx(assetInfo.AssetGuid, btxID)
-		assets[assetInfo.AssetGuid] = dBAsset
-		return nil
-	} else if d.chainParser.IsAssetTx(version) {
-		asset, err := d.chainParser.GetAssetFromTx(tx)
-		if err != nil {
-			return err
-		}
-		err = d.DisconnectAssetOutput(version, asset, dBAsset, assetInfo)
-		if err != nil {
-			return err
-		}
-	} 
+	
 	// on activate we won't get here but its ok because DisconnectSyscoinInput will catch assetFoundInTx
 	exists := assetFoundInTx(assetInfo.AssetGuid, btxID)
 	if !exists {
 		dBAsset.Transactions--
-		balanceAsset.Transfers--
+		if !isActivate {
+			balanceAsset.Transfers--
+		}
 	}
 	
-
 	balanceAsset.BalanceSat.Sub(balanceAsset.BalanceSat, assetInfo.ValueSat)
 	if balanceAsset.BalanceSat.Sign() < 0 {
 		balanceAsset.BalanceSat.SetInt64(0)
 	}
-	
-	isAssetSend := d.chainParser.IsAssetSendTx(version)
-	if isAssetSend {
+
+	if d.chainParser.IsAssetSendTx(version) {
 		balanceAssetSat := big.NewInt(dBAsset.AssetObj.Balance)
 		balanceAssetSat.Add(balanceAssetSat, assetInfo.ValueSat)
 		dBAsset.AssetObj.Balance = balanceAssetSat.Int64()
-	} 
+	} else if isActivate {
+		// vout AssetGuid should be set to 0 so it won't serialize asset info or use asset info anywhere in API
+		assetInfo.AssetGuid = 0
+	}
+	
 	assets[assetInfo.AssetGuid] = dBAsset
 	return nil
 }
-
-func (d *RocksDB) DisconnectSyscoinInput(addrDesc bchain.AddressDescriptor, version int32, balanceAsset *bchain.AssetBalance,  btxID []byte, assetInfo *bchain.AssetInfo, utxo *bchain.Utxo, assets map[uint32]*bchain.Asset, assetFoundInTx func(asset uint32, btxID []byte) bool) error {
-	isActivate := d.chainParser.IsAssetActivateTx(version)
-	dBAsset, err := d.GetAsset(assetInfo.AssetGuid, &assets)
+func (d *RocksDB) DisconnectAssetOutput(addrDesc *bchain.AddressDescriptor, isActivate bool, assets map[uint32]*bchain.Asset, assetGuid uint32) error {
+	script, err := d.chainParser.GetScriptFromAddrDesc(addrDesc)
+	if err != nil {
+		return err
+	}
+	sptData := d.chainParser.TryGetOPReturn(script)
+	if sptData == nil {
+		return nil
+	}
+	asset, err := d.chainParser.GetAssetFromData(sptData)
+	if err != nil {
+		return err
+	}
+	dBAsset, err := d.GetAsset(assetGuid, &assets)
 	if dBAsset == nil || err != nil {
 		return err
 	}
 	if isActivate {
-		assetInfo.AssetGuid = 0
-		utxo.AssetInfo.AssetGuid = 0
+		delete(assetBalances, assetGuid)
+		// signals for removal from asset db
+		dBAsset.AssetObj.TotalSupply = -1
+		assets[assetGuid] = dBAsset
 		return nil
-	} else if d.chainParser.IsAssetTx(version) {
-		// set the asset to be owned by the asset of 0 value
-		if assetInfo.ValueSat.Int64() == 0 {
-			dBAsset.AddrDesc = addrDesc
+	} else {
+		err = d.DisconnectAssetOutputHelper(asset, dBAsset)
+		if err != nil {
+			return err
 		}
-	} 
+	}
+	assets[assetGuid] = dBAsset
+	return nil
+}
+func (d *RocksDB) DisconnectAllocationInput(addrDesc *bchain.AddressDescriptor, balanceAsset *bchain.AssetBalance,  btxID []byte, assetInfo *bchain.AssetInfo, utxo *bchain.Utxo, assets map[uint32]*bchain.Asset, assetFoundInTx func(asset uint32, btxID []byte) bool) error {
+	dBAsset, err := d.GetAsset(assetInfo.AssetGuid, &assets)
+	if dBAsset == nil || err != nil {
+		return err
+	}
 	exists := assetFoundInTx(assetInfo.AssetGuid, btxID)
 	if !exists {
 		balanceAsset.Transfers--
@@ -233,6 +257,15 @@ func (d *RocksDB) DisconnectSyscoinInput(addrDesc bchain.AddressDescriptor, vers
 	}
 	utxo.AssetInfo = *assetInfo
 	assets[assetInfo.AssetGuid] = dBAsset
+	return nil
+}
+func (d *RocksDB) DisconnectAssetInput(addrDesc *bchain.AddressDescriptor, assets map[uint32]*bchain.Asset, assetGuid uint32) error {
+	dBAsset, err := d.GetAsset(assetGuid, &assets)
+	if dBAsset == nil || err != nil {
+		return err
+	}
+	dBAsset.AddrDesc = addrDesc
+	assets[assetGuid] = dBAsset
 	return nil
 }
 func (d *RocksDB) SetupAssetCache() error {
