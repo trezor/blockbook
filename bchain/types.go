@@ -769,6 +769,16 @@ type BlockChainParser interface {
 	UnpackAssetInfo(assetInfo *AssetInfo, buf []byte, details bool) int
 	AppendAssetInfoDetails(assetInfoDetails *AssetInfoDetails, buf []byte, varBuf []byte) []byte
 	UnpackAssetInfoDetails(assetInfoDetails *AssetInfoDetails, buf []byte) int
+	PackSyscoinBurnToEthereum(a *SyscoinBurnToEthereumType, buf []byte) []byte
+	UnpackSyscoinBurnToEthereum(a *SyscoinBurnToEthereumType, buf []byte) int
+	AppendMintSyscoin(a *MintSyscoinType, buf []byte) []byte
+	UnpackMintSyscoin(a *MintSyscoinType, buf []byte) int 
+	UnpackAssetOut(a *AssetOutType) int
+	PackAssetOut(a *AssetOutType, buf []byte, varBuf []byte) []byte
+	PackAssetObj(a *AssetType, buf []byte) []byte
+	UnpackAssetObj(a *AssetType, buf []byte) int
+	UnpackAllocation(a *AssetAllocationType, buf []byte) int
+	PackAllocation(a *AssetAllocationType, buf []byte) []byte
 }
 
 // Mempool defines common interface to mempool

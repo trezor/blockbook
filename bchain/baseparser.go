@@ -373,6 +373,36 @@ func (p *BaseParser) AppendAssetInfoDetails(assetInfoDetails *AssetInfoDetails, 
 func (p *BaseParser) UnpackAssetInfoDetails(assetInfoDetails *AssetInfoDetails, buf []byte) int  {
 	return 0
 }
+func (p *BaseParser) PackSyscoinBurnToEthereum(a *SyscoinBurnToEthereumType, buf []byte) []byte {
+	return nil
+}
+func (p *BaseParser) UnpackSyscoinBurnToEthereum(a *SyscoinBurnToEthereumType, buf []byte) int {
+	return 0
+}
+func (p *BaseParser) AppendMintSyscoin(a *MintSyscoinType, buf []byte) []byte {
+	return nil
+}
+func (p *BaseParser) UnpackMintSyscoin(a *bchain.MintSyscoinType, buf []byte) int {
+	return 0
+}
+func (p *BaseParser) UnpackAssetOut(a *AssetOutType) int {
+	return 0
+}
+func (p *BaseParser) PackAssetOut(a *AssetOutType, buf []byte, varBuf []byte) []byte {
+	return nil
+}
+func (p *BaseParser) PackAssetObj(a *AssetType, buf []byte) []byte {
+	return nil
+}
+func (p *BaseParser) UnpackAssetObj(a *AssetType, buf []byte) int {
+	return 0
+}
+func (p *BaseParser) UnpackAllocation(a *AssetAllocationType, buf []byte) int {
+	return 0
+}
+func (p *BaseParser) PackAllocation(a *AssetAllocationType, buf []byte) []byte {
+	return nil
+}
 const PackedHeightBytes = 4
 func (p *BaseParser) PackAddressKey(addrDesc AddressDescriptor, height uint32) []byte {
 	buf := make([]byte, len(addrDesc)+PackedHeightBytes)

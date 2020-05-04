@@ -235,24 +235,6 @@ func (p *SyscoinParser) TryGetOPReturn(script []byte) []byte {
 	return nil
 }
 
-func (a *bchain.AssetAllocationType) Serialize(buf []byte) []byte {
-	varBuf := make([]byte, vlq.MaxLen64)
-	l := p.BaseParser.PackVaruint(uint(len(a.VoutAssets)), varBuf)
-
-	for k, v := range a.VoutAssets {
-		varBufLE := p.BaseParser.PackUintLE(uint32(w))
-		buf = append(buf, varBufLE...)
-
-		l = p.BaseParser.PackVaruint(uint(len(v)), varBuf)
-		buf = append(buf, varBuf[:l]...)
-
-		for _,voutAsset := range v {
-			buf = voutAsset.Serialize(buf, varBuf)
-		}
-	}
-	return buf
-}
-
 // Amount compression:
 // * If the amount is 0, output 0
 // * first, divide the amount (in base units) by the largest power of 10 possible; call the exponent e (e is max 9)
@@ -306,7 +288,25 @@ func DecompressAmount(x uint64) uint64 {
     return n
 }
 
-func (a *bchain.AssetAllocationType) Deserialize(buf []byte) int {
+func (p *SyscoinParser) PackAllocation(a *bchain.AssetAllocationType, buf []byte) []byte {
+	varBuf := make([]byte, vlq.MaxLen64)
+	l := p.BaseParser.PackVaruint(uint(len(a.VoutAssets)), varBuf)
+
+	for k, v := range a.VoutAssets {
+		varBufLE := p.BaseParser.PackUintLE(uint32(w))
+		buf = append(buf, varBufLE...)
+
+		l = p.BaseParser.PackVaruint(uint(len(v)), varBuf)
+		buf = append(buf, varBuf[:l]...)
+
+		for _,voutAsset := range v {
+			buf = p.PackAssetOut(&voutAsset, buf, varBuf)
+		}
+	}
+	return buf
+}
+
+func (p *SyscoinParser) UnpackAllocation(a *bchain.AssetAllocationType, buf []byte) int {
 	numAssets, l := p.BaseParser.UnpackVarint(buf)
 
 	a.BlockNumber, ll = p.BaseParser.UnpackVarint(buf[l:])
@@ -324,15 +324,15 @@ func (a *bchain.AssetAllocationType) Deserialize(buf []byte) int {
 			a.VoutAssets[assetGuid] = assetOutArray
 		}
 		for j := 0; j < int(numOutputs); j++ {
-			ll = assetOutArray[j].Deserialize(buf[l:])
+			ll = p.UnpackAssetOut(&assetOutArray[j], buf[l:])
 			l += ll
 		}
 	}
 	return l
 }
 
-func (a *bchain.AssetType) Deserialize(buf []byte) int {
-	l := a.Allocation.Deserialize(buf)
+func (p *SyscoinParser) UnpackAssetObj(a *bchain.AssetType, buf []byte) int {
+	l := p.UnpackAllocation(&a.Allocation, buf)
 
 	a.Precision = buf[l:l+1]
 	l += 1
@@ -374,9 +374,9 @@ func (a *bchain.AssetType) Deserialize(buf []byte) int {
 	return l
 }
 
-func (a *bchain.AssetType) Serialize(buf []byte) []byte {
+func (p *SyscoinParser) PackAssetObj(a *bchain.AssetType, buf []byte) []byte {
 	varBuf := make([]byte, 20)
-	buf = a.Allocation.Serialize(buf)
+	buf = p.UnpackAllocation(&a.Allocation, buf)
 	buf = append(buf, []byte(a.Precision)...)
 
 	buf = p.BaseParser.PackVarBytes(a.Contract, buf, varBuf)
@@ -404,7 +404,7 @@ func (a *bchain.AssetType) Serialize(buf []byte) []byte {
 	return buf
 }
 
-func (a *bchain.AssetOutType) Serialize(buf []byte, varBuf []byte) []byte {
+func (p *SyscoinParser) PackAssetOut(a *bchain.AssetOutType, buf []byte, varBuf []byte) []byte {
 	l := p.BaseParser.PackVaruint(uint(a.N), varBuf)
 	buf = append(buf, varBuf[:l]...)
 	l = p.BaseParser.PackVaruint(uint(CompressAmount(uint64(a.ValueSat))), varBuf)
@@ -412,7 +412,7 @@ func (a *bchain.AssetOutType) Serialize(buf []byte, varBuf []byte) []byte {
 	return buf
 }
 
-func (a *bchain.AssetOutType) Deserialize() int {
+func (p *SyscoinParser) UnpackAssetOut(a *bchain.AssetOutType) int {
 	a.N, l = uint32(p.BaseParser.UnpackVaruint(buf[l:]))
 	valueSat, ll := p.BaseParser.UnpackVarint(buf[l:])
 	l += ll
@@ -421,8 +421,8 @@ func (a *bchain.AssetOutType) Deserialize() int {
 }
 
 
-func (a *bchain.MintSyscoinType) Deserialize(buf []byte) int {
-	l := a.Allocation.Deserialize(buf)
+func (p *SyscoinParser) UnpackMintSyscoin(a *bchain.MintSyscoinType, buf []byte) int {
+	l := p.UnpackAllocation(&a.Allocation, buf)
 
 	a.BridgeTransferId, ll = p.BaseParser.UnpackVaruint(buf[l:])
 	l += ll
@@ -457,9 +457,9 @@ func (a *bchain.MintSyscoinType) Deserialize(buf []byte) int {
 	return l
 }
 
-func (a *bchain.MintSyscoinType) Serialize(buf []byte) []byte {
+func (p *SyscoinParser) AppendMintSyscoin(a *bchain.MintSyscoinType, buf []byte) []byte {
 	varBuf := make([]byte, 4096)
-	buf = a.Allocation.Serialize(buf)
+	buf = p.PackAllocation(&a.Allocation, buf)
 
 	l = p.BaseParser.PackVaruint(a.BridgeTransferId, varBuf)
 	buf = append(buf, varBuf[:l]...)
@@ -485,15 +485,15 @@ func (a *bchain.MintSyscoinType) Serialize(buf []byte) []byte {
 	return buf
 }
 
-func (a *bchain.SyscoinBurnToEthereumType) Deserialize(buf []byte) int {
-	l = a.Allocation.Deserialize(buf)
+func (p *SyscoinParser) UnpackSyscoinBurnToEthereum(a *bchain.SyscoinBurnToEthereumType, buf []byte) int {
+	l = p.UnpackAllocation(&a.Allocation, buf)
 	a.ethAddress, ll = p.BaseParser.UnpackVarBytes(buf[l:])
 	l += ll	
 	return l
 }
 
-func (a *bchain.SyscoinBurnToEthereumType) Serialize(buf []byte) []byte {
-	buf = a.Allocation.Serialize(buf)
+func (p *SyscoinParser) PackSyscoinBurnToEthereum(a *bchain.SyscoinBurnToEthereumType, buf []byte) []byte {
+	buf = p.PackAllocation(&a.Allocation, buf)
 	buf = append(buf, a.ethAddress...)
 	return buf
 }
@@ -518,7 +518,7 @@ func (p *SyscoinParser) GetAllocationFromTx(tx *bchain.Tx) (*bchain.AssetAllocat
 		}
 	}
 	var assetAllocation bchain.AssetAllocationType
-	l := assetAllocation.Deserialize(sptData)
+	l := p.UnpackAllocation(&assetAllocation, sptData)
 	if l != len(sptData) {
 		return nil, errors.New("Could not decode asset allocation")
 	}
@@ -545,7 +545,7 @@ func (p *SyscoinParser) GetAssetFromTx(tx *bchain.Tx) (*bchain.AssetType, error)
 		}
 	}
 	var asset bchain.AssetType
-	l := asset.Deserialize(sptData)
+	l := p.UnpackAssetObj(&asset, sptData)
 	if l != len(sptData) {
 		return nil, errors.New("Could not decode asset")
 	}
@@ -810,7 +810,7 @@ func (p *SyscoinParser) PackAsset(asset *bchain.Asset) []byte {
 	l = p.BaseParser.PackVaruint(uint(len(asset.AddrDesc)), varBuf)
 	buf = append(buf, varBuf[:l]...)
 	buf = append(buf, []byte(asset.AddrDesc)...)
-	buf = asset.AssetObj.Serialize(buf)
+	buf = p.PackAssetObj(&asset.AssetObj, buf)
 	return buf
 }
 
@@ -821,7 +821,7 @@ func (p *SyscoinParser) UnpackAsset(buf []byte) *bchain.Asset {
 	asset.AddrDesc, ll = p.BaseParser.UnpackVarBytes(buf[l:])
 	l += ll
 	varBuf := buf[l:]
-	l = asset.AssetObj.Deserialize(varBuf)
+	l = p.UnpackAssetObj(&asset.AssetObj, varBuf)
 	if l != len(varBuf) {
 		return nil
 	}

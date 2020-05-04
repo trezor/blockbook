@@ -53,10 +53,10 @@ func (d *RocksDB) ConnectAssetOutput(version int32, asset *bchain.Asset, dBAsset
 	return nil
 }
 
-func (d *RocksDB) DisconnectAssetOutput(version int32, asset *bchain.Asset, dbAsset *bchain.Asset, assetInfo* bchain.AssetInfo) error {
+func (d *RocksDB) DisconnectAssetOutput(version int32, asset *bchain.Asset, dBAsset *bchain.Asset, assetInfo* bchain.AssetInfo) error {
 	// add the output value to the asset balance
 	if d.chainParser.IsAssetSendTx(version) {
-		balanceAssetSat = big.NewInt(dBAsset.AssetObj.Balance)
+		balanceAssetSat := big.NewInt(dBAsset.AssetObj.Balance)
 		balanceAssetSat.Add(balanceAssetSat, assetInfo.ValueSat)
 		dBAsset.AssetObj.Balance = balanceAssetSat.Int64()
 	} else if !d.chainParser.IsAssetActivateTx(version) {
