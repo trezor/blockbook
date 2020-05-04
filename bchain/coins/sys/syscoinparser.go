@@ -407,7 +407,7 @@ func (a *AssetType) Serialize(buf []byte) []byte {
 }
 
 func (a *AssetOutType) Serialize(buf []byte, varBuf []byte) []byte {
-	l := p.BaseParser.PackVaruint(uint(a.N)), varBuf)
+	l := p.BaseParser.PackVaruint(uint(a.N), varBuf)
 	buf = append(buf, varBuf[:l]...)
 	l = p.BaseParser.PackVaruint(uint(CompressAmount(uint64(a.ValueSat))), varBuf)
 	buf = append(buf, varBuf[:l]...)
