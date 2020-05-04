@@ -333,7 +333,7 @@ func (p *SyscoinParser) UnpackAllocation(a *bchain.AssetAllocationType, buf []by
 func (p *SyscoinParser) UnpackAssetObj(a *bchain.AssetType, buf []byte) int {
 	l := p.UnpackAllocation(&a.Allocation, buf)
 	var ll int
-	a.Precision = uint8(buf[l:l+1])
+	a.Precision = uint8(*buf[l:l+1])
 	l += 1
 
 	a.Contract, ll = p.BaseParser.UnpackVarBytes(buf[l:])
@@ -346,7 +346,7 @@ func (p *SyscoinParser) UnpackAssetObj(a *bchain.AssetType, buf []byte) int {
 	a.Symbol = string(symbol)
 	l += ll
 
-	a.UpdateFlags = buf[l:l+1]
+	a.UpdateFlags = uint8(*buf[l:l+1])
 	l += 1
 
 	a.PrevContract, ll = p.BaseParser.UnpackVarBytes(buf[l:])
@@ -355,27 +355,27 @@ func (p *SyscoinParser) UnpackAssetObj(a *bchain.AssetType, buf []byte) int {
 	a.PrevPubData, ll = p.BaseParser.UnpackVarBytes(buf[l:])
 	l += ll
 
-	a.PrevUpdateFlags = uint8(buf[l:l+1])
+	a.PrevUpdateFlags = uint8(*buf[l:l+1])
 	l += 1
 
 	balance, ll := p.BaseParser.UnpackVarint(buf[l:])
 	l += ll
-	a.Balance = int64(DecompressAmount(balance))
+	a.Balance = int64(DecompressAmount(uint64(balance)))
 
 	totalSupply, ll := p.BaseParser.UnpackVarint(buf[l:])
 	l += ll
-	a.TotalSupply = int64(DecompressAmount(totalSupply))
+	a.TotalSupply = int64(DecompressAmount(uint64(totalSupply)))
 
 	maxSupply, ll := p.BaseParser.UnpackVarint(buf[l:])
 	l += ll
-	a.MaxSupply = int64(DecompressAmount(maxSupply))
+	a.MaxSupply = int64(DecompressAmount(uint64(maxSupply)))
 
 	return l
 }
 
 func (p *SyscoinParser) PackAssetObj(a *bchain.AssetType, buf []byte) []byte {
 	varBuf := make([]byte, 20)
-	buf = p.UnpackAllocation(&a.Allocation, buf)
+	buf = p.PackAllocation(&a.Allocation, buf)
 	buf = append(buf, []byte(a.Precision)...)
 
 	buf = p.BaseParser.PackVarBytes(a.Contract, buf, varBuf)
@@ -415,7 +415,7 @@ func (p *SyscoinParser) UnpackAssetOut(a *bchain.AssetOutType, buf []byte) int {
 	a.N, l = uint32(p.BaseParser.UnpackVaruint(buf[l:]))
 	valueSat, ll := p.BaseParser.UnpackVarint(buf[l:])
 	l += ll
-	a.ValueSat = int64(DecompressAmount(valueSat))
+	a.ValueSat = int64(DecompressAmount(uint64(valueSat)))
 	return l
 }
 
