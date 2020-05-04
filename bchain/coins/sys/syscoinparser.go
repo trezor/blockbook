@@ -630,7 +630,7 @@ func (p *SyscoinParser) AppendAssetInfoDetails(assetInfoDetails *bchain.AssetInf
 
 func (p *SyscoinParser) UnpackAssetInfoDetails(assetInfoDetails *bchain.AssetInfoDetails, buf []byte) int {
 	decimals, l := p.BaseParser.UnpackVarint32(buf)
-	symbolBytes, al := append([]byte(nil), buf[l:]...)
+	symbolBytes := append([]byte(nil), buf[l:]...)
 	assetInfoDetails = &bchain.AssetInfoDetails{Symbol: string(symbolBytes), Decimals: decimals}
 	return l + al
 }
@@ -639,7 +639,7 @@ func (p *SyscoinParser) AppendAssetInfo(assetInfo *bchain.AssetInfo, buf []byte,
 	varBuf = p.BaseParser.PackUint(assetInfo.AssetGuid)
 	buf = append(buf, varBuf...)	
 	if(assetInfo.AssetGuid > 0) {
-		l = p.BaseParser.PackBigint(assetInfo.ValueSat, varBuf)
+		l := p.BaseParser.PackBigint(assetInfo.ValueSat, varBuf)
 		buf = append(buf, varBuf[:l]...)
 		if details {
 			buf = p.AppendAssetInfoDetails(txi.AssetInfo.Details, buf, varBuf)	

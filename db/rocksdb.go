@@ -573,7 +573,7 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses bch
 						balanceAsset = &bchain.AssetBalance{Transfers: 0, BalanceSat: big.NewInt(0), SentSat: big.NewInt(0)}
 						balance.AssetBalances[assetGuid] = balanceAsset
 					}
-					err = d.ConnectSyscoinOutput(tx, addrDesc, block.Height, balanceAsset, tx.Version, btxID, &utxo, output.AssetInfo, assets, txAssets)
+					err = d.ConnectSyscoinOutput(tx, addrDesc, block.Height, balanceAsset, tx.Version, btxID, &utxo, &output.AssetInfo, assets, txAssets)
 					if err != nil {
 						glog.Warningf("rocksdb: ConnectSyscoinOutput: height %d, tx %v, output %v, error %v", block.Height, tx.Txid, output, err)
 					}
@@ -675,7 +675,7 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses bch
 						balanceAsset = &bchain.AssetBalance{Transfers: 0, BalanceSat: big.NewInt(0), SentSat: big.NewInt(0)}
 						balance.AssetBalances[assetGuid] = balanceAsset
 					}
-					err := d.ConnectSyscoinInput(block.Height, balanceAsset, tx.Version, btxID, tai.AssetInfo, assets, txAssets)
+					err := d.ConnectSyscoinInput(block.Height, balanceAsset, tx.Version, btxID, &tai.AssetInfo, assets, txAssets)
 					if err != nil {
 						glog.Warningf("rocksdb: ConnectSyscoinInput: height %d, tx %v, input %v, error %v", block.Height, btxID, input, err)
 					}
@@ -1034,7 +1034,7 @@ func (d *RocksDB) disconnectTxAddressesInputs(wb *gorocksdb.WriteBatch, btxID []
 						if !ok {
 							return errors.New("DisconnectSyscoinInput asset balance not found")
 						}
-						err := d.DisconnectSyscoinInput(t.AddrDesc, txa.Version, balanceAsset, btxID, t.AssetInfo, &utxo, assets, assetFoundInTx)
+						err := d.DisconnectSyscoinInput(t.AddrDesc, txa.Version, balanceAsset, btxID, &t.AssetInfo, &utxo, assets, assetFoundInTx)
 						if err != nil {
 							glog.Warningf("rocksdb: DisconnectSyscoinInput: tx %v, input %v, error %v", btxID, input, err)
 						}
@@ -1077,7 +1077,7 @@ func (d *RocksDB) disconnectTxAddressesOutputs(wb *gorocksdb.WriteBatch, btxID [
 						if balance.AssetBalances == nil {
 							return errors.New("DisconnectSyscoinOutput asset balances was nil but not expected to be")
 						}
-						err := d.DisconnectSyscoinOutput(tx, balance.AssetBalances, txa.Version, btxID, assets, t.AssetInfo, assetFoundInTx)
+						err := d.DisconnectSyscoinOutput(tx, balance.AssetBalances, txa.Version, btxID, assets, &t.AssetInfo, assetFoundInTx)
 						if err != nil {
 							glog.Warningf("rocksdb: DisconnectSyscoinOutput: tx %v, output %v, error %v", btxID, t, err)
 						}
