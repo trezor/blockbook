@@ -5,11 +5,9 @@ import (
 	"blockbook/bchain"
 	"blockbook/bchain/coins/btc"
 	"blockbook/bchain/coins/utils"
-	"encoding/hex"
 	"bytes"
 	"math/big"
 	"github.com/martinboehm/btcd/wire"
-	"github.com/martinboehm/btcd/blockchain"
 	"github.com/martinboehm/btcutil/chaincfg"
 	"github.com/martinboehm/btcutil/txscript"
 	vlq "github.com/bsm/go-vlq"
@@ -237,7 +235,7 @@ func (p *SyscoinParser) TryGetOPReturn(script []byte) []byte {
 	return nil
 }
 
-func (a *AssetAllocationType) Serialize(buf []byte) []byte {
+func (a *bchain.AssetAllocationType) Serialize(buf []byte) []byte {
 	varBuf := make([]byte, vlq.MaxLen64)
 	l := p.BaseParser.PackVaruint(uint(len(a.VoutAssets)), varBuf)
 
@@ -308,7 +306,7 @@ func DecompressAmount(x uint64) uint64 {
     return n
 }
 
-func (a *AssetAllocationType) Deserialize(buf []byte) int {
+func (a *bchain.AssetAllocationType) Deserialize(buf []byte) int {
 	numAssets, l := p.BaseParser.UnpackVarint(buf)
 
 	a.BlockNumber, ll = p.BaseParser.UnpackVarint(buf[l:])
@@ -333,7 +331,7 @@ func (a *AssetAllocationType) Deserialize(buf []byte) int {
 	return l
 }
 
-func (a *AssetType) Deserialize(buf []byte) int {
+func (a *bchain.AssetType) Deserialize(buf []byte) int {
 	l := a.Allocation.Deserialize(buf)
 
 	a.Precision = buf[l:l+1]
@@ -376,7 +374,7 @@ func (a *AssetType) Deserialize(buf []byte) int {
 	return l
 }
 
-func (a *AssetType) Serialize(buf []byte) []byte {
+func (a *bchain.AssetType) Serialize(buf []byte) []byte {
 	varBuf := make([]byte, 20)
 	buf = a.Allocation.Serialize(buf)
 	buf = append(buf, []byte(a.Precision)...)
@@ -406,7 +404,7 @@ func (a *AssetType) Serialize(buf []byte) []byte {
 	return buf
 }
 
-func (a *AssetOutType) Serialize(buf []byte, varBuf []byte) []byte {
+func (a *bchain.AssetOutType) Serialize(buf []byte, varBuf []byte) []byte {
 	l := p.BaseParser.PackVaruint(uint(a.N), varBuf)
 	buf = append(buf, varBuf[:l]...)
 	l = p.BaseParser.PackVaruint(uint(CompressAmount(uint64(a.ValueSat))), varBuf)
@@ -414,7 +412,7 @@ func (a *AssetOutType) Serialize(buf []byte, varBuf []byte) []byte {
 	return buf
 }
 
-func (a *AssetOutType) Deserialize() int {
+func (a *bchain.AssetOutType) Deserialize() int {
 	a.N, l = uint32(p.BaseParser.UnpackVaruint(buf[l:]))
 	valueSat, ll := p.BaseParser.UnpackVarint(buf[l:])
 	l += ll
@@ -423,7 +421,7 @@ func (a *AssetOutType) Deserialize() int {
 }
 
 
-func (a *MintSyscoinType) Deserialize(buf []byte) int {
+func (a *bchain.MintSyscoinType) Deserialize(buf []byte) int {
 	l := a.Allocation.Deserialize(buf)
 
 	a.BridgeTransferId, ll = p.BaseParser.UnpackVaruint(buf[l:])
@@ -459,7 +457,7 @@ func (a *MintSyscoinType) Deserialize(buf []byte) int {
 	return l
 }
 
-func (a *MintSyscoinType) Serialize(buf []byte) []byte {
+func (a *bchain.MintSyscoinType) Serialize(buf []byte) []byte {
 	varBuf := make([]byte, 4096)
 	buf = a.Allocation.Serialize(buf)
 
@@ -487,14 +485,14 @@ func (a *MintSyscoinType) Serialize(buf []byte) []byte {
 	return buf
 }
 
-func (a *SyscoinBurnToEthereumType) Deserialize(buf []byte) int {
+func (a *bchain.SyscoinBurnToEthereumType) Deserialize(buf []byte) int {
 	l = a.Allocation.Deserialize(buf)
 	a.ethAddress, ll = p.BaseParser.UnpackVarBytes(buf[l:])
 	l += ll	
 	return l
 }
 
-func (a *SyscoinBurnToEthereumType) Serialize(buf []byte) []byte {
+func (a *bchain.SyscoinBurnToEthereumType) Serialize(buf []byte) []byte {
 	buf = a.Allocation.Serialize(buf)
 	buf = append(buf, a.ethAddress...)
 	return buf
@@ -823,7 +821,7 @@ func (p *SyscoinParser) UnpackAsset(buf []byte) *bchain.Asset {
 	asset.AddrDesc, ll = p.BaseParser.UnpackVarBytes(buf[l:])
 	l += ll
 	varBuf := buf[l:]
-	l := asset.AssetObj.Deserialize(varBuf)
+	l = asset.AssetObj.Deserialize(varBuf)
 	if l != len(varBuf) {
 		return nil
 	}
