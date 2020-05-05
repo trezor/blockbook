@@ -98,8 +98,8 @@ func (p *SyscoinParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 	if err != nil {
 		return nil, 0, err
 	}
-	p.LoadAssets(&tx)
-	return &tx, height, nil
+	p.LoadAssets(tx)
+	return tx, height, nil
 }
 // TxFromMsgTx converts syscoin wire Tx to bchain.Tx
 func (p *SyscoinParser) TxFromMsgTx(t *wire.MsgTx, parseAddresses bool) bchain.Tx {
