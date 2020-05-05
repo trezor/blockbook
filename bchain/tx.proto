@@ -2,6 +2,15 @@ syntax = "proto3";
 	package bchain;
 		
     message ProtoTransaction {
+        message AssetInfoDetailsType {
+            string Symbol = 1;
+            int32 Decimals = 2;
+        }
+        message AssetInfoType {
+            uint32 AssetGuid = 1;
+            bytes ValueSat = 2;
+            AssetInfoDetailsType Details = 3;
+        }
         message VinType {
             string Coinbase = 1;
             bytes Txid = 2;
@@ -9,12 +18,14 @@ syntax = "proto3";
             bytes ScriptSigHex = 4;
             uint32 Sequence = 5;
             repeated string Addresses = 6;
+            AssetInfoType AssetInfo = 7;
         }
         message VoutType {
             bytes ValueSat = 1;
             uint32 N = 2;
             bytes ScriptPubKeyHex = 3;
             repeated string Addresses = 4;
+            AssetInfoType AssetInfo = 5;
         }
 
         bytes Txid = 1;

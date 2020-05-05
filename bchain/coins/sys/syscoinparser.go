@@ -91,6 +91,16 @@ func GetChainParams(chain string) *chaincfg.Params {
 		return &MainNetParams
 	}
 }
+
+// UnpackTx unpacks transaction from protobuf byte array
+func (p *SyscoinParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
+	tx, height, err := p.BitcoinParser.UnpackTx(buf)
+	if err != nil {
+		return nil, 0, err
+	}
+	p.LoadAssets(&tx)
+	return &tx, height, nil
+}
 // TxFromMsgTx converts syscoin wire Tx to bchain.Tx
 func (p *SyscoinParser) TxFromMsgTx(t *wire.MsgTx, parseAddresses bool) bchain.Tx {
 	tx := p.BitcoinParser.TxFromMsgTx(t, parseAddresses)
