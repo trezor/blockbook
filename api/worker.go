@@ -127,7 +127,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 	var err error
 	var ta *bchain.TxAddresses
 	var tokens []*bchain.TokenTransferSummary
-	mapTTS := map[uint32]*bchain.TokenTransferSummary{}
+	var mapTTS  map[uint32]*bchain.TokenTransferSummary
 	var ethSpecific *EthereumSpecific
 	var blockhash string
 	if bchainTx.Confirmations > 0 {
@@ -210,6 +210,9 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 				if vin.ValueSat != nil {
 					valInSat.Add(&valInSat, (*big.Int)(vin.ValueSat))
 					if vin.AssetInfo.AssetGuid > 0 {
+						if mapTTS == nil {
+							mapTTS = map[uint32]*bchain.TokenTransferSummary{}
+						}
 						tts, ok := mapTTS[vin.AssetInfo.AssetGuid]
 						if !ok {
 							assetGuid := strconv.FormatUint(uint64(vin.AssetInfo.AssetGuid), 10)
@@ -284,7 +287,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 		}
 		pValInSat = &valInSat
 		// flatten TTS Map
-		if len(mapTTS) > 0 {
+		if mapTTS != nil && len(mapTTS) > 0 {
 			tokens = make([]*bchain.TokenTransferSummary, len(mapTTS))
 			var i int = 0
 			for _, token := range mapTTS {

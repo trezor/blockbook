@@ -149,7 +149,7 @@ func (p *SyscoinParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) ([
 }
 
 // UnpackTx unpacks transaction from protobuf byte array
-func (p *SyscoinParser) UnpackTx(buf []byte) (*Tx, uint32, error) {
+func (p *SyscoinParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 	var pt ProtoSyscoinTransaction
 	err := proto.Unmarshal(buf, &pt)
 	if err != nil {
