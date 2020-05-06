@@ -2,6 +2,7 @@ package syscoin
 
 import (
 	"encoding/json"
+	"encoding/hex"
 	"blockbook/bchain"
 	"blockbook/bchain/coins/btc"
 	"blockbook/bchain/coins/utils"
@@ -105,7 +106,7 @@ func (p *SyscoinParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) ([
 		}
 		// coinbase txs do not have Vin.txid
 		itxid, err := p.PackTxid(vi.Txid)
-		if err != nil && err != ErrTxidMissing {
+		if err != nil && err != bchain.ErrTxidMissing {
 			return nil, errors.Annotatef(err, "Vin %v Txid %v", i, vi.Txid)
 		}
 		pti[i] = &ProtoSyscoinTransaction_VinType{
@@ -148,7 +149,7 @@ func (p *SyscoinParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) ([
 }
 
 // UnpackTx unpacks transaction from protobuf byte array
-func (p *BaseParser) UnpackTx(buf []byte) (*Tx, uint32, error) {
+func (p *SyscoinParser) UnpackTx(buf []byte) (*Tx, uint32, error) {
 	var pt ProtoSyscoinTransaction
 	err := proto.Unmarshal(buf, &pt)
 	if err != nil {
@@ -158,13 +159,13 @@ func (p *BaseParser) UnpackTx(buf []byte) (*Tx, uint32, error) {
 	if err != nil {
 		return nil, 0, err
 	}
-	vin := make([]Vin, len(pt.Vin))
+	vin := make([]bchain.Vin, len(pt.Vin))
 	for i, pti := range pt.Vin {
 		itxid, err := p.UnpackTxid(pti.Txid)
 		if err != nil {
 			return nil, 0, err
 		}
-		vin[i] = Vin{
+		vin[i] = bchain.Vin{
 			Addresses: pti.Addresses,
 			Coinbase:  pti.Coinbase,
 			ScriptSig: bchain.ScriptSig{
@@ -175,11 +176,11 @@ func (p *BaseParser) UnpackTx(buf []byte) (*Tx, uint32, error) {
 			Vout:     pti.Vout,
 		}
 	}
-	vout := make([]Vout, len(pt.Vout))
+	vout := make([]bchain.Vout, len(pt.Vout))
 	for i, pto := range pt.Vout {
 		var vs big.Int
 		vs.SetBytes(pto.ValueSat)
-		vout[i] = Vout{
+		vout[i] = bchain.Vout{
 			N: pto.N,
 			ScriptPubKey: bchain.ScriptPubKey{
 				Addresses: pto.Addresses,
