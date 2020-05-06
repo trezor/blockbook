@@ -56,7 +56,7 @@ func verifyAfterSyscoinTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect bool
 	if err := checkColumn(d, cfAddresses, []keyPair{
 		{addressKeyHex(dbtestdata.AddrS1, 158, d), txIndexesHexSyscoin(dbtestdata.TxidS1T0, bchain.SyscoinMask, []int32{0}, d), nil},
 		{addressKeyHex(dbtestdata.AddrS2, 158, d), txIndexesHexSyscoin(dbtestdata.TxidS1T1, bchain.SyscoinMask, []int32{0}, d), nil},
-		{addressKeyHex(dbtestdata.AddrS3, 158, d), txIndexesHexSyscoin(dbtestdata.TxidS1T1, bchain.SyscoinMask, []int32{2}, d), nil},
+		{addressKeyHex(dbtestdata.AddrS3, 158, d), txIndexesHexSyscoin(dbtestdata.TxidS1T1, bchain.AssetActivateMask, []int32{2}, d), nil},
 	
 	}); err != nil {
 		{
