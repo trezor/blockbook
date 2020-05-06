@@ -778,28 +778,6 @@ func (p *SyscoinParser) PackAddrBalance(ab *bchain.AddrBalance, buf, varBuf []by
 }
 
 
-
-func (p *SyscoinParser) PackTxIndexes(txi []bchain.TxIndexes) []byte {
-	buf := make([]byte, 0, 36)
-	bvout := make([]byte, vlq.MaxLen32)
-	// store the txs in reverse order for ordering from newest to oldest
-	for j := len(txi) - 1; j >= 0; j-- {
-		t := &txi[j]
-		l := p.BaseParser.PackVaruint(uint(t.Type), buf)
-		buf = append(buf, buf[:l]...)
-		buf = append(buf, []byte(t.BtxID)...)
-		for i, index := range t.Indexes {
-			index <<= 1
-			if i == len(t.Indexes)-1 {
-				index |= 1
-			}
-			l = p.BaseParser.PackVarint32(index, bvout)
-			buf = append(buf, bvout[:l]...)
-		}
-	}
-	return buf
-}
-
 func (p *SyscoinParser) PackAsset(asset *bchain.Asset) []byte {
 	buf := make([]byte, 0, 32)
 	varBuf := make([]byte, vlq.MaxLen64)
