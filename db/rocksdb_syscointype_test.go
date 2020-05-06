@@ -250,26 +250,20 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 
 	// get transactions for various addresses / low-high ranges
 	verifyGetTransactions(t, d, dbtestdata.AddrS3, 0, 1000000, []txidIndex{
-		{dbtestdata.TxidS2T1, ^1045909988}, // asset is used as input to send to addr6 (burn)
 		{dbtestdata.TxidS2T1, 1},
-		{dbtestdata.TxidS1T1, ^1045909988}, // asset is used as input to update asset
 		{dbtestdata.TxidS1T1, 1},
 	}, nil)
 	verifyGetTransactions(t, d, dbtestdata.AddrS3, 249727, 249727, []txidIndex{
-		{dbtestdata.TxidS1T1, ^1045909988},
 		{dbtestdata.TxidS1T1, 1},
 	}, nil)
 	verifyGetTransactions(t, d, dbtestdata.AddrS3, 347314, 1000000, []txidIndex{
-		{dbtestdata.TxidS2T1, ^1045909988},
 		{dbtestdata.TxidS2T1, 1},
 	}, nil)
 	verifyGetTransactions(t, d, dbtestdata.AddrS3, 500000, 1000000, []txidIndex{}, nil)
 	verifyGetTransactions(t, d, dbtestdata.AddrS4, 0, 1000000, []txidIndex{
 		{dbtestdata.TxidS2T0, 0},
 	}, nil)
-	verifyGetTransactions(t, d, dbtestdata.AddrS6, 0, 1000000, []txidIndex{
-		{dbtestdata.TxidS2T1, 1045909988}, // sent to addr6 burn as asset
-	}, nil)
+	verifyGetTransactions(t, d, dbtestdata.AddrS6, 0, 1000000, []txidIndex{}, nil)
 	verifyGetTransactions(t, d, "SgBVZhGLjqRz8ufXFwLhZvXpUMKqoduBad", 500000, 1000000, []txidIndex{}, errors.New("checksum mismatch"))
 
 	// GetBestBlock
