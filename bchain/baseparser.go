@@ -551,8 +551,8 @@ func (p *BaseParser) PackTxIndexes(txi []TxIndexes) []byte {
 	// store the txs in reverse order for ordering from newest to oldest
 	for j := len(txi) - 1; j >= 0; j-- {
 		t := &txi[j]
-		l := p.PackVaruint(uint(t.Type), buf)
-		buf = append(buf, buf[:l]...)
+		l := p.PackVaruint(uint(t.Type), bvout)
+		buf = append(buf, bvout[:l]...)
 		buf = append(buf, []byte(t.BtxID)...)
 		for i, index := range t.Indexes {
 			index <<= 1
