@@ -303,5 +303,6 @@ type Mempool interface {
 	GetTransactions(address string) ([]Outpoint, error)
 	GetAddrDescTransactions(addrDesc AddressDescriptor) ([]Outpoint, error)
 	GetAllEntries() MempoolTxidEntries
+	GetNewEntries(timeFrom uint32) MempoolTxidEntries
 	GetTransactionTime(txid string) uint32
 }

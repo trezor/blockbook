@@ -1117,8 +1117,11 @@ func (s *PublicServer) apiMempool(r *http.Request, apiVersion int) (interface{},
 		if ec != nil {
 			page = 0
 		}
-		// TODO: returns only TxIDs
-		mempool, err = s.api.GetMempool(page, txsInAPI)
+		fromTime, err := strconv.Atoi(r.URL.Path[i+1:])
+		if err != nil {
+			fromTime = 0
+		}
+		mempool, err = s.api.GetMempoolNew(uint32(fromTime), page, txsInAPI)
 		// note: no V1 support
 	}
 	return mempool, err

@@ -103,6 +103,32 @@ func (m *BaseMempool) GetAllEntries() MempoolTxidEntries {
 	return entries
 }
 
+// GetNewEntries returns mempool entries newer than a threshold, sorted by fist seen time in descending order
+func (m *BaseMempool) GetNewEntries(timeFrom uint32) MempoolTxidEntries {
+	m.mux.Lock()
+	count := 0
+	// first count, second collect
+	for _, entry := range m.txEntries {
+		if entry.time >= timeFrom {
+			count++
+		}
+	}
+	entries := make(MempoolTxidEntries, count)
+	i := 0
+	for txid, entry := range m.txEntries {
+		if entry.time >= timeFrom {
+			entries[i] = MempoolTxidEntry{
+				Txid: txid,
+				Time: entry.time,
+			}
+			i++
+		}		
+	}
+	m.mux.Unlock()
+	sort.Sort(entries)
+	return entries
+}
+
 // GetTransactionTime returns first seen time of a transaction
 func (m *BaseMempool) GetTransactionTime(txid string) uint32 {
 	m.mux.Lock()
