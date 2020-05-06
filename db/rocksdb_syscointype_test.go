@@ -29,14 +29,14 @@ func syscoinTestParser() *syscoin.SyscoinParser {
 
 func txIndexesHexSyscoin(tx string, assetsMask bchain.AssetsMask, indexes []int32, d *RocksDB) string {
 	buf := make([]byte, vlq.MaxLen32)
-	varBuf := d.chainParser.PackUint(uint32(assetsMask))
-	tx = hex.EncodeToString(varBuf) + tx
+	l := d.chainParser.PackVaruint(uint(assetsMask), buf)
+	tx = hex.EncodeToString(buf[:l]) + tx
 	for i, index := range indexes {
 		index <<= 1
 		if i == len(indexes)-1 {
 			index |= 1
 		}
-		l := d.chainParser.PackVarint32(index, buf)
+		l = d.chainParser.PackVarint32(index, buf)
 		tx += hex.EncodeToString(buf[:l])
 	}
 	return tx

@@ -321,12 +321,12 @@ func (p *SyscoinParser) PackAllocation(a *bchain.AssetAllocationType, buf []byte
 }
 
 func (p *SyscoinParser) UnpackAllocation(a *bchain.AssetAllocationType, buf []byte) int {
-	numAssets, l := p.BaseParser.UnpackVarint(buf)
+	numAssets, l := p.BaseParser.UnpackVaruint(buf)
 	a.VoutAssets = make(map[uint32][]bchain.AssetOutType, numAssets)
 	for i := 0; i < int(numAssets); i++ {
 		assetGuid := p.BaseParser.UnpackUintLE(buf[l:])
 		l += 4
-		numOutputs, ll := p.BaseParser.UnpackVarint(buf[l:])
+		numOutputs, ll := p.BaseParser.UnpackVaruint(buf[l:])
 		l += ll
 		assetOutArray, ok := a.VoutAssets[assetGuid]
 		if !ok {
@@ -369,15 +369,15 @@ func (p *SyscoinParser) UnpackAssetObj(a *bchain.AssetType, buf []byte) int {
 	a.PrevUpdateFlags = uint8(buf[l:l+1][0])
 	l += 1
 
-	balance, ll := p.BaseParser.UnpackVarint(buf[l:])
+	balance, ll := p.BaseParser.UnpackVaruint(buf[l:])
 	l += ll
 	a.Balance = int64(DecompressAmount(uint64(balance)))
 
-	totalSupply, ll := p.BaseParser.UnpackVarint(buf[l:])
+	totalSupply, ll := p.BaseParser.UnpackVaruint(buf[l:])
 	l += ll
 	a.TotalSupply = int64(DecompressAmount(uint64(totalSupply)))
 
-	maxSupply, ll := p.BaseParser.UnpackVarint(buf[l:])
+	maxSupply, ll := p.BaseParser.UnpackVaruint(buf[l:])
 	l += ll
 	a.MaxSupply = int64(DecompressAmount(uint64(maxSupply)))
 
@@ -427,7 +427,7 @@ func (p *SyscoinParser) UnpackAssetOut(a *bchain.AssetOutType, buf []byte) int {
 	var ll int
 	n, l := p.BaseParser.UnpackVaruint(buf[l:])
 	a.N = uint32(n)
-	valueSat, ll := p.BaseParser.UnpackVarint(buf[l:])
+	valueSat, ll := p.BaseParser.UnpackVaruint(buf[l:])
 	l += ll
 	a.ValueSat = int64(DecompressAmount(uint64(valueSat)))
 	return l
@@ -785,15 +785,15 @@ func (p *SyscoinParser) PackTxIndexes(txi []bchain.TxIndexes) []byte {
 	// store the txs in reverse order for ordering from newest to oldest
 	for j := len(txi) - 1; j >= 0; j-- {
 		t := &txi[j]
-		varBuf := p.BaseParser.PackUint(uint32(t.Type))
-		buf = append(buf, varBuf...)
+		l := p.BaseParser.PackVaruint(uint(t.Type), buf)
+		buf = append(buf, buf[:l]...)
 		buf = append(buf, []byte(t.BtxID)...)
 		for i, index := range t.Indexes {
 			index <<= 1
 			if i == len(t.Indexes)-1 {
 				index |= 1
 			}
-			l := p.BaseParser.PackVarint32(index, bvout)
+			l = p.BaseParser.PackVarint32(index, bvout)
 			buf = append(buf, bvout[:l]...)
 		}
 	}
