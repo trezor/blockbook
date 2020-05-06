@@ -468,7 +468,11 @@ func Test_BulkConnect_SyscoinType(t *testing.T) {
 		t.Fatal("Expecting is.BlockTimes 0, got ", len(d.is.BlockTimes))
 	}
 
-	if err := bc.ConnectBlock(dbtestdata.GetTestSyscoinTypeBlock1(d.chainParser), false); err != nil {
+	block1 := dbtestdata.GetTestSyscoinTypeBlock1(d.chainParser)
+	for _, tx: block1.Txs {
+		d.chainParser.LoadAssets(&tx)
+	}
+	if err := bc.ConnectBlock(block1, false); err != nil {
 		t.Fatal(err)
 	}
 	if err := checkColumn(d, cfBlockTxs, []keyPair{}); err != nil {
