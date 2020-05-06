@@ -12,9 +12,7 @@ import (
 	"reflect"
 	"testing"
 	"github.com/martinboehm/btcutil/chaincfg"
-	"encoding/hex"
 	"github.com/juju/errors"
-	vlq "github.com/bsm/go-vlq"
 )
 
 type testSyscoinParser struct {
@@ -410,10 +408,6 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tokenRecipient := &bchain.TokenTransferRecipient{
-		To: dbtestdata.AddrS6,
-		Value: (*bchain.Amount)(dbtestdata.SatAssetSent),
-	}
 	taw := &bchain.TxAddresses{
 		Version: 29701,
 		Height: 347314,
@@ -435,22 +429,9 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 				ValueSat: *dbtestdata.SatS2T1A1,
 			},
 		},
-		TokenTransferSummary: &bchain.TokenTransferSummary {
-			Type:   bchain.SPTAssetSendType,
-			From:	dbtestdata.AddrS3,
-			Token:  "1045909988", 
-			Symbol: "SYSX",
-			Decimals: 8,
-			Value:	 (*bchain.Amount)(dbtestdata.SatAssetSent),
-			Fee:     (*bchain.Amount)(dbtestdata.SatZero),
-			Recipients: []*bchain.TokenTransferRecipient{tokenRecipient},
-		},
 	}
 	if !reflect.DeepEqual(ta, taw) {
 		t.Errorf("GetTxAddresses() = %+v, want %+v", ta, taw)
-	}
-	if !reflect.DeepEqual(*ta.TokenTransferSummary, *taw.TokenTransferSummary) {
-		t.Errorf("GetTxAddresses() = %+v, want %+v", *ta.TokenTransferSummary, *taw.TokenTransferSummary)
 	}
 
 }
