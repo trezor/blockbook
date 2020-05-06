@@ -1164,6 +1164,9 @@ func (w *Worker) balanceHistoryForTxid(addrDesc bchain.AddressDescriptor, txid s
 			if bytes.Equal(addrDesc, tai.AddrDesc) {
 				(*big.Int)(bh.SentSat).Add((*big.Int)(bh.SentSat), &tai.ValueSat)
 				if tai.AssetInfo.AssetGuid > 0 {
+					if bh.Tokens == nil {
+						bh.Tokens = map[uint32]*TokenBalanceHistory{}
+					}
 					bhaToken, ok := bh.Tokens[tai.AssetInfo.AssetGuid];
 					if !ok {
 						bhaToken = &TokenBalanceHistory{AssetGuid: tai.AssetInfo.AssetGuid, SentSat: &bchain.Amount{}, ReceivedSat: &bchain.Amount{}}
@@ -1178,6 +1181,9 @@ func (w *Worker) balanceHistoryForTxid(addrDesc bchain.AddressDescriptor, txid s
 			if bytes.Equal(addrDesc, tao.AddrDesc) {
 				(*big.Int)(bh.ReceivedSat).Add((*big.Int)(bh.ReceivedSat), &tao.ValueSat)
 				if tao.AssetInfo.AssetGuid > 0 {
+					if bh.Tokens == nil {
+						bh.Tokens = map[uint32]*TokenBalanceHistory{}
+					}
 					bhaToken, ok := bh.Tokens[tao.AssetInfo.AssetGuid];
 					if !ok {
 						bhaToken = &TokenBalanceHistory{AssetGuid: tao.AssetInfo.AssetGuid, SentSat: &bchain.Amount{}, ReceivedSat: &bchain.Amount{}}

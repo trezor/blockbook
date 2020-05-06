@@ -286,7 +286,7 @@ type BalanceHistory struct {
 	SentSat     *bchain.Amount     `json:"sent"`
 	FiatRates   map[string]float64 `json:"rates,omitempty"`
 	Txid        string             `json:"txid,omitempty"`
-	Tokens	    map[uint32]*TokenBalanceHistory `json:"tokens,omitempty"`	
+	Tokens	    *map[uint32]*TokenBalanceHistory `json:"tokens,omitempty"`	
 }
 
 // BalanceHistories is array of BalanceHistory

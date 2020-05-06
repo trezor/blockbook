@@ -12,6 +12,7 @@ import (
 	"github.com/martinboehm/btcutil/txscript"
 	vlq "github.com/bsm/go-vlq"
 	"github.com/juju/errors"
+	"github.com/gogo/protobuf/proto"
 )
 
 // magic numbers
@@ -92,14 +93,113 @@ func GetChainParams(chain string) *chaincfg.Params {
 	}
 }
 
+
+// PackTx packs transaction to byte array using protobuf
+func (p *SyscoinParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) ([]byte, error) {
+	var err error
+	pti := make([]*bchain.ProtoSyscoinTransaction_VinType, len(tx.Vin))
+	for i, vi := range tx.Vin {
+		hex, err := hex.DecodeString(vi.ScriptSig.Hex)
+		if err != nil {
+			return nil, errors.Annotatef(err, "Vin %v Hex %v", i, vi.ScriptSig.Hex)
+		}
+		// coinbase txs do not have Vin.txid
+		itxid, err := p.PackTxid(vi.Txid)
+		if err != nil && err != ErrTxidMissing {
+			return nil, errors.Annotatef(err, "Vin %v Txid %v", i, vi.Txid)
+		}
+		pti[i] = &bchain.ProtoSyscoinTransaction_VinType{
+			Addresses:    vi.Addresses,
+			Coinbase:     vi.Coinbase,
+			ScriptSigHex: hex,
+			Sequence:     vi.Sequence,
+			Txid:         itxid,
+			Vout:         vi.Vout,
+		}
+	}
+	pto := make([]*bchain.ProtoSyscoinTransaction_VoutType, len(tx.Vout))
+	for i, vo := range tx.Vout {
+		hex, err := hex.DecodeString(vo.ScriptPubKey.Hex)
+		if err != nil {
+			return nil, errors.Annotatef(err, "Vout %v Hex %v", i, vo.ScriptPubKey.Hex)
+		}
+		pto[i] = &bchain.ProtoSyscoinTransaction_VoutType{
+			Addresses:       vo.ScriptPubKey.Addresses,
+			N:               vo.N,
+			ScriptPubKeyHex: hex,
+			ValueSat:        vo.ValueSat.Bytes(),
+		}
+	}
+	pt := &ProtoSyscoinTransaction{
+		Blocktime: uint64(blockTime),
+		Height:    height,
+		Locktime:  tx.LockTime,
+		Vin:       pti,
+		Vout:      pto,
+		Version:   tx.Version,
+	}
+	if pt.Hex, err = hex.DecodeString(tx.Hex); err != nil {
+		return nil, errors.Annotatef(err, "Hex %v", tx.Hex)
+	}
+	if pt.Txid, err = p.PackTxid(tx.Txid); err != nil {
+		return nil, errors.Annotatef(err, "Txid %v", tx.Txid)
+	}
+	return proto.Marshal(pt)
+}
+
 // UnpackTx unpacks transaction from protobuf byte array
-func (p *SyscoinParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
-	tx, height, err := p.BitcoinParser.UnpackTx(buf)
+func (p *BaseParser) UnpackTx(buf []byte) (*Tx, uint32, error) {
+	var pt ProtoSyscoinTransaction
+	err := proto.Unmarshal(buf, &pt)
 	if err != nil {
 		return nil, 0, err
 	}
-	p.LoadAssets(tx)
-	return tx, height, nil
+	txid, err := p.UnpackTxid(pt.Txid)
+	if err != nil {
+		return nil, 0, err
+	}
+	vin := make([]Vin, len(pt.Vin))
+	for i, pti := range pt.Vin {
+		itxid, err := p.UnpackTxid(pti.Txid)
+		if err != nil {
+			return nil, 0, err
+		}
+		vin[i] = Vin{
+			Addresses: pti.Addresses,
+			Coinbase:  pti.Coinbase,
+			ScriptSig: bchain.ScriptSig{
+				Hex: hex.EncodeToString(pti.ScriptSigHex),
+			},
+			Sequence: pti.Sequence,
+			Txid:     itxid,
+			Vout:     pti.Vout,
+		}
+	}
+	vout := make([]Vout, len(pt.Vout))
+	for i, pto := range pt.Vout {
+		var vs big.Int
+		vs.SetBytes(pto.ValueSat)
+		vout[i] = Vout{
+			N: pto.N,
+			ScriptPubKey: bchain.ScriptPubKey{
+				Addresses: pto.Addresses,
+				Hex:       hex.EncodeToString(pto.ScriptPubKeyHex),
+			},
+			ValueSat: vs,
+		}
+	}
+	tx := bchain.Tx{
+		Blocktime: int64(pt.Blocktime),
+		Hex:       hex.EncodeToString(pt.Hex),
+		LockTime:  pt.Locktime,
+		Time:      int64(pt.Blocktime),
+		Txid:      txid,
+		Vin:       vin,
+		Vout:      vout,
+		Version:   pt.Version,
+	}
+	p.LoadAssets(&tx)
+	return &tx, pt.Height, nil
 }
 // TxFromMsgTx converts syscoin wire Tx to bchain.Tx
 func (p *SyscoinParser) TxFromMsgTx(t *wire.MsgTx, parseAddresses bool) bchain.Tx {
