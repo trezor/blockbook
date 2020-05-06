@@ -349,6 +349,10 @@ func (a BalanceHistories) SortAndAggregate(groupByTime uint32) BalanceHistories 
 			(*big.Int)(bha.SentSat).Add((*big.Int)(bha.SentSat), (*big.Int)(bh.SentSat))
 			(*big.Int)(bha.ReceivedSat).Add((*big.Int)(bha.ReceivedSat), (*big.Int)(bh.ReceivedSat))
 		}
+		if bha.Txs > 0 {
+			bha.Txid = ""
+			bhs = append(bhs, bha)
+		}
 	}
 	return bhs
 }
