@@ -323,7 +323,7 @@ func (p *BaseParser) IsAssetActivateTx(nVersion int32) bool {
 	return false
 }
 func (p *BaseParser) GetAssetsMaskFromVersion(nVersion int32) AssetsMask {
-	return AllMask
+	return BaseCoinMask
 }
 func (p *BaseParser) GetAssetTypeFromVersion(nVersion int32) TokenType {
 	return SPTUnknownType
