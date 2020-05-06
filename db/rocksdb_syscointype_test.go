@@ -383,7 +383,7 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 		},
 		AssetBalances: map[uint32]*bchain.AssetBalance {
 			1045909988: &bchain.AssetBalance{
-				SentSat: 	dbtestdata.SatSent,
+				SentSat: 	dbtestdata.SatAssetSent,
 				BalanceSat: dbtestdata.SatZero,
 				Transfers:	2,
 			},
