@@ -143,7 +143,7 @@ func (d *RocksDB) addToAddressesAndContractsEthereumType(addrDesc bchain.Address
 			}
 		}
 	}
-	counted := addToAddressesMap(addresses, strAddrDesc, btxID, index, 0)
+	counted := addToAddressesMap(addresses, strAddrDesc, btxID, index, bchain.AllMask)
 	if !counted {
 		ac.TotalTxs++
 	}
