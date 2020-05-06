@@ -97,7 +97,7 @@ func GetChainParams(chain string) *chaincfg.Params {
 // PackTx packs transaction to byte array using protobuf
 func (p *SyscoinParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) ([]byte, error) {
 	var err error
-	pti := make([]*bchain.ProtoSyscoinTransaction_VinType, len(tx.Vin))
+	pti := make([]*ProtoSyscoinTransaction_VinType, len(tx.Vin))
 	for i, vi := range tx.Vin {
 		hex, err := hex.DecodeString(vi.ScriptSig.Hex)
 		if err != nil {
@@ -108,7 +108,7 @@ func (p *SyscoinParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) ([
 		if err != nil && err != ErrTxidMissing {
 			return nil, errors.Annotatef(err, "Vin %v Txid %v", i, vi.Txid)
 		}
-		pti[i] = &bchain.ProtoSyscoinTransaction_VinType{
+		pti[i] = &ProtoSyscoinTransaction_VinType{
 			Addresses:    vi.Addresses,
 			Coinbase:     vi.Coinbase,
 			ScriptSigHex: hex,
@@ -117,13 +117,13 @@ func (p *SyscoinParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) ([
 			Vout:         vi.Vout,
 		}
 	}
-	pto := make([]*bchain.ProtoSyscoinTransaction_VoutType, len(tx.Vout))
+	pto := make([]*ProtoSyscoinTransaction_VoutType, len(tx.Vout))
 	for i, vo := range tx.Vout {
 		hex, err := hex.DecodeString(vo.ScriptPubKey.Hex)
 		if err != nil {
 			return nil, errors.Annotatef(err, "Vout %v Hex %v", i, vo.ScriptPubKey.Hex)
 		}
-		pto[i] = &bchain.ProtoSyscoinTransaction_VoutType{
+		pto[i] = &ProtoSyscoinTransaction_VoutType{
 			Addresses:       vo.ScriptPubKey.Addresses,
 			N:               vo.N,
 			ScriptPubKeyHex: hex,
