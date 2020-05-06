@@ -394,7 +394,7 @@ func (d *RocksDB) GetAddrDescTransactions(addrDesc bchain.AddressDescriptor, low
 		for len(val) > txidUnpackedLen+1 {
 			mask, l := d.chainParser.UnpackVaruint(val)
 			maskUint := uint32(mask)
-			val = val[:l]
+			val = val[l:]
 			tx, err := d.chainParser.UnpackTxid(val[:txidUnpackedLen])
 			if err != nil {
 				return err
