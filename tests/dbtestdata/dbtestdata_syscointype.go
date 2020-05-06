@@ -70,6 +70,7 @@ func GetTestSyscoinTypeBlock1(parser bchain.BlockChainParser) *bchain.Block {
 						},
 						ValueSat: *SatS1T0A1,
 					},
+					{
 						N: 1,
 						ScriptPubKey: bchain.ScriptPubKey{
 							Hex: TxidS1T0OutputReturn, // OP_RETURN script
