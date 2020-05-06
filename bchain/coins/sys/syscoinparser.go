@@ -556,10 +556,9 @@ func (p *SyscoinParser) LoadAssets(tx *bchain.Tx) error {
 			return err
 		}
         for k, v := range allocation.VoutAssets {
-            nAsset := k
             for _,voutAsset := range v {
 				// store in vout
-				tx.Vout[voutAsset.N].AssetInfo = bchain.AssetInfo{AssetGuid: nAsset, ValueSat: big.NewInt(voutAsset.ValueSat)}
+				tx.Vout[voutAsset.N].AssetInfo = bchain.AssetInfo{AssetGuid: k, ValueSat: big.NewInt(voutAsset.ValueSat)}
             }
         }       
 	}

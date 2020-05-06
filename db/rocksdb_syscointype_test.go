@@ -211,7 +211,12 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 	// connect 1st block - will log warnings about missing UTXO transactions in txAddresses column
 	block1 := dbtestdata.GetTestSyscoinTypeBlock1(d.chainParser)
 	for i, _ := range block1.Txs {
-		d.chainParser.LoadAssets(&block1.Txs[i])
+		tx := &block1.Txs[i]
+		err := d.chainParser.LoadAssets(tx)
+		if err != nil {
+		{
+			t.Fatal(err)
+		}
 	}
 	if err := d.ConnectBlock(block1); err != nil {
 		t.Fatal(err)
@@ -470,7 +475,12 @@ func Test_BulkConnect_SyscoinType(t *testing.T) {
 
 	block1 := dbtestdata.GetTestSyscoinTypeBlock1(d.chainParser)
 	for i, _ := range block1.Txs {
-		d.chainParser.LoadAssets(&block1.Txs[i])
+		tx := &block1.Txs[i]
+		err := d.chainParser.LoadAssets(tx)
+		if err != nil {
+		{
+			t.Fatal(err)
+		}
 	}
 	if err := bc.ConnectBlock(block1, false); err != nil {
 		t.Fatal(err)
