@@ -9,8 +9,8 @@ import (
 	"blockbook/bchain/coins/sys"
 	"blockbook/tests/dbtestdata"
 	"math/big"
-	"reflect"
-	"testing"
+	//"reflect"
+	//"testing"
 	"github.com/martinboehm/btcutil/chaincfg"
 	"github.com/juju/errors"
 	"encoding/hex"
@@ -72,16 +72,16 @@ func verifyAfterSyscoinTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect bool
 		},
 		{
 			dbtestdata.AddressToPubKeyHex(dbtestdata.AddrS2, d.chainParser),
-			"01" + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatS1T1A0, d) +
-			"00" + dbtestdata.TxidS1T1 + varuintToHex(1) + varuintToHex(158) + bigintToHex(dbtestdata.SatS1T1A0, d),
+			"01" + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatS1T1A1, d) +
+			"00" + dbtestdata.TxidS1T1 + varuintToHex(1) + varuintToHex(158) + bigintToHex(dbtestdata.SatS1T1A1, d),
 			nil,
 		},
 		// asset activate
 		{
 			dbtestdata.AddressToPubKeyHex(dbtestdata.AddrS3, d.chainParser),
-			"01" + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatS1T1A1, d) +
+			"01" + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatS1T1A2, d) +
 			"01" + varuintToHex(732260830) + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatZero, d) + varuintToHex(1) +
-				dbtestdata.TxidS1T1 + varuintToHex(1) + varuintToHex(158) + bigintToHex(dbtestdata.SatS1T1A1, d) + varuintToHex(732260830) + bigintToHex(dbtestdata.SatZero, d),
+				dbtestdata.TxidS1T1 + varuintToHex(1) + varuintToHex(158) + bigintToHex(dbtestdata.SatS1T1A2, d) + varuintToHex(732260830) + bigintToHex(dbtestdata.SatZero, d),
 			nil,
 		},
 	}); err != nil {
