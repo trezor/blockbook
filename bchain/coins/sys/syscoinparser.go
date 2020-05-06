@@ -193,7 +193,7 @@ func (p *SyscoinParser) GetAssetsMaskFromVersion(nVersion int32) bchain.AssetsMa
 	case SYSCOIN_TX_VERSION_ALLOCATION_SEND:
 		return bchain.AssetAllocationSendMask
 	default:
-		return bchain.SyscoinMask
+		return bchain.BaseCoinMask
 	}
 }
 

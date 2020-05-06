@@ -531,6 +531,10 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses bch
 		for i, output := range tx.Vout {
 			tao := &ta.Outputs[i]
 			tao.ValueSat = output.ValueSat
+			mask := bchain.BaseCoinMask
+			if output.AssetInfo.AssetGuid > 0 {
+				mask = assetsMask
+			}
 			addrDesc, err := d.chainParser.GetAddrDescFromVout(&output)
 			if err != nil || len(addrDesc) == 0 || len(addrDesc) > maxAddrDescLen {
 				if err != nil {
@@ -567,7 +571,7 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses bch
 					Height:   block.Height,
 					ValueSat: output.ValueSat,
 				}
-				counted := addToAddressesMap(addresses, strAddrDesc, btxID, int32(i), assetsMask)
+				counted := addToAddressesMap(addresses, strAddrDesc, btxID, int32(i), mask)
 				if !counted {
 					balance.Txs++
 				}
@@ -621,6 +625,10 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses bch
 					continue
 				}
 				return err
+			}
+			mask := bchain.BaseCoinMask
+			if tai.AssetInfo.AssetGuid > 0 {
+				mask = assetsMask
 			}
 			stxID := string(btxID)
 			ita, e := txAddressesMap[stxID]
@@ -677,7 +685,7 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses bch
 				} else {
 					d.cbs.balancesHit++
 				}
-				counted := addToAddressesMap(addresses, strAddrDesc, spendingTxid, ^int32(i), assetsMask)
+				counted := addToAddressesMap(addresses, strAddrDesc, spendingTxid, ^int32(i), mask)
 				if !counted {
 					balance.Txs++
 				}

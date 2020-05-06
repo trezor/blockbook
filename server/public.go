@@ -658,7 +658,7 @@ func (s *PublicServer) getAddressQueryParams(r *http.Request, accountDetails api
 			}
 		}
 		if filterParam == "non-tokens" {
-			assetsMask = bchain.SyscoinMask
+			assetsMask = bchain.BaseCoinMask
 		} else if filterParam == "token-only" {
 			assetsMask = bchain.AssetMask
 		} else if filterParam == "token-transfers" {

@@ -438,7 +438,7 @@ const SPTAssetAllocationBurnToEthereumType TokenType = "SPTAssetAllocationBurnTo
 
 
 const AllMask AssetsMask = 1
-const SyscoinMask AssetsMask = 2
+const BaseCoinMask AssetsMask = 2
 const AssetAllocationSendMask AssetsMask = 4
 const AssetSyscoinBurnToAllocationMask AssetsMask = 8
 const AssetAllocationBurnToSyscoinMask AssetsMask = 16
