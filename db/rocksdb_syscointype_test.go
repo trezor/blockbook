@@ -13,6 +13,9 @@ import (
 	"testing"
 	"github.com/martinboehm/btcutil/chaincfg"
 	"github.com/juju/errors"
+	"encoding/hex"
+	"fmt"
+	vlq "github.com/bsm/go-vlq"
 )
 
 type testSyscoinParser struct {
@@ -24,8 +27,8 @@ func syscoinTestParser() *syscoin.SyscoinParser {
 	&btc.Configuration{BlockAddressesToKeep: 1})
 }
 
-func txIndexesHexSyscoin(tx string, assetsMask int32, indexes []int32, d *RocksDB) string {
-	tx = fmt.Sprint(assetsMask) + tx
+func txIndexesHexSyscoin(tx string, assetsMask bchain.AssetsMask, indexes []int32, d *RocksDB) string {
+	tx = fmt.Sprint(int32(assetsMask)) + tx
 	buf := make([]byte, vlq.MaxLen32)
 	for i, index := range indexes {
 		index <<= 1
