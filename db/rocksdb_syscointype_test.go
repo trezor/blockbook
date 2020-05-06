@@ -115,7 +115,7 @@ func verifyAfterSyscoinTypeBlock2(t *testing.T, d *RocksDB) {
 	if err := checkColumn(d, cfHeight, []keyPair{
 		{
 			"0000009e",
-			"78ae6476a514897c8a6984032e5d0e4a44424055f0c2d7b5cf664ae8c8c20487" + uintToHex(1574279564) + varuintToHex(2) + varuintToHex(1551),
+			"000004138eaa5e65a84b9b7f48fb9f9b1a8aadf27248974cabb3a23f7f20458a" + uintToHex(1588788257) + varuintToHex(2) + varuintToHex(536),
 			nil,
 		},
 		{
@@ -129,9 +129,9 @@ func verifyAfterSyscoinTypeBlock2(t *testing.T, d *RocksDB) {
 		}
 	}
 	if err := checkColumn(d, cfAddresses, []keyPair{
-		{addressKeyHex(dbtestdata.AddrS1, 249727, d), txIndexesHexSyscoin(dbtestdata.TxidS1T0, bchain.SyscoinMask, []int32{0}, d), nil},
-		{addressKeyHex(dbtestdata.AddrS2, 249727, d), txIndexesHexSyscoin(dbtestdata.TxidS1T0, bchain.SyscoinMask, []int32{1}, d), nil},
-		{addressKeyHex(dbtestdata.AddrS3, 249727, d), txIndexesHexSyscoin(dbtestdata.TxidS1T1, bchain.SyscoinMask, []int32{1}, d), nil},
+		{addressKeyHex(dbtestdata.AddrS1, 158, d), txIndexesHexSyscoin(dbtestdata.TxidS1T0, bchain.SyscoinMask, []int32{0}, d), nil},
+		{addressKeyHex(dbtestdata.AddrS2, 158, d), txIndexesHexSyscoin(dbtestdata.TxidS1T1, bchain.AssetActivateMask, []int32{0}, d), nil},
+		{addressKeyHex(dbtestdata.AddrS3, 158, d), txIndexesHexSyscoin(dbtestdata.TxidS1T1, bchain.SyscoinMask, []int32{2}, d), nil},
 		{addressKeyHex(dbtestdata.AddrS4, 347314, d), txIndexesHexSyscoin(dbtestdata.TxidS2T0, bchain.SyscoinMask, []int32{0}, d), nil},
 		{addressKeyHex(dbtestdata.AddrS5, 347314, d), txIndexesHexSyscoin(dbtestdata.TxidS2T0, bchain.SyscoinMask, []int32{1}, d), nil},
 		{addressKeyHex(dbtestdata.AddrS3, 347314, d), txIndexesHexSyscoin(dbtestdata.TxidS2T1, bchain.SyscoinMask, []int32{1}, d), nil},

@@ -110,15 +110,16 @@ func addressKeyHex(a string, height uint32, d *RocksDB) string {
 }
 
 func txIndexesHex(tx string, indexes []int32, d *RocksDB) string {
-	// type
-	tx = "00" + tx
 	buf := make([]byte, vlq.MaxLen32)
+	// type
+	l := d.chainParser.PackVaruint(uint(bchain.AllMask), buf)
+	tx = hex.EncodeToString(buf[:l]) + tx
 	for i, index := range indexes {
 		index <<= 1
 		if i == len(indexes)-1 {
 			index |= 1
 		}
-		l := d.chainParser.PackVarint32(index, buf)
+		l = d.chainParser.PackVarint32(index, buf)
 		tx += hex.EncodeToString(buf[:l])
 	}
 	return tx
