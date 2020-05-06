@@ -1108,6 +1108,22 @@ func (s *PublicServer) apiBlock(r *http.Request, apiVersion int) (interface{}, e
 	return block, err
 }
 
+func (s *PublicServer) apiMempool(r *http.Request, apiVersion int) (interface{}, error) {
+	s.metrics.ExplorerViews.With(common.Labels{"action": "api-mempool"}).Inc()
+	var mempool *api.MempoolTxids
+	var err error
+	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
+		page, ec := strconv.Atoi(r.URL.Query().Get("page"))
+		if ec != nil {
+			page = 0
+		}
+		// TODO: returns only TxIDs
+		mempool, err = s.api.GetMempool(page, txsInAPI)
+		// note: no V1 support
+	}
+	return mempool, err
+}
+
 func (s *PublicServer) apiFeeStats(r *http.Request, apiVersion int) (interface{}, error) {
 	var feeStats *api.FeeStats
 	var err error
