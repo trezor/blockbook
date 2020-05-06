@@ -14,7 +14,6 @@ import (
 	"github.com/martinboehm/btcutil/chaincfg"
 	"github.com/juju/errors"
 	"encoding/hex"
-	"fmt"
 	vlq "github.com/bsm/go-vlq"
 )
 
@@ -29,7 +28,7 @@ func syscoinTestParser() *syscoin.SyscoinParser {
 
 func txIndexesHexSyscoin(tx string, assetsMask bchain.AssetsMask, indexes []int32, d *RocksDB) string {
 	buf := make([]byte, vlq.MaxLen32)
-	l := d.chainParser.PackVaruint(uint(assetsMask), buf)
+	l := d.chainParser.PackVaruint(uint(uint32(assetsMask)), buf)
 	tx = hex.EncodeToString(buf[:l]) + tx
 	for i, index := range indexes {
 		index <<= 1
