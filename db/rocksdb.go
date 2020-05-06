@@ -363,6 +363,7 @@ func (d *RocksDB) GetTransactions(address string, lower uint32, higher uint32, f
 // GetAddrDescTransactions finds all input/output transactions for address descriptor
 // Transaction are passed to callback function in the order from newest block to the oldest
 func (d *RocksDB) GetAddrDescTransactions(addrDesc bchain.AddressDescriptor, lower uint32, higher uint32, assetsBitMask bchain.AssetsMask, fn GetTransactionsCallback) (err error) {
+	assetsBitMaskUint := uint32(assetsBitMask)
 	txidUnpackedLen := d.chainParser.PackedTxidLen()
 	addrDescLen := len(addrDesc)
 	startKey := d.chainParser.PackAddressKey(addrDesc, higher)
@@ -392,6 +393,7 @@ func (d *RocksDB) GetAddrDescTransactions(addrDesc bchain.AddressDescriptor, low
 		// +1 for varint byte of mask
 		for len(val) > txidUnpackedLen+1 {
 			mask, l := d.chainParser.UnpackVaruint(val)
+			maskUint := uint32(mask)
 			val = val[:l]
 			tx, err := d.chainParser.UnpackTxid(val[:txidUnpackedLen])
 			if err != nil {
@@ -404,7 +406,7 @@ func (d *RocksDB) GetAddrDescTransactions(addrDesc bchain.AddressDescriptor, low
 				glog.Warningf("rocksdb: addresses contain incorrect data %s: %s", hex.EncodeToString(key), hex.EncodeToString(val))
 				break
 			}
-			if (assetsBitMask == bchain.AllMask || (uint32(assetsBitMask) & mask) == mask) {
+			if (assetsBitMask == bchain.AllMask || (assetsBitMaskUint & maskUint) == maskUint) {
 				if err := fn(tx, height, indexes); err != nil {
 					if _, ok := err.(*StopIteration); ok {
 						return nil

@@ -28,7 +28,7 @@ func syscoinTestParser() *syscoin.SyscoinParser {
 
 func txIndexesHexSyscoin(tx string, assetsMask bchain.AssetsMask, indexes []int32, d *RocksDB) string {
 	buf := make([]byte, vlq.MaxLen32)
-	l := d.chainParser.PackVaruint(uint(uint32(assetsMask)), buf)
+	l := d.chainParser.PackVaruint(uint(assetsMask), buf)
 	tx = hex.EncodeToString(buf[:l]) + tx
 	for i, index := range indexes {
 		index <<= 1
