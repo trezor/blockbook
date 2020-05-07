@@ -230,13 +230,13 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 
 	if err := checkColumn(d, cfBlockTxs, []keyPair{
 		{
-			"0000009e",
+			"000000a5",
 			dbtestdata.TxidS2T0 + "01" + "0000000000000000000000000000000000000000000000000000000000000000" + "00" +
 			dbtestdata.TxidS2T1 + "01" + dbtestdata.TxidS2T1INPUT0 + "02",
 			nil,
 		},
 		{
-			"000000a5",
+			"0000009e",
 			dbtestdata.TxidS1T0 + "01" + "0000000000000000000000000000000000000000000000000000000000000000" + "00" +
 			dbtestdata.TxidS1T1 + "01" + dbtestdata.TxidS1T1INPUT0 + "02",
 			nil,
