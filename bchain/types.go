@@ -56,7 +56,7 @@ type AssetInfoDetails struct {
 type AssetInfo struct {
 	AssetGuid uint32 `json:"assetGuid"`
 	ValueSat *big.Int `json:"valueSat"`
-	Details  *AssetInfoDetails `json:"details, omitempty"`
+	Details  AssetInfoDetails `json:"details, omitempty"`
 }
 
 // Vin contains data about tx output

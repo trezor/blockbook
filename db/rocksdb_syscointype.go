@@ -81,7 +81,7 @@ func (d *RocksDB) ConnectAllocationInput(height uint32, balanceAsset *bchain.Ass
 		return err
 	}
 	if dBAsset != nil {
-		assetInfo.Details = &bchain.AssetInfoDetails{Symbol: dBAsset.AssetObj.Symbol, Decimals: int32(dBAsset.AssetObj.Precision)}
+		assetInfo.Details = bchain.AssetInfoDetails{Symbol: dBAsset.AssetObj.Symbol, Decimals: int32(dBAsset.AssetObj.Precision)}
 		counted := d.addToAssetsMap(txAssets, assetInfo.AssetGuid, btxID, version, height)
 		if !counted && !d.chainParser.IsAssetTx(version) {
 			balanceAsset.Transfers++
@@ -102,7 +102,7 @@ func (d *RocksDB) ConnectAllocationOutput(height uint32, balanceAsset *bchain.As
 		return err
 	}
 	if dBAsset != nil {
-		utxo.AssetInfo.Details = &bchain.AssetInfoDetails{Symbol: dBAsset.AssetObj.Symbol, Decimals: int32(dBAsset.AssetObj.Precision)}
+		utxo.AssetInfo = *assetInfo
 		assetInfo.Details = utxo.AssetInfo.Details
 		counted := d.addToAssetsMap(txAssets, assetInfo.AssetGuid, btxID, version, height)
 		if !counted {
@@ -148,12 +148,11 @@ func (d *RocksDB) ConnectAssetOutput(addrDescData *bchain.AddressDescriptor, add
 		if  err != nil {
 			return err
 		}
+	} else if isActivate {
+		dBAsset = bchain.Asset{Transactions: 0, AssetObj: *asset}
 	}
-	if dBAsset != nil || isActivate {
+	if dBAsset != nil {
 		if isAssetTx {
-			if isActivate {
-				dBAsset.AssetObj = *asset
-			}
 			err = d.ConnectAssetOutputHelper(isActivate, asset, dBAsset)
 			if err != nil {
 				return err

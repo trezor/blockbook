@@ -649,7 +649,7 @@ func (p *SyscoinParser) UnpackAssetInfo(assetInfo *bchain.AssetInfo, buf []byte,
 		assetInfo.ValueSat = &valueSat
 		l += al
 		if details {
-			al = p.UnpackAssetInfoDetails(assetInfo.Details, buf)
+			al = p.UnpackAssetInfoDetails(&assetInfo.Details, buf)
 			l += al
 		}
 	}
