@@ -212,7 +212,7 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 	if len(d.is.BlockTimes) != 1 {
 		t.Fatal("Expecting is.BlockTimes 1, got ", len(d.is.BlockTimes))
 	}
-/*
+
 	// connect 2nd block - use some outputs from the 1st block as the inputs and 1 input uses tx from the same block
 	block2 := dbtestdata.GetTestSyscoinTypeBlock2(d.chainParser)
 	if err := d.ConnectBlock(block2); err != nil {
@@ -222,13 +222,13 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 
 	if err := checkColumn(d, cfBlockTxs, []keyPair{
 		{
-			"00054cb2",
+			"0000009e",
 			dbtestdata.TxidS2T0 + "01" + "0000000000000000000000000000000000000000000000000000000000000000" + "00" +
 			dbtestdata.TxidS2T1 + "01" + dbtestdata.TxidS2T1INPUT0 + "02",
 			nil,
 		},
 		{
-			"0003cf7f",
+			"000000a5",
 			dbtestdata.TxidS1T0 + "01" + "0000000000000000000000000000000000000000000000000000000000000000" + "00" +
 			dbtestdata.TxidS1T1 + "01" + dbtestdata.TxidS1T1INPUT0 + "02",
 			nil,
@@ -242,7 +242,8 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 	if len(d.is.BlockTimes) != 2 {
 		t.Fatal("Expecting is.BlockTimes 2, got ", len(d.is.BlockTimes))
 	}
-
+	t.Fatal("Done")
+/*
 	// get transactions for various addresses / low-high ranges
 	verifyGetTransactions(t, d, dbtestdata.AddrS3, 0, 1000000, []txidIndex{
 		{dbtestdata.TxidS2T1, 1},
@@ -339,13 +340,13 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 
 	if err := checkColumn(d, cfBlockTxs, []keyPair{
 		{
-			"00054cb2",
+			"0000009e",
 			dbtestdata.TxidS2T0 + "01" + "0000000000000000000000000000000000000000000000000000000000000000" + "00" +
 			dbtestdata.TxidS2T1 + "01" + dbtestdata.TxidS2T1INPUT0 + "02",
 			nil,
 		},
 		{
-			"0003cf7f",
+			"000000a5",
 			dbtestdata.TxidS1T0 + "01" + "0000000000000000000000000000000000000000000000000000000000000000" + "00" +
 			dbtestdata.TxidS1T1 + "01" + dbtestdata.TxidS1T1INPUT0 + "02",
 			nil,
