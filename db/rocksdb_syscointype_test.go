@@ -370,7 +370,6 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 	if len(d.is.BlockTimes) != 2 {
 		t.Fatal("Expecting is.BlockTimes 2, got ", len(d.is.BlockTimes))
 	}
-	t.Fatal("Done")
 	
 	// test public methods for address balance and tx addresses
 	ab, err := d.GetAddressBalance(dbtestdata.AddrS3, bchain.AddressBalanceDetailUTXO)
@@ -414,8 +413,8 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 		t.Errorf("GetAddressBalance().ReceivedSat() = %v, want %v", rs, rsw)
 	}
 
-	rsa := bchain.ReceivedSatFromBalances(dbtestdata.SatZero, dbtestdata.SatAssetSent)
-	rswa := dbtestdata.SatAssetSent
+	rsa := bchain.ReceivedSatFromBalances(dbtestdata.SatZero, dbtestdata.SatZero)
+	rswa := dbtestdata.SatZero
 	if rsa.Cmp(rswa) != 0 {
 		t.Errorf("GetAddressBalance().ReceivedSatFromBalances() = %v, want %v", rsa, rswa)
 	}
