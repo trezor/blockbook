@@ -240,7 +240,7 @@ func (d *RocksDB) DisconnectAssetOutput(addrDesc *bchain.AddressDescriptor, isAc
 	assets[assetGuid] = dBAsset
 	return nil
 }
-func (d *RocksDB) DisconnectAllocationInput(addrDesc *bchain.AddressDescriptor, balanceAsset *bchain.AssetBalance,  btxID []byte, assetInfo *bchain.AssetInfo, utxo *bchain.Utxo, assets map[uint32]*bchain.Asset, assetFoundInTx func(asset uint32, btxID []byte) bool) error {
+func (d *RocksDB) DisconnectAllocationInput(assetBalances *balance.AssetBalances, addrDesc *bchain.AddressDescriptor, balanceAsset *bchain.AssetBalance,  btxID []byte, assetInfo *bchain.AssetInfo, utxo *bchain.Utxo, assets map[uint32]*bchain.Asset, assetFoundInTx func(asset uint32, btxID []byte) bool) error {
 	dBAsset, err := d.GetAsset(assetInfo.AssetGuid, &assets)
 	if dBAsset == nil || err != nil {
 		return err
@@ -248,6 +248,13 @@ func (d *RocksDB) DisconnectAllocationInput(addrDesc *bchain.AddressDescriptor, 
 	exists := assetFoundInTx(assetInfo.AssetGuid, btxID)
 	if !exists {
 		balanceAsset.Transfers--
+		if balanceAsset.Transfers <= 0 {
+			balanceAsset.Transfers = 0
+			// should remove this asset balance if no more transfers
+			delete(assetBalances, assetInfo.AssetGuid)
+			// vout AssetGuid should be set to 0 so it won't serialize asset info or use asset info anywhere in API
+			assetInfo.AssetGuid = 0
+		}
 	}
 	
 	balanceAsset.SentSat.Sub(balanceAsset.SentSat, assetInfo.ValueSat)
