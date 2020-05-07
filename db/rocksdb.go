@@ -729,7 +729,7 @@ func addToAddressesMap(addresses bchain.AddressesMap, strAddrDesc string, btxID 
 			if bytes.Equal(btxID, t.BtxID) {
 				at[i].Indexes = append(t.Indexes, index)
 				// add the mask to the existing type incase there are multiple types in one transaction (ie: asset update + asset allocation send + syscoin send)
-				at[i].Type = assetsMask | t.Type
+				at[i].Type |= assetsMask
 				return true
 			}
 		}
