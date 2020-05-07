@@ -150,7 +150,7 @@ func (d *RocksDB) ConnectAssetOutput(addrDescData *bchain.AddressDescriptor, add
 			return err
 		}
 	} else if isActivate {
-		dBAsset = bchain.Asset{Transactions: 0, AssetObj: *asset}
+		dBAsset = &bchain.Asset{Transactions: 0, AssetObj: *asset}
 	}
 	if dBAsset != nil {
 		if isAssetTx {
