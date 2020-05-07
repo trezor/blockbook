@@ -635,7 +635,7 @@ func (p *SyscoinParser) AppendAssetInfo(assetInfo *bchain.AssetInfo, buf []byte,
 		l = p.BaseParser.PackBigint(assetInfo.ValueSat, varBuf)
 		buf = append(buf, varBuf[:l]...)
 		if details {
-			buf = p.AppendAssetInfoDetails(assetInfo.Details, buf, varBuf)	
+			buf = p.AppendAssetInfoDetails(&assetInfo.Details, buf, varBuf)	
 		}
 	}
 	return buf

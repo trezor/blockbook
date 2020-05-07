@@ -103,6 +103,7 @@ func (d *RocksDB) ConnectAllocationOutput(height uint32, balanceAsset *bchain.As
 	}
 	if dBAsset != nil {
 		utxo.AssetInfo = *assetInfo
+		utxo.AssetInfo.Details = bchain.AssetInfoDetails{Symbol: dBAsset.AssetObj.Symbol, Decimals: int32(dBAsset.AssetObj.Precision)}
 		assetInfo.Details = utxo.AssetInfo.Details
 		counted := d.addToAssetsMap(txAssets, assetInfo.AssetGuid, btxID, version, height)
 		if !counted {
