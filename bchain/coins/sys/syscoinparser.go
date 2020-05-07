@@ -7,6 +7,7 @@ import (
 	"blockbook/bchain/coins/utils"
 	"bytes"
 	"math/big"
+	"strconv"
 	"github.com/martinboehm/btcd/wire"
 	"github.com/martinboehm/btcutil/chaincfg"
 	"github.com/martinboehm/btcutil/txscript"
@@ -536,7 +537,7 @@ func (p *SyscoinParser) GetAllocationFromTx(tx *bchain.Tx) (*bchain.AssetAllocat
 	var assetAllocation bchain.AssetAllocationType
 	l := p.UnpackAllocation(&assetAllocation, sptData)
 	if l != len(sptData) {
-		return nil, errors.New("Could not decode asset allocation")
+		return nil, errors.New("Could not decode asset allocation l " + strconv.Itoa(l) + " vs len " + strconv.Itoa(len(sptData)))
 	}
 	return &assetAllocation, nil
 }
