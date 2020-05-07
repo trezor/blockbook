@@ -199,7 +199,7 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 	for i, _ := range block1.Txs {
 		tx := &block1.Txs[i]
 		err := d.chainParser.LoadAssets(tx)
-		if err != nil {
+		if err != nil
 		{
 			t.Fatal(err)
 		}
@@ -438,7 +438,6 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 	if !reflect.DeepEqual(ta, taw) {
 		t.Errorf("GetTxAddresses() = %+v, want %+v", ta, taw)
 	}*/
-
 }
 
 func Test_BulkConnect_SyscoinType(t *testing.T) {
@@ -464,7 +463,7 @@ func Test_BulkConnect_SyscoinType(t *testing.T) {
 	for i, _ := range block1.Txs {
 		tx := &block1.Txs[i]
 		err := d.chainParser.LoadAssets(tx)
-		if err != nil {
+		if err != nil
 		{
 			t.Fatal(err)
 		}
