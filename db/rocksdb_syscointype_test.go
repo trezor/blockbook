@@ -164,9 +164,10 @@ func verifyAfterSyscoinTypeBlock2(t *testing.T, d *RocksDB) {
 		// asset update
 		{
 			dbtestdata.AddressToPubKeyHex(dbtestdata.AddrS3, d.chainParser),
-			"01" + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatS1T1A2, d) +
-			"01" + varuintToHex(732260830) + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatZero, d) + varuintToHex(2) +
-			"00" + dbtestdata.TxidS2T1 + varuintToHex(0) + varuintToHex(165) + bigintToHex(dbtestdata.SatS2T0A1, d) + varuintToHex(732260830) + bigintToHex(dbtestdata.SatZero, d),
+			"02" + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(addedAmount, d) +
+			"01" + varuintToHex(732260830) + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatZero, d) + varuintToHex(0) +
+			dbtestdata.TxidS1T1 + varuintToHex(2) + varuintToHex(158) + bigintToHex(dbtestdata.SatS1T1A2, d) + "00",
+			dbtestdata.TxidS2T1 + varuintToHex(0) + varuintToHex(165) + bigintToHex(dbtestdata.SatS2T0A1, d) + varuintToHex(732260830) + bigintToHex(dbtestdata.SatZero, d),
 			nil,
 		},
 	}); err != nil {
@@ -195,7 +196,7 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 		t.Fatal("Expecting is.BlockTimes 0, got ", len(d.is.BlockTimes))
 	}
 
-	// connect 1st block - will log warnings about missing UTXO transactions in txAddresses column
+	// connect 1st block - create asset
 	block1 := dbtestdata.GetTestSyscoinTypeBlock1(d.chainParser)
 	for i, _ := range block1.Txs {
 		tx := &block1.Txs[i]
@@ -213,7 +214,7 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 		t.Fatal("Expecting is.BlockTimes 1, got ", len(d.is.BlockTimes))
 	}
 
-	// connect 2nd block - use some outputs from the 1st block as the inputs and 1 input uses tx from the same block
+	// connect 2nd block - update asset
 	block2 := dbtestdata.GetTestSyscoinTypeBlock2(d.chainParser)
 	for i, _ := range block2.Txs {
 		tx := &block2.Txs[i]
