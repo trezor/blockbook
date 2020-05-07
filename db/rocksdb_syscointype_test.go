@@ -73,7 +73,7 @@ func verifyAfterSyscoinTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect bool
 		{
 			dbtestdata.AddressToPubKeyHex(dbtestdata.AddrS2, d.chainParser),
 			"01" + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatS1T1A1, d) +
-			"00" + dbtestdata.TxidS1T1 + varuintToHex(1) + varuintToHex(158) + bigintToHex(dbtestdata.SatS1T1A1, d),
+			"00" + dbtestdata.TxidS1T1 + varuintToHex(0) + varuintToHex(158) + bigintToHex(dbtestdata.SatS1T1A1, d),
 			nil,
 		},
 		// asset activate
@@ -81,7 +81,7 @@ func verifyAfterSyscoinTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect bool
 			dbtestdata.AddressToPubKeyHex(dbtestdata.AddrS3, d.chainParser),
 			"01" + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatS1T1A2, d) +
 			"01" + varuintToHex(732260830) + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatZero, d) + varuintToHex(1) +
-				dbtestdata.TxidS1T1 + varuintToHex(1) + varuintToHex(158) + bigintToHex(dbtestdata.SatS1T1A2, d) + varuintToHex(732260830) + bigintToHex(dbtestdata.SatZero, d),
+				dbtestdata.TxidS1T1 + varuintToHex(2) + varuintToHex(158) + bigintToHex(dbtestdata.SatS1T1A2, d) + varuintToHex(732260830) + bigintToHex(dbtestdata.SatZero, d),
 			nil,
 		},
 	}); err != nil {
@@ -110,7 +110,6 @@ func verifyAfterSyscoinTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect bool
 		}
 	}
 }
-
 func verifyAfterSyscoinTypeBlock2(t *testing.T, d *RocksDB) {
 	if err := checkColumn(d, cfHeight, []keyPair{
 		{
@@ -119,8 +118,8 @@ func verifyAfterSyscoinTypeBlock2(t *testing.T, d *RocksDB) {
 			nil,
 		},
 		{
-			"00054cb2",
-			"6609d44688868613991b0cd5ed981a76526caed6b0f7b1be242f5a93311636c6" + uintToHex(1580142055) + varuintToHex(2) + varuintToHex(1611),
+			"000000a5",
+			"00000de793885472131c2bea4d252281a2c8194fc43453c1ab427a45f968313f" + uintToHex(1588824028) + varuintToHex(2) + varuintToHex(544),
 			nil,
 		},
 	}); err != nil {
@@ -132,9 +131,8 @@ func verifyAfterSyscoinTypeBlock2(t *testing.T, d *RocksDB) {
 		{addressKeyHex(dbtestdata.AddrS1, 158, d), txIndexesHexSyscoin(dbtestdata.TxidS1T0, bchain.BaseCoinMask, []int32{0}, d), nil},
 		{addressKeyHex(dbtestdata.AddrS2, 158, d), txIndexesHexSyscoin(dbtestdata.TxidS1T1, bchain.AssetActivateMask, []int32{0}, d), nil},
 		{addressKeyHex(dbtestdata.AddrS3, 158, d), txIndexesHexSyscoin(dbtestdata.TxidS1T1, bchain.BaseCoinMask, []int32{2}, d), nil},
-		{addressKeyHex(dbtestdata.AddrS4, 347314, d), txIndexesHexSyscoin(dbtestdata.TxidS2T0, bchain.BaseCoinMask, []int32{0}, d), nil},
-		{addressKeyHex(dbtestdata.AddrS5, 347314, d), txIndexesHexSyscoin(dbtestdata.TxidS2T0, bchain.BaseCoinMask, []int32{1}, d), nil},
-		{addressKeyHex(dbtestdata.AddrS3, 347314, d), txIndexesHexSyscoin(dbtestdata.TxidS2T1, bchain.BaseCoinMask, []int32{1}, d), nil},
+		{addressKeyHex(dbtestdata.AddrS4, 165, d), txIndexesHexSyscoin(dbtestdata.TxidS2T0, bchain.BaseCoinMask, []int32{0}, d), nil},
+		{addressKeyHex(dbtestdata.AddrS3, 165, d), txIndexesHexSyscoin(dbtestdata.TxidS2T1, bchain.AssetUpdateMask, []int32{0}, d), nil},
 	}); err != nil {
 		{
 			t.Fatal(err)
@@ -146,40 +144,28 @@ func verifyAfterSyscoinTypeBlock2(t *testing.T, d *RocksDB) {
 		{
 			dbtestdata.AddressToPubKeyHex(dbtestdata.AddrS1, d.chainParser),
 			"01" + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatS1T0A1, d) +
-			"00" + dbtestdata.TxidS1T0 + varuintToHex(0) + varuintToHex(249727) + bigintToHex(dbtestdata.SatS1T0A1, d),
+			"00" + dbtestdata.TxidS1T0 + varuintToHex(0) + varuintToHex(158) + bigintToHex(dbtestdata.SatS1T0A1, d),
 			nil,
 		},
 		{
 			dbtestdata.AddressToPubKeyHex(dbtestdata.AddrS2, d.chainParser),
 			"01" + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatS1T0A2, d) +
-			"00" + dbtestdata.TxidS1T0 + varuintToHex(1) + varuintToHex(249727) + bigintToHex(dbtestdata.SatS1T0A2, d),
+			"00" + dbtestdata.TxidS1T0 + varuintToHex(0) + varuintToHex(158) + bigintToHex(dbtestdata.SatS1T0A2, d),
 			nil,
 		},
+		// asset update
 		{
 			dbtestdata.AddressToPubKeyHex(dbtestdata.AddrS3, d.chainParser),
 			"02" + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(addedAmount, d) +
-			"01" + varuintToHex(1045909988) + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatAssetSent, d) + varuintToHex(2) +
-				dbtestdata.TxidS1T1 + varuintToHex(1) + varuintToHex(249727) + bigintToHex(dbtestdata.SatS1T1A1, d) +
-				dbtestdata.TxidS2T1 + varuintToHex(1) + varuintToHex(347314) + bigintToHex(dbtestdata.SatS2T1A1, d),
+			"01" + varuintToHex(732260830) + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatZero, d) + varuintToHex(2) +
+			dbtestdata.TxidS1T1 + varuintToHex(2) + varuintToHex(158) + bigintToHex(dbtestdata.SatS1T1A2, d) + varuintToHex(732260830) + bigintToHex(dbtestdata.SatZero, d),
+			dbtestdata.TxidS2T1 + varuintToHex(0) + varuintToHex(165) + bigintToHex(dbtestdata.SatS2T1A1, d) + varuintToHex(732260830) + bigintToHex(dbtestdata.SatZero, d),
 			nil,
 		},
 		{
 			dbtestdata.AddressToPubKeyHex(dbtestdata.AddrS4, d.chainParser),
 			"01" + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatS2T0A1, d) +
-			"00" + dbtestdata.TxidS2T0 + varuintToHex(0) + varuintToHex(347314) + bigintToHex(dbtestdata.SatS2T0A1, d),
-			nil,
-		},
-		{
-			dbtestdata.AddressToPubKeyHex(dbtestdata.AddrS5, d.chainParser),
-			"01" + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatS2T0A2, d) +
-			"00" + dbtestdata.TxidS2T0 + varuintToHex(1) + varuintToHex(347314) + bigintToHex(dbtestdata.SatS2T0A2, d),
-			nil,
-		},
-		// burn should have a address balance as asset output from S2T1
-		{
-			dbtestdata.AddressToPubKeyHex(dbtestdata.AddrS6, d.chainParser),
-			"01" + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatZero, d) +
-			"01" + varuintToHex(1045909988) + bigintToHex(dbtestdata.SatAssetSent, d) + bigintToHex(dbtestdata.SatZero, d) + varuintToHex(1),
+			"00" + dbtestdata.TxidS2T0 + varuintToHex(0) + varuintToHex(165) + bigintToHex(dbtestdata.SatS2T0A1, d),
 			nil,
 		},
 	}); err != nil {
