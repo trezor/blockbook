@@ -9,10 +9,10 @@ import (
 	"blockbook/bchain/coins/sys"
 	"blockbook/tests/dbtestdata"
 	"math/big"
-	//"reflect"
+	"reflect"
 	"testing"
 	"github.com/martinboehm/btcutil/chaincfg"
-	//"github.com/juju/errors"
+	"github.com/juju/errors"
 	"encoding/hex"
 	vlq "github.com/bsm/go-vlq"
 )
