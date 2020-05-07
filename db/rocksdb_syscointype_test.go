@@ -67,13 +67,13 @@ func verifyAfterSyscoinTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect bool
 		{
 			dbtestdata.AddressToPubKeyHex(dbtestdata.AddrS1, d.chainParser),
 			"01" + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatS1T0A1, d) +
-			"00" +	dbtestdata.TxidS1T0 + varuintToHex(0) + varuintToHex(158) + bigintToHex(dbtestdata.SatS1T0A1, d),
+			"00" +	dbtestdata.TxidS1T0 + varuintToHex(0) + varuintToHex(158) + bigintToHex(dbtestdata.SatS1T0A1, d) + "00",
 			nil,
 		},
 		{
 			dbtestdata.AddressToPubKeyHex(dbtestdata.AddrS2, d.chainParser),
 			"01" + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatS1T1A1, d) +
-			"00" + dbtestdata.TxidS1T1 + varuintToHex(0) + varuintToHex(158) + bigintToHex(dbtestdata.SatS1T1A1, d),
+			"00" + dbtestdata.TxidS1T1 + varuintToHex(0) + varuintToHex(158) + bigintToHex(dbtestdata.SatS1T1A1, d) + "00",
 			nil,
 		},
 		// asset activate
@@ -144,13 +144,13 @@ func verifyAfterSyscoinTypeBlock2(t *testing.T, d *RocksDB) {
 		{
 			dbtestdata.AddressToPubKeyHex(dbtestdata.AddrS1, d.chainParser),
 			"01" + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatS1T0A1, d) +
-			"00" + dbtestdata.TxidS1T0 + varuintToHex(0) + varuintToHex(158) + bigintToHex(dbtestdata.SatS1T0A1, d),
+			"00" + dbtestdata.TxidS1T0 + varuintToHex(0) + varuintToHex(158) + bigintToHex(dbtestdata.SatS1T0A1, d) + "00",
 			nil,
 		},
 		{
 			dbtestdata.AddressToPubKeyHex(dbtestdata.AddrS2, d.chainParser),
 			"01" + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatS1T0A2, d) +
-			"00" + dbtestdata.TxidS1T0 + varuintToHex(0) + varuintToHex(158) + bigintToHex(dbtestdata.SatS1T0A2, d),
+			"00" + dbtestdata.TxidS1T0 + varuintToHex(0) + varuintToHex(158) + bigintToHex(dbtestdata.SatS1T0A2, d) + "00",
 			nil,
 		},
 		// asset update
@@ -165,7 +165,7 @@ func verifyAfterSyscoinTypeBlock2(t *testing.T, d *RocksDB) {
 		{
 			dbtestdata.AddressToPubKeyHex(dbtestdata.AddrS4, d.chainParser),
 			"01" + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatS2T0A1, d) +
-			"00" + dbtestdata.TxidS2T0 + varuintToHex(0) + varuintToHex(165) + bigintToHex(dbtestdata.SatS2T0A1, d),
+			"00" + dbtestdata.TxidS2T0 + varuintToHex(0) + varuintToHex(165) + bigintToHex(dbtestdata.SatS2T0A1, d) + "00",
 			nil,
 		},
 	}); err != nil {
