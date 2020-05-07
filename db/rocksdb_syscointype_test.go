@@ -165,7 +165,7 @@ func verifyAfterSyscoinTypeBlock2(t *testing.T, d *RocksDB) {
 		{
 			dbtestdata.AddressToPubKeyHex(dbtestdata.AddrS3, d.chainParser),
 			"02" + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(addedAmount, d) +
-			"01" + varuintToHex(732260830) + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatZero, d) + varuintToHex(2) +
+			"01" + varuintToHex(732260830) + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatZero, d) + varuintToHex(1) +
 			dbtestdata.TxidS1T1 + varuintToHex(2) + varuintToHex(158) + bigintToHex(dbtestdata.SatS1T1A2, d) + "00" +
 			dbtestdata.TxidS2T1 + varuintToHex(0) + varuintToHex(165) + bigintToHex(dbtestdata.SatS2T1A1, d) + varuintToHex(732260830) + bigintToHex(dbtestdata.SatZero, d),
 			nil,
