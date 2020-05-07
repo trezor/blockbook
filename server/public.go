@@ -1110,7 +1110,7 @@ func (s *PublicServer) apiBlock(r *http.Request, apiVersion int) (interface{}, e
 
 func (s *PublicServer) apiMempool(r *http.Request, apiVersion int) (interface{}, error) {
 	s.metrics.ExplorerViews.With(common.Labels{"action": "api-mempool"}).Inc()
-	var mempool *api.MempoolTxids
+	var mempool *api.MempoolTxs
 	var err error
 	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
 		page, ec := strconv.Atoi(r.URL.Query().Get("page"))

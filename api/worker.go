@@ -1635,24 +1635,34 @@ func (w *Worker) GetMempool(page int, itemsOnPage int) (*MempoolTxids, error) {
 }
 
 // GetMempoolNew returns a page of mempool txids, newer than fromTime
-func (w *Worker) GetMempoolNew(timeFrom uint32, page, itemsOnPage int) (*MempoolTxids, error) {
+func (w *Worker) GetMempoolNew(timeFrom uint32, page, itemsOnPage int) (*MempoolTxs, error) {
 	page--
 	if page < 0 {
 		page = 0
 	}
 	entries := w.mempool.GetNewEntries(timeFrom)
 	pg, from, to, _ := computePaging(len(entries), page, itemsOnPage)
-	r := &MempoolTxids{
+	txCount := to - from
+	r := &MempoolTxs{
 		Paging:      pg,
+		LastTime:    0, // set later
 		MempoolSize: len(entries),
+		// TODO previousBlockHash, height
+		TxCount: txCount,
 	}
-	r.Mempool = make([]MempoolTxid, to-from)
+	r.Transactions = make([]*Tx, txCount)
+	var lastTime uint32 = 0
 	for i := from; i < to; i++ {
 		entry := &entries[i]
-		r.Mempool[i-from] = MempoolTxid{
-			Txid: entry.Txid,
-			Time: int64(entry.Time),
+		if entry.Time > lastTime {
+			lastTime = entry.Time
 		}
+		tx, err := w.GetTransaction(entry.Txid, false, false)
+		if err != nil {
+			tx = &Tx{}
+		}
+		r.Transactions[i-from] = tx
 	}
+	r.LastTime = lastTime
 	return r, nil
 }

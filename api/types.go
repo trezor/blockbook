@@ -447,3 +447,12 @@ type MempoolTxids struct {
 	Mempool     []MempoolTxid `json:"mempool"`
 	MempoolSize int           `json:"mempoolSize"`
 }
+
+// MempoolTxs contains information about mempool transactions
+type MempoolTxs struct {
+	Paging
+	LastTime     uint32 `json:"lastTime"`
+	MempoolSize  int    `json:"mempoolSize"`
+	TxCount      int    `json:"txCount"`
+	Transactions []*Tx  `json:"txs,omitempty"`
+}
