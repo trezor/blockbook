@@ -75,7 +75,7 @@ func (d *RocksDB) DisconnectAssetOutputHelper(asset *bchain.AssetType, dBAsset *
 	return nil
 }
 
-func (d *RocksDB) ConnectAllocationInput(height uint32, balanceAsset *bchain.AssetBalance, version int32, btxID []byte, assetInfo* bchain.AssetInfo, assets map[uint32]*bchain.Asset, txAssets bchain.TxAssetMap) error {
+func (d *RocksDB) ConnectAllocationInput(height uint32, balanceAsset *bchain.AssetBalance, isAssetTx bool, version int32, btxID []byte, assetInfo* bchain.AssetInfo, assets map[uint32]*bchain.Asset, txAssets bchain.TxAssetMap) error {
 	dBAsset, err := d.GetAsset(assetInfo.AssetGuid, &assets)
 	if !d.chainParser.IsAssetActivateTx(version) && err != nil {
 		return err
@@ -83,7 +83,7 @@ func (d *RocksDB) ConnectAllocationInput(height uint32, balanceAsset *bchain.Ass
 	if dBAsset != nil {
 		assetInfo.Details = bchain.AssetInfoDetails{Symbol: dBAsset.AssetObj.Symbol, Decimals: int32(dBAsset.AssetObj.Precision)}
 		counted := d.addToAssetsMap(txAssets, assetInfo.AssetGuid, btxID, version, height)
-		if !counted && !d.chainParser.IsAssetTx(version) {
+		if !counted && !isAssetTx {
 			balanceAsset.Transfers++
 		}
 		assets[assetInfo.AssetGuid] = dBAsset
@@ -167,7 +167,7 @@ func (d *RocksDB) ConnectAssetOutput(addrDescData *bchain.AddressDescriptor, add
 	return nil
 }
 
-func (d *RocksDB) DisconnectAllocationOutput(assetBalances map[uint32]*bchain.AssetBalance, isActivate bool, version int32, btxID []byte, assets map[uint32]*bchain.Asset,  assetInfo *bchain.AssetInfo, assetFoundInTx func(asset uint32, btxID []byte) bool) error {
+func (d *RocksDB) DisconnectAllocationOutput(assetBalances map[uint32]*bchain.AssetBalance, isActivate bool, isAssetTx bool, version int32, btxID []byte, assets map[uint32]*bchain.Asset,  assetInfo *bchain.AssetInfo, assetFoundInTx func(asset uint32, btxID []byte) bool) error {
 	var balanceAsset *bchain.AssetBalance
 	if assetBalances != nil {
 		var ok bool
@@ -185,7 +185,7 @@ func (d *RocksDB) DisconnectAllocationOutput(assetBalances map[uint32]*bchain.As
 	exists := assetFoundInTx(assetInfo.AssetGuid, btxID)
 	if !exists {
 		dBAsset.Transactions--
-		if !isActivate {
+		if !isAssetTx {
 			balanceAsset.Transfers--
 		}
 	}
