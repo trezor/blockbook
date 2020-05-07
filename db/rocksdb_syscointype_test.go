@@ -138,7 +138,7 @@ func verifyAfterSyscoinTypeBlock2(t *testing.T, d *RocksDB) {
 			t.Fatal(err)
 		}
 	}
-	addedAmount := new(big.Int).Set(dbtestdata.SatS1T1A1)
+	addedAmount := new(big.Int).Set(dbtestdata.SatS1T1A2)
 	addedAmount.Add(addedAmount, dbtestdata.SatS2T1A1)
 	if err := checkColumn(d, cfAddressBalance, []keyPair{
 		{
@@ -167,7 +167,7 @@ func verifyAfterSyscoinTypeBlock2(t *testing.T, d *RocksDB) {
 			"02" + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(addedAmount, d) +
 			"01" + varuintToHex(732260830) + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatZero, d) + varuintToHex(0) +
 			dbtestdata.TxidS1T1 + varuintToHex(2) + varuintToHex(158) + bigintToHex(dbtestdata.SatS1T1A2, d) + "00" +
-			dbtestdata.TxidS2T1 + varuintToHex(0) + varuintToHex(165) + bigintToHex(dbtestdata.SatS2T0A1, d) + varuintToHex(732260830) + bigintToHex(dbtestdata.SatZero, d),
+			dbtestdata.TxidS2T1 + varuintToHex(0) + varuintToHex(165) + bigintToHex(dbtestdata.SatS2T1A1, d) + varuintToHex(732260830) + bigintToHex(dbtestdata.SatZero, d),
 			nil,
 		},
 	}); err != nil {
