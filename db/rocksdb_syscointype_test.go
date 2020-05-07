@@ -255,10 +255,10 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 	// get transactions for various addresses / low-high ranges
 	verifyGetTransactions(t, d, dbtestdata.AddrS3, 0, 1000000, []txidIndex{
 		{dbtestdata.TxidS2T1, 0},
-		{dbtestdata.TxidS1T1, 1},
+		{dbtestdata.TxidS1T1, 2},
 	}, nil)
 	verifyGetTransactions(t, d, dbtestdata.AddrS3, 158, 158, []txidIndex{
-		{dbtestdata.TxidS1T1, 1},
+		{dbtestdata.TxidS1T1, 2},
 	}, nil)
 	verifyGetTransactions(t, d, dbtestdata.AddrS3, 165, 1000000, []txidIndex{
 		{dbtestdata.TxidS2T1, 0},
@@ -328,12 +328,14 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Errorf("DisconnectBlockRangeBitcoinType 165")
 	verifyAfterSyscoinTypeBlock1(t, d, false)
 	if err := checkColumn(d, cfTransactions, []keyPair{}); err != nil {
 		{
 			t.Fatal(err)
 		}
 	}
+	t.Errorf("verified block 1")
 
 	if len(d.is.BlockTimes) != 1 {
 		t.Fatal("Expecting is.BlockTimes 1, got ", len(d.is.BlockTimes))
@@ -343,8 +345,9 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 	if err := d.ConnectBlock(block2); err != nil {
 		t.Fatal(err)
 	}
+	t.Errorf("verify block 2")
 	verifyAfterSyscoinTypeBlock2(t, d)
-
+	t.Errorf("verified block 2")
 	if err := checkColumn(d, cfBlockTxs, []keyPair{
 		{
 			"000000a5",
@@ -368,13 +371,13 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 		t.Fatal("Expecting is.BlockTimes 2, got ", len(d.is.BlockTimes))
 	}
 	t.Fatal("Done")
-	/* 
+	
 	// test public methods for address balance and tx addresses
 	ab, err := d.GetAddressBalance(dbtestdata.AddrS3, bchain.AddressBalanceDetailUTXO)
 	if err != nil {
 		t.Fatal(err)
 	}
-	addedAmount := new(big.Int).Set(dbtestdata.SatS1T1A1)
+	addedAmount := new(big.Int).Set(dbtestdata.SatS1T1A2)
 	addedAmount.Add(addedAmount, dbtestdata.SatS2T1A1)
 	abw := &bchain.AddrBalance{
 		Txs:        2,
@@ -383,22 +386,22 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 		Utxos: []bchain.Utxo{
 			{
 				BtxID:    hexToBytes(dbtestdata.TxidS1T1),
-				Vout:     1,
-				Height:   249727,
-				ValueSat: *dbtestdata.SatS1T1A1,
+				Vout:     2,
+				Height:   158,
+				ValueSat: *dbtestdata.SatS1T1A2,
 			},
 			{
 				BtxID:    hexToBytes(dbtestdata.TxidS2T1),
-				Vout:     1,
-				Height:   347314,
+				Vout:     0,
+				Height:   165,
 				ValueSat: *dbtestdata.SatS2T1A1,
 			},
 		},
 		AssetBalances: map[uint32]*bchain.AssetBalance {
-			1045909988: &bchain.AssetBalance{
-				SentSat: 	dbtestdata.SatAssetSent,
+			732260830: &bchain.AssetBalance{
+				SentSat: 	dbtestdata.SatZero,
 				BalanceSat: dbtestdata.SatZero,
-				Transfers:	2,
+				Transfers:	0,
 			},
 		},
 	}
@@ -423,7 +426,7 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 	}
 	taw := &bchain.TxAddresses{
 		Version: 29701,
-		Height: 347314,
+		Height: 165,
 		Inputs: []bchain.TxInput{
 			{
 				// input won't be found because there is many transactions within the range of blocks we chose to isolate asset data for this test
@@ -445,7 +448,7 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 	}
 	if !reflect.DeepEqual(ta, taw) {
 		t.Errorf("GetTxAddresses() = %+v, want %+v", ta, taw)
-	}*/
+	}
 }
 
 func Test_BulkConnect_SyscoinType(t *testing.T) {
