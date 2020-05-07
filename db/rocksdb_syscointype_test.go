@@ -250,24 +250,23 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 	if len(d.is.BlockTimes) != 2 {
 		t.Fatal("Expecting is.BlockTimes 2, got ", len(d.is.BlockTimes))
 	}
-	t.Fatal("Done")
-/*
+	
+
 	// get transactions for various addresses / low-high ranges
 	verifyGetTransactions(t, d, dbtestdata.AddrS3, 0, 1000000, []txidIndex{
-		{dbtestdata.TxidS2T1, 1},
+		{dbtestdata.TxidS2T1, 0},
 		{dbtestdata.TxidS1T1, 1},
 	}, nil)
-	verifyGetTransactions(t, d, dbtestdata.AddrS3, 249727, 249727, []txidIndex{
+	verifyGetTransactions(t, d, dbtestdata.AddrS3, 158, 158, []txidIndex{
 		{dbtestdata.TxidS1T1, 1},
 	}, nil)
-	verifyGetTransactions(t, d, dbtestdata.AddrS3, 347314, 1000000, []txidIndex{
-		{dbtestdata.TxidS2T1, 1},
+	verifyGetTransactions(t, d, dbtestdata.AddrS3, 165, 1000000, []txidIndex{
+		{dbtestdata.TxidS2T1, 0},
 	}, nil)
 	verifyGetTransactions(t, d, dbtestdata.AddrS3, 500000, 1000000, []txidIndex{}, nil)
 	verifyGetTransactions(t, d, dbtestdata.AddrS4, 0, 1000000, []txidIndex{
 		{dbtestdata.TxidS2T0, 0},
 	}, nil)
-	verifyGetTransactions(t, d, dbtestdata.AddrS6, 0, 1000000, []txidIndex{}, nil)
 	verifyGetTransactions(t, d, "SgBVZhGLjqRz8ufXFwLhZvXpUMKqoduBad", 500000, 1000000, []txidIndex{}, errors.New("checksum mismatch"))
 
 	// GetBestBlock
@@ -275,24 +274,24 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if height != 347314 {
-		t.Fatalf("GetBestBlock: got height %v, expected %v", height, 347314)
+	if height != 165 {
+		t.Fatalf("GetBestBlock: got height %v, expected %v", height, 165)
 	}
-	if hash != "6609d44688868613991b0cd5ed981a76526caed6b0f7b1be242f5a93311636c6" {
+	if hash != "00000de793885472131c2bea4d252281a2c8194fc43453c1ab427a45f968313f" {
 		t.Fatalf("GetBestBlock: got hash %v, expected %v", hash, "6609d44688868613991b0cd5ed981a76526caed6b0f7b1be242f5a93311636c6")
 	}
 
 	// GetBlockHash
-	hash, err = d.GetBlockHash(249727)
+	hash, err = d.GetBlockHash(158)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if hash != "78ae6476a514897c8a6984032e5d0e4a44424055f0c2d7b5cf664ae8c8c20487" {
-		t.Fatalf("GetBlockHash: got hash %v, expected %v", hash, "78ae6476a514897c8a6984032e5d0e4a44424055f0c2d7b5cf664ae8c8c20487")
+	if hash != "000004138eaa5e65a84b9b7f48fb9f9b1a8aadf27248974cabb3a23f7f20458a" {
+		t.Fatalf("GetBlockHash: got hash %v, expected %v", hash, "000004138eaa5e65a84b9b7f48fb9f9b1a8aadf27248974cabb3a23f7f20458a")
 	}
 
 	// Not connected block
-	hash, err = d.GetBlockHash(347315)
+	hash, err = d.GetBlockHash(166)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -301,31 +300,31 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 	}
 
 	// GetBlockHash
-	info, err := d.GetBlockInfo(347314)
+	info, err := d.GetBlockInfo(165)
 	if err != nil {
 		t.Fatal(err)
 	}
 	iw := &bchain.DbBlockInfo{
-		Hash:   "6609d44688868613991b0cd5ed981a76526caed6b0f7b1be242f5a93311636c6",
+		Hash:   "00000de793885472131c2bea4d252281a2c8194fc43453c1ab427a45f968313f",
 		Txs:    2,
-		Size:   1611,
-		Time:   1580142055,
-		Height: 347314,
+		Size:   544,
+		Time:   1588824028,
+		Height: 165,
 	}
 	if !reflect.DeepEqual(info, iw) {
 		t.Errorf("GetBlockInfo() = %+v, want %+v", info, iw)
 	}
 
 	// try to disconnect both blocks, however only the last one is kept, it is not possible
-	err = d.DisconnectBlockRangeBitcoinType(249727, 347314)
-	if err == nil || err.Error() != "Cannot disconnect blocks with height 249728 and lower. It is necessary to rebuild index." {
+	err = d.DisconnectBlockRangeBitcoinType(158, 165)
+	if err == nil || err.Error() != "Cannot disconnect blocks with height 158 and lower. It is necessary to rebuild index." {
 		t.Fatal(err)
 	}
 	verifyAfterSyscoinTypeBlock2(t, d)
 
 	// disconnect the 2nd block, verify that the db contains only data from the 1st block with restored unspentTxs
 	// and that the cached tx is removed
-	err = d.DisconnectBlockRangeBitcoinType(347314, 347314)
+	err = d.DisconnectBlockRangeBitcoinType(165, 165)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -348,13 +347,13 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 
 	if err := checkColumn(d, cfBlockTxs, []keyPair{
 		{
-			"0000009e",
+			"000000a5",
 			dbtestdata.TxidS2T0 + "01" + "0000000000000000000000000000000000000000000000000000000000000000" + "00" +
 			dbtestdata.TxidS2T1 + "01" + dbtestdata.TxidS2T1INPUT0 + "02",
 			nil,
 		},
 		{
-			"000000a5",
+			"0000009e",
 			dbtestdata.TxidS1T0 + "01" + "0000000000000000000000000000000000000000000000000000000000000000" + "00" +
 			dbtestdata.TxidS1T1 + "01" + dbtestdata.TxidS1T1INPUT0 + "02",
 			nil,
@@ -368,7 +367,8 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 	if len(d.is.BlockTimes) != 2 {
 		t.Fatal("Expecting is.BlockTimes 2, got ", len(d.is.BlockTimes))
 	}
-
+	t.Fatal("Done")
+	/* 
 	// test public methods for address balance and tx addresses
 	ab, err := d.GetAddressBalance(dbtestdata.AddrS3, bchain.AddressBalanceDetailUTXO)
 	if err != nil {
