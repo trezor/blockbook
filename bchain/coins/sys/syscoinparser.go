@@ -547,7 +547,7 @@ func (p *SyscoinParser) GetAssetFromData(sptData []byte) (*bchain.AssetType, err
 	var asset bchain.AssetType
 	l := p.UnpackAssetObj(&asset, sptData)
 	if l != len(sptData) {
-		return nil, errors.New("Could not decode asset l " + strconv.Itoa(l) + " vs len " + strconv.Itoa(len(sptData))
+		return nil, errors.New("Could not decode asset l " + strconv.Itoa(l) + " vs len " + strconv.Itoa(len(sptData)))
 	}
 	return &asset, nil
 }
