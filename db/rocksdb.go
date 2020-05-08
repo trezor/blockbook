@@ -566,12 +566,13 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses bch
 					d.cbs.balancesHit++
 				}
 				balance.BalanceSat.Add(&balance.BalanceSat, &output.ValueSat)
-				utxo := bchain.Utxo{
+				balance.AddUtxo(&bchain.Utxo{
 					BtxID:    btxID,
 					Vout:     int32(i),
 					Height:   block.Height,
 					ValueSat: output.ValueSat,
-				}
+					AssetInfo: tao.AssetInfo.AssetGuid,
+				})
 				counted := addToAddressesMap(addresses, strAddrDesc, btxID, int32(i), mask)
 				if !counted {
 					balance.Txs++
@@ -586,7 +587,7 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses bch
 						balanceAsset = &bchain.AssetBalance{Transfers: 0, BalanceSat: big.NewInt(0), SentSat: big.NewInt(0)}
 						balance.AssetBalances[assetGuid] = balanceAsset
 					}
-					err = d.ConnectAllocationOutput(block.Height, balanceAsset, isActivate, tx.Version, btxID, &utxo, &tao.AssetInfo, assets, txAssets)
+					err = d.ConnectAllocationOutput(block.Height, balanceAsset, isActivate, tx.Version, btxID, &tao.AssetInfo, assets, txAssets)
 					if err != nil {
 						glog.Warningf("rocksdb: ConnectAllocationOutput: height %d, tx %v, output %v, error %v", block.Height, tx.Txid, output, err)
 					}
@@ -596,7 +597,6 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses bch
 						addrDescOwner = &addrDesc
 					}
 				}
-				balance.AddUtxo(&utxo)
 			}  else if isAssetTx && addrDesc[0] == txscript.OP_RETURN {
 				// if opreturn save data for later disconnecting output
 				addrDescData = &addrDesc
@@ -656,9 +656,8 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses bch
 
 			tai.AddrDesc = spentOutput.AddrDesc
 			tai.ValueSat = spentOutput.ValueSat
-			tai.AssetInfo = spentOutput.AssetInfo
 			mask := bchain.BaseCoinMask
-			if tai.AssetInfo.AssetGuid > 0 {
+			if spentOutput.AssetInfo.AssetGuid > 0 {
 				mask = d.chainParser.GetAssetsMaskFromVersion(ita.Version)
 			}
 			// mark the output as spent in tx
@@ -696,16 +695,16 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses bch
 					d.resetValueSatToZero(&balance.BalanceSat, spentOutput.AddrDesc, "balance")
 				}
 				balance.SentSat.Add(&balance.SentSat, &spentOutput.ValueSat)
-				if tai.AssetInfo.AssetGuid > 0 {
+				if spentOutput.AssetInfo.AssetGuid > 0 {
 					if balance.AssetBalances == nil {
 						balance.AssetBalances = map[uint32]*bchain.AssetBalance{}
 					}
-					balanceAsset, ok := balance.AssetBalances[tai.AssetInfo.AssetGuid]
+					balanceAsset, ok := balance.AssetBalances[spentOutput.AssetInfo.AssetGuid]
 					if !ok {
 						balanceAsset = &bchain.AssetBalance{Transfers: 0, BalanceSat: big.NewInt(0), SentSat: big.NewInt(0)}
-						balance.AssetBalances[tai.AssetInfo.AssetGuid] = balanceAsset
+						balance.AssetBalances[spentOutput.AssetInfo.AssetGuid] = balanceAsset
 					}
-					err := d.ConnectAllocationInput(block.Height, balanceAsset, isActivate, tx.Version, btxID, &tai.AssetInfo, assets, txAssets)
+					err := d.ConnectAllocationInput(block.Height, balanceAsset, isActivate, tx.Version, btxID, &spentOutput.AssetInfo, assets, txAssets)
 					if err != nil {
 						glog.Warningf("rocksdb: ConnectAllocationInput: height %d, tx %v, input %v, error %v", block.Height, btxID, input, err)
 					}
@@ -1055,12 +1054,13 @@ func (d *RocksDB) disconnectTxAddressesInputs(wb *gorocksdb.WriteBatch, btxID []
 						d.resetValueSatToZero(&balance.SentSat, t.AddrDesc, "sent amount")
 					}
 					balance.BalanceSat.Add(&balance.BalanceSat, &t.ValueSat)
-					utxo := bchain.Utxo{
+					balance.AddUtxoInDisconnect(&bchain.Utxo{
 						BtxID:    input.BtxID,
 						Vout:     input.Index,
 						Height:   inputHeight,
 						ValueSat: t.ValueSat,
-					}
+						AssetInfo: t.AssetInfo.AssetGuid,
+					})
 					if t.AssetInfo.AssetGuid > 0 {
 						if balance.AssetBalances == nil {
 							return errors.New("DisconnectSyscoinInput asset balances was nil but not expected to be")
@@ -1069,7 +1069,7 @@ func (d *RocksDB) disconnectTxAddressesInputs(wb *gorocksdb.WriteBatch, btxID []
 						if !ok {
 							return errors.New("DisconnectSyscoinInput asset balance not found")
 						}
-						err := d.DisconnectAllocationInput(balance.AssetBalances, &t.AddrDesc, balanceAsset, btxID, &t.AssetInfo, &utxo, assets, assetFoundInTx)
+						err := d.DisconnectAllocationInput(balance.AssetBalances, &t.AddrDesc, balanceAsset, btxID, &t.AssetInfo, assets, assetFoundInTx)
 						if err != nil {
 							glog.Warningf("rocksdb: DisconnectAllocationInput: tx %v, input %v, error %v", btxID, input, err)
 						}
@@ -1079,7 +1079,6 @@ func (d *RocksDB) disconnectTxAddressesInputs(wb *gorocksdb.WriteBatch, btxID []
 							addrDesc = &t.AddrDesc
 						}
 					}
-					balance.AddUtxoInDisconnect(&utxo)
 				} else {
 					ad, _, _ := d.chainParser.GetAddressesFromAddrDesc(t.AddrDesc)
 					glog.Warningf("Balance for address %s (%s) not found", ad, t.AddrDesc)

@@ -49,14 +49,10 @@ type ScriptSig struct {
 	// Asm string `json:"asm"`
 	Hex string `json:"hex"`
 }
-type AssetInfoDetails struct {
-	Symbol   string `json:"symbol"`
-	Decimals int32    `json:"decimals"`
-}
 type AssetInfo struct {
-	AssetGuid uint32 `json:"assetGuid"`
+	AssetGuid uint32  `json:"assetGuid"`
 	ValueSat *big.Int `json:"valueSat"`
-	Details  AssetInfoDetails `json:"details, omitempty"`
+	ValueStr string   `json:"valueStr,omitempty"`
 }
 
 // Vin contains data about tx output
@@ -382,7 +378,6 @@ type AddressesMap map[string][]TxIndexes
 type TxInput struct {
 	AddrDesc AddressDescriptor
 	ValueSat big.Int
-	AssetInfo AssetInfo
 }
 
 // BlockInfo holds information about blocks kept in column height
@@ -768,8 +763,6 @@ type BlockChainParser interface {
 	LoadAssets(tx *Tx) error
 	AppendAssetInfo(assetInfo *AssetInfo, buf []byte, varBuf []byte, details bool) []byte
 	UnpackAssetInfo(assetInfo *AssetInfo, buf []byte, details bool) int
-	AppendAssetInfoDetails(assetInfoDetails *AssetInfoDetails, buf []byte, varBuf []byte) []byte
-	UnpackAssetInfoDetails(assetInfoDetails *AssetInfoDetails, buf []byte) int
 	PackSyscoinBurnToEthereum(a *SyscoinBurnToEthereumType, buf []byte) []byte
 	UnpackSyscoinBurnToEthereum(a *SyscoinBurnToEthereumType, buf []byte) int
 	AppendMintSyscoin(a *MintSyscoinType, buf []byte) []byte

@@ -192,6 +192,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 						vout := &otx.Vout[vin.Vout]
 						vin.ValueSat = (*bchain.Amount)(&vout.ValueSat)
 						vin.AddrDesc, vin.Addresses, vin.IsAddress, err = w.getAddressesFromVout(vout)
+						vin.AssetInfo = &vout.AssetInfo
 						if err != nil {
 							glog.Errorf("getAddressesFromVout error %v, vout %+v", err, vout)
 						}
@@ -201,6 +202,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 						output := &tas.Outputs[vin.Vout]
 						vin.ValueSat = (*bchain.Amount)(&output.ValueSat)
 						vin.AddrDesc = output.AddrDesc
+						vin.AssetInfo = &output.AssetInfo
 						vin.Addresses, vin.IsAddress, err = output.Addresses(w.chainParser)
 						if err != nil {
 							glog.Errorf("output.Addresses error %v, tx %v, output %v", err, bchainVin.Txid, i)
@@ -209,22 +211,28 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 				}
 				if vin.ValueSat != nil {
 					valInSat.Add(&valInSat, (*big.Int)(vin.ValueSat))
-					if vin.AssetInfo.AssetGuid > 0 {
+					if vin.AssetInfo != nil && vin.AssetInfo.AssetGuid > 0 {
 						if mapTTS == nil {
 							mapTTS = map[uint32]*bchain.TokenTransferSummary{}
 						}
 						tts, ok := mapTTS[vin.AssetInfo.AssetGuid]
 						if !ok {
+							dbAsset, errAsset := w.db.GetAsset(vin.AssetInfo.AssetGuid, nil)
+							if errAsset != nil || dbAsset == nil {
+								return nil, errAsset
+							}
 							assetGuid := strconv.FormatUint(uint64(vin.AssetInfo.AssetGuid), 10)
 							tts = &bchain.TokenTransferSummary{
 								Type:     w.chainParser.GetAssetTypeFromVersion(bchainTx.Version),
 								Token:    assetGuid,
-								Decimals: int(vin.AssetInfo.Details.Decimals),
+								Decimals: int(dbAsset.AssetObj.Precision),
 								ValueIn:  (*bchain.Amount)(big.NewInt(0)),
-								Symbol:   vin.AssetInfo.Details.Symbol,
+								Symbol:   dbAsset.AssetObj.Symbol,
 							}
 							mapTTS[vin.AssetInfo.AssetGuid] = tts
 						}
+						amountAsset := (*bchain.Amount)(vin.AssetInfo.ValueSat)
+						vin.AssetInfo.ValueStr = amountAsset.DecimalString(tts.Decimals) + " " + dbAsset.AssetObj.Symbol
 						(*big.Int)(tts.ValueIn).Add((*big.Int)(tts.ValueIn), (*big.Int)(vin.AssetInfo.ValueSat))
 					}
 				}
@@ -248,20 +256,27 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 		vout.ValueSat = (*bchain.Amount)(&bchainVout.ValueSat)
 		valOutSat.Add(&valOutSat, &bchainVout.ValueSat)
 		
-		if vout.AssetInfo.AssetGuid > 0 {
-			tts, ok := mapTTS[vout.AssetInfo.AssetGuid]
+		if bchainVout.AssetInfo.AssetGuid > 0 {
+			vout.AssetInfo = &bchainVout.AssetInfo
+			tts, ok := mapTTS[bchainVout.AssetInfo.AssetGuid]
 			if !ok {
-				assetGuid := strconv.FormatUint(uint64(vout.AssetInfo.AssetGuid), 10)
+				dbAsset, errAsset := w.db.GetAsset(bchainVout.AssetInfo.AssetGuid, nil)
+				if errAsset != nil || dbAsset == nil {
+					return nil, errAsset
+				}
+				assetGuid := strconv.FormatUint(uint64(bchainVout.AssetInfo.AssetGuid), 10)
 				tts = &bchain.TokenTransferSummary{
 					Type:     w.chainParser.GetAssetTypeFromVersion(bchainTx.Version),
 					Token:    assetGuid,
-					Decimals: int(vout.AssetInfo.Details.Decimals),
+					Decimals: int(dbAsset.AssetObj.Precision),
 					ValueIn:  (*bchain.Amount)(big.NewInt(0)),
-					Symbol:   vout.AssetInfo.Details.Symbol,
+					Symbol:   dbAsset.AssetObj.Symbol,
 				}
-				mapTTS[vout.AssetInfo.AssetGuid] = tts
+				mapTTS[bchainVout.AssetInfo.AssetGuid] = tts
 			}
-			(*big.Int)(tts.Value).Add((*big.Int)(tts.Value), (*big.Int)(vout.AssetInfo.ValueSat))
+			amountAsset := (*bchain.Amount)(bchainVout.AssetInfo.ValueSat)
+			vout.AssetInfo.ValueStr = amountAsset.DecimalString(tts.Decimals) + " " + dbAsset.AssetObj.Symbol
+			(*big.Int)(tts.Value).Add((*big.Int)(tts.Value), bchainVout.AssetInfo.ValueSat)
 		}
 		
 		vout.Hex = bchainVout.ScriptPubKey.Hex
@@ -1365,7 +1380,7 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *bchain.A
 									AmountSat: (*bchain.Amount)(&vout.ValueSat),
 									Locktime:  bchainTx.LockTime,
 									Coinbase:  coinbase,
-									AssetInfo: vout.AssetInfo,
+									AssetInfo: &vout.AssetInfo,
 								})
 								inMempool[bchainTx.Txid] = struct{}{}
 							}
@@ -1422,7 +1437,7 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *bchain.A
 							Height:        int(utxo.Height),
 							Confirmations: confirmations,
 							Coinbase:      coinbase,
-							AssetInfo:	   utxo.AssetInfo,
+							AssetInfo:	   &utxo.AssetInfo,
 						})
 					}
 				}

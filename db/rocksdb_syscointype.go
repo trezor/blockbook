@@ -85,7 +85,6 @@ func (d *RocksDB) ConnectAllocationInput(height uint32, balanceAsset *bchain.Ass
 		balanceAsset.Transfers++
 	}
 	if dBAsset != nil {
-		assetInfo.Details = bchain.AssetInfoDetails{Symbol: dBAsset.AssetObj.Symbol, Decimals: int32(dBAsset.AssetObj.Precision)}
 		assets[assetInfo.AssetGuid] = dBAsset
 	}
 	balanceAsset.BalanceSat.Sub(balanceAsset.BalanceSat, assetInfo.ValueSat)
@@ -96,12 +95,11 @@ func (d *RocksDB) ConnectAllocationInput(height uint32, balanceAsset *bchain.Ass
 	return nil
 }
 
-func (d *RocksDB) ConnectAllocationOutput(height uint32, balanceAsset *bchain.AssetBalance, isActivate bool, version int32, btxID []byte, utxo* bchain.Utxo, assetInfo* bchain.AssetInfo, assets map[uint32]*bchain.Asset, txAssets bchain.TxAssetMap) error {
+func (d *RocksDB) ConnectAllocationOutput(height uint32, balanceAsset *bchain.AssetBalance, isActivate bool, version int32, btxID []byte, assetInfo* bchain.AssetInfo, assets map[uint32]*bchain.Asset, txAssets bchain.TxAssetMap) error {
 	dBAsset, err := d.GetAsset(assetInfo.AssetGuid, &assets)
 	if !isActivate && err != nil {
 		return err
 	}
-	utxo.AssetInfo = *assetInfo
 	counted := d.addToAssetsMap(txAssets, assetInfo.AssetGuid, btxID, version, height)
 	if !counted {
 		if dBAsset != nil {
@@ -110,8 +108,6 @@ func (d *RocksDB) ConnectAllocationOutput(height uint32, balanceAsset *bchain.As
 		balanceAsset.Transfers++
 	}
 	if dBAsset != nil {
-		utxo.AssetInfo.Details = bchain.AssetInfoDetails{Symbol: dBAsset.AssetObj.Symbol, Decimals: int32(dBAsset.AssetObj.Precision)}
-		assetInfo.Details = utxo.AssetInfo.Details
 		if d.chainParser.IsAssetSendTx(version) {
 			balanceAssetSat := big.NewInt(dBAsset.AssetObj.Balance)
 			balanceAssetSat.Sub(balanceAssetSat, assetInfo.ValueSat)
@@ -236,7 +232,7 @@ func (d *RocksDB) DisconnectAssetOutput(addrDesc *bchain.AddressDescriptor, isAc
 	assets[assetGuid] = dBAsset
 	return nil
 }
-func (d *RocksDB) DisconnectAllocationInput(assetBalances map[uint32]*bchain.AssetBalance, addrDesc *bchain.AddressDescriptor, balanceAsset *bchain.AssetBalance,  btxID []byte, assetInfo *bchain.AssetInfo, utxo *bchain.Utxo, assets map[uint32]*bchain.Asset, assetFoundInTx func(asset uint32, btxID []byte) bool) error {
+func (d *RocksDB) DisconnectAllocationInput(assetBalances map[uint32]*bchain.AssetBalance, addrDesc *bchain.AddressDescriptor, balanceAsset *bchain.AssetBalance,  btxID []byte, assetInfo *bchain.AssetInfo, assets map[uint32]*bchain.Asset, assetFoundInTx func(asset uint32, btxID []byte) bool) error {
 	dBAsset, err := d.GetAsset(assetInfo.AssetGuid, &assets)
 	if dBAsset == nil || err != nil {
 		return err
@@ -246,7 +242,6 @@ func (d *RocksDB) DisconnectAllocationInput(assetBalances map[uint32]*bchain.Ass
 	if balanceAsset.SentSat.Sign() < 0 {
 		balanceAsset.SentSat.SetInt64(0)
 	}
-	utxo.AssetInfo = *assetInfo
 	exists := assetFoundInTx(assetInfo.AssetGuid, btxID)
 	if !exists {
 		balanceAsset.Transfers--
