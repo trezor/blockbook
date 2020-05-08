@@ -114,12 +114,12 @@ func verifyAfterSyscoinTypeBlock2(t *testing.T, d *RocksDB) {
 	if err := checkColumn(d, cfHeight, []keyPair{
 		{
 			"000000b6",
-			"00000e4afb4178a83b1b6e05872c5754b007f94b7645d93443a4ee51c45a2d74" + uintToHex(1588824028) + varuintToHex(2) + varuintToHex(544),
+			"00000e4afb4178a83b1b6e05872c5754b007f94b7645d93443a4ee51c45a2d74" + uintToHex(1588899730) + varuintToHex(2) + varuintToHex(539),
 			nil,
 		},
 		{
 			"000000ab",
-			"00000da4905f27bad527f9ec2fb78090ee4079bd4d7219ee2f450e5439d0ed38" + uintToHex(1588899730) + varuintToHex(2) + varuintToHex(539),
+			"00000da4905f27bad527f9ec2fb78090ee4079bd4d7219ee2f450e5439d0ed38" + uintToHex(1588899698) + varuintToHex(2) + varuintToHex(536),
 			nil,
 		},
 	}); err != nil {
