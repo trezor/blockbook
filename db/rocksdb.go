@@ -627,10 +627,6 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses bch
 				}
 				return err
 			}
-			mask := bchain.BaseCoinMask
-			if tai.AssetInfo.AssetGuid > 0 {
-				mask = assetsMask
-			}
 			stxID := string(btxID)
 			ita, e := txAddressesMap[stxID]
 			if !e {
@@ -657,10 +653,15 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses bch
 				glog.Warningf("rocksdb: height %d, tx %v, input tx %v vout %v is double spend", block.Height, tx.Txid, input.Txid, input.Vout)
 			}
 
+
 			tai.AddrDesc = spentOutput.AddrDesc
 			tai.ValueSat = spentOutput.ValueSat
 			tai.AssetInfo = spentOutput.AssetInfo
 			input.AssetInfo = spentOutput.AssetInfo
+			mask := bchain.BaseCoinMask
+			if tai.AssetInfo.AssetGuid > 0 {
+				mask = assetsMask
+			}
 			// mark the output as spent in tx
 			spentOutput.Spent = true
 			if len(spentOutput.AddrDesc) == 0 {
