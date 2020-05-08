@@ -147,7 +147,7 @@ func verifyAfterSyscoinTypeBlock2(t *testing.T, d *RocksDB) {
 		{
 			dbtestdata.AddressToPubKeyHex(dbtestdata.AddrS1, d.chainParser),
 			"02" + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(S1addedAmount, d) +
-			/*assetbalances*/"00" +	dbtestdata.TxidS1T0 + varuintToHex(0) + varuintToHex(171) + bigintToHex(dbtestdata.SatS1T0A1, d) + 
+			/*assetbalances*/"00" +	dbtestdata.TxidS1T0 + varuintToHex(0) + varuintToHex(171) + bigintToHex(dbtestdata.SatS1T0A1, d) + /*asset info*/"00" + 
 			dbtestdata.TxidS2T0 + varuintToHex(0) + varuintToHex(182) + bigintToHex(dbtestdata.SatS2T0A1, d) + /*asset info*/"00",
 			nil,
 		},
@@ -265,8 +265,8 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 	}, nil)
 	verifyGetTransactions(t, d, dbtestdata.AddrS3, 500000, 1000000, []txidIndex{}, nil)
 	verifyGetTransactions(t, d, dbtestdata.AddrS1, 0, 1000000, []txidIndex{
-		{dbtestdata.TxidS1T0, 0},
 		{dbtestdata.TxidS2T0, 0},
+		{dbtestdata.TxidS1T0, 0},
 	}, nil)
 	verifyGetTransactions(t, d, "SgBVZhGLjqRz8ufXFwLhZvXpUMKqoduBad", 500000, 1000000, []txidIndex{}, errors.New("checksum mismatch"))
 
@@ -373,28 +373,21 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 	}
 	
 	// test public methods for address balance and tx addresses
-	ab, err := d.GetAddressBalance(dbtestdata.AddrS3, bchain.AddressBalanceDetailUTXO)
+	ab, err := d.GetAddressBalance(dbtestdata.AddrS5, bchain.AddressBalanceDetailUTXO)
 	if err != nil {
 		t.Fatal(err)
 	}
-	addedAmount := new(big.Int).Set(dbtestdata.SatS1T1A2)
-	addedAmount.Add(addedAmount, dbtestdata.SatS2T1A1)
 	abw := &bchain.AddrBalance{
 		Txs:        2,
 		SentSat:    *dbtestdata.SatZero,
 		BalanceSat: *addedAmount,
 		Utxos: []bchain.Utxo{
 			{
-				BtxID:    hexToBytes(dbtestdata.TxidS1T1),
-				Vout:     2,
-				Height:   171,
-				ValueSat: *dbtestdata.SatS1T1A2,
-			},
-			{
 				BtxID:    hexToBytes(dbtestdata.TxidS2T1),
 				Vout:     0,
 				Height:   182,
 				ValueSat: *dbtestdata.SatS2T1A1,
+				AssetInfo: bchain.AssetInfo{AssetGuid: 720034467, ValueSat: dbtestdata.SatZero},
 			},
 		},
 		AssetBalances: map[uint32]*bchain.AssetBalance {
@@ -425,24 +418,26 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 		t.Fatal(err)
 	}
 	taw := &bchain.TxAddresses{
-		Version: 29701,
+		Version: 131,
 		Height: 182,
 		Inputs: []bchain.TxInput{
 			{
 				// input won't be found because there is many transactions within the range of blocks we chose to isolate asset data for this test
 				ValueSat: *dbtestdata.SatZero,
+				AssetInfo: bchain.AssetInfo{AssetGuid: 720034467, ValueSat: dbtestdata.SatZero},
 			},
 		},
 		Outputs: []bchain.TxOutput{
 			{
-				AddrDesc: hexToBytes(dbtestdata.TxidS2T1OutputReturn),
-				Spent:    false,
-				ValueSat: *dbtestdata.SatZero,
-			},
-			{
 				AddrDesc: addressToAddrDesc(dbtestdata.AddrS3, d.chainParser),
 				Spent:    false,
 				ValueSat: *dbtestdata.SatS2T1A1,
+				AssetInfo: bchain.AssetInfo{AssetGuid: 720034467, ValueSat: dbtestdata.SatZero},
+			},
+			{
+				AddrDesc: hexToBytes(dbtestdata.TxidS2T1OutputReturn),
+				Spent:    false,
+				ValueSat: *dbtestdata.SatZero,
 			},
 		},
 	}
