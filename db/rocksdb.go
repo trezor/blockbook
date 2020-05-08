@@ -615,7 +615,6 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses bch
 		ta := blockTxAddresses[txi]
 		ta.Inputs = make([]bchain.TxInput, len(tx.Vin))
 		logged := false
-		assetsMask := d.chainParser.GetAssetsMaskFromVersion(tx.Version)
 		isActivate := d.chainParser.IsAssetActivateTx(tx.Version)
 		for i, input := range tx.Vin {
 			tai := &ta.Inputs[i]
@@ -660,7 +659,7 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses bch
 			input.AssetInfo = spentOutput.AssetInfo
 			mask := bchain.BaseCoinMask
 			if tai.AssetInfo.AssetGuid > 0 {
-				mask = assetsMask
+				mask = d.chainParser.GetAssetsMaskFromVersion(ita.Version)
 			}
 			// mark the output as spent in tx
 			spentOutput.Spent = true
