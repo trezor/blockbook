@@ -119,7 +119,7 @@ func verifyAfterSyscoinTypeBlock2(t *testing.T, d *RocksDB) {
 		},
 		{
 			"000000ab",
-			"00000e4afb4178a83b1b6e05872c5754b007f94b7645d93443a4ee51c45a2d74" + uintToHex(1588899730) + varuintToHex(2) + varuintToHex(539),
+			"00000da4905f27bad527f9ec2fb78090ee4079bd4d7219ee2f450e5439d0ed38" + uintToHex(1588899730) + varuintToHex(2) + varuintToHex(539),
 			nil,
 		},
 	}); err != nil {
