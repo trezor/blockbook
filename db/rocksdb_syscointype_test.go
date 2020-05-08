@@ -142,7 +142,7 @@ func verifyAfterSyscoinTypeBlock2(t *testing.T, d *RocksDB) {
 	addedAmount := new(big.Int).Set(dbtestdata.SatS1T1A2)
 	addedAmount.Add(addedAmount, dbtestdata.SatS2T1A1)
 	S1addedAmount := new(big.Int).Set(dbtestdata.SatS1T0A1)
-	S1addedAmount.Add(addedAmount, dbtestdata.SatS2T0A1)
+	S1addedAmount.Add(S1addedAmount, dbtestdata.SatS2T0A1)
 	if err := checkColumn(d, cfAddressBalance, []keyPair{
 		{
 			dbtestdata.AddressToPubKeyHex(dbtestdata.AddrS1, d.chainParser),
