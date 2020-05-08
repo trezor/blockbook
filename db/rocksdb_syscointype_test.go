@@ -380,7 +380,7 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 	abw := &bchain.AddrBalance{
 		Txs:        2,
 		SentSat:    *dbtestdata.SatZero,
-		BalanceSat: *addedAmount,
+		BalanceSat: *dbtestdata.SatS2T1A1,
 		Utxos: []bchain.Utxo{
 			{
 				BtxID:    hexToBytes(dbtestdata.TxidS2T1),
@@ -401,35 +401,24 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 	if !reflect.DeepEqual(ab, abw) {
 		t.Errorf("GetAddressBalance() = %+v, want %+v", ab, abw)
 	}
-	rs := ab.ReceivedSat()
-	rsw := addedAmount
-	if rs.Cmp(rsw) != 0 {
-		t.Errorf("GetAddressBalance().ReceivedSat() = %v, want %v", rs, rsw)
-	}
-
-	rsa := bchain.ReceivedSatFromBalances(dbtestdata.SatZero, dbtestdata.SatZero)
-	rswa := dbtestdata.SatZero
-	if rsa.Cmp(rswa) != 0 {
-		t.Errorf("GetAddressBalance().ReceivedSatFromBalances() = %v, want %v", rsa, rswa)
-	}
 
 	ta, err := d.GetTxAddresses(dbtestdata.TxidS2T1)
 	if err != nil {
 		t.Fatal(err)
 	}
+	// spends an asset (activate) output to another output
 	taw := &bchain.TxAddresses{
 		Version: 131,
 		Height: 182,
 		Inputs: []bchain.TxInput{
 			{
-				// input won't be found because there is many transactions within the range of blocks we chose to isolate asset data for this test
 				ValueSat: *dbtestdata.SatZero,
 				AssetInfo: bchain.AssetInfo{AssetGuid: 720034467, ValueSat: dbtestdata.SatZero},
 			},
 		},
 		Outputs: []bchain.TxOutput{
 			{
-				AddrDesc: addressToAddrDesc(dbtestdata.AddrS3, d.chainParser),
+				AddrDesc: addressToAddrDesc(dbtestdata.AddrS5, d.chainParser),
 				Spent:    false,
 				ValueSat: *dbtestdata.SatS2T1A1,
 				AssetInfo: bchain.AssetInfo{AssetGuid: 720034467, ValueSat: dbtestdata.SatZero},
