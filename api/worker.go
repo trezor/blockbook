@@ -195,6 +195,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 						if err != nil {
 							glog.Errorf("getAddressesFromVout error %v, vout %+v", err, vout)
 						}
+						vin.AssetInfo = &vout.AssetInfo
 					}
 				} else {
 					if len(tas.Outputs) > int(vin.Vout) {
@@ -205,12 +206,12 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 						if err != nil {
 							glog.Errorf("output.Addresses error %v, tx %v, output %v", err, bchainVin.Txid, i)
 						}
+						vin.AssetInfo = &output.AssetInfo
 					}
 				}
 				if vin.ValueSat != nil {
 					valInSat.Add(&valInSat, (*big.Int)(vin.ValueSat))
-					if bchainVin.AssetInfo.AssetGuid > 0 {
-						vin.AssetInfo = &bchainVin.AssetInfo
+					if vin.AssetInfo != nil && vin.AssetInfo.AssetGuid > 0 {
 						if mapTTS == nil {
 							mapTTS = map[uint32]*bchain.TokenTransferSummary{}
 						}

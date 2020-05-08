@@ -646,7 +646,7 @@ func (p *SyscoinParser) PackTxAddresses(ta *bchain.TxAddresses, buf []byte, varB
 	buf = append(buf, varBuf[:l]...)
 	for i := range ta.Inputs {
 		ti := &ta.Inputs[i]
-		buf = p.BitcoinParser.AppendTxInput(&ti, buf, varBuf)
+		buf = p.BitcoinParser.AppendTxInput(ti, buf, varBuf)
 		buf = p.AppendAssetInfo(&ti.AssetInfo, buf, varBuf)
 	}
 	l = p.BaseParser.PackVaruint(uint(len(ta.Outputs)), varBuf)
