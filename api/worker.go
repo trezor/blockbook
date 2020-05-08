@@ -215,7 +215,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 				}
 				if vin.ValueSat != nil {
 					valInSat.Add(&valInSat, (*big.Int)(vin.ValueSat))
-					if vin.AssetInfo.AssetGuid > 0 {
+					if vin.AssetInfo != nil && vin.AssetInfo.AssetGuid > 0 {
 						if mapTTS == nil {
 							mapTTS = map[uint32]*bchain.TokenTransferSummary{}
 						}
