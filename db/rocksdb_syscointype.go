@@ -162,20 +162,11 @@ func (d *RocksDB) ConnectAssetOutput(addrDescData *bchain.AddressDescriptor, add
 	return nil
 }
 
-func (d *RocksDB) DisconnectAllocationOutput(assetBalances map[uint32]*bchain.AssetBalance, isActivate bool,  version int32, btxID []byte, assets map[uint32]*bchain.Asset,  assetInfo *bchain.AssetInfo, assetFoundInTx func(asset uint32, btxID []byte) bool) error {
-	var balanceAsset *bchain.AssetBalance
-	if assetBalances != nil {
-		var ok bool
-		balanceAsset, ok = assetBalances[assetInfo.AssetGuid]
-		if !ok {
-			return errors.New("DisconnectAllocationOutput asset balance not found")
-		}
-	}
+func (d *RocksDB) DisconnectAllocationOutput(assetBalances map[uint32]*bchain.AssetBalance, balanceAsset *bchain.AssetBalance, isActivate bool,  version int32, btxID []byte, assets map[uint32]*bchain.Asset,  assetInfo *bchain.AssetInfo, assetFoundInTx func(asset uint32, btxID []byte) bool) error {
 	dBAsset, err := d.GetAsset(assetInfo.AssetGuid, &assets)
 	if dBAsset == nil || err != nil {
 		return err
 	}
-	
 	
 	balanceAsset.BalanceSat.Sub(balanceAsset.BalanceSat, assetInfo.ValueSat)
 	if balanceAsset.BalanceSat.Sign() < 0 {

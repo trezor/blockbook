@@ -1127,7 +1127,11 @@ func (d *RocksDB) disconnectTxAddressesOutputs(wb *gorocksdb.WriteBatch, btxID [
 						if balance.AssetBalances == nil {
 							return errors.New("DisconnectSyscoinOutput asset balances was nil but not expected to be")
 						}
-						err := d.DisconnectAllocationOutput(balance.AssetBalances, isActivate, txa.Version, btxID, assets, &t.AssetInfo, assetFoundInTx)
+						balanceAsset, ok := balance.AssetBalances[t.AssetInfo.AssetGuid]
+						if !ok {
+							return errors.New("DisconnectSyscoinOutput asset balance not found")
+						}
+						err := d.DisconnectAllocationOutput(balance.AssetBalances, balanceAsset, isActivate, txa.Version, btxID, assets, &t.AssetInfo, assetFoundInTx)
 						if err != nil {
 							glog.Warningf("rocksdb: DisconnectSyscoinOutput: tx %v, output %v, error %v", btxID, t, err)
 						}

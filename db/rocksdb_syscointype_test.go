@@ -252,17 +252,17 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 	
 
 	// get transactions for various addresses / low-high ranges
-	verifyGetTransactions(t, d, dbtestdata.AddrS3, 0, 1000000, []txidIndex{
-		{dbtestdata.TxidS2T1, 0},
-		{dbtestdata.TxidS1T1, 2},
+	verifyGetTransactions(t, d, dbtestdata.AddrS2, 0, 1000000, []txidIndex{
+		{dbtestdata.TxidS2T1, ^0},
+		{dbtestdata.TxidS1T1, 0},
 	}, nil)
-	verifyGetTransactions(t, d, dbtestdata.AddrS3, 171, 171, []txidIndex{
-		{dbtestdata.TxidS1T1, 2},
+	verifyGetTransactions(t, d, dbtestdata.AddrS2, 171, 171, []txidIndex{
+		{dbtestdata.TxidS1T1, 9},
 	}, nil)
-	verifyGetTransactions(t, d, dbtestdata.AddrS3, 182, 1000000, []txidIndex{
-		{dbtestdata.TxidS2T1, 0},
+	verifyGetTransactions(t, d, dbtestdata.AddrS2, 182, 1000000, []txidIndex{
+		{dbtestdata.TxidS2T1, ^0},
 	}, nil)
-	verifyGetTransactions(t, d, dbtestdata.AddrS3, 500000, 1000000, []txidIndex{}, nil)
+	verifyGetTransactions(t, d, dbtestdata.AddrS2, 500000, 1000000, []txidIndex{}, nil)
 	verifyGetTransactions(t, d, dbtestdata.AddrS1, 0, 1000000, []txidIndex{
 		{dbtestdata.TxidS2T0, 0},
 		{dbtestdata.TxidS1T0, 0},
