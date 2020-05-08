@@ -131,8 +131,8 @@ func verifyAfterSyscoinTypeBlock2(t *testing.T, d *RocksDB) {
 		{addressKeyHex(dbtestdata.AddrS1, 171, d), txIndexesHexSyscoin(dbtestdata.TxidS1T0, bchain.BaseCoinMask, []int32{0}, d), nil},
 		{addressKeyHex(dbtestdata.AddrS2, 171, d), txIndexesHexSyscoin(dbtestdata.TxidS1T1, bchain.AssetActivateMask, []int32{0}, d), nil},
 		{addressKeyHex(dbtestdata.AddrS3, 171, d), txIndexesHexSyscoin(dbtestdata.TxidS1T1, bchain.BaseCoinMask, []int32{2}, d), nil},
-		{addressKeyHex(dbtestdata.AddrS4, 182, d), txIndexesHexSyscoin(dbtestdata.TxidS2T0, bchain.BaseCoinMask, []int32{0}, d), nil},
 		{addressKeyHex(dbtestdata.AddrS2, 182, d), txIndexesHexSyscoin(dbtestdata.TxidS2T1, bchain.AssetActivateMask, []int32{^0}, d), nil},
+		{addressKeyHex(dbtestdata.AddrS4, 182, d), txIndexesHexSyscoin(dbtestdata.TxidS2T0, bchain.BaseCoinMask, []int32{0}, d), nil},
 		{addressKeyHex(dbtestdata.AddrS5, 182, d), txIndexesHexSyscoin(dbtestdata.TxidS2T1, bchain.AssetUpdateMask, []int32{0}, d), nil},
 	}); err != nil {
 		{
