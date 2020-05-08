@@ -80,8 +80,8 @@ func verifyAfterSyscoinTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect bool
 		},
 		{
 			dbtestdata.AddressToPubKeyHex(dbtestdata.AddrS3, d.chainParser),
-			"01" + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatS1T1A1, d) +
-			"00" + dbtestdata.TxidS1T1 + varuintToHex(2) + varuintToHex(171) + bigintToHex(dbtestdata.SatS1T1A1, d) + "00",
+			"01" + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatS1T1A2, d) +
+			"00" + dbtestdata.TxidS1T1 + varuintToHex(2) + varuintToHex(171) + bigintToHex(dbtestdata.SatS1T1A2, d) + "00",
 			nil,
 		},	
 	}); err != nil {
@@ -149,8 +149,8 @@ func verifyAfterSyscoinTypeBlock2(t *testing.T, d *RocksDB) {
 		},
 		{
 			dbtestdata.AddressToPubKeyHex(dbtestdata.AddrS3, d.chainParser),
-			"01" + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatS1T1A1, d) +
-			"00" + dbtestdata.TxidS1T1 + varuintToHex(2) + varuintToHex(171) + bigintToHex(dbtestdata.SatS1T1A1, d) + "00",
+			"01" + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatS1T1A2, d) +
+			"00" + dbtestdata.TxidS1T1 + varuintToHex(2) + varuintToHex(171) + bigintToHex(dbtestdata.SatS1T1A2, d) + "00",
 			nil,
 		},	
 		{
