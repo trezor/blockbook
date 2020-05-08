@@ -50,8 +50,8 @@ type ScriptSig struct {
 	Hex string `json:"hex"`
 }
 type AssetInfo struct {
-	AssetGuid uint32  `json:"assetGuid"`
-	ValueSat *big.Int `json:"valueSat"`
+	AssetGuid uint32  `json:"assetGuid,omitempty"`
+	ValueSat *big.Int `json:"valueSat,omitempty"`
 	ValueStr string   `json:"valueStr,omitempty"`
 }
 
