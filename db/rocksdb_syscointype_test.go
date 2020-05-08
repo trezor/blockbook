@@ -132,7 +132,7 @@ func verifyAfterSyscoinTypeBlock2(t *testing.T, d *RocksDB) {
 		{addressKeyHex(dbtestdata.AddrS2, 171, d), txIndexesHexSyscoin(dbtestdata.TxidS1T1, bchain.AssetActivateMask, []int32{0}, d), nil},
 		{addressKeyHex(dbtestdata.AddrS3, 171, d), txIndexesHexSyscoin(dbtestdata.TxidS1T1, bchain.BaseCoinMask, []int32{2}, d), nil},
 		{addressKeyHex(dbtestdata.AddrS2, 182, d), txIndexesHexSyscoin(dbtestdata.TxidS2T1, bchain.AssetActivateMask, []int32{^0}, d), nil},
-		{addressKeyHex(dbtestdata.AddrS4, 182, d), txIndexesHexSyscoin(dbtestdata.TxidS2T0, bchain.BaseCoinMask, []int32{0}, d), nil},
+		{addressKeyHex(dbtestdata.AddrS1, 182, d), txIndexesHexSyscoin(dbtestdata.TxidS2T0, bchain.BaseCoinMask, []int32{0}, d), nil},
 		{addressKeyHex(dbtestdata.AddrS5, 182, d), txIndexesHexSyscoin(dbtestdata.TxidS2T1, bchain.AssetUpdateMask, []int32{0}, d), nil},
 	}); err != nil {
 		{
@@ -141,11 +141,14 @@ func verifyAfterSyscoinTypeBlock2(t *testing.T, d *RocksDB) {
 	}
 	addedAmount := new(big.Int).Set(dbtestdata.SatS1T1A2)
 	addedAmount.Add(addedAmount, dbtestdata.SatS2T1A1)
+	S1addedAmount := new(big.Int).Set(dbtestdata.SatS1T0A1)
+	S1addedAmount.Add(addedAmount, dbtestdata.SatS2T0A1)
 	if err := checkColumn(d, cfAddressBalance, []keyPair{
 		{
 			dbtestdata.AddressToPubKeyHex(dbtestdata.AddrS1, d.chainParser),
-			"01" + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatS1T0A1, d) +
-			/*assetbalances*/"00" +	dbtestdata.TxidS1T0 + varuintToHex(0) + varuintToHex(171) + bigintToHex(dbtestdata.SatS1T0A1, d) + /*asset info*/"00",
+			"02" + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(S1addedAmount, d) +
+			/*assetbalances*/"00" +	dbtestdata.TxidS1T0 + varuintToHex(0) + varuintToHex(171) + bigintToHex(dbtestdata.SatS1T0A1, d) + 
+			dbtestdata.TxidS2T0 + varuintToHex(0) + varuintToHex(182) + bigintToHex(dbtestdata.SatS2T0A1, d) + /*asset info*/"00",
 			nil,
 		},
 		{
@@ -157,12 +160,6 @@ func verifyAfterSyscoinTypeBlock2(t *testing.T, d *RocksDB) {
 			dbtestdata.AddressToPubKeyHex(dbtestdata.AddrS3, d.chainParser),
 			"01" + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatS1T1A2, d) +
 			"00" + dbtestdata.TxidS1T1 + varuintToHex(2) + varuintToHex(171) + bigintToHex(dbtestdata.SatS1T1A2, d) + "00",
-			nil,
-		},	
-		{
-			dbtestdata.AddressToPubKeyHex(dbtestdata.AddrS4, d.chainParser),
-			"01" + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatS2T0A1, d) +
-			"00" + dbtestdata.TxidS2T0 + varuintToHex(0) + varuintToHex(182) + bigintToHex(dbtestdata.SatS2T0A1, d) + "00",
 			nil,
 		},
 		// asset update. asset activate (AddrS2), should be spent
@@ -267,7 +264,8 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 		{dbtestdata.TxidS2T1, 0},
 	}, nil)
 	verifyGetTransactions(t, d, dbtestdata.AddrS3, 500000, 1000000, []txidIndex{}, nil)
-	verifyGetTransactions(t, d, dbtestdata.AddrS4, 0, 1000000, []txidIndex{
+	verifyGetTransactions(t, d, dbtestdata.AddrS1, 0, 1000000, []txidIndex{
+		{dbtestdata.TxidS1T0, 0},
 		{dbtestdata.TxidS2T0, 0},
 	}, nil)
 	verifyGetTransactions(t, d, "SgBVZhGLjqRz8ufXFwLhZvXpUMKqoduBad", 500000, 1000000, []txidIndex{}, errors.New("checksum mismatch"))

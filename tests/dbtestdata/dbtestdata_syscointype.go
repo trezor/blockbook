@@ -17,7 +17,6 @@ const (
 	AddrS1 = "sys1qyz3lpck0d408ukzfp8p95q7s79traduvk5raga"
 	AddrS2 = "sys1quecv5gwlkakghzkf0a95m83zy68dpt6z90yg9w"
 	AddrS3 = "sys1qxxsw663zfufvvelygzrykt0d0gsaku8kz8pn3a"
-	AddrS4 = "sys1qyz3lpck0d408ukzfp8p95q7s79traduvk5raga"
 	AddrS5 = "sys1q66dnt6mle02m5v8lckym8e53utmx6has5qrl8q"
 	TxidS1T0OutputReturn = "6a24aa21a9edba34b1ff320a4a633d3ec439863183244049aca52ca18305cb7d87e2b47bcabb" // auxpow commitment in coinbase
 	TxidS1T1OutputReturn = "6a3401a3daea2a01000008001d7b226465736372697074696f6e223a227075626c696376616c7565227d034341541f00001f64648668"
@@ -141,7 +140,7 @@ func GetTestSyscoinTypeBlock2(parser bchain.BlockChainParser) *bchain.Block {
 					{
 						N: 0,
 						ScriptPubKey: bchain.ScriptPubKey{
-							Hex: AddressToPubKeyHex(AddrS4, parser),
+							Hex: AddressToPubKeyHex(AddrS1, parser),
 						},
 						ValueSat: *SatS2T0A1,
 					},
