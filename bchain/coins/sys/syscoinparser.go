@@ -665,7 +665,7 @@ func (p *SyscoinParser) PackTxAddresses(ta *bchain.TxAddresses, buf []byte, varB
 	// pack version info for syscoin to detect sysx tx types
 	l := p.BaseParser.PackVaruint(uint(ta.Version), varBuf)
 	buf = append(buf, varBuf[:l]...)
-	l := p.BaseParser.PackVaruint(uint(ta.Height), varBuf)
+	l = p.BaseParser.PackVaruint(uint(ta.Height), varBuf)
 	buf = append(buf, varBuf[:l]...)
 	l = p.BaseParser.PackVaruint(uint(len(ta.Inputs)), varBuf)
 	buf = append(buf, varBuf[:l]...)
@@ -689,8 +689,9 @@ func (p *SyscoinParser) UnpackTxAddresses(buf []byte) (*bchain.TxAddresses, erro
 	// unpack version info for syscoin to detect sysx tx types
 	version, l := p.BaseParser.UnpackVaruint(buf)
 	ta.Version = int32(version)
-	height, l := p.BaseParser.UnpackVaruint(buf)
+	height, ll := p.BaseParser.UnpackVaruint(buf[l:])
 	ta.Height = uint32(height)
+	l += ll
 	inputs, ll := p.BaseParser.UnpackVaruint(buf[l:])
 	l += ll
 	ta.Inputs = make([]bchain.TxInput, inputs)
