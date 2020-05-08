@@ -361,10 +361,10 @@ func (p *BaseParser) GetAllocationFromTx(tx *Tx) (*AssetAllocationType, error) {
 func (p *BaseParser) LoadAssets(tx *Tx) error {
 	return errors.New("Not supported")
 }
-func (p *BaseParser) AppendAssetInfo(assetInfo *AssetInfo, buf []byte, varBuf []byte, details bool) []byte  {
+func (p *BaseParser) AppendAssetInfo(assetInfo *AssetInfo, buf []byte, varBuf []byte) []byte  {
 	return nil
 }
-func (p *BaseParser) UnpackAssetInfo(assetInfo *AssetInfo, buf []byte, details bool) int  {
+func (p *BaseParser) UnpackAssetInfo(assetInfo *AssetInfo, buf []byte) int  {
 	return 0
 }
 func (p *BaseParser) PackSyscoinBurnToEthereum(a *SyscoinBurnToEthereumType, buf []byte) []byte {

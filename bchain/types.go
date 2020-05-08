@@ -761,8 +761,8 @@ type BlockChainParser interface {
 	GetAssetFromData(sptData []byte) (*AssetType, error)
 	GetAllocationFromTx(tx *Tx) (*AssetAllocationType, error)
 	LoadAssets(tx *Tx) error
-	AppendAssetInfo(assetInfo *AssetInfo, buf []byte, varBuf []byte, details bool) []byte
-	UnpackAssetInfo(assetInfo *AssetInfo, buf []byte, details bool) int
+	AppendAssetInfo(assetInfo *AssetInfo, buf []byte, varBuf []byte) []byte
+	UnpackAssetInfo(assetInfo *AssetInfo, buf []byte) int
 	PackSyscoinBurnToEthereum(a *SyscoinBurnToEthereumType, buf []byte) []byte
 	UnpackSyscoinBurnToEthereum(a *SyscoinBurnToEthereumType, buf []byte) int
 	AppendMintSyscoin(a *MintSyscoinType, buf []byte) []byte

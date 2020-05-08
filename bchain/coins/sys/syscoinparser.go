@@ -773,7 +773,7 @@ func (p *SyscoinParser) PackAddrBalance(ab *bchain.AddrBalance, buf, varBuf []by
 			buf = append(buf, varBuf[:l]...)
 			l = p.BaseParser.PackBigint(&utxo.ValueSat, varBuf)
 			buf = append(buf, varBuf[:l]...)
-			buf = p.AppendAssetInfo(&utxo.AssetInfo, buf, varBuf, false)
+			buf = p.AppendAssetInfo(&utxo.AssetInfo, buf, varBuf)
 		}
 	}
 	return buf
