@@ -627,7 +627,7 @@ func (p *SyscoinParser) UnpackAssetInfoDetails(assetInfoDetails *bchain.AssetInf
 	decimals, l := p.BaseParser.UnpackVarint32(buf)
 	numBytes, ll := p.BaseParser.UnpackVaruint(buf[l:])
 	l += ll
-	symbolBytes := append([]byte(nil), buf[l:l+numBytes]...)
+	symbolBytes := append([]byte(nil), buf[l:l+int(numBytes)]...)
 	assetInfoDetails = &bchain.AssetInfoDetails{Symbol: string(symbolBytes), Decimals: decimals}
 	return l + int(numBytes)
 }
