@@ -98,7 +98,7 @@ func verifyAfterSyscoinTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect bool
 			{
 				"000000ab",
 				dbtestdata.TxidS1T0 + "01" + "0000000000000000000000000000000000000000000000000000000000000000" + "00" +
-				dbtestdata.TxidS1T1 + "01" + dbtestdata.TxidS1T1INPUT0 + "02",
+				dbtestdata.TxidS1T1 + "01" + dbtestdata.TxidS1T1INPUT0 + "00",
 				nil,
 			},
 		}
@@ -229,13 +229,13 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 		{
 			"000000b6",
 			dbtestdata.TxidS2T0 + "01" + "0000000000000000000000000000000000000000000000000000000000000000" + "00" +
-			dbtestdata.TxidS2T1 + "01" + dbtestdata.TxidS1T1 + "02",
+			dbtestdata.TxidS2T1 + "01" + dbtestdata.TxidS1T1 + "00",
 			nil,
 		},
 		{
 			"000000ab",
 			dbtestdata.TxidS1T0 + "01" + "0000000000000000000000000000000000000000000000000000000000000000" + "00" +
-			dbtestdata.TxidS1T1 + "01" + dbtestdata.TxidS1T1INPUT0 + "02",
+			dbtestdata.TxidS1T1 + "01" + dbtestdata.TxidS1T1INPUT0 + "00",
 			nil,
 		},
 	}); err != nil {
