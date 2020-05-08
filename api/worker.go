@@ -192,7 +192,6 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 						vout := &otx.Vout[vin.Vout]
 						vin.ValueSat = (*bchain.Amount)(&vout.ValueSat)
 						vin.AddrDesc, vin.Addresses, vin.IsAddress, err = w.getAddressesFromVout(vout)
-						vin.AssetInfo = &vout.AssetInfo
 						if err != nil {
 							glog.Errorf("getAddressesFromVout error %v, vout %+v", err, vout)
 						}
@@ -202,7 +201,6 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 						output := &tas.Outputs[vin.Vout]
 						vin.ValueSat = (*bchain.Amount)(&output.ValueSat)
 						vin.AddrDesc = output.AddrDesc
-						vin.AssetInfo = &output.AssetInfo
 						vin.Addresses, vin.IsAddress, err = output.Addresses(w.chainParser)
 						if err != nil {
 							glog.Errorf("output.Addresses error %v, tx %v, output %v", err, bchainVin.Txid, i)
@@ -211,7 +209,8 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 				}
 				if vin.ValueSat != nil {
 					valInSat.Add(&valInSat, (*big.Int)(vin.ValueSat))
-					if vin.AssetInfo != nil && vin.AssetInfo.AssetGuid > 0 {
+					if bchainVin.AssetInfo.AssetGuid > 0 {
+						vin.AssetInfo = &bchainVin.AssetInfo
 						if mapTTS == nil {
 							mapTTS = map[uint32]*bchain.TokenTransferSummary{}
 						}
@@ -232,7 +231,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 							mapTTS[vin.AssetInfo.AssetGuid] = tts
 						}
 						amountAsset := (*bchain.Amount)(vin.AssetInfo.ValueSat)
-						vin.AssetInfo.ValueStr = amountAsset.DecimalString(tts.Decimals) + " " + dbAsset.AssetObj.Symbol
+						vin.AssetInfo.ValueStr = amountAsset.DecimalString(tts.Decimals) + " " + tts.Symbol
 						(*big.Int)(tts.ValueIn).Add((*big.Int)(tts.ValueIn), (*big.Int)(vin.AssetInfo.ValueSat))
 					}
 				}
@@ -258,13 +257,13 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 		
 		if bchainVout.AssetInfo.AssetGuid > 0 {
 			vout.AssetInfo = &bchainVout.AssetInfo
-			tts, ok := mapTTS[bchainVout.AssetInfo.AssetGuid]
+			tts, ok := mapTTS[vout.AssetInfo.AssetGuid]
 			if !ok {
-				dbAsset, errAsset := w.db.GetAsset(bchainVout.AssetInfo.AssetGuid, nil)
+				dbAsset, errAsset := w.db.GetAsset(vout.AssetInfo.AssetGuid, nil)
 				if errAsset != nil || dbAsset == nil {
 					return nil, errAsset
 				}
-				assetGuid := strconv.FormatUint(uint64(bchainVout.AssetInfo.AssetGuid), 10)
+				assetGuid := strconv.FormatUint(uint64(vout.AssetInfo.AssetGuid), 10)
 				tts = &bchain.TokenTransferSummary{
 					Type:     w.chainParser.GetAssetTypeFromVersion(bchainTx.Version),
 					Token:    assetGuid,
@@ -272,11 +271,11 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 					ValueIn:  (*bchain.Amount)(big.NewInt(0)),
 					Symbol:   dbAsset.AssetObj.Symbol,
 				}
-				mapTTS[bchainVout.AssetInfo.AssetGuid] = tts
+				mapTTS[vout.AssetInfo.AssetGuid] = tts
 			}
-			amountAsset := (*bchain.Amount)(bchainVout.AssetInfo.ValueSat)
-			vout.AssetInfo.ValueStr = amountAsset.DecimalString(tts.Decimals) + " " + dbAsset.AssetObj.Symbol
-			(*big.Int)(tts.Value).Add((*big.Int)(tts.Value), bchainVout.AssetInfo.ValueSat)
+			amountAsset := (*bchain.Amount)(vout.AssetInfo.ValueSat)
+			vout.AssetInfo.ValueStr = amountAsset.DecimalString(tts.Decimals) + " " + tts.Symbol
+			(*big.Int)(tts.Value).Add((*big.Int)(tts.Value), vout.AssetInfo.ValueSat)
 		}
 		
 		vout.Hex = bchainVout.ScriptPubKey.Hex

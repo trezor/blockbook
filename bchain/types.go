@@ -378,6 +378,7 @@ type AddressesMap map[string][]TxIndexes
 type TxInput struct {
 	AddrDesc AddressDescriptor
 	ValueSat big.Int
+	AssetInfo AssetInfo
 }
 
 // BlockInfo holds information about blocks kept in column height

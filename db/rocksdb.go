@@ -658,6 +658,7 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses bch
 			tai.ValueSat = spentOutput.ValueSat
 			mask := bchain.BaseCoinMask
 			if spentOutput.AssetInfo.AssetGuid > 0 {
+				tai.AssetInfo = spentOutput.AssetInfo
 				mask = d.chainParser.GetAssetsMaskFromVersion(ita.Version)
 			}
 			// mark the output as spent in tx
@@ -1019,7 +1020,6 @@ func (d *RocksDB) disconnectTxAddressesInputs(wb *gorocksdb.WriteBatch, btxID []
 	var addrDesc *bchain.AddressDescriptor = nil
 	isAssetTx := d.chainParser.IsAssetTx(txa.Version)
 	var assetGuid uint32 = 0
-	var assetInfo *bchain.AssetInfo = nil
 	for i, t := range txa.Inputs {
 		if len(t.AddrDesc) > 0 {
 			input := &inputs[i]
@@ -1038,7 +1038,6 @@ func (d *RocksDB) disconnectTxAddressesInputs(wb *gorocksdb.WriteBatch, btxID []
 			var inputHeight uint32
 			if sa != nil {
 				sa.Outputs[input.Index].Spent = false
-				assetInfo = &sa.Outputs[input.Index].AssetInfo
 				inputHeight = sa.Height
 			}
 			if d.chainParser.IsAddrDescIndexable(t.AddrDesc) {
@@ -1061,23 +1060,23 @@ func (d *RocksDB) disconnectTxAddressesInputs(wb *gorocksdb.WriteBatch, btxID []
 						Vout:     input.Index,
 						Height:   inputHeight,
 						ValueSat: t.ValueSat,
-						AssetInfo: *assetInfo,
+						AssetInfo: t.AssetInfo,
 					})
-					if assetInfo != nil && assetInfo.AssetGuid > 0 {
+					if t.AssetInfo.AssetGuid > 0 {
 						if balance.AssetBalances == nil {
 							return errors.New("DisconnectSyscoinInput asset balances was nil but not expected to be")
 						}
-						balanceAsset, ok := balance.AssetBalances[assetInfo.AssetGuid]
+						balanceAsset, ok := balance.AssetBalances[t.AssetInfo.AssetGuid]
 						if !ok {
 							return errors.New("DisconnectSyscoinInput asset balance not found")
 						}
-						err := d.DisconnectAllocationInput(balance.AssetBalances, &t.AddrDesc, balanceAsset, btxID, assetInfo, assets, assetFoundInTx)
+						err := d.DisconnectAllocationInput(balance.AssetBalances, &t.AddrDesc, balanceAsset, btxID, &t.AssetInfo, assets, assetFoundInTx)
 						if err != nil {
 							glog.Warningf("rocksdb: DisconnectAllocationInput: tx %v, input %v, error %v", btxID, input, err)
 						}
 						// if asset tx save ownership addrDesc for later disconnect when we replace the addrDesc of asset to this one
-						if isAssetTx && assetInfo.ValueSat.Int64() == 0 {
-							assetGuid = assetInfo.AssetGuid
+						if isAssetTx && t.AssetInfo.ValueSat.Int64() == 0 {
+							assetGuid = t.AssetInfo.AssetGuid
 							addrDesc = &t.AddrDesc
 						}
 					}
