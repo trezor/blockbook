@@ -485,7 +485,7 @@ func (s *SocketIoServer) getAddressHistory(addr []string, opts *addrOpts) (res r
 				if vin.ValueSat != nil {
 					totalSat.Sub(&totalSat, (*big.Int)(vin.ValueSat))
 				}
-				if vin.AssetInfo.AssetGuid > 0 {
+				if vin.AssetInfo != nil && vin.AssetInfo.AssetGuid > 0 {
 					if ahi.Tokens == nil {
 						ahi.Tokens = map[uint32]*api.TokenBalanceHistory{}
 					}
@@ -511,7 +511,7 @@ func (s *SocketIoServer) getAddressHistory(addr []string, opts *addrOpts) (res r
 				if vout.ValueSat != nil {
 					totalSat.Add(&totalSat, (*big.Int)(vout.ValueSat))
 				}
-				if vout.AssetInfo.AssetGuid > 0 {
+				if vout.AssetInfo != nil && vout.AssetInfo.AssetGuid > 0 {
 					if ahi.Tokens == nil {
 						ahi.Tokens = map[uint32]*api.TokenBalanceHistory{}
 					}
@@ -564,7 +564,7 @@ func (s *SocketIoServer) getAssetHistory(asset string, opts *assetOpts) (res res
 		var totalSat big.Int
 		for i := range tx.Vin {
 			vin := &tx.Vin[i]
-			if vin.AssetInfo.AssetGuid == assetGuid {
+			if vin.AssetInfo != nil && vin.AssetInfo.AssetGuid == assetGuid {
 				a, _, err := s.chainParser.GetAddressesFromAddrDesc(vin.AddrDesc)
 				if err != nil {
 					return res, err
@@ -590,7 +590,7 @@ func (s *SocketIoServer) getAssetHistory(asset string, opts *assetOpts) (res res
 		}
 		for i := range tx.Vout {
 			vout := &tx.Vout[i]
-			if vout.AssetInfo.AssetGuid == assetGuid {
+			if vout.AssetInfo != nil && vout.AssetInfo.AssetGuid == assetGuid {
 				a, _, err := s.chainParser.GetAddressesFromAddrDesc(vout.AddrDesc)
 				if err != nil {
 					return res, err
