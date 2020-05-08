@@ -522,7 +522,7 @@ func (p *SyscoinParser) GetAllocationFromTx(tx *bchain.Tx) (*bchain.AssetAllocat
 		if err != nil || len(addrDesc) == 0 || len(addrDesc) > maxAddrDescLen {
 			continue
 		}
-		if(addrDesc[0] == txscript.OP_RETURN) {
+		if addrDesc[0] == txscript.OP_RETURN {
 			script, err := p.GetScriptFromAddrDesc(addrDesc)
 			if err != nil {
 				return nil, err
@@ -631,7 +631,7 @@ func (p *SyscoinParser) UnpackAssetInfoDetails(assetInfoDetails *bchain.AssetInf
 func (p *SyscoinParser) AppendAssetInfo(assetInfo *bchain.AssetInfo, buf []byte, varBuf []byte, details bool) []byte {
 	l := p.BaseParser.PackVaruint(uint(assetInfo.AssetGuid), varBuf)
 	buf = append(buf, varBuf[:l]...)
-	if(assetInfo.AssetGuid > 0) {
+	if assetInfo.AssetGuid > 0 {
 		l = p.BaseParser.PackBigint(assetInfo.ValueSat, varBuf)
 		buf = append(buf, varBuf[:l]...)
 		if details {
@@ -644,7 +644,7 @@ func (p *SyscoinParser) AppendAssetInfo(assetInfo *bchain.AssetInfo, buf []byte,
 func (p *SyscoinParser) UnpackAssetInfo(assetInfo *bchain.AssetInfo, buf []byte, details bool) int {
 	assetGuid, l := p.BaseParser.UnpackVaruint(buf)
 	assetInfo.AssetGuid = uint32(assetGuid)
-	if(assetInfo.AssetGuid > 0) {
+	if assetInfo.AssetGuid > 0 {
 		valueSat, al := p.BaseParser.UnpackBigint(buf[l:])
 		assetInfo.ValueSat = &valueSat
 		l += al
