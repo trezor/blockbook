@@ -236,13 +236,13 @@ func (p *SyscoinParser) TryGetOPReturn(script []byte) []byte {
 		// 1) OP_RETURN <datalen> <data>
 		// 2) OP_RETURN OP_PUSHDATA1 <datalen in 1 byte> <data>
 		// 3) OP_RETURN OP_PUSHDATA2 <datalen in 2 bytes> <data>
-		
+		op := script[1]
 		var data []byte
-		if len(script) < txscript.OP_PUSHDATA1 {
+		if op < txscript.OP_PUSHDATA1 {
 			data = script[2:]
-		} else if script[1] == txscript.OP_PUSHDATA1 && len(script) <= 0xff {
+		} else if op == txscript.OP_PUSHDATA1 {
 			data = script[3:]
-		} else if script[1] == txscript.OP_PUSHDATA2 && len(script) <= 0xffff {
+		} else if op == txscript.OP_PUSHDATA2 {
 			data = script[4:]
 		}
 		return data
