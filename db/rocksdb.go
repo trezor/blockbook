@@ -548,6 +548,7 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses bch
 				continue
 			}
 			tao.AddrDesc = addrDesc
+			tao.AssetInfo = output.AssetInfo
 			if d.chainParser.IsAddrDescIndexable(addrDesc) {
 				strAddrDesc := string(addrDesc)
 				balance, e := balances[strAddrDesc]
@@ -575,8 +576,8 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses bch
 				if !counted {
 					balance.Txs++
 				}
-				if output.AssetInfo.AssetGuid > 0 {
-					assetGuid := output.AssetInfo.AssetGuid
+				if tao.AssetInfo.AssetGuid > 0 {
+					assetGuid := tao.AssetInfo.AssetGuid
 					if balance.AssetBalances == nil {
 						balance.AssetBalances = map[uint32]*bchain.AssetBalance{}
 					}
@@ -585,13 +586,13 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses bch
 						balanceAsset = &bchain.AssetBalance{Transfers: 0, BalanceSat: big.NewInt(0), SentSat: big.NewInt(0)}
 						balance.AssetBalances[assetGuid] = balanceAsset
 					}
-					err = d.ConnectAllocationOutput(block.Height, balanceAsset, isActivate, tx.Version, btxID, &utxo, &output.AssetInfo, assets, txAssets)
+					err = d.ConnectAllocationOutput(block.Height, balanceAsset, isActivate, tx.Version, btxID, &utxo, &tao.AssetInfo, assets, txAssets)
 					if err != nil {
 						glog.Warningf("rocksdb: ConnectAllocationOutput: height %d, tx %v, output %v, error %v", block.Height, tx.Txid, output, err)
 					}
 					// replace asset ownership with this addrDesc in ConnectAssetOutput, this should be the change address
-					if isAssetTx && output.AssetInfo.ValueSat.Int64() == 0 {
-						assetGuid = output.AssetInfo.AssetGuid
+					if isAssetTx && tao.AssetInfo.ValueSat.Int64() == 0 {
+						assetGuid = tao.AssetInfo.AssetGuid
 						addrDescOwner = &addrDesc
 					}
 				}
@@ -656,7 +657,6 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses bch
 			tai.AddrDesc = spentOutput.AddrDesc
 			tai.ValueSat = spentOutput.ValueSat
 			tai.AssetInfo = spentOutput.AssetInfo
-			input.AssetInfo = spentOutput.AssetInfo
 			mask := bchain.BaseCoinMask
 			if tai.AssetInfo.AssetGuid > 0 {
 				mask = d.chainParser.GetAssetsMaskFromVersion(ita.Version)
