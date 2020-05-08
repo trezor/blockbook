@@ -1378,14 +1378,17 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *bchain.A
 								if len(bchainTx.Vin) == 1 && len(bchainTx.Vin[0].Coinbase) > 0 {
 									coinbase = true
 								}
-								utxos = append(utxos, Utxo{
+								utxoTmp := Utxo{
 									Txid:      bchainTx.Txid,
 									Vout:      int32(i),
 									AmountSat: (*bchain.Amount)(&vout.ValueSat),
 									Locktime:  bchainTx.LockTime,
 									Coinbase:  coinbase,
-									AssetInfo: &vout.AssetInfo,
-								})
+								}
+								if utxo.AssetInfo.AssetGuid > 0 {
+									utxoTmp.AssetInfo = &vout.AssetInfo
+								}
+								utxos = append(utxos, utxoTmp)
 								inMempool[bchainTx.Txid] = struct{}{}
 							}
 						}
@@ -1434,15 +1437,18 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *bchain.A
 					}
 					_, e = inMempool[txid]
 					if !e {
-						utxos = append(utxos, Utxo{
+						utxoTmp := Utxo{
 							Txid:          txid,
 							Vout:          utxo.Vout,
 							AmountSat:     (*bchain.Amount)(&utxo.ValueSat),
 							Height:        int(utxo.Height),
 							Confirmations: confirmations,
 							Coinbase:      coinbase,
-							AssetInfo:	   &utxo.AssetInfo,
-						})
+						}
+						if utxo.AssetInfo.AssetGuid > 0 {
+							utxoTmp.AssetInfo = &utxo.AssetInfo
+						}
+						utxos = append(utxos, utxoTmp)
 					}
 				}
 				checksum.Sub(&checksum, &utxo.ValueSat)

@@ -96,7 +96,7 @@ type Vout struct {
 // Contains SyscoinSpecific asset information hex decoded and pertinent to API display
 type AssetSpecific struct {
 	AssetGuid 		uint32
-	AddrStr    	    string
+	AddrStr    	    string `json:"addrStr,omitempty"`
 	Contract 		string
 	Symbol 			string
 	PubData 		map[string]interface{}
@@ -110,7 +110,7 @@ type AssetSpecific struct {
 // Contains SyscoinSpecific assets information when searching for assets
 type AssetsSpecific struct {
 	AssetGuid 		uint32
-	AddrStr    	    string
+	AddrStr    	    string `json:"addrStr,omitempty"`
 	Contract 		string
 	Symbol 			string
 	PubData 		map[string]interface{}
@@ -199,7 +199,7 @@ type AddressFilter struct {
 // Address holds information about address and its transactions
 type Address struct {
 	Paging
-	AddrStr               string                `json:"address"`
+	AddrStr               string                `json:"address,omitempty"`
 	BalanceSat            *bchain.Amount               `json:"balance"`
 	TotalReceivedSat      *bchain.Amount               `json:"totalReceived,omitempty"`
 	TotalSentSat          *bchain.Amount               `json:"totalSent,omitempty"`
