@@ -75,12 +75,12 @@ func (d *RocksDB) DisconnectAssetOutputHelper(asset *bchain.AssetType, dBAsset *
 	return nil
 }
 
-func (d *RocksDB) ConnectAllocationInput(height uint32, balanceAsset *bchain.AssetBalance, isActivate bool, version int32, btxID []byte, assetInfo* bchain.AssetInfo, assets map[uint32]*bchain.Asset, txAssets bchain.TxAssetMap) error {
+func (d *RocksDB) ConnectAllocationInput(addrDesc* bchain.AddressDescriptor, balanceAsset *bchain.AssetBalance, isActivate bool, assetInfo* bchain.AssetInfo, assets map[uint32]*bchain.Asset, blockTxAssetAddresses bchain.AssetAddressMap) error {
 	dBAsset, err := d.GetAsset(assetInfo.AssetGuid, &assets)
 	if !isActivate && err != nil {
 		return err
 	}
-	counted := d.addToAssetsMap(txAssets, assetInfo.AssetGuid, btxID, version, height)
+	counted := d.addToAssetAddressMap(blockTxAssetAddresses, assetInfo.AssetGuid, btxID, addrDesc)
 	if !counted {
 		balanceAsset.Transfers++
 	}
@@ -95,7 +95,7 @@ func (d *RocksDB) ConnectAllocationInput(height uint32, balanceAsset *bchain.Ass
 	return nil
 }
 
-func (d *RocksDB) ConnectAllocationOutput(height uint32, balanceAsset *bchain.AssetBalance, isActivate bool, version int32, btxID []byte, assetInfo* bchain.AssetInfo, assets map[uint32]*bchain.Asset, txAssets bchain.TxAssetMap) error {
+func (d *RocksDB) ConnectAllocationOutput(addrDesc* bchain.AddressDescriptor, height uint32, balanceAsset *bchain.AssetBalance, isActivate bool, version int32, btxID []byte, assetInfo* bchain.AssetInfo, assets map[uint32]*bchain.Asset, txAssets bchain.TxAssetMap, blockTxAssetAddresses bchain.AssetAddressMap) error {
 	dBAsset, err := d.GetAsset(assetInfo.AssetGuid, &assets)
 	if !isActivate && err != nil {
 		return err
@@ -105,6 +105,10 @@ func (d *RocksDB) ConnectAllocationOutput(height uint32, balanceAsset *bchain.As
 		if dBAsset != nil {
 			dBAsset.Transactions++
 		}
+	}
+	// asset guid + txid + address of output/input must match for counted to be true
+	counted = d.addToAssetAddressMap(blockTxAssetAddresses, assetInfo.AssetGuid, btxID, addrDesc)
+	if !counted {
 		balanceAsset.Transfers++
 	}
 	if dBAsset != nil {
@@ -162,7 +166,7 @@ func (d *RocksDB) ConnectAssetOutput(addrDescData *bchain.AddressDescriptor, add
 	return nil
 }
 
-func (d *RocksDB) DisconnectAllocationOutput(assetBalances map[uint32]*bchain.AssetBalance, balanceAsset *bchain.AssetBalance, isActivate bool,  version int32, btxID []byte, assets map[uint32]*bchain.Asset,  assetInfo *bchain.AssetInfo, assetFoundInTx func(asset uint32, btxID []byte) bool) error {
+func (d *RocksDB) DisconnectAllocationOutput(assetBalances map[uint32]*bchain.AssetBalance, addrDesc *bchain.AddressDescriptor, balanceAsset *bchain.AssetBalance, isActivate bool,  version int32, btxID []byte, assets map[uint32]*bchain.Asset,  assetInfo *bchain.AssetInfo, blockTxAssetAddresses bchain.AssetAddressMap, assetFoundInTx func(asset uint32, btxID []byte) bool) error {
 	dBAsset, err := d.GetAsset(assetInfo.AssetGuid, &assets)
 	if dBAsset == nil || err != nil {
 		return err
@@ -185,14 +189,15 @@ func (d *RocksDB) DisconnectAllocationOutput(assetBalances map[uint32]*bchain.As
 	exists := assetFoundInTx(assetInfo.AssetGuid, btxID)
 	if !exists {
 		dBAsset.Transactions--
+	}
+	counted := d.addToAssetAddressMap(blockTxAssetAddresses, assetInfo.AssetGuid, btxID, addrDesc)
+	if !counted {
 		balanceAsset.Transfers--
 	}
 	if balanceAsset.Transfers <= 0 || isActivate {
 		balanceAsset.Transfers = 0
 		// should remove this asset balance if no more transfers
 		delete(assetBalances, assetInfo.AssetGuid)
-		// vout AssetGuid should be set to 0 so it won't serialize asset info or use asset info anywhere in API
-		assetInfo.AssetGuid = 0
 	}
 	assets[assetInfo.AssetGuid] = dBAsset
 	return nil
@@ -223,7 +228,7 @@ func (d *RocksDB) DisconnectAssetOutput(addrDesc *bchain.AddressDescriptor, isAc
 	assets[assetGuid] = dBAsset
 	return nil
 }
-func (d *RocksDB) DisconnectAllocationInput(assetBalances map[uint32]*bchain.AssetBalance, addrDesc *bchain.AddressDescriptor, balanceAsset *bchain.AssetBalance,  btxID []byte, assetInfo *bchain.AssetInfo, assets map[uint32]*bchain.Asset, assetFoundInTx func(asset uint32, btxID []byte) bool) error {
+func (d *RocksDB) DisconnectAllocationInput(assetBalances map[uint32]*bchain.AssetBalance, addrDesc *bchain.AddressDescriptor, balanceAsset *bchain.AssetBalance,  btxID []byte, assetInfo *bchain.AssetInfo, assets map[uint32]*bchain.Asset, blockTxAssetAddresses bchain.AssetAddressMap, assetFoundInTx func(asset uint32, btxID []byte) bool) error {
 	dBAsset, err := d.GetAsset(assetInfo.AssetGuid, &assets)
 	if dBAsset == nil || err != nil {
 		return err
@@ -233,16 +238,15 @@ func (d *RocksDB) DisconnectAllocationInput(assetBalances map[uint32]*bchain.Ass
 	if balanceAsset.SentSat.Sign() < 0 {
 		balanceAsset.SentSat.SetInt64(0)
 	}
-	exists := assetFoundInTx(assetInfo.AssetGuid, btxID)
-	if !exists {
+	assetFoundInTx(assetInfo.AssetGuid, btxID)
+	counted := d.addToAssetAddressMap(blockTxAssetAddresses, assetInfo.AssetGuid, btxID, addrDesc)
+	if !counted {
 		balanceAsset.Transfers--
 	}
 	if balanceAsset.Transfers <= 0 {
 		balanceAsset.Transfers = 0
 		// should remove this asset balance if no more transfers
 		delete(assetBalances, assetInfo.AssetGuid)
-		// vout AssetGuid should be set to 0 so it won't serialize asset info or use asset info anywhere in API
-		assetInfo.AssetGuid = 0
 	}	
 	assets[assetInfo.AssetGuid] = dBAsset
 	return nil
@@ -436,5 +440,22 @@ func (d *RocksDB) addToAssetsMap(txassets bchain.TxAssetMap, assetGuid uint32, b
 	}
 	at.Txs = append(at.Txs, &bchain.TxAssetIndex{Type: d.chainParser.GetAssetsMaskFromVersion(version), BtxID: btxID})
 	at.Height = height
+	return false
+}
+// to control Transfer add/remove
+func (d *RocksDB) addToAssetAddressMap(txassetAddresses bchain.TxAssetAddressMap, assetGuid uint32, btxID []byte, addrDesc *bchain.AddressDescriptor) bool {
+	at, found := txassetAddresses[assetGuid]
+	if found {
+		// if the tx is already in the slice
+		for _, t := range at.Txs {
+			if bytes.Equal(btxID, t.BtxID) && bytes.Equal(addrDesc, t.AddrDesc) {
+				return true
+			}
+		}
+	} else {
+		at = &bchain.TxAssetAddress{Txs: []*bchain.TxAssetAddressIndex{}}
+		txassetAddresses[assetGuid] = at
+	}
+	at.Txs = append(at.Txs, &bchain.TxAssetAddressIndex{AddrDesc: *addrDesc, BtxID: btxID})
 	return false
 }

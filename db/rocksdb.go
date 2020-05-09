@@ -509,6 +509,7 @@ func (d *RocksDB) GetAndResetConnectBlockStats() string {
 func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses bchain.AddressesMap, txAddressesMap map[string]*bchain.TxAddresses, balances map[string]*bchain.AddrBalance, assets map[uint32]*bchain.Asset, txAssets bchain.TxAssetMap) error {
 	blockTxIDs := make([][]byte, len(block.Txs))
 	blockTxAddresses := make([]*bchain.TxAddresses, len(block.Txs))
+	blockTxAssetAddresses := make(bchain.TxAssetAddressMap)
 	// first process all outputs so that inputs can refer to txs in this block
 	for txi := range block.Txs {
 		var addrDescData *bchain.AddressDescriptor = nil
@@ -587,7 +588,7 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses bch
 						balanceAsset = &bchain.AssetBalance{Transfers: 0, BalanceSat: big.NewInt(0), SentSat: big.NewInt(0)}
 						balance.AssetBalances[assetGuid] = balanceAsset
 					}
-					err = d.ConnectAllocationOutput(block.Height, balanceAsset, isActivate, tx.Version, btxID, &tao.AssetInfo, assets, txAssets)
+					err = d.ConnectAllocationOutput(&addrDesc, block.Height, balanceAsset, isActivate, tx.Version, btxID, &tao.AssetInfo, assets, txAssets, blockTxAssetAddresses)
 					if err != nil {
 						glog.Warningf("rocksdb: ConnectAllocationOutput: height %d, tx %v, output %v, error %v", block.Height, tx.Txid, output, err)
 					}
@@ -705,7 +706,7 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses bch
 						balanceAsset = &bchain.AssetBalance{Transfers: 0, BalanceSat: big.NewInt(0), SentSat: big.NewInt(0)}
 						balance.AssetBalances[spentOutput.AssetInfo.AssetGuid] = balanceAsset
 					}
-					err := d.ConnectAllocationInput(block.Height, balanceAsset, isActivate, tx.Version, btxID, &spentOutput.AssetInfo, assets, txAssets)
+					err := d.ConnectAllocationInput(&spentOutput.AddrDesc, balanceAsset, isActivate, &spentOutput.AssetInfo, assets, txAssets, blockTxAssetAddresses)
 					if err != nil {
 						glog.Warningf("rocksdb: ConnectAllocationInput: height %d, tx %v, input %v, error %v", block.Height, btxID, input, err)
 					}
@@ -1014,7 +1015,7 @@ func (d *RocksDB) disconnectTxAddressesInputs(wb *gorocksdb.WriteBatch, btxID []
 	getAddressBalance func(addrDesc bchain.AddressDescriptor) (*bchain.AddrBalance, error),
 	addressFoundInTx func(addrDesc bchain.AddressDescriptor, btxID []byte) bool,
 	assetFoundInTx func(asset uint32, btxID []byte) bool,
-	assets map[uint32]*bchain.Asset) error {
+	assets map[uint32]*bchain.Asset, blockTxAssetAddresses bchain.TxAssetAddressMap) error {
 	var err error
 	var balance *bchain.AddrBalance
 	var addrDesc *bchain.AddressDescriptor = nil
@@ -1070,7 +1071,7 @@ func (d *RocksDB) disconnectTxAddressesInputs(wb *gorocksdb.WriteBatch, btxID []
 						if !ok {
 							return errors.New("DisconnectSyscoinInput asset balance not found")
 						}
-						err := d.DisconnectAllocationInput(balance.AssetBalances, &t.AddrDesc, balanceAsset, btxID, &t.AssetInfo, assets, assetFoundInTx)
+						err := d.DisconnectAllocationInput(balance.AssetBalances, &t.AddrDesc, balanceAsset, btxID, &t.AssetInfo, assets, blockTxAssetAddresses, assetFoundInTx)
 						if err != nil {
 							glog.Warningf("rocksdb: DisconnectAllocationInput: tx %v, input %v, error %v", btxID, input, err)
 						}
@@ -1100,7 +1101,7 @@ func (d *RocksDB) disconnectTxAddressesOutputs(wb *gorocksdb.WriteBatch, btxID [
 	getAddressBalance func(addrDesc bchain.AddressDescriptor) (*bchain.AddrBalance, error),
 	addressFoundInTx func(addrDesc bchain.AddressDescriptor, btxID []byte) bool,
 	assetFoundInTx func(asset uint32, btxID []byte) bool,
-	assets map[uint32]*bchain.Asset) error {
+	assets map[uint32]*bchain.Asset, blockTxAssetAddresses bchain.TxAssetAddressMap) error {
 	var addrDesc *bchain.AddressDescriptor = nil
 	isActivate := d.chainParser.IsAssetActivateTx(txa.Version)
 	isAssetTx := d.chainParser.IsAssetTx(txa.Version)
@@ -1131,7 +1132,7 @@ func (d *RocksDB) disconnectTxAddressesOutputs(wb *gorocksdb.WriteBatch, btxID [
 						if !ok {
 							return errors.New("DisconnectSyscoinOutput asset balance not found")
 						}
-						err := d.DisconnectAllocationOutput(balance.AssetBalances, balanceAsset, isActivate, txa.Version, btxID, assets, &t.AssetInfo, assetFoundInTx)
+						err := d.DisconnectAllocationOutput(balance.AssetBalances, &t.AddrDesc, balanceAsset, isActivate, txa.Version, btxID, assets, &t.AssetInfo, blockTxAssetAddresses, assetFoundInTx)
 						if err != nil {
 							glog.Warningf("rocksdb: DisconnectSyscoinOutput: tx %v, output %v, error %v", btxID, t, err)
 						}
@@ -1163,7 +1164,7 @@ func (d *RocksDB) disconnectBlock(height uint32, blockTxs []bchain.BlockTxs) err
 	txAddressesToUpdate := make(map[string]*bchain.TxAddresses)
 	txAddresses := make([]*bchain.TxAddresses, len(blockTxs))
 	txsToDelete := make(map[string]struct{})
-
+	blockTxAssetAddresses := make(bchain.TxAssetAddressMap)
 	balances := make(map[string]*bchain.AddrBalance)
 	assets := make(map[uint32]*bchain.Asset)
 	getAddressBalance := func(addrDesc bchain.AddressDescriptor) (*bchain.AddrBalance, error) {
@@ -1230,7 +1231,7 @@ func (d *RocksDB) disconnectBlock(height uint32, blockTxs []bchain.BlockTxs) err
 			continue
 		}
 		txAddresses[i] = txa
-		if err := d.disconnectTxAddressesInputs(wb, btxID, blockTxs[i].Inputs, txa, txAddressesToUpdate, getAddressBalance, addressFoundInTx, assetFoundInTx, assets); err != nil {
+		if err := d.disconnectTxAddressesInputs(wb, btxID, blockTxs[i].Inputs, txa, txAddressesToUpdate, getAddressBalance, addressFoundInTx, assetFoundInTx, assets, blockTxAssetAddresses); err != nil {
 			return err
 		}
 	}
@@ -1240,7 +1241,7 @@ func (d *RocksDB) disconnectBlock(height uint32, blockTxs []bchain.BlockTxs) err
 		if txa == nil {
 			continue
 		}
-		if err := d.disconnectTxAddressesOutputs(wb, btxID, txa, getAddressBalance, addressFoundInTx, assetFoundInTx, assets); err != nil {
+		if err := d.disconnectTxAddressesOutputs(wb, btxID, txa, getAddressBalance, addressFoundInTx, assetFoundInTx, assets, blockTxAssetAddresses); err != nil {
 			return err
 		}
 	}

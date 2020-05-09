@@ -597,6 +597,16 @@ type TxAsset struct {
 }
 type TxAssetMap map[string]*TxAsset
 
+// used to store all unique txid/address tuples related to an asset
+type TxAssetAddressIndex struct {
+	addrDesc   AddressDescriptor
+	BtxID      []byte
+}
+type TxAssetAddress struct {
+	Txs       []*TxAssetAddressIndex
+}
+type TxAssetAddressMap map[uint32]*TxAssetAddress
+
 // TxAddresses stores transaction inputs and outputs with amounts
 type TxAddresses struct {
 	Version int32
