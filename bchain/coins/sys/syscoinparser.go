@@ -686,6 +686,7 @@ func (p *SyscoinParser) UnpackTxAddresses(buf []byte) (*bchain.TxAddresses, erro
 		assetInfoFlag, ll := p.BaseParser.UnpackVaruint(buf[l:])
 		l += ll
 		if assetInfoFlag == 1 {
+			ti.AssetInfo = &bchain.AssetInfo{}
 			l += p.UnpackAssetInfo(ti.AssetInfo, buf[l:])
 		}
 	}
@@ -698,6 +699,7 @@ func (p *SyscoinParser) UnpackTxAddresses(buf []byte) (*bchain.TxAddresses, erro
 		assetInfoFlag, ll := p.BaseParser.UnpackVaruint(buf[l:])
 		l += ll
 		if assetInfoFlag == 1 {
+			to.AssetInfo = &bchain.AssetInfo{}
 			l += p.UnpackAssetInfo(to.AssetInfo, buf[l:])
 		}
 	}
@@ -753,6 +755,7 @@ func (p *SyscoinParser) UnpackAddrBalance(buf []byte, txidUnpackedLen int, detai
 			assetInfoFlag, ll := p.BaseParser.UnpackVaruint(buf[l:])
 			l += ll
 			if assetInfoFlag == 1 {
+				u.AssetInfo = &bchain.AssetInfo{}
 				l += p.UnpackAssetInfo(u.AssetInfo, buf[l:])
 			}
 			if detail == bchain.AddressBalanceDetailUTXO {
