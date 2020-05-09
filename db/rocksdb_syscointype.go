@@ -116,7 +116,7 @@ func (d *RocksDB) ConnectAllocationOutput(addrDesc* bchain.AddressDescriptor, he
 			}
 		}
 		assets[assetInfo.AssetGuid] = dBAsset
-	} else {
+	} else if !isActivate {
 		return errors.New("ConnectSyscoinOutput: asset not found")
 	}
 	balanceAsset.BalanceSat.Add(balanceAsset.BalanceSat, assetInfo.ValueSat)
