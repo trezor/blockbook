@@ -777,6 +777,7 @@ func (d *RocksDB) storeBalances(wb *gorocksdb.WriteBatch, abm map[string]*bchain
 			glog.Warning("txs <= 0")
 			wb.DeleteCF(d.cfh[cfAddressBalance], bchain.AddressDescriptor(addrDesc))
 		} else {
+			// asset transfers with 0 transactions are removed from db - happens on disconnect
 			for key, value := range ab.AssetBalances {
 				if value.Transfers <= 0 {
 					delete(ab.AssetBalances, key)
@@ -1024,7 +1025,6 @@ func (d *RocksDB) disconnectTxAddressesInputs(wb *gorocksdb.WriteBatch, btxID []
 	assetFoundInTx func(asset uint32, btxID []byte) bool,
 	assets map[uint32]*bchain.Asset, blockTxAssetAddresses bchain.TxAssetAddressMap) error {
 	var err error
-	var balance *bchain.AddrBalance
 	var addrDesc *bchain.AddressDescriptor = nil
 	isAssetTx := d.chainParser.IsAssetTx(txa.Version)
 	var assetGuid uint32 = 0
@@ -1049,7 +1049,7 @@ func (d *RocksDB) disconnectTxAddressesInputs(wb *gorocksdb.WriteBatch, btxID []
 				inputHeight = sa.Height
 			}
 			if d.chainParser.IsAddrDescIndexable(t.AddrDesc) {
-				balance, err = getAddressBalance(t.AddrDesc)
+				balance, err := getAddressBalance(t.AddrDesc)
 				if err != nil {
 					return err
 				}
