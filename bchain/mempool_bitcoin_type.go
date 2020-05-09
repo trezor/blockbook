@@ -73,7 +73,7 @@ func (m *MempoolBitcoinType) getInputAddress(input Outpoint) *addrIndex {
 			return nil
 		}
 		if itx.Vout[input.Vout].AssetInfo != nil {
-			assetInfo = &AssetInfo{AssetGuid: itx.Vout[input.Vout].AssetInfo.AssetGuid, ValueSat: big.NewInt(itx.Vout[input.Vout].AssetInfo.ValueSat)}
+			assetInfo = &AssetInfo{AssetGuid: itx.Vout[input.Vout].AssetInfo.AssetGuid, ValueSat: new(big.Int).Set(itx.Vout[input.Vout].AssetInfo.ValueSat)}
 		}
 	}
 	return &addrIndex{string(addrDesc), ^input.Vout, assetInfo}
