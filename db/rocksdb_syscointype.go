@@ -352,12 +352,12 @@ func (d *RocksDB) GetAsset(guid uint32, assets map[uint32]*bchain.Asset) (*bchai
 	}
 	// nil data means the key was not found in DB
 	if val.Data() == nil {
-		return nil, nil
+		return nil, errors.New("GetAsset: key not found in asset db")
 	}
 	defer val.Free()
 	buf := val.Data()
 	if len(buf) == 0 {
-		return nil, nil
+		return nil, errors.New("GetAsset: empty value in asset db")
 	}
 	assetDb = d.chainParser.UnpackAsset(buf)
 	if assetDb == nil {
