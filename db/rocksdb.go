@@ -550,7 +550,7 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses bch
 			}
 			tao.AddrDesc = addrDesc
 			if output.AssetInfo != nil {
-				tao.AssetInfo = &bchain.AssetInfo{AssetGuid: output.AssetInfo.AssetGuid, ValueSat: big.NewInt(output.AssetInfo.ValueSat)}
+				tao.AssetInfo = &bchain.AssetInfo{AssetGuid: output.AssetInfo.AssetGuid, new(big.Int).Set(output.AssetInfo.ValueSat)}
 			}
 			if d.chainParser.IsAddrDescIndexable(addrDesc) {
 				strAddrDesc := string(addrDesc)
@@ -661,7 +661,7 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses bch
 			tai.ValueSat = spentOutput.ValueSat
 			mask := bchain.BaseCoinMask
 			if spentOutput.AssetInfo != nil {
-				tai.AssetInfo = &bchain.AssetInfo{AssetGuid: spentOutput.AssetInfo.AssetGuid, ValueSat: big.NewInt(spentOutput.AssetInfo.ValueSat)}
+				tai.AssetInfo = &bchain.AssetInfo{AssetGuid: spentOutput.AssetInfo.AssetGuid, new(big.Int).Set(spentOutput.AssetInfo.ValueSat)}
 				mask = d.chainParser.GetAssetsMaskFromVersion(ita.Version)
 			}
 			// mark the output as spent in tx
