@@ -1385,7 +1385,7 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *bchain.A
 									Locktime:  bchainTx.LockTime,
 									Coinbase:  coinbase,
 								}
-								if utxoTmp.AssetInfo.AssetGuid > 0 {
+								if vout.AssetInfo.AssetGuid > 0 {
 									utxoTmp.AssetInfo = &vout.AssetInfo
 								}
 								utxos = append(utxos, utxoTmp)
@@ -1445,7 +1445,7 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *bchain.A
 							Confirmations: confirmations,
 							Coinbase:      coinbase,
 						}
-						if utxoTmp.AssetInfo.AssetGuid > 0 {
+						if utxo.AssetInfo.AssetGuid > 0 {
 							utxoTmp.AssetInfo = &utxo.AssetInfo
 						}
 						utxos = append(utxos, utxoTmp)
