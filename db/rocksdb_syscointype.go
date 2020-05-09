@@ -76,7 +76,7 @@ func (d *RocksDB) DisconnectAssetOutputHelper(asset *bchain.AssetType, dBAsset *
 }
 
 func (d *RocksDB) ConnectAllocationInput(addrDesc* bchain.AddressDescriptor, balanceAsset *bchain.AssetBalance, isActivate bool, btxID []byte, assetInfo* bchain.AssetInfo, assets map[uint32]*bchain.Asset, blockTxAssetAddresses bchain.TxAssetAddressMap) error {
-	dBAsset, err := d.GetAsset(assetInfo.AssetGuid, &assets)
+	dBAsset, err := d.GetAsset(assetInfo.AssetGuid, assets)
 	if !isActivate && err != nil {
 		return err
 	}
@@ -96,7 +96,7 @@ func (d *RocksDB) ConnectAllocationInput(addrDesc* bchain.AddressDescriptor, bal
 }
 
 func (d *RocksDB) ConnectAllocationOutput(addrDesc* bchain.AddressDescriptor, height uint32, balanceAsset *bchain.AssetBalance, isActivate bool, version int32, btxID []byte, assetInfo* bchain.AssetInfo, assets map[uint32]*bchain.Asset, txAssets bchain.TxAssetMap, blockTxAssetAddresses bchain.TxAssetAddressMap) error {
-	dBAsset, err := d.GetAsset(assetInfo.AssetGuid, &assets)
+	dBAsset, err := d.GetAsset(assetInfo.AssetGuid, assets)
 	if !isActivate && err != nil {
 		return err
 	}
@@ -167,8 +167,11 @@ func (d *RocksDB) ConnectAssetOutput(addrDescData *bchain.AddressDescriptor, add
 }
 
 func (d *RocksDB) DisconnectAllocationOutput(addrDesc *bchain.AddressDescriptor, balanceAsset *bchain.AssetBalance, isActivate bool,  version int32, btxID []byte, assets map[uint32]*bchain.Asset,  assetInfo *bchain.AssetInfo, blockTxAssetAddresses bchain.TxAssetAddressMap, assetFoundInTx func(asset uint32, btxID []byte) bool) error {
-	dBAsset, err := d.GetAsset(assetInfo.AssetGuid, &assets)
+	dBAsset, err := d.GetAsset(assetInfo.AssetGuid, assets)
 	if dBAsset == nil || err != nil {
+		if dbAsset == nil {
+			return errors.New("DisconnectAllocationOutput could not read asset")
+		}
 		return err
 	}
 	
@@ -210,8 +213,11 @@ func (d *RocksDB) DisconnectAssetOutput(addrDesc *bchain.AddressDescriptor, isAc
 	if err != nil {
 		return err
 	}
-	dBAsset, err := d.GetAsset(assetGuid, &assets)
+	dBAsset, err := d.GetAsset(assetGuid, assets)
 	if dBAsset == nil || err != nil {
+		if dbAsset == nil {
+			return errors.New("DisconnectAssetOutput could not read asset")
+		}
 		return err
 	}
 	if !isActivate {
@@ -224,8 +230,11 @@ func (d *RocksDB) DisconnectAssetOutput(addrDesc *bchain.AddressDescriptor, isAc
 	return nil
 }
 func (d *RocksDB) DisconnectAllocationInput(addrDesc *bchain.AddressDescriptor, balanceAsset *bchain.AssetBalance,  btxID []byte, assetInfo *bchain.AssetInfo, assets map[uint32]*bchain.Asset, blockTxAssetAddresses bchain.TxAssetAddressMap, assetFoundInTx func(asset uint32, btxID []byte) bool) error {
-	dBAsset, err := d.GetAsset(assetInfo.AssetGuid, &assets)
+	dBAsset, err := d.GetAsset(assetInfo.AssetGuid, assets)
 	if dBAsset == nil || err != nil {
+		if dbAsset == nil {
+			return errors.New("DisconnectAllocationInput could not read asset")
+		}
 		return err
 	}
 	balanceAsset.SentSat.Sub(balanceAsset.SentSat, assetInfo.ValueSat)
@@ -242,8 +251,11 @@ func (d *RocksDB) DisconnectAllocationInput(addrDesc *bchain.AddressDescriptor, 
 	return nil
 }
 func (d *RocksDB) DisconnectAssetInput(addrDesc *bchain.AddressDescriptor, assets map[uint32]*bchain.Asset, assetGuid uint32) error {
-	dBAsset, err := d.GetAsset(assetGuid, &assets)
+	dBAsset, err := d.GetAsset(assetGuid, assets)
 	if dBAsset == nil || err != nil {
+		if dbAsset == nil {
+			return errors.New("DisconnectAssetInput could not read asset")
+		}
 		return err
 	}
 	dBAsset.AddrDesc = *addrDesc
@@ -322,12 +334,12 @@ func (d *RocksDB) storeAssets(wb *gorocksdb.WriteBatch, assets map[uint32]*bchai
 	return nil
 }
 
-func (d *RocksDB) GetAsset(guid uint32, assets *map[uint32]*bchain.Asset) (*bchain.Asset, error) {
+func (d *RocksDB) GetAsset(guid uint32, assets map[uint32]*bchain.Asset) (*bchain.Asset, error) {
 	var assetDb *bchain.Asset
 	var assetL1 *bchain.Asset
 	var ok bool
 	if assets != nil {
-		if assetL1, ok = (*assets)[guid]; ok {
+		if assetL1, ok = assets[guid]; ok {
 			return assetL1, nil
 		}
 	}
