@@ -884,8 +884,8 @@ func (d *RocksDB) GetAddrDescBalance(addrDesc bchain.AddressDescriptor, detail b
 	}
 	defer val.Free()
 	buf := val.Data()
-	// 3 is minimum length of addrBalance - 1 byte txs, 1 byte sent, 1 byte balance
-	if len(buf) < 3 {
+	// 4 is minimum length of addrBalance - 1 byte txs, 1 byte sent, 1 byte balance, 1 byte assetinfo flag
+	if len(buf) < 4 {
 		return nil, nil
 	}
 	return d.chainParser.UnpackAddrBalance(buf, d.chainParser.PackedTxidLen(), detail)
