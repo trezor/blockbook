@@ -706,7 +706,7 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses bch
 						balanceAsset = &bchain.AssetBalance{Transfers: 0, BalanceSat: big.NewInt(0), SentSat: big.NewInt(0)}
 						balance.AssetBalances[spentOutput.AssetInfo.AssetGuid] = balanceAsset
 					}
-					err := d.ConnectAllocationInput(&spentOutput.AddrDesc, balanceAsset, isActivate, btxID, &spentOutput.AssetInfo, assets, txAssets, blockTxAssetAddresses)
+					err := d.ConnectAllocationInput(&spentOutput.AddrDesc, balanceAsset, isActivate, btxID, &spentOutput.AssetInfo, assets, blockTxAssetAddresses)
 					if err != nil {
 						glog.Warningf("rocksdb: ConnectAllocationInput: height %d, tx %v, input %v, error %v", block.Height, btxID, input, err)
 					}
