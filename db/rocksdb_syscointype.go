@@ -10,6 +10,7 @@ import (
 	"github.com/tecbot/gorocksdb"
 	"encoding/hex"
 	"time"
+	"fmt"
 )
 var AssetCache map[uint32]bchain.Asset
 var SetupAssetCacheFirstTime bool = true
@@ -163,7 +164,7 @@ func (d *RocksDB) DisconnectAllocationOutput(addrDesc *bchain.AddressDescriptor,
 	dBAsset, err := d.GetAsset(assetInfo.AssetGuid, assets)
 	if dBAsset == nil || err != nil {
 		if dBAsset == nil {
-			return errors.New("DisconnectAllocationOutput could not read asset")
+			return errors.New(fmt.Sprint("DisconnectAllocationOutput could not read asset " , assetInfo.AssetGui))
 		}
 		return err
 	}
@@ -209,7 +210,7 @@ func (d *RocksDB) DisconnectAssetOutput(addrDesc *bchain.AddressDescriptor, isAc
 	dBAsset, err := d.GetAsset(assetGuid, assets)
 	if dBAsset == nil || err != nil {
 		if dBAsset == nil {
-			return errors.New("DisconnectAssetOutput could not read asset")
+			return errors.New(fmt.Sprint("DisconnectAssetOutput could not read asset " , assetGuid))
 		}
 		return err
 	}
@@ -239,7 +240,7 @@ func (d *RocksDB) DisconnectAssetInput(addrDesc *bchain.AddressDescriptor, asset
 	dBAsset, err := d.GetAsset(assetGuid, assets)
 	if dBAsset == nil || err != nil {
 		if dBAsset == nil {
-			return errors.New("DisconnectAssetInput could not read asset")
+			return errors.New(fmt.Sprint("DisconnectAssetInput could not read asset " , assetGuid))
 		}
 		return err
 	}
