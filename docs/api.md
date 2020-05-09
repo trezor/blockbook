@@ -217,7 +217,8 @@ Response for Ethereum-type coins. There is always only one *vin*, only one *vout
     "nonce": 2830,
     "gasLimit": 36591,
     "gasUsed": 36591,
-    "gasPrice": "11000000000"
+    "gasPrice": "11000000000",
+    "data": "0xa9059cbb000000000000000000000000ba98d6a5"
   }
 }
 ```
