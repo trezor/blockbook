@@ -257,7 +257,7 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 		{dbtestdata.TxidS1T1, 0},
 	}, nil)
 	verifyGetTransactions(t, d, dbtestdata.AddrS2, 171, 171, []txidIndex{
-		{dbtestdata.TxidS1T1, 9},
+		{dbtestdata.TxidS1T1, 0},
 	}, nil)
 	verifyGetTransactions(t, d, dbtestdata.AddrS2, 182, 1000000, []txidIndex{
 		{dbtestdata.TxidS2T1, ^0},
