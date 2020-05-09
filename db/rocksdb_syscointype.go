@@ -230,13 +230,6 @@ func (d *RocksDB) DisconnectAssetOutput(addrDesc *bchain.AddressDescriptor, isAc
 	return nil
 }
 func (d *RocksDB) DisconnectAllocationInput(addrDesc *bchain.AddressDescriptor, balanceAsset *bchain.AssetBalance,  btxID []byte, assetInfo *bchain.AssetInfo, assets map[uint32]*bchain.Asset, blockTxAssetAddresses bchain.TxAssetAddressMap, assetFoundInTx func(asset uint32, btxID []byte) bool) error {
-	dBAsset, err := d.GetAsset(assetInfo.AssetGuid, assets)
-	if dBAsset == nil || err != nil {
-		if dBAsset == nil {
-			return errors.New("DisconnectAllocationInput could not read asset")
-		}
-		return err
-	}
 	balanceAsset.SentSat.Sub(balanceAsset.SentSat, assetInfo.ValueSat)
 	balanceAsset.BalanceSat.Add(balanceAsset.BalanceSat, assetInfo.ValueSat)
 	if balanceAsset.SentSat.Sign() < 0 {
@@ -247,7 +240,6 @@ func (d *RocksDB) DisconnectAllocationInput(addrDesc *bchain.AddressDescriptor, 
 	if !counted {
 		balanceAsset.Transfers--
 	}	
-	assets[assetInfo.AssetGuid] = dBAsset
 	return nil
 }
 func (d *RocksDB) DisconnectAssetInput(addrDesc *bchain.AddressDescriptor, assets map[uint32]*bchain.Asset, assetGuid uint32) error {
