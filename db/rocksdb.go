@@ -592,7 +592,7 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses bch
 					}
 					err = d.ConnectAllocationOutput(&addrDesc, block.Height, balanceAsset, isActivate, tx.Version, btxID, tao.AssetInfo, assets, txAssets, blockTxAssetAddresses)
 					if err != nil {
-						glog.Warningf("rocksdb: ConnectAllocationOutput: height %d, tx %v, output %v, error %v", block.Height, tx.Txid, output, err)
+						return errors.New("ConnectAllocationOutput: height %d, tx %v, output %v, error %v", block.Height, tx.Txid, output, err)
 					}
 					// replace asset ownership with this addrDesc in ConnectAssetOutput, this should be the change address
 					if isAssetTx && tao.AssetInfo.ValueSat.Int64() == 0 {
@@ -608,7 +608,7 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses bch
 		if assetGuid > 0 && addrDescOwner != nil && addrDescData != nil {
 			err := d.ConnectAssetOutput(addrDescData, addrDescOwner, isActivate, isAssetTx, assetGuid, assets)
 			if err != nil {
-				glog.Warningf("rocksdb: ConnectAssetOutput: tx %v, error %v", btxID, err)
+				return errors.New("ConnectAssetOutput: tx %v, error %v", btxID, err)
 			}
 		}
 	}
@@ -708,9 +708,9 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses bch
 						balanceAsset = &bchain.AssetBalance{Transfers: 0, BalanceSat: big.NewInt(0), SentSat: big.NewInt(0)}
 						balance.AssetBalances[spentOutput.AssetInfo.AssetGuid] = balanceAsset
 					}
-					err := d.ConnectAllocationInput(&spentOutput.AddrDesc, balanceAsset, isActivate, btxID, spentOutput.AssetInfo, assets, blockTxAssetAddresses)
+					err := d.ConnectAllocationInput(&spentOutput.AddrDesc, balanceAsset, isActivate, btxID, spentOutput.AssetInfo, blockTxAssetAddresses)
 					if err != nil {
-						glog.Warningf("rocksdb: ConnectAllocationInput: height %d, tx %v, input %v, error %v", block.Height, btxID, input, err)
+						return errors.New("ConnectAllocationInput: height %d, tx %v, input %v, error %v", block.Height, btxID, input, err)
 					}
 				}
 			}
@@ -1078,9 +1078,9 @@ func (d *RocksDB) disconnectTxAddressesInputs(wb *gorocksdb.WriteBatch, btxID []
 						if !ok {
 							return errors.New("DisconnectSyscoinInput asset balance not found")
 						}
-						err := d.DisconnectAllocationInput(&t.AddrDesc, balanceAsset, btxID, t.AssetInfo, assets, blockTxAssetAddresses, assetFoundInTx)
+						err := d.DisconnectAllocationInput(&t.AddrDesc, balanceAsset, btxID, t.AssetInfo, blockTxAssetAddresses, assetFoundInTx)
 						if err != nil {
-							glog.Warningf("rocksdb: DisconnectAllocationInput: tx %v, input %v, error %v", btxID, input, err)
+							return errors.New("DisconnectAllocationInput: tx %v, input %v, error %v", btxID, input, err)
 						}
 						// if asset tx save ownership addrDesc for later disconnect when we replace the addrDesc of asset to this one
 						if isAssetTx && t.AssetInfo.ValueSat.Int64() == 0 {
@@ -1098,7 +1098,7 @@ func (d *RocksDB) disconnectTxAddressesInputs(wb *gorocksdb.WriteBatch, btxID []
 	if addrDesc != nil {
 		err := d.DisconnectAssetInput(addrDesc, assets, assetGuid)
 		if err != nil {
-			glog.Warningf("rocksdb: DisconnectAssetInput: tx %v, error %v", btxID, err)
+			return errors.New("DisconnectAssetInput: tx %v, error %v", btxID, err)
 		}
 	}
 	return nil
@@ -1141,7 +1141,7 @@ func (d *RocksDB) disconnectTxAddressesOutputs(wb *gorocksdb.WriteBatch, btxID [
 						}
 						err := d.DisconnectAllocationOutput(&t.AddrDesc, balanceAsset, isActivate, txa.Version, btxID, assets, t.AssetInfo, blockTxAssetAddresses, assetFoundInTx)
 						if err != nil {
-							glog.Warningf("rocksdb: DisconnectSyscoinOutput: tx %v, output %v, error %v", btxID, t, err)
+							return errors.New("DisconnectSyscoinOutput: tx %v, output %v, error %v", btxID, t, err)
 						}
 						// save it for later, if its an asset tx we will only have 1 asset guid
 						assetGuid = t.AssetInfo.AssetGuid
@@ -1159,7 +1159,7 @@ func (d *RocksDB) disconnectTxAddressesOutputs(wb *gorocksdb.WriteBatch, btxID [
 	if assetGuid > 0 && addrDesc != nil {
 		err := d.DisconnectAssetOutput(addrDesc, isActivate, assets, assetGuid)
 		if err != nil {
-			glog.Warningf("rocksdb: DisconnectAssetOutput: tx %v, error %v", btxID, err)
+			return errors.New("DisconnectAssetOutput: tx %v, error %v", btxID, err)
 		}
 	}
 	return nil
