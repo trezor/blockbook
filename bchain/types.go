@@ -79,7 +79,7 @@ type Vout struct {
 	JsonValue    json.Number  `json:"value"`
 	N            uint32       `json:"n"`
 	ScriptPubKey ScriptPubKey `json:"scriptPubKey"`
-	AssetInfo    AssetInfo	  `json:"assetInfo"`
+	AssetInfo	AssetInfo `json:"assetInfo,omitempty"`
 }
 
 // Tx is blockchain transaction
@@ -215,7 +215,7 @@ type Utxo struct {
 	Vout     int32
 	Height   uint32
 	ValueSat big.Int
-	AssetInfo	AssetInfo
+	AssetInfo	AssetInfo `json:"assetInfo,omitempty"`
 }
 // holds balance information for an asset indexed by a uint32 asset guid
 type AssetBalance struct {
@@ -378,7 +378,7 @@ type AddressesMap map[string][]TxIndexes
 type TxInput struct {
 	AddrDesc AddressDescriptor
 	ValueSat big.Int
-	AssetInfo AssetInfo
+	AssetInfo	AssetInfo `json:"assetInfo,omitempty"`
 }
 
 // BlockInfo holds information about blocks kept in column height
@@ -395,7 +395,7 @@ type TxOutput struct {
 	AddrDesc AddressDescriptor
 	Spent    bool
 	ValueSat big.Int
-	AssetInfo AssetInfo
+	AssetInfo	AssetInfo `json:"assetInfo,omitempty"`
 }
 
 // Addresses converts AddressDescriptor of the input to array of strings
