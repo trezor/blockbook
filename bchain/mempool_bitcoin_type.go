@@ -73,7 +73,7 @@ func (m *MempoolBitcoinType) getInputAddress(input Outpoint) *addrIndex {
 			return nil
 		}
 		if itx.Vout[input.Vout].AssetInfo != nil {
-			assetInfo = &bchain.AssetInfo{AssetGuid: itx.Vout[input.Vout].AssetInfo.AssetGuid, ValueSat: big.NewInt(itx.Vout[input.Vout].AssetInfo.ValueSat)}
+			assetInfo = &AssetInfo{AssetGuid: itx.Vout[input.Vout].AssetInfo.AssetGuid, ValueSat: big.NewInt(itx.Vout[input.Vout].AssetInfo.ValueSat)}
 		}
 	}
 	return &addrIndex{string(addrDesc), ^input.Vout, assetInfo}
@@ -95,7 +95,7 @@ func (m *MempoolBitcoinType) getTxAddrs(txid string, chanInput chan Outpoint, ch
 			continue
 		}
 		if len(addrDesc) > 0 {
-			io = append(io, addrIndex{string(addrDesc), int32(output.N), &output.AssetInfo})
+			io = append(io, addrIndex{string(addrDesc), int32(output.N), output.AssetInfo})
 		}
 		if m.OnNewTxAddr != nil {
 			m.OnNewTxAddr(tx, addrDesc)
