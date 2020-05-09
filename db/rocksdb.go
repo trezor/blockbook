@@ -775,6 +775,11 @@ func (d *RocksDB) storeBalances(wb *gorocksdb.WriteBatch, abm map[string]*bchain
 			glog.Warning("txs <= 0")
 			wb.DeleteCF(d.cfh[cfAddressBalance], bchain.AddressDescriptor(addrDesc))
 		} else {
+			for key, value := range ab.AssetBalances {
+				if value.Transfers <= 0 {
+					delete(ab.AssetBalances, key)
+				}
+			}
 			buf = d.chainParser.PackAddrBalance(ab, buf, varBuf)
 			wb.PutCF(d.cfh[cfAddressBalance], bchain.AddressDescriptor(addrDesc), buf)
 		}
@@ -1071,7 +1076,7 @@ func (d *RocksDB) disconnectTxAddressesInputs(wb *gorocksdb.WriteBatch, btxID []
 						if !ok {
 							return errors.New("DisconnectSyscoinInput asset balance not found")
 						}
-						err := d.DisconnectAllocationInput(balance.AssetBalances, &t.AddrDesc, balanceAsset, btxID, &t.AssetInfo, assets, blockTxAssetAddresses, assetFoundInTx)
+						err := d.DisconnectAllocationInput(&t.AddrDesc, balanceAsset, btxID, &t.AssetInfo, assets, blockTxAssetAddresses, assetFoundInTx)
 						if err != nil {
 							glog.Warningf("rocksdb: DisconnectAllocationInput: tx %v, input %v, error %v", btxID, input, err)
 						}
@@ -1132,7 +1137,7 @@ func (d *RocksDB) disconnectTxAddressesOutputs(wb *gorocksdb.WriteBatch, btxID [
 						if !ok {
 							return errors.New("DisconnectSyscoinOutput asset balance not found")
 						}
-						err := d.DisconnectAllocationOutput(balance.AssetBalances, &t.AddrDesc, balanceAsset, isActivate, txa.Version, btxID, assets, &t.AssetInfo, blockTxAssetAddresses, assetFoundInTx)
+						err := d.DisconnectAllocationOutput(&t.AddrDesc, balanceAsset, isActivate, txa.Version, btxID, assets, &t.AssetInfo, blockTxAssetAddresses, assetFoundInTx)
 						if err != nil {
 							glog.Warningf("rocksdb: DisconnectSyscoinOutput: tx %v, output %v, error %v", btxID, t, err)
 						}
