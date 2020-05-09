@@ -560,7 +560,7 @@ func (p *SyscoinParser) LoadAssets(tx *bchain.Tx) error {
         for k, v := range allocation.VoutAssets {
             for _,voutAsset := range v {
 				// store in vout
-				tx.Vout[voutAsset.N].AssetInfo = &bchain.AssetInfo{AssetGuid: k, ValueSat: new(big.Int).Set(voutAsset.ValueSat)}
+				tx.Vout[voutAsset.N].AssetInfo = &bchain.AssetInfo{AssetGuid: k, ValueSat: big.NewInt(voutAsset.ValueSat)}
             }
         }       
 	}
@@ -657,7 +657,7 @@ func (p *SyscoinParser) PackTxAddresses(ta *bchain.TxAddresses, buf []byte, varB
 	for i := range ta.Outputs {
 		to := &ta.Outputs[i]
 		buf = p.BitcoinParser.AppendTxOutput(to, buf, varBuf)
-		if ti.AssetInfo != nil {
+		if to.AssetInfo != nil {
 			l = p.BaseParser.PackVaruint(1, varBuf)
 			buf = append(buf, varBuf[:l]...)
 			buf = p.AppendAssetInfo(to.AssetInfo, buf, varBuf)
@@ -750,7 +750,11 @@ func (p *SyscoinParser) UnpackAddrBalance(buf []byte, txidUnpackedLen int, detai
 				Height:   uint32(height),
 				ValueSat: valueSat,
 			}
-			ll = p.UnpackAssetInfo(&u.AssetInfo, buf[l:])
+			assetInfoFlag, ll := p.BaseParser.UnpackVaruint(buf[l:])
+			l += ll
+			if assetInfoFlag == 1 {
+				l += p.UnpackAssetInfo(u.AssetInfo, buf[l:])
+			}
 			l += ll
 			if detail == bchain.AddressBalanceDetailUTXO {
 				ab.Utxos = append(ab.Utxos, u)
@@ -794,7 +798,14 @@ func (p *SyscoinParser) PackAddrBalance(ab *bchain.AddrBalance, buf, varBuf []by
 			buf = append(buf, varBuf[:l]...)
 			l = p.BaseParser.PackBigint(&utxo.ValueSat, varBuf)
 			buf = append(buf, varBuf[:l]...)
-			buf = p.AppendAssetInfo(&utxo.AssetInfo, buf, varBuf)
+			if utxo.AssetInfo != nil {
+				l = p.BaseParser.PackVaruint(1, varBuf)
+				buf = append(buf, varBuf[:l]...)
+				buf = p.AppendAssetInfo(utxo.AssetInfo, buf, varBuf)
+			} else {
+				l = p.BaseParser.PackVaruint(0, varBuf)
+				buf = append(buf, varBuf[:l]...)
+			}
 		}
 	}
 	return buf
