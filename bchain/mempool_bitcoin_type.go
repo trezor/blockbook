@@ -2,7 +2,7 @@ package bchain
 
 import (
 	"time"
-
+	"math/big"
 	"github.com/golang/glog"
 )
 
