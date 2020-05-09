@@ -133,7 +133,7 @@ func (d *RocksDB) ConnectAssetOutput(addrDescData *bchain.AddressDescriptor, add
 	}
 	sptData := d.chainParser.TryGetOPReturn(script)
 	if sptData == nil {
-		return nil
+		return errors.New(fmt.Sprint("ConnectAssetOutput could not parse opreturn"))
 	}
 	asset, err := d.chainParser.GetAssetFromData(sptData)
 	if err != nil {
@@ -207,7 +207,7 @@ func (d *RocksDB) DisconnectAssetOutput(addrDesc *bchain.AddressDescriptor, isAc
 	}
 	sptData := d.chainParser.TryGetOPReturn(script)
 	if sptData == nil {
-		return nil
+		return errors.New(fmt.Sprint("DisconnectAssetOutput could not parse opreturn"))
 	}
 	asset, err := d.chainParser.GetAssetFromData(sptData)
 	if err != nil {
