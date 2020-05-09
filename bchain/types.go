@@ -555,7 +555,7 @@ type Token struct {
 	TotalReceivedSat *Amount   `json:"totalReceived,omitempty"`
 	TotalSentSat     *Amount   `json:"totalSent,omitempty"`
 	ContractIndex    string    `json:"-"`
-	AddrStr		 	 string    `json:"addrStr"`
+	AddrStr		 	 string    `json:"addrStr,omitempty"`
 }
 type Tokens []*Token
 func (t Tokens) Len() int           { return len(t) }
