@@ -533,7 +533,7 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses bch
 			tao := &ta.Outputs[i]
 			tao.ValueSat = output.ValueSat
 			mask := bchain.BaseCoinMask
-			if output.AssetInfo.AssetGuid > 0 {
+			if output.AssetInfo != nil {
 				mask = assetsMask
 			}
 			addrDesc, err := d.chainParser.GetAddrDescFromVout(&output)
@@ -549,7 +549,9 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses bch
 				continue
 			}
 			tao.AddrDesc = addrDesc
-			tao.AssetInfo = output.AssetInfo
+			if output.AssetInfo != nil {
+				tao.AssetInfo = &bchain.AssetInfo{AssetGuid: output.AssetInfo.AssetGuid, ValueSat: big.NewInt(output.AssetInfo.ValueSat)}
+			}
 			if d.chainParser.IsAddrDescIndexable(addrDesc) {
 				strAddrDesc := string(addrDesc)
 				balance, e := balances[strAddrDesc]
@@ -578,7 +580,7 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses bch
 				if !counted {
 					balance.Txs++
 				}
-				if tao.AssetInfo.AssetGuid > 0 {
+				if tao.AssetInfo != nil {
 					assetGuid := tao.AssetInfo.AssetGuid
 					if balance.AssetBalances == nil {
 						balance.AssetBalances = map[uint32]*bchain.AssetBalance{}
@@ -658,8 +660,8 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses bch
 			tai.AddrDesc = spentOutput.AddrDesc
 			tai.ValueSat = spentOutput.ValueSat
 			mask := bchain.BaseCoinMask
-			if spentOutput.AssetInfo.AssetGuid > 0 {
-				tai.AssetInfo = spentOutput.AssetInfo
+			if spentOutput.AssetInfo != nil {
+				tai.AssetInfo = &bchain.AssetInfo{AssetGuid: spentOutput.AssetInfo.AssetGuid, ValueSat: big.NewInt(spentOutput.AssetInfo.ValueSat)}
 				mask = d.chainParser.GetAssetsMaskFromVersion(ita.Version)
 			}
 			// mark the output as spent in tx
@@ -697,7 +699,7 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses bch
 					d.resetValueSatToZero(&balance.BalanceSat, spentOutput.AddrDesc, "balance")
 				}
 				balance.SentSat.Add(&balance.SentSat, &spentOutput.ValueSat)
-				if spentOutput.AssetInfo.AssetGuid > 0 {
+				if spentOutput.AssetInfo != nil {
 					if balance.AssetBalances == nil {
 						balance.AssetBalances = map[uint32]*bchain.AssetBalance{}
 					}
@@ -1068,7 +1070,7 @@ func (d *RocksDB) disconnectTxAddressesInputs(wb *gorocksdb.WriteBatch, btxID []
 						ValueSat: t.ValueSat,
 						AssetInfo: t.AssetInfo,
 					})
-					if t.AssetInfo.AssetGuid > 0 {
+					if t.AssetInfo != nil {
 						if balance.AssetBalances == nil {
 							return errors.New("DisconnectSyscoinInput asset balances was nil but not expected to be")
 						}
@@ -1129,7 +1131,7 @@ func (d *RocksDB) disconnectTxAddressesOutputs(wb *gorocksdb.WriteBatch, btxID [
 						d.resetValueSatToZero(&balance.BalanceSat, t.AddrDesc, "balance")
 					}
 					balance.MarkUtxoAsSpent(btxID, int32(i))
-					if t.AssetInfo.AssetGuid > 0 {
+					if t.AssetInfo != nil {
 						if balance.AssetBalances == nil {
 							return errors.New("DisconnectSyscoinOutput asset balances was nil but not expected to be")
 						}

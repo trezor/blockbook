@@ -485,7 +485,7 @@ func (s *SocketIoServer) getAddressHistory(addr []string, opts *addrOpts) (res r
 				if vin.ValueSat != nil {
 					totalSat.Sub(&totalSat, (*big.Int)(vin.ValueSat))
 				}
-				if vin.AssetInfo != nil && vin.AssetInfo.AssetGuid > 0 {
+				if vin.AssetInfo != nil {
 					if ahi.Tokens == nil {
 						ahi.Tokens = map[uint32]*api.TokenBalanceHistory{}
 					}
@@ -511,7 +511,7 @@ func (s *SocketIoServer) getAddressHistory(addr []string, opts *addrOpts) (res r
 				if vout.ValueSat != nil {
 					totalSat.Add(&totalSat, (*big.Int)(vout.ValueSat))
 				}
-				if vout.AssetInfo != nil && vout.AssetInfo.AssetGuid > 0 {
+				if vout.AssetInfo != nil {
 					if ahi.Tokens == nil {
 						ahi.Tokens = map[uint32]*api.TokenBalanceHistory{}
 					}

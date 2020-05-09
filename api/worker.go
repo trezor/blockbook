@@ -195,8 +195,8 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 						if err != nil {
 							glog.Errorf("getAddressesFromVout error %v, vout %+v", err, vout)
 						}
-						if vout.AssetInfo.AssetGuid > 0 {
-							vin.AssetInfo = &vout.AssetInfo
+						if vout.AssetInfo != nil {
+							vin.AssetInfo = &bchain.AssetInfo{AssetGuid: vout.AssetInfo.AssetGuid, ValueSat: big.NewInt(vout.AssetInfo.ValueSat)}
 						}
 					}
 				} else {
@@ -208,14 +208,14 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 						if err != nil {
 							glog.Errorf("output.Addresses error %v, tx %v, output %v", err, bchainVin.Txid, i)
 						}
-						if output.AssetInfo.AssetGuid > 0 {
-							vin.AssetInfo = &output.AssetInfo
+						if output.AssetInfo != nil {
+							vin.AssetInfo = &bchain.AssetInfo{AssetGuid: output.AssetInfo.AssetGuid, ValueSat: big.NewInt(output.AssetInfo.ValueSat)}
 						}
 					}
 				}
 				if vin.ValueSat != nil {
 					valInSat.Add(&valInSat, (*big.Int)(vin.ValueSat))
-					if vin.AssetInfo != nil && vin.AssetInfo.AssetGuid > 0 {
+					if vin.AssetInfo != nil {
 						if mapTTS == nil {
 							mapTTS = map[uint32]*bchain.TokenTransferSummary{}
 						}
@@ -260,8 +260,9 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 		vout.ValueSat = (*bchain.Amount)(&bchainVout.ValueSat)
 		valOutSat.Add(&valOutSat, &bchainVout.ValueSat)
 		
-		if bchainVout.AssetInfo.AssetGuid > 0 {
-			vout.AssetInfo = &bchainVout.AssetInfo
+		if bchainVout.AssetInfo != nil {
+			
+			vout.AssetInfo = &bchain.AssetInfo{AssetGuid: bchainVout.AssetInfo.AssetGuid, ValueSat: big.NewInt(bchainVout.AssetInfo.ValueSat)}
 			tts, ok := mapTTS[vout.AssetInfo.AssetGuid]
 			if !ok {
 				dbAsset, errAsset := w.db.GetAsset(vout.AssetInfo.AssetGuid, nil)
@@ -1185,7 +1186,7 @@ func (w *Worker) balanceHistoryForTxid(addrDesc bchain.AddressDescriptor, txid s
 			tai := &ta.Inputs[i]
 			if bytes.Equal(addrDesc, tai.AddrDesc) {
 				(*big.Int)(bh.SentSat).Add((*big.Int)(bh.SentSat), &tai.ValueSat)
-				if tai.AssetInfo.AssetGuid > 0 {
+				if tai.AssetInfo != nil {
 					if bh.Tokens == nil {
 						bh.Tokens = map[uint32]*TokenBalanceHistory{}
 					}
@@ -1202,7 +1203,7 @@ func (w *Worker) balanceHistoryForTxid(addrDesc bchain.AddressDescriptor, txid s
 			tao := &ta.Outputs[i]
 			if bytes.Equal(addrDesc, tao.AddrDesc) {
 				(*big.Int)(bh.ReceivedSat).Add((*big.Int)(bh.ReceivedSat), &tao.ValueSat)
-				if tao.AssetInfo.AssetGuid > 0 {
+				if tao.AssetInfo != nil {
 					if bh.Tokens == nil {
 						bh.Tokens = map[uint32]*TokenBalanceHistory{}
 					}
@@ -1385,8 +1386,8 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *bchain.A
 									Locktime:  bchainTx.LockTime,
 									Coinbase:  coinbase,
 								}
-								if vout.AssetInfo.AssetGuid > 0 {
-									utxoTmp.AssetInfo = &vout.AssetInfo
+								if vout.AssetInfo != nil {
+									utxoTmp.AssetInfo = &bchain.AssetInfo{AssetGuid: vout.AssetInfo.AssetGuid, ValueSat: big.NewInt(vout.AssetInfo.ValueSat)}
 								}
 								utxos = append(utxos, utxoTmp)
 								inMempool[bchainTx.Txid] = struct{}{}
@@ -1445,8 +1446,8 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *bchain.A
 							Confirmations: confirmations,
 							Coinbase:      coinbase,
 						}
-						if utxo.AssetInfo.AssetGuid > 0 {
-							utxoTmp.AssetInfo = &utxo.AssetInfo
+						if utxo.AssetInfo != nil {
+							utxoTmp.AssetInfo = &bchain.AssetInfo{AssetGuid: utxo.AssetInfo.AssetGuid, ValueSat: big.NewInt(utxo.AssetInfo.ValueSat)}
 						}
 						utxos = append(utxos, utxoTmp)
 					}

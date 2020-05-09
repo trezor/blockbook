@@ -386,7 +386,7 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 				Vout:     0,
 				Height:   182,
 				ValueSat: *dbtestdata.SatS2T1A1,
-				AssetInfo: bchain.AssetInfo{AssetGuid: 720034467, ValueSat: dbtestdata.SatZero},
+				AssetInfo: &bchain.AssetInfo{AssetGuid: 720034467, ValueSat: dbtestdata.SatZero},
 			},
 		},
 		AssetBalances: map[uint32]*bchain.AssetBalance {
@@ -412,7 +412,7 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 		Inputs: []bchain.TxInput{
 			{
 				ValueSat: *dbtestdata.SatZero,
-				AssetInfo: bchain.AssetInfo{AssetGuid: 720034467, ValueSat: dbtestdata.SatZero},
+				AssetInfo: &bchain.AssetInfo{AssetGuid: 720034467, ValueSat: dbtestdata.SatZero},
 			},
 		},
 		Outputs: []bchain.TxOutput{
@@ -420,7 +420,7 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 				AddrDesc: addressToAddrDesc(dbtestdata.AddrS5, d.chainParser),
 				Spent:    false,
 				ValueSat: *dbtestdata.SatS2T1A1,
-				AssetInfo: bchain.AssetInfo{AssetGuid: 720034467, ValueSat: dbtestdata.SatZero},
+				AssetInfo: &bchain.AssetInfo{AssetGuid: 720034467, ValueSat: dbtestdata.SatZero},
 			},
 			{
 				AddrDesc: hexToBytes(dbtestdata.TxidS2T1OutputReturn),

@@ -72,8 +72,8 @@ func (m *MempoolBitcoinType) getInputAddress(input Outpoint) *addrIndex {
 			glog.Error("error in addrDesc in ", input.Txid, " ", input.Vout, ": ", err)
 			return nil
 		}
-		if itx.Vout[input.Vout].AssetInfo.AssetGuid > 0 {
-			assetInfo = &itx.Vout[input.Vout].AssetInfo
+		if itx.Vout[input.Vout].AssetInfo != nil {
+			assetInfo = &bchain.AssetInfo{AssetGuid: itx.Vout[input.Vout].AssetInfo.AssetGuid, ValueSat: big.NewInt(itx.Vout[input.Vout].AssetInfo.ValueSat)}
 		}
 	}
 	return &addrIndex{string(addrDesc), ^input.Vout, assetInfo}
