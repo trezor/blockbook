@@ -1,16 +1,20 @@
+// +build unittest
+
 package nuls
 
 import (
 	"blockbook/bchain"
 	"blockbook/bchain/coins/btc"
 	"encoding/hex"
-	"encoding/json"
 	"math/big"
 	"reflect"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/martinboehm/btcutil/hdkeychain"
+	"github.com/syscoin/blockbook/bchain"
+	"github.com/syscoin/blockbook/bchain/coins/btc"
+	"github.com/syscoin/blockbook/common"
 )
 
 var (
@@ -41,7 +45,7 @@ func init() {
 			{
 				ValueSat:  *big.NewInt(399999000000),
 				N:         0,
-				JsonValue: json.Number("0"),
+				JsonValue: common.JSONNumber("0"),
 				ScriptPubKey: bchain.ScriptPubKey{
 					Hex: "Nse4zpZHsUuU7h5ymv28pcGbwHju3joV",
 					Addresses: []string{
@@ -73,7 +77,7 @@ func init() {
 			{
 				ValueSat:  *big.NewInt(400000000000),
 				N:         0,
-				JsonValue: json.Number("0"),
+				JsonValue: common.JSONNumber("0"),
 				ScriptPubKey: bchain.ScriptPubKey{
 					Hex: "Nse4ikjE88g2BgsNwsswTdkSwiSrKjjS",
 					Addresses: []string{
@@ -84,7 +88,7 @@ func init() {
 			{
 				ValueSat:  *big.NewInt(7286565570000),
 				N:         1,
-				JsonValue: json.Number("0"),
+				JsonValue: common.JSONNumber("0"),
 				ScriptPubKey: bchain.ScriptPubKey{
 					Hex: "Nse119z2oSDJYkFkxmwYDiYtPfBeNkqi",
 					Addresses: []string{

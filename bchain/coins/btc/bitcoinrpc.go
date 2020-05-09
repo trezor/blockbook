@@ -17,6 +17,8 @@ import (
 	"github.com/golang/glog"
 	"github.com/juju/errors"
 	"github.com/martinboehm/btcd/wire"
+	"github.com/syscoin/blockbook/bchain"
+	"github.com/syscoin/blockbook/common"
 )
 
 // BitcoinRPC is an interface to JSON-RPC bitcoind service.
@@ -237,13 +239,13 @@ type CmdGetBlockChainInfo struct {
 type ResGetBlockChainInfo struct {
 	Error  *bchain.RPCError `json:"error"`
 	Result struct {
-		Chain         string      `json:"chain"`
-		Blocks        int         `json:"blocks"`
-		Headers       int         `json:"headers"`
-		Bestblockhash string      `json:"bestblockhash"`
-		Difficulty    json.Number `json:"difficulty"`
-		SizeOnDisk    int64       `json:"size_on_disk"`
-		Warnings      string      `json:"warnings"`
+		Chain         string            `json:"chain"`
+		Blocks        int               `json:"blocks"`
+		Headers       int               `json:"headers"`
+		Bestblockhash string            `json:"bestblockhash"`
+		Difficulty    common.JSONNumber `json:"difficulty"`
+		SizeOnDisk    int64             `json:"size_on_disk"`
+		Warnings      string            `json:"warnings"`
 	} `json:"result"`
 }
 
@@ -256,11 +258,11 @@ type CmdGetNetworkInfo struct {
 type ResGetNetworkInfo struct {
 	Error  *bchain.RPCError `json:"error"`
 	Result struct {
-		Version         json.Number `json:"version"`
-		Subversion      json.Number `json:"subversion"`
-		ProtocolVersion json.Number `json:"protocolversion"`
-		Timeoffset      float64     `json:"timeoffset"`
-		Warnings        string      `json:"warnings"`
+		Version         common.JSONNumber `json:"version"`
+		Subversion      common.JSONNumber `json:"subversion"`
+		ProtocolVersion common.JSONNumber `json:"protocolversion"`
+		Timeoffset      float64           `json:"timeoffset"`
+		Warnings        string            `json:"warnings"`
 	} `json:"result"`
 }
 
@@ -381,8 +383,8 @@ type CmdEstimateSmartFee struct {
 type ResEstimateSmartFee struct {
 	Error  *bchain.RPCError `json:"error"`
 	Result struct {
-		Feerate json.Number `json:"feerate"`
-		Blocks  int         `json:"blocks"`
+		Feerate common.JSONNumber `json:"feerate"`
+		Blocks  int               `json:"blocks"`
 	} `json:"result"`
 }
 
@@ -396,8 +398,8 @@ type CmdEstimateFee struct {
 }
 
 type ResEstimateFee struct {
-	Error  *bchain.RPCError `json:"error"`
-	Result json.Number      `json:"result"`
+	Error  *bchain.RPCError  `json:"error"`
+	Result common.JSONNumber `json:"result"`
 }
 
 // sendrawtransaction
