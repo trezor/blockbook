@@ -164,7 +164,7 @@ func (d *RocksDB) DisconnectAllocationOutput(addrDesc *bchain.AddressDescriptor,
 	dBAsset, err := d.GetAsset(assetInfo.AssetGuid, assets)
 	if dBAsset == nil || err != nil {
 		if dBAsset == nil {
-			return errors.New(fmt.Sprint("DisconnectAllocationOutput could not read asset " , assetInfo.AssetGui))
+			return errors.New(fmt.Sprint("DisconnectAllocationOutput could not read asset " , assetInfo.AssetGuid))
 		}
 		return err
 	}
