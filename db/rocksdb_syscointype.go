@@ -94,6 +94,9 @@ func (d *RocksDB) ConnectAllocationOutput(addrDesc* bchain.AddressDescriptor, he
 	if !isActivate && err != nil {
 		return err
 	}
+	if !isActivate && dBAsset == nil {
+		return errors.New(fmt.Sprint("ConnectAllocationOutput could not read asset " , assetInfo.AssetGuid))
+	}
 	counted := d.addToAssetsMap(txAssets, assetInfo.AssetGuid, btxID, version, height)
 	if !counted {
 		if dBAsset != nil {
@@ -141,6 +144,9 @@ func (d *RocksDB) ConnectAssetOutput(addrDescData *bchain.AddressDescriptor, add
 		dBAsset, err = d.GetAsset(assetGuid, assets)
 		if  err != nil {
 			return err
+		}
+		if dBAsset == nil {
+			return errors.New(fmt.Sprint("ConnectAssetOutput could not read asset " , assetGuid))
 		}
 	} else if isActivate {
 		dBAsset = &bchain.Asset{Transactions: 1, AssetObj: *asset}
