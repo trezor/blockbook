@@ -1,9 +1,12 @@
+// +build unittest
+
 package bchain
 
 import (
-	"encoding/json"
 	"math/big"
 	"testing"
+
+	"github.com/trezor/blockbook/common"
 )
 
 func NewBaseParser(adp int) *BaseParser {
@@ -44,7 +47,7 @@ func TestBaseParser_AmountToDecimalString(t *testing.T) {
 func TestBaseParser_AmountToBigInt(t *testing.T) {
 	for _, tt := range amounts {
 		t.Run(tt.s, func(t *testing.T) {
-			got, err := NewBaseParser(tt.adp).AmountToBigInt(json.Number(tt.s))
+			got, err := NewBaseParser(tt.adp).AmountToBigInt(common.JSONNumber(tt.s))
 			if err != nil {
 				t.Errorf("BaseParser.AmountToBigInt() error = %v", err)
 				return

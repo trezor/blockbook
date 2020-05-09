@@ -3,8 +3,6 @@ package common
 import (
 	"encoding/json"
 	"strconv"
-
-	"github.com/golang/glog"
 )
 
 // JSONNumber is used instead of json.Number after upgrade to go 1.14
@@ -36,7 +34,11 @@ func (c JSONNumber) String() string {
 
 // MarshalJSON marsalls JSONNumber to []byte
 // if possible, return a number without quotes, otherwise string value in quotes
+// empty string is treated as number 0
 func (c JSONNumber) MarshalJSON() ([]byte, error) {
+	if len(c) == 0 {
+		return []byte("0"), nil
+	}
 	if f, err := c.Float64(); err == nil {
 		return json.Marshal(f)
 	}
@@ -53,6 +55,5 @@ func (c *JSONNumber) UnmarshalJSON(d []byte) error {
 	} else {
 		*c = JSONNumber(s)
 	}
-	glog.Info("JSONNumber ", s, ", ", *c)
 	return nil
 }

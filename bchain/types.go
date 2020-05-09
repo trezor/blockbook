@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+
+	"github.com/trezor/blockbook/common"
 )
 
 // ChainType is type of the blockchain
@@ -68,9 +70,9 @@ type ScriptPubKey struct {
 // Vout contains data about tx output
 type Vout struct {
 	ValueSat     big.Int
-	JsonValue    json.Number  `json:"value"`
-	N            uint32       `json:"n"`
-	ScriptPubKey ScriptPubKey `json:"scriptPubKey"`
+	JsonValue    common.JSONNumber `json:"value"`
+	N            uint32            `json:"n"`
+	ScriptPubKey ScriptPubKey      `json:"scriptPubKey"`
 }
 
 // Tx is blockchain transaction
@@ -110,30 +112,30 @@ type BlockHeader struct {
 // BlockInfo contains extended block header data and a list of block txids
 type BlockInfo struct {
 	BlockHeader
-	Version    json.Number `json:"version"`
-	MerkleRoot string      `json:"merkleroot"`
-	Nonce      json.Number `json:"nonce"`
-	Bits       string      `json:"bits"`
-	Difficulty json.Number `json:"difficulty"`
-	Txids      []string    `json:"tx,omitempty"`
+	Version    common.JSONNumber `json:"version"`
+	MerkleRoot string            `json:"merkleroot"`
+	Nonce      common.JSONNumber `json:"nonce"`
+	Bits       string            `json:"bits"`
+	Difficulty common.JSONNumber `json:"difficulty"`
+	Txids      []string          `json:"tx,omitempty"`
 }
 
 // MempoolEntry is used to get data about mempool entry
 type MempoolEntry struct {
 	Size            uint32 `json:"size"`
 	FeeSat          big.Int
-	Fee             json.Number `json:"fee"`
+	Fee             common.JSONNumber `json:"fee"`
 	ModifiedFeeSat  big.Int
-	ModifiedFee     json.Number `json:"modifiedfee"`
-	Time            uint64      `json:"time"`
-	Height          uint32      `json:"height"`
-	DescendantCount uint32      `json:"descendantcount"`
-	DescendantSize  uint32      `json:"descendantsize"`
-	DescendantFees  uint32      `json:"descendantfees"`
-	AncestorCount   uint32      `json:"ancestorcount"`
-	AncestorSize    uint32      `json:"ancestorsize"`
-	AncestorFees    uint32      `json:"ancestorfees"`
-	Depends         []string    `json:"depends"`
+	ModifiedFee     common.JSONNumber `json:"modifiedfee"`
+	Time            uint64            `json:"time"`
+	Height          uint32            `json:"height"`
+	DescendantCount uint32            `json:"descendantcount"`
+	DescendantSize  uint32            `json:"descendantsize"`
+	DescendantFees  uint32            `json:"descendantfees"`
+	AncestorCount   uint32            `json:"ancestorcount"`
+	AncestorSize    uint32            `json:"ancestorsize"`
+	AncestorFees    uint32            `json:"ancestorfees"`
+	Depends         []string          `json:"depends"`
 }
 
 // ChainInfo is used to get information about blockchain
@@ -267,9 +269,9 @@ type BlockChainParser interface {
 	MinimumCoinbaseConfirmations() int
 	// AmountToDecimalString converts amount in big.Int to string with decimal point in the correct place
 	AmountToDecimalString(a *big.Int) string
-	// AmountToBigInt converts amount in json.Number (string) to big.Int
+	// AmountToBigInt converts amount in common.JSONNumber (string) to big.Int
 	// it uses string operations to avoid problems with rounding
-	AmountToBigInt(n json.Number) (big.Int, error)
+	AmountToBigInt(n common.JSONNumber) (big.Int, error)
 	// address descriptor conversions
 	GetAddrDescFromVout(output *Vout) (AddressDescriptor, error)
 	GetAddrDescFromAddress(address string) (AddressDescriptor, error)
