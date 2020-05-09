@@ -815,13 +815,11 @@ func (p *SyscoinParser) PackAddrBalance(ab *bchain.AddrBalance, buf, varBuf []by
 
 
 func (p *SyscoinParser) PackAsset(asset *bchain.Asset) []byte {
-	buf := make([]byte, 0, 32)
-	varBuf := make([]byte, vlq.MaxLen64)
+	buf := make([]byte, 0, 52)
+	varBuf := make([]byte, 40)
 	l := p.BaseParser.PackVaruint(uint(asset.Transactions), varBuf)
 	buf = append(buf, varBuf[:l]...)
-	l = p.BaseParser.PackVaruint(uint(len(asset.AddrDesc)), varBuf)
-	buf = append(buf, varBuf[:l]...)
-	buf = append(buf, []byte(asset.AddrDesc)...)
+	buf = p.BaseParser.PackVarBytes([]byte(asset.AddrDesc), buf, varBuf)
 	buf = p.PackAssetObj(&asset.AssetObj, buf)
 	return buf
 }
