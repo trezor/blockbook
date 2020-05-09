@@ -599,7 +599,7 @@ type TxAssetMap map[string]*TxAsset
 
 // used to store all unique txid/address tuples related to an asset
 type TxAssetAddressIndex struct {
-	addrDesc   AddressDescriptor
+	AddrDesc   AddressDescriptor
 	BtxID      []byte
 }
 type TxAssetAddress struct {

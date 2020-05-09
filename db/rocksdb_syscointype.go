@@ -75,7 +75,7 @@ func (d *RocksDB) DisconnectAssetOutputHelper(asset *bchain.AssetType, dBAsset *
 	return nil
 }
 
-func (d *RocksDB) ConnectAllocationInput(addrDesc* bchain.AddressDescriptor, balanceAsset *bchain.AssetBalance, isActivate bool, assetInfo* bchain.AssetInfo, assets map[uint32]*bchain.Asset, blockTxAssetAddresses bchain.AssetAddressMap) error {
+func (d *RocksDB) ConnectAllocationInput(addrDesc* bchain.AddressDescriptor, balanceAsset *bchain.AssetBalance, isActivate bool, btxID []byte, assetInfo* bchain.AssetInfo, assets map[uint32]*bchain.Asset, blockTxAssetAddresses bchain.TxAssetAddressMap) error {
 	dBAsset, err := d.GetAsset(assetInfo.AssetGuid, &assets)
 	if !isActivate && err != nil {
 		return err
@@ -95,7 +95,7 @@ func (d *RocksDB) ConnectAllocationInput(addrDesc* bchain.AddressDescriptor, bal
 	return nil
 }
 
-func (d *RocksDB) ConnectAllocationOutput(addrDesc* bchain.AddressDescriptor, height uint32, balanceAsset *bchain.AssetBalance, isActivate bool, version int32, btxID []byte, assetInfo* bchain.AssetInfo, assets map[uint32]*bchain.Asset, txAssets bchain.TxAssetMap, blockTxAssetAddresses bchain.AssetAddressMap) error {
+func (d *RocksDB) ConnectAllocationOutput(addrDesc* bchain.AddressDescriptor, height uint32, balanceAsset *bchain.AssetBalance, isActivate bool, version int32, btxID []byte, assetInfo* bchain.AssetInfo, assets map[uint32]*bchain.Asset, txAssets bchain.TxAssetMap, blockTxAssetAddresses bchain.TxAssetAddressMap) error {
 	dBAsset, err := d.GetAsset(assetInfo.AssetGuid, &assets)
 	if !isActivate && err != nil {
 		return err
@@ -166,7 +166,7 @@ func (d *RocksDB) ConnectAssetOutput(addrDescData *bchain.AddressDescriptor, add
 	return nil
 }
 
-func (d *RocksDB) DisconnectAllocationOutput(assetBalances map[uint32]*bchain.AssetBalance, addrDesc *bchain.AddressDescriptor, balanceAsset *bchain.AssetBalance, isActivate bool,  version int32, btxID []byte, assets map[uint32]*bchain.Asset,  assetInfo *bchain.AssetInfo, blockTxAssetAddresses bchain.AssetAddressMap, assetFoundInTx func(asset uint32, btxID []byte) bool) error {
+func (d *RocksDB) DisconnectAllocationOutput(assetBalances map[uint32]*bchain.AssetBalance, addrDesc *bchain.AddressDescriptor, balanceAsset *bchain.AssetBalance, isActivate bool,  version int32, btxID []byte, assets map[uint32]*bchain.Asset,  assetInfo *bchain.AssetInfo, blockTxAssetAddresses bchain.TxAssetAddressMap, assetFoundInTx func(asset uint32, btxID []byte) bool) error {
 	dBAsset, err := d.GetAsset(assetInfo.AssetGuid, &assets)
 	if dBAsset == nil || err != nil {
 		return err
@@ -228,7 +228,7 @@ func (d *RocksDB) DisconnectAssetOutput(addrDesc *bchain.AddressDescriptor, isAc
 	assets[assetGuid] = dBAsset
 	return nil
 }
-func (d *RocksDB) DisconnectAllocationInput(assetBalances map[uint32]*bchain.AssetBalance, addrDesc *bchain.AddressDescriptor, balanceAsset *bchain.AssetBalance,  btxID []byte, assetInfo *bchain.AssetInfo, assets map[uint32]*bchain.Asset, blockTxAssetAddresses bchain.AssetAddressMap, assetFoundInTx func(asset uint32, btxID []byte) bool) error {
+func (d *RocksDB) DisconnectAllocationInput(assetBalances map[uint32]*bchain.AssetBalance, addrDesc *bchain.AddressDescriptor, balanceAsset *bchain.AssetBalance,  btxID []byte, assetInfo *bchain.AssetInfo, assets map[uint32]*bchain.Asset, blockTxAssetAddresses bchain.TxAssetAddressMap, assetFoundInTx func(asset uint32, btxID []byte) bool) error {
 	dBAsset, err := d.GetAsset(assetInfo.AssetGuid, &assets)
 	if dBAsset == nil || err != nil {
 		return err
@@ -448,7 +448,7 @@ func (d *RocksDB) addToAssetAddressMap(txassetAddresses bchain.TxAssetAddressMap
 	if found {
 		// if the tx is already in the slice
 		for _, t := range at.Txs {
-			if bytes.Equal(btxID, t.BtxID) && bytes.Equal(addrDesc, t.AddrDesc) {
+			if bytes.Equal(btxID, t.BtxID) && bytes.Equal(*addrDesc, t.AddrDesc) {
 				return true
 			}
 		}
