@@ -126,13 +126,13 @@ func verifyAfterSyscoinTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect bool
 	}
 	voutAsset, ok := dBAsset.AssetObj.Allocation.VoutAssets[720034467]
 	if !ok {
-		t.Fatal(fmt.Sprint("Block1: voutAsset missing 720034467")
+		t.Fatal("Block1: voutAsset missing 720034467")
 	}
 	if len(voutAsset) != 1 {
 		t.Fatal(fmt.Sprint("Block1: Property mismatch len(voutAsset): ", len(voutAsset) , ". Expected: 1"))
 	}
 	if voutAsset[0].N != 0 {
-		t.Fatal(fmt.Sprint("Block1: Property mismatch voutAsset[0].N: ", len(voutAsset) , ". Expected: 0"))
+		t.Fatal(fmt.Sprint("Block1: Property mismatch voutAsset[0].N: ", voutAsset[0].N , ". Expected: 0"))
 	}
 	if voutAsset[0].ValueSat != 0 {
 		t.Fatal(fmt.Sprint("Block1: Property mismatch voutAsset[0].ValueSat: ", voutAsset[0].ValueSat , ". Expected: 0"))
