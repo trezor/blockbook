@@ -464,7 +464,7 @@ func (p *BaseParser) UnpackVaruint(buf []byte) (uint, int) {
 
 func (p *BaseParser) UnpackVarBytes(buf []byte) ([]byte, int) {
 	txvalue, l := p.UnpackVaruint(buf)
-	bufValue := append([]byte(nil), buf[:int(txvalue)]...)
+	bufValue := append([]byte(nil), buf[l:l+int(txvalue)]...)
 	return bufValue, (l+int(txvalue))
 }
 
