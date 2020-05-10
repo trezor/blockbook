@@ -253,13 +253,13 @@ func (p *SyscoinParser) TryGetOPReturn(script []byte) []byte {
 
 func (p *SyscoinParser) PackAllocation(a *bchain.AssetAllocationType, buf []byte) []byte {
 	varBuf := make([]byte, vlq.MaxLen64)
-	l := p.BaseParser.PackVarint(uint(len(a.VoutAssets)), varBuf)
+	l := p.BaseParser.PackVarint(len(a.VoutAssets), varBuf)
 
 	for k, v := range a.VoutAssets {
 		varBufLE := p.BaseParser.PackUintLE(k)
 		buf = append(buf, varBufLE...)
 
-		l = p.BaseParser.PackVarint(uint(len(v)), varBuf)
+		l = p.BaseParser.PackVarint(len(v), varBuf)
 		buf = append(buf, varBuf[:l]...)
 
 		for _,voutAsset := range v {
@@ -366,7 +366,7 @@ func (p *SyscoinParser) PackAssetObj(a *bchain.AssetType, buf []byte) []byte {
 func (p *SyscoinParser) PackAssetOut(a *bchain.AssetOutType, buf []byte, varBuf []byte) []byte {
 	l := p.BaseParser.PackVarint(int(a.N), varBuf)
 	buf = append(buf, varBuf[:l]...)
-	l = p.BaseParser.PackVarint(uint(p.BaseParser.CompressAmount(uint64(a.ValueSat))), varBuf)
+	l = p.BaseParser.PackVarint(int(p.BaseParser.CompressAmount(uint64(a.ValueSat))), varBuf)
 	buf = append(buf, varBuf[:l]...)
 	return buf
 }
