@@ -320,6 +320,10 @@ func (d *RocksDB) storeAssets(wb *gorocksdb.WriteBatch, assets map[uint32]*bchai
 			wb.DeleteCF(d.cfh[cfAssets], key)
 		} else {
 			buf := d.chainParser.PackAsset(asset)
+			assetDb := d.chainParser.UnpackAsset(buf)
+			if assetDb == nil {
+				return errors.New("storeAssets: UnpackAsset failure")
+			}
 			wb.PutCF(d.cfh[cfAssets], key, buf)
 		}
 	}
