@@ -469,7 +469,7 @@ func (p *BaseParser) UnpackVarBytes(buf []byte) ([]byte, int) {
 }
 
 func (p *BaseParser) PackVarBytes(bufValue []byte, buf []byte, varBuf []byte) []byte {
-	l := p.PackVarint(len(bufValue), varBuf)
+	l := p.PackVarint(uint(len(bufValue)), varBuf)
 	buf = append(buf, varBuf[:l]...)
 	buf = append(buf, bufValue...)
 	return buf
