@@ -133,7 +133,7 @@ func (d *RocksDB) ConnectAssetOutput(addrDescData *bchain.AddressDescriptor, add
 	}
 	sptData := d.chainParser.TryGetOPReturn(script)
 	if sptData == nil {
-		return errors.New(fmt.Sprint("ConnectAssetOutput could not parse opreturn"))
+		return errors.New("ConnectAssetOutput could not parse opreturn")
 	}
 	asset, err := d.chainParser.GetAssetFromData(sptData)
 	if err != nil {
@@ -308,7 +308,6 @@ func (d *RocksDB) storeAssets(wb *gorocksdb.WriteBatch, assets map[uint32]*bchai
 	if assets == nil {
 		return nil
 	}
-	return errors.New("storeAssets: 1")
 	if AssetCache == nil {
 		AssetCache = map[uint32]bchain.Asset{}
 	}

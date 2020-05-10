@@ -581,14 +581,13 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses bch
 					balance.Txs++
 				}
 				if tao.AssetInfo != nil {
-					assetGuid := tao.AssetInfo.AssetGuid
 					if balance.AssetBalances == nil {
 						balance.AssetBalances = map[uint32]*bchain.AssetBalance{}
 					}
-					balanceAsset, ok := balance.AssetBalances[assetGuid]
+					balanceAsset, ok := balance.AssetBalances[tao.AssetInfo.AssetGuid]
 					if !ok {
 						balanceAsset = &bchain.AssetBalance{Transfers: 0, BalanceSat: big.NewInt(0), SentSat: big.NewInt(0)}
-						balance.AssetBalances[assetGuid] = balanceAsset
+						balance.AssetBalances[tao.AssetInfo.AssetGuid] = balanceAsset
 					}
 					err = d.ConnectAllocationOutput(&addrDesc, block.Height, balanceAsset, isActivate, tx.Version, btxID, tao.AssetInfo, assets, txAssets, blockTxAssetAddresses)
 					if err != nil {
