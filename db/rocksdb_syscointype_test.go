@@ -10,6 +10,8 @@ import (
 	"blockbook/tests/dbtestdata"
 	"math/big"
 	"reflect"
+	"fmt"
+	"bytes"
 	"testing"
 	"github.com/martinboehm/btcutil/chaincfg"
 	"github.com/juju/errors"
@@ -116,8 +118,8 @@ func verifyAfterSyscoinTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect bool
 		}
 		t.Fatal(err)
 	}
-	if dBAsset.Transaction != 1 {
-		t.Fatal(fmt.Sprint("Block1: Property mismatch dbAsset.Transaction: ", dBAsset.Transaction, ". Expected: 1"))
+	if dBAsset.Transactions != 1 {
+		t.Fatal(fmt.Sprint("Block1: Property mismatch dbAsset.Transaction: ", dBAsset.Transactions, ". Expected: 1"))
 	}
 	if dBAsset.AssetObj.Symbol != "CAT" {
 		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.Symbol: ", dBAsset.AssetObj.Symbol , ". Expected: CAT"))
