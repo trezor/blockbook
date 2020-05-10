@@ -275,7 +275,7 @@ func (p *SyscoinParser) UnpackAllocation(a *bchain.AssetAllocationType, buf []by
 	for i := 0; i < int(numAssets); i++ {
 		guid, ll := p.BaseParser.UnpackVaruint(buf[l:])
 		l += ll
-		assetGuid := uint32(guid)
+		assetGuid = uint32(guid)
 		numOutputs, ll := p.BaseParser.UnpackVaruint(buf[l:])
 		l += ll
 		assetOutArray, ok := a.VoutAssets[assetGuid]
