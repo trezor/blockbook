@@ -256,8 +256,8 @@ func (p *SyscoinParser) PackAllocation(a *bchain.AssetAllocationType, buf []byte
 	l := p.BaseParser.PackVaruint(uint(len(a.VoutAssets)), varBuf)
 
 	for k, v := range a.VoutAssets {
-		varBufLE := p.BaseParser.PackUintLE(k)
-		buf = append(buf, varBufLE...)
+		l = p.BaseParser.PackVaruint(uint(k), varBuf)
+		buf = append(buf, varBuf[:l]...)
 
 		l = p.BaseParser.PackVaruint(uint(len(v)), varBuf)
 		buf = append(buf, varBuf[:l]...)
@@ -273,8 +273,9 @@ func (p *SyscoinParser) UnpackAllocation(a *bchain.AssetAllocationType, buf []by
 	numAssets, l := p.BaseParser.UnpackVaruint(buf)
 	a.VoutAssets = make(map[uint32][]bchain.AssetOutType, numAssets)
 	for i := 0; i < int(numAssets); i++ {
-		assetGuid := p.BaseParser.UnpackUintLE(buf[l:])
-		l += 4
+		guid, ll := p.BaseParser.UnpackVaruint(buf[l:])
+		l += ll
+		assetGuid = uint32(guid)
 		numOutputs, ll := p.BaseParser.UnpackVaruint(buf[l:])
 		l += ll
 		assetOutArray, ok := a.VoutAssets[assetGuid]
@@ -422,7 +423,7 @@ func (p *SyscoinParser) UnpackMintSyscoin(a *bchain.MintSyscoinType, buf []byte)
 }
 
 func (p *SyscoinParser) AppendMintSyscoin(a *bchain.MintSyscoinType, buf []byte) []byte {
-	varBuf := make([]byte, 4096)
+	varBuf := make([]byte, 512)
 	buf = p.PackAllocation(&a.Allocation, buf)
 
 	l := p.BaseParser.PackVaruint(uint(a.BridgeTransferId), varBuf)
@@ -484,8 +485,8 @@ func (p *SyscoinParser) GetAllocationFromTx(tx *bchain.Tx) (*bchain.AssetAllocat
 	}
 	var assetAllocation bchain.AssetAllocationType
 	l := p.UnpackAllocation(&assetAllocation, sptData)
-	// should be atleast 8 bytes minimum
-	if l < 8 {
+	// should be atleast 5 bytes minimum
+	if l < 5 {
 		return nil, errors.New("Could not decode asset allocation")
 	}
 	return &assetAllocation, nil

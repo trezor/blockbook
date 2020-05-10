@@ -425,16 +425,6 @@ func (p *BaseParser) UnpackUint(buf []byte) uint32 {
 	return binary.BigEndian.Uint32(buf)
 }
 
-func (p *BaseParser) PackUintLE(i uint32) []byte {
-	buf := make([]byte, 4)
-	binary.LittleEndian.PutUint32(buf, i)
-	return buf
-}
-
-func (p *BaseParser) UnpackUintLE(buf []byte) uint32 {
-	return binary.LittleEndian.Uint32(buf)
-}
-
 func (p *BaseParser) PackVarint32(i int32, buf []byte) int {
 	return vlq.PutInt(buf, int64(i))
 }
