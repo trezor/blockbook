@@ -122,28 +122,28 @@ func verifyAfterSyscoinTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect bool
 	if dBAsset.AssetObj.Symbol != "CAT" {
 		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.Symbol: ", dBAsset.AssetObj.Symbol , ". Expected: CAT"))
 	}
-	if dBAsset.AssetObj.PubData != []byte({"{\"description\":\"publicvalue\"}") {
+	if !bytes.Equal(dBAsset.AssetObj.PubData, []byte("{\"description\":\"publicvalue\"}")) {
 		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.PubData: ", dBAsset.AssetObj.PubData  , ". Expected: {\"description\":\"publicvalue\"}"))
 	}
-	if dBAsset.AssetObj.UpdateFlags != 31) {
+	if dBAsset.AssetObj.UpdateFlags != 31 {
 		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.UpdateFlags: ", dBAsset.AssetObj.UpdateFlags  , ". Expected: 31"))
 	}
-	if dBAsset.AssetObj.Balance != 10000000000) {
+	if dBAsset.AssetObj.Balance != 10000000000 {
 		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.Balance: ", dBAsset.AssetObj.Balance  , ". Expected: 10000000000"))
 	}
-	if dBAsset.AssetObj.TotalSupply != 10000000000) {
+	if dBAsset.AssetObj.TotalSupply != 10000000000 {
 		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.TotalSupply: ", dBAsset.AssetObj.TotalSupply  , ". Expected: 10000000000"))
 	}
-	if dBAsset.AssetObj.MaxSupply != 100000000000) {
+	if dBAsset.AssetObj.MaxSupply != 100000000000 {
 		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.MaxSupply: ", dBAsset.AssetObj.MaxSupply  , ". Expected: 100000000000"))
 	}
-	if dBAsset.AssetObj.Precision != 8) {
+	if dBAsset.AssetObj.Precision != 8 {
 		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.Precision: ", dBAsset.AssetObj.Precision  , ". Expected: 8"))
 	}
-	if dBAsset.AssetObj.PrevPubData != "") {
+	if dBAsset.AssetObj.PrevPubData != "" {
 		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.PrevPubData: ", dBAsset.AssetObj.PrevPubData  , ". Expected: ''"))
 	}
-	if dBAsset.AssetObj.PrevUpdateFlags != 0) {
+	if dBAsset.AssetObj.PrevUpdateFlags != 0 {
 		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.PrevUpdateFlags: ", dBAsset.AssetObj.PrevUpdateFlags  , ". Expected: 0"))
 	}
 }
@@ -224,28 +224,28 @@ func verifyAfterSyscoinTypeBlock2(t *testing.T, d *RocksDB) {
 	if dBAsset.AssetObj.Symbol != "CAT" {
 		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.Symbol: ", dBAsset.AssetObj.Symbol , ". Expected: CAT"))
 	}
-	if dBAsset.AssetObj.PubData != []byte("{\"description\":\"newdescription1\"}") {
+	if !bytes.Equal(dBAsset.AssetObj.PubData, []byte("{\"description\":\"newdescription1\"}")) {
 		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.PubData: ", dBAsset.AssetObj.PubData  , ". Expected: {\"description\":\"newdescription1\"}"))
 	}
-	if dBAsset.AssetObj.UpdateFlags != 31) {
+	if dBAsset.AssetObj.UpdateFlags != 31 {
 		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.UpdateFlags: ", dBAsset.AssetObj.UpdateFlags  , ". Expected: 31"))
 	}
-	if dBAsset.AssetObj.Balance != 10500000000) {
+	if dBAsset.AssetObj.Balance != 10500000000 {
 		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.Balance: ", dBAsset.AssetObj.Balance  , ". Expected: 10500000000"))
 	}
-	if dBAsset.AssetObj.TotalSupply != 10500000000) {
+	if dBAsset.AssetObj.TotalSupply != 10500000000 {
 		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.TotalSupply: ", dBAsset.AssetObj.TotalSupply  , ". Expected: 10000000000"))
 	}
-	if dBAsset.AssetObj.MaxSupply != 100000000000) {
+	if dBAsset.AssetObj.MaxSupply != 100000000000 {
 		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.MaxSupply: ", dBAsset.AssetObj.MaxSupply  , ". Expected: 100000000000"))
 	}
-	if dBAsset.AssetObj.Precision != 8) {
+	if dBAsset.AssetObj.Precision != 8 {
 		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.Precision: ", dBAsset.AssetObj.Precision  , ". Expected: 8"))
 	}
-	if dBAsset.AssetObj.PrevPubData != ]byte("{\"description\":\"publicvalue\"}") {
+	if !bytes.Equal(dBAsset.AssetObj.PrevPubData, ]byte("{\"description\":\"publicvalue\"}")) {
 		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.PrevPubData: ", dBAsset.AssetObj.PrevPubData  , ". Expected: {\"description\":\"publicvalue\"}"))
 	}
-	if dBAsset.AssetObj.PrevUpdateFlags != 31) {
+	if dBAsset.AssetObj.PrevUpdateFlags != 31 {
 		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.PrevUpdateFlags: ", dBAsset.AssetObj.PrevUpdateFlags  , ". Expected: 31"))
 	}
 }
