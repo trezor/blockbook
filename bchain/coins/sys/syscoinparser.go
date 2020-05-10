@@ -252,7 +252,7 @@ func (p *SyscoinParser) TryGetOPReturn(script []byte) []byte {
 }
 
 
-func (p *SyscoinParser) GetAllocationFromTx(tx *bchain.Tx) (*bchain.wire.AssetAllocationType, error) {
+func (p *SyscoinParser) GetAllocationFromTx(tx *bchain.Tx) (*wire.AssetAllocationType, error) {
 	var sptData []byte
 	for _, output := range tx.Vout {
 		addrDesc, err := p.GetAddrDescFromVout(&output)
@@ -271,7 +271,7 @@ func (p *SyscoinParser) GetAllocationFromTx(tx *bchain.Tx) (*bchain.wire.AssetAl
 			break
 		}
 	}
-	var assetAllocation bchain.wire.AssetAllocationType
+	var assetAllocation wire.AssetAllocationType
 	r := bytes.NewReader(sptData)
 	err := assetAllocation.Deserialize(r)
 	if err != nil {
