@@ -263,15 +263,15 @@ func CompressAmount(n uint64) uint64 {
     if n == 0 {
 		return 0
 	}
-    var e uint64 = 0;
+    var e int = 0;
     for ((n % 10) == 0) && e < 9 {
         n /= 10
         e++
     }
     if e < 9 {
-        var d uint64 = (n % 10)
+        var d int = (n % 10)
         n /= 10
-        return 1 + (n*9 + d - 1)*10 + e
+        return 1 + (n*9 + uint64(d) - 1)*10 + uint64(e)
     } else {
         return 1 + (n - 1)*10 + 9
     }
@@ -284,15 +284,15 @@ func DecompressAmount(x uint64) uint64 {
 	}
     x--
     // x = 10*(9*n + d - 1) + e
-    var e uint64 = x % 10
+    var e int = x % 10
     x /= 10
     var n uint64 = 0
     if e < 9 {
         // x = 9*n + d - 1
-        var d uint64 = (x % 9) + 1
+        var d int = (x % 9) + 1
         x /= 9
         // x = n
-        n = x*10 + d
+        n = x*10 + uint64(d)
     } else {
         n = x+1
     }
