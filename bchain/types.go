@@ -732,20 +732,10 @@ type BlockChainParser interface {
 	PackAsset(asset *Asset) ([]byte, error)
 	UnpackAsset(buf []byte) (*Asset, error)
 	GetAssetFromData(sptData []byte) (*wire.AssetType, error)
-	GetAllocationFromTx(tx *Tx) (*AssetAllocationType, error)
+	GetAllocationFromTx(tx *Tx) (*wire.AssetAllocationType, error)
 	LoadAssets(tx *Tx) error
 	AppendAssetInfo(assetInfo *AssetInfo, buf []byte, varBuf []byte) []byte
 	UnpackAssetInfo(assetInfo *AssetInfo, buf []byte) int
-	PackSyscoinBurnToEthereum(a *SyscoinBurnToEthereumType, buf []byte) []byte
-	UnpackSyscoinBurnToEthereum(a *SyscoinBurnToEthereumType, buf []byte) int
-	AppendMintSyscoin(a *MintSyscoinType, buf []byte) []byte
-	UnpackMintSyscoin(a *MintSyscoinType, buf []byte) int 
-	UnpackAssetOut(a *AssetOutType, buf []byte) int
-	PackAssetOut(a *AssetOutType, buf []byte, varBuf []byte) []byte
-	PackAssetObj(a *wire.AssetType, buf []byte) []byte
-	UnpackAssetObj(a *wire.AssetType, buf []byte) int
-	UnpackAllocation(a *AssetAllocationType, buf []byte) int
-	PackAllocation(a *AssetAllocationType, buf []byte) []byte
 }
 
 // Mempool defines common interface to mempool

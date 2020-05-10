@@ -355,7 +355,7 @@ func (p *BaseParser) UnpackAssetTxIndex(buf []byte) []*TxAssetIndex {
 func (p *BaseParser) GetAssetFromData(sptData []byte) (*wire.AssetType, error) {
 	return nil, errors.New("Not supported")
 }
-func (p *BaseParser) GetAllocationFromTx(tx *Tx) (*AssetAllocationType, error) {
+func (p *BaseParser) GetAllocationFromTx(tx *Tx) (*wire.AssetAllocationType, error) {
 	return nil, errors.New("Not supported")
 }
 func (p *BaseParser) LoadAssets(tx *Tx) error {
@@ -366,36 +366,6 @@ func (p *BaseParser) AppendAssetInfo(assetInfo *AssetInfo, buf []byte, varBuf []
 }
 func (p *BaseParser) UnpackAssetInfo(assetInfo *AssetInfo, buf []byte) int  {
 	return 0
-}
-func (p *BaseParser) PackSyscoinBurnToEthereum(a *SyscoinBurnToEthereumType, buf []byte) []byte {
-	return nil
-}
-func (p *BaseParser) UnpackSyscoinBurnToEthereum(a *SyscoinBurnToEthereumType, buf []byte) int {
-	return 0
-}
-func (p *BaseParser) AppendMintSyscoin(a *MintSyscoinType, buf []byte) []byte {
-	return nil
-}
-func (p *BaseParser) UnpackMintSyscoin(a *MintSyscoinType, buf []byte) int {
-	return 0
-}
-func (p *BaseParser) UnpackAssetOut(a *AssetOutType, buf []byte) int {
-	return 0
-}
-func (p *BaseParser) PackAssetOut(a *AssetOutType, buf []byte, varBuf []byte) []byte {
-	return nil
-}
-func (p *BaseParser) PackAssetObj(a *wire.AssetType, buf []byte) []byte {
-	return nil
-}
-func (p *BaseParser) UnpackAssetObj(a *wire.AssetType, buf []byte) int {
-	return 0
-}
-func (p *BaseParser) UnpackAllocation(a *AssetAllocationType, buf []byte) int {
-	return 0
-}
-func (p *BaseParser) PackAllocation(a *AssetAllocationType, buf []byte) []byte {
-	return nil
 }
 const PackedHeightBytes = 4
 func (p *BaseParser) PackAddressKey(addrDesc AddressDescriptor, height uint32) []byte {

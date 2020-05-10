@@ -252,7 +252,7 @@ func (p *SyscoinParser) TryGetOPReturn(script []byte) []byte {
 }
 
 
-func (p *SyscoinParser) GetAllocationFromTx(tx *bchain.Tx) (*bchain.AssetAllocationType, error) {
+func (p *SyscoinParser) GetAllocationFromTx(tx *bchain.Tx) (*bchain.wire.AssetAllocationType, error) {
 	var sptData []byte
 	for _, output := range tx.Vout {
 		addrDesc, err := p.GetAddrDescFromVout(&output)
@@ -271,11 +271,11 @@ func (p *SyscoinParser) GetAllocationFromTx(tx *bchain.Tx) (*bchain.AssetAllocat
 			break
 		}
 	}
-	var assetAllocation bchain.AssetAllocationType
-	l := p.UnpackAllocation(&assetAllocation, sptData)
-	// should be atleast 8 bytes minimum
-	if l < 8 {
-		return nil, errors.New("Could not decode asset allocation")
+	var assetAllocation bchain.wire.AssetAllocationType
+	r := bytes.NewReader(sptData)
+	err := assetAllocation.Deserialize(r)
+	if err != nil {
+		return nil, err
 	}
 	return &assetAllocation, nil
 }
