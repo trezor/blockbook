@@ -485,7 +485,10 @@ func (a *Amount) AsInt64() int64 {
 }
 
 
-// encapuslates Syscoin SPT as well as aux fees object unmarshalled
+// encapuslates Syscoin SPT wire types
+type AssetAllocation struct {
+	AssetObj 		wire.AssetAllocationType
+}
 type Asset struct {
 	Transactions	uint32
 	AssetObj 		wire.AssetType
@@ -731,8 +734,8 @@ type BlockChainParser interface {
 	UnpackAssetTxIndex(buf []byte) []*TxAssetIndex
 	PackAsset(asset *Asset) ([]byte, error)
 	UnpackAsset(buf []byte) (*Asset, error)
-	GetAssetFromData(sptData []byte) (*wire.AssetType, error)
-	GetAllocationFromTx(tx *Tx) (*wire.AssetAllocationType, error)
+	GetAssetFromData(sptData []byte) (*bchain.Asset, error)
+	GetAllocationFromTx(tx *Tx) (*bchain.AssetAllocation, error)
 	LoadAssets(tx *Tx) error
 	AppendAssetInfo(assetInfo *AssetInfo, buf []byte, varBuf []byte) []byte
 	UnpackAssetInfo(assetInfo *AssetInfo, buf []byte) int

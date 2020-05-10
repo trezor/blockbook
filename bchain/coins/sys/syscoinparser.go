@@ -250,7 +250,7 @@ func (p *SyscoinParser) TryGetOPReturn(script []byte) []byte {
 }
 
 
-func (p *SyscoinParser) GetAllocationFromTx(tx *bchain.Tx) (*wire.AssetAllocationType, error) {
+func (p *SyscoinParser) GetAllocationFromTx(tx *bchain.Tx) (*bchain.AssetAllocation, error) {
 	var sptData []byte
 	for _, output := range tx.Vout {
 		addrDesc, err := p.GetAddrDescFromVout(&output)
@@ -269,19 +269,19 @@ func (p *SyscoinParser) GetAllocationFromTx(tx *bchain.Tx) (*wire.AssetAllocatio
 			break
 		}
 	}
-	var assetAllocation wire.AssetAllocationType
+	var assetAllocation bchain.AssetAllocation
 	r := bytes.NewReader(sptData)
-	err := assetAllocation.Deserialize(r)
+	err := assetAllocation.AssetObj.Deserialize(r)
 	if err != nil {
 		return nil, err
 	}
 	return &assetAllocation, nil
 }
 
-func (p *SyscoinParser) GetAssetFromData(sptData []byte) (*wire.AssetType, error) {
-	var asset wire.AssetType
+func (p *SyscoinParser) GetAssetFromData(sptData []byte) (*bchain.Asset, error) {
+	var asset bchain.Asset
 	r := bytes.NewReader(sptData)
-	err := asset.Deserialize(r)
+	err := asset.AssetObj.Deserialize(r)
 	if err != nil {
 		return nil, err
 	}
@@ -293,7 +293,7 @@ func (p *SyscoinParser) LoadAssets(tx *bchain.Tx) error {
 		if err != nil {
 			return err
 		}
-        for k, v := range allocation.VoutAssets {
+        for k, v := range allocation.AssetObj.VoutAssets {
             for _,voutAsset := range v {
 				// store in vout
 				tx.Vout[voutAsset.N].AssetInfo = &bchain.AssetInfo{AssetGuid: k, ValueSat: big.NewInt(voutAsset.ValueSat)}

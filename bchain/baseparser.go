@@ -6,7 +6,6 @@ import (
 	"encoding/binary"
 	"math/big"
 	"strings"
-	"github.com/syscoin/btcd/wire"
 	"github.com/gogo/protobuf/proto"
 	"github.com/golang/glog"
 	"github.com/juju/errors"
@@ -352,10 +351,10 @@ func (p *BaseParser) PackAssetTxIndex(txAsset *TxAsset) []byte {
 func (p *BaseParser) UnpackAssetTxIndex(buf []byte) []*TxAssetIndex {
 	return nil
 }
-func (p *BaseParser) GetAssetFromData(sptData []byte) (*wire.AssetType, error) {
+func (p *BaseParser) GetAssetFromData(sptData []byte) (*bchain.Asset, error) {
 	return nil, errors.New("Not supported")
 }
-func (p *BaseParser) GetAllocationFromTx(tx *Tx) (*wire.AssetAllocationType, error) {
+func (p *BaseParser) GetAllocationFromTx(tx *Tx) (*bchain.AssetAllocation, error) {
 	return nil, errors.New("Not supported")
 }
 func (p *BaseParser) LoadAssets(tx *Tx) error {

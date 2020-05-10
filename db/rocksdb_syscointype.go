@@ -11,17 +11,16 @@ import (
 	"encoding/hex"
 	"time"
 	"fmt"
-	"github.com/syscoin/btcd/wire"
 )
 var AssetCache map[uint32]bchain.Asset
 var SetupAssetCacheFirstTime bool = true
 // GetTxAssetsCallback is called by GetTransactions/GetTxAssets for each found tx
 type GetTxAssetsCallback func(txids []string) error
 
-func (d *RocksDB) ConnectAssetOutputHelper(isActivate bool, asset *wire.AssetType, dBAsset *bchain.Asset) error {
+func (d *RocksDB) ConnectAssetOutputHelper(isActivate bool, asset *bchain.Asset, dBAsset *bchain.Asset) error {
 	if !isActivate {
-		if asset.Balance > 0 {
-			valueTo := big.NewInt(asset.Balance)
+		if asset.AssetObj.Balance > 0 {
+			valueTo := big.NewInt(asset.AssetObj.Balance)
 			balanceDb := big.NewInt(dBAsset.AssetObj.Balance)
 			balanceDb.Add(balanceDb, valueTo)
 			supplyDb := big.NewInt(dBAsset.AssetObj.TotalSupply)
@@ -30,24 +29,24 @@ func (d *RocksDB) ConnectAssetOutputHelper(isActivate bool, asset *wire.AssetTyp
 			dBAsset.AssetObj.TotalSupply = supplyDb.Int64()
 		}
 		// logic follows core CheckAssetInputs()
-		if len(asset.PubData) > 0 {
-			dBAsset.AssetObj.PubData = asset.PubData
+		if len(asset.AssetObj.PubData) > 0 {
+			dBAsset.AssetObj.PubData = asset.AssetObj.PubData
 		}
-		if len(asset.Contract) > 0 {
-			dBAsset.AssetObj.Contract = asset.Contract
+		if len(asset.AssetObj.Contract) > 0 {
+			dBAsset.AssetObj.Contract = asset.AssetObj.Contract
 		}
-		if asset.UpdateFlags != dBAsset.AssetObj.UpdateFlags {
-			dBAsset.AssetObj.UpdateFlags = asset.UpdateFlags
+		if asset.AssetObj.UpdateFlags != dBAsset.AssetObj.UpdateFlags {
+			dBAsset.AssetObj.UpdateFlags = asset.AssetObj.UpdateFlags
 		}
 	} else {
-		dBAsset.AssetObj.TotalSupply = asset.Balance
+		dBAsset.AssetObj.TotalSupply = asset.AssetObj.Balance
 	}	
 	return nil
 }
 
-func (d *RocksDB) DisconnectAssetOutputHelper(asset *wire.AssetType, dBAsset *bchain.Asset) error {
-	if asset.Balance > 0 {
-		valueTo := big.NewInt(asset.Balance)
+func (d *RocksDB) DisconnectAssetOutputHelper(asset *bchain.Asset, dBAsset *bchain.Asset) error {
+	if asset.AssetObj.Balance > 0 {
+		valueTo := big.NewInt(asset.AssetObj.Balance)
 		balanceDb := big.NewInt(dBAsset.AssetObj.Balance)
 		balanceDb.Sub(balanceDb, valueTo)
 		supplyDb := big.NewInt(dBAsset.AssetObj.TotalSupply)
@@ -65,14 +64,14 @@ func (d *RocksDB) DisconnectAssetOutputHelper(asset *wire.AssetType, dBAsset *bc
 	}
 	// logic follows core CheckAssetInputs()
 	// prev data is enforced to be correct (previous value) if value exists in the tx data
-	if len(asset.PubData) > 0 {
-		dBAsset.AssetObj.PubData = asset.PrevPubData
+	if len(asset.AssetObj.PubData) > 0 {
+		dBAsset.AssetObj.PubData = asset.AssetObj.PrevPubData
 	}
-	if len(asset.Contract) > 0 {
-		dBAsset.AssetObj.Contract = asset.PrevContract
+	if len(asset.AssetObj.Contract) > 0 {
+		dBAsset.AssetObj.Contract = asset.AssetObj.PrevContract
 	}
-	if asset.UpdateFlags != dBAsset.AssetObj.UpdateFlags {
-		dBAsset.AssetObj.UpdateFlags = asset.PrevUpdateFlags
+	if asset.AssetObj.UpdateFlags != dBAsset.AssetObj.UpdateFlags {
+		dBAsset.AssetObj.UpdateFlags = asset.AssetObj.PrevUpdateFlags
 	}
 	return nil
 }
@@ -150,7 +149,7 @@ func (d *RocksDB) ConnectAssetOutput(addrDescData *bchain.AddressDescriptor, add
 			return errors.New(fmt.Sprint("ConnectAssetOutput could not read asset " , assetGuid))
 		}
 	} else if isActivate {
-		dBAsset = &bchain.Asset{Transactions: 1, AssetObj: *asset}
+		dBAsset = &bchain.Asset{Transactions: 1, AssetObj: *asset.AssetObj}
 	}
 	if dBAsset != nil {
 		if isAssetTx {
