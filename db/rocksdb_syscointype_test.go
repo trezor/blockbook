@@ -125,7 +125,7 @@ func verifyAfterSyscoinTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect bool
 		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.Symbol: ", dBAsset.AssetObj.Symbol , ". Expected: CAT"))
 	}
 	if !bytes.Equal(dBAsset.AssetObj.PubData, []byte("{\"description\":\"publicvalue\"}")) {
-		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.PubData: ", dBAsset.AssetObj.PubData  , ". Expected: {\"description\":\"publicvalue\"}"))
+		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.PubData: ", string(dBAsset.AssetObj.PubData)  , ". Expected: {\"description\":\"publicvalue\"}"))
 	}
 	if dBAsset.AssetObj.UpdateFlags != 31 {
 		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.UpdateFlags: ", dBAsset.AssetObj.UpdateFlags  , ". Expected: 31"))
@@ -142,8 +142,8 @@ func verifyAfterSyscoinTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect bool
 	if dBAsset.AssetObj.Precision != 8 {
 		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.Precision: ", dBAsset.AssetObj.Precision  , ". Expected: 8"))
 	}
-	if !bytes.Equal(dBAsset.AssetObj.PrevPubData, "") {
-		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.PrevPubData: ", dBAsset.AssetObj.PrevPubData  , ". Expected: ''"))
+	if len(dBAsset.AssetObj.PrevPubData) > 0 {
+		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.PrevPubData: ", string(dBAsset.AssetObj.PrevPubData)  , ". Expected: ''"))
 	}
 	if dBAsset.AssetObj.PrevUpdateFlags != 0 {
 		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.PrevUpdateFlags: ", dBAsset.AssetObj.PrevUpdateFlags  , ". Expected: 0"))
@@ -227,7 +227,7 @@ func verifyAfterSyscoinTypeBlock2(t *testing.T, d *RocksDB) {
 		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.Symbol: ", dBAsset.AssetObj.Symbol , ". Expected: CAT"))
 	}
 	if !bytes.Equal(dBAsset.AssetObj.PubData, []byte("{\"description\":\"newdescription1\"}")) {
-		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.PubData: ", dBAsset.AssetObj.PubData  , ". Expected: {\"description\":\"newdescription1\"}"))
+		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.PubData: ", string(dBAsset.AssetObj.PubData)  , ". Expected: {\"description\":\"newdescription1\"}"))
 	}
 	if dBAsset.AssetObj.UpdateFlags != 31 {
 		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.UpdateFlags: ", dBAsset.AssetObj.UpdateFlags  , ". Expected: 31"))
@@ -245,7 +245,7 @@ func verifyAfterSyscoinTypeBlock2(t *testing.T, d *RocksDB) {
 		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.Precision: ", dBAsset.AssetObj.Precision  , ". Expected: 8"))
 	}
 	if !bytes.Equal(dBAsset.AssetObj.PrevPubData, []byte("{\"description\":\"publicvalue\"}")) {
-		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.PrevPubData: ", dBAsset.AssetObj.PrevPubData  , ". Expected: {\"description\":\"publicvalue\"}"))
+		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.PrevPubData: ", string(dBAsset.AssetObj.PrevPubData)  , ". Expected: {\"description\":\"publicvalue\"}"))
 	}
 	if dBAsset.AssetObj.PrevUpdateFlags != 31 {
 		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.PrevUpdateFlags: ", dBAsset.AssetObj.PrevUpdateFlags  , ". Expected: 31"))
