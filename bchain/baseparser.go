@@ -521,7 +521,7 @@ func (p *BaseParser) DecompressAmount(x uint64) uint64 {
     } else {
         n = x+1
     }
-    for e {
+    for e > 0 {
         n *= 10
         e--
     }
