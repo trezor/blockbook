@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"math/big"
 	"github.com/martinboehm/btcd/wire"
+	"github.com/syscoin/btcd/wire"
 	"github.com/martinboehm/btcutil/chaincfg"
 	"github.com/martinboehm/btcutil/txscript"
 	vlq "github.com/bsm/go-vlq"
@@ -251,218 +252,6 @@ func (p *SyscoinParser) TryGetOPReturn(script []byte) []byte {
 }
 
 
-func (p *SyscoinParser) PackAllocation(a *bchain.AssetAllocationType, buf []byte) []byte {
-	varBuf := make([]byte, vlq.MaxLen64)
-	l := p.BaseParser.PackVaruint(uint(len(a.VoutAssets)), varBuf)
-
-	for k, v := range a.VoutAssets {
-		varBufLE := p.BaseParser.PackUintLE(k)
-		buf = append(buf, varBufLE...)
-
-		l = p.BaseParser.PackVaruint(uint(len(v)), varBuf)
-		buf = append(buf, varBuf[:l]...)
-
-		for _,voutAsset := range v {
-			buf = p.PackAssetOut(&voutAsset, buf, varBuf)
-		}
-	}
-	return buf
-}
-
-func (p *SyscoinParser) UnpackAllocation(a *bchain.AssetAllocationType, buf []byte) int {
-	numAssets, l := p.BaseParser.UnpackVaruint(buf)
-	a.VoutAssets = make(map[uint32][]bchain.AssetOutType, numAssets)
-	for i := 0; i < int(numAssets); i++ {
-		assetGuid := p.BaseParser.UnpackUintLE(buf[l:])
-		l += 4
-		numOutputs, ll := p.BaseParser.UnpackVaruint(buf[l:])
-		l += ll
-		assetOutArray, ok := a.VoutAssets[assetGuid]
-		if !ok {
-			assetOutArray = make([]bchain.AssetOutType, numOutputs)
-			a.VoutAssets[assetGuid] = assetOutArray
-		}
-		for j := 0; j < int(numOutputs); j++ {
-			ll = p.UnpackAssetOut(&assetOutArray[j], buf[l:])
-			l += ll
-		}
-	}
-	return l
-}
-
-func (p *SyscoinParser) UnpackAssetObj(a *bchain.AssetType, buf []byte) int {
-	l := p.UnpackAllocation(&a.Allocation, buf)
-	var ll int
-	a.Precision = uint8(buf[l:l+1][0])
-	l += 1
-
-	a.Contract, ll = p.BaseParser.UnpackVarBytes(buf[l:])
-	l += ll
-	
-	a.PubData, ll = p.BaseParser.UnpackVarBytes(buf[l:])
-	l += ll
-
-	symbol, ll := p.BaseParser.UnpackVarBytes(buf[l:])
-	a.Symbol = string(symbol)
-	l += ll
-
-	a.UpdateFlags = uint8(buf[l:l+1][0])
-	l += 1
-
-	a.PrevContract, ll = p.BaseParser.UnpackVarBytes(buf[l:])
-	l += ll
-
-	a.PrevPubData, ll = p.BaseParser.UnpackVarBytes(buf[l:])
-	l += ll
-
-	a.PrevUpdateFlags = uint8(buf[l:l+1][0])
-	l += 1
-
-	balance, ll := p.BaseParser.UnpackVaruint(buf[l:])
-	l += ll
-	a.Balance = int64(p.BaseParser.DecompressAmount(uint64(balance)))
-
-	totalSupply, ll := p.BaseParser.UnpackVaruint(buf[l:])
-	l += ll
-	a.TotalSupply = int64(p.BaseParser.DecompressAmount(uint64(totalSupply)))
-
-	maxSupply, ll := p.BaseParser.UnpackVaruint(buf[l:])
-	l += ll
-	a.MaxSupply = int64(p.BaseParser.DecompressAmount(uint64(maxSupply)))
-
-	return l
-}
-
-func (p *SyscoinParser) PackAssetObj(a *bchain.AssetType, buf []byte) []byte {
-	varBuf := make([]byte, 20)
-	buf = p.PackAllocation(&a.Allocation, buf)
-	buf = append(buf, []byte{a.Precision}...)
-
-	buf = p.BaseParser.PackVarBytes(a.Contract, buf, varBuf)
-
-	buf = p.BaseParser.PackVarBytes(a.PubData, buf, varBuf)
-
-	buf = p.BaseParser.PackVarBytes([]byte(a.Symbol), buf, varBuf)
-
-	buf = append(buf, []byte{a.UpdateFlags}...)
-
-	buf = p.BaseParser.PackVarBytes(a.PrevContract, buf, varBuf)
-
-	buf = p.BaseParser.PackVarBytes(a.PrevPubData, buf, varBuf)
-
-	buf = append(buf, []byte{a.PrevUpdateFlags}...)
-
-	l := p.BaseParser.PackVaruint(uint(p.BaseParser.CompressAmount(uint64(a.Balance))), varBuf)
-	buf = append(buf, varBuf[:l]...)
-
-	l = p.BaseParser.PackVaruint(uint(p.BaseParser.CompressAmount(uint64(a.TotalSupply))), varBuf)
-	buf = append(buf, varBuf[:l]...)
-
-	l = p.BaseParser.PackVaruint(uint(p.BaseParser.CompressAmount(uint64(a.MaxSupply))), varBuf)
-	buf = append(buf, varBuf[:l]...)
-	return buf
-}
-
-func (p *SyscoinParser) PackAssetOut(a *bchain.AssetOutType, buf []byte, varBuf []byte) []byte {
-	l := p.BaseParser.PackVaruint(uint(a.N), varBuf)
-	buf = append(buf, varBuf[:l]...)
-	l = p.BaseParser.PackVaruint(uint(p.BaseParser.CompressAmount(uint64(a.ValueSat))), varBuf)
-	buf = append(buf, varBuf[:l]...)
-	return buf
-}
-
-func (p *SyscoinParser) UnpackAssetOut(a *bchain.AssetOutType, buf []byte) int {
-	var l int
-	var ll int
-	n, l := p.BaseParser.UnpackVaruint(buf[l:])
-	a.N = uint32(n)
-	valueSat, ll := p.BaseParser.UnpackVaruint(buf[l:])
-	l += ll
-	a.ValueSat = int64(p.BaseParser.DecompressAmount(uint64(valueSat)))
-	return l
-}
-
-
-func (p *SyscoinParser) UnpackMintSyscoin(a *bchain.MintSyscoinType, buf []byte) int {
-	l := p.UnpackAllocation(&a.Allocation, buf)
-	var ll int
-	bridgeTransferId, ll := p.BaseParser.UnpackVaruint(buf[l:])
-	a.BridgeTransferId = uint32(bridgeTransferId)
-	l += ll
-
-	blockNumber, ll := p.BaseParser.UnpackVaruint(buf[l:])
-	a.BlockNumber = uint32(blockNumber)
-	l += ll
-
-	a.TxValue, ll = p.BaseParser.UnpackVarBytes(buf[l:])
-	l += ll
-	
-	a.TxParentNodes, ll = p.BaseParser.UnpackVarBytes(buf[l:])
-	l += ll
-
-	a.TxRoot, ll = p.BaseParser.UnpackVarBytes(buf[l:])
-	l += ll
-
-	a.TxPath, ll = p.BaseParser.UnpackVarBytes(buf[l:])
-	l += ll
-
-	a.ReceiptValue, ll = p.BaseParser.UnpackVarBytes(buf[l:])
-	l += ll
-
-	a.ReceiptParentNodes, ll = p.BaseParser.UnpackVarBytes(buf[l:])
-	l += ll
-
-	a.ReceiptRoot, ll = p.BaseParser.UnpackVarBytes(buf[l:])
-	l += ll	
-
-	a.ReceiptPath, ll = p.BaseParser.UnpackVarBytes(buf[l:])
-	l += ll	
-	
-	return l
-}
-
-func (p *SyscoinParser) AppendMintSyscoin(a *bchain.MintSyscoinType, buf []byte) []byte {
-	varBuf := make([]byte, 4096)
-	buf = p.PackAllocation(&a.Allocation, buf)
-
-	l := p.BaseParser.PackVaruint(uint(a.BridgeTransferId), varBuf)
-	buf = append(buf, varBuf[:l]...)
-
-	l = p.BaseParser.PackVaruint(uint(a.BlockNumber), varBuf)
-	buf = append(buf, varBuf[:l]...)
-
-	buf = p.BaseParser.PackVarBytes(a.TxValue, buf, varBuf)
-
-	buf = p.BaseParser.PackVarBytes(a.TxParentNodes, buf, varBuf)
-
-	buf = p.BaseParser.PackVarBytes(a.TxRoot, buf, varBuf)
-
-	buf = p.BaseParser.PackVarBytes(a.TxPath, buf, varBuf)
-
-	buf = p.BaseParser.PackVarBytes(a.ReceiptValue, buf, varBuf)
-
-	buf = p.BaseParser.PackVarBytes(a.ReceiptParentNodes, buf, varBuf)
-
-	buf = p.BaseParser.PackVarBytes(a.ReceiptRoot, buf, varBuf)
-
-	buf = p.BaseParser.PackVarBytes(a.ReceiptPath, buf, varBuf)
-	return buf
-}
-
-func (p *SyscoinParser) UnpackSyscoinBurnToEthereum(a *bchain.SyscoinBurnToEthereumType, buf []byte) int {
-	l := p.UnpackAllocation(&a.Allocation, buf)
-	var ll int
-	a.EthAddress, ll = p.BaseParser.UnpackVarBytes(buf[l:])
-	l += ll	
-	return l
-}
-
-func (p *SyscoinParser) PackSyscoinBurnToEthereum(a *bchain.SyscoinBurnToEthereumType, buf []byte) []byte {
-	buf = p.PackAllocation(&a.Allocation, buf)
-	buf = append(buf, a.EthAddress...)
-	return buf
-}
-
 func (p *SyscoinParser) GetAllocationFromTx(tx *bchain.Tx) (*bchain.AssetAllocationType, error) {
 	var sptData []byte
 	for _, output := range tx.Vout {
@@ -491,11 +280,12 @@ func (p *SyscoinParser) GetAllocationFromTx(tx *bchain.Tx) (*bchain.AssetAllocat
 	return &assetAllocation, nil
 }
 
-func (p *SyscoinParser) GetAssetFromData(sptData []byte) (*bchain.AssetType, error) {
-	var asset bchain.AssetType
-	l := p.UnpackAssetObj(&asset, sptData)
-	if l != len(sptData) {
-		return nil, errors.New("Could not decode asset l " + strconv.Itoa(l) + " vs len " + strconv.Itoa(len(sptData)))
+func (p *SyscoinParser) GetAssetFromData(sptData []byte) (*wire.AssetType, error) {
+	var asset wire.AssetType
+	r := bytes.NewReader(sptData)
+	err := asset.Deserialize(r)
+	if err != nil {
+		return nil, err
 	}
 	return &asset, nil
 }
@@ -762,27 +552,33 @@ func (p *SyscoinParser) PackAddrBalance(ab *bchain.AddrBalance, buf, varBuf []by
 }
 
 
-func (p *SyscoinParser) PackAsset(asset *bchain.Asset) []byte {
+func (p *SyscoinParser) PackAsset(asset *bchain.Asset) ([]byte, error) {
 	buf := make([]byte, 0, 52)
 	varBuf := make([]byte, 40)
 	l := p.BaseParser.PackVaruint(uint(asset.Transactions), varBuf)
 	buf = append(buf, varBuf[:l]...)
 	buf = p.BaseParser.PackVarBytes([]byte(asset.AddrDesc), buf, varBuf)
-	buf = p.PackAssetObj(&asset.AssetObj, buf)
-	return buf
+	var buffer bytes.Buffer
+	err := asset.AssetObj.Serialize(&buffer)
+	if err != nil {
+		return nil, err
+	}
+	buf = append(buf, buffer.Bytes()...)
+	return buf, nil
 }
 
-func (p *SyscoinParser) UnpackAsset(buf []byte) *bchain.Asset {
+func (p *SyscoinParser) UnpackAsset(buf []byte) (*bchain.Asset, error) {
 	var asset bchain.Asset
 	var ll int
 	transactions, l := p.BaseParser.UnpackVaruint(buf)
 	asset.Transactions = uint32(transactions)
 	asset.AddrDesc, ll = p.BaseParser.UnpackVarBytes(buf[l:])
 	l += ll
-	varBuf := buf[l:]
-	l = p.UnpackAssetObj(&asset.AssetObj, varBuf)
-	if l != len(varBuf) {
-		return nil
+
+	r := bytes.NewReader(buf[l:])
+	err := asset.AssetObj.Deserialize(r)
+	if err != nil {
+		return nil, err
 	}
-	return &asset
+	return &asset, nil
 }

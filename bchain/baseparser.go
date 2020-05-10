@@ -6,7 +6,7 @@ import (
 	"encoding/binary"
 	"math/big"
 	"strings"
-
+	"github.com/syscoin/btcd/wire"
 	"github.com/gogo/protobuf/proto"
 	"github.com/golang/glog"
 	"github.com/juju/errors"
@@ -352,7 +352,7 @@ func (p *BaseParser) PackAssetTxIndex(txAsset *TxAsset) []byte {
 func (p *BaseParser) UnpackAssetTxIndex(buf []byte) []*TxAssetIndex {
 	return nil
 }
-func (p *BaseParser) GetAssetFromData(sptData []byte) (*AssetType, error) {
+func (p *BaseParser) GetAssetFromData(sptData []byte) (*wire.AssetType, error) {
 	return nil, errors.New("Not supported")
 }
 func (p *BaseParser) GetAllocationFromTx(tx *Tx) (*AssetAllocationType, error) {
@@ -385,10 +385,10 @@ func (p *BaseParser) UnpackAssetOut(a *AssetOutType, buf []byte) int {
 func (p *BaseParser) PackAssetOut(a *AssetOutType, buf []byte, varBuf []byte) []byte {
 	return nil
 }
-func (p *BaseParser) PackAssetObj(a *AssetType, buf []byte) []byte {
+func (p *BaseParser) PackAssetObj(a *wire.AssetType, buf []byte) []byte {
 	return nil
 }
-func (p *BaseParser) UnpackAssetObj(a *AssetType, buf []byte) int {
+func (p *BaseParser) UnpackAssetObj(a *wire.AssetType, buf []byte) int {
 	return 0
 }
 func (p *BaseParser) UnpackAllocation(a *AssetAllocationType, buf []byte) int {
@@ -667,11 +667,11 @@ func (p *BaseParser) UnpackBlockInfo(buf []byte) (*DbBlockInfo, error) {
 	return nil, errors.New("Not supported")
 }
 
-func (p *BaseParser) UnpackAsset(buf []byte) *Asset {
+func (p *BaseParser) UnpackAsset(buf []byte) (*Asset, error) {
 	return nil
 }
 
-func (p *BaseParser) PackAsset(asset *Asset) []byte {
+func (p *BaseParser) PackAsset(asset *Asset) ([]byte, error) {
 	return nil
 }
 

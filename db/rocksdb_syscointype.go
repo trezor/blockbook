@@ -11,13 +11,14 @@ import (
 	"encoding/hex"
 	"time"
 	"fmt"
+	"github.com/syscoin/btcd/wire"
 )
 var AssetCache map[uint32]bchain.Asset
 var SetupAssetCacheFirstTime bool = true
 // GetTxAssetsCallback is called by GetTransactions/GetTxAssets for each found tx
 type GetTxAssetsCallback func(txids []string) error
 
-func (d *RocksDB) ConnectAssetOutputHelper(isActivate bool, asset *bchain.AssetType, dBAsset *bchain.Asset) error {
+func (d *RocksDB) ConnectAssetOutputHelper(isActivate bool, asset *wire.AssetType, dBAsset *bchain.Asset) error {
 	if !isActivate {
 		if asset.Balance > 0 {
 			valueTo := big.NewInt(asset.Balance)
@@ -44,7 +45,7 @@ func (d *RocksDB) ConnectAssetOutputHelper(isActivate bool, asset *bchain.AssetT
 	return nil
 }
 
-func (d *RocksDB) DisconnectAssetOutputHelper(asset *bchain.AssetType, dBAsset *bchain.Asset) error {
+func (d *RocksDB) DisconnectAssetOutputHelper(asset *wire.AssetType, dBAsset *bchain.Asset) error {
 	if asset.Balance > 0 {
 		valueTo := big.NewInt(asset.Balance)
 		balanceDb := big.NewInt(dBAsset.AssetObj.Balance)
@@ -265,9 +266,9 @@ func (d *RocksDB) SetupAssetCache() error {
 	defer it.Close()
 	for it.SeekToFirst(); it.Valid(); it.Next() {
 		assetKey := d.chainParser.UnpackUint(it.Key().Data())
-		assetDb := d.chainParser.UnpackAsset(it.Value().Data())
-		if assetDb == nil {
-			return errors.New("SetupAssetCache: UnpackAsset failure")
+		assetDb, err := d.chainParser.UnpackAsset(it.Value().Data())
+		if err != nil {
+			return err
 		}
 		AssetCache[assetKey] = *assetDb
 	}
@@ -319,7 +320,10 @@ func (d *RocksDB) storeAssets(wb *gorocksdb.WriteBatch, assets map[uint32]*bchai
 			delete(AssetCache, guid)
 			wb.DeleteCF(d.cfh[cfAssets], key)
 		} else {
-			buf := d.chainParser.PackAsset(asset)
+			buf, err := d.chainParser.PackAsset(asset)
+			if err != nil {
+				return err
+			}
 			wb.PutCF(d.cfh[cfAssets], key, buf)
 		}
 	}
@@ -359,9 +363,9 @@ func (d *RocksDB) GetAsset(guid uint32, assets map[uint32]*bchain.Asset) (*bchai
 	if len(buf) == 0 {
 		return nil, errors.New("GetAsset: empty value in asset db")
 	}
-	assetDb = d.chainParser.UnpackAsset(buf)
-	if assetDb == nil {
-		return nil, errors.New("GetAsset: Could not unpack asset")
+	assetDb, err = d.chainParser.UnpackAsset(buf)
+	if err != nil {
+		return nil, err
 	}
 	// cache miss, add it, we also add it on storeAsset but on API queries we should not have to wait until a block
 	// with this asset to store it in cache

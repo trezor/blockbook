@@ -10,6 +10,7 @@ import (
 	"unsafe"
 	"bytes"
 	"github.com/golang/glog"
+	"github.com/syscoin/btcd/wire"
 )
 
 // ChainType is type of the blockchain
@@ -483,52 +484,11 @@ func (a *Amount) AsInt64() int64 {
 	return (*big.Int)(a).Int64()
 }
 
-type AssetOutType struct {
-	N uint32
-	ValueSat int64
-}
-type AssetAllocationType struct {
-	VoutAssets map[uint32][]AssetOutType
-}
-
-type AssetType struct {
-	Allocation AssetAllocationType
-	Contract []byte
-	PrevContract  []byte
-	Symbol string
-	PubData []byte
-	PrevPubData []byte
-	Balance int64
-	TotalSupply int64
-	MaxSupply int64
-	Precision uint8
-	UpdateFlags uint8
-	PrevUpdateFlags uint8
-}
-
-type MintSyscoinType struct {
-	Allocation AssetAllocationType
-    TxValue []byte
-    TxParentNodes []byte
-    TxRoot []byte
-    TxPath []byte
-    ReceiptValue []byte
-    ReceiptParentNodes []byte
-    ReceiptRoot []byte
-    ReceiptPath []byte
-    BlockNumber uint32
-    BridgeTransferId uint32
-}
-
-type SyscoinBurnToEthereumType struct {
-	Allocation AssetAllocationType
-	EthAddress []byte
-}
 
 // encapuslates Syscoin SPT as well as aux fees object unmarshalled
 type Asset struct {
 	Transactions	uint32
-	AssetObj 		AssetType
+	AssetObj 		wire.AssetType
 	AddrDesc    	AddressDescriptor
 }
 // Assets is array of Asset
@@ -769,9 +729,9 @@ type BlockChainParser interface {
 	UnpackAssetKey(key []byte) (uint32, uint32)
 	PackAssetTxIndex(txAsset *TxAsset) []byte
 	UnpackAssetTxIndex(buf []byte) []*TxAssetIndex
-	PackAsset(asset *Asset) []byte
-	UnpackAsset(buf []byte) *Asset
-	GetAssetFromData(sptData []byte) (*AssetType, error)
+	PackAsset(asset *Asset) ([]byte, error)
+	UnpackAsset(buf []byte) (*Asset, error)
+	GetAssetFromData(sptData []byte) (*wire.AssetType, error)
 	GetAllocationFromTx(tx *Tx) (*AssetAllocationType, error)
 	LoadAssets(tx *Tx) error
 	AppendAssetInfo(assetInfo *AssetInfo, buf []byte, varBuf []byte) []byte
@@ -782,8 +742,8 @@ type BlockChainParser interface {
 	UnpackMintSyscoin(a *MintSyscoinType, buf []byte) int 
 	UnpackAssetOut(a *AssetOutType, buf []byte) int
 	PackAssetOut(a *AssetOutType, buf []byte, varBuf []byte) []byte
-	PackAssetObj(a *AssetType, buf []byte) []byte
-	UnpackAssetObj(a *AssetType, buf []byte) int
+	PackAssetObj(a *wire.AssetType, buf []byte) []byte
+	UnpackAssetObj(a *wire.AssetType, buf []byte) int
 	UnpackAllocation(a *AssetAllocationType, buf []byte) int
 	PackAllocation(a *AssetAllocationType, buf []byte) []byte
 }
