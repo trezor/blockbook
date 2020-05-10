@@ -386,11 +386,11 @@ func (p *SyscoinParser) UnpackAssetOut(a *bchain.AssetOutType, buf []byte) int {
 func (p *SyscoinParser) UnpackMintSyscoin(a *bchain.MintSyscoinType, buf []byte) int {
 	l := p.UnpackAllocation(&a.Allocation, buf)
 	var ll int
-	bridgeTransferId, ll := p.BaseParser.UnpackVarint(buf[l:])
+	bridgeTransferId, ll := p.BaseParser.UnpackVaruint(buf[l:])
 	a.BridgeTransferId = uint32(bridgeTransferId)
 	l += ll
 
-	blockNumber, ll := p.BaseParser.UnpackVarint(buf[l:])
+	blockNumber, ll := p.BaseParser.UnpackVaruint(buf[l:])
 	a.BlockNumber = uint32(blockNumber)
 	l += ll
 
@@ -425,10 +425,10 @@ func (p *SyscoinParser) AppendMintSyscoin(a *bchain.MintSyscoinType, buf []byte)
 	varBuf := make([]byte, 4096)
 	buf = p.PackAllocation(&a.Allocation, buf)
 
-	l := p.BaseParser.PackVarint(uint(a.BridgeTransferId), varBuf)
+	l := p.BaseParser.PackVaruint(uint(a.BridgeTransferId), varBuf)
 	buf = append(buf, varBuf[:l]...)
 
-	l = p.BaseParser.PackVarint(uint(a.BlockNumber), varBuf)
+	l = p.BaseParser.PackVaruint(uint(a.BlockNumber), varBuf)
 	buf = append(buf, varBuf[:l]...)
 
 	buf = p.BaseParser.PackVarBytes(a.TxValue, buf, varBuf)
