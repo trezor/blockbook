@@ -253,13 +253,13 @@ func (p *SyscoinParser) TryGetOPReturn(script []byte) []byte {
 
 func (p *SyscoinParser) PackAllocation(a *bchain.AssetAllocationType, buf []byte) []byte {
 	varBuf := make([]byte, vlq.MaxLen64)
-	l := p.BaseParser.PackVaruint(uint(len(a.VoutAssets)), varBuf)
+	l := p.BaseParser.PackVarint(uint(len(a.VoutAssets)), varBuf)
 
 	for k, v := range a.VoutAssets {
 		varBufLE := p.BaseParser.PackUintLE(k)
 		buf = append(buf, varBufLE...)
 
-		l = p.BaseParser.PackVaruint(uint(len(v)), varBuf)
+		l = p.BaseParser.PackVarint(uint(len(v)), varBuf)
 		buf = append(buf, varBuf[:l]...)
 
 		for _,voutAsset := range v {
@@ -270,12 +270,12 @@ func (p *SyscoinParser) PackAllocation(a *bchain.AssetAllocationType, buf []byte
 }
 
 func (p *SyscoinParser) UnpackAllocation(a *bchain.AssetAllocationType, buf []byte) int {
-	numAssets, l := p.BaseParser.UnpackVaruint(buf)
+	numAssets, l := p.BaseParser.UnpackVarint(buf)
 	a.VoutAssets = make(map[uint32][]bchain.AssetOutType, numAssets)
 	for i := 0; i < int(numAssets); i++ {
 		assetGuid := p.BaseParser.UnpackUintLE(buf[l:])
 		l += 4
-		numOutputs, ll := p.BaseParser.UnpackVaruint(buf[l:])
+		numOutputs, ll := p.BaseParser.UnpackVarint(buf[l:])
 		l += ll
 		assetOutArray, ok := a.VoutAssets[assetGuid]
 		if !ok {
@@ -318,15 +318,15 @@ func (p *SyscoinParser) UnpackAssetObj(a *bchain.AssetType, buf []byte) int {
 	a.PrevUpdateFlags = uint8(buf[l:l+1][0])
 	l += 1
 
-	balance, ll := p.BaseParser.UnpackVaruint(buf[l:])
+	balance, ll := p.BaseParser.UnpackVarint(buf[l:])
 	l += ll
 	a.Balance = int64(p.BaseParser.DecompressAmount(uint64(balance)))
 
-	totalSupply, ll := p.BaseParser.UnpackVaruint(buf[l:])
+	totalSupply, ll := p.BaseParser.UnpackVarint(buf[l:])
 	l += ll
 	a.TotalSupply = int64(p.BaseParser.DecompressAmount(uint64(totalSupply)))
 
-	maxSupply, ll := p.BaseParser.UnpackVaruint(buf[l:])
+	maxSupply, ll := p.BaseParser.UnpackVarint(buf[l:])
 	l += ll
 	a.MaxSupply = int64(p.BaseParser.DecompressAmount(uint64(maxSupply)))
 
@@ -352,21 +352,21 @@ func (p *SyscoinParser) PackAssetObj(a *bchain.AssetType, buf []byte) []byte {
 
 	buf = append(buf, []byte{a.PrevUpdateFlags}...)
 
-	l := p.BaseParser.PackVaruint(uint(p.BaseParser.CompressAmount(uint64(a.Balance))), varBuf)
+	l := p.BaseParser.PackVarint(int(p.BaseParser.CompressAmount(uint64(a.Balance))), varBuf)
 	buf = append(buf, varBuf[:l]...)
 
-	l = p.BaseParser.PackVaruint(uint(p.BaseParser.CompressAmount(uint64(a.TotalSupply))), varBuf)
+	l = p.BaseParser.PackVarint(int(p.BaseParser.CompressAmount(uint64(a.TotalSupply))), varBuf)
 	buf = append(buf, varBuf[:l]...)
 
-	l = p.BaseParser.PackVaruint(uint(p.BaseParser.CompressAmount(uint64(a.MaxSupply))), varBuf)
+	l = p.BaseParser.PackVarint(int(p.BaseParser.CompressAmount(uint64(a.MaxSupply))), varBuf)
 	buf = append(buf, varBuf[:l]...)
 	return buf
 }
 
 func (p *SyscoinParser) PackAssetOut(a *bchain.AssetOutType, buf []byte, varBuf []byte) []byte {
-	l := p.BaseParser.PackVaruint(uint(a.N), varBuf)
+	l := p.BaseParser.PackVarint(int(a.N), varBuf)
 	buf = append(buf, varBuf[:l]...)
-	l = p.BaseParser.PackVaruint(uint(p.BaseParser.CompressAmount(uint64(a.ValueSat))), varBuf)
+	l = p.BaseParser.PackVarint(uint(p.BaseParser.CompressAmount(uint64(a.ValueSat))), varBuf)
 	buf = append(buf, varBuf[:l]...)
 	return buf
 }
@@ -374,9 +374,9 @@ func (p *SyscoinParser) PackAssetOut(a *bchain.AssetOutType, buf []byte, varBuf 
 func (p *SyscoinParser) UnpackAssetOut(a *bchain.AssetOutType, buf []byte) int {
 	var l int
 	var ll int
-	n, l := p.BaseParser.UnpackVaruint(buf[l:])
+	n, l := p.BaseParser.UnpackVarint(buf[l:])
 	a.N = uint32(n)
-	valueSat, ll := p.BaseParser.UnpackVaruint(buf[l:])
+	valueSat, ll := p.BaseParser.UnpackVarint(buf[l:])
 	l += ll
 	a.ValueSat = int64(p.BaseParser.DecompressAmount(uint64(valueSat)))
 	return l
@@ -386,11 +386,11 @@ func (p *SyscoinParser) UnpackAssetOut(a *bchain.AssetOutType, buf []byte) int {
 func (p *SyscoinParser) UnpackMintSyscoin(a *bchain.MintSyscoinType, buf []byte) int {
 	l := p.UnpackAllocation(&a.Allocation, buf)
 	var ll int
-	bridgeTransferId, ll := p.BaseParser.UnpackVaruint(buf[l:])
+	bridgeTransferId, ll := p.BaseParser.UnpackVarint(buf[l:])
 	a.BridgeTransferId = uint32(bridgeTransferId)
 	l += ll
 
-	blockNumber, ll := p.BaseParser.UnpackVaruint(buf[l:])
+	blockNumber, ll := p.BaseParser.UnpackVarint(buf[l:])
 	a.BlockNumber = uint32(blockNumber)
 	l += ll
 
@@ -425,10 +425,10 @@ func (p *SyscoinParser) AppendMintSyscoin(a *bchain.MintSyscoinType, buf []byte)
 	varBuf := make([]byte, 4096)
 	buf = p.PackAllocation(&a.Allocation, buf)
 
-	l := p.BaseParser.PackVaruint(uint(a.BridgeTransferId), varBuf)
+	l := p.BaseParser.PackVarint(uint(a.BridgeTransferId), varBuf)
 	buf = append(buf, varBuf[:l]...)
 
-	l = p.BaseParser.PackVaruint(uint(a.BlockNumber), varBuf)
+	l = p.BaseParser.PackVarint(uint(a.BlockNumber), varBuf)
 	buf = append(buf, varBuf[:l]...)
 
 	buf = p.BaseParser.PackVarBytes(a.TxValue, buf, varBuf)
