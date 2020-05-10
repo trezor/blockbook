@@ -142,7 +142,7 @@ func verifyAfterSyscoinTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect bool
 	if dBAsset.AssetObj.Precision != 8 {
 		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.Precision: ", dBAsset.AssetObj.Precision  , ". Expected: 8"))
 	}
-	if dBAsset.AssetObj.PrevPubData != "" {
+	if !bytes.Equal(dBAsset.AssetObj.PrevPubData, "") {
 		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.PrevPubData: ", dBAsset.AssetObj.PrevPubData  , ". Expected: ''"))
 	}
 	if dBAsset.AssetObj.PrevUpdateFlags != 0 {
@@ -220,8 +220,8 @@ func verifyAfterSyscoinTypeBlock2(t *testing.T, d *RocksDB) {
 		}
 		t.Fatal(err)
 	}
-	if dBAsset.Transaction != 2 {
-		t.Fatal(fmt.Sprint("Block1: Property mismatch dbAsset.Transaction: ", dBAsset.Transaction, ". Expected: 2"))
+	if dBAsset.Transactions != 2 {
+		t.Fatal(fmt.Sprint("Block1: Property mismatch dbAsset.Transaction: ", dBAsset.Transactions, ". Expected: 2"))
 	}
 	if dBAsset.AssetObj.Symbol != "CAT" {
 		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.Symbol: ", dBAsset.AssetObj.Symbol , ". Expected: CAT"))
