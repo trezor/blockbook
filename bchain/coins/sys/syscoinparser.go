@@ -250,58 +250,6 @@ func (p *SyscoinParser) TryGetOPReturn(script []byte) []byte {
 	return nil
 }
 
-// Amount compression:
-// * If the amount is 0, output 0
-// * first, divide the amount (in base units) by the largest power of 10 possible; call the exponent e (e is max 9)
-// * if e<9, the last digit of the resulting number cannot be 0; store it as d, and drop it (divide by 10)
-//   * call the result n
-//   * output 1 + 10*(9*n + d - 1) + e
-// * if e==9, we only know the resulting number is not zero, so output 1 + 10*(n - 1) + 9
-// (this is decodable, as d is in [1-9] and e is in [0-9])
-
-func CompressAmount(n uint64) uint64 {
-    if n == 0 {
-		return 0
-	}
-    var e int = 0;
-    for ((n % 10) == 0) && e < 9 {
-        n /= 10
-        e++
-    }
-    if e < 9 {
-        var d int = int(n % 10)
-        n /= 10
-        return 1 + (n*9 + uint64(d) - 1)*10 + uint64(e)
-    } else {
-        return 1 + (n - 1)*10 + 9
-    }
-}
-
-func DecompressAmount(x uint64) uint64 {
-    // x = 0  OR  x = 1+10*(9*n + d - 1) + e  OR  x = 1+10*(n - 1) + 9
-    if x == 0 {
-		return 0
-	}
-    x--
-    // x = 10*(9*n + d - 1) + e
-    var e int = int(x % 10)
-    x /= 10
-    var n uint64 = 0
-    if e < 9 {
-        // x = 9*n + d - 1
-        var d int = int(x % 9) + 1
-        x /= 9
-        // x = n
-        n = x*10 + uint64(d)
-    } else {
-        n = x+1
-    }
-    for e > 0 {
-        n *= 10
-        e--
-    }
-    return n
-}
 
 func (p *SyscoinParser) PackAllocation(a *bchain.AssetAllocationType, buf []byte) []byte {
 	varBuf := make([]byte, vlq.MaxLen64)
@@ -372,15 +320,15 @@ func (p *SyscoinParser) UnpackAssetObj(a *bchain.AssetType, buf []byte) int {
 
 	balance, ll := p.BaseParser.UnpackVaruint(buf[l:])
 	l += ll
-	a.Balance = int64(DecompressAmount(uint64(balance)))
+	a.Balance = int64(p.BaseParser.DecompressAmount(uint64(balance)))
 
 	totalSupply, ll := p.BaseParser.UnpackVaruint(buf[l:])
 	l += ll
-	a.TotalSupply = int64(DecompressAmount(uint64(totalSupply)))
+	a.TotalSupply = int64(p.BaseParser.DecompressAmount(uint64(totalSupply)))
 
 	maxSupply, ll := p.BaseParser.UnpackVaruint(buf[l:])
 	l += ll
-	a.MaxSupply = int64(DecompressAmount(uint64(maxSupply)))
+	a.MaxSupply = int64(p.BaseParser.DecompressAmount(uint64(maxSupply)))
 
 	return l
 }
@@ -404,13 +352,13 @@ func (p *SyscoinParser) PackAssetObj(a *bchain.AssetType, buf []byte) []byte {
 
 	buf = append(buf, []byte{a.PrevUpdateFlags}...)
 
-	l := p.BaseParser.PackVaruint(uint(CompressAmount(uint64(a.Balance))), varBuf)
+	l := p.BaseParser.PackVaruint(uint(p.BaseParser.CompressAmount(uint64(a.Balance))), varBuf)
 	buf = append(buf, varBuf[:l]...)
 
-	l = p.BaseParser.PackVaruint(uint(CompressAmount(uint64(a.TotalSupply))), varBuf)
+	l = p.BaseParser.PackVaruint(uint(p.BaseParser.CompressAmount(uint64(a.TotalSupply))), varBuf)
 	buf = append(buf, varBuf[:l]...)
 
-	l = p.BaseParser.PackVaruint(uint(CompressAmount(uint64(a.MaxSupply))), varBuf)
+	l = p.BaseParser.PackVaruint(uint(p.BaseParser.CompressAmount(uint64(a.MaxSupply))), varBuf)
 	buf = append(buf, varBuf[:l]...)
 	return buf
 }
@@ -418,7 +366,7 @@ func (p *SyscoinParser) PackAssetObj(a *bchain.AssetType, buf []byte) []byte {
 func (p *SyscoinParser) PackAssetOut(a *bchain.AssetOutType, buf []byte, varBuf []byte) []byte {
 	l := p.BaseParser.PackVaruint(uint(a.N), varBuf)
 	buf = append(buf, varBuf[:l]...)
-	l = p.BaseParser.PackVaruint(uint(CompressAmount(uint64(a.ValueSat))), varBuf)
+	l = p.BaseParser.PackVaruint(uint(p.BaseParser.CompressAmount(uint64(a.ValueSat))), varBuf)
 	buf = append(buf, varBuf[:l]...)
 	return buf
 }
@@ -430,7 +378,7 @@ func (p *SyscoinParser) UnpackAssetOut(a *bchain.AssetOutType, buf []byte) int {
 	a.N = uint32(n)
 	valueSat, ll := p.BaseParser.UnpackVaruint(buf[l:])
 	l += ll
-	a.ValueSat = int64(DecompressAmount(uint64(valueSat)))
+	a.ValueSat = int64(p.BaseParser.DecompressAmount(uint64(valueSat)))
 	return l
 }
 
