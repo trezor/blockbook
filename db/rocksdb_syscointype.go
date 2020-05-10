@@ -149,7 +149,7 @@ func (d *RocksDB) ConnectAssetOutput(addrDescData *bchain.AddressDescriptor, add
 			return errors.New(fmt.Sprint("ConnectAssetOutput could not read asset " , assetGuid))
 		}
 	} else if isActivate {
-		dBAsset = &bchain.Asset{Transactions: 1, AssetObj: *asset.AssetObj}
+		dBAsset = &bchain.Asset{Transactions: 1, AssetObj: asset.AssetObj}
 	}
 	if dBAsset != nil {
 		if isAssetTx {
