@@ -242,7 +242,7 @@ func verifyAfterSyscoinTypeBlock2(t *testing.T, d *RocksDB) {
 	if dBAsset.AssetObj.Precision != 8 {
 		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.Precision: ", dBAsset.AssetObj.Precision  , ". Expected: 8"))
 	}
-	if !bytes.Equal(dBAsset.AssetObj.PrevPubData, ]byte("{\"description\":\"publicvalue\"}")) {
+	if !bytes.Equal(dBAsset.AssetObj.PrevPubData, []byte("{\"description\":\"publicvalue\"}")) {
 		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.PrevPubData: ", dBAsset.AssetObj.PrevPubData  , ". Expected: {\"description\":\"publicvalue\"}"))
 	}
 	if dBAsset.AssetObj.PrevUpdateFlags != 31 {
