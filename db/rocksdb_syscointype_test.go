@@ -121,6 +121,22 @@ func verifyAfterSyscoinTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect bool
 	if dBAsset.Transactions != 1 {
 		t.Fatal(fmt.Sprint("Block1: Property mismatch dbAsset.Transaction: ", dBAsset.Transactions, ". Expected: 1"))
 	}
+	if len(dBAsset.AssetObj.Allocation.VoutAssets) != 1 {
+		t.Fatal(fmt.Sprint("Block1: Property mismatch len(dBAsset.AssetObj.Allocation.VoutAssets): ", len(dBAsset.AssetObj.Allocation.VoutAssets) , ". Expected: 1"))
+	}
+	voutAsset, ok := dBAsset.AssetObj.Allocation.VoutAssets[720034467]
+	if !ok {
+		t.Fatal(fmt.Sprint("Block1: voutAsset missing 720034467")
+	}
+	if len(voutAsset) != 1 {
+		t.Fatal(fmt.Sprint("Block1: Property mismatch len(voutAsset): ", len(voutAsset) , ". Expected: 1"))
+	}
+	if voutAsset[0].N != 0 {
+		t.Fatal(fmt.Sprint("Block1: Property mismatch voutAsset[0].N: ", len(voutAsset) , ". Expected: 0"))
+	}
+	if voutAsset[0].ValueSat != 0 {
+		t.Fatal(fmt.Sprint("Block1: Property mismatch voutAsset[0].ValueSat: ", voutAsset[0].ValueSat , ". Expected: 0"))
+	}
 	if dBAsset.AssetObj.Symbol != "CAT" {
 		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.Symbol: ", dBAsset.AssetObj.Symbol , ". Expected: CAT"))
 	}
