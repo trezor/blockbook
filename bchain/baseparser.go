@@ -638,10 +638,10 @@ func (p *BaseParser) UnpackBlockInfo(buf []byte) (*DbBlockInfo, error) {
 }
 
 func (p *BaseParser) UnpackAsset(buf []byte) (*Asset, error) {
-	return nil
+	return nil, nil
 }
 
 func (p *BaseParser) PackAsset(asset *Asset) ([]byte, error) {
-	return nil
+	return nil, nil
 }
 
