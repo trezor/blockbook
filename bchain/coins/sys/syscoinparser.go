@@ -269,7 +269,7 @@ func CompressAmount(n uint64) uint64 {
         e++
     }
     if e < 9 {
-        var d int = (n % 10)
+        var d int = int(n % 10)
         n /= 10
         return 1 + (n*9 + uint64(d) - 1)*10 + uint64(e)
     } else {
@@ -284,12 +284,12 @@ func DecompressAmount(x uint64) uint64 {
 	}
     x--
     // x = 10*(9*n + d - 1) + e
-    var e int = x % 10
+    var e int = int(x % 10)
     x /= 10
     var n uint64 = 0
     if e < 9 {
         // x = 9*n + d - 1
-        var d int = (x % 9) + 1
+        var d int = int(x % 9) + 1
         x /= 9
         // x = n
         n = x*10 + uint64(d)
