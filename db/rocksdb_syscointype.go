@@ -224,7 +224,14 @@ func (d *RocksDB) DisconnectAssetOutput(addrDesc *bchain.AddressDescriptor, isAc
 	assets[assetGuid] = dBAsset
 	return nil
 }
-func (d *RocksDB) DisconnectAllocationInput(addrDesc *bchain.AddressDescriptor, balanceAsset *bchain.AssetBalance,  btxID []byte, assetInfo *bchain.AssetInfo, blockTxAssetAddresses bchain.TxAssetAddressMap, assetFoundInTx func(asset uint32, btxID []byte) bool) error {
+func (d *RocksDB) DisconnectAllocationInput(addrDesc *bchain.AddressDescriptor, balanceAsset *bchain.AssetBalance,  btxID []byte, assetInfo *bchain.AssetInfo, blockTxAssetAddresses bchain.TxAssetAddressMap, assets map[uint32]*bchain.Asset, assetFoundInTx func(asset uint32, btxID []byte) bool) error {
+	dBAsset, err := d.GetAsset(assetInfo.AssetGuid, assets)
+	if dBAsset == nil || err != nil {
+		if dBAsset == nil {
+			return errors.New(fmt.Sprint("DisconnectAllocationInput could not read asset " , assetInfo.AssetGuid))
+		}
+		return err
+	}
 	balanceAsset.SentSat.Sub(balanceAsset.SentSat, assetInfo.ValueSat)
 	balanceAsset.BalanceSat.Add(balanceAsset.BalanceSat, assetInfo.ValueSat)
 	if balanceAsset.SentSat.Sign() < 0 {

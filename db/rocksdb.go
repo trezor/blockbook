@@ -1077,7 +1077,7 @@ func (d *RocksDB) disconnectTxAddressesInputs(wb *gorocksdb.WriteBatch, btxID []
 						if !ok {
 							return errors.New("DisconnectSyscoinInput asset balance not found")
 						}
-						err := d.DisconnectAllocationInput(&t.AddrDesc, balanceAsset, btxID, t.AssetInfo, blockTxAssetAddresses, assetFoundInTx)
+						err := d.DisconnectAllocationInput(&t.AddrDesc, balanceAsset, btxID, t.AssetInfo, blockTxAssetAddresses, assets, assetFoundInTx)
 						if err != nil {
 							return err
 						}
