@@ -188,11 +188,6 @@ func (d *RocksDB) DisconnectAllocationOutput(addrDesc *bchain.AddressDescriptor,
 		// signals for removal from asset db
 		dBAsset.AssetObj.TotalSupply = -1
 	}
-	// on activate we won't get here but its ok because DisconnectSyscoinInput will catch assetFoundInTx
-	exists := assetFoundInTx(assetInfo.AssetGuid, btxID)
-	if !exists {
-		dBAsset.Transactions--
-	}
 	counted := d.addToAssetAddressMap(blockTxAssetAddresses, assetInfo.AssetGuid, btxID, addrDesc)
 	if !counted {
 		balanceAsset.Transfers--
@@ -235,7 +230,10 @@ func (d *RocksDB) DisconnectAllocationInput(addrDesc *bchain.AddressDescriptor, 
 	if balanceAsset.SentSat.Sign() < 0 {
 		balanceAsset.SentSat.SetInt64(0)
 	}
-	assetFoundInTx(assetInfo.AssetGuid, btxID)
+	exists := assetFoundInTx(assetInfo.AssetGuid, btxID)
+	if !exists {
+		dBAsset.Transactions--
+	}
 	counted := d.addToAssetAddressMap(blockTxAssetAddresses, assetInfo.AssetGuid, btxID, addrDesc)
 	if !counted {
 		balanceAsset.Transfers--

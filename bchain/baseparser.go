@@ -444,59 +444,6 @@ func (p *BaseParser) PackVarBytes(bufValue []byte, buf []byte, varBuf []byte) []
 	return buf
 }
 
-// Amount compression:
-// * If the amount is 0, output 0
-// * first, divide the amount (in base units) by the largest power of 10 possible; call the exponent e (e is max 9)
-// * if e<9, the last digit of the resulting number cannot be 0; store it as d, and drop it (divide by 10)
-//   * call the result n
-//   * output 1 + 10*(9*n + d - 1) + e
-// * if e==9, we only know the resulting number is not zero, so output 1 + 10*(n - 1) + 9
-// (this is decodable, as d is in [1-9] and e is in [0-9])
-
-func (p *BaseParser) CompressAmount(n uint64) uint64 {
-    if n == 0 {
-		return 0
-	}
-    var e int = 0;
-    for ((n % 10) == 0) && e < 9 {
-        n /= 10
-        e++
-    }
-    if e < 9 {
-        var d int = int(n % 10)
-        n /= 10
-        return 1 + (n*9 + uint64(d) - 1)*10 + uint64(e)
-    } else {
-        return 1 + (n - 1)*10 + 9
-    }
-}
-
-func (p *BaseParser) DecompressAmount(x uint64) uint64 {
-    // x = 0  OR  x = 1+10*(9*n + d - 1) + e  OR  x = 1+10*(n - 1) + 9
-    if x == 0 {
-		return 0
-	}
-    x--
-    // x = 10*(9*n + d - 1) + e
-    var e int = int(x % 10)
-    x /= 10
-    var n uint64 = 0
-    if e < 9 {
-        // x = 9*n + d - 1
-        var d int = int(x % 9) + 1
-        x /= 9
-        // x = n
-        n = x*10 + uint64(d)
-    } else {
-        n = x+1
-    }
-    for e > 0 {
-        n *= 10
-        e--
-    }
-    return n
-}
-
 const (
 	// number of bits in a big.Word
 	wordBits = 32 << (uint64(^big.Word(0)) >> 63)

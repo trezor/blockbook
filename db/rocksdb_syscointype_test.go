@@ -297,11 +297,6 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	compressedAmount := d.chainParser.CompressAmount(100000000000)
-	decompressedAmount := d.chainParser.DecompressAmount(compressedAmount)
-	if decompressedAmount != 100000000000 {
-		t.Fatal("Expecting decompressedAmounts 100000000000, got ", decompressedAmount)
-	}
 	if err := d.ConnectBlock(block1); err != nil {
 		t.Fatal(err)
 	}
