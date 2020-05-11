@@ -244,7 +244,8 @@ func (d *RocksDB) DisconnectAllocationInput(addrDesc *bchain.AddressDescriptor, 
 	counted := d.addToAssetAddressMap(blockTxAssetAddresses, assetInfo.AssetGuid, btxID, addrDesc)
 	if !counted {
 		balanceAsset.Transfers--
-	}	
+	}
+	assets[assetGuid] = dBAsset
 	return nil
 }
 func (d *RocksDB) DisconnectAssetInput(addrDesc *bchain.AddressDescriptor, assets map[uint32]*bchain.Asset, assetGuid uint32) error {
