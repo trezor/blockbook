@@ -587,19 +587,13 @@ func Test_BulkConnect_SyscoinType(t *testing.T) {
 			dbtestdata.TxidS2T1 + "01" + dbtestdata.TxidS1T1 + "00",
 			nil,
 		},
-		{
-			"000000ab",
-			dbtestdata.TxidS1T0 + "01" + "0000000000000000000000000000000000000000000000000000000000000000" + "00" +
-			dbtestdata.TxidS1T1 + "01" + dbtestdata.TxidS1T1INPUT0 + "00",
-			nil,
-		},
 	}); err != nil {
 		{
 			t.Fatal(err)
 		}
 	}
-	if len(d.is.BlockTimes) != 2 {
-		t.Fatal("Expecting is.BlockTimes 2, got ", len(d.is.BlockTimes))
+	if len(d.is.BlockTimes) != 183 {
+		t.Fatal("Expecting is.BlockTimes 183, got ", len(d.is.BlockTimes))
 	}
 	chaincfg.ResetParams()
 }
