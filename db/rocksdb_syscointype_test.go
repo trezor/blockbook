@@ -261,7 +261,7 @@ func verifyAfterSyscoinTypeBlock2(t *testing.T, d *RocksDB) {
 		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.Precision: ", dBAsset.AssetObj.Precision  , ". Expected: 8"))
 	}
 	// prev pub data is not persisted for performance reasons, wire info will have it
-	if len(dBAsset.AssetObj.PrevPubData) == 0 {
+	if len(dBAsset.AssetObj.PrevPubData) != 0 {
 		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.PrevPubData: ", string(dBAsset.AssetObj.PrevPubData)  , ". Expected: ''"))
 	}
 	if dBAsset.AssetObj.PrevUpdateFlags != 31 {
