@@ -580,6 +580,7 @@ func Test_BulkConnect_SyscoinType(t *testing.T) {
 	}
 
 	verifyAfterSyscoinTypeBlock2(t, d)
+	// because BlockAddressesToKeep == 1
 	if err := checkColumn(d, cfBlockTxs, []keyPair{
 		{
 			"000000b6",
