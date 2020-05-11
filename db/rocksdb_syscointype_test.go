@@ -421,15 +421,12 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Errorf("DisconnectBlockRangeBitcoinType 182")
 	verifyAfterSyscoinTypeBlock1(t, d, false)
 	if err := checkColumn(d, cfTransactions, []keyPair{}); err != nil {
 		{
 			t.Fatal(err)
 		}
 	}
-	t.Errorf("verified block 1")
-
 	if len(d.is.BlockTimes) != 1 {
 		t.Fatal("Expecting is.BlockTimes 1, got ", len(d.is.BlockTimes))
 	}
@@ -438,9 +435,7 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 	if err := d.ConnectBlock(block2); err != nil {
 		t.Fatal(err)
 	}
-	t.Errorf("verify block 2")
 	verifyAfterSyscoinTypeBlock2(t, d)
-	t.Errorf("verified block 2")
 	if err := checkColumn(d, cfBlockTxs, []keyPair{
 		{
 			"000000b6",
@@ -470,7 +465,7 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 		t.Fatal(err)
 	}
 	abw := &bchain.AddrBalance{
-		Txs:        2,
+		Txs:        1,
 		SentSat:    *dbtestdata.SatZero,
 		BalanceSat: *dbtestdata.SatS2T1A1,
 		Utxos: []bchain.Utxo{
@@ -486,7 +481,7 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 			720034467: &bchain.AssetBalance{
 				SentSat: 	dbtestdata.SatZero,
 				BalanceSat: dbtestdata.SatZero,
-				Transfers:	2,
+				Transfers:	1,
 			},
 		},
 	}
@@ -504,7 +499,8 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 		Height: 182,
 		Inputs: []bchain.TxInput{
 			{
-				ValueSat: *dbtestdata.SatZero,
+				AddrDesc: addressToAddrDesc(dbtestdata.AddrS2, d.chainParser),
+				ValueSat: *dbtestdata.SatS1T1A1,
 				AssetInfo: &bchain.AssetInfo{AssetGuid: 720034467, ValueSat: dbtestdata.SatZero},
 			},
 		},
@@ -562,7 +558,7 @@ func Test_BulkConnect_SyscoinType(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-/*
+
 	block2 := dbtestdata.GetTestSyscoinTypeBlock2(d.chainParser)
 	for i, _ := range block2.Txs {
 		tx := &block2.Txs[i]
@@ -586,9 +582,15 @@ func Test_BulkConnect_SyscoinType(t *testing.T) {
 	verifyAfterSyscoinTypeBlock2(t, d)
 	if err := checkColumn(d, cfBlockTxs, []keyPair{
 		{
-			"00054cb2",
+			"000000b6",
 			dbtestdata.TxidS2T0 + "01" + "0000000000000000000000000000000000000000000000000000000000000000" + "00" +
-			dbtestdata.TxidS2T1 + "01" + dbtestdata.TxidS1T1 + "02",
+			dbtestdata.TxidS2T1 + "01" + dbtestdata.TxidS1T1 + "00",
+			nil,
+		},
+		{
+			"000000ab",
+			dbtestdata.TxidS1T0 + "01" + "0000000000000000000000000000000000000000000000000000000000000000" + "00" +
+			dbtestdata.TxidS1T1 + "01" + dbtestdata.TxidS1T1INPUT0 + "00",
 			nil,
 		},
 	}); err != nil {
@@ -596,8 +598,8 @@ func Test_BulkConnect_SyscoinType(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if len(d.is.BlockTimes) != 347315 {
-		t.Fatal("Expecting is.BlockTimes 347315, got ", len(d.is.BlockTimes))
-	}*/
+	if len(d.is.BlockTimes) != 2 {
+		t.Fatal("Expecting is.BlockTimes 2, got ", len(d.is.BlockTimes))
+	}
 	chaincfg.ResetParams()
 }
