@@ -161,8 +161,8 @@ func verifyAfterSyscoinTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect bool
 	if len(dBAsset.AssetObj.PrevPubData) > 0 {
 		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.PrevPubData: ", string(dBAsset.AssetObj.PrevPubData)  , ". Expected: ''"))
 	}
-	if dBAsset.AssetObj.PrevUpdateFlags != 0 {
-		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.PrevUpdateFlags: ", dBAsset.AssetObj.PrevUpdateFlags  , ". Expected: 0"))
+	if dBAsset.AssetObj.PrevUpdateFlags != 31 {
+		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.PrevUpdateFlags: ", dBAsset.AssetObj.PrevUpdateFlags  , ". Expected: 31"))
 	}
 }
 func verifyAfterSyscoinTypeBlock2(t *testing.T, d *RocksDB) {
