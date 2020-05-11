@@ -524,9 +524,6 @@ func (s *SocketIoServer) getAddressHistory(addr []string, opts *addrOpts) (res r
 				}
 			}
 		}
-		if len(ahi.Tokens) <= 0 {
-			ahi.Tokens = nil
-		}
 		ahi.Addresses = ads
 		ahi.Confirmations = int(tx.Confirmations)
 		ahi.Satoshis = totalSat.Int64()

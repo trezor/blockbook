@@ -555,7 +555,7 @@ func (p *SyscoinParser) PackAsset(asset *bchain.Asset) ([]byte, error) {
 	varBuf := make([]byte, 40)
 	l := p.BaseParser.PackVaruint(uint(asset.Transactions), varBuf)
 	buf = append(buf, varBuf[:l]...)
-	buf = p.BaseParser.PackVarBytes([]byte(asset.AddrDesc), buf, varBuf)
+	buf = p.BaseParser.PackVarBytes(asset.AddrDesc, buf, varBuf)
 	var buffer bytes.Buffer
 	err := asset.AssetObj.Serialize(&buffer)
 	if err != nil {
