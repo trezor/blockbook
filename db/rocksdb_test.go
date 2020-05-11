@@ -100,12 +100,6 @@ func uintToHex(i uint32) string {
 	return hex.EncodeToString(buf)
 }
 
-func uintToHexLE(i uint32) string {
-	buf := make([]byte, 4)
-	binary.LittleEndian.PutUint32(buf, i)
-	return hex.EncodeToString(buf)
-}
-
 func hexToBytes(h string) []byte {
 	b, _ := hex.DecodeString(h)
 	return b
