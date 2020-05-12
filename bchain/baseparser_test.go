@@ -6,7 +6,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/syscoin/blockbook/common"
+	"blockbook/common"
 )
 
 func NewBaseParser(adp int) *BaseParser {

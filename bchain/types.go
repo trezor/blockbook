@@ -12,7 +12,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/syscoin/btcd/wire"
 
-	"github.com/syscoin/blockbook/common"
+	"blockbook/common"
 )
 
 // ChainType is type of the blockchain

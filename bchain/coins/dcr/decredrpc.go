@@ -21,9 +21,7 @@ import (
 	"github.com/decred/dcrd/dcrjson"
 	"github.com/golang/glog"
 	"github.com/juju/errors"
-	"github.com/syscoin/blockbook/bchain"
-	"github.com/syscoin/blockbook/bchain/coins/btc"
-	"github.com/syscoin/blockbook/common"
+	"blockbook/common"
 )
 
 // voteBitYes defines the vote bit set when a given block validates the previous
