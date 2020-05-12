@@ -656,6 +656,7 @@ func (w *Worker) GetXpubUtxo(xpub string, onlyConfirmed bool, gap int) (Utxos, e
 	data, _, err := w.getXpubData(xpub, 0, 1, AccountDetailsBasic, &AddressFilter{
 		Vout:          AddressFilterVoutOff,
 		OnlyConfirmed: onlyConfirmed,
+		AssetsMask:	   bchain.AllMask,
 	}, gap)
 	if err != nil {
 		return nil, err
@@ -711,6 +712,7 @@ func (w *Worker) GetXpubBalanceHistory(xpub string, fromTimestamp, toTimestamp i
 		OnlyConfirmed: true,
 		FromHeight:    fromHeight,
 		ToHeight:      toHeight,
+		AssetsMask:	   bchain.AllMask,
 	}, gap)
 	if err != nil {
 		return nil, err

@@ -1304,7 +1304,7 @@ func (w *Worker) GetBalanceHistory(address string, fromTimestamp, toTimestamp in
 	if fromHeight >= toHeight {
 		return bhs, nil
 	}
-	txs, err := w.getAddressTxids(addrDesc, false, &AddressFilter{Vout: AddressFilterVoutOff, FromHeight: fromHeight, ToHeight: toHeight}, maxInt)
+	txs, err := w.getAddressTxids(addrDesc, false, &AddressFilter{AssetsMask: bchain.AllMask, Vout: AddressFilterVoutOff, FromHeight: fromHeight, ToHeight: toHeight}, maxInt)
 	if err != nil {
 		return nil, err
 	}
@@ -1347,7 +1347,7 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *bchain.A
 	spentInMempool := make(map[string]struct{})
 	if !onlyConfirmed {
 		// get utxo from mempool
-		txm, err := w.getAddressTxids(addrDesc, true, &AddressFilter{Vout: AddressFilterVoutOff}, maxInt)
+		txm, err := w.getAddressTxids(addrDesc, true, &AddressFilter{AssetsMask: bchain.AllMask, Vout: AddressFilterVoutOff}, maxInt)
 		if err != nil {
 			return nil, err
 		}
