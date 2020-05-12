@@ -57,23 +57,25 @@ type websocketChannel struct {
 
 // WebsocketServer is a handle to websocket server
 type WebsocketServer struct {
-	socket                     *websocket.Conn
-	upgrader                   *websocket.Upgrader
-	db                         *db.RocksDB
-	txCache                    *db.TxCache
-	chain                      bchain.BlockChain
-	chainParser                bchain.BlockChainParser
-	mempool                    bchain.Mempool
-	metrics                    *common.Metrics
-	is                         *common.InternalState
-	api                        *api.Worker
-	block0hash                 string
-	newBlockSubscriptions      map[*websocketChannel]string
-	newBlockSubscriptionsLock  sync.Mutex
-	addressSubscriptions       map[string]map[*websocketChannel]string
-	addressSubscriptionsLock   sync.Mutex
-	fiatRatesSubscriptions     map[string]map[*websocketChannel]string
-	fiatRatesSubscriptionsLock sync.Mutex
+	socket                      *websocket.Conn
+	upgrader                    *websocket.Upgrader
+	db                          *db.RocksDB
+	txCache                     *db.TxCache
+	chain                       bchain.BlockChain
+	chainParser                 bchain.BlockChainParser
+	mempool                     bchain.Mempool
+	metrics                     *common.Metrics
+	is                          *common.InternalState
+	api                         *api.Worker
+	block0hash                  string
+	newBlockSubscriptions       map[*websocketChannel]string
+	newBlockSubscriptionsLock   sync.Mutex
+	addressSubscriptions        map[string]map[*websocketChannel]string
+	addressSubscriptionsLock    sync.Mutex
+	anyAddressSubscriptions     map[*websocketChannel]string
+	anyAddressSubscriptionsLock sync.Mutex
+	fiatRatesSubscriptions      map[string]map[*websocketChannel]string
+	fiatRatesSubscriptionsLock  sync.Mutex
 }
 
 // NewWebsocketServer creates new websocket interface to blockbook and returns its handle
@@ -92,18 +94,19 @@ func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.
 			WriteBufferSize: 1024 * 32,
 			CheckOrigin:     checkOrigin,
 		},
-		db:                     db,
-		txCache:                txCache,
-		chain:                  chain,
-		chainParser:            chain.GetChainParser(),
-		mempool:                mempool,
-		metrics:                metrics,
-		is:                     is,
-		api:                    api,
-		block0hash:             b0,
-		newBlockSubscriptions:  make(map[*websocketChannel]string),
-		addressSubscriptions:   make(map[string]map[*websocketChannel]string),
-		fiatRatesSubscriptions: make(map[string]map[*websocketChannel]string),
+		db:                      db,
+		txCache:                 txCache,
+		chain:                   chain,
+		chainParser:             chain.GetChainParser(),
+		mempool:                 mempool,
+		metrics:                 metrics,
+		is:                      is,
+		api:                     api,
+		block0hash:              b0,
+		newBlockSubscriptions:   make(map[*websocketChannel]string),
+		addressSubscriptions:    make(map[string]map[*websocketChannel]string),
+		anyAddressSubscriptions: make(map[*websocketChannel]string),
+		fiatRatesSubscriptions:  make(map[string]map[*websocketChannel]string),
 	}
 	return s, nil
 }
@@ -332,6 +335,12 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *webs
 	},
 	"unsubscribeAddresses": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
 		return s.unsubscribeAddresses(c)
+	},
+	"subscribeAnyAddresses": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
+		return s.subscribeAnyAddresses(c, req)
+	},
+	"unsubscribeAnyAddresses": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
+		return s.unsubscribeAnyAddresses(c)
 	},
 	"subscribeFiatRates": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
 		r := struct {
@@ -697,6 +706,26 @@ func (s *WebsocketServer) unsubscribeAddresses(c *websocketChannel) (res interfa
 	return &subscriptionResponse{false}, nil
 }
 
+func (s *WebsocketServer) subscribeAnyAddresses(c *websocketChannel, req *websocketReq) (res interface{}, err error) {
+	// unsubscribe first
+	s.unsubscribeAnyAddresses(c)
+	s.anyAddressSubscriptionsLock.Lock()
+	defer s.anyAddressSubscriptionsLock.Unlock()
+	s.anyAddressSubscriptions[c] = req.ID
+	return &subscriptionResponse{true}, nil
+}
+
+func (s *WebsocketServer) unsubscribeAnyAddresses(c *websocketChannel) (res interface{}, err error) {
+	s.anyAddressSubscriptionsLock.Lock()
+	defer s.anyAddressSubscriptionsLock.Unlock()
+	for sc := range s.anyAddressSubscriptions {
+		if sc == c {
+			delete(s.anyAddressSubscriptions, c)
+		}
+	}
+	return &subscriptionResponse{false}, nil
+}
+
 // subscribeFiatRates subscribes all FiatRates subscriptions by this channel
 func (s *WebsocketServer) subscribeFiatRates(c *websocketChannel, currency string, req *websocketReq) (res interface{}, err error) {
 	// unsubscribe all previous subscriptions
@@ -757,47 +786,61 @@ func (s *WebsocketServer) OnNewBlock(hash string, height uint32) {
 
 // OnNewTxAddr is a callback that broadcasts info about a tx affecting subscribed address
 func (s *WebsocketServer) OnNewTxAddr(tx *bchain.Tx, addrDesc bchain.AddressDescriptor) {
-	// check if there is any subscription but release the lock immediately, GetTransactionFromBchainTx may take some time
+	// check if there is any subscription, to this address or to any address
+	subs := make(map[*websocketChannel]string)
+	// check if there is any subscription for this address (release lock immediately)
 	s.addressSubscriptionsLock.Lock()
 	as, ok := s.addressSubscriptions[string(addrDesc)]
-	lenAs := len(as)
-	s.addressSubscriptionsLock.Unlock()
-	if ok && lenAs > 0 {
-		addr, _, err := s.chainParser.GetAddressesFromAddrDesc(addrDesc)
-		if err != nil {
-			glog.Error("GetAddressesFromAddrDesc error ", err, " for ", addrDesc)
-			return
+	if ok && len(as) > 0 {
+		for c, id := range as {
+			subs[c] = id
 		}
-		if len(addr) == 1 {
-			atx, err := s.api.GetTransactionFromBchainTx(tx, 0, false, false)
-			if err != nil {
-				glog.Error("GetTransactionFromBchainTx error ", err, " for ", tx.Txid)
-				return
-			}
-			data := struct {
-				Address string  `json:"address"`
-				Tx      *api.Tx `json:"tx"`
-			}{
-				Address: addr[0],
-				Tx:      atx,
-			}
-			// get the list of subscriptions again, this time keep the lock
-			s.addressSubscriptionsLock.Lock()
-			defer s.addressSubscriptionsLock.Unlock()
-			as, ok = s.addressSubscriptions[string(addrDesc)]
-			if ok {
-				for c, id := range as {
-					if c.IsAlive() {
-						c.out <- &websocketRes{
-							ID:   id,
-							Data: &data,
-						}
-					}
-				}
-				glog.Info("broadcasting new tx ", tx.Txid, " for addr ", addr[0], " to ", len(as), " channels")
+	}
+	s.addressSubscriptionsLock.Unlock()
+	// check is there is any subscription for any address
+	s.anyAddressSubscriptionsLock.Lock()
+	for c, id := range s.anyAddressSubscriptions {
+		subs[c] = id
+	}
+	s.anyAddressSubscriptionsLock.Unlock()
+
+	if len(subs) == 0 {
+		return
+	}
+	addr, _, err := s.chainParser.GetAddressesFromAddrDesc(addrDesc)
+	if err != nil {
+		glog.Error("GetAddressesFromAddrDesc error ", err, " for ", addrDesc)
+		return
+	}
+	if len(addr) != 1 {
+		return
+	}
+	atx, err := s.api.GetTransactionFromBchainTx(tx, 0, false, false)
+	if err != nil {
+		glog.Error("GetTransactionFromBchainTx error ", err, " for ", tx.Txid)
+		return
+	}
+	data := struct {
+		Address string  `json:"address"`
+		Tx      *api.Tx `json:"tx"`
+	}{
+		Address: addr[0],
+		Tx:      atx,
+	}
+	// get the list of subscriptions again, keep locks
+	s.addressSubscriptionsLock.Lock()
+	defer s.addressSubscriptionsLock.Unlock()
+	s.anyAddressSubscriptionsLock.Lock()
+	defer s.anyAddressSubscriptionsLock.Unlock()
+	for c, id := range subs {
+		if c.IsAlive() {
+			c.out <- &websocketRes{
+				ID:   id,
+				Data: &data,
 			}
 		}
 	}
+	glog.Info("broadcasting new tx ", tx.Txid, " for addr ", addr[0], " to ", len(subs), " channels")
 }
 
 func (s *WebsocketServer) broadcastTicker(currency string, rates map[string]float64) {

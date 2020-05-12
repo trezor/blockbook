@@ -56,6 +56,7 @@
             subscriptions = {};
             subscribeNewBlockId = "";
             subscribeAddressesId = "";
+            subscribeAnyAddressesId = "";
             if (server.startsWith("http")) {
                 server = server.replace("http", "ws");
             }
@@ -296,6 +297,36 @@
                 document.getElementById('subscribeAddressesResult').innerText += JSON.stringify(result).replace(/,/g, ", ") + "\n";
                 document.getElementById('subscribeAddressesIds').innerText = "";
                 document.getElementById('unsubscribeAddressesButton').setAttribute("style", "display: none;");
+            });
+        }
+
+        function subscribeAnyAddresses() {
+            const method = 'subscribeAnyAddresses';
+            var addresses = document.getElementById('subscribeAnyAddressesName').value.split(",");
+            addresses = addresses.map(s => s.trim());
+            const params = {
+                addresses
+            };
+            if (subscribeAnyAddressesId) {
+                delete subscriptions[subscribeAnyAddressesId];
+                subscribeAnyAddressesId = "";
+            }
+            subscribeAnyAddressesId = subscribe(method, params, function (result) {
+                document.getElementById('subscribeAnyAddressesResult').innerText += JSON.stringify(result).replace(/,/g, ", ") + "\n";
+            });
+            document.getElementById('subscribeAnyAddressesIds').innerText = subscribeAnyAddressesId;
+            document.getElementById('unsubscribeAnyAddressesButton').setAttribute("style", "display: inherit;");
+        }
+
+        function unsubscribeAnyAddresses() {
+            const method = 'unsubscribeAnyAddresses';
+            const params = {
+            };
+            unsubscribe(method, subscribeAnyAddressesId, params, function (result) {
+                subscribeAnyAddressesId = "";
+                document.getElementById('subscribeAnyAddressesResult').innerText += JSON.stringify(result).replace(/,/g, ", ") + "\n";
+                document.getElementById('subscribeAnyAddressesIds').innerText = "";
+                document.getElementById('unsubscribeAnyAddressesButton').setAttribute("style", "display: none;");
             });
         }
 
@@ -601,6 +632,23 @@
         </div>
         <div class="row">
             <div class="col" id="subscribeAddressesResult"></div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <input class="btn btn-secondary" type="button" value="subscribe address" onclick="subscribeAnyAddresses()">
+            </div>
+            <div class="col-8">
+                <input type="text" class="form-control" id="subscribeAnyAddressesName" value="0xba98d6a5ac827632e3457de7512d211e4ff7e8bd,0x73d0385f4d8e00c5e6504c6030f47bf6212736a8">
+            </div>
+            <div class="col">
+                <span id="subscribeAnyAddressesIds"></span>
+            </div>
+            <div class="col">
+                <input class="btn btn-secondary" id="unsubscribeAnyAddressesButton" style="display: none;" type="button" value="unsubscribe" onclick="unsubscribeAnyAddresses()">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col" id="subscribeAnyAddressesResult"></div>
         </div>
         <div class="row">
             <div class="col-3">

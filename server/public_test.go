@@ -1421,6 +1421,20 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			},
 			want: `{"id":"36","data":[{"time":1521514800,"txs":1,"received":"1","sent":"0","rates":{"eur":1301,"usd":2001}}]}`,
 		},
+		{
+			name: "websocket subscribeAnyAddresses",
+			req: websocketReq{
+				Method: "subscribeAnyAddresses",
+			},
+			want: `{"id":"37","data":{"subscribed":true}}`,
+		},
+		{
+			name: "websocket unsubscribeAnyAddresses",
+			req: websocketReq{
+				Method: "unsubscribeAnyAddresses",
+			},
+			want: `{"id":"38","data":{"subscribed":false}}`,
+		},
 	}
 
 	// send all requests at once
