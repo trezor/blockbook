@@ -56,12 +56,6 @@ type xpubAddress struct {
 	txids     xpubTxids
 }
 
-// history of tokens mapped to uint32 asset guid's in BalanceHistory obj
-type TokenBalanceXpub struct {
-	BalanceSat *big.Int `json:"balance,omitempty"`
-	SentSat    *big.Int `json:"sent,omitempty"`
-}
-
 type xpubData struct {
 	gap             int
 	accessed        int64
@@ -73,7 +67,7 @@ type xpubData struct {
 	balanceSat      big.Int
 	addresses       []xpubAddress
 	changeAddresses []xpubAddress
-	Tokens	    map[uint32]*TokenBalanceXpub `json:"tokens,omitempty"`
+	Tokens	    map[uint32]*bchain.AssetBalance `json:"tokens,omitempty"`
 }
 
 func (w *Worker) xpubGetAddressTxids(addrDesc bchain.AddressDescriptor, mempool bool, fromHeight, toHeight uint32, filter *AddressFilter, maxResults int) ([]xpubTxid, bool, error) {
@@ -178,13 +172,14 @@ func (w *Worker) xpubDerivedAddressBalance(data *xpubData, ad *xpubAddress) (boo
 		if ad.balance.AssetBalances != nil {
 			for assetGuid, assetBalance := range ad.balance.AssetBalances {
 				if data.Tokens == nil {
-					data.Tokens = map[uint32]*TokenBalanceXpub{}
+					data.Tokens = map[uint32]*bchain.AssetBalance{}
 				}
 				bhaToken, ok := data.Tokens[assetGuid];
 				if !ok {
-					bhaToken = &TokenBalanceXpub{SentSat: big.NewInt(0), BalanceSat: big.NewInt(0)}
+					bhaToken = &bchain.AssetBalance{Transfers: 0, SentSat: big.NewInt(0), BalanceSat: big.NewInt(0)}
 					data.Tokens[assetGuid] = bhaToken
 				}
+				bhaToken.Transfers += assetBalance.Transfers
 				bhaToken.SentSat.Add(bhaToken.SentSat, assetBalance.SentSat)
 				bhaToken.BalanceSat.Add(bhaToken.BalanceSat, assetBalance.BalanceSat)
 			}
