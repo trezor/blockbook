@@ -483,6 +483,7 @@ func (s *WebsocketServer) getAccountInfo(req *accountInfoReq) (res *api.Address,
 		Contract:       req.ContractFilter,
 		Vout:           api.AddressFilterVoutOff,
 		TokensToReturn: tokensToReturn,
+		AssetsMask:		bchain.AllMask,
 	}
 	if req.PageSize == 0 {
 		req.PageSize = txsOnPage
