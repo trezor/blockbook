@@ -534,7 +534,7 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 			for i := range da {
 				ad := &da[i]
 				for _, txid := range ad.txids {
-					added, _ := txcMap[txid.txid]
+					added, foundTx := txcMap[txid.txid]
 					// count txs regardless of filter but only once
 					if !foundTx {
 						txCount++
