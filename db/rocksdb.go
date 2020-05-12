@@ -405,7 +405,7 @@ func (d *RocksDB) GetAddrDescTransactions(addrDesc bchain.AddressDescriptor, low
 				glog.Warningf("rocksdb: addresses contain incorrect data %s: %s", hex.EncodeToString(key), hex.EncodeToString(val))
 				break
 			}
-			if (assetsBitMask == bchain.AllMask || (assetsBitMaskUint & maskUint) == maskUint {
+			if assetsBitMask == bchain.AllMask || (assetsBitMaskUint & maskUint) == maskUint {
 				if err := fn(tx, height, indexes); err != nil {
 					if _, ok := err.(*StopIteration); ok {
 						return nil
