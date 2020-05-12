@@ -365,6 +365,7 @@ func (d *RocksDB) GetTransactions(address string, lower uint32, higher uint32, f
 func (d *RocksDB) GetAddrDescTransactions(addrDesc bchain.AddressDescriptor, lower uint32, higher uint32, assetsBitMask bchain.AssetsMask, fn GetTransactionsCallback) (err error) {
 	assetsBitMaskUint := uint32(assetsBitMask)
 	txidUnpackedLen := d.chainParser.PackedTxidLen()
+	txIndexUnpackedLen := d.chainParser.PackedTxIndexLen()
 	addrDescLen := len(addrDesc)
 	startKey := d.chainParser.PackAddressKey(addrDesc, higher)
 	stopKey := d.chainParser.PackAddressKey(addrDesc, lower)
@@ -390,7 +391,7 @@ func (d *RocksDB) GetAddrDescTransactions(addrDesc bchain.AddressDescriptor, low
 		if err != nil {
 			return err
 		}
-		for len(val) > txidUnpackedLen {
+		for len(val) > txIndexUnpackedLen {
 			mask, l := d.chainParser.UnpackTxIndexType(val)
 			maskUint := uint32(mask)
 			tx, err := d.chainParser.UnpackTxid(val[l:l+txidUnpackedLen])

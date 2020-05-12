@@ -549,12 +549,9 @@ func (p *SyscoinParser) PackAddrBalance(ab *bchain.AddrBalance, buf, varBuf []by
 	return buf
 }
 
-
-// PackedTxidLen returns length in bytes of packed txid + tx type
-func (p *SyscoinParser) PackedTxidLen() int {
+func (p *SyscoinParser) PackedTxIndexLen() int {
 	return p.BaseParser.PackedTxidLen() + 1
 }
-
 func (p *SyscoinParser) UnpackTxIndexType(buf []byte) (bchain.AssetsMask, int) {
 	maskUint, l := p.BaseParser.UnpackVaruint(buf)
 	return bchain.AssetsMask(maskUint), l

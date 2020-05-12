@@ -666,6 +666,7 @@ type BlockChainParser interface {
 	IsAddrDescIndexable(addrDesc AddressDescriptor) bool
 	// parsing/packing/unpacking specific to chain
 	PackedTxidLen() int
+	PackedTxIndexLen() int
 	PackTxid(txid string) ([]byte, error)
 	UnpackTxid(buf []byte) (string, error)
 	ParseTx(b []byte) (*Tx, error)

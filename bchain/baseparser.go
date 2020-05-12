@@ -129,6 +129,10 @@ func (p *BaseParser) PackedTxidLen() int {
 	return 32
 }
 
+func (p *BaseParser) PackedTxIndexLen() int {
+	return p.PackedTxidLen()
+}
+
 // KeepBlockAddresses returns number of blocks which are to be kept in blockaddresses column
 func (p *BaseParser) KeepBlockAddresses() int {
 	return p.BlockAddressesToKeep
