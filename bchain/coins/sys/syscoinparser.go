@@ -556,10 +556,11 @@ func (p *SyscoinParser) PackedTxidLen() int {
 }
 
 func (p *SyscoinParser) UnpackTxIndexType(buf []byte) (bchain.AssetsMask, int) {
-	return p.BaseParser.UnpackVaruint(buf)
+	maskUint, l := p.BaseParser.UnpackVaruint(buf)
+	return bchain.AssetsMask(maskUint), l
 }
 
-func (p *SyscoinParser) PackTxIndexes(txi []TxIndexes) []byte {
+func (p *SyscoinParser) PackTxIndexes(txi []bchain.TxIndexes) []byte {
 	buf := make([]byte, 0, 34)
 	bvout := make([]byte, vlq.MaxLen32)
 	// store the txs in reverse order for ordering from newest to oldest
