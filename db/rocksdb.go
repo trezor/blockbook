@@ -1,6 +1,8 @@
 package db
 
 import (
+	"blockbook/bchain"
+	"blockbook/common"
 	"bytes"
 	"encoding/hex"
 	"encoding/json"
@@ -18,8 +20,6 @@ import (
 	"github.com/juju/errors"
 	"github.com/tecbot/gorocksdb"
 	"github.com/martinboehm/btcutil/txscript"
-	"github.com/syscoin/blockbook/bchain"
-	"github.com/syscoin/blockbook/common"
 )
 
 const dbVersion = 5

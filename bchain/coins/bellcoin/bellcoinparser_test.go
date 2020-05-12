@@ -3,6 +3,8 @@
 package bellcoin
 
 import (
+	"blockbook/bchain"
+	"blockbook/bchain/coins/btc"
 	"encoding/hex"
 	"math/big"
 	"os"
@@ -10,8 +12,6 @@ import (
 	"testing"
 
 	"github.com/martinboehm/btcutil/chaincfg"
-	"github.com/syscoin/blockbook/bchain"
-	"github.com/syscoin/blockbook/bchain/coins/btc"
 )
 
 func TestMain(m *testing.M) {

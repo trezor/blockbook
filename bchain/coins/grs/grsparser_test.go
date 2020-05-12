@@ -3,6 +3,8 @@
 package grs
 
 import (
+	"blockbook/bchain"
+	"blockbook/bchain/coins/btc"
 	"bytes"
 	"encoding/hex"
 	"math/big"
@@ -11,8 +13,6 @@ import (
 	"testing"
 
 	"github.com/martinboehm/btcutil/chaincfg"
-	"github.com/syscoin/blockbook/bchain"
-	"github.com/syscoin/blockbook/bchain/coins/btc"
 )
 
 var (

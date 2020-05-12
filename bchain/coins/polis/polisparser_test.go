@@ -3,19 +3,18 @@
 package polis
 
 import (
+	"blockbook/bchain"
+	"blockbook/bchain/coins/btc"
 	"bytes"
 	"encoding/hex"
 	"fmt"
+	"github.com/martinboehm/btcutil/chaincfg"
 	"io/ioutil"
 	"math/big"
 	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
-
-	"github.com/martinboehm/btcutil/chaincfg"
-	"github.com/syscoin/blockbook/bchain"
-	"github.com/syscoin/blockbook/bchain/coins/btc"
 )
 
 type testBlock struct {

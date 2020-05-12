@@ -1,6 +1,10 @@
 package api
 
 import (
+	"blockbook/bchain"
+	"blockbook/bchain/coins/eth"
+	"blockbook/common"
+	"blockbook/db"
 	"bytes"
 	"encoding/json"
 	"encoding/hex"
@@ -15,10 +19,6 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/juju/errors"
-	"github.com/syscoin/blockbook/bchain"
-	"github.com/syscoin/blockbook/bchain/coins/eth"
-	"github.com/syscoin/blockbook/common"
-	"github.com/syscoin/blockbook/db"
 )
 
 // Worker is handle to api worker

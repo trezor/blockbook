@@ -1,15 +1,13 @@
 package api
 
 import (
+	"blockbook/bchain"
+	"blockbook/common"
 	"encoding/json"
 	"errors"
 	"math/big"
 	"sort"
 	"time"
-
-	"github.com/syscoin/blockbook/bchain"
-	"github.com/syscoin/blockbook/common"
-	"github.com/syscoin/blockbook/db"
 )
 
 const maxUint32 = ^uint32(0)

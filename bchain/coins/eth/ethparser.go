@@ -1,6 +1,7 @@
 package eth
 
 import (
+	"blockbook/bchain"
 	"encoding/hex"
 	"math/big"
 	"strconv"
@@ -8,7 +9,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/golang/protobuf/proto"
 	"github.com/juju/errors"
-	"github.com/syscoin/blockbook/bchain"
 	"golang.org/x/crypto/sha3"
 	vlq "github.com/bsm/go-vlq"
 )

@@ -1,6 +1,7 @@
 package btc
 
 import (
+	"blockbook/bchain"
 	"bytes"
 	"context"
 	"encoding/hex"
@@ -16,7 +17,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/juju/errors"
 	"github.com/martinboehm/btcd/wire"
-	"github.com/syscoin/blockbook/bchain"
+	"blockbook/common"
 )
 
 // BitcoinRPC is an interface to JSON-RPC bitcoind service.

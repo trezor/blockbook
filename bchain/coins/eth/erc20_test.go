@@ -3,13 +3,12 @@
 package eth
 
 import (
-	"fmt"
+	"blockbook/bchain"
+	"blockbook/tests/dbtestdata"
+	fmt "fmt"
 	"math/big"
 	"strings"
 	"testing"
-
-	"github.com/syscoin/blockbook/bchain"
-	"github.com/syscoin/blockbook/tests/dbtestdata"
 )
 
 func TestErc20_erc20GetTransfersFromLog(t *testing.T) {

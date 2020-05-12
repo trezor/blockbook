@@ -1,6 +1,7 @@
 package fiat
 
 import (
+	"blockbook/db"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -8,7 +9,6 @@ import (
 	"time"
 
 	"github.com/golang/glog"
-	"github.com/syscoin/blockbook/db"
 )
 
 // OnNewFiatRatesTicker is used to send notification about a new FiatRates ticker

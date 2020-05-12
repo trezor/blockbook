@@ -3,6 +3,7 @@
 package btc
 
 import (
+	"blockbook/bchain"
 	"encoding/hex"
 	"math/big"
 	"os"
@@ -10,7 +11,6 @@ import (
 	"testing"
 
 	"github.com/martinboehm/btcutil/chaincfg"
-	"github.com/syscoin/blockbook/bchain"
 )
 
 func TestMain(m *testing.M) {

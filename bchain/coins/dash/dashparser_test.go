@@ -3,6 +3,8 @@
 package dash
 
 import (
+	"blockbook/bchain"
+	"blockbook/bchain/coins/btc"
 	"bytes"
 	"encoding/hex"
 	"fmt"
@@ -11,9 +13,6 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
-
-	"github.com/syscoin/blockbook/bchain"
-	"github.com/syscoin/blockbook/bchain/coins/btc"
 )
 
 type testBlock struct {

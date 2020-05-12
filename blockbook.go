@@ -1,6 +1,13 @@
 package main
 
 import (
+	"blockbook/api"
+	"blockbook/bchain"
+	"blockbook/bchain/coins"
+	"blockbook/common"
+	"blockbook/db"
+	"blockbook/fiat"
+	"blockbook/server"
 	"context"
 	"encoding/json"
 	"flag"
@@ -19,13 +26,6 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/juju/errors"
-	"github.com/syscoin/blockbook/api"
-	"github.com/syscoin/blockbook/bchain"
-	"github.com/syscoin/blockbook/bchain/coins"
-	"github.com/syscoin/blockbook/common"
-	"github.com/syscoin/blockbook/db"
-	"github.com/syscoin/blockbook/fiat"
-	"github.com/syscoin/blockbook/server"
 )
 
 // debounce too close requests for resync

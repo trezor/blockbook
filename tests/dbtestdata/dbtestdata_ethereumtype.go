@@ -1,9 +1,8 @@
 package dbtestdata
 
 import (
+	"blockbook/bchain"
 	"encoding/hex"
-
-	"github.com/syscoin/blockbook/bchain"
 )
 
 // Addresses

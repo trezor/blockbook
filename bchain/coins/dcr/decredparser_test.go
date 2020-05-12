@@ -3,14 +3,13 @@
 package dcr
 
 import (
+	"blockbook/bchain"
+	"blockbook/bchain/coins/btc"
 	"encoding/hex"
 	"math/big"
 	"os"
 	"reflect"
 	"testing"
-
-	"github.com/syscoin/blockbook/bchain"
-	"github.com/syscoin/blockbook/bchain/coins/btc"
 )
 
 var (

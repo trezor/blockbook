@@ -3,6 +3,10 @@
 package fiat
 
 import (
+	"blockbook/bchain"
+	"blockbook/bchain/coins/btc"
+	"blockbook/common"
+	"blockbook/db"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -14,10 +18,6 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/martinboehm/btcutil/chaincfg"
-	"github.com/syscoin/blockbook/bchain"
-	"github.com/syscoin/blockbook/bchain/coins/btc"
-	"github.com/syscoin/blockbook/common"
-	"github.com/syscoin/blockbook/db"
 )
 
 func TestMain(m *testing.M) {

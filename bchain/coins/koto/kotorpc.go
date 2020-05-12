@@ -1,12 +1,12 @@
 package koto
 
 import (
+	"blockbook/bchain"
+	"blockbook/bchain/coins/btc"
 	"encoding/json"
 
 	"github.com/golang/glog"
 	"github.com/juju/errors"
-	"github.com/syscoin/blockbook/bchain"
-	"github.com/syscoin/blockbook/bchain/coins/btc"
 )
 
 // KotoRPC is an interface to JSON-RPC bitcoind service

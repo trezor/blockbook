@@ -1,6 +1,8 @@
 package api
 
 import (
+	"blockbook/bchain"
+	"blockbook/db"
 	"fmt"
 	"math/big"
 	"sort"
@@ -10,8 +12,6 @@ import (
 	"bytes"
 	"github.com/golang/glog"
 	"github.com/juju/errors"
-	"github.com/syscoin/blockbook/bchain"
-	"github.com/syscoin/blockbook/db"
 )
 
 const defaultAddressesGap = 20

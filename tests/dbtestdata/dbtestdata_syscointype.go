@@ -1,8 +1,8 @@
 package dbtestdata
 
 import (
+	"blockbook/bchain"
 	"math/big"
-	"github.com/syscoin/blockbook/bchain"
 )
 
 // Txids, Addresses

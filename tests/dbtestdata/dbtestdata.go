@@ -1,11 +1,11 @@
 package dbtestdata
 
 import (
+	"blockbook/bchain"
 	"encoding/hex"
 	"math/big"
 
 	"github.com/golang/glog"
-	"github.com/syscoin/blockbook/bchain"
 )
 
 // Txids, Xpubs and Addresses

@@ -1,6 +1,7 @@
 package fiat
 
 import (
+	"blockbook/db"
 	"encoding/json"
 	"errors"
 	"io/ioutil"
@@ -9,7 +10,6 @@ import (
 	"time"
 
 	"github.com/golang/glog"
-	"github.com/syscoin/blockbook/db"
 )
 
 // Coingecko is a structure that implements RatesDownloaderInterface

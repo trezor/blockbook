@@ -3,14 +3,13 @@
 package eth
 
 import (
+	"blockbook/bchain"
+	"blockbook/tests/dbtestdata"
 	"encoding/hex"
 	"fmt"
 	"math/big"
 	"reflect"
 	"testing"
-
-	"github.com/syscoin/blockbook/bchain"
-	"github.com/syscoin/blockbook/tests/dbtestdata"
 )
 
 func TestEthParser_GetAddrDescFromAddress(t *testing.T) {

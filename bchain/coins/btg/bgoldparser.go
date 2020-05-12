@@ -1,6 +1,9 @@
 package btg
 
 import (
+	"blockbook/bchain"
+	"blockbook/bchain/coins/btc"
+	"blockbook/bchain/coins/utils"
 	"bytes"
 	"encoding/binary"
 	"io"
@@ -8,9 +11,6 @@ import (
 	"github.com/martinboehm/btcd/chaincfg/chainhash"
 	"github.com/martinboehm/btcd/wire"
 	"github.com/martinboehm/btcutil/chaincfg"
-	"github.com/syscoin/blockbook/bchain"
-	"github.com/syscoin/blockbook/bchain/coins/btc"
-	"github.com/syscoin/blockbook/bchain/coins/utils"
 )
 
 const (
