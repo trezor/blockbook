@@ -116,7 +116,7 @@ func txIndexesHex(tx string, indexes []int32, d *RocksDB) string {
 		if i == len(indexes)-1 {
 			index |= 1
 		}
-		l = d.chainParser.PackVarint32(index, buf)
+		l := d.chainParser.PackVarint32(index, buf)
 		tx += hex.EncodeToString(buf[:l])
 	}
 	return tx
