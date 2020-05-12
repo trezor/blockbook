@@ -432,7 +432,7 @@ const SPTAssetSyscoinBurnToAllocationType TokenType = "SPTAssetSyscoinBurnToAllo
 const SPTAssetAllocationBurnToSyscoinType TokenType = "SPTAssetAllocationBurnToSyscoin"
 const SPTAssetAllocationBurnToEthereumType TokenType = "SPTAssetAllocationBurnToEthereum"
 
-
+const AllMask AssetsMask = 0
 const BaseCoinMask AssetsMask = 1
 const AssetAllocationSendMask AssetsMask = 2
 const AssetSyscoinBurnToAllocationMask AssetsMask = 4
@@ -443,7 +443,6 @@ const AssetUpdateMask AssetsMask = 64
 const AssetSendMask AssetsMask = 128
 const AssetActivateMask AssetsMask = 256
 const AssetMask AssetsMask = AssetActivateMask | AssetUpdateMask | AssetSendMask | AssetSyscoinBurnToAllocationMask | AssetAllocationBurnToSyscoinMask | AssetAllocationBurnToEthereumMask | AssetAllocationMintMask | AssetAllocationSendMask
-const AllMask AssetsMask = BaseCoinMask | AssetMask
 // Amount is datatype holding amounts
 type Amount big.Int
 // MarshalJSON Amount serialization
