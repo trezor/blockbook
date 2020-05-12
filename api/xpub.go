@@ -182,11 +182,11 @@ func (w *Worker) xpubDerivedAddressBalance(data *xpubData, ad *xpubAddress) (boo
 				}
 				bhaToken, ok := data.Tokens[assetGuid];
 				if !ok {
-					bhaToken = &TokenBalanceXpub{SentSat: &bchain.Amount{}, BalanceSat: &bchain.Amount{}}
+					bhaToken = &TokenBalanceXpub{SentSat: big.NewInt(0), BalanceSat: big.NewInt(0)}
 					data.Tokens[assetGuid] = bhaToken
 				}
-				(*big.Int)(bhaToken.SentSat).Add((*big.Int)(bhaToken.SentSat), assetBalance.SentSat)
-				(*big.Int)(bhaToken.BalanceSat).Add((*big.Int)(bhaToken.BalanceSat), assetBalance.BalanceSat)
+				bhaToken.SentSat.Add(bhaToken.SentSat, assetBalance.SentSat)
+				bhaToken.BalanceSat.Add(bhaToken.BalanceSat, assetBalance.BalanceSat)
 			}
 		}
 	}
