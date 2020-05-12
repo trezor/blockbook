@@ -390,9 +390,8 @@ func (d *RocksDB) GetAddrDescTransactions(addrDesc bchain.AddressDescriptor, low
 		if err != nil {
 			return err
 		}
-		// +1 for varint byte of mask
-		for len(val) > txidUnpackedLen+1 {
-			mask, l := d.chainParser.UnpackVaruint(val)
+		for len(val) > txidUnpackedLen {
+			mask, l := d.chainParser.UnpackTxIndexType(val)
 			maskUint := uint32(mask)
 			tx, err := d.chainParser.UnpackTxid(val[l:l+txidUnpackedLen])
 			if err != nil {
@@ -405,7 +404,7 @@ func (d *RocksDB) GetAddrDescTransactions(addrDesc bchain.AddressDescriptor, low
 				glog.Warningf("rocksdb: addresses contain incorrect data %s: %s", hex.EncodeToString(key), hex.EncodeToString(val))
 				break
 			}
-			if assetsBitMask == bchain.AllMask || (assetsBitMaskUint & maskUint) == maskUint {
+			if assetsBitMask == bchain.AllMask || mask == bchain.AllMask || (assetsBitMaskUint & maskUint) == maskUint {
 				if err := fn(tx, height, indexes); err != nil {
 					if _, ok := err.(*StopIteration); ok {
 						return nil

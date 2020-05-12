@@ -499,13 +499,11 @@ func (p *BaseParser) UnpackBigint(buf []byte) (big.Int, int) {
 }
 
 func (p *BaseParser) PackTxIndexes(txi []TxIndexes) []byte {
-	buf := make([]byte, 0, 34)
+	buf := make([]byte, 0, 32)
 	bvout := make([]byte, vlq.MaxLen32)
 	// store the txs in reverse order for ordering from newest to oldest
 	for j := len(txi) - 1; j >= 0; j-- {
 		t := &txi[j]
-		l := p.PackVaruint(uint(t.Type), bvout)
-		buf = append(buf, bvout[:l]...)
 		buf = append(buf, []byte(t.BtxID)...)
 		for i, index := range t.Indexes {
 			index <<= 1
@@ -579,5 +577,8 @@ func (p *BaseParser) UnpackAsset(buf []byte) (*Asset, error) {
 
 func (p *BaseParser) PackAsset(asset *Asset) ([]byte, error) {
 	return nil, nil
+}
+func (p *BaseParser) UnpackTxIndexType(buf []byte) (AssetsMask, int) {
+	return AllMask, 0
 }
 

@@ -550,6 +550,36 @@ func (p *SyscoinParser) PackAddrBalance(ab *bchain.AddrBalance, buf, varBuf []by
 }
 
 
+// PackedTxidLen returns length in bytes of packed txid + tx type
+func (p *SyscoinParser) PackedTxidLen() int {
+	return p.BaseParser.PackedTxidLen() + 1
+}
+
+func (p *SyscoinParser) UnpackTxIndexType(buf []byte) (bchain.AssetsMask, int) {
+	return p.BaseParser.UnpackVaruint(buf)
+}
+
+func (p *SyscoinParser) PackTxIndexes(txi []TxIndexes) []byte {
+	buf := make([]byte, 0, 34)
+	bvout := make([]byte, vlq.MaxLen32)
+	// store the txs in reverse order for ordering from newest to oldest
+	for j := len(txi) - 1; j >= 0; j-- {
+		t := &txi[j]
+		l := p.BaseParser.PackVaruint(uint(t.Type), bvout)
+		buf = append(buf, bvout[:l]...)
+		buf = append(buf, []byte(t.BtxID)...)
+		for i, index := range t.Indexes {
+			index <<= 1
+			if i == len(t.Indexes)-1 {
+				index |= 1
+			}
+			l := p.BaseParser.PackVarint32(index, bvout)
+			buf = append(buf, bvout[:l]...)
+		}
+	}
+	return buf
+}
+
 func (p *SyscoinParser) PackAsset(asset *bchain.Asset) ([]byte, error) {
 	buf := make([]byte, 0, 52)
 	varBuf := make([]byte, 40)
