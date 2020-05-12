@@ -261,7 +261,9 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 		valOutSat.Add(&valOutSat, &bchainVout.ValueSat)
 		
 		if bchainVout.AssetInfo != nil {
-			
+			if mapTTS == nil {
+				mapTTS = map[uint32]*bchain.TokenTransferSummary{}
+			}
 			vout.AssetInfo = &bchain.AssetInfo{AssetGuid: bchainVout.AssetInfo.AssetGuid, ValueSat: new(big.Int).Set(bchainVout.AssetInfo.ValueSat)}
 			tts, ok := mapTTS[vout.AssetInfo.AssetGuid]
 			if !ok {
@@ -1192,7 +1194,7 @@ func (w *Worker) balanceHistoryForTxid(addrDesc bchain.AddressDescriptor, txid s
 					}
 					bhaToken, ok := bh.Tokens[tai.AssetInfo.AssetGuid];
 					if !ok {
-						bhaToken = &TokenBalanceHistory{AssetGuid: tai.AssetInfo.AssetGuid, SentSat: &bchain.Amount{}, ReceivedSat: &bchain.Amount{}}
+						bhaToken = &TokenBalanceHistory{SentSat: &bchain.Amount{}, ReceivedSat: &bchain.Amount{}}
 						bh.Tokens[tai.AssetInfo.AssetGuid] = bhaToken
 					}
 					(*big.Int)(bhaToken.SentSat).Add((*big.Int)(bhaToken.SentSat), tai.AssetInfo.ValueSat)
@@ -1209,7 +1211,7 @@ func (w *Worker) balanceHistoryForTxid(addrDesc bchain.AddressDescriptor, txid s
 					}
 					bhaToken, ok := bh.Tokens[tao.AssetInfo.AssetGuid];
 					if !ok {
-						bhaToken = &TokenBalanceHistory{AssetGuid: tao.AssetInfo.AssetGuid, SentSat: &bchain.Amount{}, ReceivedSat: &bchain.Amount{}}
+						bhaToken = &TokenBalanceHistory{SentSat: &bchain.Amount{}, ReceivedSat: &bchain.Amount{}}
 						bh.Tokens[tao.AssetInfo.AssetGuid] = bhaToken
 					}
 					(*big.Int)(bhaToken.ReceivedSat).Add((*big.Int)(bhaToken.ReceivedSat), tao.AssetInfo.ValueSat)

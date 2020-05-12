@@ -491,7 +491,7 @@ func (s *SocketIoServer) getAddressHistory(addr []string, opts *addrOpts) (res r
 					}
 					token, ok := ahi.Tokens[uint32(vin.AssetInfo.AssetGuid)]
 					if !ok {
-						token = &api.TokenBalanceHistory{AssetGuid: uint32(vin.AssetInfo.AssetGuid), ReceivedSat: &bchain.Amount{}, SentSat: &bchain.Amount{}}
+						token = &api.TokenBalanceHistory{ReceivedSat: &bchain.Amount{}, SentSat: &bchain.Amount{}}
 						ahi.Tokens[uint32(vin.AssetInfo.AssetGuid)] = token
 					}
 					(*big.Int)(token.SentSat).Add((*big.Int)(token.SentSat), vin.AssetInfo.ValueSat)
@@ -517,7 +517,7 @@ func (s *SocketIoServer) getAddressHistory(addr []string, opts *addrOpts) (res r
 					}
 					token, ok := ahi.Tokens[uint32(vout.AssetInfo.AssetGuid)]
 					if !ok {
-						token = &api.TokenBalanceHistory{AssetGuid: uint32(vout.AssetInfo.AssetGuid), ReceivedSat: &bchain.Amount{}, SentSat: &bchain.Amount{}}
+						token = &api.TokenBalanceHistory{ReceivedSat: &bchain.Amount{}, SentSat: &bchain.Amount{}}
 						ahi.Tokens[uint32(vout.AssetInfo.AssetGuid)] = token
 					}
 					(*big.Int)(token.ReceivedSat).Add((*big.Int)(token.ReceivedSat), vout.AssetInfo.ValueSat)
@@ -579,7 +579,7 @@ func (s *SocketIoServer) getAssetHistory(asset string, opts *assetOpts) (res res
 				}
 				token, ok := ahi.Tokens[uint32(vin.AssetInfo.AssetGuid)]
 				if !ok {
-					token = &api.TokenBalanceHistory{AssetGuid: uint32(vin.AssetInfo.AssetGuid), ReceivedSat: &bchain.Amount{}, SentSat: &bchain.Amount{}}
+					token = &api.TokenBalanceHistory{ReceivedSat: &bchain.Amount{}, SentSat: &bchain.Amount{}}
 					ahi.Tokens[uint32(vin.AssetInfo.AssetGuid)] = token
 				}
 				(*big.Int)(token.SentSat).Add((*big.Int)(token.SentSat), vin.AssetInfo.ValueSat)
@@ -606,7 +606,7 @@ func (s *SocketIoServer) getAssetHistory(asset string, opts *assetOpts) (res res
 
 				token, ok := ahi.Tokens[uint32(vout.AssetInfo.AssetGuid)]
 				if !ok {
-					token = &api.TokenBalanceHistory{AssetGuid: uint32(vout.AssetInfo.AssetGuid), ReceivedSat: &bchain.Amount{}, SentSat: &bchain.Amount{}}
+					token = &api.TokenBalanceHistory{ReceivedSat: &bchain.Amount{}, SentSat: &bchain.Amount{}}
 					ahi.Tokens[uint32(vout.AssetInfo.AssetGuid)] = token
 				}
 				(*big.Int)(token.ReceivedSat).Add((*big.Int)(token.ReceivedSat), vout.AssetInfo.ValueSat)

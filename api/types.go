@@ -273,7 +273,6 @@ func (a Utxos) Less(i, j int) bool {
 
 // history of tokens mapped to uint32 asset guid's in BalanceHistory obj
 type TokenBalanceHistory struct {
-	AssetGuid   uint32 `json:"assetGuid,omitempty"`
 	ReceivedSat *bchain.Amount `json:"received,omitempty"`
 	SentSat     *bchain.Amount `json:"sent,omitempty"`
 }
@@ -336,11 +335,11 @@ func (a BalanceHistories) SortAndAggregate(groupByTime uint32) BalanceHistories 
 					bha.Tokens = map[uint32]*TokenBalanceHistory{}
 				}
 				// fill up map of balances for each asset guid
-				for _, token := range bh.Tokens {
-					bhaToken, ok := bha.Tokens[token.AssetGuid];
+				for assetGuid, token := range bh.Tokens {
+					bhaToken, ok := bha.Tokens[assetGuid];
 					if !ok {
-						bhaToken = &TokenBalanceHistory{AssetGuid: token.AssetGuid, SentSat: &bchain.Amount{}, ReceivedSat: &bchain.Amount{}}
-						bha.Tokens[token.AssetGuid] = bhaToken
+						bhaToken = &TokenBalanceHistory{SentSat: &bchain.Amount{}, ReceivedSat: &bchain.Amount{}}
+						bha.Tokens[assetGuid] = bhaToken
 					}
 					(*big.Int)(bhaToken.SentSat).Add((*big.Int)(bhaToken.SentSat), (*big.Int)(token.SentSat))
 					(*big.Int)(bhaToken.ReceivedSat).Add((*big.Int)(bhaToken.ReceivedSat), (*big.Int)(token.ReceivedSat))
