@@ -19,7 +19,6 @@ const maxAddressesGap = 10000
 
 const txInput = 1
 const txOutput = 2
-const txVout = 4
 
 const xpubCacheSize = 512
 const xpubCacheExpirationSeconds = 7200
@@ -184,6 +183,7 @@ func (w *Worker) xpubDerivedAddressBalance(data *xpubData, ad *xpubAddress) (boo
 				bhaToken.BalanceSat.Add(bhaToken.BalanceSat, assetBalance.BalanceSat)
 			}
 		}
+		return true, nil
 	}
 	return false, nil
 }
@@ -360,9 +360,8 @@ func (w *Worker) getXpubData(xpub string, page int, txsOnPage int, option Accoun
 	// gap is increased one as there must be gap of empty addresses before the derivation is stopped
 	gap++
 	var processedHash string
-	voutStr := strconv.FormatInt(int64(filter.Vout), 10)
 	cachedXpubsMux.Lock()
-	data, found := cachedXpubs[xpub + voutStr]
+	data, found := cachedXpubs[xpub]
 	cachedXpubsMux.Unlock()
 	// to load all data for xpub may take some time, do it in a loop to process a possible new block
 	for {
@@ -423,7 +422,7 @@ func (w *Worker) getXpubData(xpub string, page int, txsOnPage int, option Accoun
 	if len(cachedXpubs) >= xpubCacheSize {
 		evictXpubCacheItems()
 	}
-	cachedXpubs[xpub+voutStr] = data
+	cachedXpubs[xpub] = data
 	cachedXpubsMux.Unlock()
 	return &data, bestheight, nil
 }
@@ -466,14 +465,11 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 			if txid.height < filter.FromHeight || txid.height > toHeight {
 				return false
 			}
-
 			if filter.Vout != AddressFilterVoutOff {
-				if (filter.Vout == AddressFilterVoutInputs && txid.inputOutput&txInput != 0) ||
-					(filter.Vout == AddressFilterVoutOutputs && txid.inputOutput&txOutput != 0) ||
-					(txid.inputOutput&txVout != 0) {
-					return true
+				if filter.Vout == AddressFilterVoutInputs && txid.inputOutput&txInput == 0 ||
+					filter.Vout == AddressFilterVoutOutputs && txid.inputOutput&txOutput == 0 {
+					return false
 				}
-				return false
 			}
 			return true
 		}
@@ -589,7 +585,6 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 		tokens = make(bchain.Tokens, 0, 4)
 		xpubAddresses = make(map[string]struct{})
 	}
-
 	for ci, da := range [][]xpubAddress{data.addresses, data.changeAddresses} {
 		for i := range da {
 			ad := &da[i]
@@ -704,7 +699,7 @@ func (w *Worker) GetXpubUtxo(xpub string, onlyConfirmed bool, gap int) (Utxos, e
 }
 
 // GetXpubBalanceHistory returns history of balance for given xpub
-func (w *Worker) GetXpubBalanceHistory(xpub string, fromTimestamp, toTimestamp int64, currencies []string, gap int, groupBy uint32, AddressFilterVout int) (BalanceHistories, error) {
+func (w *Worker) GetXpubBalanceHistory(xpub string, fromTimestamp, toTimestamp int64, currencies []string, gap int, groupBy uint32) (BalanceHistories, error) {
 	bhs := make(BalanceHistories, 0)
 	start := time.Now()
 	fromUnix, fromHeight, toUnix, toHeight := w.balanceHistoryHeightsFromTo(fromTimestamp, toTimestamp)
@@ -712,7 +707,7 @@ func (w *Worker) GetXpubBalanceHistory(xpub string, fromTimestamp, toTimestamp i
 		return bhs, nil
 	}
 	data, _, err := w.getXpubData(xpub, 0, 1, AccountDetailsTxidHistory, &AddressFilter{
-		Vout:          AddressFilterVout,
+		Vout:          AddressFilterVoutOff,
 		OnlyConfirmed: true,
 		FromHeight:    fromHeight,
 		ToHeight:      toHeight,
