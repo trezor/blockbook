@@ -106,6 +106,8 @@ func (d *RocksDB) addToAddressesAndContractsEthereumType(addrDesc bchain.Address
 	var err error
 	strAddrDesc := string(addrDesc)
 	ac, e := addressContracts[strAddrDesc]
+	addressTxIdx := make(addressTxIdxMap)
+
 	if !e {
 		ac, err = d.GetAddrDescContracts(addrDesc)
 		if err != nil {
@@ -143,7 +145,7 @@ func (d *RocksDB) addToAddressesAndContractsEthereumType(addrDesc bchain.Address
 			}
 		}
 	}
-	counted := addToAddressesMap(addresses, strAddrDesc, btxID, index)
+	counted := addToAddressesMap(addresses, addressTxIdx, strAddrDesc, btxID, index)
 	if !counted {
 		ac.TotalTxs++
 	}
