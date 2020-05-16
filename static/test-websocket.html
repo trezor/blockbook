@@ -1,6 +1,5 @@
 <!doctype html>
 <html lang="en">
-
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
@@ -162,6 +161,27 @@
             });
         }
 
+        function getBalanceHistory() {
+            const descriptor = document.getElementById('getBalanceHistoryDescriptor').value.trim();
+            const from = parseInt(document.getElementById("getBalanceHistoryFrom").value.trim());
+            const to = parseInt(document.getElementById("getBalanceHistoryTo").value.trim());
+            const currencies = document.getElementById('getBalanceHistoryFiat').value.split(",");
+            const groupBy = parseInt(document.getElementById("getBalanceHistoryGroupBy").value);
+            const method = 'getBalanceHistory';
+            const params = {
+                descriptor,
+                from,
+                to,
+                currencies,
+                groupBy
+                // default gap=20
+            };
+            send(method, params, function (result) {
+                document.getElementById('getBalanceHistoryResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
+            });
+        }
+
+
         function getTransaction() {
             const txid = document.getElementById('getTransactionTxid').value.trim();
             const method = 'getTransaction';
@@ -279,6 +299,71 @@
             });
         }
 
+        function getFiatRatesForTimestamps() {
+            const method = 'getFiatRatesForTimestamps';
+            var timestamps = document.getElementById('getFiatRatesForTimestampsList').value.split(",");
+            var currencies = document.getElementById('getFiatRatesForTimestampsCurrency').value.split(",");
+            timestamps = timestamps.map(Number);
+            const params = {
+                timestamps,
+                'currencies': currencies
+            };
+            send(method, params, function (result) {
+                document.getElementById('getFiatRatesForTimestampsResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
+            });
+        }
+
+        function getCurrentFiatRates() {
+            const method = 'getCurrentFiatRates';
+            var currencies = document.getElementById('getCurrentFiatRatesCurrency').value.split(",");
+            const params = {
+                "currencies": currencies
+            };
+            send(method, params, function (result) {
+                document.getElementById('getCurrentFiatRatesResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
+            });
+        }
+
+        function getFiatRatesTickersList() {
+            const method = 'getFiatRatesTickersList';
+            var timestamp = document.getElementById('getFiatRatesTickersListDate').value;
+            timestamp = parseInt(timestamp);
+            const params = {
+                timestamp,
+            };
+            send(method, params, function (result) {
+                document.getElementById('getFiatRatesTickersListResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
+            });
+        }
+
+        function subscribeNewFiatRatesTicker() {
+            const method = 'subscribeFiatRates';
+            var currency = document.getElementById('subscribeFiatRatesCurrency').value;
+            const params = {
+                "currency": currency
+            };
+            if (subscribeNewFiatRatesTickerId) {
+                delete subscriptions[subscribeNewFiatRatesTickerId];
+                subscribeNewFiatRatesTickerId = "";
+            }
+            subscribeNewFiatRatesTickerId = subscribe(method, params, function (result) {
+                document.getElementById('subscribeNewFiatRatesTickerResult').innerText += JSON.stringify(result).replace(/,/g, ", ") + "\n";
+            });
+            document.getElementById('subscribeNewFiatRatesTickerId').innerText = subscribeNewFiatRatesTickerId;
+            document.getElementById('unsubscribeNewFiatRatesTickerButton').setAttribute("style", "display: inherit;");
+        }
+
+        function unsubscribeNewFiatRatesTicker() {
+            const method = 'unsubscribeFiatRates';
+            const params = {
+            };
+            unsubscribe(method, subscribeNewFiatRatesTickerId, params, function (result) {
+                subscribeNewFiatRatesTickerId = "";
+                document.getElementById('subscribeNewFiatRatesTickerResult').innerText += JSON.stringify(result).replace(/,/g, ", ") + "\n";
+                document.getElementById('subscribeNewFiatRatesTickerId').innerText = "";
+                document.getElementById('unsubscribeNewFiatRatesTickerButton').setAttribute("style", "display: none;");
+            });
+        }
     </script>
 </head>
 
@@ -370,6 +455,27 @@
         </div>
         <div class="row">
             <div class="col">
+                <input class="btn btn-secondary" type="button" value="getBalanceHistory" onclick="getBalanceHistory()">
+            </div>
+            <div class="col-8">
+                <div class="row" style="margin: 0;">
+                    <input type="text" placeholder="descriptor" class="form-control" id="getBalanceHistoryDescriptor" value="0xba98d6a5ac827632e3457de7512d211e4ff7e8bd">
+                </div>
+                <div class="row" style="margin: 0; margin-top: 5px;">
+                    <input type="text" placeholder="from Unix TS" style="width: 20%;margin-left: 5px;margin-right: 5px;" class="form-control" id="getBalanceHistoryFrom">
+                    <input type="text" placeholder="to Unix TS" style="width: 20%; margin-left: 5px; margin-right: 5px;" class="form-control" id="getBalanceHistoryTo">
+                    <input type="text" placeholder="usd,eur" style="width: 20%; margin-left: 5px; margin-right: 5px;" class="form-control" id="getBalanceHistoryFiat">
+                    <input type="text" placeholder="group by (sec)" style="width: 20%; margin-left: 5px; margin-right: 5px;" class="form-control" id="getBalanceHistoryGroupBy">
+                </div>
+            </div>
+            <div class="col form-inline"></div>
+        </div>
+        <div class="row">
+            <div class="col" id="getBalanceHistoryResult">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col">
                 <input class="btn btn-secondary" type="button" value="getTransaction" onclick="getTransaction()">
             </div>
             <div class="col-8">
@@ -430,6 +536,42 @@
             <div class="col" id="sendTransactionResult"></div>
         </div>
         <div class="row">
+            <div class="col-2">
+                <input class="btn btn-secondary" type="button" value="get fiat rates for dates" onclick="getFiatRatesForTimestamps()">
+            </div>
+            <div class="col-1">
+                <input type="text" class="form-control" id="getFiatRatesForTimestampsCurrency" placeholder="usd,eur">
+            </div>
+            <div class="col-7">
+                <input type="text" class="form-control" id="getFiatRatesForTimestampsList" value="1575288000,1575550800">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col" id="getFiatRatesForTimestampsResult"></div>
+        </div>
+        <div class="row">
+            <div class="col-2">
+                <input class="btn btn-secondary" type="button" value="get current fiat rates" onclick="getCurrentFiatRates()">
+            </div>
+            <div class="col-1">
+                <input type="text" class="form-control" id="getCurrentFiatRatesCurrency" placeholder="usd">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col" id="getCurrentFiatRatesResult"></div>
+        </div>
+        <div class="row">
+            <div class="col-2">
+                <input class="btn btn-secondary" type="button" value="get fiat rates tickers" onclick="getFiatRatesTickersList()">
+            </div>
+            <div class="col-8">
+                <input type="text" class="form-control" id="getFiatRatesTickersListDate" value="1576591569" placeholder="Unix timestamp">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col" id="getFiatRatesTickersListResult"></div>
+        </div>
+        <div class="row">
             <div class="col">
                 <input class="btn btn-secondary" type="button" value="subscribe new block" onclick="subscribeNewBlock()">
             </div>
@@ -460,7 +602,25 @@
         <div class="row">
             <div class="col" id="subscribeAddressesResult"></div>
         </div>
+        <div class="row">
+            <div class="col-3">
+                <input class="btn btn-secondary" type="button" value="subscribe new fiat rates" onclick="subscribeNewFiatRatesTicker()">
+            </div>
+            <div class="col-1">
+                <span id="subscribeNewFiatRatesTickerId"></span>
+            </div>
+            <div class="col-1">
+                <input type="text" class="form-control" id="subscribeFiatRatesCurrency" value="usd">
+            </div>
+            <div class="col-5">
+                <input class="btn btn-secondary" id="unsubscribeNewFiatRatesTickerButton" style="display: none;" type="button" value="unsubscribe" onclick="unsubscribeNewFiatRatesTicker()">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col" id="subscribeNewFiatRatesTickerResult"></div>
+        </div>
     </div>
+    <br><br>
 </body>
 <script>
     document.getElementById('serverAddress').value = window.location.protocol + "//" + window.location.host;

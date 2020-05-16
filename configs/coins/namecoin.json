@@ -22,10 +22,10 @@
     "package_name": "backend-namecoin",
     "package_revision": "satoshilabs-1",
     "system_user": "namecoin",
-    "version": "0.16.3",
-    "binary_url": "https://www.namecoin.org/files/namecoin-core-0.16.3/namecoin-0.16.3-x86_64-linux-gnu.tar.gz",
+    "version": "0.19.0.1",
+    "binary_url": "https://www.namecoin.org/files/namecoin-core/namecoin-core-0.19.0.1/namecoin-0.19.0.1-x86_64-linux-gnu.tar.gz",
     "verification_type": "sha256",
-    "verification_source": "14ebaaf6f22f69b057a5bcb9b6959548f0a3f1b62cc113f19581d2297044827e",
+    "verification_source": "16acef267c5458ea3f5a7fdfd3482bb32102143ce24a94951a044dc53bc7021b",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
       "bin/namecoin-qt"
@@ -64,11 +64,14 @@
       "block_addresses_to_keep": 300,
       "xpub_magic": 76067358,
       "slip44": 7,
-      "additional_params": {}
+      "additional_params": {
+        "fiat_rates": "coingecko",
+        "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"namecoin\", \"periodSeconds\": 60}"
+      }
     }
   },
   "meta": {
-    "package_maintainer": "Jakub Matys",
-    "package_maintainer_email": "jakub.matys@satoshilabs.com"
+    "package_maintainer": "IT Admin",
+    "package_maintainer_email": "it@satoshilabs.com"
   }
 }

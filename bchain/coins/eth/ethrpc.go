@@ -1,7 +1,6 @@
 package eth
 
 import (
-	"blockbook/bchain"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -17,6 +16,8 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/golang/glog"
 	"github.com/juju/errors"
+	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/common"
 )
 
 // EthereumNet type specifies the type of ethereum network
@@ -57,7 +58,6 @@ type EthereumRPC struct {
 	chanNewTx            chan ethcommon.Hash
 	newTxSubscription    *rpc.ClientSubscription
 	ChainConfig          *Configuration
-	isETC                bool
 }
 
 // NewEthereumRPC returns new EthRPC instance.
@@ -88,9 +88,6 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 	// always create parser
 	s.Parser = NewEthereumParser(c.BlockAddressesToKeep)
 	s.timeout = time.Duration(c.RPCTimeout) * time.Second
-
-	// detect ethereum classic
-	s.isETC = s.ChainConfig.CoinName == "Ethereum Classic"
 
 	// new blocks notifications handling
 	// the subscription is done in Initialize
@@ -206,25 +203,21 @@ func (b *EthereumRPC) InitializeMempool(addrDescForOutpoint bchain.AddrDescForOu
 }
 
 func (b *EthereumRPC) subscribeEvents() error {
-	if b.isETC {
-		glog.Info(b.ChainConfig.CoinName, " does not support subscription to newHeads")
-	} else {
-		// subscriptions
-		if err := b.subscribe(func() (*rpc.ClientSubscription, error) {
-			// invalidate the previous subscription - it is either the first one or there was an error
-			b.newBlockSubscription = nil
-			ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
-			defer cancel()
-			sub, err := b.rpc.EthSubscribe(ctx, b.chanNewBlock, "newHeads")
-			if err != nil {
-				return nil, errors.Annotatef(err, "EthSubscribe newHeads")
-			}
-			b.newBlockSubscription = sub
-			glog.Info("Subscribed to newHeads")
-			return sub, nil
-		}); err != nil {
-			return err
+	// subscriptions
+	if err := b.subscribe(func() (*rpc.ClientSubscription, error) {
+		// invalidate the previous subscription - it is either the first one or there was an error
+		b.newBlockSubscription = nil
+		ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
+		defer cancel()
+		sub, err := b.rpc.EthSubscribe(ctx, b.chanNewBlock, "newHeads")
+		if err != nil {
+			return nil, errors.Annotatef(err, "EthSubscribe newHeads")
 		}
+		b.newBlockSubscription = sub
+		glog.Info("Subscribed to newHeads")
+		return sub, nil
+	}); err != nil {
+		return err
 	}
 
 	if err := b.subscribe(func() (*rpc.ClientSubscription, error) {
@@ -366,12 +359,6 @@ func (b *EthereumRPC) GetChainInfo() (*bchain.ChainInfo, error) {
 func (b *EthereumRPC) getBestHeader() (*ethtypes.Header, error) {
 	b.bestHeaderLock.Lock()
 	defer b.bestHeaderLock.Unlock()
-	// ETC does not have newBlocks subscription, bestHeader must be updated very often (each 1 second)
-	if b.isETC {
-		if b.bestHeaderTime.Add(1 * time.Second).Before(time.Now()) {
-			b.bestHeader = nil
-		}
-	}
 	// if the best header was not updated for 15 minutes, there could be a subscription problem, reconnect RPC
 	// do it only in case of normal operation, not initial synchronization
 	if b.bestHeaderTime.Add(15*time.Minute).Before(time.Now()) && !b.bestHeaderTime.IsZero() && b.mempoolInitialized {
@@ -547,7 +534,7 @@ func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error
 	btxs := make([]bchain.Tx, len(body.Transactions))
 	for i := range body.Transactions {
 		tx := &body.Transactions[i]
-		btx, err := b.Parser.ethTxToTx(tx, &rpcReceipt{Logs: logs[tx.Hash]}, bbh.Time, uint32(bbh.Confirmations))
+		btx, err := b.Parser.ethTxToTx(tx, &rpcReceipt{Logs: logs[tx.Hash]}, bbh.Time, uint32(bbh.Confirmations), true)
 		if err != nil {
 			return nil, errors.Annotatef(err, "hash %v, height %v, txid %v", hash, height, tx.Hash)
 		}
@@ -583,8 +570,8 @@ func (b *EthereumRPC) GetBlockInfo(hash string) (*bchain.BlockInfo, error) {
 	}
 	return &bchain.BlockInfo{
 		BlockHeader: *bch,
-		Difficulty:  json.Number(head.Difficulty),
-		Nonce:       json.Number(head.Nonce),
+		Difficulty:  common.JSONNumber(head.Difficulty),
+		Nonce:       common.JSONNumber(head.Nonce),
 		Txids:       txs.Transactions,
 	}, nil
 }
@@ -613,7 +600,7 @@ func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 	var btx *bchain.Tx
 	if tx.BlockNumber == "" {
 		// mempool tx
-		btx, err = b.Parser.ethTxToTx(tx, nil, 0, 0)
+		btx, err = b.Parser.ethTxToTx(tx, nil, 0, 0, true)
 		if err != nil {
 			return nil, errors.Annotatef(err, "txid %v", txid)
 		}
@@ -634,33 +621,9 @@ func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 			return nil, errors.Annotatef(err, "txid %v", txid)
 		}
 		var receipt rpcReceipt
-		if b.isETC {
-			var rawReceipt json.RawMessage
-			var etcReceipt rpcEtcReceipt
-			err = b.rpc.CallContext(ctx, &rawReceipt, "eth_getTransactionReceipt", hash)
-			if err != nil {
-				return nil, errors.Annotatef(err, "txid %v", txid)
-			}
-			err = json.Unmarshal(rawReceipt, &etcReceipt)
-			if err == nil {
-				receipt.GasUsed = etcReceipt.GasUsed
-				receipt.Logs = etcReceipt.Logs
-				if etcReceipt.Status == 0 {
-					receipt.Status = "0x0"
-				} else {
-					receipt.Status = "0x1"
-				}
-			} else {
-				err = json.Unmarshal(rawReceipt, &receipt)
-				if err != nil {
-					return nil, errors.Annotatef(err, "unmarshal receipt for txid %v, %v", txid, string(rawReceipt))
-				}
-			}
-		} else {
-			err = b.rpc.CallContext(ctx, &receipt, "eth_getTransactionReceipt", hash)
-			if err != nil {
-				return nil, errors.Annotatef(err, "txid %v", txid)
-			}
+		err = b.rpc.CallContext(ctx, &receipt, "eth_getTransactionReceipt", hash)
+		if err != nil {
+			return nil, errors.Annotatef(err, "txid %v", txid)
 		}
 		n, err := ethNumber(tx.BlockNumber)
 		if err != nil {
@@ -670,7 +633,7 @@ func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 		if err != nil {
 			return nil, errors.Annotatef(err, "txid %v", txid)
 		}
-		btx, err = b.Parser.ethTxToTx(tx, &receipt, time, confirmations)
+		btx, err = b.Parser.ethTxToTx(tx, &receipt, time, confirmations, true)
 		if err != nil {
 			return nil, errors.Annotatef(err, "txid %v", txid)
 		}

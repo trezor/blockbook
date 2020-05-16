@@ -9,6 +9,7 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/golang/glog"
 	"github.com/juju/errors"
+	"github.com/trezor/blockbook/common"
 )
 
 // BaseParser implements data parsing/handling functionality base for all other parsers
@@ -39,9 +40,9 @@ func (p *BaseParser) GetAddrDescForUnknownInput(tx *Tx, input int) AddressDescri
 
 const zeros = "0000000000000000000000000000000000000000"
 
-// AmountToBigInt converts amount in json.Number (string) to big.Int
+// AmountToBigInt converts amount in common.JSONNumber (string) to big.Int
 // it uses string operations to avoid problems with rounding
-func (p *BaseParser) AmountToBigInt(n json.Number) (big.Int, error) {
+func (p *BaseParser) AmountToBigInt(n common.JSONNumber) (big.Int, error) {
 	var r big.Int
 	s := string(n)
 	i := strings.IndexByte(s, '.')

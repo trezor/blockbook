@@ -22,10 +22,10 @@
     "package_name": "backend-bitcoin",
     "package_revision": "satoshilabs-1",
     "system_user": "bitcoin",
-    "version": "0.18.1",
-    "binary_url": "https://bitcoin.org/bin/bitcoin-core-0.18.1/bitcoin-0.18.1-x86_64-linux-gnu.tar.gz",
+    "version": "0.19.0.1",
+    "binary_url": "https://bitcoin.org/bin/bitcoin-core-0.19.0.1/bitcoin-0.19.0.1-x86_64-linux-gnu.tar.gz",
     "verification_type": "gpg-sha256",
-    "verification_source": "https://bitcoin.org/bin/bitcoin-core-0.18.1/SHA256SUMS.asc",
+    "verification_source": "https://bitcoin.org/bin/bitcoin-core-0.19.0.1/SHA256SUMS.asc",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
       "bin/bitcoin-qt"
@@ -59,13 +59,15 @@
       "xpub_magic_segwit_p2sh": 77429938,
       "xpub_magic_segwit_native": 78792518,
       "additional_params": {
-        "alternativeEstimateFee": "whatthefee-disabled",
-        "alternativeEstimateFeeParams": "{\"url\": \"https://whatthefee.io/data.json\", \"periodSeconds\": 60}"
+        "alternative_estimate_fee": "whatthefee-disabled",
+        "alternative_estimate_fee_params": "{\"url\": \"https://whatthefee.io/data.json\", \"periodSeconds\": 60}",
+        "fiat_rates": "coingecko",
+        "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"bitcoin\", \"periodSeconds\": 60}"
       }
     }
   },
   "meta": {
-    "package_maintainer": "Martin Bohm",
-    "package_maintainer_email": "martin.bohm@satoshilabs.com"
+    "package_maintainer": "IT",
+    "package_maintainer_email": "it@satoshilabs.com"
   }
 }

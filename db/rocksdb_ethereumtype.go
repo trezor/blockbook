@@ -1,8 +1,6 @@
 package db
 
 import (
-	"blockbook/bchain"
-	"blockbook/bchain/coins/eth"
 	"bytes"
 	"encoding/hex"
 
@@ -10,6 +8,8 @@ import (
 	"github.com/golang/glog"
 	"github.com/juju/errors"
 	"github.com/tecbot/gorocksdb"
+	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/bchain/coins/eth"
 )
 
 // AddrContract is Contract address with number of transactions done by given address
@@ -455,6 +455,7 @@ func (d *RocksDB) DisconnectBlockRangeEthereumType(lower uint32, higher uint32) 
 	d.storeAddressContracts(wb, contracts)
 	err := d.db.Write(d.wo, wb)
 	if err == nil {
+		d.is.RemoveLastBlockTimes(int(higher-lower) + 1)
 		glog.Infof("rocksdb: blocks %d-%d disconnected", lower, higher)
 	}
 	return err

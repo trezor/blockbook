@@ -22,10 +22,10 @@
     "package_name": "backend-ravencoin",
     "package_revision": "satoshilabs-1",
     "system_user": "ravencoin",
-    "version": "2.4.0.0",
-    "binary_url": "https://github.com/RavenProject/Ravencoin/releases/download/v2.4.0/raven-2.4.0.0-x86_64-linux-gnu.tar.gz",
+    "version": "4.1.0.0",
+    "binary_url": "https://github.com/RavenProject/Ravencoin/releases/download/v4.1.0/raven-4.1.0.0-x86_64-linux-gnu.tar.gz",
     "verification_type": "sha256",
-    "verification_source": "e16e23b0a1802c8c8c88af69784ad0a2cd5dcec838464961a0580601924398b0",
+    "verification_source": "b586bcb289ed6fb30e14dd1ac7ea6f1f896c37d368f48dcebee359d2fb64768b",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
       "bin/raven-qt"

@@ -1,19 +1,22 @@
 package viacoin
 
 import (
-	"blockbook/bchain"
-	"blockbook/bchain/coins/btc"
-	"blockbook/bchain/coins/utils"
 	"bytes"
+
 	"github.com/martinboehm/btcd/wire"
 	"github.com/martinboehm/btcutil/chaincfg"
+	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/bchain/coins/btc"
+	"github.com/trezor/blockbook/bchain/coins/utils"
 )
 
+// magic numbers
 const (
 	MainnetMagic wire.BitcoinNet = 0xcbc6680f
 	RegtestMagic wire.BitcoinNet = 0x377b972d
 )
 
+// chain parameters
 var (
 	MainNetParams chaincfg.Params
 	RegtestParams chaincfg.Params
@@ -35,14 +38,6 @@ func init() {
 	RegtestParams.PubKeyHashAddrID = []byte{111} // base58 prefix: m or n
 	RegtestParams.ScriptHashAddrID = []byte{196} // base58 prefix: 2
 	RegtestParams.Bech32HRPSegwit = "tvia"
-
-	err := chaincfg.Register(&MainNetParams)
-	if err == nil {
-		err = chaincfg.Register(&RegtestParams)
-	}
-	if err != nil {
-		panic(err)
-	}
 }
 
 // ViacoinParser handle
@@ -55,7 +50,18 @@ func NewViacoinParser(params *chaincfg.Params, c *btc.Configuration) *ViacoinPar
 	return &ViacoinParser{BitcoinParser: btc.NewBitcoinParser(params, c)}
 }
 
+// GetChainParams returns network parameters
 func GetChainParams(chain string) *chaincfg.Params {
+	if !chaincfg.IsRegistered(&MainNetParams) {
+		err := chaincfg.Register(&MainNetParams)
+		if err == nil {
+			err = chaincfg.Register(&RegtestParams)
+		}
+		if err != nil {
+			panic(err)
+		}
+	}
+
 	switch chain {
 	case "regtest":
 		return &RegtestParams

@@ -1,0 +1,65 @@
+{
+  "coin": {
+    "name": "Divi",
+    "shortcut": "DIVI",
+    "label": "Divi Project",
+    "alias": "divi"
+  },
+  "ports": {
+    "backend_rpc": 8089,
+    "backend_message_queue": 38389,
+    "blockbook_internal": 9089,
+    "blockbook_public": 9189
+  },
+  "ipc": {
+    "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
+    "rpc_user": "divirpc",
+    "rpc_pass": "divipass",
+    "rpc_timeout": 25,
+    "message_queue_binding_template": "tcp://127.0.0.1:{{.Ports.BackendMessageQueue}}"
+  },
+  "backend": {
+    "package_name": "backend-divi",
+    "package_revision": "satoshilabs-1",
+    "system_user": "divi",
+    "version": "1.0.4",
+    "binary_url": "https://github.com/DiviProject/Divi/releases/download/v1.0.4-core/divi_ubuntu.zip",
+    "extract_command": "unzip -j -d backend",
+    "exclude_files": [
+      "divi-cli",
+      "divi-tx"
+    ],
+    "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/divid -datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -conf={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf -pid=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",
+    "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/*.log",
+    "postinst_script_template": "chmod a+x {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/divid",
+    "service_type": "forking",
+    "service_additional_params_template": "",
+    "protect_memory": false,
+    "mainnet": true,
+    "server_config_file": "bitcoin_like.conf",
+    "client_config_file": "bitcoin_like_client.conf",
+    "additional_params": {
+      "rpcallowip": "127.0.0.1"
+    }
+  },
+  "blockbook": {
+    "package_name": "blockbook-divi",
+    "system_user": "blockbook-divi",
+    "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
+    "public_binding_template": ":{{.Ports.BlockbookPublic}}",
+    "explorer_url": "https://chainz.cryptoid.info/divi/",
+    "additional_params": "-resyncindexperiod=30011 -resyncmempoolperiod=2011",
+    "block_chain": {
+      "parse": true,
+      "mempool_workers": 8,
+      "mempool_sub_workers": 2,
+      "block_addresses_to_keep": 300,
+      "slip44": 301,
+      "additional_params": {}
+    }
+  },
+  "meta": {
+    "package_maintainer": "James Scaur",
+    "package_maintainer_email": "james@txbatch.com"
+  }
+}

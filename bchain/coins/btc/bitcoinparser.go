@@ -1,7 +1,6 @@
 package btc
 
 import (
-	"blockbook/bchain"
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
@@ -16,6 +15,7 @@ import (
 	"github.com/martinboehm/btcutil/chaincfg"
 	"github.com/martinboehm/btcutil/hdkeychain"
 	"github.com/martinboehm/btcutil/txscript"
+	"github.com/trezor/blockbook/bchain"
 )
 
 // OutputScriptToAddressesFunc converts ScriptPubKey to bitcoin addresses

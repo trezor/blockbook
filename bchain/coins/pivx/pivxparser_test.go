@@ -3,8 +3,6 @@
 package pivx
 
 import (
-	"blockbook/bchain"
-	"blockbook/bchain/coins/btc"
 	"bytes"
 	"encoding/hex"
 	"fmt"
@@ -16,6 +14,8 @@ import (
 	"testing"
 
 	"github.com/martinboehm/btcutil/chaincfg"
+	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/bchain/coins/btc"
 )
 
 func TestMain(m *testing.M) {
@@ -412,6 +412,14 @@ var testParseBlockTxs = map[int]testBlock{
 			"a99f5fa0b4bf464d57ddd10ae56db27edb054830a2b95b9a23509d217b871a6a",
 			"fccaee46b6f01e42c24ee3f7bbfe5a3f2732b2486af0423473446fbc50a1e48c",
 			"baab318237b55f2dbb1ede2c65f7da9bf2c51c0e9a63903b3376f559fe999960",
+		},
+	},
+	1384217: {
+		size: 430,
+		time: 1577435460,
+		txs: []string{
+			"9c64e40fb27da7c7f826076d0f073968ce36188e827f5a7b2924974369bf9433",
+			"0c5b5b1b9c491a5a7ec9caab204e14f72383460b887c5342d296ae0a7451c09e",
 		},
 	},
 }

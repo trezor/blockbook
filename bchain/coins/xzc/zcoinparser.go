@@ -1,8 +1,6 @@
 package xzc
 
 import (
-	"blockbook/bchain"
-	"blockbook/bchain/coins/btc"
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
@@ -11,13 +9,15 @@ import (
 	"github.com/martinboehm/btcd/chaincfg/chainhash"
 	"github.com/martinboehm/btcd/wire"
 	"github.com/martinboehm/btcutil/chaincfg"
+	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/bchain/coins/btc"
 )
 
 const (
 	OpZeroCoinMint  = 0xc1
 	OpZeroCoinSpend = 0xc2
-	OpSigmaMint		= 0xc3
-	OpSigmaSpend	= 0xc4
+	OpSigmaMint     = 0xc3
+	OpSigmaSpend    = 0xc4
 
 	MainnetMagic wire.BitcoinNet = 0xe3d9fef1
 	TestnetMagic wire.BitcoinNet = 0xcffcbeea

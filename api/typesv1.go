@@ -1,8 +1,9 @@
 package api
 
 import (
-	"blockbook/bchain"
 	"math/big"
+
+	"github.com/trezor/blockbook/bchain"
 )
 
 // ScriptSigV1 is used for legacy api v1

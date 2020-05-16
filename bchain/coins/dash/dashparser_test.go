@@ -1,10 +1,8 @@
-// build unittest
+// +build unittest
 
 package dash
 
 import (
-	"blockbook/bchain"
-	"blockbook/bchain/coins/btc"
 	"bytes"
 	"encoding/hex"
 	"fmt"
@@ -13,6 +11,9 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/bchain/coins/btc"
 )
 
 type testBlock struct {

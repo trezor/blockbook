@@ -3,13 +3,14 @@
 package eth
 
 import (
-	"blockbook/bchain"
-	"blockbook/tests/dbtestdata"
 	"encoding/hex"
 	"fmt"
 	"math/big"
 	"reflect"
 	"testing"
+
+	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/tests/dbtestdata"
 )
 
 func TestEthParser_GetAddrDescFromAddress(t *testing.T) {
@@ -77,14 +78,14 @@ func init() {
 		Txid:      "0xcd647151552b5132b2aef7c9be00dc6f73afc5901dde157aab131335baaa853b",
 		Vin: []bchain.Vin{
 			{
-				Addresses: []string{"0x3e3a3d69dc66ba10737f531ed088954a9ec89d97"},
+				Addresses: []string{"0x3E3a3D69dc66bA10737F531ed088954a9EC89d97"},
 			},
 		},
 		Vout: []bchain.Vout{
 			{
 				ValueSat: *big.NewInt(1999622000000000000),
 				ScriptPubKey: bchain.ScriptPubKey{
-					Addresses: []string{"0x555ee11fbddc0e49a9bab358a8941ad95ffdb48f"},
+					Addresses: []string{"0x555Ee11FBDDc0E49A9bAB358A8941AD95fFDB48f"},
 				},
 			},
 		},
@@ -93,12 +94,12 @@ func init() {
 				AccountNonce:     "0xb26c",
 				GasPrice:         "0x430e23400",
 				GasLimit:         "0x5208",
-				To:               "0x555ee11fbddc0e49a9bab358a8941ad95ffdb48f",
+				To:               "0x555Ee11FBDDc0E49A9bAB358A8941AD95fFDB48f",
 				Value:            "0x1bc0159d530e6000",
 				Payload:          "0x",
 				Hash:             "0xcd647151552b5132b2aef7c9be00dc6f73afc5901dde157aab131335baaa853b",
 				BlockNumber:      "0x41eee8",
-				From:             "0x3e3a3d69dc66ba10737f531ed088954a9ec89d97",
+				From:             "0x3E3a3D69dc66bA10737F531ed088954a9EC89d97",
 				TransactionIndex: "0xa",
 			},
 			Receipt: &rpcReceipt{
@@ -115,14 +116,14 @@ func init() {
 		Txid:      "0xa9cd088aba2131000da6f38a33c20169baee476218deea6b78720700b895b101",
 		Vin: []bchain.Vin{
 			{
-				Addresses: []string{"0x20cd153de35d469ba46127a0c8f18626b59a256a"},
+				Addresses: []string{"0x20cD153de35D469BA46127A0C8F18626b59a256A"},
 			},
 		},
 		Vout: []bchain.Vout{
 			{
 				ValueSat: *big.NewInt(0),
 				ScriptPubKey: bchain.ScriptPubKey{
-					Addresses: []string{"0x4af4114f73d1c1c903ac9e0361b379d1291808a2"},
+					Addresses: []string{"0x4af4114F73d1c1C903aC9E0361b379D1291808A2"},
 				},
 			},
 		},
@@ -131,19 +132,19 @@ func init() {
 				AccountNonce:     "0xd0",
 				GasPrice:         "0x9502f9000",
 				GasLimit:         "0x130d5",
-				To:               "0x4af4114f73d1c1c903ac9e0361b379d1291808a2",
+				To:               "0x4af4114F73d1c1C903aC9E0361b379D1291808A2",
 				Value:            "0x0",
 				Payload:          "0xa9059cbb000000000000000000000000555ee11fbddc0e49a9bab358a8941ad95ffdb48f00000000000000000000000000000000000000000000021e19e0c9bab2400000",
 				Hash:             "0xa9cd088aba2131000da6f38a33c20169baee476218deea6b78720700b895b101",
 				BlockNumber:      "0x41eee8",
-				From:             "0x20cd153de35d469ba46127a0c8f18626b59a256a",
+				From:             "0x20cD153de35D469BA46127A0C8F18626b59a256A",
 				TransactionIndex: "0x0"},
 			Receipt: &rpcReceipt{
 				GasUsed: "0xcb39",
 				Status:  "0x1",
 				Logs: []*rpcLog{
 					{
-						Address: "0x4af4114f73d1c1c903ac9e0361b379d1291808a2",
+						Address: "0x4af4114F73d1c1C903aC9E0361b379D1291808A2",
 						Data:    "0x00000000000000000000000000000000000000000000021e19e0c9bab2400000",
 						Topics: []string{
 							"0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
@@ -261,6 +262,33 @@ func TestEthereumParser_UnpackTx(t *testing.T) {
 			}
 			if got1 != tt.want1 {
 				t.Errorf("EthereumParser.UnpackTx() got1 = %v, want %v", got1, tt.want1)
+			}
+		})
+	}
+}
+
+func TestEthereumParser_GetEthereumTxData(t *testing.T) {
+	tests := []struct {
+		name string
+		tx   *bchain.Tx
+		want string
+	}{
+		{
+			name: "Test empty data",
+			tx:   &testTx1,
+			want: "0x",
+		},
+		{
+			name: "Test non empty data",
+			tx:   &testTx2,
+			want: "0xa9059cbb000000000000000000000000555ee11fbddc0e49a9bab358a8941ad95ffdb48f00000000000000000000000000000000000000000000021e19e0c9bab2400000",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := GetEthereumTxData(tt.tx)
+			if got.Data != tt.want {
+				t.Errorf("EthereumParser.GetEthereumTxData() = %v, want %v", got.Data, tt.want)
 			}
 		})
 	}

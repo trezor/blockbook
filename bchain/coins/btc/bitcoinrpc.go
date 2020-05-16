@@ -1,7 +1,6 @@
 package btc
 
 import (
-	"blockbook/bchain"
 	"bytes"
 	"context"
 	"encoding/hex"
@@ -17,6 +16,8 @@ import (
 	"github.com/golang/glog"
 	"github.com/juju/errors"
 	"github.com/martinboehm/btcd/wire"
+	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/common"
 )
 
 // BitcoinRPC is an interface to JSON-RPC bitcoind service.
@@ -55,8 +56,8 @@ type Configuration struct {
 	XPubMagicSegwitP2sh          uint32 `json:"xpub_magic_segwit_p2sh,omitempty"`
 	XPubMagicSegwitNative        uint32 `json:"xpub_magic_segwit_native,omitempty"`
 	Slip44                       uint32 `json:"slip44,omitempty"`
-	AlternativeEstimateFee       string `json:"alternativeEstimateFee,omitempty"`
-	AlternativeEstimateFeeParams string `json:"alternativeEstimateFeeParams,omitempty"`
+	AlternativeEstimateFee       string `json:"alternative_estimate_fee,omitempty"`
+	AlternativeEstimateFeeParams string `json:"alternative_estimate_fee_params,omitempty"`
 	MinimumCoinbaseConfirmations int    `json:"minimumCoinbaseConfirmations,omitempty"`
 }
 
@@ -237,13 +238,13 @@ type CmdGetBlockChainInfo struct {
 type ResGetBlockChainInfo struct {
 	Error  *bchain.RPCError `json:"error"`
 	Result struct {
-		Chain         string      `json:"chain"`
-		Blocks        int         `json:"blocks"`
-		Headers       int         `json:"headers"`
-		Bestblockhash string      `json:"bestblockhash"`
-		Difficulty    json.Number `json:"difficulty"`
-		SizeOnDisk    int64       `json:"size_on_disk"`
-		Warnings      string      `json:"warnings"`
+		Chain         string            `json:"chain"`
+		Blocks        int               `json:"blocks"`
+		Headers       int               `json:"headers"`
+		Bestblockhash string            `json:"bestblockhash"`
+		Difficulty    common.JSONNumber `json:"difficulty"`
+		SizeOnDisk    int64             `json:"size_on_disk"`
+		Warnings      string            `json:"warnings"`
 	} `json:"result"`
 }
 
@@ -256,11 +257,11 @@ type CmdGetNetworkInfo struct {
 type ResGetNetworkInfo struct {
 	Error  *bchain.RPCError `json:"error"`
 	Result struct {
-		Version         json.Number `json:"version"`
-		Subversion      json.Number `json:"subversion"`
-		ProtocolVersion json.Number `json:"protocolversion"`
-		Timeoffset      float64     `json:"timeoffset"`
-		Warnings        string      `json:"warnings"`
+		Version         common.JSONNumber `json:"version"`
+		Subversion      common.JSONNumber `json:"subversion"`
+		ProtocolVersion common.JSONNumber `json:"protocolversion"`
+		Timeoffset      float64           `json:"timeoffset"`
+		Warnings        string            `json:"warnings"`
 	} `json:"result"`
 }
 
@@ -358,8 +359,8 @@ type CmdEstimateSmartFee struct {
 type ResEstimateSmartFee struct {
 	Error  *bchain.RPCError `json:"error"`
 	Result struct {
-		Feerate json.Number `json:"feerate"`
-		Blocks  int         `json:"blocks"`
+		Feerate common.JSONNumber `json:"feerate"`
+		Blocks  int               `json:"blocks"`
 	} `json:"result"`
 }
 
@@ -373,8 +374,8 @@ type CmdEstimateFee struct {
 }
 
 type ResEstimateFee struct {
-	Error  *bchain.RPCError `json:"error"`
-	Result json.Number      `json:"result"`
+	Error  *bchain.RPCError  `json:"error"`
+	Result common.JSONNumber `json:"result"`
 }
 
 // sendrawtransaction

@@ -3,13 +3,13 @@
 package flo
 
 import (
-	"blockbook/bchain/coins/btc"
 	"encoding/hex"
 	"os"
 	"reflect"
 	"testing"
 
 	"github.com/martinboehm/btcutil/chaincfg"
+	"github.com/trezor/blockbook/bchain/coins/btc"
 )
 
 func TestMain(m *testing.M) {

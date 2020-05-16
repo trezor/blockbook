@@ -19,13 +19,13 @@
     "package_name": "backend-ethereum-classic",
     "package_revision": "satoshilabs-1",
     "system_user": "ethereum-classic",
-    "version": "5.5.2-be43774",
-    "binary_url": "https://github.com/ethereumproject/go-ethereum/releases/download/v5.5.2/geth-classic-linux-v5.5.2-be43774.tar.gz",
+    "version": "1.11.2",
+    "binary_url": "https://github.com/etclabscore/core-geth/releases/download/v1.11.2/core-geth-linux-v1.11.2.zip",
     "verification_type": "sha256",
-    "verification_source": "01663085cfe8854bff2a2abd2cc51414fcfdb28a5ab5e22e5b7fe5487de0678a",
-    "extract_command": "tar -C backend -xf",
+    "verification_source": "593ebe30cf7161d8c085fa8ca4e6438028159bc09d30f89a5525faa25dd7aa64",
+    "extract_command": "unzip -d backend",
     "exclude_files": [],
-    "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/geth --ipcdisable --cache 1024 --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --port 38337 --ws --wsaddr 0.0.0.0 --wsport {{.Ports.BackendRPC}} --wsorigins \"*\" --rpc --rpcport 8137 -rpcaddr 0.0.0.0 --rpccorsdomain \"*\" 2>>{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
+    "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/geth --classic --ipcdisable --cache 1024 --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --port 38337 --ws --wsaddr 0.0.0.0 --wsport {{.Ports.BackendRPC}} --wsorigins \"*\" --rpc --rpcport 8137 -rpcaddr 0.0.0.0 --rpccorsdomain \"*\" 2>>{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
     "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
     "postinst_script_template": "",
     "service_type": "simple",
@@ -41,7 +41,7 @@
     "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
     "public_binding_template": ":{{.Ports.BlockbookPublic}}",
     "explorer_url": "",
-    "additional_params": "-resyncindexperiod=4441 -resyncmempoolperiod=2011",
+    "additional_params": "",
     "block_chain": {
       "parse": true,
       "mempool_workers": 8,
@@ -49,12 +49,14 @@
       "block_addresses_to_keep": 300,
       "additional_params": {
         "mempoolTxTimeoutHours": 48,
-        "queryBackendOnMempoolResync": true
+        "queryBackendOnMempoolResync": true,
+        "fiat_rates": "coingecko",
+        "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"ethereum-classic\", \"periodSeconds\": 60}"
       }
     }
   },
   "meta": {
-    "package_maintainer": "Petr Kracik",
-    "package_maintainer_email": "petr.kracik@satoshilabs.com"
+    "package_maintainer": "IT",
+    "package_maintainer_email": "it@satoshilabs.com"
   }
 }
