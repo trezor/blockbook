@@ -25,7 +25,7 @@
     "verification_source": "db4b232de315ea66786158a1f0b8324474781fc4afe2c5435be0514988a88aa1",
     "extract_command": "unzip -d backend",
     "exclude_files": [],
-    "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/geth --classic --ipcdisable --cache 1024 --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --port 38337 --ws --wsaddr 0.0.0.0 --wsport {{.Ports.BackendRPC}} --wsorigins \"*\" --rpc --rpcport 8137 -rpcaddr 0.0.0.0 --rpccorsdomain \"*\" 2>>{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
+    "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/geth --classic --ipcdisable --cache 1024 --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --port 38337 --ws --wsaddr 127.0.0.1 --wsport {{.Ports.BackendRPC}} --wsorigins \"*\" --rpc --rpcport 8137 -rpcaddr 127.0.0.1 --rpccorsdomain \"*\" 2>>{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
     "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
     "postinst_script_template": "",
     "service_type": "simple",
