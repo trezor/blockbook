@@ -715,6 +715,7 @@ Example response (fiatcurrency not specified):
     "txs": 5,
     "received": "5000000",
     "sent": "0",
+    "sentToSelf":"100000",
     "rates": {
       "usd": 7855.9,
       "eur": 6838.13,
@@ -726,6 +727,7 @@ Example response (fiatcurrency not specified):
     "txs": 1,
     "received": "0",
     "sent": "5000000",
+    "sentToSelf":"0",
     "rates": {
       "usd": 8283.11,
       "eur": 7464.45,
@@ -744,6 +746,7 @@ Example response (fiatcurrency=usd):
     "txs": 5,
     "received": "5000000",
     "sent": "0",
+    "sentToSelf":"0",
     "rates": {
       "usd": 7855.9
     }
@@ -753,6 +756,7 @@ Example response (fiatcurrency=usd):
     "txs": 1,
     "received": "0",
     "sent": "5000000",
+    "sentToSelf":"0",
     "rates": {
       "usd": 8283.11
     }
@@ -769,12 +773,15 @@ Example response (fiatcurrency=usd&groupBy=172800):
     "txs": 6,
     "received": "5000000",
     "sent": "5000000",
+    "sentToSelf":"0",
     "rates": {
       "usd": 7734.45
     }
   }
 ]
 ```
+
+The value of `sentToSelf` is the amount sent from the same address to the same address or within addresses of xpub.
 
 ### Websocket API
 
