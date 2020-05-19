@@ -776,7 +776,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`[{"time":1521514800,"txs":1,"received":"24690","sent":"0","rates":{"eur":1301,"usd":2001}},{"time":1521594000,"txs":1,"received":"0","sent":"12345","rates":{"eur":1303,"usd":2003}}]`,
+				`[{"time":1521514800,"txs":1,"received":"24690","sent":"0","sentToSelf":"0","rates":{"eur":1301,"usd":2001}},{"time":1521594000,"txs":1,"received":"0","sent":"12345","sentToSelf":"0","rates":{"eur":1303,"usd":2003}}]`,
 			},
 		},
 		{
@@ -785,7 +785,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`[{"time":1521514800,"txs":1,"received":"9876","sent":"0","rates":{"eur":1301,"usd":2001}},{"time":1521594000,"txs":1,"received":"9000","sent":"9876","rates":{"eur":1303,"usd":2003}}]`,
+				`[{"time":1521514800,"txs":1,"received":"9876","sent":"0","sentToSelf":"0","rates":{"eur":1301,"usd":2001}},{"time":1521594000,"txs":1,"received":"9000","sent":"9876","sentToSelf":"9000","rates":{"eur":1303,"usd":2003}}]`,
 			},
 		},
 		{
@@ -794,7 +794,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`[{"time":1521514800,"txs":1,"received":"9876","sent":"0","rates":{"eur":1301}},{"time":1521594000,"txs":1,"received":"9000","sent":"9876","rates":{"eur":1303}}]`,
+				`[{"time":1521514800,"txs":1,"received":"9876","sent":"0","sentToSelf":"0","rates":{"eur":1301}},{"time":1521594000,"txs":1,"received":"9000","sent":"9876","sentToSelf":"9000","rates":{"eur":1303}}]`,
 			},
 		},
 		{
@@ -803,7 +803,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`[{"time":1521514800,"txs":1,"received":"24690","sent":"0","rates":{"eur":1301,"usd":2001}}]`,
+				`[{"time":1521514800,"txs":1,"received":"24690","sent":"0","sentToSelf":"0","rates":{"eur":1301,"usd":2001}}]`,
 			},
 		},
 		{
@@ -812,7 +812,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`[{"time":1521514800,"txs":1,"received":"1","sent":"0","rates":{"eur":1301,"usd":2001}},{"time":1521594000,"txs":1,"received":"118641975500","sent":"1","rates":{"eur":1303,"usd":2003}}]`,
+				`[{"time":1521514800,"txs":1,"received":"1","sent":"0","sentToSelf":"0","rates":{"eur":1301,"usd":2001}},{"time":1521594000,"txs":1,"received":"118641975500","sent":"1","sentToSelf":"118641975500","rates":{"eur":1303,"usd":2003}}]`,
 			},
 		},
 		{
@@ -821,7 +821,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`[{"time":1521514800,"txs":1,"received":"1","sent":"0","rates":{"eur":1301,"usd":2001}}]`,
+				`[{"time":1521514800,"txs":1,"received":"1","sent":"0","sentToSelf":"0","rates":{"eur":1301,"usd":2001}}]`,
 			},
 		},
 		{
@@ -830,7 +830,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`[{"time":1521514800,"txs":1,"received":"1","sent":"0","rates":{"usd":2001}}]`,
+				`[{"time":1521514800,"txs":1,"received":"1","sent":"0","sentToSelf":"0","rates":{"usd":2001}}]`,
 			},
 		},
 		{
@@ -839,7 +839,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`[{"time":1521594000,"txs":1,"received":"118641975500","sent":"1","rates":{"eur":1303,"usd":2003}}]`,
+				`[{"time":1521594000,"txs":1,"received":"118641975500","sent":"1","sentToSelf":"118641975500","rates":{"eur":1303,"usd":2003}}]`,
 			},
 		},
 		{
@@ -1370,7 +1370,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 					"descriptor": "mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz",
 				},
 			},
-			want: `{"id":"32","data":[{"time":1521514800,"txs":1,"received":"24690","sent":"0","rates":{"eur":1301,"usd":2001}},{"time":1521594000,"txs":1,"received":"0","sent":"12345","rates":{"eur":1303,"usd":2003}}]}`,
+			want: `{"id":"32","data":[{"time":1521514800,"txs":1,"received":"24690","sent":"0","sentToSelf":"0","rates":{"eur":1301,"usd":2001}},{"time":1521594000,"txs":1,"received":"0","sent":"12345","sentToSelf":"0","rates":{"eur":1303,"usd":2003}}]}`,
 		},
 		{
 			name: "websocket getBalanceHistory xpub",
@@ -1380,7 +1380,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 					"descriptor": dbtestdata.Xpub,
 				},
 			},
-			want: `{"id":"33","data":[{"time":1521514800,"txs":1,"received":"1","sent":"0","rates":{"eur":1301,"usd":2001}},{"time":1521594000,"txs":1,"received":"118641975500","sent":"1","rates":{"eur":1303,"usd":2003}}]}`,
+			want: `{"id":"33","data":[{"time":1521514800,"txs":1,"received":"1","sent":"0","sentToSelf":"0","rates":{"eur":1301,"usd":2001}},{"time":1521594000,"txs":1,"received":"118641975500","sent":"1","sentToSelf":"118641975500","rates":{"eur":1303,"usd":2003}}]}`,
 		},
 		{
 			name: "websocket getBalanceHistory xpub from=1521504000&to=1521590400 currencies=[usd]",
@@ -1393,7 +1393,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 					"currencies": []string{"usd"},
 				},
 			},
-			want: `{"id":"34","data":[{"time":1521514800,"txs":1,"received":"1","sent":"0","rates":{"usd":2001}}]}`,
+			want: `{"id":"34","data":[{"time":1521514800,"txs":1,"received":"1","sent":"0","sentToSelf":"0","rates":{"usd":2001}}]}`,
 		},
 		{
 			name: "websocket getBalanceHistory xpub from=1521504000&to=1521590400 currencies=[usd, eur, incorrect]",
@@ -1406,7 +1406,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 					"currencies": []string{"usd", "eur", "incorrect"},
 				},
 			},
-			want: `{"id":"35","data":[{"time":1521514800,"txs":1,"received":"1","sent":"0","rates":{"eur":1301,"incorrect":-1,"usd":2001}}]}`,
+			want: `{"id":"35","data":[{"time":1521514800,"txs":1,"received":"1","sent":"0","sentToSelf":"0","rates":{"eur":1301,"incorrect":-1,"usd":2001}}]}`,
 		},
 		{
 			name: "websocket getBalanceHistory xpub from=1521504000&to=1521590400 currencies=[]",
@@ -1419,7 +1419,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 					"currencies": []string{},
 				},
 			},
-			want: `{"id":"36","data":[{"time":1521514800,"txs":1,"received":"1","sent":"0","rates":{"eur":1301,"usd":2001}}]}`,
+			want: `{"id":"36","data":[{"time":1521514800,"txs":1,"received":"1","sent":"0","sentToSelf":"0","rates":{"eur":1301,"usd":2001}}]}`,
 		},
 	}
 

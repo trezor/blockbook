@@ -821,7 +821,7 @@ func (w *Worker) balanceHistoryHeightsFromTo(fromTimestamp, toTimestamp int64) (
 	return fromUnix, fromHeight, toUnix, toHeight
 }
 
-func (w *Worker) balanceHistoryForTxid(addrDesc bchain.AddressDescriptor, txid string, fromUnix, toUnix uint32) (*BalanceHistory, error) {
+func (w *Worker) balanceHistoryForTxid(addrDesc bchain.AddressDescriptor, txid string, fromUnix, toUnix uint32, selfAddrDesc map[string]struct{}) (*BalanceHistory, error) {
 	var time uint32
 	var err error
 	var ta *db.TxAddresses
@@ -854,23 +854,41 @@ func (w *Worker) balanceHistoryForTxid(addrDesc bchain.AddressDescriptor, txid s
 		return nil, nil
 	}
 	bh := BalanceHistory{
-		Time:        time,
-		Txs:         1,
-		SentSat:     &Amount{},
-		ReceivedSat: &Amount{},
-		Txid:        txid,
+		Time:          time,
+		Txs:           1,
+		ReceivedSat:   &Amount{},
+		SentSat:       &Amount{},
+		SentToSelfSat: &Amount{},
+		Txid:          txid,
 	}
+	countSentToSelf := false
 	if w.chainType == bchain.ChainBitcoinType {
+		// detect if this input is the first of selfAddrDesc
+		// to not to count sentToSelf multiple times if counting multiple xpub addresses
+		ownInputIndex := -1
 		for i := range ta.Inputs {
 			tai := &ta.Inputs[i]
+			if _, found := selfAddrDesc[string(tai.AddrDesc)]; found {
+				if ownInputIndex < 0 {
+					ownInputIndex = i
+				}
+			}
 			if bytes.Equal(addrDesc, tai.AddrDesc) {
 				(*big.Int)(bh.SentSat).Add((*big.Int)(bh.SentSat), &tai.ValueSat)
+				if ownInputIndex == i {
+					countSentToSelf = true
+				}
 			}
 		}
 		for i := range ta.Outputs {
 			tao := &ta.Outputs[i]
 			if bytes.Equal(addrDesc, tao.AddrDesc) {
 				(*big.Int)(bh.ReceivedSat).Add((*big.Int)(bh.ReceivedSat), &tao.ValueSat)
+			}
+			if countSentToSelf {
+				if _, found := selfAddrDesc[string(tao.AddrDesc)]; found {
+					(*big.Int)(bh.SentToSelfSat).Add((*big.Int)(bh.SentToSelfSat), &tao.ValueSat)
+				}
 			}
 		}
 	} else if w.chainType == bchain.ChainEthereumType {
@@ -889,6 +907,9 @@ func (w *Worker) balanceHistoryForTxid(addrDesc bchain.AddressDescriptor, txid s
 					if bytes.Equal(addrDesc, txAddrDesc) {
 						(*big.Int)(bh.ReceivedSat).Add((*big.Int)(bh.ReceivedSat), &value)
 					}
+					if _, found := selfAddrDesc[string(txAddrDesc)]; found {
+						countSentToSelf = true
+					}
 				}
 			}
 		}
@@ -903,6 +924,11 @@ func (w *Worker) balanceHistoryForTxid(addrDesc bchain.AddressDescriptor, txid s
 					// add sent amount only for OK transactions, however fees always
 					if ethTxData.Status == 1 {
 						(*big.Int)(bh.SentSat).Add((*big.Int)(bh.SentSat), &value)
+						if countSentToSelf {
+							if _, found := selfAddrDesc[string(txAddrDesc)]; found {
+								(*big.Int)(bh.SentToSelfSat).Add((*big.Int)(bh.SentToSelfSat), &value)
+							}
+						}
 					}
 					var feesSat big.Int
 					// mempool txs do not have fees yet
@@ -963,8 +989,9 @@ func (w *Worker) GetBalanceHistory(address string, fromTimestamp, toTimestamp in
 	if err != nil {
 		return nil, err
 	}
+	selfAddrDesc := map[string]struct{}{string(addrDesc): {}}
 	for txi := len(txs) - 1; txi >= 0; txi-- {
-		bh, err := w.balanceHistoryForTxid(addrDesc, txs[txi], fromUnix, toUnix)
+		bh, err := w.balanceHistoryForTxid(addrDesc, txs[txi], fromUnix, toUnix, selfAddrDesc)
 		if err != nil {
 			return nil, err
 		}

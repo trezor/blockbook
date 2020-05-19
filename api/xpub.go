@@ -606,12 +606,18 @@ func (w *Worker) GetXpubBalanceHistory(xpub string, fromTimestamp, toTimestamp i
 	if err != nil {
 		return nil, err
 	}
+	selfAddrDesc := make(map[string]struct{})
+	for _, da := range [][]xpubAddress{data.addresses, data.changeAddresses} {
+		for i := range da {
+			selfAddrDesc[string(da[i].addrDesc)] = struct{}{}
+		}
+	}
 	for _, da := range [][]xpubAddress{data.addresses, data.changeAddresses} {
 		for i := range da {
 			ad := &da[i]
 			txids := ad.txids
 			for txi := len(txids) - 1; txi >= 0; txi-- {
-				bh, err := w.balanceHistoryForTxid(ad.addrDesc, txids[txi].txid, fromUnix, toUnix)
+				bh, err := w.balanceHistoryForTxid(ad.addrDesc, txids[txi].txid, fromUnix, toUnix, selfAddrDesc)
 				if err != nil {
 					return nil, err
 				}
