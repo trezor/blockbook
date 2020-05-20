@@ -210,7 +210,7 @@
                 var specific = document.getElementById('estimateFeeSpecific').value.trim();
                 if (specific) {
                     // example for bitcoin type: {"conservative": false,"txsize":1234}
-                    // example for ethereum type: {"from":"0x65513ecd11fd3a5b1fefdcc6a500b025008405a2","to":"0x65513ecd11fd3a5b1fefdcc6a500b025008405a2","data":"0xabcd"}
+                    // example for ethereum type: {"from":"0x65513ecd11fd3a5b1fefdcc6a500b025008405a2","to":"0x65513ecd11fd3a5b1fefdcc6a500b025008405a2","data":"0xabcd","gasPrice":"0x30d40","value":"0x1234"}
                     specific = JSON.parse(specific)
                 }
                 else {

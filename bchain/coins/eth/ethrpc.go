@@ -11,6 +11,7 @@ import (
 
 	ethereum "github.com/ethereum/go-ethereum"
 	ethcommon "github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -720,6 +721,18 @@ func (b *EthereumRPC) EthereumTypeEstimateGas(params map[string]interface{}) (ui
 	s, ok = getStringFromMap("data", params)
 	if ok && len(s) > 0 {
 		msg.Data = ethcommon.FromHex(s)
+	}
+	s, ok = getStringFromMap("value", params)
+	if ok && len(s) > 0 {
+		msg.Value, _ = hexutil.DecodeBig(s)
+	}
+	s, ok = getStringFromMap("gas", params)
+	if ok && len(s) > 0 {
+		msg.Gas, _ = hexutil.DecodeUint64(s)
+	}
+	s, ok = getStringFromMap("gasPrice", params)
+	if ok && len(s) > 0 {
+		msg.GasPrice, _ = hexutil.DecodeBig(s)
 	}
 	return b.client.EstimateGas(ctx, msg)
 }
