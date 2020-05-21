@@ -226,6 +226,8 @@ const (
 	AddressFilterVoutInputs = -2
 	// AddressFilterVoutOutputs specifies that only txs where the address is as output are returned
 	AddressFilterVoutOutputs = -3
+	// AddressFilterVoutQueryNotNecessary signals that query for transactions is not necessary as there are no transactions for specified contract filter
+	AddressFilterVoutQueryNotNecessary = -4
 
 	// TokensToReturnNonzeroBalance - return only tokens with nonzero balance
 	TokensToReturnNonzeroBalance TokensToReturn = 0
