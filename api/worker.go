@@ -597,6 +597,44 @@ func computePaging(count, page, itemsOnPage int) (Paging, int, int, int) {
 	}, from, to, page
 }
 
+func (w *Worker) getEthereumToken(index int, addrDesc, contract bchain.AddressDescriptor, details AccountDetails, txs int) (*bchain.Token, error) {
+	var b *big.Int
+	validContract := true
+	ci, err := w.chain.EthereumTypeGetErc20ContractInfo(contract)
+	if err != nil {
+		return nil, errors.Annotatef(err, "EthereumTypeGetErc20ContractInfo %v", contract)
+	}
+	if ci == nil {
+		ci = &bchain.Erc20Contract{}
+		addresses, _, _ := w.chainParser.GetAddressesFromAddrDesc(contract)
+		if len(addresses) > 0 {
+			ci.Contract = addresses[0]
+			ci.Name = addresses[0]
+		}
+		validContract = false
+	}
+	// do not read contract balances etc in case of Basic option
+	if details >= AccountDetailsTokenBalances && validContract {
+		b, err = w.chain.EthereumTypeGetErc20ContractBalance(addrDesc, contract)
+		if err != nil {
+			// return nil, nil, nil, errors.Annotatef(err, "EthereumTypeGetErc20ContractBalance %v %v", addrDesc, c.Contract)
+			glog.Warningf("EthereumTypeGetErc20ContractBalance addr %v, contract %v, %v", addrDesc, contract, err)
+		}
+	} else {
+		b = nil
+	}
+	return &Token{
+		Type:          ERC20TokenType,
+		BalanceSat:    (*bchain.Amount)(b),
+		Contract:      ci.Contract,
+		Name:          ci.Name,
+		Symbol:        ci.Symbol,
+		Transfers:     txs,
+		Decimals:      ci.Decimals,
+		ContractIndex: strconv.Itoa(index),
+	}, nil
+}
+
 func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescriptor, details AccountDetails, filter *AddressFilter) (*bchain.AddrBalance, bchain.Tokens, *bchain.Erc20Contract, uint64, int, int, error) {
 	var (
 		ba             *bchain.AddrBalance
@@ -644,43 +682,26 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 					// filter only transactions of this contract
 					filter.Vout = i + 1
 				}
-				validContract := true
-				ci, err := w.chain.EthereumTypeGetErc20ContractInfo(c.Contract)
+				t, err := w.getEthereumToken(i+1, addrDesc, c.Contract, details, int(c.Txs))
 				if err != nil {
-					return nil, nil, nil, 0, 0, 0, errors.Annotatef(err, "EthereumTypeGetErc20ContractInfo %v", c.Contract)
+					return nil, nil, nil, 0, 0, 0, err
 				}
-				if ci == nil {
-					ci = &bchain.Erc20Contract{}
-					addresses, _, _ := w.chainParser.GetAddressesFromAddrDesc(c.Contract)
-					if len(addresses) > 0 {
-						ci.Contract = addresses[0]
-						ci.Name = addresses[0]
-					}
-					validContract = false
-				}
-				// do not read contract balances etc in case of Basic option
-				if details >= AccountDetailsTokenBalances && validContract {
-					b, err = w.chain.EthereumTypeGetErc20ContractBalance(addrDesc, c.Contract)
-					if err != nil {
-						// return nil, nil, nil, errors.Annotatef(err, "EthereumTypeGetErc20ContractBalance %v %v", addrDesc, c.Contract)
-						glog.Warningf("EthereumTypeGetErc20ContractBalance addr %v, contract %v, %v", addrDesc, c.Contract, err)
-					}
-				} else {
-					b = nil
-				}
-				tokens[j] = &bchain.Token{
-					Type:          bchain.ERC20TokenType,
-					BalanceSat:    (*bchain.Amount)(b),
-					Contract:      ci.Contract,
-					Name:          ci.Name,
-					Symbol:        ci.Symbol,
-					Transfers:     uint32(c.Txs),
-					Decimals:      ci.Decimals,
-					ContractIndex: strconv.Itoa(i + 1),
-				}
+				tokens[j] = *t
 				j++
 			}
-			tokens = tokens[:j]
+			// special handling if filter has contract
+			// if the address has no transactions with given contract, check the balance, the address may have some balance even without transactions
+			if len(filterDesc) > 0 && j == 0 && details >= AccountDetailsTokens {
+				t, err := w.getEthereumToken(0, addrDesc, filterDesc, details, 0)
+				if err != nil {
+					return nil, nil, nil, 0, 0, 0, err
+				}
+				tokens = []bchain.Token{*t}
+				// switch off query for transactions, there are no transactions
+				filter.Vout = AddressFilterVoutQueryNotNecessary
+			} else {
+				tokens = tokens[:j]
+			}
 		}
 		ci, err = w.chain.EthereumTypeGetErc20ContractInfo(addrDesc)
 		if err != nil {
@@ -694,6 +715,8 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 				totalResults = int(ca.NonContractTxs)
 			} else if filter.Vout > 0 && filter.Vout-1 < len(ca.Contracts) {
 				totalResults = int(ca.Contracts[filter.Vout-1].Txs)
+			} else if filter.Vout == AddressFilterVoutQueryNotNecessary {
+				totalResults = 0
 			}
 		}
 		nonContractTxs = int(ca.NonContractTxs)
@@ -854,7 +877,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 		}
 	}
 	// get tx history if requested by option or check mempool if there are some transactions for a new address
-	if option >= AccountDetailsTxidHistory {
+	if option >= AccountDetailsTxidHistory && filter.Vout != AddressFilterVoutQueryNotNecessary {
 		txc, err := w.getAddressTxids(addrDesc, false, filter, (page+1)*txsOnPage)
 		if err != nil {
 			return nil, errors.Annotatef(err, "getAddressTxids %v false", addrDesc)
