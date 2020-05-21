@@ -416,18 +416,18 @@ func (s *WebsocketServer) onRequest(c *websocketChannel, req *websocketReq) {
 	f, ok := requestHandlers[req.Method]
 	if ok {
 		data, err = f(s, c, req)
+		if err == nil {
+			glog.V(1).Info("Client ", c.id, " onRequest ", req.Method, " success")
+			s.metrics.WebsocketRequests.With(common.Labels{"method": req.Method, "status": "success"}).Inc()
+		} else {
+			glog.Error("Client ", c.id, " onMessage ", req.Method, ": ", errors.ErrorStack(err), ", data ", string(req.Params))
+			s.metrics.WebsocketRequests.With(common.Labels{"method": req.Method, "status": "failure"}).Inc()
+			e := resultError{}
+			e.Error.Message = err.Error()
+			data = e
+		}
 	} else {
-		err = errors.New("unknown method")
-	}
-	if err == nil {
-		glog.V(1).Info("Client ", c.id, " onRequest ", req.Method, " success")
-		s.metrics.WebsocketRequests.With(common.Labels{"method": req.Method, "status": "success"}).Inc()
-	} else {
-		glog.Error("Client ", c.id, " onMessage ", req.Method, ": ", errors.ErrorStack(err), ", data ", string(req.Params))
-		s.metrics.WebsocketRequests.With(common.Labels{"method": req.Method, "status": "failure"}).Inc()
-		e := resultError{}
-		e.Error.Message = err.Error()
-		data = e
+		glog.Warning("Client ", c.id, " onMessage ", req.Method, ": unknown method, data ", string(req.Params))
 	}
 }
 
