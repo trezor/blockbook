@@ -501,6 +501,13 @@ func (t *Tx) getAddrVoutValue(addrDesc bchain.AddressDescriptor) *big.Int {
 	}
 	return &val
 }
+func (t *Tx) getAddrEthereumTypeInputValue(addrDesc bchain.AddressDescriptor) *big.Int {
+	var val big.Int
+	if len(t.Vin) > 0 && len(t.Vout) > 0 && bytes.Equal(t.Vin[0].AddrDesc, addrDesc) {
+		val.Add(&val, (*big.Int)(t.Vout[0].ValueSat))
+	}
+	return &val
+}
 
 func (t *Tx) getAddrVinValue(addrDesc bchain.AddressDescriptor) *big.Int {
 	var val big.Int
@@ -860,7 +867,12 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 				if tx.Confirmations == 0 {
 					unconfirmedTxs++
 					uBalSat.Add(&uBalSat, tx.getAddrVoutValue(addrDesc))
-					uBalSat.Sub(&uBalSat, tx.getAddrVinValue(addrDesc))
+					// for ethereum take the value from vout, vin is always empty
+					if w.chainType == bchain.ChainEthereumType {
+						uBalSat.Sub(&uBalSat, tx.getAddrEthereumTypeInputValue(addrDesc))
+					} else {
+						uBalSat.Sub(&uBalSat, tx.getAddrVinValue(addrDesc))
+					}
 					if page == 0 {
 						if option == AccountDetailsTxidHistory {
 							txids = append(txids, tx.Txid)
