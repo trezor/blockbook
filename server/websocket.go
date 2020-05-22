@@ -420,7 +420,9 @@ func (s *WebsocketServer) onRequest(c *websocketChannel, req *websocketReq) {
 			glog.V(1).Info("Client ", c.id, " onRequest ", req.Method, " success")
 			s.metrics.WebsocketRequests.With(common.Labels{"method": req.Method, "status": "success"}).Inc()
 		} else {
-			glog.Error("Client ", c.id, " onMessage ", req.Method, ": ", errors.ErrorStack(err), ", data ", string(req.Params))
+			if apiErr, ok := err.(*api.APIError); !ok || !apiErr.Public {
+				glog.Error("Client ", c.id, " onMessage ", req.Method, ": ", errors.ErrorStack(err), ", data ", string(req.Params))
+			}
 			s.metrics.WebsocketRequests.With(common.Labels{"method": req.Method, "status": "failure"}).Inc()
 			e := resultError{}
 			e.Error.Message = err.Error()
