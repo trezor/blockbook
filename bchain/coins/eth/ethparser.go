@@ -480,8 +480,13 @@ type EthereumTxData struct {
 
 // GetEthereumTxData returns EthereumTxData from bchain.Tx
 func GetEthereumTxData(tx *bchain.Tx) *EthereumTxData {
+	return GetEthereumTxDataFromSpecificData(tx.CoinSpecificData)
+}
+
+// GetEthereumTxDataFromSpecificData returns EthereumTxData from coinSpecificData
+func GetEthereumTxDataFromSpecificData(coinSpecificData interface{}) *EthereumTxData {
 	etd := EthereumTxData{Status: txStatusPending}
-	csd, ok := tx.CoinSpecificData.(completeTransaction)
+	csd, ok := coinSpecificData.(completeTransaction)
 	if ok {
 		if csd.Tx != nil {
 			etd.Nonce, _ = hexutil.DecodeUint64(csd.Tx.AccountNonce)

@@ -155,12 +155,13 @@ func (b *BitcoinRPC) CreateMempool(chain bchain.BlockChain) (bchain.Mempool, err
 }
 
 // InitializeMempool creates ZeroMQ subscription and sets AddrDescForOutpointFunc to the Mempool
-func (b *BitcoinRPC) InitializeMempool(addrDescForOutpoint bchain.AddrDescForOutpointFunc, onNewTxAddr bchain.OnNewTxAddrFunc) error {
+func (b *BitcoinRPC) InitializeMempool(addrDescForOutpoint bchain.AddrDescForOutpointFunc, onNewTxAddr bchain.OnNewTxAddrFunc, onNewTx bchain.OnNewTxFunc) error {
 	if b.Mempool == nil {
 		return errors.New("Mempool not created")
 	}
 	b.Mempool.AddrDescForOutpoint = addrDescForOutpoint
 	b.Mempool.OnNewTxAddr = onNewTxAddr
+	b.Mempool.OnNewTx = onNewTx
 	if b.mq == nil {
 		mq, err := bchain.NewMQ(b.ChainConfig.MessageQueueBinding, b.pushHandler)
 		if err != nil {

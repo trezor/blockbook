@@ -49,7 +49,7 @@ type ScriptSig struct {
 	Hex string `json:"hex"`
 }
 
-// Vin contains data about tx output
+// Vin contains data about tx input
 type Vin struct {
 	Coinbase  string    `json:"coinbase"`
 	Txid      string    `json:"txid"`
@@ -90,6 +90,27 @@ type Tx struct {
 	Time             int64       `json:"time,omitempty"`
 	Blocktime        int64       `json:"blocktime,omitempty"`
 	CoinSpecificData interface{} `json:"-"`
+}
+
+// MempoolVin contains data about tx input
+type MempoolVin struct {
+	Vin
+	AddrDesc AddressDescriptor `json:"-"`
+	ValueSat big.Int
+}
+
+// MempoolTx is blockchain transaction in mempool
+// optimized for onNewTx notification
+type MempoolTx struct {
+	Hex              string          `json:"hex"`
+	Txid             string          `json:"txid"`
+	Version          int32           `json:"version"`
+	LockTime         uint32          `json:"locktime"`
+	Vin              []MempoolVin    `json:"vin"`
+	Vout             []Vout          `json:"vout"`
+	Blocktime        int64           `json:"blocktime,omitempty"`
+	Erc20            []Erc20Transfer `json:"-"`
+	CoinSpecificData interface{}     `json:"-"`
 }
 
 // Block is block header and list of transactions
@@ -211,8 +232,11 @@ type OnNewBlockFunc func(hash string, height uint32)
 // OnNewTxAddrFunc is used to send notification about a new transaction/address
 type OnNewTxAddrFunc func(tx *Tx, desc AddressDescriptor)
 
-// AddrDescForOutpointFunc defines function that returns address descriptorfor given outpoint or nil if outpoint not found
-type AddrDescForOutpointFunc func(outpoint Outpoint) AddressDescriptor
+// OnNewTxFunc is used to send notification about a new transaction/address
+type OnNewTxFunc func(tx *MempoolTx)
+
+// AddrDescForOutpointFunc returns address descriptor and value for given outpoint or nil if outpoint not found
+type AddrDescForOutpointFunc func(outpoint Outpoint) (AddressDescriptor, *big.Int)
 
 // BlockChain defines common interface to block chain daemon
 type BlockChain interface {
@@ -222,7 +246,7 @@ type BlockChain interface {
 	// create mempool but do not initialize it
 	CreateMempool(BlockChain) (Mempool, error)
 	// initialize mempool, create ZeroMQ (or other) subscription
-	InitializeMempool(AddrDescForOutpointFunc, OnNewTxAddrFunc) error
+	InitializeMempool(AddrDescForOutpointFunc, OnNewTxAddrFunc, OnNewTxFunc) error
 	// shutdown mempool, ZeroMQ and block chain connections
 	Shutdown(ctx context.Context) error
 	// chain info

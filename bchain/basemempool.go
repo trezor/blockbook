@@ -3,6 +3,7 @@ package bchain
 import (
 	"sort"
 	"sync"
+	"time"
 )
 
 type addrIndex struct {
@@ -27,6 +28,7 @@ type BaseMempool struct {
 	txEntries    map[string]txEntry
 	addrDescToTx map[string][]Outpoint
 	OnNewTxAddr  OnNewTxAddrFunc
+	OnNewTx      OnNewTxFunc
 }
 
 // GetTransactions returns slice of mempool transactions for given address
@@ -112,4 +114,23 @@ func (m *BaseMempool) GetTransactionTime(txid string) uint32 {
 		return 0
 	}
 	return e.time
+}
+
+func (m *BaseMempool) txToMempoolTx(tx *Tx) *MempoolTx {
+	mtx := MempoolTx{
+		Hex:              tx.Hex,
+		Blocktime:        time.Now().Unix(),
+		LockTime:         tx.LockTime,
+		Txid:             tx.Txid,
+		Version:          tx.Version,
+		Vout:             tx.Vout,
+		CoinSpecificData: tx.CoinSpecificData,
+	}
+	mtx.Vin = make([]MempoolVin, len(tx.Vin))
+	for i, vin := range tx.Vin {
+		mtx.Vin[i] = MempoolVin{
+			Vin: vin,
+		}
+	}
+	return &mtx
 }

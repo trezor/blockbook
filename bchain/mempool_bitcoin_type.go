@@ -1,10 +1,16 @@
 package bchain
 
 import (
+	"math/big"
 	"time"
 
 	"github.com/golang/glog"
 )
+
+type chanInputPayload struct {
+	tx    *MempoolTx
+	index int
+}
 
 // MempoolBitcoinType is mempool handle.
 type MempoolBitcoinType struct {
@@ -28,12 +34,12 @@ func NewMempoolBitcoinType(chain BlockChain, workers int, subworkers int) *Mempo
 	}
 	for i := 0; i < workers; i++ {
 		go func(i int) {
-			chanInput := make(chan Outpoint, 1)
+			chanInput := make(chan chanInputPayload, 1)
 			chanResult := make(chan *addrIndex, 1)
 			for j := 0; j < subworkers; j++ {
 				go func(j int) {
-					for input := range chanInput {
-						ai := m.getInputAddress(input)
+					for payload := range chanInput {
+						ai := m.getInputAddress(&payload)
 						chanResult <- ai
 					}
 				}(j)
@@ -51,38 +57,44 @@ func NewMempoolBitcoinType(chain BlockChain, workers int, subworkers int) *Mempo
 	return m
 }
 
-func (m *MempoolBitcoinType) getInputAddress(input Outpoint) *addrIndex {
+func (m *MempoolBitcoinType) getInputAddress(payload *chanInputPayload) *addrIndex {
 	var addrDesc AddressDescriptor
+	var value *big.Int
+	vin := &payload.tx.Vin[payload.index]
 	if m.AddrDescForOutpoint != nil {
-		addrDesc = m.AddrDescForOutpoint(input)
+		addrDesc, value = m.AddrDescForOutpoint(Outpoint{vin.Txid, int32(vin.Vout)})
 	}
 	if addrDesc == nil {
-		itx, err := m.chain.GetTransactionForMempool(input.Txid)
+		itx, err := m.chain.GetTransactionForMempool(vin.Txid)
 		if err != nil {
-			glog.Error("cannot get transaction ", input.Txid, ": ", err)
+			glog.Error("cannot get transaction ", vin.Txid, ": ", err)
 			return nil
 		}
-		if int(input.Vout) >= len(itx.Vout) {
-			glog.Error("Vout len in transaction ", input.Txid, " ", len(itx.Vout), " input.Vout=", input.Vout)
+		if int(vin.Vout) >= len(itx.Vout) {
+			glog.Error("Vout len in transaction ", vin.Txid, " ", len(itx.Vout), " input.Vout=", vin.Vout)
 			return nil
 		}
-		addrDesc, err = m.chain.GetChainParser().GetAddrDescFromVout(&itx.Vout[input.Vout])
+		addrDesc, err = m.chain.GetChainParser().GetAddrDescFromVout(&itx.Vout[vin.Vout])
 		if err != nil {
-			glog.Error("error in addrDesc in ", input.Txid, " ", input.Vout, ": ", err)
+			glog.Error("error in addrDesc in ", vin.Txid, " ", vin.Vout, ": ", err)
 			return nil
 		}
+		value = &itx.Vout[vin.Vout].ValueSat
 	}
-	return &addrIndex{string(addrDesc), ^input.Vout}
+	vin.AddrDesc = addrDesc
+	vin.ValueSat = *value
+	return &addrIndex{string(addrDesc), ^int32(vin.Vout)}
 
 }
 
-func (m *MempoolBitcoinType) getTxAddrs(txid string, chanInput chan Outpoint, chanResult chan *addrIndex) ([]addrIndex, bool) {
+func (m *MempoolBitcoinType) getTxAddrs(txid string, chanInput chan chanInputPayload, chanResult chan *addrIndex) ([]addrIndex, bool) {
 	tx, err := m.chain.GetTransactionForMempool(txid)
 	if err != nil {
 		glog.Error("cannot get transaction ", txid, ": ", err)
 		return nil, false
 	}
 	glog.V(2).Info("mempool: gettxaddrs ", txid, ", ", len(tx.Vin), " inputs")
+	mtx := m.txToMempoolTx(tx)
 	io := make([]addrIndex, 0, len(tx.Vout)+len(tx.Vin))
 	for _, output := range tx.Vout {
 		addrDesc, err := m.chain.GetChainParser().GetAddrDescFromVout(&output)
@@ -98,11 +110,12 @@ func (m *MempoolBitcoinType) getTxAddrs(txid string, chanInput chan Outpoint, ch
 		}
 	}
 	dispatched := 0
-	for _, input := range tx.Vin {
+	for i := range tx.Vin {
+		input := &tx.Vin[i]
 		if input.Coinbase != "" {
 			continue
 		}
-		o := Outpoint{input.Txid, int32(input.Vout)}
+		payload := chanInputPayload{mtx, i}
 	loop:
 		for {
 			select {
@@ -113,7 +126,7 @@ func (m *MempoolBitcoinType) getTxAddrs(txid string, chanInput chan Outpoint, ch
 				}
 				dispatched--
 			// send input to be processed
-			case chanInput <- o:
+			case chanInput <- payload:
 				dispatched++
 				break loop
 			}
@@ -124,6 +137,9 @@ func (m *MempoolBitcoinType) getTxAddrs(txid string, chanInput chan Outpoint, ch
 		if ai != nil {
 			io = append(io, *ai)
 		}
+	}
+	if m.OnNewTx != nil {
+		m.OnNewTx(mtx)
 	}
 	return io, true
 }
