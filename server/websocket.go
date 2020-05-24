@@ -758,47 +758,91 @@ func (s *WebsocketServer) OnNewBlock(hash string, height uint32) {
 	glog.Info("broadcasting new block ", height, " ", hash, " to ", len(s.newBlockSubscriptions), " channels")
 }
 
-// OnNewTxAddr is a callback that broadcasts info about a tx affecting subscribed address
-func (s *WebsocketServer) OnNewTxAddr(tx *bchain.Tx, addrDesc bchain.AddressDescriptor) {
-	// check if there is any subscription but release the lock immediately, GetTransactionFromBchainTx may take some time
-	s.addressSubscriptionsLock.Lock()
-	as, ok := s.addressSubscriptions[string(addrDesc)]
-	lenAs := len(as)
-	s.addressSubscriptionsLock.Unlock()
-	if ok && lenAs > 0 {
-		addr, _, err := s.chainParser.GetAddressesFromAddrDesc(addrDesc)
-		if err != nil {
-			glog.Error("GetAddressesFromAddrDesc error ", err, " for ", addrDesc)
-			return
+func (s *WebsocketServer) sendOnNewTxAddr(stringAddressDescriptor string, tx *api.Tx) {
+	addrDesc := bchain.AddressDescriptor(stringAddressDescriptor)
+	addr, _, err := s.chainParser.GetAddressesFromAddrDesc(addrDesc)
+	if err != nil {
+		glog.Error("GetAddressesFromAddrDesc error ", err, " for ", addrDesc)
+		return
+	}
+	if len(addr) == 1 {
+		data := struct {
+			Address string  `json:"address"`
+			Tx      *api.Tx `json:"tx"`
+		}{
+			Address: addr[0],
+			Tx:      tx,
 		}
-		if len(addr) == 1 {
-			atx, err := s.api.GetTransactionFromBchainTx(tx, 0, false, false)
-			if err != nil {
-				glog.Error("GetTransactionFromBchainTx error ", err, " for ", tx.Txid)
-				return
-			}
-			data := struct {
-				Address string  `json:"address"`
-				Tx      *api.Tx `json:"tx"`
-			}{
-				Address: addr[0],
-				Tx:      atx,
-			}
-			// get the list of subscriptions again, this time keep the lock
-			s.addressSubscriptionsLock.Lock()
-			defer s.addressSubscriptionsLock.Unlock()
-			as, ok = s.addressSubscriptions[string(addrDesc)]
-			if ok {
-				for c, id := range as {
-					if c.IsAlive() {
-						c.out <- &websocketRes{
-							ID:   id,
-							Data: &data,
-						}
+		// get the list of subscriptions again, this time keep the lock
+		s.addressSubscriptionsLock.Lock()
+		defer s.addressSubscriptionsLock.Unlock()
+		as, ok := s.addressSubscriptions[stringAddressDescriptor]
+		if ok {
+			for c, id := range as {
+				if c.IsAlive() {
+					c.out <- &websocketRes{
+						ID:   id,
+						Data: &data,
 					}
 				}
-				glog.Info("broadcasting new tx ", tx.Txid, " for addr ", addr[0], " to ", len(as), " channels")
 			}
+			glog.Info("broadcasting new tx ", tx.Txid, ", addr ", addr[0], " to ", len(as), " channels")
+		}
+	}
+}
+
+// OnNewTx is a callback that broadcasts info about a tx affecting subscribed address
+func (s *WebsocketServer) OnNewTx(tx *bchain.MempoolTx) {
+	// check if there is any subscription in inputs, outputs and erc20
+	// release the lock immediately, GetTransactionFromMempoolTx is potentially slow
+	subscribed := make(map[string]struct{})
+	s.addressSubscriptionsLock.Lock()
+	for i := range tx.Vin {
+		sad := string(tx.Vin[i].AddrDesc)
+		if len(sad) > 0 {
+			as, ok := s.addressSubscriptions[sad]
+			if ok && len(as) > 0 {
+				subscribed[sad] = struct{}{}
+			}
+		}
+	}
+	for i := range tx.Vout {
+		addrDesc, err := s.chainParser.GetAddrDescFromVout(&tx.Vout[i])
+		if err == nil && len(addrDesc) > 0 {
+			sad := string(addrDesc)
+			as, ok := s.addressSubscriptions[sad]
+			if ok && len(as) > 0 {
+				subscribed[sad] = struct{}{}
+			}
+		}
+	}
+	for i := range tx.Erc20 {
+		addrDesc, err := s.chainParser.GetAddrDescFromAddress(tx.Erc20[i].From)
+		if err == nil && len(addrDesc) > 0 {
+			sad := string(addrDesc)
+			as, ok := s.addressSubscriptions[sad]
+			if ok && len(as) > 0 {
+				subscribed[sad] = struct{}{}
+			}
+		}
+		addrDesc, err = s.chainParser.GetAddrDescFromAddress(tx.Erc20[i].To)
+		if err == nil && len(addrDesc) > 0 {
+			sad := string(addrDesc)
+			as, ok := s.addressSubscriptions[sad]
+			if ok && len(as) > 0 {
+				subscribed[sad] = struct{}{}
+			}
+		}
+	}
+	s.addressSubscriptionsLock.Unlock()
+	if len(subscribed) > 0 {
+		atx, err := s.api.GetTransactionFromMempoolTx(tx)
+		if err != nil {
+			glog.Error("GetTransactionFromMempoolTx error ", err, " for ", tx.Txid)
+			return
+		}
+		for stringAddressDescriptor := range subscribed {
+			s.sendOnNewTxAddr(stringAddressDescriptor, atx)
 		}
 	}
 }
