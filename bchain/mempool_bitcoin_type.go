@@ -53,7 +53,6 @@ func NewMempoolBitcoinType(chain BlockChain, workers int, subworkers int) *Mempo
 
 func (m *MempoolBitcoinType) getInputAddress(input Outpoint) *addrIndex {
 	var addrDesc AddressDescriptor
-	var assetInfo *AssetInfo = nil
 	if m.AddrDescForOutpoint != nil {
 		addrDesc = m.AddrDescForOutpoint(input)
 	}
@@ -72,11 +71,8 @@ func (m *MempoolBitcoinType) getInputAddress(input Outpoint) *addrIndex {
 			glog.Error("error in addrDesc in ", input.Txid, " ", input.Vout, ": ", err)
 			return nil
 		}
-		if itx.Vout[input.Vout].AssetInfo != nil {
-			assetInfo = &AssetInfo{AssetGuid: itx.Vout[input.Vout].AssetInfo.AssetGuid, ValueSat: new(big.Int).Set(itx.Vout[input.Vout].AssetInfo.ValueSat)}
-		}
 	}
-	return &addrIndex{string(addrDesc), ^input.Vout, assetInfo}
+	return &addrIndex{string(addrDesc), ^input.Vout, itx.Vout[input.Vout].AssetInfo}
 
 }
 
