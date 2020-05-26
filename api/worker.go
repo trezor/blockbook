@@ -603,10 +603,16 @@ func (t *Tx) getAddrVoutValue(addrDesc bchain.AddressDescriptor) *big.Int {
 	}
 	return &val
 }
-func (t *Tx) getAddrEthereumTypeInputValue(addrDesc bchain.AddressDescriptor) *big.Int {
+func (t *Tx) getAddrEthereumTypeMempoolInputValue(addrDesc bchain.AddressDescriptor) *big.Int {
 	var val big.Int
 	if len(t.Vin) > 0 && len(t.Vout) > 0 && bytes.Equal(t.Vin[0].AddrDesc, addrDesc) {
 		val.Add(&val, (*big.Int)(t.Vout[0].ValueSat))
+		// add maximum possible fee (the used value is not yet known)
+		if t.EthereumSpecific != nil && t.EthereumSpecific.GasLimit != nil && t.EthereumSpecific.GasPrice != nil {
+			var fees big.Int
+			fees.Mul((*big.Int)(t.EthereumSpecific.GasPrice), t.EthereumSpecific.GasLimit)
+			val.Add(&val, &fees)
+		}
 	}
 	return &val
 }
@@ -969,9 +975,9 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 				if tx.Confirmations == 0 {
 					unconfirmedTxs++
 					uBalSat.Add(&uBalSat, tx.getAddrVoutValue(addrDesc))
-					// for ethereum take the value from vout, vin is always empty
+					// ethereum has a different logic - value not in input and add maximum possible fees
 					if w.chainType == bchain.ChainEthereumType {
-						uBalSat.Sub(&uBalSat, tx.getAddrEthereumTypeInputValue(addrDesc))
+						uBalSat.Sub(&uBalSat, tx.getAddrEthereumTypeMempoolInputValue(addrDesc))
 					} else {
 						uBalSat.Sub(&uBalSat, tx.getAddrVinValue(addrDesc))
 					}
