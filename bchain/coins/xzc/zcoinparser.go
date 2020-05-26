@@ -183,7 +183,7 @@ func (p *ZcoinParser) ParseBlock(b []byte) (*bchain.Block, error) {
 	for i := uint64(0); i < ntx; i++ {
 		tx := wire.MsgTx{}
 
-		err := tx.BtcDecode(reader, 0, wire.WitnessEncoding)
+		err := tx.BtcDecode(reader, 0, wire.BaseEncoding)
 		if err != nil {
 			return nil, err
 		}
@@ -193,6 +193,16 @@ func (p *ZcoinParser) ParseBlock(b []byte) (*bchain.Block, error) {
 		p.parseZcoinTx(&btx)
 
 		txs[i] = btx
+
+		// parse extra
+		txVersion := tx.Version & 0xffff
+		txType := (tx.Version >> 16) & 0xffff
+		if txVersion == 3 && txType != 0 {
+			_, err = wire.ReadVarBytes(reader, 0, 0xffffffff, "extraPayload")
+			if err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	return &bchain.Block{
