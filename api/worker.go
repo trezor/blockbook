@@ -1385,6 +1385,7 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *bchain.A
 									Locktime:  bchainTx.LockTime,
 									Coinbase:  coinbase,
 									AssetInfo: vout.AssetInfo,
+									Script:    w.chainParser.GetScriptFromAddrDesc(addrDesc),
 								}
 								utxos = append(utxos, utxoTmp)
 								inMempool[bchainTx.Txid] = struct{}{}
@@ -1443,6 +1444,7 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *bchain.A
 							Confirmations: confirmations,
 							Coinbase:      coinbase,
 							AssetInfo: 	   utxo.AssetInfo,
+							Script:    	   w.chainParser.GetScriptFromAddrDesc(addrDesc),
 						}
 						utxos = append(utxos, utxoTmp)
 					}

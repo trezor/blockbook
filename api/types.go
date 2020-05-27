@@ -252,6 +252,7 @@ type Utxo struct {
 	Locktime      uint32  `json:"lockTime,omitempty"`
 	Coinbase      bool    `json:"coinbase,omitempty"`
 	AssetInfo	  *bchain.AssetInfo  `json:"assetInfo,omitempty"`
+	Script		  string	`json:"script,omitempty"`
 }
 
 // Utxos is array of Utxo
