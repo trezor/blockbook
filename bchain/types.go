@@ -475,6 +475,16 @@ func (a *Amount) AsBigInt() big.Int {
 	return big.Int(*a)
 }
 
+// AsUInt64 returns Amount as uint64 (0 if Amount is nil).
+// It is used only for legacy interfaces (socket.io)
+// and generally not recommended to use for possible loss of precision.
+func (a *Amount) AsUInt64() uint64 {
+	if a == nil {
+		return 0
+	}
+	return (*big.Int)(a).UInt64()
+}
+
 // AsInt64 returns Amount as int64 (0 if Amount is nil).
 // It is used only for legacy interfaces (socket.io)
 // and generally not recommended to use for possible loss of precision.
