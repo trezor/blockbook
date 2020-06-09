@@ -13,13 +13,16 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/martinboehm/btcd/wire"
 	"github.com/martinboehm/btcutil/chaincfg"
+	"github.com/prometheus/common/log"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/bchain/coins/btc"
 )
 
 var (
 	testTx1, testTx2, testTx3, testTx4                         bchain.Tx
+	rawTestTx1, rawTestTx2, rawTestTx3, rawTestTx4             string
 	testTxPacked1, testTxPacked2, testTxPacked3, testTxPacked4 string
 	rawBlock1, rawBlock2                                       string
 	jsonTx                                                     json.RawMessage
@@ -41,10 +44,10 @@ func init() {
 	rawBlock2 = rawBlocks[1]
 
 	hextxs := readHexs("./testdata/txs.hex")
-	rawTestTx1 := hextxs[0]
-	rawTestTx2 := hextxs[1]
-	rawTestTx3 := hextxs[2]
-	rawTestTx4 := hextxs[3]
+	rawTestTx1 = hextxs[0]
+	rawTestTx2 = hextxs[1]
+	rawTestTx3 = hextxs[2]
+	rawTestTx4 = hextxs[3]
 
 	rawSpendHex := readHexs("./testdata/rawspend.hex")[0]
 
@@ -65,7 +68,7 @@ func init() {
 		Blocktime: 1533980594,
 		Time:      1533980594,
 		Txid:      "9d9e759dd970d86df9e105a7d4f671543bc16a03b6c5d2b48895f2a00aa7dd23",
-		LockTime:  0,
+		LockTime:  99688,
 		Vin: []bchain.Vin{
 			{
 				ScriptSig: bchain.ScriptSig{
@@ -78,14 +81,14 @@ func init() {
 		},
 		Vout: []bchain.Vout{
 			{
-				ValueSat: *big.NewInt(18188266638),
+				ValueSat: *big.NewInt(100000000),
 				N:        0,
 				ScriptPubKey: bchain.ScriptPubKey{
 					Hex: "c10280004c80f767f3ee79953c67a7ed386dcccf1243619eb4bbbe414a3982dd94a83c1b69ac52d6ab3b653a3e05c4e4516c8dfe1e58ada40461bc5835a4a0d0387a51c29ac11b72ae25bbcdef745f50ad08f08b3e9bc2c31a35444398a490e65ac090e9f341f1abdebe47e57e8237ac25d098e951b4164a35caea29f30acb50b12e4425df28",
 				},
 			},
 			{
-				ValueSat: *big.NewInt(18188266638),
+				ValueSat: *big.NewInt(871824000),
 				N:        1,
 				ScriptPubKey: bchain.ScriptPubKey{
 					Hex: "76a914c963f917c7f23cb4243e079db33107571b87690588ac",
@@ -105,9 +108,7 @@ func init() {
 		LockTime:  0,
 		Vin: []bchain.Vin{
 			{
-				ScriptSig: bchain.ScriptSig{
-					Hex: rawSpendHex,
-				},
+				Coinbase: rawSpendHex,
 				Txid:     "0000000000000000000000000000000000000000000000000000000000000000",
 				Vout:     4294967295,
 				Sequence: 2,
@@ -226,7 +227,7 @@ func init() {
 				ScriptPubKey: bchain.ScriptPubKey{
 					Hex: "76a914ff71b0c9c2a90c6164a50a2fb523eb54a8a6b55088ac",
 					Addresses: []string{
-						"a1HwTdCmQV3NspP2QqCGpehoFpi8NY4Zg3",
+						"aQ18FBVFtnueucZKeVg4srhmzbpAeb1KoN",
 					},
 				},
 			},
@@ -628,6 +629,164 @@ func TestParseBlock(t *testing.T) {
 				if len(got.Txs) != tt.wantTxs {
 					t.Errorf("parseBlock() txs length got = %d, want %d", len(got.Txs), tt.wantTxs)
 				}
+			}
+		})
+	}
+}
+
+func TestParseTransaction(t *testing.T) {
+	type args struct {
+		rawTransaction string
+		enc            wire.MessageEncoding
+		parser         *ZcoinParser
+	}
+	tests := []struct {
+		name string
+		args args
+		want bchain.Tx
+
+		// TODO: remove this later
+		privacyType byte // 0 as non privacy
+	}{
+		{
+			name: "normal-transaction",
+			args: args{
+				rawTransaction: rawTestTx1,
+				enc:            wire.WitnessEncoding,
+				parser:         NewZcoinParser(GetChainParams("main"), &btc.Configuration{}),
+			},
+			want:        testTx1,
+			privacyType: 0,
+		},
+		{
+			name: "coinbase-zcoinspend",
+			args: args{
+				rawTransaction: rawTestTx2,
+				enc:            wire.WitnessEncoding,
+				parser:         NewZcoinParser(GetChainParams("main"), &btc.Configuration{}),
+			},
+			want:        testTx2,
+			privacyType: OpSigmaSpend,
+		},
+		{
+			name: "normal-transaction-2",
+			args: args{
+				rawTransaction: rawTestTx3,
+				enc:            wire.WitnessEncoding,
+				parser:         NewZcoinParser(GetChainParams("main"), &btc.Configuration{}),
+			},
+			want:        testTx3,
+			privacyType: 0,
+		},
+		{
+			name: "coinbase-transaction",
+			args: args{
+				rawTransaction: rawTestTx4,
+				enc:            wire.WitnessEncoding,
+				parser:         NewZcoinParser(GetChainParams("main"), &btc.Configuration{}),
+			},
+			want:        testTx4,
+			privacyType: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b, _ := hex.DecodeString(tt.args.rawTransaction)
+			r := bytes.NewReader(b)
+
+			msg := ZcoinMsgTx{}
+			err := msg.XzcDecode(r, 0, tt.args.enc)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			log.Info(msg)
+
+			got := tt.args.parser.TxFromZcoinMsgTx(&msg, true)
+			if pErr := tt.args.parser.parseZcoinTx(&got); pErr != nil {
+				t.Fatal(pErr)
+			}
+
+			if r.Len() != 0 {
+				t.Errorf("There are remaining data to read %d", r.Len())
+			}
+
+			if len(got.Vin) != len(tt.want.Vin) {
+				t.Errorf("parseTransaction() got vin size = %v, want vin size = %v", len(got.Vin), len(tt.want.Vin))
+			}
+
+			for i := 0; i != len(got.Vin); i++ {
+				if !reflect.DeepEqual(got.Vin[i].Addresses, tt.want.Vin[i].Addresses) {
+					t.Errorf("parseTransaction() at input %d got Addresses = %v, want Addresses = %v",
+						i, got.Vin[i].Addresses, tt.want.Vin[i].Addresses)
+				}
+
+				if !reflect.DeepEqual(got.Vin[i].Coinbase, tt.want.Vin[i].Coinbase) {
+					t.Errorf("parseTransaction() at input %d got Coinbase = %v, want Coinbase = %v",
+						i, got.Vin[i].Coinbase, tt.want.Vin[i].Coinbase)
+				}
+
+				if !reflect.DeepEqual(got.Vin[i].ScriptSig, tt.want.Vin[i].ScriptSig) {
+					t.Errorf("parseTransaction() at input %d got ScriptSig = %v, want ScriptSig = %v",
+						i, got.Vin[i].ScriptSig, tt.want.Vin[i].ScriptSig)
+				}
+
+				if !reflect.DeepEqual(got.Vin[i].Sequence, tt.want.Vin[i].Sequence) {
+					t.Errorf("parseTransaction() at input %d got Sequence = %v, want Sequence = %v",
+						i, got.Vin[i].Sequence, tt.want.Vin[i].Sequence)
+				}
+
+				if tt.privacyType == 0 && !reflect.DeepEqual(got.Vin[i].Txid, tt.want.Vin[i].Txid) {
+					t.Errorf("parseTransaction() at input %d got Txid = %v, want Txid = %v",
+						i, got.Vin[i].Txid, tt.want.Vin[i].Txid)
+				}
+
+				if tt.privacyType == 0 && !reflect.DeepEqual(got.Vin[i].Vout, tt.want.Vin[i].Vout) {
+					t.Errorf("parseTransaction() at input %d got Vout = %v, want Vout = %v",
+						i, got.Vin[i].Vout, tt.want.Vin[i].Vout)
+				}
+			}
+
+			if len(got.Vout) != len(tt.want.Vout) {
+				t.Errorf("parseTransaction() got vout size = %v, want vout size = %v", len(got.Vout), len(tt.want.Vout))
+			}
+
+			for i := 0; i != len(got.Vout); i++ {
+				if !reflect.DeepEqual(got.Vout[i].JsonValue, tt.want.Vout[i].JsonValue) {
+					t.Errorf("parseTransaction() at input %d got JsonValue = %v, want JsonValue = %v",
+						i, got.Vout[i].JsonValue, tt.want.Vout[i].JsonValue)
+				}
+
+				if !reflect.DeepEqual(got.Vout[i].N, tt.want.Vout[i].N) {
+					t.Errorf("parseTransaction() at input %d got N = %v, want N = %v",
+						i, got.Vout[i].N, tt.want.Vout[i].N)
+				}
+
+				// empty addresses and null should be the same
+				if !((len(got.Vout[i].ScriptPubKey.Addresses) == 0 && len(got.Vout[i].ScriptPubKey.Addresses) == len(tt.want.Vout[i].ScriptPubKey.Addresses)) ||
+					reflect.DeepEqual(got.Vout[i].ScriptPubKey.Addresses, tt.want.Vout[i].ScriptPubKey.Addresses)) {
+					t.Errorf("parseTransaction() at input %d got ScriptPubKey.Addresses = %v, want ScriptPubKey.Addresses = %v",
+						i, got.Vout[i].ScriptPubKey.Addresses, tt.want.Vout[i].ScriptPubKey.Addresses)
+				}
+
+				if !reflect.DeepEqual(got.Vout[i].ScriptPubKey.Hex, tt.want.Vout[i].ScriptPubKey.Hex) {
+					t.Errorf("parseTransaction() at input %d got ScriptPubKey.Hex = %v, want ScriptPubKey.Hex = %v",
+						i, got.Vout[i].ScriptPubKey.Hex, tt.want.Vout[i].ScriptPubKey.Hex)
+				}
+
+				if !reflect.DeepEqual(got.Vout[i].ValueSat, tt.want.Vout[i].ValueSat) {
+					t.Errorf("parseTransaction() at input %d got ValueSat = %v, want ValueSat = %v",
+						i, got.Vout[i].ValueSat, tt.want.Vout[i].ValueSat)
+				}
+			}
+
+			if got.LockTime != tt.want.LockTime {
+				t.Errorf("parseTransaction() got LockTime = %v, want LockTime = %v", got.LockTime, tt.want.LockTime)
+			}
+
+			if got.Txid != tt.want.Txid {
+				t.Errorf("parseTransaction() got txid = %v, want txid %v", got.Txid, tt.want.Txid)
 			}
 		})
 	}

@@ -3,9 +3,12 @@ package xzc
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"io"
+	"math/big"
 
+	"github.com/martinboehm/btcd/blockchain"
 	"github.com/martinboehm/btcd/chaincfg/chainhash"
 	"github.com/martinboehm/btcd/wire"
 	"github.com/martinboehm/btcutil/chaincfg"
@@ -125,6 +128,62 @@ func (p *ZcoinParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 	return p.BaseParser.UnpackTx(buf)
 }
 
+// TxFromZcoinMsgTx converts bitcoin wire Tx to bchain.Tx
+func (p *ZcoinParser) TxFromZcoinMsgTx(t *ZcoinMsgTx, parseAddresses bool) bchain.Tx {
+	vin := make([]bchain.Vin, len(t.TxIn))
+	for i, in := range t.TxIn {
+		if blockchain.IsCoinBaseTx(&t.MsgTx) {
+			vin[i] = bchain.Vin{
+				Coinbase: hex.EncodeToString(in.SignatureScript),
+				Sequence: in.Sequence,
+			}
+			break
+		}
+		s := bchain.ScriptSig{
+			Hex: hex.EncodeToString(in.SignatureScript),
+			// missing: Asm,
+		}
+		vin[i] = bchain.Vin{
+			Txid:      in.PreviousOutPoint.Hash.String(),
+			Vout:      in.PreviousOutPoint.Index,
+			Sequence:  in.Sequence,
+			ScriptSig: s,
+		}
+	}
+	vout := make([]bchain.Vout, len(t.TxOut))
+	for i, out := range t.TxOut {
+		addrs := []string{}
+		if parseAddresses {
+			addrs, _, _ = p.OutputScriptToAddressesFunc(out.PkScript)
+		}
+		s := bchain.ScriptPubKey{
+			Hex:       hex.EncodeToString(out.PkScript),
+			Addresses: addrs,
+			// missing: Asm,
+			// missing: Type,
+		}
+		var vs big.Int
+		vs.SetInt64(out.Value)
+		vout[i] = bchain.Vout{
+			ValueSat:     vs,
+			N:            uint32(i),
+			ScriptPubKey: s,
+		}
+	}
+	tx := bchain.Tx{
+		Txid:     t.TxHash().String(),
+		Version:  t.Version,
+		LockTime: t.LockTime,
+		Vin:      vin,
+		Vout:     vout,
+		// skip: BlockHash,
+		// skip: Confirmations,
+		// skip: Time,
+		// skip: Blocktime,
+	}
+	return tx
+}
+
 // ParseBlock parses raw block to our Block struct
 func (p *ZcoinParser) ParseBlock(b []byte) (*bchain.Block, error) {
 	reader := bytes.NewReader(b)
@@ -181,28 +240,19 @@ func (p *ZcoinParser) ParseBlock(b []byte) (*bchain.Block, error) {
 	txs := make([]bchain.Tx, ntx)
 
 	for i := uint64(0); i < ntx; i++ {
-		tx := wire.MsgTx{}
+		tx := ZcoinMsgTx{}
 
-		err := tx.BtcDecode(reader, 0, wire.BaseEncoding)
-		if err != nil {
+		if err = tx.XzcDecode(reader, 0, wire.WitnessEncoding); err != nil {
 			return nil, err
 		}
 
-		btx := p.TxFromMsgTx(&tx, false)
+		btx := p.TxFromZcoinMsgTx(&tx, false)
 
-		p.parseZcoinTx(&btx)
+		if err = p.parseZcoinTx(&btx); err != nil {
+			return nil, err
+		}
 
 		txs[i] = btx
-
-		// parse extra
-		txVersion := tx.Version & 0xffff
-		txType := (tx.Version >> 16) & 0xffff
-		if txVersion == 3 && txType != 0 {
-			_, err = wire.ReadVarBytes(reader, 0, 0xffffffff, "extraPayload")
-			if err != nil {
-				return nil, err
-			}
-		}
 	}
 
 	return &bchain.Block{
