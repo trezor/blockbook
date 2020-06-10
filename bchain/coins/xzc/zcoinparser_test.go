@@ -20,11 +20,11 @@ import (
 )
 
 var (
-	testTx1, testTx2, testTx3, testTx4, testTx5                bchain.Tx
-	rawTestTx1, rawTestTx2, rawTestTx3, rawTestTx4, rawTestTx5 string
-	testTxPacked1, testTxPacked2, testTxPacked3, testTxPacked4 string
-	rawBlock1, rawBlock2                                       string
-	jsonTx                                                     json.RawMessage
+	testTx1, testTx2, testTx3, testTx4, testTx5, testTx6                   bchain.Tx
+	rawTestTx1, rawTestTx2, rawTestTx3, rawTestTx4, rawTestTx5, rawTestTx6 string
+	testTxPacked1, testTxPacked2, testTxPacked3, testTxPacked4             string
+	rawBlock1, rawBlock2                                                   string
+	jsonTx                                                                 json.RawMessage
 )
 
 func readHexs(path string) []string {
@@ -48,6 +48,7 @@ func init() {
 	rawTestTx3 = hextxs[2]
 	rawTestTx4 = hextxs[3]
 	rawTestTx5 = hextxs[4]
+	rawTestTx6 = hextxs[5]
 
 	rawSpendHex := readHexs("./testdata/rawspend.hex")[0]
 
@@ -251,6 +252,7 @@ func init() {
 					},
 				},
 			},
+			// TODO: test segwit
 		},
 	}
 
@@ -262,6 +264,92 @@ func init() {
 		LockTime:  0,
 		Vin:       []bchain.Vin{},
 		Vout:      []bchain.Vout{},
+	}
+
+	testTx6 = bchain.Tx{
+		Hex:       rawTestTx6,
+		Blocktime: 1591762049,
+		Time:      1591762049,
+		Txid:      "e5767d3606230a65f150837a6f28b4f0e4c2702a683045df3883d57702739c61",
+		LockTime:  0,
+		Vin: []bchain.Vin{
+			{
+				Coinbase: "02b4140101",
+				Sequence: 4294967295,
+			},
+		},
+		Vout: []bchain.Vout{
+			{
+				ValueSat: *big.NewInt(1400000000),
+				N:        0,
+				ScriptPubKey: bchain.ScriptPubKey{
+					Hex: "2103fb09a216761d5e7f248294970c2370f7f84ce1ad564b8e7096b1e19116af1d52ac",
+					Addresses: []string{
+						"TAn9Ghkp31myXRgejCj11wWVHT14Lsj349",
+					},
+				},
+			},
+			{
+				ValueSat: *big.NewInt(50000000),
+				N:        1,
+				ScriptPubKey: bchain.ScriptPubKey{
+					Hex: "76a914296134d2415bf1f2b518b3f673816d7e603b160088ac",
+					Addresses: []string{
+						"TDk19wPKYq91i18qmY6U9FeTdTxwPeSveo",
+					},
+				},
+			},
+			{
+				ValueSat: *big.NewInt(50000000),
+				N:        2,
+				ScriptPubKey: bchain.ScriptPubKey{
+					Hex: "76a914e1e1dc06a889c1b6d3eb00eef7a96f6a7cfb884888ac",
+					Addresses: []string{
+						"TWZZcDGkNixTAMtRBqzZkkMHbq1G6vUTk5",
+					},
+				},
+			},
+			{
+				ValueSat: *big.NewInt(50000000),
+				N:        3,
+				ScriptPubKey: bchain.ScriptPubKey{
+					Hex: "76a914ab03ecfddee6330497be894d16c29ae341c123aa88ac",
+					Addresses: []string{
+						"TRZTFdNCKCKbLMQV8cZDkQN9Vwuuq4gDzT",
+					},
+				},
+			},
+			{
+				ValueSat: *big.NewInt(150000000),
+				N:        4,
+				ScriptPubKey: bchain.ScriptPubKey{
+					Hex: "76a9144281a58a1d5b2d3285e00cb45a8492debbdad4c588ac",
+					Addresses: []string{
+						"TG2ruj59E5b1u9G3F7HQVs6pCcVDBxrQve",
+					},
+				},
+			},
+			{
+				ValueSat: *big.NewInt(50000000),
+				N:        5,
+				ScriptPubKey: bchain.ScriptPubKey{
+					Hex: "76a9141fd264c0bb53bd9fef18e2248ddf1383d6e811ae88ac",
+					Addresses: []string{
+						"TCsTzQZKVn4fao8jDmB9zQBk9YQNEZ3XfS",
+					},
+				},
+			},
+			{
+				ValueSat: *big.NewInt(750000000),
+				N:        6,
+				ScriptPubKey: bchain.ScriptPubKey{
+					Hex: "76a91471a3892d164ffa3829078bf9ad5f114a3908ce5588ac",
+					Addresses: []string{
+						"TLL5GQULX4uBfz7yXL6VcZyvzdKVv1RGxm",
+					},
+				},
+			},
+		},
 	}
 }
 
@@ -706,6 +794,16 @@ func TestParseTransaction(t *testing.T) {
 				parser:         NewZcoinParser(GetChainParams("main"), &btc.Configuration{}),
 			},
 			want:        testTx5,
+			privacyType: 0,
+		},
+		{
+			name: "special-coinbase",
+			args: args{
+				rawTransaction: rawTestTx6,
+				enc:            wire.WitnessEncoding,
+				parser:         NewZcoinParser(GetChainParams("test"), &btc.Configuration{}),
+			},
+			want:        testTx6,
 			privacyType: 0,
 		},
 	}
