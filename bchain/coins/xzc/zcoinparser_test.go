@@ -735,22 +735,18 @@ func TestParseBlock(t *testing.T) {
 func TestParseTransaction(t *testing.T) {
 	type args struct {
 		rawTransaction string
-		enc            wire.MessageEncoding
 		parser         *ZcoinParser
 	}
 	tests := []struct {
-		name string
-		args args
-		want bchain.Tx
-
-		// TODO: remove this later
+		name        string
+		args        args
+		want        bchain.Tx
 		privacyType byte // 0 as non privacy
 	}{
 		{
 			name: "normal-transaction",
 			args: args{
 				rawTransaction: rawTestTx1,
-				enc:            wire.WitnessEncoding,
 				parser:         NewZcoinParser(GetChainParams("main"), &btc.Configuration{}),
 			},
 			want:        testTx1,
@@ -760,7 +756,6 @@ func TestParseTransaction(t *testing.T) {
 			name: "coinbase-zcoinspend",
 			args: args{
 				rawTransaction: rawTestTx2,
-				enc:            wire.WitnessEncoding,
 				parser:         NewZcoinParser(GetChainParams("main"), &btc.Configuration{}),
 			},
 			want:        testTx2,
@@ -770,7 +765,6 @@ func TestParseTransaction(t *testing.T) {
 			name: "normal-transaction-2",
 			args: args{
 				rawTransaction: rawTestTx3,
-				enc:            wire.WitnessEncoding,
 				parser:         NewZcoinParser(GetChainParams("main"), &btc.Configuration{}),
 			},
 			want:        testTx3,
@@ -780,7 +774,6 @@ func TestParseTransaction(t *testing.T) {
 			name: "coinbase-transaction",
 			args: args{
 				rawTransaction: rawTestTx4,
-				enc:            wire.WitnessEncoding,
 				parser:         NewZcoinParser(GetChainParams("main"), &btc.Configuration{}),
 			},
 			want:        testTx4,
@@ -790,7 +783,6 @@ func TestParseTransaction(t *testing.T) {
 			name: "special-transaction",
 			args: args{
 				rawTransaction: rawTestTx5,
-				enc:            wire.WitnessEncoding,
 				parser:         NewZcoinParser(GetChainParams("main"), &btc.Configuration{}),
 			},
 			want:        testTx5,
@@ -800,7 +792,6 @@ func TestParseTransaction(t *testing.T) {
 			name: "special-coinbase",
 			args: args{
 				rawTransaction: rawTestTx6,
-				enc:            wire.WitnessEncoding,
 				parser:         NewZcoinParser(GetChainParams("test"), &btc.Configuration{}),
 			},
 			want:        testTx6,
@@ -814,7 +805,7 @@ func TestParseTransaction(t *testing.T) {
 			r := bytes.NewReader(b)
 
 			msg := ZcoinMsgTx{}
-			err := msg.XzcDecode(r, 0, tt.args.enc)
+			err := msg.XzcDecode(r, 0, wire.BaseEncoding)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -825,84 +816,84 @@ func TestParseTransaction(t *testing.T) {
 			}
 
 			if r.Len() != 0 {
-				t.Errorf("There are remaining data to read %d", r.Len())
+				t.Errorf("ParseZcoinTransaction: Expected EOF but there are remaining %d bytes to read", r.Len())
 			}
 
 			if len(got.Vin) != len(tt.want.Vin) {
-				t.Errorf("parseTransaction() got vin size = %v, want vin size = %v", len(got.Vin), len(tt.want.Vin))
+				t.Errorf("ParseZcoinTransaction: Check vin size, got %v, want %v", len(got.Vin), len(tt.want.Vin))
 			}
 
 			for i := 0; i != len(got.Vin); i++ {
 				if !reflect.DeepEqual(got.Vin[i].Addresses, tt.want.Vin[i].Addresses) {
-					t.Errorf("parseTransaction() at input %d got Addresses = %v, want Addresses = %v",
+					t.Errorf("ParseZcoinTransaction: Check Addresses at input %d, got %v, want %v",
 						i, got.Vin[i].Addresses, tt.want.Vin[i].Addresses)
 				}
 
 				if !reflect.DeepEqual(got.Vin[i].Coinbase, tt.want.Vin[i].Coinbase) {
-					t.Errorf("parseTransaction() at input %d got Coinbase = %v, want Coinbase = %v",
+					t.Errorf("ParseZcoinTransaction: Check Coinbase at input %d, got %v, want %v",
 						i, got.Vin[i].Coinbase, tt.want.Vin[i].Coinbase)
 				}
 
 				if !reflect.DeepEqual(got.Vin[i].ScriptSig, tt.want.Vin[i].ScriptSig) {
-					t.Errorf("parseTransaction() at input %d got ScriptSig = %v, want ScriptSig = %v",
+					t.Errorf("ParseZcoinTransaction: Check ScriptSig at input %d, got %v, want %v",
 						i, got.Vin[i].ScriptSig, tt.want.Vin[i].ScriptSig)
 				}
 
 				if !reflect.DeepEqual(got.Vin[i].Sequence, tt.want.Vin[i].Sequence) {
-					t.Errorf("parseTransaction() at input %d got Sequence = %v, want Sequence = %v",
+					t.Errorf("ParseZcoinTransaction: Check Sequence at input %d, got %v, want %v",
 						i, got.Vin[i].Sequence, tt.want.Vin[i].Sequence)
 				}
 
 				if tt.privacyType == 0 && !reflect.DeepEqual(got.Vin[i].Txid, tt.want.Vin[i].Txid) {
-					t.Errorf("parseTransaction() at input %d got Txid = %v, want Txid = %v",
+					t.Errorf("ParseZcoinTransaction: Check Txid at input %d, got %v, want %v",
 						i, got.Vin[i].Txid, tt.want.Vin[i].Txid)
 				}
 
 				if tt.privacyType == 0 && !reflect.DeepEqual(got.Vin[i].Vout, tt.want.Vin[i].Vout) {
-					t.Errorf("parseTransaction() at input %d got Vout = %v, want Vout = %v",
+					t.Errorf("ParseZcoinTransaction: Check Vout at input %d, got %v, want %v",
 						i, got.Vin[i].Vout, tt.want.Vin[i].Vout)
 				}
 			}
 
 			if len(got.Vout) != len(tt.want.Vout) {
-				t.Errorf("parseTransaction() got vout size = %v, want vout size = %v", len(got.Vout), len(tt.want.Vout))
+				t.Errorf("ParseZcoinTransaction: Check vout size, got %v, want %v", len(got.Vout), len(tt.want.Vout))
 			}
 
 			for i := 0; i != len(got.Vout); i++ {
 				if !reflect.DeepEqual(got.Vout[i].JsonValue, tt.want.Vout[i].JsonValue) {
-					t.Errorf("parseTransaction() at input %d got JsonValue = %v, want JsonValue = %v",
+					t.Errorf("ParseZcoinTransaction: Check JsonValue at output %d, got %v, want %v",
 						i, got.Vout[i].JsonValue, tt.want.Vout[i].JsonValue)
 				}
 
 				if !reflect.DeepEqual(got.Vout[i].N, tt.want.Vout[i].N) {
-					t.Errorf("parseTransaction() at input %d got N = %v, want N = %v",
+					t.Errorf("ParseZcoinTransaction: Check N at output %d, got %v, want %v",
 						i, got.Vout[i].N, tt.want.Vout[i].N)
 				}
 
 				// empty addresses and null should be the same
 				if !((len(got.Vout[i].ScriptPubKey.Addresses) == 0 && len(got.Vout[i].ScriptPubKey.Addresses) == len(tt.want.Vout[i].ScriptPubKey.Addresses)) ||
 					reflect.DeepEqual(got.Vout[i].ScriptPubKey.Addresses, tt.want.Vout[i].ScriptPubKey.Addresses)) {
-					t.Errorf("parseTransaction() at input %d got ScriptPubKey.Addresses = %v, want ScriptPubKey.Addresses = %v",
+					t.Errorf("ParseZcoinTransaction: Check ScriptPubKey.Addresses at output %d, got %v, want %v",
 						i, got.Vout[i].ScriptPubKey.Addresses, tt.want.Vout[i].ScriptPubKey.Addresses)
 				}
 
 				if !reflect.DeepEqual(got.Vout[i].ScriptPubKey.Hex, tt.want.Vout[i].ScriptPubKey.Hex) {
-					t.Errorf("parseTransaction() at input %d got ScriptPubKey.Hex = %v, want ScriptPubKey.Hex = %v",
+					t.Errorf("ParseZcoinTransaction: Check ScriptPubKey.Hex at output %d, got %v, want %v",
 						i, got.Vout[i].ScriptPubKey.Hex, tt.want.Vout[i].ScriptPubKey.Hex)
 				}
 
 				if !reflect.DeepEqual(got.Vout[i].ValueSat, tt.want.Vout[i].ValueSat) {
-					t.Errorf("parseTransaction() at input %d got ValueSat = %v, want ValueSat = %v",
+					t.Errorf("ParseZcoinTransaction: Check ValueSat at output %d, got %v, want %v",
 						i, got.Vout[i].ValueSat, tt.want.Vout[i].ValueSat)
 				}
 			}
 
 			if got.LockTime != tt.want.LockTime {
-				t.Errorf("parseTransaction() got LockTime = %v, want LockTime = %v", got.LockTime, tt.want.LockTime)
+				t.Errorf("ParseZcoinTransaction: Check LockTime, got %v, want %v", got.LockTime, tt.want.LockTime)
 			}
 
 			if got.Txid != tt.want.Txid {
-				t.Errorf("parseTransaction() got txid = %v, want txid %v", got.Txid, tt.want.Txid)
+				t.Errorf("ParseZcoinTransaction: Check TxId, got %v, want %v", got.Txid, tt.want.Txid)
 			}
 		})
 	}
