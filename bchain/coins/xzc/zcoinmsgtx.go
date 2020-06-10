@@ -1,9 +1,11 @@
 package xzc
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"io"
+	"log"
 
 	"github.com/martinboehm/btcd/chaincfg/chainhash"
 	"github.com/martinboehm/btcd/wire"
@@ -20,12 +22,31 @@ type ZcoinMsgTx struct {
 	Extra []byte
 }
 
+func (msg *ZcoinMsgTx) TxHash() chainhash.Hash {
+	extraSize := uint64(len(msg.Extra))
+	sizeOfExtraSize := wire.VarIntSerializeSize(extraSize)
+
+	// Original payload
+	buf := bytes.NewBuffer(make([]byte, 0,
+		msg.SerializeSizeStripped()+sizeOfExtraSize+len(msg.Extra)))
+	_ = msg.SerializeNoWitness(buf)
+
+	// Extra payload
+	if extraSize != 0 {
+		wire.WriteVarInt(buf, 0, extraSize)
+		buf.Write(msg.Extra)
+	}
+
+	return chainhash.DoubleHashH(buf.Bytes())
+}
+
 func (msg *ZcoinMsgTx) XzcDecode(r io.Reader, pver uint32, enc wire.MessageEncoding) error {
 
 	var version uint32 = 0
 	if err := binary.Read(r, binary.LittleEndian, &version); err != nil {
 		return err
 	}
+
 	msg.Version = int32(version)
 
 	count, err := wire.ReadVarInt(r, 0)
@@ -80,28 +101,30 @@ func (msg *ZcoinMsgTx) XzcDecode(r io.Reader, pver uint32, enc wire.MessageEncod
 		}
 	}
 
-	outputs, err := wire.ReadVarInt(r, 0)
-	if err != nil {
-		return err
-	}
-
-	if outputs > uint64(maxTxInPerMessage) {
-		return errors.New("too many output transactions")
-	}
-
-	msg.TxOut = make([]*wire.TxOut, outputs)
-	txOut := make([]wire.TxOut, outputs)
-	for i := 0; i != len(txOut); i++ {
-		to := &txOut[i]
-		msg.TxOut[i] = to
-
-		if err = binary.Read(r, binary.LittleEndian, &to.Value); err != nil {
+	if !(count == 0 && enc == wire.WitnessEncoding) {
+		outputs, err := wire.ReadVarInt(r, 0)
+		if err != nil {
 			return err
 		}
 
-		if to.PkScript, err = wire.ReadVarBytes(r, 0, wire.MaxMessagePayload,
-			"transaction output public key script"); err != nil {
-			return err
+		if outputs > uint64(maxTxInPerMessage) {
+			return errors.New("too many output transactions")
+		}
+
+		msg.TxOut = make([]*wire.TxOut, outputs)
+		txOut := make([]wire.TxOut, outputs)
+		for i := 0; i != len(txOut); i++ {
+			to := &txOut[i]
+			msg.TxOut[i] = to
+
+			if err = binary.Read(r, binary.LittleEndian, &to.Value); err != nil {
+				return err
+			}
+
+			if to.PkScript, err = wire.ReadVarBytes(r, 0, wire.MaxMessagePayload,
+				"transaction output public key script"); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -139,10 +162,12 @@ func (msg *ZcoinMsgTx) XzcDecode(r io.Reader, pver uint32, enc wire.MessageEncod
 	txVersion := version & 0xffff
 	txType := (version >> 16) & 0xffff
 	if txVersion == 3 && txType != 0 {
+
 		extraSize, err := wire.ReadVarInt(r, 0)
 		if err != nil {
 			return err
 		}
+		log.Printf("Size %d", extraSize)
 
 		msg.Extra = make([]byte, extraSize)
 		_, err = io.ReadFull(r, msg.Extra[:])

@@ -15,14 +15,13 @@ import (
 
 	"github.com/martinboehm/btcd/wire"
 	"github.com/martinboehm/btcutil/chaincfg"
-	"github.com/prometheus/common/log"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/bchain/coins/btc"
 )
 
 var (
-	testTx1, testTx2, testTx3, testTx4                         bchain.Tx
-	rawTestTx1, rawTestTx2, rawTestTx3, rawTestTx4             string
+	testTx1, testTx2, testTx3, testTx4, testTx5                bchain.Tx
+	rawTestTx1, rawTestTx2, rawTestTx3, rawTestTx4, rawTestTx5 string
 	testTxPacked1, testTxPacked2, testTxPacked3, testTxPacked4 string
 	rawBlock1, rawBlock2                                       string
 	jsonTx                                                     json.RawMessage
@@ -48,6 +47,7 @@ func init() {
 	rawTestTx2 = hextxs[1]
 	rawTestTx3 = hextxs[2]
 	rawTestTx4 = hextxs[3]
+	rawTestTx5 = hextxs[4]
 
 	rawSpendHex := readHexs("./testdata/rawspend.hex")[0]
 
@@ -252,6 +252,16 @@ func init() {
 				},
 			},
 		},
+	}
+
+	testTx5 = bchain.Tx{
+		Hex:       rawTestTx5,
+		Blocktime: 1591752749,
+		Time:      1591752749,
+		Txid:      "8d1f32f35c32d2c127a7400dc1ec52049fbf0b8bcdf284cfaa3da59b6169a22d",
+		LockTime:  0,
+		Vin:       []bchain.Vin{},
+		Vout:      []bchain.Vout{},
 	}
 }
 
@@ -688,6 +698,16 @@ func TestParseTransaction(t *testing.T) {
 			want:        testTx4,
 			privacyType: 0,
 		},
+		{
+			name: "special-transaction",
+			args: args{
+				rawTransaction: rawTestTx5,
+				enc:            wire.WitnessEncoding,
+				parser:         NewZcoinParser(GetChainParams("main"), &btc.Configuration{}),
+			},
+			want:        testTx5,
+			privacyType: 0,
+		},
 	}
 
 	for _, tt := range tests {
@@ -700,8 +720,6 @@ func TestParseTransaction(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-
-			log.Info(msg)
 
 			got := tt.args.parser.TxFromZcoinMsgTx(&msg, true)
 			if pErr := tt.args.parser.parseZcoinTx(&got); pErr != nil {
