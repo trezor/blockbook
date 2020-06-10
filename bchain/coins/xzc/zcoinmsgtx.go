@@ -15,7 +15,10 @@ type ZcoinMsgTx struct {
 
 func (msg *ZcoinMsgTx) TxHash() chainhash.Hash {
 	extraSize := uint64(len(msg.Extra))
-	sizeOfExtraSize := wire.VarIntSerializeSize(extraSize)
+	sizeOfExtraSize := 0
+	if extraSize != 0 {
+		sizeOfExtraSize = wire.VarIntSerializeSize(extraSize)
+	}
 
 	// Original payload
 	buf := bytes.NewBuffer(make([]byte, 0,
