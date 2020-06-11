@@ -20,11 +20,11 @@ import (
 )
 
 var (
-	testTx1, testTx2, testTx3, testTx4, testTx5, testTx6                   bchain.Tx
-	rawTestTx1, rawTestTx2, rawTestTx3, rawTestTx4, rawTestTx5, rawTestTx6 string
-	testTxPacked1, testTxPacked2, testTxPacked3, testTxPacked4             string
-	rawBlock1, rawBlock2                                                   string
-	jsonTx                                                                 json.RawMessage
+	testTx1, testTx2, testTx3, testTx4, testTx5, testTx6                                     bchain.Tx
+	rawTestTx1, rawTestTx2, rawTestTx3, rawTestTx4, rawTestTx5, rawTestTx6                   string
+	testTxPacked1, testTxPacked2, testTxPacked3, testTxPacked4, testTxPacked5, testTxPacked6 string
+	rawBlock1, rawBlock2                                                                     string
+	jsonTx                                                                                   json.RawMessage
 )
 
 func readHexs(path string) []string {
@@ -63,6 +63,8 @@ func init() {
 	testTxPacked2 = testTxPackeds[1]
 	testTxPacked3 = testTxPackeds[2]
 	testTxPacked4 = testTxPackeds[3]
+	testTxPacked5 = testTxPackeds[4]
+	testTxPacked6 = testTxPackeds[5]
 
 	testTx1 = bchain.Tx{
 		Hex:       rawTestTx1,
@@ -573,6 +575,28 @@ func TestPackTx(t *testing.T) {
 			want:    testTxPacked4,
 			wantErr: false,
 		},
+		{
+			name: "xzc-special-tx",
+			args: args{
+				tx:        testTx5,
+				height:    5268,
+				blockTime: 1591752749,
+				parser:    NewZcoinParser(GetChainParams("test"), &btc.Configuration{}),
+			},
+			want:    testTxPacked5,
+			wantErr: false,
+		},
+		{
+			name: "xzc-special-coinbase-tx",
+			args: args{
+				tx:        testTx6,
+				height:    5300,
+				blockTime: 1591762049,
+				parser:    NewZcoinParser(GetChainParams("test"), &btc.Configuration{}),
+			},
+			want:    testTxPacked6,
+			wantErr: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -642,6 +666,26 @@ func TestUnpackTx(t *testing.T) {
 			},
 			want:    &testTx4,
 			want1:   100001,
+			wantErr: false,
+		},
+		{
+			name: "xzc-special-tx",
+			args: args{
+				packedTx: testTxPacked5,
+				parser:   NewZcoinParser(GetChainParams("test"), &btc.Configuration{}),
+			},
+			want:    &testTx5,
+			want1:   5268,
+			wantErr: false,
+		},
+		{
+			name: "xzc-special-coinbase-tx",
+			args: args{
+				packedTx: testTxPacked6,
+				parser:   NewZcoinParser(GetChainParams("test"), &btc.Configuration{}),
+			},
+			want:    &testTx6,
+			want1:   5300,
 			wantErr: false,
 		},
 	}
