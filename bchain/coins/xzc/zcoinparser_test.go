@@ -23,7 +23,7 @@ var (
 	testTx1, testTx2, testTx3, testTx4, testTx5, testTx6                                     bchain.Tx
 	rawTestTx1, rawTestTx2, rawTestTx3, rawTestTx4, rawTestTx5, rawTestTx6                   string
 	testTxPacked1, testTxPacked2, testTxPacked3, testTxPacked4, testTxPacked5, testTxPacked6 string
-	rawBlock1, rawBlock2                                                                     string
+	rawBlock1, rawBlock2, rawBlock3                                                          string
 	jsonTx                                                                                   json.RawMessage
 )
 
@@ -41,6 +41,7 @@ func init() {
 	rawBlocks := readHexs("./testdata/rawblock.hex")
 	rawBlock1 = rawBlocks[0]
 	rawBlock2 = rawBlocks[1]
+	rawBlock3 = rawBlocks[2]
 
 	hextxs := readHexs("./testdata/txs.hex")
 	rawTestTx1 = hextxs[0]
@@ -750,6 +751,21 @@ func TestParseBlock(t *testing.T) {
 				},
 			},
 			wantTxs: 4,
+			wantErr: false,
+		},
+		{
+			name: "special-tx-block",
+			args: args{
+				rawBlock: rawBlock3,
+				parser:   NewZcoinParser(GetChainParams("test"), &btc.Configuration{}),
+			},
+			want: &bchain.Block{
+				BlockHeader: bchain.BlockHeader{
+					Size: 200062,
+					Time: 1591752749,
+				},
+			},
+			wantTxs: 3,
 			wantErr: false,
 		},
 	}
