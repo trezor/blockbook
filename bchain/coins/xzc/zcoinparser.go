@@ -28,6 +28,8 @@ const (
 	MTPL                   = 64
 
 	SpendTxID = "0000000000000000000000000000000000000000000000000000000000000000"
+
+	TransactionQuorumCommitmentType = 6
 )
 
 var (
@@ -193,8 +195,27 @@ func (p *ZcoinParser) ParseBlock(b []byte) (*bchain.Block, error) {
 	for i := uint64(0); i < ntx; i++ {
 		tx := ZcoinMsgTx{}
 
-		// NOTE: zcoin disable witness
-		if err = tx.XzcDecode(reader, 0, wire.BaseEncoding); err != nil {
+		// read version and seek back
+		var version uint32 = 0
+		if err = binary.Read(reader, binary.LittleEndian, &version); err != nil {
+			return nil, err
+		}
+
+		if _, err = reader.Seek(-4, io.SeekCurrent); err != nil {
+			return nil, err
+		}
+
+		txVersion := version & 0xffff
+		txType := (version >> 16) & 0xffff
+
+		enc := wire.WitnessEncoding
+
+		// transaction quorum commitment could not be parsed with witness flag
+		if txVersion == 3 && txType == TransactionQuorumCommitmentType {
+			enc = wire.BaseEncoding
+		}
+
+		if err = tx.XzcDecode(reader, 0, enc); err != nil {
 			return nil, err
 		}
 

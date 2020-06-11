@@ -8,11 +8,13 @@ import (
 	"github.com/martinboehm/btcd/wire"
 )
 
+// ZcoinMsgTx encapsulate zcoin tx and extra
 type ZcoinMsgTx struct {
 	wire.MsgTx
 	Extra []byte
 }
 
+// TxHash calculate hash of transaction
 func (msg *ZcoinMsgTx) TxHash() chainhash.Hash {
 	extraSize := uint64(len(msg.Extra))
 	sizeOfExtraSize := 0
@@ -34,8 +36,8 @@ func (msg *ZcoinMsgTx) TxHash() chainhash.Hash {
 	return chainhash.DoubleHashH(buf.Bytes())
 }
 
+// XzcDecode to decode bitcoin tx and extra
 func (msg *ZcoinMsgTx) XzcDecode(r io.Reader, pver uint32, enc wire.MessageEncoding) error {
-
 	if err := msg.MsgTx.BtcDecode(r, pver, enc); err != nil {
 		return err
 	}
