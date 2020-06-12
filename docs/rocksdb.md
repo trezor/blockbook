@@ -21,7 +21,7 @@ For Ethereum type coins it is fixed size array of 20 bytes.
 
 **Database structure:**
 
-The database structure described here is of Blockbook version **0.3.3** (internal data format version 5). 
+The database structure described here is of Blockbook version **0.3.4** (internal data format version 5). 
 
 The database structure for **Bitcoin type** and **Ethereum type** coins is slightly different. Column families used for both types:
 - default, height, addresses, transactions, blockTxs
