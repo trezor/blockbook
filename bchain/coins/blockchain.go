@@ -50,7 +50,7 @@ import (
 	"github.com/trezor/blockbook/bchain/coins/vipstarcoin"
 	"github.com/trezor/blockbook/bchain/coins/xzc"
 	"github.com/trezor/blockbook/bchain/coins/zec"
-	"github.com/alexeirbv/blockbook/bchain/coins/yec"
+	"github.com/trezor/blockbook/bchain/coins/yec"
 	"github.com/trezor/blockbook/common"
 )
 
