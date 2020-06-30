@@ -28,6 +28,8 @@ const (
 	MTPL                   = 64
 
 	SpendTxID = "0000000000000000000000000000000000000000000000000000000000000000"
+
+	TransactionQuorumCommitmentType = 6
 )
 
 var (
@@ -125,6 +127,16 @@ func (p *ZcoinParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 	return p.BaseParser.UnpackTx(buf)
 }
 
+// TxFromZcoinMsgTx converts bitcoin wire Tx to bchain.Tx
+func (p *ZcoinParser) TxFromZcoinMsgTx(t *ZcoinMsgTx, parseAddresses bool) bchain.Tx {
+	btx := p.TxFromMsgTx(&t.MsgTx, parseAddresses)
+
+	// NOTE: wire.MsgTx.TxHash() doesn't include extra
+	btx.Txid = t.TxHash().String()
+
+	return btx
+}
+
 // ParseBlock parses raw block to our Block struct
 func (p *ZcoinParser) ParseBlock(b []byte) (*bchain.Block, error) {
 	reader := bytes.NewReader(b)
@@ -181,16 +193,37 @@ func (p *ZcoinParser) ParseBlock(b []byte) (*bchain.Block, error) {
 	txs := make([]bchain.Tx, ntx)
 
 	for i := uint64(0); i < ntx; i++ {
-		tx := wire.MsgTx{}
+		tx := ZcoinMsgTx{}
 
-		err := tx.BtcDecode(reader, 0, wire.WitnessEncoding)
-		if err != nil {
+		// read version and seek back
+		var version uint32 = 0
+		if err = binary.Read(reader, binary.LittleEndian, &version); err != nil {
 			return nil, err
 		}
 
-		btx := p.TxFromMsgTx(&tx, false)
+		if _, err = reader.Seek(-4, io.SeekCurrent); err != nil {
+			return nil, err
+		}
 
-		p.parseZcoinTx(&btx)
+		txVersion := version & 0xffff
+		txType := (version >> 16) & 0xffff
+
+		enc := wire.WitnessEncoding
+
+		// transaction quorum commitment could not be parsed with witness flag
+		if txVersion == 3 && txType == TransactionQuorumCommitmentType {
+			enc = wire.BaseEncoding
+		}
+
+		if err = tx.XzcDecode(reader, 0, enc); err != nil {
+			return nil, err
+		}
+
+		btx := p.TxFromZcoinMsgTx(&tx, false)
+
+		if err = p.parseZcoinTx(&btx); err != nil {
+			return nil, err
+		}
 
 		txs[i] = btx
 	}
