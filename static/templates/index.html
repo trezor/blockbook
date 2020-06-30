@@ -1,5 +1,5 @@
 {{define "specific"}}{{$cs := .CoinShortcut}}{{$bb := .Info.Blockbook}}{{$be := .Info.Backend}}
-{{- if eq $bb.Coin "Bcash" -}}
+{{- if eq .CoinShortcut "BCHSV" -}}
     <div class="row">
         <div class="message announcment col-12">
           <span>We’ve changed technology platform of Bitcoin SV explorer to increase uptime and stability. Explorer API is now available in both versions. However we encourage our API users to migrate to a new protocol as Insight version can be deprecated in future.</span>
