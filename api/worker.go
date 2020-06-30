@@ -1638,7 +1638,7 @@ func (w *Worker) GetBlock(bid string, page int, txsOnPage int) (*Block, error) {
 	txs := make([]*Tx, to-from)
 	txi := 0
 	for i := from; i < to; i++ {
-		txs[txi], err = w.txFromTxid(bi.Txids[i], bestheight, AccountDetailsTxHistoryLight, dbi)
+		txs[txi], err = w.txFromTxid(bi.Txids[i], bestheight, AccountDetailsTxHistory, dbi)
 		if err != nil {
 			return nil, err
 		}

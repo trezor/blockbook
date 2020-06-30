@@ -1108,7 +1108,12 @@ func (s *PublicServer) apiBlock(r *http.Request, apiVersion int) (interface{}, e
 		if ec != nil {
 			page = 0
 		}
-		block, err = s.api.GetBlock(r.URL.Path[i+1:], page, txsInAPI)
+		pageSize, ec := strconv.Atoi(r.URL.Query().Get("pageSize"))
+		if ec != nil {
+			pageSize = txsInAPI
+		}
+		block, err = s.api.GetBlock(r.URL.Path[i+1:], page, pageSize)
+
 		if err == nil && apiVersion == apiV1 {
 			return s.api.BlockToV1(block), nil
 		}
