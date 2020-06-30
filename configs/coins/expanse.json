@@ -1,0 +1,60 @@
+{
+    "coin": {
+      "name": "Expanse",
+      "shortcut": "EXP",
+      "label": "Expanse",
+      "alias": "expanse"
+    },
+    "ports": {
+      "backend_rpc": 8062,
+      "backend_message_queue": 0,
+      "blockbook_internal": 9062,
+      "blockbook_public": 9162
+    },
+    "ipc": {
+      "rpc_url_template": "ws://127.0.0.1:{{.Ports.BackendRPC}}",
+      "rpc_timeout": 25
+    },
+    "backend": {
+      "package_name": "backend-expanse",
+      "package_revision": "satoshilabs-1",
+      "system_user": "expanse",
+      "version": "1.9.10",
+      "binary_url": "https://github.com/expanse-org/go-expanse/releases/download/v1.9.10/gexp-linux-amd64.tar.gz",
+      "verification_type": "sha256",
+      "verification_source": "c213043cdd0c25b84ab3f490edd755ba75e1123122810b114a8cd0a05e0a1150",
+      "extract_command": "tar -C backend --strip 1 -xf",
+      "exclude_files": [],
+      "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/gexp --syncmode=fast --cache 1024 --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --port 36332 --ws --wsaddr 0.0.0.0 --wsport {{.Ports.BackendRPC}} --wsorigins \"*\" --rpc --rpcport 8162 -rpcaddr 0.0.0.0 --rpccorsdomain \"*\" 2>>{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
+      "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
+      "postinst_script_template": "",
+      "service_type": "simple",
+      "service_additional_params_template": "",
+      "protect_memory": true,
+      "mainnet": true,
+      "server_config_file": "",
+      "client_config_file": ""
+    },
+    "blockbook": {
+      "package_name": "blockbook-expanse",
+      "system_user": "blockbook-expanse",
+      "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
+      "public_binding_template": ":{{.Ports.BlockbookPublic}}",
+      "explorer_url": "",
+      "additional_params": "",
+      "block_chain": {
+        "parse": true,
+        "mempool_workers": 8,
+        "mempool_sub_workers": 2,
+        "block_addresses_to_keep": 300,
+        "additional_params": {
+          "mempoolTxTimeoutHours": 48,
+          "queryBackendOnMempoolResync": true
+        }
+      }
+    },
+    "meta": {
+      "package_maintainer": "IT",
+      "package_maintainer_email": "it@satoshilabs.com"
+    }
+  }
