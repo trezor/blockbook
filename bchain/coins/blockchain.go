@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/juju/errors"
+	"github.com/trezor/blockbook/bchain/coins/arycoin"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/bchain/coins/bch"
 	"github.com/trezor/blockbook/bchain/coins/bellcoin"
@@ -121,6 +122,7 @@ func init() {
 	BlockChainFactories["Ycash"] = yec.NewYCashRPC
 	BlockChainFactories["Creamcoin"] = creamcoin.NewCreamCoinRPC
 	BlockChainFactories["Komodo"] = kmd.NewKmdRPC
+	BlockChainFactories["Aryacoin"] = aryacoin.NewAryaCoinRPC
 }
 
 // GetCoinNameFromConfig gets coin name and coin shortcut from config file
