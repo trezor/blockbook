@@ -52,7 +52,7 @@ type VoutV1 struct {
 type TxV1 struct {
 	Txid          string   `json:"txid"`
 	Version       int32    `json:"version,omitempty"`
-	Locktime      uint32   `json:"locktime,omitempty"`
+	Locktime      uint32   `json:"locktime"`
 	Vin           []VinV1  `json:"vin"`
 	Vout          []VoutV1 `json:"vout"`
 	Blockhash     string   `json:"blockhash,omitempty"`
