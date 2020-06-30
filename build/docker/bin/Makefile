@@ -28,7 +28,7 @@ test: prepare-sources generate-data
 	cd $(BLOCKBOOK_SRC) && go test -tags unittest `go list ./... | grep -vP '^github.com/trezor/blockbook/(contrib|tests)'` $(ARGS)
 
 test-integration: prepare-sources generate-data
-	cd $(BLOCKBOOK_SRC) && go test -tags integration `go list blockbook/tests/...` $(ARGS)
+	cd $(BLOCKBOOK_SRC) && go test -tags integration `go list github.com/trezor/blockbook/tests/...` $(ARGS)
 
 test-all: prepare-sources generate-data
 	cd $(BLOCKBOOK_SRC) && go test -tags 'unittest integration' `go list ./... | grep -v '^github.com/trezor/blockbook/contrib'` $(ARGS)
