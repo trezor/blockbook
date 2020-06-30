@@ -491,7 +491,7 @@ func (s *WebsocketServer) getAccountInfo(req *accountInfoReq) (res *api.Address,
 	}
 	a, err := s.api.GetXpubAddress(req.Descriptor, req.Page, req.PageSize, opt, &filter, req.Gap)
 	if err != nil {
-		return s.api.GetAddress(req.Descriptor, req.Page, req.PageSize, opt, &filter)
+		return s.api.GetAddress(req.Descriptor, req.Page, req.PageSize, opt, &filter, false)
 	}
 	return a, nil
 }

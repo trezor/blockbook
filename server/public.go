@@ -589,7 +589,7 @@ func (s *PublicServer) explorerSpendingTx(w http.ResponseWriter, r *http.Request
 	return errorTpl, nil, err
 }
 
-func (s *PublicServer) getAddressQueryParams(r *http.Request, accountDetails api.AccountDetails, maxPageSize int) (int, int, api.AccountDetails, *api.AddressFilter, string, int) {
+func (s *PublicServer) getAddressQueryParams(r *http.Request, accountDetails api.AccountDetails, maxPageSize int) (int, int, api.AccountDetails, *api.AddressFilter, string, int, bool) {
 	var voutFilter = api.AddressFilterVoutOff
 	page, ec := strconv.Atoi(r.URL.Query().Get("page"))
 	if ec != nil {
@@ -647,6 +647,10 @@ func (s *PublicServer) getAddressQueryParams(r *http.Request, accountDetails api
 	if ec != nil {
 		gap = 0
 	}
+	noHex, err := strconv.ParseBool(r.URL.Query().Get("noHex"))
+	if err != nil {
+		noHex = false
+	}
 	contract := r.URL.Query().Get("contract")
 	return page, pageSize, accountDetails, &api.AddressFilter{
 		Vout:           voutFilter,
@@ -654,7 +658,7 @@ func (s *PublicServer) getAddressQueryParams(r *http.Request, accountDetails api
 		FromHeight:     uint32(from),
 		ToHeight:       uint32(to),
 		Contract:       contract,
-	}, filterParam, gap
+	}, filterParam, gap, noHex
 }
 
 func (s *PublicServer) explorerAddress(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
@@ -667,9 +671,9 @@ func (s *PublicServer) explorerAddress(w http.ResponseWriter, r *http.Request) (
 		return errorTpl, nil, api.NewAPIError("Missing address", true)
 	}
 	s.metrics.ExplorerViews.With(common.Labels{"action": "address"}).Inc()
-	page, _, _, filter, filterParam, _ := s.getAddressQueryParams(r, api.AccountDetailsTxHistoryLight, txsOnPage)
+	page, _, _, filter, filterParam, _ , noHex := s.getAddressQueryParams(r, api.AccountDetailsTxHistoryLight, txsOnPage)
 	// do not allow details to be changed by query params
-	address, err := s.api.GetAddress(addressParam, page, txsOnPage, api.AccountDetailsTxHistoryLight, filter)
+	address, err := s.api.GetAddress(addressParam, page, txsOnPage, api.AccountDetailsTxHistoryLight, filter, noHex)
 	if err != nil {
 		return errorTpl, nil, err
 	}
@@ -698,7 +702,7 @@ func (s *PublicServer) explorerXpub(w http.ResponseWriter, r *http.Request) (tpl
 		return errorTpl, nil, api.NewAPIError("Missing xpub", true)
 	}
 	s.metrics.ExplorerViews.With(common.Labels{"action": "xpub"}).Inc()
-	page, _, _, filter, filterParam, gap := s.getAddressQueryParams(r, api.AccountDetailsTxHistoryLight, txsOnPage)
+	page, _, _, filter, filterParam, gap, _ := s.getAddressQueryParams(r, api.AccountDetailsTxHistoryLight, txsOnPage)
 	// do not allow txsOnPage and details to be changed by query params
 	address, err := s.api.GetXpubAddress(xpub, page, txsOnPage, api.AccountDetailsTxHistoryLight, filter, gap)
 	if err != nil {
@@ -796,7 +800,7 @@ func (s *PublicServer) explorerSearch(w http.ResponseWriter, r *http.Request) (t
 			http.Redirect(w, r, joinURL("/tx/", tx.Txid), 302)
 			return noTpl, nil, nil
 		}
-		address, err = s.api.GetAddress(q, 0, 1, api.AccountDetailsBasic, &api.AddressFilter{Vout: api.AddressFilterVoutOff})
+		address, err = s.api.GetAddress(q, 0, 1, api.AccountDetailsBasic, &api.AddressFilter{Vout: api.AddressFilterVoutOff}, false)
 		if err == nil {
 			http.Redirect(w, r, joinURL("/address/", address.AddrStr), 302)
 			return noTpl, nil, nil
@@ -990,8 +994,8 @@ func (s *PublicServer) apiAddress(r *http.Request, apiVersion int) (interface{},
 	var address *api.Address
 	var err error
 	s.metrics.ExplorerViews.With(common.Labels{"action": "api-address"}).Inc()
-	page, pageSize, details, filter, _, _ := s.getAddressQueryParams(r, api.AccountDetailsTxidHistory, txsInAPI)
-	address, err = s.api.GetAddress(addressParam, page, pageSize, details, filter)
+	page, pageSize, details, filter, _, _, _ := s.getAddressQueryParams(r, api.AccountDetailsTxidHistory, txsInAPI)
+	address, err = s.api.GetAddress(addressParam, page, pageSize, details, filter, false)
 	if err == nil && apiVersion == apiV1 {
 		return s.api.AddressToV1(address), nil
 	}
@@ -1010,7 +1014,7 @@ func (s *PublicServer) apiXpub(r *http.Request, apiVersion int) (interface{}, er
 	var address *api.Address
 	var err error
 	s.metrics.ExplorerViews.With(common.Labels{"action": "api-xpub"}).Inc()
-	page, pageSize, details, filter, _, gap := s.getAddressQueryParams(r, api.AccountDetailsTxidHistory, txsInAPI)
+	page, pageSize, details, filter, _, gap, _ := s.getAddressQueryParams(r, api.AccountDetailsTxidHistory, txsInAPI)
 	address, err = s.api.GetXpubAddress(xpub, page, pageSize, details, filter, gap)
 	if err == nil && apiVersion == apiV1 {
 		return s.api.AddressToV1(address), nil
