@@ -1,0 +1,61 @@
+{
+    "coin": {
+      "name": "Callisto",
+      "shortcut": "CLO",
+      "label": "Callisto",
+      "alias": "callisto"
+    },
+    "ports": {
+      "backend_rpc": 8062,
+      "backend_message_queue": 0,
+      "backend_p2p": 38346,
+      "backend_http": 8146,
+      "blockbook_internal": 9071,
+      "blockbook_public": 9170
+    },
+    "ipc": {
+      "rpc_url_template": "ws://127.0.0.1:{{.Ports.BackendRPC}}",
+      "rpc_timeout": 25
+    },
+    "backend": {
+      "package_name": "backend-callstio",
+      "package_revision": "satoshilabs-1",
+      "system_user": "ethereum",
+      "version": "1.9.11-6a62fe39",
+      "binary_url": "https://gethstore.blob.core.windows.net/builds/geth-linux-amd64-1.9.11-6a62fe39.tar.gz",
+      "verification_type": "gpg",
+      "verification_source": "https://gethstore.blob.core.windows.net/builds/geth-linux-amd64-1.9.11-6a62fe39.tar.gz.asc",
+      "extract_command": "tar -C backend --strip 1 -xf",
+      "exclude_files": [],
+      "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/geth --ipcdisable --syncmode full --cache 1024 --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --port 38336 --ws --wsaddr 0.0.0.0 --wsport {{.Ports.BackendRPC}} --wsorigins \"*\" --rpc --rpcport 8136 -rpcaddr 0.0.0.0 --rpccorsdomain \"*\" --rpcvhosts \"*\" 2>>{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
+      "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
+      "postinst_script_template": "",
+      "service_type": "simple",
+      "service_additional_params_template": "",
+      "protect_memory": true,
+      "mainnet": true,
+      "server_config_file": "",
+      "client_config_file": ""
+    },
+    "blockbook": {
+      "package_name": "blockbook-callisto",
+      "system_user": "blockbook-callisto",
+      "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
+      "public_binding_template": ":{{.Ports.BlockbookPublic}}",
+      "explorer_url": "",
+      "additional_params": "",
+      "block_chain": {
+        "parse": true,
+        "mempool_workers": 8,
+        "mempool_sub_workers": 2,
+        "block_addresses_to_keep": 300,
+        "additional_params": {
+          "mempoolTxTimeoutHours": 48,
+          "queryBackendOnMempoolResync": false
+        }
+      }
+    },
+    "meta": {
+      "package_maintainer": "IT",
+      "package_maintainer_email": "it@satoshilabs.com"
+    }

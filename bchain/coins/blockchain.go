@@ -80,6 +80,7 @@ func init() {
 	BlockChainFactories["Dash Testnet"] = dash.NewDashRPC
 	BlockChainFactories["Decred"] = dcr.NewDecredRPC
 	BlockChainFactories["Decred Testnet"] = dcr.NewDecredRPC
+	BlockChainFactories["Callisto"] = eth.NewEthereumRPC
 	BlockChainFactories["GameCredits"] = gamecredits.NewGameCreditsRPC
 	BlockChainFactories["Koto"] = koto.NewKotoRPC
 	BlockChainFactories["Koto Testnet"] = koto.NewKotoRPC
