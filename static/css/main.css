@@ -35,6 +35,22 @@ h3 {
     padding-bottom: 1px;
 }
 
+.message {
+    padding: 15px;
+    font-size: 16px;
+    border-radius: 5px;
+    margin-bottom: 20px;
+    line-height: 22px;
+    text-align: center;
+    padding-left: 5px;
+    padding-right: 5px;
+  }
+  
+  .message.announcment {  
+    color: #7190EB;
+    background: rgba(66, 139, 202, 0.1);
+  }
+
 .navbar-form .form-control {
     background-color: gray;
     color: #fff;
