@@ -1212,6 +1212,7 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *db.AddrB
 									AmountSat: (*Amount)(&vout.ValueSat),
 									Locktime:  bchainTx.LockTime,
 									Coinbase:  coinbase,
+									ScriptPubKey: vout.ScriptPubKey.Hex,
 								})
 								inMempool[bchainTx.Txid] = struct{}{}
 							}
@@ -1259,6 +1260,14 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *db.AddrB
 							coinbase = true
 						}
 					}
+					bchainTx, height, err := w.txCache.GetTransaction(txid)
+					if err != nil {
+						if err == bchain.ErrTxNotFound {
+							return nil, NewAPIError(fmt.Sprintf("Transaction '%v' not found", txid), true)
+						}
+						return nil, NewAPIError(fmt.Sprintf("Transaction '%v' not found (%v)", txid, err), true)
+					}
+					transaction, err := w.GetTransactionFromBchainTx(bchainTx, height, false, false)
 					_, e = inMempool[txid]
 					if !e {
 						utxos = append(utxos, Utxo{
@@ -1268,6 +1277,7 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *db.AddrB
 							Height:        int(utxo.Height),
 							Confirmations: confirmations,
 							Coinbase:      coinbase,
+							ScriptPubKey:  transaction.Vout[utxo.Vout].Hex,
 						})
 					}
 				}
