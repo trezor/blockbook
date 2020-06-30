@@ -91,18 +91,20 @@ h3 {
     margin: 0;
     padding-bottom: 0;
     padding-top: 0;
-    background-color: #212121;
+    background-image: linear-gradient(90deg,#9e77c1,#a572ba);
+    background-color: #9e77c1;
     border: 0;
 }
 
-.bg-trezor {
-    background-color: #212121!important;
+.bg-guarda {
+    background-image: linear-gradient(90deg,#9e77c1,#a572ba);
+    background-color: #9e77c1!important;
     padding-top: 3px;
     padding-bottom: 2px;
     z-index: 2;
 }
 
-.bg-trezor .navbar-brand {
+.bg-guarda .navbar-brand {
     color: rgba(255, 255, 255);
     font-weight: bold;
     font-size: 19px;
@@ -113,7 +115,7 @@ h3 {
     .navbar {
         font-size: 14px;
     }
-    .bg-trezor .navbar-brand {
+    .bg-guarda .navbar-brand {
         font-weight: normal;
         font-size: 14px;
     }
@@ -127,8 +129,8 @@ h3 {
 }
 
 #footer {
-    background-color: #212121;
-    color: #fff;
+    background-image: linear-gradient(90deg,#9e77c1,#a572ba);
+    background-color: #9e77c1;
     height: 42px;
     overflow: hidden;
 }
