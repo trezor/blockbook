@@ -1,4 +1,11 @@
 {{define "specific"}}{{$cs := .CoinShortcut}}{{$bb := .Info.Blockbook}}{{$be := .Info.Backend}}
+{{- if eq $bb.Coin "Bcash" -}}
+    <div class="row">
+        <div class="message announcment col-12">
+          <span>We’ve changed technology platform of Bitcoin SV explorer to increase uptime and stability. Explorer API is now available in both versions. However we encourage our API users to migrate to a new protocol as Insight version can be deprecated in future.</span>
+        </div>
+    </div>
+{{- end -}}
 <h1>Application status</h1>
 {{- if $bb.InitialSync -}}
 <h3 class="bg-danger text-white" style="padding: 20px;">Application is now in initial synchronization and does not provide any data.</h3>
@@ -98,12 +105,6 @@
                 <tr>
                     <td>Size On Disk</td>
                     <td class="data">{{$be.SizeOnDisk}}</td>
-                </tr>
-                {{- end -}}
-                {{- if $be.Warnings -}}
-                <tr>
-                    <td>Warnings</td>
-                    <td class="data text-warning">{{$be.Warnings}}</td>
                 </tr>
                 {{- end -}}
             </tbody>
