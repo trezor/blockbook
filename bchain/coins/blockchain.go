@@ -31,6 +31,7 @@ import (
 	"github.com/trezor/blockbook/bchain/coins/gamecredits"
 	"github.com/trezor/blockbook/bchain/coins/grs"
 	"github.com/trezor/blockbook/bchain/coins/koto"
+	"github.com/trezor/blockbook/bchain/coins/kmd"
 	"github.com/trezor/blockbook/bchain/coins/liquid"
 	"github.com/trezor/blockbook/bchain/coins/litecoin"
 	"github.com/trezor/blockbook/bchain/coins/monacoin"
@@ -119,6 +120,7 @@ func init() {
 	BlockChainFactories["BitZeny"] = bitzeny.NewBitZenyRPC
 	BlockChainFactories["Ycash"] = yec.NewYCashRPC
 	BlockChainFactories["Creamcoin"] = creamcoin.NewCreamCoinRPC
+	BlockChainFactories["Komodo"] = kmd.NewKmdRPC
 }
 
 // GetCoinNameFromConfig gets coin name and coin shortcut from config file
