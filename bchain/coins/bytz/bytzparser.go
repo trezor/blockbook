@@ -2,13 +2,9 @@ package bytz
 
 import (
 	"bytes"
-
-
 	"encoding/hex"
 	"encoding/json"
-
 	"io"
-
 	"math/big"
 
 	"github.com/juju/errors"
