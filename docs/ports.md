@@ -8,7 +8,7 @@
 | Dash                   | 9033                    | 9133                  | 8033             | 38333                       |
 | Litecoin               | 9034                    | 9134                  | 8034             | 38334                       |
 | Bitcoin Gold           | 9035                    | 9135                  | 8035             | 38335                       |
-| Ethereum               | 9036                    | 9136                  | 8036             | 38336 p2p, 8136 http        |
+| Ethereum               | 9036                    | 9136                  | 8036             | 8136 http, 38336 p2p        |
 | Ethereum Classic       | 9037                    | 9137                  | 8037             |                             |
 | Dogecoin               | 9038                    | 9138                  | 8038             | 38338                       |
 | Namecoin               | 9039                    | 9139                  | 8039             | 38339                       |
@@ -44,6 +44,7 @@
 | Unobtanium             | 9092                    | 9192                  | 65535            | 38392                       |
 | Omotenashicoin         | 9094                    | 9194                  | 8094             | 38394                       |
 | BitZeny                | 9095                    | 9195                  | 8095             | 38395                       |
+| BYTZ                   | 9096                    | 9196                  | 8096             | 38396                       |
 | Bitcoin Testnet        | 19030                   | 19130                 | 18030            | 48330                       |
 | Bitcoin Cash Testnet   | 19031                   | 19131                 | 18031            | 48331                       |
 | Zcash Testnet          | 19032                   | 19132                 | 18032            | 48332                       |
@@ -60,5 +61,6 @@
 | Flo Testnet            | 19066                   | 19166                 | 18066            | 48366                       |
 | Qtum Testnet           | 19088                   | 19188                 | 18088            | 48388                       |
 | Omotenashicoin Testnet | 19089                   | 19189                 | 18089            | 48389                       |
+| BYTZ Testnet           | 19090                   | 19190                 | 18090            | 48391                       |
 
 > NOTE: This document is generated from coin definitions in `configs/coins`.
