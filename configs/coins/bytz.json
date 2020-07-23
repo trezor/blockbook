@@ -6,10 +6,10 @@
     "alias": "bytz"
   },
   "ports": {
-    "backend_rpc": 8048,
-    "backend_message_queue": 38348,
-    "blockbook_internal": 9048,
-    "blockbook_public": 9148
+    "backend_rpc": 8096,
+    "backend_message_queue": 48390,
+    "blockbook_internal": 9096,
+    "blockbook_public": 9196
   },
   "ipc": {
     "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
