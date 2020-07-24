@@ -224,26 +224,6 @@ func Test_UnpackTx(t *testing.T) {
 			want1:   800000,
 			wantErr: false,
 		},
-		// {
-		// 	name: "bytz-2",
-		// 	args: args{
-		// 		packedTx: testTxPacked2,
-		// 		parser:   NewBytzParser(GetChainParams("main"), &btc.Configuration{}),
-		// 	},
-		// 	want:    &testTx2,
-		// 	want1:   850000,
-		// 	wantErr: false,
-		// },
-		// {
-		// 	name: "Bytz-3",
-		// 	args: args{
-		// 		packedTx: testTxPacked3,
-		// 		parser:   NewBytzParser(GetChainParams("main"), &btc.Configuration{}),
-		// 	},
-		// 	want:    &testTx3,
-		// 	want1:   850900,
-		// 	wantErr: false,
-		// },
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -278,30 +258,6 @@ var testParseBlockTxs = map[int]testBlock{
   				"52b116d26f7c8b633c284f8998a431e106d837c0c5888f9ea5273d36c4556bec",
 		},
 	},
-  // 850000: {
-	// 	size: 463,
-	// 	time: 1504351235,
-	// 	txs: []string{
-  //       "556569e1bd20ae007853d839fda5cbefed4883ac53e6327a0a8a30180d242e24",
-  // 			"52b116d26f7c8b633c284f8998a431e106d837c0c5888f9ea5273d36c4556bec",
-	// 	},
-	// },
-  // 850900: {
-  // 		size: 463,
-	// 	time: 1504351235,
-	// 	txs: []string{
-  //     "556569e1bd20ae007853d839fda5cbefed4883ac53e6327a0a8a30180d242e24",
-	// 		"52b116d26f7c8b633c284f8998a431e106d837c0c5888f9ea5273d36c4556bec",
-	// 	},
-	// },
-  // 850920: {
-	// 	size: 463,
-	// 	time: 1504351235,
-	// 	txs: []string{
-  //       "556569e1bd20ae007853d839fda5cbefed4883ac53e6327a0a8a30180d242e24",
-  // 			"52b116d26f7c8b633c284f8998a431e106d837c0c5888f9ea5273d36c4556bec",
-	// 	},
-	// },
 }
 
 func helperLoadBlock(t *testing.T, height int) []byte {
@@ -342,15 +298,5 @@ func TestParseBlock(t *testing.T) {
 		if blk.Time != tb.time {
 			t.Errorf("ParseBlock() block time: got %d, want %d", blk.Time, tb.time)
 		}
-
-		// if len(blk.Txs) != len(tb.txs) {
-		// 	t.Errorf("ParseBlock() number of transactions: got %d, want %d", len(blk.Txs), len(tb.txs))
-		// }
-
-		// for ti, tx := range tb.txs {
-		// 	if blk.Txs[ti].Txid != tx {
-		// 		t.Errorf("ParseBlock() transaction %d: got %s, want %s", ti, blk.Txs[ti].Txid, tx)
-		// 	}
-		// }
 	}
 }
