@@ -186,28 +186,6 @@ func Test_PackTx(t *testing.T) {
 			want:    testTxPacked1,
 			wantErr: false,
 		},
-		// {
-		// 	name: "bytz-2",
-		// 	args: args{
-		// 		tx:        testTx2,
-		// 		height:    850000,
-		// 		blockTime: 1578371657,
-		// 		parser:    NewBytzParser(GetChainParams("main"), &btc.Configuration{}),
-		// 	},
-		// 	want:    testTxPacked2,
-		// 	wantErr: false,
-		// },
-		// {
-		// 	name: "bytz-3",
-		// 	args: args{
-		// 		tx:        testTx3,
-		// 		height:    850900,
-		// 		blockTime: 1578426253,
-		// 		parser:    NewBytzParser(GetChainParams("main"), &btc.Configuration{}),
-		// 	},
-		// 	want:    testTxPacked3,
-		// 	wantErr: false,
-		// },
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
