@@ -259,11 +259,12 @@ type testBlock struct {
 
 var testParseBlockTxs = map[int]testBlock{
 	800000: {
-		size: 463,
-		time: 1504351235,
+		size: 792,
+		time: 1575334901,
 		txs: []string{
           "556569e1bd20ae007853d839fda5cbefed4883ac53e6327a0a8a30180d242e24",
   				"52b116d26f7c8b633c284f8998a431e106d837c0c5888f9ea5273d36c4556bec",
+					"c4b7a36756cd720e4dd5931813f762788b521c0eff27ffcd14832e26b3188340",
 		},
 	},
 }
