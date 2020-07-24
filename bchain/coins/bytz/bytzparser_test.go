@@ -167,8 +167,8 @@ func init() {
 	},
 		Blocktime: 1595613206,
 		Time:      1595613206,
-
- }
+	}
+}
 
 func Test_PackTx(t *testing.T) {
 	type args struct {
@@ -233,6 +233,7 @@ func Test_UnpackTx(t *testing.T) {
 			wantErr: false,
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			b, _ := hex.DecodeString(tt.args.packedTx)
@@ -306,6 +307,6 @@ func TestParseBlock(t *testing.T) {
 
 		if blk.Time != tb.time {
 			t.Errorf("ParseBlock() block time: got %d, want %d", blk.Time, tb.time)
-		}
-	}
-}
+		 }
+	 }
+ }
