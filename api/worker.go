@@ -1337,6 +1337,9 @@ func (w *Worker) balanceHistoryForTxid(addrDesc bchain.AddressDescriptor, txid s
 			}
 			if bytes.Equal(addrDesc, tai.AddrDesc) {
 				(*big.Int)(bh.SentSat).Add((*big.Int)(bh.SentSat), &tai.ValueSat)
+				if ownInputIndex == i {
+					countSentToSelf = true
+				}
 				if tai.AssetInfo != nil {
 					if bh.Tokens == nil {
 						bh.Tokens = map[uint32]*TokenBalanceHistory{}
@@ -1347,8 +1350,6 @@ func (w *Worker) balanceHistoryForTxid(addrDesc bchain.AddressDescriptor, txid s
 						bh.Tokens[tai.AssetInfo.AssetGuid] = bhaToken
 					}
 					(*big.Int)(bhaToken.SentSat).Add((*big.Int)(bhaToken.SentSat), tai.AssetInfo.ValueSat)
-				if ownInputIndex == i {
-					countSentToSelf = true
 				}
 			}
 		}
