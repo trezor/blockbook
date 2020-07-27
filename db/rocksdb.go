@@ -594,7 +594,7 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses bch
 						return err
 					}
 					// replace asset ownership with this addrDesc in ConnectAssetOutput, this should be the change address
-					if isAssetTx && tao.AssetInfo.ValueSat.UInt64() == 0 {
+					if isAssetTx && tao.AssetInfo.ValueSat.Uint64() == 0 {
 						assetGuid = tao.AssetInfo.AssetGuid
 						addrDescOwner = &addrDesc
 					}
@@ -1082,7 +1082,7 @@ func (d *RocksDB) disconnectTxAddressesInputs(wb *gorocksdb.WriteBatch, btxID []
 							return err
 						}
 						// if asset tx save ownership addrDesc for later disconnect when we replace the addrDesc of asset to this one
-						if isAssetTx && t.AssetInfo.ValueSat.UInt64() == 0 {
+						if isAssetTx && t.AssetInfo.ValueSat.Uint64() == 0 {
 							assetGuid = t.AssetInfo.AssetGuid
 							addrDesc = &t.AddrDesc
 						}

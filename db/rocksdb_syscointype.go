@@ -25,8 +25,8 @@ func (d *RocksDB) ConnectAssetOutputHelper(isActivate bool, asset *bchain.Asset,
 			balanceDb.Add(balanceDb, valueTo)
 			supplyDb := big.NewInt(dBAsset.AssetObj.TotalSupply)
 			supplyDb.Add(supplyDb, valueTo)
-			dBAsset.AssetObj.Balance = balanceDb.UInt64()
-			dBAsset.AssetObj.TotalSupply = supplyDb.UInt64()
+			dBAsset.AssetObj.Balance = balanceDb.Uint64()
+			dBAsset.AssetObj.TotalSupply = supplyDb.Uint64()
 		}
 		// logic follows core CheckAssetInputs()
 		if len(asset.AssetObj.PubData) > 0 {
@@ -55,12 +55,12 @@ func (d *RocksDB) DisconnectAssetOutputHelper(asset *bchain.Asset, dBAsset *bcha
 			glog.Warningf("DisconnectAssetOutput balance is negative %v, setting to 0...", dBAsset.AssetObj.Balance)
 			dBAsset.AssetObj.Balance = 0
 		}
-		dBAsset.AssetObj.Balance = balanceDb.UInt64()
+		dBAsset.AssetObj.Balance = balanceDb.Uint64()
 		if dBAsset.AssetObj.TotalSupply < asset.AssetObj.Balance {
 			glog.Warningf("DisconnectAssetOutput total supply is negative %v, setting to 0...", dBAsset.AssetObj.TotalSupply)
 			dBAsset.AssetObj.TotalSupply = 0
 		}
-		dBAsset.AssetObj.TotalSupply = supplyDb.UInt64()
+		dBAsset.AssetObj.TotalSupply = supplyDb.Uint64()
 	}
 	// logic follows core CheckAssetInputs()
 	// prev data is enforced to be correct (previous value) if value exists in the tx data
@@ -112,7 +112,7 @@ func (d *RocksDB) ConnectAllocationOutput(addrDesc* bchain.AddressDescriptor, he
 		if d.chainParser.IsAssetSendTx(version) {
 			balanceAssetSat := big.NewInt(dBAsset.AssetObj.Balance)
 			balanceAssetSat.Sub(balanceAssetSat, assetInfo.ValueSat)
-			dBAsset.AssetObj.Balance = balanceAssetSat.UInt64()
+			dBAsset.AssetObj.Balance = balanceAssetSat.Uint64()
 			if dBAsset.AssetObj.Balance < 0 {
 				glog.Warningf("ConnectAssetOutput balance is negative %v, setting to 0...", dBAsset.AssetObj.Balance)
 				dBAsset.AssetObj.Balance = 0
@@ -183,7 +183,7 @@ func (d *RocksDB) DisconnectAllocationOutput(addrDesc *bchain.AddressDescriptor,
 	if d.chainParser.IsAssetSendTx(version) {
 		balanceAssetSat := big.NewInt(dBAsset.AssetObj.Balance)
 		balanceAssetSat.Add(balanceAssetSat, assetInfo.ValueSat)
-		dBAsset.AssetObj.Balance = balanceAssetSat.UInt64()
+		dBAsset.AssetObj.Balance = balanceAssetSat.Uint64()
 	} else if isActivate {
 		// signals for removal from asset db
 		dBAsset.AssetObj.TotalSupply = -1

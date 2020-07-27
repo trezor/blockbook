@@ -19,8 +19,8 @@ func (c JSONNumber) Float64() (float64, error) {
 	return f, nil
 }
 
-// UInt64 returns JSONNumber as uint64
-func (c JSONNumber) UInt64() (uint64, error) {
+// Uint64 returns JSONNumber as uint64
+func (c JSONNumber) Uint64() (uint64, error) {
 	i, err := strconv.ParseUint(string(c), 10, 64)
 	if err != nil {
 		return 0, err

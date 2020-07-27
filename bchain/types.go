@@ -506,7 +506,7 @@ func (a *Amount) AsUInt64() uint64 {
 	if a == nil {
 		return 0
 	}
-	return (*big.Int)(a).UInt64()
+	return (*big.Int)(a).Uint64()
 }
 
 // AsInt64 returns Amount as int64 (0 if Amount is nil).
