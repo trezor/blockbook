@@ -860,7 +860,7 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 				if err != nil {
 					return nil, nil, nil, 0, 0, 0, err
 				}
-				tokens[j] = *t
+				tokens[j] = t
 				j++
 			}
 			// special handling if filter has contract
@@ -870,7 +870,7 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 				if err != nil {
 					return nil, nil, nil, 0, 0, 0, err
 				}
-				tokens = []bchain.Token{*t}
+				tokens = bchain.Tokens{t}
 				// switch off query for transactions, there are no transactions
 				filter.Vout = AddressFilterVoutQueryNotNecessary
 			} else {
@@ -1617,7 +1617,7 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *bchain.A
 									Locktime:  bchainTx.LockTime,
 									Coinbase:  coinbase,
 									AssetInfo: vout.AssetInfo,
-									Script:    script,
+									Script:    string(script),
 								}
 								utxos = append(utxos, utxoTmp)
 								inMempool[bchainTx.Txid] = struct{}{}
@@ -1680,7 +1680,7 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *bchain.A
 							Confirmations: confirmations,
 							Coinbase:      coinbase,
 							AssetInfo: 	   utxo.AssetInfo,
-							Script:    	   script,
+							Script:    	   string(script),
 						}
 						utxos = append(utxos, utxoTmp)
 					}
