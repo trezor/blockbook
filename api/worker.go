@@ -379,7 +379,7 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 	var err error
 	var valInSat, valOutSat, feesSat big.Int
 	var pValInSat *big.Int
-	var tokens []*TokenTransferSummary
+	var tokens []*bchain.TokenTransferSummary
 	var mapTTS  map[uint32]*bchain.TokenTransferSummary
 	var ethSpecific *EthereumSpecific
 	vins := make([]Vin, len(mempoolTx.Vin))
@@ -418,7 +418,7 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 						}
 						assetGuid := strconv.FormatUint(uint64(vin.AssetInfo.AssetGuid), 10)
 						tts = &bchain.TokenTransferSummary{
-							Type:     w.chainParser.GetAssetTypeFromVersion(bchainTx.Version),
+							Type:     w.chainParser.GetAssetTypeFromVersion(mempoolTx.Version),
 							Token:    assetGuid,
 							Decimals: int(dbAsset.AssetObj.Precision),
 							ValueIn:  (*bchain.Amount)(big.NewInt(0)),
@@ -467,7 +467,7 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 				}
 				assetGuid := strconv.FormatUint(uint64(vout.AssetInfo.AssetGuid), 10)
 				tts = &bchain.TokenTransferSummary{
-					Type:     w.chainParser.GetAssetTypeFromVersion(bchainTx.Version),
+					Type:     w.chainParser.GetAssetTypeFromVersion(mempoolTx.Version),
 					Token:    assetGuid,
 					Decimals: int(dbAsset.AssetObj.Precision),
 					ValueIn:  (*bchain.Amount)(big.NewInt(0)),
@@ -771,7 +771,7 @@ func computePaging(count, page, itemsOnPage int) (Paging, int, int, int) {
 	}, from, to, page
 }
 
-func (w *Worker) getEthereumToken(index int, addrDesc, contract bchain.AddressDescriptor, details AccountDetails, txs int) (*bchain.Token, error) {
+func (w *Worker) getEthereumToken(index int, addrDesc, contract bchain.AddressDescriptor, details AccountDetails, txs uint32) (*bchain.Token, error) {
 	var b *big.Int
 	validContract := true
 	ci, err := w.chain.EthereumTypeGetErc20ContractInfo(contract)
@@ -798,7 +798,7 @@ func (w *Worker) getEthereumToken(index int, addrDesc, contract bchain.AddressDe
 		b = nil
 	}
 	return &bchain.Token{
-		Type:          ERC20TokenType,
+		Type:          bchain.ERC20TokenType,
 		BalanceSat:    (*bchain.Amount)(b),
 		Contract:      ci.Contract,
 		Name:          ci.Name,
@@ -846,7 +846,7 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 			}
 		}
 		if details > AccountDetailsBasic {
-			tokens = make(bchain.Tokens, len(ca.Contracts))
+			tokens = make([]bchain.Tokens, len(ca.Contracts))
 			var j int
 			for i, c := range ca.Contracts {
 				if len(filterDesc) > 0 {
@@ -856,7 +856,7 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 					// filter only transactions of this contract
 					filter.Vout = i + 1
 				}
-				t, err := w.getEthereumToken(i+1, addrDesc, c.Contract, details, int(c.Txs))
+				t, err := w.getEthereumToken(i+1, addrDesc, c.Contract, details, c.Txs)
 				if err != nil {
 					return nil, nil, nil, 0, 0, 0, err
 				}
@@ -1382,7 +1382,7 @@ func (w *Worker) balanceHistoryForTxid(addrDesc bchain.AddressDescriptor, txid s
 		SentToSelfSat: &bchain.Amount{},
 		Txid:        txid,
 	}
-	
+	countSentToSelf := false
 	if w.chainType == bchain.ChainBitcoinType {
 		// detect if this input is the first of selfAddrDesc
 		// to not to count sentToSelf multiple times if counting multiple xpub addresses
