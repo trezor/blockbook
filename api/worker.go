@@ -812,7 +812,7 @@ func (w *Worker) getEthereumToken(index int, addrDesc, contract bchain.AddressDe
 func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescriptor, details AccountDetails, filter *AddressFilter) (*bchain.AddrBalance, bchain.Tokens, *bchain.Erc20Contract, uint64, int, int, error) {
 	var (
 		ba             *bchain.AddrBalance
-		tokens         bchain.Tokens
+		tokens         []bchain.Tokens
 		ci             *bchain.Erc20Contract
 		n              uint64
 		nonContractTxs int
@@ -856,7 +856,7 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 					// filter only transactions of this contract
 					filter.Vout = i + 1
 				}
-				t, err := w.getEthereumToken(i+1, addrDesc, c.Contract, details, c.Txs)
+				t, err := w.getEthereumToken(i+1, addrDesc, c.Contract, details, uint32(c.Txs))
 				if err != nil {
 					return nil, nil, nil, 0, 0, 0, err
 				}
@@ -1606,6 +1606,10 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *bchain.A
 								if len(bchainTx.Vin) == 1 && len(bchainTx.Vin[0].Coinbase) > 0 {
 									coinbase = true
 								}
+								script, err := w.chainParser.GetScriptFromAddrDesc(addrDesc)
+								if err != nil {
+									return err
+								}
 								utxoTmp := Utxo{
 									Txid:      bchainTx.Txid,
 									Vout:      int32(i),
@@ -1613,7 +1617,7 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *bchain.A
 									Locktime:  bchainTx.LockTime,
 									Coinbase:  coinbase,
 									AssetInfo: vout.AssetInfo,
-									Script:    w.chainParser.GetScriptFromAddrDesc(addrDesc),
+									Script:    script,
 								}
 								utxos = append(utxos, utxoTmp)
 								inMempool[bchainTx.Txid] = struct{}{}
@@ -1664,6 +1668,10 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *bchain.A
 					}
 					_, e = inMempool[txid]
 					if !e {
+						script, err := w.chainParser.GetScriptFromAddrDesc(addrDesc)
+						if err != nil {
+							return err
+						}
 						utxoTmp := Utxo{
 							Txid:          txid,
 							Vout:          utxo.Vout,
@@ -1672,7 +1680,7 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *bchain.A
 							Confirmations: confirmations,
 							Coinbase:      coinbase,
 							AssetInfo: 	   utxo.AssetInfo,
-							Script:    	   w.chainParser.GetScriptFromAddrDesc(addrDesc),
+							Script:    	   script,
 						}
 						utxos = append(utxos, utxoTmp)
 					}
