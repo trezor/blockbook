@@ -379,7 +379,8 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 	var err error
 	var valInSat, valOutSat, feesSat big.Int
 	var pValInSat *big.Int
-	var tokens []TokenTransfer
+	var tokens []*TokenTransferSummary
+	var mapTTS  map[uint32]*bchain.TokenTransferSummary
 	var ethSpecific *EthereumSpecific
 	vins := make([]Vin, len(mempoolTx.Vin))
 	rbf := false
@@ -399,11 +400,35 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 		if w.chainType == bchain.ChainBitcoinType {
 			//  bchainVin.Txid=="" is coinbase transaction
 			if bchainVin.Txid != "" {
-				vin.ValueSat = (*Amount)(&bchainVin.ValueSat)
+				vin.ValueSat = (*bchain.Amount)(&bchainVin.ValueSat)
 				vin.AddrDesc = bchainVin.AddrDesc
 				vin.Addresses, vin.IsAddress, err = w.chainParser.GetAddressesFromAddrDesc(vin.AddrDesc)
 				if vin.ValueSat != nil {
 					valInSat.Add(&valInSat, (*big.Int)(vin.ValueSat))
+				}
+				if vin.AssetInfo != nil {
+					if mapTTS == nil {
+						mapTTS = map[uint32]*bchain.TokenTransferSummary{}
+					}
+					tts, ok := mapTTS[vin.AssetInfo.AssetGuid]
+					if !ok {
+						dbAsset, errAsset := w.db.GetAsset(vin.AssetInfo.AssetGuid, nil)
+						if errAsset != nil || dbAsset == nil {
+							return nil, errAsset
+						}
+						assetGuid := strconv.FormatUint(uint64(vin.AssetInfo.AssetGuid), 10)
+						tts = &bchain.TokenTransferSummary{
+							Type:     w.chainParser.GetAssetTypeFromVersion(bchainTx.Version),
+							Token:    assetGuid,
+							Decimals: int(dbAsset.AssetObj.Precision),
+							ValueIn:  (*bchain.Amount)(big.NewInt(0)),
+							Symbol:   dbAsset.AssetObj.Symbol,
+						}
+						mapTTS[vin.AssetInfo.AssetGuid] = tts
+					}
+					amountAsset := (*bchain.Amount)(vin.AssetInfo.ValueSat)
+					vin.AssetInfo.ValueStr = amountAsset.DecimalString(tts.Decimals) + " " + tts.Symbol
+					(*big.Int)(tts.ValueIn).Add((*big.Int)(tts.ValueIn), (*big.Int)(vin.AssetInfo.ValueSat))
 				}
 			}
 		} else if w.chainType == bchain.ChainEthereumType {
@@ -422,12 +447,37 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 		bchainVout := &mempoolTx.Vout[i]
 		vout := &vouts[i]
 		vout.N = i
-		vout.ValueSat = (*Amount)(&bchainVout.ValueSat)
+		vout.ValueSat = (*bchain.Amount)(&bchainVout.ValueSat)
 		valOutSat.Add(&valOutSat, &bchainVout.ValueSat)
 		vout.Hex = bchainVout.ScriptPubKey.Hex
 		vout.AddrDesc, vout.Addresses, vout.IsAddress, err = w.getAddressesFromVout(bchainVout)
 		if err != nil {
 			glog.V(2).Infof("getAddressesFromVout error %v, %v, output %v", err, mempoolTx.Txid, bchainVout.N)
+		}
+		if bchainVout.AssetInfo != nil {
+			if mapTTS == nil {
+				mapTTS = map[uint32]*bchain.TokenTransferSummary{}
+			}
+			vout.AssetInfo = bchainVout.AssetInfo
+			tts, ok := mapTTS[vout.AssetInfo.AssetGuid]
+			if !ok {
+				dbAsset, errAsset := w.db.GetAsset(vout.AssetInfo.AssetGuid, nil)
+				if errAsset != nil || dbAsset == nil {
+					return nil, errAsset
+				}
+				assetGuid := strconv.FormatUint(uint64(vout.AssetInfo.AssetGuid), 10)
+				tts = &bchain.TokenTransferSummary{
+					Type:     w.chainParser.GetAssetTypeFromVersion(bchainTx.Version),
+					Token:    assetGuid,
+					Decimals: int(dbAsset.AssetObj.Precision),
+					ValueIn:  (*bchain.Amount)(big.NewInt(0)),
+					Symbol:   dbAsset.AssetObj.Symbol,
+				}
+				mapTTS[vout.AssetInfo.AssetGuid] = tts
+			}
+			amountAsset := (*bchain.Amount)(vout.AssetInfo.ValueSat)
+			vout.AssetInfo.ValueStr = amountAsset.DecimalString(tts.Decimals) + " " + tts.Symbol
+			(*big.Int)(tts.Value).Add((*big.Int)(tts.Value), vout.AssetInfo.ValueSat)
 		}
 	}
 	if w.chainType == bchain.ChainBitcoinType {
@@ -437,6 +487,15 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 			feesSat.SetUint64(0)
 		}
 		pValInSat = &valInSat
+		// flatten TTS Map
+		if mapTTS != nil && len(mapTTS) > 0 {
+			tokens = make([]*bchain.TokenTransferSummary, len(mapTTS))
+			var i int = 0
+			for _, token := range mapTTS {
+				tokens[i] = token
+				i++
+			}
+		}
 	} else if w.chainType == bchain.ChainEthereumType {
 		if len(mempoolTx.Vout) > 0 {
 			valOutSat = mempoolTx.Vout[0].ValueSat
@@ -445,7 +504,7 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 		ethTxData := eth.GetEthereumTxDataFromSpecificData(mempoolTx.CoinSpecificData)
 		ethSpecific = &EthereumSpecific{
 			GasLimit: ethTxData.GasLimit,
-			GasPrice: (*Amount)(ethTxData.GasPrice),
+			GasPrice: (*bchain.Amount)(ethTxData.GasPrice),
 			GasUsed:  ethTxData.GasUsed,
 			Nonce:    ethTxData.Nonce,
 			Status:   ethTxData.Status,
@@ -454,17 +513,17 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 	}
 	r := &Tx{
 		Blocktime:        mempoolTx.Blocktime,
-		FeesSat:          (*Amount)(&feesSat),
+		FeesSat:          (*bchain.Amount)(&feesSat),
 		Locktime:         mempoolTx.LockTime,
 		Txid:             mempoolTx.Txid,
-		ValueInSat:       (*Amount)(pValInSat),
-		ValueOutSat:      (*Amount)(&valOutSat),
+		ValueInSat:       (*bchain.Amount)(pValInSat),
+		ValueOutSat:      (*bchain.Amount)(&valOutSat),
 		Version:          mempoolTx.Version,
 		Hex:              mempoolTx.Hex,
 		Rbf:              rbf,
 		Vin:              vins,
 		Vout:             vouts,
-		TokenTransfers:   tokens,
+		TokenTransferSummary:   tokens,
 		EthereumSpecific: ethSpecific,
 	}
 	return r, nil
@@ -492,7 +551,7 @@ func (w *Worker) getTokensFromErc20(erc20 []bchain.Erc20Transfer) []*bchain.Toke
 			From:     e.From,
 			To:       e.To,
 			Decimals: erc20c.Decimals,
-			Value:    (*Amount)(&e.Tokens),
+			Value:    (*bchain.Amount)(&e.Tokens),
 			Name:     erc20c.Name,
 			Symbol:   erc20c.Symbol,
 		}
@@ -738,7 +797,7 @@ func (w *Worker) getEthereumToken(index int, addrDesc, contract bchain.AddressDe
 	} else {
 		b = nil
 	}
-	return &Token{
+	return &bchain.Token{
 		Type:          ERC20TokenType,
 		BalanceSat:    (*bchain.Amount)(b),
 		Contract:      ci.Contract,
