@@ -758,7 +758,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`[{"txid":"7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25","vout":1,"value":"917283951061","height":225494,"confirmations":1}]`,
+				`[{"txid":"7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25","vout":1,"value":"917283951061","height":225494,"confirmations":1,"script":"76a9148d802c045445df49613f6a70ddd2e48526f3701f88ac"}]`,
 			},
 		},
 		{
@@ -767,7 +767,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`[{"txid":"3d90d15ed026dc45e19ffb52875ed18fa9e8012ad123d7f7212176e2b0ebdb71","vout":0,"value":"118641975500","height":225494,"confirmations":1,"address":"2N6utyMZfPNUb1Bk8oz7p2JqJrXkq83gegu","path":"m/49'/1'/33'/1/3"}]`,
+				`[{"txid":"3d90d15ed026dc45e19ffb52875ed18fa9e8012ad123d7f7212176e2b0ebdb71","vout":0,"value":"118641975500","height":225494,"confirmations":1,"address":"2N6utyMZfPNUb1Bk8oz7p2JqJrXkq83gegu","path":"m/49'/1'/33'/1/3","script":"a91495e9fbe306449c991d314afe3c3567d5bf78efd287"}]`,
 			},
 		},
 		{
@@ -1099,7 +1099,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 					"descriptor": dbtestdata.Addr1,
 				},
 			},
-			want: `{"id":"5","data":[{"txid":"00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840","vout":0,"value":"100000000","height":225493,"confirmations":2}]}`,
+			want: `{"id":"5","data":[{"txid":"00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840","vout":0,"value":"100000000","height":225493,"confirmations":2,"script":"76a914010d39800f86122416e28f485029acf77507169288ac"}]}`,
 		},
 		{
 			name: "websocket getAccountUtxo",
