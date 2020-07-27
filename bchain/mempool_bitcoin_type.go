@@ -79,7 +79,7 @@ func (m *MempoolBitcoinType) getInputAddress(payload *chanInputPayload) *addrInd
 			glog.Error("error in addrDesc in ", vin.Txid, " ", vin.Vout, ": ", err)
 			return nil
 		}
-		assetInfo = itx.Vout[input.Vout].AssetInfo
+		assetInfo = itx.Vout[vin.Vout].AssetInfo
 		value = &itx.Vout[vin.Vout].ValueSat
 	}
 	vin.AddrDesc = addrDesc
