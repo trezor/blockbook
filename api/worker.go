@@ -812,7 +812,7 @@ func (w *Worker) getEthereumToken(index int, addrDesc, contract bchain.AddressDe
 func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescriptor, details AccountDetails, filter *AddressFilter) (*bchain.AddrBalance, bchain.Tokens, *bchain.Erc20Contract, uint64, int, int, error) {
 	var (
 		ba             *bchain.AddrBalance
-		tokens         []bchain.Tokens
+		tokens         bchain.Tokens
 		ci             *bchain.Erc20Contract
 		n              uint64
 		nonContractTxs int
@@ -846,7 +846,7 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 			}
 		}
 		if details > AccountDetailsBasic {
-			tokens = make([]bchain.Tokens, len(ca.Contracts))
+			tokens = make(bchain.Tokens, len(ca.Contracts))
 			var j int
 			for i, c := range ca.Contracts {
 				if len(filterDesc) > 0 {
@@ -1608,7 +1608,7 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *bchain.A
 								}
 								script, err := w.chainParser.GetScriptFromAddrDesc(addrDesc)
 								if err != nil {
-									return err
+									return nil, err
 								}
 								utxoTmp := Utxo{
 									Txid:      bchainTx.Txid,
@@ -1670,7 +1670,7 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *bchain.A
 					if !e {
 						script, err := w.chainParser.GetScriptFromAddrDesc(addrDesc)
 						if err != nil {
-							return err
+							return nil, err
 						}
 						utxoTmp := Utxo{
 							Txid:          txid,
