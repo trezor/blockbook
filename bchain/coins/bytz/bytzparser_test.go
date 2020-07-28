@@ -308,6 +308,7 @@ func TestParseBlock(t *testing.T) {
 
 		if blk.Time != tb.time {
 			t.Errorf("ParseBlock() block time: got %d, want %d", blk.Time, tb.time)
-		 }
-	 }
- }
+		  }
+	  }
+  }
+}
