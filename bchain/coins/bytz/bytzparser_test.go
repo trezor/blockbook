@@ -71,8 +71,8 @@ func Test_GetAddressesFromAddrDesc(t *testing.T) {
 	}{
 		{
 			name:    "P2PKH1",
-			args:    args{script: "76a914dda91c0396050d660f9c0e38f78064486bbfcb2c88ac"},
-			want:    []string{"sVqFFBJz11My5GrxnMuX5V1R9ujB1GEipJ"},
+			args:    args{script: "76a914df5c0d39a08b7bc2fd8b35fa73f501b527ac4b8488ac"},
+			want:    []string{"secR3DMvMhjAXABDXjpdJtd2M6TCv496yD"},
 			want2:   true,
 			wantErr: false,
 		},
