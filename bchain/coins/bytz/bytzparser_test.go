@@ -168,6 +168,7 @@ func init() {
 		},
 		Blocktime: 1595613206,
 		Time:      1595613206,
+	}
 }
 
 
@@ -311,4 +312,3 @@ func TestParseBlock(t *testing.T) {
 		  }
 	  }
   }
-}
