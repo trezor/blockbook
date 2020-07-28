@@ -36,8 +36,8 @@ func Test_GetAddrDescFromAddress_Mainnet(t *testing.T) {
 	}{
 		{
 			name:    "P2PKH1",
-			args:    args{address: "sVqFFBJz11My5GrxnMuX5V1R9ujB1GEipJ"},
-			want:    "76a9147f1026d7c5566bbdcf3aebf03b6064c6c1362a0888ac",
+			args:    args{address: "sT52jNJNZtnw5aCkEV44PfFWVSzzzhRC5D"},
+			want:    "76a91460c326d60d9b97f362692443dc8fcbd5468ab3e788ac",
 			wantErr: false,
 		},
 	}
