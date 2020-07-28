@@ -136,7 +136,7 @@ func init() {
 				},
 			},
 			{
-				ValueSat: *big.NewInt(4182.47),
+				ValueSat: *big.NewInt(418247000000),
 				N:        1,
 				ScriptPubKey: bchain.ScriptPubKey{
 					Hex: "4104fe8490b77c7aaaf08b3e9a7305691dc1ed03a92aaa89804b0e5c9fc18741936e77cdc9f0d9250083a873dc934402038d025050e4ed9836caaeaabc3d6e47bdd3ac",
@@ -146,7 +146,7 @@ func init() {
 				},
 			},
 			{
-				ValueSat: *big.NewInt(1742.48),
+				ValueSat: *big.NewInt(174248000000),
 				N:        2,
 				ScriptPubKey: bchain.ScriptPubKey{
 					Hex: "4104fe8490b77c7aaaf08b3e9a7305691dc1ed03a92aaa89804b0e5c9fc18741936e77cdc9f0d9250083a873dc934402038d025050e4ed9836caaeaabc3d6e47bdd3ac",
@@ -156,7 +156,7 @@ func init() {
 				},
 			},
 					{
-						ValueSat: *big.NewInt(2440),
+						ValueSat: *big.NewInt(244000000000),
 						N:        3,
 						ScriptPubKey: bchain.ScriptPubKey{
 							Hex: "76a914dadd93ebde4cd80ab6c26c0e1b7b82a2be4ba3a688ac",
