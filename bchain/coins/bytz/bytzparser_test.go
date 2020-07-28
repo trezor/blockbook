@@ -189,8 +189,8 @@ func Test_PackTx(t *testing.T) {
 			name: "bytz-1",
 			args: args{
 				tx:        testTx1,
-				height:    800000,
-				blockTime: 1575334901,
+				height:    1033804,
+				blockTime: 1589091692,
 				parser:    NewBytzParser(GetChainParams("main"), &btc.Configuration{}),
 			},
 			want:    testTxPacked1,
@@ -231,7 +231,7 @@ func Test_UnpackTx(t *testing.T) {
 				parser:   NewBytzParser(GetChainParams("main"), &btc.Configuration{}),
 			},
 			want:    &testTx1,
-			want1:   800000,
+			want1:   1033804,
 			wantErr: false,
 		},
 	}
@@ -261,13 +261,12 @@ type testBlock struct {
 }
 
 var testParseBlockTxs = map[int]testBlock{
-	800000: {
-		size: 792,
-		time: 1575334901,
+	1033804: {
+		size: 569,
+		time: 1589091692,
 		txs: []string{
-          "556569e1bd20ae007853d839fda5cbefed4883ac53e6327a0a8a30180d242e24",
-  				"52b116d26f7c8b633c284f8998a431e106d837c0c5888f9ea5273d36c4556bec",
-					"c4b7a36756cd720e4dd5931813f762788b521c0eff27ffcd14832e26b3188340",
+          "b76af5d1c51955aa59f50079d76ffdbda94b8ba4ec81b7f9d116dbb4d2ae8cb3",
+  				"613645f4326f6c99bbd43d0379379c5fe792c835f8198f427b064a57cb3769e0",
 		},
 	},
 }
