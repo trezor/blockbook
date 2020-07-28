@@ -155,7 +155,6 @@ func init() {
 					},
 				},
 			},
-		},
 					{
 						ValueSat: *big.NewInt(2440),
 						N:        3,
@@ -167,7 +166,6 @@ func init() {
 				},
 			},
 		},
-	},
 		Blocktime: 1595613206,
 		Time:      1595613206,
 }
