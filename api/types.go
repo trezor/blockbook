@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"sort"
 	"time"
+	"blockbook/bchain/coins/eth"
 )
 
 const maxUint32 = ^uint32(0)
@@ -124,12 +125,12 @@ type AssetsSpecific struct {
 
 // EthereumSpecific contains ethereum specific transaction data
 type EthereumSpecific struct {
-	Status   int      `json:"status"` // 1 OK, 0 Fail, -1 pending
-	Nonce    uint64   `json:"nonce"`
-	GasLimit *big.Int `json:"gasLimit"`
-	GasUsed  *big.Int `json:"gasUsed"`
-	GasPrice *bchain.Amount  `json:"gasPrice"`
-	Data     string   `json:"data,omitempty"`
+	Status   eth.TxStatus `json:"status"` // 1 OK, 0 Fail, -1 pending
+	Nonce    uint64       `json:"nonce"`
+	GasLimit *big.Int     `json:"gasLimit"`
+	GasUsed  *big.Int     `json:"gasUsed"`
+	GasPrice *bchain.Amount      `json:"gasPrice"`
+	Data     string       `json:"data,omitempty"`
 }
 
 // Tx holds information about a transaction
