@@ -89,7 +89,7 @@
                   "hex": "76a914787d0c475f6c677e198366a59b47380463fe12e388ac",
                   "reqSigs": 1,
                   "type": "pubkeyhash",
-                  "addresses": ["sVEUy5XCEu716LdU7sLHhddJZJacCmCahc"] //you are here
+                  "addresses": ["sVEUy5XCEu716LdU7sLHhddJZJacCmCahc"]
                }
              }
             ],
