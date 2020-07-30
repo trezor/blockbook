@@ -1037,8 +1037,8 @@ func (w *Worker) balanceHistoryForTxid(addrDesc bchain.AddressDescriptor, txid s
 	} else if w.chainType == bchain.ChainEthereumType {
 		var value big.Int
 		ethTxData := eth.GetEthereumTxData(bchainTx)
-		// add received amount only for OK transactions
-		if ethTxData.Status == 1 {
+		// add received amount only for OK or unknown status (old) transactions
+		if ethTxData.Status == eth.TxStatusOK || ethTxData.Status == eth.TxStatusUnknown {
 			if len(bchainTx.Vout) > 0 {
 				bchainVout := &bchainTx.Vout[0]
 				value = bchainVout.ValueSat
@@ -1064,8 +1064,8 @@ func (w *Worker) balanceHistoryForTxid(addrDesc bchain.AddressDescriptor, txid s
 					return nil, err
 				}
 				if bytes.Equal(addrDesc, txAddrDesc) {
-					// add sent amount only for OK transactions, however fees always
-					if ethTxData.Status == 1 {
+					// add received amount only for OK or unknown status (old) transactions, fees always
+					if ethTxData.Status == eth.TxStatusOK || ethTxData.Status == eth.TxStatusUnknown {
 						(*big.Int)(bh.SentSat).Add((*big.Int)(bh.SentSat), &value)
 						if countSentToSelf {
 							if _, found := selfAddrDesc[string(txAddrDesc)]; found {

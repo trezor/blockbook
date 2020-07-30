@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/bchain/coins/eth"
 	"github.com/trezor/blockbook/common"
 	"github.com/trezor/blockbook/db"
 )
@@ -170,12 +171,12 @@ type TokenTransfer struct {
 
 // EthereumSpecific contains ethereum specific transaction data
 type EthereumSpecific struct {
-	Status   int      `json:"status"` // 1 OK, 0 Fail, -1 pending
-	Nonce    uint64   `json:"nonce"`
-	GasLimit *big.Int `json:"gasLimit"`
-	GasUsed  *big.Int `json:"gasUsed"`
-	GasPrice *Amount  `json:"gasPrice"`
-	Data     string   `json:"data,omitempty"`
+	Status   eth.TxStatus `json:"status"` // 1 OK, 0 Fail, -1 pending
+	Nonce    uint64       `json:"nonce"`
+	GasLimit *big.Int     `json:"gasLimit"`
+	GasUsed  *big.Int     `json:"gasUsed"`
+	GasPrice *Amount      `json:"gasPrice"`
+	Data     string       `json:"data,omitempty"`
 }
 
 // Tx holds information about a transaction
