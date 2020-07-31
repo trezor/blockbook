@@ -101,5 +101,20 @@
           ]
         }
       }
+    },
+    "handleFork": {
+      "syncRanges": [{ "lower": 863801, "upper": 863801 }],
+      "fakeBlocks": {
+        "863801": {
+          "height": 863801,
+          "hash": "915a2413d358f373be303f242aa92619e6e0eeb16856217140f8749b86acea79"
+        }
+      },
+      "realBlocks": {
+        "863801": {
+          "height": 863801,
+          "hash": "77a84cf0fc3c98eb5b904355eafdf5ab99c0f6f76ee42755874b3e8d7a8d4764"
+        }
+      }
     }
   }
