@@ -1,6 +1,6 @@
 [![Go Report Card](https://goreportcard.com/badge/trezor/blockbook)](https://goreportcard.com/report/trezor/blockbook)
 
-# Blockbook https://204.92.235.59:9196/blocks
+# Blockbook
 
 **Blockbook** is back-end service for Trezor wallet. Main features of **Blockbook** are:
 
@@ -27,7 +27,7 @@ Contribution guide is [here](CONTRIBUTING.md).
 
 ## Implemented coins
 
-Blockbook currently supports over 30 coins. The Trezor team implemented 
+Blockbook currently supports over 30 coins. The Trezor team implemented
 
 - Bitcoin, Bitcoin Cash, Zcash, Dash, Litecoin, Bitcoin Gold, Ethereum, Ethereum Classic, Dogecoin, Namecoin, Vertcoin, DigiByte, Liquid
 
@@ -42,7 +42,7 @@ List of all implemented coins is in [the registry of ports](/docs/ports.md).
 
 #### Out of memory when doing initial synchronization
 
-How to reduce memory footprint of the initial sync: 
+How to reduce memory footprint of the initial sync:
 
 - disable rocksdb cache by parameter `-dbcache=0`, the default size is 500MB
 - run blockbook with parameter `-workers=1`. This disables bulk import mode, which caches a lot of data in memory (not in rocksdb cache). It will run about twice as slowly but especially for smaller blockchains it is no problem at all.
@@ -51,9 +51,9 @@ Please add your experience to this [issue](https://github.com/trezor/blockbook/i
 
 #### Error `internalState: database is in inconsistent state and cannot be used`
 
-Blockbook was killed during the initial import, most commonly by OOM killer. By default, Blockbook performs the initial import in bulk import mode, which for performance reasons does not store all the data immediately to the database. If Blockbook is killed during this phase, the database is left in an inconsistent state. 
+Blockbook was killed during the initial import, most commonly by OOM killer. By default, Blockbook performs the initial import in bulk import mode, which for performance reasons does not store all the data immediately to the database. If Blockbook is killed during this phase, the database is left in an inconsistent state.
 
-See above how to reduce the memory footprint, delete the database files and run the import again. 
+See above how to reduce the memory footprint, delete the database files and run the import again.
 
 Check [this](https://github.com/trezor/blockbook/issues/89) or [this](https://github.com/trezor/blockbook/issues/147) issue for more info.
 
