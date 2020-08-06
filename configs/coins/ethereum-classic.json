@@ -46,7 +46,7 @@
       "parse": true,
       "mempool_workers": 8,
       "mempool_sub_workers": 2,
-      "block_addresses_to_keep": 300,
+      "block_addresses_to_keep": 10000,
       "additional_params": {
         "mempoolTxTimeoutHours": 48,
         "queryBackendOnMempoolResync": true,
