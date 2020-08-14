@@ -1,0 +1,61 @@
+{
+  "coin": {
+    "name": "BSC",
+    "shortcut": "BSC",
+    "label": "BSC",
+    "alias": "bsc"
+  },
+  "ports": {
+    "backend_rpc": 8036,
+    "backend_message_queue": 0,
+    "backend_p2p": 38336,
+    "backend_http": 8136,
+    "blockbook_internal": 9036,
+    "blockbook_public": 9136
+  },
+  "ipc": {
+    "rpc_url_template": "ws://127.0.0.1:{{.Ports.BackendRPC}}",
+    "rpc_timeout": 25
+  },
+  "backend": {
+    "package_name": "backend-bsc",
+    "package_revision": "satoshilabs-1",
+    "system_user": "bsc",
+    "version": "1.9.13-cbc4ac26",
+    "binary_url": "https://github.com/binance-chain/bsc/releases/download/v1.0.1-beta.2/geth_linux",
+    "extract_command": "mv geth_linux backend",
+    "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/geth_linux --ipcdisable --syncmode full --cache 1024 --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --port 38336 --ws --wsaddr 127.0.0.1 --wsport {{.Ports.BackendRPC}} --wsorigins \"*\" --rpc --rpcport 8136 -rpcaddr 127.0.0.1 --rpccorsdomain \"*\" --rpcvhosts \"*\" 2>>{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
+    "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
+    "postinst_script_template": "",
+    "service_type": "simple",
+    "service_additional_params_template": "",
+    "protect_memory": true,
+    "mainnet": true,
+    "server_config_file": "",
+    "client_config_file": ""
+  },
+  "blockbook": {
+    "package_name": "blockbook-bsc",
+    "system_user": "blockbook-bsc",
+    "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
+    "public_binding_template": ":{{.Ports.BlockbookPublic}}",
+    "explorer_url": "",
+    "additional_params": "",
+    "block_chain": {
+      "parse": true,
+      "mempool_workers": 8,
+      "mempool_sub_workers": 2,
+      "block_addresses_to_keep": 300,
+      "additional_params": {
+        "mempoolTxTimeoutHours": 48,
+        "queryBackendOnMempoolResync": false,
+        "fiat_rates": "coingecko",
+        "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"ethereum\", \"periodSeconds\": 60}"
+      }
+    }
+  },
+  "meta": {
+    "package_maintainer": "IT",
+    "package_maintainer_email": "tom.zhao@binance.com"
+  }
+}
