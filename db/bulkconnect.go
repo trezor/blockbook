@@ -17,6 +17,7 @@ import (
 type bulkAddresses struct {
 	bi        BlockInfo
 	addresses addressesMap
+	erc20Contracts     []string
 }
 
 // BulkConnect is used to connect blocks in bulk, faster but if interrupted inconsistent way
@@ -163,6 +164,9 @@ func (b *BulkConnect) storeBulkAddresses(wb *gorocksdb.WriteBatch) error {
 		if err := b.d.writeHeight(wb, ba.bi.Height, &ba.bi, opInsert); err != nil {
 			return err
 		}
+		if err := b.d.storeNewERC20Contracts(wb, ba.erc20Contracts); err != nil {
+			return err
+		}
 	}
 	b.bulkAddressesCount = 0
 	b.bulkAddresses = b.bulkAddresses[:0]
@@ -274,9 +278,9 @@ func (b *BulkConnect) parallelStoreAddressContracts(c chan error, all bool) {
 	c <- nil
 }
 
-func (b *BulkConnect) connectBlockEthereumType(block *bchain.Block, storeBlockTxs bool) error {
+func (b *BulkConnect) connectBlockBscType(block *bchain.Block, storeBlockTxs bool) error {
 	addresses := make(addressesMap)
-	blockTxs, err := b.d.processAddressesEthereumType(block, addresses, b.addressContracts)
+	blockTxs, err := b.d.processAddressesBscType(block, addresses, b.addressContracts)
 	if err != nil {
 		return err
 	}
@@ -287,6 +291,10 @@ func (b *BulkConnect) connectBlockEthereumType(block *bchain.Block, storeBlockTx
 		storeAddrContracts = make(chan error)
 		go b.parallelStoreAddressContracts(storeAddrContracts, false)
 	}
+
+	newContracts := b.d.findNewContract(block)
+	glog.Infof("%d contracts created in block %d", len(newContracts), block.Height)
+
 	b.bulkAddresses = append(b.bulkAddresses, bulkAddresses{
 		bi: BlockInfo{
 			Hash:   block.Hash,
@@ -296,6 +304,7 @@ func (b *BulkConnect) connectBlockEthereumType(block *bchain.Block, storeBlockTx
 			Height: block.Height,
 		},
 		addresses: addresses,
+		erc20Contracts: newContracts,
 	})
 	b.bulkAddressesCount += len(addresses)
 	// open WriteBatch only if going to write
@@ -321,6 +330,68 @@ func (b *BulkConnect) connectBlockEthereumType(block *bchain.Block, storeBlockTx
 			glog.Info("rocksdb: height ", b.height, ", stored ", bac, " addresses, done in ", time.Since(start))
 		}
 	}
+
+	if storeAddrContracts != nil {
+		if err := <-storeAddrContracts; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (b *BulkConnect) connectBlockEthereumType(block *bchain.Block, storeBlockTxs bool) error {
+	addresses := make(addressesMap)
+	blockTxs, err := b.d.processAddressesEthereumType(block, addresses, b.addressContracts)
+	if err != nil {
+		return err
+	}
+	var storeAddrContracts chan error
+	var sa bool
+	if len(b.addressContracts) > maxBulkAddrContracts {
+		sa = true
+		storeAddrContracts = make(chan error)
+		go b.parallelStoreAddressContracts(storeAddrContracts, false)
+	}
+
+	newContracts := b.d.findNewContract(block)
+	glog.Infof("%d contracts created in block %d", len(newContracts), block.Height)
+
+	b.bulkAddresses = append(b.bulkAddresses, bulkAddresses{
+		bi: BlockInfo{
+			Hash:   block.Hash,
+			Time:   block.Time,
+			Txs:    uint32(len(block.Txs)),
+			Size:   uint32(block.Size),
+			Height: block.Height,
+		},
+		addresses: addresses,
+		erc20Contracts: newContracts,
+	})
+	b.bulkAddressesCount += len(addresses)
+	// open WriteBatch only if going to write
+	if sa || b.bulkAddressesCount > maxBulkAddresses || storeBlockTxs {
+		start := time.Now()
+		wb := gorocksdb.NewWriteBatch()
+		defer wb.Destroy()
+		bac := b.bulkAddressesCount
+		if sa || b.bulkAddressesCount > maxBulkAddresses {
+			if err := b.storeBulkAddresses(wb); err != nil {
+				return err
+			}
+		}
+		if storeBlockTxs {
+			if err := b.d.storeAndCleanupBlockTxsEthereumType(wb, block, blockTxs); err != nil {
+				return err
+			}
+		}
+		if err := b.d.db.Write(b.d.wo, wb); err != nil {
+			return err
+		}
+		if bac > b.bulkAddressesCount {
+			glog.Info("rocksdb: height ", b.height, ", stored ", bac, " addresses, done in ", time.Since(start))
+		}
+	}
+
 	if storeAddrContracts != nil {
 		if err := <-storeAddrContracts; err != nil {
 			return err
@@ -336,6 +407,8 @@ func (b *BulkConnect) ConnectBlock(block *bchain.Block, storeBlockTxs bool) erro
 		return b.connectBlockBitcoinType(block, storeBlockTxs)
 	} else if b.chainType == bchain.ChainEthereumType {
 		return b.connectBlockEthereumType(block, storeBlockTxs)
+	} else if b.chainType == bchain.ChainBscType {
+		return b.connectBlockBscType(block, storeBlockTxs)
 	}
 	// for default is to connect blocks in non bulk mode
 	return b.d.ConnectBlock(block)
@@ -352,7 +425,7 @@ func (b *BulkConnect) Close() error {
 		go b.parallelStoreTxAddresses(storeTxAddressesChan, true)
 		storeBalancesChan = make(chan error)
 		go b.parallelStoreBalances(storeBalancesChan, true)
-	} else if b.chainType == bchain.ChainEthereumType {
+	} else if b.chainType == bchain.ChainEthereumType || b.chainType == bchain.ChainBscType {
 		storeAddressContractsChan = make(chan error)
 		go b.parallelStoreAddressContracts(storeAddressContractsChan, true)
 	}

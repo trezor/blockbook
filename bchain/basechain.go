@@ -58,3 +58,11 @@ func (b *BaseChain) EthereumTypeGetErc20ContractInfo(contractDesc AddressDescrip
 func (b *BaseChain) EthereumTypeGetErc20ContractBalance(addrDesc, contractDesc AddressDescriptor) (*big.Int, error) {
 	return nil, errors.New("Not supported")
 }
+
+func (b *BaseChain) EthereumTypeGetReceipt(txid string)(*TransactionReceipt, error) {
+	return nil, errors.New("Not supported")
+}
+
+func (b *BaseChain) BscTypeGetTokenHub() (*Tokenhub, error) {
+	return nil, errors.New("Not supported")
+}

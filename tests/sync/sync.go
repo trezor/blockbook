@@ -139,13 +139,13 @@ func setTxAddresses(parser bchain.BlockChainParser, tx *bchain.Tx) error {
 	return nil
 }
 
-func makeRocksDB(parser bchain.BlockChainParser, m *common.Metrics, is *common.InternalState) (*db.RocksDB, func(), error) {
+func makeRocksDB(chain bchain.BlockChain, m *common.Metrics, is *common.InternalState) (*db.RocksDB, func(), error) {
 	p, err := ioutil.TempDir("", "sync_test")
 	if err != nil {
 		return nil, nil, err
 	}
 
-	d, err := db.NewRocksDB(p, 1<<17, 1<<14, parser, m)
+	d, err := db.NewRocksDBWithChain(p, 1<<17, 1<<14, m, chain)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -182,7 +182,7 @@ func withRocksDBAndSyncWorker(t *testing.T, h *TestHandler, startHeight uint32, 
 	}
 	is := &common.InternalState{}
 
-	d, closer, err := makeRocksDB(h.Chain.GetChainParser(), m, is)
+	d, closer, err := makeRocksDB(h.Chain, m, is)
 	if err != nil {
 		t.Fatal(err)
 	}

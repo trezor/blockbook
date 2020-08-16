@@ -4,12 +4,16 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"fmt"
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/rlp"
 	"math/big"
 	"strings"
 	"sync"
 	"unicode/utf8"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/golang/glog"
 	"github.com/juju/errors"
 	"github.com/trezor/blockbook/bchain"
@@ -33,10 +37,13 @@ var erc20abi = `[{"constant":true,"inputs":[],"name":"name","outputs":[{"name":"
 // doing the parsing/processing without using go-ethereum/accounts/abi library, it is simple to get data from Transfer event
 const erc20TransferMethodSignature = "0xa9059cbb"
 const erc20TransferEventSignature = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
+const tokenHubTransferInSuccessEventSignature = "0x471eb9cc1ffe55ffadf15b32595415eb9d80f22e761d24bd6dffc607e1284d59"
+const tokenHubTransferOutSuccessEventSignature = "0x74eab09b0e53aefc23f2e1b16da593f95c2dd49c6f5a23720463d10d9c330b2a"
 const erc20NameSignature = "0x06fdde03"
 const erc20SymbolSignature = "0x95d89b41"
 const erc20DecimalsSignature = "0x313ce567"
 const erc20BalanceOf = "0x70a08231"
+const bscZeroAddress = "0x0000000000000000000000000000000000000000"
 
 var cachedContracts = make(map[string]*bchain.Erc20Contract)
 var cachedContractsMux sync.Mutex
@@ -54,6 +61,236 @@ func addressFromPaddedHex(s string) (string, error) {
 	}
 	a := ethcommon.BigToAddress(&t)
 	return a.String(), nil
+}
+
+func GetInternalTransfersFromLog(tx *bchain.Tx, logs []*rpcLog, payload string, tHub *bchain.Tokenhub) ([]bchain.Erc20Transfer, error) {
+	var r []bchain.Erc20Transfer
+	for _, l := range logs {
+		if len(l.Topics) == 3 && l.Topics[0] == erc20TransferEventSignature {
+			var t big.Int
+			_, ok := t.SetString(l.Data, 0)
+			if !ok {
+				return nil, errors.New("Data is not a number")
+			}
+			from, err := addressFromPaddedHex(l.Topics[1])
+			if err != nil {
+				return nil, err
+			}
+			to, err := addressFromPaddedHex(l.Topics[2])
+			if err != nil {
+				return nil, err
+			}
+			r = append(r, bchain.Erc20Transfer{
+				Contract: EIP55AddressFromAddress(l.Address),
+				From:     EIP55AddressFromAddress(from),
+				To:       EIP55AddressFromAddress(to),
+				Tokens:   t,
+			})
+		} else {
+			if len(l.Topics) > 0 && l.Topics[0] == tokenHubTransferInSuccessEventSignature {
+				if tHub != nil && len(payload) > 0 {
+					topicHash := make([]ethcommon.Hash, 0)
+					for _, t := range l.Topics {
+						topicHash = append(topicHash, ethcommon.HexToHash(t))
+					}
+					ld := l.Data
+					if strings.HasPrefix(ld, "0x") {
+						ld = ld[2:]
+					}
+					hexData, err := hex.DecodeString(ld)
+					if err != nil {
+						return nil, err
+					}
+					lg := types.Log{
+						Address:     ethcommon.HexToAddress(l.Address),
+						Topics:      topicHash,
+						Data:        hexData,
+					}
+					tis, err := tHub.ParseTransferInSuccess(lg)
+					if err != nil {
+						glog.Errorf("parse tokenhub tx in log failed %v", err)
+						return nil, err
+					}
+					
+					syncPackage, err := decodeTransferInSyncPackage(payload)
+					if err != nil {
+						glog.Errorf("decodeTransferInSyncPackage failed: %v", err)
+						return nil, err
+					}
+
+					refundAddress := ethcommon.BytesToAddress(syncPackage.RefundAddr[:])
+
+					transfer := bchain.Erc20Transfer{
+						//Bep20Addr is coin
+						Contract: tis.Bep20Addr.String(),
+						From:     refundAddress.String(),
+						To:       tis.RefundAddr.String(),
+						Tokens:   *tis.Amount,
+					}
+
+					r = append(r, transfer)
+				}
+			} else if len(l.Topics) > 0 && l.Topics[0] == tokenHubTransferOutSuccessEventSignature {
+				if tHub != nil && len(payload) > 0 {
+					sp, err := decodeTransferOutSyncPackage(payload)
+					if err != nil {
+						return nil, err
+					}
+
+					f := ""
+					if len(tx.Vin) > 0 && len(tx.Vin[0].Addresses) > 0 {
+						f = tx.Vin[0].Addresses[0]
+					}
+
+					transfer := bchain.Erc20Transfer{
+						//Bep20Addr is coin
+						Contract: sp.ContractAddr.String(),
+						From:     EIP55AddressFromAddress(f),
+						To:       sp.Recipient.String(),
+						Tokens:   *sp.Amount,
+					}
+
+					r = append(r, transfer)
+				}
+			}
+		}
+	}
+	return r, nil
+}
+
+func decodeTransferOutSyncPackage(input string) (*TransferOutSynPackage, error) {
+	pl := input
+	if strings.HasPrefix(pl, "0x") {
+		pl = pl[2:]
+	}
+
+	data, err := hex.DecodeString(pl)
+	if err != nil {
+		return nil, err
+	}
+
+	mmp := make(map[string]interface{})
+
+	method, err := getTokenHubABI().MethodById(data[:4])
+	if err != nil {
+		return nil, err
+	}
+
+	err = method.Inputs.UnpackIntoMap(mmp, data[4:])
+
+	if err != nil {
+		return nil, err
+	}
+
+	sp := &TransferOutSynPackage{}
+
+	if val, ok := mmp["contractAddr"]; ok && val != nil {
+		//do something here
+		sp.ContractAddr = val.(ethcommon.Address)
+	}
+
+	if val, ok := mmp["recipient"]; ok && val != nil {
+		//do something here
+		sp.Recipient = val.(ethcommon.Address)
+	}
+
+	if val, ok := mmp["expireTime"]; ok && val != nil {
+		//do something here
+		sp.ExpireTime = val.(uint64)
+	}
+
+	if val, ok := mmp["amount"]; ok && val != nil {
+		//do something here
+		sp.Amount = val.(*big.Int)
+	}
+
+	return sp, nil
+}
+
+func decodeTransferInSyncPackage(input string) (*TransferInSynPackage, error) {
+	pl := input
+	if strings.HasPrefix(pl, "0x") {
+		pl = pl[2:]
+	}
+
+	data, err := hex.DecodeString(pl)
+	if err != nil {
+		return nil, err
+	}
+
+	mmp := make(map[string]interface{})
+	
+
+	method, err := getCrossChainABI().MethodById(data[:4])
+	if err != nil {
+		return nil, err
+	}
+
+	err = method.Inputs.UnpackIntoMap(mmp, data[4:])
+
+	if err != nil {
+		return nil, err
+	}
+
+	payloadFromMap := mmp["payload"]
+	if payloadFromMap == nil {
+		return nil, fmt.Errorf("payload is empty")
+	}
+	
+	payload := payloadFromMap.([]byte)
+	if len(payload) < 33 {
+		return nil, fmt.Errorf("payload len(%d) too short", len(payload))
+	}
+
+	var syncPackage TransferInSynPackage
+
+	err = rlp.DecodeBytes(payload[33:], &syncPackage)
+	if err != nil {
+		return nil, fmt.Errorf("fail to rlp decode payload %s: %v", payload, err)
+	}
+	
+	return &syncPackage, nil
+}
+
+var ccOnce sync.Once
+var mCrossChainAbi *abi.ABI
+
+var thaOnce sync.Once
+var mTokenHubAbi *abi.ABI
+
+func getCrossChainABI() *abi.ABI {
+	ccOnce.Do(func() {
+		ccAbi, _ := abi.JSON(strings.NewReader(crossChainABI))
+		mCrossChainAbi = &ccAbi
+	})
+	
+	return mCrossChainAbi
+}
+
+func getTokenHubABI() *abi.ABI {
+	thaOnce.Do(func() {
+		thaAbi, _ := abi.JSON(strings.NewReader(bchain.TokenhubABI))
+		mTokenHubAbi = &thaAbi
+	})
+
+	return mTokenHubAbi
+}
+
+type TransferInSynPackage struct {
+	Bep2TokenSymbol [32]byte
+	ContractAddr [20]byte
+	Amount big.Int
+	Recipient [20]byte
+	RefundAddr [20]byte
+	ExpireTime uint64
+}
+
+//address contractAddr, address recipient, uint256 amount, uint64 expireTime
+type TransferOutSynPackage struct {
+	ContractAddr ethcommon.Address
+	Recipient ethcommon.Address
+	Amount *big.Int
+	ExpireTime uint64
 }
 
 func erc20GetTransfersFromLog(logs []*rpcLog) ([]bchain.Erc20Transfer, error) {
@@ -85,6 +322,28 @@ func erc20GetTransfersFromLog(logs []*rpcLog) ([]bchain.Erc20Transfer, error) {
 }
 
 func erc20GetTransfersFromTx(tx *rpcTransaction) ([]bchain.Erc20Transfer, error) {
+	var r []bchain.Erc20Transfer
+	if len(tx.Payload) == 128+len(erc20TransferMethodSignature) && strings.HasPrefix(tx.Payload, erc20TransferMethodSignature) {
+		to, err := addressFromPaddedHex(tx.Payload[len(erc20TransferMethodSignature) : 64+len(erc20TransferMethodSignature)])
+		if err != nil {
+			return nil, err
+		}
+		var t big.Int
+		_, ok := t.SetString(tx.Payload[len(erc20TransferMethodSignature)+64:], 16)
+		if !ok {
+			return nil, errors.New("Data is not a number")
+		}
+		r = append(r, bchain.Erc20Transfer{
+			Contract: EIP55AddressFromAddress(tx.To),
+			From:     EIP55AddressFromAddress(tx.From),
+			To:       EIP55AddressFromAddress(to),
+			Tokens:   t,
+		})
+	}
+	return r, nil
+}
+
+func getTokenHubTransferInFromTx(tx *rpcTransaction) ([]bchain.Erc20Transfer, error)  {
 	var r []bchain.Erc20Transfer
 	if len(tx.Payload) == 128+len(erc20TransferMethodSignature) && strings.HasPrefix(tx.Payload, erc20TransferMethodSignature) {
 		to, err := addressFromPaddedHex(tx.Payload[len(erc20TransferMethodSignature) : 64+len(erc20TransferMethodSignature)])
@@ -181,35 +440,49 @@ func (b *EthereumRPC) EthereumTypeGetErc20ContractInfo(contractDesc bchain.Addre
 	cachedContractsMux.Unlock()
 	if !found {
 		address := EIP55Address(contractDesc)
-		data, err := b.ethCall(erc20NameSignature, address)
-		if err != nil {
-			return nil, err
-		}
-		name := parseErc20StringProperty(contractDesc, data)
-		if name != "" {
-			data, err = b.ethCall(erc20SymbolSignature, address)
-			if err != nil {
-				return nil, err
-			}
-			symbol := parseErc20StringProperty(contractDesc, data)
-			data, err = b.ethCall(erc20DecimalsSignature, address)
-			if err != nil {
-				return nil, err
-			}
+		if address == bscZeroAddress {
 			contract = &bchain.Erc20Contract{
 				Contract: address,
-				Name:     name,
-				Symbol:   symbol,
-			}
-			d := parseErc20NumericProperty(contractDesc, data)
-			if d != nil {
-				contract.Decimals = int(uint8(d.Uint64()))
-			} else {
-				contract.Decimals = EtherAmountDecimalPoint
+				Name:     "Binance Coin",
+				Symbol:   "BNB",
+				Decimals: 18,
 			}
 		} else {
-			contract = nil
+			nameData, err := b.ethCall(erc20NameSignature, address)
+			if err != nil {
+				return nil, err
+			}
+			name := parseErc20StringProperty(contractDesc, nameData)
+
+			symbolData, err := b.ethCall(erc20SymbolSignature, address)
+			if err != nil {
+				return nil, err
+			}
+
+			symbol := parseErc20StringProperty(contractDesc, symbolData)
+
+			// XXX: name is optional for BEP2E contract
+			if name != "" || symbol != "" {
+				data, err := b.ethCall(erc20DecimalsSignature, address)
+				if err != nil {
+					return nil, err
+				}
+				contract = &bchain.Erc20Contract{
+					Contract: address,
+					Name:     name,
+					Symbol:   symbol,
+				}
+				d := parseErc20NumericProperty(contractDesc, data)
+				if d != nil {
+					contract.Decimals = int(uint8(d.Uint64()))
+				} else {
+					contract.Decimals = EtherAmountDecimalPoint
+				}
+			} else {
+				contract = nil
+			}
 		}
+
 		cachedContractsMux.Lock()
 		cachedContracts[cds] = contract
 		cachedContractsMux.Unlock()

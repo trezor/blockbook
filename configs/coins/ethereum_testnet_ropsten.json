@@ -9,6 +9,7 @@
     "backend_rpc": 18036,
     "backend_message_queue": 0,
     "backend_p2p": 48336,
+    "backend_http": 18136,
     "blockbook_internal": 19036,
     "blockbook_public": 19136
   },
@@ -26,7 +27,7 @@
     "verification_source": "https://gethstore.blob.core.windows.net/builds/geth-linux-amd64-1.9.24-cc05b050.tar.gz.asc",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [],
-    "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/geth --testnet --syncmode full --ipcdisable --cache 1024 --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --port 48336 --ws --wsaddr 127.0.0.1 --wsport {{.Ports.BackendRPC}} --wsorigins \"*\" 2>>{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
+    "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/geth --testnet --syncmode full --gcmode archive --ipcdisable --cache 1024 --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --port 48336 --ws --wsaddr 127.0.0.1 --wsport {{.Ports.BackendRPC}} --wsorigins \"*\" --rpc --rpcport 18036 -rpcaddr 127.0.0.1 --rpccorsdomain \"*\" --rpcvhosts \"*\" 2>>{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
     "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
     "postinst_script_template": "",
     "service_type": "simple",

@@ -250,6 +250,9 @@ func TestEthereumParser_UnpackTx(t *testing.T) {
 			wc := *tt.want
 			gc.CoinSpecificData = nil
 			wc.CoinSpecificData = nil
+
+			gc.Payload = ""
+
 			if fmt.Sprint(gc) != fmt.Sprint(wc) {
 				// if !reflect.DeepEqual(gc, wc) {
 				t.Errorf("EthereumParser.UnpackTx() gc got = %+v, want %+v", gc, wc)

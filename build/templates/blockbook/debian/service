@@ -5,10 +5,10 @@ After=network.target
 Wants={{.Backend.PackageName}}.service
 
 [Service]
-ExecStart={{.Env.BlockbookInstallPath}}/{{.Coin.Alias}}/bin/blockbook -blockchaincfg={{.Env.BlockbookInstallPath}}/{{.Coin.Alias}}/config/blockchaincfg.json -datadir={{.Env.BlockbookDataPath}}/{{.Coin.Alias}}/blockbook/db -sync -internal={{template "Blockbook.InternalBindingTemplate" .}} -public={{template "Blockbook.PublicBindingTemplate" .}} -certfile={{.Env.BlockbookInstallPath}}/{{.Coin.Alias}}/cert/blockbook -explorer={{.Blockbook.ExplorerURL}} -log_dir={{.Env.BlockbookInstallPath}}/{{.Coin.Alias}}/logs {{.Blockbook.AdditionalParams}}
+ExecStart={{.Env.BlockbookInstallPath}}/{{.Coin.Alias}}/bin/blockbook -blockchaincfg={{.Env.BlockbookInstallPath}}/{{.Coin.Alias}}/config/blockchaincfg.json -datadir={{.Env.BlockbookDataPath}}/{{.Coin.Alias}}/blockbook/db -sync -internal={{template "Blockbook.InternalBindingTemplate" .}} -public={{template "Blockbook.PublicBindingTemplate" .}} -explorer={{.Blockbook.ExplorerURL}} -log_dir={{.Env.BlockbookInstallPath}}/{{.Coin.Alias}}/logs {{.Blockbook.AdditionalParams}} -dbmaxopenfiles=65535 -debug=true
 User={{.Blockbook.SystemUser}}
 Type=simple
-Restart=on-failure
+Restart=always
 TimeoutStopSec=300
 WorkingDirectory={{.Env.BlockbookInstallPath}}/{{.Coin.Alias}}
 

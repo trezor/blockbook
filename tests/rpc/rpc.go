@@ -215,7 +215,7 @@ func normalizeAddresses(tx *bchain.Tx, parser bchain.BlockChainParser) {
 		if len(tx.Vin[i].Addresses) == 0 {
 			tx.Vin[i].Addresses = nil
 		} else {
-			if parser.GetChainType() == bchain.ChainEthereumType {
+			if parser.GetChainType() == bchain.ChainEthereumType || parser.GetChainType() == bchain.ChainBscType {
 				for j := range tx.Vin[i].Addresses {
 					tx.Vin[i].Addresses[j] = strings.ToLower(tx.Vin[i].Addresses[j])
 				}
@@ -226,7 +226,7 @@ func normalizeAddresses(tx *bchain.Tx, parser bchain.BlockChainParser) {
 		if len(tx.Vout[i].ScriptPubKey.Addresses) == 0 {
 			tx.Vout[i].ScriptPubKey.Addresses = nil
 		} else {
-			if parser.GetChainType() == bchain.ChainEthereumType {
+			if parser.GetChainType() == bchain.ChainEthereumType || parser.GetChainType() == bchain.ChainBscType {
 				for j := range tx.Vout[i].ScriptPubKey.Addresses {
 					tx.Vout[i].ScriptPubKey.Addresses[j] = strings.ToLower(tx.Vout[i].ScriptPubKey.Addresses[j])
 				}

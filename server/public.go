@@ -152,7 +152,7 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 
 	var apiDefault int
 	// ethereum supports only api V2
-	if s.chainParser.GetChainType() == bchain.ChainEthereumType {
+	if s.chainParser.GetChainType() == bchain.ChainEthereumType || s.chainParser.GetChainType() == bchain.ChainBscType {
 		apiDefault = apiV2
 	} else {
 		apiDefault = apiV1
@@ -181,6 +181,7 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 	serveMux.HandleFunc(path+"api/v2/tx-specific/", s.jsonHandler(s.apiTxSpecific, apiV2))
 	serveMux.HandleFunc(path+"api/v2/tx/", s.jsonHandler(s.apiTx, apiV2))
 	serveMux.HandleFunc(path+"api/v2/address/", s.jsonHandler(s.apiAddress, apiV2))
+	serveMux.HandleFunc(path+"api/v2/token/", s.jsonHandler(s.apiTokenInfo, apiV2))
 	serveMux.HandleFunc(path+"api/v2/xpub/", s.jsonHandler(s.apiXpub, apiV2))
 	serveMux.HandleFunc(path+"api/v2/utxo/", s.jsonHandler(s.apiUtxo, apiV2))
 	serveMux.HandleFunc(path+"api/v2/block/", s.jsonHandler(s.apiBlock, apiV2))
@@ -190,6 +191,8 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 	serveMux.HandleFunc(path+"api/v2/balancehistory/", s.jsonHandler(s.apiBalanceHistory, apiDefault))
 	serveMux.HandleFunc(path+"api/v2/tickers/", s.jsonHandler(s.apiTickers, apiV2))
 	serveMux.HandleFunc(path+"api/v2/tickers-list/", s.jsonHandler(s.apiTickersList, apiV2))
+	serveMux.HandleFunc(path+"api/v2/tokenlist", s.jsonHandler(s.apiTokenList, apiV2))
+
 	// socket.io interface
 	serveMux.Handle(path+"socket.io/", s.socketio.GetHandler())
 	// websocket interface
@@ -485,7 +488,7 @@ func (s *PublicServer) parseTemplates() []*template.Template {
 	t[indexTpl] = createTemplate("./static/templates/index.html", "./static/templates/base.html")
 	t[blocksTpl] = createTemplate("./static/templates/blocks.html", "./static/templates/paging.html", "./static/templates/base.html")
 	t[sendTransactionTpl] = createTemplate("./static/templates/sendtx.html", "./static/templates/base.html")
-	if s.chainParser.GetChainType() == bchain.ChainEthereumType {
+	if s.chainParser.GetChainType() == bchain.ChainEthereumType || s.chainParser.GetChainType() == bchain.ChainBscType {
 		t[txTpl] = createTemplate("./static/templates/tx.html", "./static/templates/txdetail_ethereumtype.html", "./static/templates/base.html")
 		t[addressTpl] = createTemplate("./static/templates/address.html", "./static/templates/txdetail_ethereumtype.html", "./static/templates/paging.html", "./static/templates/base.html")
 		t[blockTpl] = createTemplate("./static/templates/block.html", "./static/templates/txdetail_ethereumtype.html", "./static/templates/paging.html", "./static/templates/base.html")
@@ -996,6 +999,75 @@ func (s *PublicServer) apiAddress(r *http.Request, apiVersion int) (interface{},
 		return s.api.AddressToV1(address), nil
 	}
 	return address, err
+}
+
+func (s *PublicServer) apiTokenList(r *http.Request, apiVersion int) (interface{}, error) {
+	tokens, err := s.api.GetEthereumTypeErc20TokenList()
+	if err != nil {
+		return nil, api.NewAPIError("fail to fetch token list", true)
+	}
+
+	erc20Infos := make([]*bchain.Erc20ContractInfo, 0)
+	for _, t := range tokens {
+		if len(t.Contract) > 0 {
+			var iconUrlHandle string
+			if s.chain.GetCoinName() == "BSC" {
+				iconUrlHandle = "bsc"
+			} else if s.chain.GetCoinName() == "BSCTestnet" {
+				iconUrlHandle = "bsct"
+			}
+			iconUrl := fmt.Sprintf("https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/%s/assets/%s/logo.png",
+				iconUrlHandle, t.Contract)
+			info := &bchain.Erc20ContractInfo{
+				Contract: t.Contract,
+				Name:     t.Name,
+				Symbol:   t.Symbol,
+				Decimals: t.Decimals,
+				Icon:     iconUrl,
+			}
+
+			erc20Infos = append(erc20Infos, info)
+		}
+	}
+
+	return erc20Infos, nil
+}
+
+func (s *PublicServer) apiTokenInfo(r *http.Request, apiVersion int) (interface{}, error) {
+	var address string
+	i := strings.LastIndexByte(r.URL.Path, '/')
+	if i > 0 {
+		address = r.URL.Path[i+1:]
+	}
+	if len(address) == 0 {
+		return nil, api.NewAPIError("Missing address", true)
+	}
+
+	addrDesc, err := s.chainParser.GetAddrDescFromAddress(address)
+	if err != nil {
+		return nil, api.NewAPIError("address illegal", true)
+	}
+
+	info, err := s.chain.EthereumTypeGetErc20ContractInfo(addrDesc)
+	if err != nil {
+		return nil, api.NewAPIError("fetch contract info failed", true)
+	}
+
+	if info == nil {
+		return nil, api.NewAPIError("fail to fetch token info", true)
+	}
+
+	iconUrl := fmt.Sprintf("https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/%s/assets/%s/logo.png", s.chain.GetCoinName(), address)
+
+	erc20Info := &bchain.Erc20ContractInfo{
+		Contract: info.Contract,
+		Name:     info.Name,
+		Symbol:   info.Symbol,
+		Decimals: info.Decimals,
+		Icon:     iconUrl,
+	}
+
+	return erc20Info, nil
 }
 
 func (s *PublicServer) apiXpub(r *http.Request, apiVersion int) (interface{}, error) {

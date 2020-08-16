@@ -583,7 +583,7 @@ func (s *WebsocketServer) estimateFee(c *websocketChannel, params []byte) (inter
 		return nil, err
 	}
 	res := make([]estimateFeeRes, len(r.Blocks))
-	if s.chainParser.GetChainType() == bchain.ChainEthereumType {
+	if s.chainParser.GetChainType() == bchain.ChainEthereumType || s.chainParser.GetChainType() == bchain.ChainBscType {
 		gas, err := s.chain.EthereumTypeEstimateGas(r.Specific)
 		if err != nil {
 			return nil, err

@@ -461,6 +461,12 @@ func (p *EthereumParser) EthereumTypeGetErc20FromTx(tx *bchain.Tx) ([]bchain.Erc
 	return r, nil
 }
 
+// EthereumTypeIsCreateContractTx tx is create contract
+func (p *EthereumParser) EthereumTypeIsCreateContractTx(tx *bchain.Tx) bool {
+	//return len(tx.Vin) == 0 || tx.Vin[0].ScriptSig
+	return false
+}
+
 // TxStatus is status of transaction
 type TxStatus int
 

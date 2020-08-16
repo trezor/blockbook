@@ -222,6 +222,7 @@ func (b *EthereumRPC) EthereumTypeGetErc20ContractInfo(contractDesc bchain.Addre
 		cachedContracts[cds] = contract
 		cachedContractsMux.Unlock()
 	}
+
 	return contract, nil
 }
 

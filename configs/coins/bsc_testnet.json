@@ -1,42 +1,42 @@
 {
   "coin": {
-    "name": "BSC",
-    "shortcut": "BSC",
-    "label": "BSC",
-    "alias": "bsc"
+    "name": "BSC Testnet",
+    "shortcut": "TBSC",
+    "label": "BSC Testnet",
+    "alias": "bsc_testnet"
   },
   "ports": {
-    "backend_rpc": 8037,
+    "backend_rpc": 8038,
     "backend_message_queue": 0,
-    "backend_p2p": 38337,
-    "backend_http": 8137,
-    "blockbook_internal": 9037,
-    "blockbook_public": 9137
+    "backend_p2p": 38338,
+    "backend_http": 8138,
+    "blockbook_internal": 9038,
+    "blockbook_public": 9138
   },
   "ipc": {
     "rpc_url_template": "ws://127.0.0.1:{{.Ports.BackendRPC}}",
     "rpc_timeout": 25
   },
   "backend": {
-    "package_name": "backend-bsc",
+    "package_name": "backend-bsc-testnet",
     "package_revision": "satoshilabs-1",
-    "system_user": "bsc",
+    "system_user": "bsc-test",
     "version": "1.9.13-cbc4ac26",
-    "binary_url": "https://github.com/ackratos/kafka-docker/raw/tmp/mainnet/geth_linux.tar.gz",
+    "binary_url": "https://github.com/ackratos/kafka-docker/raw/tmp/geth_linux.tar.gz",
     "extract_command": "tar -C backend -xf",
-    "exec_command_template": "/bin/sh -c 'if [ ! -f \"{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/geth/nodekey\" ]; then {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/geth_linux --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend init ./genesis.json; fi && {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/geth_linux --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend init ./genesis.json && {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/geth_linux --config ./config.toml --ipcdisable --syncmode full --cache 1024 --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --port 38335 --ws --wsaddr 127.0.0.1 --wsport {{.Ports.BackendRPC}} --wsorigins \"*\" --rpc --rpcport 8135 -rpcaddr 127.0.0.1 --rpccorsdomain \"*\" --rpcvhosts \"*\" 2>>{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/node.log'",
+    "exec_command_template": "/bin/sh -c 'if [ ! -f \"{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/geth/nodekey\" ]; then {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/geth_linux --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend init ./genesis.json; fi && {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/geth_linux --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend init ./genesis.json && {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/geth_linux --config ./config.toml --ipcdisable --syncmode full --cache 1024 --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --port 38336 --ws --wsaddr 127.0.0.1 --wsport {{.Ports.BackendRPC}} --wsorigins \"*\" --rpc --rpcport 8136 -rpcaddr 127.0.0.1 --rpccorsdomain \"*\" --rpcvhosts \"*\" 2>>{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/node.log'",
     "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
     "postinst_script_template": "",
     "service_type": "simple",
     "service_additional_params_template": "",
     "protect_memory": true,
-    "mainnet": true,
+    "mainnet": false,
     "server_config_file": "",
     "client_config_file": ""
   },
   "blockbook": {
-    "package_name": "blockbook-bsc",
-    "system_user": "blockbook-bsc",
+    "package_name": "blockbook-bsc-testnet",
+    "system_user": "blockbook-bsc-testnet",
     "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
     "public_binding_template": ":{{.Ports.BlockbookPublic}}",
     "explorer_url": "",

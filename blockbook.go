@@ -173,7 +173,7 @@ func mainWithExitCode() int {
 		return exitCodeFatal
 	}
 
-	index, err = db.NewRocksDB(*dbPath, *dbCache, *dbMaxOpenFiles, chain.GetChainParser(), metrics)
+	index, err = db.NewRocksDBWithChain(*dbPath, *dbCache, *dbMaxOpenFiles, metrics, chain)
 	if err != nil {
 		glog.Error("rocksDB: ", err)
 		return exitCodeFatal

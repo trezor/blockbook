@@ -3,6 +3,7 @@ package db
 import (
 	"bytes"
 	"encoding/hex"
+	ethcommon "github.com/ethereum/go-ethereum/common"
 
 	vlq "github.com/bsm/go-vlq"
 	"github.com/golang/glog"
@@ -49,6 +50,42 @@ func (d *RocksDB) storeAddressContracts(wb *gorocksdb.WriteBatch, acm map[string
 	return nil
 }
 
+func (d *RocksDB) storeNewERC20Contracts(wb *gorocksdb.WriteBatch, contracts []string) error {
+	for _, contractAddress := range contracts {
+		addr, err := d.chainParser.GetAddrDescFromAddress(contractAddress)
+		if err != nil {
+			return err
+		}
+
+		info, err := d.chain.EthereumTypeGetErc20ContractInfo(addr)
+		if err != nil {
+			return err
+		}
+
+		glog.Infof("[dvdd] try %s is %v", contractAddress, info)
+
+		if info != nil && (len(info.Name) > 0 || len(info.Symbol) > 0) {
+			glog.Infof("[dvdd] saved %s is %v", contractAddress, info)
+			addr := ethcommon.HexToAddress(contractAddress)
+			wb.PutCF(d.cfh[cfErc20Contracts], addr[:], []byte{})
+		}
+	}
+
+	return nil
+}
+
+func (d *RocksDB) GetErc20Contract() []string {
+	it := d.db.NewIteratorCF(d.ro, d.cfh[cfErc20Contracts])
+	defer it.Close()
+	addresses := make([]string, 0)
+	for it.SeekToFirst(); it.Valid(); it.Next() {
+		addr := ethcommon.BytesToAddress(it.Key().Data())
+		addresses = append(addresses, addr.String())
+	}
+
+	return addresses
+}
+
 // GetAddrDescContracts returns AddrContracts for given addrDesc
 func (d *RocksDB) GetAddrDescContracts(addrDesc bchain.AddressDescriptor) (*AddrContracts, error) {
 	val, err := d.db.GetCF(d.ro, d.cfh[cfAddressContracts], addrDesc)
@@ -60,6 +97,7 @@ func (d *RocksDB) GetAddrDescContracts(addrDesc bchain.AddressDescriptor) (*Addr
 	if len(buf) == 0 {
 		return nil, nil
 	}
+
 	tt, l := unpackVaruint(buf)
 	buf = buf[l:]
 	nct, l := unpackVaruint(buf)
@@ -155,9 +193,29 @@ type ethBlockTxContract struct {
 }
 
 type ethBlockTx struct {
-	btxID     []byte
-	from, to  bchain.AddressDescriptor
-	contracts []ethBlockTxContract
+	btxID          []byte
+	from, to       bchain.AddressDescriptor
+	contracts      []ethBlockTxContract
+}
+
+func (d *RocksDB) findNewContract(block *bchain.Block) []string {
+	newContractAddresses := make([]string, 0)
+	for _, tx := range block.Txs {
+		if d.chainParser.EthereumTypeIsCreateContractTx(&tx) {
+			glog.Infof("catch create contract tx: %v", tx)
+			receipt, err := d.chain.EthereumTypeGetReceipt(tx.Txid)
+			if err != nil {
+				glog.Warningf("fail to get receipt for tx %s", tx.Txid)
+			} else {
+				if receipt != nil && len(receipt.ContractAddress) > 0 {
+					glog.Infof("tx %s create new contract %s", tx.Txid, receipt.ContractAddress)
+					newContractAddresses = append(newContractAddresses, receipt.ContractAddress)
+				}
+			}
+		}
+	}
+
+	return newContractAddresses
 }
 
 func (d *RocksDB) processAddressesEthereumType(block *bchain.Block, addresses addressesMap, addressContracts map[string]*AddrContracts) ([]ethBlockTx, error) {
@@ -206,6 +264,7 @@ func (d *RocksDB) processAddressesEthereumType(block *bchain.Block, addresses ad
 		}
 		blockTx.contracts = make([]ethBlockTxContract, len(erc20)*2)
 		j := 0
+
 		for i, t := range erc20 {
 			var contract, from, to bchain.AddressDescriptor
 			contract, err = d.chainParser.GetAddrDescFromAddress(t.Contract)
@@ -240,6 +299,100 @@ func (d *RocksDB) processAddressesEthereumType(block *bchain.Block, addresses ad
 		}
 		blockTx.contracts = blockTx.contracts[:j]
 	}
+
+	return blockTxs, nil
+}
+
+func (d *RocksDB) processAddressesBscType(block *bchain.Block, addresses addressesMap, addressContracts map[string]*AddrContracts) ([]ethBlockTx, error) {
+	blockTxs := make([]ethBlockTx, len(block.Txs))
+	for txi, tx := range block.Txs {
+		btxID, err := d.chainParser.PackTxid(tx.Txid)
+		if err != nil {
+			return nil, err
+		}
+		blockTx := &blockTxs[txi]
+		blockTx.btxID = btxID
+		var from, to bchain.AddressDescriptor
+		// there is only one output address in EthereumType transaction, store it in format txid 0
+		if len(tx.Vout) == 1 && len(tx.Vout[0].ScriptPubKey.Addresses) == 1 {
+			to, err = d.chainParser.GetAddrDescFromAddress(tx.Vout[0].ScriptPubKey.Addresses[0])
+			if err != nil {
+				// do not log ErrAddressMissing, transactions can be without to address (for example eth contracts)
+				if err != bchain.ErrAddressMissing {
+					glog.Warningf("rocksdb: addrDesc: %v - height %d, tx %v, output", err, block.Height, tx.Txid)
+				}
+				continue
+			}
+			if err = d.addToAddressesAndContractsEthereumType(to, btxID, 0, nil, addresses, addressContracts, true); err != nil {
+				return nil, err
+			}
+			blockTx.to = to
+		}
+		// there is only one input address in EthereumType transaction, store it in format txid ^0
+		if len(tx.Vin) == 1 && len(tx.Vin[0].Addresses) == 1 {
+			from, err = d.chainParser.GetAddrDescFromAddress(tx.Vin[0].Addresses[0])
+			if err != nil {
+				if err != bchain.ErrAddressMissing {
+					glog.Warningf("rocksdb: addrDesc: %v - height %d, tx %v, input", err, block.Height, tx.Txid)
+				}
+				continue
+			}
+			if err = d.addToAddressesAndContractsEthereumType(from, btxID, ^int32(0), nil, addresses, addressContracts, !bytes.Equal(from, to)); err != nil {
+				return nil, err
+			}
+			blockTx.from = from
+		}
+
+		// store erc20 transfers
+		//erc20, err := d.chainParser.EthereumTypeGetErc20FromTx(&tx)
+		th, err := d.chain.BscTypeGetTokenHub()
+		if err != nil {
+			glog.Error(err)
+		}
+		erc20, err := d.chainParser.BscTypeGetBEP20FromTx(&tx, th)
+
+
+		if err != nil {
+			glog.Warningf("rocksdb: GetErc20FromTx %v - height %d, tx %v", err, block.Height, tx.Txid)
+		}
+		blockTx.contracts = make([]ethBlockTxContract, len(erc20)*2)
+		j := 0
+
+		for i, t := range erc20 {
+			var contract, from, to bchain.AddressDescriptor
+			contract, err = d.chainParser.GetAddrDescFromAddress(t.Contract)
+			if err == nil {
+				from, err = d.chainParser.GetAddrDescFromAddress(t.From)
+				if err == nil {
+					to, err = d.chainParser.GetAddrDescFromAddress(t.To)
+				}
+			}
+			if err != nil {
+				glog.Warningf("rocksdb: GetErc20FromTx %v - height %d, tx %v, transfer %v", err, block.Height, tx.Txid, t)
+				continue
+			}
+			if err = d.addToAddressesAndContractsEthereumType(to, btxID, int32(i), contract, addresses, addressContracts, true); err != nil {
+				return nil, err
+			}
+			eq := bytes.Equal(from, to)
+			bc := &blockTx.contracts[j]
+			j++
+			bc.addr = from
+			bc.contract = contract
+			if err = d.addToAddressesAndContractsEthereumType(from, btxID, ^int32(i), contract, addresses, addressContracts, !eq); err != nil {
+				return nil, err
+			}
+			// add to address to blockTx.contracts only if it is different from from address
+			if !eq {
+				bc = &blockTx.contracts[j]
+				j++
+				bc.addr = to
+				bc.contract = contract
+			}
+		}
+		blockTx.contracts = blockTx.contracts[:j]
+	}
+
 	return blockTxs, nil
 }
 
