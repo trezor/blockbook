@@ -22,10 +22,10 @@
     "package_name": "backend-zcoin",
     "package_revision": "satoshilabs-1",
     "system_user": "zcoin",
-    "version": "0.14.0.3",
-    "binary_url": "https://github.com/zcoinofficial/zcoin/releases/download/v0.14.0.3/zcoin-0.14.0.3-linux64.tar.gz",
+    "version": "0.14.0.4",
+    "binary_url": "https://github.com/zcoinofficial/zcoin/releases/download/v0.14.0.4/zcoin-0.14.0.4-linux64.tar.gz",
     "verification_type": "sha256",
-    "verification_source": "167e8864c18f994153929180126af2c6cacb8a8ec06255578ab4ff6e79005543",
+    "verification_source": "d060c76fe5fc0fe2527485035e984413881c4a845f65c4c9e71cc298b227a816",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
       "bin/tor",
