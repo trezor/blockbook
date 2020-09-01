@@ -1314,6 +1314,11 @@ func (w *Worker) GetAsset(asset string, page int, txsOnPage int, option AccountD
 			MaxSupply:		(*bchain.Amount)(big.NewInt(dbAsset.AssetObj.MaxSupply)),
 			Decimals:		int(dbAsset.AssetObj.Precision),
 			UpdateFlags:	dbAsset.AssetObj.UpdateFlags,
+			UpdateCapabilityFlags:	dbAsset.AssetObj.UpdateCapabilityFlags,
+			NotaryKeyID: 	dbAsset.AssetObj.NotaryKeyID,
+			NotaryDetails: 	dbAsset.AssetObj.NotaryDetails,
+			AuxFeeKeyID: 	dbAsset.AssetObj.AuxFeeKeyID,
+			AuxFeeDetails: 	dbAsset.AssetObj.AuxFeeDetails
 		},
 		Paging:                pg,
 		UnconfirmedTxs:        unconfirmedTxs,
@@ -1696,10 +1701,12 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *bchain.A
 }
 
 // GetAddressUtxo returns unspent outputs for given address
-func (w *Worker) GetAddressUtxo(address string, onlyConfirmed bool) (Utxos, error) {
+func (w *Worker) GetAddressUtxo(address string, onlyConfirmed bool) (Utxos, []AssetSpecific, error) {
 	if w.chainType != bchain.ChainBitcoinType {
 		return nil, NewAPIError("Not supported", true)
 	}
+	assets := make(AssetSpecific, 0, 0)
+	assetsMap := make(map[uint32]bool, 0)
 	start := time.Now()
 	addrDesc, err := w.chainParser.GetAddrDescFromAddress(address)
 	if err != nil {
@@ -1709,8 +1716,41 @@ func (w *Worker) GetAddressUtxo(address string, onlyConfirmed bool) (Utxos, erro
 	if err != nil {
 		return nil, err
 	}
-	glog.Info("GetAddressUtxo ", address, ", ", len(r), " utxos, finished in ", time.Since(start))
-	return r, nil
+	// add applicable assets to UTXO so spending based on mutable auxfees/notarization fields can be done by SDK's
+	for j := range r {
+		a := &r[j]
+		if(a.AssetInfo) {
+			dbAsset, errAsset := w.db.GetAsset(a.AssetInfo.AssetGuid, nil)
+			if errAsset != nil || dbAsset == nil {
+				return nil, errAsset
+			}
+			// add unique assets
+			var _, ok = assetsMap[a.AssetInfo.AssetGuid]
+			if ok {
+				continue
+			}
+			assetsMap[a.AssetInfo.AssetGuid] = true
+			assetDetails :=	&AssetSpecific{
+				AssetGuid:		a.AssetInfo.AssetGuid,
+				Symbol:			dbAsset.AssetObj.Symbol,
+				AddrStr:		dbAsset.AddrDesc.String(),
+				Contract:		"0x" + hex.EncodeToString(dbAsset.AssetObj.Contract),
+				Balance:		(*bchain.Amount)(big.NewInt(dbAsset.AssetObj.Balance)),
+				TotalSupply:	(*bchain.Amount)(big.NewInt(dbAsset.AssetObj.TotalSupply)),
+				MaxSupply:		(*bchain.Amount)(big.NewInt(dbAsset.AssetObj.MaxSupply)),
+				Decimals:		int(dbAsset.AssetObj.Precision),
+				UpdateFlags:	dbAsset.AssetObj.UpdateFlags,
+				UpdateCapabilityFlags:	dbAsset.AssetObj.UpdateCapabilityFlags,
+				NotaryKeyID: 	dbAsset.AssetObj.NotaryKeyID,
+				NotaryDetails: 	dbAsset.AssetObj.NotaryDetails,
+				AuxFeeKeyID: 	dbAsset.AssetObj.AuxFeeKeyID,
+				AuxFeeDetails: 	dbAsset.AssetObj.AuxFeeDetails
+			}
+			assets = append(assets, assetDetails...)
+		}
+	}
+	glog.Info("GetAddressUtxo ", address, ", ", len(r), " utxos, ", len(assets), " assets, finished in ", time.Since(start))
+	return r, assets, nil
 }
 
 // GetBlocks returns BlockInfo for blocks on given page

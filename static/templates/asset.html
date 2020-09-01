@@ -51,11 +51,11 @@
                                         <th>Flag</th>
                                         <th>Set</th>
                                     </tr>
-                                    {{- range $f := $data.AssetUpdateFlags -}}
+                                    {{- range $f := $data.AssetUpdateCapabilityFlags -}}
                                     <tr>
                                         <td title="{{$f.Description}}" class="data">{{$f.Value}}</td>
                                         <td class="data">
-                                            {{if isAssetUpdateFlagSet $data $f.Value $asset.AssetDetails.UpdateFlags}}
+                                            {{if isAssetUpdateCapabilityFlagSet $data $f.Value $asset.AssetDetails.UpdateCapabilityFlags}}
                                             <span title="{{$f.Description}}" class="text-success">✔</span>
                                             {{else}}
                                             <span title="{{$f.Description}}" class="text-danger">✘</span>
@@ -67,7 +67,7 @@
                             </table>
                         </td>
                     </tr>
-                {{- if $asset.AssetDetails.PubData.aux_fees -}}
+                {{- if $asset.AssetDetails.AuxFeeDetails -}}
                 <tr>
                     <td>Aux Fees</td>
                     <td style="padding: 0;">
@@ -78,13 +78,36 @@
                                     <th>Bound</th>
                                     <th>Percentage</th>
                                 </tr>
-                                {{- range $f := $asset.AssetDetails.PubData.aux_fees.fee_struct -}}{{- if $f -}}
+                                {{- range $f := $asset.AssetDetails.AuxFeeDetails -}}{{- if $f -}}
                                 <tr>
-                                    <td class="data ellipsis"><a href="/address/{{$asset.AssetDetails.PubData.aux_fees.address}}">{{$asset.AssetDetails.PubData.aux_fees.address}}</a></td>
-                                    <td class="data">{{index $f 0}} {{$asset.AssetDetails.Symbol}}</td>
-                                    <td class="data">{{formatPercentage (index $f 1)}}</td>
+                                    <td class="data ellipsis"><a href="/address/{{formatKeyID $asset.AssetDetails.AuxFeeKeyID}}">{{formatKeyID $asset.AssetDetails.AuxFeeKeyID}}</a></td>
+                                    <td class="data">{{$f.Bound}} {{$asset.AssetDetails.Symbol}}</td>
+                                    <td class="data">{{formatPercentage ($f.Percent)}}</td>
                                 </tr>
                                 {{- end -}}{{- end -}}
+                            </tbody>
+                        </table>
+                    </td>
+                </tr>
+                {{- end -}}
+                {{- if $asset.AssetDetails.NotaryDetails -}}
+                <tr>
+                    <td>Aux Fees</td>
+                    <td style="padding: 0;">
+                        <table class="table data-table">
+                            <tbody>
+                                <tr>
+                                    <th>Address</th>
+                                    <th>Endpoint</th>
+                                    <th>Instant Transfers</th>
+                                    <th>HD Required</th>
+                                </tr>
+                                <tr>
+                                    <td class="data ellipsis"><a href="/address/{{formatKeyID $asset.AssetDetails.NotaryKeyID}}">{{formatKeyID $asset.AssetDetails.NotaryKeyID}}</a></td>
+                                    <td class="data">{{$asset.AssetDetails.NotaryDetails.EndPoint}}</td>
+                                    <td class="data">{{$asset.AssetDetails.NotaryDetails.InstantTransfers}}</td>
+                                    <td class="data">{{$asset.AssetDetails.NotaryDetails.HDRequired}}</td>
+                                </tr>
                             </tbody>
                         </table>
                     </td>

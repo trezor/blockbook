@@ -650,7 +650,7 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 }
 
 // GetXpubUtxo returns unspent outputs for given xpub
-func (w *Worker) GetXpubUtxo(xpub string, onlyConfirmed bool, gap int) (Utxos, error) {
+func (w *Worker) GetXpubUtxo(xpub string, onlyConfirmed bool, gap int) (Utxos, []AssetSpecific, error) {
 	start := time.Now()
 	data, _, err := w.getXpubData(xpub, 0, 1, AccountDetailsBasic, &AddressFilter{
 		Vout:          AddressFilterVoutOff,
@@ -658,9 +658,11 @@ func (w *Worker) GetXpubUtxo(xpub string, onlyConfirmed bool, gap int) (Utxos, e
 		AssetsMask:	   bchain.AllMask,
 	}, gap)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	r := make(Utxos, 0, 8)
+	assets := make(AssetSpecific, 0, 0)
+	assetsMap := make(map[uint32]bool, 0)
 	for ci, da := range [][]xpubAddress{data.addresses, data.changeAddresses} {
 		for i := range da {
 			ad := &da[i]
@@ -688,14 +690,47 @@ func (w *Worker) GetXpubUtxo(xpub string, onlyConfirmed bool, gap int) (Utxos, e
 							a.Path = t.Path
 						}
 					}
+					// add applicable assets to UTXO so spending based on mutable auxfees/notarization fields can be done by SDK's
+					for j := range utxos {
+						a := &utxos[j]
+						if(a.AssetInfo) {
+							dbAsset, errAsset := w.db.GetAsset(a.AssetInfo.AssetGuid, nil)
+							if errAsset != nil || dbAsset == nil {
+								return nil, errAsset
+							}
+							// add unique assets
+							var _, ok = assetsMap[a.AssetInfo.AssetGuid]
+							if ok {
+								continue
+							}
+							assetsMap[a.AssetInfo.AssetGuid] = true
+							assetDetails :=	&AssetSpecific{
+								AssetGuid:		a.AssetInfo.AssetGuid,
+								Symbol:			dbAsset.AssetObj.Symbol,
+								AddrStr:		dbAsset.AddrDesc.String(),
+								Contract:		"0x" + hex.EncodeToString(dbAsset.AssetObj.Contract),
+								Balance:		(*bchain.Amount)(big.NewInt(dbAsset.AssetObj.Balance)),
+								TotalSupply:	(*bchain.Amount)(big.NewInt(dbAsset.AssetObj.TotalSupply)),
+								MaxSupply:		(*bchain.Amount)(big.NewInt(dbAsset.AssetObj.MaxSupply)),
+								Decimals:		int(dbAsset.AssetObj.Precision),
+								UpdateFlags:	dbAsset.AssetObj.UpdateFlags,
+								UpdateCapabilityFlags:	dbAsset.AssetObj.UpdateCapabilityFlags,
+								NotaryKeyID: 	dbAsset.AssetObj.NotaryKeyID,
+								NotaryDetails: 	dbAsset.AssetObj.NotaryDetails,
+								AuxFeeKeyID: 	dbAsset.AssetObj.AuxFeeKeyID,
+								AuxFeeDetails: 	dbAsset.AssetObj.AuxFeeDetails
+							}
+							assets = append(assets, assetDetails...)
+						}
+					}
 				}
 				r = append(r, utxos...)
 			}
 		}
 	}
 	sort.Stable(r)
-	glog.Info("GetXpubUtxo ", xpub[:16], ", ", len(r), " utxos, finished in ", time.Since(start))
-	return r, nil
+	glog.Info("GetXpubUtxo ", xpub[:16], ", ", len(r), " utxos, ", len(assets), " assets, finished in ", time.Since(start))
+	return r, assets, nil
 }
 
 // GetXpubBalanceHistory returns history of balance for given xpub

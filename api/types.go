@@ -95,27 +95,32 @@ type Vout struct {
 
 // Contains SyscoinSpecific asset information hex decoded and pertinent to API display
 type AssetSpecific struct {
-	AssetGuid 		uint32
-	AddrStr    	    string `json:"addrStr,omitempty"`
-	Contract 		string
-	Symbol 			string
-	PubData 		map[string]interface{}
-	Balance 		*bchain.Amount
-	TotalSupply 	*bchain.Amount
-	MaxSupply 		*bchain.Amount
-	Decimals 		int
-	UpdateFlags 	uint8
+	AssetGuid 		uint32 `json:"assetGuid"`
+	AddrDesc    bchain.AddressDescriptor `json:"-"`
+	Contract 		string `json:"contract,omitempty"`
+	Symbol 			string `json:"symbol"`
+	PubData 		map[string]interface{} `json:"pubData"`
+	NotaryKeyID		string `json:"notaryKeyID,omitempty"`
+	NotaryDetails	*bchain.NotaryDetails `json:"notaryDetails,omitempty"`
+	AuxFeeKeyID		string `json:"auxFeeKeyID,omitempty"`
+	AuxFeeDetails	*bchain.AuxFeeDetails `json:"auxFeeDetails,omitempty"`
+	Balance 		*bchain.Amount `json:"balance"`
+	TotalSupply 	*bchain.Amount `json:"totalSupply"`
+	MaxSupply 		*bchain.Amount `json:"maxSupply"`
+	Decimals 		int `json:"decimals"`
+	UpdateCapabilityFlags 	uint8 `json:"updateCapabilityFlags"`
+	UpdateFlags 	uint8 `json:"updateFlags"`
 }
 
 // Contains SyscoinSpecific assets information when searching for assets
 type AssetsSpecific struct {
-	AssetGuid 		uint32
+	AssetGuid 		uint32 `json:"assetGuid"`
 	AddrStr    	    string `json:"addrStr,omitempty"`
-	Contract 		string
-	Symbol 			string
-	PubData 		map[string]interface{}
-	TotalSupply 	*bchain.Amount
-	Decimals 		int
+	Contract 		string `json:"contract"`
+	Symbol 			string `json:"symbol"`
+	PubData 		map[string]interface{} `json:"pubData"`
+	TotalSupply 	*bchain.Amount `json:"totalSupply"`
+	Decimals 		int `json:"precision"`
 	Txs				int
 }
 
@@ -255,6 +260,7 @@ type Utxo struct {
 	Coinbase      bool    `json:"coinbase,omitempty"`
 	AssetInfo	  *bchain.AssetInfo  `json:"assetInfo,omitempty"`
 	Script		  string	`json:"script,omitempty"`
+	AssetDetails		  *AssetSpecific		`json:"assets,omitempty"`
 }
 
 // Utxos is array of Utxo

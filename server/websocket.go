@@ -498,9 +498,15 @@ func (s *WebsocketServer) getAccountInfo(req *accountInfoReq) (res *api.Address,
 }
 
 func (s *WebsocketServer) getAccountUtxo(descriptor string) (interface{}, error) {
-	utxo, err := s.api.GetXpubUtxo(descriptor, false, 0)
+	utxo, assets, err := s.api.GetXpubUtxo(descriptor, false, 0)
 	if err != nil {
-		return s.api.GetAddressUtxo(descriptor, false)
+		utxo, assets, err = s.api.GetAddressUtxo(descriptor, false)
+		if(err != nil) {
+			return utxo, err
+		}
+	}
+	if(len(assets) > 0) {
+		utxo.assets = assets
 	}
 	return utxo, nil
 }

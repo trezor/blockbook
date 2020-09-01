@@ -20,7 +20,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
+	"github.com/martinboehm/btcutil"
 	"github.com/golang/glog"
 )
 
@@ -416,7 +416,7 @@ const (
 
 	tplCount
 )
-type AssetUpdateFlag struct {
+type AssetUpdateCapabilityFlags struct {
 	Value 		string
 	Description string
 }
@@ -431,7 +431,7 @@ type TemplateData struct {
 	AddrStr              string
 	Asset				 *api.Asset
 	Assets				 *api.Assets
-	AssetUpdateFlags	 []AssetUpdateFlag
+	AssetUpdateCapabilityFlags	 []AssetUpdateCapabilityFlags
 	Tx                   *api.Tx
 	Error                *api.APIError
 	Blocks               *api.Blocks
@@ -456,10 +456,11 @@ func (s *PublicServer) parseTemplates() []*template.Template {
 		"formatAmount":             s.formatAmount,
 		"formatAmountWithDecimals": formatAmountWithDecimals,
 		"formatPercentage": 		formatPercentage,
-		"isAssetUpdateFlagSet":     isAssetUpdateFlagSet,
+		"isAssetUpdateCapabilityFlagsSet":     isAssetUpdateCapabilityFlagsSet,
 		"setTxToTemplateData":      setTxToTemplateData,
 		"isOwnAddress":             isOwnAddress,
 		"isOwnAddresses":           isOwnAddresses,
+		"formatKeyID":              s.formatKeyID,
 	}
 	var createTemplate func(filenames ...string) *template.Template
 	if s.debug {
@@ -553,8 +554,16 @@ func formatPercentage(a string) string {
 	return "0%"
 }
 
-func isAssetUpdateFlagSet(td *TemplateData, f string, mask uint8) bool {
-	for index, updateFlag := range td.AssetUpdateFlags {
+func (s *PublicServer) formatKeyID(a string) string {
+	addr, err := btcutil.NewAddressWitnessPubKeyHash([]byte(a), s.chainParser.Params)
+	if err != nil {
+		return ""
+	}
+	return addr.EncodeAddress()
+}
+
+func isAssetUpdateCapabilityFlagsSet(td *TemplateData, f string, mask uint8) bool {
+	for index, updateFlag := range td.AssetUpdateCapabilityFlags {
 		if updateFlag.Value == f {
 			ival := uint(1) << uint(index)
 			imask := uint(mask)
@@ -765,7 +774,7 @@ func (s *PublicServer) explorerAsset(w http.ResponseWriter, r *http.Request) (tp
 	}
 	data := s.newTemplateData()
 	data.Asset = asset
-	data.AssetUpdateFlags = []AssetUpdateFlag{{Value: "Admin", Description: "God mode flag, governs Flags field below"},{Value: "Data", Description: "Can you update the public data field for this asset?"},{Value: "Contract", Description: "Can you update the smart contract field for this asset?"},{Value: "Supply", Description: "Can you update the supply for this asset?"},{Value: "Flags", Description: "Can you allowed to update the UpdateFlags field for this asset?"}}
+	data.AssetUpdateCapabilityFlags = []AssetUpdateCapabilityFlags{{Value: "Data", Description: "Can you update the public data field for this asset?"},{Value: "Contract", Description: "Can you update the smart contract field for this asset?"},{Value: "Supply", Description: "Can you update the supply for this asset?"},{Value: "Notary", Description: "Can you authorize notarization for this asset?"}, {Value: "NotaryDetails", Description: "Can you update notary details for this asset?"}, {Value: "AuxFees", Description: "Can you authorize Auxiliary Fees for this asset?"}, {Value: "AuxFeeDetails", Description: "Can you update Auxiliary Fee details for this asset?"}, {Value: "CapabilityFlags", Description: "Can you allowed to update the UpdateCapabilityFlags field for this asset?"}}
 	data.Page = asset.Page
 	data.PagingRange, data.PrevPage, data.NextPage = getPagingRange(asset.Page, asset.TotalPages)
 	if filterParam != "" {
@@ -1191,6 +1200,7 @@ func (s *PublicServer) apiXpub(r *http.Request, apiVersion int) (interface{}, er
 
 func (s *PublicServer) apiUtxo(r *http.Request, apiVersion int) (interface{}, error) {
 	var utxo []api.Utxo
+	var assets []api.AssetDetails
 	var err error
 	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
 		onlyConfirmed := false
@@ -1205,16 +1215,19 @@ func (s *PublicServer) apiUtxo(r *http.Request, apiVersion int) (interface{}, er
 		if ec != nil {
 			gap = 0
 		}
-		utxo, err = s.api.GetXpubUtxo(r.URL.Path[i+1:], onlyConfirmed, gap)
+		utxo, assets, err = s.api.GetXpubUtxo(r.URL.Path[i+1:], onlyConfirmed, gap)
 		if err == nil {
 			s.metrics.ExplorerViews.With(common.Labels{"action": "api-xpub-utxo"}).Inc()
 		} else {
-			utxo, err = s.api.GetAddressUtxo(r.URL.Path[i+1:], onlyConfirmed)
+			utxo, assets, err = s.api.GetAddressUtxo(r.URL.Path[i+1:], onlyConfirmed)
 			s.metrics.ExplorerViews.With(common.Labels{"action": "api-address-utxo"}).Inc()
 		}
 		if err == nil && apiVersion == apiV1 {
 			return s.api.AddressUtxoToV1(utxo), nil
 		}
+	}
+	if(len(assets) > 0) {
+		utxo.assets = assets
 	}
 	return utxo, err
 }

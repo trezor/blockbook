@@ -19,7 +19,7 @@ type GetTxAssetsCallback func(txids []string) error
 
 func (d *RocksDB) ConnectAssetOutputHelper(isActivate bool, asset *bchain.Asset, dBAsset *bchain.Asset) error {
 	if !isActivate {
-		if asset.AssetObj.Balance > 0 {
+		if asset.AssetObj.UpdateFlags & ASSET_UPDATE_SUPPLY {
 			valueTo := big.NewInt(asset.AssetObj.Balance)
 			balanceDb := big.NewInt(dBAsset.AssetObj.Balance)
 			balanceDb.Add(balanceDb, valueTo)
@@ -29,14 +29,26 @@ func (d *RocksDB) ConnectAssetOutputHelper(isActivate bool, asset *bchain.Asset,
 			dBAsset.AssetObj.TotalSupply = supplyDb.Int64()
 		}
 		// logic follows core CheckAssetInputs()
-		if len(asset.AssetObj.PubData) > 0 {
+		if asset.AssetObj.UpdateFlags & bchain.ASSET_UPDATE_DATA {
 			dBAsset.AssetObj.PubData = asset.AssetObj.PubData
 		}
-		if len(asset.AssetObj.Contract) > 0 {
+		if asset.AssetObj.UpdateFlags & bchain.ASSET_UPDATE_CONTRACT {
 			dBAsset.AssetObj.Contract = asset.AssetObj.Contract
 		}
-		if asset.AssetObj.UpdateFlags != dBAsset.AssetObj.UpdateFlags {
-			dBAsset.AssetObj.UpdateFlags = asset.AssetObj.UpdateFlags
+		if asset.AssetOb.UpdateFlags & bchain.ASSET_UPDATE_NOTARY_KEY {
+			dBAsset.AssetObj.NotaryKeyID = asset.AssetObj.NotaryKeyID
+		}
+		if asset.AssetOb.UpdateFlags & bchain.ASSET_UPDATE_NOTARY_DETAILS {
+			dBAsset.AssetObj.NotaryDetails = asset.AssetObj.NotaryDetails
+		}
+		if asset.AssetOb.UpdateFlags & bchain.ASSET_UPDATE_AUXFEE_KEY {
+			dBAsset.AssetObj.AuxFeeKeyID = asset.AssetObj.AuxFeeKeyID
+		}
+		if asset.AssetOb.UpdateFlags & bchain.ASSET_UPDATE_AUXFEE_DETAILS {
+			dBAsset.AssetObj.AuxFeeDetails = asset.AssetObj.AuxFeeDetails
+		}
+		if asset.AssetOb.UpdateFlags & bchain.ASSET_UPDATE_CAPABILITYFLAGS {
+			dBAsset.AssetObj.UpdateCapabilityFlags = asset.AssetObj.UpdateCapabilityFlags
 		}
 	} else {
 		dBAsset.AssetObj.TotalSupply = asset.AssetObj.Balance
@@ -45,7 +57,11 @@ func (d *RocksDB) ConnectAssetOutputHelper(isActivate bool, asset *bchain.Asset,
 }
 
 func (d *RocksDB) DisconnectAssetOutputHelper(asset *bchain.Asset, dBAsset *bchain.Asset) error {
-	if asset.AssetObj.Balance > 0 {
+	// nothing was updated
+	if asset.AssetObj.UpdateFlags == 0 {
+		return nil
+	}
+	if asset.AssetObj.UpdateFlags & ASSET_UPDATE_SUPPLY {
 		valueTo := big.NewInt(asset.AssetObj.Balance)
 		balanceDb := big.NewInt(dBAsset.AssetObj.Balance)
 		balanceDb.Sub(balanceDb, valueTo)
@@ -63,16 +79,30 @@ func (d *RocksDB) DisconnectAssetOutputHelper(asset *bchain.Asset, dBAsset *bcha
 		}
 	}
 	// logic follows core CheckAssetInputs()
-	// prev data is enforced to be correct (previous value) if value exists in the tx data
-	if len(asset.AssetObj.PubData) > 0 {
-		dBAsset.AssetObj.PubData = asset.AssetObj.PrevPubData
-	}
-	if len(asset.AssetObj.Contract) > 0 {
+	// undo data fields from last update
+    // if fields changed then undo them using prev fields
+    if asset.AssetObj.UpdateFlags & bchain.ASSET_UPDATE_DATA {
+        dBAsset.AssetObj.PubData = asset.AssetObj.PrevPubData
+    }
+    if asset.AssetObj.UpdateFlags & bchain.ASSET_UPDATE_CONTRACT {
 		dBAsset.AssetObj.Contract = asset.AssetObj.PrevContract
+    }
+    if asset.AssetOb.UpdateFlags & bchain.ASSET_UPDATE_NOTARY_KEY {
+        dBAsset.AssetObj.NotaryKeyID = asset.AssetObj.PrevNotaryKeyID
+    }
+    if asset.AssetOb.UpdateFlags & bchain.ASSET_UPDATE_NOTARY_DETAILS {
+        dBAsset.AssetObj.NotaryDetails = asset.AssetObj.PrevNotaryDetails
+    }
+    if asset.AssetOb.UpdateFlags & bchain.ASSET_UPDATE_AUXFEE_KEY {
+        dBAsset.AssetObj.AuxFeeKeyID = asset.AssetObj.PrevAuxFeeKeyID
+    }
+    if asset.AssetOb.UpdateFlags & bchain.ASSET_UPDATE_AUXFEE_DETAILS {
+        dBAsset.AssetObj.AuxFeeDetails = asset.AssetObj.PrevAuxFeeDetails
+    }
+    if asset.AssetOb.UpdateFlags & bchain.ASSET_UPDATE_CAPABILITYFLAGS {
+		dBAsset.AssetObj.UpdateCapabilityFlags = asset.AssetObj.PrevUpdateCapabilityFlags
 	}
-	if asset.AssetObj.UpdateFlags != dBAsset.AssetObj.UpdateFlags {
-		dBAsset.AssetObj.UpdateFlags = asset.AssetObj.PrevUpdateFlags
-	}
+
 	return nil
 }
 
