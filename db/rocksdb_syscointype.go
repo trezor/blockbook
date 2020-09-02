@@ -36,19 +36,19 @@ func (d *RocksDB) ConnectAssetOutputHelper(isActivate bool, asset *bchain.Asset,
 		if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_CONTRACT) != 0 {
 			dBAsset.AssetObj.Contract = asset.AssetObj.Contract
 		}
-		if (asset.AssetOb.UpdateFlags & wire.ASSET_UPDATE_NOTARY_KEY) != 0 {
+		if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_NOTARY_KEY) != 0 {
 			dBAsset.AssetObj.NotaryKeyID = asset.AssetObj.NotaryKeyID
 		}
-		if (asset.AssetOb.UpdateFlags & wire.ASSET_UPDATE_NOTARY_DETAILS) != 0 {
+		if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_NOTARY_DETAILS) != 0 {
 			dBAsset.AssetObj.NotaryDetails = asset.AssetObj.NotaryDetails
 		}
-		if (asset.AssetOb.UpdateFlags & wire.ASSET_UPDATE_AUXFEE_KEY) != 0 {
+		if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_AUXFEE_KEY) != 0 {
 			dBAsset.AssetObj.AuxFeeKeyID = asset.AssetObj.AuxFeeKeyID
 		}
-		if (asset.AssetOb.UpdateFlags & wire.ASSET_UPDATE_AUXFEE_DETAILS) != 0 {
+		if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_AUXFEE_DETAILS) != 0 {
 			dBAsset.AssetObj.AuxFeeDetails = asset.AssetObj.AuxFeeDetails
 		}
-		if (asset.AssetOb.UpdateFlags & wire.ASSET_UPDATE_CAPABILITYFLAGS) != 0 {
+		if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_CAPABILITYFLAGS) != 0 {
 			dBAsset.AssetObj.UpdateCapabilityFlags = asset.AssetObj.UpdateCapabilityFlags
 		}
 	} else {
@@ -88,19 +88,19 @@ func (d *RocksDB) DisconnectAssetOutputHelper(asset *bchain.Asset, dBAsset *bcha
     if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_CONTRACT) != 0 {
 		dBAsset.AssetObj.Contract = asset.AssetObj.PrevContract
     }
-    if (asset.AssetOb.UpdateFlags & wire.ASSET_UPDATE_NOTARY_KEY) != 0 {
+    if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_NOTARY_KEY) != 0 {
         dBAsset.AssetObj.NotaryKeyID = asset.AssetObj.PrevNotaryKeyID
     }
-    if (asset.AssetOb.UpdateFlags & wire.ASSET_UPDATE_NOTARY_DETAILS) != 0 {
+    if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_NOTARY_DETAILS) != 0 {
         dBAsset.AssetObj.NotaryDetails = asset.AssetObj.PrevNotaryDetails
     }
-    if (asset.AssetOb.UpdateFlags & wire.ASSET_UPDATE_AUXFEE_KEY) != 0 {
+    if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_AUXFEE_KEY) != 0 {
         dBAsset.AssetObj.AuxFeeKeyID = asset.AssetObj.PrevAuxFeeKeyID
     }
-    if (asset.AssetOb.UpdateFlags & wire.ASSET_UPDATE_AUXFEE_DETAILS) != 0 {
+    if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_AUXFEE_DETAILS) != 0 {
         dBAsset.AssetObj.AuxFeeDetails = asset.AssetObj.PrevAuxFeeDetails
     }
-    if (asset.AssetOb.UpdateFlags & wire.ASSET_UPDATE_CAPABILITYFLAGS) != 0 {
+    if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_CAPABILITYFLAGS) != 0 {
 		dBAsset.AssetObj.UpdateCapabilityFlags = asset.AssetObj.PrevUpdateCapabilityFlags
 	}
 
