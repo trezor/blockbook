@@ -718,7 +718,7 @@ func (w *Worker) GetXpubUtxo(xpub string, onlyConfirmed bool, gap int) (Utxos, [
 								NotaryKeyID: 	dbAsset.AssetObj.NotaryKeyID,
 								NotaryDetails: 	dbAsset.AssetObj.NotaryDetails,
 								AuxFeeKeyID: 	dbAsset.AssetObj.AuxFeeKeyID,
-								AuxFeeDetails: 	dbAsset.AssetObj.AuxFeeDetails
+								AuxFeeDetails: 	dbAsset.AssetObj.AuxFeeDetails,
 							}
 							assets = append(assets, assetDetails...)
 						}

@@ -641,7 +641,7 @@ func (s *SocketIoServer) getAssetHistory(asset string, opts *assetOpts) (res res
 			NotaryKeyID: dbAsset.AssetObj.NotaryKeyID,
 			NotaryDetails: dbAsset.AssetObj.NotaryDetails,
 			AuxFeeKeyID: dbAsset.AssetObj.AuxFeeKeyID,
-			AuxFeeDetails: dbAsset.AssetObj.AuxFeeDetails
+			AuxFeeDetails: dbAsset.AssetObj.AuxFeeDetails,
 			
 		}
 		json.Unmarshal(dbAsset.AssetObj.PubData, &res.Result.AssetDetails.PubData)
