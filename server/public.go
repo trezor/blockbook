@@ -22,6 +22,7 @@ import (
 	"time"
 	"github.com/martinboehm/btcutil"
 	"github.com/golang/glog"
+	"encoding/base64"
 )
 
 const txsOnPage = 25
@@ -461,6 +462,7 @@ func (s *PublicServer) parseTemplates() []*template.Template {
 		"isOwnAddress":             isOwnAddress,
 		"isOwnAddresses":           isOwnAddresses,
 		"formatKeyID":              s.formatKeyID,
+		"formatDecodeBase64": 		formatDecodeBase64,
 	}
 	var createTemplate func(filenames ...string) *template.Template
 	if s.debug {
@@ -545,6 +547,17 @@ func formatAmountWithDecimals(a *bchain.Amount, d int) string {
 	}
 	return a.DecimalString(d)
 }
+
+func formatDecodeBase64(a []byte, d int) string {
+	var pubData string
+	base64Text := make([]byte, base64.StdEncoding.DecodedLen(len(a)))
+	n, err := base64.StdEncoding.Decode(base64Text, a)
+	if err == nil {
+		pubData = string(base64Text[:n])
+	}
+	return pubData
+}
+
 
 func formatPercentage(a string) string {
 	if f, err := strconv.ParseFloat(a, 32); err == nil {

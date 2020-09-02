@@ -25,7 +25,7 @@
                 <td class="data">{{$assetDetails.Txs}}</td>
                 <td class="data ellipsis"><a href="https://etherscan.io/address/{{$assetDetails.Contract}}">{{$assetDetails.Contract}}</a></td>
                 <td class="data">{{formatAmountWithDecimals $assetDetails.TotalSupply $assetDetails.Decimals}} {{$assetDetails.Symbol}}</td>
-                <td class="data ellipsis">{{- if $assetDetails.PubData.description}}{{$assetDetails.PubData.description}}{{else}}{{- end -}}</td>
+                <td class="data ellipsis">{{- if $assetDetails.PubData.desc}}{{formatDecodeBase64 $assetDetails.PubData.desc}}{{else}}{{- end -}}</td>
             </tr>
             {{- end -}}{{- end -}}
         </tbody>

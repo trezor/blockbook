@@ -1112,9 +1112,9 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 					tokens = append(tokens, &bchain.Token{
 						Type:             bchain.SPTUnallocatedTokenType,
 						AddrStr:		  dbAsset.AddrDesc.String(),
-						Name:             assetGuid + " (" + string(dbAsset.AssetObj.Symbol) + ")",
+						Name:             assetGuid + " (" + dbAsset.AssetObj.Symbol + ")",
 						Decimals:         int(dbAsset.AssetObj.Precision),
-						Symbol:			  string(dbAsset.AssetObj.Symbol),
+						Symbol:			  dbAsset.AssetObj.Symbol,
 						BalanceSat:       (*bchain.Amount)(ownerBalance),
 						TotalReceivedSat: (*bchain.Amount)(totalOwnerAssetReceived),
 						TotalSentSat:     (*bchain.Amount)(v.SentSat),
@@ -1129,9 +1129,9 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 			assetGuid := strconv.FormatUint(uint64(k), 10)
 			tokens = append(tokens, &bchain.Token{
 				Type:             bchain.SPTTokenType,
-				Name:             assetGuid + " (" + string(dbAsset.AssetObj.Symbol) + ")",
+				Name:             assetGuid + " (" + dbAsset.AssetObj.Symbol + ")",
 				Decimals:         int(dbAsset.AssetObj.Precision),
-				Symbol:			  string(dbAsset.AssetObj.Symbol),
+				Symbol:			  dbAsset.AssetObj.Symbol,
 				BalanceSat:       (*bchain.Amount)(v.BalanceSat),
 				TotalReceivedSat: (*bchain.Amount)(totalAssetReceived),
 				TotalSentSat:     (*bchain.Amount)(v.SentSat),
