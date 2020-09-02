@@ -1318,7 +1318,7 @@ func (w *Worker) GetAsset(asset string, page int, txsOnPage int, option AccountD
 			NotaryKeyID: 	dbAsset.AssetObj.NotaryKeyID,
 			NotaryDetails: 	dbAsset.AssetObj.NotaryDetails,
 			AuxFeeKeyID: 	dbAsset.AssetObj.AuxFeeKeyID,
-			AuxFeeDetails: 	dbAsset.AssetObj.AuxFeeDetails
+			AuxFeeDetails: 	dbAsset.AssetObj.AuxFeeDetails,
 		},
 		Paging:                pg,
 		UnconfirmedTxs:        unconfirmedTxs,
@@ -1744,7 +1744,7 @@ func (w *Worker) GetAddressUtxo(address string, onlyConfirmed bool) (Utxos, []As
 				NotaryKeyID: 	dbAsset.AssetObj.NotaryKeyID,
 				NotaryDetails: 	dbAsset.AssetObj.NotaryDetails,
 				AuxFeeKeyID: 	dbAsset.AssetObj.AuxFeeKeyID,
-				AuxFeeDetails: 	dbAsset.AssetObj.AuxFeeDetails
+				AuxFeeDetails: 	dbAsset.AssetObj.AuxFeeDetails,
 			}
 			assets = append(assets, assetDetails...)
 		}
