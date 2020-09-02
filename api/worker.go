@@ -1315,9 +1315,9 @@ func (w *Worker) GetAsset(asset string, page int, txsOnPage int, option AccountD
 			Decimals:		int(dbAsset.AssetObj.Precision),
 			UpdateFlags:	dbAsset.AssetObj.UpdateFlags,
 			UpdateCapabilityFlags:	dbAsset.AssetObj.UpdateCapabilityFlags,
-			NotaryKeyID: 	dbAsset.AssetObj.NotaryKeyID,
+			NotaryKeyID: 	hex.EncodeToString(dbAsset.AssetObj.NotaryKeyID),
 			NotaryDetails: 	dbAsset.AssetObj.NotaryDetails,
-			AuxFeeKeyID: 	dbAsset.AssetObj.AuxFeeKeyID,
+			AuxFeeKeyID: 	hex.EncodeToString(dbAsset.AssetObj.AuxFeeKeyID),
 			AuxFeeDetails: 	dbAsset.AssetObj.AuxFeeDetails,
 		},
 		Paging:                pg,
@@ -1741,9 +1741,9 @@ func (w *Worker) GetAddressUtxo(address string, onlyConfirmed bool) (Utxos, []As
 				Decimals:		int(dbAsset.AssetObj.Precision),
 				UpdateFlags:	dbAsset.AssetObj.UpdateFlags,
 				UpdateCapabilityFlags:	dbAsset.AssetObj.UpdateCapabilityFlags,
-				NotaryKeyID: 	dbAsset.AssetObj.NotaryKeyID,
+				NotaryKeyID: 	hex.EncodeToString(dbAsset.AssetObj.NotaryKeyID),
 				NotaryDetails: 	dbAsset.AssetObj.NotaryDetails,
-				AuxFeeKeyID: 	dbAsset.AssetObj.AuxFeeKeyID,
+				AuxFeeKeyID: 	hex.EncodeToString(dbAsset.AssetObj.AuxFeeKeyID),
 				AuxFeeDetails: 	dbAsset.AssetObj.AuxFeeDetails,
 			}
 			assets = append(assets, assetDetails...)
