@@ -20,7 +20,7 @@ type GetTxAssetsCallback func(txids []string) error
 
 func (d *RocksDB) ConnectAssetOutputHelper(isActivate bool, asset *bchain.Asset, dBAsset *bchain.Asset) error {
 	if !isActivate {
-		if asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_SUPPLY {
+		if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_SUPPLY) != 0 {
 			valueTo := big.NewInt(asset.AssetObj.Balance)
 			balanceDb := big.NewInt(dBAsset.AssetObj.Balance)
 			balanceDb.Add(balanceDb, valueTo)

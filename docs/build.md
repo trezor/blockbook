@@ -218,7 +218,7 @@ Setup variables for gorocksdb: https://github.com/tecbot/gorocksdb
 
 ```
 export CGO_CFLAGS="-I/path/to/rocksdb/include"
-export CGO_LDFLAGS="-L/path/to/rocksdb -lrocksdb -lstdc++ -lm -lz -lbz2 -lsnappy -llz4"
+export CGO_LDFLAGS="-L/path/to/rocksdb -lrocksdb -lstdc++ -lm -lz -lbz2 -lsnappy -llz4 -ldl"
 ```
 
 Install ZeroMQ: https://github.com/zeromq/libzmq
