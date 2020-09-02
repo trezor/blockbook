@@ -11,6 +11,7 @@ import (
 	"encoding/hex"
 	"time"
 	"fmt"
+	"github.com/syscoin/btcd/wire"
 )
 var AssetCache map[uint32]bchain.Asset
 var SetupAssetCacheFirstTime bool = true
@@ -19,7 +20,7 @@ type GetTxAssetsCallback func(txids []string) error
 
 func (d *RocksDB) ConnectAssetOutputHelper(isActivate bool, asset *bchain.Asset, dBAsset *bchain.Asset) error {
 	if !isActivate {
-		if asset.AssetObj.UpdateFlags & ASSET_UPDATE_SUPPLY {
+		if asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_SUPPLY {
 			valueTo := big.NewInt(asset.AssetObj.Balance)
 			balanceDb := big.NewInt(dBAsset.AssetObj.Balance)
 			balanceDb.Add(balanceDb, valueTo)
@@ -29,25 +30,25 @@ func (d *RocksDB) ConnectAssetOutputHelper(isActivate bool, asset *bchain.Asset,
 			dBAsset.AssetObj.TotalSupply = supplyDb.Int64()
 		}
 		// logic follows core CheckAssetInputs()
-		if asset.AssetObj.UpdateFlags & bchain.ASSET_UPDATE_DATA {
+		if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_DATA) != 0 {
 			dBAsset.AssetObj.PubData = asset.AssetObj.PubData
 		}
-		if asset.AssetObj.UpdateFlags & bchain.ASSET_UPDATE_CONTRACT {
+		if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_CONTRACT) != 0 {
 			dBAsset.AssetObj.Contract = asset.AssetObj.Contract
 		}
-		if asset.AssetOb.UpdateFlags & bchain.ASSET_UPDATE_NOTARY_KEY {
+		if (asset.AssetOb.UpdateFlags & wire.ASSET_UPDATE_NOTARY_KEY) != 0 {
 			dBAsset.AssetObj.NotaryKeyID = asset.AssetObj.NotaryKeyID
 		}
-		if asset.AssetOb.UpdateFlags & bchain.ASSET_UPDATE_NOTARY_DETAILS {
+		if (asset.AssetOb.UpdateFlags & wire.ASSET_UPDATE_NOTARY_DETAILS) != 0 {
 			dBAsset.AssetObj.NotaryDetails = asset.AssetObj.NotaryDetails
 		}
-		if asset.AssetOb.UpdateFlags & bchain.ASSET_UPDATE_AUXFEE_KEY {
+		if (asset.AssetOb.UpdateFlags & wire.ASSET_UPDATE_AUXFEE_KEY) != 0 {
 			dBAsset.AssetObj.AuxFeeKeyID = asset.AssetObj.AuxFeeKeyID
 		}
-		if asset.AssetOb.UpdateFlags & bchain.ASSET_UPDATE_AUXFEE_DETAILS {
+		if (asset.AssetOb.UpdateFlags & wire.ASSET_UPDATE_AUXFEE_DETAILS) != 0 {
 			dBAsset.AssetObj.AuxFeeDetails = asset.AssetObj.AuxFeeDetails
 		}
-		if asset.AssetOb.UpdateFlags & bchain.ASSET_UPDATE_CAPABILITYFLAGS {
+		if (asset.AssetOb.UpdateFlags & wire.ASSET_UPDATE_CAPABILITYFLAGS) != 0 {
 			dBAsset.AssetObj.UpdateCapabilityFlags = asset.AssetObj.UpdateCapabilityFlags
 		}
 	} else {
@@ -61,7 +62,7 @@ func (d *RocksDB) DisconnectAssetOutputHelper(asset *bchain.Asset, dBAsset *bcha
 	if asset.AssetObj.UpdateFlags == 0 {
 		return nil
 	}
-	if asset.AssetObj.UpdateFlags & ASSET_UPDATE_SUPPLY {
+	if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_SUPPLY) != 0 {
 		valueTo := big.NewInt(asset.AssetObj.Balance)
 		balanceDb := big.NewInt(dBAsset.AssetObj.Balance)
 		balanceDb.Sub(balanceDb, valueTo)
@@ -81,25 +82,25 @@ func (d *RocksDB) DisconnectAssetOutputHelper(asset *bchain.Asset, dBAsset *bcha
 	// logic follows core CheckAssetInputs()
 	// undo data fields from last update
     // if fields changed then undo them using prev fields
-    if asset.AssetObj.UpdateFlags & bchain.ASSET_UPDATE_DATA {
+    if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_DATA) != 0 {
         dBAsset.AssetObj.PubData = asset.AssetObj.PrevPubData
     }
-    if asset.AssetObj.UpdateFlags & bchain.ASSET_UPDATE_CONTRACT {
+    if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_CONTRACT) != 0 {
 		dBAsset.AssetObj.Contract = asset.AssetObj.PrevContract
     }
-    if asset.AssetOb.UpdateFlags & bchain.ASSET_UPDATE_NOTARY_KEY {
+    if (asset.AssetOb.UpdateFlags & wire.ASSET_UPDATE_NOTARY_KEY) != 0 {
         dBAsset.AssetObj.NotaryKeyID = asset.AssetObj.PrevNotaryKeyID
     }
-    if asset.AssetOb.UpdateFlags & bchain.ASSET_UPDATE_NOTARY_DETAILS {
+    if (asset.AssetOb.UpdateFlags & wire.ASSET_UPDATE_NOTARY_DETAILS) != 0 {
         dBAsset.AssetObj.NotaryDetails = asset.AssetObj.PrevNotaryDetails
     }
-    if asset.AssetOb.UpdateFlags & bchain.ASSET_UPDATE_AUXFEE_KEY {
+    if (asset.AssetOb.UpdateFlags & wire.ASSET_UPDATE_AUXFEE_KEY) != 0 {
         dBAsset.AssetObj.AuxFeeKeyID = asset.AssetObj.PrevAuxFeeKeyID
     }
-    if asset.AssetOb.UpdateFlags & bchain.ASSET_UPDATE_AUXFEE_DETAILS {
+    if (asset.AssetOb.UpdateFlags & wire.ASSET_UPDATE_AUXFEE_DETAILS) != 0 {
         dBAsset.AssetObj.AuxFeeDetails = asset.AssetObj.PrevAuxFeeDetails
     }
-    if asset.AssetOb.UpdateFlags & bchain.ASSET_UPDATE_CAPABILITYFLAGS {
+    if (asset.AssetOb.UpdateFlags & wire.ASSET_UPDATE_CAPABILITYFLAGS) != 0 {
 		dBAsset.AssetObj.UpdateCapabilityFlags = asset.AssetObj.PrevUpdateCapabilityFlags
 	}
 
