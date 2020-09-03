@@ -247,11 +247,11 @@ func verifyAfterSyscoinTypeBlock2(t *testing.T, d *RocksDB) {
 	if dBAsset.AssetObj.UpdateFlags != 133 {
 		t.Fatal(fmt.Sprint("Block2: Property mismatch dBAsset.AssetObj.UpdateFlags: ", dBAsset.AssetObj.UpdateFlags  , ". Expected: 133"))
 	}
-	if dBAsset.AssetObj.Balance != 42000000000 {
-		t.Fatal(fmt.Sprint("Block2: Property mismatch dBAsset.AssetObj.Balance: ", dBAsset.AssetObj.Balance  , ". Expected: 42000000000"))
+	if dBAsset.AssetObj.Balance != 52000000000 {
+		t.Fatal(fmt.Sprint("Block2: Property mismatch dBAsset.AssetObj.Balance: ", dBAsset.AssetObj.Balance  , ". Expected: 52000000000"))
 	}
-	if dBAsset.AssetObj.TotalSupply != 42000000000 {
-		t.Fatal(fmt.Sprint("Block2: Property mismatch dBAsset.AssetObj.TotalSupply: ", dBAsset.AssetObj.TotalSupply  , ". Expected: 42000000000"))
+	if dBAsset.AssetObj.TotalSupply != 52000000000 {
+		t.Fatal(fmt.Sprint("Block2: Property mismatch dBAsset.AssetObj.TotalSupply: ", dBAsset.AssetObj.TotalSupply  , ". Expected: 52000000000"))
 	}
 	if dBAsset.AssetObj.MaxSupply != 100000000000 {
 		t.Fatal(fmt.Sprint("Block2: Property mismatch dBAsset.AssetObj.MaxSupply: ", dBAsset.AssetObj.MaxSupply  , ". Expected: 100000000000"))
