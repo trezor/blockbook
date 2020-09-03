@@ -76,8 +76,8 @@ func verifyAfterSyscoinTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect bool
 		{
 			dbtestdata.AddressToPubKeyHex(dbtestdata.AddrS2, d.chainParser),
 			varuintToHex(1) + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatS1T1A1, d) +
-			varuintToHex(1) + varuintToHex(720034467) + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatZero, d) + varuintToHex(1) +
-			dbtestdata.TxidS1T1 + varuintToHex(0) + varuintToHex(171) + bigintToHex(dbtestdata.SatS1T1A1, d) + varuintToHex(1) + varuintToHex(720034467) + bigintToHex(dbtestdata.SatZero, d),
+			varuintToHex(1) + varuintToHex(2529870008) + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatZero, d) + varuintToHex(1) +
+			dbtestdata.TxidS1T1 + varuintToHex(0) + varuintToHex(171) + bigintToHex(dbtestdata.SatS1T1A1, d) + varuintToHex(1) + varuintToHex(2529870008) + bigintToHex(dbtestdata.SatZero, d),
 			nil,
 		},
 		{
@@ -111,7 +111,7 @@ func verifyAfterSyscoinTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect bool
 			t.Fatal(err)
 		}
 	}
-	dBAsset, err := d.GetAsset(720034467, nil)
+	dBAsset, err := d.GetAsset(2529870008, nil)
 	if dBAsset == nil || err != nil {
 		if dBAsset == nil {
 			t.Fatal("asset not found after block 1")
@@ -126,8 +126,8 @@ func verifyAfterSyscoinTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect bool
 	}
 
 	voutAsset := dBAsset.AssetObj.Allocation.VoutAssets[0]
-	if voutAsset.AssetGuid != 720034467 {
-		t.Fatal("Block1: voutAsset missing 720034467")
+	if voutAsset.AssetGuid != 2529870008 {
+		t.Fatal("Block1: voutAsset missing 2529870008")
 	}
 	if len(voutAsset.Values) != 1 {
 		t.Fatal(fmt.Sprint("Block1: Property mismatch len(voutAsset): ", len(voutAsset.Values) , ". Expected: 1"))
@@ -208,7 +208,7 @@ func verifyAfterSyscoinTypeBlock2(t *testing.T, d *RocksDB) {
 		{
 			dbtestdata.AddressToPubKeyHex(dbtestdata.AddrS2, d.chainParser),
 			varuintToHex(2) + bigintToHex(dbtestdata.SatS1T1A1, d) + bigintToHex(dbtestdata.SatZero, d) +
-			varuintToHex(1) + varuintToHex(720034467) + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatZero, d) + /* 2 transfers, one activate one spend of active*/varuintToHex(2),
+			varuintToHex(1) + varuintToHex(2529870008) + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatZero, d) + /* 2 transfers, one activate one spend of active*/varuintToHex(2),
 			nil,
 		},
 		{
@@ -221,8 +221,8 @@ func verifyAfterSyscoinTypeBlock2(t *testing.T, d *RocksDB) {
 		{
 			dbtestdata.AddressToPubKeyHex(dbtestdata.AddrS5, d.chainParser),
 			varuintToHex(1) + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatS2T1A1, d) +
-			varuintToHex(1) + varuintToHex(720034467) + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatZero, d) + varuintToHex(1) +
-			dbtestdata.TxidS2T1 + varuintToHex(0) + varuintToHex(182) + bigintToHex(dbtestdata.SatS2T1A1, d) +  varuintToHex(1) + varuintToHex(720034467) + bigintToHex(dbtestdata.SatZero, d),
+			varuintToHex(1) + varuintToHex(2529870008) + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatZero, d) + varuintToHex(1) +
+			dbtestdata.TxidS2T1 + varuintToHex(0) + varuintToHex(182) + bigintToHex(dbtestdata.SatS2T1A1, d) +  varuintToHex(1) + varuintToHex(2529870008) + bigintToHex(dbtestdata.SatZero, d),
 			nil,
 		},
 	}); err != nil {
@@ -230,7 +230,7 @@ func verifyAfterSyscoinTypeBlock2(t *testing.T, d *RocksDB) {
 			t.Fatal(err)
 		}
 	}
-	dBAsset, err := d.GetAsset(720034467, nil)
+	dBAsset, err := d.GetAsset(2529870008, nil)
 	if dBAsset == nil || err != nil {
 		if dBAsset == nil {
 			t.Fatal("asset not found after block 1")
@@ -475,11 +475,11 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 				Vout:     0,
 				Height:   182,
 				ValueSat: *dbtestdata.SatS2T1A1,
-				AssetInfo: &bchain.AssetInfo{AssetGuid: 720034467, ValueSat: dbtestdata.SatZero},
+				AssetInfo: &bchain.AssetInfo{AssetGuid: 2529870008, ValueSat: dbtestdata.SatZero},
 			},
 		},
 		AssetBalances: map[uint32]*bchain.AssetBalance {
-			720034467: &bchain.AssetBalance{
+			2529870008: &bchain.AssetBalance{
 				SentSat: 	dbtestdata.SatZero,
 				BalanceSat: dbtestdata.SatZero,
 				Transfers:	1,
@@ -502,7 +502,7 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 			{
 				AddrDesc: addressToAddrDesc(dbtestdata.AddrS2, d.chainParser),
 				ValueSat: *dbtestdata.SatS1T1A1,
-				AssetInfo: &bchain.AssetInfo{AssetGuid: 720034467, ValueSat: dbtestdata.SatZero},
+				AssetInfo: &bchain.AssetInfo{AssetGuid: 2529870008, ValueSat: dbtestdata.SatZero},
 			},
 		},
 		Outputs: []bchain.TxOutput{
@@ -510,7 +510,7 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 				AddrDesc: addressToAddrDesc(dbtestdata.AddrS5, d.chainParser),
 				Spent:    false,
 				ValueSat: *dbtestdata.SatS2T1A1,
-				AssetInfo: &bchain.AssetInfo{AssetGuid: 720034467, ValueSat: dbtestdata.SatZero},
+				AssetInfo: &bchain.AssetInfo{AssetGuid: 2529870008, ValueSat: dbtestdata.SatZero},
 			},
 			{
 				AddrDesc: hexToBytes(dbtestdata.TxidS2T1OutputReturn),
