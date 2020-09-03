@@ -197,9 +197,8 @@ func verifyAfterSyscoinTypeBlock2(t *testing.T, d *RocksDB) {
 	if err := checkColumn(d, cfAddressBalance, []keyPair{
 		{
 			dbtestdata.AddressToPubKeyHex(dbtestdata.AddrS1, d.chainParser),
-			varuintToHex(2) + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(S1addedAmount, d) +
+			varuintToHex(1) + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(S1addedAmount, d) +
 			/*assetbalances*/varuintToHex(0) +	dbtestdata.TxidS1T0 + varuintToHex(0) + varuintToHex(112) + bigintToHex(dbtestdata.SatS1T0A1, d) + /*asset info*/varuintToHex(0) + 
-			dbtestdata.TxidS2T0 + varuintToHex(0) + varuintToHex(113) + bigintToHex(dbtestdata.SatS2T0A1, d) + /*asset info*/varuintToHex(0),
 			nil,
 		},
 		{
