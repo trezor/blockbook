@@ -1212,9 +1212,7 @@ func (s *PublicServer) apiXpub(r *http.Request, apiVersion int) (interface{}, er
 }
 
 func (s *PublicServer) apiUtxo(r *http.Request, apiVersion int) (interface{}, error) {
-	var utxo []api.Utxo
-	var utxos api.Utxos
-	var assets []api.AssetDetails
+	var utxo api.Utxos
 	var err error
 	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
 		onlyConfirmed := false
@@ -1229,22 +1227,18 @@ func (s *PublicServer) apiUtxo(r *http.Request, apiVersion int) (interface{}, er
 		if ec != nil {
 			gap = 0
 		}
-		utxo, assets, err = s.api.GetXpubUtxo(r.URL.Path[i+1:], onlyConfirmed, gap)
+		utxo, err = s.api.GetXpubUtxo(r.URL.Path[i+1:], onlyConfirmed, gap)
 		if err == nil {
 			s.metrics.ExplorerViews.With(common.Labels{"action": "api-xpub-utxo"}).Inc()
 		} else {
-			utxo, assets, err = s.api.GetAddressUtxo(r.URL.Path[i+1:], onlyConfirmed)
+			utxo, err = s.api.GetAddressUtxo(r.URL.Path[i+1:], onlyConfirmed)
 			s.metrics.ExplorerViews.With(common.Labels{"action": "api-address-utxo"}).Inc()
 		}
 		if err == nil && apiVersion == apiV1 {
 			return s.api.AddressUtxoToV1(utxo), nil
 		}
 	}
-	if len(assets) > 0 {
-		utxos.Assets = assets
-	}
-	utxos.Utxos = utxo
-	return utxos, err
+	return utxo, err
 }
 
 func (s *PublicServer) apiBalanceHistory(r *http.Request, apiVersion int) (interface{}, error) {

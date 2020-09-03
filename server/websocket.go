@@ -498,19 +498,15 @@ func (s *WebsocketServer) getAccountInfo(req *accountInfoReq) (res *api.Address,
 }
 
 func (s *WebsocketServer) getAccountUtxo(descriptor string) (interface{}, error) {
-	var utxos api.Utxos
-	utxo, assets, err := s.api.GetXpubUtxo(descriptor, false, 0)
+	var utxo api.Utxos
+	utxo, err := s.api.GetXpubUtxo(descriptor, false, 0)
 	if err != nil {
-		utxo, assets, err = s.api.GetAddressUtxo(descriptor, false)
+		utxo, err = s.api.GetAddressUtxo(descriptor, false)
 		if(err != nil) {
 			return utxo, err
 		}
 	}
-	if len(assets) > 0 {
-		utxos.Assets = assets
-	}
-	utxos.Utxos = utxo
-	return utxos, nil
+	return utxo, nil
 }
 
 func (s *WebsocketServer) getTransaction(txid string) (interface{}, error) {

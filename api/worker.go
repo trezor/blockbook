@@ -1701,7 +1701,7 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *bchain.A
 }
 
 // GetAddressUtxo returns unspent outputs for given address
-func (w *Worker) GetAddressUtxo(address string, onlyConfirmed bool) ([]Utxo, []*AssetSpecific, error) {
+func (w *Worker) GetAddressUtxo(address string, onlyConfirmed bool) (Utxos, error) {
 	if w.chainType != bchain.ChainBitcoinType {
 		return nil, nil, NewAPIError("Not supported", true)
 	}
@@ -1750,7 +1750,13 @@ func (w *Worker) GetAddressUtxo(address string, onlyConfirmed bool) ([]Utxo, []*
 		}
 	}
 	glog.Info("GetAddressUtxo ", address, ", ", len(r), " utxos, ", len(assets), " assets, finished in ", time.Since(start))
-	return r, assets, nil
+	utxos := &Utxos {
+		Utxos: r,
+	}
+	if len(assets) > 0 {
+		utxos.Assets = assets
+	}
+	return utxos, nil
 }
 
 // GetBlocks returns BlockInfo for blocks on given page

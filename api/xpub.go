@@ -651,7 +651,7 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 }
 
 // GetXpubUtxo returns unspent outputs for given xpub
-func (w *Worker) GetXpubUtxo(xpub string, onlyConfirmed bool, gap int) ([]Utxo, []*AssetSpecific, error) {
+func (w *Worker) GetXpubUtxo(xpub string, onlyConfirmed bool, gap int) (Utxos, error) {
 	start := time.Now()
 	data, _, err := w.getXpubData(xpub, 0, 1, AccountDetailsBasic, &AddressFilter{
 		Vout:          AddressFilterVoutOff,
@@ -659,9 +659,9 @@ func (w *Worker) GetXpubUtxo(xpub string, onlyConfirmed bool, gap int) ([]Utxo, 
 		AssetsMask:	   bchain.AllMask,
 	}, gap)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	r := make([]Utxo, 0, 8)
+	r := make(Utxos, 0, 8)
 	assets := make([]*AssetSpecific, 0, 0)
 	assetsMap := make(map[uint32]bool, 0)
 	for ci, da := range [][]xpubAddress{data.addresses, data.changeAddresses} {
@@ -676,12 +676,12 @@ func (w *Worker) GetXpubUtxo(xpub string, onlyConfirmed bool, gap int) ([]Utxo, 
 			}
 			utxos, err := w.getAddrDescUtxo(ad.addrDesc, ad.balance, onlyConfirmed, onlyMempool)
 			if err != nil {
-				return nil, nil, err
+				return nil, err
 			}
 			if len(utxos) > 0 {
 				txs, errXpub := w.tokenFromXpubAddress(data, ad, ci, i, AccountDetailsTokens)
 				if errXpub != nil {
-					return nil, nil, errXpub
+					return nil, errXpub
 				}
 				if len(txs) > 0 {
 					for _ , t := range txs {
@@ -697,7 +697,7 @@ func (w *Worker) GetXpubUtxo(xpub string, onlyConfirmed bool, gap int) ([]Utxo, 
 						if a.AssetInfo != nil {
 							dbAsset, errAsset := w.db.GetAsset(a.AssetInfo.AssetGuid, nil)
 							if errAsset != nil || dbAsset == nil {
-								return nil, nil, errAsset
+								return nil, errAsset
 							}
 							// add unique assets
 							var _, ok = assetsMap[a.AssetInfo.AssetGuid]
@@ -725,13 +725,16 @@ func (w *Worker) GetXpubUtxo(xpub string, onlyConfirmed bool, gap int) ([]Utxo, 
 						}
 					}
 				}
-				r = append(r, utxos...)
+				r.Utxos = append(r.Utxos, utxos...)
 			}
 		}
 	}
 	sort.Stable(r)
+	if len(assets) > 0 {
+		r.Assets = assets
+	}
 	glog.Info("GetXpubUtxo ", xpub[:16], ", ", len(r), " utxos, ", len(assets), " assets, finished in ", time.Since(start))
-	return r, assets, nil
+	return r, nil
 }
 
 // GetXpubBalanceHistory returns history of balance for given xpub
