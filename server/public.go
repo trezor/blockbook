@@ -456,7 +456,7 @@ func (s *PublicServer) parseTemplates() []*template.Template {
 		"formatAmount":             s.formatAmount,
 		"formatAmountWithDecimals": formatAmountWithDecimals,
 		"formatPercentage": 		formatPercentage,
-		"isAssetUpdateCapabilityFlagsSet":     isAssetUpdateCapabilityFlagsSet,
+		"isAssetUpdateCapabilityFlagSet":     isAssetUpdateCapabilityFlagSet,
 		"setTxToTemplateData":      setTxToTemplateData,
 		"isOwnAddress":             isOwnAddress,
 		"isOwnAddresses":           isOwnAddresses,
@@ -574,7 +574,7 @@ func (s *PublicServer) formatKeyID(a string) string {
 	return addr
 }
 
-func isAssetUpdateCapabilityFlagsSet(td *TemplateData, f string, mask uint8) bool {
+func isAssetUpdateCapabilityFlagSet(td *TemplateData, f string, mask uint8) bool {
 	for index, updateFlag := range td.AssetUpdateCapabilityFlags {
 		if updateFlag.Value == f {
 			ival := uint(1) << uint(index)
