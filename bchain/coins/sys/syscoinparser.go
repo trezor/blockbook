@@ -304,12 +304,12 @@ func (p *SyscoinParser) LoadAssets(tx *bchain.Tx) error {
 	return nil
 }
 
-func (p *SyscoinParser) NewAddressWitnessPubKeyHash(keyId []byte) (string, error) {
+func (p *SyscoinParser) WitnessPubKeyHashFromKeyID(keyId []byte) (string, error) {
 	addr, err := btcutil.NewAddressWitnessPubKeyHash(keyId, p.BitcoinParser.Params)
 	if err != nil {
-		return ""
+		return nil, err
 	}
-	return addr.EncodeAddress()
+	return addr.EncodeAddress(), nil
 }
 
 
