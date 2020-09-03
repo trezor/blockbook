@@ -366,7 +366,7 @@ func (p *BaseParser) LoadAssets(tx *Tx) error {
 	return errors.New("Not supported")
 }
 func (p *BaseParser) WitnessPubKeyHashFromKeyID(keyId []byte) (string, error) {
-	return nil, errors.New("Not supported")
+	return "", errors.New("Not supported")
 }
 func (p *BaseParser) AppendAssetInfo(assetInfo *AssetInfo, buf []byte, varBuf []byte) []byte  {
 	return nil

@@ -307,7 +307,7 @@ func (p *SyscoinParser) LoadAssets(tx *bchain.Tx) error {
 func (p *SyscoinParser) WitnessPubKeyHashFromKeyID(keyId []byte) (string, error) {
 	addr, err := btcutil.NewAddressWitnessPubKeyHash(keyId, p.BitcoinParser.Params)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	return addr.EncodeAddress(), nil
 }
