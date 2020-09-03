@@ -662,7 +662,7 @@ func (w *Worker) GetXpubUtxo(xpub string, onlyConfirmed bool, gap int) (Utxos, [
 		return nil, nil, err
 	}
 	r := make(Utxos, 0, 8)
-	assets := make(AssetSpecific, 0, 0)
+	assets := make([]AssetSpecific, 0, 0)
 	assetsMap := make(map[uint32]bool, 0)
 	for ci, da := range [][]xpubAddress{data.addresses, data.changeAddresses} {
 		for i := range da {

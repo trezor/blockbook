@@ -1705,7 +1705,7 @@ func (w *Worker) GetAddressUtxo(address string, onlyConfirmed bool) (Utxos, []As
 	if w.chainType != bchain.ChainBitcoinType {
 		return nil, nil, NewAPIError("Not supported", true)
 	}
-	assets := make(AssetSpecific, 0, 0)
+	assets := make([]AssetSpecific, 0, 0)
 	assetsMap := make(map[uint32]bool, 0)
 	start := time.Now()
 	addrDesc, err := w.chainParser.GetAddrDescFromAddress(address)
@@ -1719,7 +1719,7 @@ func (w *Worker) GetAddressUtxo(address string, onlyConfirmed bool) (Utxos, []As
 	// add applicable assets to UTXO so spending based on mutable auxfees/notarization fields can be done by SDK's
 	for j := range r {
 		a := &r[j]
-		if(a.AssetInfo) {
+		if a.AssetInfo != nil {
 			dbAsset, errAsset := w.db.GetAsset(a.AssetInfo.AssetGuid, nil)
 			if errAsset != nil || dbAsset == nil {
 				return nil, nil, errAsset
