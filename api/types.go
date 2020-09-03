@@ -260,7 +260,7 @@ type Utxo struct {
 	Coinbase      bool    `json:"coinbase,omitempty"`
 	AssetInfo	  *bchain.AssetInfo  `json:"assetInfo,omitempty"`
 	Script		  string	`json:"script,omitempty"`
-	AssetDetails		  *AssetSpecific		`json:"assets,omitempty"`
+	Assets		  []*AssetSpecific		`json:"assets,omitempty"`
 }
 
 // Utxos is array of Utxo

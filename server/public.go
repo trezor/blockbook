@@ -1240,7 +1240,7 @@ func (s *PublicServer) apiUtxo(r *http.Request, apiVersion int) (interface{}, er
 		}
 	}
 	if(len(assets) > 0) {
-		utxo.assets = assets
+		utxo.Assets = assets
 	}
 	return utxo, err
 }

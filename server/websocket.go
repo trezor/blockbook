@@ -506,7 +506,7 @@ func (s *WebsocketServer) getAccountUtxo(descriptor string) (interface{}, error)
 		}
 	}
 	if(len(assets) > 0) {
-		utxo.assets = assets
+		utxo.Assets = assets
 	}
 	return utxo, nil
 }

@@ -1701,11 +1701,11 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *bchain.A
 }
 
 // GetAddressUtxo returns unspent outputs for given address
-func (w *Worker) GetAddressUtxo(address string, onlyConfirmed bool) (Utxos, []AssetSpecific, error) {
+func (w *Worker) GetAddressUtxo(address string, onlyConfirmed bool) (Utxos, []*AssetSpecific, error) {
 	if w.chainType != bchain.ChainBitcoinType {
 		return nil, nil, NewAPIError("Not supported", true)
 	}
-	assets := make([]AssetSpecific, 0, 0)
+	assets := make([]*AssetSpecific, 0, 0)
 	assetsMap := make(map[uint32]bool, 0)
 	start := time.Now()
 	addrDesc, err := w.chainParser.GetAddrDescFromAddress(address)
