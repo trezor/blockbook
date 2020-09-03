@@ -207,7 +207,7 @@ func verifyAfterSyscoinTypeBlock2(t *testing.T, d *RocksDB) {
 		{
 			dbtestdata.AddressToPubKeyHex(dbtestdata.AddrS3, d.chainParser),
 			varuintToHex(1) + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatS2T0A1, d) +
-			varuintToHex(0) + dbtestdata.TxidS2T0 + varuintToHex(0) + varuintToHex(112) + bigintToHex(dbtestdata.SatS2T0A1, d) + varuintToHex(0),
+			varuintToHex(0) + dbtestdata.TxidS2T0 + varuintToHex(0) + varuintToHex(113) + bigintToHex(dbtestdata.SatS2T0A1, d) + varuintToHex(0),
 			nil,
 		},
 		// asset update. asset activate should be spent
