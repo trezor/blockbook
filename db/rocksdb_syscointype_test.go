@@ -8,7 +8,6 @@ import (
 	"blockbook/bchain/coins/btc"
 	"blockbook/bchain/coins/sys"
 	"blockbook/tests/dbtestdata"
-	"math/big"
 	"reflect"
 	"fmt"
 	"bytes"
