@@ -243,8 +243,9 @@ func verifyAfterSyscoinTypeBlock2(t *testing.T, d *RocksDB) {
 	if dBAsset.AssetObj.UpdateCapabilityFlags != 127 {
 		t.Fatal(fmt.Sprint("Block2: Property mismatch dBAsset.AssetObj.UpdateCapabilityFlags: ", dBAsset.AssetObj.UpdateCapabilityFlags  , ". Expected: 127"))
 	}
-	if dBAsset.AssetObj.UpdateFlags != 135 {
-		t.Fatal(fmt.Sprint("Block2: Property mismatch dBAsset.AssetObj.UpdateFlags: ", dBAsset.AssetObj.UpdateFlags  , ". Expected: 135"))
+	// this stored property is really only for wire transaction diff checks to know what field changed, the DB is not reflective of what current state is
+	if dBAsset.AssetObj.UpdateFlags != 133 {
+		t.Fatal(fmt.Sprint("Block2: Property mismatch dBAsset.AssetObj.UpdateFlags: ", dBAsset.AssetObj.UpdateFlags  , ". Expected: 133"))
 	}
 	if dBAsset.AssetObj.Balance != 42000000000 {
 		t.Fatal(fmt.Sprint("Block2: Property mismatch dBAsset.AssetObj.Balance: ", dBAsset.AssetObj.Balance  , ". Expected: 42000000000"))
