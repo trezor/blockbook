@@ -661,7 +661,8 @@ func (w *Worker) GetXpubUtxo(xpub string, onlyConfirmed bool, gap int) (Utxos, e
 	if err != nil {
 		return nil, err
 	}
-	r := make(Utxos, 0, 8)
+	var utxoRes Utxos
+	utxoRes.Utxos = make([]Utxo, 0, 8)
 	assets := make([]*AssetSpecific, 0, 0)
 	assetsMap := make(map[uint32]bool, 0)
 	for ci, da := range [][]xpubAddress{data.addresses, data.changeAddresses} {
@@ -676,12 +677,12 @@ func (w *Worker) GetXpubUtxo(xpub string, onlyConfirmed bool, gap int) (Utxos, e
 			}
 			utxos, err := w.getAddrDescUtxo(ad.addrDesc, ad.balance, onlyConfirmed, onlyMempool)
 			if err != nil {
-				return nil, err
+				return utxoRes, err
 			}
 			if len(utxos) > 0 {
 				txs, errXpub := w.tokenFromXpubAddress(data, ad, ci, i, AccountDetailsTokens)
 				if errXpub != nil {
-					return nil, errXpub
+					return utxoRes, errXpub
 				}
 				if len(txs) > 0 {
 					for _ , t := range txs {
@@ -697,7 +698,7 @@ func (w *Worker) GetXpubUtxo(xpub string, onlyConfirmed bool, gap int) (Utxos, e
 						if a.AssetInfo != nil {
 							dbAsset, errAsset := w.db.GetAsset(a.AssetInfo.AssetGuid, nil)
 							if errAsset != nil || dbAsset == nil {
-								return nil, errAsset
+								return utxoRes, errAsset
 							}
 							// add unique assets
 							var _, ok = assetsMap[a.AssetInfo.AssetGuid]
@@ -725,16 +726,16 @@ func (w *Worker) GetXpubUtxo(xpub string, onlyConfirmed bool, gap int) (Utxos, e
 						}
 					}
 				}
-				r.Utxos = append(r.Utxos, utxos...)
+				utxoRes.Utxos = append(utxoRes.Utxos, utxos...)
 			}
 		}
 	}
-	sort.Stable(r)
+	sort.Stable(utxoRes)
 	if len(assets) > 0 {
-		r.Assets = assets
+		utxoRes.Assets = assets
 	}
-	glog.Info("GetXpubUtxo ", xpub[:16], ", ", len(r), " utxos, ", len(assets), " assets, finished in ", time.Since(start))
-	return r, nil
+	glog.Info("GetXpubUtxo ", xpub[:16], ", ", len(utxoRes.Utxos), " utxos, ", len(assets), " assets, finished in ", time.Since(start))
+	return utxoRes, nil
 }
 
 // GetXpubBalanceHistory returns history of balance for given xpub

@@ -1703,26 +1703,27 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *bchain.A
 // GetAddressUtxo returns unspent outputs for given address
 func (w *Worker) GetAddressUtxo(address string, onlyConfirmed bool) (Utxos, error) {
 	if w.chainType != bchain.ChainBitcoinType {
-		return nil, nil, NewAPIError("Not supported", true)
+		return nil, NewAPIError("Not supported", true)
 	}
 	assets := make([]*AssetSpecific, 0, 0)
 	assetsMap := make(map[uint32]bool, 0)
+	var utxoRes Utxos
 	start := time.Now()
 	addrDesc, err := w.chainParser.GetAddrDescFromAddress(address)
 	if err != nil {
-		return nil, nil, NewAPIError(fmt.Sprintf("Invalid address '%v', %v", address, err), true)
+		return utxos, NewAPIError(fmt.Sprintf("Invalid address '%v', %v", address, err), true)
 	}
-	r, err := w.getAddrDescUtxo(addrDesc, nil, onlyConfirmed, false)
+	utxoRes.Utxos, err := w.getAddrDescUtxo(addrDesc, nil, onlyConfirmed, false)
 	if err != nil {
-		return nil, nil, err
+		return utxos, err
 	}
 	// add applicable assets to UTXO so spending based on mutable auxfees/notarization fields can be done by SDK's
-	for j := range r {
-		a := &r[j]
+	for j := range utxoRes.Utxos {
+		a := &utxoRes.Utxos[j]
 		if a.AssetInfo != nil {
 			dbAsset, errAsset := w.db.GetAsset(a.AssetInfo.AssetGuid, nil)
 			if errAsset != nil || dbAsset == nil {
-				return nil, nil, errAsset
+				return utxoRes, errAsset
 			}
 			// add unique assets
 			var _, ok = assetsMap[a.AssetInfo.AssetGuid]
@@ -1749,14 +1750,11 @@ func (w *Worker) GetAddressUtxo(address string, onlyConfirmed bool) (Utxos, erro
 			assets = append(assets, assetDetails)
 		}
 	}
-	glog.Info("GetAddressUtxo ", address, ", ", len(r), " utxos, ", len(assets), " assets, finished in ", time.Since(start))
-	utxos := &Utxos {
-		Utxos: r,
-	}
+	glog.Info("GetAddressUtxo ", address, ", ", len(utxoRes.Utxos), " utxos, ", len(assets), " assets, finished in ", time.Since(start))
 	if len(assets) > 0 {
-		utxos.Assets = assets
+		utxoRes.Assets = assets
 	}
-	return utxos, nil
+	return utxoRes, nil
 }
 
 // GetBlocks returns BlockInfo for blocks on given page
