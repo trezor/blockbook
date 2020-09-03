@@ -192,12 +192,10 @@ func verifyAfterSyscoinTypeBlock2(t *testing.T, d *RocksDB) {
 			t.Fatal(err)
 		}
 	}
-	S1addedAmount := new(big.Int).Set(dbtestdata.SatS1T0A1)
-	S1addedAmount.Add(S1addedAmount, dbtestdata.SatS2T0A1)
 	if err := checkColumn(d, cfAddressBalance, []keyPair{
 		{
 			dbtestdata.AddressToPubKeyHex(dbtestdata.AddrS1, d.chainParser),
-			varuintToHex(1) + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(S1addedAmount, d) +
+			varuintToHex(1) + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatS1T0A1, d) +
 			/*assetbalances*/varuintToHex(0) +	dbtestdata.TxidS1T0 + varuintToHex(0) + varuintToHex(112) + bigintToHex(dbtestdata.SatS1T0A1, d) + /*asset info*/varuintToHex(0), 
 			nil,
 		},
