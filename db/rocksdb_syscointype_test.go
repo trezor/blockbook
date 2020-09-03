@@ -260,8 +260,8 @@ func verifyAfterSyscoinTypeBlock2(t *testing.T, d *RocksDB) {
 		t.Fatal(fmt.Sprint("Block2: Property mismatch dBAsset.AssetObj.Contract: ", dBAsset.AssetObj.MaxSupply  , ". Expected: 2b1e58b979e4b2d72d8bca5bb4646ccc032ddbfc"))
 	}
 	// prev contract is not persisted for performance reasons, wire info will have it
-	if len(dBAsset.AssetObj.Contract) != 0 {
-		t.Fatal(fmt.Sprint("Block2: Property mismatch dBAsset.AssetObj.Contract: ", string(dBAsset.AssetObj.Contract)  , ". Expected: ''"))
+	if len(dBAsset.AssetObj.PrevContract) != 0 {
+		t.Fatal(fmt.Sprint("Block2: Property mismatch dBAsset.AssetObj.Contract: ", string(dBAsset.AssetObj.PrevContract)  , ". Expected: ''"))
 	}
 	if dBAsset.AssetObj.Precision != 8 {
 		t.Fatal(fmt.Sprint("Block2: Property mismatch dBAsset.AssetObj.Precision: ", dBAsset.AssetObj.Precision  , ". Expected: 8"))
