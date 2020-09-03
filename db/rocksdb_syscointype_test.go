@@ -16,6 +16,7 @@ import (
 	"github.com/martinboehm/btcutil/chaincfg"
 	"github.com/juju/errors"
 	"encoding/hex"
+	"encoding/base64"
 	vlq "github.com/bsm/go-vlq"
 )
 
@@ -46,7 +47,7 @@ func verifyAfterSyscoinTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect bool
 	if err := checkColumn(d, cfHeight, []keyPair{
 		{
 			"000000ab",
-			"00000da4905f27bad527f9ec2fb78090ee4079bd4d7219ee2f450e5439d0ed38" + uintToHex(1588899698) + varuintToHex(2) + varuintToHex(536),
+			"00000797cfd9074de37a557bf0d47bd86c45846f31e163ba688e14dfc498527a" + uintToHex(1598556954) + varuintToHex(2) + varuintToHex(503),
 			nil,
 		},
 	}); err != nil {
@@ -56,9 +57,8 @@ func verifyAfterSyscoinTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect bool
 	}
 	// the vout is encoded as signed varint, i.e. value * 2 for non negative values
 	if err := checkColumn(d, cfAddresses, []keyPair{
-		{addressKeyHex(dbtestdata.AddrS1, 171, d), txIndexesHexSyscoin(dbtestdata.TxidS1T0, bchain.BaseCoinMask, []int32{0}, d), nil},
-		{addressKeyHex(dbtestdata.AddrS2, 171, d), txIndexesHexSyscoin(dbtestdata.TxidS1T1, bchain.AssetActivateMask, []int32{0}, d), nil},
-		{addressKeyHex(dbtestdata.AddrS3, 171, d), txIndexesHexSyscoin(dbtestdata.TxidS1T1, bchain.BaseCoinMask, []int32{2}, d), nil},
+		{addressKeyHex(dbtestdata.AddrS1, 112, d), txIndexesHexSyscoin(dbtestdata.TxidS1T0, bchain.BaseCoinMask, []int32{0}, d), nil},
+		{addressKeyHex(dbtestdata.AddrS2, 112, d), txIndexesHexSyscoin(dbtestdata.TxidS1T1, bchain.AssetActivateMask, []int32{1}, d), nil},
 	
 	}); err != nil {
 		{
@@ -69,7 +69,7 @@ func verifyAfterSyscoinTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect bool
 		{
 			dbtestdata.AddressToPubKeyHex(dbtestdata.AddrS1, d.chainParser),
 			varuintToHex(1) + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatS1T0A1, d) +
-			/*assetbalances*/varuintToHex(0) +	dbtestdata.TxidS1T0 + varuintToHex(0) + varuintToHex(171) + bigintToHex(dbtestdata.SatS1T0A1, d) + /*asset info*/varuintToHex(0),
+			/*assetbalances*/varuintToHex(0) +	dbtestdata.TxidS1T0 + varuintToHex(0) + varuintToHex(112) + bigintToHex(dbtestdata.SatS1T0A1, d) + /*asset info*/varuintToHex(0),
 			nil,
 		},
 		// asset activate
@@ -77,13 +77,7 @@ func verifyAfterSyscoinTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect bool
 			dbtestdata.AddressToPubKeyHex(dbtestdata.AddrS2, d.chainParser),
 			varuintToHex(1) + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatS1T1A1, d) +
 			varuintToHex(1) + varuintToHex(2529870008) + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatZero, d) + varuintToHex(1) +
-			dbtestdata.TxidS1T1 + varuintToHex(0) + varuintToHex(171) + bigintToHex(dbtestdata.SatS1T1A1, d) + varuintToHex(1) + varuintToHex(2529870008) + bigintToHex(dbtestdata.SatZero, d),
-			nil,
-		},
-		{
-			dbtestdata.AddressToPubKeyHex(dbtestdata.AddrS3, d.chainParser),
-			varuintToHex(1) + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatS1T1A2, d) +
-			varuintToHex(0) + dbtestdata.TxidS1T1 + varuintToHex(2) + varuintToHex(171) + bigintToHex(dbtestdata.SatS1T1A2, d) + varuintToHex(0),
+			dbtestdata.TxidS1T1 + varuintToHex(1) + varuintToHex(112) + bigintToHex(dbtestdata.SatS1T1A1, d),
 			nil,
 		},	
 	}); err != nil {
@@ -141,11 +135,15 @@ func verifyAfterSyscoinTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect bool
 	if dBAsset.AssetObj.Symbol != "CAT" {
 		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.Symbol: ", dBAsset.AssetObj.Symbol , ". Expected: CAT"))
 	}
-	if !bytes.Equal(dBAsset.AssetObj.PubData, []byte("{\"description\":\"publicvalue\"}")) {
-		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.PubData: ", string(dBAsset.AssetObj.PubData)  , ". Expected: {\"description\":\"publicvalue\"}"))
+	pubdata := "{\"desc\":\"" + base64.StdEncoding.EncodeString([]byte("publicvalue")) + "\"}"
+	if !bytes.Equal(dBAsset.AssetObj.PubData, []byte(pubdata)) {
+		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.PubData: ", string(dBAsset.AssetObj.PubData)  , ". Expected: " + pubdata))
 	}
 	if dBAsset.AssetObj.UpdateCapabilityFlags != 255 {
 		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.UpdateCapabilityFlags: ", dBAsset.AssetObj.UpdateCapabilityFlags  , ". Expected: 255"))
+	}
+	if dBAsset.AssetObj.UpdateFlags != 133 {
+		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.UpdateFlags: ", dBAsset.AssetObj.UpdateFlags  , ". Expected: 133"))
 	}
 	if dBAsset.AssetObj.Balance != 10000000000 {
 		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.Balance: ", dBAsset.AssetObj.Balance  , ". Expected: 10000000000"))
@@ -162,20 +160,20 @@ func verifyAfterSyscoinTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect bool
 	if len(dBAsset.AssetObj.PrevPubData) > 0 {
 		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.PrevPubData: ", string(dBAsset.AssetObj.PrevPubData)  , ". Expected: ''"))
 	}
-	if dBAsset.AssetObj.PrevUpdateCapabilityFlags != 255 {
-		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.PrevUpdateCapabilityFlags: ", dBAsset.AssetObj.PrevUpdateCapabilityFlags  , ". Expected: 255"))
+	if dBAsset.AssetObj.PrevUpdateCapabilityFlags != 0 {
+		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.PrevUpdateCapabilityFlags: ", dBAsset.AssetObj.PrevUpdateCapabilityFlags  , ". Expected: 0"))
 	}
 }
 func verifyAfterSyscoinTypeBlock2(t *testing.T, d *RocksDB) {
 	if err := checkColumn(d, cfHeight, []keyPair{
 		{
 			"000000b6",
-			"00000e4afb4178a83b1b6e05872c5754b007f94b7645d93443a4ee51c45a2d74" + uintToHex(1588899730) + varuintToHex(2) + varuintToHex(539),
+			"00000cade5f8d530b3f0a3b6c9dceaca50627838f2c6fffb807390cba71974e7" + uintToHex(1598557012) + varuintToHex(2) + varuintToHex(554),
 			nil,
 		},
 		{
 			"000000ab",
-			"00000da4905f27bad527f9ec2fb78090ee4079bd4d7219ee2f450e5439d0ed38" + uintToHex(1588899698) + varuintToHex(2) + varuintToHex(536),
+			"00000797cfd9074de37a557bf0d47bd86c45846f31e163ba688e14dfc498527a" + uintToHex(1598556954) + varuintToHex(2) + varuintToHex(503),
 			nil,
 		},
 	}); err != nil {
@@ -184,12 +182,11 @@ func verifyAfterSyscoinTypeBlock2(t *testing.T, d *RocksDB) {
 		}
 	}
 	if err := checkColumn(d, cfAddresses, []keyPair{
-		{addressKeyHex(dbtestdata.AddrS1, 171, d), txIndexesHexSyscoin(dbtestdata.TxidS1T0, bchain.BaseCoinMask, []int32{0}, d), nil},
-		{addressKeyHex(dbtestdata.AddrS2, 171, d), txIndexesHexSyscoin(dbtestdata.TxidS1T1, bchain.AssetActivateMask, []int32{0}, d), nil},
-		{addressKeyHex(dbtestdata.AddrS3, 171, d), txIndexesHexSyscoin(dbtestdata.TxidS1T1, bchain.BaseCoinMask, []int32{2}, d), nil},
-		{addressKeyHex(dbtestdata.AddrS2, 182, d), txIndexesHexSyscoin(dbtestdata.TxidS2T1, bchain.AssetActivateMask, []int32{^0}, d), nil},
-		{addressKeyHex(dbtestdata.AddrS1, 182, d), txIndexesHexSyscoin(dbtestdata.TxidS2T0, bchain.BaseCoinMask, []int32{0}, d), nil},
-		{addressKeyHex(dbtestdata.AddrS5, 182, d), txIndexesHexSyscoin(dbtestdata.TxidS2T1, bchain.AssetUpdateMask, []int32{0}, d), nil},
+		{addressKeyHex(dbtestdata.AddrS1, 112, d), txIndexesHexSyscoin(dbtestdata.TxidS1T0, bchain.BaseCoinMask, []int32{0}, d), nil},
+		{addressKeyHex(dbtestdata.AddrS2, 112, d), txIndexesHexSyscoin(dbtestdata.TxidS1T1, bchain.AssetActivateMask, []int32{1}, d), nil},
+		{addressKeyHex(dbtestdata.AddrS2, 113, d), txIndexesHexSyscoin(dbtestdata.TxidS2T1, bchain.AssetActivateMask, []int32{^1}, d), nil},
+		{addressKeyHex(dbtestdata.AddrS3, 113, d), txIndexesHexSyscoin(dbtestdata.TxidS2T0, bchain.BaseCoinMask, []int32{0}, d), nil},
+		{addressKeyHex(dbtestdata.AddrS4, 113, d), txIndexesHexSyscoin(dbtestdata.TxidS2T1, bchain.AssetUpdateMask, []int32{1}, d), nil},
 	}); err != nil {
 		{
 			t.Fatal(err)
@@ -201,28 +198,28 @@ func verifyAfterSyscoinTypeBlock2(t *testing.T, d *RocksDB) {
 		{
 			dbtestdata.AddressToPubKeyHex(dbtestdata.AddrS1, d.chainParser),
 			varuintToHex(2) + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(S1addedAmount, d) +
-			/*assetbalances*/varuintToHex(0) +	dbtestdata.TxidS1T0 + varuintToHex(0) + varuintToHex(171) + bigintToHex(dbtestdata.SatS1T0A1, d) + /*asset info*/varuintToHex(0) + 
-			dbtestdata.TxidS2T0 + varuintToHex(0) + varuintToHex(182) + bigintToHex(dbtestdata.SatS2T0A1, d) + /*asset info*/varuintToHex(0),
+			/*assetbalances*/varuintToHex(0) +	dbtestdata.TxidS1T0 + varuintToHex(0) + varuintToHex(112) + bigintToHex(dbtestdata.SatS1T0A1, d) + /*asset info*/varuintToHex(0) + 
+			dbtestdata.TxidS2T0 + varuintToHex(0) + varuintToHex(113) + bigintToHex(dbtestdata.SatS2T0A1, d) + /*asset info*/varuintToHex(0),
 			nil,
 		},
 		{
 			dbtestdata.AddressToPubKeyHex(dbtestdata.AddrS2, d.chainParser),
 			varuintToHex(2) + bigintToHex(dbtestdata.SatS1T1A1, d) + bigintToHex(dbtestdata.SatZero, d) +
-			varuintToHex(1) + varuintToHex(2529870008) + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatZero, d) + /* 2 transfers, one activate one spend of active*/varuintToHex(2),
+			varuintToHex(1) + varuintToHex(2529870008) + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatZero, d) + /* 2 transfers, one activate one spend of activate */varuintToHex(2),
 			nil,
 		},
 		{
 			dbtestdata.AddressToPubKeyHex(dbtestdata.AddrS3, d.chainParser),
 			varuintToHex(1) + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatS1T1A2, d) +
-			varuintToHex(0) + dbtestdata.TxidS1T1 + varuintToHex(2) + varuintToHex(171) + bigintToHex(dbtestdata.SatS1T1A2, d) + varuintToHex(0),
+			varuintToHex(0) + dbtestdata.TxidS1T1 + varuintToHex(2) + varuintToHex(112) + bigintToHex(dbtestdata.SatS1T1A2, d) + varuintToHex(0),
 			nil,
 		},
-		// asset update. asset activate (AddrS2), should be spent
+		// asset update. asset activate should be spent
 		{
-			dbtestdata.AddressToPubKeyHex(dbtestdata.AddrS5, d.chainParser),
+			dbtestdata.AddressToPubKeyHex(dbtestdata.AddrS4, d.chainParser),
 			varuintToHex(1) + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatS2T1A1, d) +
 			varuintToHex(1) + varuintToHex(2529870008) + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatZero, d) + varuintToHex(1) +
-			dbtestdata.TxidS2T1 + varuintToHex(0) + varuintToHex(182) + bigintToHex(dbtestdata.SatS2T1A1, d) +  varuintToHex(1) + varuintToHex(2529870008) + bigintToHex(dbtestdata.SatZero, d),
+			dbtestdata.TxidS2T1 + varuintToHex(0) + varuintToHex(113) + bigintToHex(dbtestdata.SatZero, d) +  varuintToHex(1) + varuintToHex(2529870008) + bigintToHex(dbtestdata.SatS2T1A1, d),
 			nil,
 		},
 	}); err != nil {
@@ -238,35 +235,46 @@ func verifyAfterSyscoinTypeBlock2(t *testing.T, d *RocksDB) {
 		t.Fatal(err)
 	}
 	if dBAsset.Transactions != 2 {
-		t.Fatal(fmt.Sprint("Block1: Property mismatch dbAsset.Transaction: ", dBAsset.Transactions, ". Expected: 2"))
+		t.Fatal(fmt.Sprint("Block2: Property mismatch dbAsset.Transaction: ", dBAsset.Transactions, ". Expected: 2"))
 	}
 	if dBAsset.AssetObj.Symbol != "CAT" {
-		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.Symbol: ", dBAsset.AssetObj.Symbol , ". Expected: CAT"))
+		t.Fatal(fmt.Sprint("Block2: Property mismatch dBAsset.AssetObj.Symbol: ", dBAsset.AssetObj.Symbol , ". Expected: CAT"))
 	}
-	if !bytes.Equal(dBAsset.AssetObj.PubData, []byte("{\"description\":\"newdescription1\"}")) {
-		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.PubData: ", string(dBAsset.AssetObj.PubData)  , ". Expected: {\"description\":\"newdescription1\"}"))
+	pubdata := "{\"desc\":\"" + base64.StdEncoding.EncodeString([]byte("new publicvalue")) + "\"}"
+	if !bytes.Equal(dBAsset.AssetObj.PubData, []byte(pubdata)) {
+		t.Fatal(fmt.Sprint("Block2: Property mismatch dBAsset.AssetObj.PubData: ", string(dBAsset.AssetObj.PubData)  , ". Expected: " + pubdata))
 	}
-	if dBAsset.AssetObj.UpdateCapabilityFlags != 255 {
-		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.UpdateCapabilityFlags: ", dBAsset.AssetObj.UpdateCapabilityFlags  , ". Expected: 255"))
+	if dBAsset.AssetObj.UpdateCapabilityFlags != 127 {
+		t.Fatal(fmt.Sprint("Block2: Property mismatch dBAsset.AssetObj.UpdateCapabilityFlags: ", dBAsset.AssetObj.UpdateCapabilityFlags  , ". Expected: 127"))
 	}
-	if dBAsset.AssetObj.Balance != 10500000000 {
-		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.Balance: ", dBAsset.AssetObj.Balance  , ". Expected: 10500000000"))
+	if dBAsset.AssetObj.UpdateFlags != 135 {
+		t.Fatal(fmt.Sprint("Block2: Property mismatch dBAsset.AssetObj.UpdateFlags: ", dBAsset.AssetObj.UpdateFlags  , ". Expected: 135"))
 	}
-	if dBAsset.AssetObj.TotalSupply != 10500000000 {
-		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.TotalSupply: ", dBAsset.AssetObj.TotalSupply  , ". Expected: 10000000000"))
+	if dBAsset.AssetObj.Balance != 42000000000 {
+		t.Fatal(fmt.Sprint("Block2: Property mismatch dBAsset.AssetObj.Balance: ", dBAsset.AssetObj.Balance  , ". Expected: 42000000000"))
+	}
+	if dBAsset.AssetObj.TotalSupply != 42000000000 {
+		t.Fatal(fmt.Sprint("Block2: Property mismatch dBAsset.AssetObj.TotalSupply: ", dBAsset.AssetObj.TotalSupply  , ". Expected: 42000000000"))
 	}
 	if dBAsset.AssetObj.MaxSupply != 100000000000 {
-		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.MaxSupply: ", dBAsset.AssetObj.MaxSupply  , ". Expected: 100000000000"))
+		t.Fatal(fmt.Sprint("Block2: Property mismatch dBAsset.AssetObj.MaxSupply: ", dBAsset.AssetObj.MaxSupply  , ". Expected: 100000000000"))
+	}
+	if hex.EncodeToString(dBAsset.AssetObj.Contract) != []byte("2b1e58b979e4b2d72d8bca5bb4646ccc032ddbfc") {
+		t.Fatal(fmt.Sprint("Block2: Property mismatch dBAsset.AssetObj.Contract: ", dBAsset.AssetObj.MaxSupply  , ". Expected: 2b1e58b979e4b2d72d8bca5bb4646ccc032ddbfc"))
+	}
+	// prev contract is not persisted for performance reasons, wire info will have it
+	if len(dBAsset.AssetObj.Contract) != 0 {
+		t.Fatal(fmt.Sprint("Block2: Property mismatch dBAsset.AssetObj.Contract: ", string(dBAsset.AssetObj.Contract)  , ". Expected: ''"))
 	}
 	if dBAsset.AssetObj.Precision != 8 {
-		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.Precision: ", dBAsset.AssetObj.Precision  , ". Expected: 8"))
+		t.Fatal(fmt.Sprint("Block2: Property mismatch dBAsset.AssetObj.Precision: ", dBAsset.AssetObj.Precision  , ". Expected: 8"))
 	}
 	// prev pub data is not persisted for performance reasons, wire info will have it
 	if len(dBAsset.AssetObj.PrevPubData) != 0 {
-		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.PrevPubData: ", string(dBAsset.AssetObj.PrevPubData)  , ". Expected: ''"))
+		t.Fatal(fmt.Sprint("Block2: Property mismatch dBAsset.AssetObj.PrevPubData: ", string(dBAsset.AssetObj.PrevPubData)  , ". Expected: ''"))
 	}
 	if dBAsset.AssetObj.PrevUpdateCapabilityFlags != 255 {
-		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.PrevUpdateCapabilityFlags: ", dBAsset.AssetObj.PrevUpdateCapabilityFlags  , ". Expected: 255"))
+		t.Fatal(fmt.Sprint("Block2: Property mismatch dBAsset.AssetObj.PrevUpdateCapabilityFlags: ", dBAsset.AssetObj.PrevUpdateCapabilityFlags  , ". Expected: 255"))
 	}
 }
 
@@ -347,45 +355,50 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 
 	// get transactions for various addresses / low-high ranges
 	verifyGetTransactions(t, d, dbtestdata.AddrS2, 0, 1000000, []txidIndex{
-		{dbtestdata.TxidS2T1, ^0},
-		{dbtestdata.TxidS1T1, 0},
+		{dbtestdata.TxidS2T1, ^1},
+		{dbtestdata.TxidS1T1, 1},
 	}, nil)
-	verifyGetTransactions(t, d, dbtestdata.AddrS2, 171, 171, []txidIndex{
-		{dbtestdata.TxidS1T1, 0},
+	verifyGetTransactions(t, d, dbtestdata.AddrS2, 112, 112, []txidIndex{
+		{dbtestdata.TxidS1T1, 1},
 	}, nil)
-	verifyGetTransactions(t, d, dbtestdata.AddrS2, 182, 1000000, []txidIndex{
-		{dbtestdata.TxidS2T1, ^0},
+	verifyGetTransactions(t, d, dbtestdata.AddrS2, 113, 1000000, []txidIndex{
+		{dbtestdata.TxidS2T1, ^1},
 	}, nil)
 	verifyGetTransactions(t, d, dbtestdata.AddrS2, 500000, 1000000, []txidIndex{}, nil)
 	verifyGetTransactions(t, d, dbtestdata.AddrS1, 0, 1000000, []txidIndex{
-		{dbtestdata.TxidS2T0, 0},
 		{dbtestdata.TxidS1T0, 0},
 	}, nil)
-	verifyGetTransactions(t, d, "SgBVZhGLjqRz8ufXFwLhZvXpUMKqoduBad", 500000, 1000000, []txidIndex{}, errors.New("checksum mismatch"))
+	verifyGetTransactions(t, d, dbtestdata.AddrS3, 0, 1000000, []txidIndex{
+		{dbtestdata.TxidS2T0, 0},
+	}, nil)
+	verifyGetTransactions(t, d, dbtestdata.AddrS4, 0, 1000000, []txidIndex{
+		{dbtestdata.TxidS2T1, 1},
+	}, nil)
+	verifyGetTransactions(t, d, "tsys1q4hg3e2lcyx87muctu26dvmnuz7lpm3lpvcabad", 500000, 1000000, []txidIndex{}, errors.New("checksum mismatch"))
 
 	// GetBestBlock
 	height, hash, err := d.GetBestBlock()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if height != 182 {
-		t.Fatalf("GetBestBlock: got height %v, expected %v", height, 182)
+	if height != 113 {
+		t.Fatalf("GetBestBlock: got height %v, expected %v", height, 113)
 	}
-	if hash != "00000e4afb4178a83b1b6e05872c5754b007f94b7645d93443a4ee51c45a2d74" {
-		t.Fatalf("GetBestBlock: got hash %v, expected %v", hash, "00000e4afb4178a83b1b6e05872c5754b007f94b7645d93443a4ee51c45a2d74")
+	if hash != "00000cade5f8d530b3f0a3b6c9dceaca50627838f2c6fffb807390cba71974e7" {
+		t.Fatalf("GetBestBlock: got hash %v, expected %v", hash, "00000cade5f8d530b3f0a3b6c9dceaca50627838f2c6fffb807390cba71974e7")
 	}
 
 	// GetBlockHash
-	hash, err = d.GetBlockHash(171)
+	hash, err = d.GetBlockHash(112)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if hash != "00000da4905f27bad527f9ec2fb78090ee4079bd4d7219ee2f450e5439d0ed38" {
-		t.Fatalf("GetBlockHash: got hash %v, expected %v", hash, "00000da4905f27bad527f9ec2fb78090ee4079bd4d7219ee2f450e5439d0ed38")
+	if hash != "00000797cfd9074de37a557bf0d47bd86c45846f31e163ba688e14dfc498527a" {
+		t.Fatalf("GetBlockHash: got hash %v, expected %v", hash, "00000797cfd9074de37a557bf0d47bd86c45846f31e163ba688e14dfc498527a")
 	}
 
 	// Not connected block
-	hash, err = d.GetBlockHash(183)
+	hash, err = d.GetBlockHash(114)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -394,31 +407,31 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 	}
 
 	// GetBlockHash
-	info, err := d.GetBlockInfo(182)
+	info, err := d.GetBlockInfo(113)
 	if err != nil {
 		t.Fatal(err)
 	}
 	iw := &bchain.DbBlockInfo{
-		Hash:   "00000e4afb4178a83b1b6e05872c5754b007f94b7645d93443a4ee51c45a2d74",
+		Hash:   "00000cade5f8d530b3f0a3b6c9dceaca50627838f2c6fffb807390cba71974e7",
 		Txs:    2,
-		Size:   539,
-		Time:   1588899730,
-		Height: 182,
+		Size:   554,
+		Time:   1598557012,
+		Height: 113,
 	}
 	if !reflect.DeepEqual(info, iw) {
 		t.Errorf("GetBlockInfo() = %+v, want %+v", info, iw)
 	}
 
 	// try to disconnect both blocks, however only the last one is kept, it is not possible
-	err = d.DisconnectBlockRangeBitcoinType(171, 182)
-	if err == nil || err.Error() != "Cannot disconnect blocks with height 172 and lower. It is necessary to rebuild index." {
+	err = d.DisconnectBlockRangeBitcoinType(112, 113)
+	if err == nil || err.Error() != "Cannot disconnect blocks with height 113 and lower. It is necessary to rebuild index." {
 		t.Fatal(err)
 	}
 	verifyAfterSyscoinTypeBlock2(t, d)
 
 	// disconnect the 2nd block, verify that the db contains only data from the 1st block with restored unspentTxs
 	// and that the cached tx is removed
-	err = d.DisconnectBlockRangeBitcoinType(182, 182)
+	err = d.DisconnectBlockRangeBitcoinType(113, 113)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -461,7 +474,7 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 	}
 	
 	// test public methods for address balance and tx addresses
-	ab, err := d.GetAddressBalance(dbtestdata.AddrS5, bchain.AddressBalanceDetailUTXO)
+	ab, err := d.GetAddressBalance(dbtestdata.AddrS4, bchain.AddressBalanceDetailUTXO)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -473,7 +486,7 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 			{
 				BtxID:    hexToBytes(dbtestdata.TxidS2T1),
 				Vout:     0,
-				Height:   182,
+				Height:   113,
 				ValueSat: *dbtestdata.SatS2T1A1,
 				AssetInfo: &bchain.AssetInfo{AssetGuid: 2529870008, ValueSat: dbtestdata.SatZero},
 			},
@@ -497,7 +510,7 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 	// spends an asset (activate) output to another output
 	taw := &bchain.TxAddresses{
 		Version: 131,
-		Height: 182,
+		Height: 113,
 		Inputs: []bchain.TxInput{
 			{
 				AddrDesc: addressToAddrDesc(dbtestdata.AddrS2, d.chainParser),
@@ -507,15 +520,15 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 		},
 		Outputs: []bchain.TxOutput{
 			{
-				AddrDesc: addressToAddrDesc(dbtestdata.AddrS5, d.chainParser),
-				Spent:    false,
-				ValueSat: *dbtestdata.SatS2T1A1,
-				AssetInfo: &bchain.AssetInfo{AssetGuid: 2529870008, ValueSat: dbtestdata.SatZero},
-			},
-			{
 				AddrDesc: hexToBytes(dbtestdata.TxidS2T1OutputReturn),
 				Spent:    false,
 				ValueSat: *dbtestdata.SatZero,
+			},
+			{
+				AddrDesc: addressToAddrDesc(dbtestdata.AddrS4, d.chainParser),
+				Spent:    false,
+				ValueSat: *dbtestdata.SatS2T1A1,
+				AssetInfo: &bchain.AssetInfo{AssetGuid: 2529870008, ValueSat: dbtestdata.SatZero},
 			},
 		},
 	}
@@ -586,7 +599,7 @@ func Test_BulkConnect_SyscoinType(t *testing.T) {
 		{
 			"000000b6",
 			dbtestdata.TxidS2T0 + "01" + "0000000000000000000000000000000000000000000000000000000000000000" + "00" +
-			dbtestdata.TxidS2T1 + "01" + dbtestdata.TxidS1T1 + "00",
+			dbtestdata.TxidS2T1 + "01" + dbtestdata.TxidS1T1 + "01",
 			nil,
 		},
 	}); err != nil {
@@ -594,8 +607,8 @@ func Test_BulkConnect_SyscoinType(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if len(d.is.BlockTimes) != 183 {
-		t.Fatal("Expecting is.BlockTimes 183, got ", len(d.is.BlockTimes))
+	if len(d.is.BlockTimes) != 114 {
+		t.Fatal("Expecting is.BlockTimes 114, got ", len(d.is.BlockTimes))
 	}
 	chaincfg.ResetParams()
 }
