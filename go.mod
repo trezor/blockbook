@@ -14,7 +14,7 @@ require (
 	github.com/decred/dcrd/dcrjson v1.2.0
 	github.com/decred/dcrd/hdkeychain v1.1.1
 	github.com/decred/dcrd/txscript v1.1.0
-	github.com/ethereum/go-ethereum v1.8.20
+	github.com/ethereum/go-ethereum v1.9.20
 	github.com/facebookgo/ensure v0.0.0-20200202191622-63f1cf65ac4c // indirect
 	github.com/facebookgo/stack v0.0.0-20160209184415-751773369052 // indirect
 	github.com/facebookgo/subset v0.0.0-20200203212716-c811ad88dec4 // indirect
@@ -38,9 +38,8 @@ require (
 	github.com/prometheus/procfs v0.0.10 // indirect
 	github.com/rs/cors v1.7.0 // indirect
 	github.com/schancel/cashaddr-converter v0.0.0-20180113210041-0a38f5822f79
-	github.com/syndtr/goleveldb v1.0.0 // indirect
 	github.com/tecbot/gorocksdb v0.0.0-20180907100951-214b6b7bc0f0
-	golang.org/x/crypto v0.0.0-20190927123631-a832865fa7ad
+	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
 	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect
 	gopkg.in/mgo.v2 v2.0.0-20190816093944-a6b53ec6cb22 // indirect
 	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce // indirect

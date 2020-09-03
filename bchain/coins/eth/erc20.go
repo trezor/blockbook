@@ -183,18 +183,26 @@ func (b *EthereumRPC) EthereumTypeGetErc20ContractInfo(contractDesc bchain.Addre
 		address := EIP55Address(contractDesc)
 		data, err := b.ethCall(erc20NameSignature, address)
 		if err != nil {
-			return nil, err
+			// ignore the error from the eth_call - since geth v1.9.15 they changed the behavior
+			// and returning error "execution reverted" for some non contract addresses
+			// https://github.com/ethereum/go-ethereum/issues/21249#issuecomment-648647672
+			glog.Warning(errors.Annotatef(err, "erc20NameSignature %v", address))
+			return nil, nil
+			// return nil, errors.Annotatef(err, "erc20NameSignature %v", address)
 		}
 		name := parseErc20StringProperty(contractDesc, data)
 		if name != "" {
 			data, err = b.ethCall(erc20SymbolSignature, address)
 			if err != nil {
-				return nil, err
+				glog.Warning(errors.Annotatef(err, "erc20SymbolSignature %v", address))
+				return nil, nil
+				// return nil, errors.Annotatef(err, "erc20SymbolSignature %v", address)
 			}
 			symbol := parseErc20StringProperty(contractDesc, data)
 			data, err = b.ethCall(erc20DecimalsSignature, address)
 			if err != nil {
-				return nil, err
+				glog.Warning(errors.Annotatef(err, "erc20DecimalsSignature %v", address))
+				// return nil, errors.Annotatef(err, "erc20DecimalsSignature %v", address)
 			}
 			contract = &bchain.Erc20Contract{
 				Contract: address,
