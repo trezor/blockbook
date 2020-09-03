@@ -1567,10 +1567,10 @@ func (w *Worker) waitForBackendSync() {
 	}
 }
 
-func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *bchain.AddrBalance, onlyConfirmed bool, onlyMempool bool) (Utxos, error) {
+func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *bchain.AddrBalance, onlyConfirmed bool, onlyMempool bool) ([]Utxo, error) {
 	w.waitForBackendSync()
 	var err error
-	utxos := make(Utxos, 0, 8)
+	utxos := make([]Utxo, 0, 8)
 	// store txids from mempool so that they are not added twice in case of import of new block while processing utxos, issue #275
 	inMempool := make(map[string]struct{})
 	// outputs could be spent in mempool, record and check mempool spends

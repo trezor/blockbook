@@ -269,12 +269,12 @@ type Utxos struct {
 }
 	
 
-func (a Utxos) Len() int      { return len(a) }
-func (a Utxos) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+func (a Utxos) Len() int      { return len(a.Utxos) }
+func (a Utxos) Swap(i, j int) { a.Utxos[i], a.Utxos[j] = a.Utxos[j], a.Utxos[i] }
 func (a Utxos) Less(i, j int) bool {
 	// sort in reverse order, unconfirmed (height==0) utxos on top
-	hi := a[i].Height
-	hj := a[j].Height
+	hi := a.Utxos[i].Height
+	hj := a.Utxos[j].Height
 	if hi == 0 {
 		hi = maxInt
 	}
