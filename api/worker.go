@@ -1713,7 +1713,7 @@ func (w *Worker) GetAddressUtxo(address string, onlyConfirmed bool) (Utxos, erro
 	if err != nil {
 		return utxoRes, NewAPIError(fmt.Sprintf("Invalid address '%v', %v", address, err), true)
 	}
-	utxoRes.Utxos, err := w.getAddrDescUtxo(addrDesc, nil, onlyConfirmed, false)
+	utxoRes.Utxos, err = w.getAddrDescUtxo(addrDesc, nil, onlyConfirmed, false)
 	if err != nil {
 		return utxoRes, err
 	}
