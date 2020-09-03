@@ -261,7 +261,7 @@ func verifyAfterSyscoinTypeBlock2(t *testing.T, d *RocksDB) {
 	}
 	// prev contract is not persisted for performance reasons, wire info will have it
 	if len(dBAsset.AssetObj.PrevContract) != 0 {
-		t.Fatal(fmt.Sprint("Block2: Property mismatch dBAsset.AssetObj.Contract: ", string(dBAsset.AssetObj.PrevContract)  , ". Expected: ''"))
+		t.Fatal(fmt.Sprint("Block2: Property mismatch dBAsset.AssetObj.PrevContract: ", string(dBAsset.AssetObj.PrevContract)  , ". Expected: ''"))
 	}
 	if dBAsset.AssetObj.Precision != 8 {
 		t.Fatal(fmt.Sprint("Block2: Property mismatch dBAsset.AssetObj.Precision: ", dBAsset.AssetObj.Precision  , ". Expected: 8"))
@@ -270,8 +270,8 @@ func verifyAfterSyscoinTypeBlock2(t *testing.T, d *RocksDB) {
 	if len(dBAsset.AssetObj.PrevPubData) != 0 {
 		t.Fatal(fmt.Sprint("Block2: Property mismatch dBAsset.AssetObj.PrevPubData: ", string(dBAsset.AssetObj.PrevPubData)  , ". Expected: ''"))
 	}
-	if dBAsset.AssetObj.PrevUpdateCapabilityFlags != 255 {
-		t.Fatal(fmt.Sprint("Block2: Property mismatch dBAsset.AssetObj.PrevUpdateCapabilityFlags: ", dBAsset.AssetObj.PrevUpdateCapabilityFlags  , ". Expected: 255"))
+	if dBAsset.AssetObj.PrevUpdateCapabilityFlags != 0 {
+		t.Fatal(fmt.Sprint("Block2: Property mismatch dBAsset.AssetObj.PrevUpdateCapabilityFlags: ", dBAsset.AssetObj.PrevUpdateCapabilityFlags  , ". Expected: 0"))
 	}
 }
 
