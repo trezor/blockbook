@@ -20,7 +20,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"github.com/martinboehm/btcutil"
 	"github.com/golang/glog"
 	"encoding/base64"
 )
@@ -568,11 +567,11 @@ func formatPercentage(a string) string {
 }
 
 func (s *PublicServer) formatKeyID(a string) string {
-	addr, err := btcutil.NewAddressWitnessPubKeyHash([]byte(a), s.chainParser.Params)
+	addr, err := s.chainParser.WitnessPubKeyHashFromKeyID([]byte(a))
 	if err != nil {
 		return ""
 	}
-	return addr.EncodeAddress()
+	return addr
 }
 
 func isAssetUpdateCapabilityFlagsSet(td *TemplateData, f string, mask uint8) bool {

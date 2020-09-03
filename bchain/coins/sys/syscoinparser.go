@@ -12,6 +12,7 @@ import (
 	"github.com/martinboehm/btcutil/txscript"
 	vlq "github.com/bsm/go-vlq"
 	"github.com/juju/errors"
+	"github.com/martinboehm/btcutil"
 )
 
 // magic numbers
@@ -302,6 +303,15 @@ func (p *SyscoinParser) LoadAssets(tx *bchain.Tx) error {
 	}
 	return nil
 }
+
+func (p *SyscoinParser) NewAddressWitnessPubKeyHash(keyId []byte) (string, error) {
+	addr, err := btcutil.NewAddressWitnessPubKeyHash(keyId, p.BitcoinParser.Params)
+	if err != nil {
+		return ""
+	}
+	return addr.EncodeAddress()
+}
+
 
 func (p *SyscoinParser) PackAssetKey(assetGuid uint32, height uint32) []byte {
 	var buf []byte

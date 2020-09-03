@@ -365,6 +365,9 @@ func (p *BaseParser) GetAllocationFromTx(tx *Tx) (*AssetAllocation, error) {
 func (p *BaseParser) LoadAssets(tx *Tx) error {
 	return errors.New("Not supported")
 }
+func (p *BaseParser) NewAddressWitnessPubKeyHash(keyId []byte) (string, error) {
+	return errors.New("Not supported")
+}
 func (p *BaseParser) AppendAssetInfo(assetInfo *AssetInfo, buf []byte, varBuf []byte) []byte  {
 	return nil
 }
