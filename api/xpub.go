@@ -675,7 +675,7 @@ func (w *Worker) GetXpubUtxo(xpub string, onlyConfirmed bool, gap int) (Utxos, [
 			}
 			utxos, err := w.getAddrDescUtxo(ad.addrDesc, ad.balance, onlyConfirmed, onlyMempool)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			if len(utxos) > 0 {
 				txs, errXpub := w.tokenFromXpubAddress(data, ad, ci, i, AccountDetailsTokens)
@@ -696,7 +696,7 @@ func (w *Worker) GetXpubUtxo(xpub string, onlyConfirmed bool, gap int) (Utxos, [
 						if(a.AssetInfo) {
 							dbAsset, errAsset := w.db.GetAsset(a.AssetInfo.AssetGuid, nil)
 							if errAsset != nil || dbAsset == nil {
-								return nil, errAsset
+								return nil, nil, errAsset
 							}
 							// add unique assets
 							var _, ok = assetsMap[a.AssetInfo.AssetGuid]

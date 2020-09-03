@@ -96,7 +96,7 @@ type Vout struct {
 // Contains SyscoinSpecific asset information hex decoded and pertinent to API display
 type AssetSpecific struct {
 	AssetGuid 		uint32 `json:"assetGuid"`
-	AddrDesc    bchain.AddressDescriptor `json:"-"`
+	AddrStr    	    string `json:"addrStr,omitempty"`
 	Contract 		string `json:"contract,omitempty"`
 	Symbol 			string `json:"symbol"`
 	PubData 		map[string]interface{} `json:"pubData"`

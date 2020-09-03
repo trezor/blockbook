@@ -1703,18 +1703,18 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *bchain.A
 // GetAddressUtxo returns unspent outputs for given address
 func (w *Worker) GetAddressUtxo(address string, onlyConfirmed bool) (Utxos, []AssetSpecific, error) {
 	if w.chainType != bchain.ChainBitcoinType {
-		return nil, NewAPIError("Not supported", true)
+		return nil, nil, NewAPIError("Not supported", true)
 	}
 	assets := make(AssetSpecific, 0, 0)
 	assetsMap := make(map[uint32]bool, 0)
 	start := time.Now()
 	addrDesc, err := w.chainParser.GetAddrDescFromAddress(address)
 	if err != nil {
-		return nil, NewAPIError(fmt.Sprintf("Invalid address '%v', %v", address, err), true)
+		return nil, nil, NewAPIError(fmt.Sprintf("Invalid address '%v', %v", address, err), true)
 	}
 	r, err := w.getAddrDescUtxo(addrDesc, nil, onlyConfirmed, false)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	// add applicable assets to UTXO so spending based on mutable auxfees/notarization fields can be done by SDK's
 	for j := range r {
@@ -1722,7 +1722,7 @@ func (w *Worker) GetAddressUtxo(address string, onlyConfirmed bool) (Utxos, []As
 		if(a.AssetInfo) {
 			dbAsset, errAsset := w.db.GetAsset(a.AssetInfo.AssetGuid, nil)
 			if errAsset != nil || dbAsset == nil {
-				return nil, errAsset
+				return nil, nil, errAsset
 			}
 			// add unique assets
 			var _, ok = assetsMap[a.AssetInfo.AssetGuid]
