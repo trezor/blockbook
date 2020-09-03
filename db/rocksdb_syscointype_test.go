@@ -126,7 +126,7 @@ func verifyAfterSyscoinTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect bool
 	if len(voutAsset.Values) != 1 {
 		t.Fatal(fmt.Sprint("Block1: Property mismatch len(voutAsset): ", len(voutAsset.Values) , ". Expected: 1"))
 	}
-	if voutAsset.Values[0].N != 0 {
+	if voutAsset.Values[0].N != 1 {
 		t.Fatal(fmt.Sprint("Block1: Property mismatch voutAsset[0].N: ", voutAsset.Values[0].N , ". Expected: 0"))
 	}
 	if voutAsset.Values[0].ValueSat != 0 {
@@ -184,7 +184,7 @@ func verifyAfterSyscoinTypeBlock2(t *testing.T, d *RocksDB) {
 	if err := checkColumn(d, cfAddresses, []keyPair{
 		{addressKeyHex(dbtestdata.AddrS1, 112, d), txIndexesHexSyscoin(dbtestdata.TxidS1T0, bchain.BaseCoinMask, []int32{0}, d), nil},
 		{addressKeyHex(dbtestdata.AddrS2, 112, d), txIndexesHexSyscoin(dbtestdata.TxidS1T1, bchain.AssetActivateMask, []int32{1}, d), nil},
-		{addressKeyHex(dbtestdata.AddrS2, 113, d), txIndexesHexSyscoin(dbtestdata.TxidS2T1, bchain.AssetActivateMask, []int32{^1}, d), nil},
+		{addressKeyHex(dbtestdata.AddrS2, 113, d), txIndexesHexSyscoin(dbtestdata.TxidS2T1, bchain.AssetActivateMask, []int32{^0}, d), nil},
 		{addressKeyHex(dbtestdata.AddrS3, 113, d), txIndexesHexSyscoin(dbtestdata.TxidS2T0, bchain.BaseCoinMask, []int32{0}, d), nil},
 		{addressKeyHex(dbtestdata.AddrS4, 113, d), txIndexesHexSyscoin(dbtestdata.TxidS2T1, bchain.AssetUpdateMask, []int32{1}, d), nil},
 	}); err != nil {
