@@ -721,7 +721,7 @@ func (w *Worker) GetXpubUtxo(xpub string, onlyConfirmed bool, gap int) (Utxos, [
 								AuxFeeKeyID: 	hex.EncodeToString(dbAsset.AssetObj.AuxFeeKeyID),
 								AuxFeeDetails: 	&dbAsset.AssetObj.AuxFeeDetails,
 							}
-							assets = append(assets, assetDetails...)
+							assets = append(assets, assetDetails)
 						}
 					}
 				}

@@ -1746,7 +1746,7 @@ func (w *Worker) GetAddressUtxo(address string, onlyConfirmed bool) (Utxos, []*A
 				AuxFeeKeyID: 	hex.EncodeToString(dbAsset.AssetObj.AuxFeeKeyID),
 				AuxFeeDetails: 	&dbAsset.AssetObj.AuxFeeDetails,
 			}
-			assets = append(assets, assetDetails...)
+			assets = append(assets, assetDetails)
 		}
 	}
 	glog.Info("GetAddressUtxo ", address, ", ", len(r), " utxos, ", len(assets), " assets, finished in ", time.Since(start))
