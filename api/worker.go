@@ -1702,20 +1702,20 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *bchain.A
 
 // GetAddressUtxo returns unspent outputs for given address
 func (w *Worker) GetAddressUtxo(address string, onlyConfirmed bool) (Utxos, error) {
+	var utxoRes Utxos
 	if w.chainType != bchain.ChainBitcoinType {
-		return nil, NewAPIError("Not supported", true)
+		return utxoRes, NewAPIError("Not supported", true)
 	}
 	assets := make([]*AssetSpecific, 0, 0)
 	assetsMap := make(map[uint32]bool, 0)
-	var utxoRes Utxos
 	start := time.Now()
 	addrDesc, err := w.chainParser.GetAddrDescFromAddress(address)
 	if err != nil {
-		return utxos, NewAPIError(fmt.Sprintf("Invalid address '%v', %v", address, err), true)
+		return utxoRes, NewAPIError(fmt.Sprintf("Invalid address '%v', %v", address, err), true)
 	}
 	utxoRes.Utxos, err := w.getAddrDescUtxo(addrDesc, nil, onlyConfirmed, false)
 	if err != nil {
-		return utxos, err
+		return utxoRes, err
 	}
 	// add applicable assets to UTXO so spending based on mutable auxfees/notarization fields can be done by SDK's
 	for j := range utxoRes.Utxos {

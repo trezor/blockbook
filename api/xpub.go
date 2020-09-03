@@ -658,10 +658,11 @@ func (w *Worker) GetXpubUtxo(xpub string, onlyConfirmed bool, gap int) (Utxos, e
 		OnlyConfirmed: onlyConfirmed,
 		AssetsMask:	   bchain.AllMask,
 	}, gap)
-	if err != nil {
-		return nil, err
-	}
 	var utxoRes Utxos
+	if err != nil {
+		return utxoRes, err
+	}
+	
 	utxoRes.Utxos = make([]Utxo, 0, 8)
 	assets := make([]*AssetSpecific, 0, 0)
 	assetsMap := make(map[uint32]bool, 0)
