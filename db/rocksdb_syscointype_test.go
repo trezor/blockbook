@@ -46,7 +46,7 @@ func txIndexesHexSyscoin(tx string, assetsMask bchain.AssetsMask, indexes []int3
 func verifyAfterSyscoinTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect bool) {
 	if err := checkColumn(d, cfHeight, []keyPair{
 		{
-			"000000ab",
+			"00000070",
 			"00000797cfd9074de37a557bf0d47bd86c45846f31e163ba688e14dfc498527a" + uintToHex(1598556954) + varuintToHex(2) + varuintToHex(503),
 			nil,
 		},
@@ -92,7 +92,7 @@ func verifyAfterSyscoinTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect bool
 	} else {
 		blockTxsKp = []keyPair{
 			{
-				"000000ab",
+				"00000070",
 				dbtestdata.TxidS1T0 + "01" + "0000000000000000000000000000000000000000000000000000000000000000" + "00" +
 				dbtestdata.TxidS1T1 + "01" + dbtestdata.TxidS1T1INPUT0 + "00",
 				nil,
@@ -167,12 +167,12 @@ func verifyAfterSyscoinTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect bool
 func verifyAfterSyscoinTypeBlock2(t *testing.T, d *RocksDB) {
 	if err := checkColumn(d, cfHeight, []keyPair{
 		{
-			"000000b6",
+			"00000071",
 			"00000cade5f8d530b3f0a3b6c9dceaca50627838f2c6fffb807390cba71974e7" + uintToHex(1598557012) + varuintToHex(2) + varuintToHex(554),
 			nil,
 		},
 		{
-			"000000ab",
+			"00000070",
 			"00000797cfd9074de37a557bf0d47bd86c45846f31e163ba688e14dfc498527a" + uintToHex(1598556954) + varuintToHex(2) + varuintToHex(503),
 			nil,
 		},
@@ -331,13 +331,13 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 
 	if err := checkColumn(d, cfBlockTxs, []keyPair{
 		{
-			"000000b6",
+			"00000071",
 			dbtestdata.TxidS2T0 + "01" + "0000000000000000000000000000000000000000000000000000000000000000" + "00" +
 			dbtestdata.TxidS2T1 + "01" + dbtestdata.TxidS1T1 + "00",
 			nil,
 		},
 		{
-			"000000ab",
+			"00000070",
 			dbtestdata.TxidS1T0 + "01" + "0000000000000000000000000000000000000000000000000000000000000000" + "00" +
 			dbtestdata.TxidS1T1 + "01" + dbtestdata.TxidS1T1INPUT0 + "00",
 			nil,
@@ -452,13 +452,13 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 	verifyAfterSyscoinTypeBlock2(t, d)
 	if err := checkColumn(d, cfBlockTxs, []keyPair{
 		{
-			"000000b6",
+			"00000071",
 			dbtestdata.TxidS2T0 + "01" + "0000000000000000000000000000000000000000000000000000000000000000" + "00" +
 			dbtestdata.TxidS2T1 + "01" + dbtestdata.TxidS1T1 + "00",
 			nil,
 		},
 		{
-			"000000ab",
+			"00000070",
 			dbtestdata.TxidS1T0 + "01" + "0000000000000000000000000000000000000000000000000000000000000000" + "00" +
 			dbtestdata.TxidS1T1 + "01" + dbtestdata.TxidS1T1INPUT0 + "00",
 			nil,
@@ -597,7 +597,7 @@ func Test_BulkConnect_SyscoinType(t *testing.T) {
 	// because BlockAddressesToKeep == 1
 	if err := checkColumn(d, cfBlockTxs, []keyPair{
 		{
-			"000000b6",
+			"00000071",
 			dbtestdata.TxidS2T0 + "01" + "0000000000000000000000000000000000000000000000000000000000000000" + "00" +
 			dbtestdata.TxidS2T1 + "01" + dbtestdata.TxidS1T1 + "01",
 			nil,
