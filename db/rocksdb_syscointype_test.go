@@ -219,7 +219,7 @@ func verifyAfterSyscoinTypeBlock2(t *testing.T, d *RocksDB) {
 			dbtestdata.AddressToPubKeyHex(dbtestdata.AddrS4, d.chainParser),
 			varuintToHex(1) + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatS2T1A1, d) +
 			varuintToHex(1) + varuintToHex(2529870008) + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatZero, d) + varuintToHex(1) +
-			dbtestdata.TxidS2T1 + varuintToHex(0) + varuintToHex(113) + bigintToHex(dbtestdata.SatZero, d) +  varuintToHex(1) + varuintToHex(2529870008) + bigintToHex(dbtestdata.SatS2T1A1, d),
+			dbtestdata.TxidS2T1 + varuintToHex(1) + varuintToHex(113) + bigintToHex(dbtestdata.SatS2T1A1, d) +  varuintToHex(1) + varuintToHex(2529870008) + bigintToHex(dbtestdata.SatZero, d),
 			nil,
 		},
 	}); err != nil {
