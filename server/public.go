@@ -1213,6 +1213,7 @@ func (s *PublicServer) apiXpub(r *http.Request, apiVersion int) (interface{}, er
 
 func (s *PublicServer) apiUtxo(r *http.Request, apiVersion int) (interface{}, error) {
 	var utxo []api.Utxo
+	var utxos api.Utxos
 	var assets []api.AssetDetails
 	var err error
 	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
@@ -1239,10 +1240,11 @@ func (s *PublicServer) apiUtxo(r *http.Request, apiVersion int) (interface{}, er
 			return s.api.AddressUtxoToV1(utxo), nil
 		}
 	}
-	if(len(assets) > 0) {
-		utxo.Assets = assets
+	if len(assets) > 0 {
+		utxos.Assets = assets
 	}
-	return utxo, err
+	utxos.Utxos = utxo
+	return utxos, err
 }
 
 func (s *PublicServer) apiBalanceHistory(r *http.Request, apiVersion int) (interface{}, error) {

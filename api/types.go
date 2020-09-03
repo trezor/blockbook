@@ -260,11 +260,14 @@ type Utxo struct {
 	Coinbase      bool    `json:"coinbase,omitempty"`
 	AssetInfo	  *bchain.AssetInfo  `json:"assetInfo,omitempty"`
 	Script		  string	`json:"script,omitempty"`
-	Assets		  []*AssetSpecific		`json:"assets,omitempty"`
 }
 
-// Utxos is array of Utxo
-type Utxos []Utxo
+// Utxos result for API
+type Utxos struct {
+	Utxos       []Utxo  `json:"utxos"`
+	Assets      []*AssetSpecific  `json:"assets"`
+}
+	
 
 func (a Utxos) Len() int      { return len(a) }
 func (a Utxos) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
