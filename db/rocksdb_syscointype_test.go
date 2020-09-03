@@ -135,7 +135,7 @@ func verifyAfterSyscoinTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect bool
 	if dBAsset.AssetObj.Symbol != "CAT" {
 		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.Symbol: ", dBAsset.AssetObj.Symbol , ". Expected: CAT"))
 	}
-	pubdata := "{\"desc\":\"" + base64.StdEncoding.EncodeString([]byte("publicvalue")) + "\"}"
+	pubdata := "{\"desc\":\"" + base64.StdEncoding.EncodeToString([]byte("publicvalue")) + "\"}"
 	if !bytes.Equal(dBAsset.AssetObj.PubData, []byte(pubdata)) {
 		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.PubData: ", string(dBAsset.AssetObj.PubData)  , ". Expected: " + pubdata))
 	}
@@ -210,8 +210,8 @@ func verifyAfterSyscoinTypeBlock2(t *testing.T, d *RocksDB) {
 		},
 		{
 			dbtestdata.AddressToPubKeyHex(dbtestdata.AddrS3, d.chainParser),
-			varuintToHex(1) + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatS1T1A2, d) +
-			varuintToHex(0) + dbtestdata.TxidS1T1 + varuintToHex(2) + varuintToHex(112) + bigintToHex(dbtestdata.SatS1T1A2, d) + varuintToHex(0),
+			varuintToHex(1) + bigintToHex(dbtestdata.SatZero, d) + bigintToHex(dbtestdata.SatS2T0A1, d) +
+			varuintToHex(0) + dbtestdata.TxidS2T0 + varuintToHex(0) + varuintToHex(112) + bigintToHex(dbtestdata.SatS2T0A1, d) + varuintToHex(0),
 			nil,
 		},
 		// asset update. asset activate should be spent
@@ -240,7 +240,7 @@ func verifyAfterSyscoinTypeBlock2(t *testing.T, d *RocksDB) {
 	if dBAsset.AssetObj.Symbol != "CAT" {
 		t.Fatal(fmt.Sprint("Block2: Property mismatch dBAsset.AssetObj.Symbol: ", dBAsset.AssetObj.Symbol , ". Expected: CAT"))
 	}
-	pubdata := "{\"desc\":\"" + base64.StdEncoding.EncodeString([]byte("new publicvalue")) + "\"}"
+	pubdata := "{\"desc\":\"" + base64.StdEncoding.EncodeToString([]byte("new publicvalue")) + "\"}"
 	if !bytes.Equal(dBAsset.AssetObj.PubData, []byte(pubdata)) {
 		t.Fatal(fmt.Sprint("Block2: Property mismatch dBAsset.AssetObj.PubData: ", string(dBAsset.AssetObj.PubData)  , ". Expected: " + pubdata))
 	}
@@ -259,7 +259,7 @@ func verifyAfterSyscoinTypeBlock2(t *testing.T, d *RocksDB) {
 	if dBAsset.AssetObj.MaxSupply != 100000000000 {
 		t.Fatal(fmt.Sprint("Block2: Property mismatch dBAsset.AssetObj.MaxSupply: ", dBAsset.AssetObj.MaxSupply  , ". Expected: 100000000000"))
 	}
-	if hex.EncodeToString(dBAsset.AssetObj.Contract) != []byte("2b1e58b979e4b2d72d8bca5bb4646ccc032ddbfc") {
+	if hex.EncodeToString(dBAsset.AssetObj.Contract) != "2b1e58b979e4b2d72d8bca5bb4646ccc032ddbfc" {
 		t.Fatal(fmt.Sprint("Block2: Property mismatch dBAsset.AssetObj.Contract: ", dBAsset.AssetObj.MaxSupply  , ". Expected: 2b1e58b979e4b2d72d8bca5bb4646ccc032ddbfc"))
 	}
 	// prev contract is not persisted for performance reasons, wire info will have it
