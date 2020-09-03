@@ -1099,7 +1099,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 					"descriptor": dbtestdata.Addr1,
 				},
 			},
-			want: `{"id":"5","data":[{"txid":"00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840","vout":0,"value":"100000000","height":225493,"confirmations":2,"script":"76a914010d39800f86122416e28f485029acf77507169288ac"}]}`,
+			want: `{"id":"5","data":{"utxos":[{"txid":"00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840","vout":0,"value":"100000000","height":225493,"confirmations":2,"script":"76a914010d39800f86122416e28f485029acf77507169288ac"}]}}`,
 		},
 		{
 			name: "websocket getAccountUtxo",
@@ -1109,7 +1109,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 					"descriptor": dbtestdata.Addr4,
 				},
 			},
-			want: `{"id":"6","data":[]}`,
+			want: `{"id":"6","data":{"utxos":[]}}`,
 		},
 		{
 			name: "websocket getTransaction",

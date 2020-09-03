@@ -265,7 +265,7 @@ type Utxo struct {
 // Utxos result for API
 type Utxos struct {
 	Utxos       []Utxo  `json:"utxos"`
-	Assets      []*AssetSpecific  `json:"assets"`
+	Assets      []*AssetSpecific  `json:"assets,omitempty"`
 }
 	
 
