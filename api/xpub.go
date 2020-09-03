@@ -12,6 +12,7 @@ import (
 	"bytes"
 	"github.com/golang/glog"
 	"github.com/juju/errors"
+	"encoding/hex"
 )
 
 const defaultAddressesGap = 20
@@ -680,7 +681,7 @@ func (w *Worker) GetXpubUtxo(xpub string, onlyConfirmed bool, gap int) (Utxos, [
 			if len(utxos) > 0 {
 				txs, errXpub := w.tokenFromXpubAddress(data, ad, ci, i, AccountDetailsTokens)
 				if errXpub != nil {
-					return nil, errXpub
+					return nil, nil, errXpub
 				}
 				if len(txs) > 0 {
 					for _ , t := range txs {
@@ -693,7 +694,7 @@ func (w *Worker) GetXpubUtxo(xpub string, onlyConfirmed bool, gap int) (Utxos, [
 					// add applicable assets to UTXO so spending based on mutable auxfees/notarization fields can be done by SDK's
 					for j := range utxos {
 						a := &utxos[j]
-						if(a.AssetInfo) {
+						if a.AssetInfo != nil {
 							dbAsset, errAsset := w.db.GetAsset(a.AssetInfo.AssetGuid, nil)
 							if errAsset != nil || dbAsset == nil {
 								return nil, nil, errAsset
@@ -716,9 +717,9 @@ func (w *Worker) GetXpubUtxo(xpub string, onlyConfirmed bool, gap int) (Utxos, [
 								UpdateFlags:	dbAsset.AssetObj.UpdateFlags,
 								UpdateCapabilityFlags:	dbAsset.AssetObj.UpdateCapabilityFlags,
 								NotaryKeyID: 	hex.EncodeToString(dbAsset.AssetObj.NotaryKeyID),
-								NotaryDetails: 	dbAsset.AssetObj.NotaryDetails,
+								NotaryDetails: 	&dbAsset.AssetObj.NotaryDetails,
 								AuxFeeKeyID: 	hex.EncodeToString(dbAsset.AssetObj.AuxFeeKeyID),
-								AuxFeeDetails: 	dbAsset.AssetObj.AuxFeeDetails,
+								AuxFeeDetails: 	&dbAsset.AssetObj.AuxFeeDetails,
 							}
 							assets = append(assets, assetDetails...)
 						}
