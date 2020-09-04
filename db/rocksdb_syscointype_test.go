@@ -449,9 +449,9 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 	verifyAfterSyscoinTypeBlock2(t, d)
 	if err := checkColumn(d, cfBlockTxs, []keyPair{
 		{
-			"00000071",
-			dbtestdata.TxidS2T0 + "01" + "0000000000000000000000000000000000000000000000000000000000000000" + varintToHex(0) +
-			dbtestdata.TxidS2T1 + "01" + dbtestdata.TxidS1T1 + varuintToHex(1),
+			"00000070",
+			dbtestdata.TxidS1T0 + "01" + "0000000000000000000000000000000000000000000000000000000000000000" + varintToHex(0) +
+			dbtestdata.TxidS1T1 + "01" + dbtestdata.TxidS1T1INPUT0 + varuintToHex(0),
 			nil,
 		},
 	}); err != nil {
