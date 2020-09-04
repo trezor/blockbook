@@ -592,9 +592,9 @@ func TestRocksDB_Index_BitcoinType(t *testing.T) {
 		{dbtestdata.TxidB2T1, 0},
 	}, nil)
 	verifyGetTransactions(t, d, dbtestdata.Addr5, 0, 1000000, []txidIndex{
-		{dbtestdata.TxidB1T2, 2},
 		{dbtestdata.TxidB2T3, ^0},
 		{dbtestdata.TxidB2T3, 0},
+		{dbtestdata.TxidB1T2, 2},
 	}, nil)
 	verifyGetTransactions(t, d, "mtGXQvBowMkBpnhLckhxhbwYK44Gs9eBad", 500000, 1000000, []txidIndex{}, errors.New("checksum mismatch"))
 
