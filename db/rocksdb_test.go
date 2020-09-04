@@ -90,7 +90,7 @@ func bigintToHex(i *big.Int, d *RocksDB) string {
 
 func varintToHex(i int32) string {
 	b := make([]byte, vlq.MaxLen32)
-	l := vlq.PutInt(buf, int64(i))
+	l := vlq.PutInt(b, int64(i))
 	return hex.EncodeToString(b[:l])
 }
 
