@@ -25,7 +25,7 @@ type testSyscoinParser struct {
 
 func syscoinTestParser() *syscoin.SyscoinParser {
 	return syscoin.NewSyscoinParser(syscoin.GetChainParams("main"),
-	&btc.Configuration{BlockAddressesToKeep: 1})
+	&btc.Configuration{BlockAddressesToKeep: 2})
 }
 
 func txIndexesHexSyscoin(tx string, assetsMask bchain.AssetsMask, indexes []int32, d *RocksDB) string {
