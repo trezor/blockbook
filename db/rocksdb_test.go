@@ -88,11 +88,18 @@ func bigintToHex(i *big.Int, d *RocksDB) string {
 	return hex.EncodeToString(b[:l])
 }
 
+func varintToHex(i int32) string {
+	b := make([]byte, vlq.MaxLen32)
+	l := vlq.PutInt(buf, int64(i))
+	return hex.EncodeToString(b[:l])
+}
+
 func varuintToHex(i uint) string {
 	b := make([]byte, vlq.MaxLen64)
 	l := vlq.PutUint(b, uint64(i))
 	return hex.EncodeToString(b[:l])
 }
+
 
 func uintToHex(i uint32) string {
 	buf := make([]byte, 4)
