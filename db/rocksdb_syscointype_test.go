@@ -352,7 +352,6 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 
 	// get transactions for various addresses / low-high ranges
 	verifyGetTransactions(t, d, dbtestdata.AddrS2, 0, 1000000, []txidIndex{
-		{dbtestdata.TxidS2T1, ^1},
 		{dbtestdata.TxidS1T1, 1},
 	}, nil)
 	verifyGetTransactions(t, d, dbtestdata.AddrS2, 112, 112, []txidIndex{
@@ -482,7 +481,7 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 		Utxos: []bchain.Utxo{
 			{
 				BtxID:    hexToBytes(dbtestdata.TxidS2T1),
-				Vout:     0,
+				Vout:     1,
 				Height:   113,
 				ValueSat: *dbtestdata.SatS2T1A1,
 				AssetInfo: &bchain.AssetInfo{AssetGuid: 2529870008, ValueSat: dbtestdata.SatZero},
