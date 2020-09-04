@@ -279,7 +279,7 @@ func verifyAfterBitcoinTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect bool
 		blockTxsKp = []keyPair{
 			{
 				"000370d5",
-				dbtestdata.TxidB1T1 + "00" + dbtestdata.TxidB1T2 + "00",
+				dbtestdata.TxidB1T1 + "00" + dbtestdata.TxidB1T2 + varintToHex(0),
 				nil,
 			},
 		}
@@ -462,10 +462,10 @@ func verifyAfterBitcoinTypeBlock2(t *testing.T, d *RocksDB) {
 	if err := checkColumn(d, cfBlockTxs, []keyPair{
 		{
 			"000370d6",
-			dbtestdata.TxidB2T1 + "02" + dbtestdata.TxidB1T2 + "00" + dbtestdata.TxidB1T1 + "02" +
-				dbtestdata.TxidB2T2 + "02" + dbtestdata.TxidB2T1 + "00" + dbtestdata.TxidB1T2 + "02" +
-				dbtestdata.TxidB2T3 + "01" + dbtestdata.TxidB1T2 + "04" +
-				dbtestdata.TxidB2T4 + "01" + "0000000000000000000000000000000000000000000000000000000000000000" + "00",
+			dbtestdata.TxidB2T1 + "02" + dbtestdata.TxidB1T2 + "00" + dbtestdata.TxidB1T1 + varintToHex(1) +
+				dbtestdata.TxidB2T2 + "02" + dbtestdata.TxidB2T1 + "00" + dbtestdata.TxidB1T2 + varintToHex(1) +
+				dbtestdata.TxidB2T3 + "01" + dbtestdata.TxidB1T2 + varintToHex(2) +
+				dbtestdata.TxidB2T4 + "01" + "0000000000000000000000000000000000000000000000000000000000000000" + varintToHex(0),
 			nil,
 		},
 	}); err != nil {
@@ -590,6 +590,11 @@ func TestRocksDB_Index_BitcoinType(t *testing.T) {
 	verifyGetTransactions(t, d, dbtestdata.Addr6, 0, 1000000, []txidIndex{
 		{dbtestdata.TxidB2T2, ^0},
 		{dbtestdata.TxidB2T1, 0},
+	}, nil)
+	verifyGetTransactions(t, d, dbtestdata.Addr5, 0, 1000000, []txidIndex{
+		{dbtestdata.TxidB1T2, 2},
+		{dbtestdata.TxidB2T3, ^0},
+		{dbtestdata.TxidB2T3, 0},
 	}, nil)
 	verifyGetTransactions(t, d, "mtGXQvBowMkBpnhLckhxhbwYK44Gs9eBad", 500000, 1000000, []txidIndex{}, errors.New("checksum mismatch"))
 
