@@ -352,13 +352,14 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 
 	// get transactions for various addresses / low-high ranges
 	verifyGetTransactions(t, d, dbtestdata.AddrS2, 0, 1000000, []txidIndex{
+		{dbtestdata.TxidS2T1, ^1},
 		{dbtestdata.TxidS1T1, 1},
 	}, nil)
 	verifyGetTransactions(t, d, dbtestdata.AddrS2, 112, 112, []txidIndex{
 		{dbtestdata.TxidS1T1, 1},
 	}, nil)
 	verifyGetTransactions(t, d, dbtestdata.AddrS2, 113, 1000000, []txidIndex{
-		{dbtestdata.TxidS1T1, 1},
+		{dbtestdata.TxidS2T1, ^1},
 	}, nil)
 	verifyGetTransactions(t, d, dbtestdata.AddrS2, 500000, 1000000, []txidIndex{}, nil)
 	verifyGetTransactions(t, d, dbtestdata.AddrS1, 0, 1000000, []txidIndex{
