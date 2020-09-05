@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 	"strconv"
-	"bytes"
 	"github.com/golang/glog"
 	"github.com/juju/errors"
 	"encoding/hex"
