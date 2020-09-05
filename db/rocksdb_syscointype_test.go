@@ -428,7 +428,7 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 	if err := d.ConnectBlock(block1); err != nil {
 		t.Fatal(err)
 	}
-	verifyAfterSyscoinTypeBlock1(t, d)
+	verifyAfterSyscoinTypeBlock1(t, d, false)
 	if err := d.ConnectBlock(block2); err != nil {
 		t.Fatal(err)
 	}
@@ -440,7 +440,7 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	verifyAfterSyscoinTypeBlock1(t, d, false)
+	verifyAfterSyscoinTypeBlock1(t, d, true)
 	if err := checkColumn(d, cfTransactions, []keyPair{}); err != nil {
 		{
 			t.Fatal(err)
