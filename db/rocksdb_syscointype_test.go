@@ -419,9 +419,17 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 		t.Errorf("GetBlockInfo() = %+v, want %+v", info, iw)
 	}
 
-	// try to disconnect both blocks, however only the last one is kept, it is not possible
+	// try to disconnect both blocks
 	err = d.DisconnectBlockRangeBitcoinType(112, 113)
-	if err == nil || err.Error() != "Cannot disconnect blocks with height 113 and lower. It is necessary to rebuild index." {
+	if err != nil {
+		t.Fatal(err)
+	}
+	// connect blocka again and verify the state of db
+	if err := d.ConnectBlock(block1); err != nil {
+		t.Fatal(err)
+	}
+	verifyAfterSyscoinTypeBlock1(t, d)
+	if err := d.ConnectBlock(block2); err != nil {
 		t.Fatal(err)
 	}
 	verifyAfterSyscoinTypeBlock2(t, d)
