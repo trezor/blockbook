@@ -79,8 +79,8 @@
                             {{- range $tokenTransfer := $tx.TokenTransferSummary -}}{{if $tokenTransfer}}
                             <tr>
                                 <td class="data ellipsis"><a href="/asset/{{$tokenTransfer.Token}}">{{$tokenTransfer.Token}}</a></td>
-                                <td class="data ellipsis">{{formatAmountWithDecimals $tokenTransfer.Value $tokenTransfer.Decimals}} {{$tokenTransfer.Symbol}}{{- if eq $tokenTransfer.Type "SPTUnallocated" -}}<span title="Unallocated balance, owned by asset"> ⚠️</span>{{- end -}}</td>
-                                <td class="data ellipsis">{{formatAmountWithDecimals $tokenTransfer.ValueOut $tokenTransfer.Decimals}} {{$tokenTransfer.Symbol}}{{- if eq $tokenTransfer.Type "SPTUnallocated" -}}<span title="Unallocated balance, owned by asset"> ⚠️</span>{{- end -}}</td>
+                                <td class="data ellipsis">{{formatAmountWithDecimals $tokenTransfer.Value $tokenTransfer.Decimals}} {{$tokenTransfer.Symbol}}</td>
+                                <td class="data ellipsis">{{formatAmountWithDecimals $tokenTransfer.ValueOut $tokenTransfer.Decimals}} {{$tokenTransfer.Symbol}}</td>
                             </tr>
                             {{- end -}}{{- end -}}
                         </tbody>

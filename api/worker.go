@@ -1097,33 +1097,10 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 	} 
 	if ba.AssetBalances != nil && option > AccountDetailsBasic {
 		tokens = make(bchain.Tokens, 0, len(ba.AssetBalances)+1)
-		var ownerFound bool = false
 		for k, v := range ba.AssetBalances {
 			dbAsset, errAsset := w.db.GetAsset(uint32(k), nil)
 			if errAsset != nil || dbAsset == nil {
 				return nil, errAsset
-			}
-			if !ownerFound {
-				// add token as unallocated if address matches asset owner address
-				if bytes.Equal(addrDesc, dbAsset.AddrDesc) {
-					ownerBalance := big.NewInt(dbAsset.AssetObj.Balance)
-					totalOwnerAssetReceived := bchain.ReceivedSatFromBalances(ownerBalance, v.SentSat)
-					assetGuid := strconv.FormatUint(uint64(k), 10)
-					tokens = append(tokens, &bchain.Token{
-						Type:             bchain.SPTUnallocatedTokenType,
-						AddrStr:		  dbAsset.AddrDesc.String(),
-						Name:             assetGuid + " (" + dbAsset.AssetObj.Symbol + ")",
-						Decimals:         int(dbAsset.AssetObj.Precision),
-						Symbol:			  dbAsset.AssetObj.Symbol,
-						BalanceSat:       (*bchain.Amount)(ownerBalance),
-						TotalReceivedSat: (*bchain.Amount)(totalOwnerAssetReceived),
-						TotalSentSat:     (*bchain.Amount)(v.SentSat),
-						Contract:		  assetGuid,
-						Transfers:		  v.Transfers,
-						ContractIndex: 	  assetGuid,
-					})
-					ownerFound = true
-				}
 			}
 			totalAssetReceived := bchain.ReceivedSatFromBalances(v.BalanceSat, v.SentSat)
 			assetGuid := strconv.FormatUint(uint64(k), 10)
@@ -1307,7 +1284,6 @@ func (w *Worker) GetAsset(asset string, page int, txsOnPage int, option AccountD
 		AssetDetails:	&AssetSpecific{
 			AssetGuid:		assetGuid,
 			Symbol:			dbAsset.AssetObj.Symbol,
-			AddrStr:		dbAsset.AddrDesc.String(),
 			Contract:		"0x" + hex.EncodeToString(dbAsset.AssetObj.Contract),
 			Balance:		(*bchain.Amount)(big.NewInt(dbAsset.AssetObj.Balance)),
 			TotalSupply:	(*bchain.Amount)(big.NewInt(dbAsset.AssetObj.TotalSupply)),
@@ -1734,7 +1710,6 @@ func (w *Worker) GetAddressUtxo(address string, onlyConfirmed bool) (Utxos, erro
 			assetDetails :=	&AssetSpecific{
 				AssetGuid:		a.AssetInfo.AssetGuid,
 				Symbol:			dbAsset.AssetObj.Symbol,
-				AddrStr:		dbAsset.AddrDesc.String(),
 				Contract:		"0x" + hex.EncodeToString(dbAsset.AssetObj.Contract),
 				Balance:		(*bchain.Amount)(big.NewInt(dbAsset.AssetObj.Balance)),
 				TotalSupply:	(*bchain.Amount)(big.NewInt(dbAsset.AssetObj.TotalSupply)),

@@ -450,7 +450,6 @@ const XPUBAddressTokenType TokenType = "XPUBAddress"
 // Syscoin SPT transaction
 const SPTNoneType TokenType = "Syscoin"
 const SPTTokenType TokenType = "SPTAllocated"
-const SPTUnallocatedTokenType TokenType = "SPTUnallocated"
 const SPTUnknownType TokenType = "SPTUnknown"
 const SPTAssetActivateType TokenType = "SPTAssetActivate"
 const SPTAssetUpdateType TokenType = "SPTAssetUpdate"
@@ -520,7 +519,6 @@ type AssetAllocation struct {
 type Asset struct {
 	Transactions	uint32
 	AssetObj 		wire.AssetType
-	AddrDesc    	AddressDescriptor
 }
 // Assets is array of Asset
 type Assets []Asset
@@ -762,6 +760,7 @@ type BlockChainParser interface {
 	PackAsset(asset *Asset) ([]byte, error)
 	UnpackAsset(buf []byte) (*Asset, error)
 	GetAssetFromData(sptData []byte) (*Asset, error)
+	GetAssetFromDesc(addrDesc *AddressDescriptor) (*Asset, error)
 	GetAllocationFromTx(tx *Tx) (*AssetAllocation, error)
 	LoadAssets(tx *Tx) error
 	AppendAssetInfo(assetInfo *AssetInfo, buf []byte, varBuf []byte) []byte

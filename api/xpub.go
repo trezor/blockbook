@@ -241,11 +241,9 @@ func (w *Worker) tokenFromXpubAddress(data *xpubData, ad *xpubAddress, changeInd
 	a, _, _ := w.chainParser.GetAddressesFromAddrDesc(ad.addrDesc)
 	numAssetBalances := 0
 	if ad.balance != nil {
-		// + 1 for owner asset for unallocated token
-		numAssetBalances = 1 + len(ad.balance.AssetBalances)
+		numAssetBalances = len(ad.balance.AssetBalances)
 	}
-	// +1 for base token always appended
-	tokens := make(bchain.Tokens, 0, 1+numAssetBalances)
+	tokens := make(bchain.Tokens, 0, numAssetBalances)
 	var address string
 	if len(a) > 0 {
 		address = a[0]
@@ -258,37 +256,12 @@ func (w *Worker) tokenFromXpubAddress(data *xpubData, ad *xpubAddress, changeInd
 			balance = &ad.balance.BalanceSat
 			totalSent = &ad.balance.SentSat
 			totalReceived = ad.balance.ReceivedSat()
-			// for asset tokens
-			var ownerFound bool = false
 			for k, v := range ad.balance.AssetBalances {
 				dbAsset, errAsset := w.db.GetAsset(k, nil)
 				if errAsset != nil || dbAsset == nil {
 					return nil, errAsset
 				}
-				if !ownerFound {
-					// add token as unallocated if address matches asset owner address
-					if bytes.Equal(ad.addrDesc, dbAsset.AddrDesc) {
-						ownerBalance := big.NewInt(dbAsset.AssetObj.Balance)
-						totalOwnerAssetReceived := bchain.ReceivedSatFromBalances(ownerBalance, v.SentSat)
-						assetGuid := strconv.FormatUint(uint64(k), 10)
-						tokens = append(tokens, &bchain.Token{
-							Type:             bchain.SPTUnallocatedTokenType,
-							Name:             address,
-							Decimals:         int(dbAsset.AssetObj.Precision),
-							Symbol:			  dbAsset.AssetObj.Symbol,
-							BalanceSat:       (*bchain.Amount)(ownerBalance),
-							TotalReceivedSat: (*bchain.Amount)(totalOwnerAssetReceived),
-							TotalSentSat:     (*bchain.Amount)(v.SentSat),
-							Path:             fmt.Sprintf("%s/%d/%d", data.basePath, changeIndex, index),
-							Contract:		  assetGuid,
-							Transfers:		  v.Transfers,
-							ContractIndex:    assetGuid,
-						})
-						ownerFound = true
-					}
-				}
 				totalAssetReceived := bchain.ReceivedSatFromBalances(v.BalanceSat, v.SentSat)
-				// add token as unallocated if address matches asset owner address other wise its allocated
 				assetGuid := strconv.FormatUint(uint64(k), 10)
 				tokens = append(tokens, &bchain.Token{
 					Type:             bchain.SPTTokenType,
@@ -710,7 +683,6 @@ func (w *Worker) GetXpubUtxo(xpub string, onlyConfirmed bool, gap int) (Utxos, e
 							assetDetails :=	&AssetSpecific{
 								AssetGuid:		a.AssetInfo.AssetGuid,
 								Symbol:			dbAsset.AssetObj.Symbol,
-								AddrStr:		dbAsset.AddrDesc.String(),
 								Contract:		"0x" + hex.EncodeToString(dbAsset.AssetObj.Contract),
 								Balance:		(*bchain.Amount)(big.NewInt(dbAsset.AssetObj.Balance)),
 								TotalSupply:	(*bchain.Amount)(big.NewInt(dbAsset.AssetObj.TotalSupply)),

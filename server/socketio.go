@@ -630,7 +630,6 @@ func (s *SocketIoServer) getAssetHistory(asset string, opts *assetOpts) (res res
 		res.Result.AssetDetails =	&api.AssetSpecific{
 			AssetGuid:		assetGuid,
 			Symbol:			dbAsset.AssetObj.Symbol,
-			AddrStr: 		dbAsset.AddrDesc.String(),
 			Contract:		"0x" + hex.EncodeToString(dbAsset.AssetObj.Contract),
 			Balance:		(*bchain.Amount)(big.NewInt(dbAsset.AssetObj.Balance)),
 			TotalSupply:	(*bchain.Amount)(big.NewInt(dbAsset.AssetObj.TotalSupply)),

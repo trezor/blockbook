@@ -279,6 +279,25 @@ func (p *SyscoinParser) GetAllocationFromTx(tx *bchain.Tx) (*bchain.AssetAllocat
 	return &assetAllocation, nil
 }
 
+func (p *SyscoinParser) GetAssetFromDesc(addrDesc *bchain.AddressDescriptor) (*bchain.Asset, error) {
+	script, err := p.GetScriptFromAddrDesc(addrDesc)
+	if err != nil {
+		return nil, err
+	}
+	sptData := p.TryGetOPReturn(script)
+	if sptData == nil {
+		return nil, errors.New("OP_RETURN empty")
+	}
+		
+	var asset bchain.Asset
+	r := bytes.NewReader(sptData)
+	err := asset.AssetObj.Deserialize(r)
+	if err != nil {
+		return nil, err
+	}
+	return &asset, nil
+}
+
 func (p *SyscoinParser) GetAssetFromData(sptData []byte) (*bchain.Asset, error) {
 	var asset bchain.Asset
 	r := bytes.NewReader(sptData)
