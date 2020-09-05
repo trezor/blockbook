@@ -1163,7 +1163,6 @@ func (w *Worker) FindAssets(filter string, page int, txsOnPage int) *Assets {
 		assetSpecific := AssetsSpecific{
 			AssetGuid:		guid,
 			Symbol:			asset.AssetObj.Symbol,
-			AddrStr:		asset.AddrDesc.String(),
 			Contract:		"0x" + hex.EncodeToString(asset.AssetObj.Contract),
 			TotalSupply:	(*bchain.Amount)(big.NewInt(asset.AssetObj.TotalSupply)),
 			Decimals:		int(asset.AssetObj.Precision),

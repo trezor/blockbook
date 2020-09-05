@@ -280,7 +280,7 @@ func (p *SyscoinParser) GetAllocationFromTx(tx *bchain.Tx) (*bchain.AssetAllocat
 }
 
 func (p *SyscoinParser) GetAssetFromDesc(addrDesc *bchain.AddressDescriptor) (*bchain.Asset, error) {
-	script, err := p.GetScriptFromAddrDesc(addrDesc)
+	script, err := p.GetScriptFromAddrDesc(*addrDesc)
 	if err != nil {
 		return nil, err
 	}
@@ -291,7 +291,7 @@ func (p *SyscoinParser) GetAssetFromDesc(addrDesc *bchain.AddressDescriptor) (*b
 		
 	var asset bchain.Asset
 	r := bytes.NewReader(sptData)
-	err := asset.AssetObj.Deserialize(r)
+	err = asset.AssetObj.Deserialize(r)
 	if err != nil {
 		return nil, err
 	}
@@ -612,7 +612,6 @@ func (p *SyscoinParser) PackAsset(asset *bchain.Asset) ([]byte, error) {
 	varBuf := make([]byte, 40)
 	l := p.BaseParser.PackVaruint(uint(asset.Transactions), varBuf)
 	buf = append(buf, varBuf[:l]...)
-	buf = p.BaseParser.PackVarBytes(asset.AddrDesc, buf, varBuf)
 	var buffer bytes.Buffer
 	err := asset.AssetObj.Serialize(&buffer)
 	if err != nil {
@@ -627,9 +626,6 @@ func (p *SyscoinParser) UnpackAsset(buf []byte) (*bchain.Asset, error) {
 	var ll int
 	transactions, l := p.BaseParser.UnpackVaruint(buf)
 	asset.Transactions = uint32(transactions)
-	asset.AddrDesc, ll = p.BaseParser.UnpackVarBytes(buf[l:])
-	l += ll
-
 	r := bytes.NewReader(buf[l:])
 	err := asset.AssetObj.Deserialize(r)
 	if err != nil {

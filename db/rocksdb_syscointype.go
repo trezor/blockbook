@@ -159,6 +159,7 @@ func (d *RocksDB) ConnectAllocationOutput(addrDesc* bchain.AddressDescriptor, he
 
 func (d *RocksDB) ConnectAssetOutput(asset *bchain.Asset, isActivate bool, isAssetTx bool, assets map[uint32]*bchain.Asset) error {
 	var dBAsset* bchain.Asset = nil
+	var err error
 	assetGuid := asset.Allocation.VoutAssets[0].AssetGuid
 	if !isActivate {
 		dBAsset, err = d.GetAsset(assetGuid, assets)

@@ -593,11 +593,14 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses bch
 					}
 				}
 			} else if isAssetTx && asset == nil && addrDesc[0] == txscript.OP_RETURN {
-				asset = d.chainParser.GetAssetFromDesc(addrDesc)
+				asset, err = d.chainParser.GetAssetFromDesc(addrDesc)
+				if err != nil {
+					return err
+				}
 			}
 		}
 		if asset != nil {
-			err := d.ConnectAssetOutput(asset, isActivate, isAssetTx, assets)
+			err = d.ConnectAssetOutput(asset, isActivate, isAssetTx, assets)
 			if err != nil {
 				return err
 			}
@@ -1016,8 +1019,6 @@ func (d *RocksDB) disconnectTxAddressesInputs(wb *gorocksdb.WriteBatch, btxID []
 	assetFoundInTx func(asset uint32, btxID []byte) bool,
 	assets map[uint32]*bchain.Asset, blockTxAssetAddresses bchain.TxAssetAddressMap) error {
 	var err error
-	var addrDesc *bchain.AddressDescriptor = nil
-	isAssetTx := d.chainParser.IsAssetTx(txa.Version)
 	for i, t := range txa.Inputs {
 		if len(t.AddrDesc) > 0 {
 			input := &inputs[i]
@@ -1090,6 +1091,8 @@ func (d *RocksDB) disconnectTxAddressesOutputs(wb *gorocksdb.WriteBatch, btxID [
 	assets map[uint32]*bchain.Asset, blockTxAssetAddresses bchain.TxAssetAddressMap) error {
 	var addrDesc *bchain.AddressDescriptor = nil
 	isActivate := d.chainParser.IsAssetActivateTx(txa.Version)
+	var asset *bchain.Asset = nil
+	isAssetTx := d.chainParser.IsAssetTx(txa.Version)
 	for i, t := range txa.Outputs {
 		if len(t.AddrDesc) > 0 {
 			exist := addressFoundInTx(t.AddrDesc, btxID)
@@ -1126,12 +1129,12 @@ func (d *RocksDB) disconnectTxAddressesOutputs(wb *gorocksdb.WriteBatch, btxID [
 					glog.Warningf("Balance for address %s (%s) not found", ad, t.AddrDesc)
 				}
 			} else if isAssetTx && asset == nil && t.AddrDesc[0] == txscript.OP_RETURN {
-				asset = d.chainParser.GetAssetFromDesc(&t.AddrDesc)
+				asset, err = d.chainParser.GetAssetFromDesc(&t.AddrDesc)
 			}
 		}
 	}
 	if asset != nil {
-		err := d.DisconnectAssetOutput(asset, isActivate, assets)
+		err = d.DisconnectAssetOutput(asset, isActivate, assets)
 		if err != nil {
 			return err
 		}
