@@ -623,7 +623,6 @@ func (p *SyscoinParser) PackAsset(asset *bchain.Asset) ([]byte, error) {
 
 func (p *SyscoinParser) UnpackAsset(buf []byte) (*bchain.Asset, error) {
 	var asset bchain.Asset
-	var ll int
 	transactions, l := p.BaseParser.UnpackVaruint(buf)
 	asset.Transactions = uint32(transactions)
 	r := bytes.NewReader(buf[l:])

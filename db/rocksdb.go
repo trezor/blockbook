@@ -1089,7 +1089,6 @@ func (d *RocksDB) disconnectTxAddressesOutputs(wb *gorocksdb.WriteBatch, btxID [
 	addressFoundInTx func(addrDesc bchain.AddressDescriptor, btxID []byte) bool,
 	assetFoundInTx func(asset uint32, btxID []byte) bool,
 	assets map[uint32]*bchain.Asset, blockTxAssetAddresses bchain.TxAssetAddressMap) error {
-	var addrDesc *bchain.AddressDescriptor = nil
 	isActivate := d.chainParser.IsAssetActivateTx(txa.Version)
 	var asset *bchain.Asset = nil
 	isAssetTx := d.chainParser.IsAssetTx(txa.Version)
