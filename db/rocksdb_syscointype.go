@@ -53,7 +53,9 @@ func (d *RocksDB) ConnectAssetOutputHelper(isActivate bool, asset *bchain.Asset,
 		}
 	} else {
 		dBAsset.AssetObj.TotalSupply = asset.AssetObj.Balance
-	}	
+	}
+	// set to all update flags so it will serialize full object into DB
+	dBAsset.AssetObj.UpdateFlags = wire.ASSET_UPDATE_ALL
 	return nil
 }
 
