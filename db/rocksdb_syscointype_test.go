@@ -440,7 +440,7 @@ func TestRocksDB_Index_SyscoinType(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	verifyAfterSyscoinTypeBlock1(t, d, true)
+	verifyAfterSyscoinTypeBlock1(t, d, false)
 	if err := checkColumn(d, cfTransactions, []keyPair{}); err != nil {
 		{
 			t.Fatal(err)
