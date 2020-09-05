@@ -593,7 +593,7 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses bch
 					}
 				}
 			} else if isAssetTx && asset == nil && addrDesc[0] == txscript.OP_RETURN {
-				asset, err = d.chainParser.GetAssetFromDesc(addrDesc)
+				asset, err = d.chainParser.GetAssetFromDesc(&addrDesc)
 				if err != nil {
 					return err
 				}
@@ -1129,12 +1129,16 @@ func (d *RocksDB) disconnectTxAddressesOutputs(wb *gorocksdb.WriteBatch, btxID [
 					glog.Warningf("Balance for address %s (%s) not found", ad, t.AddrDesc)
 				}
 			} else if isAssetTx && asset == nil && t.AddrDesc[0] == txscript.OP_RETURN {
+				var err error
 				asset, err = d.chainParser.GetAssetFromDesc(&t.AddrDesc)
+				if err != nil {
+					return err
+				}
 			}
 		}
 	}
 	if asset != nil {
-		err = d.DisconnectAssetOutput(asset, isActivate, assets)
+		err := d.DisconnectAssetOutput(asset, isActivate, assets)
 		if err != nil {
 			return err
 		}
