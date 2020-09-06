@@ -308,11 +308,9 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 		pValInSat = &valInSat
 		// flatten TTS Map
 		if mapTTS != nil && len(mapTTS) > 0 {
-			tokens = make([]*bchain.TokenTransferSummary, len(mapTTS))
-			var i int = 0
+			tokens = make([]*bchain.TokenTransferSummary, 0, len(mapTTS))
 			for _, token := range mapTTS {
-				tokens[i] = token
-				i++
+				tokens = append(tokens, token)
 			}
 		}
 		
@@ -493,11 +491,9 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 		pValInSat = &valInSat
 		// flatten TTS Map
 		if mapTTS != nil && len(mapTTS) > 0 {
-			tokens = make([]*bchain.TokenTransferSummary, len(mapTTS))
-			var i int = 0
+			tokens = make([]*bchain.TokenTransferSummary, 0, len(mapTTS))
 			for _, token := range mapTTS {
-				tokens[i] = token
-				i++
+				tokens = append(tokens, token)
 			}
 		}
 	} else if w.chainType == bchain.ChainEthereumType {

@@ -171,7 +171,7 @@ func (d *RocksDB) ConnectAssetOutput(asset *bchain.Asset, isActivate bool, isAss
 		if dBAsset == nil {
 			return errors.New(fmt.Sprint("ConnectAssetOutput could not read asset " , assetGuid))
 		}
-	} else if isActivate {
+	} else {
 		dBAsset = &bchain.Asset{Transactions: 1, AssetObj: asset.AssetObj}
 	}
 	if dBAsset != nil {
