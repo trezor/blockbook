@@ -145,7 +145,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 	var valInSat, valOutSat, feesSat big.Int
 	var pValInSat *big.Int
 	vins := make([]Vin, len(bchainTx.Vin))
-
+	txVersionAsset := w.chainParser.GetAssetTypeFromVersion(bchainTx.Version)
 	rbf := false
 	for i := range bchainTx.Vin {
 		bchainVin := &bchainTx.Vin[i]
@@ -223,7 +223,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 							}
 							assetGuid := strconv.FormatUint(uint64(vin.AssetInfo.AssetGuid), 10)
 							tts = &bchain.TokenTransferSummary{
-								Type:     w.chainParser.GetAssetTypeFromVersion(bchainTx.Version),
+								Type:     txVersionAsset,
 								Token:    assetGuid,
 								Decimals: int(dbAsset.AssetObj.Precision),
 								Value:	  (*bchain.Amount)(big.NewInt(0)),
@@ -270,7 +270,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 				}
 				assetGuid := strconv.FormatUint(uint64(vout.AssetInfo.AssetGuid), 10)
 				tts = &bchain.TokenTransferSummary{
-					Type:     w.chainParser.GetAssetTypeFromVersion(bchainTx.Version),
+					Type:     txVersionAsset,
 					Token:    assetGuid,
 					Decimals: int(dbAsset.AssetObj.Precision),
 					Value:	  (*bchain.Amount)(big.NewInt(0)),
@@ -384,6 +384,7 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 	var ethSpecific *EthereumSpecific
 	vins := make([]Vin, len(mempoolTx.Vin))
 	rbf := false
+	txVersionAsset := w.chainParser.GetAssetTypeFromVersion(mempoolTx.Version)
 	for i := range mempoolTx.Vin {
 		bchainVin := &mempoolTx.Vin[i]
 		vin := &vins[i]
@@ -418,7 +419,7 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 						}
 						assetGuid := strconv.FormatUint(uint64(vin.AssetInfo.AssetGuid), 10)
 						tts = &bchain.TokenTransferSummary{
-							Type:     w.chainParser.GetAssetTypeFromVersion(mempoolTx.Version),
+							Type:     txVersionAsset,
 							Token:    assetGuid,
 							Decimals: int(dbAsset.AssetObj.Precision),
 							Value:	  (*bchain.Amount)(big.NewInt(0)),
@@ -468,7 +469,7 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 				}
 				assetGuid := strconv.FormatUint(uint64(vout.AssetInfo.AssetGuid), 10)
 				tts = &bchain.TokenTransferSummary{
-					Type:     w.chainParser.GetAssetTypeFromVersion(mempoolTx.Version),
+					Type:     txVersionAsset,
 					Token:    assetGuid,
 					Decimals: int(dbAsset.AssetObj.Precision),
 					Value:	  (*bchain.Amount)(big.NewInt(0)),
@@ -705,7 +706,10 @@ func GetUniqueTxids(txids []string) []string {
 func (w *Worker) txFromTxAddress(txid string, ta *bchain.TxAddresses, bi *bchain.DbBlockInfo, bestheight uint32) *Tx {
 	var err error
 	var valInSat, valOutSat, feesSat big.Int
+	var tokens []*bchain.TokenTransferSummary
+	var mapTTS  map[uint32]*bchain.TokenTransferSummary
 	vins := make([]Vin, len(ta.Inputs))
+	txVersionAsset := w.chainParser.GetAssetTypeFromVersion(ta.Version)
 	for i := range ta.Inputs {
 		tai := &ta.Inputs[i]
 		vin := &vins[i]
@@ -715,6 +719,31 @@ func (w *Worker) txFromTxAddress(txid string, ta *bchain.TxAddresses, bi *bchain
 		vin.Addresses, vin.IsAddress, err = tai.Addresses(w.chainParser)
 		if err != nil {
 			glog.Errorf("tai.Addresses error %v, tx %v, input %v, tai %+v", err, txid, i, tai)
+		}
+		if vin.AssetInfo != nil {
+			if mapTTS == nil {
+				mapTTS = map[uint32]*bchain.TokenTransferSummary{}
+			}
+			tts, ok := mapTTS[vin.AssetInfo.AssetGuid]
+			if !ok {
+				dbAsset, errAsset := w.db.GetAsset(vin.AssetInfo.AssetGuid, nil)
+				if errAsset != nil || dbAsset == nil {
+					return nil, errAsset
+				}
+				assetGuid := strconv.FormatUint(uint64(vin.AssetInfo.AssetGuid), 10)
+				tts = &bchain.TokenTransferSummary{
+					Type:     txVersionAsset,
+					Token:    assetGuid,
+					Decimals: int(dbAsset.AssetObj.Precision),
+					Value:	  (*bchain.Amount)(big.NewInt(0)),
+					ValueIn:  (*bchain.Amount)(big.NewInt(0)),
+					Symbol:   dbAsset.AssetObj.Symbol,
+				}
+				mapTTS[vin.AssetInfo.AssetGuid] = tts
+			}
+			amountAsset := (*bchain.Amount)(vin.AssetInfo.ValueSat)
+			vin.AssetInfo.ValueStr = amountAsset.DecimalString(tts.Decimals) + " " + tts.Symbol
+			(*big.Int)(tts.ValueIn).Add((*big.Int)(tts.ValueIn), (*big.Int)(vin.AssetInfo.ValueSat))
 		}
 	}
 	vouts := make([]Vout, len(ta.Outputs))
@@ -729,6 +758,38 @@ func (w *Worker) txFromTxAddress(txid string, ta *bchain.TxAddresses, bi *bchain
 			glog.Errorf("tai.Addresses error %v, tx %v, output %v, tao %+v", err, txid, i, tao)
 		}
 		vout.Spent = tao.Spent
+		if vout.AssetInfo != nil {
+			if mapTTS == nil {
+				mapTTS = map[uint32]*bchain.TokenTransferSummary{}
+			}
+			tts, ok := mapTTS[vout.AssetInfo.AssetGuid]
+			if !ok {
+				dbAsset, errAsset := w.db.GetAsset(vout.AssetInfo.AssetGuid, nil)
+				if errAsset != nil || dbAsset == nil {
+					return nil, errAsset
+				}
+				assetGuid := strconv.FormatUint(uint64(vout.AssetInfo.AssetGuid), 10)
+				tts = &bchain.TokenTransferSummary{
+					Type:     txVersionAsset,
+					Token:    assetGuid,
+					Decimals: int(dbAsset.AssetObj.Precision),
+					Value:	  (*bchain.Amount)(big.NewInt(0)),
+					ValueIn:  (*bchain.Amount)(big.NewInt(0)),
+					Symbol:   dbAsset.AssetObj.Symbol,
+				}
+				mapTTS[vout.AssetInfo.AssetGuid] = tts
+			}
+			amountAsset := (*bchain.Amount)(vout.AssetInfo.ValueSat)
+			vout.AssetInfo.ValueStr = amountAsset.DecimalString(tts.Decimals) + " " + tts.Symbol
+			(*big.Int)(tts.Value).Add((*big.Int)(tts.Value), vout.AssetInfo.ValueSat)
+		}
+	}
+	// flatten TTS Map
+	if mapTTS != nil && len(mapTTS) > 0 {
+		tokens = make([]*bchain.TokenTransferSummary, 0, len(mapTTS))
+		for _, token := range mapTTS {
+			tokens = append(tokens, token)
+		}
 	}
 	// for coinbase transactions valIn is 0
 	feesSat.Sub(&valInSat, &valOutSat)
@@ -746,6 +807,7 @@ func (w *Worker) txFromTxAddress(txid string, ta *bchain.TxAddresses, bi *bchain
 		ValueOutSat:   (*bchain.Amount)(&valOutSat),
 		Vin:           vins,
 		Vout:          vouts,
+		TokenTransferSummary:   tokens,
 	}
 	return r
 }
