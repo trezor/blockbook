@@ -257,7 +257,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 		vout.N = i
 		vout.ValueSat = (*bchain.Amount)(&bchainVout.ValueSat)
 		valOutSat.Add(&valOutSat, &bchainVout.ValueSat)
-		vout.AssetInfo = bchainVin.AssetInfo
+		vout.AssetInfo = bchainVout.AssetInfo
 		if vout.AssetInfo != nil {
 			if mapTTS == nil {
 				mapTTS = map[uint32]*bchain.TokenTransferSummary{}

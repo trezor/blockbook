@@ -66,6 +66,7 @@ type Vin struct {
 	ScriptSig ScriptSig `json:"scriptSig"`
 	Sequence  uint32    `json:"sequence"`
 	Addresses []string  `json:"addresses"`
+	AssetInfo	*AssetInfo `json:"assetInfo,omitempty"`
 }
 
 // ScriptPubKey contains data about output script
@@ -107,6 +108,7 @@ type MempoolVin struct {
 	Vin
 	AddrDesc AddressDescriptor `json:"-"`
 	ValueSat big.Int
+	AssetInfo	*AssetInfo `json:"assetInfo,omitempty"`
 }
 
 // MempoolTx is blockchain transaction in mempool
@@ -760,6 +762,7 @@ type BlockChainParser interface {
 	PackAsset(asset *Asset) ([]byte, error)
 	UnpackAsset(buf []byte) (*Asset, error)
 	GetAssetFromData(sptData []byte) (*Asset, error)
+	GetAssetAllocationFromData(sptData []byte) (*AssetAllocation, error)
 	GetAssetFromDesc(addrDesc *AddressDescriptor) (*Asset, error)
 	GetAllocationFromTx(tx *Tx) (*AssetAllocation, error)
 	LoadAssets(tx *Tx) error
