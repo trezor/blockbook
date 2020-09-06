@@ -253,30 +253,18 @@ func (p *SyscoinParser) TryGetOPReturn(script []byte) []byte {
 
 func (p *SyscoinParser) GetAllocationFromTx(tx *bchain.Tx) (*bchain.AssetAllocation, error) {
 	var sptData []byte
+	var addrDesc bchain.AddressDescriptor
+	var err error
 	for _, output := range tx.Vout {
-		addrDesc, err := p.GetAddrDescFromVout(&output)
+		addrDesc, err = p.GetAddrDescFromVout(&output)
 		if err != nil || len(addrDesc) == 0 || len(addrDesc) > maxAddrDescLen {
 			continue
 		}
 		if addrDesc[0] == txscript.OP_RETURN {
-			script, err := p.GetScriptFromAddrDesc(addrDesc)
-			if err != nil {
-				return nil, err
-			}
-			sptData = p.TryGetOPReturn(script)
-			if sptData == nil {
-				return nil, errors.New("OP_RETURN empty")
-			}
 			break
 		}
 	}
-	var assetAllocation bchain.AssetAllocation
-	r := bytes.NewReader(sptData)
-	err := assetAllocation.AssetObj.Deserialize(r)
-	if err != nil {
-		return nil, err
-	}
-	return &assetAllocation, nil
+	return p.GetAssetFromDesc(&addrDesc)
 }
 
 func (p *SyscoinParser) GetAssetFromDesc(addrDesc *bchain.AddressDescriptor) (*bchain.Asset, error) {
@@ -288,14 +276,7 @@ func (p *SyscoinParser) GetAssetFromDesc(addrDesc *bchain.AddressDescriptor) (*b
 	if sptData == nil {
 		return nil, errors.New("OP_RETURN empty")
 	}
-		
-	var asset bchain.Asset
-	r := bytes.NewReader(sptData)
-	err = asset.AssetObj.Deserialize(r)
-	if err != nil {
-		return nil, err
-	}
-	return &asset, nil
+	return p.GetAssetFromData(sptData)
 }
 
 func (p *SyscoinParser) GetAssetFromData(sptData []byte) (*bchain.Asset, error) {

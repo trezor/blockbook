@@ -160,6 +160,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 		}
 		vin.Hex = bchainVin.ScriptSig.Hex
 		vin.Coinbase = bchainVin.Coinbase
+		vin.AssetInfo = bchainVin.AssetInfo
 		if w.chainType == bchain.ChainBitcoinType {
 			//  bchainVin.Txid=="" is coinbase transaction
 			if bchainVin.Txid != "" {
@@ -256,12 +257,11 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 		vout.N = i
 		vout.ValueSat = (*bchain.Amount)(&bchainVout.ValueSat)
 		valOutSat.Add(&valOutSat, &bchainVout.ValueSat)
-		
-		if bchainVout.AssetInfo != nil {
+		vout.AssetInfo = bchainVin.AssetInfo
+		if vout.AssetInfo != nil {
 			if mapTTS == nil {
 				mapTTS = map[uint32]*bchain.TokenTransferSummary{}
 			}
-			vout.AssetInfo = bchainVout.AssetInfo
 			tts, ok := mapTTS[vout.AssetInfo.AssetGuid]
 			if !ok {
 				dbAsset, errAsset := w.db.GetAsset(vout.AssetInfo.AssetGuid, nil)
@@ -398,6 +398,7 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 		}
 		vin.Hex = bchainVin.ScriptSig.Hex
 		vin.Coinbase = bchainVin.Coinbase
+		vin.AssetInfo = bchainVin.AssetInfo
 		if w.chainType == bchain.ChainBitcoinType {
 			//  bchainVin.Txid=="" is coinbase transaction
 			if bchainVin.Txid != "" {
@@ -456,11 +457,11 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 		if err != nil {
 			glog.V(2).Infof("getAddressesFromVout error %v, %v, output %v", err, mempoolTx.Txid, bchainVout.N)
 		}
-		if bchainVout.AssetInfo != nil {
+		vout.AssetInfo = bchainVout.AssetInfo
+		if vout.AssetInfo != nil {
 			if mapTTS == nil {
 				mapTTS = map[uint32]*bchain.TokenTransferSummary{}
 			}
-			vout.AssetInfo = bchainVout.AssetInfo
 			tts, ok := mapTTS[vout.AssetInfo.AssetGuid]
 			if !ok {
 				dbAsset, errAsset := w.db.GetAsset(vout.AssetInfo.AssetGuid, nil)
@@ -720,6 +721,7 @@ func (w *Worker) txFromTxAddress(txid string, ta *bchain.TxAddresses, bi *bchain
 		if err != nil {
 			glog.Errorf("tai.Addresses error %v, tx %v, input %v, tai %+v", err, txid, i, tai)
 		}
+		vin.AssetInfo = tai.AssetInfo
 		if vin.AssetInfo != nil {
 			if mapTTS == nil {
 				mapTTS = map[uint32]*bchain.TokenTransferSummary{}
@@ -758,6 +760,7 @@ func (w *Worker) txFromTxAddress(txid string, ta *bchain.TxAddresses, bi *bchain
 			glog.Errorf("tai.Addresses error %v, tx %v, output %v, tao %+v", err, txid, i, tao)
 		}
 		vout.Spent = tao.Spent
+		vout.AssetInfo = tao.AssetInfo
 		if vout.AssetInfo != nil {
 			if mapTTS == nil {
 				mapTTS = map[uint32]*bchain.TokenTransferSummary{}
@@ -1161,7 +1164,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 		totalSent = &ba.SentSat
 	} 
 	if ba.AssetBalances != nil && option > AccountDetailsBasic {
-		tokens = make(bchain.Tokens, 0, len(ba.AssetBalances)+1)
+		tokens = make(bchain.Tokens, 0, len(ba.AssetBalances))
 		for k, v := range ba.AssetBalances {
 			dbAsset, errAsset := w.db.GetAsset(uint32(k), nil)
 			if errAsset != nil || dbAsset == nil {
