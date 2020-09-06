@@ -552,9 +552,8 @@ func ToString(value interface{}) string {
     switch v := value.(type) {
     case string:
         return v
-	case []byte:
 	case []uint8:
-        return string(value)
+        return string(v)
     default:
         return ""
     }
