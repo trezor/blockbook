@@ -80,7 +80,7 @@
                             <tr>
                                 <td class="data ellipsis"><a href="/asset/{{$tokenTransfer.Token}}">{{$tokenTransfer.Token}}</a></td>
                                 <td class="data ellipsis">{{formatAmountWithDecimals $tokenTransfer.Value $tokenTransfer.Decimals}} {{$tokenTransfer.Symbol}}</td>
-                                <td class="data ellipsis">{{formatAmountWithDecimals $tokenTransfer.ValueOut $tokenTransfer.Decimals}} {{$tokenTransfer.Symbol}}</td>
+                                <td class="data ellipsis">{{formatAmountWithDecimals $tokenTransfer.ValueOutSat $tokenTransfer.Decimals}} {{$tokenTransfer.Symbol}}</td>
                             </tr>
                             {{- end -}}{{- end -}}
                         </tbody>
