@@ -462,6 +462,7 @@ func (s *PublicServer) parseTemplates() []*template.Template {
 		"isOwnAddresses":           isOwnAddresses,
 		"formatKeyID":              s.formatKeyID,
 		"formatDecodeBase64": 		formatDecodeBase64,
+		"ToString":					ToString,
 	}
 	var createTemplate func(filenames ...string) *template.Template
 	if s.debug {
@@ -547,11 +548,22 @@ func formatAmountWithDecimals(a *bchain.Amount, d int) string {
 	return a.DecimalString(d)
 }
 
-func formatDecodeBase64(aIn interface{}) string {
+func ToString(value interface{}) string {
+    switch v := value.(type) {
+    case string:
+        return v
+	case []byte:
+	case []uint8:
+        return string(value)
+    default:
+        return ""
+    }
+}
+
+func formatDecodeBase64(a string) string {
 	var pubData string
-	a := []byte(aIn)
 	base64Text := make([]byte, base64.StdEncoding.DecodedLen(len(a)))
-	n, err := base64.StdEncoding.Decode(base64Text, a)
+	n, err := base64.StdEncoding.Decode(base64Text, []byte(a))
 	if err == nil {
 		pubData = string(base64Text[:n])
 	}

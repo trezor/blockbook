@@ -100,7 +100,7 @@
                                 </tr>
                                 <tr>
                                     <td class="data ellipsis"><a href="/address/{{formatKeyID $asset.AssetDetails.NotaryKeyID}}">{{formatKeyID $asset.AssetDetails.NotaryKeyID}}</a></td>
-                                    <td class="data">{{formatDecodeBase64 $asset.AssetDetails.NotaryDetails.EndPoint}}</td>
+                                    <td class="data">{{formatDecodeBase64 $asset.AssetDetails.NotaryDetails.EndPoint | ToString}}</td>
                                     <td class="data">{{$asset.AssetDetails.NotaryDetails.InstantTransfers}}</td>
                                     <td class="data">{{$asset.AssetDetails.NotaryDetails.HDRequired}}</td>
                                 </tr>
