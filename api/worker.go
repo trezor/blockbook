@@ -226,6 +226,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 								Type:     w.chainParser.GetAssetTypeFromVersion(bchainTx.Version),
 								Token:    assetGuid,
 								Decimals: int(dbAsset.AssetObj.Precision),
+								Value:	  (*bchain.Amount)(big.NewInt(0)),
 								ValueIn:  (*bchain.Amount)(big.NewInt(0)),
 								Symbol:   dbAsset.AssetObj.Symbol,
 							}
@@ -272,6 +273,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 					Type:     w.chainParser.GetAssetTypeFromVersion(bchainTx.Version),
 					Token:    assetGuid,
 					Decimals: int(dbAsset.AssetObj.Precision),
+					Value:	  (*bchain.Amount)(big.NewInt(0)),
 					ValueIn:  (*bchain.Amount)(big.NewInt(0)),
 					Symbol:   dbAsset.AssetObj.Symbol,
 				}
@@ -421,6 +423,7 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 							Type:     w.chainParser.GetAssetTypeFromVersion(mempoolTx.Version),
 							Token:    assetGuid,
 							Decimals: int(dbAsset.AssetObj.Precision),
+							Value:	  (*bchain.Amount)(big.NewInt(0)),
 							ValueIn:  (*bchain.Amount)(big.NewInt(0)),
 							Symbol:   dbAsset.AssetObj.Symbol,
 						}
@@ -470,6 +473,7 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 					Type:     w.chainParser.GetAssetTypeFromVersion(mempoolTx.Version),
 					Token:    assetGuid,
 					Decimals: int(dbAsset.AssetObj.Precision),
+					Value:	  (*bchain.Amount)(big.NewInt(0)),
 					ValueIn:  (*bchain.Amount)(big.NewInt(0)),
 					Symbol:   dbAsset.AssetObj.Symbol,
 				}
