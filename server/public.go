@@ -547,7 +547,7 @@ func formatAmountWithDecimals(a *bchain.Amount, d int) string {
 	return a.DecimalString(d)
 }
 
-func formatDecodeBase64(a []byte, d int) string {
+func formatDecodeBase64(a []byte) string {
 	var pubData string
 	base64Text := make([]byte, base64.StdEncoding.DecodedLen(len(a)))
 	n, err := base64.StdEncoding.Decode(base64Text, a)
