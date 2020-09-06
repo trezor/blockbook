@@ -39,7 +39,7 @@
                     <td class="data">{{$asset.AssetDetails.Decimals}}</td>
                 </tr>
                 <tr>
-                        <td>Update Flags</td>
+                        <td>Capability Flags</td>
                         <td style="padding: 0;">
                             <table class="table data-table">
                                 <tbody>
@@ -74,7 +74,7 @@
                                     <th>Bound</th>
                                     <th>Percentage</th>
                                 </tr>
-                                {{- range $f := $asset.AssetDetails.AuxFeeDetails -}}{{- if $f -}}
+                                {{- range $f := $asset.AssetDetails.AuxFeeDetails.AuxFees -}}{{- if $f -}}
                                 <tr>
                                     <td class="data ellipsis"><a href="/address/{{formatKeyID $asset.AssetDetails.AuxFeeKeyID}}">{{formatKeyID $asset.AssetDetails.AuxFeeKeyID}}</a></td>
                                     <td class="data">{{$f.Bound}} {{$asset.AssetDetails.Symbol}}</td>
