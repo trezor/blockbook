@@ -728,7 +728,7 @@ func (w *Worker) txFromTxAddress(txid string, ta *bchain.TxAddresses, bi *bchain
 			if !ok {
 				dbAsset, errAsset := w.db.GetAsset(vin.AssetInfo.AssetGuid, nil)
 				if errAsset != nil || dbAsset == nil {
-					return nil, errAsset
+					return nil
 				}
 				assetGuid := strconv.FormatUint(uint64(vin.AssetInfo.AssetGuid), 10)
 				tts = &bchain.TokenTransferSummary{
@@ -766,7 +766,7 @@ func (w *Worker) txFromTxAddress(txid string, ta *bchain.TxAddresses, bi *bchain
 			if !ok {
 				dbAsset, errAsset := w.db.GetAsset(vout.AssetInfo.AssetGuid, nil)
 				if errAsset != nil || dbAsset == nil {
-					return nil, errAsset
+					return nil
 				}
 				assetGuid := strconv.FormatUint(uint64(vout.AssetInfo.AssetGuid), 10)
 				tts = &bchain.TokenTransferSummary{
@@ -996,6 +996,9 @@ func (w *Worker) txFromTxid(txid string, bestheight uint32, option AccountDetail
 				}
 			}
 			tx = w.txFromTxAddress(txid, ta, blockInfo, bestheight)
+			if tx == nil {
+				return nil, NewAPIError(fmt.Sprintf("GetTransaction, %v", txid), true)
+			}
 		}
 	} else {
 		tx, err = w.GetTransaction(txid, false, true)
