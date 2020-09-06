@@ -462,7 +462,6 @@ func (s *PublicServer) parseTemplates() []*template.Template {
 		"isOwnAddresses":           isOwnAddresses,
 		"formatKeyID":              s.formatKeyID,
 		"formatDecodeBase64": 		formatDecodeBase64,
-		"ToString":					ToString,
 	}
 	var createTemplate func(filenames ...string) *template.Template
 	if s.debug {
@@ -559,7 +558,8 @@ func ToString(value interface{}) string {
     }
 }
 
-func formatDecodeBase64(a string) string {
+func formatDecodeBase64(value interface{}) string {
+	a := ToString(value)
 	var pubData string
 	base64Text := make([]byte, base64.StdEncoding.DecodedLen(len(a)))
 	n, err := base64.StdEncoding.Decode(base64Text, []byte(a))
