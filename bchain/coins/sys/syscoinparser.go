@@ -264,7 +264,7 @@ func (p *SyscoinParser) GetAllocationFromTx(tx *bchain.Tx) (*bchain.AssetAllocat
 			break
 		}
 	}
-	return p.GetAssetAllocationFromDesc(addrDesc)
+	return p.GetAssetAllocationFromDesc(&addrDesc)
 }
 func (p *SyscoinParser) GetSPTDataFromDesc(addrDesc *bchain.AddressDescriptor) ([]byte, error) {
 	script, err := p.GetScriptFromAddrDesc(*addrDesc)
