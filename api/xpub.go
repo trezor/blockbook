@@ -683,7 +683,6 @@ func (w *Worker) GetXpubUtxo(xpub string, onlyConfirmed bool, gap int) (Utxos, e
 								AssetGuid:		a.AssetInfo.AssetGuid,
 								Symbol:			dbAsset.AssetObj.Symbol,
 								Contract:		"0x" + hex.EncodeToString(dbAsset.AssetObj.Contract),
-								PubData:		dbAsset.AssetObj.PubData,
 								Balance:		(*bchain.Amount)(big.NewInt(dbAsset.AssetObj.Balance)),
 								TotalSupply:	(*bchain.Amount)(big.NewInt(dbAsset.AssetObj.TotalSupply)),
 								MaxSupply:		(*bchain.Amount)(big.NewInt(dbAsset.AssetObj.MaxSupply)),
@@ -692,6 +691,7 @@ func (w *Worker) GetXpubUtxo(xpub string, onlyConfirmed bool, gap int) (Utxos, e
 								NotaryKeyID: 	hex.EncodeToString(dbAsset.AssetObj.NotaryKeyID),
 								AuxFeeKeyID: 	hex.EncodeToString(dbAsset.AssetObj.AuxFeeKeyID),
 							}
+							json.Unmarshal(dbAsset.AssetObj.PubData, &assetDetails.PubData)
 							if len(dbAsset.AssetObj.AuxFeeKeyID) > 0 {
 								assetDetails.AuxFeeDetails = &dbAsset.AssetObj.AuxFeeDetails
 							}
