@@ -21,13 +21,8 @@ type GetTxAssetsCallback func(txids []string) error
 func (d *RocksDB) ConnectAssetOutputHelper(isActivate bool, asset *bchain.Asset, dBAsset *bchain.Asset) error {
 	if !isActivate {
 		if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_SUPPLY) != 0 {
-			valueTo := big.NewInt(asset.AssetObj.Balance)
-			balanceDb := big.NewInt(dBAsset.AssetObj.Balance)
-			balanceDb.Add(balanceDb, valueTo)
-			supplyDb := big.NewInt(dBAsset.AssetObj.TotalSupply)
-			supplyDb.Add(supplyDb, valueTo)
-			dBAsset.AssetObj.Balance = balanceDb.Int64()
-			dBAsset.AssetObj.TotalSupply = supplyDb.Int64()
+			dBAsset.AssetObj.Balance += asset.AssetObj.Balance
+			dBAsset.AssetObj.TotalSupply += asset.AssetObj.Balance
 		}
 		// logic follows core CheckAssetInputs()
 		if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_DATA) != 0 {
@@ -65,17 +60,12 @@ func (d *RocksDB) DisconnectAssetOutputHelper(asset *bchain.Asset, dBAsset *bcha
 		return nil
 	}
 	if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_SUPPLY) != 0 {
-		valueTo := big.NewInt(asset.AssetObj.Balance)
-		balanceDb := big.NewInt(dBAsset.AssetObj.Balance)
-		balanceDb.Sub(balanceDb, valueTo)
-		supplyDb := big.NewInt(dBAsset.AssetObj.TotalSupply)
-		supplyDb.Sub(supplyDb, valueTo)
-		dBAsset.AssetObj.Balance = balanceDb.Int64()
+		dBAsset.AssetObj.Balance -= asset.AssetObj.Balance
 		if dBAsset.AssetObj.Balance < 0 {
 			glog.Warningf("DisconnectAssetOutput balance is negative %v, setting to 0...", dBAsset.AssetObj.Balance)
 			dBAsset.AssetObj.Balance = 0
 		}
-		dBAsset.AssetObj.TotalSupply = supplyDb.Int64()
+		dBAsset.AssetObj.TotalSupply -= asset.AssetObj.Balance
 		if dBAsset.AssetObj.TotalSupply < 0 {
 			glog.Warningf("DisconnectAssetOutput total supply is negative %v, setting to 0...", dBAsset.AssetObj.TotalSupply)
 			dBAsset.AssetObj.TotalSupply = 0
@@ -173,9 +163,7 @@ func (d *RocksDB) ConnectAssetOutput(asset *bchain.Asset, isActivate bool, isAss
 			for _, v := range asset.AssetObj.Allocation.VoutAssets[0].Values {
 				valueSat += v.ValueSat
 			}
-			balanceAssetSat := big.NewInt(dBAsset.AssetObj.Balance)
-			balanceAssetSat.Sub(balanceAssetSat, big.NewInt(valueSat))
-			dBAsset.AssetObj.Balance = balanceAssetSat.Int64()
+			dBAsset.AssetObj.Balance -= valueSat
 			if dBAsset.AssetObj.Balance < 0 {
 				glog.Warningf("ConnectAssetOutput balance is negative %v, setting to 0...", dBAsset.AssetObj.Balance)
 				dBAsset.AssetObj.Balance = 0
@@ -216,9 +204,7 @@ func (d *RocksDB) DisconnectAssetOutput(asset *bchain.Asset, isActivate bool, is
 			for _, v := range asset.AssetObj.Allocation.VoutAssets[0].Values {
 				valueSat += v.ValueSat
 			}
-			balanceAssetSat := big.NewInt(dBAsset.AssetObj.Balance)
-			balanceAssetSat.Add(balanceAssetSat, big.NewInt(valueSat))
-			dBAsset.AssetObj.Balance = balanceAssetSat.Int64()
+			dBAsset.AssetObj.Balance += valueSat
 		} else {
 			err = d.DisconnectAssetOutputHelper(asset, dBAsset)
 			if err != nil {
