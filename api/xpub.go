@@ -12,6 +12,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/juju/errors"
 	"encoding/hex"
+	"encoding/json"
 )
 
 const defaultAddressesGap = 20
