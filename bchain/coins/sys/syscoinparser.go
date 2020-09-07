@@ -264,10 +264,9 @@ func (p *SyscoinParser) GetAllocationFromTx(tx *bchain.Tx) (*bchain.AssetAllocat
 			break
 		}
 	}
-	return p.GetAssetAllocationFromData(sptData)
+	return p.GetAssetAllocationFromDesc(addrDesc)
 }
-
-func (p *SyscoinParser) GetAssetFromDesc(addrDesc *bchain.AddressDescriptor) (*bchain.Asset, error) {
+func (p *SyscoinParser) GetSPTDataFromDesc(addrDesc *bchain.AddressDescriptor) ([]byte], error) {
 	script, err := p.GetScriptFromAddrDesc(*addrDesc)
 	if err != nil {
 		return nil, err
@@ -276,7 +275,24 @@ func (p *SyscoinParser) GetAssetFromDesc(addrDesc *bchain.AddressDescriptor) (*b
 	if sptData == nil {
 		return nil, errors.New("OP_RETURN empty")
 	}
+	return sptData
+}
+
+
+func (p *SyscoinParser) GetAssetFromDesc(addrDesc *bchain.AddressDescriptor) (*bchain.Asset, error) {
+	sptData, err := p.GetSPTDataFromDesc(addrDesc)
+	if err != nil {
+		return nil, err
+	}
 	return p.GetAssetFromData(sptData)
+}
+
+func (p *SyscoinParser) GetAssetAllocationFromDesc(addrDesc *bchain.AddressDescriptor) (*bchain.Asset, error) {
+	sptData, err := p.GetSPTDataFromDesc(addrDesc)
+	if err != nil {
+		return nil, err
+	}
+	return p.GetAssetAllocationFromData(sptData)
 }
 
 func (p *SyscoinParser) GetAssetFromData(sptData []byte) (*bchain.Asset, error) {
