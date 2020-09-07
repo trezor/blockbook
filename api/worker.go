@@ -1112,10 +1112,6 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 						if option == AccountDetailsTxidHistory {
 							txids = append(txids, tx.Txid)
 						} else if option >= AccountDetailsTxHistoryLight {
-							// filter.Vout == 0 when called with non-token
-							if filter.Vout == 0 {
-								tx.TokenTransferSummary = nil
-							}
 							txs = append(txs, tx)
 						}
 					}
@@ -1150,10 +1146,6 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 				tx, err := w.txFromTxid(txid, bestheight, option, nil)
 				if err != nil {
 					return nil, err
-				}
-				// filter.Vout == 0 when called with non-token
-				if filter.Vout == 0 {
-					tx.TokenTransferSummary = nil
 				}
 				txs = append(txs, tx)
 			}
