@@ -687,7 +687,6 @@ func (w *Worker) GetXpubUtxo(xpub string, onlyConfirmed bool, gap int) (Utxos, e
 								TotalSupply:	(*bchain.Amount)(big.NewInt(dbAsset.AssetObj.TotalSupply)),
 								MaxSupply:		(*bchain.Amount)(big.NewInt(dbAsset.AssetObj.MaxSupply)),
 								Decimals:		int(dbAsset.AssetObj.Precision),
-								UpdateFlags:	dbAsset.AssetObj.UpdateFlags,
 								UpdateCapabilityFlags:	dbAsset.AssetObj.UpdateCapabilityFlags,
 								NotaryKeyID: 	hex.EncodeToString(dbAsset.AssetObj.NotaryKeyID),
 								NotaryDetails: 	&dbAsset.AssetObj.NotaryDetails,

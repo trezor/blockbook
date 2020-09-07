@@ -1236,6 +1236,8 @@ func (w *Worker) FindAssets(filter string, page int, txsOnPage int) *Assets {
 			Decimals:		int(asset.AssetObj.Precision),
 			Txs:			int(asset.Transactions),
 		}
+
+
 		json.Unmarshal(asset.AssetObj.PubData, &assetSpecific.PubData)
 		assetDetails = append(assetDetails, &assetSpecific)	
 	}
@@ -1356,7 +1358,6 @@ func (w *Worker) GetAsset(asset string, page int, txsOnPage int, option AccountD
 			TotalSupply:	(*bchain.Amount)(big.NewInt(dbAsset.AssetObj.TotalSupply)),
 			MaxSupply:		(*bchain.Amount)(big.NewInt(dbAsset.AssetObj.MaxSupply)),
 			Decimals:		int(dbAsset.AssetObj.Precision),
-			UpdateFlags:	dbAsset.AssetObj.UpdateFlags,
 			UpdateCapabilityFlags:	dbAsset.AssetObj.UpdateCapabilityFlags,
 			NotaryKeyID: 	hex.EncodeToString(dbAsset.AssetObj.NotaryKeyID),
 			NotaryDetails: 	&dbAsset.AssetObj.NotaryDetails,
@@ -1782,7 +1783,6 @@ func (w *Worker) GetAddressUtxo(address string, onlyConfirmed bool) (Utxos, erro
 				TotalSupply:	(*bchain.Amount)(big.NewInt(dbAsset.AssetObj.TotalSupply)),
 				MaxSupply:		(*bchain.Amount)(big.NewInt(dbAsset.AssetObj.MaxSupply)),
 				Decimals:		int(dbAsset.AssetObj.Precision),
-				UpdateFlags:	dbAsset.AssetObj.UpdateFlags,
 				UpdateCapabilityFlags:	dbAsset.AssetObj.UpdateCapabilityFlags,
 				NotaryKeyID: 	hex.EncodeToString(dbAsset.AssetObj.NotaryKeyID),
 				NotaryDetails: 	&dbAsset.AssetObj.NotaryDetails,

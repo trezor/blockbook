@@ -109,7 +109,6 @@ type AssetSpecific struct {
 	MaxSupply 		*bchain.Amount `json:"maxSupply"`
 	Decimals 		int `json:"decimals"`
 	UpdateCapabilityFlags 	uint8 `json:"updateCapabilityFlags"`
-	UpdateFlags 	uint8 `json:"updateFlags"`
 }
 
 // Contains SyscoinSpecific assets information when searching for assets
