@@ -4,7 +4,6 @@ import (
 	"blockbook/bchain"
 	"bytes"
 	"strings"
-	"math/big"
 	"github.com/golang/glog"
 	"github.com/juju/errors"
 	"github.com/tecbot/gorocksdb"
