@@ -252,7 +252,6 @@ func (p *SyscoinParser) TryGetOPReturn(script []byte) []byte {
 
 
 func (p *SyscoinParser) GetAllocationFromTx(tx *bchain.Tx) (*bchain.AssetAllocation, error) {
-	var sptData []byte
 	var addrDesc bchain.AddressDescriptor
 	var err error
 	for _, output := range tx.Vout {
