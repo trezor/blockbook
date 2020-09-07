@@ -594,7 +594,12 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses bch
 					}
 				}
 			} else if ((isAssetTx || isAssetSendTx) && asset == nil && addrDesc[0] == txscript.OP_RETURN) {
-				asset, err = d.chainParser.GetAssetFromDesc(&addrDesc)
+				if isAssetTx {
+					asset, err = d.chainParser.GetAssetFromDesc(&addrDesc)
+				} else if isAssetSendTx {
+					asset = &bchain.Asset{}
+					asset.AssetObj.Allocation, err = d.chainParser.GetAssetAllocationFromDesc(&addrDesc)
+				}
 				if err != nil {
 					return err
 				}
@@ -1096,7 +1101,12 @@ func (d *RocksDB) disconnectTxAssetOutputs(txa *bchain.TxAddresses,
 		if len(t.AddrDesc) > 0 {
 			if t.AddrDesc[0] == txscript.OP_RETURN {
 				var err error
-				asset, err = d.chainParser.GetAssetFromDesc(&t.AddrDesc)
+				if isAssetTx {
+					asset, err = d.chainParser.GetAssetFromDesc(&addrDesc)
+				} else if isAssetSendTx {
+					asset = &bchain.Asset{}
+					asset.AssetObj.Allocation, err = d.chainParser.GetAssetAllocationFromDesc(&addrDesc)
+				}
 				if err != nil {
 					return err
 				}
