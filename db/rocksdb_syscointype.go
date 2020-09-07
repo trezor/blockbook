@@ -223,7 +223,7 @@ func (d *RocksDB) DisconnectAssetOutput(asset *bchain.Asset, isActivate bool, is
 			if err != nil {
 				return err
 			}
-		]
+		}
 	} else {
 		// signals for removal from asset db
 		dBAsset.AssetObj.TotalSupply = -1
