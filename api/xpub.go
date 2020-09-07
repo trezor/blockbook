@@ -683,6 +683,7 @@ func (w *Worker) GetXpubUtxo(xpub string, onlyConfirmed bool, gap int) (Utxos, e
 								AssetGuid:		a.AssetInfo.AssetGuid,
 								Symbol:			dbAsset.AssetObj.Symbol,
 								Contract:		"0x" + hex.EncodeToString(dbAsset.AssetObj.Contract),
+								PubData:		string(dbAsset.AssetObj.PubData),
 								Balance:		(*bchain.Amount)(big.NewInt(dbAsset.AssetObj.Balance)),
 								TotalSupply:	(*bchain.Amount)(big.NewInt(dbAsset.AssetObj.TotalSupply)),
 								MaxSupply:		(*bchain.Amount)(big.NewInt(dbAsset.AssetObj.MaxSupply)),

@@ -388,7 +388,7 @@ func (d *RocksDB) GetTxAssets(assetGuid uint32, lower uint32, higher uint32, ass
 			txids := []string{}
 			for _, txIndex := range txIndexes {
 				mask := uint32(txIndex.Type)
-				if (uint32(assetsBitMask) & mask) == mask {
+				if (assetsBitMask == bchain.AllMask || uint32(assetsBitMask) & mask) == mask {
 					txids = append(txids, hex.EncodeToString(txIndex.BtxID))
 				}
 			}
