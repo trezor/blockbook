@@ -134,6 +134,7 @@ func (d *RocksDB) ConnectAllocationOutput(addrDesc* bchain.AddressDescriptor, he
 	if !counted {
 		if dBAsset != nil {
 			dBAsset.Transactions++
+			assets[assetInfo.AssetGuid] = dBAsset
 		}
 	}
 	// asset guid + txid + address of output/input must match for counted to be true
