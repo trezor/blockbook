@@ -137,8 +137,8 @@
     <h3 class="col-md-3">Transactions</h3>
     <select class="col-md-2" style="background-color: #eaeaea;" onchange="self.location='?filter='+options[selectedIndex].value">
         <option>All</option>
-        <option {{if eq $asset.Filter "transfers" -}} selected{{end}} value="transfers">Transfers</option>
-        <option {{if eq $asset.Filter "non-transfers" -}} selected{{end}} value="non-transfers">Non-Transfers</option>
+        <option {{if eq $asset.Filter "token-transfers" -}} selected{{end}} value="token-transfers">Transfers</option>
+        <option {{if eq $asset.Filter "non-token-transfers" -}} selected{{end}} value="non-token-transfers">Non-Transfers</option>
     </select>
     <div class="col-md-7">
         <nav>{{template "paging" $data}}</nav>
