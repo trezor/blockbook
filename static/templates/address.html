@@ -130,7 +130,10 @@
         <option {{if eq $addr.Filter "inputs" -}} selected{{end}} value="inputs">Address on input side</option>
         <option {{if eq $addr.Filter "outputs" -}} selected{{end}} value="outputs">Address on output side</option>
         {{- if $addr.Tokens -}}
-        <option {{if eq $addr.Filter "0" -}} selected{{end}} value="0">Non-token</option>
+        <option {{if eq $addr.Filter "token-only" -}} selected{{end}} value="token-only">Tokens only</option>
+        <option {{if eq $addr.Filter "non-tokens" -}} selected{{end}} value="non-tokens">Non-token</option>
+        <option {{if eq $addr.Filter "token-transfers" -}} selected{{end}} value="token-transfers">Token transfers</option>
+        <option {{if eq $addr.Filter "non-token-transfers" -}} selected{{end}} value="non-token-transfers">Token non-transfers</option>
         {{- range $t := $addr.Tokens -}}{{- if $t -}}
         <option {{if eq $addr.Filter $t.ContractIndex -}} selected{{end}} value="{{$t.ContractIndex}}">{{$t.Name}}</option>
         {{- end -}}{{- end -}}
