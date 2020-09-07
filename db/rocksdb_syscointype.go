@@ -166,8 +166,7 @@ func (d *RocksDB) ConnectAssetOutput(asset *bchain.Asset, isActivate bool, isAss
 			if err != nil {
 				return err
 			}
-		} 
-		else if isAssetSendTx {
+		} else if isAssetSendTx {
 			// tally total amount and subtract from asset
 			valueSat := 0
 			for _, v := range asset.AssetObj.Allocation.VoutAssets[0].Values {
