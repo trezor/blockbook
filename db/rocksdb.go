@@ -593,7 +593,7 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses bch
 						return err
 					}
 				}
-			} else if (isAssetTx || isAssetSendTx) && asset == nil && addrDesc[0] == txscript.OP_RETURN {
+			} else if ((isAssetTx || isAssetSendTx) && asset == nil && addrDesc[0] == txscript.OP_RETURN) {
 				asset, err = d.chainParser.GetAssetFromDesc(&addrDesc)
 				if err != nil {
 					return err
