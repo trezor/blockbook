@@ -275,7 +275,7 @@ func (p *SyscoinParser) GetSPTDataFromDesc(addrDesc *bchain.AddressDescriptor) (
 	if sptData == nil {
 		return nil, errors.New("OP_RETURN empty")
 	}
-	return sptData
+	return sptData, nil
 }
 
 
@@ -287,7 +287,7 @@ func (p *SyscoinParser) GetAssetFromDesc(addrDesc *bchain.AddressDescriptor) (*b
 	return p.GetAssetFromData(sptData)
 }
 
-func (p *SyscoinParser) GetAssetAllocationFromDesc(addrDesc *bchain.AddressDescriptor) (*bchain.Asset, error) {
+func (p *SyscoinParser) GetAssetAllocationFromDesc(addrDesc *bchain.AddressDescriptor) (*bchain.AssetAllocation, error) {
 	sptData, err := p.GetSPTDataFromDesc(addrDesc)
 	if err != nil {
 		return nil, err
