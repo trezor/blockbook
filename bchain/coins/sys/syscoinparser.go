@@ -221,7 +221,7 @@ func (p *SyscoinParser) IsAssetActivateTx(nVersion int32) bool {
 }
 
 func (p *SyscoinParser) IsSyscoinTx(nVersion int32) bool {
-    return p.IsAssetTx(nVersion) || p.IsAssetAllocationTx(nVersion) || p.IsSyscoinMintTx(nVersion)
+    return p.IsAssetTx(nVersion) || p.IsAssetSendTx(nVersion) || p.IsAssetAllocationTx(nVersion) || p.IsSyscoinMintTx(nVersion)
 }
 
 func (p *SyscoinParser) IsTxIndexAsset(txIndex int32) bool {
@@ -249,7 +249,6 @@ func (p *SyscoinParser) TryGetOPReturn(script []byte) []byte {
 	}
 	return nil
 }
-
 
 func (p *SyscoinParser) GetAllocationFromTx(tx *bchain.Tx) (*bchain.AssetAllocation, error) {
 	var addrDesc bchain.AddressDescriptor
