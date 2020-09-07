@@ -764,6 +764,7 @@ type BlockChainParser interface {
 	GetAssetFromData(sptData []byte) (*Asset, error)
 	GetAssetAllocationFromData(sptData []byte) (*AssetAllocation, error)
 	GetAssetFromDesc(addrDesc *AddressDescriptor) (*Asset, error)
+	GetAssetAllocationFromDesc(addrDesc *AddressDescriptor) (*AssetAllocation, error) 
 	GetAllocationFromTx(tx *Tx) (*AssetAllocation, error)
 	LoadAssets(tx *Tx) error
 	AppendAssetInfo(assetInfo *AssetInfo, buf []byte, varBuf []byte) []byte

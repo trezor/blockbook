@@ -365,6 +365,9 @@ func (p *BaseParser) GetAssetAllocationFromData(sptData []byte) (*AssetAllocatio
 func (p *BaseParser) GetAssetFromDesc(addrDesc *AddressDescriptor) (*Asset, error) {
 	return nil, errors.New("Not supported")
 }
+func (p *BaseParser) GetAssetAllocationFromDesc(addrDesc *AddressDescriptor) (*AssetAllocation, error) {
+	return nil, errors.New("Not supported")
+}
 func (p *BaseParser) GetAllocationFromTx(tx *Tx) (*AssetAllocation, error) {
 	return nil, errors.New("Not supported")
 }
