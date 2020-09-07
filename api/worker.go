@@ -1360,15 +1360,19 @@ func (w *Worker) GetAsset(asset string, page int, txsOnPage int, option AccountD
 			Decimals:		int(dbAsset.AssetObj.Precision),
 			UpdateCapabilityFlags:	dbAsset.AssetObj.UpdateCapabilityFlags,
 			NotaryKeyID: 	hex.EncodeToString(dbAsset.AssetObj.NotaryKeyID),
-			NotaryDetails: 	&dbAsset.AssetObj.NotaryDetails,
 			AuxFeeKeyID: 	hex.EncodeToString(dbAsset.AssetObj.AuxFeeKeyID),
-			AuxFeeDetails: 	&dbAsset.AssetObj.AuxFeeDetails,
 		},
 		Paging:                pg,
 		UnconfirmedTxs:        unconfirmedTxs,
 		Transactions:          txs,
 		Txs:				   int(dbAsset.Transactions),
 		Txids:                 txids,
+	}
+	if len(dbAsset.AssetObj.AuxFeeKeyID) > 0 {
+		r.AssetDetails.AuxFeeDetails = &dbAsset.AssetObj.AuxFeeDetails
+	}
+	if len(dbAsset.AssetObj.NotaryKeyID) > 0 {
+		r.AssetDetails.NotaryDetails = &dbAsset.AssetObj.NotaryDetails
 	}
 	json.Unmarshal(dbAsset.AssetObj.PubData, &r.AssetDetails.PubData)
 	glog.Info("GetAsset ", asset, " finished in ", time.Since(start))
@@ -1785,9 +1789,13 @@ func (w *Worker) GetAddressUtxo(address string, onlyConfirmed bool) (Utxos, erro
 				Decimals:		int(dbAsset.AssetObj.Precision),
 				UpdateCapabilityFlags:	dbAsset.AssetObj.UpdateCapabilityFlags,
 				NotaryKeyID: 	hex.EncodeToString(dbAsset.AssetObj.NotaryKeyID),
-				NotaryDetails: 	&dbAsset.AssetObj.NotaryDetails,
 				AuxFeeKeyID: 	hex.EncodeToString(dbAsset.AssetObj.AuxFeeKeyID),
-				AuxFeeDetails: 	&dbAsset.AssetObj.AuxFeeDetails,
+			}
+			if len(dbAsset.AssetObj.AuxFeeKeyID) > 0 {
+				assetDetails.AuxFeeDetails = &dbAsset.AssetObj.AuxFeeDetails
+			}
+			if len(dbAsset.AssetObj.NotaryKeyID) > 0 {
+				assetDetails.NotaryDetails = &dbAsset.AssetObj.NotaryDetails
 			}
 			assets = append(assets, assetDetails)
 		}

@@ -637,10 +637,14 @@ func (s *SocketIoServer) getAssetHistory(asset string, opts *assetOpts) (res res
 			Decimals:		int(dbAsset.AssetObj.Precision),
 			UpdateCapabilityFlags:	dbAsset.AssetObj.UpdateCapabilityFlags,
 			NotaryKeyID: 	hex.EncodeToString(dbAsset.AssetObj.NotaryKeyID),
-			NotaryDetails: 	&dbAsset.AssetObj.NotaryDetails,
 			AuxFeeKeyID: 	hex.EncodeToString(dbAsset.AssetObj.AuxFeeKeyID),
-			AuxFeeDetails: 	&dbAsset.AssetObj.AuxFeeDetails,
 			
+		}
+		if len(dbAsset.AssetObj.AuxFeeKeyID) > 0 {
+			res.Result.AssetDetails.AuxFeeDetails = &dbAsset.AssetObj.AuxFeeDetails
+		}
+		if len(dbAsset.AssetObj.NotaryKeyID) > 0 {
+			res.Result.AssetDetails.NotaryDetails = &dbAsset.AssetObj.NotaryDetails
 		}
 		json.Unmarshal(dbAsset.AssetObj.PubData, &res.Result.AssetDetails.PubData)
 		res.Result.Items = append(res.Result.Items, ahi)

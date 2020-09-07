@@ -689,9 +689,13 @@ func (w *Worker) GetXpubUtxo(xpub string, onlyConfirmed bool, gap int) (Utxos, e
 								Decimals:		int(dbAsset.AssetObj.Precision),
 								UpdateCapabilityFlags:	dbAsset.AssetObj.UpdateCapabilityFlags,
 								NotaryKeyID: 	hex.EncodeToString(dbAsset.AssetObj.NotaryKeyID),
-								NotaryDetails: 	&dbAsset.AssetObj.NotaryDetails,
 								AuxFeeKeyID: 	hex.EncodeToString(dbAsset.AssetObj.AuxFeeKeyID),
-								AuxFeeDetails: 	&dbAsset.AssetObj.AuxFeeDetails,
+							}
+							if len(dbAsset.AssetObj.AuxFeeKeyID) > 0 {
+								assetDetails.AuxFeeDetails = &dbAsset.AssetObj.AuxFeeDetails
+							}
+							if len(dbAsset.AssetObj.NotaryKeyID) > 0 {
+								assetDetails.NotaryDetails = &dbAsset.AssetObj.NotaryDetails
 							}
 							assets = append(assets, assetDetails)
 						}
