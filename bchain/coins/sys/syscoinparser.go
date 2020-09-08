@@ -62,10 +62,11 @@ type SyscoinParser struct {
 
 // NewSyscoinParser returns new SyscoinParser instance
 func NewSyscoinParser(params *chaincfg.Params, c *btc.Configuration) *SyscoinParser {
-	return &SyscoinParser{
+	parser := &SyscoinParser{
 		BitcoinParser: btc.NewBitcoinParser(params, c),
-		BaseParser:    &bchain.BaseParser{},
 	}
+	parser.BaseParser = parser.BitcoinParser.BaseParser
+	return parser
 }
 
 // matches max data carrier for systx
