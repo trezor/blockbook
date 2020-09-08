@@ -4,7 +4,7 @@
         <div class="col-xs-7 col-md-8 ellipsis">
             <a href="/tx/{{$tx.Txid}}">{{$tx.Txid}}</a>
             {{- if $tx.Rbf}}<span title="Replace-by-Fee (RBF) transaction, could be overriden"> ⚠️</span>{{end -}}
-            {{- if $tx.TokenType}}($tx.TokenType){{end -}}
+            {{- if $tx.TokenType}}<div class="text-muted">&nbsp;({{$tx.TokenType}})/div>{{end -}}
         </div>
         {{- if $tx.Blocktime}}<div class="col-xs-5 col-md-4 text-muted text-right">{{if $tx.Confirmations}}mined{{else}}first seen{{end}} {{formatUnixTime $tx.Blocktime}}</div>{{end -}}
     </div>
