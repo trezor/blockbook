@@ -224,7 +224,6 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 							}
 							assetGuid := strconv.FormatUint(uint64(vin.AssetInfo.AssetGuid), 10)
 							tts = &bchain.TokenTransferSummary{
-								Type:     txVersionAsset,
 								Token:    assetGuid,
 								Decimals: int(dbAsset.AssetObj.Precision),
 								Value:	  (*bchain.Amount)(big.NewInt(0)),
@@ -270,7 +269,6 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 				}
 				assetGuid := strconv.FormatUint(uint64(vout.AssetInfo.AssetGuid), 10)
 				tts = &bchain.TokenTransferSummary{
-					Type:     txVersionAsset,
 					Token:    assetGuid,
 					Decimals: int(dbAsset.AssetObj.Precision),
 					Value:	  (*bchain.Amount)(big.NewInt(0)),
@@ -368,6 +366,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 		CoinSpecificData: bchainTx.CoinSpecificData,
 		CoinSpecificJSON: sj,
 		TokenTransferSummary:   tokens,
+		TokenType: txVersionAsset,
 		EthereumSpecific: ethSpecific,
 	}
 	return r, nil
@@ -420,7 +419,6 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 						}
 						assetGuid := strconv.FormatUint(uint64(vin.AssetInfo.AssetGuid), 10)
 						tts = &bchain.TokenTransferSummary{
-							Type:     txVersionAsset,
 							Token:    assetGuid,
 							Decimals: int(dbAsset.AssetObj.Precision),
 							Value:	  (*bchain.Amount)(big.NewInt(0)),
@@ -470,7 +468,6 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 				}
 				assetGuid := strconv.FormatUint(uint64(vout.AssetInfo.AssetGuid), 10)
 				tts = &bchain.TokenTransferSummary{
-					Type:     txVersionAsset,
 					Token:    assetGuid,
 					Decimals: int(dbAsset.AssetObj.Precision),
 					Value:	  (*bchain.Amount)(big.NewInt(0)),
@@ -526,6 +523,7 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 		Vin:              vins,
 		Vout:             vouts,
 		TokenTransferSummary:   tokens,
+		TokenType: txVersionAsset,
 		EthereumSpecific: ethSpecific,
 	}
 	return r, nil
@@ -734,7 +732,6 @@ func (w *Worker) txFromTxAddress(txid string, ta *bchain.TxAddresses, bi *bchain
 				}
 				assetGuid := strconv.FormatUint(uint64(vin.AssetInfo.AssetGuid), 10)
 				tts = &bchain.TokenTransferSummary{
-					Type:     txVersionAsset,
 					Token:    assetGuid,
 					Decimals: int(dbAsset.AssetObj.Precision),
 					Value:	  (*bchain.Amount)(big.NewInt(0)),
@@ -773,7 +770,6 @@ func (w *Worker) txFromTxAddress(txid string, ta *bchain.TxAddresses, bi *bchain
 				}
 				assetGuid := strconv.FormatUint(uint64(vout.AssetInfo.AssetGuid), 10)
 				tts = &bchain.TokenTransferSummary{
-					Type:     txVersionAsset,
 					Token:    assetGuid,
 					Decimals: int(dbAsset.AssetObj.Precision),
 					Value:	  (*bchain.Amount)(big.NewInt(0)),
@@ -811,6 +807,7 @@ func (w *Worker) txFromTxAddress(txid string, ta *bchain.TxAddresses, bi *bchain
 		Vin:           vins,
 		Vout:          vouts,
 		TokenTransferSummary:   tokens,
+		TokenType: txVersionAsset,
 	}
 	return r
 }

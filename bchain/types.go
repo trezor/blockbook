@@ -564,7 +564,6 @@ func (t Tokens) Less(i, j int) bool {
 
 // TokenTransferSummary contains info about a token transfer done in a transaction
 type TokenTransferSummary struct {
-	Type     TokenType `json:"type"`
 	From     string    `json:"from"`
 	To       string    `json:"to"`
 	Token    string    `json:"token"`

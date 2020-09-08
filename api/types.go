@@ -152,6 +152,7 @@ type Tx struct {
 	CoinSpecificData interface{}       `json:"-"`
 	CoinSpecificJSON json.RawMessage   `json:"-"`
 	TokenTransferSummary   []*bchain.TokenTransferSummary   `json:"tokenTransfers,omitempty"`
+	TokenType		 string			   `json:"tokenType,omitempty"`
 	EthereumSpecific *EthereumSpecific `json:"ethereumSpecific,omitempty"`
 }
 
