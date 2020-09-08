@@ -152,26 +152,26 @@ func (p *SyscoinParser) ParseBlock(b []byte) (*bchain.Block, error) {
 		Txs: txs,
 	}, nil
 }
-func (p *SyscoinParser) GetAssetTypeFromVersion(nVersion int32) bchain.TokenType {
+func (p *SyscoinParser) GetAssetTypeFromVersion(nVersion int32) *bchain.TokenType {
 	switch nVersion {
 	case SYSCOIN_TX_VERSION_ASSET_ACTIVATE:
-		return bchain.SPTAssetActivateType
+		return &bchain.SPTAssetActivateType
 	case SYSCOIN_TX_VERSION_ASSET_UPDATE:
-		return bchain.SPTAssetUpdateType
+		return &bchain.SPTAssetUpdateType
 	case SYSCOIN_TX_VERSION_ASSET_SEND:
-		return bchain.SPTAssetSendType
+		return &bchain.SPTAssetSendType
 	case SYSCOIN_TX_VERSION_ALLOCATION_MINT:
-		return bchain.SPTAssetAllocationMintType
+		return &bchain.SPTAssetAllocationMintType
 	case SYSCOIN_TX_VERSION_ALLOCATION_BURN_TO_ETHEREUM:
-		return bchain.SPTAssetAllocationBurnToEthereumType
+		return &bchain.SPTAssetAllocationBurnToEthereumType
 	case SYSCOIN_TX_VERSION_ALLOCATION_BURN_TO_SYSCOIN:
-		return bchain.SPTAssetAllocationBurnToSyscoinType
+		return &bchain.SPTAssetAllocationBurnToSyscoinType
 	case SYSCOIN_TX_VERSION_SYSCOIN_BURN_TO_ALLOCATION:
-		return bchain.SPTAssetSyscoinBurnToAllocationType
+		return &bchain.SPTAssetSyscoinBurnToAllocationType
 	case SYSCOIN_TX_VERSION_ALLOCATION_SEND:
-		return bchain.SPTAssetAllocationSendType
+		return &bchain.SPTAssetAllocationSendType
 	default:
-		return bchain.SPTUnknownType
+		return nil
 	}
 }
 

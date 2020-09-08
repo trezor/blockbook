@@ -752,7 +752,7 @@ type BlockChainParser interface {
 	IsAssetSendTx(nVersion int32) bool
 	TryGetOPReturn(script []byte) []byte
 	GetAssetsMaskFromVersion(nVersion int32) AssetsMask
-	GetAssetTypeFromVersion(nVersion int32) TokenType
+	GetAssetTypeFromVersion(nVersion int32) *TokenType
 	PackAssetKey(assetGuid uint32, height uint32) []byte
 	UnpackAssetKey(key []byte) (uint32, uint32)
 	PackAssetTxIndex(txAsset *TxAsset) []byte

@@ -326,8 +326,8 @@ func (p *BaseParser) IsAssetActivateTx(nVersion int32) bool {
 func (p *BaseParser) GetAssetsMaskFromVersion(nVersion int32) AssetsMask {
 	return BaseCoinMask
 }
-func (p *BaseParser) GetAssetTypeFromVersion(nVersion int32) TokenType {
-	return SPTUnknownType
+func (p *BaseParser) GetAssetTypeFromVersion(nVersion int32) *TokenType {
+	return nil
 }
 func (p *BaseParser) TryGetOPReturn(script []byte) []byte {
 	return nil
