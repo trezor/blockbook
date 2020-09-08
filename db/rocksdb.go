@@ -617,6 +617,7 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses bch
 		ta := blockTxAddresses[txi]
 		ta.Inputs = make([]bchain.TxInput, len(tx.Vin))
 		logged := false
+		assetsMask := d.chainParser.GetAssetsMaskFromVersion(tx.Version)
 		for i, input := range tx.Vin {
 			tai := &ta.Inputs[i]
 			btxID, err := d.chainParser.PackTxid(input.Txid)
