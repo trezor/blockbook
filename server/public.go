@@ -579,8 +579,15 @@ func formatPercentage(a string) string {
 }
 
 func (s *PublicServer) formatKeyID(a string) string {
-	addr, err := s.chainParser.WitnessPubKeyHashFromKeyID([]byte(a))
+	dst := make([]byte, hex.DecodedLen(len(a)))
+	_, errDecode := hex.Decode(dst, a)
+	if errDecode != nil {
+		glog.Error(errDecode)
+		return ""
+	}
+	addr, err := s.chainParser.WitnessPubKeyHashFromKeyID(dst)
 	if err != nil {
+		glog.Error(err)
 		return ""
 	}
 	return addr
