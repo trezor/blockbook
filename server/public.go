@@ -22,6 +22,7 @@ import (
 	"time"
 	"github.com/golang/glog"
 	"encoding/base64"
+	"encoding/hex"
 )
 
 const txsOnPage = 25
