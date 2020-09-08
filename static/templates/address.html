@@ -134,9 +134,9 @@
         <option {{if eq $addr.Filter "non-tokens" -}} selected{{end}} value="non-tokens">Non-token</option>
         <option {{if eq $addr.Filter "token-transfers" -}} selected{{end}} value="token-transfers">Token transfers</option>
         <option {{if eq $addr.Filter "non-token-transfers" -}} selected{{end}} value="non-token-transfers">Token non-transfers</option>
-        {{- range $t := $addr.Tokens -}}{{- if $t -}}
+        {{- range $t := $addr.Tokens -}}{{- if $t -}}{{- if $t.Type == "ERC20" -}}
         <option {{if eq $addr.Filter $t.ContractIndex -}} selected{{end}} value="{{$t.ContractIndex}}">{{$t.Name}}</option>
-        {{- end -}}{{- end -}}
+        {{- end -}}{{- end -}}{{- end -}}
         {{- end -}}
     </select>
     <div class="col-md-7">

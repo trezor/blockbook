@@ -1174,7 +1174,6 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 				TotalSentSat:     (*bchain.Amount)(v.SentSat),
 				Contract:		  assetGuid,
 				Transfers:		  v.Transfers,
-				ContractIndex:    assetGuid,
 			})
 		}
 		sort.Sort(tokens)

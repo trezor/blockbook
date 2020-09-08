@@ -274,7 +274,6 @@ func (w *Worker) tokenFromXpubAddress(data *xpubData, ad *xpubAddress, changeInd
 					Path:             fmt.Sprintf("%s/%d/%d", data.basePath, changeIndex, index),
 					Contract:		  assetGuid,
 					Transfers:		  v.Transfers,
-					ContractIndex:    assetGuid,
 				})
 			}
 			sort.Sort(tokens)
