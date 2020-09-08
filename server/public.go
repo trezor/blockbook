@@ -581,7 +581,7 @@ func formatPercentage(a string) string {
 
 func (s *PublicServer) formatKeyID(a string) string {
 	dst := make([]byte, hex.DecodedLen(len(a)))
-	_, errDecode := hex.Decode(dst, a)
+	_, errDecode := hex.Decode(dst, []byte(a))
 	if errDecode != nil {
 		glog.Error(errDecode)
 		return ""
