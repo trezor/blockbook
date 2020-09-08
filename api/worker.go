@@ -546,7 +546,6 @@ func (w *Worker) getTokensFromErc20(erc20 []bchain.Erc20Transfer) []*bchain.Toke
 			erc20c = &bchain.Erc20Contract{Name: e.Contract}
 		}
 		tokens[i] = &bchain.TokenTransferSummary{
-			Type:     bchain.ERC20TokenType,
 			Token:    e.Contract,
 			From:     e.From,
 			To:       e.To,

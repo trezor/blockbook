@@ -153,26 +153,28 @@ func (p *SyscoinParser) ParseBlock(b []byte) (*bchain.Block, error) {
 	}, nil
 }
 func (p *SyscoinParser) GetAssetTypeFromVersion(nVersion int32) *bchain.TokenType {
+	var ttype bchain.TokenType
 	switch nVersion {
 	case SYSCOIN_TX_VERSION_ASSET_ACTIVATE:
-		return &bchain.SPTAssetActivateType
+		ttype = bchain.SPTAssetActivateType
 	case SYSCOIN_TX_VERSION_ASSET_UPDATE:
-		return &bchain.SPTAssetUpdateType
+		ttype = bchain.SPTAssetUpdateType
 	case SYSCOIN_TX_VERSION_ASSET_SEND:
-		return &bchain.SPTAssetSendType
+		ttype = bchain.SPTAssetSendType
 	case SYSCOIN_TX_VERSION_ALLOCATION_MINT:
-		return &bchain.SPTAssetAllocationMintType
+		ttype = bchain.SPTAssetAllocationMintType
 	case SYSCOIN_TX_VERSION_ALLOCATION_BURN_TO_ETHEREUM:
-		return &bchain.SPTAssetAllocationBurnToEthereumType
+		ttype = bchain.SPTAssetAllocationBurnToEthereumType
 	case SYSCOIN_TX_VERSION_ALLOCATION_BURN_TO_SYSCOIN:
-		return &bchain.SPTAssetAllocationBurnToSyscoinType
+		ttype = bchain.SPTAssetAllocationBurnToSyscoinType
 	case SYSCOIN_TX_VERSION_SYSCOIN_BURN_TO_ALLOCATION:
-		return &bchain.SPTAssetSyscoinBurnToAllocationType
+		ttype = bchain.SPTAssetSyscoinBurnToAllocationType
 	case SYSCOIN_TX_VERSION_ALLOCATION_SEND:
-		return &bchain.SPTAssetAllocationSendType
+		ttype = bchain.SPTAssetAllocationSendType
 	default:
 		return nil
 	}
+	return &ttype
 }
 
 func (p *SyscoinParser) GetAssetsMaskFromVersion(nVersion int32) bchain.AssetsMask {
