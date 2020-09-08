@@ -531,10 +531,6 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses bch
 		for i, output := range tx.Vout {
 			tao := &ta.Outputs[i]
 			tao.ValueSat = output.ValueSat
-			mask := bchain.BaseCoinMask
-			if output.AssetInfo != nil {
-				mask = assetsMask
-			}
 			addrDesc, err := d.chainParser.GetAddrDescFromVout(&output)
 			if err != nil || len(addrDesc) == 0 || len(addrDesc) > maxAddrDescLen {
 				if err != nil {
@@ -575,7 +571,7 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses bch
 					ValueSat: output.ValueSat,
 					AssetInfo: tao.AssetInfo,
 				})
-				counted := addToAddressesMap(addresses, strAddrDesc, btxID, int32(i), mask)
+				counted := addToAddressesMap(addresses, strAddrDesc, btxID, int32(i), assetsMask)
 				if !counted {
 					balance.Txs++
 				}
@@ -660,10 +656,8 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses bch
 
 			tai.AddrDesc = spentOutput.AddrDesc
 			tai.ValueSat = spentOutput.ValueSat
-			mask := bchain.BaseCoinMask
 			if spentOutput.AssetInfo != nil {
 				tai.AssetInfo = &bchain.AssetInfo{AssetGuid: spentOutput.AssetInfo.AssetGuid, ValueSat: new(big.Int).Set(spentOutput.AssetInfo.ValueSat)}
-				mask = d.chainParser.GetAssetsMaskFromVersion(ita.Version)
 			}
 			// mark the output as spent in tx
 			spentOutput.Spent = true
@@ -690,7 +684,7 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses bch
 				} else {
 					d.cbs.balancesHit++
 				}
-				counted := addToAddressesMap(addresses, strAddrDesc, spendingTxid, ^int32(i), mask)
+				counted := addToAddressesMap(addresses, strAddrDesc, spendingTxid, ^int32(i), assetsMask)
 				if !counted {
 					balance.Txs++
 				}
