@@ -1,13 +1,10 @@
 package ravencoin
 
 import (
-	"blockbook/bchain"
-	"blockbook/bchain/coins/btc"
-	"blockbook/bchain/coins/utils"
-	"bytes"
-
 	"github.com/martinboehm/btcd/wire"
 	"github.com/martinboehm/btcutil/chaincfg"
+	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/bchain/coins/btc"
 )
 
 // magic numbers
@@ -37,11 +34,15 @@ func init() {
 // RavencoinParser handle
 type RavencoinParser struct {
 	*btc.BitcoinParser
+	baseparser *bchain.BaseParser
 }
 
 // NewRavencoinParser returns new RavencoinParser instance
 func NewRavencoinParser(params *chaincfg.Params, c *btc.Configuration) *RavencoinParser {
-	return &RavencoinParser{BitcoinParser: btc.NewBitcoinParser(params, c)}
+	return &RavencoinParser{
+		BitcoinParser: btc.NewBitcoinParser(params, c),
+		baseparser:    &bchain.BaseParser{},
+	}
 }
 
 // GetChainParams contains network parameters
@@ -63,31 +64,12 @@ func GetChainParams(chain string) *chaincfg.Params {
 	}
 }
 
-// ParseBlock parses raw block to our Block struct
-func (p *RavencoinParser) ParseBlock(b []byte) (*bchain.Block, error) {
-	r := bytes.NewReader(b)
-	w := wire.MsgBlock{}
-	h := wire.BlockHeader{}
-	err := h.Deserialize(r)
-	if err != nil {
-		return nil, err
-	}
+// PackTx packs transaction to byte array using protobuf
+func (p *RavencoinParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) ([]byte, error) {
+	return p.baseparser.PackTx(tx, height, blockTime)
+}
 
-	err = utils.DecodeTransactions(r, 0, wire.WitnessEncoding, &w)
-	if err != nil {
-		return nil, err
-	}
-
-	txs := make([]bchain.Tx, len(w.Transactions))
-	for ti, t := range w.Transactions {
-		txs[ti] = p.TxFromMsgTx(t, false)
-	}
-
-	return &bchain.Block{
-		BlockHeader: bchain.BlockHeader{
-			Size: len(b),
-			Time: h.Timestamp.Unix(),
-		},
-		Txs: txs,
-	}, nil
+// UnpackTx unpacks transaction from protobuf byte array
+func (p *RavencoinParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
+	return p.baseparser.UnpackTx(buf)
 }

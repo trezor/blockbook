@@ -81,7 +81,7 @@ In general, build of Blockbook binary require some dependencies. They are downlo
 but if you need to build binary repeatedly it consumes a lot of time. Here comes variable *UPDATE_VENDOR* that if is
 unset says that build process uses *vendor* (i.e. dependencies) from your local repository. For example:
 `make deb-bitcoin UPDATE_VENDOR=0`. But before the command is executed there must be *vendor* directory populated,
-you can do it by calling `dep ensure --vendor-only`. See [Manual build](#manual-build) instructions below.
+you can do it by calling `go mod vendor`. See [Manual build](#manual-build) instructions below.
 
 All build targets allow pass additional parameters to underlying command inside container. It is possible via ARGS
 variable. For example if you want run only subset of unit-tests, you will perform it by calling:
@@ -194,7 +194,7 @@ like macOS or Windows, please read instructions specific for each project.
 Setup go environment:
 
 ```
-wget https://dl.google.com/go/go1.10.3.linux-amd64.tar.gz && tar xf go1.10.3.linux-amd64.tar.gz
+wget https://dl.google.com/go/go1.14.2.linux-amd64.tar.tz && tar xf go1.14.2.linux-amd64.tar.gz
 sudo mv go /opt/go
 sudo ln -s /opt/go/bin/go /usr/bin/go
 # see `go help gopath` for details
@@ -223,18 +223,12 @@ export CGO_LDFLAGS="-L/path/to/rocksdb -lrocksdb -lstdc++ -lm -lz -lbz2 -lsnappy
 
 Install ZeroMQ: https://github.com/zeromq/libzmq
 
-Install go-dep tool:
-```
-go get github.com/golang/dep/cmd/dep
-```
-
 Get blockbook sources, install dependencies, build:
 
 ```
 cd $GOPATH/src
 git clone https://github.com/trezor/blockbook.git
 cd blockbook
-dep ensure -vendor-only
 go build
 ```
 

@@ -1,10 +1,6 @@
 package server
 
 import (
-	"blockbook/api"
-	"blockbook/bchain"
-	"blockbook/common"
-	"blockbook/db"
 	"encoding/json"
 	"math/big"
 	"net/http"
@@ -18,6 +14,10 @@ import (
 	"github.com/golang/glog"
 	"github.com/gorilla/websocket"
 	"github.com/juju/errors"
+	"github.com/trezor/blockbook/api"
+	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/common"
+	"github.com/trezor/blockbook/db"
 )
 
 const upgradeFailed = "Upgrade failed: "
@@ -259,34 +259,27 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *webs
 	},
 	"getBalanceHistory": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
 		r := struct {
-			Descriptor string `json:"descriptor"`
-			From       string `json:"from"`
-			To         string `json:"to"`
-			Fiat       string `json:"fiat"`
-			Gap        int    `json:"gap"`
-			GroupBy    uint32 `json:"groupBy"`
+			Descriptor string   `json:"descriptor"`
+			From       int64    `json:"from"`
+			To         int64    `json:"to"`
+			Currencies []string `json:"currencies"`
+			Gap        int      `json:"gap"`
+			GroupBy    uint32   `json:"groupBy"`
 		}{}
 		err = json.Unmarshal(req.Params, &r)
 		if err == nil {
-			var fromTime, toTime time.Time
-			if r.From != "" {
-				fromTime, err = time.Parse("2006-01-02", r.From)
-				if err != nil {
-					return
-				}
+			if r.From <= 0 {
+				r.From = 0
 			}
-			if r.To != "" {
-				toTime, err = time.Parse("2006-01-02", r.To)
-				if err != nil {
-					return
-				}
+			if r.To <= 0 {
+				r.To = 0
 			}
 			if r.GroupBy <= 0 {
 				r.GroupBy = 3600
 			}
-			rv, err = s.api.GetXpubBalanceHistory(r.Descriptor, fromTime, toTime, strings.ToLower(r.Fiat), r.Gap, r.GroupBy)
+			rv, err = s.api.GetXpubBalanceHistory(r.Descriptor, r.From, r.To, r.Currencies, r.Gap, r.GroupBy)
 			if err != nil {
-				rv, err = s.api.GetBalanceHistory(r.Descriptor, fromTime, toTime, strings.ToLower(r.Fiat), r.GroupBy)
+				rv, err = s.api.GetBalanceHistory(r.Descriptor, r.From, r.To, r.Currencies, r.GroupBy)
 			}
 		}
 		return
@@ -359,22 +352,22 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *webs
 	},
 	"getCurrentFiatRates": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
 		r := struct {
-			Currency string `json:"currency"`
+			Currencies []string `json:"currencies"`
 		}{}
 		err = json.Unmarshal(req.Params, &r)
 		if err == nil {
-			rv, err = s.getCurrentFiatRates(strings.ToLower(r.Currency))
+			rv, err = s.getCurrentFiatRates(r.Currencies)
 		}
 		return
 	},
 	"getFiatRatesForTimestamps": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
 		r := struct {
-			Timestamps []int64 `json:"timestamps"`
-			Currency   string  `json:"currency"`
+			Timestamps []int64  `json:"timestamps"`
+			Currencies []string `json:"currencies"`
 		}{}
 		err = json.Unmarshal(req.Params, &r)
 		if err == nil {
-			rv, err = s.getFiatRatesForTimestamps(r.Timestamps, strings.ToLower(r.Currency))
+			rv, err = s.getFiatRatesForTimestamps(r.Timestamps, r.Currencies)
 		}
 		return
 	},
@@ -423,18 +416,20 @@ func (s *WebsocketServer) onRequest(c *websocketChannel, req *websocketReq) {
 	f, ok := requestHandlers[req.Method]
 	if ok {
 		data, err = f(s, c, req)
+		if err == nil {
+			glog.V(1).Info("Client ", c.id, " onRequest ", req.Method, " success")
+			s.metrics.WebsocketRequests.With(common.Labels{"method": req.Method, "status": "success"}).Inc()
+		} else {
+			if apiErr, ok := err.(*api.APIError); !ok || !apiErr.Public {
+				glog.Error("Client ", c.id, " onMessage ", req.Method, ": ", errors.ErrorStack(err), ", data ", string(req.Params))
+			}
+			s.metrics.WebsocketRequests.With(common.Labels{"method": req.Method, "status": "failure"}).Inc()
+			e := resultError{}
+			e.Error.Message = err.Error()
+			data = e
+		}
 	} else {
-		err = errors.New("unknown method")
-	}
-	if err == nil {
-		glog.V(1).Info("Client ", c.id, " onRequest ", req.Method, " success")
-		s.metrics.WebsocketRequests.With(common.Labels{"method": req.Method, "status": "success"}).Inc()
-	} else {
-		glog.Error("Client ", c.id, " onMessage ", req.Method, ": ", errors.ErrorStack(err), ", data ", string(req.Params))
-		s.metrics.WebsocketRequests.With(common.Labels{"method": req.Method, "status": "failure"}).Inc()
-		e := resultError{}
-		e.Error.Message = err.Error()
-		data = e
+		glog.Warning("Client ", c.id, " onMessage ", req.Method, ": unknown method, data ", string(req.Params))
 	}
 }
 
@@ -468,6 +463,8 @@ func (s *WebsocketServer) getAccountInfo(req *accountInfoReq) (res *api.Address,
 		opt = api.AccountDetailsTokenBalances
 	case "txids":
 		opt = api.AccountDetailsTxidHistory
+	case "txslight":
+		opt = api.AccountDetailsTxHistoryLight
 	case "txs":
 		opt = api.AccountDetailsTxHistory
 	default:
@@ -689,11 +686,14 @@ func (s *WebsocketServer) subscribeAddresses(c *websocketChannel, addrDesc []bch
 func (s *WebsocketServer) unsubscribeAddresses(c *websocketChannel) (res interface{}, err error) {
 	s.addressSubscriptionsLock.Lock()
 	defer s.addressSubscriptionsLock.Unlock()
-	for _, sa := range s.addressSubscriptions {
+	for ads, sa := range s.addressSubscriptions {
 		for sc := range sa {
 			if sc == c {
 				delete(sa, c)
 			}
+		}
+		if len(sa) == 0 {
+			delete(s.addressSubscriptions, ads)
 		}
 	}
 	return &subscriptionResponse{false}, nil
@@ -722,11 +722,14 @@ func (s *WebsocketServer) subscribeFiatRates(c *websocketChannel, currency strin
 func (s *WebsocketServer) unsubscribeFiatRates(c *websocketChannel) (res interface{}, err error) {
 	s.fiatRatesSubscriptionsLock.Lock()
 	defer s.fiatRatesSubscriptionsLock.Unlock()
-	for _, sa := range s.fiatRatesSubscriptions {
+	for fr, sa := range s.fiatRatesSubscriptions {
 		for sc := range sa {
 			if sc == c {
 				delete(sa, c)
 			}
+		}
+		if len(sa) == 0 {
+			delete(s.fiatRatesSubscriptions, fr)
 		}
 	}
 	return &subscriptionResponse{false}, nil
@@ -754,47 +757,91 @@ func (s *WebsocketServer) OnNewBlock(hash string, height uint32) {
 	glog.Info("broadcasting new block ", height, " ", hash, " to ", len(s.newBlockSubscriptions), " channels")
 }
 
-// OnNewTxAddr is a callback that broadcasts info about a tx affecting subscribed address
-func (s *WebsocketServer) OnNewTxAddr(tx *bchain.Tx, addrDesc bchain.AddressDescriptor) {
-	// check if there is any subscription but release the lock immediately, GetTransactionFromBchainTx may take some time
-	s.addressSubscriptionsLock.Lock()
-	as, ok := s.addressSubscriptions[string(addrDesc)]
-	lenAs := len(as)
-	s.addressSubscriptionsLock.Unlock()
-	if ok && lenAs > 0 {
-		addr, _, err := s.chainParser.GetAddressesFromAddrDesc(addrDesc)
-		if err != nil {
-			glog.Error("GetAddressesFromAddrDesc error ", err, " for ", addrDesc)
-			return
+func (s *WebsocketServer) sendOnNewTxAddr(stringAddressDescriptor string, tx *api.Tx) {
+	addrDesc := bchain.AddressDescriptor(stringAddressDescriptor)
+	addr, _, err := s.chainParser.GetAddressesFromAddrDesc(addrDesc)
+	if err != nil {
+		glog.Error("GetAddressesFromAddrDesc error ", err, " for ", addrDesc)
+		return
+	}
+	if len(addr) == 1 {
+		data := struct {
+			Address string  `json:"address"`
+			Tx      *api.Tx `json:"tx"`
+		}{
+			Address: addr[0],
+			Tx:      tx,
 		}
-		if len(addr) == 1 {
-			atx, err := s.api.GetTransactionFromBchainTx(tx, 0, false, false)
-			if err != nil {
-				glog.Error("GetTransactionFromBchainTx error ", err, " for ", tx.Txid)
-				return
-			}
-			data := struct {
-				Address string  `json:"address"`
-				Tx      *api.Tx `json:"tx"`
-			}{
-				Address: addr[0],
-				Tx:      atx,
-			}
-			// get the list of subscriptions again, this time keep the lock
-			s.addressSubscriptionsLock.Lock()
-			defer s.addressSubscriptionsLock.Unlock()
-			as, ok = s.addressSubscriptions[string(addrDesc)]
-			if ok {
-				for c, id := range as {
-					if c.IsAlive() {
-						c.out <- &websocketRes{
-							ID:   id,
-							Data: &data,
-						}
+		// get the list of subscriptions again, this time keep the lock
+		s.addressSubscriptionsLock.Lock()
+		defer s.addressSubscriptionsLock.Unlock()
+		as, ok := s.addressSubscriptions[stringAddressDescriptor]
+		if ok {
+			for c, id := range as {
+				if c.IsAlive() {
+					c.out <- &websocketRes{
+						ID:   id,
+						Data: &data,
 					}
 				}
-				glog.Info("broadcasting new tx ", tx.Txid, " for addr ", addr[0], " to ", len(as), " channels")
 			}
+			glog.Info("broadcasting new tx ", tx.Txid, ", addr ", addr[0], " to ", len(as), " channels")
+		}
+	}
+}
+
+// OnNewTx is a callback that broadcasts info about a tx affecting subscribed address
+func (s *WebsocketServer) OnNewTx(tx *bchain.MempoolTx) {
+	// check if there is any subscription in inputs, outputs and erc20
+	// release the lock immediately, GetTransactionFromMempoolTx is potentially slow
+	subscribed := make(map[string]struct{})
+	s.addressSubscriptionsLock.Lock()
+	for i := range tx.Vin {
+		sad := string(tx.Vin[i].AddrDesc)
+		if len(sad) > 0 {
+			as, ok := s.addressSubscriptions[sad]
+			if ok && len(as) > 0 {
+				subscribed[sad] = struct{}{}
+			}
+		}
+	}
+	for i := range tx.Vout {
+		addrDesc, err := s.chainParser.GetAddrDescFromVout(&tx.Vout[i])
+		if err == nil && len(addrDesc) > 0 {
+			sad := string(addrDesc)
+			as, ok := s.addressSubscriptions[sad]
+			if ok && len(as) > 0 {
+				subscribed[sad] = struct{}{}
+			}
+		}
+	}
+	for i := range tx.Erc20 {
+		addrDesc, err := s.chainParser.GetAddrDescFromAddress(tx.Erc20[i].From)
+		if err == nil && len(addrDesc) > 0 {
+			sad := string(addrDesc)
+			as, ok := s.addressSubscriptions[sad]
+			if ok && len(as) > 0 {
+				subscribed[sad] = struct{}{}
+			}
+		}
+		addrDesc, err = s.chainParser.GetAddrDescFromAddress(tx.Erc20[i].To)
+		if err == nil && len(addrDesc) > 0 {
+			sad := string(addrDesc)
+			as, ok := s.addressSubscriptions[sad]
+			if ok && len(as) > 0 {
+				subscribed[sad] = struct{}{}
+			}
+		}
+	}
+	s.addressSubscriptionsLock.Unlock()
+	if len(subscribed) > 0 {
+		atx, err := s.api.GetTransactionFromMempoolTx(tx)
+		if err != nil {
+			glog.Error("GetTransactionFromMempoolTx error ", err, " for ", tx.Txid)
+			return
+		}
+		for stringAddressDescriptor := range subscribed {
+			s.sendOnNewTxAddr(stringAddressDescriptor, atx)
 		}
 	}
 }
@@ -833,13 +880,13 @@ func (s *WebsocketServer) OnNewFiatRatesTicker(ticker *db.CurrencyRatesTicker) {
 	s.broadcastTicker(allFiatRates, ticker.Rates)
 }
 
-func (s *WebsocketServer) getCurrentFiatRates(currency string) (interface{}, error) {
-	ret, err := s.api.GetCurrentFiatRates(currency)
+func (s *WebsocketServer) getCurrentFiatRates(currencies []string) (interface{}, error) {
+	ret, err := s.api.GetCurrentFiatRates(currencies)
 	return ret, err
 }
 
-func (s *WebsocketServer) getFiatRatesForTimestamps(timestamps []int64, currency string) (interface{}, error) {
-	ret, err := s.api.GetFiatRatesForTimestamps(timestamps, currency)
+func (s *WebsocketServer) getFiatRatesForTimestamps(timestamps []int64, currencies []string) (interface{}, error) {
+	ret, err := s.api.GetFiatRatesForTimestamps(timestamps, currencies)
 	return ret, err
 }
 

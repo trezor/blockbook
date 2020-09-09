@@ -1,10 +1,6 @@
 package server
 
 import (
-	"blockbook/api"
-	"blockbook/bchain"
-	"blockbook/common"
-	"blockbook/db"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -22,6 +18,10 @@ import (
 	"time"
 
 	"github.com/golang/glog"
+	"github.com/trezor/blockbook/api"
+	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/common"
+	"github.com/trezor/blockbook/db"
 )
 
 const txsOnPage = 25
@@ -219,10 +219,14 @@ func (s *PublicServer) OnNewFiatRatesTicker(ticker *db.CurrencyRatesTicker) {
 	s.websocket.OnNewFiatRatesTicker(ticker)
 }
 
-// OnNewTxAddr notifies users subscribed to bitcoind/addresstxid about new block
+// OnNewTxAddr notifies users subscribed to notification about new tx
 func (s *PublicServer) OnNewTxAddr(tx *bchain.Tx, desc bchain.AddressDescriptor) {
 	s.socketio.OnNewTxAddr(tx.Txid, desc)
-	s.websocket.OnNewTxAddr(tx, desc)
+}
+
+// OnNewTx notifies users subscribed to notification about new tx
+func (s *PublicServer) OnNewTx(tx *bchain.MempoolTx) {
+	s.websocket.OnNewTx(tx)
 }
 
 func (s *PublicServer) txRedirect(w http.ResponseWriter, r *http.Request) {
@@ -625,6 +629,8 @@ func (s *PublicServer) getAddressQueryParams(r *http.Request, accountDetails api
 		accountDetails = api.AccountDetailsTokenBalances
 	case "txids":
 		accountDetails = api.AccountDetailsTxidHistory
+	case "txslight":
+		accountDetails = api.AccountDetailsTxHistoryLight
 	case "txs":
 		accountDetails = api.AccountDetailsTxHistory
 	}
@@ -641,11 +647,13 @@ func (s *PublicServer) getAddressQueryParams(r *http.Request, accountDetails api
 	if ec != nil {
 		gap = 0
 	}
+	contract := r.URL.Query().Get("contract")
 	return page, pageSize, accountDetails, &api.AddressFilter{
 		Vout:           voutFilter,
 		TokensToReturn: tokensToReturn,
 		FromHeight:     uint32(from),
 		ToHeight:       uint32(to),
+		Contract:       contract,
 	}, filterParam, gap
 }
 
@@ -670,6 +678,9 @@ func (s *PublicServer) explorerAddress(w http.ResponseWriter, r *http.Request) (
 	data.Address = address
 	data.Page = address.Page
 	data.PagingRange, data.PrevPage, data.NextPage = getPagingRange(address.Page, address.TotalPages)
+	if filterParam == "" && filter.Vout > -1 {
+		filterParam = strconv.Itoa(filter.Vout)
+	}
 	if filterParam != "" {
 		data.PageParams = template.URL("&filter=" + filterParam)
 		data.Address.Filter = filterParam
@@ -1042,21 +1053,26 @@ func (s *PublicServer) apiUtxo(r *http.Request, apiVersion int) (interface{}, er
 
 func (s *PublicServer) apiBalanceHistory(r *http.Request, apiVersion int) (interface{}, error) {
 	var history []api.BalanceHistory
-	var fromTime, toTime time.Time
+	var fromTimestamp, toTimestamp int64
 	var err error
 	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
 		gap, ec := strconv.Atoi(r.URL.Query().Get("gap"))
 		if ec != nil {
 			gap = 0
 		}
-		t := r.URL.Query().Get("from")
-		if t != "" {
-			fromTime, _ = time.Parse("2006-01-02", t)
+		from := r.URL.Query().Get("from")
+		if from != "" {
+			fromTimestamp, err = strconv.ParseInt(from, 10, 64)
+			if err != nil {
+				return history, err
+			}
 		}
-		t = r.URL.Query().Get("to")
-		if t != "" {
-			// time.RFC3339
-			toTime, _ = time.Parse("2006-01-02", t)
+		to := r.URL.Query().Get("to")
+		if to != "" {
+			toTimestamp, err = strconv.ParseInt(to, 10, 64)
+			if err != nil {
+				return history, err
+			}
 		}
 		var groupBy uint64
 		groupBy, err = strconv.ParseUint(r.URL.Query().Get("groupBy"), 10, 32)
@@ -1064,11 +1080,15 @@ func (s *PublicServer) apiBalanceHistory(r *http.Request, apiVersion int) (inter
 			groupBy = 3600
 		}
 		fiat := r.URL.Query().Get("fiatcurrency")
-		history, err = s.api.GetXpubBalanceHistory(r.URL.Path[i+1:], fromTime, toTime, fiat, gap, uint32(groupBy))
+		var fiatArray []string
+		if fiat != "" {
+			fiatArray = []string{fiat}
+		}
+		history, err = s.api.GetXpubBalanceHistory(r.URL.Path[i+1:], fromTimestamp, toTimestamp, fiatArray, gap, uint32(groupBy))
 		if err == nil {
 			s.metrics.ExplorerViews.With(common.Labels{"action": "api-xpub-balancehistory"}).Inc()
 		} else {
-			history, err = s.api.GetBalanceHistory(r.URL.Path[i+1:], fromTime, toTime, fiat, uint32(groupBy))
+			history, err = s.api.GetBalanceHistory(r.URL.Path[i+1:], fromTimestamp, toTimestamp, fiatArray, uint32(groupBy))
 			s.metrics.ExplorerViews.With(common.Labels{"action": "api-address-balancehistory"}).Inc()
 		}
 	}
@@ -1148,12 +1168,17 @@ func (s *PublicServer) apiTickersList(r *http.Request, apiVersion int) (interfac
 func (s *PublicServer) apiTickers(r *http.Request, apiVersion int) (interface{}, error) {
 	var result *db.ResultTickerAsString
 	var err error
+
 	currency := strings.ToLower(r.URL.Query().Get("currency"))
+	var currencies []string
+	if currency != "" {
+		currencies = []string{currency}
+	}
 
 	if block := r.URL.Query().Get("block"); block != "" {
 		// Get tickers for specified block height or block hash
 		s.metrics.ExplorerViews.With(common.Labels{"action": "api-tickers-block"}).Inc()
-		result, err = s.api.GetFiatRatesForBlockID(block, currency)
+		result, err = s.api.GetFiatRatesForBlockID(block, currencies)
 	} else if timestampString := r.URL.Query().Get("timestamp"); timestampString != "" {
 		// Get tickers for specified timestamp
 		s.metrics.ExplorerViews.With(common.Labels{"action": "api-tickers-date"}).Inc()
@@ -1163,7 +1188,7 @@ func (s *PublicServer) apiTickers(r *http.Request, apiVersion int) (interface{},
 			return nil, api.NewAPIError("Parameter \"timestamp\" is not a valid Unix timestamp.", true)
 		}
 
-		resultTickers, err := s.api.GetFiatRatesForTimestamps([]int64{timestamp}, currency)
+		resultTickers, err := s.api.GetFiatRatesForTimestamps([]int64{timestamp}, currencies)
 		if err != nil {
 			return nil, err
 		}
@@ -1171,7 +1196,7 @@ func (s *PublicServer) apiTickers(r *http.Request, apiVersion int) (interface{},
 	} else {
 		// No parameters - get the latest available ticker
 		s.metrics.ExplorerViews.With(common.Labels{"action": "api-tickers-last"}).Inc()
-		result, err = s.api.GetCurrentFiatRates(currency)
+		result, err = s.api.GetCurrentFiatRates(currencies)
 	}
 	if err != nil {
 		return nil, err

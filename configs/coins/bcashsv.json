@@ -22,10 +22,10 @@
     "package_name": "backend-bcashsv",
     "package_revision": "satoshilabs-1",
     "system_user": "bcashsv",
-    "version": "0.2.1",
-    "binary_url": "https://download.bitcoinsv.io/bitcoinsv/0.2.1/bitcoin-sv-0.2.1-x86_64-linux-gnu.tar.gz",
+    "version": "1.0.1",
+    "binary_url": "https://download.bitcoinsv.io/bitcoinsv/1.0.1/bitcoin-sv-1.0.1-x86_64-linux-gnu.tar.gz",
     "verification_type": "sha256",
-    "verification_source": "ead4e26a516ff79be3615b165ceba41dc08c6c7656a0054b591d0c8085c6208c",
+    "verification_source": "8392c340b1fcc74ada9de72b16b5e026443c4b08757664b8133f447157b25a56",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [],
     "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/bitcoind -datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -conf={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf -pid=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",
@@ -36,7 +36,13 @@
     "protect_memory": true,
     "mainnet": true,
     "server_config_file": "bitcoin_like.conf",
-    "client_config_file": "bitcoin_like_client.conf"
+    "client_config_file": "bitcoin_like_client.conf",
+    "additional_params": {
+      "usecashaddr": 0,
+      "excessiveblocksize":1000000000,
+      "maxstackmemoryusageconsensus":100000000,
+      "daemon":1
+    }
   },
   "blockbook": {
     "package_name": "blockbook-bcashsv",
@@ -47,8 +53,7 @@
     "additional_params": "",
     "block_chain": {
       "parse": true,
-      "subversion": "/Bitcoin SV:0.2.1/",
-      "address_format": "cashaddr",
+      "subversion": "/Bitcoin SV:1.0.1/",
       "mempool_workers": 8,
       "mempool_sub_workers": 2,
       "block_addresses_to_keep": 300,

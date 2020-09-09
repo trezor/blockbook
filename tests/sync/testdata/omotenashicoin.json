@@ -1,0 +1,43 @@
+{
+	"connectBlocks": {
+		"syncRanges": [
+			{"lower": 135001, "upper": 135001}
+		],
+		"blocks": {
+			"135001": {
+				"height": 135001,
+				"hash": "000000000007cedacd4bddd119dd9c4a4e3780bf4fc4c02800983f6a87a8574f",
+				"noTxs": 1,
+				"txDetails": [
+					{
+						"hex": "02000000010000000000000000000000000000000000000000000000000000000000000000ffffffff1803590f020445b8075e088104e0b22c0000007969696d70000000000002807c814a000000001976a91487bac515ab40891b58a05c913f908194c9d73bd588ac807584df000000001976a914a1441e207bd13f80b2142026ad39a58b5f47434d88ac00000000",
+						"txid": "a2eedb3990bddcace3a5211332e86f70d0195a2a7efaad2de18698172ff9fc6d",
+						"version": 2,
+						"vin": [
+							{
+								"coinbase": "03590f020445b8075e088104e0b22c0000007969696d7000",
+								"sequence": 0
+							}
+						],
+						"vout": [
+							{
+								"value": 12.5,
+								"n": 0,
+								"scriptPubKey": {
+									"hex": "76a91487bac515ab40891b58a05c913f908194c9d73bd588ac"
+								}
+							},
+							{
+								"value": 37.5,
+								"n": 1,
+								"scriptPubKey": {
+									"hex": "76a914a1441e207bd13f80b2142026ad39a58b5f47434d88ac"
+								}
+							}
+						]
+					}
+				]
+			}
+		}
+	}
+}

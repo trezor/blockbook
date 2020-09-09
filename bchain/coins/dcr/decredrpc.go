@@ -1,7 +1,6 @@
 package dcr
 
 import (
-	"blockbook/bchain"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -16,11 +15,12 @@ import (
 	"sync"
 	"time"
 
-	"blockbook/bchain/coins/btc"
-
 	"github.com/decred/dcrd/dcrjson"
 	"github.com/golang/glog"
 	"github.com/juju/errors"
+	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/bchain/coins/btc"
+	"github.com/trezor/blockbook/common"
 )
 
 // voteBitYes defines the vote bit set when a given block validates the previous
@@ -168,61 +168,61 @@ type GetBlockHashResult struct {
 type GetBlockResult struct {
 	Error  Error `json:"error"`
 	Result struct {
-		Hash          string      `json:"hash"`
-		Confirmations int64       `json:"confirmations"`
-		Size          int32       `json:"size"`
-		Height        uint32      `json:"height"`
-		Version       json.Number `json:"version"`
-		MerkleRoot    string      `json:"merkleroot"`
-		StakeRoot     string      `json:"stakeroot"`
-		RawTx         []RawTx     `json:"rawtx"`
-		Tx            []string    `json:"tx,omitempty"`
-		STx           []string    `json:"stx,omitempty"`
-		Time          int64       `json:"time"`
-		Nonce         json.Number `json:"nonce"`
-		VoteBits      uint16      `json:"votebits"`
-		FinalState    string      `json:"finalstate"`
-		Voters        uint16      `json:"voters"`
-		FreshStake    uint8       `json:"freshstake"`
-		Revocations   uint8       `json:"revocations"`
-		PoolSize      uint32      `json:"poolsize"`
-		Bits          string      `json:"bits"`
-		SBits         float64     `json:"sbits"`
-		ExtraData     string      `json:"extradata"`
-		StakeVersion  uint32      `json:"stakeversion"`
-		Difficulty    float64     `json:"difficulty"`
-		ChainWork     string      `json:"chainwork"`
-		PreviousHash  string      `json:"previousblockhash"`
-		NextHash      string      `json:"nextblockhash,omitempty"`
+		Hash          string            `json:"hash"`
+		Confirmations int64             `json:"confirmations"`
+		Size          int32             `json:"size"`
+		Height        uint32            `json:"height"`
+		Version       common.JSONNumber `json:"version"`
+		MerkleRoot    string            `json:"merkleroot"`
+		StakeRoot     string            `json:"stakeroot"`
+		RawTx         []RawTx           `json:"rawtx"`
+		Tx            []string          `json:"tx,omitempty"`
+		STx           []string          `json:"stx,omitempty"`
+		Time          int64             `json:"time"`
+		Nonce         common.JSONNumber `json:"nonce"`
+		VoteBits      uint16            `json:"votebits"`
+		FinalState    string            `json:"finalstate"`
+		Voters        uint16            `json:"voters"`
+		FreshStake    uint8             `json:"freshstake"`
+		Revocations   uint8             `json:"revocations"`
+		PoolSize      uint32            `json:"poolsize"`
+		Bits          string            `json:"bits"`
+		SBits         float64           `json:"sbits"`
+		ExtraData     string            `json:"extradata"`
+		StakeVersion  uint32            `json:"stakeversion"`
+		Difficulty    float64           `json:"difficulty"`
+		ChainWork     string            `json:"chainwork"`
+		PreviousHash  string            `json:"previousblockhash"`
+		NextHash      string            `json:"nextblockhash,omitempty"`
 	} `json:"result"`
 }
 
 type GetBlockHeaderResult struct {
 	Error  Error `json:"error"`
 	Result struct {
-		Hash          string      `json:"hash"`
-		Confirmations int64       `json:"confirmations"`
-		Version       json.Number `json:"version"`
-		MerkleRoot    string      `json:"merkleroot"`
-		StakeRoot     string      `json:"stakeroot"`
-		VoteBits      uint16      `json:"votebits"`
-		FinalState    string      `json:"finalstate"`
-		Voters        uint16      `json:"voters"`
-		FreshStake    uint8       `json:"freshstake"`
-		Revocations   uint8       `json:"revocations"`
-		PoolSize      uint32      `json:"poolsize"`
-		Bits          string      `json:"bits"`
-		SBits         float64     `json:"sbits"`
-		Height        uint32      `json:"height"`
-		Size          uint32      `json:"size"`
-		Time          int64       `json:"time"`
-		Nonce         uint32      `json:"nonce"`
-		ExtraData     string      `json:"extradata"`
-		StakeVersion  uint32      `json:"stakeversion"`
-		Difficulty    float64     `json:"difficulty"`
-		ChainWork     string      `json:"chainwork"`
-		PreviousHash  string      `json:"previousblockhash,omitempty"`
-		NextHash      string      `json:"nextblockhash,omitempty"`
+		Hash          string            `json:"hash"`
+		Confirmations int64             `json:"confirmations"`
+		Version       common.JSONNumber `json:"version"`
+		MerkleRoot    string            `json:"merkleroot"`
+		StakeRoot     string            `json:"stakeroot"`
+		VoteBits      uint16            `json:"votebits"`
+		FinalState    string            `json:"finalstate"`
+		Voters        uint16            `json:"voters"`
+		FreshStake    uint8             `json:"freshstake"`
+		Revocations   uint8             `json:"revocations"`
+		PoolSize      uint32            `json:"poolsize"`
+		Bits          string            `json:"bits"`
+		SBits         float64           `json:"sbits"`
+		Height        uint32            `json:"height"`
+		Size          uint32            `json:"size"`
+		Time          int64             `json:"time"`
+		Nonce         uint32            `json:"nonce"`
+		ExtraData     string            `json:"extradata"`
+		StakeVersion  uint32            `json:"stakeversion"`
+		Difficulty    float64           `json:"difficulty"`
+		ChainWork     string            `json:"chainwork"`
+		PreviousHash  string            `json:"previousblockhash,omitempty"`
+		NextHash      string            `json:"nextblockhash,omitempty"`
 	} `json:"result"`
 }
 
@@ -297,8 +297,8 @@ type EstimateSmartFeeResult struct {
 }
 
 type EstimateFeeResult struct {
-	Error  Error       `json:"error"`
-	Result json.Number `json:"result"`
+	Error  Error             `json:"error"`
+	Result common.JSONNumber `json:"result"`
 }
 
 type SendRawTransactionResult struct {
@@ -637,7 +637,7 @@ func (d *DecredRPC) GetBlockInfo(hash string) (*bchain.BlockInfo, error) {
 		Version:     block.Result.Version,
 		Nonce:       block.Result.Nonce,
 		Bits:        block.Result.Bits,
-		Difficulty:  json.Number(strconv.FormatFloat(block.Result.Difficulty, 'e', -1, 64)),
+		Difficulty:  common.JSONNumber(strconv.FormatFloat(block.Result.Difficulty, 'e', -1, 64)),
 		Txids:       block.Result.Tx,
 	}
 

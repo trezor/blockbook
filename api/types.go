@@ -1,14 +1,16 @@
 package api
 
 import (
-	"blockbook/bchain"
-	"blockbook/common"
-	"blockbook/db"
 	"encoding/json"
 	"errors"
 	"math/big"
 	"sort"
 	"time"
+
+	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/bchain/coins/eth"
+	"github.com/trezor/blockbook/common"
+	"github.com/trezor/blockbook/db"
 )
 
 const maxUint32 = ^uint32(0)
@@ -169,11 +171,12 @@ type TokenTransfer struct {
 
 // EthereumSpecific contains ethereum specific transaction data
 type EthereumSpecific struct {
-	Status   int      `json:"status"` // 1 OK, 0 Fail, -1 pending
-	Nonce    uint64   `json:"nonce"`
-	GasLimit *big.Int `json:"gasLimit"`
-	GasUsed  *big.Int `json:"gasUsed"`
-	GasPrice *Amount  `json:"gasPrice"`
+	Status   eth.TxStatus `json:"status"` // 1 OK, 0 Fail, -1 pending
+	Nonce    uint64       `json:"nonce"`
+	GasLimit *big.Int     `json:"gasLimit"`
+	GasUsed  *big.Int     `json:"gasUsed"`
+	GasPrice *Amount      `json:"gasPrice"`
+	Data     string       `json:"data,omitempty"`
 }
 
 // Tx holds information about a transaction
@@ -224,6 +227,8 @@ const (
 	AddressFilterVoutInputs = -2
 	// AddressFilterVoutOutputs specifies that only txs where the address is as output are returned
 	AddressFilterVoutOutputs = -3
+	// AddressFilterVoutQueryNotNecessary signals that query for transactions is not necessary as there are no transactions for specified contract filter
+	AddressFilterVoutQueryNotNecessary = -4
 
 	// TokensToReturnNonzeroBalance - return only tokens with nonzero balance
 	TokensToReturnNonzeroBalance TokensToReturn = 0
@@ -299,12 +304,13 @@ func (a Utxos) Less(i, j int) bool {
 
 // BalanceHistory contains info about one point in time of balance history
 type BalanceHistory struct {
-	Time        uint32  `json:"time"`
-	Txs         uint32  `json:"txs"`
-	ReceivedSat *Amount `json:"received"`
-	SentSat     *Amount `json:"sent"`
-	FiatRate    float64 `json:"fiatRate,omitempty"`
-	Txid        string  `json:"txid,omitempty"`
+	Time          uint32             `json:"time"`
+	Txs           uint32             `json:"txs"`
+	ReceivedSat   *Amount            `json:"received"`
+	SentSat       *Amount            `json:"sent"`
+	SentToSelfSat *Amount            `json:"sentToSelf"`
+	FiatRates     map[string]float64 `json:"rates,omitempty"`
+	Txid          string             `json:"txid,omitempty"`
 }
 
 // BalanceHistories is array of BalanceHistory
@@ -326,8 +332,9 @@ func (a BalanceHistories) SortAndAggregate(groupByTime uint32) BalanceHistories 
 	bhs := make(BalanceHistories, 0)
 	if len(a) > 0 {
 		bha := BalanceHistory{
-			SentSat:     &Amount{},
-			ReceivedSat: &Amount{},
+			ReceivedSat:   &Amount{},
+			SentSat:       &Amount{},
+			SentToSelfSat: &Amount{},
 		}
 		sort.Sort(a)
 		for i := range a {
@@ -340,17 +347,19 @@ func (a BalanceHistories) SortAndAggregate(groupByTime uint32) BalanceHistories 
 					bhs = append(bhs, bha)
 				}
 				bha = BalanceHistory{
-					Time:        time,
-					SentSat:     &Amount{},
-					ReceivedSat: &Amount{},
+					Time:          time,
+					ReceivedSat:   &Amount{},
+					SentSat:       &Amount{},
+					SentToSelfSat: &Amount{},
 				}
 			}
 			if bha.Txid != bh.Txid {
 				bha.Txs += bh.Txs
 				bha.Txid = bh.Txid
 			}
-			(*big.Int)(bha.SentSat).Add((*big.Int)(bha.SentSat), (*big.Int)(bh.SentSat))
 			(*big.Int)(bha.ReceivedSat).Add((*big.Int)(bha.ReceivedSat), (*big.Int)(bh.ReceivedSat))
+			(*big.Int)(bha.SentSat).Add((*big.Int)(bha.SentSat), (*big.Int)(bh.SentSat))
+			(*big.Int)(bha.SentToSelfSat).Add((*big.Int)(bha.SentToSelfSat), (*big.Int)(bh.SentToSelfSat))
 		}
 		if bha.Txs > 0 {
 			bha.Txid = ""
@@ -368,19 +377,19 @@ type Blocks struct {
 
 // BlockInfo contains extended block header data and a list of block txids
 type BlockInfo struct {
-	Hash          string      `json:"hash"`
-	Prev          string      `json:"previousBlockHash,omitempty"`
-	Next          string      `json:"nextBlockHash,omitempty"`
-	Height        uint32      `json:"height"`
-	Confirmations int         `json:"confirmations"`
-	Size          int         `json:"size"`
-	Time          int64       `json:"time,omitempty"`
-	Version       json.Number `json:"version"`
-	MerkleRoot    string      `json:"merkleRoot"`
-	Nonce         string      `json:"nonce"`
-	Bits          string      `json:"bits"`
-	Difficulty    string      `json:"difficulty"`
-	Txids         []string    `json:"tx,omitempty"`
+	Hash          string            `json:"hash"`
+	Prev          string            `json:"previousBlockHash,omitempty"`
+	Next          string            `json:"nextBlockHash,omitempty"`
+	Height        uint32            `json:"height"`
+	Confirmations int               `json:"confirmations"`
+	Size          int               `json:"size"`
+	Time          int64             `json:"time,omitempty"`
+	Version       common.JSONNumber `json:"version"`
+	MerkleRoot    string            `json:"merkleRoot"`
+	Nonce         string            `json:"nonce"`
+	Bits          string            `json:"bits"`
+	Difficulty    string            `json:"difficulty"`
+	Txids         []string          `json:"tx,omitempty"`
 }
 
 // Block contains information about block

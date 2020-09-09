@@ -2,7 +2,6 @@
 package main
 
 import (
-	build "blockbook/build/tools"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,6 +12,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	build "github.com/trezor/blockbook/build/tools"
 )
 
 const (

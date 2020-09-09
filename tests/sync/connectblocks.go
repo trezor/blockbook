@@ -3,13 +3,14 @@
 package sync
 
 import (
-	"blockbook/bchain"
-	"blockbook/db"
 	"math/big"
 	"os"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/db"
 )
 
 func testConnectBlocks(t *testing.T, h *TestHandler) {
