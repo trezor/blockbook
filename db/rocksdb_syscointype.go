@@ -368,7 +368,7 @@ func (d *RocksDB) GetSetupAssetCacheFirstTime() bool {
 	return SetupAssetCacheFirstTime
 }
 
-func (d *RocksDB) SetSetupAssetCacheFirstTime(cacheVal bool) bool {
+func (d *RocksDB) SetSetupAssetCacheFirstTime(cacheVal bool) {
 	SetupAssetCacheFirstTime = cacheVal
 }
 
