@@ -1207,7 +1207,7 @@ func (w *Worker) FindAssetsFromFilter(filter string) []*AssetsSpecific {
 	assetDetails := make([]*AssetsSpecific, 0)
 	filterLower := strings.ToLower(filter)
 	filterLower = strings.Replace(filterLower, "0x", "", -1)
-	for guid, assetCached := range w.db.GetAssetCache() {
+	for guid, assetCached := range *w.db.GetAssetCache() {
 		foundAsset := false
 		symbolLower := strings.ToLower(assetCached.AssetObj.Symbol)
 		if strings.Contains(symbolLower, filterLower) {
