@@ -103,16 +103,16 @@
                                     <td class="data ellipsis">{{formatDecodeBase64 $asset.AssetDetails.NotaryDetails.EndPoint}}</td>
                                     <td class="data">
                                             {{if $asset.AssetDetails.NotaryDetails.InstantTransfers}}
-                                            <span title="{{$f.Description}}" class="text-success">✔</span>
+                                            <span title="Instant transfers by locking inputs through notarization" class="text-success">✔</span>
                                             {{else}}
-                                            <span title="{{$f.Description}}" class="text-danger">✘</span>
+                                            <span title="Instant transfers disabled, use ZDAG and other decentralized means of assuring double-spend protection" class="text-danger">✘</span>
                                             {{end}}
                                     </td>
                                     <td class="data">
                                             {{if $asset.AssetDetails.NotaryDetails.HDRequired}}
-                                            <span title="{{$f.Description}}" class="text-success">✔</span>
+                                            <span title="HD wallet XPUB keys required to ensure tracking of accounts over change addresses" class="text-success">✔</span>
                                             {{else}}
-                                            <span title="{{$f.Description}}" class="text-danger">✘</span>
+                                            <span title="HD wallet verification disabled" class="text-danger">✘</span>
                                             {{end}}
                                     </td>
                                 </tr>
