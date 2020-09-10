@@ -29,7 +29,7 @@ func (d *RocksDB) ConnectAssetOutputHelper(isActivate bool, asset *bchain.Asset,
 			if len(dBAsset.AssetObj.PubData) > 0 {
 				dBAsset.AssetObj.UpdateFlags |= wire.ASSET_UPDATE_DATA
 			} else {
-				dBAsset.AssetObj.UpdateFlags &= ^wire.ASSET_UPDATE_DATA
+				dBAsset.AssetObj.UpdateFlags = dBAsset.AssetObj.UpdateFlags &^ wire.ASSET_UPDATE_DATA
 			}
 		}
 		if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_CONTRACT) != 0 {
@@ -37,7 +37,7 @@ func (d *RocksDB) ConnectAssetOutputHelper(isActivate bool, asset *bchain.Asset,
 			if len(dBAsset.AssetObj.Contract) > 0 {
 				dBAsset.AssetObj.UpdateFlags |= wire.ASSET_UPDATE_CONTRACT
 			} else {
-				dBAsset.AssetObj.UpdateFlags &= ^wire.ASSET_UPDATE_CONTRACT
+				dBAsset.AssetObj.UpdateFlags = dBAsset.AssetObj.UpdateFlags &^ wire.ASSET_UPDATE_CONTRACT
 			}
 		}
 		if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_NOTARY_KEY) != 0 {
@@ -45,7 +45,7 @@ func (d *RocksDB) ConnectAssetOutputHelper(isActivate bool, asset *bchain.Asset,
 			if len(dBAsset.AssetObj.NotaryKeyID) > 0 {
 				dBAsset.AssetObj.UpdateFlags |= wire.ASSET_UPDATE_NOTARY_KEY
 			} else {
-				dBAsset.AssetObj.UpdateFlags &= ^wire.ASSET_UPDATE_NOTARY_KEY
+				dBAsset.AssetObj.UpdateFlags = dBAsset.AssetObj.UpdateFlags &^ wire.ASSET_UPDATE_NOTARY_KEY
 			}
 		}
 		if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_NOTARY_DETAILS) != 0 {
@@ -53,7 +53,7 @@ func (d *RocksDB) ConnectAssetOutputHelper(isActivate bool, asset *bchain.Asset,
 			if len(dBAsset.AssetObj.NotaryDetails.EndPoint) > 0 {
 				dBAsset.AssetObj.UpdateFlags |= wire.ASSET_UPDATE_NOTARY_DETAILS
 			} else {
-				dBAsset.AssetObj.UpdateFlags &= ^wire.ASSET_UPDATE_NOTARY_DETAILS
+				dBAsset.AssetObj.UpdateFlags = dBAsset.AssetObj.UpdateFlags &^ wire.ASSET_UPDATE_NOTARY_DETAILS
 			}
 		}
 		if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_AUXFEE_KEY) != 0 {
@@ -61,7 +61,7 @@ func (d *RocksDB) ConnectAssetOutputHelper(isActivate bool, asset *bchain.Asset,
 			if len(dBAsset.AssetObj.AuxFeeKeyID) > 0 {
 				dBAsset.AssetObj.UpdateFlags |= wire.ASSET_UPDATE_AUXFEE_KEY
 			} else {
-				dBAsset.AssetObj.UpdateFlags &= ^wire.ASSET_UPDATE_AUXFEE_KEY
+				dBAsset.AssetObj.UpdateFlags = dBAsset.AssetObj.UpdateFlags &^ wire.ASSET_UPDATE_AUXFEE_KEY
 			}
 		}
 		if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_AUXFEE_DETAILS) != 0 {
@@ -69,7 +69,7 @@ func (d *RocksDB) ConnectAssetOutputHelper(isActivate bool, asset *bchain.Asset,
 			if len(dBAsset.AssetObj.AuxFeeDetails.AuxFees) > 0 {
 				dBAsset.AssetObj.UpdateFlags |= wire.ASSET_UPDATE_AUXFEE_DETAILS
 			} else {
-				dBAsset.AssetObj.UpdateFlags &= ^wire.ASSET_UPDATE_AUXFEE_DETAILS
+				dBAsset.AssetObj.UpdateFlags = dBAsset.AssetObj.UpdateFlags &^ wire.ASSET_UPDATE_AUXFEE_DETAILS
 			}
 		}
 		if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_CAPABILITYFLAGS) != 0 {
@@ -77,7 +77,7 @@ func (d *RocksDB) ConnectAssetOutputHelper(isActivate bool, asset *bchain.Asset,
 			if dBAsset.AssetObj.UpdateCapabilityFlags != 0 {
 				dBAsset.AssetObj.UpdateFlags |= wire.ASSET_UPDATE_CAPABILITYFLAGS
 			} else {
-				dBAsset.AssetObj.UpdateFlags &= ^wire.ASSET_UPDATE_CAPABILITYFLAGS
+				dBAsset.AssetObj.UpdateFlags = dBAsset.AssetObj.UpdateFlags &^ wire.ASSET_UPDATE_CAPABILITYFLAGS
 			}
 		}
 	} else {
@@ -113,7 +113,7 @@ func (d *RocksDB) DisconnectAssetOutputHelper(asset *bchain.Asset, dBAsset *bcha
 		if len(dBAsset.AssetObj.PubData) > 0 {
 			dBAsset.AssetObj.UpdateFlags |= wire.ASSET_UPDATE_DATA
 		} else {
-			dBAsset.AssetObj.UpdateFlags &= ^wire.ASSET_UPDATE_DATA
+			dBAsset.AssetObj.UpdateFlags = dBAsset.AssetObj.UpdateFlags &^ wire.ASSET_UPDATE_DATA
 		}
     }
     if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_CONTRACT) != 0 {
@@ -121,7 +121,7 @@ func (d *RocksDB) DisconnectAssetOutputHelper(asset *bchain.Asset, dBAsset *bcha
 		if len(dBAsset.AssetObj.Contract) > 0 {
 			dBAsset.AssetObj.UpdateFlags |= wire.ASSET_UPDATE_CONTRACT
 		} else {
-			dBAsset.AssetObj.UpdateFlags &= ^wire.ASSET_UPDATE_CONTRACT
+			dBAsset.AssetObj.UpdateFlags = dBAsset.AssetObj.UpdateFlags &^ wire.ASSET_UPDATE_CONTRACT
 		}
     }
     if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_NOTARY_KEY) != 0 {
@@ -129,7 +129,7 @@ func (d *RocksDB) DisconnectAssetOutputHelper(asset *bchain.Asset, dBAsset *bcha
 		if len(dBAsset.AssetObj.NotaryKeyID) > 0 {
 			dBAsset.AssetObj.UpdateFlags |= wire.ASSET_UPDATE_NOTARY_KEY
 		} else {
-			dBAsset.AssetObj.UpdateFlags &= ^wire.ASSET_UPDATE_NOTARY_KEY
+			dBAsset.AssetObj.UpdateFlags = dBAsset.AssetObj.UpdateFlags &^ wire.ASSET_UPDATE_NOTARY_KEY
 		}
     }
     if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_NOTARY_DETAILS) != 0 {
@@ -137,7 +137,7 @@ func (d *RocksDB) DisconnectAssetOutputHelper(asset *bchain.Asset, dBAsset *bcha
 		if len(dBAsset.AssetObj.NotaryDetails.EndPoint) > 0 {
 			dBAsset.AssetObj.UpdateFlags |= wire.ASSET_UPDATE_NOTARY_DETAILS
 		} else {
-			dBAsset.AssetObj.UpdateFlags &= ^wire.ASSET_UPDATE_NOTARY_DETAILS
+			dBAsset.AssetObj.UpdateFlags = dBAsset.AssetObj.UpdateFlags &^ wire.ASSET_UPDATE_NOTARY_DETAILS
 		}
     }
     if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_AUXFEE_KEY) != 0 {
@@ -145,7 +145,7 @@ func (d *RocksDB) DisconnectAssetOutputHelper(asset *bchain.Asset, dBAsset *bcha
 		if len(dBAsset.AssetObj.AuxFeeKeyID) > 0 {
 			dBAsset.AssetObj.UpdateFlags |= wire.ASSET_UPDATE_AUXFEE_KEY
 		} else {
-			dBAsset.AssetObj.UpdateFlags &= ^wire.ASSET_UPDATE_AUXFEE_KEY
+			dBAsset.AssetObj.UpdateFlags = dBAsset.AssetObj.UpdateFlags &^ wire.ASSET_UPDATE_AUXFEE_KEY
 		}
     }
     if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_AUXFEE_DETAILS) != 0 {
@@ -153,7 +153,7 @@ func (d *RocksDB) DisconnectAssetOutputHelper(asset *bchain.Asset, dBAsset *bcha
 		if len(dBAsset.AssetObj.AuxFeeDetails.AuxFees) > 0 {
 			dBAsset.AssetObj.UpdateFlags |= wire.ASSET_UPDATE_AUXFEE_DETAILS
 		} else {
-			dBAsset.AssetObj.UpdateFlags &= ^wire.ASSET_UPDATE_AUXFEE_DETAILS
+			dBAsset.AssetObj.UpdateFlags = dBAsset.AssetObj.UpdateFlags &^ wire.ASSET_UPDATE_AUXFEE_DETAILS
 		}
     }
     if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_CAPABILITYFLAGS) != 0 {
@@ -161,7 +161,7 @@ func (d *RocksDB) DisconnectAssetOutputHelper(asset *bchain.Asset, dBAsset *bcha
 		if dBAsset.AssetObj.UpdateCapabilityFlags != 0 {
 			dBAsset.AssetObj.UpdateFlags |= wire.ASSET_UPDATE_CAPABILITYFLAGS
 		} else {
-			dBAsset.AssetObj.UpdateFlags &= ^wire.ASSET_UPDATE_CAPABILITYFLAGS
+			dBAsset.AssetObj.UpdateFlags = dBAsset.AssetObj.UpdateFlags &^ wire.ASSET_UPDATE_CAPABILITYFLAGS
 		}
 	}
 
