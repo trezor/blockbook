@@ -26,30 +26,64 @@ func (d *RocksDB) ConnectAssetOutputHelper(isActivate bool, asset *bchain.Asset,
 		// logic follows core CheckAssetInputs()
 		if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_DATA) != 0 {
 			dBAsset.AssetObj.PubData = asset.AssetObj.PubData
+			if len(dBAsset.AssetObj.PubData) > 0 {
+				dBAsset.AssetObj.UpdateFlags |= wire.ASSET_UPDATE_DATA
+			} else {
+				dBAsset.AssetObj.UpdateFlags &= ~wire.ASSET_UPDATE_DATA
+			}
 		}
 		if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_CONTRACT) != 0 {
 			dBAsset.AssetObj.Contract = asset.AssetObj.Contract
+			if len(dBAsset.AssetObj.Contract) > 0 {
+				dBAsset.AssetObj.UpdateFlags |= wire.ASSET_UPDATE_CONTRACT
+			} else {
+				dBAsset.AssetObj.UpdateFlags &= ~wire.ASSET_UPDATE_CONTRACT
+			}
 		}
 		if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_NOTARY_KEY) != 0 {
 			dBAsset.AssetObj.NotaryKeyID = asset.AssetObj.NotaryKeyID
+			if len(dBAsset.AssetObj.NotaryKeyID) > 0 {
+				dBAsset.AssetObj.UpdateFlags |= wire.ASSET_UPDATE_NOTARY_KEY
+			} else {
+				dBAsset.AssetObj.UpdateFlags &= ~wire.ASSET_UPDATE_NOTARY_KEY
+			}
 		}
 		if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_NOTARY_DETAILS) != 0 {
 			dBAsset.AssetObj.NotaryDetails = asset.AssetObj.NotaryDetails
+			if len(dBAsset.AssetObj.NotaryDetails.EndPoint) > 0 {
+				dBAsset.AssetObj.UpdateFlags |= wire.ASSET_UPDATE_NOTARY_DETAILS
+			} else {
+				dBAsset.AssetObj.UpdateFlags &= ~wire.ASSET_UPDATE_NOTARY_DETAILS
+			}
 		}
 		if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_AUXFEE_KEY) != 0 {
 			dBAsset.AssetObj.AuxFeeKeyID = asset.AssetObj.AuxFeeKeyID
+			if len(dBAsset.AssetObj.AuxFeeKeyID) > 0 {
+				dBAsset.AssetObj.UpdateFlags |= wire.ASSET_UPDATE_AUXFEE_KEY
+			} else {
+				dBAsset.AssetObj.UpdateFlags &= ~wire.ASSET_UPDATE_AUXFEE_KEY
+			}
 		}
 		if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_AUXFEE_DETAILS) != 0 {
 			dBAsset.AssetObj.AuxFeeDetails = asset.AssetObj.AuxFeeDetails
+			if len(dBAsset.AssetObj.AuxFeeDetails.AuxFees) > 0 {
+				dBAsset.AssetObj.UpdateFlags |= wire.ASSET_UPDATE_AUXFEE_DETAILS
+			} else {
+				dBAsset.AssetObj.UpdateFlags &= ~wire.ASSET_UPDATE_AUXFEE_DETAILS
+			}
 		}
 		if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_CAPABILITYFLAGS) != 0 {
 			dBAsset.AssetObj.UpdateCapabilityFlags = asset.AssetObj.UpdateCapabilityFlags
+			if dBAsset.AssetObj.UpdateCapabilityFlags != 0 {
+				dBAsset.AssetObj.UpdateFlags |= wire.ASSET_UPDATE_CAPABILITYFLAGS
+			} else {
+				dBAsset.AssetObj.UpdateFlags &= ~wire.ASSET_UPDATE_CAPABILITYFLAGS
+			}
 		}
 	} else {
 		dBAsset.AssetObj.TotalSupply = asset.AssetObj.Balance
+		dBAsset.AssetObj.UpdateFlags = asset.AssetObj.UpdateFlags
 	}
-	// set to all update flags so it will serialize full object into DB
-	dBAsset.AssetObj.UpdateFlags = wire.ASSET_UPDATE_ALL
 	return nil
 }
 
@@ -72,27 +106,63 @@ func (d *RocksDB) DisconnectAssetOutputHelper(asset *bchain.Asset, dBAsset *bcha
 	}
 	// logic follows core CheckAssetInputs()
 	// undo data fields from last update
-    // if fields changed then undo them using prev fields
+	// if fields changed then undo them using prev fields
+	dBAsset.AssetObj.UpdateFlags = wire.ASSET_UPDATE_SUPPLY
     if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_DATA) != 0 {
-        dBAsset.AssetObj.PubData = asset.AssetObj.PrevPubData
+		dBAsset.AssetObj.PubData = asset.AssetObj.PrevPubData
+		if len(dBAsset.AssetObj.PubData) > 0 {
+			dBAsset.AssetObj.UpdateFlags |= wire.ASSET_UPDATE_DATA
+		} else {
+			dBAsset.AssetObj.UpdateFlags &= ~wire.ASSET_UPDATE_DATA
+		}
     }
     if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_CONTRACT) != 0 {
 		dBAsset.AssetObj.Contract = asset.AssetObj.PrevContract
+		if len(dBAsset.AssetObj.Contract) > 0 {
+			dBAsset.AssetObj.UpdateFlags |= wire.ASSET_UPDATE_CONTRACT
+		} else {
+			dBAsset.AssetObj.UpdateFlags &= ~wire.ASSET_UPDATE_CONTRACT
+		}
     }
     if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_NOTARY_KEY) != 0 {
-        dBAsset.AssetObj.NotaryKeyID = asset.AssetObj.PrevNotaryKeyID
+		dBAsset.AssetObj.NotaryKeyID = asset.AssetObj.PrevNotaryKeyID
+		if len(dBAsset.AssetObj.NotaryKeyID) > 0 {
+			dBAsset.AssetObj.UpdateFlags |= wire.ASSET_UPDATE_NOTARY_KEY
+		} else {
+			dBAsset.AssetObj.UpdateFlags &= ~wire.ASSET_UPDATE_NOTARY_KEY
+		}
     }
     if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_NOTARY_DETAILS) != 0 {
-        dBAsset.AssetObj.NotaryDetails = asset.AssetObj.PrevNotaryDetails
+		dBAsset.AssetObj.NotaryDetails = asset.AssetObj.PrevNotaryDetails
+		if len(dBAsset.AssetObj.NotaryDetails.EndPoint) > 0 {
+			dBAsset.AssetObj.UpdateFlags |= wire.ASSET_UPDATE_NOTARY_DETAILS
+		} else {
+			dBAsset.AssetObj.UpdateFlags &= ~wire.ASSET_UPDATE_NOTARY_DETAILS
+		}
     }
     if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_AUXFEE_KEY) != 0 {
-        dBAsset.AssetObj.AuxFeeKeyID = asset.AssetObj.PrevAuxFeeKeyID
+		dBAsset.AssetObj.AuxFeeKeyID = asset.AssetObj.PrevAuxFeeKeyID
+		if len(dBAsset.AssetObj.AuxFeeKeyID) > 0 {
+			dBAsset.AssetObj.UpdateFlags |= wire.ASSET_UPDATE_AUXFEE_KEY
+		} else {
+			dBAsset.AssetObj.UpdateFlags &= ~wire.ASSET_UPDATE_AUXFEE_KEY
+		}
     }
     if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_AUXFEE_DETAILS) != 0 {
-        dBAsset.AssetObj.AuxFeeDetails = asset.AssetObj.PrevAuxFeeDetails
+		dBAsset.AssetObj.AuxFeeDetails = asset.AssetObj.PrevAuxFeeDetails
+		if len(dBAsset.AssetObj.AuxFeeDetails.AuxFees) > 0 {
+			dBAsset.AssetObj.UpdateFlags |= wire.ASSET_UPDATE_AUXFEE_DETAILS
+		} else {
+			dBAsset.AssetObj.UpdateFlags &= ~wire.ASSET_UPDATE_AUXFEE_DETAILS
+		}
     }
     if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_CAPABILITYFLAGS) != 0 {
 		dBAsset.AssetObj.UpdateCapabilityFlags = asset.AssetObj.PrevUpdateCapabilityFlags
+		if dBAsset.AssetObj.UpdateCapabilityFlags != 0 {
+			dBAsset.AssetObj.UpdateFlags |= wire.ASSET_UPDATE_CAPABILITYFLAGS
+		} else {
+			dBAsset.AssetObj.UpdateFlags &= ~wire.ASSET_UPDATE_CAPABILITYFLAGS
+		}
 	}
 
 	return nil
