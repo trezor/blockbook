@@ -82,10 +82,10 @@
                                 </tr>
                                 {{- range $t := $addr.Tokens -}}{{- if $t -}}
                                 <tr>
-                                    <td class="data ellipsis">{{if $t.Contract}}<a href="/asset/{{$t.Contract}}">{{$t.Contract}}</a>{{else}}{{$t.Name}}{{end}}</td>
-                                    <td class="data ellipsis">{{formatAmountWithDecimals $t.TotalReceivedSat $t.Decimals}} {{$t.Symbol}}</td>
-                                    <td class="data ellipsis">{{formatAmountWithDecimals $t.TotalSentSat $t.Decimals}} {{$t.Symbol}}</td>
-                                    <td class="data ellipsis">{{formatAmountWithDecimals $t.BalanceSat $t.Decimals}} {{$t.Symbol}}</td>
+                                    <td class="data ellipsis">{{if $t.Contract}}<a href="/asset/{{$t.Contract}}">{{$t.Contract}}</a>{{else}}{{$t.Name}}{{end}}&nbsp;<div class="text-muted">{{$t.Symbol}}</div></td>
+                                    <td class="data ellipsis">{{formatAmountWithDecimals $t.TotalReceivedSat $t.Decimals}}</td>
+                                    <td class="data ellipsis">{{formatAmountWithDecimals $t.TotalSentSat $t.Decimals}}</td>
+                                    <td class="data ellipsis">{{formatAmountWithDecimals $t.BalanceSat $t.Decimals}}</td>
                                     <td class="data">{{$t.Transfers}}</td>
                                 </tr>
                                 {{- end -}}{{- end -}}
