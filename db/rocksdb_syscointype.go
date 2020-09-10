@@ -336,7 +336,7 @@ func (d *RocksDB) SetupAssetCache() error {
 }
 
 // find assets from cache that contain filter
-func (d *RocksDB) FindAssetsFromFilter(filter string) map[uint32]bchain.Asset {
+func (d *RocksDB) FindAssetsFromFilter(filter string) []*api.AssetsSpecific {
 	start := time.Now()
 	if SetupAssetCacheFirstTime == true {
 		if err := d.SetupAssetCache(); err != nil {
@@ -345,23 +345,36 @@ func (d *RocksDB) FindAssetsFromFilter(filter string) map[uint32]bchain.Asset {
 		}
 		SetupAssetCacheFirstTime = false;
 	}
-	assets := map[uint32]bchain.Asset{}
+	assetDetails := make([]*api.AssetsSpecific, 0)
 	filterLower := strings.ToLower(filter)
 	filterLower = strings.Replace(filterLower, "0x", "", -1)
 	for guid, assetCached := range AssetCache {
+		foundAsset := false
 		symbolLower := strings.ToLower(assetCached.AssetObj.Symbol)
 		if strings.Contains(symbolLower, filterLower) {
-			assets[guid] = assetCached
+			foundAsset = true
 		} else if len(assetCached.AssetObj.Contract) > 0 && len(filterLower) > 5 {
 			contractStr := hex.EncodeToString(assetCached.AssetObj.Contract)
 			contractLower := strings.ToLower(contractStr)
 			if strings.Contains(contractLower, filterLower) {
-				assets[guid] = assetCached
+				foundAsset = true
 			}
+		}
+		if foundAsset == true {
+			assetSpecific := api.AssetsSpecific{
+				AssetGuid:		guid,
+				Symbol:			assetCached.AssetObj.Symbol,
+				Contract:		"0x" + hex.EncodeToString(assetCached.AssetObj.Contract),
+				TotalSupply:	(*bchain.Amount)(big.NewInt(assetCached.AssetObj.TotalSupply)),
+				Decimals:		int(assetCached.AssetObj.Precision),
+				Txs:			int(assetCached.Transactions),
+			}
+			json.Unmarshal(assetCached.AssetObj.PubData, &assetSpecific.PubData)
+			assetDetails = append(assetDetails, &assetSpecific)
 		}
 	}
 	glog.Info("FindAssetsFromFilter finished in ", time.Since(start))
-	return assets
+	return assetDetails
 }
 
 func (d *RocksDB) storeAssets(wb *gorocksdb.WriteBatch, assets map[uint32]*bchain.Asset) error {

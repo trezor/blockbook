@@ -1200,33 +1200,14 @@ func (w *Worker) FindAssets(filter string, page int, txsOnPage int) *Assets {
 		page = 0
 	}
 	start := time.Now()
-	assetDetails := make([]*AssetsSpecific, 0)
+
 	assetsFiltered := w.db.FindAssetsFromFilter(filter)
-	
 	var from, to int
 	var pg Paging
 	pg, from, to, page = computePaging(len(assetsFiltered), page, txsOnPage)
-	var i int = 0
-	for guid, asset := range assetsFiltered {
-		i++
-		if i < from {
-			continue
-		}
-		if i >= to {
-			break
-		}
-		assetSpecific := AssetsSpecific{
-			AssetGuid:		guid,
-			Symbol:			asset.AssetObj.Symbol,
-			Contract:		"0x" + hex.EncodeToString(asset.AssetObj.Contract),
-			TotalSupply:	(*bchain.Amount)(big.NewInt(asset.AssetObj.TotalSupply)),
-			Decimals:		int(asset.AssetObj.Precision),
-			Txs:			int(asset.Transactions),
-		}
-
-
-		json.Unmarshal(asset.AssetObj.PubData, &assetSpecific.PubData)
-		assetDetails = append(assetDetails, &assetSpecific)	
+	assetDetails := make([]*AssetsSpecific, to-from)
+	for i := from; i < to; i++ {
+		assetDetails[i-from] = assetsFiltered[i]
 	}
 	r := &Assets{
 		AssetDetails:		assetDetails,
