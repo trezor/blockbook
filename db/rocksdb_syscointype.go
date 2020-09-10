@@ -340,7 +340,7 @@ func (d *RocksDB) FindAssetsFromFilter(filter string) map[uint32]bchain.Asset {
 	start := time.Now()
 	if SetupAssetCacheFirstTime == true {
 		if err := d.SetupAssetCache(); err != nil {
-			glog.Error("storeAssets SetupAssetCache ", err)
+			glog.Error("FindAssetsFromFilter SetupAssetCache ", err)
 			return nil
 		}
 		SetupAssetCacheFirstTime = false;
