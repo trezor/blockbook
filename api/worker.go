@@ -1194,6 +1194,48 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 	return r, nil
 }
 
+// find assets from cache that contain filter
+func (w *Worker) FindAssetsFromFilter(filter string) []*AssetsSpecific {
+	start := time.Now()
+	if w.db.GetSetupAssetCacheFirstTime() == true {
+		if err := w.db.SetupAssetCache(); err != nil {
+			glog.Error("FindAssetsFromFilter SetupAssetCache ", err)
+			return nil
+		}
+		w.db.SetSetupAssetCacheFirstTime(false);
+	}
+	assetDetails := make([]*AssetsSpecific, 0)
+	filterLower := strings.ToLower(filter)
+	filterLower = strings.Replace(filterLower, "0x", "", -1)
+	for guid, assetCached := range w.db.GetAssetCache() {
+		foundAsset := false
+		symbolLower := strings.ToLower(assetCached.AssetObj.Symbol)
+		if strings.Contains(symbolLower, filterLower) {
+			foundAsset = true
+		} else if len(assetCached.AssetObj.Contract) > 0 && len(filterLower) > 5 {
+			contractStr := hex.EncodeToString(assetCached.AssetObj.Contract)
+			contractLower := strings.ToLower(contractStr)
+			if strings.Contains(contractLower, filterLower) {
+				foundAsset = true
+			}
+		}
+		if foundAsset == true {
+			assetSpecific := AssetsSpecific{
+				AssetGuid:		guid,
+				Symbol:			assetCached.AssetObj.Symbol,
+				Contract:		"0x" + hex.EncodeToString(assetCached.AssetObj.Contract),
+				TotalSupply:	(*bchain.Amount)(big.NewInt(assetCached.AssetObj.TotalSupply)),
+				Decimals:		int(assetCached.AssetObj.Precision),
+				Txs:			int(assetCached.Transactions),
+			}
+			json.Unmarshal(assetCached.AssetObj.PubData, &assetSpecific.PubData)
+			assetDetails = append(assetDetails, &assetSpecific)
+		}
+	}
+	glog.Info("FindAssetsFromFilter finished in ", time.Since(start))
+	return assetDetails
+}
+
 func (w *Worker) FindAssets(filter string, page int, txsOnPage int) *Assets {
 	page--
 	if page < 0 {
@@ -1201,7 +1243,7 @@ func (w *Worker) FindAssets(filter string, page int, txsOnPage int) *Assets {
 	}
 	start := time.Now()
 
-	assetsFiltered := w.db.FindAssetsFromFilter(filter)
+	assetsFiltered := w.FindAssetsFromFilter(filter)
 	var from, to int
 	var pg Paging
 	pg, from, to, page = computePaging(len(assetsFiltered), page, txsOnPage)

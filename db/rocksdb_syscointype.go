@@ -335,47 +335,6 @@ func (d *RocksDB) SetupAssetCache() error {
 	return nil
 }
 
-// find assets from cache that contain filter
-func (d *RocksDB) FindAssetsFromFilter(filter string) []*api.AssetsSpecific {
-	start := time.Now()
-	if SetupAssetCacheFirstTime == true {
-		if err := d.SetupAssetCache(); err != nil {
-			glog.Error("FindAssetsFromFilter SetupAssetCache ", err)
-			return nil
-		}
-		SetupAssetCacheFirstTime = false;
-	}
-	assetDetails := make([]*api.AssetsSpecific, 0)
-	filterLower := strings.ToLower(filter)
-	filterLower = strings.Replace(filterLower, "0x", "", -1)
-	for guid, assetCached := range AssetCache {
-		foundAsset := false
-		symbolLower := strings.ToLower(assetCached.AssetObj.Symbol)
-		if strings.Contains(symbolLower, filterLower) {
-			foundAsset = true
-		} else if len(assetCached.AssetObj.Contract) > 0 && len(filterLower) > 5 {
-			contractStr := hex.EncodeToString(assetCached.AssetObj.Contract)
-			contractLower := strings.ToLower(contractStr)
-			if strings.Contains(contractLower, filterLower) {
-				foundAsset = true
-			}
-		}
-		if foundAsset == true {
-			assetSpecific := api.AssetsSpecific{
-				AssetGuid:		guid,
-				Symbol:			assetCached.AssetObj.Symbol,
-				Contract:		"0x" + hex.EncodeToString(assetCached.AssetObj.Contract),
-				TotalSupply:	(*bchain.Amount)(big.NewInt(assetCached.AssetObj.TotalSupply)),
-				Decimals:		int(assetCached.AssetObj.Precision),
-				Txs:			int(assetCached.Transactions),
-			}
-			json.Unmarshal(assetCached.AssetObj.PubData, &assetSpecific.PubData)
-			assetDetails = append(assetDetails, &assetSpecific)
-		}
-	}
-	glog.Info("FindAssetsFromFilter finished in ", time.Since(start))
-	return assetDetails
-}
 
 func (d *RocksDB) storeAssets(wb *gorocksdb.WriteBatch, assets map[uint32]*bchain.Asset) error {
 	if assets == nil {
@@ -400,6 +359,18 @@ func (d *RocksDB) storeAssets(wb *gorocksdb.WriteBatch, assets map[uint32]*bchai
 		}
 	}
 	return nil
+}
+
+func (d *RocksDB) GetAssetCache() *map[uint32]*bchain.Asset {
+	return &AssetCache
+}
+
+func (d *RocksDB) GetSetupAssetCacheFirstTime() bool {
+	return SetupAssetCacheFirstTime
+}
+
+func (d *RocksDB) SetSetupAssetCacheFirstTime(cacheVal bool) bool {
+	SetupAssetCacheFirstTime = cacheVal
 }
 
 func (d *RocksDB) GetAsset(guid uint32, assets map[uint32]*bchain.Asset) (*bchain.Asset, error) {
