@@ -92,7 +92,7 @@
                     <td style="padding: 0;">
                         <table class="table data-table">
                             <tbody>
-                                <tr>
+                                <tr class="ellipsis">
                                     <th>Address</th>
                                     <th>Endpoint</th>
                                     <th>Instant Transfers</th>
@@ -100,9 +100,21 @@
                                 </tr>
                                 <tr>
                                     <td class="data ellipsis"><a href="/address/{{formatKeyID $asset.AssetDetails.NotaryKeyID}}">{{formatKeyID $asset.AssetDetails.NotaryKeyID}}</a></td>
-                                    <td class="data">{{formatDecodeBase64 $asset.AssetDetails.NotaryDetails.EndPoint}}</td>
-                                    <td class="data">{{$asset.AssetDetails.NotaryDetails.InstantTransfers}}</td>
-                                    <td class="data">{{$asset.AssetDetails.NotaryDetails.HDRequired}}</td>
+                                    <td class="data ellipsis">{{formatDecodeBase64 $asset.AssetDetails.NotaryDetails.EndPoint}}</td>
+                                    <td class="data">
+                                            {{if $asset.AssetDetails.NotaryDetails.InstantTransfers}}
+                                            <span title="{{$f.Description}}" class="text-success">✔</span>
+                                            {{else}}
+                                            <span title="{{$f.Description}}" class="text-danger">✘</span>
+                                            {{end}}
+                                    </td>
+                                    <td class="data">
+                                            {{if $asset.AssetDetails.NotaryDetails.HDRequired}}
+                                            <span title="{{$f.Description}}" class="text-success">✔</span>
+                                            {{else}}
+                                            <span title="{{$f.Description}}" class="text-danger">✘</span>
+                                            {{end}}
+                                    </td>
                                 </tr>
                             </tbody>
                         </table>
