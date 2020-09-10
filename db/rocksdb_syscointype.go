@@ -3,7 +3,6 @@ package db
 import (
 	"blockbook/bchain"
 	"bytes"
-	"strings"
 	"github.com/golang/glog"
 	"github.com/juju/errors"
 	"github.com/tecbot/gorocksdb"
@@ -361,7 +360,7 @@ func (d *RocksDB) storeAssets(wb *gorocksdb.WriteBatch, assets map[uint32]*bchai
 	return nil
 }
 
-func (d *RocksDB) GetAssetCache() *map[uint32]*bchain.Asset {
+func (d *RocksDB) GetAssetCache() *map[uint32]bchain.Asset {
 	return &AssetCache
 }
 
