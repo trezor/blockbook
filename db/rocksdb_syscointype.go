@@ -83,6 +83,8 @@ func (d *RocksDB) ConnectAssetOutputHelper(isActivate bool, asset *bchain.Asset,
 	} else {
 		dBAsset.AssetObj.TotalSupply = asset.AssetObj.Balance
 		dBAsset.AssetObj.UpdateFlags = asset.AssetObj.UpdateFlags
+		// clear vout assets from storage
+		dBAsset.AssetObj.Allocation.VoutAssets = make([]wire.AssetOutType, 0)
 	}
 	return nil
 }
