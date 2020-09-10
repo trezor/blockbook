@@ -22,10 +22,10 @@
     "package_name": "backend-groestlcoin",
     "package_revision": "satoshilabs-1",
     "system_user": "groestlcoin",
-    "version": "2.19.1",
-    "binary_url": "https://github.com/Groestlcoin/groestlcoin/releases/download/v2.19.1/groestlcoin-2.19.1-x86_64-linux-gnu.tar.gz",
+    "version": "2.20.1",
+    "binary_url": "https://github.com/Groestlcoin/groestlcoin/releases/download/v2.20.1/groestlcoin-2.20.1-x86_64-linux-gnu.tar.gz",
     "verification_type": "gpg-sha256",
-    "verification_source": "https://github.com/Groestlcoin/groestlcoin/releases/download/v2.19.1/SHA256SUMS.asc",
+    "verification_source": "https://github.com/Groestlcoin/groestlcoin/releases/download/v2.20.1/SHA256SUMS.asc",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
       "bin/groestlcoin-qt"
@@ -60,7 +60,10 @@
       "xpub_magic_segwit_p2sh": 77429938,
       "xpub_magic_segwit_native": 78792518,
       "slip44": 17,
-      "additional_params": {}
+      "additional_params": {
+        "fiat_rates": "coingecko",
+        "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"groestlcoin\", \"periodSeconds\": 60}"
+      }
     }
   },
   "meta": {
