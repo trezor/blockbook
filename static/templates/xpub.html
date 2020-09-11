@@ -74,7 +74,7 @@
                                     <th style="width: 8%;">Txs</th>
                                     <th style="width: 18%;">Path</th>
                                 </tr>
-                                {{- range $t := $addr.Tokens -}}{{- if $t -}}
+                                {{- range $t := $addr.TokensAsset -}}{{- if $t -}}
                                 <tr>
                                     <td class="data ellipsis"><a href="/asset/{{$t.Contract}}">{{$t.Contract}}</a>&nbsp;<span class="text-muted">{{$t.Symbol}}</span></td>
                                     <td class="data ellipsis"><a href="/address/{{$t.Name}}">{{$t.Name}}</a></td>
