@@ -577,21 +577,17 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 				if len(tokensXPub) > 0 {
 					for _, token := range tokensXPub {
 						if token != nil {
-							if token.Type != bchain.XPUBAddressTokenType {
-								if filter.TokensToReturn == TokensToReturnDerived ||
-									filter.TokensToReturn == TokensToReturnUsed && token.BalanceSat != nil ||
-									filter.TokensToReturn == TokensToReturnNonzeroBalance && token.BalanceSat != nil && token.BalanceSat.AsInt64() != 0 {
+							if filter.TokensToReturn == TokensToReturnDerived ||
+								filter.TokensToReturn == TokensToReturnUsed && token.BalanceSat != nil ||
+								filter.TokensToReturn == TokensToReturnNonzeroBalance && token.BalanceSat != nil && token.BalanceSat.AsInt64() != 0 {
+									if token.Type != bchain.XPUBAddressTokenType {
 										if tokensAsset == nil {
 											tokensAsset = make(bchain.Tokens, 0, 4)
 										}
 										tokensAsset = append(tokensAsset, token)
-								}
-							} else {
-								if filter.TokensToReturn == TokensToReturnDerived ||
-									filter.TokensToReturn == TokensToReturnUsed && ad.balance != nil ||
-									filter.TokensToReturn == TokensToReturnNonzeroBalance && ad.balance != nil && !IsZeroBigInt(&ad.balance.BalanceSat) {
-									tokens = append(tokens, token)
-								}
+									} else {
+										tokens = append(tokens, token)
+									}
 							}
 							xpubAddresses[token.Name] = struct{}{}
 						}
