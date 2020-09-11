@@ -579,7 +579,7 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 					for _, token := range tokensXPub {
 						if token != nil {
 							if filter.TokensToReturn == TokensToReturnDerived ||
-								filter.TokensToReturn == TokensToReturnUsed && token.BalanceSat != nil ||
+								filter.TokensToReturn == TokensToReturnUsed && ad.balance != nil ||
 								filter.TokensToReturn == TokensToReturnNonzeroBalance && token.BalanceSat != nil && token.BalanceSat.AsInt64() != 0 {
 									if token.Type != bchain.XPUBAddressTokenType {
 										tokensAsset = append(tokensAsset, token)
