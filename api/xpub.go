@@ -553,16 +553,22 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 	usedTokens := 0
 	usedAssetTokens := 0
 	var tokens bchain.Tokens
+	var tokensAsset bchain.Tokens
 	var xpubAddresses map[string]struct{}
 	if option > AccountDetailsBasic {
 		tokens = make(bchain.Tokens, 0, 4)
+		tokensAsset = make(bchain.Tokens, 0, 4)
 		xpubAddresses = make(map[string]struct{})
 	}
 	for ci, da := range [][]xpubAddress{data.addresses, data.changeAddresses} {
 		for i := range da {
 			ad := &da[i]
-			if ad.balance != nil {
-				usedTokens++
+			if ad.balance != nil && ad.balance.Txs > 0 {
+				if ad.balance.AssetBalances != nil && len(ad.balance.AssetBalances) > 0 {
+					usedAssetTokens++
+				} else {
+					usedTokens++
+				}
 			}
 			if option > AccountDetailsBasic {
 				tokensXPub, errXpub := w.tokenFromXpubAddress(data, ad, ci, i, option)
@@ -573,9 +579,6 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 					for _, token := range tokensXPub {
 						if token != nil {
 							if token.Type != bchain.XPUBAddressTokenType {
-								if token.BalanceSat != nil {
-									usedAssetTokens++
-								}
 								if filter.TokensToReturn == TokensToReturnDerived ||
 									filter.TokensToReturn == TokensToReturnUsed && token.BalanceSat != nil ||
 									filter.TokensToReturn == TokensToReturnNonzeroBalance && token.BalanceSat != nil && token.BalanceSat.AsInt64() != 0 {
@@ -585,7 +588,7 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 								if filter.TokensToReturn == TokensToReturnDerived ||
 									filter.TokensToReturn == TokensToReturnUsed && ad.balance != nil ||
 									filter.TokensToReturn == TokensToReturnNonzeroBalance && token.BalanceSat != nil && token.BalanceSat.AsInt64() != 0  {
-									tokens = append(tokens, token)
+									tokensAsset = append(tokensAsset, token)
 								}
 							}
 							xpubAddresses[token.Name] = struct{}{}
@@ -595,12 +598,7 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 			}
 		}
 	}
-	// if more than 1 asset token is found add to usedTokens
-	// we want minus 1 because ad.balance is assumed to be nil for asset token to exist, so usedToken will already be incremented by 1
-	// we just need to increment for each token above the size of 1 to account for all other assets
-	if usedAssetTokens > 1 {
-		usedTokens += usedAssetTokens-1
-	}
+
 	var totalReceived big.Int
 	totalReceived.Add(&data.balanceSat, &data.sentSat)
 	addr := Address{
@@ -615,7 +613,9 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 		Transactions:          txs,
 		Txids:                 txids,
 		UsedTokens:            usedTokens,
+		UsedAssetTokens:       usedAssetTokens,
 		Tokens:                tokens,
+		TokensAsset:           tokensAsset,
 		XPubAddresses:         xpubAddresses,
 	}
 	glog.Info("GetXpubAddress ", xpub[:16], ", ", len(data.addresses)+len(data.changeAddresses), " derived addresses, ", txCount, " confirmed txs, finished in ", time.Since(start))

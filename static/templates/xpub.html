@@ -61,6 +61,33 @@
                     <td></td><td><a href="?tokens=derived" style="float: left;">Show derived XPUB addresses</a></td>
                     {{- end -}}
                 </tr>
+                <tr>
+                    {{- if or $addr.TokensAsset $addr.UsedAssetTokens -}}
+                    <td>{{if $data.NonZeroBalanceTokens}}XPUB Assets with Balance{{else}}XPUB Assets{{end}}</td>
+                    <td style="padding: 0;">
+                        <table class="table data-table">
+                            <tbody>
+                                <tr>
+                                    <th style="width: 15%;">Asset</th>
+                                    <th style="width: 35%;">Address</th>
+                                    <th>Balance</th>
+                                    <th style="width: 8%;">Txs</th>
+                                    <th style="width: 18%;">Path</th>
+                                </tr>
+                                {{- range $t := $addr.Tokens -}}{{- if $t -}}
+                                <tr>
+                                    <td class="data ellipsis"><a href="/asset/{{$t.Contract}}">{{$t.Contract}}</a>&nbsp;<span class="text-muted">{{$t.Symbol}}</span></td>
+                                    <td class="data ellipsis"><a href="/address/{{$t.Name}}">{{$t.Name}}</a></td>
+                                    <td class="data">{{formatAmount $t.BalanceSat}} {{$cs}}</td>
+                                    <td class="data">{{$t.Transfers}}</td>
+                                    <td>{{$t.Path}}</td>
+                                </tr>
+                                {{- end -}}{{- end -}}
+                            </tbody>
+                        </table>
+                    </td>
+                    {{- end -}}
+                </tr>
         </tbody>
         </table>
     </div>
