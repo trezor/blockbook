@@ -557,7 +557,6 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 	var xpubAddresses map[string]struct{}
 	if option > AccountDetailsBasic {
 		tokens = make(bchain.Tokens, 0, 4)
-		tokensAsset = make(bchain.Tokens, 0, 4)
 		xpubAddresses = make(map[string]struct{})
 	}
 	for ci, da := range [][]xpubAddress{data.addresses, data.changeAddresses} {
@@ -582,7 +581,10 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 								if filter.TokensToReturn == TokensToReturnDerived ||
 									filter.TokensToReturn == TokensToReturnUsed && token.BalanceSat != nil ||
 									filter.TokensToReturn == TokensToReturnNonzeroBalance && token.BalanceSat != nil && token.BalanceSat.AsInt64() != 0 {
-									tokensAsset = append(tokensAsset, token)
+										if tokensAsset == nil {
+											tokensAsset = make(bchain.Tokens, 0, 4)
+										}
+										tokensAsset = append(tokensAsset, token)
 								}
 							} else {
 								if filter.TokensToReturn == TokensToReturnDerived ||
@@ -613,10 +615,12 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 		Transactions:          txs,
 		Txids:                 txids,
 		UsedTokens:            usedTokens,
-		UsedAssetTokens:       usedAssetTokens,
 		Tokens:                tokens,
 		TokensAsset:           tokensAsset,
 		XPubAddresses:         xpubAddresses,
+	}
+	if usedAssetTokens > 0 {
+		addr.UsedAssetTokens = usedAssetTokens
 	}
 	glog.Info("GetXpubAddress ", xpub[:16], ", ", len(data.addresses)+len(data.changeAddresses), " derived addresses, ", txCount, " confirmed txs, finished in ", time.Since(start))
 	return &addr, nil
