@@ -29,6 +29,10 @@
                     <td>Used XPUB Addresses</td>
                     <td class="data">{{$addr.UsedTokens}}</td>
                 </tr>
+                <tr>
+                    <td>Used XPUB Assets</td>
+                    <td class="data">{{$addr.UsedAssetTokens}}</td>
+                </tr>              
                  <tr>
                     {{- if or $addr.Tokens $addr.UsedTokens -}}
                     <td>{{if $data.NonZeroBalanceTokens}}XPUB Addresses with Balance{{else}}XPUB Addresses{{end}}</td>

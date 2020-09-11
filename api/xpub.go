@@ -566,9 +566,8 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 			if ad.balance != nil && ad.balance.Txs > 0 {
 				if ad.balance.AssetBalances != nil && len(ad.balance.AssetBalances) > 0 {
 					usedAssetTokens++
-				} else {
-					usedTokens++
 				}
+				usedTokens++
 			}
 			if option > AccountDetailsBasic {
 				tokensXPub, errXpub := w.tokenFromXpubAddress(data, ad, ci, i, option)
