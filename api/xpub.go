@@ -582,13 +582,13 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 								if filter.TokensToReturn == TokensToReturnDerived ||
 									filter.TokensToReturn == TokensToReturnUsed && token.BalanceSat != nil ||
 									filter.TokensToReturn == TokensToReturnNonzeroBalance && token.BalanceSat != nil && token.BalanceSat.AsInt64() != 0 {
-									tokens = append(tokens, token)
+									tokensAsset = append(tokensAsset, token)
 								}
 							} else {
 								if filter.TokensToReturn == TokensToReturnDerived ||
 									filter.TokensToReturn == TokensToReturnUsed && ad.balance != nil ||
 									filter.TokensToReturn == TokensToReturnNonzeroBalance && token.BalanceSat != nil && token.BalanceSat.AsInt64() != 0  {
-									tokensAsset = append(tokensAsset, token)
+									tokens = append(tokens, token)
 								}
 							}
 							xpubAddresses[token.Name] = struct{}{}
