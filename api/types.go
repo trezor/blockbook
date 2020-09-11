@@ -220,7 +220,7 @@ type Address struct {
 	UsedTokens            int                   `json:"usedTokens,omitempty"`
 	UsedAssetTokens       int               	`json:"usedAssetTokens,omitempty"`
 	Tokens                bchain.Tokens         `json:"tokens,omitempty"`
-	TokensAsset           bchain.Tokens         `json:"tokens,omitempty"`
+	TokensAsset           bchain.Tokens         `json:"tokensAsset,omitempty"`
 	Erc20Contract         *bchain.Erc20Contract `json:"erc20Contract,omitempty"`
 	// helpers for explorer
 	Filter        string              `json:"-"`
