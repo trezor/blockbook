@@ -589,7 +589,7 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 							} else {
 								if filter.TokensToReturn == TokensToReturnDerived ||
 									filter.TokensToReturn == TokensToReturnUsed && ad.balance != nil ||
-									filter.TokensToReturn == TokensToReturnNonzeroBalance && token.BalanceSat != nil && token.BalanceSat.AsInt64() != 0  {
+									filter.TokensToReturn == TokensToReturnNonzeroBalance && ad.balance != nil && ad.balance.BalanceSat.AsInt64() != 0  {
 									tokens = append(tokens, token)
 								}
 							}
