@@ -62,7 +62,7 @@ func IsZeroBigInt(b *big.Int) bool {
 
 type AssetInfo struct {
 	AssetGuid uint32  `json:"assetGuid,omitempty"`
-	ValueSat *bchain.Amount `json:"valueSat,omitempty"`
+	ValueSat *bchain.Amount `json:"value,omitempty"`
 	ValueStr string   `json:"valueStr,omitempty"`
 }
 
