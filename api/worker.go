@@ -160,7 +160,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 		}
 		vin.Hex = bchainVin.ScriptSig.Hex
 		vin.Coinbase = bchainVin.Coinbase
-		vin.AssetInfo = AssetInfo{AssetGuid: bchainVin.AssetInfo.AssetGuid, ValueSat: (*bchain.Amount)(bchainVin.AssetInfo.ValueSat)}
+		vin.AssetInfo = &AssetInfo{AssetGuid: bchainVin.AssetInfo.AssetGuid, ValueSat: (*bchain.Amount)(bchainVin.AssetInfo.ValueSat)}
 		if w.chainType == bchain.ChainBitcoinType {
 			//  bchainVin.Txid=="" is coinbase transaction
 			if bchainVin.Txid != "" {
@@ -196,7 +196,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 						if err != nil {
 							glog.Errorf("getAddressesFromVout error %v, vout %+v", err, vout)
 						}
-						vin.AssetInfo = AssetInfo{AssetGuid: vout.AssetInfo.AssetGuid, ValueSat: (*bchain.Amount)(vout.AssetInfo.ValueSat)}
+						vin.AssetInfo = &AssetInfo{AssetGuid: vout.AssetInfo.AssetGuid, ValueSat: (*bchain.Amount)(vout.AssetInfo.ValueSat)}
 					}
 				} else {
 					if len(tas.Outputs) > int(vin.Vout) {
@@ -207,7 +207,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 						if err != nil {
 							glog.Errorf("output.Addresses error %v, tx %v, output %v", err, bchainVin.Txid, i)
 						}
-						vin.AssetInfo = AssetInfo{AssetGuid: output.AssetInfo.AssetGuid, ValueSat: (*bchain.Amount)(output.AssetInfo.ValueSat)}
+						vin.AssetInfo = &AssetInfo{AssetGuid: output.AssetInfo.AssetGuid, ValueSat: (*bchain.Amount)(output.AssetInfo.ValueSat)}
 					}
 				}
 				if vin.ValueSat != nil {
@@ -255,7 +255,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 		vout.N = i
 		vout.ValueSat = (*bchain.Amount)(&bchainVout.ValueSat)
 		valOutSat.Add(&valOutSat, &bchainVout.ValueSat)
-		vout.AssetInfo = AssetInfo{AssetGuid: bchainVout.AssetInfo.AssetGuid, ValueSat: (*bchain.Amount)(bchainVout.AssetInfo.ValueSat)}
+		vout.AssetInfo = &AssetInfo{AssetGuid: bchainVout.AssetInfo.AssetGuid, ValueSat: (*bchain.Amount)(bchainVout.AssetInfo.ValueSat)}
 		if vout.AssetInfo != nil {
 			if mapTTS == nil {
 				mapTTS = map[uint32]*bchain.TokenTransferSummary{}
@@ -395,7 +395,7 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 		}
 		vin.Hex = bchainVin.ScriptSig.Hex
 		vin.Coinbase = bchainVin.Coinbase
-		vin.AssetInfo = AssetInfo{AssetGuid: bchainVin.AssetInfo.AssetGuid, ValueSat: (*bchain.Amount)(bchainVin.AssetInfo.ValueSat)}
+		vin.AssetInfo = &AssetInfo{AssetGuid: bchainVin.AssetInfo.AssetGuid, ValueSat: (*bchain.Amount)(bchainVin.AssetInfo.ValueSat)}
 		if w.chainType == bchain.ChainBitcoinType {
 			//  bchainVin.Txid=="" is coinbase transaction
 			if bchainVin.Txid != "" {
@@ -452,7 +452,7 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 		if err != nil {
 			glog.V(2).Infof("getAddressesFromVout error %v, %v, output %v", err, mempoolTx.Txid, bchainVout.N)
 		}
-		vout.AssetInfo = AssetInfo{AssetGuid: bchainVout.AssetInfo.AssetGuid, ValueSat: (*bchain.Amount)(bchainVout.AssetInfo.ValueSat)}
+		vout.AssetInfo = &AssetInfo{AssetGuid: bchainVout.AssetInfo.AssetGuid, ValueSat: (*bchain.Amount)(bchainVout.AssetInfo.ValueSat)}
 		if vout.AssetInfo != nil {
 			if mapTTS == nil {
 				mapTTS = map[uint32]*bchain.TokenTransferSummary{}
@@ -714,7 +714,7 @@ func (w *Worker) txFromTxAddress(txid string, ta *bchain.TxAddresses, bi *bchain
 		if err != nil {
 			glog.Errorf("tai.Addresses error %v, tx %v, input %v, tai %+v", err, txid, i, tai)
 		}
-		vin.AssetInfo = AssetInfo{AssetGuid: tai.AssetInfo.AssetGuid, ValueSat: (*bchain.Amount)(tai.AssetInfo.ValueSat)}
+		vin.AssetInfo = &AssetInfo{AssetGuid: tai.AssetInfo.AssetGuid, ValueSat: (*bchain.Amount)(tai.AssetInfo.ValueSat)}
 		if vin.AssetInfo != nil {
 			if mapTTS == nil {
 				mapTTS = map[uint32]*bchain.TokenTransferSummary{}
@@ -751,7 +751,7 @@ func (w *Worker) txFromTxAddress(txid string, ta *bchain.TxAddresses, bi *bchain
 			glog.Errorf("tai.Addresses error %v, tx %v, output %v, tao %+v", err, txid, i, tao)
 		}
 		vout.Spent = tao.Spent
-		vout.AssetInfo = AssetInfo{AssetGuid: tao.AssetInfo.AssetGuid, ValueSat: (*bchain.Amount)(tao.AssetInfo.ValueSat)}
+		vout.AssetInfo = &AssetInfo{AssetGuid: tao.AssetInfo.AssetGuid, ValueSat: (*bchain.Amount)(tao.AssetInfo.ValueSat)}
 		if vout.AssetInfo != nil {
 			if mapTTS == nil {
 				mapTTS = map[uint32]*bchain.TokenTransferSummary{}
