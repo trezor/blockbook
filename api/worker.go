@@ -1172,7 +1172,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 			assetGuid := strconv.FormatUint(uint64(k), 10)
 			tokens = append(tokens, &bchain.Token{
 				Type:             bchain.SPTTokenType,
-				Name:             assetGuid + " (" + dbAsset.AssetObj.Symbol + ")",
+				Name:             address,
 				Decimals:         int(dbAsset.AssetObj.Precision),
 				Symbol:			  string(dbAsset.AssetObj.Symbol),
 				BalanceSat:       (*bchain.Amount)(v.BalanceSat),
