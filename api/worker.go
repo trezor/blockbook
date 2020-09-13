@@ -1673,7 +1673,7 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *bchain.A
 									AmountSat: (*bchain.Amount)(&vout.ValueSat),
 									Locktime:  bchainTx.LockTime,
 									Coinbase:  coinbase,
-									AssetInfo: vout.AssetInfo,
+									AssetInfo: &AssetInfo{AssetGuid: vout.AssetInfo.AssetGuid, ValueSat: (*bchain.Amount)(vout.AssetInfo.ValueSat)},
 									Script:    hex.EncodeToString(script),
 								}
 								utxos = append(utxos, utxoTmp)
@@ -1736,7 +1736,7 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *bchain.A
 							Height:        int(utxo.Height),
 							Confirmations: confirmations,
 							Coinbase:      coinbase,
-							AssetInfo: 	   utxo.AssetInfo,
+							AssetInfo: 	   &AssetInfo{AssetGuid: utxo.AssetInfo.AssetGuid, ValueSat: (*bchain.Amount)(utxo.AssetInfo.ValueSat)},
 							Script:    	   hex.EncodeToString(script),
 						}
 						utxos = append(utxos, utxoTmp)
