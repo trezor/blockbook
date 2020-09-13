@@ -234,7 +234,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 								Decimals: int(dbAsset.AssetObj.Precision),
 								Value:	  (*bchain.Amount)(big.NewInt(0)),
 								ValueIn:  (*bchain.Amount)(big.NewInt(0)),
-								Symbol:   dbAsset.AssetObj.Symbol,
+								Symbol:   string(dbAsset.AssetObj.Symbol),
 							}
 							mapTTS[vin.AssetInfo.AssetGuid] = tts
 						}
@@ -280,7 +280,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 					Decimals: int(dbAsset.AssetObj.Precision),
 					Value:	  (*bchain.Amount)(big.NewInt(0)),
 					ValueIn:  (*bchain.Amount)(big.NewInt(0)),
-					Symbol:   dbAsset.AssetObj.Symbol,
+					Symbol:   string(dbAsset.AssetObj.Symbol),
 				}
 				mapTTS[vout.AssetInfo.AssetGuid] = tts
 			}
@@ -431,7 +431,7 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 							Decimals: int(dbAsset.AssetObj.Precision),
 							Value:	  (*bchain.Amount)(big.NewInt(0)),
 							ValueIn:  (*bchain.Amount)(big.NewInt(0)),
-							Symbol:   dbAsset.AssetObj.Symbol,
+							Symbol:   string(dbAsset.AssetObj.Symbol),
 						}
 						mapTTS[vin.AssetInfo.AssetGuid] = tts
 					}
@@ -481,7 +481,7 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 					Decimals: int(dbAsset.AssetObj.Precision),
 					Value:	  (*bchain.Amount)(big.NewInt(0)),
 					ValueIn:  (*bchain.Amount)(big.NewInt(0)),
-					Symbol:   dbAsset.AssetObj.Symbol,
+					Symbol:   string(dbAsset.AssetObj.Symbol),
 				}
 				mapTTS[vout.AssetInfo.AssetGuid] = tts
 			}
@@ -745,7 +745,7 @@ func (w *Worker) txFromTxAddress(txid string, ta *bchain.TxAddresses, bi *bchain
 					Decimals: int(dbAsset.AssetObj.Precision),
 					Value:	  (*bchain.Amount)(big.NewInt(0)),
 					ValueIn:  (*bchain.Amount)(big.NewInt(0)),
-					Symbol:   dbAsset.AssetObj.Symbol,
+					Symbol:   string(dbAsset.AssetObj.Symbol),
 				}
 				mapTTS[vin.AssetInfo.AssetGuid] = tts
 			}
@@ -784,7 +784,7 @@ func (w *Worker) txFromTxAddress(txid string, ta *bchain.TxAddresses, bi *bchain
 					Decimals: int(dbAsset.AssetObj.Precision),
 					Value:	  (*bchain.Amount)(big.NewInt(0)),
 					ValueIn:  (*bchain.Amount)(big.NewInt(0)),
-					Symbol:   dbAsset.AssetObj.Symbol,
+					Symbol:   string(dbAsset.AssetObj.Symbol),
 				}
 				mapTTS[vout.AssetInfo.AssetGuid] = tts
 			}
@@ -1174,7 +1174,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 				Type:             bchain.SPTTokenType,
 				Name:             assetGuid + " (" + dbAsset.AssetObj.Symbol + ")",
 				Decimals:         int(dbAsset.AssetObj.Precision),
-				Symbol:			  dbAsset.AssetObj.Symbol,
+				Symbol:			  string(dbAsset.AssetObj.Symbol),
 				BalanceSat:       (*bchain.Amount)(v.BalanceSat),
 				TotalReceivedSat: (*bchain.Amount)(totalAssetReceived),
 				TotalSentSat:     (*bchain.Amount)(v.SentSat),
@@ -1219,7 +1219,14 @@ func (w *Worker) FindAssetsFromFilter(filter string) []*AssetsSpecific {
 	filterLower = strings.Replace(filterLower, "0x", "", -1)
 	for guid, assetCached := range *w.db.GetAssetCache() {
 		foundAsset := false
-		symbolLower := strings.ToLower(assetCached.AssetObj.Symbol)
+		base64Text := make([]byte, base64.StdEncoding.DecodedLen(len(assetCached.AssetObj.Symbol)))
+		n, err := base64.StdEncoding.Decode(base64Text, assetCached.AssetObj.Symbol)
+		if err != nil {
+			glog.Error("FindAssetsFromFilter could not decode symbol ", err)
+			return nil
+		}
+		symbol := string(base64Text[:n])
+		symbolLower := strings.ToLower(symbol)
 		if strings.Contains(symbolLower, filterLower) {
 			foundAsset = true
 		} else if len(assetCached.AssetObj.Contract) > 0 && len(filterLower) > 5 {
@@ -1232,7 +1239,7 @@ func (w *Worker) FindAssetsFromFilter(filter string) []*AssetsSpecific {
 		if foundAsset == true {
 			assetSpecific := AssetsSpecific{
 				AssetGuid:		guid,
-				Symbol:			assetCached.AssetObj.Symbol,
+				Symbol:			string(assetCached.AssetObj.Symbol),
 				Contract:		"0x" + hex.EncodeToString(assetCached.AssetObj.Contract),
 				TotalSupply:	(*bchain.Amount)(big.NewInt(assetCached.AssetObj.TotalSupply)),
 				Decimals:		int(assetCached.AssetObj.Precision),
@@ -1372,7 +1379,7 @@ func (w *Worker) GetAsset(asset string, page int, txsOnPage int, option AccountD
 	r := &Asset{
 		AssetDetails:	&AssetSpecific{
 			AssetGuid:		assetGuid,
-			Symbol:			dbAsset.AssetObj.Symbol,
+			Symbol:			string(dbAsset.AssetObj.Symbol),
 			Contract:		"0x" + hex.EncodeToString(dbAsset.AssetObj.Contract),
 			Balance:		(*bchain.Amount)(big.NewInt(dbAsset.AssetObj.Balance)),
 			TotalSupply:	(*bchain.Amount)(big.NewInt(dbAsset.AssetObj.TotalSupply)),
@@ -1805,7 +1812,7 @@ func (w *Worker) GetAddressUtxo(address string, onlyConfirmed bool) (Utxos, erro
 			assetsMap[a.AssetInfo.AssetGuid] = true
 			assetDetails :=	&AssetSpecific{
 				AssetGuid:		a.AssetInfo.AssetGuid,
-				Symbol:			dbAsset.AssetObj.Symbol,
+				Symbol:			string(dbAsset.AssetObj.Symbol),
 				Contract:		"0x" + hex.EncodeToString(dbAsset.AssetObj.Contract),
 				Balance:		(*bchain.Amount)(big.NewInt(dbAsset.AssetObj.Balance)),
 				TotalSupply:	(*bchain.Amount)(big.NewInt(dbAsset.AssetObj.TotalSupply)),

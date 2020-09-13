@@ -566,8 +566,9 @@ func formatDecodeBase64(value interface{}) string {
 	n, err := base64.StdEncoding.Decode(base64Text, []byte(a))
 	if err == nil {
 		pubData = string(base64Text[:n])
+		return pubData
 	}
-	return pubData
+	return a
 }
 
 

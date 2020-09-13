@@ -267,7 +267,7 @@ func (w *Worker) tokenFromXpubAddress(data *xpubData, ad *xpubAddress, changeInd
 					Type:             bchain.SPTTokenType,
 					Name:             address,
 					Decimals:         int(dbAsset.AssetObj.Precision),
-					Symbol:			  dbAsset.AssetObj.Symbol,
+					Symbol:			  string(dbAsset.AssetObj.Symbol),
 					BalanceSat:       (*bchain.Amount)(v.BalanceSat),
 					TotalReceivedSat: (*bchain.Amount)(totalAssetReceived),
 					TotalSentSat:     (*bchain.Amount)(v.SentSat),
@@ -680,7 +680,7 @@ func (w *Worker) GetXpubUtxo(xpub string, onlyConfirmed bool, gap int) (Utxos, e
 							assetsMap[a.AssetInfo.AssetGuid] = true
 							assetDetails :=	&AssetSpecific{
 								AssetGuid:		a.AssetInfo.AssetGuid,
-								Symbol:			dbAsset.AssetObj.Symbol,
+								Symbol:			string(dbAsset.AssetObj.Symbol),
 								Contract:		"0x" + hex.EncodeToString(dbAsset.AssetObj.Contract),
 								Balance:		(*bchain.Amount)(big.NewInt(dbAsset.AssetObj.Balance)),
 								TotalSupply:	(*bchain.Amount)(big.NewInt(dbAsset.AssetObj.TotalSupply)),

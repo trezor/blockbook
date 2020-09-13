@@ -19,10 +19,10 @@
         <tbody>
             {{- range $assetDetails := $assets.AssetDetails -}}{{- if $assetDetails -}}
             <tr>
-                <td class="data"><a href="/asset/{{$assetDetails.AssetGuid}}">{{$assetDetails.AssetGuid}}</a>&nbsp;<span class="text-muted">{{$assetDetails.Symbol}}</span></td>
+                <td class="data"><a href="/asset/{{$assetDetails.AssetGuid}}">{{$assetDetails.AssetGuid}}</a>&nbsp;<span class="text-muted">{{formatDecodeBase64 $assetDetails.Symbol}}</span></td>
                 <td class="data">{{$assetDetails.Txs}}</td>
                 <td class="data ellipsis"><a href="https://etherscan.io/address/{{$assetDetails.Contract}}">{{$assetDetails.Contract}}</a></td>
-                <td class="data">{{formatAmountWithDecimals $assetDetails.TotalSupply $assetDetails.Decimals}} {{$assetDetails.Symbol}}</td>
+                <td class="data">{{formatAmountWithDecimals $assetDetails.TotalSupply $assetDetails.Decimals}} {{formatDecodeBase64 $assetDetails.Symbol}}</td>
                 <td class="data ellipsis">{{- if $assetDetails.PubData.desc}}{{formatDecodeBase64 $assetDetails.PubData.desc}}{{else}}{{- end -}}</td>
             </tr>
             {{- end -}}{{- end -}}

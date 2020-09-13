@@ -80,7 +80,7 @@
                                 </tr>
                                 {{- range $t := $addr.TokensAsset -}}{{- if $t -}}
                                 <tr>
-                                    <td class="data ellipsis"><a href="/asset/{{$t.Contract}}">{{$t.Contract}}</a>&nbsp;<span class="text-muted">{{$t.Symbol}}</span></td>
+                                    <td class="data ellipsis"><a href="/asset/{{$t.Contract}}">{{$t.Contract}}</a>&nbsp;<span class="text-muted">{{formatDecodeBase64 $t.Symbol}}</span></td>
                                     <td class="data ellipsis"><a href="/address/{{$t.Name}}">{{$t.Name}}</a></td>
                                     <td class="data">{{formatAmount $t.BalanceSat}}</td>
                                     <td class="data">{{$t.Transfers}}</td>

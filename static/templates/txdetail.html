@@ -89,7 +89,7 @@
             {{- end -}}
             <span class="txvalues txvalues-primary">{{formatAmount $tx.ValueOutSat}} {{$cs}}</span>
             {{- range $tokenTransfer := $tx.TokenTransferSummary -}}{{if $tokenTransfer}}
-            <span class="txvalues txvalues-primary">{{formatAmount $tokenTransfer.Value}} {{$tokenTransfer.Symbol}}</span>
+            <span class="txvalues txvalues-primary">{{formatAmount $tokenTransfer.Value}} {{formatDecodeBase64 $tokenTransfer.Symbol}}</span>
             {{- end -}}{{- end -}}
         </div>
     </div>

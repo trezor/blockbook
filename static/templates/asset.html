@@ -1,5 +1,5 @@
 {{define "specific"}}{{$cs := .CoinShortcut}}{{$asset := .Asset}}{{$data := .}}
-<h1>Asset <small class="text-muted">{{$asset.AssetDetails.Symbol}}</small></h1>
+<h1>Asset <small class="text-muted">{{formatDecodeBase64 $asset.AssetDetails.Symbol}}</small></h1>
 <div class="alert alert-data ellipsis">
     <span class="data">{{$asset.AssetDetails.AssetGuid}}</span>
 </div>
@@ -24,15 +24,15 @@
                 </tr>
                 <tr>
                     <td>Balance</td>
-                    <td class="data">{{formatAmountWithDecimals $asset.AssetDetails.Balance $asset.AssetDetails.Decimals}} {{$asset.AssetDetails.Symbol}}</td>
+                    <td class="data">{{formatAmountWithDecimals $asset.AssetDetails.Balance $asset.AssetDetails.Decimals}} {{formatDecodeBase64 $asset.AssetDetails.Symbol}}</td>
                 </tr>
                 <tr>
                     <td>Total Supply</td>
-                    <td class="data">{{formatAmountWithDecimals $asset.AssetDetails.TotalSupply $asset.AssetDetails.Decimals}} {{$asset.AssetDetails.Symbol}}</td>
+                    <td class="data">{{formatAmountWithDecimals $asset.AssetDetails.TotalSupply $asset.AssetDetails.Decimals}} {{formatDecodeBase64 $asset.AssetDetails.Symbol}}</td>
                 </tr>
                 <tr>
                     <td>Max Supply</td>
-                    <td class="data">{{formatAmountWithDecimals $asset.AssetDetails.MaxSupply $asset.AssetDetails.Decimals}} {{$asset.AssetDetails.Symbol}}</td>
+                    <td class="data">{{formatAmountWithDecimals $asset.AssetDetails.MaxSupply $asset.AssetDetails.Decimals}} {{formatDecodeBase64 $asset.AssetDetails.Symbol}}</td>
                 </tr>
                 <tr>
                     <td>Decimals</td>
@@ -77,7 +77,7 @@
                                 {{- range $f := $asset.AssetDetails.AuxFeeDetails.AuxFees -}}{{- if $f -}}
                                 <tr>
                                     <td class="data ellipsis"><a href="/address/{{formatKeyID $asset.AssetDetails.AuxFeeKeyID}}">{{formatKeyID $asset.AssetDetails.AuxFeeKeyID}}</a></td>
-                                    <td class="data">{{$f.Bound}} {{$asset.AssetDetails.Symbol}}</td>
+                                    <td class="data">{{$f.Bound}} {{formatDecodeBase64 $asset.AssetDetails.Symbol}}</td>
                                     <td class="data">{{formatPercentage ($f.Percent)}}</td>
                                 </tr>
                                 {{- end -}}{{- end -}}
