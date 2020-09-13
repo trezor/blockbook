@@ -573,7 +573,7 @@ func formatDecodeBase64(value interface{}) string {
 }
 
 func formatDecodeBase64ValueStr(valueStr interface{}) string {
-	a := ToString(value)
+	a := ToString(valueStr)
 	i := strings.Index(a, " ")
 	if i < len(a) {
 		a = a[i+1:]
