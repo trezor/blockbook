@@ -118,8 +118,8 @@ func verifyAfterSyscoinTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect bool
 		t.Fatal(fmt.Sprint("Block1: Property mismatch len(dBAsset.AssetObj.Allocation.VoutAssets): ", len(dBAsset.AssetObj.Allocation.VoutAssets) , ". Expected: 0"))
 	}
 
-	if dBAsset.AssetObj.Symbol != base64.StdEncoding.EncodeToString([]byte("CAT")) {
-		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.Symbol: ", dBAsset.AssetObj.Symbol , ". Expected: " + base64.StdEncoding.EncodeToString([]byte("CAT"))))
+	if string(dBAsset.AssetObj.Symbol) != base64.StdEncoding.EncodeToString([]byte("CAT")) {
+		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.Symbol: ", string(dBAsset.AssetObj.Symbol) , ". Expected: " + base64.StdEncoding.EncodeToString([]byte("CAT"))))
 	}
 	pubdata := "{\"desc\":\"" + base64.StdEncoding.EncodeToString([]byte("publicvalue")) + "\"}"
 	if !bytes.Equal(dBAsset.AssetObj.PubData, []byte(pubdata)) {
@@ -220,8 +220,8 @@ func verifyAfterSyscoinTypeBlock2(t *testing.T, d *RocksDB) {
 	if dBAsset.Transactions != 2 {
 		t.Fatal(fmt.Sprint("Block2: Property mismatch dbAsset.Transaction: ", dBAsset.Transactions, ". Expected: 2"))
 	}
-	if dBAsset.AssetObj.Symbol != base64.StdEncoding.EncodeToString([]byte("CAT")) {
-		t.Fatal(fmt.Sprint("Block2: Property mismatch dBAsset.AssetObj.Symbol: ", dBAsset.AssetObj.Symbol , ". Expected: " + base64.StdEncoding.EncodeToString([]byte("CAT"))))
+	if string(dBAsset.AssetObj.Symbol) != base64.StdEncoding.EncodeToString([]byte("CAT")) {
+		t.Fatal(fmt.Sprint("Block2: Property mismatch dBAsset.AssetObj.Symbol: ", string(dBAsset.AssetObj.Symbol) , ". Expected: " + base64.StdEncoding.EncodeToString([]byte("CAT"))))
 	}
 	pubdata := "{\"desc\":\"" + base64.StdEncoding.EncodeToString([]byte("new publicvalue")) + "\"}"
 	if !bytes.Equal(dBAsset.AssetObj.PubData, []byte(pubdata)) {
