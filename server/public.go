@@ -463,6 +463,7 @@ func (s *PublicServer) parseTemplates() []*template.Template {
 		"isOwnAddresses":           isOwnAddresses,
 		"formatKeyID":              s.formatKeyID,
 		"formatDecodeBase64": 		formatDecodeBase64,
+		"formatDecodeBase64ValueStr": formatDecodeBase64ValueStr,
 	}
 	var createTemplate func(filenames ...string) *template.Template
 	if s.debug {
@@ -571,7 +572,21 @@ func formatDecodeBase64(value interface{}) string {
 	return a
 }
 
-
+func formatDecodeBase64ValueStr(valueStr interface{}) string {
+	a := ToString(value)
+	i := strings.Index(a, " ")
+	if i < len(a) {
+		a = a[i+1:]
+		var pubData string
+		base64Text := make([]byte, base64.StdEncoding.DecodedLen(len(a)))
+		n, err := base64.StdEncoding.Decode(base64Text, []byte(a))
+		if err == nil {
+			pubData = string(base64Text[:n])
+			return pubData
+		}
+	}
+	return a
+} 
 func formatPercentage(a string) string {
 	if f, err := strconv.ParseFloat(a, 32); err == nil {
 		f = f*100
