@@ -60,6 +60,12 @@ func IsZeroBigInt(b *big.Int) bool {
 	return len(b.Bits()) == 0
 }
 
+type AssetInfo struct {
+	AssetGuid uint32  `json:"assetGuid,omitempty"`
+	ValueSat *bchain.Amount `json:"valueSat,omitempty"`
+	ValueStr string   `json:"valueStr,omitempty"`
+}
+
 
 // Vin contains information about single transaction input
 type Vin struct {
@@ -74,7 +80,7 @@ type Vin struct {
 	Hex       string                   `json:"hex,omitempty"`
 	Asm       string                   `json:"asm,omitempty"`
 	Coinbase  string                   `json:"coinbase,omitempty"`
-	AssetInfo *bchain.AssetInfo		   `json:"assetInfo,omitempty"`
+	AssetInfo *AssetInfo		   `json:"assetInfo,omitempty"`
 }
 
 // Vout contains information about single transaction output
@@ -91,7 +97,7 @@ type Vout struct {
 	Addresses   []string                 `json:"addresses"`
 	IsAddress   bool                     `json:"isAddress"`
 	Type        string                   `json:"type,omitempty"`
-	AssetInfo 	*bchain.AssetInfo		 `json:"assetInfo,omitempty"`
+	AssetInfo 	*AssetInfo		 `json:"assetInfo,omitempty"`
 }
 
 // Contains SyscoinSpecific asset information hex decoded and pertinent to API display
@@ -259,7 +265,7 @@ type Utxo struct {
 	Path          string  `json:"path,omitempty"`
 	Locktime      uint32  `json:"lockTime,omitempty"`
 	Coinbase      bool    `json:"coinbase,omitempty"`
-	AssetInfo	  *bchain.AssetInfo  `json:"assetInfo,omitempty"`
+	AssetInfo	  *AssetInfo  `json:"assetInfo,omitempty"`
 	Script		  string	`json:"script,omitempty"`
 }
 

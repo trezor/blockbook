@@ -52,10 +52,10 @@ type ScriptSig struct {
 	// Asm string `json:"asm"`
 	Hex string `json:"hex"`
 }
+
 type AssetInfo struct {
 	AssetGuid uint32  `json:"assetGuid,omitempty"`
 	ValueSat *big.Int `json:"valueSat,omitempty"`
-	ValueStr string   `json:"valueStr,omitempty"`
 }
 
 // Vin contains data about tx input

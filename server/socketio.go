@@ -494,7 +494,7 @@ func (s *SocketIoServer) getAddressHistory(addr []string, opts *addrOpts) (res r
 						token = &api.TokenBalanceHistory{ReceivedSat: &bchain.Amount{}, SentSat: &bchain.Amount{}}
 						ahi.Tokens[uint32(vin.AssetInfo.AssetGuid)] = token
 					}
-					(*big.Int)(token.SentSat).Add((*big.Int)(token.SentSat), vin.AssetInfo.ValueSat)
+					(*big.Int)(token.SentSat).Add((*big.Int)(token.SentSat), (*big.Int)(vin.AssetInfo.ValueSat))
 				}
 			}
 		}
@@ -520,7 +520,7 @@ func (s *SocketIoServer) getAddressHistory(addr []string, opts *addrOpts) (res r
 						token = &api.TokenBalanceHistory{ReceivedSat: &bchain.Amount{}, SentSat: &bchain.Amount{}}
 						ahi.Tokens[uint32(vout.AssetInfo.AssetGuid)] = token
 					}
-					(*big.Int)(token.ReceivedSat).Add((*big.Int)(token.ReceivedSat), vout.AssetInfo.ValueSat)
+					(*big.Int)(token.ReceivedSat).Add((*big.Int)(token.ReceivedSat), (*big.Int)(vout.AssetInfo.ValueSat))
 				}
 			}
 		}
@@ -582,7 +582,7 @@ func (s *SocketIoServer) getAssetHistory(asset string, opts *assetOpts) (res res
 					token = &api.TokenBalanceHistory{ReceivedSat: &bchain.Amount{}, SentSat: &bchain.Amount{}}
 					ahi.Tokens[uint32(vin.AssetInfo.AssetGuid)] = token
 				}
-				(*big.Int)(token.SentSat).Add((*big.Int)(token.SentSat), vin.AssetInfo.ValueSat)
+				(*big.Int)(token.SentSat).Add((*big.Int)(token.SentSat), (*big.Int)(vin.AssetInfo.ValueSat))
 			}
 		}
 		for i := range tx.Vout {
@@ -609,7 +609,7 @@ func (s *SocketIoServer) getAssetHistory(asset string, opts *assetOpts) (res res
 					token = &api.TokenBalanceHistory{ReceivedSat: &bchain.Amount{}, SentSat: &bchain.Amount{}}
 					ahi.Tokens[uint32(vout.AssetInfo.AssetGuid)] = token
 				}
-				(*big.Int)(token.ReceivedSat).Add((*big.Int)(token.ReceivedSat), vout.AssetInfo.ValueSat)
+				(*big.Int)(token.ReceivedSat).Add((*big.Int)(token.ReceivedSat), (*big.Int)(vout.AssetInfo.ValueSat))
 				
 			}
 		}

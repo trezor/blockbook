@@ -160,7 +160,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 		}
 		vin.Hex = bchainVin.ScriptSig.Hex
 		vin.Coinbase = bchainVin.Coinbase
-		vin.AssetInfo = bchainVin.AssetInfo
+		vin.AssetInfo = AssetInfo{AssetGuid: bchainVin.AssetInfo.AssetGuid, ValueSat: (*bchain.Amount)(bchainVin.AssetInfo.ValueSat)}
 		if w.chainType == bchain.ChainBitcoinType {
 			//  bchainVin.Txid=="" is coinbase transaction
 			if bchainVin.Txid != "" {
@@ -196,7 +196,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 						if err != nil {
 							glog.Errorf("getAddressesFromVout error %v, vout %+v", err, vout)
 						}
-						vin.AssetInfo = vout.AssetInfo
+						vin.AssetInfo = AssetInfo{AssetGuid: vout.AssetInfo.AssetGuid, ValueSat: (*bchain.Amount)(vout.AssetInfo.ValueSat)}
 					}
 				} else {
 					if len(tas.Outputs) > int(vin.Vout) {
@@ -207,7 +207,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 						if err != nil {
 							glog.Errorf("output.Addresses error %v, tx %v, output %v", err, bchainVin.Txid, i)
 						}
-						vin.AssetInfo = output.AssetInfo
+						vin.AssetInfo = AssetInfo{AssetGuid: output.AssetInfo.AssetGuid, ValueSat: (*bchain.Amount)(output.AssetInfo.ValueSat)}
 					}
 				}
 				if vin.ValueSat != nil {
@@ -232,8 +232,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 							}
 							mapTTS[vin.AssetInfo.AssetGuid] = tts
 						}
-						amountAsset := (*bchain.Amount)(vin.AssetInfo.ValueSat)
-						vin.AssetInfo.ValueStr = amountAsset.DecimalString(tts.Decimals) + " " + tts.Symbol
+						vin.AssetInfo.ValueStr = vin.AssetInfo.ValueSat.DecimalString(tts.Decimals) + " " + tts.Symbol
 						(*big.Int)(tts.ValueIn).Add((*big.Int)(tts.ValueIn), (*big.Int)(vin.AssetInfo.ValueSat))
 					}
 				}
@@ -256,7 +255,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 		vout.N = i
 		vout.ValueSat = (*bchain.Amount)(&bchainVout.ValueSat)
 		valOutSat.Add(&valOutSat, &bchainVout.ValueSat)
-		vout.AssetInfo = bchainVout.AssetInfo
+		vout.AssetInfo = AssetInfo{AssetGuid: bchainVout.AssetInfo.AssetGuid, ValueSat: (*bchain.Amount)(bchainVout.AssetInfo.ValueSat)}
 		if vout.AssetInfo != nil {
 			if mapTTS == nil {
 				mapTTS = map[uint32]*bchain.TokenTransferSummary{}
@@ -277,9 +276,8 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 				}
 				mapTTS[vout.AssetInfo.AssetGuid] = tts
 			}
-			amountAsset := (*bchain.Amount)(vout.AssetInfo.ValueSat)
-			vout.AssetInfo.ValueStr = amountAsset.DecimalString(tts.Decimals) + " " + tts.Symbol
-			(*big.Int)(tts.Value).Add((*big.Int)(tts.Value), vout.AssetInfo.ValueSat)
+			vout.AssetInfo.ValueStr = vout.AssetInfo.ValueSat.DecimalString(tts.Decimals) + " " + tts.Symbol
+			(*big.Int)(tts.Value).Add((*big.Int)(tts.Value), (*big.Int)(vout.AssetInfo.ValueSat))
 		}
 		
 		vout.Hex = bchainVout.ScriptPubKey.Hex
@@ -397,7 +395,7 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 		}
 		vin.Hex = bchainVin.ScriptSig.Hex
 		vin.Coinbase = bchainVin.Coinbase
-		vin.AssetInfo = bchainVin.AssetInfo
+		vin.AssetInfo = AssetInfo{AssetGuid: bchainVin.AssetInfo.AssetGuid, ValueSat: (*bchain.Amount)(bchainVin.AssetInfo.ValueSat)}
 		if w.chainType == bchain.ChainBitcoinType {
 			//  bchainVin.Txid=="" is coinbase transaction
 			if bchainVin.Txid != "" {
@@ -427,8 +425,7 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 						}
 						mapTTS[vin.AssetInfo.AssetGuid] = tts
 					}
-					amountAsset := (*bchain.Amount)(vin.AssetInfo.ValueSat)
-					vin.AssetInfo.ValueStr = amountAsset.DecimalString(tts.Decimals) + " " + tts.Symbol
+					vin.AssetInfo.ValueStr = vin.AssetInfo.ValueSat.DecimalString(tts.Decimals) + " " + tts.Symbol
 					(*big.Int)(tts.ValueIn).Add((*big.Int)(tts.ValueIn), (*big.Int)(vin.AssetInfo.ValueSat))
 				}
 			}
@@ -455,7 +452,7 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 		if err != nil {
 			glog.V(2).Infof("getAddressesFromVout error %v, %v, output %v", err, mempoolTx.Txid, bchainVout.N)
 		}
-		vout.AssetInfo = bchainVout.AssetInfo
+		vout.AssetInfo = AssetInfo{AssetGuid: bchainVout.AssetInfo.AssetGuid, ValueSat: (*bchain.Amount)(bchainVout.AssetInfo.ValueSat)}
 		if vout.AssetInfo != nil {
 			if mapTTS == nil {
 				mapTTS = map[uint32]*bchain.TokenTransferSummary{}
@@ -476,9 +473,8 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 				}
 				mapTTS[vout.AssetInfo.AssetGuid] = tts
 			}
-			amountAsset := (*bchain.Amount)(vout.AssetInfo.ValueSat)
-			vout.AssetInfo.ValueStr = amountAsset.DecimalString(tts.Decimals) + " " + tts.Symbol
-			(*big.Int)(tts.Value).Add((*big.Int)(tts.Value), vout.AssetInfo.ValueSat)
+			vout.AssetInfo.ValueStr = vout.AssetInfo.ValueSat.DecimalString(tts.Decimals) + " " + tts.Symbol
+			(*big.Int)(tts.Value).Add((*big.Int)(tts.Value), (*big.Int)(vout.AssetInfo.ValueSat))
 		}
 	}
 	if w.chainType == bchain.ChainBitcoinType {
@@ -718,7 +714,7 @@ func (w *Worker) txFromTxAddress(txid string, ta *bchain.TxAddresses, bi *bchain
 		if err != nil {
 			glog.Errorf("tai.Addresses error %v, tx %v, input %v, tai %+v", err, txid, i, tai)
 		}
-		vin.AssetInfo = tai.AssetInfo
+		vin.AssetInfo = AssetInfo{AssetGuid: tai.AssetInfo.AssetGuid, ValueSat: (*bchain.Amount)(tai.AssetInfo.ValueSat)}
 		if vin.AssetInfo != nil {
 			if mapTTS == nil {
 				mapTTS = map[uint32]*bchain.TokenTransferSummary{}
@@ -739,8 +735,7 @@ func (w *Worker) txFromTxAddress(txid string, ta *bchain.TxAddresses, bi *bchain
 				}
 				mapTTS[vin.AssetInfo.AssetGuid] = tts
 			}
-			amountAsset := (*bchain.Amount)(vin.AssetInfo.ValueSat)
-			vin.AssetInfo.ValueStr = amountAsset.DecimalString(tts.Decimals) + " " + tts.Symbol
+			vin.AssetInfo.ValueStr = vin.AssetInfo.ValueSat.DecimalString(tts.Decimals) + " " + tts.Symbol
 			(*big.Int)(tts.ValueIn).Add((*big.Int)(tts.ValueIn), (*big.Int)(vin.AssetInfo.ValueSat))
 		}
 	}
@@ -756,7 +751,7 @@ func (w *Worker) txFromTxAddress(txid string, ta *bchain.TxAddresses, bi *bchain
 			glog.Errorf("tai.Addresses error %v, tx %v, output %v, tao %+v", err, txid, i, tao)
 		}
 		vout.Spent = tao.Spent
-		vout.AssetInfo = tao.AssetInfo
+		vout.AssetInfo = AssetInfo{AssetGuid: tao.AssetInfo.AssetGuid, ValueSat: (*bchain.Amount)(tao.AssetInfo.ValueSat)}
 		if vout.AssetInfo != nil {
 			if mapTTS == nil {
 				mapTTS = map[uint32]*bchain.TokenTransferSummary{}
@@ -777,9 +772,8 @@ func (w *Worker) txFromTxAddress(txid string, ta *bchain.TxAddresses, bi *bchain
 				}
 				mapTTS[vout.AssetInfo.AssetGuid] = tts
 			}
-			amountAsset := (*bchain.Amount)(vout.AssetInfo.ValueSat)
-			vout.AssetInfo.ValueStr = amountAsset.DecimalString(tts.Decimals) + " " + tts.Symbol
-			(*big.Int)(tts.Value).Add((*big.Int)(tts.Value), vout.AssetInfo.ValueSat)
+			vout.AssetInfo.ValueStr = vout.AssetInfo.ValueSat.DecimalString(tts.Decimals) + " " + tts.Symbol
+			(*big.Int)(tts.Value).Add((*big.Int)(tts.Value), (*big.Int)(vout.AssetInfo.ValueSat))
 		}
 	}
 	// flatten TTS Map
@@ -1471,7 +1465,7 @@ func (w *Worker) balanceHistoryForTxid(addrDesc bchain.AddressDescriptor, txid s
 						bhaToken = &TokenBalanceHistory{SentSat: &bchain.Amount{}, ReceivedSat: &bchain.Amount{}}
 						bh.Tokens[tai.AssetInfo.AssetGuid] = bhaToken
 					}
-					(*big.Int)(bhaToken.SentSat).Add((*big.Int)(bhaToken.SentSat), tai.AssetInfo.ValueSat)
+					(*big.Int)(bhaToken.SentSat).Add((*big.Int)(bhaToken.SentSat), (*big.Int)(tai.AssetInfo.ValueSat))
 				}
 			}
 		}
@@ -1488,7 +1482,7 @@ func (w *Worker) balanceHistoryForTxid(addrDesc bchain.AddressDescriptor, txid s
 						bhaToken = &TokenBalanceHistory{SentSat: &bchain.Amount{}, ReceivedSat: &bchain.Amount{}}
 						bh.Tokens[tao.AssetInfo.AssetGuid] = bhaToken
 					}
-					(*big.Int)(bhaToken.ReceivedSat).Add((*big.Int)(bhaToken.ReceivedSat), tao.AssetInfo.ValueSat)
+					(*big.Int)(bhaToken.ReceivedSat).Add((*big.Int)(bhaToken.ReceivedSat), (*big.Int)(tao.AssetInfo.ValueSat))
 				}
 			}
 			if countSentToSelf {
