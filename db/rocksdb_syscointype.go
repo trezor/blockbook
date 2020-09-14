@@ -398,7 +398,7 @@ func (d *RocksDB) GetAsset(guid uint32, assets map[uint32]*bchain.Asset) (*bchai
 	}
 	// nil data means the key was not found in DB
 	if val.Data() == nil {
-		return &bchain.Asset{Transactions: 0, AssetObj: {Precision: 8}}, nil
+		return &bchain.Asset{Transactions: 0, AssetObj: wire.AssetType{Precision: 8}}, nil
 	}
 	defer val.Free()
 	buf := val.Data()
