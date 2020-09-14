@@ -1403,7 +1403,7 @@ func (w *Worker) GetAsset(asset string, page int, txsOnPage int, option AccountD
 		r.AssetDetails.NotaryDetails = &dbAsset.AssetObj.NotaryDetails
 	}
 	if len(dbAsset.AssetObj.PubData) > 0 {
-		json.Unmarshal(dbAsset.AssetObj.PubData, &r.assetDetails.PubData)
+		json.Unmarshal(dbAsset.AssetObj.PubData, &r.AssetDetails.PubData)
 	}
 	glog.Info("GetAsset ", asset, " finished in ", time.Since(start))
 	return r, nil
