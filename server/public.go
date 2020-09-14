@@ -576,13 +576,13 @@ func formatDecodeBase64ValueStr(valueStr interface{}) string {
 	a := ToString(valueStr)
 	i := strings.Index(a, " ")
 	if i < len(a) {
-		a = a[i+1:]
+		symbol := a[i+1:]
 		var pubData string
-		base64Text := make([]byte, base64.StdEncoding.DecodedLen(len(a)))
-		n, err := base64.StdEncoding.Decode(base64Text, []byte(a))
+		base64Text := make([]byte, base64.StdEncoding.DecodedLen(len(symbol)))
+		n, err := base64.StdEncoding.Decode(base64Text, []byte(symbol))
 		if err == nil {
 			pubData = string(base64Text[:n])
-			return pubData
+			return a[:i] + " " + pubData
 		}
 	}
 	return a
