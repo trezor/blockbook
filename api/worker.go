@@ -1309,7 +1309,7 @@ func (w *Worker) GetAsset(asset string, page int, txsOnPage int, option AccountD
 	}
 	assetGuid := uint32(assetGuidInt)
 	dbAsset, errAsset := w.db.GetAsset(assetGuid, nil)
-	if errAsset != nil || dbAsset == nil {
+	if errAsset != nil || dbAsset == nil || dbAsset.Transactions == 0 {
 		return nil, NewAPIError("Asset not found", true)
 	}
 	// totalResults is known only if there is no filter
@@ -1402,7 +1402,9 @@ func (w *Worker) GetAsset(asset string, page int, txsOnPage int, option AccountD
 	if len(dbAsset.AssetObj.NotaryKeyID) > 0 {
 		r.AssetDetails.NotaryDetails = &dbAsset.AssetObj.NotaryDetails
 	}
-	json.Unmarshal(dbAsset.AssetObj.PubData, &r.AssetDetails.PubData)
+	if len(dbAsset.AssetObj.PubData) > 0 {
+		json.Unmarshal(dbAsset.AssetObj.PubData, &r.assetDetails.PubData)
+	}
 	glog.Info("GetAsset ", asset, " finished in ", time.Since(start))
 	return r, nil
 }
@@ -1823,7 +1825,9 @@ func (w *Worker) GetAddressUtxo(address string, onlyConfirmed bool) (Utxos, erro
 				NotaryKeyID: 	hex.EncodeToString(dbAsset.AssetObj.NotaryKeyID),
 				AuxFeeKeyID: 	hex.EncodeToString(dbAsset.AssetObj.AuxFeeKeyID),
 			}
-			json.Unmarshal(dbAsset.AssetObj.PubData, &assetDetails.PubData)
+			if len(dbAsset.AssetObj.PubData) > 0 {
+				json.Unmarshal(dbAsset.AssetObj.PubData, &assetDetails.PubData)
+			}
 			if len(dbAsset.AssetObj.AuxFeeKeyID) > 0 {
 				assetDetails.AuxFeeDetails = &dbAsset.AssetObj.AuxFeeDetails
 			}

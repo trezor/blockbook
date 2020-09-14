@@ -690,7 +690,9 @@ func (w *Worker) GetXpubUtxo(xpub string, onlyConfirmed bool, gap int) (Utxos, e
 								NotaryKeyID: 	hex.EncodeToString(dbAsset.AssetObj.NotaryKeyID),
 								AuxFeeKeyID: 	hex.EncodeToString(dbAsset.AssetObj.AuxFeeKeyID),
 							}
-							json.Unmarshal(dbAsset.AssetObj.PubData, &assetDetails.PubData)
+							if len(dbAsset.AssetObj.PubData) > 0 {
+								json.Unmarshal(dbAsset.AssetObj.PubData, &assetDetails.PubData)
+							}
 							if len(dbAsset.AssetObj.AuxFeeKeyID) > 0 {
 								assetDetails.AuxFeeDetails = &dbAsset.AssetObj.AuxFeeDetails
 							}
