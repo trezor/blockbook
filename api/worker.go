@@ -1699,7 +1699,6 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *bchain.A
 									AmountSat: (*bchain.Amount)(&vout.ValueSat),
 									Locktime:  bchainTx.LockTime,
 									Coinbase:  coinbase,
-									Script:    hex.EncodeToString(script),
 								}
 								if vout.AssetInfo != nil {
 									utxoTmp.AssetInfo = &AssetInfo{AssetGuid: vout.AssetInfo.AssetGuid, ValueSat: (*bchain.Amount)(vout.AssetInfo.ValueSat)}
@@ -1764,7 +1763,6 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *bchain.A
 							Height:        int(utxo.Height),
 							Confirmations: confirmations,
 							Coinbase:      coinbase,
-							Script:    	   hex.EncodeToString(script),
 						}
 						if utxo.AssetInfo != nil {
 							utxoTmp.AssetInfo = &AssetInfo{AssetGuid: utxo.AssetInfo.AssetGuid, ValueSat: (*bchain.Amount)(utxo.AssetInfo.ValueSat)}
