@@ -33,7 +33,7 @@ func init() {
 		Vin: []bchain.Vin{
 			{
 				coinbase: "03ec6d0904e66bb55e023043092906000000000000",
-        		sequence: 4294967295
+        		        sequence: 4294967295,
 			},
 		},
 		Vout: []bchain.Vout{
@@ -78,11 +78,10 @@ func init() {
 				N:        1,
 				ScriptPubKey: bchain.ScriptPubKey{
 					Hex: "6a24aa21a9edba8f1b231c491442f6d23b9233c65ed26daa901e7350861fdcfc8d2f12fe02b3",
-					},
 				},
 			},
 		},
-	}
+	},
 }
 
 func TestMain(m *testing.M) {
