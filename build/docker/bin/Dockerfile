@@ -1,6 +1,6 @@
 # initialize from the image
 
-FROM debian:10
+FROM debian:9
 
 RUN apt-get update && \
     apt-get upgrade -y && \
