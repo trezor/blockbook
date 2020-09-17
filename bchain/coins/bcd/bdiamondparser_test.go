@@ -3,8 +3,6 @@
 package bcd
 
 import (
-	"github.com/trezor/blockbook/bchain"
-	"github.com/trezor/blockbook/bchain/coins/btc"
 	"bytes"
 	"encoding/hex"
 	"fmt"
@@ -12,6 +10,9 @@ import (
 	"os"
 	"reflect"
 	"testing"
+
+	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/bchain/coins/btc"
 
 	"github.com/martinboehm/btcutil/chaincfg"
 )
@@ -33,7 +34,7 @@ func init() {
 		Vin: []bchain.Vin{
 			{
 				coinbase: "03ec6d0904e66bb55e023043092906000000000000",
-        		        sequence: 4294967295,
+				sequence: 4294967295,
 			},
 		},
 		Vout: []bchain.Vout{
@@ -81,7 +82,7 @@ func init() {
 				},
 			},
 		},
-	},
+	}
 }
 
 func TestMain(m *testing.M) {
