@@ -1689,10 +1689,6 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *bchain.A
 								if len(bchainTx.Vin) == 1 && len(bchainTx.Vin[0].Coinbase) > 0 {
 									coinbase = true
 								}
-								script, err := w.chainParser.GetScriptFromAddrDesc(addrDesc)
-								if err != nil {
-									return nil, err
-								}
 								utxoTmp := Utxo{
 									Txid:      bchainTx.Txid,
 									Vout:      int32(i),
@@ -1752,10 +1748,6 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *bchain.A
 					}
 					_, e = inMempool[txid]
 					if !e {
-						script, err := w.chainParser.GetScriptFromAddrDesc(addrDesc)
-						if err != nil {
-							return nil, err
-						}
 						utxoTmp := Utxo{
 							Txid:          txid,
 							Vout:          utxo.Vout,
