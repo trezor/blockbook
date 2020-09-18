@@ -767,7 +767,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`[{"txid":"3d90d15ed026dc45e19ffb52875ed18fa9e8012ad123d7f7212176e2b0ebdb71","vout":0,"value":"118641975500","height":225494,"confirmations":1,"address":"2N6utyMZfPNUb1Bk8oz7p2JqJrXkq83gegu","path":"m/49'/1'/33'/1/3","script":"a91495e9fbe306449c991d314afe3c3567d5bf78efd287"}]`,
+				`[{"txid":"3d90d15ed026dc45e19ffb52875ed18fa9e8012ad123d7f7212176e2b0ebdb71","vout":0,"value":"118641975500","height":225494,"confirmations":1,"address":"2N6utyMZfPNUb1Bk8oz7p2JqJrXkq83gegu","path":"m/49'/1'/33'/1/3"}]`,
 			},
 		},
 		{
@@ -996,7 +996,7 @@ func socketioTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 		{
 			name: "socketio getDetailedTransaction",
 			req:  socketioReq{"getDetailedTransaction", []interface{}{"3d90d15ed026dc45e19ffb52875ed18fa9e8012ad123d7f7212176e2b0ebdb71"}},
-			want: `{"result":{"hex":"","height":225494,"blockTimestamp":1521595678,"version":0,"hash":"3d90d15ed026dc45e19ffb52875ed18fa9e8012ad123d7f7212176e2b0ebdb71","inputs":[{"txid":"7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25","outputIndex":0,"script":"","sequence":0,"address":"mzB8cYrfRwFRFAGTDzV8LkUQy5BQicxGhX","satoshis":317283951061},{"txid":"effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75","outputIndex":1,"script":"","sequence":0,"address":"2MzmAKayJmja784jyHvRUW1bXPget1csRRG","satoshis":1}],"inputSatoshis":317283951062,"outputs":[{"satoshis":118641975500,"script":"a91495e9fbe306449c991d314afe3c3567d5bf78efd287","address":"2N6utyMZfPNUb1Bk8oz7p2JqJrXkq83gegu"},{"satoshis":198641975500,"script":"76a9143f8ba3fda3ba7b69f5818086e12223c6dd25e3c888ac","address":"mmJx9Y8ayz9h14yd9fgCW1bUKoEpkBAquP"}],"outputSatoshis":317283951000,"feeSatoshis":62}}`,
+			want: `{"result":{"hex":"","height":225494,"blockTimestamp":1521595678,"version":0,"hash":"3d90d15ed026dc45e19ffb52875ed18fa9e8012ad123d7f7212176e2b0ebdb71","inputs":[{"txid":"7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25","outputIndex":0,"script":"","sequence":0,"address":"mzB8cYrfRwFRFAGTDzV8LkUQy5BQicxGhX","satoshis":317283951061},{"txid":"effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75","outputIndex":1,"script":"","sequence":0,"address":"2MzmAKayJmja784jyHvRUW1bXPget1csRRG","satoshis":1}],"inputSatoshis":317283951062,"outputs":[{"satoshis":118641975500,"address":"2N6utyMZfPNUb1Bk8oz7p2JqJrXkq83gegu"},{"satoshis":198641975500,"script":"76a9143f8ba3fda3ba7b69f5818086e12223c6dd25e3c888ac","address":"mmJx9Y8ayz9h14yd9fgCW1bUKoEpkBAquP"}],"outputSatoshis":317283951000,"feeSatoshis":62}}`,
 		},
 		{
 			name: "socketio sendTransaction",
