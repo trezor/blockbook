@@ -131,11 +131,8 @@ func verifyAfterSyscoinTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect bool
 	if dBAsset.AssetObj.UpdateFlags != 133 {
 		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.UpdateFlags: ", dBAsset.AssetObj.UpdateFlags  , ". Expected: 133"))
 	}
-	if dBAsset.AssetObj.Balance != 10000000000 {
-		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.Balance: ", dBAsset.AssetObj.Balance  , ". Expected: 10000000000"))
-	}
-	if dBAsset.AssetObj.TotalSupply != 10000000000 {
-		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.TotalSupply: ", dBAsset.AssetObj.TotalSupply  , ". Expected: 10000000000"))
+	if dBAsset.AssetObj.TotalSupply != 0 {
+		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.TotalSupply: ", dBAsset.AssetObj.TotalSupply  , ". Expected: 0"))
 	}
 	if dBAsset.AssetObj.MaxSupply != 100000000000 {
 		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.MaxSupply: ", dBAsset.AssetObj.MaxSupply  , ". Expected: 100000000000"))
@@ -233,11 +230,8 @@ func verifyAfterSyscoinTypeBlock2(t *testing.T, d *RocksDB) {
 	if dBAsset.AssetObj.UpdateFlags != 135 {
 		t.Fatal(fmt.Sprint("Block2: Property mismatch dBAsset.AssetObj.UpdateFlags: ", dBAsset.AssetObj.UpdateFlags  , ". Expected: 135"))
 	}
-	if dBAsset.AssetObj.Balance != 52000000000 {
-		t.Fatal(fmt.Sprint("Block2: Property mismatch dBAsset.AssetObj.Balance: ", dBAsset.AssetObj.Balance  , ". Expected: 52000000000"))
-	}
-	if dBAsset.AssetObj.TotalSupply != 52000000000 {
-		t.Fatal(fmt.Sprint("Block2: Property mismatch dBAsset.AssetObj.TotalSupply: ", dBAsset.AssetObj.TotalSupply  , ". Expected: 52000000000"))
+	if dBAsset.AssetObj.TotalSupply != 0 {
+		t.Fatal(fmt.Sprint("Block2: Property mismatch dBAsset.AssetObj.TotalSupply: ", dBAsset.AssetObj.TotalSupply  , ". Expected: 0"))
 	}
 	if dBAsset.AssetObj.MaxSupply != 100000000000 {
 		t.Fatal(fmt.Sprint("Block2: Property mismatch dBAsset.AssetObj.MaxSupply: ", dBAsset.AssetObj.MaxSupply  , ". Expected: 100000000000"))

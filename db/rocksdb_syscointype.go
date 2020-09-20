@@ -18,10 +18,6 @@ type GetTxAssetsCallback func(txids []string) error
 
 func (d *RocksDB) ConnectAssetOutputHelper(isActivate bool, asset *bchain.Asset, dBAsset *bchain.Asset) error {
 	if !isActivate {
-		if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_SUPPLY) != 0 {
-			dBAsset.AssetObj.Balance += asset.AssetObj.Balance
-			dBAsset.AssetObj.TotalSupply += asset.AssetObj.Balance
-		}
 		// logic follows core CheckAssetInputs()
 		if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_DATA) != 0 {
 			dBAsset.AssetObj.PubData = asset.AssetObj.PubData
@@ -55,20 +51,12 @@ func (d *RocksDB) ConnectAssetOutputHelper(isActivate bool, asset *bchain.Asset,
 				dBAsset.AssetObj.UpdateFlags = dBAsset.AssetObj.UpdateFlags &^ wire.ASSET_UPDATE_NOTARY_DETAILS
 			}
 		}
-		if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_AUXFEE_KEY) != 0 {
-			dBAsset.AssetObj.AuxFeeKeyID = asset.AssetObj.AuxFeeKeyID
-			if len(dBAsset.AssetObj.AuxFeeKeyID) > 0 {
-				dBAsset.AssetObj.UpdateFlags |= wire.ASSET_UPDATE_AUXFEE_KEY
-			} else {
-				dBAsset.AssetObj.UpdateFlags = dBAsset.AssetObj.UpdateFlags &^ wire.ASSET_UPDATE_AUXFEE_KEY
-			}
-		}
-		if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_AUXFEE_DETAILS) != 0 {
+		if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_AUXFEE) != 0 {
 			dBAsset.AssetObj.AuxFeeDetails = asset.AssetObj.AuxFeeDetails
-			if len(dBAsset.AssetObj.AuxFeeDetails.AuxFees) > 0 {
-				dBAsset.AssetObj.UpdateFlags |= wire.ASSET_UPDATE_AUXFEE_DETAILS
+			if len(dBAsset.AssetObj.AuxFeeDetails.AuxFees) > 0  || len(dBAsset.AssetObj.AuxFeeDetails.AuxFeeKeyID) > 0 {
+				dBAsset.AssetObj.UpdateFlags |= wire.ASSET_UPDATE_AUXFEE
 			} else {
-				dBAsset.AssetObj.UpdateFlags = dBAsset.AssetObj.UpdateFlags &^ wire.ASSET_UPDATE_AUXFEE_DETAILS
+				dBAsset.AssetObj.UpdateFlags = dBAsset.AssetObj.UpdateFlags &^ wire.ASSET_UPDATE_AUXFEE
 			}
 		}
 		if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_CAPABILITYFLAGS) != 0 {
@@ -80,7 +68,6 @@ func (d *RocksDB) ConnectAssetOutputHelper(isActivate bool, asset *bchain.Asset,
 			}
 		}
 	} else {
-		dBAsset.AssetObj.TotalSupply = asset.AssetObj.Balance
 		dBAsset.AssetObj.UpdateFlags = asset.AssetObj.UpdateFlags
 		// clear vout assets from storage
 		dBAsset.AssetObj.Allocation.VoutAssets = make([]wire.AssetOutType, 0)
@@ -92,18 +79,6 @@ func (d *RocksDB) DisconnectAssetOutputHelper(asset *bchain.Asset, dBAsset *bcha
 	// nothing was updated
 	if asset.AssetObj.UpdateFlags == 0 {
 		return nil
-	}
-	if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_SUPPLY) != 0 {
-		dBAsset.AssetObj.Balance -= asset.AssetObj.Balance
-		if dBAsset.AssetObj.Balance < 0 {
-			glog.Warningf("DisconnectAssetOutput balance is negative %v, setting to 0...", dBAsset.AssetObj.Balance)
-			dBAsset.AssetObj.Balance = 0
-		}
-		dBAsset.AssetObj.TotalSupply -= asset.AssetObj.Balance
-		if dBAsset.AssetObj.TotalSupply < 0 {
-			glog.Warningf("DisconnectAssetOutput total supply is negative %v, setting to 0...", dBAsset.AssetObj.TotalSupply)
-			dBAsset.AssetObj.TotalSupply = 0
-		}
 	}
 	// logic follows core CheckAssetInputs()
 	// undo data fields from last update
@@ -141,20 +116,12 @@ func (d *RocksDB) DisconnectAssetOutputHelper(asset *bchain.Asset, dBAsset *bcha
 			dBAsset.AssetObj.UpdateFlags = dBAsset.AssetObj.UpdateFlags &^ wire.ASSET_UPDATE_NOTARY_DETAILS
 		}
     }
-    if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_AUXFEE_KEY) != 0 {
-		dBAsset.AssetObj.AuxFeeKeyID = asset.AssetObj.PrevAuxFeeKeyID
-		if len(dBAsset.AssetObj.AuxFeeKeyID) > 0 {
-			dBAsset.AssetObj.UpdateFlags |= wire.ASSET_UPDATE_AUXFEE_KEY
-		} else {
-			dBAsset.AssetObj.UpdateFlags = dBAsset.AssetObj.UpdateFlags &^ wire.ASSET_UPDATE_AUXFEE_KEY
-		}
-    }
-    if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_AUXFEE_DETAILS) != 0 {
+    if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_AUXFEE) != 0 {
 		dBAsset.AssetObj.AuxFeeDetails = asset.AssetObj.PrevAuxFeeDetails
-		if len(dBAsset.AssetObj.AuxFeeDetails.AuxFees) > 0 {
-			dBAsset.AssetObj.UpdateFlags |= wire.ASSET_UPDATE_AUXFEE_DETAILS
+		if len(dBAsset.AssetObj.AuxFeeDetails.AuxFees) > 0 || len(dBAsset.AssetObj.AuxFeeDetails.AuxFeeKeyID) > 0 {
+			dBAsset.AssetObj.UpdateFlags |= wire.ASSET_UPDATE_AUXFEE
 		} else {
-			dBAsset.AssetObj.UpdateFlags = dBAsset.AssetObj.UpdateFlags &^ wire.ASSET_UPDATE_AUXFEE_DETAILS
+			dBAsset.AssetObj.UpdateFlags = dBAsset.AssetObj.UpdateFlags &^ wire.ASSET_UPDATE_AUXFEE
 		}
     }
     if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_CAPABILITYFLAGS) != 0 {
@@ -206,7 +173,7 @@ func (d *RocksDB) ConnectAllocationOutput(addrDesc* bchain.AddressDescriptor, he
 	return nil
 }
 
-func (d *RocksDB) ConnectAssetOutput(asset *bchain.Asset, isActivate bool, isAssetTx bool, isAssetSendTx bool, assets map[uint32]*bchain.Asset) error {
+func (d *RocksDB) ConnectAssetOutput(asset *bchain.Asset, isActivate bool, isAssetTx bool, isAssetSendTx bool, assets map[uint32]*bchain.Asset, mapAssetsIn bchain.AssetsMap) error {
 	var dBAsset* bchain.Asset = nil
 	var err error
 	assetGuid := asset.AssetObj.Allocation.VoutAssets[0].AssetGuid
@@ -229,15 +196,16 @@ func (d *RocksDB) ConnectAssetOutput(asset *bchain.Asset, isActivate bool, isAss
 			}
 		} else if isAssetSendTx {
 			// tally total amount and subtract from asset
-			valueSat := int64(0)
+			valueSatOut := int64(0)
 			for _, v := range asset.AssetObj.Allocation.VoutAssets[0].Values {
-				valueSat += v.ValueSat
+				valueSatOut += v.ValueSat
 			}
-			dBAsset.AssetObj.Balance -= valueSat
-			if dBAsset.AssetObj.Balance < 0 {
-				glog.Warningf("ConnectAssetOutput balance is negative %v, setting to 0...", dBAsset.AssetObj.Balance)
-				dBAsset.AssetObj.Balance = 0
+			valueSatIn, e := mapAssetsIn[assetGuid]
+			if !e {
+				return errors.New(fmt.Sprint("ConnectAssetOutput asset input not found " , assetGuid))
 			}
+			dBAsset.AssetObj.TotalSupply += (valueSatOut - valueSatIn)
+			dBAsset.AssetObj.UpdateFlags |= wire.ASSET_UPDATE_SUPPLY
 		} 
 		assets[assetGuid] = dBAsset
 	} else {
@@ -258,7 +226,7 @@ func (d *RocksDB) DisconnectAllocationOutput(addrDesc *bchain.AddressDescriptor,
 	}
 	return nil
 }
-func (d *RocksDB) DisconnectAssetOutput(asset *bchain.Asset, isActivate bool, isAssetSendTx bool, assets map[uint32]*bchain.Asset) error {
+func (d *RocksDB) DisconnectAssetOutput(asset *bchain.Asset, isActivate bool, isAssetSendTx bool, assets map[uint32]*bchain.Asset, mapAssetsIn bchain.AssetsMap) error {
 	assetGuid := asset.AssetObj.Allocation.VoutAssets[0].AssetGuid
 	dBAsset, err := d.GetAsset(assetGuid, assets)
 	if dBAsset == nil || err != nil {
@@ -270,11 +238,22 @@ func (d *RocksDB) DisconnectAssetOutput(asset *bchain.Asset, isActivate bool, is
 	if !isActivate {
 		if isAssetSendTx {
 			// tally total amount and add to asset
-			valueSat := int64(0)
+			valueSatOut := int64(0)
 			for _, v := range asset.AssetObj.Allocation.VoutAssets[0].Values {
-				valueSat += v.ValueSat
+				valueSatOut += v.ValueSat
 			}
-			dBAsset.AssetObj.Balance += valueSat
+			valueSatIn, e := mapAssetsIn[assetGuid]
+			if !e {
+				return errors.New(fmt.Sprint("DisconnectAssetOutput asset input not found " , assetGuid))
+			}
+			dBAsset.AssetObj.TotalSupply -= (valueSatOut - valueSatIn)
+			if dBAsset.AssetObj.TotalSupply < 0 {
+				glog.Warningf("DisconnectAssetOutput total supply is negative %v, setting to 0...", dBAsset.AssetObj.TotalSupply)
+				dBAsset.AssetObj.TotalSupply = 0
+			}
+			if dBAsset.AssetObj.TotalSupply == 0 {
+				dBAsset.AssetObj.UpdateFlags = dBAsset.AssetObj.UpdateFlags &^ wire.ASSET_UPDATE_SUPPLY
+			}
 		} else {
 			err = d.DisconnectAssetOutputHelper(asset, dBAsset)
 			if err != nil {

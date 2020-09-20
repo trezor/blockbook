@@ -631,13 +631,11 @@ func (s *SocketIoServer) getAssetHistory(asset string, opts *assetOpts) (res res
 			AssetGuid:		assetGuid,
 			Symbol:			string(dbAsset.AssetObj.Symbol),
 			Contract:		"0x" + hex.EncodeToString(dbAsset.AssetObj.Contract),
-			Balance:		(*bchain.Amount)(big.NewInt(dbAsset.AssetObj.Balance)),
 			TotalSupply:	(*bchain.Amount)(big.NewInt(dbAsset.AssetObj.TotalSupply)),
 			MaxSupply:		(*bchain.Amount)(big.NewInt(dbAsset.AssetObj.MaxSupply)),
 			Decimals:		int(dbAsset.AssetObj.Precision),
 			UpdateCapabilityFlags:	dbAsset.AssetObj.UpdateCapabilityFlags,
 			NotaryKeyID: 	hex.EncodeToString(dbAsset.AssetObj.NotaryKeyID),
-			AuxFeeKeyID: 	hex.EncodeToString(dbAsset.AssetObj.AuxFeeKeyID),
 			
 		}
 		if len(dbAsset.AssetObj.AuxFeeKeyID) > 0 {

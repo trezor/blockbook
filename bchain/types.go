@@ -596,7 +596,7 @@ type TxAssetAddress struct {
 	Txs       []*TxAssetAddressIndex
 }
 type TxAssetAddressMap map[uint32]*TxAssetAddress
-
+type AssetsMap map[uint32]int64
 // TxAddresses stores transaction inputs and outputs with amounts
 type TxAddresses struct {
 	Version int32
