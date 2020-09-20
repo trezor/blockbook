@@ -691,7 +691,7 @@ func (w *Worker) GetXpubUtxo(xpub string, onlyConfirmed bool, gap int) (Utxos, e
 							if len(dbAsset.AssetObj.PubData) > 0 {
 								json.Unmarshal(dbAsset.AssetObj.PubData, &assetDetails.PubData)
 							}
-							if len(dbAsset.AssetObj.AuxFeeKeyID) > 0 {
+							if len(dbAsset.AssetObj.AuxFeeDetails.AuxFeeKeyID) > 0 {
 								assetDetails.AuxFeeDetails = &dbAsset.AssetObj.AuxFeeDetails
 							}
 							if len(dbAsset.AssetObj.NotaryKeyID) > 0 {

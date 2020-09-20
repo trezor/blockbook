@@ -638,7 +638,7 @@ func (s *SocketIoServer) getAssetHistory(asset string, opts *assetOpts) (res res
 			NotaryKeyID: 	hex.EncodeToString(dbAsset.AssetObj.NotaryKeyID),
 			
 		}
-		if len(dbAsset.AssetObj.AuxFeeKeyID) > 0 {
+		if len(dbAsset.AssetObj.AuxFeeDetails.AuxFeeKeyID) > 0 {
 			res.Result.AssetDetails.AuxFeeDetails = &dbAsset.AssetObj.AuxFeeDetails
 		}
 		if len(dbAsset.AssetObj.NotaryKeyID) > 0 {
