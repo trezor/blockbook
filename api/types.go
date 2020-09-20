@@ -108,9 +108,7 @@ type AssetSpecific struct {
 	PubData 		map[string]interface{} `json:"pubData"`
 	NotaryKeyID		string `json:"notaryKeyID,omitempty"`
 	NotaryDetails	*bchain.NotaryDetails `json:"notaryDetails,omitempty"`
-	AuxFeeKeyID		string `json:"auxFeeKeyID,omitempty"`
 	AuxFeeDetails	*bchain.AuxFeeDetails `json:"auxFeeDetails,omitempty"`
-	Balance 		*bchain.Amount `json:"balance"`
 	TotalSupply 	*bchain.Amount `json:"totalSupply"`
 	MaxSupply 		*bchain.Amount `json:"maxSupply"`
 	Decimals 		int `json:"decimals"`

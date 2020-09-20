@@ -23,10 +23,6 @@
                     <td class="data"><a href="https://etherscan.io/address/{{$asset.AssetDetails.Contract}}">{{$asset.AssetDetails.Contract}}</a></td>
                 </tr>
                 <tr>
-                    <td>Balance</td>
-                    <td class="data">{{formatAmountWithDecimals $asset.AssetDetails.Balance $asset.AssetDetails.Decimals}} {{formatDecodeBase64 $asset.AssetDetails.Symbol}}</td>
-                </tr>
-                <tr>
                     <td>Total Supply</td>
                     <td class="data">{{formatAmountWithDecimals $asset.AssetDetails.TotalSupply $asset.AssetDetails.Decimals}} {{formatDecodeBase64 $asset.AssetDetails.Symbol}}</td>
                 </tr>
