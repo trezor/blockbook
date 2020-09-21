@@ -218,7 +218,7 @@ func verifyAfterSyscoinTypeBlock2(t *testing.T, d *RocksDB) {
 		t.Fatal(fmt.Sprint("Block2: Property mismatch dbAsset.Transaction: ", dBAsset.Transactions, ". Expected: 2"))
 	}
 	if string(dBAsset.AssetObj.Symbol) != base64.StdEncoding.EncodeToString([]byte("CAT")) {
-		t.Fatal(fmt.Sprint("Block1: Property mismatch dBAsset.AssetObj.Symbol: ", string(dBAsset.AssetObj.Symbol) , ". Expected: " + base64.StdEncoding.EncodeToString([]byte("CAT"))))
+		t.Fatal(fmt.Sprint("Block2: Property mismatch dBAsset.AssetObj.Symbol: ", string(dBAsset.AssetObj.Symbol) , ". Expected: " + base64.StdEncoding.EncodeToString([]byte("CAT"))))
 	}
 	pubdata := "{\"desc\":\"" + base64.StdEncoding.EncodeToString([]byte("new publicvalue")) + "\"}"
 	if !bytes.Equal(dBAsset.AssetObj.PubData, []byte(pubdata)) {
