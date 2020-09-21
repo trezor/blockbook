@@ -83,7 +83,6 @@ func (d *RocksDB) DisconnectAssetOutputHelper(asset *bchain.Asset, dBAsset *bcha
 	// logic follows core CheckAssetInputs()
 	// undo data fields from last update
 	// if fields changed then undo them using prev fields
-	dBAsset.AssetObj.UpdateFlags = wire.ASSET_UPDATE_SUPPLY
     if (asset.AssetObj.UpdateFlags & wire.ASSET_UPDATE_DATA) != 0 {
 		dBAsset.AssetObj.PubData = asset.AssetObj.PrevPubData
 		if len(dBAsset.AssetObj.PubData) > 0 {
