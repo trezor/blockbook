@@ -27,7 +27,7 @@ const (
 	SYSCOIN_TX_VERSION_ALLOCATION_MINT int32 = 133
 	SYSCOIN_TX_VERSION_ALLOCATION_BURN_TO_ETHEREUM int32 = 134
 	SYSCOIN_TX_VERSION_ALLOCATION_SEND int32 = 135
-	maxAddrDescLen = 1024
+	maxAddrDescLen = 10000
 )
 
 // chain parameters
@@ -71,7 +71,7 @@ func NewSyscoinParser(params *chaincfg.Params, c *btc.Configuration) *SyscoinPar
 
 // matches max data carrier for systx
 func (p *SyscoinParser) GetMaxAddrLength() int {
-	return 8000
+	return maxAddrDescLen
 }
 
 // GetChainParams returns network parameters
