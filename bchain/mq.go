@@ -78,7 +78,7 @@ func (mq *MQ) run(callback func(NotificationType)) {
 		msg, err := mq.socket.RecvMessageBytes(0)
 		if err != nil {
 			if zmq.AsErrno(err) == zmq.Errno(zmq.ETERM) || err.Error() == "Socket is closed" {
-				glog.Info("MQ loop terminated %v", err.Error())
+				glog.Info("MQ loop terminated error ", err, ", ", zmq.AsErrno(err))
 				break
 			}
 			// suppress logging of error for the first time
