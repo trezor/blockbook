@@ -55,7 +55,7 @@
   branch = "master"
   name = "github.com/syscoin/btcd"
   packages = ["wire"]
-  revision = "be589000d42661591ec4ca6e1fb781607f11980e"
+  revision = "208f07431b22486190deaf9182af14d7445d11ae"
 
 [[projects]]
   branch = "master"
