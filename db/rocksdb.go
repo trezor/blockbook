@@ -816,7 +816,17 @@ func (d *RocksDB) storeBalances(wb *gorocksdb.WriteBatch, abm map[string]*bchain
 			// asset transfers with 0 transactions are removed from db - happens on disconnect
 			for key, value := range ab.AssetBalances {
 				if value.Transfers <= 0 {
-					delete(ab.AssetBalances, key)
+					// ensure transactions for asset are also 0, asset activate will have transfers as 0 but transactions as 1
+					dBAsset, err := d.GetAsset(key, nil)
+					if dBAsset == nil || err != nil {
+						if dBAsset == nil {
+							return errors.New(fmt.Sprint("storeBalances could not read asset " , key))
+						}
+						return err
+					}
+					if(dBAsset.Transactions <= 0) {
+						delete(ab.AssetBalances, key)
+					}
 				}
 			}
 			buf = d.chainParser.PackAddrBalance(ab, buf, varBuf)

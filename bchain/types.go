@@ -458,7 +458,7 @@ const SPTAssetUpdateType TokenType = "SPTAssetUpdate"
 const SPTAssetSendType TokenType = "SPTAssetSend"
 const SPTAssetAllocationMintType TokenType = "SPTAssetAllocationMint"
 const SPTAssetAllocationSendType TokenType = "SPTAssetAllocationSend"
-const SPTAssetSyscoinBurnToAllocationType TokenType = "SPTAssetSyscoinBurnToAllocation"
+const SPTAssetSyscoinBurnToAllocationType TokenType = "SPTSyscoinBurnToAssetAllocation"
 const SPTAssetAllocationBurnToSyscoinType TokenType = "SPTAssetAllocationBurnToSyscoin"
 const SPTAssetAllocationBurnToEthereumType TokenType = "SPTAssetAllocationBurnToEthereum"
 
