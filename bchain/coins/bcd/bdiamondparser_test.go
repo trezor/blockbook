@@ -74,13 +74,6 @@ func init() {
 					},
 				},
 			},
-			{
-				ValueSat: *big.NewInt(0),
-				N:        1,
-				ScriptPubKey: bchain.ScriptPubKey{
-					Hex: "6a24aa21a9edba8f1b231c491442f6d23b9233c65ed26daa901e7350861fdcfc8d2f12fe02b3",
-				},
-			},
 		},
 	}
 }
