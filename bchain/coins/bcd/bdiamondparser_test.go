@@ -33,8 +33,8 @@ func init() {
 		LockTime:  0,
 		Vin: []bchain.Vin{
 			{
-				coinbase: "03ec6d0904e66bb55e023043092906000000000000",
-				sequence: 4294967295,
+				Coinbase: "03ec6d0904e66bb55e023043092906000000000000",
+				Sequence: 4294967295,
 			},
 		},
 		Vout: []bchain.Vout{
@@ -59,8 +59,8 @@ func init() {
 		LockTime:  0,
 		Vin: []bchain.Vin{
 			{
-				coinbase: "03ee6d09043d74b55e087102008138712300082f6666706f6f6c2f",
-				sequence: 4294967294,
+				Coinbase: "03ee6d09043d74b55e087102008138712300082f6666706f6f6c2f",
+				Sequence: 4294967294,
 			},
 		},
 		Vout: []bchain.Vout{
