@@ -31,7 +31,6 @@ var (
 func init() {
 	MainNetParams = chaincfg.MainNetParams
 	MainNetParams.Net = MainnetMagic
-	fmt.Println("init() MainNetParams.Net: ", MainNetParams.Net)
 
 	// Address encoding magics
 	MainNetParams.AddressMagicLen = 1
