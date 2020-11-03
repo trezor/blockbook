@@ -163,16 +163,16 @@
 
         function getBalanceHistory() {
             const descriptor = document.getElementById('getBalanceHistoryDescriptor').value.trim();
-            const from = document.getElementById("getBalanceHistoryFrom").value.trim();
-            const to = document.getElementById("getBalanceHistoryTo").value.trim();
-            const fiat = document.getElementById("getBalanceHistoryFiat").value.trim();
+            const from = parseInt(document.getElementById("getBalanceHistoryFrom").value.trim());
+            const to = parseInt(document.getElementById("getBalanceHistoryTo").value.trim());
+            const currencies = document.getElementById('getBalanceHistoryFiat').value.split(",");
             const groupBy = parseInt(document.getElementById("getBalanceHistoryGroupBy").value);
             const method = 'getBalanceHistory';
             const params = {
                 descriptor,
                 from,
                 to,
-                fiat,
+                currencies,
                 groupBy
                 // default gap=20
             };
@@ -210,7 +210,7 @@
                 var specific = document.getElementById('estimateFeeSpecific').value.trim();
                 if (specific) {
                     // example for bitcoin type: {"conservative": false,"txsize":1234}
-                    // example for ethereum type: {"from":"0x65513ecd11fd3a5b1fefdcc6a500b025008405a2","to":"0x65513ecd11fd3a5b1fefdcc6a500b025008405a2","data":"0xabcd"}
+                    // example for ethereum type: {"from":"0x65513ecd11fd3a5b1fefdcc6a500b025008405a2","to":"0x65513ecd11fd3a5b1fefdcc6a500b025008405a2","data":"0xabcd","gasPrice":"0x30d40","value":"0x1234"}
                     specific = JSON.parse(specific)
                 }
                 else {
@@ -302,11 +302,11 @@
         function getFiatRatesForTimestamps() {
             const method = 'getFiatRatesForTimestamps';
             var timestamps = document.getElementById('getFiatRatesForTimestampsList').value.split(",");
-            var currency = document.getElementById('getFiatRatesForTimestampsCurrency').value;
+            var currencies = document.getElementById('getFiatRatesForTimestampsCurrency').value.split(",");
             timestamps = timestamps.map(Number);
             const params = {
                 timestamps,
-                "currency": currency
+                'currencies': currencies
             };
             send(method, params, function (result) {
                 document.getElementById('getFiatRatesForTimestampsResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
@@ -315,9 +315,9 @@
 
         function getCurrentFiatRates() {
             const method = 'getCurrentFiatRates';
-            var currency = document.getElementById('getCurrentFiatRatesCurrency').value;
+            var currencies = document.getElementById('getCurrentFiatRatesCurrency').value.split(",");
             const params = {
-                "currency": currency
+                "currencies": currencies
             };
             send(method, params, function (result) {
                 document.getElementById('getCurrentFiatRatesResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
@@ -462,9 +462,9 @@
                     <input type="text" placeholder="descriptor" class="form-control" id="getBalanceHistoryDescriptor" value="0xba98d6a5ac827632e3457de7512d211e4ff7e8bd">
                 </div>
                 <div class="row" style="margin: 0; margin-top: 5px;">
-                    <input type="text" placeholder="from YYYY-MM-DD" style="width: 30%;margin-left: 5px;margin-right: 5px;" class="form-control" id="getBalanceHistoryFrom">
-                    <input type="text" placeholder="to YYYY-MM-DD" style="width: 30%; margin-left: 5px; margin-right: 5px;" class="form-control" id="getBalanceHistoryTo">
-                    <input type="text" placeholder="fiat" style="width: 10%; margin-left: 5px; margin-right: 5px;" class="form-control" id="getBalanceHistoryFiat">
+                    <input type="text" placeholder="from Unix TS" style="width: 20%;margin-left: 5px;margin-right: 5px;" class="form-control" id="getBalanceHistoryFrom">
+                    <input type="text" placeholder="to Unix TS" style="width: 20%; margin-left: 5px; margin-right: 5px;" class="form-control" id="getBalanceHistoryTo">
+                    <input type="text" placeholder="usd,eur" style="width: 20%; margin-left: 5px; margin-right: 5px;" class="form-control" id="getBalanceHistoryFiat">
                     <input type="text" placeholder="group by (sec)" style="width: 20%; margin-left: 5px; margin-right: 5px;" class="form-control" id="getBalanceHistoryGroupBy">
                 </div>
             </div>
@@ -540,7 +540,7 @@
                 <input class="btn btn-secondary" type="button" value="get fiat rates for dates" onclick="getFiatRatesForTimestamps()">
             </div>
             <div class="col-1">
-                <input type="text" class="form-control" id="getFiatRatesForTimestampsCurrency" value="usd">
+                <input type="text" class="form-control" id="getFiatRatesForTimestampsCurrency" placeholder="usd,eur">
             </div>
             <div class="col-7">
                 <input type="text" class="form-control" id="getFiatRatesForTimestampsList" value="1575288000,1575550800">

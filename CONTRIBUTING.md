@@ -3,8 +3,8 @@
 Blockbook is back-end service for Trezor wallet. Although it is open source, the design and development of the core packages
 is done by Trezor developers in order to keep Blockbook compatible with Trezor.
 
-Bug fixes and support for new coins are welcome. Please take note that non-fixing pull requests that change base
-packages or another coin code will not be accepted. If you have a need to change some of the existing code, please file
+Bug fixes and support for new coins are welcome. **Please take note that non-fixing pull requests that change base
+packages or another coin code will not be accepted.** If you have a need to change some of the existing code, please file
 an issue and discuss your request with Blockbook maintainers.
 
 ## Development environment

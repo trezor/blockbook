@@ -1,7 +1,6 @@
 package eth
 
 import (
-	"blockbook/bchain"
 	"encoding/hex"
 	"math/big"
 	"strconv"
@@ -9,6 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/golang/protobuf/proto"
 	"github.com/juju/errors"
+	"github.com/trezor/blockbook/bchain"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -76,12 +76,6 @@ type rpcReceipt struct {
 	Logs    []*rpcLog `json:"logs"`
 }
 
-type rpcEtcReceipt struct {
-	GasUsed string    `json:"gasUsed"`
-	Status  int       `json:"status"`
-	Logs    []*rpcLog `json:"logs"`
-}
-
 type completeTransaction struct {
 	Tx      *rpcTransaction `json:"tx"`
 	Receipt *rpcReceipt     `json:"receipt,omitempty"`
@@ -102,17 +96,30 @@ func ethNumber(n string) (int64, error) {
 	return 0, errors.Errorf("Not a number: '%v'", n)
 }
 
-func (p *EthereumParser) ethTxToTx(tx *rpcTransaction, receipt *rpcReceipt, blocktime int64, confirmations uint32) (*bchain.Tx, error) {
+func (p *EthereumParser) ethTxToTx(tx *rpcTransaction, receipt *rpcReceipt, blocktime int64, confirmations uint32, fixEIP55 bool) (*bchain.Tx, error) {
 	txid := tx.Hash
 	var (
 		fa, ta []string
 		err    error
 	)
 	if len(tx.From) > 2 {
+		if fixEIP55 {
+			tx.From = EIP55AddressFromAddress(tx.From)
+		}
 		fa = []string{tx.From}
 	}
 	if len(tx.To) > 2 {
+		if fixEIP55 {
+			tx.To = EIP55AddressFromAddress(tx.To)
+		}
 		ta = []string{tx.To}
+	}
+	if fixEIP55 && receipt != nil && receipt.Logs != nil {
+		for _, l := range receipt.Logs {
+			if len(l.Address) > 2 {
+				l.Address = EIP55AddressFromAddress(l.Address)
+			}
+		}
 	}
 	ct := completeTransaction{
 		Tx:      tx,
@@ -204,6 +211,9 @@ func EIP55Address(addrDesc bchain.AddressDescriptor) string {
 
 // EIP55AddressFromAddress returns an EIP55-compliant hex string representation of the address
 func EIP55AddressFromAddress(address string) string {
+	if has0xPrefix(address) {
+		address = address[2:]
+	}
 	b, err := hex.DecodeString(address)
 	if err != nil {
 		return address
@@ -375,7 +385,7 @@ func (p *EthereumParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 			Logs:    logs,
 		}
 	}
-	tx, err := p.ethTxToTx(&rt, rr, int64(pt.BlockTime), 0)
+	tx, err := p.ethTxToTx(&rt, rr, int64(pt.BlockTime), 0, false)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -451,40 +461,51 @@ func (p *EthereumParser) EthereumTypeGetErc20FromTx(tx *bchain.Tx) ([]bchain.Erc
 	return r, nil
 }
 
+// TxStatus is status of transaction
+type TxStatus int
+
+// statuses of transaction
 const (
-	txStatusUnknown = iota - 2
-	txStatusPending
-	txStatusFailure
-	txStatusOK
+	TxStatusUnknown = TxStatus(iota - 2)
+	TxStatusPending
+	TxStatusFailure
+	TxStatusOK
 )
 
 // EthereumTxData contains ethereum specific transaction data
 type EthereumTxData struct {
-	Status   int      `json:"status"` // 1 OK, 0 Fail, -1 pending, -2 unknown
+	Status   TxStatus `json:"status"` // 1 OK, 0 Fail, -1 pending, -2 unknown
 	Nonce    uint64   `json:"nonce"`
 	GasLimit *big.Int `json:"gaslimit"`
 	GasUsed  *big.Int `json:"gasused"`
 	GasPrice *big.Int `json:"gasprice"`
+	Data     string   `json:"data"`
 }
 
 // GetEthereumTxData returns EthereumTxData from bchain.Tx
 func GetEthereumTxData(tx *bchain.Tx) *EthereumTxData {
-	etd := EthereumTxData{Status: txStatusPending}
-	csd, ok := tx.CoinSpecificData.(completeTransaction)
+	return GetEthereumTxDataFromSpecificData(tx.CoinSpecificData)
+}
+
+// GetEthereumTxDataFromSpecificData returns EthereumTxData from coinSpecificData
+func GetEthereumTxDataFromSpecificData(coinSpecificData interface{}) *EthereumTxData {
+	etd := EthereumTxData{Status: TxStatusPending}
+	csd, ok := coinSpecificData.(completeTransaction)
 	if ok {
 		if csd.Tx != nil {
 			etd.Nonce, _ = hexutil.DecodeUint64(csd.Tx.AccountNonce)
 			etd.GasLimit, _ = hexutil.DecodeBig(csd.Tx.GasLimit)
 			etd.GasPrice, _ = hexutil.DecodeBig(csd.Tx.GasPrice)
+			etd.Data = csd.Tx.Payload
 		}
 		if csd.Receipt != nil {
 			switch csd.Receipt.Status {
 			case "0x1":
-				etd.Status = txStatusOK
+				etd.Status = TxStatusOK
 			case "": // old transactions did not set status
-				etd.Status = txStatusUnknown
+				etd.Status = TxStatusUnknown
 			default:
-				etd.Status = txStatusFailure
+				etd.Status = TxStatusFailure
 			}
 			etd.GasUsed, _ = hexutil.DecodeBig(csd.Receipt.GasUsed)
 		}

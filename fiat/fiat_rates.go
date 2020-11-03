@@ -1,7 +1,6 @@
 package fiat
 
 import (
-	"blockbook/db"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,6 +8,7 @@ import (
 	"time"
 
 	"github.com/golang/glog"
+	"github.com/trezor/blockbook/db"
 )
 
 // OnNewFiatRatesTicker is used to send notification about a new FiatRates ticker
@@ -143,7 +143,7 @@ func (rd *RatesDownloader) findEarliestMarketData() (*time.Time, error) {
 // syncLatest downloads the latest FiatRates data every rd.PeriodSeconds
 func (rd *RatesDownloader) syncLatest() error {
 	timer := time.NewTimer(rd.periodSeconds)
-	var lastTickerRates map[string]float64 = nil
+	var lastTickerRates map[string]float64
 	sameTickerCounter := 0
 	for {
 		ticker, err := rd.downloader.getTicker(nil)

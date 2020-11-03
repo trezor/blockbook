@@ -1,7 +1,6 @@
 package btc
 
 import (
-	"blockbook/bchain"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -12,8 +11,8 @@ import (
 	"time"
 
 	"github.com/golang/glog"
-
 	"github.com/juju/errors"
+	"github.com/trezor/blockbook/bchain"
 )
 
 // https://whatthefee.io returns

@@ -3,13 +3,14 @@
 package eth
 
 import (
-	"blockbook/bchain"
-	"blockbook/tests/dbtestdata"
 	"encoding/hex"
 	"fmt"
 	"math/big"
 	"reflect"
 	"testing"
+
+	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/tests/dbtestdata"
 )
 
 func TestEthParser_GetAddrDescFromAddress(t *testing.T) {
@@ -261,6 +262,33 @@ func TestEthereumParser_UnpackTx(t *testing.T) {
 			}
 			if got1 != tt.want1 {
 				t.Errorf("EthereumParser.UnpackTx() got1 = %v, want %v", got1, tt.want1)
+			}
+		})
+	}
+}
+
+func TestEthereumParser_GetEthereumTxData(t *testing.T) {
+	tests := []struct {
+		name string
+		tx   *bchain.Tx
+		want string
+	}{
+		{
+			name: "Test empty data",
+			tx:   &testTx1,
+			want: "0x",
+		},
+		{
+			name: "Test non empty data",
+			tx:   &testTx2,
+			want: "0xa9059cbb000000000000000000000000555ee11fbddc0e49a9bab358a8941ad95ffdb48f00000000000000000000000000000000000000000000021e19e0c9bab2400000",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := GetEthereumTxData(tt.tx)
+			if got.Data != tt.want {
+				t.Errorf("EthereumParser.GetEthereumTxData() = %v, want %v", got.Data, tt.want)
 			}
 		})
 	}

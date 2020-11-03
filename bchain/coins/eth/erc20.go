@@ -1,7 +1,6 @@
 package eth
 
 import (
-	"blockbook/bchain"
 	"bytes"
 	"context"
 	"encoding/hex"
@@ -13,6 +12,7 @@ import (
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/golang/glog"
 	"github.com/juju/errors"
+	"github.com/trezor/blockbook/bchain"
 )
 
 var erc20abi = `[{"constant":true,"inputs":[],"name":"name","outputs":[{"name":"","type":"string"}],"payable":false,"type":"function","signature":"0x06fdde03"},
@@ -145,24 +145,26 @@ func parseErc20StringProperty(contractDesc bchain.AddressDescriptor, data string
 		n := parseErc20NumericProperty(contractDesc, data[64:128])
 		if n != nil {
 			l := n.Uint64()
-			if 2*int(l) <= len(data)-128 {
+			if l > 0 && 2*int(l) <= len(data)-128 {
 				b, err := hex.DecodeString(data[128 : 128+2*l])
 				if err == nil {
 					return string(b)
 				}
 			}
 		}
-	} else if len(data) == 64 {
-		// allow string properties as 32 bytes of UTF-8 data
-		b, err := hex.DecodeString(data)
-		if err == nil {
-			i := bytes.Index(b, []byte{0})
-			if i > 0 {
-				b = b[:i]
-			}
-			if utf8.Valid(b) {
-				return string(b)
-			}
+	}
+	// allow string properties as UTF-8 data
+	b, err := hex.DecodeString(data)
+	if err == nil {
+		i := bytes.Index(b, []byte{0})
+		if i > 32 {
+			i = 32
+		}
+		if i > 0 {
+			b = b[:i]
+		}
+		if utf8.Valid(b) {
+			return string(b)
 		}
 	}
 	if glog.V(1) {
@@ -181,18 +183,26 @@ func (b *EthereumRPC) EthereumTypeGetErc20ContractInfo(contractDesc bchain.Addre
 		address := EIP55Address(contractDesc)
 		data, err := b.ethCall(erc20NameSignature, address)
 		if err != nil {
-			return nil, err
+			// ignore the error from the eth_call - since geth v1.9.15 they changed the behavior
+			// and returning error "execution reverted" for some non contract addresses
+			// https://github.com/ethereum/go-ethereum/issues/21249#issuecomment-648647672
+			glog.Warning(errors.Annotatef(err, "erc20NameSignature %v", address))
+			return nil, nil
+			// return nil, errors.Annotatef(err, "erc20NameSignature %v", address)
 		}
 		name := parseErc20StringProperty(contractDesc, data)
 		if name != "" {
 			data, err = b.ethCall(erc20SymbolSignature, address)
 			if err != nil {
-				return nil, err
+				glog.Warning(errors.Annotatef(err, "erc20SymbolSignature %v", address))
+				return nil, nil
+				// return nil, errors.Annotatef(err, "erc20SymbolSignature %v", address)
 			}
 			symbol := parseErc20StringProperty(contractDesc, data)
 			data, err = b.ethCall(erc20DecimalsSignature, address)
 			if err != nil {
-				return nil, err
+				glog.Warning(errors.Annotatef(err, "erc20DecimalsSignature %v", address))
+				// return nil, errors.Annotatef(err, "erc20DecimalsSignature %v", address)
 			}
 			contract = &bchain.Erc20Contract{
 				Contract: address,

@@ -1,13 +1,6 @@
 package main
 
 import (
-	"blockbook/api"
-	"blockbook/bchain"
-	"blockbook/bchain/coins"
-	"blockbook/common"
-	"blockbook/db"
-	"blockbook/fiat"
-	"blockbook/server"
 	"context"
 	"encoding/json"
 	"flag"
@@ -26,6 +19,13 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/juju/errors"
+	"github.com/trezor/blockbook/api"
+	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/bchain/coins"
+	"github.com/trezor/blockbook/common"
+	"github.com/trezor/blockbook/db"
+	"github.com/trezor/blockbook/fiat"
+	"github.com/trezor/blockbook/server"
 )
 
 // debounce too close requests for resync
@@ -54,6 +54,7 @@ var (
 
 	synchronize = flag.Bool("sync", false, "synchronizes until tip, if together with zeromq, keeps index synchronized")
 	repair      = flag.Bool("repair", false, "repair the database")
+	fixUtxo     = flag.Bool("fixutxo", false, "check and fix utxo db and exit")
 	prof        = flag.String("prof", "", "http server binding [address]:port of the interface to profiling data /debug/pprof/ (default no profiling)")
 
 	syncChunk   = flag.Int("chunk", 100, "block chunk size for processing in bulk mode")
@@ -99,6 +100,7 @@ var (
 	internalState                 *common.InternalState
 	callbacksOnNewBlock           []bchain.OnNewBlockFunc
 	callbacksOnNewTxAddr          []bchain.OnNewTxAddrFunc
+	callbacksOnNewTx              []bchain.OnNewTxFunc
 	callbacksOnNewFiatRatesTicker []fiat.OnNewFiatRatesTicker
 	chanOsSignal                  chan os.Signal
 	inShutdown                    int32
@@ -183,7 +185,26 @@ func mainWithExitCode() int {
 		glog.Error("internalState: ", err)
 		return exitCodeFatal
 	}
+
+	// fix possible inconsistencies in the UTXO index
+	if *fixUtxo || !internalState.UtxoChecked {
+		err = index.FixUtxos(chanOsSignal)
+		if err != nil {
+			glog.Error("fixUtxos: ", err)
+			return exitCodeFatal
+		}
+		internalState.UtxoChecked = true
+	}
 	index.SetInternalState(internalState)
+	if *fixUtxo {
+		err = index.StoreInternalState(internalState)
+		if err != nil {
+			glog.Error("StoreInternalState: ", err)
+			return exitCodeFatal
+		}
+		return exitCodeOK
+	}
+
 	if internalState.DbState != common.DbStateClosed {
 		if internalState.DbState == common.DbStateInconsistent {
 			glog.Error("internalState: database is in inconsistent state and cannot be used")
@@ -278,7 +299,7 @@ func mainWithExitCode() int {
 		if chain.GetChainParser().GetChainType() == bchain.ChainBitcoinType {
 			addrDescForOutpoint = index.AddrDescForOutpoint
 		}
-		err = chain.InitializeMempool(addrDescForOutpoint, onNewTxAddr)
+		err = chain.InitializeMempool(addrDescForOutpoint, onNewTxAddr, onNewTx)
 		if err != nil {
 			glog.Error("initializeMempool ", err)
 			return exitCodeFatal
@@ -299,6 +320,7 @@ func mainWithExitCode() int {
 		// start full public interface
 		callbacksOnNewBlock = append(callbacksOnNewBlock, publicServer.OnNewBlock)
 		callbacksOnNewTxAddr = append(callbacksOnNewTxAddr, publicServer.OnNewTxAddr)
+		callbacksOnNewTx = append(callbacksOnNewTx, publicServer.OnNewTx)
 		callbacksOnNewFiatRatesTicker = append(callbacksOnNewFiatRatesTicker, publicServer.OnNewFiatRatesTicker)
 		publicServer.ConnectFullPublicInterface()
 	}
@@ -556,6 +578,7 @@ func storeInternalStateLoop() {
 		close(stopCompute)
 		close(chanStoreInternalStateDone)
 	}()
+	signal.Notify(stopCompute, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 	var computeRunning bool
 	lastCompute := time.Now()
 	lastAppInfo := time.Now()
@@ -596,6 +619,12 @@ func storeInternalStateLoop() {
 func onNewTxAddr(tx *bchain.Tx, desc bchain.AddressDescriptor) {
 	for _, c := range callbacksOnNewTxAddr {
 		c(tx, desc)
+	}
+}
+
+func onNewTx(tx *bchain.MempoolTx) {
+	for _, c := range callbacksOnNewTx {
+		c(tx)
 	}
 }
 

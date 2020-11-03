@@ -1,11 +1,12 @@
 package dbtestdata
 
 import (
-	"blockbook/bchain"
 	"context"
 	"encoding/json"
 	"errors"
 	"math/big"
+
+	"github.com/trezor/blockbook/bchain"
 )
 
 type fakeBlockChain struct {
@@ -25,7 +26,7 @@ func (c *fakeBlockChain) Initialize() error {
 	return nil
 }
 
-func (c *fakeBlockChain) InitializeMempool(addrDescForOutpoint bchain.AddrDescForOutpointFunc, onNewTxAddr bchain.OnNewTxAddrFunc) error {
+func (c *fakeBlockChain) InitializeMempool(addrDescForOutpoint bchain.AddrDescForOutpointFunc, onNewTxAddr bchain.OnNewTxAddrFunc, onNewTx bchain.OnNewTxFunc) error {
 	return nil
 }
 

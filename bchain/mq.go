@@ -73,15 +73,24 @@ func (mq *MQ) run(callback func(NotificationType)) {
 		mq.finished <- nil
 	}()
 	mq.isRunning = true
+	repeatedError := false
 	for {
 		msg, err := mq.socket.RecvMessageBytes(0)
 		if err != nil {
 			if zmq.AsErrno(err) == zmq.Errno(zmq.ETERM) || err.Error() == "Socket is closed" {
 				break
 			}
-			glog.Error("MQ RecvMessageBytes error ", err, ", ", zmq.AsErrno(err))
+			// suppress logging of error for the first time
+			// programs built with Go 1.14 will receive more signals
+			// the error should be resolved by retrying the call
+			// see https://golang.org/doc/go1.14#runtime
+			if repeatedError {
+				glog.Error("MQ RecvMessageBytes error ", err, ", ", zmq.AsErrno(err))
+			}
+			repeatedError = true
 			time.Sleep(100 * time.Millisecond)
 		}
+		repeatedError = false
 		if msg != nil && len(msg) >= 3 {
 			var nt NotificationType
 			switch string(msg[0]) {
