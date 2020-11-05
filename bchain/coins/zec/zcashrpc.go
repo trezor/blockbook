@@ -103,6 +103,7 @@ func (z *ZCashRPC) GetChainInfo() (*bchain.ChainInfo, error) {
 		ProtocolVersion: string(networkInfo.Result.ProtocolVersion),
 		Timeoffset:      networkInfo.Result.Timeoffset,
 		Consensus:       chainInfo.Result.Consensus,
+		Warnings:        networkInfo.Result.Warnings,
 	}, nil
 }
 
