@@ -1777,6 +1777,7 @@ func (w *Worker) GetSystemInfo(internal bool) (*SystemInfo, error) {
 		Timeoffset:      ci.Timeoffset,
 		Version:         ci.Version,
 		Warnings:        ci.Warnings,
+		Consensus:       ci.Consensus,
 	}
 	glog.Info("GetSystemInfo finished in ", time.Since(start))
 	return &SystemInfo{blockbookInfo, backendInfo}, nil

@@ -161,17 +161,18 @@ type MempoolEntry struct {
 
 // ChainInfo is used to get information about blockchain
 type ChainInfo struct {
-	Chain           string  `json:"chain"`
-	Blocks          int     `json:"blocks"`
-	Headers         int     `json:"headers"`
-	Bestblockhash   string  `json:"bestblockhash"`
-	Difficulty      string  `json:"difficulty"`
-	SizeOnDisk      int64   `json:"size_on_disk"`
-	Version         string  `json:"version"`
-	Subversion      string  `json:"subversion"`
-	ProtocolVersion string  `json:"protocolversion"`
-	Timeoffset      float64 `json:"timeoffset"`
-	Warnings        string  `json:"warnings"`
+	Chain           string      `json:"chain"`
+	Blocks          int         `json:"blocks"`
+	Headers         int         `json:"headers"`
+	Bestblockhash   string      `json:"bestblockhash"`
+	Difficulty      string      `json:"difficulty"`
+	SizeOnDisk      int64       `json:"size_on_disk"`
+	Version         string      `json:"version"`
+	Subversion      string      `json:"subversion"`
+	ProtocolVersion string      `json:"protocolversion"`
+	Timeoffset      float64     `json:"timeoffset"`
+	Warnings        string      `json:"warnings"`
+	Consensus       interface{} `json:"consensus,omitempty"`
 }
 
 // RPCError defines rpc error returned by backend
