@@ -7,11 +7,29 @@ import (
 	"github.com/juju/errors"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/bchain/coins/btc"
+	"github.com/trezor/blockbook/common"
 )
 
 // ZCashRPC is an interface to JSON-RPC bitcoind service
 type ZCashRPC struct {
 	*btc.BitcoinRPC
+}
+
+type ResGetBlockChainInfo struct {
+	Error  *bchain.RPCError `json:"error"`
+	Result struct {
+		Chain         string            `json:"chain"`
+		Blocks        int               `json:"blocks"`
+		Headers       int               `json:"headers"`
+		Bestblockhash string            `json:"bestblockhash"`
+		Difficulty    common.JSONNumber `json:"difficulty"`
+		Pruned        bool              `json:"pruned"`
+		SizeOnDisk    int64             `json:"size_on_disk"`
+		Consensus     struct {
+			Chaintip  string `json:"chaintip"`
+			Nextblock string `json:"nextblock"`
+		} `json:"consensus"`
+	} `json:"result"`
 }
 
 // NewZCashRPC returns new ZCashRPC instance
@@ -52,6 +70,41 @@ func (z *ZCashRPC) Initialize() error {
 	glog.Info("rpc: block chain ", params.Name)
 
 	return nil
+}
+
+func (z *ZCashRPC) GetChainInfo() (*bchain.ChainInfo, error) {
+	chainInfo := ResGetBlockChainInfo{}
+	err := z.Call(&btc.CmdGetBlockChainInfo{Method: "getblockchaininfo"}, &chainInfo)
+	if err != nil {
+		return nil, err
+	}
+	if chainInfo.Error != nil {
+		return nil, chainInfo.Error
+	}
+
+	networkInfo := btc.ResGetNetworkInfo{}
+	err = z.Call(&btc.CmdGetNetworkInfo{Method: "getnetworkinfo"}, &networkInfo)
+	if err != nil {
+		return nil, err
+	}
+	if networkInfo.Error != nil {
+		return nil, networkInfo.Error
+	}
+
+	return &bchain.ChainInfo{
+		Bestblockhash:   chainInfo.Result.Bestblockhash,
+		Blocks:          chainInfo.Result.Blocks,
+		Chain:           chainInfo.Result.Chain,
+		Difficulty:      string(chainInfo.Result.Difficulty),
+		Headers:         chainInfo.Result.Headers,
+		SizeOnDisk:      chainInfo.Result.SizeOnDisk,
+		Version:         string(networkInfo.Result.Version),
+		Subversion:      string(networkInfo.Result.Subversion),
+		ProtocolVersion: string(networkInfo.Result.ProtocolVersion),
+		Timeoffset:      networkInfo.Result.Timeoffset,
+		Consensus:       chainInfo.Result.Consensus,
+		Warnings:        networkInfo.Result.Warnings,
+	}, nil
 }
 
 // GetBlock returns block with given hash.
