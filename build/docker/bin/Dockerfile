@@ -36,15 +36,14 @@ RUN strip /opt/rocksdb/ldb /opt/rocksdb/sst_dump && \
 RUN go get github.com/golang/dep/cmd/dep
 RUN go get github.com/gobuffalo/packr/...
 
-# download pre-loaded depencencies
+# pre-load depencencies
 RUN \
     cleanup() { rm -rf $GOPATH/src/blockbook; } && \
     trap cleanup EXIT && \
     cd $GOPATH/src && \
     git clone https://github.com/syscoin/blockbook.git -b dev-4.2.0 && \
     cd blockbook && \
-    dep ensure -vendor-only && \
-    cp -r vendor /build/vendor
+    go mod download
 
 ADD Makefile /build/Makefile
 
