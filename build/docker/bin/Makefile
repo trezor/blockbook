@@ -1,5 +1,4 @@
 SHELL = /bin/bash
-UPDATE_VENDOR ?= 1
 VERSION ?= devel
 GITCOMMIT = $(shell cd /src && git describe --always --dirty)
 BUILDTIME = $(shell date --iso-8601=seconds)
@@ -38,15 +37,6 @@ prepare-sources:
 	rm -rf $(BLOCKBOOK_SRC)
 	mkdir -p $(BLOCKBOOK_BASE)
 	cp -r /src $(BLOCKBOOK_SRC)
-	$(MAKE) prepare-vendor
-
-prepare-vendor:
-	@ if [ "$(UPDATE_VENDOR)" -eq 1 ]; then \
-		echo "Updating vendor"; \
-		cd $(BLOCKBOOK_SRC) && rm -rf vendor* && cp -r /build/vendor . && env GO111MODULE=on go mod vendor ; \
-	else \
-		echo "Update of vendor not demanded, keeping version from src" ; \
-	fi
 
 generate-data:
 	cd $(BLOCKBOOK_SRC) && packr clean && packr
