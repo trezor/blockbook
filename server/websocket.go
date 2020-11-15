@@ -144,6 +144,7 @@ func (s *WebsocketServer) GetHandler() http.Handler {
 
 func (s *WebsocketServer) closeChannel(c *websocketChannel) {
 	if c.CloseOut() {
+		c.conn.Close()
 		s.onDisconnect(c)
 	}
 }
@@ -152,7 +153,6 @@ func (c *websocketChannel) CloseOut() bool {
 	c.aliveLock.Lock()
 	defer c.aliveLock.Unlock()
 	if c.alive {
-		c.conn.Close()
 		c.alive = false
 		//clean out
 		close(c.out)
