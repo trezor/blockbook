@@ -44,6 +44,7 @@ func NewSyncWorker(db *RocksDB, chain bchain.BlockChain, syncWorkers, syncChunk 
 }
 
 var errSynced = errors.New("synced")
+var errFork = errors.New("fork")
 
 // ErrOperationInterrupted is returned when operation is interrupted by OS signal
 var ErrOperationInterrupted = errors.New("ErrOperationInterrupted")
@@ -105,7 +106,7 @@ func (w *SyncWorker) resyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 		}
 		if remoteHash != localBestHash {
 			// forked - the remote hash differs from the local hash at the same height
-			glog.Info("resync: local is forked at height ", localBestHeight, ", local hash ", localBestHash, ", remote hash", remoteHash)
+			glog.Info("resync: local is forked at height ", localBestHeight, ", local hash ", localBestHash, ", remote hash ", remoteHash)
 			return w.handleFork(localBestHeight, localBestHash, onNewBlock, initialSync)
 		}
 		glog.Info("resync: local at ", localBestHeight, " is behind")
@@ -141,7 +142,11 @@ func (w *SyncWorker) resyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 			return w.resyncIndex(onNewBlock, initialSync)
 		}
 	}
-	return w.connectBlocks(onNewBlock, initialSync)
+	err = w.connectBlocks(onNewBlock, initialSync)
+	if err == errFork {
+		return w.resyncIndex(onNewBlock, initialSync)
+	}
+	return err
 }
 
 func (w *SyncWorker) handleFork(localBestHeight uint32, localBestHash string, onNewBlock bchain.OnNewBlockFunc, initialSync bool) error {
@@ -377,9 +382,9 @@ func (w *SyncWorker) getBlockChain(out chan blockResult, done chan struct{}) {
 
 	hash := w.startHash
 	height := w.startHeight
+	prevHash := ""
 
-	// some coins do not return Next hash
-	// must loop until error
+	// loop until error ErrBlockNotFound
 	for {
 		select {
 		case <-done:
@@ -394,6 +399,12 @@ func (w *SyncWorker) getBlockChain(out chan blockResult, done chan struct{}) {
 			out <- blockResult{err: err}
 			return
 		}
+		if block.Prev != "" && prevHash != "" && prevHash != block.Prev {
+			glog.Infof("sync: fork detected at height %d %s, local prevHash %s, remote prevHash %s", height, block.Hash, prevHash, block.Prev)
+			out <- blockResult{err: errFork}
+			return
+		}
+		prevHash = block.Hash
 		hash = block.Next
 		height++
 		out <- blockResult{block: block}
