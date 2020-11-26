@@ -1,9 +1,9 @@
 {
   "coin": {
-    "name": "Zcoin",
-    "shortcut": "XZC",
-    "label": "Zcoin",
-    "alias": "zcoin"
+    "name": "Firo",
+    "shortcut": "FIRO",
+    "label": "Firo",
+    "alias": "firo"
   },
   "ports": {
     "backend_rpc": 8050,
@@ -19,13 +19,13 @@
     "message_queue_binding_template": "tcp://127.0.0.1:{{.Ports.BackendMessageQueue}}"
   },
   "backend": {
-    "package_name": "backend-zcoin",
+    "package_name": "backend-firo",
     "package_revision": "satoshilabs-1",
-    "system_user": "zcoin",
-    "version": "0.14.0.4",
-    "binary_url": "https://github.com/zcoinofficial/zcoin/releases/download/v0.14.0.4/zcoin-0.14.0.4-linux64.tar.gz",
+    "system_user": "firo",
+    "version": "0.14.1.1beta3",
+    "binary_url": "https://github.com/firoorg/firo/releases/download/v0.14.1.1beta3/zcoin-0.14.1.1beta3-linux64.tar.gz",
     "verification_type": "sha256",
-    "verification_source": "d060c76fe5fc0fe2527485035e984413881c4a845f65c4c9e71cc298b227a816",
+    "verification_source": "689282d0e798b85ace7496656208366fab12f3ca27e36fdb6f3fed8dfd220e92",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
       "bin/tor",
@@ -103,8 +103,8 @@
     }
   },
   "blockbook": {
-    "package_name": "blockbook-zcoin",
-    "system_user": "blockbook-zcoin",
+    "package_name": "blockbook-firo",
+    "system_user": "blockbook-firo",
     "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
     "public_binding_template": ":{{.Ports.BlockbookPublic}}",
     "explorer_url": "",

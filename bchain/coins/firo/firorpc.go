@@ -1,4 +1,4 @@
-package xzc
+package firo
 
 import (
 	"encoding/hex"
@@ -10,19 +10,19 @@ import (
 	"github.com/trezor/blockbook/bchain/coins/btc"
 )
 
-type ZcoinRPC struct {
+type FiroRPC struct {
 	*btc.BitcoinRPC
 }
 
-func NewZcoinRPC(config json.RawMessage, pushHandler func(bchain.NotificationType)) (bchain.BlockChain, error) {
+func NewFiroRPC(config json.RawMessage, pushHandler func(bchain.NotificationType)) (bchain.BlockChain, error) {
 	// init base implementation
 	bc, err := btc.NewBitcoinRPC(config, pushHandler)
 	if err != nil {
 		return nil, err
 	}
 
-	// init zcoin implementation
-	zc := &ZcoinRPC{
+	// init firo implementation
+	zc := &FiroRPC{
 		BitcoinRPC: bc.(*btc.BitcoinRPC),
 	}
 
@@ -35,7 +35,7 @@ func NewZcoinRPC(config json.RawMessage, pushHandler func(bchain.NotificationTyp
 	return zc, nil
 }
 
-func (zc *ZcoinRPC) Initialize() error {
+func (zc *FiroRPC) Initialize() error {
 	ci, err := zc.GetChainInfo()
 	if err != nil {
 		return err
@@ -45,7 +45,7 @@ func (zc *ZcoinRPC) Initialize() error {
 	params := GetChainParams(chainName)
 
 	// always create parser
-	zc.Parser = NewZcoinParser(params, zc.ChainConfig)
+	zc.Parser = NewFiroParser(params, zc.ChainConfig)
 
 	// parameters for getInfo request
 	if params.Net == MainnetMagic {
@@ -61,7 +61,7 @@ func (zc *ZcoinRPC) Initialize() error {
 	return nil
 }
 
-func (zc *ZcoinRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
+func (zc *FiroRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 	var err error
 
 	if hash == "" {
@@ -96,7 +96,7 @@ func (zc *ZcoinRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) 
 	return block, nil
 }
 
-func (zc *ZcoinRPC) GetBlockInfo(hash string) (*bchain.BlockInfo, error) {
+func (zc *FiroRPC) GetBlockInfo(hash string) (*bchain.BlockInfo, error) {
 	glog.V(1).Info("rpc: getblock (verbosity=true) ", hash)
 
 	res := btc.ResGetBlockInfo{}
@@ -117,7 +117,7 @@ func (zc *ZcoinRPC) GetBlockInfo(hash string) (*bchain.BlockInfo, error) {
 	return &res.Result, nil
 }
 
-func (zc *ZcoinRPC) GetBlockWithoutHeader(hash string, height uint32) (*bchain.Block, error) {
+func (zc *FiroRPC) GetBlockWithoutHeader(hash string, height uint32) (*bchain.Block, error) {
 	data, err := zc.GetBlockRaw(hash)
 	if err != nil {
 		return nil, err
@@ -134,7 +134,7 @@ func (zc *ZcoinRPC) GetBlockWithoutHeader(hash string, height uint32) (*bchain.B
 	return block, nil
 }
 
-func (zc *ZcoinRPC) GetBlockRaw(hash string) ([]byte, error) {
+func (zc *FiroRPC) GetBlockRaw(hash string) ([]byte, error) {
 	glog.V(1).Info("rpc: getblock (verbosity=false) ", hash)
 
 	res := btc.ResGetBlockRaw{}
@@ -155,7 +155,7 @@ func (zc *ZcoinRPC) GetBlockRaw(hash string) ([]byte, error) {
 	return hex.DecodeString(res.Result)
 }
 
-func (zc *ZcoinRPC) GetTransactionForMempool(txid string) (*bchain.Tx, error) {
+func (zc *FiroRPC) GetTransactionForMempool(txid string) (*bchain.Tx, error) {
 	glog.V(1).Info("rpc: getrawtransaction nonverbose ", txid)
 
 	res := btc.ResGetRawTransactionNonverbose{}
@@ -183,7 +183,7 @@ func (zc *ZcoinRPC) GetTransactionForMempool(txid string) (*bchain.Tx, error) {
 	return tx, nil
 }
 
-func (zc *ZcoinRPC) GetTransaction(txid string) (*bchain.Tx, error) {
+func (zc *FiroRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 	r, err := zc.getRawTransaction(txid)
 	if err != nil {
 		return nil, err
@@ -198,14 +198,14 @@ func (zc *ZcoinRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 	return tx, nil
 }
 
-func (zc *ZcoinRPC) GetTransactionSpecific(tx *bchain.Tx) (json.RawMessage, error) {
+func (zc *FiroRPC) GetTransactionSpecific(tx *bchain.Tx) (json.RawMessage, error) {
 	if csd, ok := tx.CoinSpecificData.(json.RawMessage); ok {
 		return csd, nil
 	}
 	return zc.getRawTransaction(tx.Txid)
 }
 
-func (zc *ZcoinRPC) getRawTransaction(txid string) (json.RawMessage, error) {
+func (zc *FiroRPC) getRawTransaction(txid string) (json.RawMessage, error) {
 	glog.V(1).Info("rpc: getrawtransaction ", txid)
 
 	res := btc.ResGetRawTransaction{}

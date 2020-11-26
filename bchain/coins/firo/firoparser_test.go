@@ -1,6 +1,6 @@
 // +build unittest
 
-package xzc
+package firo
 
 import (
 	"bytes"
@@ -365,32 +365,32 @@ func TestMain(m *testing.M) {
 func TestGetAddrDesc(t *testing.T) {
 	type args struct {
 		tx     bchain.Tx
-		parser *ZcoinParser
+		parser *FiroParser
 	}
 	tests := []struct {
 		name string
 		args args
 	}{
 		{
-			name: "xzc-1",
+			name: "firo-1",
 			args: args{
 				tx:     testTx1,
-				parser: NewZcoinParser(GetChainParams("main"), &btc.Configuration{}),
+				parser: NewFiroParser(GetChainParams("main"), &btc.Configuration{}),
 			},
 		},
 		// FIXME: work around handle zerocoin spend as coinbase
 		// {
-		// 	name: "xzc-2",
+		// 	name: "firo-2",
 		// 	args: args{
 		// 		tx:     testTx2,
-		// 		parser: NewZcoinParser(GetChainParams("main"), &btc.Configuration{}),
+		// 		parser: NewFiroParser(GetChainParams("main"), &btc.Configuration{}),
 		// 	},
 		// },
 		{
-			name: "xzc-3",
+			name: "firo-3",
 			args: args{
 				tx:     testTx3,
-				parser: NewZcoinParser(GetChainParams("main"), &btc.Configuration{}),
+				parser: NewFiroParser(GetChainParams("main"), &btc.Configuration{}),
 			},
 		},
 	}
@@ -448,7 +448,7 @@ func TestGetAddrDescFromVoutForMint(t *testing.T) {
 			wantErr: false,
 		},
 	}
-	parser := NewZcoinParser(GetChainParams("main"), &btc.Configuration{})
+	parser := NewFiroParser(GetChainParams("main"), &btc.Configuration{})
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -498,7 +498,7 @@ func TestGetAddressesFromAddrDescForMint(t *testing.T) {
 			wantErr: false,
 		},
 	}
-	parser := NewZcoinParser(GetChainParams("main"), &btc.Configuration{})
+	parser := NewFiroParser(GetChainParams("main"), &btc.Configuration{})
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -523,7 +523,7 @@ func TestPackTx(t *testing.T) {
 		tx        bchain.Tx
 		height    uint32
 		blockTime int64
-		parser    *ZcoinParser
+		parser    *FiroParser
 	}
 	tests := []struct {
 		name    string
@@ -532,68 +532,68 @@ func TestPackTx(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "xzc-1",
+			name: "firo-1",
 			args: args{
 				tx:        testTx1,
 				height:    100002,
 				blockTime: 1533980594,
-				parser:    NewZcoinParser(GetChainParams("main"), &btc.Configuration{}),
+				parser:    NewFiroParser(GetChainParams("main"), &btc.Configuration{}),
 			},
 			want:    testTxPacked1,
 			wantErr: false,
 		},
 		// FIXME: work around handle zerocoin spend as coinbase
 		// {
-		// 	name: "xzc-2",
+		// 	name: "firo-2",
 		// 	args: args{
 		// 		tx:        testTx2,
 		// 		height:    11002,
 		// 		blockTime: 1481277009,
-		// 		parser:    NewZcoinParser(GetChainParams("main"), &btc.Configuration{}),
+		// 		parser:    NewFiroParser(GetChainParams("main"), &btc.Configuration{}),
 		// 	},
 		// 	want:    testTxPacked2,
 		// 	wantErr: true,
 		// },
 		{
-			name: "xzc-3",
+			name: "firo-3",
 			args: args{
 				tx:        testTx3,
 				height:    126202,
 				blockTime: 1547091829,
-				parser:    NewZcoinParser(GetChainParams("main"), &btc.Configuration{}),
+				parser:    NewFiroParser(GetChainParams("main"), &btc.Configuration{}),
 			},
 			want:    testTxPacked3,
 			wantErr: false,
 		},
 		{
-			name: "xzc-coinbase",
+			name: "firo-coinbase",
 			args: args{
 				tx:        testTx4,
 				height:    100001,
 				blockTime: 1533977563,
-				parser:    NewZcoinParser(GetChainParams("main"), &btc.Configuration{}),
+				parser:    NewFiroParser(GetChainParams("main"), &btc.Configuration{}),
 			},
 			want:    testTxPacked4,
 			wantErr: false,
 		},
 		{
-			name: "xzc-quorum-commitment-tx",
+			name: "firo-quorum-commitment-tx",
 			args: args{
 				tx:        testTx5,
 				height:    5268,
 				blockTime: 1591752749,
-				parser:    NewZcoinParser(GetChainParams("test"), &btc.Configuration{}),
+				parser:    NewFiroParser(GetChainParams("test"), &btc.Configuration{}),
 			},
 			want:    testTxPacked5,
 			wantErr: false,
 		},
 		{
-			name: "xzc-special-coinbase-tx",
+			name: "firo-special-coinbase-tx",
 			args: args{
 				tx:        testTx6,
 				height:    5300,
 				blockTime: 1591762049,
-				parser:    NewZcoinParser(GetChainParams("test"), &btc.Configuration{}),
+				parser:    NewFiroParser(GetChainParams("test"), &btc.Configuration{}),
 			},
 			want:    testTxPacked6,
 			wantErr: false,
@@ -619,7 +619,7 @@ func TestPackTx(t *testing.T) {
 func TestUnpackTx(t *testing.T) {
 	type args struct {
 		packedTx string
-		parser   *ZcoinParser
+		parser   *FiroParser
 	}
 	tests := []struct {
 		name    string
@@ -629,10 +629,10 @@ func TestUnpackTx(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "xzc-1",
+			name: "firo-1",
 			args: args{
 				packedTx: testTxPacked1,
-				parser:   NewZcoinParser(GetChainParams("main"), &btc.Configuration{}),
+				parser:   NewFiroParser(GetChainParams("main"), &btc.Configuration{}),
 			},
 			want:    &testTx1,
 			want1:   100002,
@@ -640,50 +640,50 @@ func TestUnpackTx(t *testing.T) {
 		},
 		// FIXME: work around handle zerocoin spend as coinbase
 		// {
-		// 	name: "xzc-2",
+		// 	name: "firo-2",
 		// 	args: args{
 		// 		packedTx: testTxPacked2,
-		// 		parser:   NewZcoinParser(GetChainParams("main"), &btc.Configuration{}),
+		// 		parser:   NewFiroParser(GetChainParams("main"), &btc.Configuration{}),
 		// 	},
 		// 	want:    &testTx2,
 		// 	want1:   11002,
 		// 	wantErr: true,
 		// },
 		{
-			name: "xzc-3",
+			name: "firo-3",
 			args: args{
 				packedTx: testTxPacked3,
-				parser:   NewZcoinParser(GetChainParams("main"), &btc.Configuration{}),
+				parser:   NewFiroParser(GetChainParams("main"), &btc.Configuration{}),
 			},
 			want:    &testTx3,
 			want1:   126202,
 			wantErr: false,
 		},
 		{
-			name: "xzc-coinbase",
+			name: "firo-coinbase",
 			args: args{
 				packedTx: testTxPacked4,
-				parser:   NewZcoinParser(GetChainParams("main"), &btc.Configuration{}),
+				parser:   NewFiroParser(GetChainParams("main"), &btc.Configuration{}),
 			},
 			want:    &testTx4,
 			want1:   100001,
 			wantErr: false,
 		},
 		{
-			name: "xzc-special-tx",
+			name: "firo-special-tx",
 			args: args{
 				packedTx: testTxPacked5,
-				parser:   NewZcoinParser(GetChainParams("test"), &btc.Configuration{}),
+				parser:   NewFiroParser(GetChainParams("test"), &btc.Configuration{}),
 			},
 			want:    &testTx5,
 			want1:   5268,
 			wantErr: false,
 		},
 		{
-			name: "xzc-special-coinbase-tx",
+			name: "firo-special-coinbase-tx",
 			args: args{
 				packedTx: testTxPacked6,
-				parser:   NewZcoinParser(GetChainParams("test"), &btc.Configuration{}),
+				parser:   NewFiroParser(GetChainParams("test"), &btc.Configuration{}),
 			},
 			want:    &testTx6,
 			want1:   5300,
@@ -714,7 +714,7 @@ func TestUnpackTx(t *testing.T) {
 func TestParseBlock(t *testing.T) {
 	type args struct {
 		rawBlock string
-		parser   *ZcoinParser
+		parser   *FiroParser
 	}
 	tests := []struct {
 		name    string
@@ -727,7 +727,7 @@ func TestParseBlock(t *testing.T) {
 			name: "normal-block",
 			args: args{
 				rawBlock: rawBlock1,
-				parser:   NewZcoinParser(GetChainParams("main"), &btc.Configuration{}),
+				parser:   NewFiroParser(GetChainParams("main"), &btc.Configuration{}),
 			},
 			want: &bchain.Block{
 				BlockHeader: bchain.BlockHeader{
@@ -742,7 +742,7 @@ func TestParseBlock(t *testing.T) {
 			name: "spend-block",
 			args: args{
 				rawBlock: rawBlock2,
-				parser:   NewZcoinParser(GetChainParams("main"), &btc.Configuration{}),
+				parser:   NewFiroParser(GetChainParams("main"), &btc.Configuration{}),
 			},
 			want: &bchain.Block{
 				BlockHeader: bchain.BlockHeader{
@@ -757,7 +757,7 @@ func TestParseBlock(t *testing.T) {
 			name: "special-tx-block",
 			args: args{
 				rawBlock: rawBlock3,
-				parser:   NewZcoinParser(GetChainParams("test"), &btc.Configuration{}),
+				parser:   NewFiroParser(GetChainParams("test"), &btc.Configuration{}),
 			},
 			want: &bchain.Block{
 				BlockHeader: bchain.BlockHeader{
@@ -796,7 +796,7 @@ func TestDecodeTransaction(t *testing.T) {
 	type args struct {
 		enc            wire.MessageEncoding
 		rawTransaction string
-		parser         *ZcoinParser
+		parser         *FiroParser
 		privacyType    byte // 0 as non privacy
 	}
 	tests := []struct {
@@ -810,16 +810,16 @@ func TestDecodeTransaction(t *testing.T) {
 			args: args{
 				enc:            wire.WitnessEncoding,
 				rawTransaction: rawTestTx1,
-				parser:         NewZcoinParser(GetChainParams("main"), &btc.Configuration{}),
+				parser:         NewFiroParser(GetChainParams("main"), &btc.Configuration{}),
 			},
 			want: testTx1,
 		},
 		{
-			name: "coinbase-zcoinspend",
+			name: "coinbase-firospend",
 			args: args{
 				enc:            wire.WitnessEncoding,
 				rawTransaction: rawTestTx2,
-				parser:         NewZcoinParser(GetChainParams("main"), &btc.Configuration{}),
+				parser:         NewFiroParser(GetChainParams("main"), &btc.Configuration{}),
 				privacyType:    OpSigmaSpend,
 			},
 			want: testTx2,
@@ -829,7 +829,7 @@ func TestDecodeTransaction(t *testing.T) {
 			args: args{
 				enc:            wire.WitnessEncoding,
 				rawTransaction: rawTestTx3,
-				parser:         NewZcoinParser(GetChainParams("main"), &btc.Configuration{}),
+				parser:         NewFiroParser(GetChainParams("main"), &btc.Configuration{}),
 			},
 			want: testTx3,
 		},
@@ -838,7 +838,7 @@ func TestDecodeTransaction(t *testing.T) {
 			args: args{
 				enc:            wire.WitnessEncoding,
 				rawTransaction: rawTestTx4,
-				parser:         NewZcoinParser(GetChainParams("main"), &btc.Configuration{}),
+				parser:         NewFiroParser(GetChainParams("main"), &btc.Configuration{}),
 			},
 			want: testTx4,
 		},
@@ -847,7 +847,7 @@ func TestDecodeTransaction(t *testing.T) {
 			args: args{
 				enc:            wire.BaseEncoding,
 				rawTransaction: rawTestTx5,
-				parser:         NewZcoinParser(GetChainParams("main"), &btc.Configuration{}),
+				parser:         NewFiroParser(GetChainParams("main"), &btc.Configuration{}),
 			},
 			want: testTx5,
 		},
@@ -856,7 +856,7 @@ func TestDecodeTransaction(t *testing.T) {
 			args: args{
 				enc:            wire.WitnessEncoding,
 				rawTransaction: rawTestTx5,
-				parser:         NewZcoinParser(GetChainParams("main"), &btc.Configuration{}),
+				parser:         NewFiroParser(GetChainParams("main"), &btc.Configuration{}),
 			},
 			wantErr: true,
 		},
@@ -865,7 +865,7 @@ func TestDecodeTransaction(t *testing.T) {
 			args: args{
 				enc:            wire.WitnessEncoding,
 				rawTransaction: rawTestTx6,
-				parser:         NewZcoinParser(GetChainParams("test"), &btc.Configuration{}),
+				parser:         NewFiroParser(GetChainParams("test"), &btc.Configuration{}),
 			},
 			want: testTx6,
 		},
@@ -876,8 +876,8 @@ func TestDecodeTransaction(t *testing.T) {
 			b, _ := hex.DecodeString(tt.args.rawTransaction)
 			r := bytes.NewReader(b)
 
-			msg := ZcoinMsgTx{}
-			err := msg.XzcDecode(r, 0, tt.args.enc)
+			msg := FiroMsgTx{}
+			err := msg.FiroDecode(r, 0, tt.args.enc)
 
 			if tt.wantErr {
 				if err == nil {
@@ -891,8 +891,8 @@ func TestDecodeTransaction(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			got := tt.args.parser.TxFromZcoinMsgTx(&msg, true)
-			if pErr := tt.args.parser.parseZcoinTx(&got); pErr != nil {
+			got := tt.args.parser.TxFromFiroMsgTx(&msg, true)
+			if pErr := tt.args.parser.parseFiroTx(&got); pErr != nil {
 				t.Fatal(pErr)
 			}
 
