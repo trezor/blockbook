@@ -1010,20 +1010,12 @@ func (s *PublicServer) apiTokenList(r *http.Request, apiVersion int) (interface{
 	erc20Infos := make([]*bchain.Erc20ContractInfo, 0)
 	for _, t := range tokens {
 		if len(t.Contract) > 0 {
-			var iconUrlHandle string
-			if s.chain.GetCoinName() == "BSC" {
-				iconUrlHandle = "bsc"
-			} else if s.chain.GetCoinName() == "BSCTestnet" {
-				iconUrlHandle = "bsct"
-			}
-			iconUrl := fmt.Sprintf("https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/%s/assets/%s/logo.png",
-				iconUrlHandle, t.Contract)
 			info := &bchain.Erc20ContractInfo{
 				Contract: t.Contract,
 				Name:     t.Name,
 				Symbol:   t.Symbol,
 				Decimals: t.Decimals,
-				Icon:     iconUrl,
+				Icon:     "",
 			}
 
 			erc20Infos = append(erc20Infos, info)
@@ -1057,14 +1049,12 @@ func (s *PublicServer) apiTokenInfo(r *http.Request, apiVersion int) (interface{
 		return nil, api.NewAPIError("fail to fetch token info", true)
 	}
 
-	iconUrl := fmt.Sprintf("https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/%s/assets/%s/logo.png", s.chain.GetCoinName(), address)
-
 	erc20Info := &bchain.Erc20ContractInfo{
 		Contract: info.Contract,
 		Name:     info.Name,
 		Symbol:   info.Symbol,
 		Decimals: info.Decimals,
-		Icon:     iconUrl,
+		Icon:     "",
 	}
 
 	return erc20Info, nil
