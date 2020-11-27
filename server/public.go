@@ -1007,15 +1007,14 @@ func (s *PublicServer) apiTokenList(r *http.Request, apiVersion int) (interface{
 		return nil, api.NewAPIError("fail to fetch token list", true)
 	}
 
-	erc20Infos := make([]*bchain.Erc20ContractInfo, 0)
+	erc20Infos := make([]*bchain.Erc20Contract, 0)
 	for _, t := range tokens {
 		if len(t.Contract) > 0 {
-			info := &bchain.Erc20ContractInfo{
+			info := &bchain.Erc20Contract{
 				Contract: t.Contract,
 				Name:     t.Name,
 				Symbol:   t.Symbol,
 				Decimals: t.Decimals,
-				Icon:     "",
 			}
 
 			erc20Infos = append(erc20Infos, info)
@@ -1049,12 +1048,11 @@ func (s *PublicServer) apiTokenInfo(r *http.Request, apiVersion int) (interface{
 		return nil, api.NewAPIError("fail to fetch token info", true)
 	}
 
-	erc20Info := &bchain.Erc20ContractInfo{
+	erc20Info := &bchain.Erc20Contract{
 		Contract: info.Contract,
 		Name:     info.Name,
 		Symbol:   info.Symbol,
 		Decimals: info.Decimals,
-		Icon:     "",
 	}
 
 	return erc20Info, nil
