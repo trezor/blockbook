@@ -335,7 +335,7 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 			if bchainVin.Txid != "" {
 				vin.ValueSat = (*Amount)(&bchainVin.ValueSat)
 				vin.AddrDesc = bchainVin.AddrDesc
-				vin.Addresses, vin.IsAddress, err = w.chainParser.GetAddressesFromAddrDesc(vin.AddrDesc)
+				vin.Addresses, vin.IsAddress, _ = w.chainParser.GetAddressesFromAddrDesc(vin.AddrDesc)
 				if vin.ValueSat != nil {
 					valInSat.Add(&valInSat, (*big.Int)(vin.ValueSat))
 				}
@@ -1777,6 +1777,7 @@ func (w *Worker) GetSystemInfo(internal bool) (*SystemInfo, error) {
 		Timeoffset:      ci.Timeoffset,
 		Version:         ci.Version,
 		Warnings:        ci.Warnings,
+		Consensus:       ci.Consensus,
 	}
 	glog.Info("GetSystemInfo finished in ", time.Since(start))
 	return &SystemInfo{blockbookInfo, backendInfo}, nil
