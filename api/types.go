@@ -153,8 +153,7 @@ type Tx struct {
 	FeesSat          *bchain.Amount           `json:"fees,omitempty"`
 	Hex              string            `json:"hex,omitempty"`
 	Rbf              bool              `json:"rbf,omitempty"`
-	CoinSpecificData interface{}       `json:"-"`
-	CoinSpecificJSON json.RawMessage   `json:"-"`
+	CoinSpecificData json.RawMessage   `json:"coinSpecificData,omitempty"`
 	TokenTransferSummary   []*bchain.TokenTransferSummary   `json:"tokenTransfers,omitempty"`
 	TokenType		 *bchain.TokenType	`json:"tokenType,omitempty"`
 	EthereumSpecific *EthereumSpecific `json:"ethereumSpecific,omitempty"`
