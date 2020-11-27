@@ -22,10 +22,10 @@
     "package_name": "backend-syscoin-testnet",
     "package_revision": "satoshilabs-1",
     "system_user": "syscoin",
-    "version": "4.2.0.0",
-    "binary_url": "https://github.com/syscoin/syscoin/releases/download/v4.2.0/syscoin-4.2.0-x86_64-linux-gnu.tar.gz",
+    "version": "4.1.97.0",
+    "binary_url": "https://github.com/syscoin/syscoin/releases/download/v4.1.97/syscoin-4.1.97-x86_64-linux-gnu.tar.gz",
     "verification_type": "gpg-sha256",
-    "verification_source": "https://github.com/syscoin/syscoin/releases/download/v4.2.0/SHA256SUMS.asc",
+    "verification_source": "https://github.com/syscoin/syscoin/releases/download/v4.1.97/SHA256SUMS.asc",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
       "bin/syscoin-qt"
@@ -59,6 +59,7 @@
       "xpub_magic_segwit_p2sh": 71979618,
       "xpub_magic_segwit_native": 73342198,
       "slip44": 1,
+      "subversion": "/Satoshi:4.1.97/",
       "additional_params": {
         "fiat_rates": "coingecko",
         "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"syscoin\", \"periodSeconds\": 60}"
