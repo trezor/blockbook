@@ -40,8 +40,13 @@
     "server_config_file": "syscoin.conf",
     "client_config_file": "bitcoin_client.conf",
     "additional_params": {
-      "deprecatedrpc": "estimatefee"
+      "deprecatedrpc": "estimatefee",
+      "addnode": [
+        "54.190.239.153",
+        "52.40.171.92"
+      ]
     }
+    
   },
   "blockbook": {
     "package_name": "blockbook-syscoin-testnet",
