@@ -2,7 +2,6 @@ package ghost
 
 import (
 	"encoding/json"
-
 	"github.com/golang/glog"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/bchain/coins/btc"
@@ -24,6 +23,7 @@ func NewGhostRPC(config json.RawMessage, pushHandler func(bchain.NotificationTyp
 		b.(*btc.BitcoinRPC),
 	}
 	s.RPCMarshaler = btc.JSONMarshalerV2{}
+	s.ChainConfig.Parse = false
 	s.ChainConfig.SupportsEstimateFee = false
 
 	return s, nil
@@ -58,5 +58,6 @@ func (b *GhostRPC) Initialize() error {
 
 // GetBlock returns block with given hash.
 func (g *GhostRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
-	return g.GetBlockFull(hash)
+	block, err := g.GetBlockFull(hash)
+	return block, err
 }

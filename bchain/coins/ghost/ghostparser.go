@@ -3,7 +3,6 @@ package ghost
 import (
 	"github.com/martinboehm/btcd/wire"
 	"github.com/martinboehm/btcutil/chaincfg"
-	"github.com/martinboehm/btcutil/txscript"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/bchain/coins/btc"
 )
@@ -43,7 +42,7 @@ func NewGhostParser(params *chaincfg.Params, c *btc.Configuration) *GhostParser 
 		BitcoinParser: btc.NewBitcoinParser(params, c),
 		baseparser:    &bchain.BaseParser{},
 	}
-	p.OutputScriptToAddressesFunc = p.outputScriptToAddresses
+	// p.OutputScriptToAddressesFunc = p.outputScriptToAddresses
 	return p
 }
 
@@ -67,11 +66,40 @@ func GetChainParams(chain string) *chaincfg.Params {
 	}
 }
 
+func (p *GhostParser) GetAddrDescFromVout(output *bchain.Vout) (bchain.AddressDescriptor, error) {
+	addrs := output.ScriptPubKey.Addresses
+	if addrs == nil || len(addrs) == 0 {
+		return nil, nil
+	}
+	var addressByte []byte
+	for i := range output.ScriptPubKey.Addresses {
+		addressByte = append(addressByte, output.ScriptPubKey.Addresses[i]...)
+	}
+	return bchain.AddressDescriptor(addressByte), nil
+}
+
+func (p *GhostParser) GetAddressesFromAddrDesc(addrDesc bchain.AddressDescriptor) ([]string, bool, error) {
+	var addrs []string
+	if addrDesc != nil {
+		addrs = append(addrs, string(addrDesc))
+	}
+	return addrs, true, nil
+}
+
+/*
 func (p *GhostParser) outputScriptToAddresses(script []byte) ([]string, bool, error) {
 	sc, addresses, _, err := txscript.ExtractPkScriptAddrs(script, p.Params)
 	if err != nil {
 		return nil, false, err
 	}
+	// Need to handle specific Ghost types
+	if sc == txscript.NonStandardTy {
+		pops, err := txscript.PushedData(script)
+		print(pops, err)
+		//addr, err := btcutil.NewAddressPubKeyHash(pops[0], p.Params)
+		//print(addr.EncodeAddress(), err)
+	 }
+
 	rv := make([]string, len(addresses))
 	for i, a := range addresses {
 		rv[i] = a.EncodeAddress()
@@ -87,3 +115,4 @@ func (p *GhostParser) outputScriptToAddresses(script []byte) ([]string, bool, er
 	}
 	return rv, s, nil
 }
+*/
