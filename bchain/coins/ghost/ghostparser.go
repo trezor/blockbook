@@ -66,6 +66,11 @@ func GetChainParams(chain string) *chaincfg.Params {
 	}
 }
 
+func (p *GhostParser) GetAddrDescFromAddress(address string) (bchain.AddressDescriptor, error) {
+	addressByte := []byte(address)
+	return bchain.AddressDescriptor(addressByte), nil
+}
+
 func (p *GhostParser) GetAddrDescFromVout(output *bchain.Vout) (bchain.AddressDescriptor, error) {
 	addrs := output.ScriptPubKey.Addresses
 	if addrs == nil || len(addrs) == 0 {

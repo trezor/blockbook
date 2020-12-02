@@ -58,6 +58,13 @@ func (b *GhostRPC) Initialize() error {
 
 // GetBlock returns block with given hash.
 func (g *GhostRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
+	var err error
+	if hash == "" && height > 0 {
+		hash, err = g.GetBlockHash(height)
+		if err != nil {
+			return nil, err
+		}
+	}
 	block, err := g.GetBlockFull(hash)
 	return block, err
 }
