@@ -77,10 +77,13 @@ func (p *SyscoinParser) GetMaxAddrLength() int {
 
 // GetChainParams returns network parameters
 func GetChainParams(chain string) *chaincfg.Params {
+	if !chaincfg.IsRegistered(&chaincfg.MainNetParams) {
+		chaincfg.RegisterBitcoinParams()
+	}
 	if !chaincfg.IsRegistered(&MainNetParams) {
 		err := chaincfg.Register(&MainNetParams)
 		if err == nil {
-			err = chaincfg.Register(&RegtestParams)
+			err = chaincfg.Register(&TestnetParams)
 		}
 		if err != nil {
 			panic(err)
