@@ -18,7 +18,8 @@ import (
 // magic numbers
 const (
 	MainnetMagic wire.BitcoinNet = 0xffcae2ce
-	RegtestMagic wire.BitcoinNet = 0xdab5bffa
+	TestnetMagic wire.BitcoinNet = 0xcee2cafe
+
 	SYSCOIN_TX_VERSION_ALLOCATION_BURN_TO_SYSCOIN int32 = 128
 	SYSCOIN_TX_VERSION_SYSCOIN_BURN_TO_ALLOCATION int32 = 129
 	SYSCOIN_TX_VERSION_ASSET_ACTIVATE int32 = 130
@@ -33,7 +34,7 @@ const (
 // chain parameters
 var (
 	MainNetParams chaincfg.Params
-	RegtestParams chaincfg.Params
+	TestnetParams chaincfg.Params
 )
 
 func init() {
@@ -45,13 +46,13 @@ func init() {
 	MainNetParams.ScriptHashAddrID = []byte{5} // base68 prefix: 3
 	MainNetParams.Bech32HRPSegwit = "sys"
 
-	RegtestParams = chaincfg.RegressionNetParams
-	RegtestParams.Net = RegtestMagic
+	TestnetParams = chaincfg.TestNet3Params
+	TestnetParams.Net = TestnetMagic
 
-	// Regtest address encoding magics
-	RegtestParams.PubKeyHashAddrID = []byte{65} // base58 prefix: t
-	RegtestParams.ScriptHashAddrID = []byte{196} // base58 prefix: 2
-	RegtestParams.Bech32HRPSegwit = "tsys"
+	// Testnet address encoding magics
+	TestnetParams.PubKeyHashAddrID = []byte{65} // base58 prefix: t
+	TestnetParams.ScriptHashAddrID = []byte{196} // base58 prefix: 2
+	TestnetParams.Bech32HRPSegwit = "tsys"
 }
 
 // SyscoinParser handle
@@ -87,8 +88,10 @@ func GetChainParams(chain string) *chaincfg.Params {
 	}
 
 	switch chain {
+	case "test":
+		return &TestnetParams
 	case "regtest":
-		return &RegtestParams
+		return &chaincfg.RegressionNetParams
 	default:
 		return &MainNetParams
 	}
