@@ -252,6 +252,8 @@ When you have running back-end daemon you can start Blockbook. It is highly reco
 for both Blockbook and back-end daemon. You can use *contrib/scripts/build-blockchaincfg.sh* that will generate
 Blockbook's blockchain configuration from our coin definition files.
 
+Also, check that your operating system open files limit is set to high enough value - recommended is at least 20000.
+
 Example for Bitcoin:
 ```
 ./contrib/scripts/build-blockchaincfg.sh <coin>
