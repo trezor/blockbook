@@ -44,6 +44,7 @@
 | Unobtanium             | 9092                    | 9192                  | 65535            | 38392                       |
 | Omotenashicoin         | 9094                    | 9194                  | 8094             | 38394                       |
 | BitZeny                | 9095                    | 9195                  | 8095             | 38395                       |
+| Bitcoin Signet         | 19020                   | 19120                 | 18020            | 48320                       |
 | Bitcoin Testnet        | 19030                   | 19130                 | 18030            | 48330                       |
 | Bitcoin Cash Testnet   | 19031                   | 19131                 | 18031            | 48331                       |
 | Zcash Testnet          | 19032                   | 19132                 | 18032            | 48332                       |

@@ -6,10 +6,10 @@
     "alias": "bitcoin_signet"
   },
   "ports": {
-    "backend_rpc": 18030,
-    "backend_message_queue": 48330,
-    "blockbook_internal": 19030,
-    "blockbook_public": 19130
+    "backend_rpc": 18020,
+    "backend_message_queue": 48320,
+    "blockbook_internal": 19020,
+    "blockbook_public": 19120
   },
   "ipc": {
     "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
