@@ -440,6 +440,7 @@ func (s *PublicServer) parseTemplates() []*template.Template {
 		"setTxToTemplateData":      setTxToTemplateData,
 		"isOwnAddress":             isOwnAddress,
 		"isOwnAddresses":           isOwnAddresses,
+		"toJSON":                   toJSON,
 	}
 	var createTemplate func(filenames ...string) *template.Template
 	if s.debug {
@@ -505,6 +506,14 @@ func formatUnixTime(ut int64) string {
 
 func formatTime(t time.Time) string {
 	return t.Format(time.RFC1123)
+}
+
+func toJSON(data interface{}) string {
+	json, err := json.Marshal(data)
+	if err != nil {
+		return ""
+	}
+	return string(json)
 }
 
 // for now return the string as it is

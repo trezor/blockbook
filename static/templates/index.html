@@ -100,6 +100,12 @@
                     <td class="data">{{$be.SizeOnDisk}}</td>
                 </tr>
                 {{- end -}}
+                {{- if $be.Consensus -}}
+                <tr>
+                    <td>Consensus</td>
+                    <td class="data">{{toJSON $be.Consensus}}</td>
+                </tr>
+                {{- end -}}
                 {{- if $be.Warnings -}}
                 <tr>
                     <td>Warnings</td>
