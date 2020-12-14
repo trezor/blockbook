@@ -91,7 +91,7 @@ func erc20GetTransfersFromTx(tx *rpcTransaction) ([]bchain.Erc20Transfer, error)
 	return r, nil
 }
 
-func (b *EthereumRPC) ethCall(data, to string) (string, error) {
+func (b *EnergiRPC) ethCall(data, to string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
 	defer cancel()
 	var r string
@@ -159,7 +159,7 @@ func parseErc20StringProperty(contractDesc bchain.AddressDescriptor, data string
 }
 
 // EthereumTypeGetErc20ContractInfo returns information about ERC20 contract
-func (b *EthereumRPC) EthereumTypeGetErc20ContractInfo(contractDesc bchain.AddressDescriptor) (*bchain.Erc20Contract, error) {
+func (b *EnergiRPC) EthereumTypeGetErc20ContractInfo(contractDesc bchain.AddressDescriptor) (*bchain.Erc20Contract, error) {
 	cds := string(contractDesc)
 	cachedContractsMux.Lock()
 	contract, found := cachedContracts[cds]
@@ -211,7 +211,7 @@ func (b *EthereumRPC) EthereumTypeGetErc20ContractInfo(contractDesc bchain.Addre
 }
 
 // EthereumTypeGetErc20ContractBalance returns balance of ERC20 contract for given address
-func (b *EthereumRPC) EthereumTypeGetErc20ContractBalance(addrDesc, contractDesc bchain.AddressDescriptor) (*big.Int, error) {
+func (b *EnergiRPC) EthereumTypeGetErc20ContractBalance(addrDesc, contractDesc bchain.AddressDescriptor) (*big.Int, error) {
 	addr := EIP55Address(addrDesc)
 	contract := EIP55Address(contractDesc)
 	req := erc20BalanceOf + "0000000000000000000000000000000000000000000000000000000000000000"[len(addr)-2:] + addr[2:]

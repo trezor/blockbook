@@ -162,7 +162,7 @@ func TestErc20_parseErc20StringProperty(t *testing.T) {
 }
 
 func TestErc20_erc20GetTransfersFromTx(t *testing.T) {
-	p := NewEthereumParser(1)
+	p := NewEnergiParser(1)
 	b := dbtestdata.GetTestEthereumTypeBlock1(p)
 	bn, _ := new(big.Int).SetString("21e19e0c9bab2400000", 16)
 	tests := []struct {

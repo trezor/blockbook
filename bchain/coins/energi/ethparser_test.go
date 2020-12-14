@@ -54,7 +54,7 @@ func TestEthParser_GetAddrDescFromAddress(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := NewEthereumParser(1)
+			p := NewEnergiParser(1)
 			got, err := p.GetAddrDescFromAddress(tt.args.address)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("EthParser.GetAddrDescFromAddress() error = %v, wantErr %v", err, tt.wantErr)
@@ -235,7 +235,7 @@ func init() {
 
 }
 
-func TestEthereumParser_PackTx(t *testing.T) {
+func TestEnergiParser_PackTx(t *testing.T) {
 	type args struct {
 		tx        *bchain.Tx
 		height    uint32
@@ -243,7 +243,7 @@ func TestEthereumParser_PackTx(t *testing.T) {
 	}
 	tests := []struct {
 		name    string
-		p       *EthereumParser
+		p       *EnergiParser
 		args    args
 		want    string
 		wantErr bool
@@ -285,29 +285,29 @@ func TestEthereumParser_PackTx(t *testing.T) {
 			want: dbtestdata.EthTx1NoStatusPacked,
 		},
 	}
-	p := NewEthereumParser(1)
+	p := NewEnergiParser(1)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := p.PackTx(tt.args.tx, tt.args.height, tt.args.blockTime)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("EthereumParser.PackTx() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("EnergiParser.PackTx() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			h := hex.EncodeToString(got)
 			if !reflect.DeepEqual(h, tt.want) {
-				t.Errorf("EthereumParser.PackTx() = %v, want %v", h, tt.want)
+				t.Errorf("EnergiParser.PackTx() = %v, want %v", h, tt.want)
 			}
 		})
 	}
 }
 
-func TestEthereumParser_UnpackTx(t *testing.T) {
+func TestEnergiParser_UnpackTx(t *testing.T) {
 	type args struct {
 		hex string
 	}
 	tests := []struct {
 		name    string
-		p       *EthereumParser
+		p       *EnergiParser
 		args    args
 		want    *bchain.Tx
 		want1   uint32
@@ -338,7 +338,7 @@ func TestEthereumParser_UnpackTx(t *testing.T) {
 			want1: 4321000,
 		},
 	}
-	p := NewEthereumParser(1)
+	p := NewEnergiParser(1)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			b, err := hex.DecodeString(tt.args.hex)
@@ -347,7 +347,7 @@ func TestEthereumParser_UnpackTx(t *testing.T) {
 			}
 			got, got1, err := p.UnpackTx(b)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("EthereumParser.UnpackTx() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("EnergiParser.UnpackTx() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			// DeepEqual has problems with pointers in completeTransaction
@@ -359,22 +359,22 @@ func TestEthereumParser_UnpackTx(t *testing.T) {
 			wc.CoinSpecificData = nil
 			if fmt.Sprint(gc) != fmt.Sprint(wc) {
 				// if !reflect.DeepEqual(gc, wc) {
-				t.Errorf("EthereumParser.UnpackTx() gc got = %+v, want %+v", gc, wc)
+				t.Errorf("EnergiParser.UnpackTx() gc got = %+v, want %+v", gc, wc)
 			}
 			if !reflect.DeepEqual(gs.Tx, ws.Tx) {
-				t.Errorf("EthereumParser.UnpackTx() gs.Tx got = %+v, want %+v", gs.Tx, ws.Tx)
+				t.Errorf("EnergiParser.UnpackTx() gs.Tx got = %+v, want %+v", gs.Tx, ws.Tx)
 			}
 			if !reflect.DeepEqual(gs.Receipt, ws.Receipt) {
-				t.Errorf("EthereumParser.UnpackTx() gs.Receipt got = %+v, want %+v", gs.Receipt, ws.Receipt)
+				t.Errorf("EnergiParser.UnpackTx() gs.Receipt got = %+v, want %+v", gs.Receipt, ws.Receipt)
 			}
 			if got1 != tt.want1 {
-				t.Errorf("EthereumParser.UnpackTx() got1 = %v, want %v", got1, tt.want1)
+				t.Errorf("EnergiParser.UnpackTx() got1 = %v, want %v", got1, tt.want1)
 			}
 		})
 	}
 }
 
-func TestEthereumParser_GetEthereumTxData(t *testing.T) {
+func TestEnergiParser_GetEthereumTxData(t *testing.T) {
 	tests := []struct {
 		name string
 		tx   *bchain.Tx
@@ -395,7 +395,7 @@ func TestEthereumParser_GetEthereumTxData(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := GetEthereumTxData(tt.tx)
 			if got.Data != tt.want {
-				t.Errorf("EthereumParser.GetEthereumTxData() = %v, want %v", got.Data, tt.want)
+				t.Errorf("EnergiParser.GetEthereumTxData() = %v, want %v", got.Data, tt.want)
 			}
 		})
 	}

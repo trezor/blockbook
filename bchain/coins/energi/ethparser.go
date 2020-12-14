@@ -18,14 +18,14 @@ const EthereumTypeAddressDescriptorLen = 20
 // EtherAmountDecimalPoint defines number of decimal points in Ether amounts
 const EtherAmountDecimalPoint = 18
 
-// EthereumParser handle
-type EthereumParser struct {
+// EnergiParser handle
+type EnergiParser struct {
 	*bchain.BaseParser
 }
 
-// NewEthereumParser returns new EthereumParser instance
-func NewEthereumParser(b int) *EthereumParser {
-	return &EthereumParser{&bchain.BaseParser{
+// NewEnergiParser returns new EnergiParser instance
+func NewEnergiParser(b int) *EnergiParser {
+	return &EnergiParser{&bchain.BaseParser{
 		BlockAddressesToKeep: b,
 		AmountDecimalPoint:   EtherAmountDecimalPoint,
 	}}
@@ -104,7 +104,7 @@ type header struct {
 	Hash       hash        `json:"hash"`
 }
 
-func (p *EthereumParser) ethTxToTx(tx *rpcTransaction, receipt *rpcReceipt, blocktime int64, confirmations uint32, fixEIP55 bool) (*bchain.Tx, error) {
+func (p *EnergiParser) ethTxToTx(tx *rpcTransaction, receipt *rpcReceipt, blocktime int64, confirmations uint32, fixEIP55 bool) (*bchain.Tx, error) {
 	txid := tx.Hash
 	var (
 		fa, ta []string
@@ -169,7 +169,7 @@ func (p *EthereumParser) ethTxToTx(tx *rpcTransaction, receipt *rpcReceipt, bloc
 }
 
 // GetAddrDescFromVout returns internal address representation of given transaction output
-func (p *EthereumParser) GetAddrDescFromVout(output *bchain.Vout) (bchain.AddressDescriptor, error) {
+func (p *EnergiParser) GetAddrDescFromVout(output *bchain.Vout) (bchain.AddressDescriptor, error) {
 	if len(output.ScriptPubKey.Addresses) != 1 {
 		return nil, bchain.ErrAddressMissing
 	}
@@ -181,7 +181,7 @@ func has0xPrefix(s string) bool {
 }
 
 // GetAddrDescFromAddress returns internal address representation of given address
-func (p *EthereumParser) GetAddrDescFromAddress(address string) (bchain.AddressDescriptor, error) {
+func (p *EnergiParser) GetAddrDescFromAddress(address string) (bchain.AddressDescriptor, error) {
 	// github.com/ethereum/go-ethereum/common.HexToAddress does not handle address errors, using own decoding
 	if has0xPrefix(address) {
 		address = address[2:]
@@ -230,12 +230,12 @@ func EIP55AddressFromAddress(address string) string {
 }
 
 // GetAddressesFromAddrDesc returns addresses for given address descriptor with flag if the addresses are searchable
-func (p *EthereumParser) GetAddressesFromAddrDesc(addrDesc bchain.AddressDescriptor) ([]string, bool, error) {
+func (p *EnergiParser) GetAddressesFromAddrDesc(addrDesc bchain.AddressDescriptor) ([]string, bool, error) {
 	return []string{EIP55Address(addrDesc)}, true, nil
 }
 
 // GetScriptFromAddrDesc returns output script for given address descriptor
-func (p *EthereumParser) GetScriptFromAddrDesc(addrDesc bchain.AddressDescriptor) ([]byte, error) {
+func (p *EnergiParser) GetScriptFromAddrDesc(addrDesc bchain.AddressDescriptor) ([]byte, error) {
 	return addrDesc, nil
 }
 
@@ -262,7 +262,7 @@ func hexEncodeBig(b []byte) string {
 }
 
 // PackTx packs transaction to byte array
-func (p *EthereumParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) ([]byte, error) {
+func (p *EnergiParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) ([]byte, error) {
 	var err error
 	var n uint64
 	r, ok := tx.CoinSpecificData.(completeTransaction)
@@ -358,7 +358,7 @@ func (p *EthereumParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) (
 }
 
 // UnpackTx unpacks transaction from byte array
-func (p *EthereumParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
+func (p *EnergiParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 	var pt ProtoCompleteTransaction
 	err := proto.Unmarshal(buf, &pt)
 	if err != nil {
@@ -412,12 +412,12 @@ func (p *EthereumParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 }
 
 // PackedTxidLen returns length in bytes of packed txid
-func (p *EthereumParser) PackedTxidLen() int {
+func (p *EnergiParser) PackedTxidLen() int {
 	return 32
 }
 
 // PackTxid packs txid to byte array
-func (p *EthereumParser) PackTxid(txid string) ([]byte, error) {
+func (p *EnergiParser) PackTxid(txid string) ([]byte, error) {
 	if has0xPrefix(txid) {
 		txid = txid[2:]
 	}
@@ -425,12 +425,12 @@ func (p *EthereumParser) PackTxid(txid string) ([]byte, error) {
 }
 
 // UnpackTxid unpacks byte array to txid
-func (p *EthereumParser) UnpackTxid(buf []byte) (string, error) {
+func (p *EnergiParser) UnpackTxid(buf []byte) (string, error) {
 	return hexutil.Encode(buf), nil
 }
 
 // PackBlockHash packs block hash to byte array
-func (p *EthereumParser) PackBlockHash(hash string) ([]byte, error) {
+func (p *EnergiParser) PackBlockHash(hash string) ([]byte, error) {
 	if has0xPrefix(hash) {
 		hash = hash[2:]
 	}
@@ -438,12 +438,12 @@ func (p *EthereumParser) PackBlockHash(hash string) ([]byte, error) {
 }
 
 // UnpackBlockHash unpacks byte array to block hash
-func (p *EthereumParser) UnpackBlockHash(buf []byte) (string, error) {
+func (p *EnergiParser) UnpackBlockHash(buf []byte) (string, error) {
 	return hexutil.Encode(buf), nil
 }
 
 // GetChainType returns EthereumType
-func (p *EthereumParser) GetChainType() bchain.ChainType {
+func (p *EnergiParser) GetChainType() bchain.ChainType {
 	return bchain.ChainEthereumType
 }
 
@@ -463,7 +463,7 @@ func GetHeightFromTx(tx *bchain.Tx) (uint32, error) {
 }
 
 // EthereumTypeGetErc20FromTx returns Erc20 data from bchain.Tx
-func (p *EthereumParser) EthereumTypeGetErc20FromTx(tx *bchain.Tx) ([]bchain.Erc20Transfer, error) {
+func (p *EnergiParser) EthereumTypeGetErc20FromTx(tx *bchain.Tx) ([]bchain.Erc20Transfer, error) {
 	var r []bchain.Erc20Transfer
 	var err error
 	csd, ok := tx.CoinSpecificData.(completeTransaction)
