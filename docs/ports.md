@@ -45,6 +45,7 @@
 | Omotenashicoin         | 9094                    | 9194                  | 8094             | 38394                       |
 | BitZeny                | 9095                    | 9195                  | 8095             | 38395                       |
 | Trezarcoin             | 9096                    | 9196                  | 8096             | 38396                       |
+| Energi                 | 9196                    | 9296                  | 8196             | 38496 p2p, 8296 http        |
 | Bitcoin Signet         | 19020                   | 19120                 | 18020            | 48320                       |
 | Ethereum Goerli        | 19026                   | 19126                 | 18026            | 48326 p2p                   |
 | Bitcoin Testnet        | 19030                   | 19130                 | 18030            | 48330                       |
