@@ -1,0 +1,65 @@
+{
+  "coin": {
+    "name": "Energi",
+    "shortcut": "NRG",
+    "label": "Energi",
+    "alias": "energi"
+  },
+  "ports": {
+    "backend_rpc": 8196,
+    "backend_message_queue": 0,
+    "backend_p2p": 38496,
+    "backend_http": 8296,
+    "blockbook_internal": 9196,
+    "blockbook_public": 9296
+  },
+  "ipc": {
+    "rpc_url_template": "ws://127.0.0.1:{{.Ports.BackendRPC}}",
+    "rpc_timeout": 25
+  },
+  "backend": {
+    "package_name": "backend-energi",
+    "package_revision": "Pantani",
+    "system_user": "energi",
+    "version": "3.0.6-b0f6ac4",
+    "binary_url": "https://s3-us-west-2.amazonaws.com/download.energi.software/releases/energi3/3.0.7/energi3-3.0.7-linux-amd64.tgz",
+    "verification_type": "sha256",
+    "verification_source": "6f6e0fe03f9cd38fe29addffb42ae4217656a7a9ee9be3a824f104b6a4ac7237",
+    "extract_command": "tar -C backend --strip 1 -xf",
+    "exclude_files": [],
+    "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/energi3 --ipcdisable --syncmode full --cache 1024 --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --port 38496 --ws --wsapi eth,net,web3 --wsaddr 0.0.0.0 --wsport {{.Ports.BackendRPC}} --wsorigins \"*\" --rpc --rpcapi personal,eth,net,web3b --rpcport 8296 -rpcaddr 0.0.0.0 --rpccorsdomain \"*\" --rpcvhosts \"*\" 2>>{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
+    "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
+    "postinst_script_template": "",
+    "service_type": "forking",
+    "service_additional_params_template": "",
+    "protect_memory": true,
+    "mainnet": true,
+    "server_config_file": "",
+    "client_config_file": ""
+  },
+  "blockbook": {
+    "package_name": "blockbook-energi",
+    "system_user": "blockbook-energi",
+    "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
+    "public_binding_template": ":{{.Ports.BlockbookPublic}}",
+    "explorer_url": "",
+    "additional_params": "",
+    "block_chain": {
+      "parse": true,
+      "mempool_workers": 8,
+      "mempool_sub_workers": 2,
+      "block_addresses_to_keep": 300,
+      "slip44": 9797,
+      "additional_params": {
+        "mempoolTxTimeoutHours": 48,
+        "queryBackendOnMempoolResync": false,
+        "fiat_rates": "coingecko",
+        "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"energi\", \"periodSeconds\": 60}"
+      }
+    }
+  },
+  "meta": {
+    "package_maintainer": "Pantani",
+    "package_maintainer_email": "danpantani@gmail.com"
+  }
+}
