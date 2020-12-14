@@ -777,13 +777,7 @@ func (b *EthereumRPC) GetChainParser() bchain.BlockChainParser {
 	return b.Parser
 }
 
-func toBlockNumArg(number *big.Int) string {
-	if number == nil {
-		return "latest"
-	}
-	return hexutil.EncodeBig(number)
-}
-
+// GetChainParser returns ethereum block header by number.
 func (b *EthereumRPC) headerByNumber(ctx context.Context, number *big.Int) (*header, error) {
 	var head header
 	err := b.rpc.CallContext(ctx, &head, "eth_getBlockByNumber", toBlockNumArg(number), false)

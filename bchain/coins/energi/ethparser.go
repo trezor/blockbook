@@ -531,3 +531,10 @@ func GetEthereumTxDataFromSpecificData(coinSpecificData interface{}) *EthereumTx
 	}
 	return &etd
 }
+
+func toBlockNumArg(number *big.Int) string {
+	if number == nil {
+		return "latest"
+	}
+	return hexutil.EncodeBig(number)
+}

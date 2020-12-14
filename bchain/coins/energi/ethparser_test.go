@@ -400,3 +400,34 @@ func TestEthereumParser_GetEthereumTxData(t *testing.T) {
 		})
 	}
 }
+
+func Test_toBlockNumArg(t *testing.T) {
+	tests := []struct {
+		name   string
+		number *big.Int
+		want   string
+	}{
+		{
+			name:   "test a valid number 1",
+			number: big.NewInt(1),
+			want:   "0x1",
+		},
+		{
+			name:   "test a valid number 2",
+			number: big.NewInt(2),
+			want:   "0x2",
+		},
+		{
+			name:   "test the latest block",
+			number: nil,
+			want:   "latest",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := toBlockNumArg(tt.number); got != tt.want {
+				t.Errorf("toBlockNumArg() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
