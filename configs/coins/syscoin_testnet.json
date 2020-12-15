@@ -22,7 +22,7 @@
     "package_name": "backend-syscoin-testnet",
     "package_revision": "satoshilabs-1",
     "system_user": "syscoin",
-    "version": "4.1.97.0",
+    "version": "4.1.95.0",
     "binary_url": "https://github.com/syscoin/syscoin/releases/download/v4.1.95/syscoin-4.1.95-x86_64-linux-gnu.tar.gz",
     "verification_type": "gpg-sha256",
     "verification_source": "https://github.com/syscoin/syscoin/releases/download/v4.1.95/SHA256SUMS.asc",
