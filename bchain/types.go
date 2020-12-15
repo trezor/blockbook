@@ -261,7 +261,6 @@ type AddrBalance struct {
 }
 
 type NotaryDetails = wire.NotaryDetailsType
-type AuxFees = wire.AuxFeesType
 type AuxFeeDetails = wire.AuxFeeDetailsType
 
 // ReceivedSat computes received amount from total balance and sent amount
