@@ -596,13 +596,12 @@ func formatPercentage(a string) string {
 }
 
 func (s *PublicServer) formatKeyID(a string) string {
-	dst := make([]byte, hex.DecodedLen(len(a)))
-	_, errDecode := hex.Decode(dst, []byte(a))
-	if errDecode != nil {
-		glog.Error(errDecode)
+	keyBytes, err := base64.StdEncoding.DecodeString(a)
+	if err != nil {
+		glog.Error(err)
 		return ""
 	}
-	addr, err := s.chainParser.WitnessPubKeyHashFromKeyID(dst)
+	addr, err := s.chainParser.WitnessPubKeyHashFromKeyID(keyBytes)
 	if err != nil {
 		glog.Error(err)
 		return ""
