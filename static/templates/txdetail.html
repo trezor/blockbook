@@ -80,7 +80,7 @@
             {{- if $tx.FeesSat -}}
             <span class="txvalues txvalues-default">Fee: {{formatAmount $tx.FeesSat}} {{$cs}}</span>
             {{- end -}}
-            {{- range $tokenTransfer := $tx.TokenTransferSummary -}}{{if $tokenTransfer && $tokenTransfer.Fee > 0}}	
+            {{- range $tokenTransfer := $tx.TokenTransferSummary -}}{{if $tokenTransfer and $tokenTransfer.Fee > 0}}	
             <span class="txvalues txvalues-default">Fee: {{formatAmountWithDecimals $tokenTransfer.Fee}} {{formatDecodeBase64 $tokenTransfer.Symbol}}</span>	
             {{- end -}}{{- end -}}
         </div>
