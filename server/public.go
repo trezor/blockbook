@@ -586,12 +586,10 @@ func formatDecodeBase64ValueStr(valueStr interface{}) string {
 	}
 	return a
 } 
-func formatPercentage(a string) string {
-	if f, err := strconv.ParseFloat(a, 32); err == nil {
-		f = f*100
-		return fmt.Sprintf("%.5f%%", f)
-	}
-	return "0%"
+
+func formatPercentage(a uint16) string {
+	f := float64(a) / 1000.0
+	return fmt.Sprintf("%.5f%%", f)
 }
 
 func (s *PublicServer) formatKeyID(valueStr interface{}) string {
