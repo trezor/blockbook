@@ -22,7 +22,6 @@ import (
 	"time"
 	"github.com/golang/glog"
 	"encoding/base64"
-	"encoding/hex"
 )
 
 const txsOnPage = 25
@@ -551,8 +550,8 @@ func formatAmountWithDecimals(a *bchain.Amount, d int) string {
 }
 
 func formatInt64WithDecimals(a int64, d int) string {
-	amount := (bchain.Amount)(*big.NewInt(a))
-	return a.DecimalString(d)
+	amount := (*bchain.Amount)(big.NewInt(a))
+	return amount.DecimalString(d)
 }
 
 func ToString(value interface{}) string {
