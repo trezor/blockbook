@@ -594,7 +594,8 @@ func formatPercentage(a string) string {
 	return "0%"
 }
 
-func (s *PublicServer) formatKeyID(a string) string {
+func (s *PublicServer) formatKeyID(valueStr interface{}) string {
+	a := ToString(valueStr)
 	keyBytes, err := base64.StdEncoding.DecodeString(a)
 	if err != nil {
 		glog.Error(err)
