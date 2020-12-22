@@ -456,7 +456,7 @@ func (s *PublicServer) parseTemplates() []*template.Template {
 		"formatUnixTime":           formatUnixTime,
 		"formatAmount":             s.formatAmount,
 		"formatAmountWithDecimals": formatAmountWithDecimals,
-		"formatInt64WithDecimals": formatInt64WithDecimals
+		"formatInt64WithDecimals": formatInt64WithDecimals,
 		"formatPercentage": 		formatPercentage,
 		"isAssetUpdateCapabilityFlagSet":     isAssetUpdateCapabilityFlagSet,
 		"setTxToTemplateData":      setTxToTemplateData,
