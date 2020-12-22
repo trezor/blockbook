@@ -635,7 +635,7 @@ func (s *SocketIoServer) getAssetHistory(asset string, opts *assetOpts) (res res
 			MaxSupply:		(*bchain.Amount)(big.NewInt(dbAsset.AssetObj.MaxSupply)),
 			Decimals:		int(dbAsset.AssetObj.Precision),
 			UpdateCapabilityFlags:	dbAsset.AssetObj.UpdateCapabilityFlags,
-			NotaryKeyID: 	hex.EncodeToString(dbAsset.AssetObj.NotaryKeyID),
+			NotaryKeyID: 	dbAsset.AssetObj.NotaryKeyID,
 			
 		}
 		if len(dbAsset.AssetObj.AuxFeeDetails.AuxFeeKeyID) > 0 {
