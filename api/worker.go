@@ -122,7 +122,32 @@ func (w *Worker) GetTransaction(txid string, spendingTxs bool, specificJSON bool
 	}
 	return w.GetTransactionFromBchainTx(bchainTx, height, spendingTxs, specificJSON)
 }
-
+func (w *Worker) getAuxFee(auxFeeDetails *bchain.AuxFeeDetails, nAmount int64) *bchain.Amount {
+	nValue = int64(0)
+	nAccumulatedFee := int64(0)
+	nRate := float64(0)
+	for i := range auxFeeDetails.AuxFees {
+        fee := &auxFeeDetails.AuxFees[i]
+        feeNext := &auxFeeDetails.AuxFees[i < len(auxFeeDetails.AuxFees)-1? i+1:i]
+        nBoundAmount := fee.Bound
+        nNextBoundAmount := feeNext.Bound
+        // max uint16 (65535 = 0.65535 = 65.5535%)
+        nRate := ((float64)fee.Percent) / 100000.0;
+        // case where amount is in between the bounds
+        if nAmount >= nBoundAmount && nAmount < nNextBoundAmount {
+            break;    
+        }
+        nBoundAmount = nNextBoundAmount - nBoundAmount
+        // must be last bound
+        if(nBoundAmount <= 0){
+            nValue = (nAmount - nNextBoundAmount) * nRate + nAccumulatedFee
+            return (*bchain.Amount)(big.NewInt(nValue))
+        }
+        nAccumulatedFee += (nBoundAmount * nRate)
+    }
+    nValue = (nAmount - nBoundAmount) * nRate + nAccumulatedFee;  
+	return (*bchain.Amount)(big.NewInt(nValue))
+}
 // GetTransactionFromBchainTx reads transaction data from txid
 func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spendingTxs bool, specificJSON bool) (*Tx, error) {
 	var err error
@@ -229,18 +254,18 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 							if errAsset != nil || dbAsset == nil {
 								return nil, errAsset
 							}
-							assetGuid := strconv.FormatUint(uint64(vin.AssetInfo.AssetGuid), 10)
 							tts = &bchain.TokenTransferSummary{
-								Token:    assetGuid,
+								Token:    vin.AssetInfo.AssetGuid,
 								Decimals: int(dbAsset.AssetObj.Precision),
 								Value:	  (*bchain.Amount)(big.NewInt(0)),
-								ValueIn:  (*bchain.Amount)(big.NewInt(0)),
 								Symbol:   string(dbAsset.AssetObj.Symbol),
 							}
 							mapTTS[vin.AssetInfo.AssetGuid] = tts
 						}
+						if len(dbAsset.AssetObj.AuxFeeDetails.AuxFeeKeyID) > 0 {
+							tts.AuxFeeDetails = &dbAsset.AssetObj.AuxFeeDetails
+						}
 						vin.AssetInfo.ValueStr = vin.AssetInfo.ValueSat.DecimalString(tts.Decimals) + " " + tts.Symbol
-						(*big.Int)(tts.ValueIn).Add((*big.Int)(tts.ValueIn), (*big.Int)(vin.AssetInfo.ValueSat))
 					}
 				}
 			}
@@ -275,15 +300,16 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 				if errAsset != nil || dbAsset == nil {
 					return nil, errAsset
 				}
-				assetGuid := strconv.FormatUint(uint64(vout.AssetInfo.AssetGuid), 10)
 				tts = &bchain.TokenTransferSummary{
-					Token:    assetGuid,
+					Token:    vout.AssetInfo.AssetGuid,
 					Decimals: int(dbAsset.AssetObj.Precision),
 					Value:	  (*bchain.Amount)(big.NewInt(0)),
-					ValueIn:  (*bchain.Amount)(big.NewInt(0)),
 					Symbol:   string(dbAsset.AssetObj.Symbol),
 				}
 				mapTTS[vout.AssetInfo.AssetGuid] = tts
+			}
+			if len(dbAsset.AssetObj.AuxFeeDetails.AuxFeeKeyID) > 0 {
+				tts.AuxFeeDetails = &dbAsset.AssetObj.AuxFeeDetails
 			}
 			vout.AssetInfo.ValueStr = vout.AssetInfo.ValueSat.DecimalString(tts.Decimals) + " " + tts.Symbol
 			(*big.Int)(tts.Value).Add((*big.Int)(tts.Value), (*big.Int)(vout.AssetInfo.ValueSat))
@@ -315,6 +341,10 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 		if mapTTS != nil && len(mapTTS) > 0 {
 			tokens = make([]*bchain.TokenTransferSummary, 0, len(mapTTS))
 			for _, token := range mapTTS {
+				// get aux fee if applicable
+				if token.AuxFeeDetails != nil {
+					token.Fee = w.getAuxFee(token.AuxFeeDetails, token.Value.AsInt64())
+				}
 				tokens = append(tokens, token)
 			}
 		}
@@ -426,18 +456,18 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 						if errAsset != nil || dbAsset == nil {
 							return nil, errAsset
 						}
-						assetGuid := strconv.FormatUint(uint64(vin.AssetInfo.AssetGuid), 10)
 						tts = &bchain.TokenTransferSummary{
-							Token:    assetGuid,
+							Token:    vin.AssetInfo.AssetGuid,
 							Decimals: int(dbAsset.AssetObj.Precision),
 							Value:	  (*bchain.Amount)(big.NewInt(0)),
-							ValueIn:  (*bchain.Amount)(big.NewInt(0)),
 							Symbol:   string(dbAsset.AssetObj.Symbol),
 						}
 						mapTTS[vin.AssetInfo.AssetGuid] = tts
 					}
+					if len(dbAsset.AssetObj.AuxFeeDetails.AuxFeeKeyID) > 0 {
+						tts.AuxFeeDetails = &dbAsset.AssetObj.AuxFeeDetails
+					}
 					vin.AssetInfo.ValueStr = vin.AssetInfo.ValueSat.DecimalString(tts.Decimals) + " " + tts.Symbol
-					(*big.Int)(tts.ValueIn).Add((*big.Int)(tts.ValueIn), (*big.Int)(vin.AssetInfo.ValueSat))
 				}
 			}
 		} else if w.chainType == bchain.ChainEthereumType {
@@ -476,15 +506,16 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 				if errAsset != nil || dbAsset == nil {
 					return nil, errAsset
 				}
-				assetGuid := strconv.FormatUint(uint64(vout.AssetInfo.AssetGuid), 10)
 				tts = &bchain.TokenTransferSummary{
-					Token:    assetGuid,
+					Token:    vout.AssetInfo.AssetGuid,
 					Decimals: int(dbAsset.AssetObj.Precision),
 					Value:	  (*bchain.Amount)(big.NewInt(0)),
-					ValueIn:  (*bchain.Amount)(big.NewInt(0)),
 					Symbol:   string(dbAsset.AssetObj.Symbol),
 				}
 				mapTTS[vout.AssetInfo.AssetGuid] = tts
+			}
+			if len(dbAsset.AssetObj.AuxFeeDetails.AuxFeeKeyID) > 0 {
+				tts.AuxFeeDetails = &dbAsset.AssetObj.AuxFeeDetails
 			}
 			vout.AssetInfo.ValueStr = vout.AssetInfo.ValueSat.DecimalString(tts.Decimals) + " " + tts.Symbol
 			(*big.Int)(tts.Value).Add((*big.Int)(tts.Value), (*big.Int)(vout.AssetInfo.ValueSat))
@@ -501,6 +532,10 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 		if mapTTS != nil && len(mapTTS) > 0 {
 			tokens = make([]*bchain.TokenTransferSummary, 0, len(mapTTS))
 			for _, token := range mapTTS {
+				// get aux fee if applicable
+				if token.AuxFeeDetails != nil {
+					token.Fee = w.getAuxFee(token.AuxFeeDetails, token.Value.AsInt64())
+				}
 				tokens = append(tokens, token)
 			}
 		}
@@ -555,7 +590,8 @@ func (w *Worker) getTokensFromErc20(erc20 []bchain.Erc20Transfer) []*bchain.Toke
 			erc20c = &bchain.Erc20Contract{Name: e.Contract}
 		}
 		tokens[i] = &bchain.TokenTransferSummary{
-			Token:    e.Contract,
+			// SYSCOIN erc20 not compatible as Token is int
+			Token:    0, // e.Contract,
 			From:     e.From,
 			To:       e.To,
 			Decimals: erc20c.Decimals,
@@ -740,18 +776,18 @@ func (w *Worker) txFromTxAddress(txid string, ta *bchain.TxAddresses, bi *bchain
 				if errAsset != nil || dbAsset == nil {
 					return nil
 				}
-				assetGuid := strconv.FormatUint(uint64(vin.AssetInfo.AssetGuid), 10)
 				tts = &bchain.TokenTransferSummary{
-					Token:    assetGuid,
+					Token:    vin.AssetInfo.AssetGuid,
 					Decimals: int(dbAsset.AssetObj.Precision),
 					Value:	  (*bchain.Amount)(big.NewInt(0)),
-					ValueIn:  (*bchain.Amount)(big.NewInt(0)),
 					Symbol:   string(dbAsset.AssetObj.Symbol),
 				}
 				mapTTS[vin.AssetInfo.AssetGuid] = tts
 			}
+			if len(dbAsset.AssetObj.AuxFeeDetails.AuxFeeKeyID) > 0 {
+				tts.AuxFeeDetails = &dbAsset.AssetObj.AuxFeeDetails
+			}
 			vin.AssetInfo.ValueStr = vin.AssetInfo.ValueSat.DecimalString(tts.Decimals) + " " + tts.Symbol
-			(*big.Int)(tts.ValueIn).Add((*big.Int)(tts.ValueIn), (*big.Int)(vin.AssetInfo.ValueSat))
 		}
 	}
 	vouts := make([]Vout, len(ta.Outputs))
@@ -779,15 +815,16 @@ func (w *Worker) txFromTxAddress(txid string, ta *bchain.TxAddresses, bi *bchain
 				if errAsset != nil || dbAsset == nil {
 					return nil
 				}
-				assetGuid := strconv.FormatUint(uint64(vout.AssetInfo.AssetGuid), 10)
 				tts = &bchain.TokenTransferSummary{
-					Token:    assetGuid,
+					Token:    vout.AssetInfo.AssetGuid,
 					Decimals: int(dbAsset.AssetObj.Precision),
 					Value:	  (*bchain.Amount)(big.NewInt(0)),
-					ValueIn:  (*bchain.Amount)(big.NewInt(0)),
 					Symbol:   string(dbAsset.AssetObj.Symbol),
 				}
 				mapTTS[vout.AssetInfo.AssetGuid] = tts
+			}
+			if len(dbAsset.AssetObj.AuxFeeDetails.AuxFeeKeyID) > 0 {
+				tts.AuxFeeDetails = &dbAsset.AssetObj.AuxFeeDetails
 			}
 			vout.AssetInfo.ValueStr = vout.AssetInfo.ValueSat.DecimalString(tts.Decimals) + " " + tts.Symbol
 			(*big.Int)(tts.Value).Add((*big.Int)(tts.Value), (*big.Int)(vout.AssetInfo.ValueSat))
@@ -797,6 +834,10 @@ func (w *Worker) txFromTxAddress(txid string, ta *bchain.TxAddresses, bi *bchain
 	if mapTTS != nil && len(mapTTS) > 0 {
 		tokens = make([]*bchain.TokenTransferSummary, 0, len(mapTTS))
 		for _, token := range mapTTS {
+			// get aux fee if applicable
+			if token.AuxFeeDetails != nil {
+				token.Fee = w.getAuxFee(token.AuxFeeDetails, token.Value.AsInt64())
+			}
 			tokens = append(tokens, token)
 		}
 	}

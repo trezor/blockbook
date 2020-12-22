@@ -565,13 +565,13 @@ func (t Tokens) Less(i, j int) bool {
 type TokenTransferSummary struct {
 	From     string    `json:"from"`
 	To       string    `json:"to"`
-	Token    string    `json:"token"`
+	Token    uint32    `json:"token"`
 	Name     string    `json:"name"`
 	Symbol   string    `json:"symbol"`
 	Decimals int       `json:"decimals"`
 	Value	 *Amount   `json:"valueOut"`
-	ValueIn	 *Amount   `json:"valueIn"`
-	Fee      *Amount   `json:"fee"`
+	Fee	 	 *Amount   `json:"fee"`
+	AuxFeeDetails	*AuxFeeDetails 
 }
 
 // used to store all txids related to an asset for asset history
