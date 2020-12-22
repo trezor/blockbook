@@ -598,6 +598,7 @@ func (s *PublicServer) formatKeyID(valueStr interface{}) string {
 	_, errDecode := hex.Decode(dst, []byte(a))
 	if errDecode != nil {
 		glog.Error(errDecode)
+	}
 	addr, err := s.chainParser.WitnessPubKeyHashFromKeyID(dst)
 	if err != nil {
 		glog.Error(err)
