@@ -135,7 +135,7 @@ func (w *Worker) getAuxFee(auxFeeDetails *bchain.AuxFeeDetails, nAmount int64) *
         nBoundAmount := fee.Bound
         nNextBoundAmount := feeNext.Bound
         // max uint16 (65535 = 0.65535 = 65.5535%)
-        nRate := ((float64)fee.Percent) / 100000.0;
+        nRate := float64(fee.Percent) / 100000.0;
         // case where amount is in between the bounds
         if nAmount >= nBoundAmount && nAmount < nNextBoundAmount {
             break;    
