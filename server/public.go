@@ -456,6 +456,7 @@ func (s *PublicServer) parseTemplates() []*template.Template {
 		"formatUnixTime":           formatUnixTime,
 		"formatAmount":             s.formatAmount,
 		"formatAmountWithDecimals": formatAmountWithDecimals,
+		"formatInt64WithDecimals": formatInt64WithDecimals
 		"formatPercentage": 		formatPercentage,
 		"isAssetUpdateCapabilityFlagSet":     isAssetUpdateCapabilityFlagSet,
 		"setTxToTemplateData":      setTxToTemplateData,
@@ -549,6 +550,11 @@ func formatAmountWithDecimals(a *bchain.Amount, d int) string {
 	return a.DecimalString(d)
 }
 
+func formatInt64WithDecimals(a int64, d int) string {
+	amount := (bchain.Amount*)(big.NewInt(a))
+	return a.DecimalString(d)
+}
+
 func ToString(value interface{}) string {
     switch v := value.(type) {
     case string:
@@ -593,14 +599,8 @@ func formatPercentage(a uint16) string {
 	return fmt.Sprintf("%.3f%%", f)
 }
 
-func (s *PublicServer) formatKeyID(valueStr interface{}) string {
-	a := ToString(valueStr)
-	dst := make([]byte, hex.DecodedLen(len(a)))
-	_, errDecode := hex.Decode(dst, []byte(a))
-	if errDecode != nil {
-		glog.Error(errDecode)
-	}
-	addr, err := s.chainParser.WitnessPubKeyHashFromKeyID(dst)
+func (s *PublicServer) formatKeyID(addrBytes []byte) string {
+	addr, err := s.chainParser.WitnessPubKeyHashFromKeyID(addrBytes)
 	if err != nil {
 		glog.Error(err)
 		return ""
