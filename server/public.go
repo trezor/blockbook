@@ -590,7 +590,7 @@ func formatDecodeBase64ValueStr(valueStr interface{}) string {
 
 func formatPercentage(a uint16) string {
 	f := float64(a) / 1000.0
-	return fmt.Sprintf("%.5f%%", f)
+	return fmt.Sprintf("%.3f%%", f)
 }
 
 func (s *PublicServer) formatKeyID(valueStr interface{}) string {
