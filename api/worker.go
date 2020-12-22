@@ -127,8 +127,11 @@ func (w *Worker) getAuxFee(auxFeeDetails *bchain.AuxFeeDetails, nAmount int64) *
 	nAccumulatedFee := int64(0)
 	nRate := float64(0)
 	for i := range auxFeeDetails.AuxFees {
-        fee := &auxFeeDetails.AuxFees[i]
-        feeNext := &auxFeeDetails.AuxFees[i < len(auxFeeDetails.AuxFees)-1? i+1:i]
+		fee := &auxFeeDetails.AuxFees[i]
+		feeNext := &auxFeeDetails.AuxFees[i]
+		if i < len(auxFeeDetails.AuxFees)-1 {
+			feeNext = &auxFeeDetails.AuxFees[i+1]
+		}
         nBoundAmount := fee.Bound
         nNextBoundAmount := feeNext.Bound
         // max uint16 (65535 = 0.65535 = 65.5535%)
