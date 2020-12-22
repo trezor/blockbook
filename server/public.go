@@ -551,7 +551,7 @@ func formatAmountWithDecimals(a *bchain.Amount, d int) string {
 }
 
 func formatInt64WithDecimals(a int64, d int) string {
-	amount := (bchain.Amount*)(big.NewInt(a))
+	amount := (bchain.Amount)(*big.NewInt(a))
 	return a.DecimalString(d)
 }
 
