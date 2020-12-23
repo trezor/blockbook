@@ -10,7 +10,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/juju/errors"
 	vlq "github.com/bsm/go-vlq"
-	"blockbook/common"
+	"github.com/syscoin/blockbook/common"
 )
 
 // BaseParser implements data parsing/handling functionality base for all other parsers

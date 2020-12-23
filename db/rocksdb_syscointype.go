@@ -1,7 +1,7 @@
 package db
 
 import (
-	"blockbook/bchain"
+	"github.com/syscoin/blockbook/bchain"
 	"bytes"
 	"github.com/golang/glog"
 	"github.com/juju/errors"

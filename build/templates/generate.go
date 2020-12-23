@@ -1,7 +1,7 @@
 package main
 
 import (
-	"blockbook/build/tools"
+	"github.com/syscoin/blockbook/build/tools"
 	"fmt"
 	"os"
 	"path/filepath"

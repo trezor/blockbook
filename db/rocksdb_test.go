@@ -3,10 +3,10 @@
 package db
 
 import (
-	"blockbook/bchain"
-	"blockbook/bchain/coins/btc"
-	"blockbook/common"
-	"blockbook/tests/dbtestdata"
+	"github.com/syscoin/blockbook/bchain"
+	"github.com/syscoin/blockbook/bchain/coins/btc"
+	"github.com/syscoin/blockbook/common"
+	"github.com/syscoin/blockbook/tests/dbtestdata"
 	"encoding/binary"
 	"encoding/hex"
 	"io/ioutil"

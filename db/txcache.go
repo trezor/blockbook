@@ -1,9 +1,9 @@
 package db
 
 import (
-	"blockbook/bchain"
-	"blockbook/bchain/coins/eth"
-	"blockbook/common"
+	"github.com/syscoin/blockbook/bchain"
+	"github.com/syscoin/blockbook/bchain/coins/eth"
+	"github.com/syscoin/blockbook/common"
 
 	"github.com/golang/glog"
 	"github.com/juju/errors"

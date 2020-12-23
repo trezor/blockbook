@@ -1,8 +1,8 @@
 package api
 
 import (
-	"blockbook/bchain"
-	"blockbook/db"
+	"github.com/syscoin/blockbook/bchain"
+	"github.com/syscoin/blockbook/db"
 	"fmt"
 	"math/big"
 	"sort"

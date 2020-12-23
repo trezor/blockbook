@@ -3,11 +3,11 @@
 package tests
 
 import (
-	"blockbook/bchain"
-	"blockbook/bchain/coins"
-	build "blockbook/build/tools"
-	"blockbook/tests/rpc"
-	"blockbook/tests/sync"
+	"github.com/syscoin/blockbook/bchain"
+	"github.com/syscoin/blockbook/bchain/coins"
+	build "github.com/syscoin/blockbook/build/tools"
+	"github.com/syscoin/blockbook/tests/rpc"
+	"github.com/syscoin/blockbook/tests/sync"
 	"encoding/json"
 	"errors"
 	"fmt"

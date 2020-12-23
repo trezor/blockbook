@@ -3,11 +3,11 @@
 package server
 
 import (
-	"blockbook/bchain"
-	"blockbook/bchain/coins/btc"
-	"blockbook/common"
-	"blockbook/db"
-	"blockbook/tests/dbtestdata"
+	"github.com/syscoin/blockbook/bchain"
+	"github.com/syscoin/blockbook/bchain/coins/btc"
+	"github.com/syscoin/blockbook/common"
+	"github.com/syscoin/blockbook/db"
+	"github.com/syscoin/blockbook/tests/dbtestdata"
 	"encoding/json"
 	"io/ioutil"
 	"net/http"

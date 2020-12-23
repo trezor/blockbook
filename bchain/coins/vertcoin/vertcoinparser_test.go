@@ -3,8 +3,8 @@
 package vertcoin
 
 import (
-	"blockbook/bchain"
-	"blockbook/bchain/coins/btc"
+	"github.com/syscoin/blockbook/bchain"
+	"github.com/syscoin/blockbook/bchain/coins/btc"
 	"encoding/hex"
 	"math/big"
 	"os"

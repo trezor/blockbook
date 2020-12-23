@@ -1,7 +1,7 @@
 package eth
 
 import (
-	"blockbook/bchain"
+	"github.com/syscoin/blockbook/bchain"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -18,7 +18,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/golang/glog"
 	"github.com/juju/errors"
-	"blockbook/common"
+	"github.com/syscoin/blockbook/common"
 )
 
 // EthereumNet type specifies the type of ethereum network

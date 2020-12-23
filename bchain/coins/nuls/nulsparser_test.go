@@ -3,8 +3,8 @@
 package nuls
 
 import (
-	"blockbook/bchain"
-	"blockbook/bchain/coins/btc"
+	"github.com/syscoin/blockbook/bchain"
+	"github.com/syscoin/blockbook/bchain/coins/btc"
 	"encoding/hex"
 	"math/big"
 	"reflect"
@@ -12,7 +12,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/martinboehm/btcutil/hdkeychain"
-	"blockbook/common"
+	"github.com/syscoin/blockbook/common"
 )
 
 var (

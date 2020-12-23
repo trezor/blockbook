@@ -3,7 +3,7 @@
 package api
 
 import (
-	"blockbook/bchain"
+	"github.com/syscoin/blockbook/bchain"
 	"encoding/json"
 	"math/big"
 	"reflect"

@@ -1,7 +1,7 @@
 package dbtestdata
 
 import (
-	"blockbook/bchain"
+	"github.com/syscoin/blockbook/bchain"
 	"context"
 	"encoding/json"
 	"errors"

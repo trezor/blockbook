@@ -3,9 +3,9 @@
 package sync
 
 import (
-	"blockbook/bchain"
-	"blockbook/common"
-	"blockbook/db"
+	"github.com/syscoin/blockbook/bchain"
+	"github.com/syscoin/blockbook/common"
+	"github.com/syscoin/blockbook/db"
 	"encoding/json"
 	"errors"
 	"io/ioutil"

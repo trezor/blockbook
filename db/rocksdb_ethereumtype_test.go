@@ -3,9 +3,9 @@
 package db
 
 import (
-	"blockbook/bchain"
-	"blockbook/bchain/coins/eth"
-	"blockbook/tests/dbtestdata"
+	"github.com/syscoin/blockbook/bchain"
+	"github.com/syscoin/blockbook/bchain/coins/eth"
+	"github.com/syscoin/blockbook/tests/dbtestdata"
 	"encoding/hex"
 	"reflect"
 	"testing"

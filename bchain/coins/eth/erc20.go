@@ -1,7 +1,7 @@
 package eth
 
 import (
-	"blockbook/bchain"
+	"github.com/syscoin/blockbook/bchain"
 	"bytes"
 	"context"
 	"encoding/hex"

@@ -3,7 +3,7 @@
 package rpc
 
 import (
-	"blockbook/bchain"
+	"github.com/syscoin/blockbook/bchain"
 	"encoding/json"
 	"io/ioutil"
 	"path/filepath"

@@ -3,10 +3,10 @@
 package fiat
 
 import (
-	"blockbook/bchain"
-	"blockbook/bchain/coins/btc"
-	"blockbook/common"
-	"blockbook/db"
+	"github.com/syscoin/blockbook/bchain"
+	"github.com/syscoin/blockbook/bchain/coins/btc"
+	"github.com/syscoin/blockbook/common"
+	"github.com/syscoin/blockbook/db"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"

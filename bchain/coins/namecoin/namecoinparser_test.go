@@ -3,7 +3,7 @@
 package namecoin
 
 import (
-	"blockbook/bchain/coins/btc"
+	"github.com/syscoin/blockbook/bchain/coins/btc"
 	"bytes"
 	"encoding/hex"
 	"fmt"

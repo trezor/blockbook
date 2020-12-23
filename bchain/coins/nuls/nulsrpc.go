@@ -1,8 +1,8 @@
 package nuls
 
 import (
-	"blockbook/bchain"
-	"blockbook/bchain/coins/btc"
+	"github.com/syscoin/blockbook/bchain"
+	"github.com/syscoin/blockbook/bchain/coins/btc"
 	"bytes"
 	"encoding/base64"
 	"encoding/hex"

@@ -3,8 +3,8 @@
 package eth
 
 import (
-	"blockbook/bchain"
-	"blockbook/tests/dbtestdata"
+	"github.com/syscoin/blockbook/bchain"
+	"github.com/syscoin/blockbook/tests/dbtestdata"
 	fmt "fmt"
 	"math/big"
 	"strings"

@@ -1,10 +1,10 @@
 package server
 
 import (
-	"blockbook/api"
-	"blockbook/bchain"
-	"blockbook/common"
-	"blockbook/db"
+	"github.com/syscoin/blockbook/api"
+	"github.com/syscoin/blockbook/bchain"
+	"github.com/syscoin/blockbook/common"
+	"github.com/syscoin/blockbook/db"
 	"encoding/json"
 	"encoding/hex"
 	"math/big"

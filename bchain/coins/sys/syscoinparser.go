@@ -2,9 +2,9 @@ package syscoin
 
 import (
 	"encoding/json"
-	"blockbook/bchain"
-	"blockbook/bchain/coins/btc"
-	"blockbook/bchain/coins/utils"
+	"github.com/syscoin/blockbook/bchain"
+	"github.com/syscoin/blockbook/bchain/coins/btc"
+	"github.com/syscoin/blockbook/bchain/coins/utils"
 	"bytes"
 	"math/big"
 	"github.com/martinboehm/btcd/wire"

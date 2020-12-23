@@ -1,7 +1,7 @@
 package fiat
 
 import (
-	"blockbook/db"
+	"github.com/syscoin/blockbook/db"
 	"encoding/json"
 	"errors"
 	"io/ioutil"

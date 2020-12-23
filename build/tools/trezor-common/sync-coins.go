@@ -2,7 +2,7 @@
 package main
 
 import (
-	build "blockbook/build/tools"
+	build "github.com/syscoin/blockbook/build/tools"
 	"encoding/json"
 	"errors"
 	"fmt"

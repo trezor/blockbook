@@ -3,8 +3,8 @@
 package koto
 
 import (
-	"blockbook/bchain"
-	"blockbook/bchain/coins/btc"
+	"github.com/syscoin/blockbook/bchain"
+	"github.com/syscoin/blockbook/bchain/coins/btc"
 	"bytes"
 	"encoding/hex"
 	"math/big"

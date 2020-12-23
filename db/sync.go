@@ -1,8 +1,8 @@
 package db
 
 import (
-	"blockbook/bchain"
-	"blockbook/common"
+	"github.com/syscoin/blockbook/bchain"
+	"github.com/syscoin/blockbook/common"
 	"os"
 	"sync"
 	"sync/atomic"

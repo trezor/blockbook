@@ -3,7 +3,7 @@
 package flo
 
 import (
-	"blockbook/bchain/coins/btc"
+	"github.com/syscoin/blockbook/bchain/coins/btc"
 	"encoding/hex"
 	"os"
 	"reflect"

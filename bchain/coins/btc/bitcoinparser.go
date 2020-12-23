@@ -1,7 +1,7 @@
 package btc
 
 import (
-	"blockbook/bchain"
+	"github.com/syscoin/blockbook/bchain"
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"

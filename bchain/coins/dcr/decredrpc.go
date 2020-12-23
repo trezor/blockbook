@@ -1,7 +1,7 @@
 package dcr
 
 import (
-	"blockbook/bchain"
+	"github.com/syscoin/blockbook/bchain"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -16,12 +16,12 @@ import (
 	"sync"
 	"time"
 
-	"blockbook/bchain/coins/btc"
+	"github.com/syscoin/blockbook/bchain/coins/btc"
 
 	"github.com/decred/dcrd/dcrjson"
 	"github.com/golang/glog"
 	"github.com/juju/errors"
-	"blockbook/common"
+	"github.com/syscoin/blockbook/common"
 )
 
 // voteBitYes defines the vote bit set when a given block validates the previous
