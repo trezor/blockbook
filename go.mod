@@ -28,7 +28,7 @@ require (
 	github.com/juju/testing v0.0.0-20191001232224-ce9dec17d28b // indirect
 	github.com/martinboehm/bchutil v0.0.0-20190104112650-6373f11b6efe
 	github.com/martinboehm/btcd v0.0.0-20200313230603-83af86142d93
-	github.com/syscoin/btcd v0.0.0-20200313230603-434a4faf8034
+	github.com/syscoin/btcd v0.0.0-20201221171520-434a4faf8034
 	github.com/martinboehm/btcutil v0.0.0-20200229134221-d7706467ae8f
 	github.com/martinboehm/golang-socketio v0.0.0-20180414165752-f60b0a8befde
 	github.com/mr-tron/base58 v1.2.0 // indirect
