@@ -357,7 +357,7 @@ github.com/martinboehm/bchutil v0.0.0-20190104112650-6373f11b6efe/go.mod h1:0hw4
 github.com/martinboehm/btcd v0.0.0-20200313230603-83af86142d93 h1:SBXxF9UMEPAswVhAt3Y275Lx59Do8C/rpAmg6k73HYY=
 github.com/martinboehm/btcd v0.0.0-20200313230603-83af86142d93/go.mod h1:rKQj/jGwFruYjpM6vN+syReFoR0DsLQaajhyH/5mwUE=
 github.com/syscoin/btcd v0.0.0-20201223040803-26c29e1db0ec h1:xr4h8KaM4ibpFGPLDJLRhjZtKZet/Q14YgPk3T0F9FE=
-github.com/syscoin/btcd v0.0.0-20201223040803-26c29e1db0ec/go.mod h1:rKQj/jGwFruYjpM6vN+syReFoR0DsLQaajhyH/5mwUE=
+github.com/syscoin/btcd v0.0.0-20201223040803-26c29e1db0ec/go.mod h1:xr4h8KaM4ibpFGPLDJLRhjZtKZet/Q14YgPk3T0F9FE=
 github.com/martinboehm/btcutil v0.0.0-20180706230648-ab6388e0c60a/go.mod h1:NIviPmxe43yBgIB4HGB4w4kv9/s5kaDa/pi+wZAAxQo=
 github.com/martinboehm/btcutil v0.0.0-20200229134221-d7706467ae8f h1:MMI9XvVjNHkqQDDyud0Ll0qd/w4jAhgkLZMY8q6KbR8=
 github.com/martinboehm/btcutil v0.0.0-20200229134221-d7706467ae8f/go.mod h1:NIviPmxe43yBgIB4HGB4w4kv9/s5kaDa/pi+wZAAxQo=
