@@ -311,8 +311,14 @@ func (p *EthereumParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) (
 		if pt.Receipt.GasUsed, err = hexDecodeBig(r.Receipt.GasUsed); err != nil {
 			return nil, errors.Annotatef(err, "GasUsed %v", r.Receipt.GasUsed)
 		}
-		if pt.Receipt.Status, err = hexDecodeBig(r.Receipt.Status); err != nil {
-			return nil, errors.Annotatef(err, "Status %v", r.Receipt.Status)
+		if r.Receipt.Status != "" {
+			if pt.Receipt.Status, err = hexDecodeBig(r.Receipt.Status); err != nil {
+				return nil, errors.Annotatef(err, "Status %v", r.Receipt.Status)
+			}
+		} else {
+			// unknown status, use 'U' as status bytes
+			// there is a potential for conflict with value 0x55 but this is not used by any chain at this moment
+			pt.Receipt.Status = []byte{'U'}
 		}
 		ptLogs := make([]*ProtoCompleteTransaction_ReceiptType_LogType, len(r.Receipt.Logs))
 		for i, l := range r.Receipt.Logs {
@@ -379,9 +385,14 @@ func (p *EthereumParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 				Topics:  topics,
 			}
 		}
+		status := ""
+		// handle a special value []byte{'U'} as unknown state
+		if len(pt.Receipt.Status) != 1 || pt.Receipt.Status[0] != 'U' {
+			status = hexEncodeBig(pt.Receipt.Status)
+		}
 		rr = &rpcReceipt{
 			GasUsed: hexEncodeBig(pt.Receipt.GasUsed),
-			Status:  hexEncodeBig(pt.Receipt.Status),
+			Status:  status,
 			Logs:    logs,
 		}
 	}
