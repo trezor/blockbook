@@ -48,7 +48,7 @@ import (
 	"github.com/trezor/blockbook/bchain/coins/vertcoin"
 	"github.com/trezor/blockbook/bchain/coins/viacoin"
 	"github.com/trezor/blockbook/bchain/coins/vipstarcoin"
-	"github.com/trezor/blockbook/bchain/coins/xzc"
+	"github.com/trezor/blockbook/bchain/coins/firo"
 	"github.com/trezor/blockbook/bchain/coins/zec"
 	"github.com/trezor/blockbook/common"
 )
@@ -94,7 +94,7 @@ func init() {
 	BlockChainFactories["PIVX"] = pivx.NewPivXRPC
 	BlockChainFactories["PIVX Testnet"] = pivx.NewPivXRPC
 	BlockChainFactories["Polis"] = polis.NewPolisRPC
-	BlockChainFactories["Zcoin"] = xzc.NewZcoinRPC
+	BlockChainFactories["Firo"] = firo.NewFiroRPC
 	BlockChainFactories["Fujicoin"] = fujicoin.NewFujicoinRPC
 	BlockChainFactories["Flo"] = flo.NewFloRPC
 	BlockChainFactories["Bellcoin"] = bellcoin.NewBellcoinRPC
