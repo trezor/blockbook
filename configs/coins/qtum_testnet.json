@@ -22,10 +22,10 @@
     "package_name": "backend-qtum-testnet",
     "package_revision": "satoshilabs-1",
     "system_user": "qtum",
-    "version": "0.19.1",
-    "binary_url": "https://github.com/qtumproject/qtum/releases/download/mainnet-ignition-v0.19.1/qtum-0.19.1-x86_64-linux-gnu.tar.gz",
+    "version": "0.20.1",
+    "binary_url": "https://github.com/qtumproject/qtum/releases/download/mainnet-ignition-v0.20.1/qtum-0.20.1-x86_64-linux-gnu.tar.gz",
     "verification_type": "sha256",
-    "verification_source": "044a8e535ff8a220dbcd1fe7fadae2429c123c97bd1fb5e7c50abc0e6640c8d4",
+    "verification_source": "e9a77eb3e2b76625fdc8058c12bc0790309b24b9c1ac39f4895e4f8756cf0010",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
       "bin/qtum-qt"
