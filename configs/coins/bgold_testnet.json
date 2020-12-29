@@ -1,0 +1,84 @@
+{
+    "coin": {
+      "name": "Bgold-Testnet",
+      "shortcut": "TBTG",
+      "label": "Bitcoin Gold Testnet",
+      "alias": "bgold_testnet"
+    },
+    "ports": {
+      "backend_rpc": 18035,
+      "backend_message_queue": 48335,
+      "blockbook_internal": 19035,
+      "blockbook_public": 19135
+    },
+    "ipc": {
+      "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
+      "rpc_user": "rpc",
+      "rpc_pass": "rpc",
+      "rpc_timeout": 25,
+      "message_queue_binding_template": "tcp://127.0.0.1:{{.Ports.BackendMessageQueue}}"
+    },
+    "backend": {
+      "package_name": "backend-bgold-testnet",
+      "package_revision": "satoshilabs-1",
+      "system_user": "bgold",
+      "version": "0.17.3",
+      "binary_url": "https://github.com/BTCGPU/BTCGPU/releases/download/v0.17.3/bitcoin-gold-0.17.3-x86_64-linux-gnu.tar.gz",
+      "verification_type": "gpg-sha256",
+      "verification_source": "https://github.com/BTCGPU/BTCGPU/releases/download/v0.17.3/SHA256SUMS.asc",
+      "extract_command": "tar -C backend --strip 1 -xf",
+      "exclude_files": [
+        "bin/bitcoin-qt"
+      ],
+      "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/bgoldd -datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -conf={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf -pid=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",
+      "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/testnet/*.log",
+      "postinst_script_template": "",
+      "service_type": "forking",
+      "service_additional_params_template": "",
+      "protect_memory": true,
+      "mainnet": false,
+      "server_config_file": "bitcoin_like.conf",
+      "client_config_file": "bitcoin_like_client.conf",
+      "additional_params": {
+        "addnode": [
+          "136.243.230.235:18338",
+          "167.179.114.118:18338",
+          "51.15.140.154:18338",
+          "62.141.35.88:18338",
+          "71.172.96.60:18338",
+          "8.39.234.187:18338"
+        ],
+        "maxconnections": 250,
+        "mempoolexpiry": 72,
+        "timeout": 768
+      }
+    },
+    "blockbook": {
+      "package_name": "blockbook-bgold-testnet",
+      "system_user": "blockbook-bgold",
+      "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
+      "public_binding_template": ":{{.Ports.BlockbookPublic}}",
+      "explorer_url": "",
+      "additional_params": "",
+      "block_chain": {
+        "parse": true,
+        "subversion": "/Bitcoin Gold:0.17.3/",
+        "mempool_workers": 8,
+        "mempool_sub_workers": 2,
+        "block_addresses_to_keep": 300,
+        "xpub_magic": 70617039,
+        "xpub_magic_segwit_p2sh": 71979618,
+        "xpub_magic_segwit_native": 73342198,
+        "slip44": 156,
+        "additional_params": {
+          "fiat_rates": "coingecko",
+          "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"bitcoin-gold\", \"periodSeconds\": 60}"
+        }
+      }
+    },
+    "meta": {
+      "package_maintainer": "Martin Kuvandzhiev",
+      "package_maintainer_email": "martin@bitcoingold.org"
+    }
+  }
+  

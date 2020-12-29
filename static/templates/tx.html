@@ -65,6 +65,18 @@
                 <td>Fees</td>
                 <td class="data">{{formatAmount $tx.FeesSat}} {{$cs}}</td>
             </tr>{{end -}}
+            {{- if not $tx.Confirmations}}
+            <tr>
+                <td><span title="Replace by fee">RBF</span></td>
+                <td class="data">
+                    {{- if $tx.Rbf}}
+                    <span title="Replace by fee transaction, could be replaced.">ON</span>
+                    {{- else -}}
+                    <span title="Final transaction that can not be replaced unless it is dropped from the mempool.">OFF️</span>
+                    {{end -}}
+                </td>
+            </tr>
+            {{end -}}
         </tbody>
     </table>
 </div>
