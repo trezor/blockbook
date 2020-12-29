@@ -54,7 +54,7 @@
       }
     },
     "blockbook": {
-      "package_name": "blockbook-bgold",
+      "package_name": "blockbook-bgold-testnet",
       "system_user": "blockbook-bgold",
       "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
       "public_binding_template": ":{{.Ports.BlockbookPublic}}",
