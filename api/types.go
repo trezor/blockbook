@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/bchain/coins/eth"
 	"github.com/trezor/blockbook/common"
 	"github.com/trezor/blockbook/db"
 )
@@ -170,12 +171,12 @@ type TokenTransfer struct {
 
 // EthereumSpecific contains ethereum specific transaction data
 type EthereumSpecific struct {
-	Status   int      `json:"status"` // 1 OK, 0 Fail, -1 pending
-	Nonce    uint64   `json:"nonce"`
-	GasLimit *big.Int `json:"gasLimit"`
-	GasUsed  *big.Int `json:"gasUsed"`
-	GasPrice *Amount  `json:"gasPrice"`
-	Data     string   `json:"data,omitempty"`
+	Status   eth.TxStatus `json:"status"` // 1 OK, 0 Fail, -1 pending
+	Nonce    uint64       `json:"nonce"`
+	GasLimit *big.Int     `json:"gasLimit"`
+	GasUsed  *big.Int     `json:"gasUsed"`
+	GasPrice *Amount      `json:"gasPrice"`
+	Data     string       `json:"data,omitempty"`
 }
 
 // Tx holds information about a transaction
@@ -195,8 +196,7 @@ type Tx struct {
 	FeesSat          *Amount           `json:"fees,omitempty"`
 	Hex              string            `json:"hex,omitempty"`
 	Rbf              bool              `json:"rbf,omitempty"`
-	CoinSpecificData interface{}       `json:"-"`
-	CoinSpecificJSON json.RawMessage   `json:"-"`
+	CoinSpecificData json.RawMessage   `json:"coinSpecificData,omitempty"`
 	TokenTransfers   []TokenTransfer   `json:"tokenTransfers,omitempty"`
 	EthereumSpecific *EthereumSpecific `json:"ethereumSpecific,omitempty"`
 }
@@ -423,18 +423,19 @@ type BlockbookInfo struct {
 
 // BackendInfo is used to get information about blockchain
 type BackendInfo struct {
-	BackendError    string  `json:"error,omitempty"`
-	Chain           string  `json:"chain,omitempty"`
-	Blocks          int     `json:"blocks,omitempty"`
-	Headers         int     `json:"headers,omitempty"`
-	BestBlockHash   string  `json:"bestBlockHash,omitempty"`
-	Difficulty      string  `json:"difficulty,omitempty"`
-	SizeOnDisk      int64   `json:"sizeOnDisk,omitempty"`
-	Version         string  `json:"version,omitempty"`
-	Subversion      string  `json:"subversion,omitempty"`
-	ProtocolVersion string  `json:"protocolVersion,omitempty"`
-	Timeoffset      float64 `json:"timeOffset,omitempty"`
-	Warnings        string  `json:"warnings,omitempty"`
+	BackendError    string      `json:"error,omitempty"`
+	Chain           string      `json:"chain,omitempty"`
+	Blocks          int         `json:"blocks,omitempty"`
+	Headers         int         `json:"headers,omitempty"`
+	BestBlockHash   string      `json:"bestBlockHash,omitempty"`
+	Difficulty      string      `json:"difficulty,omitempty"`
+	SizeOnDisk      int64       `json:"sizeOnDisk,omitempty"`
+	Version         string      `json:"version,omitempty"`
+	Subversion      string      `json:"subversion,omitempty"`
+	ProtocolVersion string      `json:"protocolVersion,omitempty"`
+	Timeoffset      float64     `json:"timeOffset,omitempty"`
+	Warnings        string      `json:"warnings,omitempty"`
+	Consensus       interface{} `json:"consensus,omitempty"`
 }
 
 // SystemInfo contains information about the running blockbook and backend instance

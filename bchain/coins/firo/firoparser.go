@@ -1,4 +1,4 @@
-package xzc
+package firo
 
 import (
 	"bytes"
@@ -14,10 +14,13 @@ import (
 )
 
 const (
-	OpZeroCoinMint  = 0xc1
-	OpZeroCoinSpend = 0xc2
-	OpSigmaMint     = 0xc3
-	OpSigmaSpend    = 0xc4
+	OpZeroCoinMint  		= 0xc1
+	OpZeroCoinSpend 		= 0xc2
+	OpSigmaMint     		= 0xc3
+	OpSigmaSpend    		= 0xc4
+	OpLelantusMint    	= 0xc5
+	OpLelantusJMint    	= 0xc6
+	OpLelantusJoinSplit = 0xc7
 
 	MainnetMagic wire.BitcoinNet = 0xe3d9fef1
 	TestnetMagic wire.BitcoinNet = 0xcffcbeea
@@ -28,6 +31,8 @@ const (
 	MTPL                   = 64
 
 	SpendTxID = "0000000000000000000000000000000000000000000000000000000000000000"
+
+	TransactionQuorumCommitmentType = 6
 )
 
 var (
@@ -58,21 +63,21 @@ func init() {
 	RegtestParams.Net = RegtestMagic
 }
 
-// ZcoinParser handle
-type ZcoinParser struct {
+// FiroParser handle
+type FiroParser struct {
 	*btc.BitcoinParser
 }
 
-// NewZcoinParser returns new ZcoinParser instance
-func NewZcoinParser(params *chaincfg.Params, c *btc.Configuration) *ZcoinParser {
-	return &ZcoinParser{
+// NewFiroParser returns new FiroParser instance
+func NewFiroParser(params *chaincfg.Params, c *btc.Configuration) *FiroParser {
+	return &FiroParser{
 		BitcoinParser: btc.NewBitcoinParser(params, c),
 	}
 }
 
-// GetChainParams contains network parameters for the main Zcoin network,
-// the regression test Zcoin network, the test Zcoin network and
-// the simulation test Zcoin network, in this order
+// GetChainParams contains network parameters for the main Firo network,
+// the regression test Firo network, the test Firo network and
+// the simulation test Firo network, in this order
 func GetChainParams(chain string) *chaincfg.Params {
 	if !chaincfg.IsRegistered(&MainNetParams) {
 		err := chaincfg.Register(&MainNetParams)
@@ -97,7 +102,7 @@ func GetChainParams(chain string) *chaincfg.Params {
 }
 
 // GetAddressesFromAddrDesc returns addresses for given address descriptor with flag if the addresses are searchable
-func (p *ZcoinParser) GetAddressesFromAddrDesc(addrDesc bchain.AddressDescriptor) ([]string, bool, error) {
+func (p *FiroParser) GetAddressesFromAddrDesc(addrDesc bchain.AddressDescriptor) ([]string, bool, error) {
 
 	if len(addrDesc) > 0 {
 		switch addrDesc[0] {
@@ -109,6 +114,12 @@ func (p *ZcoinParser) GetAddressesFromAddrDesc(addrDesc bchain.AddressDescriptor
 			return []string{"Sigmamint"}, false, nil
 		case OpSigmaSpend:
 			return []string{"Sigmaspend"}, false, nil
+		case OpLelantusMint:
+			return []string{"LelantusMint"}, false, nil
+		case OpLelantusJMint:
+			return []string{"LelantusJMint"}, false, nil
+		case OpLelantusJoinSplit:
+			return []string{"LelantusJoinSplit"}, false, nil
 		}
 	}
 
@@ -116,17 +127,27 @@ func (p *ZcoinParser) GetAddressesFromAddrDesc(addrDesc bchain.AddressDescriptor
 }
 
 // PackTx packs transaction to byte array using protobuf
-func (p *ZcoinParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) ([]byte, error) {
+func (p *FiroParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) ([]byte, error) {
 	return p.BaseParser.PackTx(tx, height, blockTime)
 }
 
 // UnpackTx unpacks transaction from protobuf byte array
-func (p *ZcoinParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
+func (p *FiroParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 	return p.BaseParser.UnpackTx(buf)
 }
 
+// TxFromFiroMsgTx converts bitcoin wire Tx to bchain.Tx
+func (p *FiroParser) TxFromFiroMsgTx(t *FiroMsgTx, parseAddresses bool) bchain.Tx {
+	btx := p.TxFromMsgTx(&t.MsgTx, parseAddresses)
+
+	// NOTE: wire.MsgTx.TxHash() doesn't include extra
+	btx.Txid = t.TxHash().String()
+
+	return btx
+}
+
 // ParseBlock parses raw block to our Block struct
-func (p *ZcoinParser) ParseBlock(b []byte) (*bchain.Block, error) {
+func (p *FiroParser) ParseBlock(b []byte) (*bchain.Block, error) {
 	reader := bytes.NewReader(b)
 
 	// parse standard block header first
@@ -181,16 +202,37 @@ func (p *ZcoinParser) ParseBlock(b []byte) (*bchain.Block, error) {
 	txs := make([]bchain.Tx, ntx)
 
 	for i := uint64(0); i < ntx; i++ {
-		tx := wire.MsgTx{}
+		tx := FiroMsgTx{}
 
-		err := tx.BtcDecode(reader, 0, wire.WitnessEncoding)
-		if err != nil {
+		// read version and seek back
+		var version uint32 = 0
+		if err = binary.Read(reader, binary.LittleEndian, &version); err != nil {
 			return nil, err
 		}
 
-		btx := p.TxFromMsgTx(&tx, false)
+		if _, err = reader.Seek(-4, io.SeekCurrent); err != nil {
+			return nil, err
+		}
 
-		p.parseZcoinTx(&btx)
+		txVersion := version & 0xffff
+		txType := (version >> 16) & 0xffff
+
+		enc := wire.WitnessEncoding
+
+		// transaction quorum commitment could not be parsed with witness flag
+		if txVersion == 3 && txType == TransactionQuorumCommitmentType {
+			enc = wire.BaseEncoding
+		}
+
+		if err = tx.FiroDecode(reader, 0, enc); err != nil {
+			return nil, err
+		}
+
+		btx := p.TxFromFiroMsgTx(&tx, false)
+
+		if err = p.parseFiroTx(&btx); err != nil {
+			return nil, err
+		}
 
 		txs[i] = btx
 	}
@@ -205,7 +247,7 @@ func (p *ZcoinParser) ParseBlock(b []byte) (*bchain.Block, error) {
 }
 
 // ParseTxFromJson parses JSON message containing transaction and returns Tx struct
-func (p *ZcoinParser) ParseTxFromJson(msg json.RawMessage) (*bchain.Tx, error) {
+func (p *FiroParser) ParseTxFromJson(msg json.RawMessage) (*bchain.Tx, error) {
 	var tx bchain.Tx
 	err := json.Unmarshal(msg, &tx)
 	if err != nil {
@@ -222,12 +264,12 @@ func (p *ZcoinParser) ParseTxFromJson(msg json.RawMessage) (*bchain.Tx, error) {
 		vout.JsonValue = ""
 	}
 
-	p.parseZcoinTx(&tx)
+	p.parseFiroTx(&tx)
 
 	return &tx, nil
 }
 
-func (p *ZcoinParser) parseZcoinTx(tx *bchain.Tx) error {
+func (p *FiroParser) parseFiroTx(tx *bchain.Tx) error {
 	for i := range tx.Vin {
 		vin := &tx.Vin[i]
 

@@ -259,10 +259,11 @@ func TestGetAddressesFromAddrDesc(t *testing.T) {
 }
 
 var (
-	testTx1, testTx2 bchain.Tx
+	testTx1, testTx2, testTx3 bchain.Tx
 
 	testTxPacked1 = "0001e2408ba8d7af5401000000017f9a22c9cbf54bd902400df746f138f37bcf5b4d93eb755820e974ba43ed5f42040000006a4730440220037f4ed5427cde81d55b9b6a2fd08c8a25090c2c2fff3a75c1a57625ca8a7118022076c702fe55969fa08137f71afd4851c48e31082dd3c40c919c92cdbc826758d30121029f6da5623c9f9b68a9baf9c1bc7511df88fa34c6c2f71f7c62f2f03ff48dca80feffffff019c9700000000000017a9146144d57c8aff48492c9dfb914e120b20bad72d6f8773d00700"
 	testTxPacked2 = "0007c91a899ab7da6a010000000001019d64f0c72a0d206001decbffaa722eb1044534c74eee7a5df8318e42a4323ec10000000017160014550da1f5d25a9dae2eafd6902b4194c4c6500af6ffffffff02809698000000000017a914cd668d781ece600efa4b2404dc91fd26b8b8aed8870553d7360000000017a914246655bdbd54c7e477d0ea2375e86e0db2b8f80a8702473044022076aba4ad559616905fa51d4ddd357fc1fdb428d40cb388e042cdd1da4a1b7357022011916f90c712ead9a66d5f058252efd280439ad8956a967e95d437d246710bc9012102a80a5964c5612bb769ef73147b2cf3c149bc0fd4ecb02f8097629c94ab013ffd00000000"
+	testTxPacked3 = "00003d818bfda9aa3e02000000000102deb1999a857ab0a13d6b12fbd95ea75b409edde5f2ff747507ce42d9986a8b9d0000000000fdffffff9fd2d3361e203b2375eba6438efbef5b3075531e7e583c7cc76b7294fe7f22980000000000fdffffff02a0860100000000001600148091746745464e7555c31e9a5afceac14a02978ae7fc1c0000000000160014565ea9ff4589d3e05ba149ae6e257752bfdc2a1e0247304402207d67d320a8e813f986b35e9791935fcb736754812b7038686f5de6cfdcda99cd02201c3bb2c178e0056016437ecfe365a7eef84aa9d293ebdc566177af82e22fcdd3012103abb30c1bbe878b07b58dc169b1d061d48c60be8107f632a59778b38bf7ceea5a02473044022044f54a478cfe086e870cb026c9dcd4e14e63778bef569a4d55a6332725cd9a9802202f0e94c04e6f328fc64ad9efe552888c299750d1b8d033324825a3ff29920e030121036fcd433428aa7dc65c4f5408fa31f208c54fe4b4c6c1ae9c39a825ed4f1ac039813d0000"
 )
 
 func init() {
@@ -335,6 +336,54 @@ func init() {
 			},
 		},
 	}
+
+	testTx3 = bchain.Tx{
+		Hex:       "02000000000102deb1999a857ab0a13d6b12fbd95ea75b409edde5f2ff747507ce42d9986a8b9d0000000000fdffffff9fd2d3361e203b2375eba6438efbef5b3075531e7e583c7cc76b7294fe7f22980000000000fdffffff02a0860100000000001600148091746745464e7555c31e9a5afceac14a02978ae7fc1c0000000000160014565ea9ff4589d3e05ba149ae6e257752bfdc2a1e0247304402207d67d320a8e813f986b35e9791935fcb736754812b7038686f5de6cfdcda99cd02201c3bb2c178e0056016437ecfe365a7eef84aa9d293ebdc566177af82e22fcdd3012103abb30c1bbe878b07b58dc169b1d061d48c60be8107f632a59778b38bf7ceea5a02473044022044f54a478cfe086e870cb026c9dcd4e14e63778bef569a4d55a6332725cd9a9802202f0e94c04e6f328fc64ad9efe552888c299750d1b8d033324825a3ff29920e030121036fcd433428aa7dc65c4f5408fa31f208c54fe4b4c6c1ae9c39a825ed4f1ac039813d0000",
+		Blocktime: 1607805599,
+		Txid:      "24551a58a1d1fb89d7052e2bbac7cb69a7825ee1e39439befbec8c32148cf735",
+		LockTime:  15745,
+		Version:   2,
+		Vin: []bchain.Vin{
+			{
+				ScriptSig: bchain.ScriptSig{
+					Hex: "",
+				},
+				Txid:     "9d8b6a98d942ce077574fff2e5dd9e405ba75ed9fb126b3da1b07a859a99b1de",
+				Vout:     0,
+				Sequence: 4294967293,
+			},
+			{
+				ScriptSig: bchain.ScriptSig{
+					Hex: "",
+				},
+				Txid:     "98227ffe94726bc77c3c587e1e5375305beffb8e43a6eb75233b201e36d3d29f",
+				Vout:     0,
+				Sequence: 4294967293,
+			},
+		},
+		Vout: []bchain.Vout{
+			{
+				ValueSat: *big.NewInt(100000),
+				N:        0,
+				ScriptPubKey: bchain.ScriptPubKey{
+					Hex: "00148091746745464e7555c31e9a5afceac14a02978a",
+					Addresses: []string{
+						"tb1qszghge69ge8824wrr6d94l82c99q99u2ccgv5w",
+					},
+				},
+			},
+			{
+				ValueSat: *big.NewInt(1899751),
+				N:        1,
+				ScriptPubKey: bchain.ScriptPubKey{
+					Hex: "0014565ea9ff4589d3e05ba149ae6e257752bfdc2a1e",
+					Addresses: []string{
+						"tb1q2e02nl6938f7qkapfxhxufth22lac2s792vsxp",
+					},
+				},
+			},
+		},
+	}
 }
 
 func TestPackTx(t *testing.T) {
@@ -370,6 +419,17 @@ func TestPackTx(t *testing.T) {
 				parser:    NewBitcoinParser(GetChainParams("test"), &Configuration{}),
 			},
 			want:    testTxPacked2,
+			wantErr: false,
+		},
+		{
+			name: "signet-1",
+			args: args{
+				tx:        testTx3,
+				height:    15745,
+				blockTime: 1607805599,
+				parser:    NewBitcoinParser(GetChainParams("signet"), &Configuration{}),
+			},
+			want:    testTxPacked3,
 			wantErr: false,
 		},
 	}
@@ -418,6 +478,16 @@ func TestUnpackTx(t *testing.T) {
 			},
 			want:    &testTx2,
 			want1:   510234,
+			wantErr: false,
+		},
+		{
+			name: "signet-1",
+			args: args{
+				packedTx: testTxPacked3,
+				parser:   NewBitcoinParser(GetChainParams("signet"), &Configuration{}),
+			},
+			want:    &testTx3,
+			want1:   15745,
 			wantErr: false,
 		},
 	}

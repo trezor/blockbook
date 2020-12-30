@@ -975,6 +975,9 @@ func (s *PublicServer) apiTxSpecific(r *http.Request, apiVersion int) (interface
 	var err error
 	s.metrics.ExplorerViews.With(common.Labels{"action": "api-tx-specific"}).Inc()
 	tx, err = s.chain.GetTransactionSpecific(&bchain.Tx{Txid: txid})
+	if err == bchain.ErrTxNotFound {
+		return nil, api.NewAPIError(fmt.Sprintf("Transaction '%v' not found", txid), true)
+	}
 	return tx, err
 }
 

@@ -1,0 +1,103 @@
+{
+  "connectBlocks": {
+    "syncRanges": [
+      { "lower": 1303776, "upper": 1303796 }
+    ],
+    "blocks": {
+      "1303796": {
+        "hash": "9c22576a9defad9cc5cf27ed479c2175d4eb396d1b7706bfd5066add9b0366d1",
+        "height": 1503796,
+        "noTxs": 1,
+        "txDetails": [
+          {
+            "txid": "c35f4d078ec352096c1f83908f87e4fbb9553f264b0ba139cd7ca82dc060105a",
+            "version": 1,
+            "vin": [
+              {
+                "coinbase": "03f4e41304c9c4745e08810078cef13400007a657267706f6f6c2e636f6d00",
+                "sequence": 0
+              }
+            ],
+            "vout": [
+              {
+                "value": 100.00000000,
+                "n": 0,
+                "scriptPubKey": {
+                  "hex": "21036842117fa1b85649c3e2e84c759387d5670051213c61764e2a5bbf55260c2f3bac"
+                }
+              }
+            ],
+            "hex": "01000000fdc4745e010000000000000000000000000000000000000000000000000000000000000000ffffffff1f03f4e41304c9c4745e08810078cef13400007a657267706f6f6c2e636f6d00000000000100e1f505000000002321036842117fa1b85649c3e2e84c759387d5670051213c61764e2a5bbf55260c2f3bac00000000",
+            "time": 1584710909,
+            "blocktime": 1584710909
+          }
+        ]
+      },
+      "1303793": {
+        "noTxs": 1,
+        "height": 1303793,
+        "hash": "354bbb65711ed4dc62a0277118e40e4c70a6dd16a2eb84e4127e004e241616c0",
+        "txDetails": [
+          {
+            "txid": "3ec26d343d09ee8a43b2c55bbe861302ec4cd42412b145562a4e39ea0a9b3923",
+            "version": 1,
+            "vin": [
+              {
+                "coinbase": "03f1e4130455c4745e088100786e600300007a657267706f6f6c2e636f6d00",
+                "sequence": 0
+              }
+            ],
+            "vout": [
+              {
+                "value": 100.00000000,
+                "n": 0,
+                "scriptPubKey": {
+                  "hex": "21036842117fa1b85649c3e2e84c759387d5670051213c61764e2a5bbf55260c2f3bac"
+                }
+              }
+            ],
+            "hex": "0100000060c4745e010000000000000000000000000000000000000000000000000000000000000000ffffffff1f03f1e4130455c4745e088100786e600300007a657267706f6f6c2e636f6d00000000000100e1f505000000002321036842117fa1b85649c3e2e84c759387d5670051213c61764e2a5bbf55260c2f3bac00000000",
+            "time": 1584710752,
+            "blocktime": 1584710752
+          }
+        ]
+      }
+    }
+  },
+  "handleFork": {
+    "syncRanges": [
+      {
+        "lower": 1303790,
+        "upper": 1303796
+      }
+    ],
+    "fakeBlocks": {
+      "1303794": {
+        "height": 1303794,
+        "hash": "c669716c44eb8ec04ba57210197ec55796f6ca2d84a39aaac37e5609e73a4da1"
+      },
+      "1303795": {
+        "height": 1303795,
+        "hash": "24be474670ce1db3c34c5c4d077aafba14ba6d406023037eb445b3996cbe8bb1"
+      },
+      "1303796": {
+        "height": 1303796,
+        "hash": "8919bab7d23acb214e841ebe24bd7c52b06774abc1ac9d4685c4ef220aed7dde"
+      }
+    },
+    "realBlocks": {
+      "1303794": {
+        "height": 1303794,
+        "hash": "186daaeb62fa64179e95f7d8941102b1f96f71aee8fa83175ddbdb276871a710"
+      },
+      "1303795": {
+        "height": 1303795,
+        "hash": "2e26261bbd964f5f44946a44fb0269802860ab65163a4edb6dd6da54ab9719e0"
+      },
+      "1303796": {
+        "height": 1303796,
+        "hash": "9c22576a9defad9cc5cf27ed479c2175d4eb396d1b7706bfd5066add9b0366d1"
+      }
+    }
+  }
+}

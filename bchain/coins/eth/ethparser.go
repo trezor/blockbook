@@ -311,8 +311,14 @@ func (p *EthereumParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) (
 		if pt.Receipt.GasUsed, err = hexDecodeBig(r.Receipt.GasUsed); err != nil {
 			return nil, errors.Annotatef(err, "GasUsed %v", r.Receipt.GasUsed)
 		}
-		if pt.Receipt.Status, err = hexDecodeBig(r.Receipt.Status); err != nil {
-			return nil, errors.Annotatef(err, "Status %v", r.Receipt.Status)
+		if r.Receipt.Status != "" {
+			if pt.Receipt.Status, err = hexDecodeBig(r.Receipt.Status); err != nil {
+				return nil, errors.Annotatef(err, "Status %v", r.Receipt.Status)
+			}
+		} else {
+			// unknown status, use 'U' as status bytes
+			// there is a potential for conflict with value 0x55 but this is not used by any chain at this moment
+			pt.Receipt.Status = []byte{'U'}
 		}
 		ptLogs := make([]*ProtoCompleteTransaction_ReceiptType_LogType, len(r.Receipt.Logs))
 		for i, l := range r.Receipt.Logs {
@@ -379,9 +385,14 @@ func (p *EthereumParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 				Topics:  topics,
 			}
 		}
+		status := ""
+		// handle a special value []byte{'U'} as unknown state
+		if len(pt.Receipt.Status) != 1 || pt.Receipt.Status[0] != 'U' {
+			status = hexEncodeBig(pt.Receipt.Status)
+		}
 		rr = &rpcReceipt{
 			GasUsed: hexEncodeBig(pt.Receipt.GasUsed),
-			Status:  hexEncodeBig(pt.Receipt.Status),
+			Status:  status,
 			Logs:    logs,
 		}
 	}
@@ -461,16 +472,20 @@ func (p *EthereumParser) EthereumTypeGetErc20FromTx(tx *bchain.Tx) ([]bchain.Erc
 	return r, nil
 }
 
+// TxStatus is status of transaction
+type TxStatus int
+
+// statuses of transaction
 const (
-	txStatusUnknown = iota - 2
-	txStatusPending
-	txStatusFailure
-	txStatusOK
+	TxStatusUnknown = TxStatus(iota - 2)
+	TxStatusPending
+	TxStatusFailure
+	TxStatusOK
 )
 
 // EthereumTxData contains ethereum specific transaction data
 type EthereumTxData struct {
-	Status   int      `json:"status"` // 1 OK, 0 Fail, -1 pending, -2 unknown
+	Status   TxStatus `json:"status"` // 1 OK, 0 Fail, -1 pending, -2 unknown
 	Nonce    uint64   `json:"nonce"`
 	GasLimit *big.Int `json:"gaslimit"`
 	GasUsed  *big.Int `json:"gasused"`
@@ -485,7 +500,7 @@ func GetEthereumTxData(tx *bchain.Tx) *EthereumTxData {
 
 // GetEthereumTxDataFromSpecificData returns EthereumTxData from coinSpecificData
 func GetEthereumTxDataFromSpecificData(coinSpecificData interface{}) *EthereumTxData {
-	etd := EthereumTxData{Status: txStatusPending}
+	etd := EthereumTxData{Status: TxStatusPending}
 	csd, ok := coinSpecificData.(completeTransaction)
 	if ok {
 		if csd.Tx != nil {
@@ -497,11 +512,11 @@ func GetEthereumTxDataFromSpecificData(coinSpecificData interface{}) *EthereumTx
 		if csd.Receipt != nil {
 			switch csd.Receipt.Status {
 			case "0x1":
-				etd.Status = txStatusOK
+				etd.Status = TxStatusOK
 			case "": // old transactions did not set status
-				etd.Status = txStatusUnknown
+				etd.Status = TxStatusUnknown
 			default:
-				etd.Status = txStatusFailure
+				etd.Status = TxStatusFailure
 			}
 			etd.GasUsed, _ = hexutil.DecodeBig(csd.Receipt.GasUsed)
 		}

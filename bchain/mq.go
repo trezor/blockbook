@@ -89,8 +89,9 @@ func (mq *MQ) run(callback func(NotificationType)) {
 			}
 			repeatedError = true
 			time.Sleep(100 * time.Millisecond)
+		} else {
+			repeatedError = false
 		}
-		repeatedError = false
 		if msg != nil && len(msg) >= 3 {
 			var nt NotificationType
 			switch string(msg[0]) {

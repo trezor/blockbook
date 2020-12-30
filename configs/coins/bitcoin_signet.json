@@ -1,15 +1,15 @@
 {
   "coin": {
-    "name": "Testnet",
-    "shortcut": "TEST",
-    "label": "Bitcoin Testnet",
-    "alias": "bitcoin_testnet"
+    "name": "Signet",
+    "shortcut": "sBTC",
+    "label": "Bitcoin Signet",
+    "alias": "bitcoin_signet"
   },
   "ports": {
-    "backend_rpc": 18030,
-    "backend_message_queue": 48330,
-    "blockbook_internal": 19030,
-    "blockbook_public": 19130
+    "backend_rpc": 18020,
+    "backend_message_queue": 48320,
+    "blockbook_internal": 19020,
+    "blockbook_public": 19120
   },
   "ipc": {
     "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
@@ -19,32 +19,30 @@
     "message_queue_binding_template": "tcp://127.0.0.1:{{.Ports.BackendMessageQueue}}"
   },
   "backend": {
-    "package_name": "backend-bitcoin-testnet",
+    "package_name": "backend-bitcoin-signet",
     "package_revision": "satoshilabs-1",
     "system_user": "bitcoin",
-    "version": "0.20.1",
-    "binary_url": "https://bitcoin.org/bin/bitcoin-core-0.20.1/bitcoin-0.20.1-x86_64-linux-gnu.tar.gz",
-    "verification_type": "gpg-sha256",
-    "verification_source": "https://bitcoin.org/bin/bitcoin-core-0.20.1/SHA256SUMS.asc",
+    "version": "0.21.0rc2",
+    "binary_url": "https://storage.tamami-foundation.org/bitcoin-a35b948836db20fab9b48d3b77cf9f23ffee109a-x86_64-linux-gnu.tar.gz",
+    "verification_type": "sha256",
+    "verification_source": "b7cbeafd6a20c53f593a763cde94115ff39ae63e14049037bffbe4656eeebdc4",
     "extract_command": "tar -C backend --strip 1 -xf",
-    "exclude_files": [
-      "bin/bitcoin-qt"
-    ],
+    "exclude_files": [],
     "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/bitcoind -datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -conf={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf -pid=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",
-    "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/testnet3/*.log",
+    "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/signet/*.log",
     "postinst_script_template": "",
     "service_type": "forking",
     "service_additional_params_template": "",
     "protect_memory": true,
     "mainnet": false,
-    "server_config_file": "bitcoin.conf",
+    "server_config_file": "bitcoin-signet.conf",
     "client_config_file": "bitcoin_client.conf",
     "additional_params": {
       "deprecatedrpc": "estimatefee"
     }
   },
   "blockbook": {
-    "package_name": "blockbook-bitcoin-testnet",
+    "package_name": "blockbook-bitcoin-signet",
     "system_user": "blockbook-bitcoin",
     "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
     "public_binding_template": ":{{.Ports.BlockbookPublic}}",
@@ -63,7 +61,7 @@
     }
   },
   "meta": {
-    "package_maintainer": "IT",
-    "package_maintainer_email": "it@satoshilabs.com"
+    "package_maintainer": "wakiyamap",
+    "package_maintainer_email": "wakiyamap@gmail.com"
   }
 }

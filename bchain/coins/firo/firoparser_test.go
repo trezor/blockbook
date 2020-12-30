@@ -1,6 +1,6 @@
 // +build unittest
 
-package xzc
+package firo
 
 import (
 	"bytes"
@@ -13,16 +13,18 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/martinboehm/btcd/wire"
 	"github.com/martinboehm/btcutil/chaincfg"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/bchain/coins/btc"
 )
 
 var (
-	testTx1, testTx2, testTx3, testTx4                         bchain.Tx
-	testTxPacked1, testTxPacked2, testTxPacked3, testTxPacked4 string
-	rawBlock1, rawBlock2                                       string
-	jsonTx                                                     json.RawMessage
+	testTx1, testTx2, testTx3, testTx4, testTx5, testTx6                                     bchain.Tx
+	rawTestTx1, rawTestTx2, rawTestTx3, rawTestTx4, rawTestTx5, rawTestTx6                   string
+	testTxPacked1, testTxPacked2, testTxPacked3, testTxPacked4, testTxPacked5, testTxPacked6 string
+	rawBlock1, rawBlock2, rawBlock3                                                          string
+	jsonTx                                                                                   json.RawMessage
 )
 
 func readHexs(path string) []string {
@@ -39,12 +41,15 @@ func init() {
 	rawBlocks := readHexs("./testdata/rawblock.hex")
 	rawBlock1 = rawBlocks[0]
 	rawBlock2 = rawBlocks[1]
+	rawBlock3 = rawBlocks[2]
 
 	hextxs := readHexs("./testdata/txs.hex")
-	rawTestTx1 := hextxs[0]
-	rawTestTx2 := hextxs[1]
-	rawTestTx3 := hextxs[2]
-	rawTestTx4 := hextxs[3]
+	rawTestTx1 = hextxs[0]
+	rawTestTx2 = hextxs[1]
+	rawTestTx3 = hextxs[2]
+	rawTestTx4 = hextxs[3]
+	rawTestTx5 = hextxs[4]
+	rawTestTx6 = hextxs[5]
 
 	rawSpendHex := readHexs("./testdata/rawspend.hex")[0]
 
@@ -59,13 +64,15 @@ func init() {
 	testTxPacked2 = testTxPackeds[1]
 	testTxPacked3 = testTxPackeds[2]
 	testTxPacked4 = testTxPackeds[3]
+	testTxPacked5 = testTxPackeds[4]
+	testTxPacked6 = testTxPackeds[5]
 
 	testTx1 = bchain.Tx{
 		Hex:       rawTestTx1,
 		Blocktime: 1533980594,
 		Time:      1533980594,
 		Txid:      "9d9e759dd970d86df9e105a7d4f671543bc16a03b6c5d2b48895f2a00aa7dd23",
-		LockTime:  0,
+		LockTime:  99688,
 		Vin: []bchain.Vin{
 			{
 				ScriptSig: bchain.ScriptSig{
@@ -78,14 +85,14 @@ func init() {
 		},
 		Vout: []bchain.Vout{
 			{
-				ValueSat: *big.NewInt(18188266638),
+				ValueSat: *big.NewInt(100000000),
 				N:        0,
 				ScriptPubKey: bchain.ScriptPubKey{
 					Hex: "c10280004c80f767f3ee79953c67a7ed386dcccf1243619eb4bbbe414a3982dd94a83c1b69ac52d6ab3b653a3e05c4e4516c8dfe1e58ada40461bc5835a4a0d0387a51c29ac11b72ae25bbcdef745f50ad08f08b3e9bc2c31a35444398a490e65ac090e9f341f1abdebe47e57e8237ac25d098e951b4164a35caea29f30acb50b12e4425df28",
 				},
 			},
 			{
-				ValueSat: *big.NewInt(18188266638),
+				ValueSat: *big.NewInt(871824000),
 				N:        1,
 				ScriptPubKey: bchain.ScriptPubKey{
 					Hex: "76a914c963f917c7f23cb4243e079db33107571b87690588ac",
@@ -105,9 +112,7 @@ func init() {
 		LockTime:  0,
 		Vin: []bchain.Vin{
 			{
-				ScriptSig: bchain.ScriptSig{
-					Hex: rawSpendHex,
-				},
+				Coinbase: rawSpendHex,
 				Txid:     "0000000000000000000000000000000000000000000000000000000000000000",
 				Vout:     4294967295,
 				Sequence: 2,
@@ -226,7 +231,7 @@ func init() {
 				ScriptPubKey: bchain.ScriptPubKey{
 					Hex: "76a914ff71b0c9c2a90c6164a50a2fb523eb54a8a6b55088ac",
 					Addresses: []string{
-						"a1HwTdCmQV3NspP2QqCGpehoFpi8NY4Zg3",
+						"aQ18FBVFtnueucZKeVg4srhmzbpAeb1KoN",
 					},
 				},
 			},
@@ -250,6 +255,103 @@ func init() {
 					},
 				},
 			},
+			// TODO: test segwit
+		},
+	}
+
+	testTx5 = bchain.Tx{
+		Hex:       rawTestTx5,
+		Blocktime: 1591752749,
+		Time:      1591752749,
+		Txid:      "8d1f32f35c32d2c127a7400dc1ec52049fbf0b8bcdf284cfaa3da59b6169a22d",
+		LockTime:  0,
+		Vin:       []bchain.Vin{},
+		Vout:      []bchain.Vout{},
+	}
+
+	testTx6 = bchain.Tx{
+		Hex:       rawTestTx6,
+		Blocktime: 1591762049,
+		Time:      1591762049,
+		Txid:      "e5767d3606230a65f150837a6f28b4f0e4c2702a683045df3883d57702739c61",
+		LockTime:  0,
+		Vin: []bchain.Vin{
+			{
+				Coinbase: "02b4140101",
+				Sequence: 4294967295,
+			},
+		},
+		Vout: []bchain.Vout{
+			{
+				ValueSat: *big.NewInt(1400000000),
+				N:        0,
+				ScriptPubKey: bchain.ScriptPubKey{
+					Hex: "2103fb09a216761d5e7f248294970c2370f7f84ce1ad564b8e7096b1e19116af1d52ac",
+					Addresses: []string{
+						"TAn9Ghkp31myXRgejCj11wWVHT14Lsj349",
+					},
+				},
+			},
+			{
+				ValueSat: *big.NewInt(50000000),
+				N:        1,
+				ScriptPubKey: bchain.ScriptPubKey{
+					Hex: "76a914296134d2415bf1f2b518b3f673816d7e603b160088ac",
+					Addresses: []string{
+						"TDk19wPKYq91i18qmY6U9FeTdTxwPeSveo",
+					},
+				},
+			},
+			{
+				ValueSat: *big.NewInt(50000000),
+				N:        2,
+				ScriptPubKey: bchain.ScriptPubKey{
+					Hex: "76a914e1e1dc06a889c1b6d3eb00eef7a96f6a7cfb884888ac",
+					Addresses: []string{
+						"TWZZcDGkNixTAMtRBqzZkkMHbq1G6vUTk5",
+					},
+				},
+			},
+			{
+				ValueSat: *big.NewInt(50000000),
+				N:        3,
+				ScriptPubKey: bchain.ScriptPubKey{
+					Hex: "76a914ab03ecfddee6330497be894d16c29ae341c123aa88ac",
+					Addresses: []string{
+						"TRZTFdNCKCKbLMQV8cZDkQN9Vwuuq4gDzT",
+					},
+				},
+			},
+			{
+				ValueSat: *big.NewInt(150000000),
+				N:        4,
+				ScriptPubKey: bchain.ScriptPubKey{
+					Hex: "76a9144281a58a1d5b2d3285e00cb45a8492debbdad4c588ac",
+					Addresses: []string{
+						"TG2ruj59E5b1u9G3F7HQVs6pCcVDBxrQve",
+					},
+				},
+			},
+			{
+				ValueSat: *big.NewInt(50000000),
+				N:        5,
+				ScriptPubKey: bchain.ScriptPubKey{
+					Hex: "76a9141fd264c0bb53bd9fef18e2248ddf1383d6e811ae88ac",
+					Addresses: []string{
+						"TCsTzQZKVn4fao8jDmB9zQBk9YQNEZ3XfS",
+					},
+				},
+			},
+			{
+				ValueSat: *big.NewInt(750000000),
+				N:        6,
+				ScriptPubKey: bchain.ScriptPubKey{
+					Hex: "76a91471a3892d164ffa3829078bf9ad5f114a3908ce5588ac",
+					Addresses: []string{
+						"TLL5GQULX4uBfz7yXL6VcZyvzdKVv1RGxm",
+					},
+				},
+			},
 		},
 	}
 }
@@ -263,32 +365,32 @@ func TestMain(m *testing.M) {
 func TestGetAddrDesc(t *testing.T) {
 	type args struct {
 		tx     bchain.Tx
-		parser *ZcoinParser
+		parser *FiroParser
 	}
 	tests := []struct {
 		name string
 		args args
 	}{
 		{
-			name: "xzc-1",
+			name: "firo-1",
 			args: args{
 				tx:     testTx1,
-				parser: NewZcoinParser(GetChainParams("main"), &btc.Configuration{}),
+				parser: NewFiroParser(GetChainParams("main"), &btc.Configuration{}),
 			},
 		},
 		// FIXME: work around handle zerocoin spend as coinbase
 		// {
-		// 	name: "xzc-2",
+		// 	name: "firo-2",
 		// 	args: args{
 		// 		tx:     testTx2,
-		// 		parser: NewZcoinParser(GetChainParams("main"), &btc.Configuration{}),
+		// 		parser: NewFiroParser(GetChainParams("main"), &btc.Configuration{}),
 		// 	},
 		// },
 		{
-			name: "xzc-3",
+			name: "firo-3",
 			args: args{
 				tx:     testTx3,
-				parser: NewZcoinParser(GetChainParams("main"), &btc.Configuration{}),
+				parser: NewFiroParser(GetChainParams("main"), &btc.Configuration{}),
 			},
 		},
 	}
@@ -346,7 +448,7 @@ func TestGetAddrDescFromVoutForMint(t *testing.T) {
 			wantErr: false,
 		},
 	}
-	parser := NewZcoinParser(GetChainParams("main"), &btc.Configuration{})
+	parser := NewFiroParser(GetChainParams("main"), &btc.Configuration{})
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -396,7 +498,7 @@ func TestGetAddressesFromAddrDescForMint(t *testing.T) {
 			wantErr: false,
 		},
 	}
-	parser := NewZcoinParser(GetChainParams("main"), &btc.Configuration{})
+	parser := NewFiroParser(GetChainParams("main"), &btc.Configuration{})
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -421,7 +523,7 @@ func TestPackTx(t *testing.T) {
 		tx        bchain.Tx
 		height    uint32
 		blockTime int64
-		parser    *ZcoinParser
+		parser    *FiroParser
 	}
 	tests := []struct {
 		name    string
@@ -430,48 +532,70 @@ func TestPackTx(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "xzc-1",
+			name: "firo-1",
 			args: args{
 				tx:        testTx1,
 				height:    100002,
 				blockTime: 1533980594,
-				parser:    NewZcoinParser(GetChainParams("main"), &btc.Configuration{}),
+				parser:    NewFiroParser(GetChainParams("main"), &btc.Configuration{}),
 			},
 			want:    testTxPacked1,
 			wantErr: false,
 		},
 		// FIXME: work around handle zerocoin spend as coinbase
 		// {
-		// 	name: "xzc-2",
+		// 	name: "firo-2",
 		// 	args: args{
 		// 		tx:        testTx2,
 		// 		height:    11002,
 		// 		blockTime: 1481277009,
-		// 		parser:    NewZcoinParser(GetChainParams("main"), &btc.Configuration{}),
+		// 		parser:    NewFiroParser(GetChainParams("main"), &btc.Configuration{}),
 		// 	},
 		// 	want:    testTxPacked2,
 		// 	wantErr: true,
 		// },
 		{
-			name: "xzc-3",
+			name: "firo-3",
 			args: args{
 				tx:        testTx3,
 				height:    126202,
 				blockTime: 1547091829,
-				parser:    NewZcoinParser(GetChainParams("main"), &btc.Configuration{}),
+				parser:    NewFiroParser(GetChainParams("main"), &btc.Configuration{}),
 			},
 			want:    testTxPacked3,
 			wantErr: false,
 		},
 		{
-			name: "xzc-coinbase",
+			name: "firo-coinbase",
 			args: args{
 				tx:        testTx4,
 				height:    100001,
 				blockTime: 1533977563,
-				parser:    NewZcoinParser(GetChainParams("main"), &btc.Configuration{}),
+				parser:    NewFiroParser(GetChainParams("main"), &btc.Configuration{}),
 			},
 			want:    testTxPacked4,
+			wantErr: false,
+		},
+		{
+			name: "firo-quorum-commitment-tx",
+			args: args{
+				tx:        testTx5,
+				height:    5268,
+				blockTime: 1591752749,
+				parser:    NewFiroParser(GetChainParams("test"), &btc.Configuration{}),
+			},
+			want:    testTxPacked5,
+			wantErr: false,
+		},
+		{
+			name: "firo-special-coinbase-tx",
+			args: args{
+				tx:        testTx6,
+				height:    5300,
+				blockTime: 1591762049,
+				parser:    NewFiroParser(GetChainParams("test"), &btc.Configuration{}),
+			},
+			want:    testTxPacked6,
 			wantErr: false,
 		},
 	}
@@ -495,7 +619,7 @@ func TestPackTx(t *testing.T) {
 func TestUnpackTx(t *testing.T) {
 	type args struct {
 		packedTx string
-		parser   *ZcoinParser
+		parser   *FiroParser
 	}
 	tests := []struct {
 		name    string
@@ -505,10 +629,10 @@ func TestUnpackTx(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "xzc-1",
+			name: "firo-1",
 			args: args{
 				packedTx: testTxPacked1,
-				parser:   NewZcoinParser(GetChainParams("main"), &btc.Configuration{}),
+				parser:   NewFiroParser(GetChainParams("main"), &btc.Configuration{}),
 			},
 			want:    &testTx1,
 			want1:   100002,
@@ -516,33 +640,53 @@ func TestUnpackTx(t *testing.T) {
 		},
 		// FIXME: work around handle zerocoin spend as coinbase
 		// {
-		// 	name: "xzc-2",
+		// 	name: "firo-2",
 		// 	args: args{
 		// 		packedTx: testTxPacked2,
-		// 		parser:   NewZcoinParser(GetChainParams("main"), &btc.Configuration{}),
+		// 		parser:   NewFiroParser(GetChainParams("main"), &btc.Configuration{}),
 		// 	},
 		// 	want:    &testTx2,
 		// 	want1:   11002,
 		// 	wantErr: true,
 		// },
 		{
-			name: "xzc-3",
+			name: "firo-3",
 			args: args{
 				packedTx: testTxPacked3,
-				parser:   NewZcoinParser(GetChainParams("main"), &btc.Configuration{}),
+				parser:   NewFiroParser(GetChainParams("main"), &btc.Configuration{}),
 			},
 			want:    &testTx3,
 			want1:   126202,
 			wantErr: false,
 		},
 		{
-			name: "xzc-coinbase",
+			name: "firo-coinbase",
 			args: args{
 				packedTx: testTxPacked4,
-				parser:   NewZcoinParser(GetChainParams("main"), &btc.Configuration{}),
+				parser:   NewFiroParser(GetChainParams("main"), &btc.Configuration{}),
 			},
 			want:    &testTx4,
 			want1:   100001,
+			wantErr: false,
+		},
+		{
+			name: "firo-special-tx",
+			args: args{
+				packedTx: testTxPacked5,
+				parser:   NewFiroParser(GetChainParams("test"), &btc.Configuration{}),
+			},
+			want:    &testTx5,
+			want1:   5268,
+			wantErr: false,
+		},
+		{
+			name: "firo-special-coinbase-tx",
+			args: args{
+				packedTx: testTxPacked6,
+				parser:   NewFiroParser(GetChainParams("test"), &btc.Configuration{}),
+			},
+			want:    &testTx6,
+			want1:   5300,
 			wantErr: false,
 		},
 	}
@@ -570,7 +714,7 @@ func TestUnpackTx(t *testing.T) {
 func TestParseBlock(t *testing.T) {
 	type args struct {
 		rawBlock string
-		parser   *ZcoinParser
+		parser   *FiroParser
 	}
 	tests := []struct {
 		name    string
@@ -583,7 +727,7 @@ func TestParseBlock(t *testing.T) {
 			name: "normal-block",
 			args: args{
 				rawBlock: rawBlock1,
-				parser:   NewZcoinParser(GetChainParams("main"), &btc.Configuration{}),
+				parser:   NewFiroParser(GetChainParams("main"), &btc.Configuration{}),
 			},
 			want: &bchain.Block{
 				BlockHeader: bchain.BlockHeader{
@@ -598,7 +742,7 @@ func TestParseBlock(t *testing.T) {
 			name: "spend-block",
 			args: args{
 				rawBlock: rawBlock2,
-				parser:   NewZcoinParser(GetChainParams("main"), &btc.Configuration{}),
+				parser:   NewFiroParser(GetChainParams("main"), &btc.Configuration{}),
 			},
 			want: &bchain.Block{
 				BlockHeader: bchain.BlockHeader{
@@ -607,6 +751,21 @@ func TestParseBlock(t *testing.T) {
 				},
 			},
 			wantTxs: 4,
+			wantErr: false,
+		},
+		{
+			name: "special-tx-block",
+			args: args{
+				rawBlock: rawBlock3,
+				parser:   NewFiroParser(GetChainParams("test"), &btc.Configuration{}),
+			},
+			want: &bchain.Block{
+				BlockHeader: bchain.BlockHeader{
+					Size: 200062,
+					Time: 1591752749,
+				},
+			},
+			wantTxs: 3,
 			wantErr: false,
 		},
 	}
@@ -628,6 +787,194 @@ func TestParseBlock(t *testing.T) {
 				if len(got.Txs) != tt.wantTxs {
 					t.Errorf("parseBlock() txs length got = %d, want %d", len(got.Txs), tt.wantTxs)
 				}
+			}
+		})
+	}
+}
+
+func TestDecodeTransaction(t *testing.T) {
+	type args struct {
+		enc            wire.MessageEncoding
+		rawTransaction string
+		parser         *FiroParser
+		privacyType    byte // 0 as non privacy
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    bchain.Tx
+		wantErr bool
+	}{
+		{
+			name: "normal-transaction",
+			args: args{
+				enc:            wire.WitnessEncoding,
+				rawTransaction: rawTestTx1,
+				parser:         NewFiroParser(GetChainParams("main"), &btc.Configuration{}),
+			},
+			want: testTx1,
+		},
+		{
+			name: "coinbase-firospend",
+			args: args{
+				enc:            wire.WitnessEncoding,
+				rawTransaction: rawTestTx2,
+				parser:         NewFiroParser(GetChainParams("main"), &btc.Configuration{}),
+				privacyType:    OpSigmaSpend,
+			},
+			want: testTx2,
+		},
+		{
+			name: "normal-transaction-2",
+			args: args{
+				enc:            wire.WitnessEncoding,
+				rawTransaction: rawTestTx3,
+				parser:         NewFiroParser(GetChainParams("main"), &btc.Configuration{}),
+			},
+			want: testTx3,
+		},
+		{
+			name: "coinbase-transaction",
+			args: args{
+				enc:            wire.WitnessEncoding,
+				rawTransaction: rawTestTx4,
+				parser:         NewFiroParser(GetChainParams("main"), &btc.Configuration{}),
+			},
+			want: testTx4,
+		},
+		{
+			name: "quorum-commitment-transaction",
+			args: args{
+				enc:            wire.BaseEncoding,
+				rawTransaction: rawTestTx5,
+				parser:         NewFiroParser(GetChainParams("main"), &btc.Configuration{}),
+			},
+			want: testTx5,
+		},
+		{
+			name: "quorum-commitment-transaction-witness",
+			args: args{
+				enc:            wire.WitnessEncoding,
+				rawTransaction: rawTestTx5,
+				parser:         NewFiroParser(GetChainParams("main"), &btc.Configuration{}),
+			},
+			wantErr: true,
+		},
+		{
+			name: "special-coinbase",
+			args: args{
+				enc:            wire.WitnessEncoding,
+				rawTransaction: rawTestTx6,
+				parser:         NewFiroParser(GetChainParams("test"), &btc.Configuration{}),
+			},
+			want: testTx6,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b, _ := hex.DecodeString(tt.args.rawTransaction)
+			r := bytes.NewReader(b)
+
+			msg := FiroMsgTx{}
+			err := msg.FiroDecode(r, 0, tt.args.enc)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("Want error")
+				}
+
+				return
+			}
+
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			got := tt.args.parser.TxFromFiroMsgTx(&msg, true)
+			if pErr := tt.args.parser.parseFiroTx(&got); pErr != nil {
+				t.Fatal(pErr)
+			}
+
+			if r.Len() != 0 {
+				t.Errorf("Expected EOF but there are remaining %d bytes to read", r.Len())
+			}
+
+			if len(got.Vin) != len(tt.want.Vin) {
+				t.Errorf("Check vin size, got %v, want %v", len(got.Vin), len(tt.want.Vin))
+			}
+
+			for i := 0; i != len(got.Vin); i++ {
+				if !reflect.DeepEqual(got.Vin[i].Addresses, tt.want.Vin[i].Addresses) {
+					t.Errorf("Check Addresses at input %d, got %v, want %v",
+						i, got.Vin[i].Addresses, tt.want.Vin[i].Addresses)
+				}
+
+				if !reflect.DeepEqual(got.Vin[i].Coinbase, tt.want.Vin[i].Coinbase) {
+					t.Errorf("Check Coinbase at input %d, got %v, want %v",
+						i, got.Vin[i].Coinbase, tt.want.Vin[i].Coinbase)
+				}
+
+				if !reflect.DeepEqual(got.Vin[i].ScriptSig, tt.want.Vin[i].ScriptSig) {
+					t.Errorf("Check ScriptSig at input %d, got %v, want %v",
+						i, got.Vin[i].ScriptSig, tt.want.Vin[i].ScriptSig)
+				}
+
+				if !reflect.DeepEqual(got.Vin[i].Sequence, tt.want.Vin[i].Sequence) {
+					t.Errorf("Check Sequence at input %d, got %v, want %v",
+						i, got.Vin[i].Sequence, tt.want.Vin[i].Sequence)
+				}
+
+				if tt.args.privacyType == 0 && !reflect.DeepEqual(got.Vin[i].Txid, tt.want.Vin[i].Txid) {
+					t.Errorf("Check Txid at input %d, got %v, want %v",
+						i, got.Vin[i].Txid, tt.want.Vin[i].Txid)
+				}
+
+				if tt.args.privacyType == 0 && !reflect.DeepEqual(got.Vin[i].Vout, tt.want.Vin[i].Vout) {
+					t.Errorf("Check Vout at input %d, got %v, want %v",
+						i, got.Vin[i].Vout, tt.want.Vin[i].Vout)
+				}
+			}
+
+			if len(got.Vout) != len(tt.want.Vout) {
+				t.Errorf("Check vout size, got %v, want %v", len(got.Vout), len(tt.want.Vout))
+			}
+
+			for i := 0; i != len(got.Vout); i++ {
+				if !reflect.DeepEqual(got.Vout[i].JsonValue, tt.want.Vout[i].JsonValue) {
+					t.Errorf("Check JsonValue at output %d, got %v, want %v",
+						i, got.Vout[i].JsonValue, tt.want.Vout[i].JsonValue)
+				}
+
+				if !reflect.DeepEqual(got.Vout[i].N, tt.want.Vout[i].N) {
+					t.Errorf("Check N at output %d, got %v, want %v",
+						i, got.Vout[i].N, tt.want.Vout[i].N)
+				}
+
+				// empty addresses and null should be the same
+				if !((len(got.Vout[i].ScriptPubKey.Addresses) == 0 && len(got.Vout[i].ScriptPubKey.Addresses) == len(tt.want.Vout[i].ScriptPubKey.Addresses)) ||
+					reflect.DeepEqual(got.Vout[i].ScriptPubKey.Addresses, tt.want.Vout[i].ScriptPubKey.Addresses)) {
+					t.Errorf("Check ScriptPubKey.Addresses at output %d, got %v, want %v",
+						i, got.Vout[i].ScriptPubKey.Addresses, tt.want.Vout[i].ScriptPubKey.Addresses)
+				}
+
+				if !reflect.DeepEqual(got.Vout[i].ScriptPubKey.Hex, tt.want.Vout[i].ScriptPubKey.Hex) {
+					t.Errorf("Check ScriptPubKey.Hex at output %d, got %v, want %v",
+						i, got.Vout[i].ScriptPubKey.Hex, tt.want.Vout[i].ScriptPubKey.Hex)
+				}
+
+				if !reflect.DeepEqual(got.Vout[i].ValueSat, tt.want.Vout[i].ValueSat) {
+					t.Errorf("Check ValueSat at output %d, got %v, want %v",
+						i, got.Vout[i].ValueSat, tt.want.Vout[i].ValueSat)
+				}
+			}
+
+			if got.LockTime != tt.want.LockTime {
+				t.Errorf("Check LockTime, got %v, want %v", got.LockTime, tt.want.LockTime)
+			}
+
+			if got.Txid != tt.want.Txid {
+				t.Errorf("Check TxId, got %v, want %v", got.Txid, tt.want.Txid)
 			}
 		})
 	}
