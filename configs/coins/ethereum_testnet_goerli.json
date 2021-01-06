@@ -6,11 +6,11 @@
     "alias": "ethereum_testnet_goerli"
   },
   "ports": {
-    "backend_rpc": 18036,
+    "backend_rpc": 16036,
     "backend_message_queue": 0,
     "backend_p2p": 48336,
-    "blockbook_internal": 19036,
-    "blockbook_public": 19136
+    "blockbook_internal": 17036,
+    "blockbook_public": 17136
   },
   "ipc": {
     "rpc_url_template": "ws://127.0.0.1:{{.Ports.BackendRPC}}",
