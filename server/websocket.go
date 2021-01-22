@@ -528,19 +528,26 @@ func (s *WebsocketServer) getTransactionSpecific(txid string) (interface{}, erro
 
 func (s *WebsocketServer) getInfo() (interface{}, error) {
 	vi := common.GetVersionInfo()
+	bi := s.is.GetBackendInfo()
 	height, hash, err := s.db.GetBestBlock()
 	if err != nil {
 		return nil, err
 	}
+	type backendInfo struct {
+		Version    string      `json:"version,omitempty"`
+		Subversion string      `json:"subversion,omitempty"`
+		Consensus  interface{} `json:"consensus,omitempty"`
+	}
 	type info struct {
-		Name       string `json:"name"`
-		Shortcut   string `json:"shortcut"`
-		Decimals   int    `json:"decimals"`
-		Version    string `json:"version"`
-		BestHeight int    `json:"bestHeight"`
-		BestHash   string `json:"bestHash"`
-		Block0Hash string `json:"block0Hash"`
-		Testnet    bool   `json:"testnet"`
+		Name       string      `json:"name"`
+		Shortcut   string      `json:"shortcut"`
+		Decimals   int         `json:"decimals"`
+		Version    string      `json:"version"`
+		BestHeight int         `json:"bestHeight"`
+		BestHash   string      `json:"bestHash"`
+		Block0Hash string      `json:"block0Hash"`
+		Testnet    bool        `json:"testnet"`
+		Backend    backendInfo `json:"backend"`
 	}
 	return &info{
 		Name:       s.is.Coin,
@@ -551,6 +558,11 @@ func (s *WebsocketServer) getInfo() (interface{}, error) {
 		Version:    vi.Version,
 		Block0Hash: s.block0hash,
 		Testnet:    s.chain.IsTestnet(),
+		Backend: backendInfo{
+			Version:    bi.Version,
+			Subversion: bi.Subversion,
+			Consensus:  bi.Consensus,
+		},
 	}, nil
 }
 

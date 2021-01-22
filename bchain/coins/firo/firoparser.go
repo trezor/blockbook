@@ -14,12 +14,12 @@ import (
 )
 
 const (
-	OpZeroCoinMint  		= 0xc1
-	OpZeroCoinSpend 		= 0xc2
-	OpSigmaMint     		= 0xc3
-	OpSigmaSpend    		= 0xc4
-	OpLelantusMint    	= 0xc5
-	OpLelantusJMint    	= 0xc6
+	OpZeroCoinMint      = 0xc1
+	OpZeroCoinSpend     = 0xc2
+	OpSigmaMint         = 0xc3
+	OpSigmaSpend        = 0xc4
+	OpLelantusMint      = 0xc5
+	OpLelantusJMint     = 0xc6
 	OpLelantusJoinSplit = 0xc7
 
 	MainnetMagic wire.BitcoinNet = 0xe3d9fef1

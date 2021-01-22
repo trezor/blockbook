@@ -421,27 +421,10 @@ type BlockbookInfo struct {
 	About             string                       `json:"about"`
 }
 
-// BackendInfo is used to get information about blockchain
-type BackendInfo struct {
-	BackendError    string      `json:"error,omitempty"`
-	Chain           string      `json:"chain,omitempty"`
-	Blocks          int         `json:"blocks,omitempty"`
-	Headers         int         `json:"headers,omitempty"`
-	BestBlockHash   string      `json:"bestBlockHash,omitempty"`
-	Difficulty      string      `json:"difficulty,omitempty"`
-	SizeOnDisk      int64       `json:"sizeOnDisk,omitempty"`
-	Version         string      `json:"version,omitempty"`
-	Subversion      string      `json:"subversion,omitempty"`
-	ProtocolVersion string      `json:"protocolVersion,omitempty"`
-	Timeoffset      float64     `json:"timeOffset,omitempty"`
-	Warnings        string      `json:"warnings,omitempty"`
-	Consensus       interface{} `json:"consensus,omitempty"`
-}
-
 // SystemInfo contains information about the running blockbook and backend instance
 type SystemInfo struct {
-	Blockbook *BlockbookInfo `json:"blockbook"`
-	Backend   *BackendInfo   `json:"backend"`
+	Blockbook *BlockbookInfo      `json:"blockbook"`
+	Backend   *common.BackendInfo `json:"backend"`
 }
 
 // MempoolTxid contains information about a transaction in mempool
