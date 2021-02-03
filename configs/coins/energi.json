@@ -6,12 +6,12 @@
     "alias": "energi"
   },
   "ports": {
-    "backend_rpc": 8196,
+    "backend_rpc": 8097,
     "backend_message_queue": 0,
-    "backend_p2p": 38496,
-    "backend_http": 8296,
-    "blockbook_internal": 9196,
-    "blockbook_public": 9296
+    "backend_p2p": 38397,
+    "backend_http": 8197,
+    "blockbook_internal": 9097,
+    "blockbook_public": 9197
   },
   "ipc": {
     "rpc_url_template": "ws://127.0.0.1:{{.Ports.BackendRPC}}",
@@ -27,7 +27,7 @@
     "verification_source": "6f6e0fe03f9cd38fe29addffb42ae4217656a7a9ee9be3a824f104b6a4ac7237",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [],
-    "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/energi3 --ipcdisable --syncmode full --cache 1024 --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --port 38496 --ws --wsapi eth,net,web3 --wsaddr 0.0.0.0 --wsport {{.Ports.BackendRPC}} --wsorigins \"*\" --rpc --rpcapi personal,eth,net,web3b --rpcport 8296 -rpcaddr 0.0.0.0 --rpccorsdomain \"*\" --rpcvhosts \"*\" 2>>{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
+    "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/energi3 --ipcdisable --syncmode full --cache 1024 --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --port 38397 --ws --wsapi eth,net,web3 --wsaddr 0.0.0.0 --wsport {{.Ports.BackendRPC}} --wsorigins \"*\" --rpc --rpcapi personal,eth,net,web3b --rpcport 8197 -rpcaddr 0.0.0.0 --rpccorsdomain \"*\" --rpcvhosts \"*\" 2>>{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
     "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
     "postinst_script_template": "",
     "service_type": "forking",
