@@ -442,26 +442,6 @@ func (p *EnergiParser) UnpackBlockHash(buf []byte) (string, error) {
 	return hexutil.Encode(buf), nil
 }
 
-// GetChainType returns EthereumType
-func (p *EnergiParser) GetChainType() bchain.ChainType {
-	return bchain.ChainEthereumType
-}
-
-// GetHeightFromTx returns ethereum specific data from bchain.Tx
-func GetHeightFromTx(tx *bchain.Tx) (uint32, error) {
-	var bn string
-	csd, ok := tx.CoinSpecificData.(completeTransaction)
-	if !ok {
-		return 0, errors.New("Missing CoinSpecificData")
-	}
-	bn = csd.Tx.BlockNumber
-	n, err := hexutil.DecodeUint64(bn)
-	if err != nil {
-		return 0, errors.Annotatef(err, "BlockNumber %v", bn)
-	}
-	return uint32(n), nil
-}
-
 // EthereumTypeGetErc20FromTx returns Erc20 data from bchain.Tx
 func (p *EnergiParser) EthereumTypeGetErc20FromTx(tx *bchain.Tx) ([]bchain.Erc20Transfer, error) {
 	var r []bchain.Erc20Transfer
