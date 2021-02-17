@@ -1,6 +1,6 @@
-# initialize from the image
-
-FROM debian:9
+# initialize from the image defined by BASE_IMAGE
+ARG BASE_IMAGE
+FROM $BASE_IMAGE
 
 RUN apt-get update && \
     apt-get upgrade -y && \
