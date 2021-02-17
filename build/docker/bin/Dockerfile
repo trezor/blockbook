@@ -15,8 +15,15 @@ ENV GOPATH=/go
 ENV PATH=$PATH:$GOPATH/bin
 ENV CGO_CFLAGS="-I/opt/rocksdb/include"
 ENV CGO_LDFLAGS="-L/opt/rocksdb -ldl -lrocksdb -lstdc++ -lm -lz -lbz2 -lsnappy -llz4"
+ARG TCMALLOC
 
 RUN mkdir /build
+
+RUN if [ -n "${TCMALLOC}" ]; then \
+    echo "Using TCMALLOC"; \
+    apt-get install -y google-perftools; \
+    ln -s /usr/lib/libtcmalloc.so.4 /usr/lib/libtcmalloc.so;\
+fi
 
 # install and configure go
 RUN cd /opt && wget https://dl.google.com/go/$GOLANG_VERSION.tar.gz && \

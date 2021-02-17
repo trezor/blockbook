@@ -2,6 +2,7 @@ BIN_IMAGE = blockbook-build
 DEB_IMAGE = blockbook-build-deb
 PACKAGER = $(shell id -u):$(shell id -g)
 NO_CACHE = false
+TCMALLOC = 
 ARGS ?=
 
 TARGETS=$(subst .json,, $(shell ls configs/coins))
@@ -44,7 +45,7 @@ build-images: clean-images
 .bin-image:
 	@if [ $$(build/tools/image_status.sh $(BIN_IMAGE):latest build/docker) != "ok" ]; then \
 		echo "Building image $(BIN_IMAGE)..."; \
-		docker build --no-cache=$(NO_CACHE) -t $(BIN_IMAGE) build/docker/bin; \
+		docker build --no-cache=$(NO_CACHE) --build-arg TCMALLOC=$(TCMALLOC) -t $(BIN_IMAGE) build/docker/bin; \
 	else \
 		echo "Image $(BIN_IMAGE) is up to date"; \
 	fi
