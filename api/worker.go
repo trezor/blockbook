@@ -668,6 +668,13 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 	if err != nil {
 		return nil, nil, nil, 0, 0, 0, errors.Annotatef(err, "EthereumTypeGetBalance %v", addrDesc)
 	}
+	var filterDesc bchain.AddressDescriptor
+	if filter.Contract != "" {
+		filterDesc, err = w.chainParser.GetAddrDescFromAddress(filter.Contract)
+		if err != nil {
+			return nil, nil, nil, 0, 0, 0, NewAPIError(fmt.Sprintf("Invalid contract filter, %v", err), true)
+		}
+	}
 	if ca != nil {
 		ba = &db.AddrBalance{
 			Txs: uint32(ca.TotalTxs),
@@ -678,13 +685,6 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 		n, err = w.chain.EthereumTypeGetNonce(addrDesc)
 		if err != nil {
 			return nil, nil, nil, 0, 0, 0, errors.Annotatef(err, "EthereumTypeGetNonce %v", addrDesc)
-		}
-		var filterDesc bchain.AddressDescriptor
-		if filter.Contract != "" {
-			filterDesc, err = w.chainParser.GetAddrDescFromAddress(filter.Contract)
-			if err != nil {
-				return nil, nil, nil, 0, 0, 0, NewAPIError(fmt.Sprintf("Invalid contract filter, %v", err), true)
-			}
 		}
 		if details > AccountDetailsBasic {
 			tokens = make([]Token, len(ca.Contracts))
@@ -741,6 +741,16 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 			ba = &db.AddrBalance{
 				BalanceSat: *b,
 			}
+		}
+		// special handling if filtering for a contract, check the ballance of it
+		if len(filterDesc) > 0 && details >= AccountDetailsTokens {
+			t, err := w.getEthereumToken(0, addrDesc, filterDesc, details, 0)
+			if err != nil {
+				return nil, nil, nil, 0, 0, 0, err
+			}
+			tokens = []Token{*t}
+			// switch off query for transactions, there are no transactions
+			filter.Vout = AddressFilterVoutQueryNotNecessary
 		}
 	}
 	return ba, tokens, ci, n, nonContractTxs, totalResults, nil
