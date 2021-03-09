@@ -55,6 +55,7 @@
             pendingMessages = {};
             subscriptions = {};
             subscribeNewBlockId = "";
+            subscribeNewTransactionId = "";
             subscribeAddressesId = "";
             if (server.startsWith("http")) {
                 server = server.replace("http", "ws");
@@ -266,6 +267,33 @@
                 document.getElementById('subscribeNewBlockResult').innerText += JSON.stringify(result).replace(/,/g, ", ") + "\n";
                 document.getElementById('subscribeNewBlockId').innerText = "";
                 document.getElementById('unsubscribeNewBlockButton').setAttribute("style", "display: none;");
+            });
+        }
+
+        function subscribeNewTransaction() {
+            const method = 'subscribeNewTransaction';
+            const params = {
+            };
+            if (subscribeNewTransactionId) {
+                delete subscriptions[subscribeNewTransactionId];
+                subscribeNewTransactionId = "";
+            }
+            subscribeNewTransactionId = subscribe(method, params, function (result) {
+                document.getElementById('subscribeNewTransactionResult').innerText += JSON.stringify(result).replace(/,/g, ", ") + "\n";
+            });
+            document.getElementById('subscribeNewTransactionId').innerText = subscribeNewTransactionId;
+            document.getElementById('unsubscribeNewTransactionButton').setAttribute("style", "display: inherit;");
+        }
+
+        function unsubscribeNewTransaction() {
+            const method = 'unsubscribeNewTransaction';
+            const params = {
+            };
+            unsubscribe(method, subscribeNewTransactionId, params, function (result) {
+                subscribeNewTransactionId = "";
+                document.getElementById('subscribeNewTransactionResult').innerText += JSON.stringify(result).replace(/,/g, ", ") + "\n";
+                document.getElementById('subscribeNewTransactionId').innerText = "";
+                document.getElementById('unsubscribeNewTransactionButton').setAttribute("style", "display: none;");
             });
         }
 
@@ -584,6 +612,20 @@
         </div>
         <div class="row">
             <div class="col" id="subscribeNewBlockResult"></div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <input class="btn btn-secondary" type="button" value="subscribe new transaction" onclick="subscribeNewTransaction()">
+            </div>
+            <div class="col-4">
+                <span id="subscribeNewTransactionId"></span>
+            </div>
+            <div class="col">
+                <input class="btn btn-secondary" id="unsubscribeNewTransactionButton" style="display: none;" type="button" value="unsubscribe" onclick="unsubscribeNewTransaction()">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col" id="subscribeNewTransactionResult"></div>
         </div>
         <div class="row">
             <div class="col">

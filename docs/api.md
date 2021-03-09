@@ -764,9 +764,10 @@ The websocket interface provides the following requests:
 
 The client can subscribe to the following events:
 
-- `subscribeNewBlock` - new block added to blockchain
-- `subscribeAddresses` - new transaction for given address (list of addresses)
-- `subscribeFiatRates` - new currency rate ticker
+- `subscribeNewBlock`       - new block added to blockchain
+- `subscribeNewTransaction` - new transaction added to blockchain (mempool for all addresses)
+- `subscribeAddresses`      - new transaction for given address (list of addresses)
+- `subscribeFiatRates`      - new currency rate ticker
 
 There can be always only one subscription of given event per connection, i.e. new list of addresses replaces previous list of addresses.
 
@@ -791,5 +792,3 @@ Example for subscribing to an address (or multiple addresses)
    }
 }
 ```
-
-
