@@ -246,6 +246,7 @@ func (s *WebsocketServer) onConnect(c *websocketChannel) {
 
 func (s *WebsocketServer) onDisconnect(c *websocketChannel) {
 	s.unsubscribeNewBlock(c)
+	s.unsubscribeNewTransaction(c)
 	s.unsubscribeAddresses(c)
 	s.unsubscribeFiatRates(c)
 	glog.Info("Client disconnected ", c.id, ", ", c.ip)
@@ -684,7 +685,6 @@ func (s *WebsocketServer) unsubscribeNewBlock(c *websocketChannel) (res interfac
 func (s *WebsocketServer) subscribeNewTransaction(c *websocketChannel, req *websocketReq) (res interface{}, err error) {
 	s.newTransactionSubscriptionsLock.Lock()
 	defer s.newTransactionSubscriptionsLock.Unlock()
-	glog.Infof("subscribeNewTransaction: %+v\n%v\n", c, req.ID)
 	s.newTransactionSubscriptions[c] = req.ID
 	return &subscriptionResponse{true}, nil
 }
@@ -692,7 +692,6 @@ func (s *WebsocketServer) subscribeNewTransaction(c *websocketChannel, req *webs
 func (s *WebsocketServer) unsubscribeNewTransaction(c *websocketChannel) (res interface{}, err error) {
 	s.newTransactionSubscriptionsLock.Lock()
 	defer s.newTransactionSubscriptionsLock.Unlock()
-	glog.Infof("unsubscribeNewTransaction: %+v\n", c)
 	delete(s.newTransactionSubscriptions, c)
 	return &subscriptionResponse{false}, nil
 }
