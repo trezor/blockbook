@@ -70,6 +70,7 @@ type WebsocketServer struct {
 	block0hash                      string
 	newBlockSubscriptions           map[*websocketChannel]string
 	newBlockSubscriptionsLock       sync.Mutex
+	newTransactionEnabled           bool
 	newTransactionSubscriptions     map[*websocketChannel]string
 	newTransactionSubscriptionsLock sync.Mutex
 	addressSubscriptions            map[string]map[*websocketChannel]string
@@ -79,7 +80,7 @@ type WebsocketServer struct {
 }
 
 // NewWebsocketServer creates new websocket interface to blockbook and returns its handle
-func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, txCache *db.TxCache, metrics *common.Metrics, is *common.InternalState) (*WebsocketServer, error) {
+func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, txCache *db.TxCache, metrics *common.Metrics, is *common.InternalState, enableSubNewTx bool) (*WebsocketServer, error) {
 	api, err := api.NewWorker(db, chain, mempool, txCache, is)
 	if err != nil {
 		return nil, err
@@ -104,6 +105,7 @@ func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.
 		api:                         api,
 		block0hash:                  b0,
 		newBlockSubscriptions:       make(map[*websocketChannel]string),
+		newTransactionEnabled:       enableSubNewTx,
 		newTransactionSubscriptions: make(map[*websocketChannel]string),
 		addressSubscriptions:        make(map[string]map[*websocketChannel]string),
 		fiatRatesSubscriptions:      make(map[string]map[*websocketChannel]string),
@@ -667,6 +669,10 @@ func (s *WebsocketServer) sendTransaction(tx string) (res resultSendTransaction,
 type subscriptionResponse struct {
 	Subscribed bool `json:"subscribed"`
 }
+type subscriptionResponseMessage struct {
+	Subscribed bool   `json:"subscribed"`
+	Message    string `json:"message"`
+}
 
 func (s *WebsocketServer) subscribeNewBlock(c *websocketChannel, req *websocketReq) (res interface{}, err error) {
 	s.newBlockSubscriptionsLock.Lock()
@@ -685,6 +691,9 @@ func (s *WebsocketServer) unsubscribeNewBlock(c *websocketChannel) (res interfac
 func (s *WebsocketServer) subscribeNewTransaction(c *websocketChannel, req *websocketReq) (res interface{}, err error) {
 	s.newTransactionSubscriptionsLock.Lock()
 	defer s.newTransactionSubscriptionsLock.Unlock()
+	if !s.newTransactionEnabled {
+		return &subscriptionResponseMessage{false, "subscribeNewTransaction not enabled, use -enablesubnewtx flag to enable."}, nil
+	}
 	s.newTransactionSubscriptions[c] = req.ID
 	return &subscriptionResponse{true}, nil
 }
@@ -692,6 +701,9 @@ func (s *WebsocketServer) subscribeNewTransaction(c *websocketChannel, req *webs
 func (s *WebsocketServer) unsubscribeNewTransaction(c *websocketChannel) (res interface{}, err error) {
 	s.newTransactionSubscriptionsLock.Lock()
 	defer s.newTransactionSubscriptionsLock.Unlock()
+	if !s.newTransactionEnabled {
+		return &subscriptionResponseMessage{false, "unsubscribeNewTransaction not enabled, use -enablesubnewtx flag to enable."}, nil
+	}
 	delete(s.newTransactionSubscriptions, c)
 	return &subscriptionResponse{false}, nil
 }
