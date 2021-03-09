@@ -38,7 +38,6 @@ prepare-sources:
 	mkdir -p $(BLOCKBOOK_BASE)
 	cp -r /src $(BLOCKBOOK_SRC)
 	cd $(BLOCKBOOK_SRC) && go mod download
-	sed -i 's/maxRequestContentLength\ =\ 1024\ \*\ 1024\ \*\ 5/maxRequestContentLength = 1024 * 1024 * 20/g' $(GOPATH)/pkg/mod/github.com/ethereum/go-ethereum*/rpc/http.go
 
 generate-data:
 	cd $(BLOCKBOOK_SRC) && packr clean && packr
