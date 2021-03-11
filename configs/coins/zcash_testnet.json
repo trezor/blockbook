@@ -23,7 +23,7 @@
     "package_revision": "satoshilabs-1",
     "system_user": "zcash",
     "version": "4.3.0",
-    "binary_url": "https://download.z.cash/downloads//zcash-4.3.0-linux64-debian-stretch.tar.gz",
+    "binary_url": "https://download.z.cash/downloads/zcash-4.3.0-linux64-debian-stretch.tar.gz",
     "verification_type": "sha256",
     "verification_source": "2654225b62b5bb8a39dc62a7f6b9ea13f66c2dc5be16da452f1031994e49eb64",
     "extract_command": "tar -C backend --strip 1 -xf",
