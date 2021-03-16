@@ -274,7 +274,8 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 	// for now do not return size, we would have to compute vsize of segwit transactions
 	// size:=len(bchainTx.Hex) / 2
 	var sj json.RawMessage
-	if specificJSON {
+	// return CoinSpecificData for all mempool transactions or if requested
+	if specificJSON || bchainTx.Confirmations == 0 {
 		sj, err = w.chain.GetTransactionSpecific(bchainTx)
 		if err != nil {
 			return nil, err
@@ -299,8 +300,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 		Rbf:              rbf,
 		Vin:              vins,
 		Vout:             vouts,
-		CoinSpecificData: bchainTx.CoinSpecificData,
-		CoinSpecificJSON: sj,
+		CoinSpecificData: sj,
 		TokenTransfers:   tokens,
 		EthereumSpecific: ethSpecific,
 	}
@@ -668,6 +668,13 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 	if err != nil {
 		return nil, nil, nil, 0, 0, 0, errors.Annotatef(err, "EthereumTypeGetBalance %v", addrDesc)
 	}
+	var filterDesc bchain.AddressDescriptor
+	if filter.Contract != "" {
+		filterDesc, err = w.chainParser.GetAddrDescFromAddress(filter.Contract)
+		if err != nil {
+			return nil, nil, nil, 0, 0, 0, NewAPIError(fmt.Sprintf("Invalid contract filter, %v", err), true)
+		}
+	}
 	if ca != nil {
 		ba = &db.AddrBalance{
 			Txs: uint32(ca.TotalTxs),
@@ -678,13 +685,6 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 		n, err = w.chain.EthereumTypeGetNonce(addrDesc)
 		if err != nil {
 			return nil, nil, nil, 0, 0, 0, errors.Annotatef(err, "EthereumTypeGetNonce %v", addrDesc)
-		}
-		var filterDesc bchain.AddressDescriptor
-		if filter.Contract != "" {
-			filterDesc, err = w.chainParser.GetAddrDescFromAddress(filter.Contract)
-			if err != nil {
-				return nil, nil, nil, 0, 0, 0, NewAPIError(fmt.Sprintf("Invalid contract filter, %v", err), true)
-			}
 		}
 		if details > AccountDetailsBasic {
 			tokens = make([]Token, len(ca.Contracts))
@@ -742,6 +742,16 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 				BalanceSat: *b,
 			}
 		}
+		// special handling if filtering for a contract, check the ballance of it
+		if len(filterDesc) > 0 && details >= AccountDetailsTokens {
+			t, err := w.getEthereumToken(0, addrDesc, filterDesc, details, 0)
+			if err != nil {
+				return nil, nil, nil, 0, 0, 0, err
+			}
+			tokens = []Token{*t}
+			// switch off query for transactions, there are no transactions
+			filter.Vout = AddressFilterVoutQueryNotNecessary
+		}
 	}
 	return ba, tokens, ci, n, nonContractTxs, totalResults, nil
 }
@@ -758,7 +768,7 @@ func (w *Worker) txFromTxid(txid string, bestheight uint32, option AccountDetail
 		if ta == nil {
 			glog.Warning("DB inconsistency:  tx ", txid, ": not found in txAddresses")
 			// as fallback, get tx from backend
-			tx, err = w.GetTransaction(txid, false, true)
+			tx, err = w.GetTransaction(txid, false, false)
 			if err != nil {
 				return nil, errors.Annotatef(err, "GetTransaction %v", txid)
 			}
@@ -777,7 +787,7 @@ func (w *Worker) txFromTxid(txid string, bestheight uint32, option AccountDetail
 			tx = w.txFromTxAddress(txid, ta, blockInfo, bestheight)
 		}
 	} else {
-		tx, err = w.GetTransaction(txid, false, true)
+		tx, err = w.GetTransaction(txid, false, false)
 		if err != nil {
 			return nil, errors.Annotatef(err, "GetTransaction %v", txid)
 		}
@@ -866,7 +876,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 			return nil, errors.Annotatef(err, "getAddressTxids %v true", addrDesc)
 		}
 		for _, txid := range txm {
-			tx, err := w.GetTransaction(txid, false, false)
+			tx, err := w.GetTransaction(txid, false, true)
 			// mempool transaction may fail
 			if err != nil || tx == nil {
 				glog.Warning("GetTransaction in mempool: ", err)
@@ -1764,7 +1774,7 @@ func (w *Worker) GetSystemInfo(internal bool) (*SystemInfo, error) {
 		DbColumns:         columnStats,
 		About:             Text.BlockbookAbout,
 	}
-	backendInfo := &BackendInfo{
+	backendInfo := &common.BackendInfo{
 		BackendError:    backendError,
 		BestBlockHash:   ci.Bestblockhash,
 		Blocks:          ci.Blocks,
@@ -1779,6 +1789,7 @@ func (w *Worker) GetSystemInfo(internal bool) (*SystemInfo, error) {
 		Warnings:        ci.Warnings,
 		Consensus:       ci.Consensus,
 	}
+	w.is.SetBackendInfo(backendInfo)
 	glog.Info("GetSystemInfo finished in ", time.Since(start))
 	return &SystemInfo{blockbookInfo, backendInfo}, nil
 }

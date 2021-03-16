@@ -764,11 +764,32 @@ The websocket interface provides the following requests:
 
 The client can subscribe to the following events:
 
-- new block added to blockchain
-- new transaction for given address (list of addresses)
-- new currency rate ticker
+- `subscribeNewBlock` - new block added to blockchain
+- `subscribeAddresses` - new transaction for given address (list of addresses)
+- `subscribeFiatRates` - new currency rate ticker
 
 There can be always only one subscription of given event per connection, i.e. new list of addresses replaces previous list of addresses.
 
 _Note: If there is reorg on the backend (blockchain), you will get a new block hash with the same or even smaller height if the reorg is deeper_
+
+Websocket communication format
+```
+{
+  "id":"1", //an id to help to identify the response
+  "method":"<The method that you would like to call>", 
+  "params":<The params (same as in the API call>
+}
+```
+
+Example for subscribing to an address (or multiple addresses)
+```
+{
+  "id":"1", 
+  "method":"subscribeAddresses", 
+  "params":{
+    "addresses":["mnYYiDCb2JZXnqEeXta1nkt5oCVe2RVhJj", "tb1qp0we5epypgj4acd2c4au58045ruud2pd6heuee"]
+   }
+}
+```
+
 
