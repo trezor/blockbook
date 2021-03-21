@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
-        "unicode/utf8"
+	"unicode/utf8"
 	"math/big"
 	"strconv"
 
