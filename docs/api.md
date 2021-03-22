@@ -764,11 +764,14 @@ The websocket interface provides the following requests:
 
 The client can subscribe to the following events:
 
-- `subscribeNewBlock` - new block added to blockchain
-- `subscribeAddresses` - new transaction for given address (list of addresses)
-- `subscribeFiatRates` - new currency rate ticker
+- `subscribeNewBlock`       - new block added to blockchain
+- `subscribeNewTransaction` - new transaction added to blockchain (all addresses)
+- `subscribeAddresses`      - new transaction for given address (list of addresses)
+- `subscribeFiatRates`      - new currency rate ticker
 
 There can be always only one subscription of given event per connection, i.e. new list of addresses replaces previous list of addresses.
+
+The subscribeNewTransaction event is not enabled by default. To enable support, blockbook must be run with the `-enablesubnewtx` flag.
 
 _Note: If there is reorg on the backend (blockchain), you will get a new block hash with the same or even smaller height if the reorg is deeper_
 
@@ -791,5 +794,3 @@ Example for subscribing to an address (or multiple addresses)
    }
 }
 ```
-
-

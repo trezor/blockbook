@@ -73,6 +73,8 @@ var (
 
 	noTxCache = flag.Bool("notxcache", false, "disable tx cache")
 
+	enableSubNewTx = flag.Bool("enablesubnewtx", false, "enable support for subscribing to all new transactions")
+
 	computeColumnStats  = flag.Bool("computedbstats", false, "compute column stats and exit")
 	computeFeeStatsFlag = flag.Bool("computefeestats", false, "compute fee stats for blocks in blockheight-blockuntil range and exit")
 	dbStatsPeriodHours  = flag.Int("dbstatsperiod", 24, "period of db stats collection in hours, 0 disables stats collection")
@@ -405,7 +407,7 @@ func startInternalServer() (*server.InternalServer, error) {
 
 func startPublicServer() (*server.PublicServer, error) {
 	// start public server in limited functionality, extend it after sync is finished by calling ConnectFullPublicInterface
-	publicServer, err := server.NewPublicServer(*publicBinding, *certFiles, index, chain, mempool, txCache, *explorerURL, metrics, internalState, *debugMode)
+	publicServer, err := server.NewPublicServer(*publicBinding, *certFiles, index, chain, mempool, txCache, *explorerURL, metrics, internalState, *debugMode, *enableSubNewTx)
 	if err != nil {
 		return nil, err
 	}

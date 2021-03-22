@@ -109,7 +109,7 @@ func setupPublicHTTPServer(t *testing.T) (*PublicServer, string) {
 	}
 
 	// s.Run is never called, binding can be to any port
-	s, err := NewPublicServer("localhost:12345", "", d, chain, mempool, txCache, "", metrics, is, false)
+	s, err := NewPublicServer("localhost:12345", "", d, chain, mempool, txCache, "", metrics, is, false, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1420,6 +1420,20 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 				},
 			},
 			want: `{"id":"36","data":[{"time":1521514800,"txs":1,"received":"1","sent":"0","sentToSelf":"0","rates":{"eur":1301,"usd":2001}}]}`,
+		},
+		{
+			name: "websocket subscribeNewTransaction",
+			req: websocketReq{
+				Method: "subscribeNewTransaction",
+			},
+			want: `{"id":"37","data":{"subscribed":false,"message":"subscribeNewTransaction not enabled, use -enablesubnewtx flag to enable."}}`,
+		},
+		{
+			name: "websocket unsubscribeNewTransaction",
+			req: websocketReq{
+				Method: "unsubscribeNewTransaction",
+			},
+			want: `{"id":"38","data":{"subscribed":false,"message":"unsubscribeNewTransaction not enabled, use -enablesubnewtx flag to enable."}}`,
 		},
 	}
 

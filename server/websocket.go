@@ -57,27 +57,30 @@ type websocketChannel struct {
 
 // WebsocketServer is a handle to websocket server
 type WebsocketServer struct {
-	socket                     *websocket.Conn
-	upgrader                   *websocket.Upgrader
-	db                         *db.RocksDB
-	txCache                    *db.TxCache
-	chain                      bchain.BlockChain
-	chainParser                bchain.BlockChainParser
-	mempool                    bchain.Mempool
-	metrics                    *common.Metrics
-	is                         *common.InternalState
-	api                        *api.Worker
-	block0hash                 string
-	newBlockSubscriptions      map[*websocketChannel]string
-	newBlockSubscriptionsLock  sync.Mutex
-	addressSubscriptions       map[string]map[*websocketChannel]string
-	addressSubscriptionsLock   sync.Mutex
-	fiatRatesSubscriptions     map[string]map[*websocketChannel]string
-	fiatRatesSubscriptionsLock sync.Mutex
+	socket                          *websocket.Conn
+	upgrader                        *websocket.Upgrader
+	db                              *db.RocksDB
+	txCache                         *db.TxCache
+	chain                           bchain.BlockChain
+	chainParser                     bchain.BlockChainParser
+	mempool                         bchain.Mempool
+	metrics                         *common.Metrics
+	is                              *common.InternalState
+	api                             *api.Worker
+	block0hash                      string
+	newBlockSubscriptions           map[*websocketChannel]string
+	newBlockSubscriptionsLock       sync.Mutex
+	newTransactionEnabled           bool
+	newTransactionSubscriptions     map[*websocketChannel]string
+	newTransactionSubscriptionsLock sync.Mutex
+	addressSubscriptions            map[string]map[*websocketChannel]string
+	addressSubscriptionsLock        sync.Mutex
+	fiatRatesSubscriptions          map[string]map[*websocketChannel]string
+	fiatRatesSubscriptionsLock      sync.Mutex
 }
 
 // NewWebsocketServer creates new websocket interface to blockbook and returns its handle
-func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, txCache *db.TxCache, metrics *common.Metrics, is *common.InternalState) (*WebsocketServer, error) {
+func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, txCache *db.TxCache, metrics *common.Metrics, is *common.InternalState, enableSubNewTx bool) (*WebsocketServer, error) {
 	api, err := api.NewWorker(db, chain, mempool, txCache, is)
 	if err != nil {
 		return nil, err
@@ -92,18 +95,20 @@ func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.
 			WriteBufferSize: 1024 * 32,
 			CheckOrigin:     checkOrigin,
 		},
-		db:                     db,
-		txCache:                txCache,
-		chain:                  chain,
-		chainParser:            chain.GetChainParser(),
-		mempool:                mempool,
-		metrics:                metrics,
-		is:                     is,
-		api:                    api,
-		block0hash:             b0,
-		newBlockSubscriptions:  make(map[*websocketChannel]string),
-		addressSubscriptions:   make(map[string]map[*websocketChannel]string),
-		fiatRatesSubscriptions: make(map[string]map[*websocketChannel]string),
+		db:                          db,
+		txCache:                     txCache,
+		chain:                       chain,
+		chainParser:                 chain.GetChainParser(),
+		mempool:                     mempool,
+		metrics:                     metrics,
+		is:                          is,
+		api:                         api,
+		block0hash:                  b0,
+		newBlockSubscriptions:       make(map[*websocketChannel]string),
+		newTransactionEnabled:       enableSubNewTx,
+		newTransactionSubscriptions: make(map[*websocketChannel]string),
+		addressSubscriptions:        make(map[string]map[*websocketChannel]string),
+		fiatRatesSubscriptions:      make(map[string]map[*websocketChannel]string),
 	}
 	return s, nil
 }
@@ -243,6 +248,7 @@ func (s *WebsocketServer) onConnect(c *websocketChannel) {
 
 func (s *WebsocketServer) onDisconnect(c *websocketChannel) {
 	s.unsubscribeNewBlock(c)
+	s.unsubscribeNewTransaction(c)
 	s.unsubscribeAddresses(c)
 	s.unsubscribeFiatRates(c)
 	glog.Info("Client disconnected ", c.id, ", ", c.ip)
@@ -345,6 +351,12 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *webs
 	},
 	"unsubscribeNewBlock": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
 		return s.unsubscribeNewBlock(c)
+	},
+	"subscribeNewTransaction": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
+		return s.subscribeNewTransaction(c, req)
+	},
+	"unsubscribeNewTransaction": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
+		return s.unsubscribeNewTransaction(c)
 	},
 	"subscribeAddresses": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
 		ad, err := s.unmarshalAddresses(req.Params)
@@ -657,6 +669,10 @@ func (s *WebsocketServer) sendTransaction(tx string) (res resultSendTransaction,
 type subscriptionResponse struct {
 	Subscribed bool `json:"subscribed"`
 }
+type subscriptionResponseMessage struct {
+	Subscribed bool   `json:"subscribed"`
+	Message    string `json:"message"`
+}
 
 func (s *WebsocketServer) subscribeNewBlock(c *websocketChannel, req *websocketReq) (res interface{}, err error) {
 	s.newBlockSubscriptionsLock.Lock()
@@ -669,6 +685,26 @@ func (s *WebsocketServer) unsubscribeNewBlock(c *websocketChannel) (res interfac
 	s.newBlockSubscriptionsLock.Lock()
 	defer s.newBlockSubscriptionsLock.Unlock()
 	delete(s.newBlockSubscriptions, c)
+	return &subscriptionResponse{false}, nil
+}
+
+func (s *WebsocketServer) subscribeNewTransaction(c *websocketChannel, req *websocketReq) (res interface{}, err error) {
+	s.newTransactionSubscriptionsLock.Lock()
+	defer s.newTransactionSubscriptionsLock.Unlock()
+	if !s.newTransactionEnabled {
+		return &subscriptionResponseMessage{false, "subscribeNewTransaction not enabled, use -enablesubnewtx flag to enable."}, nil
+	}
+	s.newTransactionSubscriptions[c] = req.ID
+	return &subscriptionResponse{true}, nil
+}
+
+func (s *WebsocketServer) unsubscribeNewTransaction(c *websocketChannel) (res interface{}, err error) {
+	s.newTransactionSubscriptionsLock.Lock()
+	defer s.newTransactionSubscriptionsLock.Unlock()
+	if !s.newTransactionEnabled {
+		return &subscriptionResponseMessage{false, "unsubscribeNewTransaction not enabled, use -enablesubnewtx flag to enable."}, nil
+	}
+	delete(s.newTransactionSubscriptions, c)
 	return &subscriptionResponse{false}, nil
 }
 
@@ -790,6 +826,18 @@ func (s *WebsocketServer) OnNewBlock(hash string, height uint32) {
 	glog.Info("broadcasting new block ", height, " ", hash, " to ", len(s.newBlockSubscriptions), " channels")
 }
 
+func (s *WebsocketServer) sendOnNewTx(tx *api.Tx) {
+	s.newTransactionSubscriptionsLock.Lock()
+	defer s.newTransactionSubscriptionsLock.Unlock()
+	for c, id := range s.newTransactionSubscriptions {
+		c.DataOut(&websocketRes{
+			ID:   id,
+			Data: &tx,
+		})
+	}
+	glog.Info("broadcasting new tx ", tx.Txid, " to ", len(s.newTransactionSubscriptions), " channels")
+}
+
 func (s *WebsocketServer) sendOnNewTxAddr(stringAddressDescriptor string, tx *api.Tx) {
 	addrDesc := bchain.AddressDescriptor(stringAddressDescriptor)
 	addr, _, err := s.chainParser.GetAddressesFromAddrDesc(addrDesc)
@@ -868,12 +916,15 @@ func (s *WebsocketServer) getNewTxSubscriptions(tx *bchain.MempoolTx) map[string
 // OnNewTx is a callback that broadcasts info about a tx affecting subscribed address
 func (s *WebsocketServer) OnNewTx(tx *bchain.MempoolTx) {
 	subscribed := s.getNewTxSubscriptions(tx)
-	if len(subscribed) > 0 {
+	if len(s.newTransactionSubscriptions) > 0 || len(subscribed) > 0 {
 		atx, err := s.api.GetTransactionFromMempoolTx(tx)
 		if err != nil {
 			glog.Error("GetTransactionFromMempoolTx error ", err, " for ", tx.Txid)
 			return
 		}
+
+		s.sendOnNewTx(atx)
+
 		for stringAddressDescriptor := range subscribed {
 			s.sendOnNewTxAddr(stringAddressDescriptor, atx)
 		}
