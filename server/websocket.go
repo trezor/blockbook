@@ -436,8 +436,10 @@ func (s *WebsocketServer) onRequest(c *websocketChannel, req *websocketReq) {
 				Data: data,
 			})
 		}
+		s.metrics.WebsocketPendingRequests.With((common.Labels{"method": req.Method})).Dec()
 	}()
 	t := time.Now()
+	s.metrics.WebsocketPendingRequests.With((common.Labels{"method": req.Method})).Inc()
 	defer s.metrics.WebsocketReqDuration.With(common.Labels{"method": req.Method}).Observe(float64(time.Since(t)) / 1e3) // in microseconds
 	f, ok := requestHandlers[req.Method]
 	if ok {

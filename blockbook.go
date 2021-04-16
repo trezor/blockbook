@@ -469,6 +469,8 @@ func blockbookAppInfoMetric(db *db.RocksDB, chain bchain.BlockChain, txCache *db
 		"backend_version":          si.Backend.Version,
 		"backend_subversion":       si.Backend.Subversion,
 		"backend_protocol_version": si.Backend.ProtocolVersion}).Set(float64(0))
+	metrics.BackendBestHeight.Set(float64(si.Backend.Blocks))
+	metrics.BlockbookBestHeight.Set(float64(si.Blockbook.BestHeight))
 	return nil
 }
 

@@ -169,9 +169,11 @@ func (s *SocketIoServer) onMessage(c *gosocketio.Channel, req map[string]json.Ra
 			e.Error.Message = "Internal error"
 			rv = e
 		}
+		s.metrics.SocketIOPendingRequests.With((common.Labels{"method": method})).Dec()
 	}()
 	t := time.Now()
 	params := req["params"]
+	s.metrics.SocketIOPendingRequests.With((common.Labels{"method": method})).Inc()
 	defer s.metrics.SocketIOReqDuration.With(common.Labels{"method": method}).Observe(float64(time.Since(t)) / 1e3) // in microseconds
 	f, ok := onMessageHandlers[method]
 	if ok {
