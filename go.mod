@@ -5,7 +5,6 @@ go 1.15
 require (
 	github.com/Groestlcoin/go-groestl-hash v0.0.0-20181012171753-790653ac190c // indirect
 	github.com/allegro/bigcache v1.2.1 // indirect
-	github.com/aristanetworks/goarista v0.0.0-20201012165903-2cb20defcd66 // indirect
 	github.com/bsm/go-vlq v0.0.0-20150828105119-ec6e8d4f5f4e
 	github.com/btcsuite/btcd v0.21.0-beta // indirect
 	github.com/dchest/blake256 v1.0.0 // indirect
@@ -17,12 +16,12 @@ require (
 	github.com/decred/dcrd/dcrutil/v3 v3.0.0
 	github.com/decred/dcrd/hdkeychain/v3 v3.0.0
 	github.com/decred/dcrd/txscript/v3 v3.0.0
-	github.com/ethereum/go-ethereum v1.9.24
+	github.com/ethereum/go-ethereum v1.10.2
 	github.com/facebookgo/ensure v0.0.0-20200202191622-63f1cf65ac4c // indirect
 	github.com/facebookgo/stack v0.0.0-20160209184415-751773369052 // indirect
 	github.com/facebookgo/subset v0.0.0-20200203212716-c811ad88dec4 // indirect
 	github.com/gobuffalo/packr v1.13.7
-	github.com/gogo/protobuf v1.2.1
+	github.com/gogo/protobuf v1.3.2
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
 	github.com/golang/protobuf v1.4.3
 	github.com/gorilla/websocket v1.4.2
@@ -37,7 +36,6 @@ require (
 	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
 	github.com/pebbe/zmq4 v1.2.1
 	github.com/prometheus/client_golang v1.8.0
-	github.com/rs/cors v1.7.0 // indirect
 	github.com/schancel/cashaddr-converter v0.0.0-20181111022653-4769e7add95a
 	github.com/tecbot/gorocksdb v0.0.0-20191217155057-f0fad39f321c
 	golang.org/x/crypto v0.0.0-20201112155050-0c6587e931a9
