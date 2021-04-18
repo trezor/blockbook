@@ -25,7 +25,7 @@ Socket.io interface is provided at `/socket.io/`. The interface also can be expl
 
 The legacy API is provided as is and will not be further developed.
 
-The legacy API is currently (Blockbook v0.3.4) also accessible without the */v1/* prefix, however in the future versions the version less access will be removed.
+The legacy API is currently (Blockbook v0.3.5) also accessible without the */v1/* prefix, however in the future versions the version less access will be removed.
 
 ## API V2
 
@@ -67,7 +67,7 @@ Response:
   "blockbook": {
     "coin": "Bitcoin",
     "host": "blockbook",
-    "version": "0.3.4",
+    "version": "0.3.5",
     "gitCommit": "3d9ad91",
     "buildTime": "2019-05-17T14:34:00+00:00",
     "syncMode": true,
