@@ -808,8 +808,7 @@ func (s *WebsocketServer) unsubscribeFiatRates(c *websocketChannel) (res interfa
 	return &subscriptionResponse{false}, nil
 }
 
-// OnNewBlock is a callback that broadcasts info about new block to subscribed clients
-func (s *WebsocketServer) OnNewBlock(hash string, height uint32) {
+func (s *WebsocketServer) onNewBlockAsync(hash string, height uint32) {
 	s.newBlockSubscriptionsLock.Lock()
 	defer s.newBlockSubscriptionsLock.Unlock()
 	data := struct {
@@ -826,6 +825,11 @@ func (s *WebsocketServer) OnNewBlock(hash string, height uint32) {
 		})
 	}
 	glog.Info("broadcasting new block ", height, " ", hash, " to ", len(s.newBlockSubscriptions), " channels")
+}
+
+// OnNewBlock is a callback that broadcasts info about new block to subscribed clients
+func (s *WebsocketServer) OnNewBlock(hash string, height uint32) {
+	go s.onNewBlockAsync(hash, height)
 }
 
 func (s *WebsocketServer) sendOnNewTx(tx *api.Tx) {
@@ -915,21 +919,23 @@ func (s *WebsocketServer) getNewTxSubscriptions(tx *bchain.MempoolTx) map[string
 	return subscribed
 }
 
+func (s *WebsocketServer) onNewTxAsync(tx *bchain.MempoolTx, subscribed map[string]struct{}) {
+	atx, err := s.api.GetTransactionFromMempoolTx(tx)
+	if err != nil {
+		glog.Error("GetTransactionFromMempoolTx error ", err, " for ", tx.Txid)
+		return
+	}
+	s.sendOnNewTx(atx)
+	for stringAddressDescriptor := range subscribed {
+		s.sendOnNewTxAddr(stringAddressDescriptor, atx)
+	}
+}
+
 // OnNewTx is a callback that broadcasts info about a tx affecting subscribed address
 func (s *WebsocketServer) OnNewTx(tx *bchain.MempoolTx) {
 	subscribed := s.getNewTxSubscriptions(tx)
 	if len(s.newTransactionSubscriptions) > 0 || len(subscribed) > 0 {
-		atx, err := s.api.GetTransactionFromMempoolTx(tx)
-		if err != nil {
-			glog.Error("GetTransactionFromMempoolTx error ", err, " for ", tx.Txid)
-			return
-		}
-
-		s.sendOnNewTx(atx)
-
-		for stringAddressDescriptor := range subscribed {
-			s.sendOnNewTxAddr(stringAddressDescriptor, atx)
-		}
+		go s.onNewTxAsync(tx, subscribed)
 	}
 }
 

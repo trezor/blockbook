@@ -716,10 +716,14 @@ func (s *SocketIoServer) onSubscribe(c *gosocketio.Channel, req []byte) interfac
 	return nil
 }
 
-// OnNewBlockHash notifies users subscribed to bitcoind/hashblock about new block
-func (s *SocketIoServer) OnNewBlockHash(hash string) {
+func (s *SocketIoServer) onNewBlockHashAsync(hash string) {
 	c := s.server.BroadcastTo("bitcoind/hashblock", "bitcoind/hashblock", hash)
 	glog.Info("broadcasting new block hash ", hash, " to ", c, " channels")
+}
+
+// OnNewBlockHash notifies users subscribed to bitcoind/hashblock about new block
+func (s *SocketIoServer) OnNewBlockHash(hash string) {
+	go s.onNewBlockHashAsync(hash)
 }
 
 // OnNewTxAddr notifies users subscribed to bitcoind/addresstxid about new block
