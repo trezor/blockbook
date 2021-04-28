@@ -29,10 +29,11 @@ type Worker struct {
 	chainType   bchain.ChainType
 	mempool     bchain.Mempool
 	is          *common.InternalState
+	metrics     *common.Metrics
 }
 
 // NewWorker creates new api worker
-func NewWorker(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, txCache *db.TxCache, is *common.InternalState) (*Worker, error) {
+func NewWorker(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, txCache *db.TxCache, metrics *common.Metrics, is *common.InternalState) (*Worker, error) {
 	w := &Worker{
 		db:          db,
 		txCache:     txCache,
@@ -41,6 +42,10 @@ func NewWorker(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, 
 		chainType:   chain.GetChainParser().GetChainType(),
 		mempool:     mempool,
 		is:          is,
+		metrics:     metrics,
+	}
+	if w.chainType == bchain.ChainBitcoinType {
+		w.initXpubCache()
 	}
 	return w, nil
 }

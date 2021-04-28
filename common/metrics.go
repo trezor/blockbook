@@ -32,6 +32,7 @@ type Metrics struct {
 	ExplorerPendingRequests  *prometheus.GaugeVec
 	WebsocketPendingRequests *prometheus.GaugeVec
 	SocketIOPendingRequests  *prometheus.GaugeVec
+	XPubCacheSize            prometheus.Gauge
 }
 
 // Labels represents a collection of label name -> value mappings.
@@ -229,6 +230,13 @@ func GetMetrics(coin string) (*Metrics, error) {
 			ConstLabels: Labels{"coin": coin},
 		},
 		[]string{"method"},
+	)
+	metrics.XPubCacheSize = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name:        "blockbook_xpub_cache_size",
+			Help:        "Number of cached xpubs",
+			ConstLabels: Labels{"coin": coin},
+		},
 	)
 
 	v := reflect.ValueOf(metrics)

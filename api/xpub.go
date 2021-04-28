@@ -19,10 +19,9 @@ const maxAddressesGap = 10000
 const txInput = 1
 const txOutput = 2
 
-const xpubCacheSize = 4096
 const xpubCacheExpirationSeconds = 3600
 
-var cachedXpubs = make(map[string]xpubData)
+var cachedXpubs map[string]xpubData
 var cachedXpubsMux sync.Mutex
 
 type xpubTxid struct {
@@ -65,6 +64,35 @@ type xpubData struct {
 	balanceSat      big.Int
 	addresses       []xpubAddress
 	changeAddresses []xpubAddress
+}
+
+func (w *Worker) initXpubCache() {
+	cachedXpubsMux.Lock()
+	if cachedXpubs == nil {
+		cachedXpubs = make(map[string]xpubData)
+		go func() {
+			for {
+				time.Sleep(20 * time.Second)
+				w.evictXpubCacheItems()
+			}
+		}()
+	}
+	cachedXpubsMux.Unlock()
+}
+
+func (w *Worker) evictXpubCacheItems() {
+	cachedXpubsMux.Lock()
+	defer cachedXpubsMux.Unlock()
+	threshold := time.Now().Unix() - xpubCacheExpirationSeconds
+	count := 0
+	for k, v := range cachedXpubs {
+		if v.accessed < threshold {
+			delete(cachedXpubs, k)
+			count++
+		}
+	}
+	w.metrics.XPubCacheSize.Set(float64(len(cachedXpubs)))
+	glog.Info("Evicted ", count, " items from xpub cache, cache size ", len(cachedXpubs))
 }
 
 func (w *Worker) xpubGetAddressTxids(addrDesc bchain.AddressDescriptor, mempool bool, fromHeight, toHeight uint32, maxResults int) ([]xpubTxid, bool, error) {
@@ -247,28 +275,6 @@ func (w *Worker) tokenFromXpubAddress(data *xpubData, ad *xpubAddress, changeInd
 	}
 }
 
-func evictXpubCacheItems() {
-	var oldestKey string
-	oldest := maxInt64
-	now := time.Now().Unix()
-	count := 0
-	for k, v := range cachedXpubs {
-		if v.accessed+xpubCacheExpirationSeconds < now {
-			delete(cachedXpubs, k)
-			count++
-		}
-		if v.accessed < oldest {
-			oldestKey = k
-			oldest = v.accessed
-		}
-	}
-	if oldestKey != "" && oldest+xpubCacheExpirationSeconds >= now {
-		delete(cachedXpubs, oldestKey)
-		count++
-	}
-	glog.V(1).Info("Evicted ", count, " items from xpub cache, oldest item accessed at ", time.Unix(oldest, 0), ", cache size ", len(cachedXpubs))
-}
-
 func (w *Worker) getXpubData(xpub string, page int, txsOnPage int, option AccountDetails, filter *AddressFilter, gap int) (*xpubData, uint32, bool, error) {
 	if w.chainType != bchain.ChainBitcoinType {
 		return nil, 0, false, ErrUnsupportedXpub
@@ -345,9 +351,6 @@ func (w *Worker) getXpubData(xpub string, page int, txsOnPage int, option Accoun
 	}
 	data.accessed = time.Now().Unix()
 	cachedXpubsMux.Lock()
-	if len(cachedXpubs) >= xpubCacheSize {
-		evictXpubCacheItems()
-	}
 	cachedXpubs[xpub] = data
 	cachedXpubsMux.Unlock()
 	return &data, bestheight, inCache, nil
