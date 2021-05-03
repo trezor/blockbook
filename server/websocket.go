@@ -643,7 +643,7 @@ func (s *WebsocketServer) estimateFee(c *websocketChannel, params []byte) (inter
 			}
 		}
 		for i, b := range r.Blocks {
-			fee, err := s.chain.EstimateSmartFee(b, conservative)
+			fee, err := s.api.BitcoinTypeEstimateFee(b, conservative)
 			if err != nil {
 				return nil, err
 			}

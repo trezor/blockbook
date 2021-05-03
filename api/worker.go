@@ -1821,3 +1821,50 @@ func (w *Worker) GetMempool(page int, itemsOnPage int) (*MempoolTxids, error) {
 	}
 	return r, nil
 }
+
+type bitcoinTypeEstimatedFee struct {
+	accessed int64
+	fee      big.Int
+}
+
+const bitcoinTypeEstimatedFeeCacheSize = 250
+
+var bitcoinTypeEstimatedFeeCache [bitcoinTypeEstimatedFeeCacheSize]bitcoinTypeEstimatedFee
+var bitcoinTypeEstimatedFeeConservativeCache [bitcoinTypeEstimatedFeeCacheSize]bitcoinTypeEstimatedFee
+
+// BitcoinTypeEstimateFee returns a fee estimation for given number of blocks
+// it uses 5 second cache to reduce calls to the backend
+func (w *Worker) BitcoinTypeEstimateFee(blocks int, conservative bool) (big.Int, error) {
+	if blocks >= bitcoinTypeEstimatedFeeCacheSize {
+		return w.chain.EstimateSmartFee(blocks, conservative)
+	}
+	// 5 seconds cache
+	threshold := time.Now().Unix() - 5
+	if conservative {
+		cached := bitcoinTypeEstimatedFeeConservativeCache[blocks]
+		if cached.accessed >= threshold {
+			return cached.fee, nil
+		}
+		fee, err := w.chain.EstimateSmartFee(blocks, conservative)
+		if err == nil {
+			bitcoinTypeEstimatedFeeConservativeCache[blocks] = bitcoinTypeEstimatedFee{
+				accessed: time.Now().Unix(),
+				fee:      fee,
+			}
+		}
+		return fee, err
+	} else {
+		cached := bitcoinTypeEstimatedFeeCache[blocks]
+		if cached.accessed >= threshold {
+			return cached.fee, nil
+		}
+		fee, err := w.chain.EstimateSmartFee(blocks, conservative)
+		if err == nil {
+			bitcoinTypeEstimatedFeeCache[blocks] = bitcoinTypeEstimatedFee{
+				accessed: time.Now().Unix(),
+				fee:      fee,
+			}
+		}
+		return fee, err
+	}
+}
