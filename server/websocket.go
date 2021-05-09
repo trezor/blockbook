@@ -118,6 +118,14 @@ func checkOrigin(r *http.Request) bool {
 	return true
 }
 
+func getIP(r *http.Request) string {
+	ip := r.Header.Get("X-Real-Ip")
+	if ip != "" {
+		return ip
+	}
+	return r.RemoteAddr
+}
+
 // ServeHTTP sets up handler of websocket channel
 func (s *WebsocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
@@ -133,7 +141,7 @@ func (s *WebsocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		id:            atomic.AddUint64(&connectionCounter, 1),
 		conn:          conn,
 		out:           make(chan *websocketRes, outChannelSize),
-		ip:            r.RemoteAddr,
+		ip:            getIP(r),
 		requestHeader: r.Header,
 		alive:         true,
 	}
