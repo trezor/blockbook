@@ -13,7 +13,7 @@ type Metrics struct {
 	SocketIOClients          prometheus.Gauge
 	SocketIOReqDuration      *prometheus.HistogramVec
 	WebsocketRequests        *prometheus.CounterVec
-	WebsocketSubscribes      *prometheus.CounterVec
+	WebsocketSubscribes      *prometheus.GaugeVec
 	WebsocketClients         prometheus.Gauge
 	WebsocketReqDuration     *prometheus.HistogramVec
 	IndexResyncDuration      prometheus.Histogram
@@ -82,13 +82,13 @@ func GetMetrics(coin string) (*Metrics, error) {
 		},
 		[]string{"method", "status"},
 	)
-	metrics.WebsocketSubscribes = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
+	metrics.WebsocketSubscribes = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
 			Name:        "blockbook_websocket_subscribes",
-			Help:        "Total number of websocket subscribes by channel and status",
+			Help:        "Number of websocket subscriptions by method",
 			ConstLabels: Labels{"coin": coin},
 		},
-		[]string{"channel", "status"},
+		[]string{"method"},
 	)
 	metrics.WebsocketClients = prometheus.NewGauge(
 		prometheus.GaugeOpts{
