@@ -112,7 +112,7 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 
 	// new mempool transaction notifications handling
 	// the subscription is done in Initialize
-	s.chanNewTx = make(chan ethcommon.Hash)
+	s.chanNewTx = make(chan ethcommon.Hash, 10000000) // 320M memory
 	go func() {
 		for {
 			t, ok := <-s.chanNewTx
@@ -123,7 +123,7 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 			if glog.V(2) {
 				glog.Info("rpc: new tx ", hex)
 			}
-			s.Mempool.AddTransactionToMempool(hex)
+			go s.Mempool.AddTransactionToMempool(hex)
 			pushHandler(bchain.NotificationNewTx)
 		}
 	}()
@@ -207,7 +207,7 @@ func (b *EthereumRPC) InitializeMempool(addrDescForOutpoint bchain.AddrDescForOu
 
 func (b *EthereumRPC) subscribeEvents() error {
 	// subscriptions
-	if err := b.subscribe(func() (*rpc.ClientSubscription, error) {
+	if err := b.subscribe("newHeads", func() (*rpc.ClientSubscription, error) {
 		// invalidate the previous subscription - it is either the first one or there was an error
 		b.newBlockSubscription = nil
 		ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
@@ -223,7 +223,7 @@ func (b *EthereumRPC) subscribeEvents() error {
 		return err
 	}
 
-	if err := b.subscribe(func() (*rpc.ClientSubscription, error) {
+	if err := b.subscribe("newPendingTransactions", func() (*rpc.ClientSubscription, error) {
 		// invalidate the previous subscription - it is either the first one or there was an error
 		b.newTxSubscription = nil
 		ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
@@ -243,7 +243,7 @@ func (b *EthereumRPC) subscribeEvents() error {
 }
 
 // subscribe subscribes notification and tries to resubscribe in case of error
-func (b *EthereumRPC) subscribe(f func() (*rpc.ClientSubscription, error)) error {
+func (b *EthereumRPC) subscribe(arg string, f func() (*rpc.ClientSubscription, error)) error {
 	s, err := f()
 	if err != nil {
 		return err
@@ -257,7 +257,7 @@ func (b *EthereumRPC) subscribe(f func() (*rpc.ClientSubscription, error)) error
 			if e == nil {
 				return
 			}
-			glog.Error("Subscription error ", e)
+			glog.Error("Subscription error ", e, arg)
 			timer := time.NewTimer(time.Second * 2)
 			// try in 2 second interval to resubscribe
 			for {
@@ -336,19 +336,15 @@ func (b *EthereumRPC) GetChainInfo() (*bchain.ChainInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	var ver, protocol string
+	var ver string
 	if err := b.rpc.CallContext(ctx, &ver, "web3_clientVersion"); err != nil {
 		return nil, err
 	}
-	if err := b.rpc.CallContext(ctx, &protocol, "eth_protocolVersion"); err != nil {
-		return nil, err
-	}
 	rv := &bchain.ChainInfo{
-		Blocks:          int(h.Number.Int64()),
-		Bestblockhash:   h.Hash().Hex(),
-		Difficulty:      h.Difficulty.String(),
-		Version:         ver,
-		ProtocolVersion: protocol,
+		Blocks:        int(h.Number.Int64()),
+		Bestblockhash: h.Hash().Hex(),
+		Difficulty:    h.Difficulty.String(),
+		Version:       ver,
 	}
 	idi := int(id.Uint64())
 	//mainnet is 56
@@ -649,7 +645,7 @@ func (b *EthereumRPC) BscTypeGetTokenHub() (*bchain.Tokenhub, error) {
 	return th, nil
 }
 
-func (b *EthereumRPC) EthereumTypeGetReceipt(txid string)(*bchain.TransactionReceipt, error)  {
+func (b *EthereumRPC) EthereumTypeGetReceipt(txid string) (*bchain.TransactionReceipt, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
 	defer cancel()
 	hash := ethcommon.HexToHash(txid)

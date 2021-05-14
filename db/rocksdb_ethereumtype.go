@@ -89,6 +89,7 @@ func (d *RocksDB) GetErc20Contract() []string {
 // GetAddrDescContracts returns AddrContracts for given addrDesc
 func (d *RocksDB) GetAddrDescContracts(addrDesc bchain.AddressDescriptor) (*AddrContracts, error) {
 	val, err := d.db.GetCF(d.ro, d.cfh[cfAddressContracts], addrDesc)
+
 	if err != nil {
 		return nil, err
 	}

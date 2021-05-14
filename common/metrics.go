@@ -27,6 +27,9 @@ type Metrics struct {
 	DbColumnRows          *prometheus.GaugeVec
 	DbColumnSize          *prometheus.GaugeVec
 	BlockbookAppInfo      *prometheus.GaugeVec
+	BlockbookBestHeight   prometheus.Gauge
+	BackendBlocks         prometheus.Gauge
+	BufferedNewTx         prometheus.Gauge
 }
 
 // Labels represents a collection of label name -> value mappings.
@@ -186,6 +189,30 @@ func GetMetrics(coin string) (*Metrics, error) {
 			ConstLabels: Labels{"coin": coin},
 		},
 		[]string{"blockbook_version", "blockbook_commit", "blockbook_buildtime", "backend_version", "backend_subversion", "backend_protocol_version"},
+	)
+
+	metrics.BlockbookBestHeight = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name:        "blockbook_bestheight",
+			Help:        "Blockbook sync height",
+			ConstLabels: Labels{"coin": coin},
+		},
+	)
+
+	metrics.BackendBlocks = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name:        "backend_blocks",
+			Help:        "Backend sync height",
+			ConstLabels: Labels{"coin": coin},
+		},
+	)
+
+	metrics.BufferedNewTx = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name:        "buffered_newtx",
+			Help:        "Buffered new tx",
+			ConstLabels: Labels{"coin": coin},
+		},
 	)
 
 	v := reflect.ValueOf(metrics)

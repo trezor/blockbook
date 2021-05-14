@@ -86,7 +86,7 @@ var (
 
 var (
 	chanSyncIndex                 = make(chan struct{})
-	chanSyncMempool               = make(chan struct{})
+	chanSyncMempool               = make(chan struct{}, 10000000) // s.chanNewTx = make(chan ethcommon.Hash, 10000000)
 	chanStoreInternalState        = make(chan struct{})
 	chanSyncIndexDone             = make(chan struct{})
 	chanSyncMempoolDone           = make(chan struct{})
@@ -316,6 +316,17 @@ func mainWithExitCode() int {
 	}
 	go storeInternalStateLoop()
 
+	// update blockbook sync metrics
+	fnOnNewBlockMetrics := func(hash string, height uint32) {
+		ci, err := chain.GetChainInfo()
+		if err != nil {
+			ci = &bchain.ChainInfo{}
+		}
+		metrics.BackendBlocks.Set(float64(ci.Blocks))
+		metrics.BlockbookBestHeight.Set(float64(height))
+	}
+	callbacksOnNewBlock = append(callbacksOnNewBlock, fnOnNewBlockMetrics)
+
 	if publicServer != nil {
 		// start full public interface
 		callbacksOnNewBlock = append(callbacksOnNewBlock, publicServer.OnNewBlock)
@@ -467,6 +478,10 @@ func blockbookAppInfoMetric(db *db.RocksDB, chain bchain.BlockChain, txCache *db
 		"backend_version":          si.Backend.Version,
 		"backend_subversion":       si.Backend.Subversion,
 		"backend_protocol_version": si.Backend.ProtocolVersion}).Set(float64(0))
+
+	metrics.BackendBlocks.Set(float64(si.Backend.Blocks))
+	metrics.BlockbookBestHeight.Set(float64(si.Blockbook.BestHeight))
+
 	return nil
 }
 
@@ -657,6 +672,7 @@ func pushSynchronizationHandler(nt bchain.NotificationType) {
 		chanSyncIndex <- struct{}{}
 	} else if nt == bchain.NotificationNewTx {
 		chanSyncMempool <- struct{}{}
+		metrics.BufferedNewTx.Set(float64(len(chanSyncMempool)))
 	} else {
 		glog.Error("MQ: unknown notification sent")
 	}

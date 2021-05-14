@@ -10,6 +10,7 @@ import (
 	"math/big"
 	"strings"
 	"sync"
+	"time"
 	"unicode/utf8"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
@@ -45,8 +46,18 @@ const erc20DecimalsSignature = "0x313ce567"
 const erc20BalanceOf = "0x70a08231"
 const bscZeroAddress = "0x0000000000000000000000000000000000000000"
 
-var cachedContracts = make(map[string]*bchain.Erc20Contract)
+var cachedContracts = make(map[string]*bchain.Erc20Contract) // Cached erc20 contracts, must be erc20
+var cachedNonErc20Contracts = make(map[string]struct{})      // Cached non-erc20 contracts, may become erc20 in future, so periodically clear this cache
 var cachedContractsMux sync.Mutex
+
+func init() {
+	t := time.NewTicker(2 * time.Hour)
+	go func() {
+		for range t.C {
+			clearCachedNonERC20Contracts()
+		}
+	}()
+}
 
 func addressFromPaddedHex(s string) (string, error) {
 	var t big.Int
@@ -102,16 +113,16 @@ func GetInternalTransfersFromLog(tx *bchain.Tx, logs []*rpcLog, payload string, 
 						return nil, err
 					}
 					lg := types.Log{
-						Address:     ethcommon.HexToAddress(l.Address),
-						Topics:      topicHash,
-						Data:        hexData,
+						Address: ethcommon.HexToAddress(l.Address),
+						Topics:  topicHash,
+						Data:    hexData,
 					}
 					tis, err := tHub.ParseTransferInSuccess(lg)
 					if err != nil {
 						glog.Errorf("parse tokenhub tx in log failed %v", err)
 						return nil, err
 					}
-					
+
 					syncPackage, err := decodeTransferInSyncPackage(payload)
 					if err != nil {
 						glog.Errorf("decodeTransferInSyncPackage failed: %v", err)
@@ -122,9 +133,9 @@ func GetInternalTransfersFromLog(tx *bchain.Tx, logs []*rpcLog, payload string, 
 
 					transfer := bchain.Erc20Transfer{
 						//Bep20Addr is coin
-						Contract: tis.Bep20Addr.String(),
-						From:     refundAddress.String(),
-						To:       tis.RefundAddr.String(),
+						Contract: EIP55AddressFromAddress(tis.Bep20Addr.String()),
+						From:     EIP55AddressFromAddress(refundAddress.String()),
+						To:       EIP55AddressFromAddress(tis.RefundAddr.String()),
 						Tokens:   *tis.Amount,
 					}
 
@@ -144,9 +155,9 @@ func GetInternalTransfersFromLog(tx *bchain.Tx, logs []*rpcLog, payload string, 
 
 					transfer := bchain.Erc20Transfer{
 						//Bep20Addr is coin
-						Contract: sp.ContractAddr.String(),
+						Contract: EIP55AddressFromAddress(sp.ContractAddr.String()),
 						From:     EIP55AddressFromAddress(f),
-						To:       sp.Recipient.String(),
+						To:       EIP55AddressFromAddress(sp.Recipient.String()),
 						Tokens:   *sp.Amount,
 					}
 
@@ -219,7 +230,6 @@ func decodeTransferInSyncPackage(input string) (*TransferInSynPackage, error) {
 	}
 
 	mmp := make(map[string]interface{})
-	
 
 	method, err := getCrossChainABI().MethodById(data[:4])
 	if err != nil {
@@ -236,7 +246,7 @@ func decodeTransferInSyncPackage(input string) (*TransferInSynPackage, error) {
 	if payloadFromMap == nil {
 		return nil, fmt.Errorf("payload is empty")
 	}
-	
+
 	payload := payloadFromMap.([]byte)
 	if len(payload) < 33 {
 		return nil, fmt.Errorf("payload len(%d) too short", len(payload))
@@ -248,7 +258,7 @@ func decodeTransferInSyncPackage(input string) (*TransferInSynPackage, error) {
 	if err != nil {
 		return nil, fmt.Errorf("fail to rlp decode payload %s: %v", payload, err)
 	}
-	
+
 	return &syncPackage, nil
 }
 
@@ -263,7 +273,7 @@ func getCrossChainABI() *abi.ABI {
 		ccAbi, _ := abi.JSON(strings.NewReader(crossChainABI))
 		mCrossChainAbi = &ccAbi
 	})
-	
+
 	return mCrossChainAbi
 }
 
@@ -278,19 +288,19 @@ func getTokenHubABI() *abi.ABI {
 
 type TransferInSynPackage struct {
 	Bep2TokenSymbol [32]byte
-	ContractAddr [20]byte
-	Amount big.Int
-	Recipient [20]byte
-	RefundAddr [20]byte
-	ExpireTime uint64
+	ContractAddr    [20]byte
+	Amount          big.Int
+	Recipient       [20]byte
+	RefundAddr      [20]byte
+	ExpireTime      uint64
 }
 
 //address contractAddr, address recipient, uint256 amount, uint64 expireTime
 type TransferOutSynPackage struct {
 	ContractAddr ethcommon.Address
-	Recipient ethcommon.Address
-	Amount *big.Int
-	ExpireTime uint64
+	Recipient    ethcommon.Address
+	Amount       *big.Int
+	ExpireTime   uint64
 }
 
 func erc20GetTransfersFromLog(logs []*rpcLog) ([]bchain.Erc20Transfer, error) {
@@ -343,7 +353,7 @@ func erc20GetTransfersFromTx(tx *rpcTransaction) ([]bchain.Erc20Transfer, error)
 	return r, nil
 }
 
-func getTokenHubTransferInFromTx(tx *rpcTransaction) ([]bchain.Erc20Transfer, error)  {
+func getTokenHubTransferInFromTx(tx *rpcTransaction) ([]bchain.Erc20Transfer, error) {
 	var r []bchain.Erc20Transfer
 	if len(tx.Payload) == 128+len(erc20TransferMethodSignature) && strings.HasPrefix(tx.Payload, erc20TransferMethodSignature) {
 		to, err := addressFromPaddedHex(tx.Payload[len(erc20TransferMethodSignature) : 64+len(erc20TransferMethodSignature)])
@@ -437,6 +447,9 @@ func (b *EthereumRPC) EthereumTypeGetErc20ContractInfo(contractDesc bchain.Addre
 	cds := string(contractDesc)
 	cachedContractsMux.Lock()
 	contract, found := cachedContracts[cds]
+	if !found {
+		_, found = cachedNonErc20Contracts[cds]
+	}
 	cachedContractsMux.Unlock()
 	if !found {
 		address := EIP55Address(contractDesc)
@@ -448,24 +461,35 @@ func (b *EthereumRPC) EthereumTypeGetErc20ContractInfo(contractDesc bchain.Addre
 				Decimals: 18,
 			}
 		} else {
-			nameData, err := b.ethCall(erc20NameSignature, address)
+			data, err := b.ethCall(erc20NameSignature, address)
 			if err != nil {
-				return nil, err
+				// ignore the error from the eth_call - since geth v1.9.15 they changed the behavior
+				// and returning error "execution reverted" for some non contract addresses
+				// https://github.com/ethereum/go-ethereum/issues/21249#issuecomment-648647672
+				glog.Warning(errors.Annotatef(err, "erc20NameSignature %v", address))
+				return nil, nil
 			}
-			name := parseErc20StringProperty(contractDesc, nameData)
+			name := parseErc20StringProperty(contractDesc, data)
 
-			symbolData, err := b.ethCall(erc20SymbolSignature, address)
+			sData, err := b.ethCall(erc20SymbolSignature, address)
 			if err != nil {
-				return nil, err
+				glog.Warning(errors.Annotatef(err, "erc20SymbolSignature %v", address))
+				return nil, nil
 			}
 
-			symbol := parseErc20StringProperty(contractDesc, symbolData)
+			symbol := parseErc20StringProperty(contractDesc, sData)
 
 			// XXX: name is optional for BEP2E contract
 			if name != "" || symbol != "" {
-				data, err := b.ethCall(erc20DecimalsSignature, address)
+				data, err = b.ethCall(erc20SymbolSignature, address)
 				if err != nil {
-					return nil, err
+					glog.Warning(errors.Annotatef(err, "erc20SymbolSignature %v", address))
+					return nil, nil
+				}
+				symbol := parseErc20StringProperty(contractDesc, data)
+				data, err = b.ethCall(erc20DecimalsSignature, address)
+				if err != nil {
+					glog.Warning(errors.Annotatef(err, "erc20DecimalsSignature %v", address))
 				}
 				contract = &bchain.Erc20Contract{
 					Contract: address,
@@ -484,7 +508,11 @@ func (b *EthereumRPC) EthereumTypeGetErc20ContractInfo(contractDesc bchain.Addre
 		}
 
 		cachedContractsMux.Lock()
-		cachedContracts[cds] = contract
+		if contract != nil {
+			cachedContracts[cds] = contract
+		} else {
+			cachedNonErc20Contracts[cds] = struct{}{}
+		}
 		cachedContractsMux.Unlock()
 	}
 	return contract, nil
@@ -504,4 +532,10 @@ func (b *EthereumRPC) EthereumTypeGetErc20ContractBalance(addrDesc, contractDesc
 		return nil, errors.New("Invalid balance")
 	}
 	return r, nil
+}
+
+func clearCachedNonERC20Contracts() {
+	cachedContractsMux.Lock()
+	cachedNonErc20Contracts = make(map[string]struct{})
+	cachedContractsMux.Unlock()
 }

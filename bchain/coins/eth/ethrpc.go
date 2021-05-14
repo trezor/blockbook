@@ -335,11 +335,8 @@ func (b *EthereumRPC) GetChainInfo() (*bchain.ChainInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	var ver, protocol string
+	var ver string
 	if err := b.rpc.CallContext(ctx, &ver, "web3_clientVersion"); err != nil {
-		return nil, err
-	}
-	if err := b.rpc.CallContext(ctx, &protocol, "eth_protocolVersion"); err != nil {
 		return nil, err
 	}
 	rv := &bchain.ChainInfo{
@@ -347,7 +344,6 @@ func (b *EthereumRPC) GetChainInfo() (*bchain.ChainInfo, error) {
 		Bestblockhash:   h.Hash().Hex(),
 		Difficulty:      h.Difficulty.String(),
 		Version:         ver,
-		ProtocolVersion: protocol,
 	}
 	idi := int(id.Uint64())
 	if idi == 1 {

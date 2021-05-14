@@ -182,6 +182,10 @@ type TransactionReceipt struct {
 	ContractAddress string `json:"contractAddress"`
 }
 
+type TransactionReceipt struct {
+	ContractAddress string `json:"contractAddress"`
+}
+
 // RPCError defines rpc error returned by backend
 type RPCError struct {
 	Code    int    `json:"code"`
@@ -215,6 +219,14 @@ type Erc20Contract struct {
 	Name     string `json:"name"`
 	Symbol   string `json:"symbol"`
 	Decimals int    `json:"decimals"`
+}
+
+type Erc20ContractInfo struct {
+	Contract string `json:"contract"`
+	Name     string `json:"name"`
+	Symbol   string `json:"symbol"`
+	Decimals int    `json:"decimals"`
+	Icon     string `json:"icon"`
 }
 
 // Erc20Transfer contains a single ERC20 token transfer

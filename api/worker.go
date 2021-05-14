@@ -751,6 +751,7 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 		}
 		if details > AccountDetailsBasic {
 			tokens = make([]Token, len(ca.Contracts))
+
 			var j int
 			for i, c := range ca.Contracts {
 				if len(filterDesc) > 0 {
@@ -760,6 +761,7 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 					// filter only transactions of this contract
 					filter.Vout = i + 1
 				}
+
 				t, err := w.getEthereumToken(i+1, addrDesc, c.Contract, details, int(c.Txs))
 				if err != nil {
 					return nil, nil, nil, 0, 0, 0, err
@@ -767,6 +769,7 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 				tokens[j] = *t
 				j++
 			}
+
 			// special handling if filter has contract
 			// if the address has no transactions with given contract, check the balance, the address may have some balance even without transactions
 			if len(filterDesc) > 0 && j == 0 && details >= AccountDetailsTokens {
@@ -1844,7 +1847,7 @@ func (w *Worker) GetSystemInfo(internal bool) (*SystemInfo, error) {
 		Consensus:       ci.Consensus,
 	}
 	glog.Info("GetSystemInfo finished in ", time.Since(start))
-	return &SystemInfo{blockbookInfo, backendInfo}, nil
+	return &SystemInfo{blockbookInfo, backendInfo}, err
 }
 
 // GetMempool returns a page of mempool txids
