@@ -95,6 +95,8 @@ func (w *SyncWorker) ResyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 		if err == nil {
 			w.is.FinishedSync(bh)
 		}
+		w.metrics.BackendBestHeight.Set(float64(w.is.BackendInfo.Blocks))
+		w.metrics.BlockbookBestHeight.Set(float64(bh))
 		return err
 	case errSynced:
 		// this is not actually error but flag that resync wasn't necessary
@@ -226,6 +228,7 @@ func (w *SyncWorker) connectBlocks(onNewBlock bchain.OnNewBlockFunc, initialSync
 		if onNewBlock != nil {
 			onNewBlock(res.block.Hash, res.block.Height)
 		}
+		w.metrics.BlockbookBestHeight.Set(float64(res.block.Height))
 		if res.block.Height > 0 && res.block.Height%1000 == 0 {
 			glog.Info("connected block ", res.block.Height, " ", res.block.Hash)
 		}
@@ -377,6 +380,7 @@ ConnectLoop:
 			}
 			hch <- hashHeight{hash, h}
 			if h > 0 && h%1000 == 0 {
+				w.metrics.BlockbookBestHeight.Set(float64(h))
 				glog.Info("connecting block ", h, " ", hash, ", elapsed ", time.Since(start), " ", w.db.GetAndResetConnectBlockStats())
 				start = time.Now()
 			}

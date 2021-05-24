@@ -1,5 +1,5 @@
 {
-    "version": "0.3.4",
+    "version": "0.3.5",
     "backend_install_path": "/opt/coins/nodes",
     "backend_data_path": "/opt/coins/data",
     "blockbook_install_path": "/opt/coins/blockbook",

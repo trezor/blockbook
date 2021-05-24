@@ -60,7 +60,7 @@ type PublicServer struct {
 // only basic functionality is mapped, to map all functions, call
 func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, txCache *db.TxCache, explorerURL string, metrics *common.Metrics, is *common.InternalState, debugMode bool, enableSubNewTx bool) (*PublicServer, error) {
 
-	api, err := api.NewWorker(db, chain, mempool, txCache, is)
+	api, err := api.NewWorker(db, chain, mempool, txCache, metrics, is)
 	if err != nil {
 		return nil, err
 	}
@@ -258,7 +258,13 @@ func joinURL(base string, part string) string {
 }
 
 func getFunctionName(i interface{}) string {
-	return runtime.FuncForPC(reflect.ValueOf(i).Pointer()).Name()
+	name := runtime.FuncForPC(reflect.ValueOf(i).Pointer()).Name()
+	start := strings.LastIndex(name, ".")
+	end := strings.LastIndex(name, "-")
+	if start > 0 && end > start {
+		name = name[start+1 : end]
+	}
+	return name
 }
 
 func (s *PublicServer) jsonHandler(handler func(r *http.Request, apiVersion int) (interface{}, error), apiVersion int) func(w http.ResponseWriter, r *http.Request) {
@@ -266,12 +272,13 @@ func (s *PublicServer) jsonHandler(handler func(r *http.Request, apiVersion int)
 		Text       string `json:"error"`
 		HTTPStatus int    `json:"-"`
 	}
+	handlerName := getFunctionName(handler)
 	return func(w http.ResponseWriter, r *http.Request) {
 		var data interface{}
 		var err error
 		defer func() {
 			if e := recover(); e != nil {
-				glog.Error(getFunctionName(handler), " recovered from panic: ", e)
+				glog.Error(handlerName, " recovered from panic: ", e)
 				debug.PrintStack()
 				if s.debug {
 					data = jsonError{fmt.Sprint("Internal server error: recovered from panic ", e), http.StatusInternalServerError}
@@ -287,7 +294,9 @@ func (s *PublicServer) jsonHandler(handler func(r *http.Request, apiVersion int)
 			if err != nil {
 				glog.Warning("json encode ", err)
 			}
+			s.metrics.ExplorerPendingRequests.With((common.Labels{"method": handlerName})).Dec()
 		}()
+		s.metrics.ExplorerPendingRequests.With((common.Labels{"method": handlerName})).Inc()
 		data, err = handler(r, apiVersion)
 		if err != nil || data == nil {
 			if apiErr, ok := err.(*api.APIError); ok {
@@ -298,7 +307,7 @@ func (s *PublicServer) jsonHandler(handler func(r *http.Request, apiVersion int)
 				}
 			} else {
 				if err != nil {
-					glog.Error(getFunctionName(handler), " error: ", err)
+					glog.Error(handlerName, " error: ", err)
 				}
 				if s.debug {
 					if data != nil {
@@ -332,13 +341,14 @@ func (s *PublicServer) newTemplateDataWithError(text string) *TemplateData {
 }
 
 func (s *PublicServer) htmlTemplateHandler(handler func(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error)) func(w http.ResponseWriter, r *http.Request) {
+	handlerName := getFunctionName(handler)
 	return func(w http.ResponseWriter, r *http.Request) {
 		var t tpl
 		var data *TemplateData
 		var err error
 		defer func() {
 			if e := recover(); e != nil {
-				glog.Error(getFunctionName(handler), " recovered from panic: ", e)
+				glog.Error(handlerName, " recovered from panic: ", e)
 				debug.PrintStack()
 				t = errorInternalTpl
 				if s.debug {
@@ -358,7 +368,9 @@ func (s *PublicServer) htmlTemplateHandler(handler func(w http.ResponseWriter, r
 					glog.Error(err)
 				}
 			}
+			s.metrics.ExplorerPendingRequests.With((common.Labels{"method": handlerName})).Dec()
 		}()
+		s.metrics.ExplorerPendingRequests.With((common.Labels{"method": handlerName})).Inc()
 		if s.debug {
 			// reload templates on each request
 			// to reflect changes during development
@@ -375,7 +387,7 @@ func (s *PublicServer) htmlTemplateHandler(handler func(w http.ResponseWriter, r
 				}
 			} else {
 				if err != nil {
-					glog.Error(getFunctionName(handler), " error: ", err)
+					glog.Error(handlerName, " error: ", err)
 				}
 				if s.debug {
 					data = s.newTemplateDataWithError(fmt.Sprintf("Internal server error: %v, data %+v", err, data))

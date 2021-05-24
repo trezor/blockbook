@@ -53,6 +53,7 @@ type websocketChannel struct {
 	requestHeader http.Header
 	alive         bool
 	aliveLock     sync.Mutex
+	addrDescs     []string // subscribed address descriptors as strings
 }
 
 // WebsocketServer is a handle to websocket server
@@ -81,7 +82,7 @@ type WebsocketServer struct {
 
 // NewWebsocketServer creates new websocket interface to blockbook and returns its handle
 func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, txCache *db.TxCache, metrics *common.Metrics, is *common.InternalState, enableSubNewTx bool) (*WebsocketServer, error) {
-	api, err := api.NewWorker(db, chain, mempool, txCache, is)
+	api, err := api.NewWorker(db, chain, mempool, txCache, metrics, is)
 	if err != nil {
 		return nil, err
 	}
@@ -118,6 +119,14 @@ func checkOrigin(r *http.Request) bool {
 	return true
 }
 
+func getIP(r *http.Request) string {
+	ip := r.Header.Get("X-Real-Ip")
+	if ip != "" {
+		return ip
+	}
+	return r.RemoteAddr
+}
+
 // ServeHTTP sets up handler of websocket channel
 func (s *WebsocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
@@ -133,7 +142,7 @@ func (s *WebsocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		id:            atomic.AddUint64(&connectionCounter, 1),
 		conn:          conn,
 		out:           make(chan *websocketRes, outChannelSize),
-		ip:            r.RemoteAddr,
+		ip:            getIP(r),
 		requestHeader: r.Header,
 		alive:         true,
 	}
@@ -436,8 +445,10 @@ func (s *WebsocketServer) onRequest(c *websocketChannel, req *websocketReq) {
 				Data: data,
 			})
 		}
+		s.metrics.WebsocketPendingRequests.With((common.Labels{"method": req.Method})).Dec()
 	}()
 	t := time.Now()
+	s.metrics.WebsocketPendingRequests.With((common.Labels{"method": req.Method})).Inc()
 	defer s.metrics.WebsocketReqDuration.With(common.Labels{"method": req.Method}).Observe(float64(time.Since(t)) / 1e3) // in microseconds
 	f, ok := requestHandlers[req.Method]
 	if ok {
@@ -641,7 +652,7 @@ func (s *WebsocketServer) estimateFee(c *websocketChannel, params []byte) (inter
 			}
 		}
 		for i, b := range r.Blocks {
-			fee, err := s.chain.EstimateSmartFee(b, conservative)
+			fee, err := s.api.BitcoinTypeEstimateFee(b, conservative)
 			if err != nil {
 				return nil, err
 			}
@@ -678,6 +689,7 @@ func (s *WebsocketServer) subscribeNewBlock(c *websocketChannel, req *websocketR
 	s.newBlockSubscriptionsLock.Lock()
 	defer s.newBlockSubscriptionsLock.Unlock()
 	s.newBlockSubscriptions[c] = req.ID
+	s.metrics.WebsocketSubscribes.With((common.Labels{"method": "subscribeNewBlock"})).Set(float64(len(s.newBlockSubscriptions)))
 	return &subscriptionResponse{true}, nil
 }
 
@@ -685,6 +697,7 @@ func (s *WebsocketServer) unsubscribeNewBlock(c *websocketChannel) (res interfac
 	s.newBlockSubscriptionsLock.Lock()
 	defer s.newBlockSubscriptionsLock.Unlock()
 	delete(s.newBlockSubscriptions, c)
+	s.metrics.WebsocketSubscribes.With((common.Labels{"method": "subscribeNewBlock"})).Set(float64(len(s.newBlockSubscriptions)))
 	return &subscriptionResponse{false}, nil
 }
 
@@ -695,6 +708,7 @@ func (s *WebsocketServer) subscribeNewTransaction(c *websocketChannel, req *webs
 		return &subscriptionResponseMessage{false, "subscribeNewTransaction not enabled, use -enablesubnewtx flag to enable."}, nil
 	}
 	s.newTransactionSubscriptions[c] = req.ID
+	s.metrics.WebsocketSubscribes.With((common.Labels{"method": "subscribeNewTransaction"})).Set(float64(len(s.newTransactionSubscriptions)))
 	return &subscriptionResponse{true}, nil
 }
 
@@ -705,10 +719,11 @@ func (s *WebsocketServer) unsubscribeNewTransaction(c *websocketChannel) (res in
 		return &subscriptionResponseMessage{false, "unsubscribeNewTransaction not enabled, use -enablesubnewtx flag to enable."}, nil
 	}
 	delete(s.newTransactionSubscriptions, c)
+	s.metrics.WebsocketSubscribes.With((common.Labels{"method": "subscribeNewTransaction"})).Set(float64(len(s.newTransactionSubscriptions)))
 	return &subscriptionResponse{false}, nil
 }
 
-func (s *WebsocketServer) unmarshalAddresses(params []byte) ([]bchain.AddressDescriptor, error) {
+func (s *WebsocketServer) unmarshalAddresses(params []byte) ([]string, error) {
 	r := struct {
 		Addresses []string `json:"addresses"`
 	}{}
@@ -716,38 +731,41 @@ func (s *WebsocketServer) unmarshalAddresses(params []byte) ([]bchain.AddressDes
 	if err != nil {
 		return nil, err
 	}
-	rv := make([]bchain.AddressDescriptor, len(r.Addresses))
+	rv := make([]string, len(r.Addresses))
 	for i, a := range r.Addresses {
 		ad, err := s.chainParser.GetAddrDescFromAddress(a)
 		if err != nil {
 			return nil, err
 		}
-		rv[i] = ad
+		rv[i] = string(ad)
 	}
 	return rv, nil
 }
 
 // unsubscribe addresses without addressSubscriptionsLock - can be called only from subscribeAddresses and unsubscribeAddresses
 func (s *WebsocketServer) doUnsubscribeAddresses(c *websocketChannel) {
-	for ads, sa := range s.addressSubscriptions {
-		for sc := range sa {
-			if sc == c {
-				delete(sa, c)
+	for _, ads := range c.addrDescs {
+		sa, e := s.addressSubscriptions[ads]
+		if e {
+			for sc := range sa {
+				if sc == c {
+					delete(sa, c)
+				}
+			}
+			if len(sa) == 0 {
+				delete(s.addressSubscriptions, ads)
 			}
 		}
-		if len(sa) == 0 {
-			delete(s.addressSubscriptions, ads)
-		}
 	}
+	c.addrDescs = nil
 }
 
-func (s *WebsocketServer) subscribeAddresses(c *websocketChannel, addrDesc []bchain.AddressDescriptor, req *websocketReq) (res interface{}, err error) {
+func (s *WebsocketServer) subscribeAddresses(c *websocketChannel, addrDesc []string, req *websocketReq) (res interface{}, err error) {
 	s.addressSubscriptionsLock.Lock()
 	defer s.addressSubscriptionsLock.Unlock()
 	// unsubscribe all previous subscriptions
 	s.doUnsubscribeAddresses(c)
-	for i := range addrDesc {
-		ads := string(addrDesc[i])
+	for _, ads := range addrDesc {
 		as, ok := s.addressSubscriptions[ads]
 		if !ok {
 			as = make(map[*websocketChannel]string)
@@ -755,6 +773,8 @@ func (s *WebsocketServer) subscribeAddresses(c *websocketChannel, addrDesc []bch
 		}
 		as[c] = req.ID
 	}
+	c.addrDescs = addrDesc
+	s.metrics.WebsocketSubscribes.With((common.Labels{"method": "subscribeAddresses"})).Set(float64(len(s.addressSubscriptions)))
 	return &subscriptionResponse{true}, nil
 }
 
@@ -763,6 +783,7 @@ func (s *WebsocketServer) unsubscribeAddresses(c *websocketChannel) (res interfa
 	s.addressSubscriptionsLock.Lock()
 	defer s.addressSubscriptionsLock.Unlock()
 	s.doUnsubscribeAddresses(c)
+	s.metrics.WebsocketSubscribes.With((common.Labels{"method": "subscribeAddresses"})).Set(float64(len(s.addressSubscriptions)))
 	return &subscriptionResponse{false}, nil
 }
 
@@ -795,6 +816,7 @@ func (s *WebsocketServer) subscribeFiatRates(c *websocketChannel, currency strin
 		s.fiatRatesSubscriptions[currency] = as
 	}
 	as[c] = req.ID
+	s.metrics.WebsocketSubscribes.With((common.Labels{"method": "subscribeFiatRates"})).Set(float64(len(s.fiatRatesSubscriptions)))
 	return &subscriptionResponse{true}, nil
 }
 
@@ -803,11 +825,11 @@ func (s *WebsocketServer) unsubscribeFiatRates(c *websocketChannel) (res interfa
 	s.fiatRatesSubscriptionsLock.Lock()
 	defer s.fiatRatesSubscriptionsLock.Unlock()
 	s.doUnsubscribeFiatRates(c)
+	s.metrics.WebsocketSubscribes.With((common.Labels{"method": "subscribeFiatRates"})).Set(float64(len(s.fiatRatesSubscriptions)))
 	return &subscriptionResponse{false}, nil
 }
 
-// OnNewBlock is a callback that broadcasts info about new block to subscribed clients
-func (s *WebsocketServer) OnNewBlock(hash string, height uint32) {
+func (s *WebsocketServer) onNewBlockAsync(hash string, height uint32) {
 	s.newBlockSubscriptionsLock.Lock()
 	defer s.newBlockSubscriptionsLock.Unlock()
 	data := struct {
@@ -824,6 +846,11 @@ func (s *WebsocketServer) OnNewBlock(hash string, height uint32) {
 		})
 	}
 	glog.Info("broadcasting new block ", height, " ", hash, " to ", len(s.newBlockSubscriptions), " channels")
+}
+
+// OnNewBlock is a callback that broadcasts info about new block to subscribed clients
+func (s *WebsocketServer) OnNewBlock(hash string, height uint32) {
+	go s.onNewBlockAsync(hash, height)
 }
 
 func (s *WebsocketServer) sendOnNewTx(tx *api.Tx) {
@@ -913,21 +940,23 @@ func (s *WebsocketServer) getNewTxSubscriptions(tx *bchain.MempoolTx) map[string
 	return subscribed
 }
 
+func (s *WebsocketServer) onNewTxAsync(tx *bchain.MempoolTx, subscribed map[string]struct{}) {
+	atx, err := s.api.GetTransactionFromMempoolTx(tx)
+	if err != nil {
+		glog.Error("GetTransactionFromMempoolTx error ", err, " for ", tx.Txid)
+		return
+	}
+	s.sendOnNewTx(atx)
+	for stringAddressDescriptor := range subscribed {
+		s.sendOnNewTxAddr(stringAddressDescriptor, atx)
+	}
+}
+
 // OnNewTx is a callback that broadcasts info about a tx affecting subscribed address
 func (s *WebsocketServer) OnNewTx(tx *bchain.MempoolTx) {
 	subscribed := s.getNewTxSubscriptions(tx)
 	if len(s.newTransactionSubscriptions) > 0 || len(subscribed) > 0 {
-		atx, err := s.api.GetTransactionFromMempoolTx(tx)
-		if err != nil {
-			glog.Error("GetTransactionFromMempoolTx error ", err, " for ", tx.Txid)
-			return
-		}
-
-		s.sendOnNewTx(atx)
-
-		for stringAddressDescriptor := range subscribed {
-			s.sendOnNewTxAddr(stringAddressDescriptor, atx)
-		}
+		go s.onNewTxAsync(tx, subscribed)
 	}
 }
 

@@ -29,10 +29,11 @@ type Worker struct {
 	chainType   bchain.ChainType
 	mempool     bchain.Mempool
 	is          *common.InternalState
+	metrics     *common.Metrics
 }
 
 // NewWorker creates new api worker
-func NewWorker(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, txCache *db.TxCache, is *common.InternalState) (*Worker, error) {
+func NewWorker(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, txCache *db.TxCache, metrics *common.Metrics, is *common.InternalState) (*Worker, error) {
 	w := &Worker{
 		db:          db,
 		txCache:     txCache,
@@ -41,6 +42,10 @@ func NewWorker(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, 
 		chainType:   chain.GetChainParser().GetChainType(),
 		mempool:     mempool,
 		is:          is,
+		metrics:     metrics,
+	}
+	if w.chainType == bchain.ChainBitcoinType {
+		w.initXpubCache()
 	}
 	return w, nil
 }
@@ -105,7 +110,7 @@ func (w *Worker) GetSpendingTxid(txid string, n int) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	glog.Info("GetSpendingTxid ", txid, " ", n, " finished in ", time.Since(start))
+	glog.Info("GetSpendingTxid ", txid, " ", n, ", ", time.Since(start))
 	return tx.Vout[n].SpentTxID, nil
 }
 
@@ -954,7 +959,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 		Erc20Contract:         erc20c,
 		Nonce:                 nonce,
 	}
-	glog.Info("GetAddress ", address, " finished in ", time.Since(start))
+	glog.Info("GetAddress ", address, ", ", time.Since(start))
 	return r, nil
 }
 
@@ -1157,7 +1162,7 @@ func (w *Worker) GetBalanceHistory(address string, fromTimestamp, toTimestamp in
 	if err != nil {
 		return nil, err
 	}
-	glog.Info("GetBalanceHistory ", address, ", blocks ", fromHeight, "-", toHeight, ", count ", len(bha), " finished in ", time.Since(start))
+	glog.Info("GetBalanceHistory ", address, ", blocks ", fromHeight, "-", toHeight, ", count ", len(bha), ", ", time.Since(start))
 	return bha, nil
 }
 
@@ -1305,7 +1310,7 @@ func (w *Worker) GetAddressUtxo(address string, onlyConfirmed bool) (Utxos, erro
 	if err != nil {
 		return nil, err
 	}
-	glog.Info("GetAddressUtxo ", address, ", ", len(r), " utxos, finished in ", time.Since(start))
+	glog.Info("GetAddressUtxo ", address, ", ", len(r), " utxos, ", time.Since(start))
 	return r, nil
 }
 
@@ -1335,7 +1340,7 @@ func (w *Worker) GetBlocks(page int, blocksOnPage int) (*Blocks, error) {
 		}
 		r.Blocks[i-from] = *bi
 	}
-	glog.Info("GetBlocks page ", page, " finished in ", time.Since(start))
+	glog.Info("GetBlocks page ", page, ", ", time.Since(start))
 	return r, nil
 }
 
@@ -1597,7 +1602,7 @@ func (w *Worker) GetFeeStats(bid string) (*FeeStats, error) {
 		}
 	}
 
-	glog.Info("GetFeeStats ", bid, " (", len(feesPerKb), " txs) finished in ", time.Since(start))
+	glog.Info("GetFeeStats ", bid, " (", len(feesPerKb), " txs), ", time.Since(start))
 
 	return &FeeStats{
 		TxCount:         len(feesPerKb),
@@ -1649,7 +1654,7 @@ func (w *Worker) GetBlock(bid string, page int, txsOnPage int) (*Block, error) {
 	}
 	txs = txs[:txi]
 	bi.Txids = nil
-	glog.Info("GetBlock ", bid, ", page ", page, " finished in ", time.Since(start))
+	glog.Info("GetBlock ", bid, ", page ", page, ", ", time.Since(start))
 	return &Block{
 		Paging: pg,
 		BlockInfo: BlockInfo{
@@ -1790,7 +1795,7 @@ func (w *Worker) GetSystemInfo(internal bool) (*SystemInfo, error) {
 		Consensus:       ci.Consensus,
 	}
 	w.is.SetBackendInfo(backendInfo)
-	glog.Info("GetSystemInfo finished in ", time.Since(start))
+	glog.Info("GetSystemInfo, ", time.Since(start))
 	return &SystemInfo{blockbookInfo, backendInfo}, nil
 }
 
@@ -1815,4 +1820,51 @@ func (w *Worker) GetMempool(page int, itemsOnPage int) (*MempoolTxids, error) {
 		}
 	}
 	return r, nil
+}
+
+type bitcoinTypeEstimatedFee struct {
+	accessed int64
+	fee      big.Int
+}
+
+const bitcoinTypeEstimatedFeeCacheSize = 250
+
+var bitcoinTypeEstimatedFeeCache [bitcoinTypeEstimatedFeeCacheSize]bitcoinTypeEstimatedFee
+var bitcoinTypeEstimatedFeeConservativeCache [bitcoinTypeEstimatedFeeCacheSize]bitcoinTypeEstimatedFee
+
+// BitcoinTypeEstimateFee returns a fee estimation for given number of blocks
+// it uses 5 second cache to reduce calls to the backend
+func (w *Worker) BitcoinTypeEstimateFee(blocks int, conservative bool) (big.Int, error) {
+	if blocks >= bitcoinTypeEstimatedFeeCacheSize {
+		return w.chain.EstimateSmartFee(blocks, conservative)
+	}
+	// 5 seconds cache
+	threshold := time.Now().Unix() - 5
+	if conservative {
+		cached := bitcoinTypeEstimatedFeeConservativeCache[blocks]
+		if cached.accessed >= threshold {
+			return cached.fee, nil
+		}
+		fee, err := w.chain.EstimateSmartFee(blocks, conservative)
+		if err == nil {
+			bitcoinTypeEstimatedFeeConservativeCache[blocks] = bitcoinTypeEstimatedFee{
+				accessed: time.Now().Unix(),
+				fee:      fee,
+			}
+		}
+		return fee, err
+	} else {
+		cached := bitcoinTypeEstimatedFeeCache[blocks]
+		if cached.accessed >= threshold {
+			return cached.fee, nil
+		}
+		fee, err := w.chain.EstimateSmartFee(blocks, conservative)
+		if err == nil {
+			bitcoinTypeEstimatedFeeCache[blocks] = bitcoinTypeEstimatedFee{
+				accessed: time.Now().Unix(),
+				fee:      fee,
+			}
+		}
+		return fee, err
+	}
 }
