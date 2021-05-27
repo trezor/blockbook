@@ -17,9 +17,9 @@ require (
 	github.com/facebookgo/stack v0.0.0-20160209184415-751773369052 // indirect
 	github.com/facebookgo/subset v0.0.0-20200203212716-c811ad88dec4 // indirect
 	github.com/gobuffalo/packr v1.13.7
-	github.com/gogo/protobuf v1.1.1
+	github.com/gogo/protobuf v1.3.1
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
-	github.com/golang/protobuf v1.3.2
+	github.com/golang/protobuf v1.4.3
 	github.com/gorilla/websocket v1.4.2
 	github.com/juju/errors v0.0.0-20170703010042-c7d06af17c68
 	github.com/juju/loggo v0.0.0-20190526231331-6e530bcce5d8 // indirect
@@ -30,16 +30,15 @@ require (
 	github.com/martinboehm/golang-socketio v0.0.0-20180414165752-f60b0a8befde
 	github.com/mr-tron/base58 v1.1.3 // indirect
 	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
-	github.com/onsi/ginkgo v1.10.1 // indirect
-	github.com/onsi/gomega v1.7.0 // indirect
 	github.com/pebbe/zmq4 v1.0.0
 	github.com/prometheus/client_golang v1.1.0
 	github.com/prometheus/common v0.9.1 // indirect
 	github.com/prometheus/procfs v0.0.10 // indirect
-	github.com/rs/cors v1.7.0 // indirect
 	github.com/schancel/cashaddr-converter v0.0.0-20180113210041-0a38f5822f79
 	github.com/tecbot/gorocksdb v0.0.0-20180907100951-214b6b7bc0f0
-	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
+	golang.org/x/crypto v0.0.0-20210322153248-0c34fe9e7dc2
 	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect
 	gopkg.in/mgo.v2 v2.0.0-20190816093944-a6b53ec6cb22 // indirect
 )
+
+replace github.com/ethereum/go-ethereum => github.com/binance-chain/bsc v0.0.0-20210526215719-8f3389ad7e61
