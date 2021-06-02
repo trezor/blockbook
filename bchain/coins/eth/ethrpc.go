@@ -31,6 +31,8 @@ const (
 	TestNet EthereumNet = 3
 	// TestNetGoerli is Goerli test network
 	TestNetGoerli EthereumNet = 5
+	// AMB
+	AmbrosusNet EthereumNet = 16718
 )
 
 // Configuration represents json config file
@@ -165,6 +167,11 @@ func (b *EthereumRPC) Initialize() error {
 	case TestNetGoerli:
 		b.Testnet = true
 		b.Network = "goerli"
+	case AmbrosusNet:
+		b.Testnet = false
+		b.Network = "ambrosus"
+		break
+
 	default:
 		return errors.Errorf("Unknown network id %v", id)
 	}
@@ -409,14 +416,34 @@ func (b *EthereumRPC) GetBlockHash(height uint32) (string, error) {
 	n.SetUint64(uint64(height))
 	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
 	defer cancel()
-	h, err := b.client.HeaderByNumber(ctx, &n)
+
+	var head struct {
+		ParentHash  ethcommon.Hash    `json:"parentHash"       gencodec:"required"`
+		UncleHash   ethcommon.Hash    `json:"sha3Uncles"       gencodec:"required"`
+		Coinbase    ethcommon.Address `json:"miner"            gencodec:"required"`
+		Root        ethcommon.Hash    `json:"stateRoot"        gencodec:"required"`
+		TxHash      ethcommon.Hash    `json:"transactionsRoot" gencodec:"required"`
+		ReceiptHash ethcommon.Hash    `json:"receiptsRoot"     gencodec:"required"`
+		//Bloom       Bloom          `json:"logsBloom"        gencodec:"required"`
+		//Difficulty  *big.Int       `json:"difficulty"       gencodec:"required"`
+		//Number      *big.Int       `json:"number"           gencodec:"required"`
+		//GasLimit    uint64         `json:"gasLimit"         gencodec:"required"`
+		//GasUsed     uint64         `json:"gasUsed"          gencodec:"required"`
+		//Time        uint64         `json:"timestamp"        gencodec:"required"`
+		//Extra       []byte         `json:"extraData"        gencodec:"required"`
+		MixDigest   ethcommon.Hash    `json:"mixHash"`
+		Nonce       [8]byte     `json:"nonce"`
+		Hash		string			`json:"hash"`
+	}
+	err := b.rpc.CallContext(ctx, &head, "eth_getBlockByNumber", hexutil.EncodeBig(&n), false)
+
 	if err != nil {
 		if err == ethereum.NotFound {
 			return "", bchain.ErrBlockNotFound
 		}
 		return "", errors.Annotatef(err, "height %v", height)
 	}
-	return h.Hash().Hex(), nil
+	return head.Hash, nil
 }
 
 func (b *EthereumRPC) ethHeaderToBlockHeader(h *rpcHeader) (*bchain.BlockHeader, error) {

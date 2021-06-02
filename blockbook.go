@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"math/rand"
@@ -113,7 +114,18 @@ func init() {
 	glog.CopyStandardLogTo("INFO")
 }
 
+func ControlCHandler() {
+	c := make(chan os.Signal)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-c
+		fmt.Println("\r- Ctrl+C catched, exiting.")
+		os.Exit(0)
+	}()
+}
+
 func main() {
+	ControlCHandler()
 	defer func() {
 		if e := recover(); e != nil {
 			glog.Error("main recovered from panic: ", e)
