@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/golang/glog"
@@ -1823,48 +1824,40 @@ func (w *Worker) GetMempool(page int, itemsOnPage int) (*MempoolTxids, error) {
 }
 
 type bitcoinTypeEstimatedFee struct {
-	accessed int64
-	fee      big.Int
+	timestamp int64
+	fee       big.Int
+	lock      sync.Mutex
 }
 
-const bitcoinTypeEstimatedFeeCacheSize = 250
+const bitcoinTypeEstimatedFeeCacheSize = 300
 
 var bitcoinTypeEstimatedFeeCache [bitcoinTypeEstimatedFeeCacheSize]bitcoinTypeEstimatedFee
 var bitcoinTypeEstimatedFeeConservativeCache [bitcoinTypeEstimatedFeeCacheSize]bitcoinTypeEstimatedFee
 
+func (w *Worker) cachedBitcoinTypeEstimateFee(blocks int, conservative bool, s *bitcoinTypeEstimatedFee) (big.Int, error) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	// 10 seconds cache
+	threshold := time.Now().Unix() - 10
+	if s.timestamp >= threshold {
+		return s.fee, nil
+	}
+	fee, err := w.chain.EstimateSmartFee(blocks, conservative)
+	if err == nil {
+		s.timestamp = time.Now().Unix()
+		s.fee = fee
+	}
+	return fee, err
+}
+
 // BitcoinTypeEstimateFee returns a fee estimation for given number of blocks
-// it uses 5 second cache to reduce calls to the backend
+// it uses 10 second cache to reduce calls to the backend
 func (w *Worker) BitcoinTypeEstimateFee(blocks int, conservative bool) (big.Int, error) {
 	if blocks >= bitcoinTypeEstimatedFeeCacheSize {
 		return w.chain.EstimateSmartFee(blocks, conservative)
 	}
-	// 5 seconds cache
-	threshold := time.Now().Unix() - 5
 	if conservative {
-		cached := bitcoinTypeEstimatedFeeConservativeCache[blocks]
-		if cached.accessed >= threshold {
-			return cached.fee, nil
-		}
-		fee, err := w.chain.EstimateSmartFee(blocks, conservative)
-		if err == nil {
-			bitcoinTypeEstimatedFeeConservativeCache[blocks] = bitcoinTypeEstimatedFee{
-				accessed: time.Now().Unix(),
-				fee:      fee,
-			}
-		}
-		return fee, err
-	} else {
-		cached := bitcoinTypeEstimatedFeeCache[blocks]
-		if cached.accessed >= threshold {
-			return cached.fee, nil
-		}
-		fee, err := w.chain.EstimateSmartFee(blocks, conservative)
-		if err == nil {
-			bitcoinTypeEstimatedFeeCache[blocks] = bitcoinTypeEstimatedFee{
-				accessed: time.Now().Unix(),
-				fee:      fee,
-			}
-		}
-		return fee, err
+		return w.cachedBitcoinTypeEstimateFee(blocks, conservative, &bitcoinTypeEstimatedFeeConservativeCache[blocks])
 	}
+	return w.cachedBitcoinTypeEstimateFee(blocks, conservative, &bitcoinTypeEstimatedFeeCache[blocks])
 }
