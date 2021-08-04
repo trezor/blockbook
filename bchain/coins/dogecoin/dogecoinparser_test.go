@@ -82,6 +82,70 @@ func Test_GetAddrDescFromAddress_Mainnet(t *testing.T) {
 	}
 }
 
+func Test_GetAddrDescFromAddress_Testnet(t *testing.T) {
+	type args struct {
+		address string
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    string
+		wantErr bool
+	}{
+		{
+			name:    "P2PKH1",
+			args:    args{address: "neYNjrnowpYrbS4QanPngXBi6MQcX6FsWV"},
+			want:    "76a9147183fdc10d664551d151922f95e58ab548d8ad2688ac",
+			wantErr: false,
+		},
+		{
+			name:    "P2PKH2",
+			args:    args{address: "nYrWFiv3zz5MewmN6ZJUpEfLQwz63Ptf1i"},
+			want:    "76a9143320ff38bc2d44e404cc3f0b36202f3a4897e05088ac",
+			wantErr: false,
+		},
+		{
+			name:    "P2PKH3",
+			args:    args{address: "nbn2EWCDp2xcb7jTxhcXytLKZuctY8xXiB"},
+			want:    "76a914533051d74f660325166fd342250f99fd366214ec88ac",
+			wantErr: false,
+		},
+		{
+			name:    "P2SH1",
+			args:    args{address: "2MyChfh5WfqzDTyFibZq2uSF3WcYFE1G5te"},
+			want:    "a91441569cc9dbdc08a99d20079bfd12071a2bdbf8e987",
+			wantErr: false,
+		},
+		{
+			name:    "P2SH2",
+			args:    args{address: "2NCnuCgdAAQHQvSQVw9eJA8UfbffupFLaYm"},
+			want:    "a914d66804cbba3b9035f2447b5454699f657dd3275087",
+			wantErr: false,
+		},
+		{
+			name:    "P2SH3",
+			args:    args{address: "2N2ju8ukjDQbJRB4ptNtekDzYNiqSQHARvd"},
+			want:    "a9146825756d503c3a81659409636d6e6c40755fcdcf87",
+			wantErr: false,
+		},
+	}
+	parser := NewDogecoinParser(GetChainParams("test"), &btc.Configuration{})
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parser.GetAddrDescFromAddress(tt.args.address)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GetAddrDescFromAddress() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			h := hex.EncodeToString(got)
+			if !reflect.DeepEqual(h, tt.want) {
+				t.Errorf("GetAddrDescFromAddress() = %v, want %v", h, tt.want)
+			}
+		})
+	}
+}
+
 func Test_GetAddressesFromAddrDesc_Mainnet(t *testing.T) {
 	type args struct {
 		script string
@@ -138,6 +202,96 @@ func Test_GetAddressesFromAddrDesc_Mainnet(t *testing.T) {
 	}
 
 	parser := NewDogecoinParser(GetChainParams("main"), &btc.Configuration{})
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b, _ := hex.DecodeString(tt.args.script)
+			got, got2, err := parser.GetAddressesFromAddrDesc(b)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GetAddressesFromAddrDesc() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("GetAddressesFromAddrDesc() = %v, want %v", got, tt.want)
+			}
+			if !reflect.DeepEqual(got2, tt.want2) {
+				t.Errorf("GetAddressesFromAddrDesc() = %v, want %v", got2, tt.want2)
+			}
+		})
+	}
+}
+
+func Test_GetAddressesFromAddrDesc_Testnet(t *testing.T) {
+	type args struct {
+		script string
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    []string
+		want2   bool
+		wantErr bool
+	}{
+		{
+			name:    "P2PKH1",
+			args:    args{script: "76a9147183fdc10d664551d151922f95e58ab548d8ad2688ac"},
+			want:    []string{"neYNjrnowpYrbS4QanPngXBi6MQcX6FsWV"},
+			want2:   true,
+			wantErr: false,
+		},
+		{
+			name:    "P2PKH2",
+			args:    args{script: "76a9143320ff38bc2d44e404cc3f0b36202f3a4897e05088ac"},
+			want:    []string{"nYrWFiv3zz5MewmN6ZJUpEfLQwz63Ptf1i"},
+			want2:   true,
+			wantErr: false,
+		},
+		{
+			name:    "P2PKH3",
+			args:    args{script: "76a914533051d74f660325166fd342250f99fd366214ec88ac"},
+			want:    []string{"nbn2EWCDp2xcb7jTxhcXytLKZuctY8xXiB"},
+			want2:   true,
+			wantErr: false,
+		},
+		{
+			name:    "P2SH1",
+			args:    args{script: "a91441569cc9dbdc08a99d20079bfd12071a2bdbf8e987"},
+			want:    []string{"2MyChfh5WfqzDTyFibZq2uSF3WcYFE1G5te"},
+			want2:   true,
+			wantErr: false,
+		},
+		{
+			name:    "P2SH2",
+			args:    args{script: "a914d66804cbba3b9035f2447b5454699f657dd3275087"},
+			want:    []string{"2NCnuCgdAAQHQvSQVw9eJA8UfbffupFLaYm"},
+			want2:   true,
+			wantErr: false,
+		},
+		{
+			name:    "P2SH3",
+			args:    args{script: "a9146825756d503c3a81659409636d6e6c40755fcdcf87"},
+			want:    []string{"2N2ju8ukjDQbJRB4ptNtekDzYNiqSQHARvd"},
+			want2:   true,
+			wantErr: false,
+		},
+		// TODO
+		{
+			name:    "OP_RETURN ascii",
+			args:    args{script: "6a0461686f6a"},
+			want:    []string{"OP_RETURN (ahoj)"},
+			want2:   false,
+			wantErr: false,
+		},
+		{
+			name:    "OP_RETURN hex",
+			args:    args{script: "6a072020f1686f6a20"},
+			want:    []string{"OP_RETURN 2020f1686f6a20"},
+			want2:   false,
+			wantErr: false,
+		},
+	}
+
+	parser := NewDogecoinParser(GetChainParams("test"), &btc.Configuration{})
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
