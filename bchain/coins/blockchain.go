@@ -12,6 +12,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/bchain/coins/bch"
+	"github.com/trezor/blockbook/bchain/coins/bcd"
 	"github.com/trezor/blockbook/bchain/coins/bellcoin"
 	"github.com/trezor/blockbook/bchain/coins/bitcore"
 	"github.com/trezor/blockbook/bchain/coins/bitzeny"
@@ -72,6 +73,7 @@ func init() {
 	BlockChainFactories["Ethereum Testnet Goerli"] = eth.NewEthereumRPC
 	BlockChainFactories["Bcash"] = bch.NewBCashRPC
 	BlockChainFactories["Bcash Testnet"] = bch.NewBCashRPC
+	BlockChainFactories["Bdiamond"] = bcd.NewBdiamondRPC
 	BlockChainFactories["Bgold"] = btg.NewBGoldRPC
 	BlockChainFactories["Bgold Testnet"] = btg.NewBGoldRPC
 	BlockChainFactories["Dash"] = dash.NewDashRPC

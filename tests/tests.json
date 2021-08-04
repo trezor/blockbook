@@ -17,6 +17,11 @@
     "bgold": {
         "sync": ["ConnectBlocksParallel", "ConnectBlocks", "HandleFork"]
     },
+    "bdiamond": {
+        "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",
+                "EstimateSmartFee", "EstimateFee", "GetBestBlockHash", "GetBestBlockHeight", "GetBlockHeader"],
+        "sync": ["ConnectBlocksParallel", "ConnectBlocks", "HandleFork"]
+    },
     "bitcoin": {
         "rpc":  ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",
                  "EstimateSmartFee", "EstimateFee", "GetBestBlockHash", "GetBestBlockHeight", "GetBlockHeader"],
