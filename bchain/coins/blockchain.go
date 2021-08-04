@@ -84,6 +84,7 @@ func init() {
 	BlockChainFactories["Litecoin"] = litecoin.NewLitecoinRPC
 	BlockChainFactories["Litecoin Testnet"] = litecoin.NewLitecoinRPC
 	BlockChainFactories["Dogecoin"] = dogecoin.NewDogecoinRPC
+	BlockChainFactories["Dogecoin Testnet"] = dogecoin.NewDogecoinRPC
 	BlockChainFactories["Vertcoin"] = vertcoin.NewVertcoinRPC
 	BlockChainFactories["Vertcoin Testnet"] = vertcoin.NewVertcoinRPC
 	BlockChainFactories["Namecoin"] = namecoin.NewNamecoinRPC
