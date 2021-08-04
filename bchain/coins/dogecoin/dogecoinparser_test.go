@@ -864,3 +864,96 @@ func TestParseBlock(t *testing.T) {
 		}
 	}
 }
+
+var testParseBlockTxs_Testnet = map[int]testBlock{
+	// block without auxpow
+	99999: {
+		size: 789,
+		time: 1401525639,
+		txs: []string{
+			"a4006895a14f5eb8796c784e6845d6aaea57b87325ccd066e900dc53aa8bf6a4",
+			"63c8d9dff87bf56804748e33c6c69f66d4930c4403b01cfd9a9d520fb91e4e17",
+			"3fa993ca67bcd2b2dec15c61b7fc2947e268ebe71bcf77dc00236c99c15eaa72",
+		},
+	},
+	// 1st block with auxpow – see https://github.com/dogecoin/dogecoin/releases/tag/v1.8.0-beta-1
+	158100: {
+		size: 227,
+		time: 1407217902,
+		txs: []string{
+			"f09d8c02cd8a3da1af2a9722860fc58c593ffb3b6c51ffe09f978c89744561a7",
+		},
+	},
+	// random block with auxpow
+	1234580: {
+		size: 850,
+		time: 1521801579,
+		txs: []string{
+			"b16bd42a4718fa8db2f88fd7f5d268582af1b9cfd378600ba4e615708d7550cf",
+			"2786caddf5c090be0554fe39511299b5daf5644024e80643c70c6573465252f1",
+			"423f4c0efa75a521a29c21100b90d4f6bdbafeb0778657154cedb638b9c3b439",
+		},
+	},
+	// recent block
+	3274642: {
+		size: 847,
+		time: 1627931191,
+		txs: []string{
+			"aefc849cd9522e6d93a0ef4c2647dec96386756f02238bb05507407a589fb9a9",
+			"877a2b2bf1f5b52e4893866aff3d573c49e22666662a510b0ff313bdf10e76b3",
+			"8c9130974b68a81c652f3b43c6d352b892d920fe498d1f2fb566c1155169f443",
+			"7fee19b12f19f426bc3e90b36d0149917695bcc4c57a07f0efebbdd30820a079",
+		},
+	},
+}
+
+func helperLoadBlock_Testnet(t *testing.T, height int) []byte {
+	name := fmt.Sprintf("block_dump_testnet.%d", height)
+	path := filepath.Join("testdata", name)
+
+	d, err := ioutil.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	d = bytes.TrimSpace(d)
+
+	b := make([]byte, hex.DecodedLen(len(d)))
+	_, err = hex.Decode(b, d)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return b
+}
+
+func TestParseBlock_Testnet(t *testing.T) {
+	p := NewDogecoinParser(GetChainParams("test"), &btc.Configuration{})
+
+	for height, tb := range testParseBlockTxs_Testnet {
+		b := helperLoadBlock_Testnet(t, height)
+
+		blk, err := p.ParseBlock(b)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if blk.Size != tb.size {
+			t.Errorf("ParseBlock() block size: got %d, want %d", blk.Size, tb.size)
+		}
+
+		if blk.Time != tb.time {
+			t.Errorf("ParseBlock() block time: got %d, want %d", blk.Time, tb.time)
+		}
+
+		if len(blk.Txs) != len(tb.txs) {
+			t.Errorf("ParseBlock() number of transactions: got %d, want %d", len(blk.Txs), len(tb.txs))
+		}
+
+		for ti, tx := range tb.txs {
+			if blk.Txs[ti].Txid != tx {
+				t.Errorf("ParseBlock() transaction %d: got %s, want %s", ti, blk.Txs[ti].Txid, tx)
+			}
+		}
+	}
+}
