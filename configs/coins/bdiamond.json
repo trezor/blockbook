@@ -6,7 +6,7 @@
     "alias": "bdiamond"
   },
   "ports": {
-    "backend_rpc": 7116,
+    "backend_rpc": 9068,
     "backend_message_queue": 48390,
     "blockbook_internal": 19090,
     "blockbook_public": 19190
@@ -25,6 +25,9 @@
     "version": "1.3.0",
     "binary_url": "https://github.com/eveybcd/BitcoinDiamond/releases/download/v1.3.0/bitcoindiamond-1.3.0-x86_64-linux-gnu.tar.gz",
     "extract_command": "tar -C backend --strip 1 -xf",
+    "exclude_files": [
+      "bitcoindiamond-qt"
+    ],
     "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/bdiamondd -datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -conf={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf -pid=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",
     "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/*.log",
     "postinst_script_template": "",
