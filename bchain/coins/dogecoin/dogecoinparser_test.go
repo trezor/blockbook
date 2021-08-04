@@ -274,11 +274,10 @@ func Test_GetAddressesFromAddrDesc_Testnet(t *testing.T) {
 			want2:   true,
 			wantErr: false,
 		},
-		// TODO
 		{
 			name:    "OP_RETURN ascii",
-			args:    args{script: "6a0461686f6a"},
-			want:    []string{"OP_RETURN (ahoj)"},
+			args:    args{script: "6a0c48656c6c6f20746865726521"},
+			want:    []string{"OP_RETURN (Hello there!)"},
 			want2:   false,
 			wantErr: false,
 		},
@@ -317,6 +316,12 @@ var (
 
 	testTx2       bchain.Tx
 	testTxPacked2 = "0001193a8ba8d7835601000000016d0211b5656f1b8c2ac002445638e247082090ffc5d5fa7c38b445b84a2c2054000000006b4830450221008856f2f620df278c0fc6a5d5e2d50451c0a65a75aaf7a4a9cbfcac3918b5536802203dc685a784d49e2a95eb72763ad62f02094af78507c57b0a3c3f1d8a60f74db6012102db814cd43df584804fde1949365a6309714e342aef0794dc58385d7e413444cdffffffff0237daa2ee0a4715001976a9149355c01ed20057eac9fe0bbf8b07d87e62fe712d88ac8008389e7e8d03001976a9145b4f2511c94e4fcaa8f8835b2458f8cb6542ca7688ac00000000"
+
+	testTx1_Testnet       bchain.Tx
+	testTxPacked1_Testnet = "0030d40b8c8bc4d552010000000104207e905afaf6facfafe7f63cac0afaab07c36b8aab34d5a6b6402859cfbb3b010000006b483045022100daf5631310f5f8ffa4b6a5e9151e3eefbc797ab67ee52e78621526d32694705b02206c038bd527397d3d6f01cd72011a61b58f5d8b74c2d067274d09a8f70f436d330121031d716677bfa840265c32f02b1ff519e59b2d76fcc1753c59516d6891058e6826ffffffff0256b54009000000001976a914e56f55dbb600c10e1f4f6d5da38eea5e664504cf88ac220d5871030000001976a914e8600a08d053bcd41bc316be574efbba6e126d3088ac00000000"
+
+	testTx2_Testnet       bchain.Tx
+	testTxPacked2_Testnet = "0030d4068c8bc4c770010000000342dd48439e8fe54b161be919bd9a34e887fa88ca38b1200fc26f4edffc3e69950000000069463043021f48a06f76e53665563090919d01dab845039d7ca4050ea00d65dd6542f2e219022024ae5e8806d737c80e83aa969dd549afbf675a94582889b61a630c0a328969870121036a0a9600ef07072a55fdd770fe4c6e4a138ce3c409eb4328f37fb3066d12e598feffffff9883d80ffa7af541808640940b2a7fb69c8ad817ef51049cdf9ee09731460a12010000006a47304402201d6a14b9a2f275a64edfa447e13347e53023bc192de577a0f7fa5309f26d987b0220386ba58a20032395c8c773cc9be405251b9f5d47182f3be5055dbe01ce0894650121038548fe799340b63c4e05e1edee6a36c5a2b82abec4efecc60bef0205969fb9befeffffffd7d88db648983248f58adb62a428baad726e9d6f40a9dfbf8181c7cd013d2dad000000006b483045022100880a8e9c9fdf43ef8f8c2e6817327d6cee89f12e47d77eb6e470a1b2d99b695d0220755911c3ec6d6704c34d8fd447875c9dbaf37c83a2079352be827c558e1b3f3b012103ddd9ebd38c8891b2ee56b17a155367edcc251fc7aca30130523c834d94fd04d2feffffff021ed9092c000000001976a91433bc558a159810fe4353b09b38b270a74a02621f88ac29ebe9a50000000017a914d0e87f2ab081c1c00e3dca9b653d654889ddb7148705d43000"
 )
 
 func init() {
@@ -399,6 +404,102 @@ func init() {
 			},
 		},
 	}
+
+	testTx1_Testnet = bchain.Tx{
+		Hex:       "010000000104207e905afaf6facfafe7f63cac0afaab07c36b8aab34d5a6b6402859cfbb3b010000006b483045022100daf5631310f5f8ffa4b6a5e9151e3eefbc797ab67ee52e78621526d32694705b02206c038bd527397d3d6f01cd72011a61b58f5d8b74c2d067274d09a8f70f436d330121031d716677bfa840265c32f02b1ff519e59b2d76fcc1753c59516d6891058e6826ffffffff0256b54009000000001976a914e56f55dbb600c10e1f4f6d5da38eea5e664504cf88ac220d5871030000001976a914e8600a08d053bcd41bc316be574efbba6e126d3088ac00000000",
+		Blocktime: 1622709609,
+		Txid:      "43cfbc6db77a8e9aad25913c2298da81421e513e216420b8af2562e744a030c9",
+		LockTime:  0,
+		Version:   1,
+		Vin: []bchain.Vin{
+			{
+				ScriptSig: bchain.ScriptSig{
+					Hex: "483045022100daf5631310f5f8ffa4b6a5e9151e3eefbc797ab67ee52e78621526d32694705b02206c038bd527397d3d6f01cd72011a61b58f5d8b74c2d067274d09a8f70f436d330121031d716677bfa840265c32f02b1ff519e59b2d76fcc1753c59516d6891058e6826",
+				},
+				Txid:     "3bbbcf592840b6a6d534ab8a6bc307abfa0aac3cf6e7afcffaf6fa5a907e2004",
+				Vout:     1,
+				Sequence: 4294967295,
+			},
+		},
+		Vout: []bchain.Vout{
+			{
+				ValueSat: *big.NewInt(155235670),
+				N:        0,
+				ScriptPubKey: bchain.ScriptPubKey{
+					Hex: "76a914e56f55dbb600c10e1f4f6d5da38eea5e664504cf88ac",
+					Addresses: []string{
+						"nq7JNvDtsGxB7wRjqc6DQ7JRzzXtHT2ETD",
+					},
+				},
+			},
+			{
+				ValueSat: *big.NewInt(14786497826),
+				N:        1,
+				ScriptPubKey: bchain.ScriptPubKey{
+					Hex: "76a914e8600a08d053bcd41bc316be574efbba6e126d3088ac",
+					Addresses: []string{
+						"nqNr5hLREhQTjx4DA4TfJfeFR9YjMQXrxn",
+					},
+				},
+			},
+		},
+	}
+
+	testTx2_Testnet = bchain.Tx{
+		Hex:       "010000000342dd48439e8fe54b161be919bd9a34e887fa88ca38b1200fc26f4edffc3e69950000000069463043021f48a06f76e53665563090919d01dab845039d7ca4050ea00d65dd6542f2e219022024ae5e8806d737c80e83aa969dd549afbf675a94582889b61a630c0a328969870121036a0a9600ef07072a55fdd770fe4c6e4a138ce3c409eb4328f37fb3066d12e598feffffff9883d80ffa7af541808640940b2a7fb69c8ad817ef51049cdf9ee09731460a12010000006a47304402201d6a14b9a2f275a64edfa447e13347e53023bc192de577a0f7fa5309f26d987b0220386ba58a20032395c8c773cc9be405251b9f5d47182f3be5055dbe01ce0894650121038548fe799340b63c4e05e1edee6a36c5a2b82abec4efecc60bef0205969fb9befeffffffd7d88db648983248f58adb62a428baad726e9d6f40a9dfbf8181c7cd013d2dad000000006b483045022100880a8e9c9fdf43ef8f8c2e6817327d6cee89f12e47d77eb6e470a1b2d99b695d0220755911c3ec6d6704c34d8fd447875c9dbaf37c83a2079352be827c558e1b3f3b012103ddd9ebd38c8891b2ee56b17a155367edcc251fc7aca30130523c834d94fd04d2feffffff021ed9092c000000001976a91433bc558a159810fe4353b09b38b270a74a02621f88ac29ebe9a50000000017a914d0e87f2ab081c1c00e3dca9b653d654889ddb7148705d43000",
+		Blocktime: 1622708728,
+		Txid:      "91e2f3a9dde1e2da53f29c73033084b3d1a3b0c0ba6737d6418cfa9cad62be3c",
+		LockTime:  3200005,
+		Version:   1,
+		Vin: []bchain.Vin{
+			{
+				ScriptSig: bchain.ScriptSig{
+					Hex: "463043021f48a06f76e53665563090919d01dab845039d7ca4050ea00d65dd6542f2e219022024ae5e8806d737c80e83aa969dd549afbf675a94582889b61a630c0a328969870121036a0a9600ef07072a55fdd770fe4c6e4a138ce3c409eb4328f37fb3066d12e598",
+				},
+				Txid:     "95693efcdf4e6fc20f20b138ca88fa87e8349abd19e91b164be58f9e4348dd42",
+				Vout:     0,
+				Sequence: 4294967294, // Locktime is enabled for this transaction; see BIP-125
+			},
+			{
+				ScriptSig: bchain.ScriptSig{
+					Hex: "47304402201d6a14b9a2f275a64edfa447e13347e53023bc192de577a0f7fa5309f26d987b0220386ba58a20032395c8c773cc9be405251b9f5d47182f3be5055dbe01ce0894650121038548fe799340b63c4e05e1edee6a36c5a2b82abec4efecc60bef0205969fb9be",
+				},
+				Txid:     "120a463197e09edf9c0451ef17d88a9cb67f2a0b9440868041f57afa0fd88398",
+				Vout:     1,
+				Sequence: 4294967294,
+			},
+			{
+				ScriptSig: bchain.ScriptSig{
+					Hex: "483045022100880a8e9c9fdf43ef8f8c2e6817327d6cee89f12e47d77eb6e470a1b2d99b695d0220755911c3ec6d6704c34d8fd447875c9dbaf37c83a2079352be827c558e1b3f3b012103ddd9ebd38c8891b2ee56b17a155367edcc251fc7aca30130523c834d94fd04d2",
+				},
+				Txid:     "ad2d3d01cdc78181bfdfa9406f9d6e72adba28a462db8af548329848b68dd8d7",
+				Vout:     0,
+				Sequence: 4294967294,
+			},
+		},
+		Vout: []bchain.Vout{
+			{
+				ValueSat: *big.NewInt(738842910),
+				N:        0,
+				ScriptPubKey: bchain.ScriptPubKey{
+					Hex: "76a91433bc558a159810fe4353b09b38b270a74a02621f88ac",
+					Addresses: []string{
+						"nYuiLjsDCVCBwZ3XhNv3qiiDiwmtQRLNhY",
+					},
+				},
+			},
+			{
+				ValueSat: *big.NewInt(2783570729),
+				N:        1,
+				ScriptPubKey: bchain.ScriptPubKey{
+					Hex: "a914d0e87f2ab081c1c00e3dca9b653d654889ddb71487",
+					Addresses: []string{
+						"2NCHq4LmqvjB9mqrHMWNUjfDs2FdsmJah6b",
+					},
+				},
+			},
+		},
+	}
 }
 
 func Test_PackTx(t *testing.T) {
@@ -452,6 +553,57 @@ func Test_PackTx(t *testing.T) {
 	}
 }
 
+func Test_PackTx_Testnet(t *testing.T) {
+	type args struct {
+		tx        bchain.Tx
+		height    uint32
+		blockTime int64
+		parser    *DogecoinParser
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    string
+		wantErr bool
+	}{
+		{
+			name: "dogecoin-testnet-1",
+			args: args{
+				tx:        testTx1_Testnet,
+				height:    3200011,
+				blockTime: 1622709609,
+				parser:    NewDogecoinParser(GetChainParams("test"), &btc.Configuration{}),
+			},
+			want:    testTxPacked1_Testnet,
+			wantErr: false,
+		},
+		{
+			name: "dogecoin-testnet-2",
+			args: args{
+				tx:        testTx2_Testnet,
+				height:    3200006,
+				blockTime: 1622708728,
+				parser:    NewDogecoinParser(GetChainParams("test"), &btc.Configuration{}),
+			},
+			want:    testTxPacked2_Testnet,
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.args.parser.PackTx(&tt.args.tx, tt.args.height, tt.args.blockTime)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("packTx() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			h := hex.EncodeToString(got)
+			if !reflect.DeepEqual(h, tt.want) {
+				t.Errorf("packTx() = %v, want %v", h, tt.want)
+			}
+		})
+	}
+}
+
 func Test_UnpackTx(t *testing.T) {
 	type args struct {
 		packedTx string
@@ -482,6 +634,57 @@ func Test_UnpackTx(t *testing.T) {
 			},
 			want:    &testTx2,
 			want1:   71994,
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b, _ := hex.DecodeString(tt.args.packedTx)
+			got, got1, err := tt.args.parser.UnpackTx(b)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("unpackTx() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("unpackTx() got = %v, want %v", got, tt.want)
+			}
+			if got1 != tt.want1 {
+				t.Errorf("unpackTx() got1 = %v, want %v", got1, tt.want1)
+			}
+		})
+	}
+}
+
+func Test_UnpackTx_Testnet(t *testing.T) {
+	type args struct {
+		packedTx string
+		parser   *DogecoinParser
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    *bchain.Tx
+		want1   uint32
+		wantErr bool
+	}{
+		{
+			name: "dogecoin-testnet-1",
+			args: args{
+				packedTx: testTxPacked1_Testnet,
+				parser:   NewDogecoinParser(GetChainParams("test"), &btc.Configuration{}),
+			},
+			want:    &testTx1_Testnet,
+			want1:   3200011,
+			wantErr: false,
+		},
+		{
+			name: "dogecoin-testnet-2",
+			args: args{
+				packedTx: testTxPacked2_Testnet,
+				parser:   NewDogecoinParser(GetChainParams("test"), &btc.Configuration{}),
+			},
+			want:    &testTx2_Testnet,
+			want1:   3200006,
 			wantErr: false,
 		},
 	}
