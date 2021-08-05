@@ -7,7 +7,7 @@ RUN apt-get update && \
     apt-get upgrade -y && \
     apt-get install -y build-essential git wget pkg-config lxc-dev libzmq3-dev \
                        libgflags-dev libsnappy-dev zlib1g-dev libbz2-dev \
-                       liblz4-dev graphviz && \
+                       liblz4-dev graphviz libx11-xcb1 && \
     apt-get clean
 
 ENV GOLANG_VERSION=go1.15.5.linux-amd64
