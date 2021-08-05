@@ -1,15 +1,15 @@
 {
   "coin": {
-    "name": "Bitcoin",
-    "shortcut": "BTC",
-    "label": "Bitcoin",
-    "alias": "bitcoin"
+    "name": "Regtest",
+    "shortcut": "rBTC",
+    "label": "Bitcoin Regtest",
+    "alias": "bitcoin_regtest"
   },
   "ports": {
-    "backend_rpc": 8030,
-    "backend_message_queue": 38330,
-    "blockbook_internal": 9030,
-    "blockbook_public": 9130
+    "backend_rpc": 18021,
+    "backend_message_queue": 48321,
+    "blockbook_internal": 19021,
+    "blockbook_public": 19121
   },
   "ipc": {
     "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
@@ -19,7 +19,7 @@
     "message_queue_binding_template": "tcp://127.0.0.1:{{.Ports.BackendMessageQueue}}"
   },
   "backend": {
-    "package_name": "backend-bitcoin",
+    "package_name": "backend-bitcoin-regtest",
     "package_revision": "satoshilabs-1",
     "system_user": "bitcoin",
     "version": "0.21.1",
@@ -31,39 +31,35 @@
       "bin/bitcoin-qt"
     ],
     "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/bitcoind -datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -conf={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf -pid=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",
-    "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/*.log",
+    "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/regtest3/*.log",
     "postinst_script_template": "",
     "service_type": "forking",
     "service_additional_params_template": "",
+    "mainnet": false,
     "protect_memory": true,
-    "mainnet": true,
-    "server_config_file": "bitcoin.conf",
+    "server_config_file": "bitcoin_regtest.conf",
     "client_config_file": "bitcoin_client.conf",
     "additional_params": {
       "deprecatedrpc": "estimatefee"
     }
   },
   "blockbook": {
-    "package_name": "blockbook-bitcoin",
+    "package_name": "blockbook-bitcoin-regtest",
     "system_user": "blockbook-bitcoin",
     "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
     "public_binding_template": ":{{.Ports.BlockbookPublic}}",
     "explorer_url": "",
-    "additional_params": "-dbcache=1073741824",
+    "additional_params": "",
     "block_chain": {
       "parse": true,
       "mempool_workers": 8,
       "mempool_sub_workers": 2,
       "block_addresses_to_keep": 300,
-      "xpub_magic": 76067358,
-      "xpub_magic_segwit_p2sh": 77429938,
-      "xpub_magic_segwit_native": 78792518,
-      "additional_params": {
-        "alternative_estimate_fee": "whatthefee-disabled",
-        "alternative_estimate_fee_params": "{\"url\": \"https://whatthefee.io/data.json\", \"periodSeconds\": 60}",
-        "fiat_rates": "coingecko",
-        "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"bitcoin\", \"periodSeconds\": 60}"
-      }
+      "xpub_magic": 70617039,
+      "xpub_magic_segwit_p2sh": 71979618,
+      "xpub_magic_segwit_native": 73342198,
+      "slip44": 1,
+      "additional_params": {}
     }
   },
   "meta": {

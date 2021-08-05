@@ -25,7 +25,7 @@ Socket.io interface is provided at `/socket.io/`. The interface also can be expl
 
 The legacy API is provided as is and will not be further developed.
 
-The legacy API is currently (Blockbook v0.3.4) also accessible without the */v1/* prefix, however in the future versions the version less access will be removed.
+The legacy API is currently (Blockbook v0.3.5) also accessible without the */v1/* prefix, however in the future versions the version less access will be removed.
 
 ## API V2
 
@@ -67,7 +67,7 @@ Response:
   "blockbook": {
     "coin": "Bitcoin",
     "host": "blockbook",
-    "version": "0.3.4",
+    "version": "0.3.5",
     "gitCommit": "3d9ad91",
     "buildTime": "2019-05-17T14:34:00+00:00",
     "syncMode": true,
@@ -764,11 +764,14 @@ The websocket interface provides the following requests:
 
 The client can subscribe to the following events:
 
-- `subscribeNewBlock` - new block added to blockchain
-- `subscribeAddresses` - new transaction for given address (list of addresses)
-- `subscribeFiatRates` - new currency rate ticker
+- `subscribeNewBlock`       - new block added to blockchain
+- `subscribeNewTransaction` - new transaction added to blockchain (all addresses)
+- `subscribeAddresses`      - new transaction for given address (list of addresses)
+- `subscribeFiatRates`      - new currency rate ticker
 
 There can be always only one subscription of given event per connection, i.e. new list of addresses replaces previous list of addresses.
+
+The subscribeNewTransaction event is not enabled by default. To enable support, blockbook must be run with the `-enablesubnewtx` flag.
 
 _Note: If there is reorg on the backend (blockchain), you will get a new block hash with the same or even smaller height if the reorg is deeper_
 
@@ -791,5 +794,3 @@ Example for subscribing to an address (or multiple addresses)
    }
 }
 ```
-
-

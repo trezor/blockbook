@@ -46,11 +46,14 @@
 | BitZeny                | 9095                    | 9195                  | 8095             | 38395                       |
 | Trezarcoin             | 9096                    | 9196                  | 8096             | 38396                       |
 | Bitcoin Signet         | 19020                   | 19120                 | 18020            | 48320                       |
+| Bitcoin Regtest        | 19021                   | 19121                 | 18021            | 48321                       |
+| Ethereum Goerli        | 19026                   | 19126                 | 18026            | 48326 p2p                   |
 | Bitcoin Testnet        | 19030                   | 19130                 | 18030            | 48330                       |
 | Bitcoin Cash Testnet   | 19031                   | 19131                 | 18031            | 48331                       |
 | Zcash Testnet          | 19032                   | 19132                 | 18032            | 48332                       |
 | Dash Testnet           | 19033                   | 19133                 | 18033            | 48333                       |
 | Litecoin Testnet       | 19034                   | 19134                 | 18034            | 48334                       |
+| Bitcoin Gold Testnet   | 19035                   | 19135                 | 18035            | 48335                       |
 | Ethereum Ropsten       | 19036                   | 19136                 | 18036            | 48336 p2p                   |
 | Vertcoin Testnet       | 19040                   | 19140                 | 18040            | 48340                       |
 | Monacoin Testnet       | 19041                   | 19141                 | 18041            | 48341                       |

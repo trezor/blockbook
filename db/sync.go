@@ -49,6 +49,31 @@ var errFork = errors.New("fork")
 // ErrOperationInterrupted is returned when operation is interrupted by OS signal
 var ErrOperationInterrupted = errors.New("ErrOperationInterrupted")
 
+func (w *SyncWorker) updateBackendInfo() {
+	ci, err := w.chain.GetChainInfo()
+	var backendError string
+	if err != nil {
+		glog.Error("GetChainInfo error ", err)
+		backendError = errors.Annotatef(err, "GetChainInfo").Error()
+		ci = &bchain.ChainInfo{}
+	}
+	w.is.SetBackendInfo(&common.BackendInfo{
+		BackendError:    backendError,
+		BestBlockHash:   ci.Bestblockhash,
+		Blocks:          ci.Blocks,
+		Chain:           ci.Chain,
+		Difficulty:      ci.Difficulty,
+		Headers:         ci.Headers,
+		ProtocolVersion: ci.ProtocolVersion,
+		SizeOnDisk:      ci.SizeOnDisk,
+		Subversion:      ci.Subversion,
+		Timeoffset:      ci.Timeoffset,
+		Version:         ci.Version,
+		Warnings:        ci.Warnings,
+		Consensus:       ci.Consensus,
+	})
+}
+
 // ResyncIndex synchronizes index to the top of the blockchain
 // onNewBlock is called when new block is connected, but not in initial parallel sync
 func (w *SyncWorker) ResyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync bool) error {
@@ -56,6 +81,9 @@ func (w *SyncWorker) ResyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 	w.is.StartedSync()
 
 	err := w.resyncIndex(onNewBlock, initialSync)
+
+	// update backend info after each resync
+	w.updateBackendInfo()
 
 	switch err {
 	case nil:
@@ -67,6 +95,8 @@ func (w *SyncWorker) ResyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 		if err == nil {
 			w.is.FinishedSync(bh)
 		}
+		w.metrics.BackendBestHeight.Set(float64(w.is.BackendInfo.Blocks))
+		w.metrics.BlockbookBestHeight.Set(float64(bh))
 		return err
 	case errSynced:
 		// this is not actually error but flag that resync wasn't necessary
@@ -198,6 +228,7 @@ func (w *SyncWorker) connectBlocks(onNewBlock bchain.OnNewBlockFunc, initialSync
 		if onNewBlock != nil {
 			onNewBlock(res.block.Hash, res.block.Height)
 		}
+		w.metrics.BlockbookBestHeight.Set(float64(res.block.Height))
 		if res.block.Height > 0 && res.block.Height%1000 == 0 {
 			glog.Info("connected block ", res.block.Height, " ", res.block.Hash)
 		}
@@ -349,6 +380,7 @@ ConnectLoop:
 			}
 			hch <- hashHeight{hash, h}
 			if h > 0 && h%1000 == 0 {
+				w.metrics.BlockbookBestHeight.Set(float64(h))
 				glog.Info("connecting block ", h, " ", hash, ", elapsed ", time.Since(start), " ", w.db.GetAndResetConnectBlockStats())
 				start = time.Now()
 			}

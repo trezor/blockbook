@@ -26,6 +26,23 @@ type InternalStateColumn struct {
 	Updated    time.Time `json:"updated"`
 }
 
+// BackendInfo is used to get information about blockchain
+type BackendInfo struct {
+	BackendError    string      `json:"error,omitempty"`
+	Chain           string      `json:"chain,omitempty"`
+	Blocks          int         `json:"blocks,omitempty"`
+	Headers         int         `json:"headers,omitempty"`
+	BestBlockHash   string      `json:"bestBlockHash,omitempty"`
+	Difficulty      string      `json:"difficulty,omitempty"`
+	SizeOnDisk      int64       `json:"sizeOnDisk,omitempty"`
+	Version         string      `json:"version,omitempty"`
+	Subversion      string      `json:"subversion,omitempty"`
+	ProtocolVersion string      `json:"protocolVersion,omitempty"`
+	Timeoffset      float64     `json:"timeOffset,omitempty"`
+	Warnings        string      `json:"warnings,omitempty"`
+	Consensus       interface{} `json:"consensus,omitempty"`
+}
+
 // InternalState contains the data of the internal state
 type InternalState struct {
 	mux sync.Mutex
@@ -55,6 +72,8 @@ type InternalState struct {
 	DbColumns []InternalStateColumn `json:"dbColumns"`
 
 	UtxoChecked bool `json:"utxoChecked"`
+
+	BackendInfo BackendInfo `json:"-"`
 }
 
 // StartedSync signals start of synchronization
@@ -214,6 +233,20 @@ func (is *InternalState) GetBlockHeightOfTime(time uint32) uint32 {
 		}
 	}
 	return uint32(height)
+}
+
+// SetBackendInfo sets new BackendInfo
+func (is *InternalState) SetBackendInfo(bi *BackendInfo) {
+	is.mux.Lock()
+	defer is.mux.Unlock()
+	is.BackendInfo = *bi
+}
+
+// GetBackendInfo gets BackendInfo
+func (is *InternalState) GetBackendInfo() BackendInfo {
+	is.mux.Lock()
+	defer is.mux.Unlock()
+	return is.BackendInfo
 }
 
 // Pack marshals internal state to json

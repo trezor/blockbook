@@ -22,10 +22,10 @@
     "package_name": "backend-digibyte",
     "package_revision": "satoshilabs-1",
     "system_user": "digibyte",
-    "version": "7.17.2",
-    "binary_url": "https://github.com/digibyte/digibyte/releases/download/v7.17.2/digibyte-7.17.2-x86_64-linux-gnu.tar.gz",
+    "version": "7.17.3",
+    "binary_url": "https://github.com/digibyte-core/digibyte/releases/download/v7.17.3/digibyte-7.17.3-x86_64-linux-gnu.tar.gz",
     "verification_type": "sha256",
-    "verification_source": "caa8ecc42cbebbd2c43e742c7ecc2dd21d76a9e2db23676af428b67b131f6413",
+    "verification_source": "b5cd8f590d359e4846dd5cbe60751221e54d773a6227ea9686d17c4890057f46",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
       "bin/digibyte-qt"
