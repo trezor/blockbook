@@ -55,6 +55,7 @@
 | Litecoin Testnet       | 19034                   | 19134                 | 18034            | 48334                       |
 | Bitcoin Gold Testnet   | 19035                   | 19135                 | 18035            | 48335                       |
 | Ethereum Ropsten       | 19036                   | 19136                 | 18036            | 48336 p2p                   |
+| Dogecoin Testnet       | 19038                   | 19138                 | 18038            | 48338                                  
 | Vertcoin Testnet       | 19040                   | 19140                 | 18040            | 48340                       |
 | Monacoin Testnet       | 19041                   | 19141                 | 18041            | 48341                       |
 | DigiByte Testnet       | 19042                   | 19142                 | 18042            | 48342                       |

@@ -13,11 +13,13 @@ import (
 // magic numbers
 const (
 	MainnetMagic wire.BitcoinNet = 0xc0c0c0c0
+	TestnetMagic wire.BitcoinNet = 0xfcc1b7dc // See https://github.com/dogecoin/dogecoin/blob/f80bfe9068ac1a0619d48dad0d268894d926941e/qa/rpc-tests/test_framework/mininode.py#L1620
 )
 
 // chain parameters
 var (
 	MainNetParams chaincfg.Params
+	TestNetParams chaincfg.Params
 )
 
 func init() {
@@ -25,6 +27,11 @@ func init() {
 	MainNetParams.Net = MainnetMagic
 	MainNetParams.PubKeyHashAddrID = []byte{30}
 	MainNetParams.ScriptHashAddrID = []byte{22}
+
+	TestNetParams = chaincfg.TestNet3Params
+	TestNetParams.Net = TestnetMagic
+	TestNetParams.PubKeyHashAddrID = []byte{113} // See https://github.com/dogecoin/dogecoin/blob/f80bfe9068ac1a0619d48dad0d268894d926941e/contrib/testgen/gen_base58_test_vectors.py#L23
+	TestNetParams.ScriptHashAddrID = []byte{196} // See https://github.com/dogecoin/dogecoin/blob/f80bfe9068ac1a0619d48dad0d268894d926941e/contrib/testgen/gen_base58_test_vectors.py#L24
 }
 
 // DogecoinParser handle
@@ -42,11 +49,16 @@ func NewDogecoinParser(params *chaincfg.Params, c *btc.Configuration) *DogecoinP
 func GetChainParams(chain string) *chaincfg.Params {
 	if !chaincfg.IsRegistered(&MainNetParams) {
 		err := chaincfg.Register(&MainNetParams)
+		if err == nil {
+			err = chaincfg.Register(&TestNetParams)
+		}
 		if err != nil {
 			panic(err)
 		}
 	}
 	switch chain {
+	case "test":
+		return &TestNetParams
 	default:
 		return &MainNetParams
 	}
