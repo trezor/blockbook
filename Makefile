@@ -46,7 +46,7 @@ build-images: clean-images
 .bin-image:
 	@if [ $$(build/tools/image_status.sh $(BIN_IMAGE):latest build/docker) != "ok" ]; then \
 		echo "Building image $(BIN_IMAGE) from $(BASE_IMAGE)"; \
-		docker build --no-cache=$(NO_CACHE) --build-arg TCMALLOC=$(TCMALLOC) --build-arg BASE_IMAGE=$(BASE_IMAGE) -t $(BIN_IMAGE) build/docker/bin; \
+		docker build --network="host" --no-cache=$(NO_CACHE) --build-arg TCMALLOC=$(TCMALLOC) --build-arg BASE_IMAGE=$(BASE_IMAGE) -t $(BIN_IMAGE) build/docker/bin; \
 	else \
 		echo "Image $(BIN_IMAGE) is up to date"; \
 	fi
@@ -54,7 +54,7 @@ build-images: clean-images
 .deb-image: .bin-image
 	@if [ $$(build/tools/image_status.sh $(DEB_IMAGE):latest build/docker) != "ok" ]; then \
 		echo "Building image $(DEB_IMAGE)..."; \
-		docker build --no-cache=$(NO_CACHE) -t $(DEB_IMAGE) build/docker/deb; \
+		docker build --network="host" --no-cache=$(NO_CACHE) -t $(DEB_IMAGE) build/docker/deb; \
 	else \
 		echo "Image $(DEB_IMAGE) is up to date"; \
 	fi
