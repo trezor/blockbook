@@ -3,8 +3,8 @@ package db
 import (
 	"time"
 
+	"github.com/flier/gorocksdb"
 	"github.com/golang/glog"
-	"github.com/tecbot/gorocksdb"
 	"github.com/trezor/blockbook/bchain"
 )
 

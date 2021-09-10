@@ -10,12 +10,12 @@ ARGS ?=
 all: build tools
 
 build: prepare-sources generate-data
-	cd $(BLOCKBOOK_SRC) && go build -o $(CURDIR)/blockbook -ldflags="-s -w $(LDFLAGS)" $(ARGS)
+	cd $(BLOCKBOOK_SRC) && go build -tags rocksdb_6_16 -o $(CURDIR)/blockbook -ldflags="-s -w $(LDFLAGS)" $(ARGS)
 	cp $(CURDIR)/blockbook /out/blockbook
 	chown $(PACKAGER) /out/blockbook
 
 build-debug: prepare-sources generate-data
-	cd $(BLOCKBOOK_SRC) && go build -o $(CURDIR)/blockbook -ldflags="$(LDFLAGS)" $(ARGS)
+	cd $(BLOCKBOOK_SRC) && go build -tags rocksdb_6_16 -o $(CURDIR)/blockbook -ldflags="$(LDFLAGS)" $(ARGS)
 	cp $(CURDIR)/blockbook /out/blockbook
 	chown $(PACKAGER) /out/blockbook
 
@@ -24,13 +24,13 @@ tools:
 	chown $(PACKAGER) /out/{ldb,sst_dump}
 
 test: prepare-sources generate-data
-	cd $(BLOCKBOOK_SRC) && go test -tags unittest `go list ./... | grep -vP '^github.com/trezor/blockbook/(contrib|tests)'` $(ARGS)
+	cd $(BLOCKBOOK_SRC) && go test -tags 'rocksdb_6_16 unittest' `go list ./... | grep -vP '^github.com/trezor/blockbook/(contrib|tests)'` $(ARGS)
 
 test-integration: prepare-sources generate-data
-	cd $(BLOCKBOOK_SRC) && go test -tags integration `go list github.com/trezor/blockbook/tests/...` $(ARGS)
+	cd $(BLOCKBOOK_SRC) && go test -tags 'rocksdb_6_16 integration' `go list github.com/trezor/blockbook/tests/...` $(ARGS)
 
 test-all: prepare-sources generate-data
-	cd $(BLOCKBOOK_SRC) && go test -tags 'unittest integration' `go list ./... | grep -v '^github.com/trezor/blockbook/contrib'` $(ARGS)
+	cd $(BLOCKBOOK_SRC) && go test -tags 'rocksdb_6_16 unittest integration' `go list ./... | grep -v '^github.com/trezor/blockbook/contrib'` $(ARGS)
 
 prepare-sources:
 	@ [ -n "`ls /src 2> /dev/null`" ] || (echo "/src doesn't exist or is empty" 1>&2 && exit 1)
