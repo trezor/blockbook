@@ -40,9 +40,6 @@ RUN cd /opt/rocksdb && CFLAGS=-fPIC CXXFLAGS=-fPIC make -j 4 release
 RUN strip /opt/rocksdb/ldb /opt/rocksdb/sst_dump && \
     cp /opt/rocksdb/ldb /opt/rocksdb/sst_dump /build
 
-# install build tools
-RUN go get github.com/gobuffalo/packr/...
-
 # pre-load depencencies
 RUN \
     cleanup() { rm -rf $GOPATH/src/github.com/trezor ; } && \
