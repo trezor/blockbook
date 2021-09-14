@@ -2,6 +2,7 @@ package dcr
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -53,6 +54,7 @@ func NewDecredRPC(config json.RawMessage, pushHandler func(bchain.NotificationTy
 		Dial:                (&net.Dialer{KeepAlive: 600 * time.Second}).Dial,
 		MaxIdleConns:        100,
 		MaxIdleConnsPerHost: 100, // necessary to not to deplete ports
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
 
 	d := &DecredRPC{
@@ -575,6 +577,13 @@ func (d *DecredRPC) getBlock(hash string) (*GetBlockResult, error) {
 	}
 
 	var block GetBlockResult
+
+	//Need for skip block height 0 without data
+	if hash == "298e5cc3d985bfe7f81dc135f360abe089edd4396b86d2de66b0cef42b21d980" {
+		glog.Info("Skip 0 block with hash " + hash)
+		return &block, nil
+	}
+
 	if err := d.Call(blockRequest, &block); err != nil {
 		return nil, err
 	}
