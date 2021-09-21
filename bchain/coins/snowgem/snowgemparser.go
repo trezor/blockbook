@@ -49,15 +49,15 @@ func init() {
 
 // SnowGemParser handle
 type SnowGemParser struct {
-	*btc.BitcoinParser
+	*btc.BitcoinLikeParser
 	baseparser *bchain.BaseParser
 }
 
 // NewSnowGemParser returns new SnowGemParser instance
 func NewSnowGemParser(params *chaincfg.Params, c *btc.Configuration) *SnowGemParser {
 	return &SnowGemParser{
-		BitcoinParser: btc.NewBitcoinParser(params, c),
-		baseparser:    &bchain.BaseParser{},
+		BitcoinLikeParser: btc.NewBitcoinLikeParser(params, c),
+		baseparser:        &bchain.BaseParser{},
 	}
 }
 

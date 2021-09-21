@@ -59,12 +59,12 @@ func init() {
 
 // NulsParser handle
 type NulsParser struct {
-	*btc.BitcoinParser
+	*btc.BitcoinLikeParser
 }
 
 // NewNulsParser returns new NulsParser instance
 func NewNulsParser(params *chaincfg.Params, c *btc.Configuration) *NulsParser {
-	return &NulsParser{BitcoinParser: btc.NewBitcoinParser(params, c)}
+	return &NulsParser{BitcoinLikeParser: btc.NewBitcoinLikeParser(params, c)}
 }
 
 // GetChainParams contains network parameters for the main Gincoin network,

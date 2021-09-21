@@ -42,15 +42,15 @@ func init() {
 
 // GroestlcoinParser handle
 type GroestlcoinParser struct {
-	*btc.BitcoinParser
+	*btc.BitcoinLikeParser
 	baseparser *bchain.BaseParser
 }
 
 // NewGroestlcoinParser returns new GroestlcoinParser instance
 func NewGroestlcoinParser(params *chaincfg.Params, c *btc.Configuration) *GroestlcoinParser {
 	return &GroestlcoinParser{
-		BitcoinParser: btc.NewBitcoinParser(params, c),
-		baseparser:    &bchain.BaseParser{},
+		BitcoinLikeParser: btc.NewBitcoinLikeParser(params, c),
+		baseparser:        &bchain.BaseParser{},
 	}
 }
 

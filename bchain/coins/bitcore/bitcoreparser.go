@@ -39,15 +39,15 @@ func init() {
 
 // BitcoreParser handle
 type BitcoreParser struct {
-	*btc.BitcoinParser
+	*btc.BitcoinLikeParser
 	baseparser *bchain.BaseParser
 }
 
 // NewBitcoreParser returns new BitcoreParser instance
 func NewBitcoreParser(params *chaincfg.Params, c *btc.Configuration) *BitcoreParser {
 	return &BitcoreParser{
-		BitcoinParser: btc.NewBitcoinParser(params, c),
-		baseparser:    &bchain.BaseParser{},
+		BitcoinLikeParser: btc.NewBitcoinLikeParser(params, c),
+		baseparser:        &bchain.BaseParser{},
 	}
 }
 

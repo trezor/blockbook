@@ -65,13 +65,13 @@ func init() {
 
 // FiroParser handle
 type FiroParser struct {
-	*btc.BitcoinParser
+	*btc.BitcoinLikeParser
 }
 
 // NewFiroParser returns new FiroParser instance
 func NewFiroParser(params *chaincfg.Params, c *btc.Configuration) *FiroParser {
 	return &FiroParser{
-		BitcoinParser: btc.NewBitcoinParser(params, c),
+		BitcoinLikeParser: btc.NewBitcoinLikeParser(params, c),
 	}
 }
 
