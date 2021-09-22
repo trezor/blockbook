@@ -186,7 +186,7 @@ func (p *BitcoinLikeParser) outputScriptToAddresses(script []byte) ([]string, bo
 		rv[i] = a.EncodeAddress()
 	}
 	var s bool
-	if sc == txscript.PubKeyHashTy || sc == txscript.WitnessV0PubKeyHashTy || sc == txscript.ScriptHashTy || sc == txscript.WitnessV0ScriptHashTy {
+	if sc == txscript.PubKeyHashTy || sc == txscript.WitnessV0PubKeyHashTy || sc == txscript.ScriptHashTy || sc == txscript.WitnessV0ScriptHashTy || sc == txscript.WitnessV1TaprootTy {
 		s = true
 	} else if len(rv) == 0 {
 		or := p.TryParseOPReturn(script)
@@ -345,13 +345,13 @@ func (p *BitcoinLikeParser) DeriveAddressDescriptors(xpub string, change uint32,
 	if err != nil {
 		return nil, err
 	}
-	changeExtKey, err := extKey.Child(change)
+	changeExtKey, err := extKey.Derive(change)
 	if err != nil {
 		return nil, err
 	}
 	ad := make([]bchain.AddressDescriptor, len(indexes))
 	for i, index := range indexes {
-		indexExtKey, err := changeExtKey.Child(index)
+		indexExtKey, err := changeExtKey.Derive(index)
 		if err != nil {
 			return nil, err
 		}
@@ -372,13 +372,13 @@ func (p *BitcoinLikeParser) DeriveAddressDescriptorsFromTo(xpub string, change u
 	if err != nil {
 		return nil, err
 	}
-	changeExtKey, err := extKey.Child(change)
+	changeExtKey, err := extKey.Derive(change)
 	if err != nil {
 		return nil, err
 	}
 	ad := make([]bchain.AddressDescriptor, toIndex-fromIndex)
 	for index := fromIndex; index < toIndex; index++ {
-		indexExtKey, err := changeExtKey.Child(index)
+		indexExtKey, err := changeExtKey.Derive(index)
 		if err != nil {
 			return nil, err
 		}

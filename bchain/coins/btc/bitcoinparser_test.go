@@ -1,3 +1,4 @@
+//go:build unittest
 // +build unittest
 
 package btc
@@ -59,8 +60,78 @@ func TestGetAddrDescFromAddress(t *testing.T) {
 			want:    "002003973a40ec94c0d10f6f6f0e7a62ba2044b7d19db6ff2bf60651e17fb29d8d29",
 			wantErr: false,
 		},
+		{
+			name:    " witness_unknown v1",
+			args:    args{address: "bc1pw508d6qejxtdg4y5r3zarvary0c5xw7kw508d6qejxtdg4y5r3zarvary0c5xw7kt5nd6y"},
+			want:    "5128751e76e8199196d454941c45d1b3a323f1433bd6751e76e8199196d454941c45d1b3a323f1433bd6",
+			wantErr: false,
+		},
+		{
+			name:    " witness_unknown v16",
+			args:    args{address: "bc1sw50qgdz25j"},
+			want:    "6002751e",
+			wantErr: false,
+		},
 	}
 	parser := NewBitcoinParser(GetChainParams("main"), &Configuration{})
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parser.GetAddrDescFromAddress(tt.args.address)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GetAddrDescFromAddress() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			h := hex.EncodeToString(got)
+			if !reflect.DeepEqual(h, tt.want) {
+				t.Errorf("GetAddrDescFromAddress() = %v, want %v", h, tt.want)
+			}
+		})
+	}
+}
+
+func TestGetAddrDescFromAddressTestnet(t *testing.T) {
+	type args struct {
+		address string
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    string
+		wantErr bool
+	}{
+		{
+			name:    "pubkeyhash",
+			args:    args{address: "mtkbaiLiUH3fvGJeSzuN3kUgmJzqinLejJ"},
+			want:    "76a914912e2b234f941f30b18afbb4fa46171214bf66c888ac",
+			wantErr: false,
+		},
+		{
+			name:    "scripthash",
+			args:    args{address: "2Mv28xcUJdFXBTfGMtja6fVBMCEbsH3r2AW"},
+			want:    "a9141e6ec5a1d12912b396d77d98dcb000e91f517fa487",
+			wantErr: false,
+		},
+		{
+			name:    "witness_v0_keyhash",
+			args:    args{address: "tb1qupjdck20as3y4l95cd5wepkv0grcz0p7d8rd5s"},
+			want:    "0014e064dc594fec224afcb4c368ec86cc7a07813c3e",
+			wantErr: false,
+		},
+		{
+			name:    "witness_v0_scripthash",
+			args:    args{address: "tb1qqwtn5s8vjnqdzrm0du885c46ypzt05vakmljhasx28shlv5a355seu0fjv"},
+			want:    "002003973a40ec94c0d10f6f6f0e7a62ba2044b7d19db6ff2bf60651e17fb29d8d29",
+			wantErr: false,
+		},
+		{
+			name:    "witness_v1_taproot",
+			args:    args{address: "tb1pqsv2qyp8hsma46422ecfd3ek02jayumkkzjx7vkf3cqpmfd4ucpsx0cc9h"},
+			want:    "51200418a01027bc37daeaaa567096c7367aa5d27376b0a46f32c98e001da5b5e603",
+			wantErr: false,
+		},
+	}
+	parser := NewBitcoinParser(GetChainParams("test"), &Configuration{})
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -302,6 +373,95 @@ We know the game and we're gonna play it (TO FRONT)
 			}
 			if !reflect.DeepEqual(got2, tt.want2) {
 				t.Errorf("GetAddressesFromAddrDesc() = %v, want %v", got2, tt.want2)
+			}
+		})
+	}
+}
+
+func TestGetAddressesFromAddrDescTestnet(t *testing.T) {
+	type args struct {
+		script string
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    []string
+		want2   bool
+		wantErr bool
+	}{
+		{
+			name:    "pubkeyhash",
+			args:    args{script: "76a914912e2b234f941f30b18afbb4fa46171214bf66c888ac"},
+			want:    []string{"mtkbaiLiUH3fvGJeSzuN3kUgmJzqinLejJ"},
+			want2:   true,
+			wantErr: false,
+		},
+		{
+			name:    "pubkey compressed",
+			args:    args{script: "2102a741071164b40b01c4ad28913c4aa2a1015cc5b064f0c802272552f17ae08750ac"},
+			want:    []string{"mkMe1fsfCWFext2qxf4bk3yiruBTvnici4"},
+			want2:   false,
+			wantErr: false,
+		},
+		{
+			name:    "pubkey uncompressed",
+			args:    args{script: "41041057356b91bfd3efeff5fc0fa8b865faafafb67bd653c5da2cd16ce15c7b86db0e622c8e1e135f68918a23601eb49208c1ac72c7b64a4ee99c396cf788da16ccac"},
+			want:    []string{"mx43tNdg4JYY29ifrHjJpdbcCqqDGVSng5"},
+			want2:   false,
+			wantErr: false,
+		},
+		{
+			name:    "scripthash",
+			args:    args{script: "a9141e6ec5a1d12912b396d77d98dcb000e91f517fa487"},
+			want:    []string{"2Mv28xcUJdFXBTfGMtja6fVBMCEbsH3r2AW"},
+			want2:   true,
+			wantErr: false,
+		},
+		{
+			name:    "witness_v0_keyhash",
+			args:    args{script: "0014e064dc594fec224afcb4c368ec86cc7a07813c3e"},
+			want:    []string{"tb1qupjdck20as3y4l95cd5wepkv0grcz0p7d8rd5s"},
+			want2:   true,
+			wantErr: false,
+		},
+		{
+			name:    "witness_v0_scripthash",
+			args:    args{script: "002003973a40ec94c0d10f6f6f0e7a62ba2044b7d19db6ff2bf60651e17fb29d8d29"},
+			want:    []string{"tb1qqwtn5s8vjnqdzrm0du885c46ypzt05vakmljhasx28shlv5a355seu0fjv"},
+			want2:   true,
+			wantErr: false,
+		},
+		{
+			name:    "witness_v1_taproot",
+			args:    args{script: "51200418a01027bc37daeaaa567096c7367aa5d27376b0a46f32c98e001da5b5e603"},
+			want:    []string{"tb1pqsv2qyp8hsma46422ecfd3ek02jayumkkzjx7vkf3cqpmfd4ucpsx0cc9h"},
+			want2:   true,
+			wantErr: false,
+		},
+		{
+			name:    "OP_RETURN ascii",
+			args:    args{script: "6a0461686f6a"},
+			want:    []string{"OP_RETURN (ahoj)"},
+			want2:   false,
+			wantErr: false,
+		},
+	}
+
+	parser := NewBitcoinParser(GetChainParams("test"), &Configuration{})
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b, _ := hex.DecodeString(tt.args.script)
+			got, got2, err := parser.GetAddressesFromAddrDesc(b)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("TestGetAddressesFromAddrDesc_Testnet() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("TestGetAddressesFromAddrDesc_Testnet() = %v, want %v", got, tt.want)
+			}
+			if !reflect.DeepEqual(got2, tt.want2) {
+				t.Errorf("TestGetAddressesFromAddrDesc_Testnet() = %v, want %v", got2, tt.want2)
 			}
 		})
 	}

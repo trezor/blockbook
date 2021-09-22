@@ -169,13 +169,13 @@ func (p *NulsParser) DeriveAddressDescriptorsFromTo(xpub string, change uint32, 
 	if err != nil {
 		return nil, err
 	}
-	changeExtKey, err := extKey.Child(change)
+	changeExtKey, err := extKey.Derive(change)
 	if err != nil {
 		return nil, err
 	}
 	ad := make([]bchain.AddressDescriptor, toIndex-fromIndex)
 	for index := fromIndex; index < toIndex; index++ {
-		indexExtKey, err := changeExtKey.Child(index)
+		indexExtKey, err := changeExtKey.Derive(index)
 		if err != nil {
 			return nil, err
 		}
