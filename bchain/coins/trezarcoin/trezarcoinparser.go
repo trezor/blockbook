@@ -26,15 +26,15 @@ func init() {
 
 // TrezarcoinParser handle
 type TrezarcoinParser struct {
-	*btc.BitcoinParser
+	*btc.BitcoinLikeParser
 	baseparser *bchain.BaseParser
 }
 
 // NewTrezarcoinParser returns new TrezarcoinParser instance
 func NewTrezarcoinParser(params *chaincfg.Params, c *btc.Configuration) *TrezarcoinParser {
 	return &TrezarcoinParser{
-		BitcoinParser: btc.NewBitcoinParser(params, c),
-		baseparser:    &bchain.BaseParser{},
+		BitcoinLikeParser: btc.NewBitcoinLikeParser(params, c),
+		baseparser:        &bchain.BaseParser{},
 	}
 }
 

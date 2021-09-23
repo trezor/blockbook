@@ -36,12 +36,12 @@ func init() {
 
 // RitocoinParser handle
 type RitocoinParser struct {
-	*btc.BitcoinParser
+	*btc.BitcoinLikeParser
 }
 
 // NewRitocoinParser returns new RitocoinParser instance
 func NewRitocoinParser(params *chaincfg.Params, c *btc.Configuration) *RitocoinParser {
-	return &RitocoinParser{BitcoinParser: btc.NewBitcoinParser(params, c)}
+	return &RitocoinParser{BitcoinLikeParser: btc.NewBitcoinLikeParser(params, c)}
 }
 
 // GetChainParams contains network parameters

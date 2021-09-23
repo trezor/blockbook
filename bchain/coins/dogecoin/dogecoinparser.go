@@ -36,12 +36,12 @@ func init() {
 
 // DogecoinParser handle
 type DogecoinParser struct {
-	*btc.BitcoinParser
+	*btc.BitcoinLikeParser
 }
 
 // NewDogecoinParser returns new DogecoinParser instance
 func NewDogecoinParser(params *chaincfg.Params, c *btc.Configuration) *DogecoinParser {
-	return &DogecoinParser{BitcoinParser: btc.NewBitcoinParser(params, c)}
+	return &DogecoinParser{BitcoinLikeParser: btc.NewBitcoinLikeParser(params, c)}
 }
 
 // GetChainParams contains network parameters for the main Dogecoin network,
