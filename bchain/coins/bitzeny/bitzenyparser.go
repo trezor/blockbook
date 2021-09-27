@@ -35,12 +35,12 @@ func init() {
 
 // BitZenyParser handle
 type BitZenyParser struct {
-	*btc.BitcoinParser
+	*btc.BitcoinLikeParser
 }
 
 // NewBitZenyParser returns new BitZenyParser instance
 func NewBitZenyParser(params *chaincfg.Params, c *btc.Configuration) *BitZenyParser {
-	return &BitZenyParser{BitcoinParser: btc.NewBitcoinParser(params, c)}
+	return &BitZenyParser{BitcoinLikeParser: btc.NewBitcoinLikeParser(params, c)}
 }
 
 // GetChainParams contains network parameters for the main BitZeny network,

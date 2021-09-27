@@ -73,6 +73,8 @@ var (
 
 	noTxCache = flag.Bool("notxcache", false, "disable tx cache")
 
+	enableSubNewTx = flag.Bool("enablesubnewtx", false, "enable support for subscribing to all new transactions")
+
 	computeColumnStats  = flag.Bool("computedbstats", false, "compute column stats and exit")
 	computeFeeStatsFlag = flag.Bool("computefeestats", false, "compute fee stats for blocks in blockheight-blockuntil range and exit")
 	dbStatsPeriodHours  = flag.Int("dbstatsperiod", 24, "period of db stats collection in hours, 0 disables stats collection")
@@ -385,7 +387,7 @@ func getBlockChainWithRetry(coin string, configfile string, pushHandler func(bch
 }
 
 func startInternalServer() (*server.InternalServer, error) {
-	internalServer, err := server.NewInternalServer(*internalBinding, *certFiles, index, chain, mempool, txCache, internalState)
+	internalServer, err := server.NewInternalServer(*internalBinding, *certFiles, index, chain, mempool, txCache, metrics, internalState)
 	if err != nil {
 		return nil, err
 	}
@@ -405,7 +407,7 @@ func startInternalServer() (*server.InternalServer, error) {
 
 func startPublicServer() (*server.PublicServer, error) {
 	// start public server in limited functionality, extend it after sync is finished by calling ConnectFullPublicInterface
-	publicServer, err := server.NewPublicServer(*publicBinding, *certFiles, index, chain, mempool, txCache, *explorerURL, metrics, internalState, *debugMode)
+	publicServer, err := server.NewPublicServer(*publicBinding, *certFiles, index, chain, mempool, txCache, *explorerURL, metrics, internalState, *debugMode, *enableSubNewTx)
 	if err != nil {
 		return nil, err
 	}
@@ -451,7 +453,7 @@ func performRollback() error {
 }
 
 func blockbookAppInfoMetric(db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxCache, is *common.InternalState, metrics *common.Metrics) error {
-	api, err := api.NewWorker(db, chain, mempool, txCache, is)
+	api, err := api.NewWorker(db, chain, mempool, txCache, metrics, is)
 	if err != nil {
 		return err
 	}
@@ -467,6 +469,8 @@ func blockbookAppInfoMetric(db *db.RocksDB, chain bchain.BlockChain, txCache *db
 		"backend_version":          si.Backend.Version,
 		"backend_subversion":       si.Backend.Subversion,
 		"backend_protocol_version": si.Backend.ProtocolVersion}).Set(float64(0))
+	metrics.BackendBestHeight.Set(float64(si.Backend.Blocks))
+	metrics.BlockbookBestHeight.Set(float64(si.Blockbook.BestHeight))
 	return nil
 }
 
@@ -704,7 +708,7 @@ func normalizeName(s string) string {
 func computeFeeStats(stopCompute chan os.Signal, blockFrom, blockTo int, db *db.RocksDB, chain bchain.BlockChain, txCache *db.TxCache, is *common.InternalState, metrics *common.Metrics) error {
 	start := time.Now()
 	glog.Info("computeFeeStats start")
-	api, err := api.NewWorker(db, chain, mempool, txCache, is)
+	api, err := api.NewWorker(db, chain, mempool, txCache, metrics, is)
 	if err != nil {
 		return err
 	}

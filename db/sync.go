@@ -44,9 +44,35 @@ func NewSyncWorker(db *RocksDB, chain bchain.BlockChain, syncWorkers, syncChunk 
 }
 
 var errSynced = errors.New("synced")
+var errFork = errors.New("fork")
 
 // ErrOperationInterrupted is returned when operation is interrupted by OS signal
 var ErrOperationInterrupted = errors.New("ErrOperationInterrupted")
+
+func (w *SyncWorker) updateBackendInfo() {
+	ci, err := w.chain.GetChainInfo()
+	var backendError string
+	if err != nil {
+		glog.Error("GetChainInfo error ", err)
+		backendError = errors.Annotatef(err, "GetChainInfo").Error()
+		ci = &bchain.ChainInfo{}
+	}
+	w.is.SetBackendInfo(&common.BackendInfo{
+		BackendError:    backendError,
+		BestBlockHash:   ci.Bestblockhash,
+		Blocks:          ci.Blocks,
+		Chain:           ci.Chain,
+		Difficulty:      ci.Difficulty,
+		Headers:         ci.Headers,
+		ProtocolVersion: ci.ProtocolVersion,
+		SizeOnDisk:      ci.SizeOnDisk,
+		Subversion:      ci.Subversion,
+		Timeoffset:      ci.Timeoffset,
+		Version:         ci.Version,
+		Warnings:        ci.Warnings,
+		Consensus:       ci.Consensus,
+	})
+}
 
 // ResyncIndex synchronizes index to the top of the blockchain
 // onNewBlock is called when new block is connected, but not in initial parallel sync
@@ -55,6 +81,9 @@ func (w *SyncWorker) ResyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 	w.is.StartedSync()
 
 	err := w.resyncIndex(onNewBlock, initialSync)
+
+	// update backend info after each resync
+	w.updateBackendInfo()
 
 	switch err {
 	case nil:
@@ -66,6 +95,8 @@ func (w *SyncWorker) ResyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 		if err == nil {
 			w.is.FinishedSync(bh)
 		}
+		w.metrics.BackendBestHeight.Set(float64(w.is.BackendInfo.Blocks))
+		w.metrics.BlockbookBestHeight.Set(float64(bh))
 		return err
 	case errSynced:
 		// this is not actually error but flag that resync wasn't necessary
@@ -105,7 +136,7 @@ func (w *SyncWorker) resyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 		}
 		if remoteHash != localBestHash {
 			// forked - the remote hash differs from the local hash at the same height
-			glog.Info("resync: local is forked at height ", localBestHeight, ", local hash ", localBestHash, ", remote hash", remoteHash)
+			glog.Info("resync: local is forked at height ", localBestHeight, ", local hash ", localBestHash, ", remote hash ", remoteHash)
 			return w.handleFork(localBestHeight, localBestHash, onNewBlock, initialSync)
 		}
 		glog.Info("resync: local at ", localBestHeight, " is behind")
@@ -141,7 +172,11 @@ func (w *SyncWorker) resyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 			return w.resyncIndex(onNewBlock, initialSync)
 		}
 	}
-	return w.connectBlocks(onNewBlock, initialSync)
+	err = w.connectBlocks(onNewBlock, initialSync)
+	if err == errFork {
+		return w.resyncIndex(onNewBlock, initialSync)
+	}
+	return err
 }
 
 func (w *SyncWorker) handleFork(localBestHeight uint32, localBestHash string, onNewBlock bchain.OnNewBlockFunc, initialSync bool) error {
@@ -193,6 +228,7 @@ func (w *SyncWorker) connectBlocks(onNewBlock bchain.OnNewBlockFunc, initialSync
 		if onNewBlock != nil {
 			onNewBlock(res.block.Hash, res.block.Height)
 		}
+		w.metrics.BlockbookBestHeight.Set(float64(res.block.Height))
 		if res.block.Height > 0 && res.block.Height%1000 == 0 {
 			glog.Info("connected block ", res.block.Height, " ", res.block.Hash)
 		}
@@ -344,6 +380,7 @@ ConnectLoop:
 			}
 			hch <- hashHeight{hash, h}
 			if h > 0 && h%1000 == 0 {
+				w.metrics.BlockbookBestHeight.Set(float64(h))
 				glog.Info("connecting block ", h, " ", hash, ", elapsed ", time.Since(start), " ", w.db.GetAndResetConnectBlockStats())
 				start = time.Now()
 			}
@@ -377,9 +414,9 @@ func (w *SyncWorker) getBlockChain(out chan blockResult, done chan struct{}) {
 
 	hash := w.startHash
 	height := w.startHeight
+	prevHash := ""
 
-	// some coins do not return Next hash
-	// must loop until error
+	// loop until error ErrBlockNotFound
 	for {
 		select {
 		case <-done:
@@ -394,6 +431,12 @@ func (w *SyncWorker) getBlockChain(out chan blockResult, done chan struct{}) {
 			out <- blockResult{err: err}
 			return
 		}
+		if block.Prev != "" && prevHash != "" && prevHash != block.Prev {
+			glog.Infof("sync: fork detected at height %d %s, local prevHash %s, remote prevHash %s", height, block.Hash, prevHash, block.Prev)
+			out <- blockResult{err: errFork}
+			return
+		}
+		prevHash = block.Hash
 		hash = block.Next
 		height++
 		out <- blockResult{block: block}

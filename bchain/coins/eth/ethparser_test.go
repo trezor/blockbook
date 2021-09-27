@@ -68,7 +68,7 @@ func TestEthParser_GetAddrDescFromAddress(t *testing.T) {
 	}
 }
 
-var testTx1, testTx2 bchain.Tx
+var testTx1, testTx2, testTx1Failed, testTx1NoStatus bchain.Tx
 
 func init() {
 
@@ -156,6 +156,83 @@ func init() {
 			},
 		},
 	}
+
+	testTx1Failed = bchain.Tx{
+		Blocktime: 1534858022,
+		Time:      1534858022,
+		Txid:      "0xcd647151552b5132b2aef7c9be00dc6f73afc5901dde157aab131335baaa853b",
+		Vin: []bchain.Vin{
+			{
+				Addresses: []string{"0x3E3a3D69dc66bA10737F531ed088954a9EC89d97"},
+			},
+		},
+		Vout: []bchain.Vout{
+			{
+				ValueSat: *big.NewInt(1999622000000000000),
+				ScriptPubKey: bchain.ScriptPubKey{
+					Addresses: []string{"0x555Ee11FBDDc0E49A9bAB358A8941AD95fFDB48f"},
+				},
+			},
+		},
+		CoinSpecificData: completeTransaction{
+			Tx: &rpcTransaction{
+				AccountNonce:     "0xb26c",
+				GasPrice:         "0x430e23400",
+				GasLimit:         "0x5208",
+				To:               "0x555Ee11FBDDc0E49A9bAB358A8941AD95fFDB48f",
+				Value:            "0x1bc0159d530e6000",
+				Payload:          "0x",
+				Hash:             "0xcd647151552b5132b2aef7c9be00dc6f73afc5901dde157aab131335baaa853b",
+				BlockNumber:      "0x41eee8",
+				From:             "0x3E3a3D69dc66bA10737F531ed088954a9EC89d97",
+				TransactionIndex: "0xa",
+			},
+			Receipt: &rpcReceipt{
+				GasUsed: "0x5208",
+				Status:  "0x0",
+				Logs:    []*rpcLog{},
+			},
+		},
+	}
+
+	testTx1NoStatus = bchain.Tx{
+		Blocktime: 1534858022,
+		Time:      1534858022,
+		Txid:      "0xcd647151552b5132b2aef7c9be00dc6f73afc5901dde157aab131335baaa853b",
+		Vin: []bchain.Vin{
+			{
+				Addresses: []string{"0x3E3a3D69dc66bA10737F531ed088954a9EC89d97"},
+			},
+		},
+		Vout: []bchain.Vout{
+			{
+				ValueSat: *big.NewInt(1999622000000000000),
+				ScriptPubKey: bchain.ScriptPubKey{
+					Addresses: []string{"0x555Ee11FBDDc0E49A9bAB358A8941AD95fFDB48f"},
+				},
+			},
+		},
+		CoinSpecificData: completeTransaction{
+			Tx: &rpcTransaction{
+				AccountNonce:     "0xb26c",
+				GasPrice:         "0x430e23400",
+				GasLimit:         "0x5208",
+				To:               "0x555Ee11FBDDc0E49A9bAB358A8941AD95fFDB48f",
+				Value:            "0x1bc0159d530e6000",
+				Payload:          "0x",
+				Hash:             "0xcd647151552b5132b2aef7c9be00dc6f73afc5901dde157aab131335baaa853b",
+				BlockNumber:      "0x41eee8",
+				From:             "0x3E3a3D69dc66bA10737F531ed088954a9EC89d97",
+				TransactionIndex: "0xa",
+			},
+			Receipt: &rpcReceipt{
+				GasUsed: "0x5208",
+				Status:  "",
+				Logs:    []*rpcLog{},
+			},
+		},
+	}
+
 }
 
 func TestEthereumParser_PackTx(t *testing.T) {
@@ -188,6 +265,24 @@ func TestEthereumParser_PackTx(t *testing.T) {
 				blockTime: 1534858022,
 			},
 			want: dbtestdata.EthTx2Packed,
+		},
+		{
+			name: "3",
+			args: args{
+				tx:        &testTx1Failed,
+				height:    4321000,
+				blockTime: 1534858022,
+			},
+			want: dbtestdata.EthTx1FailedPacked,
+		},
+		{
+			name: "4",
+			args: args{
+				tx:        &testTx1NoStatus,
+				height:    4321000,
+				blockTime: 1534858022,
+			},
+			want: dbtestdata.EthTx1NoStatusPacked,
 		},
 	}
 	p := NewEthereumParser(1)
@@ -228,6 +323,18 @@ func TestEthereumParser_UnpackTx(t *testing.T) {
 			name:  "2",
 			args:  args{hex: dbtestdata.EthTx2Packed},
 			want:  &testTx2,
+			want1: 4321000,
+		},
+		{
+			name:  "3",
+			args:  args{hex: dbtestdata.EthTx1FailedPacked},
+			want:  &testTx1Failed,
+			want1: 4321000,
+		},
+		{
+			name:  "4",
+			args:  args{hex: dbtestdata.EthTx1NoStatusPacked},
+			want:  &testTx1NoStatus,
 			want1: 4321000,
 		},
 	}

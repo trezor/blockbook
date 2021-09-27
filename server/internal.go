@@ -28,8 +28,8 @@ type InternalServer struct {
 }
 
 // NewInternalServer creates new internal http interface to blockbook and returns its handle
-func NewInternalServer(binding, certFiles string, db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, txCache *db.TxCache, is *common.InternalState) (*InternalServer, error) {
-	api, err := api.NewWorker(db, chain, mempool, txCache, is)
+func NewInternalServer(binding, certFiles string, db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, txCache *db.TxCache, metrics *common.Metrics, is *common.InternalState) (*InternalServer, error) {
+	api, err := api.NewWorker(db, chain, mempool, txCache, metrics, is)
 	if err != nil {
 		return nil, err
 	}

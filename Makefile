@@ -1,8 +1,9 @@
 BIN_IMAGE = blockbook-build
 DEB_IMAGE = blockbook-build-deb
 PACKAGER = $(shell id -u):$(shell id -g)
+BASE_IMAGE = $$(awk -F= '$$1=="ID" { print $$2 ;}' /etc/os-release):$$(awk -F= '$$1=="VERSION_ID" { print $$2 ;}' /etc/os-release | tr -d '"')
 NO_CACHE = false
-UPDATE_VENDOR = 1
+TCMALLOC = 
 ARGS ?=
 
 TARGETS=$(subst .json,, $(shell ls configs/coins))
@@ -10,28 +11,28 @@ TARGETS=$(subst .json,, $(shell ls configs/coins))
 .PHONY: build build-debug test deb
 
 build: .bin-image
-	docker run -t --rm -e PACKAGER=$(PACKAGER) -e UPDATE_VENDOR=$(UPDATE_VENDOR) -v "$(CURDIR):/src" -v "$(CURDIR)/build:/out" $(BIN_IMAGE) make build ARGS="$(ARGS)"
+	docker run -t --rm -e PACKAGER=$(PACKAGER) -v "$(CURDIR):/src" -v "$(CURDIR)/build:/out" $(BIN_IMAGE) make build ARGS="$(ARGS)"
 
 build-debug: .bin-image
-	docker run -t --rm -e PACKAGER=$(PACKAGER) -e UPDATE_VENDOR=$(UPDATE_VENDOR) -v "$(CURDIR):/src" -v "$(CURDIR)/build:/out" $(BIN_IMAGE) make build-debug ARGS="$(ARGS)"
+	docker run -t --rm -e PACKAGER=$(PACKAGER) -v "$(CURDIR):/src" -v "$(CURDIR)/build:/out" $(BIN_IMAGE) make build-debug ARGS="$(ARGS)"
 
 test: .bin-image
-	docker run -t --rm -e PACKAGER=$(PACKAGER) -e UPDATE_VENDOR=$(UPDATE_VENDOR) -v "$(CURDIR):/src" --network="host" $(BIN_IMAGE) make test ARGS="$(ARGS)"
+	docker run -t --rm -e PACKAGER=$(PACKAGER) -v "$(CURDIR):/src" --network="host" $(BIN_IMAGE) make test ARGS="$(ARGS)"
 
 test-integration: .bin-image
-	docker run -t --rm -e PACKAGER=$(PACKAGER) -e UPDATE_VENDOR=$(UPDATE_VENDOR) -v "$(CURDIR):/src" --network="host" $(BIN_IMAGE) make test-integration ARGS="$(ARGS)"
+	docker run -t --rm -e PACKAGER=$(PACKAGER) -v "$(CURDIR):/src" --network="host" $(BIN_IMAGE) make test-integration ARGS="$(ARGS)"
 
 test-all: .bin-image
-	docker run -t --rm -e PACKAGER=$(PACKAGER) -e UPDATE_VENDOR=$(UPDATE_VENDOR) -v "$(CURDIR):/src" --network="host" $(BIN_IMAGE) make test-all ARGS="$(ARGS)"
+	docker run -t --rm -e PACKAGER=$(PACKAGER) -v "$(CURDIR):/src" --network="host" $(BIN_IMAGE) make test-all ARGS="$(ARGS)"
 
 deb-backend-%: .deb-image
-	docker run -t --rm -e PACKAGER=$(PACKAGER) -e UPDATE_VENDOR=$(UPDATE_VENDOR) -v "$(CURDIR):/src" -v "$(CURDIR)/build:/out" $(DEB_IMAGE) /build/build-deb.sh backend $* $(ARGS)
+	docker run -t --rm -e PACKAGER=$(PACKAGER) -v "$(CURDIR):/src" -v "$(CURDIR)/build:/out" $(DEB_IMAGE) /build/build-deb.sh backend $* $(ARGS)
 
 deb-blockbook-%: .deb-image
-	docker run -t --rm -e PACKAGER=$(PACKAGER) -e UPDATE_VENDOR=$(UPDATE_VENDOR) -v "$(CURDIR):/src" -v "$(CURDIR)/build:/out" $(DEB_IMAGE) /build/build-deb.sh blockbook $* $(ARGS)
+	docker run -t --rm -e PACKAGER=$(PACKAGER) -v "$(CURDIR):/src" -v "$(CURDIR)/build:/out" $(DEB_IMAGE) /build/build-deb.sh blockbook $* $(ARGS)
 
 deb-%: .deb-image
-	docker run -t --rm -e PACKAGER=$(PACKAGER) -e UPDATE_VENDOR=$(UPDATE_VENDOR) -v "$(CURDIR):/src" -v "$(CURDIR)/build:/out" $(DEB_IMAGE) /build/build-deb.sh all $* $(ARGS)
+	docker run -t --rm -e PACKAGER=$(PACKAGER) -v "$(CURDIR):/src" -v "$(CURDIR)/build:/out" $(DEB_IMAGE) /build/build-deb.sh all $* $(ARGS)
 
 deb-blockbook-all: clean-deb $(addprefix deb-blockbook-, $(TARGETS))
 
@@ -44,8 +45,8 @@ build-images: clean-images
 
 .bin-image:
 	@if [ $$(build/tools/image_status.sh $(BIN_IMAGE):latest build/docker) != "ok" ]; then \
-		echo "Building image $(BIN_IMAGE)..."; \
-		docker build --no-cache=$(NO_CACHE) -t $(BIN_IMAGE) build/docker/bin; \
+		echo "Building image $(BIN_IMAGE) from $(BASE_IMAGE)"; \
+		docker build --no-cache=$(NO_CACHE) --build-arg TCMALLOC=$(TCMALLOC) --build-arg BASE_IMAGE=$(BASE_IMAGE) -t $(BIN_IMAGE) build/docker/bin; \
 	else \
 		echo "Image $(BIN_IMAGE) is up to date"; \
 	fi

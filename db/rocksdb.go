@@ -157,7 +157,7 @@ func NewRocksDB(path string, cacheSize, maxOpenFiles int, parser bchain.BlockCha
 		return nil, errors.New("Unknown chain type")
 	}
 
-	c := gorocksdb.NewLRUCache(cacheSize)
+	c := gorocksdb.NewLRUCache(uint64(cacheSize))
 	db, cfh, err := openDB(path, c, maxOpenFiles)
 	if err != nil {
 		return nil, err
@@ -308,17 +308,17 @@ func (d *RocksDB) Reopen() error {
 	return nil
 }
 
-func atoi(s string) int {
+func atoUint64(s string) uint64 {
 	i, err := strconv.Atoi(s)
 	if err != nil {
 		return 0
 	}
-	return i
+	return uint64(i)
 }
 
 // GetMemoryStats returns memory usage statistics as reported by RocksDB
 func (d *RocksDB) GetMemoryStats() string {
-	var total, indexAndFilter, memtable int
+	var total, indexAndFilter, memtable uint64
 	type columnStats struct {
 		name           string
 		indexAndFilter string
@@ -329,12 +329,12 @@ func (d *RocksDB) GetMemoryStats() string {
 		cs[i].name = cfNames[i]
 		cs[i].indexAndFilter = d.db.GetPropertyCF("rocksdb.estimate-table-readers-mem", d.cfh[i])
 		cs[i].memtable = d.db.GetPropertyCF("rocksdb.cur-size-all-mem-tables", d.cfh[i])
-		indexAndFilter += atoi(cs[i].indexAndFilter)
-		memtable += atoi(cs[i].memtable)
+		indexAndFilter += atoUint64(cs[i].indexAndFilter)
+		memtable += atoUint64(cs[i].memtable)
 	}
 	m := struct {
-		cacheUsage       int
-		pinnedCacheUsage int
+		cacheUsage       uint64
+		pinnedCacheUsage uint64
 		columns          []columnStats
 	}{
 		cacheUsage:       d.cache.GetUsage(),

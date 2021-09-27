@@ -29,12 +29,12 @@ func init() {
 
 // NamecoinParser handle
 type NamecoinParser struct {
-	*btc.BitcoinParser
+	*btc.BitcoinLikeParser
 }
 
 // NewNamecoinParser returns new NamecoinParser instance
 func NewNamecoinParser(params *chaincfg.Params, c *btc.Configuration) *NamecoinParser {
-	return &NamecoinParser{BitcoinParser: btc.NewBitcoinParser(params, c)}
+	return &NamecoinParser{BitcoinLikeParser: btc.NewBitcoinLikeParser(params, c)}
 }
 
 // GetChainParams contains network parameters for the main Namecoin network,

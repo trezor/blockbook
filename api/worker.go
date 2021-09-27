@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/golang/glog"
@@ -29,10 +30,11 @@ type Worker struct {
 	chainType   bchain.ChainType
 	mempool     bchain.Mempool
 	is          *common.InternalState
+	metrics     *common.Metrics
 }
 
 // NewWorker creates new api worker
-func NewWorker(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, txCache *db.TxCache, is *common.InternalState) (*Worker, error) {
+func NewWorker(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, txCache *db.TxCache, metrics *common.Metrics, is *common.InternalState) (*Worker, error) {
 	w := &Worker{
 		db:          db,
 		txCache:     txCache,
@@ -41,6 +43,10 @@ func NewWorker(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, 
 		chainType:   chain.GetChainParser().GetChainType(),
 		mempool:     mempool,
 		is:          is,
+		metrics:     metrics,
+	}
+	if w.chainType == bchain.ChainBitcoinType {
+		w.initXpubCache()
 	}
 	return w, nil
 }
@@ -105,7 +111,7 @@ func (w *Worker) GetSpendingTxid(txid string, n int) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	glog.Info("GetSpendingTxid ", txid, " ", n, " finished in ", time.Since(start))
+	glog.Info("GetSpendingTxid ", txid, " ", n, ", ", time.Since(start))
 	return tx.Vout[n].SpentTxID, nil
 }
 
@@ -274,7 +280,8 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 	// for now do not return size, we would have to compute vsize of segwit transactions
 	// size:=len(bchainTx.Hex) / 2
 	var sj json.RawMessage
-	if specificJSON {
+	// return CoinSpecificData for all mempool transactions or if requested
+	if specificJSON || bchainTx.Confirmations == 0 {
 		sj, err = w.chain.GetTransactionSpecific(bchainTx)
 		if err != nil {
 			return nil, err
@@ -299,8 +306,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 		Rbf:              rbf,
 		Vin:              vins,
 		Vout:             vouts,
-		CoinSpecificData: bchainTx.CoinSpecificData,
-		CoinSpecificJSON: sj,
+		CoinSpecificData: sj,
 		TokenTransfers:   tokens,
 		EthereumSpecific: ethSpecific,
 	}
@@ -668,6 +674,13 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 	if err != nil {
 		return nil, nil, nil, 0, 0, 0, errors.Annotatef(err, "EthereumTypeGetBalance %v", addrDesc)
 	}
+	var filterDesc bchain.AddressDescriptor
+	if filter.Contract != "" {
+		filterDesc, err = w.chainParser.GetAddrDescFromAddress(filter.Contract)
+		if err != nil {
+			return nil, nil, nil, 0, 0, 0, NewAPIError(fmt.Sprintf("Invalid contract filter, %v", err), true)
+		}
+	}
 	if ca != nil {
 		ba = &db.AddrBalance{
 			Txs: uint32(ca.TotalTxs),
@@ -678,13 +691,6 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 		n, err = w.chain.EthereumTypeGetNonce(addrDesc)
 		if err != nil {
 			return nil, nil, nil, 0, 0, 0, errors.Annotatef(err, "EthereumTypeGetNonce %v", addrDesc)
-		}
-		var filterDesc bchain.AddressDescriptor
-		if filter.Contract != "" {
-			filterDesc, err = w.chainParser.GetAddrDescFromAddress(filter.Contract)
-			if err != nil {
-				return nil, nil, nil, 0, 0, 0, NewAPIError(fmt.Sprintf("Invalid contract filter, %v", err), true)
-			}
 		}
 		if details > AccountDetailsBasic {
 			tokens = make([]Token, len(ca.Contracts))
@@ -742,6 +748,16 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 				BalanceSat: *b,
 			}
 		}
+		// special handling if filtering for a contract, check the ballance of it
+		if len(filterDesc) > 0 && details >= AccountDetailsTokens {
+			t, err := w.getEthereumToken(0, addrDesc, filterDesc, details, 0)
+			if err != nil {
+				return nil, nil, nil, 0, 0, 0, err
+			}
+			tokens = []Token{*t}
+			// switch off query for transactions, there are no transactions
+			filter.Vout = AddressFilterVoutQueryNotNecessary
+		}
 	}
 	return ba, tokens, ci, n, nonContractTxs, totalResults, nil
 }
@@ -758,7 +774,7 @@ func (w *Worker) txFromTxid(txid string, bestheight uint32, option AccountDetail
 		if ta == nil {
 			glog.Warning("DB inconsistency:  tx ", txid, ": not found in txAddresses")
 			// as fallback, get tx from backend
-			tx, err = w.GetTransaction(txid, false, true)
+			tx, err = w.GetTransaction(txid, false, false)
 			if err != nil {
 				return nil, errors.Annotatef(err, "GetTransaction %v", txid)
 			}
@@ -777,7 +793,7 @@ func (w *Worker) txFromTxid(txid string, bestheight uint32, option AccountDetail
 			tx = w.txFromTxAddress(txid, ta, blockInfo, bestheight)
 		}
 	} else {
-		tx, err = w.GetTransaction(txid, false, true)
+		tx, err = w.GetTransaction(txid, false, false)
 		if err != nil {
 			return nil, errors.Annotatef(err, "GetTransaction %v", txid)
 		}
@@ -866,7 +882,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 			return nil, errors.Annotatef(err, "getAddressTxids %v true", addrDesc)
 		}
 		for _, txid := range txm {
-			tx, err := w.GetTransaction(txid, false, false)
+			tx, err := w.GetTransaction(txid, false, true)
 			// mempool transaction may fail
 			if err != nil || tx == nil {
 				glog.Warning("GetTransaction in mempool: ", err)
@@ -944,7 +960,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 		Erc20Contract:         erc20c,
 		Nonce:                 nonce,
 	}
-	glog.Info("GetAddress ", address, " finished in ", time.Since(start))
+	glog.Info("GetAddress ", address, ", ", time.Since(start))
 	return r, nil
 }
 
@@ -1147,7 +1163,7 @@ func (w *Worker) GetBalanceHistory(address string, fromTimestamp, toTimestamp in
 	if err != nil {
 		return nil, err
 	}
-	glog.Info("GetBalanceHistory ", address, ", blocks ", fromHeight, "-", toHeight, ", count ", len(bha), " finished in ", time.Since(start))
+	glog.Info("GetBalanceHistory ", address, ", blocks ", fromHeight, "-", toHeight, ", count ", len(bha), ", ", time.Since(start))
 	return bha, nil
 }
 
@@ -1295,7 +1311,7 @@ func (w *Worker) GetAddressUtxo(address string, onlyConfirmed bool) (Utxos, erro
 	if err != nil {
 		return nil, err
 	}
-	glog.Info("GetAddressUtxo ", address, ", ", len(r), " utxos, finished in ", time.Since(start))
+	glog.Info("GetAddressUtxo ", address, ", ", len(r), " utxos, ", time.Since(start))
 	return r, nil
 }
 
@@ -1325,7 +1341,7 @@ func (w *Worker) GetBlocks(page int, blocksOnPage int) (*Blocks, error) {
 		}
 		r.Blocks[i-from] = *bi
 	}
-	glog.Info("GetBlocks page ", page, " finished in ", time.Since(start))
+	glog.Info("GetBlocks page ", page, ", ", time.Since(start))
 	return r, nil
 }
 
@@ -1587,7 +1603,7 @@ func (w *Worker) GetFeeStats(bid string) (*FeeStats, error) {
 		}
 	}
 
-	glog.Info("GetFeeStats ", bid, " (", len(feesPerKb), " txs) finished in ", time.Since(start))
+	glog.Info("GetFeeStats ", bid, " (", len(feesPerKb), " txs), ", time.Since(start))
 
 	return &FeeStats{
 		TxCount:         len(feesPerKb),
@@ -1639,7 +1655,7 @@ func (w *Worker) GetBlock(bid string, page int, txsOnPage int) (*Block, error) {
 	}
 	txs = txs[:txi]
 	bi.Txids = nil
-	glog.Info("GetBlock ", bid, ", page ", page, " finished in ", time.Since(start))
+	glog.Info("GetBlock ", bid, ", page ", page, ", ", time.Since(start))
 	return &Block{
 		Paging: pg,
 		BlockInfo: BlockInfo{
@@ -1764,7 +1780,7 @@ func (w *Worker) GetSystemInfo(internal bool) (*SystemInfo, error) {
 		DbColumns:         columnStats,
 		About:             Text.BlockbookAbout,
 	}
-	backendInfo := &BackendInfo{
+	backendInfo := &common.BackendInfo{
 		BackendError:    backendError,
 		BestBlockHash:   ci.Bestblockhash,
 		Blocks:          ci.Blocks,
@@ -1779,7 +1795,8 @@ func (w *Worker) GetSystemInfo(internal bool) (*SystemInfo, error) {
 		Warnings:        ci.Warnings,
 		Consensus:       ci.Consensus,
 	}
-	glog.Info("GetSystemInfo finished in ", time.Since(start))
+	w.is.SetBackendInfo(backendInfo)
+	glog.Info("GetSystemInfo, ", time.Since(start))
 	return &SystemInfo{blockbookInfo, backendInfo}, nil
 }
 
@@ -1804,4 +1821,43 @@ func (w *Worker) GetMempool(page int, itemsOnPage int) (*MempoolTxids, error) {
 		}
 	}
 	return r, nil
+}
+
+type bitcoinTypeEstimatedFee struct {
+	timestamp int64
+	fee       big.Int
+	lock      sync.Mutex
+}
+
+const bitcoinTypeEstimatedFeeCacheSize = 300
+
+var bitcoinTypeEstimatedFeeCache [bitcoinTypeEstimatedFeeCacheSize]bitcoinTypeEstimatedFee
+var bitcoinTypeEstimatedFeeConservativeCache [bitcoinTypeEstimatedFeeCacheSize]bitcoinTypeEstimatedFee
+
+func (w *Worker) cachedBitcoinTypeEstimateFee(blocks int, conservative bool, s *bitcoinTypeEstimatedFee) (big.Int, error) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	// 10 seconds cache
+	threshold := time.Now().Unix() - 10
+	if s.timestamp >= threshold {
+		return s.fee, nil
+	}
+	fee, err := w.chain.EstimateSmartFee(blocks, conservative)
+	if err == nil {
+		s.timestamp = time.Now().Unix()
+		s.fee = fee
+	}
+	return fee, err
+}
+
+// BitcoinTypeEstimateFee returns a fee estimation for given number of blocks
+// it uses 10 second cache to reduce calls to the backend
+func (w *Worker) BitcoinTypeEstimateFee(blocks int, conservative bool) (big.Int, error) {
+	if blocks >= bitcoinTypeEstimatedFeeCacheSize {
+		return w.chain.EstimateSmartFee(blocks, conservative)
+	}
+	if conservative {
+		return w.cachedBitcoinTypeEstimateFee(blocks, conservative, &bitcoinTypeEstimatedFeeConservativeCache[blocks])
+	}
+	return w.cachedBitcoinTypeEstimateFee(blocks, conservative, &bitcoinTypeEstimatedFeeCache[blocks])
 }

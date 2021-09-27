@@ -44,15 +44,15 @@ func init() {
 
 // KotoParser handle
 type KotoParser struct {
-	*btc.BitcoinParser
+	*btc.BitcoinLikeParser
 	baseparser *bchain.BaseParser
 }
 
 // NewKotoParser returns new KotoParser instance
 func NewKotoParser(params *chaincfg.Params, c *btc.Configuration) *KotoParser {
 	return &KotoParser{
-		BitcoinParser: btc.NewBitcoinParser(params, c),
-		baseparser:    &bchain.BaseParser{},
+		BitcoinLikeParser: btc.NewBitcoinLikeParser(params, c),
+		baseparser:        &bchain.BaseParser{},
 	}
 }
 

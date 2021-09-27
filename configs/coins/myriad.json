@@ -22,10 +22,10 @@
     "package_name": "backend-myriad",
     "package_revision": "satoshilabs-1",
     "system_user": "myriad",
-    "version": "0.16.4.0",
-    "binary_url": "https://github.com/myriadteam/myriadcoin/releases/download/v0.16.4.0/myriadcoin-0.16.4.0-x86_64-linux-gnu.tar.gz",
+    "version": "0.18.1.0",
+    "binary_url": "https://github.com/myriadteam/myriadcoin/releases/download/v0.18.1.0/myriadcoin-0.18.1.0-x86_64-linux-gnu.tar.gz",
     "verification_type": "sha256",
-    "verification_source": "a2761eaa948e30b1de419f9fc2a07eb3efe852cb2bf76aa371a5e40c959929d8",
+    "verification_source": "b1af5682ecd89b6d8be284218bb503441b24b231a305d5a8cebb3c63889990b6",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
       "bin/myriadcoin-qt"

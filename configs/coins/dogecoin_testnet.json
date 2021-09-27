@@ -1,0 +1,70 @@
+{
+  "coin": {
+    "name": "Dogecoin Testnet",
+    "shortcut": "DOGETEST",
+    "label": "Dogecoin Testnet",
+    "alias": "dogecoin_testnet"
+  },
+  "ports": {
+    "backend_rpc": 18038,
+    "backend_message_queue": 48338,
+    "blockbook_internal": 19038,
+    "blockbook_public": 19138
+  },
+  "ipc": {
+    "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
+    "rpc_user": "rpc",
+    "rpc_pass": "rpcp",
+    "rpc_timeout": 25,
+    "message_queue_binding_template": "tcp://127.0.0.1:{{.Ports.BackendMessageQueue}}"
+  },
+  "backend": {
+    "package_name": "backend-dogecoin-testnet",
+    "package_revision": "satoshilabs-1",
+    "system_user": "dogecoin",
+    "version": "1.14.3",
+    "binary_url": "https://github.com/dogecoin/dogecoin/releases/download/v1.14.3/dogecoin-1.14.3-x86_64-linux-gnu.tar.gz",
+    "verification_type": "sha256",
+    "verification_source": "a95cc29ac3c19a450e9083cc3ac24b6f61763d3ed1563bfc3ea9afbf0a2804fd",
+    "extract_command": "tar -C backend --strip 1 -xf",
+    "exclude_files": [
+      "bin/dogecoin-qt"
+    ],
+    "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/dogecoind -datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -conf={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf -pid=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid -rest",
+    "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/*.log",
+    "postinst_script_template": "",
+    "service_type": "forking",
+    "service_additional_params_template": "",
+    "protect_memory": false,
+    "mainnet": false,
+    "server_config_file": "bitcoin_like.conf",
+    "client_config_file": "bitcoin_like_client.conf",
+    "additional_params": {
+      "discover": 0,
+      "rpcthreads": 16,
+      "upnp": 0,
+      "whitelist": "127.0.0.1"
+    }
+  },
+  "blockbook": {
+    "package_name": "blockbook-dogecoin-testnet",
+    "system_user": "blockbook-dogecoin",
+    "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
+    "public_binding_template": ":{{.Ports.BlockbookPublic}}",
+    "explorer_url": "",
+    "additional_params": "-resyncindexperiod=30011 -resyncmempoolperiod=2011",
+    "block_chain": {
+      "parse": true,
+      "mempool_workers": 8,
+      "mempool_sub_workers": 2,
+      "block_addresses_to_keep": 300,
+      "xpub_magic": 70617039,
+      "slip44": 1,
+      "additional_params": {}
+    }
+  },
+  "meta": {
+    "package_maintainer": "IT Admin",
+    "package_maintainer_email": "it@satoshilabs.com"
+  }
+}

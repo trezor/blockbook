@@ -35,12 +35,12 @@ func init() {
 
 // GameCreditsParser handle
 type GameCreditsParser struct {
-	*btc.BitcoinParser
+	*btc.BitcoinLikeParser
 }
 
 // NewGameCreditsParser returns new GameCreditsParser instance
 func NewGameCreditsParser(params *chaincfg.Params, c *btc.Configuration) *GameCreditsParser {
-	return &GameCreditsParser{BitcoinParser: btc.NewBitcoinParser(params, c)}
+	return &GameCreditsParser{BitcoinLikeParser: btc.NewBitcoinLikeParser(params, c)}
 }
 
 // GetChainParams contains network parameters for the main GameCredits network,

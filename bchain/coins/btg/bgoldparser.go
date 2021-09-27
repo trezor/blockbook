@@ -47,12 +47,12 @@ func init() {
 
 // BGoldParser handle
 type BGoldParser struct {
-	*btc.BitcoinParser
+	*btc.BitcoinLikeParser
 }
 
 // NewBGoldParser returns new BGoldParser instance
 func NewBGoldParser(params *chaincfg.Params, c *btc.Configuration) *BGoldParser {
-	return &BGoldParser{BitcoinParser: btc.NewBitcoinParser(params, c)}
+	return &BGoldParser{BitcoinLikeParser: btc.NewBitcoinLikeParser(params, c)}
 }
 
 // GetChainParams contains network parameters for the main Bitcoin Cash network,

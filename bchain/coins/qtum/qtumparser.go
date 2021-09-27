@@ -40,13 +40,13 @@ func init() {
 
 // QtumParser handle
 type QtumParser struct {
-	*btc.BitcoinParser
+	*btc.BitcoinLikeParser
 }
 
 // NewQtumParser returns new DashParser instance
 func NewQtumParser(params *chaincfg.Params, c *btc.Configuration) *QtumParser {
 	return &QtumParser{
-		BitcoinParser: btc.NewBitcoinParser(params, c),
+		BitcoinLikeParser: btc.NewBitcoinLikeParser(params, c),
 	}
 }
 
