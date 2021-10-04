@@ -38,12 +38,12 @@ func init() {
 
 // FujicoinParser handle
 type FujicoinParser struct {
-	*btc.BitcoinLikeParser
+	*btc.BitcoinParser
 }
 
 // NewFujicoinParser returns new FujicoinParser instance
 func NewFujicoinParser(params *chaincfg.Params, c *btc.Configuration) *FujicoinParser {
-	return &FujicoinParser{BitcoinLikeParser: btc.NewBitcoinLikeParser(params, c)}
+	return &FujicoinParser{BitcoinParser: btc.NewBitcoinParser(params, c)}
 }
 
 // GetChainParams contains network parameters for the main Fujicoin network,
