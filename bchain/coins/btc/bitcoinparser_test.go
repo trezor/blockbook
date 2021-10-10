@@ -720,6 +720,7 @@ func TestUnpackTx(t *testing.T) {
 
 func TestDeriveAddressDescriptors(t *testing.T) {
 	btcMainParser := NewBitcoinParser(GetChainParams("main"), &Configuration{XPubMagic: 76067358, XPubMagicSegwitP2sh: 77429938, XPubMagicSegwitNative: 78792518})
+	btcTestnetParser := NewBitcoinParser(GetChainParams("test"), &Configuration{XPubMagic: 70617039, XPubMagicSegwitP2sh: 71979618, XPubMagicSegwitNative: 73342198})
 	type args struct {
 		xpub    string
 		change  uint32
@@ -732,6 +733,36 @@ func TestDeriveAddressDescriptors(t *testing.T) {
 		want    []string
 		wantErr bool
 	}{
+		{
+			name: "m/86'/1'/0'",
+			args: args{
+				xpub:    "tr([5c9e228d/86'/1'/0']tpubDC88gkaZi5HvJGxGDNLADkvtdpni3mLmx6vr2KnXmWMG8zfkBRggsxHVBkUpgcwPe2KKpkyvTJCdXHb1UHEWE64vczyyPQfHr1skBcsRedN/0/*)#4rqwxvej",
+				change:  0,
+				indexes: []uint32{0, 1, 10},
+				parser:  btcTestnetParser,
+			},
+			want: []string{"tb1pswrqtykue8r89t9u4rprjs0gt4qzkdfuursfnvqaa3f2yql07zmq8s8a5u", "tb1p8tvmvsvhsee73rhym86wt435qrqm92psfsyhy6a3n5gw455znnpqm8wald", "tb1pqr4803xedptkvsr6ksed2m7fx780y3u8shnd0fqdupnc0w75262sl49kwz"},
+		},
+		{
+			name: "m/86'/0'/0'",
+			args: args{
+				xpub:    "tr([5c9e228d/86'/0'/0']xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/0/*)#d8jj22qr",
+				change:  0,
+				indexes: []uint32{0, 1},
+				parser:  btcMainParser,
+			},
+			want: []string{"bc1p5cyxnuxmeuwuvkwfem96lqzszd02n6xdcjrs20cac6yqjjwudpxqkedrcr", "bc1p4qhjn9zdvkux4e44uhx8tc55attvtyu358kutcqkudyccelu0was9fqzwh"},
+		},
+		{
+			name: "m/86'/0'/0'/1",
+			args: args{
+				xpub:    "tr([5c9e228d/86'/0'/0']xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/0/*)#d8jj22qr",
+				change:  1,
+				indexes: []uint32{0},
+				parser:  btcMainParser,
+			},
+			want: []string{"bc1p3qkhfews2uk44qtvauqyr2ttdsw7svhkl9nkm9s9c3x4ax5h60wqwruhk7"},
+		},
 		{
 			name: "m/44'/0'/0'",
 			args: args{
@@ -788,7 +819,7 @@ func TestDeriveAddressDescriptors(t *testing.T) {
 
 func TestDeriveAddressDescriptorsFromTo(t *testing.T) {
 	btcMainParser := NewBitcoinParser(GetChainParams("main"), &Configuration{XPubMagic: 76067358, XPubMagicSegwitP2sh: 77429938, XPubMagicSegwitNative: 78792518})
-	btcTestnetsParser := NewBitcoinParser(GetChainParams("test"), &Configuration{XPubMagic: 70617039, XPubMagicSegwitP2sh: 71979618, XPubMagicSegwitNative: 73342198})
+	btcTestnetParser := NewBitcoinParser(GetChainParams("test"), &Configuration{XPubMagic: 70617039, XPubMagicSegwitP2sh: 71979618, XPubMagicSegwitNative: 73342198})
 	type args struct {
 		xpub      string
 		change    uint32
@@ -836,13 +867,24 @@ func TestDeriveAddressDescriptorsFromTo(t *testing.T) {
 			want: []string{"bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu"},
 		},
 		{
+			name: "m/86'/0'/0'",
+			args: args{
+				xpub:      "tr([5c9e228d/86'/0'/0']xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/0/*)#d8jj22qr",
+				change:    0,
+				fromIndex: 0,
+				toIndex:   1,
+				parser:    btcMainParser,
+			},
+			want: []string{"bc1p5cyxnuxmeuwuvkwfem96lqzszd02n6xdcjrs20cac6yqjjwudpxqkedrcr"},
+		},
+		{
 			name: "m/49'/1'/0'",
 			args: args{
 				xpub:      "upub5DR1Mg5nykixzYjFXWW5GghAU7dDqoPVJ2jrqFbL8sJ7Hs7jn69MP7KBnnmxn88GeZtnH8PRKV9w5MMSFX8AdEAoXY8Qd8BJPoXtpMeHMxJ",
 				change:    0,
 				fromIndex: 0,
 				toIndex:   10,
-				parser:    btcTestnetsParser,
+				parser:    btcTestnetParser,
 			},
 			want: []string{"2N4Q5FhU2497BryFfUgbqkAJE87aKHUhXMp", "2Mt7P2BAfE922zmfXrdcYTLyR7GUvbwSEns", "2N6aUMgQk8y1zvoq6FeWFyotyj75WY9BGsu", "2NA7tbZWM9BcRwBuebKSQe2xbhhF1paJwBM", "2N8RZMzvrUUnpLmvACX9ysmJ2MX3GK5jcQM", "2MvUUSiQZDSqyeSdofKX9KrSCio1nANPDTe", "2NBXaWu1HazjoUVgrXgcKNoBLhtkkD9Gmet", "2N791Ttf89tMVw2maj86E1Y3VgxD9Mc7PU7", "2NCJmwEq8GJm8t8GWWyBXAfpw7F2qZEVP5Y", "2NEgW71hWKer2XCSA8ZCC2VnWpB77L6bk68"},
 		},
@@ -893,7 +935,7 @@ func BenchmarkDeriveAddressDescriptorsFromToZpub(b *testing.B) {
 
 func TestBitcoinParser_DerivationBasePath(t *testing.T) {
 	btcMainParser := NewBitcoinParser(GetChainParams("main"), &Configuration{XPubMagic: 76067358, XPubMagicSegwitP2sh: 77429938, XPubMagicSegwitNative: 78792518, Slip44: 0})
-	btcTestnetsParser := NewBitcoinParser(GetChainParams("test"), &Configuration{XPubMagic: 70617039, XPubMagicSegwitP2sh: 71979618, XPubMagicSegwitNative: 73342198, Slip44: 1})
+	btcTestnetParser := NewBitcoinParser(GetChainParams("test"), &Configuration{XPubMagic: 70617039, XPubMagicSegwitP2sh: 71979618, XPubMagicSegwitNative: 73342198, Slip44: 1})
 	zecMainParser := NewBitcoinParser(GetChainParams("main"), &Configuration{XPubMagic: 76067358, Slip44: 133})
 	type args struct {
 		xpub   string
@@ -905,6 +947,22 @@ func TestBitcoinParser_DerivationBasePath(t *testing.T) {
 		want    string
 		wantErr bool
 	}{
+		{
+			name: "m/86'/1'/0'",
+			args: args{
+				xpub:   "tr([5c9e228d/86'/1'/0']tpubDC88gkaZi5HvJGxGDNLADkvtdpni3mLmx6vr2KnXmWMG8zfkBRggsxHVBkUpgcwPe2KKpkyvTJCdXHb1UHEWE64vczyyPQfHr1skBcsRedN/0/*)#4rqwxvej",
+				parser: btcTestnetParser,
+			},
+			want: "m/86'/1'/0'",
+		},
+		{
+			name: "m/86'/0'/0'",
+			args: args{
+				xpub:   "tr([5c9e228d/86'/0'/0']xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/0/*)#d8jj22qr",
+				parser: btcMainParser,
+			},
+			want: "m/86'/0'/0'",
+		},
 		{
 			name: "m/84'/0'/0'",
 			args: args{
@@ -933,7 +991,7 @@ func TestBitcoinParser_DerivationBasePath(t *testing.T) {
 			name: "m/49'/1'/0'",
 			args: args{
 				xpub:   "upub5DR1Mg5nykixzYjFXWW5GghAU7dDqoPVJ2jrqFbL8sJ7Hs7jn69MP7KBnnmxn88GeZtnH8PRKV9w5MMSFX8AdEAoXY8Qd8BJPoXtpMeHMxJ",
-				parser: btcTestnetsParser,
+				parser: btcTestnetParser,
 			},
 			want: "m/49'/1'/0'",
 		},

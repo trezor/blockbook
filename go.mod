@@ -5,7 +5,6 @@ go 1.17
 require (
 	github.com/Groestlcoin/go-groestl-hash v0.0.0-20181012171753-790653ac190c // indirect
 	github.com/bsm/go-vlq v0.0.0-20150828105119-ec6e8d4f5f4e
-	github.com/btcsuite/btcd v0.21.0-beta // indirect
 	github.com/dchest/blake256 v1.0.0 // indirect
 	github.com/deckarep/golang-set v1.7.1
 	github.com/decred/dcrd/chaincfg/chainhash v1.0.2
@@ -28,8 +27,8 @@ require (
 	github.com/juju/loggo v0.0.0-20190526231331-6e530bcce5d8 // indirect
 	github.com/juju/testing v0.0.0-20191001232224-ce9dec17d28b // indirect
 	github.com/martinboehm/bchutil v0.0.0-20190104112650-6373f11b6efe
-	github.com/martinboehm/btcd v0.0.0-20200313230603-83af86142d93
-	github.com/martinboehm/btcutil v0.0.0-20210922221517-e83b0c752949
+	github.com/martinboehm/btcd v0.0.0-20211010165247-d1f65b0f30fa
+	github.com/martinboehm/btcutil v0.0.0-20211010173611-6ef1889c1819
 	github.com/martinboehm/golang-socketio v0.0.0-20180414165752-f60b0a8befde
 	github.com/mr-tron/base58 v1.2.0 // indirect
 	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
@@ -45,6 +44,7 @@ require (
 	github.com/StackExchange/wmi v0.0.0-20180116203802-5d049714c4a6 // indirect
 	github.com/agl/ed25519 v0.0.0-20170116200512-5312a6153412 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
+	github.com/btcsuite/btcd v0.20.1-beta // indirect
 	github.com/btcsuite/btclog v0.0.0-20170628155309-84c8d2346e9f // indirect
 	github.com/cespare/xxhash/v2 v2.1.1 // indirect
 	github.com/dchest/siphash v1.2.1 // indirect
@@ -68,3 +68,7 @@ require (
 	google.golang.org/protobuf v1.23.0 // indirect
 	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce // indirect
 )
+
+// replace github.com/martinboehm/btcutil => ../btcutil
+
+// replace github.com/martinboehm/btcd => ../btcd

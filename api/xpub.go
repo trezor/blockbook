@@ -24,6 +24,8 @@ const xpubCacheExpirationSeconds = 3600
 var cachedXpubs map[string]xpubData
 var cachedXpubsMux sync.Mutex
 
+const xpubLogPrefix = 30
+
 type xpubTxid struct {
 	txid        string
 	height      uint32
@@ -547,7 +549,7 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 		Tokens:                tokens,
 		XPubAddresses:         xpubAddresses,
 	}
-	glog.Info("GetXpubAddress ", xpub[:16], ", cache ", inCache, ", ", len(data.addresses)+len(data.changeAddresses), " addresses, ", txCount, " txs, ", time.Since(start))
+	glog.Info("GetXpubAddress ", xpub[:xpubLogPrefix], ", cache ", inCache, ", ", len(data.addresses)+len(data.changeAddresses), " addresses, ", txCount, " txs, ", time.Since(start))
 	return &addr, nil
 }
 
@@ -588,7 +590,7 @@ func (w *Worker) GetXpubUtxo(xpub string, onlyConfirmed bool, gap int) (Utxos, e
 		}
 	}
 	sort.Stable(r)
-	glog.Info("GetXpubUtxo ", xpub[:16], ", cache ", inCache, ", ", len(r), " utxos,  ", time.Since(start))
+	glog.Info("GetXpubUtxo ", xpub[:xpubLogPrefix], ", cache ", inCache, ", ", len(r), " utxos,  ", time.Since(start))
 	return r, nil
 }
 
@@ -635,6 +637,6 @@ func (w *Worker) GetXpubBalanceHistory(xpub string, fromTimestamp, toTimestamp i
 	if err != nil {
 		return nil, err
 	}
-	glog.Info("GetUtxoBalanceHistory ", xpub[:16], ", cache ", inCache, ", blocks ", fromHeight, "-", toHeight, ", count ", len(bha), ",  ", time.Since(start))
+	glog.Info("GetUtxoBalanceHistory ", xpub[:xpubLogPrefix], ", cache ", inCache, ", blocks ", fromHeight, "-", toHeight, ", count ", len(bha), ",  ", time.Since(start))
 	return bha, nil
 }
