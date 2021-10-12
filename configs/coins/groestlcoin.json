@@ -22,10 +22,10 @@
     "package_name": "backend-groestlcoin",
     "package_revision": "satoshilabs-1",
     "system_user": "groestlcoin",
-    "version": "2.21.1",
-    "binary_url": "https://github.com/Groestlcoin/groestlcoin/releases/download/v2.21.1/groestlcoin-2.21.1-x86_64-linux-gnu.tar.gz",
-    "verification_type": "gpg-sha256",
-    "verification_source": "https://github.com/Groestlcoin/groestlcoin/releases/download/v2.21.1/SHA256SUMS.asc",
+    "version": "22.0",
+    "binary_url": "https://github.com/Groestlcoin/groestlcoin/releases/download/v22.0/groestlcoin-22.0-x86_64-linux-gnu.tar.gz",
+    "verification_type": "sha256",
+    "verification_source": "b30c5353dd3d9cfd7e8b31f29eac125925751165f690bacff57effd76560dddd",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
       "bin/groestlcoin-qt"
