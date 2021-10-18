@@ -197,7 +197,7 @@ func AddressDescriptorFromString(s string) (AddressDescriptor, error) {
 	if len(s) > 3 && s[0:3] == "ad:" {
 		return hex.DecodeString(s[3:])
 	}
-	return nil, errors.New("Not AddressDescriptor")
+	return nil, errors.New("invalid address descriptor")
 }
 
 // EthereumType specific
@@ -222,6 +222,28 @@ type Erc20Transfer struct {
 type MempoolTxidEntry struct {
 	Txid string
 	Time uint32
+}
+
+// ScriptType - type of output script parsed from xpub (descriptor)
+type ScriptType int
+
+// ScriptType enumeration
+const (
+	P2PK = ScriptType(iota)
+	P2PKH
+	P2SHWPKH
+	P2WPKH
+	P2TR
+)
+
+// XpubDescriptor contains parsed data from xpub descriptor
+type XpubDescriptor struct {
+	XpubDescriptor string // The whole descriptor
+	Xpub           string // Xpub part of the descriptor
+	Type           ScriptType
+	Bip            string
+	ChangeIndexes  []uint32
+	ExtKey         interface{} // extended key parsed from xpub, usually of type *hdkeychain.ExtendedKey
 }
 
 // MempoolTxidEntries is array of MempoolTxidEntry
@@ -317,9 +339,10 @@ type BlockChainParser interface {
 	UnpackBlockHash(buf []byte) (string, error)
 	ParseBlock(b []byte) (*Block, error)
 	// xpub
-	DerivationBasePath(xpub string) (string, error)
-	DeriveAddressDescriptors(xpub string, change uint32, indexes []uint32) ([]AddressDescriptor, error)
-	DeriveAddressDescriptorsFromTo(xpub string, change uint32, fromIndex uint32, toIndex uint32) ([]AddressDescriptor, error)
+	ParseXpub(xpub string) (*XpubDescriptor, error)
+	DerivationBasePath(descriptor *XpubDescriptor) (string, error)
+	DeriveAddressDescriptors(descriptor *XpubDescriptor, change uint32, indexes []uint32) ([]AddressDescriptor, error)
+	DeriveAddressDescriptorsFromTo(descriptor *XpubDescriptor, change uint32, fromIndex uint32, toIndex uint32) ([]AddressDescriptor, error)
 	// EthereumType specific
 	EthereumTypeGetErc20FromTx(tx *Tx) ([]Erc20Transfer, error)
 }

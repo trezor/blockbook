@@ -1,3 +1,4 @@
+//go:build unittest
 // +build unittest
 
 package dcr
@@ -336,7 +337,12 @@ func TestDeriveAddressDescriptors(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := tt.args.parser.DeriveAddressDescriptors(tt.args.xpub, tt.args.change, tt.args.indexes)
+			descriptor, err := tt.args.parser.ParseXpub(tt.args.xpub)
+			if err != nil {
+				t.Errorf("ParseXpub() error = %v", err)
+				return
+			}
+			got, err := tt.args.parser.DeriveAddressDescriptors(descriptor, tt.args.change, tt.args.indexes)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("DeriveAddressDescriptorsFromTo() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -419,7 +425,12 @@ func TestDeriveAddressDescriptorsFromTo(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := tt.args.parser.DeriveAddressDescriptorsFromTo(tt.args.xpub, tt.args.change, tt.args.fromIndex, tt.args.toIndex)
+			descriptor, err := tt.args.parser.ParseXpub(tt.args.xpub)
+			if err != nil {
+				t.Errorf("ParseXpub() error = %v", err)
+				return
+			}
+			got, err := tt.args.parser.DeriveAddressDescriptorsFromTo(descriptor, tt.args.change, tt.args.fromIndex, tt.args.toIndex)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("DeriveAddressDescriptorsFromTo() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -470,7 +481,12 @@ func TestDerivationBasePath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := tt.parser.DerivationBasePath(tt.xpub)
+			descriptor, err := tt.parser.ParseXpub(tt.xpub)
+			if err != nil {
+				t.Errorf("ParseXpub() error = %v", err)
+				return
+			}
+			got, err := tt.parser.DerivationBasePath(descriptor)
 			if err != nil {
 				t.Errorf("DerivationBasePath() expected no error but got %v", err)
 				return

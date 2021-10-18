@@ -486,7 +486,12 @@ func TestDeriveAddressDescriptorsFromTo(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := parser.DeriveAddressDescriptorsFromTo(tt.args.xpub, tt.args.change, tt.args.fromIndex, tt.args.toIndex)
+			descriptor, err := parser.ParseXpub(tt.args.xpub)
+			if err != nil {
+				t.Errorf("ParseXpub() error = %v", err)
+				return
+			}
+			got, err := parser.DeriveAddressDescriptorsFromTo(descriptor, tt.args.change, tt.args.fromIndex, tt.args.toIndex)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("DeriveAddressDescriptorsFromTo() error = %v, wantErr %v", err, tt.wantErr)
 				return
