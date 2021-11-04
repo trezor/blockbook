@@ -67,7 +67,7 @@ Response:
   "blockbook": {
     "coin": "Bitcoin",
     "host": "blockbook",
-    "version": "0.3.5",
+    "version": "0.3.6",
     "gitCommit": "3d9ad91",
     "buildTime": "2019-05-17T14:34:00+00:00",
     "syncMode": true,
