@@ -1,0 +1,40 @@
+{
+    "blockHeight": 6048,
+    "blockHash": "0000008c646f84c267bd9ec597cc88c04beba4381b9f32c707fde4967971b7be",
+    "blockTime": 1622754880,
+    "blockTxs": [
+        "8d64738add8ca229f247fbfe1263c84d124d80bbf6f08dc6f17c7da7f1f2da74"
+    ],
+    "txDetails": {
+        "8d64738add8ca229f247fbfe1263c84d124d80bbf6f08dc6f17c7da7f1f2da74": {
+            "hex": "03000500010000000000000000000000000000000000000000000000000000000000000000ffffffff1f02a017044046b960082ffffff4000000000d2f6e6f64655374726174756d2f000000000240cf2318000000001976a914ed22e769238dd0f934eea51073629f92dcc28af688ac408e5338000000001976a914e8d55cde2e27389fdc8f04b831d59e39931f6f5c88ac00000000460200a01700004231359f788b64986d4a2c80161e3b688d9c8cdb1099b13ad5aab0972f0e67f80000000000000000000000000000000000000000000000000000000000000000",
+            "txid": "8d64738add8ca229f247fbfe1263c84d124d80bbf6f08dc6f17c7da7f1f2da74",
+            "blocktime": 1622754880,
+            "time": 1622754880,
+            "locktime": 0,
+            "version": 3,
+            "vin": [
+                {
+                    "coinbase": "02a017044046b960082ffffff4000000000d2f6e6f64655374726174756d2f",
+                    "vout": 0
+                }
+            ],
+            "vout": [
+                {
+                    "value": 4.05,
+                    "n": 0,
+                    "scriptPubKey": {
+                        "hex": "76a914ed22e769238dd0f934eea51073629f92dcc28af688ac"
+                    }
+                },
+                {
+                    "value": 9.45,
+                    "n": 1,
+                    "scriptPubKey": {
+                        "hex": "76a914e8d55cde2e27389fdc8f04b831d59e39931f6f5c88ac"
+                    }
+                }
+            ]
+        }
+    }
+}
