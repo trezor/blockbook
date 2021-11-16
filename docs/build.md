@@ -234,7 +234,7 @@ Get blockbook sources, install dependencies, build:
 cd $GOPATH/src
 git clone https://github.com/trezor/blockbook.git
 cd blockbook
-go build
+go build -tags rocksdb_6_16
 ```
 
 ### Example command

@@ -1,3 +1,4 @@
+//go:build unittest
 // +build unittest
 
 package nuls
@@ -359,13 +360,13 @@ func TestDeriveAddressDescriptorsFromTo(t *testing.T) {
 		t.Errorf("DeriveAddressDescriptorsFromTo() error = %v", err)
 		return
 	}
-	changeExtKey, err := extKey.Child(0)
+	changeExtKey, err := extKey.Derive(0)
 	if err != nil {
 		t.Errorf("DeriveAddressDescriptorsFromTo() error = %v", err)
 		return
 	}
 
-	key1, _ := changeExtKey.Child(0)
+	key1, _ := changeExtKey.Derive(0)
 	priKey1, _ := key1.ECPrivKey()
 	wantPriKey1 := "0x995c98115809359eb57a5e179558faddd55ef88f88e5cf58617a5f9f3d6bb3a1"
 	if !reflect.DeepEqual(hexutil.MustDecode(wantPriKey1), priKey1.Serialize()) {
@@ -379,7 +380,7 @@ func TestDeriveAddressDescriptorsFromTo(t *testing.T) {
 		return
 	}
 
-	key2, _ := changeExtKey.Child(1)
+	key2, _ := changeExtKey.Derive(1)
 	priKey2, _ := key2.ECPrivKey()
 	wantPriKey2 := "0x0f65dee42d3c974c1a4bcc79f141be89715dc8d6406faa9ad4f1f55ca95fabc8"
 	if !reflect.DeepEqual(hexutil.MustDecode(wantPriKey2), priKey2.Serialize()) {
@@ -393,7 +394,7 @@ func TestDeriveAddressDescriptorsFromTo(t *testing.T) {
 		return
 	}
 
-	key3, _ := changeExtKey.Child(2)
+	key3, _ := changeExtKey.Derive(2)
 	priKey3, _ := key3.ECPrivKey()
 	wantPriKey3 := "0x6fd98d1d9c3f3ac1ff61bbf3f20e89f00ffa8d43a554f2a7d73fd464b6666f45"
 	if !reflect.DeepEqual(hexutil.MustDecode(wantPriKey3), priKey3.Serialize()) {
@@ -407,7 +408,7 @@ func TestDeriveAddressDescriptorsFromTo(t *testing.T) {
 		return
 	}
 
-	key4, _ := changeExtKey.Child(3)
+	key4, _ := changeExtKey.Derive(3)
 	priKey4, _ := key4.ECPrivKey()
 	wantPriKey4 := "0x21412d9e33aba493faf4bc7d408ed5290bea5b36a7beec554b858051f8d4bff3"
 	if !reflect.DeepEqual(hexutil.MustDecode(wantPriKey4), priKey4.Serialize()) {
@@ -421,7 +422,7 @@ func TestDeriveAddressDescriptorsFromTo(t *testing.T) {
 		return
 	}
 
-	key5, _ := changeExtKey.Child(4)
+	key5, _ := changeExtKey.Derive(4)
 	priKey5, _ := key5.ECPrivKey()
 	wantPriKey5 := "0xdc3d290e32a4e0f38bc26c25a78ceb1c8779110883d9cb0be54629043c1f8724"
 	if !reflect.DeepEqual(hexutil.MustDecode(wantPriKey5), priKey5.Serialize()) {
@@ -485,7 +486,12 @@ func TestDeriveAddressDescriptorsFromTo(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := parser.DeriveAddressDescriptorsFromTo(tt.args.xpub, tt.args.change, tt.args.fromIndex, tt.args.toIndex)
+			descriptor, err := parser.ParseXpub(tt.args.xpub)
+			if err != nil {
+				t.Errorf("ParseXpub() error = %v", err)
+				return
+			}
+			got, err := parser.DeriveAddressDescriptorsFromTo(descriptor, tt.args.change, tt.args.fromIndex, tt.args.toIndex)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("DeriveAddressDescriptorsFromTo() error = %v, wantErr %v", err, tt.wantErr)
 				return

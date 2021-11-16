@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"math/big"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -711,9 +712,9 @@ func (s *PublicServer) explorerAddress(w http.ResponseWriter, r *http.Request) (
 
 func (s *PublicServer) explorerXpub(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
 	var xpub string
-	i := strings.LastIndexByte(r.URL.Path, '/')
+	i := strings.LastIndex(r.URL.Path, "xpub/")
 	if i > 0 {
-		xpub = r.URL.Path[i+1:]
+		xpub = r.URL.Path[i+5:]
 	}
 	if len(xpub) == 0 {
 		return errorTpl, nil, api.NewAPIError("Missing xpub", true)
@@ -804,7 +805,7 @@ func (s *PublicServer) explorerSearch(w http.ResponseWriter, r *http.Request) (t
 	if len(q) > 0 {
 		address, err = s.api.GetXpubAddress(q, 0, 1, api.AccountDetailsBasic, &api.AddressFilter{Vout: api.AddressFilterVoutOff}, 0)
 		if err == nil {
-			http.Redirect(w, r, joinURL("/xpub/", address.AddrStr), 302)
+			http.Redirect(w, r, joinURL("/xpub/", url.QueryEscape(address.AddrStr)), 302)
 			return noTpl, nil, nil
 		}
 		block, err = s.api.GetBlock(q, 0, 1)
@@ -1024,9 +1025,9 @@ func (s *PublicServer) apiAddress(r *http.Request, apiVersion int) (interface{},
 
 func (s *PublicServer) apiXpub(r *http.Request, apiVersion int) (interface{}, error) {
 	var xpub string
-	i := strings.LastIndexByte(r.URL.Path, '/')
+	i := strings.LastIndex(r.URL.Path, "xpub/")
 	if i > 0 {
-		xpub = r.URL.Path[i+1:]
+		xpub = r.URL.Path[i+5:]
 	}
 	if len(xpub) == 0 {
 		return nil, api.NewAPIError("Missing xpub", true)

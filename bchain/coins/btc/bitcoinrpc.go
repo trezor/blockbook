@@ -678,10 +678,8 @@ func (b *BitcoinRPC) GetMempoolTransactions() ([]string, error) {
 
 // IsMissingTx return true if error means missing tx
 func IsMissingTx(err *bchain.RPCError) bool {
-	if err.Code == -5 { // "No such mempool or blockchain transaction"
-		return true
-	}
-	return false
+	// err.Code == -5 "No such mempool or blockchain transaction"
+	return err.Code == -5
 }
 
 // GetTransactionForMempool returns a transaction by the transaction ID
