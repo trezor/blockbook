@@ -54,7 +54,7 @@ func NewDecredRPC(config json.RawMessage, pushHandler func(bchain.NotificationTy
 		Dial:                (&net.Dialer{KeepAlive: 600 * time.Second}).Dial,
 		MaxIdleConns:        100,
 		MaxIdleConnsPerHost: 100, // necessary to not to deplete ports
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		TLSClientConfig:     &tls.Config{InsecureSkipVerify: true},
 	}
 
 	d := &DecredRPC{

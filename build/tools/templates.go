@@ -12,6 +12,7 @@ import (
 	"time"
 )
 
+// Config contains the structure of the config
 type Config struct {
 	Coin struct {
 		Name     string `json:"name"`
@@ -108,6 +109,7 @@ func generateRPCAuth(user, pass string) (string, error) {
 	return out.String(), nil
 }
 
+// ParseTemplate parses the template
 func (c *Config) ParseTemplate() *template.Template {
 	templates := map[string]string{
 		"IPC.RPCURLTemplate":                      c.IPC.RPCURLTemplate,
@@ -134,6 +136,7 @@ func (c *Config) ParseTemplate() *template.Template {
 	return t
 }
 
+// LoadConfig loads the config files
 func LoadConfig(configsDir, coin string) (*Config, error) {
 	config := new(Config)
 
@@ -191,6 +194,7 @@ func isEmpty(config *Config, target string) bool {
 	}
 }
 
+// GeneratePackageDefinitions generate the package definitions from the config
 func GeneratePackageDefinitions(config *Config, templateDir, outputDir string) error {
 	templ := config.ParseTemplate()
 
@@ -276,12 +280,7 @@ func writeTemplate(path string, info os.FileInfo, templ *template.Template, conf
 	}
 	defer f.Close()
 
-	err = templ.ExecuteTemplate(f, "main", config)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return templ.ExecuteTemplate(f, "main", config)
 }
 
 func writeBackendServerConfigFile(config *Config, outputDir string) error {
@@ -318,18 +317,13 @@ func writeBackendClientConfigFile(config *Config, outputDir string) error {
 
 	if config.Backend.ClientConfigFile == "" {
 		return nil
-	} else {
-		in, err := os.Open(filepath.Join(outputDir, "backend/config", config.Backend.ClientConfigFile))
-		if err != nil {
-			return err
-		}
-		defer in.Close()
-
-		_, err = io.Copy(out, in)
-		if err != nil {
-			return err
-		}
 	}
+	in, err := os.Open(filepath.Join(outputDir, "backend/config", config.Backend.ClientConfigFile))
+	if err != nil {
+		return err
+	}
+	defer in.Close()
 
-	return nil
+	_, err = io.Copy(out, in)
+	return err
 }

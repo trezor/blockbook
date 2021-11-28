@@ -6,14 +6,14 @@ import (
 	"github.com/trezor/blockbook/bchain/coins/btc"
 )
 
+// network constants
 const (
-	// MainnetMagic is mainnet network constant
 	MainnetMagic wire.BitcoinNet = 0xdab6c3fa
 	TestnetMagic wire.BitcoinNet = 0xddbdc8fd
 )
 
+// parser parameters
 var (
-	// MainNetParams are parser parameters for mainnet
 	MainNetParams chaincfg.Params
 	TestNetParams chaincfg.Params
 )
