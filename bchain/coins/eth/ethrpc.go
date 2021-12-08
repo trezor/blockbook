@@ -42,6 +42,7 @@ type Configuration struct {
 	BlockAddressesToKeep        int    `json:"block_addresses_to_keep"`
 	MempoolTxTimeoutHours       int    `json:"mempoolTxTimeoutHours"`
 	QueryBackendOnMempoolResync bool   `json:"queryBackendOnMempoolResync"`
+	ProcessInternalTransactions bool   `json:"processInternalTransactions"`
 }
 
 // EthereumRPC is an interface to JSON-RPC eth service.
@@ -157,11 +158,9 @@ func (b *EthereumRPC) Initialize() error {
 	case MainNet:
 		b.Testnet = false
 		b.Network = "livenet"
-		break
 	case TestNet:
 		b.Testnet = true
 		b.Network = "testnet"
-		break
 	case TestNetGoerli:
 		b.Testnet = true
 		b.Network = "goerli"
@@ -511,6 +510,83 @@ func (b *EthereumRPC) getERC20EventsForBlock(blockNumber string) (map[string][]*
 	return r, nil
 }
 
+type rpcCallTrace struct {
+	// CREATE, CREATE2, SELFDESTRUCT, CALL, CALLCODE, DELEGATECALL, STATICCALL
+	Type  string         `json:"type"`
+	From  string         `json:"from"`
+	To    string         `json:"to"`
+	Value string         `json:"value"`
+	Error string         `json:"error"`
+	Calls []rpcCallTrace `json:"calls"`
+}
+
+type rpcTraceResult struct {
+	Result rpcCallTrace `json:"result"`
+}
+
+func (b *EthereumRPC) processCallTrace(call rpcCallTrace, d *bchain.EthereumInternalData) {
+	value, err := hexutil.DecodeBig(call.Value)
+	if call.Type == "CREATE" {
+		d.Transfers = append(d.Transfers, bchain.EthereumInternalTransfer{
+			Type:  bchain.CREATE,
+			Value: *value,
+			From:  call.From,
+			To:    call.To,
+		})
+
+	} else if call.Type == "SELFDESTRUCT" {
+		d.Transfers = append(d.Transfers, bchain.EthereumInternalTransfer{
+			Type:  bchain.SELFDESTRUCT,
+			Value: *value,
+			From:  call.From,
+			To:    call.To,
+		})
+	} else if err == nil && value.BitLen() > 0 {
+		d.Transfers = append(d.Transfers, bchain.EthereumInternalTransfer{
+			Value: *value,
+			From:  call.From,
+			To:    call.To,
+		})
+	}
+	for i := range call.Calls {
+		b.processCallTrace(call.Calls[i], d)
+	}
+}
+
+// getInternalDataForBlock fetches debug trace using callTracer, extracts internal transfers and creations and destructions of contracts
+// by design, it never returns error so that missing internal transactions do not stop the rest of the blockchain import
+func (b *EthereumRPC) getInternalDataForBlock(blockHash string, transactions []rpcTransaction) ([]bchain.EthereumInternalData, error) {
+	data := make([]bchain.EthereumInternalData, len(transactions))
+	if b.ChainConfig.ProcessInternalTransactions {
+		ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
+		defer cancel()
+		var trace []rpcTraceResult
+		err := b.rpc.CallContext(ctx, &trace, "debug_traceBlockByHash", blockHash, map[string]interface{}{"tracer": "callTracer"})
+		if err != nil {
+			glog.Error("debug_traceBlockByHash block ", blockHash, ", error ", err)
+			return data, nil
+		}
+		if len(trace) != len(data) {
+			glog.Error("debug_traceBlockByHash block ", blockHash, ", error: trace length does not match block length ", len(trace), "!=", len(data))
+			return data, nil
+		}
+		for i, result := range trace {
+			r := &result.Result
+			d := &data[i]
+			if r.Type == "CREATE" {
+				d.Type = bchain.CREATE
+				d.Contract = r.To
+			} else if r.Type == "SELFDESTRUCT" {
+				d.Type = bchain.SELFDESTRUCT
+			}
+			for j := range r.Calls {
+				b.processCallTrace(r.Calls[j], d)
+			}
+		}
+	}
+	return data, nil
+}
+
 // GetBlock returns block with given hash or height, hash has precedence if both passed
 func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 	raw, err := b.getBlockRaw(hash, height, true)
@@ -534,10 +610,16 @@ func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error
 	if err != nil {
 		return nil, err
 	}
+
+	internalData, err := b.getInternalDataForBlock(head.Hash, body.Transactions)
+	if err != nil {
+		return nil, err
+	}
+
 	btxs := make([]bchain.Tx, len(body.Transactions))
 	for i := range body.Transactions {
 		tx := &body.Transactions[i]
-		btx, err := b.Parser.ethTxToTx(tx, &rpcReceipt{Logs: logs[tx.Hash]}, bbh.Time, uint32(bbh.Confirmations), true)
+		btx, err := b.Parser.ethTxToTx(tx, &rpcReceipt{Logs: logs[tx.Hash]}, &internalData[i], bbh.Time, uint32(bbh.Confirmations), true)
 		if err != nil {
 			return nil, errors.Annotatef(err, "hash %v, height %v, txid %v", hash, height, tx.Hash)
 		}
@@ -603,7 +685,7 @@ func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 	var btx *bchain.Tx
 	if tx.BlockNumber == "" {
 		// mempool tx
-		btx, err = b.Parser.ethTxToTx(tx, nil, 0, 0, true)
+		btx, err = b.Parser.ethTxToTx(tx, nil, nil, 0, 0, true)
 		if err != nil {
 			return nil, errors.Annotatef(err, "txid %v", txid)
 		}
@@ -636,7 +718,8 @@ func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 		if err != nil {
 			return nil, errors.Annotatef(err, "txid %v", txid)
 		}
-		btx, err = b.Parser.ethTxToTx(tx, &receipt, time, confirmations, true)
+		// TODO - handle internal tx
+		btx, err = b.Parser.ethTxToTx(tx, &receipt, nil, time, confirmations, true)
 		if err != nil {
 			return nil, errors.Annotatef(err, "txid %v", txid)
 		}
