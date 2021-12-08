@@ -202,6 +202,31 @@ func AddressDescriptorFromString(s string) (AddressDescriptor, error) {
 
 // EthereumType specific
 
+// EthereumInternalTransfer contains data about internal transfer
+type EthereumInternalTransfer struct {
+	Type  EthereumInternalTransactionType `json:"type"`
+	From  string                          `json:"from"`
+	To    string                          `json:"to"`
+	Value big.Int                         `json:"value"`
+}
+
+// EthereumInternalTransactionType - type of ethereum transaction from internal data
+type EthereumInternalTransactionType int
+
+// EthereumInternalTransactionType enumeration
+const (
+	CALL = EthereumInternalTransactionType(iota)
+	CREATE
+	SELFDESTRUCT
+)
+
+// EthereumInternalTransaction contains internal transfers
+type EthereumInternalData struct {
+	Type      EthereumInternalTransactionType `json:"type"`
+	Contract  string                          `json:"contract,omitempty"`
+	Transfers []EthereumInternalTransfer      `json:"transfers,omitempty"`
+}
+
 // Erc20Contract contains info about ERC20 contract
 type Erc20Contract struct {
 	Contract string `json:"contract"`
