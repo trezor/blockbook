@@ -77,8 +77,9 @@ type rpcReceipt struct {
 }
 
 type completeTransaction struct {
-	Tx      *rpcTransaction `json:"tx"`
-	Receipt *rpcReceipt     `json:"receipt,omitempty"`
+	Tx           *rpcTransaction              `json:"tx"`
+	InternalData *bchain.EthereumInternalData `json:"internalData,omitempty"`
+	Receipt      *rpcReceipt                  `json:"receipt,omitempty"`
 }
 
 type rpcBlockTransactions struct {
@@ -96,7 +97,7 @@ func ethNumber(n string) (int64, error) {
 	return 0, errors.Errorf("Not a number: '%v'", n)
 }
 
-func (p *EthereumParser) ethTxToTx(tx *rpcTransaction, receipt *rpcReceipt, blocktime int64, confirmations uint32, fixEIP55 bool) (*bchain.Tx, error) {
+func (p *EthereumParser) ethTxToTx(tx *rpcTransaction, receipt *rpcReceipt, internalData *bchain.EthereumInternalData, blocktime int64, confirmations uint32, fixEIP55 bool) (*bchain.Tx, error) {
 	txid := tx.Hash
 	var (
 		fa, ta []string
@@ -121,9 +122,24 @@ func (p *EthereumParser) ethTxToTx(tx *rpcTransaction, receipt *rpcReceipt, bloc
 			}
 		}
 	}
+	if internalData != nil {
+		// ignore empty internal data
+		if internalData.Type == bchain.CALL && len(internalData.Transfers) == 0 {
+			internalData = nil
+		} else {
+			if fixEIP55 {
+				for i := range internalData.Transfers {
+					it := &internalData.Transfers[i]
+					it.From = EIP55AddressFromAddress(it.From)
+					it.To = EIP55AddressFromAddress(it.To)
+				}
+			}
+		}
+	}
 	ct := completeTransaction{
-		Tx:      tx,
-		Receipt: receipt,
+		Tx:           tx,
+		InternalData: internalData,
+		Receipt:      receipt,
 	}
 	vs, err := hexutil.DecodeBig(tx.Value)
 	if err != nil {
@@ -254,6 +270,7 @@ func hexEncodeBig(b []byte) string {
 }
 
 // PackTx packs transaction to byte array
+// completeTransaction.InternalData are not packed, they are stored in a different table
 func (p *EthereumParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) ([]byte, error) {
 	var err error
 	var n uint64
@@ -396,7 +413,8 @@ func (p *EthereumParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 			Logs:    logs,
 		}
 	}
-	tx, err := p.ethTxToTx(&rt, rr, int64(pt.BlockTime), 0, false)
+	// TODO handle internal transactions
+	tx, err := p.ethTxToTx(&rt, rr, nil, int64(pt.BlockTime), 0, false)
 	if err != nil {
 		return nil, 0, err
 	}
