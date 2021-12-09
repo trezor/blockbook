@@ -84,9 +84,9 @@ Column families used only by **Ethereum type** coins:
 
 - **addressContracts** (used only by Ethereum type coins)
 
-    Maps *addrDesc* to *total number of transactions*, *number of non contract transactions* and array of *contracts* with *number of transfers* of given address.
+    Maps *addrDesc* to *total number of transactions*, *number of non contract transactions*, *number of internal transactions* and array of *contracts* with *number of transfers* of given address.
     ```
-    (addrDesc []byte) -> (total_txs vuint)+(non-contract_txs vuint)+[]((contractAddrDesc []byte)+(nr_transfers vuint))
+    (addrDesc []byte) -> (total_txs vuint)+(non-contract_txs vuint)+(internal_txs vuint)+[]((contractAddrDesc []byte)+(nr_transfers vuint))
     ```
 
 - **blockTxs**
