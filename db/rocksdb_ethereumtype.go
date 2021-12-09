@@ -22,6 +22,7 @@ type AddrContract struct {
 type AddrContracts struct {
 	TotalTxs       uint
 	NonContractTxs uint
+	InternalTxs    uint
 	Contracts      []AddrContract
 }
 
@@ -30,13 +31,15 @@ func (d *RocksDB) storeAddressContracts(wb *gorocksdb.WriteBatch, acm map[string
 	varBuf := make([]byte, vlq.MaxLen64)
 	for addrDesc, acs := range acm {
 		// address with 0 contracts is removed from db - happens on disconnect
-		if acs == nil || (acs.NonContractTxs == 0 && len(acs.Contracts) == 0) {
+		if acs == nil || (acs.NonContractTxs == 0 && acs.InternalTxs == 0 && len(acs.Contracts) == 0) {
 			wb.DeleteCF(d.cfh[cfAddressContracts], bchain.AddressDescriptor(addrDesc))
 		} else {
 			buf = buf[:0]
 			l := packVaruint(acs.TotalTxs, varBuf)
 			buf = append(buf, varBuf[:l]...)
 			l = packVaruint(acs.NonContractTxs, varBuf)
+			buf = append(buf, varBuf[:l]...)
+			l = packVaruint(acs.InternalTxs, varBuf)
 			buf = append(buf, varBuf[:l]...)
 			for _, ac := range acs.Contracts {
 				buf = append(buf, ac.Contract...)
@@ -64,6 +67,8 @@ func (d *RocksDB) GetAddrDescContracts(addrDesc bchain.AddressDescriptor) (*Addr
 	buf = buf[l:]
 	nct, l := unpackVaruint(buf)
 	buf = buf[l:]
+	ict, l := unpackVaruint(buf)
+	buf = buf[l:]
 	c := make([]AddrContract, 0, 4)
 	for len(buf) > 0 {
 		if len(buf) < eth.EthereumTypeAddressDescriptorLen {
@@ -80,6 +85,7 @@ func (d *RocksDB) GetAddrDescContracts(addrDesc bchain.AddressDescriptor) (*Addr
 	return &AddrContracts{
 		TotalTxs:       tt,
 		NonContractTxs: nct,
+		InternalTxs:    ict,
 		Contracts:      c,
 	}, nil
 }
