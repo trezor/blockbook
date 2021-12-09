@@ -41,49 +41,13 @@ type rpcHeader struct {
 	Nonce      string `json:"nonce"`
 }
 
-type rpcTransaction struct {
-	AccountNonce     string `json:"nonce"`
-	GasPrice         string `json:"gasPrice"`
-	GasLimit         string `json:"gas"`
-	To               string `json:"to"` // nil means contract creation
-	Value            string `json:"value"`
-	Payload          string `json:"input"`
-	Hash             string `json:"hash"`
-	BlockNumber      string `json:"blockNumber"`
-	BlockHash        string `json:"blockHash,omitempty"`
-	From             string `json:"from"`
-	TransactionIndex string `json:"transactionIndex"`
-	// Signature values - ignored
-	// V string `json:"v"`
-	// R string `json:"r"`
-	// S string `json:"s"`
-}
-
-type rpcLog struct {
-	Address string   `json:"address"`
-	Topics  []string `json:"topics"`
-	Data    string   `json:"data"`
-}
-
 type rpcLogWithTxHash struct {
-	rpcLog
+	bchain.RpcLog
 	Hash string `json:"transactionHash"`
 }
 
-type rpcReceipt struct {
-	GasUsed string    `json:"gasUsed"`
-	Status  string    `json:"status"`
-	Logs    []*rpcLog `json:"logs"`
-}
-
-type completeTransaction struct {
-	Tx           *rpcTransaction              `json:"tx"`
-	InternalData *bchain.EthereumInternalData `json:"internalData,omitempty"`
-	Receipt      *rpcReceipt                  `json:"receipt,omitempty"`
-}
-
 type rpcBlockTransactions struct {
-	Transactions []rpcTransaction `json:"transactions"`
+	Transactions []bchain.RpcTransaction `json:"transactions"`
 }
 
 type rpcBlockTxids struct {
@@ -97,7 +61,7 @@ func ethNumber(n string) (int64, error) {
 	return 0, errors.Errorf("Not a number: '%v'", n)
 }
 
-func (p *EthereumParser) ethTxToTx(tx *rpcTransaction, receipt *rpcReceipt, internalData *bchain.EthereumInternalData, blocktime int64, confirmations uint32, fixEIP55 bool) (*bchain.Tx, error) {
+func (p *EthereumParser) ethTxToTx(tx *bchain.RpcTransaction, receipt *bchain.RpcReceipt, internalData *bchain.EthereumInternalData, blocktime int64, confirmations uint32, fixEIP55 bool) (*bchain.Tx, error) {
 	txid := tx.Hash
 	var (
 		fa, ta []string
@@ -136,7 +100,7 @@ func (p *EthereumParser) ethTxToTx(tx *rpcTransaction, receipt *rpcReceipt, inte
 			}
 		}
 	}
-	ct := completeTransaction{
+	ct := bchain.EthereumSpecificData{
 		Tx:           tx,
 		InternalData: internalData,
 		Receipt:      receipt,
@@ -274,7 +238,7 @@ func hexEncodeBig(b []byte) string {
 func (p *EthereumParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) ([]byte, error) {
 	var err error
 	var n uint64
-	r, ok := tx.CoinSpecificData.(completeTransaction)
+	r, ok := tx.CoinSpecificData.(bchain.EthereumSpecificData)
 	if !ok {
 		return nil, errors.New("Missing CoinSpecificData")
 	}
@@ -373,7 +337,7 @@ func (p *EthereumParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 	if err != nil {
 		return nil, 0, err
 	}
-	rt := rpcTransaction{
+	rt := bchain.RpcTransaction{
 		AccountNonce: hexutil.EncodeUint64(pt.Tx.AccountNonce),
 		BlockNumber:  hexutil.EncodeUint64(uint64(pt.BlockNumber)),
 		From:         EIP55Address(pt.Tx.From),
@@ -388,15 +352,15 @@ func (p *EthereumParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 		TransactionIndex: hexutil.EncodeUint64(uint64(pt.Tx.TransactionIndex)),
 		Value:            hexEncodeBig(pt.Tx.Value),
 	}
-	var rr *rpcReceipt
+	var rr *bchain.RpcReceipt
 	if pt.Receipt != nil {
-		logs := make([]*rpcLog, len(pt.Receipt.Log))
+		logs := make([]*bchain.RpcLog, len(pt.Receipt.Log))
 		for i, l := range pt.Receipt.Log {
 			topics := make([]string, len(l.Topics))
 			for j, t := range l.Topics {
 				topics[j] = hexutil.Encode(t)
 			}
-			logs[i] = &rpcLog{
+			logs[i] = &bchain.RpcLog{
 				Address: EIP55Address(l.Address),
 				Data:    hexutil.Encode(l.Data),
 				Topics:  topics,
@@ -407,7 +371,7 @@ func (p *EthereumParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 		if len(pt.Receipt.Status) != 1 || pt.Receipt.Status[0] != 'U' {
 			status = hexEncodeBig(pt.Receipt.Status)
 		}
-		rr = &rpcReceipt{
+		rr = &bchain.RpcReceipt{
 			GasUsed: hexEncodeBig(pt.Receipt.GasUsed),
 			Status:  status,
 			Logs:    logs,
@@ -460,7 +424,7 @@ func (p *EthereumParser) GetChainType() bchain.ChainType {
 // GetHeightFromTx returns ethereum specific data from bchain.Tx
 func GetHeightFromTx(tx *bchain.Tx) (uint32, error) {
 	var bn string
-	csd, ok := tx.CoinSpecificData.(completeTransaction)
+	csd, ok := tx.CoinSpecificData.(bchain.EthereumSpecificData)
 	if !ok {
 		return 0, errors.New("Missing CoinSpecificData")
 	}
@@ -476,7 +440,7 @@ func GetHeightFromTx(tx *bchain.Tx) (uint32, error) {
 func (p *EthereumParser) EthereumTypeGetErc20FromTx(tx *bchain.Tx) ([]bchain.Erc20Transfer, error) {
 	var r []bchain.Erc20Transfer
 	var err error
-	csd, ok := tx.CoinSpecificData.(completeTransaction)
+	csd, ok := tx.CoinSpecificData.(bchain.EthereumSpecificData)
 	if ok {
 		if csd.Receipt != nil {
 			r, err = erc20GetTransfersFromLog(csd.Receipt.Logs)
@@ -519,7 +483,7 @@ func GetEthereumTxData(tx *bchain.Tx) *EthereumTxData {
 // GetEthereumTxDataFromSpecificData returns EthereumTxData from coinSpecificData
 func GetEthereumTxDataFromSpecificData(coinSpecificData interface{}) *EthereumTxData {
 	etd := EthereumTxData{Status: TxStatusPending}
-	csd, ok := coinSpecificData.(completeTransaction)
+	csd, ok := coinSpecificData.(bchain.EthereumSpecificData)
 	if ok {
 		if csd.Tx != nil {
 			etd.Nonce, _ = hexutil.DecodeUint64(csd.Tx.AccountNonce)

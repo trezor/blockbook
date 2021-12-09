@@ -22,7 +22,7 @@ import (
 	"github.com/trezor/blockbook/common"
 )
 
-const dbVersion = 5
+const dbVersion = 6
 
 const packedHeightBytes = 4
 const maxAddrDescLen = 1024
@@ -112,6 +112,8 @@ const (
 	cfTxAddresses
 	// EthereumType
 	cfAddressContracts = cfAddressBalance
+	cfInternalData
+	cfContracts
 )
 
 // common columns
@@ -120,7 +122,7 @@ var cfBaseNames = []string{"default", "height", "addresses", "blockTxs", "transa
 
 // type specific columns
 var cfNamesBitcoinType = []string{"addressBalance", "txAddresses"}
-var cfNamesEthereumType = []string{"addressContracts"}
+var cfNamesEthereumType = []string{"addressContracts", "internalData", "contracts"}
 
 func openDB(path string, c *gorocksdb.Cache, openFiles int) (*gorocksdb.DB, []*gorocksdb.ColumnFamilyHandle, error) {
 	// opts with bloom filter
