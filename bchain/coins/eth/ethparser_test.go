@@ -89,8 +89,8 @@ func init() {
 				},
 			},
 		},
-		CoinSpecificData: completeTransaction{
-			Tx: &rpcTransaction{
+		CoinSpecificData: bchain.EthereumSpecificData{
+			Tx: &bchain.RpcTransaction{
 				AccountNonce:     "0xb26c",
 				GasPrice:         "0x430e23400",
 				GasLimit:         "0x5208",
@@ -102,10 +102,10 @@ func init() {
 				From:             "0x3E3a3D69dc66bA10737F531ed088954a9EC89d97",
 				TransactionIndex: "0xa",
 			},
-			Receipt: &rpcReceipt{
+			Receipt: &bchain.RpcReceipt{
 				GasUsed: "0x5208",
 				Status:  "0x1",
-				Logs:    []*rpcLog{},
+				Logs:    []*bchain.RpcLog{},
 			},
 		},
 	}
@@ -127,8 +127,8 @@ func init() {
 				},
 			},
 		},
-		CoinSpecificData: completeTransaction{
-			Tx: &rpcTransaction{
+		CoinSpecificData: bchain.EthereumSpecificData{
+			Tx: &bchain.RpcTransaction{
 				AccountNonce:     "0xd0",
 				GasPrice:         "0x9502f9000",
 				GasLimit:         "0x130d5",
@@ -139,10 +139,10 @@ func init() {
 				BlockNumber:      "0x41eee8",
 				From:             "0x20cD153de35D469BA46127A0C8F18626b59a256A",
 				TransactionIndex: "0x0"},
-			Receipt: &rpcReceipt{
+			Receipt: &bchain.RpcReceipt{
 				GasUsed: "0xcb39",
 				Status:  "0x1",
-				Logs: []*rpcLog{
+				Logs: []*bchain.RpcLog{
 					{
 						Address: "0x4af4114F73d1c1C903aC9E0361b379D1291808A2",
 						Data:    "0x00000000000000000000000000000000000000000000021e19e0c9bab2400000",
@@ -174,8 +174,8 @@ func init() {
 				},
 			},
 		},
-		CoinSpecificData: completeTransaction{
-			Tx: &rpcTransaction{
+		CoinSpecificData: bchain.EthereumSpecificData{
+			Tx: &bchain.RpcTransaction{
 				AccountNonce:     "0xb26c",
 				GasPrice:         "0x430e23400",
 				GasLimit:         "0x5208",
@@ -187,10 +187,10 @@ func init() {
 				From:             "0x3E3a3D69dc66bA10737F531ed088954a9EC89d97",
 				TransactionIndex: "0xa",
 			},
-			Receipt: &rpcReceipt{
+			Receipt: &bchain.RpcReceipt{
 				GasUsed: "0x5208",
 				Status:  "0x0",
-				Logs:    []*rpcLog{},
+				Logs:    []*bchain.RpcLog{},
 			},
 		},
 	}
@@ -212,8 +212,8 @@ func init() {
 				},
 			},
 		},
-		CoinSpecificData: completeTransaction{
-			Tx: &rpcTransaction{
+		CoinSpecificData: bchain.EthereumSpecificData{
+			Tx: &bchain.RpcTransaction{
 				AccountNonce:     "0xb26c",
 				GasPrice:         "0x430e23400",
 				GasLimit:         "0x5208",
@@ -225,10 +225,10 @@ func init() {
 				From:             "0x3E3a3D69dc66bA10737F531ed088954a9EC89d97",
 				TransactionIndex: "0xa",
 			},
-			Receipt: &rpcReceipt{
+			Receipt: &bchain.RpcReceipt{
 				GasUsed: "0x5208",
 				Status:  "",
-				Logs:    []*rpcLog{},
+				Logs:    []*bchain.RpcLog{},
 			},
 		},
 	}
@@ -351,8 +351,8 @@ func TestEthereumParser_UnpackTx(t *testing.T) {
 				return
 			}
 			// DeepEqual has problems with pointers in completeTransaction
-			gs := got.CoinSpecificData.(completeTransaction)
-			ws := tt.want.CoinSpecificData.(completeTransaction)
+			gs := got.CoinSpecificData.(bchain.EthereumSpecificData)
+			ws := tt.want.CoinSpecificData.(bchain.EthereumSpecificData)
 			gc := *got
 			wc := *tt.want
 			gc.CoinSpecificData = nil

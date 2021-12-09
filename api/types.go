@@ -173,12 +173,14 @@ type TokenTransfer struct {
 
 // EthereumSpecific contains ethereum specific transaction data
 type EthereumSpecific struct {
-	Status   eth.TxStatus `json:"status"` // 1 OK, 0 Fail, -1 pending
-	Nonce    uint64       `json:"nonce"`
-	GasLimit *big.Int     `json:"gasLimit"`
-	GasUsed  *big.Int     `json:"gasUsed"`
-	GasPrice *Amount      `json:"gasPrice"`
-	Data     string       `json:"data,omitempty"`
+	TxType            string                            `json:"txType,omitempty"`
+	Status            eth.TxStatus                      `json:"status"` // 1 OK, 0 Fail, -1 pending
+	Nonce             uint64                            `json:"nonce"`
+	GasLimit          *big.Int                          `json:"gasLimit"`
+	GasUsed           *big.Int                          `json:"gasUsed"`
+	GasPrice          *Amount                           `json:"gasPrice"`
+	Data              string                            `json:"data,omitempty"`
+	InternalTransfers []bchain.EthereumInternalTransfer `json:"internalTransfers,omitempty"`
 }
 
 // Tx holds information about a transaction

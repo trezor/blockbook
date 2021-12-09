@@ -490,7 +490,7 @@ func (b *EthereumRPC) getBlockRaw(hash string, height uint32, fullTxs bool) (jso
 	return raw, nil
 }
 
-func (b *EthereumRPC) getERC20EventsForBlock(blockNumber string) (map[string][]*rpcLog, error) {
+func (b *EthereumRPC) getERC20EventsForBlock(blockNumber string) (map[string][]*bchain.RpcLog, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
 	defer cancel()
 	var logs []rpcLogWithTxHash
@@ -502,10 +502,10 @@ func (b *EthereumRPC) getERC20EventsForBlock(blockNumber string) (map[string][]*
 	if err != nil {
 		return nil, errors.Annotatef(err, "blockNumber %v", blockNumber)
 	}
-	r := make(map[string][]*rpcLog)
+	r := make(map[string][]*bchain.RpcLog)
 	for i := range logs {
 		l := &logs[i]
-		r[l.Hash] = append(r[l.Hash], &l.rpcLog)
+		r[l.Hash] = append(r[l.Hash], &l.RpcLog)
 	}
 	return r, nil
 }
@@ -555,7 +555,7 @@ func (b *EthereumRPC) processCallTrace(call rpcCallTrace, d *bchain.EthereumInte
 
 // getInternalDataForBlock fetches debug trace using callTracer, extracts internal transfers and creations and destructions of contracts
 // by design, it never returns error so that missing internal transactions do not stop the rest of the blockchain import
-func (b *EthereumRPC) getInternalDataForBlock(blockHash string, transactions []rpcTransaction) ([]bchain.EthereumInternalData, error) {
+func (b *EthereumRPC) getInternalDataForBlock(blockHash string, transactions []bchain.RpcTransaction) ([]bchain.EthereumInternalData, error) {
 	data := make([]bchain.EthereumInternalData, len(transactions))
 	if b.ChainConfig.ProcessInternalTransactions {
 		ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
@@ -619,7 +619,7 @@ func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error
 	btxs := make([]bchain.Tx, len(body.Transactions))
 	for i := range body.Transactions {
 		tx := &body.Transactions[i]
-		btx, err := b.Parser.ethTxToTx(tx, &rpcReceipt{Logs: logs[tx.Hash]}, &internalData[i], bbh.Time, uint32(bbh.Confirmations), true)
+		btx, err := b.Parser.ethTxToTx(tx, &bchain.RpcReceipt{Logs: logs[tx.Hash]}, &internalData[i], bbh.Time, uint32(bbh.Confirmations), true)
 		if err != nil {
 			return nil, errors.Annotatef(err, "hash %v, height %v, txid %v", hash, height, tx.Hash)
 		}
@@ -671,7 +671,7 @@ func (b *EthereumRPC) GetTransactionForMempool(txid string) (*bchain.Tx, error) 
 func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
 	defer cancel()
-	var tx *rpcTransaction
+	var tx *bchain.RpcTransaction
 	hash := ethcommon.HexToHash(txid)
 	err := b.rpc.CallContext(ctx, &tx, "eth_getTransactionByHash", hash)
 	if err != nil {
@@ -705,7 +705,7 @@ func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 		if time, err = ethNumber(ht.Time); err != nil {
 			return nil, errors.Annotatef(err, "txid %v", txid)
 		}
-		var receipt rpcReceipt
+		var receipt bchain.RpcReceipt
 		err = b.rpc.CallContext(ctx, &receipt, "eth_getTransactionReceipt", hash)
 		if err != nil {
 			return nil, errors.Annotatef(err, "txid %v", txid)
@@ -733,13 +733,13 @@ func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 
 // GetTransactionSpecific returns json as returned by backend, with all coin specific data
 func (b *EthereumRPC) GetTransactionSpecific(tx *bchain.Tx) (json.RawMessage, error) {
-	csd, ok := tx.CoinSpecificData.(completeTransaction)
+	csd, ok := tx.CoinSpecificData.(bchain.EthereumSpecificData)
 	if !ok {
 		ntx, err := b.GetTransaction(tx.Txid)
 		if err != nil {
 			return nil, err
 		}
-		csd, ok = ntx.CoinSpecificData.(completeTransaction)
+		csd, ok = ntx.CoinSpecificData.(bchain.EthereumSpecificData)
 		if !ok {
 			return nil, errors.New("Cannot get CoinSpecificData")
 		}

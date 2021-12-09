@@ -15,13 +15,13 @@ import (
 func TestErc20_erc20GetTransfersFromLog(t *testing.T) {
 	tests := []struct {
 		name    string
-		args    []*rpcLog
+		args    []*bchain.RpcLog
 		want    []bchain.Erc20Transfer
 		wantErr bool
 	}{
 		{
 			name: "1",
-			args: []*rpcLog{
+			args: []*bchain.RpcLog{
 				{
 					Address: "0x76a45e8976499ab9ae223cc584019341d5a84e96",
 					Topics: []string{
@@ -43,7 +43,7 @@ func TestErc20_erc20GetTransfersFromLog(t *testing.T) {
 		},
 		{
 			name: "2",
-			args: []*rpcLog{
+			args: []*bchain.RpcLog{
 				{ // Transfer
 					Address: "0x0d0f936ee4c93e25944694d6c121de94d9760f11",
 					Topics: []string{
@@ -167,17 +167,17 @@ func TestErc20_erc20GetTransfersFromTx(t *testing.T) {
 	bn, _ := new(big.Int).SetString("21e19e0c9bab2400000", 16)
 	tests := []struct {
 		name string
-		args *rpcTransaction
+		args *bchain.RpcTransaction
 		want []bchain.Erc20Transfer
 	}{
 		{
 			name: "0",
-			args: (b.Txs[0].CoinSpecificData.(completeTransaction)).Tx,
+			args: (b.Txs[0].CoinSpecificData.(bchain.EthereumSpecificData)).Tx,
 			want: []bchain.Erc20Transfer{},
 		},
 		{
 			name: "1",
-			args: (b.Txs[1].CoinSpecificData.(completeTransaction)).Tx,
+			args: (b.Txs[1].CoinSpecificData.(bchain.EthereumSpecificData)).Tx,
 			want: []bchain.Erc20Transfer{
 				{
 					Contract: "0x4af4114f73d1c1c903ac9e0361b379d1291808a2",

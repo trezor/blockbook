@@ -56,7 +56,7 @@ func addressFromPaddedHex(s string) (string, error) {
 	return a.String(), nil
 }
 
-func erc20GetTransfersFromLog(logs []*rpcLog) ([]bchain.Erc20Transfer, error) {
+func erc20GetTransfersFromLog(logs []*bchain.RpcLog) ([]bchain.Erc20Transfer, error) {
 	var r []bchain.Erc20Transfer
 	for _, l := range logs {
 		if len(l.Topics) == 3 && l.Topics[0] == erc20TransferEventSignature {
@@ -84,7 +84,7 @@ func erc20GetTransfersFromLog(logs []*rpcLog) ([]bchain.Erc20Transfer, error) {
 	return r, nil
 }
 
-func erc20GetTransfersFromTx(tx *rpcTransaction) ([]bchain.Erc20Transfer, error) {
+func erc20GetTransfersFromTx(tx *bchain.RpcTransaction) ([]bchain.Erc20Transfer, error) {
 	var r []bchain.Erc20Transfer
 	if len(tx.Payload) == 128+len(erc20TransferMethodSignature) && strings.HasPrefix(tx.Payload, erc20TransferMethodSignature) {
 		to, err := addressFromPaddedHex(tx.Payload[len(erc20TransferMethodSignature) : 64+len(erc20TransferMethodSignature)])
