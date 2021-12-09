@@ -44,10 +44,10 @@ func verifyAfterEthereumTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect boo
 	}
 
 	if err := checkColumn(d, cfAddressContracts, []keyPair{
-		{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr3e, d.chainParser), "0101", nil},
-		{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr55, d.chainParser), "0201" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser) + "01", nil},
-		{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr20, d.chainParser), "0101" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser) + "01", nil},
-		{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser), "0101", nil},
+		{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr3e, d.chainParser), "010100", nil},
+		{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr55, d.chainParser), "020100" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser) + "01", nil},
+		{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr20, d.chainParser), "010100" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser) + "01", nil},
+		{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser), "010100", nil},
 	}); err != nil {
 		{
 			t.Fatal(err)
@@ -113,14 +113,14 @@ func verifyAfterEthereumTypeBlock2(t *testing.T, d *RocksDB) {
 	}
 
 	if err := checkColumn(d, cfAddressContracts, []keyPair{
-		{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr3e, d.chainParser), "0101", nil},
-		{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr55, d.chainParser), "0402" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser) + "02" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract0d, d.chainParser) + "01", nil},
-		{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr20, d.chainParser), "0101" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser) + "01", nil},
-		{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser), "0101", nil},
-		{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr9f, d.chainParser), "0101", nil},
-		{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr4b, d.chainParser), "0101" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract0d, d.chainParser) + "02" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser) + "02", nil},
-		{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr7b, d.chainParser), "0100" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser) + "01" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract0d, d.chainParser) + "01", nil},
-		{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract47, d.chainParser), "0101", nil},
+		{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr3e, d.chainParser), "010100", nil},
+		{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr55, d.chainParser), "040200" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser) + "02" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract0d, d.chainParser) + "01", nil},
+		{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr20, d.chainParser), "010100" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser) + "01", nil},
+		{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser), "010100", nil},
+		{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr9f, d.chainParser), "010100", nil},
+		{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr4b, d.chainParser), "010100" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract0d, d.chainParser) + "02" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser) + "02", nil},
+		{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr7b, d.chainParser), "010000" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser) + "01" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract0d, d.chainParser) + "01", nil},
+		{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract47, d.chainParser), "010100", nil},
 	}); err != nil {
 		{
 			t.Fatal(err)
