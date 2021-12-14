@@ -190,6 +190,7 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 	serveMux.HandleFunc(path+"api/v2/feestats/", s.jsonHandler(s.apiFeeStats, apiV2))
 	serveMux.HandleFunc(path+"api/v2/balancehistory/", s.jsonHandler(s.apiBalanceHistory, apiDefault))
 	serveMux.HandleFunc(path+"api/v2/tickers/", s.jsonHandler(s.apiTickers, apiV2))
+	serveMux.HandleFunc(path+"api/v2/multi-tickers/", s.jsonHandler(s.apiMultiTickers, apiV2))
 	serveMux.HandleFunc(path+"api/v2/tickers-list/", s.jsonHandler(s.apiTickersList, apiV2))
 	// socket.io interface
 	serveMux.Handle(path+"socket.io/", s.socketio.GetHandler())
@@ -1210,7 +1211,7 @@ func (s *PublicServer) apiTickers(r *http.Request, apiVersion int) (interface{},
 
 		timestamp, err := strconv.ParseInt(timestampString, 10, 64)
 		if err != nil {
-			return nil, api.NewAPIError("Parameter \"timestamp\" is not a valid Unix timestamp.", true)
+			return nil, api.NewAPIError("Parameter 'timestamp' is not a valid Unix timestamp.", true)
 		}
 
 		resultTickers, err := s.api.GetFiatRatesForTimestamps([]int64{timestamp}, currencies)
@@ -1225,6 +1226,38 @@ func (s *PublicServer) apiTickers(r *http.Request, apiVersion int) (interface{},
 	}
 	if err != nil {
 		return nil, err
+	}
+	return result, nil
+}
+
+// apiMultiTickers returns FiatRates ticker prices for the specified comma separated list of timestamps.
+func (s *PublicServer) apiMultiTickers(r *http.Request, apiVersion int) (interface{}, error) {
+	var result []db.ResultTickerAsString
+	var err error
+
+	currency := strings.ToLower(r.URL.Query().Get("currency"))
+	var currencies []string
+	if currency != "" {
+		currencies = []string{currency}
+	}
+	if timestampString := r.URL.Query().Get("timestamp"); timestampString != "" {
+		// Get tickers for specified timestamp
+		s.metrics.ExplorerViews.With(common.Labels{"action": "api-multi-tickers-date"}).Inc()
+		timestamps := strings.Split(timestampString, ",")
+		t := make([]int64, len(timestamps))
+		for i := range timestamps {
+			t[i], err = strconv.ParseInt(timestamps[i], 10, 64)
+			if err != nil {
+				return nil, api.NewAPIError("Parameter 'timestamp' does not contain a valid Unix timestamp.", true)
+			}
+		}
+		resultTickers, err := s.api.GetFiatRatesForTimestamps(t, currencies)
+		if err != nil {
+			return nil, err
+		}
+		result = resultTickers.Tickers
+	} else {
+		return nil, api.NewAPIError("Parameter 'timestamp' is missing.", true)
 	}
 	return result, nil
 }
