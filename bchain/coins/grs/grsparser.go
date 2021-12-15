@@ -12,12 +12,16 @@ import (
 const (
 	MainnetMagic wire.BitcoinNet = 0xd4b4bef9
 	TestnetMagic wire.BitcoinNet = 0x0709110b
+	RegtestMagic wire.BitcoinNet = 0xdab5bffa
+	SignetMagic wire.BitcoinNet = 0x7696b422
 )
 
 // chain parameters
 var (
 	MainNetParams chaincfg.Params
 	TestNetParams chaincfg.Params
+	RegTestParams chaincfg.Params
+	SigNetParams chaincfg.Params
 )
 
 func init() {
@@ -38,6 +42,24 @@ func init() {
 	TestNetParams.ScriptHashAddrID = []byte{196}
 	TestNetParams.Bech32HRPSegwit = "tgrs"
 	TestNetParams.Base58CksumHasher = base58.Groestl512D
+
+	RegTestParams = chaincfg.RegressionNetParams
+	RegTestParams.Net = RegtestMagic
+
+	// Address encoding magics
+	RegTestParams.PubKeyHashAddrID = []byte{111}
+	RegTestParams.ScriptHashAddrID = []byte{196}
+	RegTestParams.Bech32HRPSegwit = "grsrt"
+	RegTestParams.Base58CksumHasher = base58.Groestl512D
+
+	SigNetParams = chaincfg.SigNetParams
+	SigNetParams.Net = SignetMagic
+
+	// Address encoding magics
+	SigNetParams.PubKeyHashAddrID = []byte{111}
+	SigNetParams.ScriptHashAddrID = []byte{196}
+	SigNetParams.Bech32HRPSegwit = "tgrs"
+	SigNetParams.Base58CksumHasher = base58.Groestl512D
 }
 
 // GroestlcoinParser handle
@@ -70,6 +92,10 @@ func GetChainParams(chain string) *chaincfg.Params {
 	switch chain {
 	case "test":
 		return &TestNetParams
+	case "regtest":
+		return &RegTestParams
+	case "signet":
+		return &SigNetParams
 	default:
 		return &MainNetParams
 	}
