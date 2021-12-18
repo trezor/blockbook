@@ -3,6 +3,7 @@ package db
 import (
 	"bytes"
 	"encoding/hex"
+	"math/big"
 
 	vlq "github.com/bsm/go-vlq"
 	"github.com/flier/gorocksdb"
@@ -11,6 +12,9 @@ import (
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/bchain/coins/eth"
 )
+
+const InternalTxIndexOffset = 1
+const ContractIndexOffset = 2
 
 // AddrContract is Contract address with number of transactions done by given address
 type AddrContract struct {
@@ -108,6 +112,11 @@ func isZeroAddress(addrDesc bchain.AddressDescriptor) bool {
 	return true
 }
 
+const transferTo = int32(0)
+const transferFrom = ^int32(0)
+const internalTransferTo = int32(1)
+const internalTransferFrom = ^int32(1)
+
 func (d *RocksDB) addToAddressesAndContractsEthereumType(addrDesc bchain.AddressDescriptor, btxID []byte, index int32, contract bchain.AddressDescriptor, addresses addressesMap, addressContracts map[string]*AddrContracts, addTxCount bool) error {
 	var err error
 	strAddrDesc := string(addrDesc)
@@ -127,7 +136,11 @@ func (d *RocksDB) addToAddressesAndContractsEthereumType(addrDesc bchain.Address
 	}
 	if contract == nil {
 		if addTxCount {
-			ac.NonContractTxs++
+			if index == internalTransferFrom || index == internalTransferTo {
+				ac.InternalTxs++
+			} else {
+				ac.NonContractTxs++
+			}
 		}
 	} else {
 		// do not store contracts for 0x0000000000000000000000000000000000000000 address
@@ -138,14 +151,20 @@ func (d *RocksDB) addToAddressesAndContractsEthereumType(addrDesc bchain.Address
 				i = len(ac.Contracts)
 				ac.Contracts = append(ac.Contracts, AddrContract{Contract: contract})
 			}
-			// index 0 is for ETH transfers, contract indexes start with 1
+			// index 0 is for ETH transfers, index 1 (InternalTxIndexOffset) is for internal transfers, contract indexes start with 2 (ContractIndexOffset)
 			if index < 0 {
-				index = ^int32(i + 1)
+				index = ^int32(i + ContractIndexOffset)
 			} else {
-				index = int32(i + 1)
+				index = int32(i + ContractIndexOffset)
 			}
 			if addTxCount {
 				ac.Contracts[i].Txs++
+			}
+		} else {
+			if index < 0 {
+				index = transferFrom
+			} else {
+				index = transferTo
 			}
 		}
 	}
@@ -160,10 +179,23 @@ type ethBlockTxContract struct {
 	addr, contract bchain.AddressDescriptor
 }
 
+type ethInternalTransfer struct {
+	internalType bchain.EthereumInternalTransactionType
+	from, to     bchain.AddressDescriptor
+	value        big.Int
+}
+
+type ethInternalData struct {
+	internalType bchain.EthereumInternalTransactionType
+	contract     bchain.AddressDescriptor
+	transfers    []ethInternalTransfer
+}
+
 type ethBlockTx struct {
-	btxID     []byte
-	from, to  bchain.AddressDescriptor
-	contracts []ethBlockTxContract
+	btxID        []byte
+	from, to     bchain.AddressDescriptor
+	contracts    []ethBlockTxContract
+	internalData *ethInternalData
 }
 
 func (d *RocksDB) processAddressesEthereumType(block *bchain.Block, addresses addressesMap, addressContracts map[string]*AddrContracts) ([]ethBlockTx, error) {
@@ -184,12 +216,12 @@ func (d *RocksDB) processAddressesEthereumType(block *bchain.Block, addresses ad
 				if err != bchain.ErrAddressMissing {
 					glog.Warningf("rocksdb: addrDesc: %v - height %d, tx %v, output", err, block.Height, tx.Txid)
 				}
-				continue
+			} else {
+				if err = d.addToAddressesAndContractsEthereumType(to, btxID, transferTo, nil, addresses, addressContracts, true); err != nil {
+					return nil, err
+				}
+				blockTx.to = to
 			}
-			if err = d.addToAddressesAndContractsEthereumType(to, btxID, 0, nil, addresses, addressContracts, true); err != nil {
-				return nil, err
-			}
-			blockTx.to = to
 		}
 		// there is only one input address in EthereumType transaction, store it in format txid ^0
 		if len(tx.Vin) == 1 && len(tx.Vin[0].Addresses) == 1 {
@@ -198,12 +230,68 @@ func (d *RocksDB) processAddressesEthereumType(block *bchain.Block, addresses ad
 				if err != bchain.ErrAddressMissing {
 					glog.Warningf("rocksdb: addrDesc: %v - height %d, tx %v, input", err, block.Height, tx.Txid)
 				}
-				continue
+			} else {
+				if err = d.addToAddressesAndContractsEthereumType(from, btxID, transferFrom, nil, addresses, addressContracts, !bytes.Equal(from, to)); err != nil {
+					return nil, err
+				}
+				blockTx.from = from
 			}
-			if err = d.addToAddressesAndContractsEthereumType(from, btxID, ^int32(0), nil, addresses, addressContracts, !bytes.Equal(from, to)); err != nil {
-				return nil, err
+		}
+		// process internal data
+		eid, _ := tx.CoinSpecificData.(bchain.EthereumSpecificData)
+		if eid.InternalData != nil {
+			blockTx.internalData = &ethInternalData{
+				internalType: eid.InternalData.Type,
 			}
-			blockTx.from = from
+			// index contract creation
+			if eid.InternalData.Type == bchain.CREATE {
+				to, err = d.chainParser.GetAddrDescFromAddress(eid.InternalData.Contract)
+				if err != nil {
+					if err != bchain.ErrAddressMissing {
+						glog.Warningf("rocksdb: addrDesc: %v - height %d, tx %v, create contract", err, block.Height, tx.Txid)
+					}
+					// set the internalType to CALL if incorrect contract so that it is not breaking the packing of data to DB
+					blockTx.internalData.internalType = bchain.CALL
+				} else {
+					blockTx.internalData.contract = to
+					if err = d.addToAddressesAndContractsEthereumType(to, btxID, internalTransferTo, nil, addresses, addressContracts, true); err != nil {
+						return nil, err
+					}
+				}
+			}
+			// index internal transfers
+			if len(eid.InternalData.Transfers) > 0 {
+				blockTx.internalData.transfers = make([]ethInternalTransfer, len(eid.InternalData.Transfers))
+				for i := range eid.InternalData.Transfers {
+					iti := &eid.InternalData.Transfers[i]
+					ito := &blockTx.internalData.transfers[i]
+					to, err = d.chainParser.GetAddrDescFromAddress(iti.To)
+					if err != nil {
+						// do not log ErrAddressMissing, transactions can be without to address (for example eth contracts)
+						if err != bchain.ErrAddressMissing {
+							glog.Warningf("rocksdb: addrDesc: %v - height %d, tx %v, internal transfer %d to", err, block.Height, tx.Txid, i)
+						}
+					} else {
+						if err = d.addToAddressesAndContractsEthereumType(to, btxID, internalTransferTo, nil, addresses, addressContracts, true); err != nil {
+							return nil, err
+						}
+						ito.to = to
+					}
+					from, err = d.chainParser.GetAddrDescFromAddress(iti.From)
+					if err != nil {
+						if err != bchain.ErrAddressMissing {
+							glog.Warningf("rocksdb: addrDesc: %v - height %d, tx %v, internal transfer %d from", err, block.Height, tx.Txid, i)
+						}
+					} else {
+						if err = d.addToAddressesAndContractsEthereumType(from, btxID, internalTransferFrom, nil, addresses, addressContracts, !bytes.Equal(from, to)); err != nil {
+							return nil, err
+						}
+						ito.from = from
+					}
+					ito.internalType = iti.Type
+					ito.value = iti.Value
+				}
+			}
 		}
 		// store erc20 transfers
 		erc20, err := d.chainParser.EthereumTypeGetErc20FromTx(&tx)
@@ -249,14 +337,95 @@ func (d *RocksDB) processAddressesEthereumType(block *bchain.Block, addresses ad
 	return blockTxs, nil
 }
 
+var ethZeroAddress []byte = make([]byte, eth.EthereumTypeAddressDescriptorLen)
+
+func packEthInternalData(data *ethInternalData) []byte {
+	// allocate enough for type+contract+all transfers with bigint value
+	buf := make([]byte, 0, (2*len(data.transfers)+1)*(eth.EthereumTypeAddressDescriptorLen+16))
+	appendAddress := func(a bchain.AddressDescriptor) {
+		if len(a) != eth.EthereumTypeAddressDescriptorLen {
+			buf = append(buf, ethZeroAddress...)
+		} else {
+			buf = append(buf, a...)
+		}
+	}
+	varBuf := make([]byte, maxPackedBigintBytes)
+
+	// internalType is one bit (CALL|CREATE), it is joined with count of internal transfers*2
+	l := packVaruint(uint(data.internalType)&1+uint(len(data.transfers))<<1, varBuf)
+	buf = append(buf, varBuf[:l]...)
+	if data.internalType == bchain.CREATE {
+		appendAddress(data.contract)
+	}
+	for i := range data.transfers {
+		t := &data.transfers[i]
+		buf = append(buf, byte(t.internalType))
+		appendAddress(t.from)
+		appendAddress(t.to)
+		l = packBigint(&t.value, varBuf)
+		buf = append(buf, varBuf[:l]...)
+	}
+	return buf
+}
+
+func (d *RocksDB) unpackEthInternalData(buf []byte) (*bchain.EthereumInternalData, error) {
+	id := bchain.EthereumInternalData{}
+	v, l := unpackVaruint(buf)
+	id.Type = bchain.EthereumInternalTransactionType(v & 1)
+	id.Transfers = make([]bchain.EthereumInternalTransfer, v>>1)
+	if id.Type == bchain.CREATE {
+		addresses, _, _ := d.chainParser.GetAddressesFromAddrDesc(buf[l : l+eth.EthereumTypeAddressDescriptorLen])
+		l += eth.EthereumTypeAddressDescriptorLen
+		if len(addresses) > 0 {
+			id.Contract = addresses[0]
+		}
+	}
+	var ll int
+	for i := range id.Transfers {
+		t := &id.Transfers[i]
+		t.Type = bchain.EthereumInternalTransactionType(buf[l])
+		l++
+		addresses, _, _ := d.chainParser.GetAddressesFromAddrDesc(buf[l : l+eth.EthereumTypeAddressDescriptorLen])
+		l += eth.EthereumTypeAddressDescriptorLen
+		if len(addresses) > 0 {
+			t.From = addresses[0]
+		}
+		addresses, _, _ = d.chainParser.GetAddressesFromAddrDesc(buf[l : l+eth.EthereumTypeAddressDescriptorLen])
+		l += eth.EthereumTypeAddressDescriptorLen
+		if len(addresses) > 0 {
+			t.To = addresses[0]
+		}
+		t.Value, ll = unpackBigint(buf[l:])
+		l += ll
+	}
+	return &id, nil
+}
+
+func (d *RocksDB) GetEthereumInternalData(txid string) (*bchain.EthereumInternalData, error) {
+	btxID, err := d.chainParser.PackTxid(txid)
+	if err != nil {
+		return nil, err
+	}
+
+	val, err := d.db.GetCF(d.ro, d.cfh[cfInternalData], btxID)
+	if err != nil {
+		return nil, err
+	}
+	defer val.Free()
+	buf := val.Data()
+	if len(buf) == 0 {
+		return nil, nil
+	}
+	return d.unpackEthInternalData(buf)
+}
+
 func (d *RocksDB) storeAndCleanupBlockTxsEthereumType(wb *gorocksdb.WriteBatch, block *bchain.Block, blockTxs []ethBlockTx) error {
 	pl := d.chainParser.PackedTxidLen()
 	buf := make([]byte, 0, (pl+2*eth.EthereumTypeAddressDescriptorLen)*len(blockTxs))
 	varBuf := make([]byte, vlq.MaxLen64)
-	zeroAddress := make([]byte, eth.EthereumTypeAddressDescriptorLen)
 	appendAddress := func(a bchain.AddressDescriptor) {
 		if len(a) != eth.EthereumTypeAddressDescriptorLen {
-			buf = append(buf, zeroAddress...)
+			buf = append(buf, ethZeroAddress...)
 		} else {
 			buf = append(buf, a...)
 		}
@@ -266,7 +435,29 @@ func (d *RocksDB) storeAndCleanupBlockTxsEthereumType(wb *gorocksdb.WriteBatch, 
 		buf = append(buf, blockTx.btxID...)
 		appendAddress(blockTx.from)
 		appendAddress(blockTx.to)
-		l := packVaruint(uint(len(blockTx.contracts)), varBuf)
+		// internal data - store the number of addresses, with odd number the CREATE tx type
+		var internalDataTransfers uint
+		if blockTx.internalData != nil {
+			wb.PutCF(d.cfh[cfInternalData], blockTx.btxID, packEthInternalData(blockTx.internalData))
+			internalDataTransfers = uint(len(blockTx.internalData.transfers)) * 2
+			if blockTx.internalData.internalType == bchain.CREATE {
+				internalDataTransfers++
+			}
+		}
+		l := packVaruint(internalDataTransfers, varBuf)
+		buf = append(buf, varBuf[:l]...)
+		if internalDataTransfers > 0 {
+			if blockTx.internalData.internalType == bchain.CREATE {
+				appendAddress(blockTx.internalData.contract)
+			}
+			for j := range blockTx.internalData.transfers {
+				c := &blockTx.internalData.transfers[j]
+				appendAddress(c.from)
+				appendAddress(c.to)
+			}
+		}
+		// contracts - store the number of address pairs
+		l = packVaruint(uint(len(blockTx.contracts)), varBuf)
 		buf = append(buf, varBuf[:l]...)
 		for j := range blockTx.contracts {
 			c := &blockTx.contracts[j]
@@ -323,7 +514,32 @@ func (d *RocksDB) getBlockTxsEthereumType(height uint32) ([]ethBlockTx, error) {
 		if err != nil {
 			return nil, err
 		}
+		// internal data
+		var internalData *ethInternalData
 		cc, l := unpackVaruint(buf[i:])
+		i += l
+		if cc > 0 {
+			internalData = &ethInternalData{}
+			// odd count of internal transfers means it is CREATE transaction with the contract added to the list
+			if cc&1 == 1 {
+				internalData.internalType = bchain.CREATE
+				internalData.contract, i, err = getAddress(i)
+				if err != nil {
+					return nil, err
+				}
+			}
+			internalData.transfers = make([]ethInternalTransfer, cc/2)
+			for j := range internalData.transfers {
+				t := &internalData.transfers[j]
+				t.from, i, err = getAddress(i)
+				t.to, i, err = getAddress(i)
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
+		// contracts
+		cc, l = unpackVaruint(buf[i:])
 		i += l
 		contracts := make([]ethBlockTxContract, cc)
 		for j := range contracts {
@@ -337,10 +553,11 @@ func (d *RocksDB) getBlockTxsEthereumType(height uint32) ([]ethBlockTx, error) {
 			}
 		}
 		bt = append(bt, ethBlockTx{
-			btxID:     txid,
-			from:      from,
-			to:        to,
-			contracts: contracts,
+			btxID:        txid,
+			from:         from,
+			to:           to,
+			internalData: internalData,
+			contracts:    contracts,
 		})
 	}
 	return bt, nil
@@ -349,7 +566,7 @@ func (d *RocksDB) getBlockTxsEthereumType(height uint32) ([]ethBlockTx, error) {
 func (d *RocksDB) disconnectBlockTxsEthereumType(wb *gorocksdb.WriteBatch, height uint32, blockTxs []ethBlockTx, contracts map[string]*AddrContracts) error {
 	glog.Info("Disconnecting block ", height, " containing ", len(blockTxs), " transactions")
 	addresses := make(map[string]map[string]struct{})
-	disconnectAddress := func(btxID []byte, addrDesc, contract bchain.AddressDescriptor) error {
+	disconnectAddress := func(btxID []byte, internal bool, addrDesc, contract bchain.AddressDescriptor) error {
 		var err error
 		// do not process empty address
 		if len(addrDesc) == 0 {
@@ -382,10 +599,18 @@ func (d *RocksDB) disconnectBlockTxsEthereumType(wb *gorocksdb.WriteBatch, heigh
 				c.TotalTxs--
 			}
 			if contract == nil {
-				if c.NonContractTxs > 0 {
-					c.NonContractTxs--
+				if internal {
+					if c.InternalTxs > 0 {
+						c.InternalTxs--
+					} else {
+						glog.Warning("AddressContracts ", addrDesc, ", InternalTxs would be negative, tx ", hex.EncodeToString(btxID))
+					}
 				} else {
-					glog.Warning("AddressContracts ", addrDesc, ", EthTxs would be negative, tx ", hex.EncodeToString(btxID))
+					if c.NonContractTxs > 0 {
+						c.NonContractTxs--
+					} else {
+						glog.Warning("AddressContracts ", addrDesc, ", EthTxs would be negative, tx ", hex.EncodeToString(btxID))
+					}
 				}
 			} else {
 				i, found := findContractInAddressContracts(contract, c.Contracts)
@@ -409,21 +634,41 @@ func (d *RocksDB) disconnectBlockTxsEthereumType(wb *gorocksdb.WriteBatch, heigh
 	}
 	for i := range blockTxs {
 		blockTx := &blockTxs[i]
-		if err := disconnectAddress(blockTx.btxID, blockTx.from, nil); err != nil {
+		if err := disconnectAddress(blockTx.btxID, false, blockTx.from, nil); err != nil {
 			return err
 		}
 		// if from==to, tx is counted only once and does not have to be disconnected again
 		if !bytes.Equal(blockTx.from, blockTx.to) {
-			if err := disconnectAddress(blockTx.btxID, blockTx.to, nil); err != nil {
+			if err := disconnectAddress(blockTx.btxID, false, blockTx.to, nil); err != nil {
 				return err
 			}
 		}
+		if blockTx.internalData != nil {
+			if blockTx.internalData.internalType == bchain.CREATE {
+				if err := disconnectAddress(blockTx.btxID, true, blockTx.internalData.contract, nil); err != nil {
+					return err
+				}
+			}
+			for j := range blockTx.internalData.transfers {
+				t := &blockTx.internalData.transfers[j]
+				if err := disconnectAddress(blockTx.btxID, true, t.from, nil); err != nil {
+					return err
+				}
+				// if from==to, tx is counted only once and does not have to be disconnected again
+				if !bytes.Equal(t.from, t.to) {
+					if err := disconnectAddress(blockTx.btxID, true, t.to, nil); err != nil {
+						return err
+					}
+				}
+			}
+		}
 		for _, c := range blockTx.contracts {
-			if err := disconnectAddress(blockTx.btxID, c.addr, c.contract); err != nil {
+			if err := disconnectAddress(blockTx.btxID, false, c.addr, c.contract); err != nil {
 				return err
 			}
 		}
 		wb.DeleteCF(d.cfh[cfTransactions], blockTx.btxID)
+		wb.DeleteCF(d.cfh[cfInternalData], blockTx.btxID)
 	}
 	for a := range addresses {
 		key := packAddressKey([]byte(a), height)
