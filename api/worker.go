@@ -701,9 +701,9 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 						continue
 					}
 					// filter only transactions of this contract
-					filter.Vout = i + 1
+					filter.Vout = i + db.ContractIndexOffset
 				}
-				t, err := w.getEthereumToken(i+1, addrDesc, c.Contract, details, int(c.Txs))
+				t, err := w.getEthereumToken(i+db.ContractIndexOffset, addrDesc, c.Contract, details, int(c.Txs))
 				if err != nil {
 					return nil, nil, nil, 0, 0, 0, err
 				}

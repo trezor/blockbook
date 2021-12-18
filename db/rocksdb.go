@@ -110,8 +110,11 @@ const (
 	// BitcoinType
 	cfAddressBalance
 	cfTxAddresses
+
+	__break__
+
 	// EthereumType
-	cfAddressContracts = cfAddressBalance
+	cfAddressContracts = iota - __break__ + cfAddressBalance - 1
 	cfInternalData
 	cfContracts
 )
