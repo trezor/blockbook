@@ -36,7 +36,7 @@ func TestMain(m *testing.M) {
 	os.Exit(c)
 }
 
-func setupRocksDB(t *testing.T, parser bchain.BlockChainParser) (*db.RocksDB, *common.InternalState, string) {
+func setupRocksDB(parser bchain.BlockChainParser, chain bchain.BlockChain, t *testing.T) (*db.RocksDB, *common.InternalState, string) {
 	tmp, err := ioutil.TempDir("", "testdb")
 	if err != nil {
 		t.Fatal(err)
@@ -50,7 +50,15 @@ func setupRocksDB(t *testing.T, parser bchain.BlockChainParser) (*db.RocksDB, *c
 		t.Fatal(err)
 	}
 	d.SetInternalState(is)
-	block1 := dbtestdata.GetTestBitcoinTypeBlock1(parser)
+	// there are 2 simulated block, of height bestBlockHeight-1 and bestBlockHeight
+	bestHeight, err := chain.GetBestBlockHeight()
+	if err != nil {
+		t.Fatal(err)
+	}
+	block1, err := chain.GetBlock("", bestHeight-1)
+	if err != nil {
+		t.Fatal(err)
+	}
 	// setup internal state BlockTimes
 	for i := uint32(0); i < block1.Height; i++ {
 		is.BlockTimes = append(is.BlockTimes, 0)
@@ -59,7 +67,10 @@ func setupRocksDB(t *testing.T, parser bchain.BlockChainParser) (*db.RocksDB, *c
 	if err := d.ConnectBlock(block1); err != nil {
 		t.Fatal(err)
 	}
-	block2 := dbtestdata.GetTestBitcoinTypeBlock2(parser)
+	block2, err := chain.GetBlock("", bestHeight)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := d.ConnectBlock(block2); err != nil {
 		t.Fatal(err)
 	}
@@ -70,31 +81,22 @@ func setupRocksDB(t *testing.T, parser bchain.BlockChainParser) (*db.RocksDB, *c
 	return d, is, tmp
 }
 
-func setupPublicHTTPServer(t *testing.T) (*PublicServer, string) {
-	parser := btc.NewBitcoinParser(
-		btc.GetChainParams("test"),
-		&btc.Configuration{
-			BlockAddressesToKeep:  1,
-			XPubMagic:             70617039,
-			XPubMagicSegwitP2sh:   71979618,
-			XPubMagicSegwitNative: 73342198,
-			Slip44:                1,
-		})
+var metrics *common.Metrics
 
-	d, is, path := setupRocksDB(t, parser)
+func setupPublicHTTPServer(parser bchain.BlockChainParser, chain bchain.BlockChain, t *testing.T) (*PublicServer, string) {
+	d, is, path := setupRocksDB(parser, chain, t)
 	// setup internal state and match BestHeight to test data
 	is.Coin = "Fakecoin"
 	is.CoinLabel = "Fake Coin"
 	is.CoinShortcut = "FAKE"
 
-	metrics, err := common.GetMetrics("Fakecoin")
-	if err != nil {
-		glog.Fatal("metrics: ", err)
-	}
-
-	chain, err := dbtestdata.NewFakeBlockChain(parser)
-	if err != nil {
-		glog.Fatal("fakechain: ", err)
+	var err error
+	// metrics can be setup only once
+	if metrics == nil {
+		metrics, err = common.GetMetrics("Fakecoin")
+		if err != nil {
+			glog.Fatal("metrics: ", err)
+		}
 	}
 
 	mempool, err := chain.CreateMempool(chain)
@@ -204,14 +206,45 @@ func InitTestFiatRates(d *db.RocksDB) error {
 	}, d)
 }
 
+type httpTests struct {
+	name        string
+	r           *http.Request
+	status      int
+	contentType string
+	body        []string
+}
+
+func performHttpTests(tests []httpTests, t *testing.T, ts *httptest.Server) {
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp, err := http.DefaultClient.Do(tt.r)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != tt.status {
+				t.Errorf("StatusCode = %v, want %v", resp.StatusCode, tt.status)
+			}
+			if resp.Header["Content-Type"][0] != tt.contentType {
+				t.Errorf("Content-Type = %v, want %v", resp.Header["Content-Type"][0], tt.contentType)
+			}
+			bb, err := ioutil.ReadAll(resp.Body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			b := string(bb)
+			for _, c := range tt.body {
+				if !strings.Contains(b, c) {
+					t.Errorf("got %v, want to contain %v", b, c)
+					break
+				}
+			}
+		})
+	}
+}
+
 func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
-	tests := []struct {
-		name        string
-		r           *http.Request
-		status      int
-		contentType string
-		body        []string
-	}{
+	tests := []httpTests{
 		{
 			name:        "explorerTx",
 			r:           newGetRequest(ts.URL + "/tx/fdd824a780cbb718eeb766eb05d83fdefc793a27082cd5e67f856d69798cf7db"),
@@ -947,33 +980,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			},
 		},
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			resp, err := http.DefaultClient.Do(tt.r)
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer resp.Body.Close()
-			if resp.StatusCode != tt.status {
-				t.Errorf("StatusCode = %v, want %v", resp.StatusCode, tt.status)
-			}
-			if resp.Header["Content-Type"][0] != tt.contentType {
-				t.Errorf("Content-Type = %v, want %v", resp.Header["Content-Type"][0], tt.contentType)
-			}
-			bb, err := ioutil.ReadAll(resp.Body)
-			if err != nil {
-				t.Fatal(err)
-			}
-			b := string(bb)
-			for _, c := range tt.body {
-				if !strings.Contains(b, c) {
-					t.Errorf("got %v, want to contain %v", b, c)
-					break
-				}
-			}
-		})
-	}
+	performHttpTests(tests, t, ts)
 }
 
 func socketioTestsBitcoinType(t *testing.T, ts *httptest.Server) {
@@ -1558,7 +1565,22 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 }
 
 func Test_PublicServer_BitcoinType(t *testing.T) {
-	s, dbpath := setupPublicHTTPServer(t)
+	parser := btc.NewBitcoinParser(
+		btc.GetChainParams("test"),
+		&btc.Configuration{
+			BlockAddressesToKeep:  1,
+			XPubMagic:             70617039,
+			XPubMagicSegwitP2sh:   71979618,
+			XPubMagicSegwitNative: 73342198,
+			Slip44:                1,
+		})
+
+	chain, err := dbtestdata.NewFakeBlockChain(parser)
+	if err != nil {
+		glog.Fatal("fakechain: ", err)
+	}
+
+	s, dbpath := setupPublicHTTPServer(parser, chain, t)
 	defer closeAndDestroyPublicServer(t, s, dbpath)
 	s.ConnectFullPublicInterface()
 	// take the handler of the public server and pass it to the test server
