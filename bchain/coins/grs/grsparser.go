@@ -50,7 +50,7 @@ type GroestlcoinParser struct {
 func NewGroestlcoinParser(params *chaincfg.Params, c *btc.Configuration) *GroestlcoinParser {
 	return &GroestlcoinParser{
 		BitcoinParser: btc.NewBitcoinParser(params, c),
-		baseparser:        &bchain.BaseParser{},
+		baseparser:    &bchain.BaseParser{},
 	}
 }
 

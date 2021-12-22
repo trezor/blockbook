@@ -1,5 +1,4 @@
 //go:build unittest
-// +build unittest
 
 package server
 
@@ -566,7 +565,7 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusBadRequest,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"error":"Parameter \"timestamp\" is not a valid Unix timestamp."}`,
+				`{"error":"Parameter 'timestamp' is not a valid Unix timestamp."}`,
 			},
 		},
 		{
@@ -594,6 +593,24 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			contentType: "application/json; charset=utf-8",
 			body: []string{
 				`{"ts":1574344800,"rates":{"eur":7100}}`,
+			},
+		},
+		{
+			name:        "apiMultiFiatRates all currencies",
+			r:           newGetRequest(ts.URL + "/api/v2/multi-tickers?timestamp=1574344800,1574346615"),
+			status:      http.StatusOK,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`[{"ts":1574344800,"rates":{"eur":7100,"usd":7814.5}},{"ts":1574346615,"rates":{"eur":7134.1,"usd":7914.5}}]`,
+			},
+		},
+		{
+			name:        "apiMultiFiatRates get EUR rate",
+			r:           newGetRequest(ts.URL + "/api/v2/multi-tickers?timestamp=1574344800,1574346615&currency=eur"),
+			status:      http.StatusOK,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`[{"ts":1574344800,"rates":{"eur":7100}},{"ts":1574346615,"rates":{"eur":7134.1}}]`,
 			},
 		},
 		{

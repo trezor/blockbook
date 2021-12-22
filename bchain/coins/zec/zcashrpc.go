@@ -15,6 +15,7 @@ type ZCashRPC struct {
 	*btc.BitcoinRPC
 }
 
+// ResGetBlockChainInfo is a response to GetChainInfo request
 type ResGetBlockChainInfo struct {
 	Error  *bchain.RPCError `json:"error"`
 	Result struct {
@@ -72,6 +73,7 @@ func (z *ZCashRPC) Initialize() error {
 	return nil
 }
 
+// GetChainInfo return info about the blockchain
 func (z *ZCashRPC) GetChainInfo() (*bchain.ChainInfo, error) {
 	chainInfo := ResGetBlockChainInfo{}
 	err := z.Call(&btc.CmdGetBlockChainInfo{Method: "getblockchaininfo"}, &chainInfo)

@@ -60,6 +60,7 @@
 | Monacoin Testnet       | 19041                   | 19141                 | 18041            | 48341                       |
 | DigiByte Testnet       | 19042                   | 19142                 | 18042            | 48342                       |
 | Groestlcoin Testnet    | 19045                   | 19145                 | 18045            | 48345                       |
+| Groestlcoin Regtest    | 19046                   | 19146                 | 18046            | 48346                       |
 | PIVX Testnet           | 19049                   | 19149                 | 18049            | 48349                       |
 | Koto Testnet           | 19051                   | 19151                 | 18051            | 48351                       |
 | Decred Testnet         | 19061                   | 19161                 | 18061            | 48361                       |
