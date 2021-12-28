@@ -10,6 +10,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/bchain/coins/eth"
+	"github.com/trezor/blockbook/common"
 	"github.com/trezor/blockbook/tests/dbtestdata"
 )
 
@@ -101,7 +102,7 @@ func verifyAfterEthereumTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect boo
 	}
 }
 
-func verifyAfterEthereumTypeBlock2(t *testing.T, d *RocksDB) {
+func verifyAfterEthereumTypeBlock2(t *testing.T, d *RocksDB, wantBlockInternalDataError bool) {
 	if err := checkColumn(d, cfHeight, []keyPair{
 		{
 			"0041eee8",
@@ -202,6 +203,22 @@ func verifyAfterEthereumTypeBlock2(t *testing.T, d *RocksDB) {
 			t.Fatal(err)
 		}
 	}
+
+	var internalDataError []keyPair
+	if wantBlockInternalDataError {
+		internalDataError = []keyPair{
+			{
+				"0041eee9",
+				"2b57e15e93a0ed197417a34c2498b7187df79099572c04a6b6e6ff418f74e6ee" + "00" + hex.EncodeToString([]byte("test error")),
+				nil,
+			},
+		}
+	}
+	if err := checkColumn(d, cfBlockInternalDataErrors, internalDataError); err != nil {
+		{
+			t.Fatal(err)
+		}
+	}
 }
 
 func formatInternalData(in *bchain.EthereumInternalData) *bchain.EthereumInternalData {
@@ -247,12 +264,14 @@ func TestRocksDB_Index_EthereumType(t *testing.T) {
 		t.Fatal("Expecting is.BlockTimes 1, got ", len(d.is.BlockTimes))
 	}
 
-	// connect 2nd block
+	// connect 2nd block, simulate InternalDataError
 	block2 := dbtestdata.GetTestEthereumTypeBlock2(d.chainParser)
+	block2.CoinSpecificData = &bchain.EthereumBlockSpecificData{InternalDataError: "test error"}
 	if err := d.ConnectBlock(block2); err != nil {
 		t.Fatal(err)
 	}
-	verifyAfterEthereumTypeBlock2(t, d)
+	verifyAfterEthereumTypeBlock2(t, d, true)
+	block2.CoinSpecificData = nil
 
 	if len(d.is.BlockTimes) != 2 {
 		t.Fatal("Expecting is.BlockTimes 2, got ", len(d.is.BlockTimes))
@@ -350,7 +369,7 @@ func TestRocksDB_Index_EthereumType(t *testing.T) {
 	if err == nil || err.Error() != "Cannot disconnect blocks with height 4321000 and lower. It is necessary to rebuild index." {
 		t.Fatal(err)
 	}
-	verifyAfterEthereumTypeBlock2(t, d)
+	verifyAfterEthereumTypeBlock2(t, d, true)
 
 	// disconnect the 2nd block, verify that the db contains only data from the 1st block with restored unspentTxs
 	// and that the cached tx is removed
@@ -373,10 +392,61 @@ func TestRocksDB_Index_EthereumType(t *testing.T) {
 	if err := d.ConnectBlock(block2); err != nil {
 		t.Fatal(err)
 	}
-	verifyAfterEthereumTypeBlock2(t, d)
+	verifyAfterEthereumTypeBlock2(t, d, false)
 
 	if len(d.is.BlockTimes) != 2 {
 		t.Fatal("Expecting is.BlockTimes 2, got ", len(d.is.BlockTimes))
 	}
 
+}
+
+func Test_BulkConnect_EthereumType(t *testing.T) {
+	d := setupRocksDB(t, &testEthereumParser{
+		EthereumParser: ethereumTestnetParser(),
+	})
+	defer closeAndDestroyRocksDB(t, d)
+
+	bc, err := d.InitBulkConnect()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if d.is.DbState != common.DbStateInconsistent {
+		t.Fatal("DB not in DbStateInconsistent")
+	}
+
+	if len(d.is.BlockTimes) != 0 {
+		t.Fatal("Expecting is.BlockTimes 0, got ", len(d.is.BlockTimes))
+	}
+
+	if err := bc.ConnectBlock(dbtestdata.GetTestEthereumTypeBlock1(d.chainParser), false); err != nil {
+		t.Fatal(err)
+	}
+	if err := checkColumn(d, cfBlockTxs, []keyPair{}); err != nil {
+		{
+			t.Fatal(err)
+		}
+	}
+
+	// connect 2nd block, simulate InternalDataError
+	block2 := dbtestdata.GetTestEthereumTypeBlock2(d.chainParser)
+	block2.CoinSpecificData = &bchain.EthereumBlockSpecificData{InternalDataError: "test error"}
+	if err := bc.ConnectBlock(block2, true); err != nil {
+		t.Fatal(err)
+	}
+	block2.CoinSpecificData = nil
+
+	if err := bc.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	if d.is.DbState != common.DbStateOpen {
+		t.Fatal("DB not in DbStateOpen")
+	}
+
+	verifyAfterEthereumTypeBlock2(t, d, true)
+
+	if len(d.is.BlockTimes) != 4321002 {
+		t.Fatal("Expecting is.BlockTimes 4321002, got ", len(d.is.BlockTimes))
+	}
 }

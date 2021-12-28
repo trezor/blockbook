@@ -117,6 +117,8 @@ const (
 	cfAddressContracts = iota - __break__ + cfAddressBalance - 1
 	cfInternalData
 	cfContracts
+	cfFunctionSignatures
+	cfBlockInternalDataErrors
 )
 
 // common columns
@@ -125,7 +127,7 @@ var cfBaseNames = []string{"default", "height", "addresses", "blockTxs", "transa
 
 // type specific columns
 var cfNamesBitcoinType = []string{"addressBalance", "txAddresses"}
-var cfNamesEthereumType = []string{"addressContracts", "internalData", "contracts"}
+var cfNamesEthereumType = []string{"addressContracts", "internalData", "contracts", "functionSignatures", "blockInternalDataErrors"}
 
 func openDB(path string, c *gorocksdb.Cache, openFiles int) (*gorocksdb.DB, []*gorocksdb.ColumnFamilyHandle, error) {
 	// opts with bloom filter
@@ -478,6 +480,15 @@ func (d *RocksDB) ConnectBlock(block *bchain.Block) error {
 		}
 		if err := d.storeAddressContracts(wb, addressContracts); err != nil {
 			return err
+		}
+		if err := d.storeInternalDataEthereumType(wb, blockTxs); err != nil {
+			return err
+		}
+		blockSpecificData, _ := block.CoinSpecificData.(*bchain.EthereumBlockSpecificData)
+		if blockSpecificData != nil && blockSpecificData.InternalDataError != "" {
+			if err := d.storeBlockInternalDataErrorEthereumType(wb, block, blockSpecificData.InternalDataError); err != nil {
+				return err
+			}
 		}
 		if err := d.storeAndCleanupBlockTxsEthereumType(wb, block, blockTxs); err != nil {
 			return err
