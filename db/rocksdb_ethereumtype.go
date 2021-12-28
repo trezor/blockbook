@@ -419,6 +419,16 @@ func (d *RocksDB) GetEthereumInternalData(txid string) (*bchain.EthereumInternal
 	return d.unpackEthInternalData(buf)
 }
 
+func (d *RocksDB) storeInternalDataEthereumType(wb *gorocksdb.WriteBatch, blockTxs []ethBlockTx) error {
+	for i := range blockTxs {
+		blockTx := &blockTxs[i]
+		if blockTx.internalData != nil {
+		wb.PutCF(d.cfh[cfInternalData], blockTx.btxID, packEthInternalData(blockTx.internalData))
+		}
+	}
+	return nil
+}
+
 func (d *RocksDB) storeAndCleanupBlockTxsEthereumType(wb *gorocksdb.WriteBatch, block *bchain.Block, blockTxs []ethBlockTx) error {
 	pl := d.chainParser.PackedTxidLen()
 	buf := make([]byte, 0, (pl+2*eth.EthereumTypeAddressDescriptorLen)*len(blockTxs))
@@ -438,7 +448,6 @@ func (d *RocksDB) storeAndCleanupBlockTxsEthereumType(wb *gorocksdb.WriteBatch, 
 		// internal data - store the number of addresses, with odd number the CREATE tx type
 		var internalDataTransfers uint
 		if blockTx.internalData != nil {
-			wb.PutCF(d.cfh[cfInternalData], blockTx.btxID, packEthInternalData(blockTx.internalData))
 			internalDataTransfers = uint(len(blockTx.internalData.transfers)) * 2
 			if blockTx.internalData.internalType == bchain.CREATE {
 				internalDataTransfers++
@@ -468,6 +477,22 @@ func (d *RocksDB) storeAndCleanupBlockTxsEthereumType(wb *gorocksdb.WriteBatch, 
 	key := packUint(block.Height)
 	wb.PutCF(d.cfh[cfBlockTxs], key, buf)
 	return d.cleanupBlockTxs(wb, block)
+}
+
+func (d *RocksDB) storeBlockInternalDataErrorEthereumType(wb *gorocksdb.WriteBatch, block *bchain.Block, message string) error {
+	key := packUint(block.Height)
+	txid, err := d.chainParser.PackTxid(block.Hash)
+	if err != nil {
+		return err
+	}
+	m := []byte(message)
+	buf := make([]byte, 0, len(txid)+len(m)+1)
+	// the stored structure is txid+retry count (1 byte)+error message
+	buf = append(buf, txid...)
+	buf = append(buf, 0)
+	buf = append(buf, m...)
+	wb.PutCF(d.cfh[cfBlockInternalDataErrors], key, buf)
+	return nil
 }
 
 func (d *RocksDB) getBlockTxsEthereumType(height uint32) ([]ethBlockTx, error) {
@@ -702,6 +727,7 @@ func (d *RocksDB) DisconnectBlockRangeEthereumType(lower uint32, higher uint32) 
 		key := packUint(height)
 		wb.DeleteCF(d.cfh[cfBlockTxs], key)
 		wb.DeleteCF(d.cfh[cfHeight], key)
+		wb.DeleteCF(d.cfh[cfBlockInternalDataErrors], key)
 	}
 	d.storeAddressContracts(wb, contracts)
 	err := d.db.Write(d.wo, wb)

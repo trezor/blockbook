@@ -83,3 +83,7 @@ type EthereumSpecificData struct {
 	InternalData *EthereumInternalData `json:"internalData,omitempty"`
 	Receipt      *RpcReceipt           `json:"receipt,omitempty"`
 }
+
+type EthereumBlockSpecificData struct {
+	InternalDataError string
+}

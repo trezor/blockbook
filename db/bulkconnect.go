@@ -25,6 +25,7 @@ type BulkConnect struct {
 	chainType          bchain.ChainType
 	bulkAddresses      []bulkAddresses
 	bulkAddressesCount int
+	ethBlockTxs        []ethBlockTx
 	txAddressesMap     map[string]*TxAddresses
 	balances           map[string]*AddrBalance
 	addressContracts   map[string]*AddrContracts
@@ -280,6 +281,7 @@ func (b *BulkConnect) connectBlockEthereumType(block *bchain.Block, storeBlockTx
 	if err != nil {
 		return err
 	}
+	b.ethBlockTxs = append(b.ethBlockTxs, blockTxs...)
 	var storeAddrContracts chan error
 	var sa bool
 	if len(b.addressContracts) > maxBulkAddrContracts {
@@ -309,6 +311,16 @@ func (b *BulkConnect) connectBlockEthereumType(block *bchain.Block, storeBlockTx
 				return err
 			}
 		}
+		if err := b.d.storeInternalDataEthereumType(wb, b.ethBlockTxs); err != nil {
+			return err
+		}
+		b.ethBlockTxs = b.ethBlockTxs[:0]
+		blockSpecificData, _ := block.CoinSpecificData.(*bchain.EthereumBlockSpecificData)
+		if blockSpecificData != nil && blockSpecificData.InternalDataError != "" {
+			if err := b.d.storeBlockInternalDataErrorEthereumType(wb, block, blockSpecificData.InternalDataError); err != nil {
+				return err
+			}
+		}
 		if storeBlockTxs {
 			if err := b.d.storeAndCleanupBlockTxsEthereumType(wb, block, blockTxs); err != nil {
 				return err
@@ -319,6 +331,16 @@ func (b *BulkConnect) connectBlockEthereumType(block *bchain.Block, storeBlockTx
 		}
 		if bac > b.bulkAddressesCount {
 			glog.Info("rocksdb: height ", b.height, ", stored ", bac, " addresses, done in ", time.Since(start))
+		}
+	} else {
+		// if there is InternalDataError, store it
+		blockSpecificData, _ := block.CoinSpecificData.(*bchain.EthereumBlockSpecificData)
+		if blockSpecificData != nil && blockSpecificData.InternalDataError != "" {
+			wb := gorocksdb.NewWriteBatch()
+			defer wb.Destroy()
+			if err := b.d.storeBlockInternalDataErrorEthereumType(wb, block, blockSpecificData.InternalDataError); err != nil {
+				return err
+			}
 		}
 	}
 	if storeAddrContracts != nil {
