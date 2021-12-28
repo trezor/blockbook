@@ -554,7 +554,6 @@ func (b *EthereumRPC) processCallTrace(call rpcCallTrace, d *bchain.EthereumInte
 }
 
 // getInternalDataForBlock fetches debug trace using callTracer, extracts internal transfers and creations and destructions of contracts
-// by design, it never returns error so that missing internal transactions do not stop the rest of the blockchain import
 func (b *EthereumRPC) getInternalDataForBlock(blockHash string, transactions []bchain.RpcTransaction) ([]bchain.EthereumInternalData, error) {
 	data := make([]bchain.EthereumInternalData, len(transactions))
 	if b.ChainConfig.ProcessInternalTransactions {
@@ -564,11 +563,11 @@ func (b *EthereumRPC) getInternalDataForBlock(blockHash string, transactions []b
 		err := b.rpc.CallContext(ctx, &trace, "debug_traceBlockByHash", blockHash, map[string]interface{}{"tracer": "callTracer"})
 		if err != nil {
 			glog.Error("debug_traceBlockByHash block ", blockHash, ", error ", err)
-			return data, nil
+			return data, err
 		}
 		if len(trace) != len(data) {
 			glog.Error("debug_traceBlockByHash block ", blockHash, ", error: trace length does not match block length ", len(trace), "!=", len(data))
-			return data, nil
+			return data, err
 		}
 		for i, result := range trace {
 			r := &result.Result
@@ -610,10 +609,11 @@ func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error
 	if err != nil {
 		return nil, err
 	}
-
+	// error fetching internal data does not stop the block processing
+	var blockSpecificData *bchain.EthereumBlockSpecificData
 	internalData, err := b.getInternalDataForBlock(head.Hash, body.Transactions)
 	if err != nil {
-		return nil, err
+		blockSpecificData = &bchain.EthereumBlockSpecificData{InternalDataError: err.Error()}
 	}
 
 	btxs := make([]bchain.Tx, len(body.Transactions))
@@ -629,8 +629,9 @@ func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error
 		}
 	}
 	bbk := bchain.Block{
-		BlockHeader: *bbh,
-		Txs:         btxs,
+		BlockHeader:      *bbh,
+		Txs:              btxs,
+		CoinSpecificData: blockSpecificData,
 	}
 	return &bbk, nil
 }
