@@ -116,7 +116,8 @@ type MempoolTx struct {
 // Block is block header and list of transactions
 type Block struct {
 	BlockHeader
-	Txs []Tx `json:"tx"`
+	Txs              []Tx        `json:"tx"`
+	CoinSpecificData interface{} `json:"-"`
 }
 
 // BlockHeader contains limited data (as needed for indexing) from backend block header
