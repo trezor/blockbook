@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"math/big"
 	"strconv"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/golang/protobuf/proto"
@@ -88,7 +89,7 @@ func (p *EthereumParser) ethTxToTx(tx *bchain.RpcTransaction, receipt *bchain.Rp
 	}
 	if internalData != nil {
 		// ignore empty internal data
-		if internalData.Type == bchain.CALL && len(internalData.Transfers) == 0 {
+		if internalData.Type == bchain.CALL && len(internalData.Transfers) == 0 && len(internalData.Error) == 0 {
 			internalData = nil
 		} else {
 			if fixEIP55 {
@@ -504,4 +505,46 @@ func GetEthereumTxDataFromSpecificData(coinSpecificData interface{}) *EthereumTx
 		}
 	}
 	return &etd
+}
+
+const errorOutputSignature = "08c379a0"
+
+// ParseErrorFromOutput takes output field from internal transaction data and extracts an error message from it
+// the output must have errorOutputSignature to be parsed
+func ParseErrorFromOutput(output string) string {
+	if has0xPrefix(output) {
+		output = output[2:]
+	}
+	if len(output) < 8+64+64+64 || output[:8] != errorOutputSignature {
+		return ""
+	}
+	return parseErc20StringProperty(nil, output[8:])
+}
+
+// PackInternalTransactionError packs common error messages to single byte to save DB space
+func PackInternalTransactionError(e string) string {
+	if e == "execution reverted" {
+		return "\x01"
+	}
+	if e == "out of gas" {
+		return "\x02"
+	}
+	if e == "contract creation code storage out of gas" {
+		return "\x03"
+	}
+	if e == "max code size exceeded" {
+		return "\x04"
+	}
+
+	return e
+}
+
+// UnpackInternalTransactionError unpacks common error messages packed by PackInternalTransactionError
+func UnpackInternalTransactionError(data []byte) string {
+	e := string(data)
+	e = strings.ReplaceAll(e, "\x01", "Reverted. ")
+	e = strings.ReplaceAll(e, "\x02", "Out of gas. ")
+	e = strings.ReplaceAll(e, "\x03", "Contract creation code storage out of gas. ")
+	e = strings.ReplaceAll(e, "\x04", "Max code size exceeded. ")
+	return strings.TrimSpace(e)
 }

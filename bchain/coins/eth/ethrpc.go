@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -512,19 +513,20 @@ func (b *EthereumRPC) getERC20EventsForBlock(blockNumber string) (map[string][]*
 
 type rpcCallTrace struct {
 	// CREATE, CREATE2, SELFDESTRUCT, CALL, CALLCODE, DELEGATECALL, STATICCALL
-	Type  string         `json:"type"`
-	From  string         `json:"from"`
-	To    string         `json:"to"`
-	Value string         `json:"value"`
-	Error string         `json:"error"`
-	Calls []rpcCallTrace `json:"calls"`
+	Type   string         `json:"type"`
+	From   string         `json:"from"`
+	To     string         `json:"to"`
+	Value  string         `json:"value"`
+	Error  string         `json:"error"`
+	Output string         `json:"output"`
+	Calls  []rpcCallTrace `json:"calls"`
 }
 
 type rpcTraceResult struct {
 	Result rpcCallTrace `json:"result"`
 }
 
-func (b *EthereumRPC) processCallTrace(call rpcCallTrace, d *bchain.EthereumInternalData) {
+func (b *EthereumRPC) processCallTrace(call *rpcCallTrace, d *bchain.EthereumInternalData) {
 	value, err := hexutil.DecodeBig(call.Value)
 	if call.Type == "CREATE" {
 		d.Transfers = append(d.Transfers, bchain.EthereumInternalTransfer{
@@ -548,8 +550,11 @@ func (b *EthereumRPC) processCallTrace(call rpcCallTrace, d *bchain.EthereumInte
 			To:    call.To,
 		})
 	}
+	if call.Error != "" {
+		d.Error = call.Error
+	}
 	for i := range call.Calls {
-		b.processCallTrace(call.Calls[i], d)
+		b.processCallTrace(&call.Calls[i], d)
 	}
 }
 
@@ -579,7 +584,28 @@ func (b *EthereumRPC) getInternalDataForBlock(blockHash string, transactions []b
 				d.Type = bchain.SELFDESTRUCT
 			}
 			for j := range r.Calls {
-				b.processCallTrace(r.Calls[j], d)
+				b.processCallTrace(&r.Calls[j], d)
+			}
+			if r.Error != "" {
+				baseError := PackInternalTransactionError(r.Error)
+				if len(baseError) > 1 {
+					// n, _ := ethNumber(transactions[i].BlockNumber)
+					// glog.Infof("Internal Data Error %d %s: unknown base error %s", n, transactions[i].Hash, baseError)
+					baseError = strings.ToUpper(baseError[:1]) + baseError[1:] + ". "
+				}
+				outputError := ParseErrorFromOutput(r.Output)
+				if len(outputError) > 0 {
+					d.Error = baseError + strings.ToUpper(outputError[:1]) + outputError[1:]
+				} else {
+					traceError := PackInternalTransactionError(d.Error)
+					if traceError == baseError {
+						d.Error = baseError
+					} else {
+						d.Error = baseError + traceError
+					}
+				}
+				// n, _ := ethNumber(transactions[i].BlockNumber)
+				// glog.Infof("Internal Data Error %d %s: %s", n, transactions[i].Hash, UnpackInternalTransactionError([]byte(d.Error)))
 			}
 		}
 	}
@@ -719,7 +745,6 @@ func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 		if err != nil {
 			return nil, errors.Annotatef(err, "txid %v", txid)
 		}
-		// TODO - handle internal tx
 		btx, err = b.Parser.ethTxToTx(tx, &receipt, nil, time, confirmations, true)
 		if err != nil {
 			return nil, errors.Annotatef(err, "txid %v", txid)

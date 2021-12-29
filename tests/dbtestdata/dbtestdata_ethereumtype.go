@@ -54,6 +54,12 @@ var EthTx2InternalData = &bchain.EthereumInternalData{
 	},
 }
 
+var EthTx3InternalData = &bchain.EthereumInternalData{
+	Type:      bchain.CALL,
+	Transfers: []bchain.EthereumInternalTransfer{},
+	Error:     "\x01Something wrong",
+}
+
 var EthTx4InternalData = &bchain.EthereumInternalData{
 	Type:     bchain.CREATE,
 	Contract: EthAddrContract0d,
@@ -127,7 +133,8 @@ func GetTestEthereumTypeBlock2(parser bchain.BlockChainParser) *bchain.Block {
 			Confirmations: 1,
 		},
 		Txs: unpackTxs([]packedAndInternal{{
-			packed: EthTx3Packed,
+			packed:   EthTx3Packed,
+			internal: EthTx3InternalData,
 		}, {
 			packed:   EthTx4Packed,
 			internal: EthTx4InternalData,

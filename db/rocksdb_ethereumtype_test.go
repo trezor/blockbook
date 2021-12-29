@@ -164,6 +164,11 @@ func verifyAfterEthereumTypeBlock2(t *testing.T, d *RocksDB, wantBlockInternalDa
 			nil,
 		},
 		{
+			dbtestdata.EthTxidB2T1,
+			"00" + hex.EncodeToString([]byte(dbtestdata.EthTx3InternalData.Error)),
+			nil,
+		},
+		{
 			dbtestdata.EthTxidB2T2,
 			"05" + dbtestdata.EthAddrContract0d +
 				"00" + dbtestdata.EthAddr4b + dbtestdata.EthAddr9f + "030f424a" +
@@ -231,6 +236,7 @@ func formatInternalData(in *bchain.EthereumInternalData) *bchain.EthereumInterna
 		t.From = eth.EIP55AddressFromAddress(t.From)
 		t.To = eth.EIP55AddressFromAddress(t.To)
 	}
+	out.Error = eth.UnpackInternalTransactionError([]byte(in.Error))
 	return &out
 }
 
@@ -295,6 +301,10 @@ func TestRocksDB_Index_EthereumType(t *testing.T) {
 	if err != nil || !reflect.DeepEqual(id, formatInternalData(dbtestdata.EthTx2InternalData)) {
 		t.Errorf("GetEthereumInternalData(%s) = %+v, want %+v, err %v", dbtestdata.EthTxidB1T2, id, formatInternalData(dbtestdata.EthTx2InternalData), err)
 	}
+	id, err = d.GetEthereumInternalData(dbtestdata.EthTxidB2T1)
+	if err != nil || !reflect.DeepEqual(id, formatInternalData(dbtestdata.EthTx3InternalData)) {
+		t.Errorf("GetEthereumInternalData(%s) = %+v, want %+v, err %v", dbtestdata.EthTxidB2T1, id, formatInternalData(dbtestdata.EthTx3InternalData), err)
+	}
 	id, err = d.GetEthereumInternalData(dbtestdata.EthTxidB2T2)
 	if err != nil || !reflect.DeepEqual(id, formatInternalData(dbtestdata.EthTx4InternalData)) {
 		t.Errorf("GetEthereumInternalData(%s) = %+v, want %+v, err %v", dbtestdata.EthTxidB2T2, id, formatInternalData(dbtestdata.EthTx4InternalData), err)
@@ -348,7 +358,15 @@ func TestRocksDB_Index_EthereumType(t *testing.T) {
 
 	// Test tx caching functionality, leave one tx in db to test cleanup in DisconnectBlock
 	testTxCache(t, d, block1, &block1.Txs[0])
+	// InternalData are not packed and stored in DB, remove them so that the test does not fail
+	esd, _ := block2.Txs[0].CoinSpecificData.(bchain.EthereumSpecificData)
+	eid := esd.InternalData
+	esd.InternalData = nil
+	block2.Txs[0].CoinSpecificData = esd
 	testTxCache(t, d, block2, &block2.Txs[0])
+	// restore InternalData
+	esd.InternalData = eid
+	block2.Txs[0].CoinSpecificData = esd
 	if err = d.PutTx(&block2.Txs[1], block2.Height, block2.Txs[1].Blocktime); err != nil {
 		t.Fatal(err)
 	}
