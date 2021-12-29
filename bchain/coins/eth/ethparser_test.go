@@ -400,3 +400,97 @@ func TestEthereumParser_GetEthereumTxData(t *testing.T) {
 		})
 	}
 }
+
+func TestEthereumParser_ParseErrorFromOutput(t *testing.T) {
+	tests := []struct {
+		name   string
+		output string
+		want   string
+	}{
+		{
+			name:   "ParseErrorFromOutput 1",
+			output: "0x08c379a000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000031546f74616c206e756d626572206f662067726f757073206d7573742062652067726561746572207468616e207a65726f2e000000000000000000000000000000",
+			want:   "Total number of groups must be greater than zero.",
+		},
+		{
+			name:   "ParseErrorFromOutput 2",
+			output: "0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000126e6f7420656e6f7567682062616c616e63650000000000000000000000000000",
+			want:   "not enough balance",
+		},
+		{
+			name:   "ParseErrorFromOutput empty",
+			output: "",
+			want:   "",
+		},
+		{
+			name:   "ParseErrorFromOutput short",
+			output: "0x08c379a000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000012",
+			want:   "",
+		},
+		{
+			name:   "ParseErrorFromOutput invalid signature",
+			output: "0x08c379b0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000126e6f7420656e6f7567682062616c616e63650000000000000000000000000000",
+			want:   "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ParseErrorFromOutput(tt.output)
+			if got != tt.want {
+				t.Errorf("EthereumParser.ParseErrorFromOutput() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestEthereumParser_PackInternalTransactionError_UnpackInternalTransactionError(t *testing.T) {
+	tests := []struct {
+		name     string
+		original string
+		packed   string
+		unpacked string
+	}{
+		{
+			name:     "execution reverted",
+			original: "execution reverted",
+			packed:   "\x01",
+			unpacked: "Reverted.",
+		},
+		{
+			name:     "out of gas",
+			original: "out of gas",
+			packed:   "\x02",
+			unpacked: "Out of gas.",
+		},
+		{
+			name:     "contract creation code storage out of gas",
+			original: "contract creation code storage out of gas",
+			packed:   "\x03",
+			unpacked: "Contract creation code storage out of gas.",
+		},
+		{
+			name:     "max code size exceeded",
+			original: "max code size exceeded",
+			packed:   "\x04",
+			unpacked: "Max code size exceeded.",
+		},
+		{
+			name:     "unknown error",
+			original: "unknown error",
+			packed:   "unknown error",
+			unpacked: "unknown error",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			packed := PackInternalTransactionError(tt.original)
+			if packed != tt.packed {
+				t.Errorf("EthereumParser.PackInternalTransactionError() = %v, want %v", packed, tt.packed)
+			}
+			unpacked := UnpackInternalTransactionError([]byte(packed))
+			if unpacked != tt.unpacked {
+				t.Errorf("EthereumParser.UnpackInternalTransactionError() = %v, want %v", unpacked, tt.unpacked)
+			}
+		})
+	}
+}
