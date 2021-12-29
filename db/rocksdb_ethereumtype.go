@@ -189,6 +189,7 @@ type ethInternalData struct {
 	internalType bchain.EthereumInternalTransactionType
 	contract     bchain.AddressDescriptor
 	transfers    []ethInternalTransfer
+	errorMsg     string
 }
 
 type ethBlockTx struct {
@@ -242,6 +243,7 @@ func (d *RocksDB) processAddressesEthereumType(block *bchain.Block, addresses ad
 		if eid.InternalData != nil {
 			blockTx.internalData = &ethInternalData{
 				internalType: eid.InternalData.Type,
+				errorMsg:     eid.InternalData.Error,
 			}
 			// index contract creation
 			if eid.InternalData.Type == bchain.CREATE {
@@ -365,6 +367,9 @@ func packEthInternalData(data *ethInternalData) []byte {
 		l = packBigint(&t.value, varBuf)
 		buf = append(buf, varBuf[:l]...)
 	}
+	if len(data.errorMsg) > 0 {
+		buf = append(buf, []byte(data.errorMsg)...)
+	}
 	return buf
 }
 
@@ -398,6 +403,7 @@ func (d *RocksDB) unpackEthInternalData(buf []byte) (*bchain.EthereumInternalDat
 		t.Value, ll = unpackBigint(buf[l:])
 		l += ll
 	}
+	id.Error = eth.UnpackInternalTransactionError(buf[l:])
 	return &id, nil
 }
 
@@ -423,7 +429,7 @@ func (d *RocksDB) storeInternalDataEthereumType(wb *gorocksdb.WriteBatch, blockT
 	for i := range blockTxs {
 		blockTx := &blockTxs[i]
 		if blockTx.internalData != nil {
-		wb.PutCF(d.cfh[cfInternalData], blockTx.btxID, packEthInternalData(blockTx.internalData))
+			wb.PutCF(d.cfh[cfInternalData], blockTx.btxID, packEthInternalData(blockTx.internalData))
 		}
 	}
 	return nil

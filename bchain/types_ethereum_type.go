@@ -27,6 +27,7 @@ type EthereumInternalData struct {
 	Type      EthereumInternalTransactionType `json:"type"`
 	Contract  string                          `json:"contract,omitempty"`
 	Transfers []EthereumInternalTransfer      `json:"transfers,omitempty"`
+	Error     string
 }
 
 // Erc20Contract contains info about ERC20 contract
