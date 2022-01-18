@@ -4,6 +4,7 @@ package db
 
 import (
 	"encoding/hex"
+	"math/big"
 	"reflect"
 	"testing"
 
@@ -22,6 +23,12 @@ func ethereumTestnetParser() *eth.EthereumParser {
 	return eth.NewEthereumParser(1)
 }
 
+func bigintFromStringToHex(s string) string {
+	var b big.Int
+	b.SetString(s, 0)
+	return bigintToHex(&b)
+}
+
 func verifyAfterEthereumTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect bool) {
 	if err := checkColumn(d, cfHeight, []keyPair{
 		{
@@ -35,7 +42,7 @@ func verifyAfterEthereumTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect boo
 		}
 	}
 	if err := checkColumn(d, cfAddresses, []keyPair{
-		{addressKeyHex(dbtestdata.EthAddr3e, 4321000, d), txIndexesHex(dbtestdata.EthTxidB1T2, []int32{^1, 1, ^1}) + txIndexesHex(dbtestdata.EthTxidB1T1, []int32{^0}), nil},
+		{addressKeyHex(dbtestdata.EthAddr3e, 4321000, d), txIndexesHex(dbtestdata.EthTxidB1T2, []int32{^1, 1}) + txIndexesHex(dbtestdata.EthTxidB1T1, []int32{^0}), nil},
 		{addressKeyHex(dbtestdata.EthAddr55, 4321000, d), txIndexesHex(dbtestdata.EthTxidB1T2, []int32{2}) + txIndexesHex(dbtestdata.EthTxidB1T1, []int32{0}), nil},
 		{addressKeyHex(dbtestdata.EthAddr20, 4321000, d), txIndexesHex(dbtestdata.EthTxidB1T2, []int32{^0, ^2}), nil},
 		{addressKeyHex(dbtestdata.EthAddr9f, 4321000, d), txIndexesHex(dbtestdata.EthTxidB1T2, []int32{^1, 1}), nil},
@@ -48,8 +55,14 @@ func verifyAfterEthereumTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect boo
 
 	if err := checkColumn(d, cfAddressContracts, []keyPair{
 		{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr3e, d.chainParser), "020102", nil},
-		{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr55, d.chainParser), "020100" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser) + "01", nil},
-		{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr20, d.chainParser), "010100" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser) + "01", nil},
+		{
+			dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr55, d.chainParser),
+			"020100" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser) + varuintToHex(1<<2+uint(bchain.ERC20)) + bigintFromStringToHex("10000000000000000000000"), nil,
+		},
+		{
+			dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr20, d.chainParser),
+			"010100" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser) + varuintToHex(1<<2+uint(bchain.ERC20)) + bigintToHex(big.NewInt(0)), nil,
+		},
 		{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr9f, d.chainParser), "010002", nil},
 		{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser), "010101", nil},
 	}); err != nil {
@@ -81,16 +94,10 @@ func verifyAfterEthereumTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect boo
 			{
 				"0041eee8",
 				dbtestdata.EthTxidB1T1 +
-					dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr3e, d.chainParser) + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr55, d.chainParser) + "00" + "00" +
+					dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr3e, d.chainParser) + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr55, d.chainParser) + "00" +
 					dbtestdata.EthTxidB1T2 +
 					dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr20, d.chainParser) + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser) +
-					"06" +
-					dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr9f, d.chainParser) + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser) +
-					dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr3e, d.chainParser) + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr9f, d.chainParser) +
-					dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr3e, d.chainParser) + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr3e, d.chainParser) +
-					"02" +
-					dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr20, d.chainParser) + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser) +
-					dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr55, d.chainParser) + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser),
+					"01" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr20, d.chainParser) + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr55, d.chainParser) + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser) + varuintToHex(uint(bchain.ERC20)) + bigintFromStringToHex("10000000000000000000000"),
 				nil,
 			},
 		}
@@ -111,7 +118,7 @@ func verifyAfterEthereumTypeBlock2(t *testing.T, d *RocksDB, wantBlockInternalDa
 		},
 		{
 			"0041eee9",
-			"2b57e15e93a0ed197417a34c2498b7187df79099572c04a6b6e6ff418f74e6ee" + uintToHex(1534859988) + varuintToHex(2) + varuintToHex(2345678),
+			"2b57e15e93a0ed197417a34c2498b7187df79099572c04a6b6e6ff418f74e6ee" + uintToHex(1534859988) + varuintToHex(6) + varuintToHex(2345678),
 			nil,
 		},
 	}); err != nil {
@@ -120,18 +127,27 @@ func verifyAfterEthereumTypeBlock2(t *testing.T, d *RocksDB, wantBlockInternalDa
 		}
 	}
 	if err := checkColumn(d, cfAddresses, []keyPair{
-		{addressKeyHex(dbtestdata.EthAddr3e, 4321000, d), txIndexesHex(dbtestdata.EthTxidB1T2, []int32{^1, 1, ^1}) + txIndexesHex(dbtestdata.EthTxidB1T1, []int32{^0}), nil},
+		{addressKeyHex(dbtestdata.EthAddr3e, 4321000, d), txIndexesHex(dbtestdata.EthTxidB1T2, []int32{^1, 1}) + txIndexesHex(dbtestdata.EthTxidB1T1, []int32{^0}), nil},
 		{addressKeyHex(dbtestdata.EthAddr55, 4321000, d), txIndexesHex(dbtestdata.EthTxidB1T2, []int32{2}) + txIndexesHex(dbtestdata.EthTxidB1T1, []int32{0}), nil},
 		{addressKeyHex(dbtestdata.EthAddr20, 4321000, d), txIndexesHex(dbtestdata.EthTxidB1T2, []int32{^0, ^2}), nil},
 		{addressKeyHex(dbtestdata.EthAddr9f, 4321000, d), txIndexesHex(dbtestdata.EthTxidB1T2, []int32{^1, 1}), nil},
 		{addressKeyHex(dbtestdata.EthAddrContract4a, 4321000, d), txIndexesHex(dbtestdata.EthTxidB1T2, []int32{0, 1}), nil},
-		{addressKeyHex(dbtestdata.EthAddr55, 4321001, d), txIndexesHex(dbtestdata.EthTxidB2T2, []int32{^3, 2}) + txIndexesHex(dbtestdata.EthTxidB2T1, []int32{^0}), nil},
-		{addressKeyHex(dbtestdata.EthAddr9f, 4321001, d), txIndexesHex(dbtestdata.EthTxidB2T2, []int32{1, 1}) + txIndexesHex(dbtestdata.EthTxidB2T1, []int32{0}), nil},
+
+		{addressKeyHex(dbtestdata.EthAddrZero, 4321001, d), txIndexesHex(dbtestdata.EthTxidB2T5, []int32{transferFrom}), nil},
+		{addressKeyHex(dbtestdata.EthAddr3e, 4321001, d), txIndexesHex(dbtestdata.EthTxidB2T4, []int32{^0, 2}), nil},
 		{addressKeyHex(dbtestdata.EthAddr4b, 4321001, d), txIndexesHex(dbtestdata.EthTxidB2T2, []int32{^0, ^1, 2, ^3, 3, ^2}), nil},
-		{addressKeyHex(dbtestdata.EthAddr7b, 4321001, d), txIndexesHex(dbtestdata.EthTxidB2T2, []int32{^2, 3}), nil},
+		{addressKeyHex(dbtestdata.EthAddr55, 4321001, d), txIndexesHex(dbtestdata.EthTxidB2T6, []int32{0, ^0, 4, ^4}) + txIndexesHex(dbtestdata.EthTxidB2T2, []int32{^3, 2}) + txIndexesHex(dbtestdata.EthTxidB2T1, []int32{^0}), nil},
+		{addressKeyHex(dbtestdata.EthAddr5d, 4321001, d), txIndexesHex(dbtestdata.EthTxidB2T5, []int32{^0, 2}), nil},
+		{addressKeyHex(dbtestdata.EthAddr7b, 4321001, d), txIndexesHex(dbtestdata.EthTxidB2T3, []int32{4}) + txIndexesHex(dbtestdata.EthTxidB2T2, []int32{^2, 3}), nil},
+		{addressKeyHex(dbtestdata.EthAddr83, 4321001, d), txIndexesHex(dbtestdata.EthTxidB2T3, []int32{^0, ^2}), nil},
+		{addressKeyHex(dbtestdata.EthAddr92, 4321001, d), txIndexesHex(dbtestdata.EthTxidB2T4, []int32{0}), nil},
+		{addressKeyHex(dbtestdata.EthAddr9f, 4321001, d), txIndexesHex(dbtestdata.EthTxidB2T2, []int32{1}) + txIndexesHex(dbtestdata.EthTxidB2T1, []int32{0}), nil},
+		{addressKeyHex(dbtestdata.EthAddrA3, 4321001, d), txIndexesHex(dbtestdata.EthTxidB2T4, []int32{^2}), nil},
 		{addressKeyHex(dbtestdata.EthAddrContract0d, 4321001, d), txIndexesHex(dbtestdata.EthTxidB2T2, []int32{1}), nil},
 		{addressKeyHex(dbtestdata.EthAddrContract47, 4321001, d), txIndexesHex(dbtestdata.EthTxidB2T2, []int32{0}), nil},
 		{addressKeyHex(dbtestdata.EthAddrContract4a, 4321001, d), txIndexesHex(dbtestdata.EthTxidB2T2, []int32{^1}), nil},
+		{addressKeyHex(dbtestdata.EthAddrContract6f, 4321001, d), txIndexesHex(dbtestdata.EthTxidB2T5, []int32{0}), nil},
+		{addressKeyHex(dbtestdata.EthAddrContractCd, 4321001, d), txIndexesHex(dbtestdata.EthTxidB2T3, []int32{0}), nil},
 	}); err != nil {
 		{
 			t.Fatal(err)
@@ -139,15 +155,53 @@ func verifyAfterEthereumTypeBlock2(t *testing.T, d *RocksDB, wantBlockInternalDa
 	}
 
 	if err := checkColumn(d, cfAddressContracts, []keyPair{
-		{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr3e, d.chainParser), "020102", nil},
-		{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr55, d.chainParser), "040200" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser) + "02" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract0d, d.chainParser) + "01", nil},
-		{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr20, d.chainParser), "010100" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser) + "01", nil},
-		{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser), "020102", nil},
+		{
+			dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr20, d.chainParser),
+			"010100" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser) + varuintToHex(1<<2+uint(bchain.ERC20)) + bigintToHex(big.NewInt(0)), nil,
+		},
+		{
+			dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr3e, d.chainParser),
+			"030202" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract6f, d.chainParser) + varuintToHex(1<<2+uint(bchain.ERC1155)) + varuintToHex(1) + bigintFromStringToHex("150") + bigintFromStringToHex("1"), nil,
+		},
+		{
+			dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr4b, d.chainParser),
+			"010101" +
+				dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract0d, d.chainParser) + varuintToHex(2<<2+uint(bchain.ERC20)) + bigintFromStringToHex("8086") +
+				dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser) + varuintToHex(2<<2+uint(bchain.ERC20)) + bigintFromStringToHex("871180000950184"), nil,
+		},
+		{
+			dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr55, d.chainParser),
+			"050300" +
+				dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser) + varuintToHex(2<<2+uint(bchain.ERC20)) + bigintFromStringToHex("10000000854307892726464") +
+				dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract0d, d.chainParser) + varuintToHex(1<<2+uint(bchain.ERC20)) + bigintFromStringToHex("0") +
+				dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr55, d.chainParser) + varuintToHex(1<<2+uint(bchain.ERC20)) + bigintFromStringToHex("0"), nil,
+		},
+		{
+			dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr5d, d.chainParser),
+			"010100" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract6f, d.chainParser) + varuintToHex(1<<2+uint(bchain.ERC1155)) + varuintToHex(2) + bigintFromStringToHex("1776") + bigintFromStringToHex("1") + bigintFromStringToHex("1898") + bigintFromStringToHex("10"), nil,
+		},
+		{
+			dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr7b, d.chainParser),
+			"020000" +
+				dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser) + varuintToHex(1<<2+uint(bchain.ERC20)) + bigintFromStringToHex("0") +
+				dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract0d, d.chainParser) + varuintToHex(1<<2+uint(bchain.ERC20)) + bigintFromStringToHex("7674999999999991915") +
+				dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContractCd, d.chainParser) + varuintToHex(1<<2+uint(bchain.ERC721)) + varuintToHex(1) + bigintFromStringToHex("1"), nil,
+		},
+		{
+			dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr83, d.chainParser),
+			"010100" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContractCd, d.chainParser) + varuintToHex(1<<2+uint(bchain.ERC721)) + varuintToHex(0), nil,
+		},
+		{
+			dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrA3, d.chainParser),
+			"010000" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract6f, d.chainParser) + varuintToHex(1<<2+uint(bchain.ERC1155)) + varuintToHex(0), nil,
+		},
+		{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr92, d.chainParser), "010100", nil},
 		{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr9f, d.chainParser), "030104", nil},
-		{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr4b, d.chainParser), "010101" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract0d, d.chainParser) + "02" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser) + "02", nil},
-		{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr7b, d.chainParser), "010000" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser) + "01" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract0d, d.chainParser) + "01", nil},
 		{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract0d, d.chainParser), "010001", nil},
 		{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract47, d.chainParser), "010100", nil},
+		{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser), "020102", nil},
+		{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract6f, d.chainParser), "010100", nil},
+		{dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContractCd, d.chainParser), "010100", nil},
 	}); err != nil {
 		{
 			t.Fatal(err)
@@ -185,22 +239,25 @@ func verifyAfterEthereumTypeBlock2(t *testing.T, d *RocksDB, wantBlockInternalDa
 		{
 			"0041eee9",
 			dbtestdata.EthTxidB2T1 +
-				dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr55, d.chainParser) + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr9f, d.chainParser) + "00" + "00" +
+				dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr55, d.chainParser) + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr9f, d.chainParser) + "00" +
 				dbtestdata.EthTxidB2T2 +
 				dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr4b, d.chainParser) + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract47, d.chainParser) +
-				"05" +
-				dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract0d, d.chainParser) +
-				dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr4b, d.chainParser) + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr9f, d.chainParser) +
-				dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser) + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr9f, d.chainParser) +
-				"08" +
-				dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr55, d.chainParser) + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract0d, d.chainParser) +
-				dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr4b, d.chainParser) + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract0d, d.chainParser) +
-				dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr4b, d.chainParser) + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser) +
-				dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr55, d.chainParser) + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser) +
-				dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr7b, d.chainParser) + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser) +
-				dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr4b, d.chainParser) + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser) +
-				dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr4b, d.chainParser) + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract0d, d.chainParser) +
-				dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr7b, d.chainParser) + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract0d, d.chainParser),
+				"04" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr55, d.chainParser) + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr4b, d.chainParser) + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract0d, d.chainParser) + varuintToHex(uint(bchain.ERC20)) + bigintFromStringToHex("7675000000000000001") +
+				dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr4b, d.chainParser) + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr55, d.chainParser) + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser) + varuintToHex(uint(bchain.ERC20)) + bigintFromStringToHex("854307892726464") +
+				dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr7b, d.chainParser) + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr4b, d.chainParser) + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract4a, d.chainParser) + varuintToHex(uint(bchain.ERC20)) + bigintFromStringToHex("871180000950184") +
+				dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr4b, d.chainParser) + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr7b, d.chainParser) + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract0d, d.chainParser) + varuintToHex(uint(bchain.ERC20)) + bigintFromStringToHex("7674999999999991915") +
+				dbtestdata.EthTxidB2T3 +
+				dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr83, d.chainParser) + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContractCd, d.chainParser) +
+				"01" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr83, d.chainParser) + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr7b, d.chainParser) + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContractCd, d.chainParser) + varuintToHex(uint(bchain.ERC721)) + bigintFromStringToHex("1") +
+				dbtestdata.EthTxidB2T4 +
+				dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr3e, d.chainParser) + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr92, d.chainParser) +
+				"01" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrA3, d.chainParser) + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr3e, d.chainParser) + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract6f, d.chainParser) + varuintToHex(uint(bchain.ERC1155)) + "01" + bigintFromStringToHex("150") + bigintFromStringToHex("1") +
+				dbtestdata.EthTxidB2T5 +
+				dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr5d, d.chainParser) + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract6f, d.chainParser) +
+				"01" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrZero, d.chainParser) + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr5d, d.chainParser) + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddrContract6f, d.chainParser) + varuintToHex(uint(bchain.ERC1155)) + "02" + bigintFromStringToHex("1776") + bigintFromStringToHex("1") + bigintFromStringToHex("1898") + bigintFromStringToHex("10") +
+				dbtestdata.EthTxidB2T6 +
+				dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr55, d.chainParser) + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr55, d.chainParser) +
+				"01" + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr55, d.chainParser) + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr55, d.chainParser) + dbtestdata.AddressToPubKeyHex(dbtestdata.EthAddr55, d.chainParser) + varuintToHex(uint(bchain.ERC20)) + bigintFromStringToHex("10000000000000000000000"),
 			nil,
 		},
 	}); err != nil {
@@ -285,6 +342,10 @@ func TestRocksDB_Index_EthereumType(t *testing.T) {
 
 	// get transactions for various addresses / low-high ranges
 	verifyGetTransactions(t, d, "0x"+dbtestdata.EthAddr55, 0, 10000000, []txidIndex{
+		{"0x" + dbtestdata.EthTxidB2T6, 0},
+		{"0x" + dbtestdata.EthTxidB2T6, ^0},
+		{"0x" + dbtestdata.EthTxidB2T6, 4},
+		{"0x" + dbtestdata.EthTxidB2T6, ^4},
 		{"0x" + dbtestdata.EthTxidB2T2, ^3},
 		{"0x" + dbtestdata.EthTxidB2T2, 2},
 		{"0x" + dbtestdata.EthTxidB2T1, ^0},
@@ -347,7 +408,7 @@ func TestRocksDB_Index_EthereumType(t *testing.T) {
 	}
 	iw := &BlockInfo{
 		Hash:   "0x2b57e15e93a0ed197417a34c2498b7187df79099572c04a6b6e6ff418f74e6ee",
-		Txs:    2,
+		Txs:    6,
 		Size:   2345678,
 		Time:   1534859988,
 		Height: 4321001,
@@ -466,5 +527,609 @@ func Test_BulkConnect_EthereumType(t *testing.T) {
 
 	if len(d.is.BlockTimes) != 4321002 {
 		t.Fatal("Expecting is.BlockTimes 4321002, got ", len(d.is.BlockTimes))
+	}
+}
+
+func Test_packUnpackEthInternalData(t *testing.T) {
+	parser := ethereumTestnetParser()
+	db := &RocksDB{chainParser: parser}
+	tests := []struct {
+		name string
+		data ethInternalData
+		want *bchain.EthereumInternalData
+	}{
+		{
+			name: "CALL 1",
+			data: ethInternalData{
+				internalType: bchain.CALL,
+				transfers: []ethInternalTransfer{
+					{
+						internalType: bchain.CALL,
+						from:         addressToAddrDesc(dbtestdata.EthAddr3e, parser),
+						to:           addressToAddrDesc(dbtestdata.EthAddr20, parser),
+						value:        *big.NewInt(412342134),
+					},
+				},
+			},
+			want: &bchain.EthereumInternalData{
+				Type: bchain.CALL,
+				Transfers: []bchain.EthereumInternalTransfer{
+					{
+						Type:  bchain.CALL,
+						From:  eth.EIP55AddressFromAddress(dbtestdata.EthAddr3e),
+						To:    eth.EIP55AddressFromAddress(dbtestdata.EthAddr20),
+						Value: *big.NewInt(412342134),
+					},
+				},
+			},
+		},
+		{
+			name: "CALL 2",
+			data: ethInternalData{
+				internalType: bchain.CALL,
+				errorMsg:     "error error error",
+				transfers: []ethInternalTransfer{
+					{
+						internalType: bchain.CALL,
+						from:         addressToAddrDesc(dbtestdata.EthAddr3e, parser),
+						to:           addressToAddrDesc(dbtestdata.EthAddr20, parser),
+						value:        *big.NewInt(4123421341),
+					},
+					{
+						internalType: bchain.CREATE,
+						from:         addressToAddrDesc(dbtestdata.EthAddr4b, parser),
+						to:           addressToAddrDesc(dbtestdata.EthAddr55, parser),
+						value:        *big.NewInt(123),
+					},
+					{
+						internalType: bchain.SELFDESTRUCT,
+						from:         addressToAddrDesc(dbtestdata.EthAddr7b, parser),
+						to:           addressToAddrDesc(dbtestdata.EthAddr83, parser),
+						value:        *big.NewInt(67890),
+					},
+				},
+			},
+			want: &bchain.EthereumInternalData{
+				Type:  bchain.CALL,
+				Error: "error error error",
+				Transfers: []bchain.EthereumInternalTransfer{
+					{
+						Type:  bchain.CALL,
+						From:  eth.EIP55AddressFromAddress(dbtestdata.EthAddr3e),
+						To:    eth.EIP55AddressFromAddress(dbtestdata.EthAddr20),
+						Value: *big.NewInt(4123421341),
+					},
+					{
+						Type:  bchain.CREATE,
+						From:  eth.EIP55AddressFromAddress(dbtestdata.EthAddr4b),
+						To:    eth.EIP55AddressFromAddress(dbtestdata.EthAddr55),
+						Value: *big.NewInt(123),
+					},
+					{
+						Type:  bchain.SELFDESTRUCT,
+						From:  eth.EIP55AddressFromAddress(dbtestdata.EthAddr7b),
+						To:    eth.EIP55AddressFromAddress(dbtestdata.EthAddr83),
+						Value: *big.NewInt(67890),
+					},
+				},
+			},
+		},
+		{
+			name: "CREATE",
+			data: ethInternalData{
+				internalType: bchain.CREATE,
+				contract:     addressToAddrDesc(dbtestdata.EthAddrContract0d, parser),
+			},
+			want: &bchain.EthereumInternalData{
+				Type:      bchain.CREATE,
+				Contract:  eth.EIP55AddressFromAddress(dbtestdata.EthAddrContract0d),
+				Transfers: []bchain.EthereumInternalTransfer{},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			packed := packEthInternalData(&tt.data)
+			got, err := db.unpackEthInternalData(packed)
+			if err != nil {
+				t.Errorf("unpackEthInternalData() error = %v", err)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("packEthInternalData/unpackEthInternalData = %+v, want %+v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_packUnpackAddrContracts(t *testing.T) {
+	parser := ethereumTestnetParser()
+	type args struct {
+		buf      []byte
+		addrDesc bchain.AddressDescriptor
+	}
+	tests := []struct {
+		name string
+		data AddrContracts
+	}{
+		{
+			name: "1",
+			data: AddrContracts{
+				TotalTxs:       30,
+				NonContractTxs: 20,
+				InternalTxs:    10,
+				Contracts:      []AddrContract{},
+			},
+		},
+		{
+			name: "2",
+			data: AddrContracts{
+				TotalTxs:       12345,
+				NonContractTxs: 444,
+				InternalTxs:    8873,
+				Contracts: []AddrContract{
+					{
+						Type:     bchain.ERC20,
+						Contract: addressToAddrDesc(dbtestdata.EthAddrContract0d, parser),
+						Txs:      8,
+						Value:    *big.NewInt(793201132),
+					},
+					{
+						Type:     bchain.ERC721,
+						Contract: addressToAddrDesc(dbtestdata.EthAddrContract47, parser),
+						Txs:      41235,
+						Ids: []big.Int{
+							*big.NewInt(1),
+							*big.NewInt(2),
+							*big.NewInt(3),
+							*big.NewInt(3144223412344123),
+							*big.NewInt(5),
+						},
+					},
+					{
+						Type:     bchain.ERC1155,
+						Contract: addressToAddrDesc(dbtestdata.EthAddrContract4a, parser),
+						Txs:      64,
+						IdValues: []bchain.TokenTransferIdValue{
+							{
+								Id:    *big.NewInt(1),
+								Value: *big.NewInt(1412341234),
+							},
+							{
+								Id:    *big.NewInt(123412341234),
+								Value: *big.NewInt(3),
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			packed := packAddrContracts(&tt.data)
+			got, err := unpackAddrContracts(packed, nil)
+			if err != nil {
+				t.Errorf("unpackAddrContracts() error = %v", err)
+				return
+			}
+			if !reflect.DeepEqual(got, &tt.data) {
+				t.Errorf("unpackAddrContracts() = %v, want %v", got, tt.data)
+			}
+		})
+	}
+}
+
+func Test_addToContracts(t *testing.T) {
+	// the test builds addToContracts that keeps contracts of an address
+	// the test adds and removes values from addToContracts, therefore the order of tests is important
+	addrContracts := &AddrContracts{}
+	parser := ethereumTestnetParser()
+	type args struct {
+		index      int32
+		contract   bchain.AddressDescriptor
+		transfer   *bchain.TokenTransfer
+		addTxCount bool
+	}
+	tests := []struct {
+		name              string
+		args              args
+		wantIndex         int32
+		wantAddrContracts *AddrContracts
+	}{
+		{
+			name: "ERC20 to",
+			args: args{
+				index:    1,
+				contract: addressToAddrDesc(dbtestdata.EthAddrContract47, parser),
+				transfer: &bchain.TokenTransfer{
+					Type:  bchain.ERC20,
+					Value: *big.NewInt(123456),
+				},
+				addTxCount: true,
+			},
+			wantIndex: 0 + ContractIndexOffset, // the first contract of the address
+			wantAddrContracts: &AddrContracts{
+				Contracts: []AddrContract{
+					{
+						Type:     bchain.ERC20,
+						Contract: addressToAddrDesc(dbtestdata.EthAddrContract47, parser),
+						Txs:      1,
+						Value:    *big.NewInt(123456),
+					},
+				},
+			},
+		},
+		{
+			name: "ERC20 from",
+			args: args{
+				index:    ^1,
+				contract: addressToAddrDesc(dbtestdata.EthAddrContract47, parser),
+				transfer: &bchain.TokenTransfer{
+					Type:  bchain.ERC20,
+					Value: *big.NewInt(23456),
+				},
+				addTxCount: true,
+			},
+			wantIndex: ^(0 + ContractIndexOffset), // the first contract of the address
+			wantAddrContracts: &AddrContracts{
+				Contracts: []AddrContract{
+					{
+						Type:     bchain.ERC20,
+						Contract: addressToAddrDesc(dbtestdata.EthAddrContract47, parser),
+						Value:    *big.NewInt(100000),
+						Txs:      2,
+					},
+				},
+			},
+		},
+		{
+			name: "ERC721 to id 1",
+			args: args{
+				index:    1,
+				contract: addressToAddrDesc(dbtestdata.EthAddrContract6f, parser),
+				transfer: &bchain.TokenTransfer{
+					Type:  bchain.ERC721,
+					Value: *big.NewInt(1),
+				},
+				addTxCount: true,
+			},
+			wantIndex: 1 + ContractIndexOffset, // the 2nd contract of the address
+			wantAddrContracts: &AddrContracts{
+				Contracts: []AddrContract{
+					{
+						Type:     bchain.ERC20,
+						Contract: addressToAddrDesc(dbtestdata.EthAddrContract47, parser),
+						Value:    *big.NewInt(100000),
+						Txs:      2,
+					},
+					{
+						Type:     bchain.ERC721,
+						Contract: addressToAddrDesc(dbtestdata.EthAddrContract6f, parser),
+						Txs:      1,
+						Ids:      []big.Int{*big.NewInt(1)},
+					},
+				},
+			},
+		},
+		{
+			name: "ERC721 to id 2",
+			args: args{
+				index:    1,
+				contract: addressToAddrDesc(dbtestdata.EthAddrContract6f, parser),
+				transfer: &bchain.TokenTransfer{
+					Type:  bchain.ERC721,
+					Value: *big.NewInt(2),
+				},
+				addTxCount: true,
+			},
+			wantIndex: 1 + ContractIndexOffset, // the 2nd contract of the address
+			wantAddrContracts: &AddrContracts{
+				Contracts: []AddrContract{
+					{
+						Type:     bchain.ERC20,
+						Contract: addressToAddrDesc(dbtestdata.EthAddrContract47, parser),
+						Value:    *big.NewInt(100000),
+						Txs:      2,
+					},
+					{
+						Type:     bchain.ERC721,
+						Contract: addressToAddrDesc(dbtestdata.EthAddrContract6f, parser),
+						Txs:      2,
+						Ids:      []big.Int{*big.NewInt(1), *big.NewInt(2)},
+					},
+				},
+			},
+		},
+		{
+			name: "ERC721 from id 1, addTxCount=false",
+			args: args{
+				index:    ^1,
+				contract: addressToAddrDesc(dbtestdata.EthAddrContract6f, parser),
+				transfer: &bchain.TokenTransfer{
+					Type:  bchain.ERC721,
+					Value: *big.NewInt(1),
+				},
+				addTxCount: false,
+			},
+			wantIndex: ^(1 + ContractIndexOffset), // the 2nd contract of the address
+			wantAddrContracts: &AddrContracts{
+				Contracts: []AddrContract{
+					{
+						Type:     bchain.ERC20,
+						Contract: addressToAddrDesc(dbtestdata.EthAddrContract47, parser),
+						Value:    *big.NewInt(100000),
+						Txs:      2,
+					},
+					{
+						Type:     bchain.ERC721,
+						Contract: addressToAddrDesc(dbtestdata.EthAddrContract6f, parser),
+						Txs:      2,
+						Ids:      []big.Int{*big.NewInt(2)},
+					},
+				},
+			},
+		},
+		{
+			name: "ERC1155 to id 11, value 56789",
+			args: args{
+				index:    1,
+				contract: addressToAddrDesc(dbtestdata.EthAddrContractCd, parser),
+				transfer: &bchain.TokenTransfer{
+					Type: bchain.ERC1155,
+					IdValues: []bchain.TokenTransferIdValue{
+						{
+							Id:    *big.NewInt(11),
+							Value: *big.NewInt(56789),
+						},
+					},
+				},
+				addTxCount: true,
+			},
+			wantIndex: 2 + ContractIndexOffset, // the 3nd contract of the address
+			wantAddrContracts: &AddrContracts{
+				Contracts: []AddrContract{
+					{
+						Type:     bchain.ERC20,
+						Contract: addressToAddrDesc(dbtestdata.EthAddrContract47, parser),
+						Value:    *big.NewInt(100000),
+						Txs:      2,
+					},
+					{
+						Type:     bchain.ERC721,
+						Contract: addressToAddrDesc(dbtestdata.EthAddrContract6f, parser),
+						Txs:      2,
+						Ids:      []big.Int{*big.NewInt(2)},
+					},
+					{
+						Type:     bchain.ERC1155,
+						Contract: addressToAddrDesc(dbtestdata.EthAddrContractCd, parser),
+						Txs:      1,
+						IdValues: []bchain.TokenTransferIdValue{
+							{
+								Id:    *big.NewInt(11),
+								Value: *big.NewInt(56789),
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "ERC1155 to id 11, value 111 and id 22, value 222",
+			args: args{
+				index:    1,
+				contract: addressToAddrDesc(dbtestdata.EthAddrContractCd, parser),
+				transfer: &bchain.TokenTransfer{
+					Type: bchain.ERC1155,
+					IdValues: []bchain.TokenTransferIdValue{
+						{
+							Id:    *big.NewInt(11),
+							Value: *big.NewInt(111),
+						},
+						{
+							Id:    *big.NewInt(22),
+							Value: *big.NewInt(222),
+						},
+					},
+				},
+				addTxCount: true,
+			},
+			wantIndex: 2 + ContractIndexOffset, // the 3nd contract of the address
+			wantAddrContracts: &AddrContracts{
+				Contracts: []AddrContract{
+					{
+						Type:     bchain.ERC20,
+						Contract: addressToAddrDesc(dbtestdata.EthAddrContract47, parser),
+						Value:    *big.NewInt(100000),
+						Txs:      2,
+					},
+					{
+						Type:     bchain.ERC721,
+						Contract: addressToAddrDesc(dbtestdata.EthAddrContract6f, parser),
+						Txs:      2,
+						Ids:      []big.Int{*big.NewInt(2)},
+					},
+					{
+						Type:     bchain.ERC1155,
+						Contract: addressToAddrDesc(dbtestdata.EthAddrContractCd, parser),
+						Txs:      2,
+						IdValues: []bchain.TokenTransferIdValue{
+							{
+								Id:    *big.NewInt(11),
+								Value: *big.NewInt(56900),
+							},
+							{
+								Id:    *big.NewInt(22),
+								Value: *big.NewInt(222),
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "ERC1155 from id 11, value 112 and id 22, value 222",
+			args: args{
+				index:    ^1,
+				contract: addressToAddrDesc(dbtestdata.EthAddrContractCd, parser),
+				transfer: &bchain.TokenTransfer{
+					Type: bchain.ERC1155,
+					IdValues: []bchain.TokenTransferIdValue{
+						{
+							Id:    *big.NewInt(11),
+							Value: *big.NewInt(112),
+						},
+						{
+							Id:    *big.NewInt(22),
+							Value: *big.NewInt(222),
+						},
+					},
+				},
+				addTxCount: true,
+			},
+			wantIndex: ^(2 + ContractIndexOffset), // the 3nd contract of the address
+			wantAddrContracts: &AddrContracts{
+				Contracts: []AddrContract{
+					{
+						Type:     bchain.ERC20,
+						Contract: addressToAddrDesc(dbtestdata.EthAddrContract47, parser),
+						Value:    *big.NewInt(100000),
+						Txs:      2,
+					},
+					{
+						Type:     bchain.ERC721,
+						Contract: addressToAddrDesc(dbtestdata.EthAddrContract6f, parser),
+						Txs:      2,
+						Ids:      []big.Int{*big.NewInt(2)},
+					},
+					{
+						Type:     bchain.ERC1155,
+						Contract: addressToAddrDesc(dbtestdata.EthAddrContractCd, parser),
+						Txs:      3,
+						IdValues: []bchain.TokenTransferIdValue{
+							{
+								Id:    *big.NewInt(11),
+								Value: *big.NewInt(56788),
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			contractIndex, found := findContractInAddressContracts(tt.args.contract, addrContracts.Contracts)
+			if !found {
+				contractIndex = len(addrContracts.Contracts)
+				addrContracts.Contracts = append(addrContracts.Contracts, AddrContract{
+					Contract: tt.args.contract,
+					Type:     tt.args.transfer.Type,
+				})
+			}
+			if got := addToContract(&addrContracts.Contracts[contractIndex], contractIndex, tt.args.index, tt.args.contract, tt.args.transfer, tt.args.addTxCount); got != tt.wantIndex {
+				t.Errorf("addToContracts() = %v, want %v", got, tt.wantIndex)
+			}
+			if !reflect.DeepEqual(addrContracts, tt.wantAddrContracts) {
+				t.Errorf("addToContracts() = %+v, want %+v", addrContracts, tt.wantAddrContracts)
+			}
+		})
+	}
+}
+
+func Test_packUnpackBlockTx(t *testing.T) {
+	parser := ethereumTestnetParser()
+	tests := []struct {
+		name    string
+		blockTx ethBlockTx
+		pos     int
+	}{
+		{
+			name: "no contract",
+			blockTx: ethBlockTx{
+				btxID:     hexToBytes(dbtestdata.EthTxidB1T1),
+				from:      addressToAddrDesc(dbtestdata.EthAddr3e, parser),
+				to:        addressToAddrDesc(dbtestdata.EthAddr55, parser),
+				contracts: []ethBlockTxContract{},
+			},
+			pos: 73,
+		},
+		{
+			name: "ERC20",
+			blockTx: ethBlockTx{
+				btxID: hexToBytes(dbtestdata.EthTxidB1T1),
+				from:  addressToAddrDesc(dbtestdata.EthAddr3e, parser),
+				to:    addressToAddrDesc(dbtestdata.EthAddr55, parser),
+				contracts: []ethBlockTxContract{
+					{
+						from:         addressToAddrDesc(dbtestdata.EthAddr20, parser),
+						to:           addressToAddrDesc(dbtestdata.EthAddr5d, parser),
+						contract:     addressToAddrDesc(dbtestdata.EthAddrContract4a, parser),
+						transferType: bchain.ERC20,
+						value:        *big.NewInt(10000),
+					},
+				},
+			},
+			pos: 137,
+		},
+		{
+			name: "multiple contracts",
+			blockTx: ethBlockTx{
+				btxID: hexToBytes(dbtestdata.EthTxidB1T1),
+				from:  addressToAddrDesc(dbtestdata.EthAddr3e, parser),
+				to:    addressToAddrDesc(dbtestdata.EthAddr55, parser),
+				contracts: []ethBlockTxContract{
+					{
+						from:         addressToAddrDesc(dbtestdata.EthAddr20, parser),
+						to:           addressToAddrDesc(dbtestdata.EthAddr3e, parser),
+						contract:     addressToAddrDesc(dbtestdata.EthAddrContract4a, parser),
+						transferType: bchain.ERC20,
+						value:        *big.NewInt(987654321),
+					},
+					{
+						from:         addressToAddrDesc(dbtestdata.EthAddr4b, parser),
+						to:           addressToAddrDesc(dbtestdata.EthAddr55, parser),
+						contract:     addressToAddrDesc(dbtestdata.EthAddrContract6f, parser),
+						transferType: bchain.ERC721,
+						value:        *big.NewInt(13),
+					},
+					{
+						from:         addressToAddrDesc(dbtestdata.EthAddr5d, parser),
+						to:           addressToAddrDesc(dbtestdata.EthAddr7b, parser),
+						contract:     addressToAddrDesc(dbtestdata.EthAddrContractCd, parser),
+						transferType: bchain.ERC1155,
+						idValues: []bchain.TokenTransferIdValue{
+							{
+								Id:    *big.NewInt(1234),
+								Value: *big.NewInt(98765),
+							},
+							{
+								Id:    *big.NewInt(5566),
+								Value: *big.NewInt(12341234421),
+							},
+						},
+					},
+				},
+			},
+			pos: 280,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			buf := make([]byte, 0)
+			packed := packBlockTx(buf, &tt.blockTx)
+			got, pos, err := unpackBlockTx(packed, 0)
+			if err != nil {
+				t.Errorf("unpackBlockTx() error = %v", err)
+				return
+			}
+			if !reflect.DeepEqual(*got, tt.blockTx) {
+				t.Errorf("unpackBlockTx() got = %v, want %v", *got, tt.blockTx)
+			}
+			if pos != tt.pos {
+				t.Errorf("unpackBlockTx() pos = %v, want %v", pos, tt.pos)
+			}
+		})
 	}
 }

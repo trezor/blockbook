@@ -13,8 +13,11 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
-// EthereumTypeAddressDescriptorLen - in case of EthereumType, the AddressDescriptor has fixed length
+// EthereumTypeAddressDescriptorLen - the AddressDescriptor of EthereumType has fixed length
 const EthereumTypeAddressDescriptorLen = 20
+
+// EthereumTypeTxidLen - the length of Txid
+const EthereumTypeTxidLen = 32
 
 // EtherAmountDecimalPoint defines number of decimal points in Ether amounts
 const EtherAmountDecimalPoint = 18
@@ -388,7 +391,7 @@ func (p *EthereumParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 
 // PackedTxidLen returns length in bytes of packed txid
 func (p *EthereumParser) PackedTxidLen() int {
-	return 32
+	return EthereumTypeTxidLen
 }
 
 // PackTxid packs txid to byte array
@@ -437,16 +440,16 @@ func GetHeightFromTx(tx *bchain.Tx) (uint32, error) {
 	return uint32(n), nil
 }
 
-// EthereumTypeGetErc20FromTx returns Erc20 data from bchain.Tx
-func (p *EthereumParser) EthereumTypeGetErc20FromTx(tx *bchain.Tx) ([]bchain.Erc20Transfer, error) {
-	var r []bchain.Erc20Transfer
+// EthereumTypeGetTokenTransfersFromTx returns contract transfers from bchain.Tx
+func (p *EthereumParser) EthereumTypeGetTokenTransfersFromTx(tx *bchain.Tx) (bchain.TokenTransfers, error) {
+	var r bchain.TokenTransfers
 	var err error
 	csd, ok := tx.CoinSpecificData.(bchain.EthereumSpecificData)
 	if ok {
 		if csd.Receipt != nil {
-			r, err = erc20GetTransfersFromLog(csd.Receipt.Logs)
+			r, err = contractGetTransfersFromLog(csd.Receipt.Logs)
 		} else {
-			r, err = erc20GetTransfersFromTx(csd.Tx)
+			r, err = contractGetTransfersFromTx(csd.Tx)
 		}
 		if err != nil {
 			return nil, err
@@ -518,7 +521,7 @@ func ParseErrorFromOutput(output string) string {
 	if len(output) < 8+64+64+64 || output[:8] != errorOutputSignature {
 		return ""
 	}
-	return parseErc20StringProperty(nil, output[8:])
+	return parseSimpleStringProperty(output[8:])
 }
 
 // PackInternalTransactionError packs common error messages to single byte to save DB space

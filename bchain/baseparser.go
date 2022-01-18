@@ -300,7 +300,7 @@ func (p *BaseParser) DeriveAddressDescriptorsFromTo(descriptor *XpubDescriptor, 
 	return nil, errors.New("Not supported")
 }
 
-// EthereumTypeGetErc20FromTx is unsupported
-func (p *BaseParser) EthereumTypeGetErc20FromTx(tx *Tx) ([]Erc20Transfer, error) {
+// EthereumTypeGetTokenTransfersFromTx is unsupported
+func (p *BaseParser) EthereumTypeGetTokenTransfersFromTx(tx *Tx) (TokenTransfers, error) {
 	return nil, errors.New("Not supported")
 }
