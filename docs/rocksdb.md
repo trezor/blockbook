@@ -84,9 +84,21 @@ Column families used only by **Ethereum type** coins:
 
 - **addressContracts** (used only by Ethereum type coins)
 
-    Maps *addrDesc* to *total number of transactions*, *number of non contract transactions*, *number of internal transactions* and array of *contracts* with *number of transfers* of given address.
+    Maps *addrDesc* to *total number of transactions*, *number of non contract transactions*, *number of internal transactions* 
+    and array of *contracts* with *number of transfers* of given address.
     ```
-    (addrDesc []byte) -> (total_txs vuint)+(non-contract_txs vuint)+(internal_txs vuint)+[]((contractAddrDesc []byte)+(nr_transfers vuint))
+    (addrDesc []byte) -> (total_txs vuint)+(non-contract_txs vuint)+(internal_txs vuint)+
+                         []((contractAddrDesc []byte)+(type+4*nr_transfers vuint))+
+                         <(value bigInt) if ERC20> or <(nr_values vuint)+[](id bigInt) if ERC721> or <(nr_values vuint)+[]((id bigInt)+(value bigInt)) if ERC1155>
+    ```
+
+- **internalData** (used only by Ethereum type coins)
+
+    Maps *txid* to *type (CALL 0 | CREATE 1)*, *addrDesc of created contract for CREATE type*, array of *type (CALL 0 | CREATE 1 | SELFDESTRUCT 2)*, *from addrDesc*, *to addrDesc*, *value bigInt* and possible *error*.
+    ```
+    (txid []byte) -> (type+2*nr_transfers vuint)+<(addrDesc []byte) if CREATE>+
+                     []((type byte)+(fromAddrDesc []byte)+(toAddrDesc []byte)+(value bigInt))+
+                     (error []byte)
     ```
 
 - **blockTxs**
@@ -104,9 +116,14 @@ Column families used only by **Ethereum type** coins:
     - Ethereum type
     
     The value is an array of transaction data. For each transaction is stored *txid*,
-     *from* and *to* address descriptors and array of *contract address descriptors* with *transfer address descriptors*.
+     *from* and *to* address descriptors and array of contract transfer infos consisting of 
+     *from*, *to* and *contract* address descriptors, *type (ERC20 0 | ERC721 1 | ERC1155 2)* and value (or list of id+value for ERC1155)
     ```
-    (height uint32) -> []((txid [32]byte)+(from addrDesc)+(to addrDesc)+(nr_contracts vuint)+[]((contract addrDesc)+(addr addrDesc)))
+    (height uint32) -> [](
+                          (txid [32]byte)+(from addrDesc)+(to addrDesc)+(nr_contracts vuint)+
+                          []((from addrDesc)+(to addrDesc)+(contract addrDesc)+(type byte)+
+                          <(value bigInt) if ERC20 or ERC721> or <(nr_values vuint)+[]((id bigInt)+(value bigInt)) if ERC1155>)
+                         )
     ```
 
 - **transactions**
