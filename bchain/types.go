@@ -102,15 +102,24 @@ type MempoolVin struct {
 // MempoolTx is blockchain transaction in mempool
 // optimized for onNewTx notification
 type MempoolTx struct {
-	Hex              string          `json:"hex"`
-	Txid             string          `json:"txid"`
-	Version          int32           `json:"version"`
-	LockTime         uint32          `json:"locktime"`
-	Vin              []MempoolVin    `json:"vin"`
-	Vout             []Vout          `json:"vout"`
-	Blocktime        int64           `json:"blocktime,omitempty"`
-	Erc20            []Erc20Transfer `json:"-"`
-	CoinSpecificData interface{}     `json:"-"`
+	Hex              string         `json:"hex"`
+	Txid             string         `json:"txid"`
+	Version          int32          `json:"version"`
+	LockTime         uint32         `json:"locktime"`
+	Vin              []MempoolVin   `json:"vin"`
+	Vout             []Vout         `json:"vout"`
+	Blocktime        int64          `json:"blocktime,omitempty"`
+	TokenTransfers   TokenTransfers `json:"-"`
+	CoinSpecificData interface{}    `json:"-"`
+}
+
+// TokenTransfers is array of TokenTransfer
+type TokenTransfers []*TokenTransfer
+
+func (a TokenTransfers) Len() int      { return len(a) }
+func (a TokenTransfers) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+func (a TokenTransfers) Less(i, j int) bool {
+	return a[i].Type < a[j].Type
 }
 
 // Block is block header and list of transactions
@@ -328,7 +337,7 @@ type BlockChainParser interface {
 	DeriveAddressDescriptors(descriptor *XpubDescriptor, change uint32, indexes []uint32) ([]AddressDescriptor, error)
 	DeriveAddressDescriptorsFromTo(descriptor *XpubDescriptor, change uint32, fromIndex uint32, toIndex uint32) ([]AddressDescriptor, error)
 	// EthereumType specific
-	EthereumTypeGetErc20FromTx(tx *Tx) ([]Erc20Transfer, error)
+	EthereumTypeGetTokenTransfersFromTx(tx *Tx) (TokenTransfers, error)
 }
 
 // Mempool defines common interface to mempool

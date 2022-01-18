@@ -22,6 +22,16 @@ const (
 	SELFDESTRUCT
 )
 
+// TokenTransferType - type of token transfer
+type TokenTransferType int
+
+// TokenTransferType enumeration
+const (
+	ERC20 = TokenTransferType(iota)
+	ERC721
+	ERC1155
+)
+
 // EthereumInternalTransaction contains internal transfers
 type EthereumInternalData struct {
 	Type      EthereumInternalTransactionType `json:"type"`
@@ -38,12 +48,19 @@ type Erc20Contract struct {
 	Decimals int    `json:"decimals"`
 }
 
-// Erc20Transfer contains a single ERC20 token transfer
-type Erc20Transfer struct {
+type TokenTransferIdValue struct {
+	Id    big.Int
+	Value big.Int
+}
+
+// TokenTransfer contains a single ERC20/ERC721/ERC1155 token transfer
+type TokenTransfer struct {
+	Type     TokenTransferType
 	Contract string
 	From     string
 	To       string
-	Tokens   big.Int
+	Value    big.Int
+	IdValues []TokenTransferIdValue
 }
 
 // RpcTransaction is returned by eth_getTransactionByHash

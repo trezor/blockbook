@@ -491,14 +491,14 @@ func (b *EthereumRPC) getBlockRaw(hash string, height uint32, fullTxs bool) (jso
 	return raw, nil
 }
 
-func (b *EthereumRPC) getERC20EventsForBlock(blockNumber string) (map[string][]*bchain.RpcLog, error) {
+func (b *EthereumRPC) getTokenTransferEventsForBlock(blockNumber string) (map[string][]*bchain.RpcLog, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
 	defer cancel()
 	var logs []rpcLogWithTxHash
 	err := b.rpc.CallContext(ctx, &logs, "eth_getLogs", map[string]interface{}{
 		"fromBlock": blockNumber,
 		"toBlock":   blockNumber,
-		"topics":    []string{erc20TransferEventSignature},
+		"topics":    []string{tokenTransferEventSignature, tokenERC1155TransferSingleEventSignature, tokenERC1155TransferBatchEventSignature},
 	})
 	if err != nil {
 		return nil, errors.Annotatef(err, "blockNumber %v", blockNumber)
@@ -630,8 +630,8 @@ func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error
 	if err != nil {
 		return nil, errors.Annotatef(err, "hash %v, height %v", hash, height)
 	}
-	// get ERC20 events
-	logs, err := b.getERC20EventsForBlock(head.Number)
+	// get contract transfers events
+	logs, err := b.getTokenTransferEventsForBlock(head.Number)
 	if err != nil {
 		return nil, err
 	}
