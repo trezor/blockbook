@@ -255,11 +255,11 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 		}
 		pValInSat = &valInSat
 	} else if w.chainType == bchain.ChainEthereumType {
-		ets, err := w.chainParser.EthereumTypeGetErc20FromTx(bchainTx)
+		tokenTransfers, err := w.chainParser.EthereumTypeGetTokenTransfersFromTx(bchainTx)
 		if err != nil {
-			glog.Errorf("GetErc20FromTx error %v, %v", err, bchainTx)
+			glog.Errorf("GetTokenTransfersFromTx error %v, %v", err, bchainTx)
 		}
-		tokens = w.getTokensFromErc20(ets)
+		tokens = w.getEthereumTokensTransfers(tokenTransfers)
 		ethTxData := eth.GetEthereumTxData(bchainTx)
 		// mempool txs do not have fees yet
 		if ethTxData.GasUsed != nil {
@@ -381,7 +381,7 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 		if len(mempoolTx.Vout) > 0 {
 			valOutSat = mempoolTx.Vout[0].ValueSat
 		}
-		tokens = w.getTokensFromErc20(mempoolTx.Erc20)
+		tokens = w.getEthereumTokensTransfers(mempoolTx.TokenTransfers)
 		ethTxData := eth.GetEthereumTxDataFromSpecificData(mempoolTx.CoinSpecificData)
 		ethSpecific = &EthereumSpecific{
 			GasLimit: ethTxData.GasLimit,
@@ -410,29 +410,30 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 	return r, nil
 }
 
-func (w *Worker) getTokensFromErc20(erc20 []bchain.Erc20Transfer) []TokenTransfer {
-	tokens := make([]TokenTransfer, len(erc20))
-	for i := range erc20 {
-		e := &erc20[i]
-		cd, err := w.chainParser.GetAddrDescFromAddress(e.Contract)
+func (w *Worker) getEthereumTokensTransfers(transfers bchain.TokenTransfers) []TokenTransfer {
+	sort.Sort(transfers)
+	tokens := make([]TokenTransfer, len(transfers))
+	for i := range transfers {
+		t := transfers[i]
+		cd, err := w.chainParser.GetAddrDescFromAddress(t.Contract)
 		if err != nil {
-			glog.Errorf("GetAddrDescFromAddress error %v, contract %v", err, e.Contract)
+			glog.Errorf("GetAddrDescFromAddress error %v, contract %v", err, t.Contract)
 			continue
 		}
 		erc20c, err := w.chain.EthereumTypeGetErc20ContractInfo(cd)
 		if err != nil {
-			glog.Errorf("GetErc20ContractInfo error %v, contract %v", err, e.Contract)
+			glog.Errorf("GetErc20ContractInfo error %v, contract %v", err, t.Contract)
 		}
 		if erc20c == nil {
-			erc20c = &bchain.Erc20Contract{Name: e.Contract}
+			erc20c = &bchain.Erc20Contract{Name: t.Contract}
 		}
 		tokens[i] = TokenTransfer{
-			Type:     ERC20TokenType,
-			Token:    e.Contract,
-			From:     e.From,
-			To:       e.To,
+			Type:     TokenTypeMap[t.Type],
+			Token:    t.Contract,
+			From:     t.From,
+			To:       t.To,
 			Decimals: erc20c.Decimals,
-			Value:    (*Amount)(&e.Tokens),
+			Value:    (*Amount)(&t.Value),
 			Name:     erc20c.Name,
 			Symbol:   erc20c.Symbol,
 		}

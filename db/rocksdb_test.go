@@ -152,10 +152,10 @@ func checkColumn(d *RocksDB, col int, kp []keyPair) error {
 	defer it.Close()
 	i := 0
 	for it.SeekToFirst(); it.Valid(); it.Next() {
-		if i >= len(kp) {
-			return errors.Errorf("Expected less rows in column %v", cfNames[col])
-		}
 		key := hex.EncodeToString(it.Key().Data())
+		if i >= len(kp) {
+			return errors.Errorf("Expected less rows in column %v, superfluous key %v", cfNames[col], key)
+		}
 		if key != kp[i].Key {
 			return errors.Errorf("Incorrect key %v found in column %v row %v, expecting %v", key, cfNames[col], i, kp[i].Key)
 		}

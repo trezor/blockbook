@@ -919,8 +919,8 @@ func (s *WebsocketServer) getNewTxSubscriptions(tx *bchain.MempoolTx) map[string
 			}
 		}
 	}
-	for i := range tx.Erc20 {
-		addrDesc, err := s.chainParser.GetAddrDescFromAddress(tx.Erc20[i].From)
+	for i := range tx.TokenTransfers {
+		addrDesc, err := s.chainParser.GetAddrDescFromAddress(tx.TokenTransfers[i].From)
 		if err == nil && len(addrDesc) > 0 {
 			sad := string(addrDesc)
 			as, ok := s.addressSubscriptions[sad]
@@ -928,7 +928,7 @@ func (s *WebsocketServer) getNewTxSubscriptions(tx *bchain.MempoolTx) map[string
 				subscribed[sad] = struct{}{}
 			}
 		}
-		addrDesc, err = s.chainParser.GetAddrDescFromAddress(tx.Erc20[i].To)
+		addrDesc, err = s.chainParser.GetAddrDescFromAddress(tx.TokenTransfers[i].To)
 		if err == nil && len(addrDesc) > 0 {
 			sad := string(addrDesc)
 			as, ok := s.addressSubscriptions[sad]
