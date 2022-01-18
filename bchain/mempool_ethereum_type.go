@@ -74,11 +74,11 @@ func (m *MempoolEthereumType) createTxEntry(txid string, txTime uint32) (txEntry
 			addrIndexes, input.AddrDesc = appendAddress(addrIndexes, ^int32(i), a, parser)
 		}
 	}
-	t, err := parser.EthereumTypeGetErc20FromTx(tx)
+	t, err := parser.EthereumTypeGetTokenTransfersFromTx(tx)
 	if err != nil {
-		glog.Error("GetErc20FromTx for tx ", txid, ", ", err)
+		glog.Error("GetGetTokenTransfersFromTx for tx ", txid, ", ", err)
 	} else {
-		mtx.Erc20 = t
+		mtx.TokenTransfers = t
 		for i := range t {
 			addrIndexes, _ = appendAddress(addrIndexes, ^int32(i+1), t[i].From, parser)
 			addrIndexes, _ = appendAddress(addrIndexes, int32(i+1), t[i].To, parser)

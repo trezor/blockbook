@@ -138,11 +138,20 @@ type Vout struct {
 // TokenType specifies type of token
 type TokenType string
 
-// ERC20TokenType is Ethereum ERC20 token
-const ERC20TokenType TokenType = "ERC20"
+// Token types
+const (
+	// Ethereum token types
+	ERC20TokenType   TokenType = "ERC20"
+	ERC771TokenType  TokenType = "ERC721"
+	ERC1155TokenType TokenType = "ERC1155"
 
-// XPUBAddressTokenType is address derived from xpub
-const XPUBAddressTokenType TokenType = "XPUBAddress"
+	// XPUBAddressTokenType is address derived from xpub
+	XPUBAddressTokenType TokenType = "XPUBAddress"
+)
+
+// TokenTypeMap maps bchain.TokenTransferType to TokenType
+// the map must match all bchain.TokenTransferTypes to avoid index out of range panic
+var TokenTypeMap []TokenType = []TokenType{ERC20TokenType, ERC771TokenType, ERC1155TokenType}
 
 // Token contains info about tokens held by an address
 type Token struct {
@@ -159,16 +168,23 @@ type Token struct {
 	ContractIndex    string    `json:"-"`
 }
 
+// TokenTransferValues contains values for ERC1155 contract
+type TokenTransferValues struct {
+	Id    *Amount `json:"id,omitempty"`
+	Value *Amount `json:"value,omitempty"`
+}
+
 // TokenTransfer contains info about a token transfer done in a transaction
 type TokenTransfer struct {
-	Type     TokenType `json:"type"`
-	From     string    `json:"from"`
-	To       string    `json:"to"`
-	Token    string    `json:"token"`
-	Name     string    `json:"name"`
-	Symbol   string    `json:"symbol"`
-	Decimals int       `json:"decimals"`
-	Value    *Amount   `json:"value"`
+	Type     TokenType             `json:"type"`
+	From     string                `json:"from"`
+	To       string                `json:"to"`
+	Token    string                `json:"token"`
+	Name     string                `json:"name"`
+	Symbol   string                `json:"symbol"`
+	Decimals int                   `json:"decimals"`
+	Value    *Amount               `json:"value,omitempty"`
+	Values   []TokenTransferValues `json:"values,omitempty"`
 }
 
 // EthereumSpecific contains ethereum specific transaction data
