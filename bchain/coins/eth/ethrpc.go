@@ -36,14 +36,15 @@ const (
 
 // Configuration represents json config file
 type Configuration struct {
-	CoinName                    string `json:"coin_name"`
-	CoinShortcut                string `json:"coin_shortcut"`
-	RPCURL                      string `json:"rpc_url"`
-	RPCTimeout                  int    `json:"rpc_timeout"`
-	BlockAddressesToKeep        int    `json:"block_addresses_to_keep"`
-	MempoolTxTimeoutHours       int    `json:"mempoolTxTimeoutHours"`
-	QueryBackendOnMempoolResync bool   `json:"queryBackendOnMempoolResync"`
-	ProcessInternalTransactions bool   `json:"processInternalTransactions"`
+	CoinName                        string `json:"coin_name"`
+	CoinShortcut                    string `json:"coin_shortcut"`
+	RPCURL                          string `json:"rpc_url"`
+	RPCTimeout                      int    `json:"rpc_timeout"`
+	BlockAddressesToKeep            int    `json:"block_addresses_to_keep"`
+	MempoolTxTimeoutHours           int    `json:"mempoolTxTimeoutHours"`
+	QueryBackendOnMempoolResync     bool   `json:"queryBackendOnMempoolResync"`
+	ProcessInternalTransactions     bool   `json:"processInternalTransactions"`
+	ProcessZeroInternalTransactions bool   `json:"processZeroInternalTransactions"`
 }
 
 // EthereumRPC is an interface to JSON-RPC eth service.
@@ -64,6 +65,9 @@ type EthereumRPC struct {
 	newTxSubscription    *rpc.ClientSubscription
 	ChainConfig          *Configuration
 }
+
+// ProcessInternalTransactions specifies if internal transactions are processed
+var ProcessInternalTransactions bool
 
 // NewEthereumRPC returns new EthRPC instance.
 func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.NotificationType)) (bchain.BlockChain, error) {
@@ -89,6 +93,8 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 		rpc:         rc,
 		ChainConfig: &c,
 	}
+
+	ProcessInternalTransactions = c.ProcessInternalTransactions
 
 	// always create parser
 	s.Parser = NewEthereumParser(c.BlockAddressesToKeep)
@@ -498,7 +504,7 @@ func (b *EthereumRPC) getTokenTransferEventsForBlock(blockNumber string) (map[st
 	err := b.rpc.CallContext(ctx, &logs, "eth_getLogs", map[string]interface{}{
 		"fromBlock": blockNumber,
 		"toBlock":   blockNumber,
-		"topics":    []string{tokenTransferEventSignature, tokenERC1155TransferSingleEventSignature, tokenERC1155TransferBatchEventSignature},
+		// "topics":    []string{tokenTransferEventSignature, tokenERC1155TransferSingleEventSignature, tokenERC1155TransferBatchEventSignature},
 	})
 	if err != nil {
 		return nil, errors.Annotatef(err, "blockNumber %v", blockNumber)
@@ -543,7 +549,7 @@ func (b *EthereumRPC) processCallTrace(call *rpcCallTrace, d *bchain.EthereumInt
 			From:  call.From,
 			To:    call.To,
 		})
-	} else if err == nil && value.BitLen() > 0 {
+	} else if err == nil && (value.BitLen() > 0 || b.ChainConfig.ProcessZeroInternalTransactions) {
 		d.Transfers = append(d.Transfers, bchain.EthereumInternalTransfer{
 			Value: *value,
 			From:  call.From,
@@ -561,7 +567,7 @@ func (b *EthereumRPC) processCallTrace(call *rpcCallTrace, d *bchain.EthereumInt
 // getInternalDataForBlock fetches debug trace using callTracer, extracts internal transfers and creations and destructions of contracts
 func (b *EthereumRPC) getInternalDataForBlock(blockHash string, transactions []bchain.RpcTransaction) ([]bchain.EthereumInternalData, error) {
 	data := make([]bchain.EthereumInternalData, len(transactions))
-	if b.ChainConfig.ProcessInternalTransactions {
+	if ProcessInternalTransactions {
 		ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
 		defer cancel()
 		var trace []rpcTraceResult
@@ -640,6 +646,7 @@ func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error
 	internalData, err := b.getInternalDataForBlock(head.Hash, body.Transactions)
 	if err != nil {
 		blockSpecificData = &bchain.EthereumBlockSpecificData{InternalDataError: err.Error()}
+		glog.Info("InternalDataError ", bbh.Height, ": ", err.Error())
 	}
 
 	btxs := make([]bchain.Tx, len(body.Transactions))
