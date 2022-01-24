@@ -456,6 +456,7 @@ func (s *PublicServer) parseTemplates() []*template.Template {
 		"setTxToTemplateData":      setTxToTemplateData,
 		"isOwnAddress":             isOwnAddress,
 		"toJSON":                   toJSON,
+		"tokenTransfersCount":      tokenTransfersCount,
 	}
 	var createTemplate func(filenames ...string) *template.Template
 	if s.debug {
@@ -556,6 +557,17 @@ func setTxToTemplateData(td *TemplateData, tx *api.Tx) *TemplateData {
 // isOwnAddress returns true if the address is the one that is being shown in the explorer
 func isOwnAddress(td *TemplateData, a string) bool {
 	return a == td.AddrStr
+}
+
+// called from template, returns count of token transfers of given type
+func tokenTransfersCount(tx *api.Tx, t api.TokenType) int {
+	count := 0
+	for i := range tx.TokenTransfers {
+		if tx.TokenTransfers[i].Type == t {
+			count++
+		}
+	}
+	return count
 }
 
 func (s *PublicServer) explorerTx(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
