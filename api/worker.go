@@ -261,6 +261,15 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 		}
 		tokens = w.getEthereumTokensTransfers(tokenTransfers)
 		ethTxData := eth.GetEthereumTxData(bchainTx)
+
+		var internalData *bchain.EthereumInternalData
+		if eth.ProcessInternalTransactions {
+			internalData, err = w.db.GetEthereumInternalData(bchainTx.Txid)
+			if err != nil {
+				return nil, err
+			}
+		}
+
 		// mempool txs do not have fees yet
 		if ethTxData.GasUsed != nil {
 			feesSat.Mul(ethTxData.GasPrice, ethTxData.GasUsed)
@@ -276,6 +285,21 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 			Status:   ethTxData.Status,
 			Data:     ethTxData.Data,
 		}
+		if internalData != nil {
+			ethSpecific.Type = internalData.Type
+			ethSpecific.CreatedContract = internalData.Contract
+			ethSpecific.Error = internalData.Error
+			ethSpecific.InternalTransfers = make([]EthereumInternalTransfer, len(internalData.Transfers))
+			for i := range internalData.Transfers {
+				f := &internalData.Transfers[i]
+				t := &ethSpecific.InternalTransfers[i]
+				t.From = f.From
+				t.To = f.To
+				t.Type = f.Type
+				t.Value = (*Amount)(&f.Value)
+			}
+		}
+
 	}
 	// for now do not return size, we would have to compute vsize of segwit transactions
 	// size:=len(bchainTx.Hex) / 2
@@ -427,13 +451,25 @@ func (w *Worker) getEthereumTokensTransfers(transfers bchain.TokenTransfers) []T
 		if erc20c == nil {
 			erc20c = &bchain.Erc20Contract{Name: t.Contract}
 		}
+		var value *Amount
+		var values []TokenTransferValues
+		if t.Type == bchain.ERC1155 {
+			values = make([]TokenTransferValues, len(t.IdValues))
+			for j := range values {
+				values[j].Id = (*Amount)(&t.IdValues[j].Id)
+				values[j].Value = (*Amount)(&t.IdValues[j].Value)
+			}
+		} else {
+			value = (*Amount)(&t.Value)
+		}
 		tokens[i] = TokenTransfer{
 			Type:     TokenTypeMap[t.Type],
 			Token:    t.Contract,
 			From:     t.From,
 			To:       t.To,
+			Value:    value,
+			Values:   values,
 			Decimals: erc20c.Decimals,
-			Value:    (*Amount)(&t.Value),
 			Name:     erc20c.Name,
 			Symbol:   erc20c.Symbol,
 		}
@@ -657,29 +693,30 @@ func (w *Worker) getEthereumToken(index int, addrDesc, contract bchain.AddressDe
 	}, nil
 }
 
-func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescriptor, details AccountDetails, filter *AddressFilter) (*db.AddrBalance, []Token, *bchain.Erc20Contract, uint64, int, int, error) {
+func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescriptor, details AccountDetails, filter *AddressFilter) (*db.AddrBalance, []Token, *bchain.Erc20Contract, uint64, int, int, int, error) {
 	var (
 		ba             *db.AddrBalance
 		tokens         []Token
 		ci             *bchain.Erc20Contract
 		n              uint64
 		nonContractTxs int
+		internalTxs    int
 	)
 	// unknown number of results for paging
 	totalResults := -1
 	ca, err := w.db.GetAddrDescContracts(addrDesc)
 	if err != nil {
-		return nil, nil, nil, 0, 0, 0, NewAPIError(fmt.Sprintf("Address not found, %v", err), true)
+		return nil, nil, nil, 0, 0, 0, 0, NewAPIError(fmt.Sprintf("Address not found, %v", err), true)
 	}
 	b, err := w.chain.EthereumTypeGetBalance(addrDesc)
 	if err != nil {
-		return nil, nil, nil, 0, 0, 0, errors.Annotatef(err, "EthereumTypeGetBalance %v", addrDesc)
+		return nil, nil, nil, 0, 0, 0, 0, errors.Annotatef(err, "EthereumTypeGetBalance %v", addrDesc)
 	}
 	var filterDesc bchain.AddressDescriptor
 	if filter.Contract != "" {
 		filterDesc, err = w.chainParser.GetAddrDescFromAddress(filter.Contract)
 		if err != nil {
-			return nil, nil, nil, 0, 0, 0, NewAPIError(fmt.Sprintf("Invalid contract filter, %v", err), true)
+			return nil, nil, nil, 0, 0, 0, 0, NewAPIError(fmt.Sprintf("Invalid contract filter, %v", err), true)
 		}
 	}
 	if ca != nil {
@@ -691,7 +728,7 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 		}
 		n, err = w.chain.EthereumTypeGetNonce(addrDesc)
 		if err != nil {
-			return nil, nil, nil, 0, 0, 0, errors.Annotatef(err, "EthereumTypeGetNonce %v", addrDesc)
+			return nil, nil, nil, 0, 0, 0, 0, errors.Annotatef(err, "EthereumTypeGetNonce %v", addrDesc)
 		}
 		if details > AccountDetailsBasic {
 			tokens = make([]Token, len(ca.Contracts))
@@ -706,7 +743,7 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 				}
 				t, err := w.getEthereumToken(i+db.ContractIndexOffset, addrDesc, c.Contract, details, int(c.Txs))
 				if err != nil {
-					return nil, nil, nil, 0, 0, 0, err
+					return nil, nil, nil, 0, 0, 0, 0, err
 				}
 				tokens[j] = *t
 				j++
@@ -716,7 +753,7 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 			if len(filterDesc) > 0 && j == 0 && details >= AccountDetailsTokens {
 				t, err := w.getEthereumToken(0, addrDesc, filterDesc, details, 0)
 				if err != nil {
-					return nil, nil, nil, 0, 0, 0, err
+					return nil, nil, nil, 0, 0, 0, 0, err
 				}
 				tokens = []Token{*t}
 				// switch off query for transactions, there are no transactions
@@ -727,7 +764,7 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 		}
 		ci, err = w.chain.EthereumTypeGetErc20ContractInfo(addrDesc)
 		if err != nil {
-			return nil, nil, nil, 0, 0, 0, err
+			return nil, nil, nil, 0, 0, 0, 0, err
 		}
 		if filter.FromHeight == 0 && filter.ToHeight == 0 {
 			// compute total results for paging
@@ -742,6 +779,7 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 			}
 		}
 		nonContractTxs = int(ca.NonContractTxs)
+		internalTxs = int(ca.InternalTxs)
 	} else {
 		// addresses without any normal transactions can have internal transactions and therefore balance
 		if b != nil {
@@ -753,14 +791,14 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 		if len(filterDesc) > 0 && details >= AccountDetailsTokens {
 			t, err := w.getEthereumToken(0, addrDesc, filterDesc, details, 0)
 			if err != nil {
-				return nil, nil, nil, 0, 0, 0, err
+				return nil, nil, nil, 0, 0, 0, 0, err
 			}
 			tokens = []Token{*t}
 			// switch off query for transactions, there are no transactions
 			filter.Vout = AddressFilterVoutQueryNotNecessary
 		}
 	}
-	return ba, tokens, ci, n, nonContractTxs, totalResults, nil
+	return ba, tokens, ci, n, nonContractTxs, internalTxs, totalResults, nil
 }
 
 func (w *Worker) txFromTxid(txid string, bestheight uint32, option AccountDetails, blockInfo *db.BlockInfo) (*Tx, error) {
@@ -865,6 +903,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 		nonce                    string
 		unconfirmedTxs           int
 		nonTokenTxs              int
+		internalTxs              int
 		totalResults             int
 	)
 	addrDesc, address, err := w.getAddrDescAndNormalizeAddress(address)
@@ -873,7 +912,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 	}
 	if w.chainType == bchain.ChainEthereumType {
 		var n uint64
-		ba, tokens, erc20c, n, nonTokenTxs, totalResults, err = w.getEthereumTypeAddressBalances(addrDesc, option, filter)
+		ba, tokens, erc20c, n, nonTokenTxs, internalTxs, totalResults, err = w.getEthereumTypeAddressBalances(addrDesc, option, filter)
 		if err != nil {
 			return nil, err
 		}
@@ -977,6 +1016,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 		TotalSentSat:          (*Amount)(totalSent),
 		Txs:                   int(ba.Txs),
 		NonTokenTxs:           nonTokenTxs,
+		InternalTxs:           internalTxs,
 		UnconfirmedBalanceSat: (*Amount)(&uBalSat),
 		UnconfirmedTxs:        unconfirmedTxs,
 		Transactions:          txs,
