@@ -187,16 +187,25 @@ type TokenTransfer struct {
 	Values   []TokenTransferValues `json:"values,omitempty"`
 }
 
+type EthereumInternalTransfer struct {
+	Type  bchain.EthereumInternalTransactionType `json:"type"`
+	From  string                                 `json:"from"`
+	To    string                                 `json:"to"`
+	Value *Amount                                `json:"value"`
+}
+
 // EthereumSpecific contains ethereum specific transaction data
 type EthereumSpecific struct {
-	TxType            string                            `json:"txType,omitempty"`
-	Status            eth.TxStatus                      `json:"status"` // 1 OK, 0 Fail, -1 pending
-	Nonce             uint64                            `json:"nonce"`
-	GasLimit          *big.Int                          `json:"gasLimit"`
-	GasUsed           *big.Int                          `json:"gasUsed"`
-	GasPrice          *Amount                           `json:"gasPrice"`
-	Data              string                            `json:"data,omitempty"`
-	InternalTransfers []bchain.EthereumInternalTransfer `json:"internalTransfers,omitempty"`
+	Type              bchain.EthereumInternalTransactionType `json:"type,omitempty"`
+	CreatedContract   string                                 `json:"createdContract,omitempty"`
+	Status            eth.TxStatus                           `json:"status"` // 1 OK, 0 Fail, -1 pending
+	Error             string                                 `json:"error,omitempty"`
+	Nonce             uint64                                 `json:"nonce"`
+	GasLimit          *big.Int                               `json:"gasLimit"`
+	GasUsed           *big.Int                               `json:"gasUsed"`
+	GasPrice          *Amount                                `json:"gasPrice"`
+	Data              string                                 `json:"data,omitempty"`
+	InternalTransfers []EthereumInternalTransfer             `json:"internalTransfers,omitempty"`
 }
 
 // Tx holds information about a transaction
@@ -279,6 +288,7 @@ type Address struct {
 	UnconfirmedTxs        int                   `json:"unconfirmedTxs"`
 	Txs                   int                   `json:"txs"`
 	NonTokenTxs           int                   `json:"nonTokenTxs,omitempty"`
+	InternalTxs           int                   `json:"internalTxs,omitempty"`
 	Transactions          []*Tx                 `json:"transactions,omitempty"`
 	Txids                 []string              `json:"txids,omitempty"`
 	Nonce                 string                `json:"nonce,omitempty"`
