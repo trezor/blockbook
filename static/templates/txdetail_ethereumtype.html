@@ -69,11 +69,34 @@
         </div>
     </div>
 
+    {{if eq $tx.EthereumSpecific.Type 1}}
+        <div class="row line-top" style="padding: 15px 0 6px 15px;font-weight: bold;">
+            Contract creation
+        </div>
+        <div class="row" style="padding: 2px 15px;">
+            <div class="col-md-4">
+                <div class="row tx-in">
+                    <table class="table data-table">
+                        <tbody>
+                            <tr{{if isOwnAddress $data $tx.EthereumSpecific.CreatedContract}} class="tx-own"{{end}}>
+                                <td>
+                                    <span class="ellipsis tx-addr">{{if ne $tx.EthereumSpecific.CreatedContract $addr}}<a href="/address/{{$tx.EthereumSpecific.CreatedContract}}">{{$tx.EthereumSpecific.CreatedContract}}</a>{{else}}{{$tx.EthereumSpecific.CreatedContract}}{{end}}</span>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    {{end}}
+
     {{if $tx.EthereumSpecific.InternalTransfers}}
     <div class="row line-top" style="padding: 15px 0 6px 15px;font-weight: bold;">
         Internal Transactions
     </div>
     {{- range $tt := $tx.EthereumSpecific.InternalTransfers -}}
+    {{if eq $tt.Type 1}}Contract creation{{end}}
+    {{if eq $tt.Type 2}}Contract destruction{{end}}
     <div class="row" style="padding: 2px 15px;">
         <div class="col-md-4">
             <div class="row tx-in">
