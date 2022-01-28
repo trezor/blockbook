@@ -307,26 +307,23 @@ func (b *BulkConnect) connectBlockEthereumType(block *bchain.Block, storeBlockTx
 		defer wb.Destroy()
 		bac := b.bulkAddressesCount
 		if sa || b.bulkAddressesCount > maxBulkAddresses {
-			if err := b.storeBulkAddresses(wb); err != nil {
+			if err = b.storeBulkAddresses(wb); err != nil {
 				return err
 			}
 		}
-		if err := b.d.storeInternalDataEthereumType(wb, b.ethBlockTxs); err != nil {
+		if err = b.d.storeInternalDataEthereumType(wb, b.ethBlockTxs); err != nil {
 			return err
 		}
 		b.ethBlockTxs = b.ethBlockTxs[:0]
-		blockSpecificData, _ := block.CoinSpecificData.(*bchain.EthereumBlockSpecificData)
-		if blockSpecificData != nil && blockSpecificData.InternalDataError != "" {
-			if err := b.d.storeBlockInternalDataErrorEthereumType(wb, block, blockSpecificData.InternalDataError); err != nil {
-				return err
-			}
+		if err = b.d.storeBlockSpecificDataEthereumType(wb, block); err != nil {
+			return err
 		}
 		if storeBlockTxs {
-			if err := b.d.storeAndCleanupBlockTxsEthereumType(wb, block, blockTxs); err != nil {
+			if err = b.d.storeAndCleanupBlockTxsEthereumType(wb, block, blockTxs); err != nil {
 				return err
 			}
 		}
-		if err := b.d.db.Write(b.d.wo, wb); err != nil {
+		if err = b.d.db.Write(b.d.wo, wb); err != nil {
 			return err
 		}
 		if bac > b.bulkAddressesCount {
@@ -338,7 +335,7 @@ func (b *BulkConnect) connectBlockEthereumType(block *bchain.Block, storeBlockTx
 		if blockSpecificData != nil && blockSpecificData.InternalDataError != "" {
 			wb := gorocksdb.NewWriteBatch()
 			defer wb.Destroy()
-			if err := b.d.storeBlockInternalDataErrorEthereumType(wb, block, blockSpecificData.InternalDataError); err != nil {
+			if err = b.d.storeBlockSpecificDataEthereumType(wb, block); err != nil {
 				return err
 			}
 		}
