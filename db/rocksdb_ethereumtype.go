@@ -215,8 +215,8 @@ func addToContract(c *AddrContract, contractIndex int, index int32, contract bch
 		aggregate = func(s, v *big.Int) {
 			s.Sub(s, v)
 			if s.Sign() < 0 {
-				glog.Warningf("rocksdb: addToContracts: contract %s, from %s, negative aggregate", transfer.Contract, transfer.From)
-				s.SetInt64(0)
+				// glog.Warningf("rocksdb: addToContracts: contract %s, from %s, negative aggregate", transfer.Contract, transfer.From)
+				s.SetUint64(0)
 			}
 		}
 	} else {
@@ -254,8 +254,12 @@ func addToContract(c *AddrContract, contractIndex int, index int32, contract bch
 				}
 			}
 			// if not found and transfer to, add to the list
+			// it is necessary to add a copy of the value so that subsequent calls to addToContract do not change the transfer value
 			if index >= 0 {
-				c.IdValues = append(c.IdValues, t)
+				c.IdValues = append(c.IdValues, bchain.TokenTransferIdValue{
+					Id:    t.Id,
+					Value: *new(big.Int).Set(&t.Value),
+				})
 			}
 		nextTransfer:
 		}
@@ -662,6 +666,17 @@ func (d *RocksDB) storeBlockInternalDataErrorEthereumType(wb *gorocksdb.WriteBat
 	buf = append(buf, 0)
 	buf = append(buf, m...)
 	wb.PutCF(d.cfh[cfBlockInternalDataErrors], key, buf)
+	return nil
+}
+
+func (d *RocksDB) storeBlockSpecificDataEthereumType(wb *gorocksdb.WriteBatch, block *bchain.Block) error {
+	blockSpecificData, _ := block.CoinSpecificData.(*bchain.EthereumBlockSpecificData)
+	if blockSpecificData != nil && blockSpecificData.InternalDataError != "" {
+		glog.Info("storeBlockSpecificDataEthereumType ", block.Height, ": ", blockSpecificData.InternalDataError)
+		if err := d.storeBlockInternalDataErrorEthereumType(wb, block, blockSpecificData.InternalDataError); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
