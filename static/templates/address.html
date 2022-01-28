@@ -108,6 +108,7 @@
         <option {{if eq $addr.Filter "outputs" -}} selected{{end}} value="outputs">Address on output side</option>
         {{- if $addr.Tokens -}}
         <option {{if eq $addr.Filter "0" -}} selected{{end}} value="0">Non-contract</option>
+        <option {{if eq $addr.Filter "0" -}} selected{{end}} value="1">Internal</option>
         {{- range $t := $addr.Tokens -}}
         <option {{if eq $addr.Filter $t.ContractIndex -}} selected{{end}} value="{{$t.ContractIndex}}">{{$t.Name}}</option>
         {{- end -}}
