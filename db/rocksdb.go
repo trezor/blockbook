@@ -484,11 +484,8 @@ func (d *RocksDB) ConnectBlock(block *bchain.Block) error {
 		if err := d.storeInternalDataEthereumType(wb, blockTxs); err != nil {
 			return err
 		}
-		blockSpecificData, _ := block.CoinSpecificData.(*bchain.EthereumBlockSpecificData)
-		if blockSpecificData != nil && blockSpecificData.InternalDataError != "" {
-			if err := d.storeBlockInternalDataErrorEthereumType(wb, block, blockSpecificData.InternalDataError); err != nil {
-				return err
-			}
+		if err = d.storeBlockSpecificDataEthereumType(wb, block); err != nil {
+			return err
 		}
 		if err := d.storeAndCleanupBlockTxsEthereumType(wb, block, blockTxs); err != nil {
 			return err
