@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -15,6 +16,8 @@ const (
 	// DbStateInconsistent means db is in inconsistent state and cannot be used
 	DbStateInconsistent
 )
+
+var inShutdown int32
 
 // InternalStateColumn contains the data of a db column
 type InternalStateColumn struct {
@@ -264,4 +267,14 @@ func UnpackInternalState(buf []byte) (*InternalState, error) {
 		return nil, err
 	}
 	return &is, nil
+}
+
+// SetInShutdown sets the internal state to in shutdown state
+func SetInShutdown() {
+	atomic.StoreInt32(&inShutdown, 1)
+}
+
+// IsInShutdown returns true if in application shutdown state
+func IsInShutdown() bool {
+	return atomic.LoadInt32(&inShutdown) != 0
 }
