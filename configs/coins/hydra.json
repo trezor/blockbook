@@ -1,0 +1,70 @@
+{
+  "coin": {
+    "name": "Hydra",
+    "shortcut": "HYDRA",
+    "label": "Hydra",
+    "alias": "hydra"
+  },
+  "ports": {
+    "backend_rpc": 8097,
+    "backend_message_queue": 38397,
+    "blockbook_internal": 9097,
+    "blockbook_public": 9197
+  },
+  "ipc": {
+    "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
+    "rpc_user": "rpc",
+    "rpc_pass": "rpc",
+    "rpc_timeout": 25,
+    "message_queue_binding_template": "tcp://127.0.0.1:{{.Ports.BackendMessageQueue}}"
+  },
+  "backend": {
+    "package_name": "backend-hydra",
+    "package_revision": "satoshilabs-1",
+    "system_user": "hydra",
+    "version": "0.18.5.5",
+    "binary_url": "https://github.com/Hydra-Chain/node/releases/download/hydra_v0.18.5.5/hydra-0.18.5.5-ubuntu20.04-x86_64-gnu.zip",
+    "verification_type": "sha256",
+    "verification_source": "2f703f6bef32eb499e3c82b0d7a330f8eb6aec551d2fc8e026a3b7ef194f3ba8",
+    "extract_command": "unzip hydra-0.18.5.5-ubuntu20.04-x86_64-gnu.zip -d backend",
+    "exclude_files": [
+      "bin/hydra-qt"
+    ],
+    "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/hydrad -datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -conf={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf -pid=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",
+    "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/*.log",
+    "postinst_script_template": "",
+    "service_type": "forking",
+    "service_additional_params_template": "",
+    "protect_memory": true,
+    "mainnet": true,
+    "server_config_file": "bitcoin_like.conf",
+    "client_config_file": "bitcoin_like_client.conf",
+    "additional_params": {
+      "deprecatedrpc": "estimatefee",
+      "logevents": "1"
+    }
+  },
+  "blockbook": {
+    "package_name": "blockbook-hydra",
+    "system_user": "blockbook-hydra",
+    "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
+    "public_binding_template": ":{{.Ports.BlockbookPublic}}",
+    "explorer_url": "",
+    "additional_params": "",
+    "block_chain": {
+      "parse": true,
+      "mempool_workers": 8,
+      "mempool_sub_workers": 2,
+      "block_addresses_to_keep": 300,
+      "xpub_magic": 76067358,
+      "xpub_magic_segwit_p2sh": 77429938,
+      "xpub_magic_segwit_native": 78792518,
+      "slip44": 2301,
+      "additional_params": {}
+    }
+  },
+  "meta": {
+    "package_maintainer": "martin-key",
+    "package_maintainer_email": "martin@gostartups.net"
+  }
+}

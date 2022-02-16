@@ -52,6 +52,7 @@ import (
 	"github.com/trezor/blockbook/bchain/coins/viacoin"
 	"github.com/trezor/blockbook/bchain/coins/vipstarcoin"
 	"github.com/trezor/blockbook/bchain/coins/zec"
+	"github.com/trezor/blockbook/bchain/coins/hydra"
 	"github.com/trezor/blockbook/common"
 )
 
@@ -126,6 +127,7 @@ func init() {
 	BlockChainFactories["BitZeny"] = bitzeny.NewBitZenyRPC
 	BlockChainFactories["Trezarcoin"] = trezarcoin.NewTrezarcoinRPC
 	BlockChainFactories["ECash"] = ecash.NewECashRPC
+	BlockChainFactories["Hydra"] = hydra.NewHydraRPC
 }
 
 // GetCoinNameFromConfig gets coin name and coin shortcut from config file
