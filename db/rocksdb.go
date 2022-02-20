@@ -196,6 +196,10 @@ func atoUint64(s string) uint64 {
 	return uint64(i)
 }
 
+func (d *RocksDB) WriteBatch(wb *gorocksdb.WriteBatch) error {
+	return d.db.Write(d.wo, wb)
+}
+
 // GetMemoryStats returns memory usage statistics as reported by RocksDB
 func (d *RocksDB) GetMemoryStats() string {
 	var total, indexAndFilter, memtable uint64
@@ -369,7 +373,7 @@ func (d *RocksDB) ConnectBlock(block *bchain.Block) error {
 	if err := d.storeAddresses(wb, block.Height, addresses); err != nil {
 		return err
 	}
-	if err := d.db.Write(d.wo, wb); err != nil {
+	if err := d.WriteBatch(wb); err != nil {
 		return err
 	}
 	d.is.AppendBlockTime(uint32(block.Time))
@@ -1418,7 +1422,7 @@ func (d *RocksDB) disconnectBlock(height uint32, blockTxs []blockTxs) error {
 		wb.DeleteCF(d.cfh[cfTransactions], b)
 		wb.DeleteCF(d.cfh[cfTxAddresses], b)
 	}
-	return d.db.Write(d.wo, wb)
+	return d.WriteBatch(wb)
 }
 
 // DisconnectBlockRangeBitcoinType removes all data belonging to blocks in range lower-higher
@@ -1535,7 +1539,7 @@ func (d *RocksDB) DeleteTx(txid string) error {
 	wb := gorocksdb.NewWriteBatch()
 	defer wb.Destroy()
 	d.internalDeleteTx(wb, key)
-	return d.db.Write(d.wo, wb)
+	return d.WriteBatch(wb)
 }
 
 // internalDeleteTx checks if tx is cached and updates internal state accordingly
@@ -1832,7 +1836,7 @@ func (d *RocksDB) fixUtxo(addrDesc bchain.AddressDescriptor, ba *AddrBalance) (b
 			wb := gorocksdb.NewWriteBatch()
 			err = d.storeBalances(wb, map[string]*AddrBalance{string(addrDesc): ba})
 			if err == nil {
-				err = d.db.Write(d.wo, wb)
+				err = d.WriteBatch(wb)
 			}
 			wb.Destroy()
 			if err != nil {
@@ -1845,7 +1849,7 @@ func (d *RocksDB) fixUtxo(addrDesc bchain.AddressDescriptor, ba *AddrBalance) (b
 		wb := gorocksdb.NewWriteBatch()
 		err := d.storeBalances(wb, map[string]*AddrBalance{string(addrDesc): ba})
 		if err == nil {
-			err = d.db.Write(d.wo, wb)
+			err = d.WriteBatch(wb)
 		}
 		wb.Destroy()
 		if err != nil {
@@ -1975,6 +1979,23 @@ func unpackVarint(buf []byte) (int, int) {
 func unpackVaruint(buf []byte) (uint, int) {
 	i, ofs := vlq.Uint(buf)
 	return uint(i), ofs
+}
+
+func packString(s string) []byte {
+	varBuf := make([]byte, vlq.MaxLen64)
+	l := len(s)
+	i := packVaruint(uint(l), varBuf)
+	buf := make([]byte, 0, i+l)
+	buf = append(buf, varBuf[:i]...)
+	buf = append(buf, s...)
+	return buf
+}
+
+func unpackString(buf []byte) (string, int) {
+	sl, l := unpackVaruint(buf)
+	so := l + int(sl)
+	s := string(buf[l:so])
+	return s, so
 }
 
 const (
