@@ -108,7 +108,7 @@ func (b *BulkConnect) parallelStoreTxAddresses(c chan error, all bool) {
 		c <- err
 		return
 	}
-	if err := b.d.db.Write(b.d.wo, wb); err != nil {
+	if err := b.d.WriteBatch(wb); err != nil {
 		c <- err
 		return
 	}
@@ -148,7 +148,7 @@ func (b *BulkConnect) parallelStoreBalances(c chan error, all bool) {
 		c <- err
 		return
 	}
-	if err := b.d.db.Write(b.d.wo, wb); err != nil {
+	if err := b.d.WriteBatch(wb); err != nil {
 		c <- err
 		return
 	}
@@ -215,7 +215,7 @@ func (b *BulkConnect) connectBlockBitcoinType(block *bchain.Block, storeBlockTxs
 				return err
 			}
 		}
-		if err := b.d.db.Write(b.d.wo, wb); err != nil {
+		if err := b.d.WriteBatch(wb); err != nil {
 			return err
 		}
 		if bac > b.bulkAddressesCount {
@@ -267,7 +267,7 @@ func (b *BulkConnect) parallelStoreAddressContracts(c chan error, all bool) {
 		c <- err
 		return
 	}
-	if err := b.d.db.Write(b.d.wo, wb); err != nil {
+	if err := b.d.WriteBatch(wb); err != nil {
 		c <- err
 		return
 	}
@@ -323,7 +323,7 @@ func (b *BulkConnect) connectBlockEthereumType(block *bchain.Block, storeBlockTx
 				return err
 			}
 		}
-		if err = b.d.db.Write(b.d.wo, wb); err != nil {
+		if err = b.d.WriteBatch(wb); err != nil {
 			return err
 		}
 		if bac > b.bulkAddressesCount {
@@ -336,6 +336,9 @@ func (b *BulkConnect) connectBlockEthereumType(block *bchain.Block, storeBlockTx
 			wb := gorocksdb.NewWriteBatch()
 			defer wb.Destroy()
 			if err = b.d.storeBlockSpecificDataEthereumType(wb, block); err != nil {
+				return err
+			}
+			if err := b.d.WriteBatch(wb); err != nil {
 				return err
 			}
 		}
@@ -381,7 +384,7 @@ func (b *BulkConnect) Close() error {
 	if err := b.storeBulkAddresses(wb); err != nil {
 		return err
 	}
-	if err := b.d.db.Write(b.d.wo, wb); err != nil {
+	if err := b.d.WriteBatch(wb); err != nil {
 		return err
 	}
 	glog.Info("rocksdb: height ", b.height, ", stored ", bac, " addresses, done in ", time.Since(start))
