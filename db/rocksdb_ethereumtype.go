@@ -578,6 +578,58 @@ func (d *RocksDB) unpackEthInternalData(buf []byte) (*bchain.EthereumInternalDat
 	return &id, nil
 }
 
+type FourByteSignature struct {
+	Name       string
+	Parameters []string
+}
+
+func packFourByteKey(fourBytes uint32, id uint32) []byte {
+	key := make([]byte, 0, 8)
+	key = append(key, packUint(fourBytes)...)
+	key = append(key, packUint(id)...)
+	return key
+}
+
+func packFourByteSignature(signature *FourByteSignature) []byte {
+	buf := packString(signature.Name)
+	for i := range signature.Parameters {
+		buf = append(buf, packString(signature.Parameters[i])...)
+	}
+	return buf
+}
+
+func unpackFourByteSignature(buf []byte) (*FourByteSignature, error) {
+	var signature FourByteSignature
+	var l int
+	signature.Name, l = unpackString(buf)
+	for l < len(buf) {
+		s, ll := unpackString(buf[l:])
+		signature.Parameters = append(signature.Parameters, s)
+		l += ll
+	}
+	return &signature, nil
+}
+
+func (d *RocksDB) GetFourByteSignature(fourBytes uint32, id uint32) (*FourByteSignature, error) {
+	key := packFourByteKey(fourBytes, id)
+	val, err := d.db.GetCF(d.ro, d.cfh[cfFunctionSignatures], key)
+	if err != nil {
+		return nil, err
+	}
+	defer val.Free()
+	buf := val.Data()
+	if len(buf) == 0 {
+		return nil, nil
+	}
+	return unpackFourByteSignature(buf)
+}
+
+func (d *RocksDB) StoreFourByteSignature(wb *gorocksdb.WriteBatch, fourBytes uint32, id uint32, signature *FourByteSignature) error {
+	key := packFourByteKey(fourBytes, id)
+	wb.PutCF(d.cfh[cfFunctionSignatures], key, packFourByteSignature(signature))
+	return nil
+}
+
 func (d *RocksDB) GetEthereumInternalData(txid string) (*bchain.EthereumInternalData, error) {
 	btxID, err := d.chainParser.PackTxid(txid)
 	if err != nil {
@@ -968,7 +1020,7 @@ func (d *RocksDB) DisconnectBlockRangeEthereumType(lower uint32, higher uint32) 
 		wb.DeleteCF(d.cfh[cfBlockInternalDataErrors], key)
 	}
 	d.storeAddressContracts(wb, contracts)
-	err := d.db.Write(d.wo, wb)
+	err := d.WriteBatch(wb)
 	if err == nil {
 		d.is.RemoveLastBlockTimes(int(higher-lower) + 1)
 		glog.Infof("rocksdb: blocks %d-%d disconnected", lower, higher)

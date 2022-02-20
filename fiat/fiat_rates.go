@@ -30,7 +30,7 @@ type RatesDownloader struct {
 	downloader          RatesDownloaderInterface
 }
 
-// NewFiatRatesDownloader initiallizes the downloader for FiatRates API.
+// NewFiatRatesDownloader initializes the downloader for FiatRates API.
 // If the startTime is nil, the downloader will start from the beginning.
 func NewFiatRatesDownloader(db *db.RocksDB, apiType string, params string, startTime *time.Time, callback OnNewFiatRatesTicker) (*RatesDownloader, error) {
 	var rd = &RatesDownloader{}
