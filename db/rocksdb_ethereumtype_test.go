@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/flier/gorocksdb"
 	"github.com/juju/errors"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/bchain/coins/eth"
@@ -297,6 +298,30 @@ func formatInternalData(in *bchain.EthereumInternalData) *bchain.EthereumInterna
 	return &out
 }
 
+func testFourByteSignature(t *testing.T, d *RocksDB) {
+	fourBytes := uint32(1234123)
+	id := uint32(42313)
+	signature := FourByteSignature{
+		Name:       "xyz",
+		Parameters: []string{"address", "(bytes,uint256[],uint256)", "uint16"},
+	}
+	wb := gorocksdb.NewWriteBatch()
+	defer wb.Destroy()
+	if err := d.StoreFourByteSignature(wb, fourBytes, id, &signature); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.WriteBatch(wb); err != nil {
+		t.Fatal(err)
+	}
+	got, err := d.GetFourByteSignature(fourBytes, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(*got, signature) {
+		t.Errorf("testFourByteSignature: got %+v, want %+v", got, signature)
+	}
+}
+
 // TestRocksDB_Index_EthereumType is an integration test probing the whole indexing functionality for EthereumType chains
 // It does the following:
 // 1) Connect two blocks (inputs from 2nd block are spending some outputs from the 1st block)
@@ -416,6 +441,9 @@ func TestRocksDB_Index_EthereumType(t *testing.T) {
 	if !reflect.DeepEqual(info, iw) {
 		t.Errorf("GetBlockInfo() = %+v, want %+v", info, iw)
 	}
+
+	// Test to store and get FourByteSignature
+	testFourByteSignature(t, d)
 
 	// Test tx caching functionality, leave one tx in db to test cleanup in DisconnectBlock
 	testTxCache(t, d, block1, &block1.Txs[0])
@@ -1129,6 +1157,42 @@ func Test_packUnpackBlockTx(t *testing.T) {
 			}
 			if pos != tt.pos {
 				t.Errorf("unpackBlockTx() pos = %v, want %v", pos, tt.pos)
+			}
+		})
+	}
+}
+
+func Test_packUnpackFourByteSignature(t *testing.T) {
+	tests := []struct {
+		name      string
+		signature FourByteSignature
+	}{
+		{
+			name: "no params",
+			signature: FourByteSignature{
+				Name: "abcdef",
+			},
+		},
+		{
+			name: "one param",
+			signature: FourByteSignature{
+				Name:       "opqr",
+				Parameters: []string{"uint16"},
+			},
+		},
+		{
+			name: "multiple params",
+			signature: FourByteSignature{
+				Name:       "xyz",
+				Parameters: []string{"address", "(bytes,uint256[],uint256)", "uint16"},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			buf := packFourByteSignature(&tt.signature)
+			if got, err := unpackFourByteSignature(buf); !reflect.DeepEqual(*got, tt.signature) || err != nil {
+				t.Errorf("packUnpackFourByteSignature() = %v, want %v, error %v", *got, tt.signature, err)
 			}
 		})
 	}
