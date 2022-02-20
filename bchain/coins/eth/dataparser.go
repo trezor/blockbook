@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"math/big"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -55,4 +56,17 @@ func parseSimpleStringProperty(data string) string {
 		}
 	}
 	return ""
+}
+
+func Decamel(s string) string {
+	var b bytes.Buffer
+	splittable := false
+	for _, v := range s {
+		if splittable && unicode.IsUpper(v) {
+			b.WriteByte(' ')
+		}
+		b.WriteRune(v)
+		splittable = unicode.IsLower(v) || unicode.IsNumber(v)
+	}
+	return b.String()
 }

@@ -1481,3 +1481,21 @@ func Test_reorderUtxo(t *testing.T) {
 		})
 	}
 }
+
+func Test_packUnpackString(t *testing.T) {
+	tests := []struct {
+		name string
+	}{
+		{name: "ahoj"},
+		{name: ""},
+		{name: "very long long very long long very long long very long long very long long very long long very long long very long long very long long very long long very long long very long long very long long"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			buf := packString(tt.name)
+			if got, l := unpackString(buf); !reflect.DeepEqual(got, tt.name) || l != len(buf) {
+				t.Errorf("Test_packUnpackString() = %v, want %v, len %d, want len %d", got, tt.name, l, len(buf))
+			}
+		})
+	}
+}

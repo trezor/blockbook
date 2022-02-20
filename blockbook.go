@@ -24,6 +24,7 @@ import (
 	"github.com/trezor/blockbook/common"
 	"github.com/trezor/blockbook/db"
 	"github.com/trezor/blockbook/fiat"
+	"github.com/trezor/blockbook/fourbyte"
 	"github.com/trezor/blockbook/server"
 )
 
@@ -343,7 +344,7 @@ func mainWithExitCode() int {
 
 	if internalServer != nil || publicServer != nil || chain != nil {
 		// start fiat rates downloader only if not shutting down immediately
-		initFiatRatesDownloader(index, *configFile)
+		initDownloaders(index, chain, *configFile)
 		waitForSignalAndShutdown(internalServer, publicServer, chain, 10*time.Second)
 	}
 
@@ -667,7 +668,7 @@ func computeFeeStats(stopCompute chan os.Signal, blockFrom, blockTo int, db *db.
 	return err
 }
 
-func initFiatRatesDownloader(db *db.RocksDB, configfile string) {
+func initDownloaders(db *db.RocksDB, chain bchain.BlockChain, configfile string) {
 	data, err := ioutil.ReadFile(configfile)
 	if err != nil {
 		glog.Errorf("Error reading file %v, %v", configfile, err)
@@ -675,8 +676,9 @@ func initFiatRatesDownloader(db *db.RocksDB, configfile string) {
 	}
 
 	var config struct {
-		FiatRates       string `json:"fiat_rates"`
-		FiatRatesParams string `json:"fiat_rates_params"`
+		FiatRates          string `json:"fiat_rates"`
+		FiatRatesParams    string `json:"fiat_rates_params"`
+		FourByteSignatures string `json:"fourByteSignatures"`
 	}
 
 	err = json.Unmarshal(data, &config)
@@ -686,14 +688,26 @@ func initFiatRatesDownloader(db *db.RocksDB, configfile string) {
 	}
 
 	if config.FiatRates == "" || config.FiatRatesParams == "" {
-		glog.Infof("FiatRates config (%v) is empty, so the functionality is disabled.", configfile)
+		glog.Infof("FiatRates config (%v) is empty, not downloading fiat rates.", configfile)
 	} else {
 		fiatRates, err := fiat.NewFiatRatesDownloader(db, config.FiatRates, config.FiatRatesParams, nil, onNewFiatRatesTicker)
 		if err != nil {
 			glog.Errorf("NewFiatRatesDownloader Init error: %v", err)
-			return
+		} else {
+			glog.Infof("Starting %v FiatRates downloader...", config.FiatRates)
+			go fiatRates.Run()
 		}
-		glog.Infof("Starting %v FiatRates downloader...", config.FiatRates)
-		go fiatRates.Run()
 	}
+
+	if config.FourByteSignatures != "" && chain.GetChainParser().GetChainType() == bchain.ChainEthereumType {
+		fbsd, err := fourbyte.NewFourByteSignaturesDownloader(db, config.FourByteSignatures)
+		if err != nil {
+			glog.Errorf("NewFourByteSignaturesDownloader Init error: %v", err)
+		} else {
+			glog.Infof("Starting FourByteSignatures downloader...")
+			go fbsd.Run()
+		}
+
+	}
+
 }

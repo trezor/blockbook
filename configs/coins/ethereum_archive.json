@@ -54,7 +54,8 @@
         "processInternalTransactions": true,
         "queryBackendOnMempoolResync": false,
         "fiat_rates": "coingecko",
-        "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"ethereum\", \"periodSeconds\": 60}"
+        "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"ethereum\", \"periodSeconds\": 60}",
+        "4byteSignatures": "https://www.4byte.directory/api/v1/signatures/"
       }
     }
   },

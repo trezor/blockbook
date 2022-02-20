@@ -51,7 +51,8 @@
       "additional_params": {
         "mempoolTxTimeoutHours": 12,
         "processInternalTransactions": true,
-        "queryBackendOnMempoolResync": false
+        "queryBackendOnMempoolResync": false,
+        "fourByteSignatures": "https://www.4byte.directory/api/v1/signatures/"
       }
     }
   },
