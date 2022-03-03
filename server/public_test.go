@@ -812,6 +812,15 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			},
 		},
 		{
+			name:        "apiUtxo v2 xpub",
+			r:           newGetRequest(ts.URL + "/api/v2/utxo/" + url.QueryEscape(dbtestdata.TaprootDescriptor)),
+			status:      http.StatusOK,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`[]`,
+			},
+		},
+		{
 			name:        "apiBalanceHistory Addr2 v2",
 			r:           newGetRequest(ts.URL + "/api/v2/balancehistory/mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz"),
 			status:      http.StatusOK,
