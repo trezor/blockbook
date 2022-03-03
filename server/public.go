@@ -1050,7 +1050,8 @@ func (s *PublicServer) apiXpub(r *http.Request, apiVersion int) (interface{}, er
 func (s *PublicServer) apiUtxo(r *http.Request, apiVersion int) (interface{}, error) {
 	var utxo []api.Utxo
 	var err error
-	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
+	if i := strings.LastIndex(r.URL.Path, "utxo/"); i > 0 {
+		desc := r.URL.Path[i+5:]
 		onlyConfirmed := false
 		c := r.URL.Query().Get("confirmed")
 		if len(c) > 0 {
@@ -1063,11 +1064,11 @@ func (s *PublicServer) apiUtxo(r *http.Request, apiVersion int) (interface{}, er
 		if ec != nil {
 			gap = 0
 		}
-		utxo, err = s.api.GetXpubUtxo(r.URL.Path[i+1:], onlyConfirmed, gap)
+		utxo, err = s.api.GetXpubUtxo(desc, onlyConfirmed, gap)
 		if err == nil {
 			s.metrics.ExplorerViews.With(common.Labels{"action": "api-xpub-utxo"}).Inc()
 		} else {
-			utxo, err = s.api.GetAddressUtxo(r.URL.Path[i+1:], onlyConfirmed)
+			utxo, err = s.api.GetAddressUtxo(desc, onlyConfirmed)
 			s.metrics.ExplorerViews.With(common.Labels{"action": "api-address-utxo"}).Inc()
 		}
 		if err == nil && apiVersion == apiV1 {
