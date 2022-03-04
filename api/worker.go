@@ -1486,8 +1486,8 @@ func (w *Worker) GetFiatRatesTickersList(timestamp int64) (*db.ResultTickerListA
 	}, nil
 }
 
-// getBlockInfoFromBlockID returns block info from block height or block hash
-func (w *Worker) getBlockInfoFromBlockID(bid string) (*bchain.BlockInfo, error) {
+// getBlockHashBlockID returns block hash from block height or block hash
+func (w *Worker) getBlockHashBlockID(bid string) string {
 	// try to decide if passed string (bid) is block height or block hash
 	// if it's a number, must be less than int32
 	var hash string
@@ -1500,6 +1500,12 @@ func (w *Worker) getBlockInfoFromBlockID(bid string) (*bchain.BlockInfo, error) 
 	} else {
 		hash = bid
 	}
+	return hash
+}
+
+// getBlockInfoFromBlockID returns block info from block height or block hash
+func (w *Worker) getBlockInfoFromBlockID(bid string) (*bchain.BlockInfo, error) {
+	hash:=w.getBlockHashBlockID(bid)
 	if hash == "" {
 		return nil, NewAPIError("Block not found", true)
 	}
@@ -1676,6 +1682,16 @@ func (w *Worker) GetBlock(bid string, page int, txsOnPage int) (*Block, error) {
 		TxCount:      txCount,
 		Transactions: txs,
 	}, nil
+}
+
+// GetBlock returns paged data about block
+func (w *Worker) GetBlockRaw(bid string) (*BlockRaw, error) {
+	hash:=w.getBlockHashBlockID(bid)
+	if hash == "" {
+		return nil, NewAPIError("Block not found", true)
+	}
+	hex, err := w.chain.GetBlockRaw(hash)
+	return &BlockRaw{Hex: hex}, err
 }
 
 // ComputeFeeStats computes fee distribution in defined blocks and logs them to log

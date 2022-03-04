@@ -285,6 +285,7 @@ type BlockChain interface {
 	GetBlockHeader(hash string) (*BlockHeader, error)
 	GetBlock(hash string, height uint32) (*Block, error)
 	GetBlockInfo(hash string) (*BlockInfo, error)
+	GetBlockRaw(hash string) (string, error)
 	GetMempoolTransactions() ([]string, error)
 	GetTransaction(txid string) (*Tx, error)
 	GetTransactionForMempool(txid string) (*Tx, error)

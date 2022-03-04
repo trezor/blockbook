@@ -399,6 +399,11 @@ type Block struct {
 	Transactions []*Tx `json:"txs,omitempty"`
 }
 
+// BlockRaw contains raw block in hex
+type BlockRaw struct {
+	Hex          string            `json:"hex"`
+}
+
 // BlockbookInfo contains information about the running blockbook instance
 type BlockbookInfo struct {
 	Coin              string                       `json:"coin"`

@@ -78,7 +78,7 @@ func (f *BitcoreRPC) GetBlock(hash string, height uint32) (*bchain.Block, error)
 	if err != nil {
 		return nil, err
 	}
-	data, err := f.GetBlockRaw(hash)
+	data, err := f.GetBlockBytes(hash)
 	if err != nil {
 		return nil, err
 	}
