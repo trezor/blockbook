@@ -129,14 +129,14 @@ func (b *BCashRPC) GetBlockRaw(hash string) (string, error) {
 		}
 		return "", errors.Annotatef(res.Error, "hash %v", hash)
 	}
-	return res.Result,nil
+	return res.Result, nil
 }
 
 // GetBlockBytes returns block with given hash as bytes
 func (b *BCashRPC) GetBlockBytes(hash string) ([]byte, error) {
-	block,err:=b.GetBlockRaw(hash)
+	block, err := b.GetBlockRaw(hash)
 	if err != nil {
-		return nil,err
+		return nil, err
 	}
 	return hex.DecodeString(block)
 }

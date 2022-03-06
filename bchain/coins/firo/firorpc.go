@@ -153,14 +153,14 @@ func (zc *FiroRPC) GetBlockRaw(hash string) (string, error) {
 		}
 		return "", errors.Annotatef(res.Error, "hash %v", hash)
 	}
-	return res.Result,nil
+	return res.Result, nil
 }
 
 // GetBlockBytes returns block with given hash as bytes
 func (zc *FiroRPC) GetBlockBytes(hash string) ([]byte, error) {
-	block,err:=zc.GetBlockRaw(hash)
+	block, err := zc.GetBlockRaw(hash)
 	if err != nil {
-		return nil,err
+		return nil, err
 	}
 	return hex.DecodeString(block)
 }

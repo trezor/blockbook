@@ -13,7 +13,7 @@ const (
 	MainnetMagic wire.BitcoinNet = 0xd4b4bef9
 	TestnetMagic wire.BitcoinNet = 0x0709110b
 	RegtestMagic wire.BitcoinNet = 0xdab5bffa
-	SignetMagic wire.BitcoinNet = 0x7696b422
+	SignetMagic  wire.BitcoinNet = 0x7696b422
 )
 
 // chain parameters
@@ -21,7 +21,7 @@ var (
 	MainNetParams chaincfg.Params
 	TestNetParams chaincfg.Params
 	RegTestParams chaincfg.Params
-	SigNetParams chaincfg.Params
+	SigNetParams  chaincfg.Params
 )
 
 func init() {

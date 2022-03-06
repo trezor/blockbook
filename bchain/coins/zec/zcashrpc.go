@@ -168,4 +168,3 @@ func (z *ZCashRPC) GetMempoolEntry(txid string) (*bchain.MempoolEntry, error) {
 func (z *ZCashRPC) GetBlockRaw(hash string) (string, error) {
 	return "", errors.New("GetBlockRaw: not supported")
 }
-
