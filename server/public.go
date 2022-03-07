@@ -454,6 +454,7 @@ func (s *PublicServer) parseTemplates() []*template.Template {
 		"formatAmount":             s.formatAmount,
 		"formatAmountWithDecimals": formatAmountWithDecimals,
 		"setTxToTemplateData":      setTxToTemplateData,
+		"isOwnAddress":             isOwnAddress,
 		"toJSON":                   toJSON,
 	}
 	var createTemplate func(filenames ...string) *template.Template
@@ -550,6 +551,11 @@ func formatAmountWithDecimals(a *api.Amount, d int) string {
 func setTxToTemplateData(td *TemplateData, tx *api.Tx) *TemplateData {
 	td.Tx = tx
 	return td
+}
+
+// isOwnAddress returns true if the address is the one that is being shown in the explorer
+func isOwnAddress(td *TemplateData, a string) bool {
+	return a == td.AddrStr
 }
 
 func (s *PublicServer) explorerTx(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {

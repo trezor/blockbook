@@ -923,6 +923,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 						if option == AccountDetailsTxidHistory {
 							txids = append(txids, tx.Txid)
 						} else if option >= AccountDetailsTxHistoryLight {
+							setIsOwnAddress(tx, address)
 							txs = append(txs, tx)
 						}
 					}
