@@ -1715,6 +1715,12 @@ func (w *Worker) GetBlockRaw(bid string) (*BlockRaw, error) {
 		return nil, NewAPIError("Block not found", true)
 	}
 	hex, err := w.chain.GetBlockRaw(hash)
+	if err != nil {
+		if err == bchain.ErrBlockNotFound {
+			return nil, NewAPIError("Block not found", true)
+		}
+		return nil, err
+	}
 	return &BlockRaw{Hex: hex}, err
 }
 
