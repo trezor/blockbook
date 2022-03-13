@@ -26,11 +26,11 @@ const (
 	TestnetMagic wire.BitcoinNet = 0xcffcbeea
 	RegtestMagic wire.BitcoinNet = 0xfabfb5da
 
-	GenesisBlockTime       = 1414776286
-	SwitchToMTPBlockHeader = 1544443200
+	GenesisBlockTime                  = 1414776286
+	SwitchToMTPBlockHeader            = 1544443200
 	SwitchToProgPowBlockHeaderTestnet = 1630069200
 	SwitchToProgPowBlockHeaderMainnet = 1635228000
-	MTPL                   = 64
+	MTPL                              = 64
 
 	SpendTxID = "0000000000000000000000000000000000000000000000000000000000000000"
 
@@ -159,7 +159,7 @@ func (p *FiroParser) ParseBlock(b []byte) (*bchain.Block, error) {
 	}
 
 	// then ProgPow or MTP header
-	if(isProgPow(header, p.Params.Net == TestnetMagic)){
+	if isProgPow(header, p.Params.Net == TestnetMagic) {
 		progPowHeader := ProgPowBlockHeader{}
 
 		// header

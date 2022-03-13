@@ -100,6 +100,8 @@ func init() {
 	BlockChainFactories["Liquid"] = liquid.NewLiquidRPC
 	BlockChainFactories["Groestlcoin"] = grs.NewGroestlcoinRPC
 	BlockChainFactories["Groestlcoin Testnet"] = grs.NewGroestlcoinRPC
+	BlockChainFactories["Groestlcoin Signet"] = grs.NewGroestlcoinRPC
+	BlockChainFactories["Groestlcoin Regtest"] = grs.NewGroestlcoinRPC
 	BlockChainFactories["PIVX"] = pivx.NewPivXRPC
 	BlockChainFactories["PIVX Testnet"] = pivx.NewPivXRPC
 	BlockChainFactories["Polis"] = polis.NewPolisRPC
@@ -253,6 +255,11 @@ func (c *blockChainWithMetrics) GetBlock(hash string, height uint32) (v *bchain.
 func (c *blockChainWithMetrics) GetBlockInfo(hash string) (v *bchain.BlockInfo, err error) {
 	defer func(s time.Time) { c.observeRPCLatency("GetBlockInfo", s, err) }(time.Now())
 	return c.b.GetBlockInfo(hash)
+}
+
+func (c *blockChainWithMetrics) GetBlockRaw(hash string) (v string, err error) {
+	defer func(s time.Time) { c.observeRPCLatency("GetBlockRaw", s, err) }(time.Now())
+	return c.b.GetBlockRaw(hash)
 }
 
 func (c *blockChainWithMetrics) GetMempoolTransactions() (v []string, err error) {

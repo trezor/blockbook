@@ -280,18 +280,23 @@ func (p *BaseParser) IsAddrDescIndexable(addrDesc AddressDescriptor) bool {
 	return true
 }
 
+// ParseXpub is unsupported
+func (p *BaseParser) ParseXpub(xpub string) (*XpubDescriptor, error) {
+	return nil, errors.New("Not supported")
+}
+
 // DerivationBasePath is unsupported
-func (p *BaseParser) DerivationBasePath(xpub string) (string, error) {
+func (p *BaseParser) DerivationBasePath(descriptor *XpubDescriptor) (string, error) {
 	return "", errors.New("Not supported")
 }
 
 // DeriveAddressDescriptors is unsupported
-func (p *BaseParser) DeriveAddressDescriptors(xpub string, change uint32, indexes []uint32) ([]AddressDescriptor, error) {
+func (p *BaseParser) DeriveAddressDescriptors(descriptor *XpubDescriptor, change uint32, indexes []uint32) ([]AddressDescriptor, error) {
 	return nil, errors.New("Not supported")
 }
 
 // DeriveAddressDescriptorsFromTo is unsupported
-func (p *BaseParser) DeriveAddressDescriptorsFromTo(xpub string, change uint32, fromIndex uint32, toIndex uint32) ([]AddressDescriptor, error) {
+func (p *BaseParser) DeriveAddressDescriptorsFromTo(descriptor *XpubDescriptor, change uint32, fromIndex uint32, toIndex uint32) ([]AddressDescriptor, error) {
 	return nil, errors.New("Not supported")
 }
 
