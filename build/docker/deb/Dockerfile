@@ -2,6 +2,8 @@
 
 FROM blockbook-build:latest
 
+ENV DEBIAN_FRONTEND=noninteractive
+
 RUN apt-get update && \
     apt-get upgrade -y && \
     apt-get install -y devscripts debhelper make dh-systemd dh-exec && \
