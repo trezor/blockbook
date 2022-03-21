@@ -22,10 +22,10 @@
     "package_name": "backend-ecash",
     "package_revision": "satoshilabs-1",
     "system_user": "ecash",
-    "version": "0.24.9",
-    "binary_url": "https://download.bitcoinabc.org/0.24.9/linux/bitcoin-abc-0.24.9-x86_64-linux-gnu.tar.gz",
+    "version": "0.25.1",
+    "binary_url": "https://download.bitcoinabc.org/0.25.1/linux/bitcoin-abc-0.25.1-x86_64-linux-gnu.tar.gz",
     "verification_type": "sha256",
-    "verification_source": "4e7d2c385544da0f3d21e4ae377463e9a509c71a96e5d051842fb2b8e4adb048",
+    "verification_source": "295183578ce67444fd6a504d2dcb85d07345454881ba4db5f52d82dd3a659bed",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
       "bin/bitcoin-qt"
