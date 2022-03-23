@@ -45,6 +45,7 @@
 | Omotenashicoin         | 9094                    | 9194                  | 8094             | 38394                       |
 | BitZeny                | 9095                    | 9195                  | 8095             | 38395                       |
 | Trezarcoin             | 9096                    | 9196                  | 8096             | 38396                       |
+| eCash                  | 9097                    | 9197                  | 8097             | 38397                       |
 | Bitcoin Signet         | 19020                   | 19120                 | 18020            | 48320                       |
 | Bitcoin Regtest        | 19021                   | 19121                 | 18021            | 48321                       |
 | Ethereum Goerli        | 19026                   | 19126                 | 18026            | 48326 p2p                   |
@@ -55,7 +56,7 @@
 | Litecoin Testnet       | 19034                   | 19134                 | 18034            | 48334                       |
 | Bitcoin Gold Testnet   | 19035                   | 19135                 | 18035            | 48335                       |
 | Ethereum Ropsten       | 19036                   | 19136                 | 18036            | 48336 p2p                   |
-| Dogecoin Testnet       | 19038                   | 19138                 | 18038            | 48338                                  
+| Dogecoin Testnet       | 19038                   | 19138                 | 18038            | 48338                       |
 | Vertcoin Testnet       | 19040                   | 19140                 | 18040            | 48340                       |
 | Monacoin Testnet       | 19041                   | 19141                 | 18041            | 48341                       |
 | DigiByte Testnet       | 19042                   | 19142                 | 18042            | 48342                       |
