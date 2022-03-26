@@ -153,25 +153,27 @@ const (
 // the map must match all bchain.TokenTransferTypes to avoid index out of range panic
 var TokenTypeMap []TokenType = []TokenType{ERC20TokenType, ERC771TokenType, ERC1155TokenType}
 
-// Token contains info about tokens held by an address
-type Token struct {
-	Type             TokenType `json:"type"`
-	Name             string    `json:"name"`
-	Path             string    `json:"path,omitempty"`
-	Contract         string    `json:"contract,omitempty"`
-	Transfers        int       `json:"transfers"`
-	Symbol           string    `json:"symbol,omitempty"`
-	Decimals         int       `json:"decimals,omitempty"`
-	BalanceSat       *Amount   `json:"balance,omitempty"`
-	TotalReceivedSat *Amount   `json:"totalReceived,omitempty"`
-	TotalSentSat     *Amount   `json:"totalSent,omitempty"`
-	ContractIndex    string    `json:"-"`
-}
-
 // TokenTransferValues contains values for ERC1155 contract
 type TokenTransferValues struct {
 	Id    *Amount `json:"id,omitempty"`
 	Value *Amount `json:"value,omitempty"`
+}
+
+// Token contains info about tokens held by an address
+type Token struct {
+	Type             TokenType             `json:"type"`
+	Name             string                `json:"name"`
+	Path             string                `json:"path,omitempty"`
+	Contract         string                `json:"contract,omitempty"`
+	Transfers        int                   `json:"transfers"`
+	Symbol           string                `json:"symbol,omitempty"`
+	Decimals         int                   `json:"decimals,omitempty"`
+	BalanceSat       *Amount               `json:"balance,omitempty"`
+	Ids              []Amount              `json:"ids,omitempty"`      // multiple ERC721 tokens
+	IdValues         []TokenTransferValues `json:"idValues,omitempty"` // multiple ERC1155 tokens
+	TotalReceivedSat *Amount               `json:"totalReceived,omitempty"`
+	TotalSentSat     *Amount               `json:"totalSent,omitempty"`
+	ContractIndex    string                `json:"-"`
 }
 
 // TokenTransfer contains info about a token transfer done in a transaction
