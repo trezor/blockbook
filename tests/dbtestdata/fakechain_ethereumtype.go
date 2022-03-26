@@ -126,3 +126,8 @@ func (c *fakeBlockChainEthereumType) EthereumTypeGetErc20ContractInfo(contractDe
 		Decimals: 18,
 	}, nil
 }
+
+// EthereumTypeGetErc20ContractBalance is not supported
+func (c *fakeBlockChainEthereumType) EthereumTypeGetErc20ContractBalance(addrDesc, contractDesc bchain.AddressDescriptor) (*big.Int, error) {
+	return big.NewInt(1000000000 + int64(addrDesc[0])*1000 + int64(contractDesc[0])), nil
+}

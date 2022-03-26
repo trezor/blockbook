@@ -34,7 +34,7 @@ func httpTestsEthereumType(t *testing.T, ts *httptest.Server) {
 			status:      http.StatusOK,
 			contentType: "application/json; charset=utf-8",
 			body: []string{
-				`{"page":1,"totalPages":1,"itemsOnPage":1000,"address":"0x4Bda106325C335dF99eab7fE363cAC8A0ba2a24D","balance":"123450075","unconfirmedBalance":"0","unconfirmedTxs":0,"txs":1,"nonTokenTxs":1,"internalTxs":1,"txids":["0xc92919ad24ffd58f760b18df7949f06e1190cf54a50a0e3745a385608ed3cbf2"],"nonce":"75","tokens":[{"type":"ERC20","name":"Contract 13","contract":"0x0d0F936Ee4c93e25944694D6C121de94D9760F11","transfers":2,"symbol":"S13","decimals":18},{"type":"ERC20","name":"Contract 74","contract":"0x4af4114F73d1c1C903aC9E0361b379D1291808A2","transfers":2,"symbol":"S74","decimals":18}],"erc20Contract":{"contract":"0x4Bda106325C335dF99eab7fE363cAC8A0ba2a24D","name":"Contract 75","symbol":"S75","decimals":18}}`,
+				`{"page":1,"totalPages":1,"itemsOnPage":1000,"address":"0x4Bda106325C335dF99eab7fE363cAC8A0ba2a24D","balance":"123450075","unconfirmedBalance":"0","unconfirmedTxs":0,"txs":1,"nonTokenTxs":1,"internalTxs":1,"txids":["0xc92919ad24ffd58f760b18df7949f06e1190cf54a50a0e3745a385608ed3cbf2"],"nonce":"75","tokens":[{"type":"ERC20","name":"Contract 13","contract":"0x0d0F936Ee4c93e25944694D6C121de94D9760F11","transfers":2,"symbol":"S13","decimals":18,"balance":"1000075013"},{"type":"ERC20","name":"Contract 74","contract":"0x4af4114F73d1c1C903aC9E0361b379D1291808A2","transfers":2,"symbol":"S74","decimals":18,"balance":"1000075074"}],"erc20Contract":{"contract":"0x4Bda106325C335dF99eab7fE363cAC8A0ba2a24D","name":"Contract 75","symbol":"S75","decimals":18}}`,
 			},
 		},
 	}
