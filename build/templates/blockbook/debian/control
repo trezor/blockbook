@@ -3,7 +3,7 @@ Source: blockbook
 Section: satoshilabs
 Priority: optional
 Maintainer: {{.Meta.PackageMaintainerEmail}}
-Build-Depends: debhelper, dh-systemd, dh-exec
+Build-Depends: debhelper, dh-exec
 Standards-Version: 3.9.5
 
 Package: {{.Blockbook.PackageName}}

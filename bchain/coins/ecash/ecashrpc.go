@@ -1,4 +1,4 @@
-package bch
+package ecash
 
 import (
 	"encoding/hex"
@@ -7,24 +7,24 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/juju/errors"
-	"github.com/martinboehm/bchutil"
+	"github.com/pirk/ecashutil"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/bchain/coins/btc"
 )
 
-// BCashRPC is an interface to JSON-RPC bitcoind service.
-type BCashRPC struct {
+// ECashRPC is an interface to JSON-RPC bitcoind service.
+type ECashRPC struct {
 	*btc.BitcoinRPC
 }
 
-// NewBCashRPC returns new BCashRPC instance.
-func NewBCashRPC(config json.RawMessage, pushHandler func(bchain.NotificationType)) (bchain.BlockChain, error) {
+// NewECashRPC returns new ECashRPC instance.
+func NewECashRPC(config json.RawMessage, pushHandler func(bchain.NotificationType)) (bchain.BlockChain, error) {
 	b, err := btc.NewBitcoinRPC(config, pushHandler)
 	if err != nil {
 		return nil, err
 	}
 
-	s := &BCashRPC{
+	s := &ECashRPC{
 		b.(*btc.BitcoinRPC),
 	}
 	s.ChainConfig.SupportsEstimateSmartFee = false
@@ -32,8 +32,8 @@ func NewBCashRPC(config json.RawMessage, pushHandler func(bchain.NotificationTyp
 	return s, nil
 }
 
-// Initialize initializes BCashRPC instance.
-func (b *BCashRPC) Initialize() error {
+// Initialize initializes ECashRPC instance.
+func (b *ECashRPC) Initialize() error {
 	ci, err := b.GetChainInfo()
 	if err != nil {
 		return err
@@ -43,14 +43,14 @@ func (b *BCashRPC) Initialize() error {
 	params := GetChainParams(chainName)
 
 	// always create parser
-	b.Parser, err = NewBCashParser(params, b.ChainConfig)
+	b.Parser, err = NewECashParser(params, b.ChainConfig)
 
 	if err != nil {
 		return err
 	}
 
 	// parameters for getInfo request
-	if params.Net == bchutil.MainnetMagic {
+	if params.Net == ecashutil.MainnetMagic {
 		b.Testnet = false
 		b.Network = "livenet"
 	} else {
@@ -83,7 +83,7 @@ type cmdEstimateSmartFee struct {
 }
 
 // GetBlock returns block with given hash.
-func (b *BCashRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
+func (b *ECashRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 	var err error
 	if hash == "" && height > 0 {
 		hash, err = b.GetBlockHash(height)
@@ -111,7 +111,7 @@ func (b *BCashRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 }
 
 // GetBlockRaw returns block with given hash as bytes.
-func (b *BCashRPC) GetBlockRaw(hash string) (string, error) {
+func (b *ECashRPC) GetBlockRaw(hash string) (string, error) {
 	glog.V(1).Info("rpc: getblock (verbose=0) ", hash)
 
 	res := btc.ResGetBlockRaw{}
@@ -133,7 +133,7 @@ func (b *BCashRPC) GetBlockRaw(hash string) (string, error) {
 }
 
 // GetBlockBytes returns block with given hash as bytes
-func (b *BCashRPC) GetBlockBytes(hash string) ([]byte, error) {
+func (b *ECashRPC) GetBlockBytes(hash string) ([]byte, error) {
 	block, err := b.GetBlockRaw(hash)
 	if err != nil {
 		return nil, err
@@ -142,7 +142,7 @@ func (b *BCashRPC) GetBlockBytes(hash string) ([]byte, error) {
 }
 
 // GetBlockInfo returns extended header (more info than in bchain.BlockHeader) with a list of txids
-func (b *BCashRPC) GetBlockInfo(hash string) (*bchain.BlockInfo, error) {
+func (b *ECashRPC) GetBlockInfo(hash string) (*bchain.BlockInfo, error) {
 	glog.V(1).Info("rpc: getblock (verbosity=1) ", hash)
 
 	res := btc.ResGetBlockInfo{}
@@ -164,7 +164,7 @@ func (b *BCashRPC) GetBlockInfo(hash string) (*bchain.BlockInfo, error) {
 }
 
 // GetBlockFull returns block with given hash.
-func (b *BCashRPC) GetBlockFull(hash string) (*bchain.Block, error) {
+func (b *ECashRPC) GetBlockFull(hash string) (*bchain.Block, error) {
 	return nil, errors.New("Not implemented")
 }
 
@@ -174,12 +174,7 @@ func isErrBlockNotFound(err *bchain.RPCError) bool {
 }
 
 // EstimateFee returns fee estimation
-func (b *BCashRPC) EstimateFee(blocks int) (big.Int, error) {
-	//  from version BitcoinABC version 0.19.1 EstimateFee does not support parameter Blocks
-	if b.ChainConfig.CoinShortcut == "BCHSV" {
-		return b.BitcoinRPC.EstimateFee(blocks)
-	}
-
+func (b *ECashRPC) EstimateFee(blocks int) (big.Int, error) {
 	glog.V(1).Info("rpc: estimatefee ", blocks)
 
 	res := btc.ResEstimateFee{}
@@ -206,7 +201,7 @@ func (b *BCashRPC) EstimateFee(blocks int) (big.Int, error) {
 }
 
 // EstimateSmartFee returns fee estimation
-func (b *BCashRPC) EstimateSmartFee(blocks int, conservative bool) (big.Int, error) {
-	// EstimateSmartFee is not supported by bcash
+func (b *ECashRPC) EstimateSmartFee(blocks int, conservative bool) (big.Int, error) {
+	// EstimateSmartFee is not supported by ecash
 	return b.EstimateFee(blocks)
 }

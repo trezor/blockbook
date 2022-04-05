@@ -24,6 +24,7 @@ import (
 	"github.com/trezor/blockbook/bchain/coins/digibyte"
 	"github.com/trezor/blockbook/bchain/coins/divi"
 	"github.com/trezor/blockbook/bchain/coins/dogecoin"
+	"github.com/trezor/blockbook/bchain/coins/ecash"
 	"github.com/trezor/blockbook/bchain/coins/eth"
 	"github.com/trezor/blockbook/bchain/coins/firo"
 	"github.com/trezor/blockbook/bchain/coins/flo"
@@ -111,7 +112,7 @@ func init() {
 	BlockChainFactories["Qtum Testnet"] = qtum.NewQtumRPC
 	BlockChainFactories["NULS"] = nuls.NewNulsRPC
 	BlockChainFactories["VIPSTARCOIN"] = vipstarcoin.NewVIPSTARCOINRPC
-	BlockChainFactories["ZelCash"] = zec.NewZCashRPC
+	BlockChainFactories["Flux"] = zec.NewZCashRPC
 	BlockChainFactories["Ravencoin"] = ravencoin.NewRavencoinRPC
 	BlockChainFactories["Ritocoin"] = ritocoin.NewRitocoinRPC
 	BlockChainFactories["Divi"] = divi.NewDiviRPC
@@ -124,6 +125,7 @@ func init() {
 	BlockChainFactories["Omotenashicoin Testnet"] = omotenashicoin.NewOmotenashiCoinRPC
 	BlockChainFactories["BitZeny"] = bitzeny.NewBitZenyRPC
 	BlockChainFactories["Trezarcoin"] = trezarcoin.NewTrezarcoinRPC
+	BlockChainFactories["ECash"] = ecash.NewECashRPC
 }
 
 // GetCoinNameFromConfig gets coin name and coin shortcut from config file
@@ -252,6 +254,11 @@ func (c *blockChainWithMetrics) GetBlock(hash string, height uint32) (v *bchain.
 func (c *blockChainWithMetrics) GetBlockInfo(hash string) (v *bchain.BlockInfo, err error) {
 	defer func(s time.Time) { c.observeRPCLatency("GetBlockInfo", s, err) }(time.Now())
 	return c.b.GetBlockInfo(hash)
+}
+
+func (c *blockChainWithMetrics) GetBlockRaw(hash string) (v string, err error) {
+	defer func(s time.Time) { c.observeRPCLatency("GetBlockRaw", s, err) }(time.Now())
+	return c.b.GetBlockRaw(hash)
 }
 
 func (c *blockChainWithMetrics) GetMempoolTransactions() (v []string, err error) {

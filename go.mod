@@ -33,6 +33,8 @@ require (
 	github.com/mr-tron/base58 v1.2.0 // indirect
 	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
 	github.com/pebbe/zmq4 v1.2.1
+	github.com/pirk/ecashaddr-converter v0.0.0-20220121162910-c6cb45163b29
+	github.com/pirk/ecashutil v0.0.0-20220124103933-d37f548d249e
 	github.com/prometheus/client_golang v1.8.0
 	github.com/schancel/cashaddr-converter v0.0.0-20181111022653-4769e7add95a
 	golang.org/x/crypto v0.0.0-20210322153248-0c34fe9e7dc2
@@ -41,6 +43,7 @@ require (
 )
 
 require (
+	github.com/PiRK/cashaddr-converter v0.0.0-20220121162910-c6cb45163b29 // indirect
 	github.com/StackExchange/wmi v0.0.0-20180116203802-5d049714c4a6 // indirect
 	github.com/agl/ed25519 v0.0.0-20170116200512-5312a6153412 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect

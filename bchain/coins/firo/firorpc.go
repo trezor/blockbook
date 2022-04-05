@@ -81,7 +81,7 @@ func (zc *FiroRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 		return nil, err
 	}
 
-	data, err := zc.GetBlockRaw(hash)
+	data, err := zc.GetBlockBytes(hash)
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +118,7 @@ func (zc *FiroRPC) GetBlockInfo(hash string) (*bchain.BlockInfo, error) {
 }
 
 func (zc *FiroRPC) GetBlockWithoutHeader(hash string, height uint32) (*bchain.Block, error) {
-	data, err := zc.GetBlockRaw(hash)
+	data, err := zc.GetBlockBytes(hash)
 	if err != nil {
 		return nil, err
 	}
@@ -134,7 +134,8 @@ func (zc *FiroRPC) GetBlockWithoutHeader(hash string, height uint32) (*bchain.Bl
 	return block, nil
 }
 
-func (zc *FiroRPC) GetBlockRaw(hash string) ([]byte, error) {
+// GetBlockRaw returns block with given hash as hex string
+func (zc *FiroRPC) GetBlockRaw(hash string) (string, error) {
 	glog.V(1).Info("rpc: getblock (verbosity=false) ", hash)
 
 	res := btc.ResGetBlockRaw{}
@@ -144,15 +145,24 @@ func (zc *FiroRPC) GetBlockRaw(hash string) ([]byte, error) {
 	err := zc.Call(&req, &res)
 
 	if err != nil {
-		return nil, errors.Annotatef(err, "hash %v", hash)
+		return "", errors.Annotatef(err, "hash %v", hash)
 	}
 	if res.Error != nil {
 		if btc.IsErrBlockNotFound(res.Error) {
-			return nil, bchain.ErrBlockNotFound
+			return "", bchain.ErrBlockNotFound
 		}
-		return nil, errors.Annotatef(res.Error, "hash %v", hash)
+		return "", errors.Annotatef(res.Error, "hash %v", hash)
 	}
-	return hex.DecodeString(res.Result)
+	return res.Result, nil
+}
+
+// GetBlockBytes returns block with given hash as bytes
+func (zc *FiroRPC) GetBlockBytes(hash string) ([]byte, error) {
+	block, err := zc.GetBlockRaw(hash)
+	if err != nil {
+		return nil, err
+	}
+	return hex.DecodeString(block)
 }
 
 func (zc *FiroRPC) GetTransactionForMempool(txid string) (*bchain.Tx, error) {
