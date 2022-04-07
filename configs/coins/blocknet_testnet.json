@@ -6,10 +6,10 @@
     "alias": "blocknet_testnet"
   },
   "ports": {
-    "backend_rpc": 18097,
-    "backend_message_queue": 48397,
-    "blockbook_internal": 19097,
-    "blockbook_public": 19197
+    "backend_rpc": 18098,
+    "backend_message_queue": 48398,
+    "blockbook_internal": 19098,
+    "blockbook_public": 19198
   },
   "ipc": {
     "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
