@@ -6,10 +6,10 @@
     "alias": "hydra"
   },
   "ports": {
-    "backend_rpc": 8097,
-    "backend_message_queue": 38397,
-    "blockbook_internal": 9097,
-    "blockbook_public": 9197
+    "backend_rpc": 8063,
+    "backend_message_queue": 38363,
+    "blockbook_internal": 9063,
+    "blockbook_public": 9163
   },
   "ipc": {
     "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
