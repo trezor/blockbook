@@ -4,7 +4,7 @@ package db
 import "C"
 
 import (
-	"github.com/tecbot/gorocksdb"
+	"github.com/flier/gorocksdb"
 )
 
 /*

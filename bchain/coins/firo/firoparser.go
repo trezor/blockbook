@@ -26,9 +26,11 @@ const (
 	TestnetMagic wire.BitcoinNet = 0xcffcbeea
 	RegtestMagic wire.BitcoinNet = 0xfabfb5da
 
-	GenesisBlockTime       = 1414776286
-	SwitchToMTPBlockHeader = 1544443200
-	MTPL                   = 64
+	GenesisBlockTime                  = 1414776286
+	SwitchToMTPBlockHeader            = 1544443200
+	SwitchToProgPowBlockHeaderTestnet = 1630069200
+	SwitchToProgPowBlockHeaderMainnet = 1635228000
+	MTPL                              = 64
 
 	SpendTxID = "0000000000000000000000000000000000000000000000000000000000000000"
 
@@ -156,38 +158,48 @@ func (p *FiroParser) ParseBlock(b []byte) (*bchain.Block, error) {
 		return nil, err
 	}
 
-	// then MTP header
-	if isMTP(header) {
-		mtpHeader := MTPBlockHeader{}
-		mtpHashData := MTPHashData{}
+	// then ProgPow or MTP header
+	if isProgPow(header, p.Params.Net == TestnetMagic) {
+		progPowHeader := ProgPowBlockHeader{}
 
 		// header
-		err = binary.Read(reader, binary.LittleEndian, &mtpHeader)
+		err = binary.Read(reader, binary.LittleEndian, &progPowHeader)
 		if err != nil {
 			return nil, err
 		}
+	} else {
+		if isMTP(header) {
+			mtpHeader := MTPBlockHeader{}
+			mtpHashData := MTPHashData{}
 
-		// hash data
-		err = binary.Read(reader, binary.LittleEndian, &mtpHashData)
-		if err != nil {
-			return nil, err
-		}
-
-		// proof
-		for i := 0; i < MTPL*3; i++ {
-			var numberProofBlocks uint8
-
-			err = binary.Read(reader, binary.LittleEndian, &numberProofBlocks)
+			// header
+			err = binary.Read(reader, binary.LittleEndian, &mtpHeader)
 			if err != nil {
 				return nil, err
 			}
 
-			for j := uint8(0); j < numberProofBlocks; j++ {
-				var mtpData [16]uint8
+			// hash data
+			err = binary.Read(reader, binary.LittleEndian, &mtpHashData)
+			if err != nil {
+				return nil, err
+			}
 
-				err = binary.Read(reader, binary.LittleEndian, mtpData[:])
+			// proof
+			for i := 0; i < MTPL*3; i++ {
+				var numberProofBlocks uint8
+
+				err = binary.Read(reader, binary.LittleEndian, &numberProofBlocks)
 				if err != nil {
 					return nil, err
+				}
+
+				for j := uint8(0); j < numberProofBlocks; j++ {
+					var mtpData [16]uint8
+
+					err = binary.Read(reader, binary.LittleEndian, mtpData[:])
+					if err != nil {
+						return nil, err
+					}
 				}
 			}
 		}
@@ -299,6 +311,13 @@ func isMTP(h *wire.BlockHeader) bool {
 	return epoch > GenesisBlockTime && epoch >= SwitchToMTPBlockHeader
 }
 
+func isProgPow(h *wire.BlockHeader, isTestNet bool) bool {
+	epoch := h.Timestamp.Unix()
+
+	// the genesis block never be MTP block
+	return isTestNet && epoch >= SwitchToProgPowBlockHeaderTestnet || !isTestNet && epoch >= SwitchToProgPowBlockHeaderMainnet
+}
+
 type MTPHashData struct {
 	HashRootMTP [16]uint8
 	BlockMTP    [128][128]uint64
@@ -309,4 +328,9 @@ type MTPBlockHeader struct {
 	MTPHashValue chainhash.Hash
 	Reserved1    chainhash.Hash
 	Reserved2    chainhash.Hash
+}
+
+type ProgPowBlockHeader struct {
+	Nonce64 int64
+	MixHash chainhash.Hash
 }

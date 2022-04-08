@@ -95,7 +95,7 @@ func (b *BCashRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 	if err != nil {
 		return nil, err
 	}
-	data, err := b.GetBlockRaw(hash)
+	data, err := b.GetBlockBytes(hash)
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +111,7 @@ func (b *BCashRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 }
 
 // GetBlockRaw returns block with given hash as bytes.
-func (b *BCashRPC) GetBlockRaw(hash string) ([]byte, error) {
+func (b *BCashRPC) GetBlockRaw(hash string) (string, error) {
 	glog.V(1).Info("rpc: getblock (verbose=0) ", hash)
 
 	res := btc.ResGetBlockRaw{}
@@ -121,15 +121,24 @@ func (b *BCashRPC) GetBlockRaw(hash string) ([]byte, error) {
 	err := b.Call(&req, &res)
 
 	if err != nil {
-		return nil, errors.Annotatef(err, "hash %v", hash)
+		return "", errors.Annotatef(err, "hash %v", hash)
 	}
 	if res.Error != nil {
 		if isErrBlockNotFound(res.Error) {
-			return nil, bchain.ErrBlockNotFound
+			return "", bchain.ErrBlockNotFound
 		}
-		return nil, errors.Annotatef(res.Error, "hash %v", hash)
+		return "", errors.Annotatef(res.Error, "hash %v", hash)
 	}
-	return hex.DecodeString(res.Result)
+	return res.Result, nil
+}
+
+// GetBlockBytes returns block with given hash as bytes
+func (b *BCashRPC) GetBlockBytes(hash string) ([]byte, error) {
+	block, err := b.GetBlockRaw(hash)
+	if err != nil {
+		return nil, err
+	}
+	return hex.DecodeString(block)
 }
 
 // GetBlockInfo returns extended header (more info than in bchain.BlockHeader) with a list of txids

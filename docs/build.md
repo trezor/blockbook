@@ -185,13 +185,13 @@ Configuration is described in [config.md](/docs/config.md).
 
 ## Manual build
 
-Instructions below are focused on Debian 9 (Stretch). If you want to use another Linux distribution or operating system
+Instructions below are focused on Debian 9 (Stretch) and 10 (Buster). If you want to use another Linux distribution or operating system
 like macOS or Windows, please read instructions specific for each project.
 
-Setup go environment:
+Setup go environment (use newer version of go as available)
 
 ```
-wget https://golang.org/dl/go1.14.2.linux-amd64.tar.gz && tar xf go1.14.2.linux-amd64.tar.gz
+wget https://golang.org/dl/go1.17.1.linux-amd64.tar.gz && tar xf go1.17.1.linux-amd64.tar.gz
 sudo mv go /opt/go
 sudo ln -s /opt/go/bin/go /usr/bin/go
 # see `go help gopath` for details
@@ -209,15 +209,11 @@ sudo apt-get update && sudo apt-get install -y \
     build-essential git wget pkg-config libzmq3-dev libgflags-dev libsnappy-dev zlib1g-dev libbz2-dev liblz4-dev
 git clone https://github.com/facebook/rocksdb.git
 cd rocksdb
-git checkout v6.8.1
+git checkout v6.22.1
 CFLAGS=-fPIC CXXFLAGS=-fPIC make release
 ```
 
-```
-CFLAGS=-fPIC CXXFLAGS=-fPIC PORTABLE=1 make release
-```
-
-Setup variables for gorocksdb: https://github.com/tecbot/gorocksdb
+Setup variables for gorocksdb
 
 ```
 export CGO_CFLAGS="-I/path/to/rocksdb/include"
@@ -241,7 +237,7 @@ Get blockbook sources, install dependencies, build:
 cd $GOPATH/src
 git clone https://github.com/trezor/blockbook.git
 cd blockbook
-go build
+go build -tags rocksdb_6_16
 ```
 
 ### Example command

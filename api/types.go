@@ -111,6 +111,7 @@ type Vin struct {
 	AddrDesc  bchain.AddressDescriptor `json:"-"`
 	Addresses []string                 `json:"addresses,omitempty"`
 	IsAddress bool                     `json:"isAddress"`
+	IsOwn     bool                     `json:"isOwn,omitempty"`
 	ValueSat  *Amount                  `json:"value,omitempty"`
 	Hex       string                   `json:"hex,omitempty"`
 	Asm       string                   `json:"asm,omitempty"`
@@ -130,6 +131,7 @@ type Vout struct {
 	AddrDesc    bchain.AddressDescriptor `json:"-"`
 	Addresses   []string                 `json:"addresses"`
 	IsAddress   bool                     `json:"isAddress"`
+	IsOwn       bool                     `json:"isOwn,omitempty"`
 	Type        string                   `json:"type,omitempty"`
 }
 
@@ -397,6 +399,11 @@ type Block struct {
 	BlockInfo
 	TxCount      int   `json:"txCount"`
 	Transactions []*Tx `json:"txs,omitempty"`
+}
+
+// BlockRaw contains raw block in hex
+type BlockRaw struct {
+	Hex string `json:"hex"`
 }
 
 // BlockbookInfo contains information about the running blockbook instance

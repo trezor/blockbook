@@ -1,4 +1,4 @@
-// +build unittest
+//go:build unittest
 
 package bch
 

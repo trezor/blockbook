@@ -1,11 +1,11 @@
 # Blockbook Contributor Guide
 
-Blockbook is back-end service for Trezor wallet. Although it is open source, the design and development of the core packages
-is done by Trezor developers in order to keep Blockbook compatible with Trezor.
+Blockbook is a back-end service for the Trezor wallet. Although it is open source, the design and development of the core packages
+is done by the Trezor developers to keep Blockbook compatible with Trezor.
 
-Bug fixes and support for new coins are welcome. **Please take note that non-fixing pull requests that change base
-packages or another coin code will not be accepted.** If you have a need to change some of the existing code, please file
-an issue and discuss your request with Blockbook maintainers.
+Bug fixes and support for new coins are welcome. **Please take note that pull requests that are not fixes and that change base
+packages or another coin code will not be accepted.** If you need a change in the existing core code, please file
+an issue and discuss your request with the Blockbook maintainers.
 
 ## Development environment
 
@@ -16,8 +16,8 @@ Instructions to set up your development environment and build Blockbook are desc
 
 ### Reporting bugs
 
-A great way to contribute to the project is to send a detailed report when you encounter an issue. We always appreciate
-a well-written, thorough bug report, and will thank you for it!
+A great way to contribute to the project is to send a detailed report when you encounter a problem. We always appreciate
+a well-written and thorough bug report, and we'll be grateful for it!
 
 Check that [our issue database](https://github.com/trezor/blockbook/issues) doesn't already include that problem or
 suggestion before submitting an issue. If you find a match, you can use the "subscribe" button to get notified on

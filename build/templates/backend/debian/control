@@ -3,7 +3,7 @@ Source: backend
 Section: satoshilabs
 Priority: optional
 Maintainer: {{.Meta.PackageMaintainerEmail}}
-Build-Depends: debhelper, wget, tar, gzip, make, dh-systemd, dh-exec
+Build-Depends: debhelper, wget, tar, gzip, make, dh-exec
 Standards-Version: 3.9.5
 
 Package: {{.Backend.PackageName}}
