@@ -12,9 +12,9 @@
     "blockbook_public": 9163
   },
   "ipc": {
-    "rpc_url_template": "http://192.168.10.155:13338",
-    "rpc_user": "user",
-    "rpc_pass": "pass",
+    "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
+    "rpc_user": "rpc",
+    "rpc_pass": "rpc",
     "rpc_timeout": 25,
     "message_queue_binding_template": "tcp://127.0.0.1:{{.Ports.BackendMessageQueue}}"
   },
@@ -26,7 +26,7 @@
     "binary_url": "https://github.com/Hydra-Chain/node/releases/download/hydra_v0.18.5.5/hydra-0.18.5.5-ubuntu20.04-x86_64-gnu.zip",
     "verification_type": "sha256",
     "verification_source": "2f703f6bef32eb499e3c82b0d7a330f8eb6aec551d2fc8e026a3b7ef194f3ba8",
-    "extract_command": "unzip hydra-0.18.5.5-ubuntu20.04-x86_64-gnu.zip -d backend",
+    "extract_command": "unzip -d backend",
     "exclude_files": [
       "bin/hydra-qt"
     ],
@@ -60,7 +60,12 @@
       "xpub_magic_segwit_p2sh": 77429938,
       "xpub_magic_segwit_native": 78792518,
       "slip44": 2301,
-      "additional_params": {}
+      "additional_params": {
+        "fiat_rates": "coingecko",
+        "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"hydra\", \"periodSeconds\": 60}",
+        "deprecatedrpc": "estimatefee",
+        "logevents": "1"
+      }
     }
   },
   "meta": {
