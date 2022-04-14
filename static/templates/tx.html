@@ -84,6 +84,46 @@
 <div class="data-div">
     {{template "txdetail" .}}
 </div>
+{{if eq .ChainType 1}}
+{{if $tx.EthereumSpecific.ParsedData}}
+{{if $tx.EthereumSpecific.ParsedData.Function }}
+<div class="data-div">
+    <h5>Input Data</h5>
+    <div class="row">
+        {{if $tx.EthereumSpecific.ParsedData.Name}}<div class="col-6">{{$tx.EthereumSpecific.ParsedData.Name}}</div>{{end}}{{if $tx.EthereumSpecific.ParsedData.MethodId}}<div class="col-6">Method ID: {{$tx.EthereumSpecific.ParsedData.MethodId}}</div>{{end}}
+        {{if $tx.EthereumSpecific.ParsedData.Function}}<div class="col-12">Function: {{$tx.EthereumSpecific.ParsedData.Function}}</div>{{end}}
+        {{if $tx.EthereumSpecific.ParsedData.Params}}
+        <div class="col-12">
+        <table class="table data-table">
+        <thead>
+            <tr>
+                <th style="width: 5%;">#</th>
+                <th>Type</th>
+                <th>Data</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range $i,$p := $tx.EthereumSpecific.ParsedData.Params}}
+            <tr>
+                <td>{{$i}}</td>
+                <td>{{$p.Type}}</td>
+                <td>
+                    {{range $j,$v := $p.Values}}
+                    {{if $j}}<br>{{end}}
+                    {{if hasPrefix $p.Type "address"}}<a href="/address/{{$v}}">{{$v}}</a>{{else}}{{$v}}{{end}}
+                    {{end}}
+                </td>
+            </tr>
+            {{end}}
+        </tbody>
+        </table>
+        </div>
+        {{end}}
+    </div>
+</div>
+{{end}}
+{{end}}
+{{end}}
 <div class="data-div">
     <h5>Raw Transaction</h5>
     <div class="alert alert-data" style="word-wrap: break-word; font-size: smaller;">

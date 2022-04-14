@@ -11,6 +11,7 @@ import (
 
 	"github.com/flier/gorocksdb"
 	"github.com/golang/glog"
+	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/db"
 )
 
@@ -98,13 +99,13 @@ func (fd *FourByteSignaturesDownloader) getPageWithRetry(url string) (*signature
 	return nil, errors.New("Too many retries to 4byte signatures")
 }
 
-func parseSignatureFromText(t string) *db.FourByteSignature {
+func parseSignatureFromText(t string) *bchain.FourByteSignature {
 	s := strings.Index(t, "(")
 	e := strings.LastIndex(t, ")")
 	if s < 0 || e < 0 {
 		return nil
 	}
-	var signature db.FourByteSignature
+	var signature bchain.FourByteSignature
 	signature.Name = t[:s]
 	params := t[s+1 : e]
 	if len(params) > 0 {
