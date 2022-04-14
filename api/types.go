@@ -207,6 +207,7 @@ type EthereumSpecific struct {
 	GasUsed           *big.Int                               `json:"gasUsed"`
 	GasPrice          *Amount                                `json:"gasPrice"`
 	Data              string                                 `json:"data,omitempty"`
+	ParsedData        *bchain.EthereumParsedInputData        `json:"parsedData,omitempty"`
 	InternalTransfers []EthereumInternalTransfer             `json:"internalTransfers,omitempty"`
 }
 

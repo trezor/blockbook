@@ -4,26 +4,26 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/trezor/blockbook/db"
+	"github.com/trezor/blockbook/bchain"
 )
 
 func Test_parseSignatureFromText(t *testing.T) {
 	tests := []struct {
 		name      string
 		signature string
-		want      db.FourByteSignature
+		want      bchain.FourByteSignature
 	}{
 		{
 			name:      "_gonsPerFragment",
 			signature: "_gonsPerFragment()",
-			want: db.FourByteSignature{
+			want: bchain.FourByteSignature{
 				Name: "_gonsPerFragment",
 			},
 		},
 		{
 			name:      "vestingDeposits",
 			signature: "vestingDeposits(address)",
-			want: db.FourByteSignature{
+			want: bchain.FourByteSignature{
 				Name:       "vestingDeposits",
 				Parameters: []string{"address"},
 			},
@@ -31,7 +31,7 @@ func Test_parseSignatureFromText(t *testing.T) {
 		{
 			name:      "batchTransferTokenB",
 			signature: "batchTransferTokenB(address[],uint256)",
-			want: db.FourByteSignature{
+			want: bchain.FourByteSignature{
 				Name:       "batchTransferTokenB",
 				Parameters: []string{"address[]", "uint256"},
 			},
@@ -39,7 +39,7 @@ func Test_parseSignatureFromText(t *testing.T) {
 		{
 			name:      "transmitAndSellTokenForEth",
 			signature: "transmitAndSellTokenForEth(address,uint256,uint256,uint256,address,(uint8,bytes32,bytes32),bytes)",
-			want: db.FourByteSignature{
+			want: bchain.FourByteSignature{
 				Name:       "transmitAndSellTokenForEth",
 				Parameters: []string{"address", "uint256", "uint256", "uint256", "address", "(uint8,bytes32,bytes32)", "bytes"},
 			},

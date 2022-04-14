@@ -6,6 +6,9 @@
             {{if eq $tx.EthereumSpecific.Status 1}}<span class="text-success"> ✔</span>{{end}}{{if eq $tx.EthereumSpecific.Status 0}}<span class="text-danger"> ✘</span>{{end}}
         </div>
         {{- if $tx.Blocktime}}<div class="col-xs-5 col-md-4 text-muted text-right">{{if $tx.Confirmations}}mined{{else}}first seen{{end}} {{formatUnixTime $tx.Blocktime}}</div>{{end -}}
+        {{if $tx.EthereumSpecific.ParsedData}}
+            {{if $tx.EthereumSpecific.ParsedData.Name}}<div class="col-6">{{$tx.EthereumSpecific.ParsedData.Name}}</div>{{end}}{{if $tx.EthereumSpecific.ParsedData.MethodId}}<div class="col-6">Method ID: {{$tx.EthereumSpecific.ParsedData.MethodId}}</div>{{end}}
+        {{end}}
         {{if $tx.EthereumSpecific.Error}}<div class="col-12">Error: {{$tx.EthereumSpecific.Error}}</div>{{end}}
     </div>
     <div class="row line-mid">
@@ -265,7 +268,7 @@
         </div>
         <div class="col-md-3 text-right" style="padding: .4rem 0;">
             {{- range $iv := $tt.Values -}}
-                {{formatAmountWithDecimals $iv.Id 0}}:{{formatAmountWithDecimals $iv.Value $tt.Decimals}} {{$tt.Symbol}}
+                {{formatAmountWithDecimals $iv.Id 0}}:{{formatAmountWithDecimals $iv.Value 0}} {{$tt.Symbol}}
             {{- end -}}
         </div>
     </div>

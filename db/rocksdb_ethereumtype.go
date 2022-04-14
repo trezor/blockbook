@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"math/big"
+	"sync"
 
 	"github.com/flier/gorocksdb"
 	"github.com/golang/glog"
@@ -578,11 +579,8 @@ func (d *RocksDB) unpackEthInternalData(buf []byte) (*bchain.EthereumInternalDat
 	return &id, nil
 }
 
-type FourByteSignature struct {
-	Name       string
-	Parameters []string
-}
-
+// FourByteSignature contains 4byte signature of transaction value with parameters
+// and parsed parameters (that are not stored in DB)
 func packFourByteKey(fourBytes uint32, id uint32) []byte {
 	key := make([]byte, 0, 8)
 	key = append(key, packUint(fourBytes)...)
@@ -590,7 +588,7 @@ func packFourByteKey(fourBytes uint32, id uint32) []byte {
 	return key
 }
 
-func packFourByteSignature(signature *FourByteSignature) []byte {
+func packFourByteSignature(signature *bchain.FourByteSignature) []byte {
 	buf := packString(signature.Name)
 	for i := range signature.Parameters {
 		buf = append(buf, packString(signature.Parameters[i])...)
@@ -598,8 +596,8 @@ func packFourByteSignature(signature *FourByteSignature) []byte {
 	return buf
 }
 
-func unpackFourByteSignature(buf []byte) (*FourByteSignature, error) {
-	var signature FourByteSignature
+func unpackFourByteSignature(buf []byte) (*bchain.FourByteSignature, error) {
+	var signature bchain.FourByteSignature
 	var l int
 	signature.Name, l = unpackString(buf)
 	for l < len(buf) {
@@ -610,7 +608,8 @@ func unpackFourByteSignature(buf []byte) (*FourByteSignature, error) {
 	return &signature, nil
 }
 
-func (d *RocksDB) GetFourByteSignature(fourBytes uint32, id uint32) (*FourByteSignature, error) {
+// GetFourByteSignature gets all 4byte signature of given fourBytes and id
+func (d *RocksDB) GetFourByteSignature(fourBytes uint32, id uint32) (*bchain.FourByteSignature, error) {
 	key := packFourByteKey(fourBytes, id)
 	val, err := d.db.GetCF(d.ro, d.cfh[cfFunctionSignatures], key)
 	if err != nil {
@@ -624,12 +623,51 @@ func (d *RocksDB) GetFourByteSignature(fourBytes uint32, id uint32) (*FourByteSi
 	return unpackFourByteSignature(buf)
 }
 
-func (d *RocksDB) StoreFourByteSignature(wb *gorocksdb.WriteBatch, fourBytes uint32, id uint32, signature *FourByteSignature) error {
+var cachedByteSignatures = make(map[uint32]*[]bchain.FourByteSignature)
+var cachedByteSignaturesMux sync.Mutex
+
+// GetFourByteSignatures gets all 4byte signatures of given fourBytes
+// (there may be more than one signature starting with the same four bytes)
+func (d *RocksDB) GetFourByteSignatures(fourBytes uint32) (*[]bchain.FourByteSignature, error) {
+	cachedByteSignaturesMux.Lock()
+	signatures, found := cachedByteSignatures[fourBytes]
+	cachedByteSignaturesMux.Unlock()
+	if !found {
+		retval := []bchain.FourByteSignature{}
+		key := packUint(fourBytes)
+		it := d.db.NewIteratorCF(d.ro, d.cfh[cfFunctionSignatures])
+		defer it.Close()
+		for it.Seek(key); it.Valid(); it.Next() {
+			current := it.Key().Data()
+			if bytes.Compare(current[:4], key) > 0 {
+				break
+			}
+			val := it.Value().Data()
+			signature, err := unpackFourByteSignature(val)
+			if err != nil {
+				return nil, err
+			}
+			retval = append(retval, *signature)
+		}
+		cachedByteSignaturesMux.Lock()
+		cachedByteSignatures[fourBytes] = &retval
+		cachedByteSignaturesMux.Unlock()
+		return &retval, nil
+	}
+	return signatures, nil
+}
+
+// StoreFourByteSignature stores 4byte signature in DB
+func (d *RocksDB) StoreFourByteSignature(wb *gorocksdb.WriteBatch, fourBytes uint32, id uint32, signature *bchain.FourByteSignature) error {
 	key := packFourByteKey(fourBytes, id)
 	wb.PutCF(d.cfh[cfFunctionSignatures], key, packFourByteSignature(signature))
+	cachedByteSignaturesMux.Lock()
+	delete(cachedByteSignatures, fourBytes)
+	cachedByteSignaturesMux.Unlock()
 	return nil
 }
 
+// GetEthereumInternalData gets transaction internal data from DB
 func (d *RocksDB) GetEthereumInternalData(txid string) (*bchain.EthereumInternalData, error) {
 	btxID, err := d.chainParser.PackTxid(txid)
 	if err != nil {
@@ -902,7 +940,9 @@ func (d *RocksDB) disconnectAddress(btxID []byte, internal bool, addrDesc bchain
 					glog.Warning("AddressContracts ", addrDesc, ", contract ", contractIndex, " Txs would be negative, tx ", hex.EncodeToString(btxID))
 				}
 			} else {
-				glog.Warning("AddressContracts ", addrDesc, ", contract ", btxContract.contract, " not found, tx ", hex.EncodeToString(btxID))
+				if !isZeroAddress(addrDesc) {
+					glog.Warning("AddressContracts ", addrDesc, ", contract ", btxContract.contract, " not found, tx ", hex.EncodeToString(btxID))
+				}
 			}
 		}
 	} else {
