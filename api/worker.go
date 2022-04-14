@@ -127,6 +127,23 @@ func (w *Worker) GetTransaction(txid string, spendingTxs bool, specificJSON bool
 	return w.GetTransactionFromBchainTx(bchainTx, height, spendingTxs, specificJSON)
 }
 
+func (w *Worker) getParsedEthereumInputData(data string) *bchain.EthereumParsedInputData {
+	var err error
+	var signatures *[]bchain.FourByteSignature
+	fourBytes := eth.GetSignatureFromData(data)
+	if fourBytes != 0 {
+		signatures, err = w.db.GetFourByteSignatures(fourBytes)
+		if err != nil {
+			glog.Errorf("GetFourByteSignatures(%v) error %v", fourBytes, err)
+			return nil
+		}
+		if signatures == nil {
+			return nil
+		}
+	}
+	return eth.ParseInputData(signatures, data)
+}
+
 // GetTransactionFromBchainTx reads transaction data from txid
 func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spendingTxs bool, specificJSON bool) (*Tx, error) {
 	var err error
@@ -270,6 +287,8 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 			}
 		}
 
+		parsedInputData := w.getParsedEthereumInputData(ethTxData.Data)
+
 		// mempool txs do not have fees yet
 		if ethTxData.GasUsed != nil {
 			feesSat.Mul(ethTxData.GasPrice, ethTxData.GasUsed)
@@ -278,12 +297,13 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 			valOutSat = bchainTx.Vout[0].ValueSat
 		}
 		ethSpecific = &EthereumSpecific{
-			GasLimit: ethTxData.GasLimit,
-			GasPrice: (*Amount)(ethTxData.GasPrice),
-			GasUsed:  ethTxData.GasUsed,
-			Nonce:    ethTxData.Nonce,
-			Status:   ethTxData.Status,
-			Data:     ethTxData.Data,
+			GasLimit:   ethTxData.GasLimit,
+			GasPrice:   (*Amount)(ethTxData.GasPrice),
+			GasUsed:    ethTxData.GasUsed,
+			Nonce:      ethTxData.Nonce,
+			Status:     ethTxData.Status,
+			Data:       ethTxData.Data,
+			ParsedData: parsedInputData,
 		}
 		if internalData != nil {
 			ethSpecific.Type = internalData.Type
@@ -674,7 +694,6 @@ func (w *Worker) getEthereumContractBalance(addrDesc bchain.AddressDescriptor, i
 	}
 
 	t := Token{
-		Type:          ERC20TokenType,
 		Contract:      ci.Contract,
 		Name:          ci.Name,
 		Symbol:        ci.Symbol,
@@ -685,6 +704,7 @@ func (w *Worker) getEthereumContractBalance(addrDesc bchain.AddressDescriptor, i
 	// return contract balances/values only at or above AccountDetailsTokenBalances
 	if details >= AccountDetailsTokenBalances && validContract {
 		if c.Type == bchain.ERC20 {
+			t.Type = ERC20TokenType
 			// get Erc20 Contract Balance from blockchain, balance obtained from adding and subtracting transfers is not correct
 			b, err := w.chain.EthereumTypeGetErc20ContractBalance(addrDesc, c.Contract)
 			if err != nil {
@@ -694,15 +714,20 @@ func (w *Worker) getEthereumContractBalance(addrDesc bchain.AddressDescriptor, i
 				t.BalanceSat = (*Amount)(b)
 			}
 		} else {
-			if len(t.Ids) > 0 {
-				ids := make([]Amount, len(t.Ids))
+			if c.Type == bchain.ERC721 {
+				t.Type = ERC771TokenType
+			} else {
+				t.Type = ERC1155TokenType
+			}
+			if len(c.Ids) > 0 {
+				ids := make([]Amount, len(c.Ids))
 				for j := range ids {
 					ids[j] = (Amount)(c.Ids[j])
 				}
 				t.Ids = ids
 			}
-			if len(t.IdValues) > 0 {
-				idValues := make([]TokenTransferValues, len(t.IdValues))
+			if len(c.IdValues) > 0 {
+				idValues := make([]TokenTransferValues, len(c.IdValues))
 				for j := range idValues {
 					idValues[j].Id = (*Amount)(&c.IdValues[j].Id)
 					idValues[j].Value = (*Amount)(&c.IdValues[j].Value)

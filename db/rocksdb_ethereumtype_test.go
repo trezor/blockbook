@@ -301,7 +301,7 @@ func formatInternalData(in *bchain.EthereumInternalData) *bchain.EthereumInterna
 func testFourByteSignature(t *testing.T, d *RocksDB) {
 	fourBytes := uint32(1234123)
 	id := uint32(42313)
-	signature := FourByteSignature{
+	signature := bchain.FourByteSignature{
 		Name:       "xyz",
 		Parameters: []string{"address", "(bytes,uint256[],uint256)", "uint16"},
 	}
@@ -319,6 +319,13 @@ func testFourByteSignature(t *testing.T, d *RocksDB) {
 	}
 	if !reflect.DeepEqual(*got, signature) {
 		t.Errorf("testFourByteSignature: got %+v, want %+v", got, signature)
+	}
+	gotSlice, err := d.GetFourByteSignatures(fourBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(*gotSlice, []bchain.FourByteSignature{signature}) {
+		t.Errorf("testFourByteSignature: got %+v, want %+v", *gotSlice, []bchain.FourByteSignature{signature})
 	}
 }
 
@@ -1165,24 +1172,24 @@ func Test_packUnpackBlockTx(t *testing.T) {
 func Test_packUnpackFourByteSignature(t *testing.T) {
 	tests := []struct {
 		name      string
-		signature FourByteSignature
+		signature bchain.FourByteSignature
 	}{
 		{
 			name: "no params",
-			signature: FourByteSignature{
+			signature: bchain.FourByteSignature{
 				Name: "abcdef",
 			},
 		},
 		{
 			name: "one param",
-			signature: FourByteSignature{
+			signature: bchain.FourByteSignature{
 				Name:       "opqr",
 				Parameters: []string{"uint16"},
 			},
 		},
 		{
 			name: "multiple params",
-			signature: FourByteSignature{
+			signature: bchain.FourByteSignature{
 				Name:       "xyz",
 				Parameters: []string{"address", "(bytes,uint256[],uint256)", "uint16"},
 			},
