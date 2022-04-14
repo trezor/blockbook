@@ -74,10 +74,15 @@ func setupRocksDB(parser bchain.BlockChainParser, chain bchain.BlockChain, t *te
 	if err := d.ConnectBlock(block2); err != nil {
 		t.Fatal(err)
 	}
-	if err := InitTestFiatRates(d); err != nil {
+	if err := initTestFiatRates(d); err != nil {
 		t.Fatal(err)
 	}
 	is.FinishedSync(block2.Height)
+	if parser.GetChainType() == bchain.ChainEthereumType {
+		if err := initEthereumTypeDB(d); err != nil {
+			t.Fatal(err)
+		}
+	}
 	return d, is, tmp
 }
 
@@ -168,8 +173,8 @@ func insertFiatRate(date string, rates map[string]float64, d *db.RocksDB) error 
 	return d.FiatRatesStoreTicker(ticker)
 }
 
-// InitTestFiatRates initializes test data for /api/v2/tickers endpoint
-func InitTestFiatRates(d *db.RocksDB) error {
+// initTestFiatRates initializes test data for /api/v2/tickers endpoint
+func initTestFiatRates(d *db.RocksDB) error {
 	if err := insertFiatRate("20180320020000", map[string]float64{
 		"usd": 2000.0,
 		"eur": 1300.0,
@@ -235,7 +240,7 @@ func performHttpTests(tests []httpTests, t *testing.T, ts *httptest.Server) {
 			b := string(bb)
 			for _, c := range tt.body {
 				if !strings.Contains(b, c) {
-					t.Errorf("got %v, want to contain %v", b, c)
+					t.Errorf("got\n%v\nwant to contain %v", b, c)
 					break
 				}
 			}

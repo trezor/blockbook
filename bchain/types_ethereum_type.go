@@ -1,6 +1,10 @@
 package bchain
 
-import "math/big"
+import (
+	"math/big"
+
+	"github.com/ethereum/go-ethereum/accounts/abi"
+)
 
 // EthereumType specific
 
@@ -10,6 +14,27 @@ type EthereumInternalTransfer struct {
 	From  string                          `json:"from"`
 	To    string                          `json:"to"`
 	Value big.Int                         `json:"value"`
+}
+
+type FourByteSignature struct {
+	// stored in DB
+	Name       string
+	Parameters []string
+	// processed from DB data and stored only in cache
+	DecamelName      string
+	Function         string
+	ParsedParameters []abi.Type
+}
+
+type EthereumParsedInputParam struct {
+	Type   string   `json:"type"`
+	Values []string `json:"values,omitempty"`
+}
+type EthereumParsedInputData struct {
+	MethodId string                     `json:"methodId"`
+	Name     string                     `json:"name"`
+	Function string                     `json:"function,omitempty"`
+	Params   []EthereumParsedInputParam `json:"params,omitempty"`
 }
 
 // EthereumInternalTransactionType - type of ethereum transaction from internal data
