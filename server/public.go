@@ -457,6 +457,8 @@ func (s *PublicServer) parseTemplates() []*template.Template {
 		"isOwnAddress":             isOwnAddress,
 		"toJSON":                   toJSON,
 		"tokenTransfersCount":      tokenTransfersCount,
+		"tokenCount":               tokenCount,
+		"hasPrefix":                strings.HasPrefix,
 	}
 	var createTemplate func(filenames ...string) *template.Template
 	if s.debug {
@@ -559,11 +561,22 @@ func isOwnAddress(td *TemplateData, a string) bool {
 	return a == td.AddrStr
 }
 
-// called from template, returns count of token transfers of given type
+// called from template, returns count of token transfers of given type in a tx
 func tokenTransfersCount(tx *api.Tx, t api.TokenType) int {
 	count := 0
 	for i := range tx.TokenTransfers {
 		if tx.TokenTransfers[i].Type == t {
+			count++
+		}
+	}
+	return count
+}
+
+// called from template, returns count of tokens in array of given type
+func tokenCount(tokens []api.Token, t api.TokenType) int {
+	count := 0
+	for i := range tokens {
+		if tokens[i].Type == t {
 			count++
 		}
 	}
