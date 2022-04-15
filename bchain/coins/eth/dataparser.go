@@ -163,16 +163,16 @@ func processParam(data string, index int, t *abi.Type, processed []bool) ([]stri
 		}
 		// get element count of dynamic type
 		c, err := strconv.ParseInt(data[d:d+64], 16, 64)
-		count := int(c)
 		if err != nil {
 			return nil, 0, false
 		}
+		count := int(c)
 		processed[dynIndex] = true
 		dynIndex++
 		if t.T == abi.StringTy || t.T == abi.BytesTy {
 			d += 64
 			de := d + (count << 1)
-			if de > len(data) {
+			if de > len(data) || de < 0 {
 				return nil, 0, false
 			}
 			if count == 0 {
@@ -291,4 +291,28 @@ func ParseInputData(signatures *[]bchain.FourByteSignature, data string) *bchain
 		}
 	}
 	return &parsed
+}
+
+// getEnsRecord processes transaction log entry and tries to parse ENS record from it
+func getEnsRecord(l *rpcLogWithTxHash) *bchain.AddressAliasRecord {
+	if len(l.Topics) == 3 && l.Topics[0] == nameRegisteredEventSignature && len(l.Data) >= 322 {
+		address, err := addressFromPaddedHex(l.Topics[2])
+		if err != nil {
+			return nil
+		}
+		c, err := strconv.ParseInt(l.Data[194:194+64], 16, 64)
+		if err != nil {
+			return nil
+		}
+		de := 194 + 64 + (int(c) << 1)
+		if de > len(l.Data) || de < 0 {
+			return nil
+		}
+		b, err := hex.DecodeString(l.Data[194+64 : de])
+		if err != nil {
+			return nil
+		}
+		return &bchain.AddressAliasRecord{Address: address, Name: string(b)}
+	}
+	return nil
 }

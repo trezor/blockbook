@@ -121,12 +121,21 @@ type RpcReceipt struct {
 	Logs    []*RpcLog `json:"logs"`
 }
 
+// EthereumSpecificData contains data specific to Ethereum transactions
 type EthereumSpecificData struct {
 	Tx           *RpcTransaction       `json:"tx"`
 	InternalData *EthereumInternalData `json:"internalData,omitempty"`
 	Receipt      *RpcReceipt           `json:"receipt,omitempty"`
 }
 
+// AddressAliasRecord maps address to ENS name
+type AddressAliasRecord struct {
+	Address string
+	Name    string
+}
+
+// EthereumBlockSpecificData contain data specific for Ethereum block
 type EthereumBlockSpecificData struct {
-	InternalDataError string
+	InternalDataError   string
+	AddressAliasRecords []AddressAliasRecord
 }
