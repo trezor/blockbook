@@ -21,6 +21,8 @@ const tokenTransferEventSignature = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f16
 const tokenERC1155TransferSingleEventSignature = "0xc3d58168c5ae7397731d063d5bbf3d657854427343f4c083240f7aacaa2d0f62"
 const tokenERC1155TransferBatchEventSignature = "0x4a39dc06d4c0dbc64b70af90fd698a233a518aa5d07e595d983b8c0526c8f7fb"
 
+const nameRegisteredEventSignature = "0xca6abbe9d7f11422cb6ca7629fbf6fe9efb1c621f71ce8f02b9f2a230097404f"
+
 const contractNameSignature = "0x06fdde03"
 const contractSymbolSignature = "0x95d89b41"
 const contractDecimalsSignature = "0x313ce567"

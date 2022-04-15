@@ -497,24 +497,28 @@ func (b *EthereumRPC) getBlockRaw(hash string, height uint32, fullTxs bool) (jso
 	return raw, nil
 }
 
-func (b *EthereumRPC) getTokenTransferEventsForBlock(blockNumber string) (map[string][]*bchain.RpcLog, error) {
+func (b *EthereumRPC) processEventsForBlock(blockNumber string) (map[string][]*bchain.RpcLog, []bchain.AddressAliasRecord, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
 	defer cancel()
 	var logs []rpcLogWithTxHash
+	var ensRecords []bchain.AddressAliasRecord
 	err := b.rpc.CallContext(ctx, &logs, "eth_getLogs", map[string]interface{}{
 		"fromBlock": blockNumber,
 		"toBlock":   blockNumber,
-		// "topics":    []string{tokenTransferEventSignature, tokenERC1155TransferSingleEventSignature, tokenERC1155TransferBatchEventSignature},
 	})
 	if err != nil {
-		return nil, errors.Annotatef(err, "blockNumber %v", blockNumber)
+		return nil, nil, errors.Annotatef(err, "blockNumber %v", blockNumber)
 	}
 	r := make(map[string][]*bchain.RpcLog)
 	for i := range logs {
 		l := &logs[i]
 		r[l.Hash] = append(r[l.Hash], &l.RpcLog)
+		ens := getEnsRecord(l)
+		if ens != nil {
+			ensRecords = append(ensRecords, *ens)
+		}
 	}
-	return r, nil
+	return r, ensRecords, nil
 }
 
 type rpcCallTrace struct {
@@ -636,17 +640,24 @@ func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error
 	if err != nil {
 		return nil, errors.Annotatef(err, "hash %v, height %v", hash, height)
 	}
-	// get contract transfers events
-	logs, err := b.getTokenTransferEventsForBlock(head.Number)
+	// get block events
+	logs, ens, err := b.processEventsForBlock(head.Number)
 	if err != nil {
 		return nil, err
 	}
 	// error fetching internal data does not stop the block processing
 	var blockSpecificData *bchain.EthereumBlockSpecificData
 	internalData, err := b.getInternalDataForBlock(head.Hash, body.Transactions)
-	if err != nil {
-		blockSpecificData = &bchain.EthereumBlockSpecificData{InternalDataError: err.Error()}
-		glog.Info("InternalDataError ", bbh.Height, ": ", err.Error())
+	if err != nil || len(ens) > 0 {
+		blockSpecificData = &bchain.EthereumBlockSpecificData{}
+		if err != nil {
+			blockSpecificData.InternalDataError = err.Error()
+			glog.Info("InternalDataError ", bbh.Height, ": ", err.Error())
+		}
+		if len(ens) > 0 {
+			blockSpecificData.AddressAliasRecords = ens
+			glog.Info("ENS", ens)
+		}
 	}
 
 	btxs := make([]bchain.Tx, len(body.Transactions))
