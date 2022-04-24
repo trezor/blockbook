@@ -228,7 +228,7 @@ func Test_contractGetTransfersFromLog(t *testing.T) {
 }
 
 func Test_contractGetTransfersFromTx(t *testing.T) {
-	p := NewEthereumParser(1)
+	p := NewEthereumParser(1, false)
 	b1 := dbtestdata.GetTestEthereumTypeBlock1(p)
 	b2 := dbtestdata.GetTestEthereumTypeBlock2(p)
 	bn, _ := new(big.Int).SetString("21e19e0c9bab2400000", 16)

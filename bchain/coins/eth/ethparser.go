@@ -28,10 +28,11 @@ type EthereumParser struct {
 }
 
 // NewEthereumParser returns new EthereumParser instance
-func NewEthereumParser(b int) *EthereumParser {
+func NewEthereumParser(b int, addressAliases bool) *EthereumParser {
 	return &EthereumParser{&bchain.BaseParser{
 		BlockAddressesToKeep: b,
 		AmountDecimalPoint:   EtherAmountDecimalPoint,
+		AddressAliases:       addressAliases,
 	}}
 }
 
@@ -456,6 +457,11 @@ func (p *EthereumParser) EthereumTypeGetTokenTransfersFromTx(tx *bchain.Tx) (bch
 		}
 	}
 	return r, nil
+}
+
+// FormatAddressAlias adds .eth to a name alias
+func (p *EthereumParser) FormatAddressAlias(address string, name string) string {
+	return name + ".eth"
 }
 
 // TxStatus is status of transaction

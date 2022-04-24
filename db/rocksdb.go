@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"sync"
 	"time"
 	"unsafe"
 
@@ -90,6 +91,9 @@ const (
 	cfContracts
 	cfFunctionSignatures
 	cfBlockInternalDataErrors
+
+	// TODO move to common section
+	cfAddressAliases
 )
 
 // common columns
@@ -98,7 +102,7 @@ var cfBaseNames = []string{"default", "height", "addresses", "blockTxs", "transa
 
 // type specific columns
 var cfNamesBitcoinType = []string{"addressBalance", "txAddresses"}
-var cfNamesEthereumType = []string{"addressContracts", "internalData", "contracts", "functionSignatures", "blockInternalDataErrors"}
+var cfNamesEthereumType = []string{"addressContracts", "internalData", "contracts", "functionSignatures", "blockInternalDataErrors", "addressAliases"}
 
 func openDB(path string, c *gorocksdb.Cache, openFiles int) (*gorocksdb.DB, []*gorocksdb.ColumnFamilyHandle, error) {
 	// opts with bloom filter
@@ -1248,6 +1252,50 @@ func (d *RocksDB) writeHeight(wb *gorocksdb.WriteBatch, height uint32, bi *Block
 	return nil
 }
 
+// address alias support
+var cachedAddressAliasRecords = make(map[string]string)
+var cachedAddressAliasRecordsMux sync.Mutex
+
+// InitAddressAliasRecords loads all records to cache
+func (d *RocksDB) InitAddressAliasRecords() (int, error) {
+	count := 0
+	cachedAddressAliasRecordsMux.Lock()
+	defer cachedAddressAliasRecordsMux.Unlock()
+	it := d.db.NewIteratorCF(d.ro, d.cfh[cfAddressAliases])
+	defer it.Close()
+	for it.SeekToFirst(); it.Valid(); it.Next() {
+		address := string(it.Key().Data())
+		name := string(it.Value().Data())
+		if address != "" && name != "" {
+			cachedAddressAliasRecords[address] = d.chainParser.FormatAddressAlias(address, name)
+			count++
+		}
+	}
+	return count, nil
+}
+
+func (d *RocksDB) GetAddressAlias(address string) string {
+	cachedAddressAliasRecordsMux.Lock()
+	name := cachedAddressAliasRecords[address]
+	cachedAddressAliasRecordsMux.Unlock()
+	return name
+}
+
+func (d *RocksDB) storeAddressAliasRecords(wb *gorocksdb.WriteBatch, records []bchain.AddressAliasRecord) error {
+	if d.chainParser.UseAddressAliases() {
+		for i := range records {
+			r := &records[i]
+			if len(r.Name) > 0 {
+				wb.PutCF(d.cfh[cfAddressAliases], []byte(r.Address), []byte(r.Name))
+				cachedAddressAliasRecordsMux.Lock()
+				cachedAddressAliasRecords[r.Address] = d.chainParser.FormatAddressAlias(r.Address, r.Name)
+				cachedAddressAliasRecordsMux.Unlock()
+			}
+		}
+	}
+	return nil
+}
+
 // Disconnect blocks
 
 func (d *RocksDB) disconnectTxAddressesInputs(wb *gorocksdb.WriteBatch, btxID []byte, inputs []outpoint, txa *TxAddresses, txAddressesToUpdate map[string]*TxAddresses,
@@ -1642,6 +1690,15 @@ func (d *RocksDB) LoadInternalState(rpcCoin string) (*common.InternalState, erro
 	var t time.Time
 	is.LastMempoolSync = t
 	is.SyncMode = false
+
+	if d.chainParser.UseAddressAliases() {
+		recordsCount, err := d.InitAddressAliasRecords()
+		if err != nil {
+			return nil, err
+		}
+		glog.Infof("loaded %d address alias records", recordsCount)
+	}
+
 	return is, nil
 }
 

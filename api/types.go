@@ -211,6 +211,12 @@ type EthereumSpecific struct {
 	InternalTransfers []EthereumInternalTransfer             `json:"internalTransfers,omitempty"`
 }
 
+type AddressAlias struct {
+	Type  string
+	Alias string
+}
+type AddressAliasesMap map[string]AddressAlias
+
 // Tx holds information about a transaction
 type Tx struct {
 	Txid             string            `json:"txid"`
@@ -231,6 +237,7 @@ type Tx struct {
 	CoinSpecificData json.RawMessage   `json:"coinSpecificData,omitempty"`
 	TokenTransfers   []TokenTransfer   `json:"tokenTransfers,omitempty"`
 	EthereumSpecific *EthereumSpecific `json:"ethereumSpecific,omitempty"`
+	AddressAliases   AddressAliasesMap `json:"addressAliases,omitempty"`
 }
 
 // FeeStats contains detailed block fee statistics
@@ -298,6 +305,7 @@ type Address struct {
 	UsedTokens            int                   `json:"usedTokens,omitempty"`
 	Tokens                []Token               `json:"tokens,omitempty"`
 	Erc20Contract         *bchain.Erc20Contract `json:"erc20Contract,omitempty"`
+	AddressAliases        AddressAliasesMap     `json:"addressAliases,omitempty"`
 	// helpers for explorer
 	Filter        string              `json:"-"`
 	XPubAddresses map[string]struct{} `json:"-"`
@@ -428,8 +436,9 @@ type BlockInfo struct {
 type Block struct {
 	Paging
 	BlockInfo
-	TxCount      int   `json:"txCount"`
-	Transactions []*Tx `json:"txs,omitempty"`
+	TxCount        int               `json:"txCount"`
+	Transactions   []*Tx             `json:"txs,omitempty"`
+	AddressAliases AddressAliasesMap `json:"addressAliases,omitempty"`
 }
 
 // BlockRaw contains raw block in hex
