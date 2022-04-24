@@ -41,6 +41,7 @@ type Configuration struct {
 	RPCURL                          string `json:"rpc_url"`
 	RPCTimeout                      int    `json:"rpc_timeout"`
 	BlockAddressesToKeep            int    `json:"block_addresses_to_keep"`
+	AddressAliases                  bool   `json:"address_aliases,omitempty"`
 	MempoolTxTimeoutHours           int    `json:"mempoolTxTimeoutHours"`
 	QueryBackendOnMempoolResync     bool   `json:"queryBackendOnMempoolResync"`
 	ProcessInternalTransactions     bool   `json:"processInternalTransactions"`
@@ -97,7 +98,7 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 	ProcessInternalTransactions = c.ProcessInternalTransactions
 
 	// always create parser
-	s.Parser = NewEthereumParser(c.BlockAddressesToKeep)
+	s.Parser = NewEthereumParser(c.BlockAddressesToKeep, c.AddressAliases)
 	s.timeout = time.Duration(c.RPCTimeout) * time.Second
 
 	// new blocks notifications handling
@@ -648,6 +649,7 @@ func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error
 	// error fetching internal data does not stop the block processing
 	var blockSpecificData *bchain.EthereumBlockSpecificData
 	internalData, err := b.getInternalDataForBlock(head.Hash, body.Transactions)
+	// pass internalData error and ENS records in blockSpecificData to be stored
 	if err != nil || len(ens) > 0 {
 		blockSpecificData = &bchain.EthereumBlockSpecificData{}
 		if err != nil {

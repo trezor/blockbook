@@ -23,27 +23,29 @@ import (
 
 // Worker is handle to api worker
 type Worker struct {
-	db          *db.RocksDB
-	txCache     *db.TxCache
-	chain       bchain.BlockChain
-	chainParser bchain.BlockChainParser
-	chainType   bchain.ChainType
-	mempool     bchain.Mempool
-	is          *common.InternalState
-	metrics     *common.Metrics
+	db                *db.RocksDB
+	txCache           *db.TxCache
+	chain             bchain.BlockChain
+	chainParser       bchain.BlockChainParser
+	chainType         bchain.ChainType
+	useAddressAliases bool
+	mempool           bchain.Mempool
+	is                *common.InternalState
+	metrics           *common.Metrics
 }
 
 // NewWorker creates new api worker
 func NewWorker(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, txCache *db.TxCache, metrics *common.Metrics, is *common.InternalState) (*Worker, error) {
 	w := &Worker{
-		db:          db,
-		txCache:     txCache,
-		chain:       chain,
-		chainParser: chain.GetChainParser(),
-		chainType:   chain.GetChainParser().GetChainType(),
-		mempool:     mempool,
-		is:          is,
-		metrics:     metrics,
+		db:                db,
+		txCache:           txCache,
+		chain:             chain,
+		chainParser:       chain.GetChainParser(),
+		chainType:         chain.GetChainParser().GetChainType(),
+		useAddressAliases: chain.GetChainParser().UseAddressAliases(),
+		mempool:           mempool,
+		is:                is,
+		metrics:           metrics,
 	}
 	if w.chainType == bchain.ChainBitcoinType {
 		w.initXpubCache()
@@ -100,7 +102,7 @@ func (w *Worker) setSpendingTxToVout(vout *Vout, txid string, height uint32) err
 // GetSpendingTxid returns transaction id of transaction that spent given output
 func (w *Worker) GetSpendingTxid(txid string, n int) (string, error) {
 	start := time.Now()
-	tx, err := w.GetTransaction(txid, false, false)
+	tx, err := w.getTransaction(txid, false, false, nil)
 	if err != nil {
 		return "", err
 	}
@@ -115,8 +117,65 @@ func (w *Worker) GetSpendingTxid(txid string, n int) (string, error) {
 	return tx.Vout[n].SpentTxID, nil
 }
 
+func aggregateAddress(m map[string]struct{}, a string) {
+	if m != nil && len(a) > 0 {
+		m[a] = struct{}{}
+	}
+}
+
+func aggregateAddresses(m map[string]struct{}, addresses []string, isAddress bool) {
+	if m != nil && isAddress {
+		for _, a := range addresses {
+			if len(a) > 0 {
+				m[a] = struct{}{}
+			}
+		}
+	}
+}
+
+func (w *Worker) newAddressesMapForAliases() map[string]struct{} {
+	if w.useAddressAliases {
+		return make(map[string]struct{})
+	}
+	return nil
+}
+
+func (w *Worker) getAddressAliases(addresses map[string]struct{}) AddressAliasesMap {
+	if len(addresses) > 0 {
+		aliases := make(AddressAliasesMap)
+		var t string
+		if w.chainType == bchain.ChainEthereumType {
+			t = "ENS"
+		} else {
+			t = "Alias"
+		}
+		for a := range addresses {
+			if w.chainType == bchain.ChainEthereumType {
+				// TODO get contract name
+			}
+			n := w.db.GetAddressAlias(a)
+			if len(n) > 0 {
+				aliases[a] = AddressAlias{Type: t, Alias: n}
+			}
+		}
+		return aliases
+	}
+	return nil
+}
+
 // GetTransaction reads transaction data from txid
 func (w *Worker) GetTransaction(txid string, spendingTxs bool, specificJSON bool) (*Tx, error) {
+	addresses := w.newAddressesMapForAliases()
+	tx, err := w.getTransaction(txid, spendingTxs, specificJSON, addresses)
+	if err != nil {
+		return nil, err
+	}
+	tx.AddressAliases = w.getAddressAliases(addresses)
+	return tx, nil
+}
+
+// getTransaction reads transaction data from txid
+func (w *Worker) getTransaction(txid string, spendingTxs bool, specificJSON bool, addresses map[string]struct{}) (*Tx, error) {
 	bchainTx, height, err := w.txCache.GetTransaction(txid)
 	if err != nil {
 		if err == bchain.ErrTxNotFound {
@@ -124,7 +183,7 @@ func (w *Worker) GetTransaction(txid string, spendingTxs bool, specificJSON bool
 		}
 		return nil, NewAPIError(fmt.Sprintf("Transaction '%v' not found (%v)", txid, err), true)
 	}
-	return w.GetTransactionFromBchainTx(bchainTx, height, spendingTxs, specificJSON)
+	return w.getTransactionFromBchainTx(bchainTx, height, spendingTxs, specificJSON, addresses)
 }
 
 func (w *Worker) getParsedEthereumInputData(data string) *bchain.EthereumParsedInputData {
@@ -144,8 +203,8 @@ func (w *Worker) getParsedEthereumInputData(data string) *bchain.EthereumParsedI
 	return eth.ParseInputData(signatures, data)
 }
 
-// GetTransactionFromBchainTx reads transaction data from txid
-func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spendingTxs bool, specificJSON bool) (*Tx, error) {
+// getTransactionFromBchainTx reads transaction data from txid
+func (w *Worker) getTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spendingTxs bool, specificJSON bool, addresses map[string]struct{}) (*Tx, error) {
 	var err error
 	var ta *db.TxAddresses
 	var tokens []TokenTransfer
@@ -199,6 +258,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 							if err != nil {
 								glog.Warning("GetAddressesFromAddrDesc tx ", bchainVin.Txid, ", addrDesc ", vin.AddrDesc, ": ", err)
 							}
+							aggregateAddresses(addresses, vin.Addresses, vin.IsAddress)
 							continue
 						}
 						return nil, errors.Annotatef(err, "txCache.GetTransaction %v", bchainVin.Txid)
@@ -215,6 +275,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 						if err != nil {
 							glog.Errorf("getAddressesFromVout error %v, vout %+v", err, vout)
 						}
+						aggregateAddresses(addresses, vin.Addresses, vin.IsAddress)
 					}
 				} else {
 					if len(tas.Outputs) > int(vin.Vout) {
@@ -225,6 +286,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 						if err != nil {
 							glog.Errorf("output.Addresses error %v, tx %v, output %v", err, bchainVin.Txid, i)
 						}
+						aggregateAddresses(addresses, vin.Addresses, vin.IsAddress)
 					}
 				}
 				if vin.ValueSat != nil {
@@ -239,6 +301,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 				}
 				vin.Addresses = bchainVin.Addresses
 				vin.IsAddress = true
+				aggregateAddresses(addresses, vin.Addresses, vin.IsAddress)
 			}
 		}
 	}
@@ -254,6 +317,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 		if err != nil {
 			glog.V(2).Infof("getAddressesFromVout error %v, %v, output %v", err, bchainTx.Txid, bchainVout.N)
 		}
+		aggregateAddresses(addresses, vout.Addresses, vout.IsAddress)
 		if ta != nil {
 			vout.Spent = ta.Outputs[i].Spent
 			if spendingTxs && vout.Spent {
@@ -276,7 +340,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 		if err != nil {
 			glog.Errorf("GetTokenTransfersFromTx error %v, %v", err, bchainTx)
 		}
-		tokens = w.getEthereumTokensTransfers(tokenTransfers)
+		tokens = w.getEthereumTokensTransfers(tokenTransfers, addresses)
 		ethTxData := eth.GetEthereumTxData(bchainTx)
 
 		var internalData *bchain.EthereumInternalData
@@ -314,7 +378,9 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 				f := &internalData.Transfers[i]
 				t := &ethSpecific.InternalTransfers[i]
 				t.From = f.From
+				aggregateAddress(addresses, t.From)
 				t.To = f.To
+				aggregateAddress(addresses, t.To)
 				t.Type = f.Type
 				t.Value = (*Amount)(&f.Value)
 			}
@@ -365,6 +431,7 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 	var pValInSat *big.Int
 	var tokens []TokenTransfer
 	var ethSpecific *EthereumSpecific
+	addresses := w.newAddressesMapForAliases()
 	vins := make([]Vin, len(mempoolTx.Vin))
 	rbf := false
 	for i := range mempoolTx.Vin {
@@ -389,6 +456,7 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 				if vin.ValueSat != nil {
 					valInSat.Add(&valInSat, (*big.Int)(vin.ValueSat))
 				}
+				aggregateAddresses(addresses, vin.Addresses, vin.IsAddress)
 			}
 		} else if w.chainType == bchain.ChainEthereumType {
 			if len(bchainVin.Addresses) > 0 {
@@ -398,6 +466,7 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 				}
 				vin.Addresses = bchainVin.Addresses
 				vin.IsAddress = true
+				aggregateAddresses(addresses, vin.Addresses, vin.IsAddress)
 			}
 		}
 	}
@@ -413,6 +482,7 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 		if err != nil {
 			glog.V(2).Infof("getAddressesFromVout error %v, %v, output %v", err, mempoolTx.Txid, bchainVout.N)
 		}
+		aggregateAddresses(addresses, vout.Addresses, vout.IsAddress)
 	}
 	if w.chainType == bchain.ChainBitcoinType {
 		// for coinbase transactions valIn is 0
@@ -425,7 +495,7 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 		if len(mempoolTx.Vout) > 0 {
 			valOutSat = mempoolTx.Vout[0].ValueSat
 		}
-		tokens = w.getEthereumTokensTransfers(mempoolTx.TokenTransfers)
+		tokens = w.getEthereumTokensTransfers(mempoolTx.TokenTransfers, addresses)
 		ethTxData := eth.GetEthereumTxDataFromSpecificData(mempoolTx.CoinSpecificData)
 		ethSpecific = &EthereumSpecific{
 			GasLimit: ethTxData.GasLimit,
@@ -450,11 +520,12 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 		Vout:             vouts,
 		TokenTransfers:   tokens,
 		EthereumSpecific: ethSpecific,
+		AddressAliases:   w.getAddressAliases(addresses),
 	}
 	return r, nil
 }
 
-func (w *Worker) getEthereumTokensTransfers(transfers bchain.TokenTransfers) []TokenTransfer {
+func (w *Worker) getEthereumTokensTransfers(transfers bchain.TokenTransfers, addresses map[string]struct{}) []TokenTransfer {
 	sort.Sort(transfers)
 	tokens := make([]TokenTransfer, len(transfers))
 	for i := range transfers {
@@ -482,6 +553,8 @@ func (w *Worker) getEthereumTokensTransfers(transfers bchain.TokenTransfers) []T
 		} else {
 			value = (*Amount)(&t.Value)
 		}
+		aggregateAddress(addresses, t.From)
+		aggregateAddress(addresses, t.To)
 		tokens[i] = TokenTransfer{
 			Type:     TokenTypeMap[t.Type],
 			Token:    t.Contract,
@@ -606,7 +679,7 @@ func GetUniqueTxids(txids []string) []string {
 	return ut[0:i]
 }
 
-func (w *Worker) txFromTxAddress(txid string, ta *db.TxAddresses, bi *db.BlockInfo, bestheight uint32) *Tx {
+func (w *Worker) txFromTxAddress(txid string, ta *db.TxAddresses, bi *db.BlockInfo, bestheight uint32, addresses map[string]struct{}) *Tx {
 	var err error
 	var valInSat, valOutSat, feesSat big.Int
 	vins := make([]Vin, len(ta.Inputs))
@@ -620,6 +693,7 @@ func (w *Worker) txFromTxAddress(txid string, ta *db.TxAddresses, bi *db.BlockIn
 		if err != nil {
 			glog.Errorf("tai.Addresses error %v, tx %v, input %v, tai %+v", err, txid, i, tai)
 		}
+		aggregateAddresses(addresses, vin.Addresses, vin.IsAddress)
 	}
 	vouts := make([]Vout, len(ta.Outputs))
 	for i := range ta.Outputs {
@@ -633,6 +707,7 @@ func (w *Worker) txFromTxAddress(txid string, ta *db.TxAddresses, bi *db.BlockIn
 			glog.Errorf("tai.Addresses error %v, tx %v, output %v, tao %+v", err, txid, i, tao)
 		}
 		vout.Spent = tao.Spent
+		aggregateAddresses(addresses, vout.Addresses, vout.IsAddress)
 	}
 	// for coinbase transactions valIn is 0
 	feesSat.Sub(&valInSat, &valOutSat)
@@ -876,7 +951,7 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 	return ba, tokens, ci, n, nonContractTxs, internalTxs, totalResults, nil
 }
 
-func (w *Worker) txFromTxid(txid string, bestheight uint32, option AccountDetails, blockInfo *db.BlockInfo) (*Tx, error) {
+func (w *Worker) txFromTxid(txid string, bestheight uint32, option AccountDetails, blockInfo *db.BlockInfo, addresses map[string]struct{}) (*Tx, error) {
 	var tx *Tx
 	var err error
 	// only ChainBitcoinType supports TxHistoryLight
@@ -888,9 +963,9 @@ func (w *Worker) txFromTxid(txid string, bestheight uint32, option AccountDetail
 		if ta == nil {
 			glog.Warning("DB inconsistency:  tx ", txid, ": not found in txAddresses")
 			// as fallback, get tx from backend
-			tx, err = w.GetTransaction(txid, false, false)
+			tx, err = w.getTransaction(txid, false, false, addresses)
 			if err != nil {
-				return nil, errors.Annotatef(err, "GetTransaction %v", txid)
+				return nil, errors.Annotatef(err, "getTransaction %v", txid)
 			}
 		} else {
 			if blockInfo == nil {
@@ -904,12 +979,12 @@ func (w *Worker) txFromTxid(txid string, bestheight uint32, option AccountDetail
 					blockInfo = &db.BlockInfo{}
 				}
 			}
-			tx = w.txFromTxAddress(txid, ta, blockInfo, bestheight)
+			tx = w.txFromTxAddress(txid, ta, blockInfo, bestheight, addresses)
 		}
 	} else {
-		tx, err = w.GetTransaction(txid, false, false)
+		tx, err = w.getTransaction(txid, false, false, addresses)
 		if err != nil {
-			return nil, errors.Annotatef(err, "GetTransaction %v", txid)
+			return nil, errors.Annotatef(err, "getTransaction %v", txid)
 		}
 	}
 	return tx, nil
@@ -1012,6 +1087,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 		ba = &db.AddrBalance{}
 		page = 0
 	}
+	addresses := w.newAddressesMapForAliases()
 	// process mempool, only if toHeight is not specified
 	if filter.ToHeight == 0 && !filter.OnlyConfirmed {
 		txm, err = w.getAddressTxids(addrDesc, true, filter, maxInt)
@@ -1019,7 +1095,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 			return nil, errors.Annotatef(err, "getAddressTxids %v true", addrDesc)
 		}
 		for _, txid := range txm {
-			tx, err := w.GetTransaction(txid, false, true)
+			tx, err := w.getTransaction(txid, false, true, addresses)
 			// mempool transaction may fail
 			if err != nil || tx == nil {
 				glog.Warning("GetTransaction in mempool: ", err)
@@ -1070,7 +1146,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 			if option == AccountDetailsTxidHistory {
 				txids = append(txids, txid)
 			} else {
-				tx, err := w.txFromTxid(txid, bestheight, option, nil)
+				tx, err := w.txFromTxid(txid, bestheight, option, nil, addresses)
 				if err != nil {
 					return nil, err
 				}
@@ -1099,6 +1175,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 		Tokens:                tokens,
 		Erc20Contract:         erc20c,
 		Nonce:                 nonce,
+		AddressAliases:        w.getAddressAliases(addresses),
 	}
 	glog.Info("GetAddress ", address, ", ", time.Since(start))
 	return r, nil
@@ -1786,8 +1863,9 @@ func (w *Worker) GetBlock(bid string, page int, txsOnPage int) (*Block, error) {
 	pg, from, to, page := computePaging(txCount, page, txsOnPage)
 	txs := make([]*Tx, to-from)
 	txi := 0
+	addresses := w.newAddressesMapForAliases()
 	for i := from; i < to; i++ {
-		txs[txi], err = w.txFromTxid(bi.Txids[i], bestheight, AccountDetailsTxHistoryLight, dbi)
+		txs[txi], err = w.txFromTxid(bi.Txids[i], bestheight, AccountDetailsTxHistoryLight, dbi, addresses)
 		if err != nil {
 			return nil, err
 		}
@@ -1819,8 +1897,9 @@ func (w *Worker) GetBlock(bid string, page int, txsOnPage int) (*Block, error) {
 			Txids:         bi.Txids,
 			Version:       bi.Version,
 		},
-		TxCount:      txCount,
-		Transactions: txs,
+		TxCount:        txCount,
+		Transactions:   txs,
+		AddressAliases: w.getAddressAliases(addresses),
 	}, nil
 }
 
@@ -1875,7 +1954,7 @@ func (w *Worker) ComputeFeeStats(blockFrom, blockTo int, stopCompute chan os.Sig
 					glog.Info("ComputeFeeStats interrupted at height ", block)
 					return db.ErrOperationInterrupted
 				default:
-					tx, err := w.txFromTxid(txid, bestheight, AccountDetailsTxHistoryLight, dbi)
+					tx, err := w.txFromTxid(txid, bestheight, AccountDetailsTxHistoryLight, dbi, nil)
 					if err != nil {
 						return err
 					}

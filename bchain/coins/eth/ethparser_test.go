@@ -54,7 +54,7 @@ func TestEthParser_GetAddrDescFromAddress(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p := NewEthereumParser(1)
+			p := NewEthereumParser(1, false)
 			got, err := p.GetAddrDescFromAddress(tt.args.address)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("EthParser.GetAddrDescFromAddress() error = %v, wantErr %v", err, tt.wantErr)
@@ -285,7 +285,7 @@ func TestEthereumParser_PackTx(t *testing.T) {
 			want: dbtestdata.EthTx1NoStatusPacked,
 		},
 	}
-	p := NewEthereumParser(1)
+	p := NewEthereumParser(1, false)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := p.PackTx(tt.args.tx, tt.args.height, tt.args.blockTime)
@@ -338,7 +338,7 @@ func TestEthereumParser_UnpackTx(t *testing.T) {
 			want1: 4321000,
 		},
 	}
-	p := NewEthereumParser(1)
+	p := NewEthereumParser(1, false)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			b, err := hex.DecodeString(tt.args.hex)
