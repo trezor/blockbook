@@ -21,7 +21,7 @@ type testEthereumParser struct {
 }
 
 func ethereumTestnetParser() *eth.EthereumParser {
-	return eth.NewEthereumParser(1)
+	return eth.NewEthereumParser(1, true)
 }
 
 func bigintFromStringToHex(s string) string {
@@ -267,6 +267,25 @@ func verifyAfterEthereumTypeBlock2(t *testing.T, d *RocksDB, wantBlockInternalDa
 		}
 	}
 
+	var addressAliases []keyPair
+	addressAliases = []keyPair{
+		{
+			hex.EncodeToString([]byte(dbtestdata.EthAddr7bEIP55)),
+			hex.EncodeToString([]byte("address7b")),
+			nil,
+		},
+		{
+			hex.EncodeToString([]byte(dbtestdata.EthAddr20EIP55)),
+			hex.EncodeToString([]byte("address20")),
+			nil,
+		},
+	}
+	if err := checkColumn(d, cfAddressAliases, addressAliases); err != nil {
+		{
+			t.Fatal(err)
+		}
+	}
+
 	var internalDataError []keyPair
 	if wantBlockInternalDataError {
 		internalDataError = []keyPair{
@@ -282,6 +301,7 @@ func verifyAfterEthereumTypeBlock2(t *testing.T, d *RocksDB, wantBlockInternalDa
 			t.Fatal(err)
 		}
 	}
+
 }
 
 func formatInternalData(in *bchain.EthereumInternalData) *bchain.EthereumInternalData {
@@ -359,9 +379,8 @@ func TestRocksDB_Index_EthereumType(t *testing.T) {
 		t.Fatal("Expecting is.BlockTimes 1, got ", len(d.is.BlockTimes))
 	}
 
-	// connect 2nd block, simulate InternalDataError
+	// connect 2nd block, simulate InternalDataError and AddressAlias
 	block2 := dbtestdata.GetTestEthereumTypeBlock2(d.chainParser)
-	block2.CoinSpecificData = &bchain.EthereumBlockSpecificData{InternalDataError: "test error"}
 	if err := d.ConnectBlock(block2); err != nil {
 		t.Fatal(err)
 	}
@@ -544,7 +563,6 @@ func Test_BulkConnect_EthereumType(t *testing.T) {
 
 	// connect 2nd block, simulate InternalDataError
 	block2 := dbtestdata.GetTestEthereumTypeBlock2(d.chainParser)
-	block2.CoinSpecificData = &bchain.EthereumBlockSpecificData{InternalDataError: "test error"}
 	if err := bc.ConnectBlock(block2, true); err != nil {
 		t.Fatal(err)
 	}

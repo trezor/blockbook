@@ -761,10 +761,17 @@ func (d *RocksDB) storeBlockInternalDataErrorEthereumType(wb *gorocksdb.WriteBat
 
 func (d *RocksDB) storeBlockSpecificDataEthereumType(wb *gorocksdb.WriteBatch, block *bchain.Block) error {
 	blockSpecificData, _ := block.CoinSpecificData.(*bchain.EthereumBlockSpecificData)
-	if blockSpecificData != nil && blockSpecificData.InternalDataError != "" {
-		glog.Info("storeBlockSpecificDataEthereumType ", block.Height, ": ", blockSpecificData.InternalDataError)
-		if err := d.storeBlockInternalDataErrorEthereumType(wb, block, blockSpecificData.InternalDataError); err != nil {
-			return err
+	if blockSpecificData != nil {
+		if blockSpecificData.InternalDataError != "" {
+			glog.Info("storeBlockSpecificDataEthereumType ", block.Height, ": ", blockSpecificData.InternalDataError)
+			if err := d.storeBlockInternalDataErrorEthereumType(wb, block, blockSpecificData.InternalDataError); err != nil {
+				return err
+			}
+		}
+		if len(blockSpecificData.AddressAliasRecords) > 0 {
+			if err := d.storeAddressAliasRecords(wb, blockSpecificData.AddressAliasRecords); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

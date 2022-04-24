@@ -50,6 +50,7 @@
       "mempool_sub_workers": 2,
       "block_addresses_to_keep": 300,
       "additional_params": {
+        "address_aliases": true,
         "mempoolTxTimeoutHours": 48,
         "processInternalTransactions": true,
         "queryBackendOnMempoolResync": false,
