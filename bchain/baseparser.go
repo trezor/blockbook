@@ -16,6 +16,7 @@ import (
 type BaseParser struct {
 	BlockAddressesToKeep int
 	AmountDecimalPoint   int
+	AddressAliases       bool
 }
 
 // ParseBlock parses raw block to our Block struct - currently not implemented
@@ -101,6 +102,11 @@ func (p *BaseParser) AmountToDecimalString(a *big.Int) string {
 // AmountDecimals returns number of decimal places in amounts
 func (p *BaseParser) AmountDecimals() int {
 	return p.AmountDecimalPoint
+}
+
+// UseAddressAliases returns true if address aliases are enabled
+func (p *BaseParser) UseAddressAliases() bool {
+	return p.AddressAliases
 }
 
 // ParseTxFromJson parses JSON message containing transaction and returns Tx struct
@@ -303,4 +309,9 @@ func (p *BaseParser) DeriveAddressDescriptorsFromTo(descriptor *XpubDescriptor, 
 // EthereumTypeGetTokenTransfersFromTx is unsupported
 func (p *BaseParser) EthereumTypeGetTokenTransfersFromTx(tx *Tx) (TokenTransfers, error) {
 	return nil, errors.New("Not supported")
+}
+
+// FormatAddressAlias makes possible to do coin specific formatting to an address alias
+func (p *BaseParser) FormatAddressAlias(address string, name string) string {
+	return name
 }

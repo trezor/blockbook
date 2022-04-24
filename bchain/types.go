@@ -305,6 +305,8 @@ type BlockChainParser interface {
 	KeepBlockAddresses() int
 	// AmountDecimals returns number of decimal places in coin amounts
 	AmountDecimals() int
+	// UseAddressAliases returns true if address aliases are enabled
+	UseAddressAliases() bool
 	// MinimumCoinbaseConfirmations returns minimum number of confirmations a coinbase transaction must have before it can be spent
 	MinimumCoinbaseConfirmations() int
 	// AmountToDecimalString converts amount in big.Int to string with decimal point in the correct place
@@ -338,6 +340,8 @@ type BlockChainParser interface {
 	DeriveAddressDescriptorsFromTo(descriptor *XpubDescriptor, change uint32, fromIndex uint32, toIndex uint32) ([]AddressDescriptor, error)
 	// EthereumType specific
 	EthereumTypeGetTokenTransfersFromTx(tx *Tx) (TokenTransfers, error)
+	// AddressAlias
+	FormatAddressAlias(address string, name string) string
 }
 
 // Mempool defines common interface to mempool

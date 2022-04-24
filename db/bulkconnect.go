@@ -330,9 +330,9 @@ func (b *BulkConnect) connectBlockEthereumType(block *bchain.Block, storeBlockTx
 			glog.Info("rocksdb: height ", b.height, ", stored ", bac, " addresses, done in ", time.Since(start))
 		}
 	} else {
-		// if there is InternalDataError, store it
+		// if there are blockSpecificData, store them
 		blockSpecificData, _ := block.CoinSpecificData.(*bchain.EthereumBlockSpecificData)
-		if blockSpecificData != nil && blockSpecificData.InternalDataError != "" {
+		if blockSpecificData != nil {
 			wb := gorocksdb.NewWriteBatch()
 			defer wb.Destroy()
 			if err = b.d.storeBlockSpecificDataEthereumType(wb, block); err != nil {

@@ -13,9 +13,11 @@ const (
 	EthAddr3e         = "3e3a3d69dc66ba10737f531ed088954a9ec89d97"
 	EthAddr55         = "555ee11fbddc0e49a9bab358a8941ad95ffdb48f"
 	EthAddr20         = "20cd153de35d469ba46127a0c8f18626b59a256a"
+	EthAddr20EIP55    = "0x20cD153de35D469BA46127A0C8F18626b59a256A"
 	EthAddr9f         = "9f4981531fda132e83c44680787dfa7ee31e4f8d"
 	EthAddr4b         = "4bda106325c335df99eab7fe363cac8a0ba2a24d"
 	EthAddr7b         = "7b62eb7fe80350dc7ec945c0b73242cb9877fb1b"
+	EthAddr7bEIP55    = "0x7B62EB7fe80350DC7EC945C0B73242cb9877FB1b"
 	EthAddr83         = "837e3f699d85a4b0b99894567e9233dfb1dcb081"
 	EthAddrA3         = "a3950b823cb063dd9afc0d27f35008b805b3ed53"
 	EthAddr5d         = "5dc6288b35e0807a3d6feb89b3a2ff4ab773168e"
@@ -126,6 +128,20 @@ var EthTx4InternalData = &bchain.EthereumInternalData{
 	},
 }
 
+var Block2SpecificData = &bchain.EthereumBlockSpecificData{
+	InternalDataError: "test error",
+	AddressAliasRecords: []bchain.AddressAliasRecord{
+		{
+			Address: EthAddr7bEIP55,
+			Name:    "address7b",
+		},
+		{
+			Address: EthAddr20EIP55,
+			Name:    "address20",
+		},
+	},
+}
+
 type packedAndInternal struct {
 	packed   string
 	internal *bchain.EthereumInternalData
@@ -194,5 +210,6 @@ func GetTestEthereumTypeBlock2(parser bchain.BlockChainParser) *bchain.Block {
 		}, {
 			packed: EthTx8Packed,
 		}}, parser),
+		CoinSpecificData: Block2SpecificData,
 	}
 }
