@@ -44,6 +44,7 @@ func NewBitcoinLikeParser(params *chaincfg.Params, c *Configuration) *BitcoinLik
 		BaseParser: &bchain.BaseParser{
 			BlockAddressesToKeep: c.BlockAddressesToKeep,
 			AmountDecimalPoint:   8,
+			AddressAliases:       c.AddressAliases,
 		},
 		Params:                       params,
 		XPubMagic:                    c.XPubMagic,

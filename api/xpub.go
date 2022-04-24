@@ -437,6 +437,7 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 		}
 		filtered = true
 	}
+	addresses := w.newAddressesMapForAliases()
 	// process mempool, only if ToHeight is not specified
 	if filter.ToHeight == 0 && !filter.OnlyConfirmed {
 		txmMap = make(map[string]*Tx)
@@ -452,7 +453,7 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 					// the same tx can have multiple addresses from the same xpub, get it from backend it only once
 					tx, foundTx := txmMap[txid.txid]
 					if !foundTx {
-						tx, err = w.GetTransaction(txid.txid, false, true)
+						tx, err = w.getTransaction(txid.txid, false, true, addresses)
 						// mempool transaction may fail
 						if err != nil || tx == nil {
 							glog.Warning("GetTransaction in mempool: ", err)
@@ -529,7 +530,7 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 			if option == AccountDetailsTxidHistory {
 				txids = append(txids, xpubTxid.txid)
 			} else {
-				tx, err := w.txFromTxid(xpubTxid.txid, bestheight, option, nil)
+				tx, err := w.txFromTxid(xpubTxid.txid, bestheight, option, nil, addresses)
 				if err != nil {
 					return nil, err
 				}
@@ -580,6 +581,7 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 		UsedTokens:            usedTokens,
 		Tokens:                tokens,
 		XPubAddresses:         xpubAddresses,
+		AddressAliases:        w.getAddressAliases(addresses),
 	}
 	glog.Info("GetXpubAddress ", xpub[:xpubLogPrefix], ", cache ", inCache, ", ", txCount, " txs, ", time.Since(start))
 	return &addr, nil
