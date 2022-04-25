@@ -1025,8 +1025,10 @@ func (d *RocksDB) disconnectBlockTxsEthereumType(wb *gorocksdb.WriteBatch, heigh
 			if err := d.disconnectAddress(blockTx.btxID, false, c.from, c, addresses, contracts); err != nil {
 				return err
 			}
-			if err := d.disconnectAddress(blockTx.btxID, false, c.to, c, addresses, contracts); err != nil {
-				return err
+			if !bytes.Equal(c.from, c.to) {
+				if err := d.disconnectAddress(blockTx.btxID, false, c.to, c, addresses, contracts); err != nil {
+					return err
+				}
 			}
 		}
 		wb.DeleteCF(d.cfh[cfTransactions], blockTx.btxID)
