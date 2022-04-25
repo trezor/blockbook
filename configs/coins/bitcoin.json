@@ -22,10 +22,10 @@
     "package_name": "backend-bitcoin",
     "package_revision": "satoshilabs-1",
     "system_user": "bitcoin",
-    "version": "22.0",
-    "binary_url": "https://bitcoincore.org/bin/bitcoin-core-22.0/bitcoin-22.0-x86_64-linux-gnu.tar.gz",
+    "version": "23.0",
+    "binary_url": "https://bitcoincore.org/bin/bitcoin-core-23.0/bitcoin-23.0-x86_64-linux-gnu.tar.gz",
     "verification_type": "sha256",
-    "verification_source": "59ebd25dd82a51638b7a6bb914586201e67db67b919b2a1ff08925a7936d1b16",
+    "verification_source": "2cca490c1f2842884a3c5b0606f179f9f937177da4eadd628e3f7fd7e25d26d0",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
       "bin/bitcoin-qt"
