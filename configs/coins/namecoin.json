@@ -22,10 +22,10 @@
     "package_name": "backend-namecoin",
     "package_revision": "satoshilabs-1",
     "system_user": "namecoin",
-    "version": "0.19.0.1",
-    "binary_url": "https://www.namecoin.org/files/namecoin-core/namecoin-core-0.19.0.1/namecoin-0.19.0.1-x86_64-linux-gnu.tar.gz",
+    "version": "0.21.0.1",
+    "binary_url": "https://www.namecoin.org/files/namecoin-core/namecoin-core-0.21.0.1/namecoin-nc0.21.0.1-x86_64-linux-gnu.tar.gz",
     "verification_type": "sha256",
-    "verification_source": "16acef267c5458ea3f5a7fdfd3482bb32102143ce24a94951a044dc53bc7021b",
+    "verification_source": "1e7f06030881fac5b8a6d33f497f1cab9a120189741ec81bc21e58d5cd93fa6f",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
       "bin/namecoin-qt"
