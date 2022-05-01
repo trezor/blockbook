@@ -537,23 +537,37 @@ type rpcTraceResult struct {
 	Result rpcCallTrace `json:"result"`
 }
 
-func (b *EthereumRPC) processCallTrace(call *rpcCallTrace, d *bchain.EthereumInternalData) {
+func (b *EthereumRPC) getCreationContractInfo(contract string, height uint32) *bchain.ContractInfo {
+	ci, err := b.fetchContractInfo(contract)
+	if ci == nil || err != nil {
+		ci = &bchain.ContractInfo{
+			Contract: contract,
+		}
+	}
+	ci.Type = bchain.UnknownTokenType
+	ci.CreatedInBlock = height
+	return ci
+}
+
+func (b *EthereumRPC) processCallTrace(call *rpcCallTrace, d *bchain.EthereumInternalData, contracts []bchain.ContractInfo, blockHeight uint32) []bchain.ContractInfo {
 	value, err := hexutil.DecodeBig(call.Value)
 	if call.Type == "CREATE" {
 		d.Transfers = append(d.Transfers, bchain.EthereumInternalTransfer{
 			Type:  bchain.CREATE,
 			Value: *value,
 			From:  call.From,
-			To:    call.To,
+			To:    call.To, // new contract address
 		})
+		contracts = append(contracts, *b.getCreationContractInfo(call.To, blockHeight))
 
 	} else if call.Type == "SELFDESTRUCT" {
 		d.Transfers = append(d.Transfers, bchain.EthereumInternalTransfer{
 			Type:  bchain.SELFDESTRUCT,
 			Value: *value,
-			From:  call.From,
+			From:  call.From, // destroyed contract address
 			To:    call.To,
 		})
+		contracts = append(contracts, bchain.ContractInfo{Contract: call.From, DestructedInBlock: blockHeight})
 	} else if err == nil && (value.BitLen() > 0 || b.ChainConfig.ProcessZeroInternalTransactions) {
 		d.Transfers = append(d.Transfers, bchain.EthereumInternalTransfer{
 			Value: *value,
@@ -565,13 +579,15 @@ func (b *EthereumRPC) processCallTrace(call *rpcCallTrace, d *bchain.EthereumInt
 		d.Error = call.Error
 	}
 	for i := range call.Calls {
-		b.processCallTrace(&call.Calls[i], d)
+		contracts = b.processCallTrace(&call.Calls[i], d, contracts, blockHeight)
 	}
+	return contracts
 }
 
 // getInternalDataForBlock fetches debug trace using callTracer, extracts internal transfers and creations and destructions of contracts
-func (b *EthereumRPC) getInternalDataForBlock(blockHash string, transactions []bchain.RpcTransaction) ([]bchain.EthereumInternalData, error) {
+func (b *EthereumRPC) getInternalDataForBlock(blockHash string, blockHeight uint32, transactions []bchain.RpcTransaction) ([]bchain.EthereumInternalData, []bchain.ContractInfo, error) {
 	data := make([]bchain.EthereumInternalData, len(transactions))
+	contracts := make([]bchain.ContractInfo, 0)
 	if ProcessInternalTransactions {
 		ctx, cancel := context.WithTimeout(context.Background(), b.timeout)
 		defer cancel()
@@ -579,11 +595,11 @@ func (b *EthereumRPC) getInternalDataForBlock(blockHash string, transactions []b
 		err := b.rpc.CallContext(ctx, &trace, "debug_traceBlockByHash", blockHash, map[string]interface{}{"tracer": "callTracer"})
 		if err != nil {
 			glog.Error("debug_traceBlockByHash block ", blockHash, ", error ", err)
-			return data, err
+			return data, contracts, err
 		}
 		if len(trace) != len(data) {
 			glog.Error("debug_traceBlockByHash block ", blockHash, ", error: trace length does not match block length ", len(trace), "!=", len(data))
-			return data, err
+			return data, contracts, err
 		}
 		for i, result := range trace {
 			r := &result.Result
@@ -591,11 +607,12 @@ func (b *EthereumRPC) getInternalDataForBlock(blockHash string, transactions []b
 			if r.Type == "CREATE" {
 				d.Type = bchain.CREATE
 				d.Contract = r.To
+				contracts = append(contracts, *b.getCreationContractInfo(d.Contract, blockHeight))
 			} else if r.Type == "SELFDESTRUCT" {
 				d.Type = bchain.SELFDESTRUCT
 			}
 			for j := range r.Calls {
-				b.processCallTrace(&r.Calls[j], d)
+				contracts = b.processCallTrace(&r.Calls[j], d, contracts, blockHeight)
 			}
 			if r.Error != "" {
 				baseError := PackInternalTransactionError(r.Error)
@@ -620,7 +637,7 @@ func (b *EthereumRPC) getInternalDataForBlock(blockHash string, transactions []b
 			}
 		}
 	}
-	return data, nil
+	return data, contracts, nil
 }
 
 // GetBlock returns block with given hash or height, hash has precedence if both passed
@@ -642,15 +659,16 @@ func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error
 		return nil, errors.Annotatef(err, "hash %v, height %v", hash, height)
 	}
 	// get block events
+	// TODO - could be possibly done in parallel to getInternalDataForBlock
 	logs, ens, err := b.processEventsForBlock(head.Number)
 	if err != nil {
 		return nil, err
 	}
 	// error fetching internal data does not stop the block processing
 	var blockSpecificData *bchain.EthereumBlockSpecificData
-	internalData, err := b.getInternalDataForBlock(head.Hash, body.Transactions)
+	internalData, contracts, err := b.getInternalDataForBlock(head.Hash, bbh.Height, body.Transactions)
 	// pass internalData error and ENS records in blockSpecificData to be stored
-	if err != nil || len(ens) > 0 {
+	if err != nil || len(ens) > 0 || len(contracts) > 0 {
 		blockSpecificData = &bchain.EthereumBlockSpecificData{}
 		if err != nil {
 			blockSpecificData.InternalDataError = err.Error()
@@ -658,7 +676,11 @@ func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error
 		}
 		if len(ens) > 0 {
 			blockSpecificData.AddressAliasRecords = ens
-			glog.Info("ENS", ens)
+			// glog.Info("ENS", ens)
+		}
+		if len(contracts) > 0 {
+			blockSpecificData.Contracts = contracts
+			// glog.Info("Contracts", contracts)
 		}
 	}
 

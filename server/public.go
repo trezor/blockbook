@@ -562,7 +562,7 @@ func isOwnAddress(td *TemplateData, a string) bool {
 }
 
 // called from template, returns count of token transfers of given type in a tx
-func tokenTransfersCount(tx *api.Tx, t api.TokenType) int {
+func tokenTransfersCount(tx *api.Tx, t bchain.TokenTypeName) int {
 	count := 0
 	for i := range tx.TokenTransfers {
 		if tx.TokenTransfers[i].Type == t {
@@ -573,7 +573,7 @@ func tokenTransfersCount(tx *api.Tx, t api.TokenType) int {
 }
 
 // called from template, returns count of tokens in array of given type
-func tokenCount(tokens []api.Token, t api.TokenType) int {
+func tokenCount(tokens []api.Token, t bchain.TokenTypeName) int {
 	count := 0
 	for i := range tokens {
 		if tokens[i].Type == t {

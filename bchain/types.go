@@ -113,6 +113,27 @@ type MempoolTx struct {
 	CoinSpecificData interface{}    `json:"-"`
 }
 
+// TokenType - type of token
+type TokenType int
+
+// TokenType enumeration
+const (
+	FungibleToken    = TokenType(iota) // ERC20
+	NonFungibleToken                   // ERC721
+	MultiToken                         // ERC1155
+)
+
+// TokenTypeName specifies type of token
+type TokenTypeName string
+
+// Token types
+const (
+	UnknownTokenType TokenTypeName = ""
+
+	// XPUBAddressTokenType is address derived from xpub
+	XPUBAddressTokenType TokenTypeName = "XPUBAddress"
+)
+
 // TokenTransfers is array of TokenTransfer
 type TokenTransfers []*TokenTransfer
 
@@ -286,13 +307,13 @@ type BlockChain interface {
 	EstimateFee(blocks int) (big.Int, error)
 	SendRawTransaction(tx string) (string, error)
 	GetMempoolEntry(txid string) (*MempoolEntry, error)
+	GetContractInfo(contractDesc AddressDescriptor) (*ContractInfo, error)
 	// parser
 	GetChainParser() BlockChainParser
 	// EthereumType specific
 	EthereumTypeGetBalance(addrDesc AddressDescriptor) (*big.Int, error)
 	EthereumTypeGetNonce(addrDesc AddressDescriptor) (uint64, error)
 	EthereumTypeEstimateGas(params map[string]interface{}) (uint64, error)
-	EthereumTypeGetErc20ContractInfo(contractDesc AddressDescriptor) (*Erc20Contract, error)
 	EthereumTypeGetErc20ContractBalance(addrDesc, contractDesc AddressDescriptor) (*big.Int, error)
 }
 

@@ -4,10 +4,8 @@ import (
 	"context"
 	"math/big"
 	"strings"
-	"sync"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
-	"github.com/golang/glog"
 	"github.com/juju/errors"
 	"github.com/trezor/blockbook/bchain"
 )
@@ -28,9 +26,6 @@ const contractSymbolSignature = "0x95d89b41"
 const contractDecimalsSignature = "0x313ce567"
 const contractBalanceOf = "0x70a08231"
 
-var cachedContracts = make(map[string]*bchain.Erc20Contract)
-var cachedContractsMux sync.Mutex
-
 func addressFromPaddedHex(s string) (string, error) {
 	var t big.Int
 	var ok bool
@@ -48,16 +43,16 @@ func addressFromPaddedHex(s string) (string, error) {
 
 func processTransferEvent(l *bchain.RpcLog) (*bchain.TokenTransfer, error) {
 	tl := len(l.Topics)
-	var ttt bchain.TokenTransferType
+	var ttt bchain.TokenType
 	var value big.Int
 	if tl == 3 {
-		ttt = bchain.ERC20
+		ttt = bchain.FungibleToken
 		_, ok := value.SetString(l.Data, 0)
 		if !ok {
 			return nil, errors.New("ERC20 log Data is not a number")
 		}
 	} else if tl == 4 {
-		ttt = bchain.ERC721
+		ttt = bchain.NonFungibleToken
 		_, ok := value.SetString(l.Topics[3], 0)
 		if !ok {
 			return nil, errors.New("ERC721 log Topics[3] is not a number")
@@ -105,11 +100,11 @@ func processERC1155TransferSingleEvent(l *bchain.RpcLog) (*bchain.TokenTransfer,
 		return nil, errors.New("ERC1155 log Data value is not a number")
 	}
 	return &bchain.TokenTransfer{
-		Type:     bchain.ERC1155,
-		Contract: EIP55AddressFromAddress(l.Address),
-		From:     EIP55AddressFromAddress(from),
-		To:       EIP55AddressFromAddress(to),
-		IdValues: []bchain.TokenTransferIdValue{{Id: id, Value: value}},
+		Type:             bchain.MultiToken,
+		Contract:         EIP55AddressFromAddress(l.Address),
+		From:             EIP55AddressFromAddress(from),
+		To:               EIP55AddressFromAddress(to),
+		MultiTokenValues: []bchain.MultiTokenValue{{Id: id, Value: value}},
 	}, nil
 }
 
@@ -150,7 +145,7 @@ func processERC1155TransferBatchEvent(l *bchain.RpcLog) (*bchain.TokenTransfer, 
 	if countIds != countValues {
 		return nil, errors.New("ERC1155 TransferBatch, count values and ids does not match")
 	}
-	idValues := make([]bchain.TokenTransferIdValue, countValues)
+	idValues := make([]bchain.MultiTokenValue, countValues)
 	for i := 0; i < countValues; i++ {
 		var id, value big.Int
 		o := offsetIds + 64 + 64*i
@@ -163,14 +158,14 @@ func processERC1155TransferBatchEvent(l *bchain.RpcLog) (*bchain.TokenTransfer, 
 		if !ok {
 			return nil, errors.New("ERC1155 log Data value is not a number")
 		}
-		idValues[i] = bchain.TokenTransferIdValue{Id: id, Value: value}
+		idValues[i] = bchain.MultiTokenValue{Id: id, Value: value}
 	}
 	return &bchain.TokenTransfer{
-		Type:     bchain.ERC1155,
-		Contract: EIP55AddressFromAddress(l.Address),
-		From:     EIP55AddressFromAddress(from),
-		To:       EIP55AddressFromAddress(to),
-		IdValues: idValues,
+		Type:             bchain.MultiToken,
+		Contract:         EIP55AddressFromAddress(l.Address),
+		From:             EIP55AddressFromAddress(from),
+		To:               EIP55AddressFromAddress(to),
+		MultiTokenValues: idValues,
 	}, nil
 }
 func contractGetTransfersFromLog(logs []*bchain.RpcLog) (bchain.TokenTransfers, error) {
@@ -214,7 +209,7 @@ func contractGetTransfersFromTx(tx *bchain.RpcTransaction) (bchain.TokenTransfer
 			return nil, errors.New("Data is not a number")
 		}
 		r = append(r, &bchain.TokenTransfer{
-			Type:     bchain.ERC20,
+			Type:     bchain.FungibleToken,
 			Contract: EIP55AddressFromAddress(tx.To),
 			From:     EIP55AddressFromAddress(tx.From),
 			To:       EIP55AddressFromAddress(to),
@@ -238,7 +233,7 @@ func contractGetTransfersFromTx(tx *bchain.RpcTransaction) (bchain.TokenTransfer
 			return nil, errors.New("Data is not a number")
 		}
 		r = append(r, &bchain.TokenTransfer{
-			Type:     bchain.ERC721,
+			Type:     bchain.NonFungibleToken,
 			Contract: EIP55AddressFromAddress(tx.To),
 			From:     EIP55AddressFromAddress(from),
 			To:       EIP55AddressFromAddress(to),
@@ -262,56 +257,52 @@ func (b *EthereumRPC) ethCall(data, to string) (string, error) {
 	return r, nil
 }
 
-// EthereumTypeGetErc20ContractInfo returns information about ERC20 contract
-func (b *EthereumRPC) EthereumTypeGetErc20ContractInfo(contractDesc bchain.AddressDescriptor) (*bchain.Erc20Contract, error) {
-	cds := string(contractDesc)
-	cachedContractsMux.Lock()
-	contract, found := cachedContracts[cds]
-	cachedContractsMux.Unlock()
-	if !found {
-		address := EIP55Address(contractDesc)
-		data, err := b.ethCall(contractNameSignature, address)
-		if err != nil {
-			// ignore the error from the eth_call - since geth v1.9.15 they changed the behavior
-			// and returning error "execution reverted" for some non contract addresses
-			// https://github.com/ethereum/go-ethereum/issues/21249#issuecomment-648647672
-			glog.Warning(errors.Annotatef(err, "erc20NameSignature %v", address))
-			return nil, nil
-			// return nil, errors.Annotatef(err, "erc20NameSignature %v", address)
-		}
-		name := parseSimpleStringProperty(data)
-		if name != "" {
-			data, err = b.ethCall(contractSymbolSignature, address)
-			if err != nil {
-				glog.Warning(errors.Annotatef(err, "erc20SymbolSignature %v", address))
-				return nil, nil
-				// return nil, errors.Annotatef(err, "erc20SymbolSignature %v", address)
-			}
-			symbol := parseSimpleStringProperty(data)
-			data, err = b.ethCall(contractDecimalsSignature, address)
-			if err != nil {
-				glog.Warning(errors.Annotatef(err, "erc20DecimalsSignature %v", address))
-				// return nil, errors.Annotatef(err, "erc20DecimalsSignature %v", address)
-			}
-			contract = &bchain.Erc20Contract{
-				Contract: address,
-				Name:     name,
-				Symbol:   symbol,
-			}
-			d := parseSimpleNumericProperty(data)
-			if d != nil {
-				contract.Decimals = int(uint8(d.Uint64()))
-			} else {
-				contract.Decimals = EtherAmountDecimalPoint
-			}
-		} else {
-			contract = nil
-		}
-		cachedContractsMux.Lock()
-		cachedContracts[cds] = contract
-		cachedContractsMux.Unlock()
+func (b *EthereumRPC) fetchContractInfo(address string) (*bchain.ContractInfo, error) {
+	var contract bchain.ContractInfo
+	data, err := b.ethCall(contractNameSignature, address)
+	if err != nil {
+		// ignore the error from the eth_call - since geth v1.9.15 they changed the behavior
+		// and returning error "execution reverted" for some non contract addresses
+		// https://github.com/ethereum/go-ethereum/issues/21249#issuecomment-648647672
+		// glog.Warning(errors.Annotatef(err, "Contract NameSignature %v", address))
+		return nil, nil
+		// return nil, errors.Annotatef(err, "erc20NameSignature %v", address)
 	}
-	return contract, nil
+	name := parseSimpleStringProperty(data)
+	if name != "" {
+		data, err = b.ethCall(contractSymbolSignature, address)
+		if err != nil {
+			// glog.Warning(errors.Annotatef(err, "Contract SymbolSignature %v", address))
+			return nil, nil
+			// return nil, errors.Annotatef(err, "erc20SymbolSignature %v", address)
+		}
+		symbol := parseSimpleStringProperty(data)
+		data, _ = b.ethCall(contractDecimalsSignature, address)
+		// if err != nil {
+		// 	glog.Warning(errors.Annotatef(err, "Contract DecimalsSignature %v", address))
+		// 	// return nil, errors.Annotatef(err, "erc20DecimalsSignature %v", address)
+		// }
+		contract = bchain.ContractInfo{
+			Contract: address,
+			Name:     name,
+			Symbol:   symbol,
+		}
+		d := parseSimpleNumericProperty(data)
+		if d != nil {
+			contract.Decimals = int(uint8(d.Uint64()))
+		} else {
+			contract.Decimals = EtherAmountDecimalPoint
+		}
+	} else {
+		return nil, nil
+	}
+	return &contract, nil
+}
+
+// GetContractInfo returns information about a contract
+func (b *EthereumRPC) GetContractInfo(contractDesc bchain.AddressDescriptor) (*bchain.ContractInfo, error) {
+	address := EIP55Address(contractDesc)
+	return b.fetchContractInfo(address)
 }
 
 // EthereumTypeGetErc20ContractBalance returns balance of ERC20 contract for given address
