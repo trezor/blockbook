@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"sync"
 
+	vlq "github.com/bsm/go-vlq"
 	"github.com/flier/gorocksdb"
 	"github.com/golang/glog"
 	"github.com/juju/errors"
@@ -18,12 +19,12 @@ const ContractIndexOffset = 2
 
 // AddrContract is Contract address with number of transactions done by given address
 type AddrContract struct {
-	Type     bchain.TokenTransferType
-	Contract bchain.AddressDescriptor
-	Txs      uint
-	Value    big.Int                       // single value of ERC20
-	Ids      []big.Int                     // multiple ERC721 tokens
-	IdValues []bchain.TokenTransferIdValue // multiple ERC1155 tokens
+	Type             bchain.TokenType
+	Contract         bchain.AddressDescriptor
+	Txs              uint
+	Value            big.Int                  // single value of ERC20
+	Ids              []big.Int                // multiple ERC721 tokens
+	MultiTokenValues []bchain.MultiTokenValue // multiple ERC1155 tokens
 }
 
 // AddrContracts contains number of transactions and contracts for an address
@@ -48,10 +49,10 @@ func packAddrContracts(acs *AddrContracts) []byte {
 		buf = append(buf, ac.Contract...)
 		l = packVaruint(uint(ac.Type)+ac.Txs<<2, varBuf)
 		buf = append(buf, varBuf[:l]...)
-		if ac.Type == bchain.ERC20 {
+		if ac.Type == bchain.FungibleToken {
 			l = packBigint(&ac.Value, varBuf)
 			buf = append(buf, varBuf[:l]...)
-		} else if ac.Type == bchain.ERC721 {
+		} else if ac.Type == bchain.NonFungibleToken {
 			l = packVaruint(uint(len(ac.Ids)), varBuf)
 			buf = append(buf, varBuf[:l]...)
 			for i := range ac.Ids {
@@ -59,12 +60,12 @@ func packAddrContracts(acs *AddrContracts) []byte {
 				buf = append(buf, varBuf[:l]...)
 			}
 		} else { // bchain.ERC1155
-			l = packVaruint(uint(len(ac.IdValues)), varBuf)
+			l = packVaruint(uint(len(ac.MultiTokenValues)), varBuf)
 			buf = append(buf, varBuf[:l]...)
-			for i := range ac.IdValues {
-				l = packBigint(&ac.IdValues[i].Id, varBuf)
+			for i := range ac.MultiTokenValues {
+				l = packBigint(&ac.MultiTokenValues[i].Id, varBuf)
 				buf = append(buf, varBuf[:l]...)
-				l = packBigint(&ac.IdValues[i].Value, varBuf)
+				l = packBigint(&ac.MultiTokenValues[i].Value, varBuf)
 				buf = append(buf, varBuf[:l]...)
 			}
 		}
@@ -87,21 +88,21 @@ func unpackAddrContracts(buf []byte, addrDesc bchain.AddressDescriptor) (*AddrCo
 		contract := append(bchain.AddressDescriptor(nil), buf[:eth.EthereumTypeAddressDescriptorLen]...)
 		txs, l := unpackVaruint(buf[eth.EthereumTypeAddressDescriptorLen:])
 		buf = buf[eth.EthereumTypeAddressDescriptorLen+l:]
-		ttt := bchain.TokenTransferType(txs & 3)
+		ttt := bchain.TokenType(txs & 3)
 		txs >>= 2
 		ac := AddrContract{
 			Type:     ttt,
 			Contract: contract,
 			Txs:      txs,
 		}
-		if ttt == bchain.ERC20 {
+		if ttt == bchain.FungibleToken {
 			b, ll := unpackBigint(buf)
 			buf = buf[ll:]
 			ac.Value = b
 		} else {
 			len, ll := unpackVaruint(buf)
 			buf = buf[ll:]
-			if ttt == bchain.ERC721 {
+			if ttt == bchain.NonFungibleToken {
 				ac.Ids = make([]big.Int, len)
 				for i := uint(0); i < len; i++ {
 					b, ll := unpackBigint(buf)
@@ -109,14 +110,14 @@ func unpackAddrContracts(buf []byte, addrDesc bchain.AddressDescriptor) (*AddrCo
 					ac.Ids[i] = b
 				}
 			} else {
-				ac.IdValues = make([]bchain.TokenTransferIdValue, len)
+				ac.MultiTokenValues = make([]bchain.MultiTokenValue, len)
 				for i := uint(0); i < len; i++ {
 					b, ll := unpackBigint(buf)
 					buf = buf[ll:]
-					ac.IdValues[i].Id = b
+					ac.MultiTokenValues[i].Id = b
 					b, ll = unpackBigint(buf)
 					buf = buf[ll:]
-					ac.IdValues[i].Value = b
+					ac.MultiTokenValues[i].Value = b
 				}
 			}
 		}
@@ -226,9 +227,9 @@ func addToContract(c *AddrContract, contractIndex int, index int32, contract bch
 			s.Add(s, v)
 		}
 	}
-	if transfer.Type == bchain.ERC20 {
+	if transfer.Type == bchain.FungibleToken {
 		aggregate(&c.Value, &transfer.Value)
-	} else if transfer.Type == bchain.ERC721 {
+	} else if transfer.Type == bchain.NonFungibleToken {
 		if index < 0 {
 			// remove token from the list
 			for i := range c.Ids {
@@ -242,14 +243,14 @@ func addToContract(c *AddrContract, contractIndex int, index int32, contract bch
 			c.Ids = append(c.Ids, transfer.Value)
 		}
 	} else { // bchain.ERC1155
-		for _, t := range transfer.IdValues {
-			for i := range c.IdValues {
+		for _, t := range transfer.MultiTokenValues {
+			for i := range c.MultiTokenValues {
 				// find the token in the list
-				if c.IdValues[i].Id.Cmp(&t.Id) == 0 {
-					aggregate(&c.IdValues[i].Value, &t.Value)
+				if c.MultiTokenValues[i].Id.Cmp(&t.Id) == 0 {
+					aggregate(&c.MultiTokenValues[i].Value, &t.Value)
 					// if transfer from, remove if the value is zero
-					if index < 0 && len(c.IdValues[i].Value.Bits()) == 0 {
-						c.IdValues = append(c.IdValues[:i], c.IdValues[i+1:]...)
+					if index < 0 && len(c.MultiTokenValues[i].Value.Bits()) == 0 {
+						c.MultiTokenValues = append(c.MultiTokenValues[:i], c.MultiTokenValues[i+1:]...)
 					}
 					goto nextTransfer
 				}
@@ -257,7 +258,7 @@ func addToContract(c *AddrContract, contractIndex int, index int32, contract bch
 			// if not found and transfer to, add to the list
 			// it is necessary to add a copy of the value so that subsequent calls to addToContract do not change the transfer value
 			if index >= 0 {
-				c.IdValues = append(c.IdValues, bchain.TokenTransferIdValue{
+				c.MultiTokenValues = append(c.MultiTokenValues, bchain.MultiTokenValue{
 					Id:    t.Id,
 					Value: *new(big.Int).Set(&t.Value),
 				})
@@ -327,9 +328,9 @@ func (d *RocksDB) addToAddressesAndContractsEthereumType(addrDesc bchain.Address
 
 type ethBlockTxContract struct {
 	from, to, contract bchain.AddressDescriptor
-	transferType       bchain.TokenTransferType
+	transferType       bchain.TokenType
 	value              big.Int
-	idValues           []bchain.TokenTransferIdValue
+	idValues           []bchain.MultiTokenValue
 }
 
 type ethInternalTransfer struct {
@@ -476,7 +477,7 @@ func (d *RocksDB) processContractTransfers(blockTx *ethBlockTx, tx *bchain.Tx, a
 		bc.to = to
 		bc.contract = contract
 		bc.value = t.Value
-		bc.idValues = t.IdValues
+		bc.idValues = t.MultiTokenValues
 	}
 	return nil
 }
@@ -699,6 +700,113 @@ func (d *RocksDB) storeInternalDataEthereumType(wb *gorocksdb.WriteBatch, blockT
 	return nil
 }
 
+var cachedContracts = make(map[string]*bchain.ContractInfo)
+var cachedContractsMux sync.Mutex
+
+func packContractInfo(contractInfo *bchain.ContractInfo) []byte {
+	buf := packString(contractInfo.Name)
+	buf = append(buf, packString(contractInfo.Symbol)...)
+	buf = append(buf, packString(string(contractInfo.Type))...)
+	varBuf := make([]byte, vlq.MaxLen64)
+	l := packVaruint(uint(contractInfo.Decimals), varBuf)
+	buf = append(buf, varBuf[:l]...)
+	l = packVaruint(uint(contractInfo.CreatedInBlock), varBuf)
+	buf = append(buf, varBuf[:l]...)
+	l = packVaruint(uint(contractInfo.DestructedInBlock), varBuf)
+	buf = append(buf, varBuf[:l]...)
+	return buf
+}
+
+func unpackContractInfo(buf []byte) (*bchain.ContractInfo, error) {
+	var contractInfo bchain.ContractInfo
+	var s string
+	var l int
+	var ui uint
+	contractInfo.Name, l = unpackString(buf)
+	buf = buf[l:]
+	contractInfo.Symbol, l = unpackString(buf)
+	buf = buf[l:]
+	s, l = unpackString(buf)
+	contractInfo.Type = bchain.TokenTypeName(s)
+	buf = buf[l:]
+	ui, l = unpackVaruint(buf)
+	contractInfo.Decimals = int(ui)
+	buf = buf[l:]
+	ui, l = unpackVaruint(buf)
+	contractInfo.CreatedInBlock = uint32(ui)
+	buf = buf[l:]
+	ui, l = unpackVaruint(buf)
+	contractInfo.DestructedInBlock = uint32(ui)
+	return &contractInfo, nil
+}
+
+func (d *RocksDB) GetContractInfoForAddress(address string) (*bchain.ContractInfo, error) {
+	contract, err := d.chainParser.GetAddrDescFromAddress(address)
+	if err != nil || contract == nil {
+		return nil, err
+	}
+	return d.GetContractInfo(contract, "")
+}
+
+// GetContractInfo gets contract from cache or DB and possibly updates the type from typeFromContext
+// this is because it is hard to guess the type of the contract using API, it is easier to set it the first time its usage is detected in tx
+func (d *RocksDB) GetContractInfo(contract bchain.AddressDescriptor, typeFromContext bchain.TokenTypeName) (*bchain.ContractInfo, error) {
+	cacheKey := string(contract)
+	cachedContractsMux.Lock()
+	contractInfo, found := cachedContracts[cacheKey]
+	cachedContractsMux.Unlock()
+	if !found {
+		val, err := d.db.GetCF(d.ro, d.cfh[cfContracts], contract)
+		if err != nil {
+			return nil, err
+		}
+		defer val.Free()
+		buf := val.Data()
+		if len(buf) == 0 {
+			return nil, nil
+		}
+		contractInfo, err = unpackContractInfo(buf)
+		addresses, _, _ := d.chainParser.GetAddressesFromAddrDesc(contract)
+		if len(addresses) > 0 {
+			contractInfo.Contract = addresses[0]
+		}
+		// if the type is specified and stored contractInfo has unknown type, set and store it
+		if typeFromContext != bchain.UnknownTokenType && contractInfo.Type == bchain.UnknownTokenType {
+			contractInfo.Type = typeFromContext
+			err = d.db.PutCF(d.wo, d.cfh[cfContracts], contract, packContractInfo(contractInfo))
+		}
+		cachedContractsMux.Lock()
+		cachedContracts[cacheKey] = contractInfo
+		cachedContractsMux.Unlock()
+	}
+	return contractInfo, nil
+}
+
+// StoreContractInfo stores contractInfo in DB
+// if CreatedInBlock==0 and DestructedInBlock!=0, it is evaluated as a desctruction of a contract, the contract info is updated
+// in all other cases the contractInfo overwrites previously stored data in DB (however it should not really happen as contract is created only once)
+func (d *RocksDB) StoreContractInfo(wb *gorocksdb.WriteBatch, contractInfo *bchain.ContractInfo) error {
+	if contractInfo.Contract != "" {
+		key, err := d.chainParser.GetAddrDescFromAddress(contractInfo.Contract)
+		if err != nil {
+			return err
+		}
+		if contractInfo.CreatedInBlock == 0 && contractInfo.DestructedInBlock != 0 {
+			storedCI, err := d.GetContractInfo(key, "")
+			if err != nil {
+				return err
+			}
+			if storedCI == nil {
+				return nil
+			}
+			storedCI.DestructedInBlock = contractInfo.DestructedInBlock
+			contractInfo = storedCI
+		}
+		wb.PutCF(d.cfh[cfContracts], key, packContractInfo(contractInfo))
+	}
+	return nil
+}
+
 func packBlockTx(buf []byte, blockTx *ethBlockTx) []byte {
 	varBuf := make([]byte, maxPackedBigintBytes)
 	buf = append(buf, blockTx.btxID...)
@@ -715,7 +823,7 @@ func packBlockTx(buf []byte, blockTx *ethBlockTx) []byte {
 		buf = appendAddress(buf, c.contract)
 		l = packVaruint(uint(c.transferType), varBuf)
 		buf = append(buf, varBuf[:l]...)
-		if c.transferType == bchain.ERC1155 {
+		if c.transferType == bchain.MultiToken {
 			l = packVaruint(uint(len(c.idValues)), varBuf)
 			buf = append(buf, varBuf[:l]...)
 			for i := range c.idValues {
@@ -773,6 +881,11 @@ func (d *RocksDB) storeBlockSpecificDataEthereumType(wb *gorocksdb.WriteBatch, b
 				return err
 			}
 		}
+		for i := range blockSpecificData.Contracts {
+			if err := d.StoreContractInfo(wb, &blockSpecificData.Contracts[i]); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }
@@ -823,12 +936,12 @@ func unpackBlockTx(buf []byte, pos int) (*ethBlockTx, int, error) {
 			return nil, 0, err
 		}
 		cc, l = unpackVaruint(buf[pos:])
-		c.transferType = bchain.TokenTransferType(cc)
+		c.transferType = bchain.TokenType(cc)
 		pos += l
-		if c.transferType == bchain.ERC1155 {
+		if c.transferType == bchain.MultiToken {
 			cc, l = unpackVaruint(buf[pos:])
 			pos += l
-			c.idValues = make([]bchain.TokenTransferIdValue, cc)
+			c.idValues = make([]bchain.MultiTokenValue, cc)
 			for i := range c.idValues {
 				c.idValues[i].Id, l = unpackBigint(buf[pos:])
 				pos += l
@@ -938,9 +1051,9 @@ func (d *RocksDB) disconnectAddress(btxID []byte, internal bool, addrDesc bchain
 							index = transferTo
 						}
 						addToContract(addrContract, contractIndex, index, btxContract.contract, &bchain.TokenTransfer{
-							Type:     btxContract.transferType,
-							Value:    btxContract.value,
-							IdValues: btxContract.idValues,
+							Type:             btxContract.transferType,
+							Value:            btxContract.value,
+							MultiTokenValues: btxContract.idValues,
 						}, false)
 					}
 				} else {

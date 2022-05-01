@@ -1,5 +1,5 @@
 {{define "specific"}}{{$cs := .CoinShortcut}}{{$addr := .Address}}{{$data := .}}
-<h1>{{if $addr.Erc20Contract}}Contract {{$addr.Erc20Contract.Name}} ({{$addr.Erc20Contract.Symbol}}){{else}}Address{{end}} <small class="text-muted">{{formatAmount $addr.BalanceSat}} {{$cs}}</small>
+<h1>{{if $addr.ContractInfo}}Contract {{$addr.ContractInfo.Name}} ({{$addr.ContractInfo.Symbol}}){{else}}Address{{end}} <small class="text-muted">{{formatAmount $addr.BalanceSat}} {{$cs}}</small>
 </h1>
 <div class="alert alert-data ellipsis">
     <span class="data">{{$addr.AddrStr}}</span>
@@ -98,7 +98,7 @@
                                 <tr>
                                     <td class="data ellipsis">{{if $t.Contract}}<a href="/address/{{$t.Contract}}">{{$t.Name}}</a>{{else}}{{$t.Name}}{{end}}</td>
                                     <td class="data">
-                                    {{range $i, $iv := $t.IdValues}}{{if $i}}, {{end}}{{formatAmountWithDecimals $iv.Id 0}}:{{formatAmountWithDecimals $iv.Value 0}} {{$t.Symbol}}{{end}}
+                                    {{range $i, $iv := $t.MultiTokenValues}}{{if $i}}, {{end}}{{formatAmountWithDecimals $iv.Id 0}}:{{formatAmountWithDecimals $iv.Value 0}} {{$t.Symbol}}{{end}}
                                     </td>
                                     <td class="data">{{$t.Transfers}}</td>
                                 </tr>
