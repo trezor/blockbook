@@ -135,58 +135,40 @@ type Vout struct {
 	Type        string                   `json:"type,omitempty"`
 }
 
-// TokenType specifies type of token
-type TokenType string
-
-// Token types
-const (
-	// Ethereum token types
-	ERC20TokenType   TokenType = "ERC20"
-	ERC771TokenType  TokenType = "ERC721"
-	ERC1155TokenType TokenType = "ERC1155"
-
-	// XPUBAddressTokenType is address derived from xpub
-	XPUBAddressTokenType TokenType = "XPUBAddress"
-)
-
-// TokenTypeMap maps bchain.TokenTransferType to TokenType
-// the map must match all bchain.TokenTransferTypes to avoid index out of range panic
-var TokenTypeMap []TokenType = []TokenType{ERC20TokenType, ERC771TokenType, ERC1155TokenType}
-
-// TokenTransferValues contains values for ERC1155 contract
-type TokenTransferValues struct {
+// MultiTokenValue contains values for contract with id and value (like ERC1155)
+type MultiTokenValue struct {
 	Id    *Amount `json:"id,omitempty"`
 	Value *Amount `json:"value,omitempty"`
 }
 
 // Token contains info about tokens held by an address
 type Token struct {
-	Type             TokenType             `json:"type"`
-	Name             string                `json:"name"`
-	Path             string                `json:"path,omitempty"`
-	Contract         string                `json:"contract,omitempty"`
-	Transfers        int                   `json:"transfers"`
-	Symbol           string                `json:"symbol,omitempty"`
-	Decimals         int                   `json:"decimals,omitempty"`
-	BalanceSat       *Amount               `json:"balance,omitempty"`
-	Ids              []Amount              `json:"ids,omitempty"`      // multiple ERC721 tokens
-	IdValues         []TokenTransferValues `json:"idValues,omitempty"` // multiple ERC1155 tokens
-	TotalReceivedSat *Amount               `json:"totalReceived,omitempty"`
-	TotalSentSat     *Amount               `json:"totalSent,omitempty"`
-	ContractIndex    string                `json:"-"`
+	Type             bchain.TokenTypeName `json:"type"`
+	Name             string               `json:"name"`
+	Path             string               `json:"path,omitempty"`
+	Contract         string               `json:"contract,omitempty"`
+	Transfers        int                  `json:"transfers"`
+	Symbol           string               `json:"symbol,omitempty"`
+	Decimals         int                  `json:"decimals,omitempty"`
+	BalanceSat       *Amount              `json:"balance,omitempty"`
+	Ids              []Amount             `json:"ids,omitempty"`              // multiple ERC721 tokens
+	MultiTokenValues []MultiTokenValue    `json:"multiTokenValues,omitempty"` // multiple ERC1155 tokens
+	TotalReceivedSat *Amount              `json:"totalReceived,omitempty"`
+	TotalSentSat     *Amount              `json:"totalSent,omitempty"`
+	ContractIndex    string               `json:"-"`
 }
 
 // TokenTransfer contains info about a token transfer done in a transaction
 type TokenTransfer struct {
-	Type     TokenType             `json:"type"`
-	From     string                `json:"from"`
-	To       string                `json:"to"`
-	Token    string                `json:"token"`
-	Name     string                `json:"name"`
-	Symbol   string                `json:"symbol"`
-	Decimals int                   `json:"decimals"`
-	Value    *Amount               `json:"value,omitempty"`
-	Values   []TokenTransferValues `json:"values,omitempty"`
+	Type             bchain.TokenTypeName `json:"type"`
+	From             string               `json:"from"`
+	To               string               `json:"to"`
+	Token            string               `json:"token"`
+	Name             string               `json:"name"`
+	Symbol           string               `json:"symbol"`
+	Decimals         int                  `json:"decimals"`
+	Value            *Amount              `json:"value,omitempty"`
+	MultiTokenValues []MultiTokenValue    `json:"multiTokenValues,omitempty"`
 }
 
 type EthereumInternalTransfer struct {
@@ -290,22 +272,22 @@ type AddressFilter struct {
 // Address holds information about address and its transactions
 type Address struct {
 	Paging
-	AddrStr               string                `json:"address"`
-	BalanceSat            *Amount               `json:"balance"`
-	TotalReceivedSat      *Amount               `json:"totalReceived,omitempty"`
-	TotalSentSat          *Amount               `json:"totalSent,omitempty"`
-	UnconfirmedBalanceSat *Amount               `json:"unconfirmedBalance"`
-	UnconfirmedTxs        int                   `json:"unconfirmedTxs"`
-	Txs                   int                   `json:"txs"`
-	NonTokenTxs           int                   `json:"nonTokenTxs,omitempty"`
-	InternalTxs           int                   `json:"internalTxs,omitempty"`
-	Transactions          []*Tx                 `json:"transactions,omitempty"`
-	Txids                 []string              `json:"txids,omitempty"`
-	Nonce                 string                `json:"nonce,omitempty"`
-	UsedTokens            int                   `json:"usedTokens,omitempty"`
-	Tokens                []Token               `json:"tokens,omitempty"`
-	Erc20Contract         *bchain.Erc20Contract `json:"erc20Contract,omitempty"`
-	AddressAliases        AddressAliasesMap     `json:"addressAliases,omitempty"`
+	AddrStr               string               `json:"address"`
+	BalanceSat            *Amount              `json:"balance"`
+	TotalReceivedSat      *Amount              `json:"totalReceived,omitempty"`
+	TotalSentSat          *Amount              `json:"totalSent,omitempty"`
+	UnconfirmedBalanceSat *Amount              `json:"unconfirmedBalance"`
+	UnconfirmedTxs        int                  `json:"unconfirmedTxs"`
+	Txs                   int                  `json:"txs"`
+	NonTokenTxs           int                  `json:"nonTokenTxs,omitempty"`
+	InternalTxs           int                  `json:"internalTxs,omitempty"`
+	Transactions          []*Tx                `json:"transactions,omitempty"`
+	Txids                 []string             `json:"txids,omitempty"`
+	Nonce                 string               `json:"nonce,omitempty"`
+	UsedTokens            int                  `json:"usedTokens,omitempty"`
+	Tokens                []Token              `json:"tokens,omitempty"`
+	ContractInfo          *bchain.ContractInfo `json:"contractInfo,omitempty"`
+	AddressAliases        AddressAliasesMap    `json:"addressAliases,omitempty"`
 	// helpers for explorer
 	Filter        string              `json:"-"`
 	XPubAddresses map[string]struct{} `json:"-"`

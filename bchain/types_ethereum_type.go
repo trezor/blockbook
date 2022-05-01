@@ -47,16 +47,6 @@ const (
 	SELFDESTRUCT
 )
 
-// TokenTransferType - type of token transfer
-type TokenTransferType int
-
-// TokenTransferType enumeration
-const (
-	ERC20 = TokenTransferType(iota)
-	ERC721
-	ERC1155
-)
-
 // EthereumInternalTransaction contains internal transfers
 type EthereumInternalData struct {
 	Type      EthereumInternalTransactionType `json:"type"`
@@ -65,27 +55,41 @@ type EthereumInternalData struct {
 	Error     string
 }
 
-// Erc20Contract contains info about ERC20 contract
-type Erc20Contract struct {
-	Contract string `json:"contract"`
-	Name     string `json:"name"`
-	Symbol   string `json:"symbol"`
-	Decimals int    `json:"decimals"`
+// ContractInfo contains info about ERC20 contract
+type ContractInfo struct {
+	Type              TokenTypeName `json:"type"`
+	Contract          string        `json:"contract"`
+	Name              string        `json:"name"`
+	Symbol            string        `json:"symbol"`
+	Decimals          int           `json:"decimals"`
+	CreatedInBlock    uint32        `json:"createdInBlock,omitempty"`
+	DestructedInBlock uint32        `json:"destructedInBlock,omitempty"`
 }
 
-type TokenTransferIdValue struct {
+// Ethereum token type names
+const (
+	ERC20TokenType   TokenTypeName = "ERC20"
+	ERC771TokenType  TokenTypeName = "ERC721"
+	ERC1155TokenType TokenTypeName = "ERC1155"
+)
+
+// EthereumTokenTypeMap maps bchain.TokenType to TokenTypeName
+// the map must match all bchain.TokenType to avoid index out of range panic
+var EthereumTokenTypeMap []TokenTypeName = []TokenTypeName{ERC20TokenType, ERC771TokenType, ERC1155TokenType}
+
+type MultiTokenValue struct {
 	Id    big.Int
 	Value big.Int
 }
 
-// TokenTransfer contains a single ERC20/ERC721/ERC1155 token transfer
+// TokenTransfer contains a single token transfer
 type TokenTransfer struct {
-	Type     TokenTransferType
-	Contract string
-	From     string
-	To       string
-	Value    big.Int
-	IdValues []TokenTransferIdValue
+	Type             TokenType
+	Contract         string
+	From             string
+	To               string
+	Value            big.Int
+	MultiTokenValues []MultiTokenValue
 }
 
 // RpcTransaction is returned by eth_getTransactionByHash
@@ -138,4 +142,5 @@ type AddressAliasRecord struct {
 type EthereumBlockSpecificData struct {
 	InternalDataError   string
 	AddressAliasRecords []AddressAliasRecord
+	Contracts           []ContractInfo
 }

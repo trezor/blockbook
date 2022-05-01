@@ -54,8 +54,8 @@ func (b *BaseChain) EthereumTypeEstimateGas(params map[string]interface{}) (uint
 	return 0, errors.New("Not supported")
 }
 
-// EthereumTypeGetErc20ContractInfo is not supported
-func (b *BaseChain) EthereumTypeGetErc20ContractInfo(contractDesc AddressDescriptor) (*Erc20Contract, error) {
+// GetContractInfo is not supported
+func (b *BaseChain) GetContractInfo(contractDesc AddressDescriptor) (*ContractInfo, error) {
 	return nil, errors.New("Not supported")
 }
 
