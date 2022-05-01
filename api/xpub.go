@@ -266,7 +266,7 @@ func (w *Worker) tokenFromXpubAddress(data *xpubData, ad *xpubAddress, changeInd
 		}
 	}
 	return Token{
-		Type:             XPUBAddressTokenType,
+		Type:             bchain.XPUBAddressTokenType,
 		Name:             address,
 		Decimals:         w.chainParser.AmountDecimals(),
 		BalanceSat:       (*Amount)(balance),

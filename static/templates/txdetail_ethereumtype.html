@@ -267,7 +267,7 @@
             </div>
         </div>
         <div class="col-md-3 text-right" style="padding: .4rem 0;">
-            {{- range $iv := $tt.Values -}}
+            {{- range $iv := $tt.MultiTokenValues -}}
                 {{formatAmountWithDecimals $iv.Id 0}}:{{formatAmountWithDecimals $iv.Value 0}} {{$tt.Symbol}}
             {{- end -}}
         </div>

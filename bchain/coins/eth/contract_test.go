@@ -133,7 +133,7 @@ func Test_contractGetTransfersFromLog(t *testing.T) {
 			},
 			want: bchain.TokenTransfers{
 				{
-					Type:     bchain.ERC721,
+					Type:     bchain.NonFungibleToken,
 					Contract: "0x5689b918D34C038901870105A6C7fc24744D31eB",
 					From:     "0x0a206d4d5ff79cb5069def7fe3598421cff09391",
 					To:       "0x6a016d7eec560549ffa0fbdb7f15c2b27302087f",
@@ -171,11 +171,11 @@ func Test_contractGetTransfersFromLog(t *testing.T) {
 			},
 			want: bchain.TokenTransfers{
 				{
-					Type:     bchain.ERC1155,
-					Contract: "0x6Fd712E3A5B556654044608F9129040A4839E36c",
-					From:     "0xa3950b823cb063dd9afc0d27f35008b805b3ed53",
-					To:       "0x4392faf3bb96b5694ecc6ef64726f61cdd4bb0ec",
-					IdValues: []bchain.TokenTransferIdValue{{Id: *big.NewInt(150), Value: *big.NewInt(0x11)}},
+					Type:             bchain.MultiToken,
+					Contract:         "0x6Fd712E3A5B556654044608F9129040A4839E36c",
+					From:             "0xa3950b823cb063dd9afc0d27f35008b805b3ed53",
+					To:               "0x4392faf3bb96b5694ecc6ef64726f61cdd4bb0ec",
+					MultiTokenValues: []bchain.MultiTokenValue{{Id: *big.NewInt(150), Value: *big.NewInt(0x11)}},
 				},
 			},
 		},
@@ -195,11 +195,11 @@ func Test_contractGetTransfersFromLog(t *testing.T) {
 			},
 			want: bchain.TokenTransfers{
 				{
-					Type:     bchain.ERC1155,
+					Type:     bchain.MultiToken,
 					Contract: "0x6c42c26a081c2f509f8bb68fb7ac3062311ccfb7",
 					From:     "0x0000000000000000000000000000000000000000",
 					To:       "0x5dc6288b35e0807a3d6feb89b3a2ff4ab773168e",
-					IdValues: []bchain.TokenTransferIdValue{
+					MultiTokenValues: []bchain.MultiTokenValue{
 						{Id: *big.NewInt(1776), Value: *big.NewInt(1)},
 						{Id: *big.NewInt(1898), Value: *big.NewInt(10)},
 					},
@@ -247,7 +247,7 @@ func Test_contractGetTransfersFromTx(t *testing.T) {
 			args: (b1.Txs[1].CoinSpecificData.(bchain.EthereumSpecificData)).Tx,
 			want: bchain.TokenTransfers{
 				{
-					Type:     bchain.ERC20,
+					Type:     bchain.FungibleToken,
 					Contract: "0x4af4114f73d1c1c903ac9e0361b379d1291808a2",
 					From:     "0x20cd153de35d469ba46127a0c8f18626b59a256a",
 					To:       "0x555ee11fbddc0e49a9bab358a8941ad95ffdb48f",
@@ -260,7 +260,7 @@ func Test_contractGetTransfersFromTx(t *testing.T) {
 			args: (b2.Txs[2].CoinSpecificData.(bchain.EthereumSpecificData)).Tx,
 			want: bchain.TokenTransfers{
 				{
-					Type:     bchain.ERC721,
+					Type:     bchain.NonFungibleToken,
 					Contract: "0xcda9fc258358ecaa88845f19af595e908bb7efe9",
 					From:     "0x837e3f699d85a4b0b99894567e9233dfb1dcb081",
 					To:       "0x7b62eb7fe80350dc7ec945c0b73242cb9877fb1b",
