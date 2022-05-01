@@ -39,8 +39,8 @@ func parseSimpleStringProperty(data string) string {
 	if len(data) > 128 {
 		n := parseSimpleNumericProperty(data[64:128])
 		if n != nil {
-			l := n.Uint64()
-			if l > 0 && 2*int(l) <= len(data)-128 {
+			l := n.Int64()
+			if l > 0 && int(l) <= ((len(data)-128)>>1) {
 				b, err := hex.DecodeString(data[128 : 128+2*l])
 				if err == nil {
 					return string(b)

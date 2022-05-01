@@ -128,6 +128,19 @@ var EthTx4InternalData = &bchain.EthereumInternalData{
 	},
 }
 
+var Block1SpecificData = &bchain.EthereumBlockSpecificData{
+	Contracts: []bchain.ContractInfo{
+		{
+			Contract:       EthAddrContract4a,
+			Type:           bchain.ERC20TokenType,
+			Name:           "Contract 74",
+			Symbol:         "S74",
+			Decimals:       12,
+			CreatedInBlock: 44444,
+		},
+	},
+}
+
 var Block2SpecificData = &bchain.EthereumBlockSpecificData{
 	InternalDataError: "test error",
 	AddressAliasRecords: []bchain.AddressAliasRecord{
@@ -138,6 +151,12 @@ var Block2SpecificData = &bchain.EthereumBlockSpecificData{
 		{
 			Address: EthAddr20EIP55,
 			Name:    "address20",
+		},
+	},
+	Contracts: []bchain.ContractInfo{
+		{
+			Contract:          EthAddrContract4a,
+			DestructedInBlock: 44445,
 		},
 	},
 }
@@ -182,6 +201,7 @@ func GetTestEthereumTypeBlock1(parser bchain.BlockChainParser) *bchain.Block {
 			packed:   EthTx2Packed,
 			internal: EthTx2InternalData,
 		}}, parser),
+		CoinSpecificData: Block1SpecificData,
 	}
 }
 

@@ -151,7 +151,10 @@ func (w *Worker) getAddressAliases(addresses map[string]struct{}) AddressAliases
 		}
 		for a := range addresses {
 			if w.chainType == bchain.ChainEthereumType {
-				// TODO get contract name
+				ci, err := w.db.GetContractInfoForAddress(a)
+				if err == nil && ci != nil && ci.Name != "" {
+					aliases[a] = AddressAlias{Type: "Contract", Alias: ci.Name}
+				}
 			}
 			n := w.db.GetAddressAlias(a)
 			if len(n) > 0 {
@@ -535,20 +538,28 @@ func (w *Worker) getEthereumTokensTransfers(transfers bchain.TokenTransfers, add
 			glog.Errorf("GetAddrDescFromAddress error %v, contract %v", err, t.Contract)
 			continue
 		}
-		erc20c, err := w.chain.EthereumTypeGetErc20ContractInfo(cd)
+		typeName := bchain.EthereumTokenTypeMap[t.Type]
+		contractInfo, err := w.db.GetContractInfo(cd, typeName)
 		if err != nil {
-			glog.Errorf("GetErc20ContractInfo error %v, contract %v", err, t.Contract)
+			glog.Errorf("GetContractInfo error %v, contract %v", err, t.Contract)
 		}
-		if erc20c == nil {
-			erc20c = &bchain.Erc20Contract{Name: t.Contract}
+		if contractInfo == nil {
+			glog.Warningf("Contract %v %v not found in DB", t.Contract, typeName)
+			contractInfo, err = w.chain.GetContractInfo(cd)
+			if err != nil {
+				glog.Errorf("GetContractInfo from chain error %v, contract %v", err, t.Contract)
+			}
+			if contractInfo == nil {
+				contractInfo = &bchain.ContractInfo{Name: t.Contract, Type: bchain.UnknownTokenType}
+			}
 		}
 		var value *Amount
-		var values []TokenTransferValues
-		if t.Type == bchain.ERC1155 {
-			values = make([]TokenTransferValues, len(t.IdValues))
+		var values []MultiTokenValue
+		if t.Type == bchain.MultiToken {
+			values = make([]MultiTokenValue, len(t.MultiTokenValues))
 			for j := range values {
-				values[j].Id = (*Amount)(&t.IdValues[j].Id)
-				values[j].Value = (*Amount)(&t.IdValues[j].Value)
+				values[j].Id = (*Amount)(&t.MultiTokenValues[j].Id)
+				values[j].Value = (*Amount)(&t.MultiTokenValues[j].Value)
 			}
 		} else {
 			value = (*Amount)(&t.Value)
@@ -556,15 +567,15 @@ func (w *Worker) getEthereumTokensTransfers(transfers bchain.TokenTransfers, add
 		aggregateAddress(addresses, t.From)
 		aggregateAddress(addresses, t.To)
 		tokens[i] = TokenTransfer{
-			Type:     TokenTypeMap[t.Type],
-			Token:    t.Contract,
-			From:     t.From,
-			To:       t.To,
-			Value:    value,
-			Values:   values,
-			Decimals: erc20c.Decimals,
-			Name:     erc20c.Name,
-			Symbol:   erc20c.Symbol,
+			Type:             typeName,
+			Token:            t.Contract,
+			From:             t.From,
+			To:               t.To,
+			Value:            value,
+			MultiTokenValues: values,
+			Decimals:         contractInfo.Decimals,
+			Name:             contractInfo.Name,
+			Symbol:           contractInfo.Symbol,
 		}
 	}
 	return tokens
@@ -751,35 +762,41 @@ func computePaging(count, page, itemsOnPage int) (Paging, int, int, int) {
 }
 
 func (w *Worker) getEthereumContractBalance(addrDesc bchain.AddressDescriptor, index int, c *db.AddrContract, details AccountDetails) (*Token, error) {
-	// TODO use db.contracts
 	validContract := true
-
-	ci, err := w.chain.EthereumTypeGetErc20ContractInfo(c.Contract)
+	typeName := bchain.EthereumTokenTypeMap[c.Type]
+	ci, err := w.db.GetContractInfo(c.Contract, typeName)
 	if err != nil {
-		return nil, errors.Annotatef(err, "EthereumTypeGetErc20ContractInfo %v", c.Contract)
+		return nil, errors.Annotatef(err, "GetContractInfo %v", c.Contract)
 	}
 	if ci == nil {
-		ci = &bchain.Erc20Contract{}
-		addresses, _, _ := w.chainParser.GetAddressesFromAddrDesc(c.Contract)
-		if len(addresses) > 0 {
-			ci.Contract = addresses[0]
-			ci.Name = addresses[0]
+		glog.Warningf("Contract %v %v not found in DB", c.Contract, typeName)
+		ci, err = w.chain.GetContractInfo(c.Contract)
+		if err != nil {
+			glog.Errorf("GetContractInfo from chain error %v, contract %v", err, c.Contract)
 		}
-		validContract = false
+		if ci == nil {
+			ci = &bchain.ContractInfo{Type: bchain.UnknownTokenType}
+			addresses, _, _ := w.chainParser.GetAddressesFromAddrDesc(c.Contract)
+			if len(addresses) > 0 {
+				ci.Contract = addresses[0]
+				ci.Name = addresses[0]
+			}
+			validContract = false
+		}
 	}
 
 	t := Token{
 		Contract:      ci.Contract,
 		Name:          ci.Name,
 		Symbol:        ci.Symbol,
+		Type:          typeName,
 		Transfers:     int(c.Txs),
 		Decimals:      ci.Decimals,
 		ContractIndex: strconv.Itoa(index),
 	}
 	// return contract balances/values only at or above AccountDetailsTokenBalances
 	if details >= AccountDetailsTokenBalances && validContract {
-		if c.Type == bchain.ERC20 {
-			t.Type = ERC20TokenType
+		if c.Type == bchain.FungibleToken {
 			// get Erc20 Contract Balance from blockchain, balance obtained from adding and subtracting transfers is not correct
 			b, err := w.chain.EthereumTypeGetErc20ContractBalance(addrDesc, c.Contract)
 			if err != nil {
@@ -789,11 +806,6 @@ func (w *Worker) getEthereumContractBalance(addrDesc bchain.AddressDescriptor, i
 				t.BalanceSat = (*Amount)(b)
 			}
 		} else {
-			if c.Type == bchain.ERC721 {
-				t.Type = ERC771TokenType
-			} else {
-				t.Type = ERC1155TokenType
-			}
 			if len(c.Ids) > 0 {
 				ids := make([]Amount, len(c.Ids))
 				for j := range ids {
@@ -801,13 +813,13 @@ func (w *Worker) getEthereumContractBalance(addrDesc bchain.AddressDescriptor, i
 				}
 				t.Ids = ids
 			}
-			if len(c.IdValues) > 0 {
-				idValues := make([]TokenTransferValues, len(c.IdValues))
+			if len(c.MultiTokenValues) > 0 {
+				idValues := make([]MultiTokenValue, len(c.MultiTokenValues))
 				for j := range idValues {
-					idValues[j].Id = (*Amount)(&c.IdValues[j].Id)
-					idValues[j].Value = (*Amount)(&c.IdValues[j].Value)
+					idValues[j].Id = (*Amount)(&c.MultiTokenValues[j].Id)
+					idValues[j].Value = (*Amount)(&c.MultiTokenValues[j].Value)
 				}
-				t.IdValues = idValues
+				t.MultiTokenValues = idValues
 			}
 		}
 	}
@@ -819,18 +831,25 @@ func (w *Worker) getEthereumContractBalance(addrDesc bchain.AddressDescriptor, i
 func (w *Worker) getEthereumContractBalanceFromBlockchain(addrDesc, contract bchain.AddressDescriptor, details AccountDetails) (*Token, error) {
 	var b *big.Int
 	validContract := true
-	ci, err := w.chain.EthereumTypeGetErc20ContractInfo(contract)
+	ci, err := w.db.GetContractInfo(contract, "")
 	if err != nil {
-		return nil, errors.Annotatef(err, "EthereumTypeGetErc20ContractInfo %v", contract)
+		return nil, errors.Annotatef(err, "GetContractInfo %v", contract)
 	}
 	if ci == nil {
-		ci = &bchain.Erc20Contract{}
-		addresses, _, _ := w.chainParser.GetAddressesFromAddrDesc(contract)
-		if len(addresses) > 0 {
-			ci.Contract = addresses[0]
-			ci.Name = addresses[0]
+		glog.Warningf("Contract %v not found in DB", contract)
+		ci, err = w.chain.GetContractInfo(contract)
+		if err != nil {
+			glog.Errorf("GetContractInfo from chain error %v, contract %v", err, contract)
 		}
-		validContract = false
+		if ci == nil {
+			ci = &bchain.ContractInfo{Type: bchain.UnknownTokenType}
+			addresses, _, _ := w.chainParser.GetAddressesFromAddrDesc(contract)
+			if len(addresses) > 0 {
+				ci.Contract = addresses[0]
+				ci.Name = addresses[0]
+			}
+			validContract = false
+		}
 	}
 	// do not read contract balances etc in case of Basic option
 	if details >= AccountDetailsTokenBalances && validContract {
@@ -843,7 +862,7 @@ func (w *Worker) getEthereumContractBalanceFromBlockchain(addrDesc, contract bch
 		b = nil
 	}
 	return &Token{
-		Type:          ERC20TokenType,
+		Type:          ci.Type,
 		BalanceSat:    (*Amount)(b),
 		Contract:      ci.Contract,
 		Name:          ci.Name,
@@ -854,11 +873,11 @@ func (w *Worker) getEthereumContractBalanceFromBlockchain(addrDesc, contract bch
 	}, nil
 }
 
-func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescriptor, details AccountDetails, filter *AddressFilter) (*db.AddrBalance, []Token, *bchain.Erc20Contract, uint64, int, int, int, error) {
+func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescriptor, details AccountDetails, filter *AddressFilter) (*db.AddrBalance, []Token, *bchain.ContractInfo, uint64, int, int, int, error) {
 	var (
 		ba             *db.AddrBalance
 		tokens         []Token
-		ci             *bchain.Erc20Contract
+		ci             *bchain.ContractInfo
 		n              uint64
 		nonContractTxs int
 		internalTxs    int
@@ -912,7 +931,7 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 			}
 			tokens = tokens[:j]
 		}
-		ci, err = w.chain.EthereumTypeGetErc20ContractInfo(addrDesc)
+		ci, err = w.db.GetContractInfo(addrDesc, "")
 		if err != nil {
 			return nil, nil, nil, 0, 0, 0, 0, err
 		}
@@ -1043,7 +1062,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 	var (
 		ba                       *db.AddrBalance
 		tokens                   []Token
-		erc20c                   *bchain.Erc20Contract
+		contractInfo             *bchain.ContractInfo
 		txm                      []string
 		txs                      []*Tx
 		txids                    []string
@@ -1062,7 +1081,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 	}
 	if w.chainType == bchain.ChainEthereumType {
 		var n uint64
-		ba, tokens, erc20c, n, nonTokenTxs, internalTxs, totalResults, err = w.getEthereumTypeAddressBalances(addrDesc, option, filter)
+		ba, tokens, contractInfo, n, nonTokenTxs, internalTxs, totalResults, err = w.getEthereumTypeAddressBalances(addrDesc, option, filter)
 		if err != nil {
 			return nil, err
 		}
@@ -1173,7 +1192,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 		Transactions:          txs,
 		Txids:                 txids,
 		Tokens:                tokens,
-		Erc20Contract:         erc20c,
+		ContractInfo:          contractInfo,
 		Nonce:                 nonce,
 		AddressAliases:        w.getAddressAliases(addresses),
 	}

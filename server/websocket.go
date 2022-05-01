@@ -896,7 +896,7 @@ func (s *WebsocketServer) sendOnNewTxAddr(stringAddressDescriptor string, tx *ap
 }
 
 func (s *WebsocketServer) getNewTxSubscriptions(tx *bchain.MempoolTx) map[string]struct{} {
-	// check if there is any subscription in inputs, outputs and erc20
+	// check if there is any subscription in inputs, outputs and token transfers
 	s.addressSubscriptionsLock.Lock()
 	defer s.addressSubscriptionsLock.Unlock()
 	subscribed := make(map[string]struct{})
