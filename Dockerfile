@@ -19,10 +19,9 @@ RUN git clone https://github.com/zeromq/libzmq \
     && make \
     && make install
 
-RUN git clone https://github.com/ambrosus/blockbook.git \
-    && cd blockbook \
-    && go build
+COPY . /blockbook
+WORKDIR /go/blockbook
+
+RUN go build
     
 RUN mkdir /etc/blockbook
-
-WORKDIR /go/blockbook
