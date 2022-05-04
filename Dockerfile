@@ -22,5 +22,7 @@ RUN git clone https://github.com/zeromq/libzmq \
 RUN git clone https://github.com/ambrosus/blockbook.git \
     && cd blockbook \
     && go build
+    
+RUN mkdir /etc/blockbook
 
 WORKDIR /go/blockbook
