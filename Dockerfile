@@ -19,7 +19,7 @@ RUN git clone https://github.com/zeromq/libzmq \
     && make \
     && make install
 
-COPY . /blockbook
+COPY . ./blockbook
 WORKDIR /go/blockbook
 
 RUN go build
