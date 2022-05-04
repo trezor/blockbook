@@ -7,7 +7,7 @@ RUN apt-get update && apt-get install -y \
     && git clone https://github.com/facebook/rocksdb.git \
     && cd rocksdb \
     && git checkout v6.8.1 \
-    && CFLAGS=-fPIC CXXFLAGS=-fPIC make release
+    && CFLAGS=-fPIC CXXFLAGS=-fPIC PORTABLE=1 make release
 
 ENV CGO_CFLAGS="-I/go/rocksdb/include" \
     CGO_LDFLAGS="-L/go/rocksdb -lrocksdb -lstdc++ -lm -lz -ldl -lbz2 -lsnappy -llz4"
