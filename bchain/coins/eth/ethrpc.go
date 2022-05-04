@@ -31,8 +31,17 @@ const (
 	TestNet EthereumNet = 3
 	// TestNetGoerli is Goerli test network
 	TestNetGoerli EthereumNet = 5
-	// AMB
+
+	// AmbrosusNet is Ambrosus Mainnet
 	AmbrosusNet EthereumNet = 16718
+
+	// AmbrosusTestNetMin .. AmbrosusTestNetMax is range for Ambrosus Testnet
+	AmbrosusTestNetMin EthereumNet = 5600
+	AmbrosusTestNetMax EthereumNet = 7800
+
+	// AmbrosusDevNetMin .. AmbrosusDevNetMax is range for Ambrosus Devnet
+	AmbrosusDevNetMin EthereumNet = 7800
+	AmbrosusDevNetMax EthereumNet = 9000
 )
 
 // Configuration represents json config file
@@ -155,22 +164,28 @@ func (b *EthereumRPC) Initialize() error {
 	}
 
 	// parameters for getInfo request
-	switch EthereumNet(id.Uint64()) {
-	case MainNet:
+	ethNet := EthereumNet(id.Uint64())
+	switch {
+	case ethNet == MainNet:
 		b.Testnet = false
 		b.Network = "livenet"
-		break
-	case TestNet:
+	case ethNet == TestNet:
 		b.Testnet = true
 		b.Network = "testnet"
-		break
-	case TestNetGoerli:
+	case ethNet == TestNetGoerli:
 		b.Testnet = true
 		b.Network = "goerli"
-	case AmbrosusNet:
+
+	case ethNet == AmbrosusNet:
 		b.Testnet = false
 		b.Network = "ambrosus"
-		break
+	// testnets have dyna,ic chainId
+	case ethNet >= AmbrosusTestNetMin && ethNet < AmbrosusTestNetMax:
+		b.Testnet = true
+		b.Network = "ambrosus-test"
+	case ethNet >= AmbrosusDevNetMin && ethNet < AmbrosusDevNetMax:
+		b.Testnet = true
+		b.Network = "ambrosus-dev"
 
 	default:
 		return errors.Errorf("Unknown network id %v", id)
@@ -431,9 +446,9 @@ func (b *EthereumRPC) GetBlockHash(height uint32) (string, error) {
 		//GasUsed     uint64         `json:"gasUsed"          gencodec:"required"`
 		//Time        uint64         `json:"timestamp"        gencodec:"required"`
 		//Extra       []byte         `json:"extraData"        gencodec:"required"`
-		MixDigest   ethcommon.Hash    `json:"mixHash"`
-		Nonce       [8]byte     `json:"nonce"`
-		Hash		string			`json:"hash"`
+		MixDigest ethcommon.Hash `json:"mixHash"`
+		Nonce     [8]byte        `json:"nonce"`
+		Hash      string         `json:"hash"`
 	}
 	err := b.rpc.CallContext(ctx, &head, "eth_getBlockByNumber", hexutil.EncodeBig(&n), false)
 
