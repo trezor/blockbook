@@ -36,12 +36,12 @@ const (
 	AmbrosusNet EthereumNet = 16718
 
 	// AmbrosusTestNetMin .. AmbrosusTestNetMax is range for Ambrosus Testnet
-	AmbrosusTestNetMin EthereumNet = 5600
-	AmbrosusTestNetMax EthereumNet = 7800
+	AmbrosusTestNetMin EthereumNet = 22016
+	AmbrosusTestNetMax EthereumNet = 30720
 
 	// AmbrosusDevNetMin .. AmbrosusDevNetMax is range for Ambrosus Devnet
-	AmbrosusDevNetMin EthereumNet = 7800
-	AmbrosusDevNetMax EthereumNet = 9000
+	AmbrosusDevNetMin EthereumNet = 30720
+	AmbrosusDevNetMax EthereumNet = 36864
 )
 
 // Configuration represents json config file
