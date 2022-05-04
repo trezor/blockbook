@@ -9,10 +9,6 @@ env:
 jobs:
   docker:
     runs-on: ubuntu-latest
-    container: 
-        image: debian:buster
-        env: 
-          DEBIAN_FRONTEND: noninteractive
     permissions:
       contents: read
       packages: write
