@@ -7,12 +7,24 @@ import (
 	"github.com/golang/glog"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/bchain/coins/btc"
+	"github.com/trezor/blockbook/common"
 )
 
 // HydraRPC is an interface to JSON-RPC bitcoind service.
 type HydraRPC struct {
 	*btc.BitcoinRPC
 	minFeeRate *big.Int // satoshi per kb
+}
+
+type resEstimateSmartFee struct {
+	Error  *bchain.RPCError `json:"error"`
+	Result struct {
+		GasPrice  common.JSONNumber `json:"gasPrice"`
+		BytePrice common.JSONNumber `json:"bytePrice"`
+	} `json:"result"`
+}
+type cmdEstimateSmartFee struct {
+	Method string `json:"method"`
 }
 
 // NewHydraRPC returns new HydraRPC instance.
@@ -67,11 +79,24 @@ func (b *HydraRPC) GetTransactionForMempool(txid string) (*bchain.Tx, error) {
 
 // EstimateSmartFee returns fee estimation
 func (b *HydraRPC) EstimateSmartFee(blocks int, conservative bool) (big.Int, error) {
-	feeRate, err := b.BitcoinRPC.EstimateSmartFee(blocks, conservative)
+
+	res := resEstimateSmartFee{}
+	req := cmdEstimateSmartFee{Method: "getoracleinfo"}
+	err := b.Call(&req, &res)
+
+	var r big.Int
 	if err != nil {
-		if b.minFeeRate.Cmp(&feeRate) == 1 {
-			feeRate = *b.minFeeRate
-		}
+		return r, nil
 	}
-	return feeRate, err
+	if res.Error != nil {
+		return r, res.Error
+	}
+	n, err := res.Result.BytePrice.Int64()
+	if err != nil {
+		return r, err
+	}
+	n *= 1000
+	r.SetInt64(n)
+
+	return r, nil
 }
