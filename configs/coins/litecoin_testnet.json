@@ -27,7 +27,6 @@
     "verification_type": "gpg",
     "verification_source": "https://download.litecoin.org/litecoin-0.21.2/linux/litecoin-0.21.2-x86_64-linux-gnu.tar.gz.asc",
     "extract_command": "tar -C backend --strip 1 -xf",
-    "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
       "bin/litecoin-qt"
     ],
