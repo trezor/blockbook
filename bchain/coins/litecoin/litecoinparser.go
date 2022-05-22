@@ -40,11 +40,15 @@ func init() {
 // LitecoinParser handle
 type LitecoinParser struct {
 	*btc.BitcoinLikeParser
+	baseparser *bchain.BaseParser
 }
 
 // NewLitecoinParser returns new LitecoinParser instance
 func NewLitecoinParser(params *chaincfg.Params, c *btc.Configuration) *LitecoinParser {
-	return &LitecoinParser{BitcoinLikeParser: btc.NewBitcoinLikeParser(params, c)}
+	return &LitecoinParser{
+		BitcoinLikeParser: btc.NewBitcoinLikeParser(params, c),
+		baseparser:        &bchain.BaseParser{},
+	}
 }
 
 // GetChainParams contains network parameters for the main Litecoin network,
@@ -124,4 +128,14 @@ func (p *LitecoinParser) ParseTxFromJson(msg json.RawMessage) (*bchain.Tx, error
 	}
 
 	return &tx, nil
+}
+
+// PackTx packs transaction to byte array using protobuf
+func (p *LitecoinParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) ([]byte, error) {
+	return p.baseparser.PackTx(tx, height, blockTime)
+}
+
+// UnpackTx unpacks transaction from protobuf byte array
+func (p *LitecoinParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
+	return p.baseparser.UnpackTx(buf)
 }
