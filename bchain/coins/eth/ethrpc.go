@@ -157,11 +157,9 @@ func (b *EthereumRPC) Initialize() error {
 	case MainNet:
 		b.Testnet = false
 		b.Network = "livenet"
-		break
 	case TestNet:
 		b.Testnet = true
 		b.Network = "testnet"
-		break
 	case TestNetGoerli:
 		b.Testnet = true
 		b.Network = "goerli"
