@@ -97,10 +97,8 @@ func (mq *MQ) run(callback func(NotificationType)) {
 			switch string(msg[0]) {
 			case "hashblock":
 				nt = NotificationNewBlock
-				break
 			case "hashtx":
 				nt = NotificationNewTx
-				break
 			default:
 				nt = NotificationUnknown
 				glog.Infof("MQ: NotificationUnknown %v", string(msg[0]))
