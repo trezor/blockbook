@@ -1508,20 +1508,6 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			},
 			want: `{"id":"39","data":{"subscribed":false,"message":"unsubscribeNewTransaction not enabled, use -enablesubnewtx flag to enable."}}`,
 		},
-		{
-			name: "websocket subscribeNewTransaction",
-			req: websocketReq{
-				Method: "subscribeNewTransaction",
-			},
-			want: `{"id":"37","data":{"subscribed":false,"message":"subscribeNewTransaction not enabled, use -enablesubnewtx flag to enable."}}`,
-		},
-		{
-			name: "websocket unsubscribeNewTransaction",
-			req: websocketReq{
-				Method: "unsubscribeNewTransaction",
-			},
-			want: `{"id":"38","data":{"subscribed":false,"message":"unsubscribeNewTransaction not enabled, use -enablesubnewtx flag to enable."}}`,
-		},
 	}
 
 	// send all requests at once
