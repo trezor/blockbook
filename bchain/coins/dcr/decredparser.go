@@ -52,7 +52,7 @@ func init() {
 
 // DecredParser handle
 type DecredParser struct {
-	*btc.BitcoinParser
+	*btc.BitcoinLikeParser
 	baseParser *bchain.BaseParser
 	netConfig  *cfg.Params
 }
@@ -60,11 +60,11 @@ type DecredParser struct {
 // NewDecredParser returns new DecredParser instance
 func NewDecredParser(params *chaincfg.Params, c *btc.Configuration) *DecredParser {
 	d := &DecredParser{
-		BitcoinParser: btc.NewBitcoinParser(params, c),
-		baseParser:    &bchain.BaseParser{},
+		BitcoinLikeParser: btc.NewBitcoinLikeParser(params, c),
+		baseParser:        &bchain.BaseParser{},
 	}
 
-	switch d.BitcoinParser.Params.Name {
+	switch d.BitcoinLikeParser.Params.Name {
 	case "testnet3":
 		d.netConfig = cfg.TestNet3Params()
 	default:
@@ -213,7 +213,7 @@ func (p *DecredParser) GetAddrDescFromVout(output *bchain.Vout) (bchain.AddressD
 	}
 
 	if scriptClass.String() == "nulldata" {
-		if parsedOPReturn := p.BitcoinParser.TryParseOPReturn(script); parsedOPReturn != "" {
+		if parsedOPReturn := p.BitcoinLikeParser.TryParseOPReturn(script); parsedOPReturn != "" {
 			return []byte(parsedOPReturn), nil
 		}
 	}
@@ -254,16 +254,28 @@ func (p *DecredParser) addrDescFromExtKey(extKey *hdkeychain.ExtendedKey) (bchai
 	return p.GetAddrDescFromAddress(addr.String())
 }
 
-// DeriveAddressDescriptors derives address descriptors from given xpub for
-// listed indexes
-func (p *DecredParser) DeriveAddressDescriptors(xpub string, change uint32,
-	indexes []uint32) ([]bchain.AddressDescriptor, error) {
+// ParseXpub parses xpub (or xpub descriptor) and returns XpubDescriptor
+func (p *DecredParser) ParseXpub(xpub string) (*bchain.XpubDescriptor, error) {
+	var descriptor bchain.XpubDescriptor
 	extKey, err := hdkeychain.NewKeyFromString(xpub, p.netConfig)
 	if err != nil {
 		return nil, err
 	}
+	descriptor.Xpub = xpub
+	descriptor.XpubDescriptor = xpub
+	descriptor.Type = bchain.P2PKH
+	descriptor.Bip = "44"
+	descriptor.ChangeIndexes = []uint32{0, 1}
+	descriptor.ExtKey = extKey
+	return &descriptor, nil
+}
 
-	changeExtKey, err := extKey.Child(change)
+// DeriveAddressDescriptors derives address descriptors from given xpub for
+// listed indexes
+func (p *DecredParser) DeriveAddressDescriptors(descriptor *bchain.XpubDescriptor, change uint32,
+	indexes []uint32) ([]bchain.AddressDescriptor, error) {
+
+	changeExtKey, err := descriptor.ExtKey.(*hdkeychain.ExtendedKey).Child(change)
 	if err != nil {
 		return nil, err
 	}
@@ -284,16 +296,13 @@ func (p *DecredParser) DeriveAddressDescriptors(xpub string, change uint32,
 
 // DeriveAddressDescriptorsFromTo derives address descriptors from given xpub for
 // addresses in index range
-func (p *DecredParser) DeriveAddressDescriptorsFromTo(xpub string, change uint32,
+func (p *DecredParser) DeriveAddressDescriptorsFromTo(descriptor *bchain.XpubDescriptor, change uint32,
 	fromIndex uint32, toIndex uint32) ([]bchain.AddressDescriptor, error) {
 	if toIndex <= fromIndex {
 		return nil, errors.New("toIndex<=fromIndex")
 	}
-	extKey, err := hdkeychain.NewKeyFromString(xpub, p.netConfig)
-	if err != nil {
-		return nil, err
-	}
-	changeExtKey, err := extKey.Child(change)
+
+	changeExtKey, err := descriptor.ExtKey.(*hdkeychain.ExtendedKey).Child(change)
 	if err != nil {
 		return nil, err
 	}
@@ -316,9 +325,9 @@ func (p *DecredParser) DeriveAddressDescriptorsFromTo(xpub string, change uint32
 // m/44'/<coin type>'/<account>'/<branch>/<address index>. This function only
 // returns a path up to m/44'/<coin type>'/<account>'/ whereby the rest of the
 // other details (<branch>/<address index>) are populated automatically.
-func (p *DecredParser) DerivationBasePath(xpub string) (string, error) {
+func (p *DecredParser) DerivationBasePath(descriptor *bchain.XpubDescriptor) (string, error) {
 	var c string
-	cn, depth, err := p.decodeXpub(xpub)
+	cn, depth, err := p.decodeXpub(descriptor.Xpub)
 	if err != nil {
 		return "", err
 	}

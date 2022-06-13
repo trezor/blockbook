@@ -551,7 +551,7 @@ func (b *BitcoinRPC) GetBlock(hash string, height uint32) (*bchain.Block, error)
 	if err != nil {
 		return nil, err
 	}
-	data, err := b.GetBlockRaw(hash)
+	data, err := b.GetBlockBytes(hash)
 	if err != nil {
 		return nil, err
 	}
@@ -588,7 +588,7 @@ func (b *BitcoinRPC) GetBlockInfo(hash string) (*bchain.BlockInfo, error) {
 // GetBlockWithoutHeader is an optimization - it does not call GetBlockHeader to get prev, next hashes
 // instead it sets to header only block hash and height passed in parameters
 func (b *BitcoinRPC) GetBlockWithoutHeader(hash string, height uint32) (*bchain.Block, error) {
-	data, err := b.GetBlockRaw(hash)
+	data, err := b.GetBlockBytes(hash)
 	if err != nil {
 		return nil, err
 	}
@@ -601,8 +601,8 @@ func (b *BitcoinRPC) GetBlockWithoutHeader(hash string, height uint32) (*bchain.
 	return block, nil
 }
 
-// GetBlockRaw returns block with given hash as bytes
-func (b *BitcoinRPC) GetBlockRaw(hash string) ([]byte, error) {
+// GetBlockRaw returns block with given hash as hex string
+func (b *BitcoinRPC) GetBlockRaw(hash string) (string, error) {
 	glog.V(1).Info("rpc: getblock (verbosity=0) ", hash)
 
 	res := ResGetBlockRaw{}
@@ -612,15 +612,24 @@ func (b *BitcoinRPC) GetBlockRaw(hash string) ([]byte, error) {
 	err := b.Call(&req, &res)
 
 	if err != nil {
-		return nil, errors.Annotatef(err, "hash %v", hash)
+		return "", errors.Annotatef(err, "hash %v", hash)
 	}
 	if res.Error != nil {
 		if IsErrBlockNotFound(res.Error) {
-			return nil, bchain.ErrBlockNotFound
+			return "", bchain.ErrBlockNotFound
 		}
-		return nil, errors.Annotatef(res.Error, "hash %v", hash)
+		return "", errors.Annotatef(res.Error, "hash %v", hash)
 	}
-	return hex.DecodeString(res.Result)
+	return res.Result, nil
+}
+
+// GetBlockBytes returns block with given hash as bytes
+func (b *BitcoinRPC) GetBlockBytes(hash string) ([]byte, error) {
+	block, err := b.GetBlockRaw(hash)
+	if err != nil {
+		return nil, err
+	}
+	return hex.DecodeString(block)
 }
 
 // GetBlockFull returns block with given hash
@@ -678,10 +687,8 @@ func (b *BitcoinRPC) GetMempoolTransactions() ([]string, error) {
 
 // IsMissingTx return true if error means missing tx
 func IsMissingTx(err *bchain.RPCError) bool {
-	if err.Code == -5 { // "No such mempool or blockchain transaction"
-		return true
-	}
-	return false
+	// err.Code == -5 "No such mempool or blockchain transaction"
+	return err.Code == -5
 }
 
 // GetTransactionForMempool returns a transaction by the transaction ID
@@ -721,10 +728,10 @@ func (b *BitcoinRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 		return nil, err
 	}
 	tx, err := b.Parser.ParseTxFromJson(r)
-	tx.CoinSpecificData = r
 	if err != nil {
 		return nil, errors.Annotatef(err, "txid %v", txid)
 	}
+	tx.CoinSpecificData = r
 	return tx, nil
 }
 

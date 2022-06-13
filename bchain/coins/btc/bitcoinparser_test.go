@@ -1,4 +1,4 @@
-// +build unittest
+//go:build unittest
 
 package btc
 
@@ -59,8 +59,78 @@ func TestGetAddrDescFromAddress(t *testing.T) {
 			want:    "002003973a40ec94c0d10f6f6f0e7a62ba2044b7d19db6ff2bf60651e17fb29d8d29",
 			wantErr: false,
 		},
+		{
+			name:    " witness_unknown v1",
+			args:    args{address: "bc1pw508d6qejxtdg4y5r3zarvary0c5xw7kw508d6qejxtdg4y5r3zarvary0c5xw7kt5nd6y"},
+			want:    "5128751e76e8199196d454941c45d1b3a323f1433bd6751e76e8199196d454941c45d1b3a323f1433bd6",
+			wantErr: false,
+		},
+		{
+			name:    " witness_unknown v16",
+			args:    args{address: "bc1sw50qgdz25j"},
+			want:    "6002751e",
+			wantErr: false,
+		},
 	}
 	parser := NewBitcoinParser(GetChainParams("main"), &Configuration{})
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parser.GetAddrDescFromAddress(tt.args.address)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GetAddrDescFromAddress() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			h := hex.EncodeToString(got)
+			if !reflect.DeepEqual(h, tt.want) {
+				t.Errorf("GetAddrDescFromAddress() = %v, want %v", h, tt.want)
+			}
+		})
+	}
+}
+
+func TestGetAddrDescFromAddressTestnet(t *testing.T) {
+	type args struct {
+		address string
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    string
+		wantErr bool
+	}{
+		{
+			name:    "pubkeyhash",
+			args:    args{address: "mtkbaiLiUH3fvGJeSzuN3kUgmJzqinLejJ"},
+			want:    "76a914912e2b234f941f30b18afbb4fa46171214bf66c888ac",
+			wantErr: false,
+		},
+		{
+			name:    "scripthash",
+			args:    args{address: "2Mv28xcUJdFXBTfGMtja6fVBMCEbsH3r2AW"},
+			want:    "a9141e6ec5a1d12912b396d77d98dcb000e91f517fa487",
+			wantErr: false,
+		},
+		{
+			name:    "witness_v0_keyhash",
+			args:    args{address: "tb1qupjdck20as3y4l95cd5wepkv0grcz0p7d8rd5s"},
+			want:    "0014e064dc594fec224afcb4c368ec86cc7a07813c3e",
+			wantErr: false,
+		},
+		{
+			name:    "witness_v0_scripthash",
+			args:    args{address: "tb1qqwtn5s8vjnqdzrm0du885c46ypzt05vakmljhasx28shlv5a355seu0fjv"},
+			want:    "002003973a40ec94c0d10f6f6f0e7a62ba2044b7d19db6ff2bf60651e17fb29d8d29",
+			wantErr: false,
+		},
+		{
+			name:    "witness_v1_taproot",
+			args:    args{address: "tb1pqsv2qyp8hsma46422ecfd3ek02jayumkkzjx7vkf3cqpmfd4ucpsx0cc9h"},
+			want:    "51200418a01027bc37daeaaa567096c7367aa5d27376b0a46f32c98e001da5b5e603",
+			wantErr: false,
+		},
+	}
+	parser := NewBitcoinParser(GetChainParams("test"), &Configuration{})
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -209,6 +279,55 @@ func TestGetAddressesFromAddrDesc(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name:    "OP_RETURN OP_PUSHDATA1 utf8",
+			args:    args{script: "6a31e5bfabe981a9e381ab4254434658e58f96e5bc95e3818ce381a7e3818de3828b5043e3818ce6acb2e38197e38184e38082"},
+			want:    []string{"OP_RETURN (快適にBTCFX取引ができるPCが欲しい。)"},
+			want2:   false,
+			wantErr: false,
+		},
+		{
+			name: "OP_RETURN OP_PUSHDATA2 ascii",
+			args: args{script: "6a4dd7035765277265206e6f20737472616e6765727320746f206c6f76650a596f75206b6e6f77207468652072756c657320616e6420736f20646f20490a412066756c6c20636f6d6d69746d656e74277320776861742049276d207468696e6b696e67206f660a596f7520776f756c646e27742067657420746869732066726f6d20616e79206f74686572206775790a49206a7573742077616e6e612074656c6c20796f7520686f772049276d206665656c696e670a476f747461206d616b6520796f7520756e6465727374616e640a0a43484f5255530a4e6576657220676f6e6e61206769766520796f752075702c0a4e6576657220676f6e6e61206c657420796f7520646f776e0a4e6576657220676f6e6e612072756e2061726f756e6420616e642064657365727420796f750a4e6576657220676f6e6e61206d616b6520796f75206372792c0a4e6576657220676f6e6e612073617920676f6f646279650a4e6576657220676f6e6e612074656c6c2061206c696520616e64206875727420796f750a0a5765277665206b6e6f776e2065616368206f7468657220666f7220736f206c6f6e670a596f75722068656172742773206265656e20616368696e672062757420796f7527726520746f6f2073687920746f207361792069740a496e7369646520776520626f7468206b6e6f7720776861742773206265656e20676f696e67206f6e0a5765206b6e6f77207468652067616d6520616e6420776527726520676f6e6e6120706c61792069740a416e6420696620796f752061736b206d6520686f772049276d206665656c696e670a446f6e27742074656c6c206d6520796f7527726520746f6f20626c696e6420746f20736565202843484f525553290a0a43484f52555343484f5255530a284f6f68206769766520796f75207570290a284f6f68206769766520796f75207570290a284f6f6829206e6576657220676f6e6e6120676976652c206e6576657220676f6e6e6120676976650a286769766520796f75207570290a284f6f6829206e6576657220676f6e6e6120676976652c206e6576657220676f6e6e6120676976650a286769766520796f75207570290a0a5765277665206b6e6f776e2065616368206f7468657220666f7220736f206c6f6e670a596f75722068656172742773206265656e20616368696e672062757420796f7527726520746f6f2073687920746f207361792069740a496e7369646520776520626f7468206b6e6f7720776861742773206265656e20676f696e67206f6e0a5765206b6e6f77207468652067616d6520616e6420776527726520676f6e6e6120706c61792069742028544f2046524f4e54290a0a"},
+			want: []string{`OP_RETURN (We're no strangers to love
+You know the rules and so do I
+A full commitment's what I'm thinking of
+You wouldn't get this from any other guy
+I just wanna tell you how I'm feeling
+Gotta make you understand
+
+CHORUS
+Never gonna give you up,
+Never gonna let you down
+Never gonna run around and desert you
+Never gonna make you cry,
+Never gonna say goodbye
+Never gonna tell a lie and hurt you
+
+We've known each other for so long
+Your heart's been aching but you're too shy to say it
+Inside we both know what's been going on
+We know the game and we're gonna play it
+And if you ask me how I'm feeling
+Don't tell me you're too blind to see (CHORUS)
+
+CHORUSCHORUS
+(Ooh give you up)
+(Ooh give you up)
+(Ooh) never gonna give, never gonna give
+(give you up)
+(Ooh) never gonna give, never gonna give
+(give you up)
+
+We've known each other for so long
+Your heart's been aching but you're too shy to say it
+Inside we both know what's been going on
+We know the game and we're gonna play it (TO FRONT)
+
+)`},
+			want2:   false,
+			wantErr: false,
+		},
+		{
 			name:    "OP_RETURN hex",
 			args:    args{script: "6a072020f1686f6a20"},
 			want:    []string{"OP_RETURN 2020f1686f6a20"},
@@ -253,6 +372,95 @@ func TestGetAddressesFromAddrDesc(t *testing.T) {
 			}
 			if !reflect.DeepEqual(got2, tt.want2) {
 				t.Errorf("GetAddressesFromAddrDesc() = %v, want %v", got2, tt.want2)
+			}
+		})
+	}
+}
+
+func TestGetAddressesFromAddrDescTestnet(t *testing.T) {
+	type args struct {
+		script string
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    []string
+		want2   bool
+		wantErr bool
+	}{
+		{
+			name:    "pubkeyhash",
+			args:    args{script: "76a914912e2b234f941f30b18afbb4fa46171214bf66c888ac"},
+			want:    []string{"mtkbaiLiUH3fvGJeSzuN3kUgmJzqinLejJ"},
+			want2:   true,
+			wantErr: false,
+		},
+		{
+			name:    "pubkey compressed",
+			args:    args{script: "2102a741071164b40b01c4ad28913c4aa2a1015cc5b064f0c802272552f17ae08750ac"},
+			want:    []string{"mkMe1fsfCWFext2qxf4bk3yiruBTvnici4"},
+			want2:   false,
+			wantErr: false,
+		},
+		{
+			name:    "pubkey uncompressed",
+			args:    args{script: "41041057356b91bfd3efeff5fc0fa8b865faafafb67bd653c5da2cd16ce15c7b86db0e622c8e1e135f68918a23601eb49208c1ac72c7b64a4ee99c396cf788da16ccac"},
+			want:    []string{"mx43tNdg4JYY29ifrHjJpdbcCqqDGVSng5"},
+			want2:   false,
+			wantErr: false,
+		},
+		{
+			name:    "scripthash",
+			args:    args{script: "a9141e6ec5a1d12912b396d77d98dcb000e91f517fa487"},
+			want:    []string{"2Mv28xcUJdFXBTfGMtja6fVBMCEbsH3r2AW"},
+			want2:   true,
+			wantErr: false,
+		},
+		{
+			name:    "witness_v0_keyhash",
+			args:    args{script: "0014e064dc594fec224afcb4c368ec86cc7a07813c3e"},
+			want:    []string{"tb1qupjdck20as3y4l95cd5wepkv0grcz0p7d8rd5s"},
+			want2:   true,
+			wantErr: false,
+		},
+		{
+			name:    "witness_v0_scripthash",
+			args:    args{script: "002003973a40ec94c0d10f6f6f0e7a62ba2044b7d19db6ff2bf60651e17fb29d8d29"},
+			want:    []string{"tb1qqwtn5s8vjnqdzrm0du885c46ypzt05vakmljhasx28shlv5a355seu0fjv"},
+			want2:   true,
+			wantErr: false,
+		},
+		{
+			name:    "witness_v1_taproot",
+			args:    args{script: "51200418a01027bc37daeaaa567096c7367aa5d27376b0a46f32c98e001da5b5e603"},
+			want:    []string{"tb1pqsv2qyp8hsma46422ecfd3ek02jayumkkzjx7vkf3cqpmfd4ucpsx0cc9h"},
+			want2:   true,
+			wantErr: false,
+		},
+		{
+			name:    "OP_RETURN ascii",
+			args:    args{script: "6a0461686f6a"},
+			want:    []string{"OP_RETURN (ahoj)"},
+			want2:   false,
+			wantErr: false,
+		},
+	}
+
+	parser := NewBitcoinParser(GetChainParams("test"), &Configuration{})
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b, _ := hex.DecodeString(tt.args.script)
+			got, got2, err := parser.GetAddressesFromAddrDesc(b)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("TestGetAddressesFromAddrDesc_Testnet() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("TestGetAddressesFromAddrDesc_Testnet() = %v, want %v", got, tt.want)
+			}
+			if !reflect.DeepEqual(got2, tt.want2) {
+				t.Errorf("TestGetAddressesFromAddrDesc_Testnet() = %v, want %v", got2, tt.want2)
 			}
 		})
 	}
@@ -509,8 +717,215 @@ func TestUnpackTx(t *testing.T) {
 	}
 }
 
+func TestParseXpubDescriptors(t *testing.T) {
+	btcMainParser := NewBitcoinParser(GetChainParams("main"), &Configuration{XPubMagic: 76067358, XPubMagicSegwitP2sh: 77429938, XPubMagicSegwitNative: 78792518})
+	btcTestnetParser := NewBitcoinParser(GetChainParams("test"), &Configuration{XPubMagic: 70617039, XPubMagicSegwitP2sh: 71979618, XPubMagicSegwitNative: 73342198})
+	tests := []struct {
+		name    string
+		xpub    string
+		parser  *BitcoinParser
+		want    *bchain.XpubDescriptor
+		wantErr bool
+	}{
+		{
+			name:   "tpub",
+			xpub:   "tpubDC88gkaZi5HvJGxGDNLADkvtdpni3mLmx6vr2KnXmWMG8zfkBRggsxHVBkUpgcwPe2KKpkyvTJCdXHb1UHEWE64vczyyPQfHr1skBcsRedN",
+			parser: btcTestnetParser,
+			want: &bchain.XpubDescriptor{
+				XpubDescriptor: "tpubDC88gkaZi5HvJGxGDNLADkvtdpni3mLmx6vr2KnXmWMG8zfkBRggsxHVBkUpgcwPe2KKpkyvTJCdXHb1UHEWE64vczyyPQfHr1skBcsRedN",
+				Xpub:           "tpubDC88gkaZi5HvJGxGDNLADkvtdpni3mLmx6vr2KnXmWMG8zfkBRggsxHVBkUpgcwPe2KKpkyvTJCdXHb1UHEWE64vczyyPQfHr1skBcsRedN",
+				Type:           bchain.P2PKH,
+				Bip:            "44",
+				ChangeIndexes:  []uint32{0, 1},
+			},
+		},
+		{
+			name:   "tr(tpub)",
+			xpub:   "tr(tpubDC88gkaZi5HvJGxGDNLADkvtdpni3mLmx6vr2KnXmWMG8zfkBRggsxHVBkUpgcwPe2KKpkyvTJCdXHb1UHEWE64vczyyPQfHr1skBcsRedN)",
+			parser: btcTestnetParser,
+			want: &bchain.XpubDescriptor{
+				XpubDescriptor: "tr(tpubDC88gkaZi5HvJGxGDNLADkvtdpni3mLmx6vr2KnXmWMG8zfkBRggsxHVBkUpgcwPe2KKpkyvTJCdXHb1UHEWE64vczyyPQfHr1skBcsRedN)",
+				Xpub:           "tpubDC88gkaZi5HvJGxGDNLADkvtdpni3mLmx6vr2KnXmWMG8zfkBRggsxHVBkUpgcwPe2KKpkyvTJCdXHb1UHEWE64vczyyPQfHr1skBcsRedN",
+				Type:           bchain.P2TR,
+				Bip:            "86",
+				ChangeIndexes:  []uint32{0, 1},
+			},
+		},
+		{
+			name:   "tr([5c9e228d/86'/1'/0']tpubD/{0,1,2}/*)#4rqwxvej",
+			xpub:   "tr([5c9e228d/86'/1'/0']tpubDC88gkaZi5HvJGxGDNLADkvtdpni3mLmx6vr2KnXmWMG8zfkBRggsxHVBkUpgcwPe2KKpkyvTJCdXHb1UHEWE64vczyyPQfHr1skBcsRedN/{0,1,2}/*)#4rqwxvej",
+			parser: btcTestnetParser,
+			want: &bchain.XpubDescriptor{
+				XpubDescriptor: "tr([5c9e228d/86'/1'/0']tpubDC88gkaZi5HvJGxGDNLADkvtdpni3mLmx6vr2KnXmWMG8zfkBRggsxHVBkUpgcwPe2KKpkyvTJCdXHb1UHEWE64vczyyPQfHr1skBcsRedN/{0,1,2}/*)#4rqwxvej",
+				Xpub:           "tpubDC88gkaZi5HvJGxGDNLADkvtdpni3mLmx6vr2KnXmWMG8zfkBRggsxHVBkUpgcwPe2KKpkyvTJCdXHb1UHEWE64vczyyPQfHr1skBcsRedN",
+				Type:           bchain.P2TR,
+				Bip:            "86",
+				ChangeIndexes:  []uint32{0, 1, 2},
+			},
+		},
+		{
+			name:   "tr([5c9e228d/86'/1'/0']tpubD/<0;1;2>/*)#4rqwxvej",
+			xpub:   "tr([5c9e228d/86'/1'/0']tpubDC88gkaZi5HvJGxGDNLADkvtdpni3mLmx6vr2KnXmWMG8zfkBRggsxHVBkUpgcwPe2KKpkyvTJCdXHb1UHEWE64vczyyPQfHr1skBcsRedN/<0;1;2>/*)#4rqwxvej",
+			parser: btcTestnetParser,
+			want: &bchain.XpubDescriptor{
+				XpubDescriptor: "tr([5c9e228d/86'/1'/0']tpubDC88gkaZi5HvJGxGDNLADkvtdpni3mLmx6vr2KnXmWMG8zfkBRggsxHVBkUpgcwPe2KKpkyvTJCdXHb1UHEWE64vczyyPQfHr1skBcsRedN/<0;1;2>/*)#4rqwxvej",
+				Xpub:           "tpubDC88gkaZi5HvJGxGDNLADkvtdpni3mLmx6vr2KnXmWMG8zfkBRggsxHVBkUpgcwPe2KKpkyvTJCdXHb1UHEWE64vczyyPQfHr1skBcsRedN",
+				Type:           bchain.P2TR,
+				Bip:            "86",
+				ChangeIndexes:  []uint32{0, 1, 2},
+			},
+		},
+		{
+			name:   "tr([5c9e228d/86'/1'/0']tpubD/3/*)#4rqwxvej",
+			xpub:   "tr([5c9e228d/86'/1'/0']tpubDC88gkaZi5HvJGxGDNLADkvtdpni3mLmx6vr2KnXmWMG8zfkBRggsxHVBkUpgcwPe2KKpkyvTJCdXHb1UHEWE64vczyyPQfHr1skBcsRedN/3/*)#4rqwxvej",
+			parser: btcTestnetParser,
+			want: &bchain.XpubDescriptor{
+				XpubDescriptor: "tr([5c9e228d/86'/1'/0']tpubDC88gkaZi5HvJGxGDNLADkvtdpni3mLmx6vr2KnXmWMG8zfkBRggsxHVBkUpgcwPe2KKpkyvTJCdXHb1UHEWE64vczyyPQfHr1skBcsRedN/3/*)#4rqwxvej",
+				Xpub:           "tpubDC88gkaZi5HvJGxGDNLADkvtdpni3mLmx6vr2KnXmWMG8zfkBRggsxHVBkUpgcwPe2KKpkyvTJCdXHb1UHEWE64vczyyPQfHr1skBcsRedN",
+				Type:           bchain.P2TR,
+				Bip:            "86",
+				ChangeIndexes:  []uint32{3},
+			},
+		},
+		{
+			name:   "xpub",
+			xpub:   "xpub6BosfCnifzxcFwrSzQiqu2DBVTshkCXacvNsWGYJVVhhawA7d4R5WSWGFNbi8Aw6ZRc1brxMyWMzG3DSSSSoekkudhUd9yLb6qx39T9nMdj",
+			parser: btcMainParser,
+			want: &bchain.XpubDescriptor{
+				XpubDescriptor: "xpub6BosfCnifzxcFwrSzQiqu2DBVTshkCXacvNsWGYJVVhhawA7d4R5WSWGFNbi8Aw6ZRc1brxMyWMzG3DSSSSoekkudhUd9yLb6qx39T9nMdj",
+				Xpub:           "xpub6BosfCnifzxcFwrSzQiqu2DBVTshkCXacvNsWGYJVVhhawA7d4R5WSWGFNbi8Aw6ZRc1brxMyWMzG3DSSSSoekkudhUd9yLb6qx39T9nMdj",
+				Type:           bchain.P2PKH,
+				Bip:            "44",
+				ChangeIndexes:  []uint32{0, 1},
+			},
+		},
+		{
+			name:   "ypub",
+			xpub:   "ypub6Ww3ibxVfGzLrAH1PNcjyAWenMTbbAosGNB6VvmSEgytSER9azLDWCxoJwW7Ke7icmizBMXrzBx9979FfaHxHcrArf3zbeJJJUZPf663zsP",
+			parser: btcMainParser,
+			want: &bchain.XpubDescriptor{
+				XpubDescriptor: "ypub6Ww3ibxVfGzLrAH1PNcjyAWenMTbbAosGNB6VvmSEgytSER9azLDWCxoJwW7Ke7icmizBMXrzBx9979FfaHxHcrArf3zbeJJJUZPf663zsP",
+				Xpub:           "ypub6Ww3ibxVfGzLrAH1PNcjyAWenMTbbAosGNB6VvmSEgytSER9azLDWCxoJwW7Ke7icmizBMXrzBx9979FfaHxHcrArf3zbeJJJUZPf663zsP",
+				Type:           bchain.P2SHWPKH,
+				Bip:            "49",
+				ChangeIndexes:  []uint32{0, 1},
+			},
+		},
+		{
+			name:   "zpub",
+			xpub:   "zpub6rFR7y4Q2AijBEqTUquhVz398htDFrtymD9xYYfG1m4wAcvPhXNfE3EfH1r1ADqtfSdVCToUG868RvUUkgDKf31mGDtKsAYz2oz2AGutZYs",
+			parser: btcMainParser,
+			want: &bchain.XpubDescriptor{
+				XpubDescriptor: "zpub6rFR7y4Q2AijBEqTUquhVz398htDFrtymD9xYYfG1m4wAcvPhXNfE3EfH1r1ADqtfSdVCToUG868RvUUkgDKf31mGDtKsAYz2oz2AGutZYs",
+				Xpub:           "zpub6rFR7y4Q2AijBEqTUquhVz398htDFrtymD9xYYfG1m4wAcvPhXNfE3EfH1r1ADqtfSdVCToUG868RvUUkgDKf31mGDtKsAYz2oz2AGutZYs",
+				Type:           bchain.P2WPKH,
+				Bip:            "84",
+				ChangeIndexes:  []uint32{0, 1},
+			},
+		},
+		{
+			name:   "sh(wpkh([5c9e228d/99'/0'/0']xpub/{122,123,4431}/*))",
+			xpub:   "sh(wpkh([5c9e228d/99'/0'/0']xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/{122,123,4431}/*))",
+			parser: btcMainParser,
+			want: &bchain.XpubDescriptor{
+				XpubDescriptor: "sh(wpkh([5c9e228d/99'/0'/0']xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/{122,123,4431}/*))",
+				Xpub:           "xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ",
+				Type:           bchain.P2SHWPKH,
+				Bip:            "99",
+				ChangeIndexes:  []uint32{122, 123, 4431},
+			},
+		},
+		{
+			name:   "sh(wpkh([5c9e228d/99'/0'/0']xpub/<122;123;4431>/*))",
+			xpub:   "sh(wpkh([5c9e228d/99'/0'/0']xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/<122;123;4431>/*))",
+			parser: btcMainParser,
+			want: &bchain.XpubDescriptor{
+				XpubDescriptor: "sh(wpkh([5c9e228d/99'/0'/0']xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/<122;123;4431>/*))",
+				Xpub:           "xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ",
+				Type:           bchain.P2SHWPKH,
+				Bip:            "99",
+				ChangeIndexes:  []uint32{122, 123, 4431},
+			},
+		},
+		{
+			name:   "pkh(xpub)",
+			xpub:   "pkh(xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ)",
+			parser: btcMainParser,
+			want: &bchain.XpubDescriptor{
+				XpubDescriptor: "pkh(xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ)",
+				Xpub:           "xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ",
+				Type:           bchain.P2PKH,
+				Bip:            "44",
+				ChangeIndexes:  []uint32{0, 1},
+			},
+		},
+		{
+			name:   "sh(wpkh(xpub))",
+			xpub:   "sh(wpkh(xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ))",
+			parser: btcMainParser,
+			want: &bchain.XpubDescriptor{
+				XpubDescriptor: "sh(wpkh(xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ))",
+				Xpub:           "xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ",
+				Type:           bchain.P2SHWPKH,
+				Bip:            "49",
+				ChangeIndexes:  []uint32{0, 1},
+			},
+		},
+		{
+			name:   "wpkh(xpub)",
+			xpub:   "wpkh(xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ)",
+			parser: btcMainParser,
+			want: &bchain.XpubDescriptor{
+				XpubDescriptor: "wpkh(xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ)",
+				Xpub:           "xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ",
+				Type:           bchain.P2WPKH,
+				Bip:            "84",
+				ChangeIndexes:  []uint32{0, 1},
+			},
+		},
+		{
+			name:    "xxx(xpub) error - unknown output script",
+			xpub:    "xxx(xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ)",
+			parser:  btcMainParser,
+			wantErr: true,
+		},
+		{
+			name:    "sh(wpkh([5c9e228d/99'/0'/0']xpub/{0,123,4431}/1)) error - * in index is mandatory",
+			xpub:    "sh(wpkh([5c9e228d/99'/0'/0']xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/{122,123,4431}/1))",
+			parser:  btcMainParser,
+			wantErr: true,
+		},
+		{
+			name:    "sh(wpkh([5c9e228d/99'/0'/0']xpub/{0,123,4431}/1) error - path too long",
+			xpub:    "sh(wpkh([5c9e228d/99'/0'/0']xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/{122,123,4431}/1/*))",
+			parser:  btcMainParser,
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.parser.ParseXpub(tt.xpub)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ParseXpub() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if err == nil {
+				if got.ExtKey == nil {
+					t.Errorf("ParseXpub() got nil ExtKey")
+					return
+				}
+				got.ExtKey = nil
+				if !reflect.DeepEqual(got, tt.want) {
+					t.Errorf("ParseXpub() = %+v, want %+v", got, tt.want)
+				}
+			}
+		})
+	}
+}
+
 func TestDeriveAddressDescriptors(t *testing.T) {
 	btcMainParser := NewBitcoinParser(GetChainParams("main"), &Configuration{XPubMagic: 76067358, XPubMagicSegwitP2sh: 77429938, XPubMagicSegwitNative: 78792518})
+	btcTestnetParser := NewBitcoinParser(GetChainParams("test"), &Configuration{XPubMagic: 70617039, XPubMagicSegwitP2sh: 71979618, XPubMagicSegwitNative: 73342198})
 	type args struct {
 		xpub    string
 		change  uint32
@@ -523,6 +938,36 @@ func TestDeriveAddressDescriptors(t *testing.T) {
 		want    []string
 		wantErr bool
 	}{
+		{
+			name: "m/86'/1'/0'",
+			args: args{
+				xpub:    "tr([5c9e228d/86'/1'/0']tpubDC88gkaZi5HvJGxGDNLADkvtdpni3mLmx6vr2KnXmWMG8zfkBRggsxHVBkUpgcwPe2KKpkyvTJCdXHb1UHEWE64vczyyPQfHr1skBcsRedN/0/*)#4rqwxvej",
+				change:  0,
+				indexes: []uint32{0, 1, 10},
+				parser:  btcTestnetParser,
+			},
+			want: []string{"tb1pswrqtykue8r89t9u4rprjs0gt4qzkdfuursfnvqaa3f2yql07zmq8s8a5u", "tb1p8tvmvsvhsee73rhym86wt435qrqm92psfsyhy6a3n5gw455znnpqm8wald", "tb1pqr4803xedptkvsr6ksed2m7fx780y3u8shnd0fqdupnc0w75262sl49kwz"},
+		},
+		{
+			name: "m/86'/0'/0'",
+			args: args{
+				xpub:    "tr([5c9e228d/86'/0'/0']xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/0/*)#d8jj22qr",
+				change:  0,
+				indexes: []uint32{0, 1},
+				parser:  btcMainParser,
+			},
+			want: []string{"bc1p5cyxnuxmeuwuvkwfem96lqzszd02n6xdcjrs20cac6yqjjwudpxqkedrcr", "bc1p4qhjn9zdvkux4e44uhx8tc55attvtyu358kutcqkudyccelu0was9fqzwh"},
+		},
+		{
+			name: "m/86'/0'/0'/1",
+			args: args{
+				xpub:    "tr([5c9e228d/86'/0'/0']xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/0/*)#d8jj22qr",
+				change:  1,
+				indexes: []uint32{0},
+				parser:  btcMainParser,
+			},
+			want: []string{"bc1p3qkhfews2uk44qtvauqyr2ttdsw7svhkl9nkm9s9c3x4ax5h60wqwruhk7"},
+		},
 		{
 			name: "m/44'/0'/0'",
 			args: args{
@@ -556,7 +1001,12 @@ func TestDeriveAddressDescriptors(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := tt.args.parser.DeriveAddressDescriptors(tt.args.xpub, tt.args.change, tt.args.indexes)
+			descriptor, err := tt.args.parser.ParseXpub(tt.args.xpub)
+			if err != nil {
+				t.Errorf("ParseXpub() error = %v", err)
+				return
+			}
+			got, err := tt.args.parser.DeriveAddressDescriptors(descriptor, tt.args.change, tt.args.indexes)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("DeriveAddressDescriptorsFromTo() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -579,7 +1029,7 @@ func TestDeriveAddressDescriptors(t *testing.T) {
 
 func TestDeriveAddressDescriptorsFromTo(t *testing.T) {
 	btcMainParser := NewBitcoinParser(GetChainParams("main"), &Configuration{XPubMagic: 76067358, XPubMagicSegwitP2sh: 77429938, XPubMagicSegwitNative: 78792518})
-	btcTestnetsParser := NewBitcoinParser(GetChainParams("test"), &Configuration{XPubMagic: 70617039, XPubMagicSegwitP2sh: 71979618, XPubMagicSegwitNative: 73342198})
+	btcTestnetParser := NewBitcoinParser(GetChainParams("test"), &Configuration{XPubMagic: 70617039, XPubMagicSegwitP2sh: 71979618, XPubMagicSegwitNative: 73342198})
 	type args struct {
 		xpub      string
 		change    uint32
@@ -627,20 +1077,36 @@ func TestDeriveAddressDescriptorsFromTo(t *testing.T) {
 			want: []string{"bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu"},
 		},
 		{
+			name: "m/86'/0'/0'",
+			args: args{
+				xpub:      "tr([5c9e228d/86'/0'/0']xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/0/*)#d8jj22qr",
+				change:    0,
+				fromIndex: 0,
+				toIndex:   1,
+				parser:    btcMainParser,
+			},
+			want: []string{"bc1p5cyxnuxmeuwuvkwfem96lqzszd02n6xdcjrs20cac6yqjjwudpxqkedrcr"},
+		},
+		{
 			name: "m/49'/1'/0'",
 			args: args{
 				xpub:      "upub5DR1Mg5nykixzYjFXWW5GghAU7dDqoPVJ2jrqFbL8sJ7Hs7jn69MP7KBnnmxn88GeZtnH8PRKV9w5MMSFX8AdEAoXY8Qd8BJPoXtpMeHMxJ",
 				change:    0,
 				fromIndex: 0,
 				toIndex:   10,
-				parser:    btcTestnetsParser,
+				parser:    btcTestnetParser,
 			},
 			want: []string{"2N4Q5FhU2497BryFfUgbqkAJE87aKHUhXMp", "2Mt7P2BAfE922zmfXrdcYTLyR7GUvbwSEns", "2N6aUMgQk8y1zvoq6FeWFyotyj75WY9BGsu", "2NA7tbZWM9BcRwBuebKSQe2xbhhF1paJwBM", "2N8RZMzvrUUnpLmvACX9ysmJ2MX3GK5jcQM", "2MvUUSiQZDSqyeSdofKX9KrSCio1nANPDTe", "2NBXaWu1HazjoUVgrXgcKNoBLhtkkD9Gmet", "2N791Ttf89tMVw2maj86E1Y3VgxD9Mc7PU7", "2NCJmwEq8GJm8t8GWWyBXAfpw7F2qZEVP5Y", "2NEgW71hWKer2XCSA8ZCC2VnWpB77L6bk68"},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := tt.args.parser.DeriveAddressDescriptorsFromTo(tt.args.xpub, tt.args.change, tt.args.fromIndex, tt.args.toIndex)
+			descriptor, err := tt.args.parser.ParseXpub(tt.args.xpub)
+			if err != nil {
+				t.Errorf("ParseXpub() error = %v", err)
+				return
+			}
+			got, err := tt.args.parser.DeriveAddressDescriptorsFromTo(descriptor, tt.args.change, tt.args.fromIndex, tt.args.toIndex)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("DeriveAddressDescriptorsFromTo() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -664,27 +1130,30 @@ func TestDeriveAddressDescriptorsFromTo(t *testing.T) {
 func BenchmarkDeriveAddressDescriptorsFromToXpub(b *testing.B) {
 	btcMainParser := NewBitcoinParser(GetChainParams("main"), &Configuration{XPubMagic: 76067358, XPubMagicSegwitP2sh: 77429938, XPubMagicSegwitNative: 78792518})
 	for i := 0; i < b.N; i++ {
-		btcMainParser.DeriveAddressDescriptorsFromTo("xpub6BosfCnifzxcFwrSzQiqu2DBVTshkCXacvNsWGYJVVhhawA7d4R5WSWGFNbi8Aw6ZRc1brxMyWMzG3DSSSSoekkudhUd9yLb6qx39T9nMdj", 1, 0, 100)
+		descriptor, _ := btcMainParser.ParseXpub("xpub6BosfCnifzxcFwrSzQiqu2DBVTshkCXacvNsWGYJVVhhawA7d4R5WSWGFNbi8Aw6ZRc1brxMyWMzG3DSSSSoekkudhUd9yLb6qx39T9nMdj")
+		btcMainParser.DeriveAddressDescriptorsFromTo(descriptor, 1, 0, 100)
 	}
 }
 
 func BenchmarkDeriveAddressDescriptorsFromToYpub(b *testing.B) {
 	btcMainParser := NewBitcoinParser(GetChainParams("main"), &Configuration{XPubMagic: 76067358, XPubMagicSegwitP2sh: 77429938, XPubMagicSegwitNative: 78792518})
 	for i := 0; i < b.N; i++ {
-		btcMainParser.DeriveAddressDescriptorsFromTo("ypub6Ww3ibxVfGzLrAH1PNcjyAWenMTbbAosGNB6VvmSEgytSER9azLDWCxoJwW7Ke7icmizBMXrzBx9979FfaHxHcrArf3zbeJJJUZPf663zsP", 1, 0, 100)
+		descriptor, _ := btcMainParser.ParseXpub("ypub6Ww3ibxVfGzLrAH1PNcjyAWenMTbbAosGNB6VvmSEgytSER9azLDWCxoJwW7Ke7icmizBMXrzBx9979FfaHxHcrArf3zbeJJJUZPf663zsP")
+		btcMainParser.DeriveAddressDescriptorsFromTo(descriptor, 1, 0, 100)
 	}
 }
 
 func BenchmarkDeriveAddressDescriptorsFromToZpub(b *testing.B) {
 	btcMainParser := NewBitcoinParser(GetChainParams("main"), &Configuration{XPubMagic: 76067358, XPubMagicSegwitP2sh: 77429938, XPubMagicSegwitNative: 78792518})
 	for i := 0; i < b.N; i++ {
-		btcMainParser.DeriveAddressDescriptorsFromTo("zpub6rFR7y4Q2AijBEqTUquhVz398htDFrtymD9xYYfG1m4wAcvPhXNfE3EfH1r1ADqtfSdVCToUG868RvUUkgDKf31mGDtKsAYz2oz2AGutZYs", 1, 0, 100)
+		descriptor, _ := btcMainParser.ParseXpub("zpub6rFR7y4Q2AijBEqTUquhVz398htDFrtymD9xYYfG1m4wAcvPhXNfE3EfH1r1ADqtfSdVCToUG868RvUUkgDKf31mGDtKsAYz2oz2AGutZYs")
+		btcMainParser.DeriveAddressDescriptorsFromTo(descriptor, 1, 0, 100)
 	}
 }
 
 func TestBitcoinParser_DerivationBasePath(t *testing.T) {
 	btcMainParser := NewBitcoinParser(GetChainParams("main"), &Configuration{XPubMagic: 76067358, XPubMagicSegwitP2sh: 77429938, XPubMagicSegwitNative: 78792518, Slip44: 0})
-	btcTestnetsParser := NewBitcoinParser(GetChainParams("test"), &Configuration{XPubMagic: 70617039, XPubMagicSegwitP2sh: 71979618, XPubMagicSegwitNative: 73342198, Slip44: 1})
+	btcTestnetParser := NewBitcoinParser(GetChainParams("test"), &Configuration{XPubMagic: 70617039, XPubMagicSegwitP2sh: 71979618, XPubMagicSegwitNative: 73342198, Slip44: 1})
 	zecMainParser := NewBitcoinParser(GetChainParams("main"), &Configuration{XPubMagic: 76067358, Slip44: 133})
 	type args struct {
 		xpub   string
@@ -696,6 +1165,22 @@ func TestBitcoinParser_DerivationBasePath(t *testing.T) {
 		want    string
 		wantErr bool
 	}{
+		{
+			name: "m/86'/1'/0'",
+			args: args{
+				xpub:   "tr([5c9e228d/86'/1'/0']tpubDC88gkaZi5HvJGxGDNLADkvtdpni3mLmx6vr2KnXmWMG8zfkBRggsxHVBkUpgcwPe2KKpkyvTJCdXHb1UHEWE64vczyyPQfHr1skBcsRedN/0/*)#4rqwxvej",
+				parser: btcTestnetParser,
+			},
+			want: "m/86'/1'/0'",
+		},
+		{
+			name: "m/86'/0'/0'",
+			args: args{
+				xpub:   "tr([5c9e228d/86'/0'/0']xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ/0/*)#d8jj22qr",
+				parser: btcMainParser,
+			},
+			want: "m/86'/0'/0'",
+		},
 		{
 			name: "m/84'/0'/0'",
 			args: args{
@@ -724,7 +1209,7 @@ func TestBitcoinParser_DerivationBasePath(t *testing.T) {
 			name: "m/49'/1'/0'",
 			args: args{
 				xpub:   "upub5DR1Mg5nykixzYjFXWW5GghAU7dDqoPVJ2jrqFbL8sJ7Hs7jn69MP7KBnnmxn88GeZtnH8PRKV9w5MMSFX8AdEAoXY8Qd8BJPoXtpMeHMxJ",
-				parser: btcTestnetsParser,
+				parser: btcTestnetParser,
 			},
 			want: "m/49'/1'/0'",
 		},
@@ -739,7 +1224,12 @@ func TestBitcoinParser_DerivationBasePath(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := tt.args.parser.DerivationBasePath(tt.args.xpub)
+			descriptor, err := tt.args.parser.ParseXpub(tt.args.xpub)
+			if err != nil {
+				t.Errorf("ParseXpub() error = %v", err)
+				return
+			}
+			got, err := tt.args.parser.DerivationBasePath(descriptor)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("BitcoinParser.DerivationBasePath() error = %v, wantErr %v", err, tt.wantErr)
 				return

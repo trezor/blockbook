@@ -6,14 +6,14 @@ import (
 	"github.com/trezor/blockbook/bchain/coins/btc"
 )
 
+// network constants
 const (
-	// MainnetMagic is mainnet network constant
 	MainnetMagic wire.BitcoinNet = 0xdab6c3fa
 	TestnetMagic wire.BitcoinNet = 0xddbdc8fd
 )
 
+// parser parameters
 var (
-	// MainNetParams are parser parameters for mainnet
 	MainNetParams chaincfg.Params
 	TestNetParams chaincfg.Params
 )
@@ -34,12 +34,12 @@ func init() {
 
 // DigiByteParser handle
 type DigiByteParser struct {
-	*btc.BitcoinParser
+	*btc.BitcoinLikeParser
 }
 
 // NewDigiByteParser returns new DigiByteParser instance
 func NewDigiByteParser(params *chaincfg.Params, c *btc.Configuration) *DigiByteParser {
-	return &DigiByteParser{BitcoinParser: btc.NewBitcoinParser(params, c)}
+	return &DigiByteParser{BitcoinLikeParser: btc.NewBitcoinLikeParser(params, c)}
 }
 
 // GetChainParams contains network parameters for the main DigiByte network

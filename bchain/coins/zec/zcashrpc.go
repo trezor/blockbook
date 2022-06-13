@@ -15,6 +15,7 @@ type ZCashRPC struct {
 	*btc.BitcoinRPC
 }
 
+// ResGetBlockChainInfo is a response to GetChainInfo request
 type ResGetBlockChainInfo struct {
 	Error  *bchain.RPCError `json:"error"`
 	Result struct {
@@ -72,6 +73,7 @@ func (z *ZCashRPC) Initialize() error {
 	return nil
 }
 
+// GetChainInfo return info about the blockchain
 func (z *ZCashRPC) GetChainInfo() (*bchain.ChainInfo, error) {
 	chainInfo := ResGetBlockChainInfo{}
 	err := z.Call(&btc.CmdGetBlockChainInfo{Method: "getblockchaininfo"}, &chainInfo)
@@ -162,7 +164,7 @@ func (z *ZCashRPC) GetMempoolEntry(txid string) (*bchain.MempoolEntry, error) {
 	return nil, errors.New("GetMempoolEntry: not implemented")
 }
 
-func isErrBlockNotFound(err *bchain.RPCError) bool {
-	return err.Message == "Block not found" ||
-		err.Message == "Block height out of range"
+// GetBlockRaw is not supported
+func (z *ZCashRPC) GetBlockRaw(hash string) (string, error) {
+	return "", errors.New("GetBlockRaw: not supported")
 }

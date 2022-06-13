@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"math/big"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -60,7 +61,7 @@ type PublicServer struct {
 // only basic functionality is mapped, to map all functions, call
 func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, txCache *db.TxCache, explorerURL string, metrics *common.Metrics, is *common.InternalState, debugMode bool, enableSubNewTx bool) (*PublicServer, error) {
 
-	api, err := api.NewWorker(db, chain, mempool, txCache, is)
+	api, err := api.NewWorker(db, chain, mempool, txCache, metrics, is)
 	if err != nil {
 		return nil, err
 	}
@@ -173,6 +174,7 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 	serveMux.HandleFunc(path+"api/xpub/", s.jsonHandler(s.apiXpub, apiDefault))
 	serveMux.HandleFunc(path+"api/utxo/", s.jsonHandler(s.apiUtxo, apiDefault))
 	serveMux.HandleFunc(path+"api/block/", s.jsonHandler(s.apiBlock, apiDefault))
+	serveMux.HandleFunc(path+"api/rawblock/", s.jsonHandler(s.apiBlockRaw, apiDefault))
 	serveMux.HandleFunc(path+"api/sendtx/", s.jsonHandler(s.apiSendTx, apiDefault))
 	serveMux.HandleFunc(path+"api/estimatefee/", s.jsonHandler(s.apiEstimateFee, apiDefault))
 	serveMux.HandleFunc(path+"api/balancehistory/", s.jsonHandler(s.apiBalanceHistory, apiDefault))
@@ -184,11 +186,13 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 	serveMux.HandleFunc(path+"api/v2/xpub/", s.jsonHandler(s.apiXpub, apiV2))
 	serveMux.HandleFunc(path+"api/v2/utxo/", s.jsonHandler(s.apiUtxo, apiV2))
 	serveMux.HandleFunc(path+"api/v2/block/", s.jsonHandler(s.apiBlock, apiV2))
+	serveMux.HandleFunc(path+"api/v2/rawblock/", s.jsonHandler(s.apiBlockRaw, apiDefault))
 	serveMux.HandleFunc(path+"api/v2/sendtx/", s.jsonHandler(s.apiSendTx, apiV2))
 	serveMux.HandleFunc(path+"api/v2/estimatefee/", s.jsonHandler(s.apiEstimateFee, apiV2))
 	serveMux.HandleFunc(path+"api/v2/feestats/", s.jsonHandler(s.apiFeeStats, apiV2))
 	serveMux.HandleFunc(path+"api/v2/balancehistory/", s.jsonHandler(s.apiBalanceHistory, apiDefault))
 	serveMux.HandleFunc(path+"api/v2/tickers/", s.jsonHandler(s.apiTickers, apiV2))
+	serveMux.HandleFunc(path+"api/v2/multi-tickers/", s.jsonHandler(s.apiMultiTickers, apiV2))
 	serveMux.HandleFunc(path+"api/v2/tickers-list/", s.jsonHandler(s.apiTickersList, apiV2))
 	// socket.io interface
 	serveMux.Handle(path+"socket.io/", s.socketio.GetHandler())
@@ -258,7 +262,13 @@ func joinURL(base string, part string) string {
 }
 
 func getFunctionName(i interface{}) string {
-	return runtime.FuncForPC(reflect.ValueOf(i).Pointer()).Name()
+	name := runtime.FuncForPC(reflect.ValueOf(i).Pointer()).Name()
+	start := strings.LastIndex(name, ".")
+	end := strings.LastIndex(name, "-")
+	if start > 0 && end > start {
+		name = name[start+1 : end]
+	}
+	return name
 }
 
 func (s *PublicServer) jsonHandler(handler func(r *http.Request, apiVersion int) (interface{}, error), apiVersion int) func(w http.ResponseWriter, r *http.Request) {
@@ -266,12 +276,13 @@ func (s *PublicServer) jsonHandler(handler func(r *http.Request, apiVersion int)
 		Text       string `json:"error"`
 		HTTPStatus int    `json:"-"`
 	}
+	handlerName := getFunctionName(handler)
 	return func(w http.ResponseWriter, r *http.Request) {
 		var data interface{}
 		var err error
 		defer func() {
 			if e := recover(); e != nil {
-				glog.Error(getFunctionName(handler), " recovered from panic: ", e)
+				glog.Error(handlerName, " recovered from panic: ", e)
 				debug.PrintStack()
 				if s.debug {
 					data = jsonError{fmt.Sprint("Internal server error: recovered from panic ", e), http.StatusInternalServerError}
@@ -287,7 +298,9 @@ func (s *PublicServer) jsonHandler(handler func(r *http.Request, apiVersion int)
 			if err != nil {
 				glog.Warning("json encode ", err)
 			}
+			s.metrics.ExplorerPendingRequests.With((common.Labels{"method": handlerName})).Dec()
 		}()
+		s.metrics.ExplorerPendingRequests.With((common.Labels{"method": handlerName})).Inc()
 		data, err = handler(r, apiVersion)
 		if err != nil || data == nil {
 			if apiErr, ok := err.(*api.APIError); ok {
@@ -298,7 +311,7 @@ func (s *PublicServer) jsonHandler(handler func(r *http.Request, apiVersion int)
 				}
 			} else {
 				if err != nil {
-					glog.Error(getFunctionName(handler), " error: ", err)
+					glog.Error(handlerName, " error: ", err)
 				}
 				if s.debug {
 					if data != nil {
@@ -332,13 +345,14 @@ func (s *PublicServer) newTemplateDataWithError(text string) *TemplateData {
 }
 
 func (s *PublicServer) htmlTemplateHandler(handler func(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error)) func(w http.ResponseWriter, r *http.Request) {
+	handlerName := getFunctionName(handler)
 	return func(w http.ResponseWriter, r *http.Request) {
 		var t tpl
 		var data *TemplateData
 		var err error
 		defer func() {
 			if e := recover(); e != nil {
-				glog.Error(getFunctionName(handler), " recovered from panic: ", e)
+				glog.Error(handlerName, " recovered from panic: ", e)
 				debug.PrintStack()
 				t = errorInternalTpl
 				if s.debug {
@@ -358,7 +372,9 @@ func (s *PublicServer) htmlTemplateHandler(handler func(w http.ResponseWriter, r
 					glog.Error(err)
 				}
 			}
+			s.metrics.ExplorerPendingRequests.With((common.Labels{"method": handlerName})).Dec()
 		}()
+		s.metrics.ExplorerPendingRequests.With((common.Labels{"method": handlerName})).Inc()
 		if s.debug {
 			// reload templates on each request
 			// to reflect changes during development
@@ -375,7 +391,7 @@ func (s *PublicServer) htmlTemplateHandler(handler func(w http.ResponseWriter, r
 				}
 			} else {
 				if err != nil {
-					glog.Error(getFunctionName(handler), " error: ", err)
+					glog.Error(handlerName, " error: ", err)
 				}
 				if s.debug {
 					data = s.newTemplateDataWithError(fmt.Sprintf("Internal server error: %v, data %+v", err, data))
@@ -439,7 +455,6 @@ func (s *PublicServer) parseTemplates() []*template.Template {
 		"formatAmountWithDecimals": formatAmountWithDecimals,
 		"setTxToTemplateData":      setTxToTemplateData,
 		"isOwnAddress":             isOwnAddress,
-		"isOwnAddresses":           isOwnAddresses,
 		"toJSON":                   toJSON,
 	}
 	var createTemplate func(filenames ...string) *template.Template
@@ -538,27 +553,9 @@ func setTxToTemplateData(td *TemplateData, tx *api.Tx) *TemplateData {
 	return td
 }
 
-// returns true if address is "own",
-// i.e. either the address of the address detail or belonging to the xpub
+// isOwnAddress returns true if the address is the one that is being shown in the explorer
 func isOwnAddress(td *TemplateData, a string) bool {
-	if a == td.AddrStr {
-		return true
-	}
-	if td.Address != nil && td.Address.XPubAddresses != nil {
-		if _, found := td.Address.XPubAddresses[a]; found {
-			return true
-		}
-	}
-	return false
-}
-
-// returns true if addresses are "own",
-// i.e. either the address of the address detail or belonging to the xpub
-func isOwnAddresses(td *TemplateData, addresses []string) bool {
-	if len(addresses) == 1 {
-		return isOwnAddress(td, addresses[0])
-	}
-	return false
+	return a == td.AddrStr
 }
 
 func (s *PublicServer) explorerTx(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
@@ -699,9 +696,9 @@ func (s *PublicServer) explorerAddress(w http.ResponseWriter, r *http.Request) (
 
 func (s *PublicServer) explorerXpub(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
 	var xpub string
-	i := strings.LastIndexByte(r.URL.Path, '/')
+	i := strings.LastIndex(r.URL.Path, "xpub/")
 	if i > 0 {
-		xpub = r.URL.Path[i+1:]
+		xpub = r.URL.Path[i+5:]
 	}
 	if len(xpub) == 0 {
 		return errorTpl, nil, api.NewAPIError("Missing xpub", true)
@@ -792,7 +789,7 @@ func (s *PublicServer) explorerSearch(w http.ResponseWriter, r *http.Request) (t
 	if len(q) > 0 {
 		address, err = s.api.GetXpubAddress(q, 0, 1, api.AccountDetailsBasic, &api.AddressFilter{Vout: api.AddressFilterVoutOff}, 0)
 		if err == nil {
-			http.Redirect(w, r, joinURL("/xpub/", address.AddrStr), 302)
+			http.Redirect(w, r, joinURL("/xpub/", url.QueryEscape(address.AddrStr)), 302)
 			return noTpl, nil, nil
 		}
 		block, err = s.api.GetBlock(q, 0, 1)
@@ -1012,9 +1009,9 @@ func (s *PublicServer) apiAddress(r *http.Request, apiVersion int) (interface{},
 
 func (s *PublicServer) apiXpub(r *http.Request, apiVersion int) (interface{}, error) {
 	var xpub string
-	i := strings.LastIndexByte(r.URL.Path, '/')
+	i := strings.LastIndex(r.URL.Path, "xpub/")
 	if i > 0 {
-		xpub = r.URL.Path[i+1:]
+		xpub = r.URL.Path[i+5:]
 	}
 	if len(xpub) == 0 {
 		return nil, api.NewAPIError("Missing xpub", true)
@@ -1036,7 +1033,8 @@ func (s *PublicServer) apiXpub(r *http.Request, apiVersion int) (interface{}, er
 func (s *PublicServer) apiUtxo(r *http.Request, apiVersion int) (interface{}, error) {
 	var utxo []api.Utxo
 	var err error
-	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
+	if i := strings.LastIndex(r.URL.Path, "utxo/"); i > 0 {
+		desc := r.URL.Path[i+5:]
 		onlyConfirmed := false
 		c := r.URL.Query().Get("confirmed")
 		if len(c) > 0 {
@@ -1049,11 +1047,11 @@ func (s *PublicServer) apiUtxo(r *http.Request, apiVersion int) (interface{}, er
 		if ec != nil {
 			gap = 0
 		}
-		utxo, err = s.api.GetXpubUtxo(r.URL.Path[i+1:], onlyConfirmed, gap)
+		utxo, err = s.api.GetXpubUtxo(desc, onlyConfirmed, gap)
 		if err == nil {
 			s.metrics.ExplorerViews.With(common.Labels{"action": "api-xpub-utxo"}).Inc()
 		} else {
-			utxo, err = s.api.GetAddressUtxo(r.URL.Path[i+1:], onlyConfirmed)
+			utxo, err = s.api.GetAddressUtxo(desc, onlyConfirmed)
 			s.metrics.ExplorerViews.With(common.Labels{"action": "api-address-utxo"}).Inc()
 		}
 		if err == nil && apiVersion == apiV1 {
@@ -1120,6 +1118,16 @@ func (s *PublicServer) apiBlock(r *http.Request, apiVersion int) (interface{}, e
 		if err == nil && apiVersion == apiV1 {
 			return s.api.BlockToV1(block), nil
 		}
+	}
+	return block, err
+}
+
+func (s *PublicServer) apiBlockRaw(r *http.Request, apiVersion int) (interface{}, error) {
+	var block *api.BlockRaw
+	var err error
+	s.metrics.ExplorerViews.With(common.Labels{"action": "api-block-raw"}).Inc()
+	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
+		block, err = s.api.GetBlockRaw(r.URL.Path[i+1:])
 	}
 	return block, err
 }
@@ -1197,7 +1205,7 @@ func (s *PublicServer) apiTickers(r *http.Request, apiVersion int) (interface{},
 
 		timestamp, err := strconv.ParseInt(timestampString, 10, 64)
 		if err != nil {
-			return nil, api.NewAPIError("Parameter \"timestamp\" is not a valid Unix timestamp.", true)
+			return nil, api.NewAPIError("Parameter 'timestamp' is not a valid Unix timestamp.", true)
 		}
 
 		resultTickers, err := s.api.GetFiatRatesForTimestamps([]int64{timestamp}, currencies)
@@ -1212,6 +1220,38 @@ func (s *PublicServer) apiTickers(r *http.Request, apiVersion int) (interface{},
 	}
 	if err != nil {
 		return nil, err
+	}
+	return result, nil
+}
+
+// apiMultiTickers returns FiatRates ticker prices for the specified comma separated list of timestamps.
+func (s *PublicServer) apiMultiTickers(r *http.Request, apiVersion int) (interface{}, error) {
+	var result []db.ResultTickerAsString
+	var err error
+
+	currency := strings.ToLower(r.URL.Query().Get("currency"))
+	var currencies []string
+	if currency != "" {
+		currencies = []string{currency}
+	}
+	if timestampString := r.URL.Query().Get("timestamp"); timestampString != "" {
+		// Get tickers for specified timestamp
+		s.metrics.ExplorerViews.With(common.Labels{"action": "api-multi-tickers-date"}).Inc()
+		timestamps := strings.Split(timestampString, ",")
+		t := make([]int64, len(timestamps))
+		for i := range timestamps {
+			t[i], err = strconv.ParseInt(timestamps[i], 10, 64)
+			if err != nil {
+				return nil, api.NewAPIError("Parameter 'timestamp' does not contain a valid Unix timestamp.", true)
+			}
+		}
+		resultTickers, err := s.api.GetFiatRatesForTimestamps(t, currencies)
+		if err != nil {
+			return nil, err
+		}
+		result = resultTickers.Tickers
+	} else {
+		return nil, api.NewAPIError("Parameter 'timestamp' is missing.", true)
 	}
 	return result, nil
 }

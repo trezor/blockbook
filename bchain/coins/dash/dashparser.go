@@ -50,15 +50,15 @@ func init() {
 
 // DashParser handle
 type DashParser struct {
-	*btc.BitcoinParser
+	*btc.BitcoinLikeParser
 	baseparser *bchain.BaseParser
 }
 
 // NewDashParser returns new DashParser instance
 func NewDashParser(params *chaincfg.Params, c *btc.Configuration) *DashParser {
 	return &DashParser{
-		BitcoinParser: btc.NewBitcoinParser(params, c),
-		baseparser:    &bchain.BaseParser{},
+		BitcoinLikeParser: btc.NewBitcoinLikeParser(params, c),
+		baseparser:        &bchain.BaseParser{},
 	}
 }
 

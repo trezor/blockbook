@@ -136,6 +136,10 @@ func getTxInBlock(b *bchain.Block, txid string) *bchain.Tx {
 	return nil
 }
 
+func (c *fakeBlockChain) GetBlockRaw(hash string) (string, error) {
+	return "00e0ff3fd42677a86f1515bafcf9802c1765e02226655a9b97fd44132602000000000000", nil
+}
+
 func (c *fakeBlockChain) GetTransaction(txid string) (v *bchain.Tx, err error) {
 	v = getTxInBlock(GetTestBitcoinTypeBlock1(c.Parser), txid)
 	if v == nil {

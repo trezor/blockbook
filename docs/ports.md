@@ -30,7 +30,7 @@
 | Viacoin                | 9055                    | 9155                  | 8055             | 38355                       |
 | VIPSTARCOIN            | 9056                    | 9156                  | 8056             | 38356                       |
 | MonetaryUnit           | 9057                    | 9157                  | 8057             | 38357                       |
-| ZelCash                | 9058                    | 9158                  | 8058             | 38358                       |
+| Flux                   | 9058                    | 9158                  | 8058             | 38358                       |
 | Ravencoin              | 9059                    | 9159                  | 8059             | 38359                       |
 | Ritocoin               | 9060                    | 9160                  | 8060             | 38360                       |
 | Decred                 | 9061                    | 9161                  | 8061             | 38361                       |
@@ -45,7 +45,9 @@
 | Omotenashicoin         | 9094                    | 9194                  | 8094             | 38394                       |
 | BitZeny                | 9095                    | 9195                  | 8095             | 38395                       |
 | Trezarcoin             | 9096                    | 9196                  | 8096             | 38396                       |
+| eCash                  | 9097                    | 9197                  | 8097             | 38397                       |
 | Bitcoin Signet         | 19020                   | 19120                 | 18020            | 48320                       |
+| Bitcoin Regtest        | 19021                   | 19121                 | 18021            | 48321                       |
 | Ethereum Goerli        | 19026                   | 19126                 | 18026            | 48326 p2p                   |
 | Bitcoin Testnet        | 19030                   | 19130                 | 18030            | 48330                       |
 | Bitcoin Cash Testnet   | 19031                   | 19131                 | 18031            | 48331                       |
@@ -54,10 +56,13 @@
 | Litecoin Testnet       | 19034                   | 19134                 | 18034            | 48334                       |
 | Bitcoin Gold Testnet   | 19035                   | 19135                 | 18035            | 48335                       |
 | Ethereum Ropsten       | 19036                   | 19136                 | 18036            | 48336 p2p                   |
+| Dogecoin Testnet       | 19038                   | 19138                 | 18038            | 48338                       |
 | Vertcoin Testnet       | 19040                   | 19140                 | 18040            | 48340                       |
 | Monacoin Testnet       | 19041                   | 19141                 | 18041            | 48341                       |
 | DigiByte Testnet       | 19042                   | 19142                 | 18042            | 48342                       |
 | Groestlcoin Testnet    | 19045                   | 19145                 | 18045            | 48345                       |
+| Groestlcoin Regtest    | 19046                   | 19146                 | 18046            | 48346                       |
+| Groestlcoin Signet     | 19047                   | 19147                 | 18047            | 48347                       |
 | PIVX Testnet           | 19049                   | 19149                 | 18049            | 48349                       |
 | Koto Testnet           | 19051                   | 19151                 | 18051            | 48351                       |
 | Decred Testnet         | 19061                   | 19161                 | 18061            | 48361                       |

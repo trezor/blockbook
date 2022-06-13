@@ -34,12 +34,12 @@ func init() {
 
 // CPUchainParser handle
 type CPUchainParser struct {
-	*btc.BitcoinParser
+	*btc.BitcoinLikeParser
 }
 
 // NewCPUchainParser returns new CPUchainParser instance
 func NewCPUchainParser(params *chaincfg.Params, c *btc.Configuration) *CPUchainParser {
-	return &CPUchainParser{BitcoinParser: btc.NewBitcoinParser(params, c)}
+	return &CPUchainParser{BitcoinLikeParser: btc.NewBitcoinLikeParser(params, c)}
 }
 
 // GetChainParams contains network parameters for the main CPUchain network,

@@ -1,9 +1,9 @@
 {
   "coin": {
-    "name": "ZelCash",
-    "shortcut": "ZEL",
-    "label": "ZelCash",
-    "alias": "zelcash"
+    "name": "Flux",
+    "shortcut": "FLUX",
+    "label": "Flux",
+    "alias": "flux"
   },
   "ports": {
     "backend_rpc": 8058,
@@ -19,16 +19,16 @@
     "message_queue_binding_template": "tcp://127.0.0.1:{{.Ports.BackendMessageQueue}}"
   },
   "backend": {
-    "package_name": "backend-zelcash",
+    "package_name": "backend-flux",
     "package_revision": "satoshilabs-1",
-    "system_user": "zelcash",
-    "version": "4.0.0",
-    "binary_url": "https://github.com/zelcash/zelcash/releases/download/v4.0.0/Zel-Linux.tar.gz",
+    "system_user": "flux",
+    "version": "6.0.0",
+    "binary_url": "https://github.com/RunOnFlux/fluxd/releases/download/v6.0.0/Flux-amd64-v6.0.0.tar.gz",
     "verification_type": "sha256",
-    "verification_source": "72fc8edaf5b222e384fd3430babaf13cada8186f1aff84df28984212bc5ea66e",
+    "verification_source": "28717246a383018de8f6099a26afc3a4877da32f2d9531a3253b1664c22145e7",
     "extract_command": "tar -C backend -xf",
     "exclude_files": [],
-    "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/zelcashd -datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -conf={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf -pid=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",
+    "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/fluxd -datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -conf={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf -pid=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",
     "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/*.log",
     "postinst_script_template": "HOME={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/fetch-params.sh",
     "service_type": "forking",
@@ -47,8 +47,8 @@
     }
   },
   "blockbook": {
-    "package_name": "blockbook-zelcash",
-    "system_user": "blockbook-zelcash",
+    "package_name": "blockbook-flux",
+    "system_user": "blockbook-flux",
     "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
     "public_binding_template": ":{{.Ports.BlockbookPublic}}",
     "explorer_url": "",
@@ -64,7 +64,7 @@
     }
   },
   "meta": {
-    "package_maintainer": "Tadeas Kmenta",
-    "package_maintainer_email": "tadeas.kmenta@zel.cash"
+    "package_maintainer": "Jeremy Anderson",
+    "package_maintainer_email": "jeremy@runonflux.io"
   }
 }

@@ -34,7 +34,7 @@ type SocketIoServer struct {
 
 // NewSocketIoServer creates new SocketIo interface to blockbook and returns its handle
 func NewSocketIoServer(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, txCache *db.TxCache, metrics *common.Metrics, is *common.InternalState) (*SocketIoServer, error) {
-	api, err := api.NewWorker(db, chain, mempool, txCache, is)
+	api, err := api.NewWorker(db, chain, mempool, txCache, metrics, is)
 	if err != nil {
 		return nil, err
 	}
@@ -169,9 +169,11 @@ func (s *SocketIoServer) onMessage(c *gosocketio.Channel, req map[string]json.Ra
 			e.Error.Message = "Internal error"
 			rv = e
 		}
+		s.metrics.SocketIOPendingRequests.With((common.Labels{"method": method})).Dec()
 	}()
 	t := time.Now()
 	params := req["params"]
+	s.metrics.SocketIOPendingRequests.With((common.Labels{"method": method})).Inc()
 	defer s.metrics.SocketIOReqDuration.With(common.Labels{"method": method}).Observe(float64(time.Since(t)) / 1e3) // in microseconds
 	f, ok := onMessageHandlers[method]
 	if ok {
@@ -714,10 +716,14 @@ func (s *SocketIoServer) onSubscribe(c *gosocketio.Channel, req []byte) interfac
 	return nil
 }
 
-// OnNewBlockHash notifies users subscribed to bitcoind/hashblock about new block
-func (s *SocketIoServer) OnNewBlockHash(hash string) {
+func (s *SocketIoServer) onNewBlockHashAsync(hash string) {
 	c := s.server.BroadcastTo("bitcoind/hashblock", "bitcoind/hashblock", hash)
 	glog.Info("broadcasting new block hash ", hash, " to ", c, " channels")
+}
+
+// OnNewBlockHash notifies users subscribed to bitcoind/hashblock about new block
+func (s *SocketIoServer) OnNewBlockHash(hash string) {
+	go s.onNewBlockHashAsync(hash)
 }
 
 // OnNewTxAddr notifies users subscribed to bitcoind/addresstxid about new block

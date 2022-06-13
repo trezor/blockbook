@@ -4,6 +4,7 @@ PACKAGER = $(shell id -u):$(shell id -g)
 BASE_IMAGE = $$(awk -F= '$$1=="ID" { print $$2 ;}' /etc/os-release):$$(awk -F= '$$1=="VERSION_ID" { print $$2 ;}' /etc/os-release | tr -d '"')
 NO_CACHE = false
 TCMALLOC = 
+PORTABLE = 0
 ARGS ?=
 
 TARGETS=$(subst .json,, $(shell ls configs/coins))
@@ -46,7 +47,7 @@ build-images: clean-images
 .bin-image:
 	@if [ $$(build/tools/image_status.sh $(BIN_IMAGE):latest build/docker) != "ok" ]; then \
 		echo "Building image $(BIN_IMAGE) from $(BASE_IMAGE)"; \
-		docker build --no-cache=$(NO_CACHE) --build-arg TCMALLOC=$(TCMALLOC) --build-arg BASE_IMAGE=$(BASE_IMAGE) -t $(BIN_IMAGE) build/docker/bin; \
+		docker build --no-cache=$(NO_CACHE) --build-arg TCMALLOC=$(TCMALLOC) --build-arg BASE_IMAGE=$(BASE_IMAGE) --build-arg PORTABLE_ROCKSDB=$(PORTABLE) -t $(BIN_IMAGE) build/docker/bin; \
 	else \
 		echo "Image $(BIN_IMAGE) is up to date"; \
 	fi

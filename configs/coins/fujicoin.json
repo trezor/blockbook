@@ -22,13 +22,15 @@
     "package_name": "backend-fujicoin",
     "package_revision": "satoshilabs-1",
     "system_user": "fujicoin",
-    "version": "0.16.3",
-    "binary_url": "https://www.fujicoin.org/fujicoin/3.0/fujicoin-blockbook.tar.gz",
-    "verification_type": "gpg-sha256",
-    "verification_source": "https://www.fujicoin.org/fujicoin/3.0/SHA256SUMS.asc",
-    "extract_command": "tar -C backend -xf",
-    "exclude_files": [],
-    "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/fujicoind -datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -conf={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf -pid=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",
+    "version": "22.0",
+    "binary_url": "https://download.fujicoin.org/fujicoin-v22.0/x86_64-linux-gnu/fujicoin-22.0-x86_64-linux-gnu.tar.gz",
+    "verification_type": "sha256",
+    "verification_source": "8aa699f3fbd6681391b90f744a25155d21a94f5ca63d6cc3b85172f3aca6e2a0",
+    "extract_command": "tar -C backend --strip 1 -xf",
+    "exclude_files": [
+      "bin/fujicoin-qt"
+    ],
+    "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/fujicoind -datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -conf={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf -pid=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",
     "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/*.log",
     "postinst_script_template": "",
     "service_type": "forking",
@@ -37,7 +39,9 @@
     "mainnet": true,
     "server_config_file": "bitcoin_like.conf",
     "client_config_file": "bitcoin_like_client.conf",
-    "additional_params": {}
+    "additional_params": {
+      "deprecatedrpc": "estimatefee"
+    }
   },
   "blockbook": {
     "package_name": "blockbook-fujicoin",
@@ -55,7 +59,10 @@
       "xpub_magic_segwit_p2sh": 77429938,
       "xpub_magic_segwit_native": 78792518,
       "slip44": 75,
-      "additional_params": {}
+      "additional_params": {
+        "fiat_rates": "coingecko",
+        "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"fujicoin\", \"periodSeconds\": 600}"
+      }
     }
   },
   "meta": {

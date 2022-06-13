@@ -59,12 +59,12 @@ func init() {
 
 // NulsParser handle
 type NulsParser struct {
-	*btc.BitcoinParser
+	*btc.BitcoinLikeParser
 }
 
 // NewNulsParser returns new NulsParser instance
 func NewNulsParser(params *chaincfg.Params, c *btc.Configuration) *NulsParser {
-	return &NulsParser{BitcoinParser: btc.NewBitcoinParser(params, c)}
+	return &NulsParser{BitcoinLikeParser: btc.NewBitcoinLikeParser(params, c)}
 }
 
 // GetChainParams contains network parameters for the main Gincoin network,
@@ -161,21 +161,17 @@ func (p *NulsParser) ParseTx(b []byte) (*bchain.Tx, error) {
 }
 
 // DeriveAddressDescriptorsFromTo derives address descriptors from given xpub for addresses in index range
-func (p *NulsParser) DeriveAddressDescriptorsFromTo(xpub string, change uint32, fromIndex uint32, toIndex uint32) ([]bchain.AddressDescriptor, error) {
+func (p *NulsParser) DeriveAddressDescriptorsFromTo(descriptor *bchain.XpubDescriptor, change uint32, fromIndex uint32, toIndex uint32) ([]bchain.AddressDescriptor, error) {
 	if toIndex <= fromIndex {
 		return nil, errors.New("toIndex<=fromIndex")
 	}
-	extKey, err := hdkeychain.NewKeyFromString(xpub, p.Params.Base58CksumHasher)
-	if err != nil {
-		return nil, err
-	}
-	changeExtKey, err := extKey.Child(change)
+	changeExtKey, err := descriptor.ExtKey.(*hdkeychain.ExtendedKey).Derive(change)
 	if err != nil {
 		return nil, err
 	}
 	ad := make([]bchain.AddressDescriptor, toIndex-fromIndex)
 	for index := fromIndex; index < toIndex; index++ {
-		indexExtKey, err := changeExtKey.Child(index)
+		indexExtKey, err := changeExtKey.Derive(index)
 		if err != nil {
 			return nil, err
 		}

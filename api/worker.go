@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/golang/glog"
@@ -29,10 +30,11 @@ type Worker struct {
 	chainType   bchain.ChainType
 	mempool     bchain.Mempool
 	is          *common.InternalState
+	metrics     *common.Metrics
 }
 
 // NewWorker creates new api worker
-func NewWorker(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, txCache *db.TxCache, is *common.InternalState) (*Worker, error) {
+func NewWorker(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, txCache *db.TxCache, metrics *common.Metrics, is *common.InternalState) (*Worker, error) {
 	w := &Worker{
 		db:          db,
 		txCache:     txCache,
@@ -41,6 +43,10 @@ func NewWorker(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, 
 		chainType:   chain.GetChainParser().GetChainType(),
 		mempool:     mempool,
 		is:          is,
+		metrics:     metrics,
+	}
+	if w.chainType == bchain.ChainBitcoinType {
+		w.initXpubCache()
 	}
 	return w, nil
 }
@@ -105,7 +111,7 @@ func (w *Worker) GetSpendingTxid(txid string, n int) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	glog.Info("GetSpendingTxid ", txid, " ", n, " finished in ", time.Since(start))
+	glog.Info("GetSpendingTxid ", txid, " ", n, ", ", time.Since(start))
 	return tx.Vout[n].SpentTxID, nil
 }
 
@@ -816,6 +822,28 @@ func (w *Worker) getAddrDescAndNormalizeAddress(address string) (bchain.AddressD
 	return addrDesc, address, nil
 }
 
+func isOwnAddress(address string, addresses []string) bool {
+	if len(addresses) == 1 {
+		return address == addresses[0]
+	}
+	return false
+}
+
+func setIsOwnAddress(tx *Tx, address string) {
+	for j := range tx.Vin {
+		vin := &tx.Vin[j]
+		if isOwnAddress(address, vin.Addresses) {
+			vin.IsOwn = true
+		}
+	}
+	for j := range tx.Vout {
+		vout := &tx.Vout[j]
+		if isOwnAddress(address, vout.Addresses) {
+			vout.IsOwn = true
+		}
+	}
+}
+
 // GetAddress computes address value and gets transactions for given address
 func (w *Worker) GetAddress(address string, page int, txsOnPage int, option AccountDetails, filter *AddressFilter) (*Address, error) {
 	start := time.Now()
@@ -895,6 +923,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 						if option == AccountDetailsTxidHistory {
 							txids = append(txids, tx.Txid)
 						} else if option >= AccountDetailsTxHistoryLight {
+							setIsOwnAddress(tx, address)
 							txs = append(txs, tx)
 						}
 					}
@@ -930,6 +959,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 				if err != nil {
 					return nil, err
 				}
+				setIsOwnAddress(tx, address)
 				txs = append(txs, tx)
 			}
 		}
@@ -954,7 +984,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 		Erc20Contract:         erc20c,
 		Nonce:                 nonce,
 	}
-	glog.Info("GetAddress ", address, " finished in ", time.Since(start))
+	glog.Info("GetAddress ", address, ", ", time.Since(start))
 	return r, nil
 }
 
@@ -1157,7 +1187,7 @@ func (w *Worker) GetBalanceHistory(address string, fromTimestamp, toTimestamp in
 	if err != nil {
 		return nil, err
 	}
-	glog.Info("GetBalanceHistory ", address, ", blocks ", fromHeight, "-", toHeight, ", count ", len(bha), " finished in ", time.Since(start))
+	glog.Info("GetBalanceHistory ", address, ", blocks ", fromHeight, "-", toHeight, ", count ", len(bha), ", ", time.Since(start))
 	return bha, nil
 }
 
@@ -1305,7 +1335,7 @@ func (w *Worker) GetAddressUtxo(address string, onlyConfirmed bool) (Utxos, erro
 	if err != nil {
 		return nil, err
 	}
-	glog.Info("GetAddressUtxo ", address, ", ", len(r), " utxos, finished in ", time.Since(start))
+	glog.Info("GetAddressUtxo ", address, ", ", len(r), " utxos, ", time.Since(start))
 	return r, nil
 }
 
@@ -1335,7 +1365,7 @@ func (w *Worker) GetBlocks(page int, blocksOnPage int) (*Blocks, error) {
 		}
 		r.Blocks[i-from] = *bi
 	}
-	glog.Info("GetBlocks page ", page, " finished in ", time.Since(start))
+	glog.Info("GetBlocks page ", page, ", ", time.Since(start))
 	return r, nil
 }
 
@@ -1480,8 +1510,8 @@ func (w *Worker) GetFiatRatesTickersList(timestamp int64) (*db.ResultTickerListA
 	}, nil
 }
 
-// getBlockInfoFromBlockID returns block info from block height or block hash
-func (w *Worker) getBlockInfoFromBlockID(bid string) (*bchain.BlockInfo, error) {
+// getBlockHashBlockID returns block hash from block height or block hash
+func (w *Worker) getBlockHashBlockID(bid string) string {
 	// try to decide if passed string (bid) is block height or block hash
 	// if it's a number, must be less than int32
 	var hash string
@@ -1494,6 +1524,12 @@ func (w *Worker) getBlockInfoFromBlockID(bid string) (*bchain.BlockInfo, error) 
 	} else {
 		hash = bid
 	}
+	return hash
+}
+
+// getBlockInfoFromBlockID returns block info from block height or block hash
+func (w *Worker) getBlockInfoFromBlockID(bid string) (*bchain.BlockInfo, error) {
+	hash := w.getBlockHashBlockID(bid)
 	if hash == "" {
 		return nil, NewAPIError("Block not found", true)
 	}
@@ -1597,7 +1633,7 @@ func (w *Worker) GetFeeStats(bid string) (*FeeStats, error) {
 		}
 	}
 
-	glog.Info("GetFeeStats ", bid, " (", len(feesPerKb), " txs) finished in ", time.Since(start))
+	glog.Info("GetFeeStats ", bid, " (", len(feesPerKb), " txs), ", time.Since(start))
 
 	return &FeeStats{
 		TxCount:         len(feesPerKb),
@@ -1649,7 +1685,7 @@ func (w *Worker) GetBlock(bid string, page int, txsOnPage int) (*Block, error) {
 	}
 	txs = txs[:txi]
 	bi.Txids = nil
-	glog.Info("GetBlock ", bid, ", page ", page, " finished in ", time.Since(start))
+	glog.Info("GetBlock ", bid, ", page ", page, ", ", time.Since(start))
 	return &Block{
 		Paging: pg,
 		BlockInfo: BlockInfo{
@@ -1670,6 +1706,22 @@ func (w *Worker) GetBlock(bid string, page int, txsOnPage int) (*Block, error) {
 		TxCount:      txCount,
 		Transactions: txs,
 	}, nil
+}
+
+// GetBlock returns paged data about block
+func (w *Worker) GetBlockRaw(bid string) (*BlockRaw, error) {
+	hash := w.getBlockHashBlockID(bid)
+	if hash == "" {
+		return nil, NewAPIError("Block not found", true)
+	}
+	hex, err := w.chain.GetBlockRaw(hash)
+	if err != nil {
+		if err == bchain.ErrBlockNotFound {
+			return nil, NewAPIError("Block not found", true)
+		}
+		return nil, err
+	}
+	return &BlockRaw{Hex: hex}, err
 }
 
 // ComputeFeeStats computes fee distribution in defined blocks and logs them to log
@@ -1790,7 +1842,7 @@ func (w *Worker) GetSystemInfo(internal bool) (*SystemInfo, error) {
 		Consensus:       ci.Consensus,
 	}
 	w.is.SetBackendInfo(backendInfo)
-	glog.Info("GetSystemInfo finished in ", time.Since(start))
+	glog.Info("GetSystemInfo, ", time.Since(start))
 	return &SystemInfo{blockbookInfo, backendInfo}, nil
 }
 
@@ -1815,4 +1867,43 @@ func (w *Worker) GetMempool(page int, itemsOnPage int) (*MempoolTxids, error) {
 		}
 	}
 	return r, nil
+}
+
+type bitcoinTypeEstimatedFee struct {
+	timestamp int64
+	fee       big.Int
+	lock      sync.Mutex
+}
+
+const bitcoinTypeEstimatedFeeCacheSize = 300
+
+var bitcoinTypeEstimatedFeeCache [bitcoinTypeEstimatedFeeCacheSize]bitcoinTypeEstimatedFee
+var bitcoinTypeEstimatedFeeConservativeCache [bitcoinTypeEstimatedFeeCacheSize]bitcoinTypeEstimatedFee
+
+func (w *Worker) cachedBitcoinTypeEstimateFee(blocks int, conservative bool, s *bitcoinTypeEstimatedFee) (big.Int, error) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	// 10 seconds cache
+	threshold := time.Now().Unix() - 10
+	if s.timestamp >= threshold {
+		return s.fee, nil
+	}
+	fee, err := w.chain.EstimateSmartFee(blocks, conservative)
+	if err == nil {
+		s.timestamp = time.Now().Unix()
+		s.fee = fee
+	}
+	return fee, err
+}
+
+// BitcoinTypeEstimateFee returns a fee estimation for given number of blocks
+// it uses 10 second cache to reduce calls to the backend
+func (w *Worker) BitcoinTypeEstimateFee(blocks int, conservative bool) (big.Int, error) {
+	if blocks >= bitcoinTypeEstimatedFeeCacheSize {
+		return w.chain.EstimateSmartFee(blocks, conservative)
+	}
+	if conservative {
+		return w.cachedBitcoinTypeEstimateFee(blocks, conservative, &bitcoinTypeEstimatedFeeConservativeCache[blocks])
+	}
+	return w.cachedBitcoinTypeEstimateFee(blocks, conservative, &bitcoinTypeEstimatedFeeCache[blocks])
 }

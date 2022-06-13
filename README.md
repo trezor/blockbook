@@ -5,10 +5,10 @@
 **Blockbook** is back-end service for Trezor wallet. Main features of **Blockbook** are:
 
 - index of addresses and address balances of the connected block chain
-- fast searches in the indexes
+- fast index search
 - simple blockchain explorer
 - websocket, API and legacy Bitcore Insight compatible socket.io interfaces
-- support of multiple coins (Bitcoin and Ethereum type), with easy extensibility for other coins
+- support of multiple coins (Bitcoin and Ethereum type) with easy extensibility to other coins
 - scripts for easy creation of debian packages for backend and blockbook
 
 ## Build and installation instructions
@@ -51,7 +51,8 @@ Please add your experience to this [issue](https://github.com/trezor/blockbook/i
 
 #### Error `internalState: database is in inconsistent state and cannot be used`
 
-Blockbook was killed during the initial import, most commonly by OOM killer. By default, Blockbook performs the initial import in bulk import mode, which for performance reasons does not store all the data immediately to the database. If Blockbook is killed during this phase, the database is left in an inconsistent state. 
+Blockbook was killed during the initial import, most commonly by OOM killer. 
+By default, Blockbook performs the initial import in bulk import mode, which for performance reasons does not store all data immediately to the database. If Blockbook is killed during this phase, the database is left in an inconsistent state. 
 
 See above how to reduce the memory footprint, delete the database files and run the import again. 
 
@@ -64,6 +65,16 @@ Check [this](https://github.com/trezor/blockbook/issues/89) or [this](https://gi
 #### My coin implementation is reporting parse errors when importing blockchain
 
 Your coin's block/transaction data may not be compatible with `BitcoinParser` `ParseBlock`/`ParseTx`, which is used by default. In that case, implement your coin in a similar way we used in case of [zcash](https://github.com/trezor/blockbook/tree/master/bchain/coins/zec) and some other coins. The principle is not to parse the block/transaction data in Blockbook but instead to get parsed transactions as json from the backend.
+
+#### Cannot build Blockbook using `go build` command
+
+When building Blockbook I get error `not enough arguments in call to _Cfunc_rocksdb_approximate_sizes`.
+
+RocksDB version 6.16.0 changed the API in a backwards incompatible way. It is necessary to build Blockbook with the `rocksdb_6_16` tag to fix the compatibility problem. The correct way to build Blockbook is:
+
+```
+go build -tags rocksdb_6_16
+```
 
 ## Data storage in RocksDB
 
