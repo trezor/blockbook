@@ -22,10 +22,10 @@
     "package_name": "backend-monacoin",
     "package_revision": "satoshilabs-1",
     "system_user": "monacoin",
-    "version": "0.20.2",
-    "binary_url": "https://github.com/monacoinproject/monacoin/releases/download/v0.20.2/monacoin-0.20.2-x86_64-linux-gnu.tar.gz",
+    "version": "0.20.3",
+    "binary_url": "https://github.com/monacoinproject/monacoin/releases/download/v0.20.3/monacoin-0.20.3-x86_64-linux-gnu.tar.gz",
     "verification_type": "gpg-sha256",
-    "verification_source": "https://github.com/monacoinproject/monacoin/releases/download/v0.20.2/monacoin-0.20.2-signatures.asc",
+    "verification_source": "https://github.com/monacoinproject/monacoin/releases/download/v0.20.3/monacoin-0.20.3-signatures.asc",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
       "bin/monacoin-qt"
