@@ -53,6 +53,8 @@
         "mempoolTxTimeoutHours": 12,
         "processInternalTransactions": true,
         "queryBackendOnMempoolResync": false,
+        "fiat_rates": "coingecko",
+        "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"ethereum\",\"platformIdentifier\": \"ethereum\",\"platformVsCurrency\": \"eth\",\"periodSeconds\": 900}",
         "fourByteSignatures": "https://www.4byte.directory/api/v1/signatures/"
       }
     }
