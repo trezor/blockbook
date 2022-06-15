@@ -193,7 +193,7 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 	serveMux.HandleFunc(path+"api/v2/balancehistory/", s.jsonHandler(s.apiBalanceHistory, apiDefault))
 	serveMux.HandleFunc(path+"api/v2/tickers/", s.jsonHandler(s.apiTickers, apiV2))
 	serveMux.HandleFunc(path+"api/v2/multi-tickers/", s.jsonHandler(s.apiMultiTickers, apiV2))
-	serveMux.HandleFunc(path+"api/v2/tickers-list/", s.jsonHandler(s.apiTickersList, apiV2))
+	serveMux.HandleFunc(path+"api/v2/tickers-list/", s.jsonHandler(s.apiAvailableVsCurrencies, apiV2))
 	// socket.io interface
 	serveMux.Handle(path+"socket.io/", s.socketio.GetHandler())
 	// websocket interface
@@ -1197,21 +1197,21 @@ func (s *PublicServer) apiSendTx(r *http.Request, apiVersion int) (interface{}, 
 	return nil, api.NewAPIError("Missing tx blob", true)
 }
 
-// apiTickersList returns a list of available FiatRates currencies
-func (s *PublicServer) apiTickersList(r *http.Request, apiVersion int) (interface{}, error) {
+// apiAvailableVsCurrencies returns a list of available versus currencies
+func (s *PublicServer) apiAvailableVsCurrencies(r *http.Request, apiVersion int) (interface{}, error) {
 	s.metrics.ExplorerViews.With(common.Labels{"action": "api-tickers-list"}).Inc()
 	timestampString := strings.ToLower(r.URL.Query().Get("timestamp"))
 	timestamp, err := strconv.ParseInt(timestampString, 10, 64)
 	if err != nil {
 		return nil, api.NewAPIError("Parameter \"timestamp\" is not a valid Unix timestamp.", true)
 	}
-	result, err := s.api.GetFiatRatesTickersList(timestamp)
+	result, err := s.api.GetAvailableVsCurrencies(timestamp)
 	return result, err
 }
 
 // apiTickers returns FiatRates ticker prices for the specified block or timestamp.
 func (s *PublicServer) apiTickers(r *http.Request, apiVersion int) (interface{}, error) {
-	var result *db.ResultTickerAsString
+	var result *api.FiatTicker
 	var err error
 
 	currency := strings.ToLower(r.URL.Query().Get("currency"))
@@ -1251,7 +1251,7 @@ func (s *PublicServer) apiTickers(r *http.Request, apiVersion int) (interface{},
 
 // apiMultiTickers returns FiatRates ticker prices for the specified comma separated list of timestamps.
 func (s *PublicServer) apiMultiTickers(r *http.Request, apiVersion int) (interface{}, error) {
-	var result []db.ResultTickerAsString
+	var result []api.FiatTicker
 	var err error
 
 	currency := strings.ToLower(r.URL.Query().Get("currency"))
