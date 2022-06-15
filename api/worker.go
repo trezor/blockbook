@@ -1342,7 +1342,8 @@ func (w *Worker) setFiatRateToBalanceHistories(histories BalanceHistories, curre
 	for i := range histories {
 		bh := &histories[i]
 		t := time.Unix(int64(bh.Time), 0)
-		ticker, err := w.db.FiatRatesFindTicker(&t)
+		// TODO
+		ticker, err := w.db.FiatRatesFindTicker(&t, "", "")
 		if err != nil {
 			glog.Errorf("Error finding ticker by date %v. Error: %v", t, err)
 			continue
@@ -1352,7 +1353,7 @@ func (w *Worker) setFiatRateToBalanceHistories(histories BalanceHistories, curre
 		if len(currencies) == 0 {
 			bh.FiatRates = ticker.Rates
 		} else {
-			rates := make(map[string]float64)
+			rates := make(map[string]float32)
 			for _, currency := range currencies {
 				currency = strings.ToLower(currency)
 				if rate, found := ticker.Rates[currency]; found {
@@ -1593,17 +1594,17 @@ func removeEmpty(stringSlice []string) []string {
 }
 
 // getFiatRatesResult checks if CurrencyRatesTicker contains all necessary data and returns formatted result
-func (w *Worker) getFiatRatesResult(currencies []string, ticker *db.CurrencyRatesTicker) (*db.ResultTickerAsString, error) {
+func (w *Worker) getFiatRatesResult(currencies []string, ticker *db.CurrencyRatesTicker) (*FiatTicker, error) {
 	currencies = removeEmpty(currencies)
 	if len(currencies) == 0 {
 		// Return all available ticker rates
-		return &db.ResultTickerAsString{
+		return &FiatTicker{
 			Timestamp: ticker.Timestamp.UTC().Unix(),
 			Rates:     ticker.Rates,
 		}, nil
 	}
 	// Check if currencies from the list are available in the ticker rates
-	rates := make(map[string]float64)
+	rates := make(map[string]float32)
 	for _, currency := range currencies {
 		currency = strings.ToLower(currency)
 		if rate, found := ticker.Rates[currency]; found {
@@ -1612,25 +1613,26 @@ func (w *Worker) getFiatRatesResult(currencies []string, ticker *db.CurrencyRate
 			rates[currency] = -1
 		}
 	}
-	return &db.ResultTickerAsString{
+	return &FiatTicker{
 		Timestamp: ticker.Timestamp.UTC().Unix(),
 		Rates:     rates,
 	}, nil
 }
 
 // GetFiatRatesForBlockID returns fiat rates for block height or block hash
-func (w *Worker) GetFiatRatesForBlockID(bid string, currencies []string) (*db.ResultTickerAsString, error) {
+func (w *Worker) GetFiatRatesForBlockID(blockID string, currencies []string) (*FiatTicker, error) {
 	var ticker *db.CurrencyRatesTicker
-	bi, err := w.getBlockInfoFromBlockID(bid)
+	bi, err := w.getBlockInfoFromBlockID(blockID)
 	if err != nil {
 		if err == bchain.ErrBlockNotFound {
-			return nil, NewAPIError(fmt.Sprintf("Block %v not found", bid), true)
+			return nil, NewAPIError(fmt.Sprintf("Block %v not found", blockID), true)
 		}
-		return nil, NewAPIError(fmt.Sprintf("Block %v not found, error: %v", bid, err), false)
+		return nil, NewAPIError(fmt.Sprintf("Block %v not found, error: %v", blockID, err), false)
 	}
 	dbi := &db.BlockInfo{Time: bi.Time} // get Unix timestamp from block
 	tm := time.Unix(dbi.Time, 0)        // convert it to Time object
-	ticker, err = w.db.FiatRatesFindTicker(&tm)
+	// TODO
+	ticker, err = w.db.FiatRatesFindTicker(&tm, "", "")
 	if err != nil {
 		return nil, NewAPIError(fmt.Sprintf("Error finding ticker: %v", err), false)
 	} else if ticker == nil {
@@ -1644,8 +1646,9 @@ func (w *Worker) GetFiatRatesForBlockID(bid string, currencies []string) (*db.Re
 }
 
 // GetCurrentFiatRates returns last available fiat rates
-func (w *Worker) GetCurrentFiatRates(currencies []string) (*db.ResultTickerAsString, error) {
-	ticker, err := w.db.FiatRatesFindLastTicker()
+func (w *Worker) GetCurrentFiatRates(currencies []string) (*FiatTicker, error) {
+	// TODO
+	ticker, err := w.db.FiatRatesFindLastTicker("", "")
 	if err != nil {
 		return nil, NewAPIError(fmt.Sprintf("Error finding ticker: %v", err), false)
 	} else if ticker == nil {
@@ -1660,8 +1663,8 @@ func (w *Worker) GetCurrentFiatRates(currencies []string) (*db.ResultTickerAsStr
 
 // makeErrorRates returns a map of currrencies, with each value equal to -1
 // used when there was an error finding ticker
-func makeErrorRates(currencies []string) map[string]float64 {
-	rates := make(map[string]float64)
+func makeErrorRates(currencies []string) map[string]float32 {
+	rates := make(map[string]float32)
 	for _, currency := range currencies {
 		rates[strings.ToLower(currency)] = -1
 	}
@@ -1669,28 +1672,29 @@ func makeErrorRates(currencies []string) map[string]float64 {
 }
 
 // GetFiatRatesForTimestamps returns fiat rates for each of the provided dates
-func (w *Worker) GetFiatRatesForTimestamps(timestamps []int64, currencies []string) (*db.ResultTickersAsString, error) {
+func (w *Worker) GetFiatRatesForTimestamps(timestamps []int64, currencies []string) (*FiatTickers, error) {
 	if len(timestamps) == 0 {
 		return nil, NewAPIError("No timestamps provided", true)
 	}
 	currencies = removeEmpty(currencies)
 
-	ret := &db.ResultTickersAsString{}
+	ret := &FiatTickers{}
 	for _, timestamp := range timestamps {
 		date := time.Unix(timestamp, 0)
 		date = date.UTC()
-		ticker, err := w.db.FiatRatesFindTicker(&date)
+		// TODO
+		ticker, err := w.db.FiatRatesFindTicker(&date, "", "")
 		if err != nil {
 			glog.Errorf("Error finding ticker for date %v. Error: %v", date, err)
-			ret.Tickers = append(ret.Tickers, db.ResultTickerAsString{Timestamp: date.Unix(), Rates: makeErrorRates(currencies)})
+			ret.Tickers = append(ret.Tickers, FiatTicker{Timestamp: date.Unix(), Rates: makeErrorRates(currencies)})
 			continue
 		} else if ticker == nil {
-			ret.Tickers = append(ret.Tickers, db.ResultTickerAsString{Timestamp: date.Unix(), Rates: makeErrorRates(currencies)})
+			ret.Tickers = append(ret.Tickers, FiatTicker{Timestamp: date.Unix(), Rates: makeErrorRates(currencies)})
 			continue
 		}
 		result, err := w.getFiatRatesResult(currencies, ticker)
 		if err != nil {
-			ret.Tickers = append(ret.Tickers, db.ResultTickerAsString{Timestamp: date.Unix(), Rates: makeErrorRates(currencies)})
+			ret.Tickers = append(ret.Tickers, FiatTicker{Timestamp: date.Unix(), Rates: makeErrorRates(currencies)})
 			continue
 		}
 		ret.Tickers = append(ret.Tickers, *result)
@@ -1698,12 +1702,13 @@ func (w *Worker) GetFiatRatesForTimestamps(timestamps []int64, currencies []stri
 	return ret, nil
 }
 
-// GetFiatRatesTickersList returns the list of available fiatRates tickers
-func (w *Worker) GetFiatRatesTickersList(timestamp int64) (*db.ResultTickerListAsString, error) {
+// GetAvailableVsCurrencies returns the list of available versus currencies for exchange rates
+func (w *Worker) GetAvailableVsCurrencies(timestamp int64) (*AvailableVsCurrencies, error) {
 	date := time.Unix(timestamp, 0)
 	date = date.UTC()
 
-	ticker, err := w.db.FiatRatesFindTicker(&date)
+	// TODO
+	ticker, err := w.db.FiatRatesFindTicker(&date, "", "")
 	if err != nil {
 		return nil, NewAPIError(fmt.Sprintf("Error finding ticker: %v", err), false)
 	} else if ticker == nil {
@@ -1716,7 +1721,7 @@ func (w *Worker) GetFiatRatesTickersList(timestamp int64) (*db.ResultTickerListA
 	}
 	sort.Strings(keys) // sort to get deterministic results
 
-	return &db.ResultTickerListAsString{
+	return &AvailableVsCurrencies{
 		Timestamp: ticker.Timestamp.Unix(),
 		Tickers:   keys,
 	}, nil

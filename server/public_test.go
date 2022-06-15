@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/flier/gorocksdb"
 	"github.com/golang/glog"
 	"github.com/gorilla/websocket"
 	"github.com/martinboehm/btcutil/chaincfg"
@@ -161,51 +162,56 @@ func newPostRequest(u string, body string) *http.Request {
 	return r
 }
 
-func insertFiatRate(date string, rates map[string]float64, d *db.RocksDB) error {
+func insertFiatRate(date string, rates map[string]float32, d *db.RocksDB) error {
 	convertedDate, err := db.FiatRatesConvertDate(date)
 	if err != nil {
 		return err
 	}
 	ticker := &db.CurrencyRatesTicker{
-		Timestamp: convertedDate,
+		Timestamp: *convertedDate,
 		Rates:     rates,
 	}
-	return d.FiatRatesStoreTicker(ticker)
+	wb := gorocksdb.NewWriteBatch()
+	defer wb.Destroy()
+	if err := d.FiatRatesStoreTicker(wb, ticker); err != nil {
+		return err
+	}
+	return d.WriteBatch(wb)
 }
 
 // initTestFiatRates initializes test data for /api/v2/tickers endpoint
 func initTestFiatRates(d *db.RocksDB) error {
-	if err := insertFiatRate("20180320020000", map[string]float64{
+	if err := insertFiatRate("20180320020000", map[string]float32{
 		"usd": 2000.0,
 		"eur": 1300.0,
 	}, d); err != nil {
 		return err
 	}
-	if err := insertFiatRate("20180320030000", map[string]float64{
+	if err := insertFiatRate("20180320030000", map[string]float32{
 		"usd": 2001.0,
 		"eur": 1301.0,
 	}, d); err != nil {
 		return err
 	}
-	if err := insertFiatRate("20180320040000", map[string]float64{
+	if err := insertFiatRate("20180320040000", map[string]float32{
 		"usd": 2002.0,
 		"eur": 1302.0,
 	}, d); err != nil {
 		return err
 	}
-	if err := insertFiatRate("20180321055521", map[string]float64{
+	if err := insertFiatRate("20180321055521", map[string]float32{
 		"usd": 2003.0,
 		"eur": 1303.0,
 	}, d); err != nil {
 		return err
 	}
-	if err := insertFiatRate("20191121140000", map[string]float64{
+	if err := insertFiatRate("20191121140000", map[string]float32{
 		"usd": 7814.5,
 		"eur": 7100.0,
 	}, d); err != nil {
 		return err
 	}
-	return insertFiatRate("20191121143015", map[string]float64{
+	return insertFiatRate("20191121143015", map[string]float32{
 		"usd": 7914.5,
 		"eur": 7134.1,
 	}, d)
