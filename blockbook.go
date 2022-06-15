@@ -688,9 +688,9 @@ func initDownloaders(db *db.RocksDB, chain bchain.BlockChain, configfile string)
 	}
 
 	if config.FiatRates == "" || config.FiatRatesParams == "" {
-		glog.Infof("FiatRates config (%v) is empty, not downloading fiat rates.", configfile)
+		glog.Infof("FiatRates config (%v) is empty, not downloading fiat rates", configfile)
 	} else {
-		fiatRates, err := fiat.NewFiatRatesDownloader(db, config.FiatRates, config.FiatRatesParams, nil, onNewFiatRatesTicker)
+		fiatRates, err := fiat.NewFiatRatesDownloader(db, config.FiatRates, config.FiatRatesParams, onNewFiatRatesTicker)
 		if err != nil {
 			glog.Errorf("NewFiatRatesDownloader Init error: %v", err)
 		} else {

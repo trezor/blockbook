@@ -421,7 +421,7 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *webs
 		}{}
 		err = json.Unmarshal(req.Params, &r)
 		if err == nil {
-			rv, err = s.getFiatRatesTickersList(r.Timestamp)
+			rv, err = s.getAvailableVsCurrencies(r.Timestamp)
 		}
 		return
 	},
@@ -960,7 +960,7 @@ func (s *WebsocketServer) OnNewTx(tx *bchain.MempoolTx) {
 	}
 }
 
-func (s *WebsocketServer) broadcastTicker(currency string, rates map[string]float64) {
+func (s *WebsocketServer) broadcastTicker(currency string, rates map[string]float32) {
 	as, ok := s.fiatRatesSubscriptions[currency]
 	if ok && len(as) > 0 {
 		data := struct {
@@ -983,7 +983,7 @@ func (s *WebsocketServer) OnNewFiatRatesTicker(ticker *db.CurrencyRatesTicker) {
 	s.fiatRatesSubscriptionsLock.Lock()
 	defer s.fiatRatesSubscriptionsLock.Unlock()
 	for currency, rate := range ticker.Rates {
-		s.broadcastTicker(currency, map[string]float64{currency: rate})
+		s.broadcastTicker(currency, map[string]float32{currency: rate})
 	}
 	s.broadcastTicker(allFiatRates, ticker.Rates)
 }
@@ -998,7 +998,7 @@ func (s *WebsocketServer) getFiatRatesForTimestamps(timestamps []int64, currenci
 	return ret, err
 }
 
-func (s *WebsocketServer) getFiatRatesTickersList(timestamp int64) (interface{}, error) {
-	ret, err := s.api.GetFiatRatesTickersList(timestamp)
+func (s *WebsocketServer) getAvailableVsCurrencies(timestamp int64) (interface{}, error) {
+	ret, err := s.api.GetAvailableVsCurrencies(timestamp)
 	return ret, err
 }
