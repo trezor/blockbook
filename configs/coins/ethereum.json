@@ -10,6 +10,7 @@
     "backend_message_queue": 0,
     "backend_p2p": 38336,
     "backend_http": 8136,
+    "backend_authrpc": 8536,
     "blockbook_internal": 9036,
     "blockbook_public": 9136
   },
@@ -27,7 +28,7 @@
     "verification_source": "https://gethstore.blob.core.windows.net/builds/geth-linux-amd64-1.10.21-67109427.tar.gz.asc",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [],
-    "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/geth --ipcdisable --syncmode full --txlookuplimit 0 --cache 1024 --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --port 38336 --ws --ws.addr 127.0.0.1 --ws.port {{.Ports.BackendRPC}} --ws.origins \"*\" --ws.api \"eth,net,web3,debug\" --http --http.port 8136 -http.addr 127.0.0.1 --http.corsdomain \"*\" --http.vhosts \"*\" --http.api \"eth,net,web3,debug\" 2>>{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
+    "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/geth --ipcdisable --syncmode full --txlookuplimit 0 --cache 1024 --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --port 38336 --ws --ws.addr 127.0.0.1 --ws.port {{.Ports.BackendRPC}} --ws.origins \"*\" --ws.api \"eth,net,web3,debug\" --http --http.port 8136 -http.addr 127.0.0.1 --http.corsdomain \"*\" --http.vhosts \"*\" --http.api \"eth,net,web3,debug\" --authrpc.port 8536 2>>{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
     "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
     "postinst_script_template": "",
     "service_type": "simple",
