@@ -1,0 +1,66 @@
+{
+  "coin": {
+    "name": "RSK",
+    "shortcut": "RSK",
+    "label": "RSK",
+    "alias": "rsk"
+  },
+  "ports": {
+    "backend_rpc": 4444,
+    "backend_ws": 4445,
+    "backend_message_queue": 0,
+    "backend_p2p": 5050,
+    "backend_http": 4444,
+    "blockbook_internal": 9097,
+    "blockbook_public": 9197
+  },
+  "ipc": {
+    "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
+    "ws_url_template": "ws://127.0.0.1:{{.Ports.BackendWS}}/websocket",
+    "rpc_timeout": 60
+  },
+  "backend": {
+    "package_name": "backend-rsk",
+    "package_revision": "satoshilabs-1",
+    "system_user": "rsk",
+    "version": "4.0.0",
+    "binary_url": "https://github.com/rsksmart/rskj/releases/download/HOP-4.0.0/rskj-core-4.0.0-HOP-all.jar",
+    "verification_type": "sha256",
+    "verification_source": "69c5c385986400bebdb2b57406bdb27ba1c19fa7e095000e56ec3a521e86352e",
+    "extract_command": "sh -c 'cp \"$$1\" backend/' fake-extract",
+    "exclude_files": [],
+    "exec_command_template": "/bin/sh -c 'java -Xmx4G -Xms1024m -Ddatabase.dir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -Drpc.providers.web.http.port={{.Ports.BackendRPC}} -Drpc.providers.web.ws.enabled=true  -Drpc.providers.web.ws.port=4445 -Drpc.providers.web.cors=\"*\" -Dlogback.configurationFile=~/backend/logback.xml -cp {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/rskj-core-4.0.0-HOP-all.jar co.rsk.Start 2>>{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
+    "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
+    "postinst_script_template": "",
+    "service_type": "simple",
+    "service_additional_params_template": "",
+    "protect_memory": true,
+    "mainnet": true,
+    "server_config_file": "",
+    "client_config_file": ""
+  },
+  "blockbook": {
+    "package_name": "blockbook-rsk",
+    "system_user": "blockbook-rsk",
+    "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
+    "public_binding_template": ":{{.Ports.BlockbookPublic}}",
+    "explorer_url": "",
+    "additional_params": "",
+    "block_chain": {
+      "parse": true,
+      "mempool_workers": 8,
+      "mempool_sub_workers": 2,
+      "block_addresses_to_keep": 300,
+      "additional_params": {
+        "mempoolTxTimeoutHours": 48,
+        "queryBackendOnMempoolResync": false,
+        "fiat_rates": "coingecko",
+        "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"rootstock\", \"periodSeconds\": 60}"
+      }
+    }
+  },
+  "meta": {
+    "package_maintainer": "IT",
+    "package_maintainer_email": "it@satoshilabs.com"
+  }
+}
