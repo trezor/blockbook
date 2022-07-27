@@ -22,10 +22,10 @@
     "package_name": "backend-dogecoin-testnet",
     "package_revision": "satoshilabs-1",
     "system_user": "dogecoin",
-    "version": "1.14.5",
-    "binary_url": "https://github.com/dogecoin/dogecoin/releases/download/v1.14.5/dogecoin-1.14.5-x86_64-linux-gnu.tar.gz",
+    "version": "1.14.6",
+    "binary_url": "https://github.com/dogecoin/dogecoin/releases/download/v1.14.6/dogecoin-1.14.6-x86_64-linux-gnu.tar.gz",
     "verification_type": "sha256",
-    "verification_source": "17a03f019168ec5283947ea6fbf1a073c1d185ea9edacc2b91f360e1c191428e",
+    "verification_source": "fe9c9cdab946155866a5bd5a5127d2971a9eed3e0b65fb553fe393ad1daaebb0",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
       "bin/dogecoin-qt"
