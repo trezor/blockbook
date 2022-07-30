@@ -1,6 +1,5 @@
 # initialize from the image defined by BASE_IMAGE
-ARG BASE_IMAGE
-FROM $BASE_IMAGE
+FROM ubuntu:18.04
 ARG DEBIAN_FRONTEND=noninteractive
 ARG PORTABLE_ROCKSDB
 
@@ -10,6 +9,12 @@ RUN apt-get update && \
                        libgflags-dev libsnappy-dev zlib1g-dev libbz2-dev \
                        liblz4-dev graphviz && \
     apt-get clean
+
+RUN cd /opt && wget https://download.libsodium.org/libsodium/releases/libsodium-1.0.18-stable.tar.gz && \
+    tar zxvf libsodium-1.0.18-stable.tar.gz && cd libsodium-stable && \
+    ./configure && make check && make install && ldconfig
+RUN cd /opt && wget https://github.com/zeromq/libzmq/releases/download/v4.2.2/zeromq-4.2.2.tar.gz && \
+    tar -xvf zeromq-4.2.2.tar.gz && cd zeromq-4.2.2 && ./configure && make && make install
 
 ENV GOLANG_VERSION=go1.17.1.linux-amd64
 ENV ROCKSDB_VERSION=v6.22.1

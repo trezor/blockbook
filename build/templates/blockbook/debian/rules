@@ -14,5 +14,5 @@ override_dh_systemd_start:
 override_dh_installinit:
 
 override_dh_shlibdeps:
-	dh_shlibdeps -- --warnings=0
+	dh_shlibdeps -- --warnings=0 --ignore-missing-info
 {{end}}
