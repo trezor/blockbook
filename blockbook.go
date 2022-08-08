@@ -525,6 +525,7 @@ func onNewFiatRatesTicker(ticker *db.CurrencyRatesTicker) {
 	defer func() {
 		if r := recover(); r != nil {
 			glog.Error("onNewFiatRatesTicker recovered from panic: ", r)
+			debug.PrintStack()
 		}
 	}()
 	for _, c := range callbacksOnNewFiatRatesTicker {

@@ -56,12 +56,12 @@ func NewFiatRatesDownloader(db *db.RocksDB, apiType string, params string, callb
 	rd.db = db
 	rd.callbackOnNewTicker = callback
 	if apiType == "coingecko" {
-		throttlingDelayMs := 50
+		throttle := true
 		if callback == nil {
 			// a small hack - in tests the callback is not used, therefore there is no delay slowing the test
-			throttlingDelayMs = 0
+			throttle = false
 		}
-		rd.downloader = NewCoinGeckoDownloader(db, rdParams.URL, rdParams.Coin, rdParams.PlatformIdentifier, rdParams.PlatformVsCurrency, rd.timeFormat, throttlingDelayMs)
+		rd.downloader = NewCoinGeckoDownloader(db, rdParams.URL, rdParams.Coin, rdParams.PlatformIdentifier, rdParams.PlatformVsCurrency, rd.timeFormat, throttle)
 	} else {
 		return nil, fmt.Errorf("NewFiatRatesDownloader: incorrect API type %q", apiType)
 	}
@@ -74,11 +74,14 @@ func (rd *RatesDownloader) Run() error {
 
 	for {
 		tickers, err := rd.downloader.CurrentTickers()
-		if err != nil && tickers != nil {
+		if err != nil || tickers == nil {
 			glog.Error("FiatRatesDownloader: CurrentTickers error ", err)
 		} else {
 			rd.db.FiatRatesSetCurrentTicker(tickers)
 			glog.Info("FiatRatesDownloader: CurrentTickers updated")
+			if rd.callbackOnNewTicker != nil {
+				rd.callbackOnNewTicker(tickers)
+			}
 		}
 		if time.Now().UTC().YearDay() != lastHistoricalTickers.YearDay() || time.Now().UTC().Year() != lastHistoricalTickers.Year() {
 			err = rd.downloader.UpdateHistoricalTickers()
@@ -86,20 +89,24 @@ func (rd *RatesDownloader) Run() error {
 				glog.Error("FiatRatesDownloader: UpdateHistoricalTickers error ", err)
 			} else {
 				lastHistoricalTickers = time.Now().UTC()
-				glog.Info("FiatRatesDownloader: UpdateHistoricalTickers finished")
-			}
-			// UpdateHistoricalTokenTickers in a goroutine, it can take quite some time as there may be many tokens
-			go func() {
-				err := rd.downloader.UpdateHistoricalTokenTickers()
-				if err != nil {
-					glog.Error("FiatRatesDownloader: UpdateHistoricalTokenTickers error ", err)
+				ticker, err := rd.db.FiatRatesFindLastTicker("", "")
+				if err != nil || ticker == nil {
+					glog.Error("FiatRatesDownloader: FiatRatesFindLastTicker error ", err)
 				} else {
-					lastHistoricalTickers = time.Now().UTC()
-					glog.Info("FiatRatesDownloader: UpdateHistoricalTokenTickers finished")
+					glog.Infof("FiatRatesDownloader: UpdateHistoricalTickers finished, last ticker from %v", ticker.Timestamp)
 				}
-			}()
+				// UpdateHistoricalTokenTickers in a goroutine, it can take quite some time as there may be many tokens
+				go func() {
+					err := rd.downloader.UpdateHistoricalTokenTickers()
+					if err != nil {
+						glog.Error("FiatRatesDownloader: UpdateHistoricalTokenTickers error ", err)
+					} else {
+						glog.Info("FiatRatesDownloader: UpdateHistoricalTokenTickers finished")
+					}
+				}()
+			}
 		}
-		// next run on the
+		// wait for the next run with a slight random value to avoid too many request at the same time
 		now := time.Now().Unix()
 		next := now + rd.periodSeconds
 		next -= next % rd.periodSeconds

@@ -75,12 +75,16 @@ func setupRocksDB(parser bchain.BlockChainParser, chain bchain.BlockChain, t *te
 	if err := d.ConnectBlock(block2); err != nil {
 		t.Fatal(err)
 	}
-	if err := initTestFiatRates(d); err != nil {
-		t.Fatal(err)
-	}
 	is.FinishedSync(block2.Height)
 	if parser.GetChainType() == bchain.ChainEthereumType {
+		if err := initTestFiatRatesEthereumType(d); err != nil {
+			t.Fatal(err)
+		}
 		if err := initEthereumTypeDB(d); err != nil {
+			t.Fatal(err)
+		}
+	} else {
+		if err := initTestFiatRates(d); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -162,14 +166,15 @@ func newPostRequest(u string, body string) *http.Request {
 	return r
 }
 
-func insertFiatRate(date string, rates map[string]float32, d *db.RocksDB) error {
+func insertFiatRate(date string, rates map[string]float32, tokenRates map[string]float32, d *db.RocksDB) error {
 	convertedDate, err := db.FiatRatesConvertDate(date)
 	if err != nil {
 		return err
 	}
 	ticker := &db.CurrencyRatesTicker{
-		Timestamp: *convertedDate,
-		Rates:     rates,
+		Timestamp:  *convertedDate,
+		Rates:      rates,
+		TokenRates: tokenRates,
 	}
 	wb := gorocksdb.NewWriteBatch()
 	defer wb.Destroy()
@@ -184,37 +189,37 @@ func initTestFiatRates(d *db.RocksDB) error {
 	if err := insertFiatRate("20180320020000", map[string]float32{
 		"usd": 2000.0,
 		"eur": 1300.0,
-	}, d); err != nil {
+	}, nil, d); err != nil {
 		return err
 	}
 	if err := insertFiatRate("20180320030000", map[string]float32{
 		"usd": 2001.0,
 		"eur": 1301.0,
-	}, d); err != nil {
+	}, nil, d); err != nil {
 		return err
 	}
 	if err := insertFiatRate("20180320040000", map[string]float32{
 		"usd": 2002.0,
 		"eur": 1302.0,
-	}, d); err != nil {
+	}, nil, d); err != nil {
 		return err
 	}
 	if err := insertFiatRate("20180321055521", map[string]float32{
 		"usd": 2003.0,
 		"eur": 1303.0,
-	}, d); err != nil {
+	}, nil, d); err != nil {
 		return err
 	}
 	if err := insertFiatRate("20191121140000", map[string]float32{
 		"usd": 7814.5,
 		"eur": 7100.0,
-	}, d); err != nil {
+	}, nil, d); err != nil {
 		return err
 	}
 	return insertFiatRate("20191121143015", map[string]float32{
 		"usd": 7914.5,
 		"eur": 7134.1,
-	}, d)
+	}, nil, d)
 }
 
 type httpTests struct {
@@ -1332,7 +1337,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 					"currencies": []string{"does-not-exist"},
 				},
 			},
-			want: `{"id":"21","data":{"ts":1574346615,"rates":{"does-not-exist":-1}}}`,
+			want: `{"id":"21","data":{"error":{"message":"No tickers found!"}}}`,
 		},
 		{
 			name: "websocket getFiatRatesForTimestamps missing date",
