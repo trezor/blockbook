@@ -1205,7 +1205,8 @@ func (s *PublicServer) apiAvailableVsCurrencies(r *http.Request, apiVersion int)
 	if err != nil {
 		return nil, api.NewAPIError("Parameter \"timestamp\" is not a valid Unix timestamp.", true)
 	}
-	result, err := s.api.GetAvailableVsCurrencies(timestamp)
+	token := strings.ToLower(r.URL.Query().Get("token"))
+	result, err := s.api.GetAvailableVsCurrencies(timestamp, token)
 	return result, err
 }
 
@@ -1219,11 +1220,12 @@ func (s *PublicServer) apiTickers(r *http.Request, apiVersion int) (interface{},
 	if currency != "" {
 		currencies = []string{currency}
 	}
+	token := strings.ToLower(r.URL.Query().Get("token"))
 
 	if block := r.URL.Query().Get("block"); block != "" {
 		// Get tickers for specified block height or block hash
 		s.metrics.ExplorerViews.With(common.Labels{"action": "api-tickers-block"}).Inc()
-		result, err = s.api.GetFiatRatesForBlockID(block, currencies)
+		result, err = s.api.GetFiatRatesForBlockID(block, currencies, token)
 	} else if timestampString := r.URL.Query().Get("timestamp"); timestampString != "" {
 		// Get tickers for specified timestamp
 		s.metrics.ExplorerViews.With(common.Labels{"action": "api-tickers-date"}).Inc()
@@ -1233,7 +1235,7 @@ func (s *PublicServer) apiTickers(r *http.Request, apiVersion int) (interface{},
 			return nil, api.NewAPIError("Parameter 'timestamp' is not a valid Unix timestamp.", true)
 		}
 
-		resultTickers, err := s.api.GetFiatRatesForTimestamps([]int64{timestamp}, currencies)
+		resultTickers, err := s.api.GetFiatRatesForTimestamps([]int64{timestamp}, currencies, token)
 		if err != nil {
 			return nil, err
 		}
@@ -1241,7 +1243,7 @@ func (s *PublicServer) apiTickers(r *http.Request, apiVersion int) (interface{},
 	} else {
 		// No parameters - get the latest available ticker
 		s.metrics.ExplorerViews.With(common.Labels{"action": "api-tickers-last"}).Inc()
-		result, err = s.api.GetCurrentFiatRates(currencies)
+		result, err = s.api.GetCurrentFiatRates(currencies, token)
 	}
 	if err != nil {
 		return nil, err
@@ -1259,6 +1261,7 @@ func (s *PublicServer) apiMultiTickers(r *http.Request, apiVersion int) (interfa
 	if currency != "" {
 		currencies = []string{currency}
 	}
+	token := strings.ToLower(r.URL.Query().Get("token"))
 	if timestampString := r.URL.Query().Get("timestamp"); timestampString != "" {
 		// Get tickers for specified timestamp
 		s.metrics.ExplorerViews.With(common.Labels{"action": "api-multi-tickers-date"}).Inc()
@@ -1270,7 +1273,7 @@ func (s *PublicServer) apiMultiTickers(r *http.Request, apiVersion int) (interfa
 				return nil, api.NewAPIError("Parameter 'timestamp' does not contain a valid Unix timestamp.", true)
 			}
 		}
-		resultTickers, err := s.api.GetFiatRatesForTimestamps(t, currencies)
+		resultTickers, err := s.api.GetFiatRatesForTimestamps(t, currencies, token)
 		if err != nil {
 			return nil, err
 		}
