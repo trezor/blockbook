@@ -26,6 +26,49 @@ type CurrencyRatesTicker struct {
 	TokenRates map[string]float32 // rates of the tokens (identified by the address of the contract) against the base currency
 }
 
+// Convert converts value in base currency to toCurrency
+func (t *CurrencyRatesTicker) Convert(baseValue float64, toCurrency string) float64 {
+	rate, found := t.Rates[toCurrency]
+	if !found {
+		return 0
+	}
+	return baseValue * float64(rate)
+}
+
+// ConvertTokenToBase converts token value to base currency
+func (t *CurrencyRatesTicker) ConvertTokenToBase(value float64, token string) float64 {
+	if t.TokenRates != nil {
+		rate, found := t.TokenRates[token]
+		if found {
+			return value * float64(rate)
+		}
+	}
+	return 0
+}
+
+// ConvertTokenToBase converts token value to toCurrency currency
+func (t *CurrencyRatesTicker) ConvertToken(value float64, token string, toCurrency string) float64 {
+	baseValue := t.ConvertTokenToBase(value, token)
+	if baseValue > 0 {
+		return t.Convert(baseValue, toCurrency)
+	}
+	return 0
+}
+
+// TokenRateInCurrency return token rate in toCurrency currency
+func (t *CurrencyRatesTicker) TokenRateInCurrency(token string, toCurrency string) float32 {
+	if t.TokenRates != nil {
+		rate, found := t.TokenRates[token]
+		if found {
+			baseRate, found := t.Rates[toCurrency]
+			if found {
+				return baseRate * rate
+			}
+		}
+	}
+	return 0
+}
+
 func packTimestamp(t *time.Time) []byte {
 	return []byte(t.UTC().Format(FiatRatesTimeFormat))
 }
@@ -117,6 +160,26 @@ func (d *RocksDB) FiatRatesStoreTicker(wb *gorocksdb.WriteBatch, ticker *Currenc
 	return nil
 }
 
+func isSuitableTicker(ticker *CurrencyRatesTicker, vsCurrency string, token string) bool {
+	if vsCurrency != "" {
+		if ticker.Rates == nil {
+			return false
+		}
+		if _, found := ticker.Rates[vsCurrency]; !found {
+			return false
+		}
+	}
+	if token != "" {
+		if ticker.TokenRates == nil {
+			return false
+		}
+		if _, found := ticker.TokenRates[token]; !found {
+			return false
+		}
+	}
+	return true
+}
+
 func getTickerFromIterator(it *gorocksdb.Iterator, vsCurrency string, token string) (*CurrencyRatesTicker, error) {
 	timeObj, err := time.Parse(FiatRatesTimeFormat, string(it.Key().Data()))
 	if err != nil {
@@ -126,21 +189,8 @@ func getTickerFromIterator(it *gorocksdb.Iterator, vsCurrency string, token stri
 	if err != nil {
 		return nil, err
 	}
-	if vsCurrency != "" {
-		if ticker.Rates == nil {
-			return nil, nil
-		}
-		if _, found := ticker.Rates[vsCurrency]; !found {
-			return nil, nil
-		}
-	}
-	if token != "" {
-		if ticker.TokenRates == nil {
-			return nil, nil
-		}
-		if _, found := ticker.TokenRates[token]; !found {
-			return nil, nil
-		}
+	if !isSuitableTicker(ticker, vsCurrency, token) {
+		return nil, nil
 	}
 	ticker.Timestamp = timeObj.UTC()
 	return ticker, nil
@@ -169,8 +219,8 @@ func (d *RocksDB) FiatRatesGetTicker(tickerTime *time.Time) (*CurrencyRatesTicke
 // FiatRatesFindTicker gets FiatRates data closest to the specified timestamp, of the base currency, vsCurrency or the token if specified
 func (d *RocksDB) FiatRatesFindTicker(tickerTime *time.Time, vsCurrency string, token string) (*CurrencyRatesTicker, error) {
 	tickersMux.Lock()
-	if currentTicker != nil && lastTickerInDB != nil {
-		if tickerTime.After(lastTickerInDB.Timestamp) {
+	if currentTicker != nil {
+		if !tickerTime.Before(currentTicker.Timestamp) || (lastTickerInDB != nil && tickerTime.After(lastTickerInDB.Timestamp)) {
 			f := true
 			if token != "" && currentTicker.TokenRates != nil {
 				_, f = currentTicker.TokenRates[token]
@@ -224,14 +274,17 @@ func (d *RocksDB) FiatRatesFindLastTicker(vsCurrency string, token string) (*Cur
 	return nil, nil
 }
 
-// FiatRatesGetCurrentTicker return current ticker
-func (d *RocksDB) FiatRatesGetCurrentTicker(tickerTime *time.Time, token string) (*CurrencyRatesTicker, error) {
+// FiatRatesGetCurrentTicker returns current ticker
+func (d *RocksDB) FiatRatesGetCurrentTicker(vsCurrency string, token string) (*CurrencyRatesTicker, error) {
 	tickersMux.Lock()
 	defer tickersMux.Unlock()
-	return currentTicker, nil
+	if currentTicker != nil && isSuitableTicker(currentTicker, vsCurrency, token) {
+		return currentTicker, nil
+	}
+	return nil, nil
 }
 
-// FiatRatesCurrentTicker return current ticker
+// FiatRatesCurrentTicker sets current ticker
 func (d *RocksDB) FiatRatesSetCurrentTicker(t *CurrencyRatesTicker) {
 	tickersMux.Lock()
 	defer tickersMux.Unlock()

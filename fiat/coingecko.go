@@ -26,6 +26,7 @@ type Coingecko struct {
 	timeFormat         string
 	httpClient         *http.Client
 	db                 *db.RocksDB
+	updatingCurrent    bool
 	updatingTokens     bool
 }
 
@@ -42,13 +43,17 @@ type coinsListItem struct {
 // coinList https://api.coingecko.com/api/v3/coins/list
 type coinList []coinsListItem
 
-type marketPoint [2]float32
+type marketPoint [2]float64
 type marketChartPrices struct {
 	Prices []marketPoint `json:"prices"`
 }
 
 // NewCoinGeckoDownloader creates a coingecko structure that implements the RatesDownloaderInterface
-func NewCoinGeckoDownloader(db *db.RocksDB, url string, coin string, platformIdentifier string, platformVsCurrency string, timeFormat string, throttlingDelayMs int) RatesDownloaderInterface {
+func NewCoinGeckoDownloader(db *db.RocksDB, url string, coin string, platformIdentifier string, platformVsCurrency string, timeFormat string, throttleDown bool) RatesDownloaderInterface {
+	var throttlingDelayMs int
+	if throttleDown {
+		throttlingDelayMs = 100
+	}
 	httpTimeoutSeconds := 15 * time.Second
 	return &Coingecko{
 		url:                url,
@@ -95,13 +100,13 @@ func (cg *Coingecko) makeReq(url string) ([]byte, error) {
 		if err == nil {
 			return resp, err
 		}
-		if err.Error() != "error code: 1015" {
+		if err.Error() != "error code: 1015" && !strings.Contains(strings.ToLower(err.Error()), "exceeded the rate limit") {
 			glog.Errorf("Coingecko makeReq %v error %v", url, err)
 			return nil, err
 		}
-		// if there is a throttling error, wait 70 seconds and retry
-		glog.Errorf("Coingecko makeReq %v error %v, will retry in 70 seconds", url, err)
-		time.Sleep(70 * time.Second)
+		// if there is a throttling error, wait 60 seconds and retry
+		glog.Errorf("Coingecko makeReq %v error %v, will retry in 60 seconds", url, err)
+		time.Sleep(60 * time.Second)
 	}
 }
 
@@ -219,6 +224,9 @@ func (cg *Coingecko) platformIds() error {
 }
 
 func (cg *Coingecko) CurrentTickers() (*db.CurrencyRatesTicker, error) {
+	cg.updatingCurrent = true
+	defer func() { cg.updatingCurrent = false }()
+
 	var newTickers = db.CurrencyRatesTicker{}
 
 	if vsCurrencies == nil {
@@ -290,13 +298,12 @@ func (cg *Coingecko) getHistoricalTicker(tickersToUpdate map[uint]*db.CurrencyRa
 	warningLogged := false
 	for _, p := range mc.Prices {
 		var timestamp uint
-		if p[0] > 100000000000 {
+		timestamp = uint(p[0])
+		if timestamp > 100000000000 {
 			// convert timestamp from milliseconds to seconds
-			timestamp = uint(p[0] / 1000)
-		} else {
-			timestamp = uint(p[0])
+			timestamp /= 1000
 		}
-		rate := p[1]
+		rate := float32(p[1])
 		if timestamp%(24*3600) == 0 && timestamp != 0 && rate != 0 { // process only tickers for the whole day with non 0 value
 			var found bool
 			var ticker *db.CurrencyRatesTicker
@@ -350,6 +357,15 @@ func (cg *Coingecko) storeTickers(tickersToUpdate map[uint]*db.CurrencyRatesTick
 	return nil
 }
 
+func (cg *Coingecko) throttleHistoricalDownload() {
+	// long delay next request to avoid throttling if downloading current tickers at the same time
+	delay := 1
+	if cg.updatingCurrent {
+		delay = 600
+	}
+	time.Sleep(cg.throttlingDelay * time.Duration(delay))
+}
+
 // UpdateHistoricalTickers gets historical tickers for the main crypto currency
 func (cg *Coingecko) UpdateHistoricalTickers() error {
 	tickersToUpdate := make(map[uint]*db.CurrencyRatesTicker)
@@ -371,7 +387,7 @@ func (cg *Coingecko) UpdateHistoricalTickers() error {
 			glog.Errorf("getHistoricalTicker %s-%s %v", cg.coin, currency, err)
 		}
 		if req {
-			time.Sleep(cg.throttlingDelay)
+			cg.throttleHistoricalDownload()
 		}
 	}
 
@@ -413,8 +429,7 @@ func (cg *Coingecko) UpdateHistoricalTokenTickers() error {
 				glog.Infof("Coingecko updated %d of %d token tickers", count, len(platformIds))
 			}
 			if req {
-				// long delay next request to avoid throttling
-				time.Sleep(cg.throttlingDelay * 20)
+				cg.throttleHistoricalDownload()
 			}
 		}
 	}
