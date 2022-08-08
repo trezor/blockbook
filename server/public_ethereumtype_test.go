@@ -85,6 +85,42 @@ func httpTestsEthereumType(t *testing.T, ts *httptest.Server) {
 				`{"txid":"0xa9cd088aba2131000da6f38a33c20169baee476218deea6b78720700b895b101","vin":[{"n":0,"addresses":["0x20cD153de35D469BA46127A0C8F18626b59a256A"],"isAddress":true}],"vout":[{"value":"0","n":0,"addresses":["0x4af4114F73d1c1C903aC9E0361b379D1291808A2"],"isAddress":true}],"blockHeight":-1,"confirmations":0,"blockTime":0,"value":"0","fees":"2081000000000000","rbf":true,"coinSpecificData":{"tx":{"nonce":"0xd0","gasPrice":"0x9502f9000","gas":"0x130d5","to":"0x4af4114F73d1c1C903aC9E0361b379D1291808A2","value":"0x0","input":"0xa9059cbb000000000000000000000000555ee11fbddc0e49a9bab358a8941ad95ffdb48f00000000000000000000000000000000000000000000021e19e0c9bab2400000","hash":"0xa9cd088aba2131000da6f38a33c20169baee476218deea6b78720700b895b101","blockNumber":"0x41eee8","from":"0x20cD153de35D469BA46127A0C8F18626b59a256A","transactionIndex":"0x0"},"internalData":{"type":0,"transfers":[{"type":1,"from":"9f4981531fda132e83c44680787dfa7ee31e4f8d","to":"4af4114f73d1c1c903ac9e0361b379d1291808a2","value":1000000},{"type":0,"from":"3e3a3d69dc66ba10737f531ed088954a9ec89d97","to":"9f4981531fda132e83c44680787dfa7ee31e4f8d","value":1000001},{"type":0,"from":"3e3a3d69dc66ba10737f531ed088954a9ec89d97","to":"3e3a3d69dc66ba10737f531ed088954a9ec89d97","value":1000002}],"Error":""},"receipt":{"gasUsed":"0xcb39","status":"0x1","logs":[{"address":"0x4af4114F73d1c1C903aC9E0361b379D1291808A2","topics":["0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef","0x00000000000000000000000020cd153de35d469ba46127a0c8f18626b59a256a","0x000000000000000000000000555ee11fbddc0e49a9bab358a8941ad95ffdb48f"],"data":"0x00000000000000000000000000000000000000000000021e19e0c9bab2400000"}]}},"tokenTransfers":[{"type":"ERC20","from":"0x20cD153de35D469BA46127A0C8F18626b59a256A","to":"0x555Ee11FBDDc0E49A9bAB358A8941AD95fFDB48f","token":"0x4af4114F73d1c1C903aC9E0361b379D1291808A2","name":"Contract 74","symbol":"S74","decimals":12,"value":"10000000000000000000000"}],"ethereumSpecific":{"status":1,"nonce":208,"gasLimit":78037,"gasUsed":52025,"gasPrice":"40000000000","data":"0xa9059cbb000000000000000000000000555ee11fbddc0e49a9bab358a8941ad95ffdb48f00000000000000000000000000000000000000000000021e19e0c9bab2400000","parsedData":{"methodId":"0xa9059cbb","name":"Transfer","function":"transfer(address, uint256)","params":[{"type":"address","values":["0x555Ee11FBDDc0E49A9bAB358A8941AD95fFDB48f"]},{"type":"uint256","values":["10000000000000000000000"]}]}},"addressAliases":{"0x20cD153de35D469BA46127A0C8F18626b59a256A":{"Type":"ENS","Alias":"address20.eth"},"0x4af4114F73d1c1C903aC9E0361b379D1291808A2":{"Type":"Contract","Alias":"Contract 74"}}}`,
 			},
 		},
+		{
+			name:        "apiFiatRates get rate by timestamp",
+			r:           newGetRequest(ts.URL + "/api/v2/tickers?currency=usd&timestamp=1574340000"),
+			status:      http.StatusOK,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`{"ts":1574344800,"rates":{"usd":7814.5}}`,
+			},
+		},
+		{
+			name:        "apiFiatRates get token rate by timestamp",
+			r:           newGetRequest(ts.URL + "/api/v2/tickers?currency=usd&timestamp=1574340000&token=0xA4DD6Bc15Be95Af55f0447555c8b6aA3088562f3"),
+			status:      http.StatusOK,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`{"ts":1574344800,"rates":{"usd":6251.6}}`,
+			},
+		},
+		{
+			name:        "apiFiatRates get token rate by timestamp for all currencies",
+			r:           newGetRequest(ts.URL + "/api/v2/tickers?timestamp=1574340000&token=0xA4DD6Bc15Be95Af55f0447555c8b6aA3088562f3"),
+			status:      http.StatusBadRequest,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`{"error":"Rates for token only for a single currency"}`,
+			},
+		},
+		{
+			name:        "apiFiatRates get token rate for unknown token by timestamp",
+			r:           newGetRequest(ts.URL + "/api/v2/tickers?currency=usd&timestamp=1574340000&token=0xFFFFFFFFFFe95Af55f0447555c8b6aA3088562f3"),
+			status:      http.StatusOK,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`{"ts":1574340000,"rates":{"usd":-1}}`,
+			},
+		},
 	}
 
 	performHttpTests(tests, t, ts)
@@ -101,6 +137,64 @@ func initEthereumTypeDB(d *db.RocksDB) error {
 		return err
 	}
 	return d.WriteBatch(wb)
+}
+
+// initTestFiatRatesEthereumType initializes test data for /api/v2/tickers endpoint
+func initTestFiatRatesEthereumType(d *db.RocksDB) error {
+	if err := insertFiatRate("20180320020000", map[string]float32{
+		"usd": 2000.0,
+		"eur": 1300.0,
+	}, map[string]float32{
+		"0xdac17f958d2ee523a2206206994597c13d831ec7": 2000.1,
+		"0x2260fac5e5542a773aa44fbcfedf7c193bc2c599": 123.0,
+	}, d); err != nil {
+		return err
+	}
+	if err := insertFiatRate("20180320030000", map[string]float32{
+		"usd": 2001.0,
+		"eur": 1301.0,
+	}, map[string]float32{
+		"0xdac17f958d2ee523a2206206994597c13d831ec7": 2001.1,
+		"0x2260fac5e5542a773aa44fbcfedf7c193bc2c599": 199.0,
+	}, d); err != nil {
+		return err
+	}
+	if err := insertFiatRate("20180320040000", map[string]float32{
+		"usd": 2002.0,
+		"eur": 1302.0,
+	}, map[string]float32{
+		"0xdac17f958d2ee523a2206206994597c13d831ec7": 2002.1,
+		"0x2260fac5e5542a773aa44fbcfedf7c193bc2c599": 99.0,
+	}, d); err != nil {
+		return err
+	}
+	if err := insertFiatRate("20180321055521", map[string]float32{
+		"usd": 2003.0,
+		"eur": 1303.0,
+	}, map[string]float32{
+		"0xdac17f958d2ee523a2206206994597c13d831ec7": 2003.1,
+		"0x2260fac5e5542a773aa44fbcfedf7c193bc2c599": 101.0,
+	}, d); err != nil {
+		return err
+	}
+	if err := insertFiatRate("20191121140000", map[string]float32{
+		"usd": 7814.5,
+		"eur": 7100.0,
+	}, map[string]float32{
+		"0xdac17f958d2ee523a2206206994597c13d831ec7": 7814.1,
+		"0x2260fac5e5542a773aa44fbcfedf7c193bc2c599": 499.0,
+		"0xa4dd6bc15be95af55f0447555c8b6aa3088562f3": 0.8,
+	}, d); err != nil {
+		return err
+	}
+	return insertFiatRate("20191121143015", map[string]float32{
+		"usd": 7914.5,
+		"eur": 7134.1,
+	}, map[string]float32{
+		"0xdac17f958d2ee523a2206206994597c13d831ec7": 7914.1,
+		"0x2260fac5e5542a773aa44fbcfedf7c193bc2c599": 599.0,
+		"0xa4dd6bc15be95af55f0447555c8b6aa3088562f3": 1.2,
+	}, d)
 }
 
 func Test_PublicServer_EthereumType(t *testing.T) {
