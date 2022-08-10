@@ -17,6 +17,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/bchain/coins/eth"
+	"github.com/trezor/blockbook/bchain/coins/rsk"
 	"github.com/trezor/blockbook/common"
 	"github.com/trezor/blockbook/db"
 )
@@ -260,7 +261,13 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 			glog.Errorf("GetErc20FromTx error %v, %v", err, bchainTx)
 		}
 		tokens = w.getTokensFromErc20(ets)
-		ethTxData := eth.GetEthereumTxData(bchainTx)
+		coinName := w.chain.GetCoinName()
+		var ethTxData *eth.EthereumTxData
+		if coinName == "RSK" {
+			ethTxData = rsk.GetEthereumTxData(bchainTx)
+		} else {
+			ethTxData = eth.GetEthereumTxData(bchainTx)
+		}
 		// mempool txs do not have fees yet
 		if ethTxData.GasUsed != nil {
 			feesSat.Mul(ethTxData.GasPrice, ethTxData.GasUsed)
@@ -382,7 +389,13 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 			valOutSat = mempoolTx.Vout[0].ValueSat
 		}
 		tokens = w.getTokensFromErc20(mempoolTx.Erc20)
-		ethTxData := eth.GetEthereumTxDataFromSpecificData(mempoolTx.CoinSpecificData)
+		coinName := w.chain.GetCoinName()
+		var ethTxData *eth.EthereumTxData
+		if coinName == "RSK" {
+			ethTxData = rsk.GetEthereumTxDataFromSpecificData(mempoolTx.CoinSpecificData)
+		} else {
+			ethTxData = eth.GetEthereumTxDataFromSpecificData(mempoolTx.CoinSpecificData)
+		}
 		ethSpecific = &EthereumSpecific{
 			GasLimit: ethTxData.GasLimit,
 			GasPrice: (*Amount)(ethTxData.GasPrice),
@@ -1076,7 +1089,13 @@ func (w *Worker) balanceHistoryForTxid(addrDesc bchain.AddressDescriptor, txid s
 		}
 	} else if w.chainType == bchain.ChainEthereumType {
 		var value big.Int
-		ethTxData := eth.GetEthereumTxData(bchainTx)
+		coinName := w.chain.GetCoinName()
+		var ethTxData *eth.EthereumTxData
+		if coinName == "RSK" {
+			ethTxData = rsk.GetEthereumTxData(bchainTx)
+		} else {
+			ethTxData = eth.GetEthereumTxData(bchainTx)
+		}
 		// add received amount only for OK or unknown status (old) transactions
 		if ethTxData.Status == eth.TxStatusOK || ethTxData.Status == eth.TxStatusUnknown {
 			if len(bchainTx.Vout) > 0 {
