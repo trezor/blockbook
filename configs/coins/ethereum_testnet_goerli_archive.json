@@ -1,25 +1,25 @@
 {
   "coin": {
-    "name": "Ethereum Archive",
-    "shortcut": "ETH",
-    "label": "Ethereum",
-    "alias": "ethereum_archive"
+    "name": "Ethereum Testnet Goerli Archive",
+    "shortcut": "gGOE",
+    "label": "Ethereum Goerli",
+    "alias": "ethereum_testnet_goerli_archive"
   },
   "ports": {
-    "backend_rpc": 8016,
+    "backend_rpc": 18006,
     "backend_message_queue": 0,
-    "backend_p2p": 38316,
-    "backend_http": 8116,
-    "backend_authrpc": 8516,
-    "blockbook_internal": 9016,
-    "blockbook_public": 9116
+    "backend_p2p": 48306,
+    "backend_http": 18106,
+    "backend_authrpc": 18506,
+    "blockbook_internal": 19006,
+    "blockbook_public": 19106
   },
   "ipc": {
     "rpc_url_template": "ws://127.0.0.1:{{.Ports.BackendRPC}}",
     "rpc_timeout": 25
   },
   "backend": {
-    "package_name": "backend-ethereum-archive",
+    "package_name": "backend-ethereum-testnet-goerli-archive",
     "package_revision": "satoshilabs-1",
     "system_user": "ethereum",
     "version": "1.10.23-d901d853",
@@ -28,18 +28,18 @@
     "verification_source": "https://gethstore.blob.core.windows.net/builds/geth-linux-amd64-1.10.23-d901d853.tar.gz.asc",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [],
-    "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/geth --syncmode full --gcmode archive --txlookuplimit 0 --ipcdisable --cache 1024 --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --port 38316 --ws --ws.addr 127.0.0.1 --ws.port {{.Ports.BackendRPC}} --ws.origins \"*\" --ws.api \"eth,net,web3,debug,txpool\" --http --http.port 8116 -http.addr 127.0.0.1 --http.corsdomain \"*\" --http.vhosts \"*\" --http.api \"eth,net,web3,debug,txpool\" --authrpc.port 8516 2>>{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
+    "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/geth --goerli --syncmode full --gcmode archive --txlookuplimit 0 --ipcdisable --cache 1024 --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --port 48306 --ws --ws.addr 127.0.0.1 --ws.port {{.Ports.BackendRPC}} --ws.origins \"*\" --ws.api \"eth,net,web3,debug,txpool\" --http --http.port 18106 -http.addr 127.0.0.1 --http.corsdomain \"*\" --http.vhosts \"*\" --http.api \"eth,net,web3,debug,txpool\" --authrpc.port 18506 2>>{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
     "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
     "postinst_script_template": "",
     "service_type": "simple",
     "service_additional_params_template": "",
     "protect_memory": true,
-    "mainnet": true,
+    "mainnet": false,
     "server_config_file": "",
     "client_config_file": ""
   },
   "blockbook": {
-    "package_name": "blockbook-ethereum-archive",
+    "package_name": "blockbook-ethereum-testnet-goerli-archive",
     "system_user": "blockbook-ethereum",
     "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
     "public_binding_template": ":{{.Ports.BlockbookPublic}}",
@@ -49,13 +49,13 @@
       "parse": true,
       "mempool_workers": 8,
       "mempool_sub_workers": 2,
-      "block_addresses_to_keep": 600,
+      "block_addresses_to_keep": 3000,
       "additional_params": {
         "address_aliases": true,
-        "mempoolTxTimeoutHours": 48,
+        "mempoolTxTimeoutHours": 12,
         "processInternalTransactions": true,
         "queryBackendOnMempoolResync": false,
-        "fiat_rates": "coingecko",
+        "fiat_rates-disabled": "coingecko",
         "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"ethereum\",\"platformIdentifier\": \"ethereum\",\"platformVsCurrency\": \"eth\",\"periodSeconds\": 900}",
         "fourByteSignatures": "https://www.4byte.directory/api/v1/signatures/"
       }
