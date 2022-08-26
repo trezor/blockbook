@@ -49,6 +49,9 @@ type Config struct {
 	Ports struct {
 		BackendRPC          int `json:"backend_rpc"`
 		BackendMessageQueue int `json:"backend_message_queue"`
+		BackendP2P          int `json:"backend_p2p"`
+		BackendHttp         int `json:"backend_http"`
+		BackendAuthRpc      int `json:"backend_authrpc"`
 		BlockbookInternal   int `json:"blockbook_internal"`
 		BlockbookPublic     int `json:"blockbook_public"`
 	} `json:"ports"`
