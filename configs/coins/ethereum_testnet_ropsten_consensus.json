@@ -25,7 +25,7 @@
     "verification_source": "8653f204f1c60363eba85cb9ef49e12293e4932c0b848e4958b19330a06359f6",
     "extract_command": "mv ${ARCHIVE} backend/beacon-chain && chmod +x backend/beacon-chain && echo",
     "exclude_files": [],
-    "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/beacon-chain --ropsten --accept-terms-of-use --execution-endpoint=http://localhost:18536 --grpc-gateway-port=17536 --rpc-port=17537 --monitoring-port=17538 --p2p-tcp-port=13536 --p2p-udp-port=12536 --datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --jwt-secret={{.Env.BackendDataPath}}/ethereum_testnet_ropsten/backend/geth/jwtsecret --genesis-state={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/genesis.ssz 2>>{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
+    "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/beacon-chain --ropsten --accept-terms-of-use --execution-endpoint=http://localhost:{{.Ports.BackendAuthRpc}} --grpc-gateway-port=17536 --rpc-port=17537 --monitoring-port=17538 --p2p-tcp-port=13536 --p2p-udp-port=12536 --datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --jwt-secret={{.Env.BackendDataPath}}/ethereum_testnet_ropsten/backend/geth/jwtsecret --genesis-state={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/genesis.ssz 2>>{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
     "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
     "postinst_script_template": "wget https://github.com/eth-clients/merge-testnets/raw/e4a6f0c181d24b28bc8651744f1d0e9ef74bda3f/ropsten-beacon-chain/genesis.ssz -O {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/genesis.ssz",
     "service_type": "simple",
