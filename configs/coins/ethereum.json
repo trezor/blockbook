@@ -51,10 +51,11 @@
       "mempool_sub_workers": 2,
       "block_addresses_to_keep": 300,
       "additional_params": {
+        "consensusNodeVersion": "http://localhost:7536/eth/v1/node/version",
         "mempoolTxTimeoutHours": 48,
         "queryBackendOnMempoolResync": false,
         "fiat_rates": "coingecko",
-        "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"ethereum\", \"periodSeconds\": 60}"
+        "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"ethereum\",\"platformIdentifier\": \"ethereum\",\"platformVsCurrency\": \"eth\",\"periodSeconds\": 900}"
       }
     }
   },

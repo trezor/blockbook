@@ -2075,19 +2075,20 @@ func (w *Worker) GetSystemInfo(internal bool) (*SystemInfo, error) {
 		About:             Text.BlockbookAbout,
 	}
 	backendInfo := &common.BackendInfo{
-		BackendError:    backendError,
-		BestBlockHash:   ci.Bestblockhash,
-		Blocks:          ci.Blocks,
-		Chain:           ci.Chain,
-		Difficulty:      ci.Difficulty,
-		Headers:         ci.Headers,
-		ProtocolVersion: ci.ProtocolVersion,
-		SizeOnDisk:      ci.SizeOnDisk,
-		Subversion:      ci.Subversion,
-		Timeoffset:      ci.Timeoffset,
-		Version:         ci.Version,
-		Warnings:        ci.Warnings,
-		Consensus:       ci.Consensus,
+		BackendError:     backendError,
+		BestBlockHash:    ci.Bestblockhash,
+		Blocks:           ci.Blocks,
+		Chain:            ci.Chain,
+		Difficulty:       ci.Difficulty,
+		Headers:          ci.Headers,
+		ProtocolVersion:  ci.ProtocolVersion,
+		SizeOnDisk:       ci.SizeOnDisk,
+		Subversion:       ci.Subversion,
+		Timeoffset:       ci.Timeoffset,
+		Version:          ci.Version,
+		Warnings:         ci.Warnings,
+		ConsensusVersion: ci.ConsensusVersion,
+		Consensus:        ci.Consensus,
 	}
 	w.is.SetBackendInfo(backendInfo)
 	glog.Info("GetSystemInfo, ", time.Since(start))

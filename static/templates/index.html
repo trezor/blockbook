@@ -72,14 +72,24 @@
                     <td>Version</td>
                     <td class="data">{{$be.Version}}</td>
                 </tr>
+                {{- if $be.Subversion -}}
                 <tr>
                     <td>Subversion</td>
                     <td class="data">{{$be.Subversion}}</td>
                 </tr>
+                {{- end -}}
+                {{- if $be.ProtocolVersion -}}
                 <tr>
                     <td>Protocol Version</td>
                     <td class="data">{{$be.ProtocolVersion}}</td>
                 </tr>
+                {{- end -}}
+                {{- if $be.ConsensusVersion -}}
+                <tr>
+                    <td>Consensus Version</td>
+                    <td class="data">{{$be.ConsensusVersion}}</td>
+                </tr>
+                {{- end -}}
                 <tr>
                     <td>Last Block</td>
                     <td class="data">{{$be.Blocks}}</td>
