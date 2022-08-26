@@ -569,9 +569,10 @@ func (s *WebsocketServer) getInfo() (interface{}, error) {
 		return nil, err
 	}
 	type backendInfo struct {
-		Version    string      `json:"version,omitempty"`
-		Subversion string      `json:"subversion,omitempty"`
-		Consensus  interface{} `json:"consensus,omitempty"`
+		Version          string      `json:"version,omitempty"`
+		Subversion       string      `json:"subversion,omitempty"`
+		ConsensusVersion string      `json:"consensus_version,omitempty"`
+		Consensus        interface{} `json:"consensus,omitempty"`
 	}
 	type info struct {
 		Name       string      `json:"name"`
@@ -594,9 +595,10 @@ func (s *WebsocketServer) getInfo() (interface{}, error) {
 		Block0Hash: s.block0hash,
 		Testnet:    s.chain.IsTestnet(),
 		Backend: backendInfo{
-			Version:    bi.Version,
-			Subversion: bi.Subversion,
-			Consensus:  bi.Consensus,
+			Version:          bi.Version,
+			Subversion:       bi.Subversion,
+			ConsensusVersion: bi.ConsensusVersion,
+			Consensus:        bi.Consensus,
 		},
 	}, nil
 }
