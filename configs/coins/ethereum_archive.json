@@ -51,6 +51,7 @@
       "mempool_sub_workers": 2,
       "block_addresses_to_keep": 600,
       "additional_params": {
+        "consensusNodeVersion": "http://localhost:7516/eth/v1/node/version",
         "address_aliases": true,
         "mempoolTxTimeoutHours": 48,
         "processInternalTransactions": true,

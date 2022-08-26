@@ -51,6 +51,7 @@
       "mempool_sub_workers": 2,
       "block_addresses_to_keep": 3000,
       "additional_params": {
+        "consensusNodeVersion": "http://localhost:17536/eth/v1/node/version",
         "mempoolTxTimeoutHours": 12,
         "queryBackendOnMempoolResync": false
       }
