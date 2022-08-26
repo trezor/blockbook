@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"math/big"
+	"net/http"
 	"strconv"
 	"strings"
 	"sync"
@@ -46,6 +48,7 @@ type Configuration struct {
 	QueryBackendOnMempoolResync     bool   `json:"queryBackendOnMempoolResync"`
 	ProcessInternalTransactions     bool   `json:"processInternalTransactions"`
 	ProcessZeroInternalTransactions bool   `json:"processZeroInternalTransactions"`
+	ConsensusNodeVersionURL         string `json:"consensusNodeVersion"`
 }
 
 // EthereumRPC is an interface to JSON-RPC eth service.
@@ -335,6 +338,37 @@ func (b *EthereumRPC) GetSubversion() string {
 	return ""
 }
 
+func (b *EthereumRPC) getConsensusVersion() string {
+	if b.ChainConfig.ConsensusNodeVersionURL == "" {
+		return ""
+	}
+	httpClient := &http.Client{
+		Timeout: 2 * time.Second,
+	}
+	resp, err := httpClient.Get(b.ChainConfig.ConsensusNodeVersionURL)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		glog.Error("getConsensusVersion ", err)
+		return ""
+	}
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		glog.Error("getConsensusVersion ", err)
+		return ""
+	}
+	type consensusVersion struct {
+		Data struct {
+			Version string `json:"version"`
+		} `json:"data"`
+	}
+	var v consensusVersion
+	err = json.Unmarshal(body, &v)
+	if err != nil {
+		glog.Error("getConsensusVersion ", err)
+		return ""
+	}
+	return v.Data.Version
+}
+
 // GetChainInfo returns information about the connected backend
 func (b *EthereumRPC) GetChainInfo() (*bchain.ChainInfo, error) {
 	h, err := b.getBestHeader()
@@ -351,11 +385,13 @@ func (b *EthereumRPC) GetChainInfo() (*bchain.ChainInfo, error) {
 	if err := b.rpc.CallContext(ctx, &ver, "web3_clientVersion"); err != nil {
 		return nil, err
 	}
+	consensusVersion := b.getConsensusVersion()
 	rv := &bchain.ChainInfo{
-		Blocks:        int(h.Number.Int64()),
-		Bestblockhash: h.Hash().Hex(),
-		Difficulty:    h.Difficulty.String(),
-		Version:       ver,
+		Blocks:           int(h.Number.Int64()),
+		Bestblockhash:    h.Hash().Hex(),
+		Difficulty:       h.Difficulty.String(),
+		Version:          ver,
+		ConsensusVersion: consensusVersion,
 	}
 	idi := int(id.Uint64())
 	if idi == 1 {
