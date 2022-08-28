@@ -45,10 +45,12 @@ type LitecoinParser struct {
 
 // NewLitecoinParser returns new LitecoinParser instance
 func NewLitecoinParser(params *chaincfg.Params, c *btc.Configuration) *LitecoinParser {
-	return &LitecoinParser{
+	p := &LitecoinParser{
 		BitcoinLikeParser: btc.NewBitcoinLikeParser(params, c),
 		baseparser:        &bchain.BaseParser{},
 	}
+	p.VSizeSupport = true
+	return p
 }
 
 // GetChainParams contains network parameters for the main Litecoin network,

@@ -59,6 +59,12 @@
                 <td>Total Output</td>
                 <td class="data">{{formatAmount $tx.ValueOutSat}} {{$cs}}</td>
             </tr>
+            {{- if $tx.Size -}}
+            <tr>
+                <td>Size/VSize</td>
+                <td class="data">{{$tx.Size}}/{{$tx.VSize}}</td>
+            </tr>
+            {{- end -}}
             {{- end -}}
             {{- if $tx.FeesSat -}}
             <tr>

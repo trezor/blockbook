@@ -423,6 +423,11 @@ func (w *Worker) getTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 		TokenTransfers:   tokens,
 		EthereumSpecific: ethSpecific,
 	}
+	if w.chainParser.SupportsVSize() {
+		r.Size = len(bchainTx.Hex) >> 1
+		r.VSize = int(bchainTx.VSize)
+
+	}
 	return r, nil
 }
 

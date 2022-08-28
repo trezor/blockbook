@@ -45,9 +45,11 @@ type QtumParser struct {
 
 // NewQtumParser returns new DashParser instance
 func NewQtumParser(params *chaincfg.Params, c *btc.Configuration) *QtumParser {
-	return &QtumParser{
+	p := &QtumParser{
 		BitcoinParser: btc.NewBitcoinParser(params, c),
 	}
+	p.VSizeSupport = false
+	return p
 }
 
 // GetChainParams contains network parameters for the main Qtum network,

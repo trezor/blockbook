@@ -82,6 +82,7 @@ type Tx struct {
 	Txid        string `json:"txid"`
 	Version     int32  `json:"version"`
 	LockTime    uint32 `json:"locktime"`
+	VSize       int64  `json:"vsize,omitempty"`
 	Vin         []Vin  `json:"vin"`
 	Vout        []Vout `json:"vout"`
 	BlockHeight uint32 `json:"blockHeight,omitempty"`
@@ -331,6 +332,8 @@ type BlockChainParser interface {
 	UseAddressAliases() bool
 	// MinimumCoinbaseConfirmations returns minimum number of confirmations a coinbase transaction must have before it can be spent
 	MinimumCoinbaseConfirmations() int
+	// SupportsVSize returns true if vsize of a transaction should be computed and returned by API
+	SupportsVSize() bool
 	// AmountToDecimalString converts amount in big.Int to string with decimal point in the correct place
 	AmountToDecimalString(a *big.Int) string
 	// AmountToBigInt converts amount in common.JSONNumber (string) to big.Int
