@@ -6,10 +6,10 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/gogo/protobuf/proto"
 	"github.com/golang/glog"
 	"github.com/juju/errors"
 	"github.com/trezor/blockbook/common"
+	"google.golang.org/protobuf/proto"
 )
 
 // BaseParser implements data parsing/handling functionality base for all other parsers
@@ -173,6 +173,11 @@ func (p *BaseParser) MinimumCoinbaseConfirmations() int {
 	return 0
 }
 
+// SupportsVSize returns true if vsize of a transaction should be computed and returned by API
+func (p *BaseParser) SupportsVSize() bool {
+	return false
+}
+
 // PackTx packs transaction to byte array using protobuf
 func (p *BaseParser) PackTx(tx *Tx, height uint32, blockTime int64) ([]byte, error) {
 	var err error
@@ -216,6 +221,7 @@ func (p *BaseParser) PackTx(tx *Tx, height uint32, blockTime int64) ([]byte, err
 		Vin:       pti,
 		Vout:      pto,
 		Version:   tx.Version,
+		VSize:     tx.VSize,
 	}
 	if pt.Hex, err = hex.DecodeString(tx.Hex); err != nil {
 		return nil, errors.Annotatef(err, "Hex %v", tx.Hex)
@@ -276,6 +282,7 @@ func (p *BaseParser) UnpackTx(buf []byte) (*Tx, uint32, error) {
 		Vin:       vin,
 		Vout:      vout,
 		Version:   pt.Version,
+		VSize:     pt.VSize,
 	}
 	return &tx, pt.Height, nil
 }
