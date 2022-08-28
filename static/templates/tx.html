@@ -59,17 +59,24 @@
                 <td>Total Output</td>
                 <td class="data">{{formatAmount $tx.ValueOutSat}} {{$cs}}</td>
             </tr>
+            {{- if $tx.VSize -}}
+            <tr>
+                <td>Size / vSize</td>
+                <td class="data">{{$tx.Size}} / {{$tx.VSize}}</td>
+            </tr>
+            {{- else -}}
             {{- if $tx.Size -}}
             <tr>
-                <td>Size/VSize</td>
-                <td class="data">{{$tx.Size}}/{{$tx.VSize}}</td>
+                <td>Size</td>
+                <td class="data">{{$tx.Size}}</td>
             </tr>
+            {{- end -}}
             {{- end -}}
             {{- end -}}
             {{- if $tx.FeesSat -}}
             <tr>
                 <td>Fees</td>
-                <td class="data">{{formatAmount $tx.FeesSat}} {{$cs}}</td>
+                <td class="data">{{formatAmount $tx.FeesSat}} {{$cs}}{{if $tx.Size}} ({{feePerByte $tx}}){{end}}</td>
             </tr>{{end -}}
             {{- if not $tx.Confirmations}}
             <tr>
