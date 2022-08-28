@@ -454,6 +454,7 @@ func (s *PublicServer) parseTemplates() []*template.Template {
 		"formatAmount":             s.formatAmount,
 		"formatAmountWithDecimals": formatAmountWithDecimals,
 		"setTxToTemplateData":      setTxToTemplateData,
+		"feePerByte":               feePerByte,
 		"isOwnAddress":             isOwnAddress,
 		"toJSON":                   toJSON,
 		"tokenTransfersCount":      tokenTransfersCount,
@@ -554,6 +555,19 @@ func formatAmountWithDecimals(a *api.Amount, d int) string {
 func setTxToTemplateData(td *TemplateData, tx *api.Tx) *TemplateData {
 	td.Tx = tx
 	return td
+}
+
+// feePerByte returns fee per vByte or Byte if vsize is unknown
+func feePerByte(tx *api.Tx) string {
+	if tx.FeesSat != nil {
+		if tx.VSize > 0 {
+			return fmt.Sprintf("%.2f sat/vByte", float64(tx.FeesSat.AsInt64())/float64(tx.VSize))
+		}
+		if tx.Size > 0 {
+			return fmt.Sprintf("%.2f sat/Byte", float64(tx.FeesSat.AsInt64())/float64(tx.Size))
+		}
+	}
+	return ""
 }
 
 // isOwnAddress returns true if the address is the one that is being shown in the explorer
