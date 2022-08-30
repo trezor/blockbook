@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flier/gorocksdb"
 	"github.com/golang/glog"
+	"github.com/linxGnu/grocksdb"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/db"
 )
@@ -173,7 +173,7 @@ func (fd *FourByteSignaturesDownloader) downloadSignatures() {
 	}
 	if len(results) > 0 {
 		glog.Infof("FourByteSignaturesDownloader storing %d new signatures", len(results))
-		wb := gorocksdb.NewWriteBatch()
+		wb := grocksdb.NewWriteBatch()
 		defer wb.Destroy()
 
 		for i := range results {

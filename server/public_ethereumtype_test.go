@@ -8,8 +8,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/flier/gorocksdb"
 	"github.com/golang/glog"
+	"github.com/linxGnu/grocksdb"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/bchain/coins/eth"
 	"github.com/trezor/blockbook/db"
@@ -128,7 +128,7 @@ func httpTestsEthereumType(t *testing.T, ts *httptest.Server) {
 
 func initEthereumTypeDB(d *db.RocksDB) error {
 	// add 0xa9059cbb transfer(address,uint256)	signature
-	wb := gorocksdb.NewWriteBatch()
+	wb := grocksdb.NewWriteBatch()
 	defer wb.Destroy()
 	if err := d.StoreFourByteSignature(wb, 2835717307, 145, &bchain.FourByteSignature{
 		Name:       "transfer",

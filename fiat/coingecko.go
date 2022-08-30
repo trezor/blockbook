@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flier/gorocksdb"
 	"github.com/golang/glog"
+	"github.com/linxGnu/grocksdb"
 	"github.com/trezor/blockbook/db"
 )
 
@@ -343,7 +343,7 @@ func (cg *Coingecko) getHistoricalTicker(tickersToUpdate map[uint]*db.CurrencyRa
 
 func (cg *Coingecko) storeTickers(tickersToUpdate map[uint]*db.CurrencyRatesTicker) error {
 	if len(tickersToUpdate) > 0 {
-		wb := gorocksdb.NewWriteBatch()
+		wb := grocksdb.NewWriteBatch()
 		defer wb.Destroy()
 		for _, v := range tickersToUpdate {
 			if err := cg.db.FiatRatesStoreTicker(wb, v); err != nil {
