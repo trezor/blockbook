@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/flier/gorocksdb"
+	"github.com/linxGnu/grocksdb"
 )
 
 func TestRocksTickers(t *testing.T) {
@@ -60,7 +60,7 @@ func TestRocksTickers(t *testing.T) {
 		},
 	}
 
-	wb := gorocksdb.NewWriteBatch()
+	wb := grocksdb.NewWriteBatch()
 	defer wb.Destroy()
 	err := d.FiatRatesStoreTicker(wb, ticker1)
 	if err != nil {

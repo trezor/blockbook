@@ -3,8 +3,8 @@ package db
 import (
 	"time"
 
-	"github.com/flier/gorocksdb"
 	"github.com/golang/glog"
+	"github.com/linxGnu/grocksdb"
 	"github.com/trezor/blockbook/bchain"
 )
 
@@ -58,7 +58,7 @@ func (d *RocksDB) InitBulkConnect() (*BulkConnect, error) {
 	return b, nil
 }
 
-func (b *BulkConnect) storeTxAddresses(wb *gorocksdb.WriteBatch, all bool) (int, int, error) {
+func (b *BulkConnect) storeTxAddresses(wb *grocksdb.WriteBatch, all bool) (int, int, error) {
 	var txm map[string]*TxAddresses
 	var sp int
 	if all {
@@ -101,7 +101,7 @@ func (b *BulkConnect) storeTxAddresses(wb *gorocksdb.WriteBatch, all bool) (int,
 func (b *BulkConnect) parallelStoreTxAddresses(c chan error, all bool) {
 	defer close(c)
 	start := time.Now()
-	wb := gorocksdb.NewWriteBatch()
+	wb := grocksdb.NewWriteBatch()
 	defer wb.Destroy()
 	count, sp, err := b.storeTxAddresses(wb, all)
 	if err != nil {
@@ -116,7 +116,7 @@ func (b *BulkConnect) parallelStoreTxAddresses(c chan error, all bool) {
 	c <- nil
 }
 
-func (b *BulkConnect) storeBalances(wb *gorocksdb.WriteBatch, all bool) (int, error) {
+func (b *BulkConnect) storeBalances(wb *grocksdb.WriteBatch, all bool) (int, error) {
 	var bal map[string]*AddrBalance
 	if all {
 		bal = b.balances
@@ -141,7 +141,7 @@ func (b *BulkConnect) storeBalances(wb *gorocksdb.WriteBatch, all bool) (int, er
 func (b *BulkConnect) parallelStoreBalances(c chan error, all bool) {
 	defer close(c)
 	start := time.Now()
-	wb := gorocksdb.NewWriteBatch()
+	wb := grocksdb.NewWriteBatch()
 	defer wb.Destroy()
 	count, err := b.storeBalances(wb, all)
 	if err != nil {
@@ -156,7 +156,7 @@ func (b *BulkConnect) parallelStoreBalances(c chan error, all bool) {
 	c <- nil
 }
 
-func (b *BulkConnect) storeBulkAddresses(wb *gorocksdb.WriteBatch) error {
+func (b *BulkConnect) storeBulkAddresses(wb *grocksdb.WriteBatch) error {
 	for _, ba := range b.bulkAddresses {
 		if err := b.d.storeAddresses(wb, ba.bi.Height, ba.addresses); err != nil {
 			return err
@@ -202,7 +202,7 @@ func (b *BulkConnect) connectBlockBitcoinType(block *bchain.Block, storeBlockTxs
 	// open WriteBatch only if going to write
 	if sa || b.bulkAddressesCount > maxBulkAddresses || storeBlockTxs {
 		start := time.Now()
-		wb := gorocksdb.NewWriteBatch()
+		wb := grocksdb.NewWriteBatch()
 		defer wb.Destroy()
 		bac := b.bulkAddressesCount
 		if sa || b.bulkAddressesCount > maxBulkAddresses {
@@ -235,7 +235,7 @@ func (b *BulkConnect) connectBlockBitcoinType(block *bchain.Block, storeBlockTxs
 	return nil
 }
 
-func (b *BulkConnect) storeAddressContracts(wb *gorocksdb.WriteBatch, all bool) (int, error) {
+func (b *BulkConnect) storeAddressContracts(wb *grocksdb.WriteBatch, all bool) (int, error) {
 	var ac map[string]*AddrContracts
 	if all {
 		ac = b.addressContracts
@@ -260,7 +260,7 @@ func (b *BulkConnect) storeAddressContracts(wb *gorocksdb.WriteBatch, all bool) 
 func (b *BulkConnect) parallelStoreAddressContracts(c chan error, all bool) {
 	defer close(c)
 	start := time.Now()
-	wb := gorocksdb.NewWriteBatch()
+	wb := grocksdb.NewWriteBatch()
 	defer wb.Destroy()
 	count, err := b.storeAddressContracts(wb, all)
 	if err != nil {
@@ -303,7 +303,7 @@ func (b *BulkConnect) connectBlockEthereumType(block *bchain.Block, storeBlockTx
 	// open WriteBatch only if going to write
 	if sa || b.bulkAddressesCount > maxBulkAddresses || storeBlockTxs {
 		start := time.Now()
-		wb := gorocksdb.NewWriteBatch()
+		wb := grocksdb.NewWriteBatch()
 		defer wb.Destroy()
 		bac := b.bulkAddressesCount
 		if sa || b.bulkAddressesCount > maxBulkAddresses {
@@ -333,7 +333,7 @@ func (b *BulkConnect) connectBlockEthereumType(block *bchain.Block, storeBlockTx
 		// if there are blockSpecificData, store them
 		blockSpecificData, _ := block.CoinSpecificData.(*bchain.EthereumBlockSpecificData)
 		if blockSpecificData != nil {
-			wb := gorocksdb.NewWriteBatch()
+			wb := grocksdb.NewWriteBatch()
 			defer wb.Destroy()
 			if err = b.d.storeBlockSpecificDataEthereumType(wb, block); err != nil {
 				return err
@@ -378,7 +378,7 @@ func (b *BulkConnect) Close() error {
 		storeAddressContractsChan = make(chan error)
 		go b.parallelStoreAddressContracts(storeAddressContractsChan, true)
 	}
-	wb := gorocksdb.NewWriteBatch()
+	wb := grocksdb.NewWriteBatch()
 	defer wb.Destroy()
 	bac := b.bulkAddressesCount
 	if err := b.storeBulkAddresses(wb); err != nil {

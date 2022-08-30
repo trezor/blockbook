@@ -66,16 +66,6 @@ Check [this](https://github.com/trezor/blockbook/issues/89) or [this](https://gi
 
 Your coin's block/transaction data may not be compatible with `BitcoinParser` `ParseBlock`/`ParseTx`, which is used by default. In that case, implement your coin in a similar way we used in case of [zcash](https://github.com/trezor/blockbook/tree/master/bchain/coins/zec) and some other coins. The principle is not to parse the block/transaction data in Blockbook but instead to get parsed transactions as json from the backend.
 
-#### Cannot build Blockbook using `go build` command
-
-When building Blockbook I get error `not enough arguments in call to _Cfunc_rocksdb_approximate_sizes`.
-
-RocksDB version 6.16.0 changed the API in a backwards incompatible way. It is necessary to build Blockbook with the `rocksdb_6_16` tag to fix the compatibility problem. The correct way to build Blockbook is:
-
-```
-go build -tags rocksdb_6_16
-```
-
 ## Data storage in RocksDB
 
 Blockbook stores data the key-value store RocksDB. Database format is described [here](/docs/rocksdb.md).

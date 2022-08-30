@@ -7,9 +7,9 @@ import (
 	"time"
 
 	vlq "github.com/bsm/go-vlq"
-	"github.com/flier/gorocksdb"
 	"github.com/golang/glog"
 	"github.com/juju/errors"
+	"github.com/linxGnu/grocksdb"
 )
 
 // FiatRatesTimeFormat is a format string for storing FiatRates timestamps in rocksdb
@@ -152,7 +152,7 @@ func FiatRatesConvertDate(date string) (*time.Time, error) {
 }
 
 // FiatRatesStoreTicker stores ticker data at the specified time
-func (d *RocksDB) FiatRatesStoreTicker(wb *gorocksdb.WriteBatch, ticker *CurrencyRatesTicker) error {
+func (d *RocksDB) FiatRatesStoreTicker(wb *grocksdb.WriteBatch, ticker *CurrencyRatesTicker) error {
 	if len(ticker.Rates) == 0 {
 		return errors.New("Error storing ticker: empty rates")
 	}
@@ -180,7 +180,7 @@ func isSuitableTicker(ticker *CurrencyRatesTicker, vsCurrency string, token stri
 	return true
 }
 
-func getTickerFromIterator(it *gorocksdb.Iterator, vsCurrency string, token string) (*CurrencyRatesTicker, error) {
+func getTickerFromIterator(it *grocksdb.Iterator, vsCurrency string, token string) (*CurrencyRatesTicker, error) {
 	timeObj, err := time.Parse(FiatRatesTimeFormat, string(it.Key().Data()))
 	if err != nil {
 		return nil, err
