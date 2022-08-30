@@ -1635,6 +1635,41 @@ func (d *RocksDB) loadBlockTimes() ([]uint32, error) {
 	return times, nil
 }
 
+func (d *RocksDB) checkColumns(is *common.InternalState) ([]common.InternalStateColumn, error) {
+	// make sure that column stats match the columns
+	sc := is.DbColumns
+	nc := make([]common.InternalStateColumn, len(cfNames))
+	for i := 0; i < len(nc); i++ {
+		nc[i].Name = cfNames[i]
+		nc[i].Version = dbVersion
+		for j := 0; j < len(sc); j++ {
+			if sc[j].Name == nc[i].Name {
+				// check the version of the column, if it does not match, the db is not compatible
+				if sc[j].Version != dbVersion {
+					// upgrade of DB 5 to 6 for BitecoinType coins is possible
+					// columns transactions and fiatRates must be cleared as they are not compatible
+					if sc[j].Version == 5 && dbVersion == 6 && d.chainParser.GetChainType() == bchain.ChainBitcoinType {
+						if nc[i].Name == "transactions" {
+							d.db.DeleteRangeCF(d.wo, d.cfh[cfTransactions], []byte{0}, []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff})
+						} else if nc[i].Name == "fiatRates" {
+							d.db.DeleteRangeCF(d.wo, d.cfh[cfFiatRates], []byte{0}, []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff})
+						}
+						glog.Infof("Column %s upgraded from v%d to v%d", nc[i].Name, sc[j].Version, dbVersion)
+					} else {
+						return nil, errors.Errorf("DB version %v of column '%v' does not match the required version %v. DB is not compatible.", sc[j].Version, sc[j].Name, dbVersion)
+					}
+				}
+				nc[i].Rows = sc[j].Rows
+				nc[i].KeyBytes = sc[j].KeyBytes
+				nc[i].ValueBytes = sc[j].ValueBytes
+				nc[i].Updated = sc[j].Updated
+				break
+			}
+		}
+	}
+	return nc, nil
+}
+
 // LoadInternalState loads from db internal state or initializes a new one if not yet stored
 func (d *RocksDB) LoadInternalState(rpcCoin string) (*common.InternalState, error) {
 	val, err := d.db.GetCF(d.ro, d.cfh[cfDefault], []byte(internalStateKey))
@@ -1659,25 +1694,9 @@ func (d *RocksDB) LoadInternalState(rpcCoin string) (*common.InternalState, erro
 			return nil, errors.Errorf("Coins do not match. DB coin %v, RPC coin %v", is.Coin, rpcCoin)
 		}
 	}
-	// make sure that column stats match the columns
-	sc := is.DbColumns
-	nc := make([]common.InternalStateColumn, len(cfNames))
-	for i := 0; i < len(nc); i++ {
-		nc[i].Name = cfNames[i]
-		nc[i].Version = dbVersion
-		for j := 0; j < len(sc); j++ {
-			if sc[j].Name == nc[i].Name {
-				// check the version of the column, if it does not match, the db is not compatible
-				if sc[j].Version != dbVersion {
-					return nil, errors.Errorf("DB version %v of column '%v' does not match the required version %v. DB is not compatible.", sc[j].Version, sc[j].Name, dbVersion)
-				}
-				nc[i].Rows = sc[j].Rows
-				nc[i].KeyBytes = sc[j].KeyBytes
-				nc[i].ValueBytes = sc[j].ValueBytes
-				nc[i].Updated = sc[j].Updated
-				break
-			}
-		}
+	nc, err := d.checkColumns(is)
+	if err != nil {
+		return nil, err
 	}
 	is.DbColumns = nc
 	is.BlockTimes, err = d.loadBlockTimes()
