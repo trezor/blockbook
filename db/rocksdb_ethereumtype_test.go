@@ -8,8 +8,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/flier/gorocksdb"
 	"github.com/juju/errors"
+	"github.com/linxGnu/grocksdb"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/bchain/coins/eth"
 	"github.com/trezor/blockbook/common"
@@ -359,7 +359,7 @@ func testFourByteSignature(t *testing.T, d *RocksDB) {
 		Name:       "xyz",
 		Parameters: []string{"address", "(bytes,uint256[],uint256)", "uint16"},
 	}
-	wb := gorocksdb.NewWriteBatch()
+	wb := grocksdb.NewWriteBatch()
 	defer wb.Destroy()
 	if err := d.StoreFourByteSignature(wb, fourBytes, id, &signature); err != nil {
 		t.Fatal(err)

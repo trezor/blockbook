@@ -7,9 +7,9 @@ import (
 	"sync"
 
 	vlq "github.com/bsm/go-vlq"
-	"github.com/flier/gorocksdb"
 	"github.com/golang/glog"
 	"github.com/juju/errors"
+	"github.com/linxGnu/grocksdb"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/bchain/coins/eth"
 )
@@ -131,7 +131,7 @@ func unpackAddrContracts(buf []byte, addrDesc bchain.AddressDescriptor) (*AddrCo
 	}, nil
 }
 
-func (d *RocksDB) storeAddressContracts(wb *gorocksdb.WriteBatch, acm map[string]*AddrContracts) error {
+func (d *RocksDB) storeAddressContracts(wb *grocksdb.WriteBatch, acm map[string]*AddrContracts) error {
 	for addrDesc, acs := range acm {
 		// address with 0 contracts is removed from db - happens on disconnect
 		if acs == nil || (acs.NonContractTxs == 0 && acs.InternalTxs == 0 && len(acs.Contracts) == 0) {
@@ -659,7 +659,7 @@ func (d *RocksDB) GetFourByteSignatures(fourBytes uint32) (*[]bchain.FourByteSig
 }
 
 // StoreFourByteSignature stores 4byte signature in DB
-func (d *RocksDB) StoreFourByteSignature(wb *gorocksdb.WriteBatch, fourBytes uint32, id uint32, signature *bchain.FourByteSignature) error {
+func (d *RocksDB) StoreFourByteSignature(wb *grocksdb.WriteBatch, fourBytes uint32, id uint32, signature *bchain.FourByteSignature) error {
 	key := packFourByteKey(fourBytes, id)
 	wb.PutCF(d.cfh[cfFunctionSignatures], key, packFourByteSignature(signature))
 	cachedByteSignaturesMux.Lock()
@@ -690,7 +690,7 @@ func (d *RocksDB) getEthereumInternalData(btxID []byte) (*bchain.EthereumInterna
 	return d.unpackEthInternalData(buf)
 }
 
-func (d *RocksDB) storeInternalDataEthereumType(wb *gorocksdb.WriteBatch, blockTxs []ethBlockTx) error {
+func (d *RocksDB) storeInternalDataEthereumType(wb *grocksdb.WriteBatch, blockTxs []ethBlockTx) error {
 	for i := range blockTxs {
 		blockTx := &blockTxs[i]
 		if blockTx.internalData != nil {
@@ -785,7 +785,7 @@ func (d *RocksDB) GetContractInfo(contract bchain.AddressDescriptor, typeFromCon
 // StoreContractInfo stores contractInfo in DB
 // if CreatedInBlock==0 and DestructedInBlock!=0, it is evaluated as a desctruction of a contract, the contract info is updated
 // in all other cases the contractInfo overwrites previously stored data in DB (however it should not really happen as contract is created only once)
-func (d *RocksDB) StoreContractInfo(wb *gorocksdb.WriteBatch, contractInfo *bchain.ContractInfo) error {
+func (d *RocksDB) StoreContractInfo(wb *grocksdb.WriteBatch, contractInfo *bchain.ContractInfo) error {
 	if contractInfo.Contract != "" {
 		key, err := d.chainParser.GetAddrDescFromAddress(contractInfo.Contract)
 		if err != nil {
@@ -840,7 +840,7 @@ func packBlockTx(buf []byte, blockTx *ethBlockTx) []byte {
 	return buf
 }
 
-func (d *RocksDB) storeAndCleanupBlockTxsEthereumType(wb *gorocksdb.WriteBatch, block *bchain.Block, blockTxs []ethBlockTx) error {
+func (d *RocksDB) storeAndCleanupBlockTxsEthereumType(wb *grocksdb.WriteBatch, block *bchain.Block, blockTxs []ethBlockTx) error {
 	pl := d.chainParser.PackedTxidLen()
 	buf := make([]byte, 0, (pl+2*eth.EthereumTypeAddressDescriptorLen)*len(blockTxs))
 	for i := range blockTxs {
@@ -851,7 +851,7 @@ func (d *RocksDB) storeAndCleanupBlockTxsEthereumType(wb *gorocksdb.WriteBatch, 
 	return d.cleanupBlockTxs(wb, block)
 }
 
-func (d *RocksDB) storeBlockInternalDataErrorEthereumType(wb *gorocksdb.WriteBatch, block *bchain.Block, message string) error {
+func (d *RocksDB) storeBlockInternalDataErrorEthereumType(wb *grocksdb.WriteBatch, block *bchain.Block, message string) error {
 	key := packUint(block.Height)
 	txid, err := d.chainParser.PackTxid(block.Hash)
 	if err != nil {
@@ -867,7 +867,7 @@ func (d *RocksDB) storeBlockInternalDataErrorEthereumType(wb *gorocksdb.WriteBat
 	return nil
 }
 
-func (d *RocksDB) storeBlockSpecificDataEthereumType(wb *gorocksdb.WriteBatch, block *bchain.Block) error {
+func (d *RocksDB) storeBlockSpecificDataEthereumType(wb *grocksdb.WriteBatch, block *bchain.Block) error {
 	blockSpecificData, _ := block.CoinSpecificData.(*bchain.EthereumBlockSpecificData)
 	if blockSpecificData != nil {
 		if blockSpecificData.InternalDataError != "" {
@@ -1112,7 +1112,7 @@ func (d *RocksDB) disconnectInternalData(btxID []byte, addresses map[string]map[
 	return nil
 }
 
-func (d *RocksDB) disconnectBlockTxsEthereumType(wb *gorocksdb.WriteBatch, height uint32, blockTxs []ethBlockTx, contracts map[string]*AddrContracts) error {
+func (d *RocksDB) disconnectBlockTxsEthereumType(wb *grocksdb.WriteBatch, height uint32, blockTxs []ethBlockTx, contracts map[string]*AddrContracts) error {
 	glog.Info("Disconnecting block ", height, " containing ", len(blockTxs), " transactions")
 	addresses := make(map[string]map[string]struct{})
 	for i := range blockTxs {
@@ -1169,7 +1169,7 @@ func (d *RocksDB) DisconnectBlockRangeEthereumType(lower uint32, higher uint32) 
 		}
 		blocks[height-lower] = blockTxs
 	}
-	wb := gorocksdb.NewWriteBatch()
+	wb := grocksdb.NewWriteBatch()
 	defer wb.Destroy()
 	contracts := make(map[string]*AddrContracts)
 	for height := higher; height >= lower; height-- {
