@@ -15,9 +15,9 @@ import (
 	"unsafe"
 
 	vlq "github.com/bsm/go-vlq"
-	"github.com/flier/gorocksdb"
 	"github.com/golang/glog"
 	"github.com/juju/errors"
+	"github.com/linxGnu/grocksdb"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/common"
 )
@@ -34,8 +34,8 @@ const refreshIterator = 5000000
 // RepairRocksDB calls RocksDb db repair function
 func RepairRocksDB(name string) error {
 	glog.Infof("rocksdb: repair")
-	opts := gorocksdb.NewDefaultOptions()
-	return gorocksdb.RepairDb(name, opts)
+	opts := grocksdb.NewDefaultOptions()
+	return grocksdb.RepairDb(name, opts)
 }
 
 type connectBlockStats struct {
@@ -60,14 +60,14 @@ const (
 // RocksDB handle
 type RocksDB struct {
 	path         string
-	db           *gorocksdb.DB
-	wo           *gorocksdb.WriteOptions
-	ro           *gorocksdb.ReadOptions
-	cfh          []*gorocksdb.ColumnFamilyHandle
+	db           *grocksdb.DB
+	wo           *grocksdb.WriteOptions
+	ro           *grocksdb.ReadOptions
+	cfh          []*grocksdb.ColumnFamilyHandle
 	chainParser  bchain.BlockChainParser
 	is           *common.InternalState
 	metrics      *common.Metrics
-	cache        *gorocksdb.Cache
+	cache        *grocksdb.Cache
 	maxOpenFiles int
 	cbs          connectBlockStats
 }
@@ -104,20 +104,20 @@ var cfBaseNames = []string{"default", "height", "addresses", "blockTxs", "transa
 var cfNamesBitcoinType = []string{"addressBalance", "txAddresses"}
 var cfNamesEthereumType = []string{"addressContracts", "internalData", "contracts", "functionSignatures", "blockInternalDataErrors", "addressAliases"}
 
-func openDB(path string, c *gorocksdb.Cache, openFiles int) (*gorocksdb.DB, []*gorocksdb.ColumnFamilyHandle, error) {
+func openDB(path string, c *grocksdb.Cache, openFiles int) (*grocksdb.DB, []*grocksdb.ColumnFamilyHandle, error) {
 	// opts with bloom filter
 	opts := createAndSetDBOptions(10, c, openFiles)
 	// opts for addresses without bloom filter
 	// from documentation: if most of your queries are executed using iterators, you shouldn't set bloom filter
 	optsAddresses := createAndSetDBOptions(0, c, openFiles)
 	// default, height, addresses, blockTxids, transactions
-	cfOptions := []*gorocksdb.Options{opts, opts, optsAddresses, opts, opts, opts}
+	cfOptions := []*grocksdb.Options{opts, opts, optsAddresses, opts, opts, opts}
 	// append type specific options
 	count := len(cfNames) - len(cfOptions)
 	for i := 0; i < count; i++ {
 		cfOptions = append(cfOptions, opts)
 	}
-	db, cfh, err := gorocksdb.OpenDbColumnFamilies(opts, path, cfNames, cfOptions)
+	db, cfh, err := grocksdb.OpenDbColumnFamilies(opts, path, cfNames, cfOptions)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -139,13 +139,13 @@ func NewRocksDB(path string, cacheSize, maxOpenFiles int, parser bchain.BlockCha
 		return nil, errors.New("Unknown chain type")
 	}
 
-	c := gorocksdb.NewLRUCache(uint64(cacheSize))
+	c := grocksdb.NewLRUCache(uint64(cacheSize))
 	db, cfh, err := openDB(path, c, maxOpenFiles)
 	if err != nil {
 		return nil, err
 	}
-	wo := gorocksdb.NewDefaultWriteOptions()
-	ro := gorocksdb.NewDefaultReadOptions()
+	wo := grocksdb.NewDefaultWriteOptions()
+	ro := grocksdb.NewDefaultReadOptions()
 	return &RocksDB{path, db, wo, ro, cfh, parser, nil, metrics, c, maxOpenFiles, connectBlockStats{}}, nil
 }
 
@@ -200,7 +200,7 @@ func atoUint64(s string) uint64 {
 	return uint64(i)
 }
 
-func (d *RocksDB) WriteBatch(wb *gorocksdb.WriteBatch) error {
+func (d *RocksDB) WriteBatch(wb *grocksdb.WriteBatch) error {
 	return d.db.Write(d.wo, wb)
 }
 
@@ -325,7 +325,7 @@ const (
 
 // ConnectBlock indexes addresses in the block and stores them in db
 func (d *RocksDB) ConnectBlock(block *bchain.Block) error {
-	wb := gorocksdb.NewWriteBatch()
+	wb := grocksdb.NewWriteBatch()
 	defer wb.Destroy()
 
 	if glog.V(2) {
@@ -740,7 +740,7 @@ func addToAddressesMap(addresses addressesMap, strAddrDesc string, btxID []byte,
 	return false
 }
 
-func (d *RocksDB) storeAddresses(wb *gorocksdb.WriteBatch, height uint32, addresses addressesMap) error {
+func (d *RocksDB) storeAddresses(wb *grocksdb.WriteBatch, height uint32, addresses addressesMap) error {
 	for addrDesc, txi := range addresses {
 		ba := bchain.AddressDescriptor(addrDesc)
 		key := packAddressKey(ba, height)
@@ -750,7 +750,7 @@ func (d *RocksDB) storeAddresses(wb *gorocksdb.WriteBatch, height uint32, addres
 	return nil
 }
 
-func (d *RocksDB) storeTxAddresses(wb *gorocksdb.WriteBatch, am map[string]*TxAddresses) error {
+func (d *RocksDB) storeTxAddresses(wb *grocksdb.WriteBatch, am map[string]*TxAddresses) error {
 	varBuf := make([]byte, maxPackedBigintBytes)
 	buf := make([]byte, 1024)
 	for txID, ta := range am {
@@ -760,7 +760,7 @@ func (d *RocksDB) storeTxAddresses(wb *gorocksdb.WriteBatch, am map[string]*TxAd
 	return nil
 }
 
-func (d *RocksDB) storeBalances(wb *gorocksdb.WriteBatch, abm map[string]*AddrBalance) error {
+func (d *RocksDB) storeBalances(wb *grocksdb.WriteBatch, abm map[string]*AddrBalance) error {
 	// allocate buffer initial buffer
 	buf := make([]byte, 1024)
 	varBuf := make([]byte, maxPackedBigintBytes)
@@ -776,7 +776,7 @@ func (d *RocksDB) storeBalances(wb *gorocksdb.WriteBatch, abm map[string]*AddrBa
 	return nil
 }
 
-func (d *RocksDB) cleanupBlockTxs(wb *gorocksdb.WriteBatch, block *bchain.Block) error {
+func (d *RocksDB) cleanupBlockTxs(wb *grocksdb.WriteBatch, block *bchain.Block) error {
 	keep := d.chainParser.KeepBlockAddresses()
 	// cleanup old block address
 	if block.Height > uint32(keep) {
@@ -797,7 +797,7 @@ func (d *RocksDB) cleanupBlockTxs(wb *gorocksdb.WriteBatch, block *bchain.Block)
 	return nil
 }
 
-func (d *RocksDB) storeAndCleanupBlockTxs(wb *gorocksdb.WriteBatch, block *bchain.Block) error {
+func (d *RocksDB) storeAndCleanupBlockTxs(wb *grocksdb.WriteBatch, block *bchain.Block) error {
 	pl := d.chainParser.PackedTxidLen()
 	buf := make([]byte, 0, pl*len(block.Txs))
 	varBuf := make([]byte, vlq.MaxLen64)
@@ -1225,7 +1225,7 @@ func (d *RocksDB) GetBlockInfo(height uint32) (*BlockInfo, error) {
 	return bi, err
 }
 
-func (d *RocksDB) writeHeightFromBlock(wb *gorocksdb.WriteBatch, block *bchain.Block, op int) error {
+func (d *RocksDB) writeHeightFromBlock(wb *grocksdb.WriteBatch, block *bchain.Block, op int) error {
 	return d.writeHeight(wb, block.Height, &BlockInfo{
 		Hash:   block.Hash,
 		Time:   block.Time,
@@ -1235,7 +1235,7 @@ func (d *RocksDB) writeHeightFromBlock(wb *gorocksdb.WriteBatch, block *bchain.B
 	}, op)
 }
 
-func (d *RocksDB) writeHeight(wb *gorocksdb.WriteBatch, height uint32, bi *BlockInfo, op int) error {
+func (d *RocksDB) writeHeight(wb *grocksdb.WriteBatch, height uint32, bi *BlockInfo, op int) error {
 	key := packUint(height)
 	switch op {
 	case opInsert:
@@ -1281,7 +1281,7 @@ func (d *RocksDB) GetAddressAlias(address string) string {
 	return name
 }
 
-func (d *RocksDB) storeAddressAliasRecords(wb *gorocksdb.WriteBatch, records []bchain.AddressAliasRecord) error {
+func (d *RocksDB) storeAddressAliasRecords(wb *grocksdb.WriteBatch, records []bchain.AddressAliasRecord) error {
 	if d.chainParser.UseAddressAliases() {
 		for i := range records {
 			r := &records[i]
@@ -1298,7 +1298,7 @@ func (d *RocksDB) storeAddressAliasRecords(wb *gorocksdb.WriteBatch, records []b
 
 // Disconnect blocks
 
-func (d *RocksDB) disconnectTxAddressesInputs(wb *gorocksdb.WriteBatch, btxID []byte, inputs []outpoint, txa *TxAddresses, txAddressesToUpdate map[string]*TxAddresses,
+func (d *RocksDB) disconnectTxAddressesInputs(wb *grocksdb.WriteBatch, btxID []byte, inputs []outpoint, txa *TxAddresses, txAddressesToUpdate map[string]*TxAddresses,
 	getAddressBalance func(addrDesc bchain.AddressDescriptor) (*AddrBalance, error),
 	addressFoundInTx func(addrDesc bchain.AddressDescriptor, btxID []byte) bool) error {
 	var err error
@@ -1354,7 +1354,7 @@ func (d *RocksDB) disconnectTxAddressesInputs(wb *gorocksdb.WriteBatch, btxID []
 	return nil
 }
 
-func (d *RocksDB) disconnectTxAddressesOutputs(wb *gorocksdb.WriteBatch, btxID []byte, txa *TxAddresses,
+func (d *RocksDB) disconnectTxAddressesOutputs(wb *grocksdb.WriteBatch, btxID []byte, txa *TxAddresses,
 	getAddressBalance func(addrDesc bchain.AddressDescriptor) (*AddrBalance, error),
 	addressFoundInTx func(addrDesc bchain.AddressDescriptor, btxID []byte) bool) error {
 	for i, t := range txa.Outputs {
@@ -1386,7 +1386,7 @@ func (d *RocksDB) disconnectTxAddressesOutputs(wb *gorocksdb.WriteBatch, btxID [
 }
 
 func (d *RocksDB) disconnectBlock(height uint32, blockTxs []blockTxs) error {
-	wb := gorocksdb.NewWriteBatch()
+	wb := grocksdb.NewWriteBatch()
 	defer wb.Destroy()
 	txAddressesToUpdate := make(map[string]*TxAddresses)
 	txAddresses := make([]*TxAddresses, len(blockTxs))
@@ -1498,7 +1498,7 @@ func (d *RocksDB) DisconnectBlockRangeBitcoinType(lower uint32, higher uint32) e
 	return nil
 }
 
-func (d *RocksDB) storeBalancesDisconnect(wb *gorocksdb.WriteBatch, balances map[string]*AddrBalance) {
+func (d *RocksDB) storeBalancesDisconnect(wb *grocksdb.WriteBatch, balances map[string]*AddrBalance) {
 	for _, b := range balances {
 		if b != nil {
 			// remove spent utxos
@@ -1584,14 +1584,14 @@ func (d *RocksDB) DeleteTx(txid string) error {
 		return nil
 	}
 	// use write batch so that this delete matches other deletes
-	wb := gorocksdb.NewWriteBatch()
+	wb := grocksdb.NewWriteBatch()
 	defer wb.Destroy()
 	d.internalDeleteTx(wb, key)
 	return d.WriteBatch(wb)
 }
 
 // internalDeleteTx checks if tx is cached and updates internal state accordingly
-func (d *RocksDB) internalDeleteTx(wb *gorocksdb.WriteBatch, key []byte) {
+func (d *RocksDB) internalDeleteTx(wb *grocksdb.WriteBatch, key []byte) {
 	val, err := d.db.GetCF(d.ro, d.cfh[cfTransactions], key)
 	// ignore error, it is only for statistics
 	if err == nil {
@@ -1745,7 +1745,7 @@ func (d *RocksDB) computeColumnSize(col int, stopCompute chan os.Signal) (int64,
 	var rows, keysSum, valuesSum int64
 	var seekKey []byte
 	// do not use cache
-	ro := gorocksdb.NewDefaultReadOptions()
+	ro := grocksdb.NewDefaultReadOptions()
 	ro.SetFillCache(false)
 	for {
 		var key []byte
@@ -1890,7 +1890,7 @@ func (d *RocksDB) fixUtxo(addrDesc bchain.AddressDescriptor, ba *AddrBalance) (b
 				utxos[i], utxos[opp] = utxos[opp], utxos[i]
 			}
 			ba.Utxos = utxos
-			wb := gorocksdb.NewWriteBatch()
+			wb := grocksdb.NewWriteBatch()
 			err = d.storeBalances(wb, map[string]*AddrBalance{string(addrDesc): ba})
 			if err == nil {
 				err = d.WriteBatch(wb)
@@ -1903,7 +1903,7 @@ func (d *RocksDB) fixUtxo(addrDesc bchain.AddressDescriptor, ba *AddrBalance) (b
 		}
 		return fixed, false, errors.Errorf("balance %s, checksum %s, from txa %s, txs %d", ba.BalanceSat.String(), checksum.String(), checksumFromTxs.String(), ba.Txs)
 	} else if reorder {
-		wb := gorocksdb.NewWriteBatch()
+		wb := grocksdb.NewWriteBatch()
 		err := d.storeBalances(wb, map[string]*AddrBalance{string(addrDesc): ba})
 		if err == nil {
 			err = d.WriteBatch(wb)
@@ -1926,7 +1926,7 @@ func (d *RocksDB) FixUtxos(stop chan os.Signal) error {
 	var row, errorsCount, fixedCount int64
 	var seekKey []byte
 	// do not use cache
-	ro := gorocksdb.NewDefaultReadOptions()
+	ro := grocksdb.NewDefaultReadOptions()
 	ro.SetFillCache(false)
 	for {
 		var addrDesc bchain.AddressDescriptor
