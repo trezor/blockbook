@@ -78,7 +78,7 @@ There are few variables that can be passed to `make` in order to modify build pr
 
 `BASE_IMAGE`: Specifies the base image of the Docker build image. By default, it chooses the same Linux distro as the host machine but you can override it this way `make BASE_IMAGE=debian:10 all-bitcoin` to make a build for Debian 10.
 
-*Please be aware that we are running our Blockbooks on Debian 9 and Debian 10 and do not offer support with running it on other distros.*
+*Please be aware that we are currently running our Blockbooks on Debian 11 and do not offer support with running it on other distros.*
 
 `NO_CACHE`: Common behaviour of Docker image build is that build steps are cached and next time they are executed much faster.
 Although this is a good idea, when something went wrong you will need to override this behaviour somehow. Execute this
@@ -185,13 +185,13 @@ Configuration is described in [config.md](/docs/config.md).
 
 ## Manual build
 
-Instructions below are focused on Debian 9 (Stretch) and 10 (Buster). If you want to use another Linux distribution or operating system
-like macOS or Windows, please read instructions specific for each project.
+Instructions below are focused on Debian 11 on amd64. If you want to use another Linux distribution or operating system
+like macOS or Windows, please adapt the instructions to your target system.
 
 Setup go environment (use newer version of go as available)
 
 ```
-wget https://golang.org/dl/go1.17.1.linux-amd64.tar.gz && tar xf go1.17.1.linux-amd64.tar.gz
+wget https://golang.org/dl/go1.19.linux-amd64.tar.gz && tar xf go1.19.linux-amd64.tar.gz
 sudo mv go /opt/go
 sudo ln -s /opt/go/bin/go /usr/bin/go
 # see `go help gopath` for details
@@ -206,18 +206,18 @@ make command to create a portable binary.
 
 ```
 sudo apt-get update && sudo apt-get install -y \
-    build-essential git wget pkg-config libzmq3-dev libgflags-dev libsnappy-dev zlib1g-dev libbz2-dev liblz4-dev
+    build-essential git wget pkg-config libzmq3-dev libgflags-dev libsnappy-dev zlib1g-dev libzstd-dev  libbz2-dev liblz4-dev 
 git clone https://github.com/facebook/rocksdb.git
 cd rocksdb
-git checkout v6.22.1
+git checkout v7.5.3
 CFLAGS=-fPIC CXXFLAGS=-fPIC make release
 ```
 
-Setup variables for gorocksdb
+Setup variables for grocksdb
 
 ```
 export CGO_CFLAGS="-I/path/to/rocksdb/include"
-export CGO_LDFLAGS="-L/path/to/rocksdb -lrocksdb -lstdc++ -lm -lz -ldl -lbz2 -lsnappy -llz4"
+export CGO_LDFLAGS="-L/path/to/rocksdb -lrocksdb -lstdc++ -lm -lz -ldl -lbz2 -lsnappy -llz4 -lzstd"
 ```
 
 Install ZeroMQ: https://github.com/zeromq/libzmq
@@ -237,7 +237,7 @@ Get blockbook sources, install dependencies, build:
 cd $GOPATH/src
 git clone https://github.com/trezor/blockbook.git
 cd blockbook
-go build -tags rocksdb_6_16
+go build
 ```
 
 ### Example command

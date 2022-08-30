@@ -14,9 +14,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/flier/gorocksdb"
 	"github.com/golang/glog"
 	"github.com/gorilla/websocket"
+	"github.com/linxGnu/grocksdb"
 	"github.com/martinboehm/btcutil/chaincfg"
 	gosocketio "github.com/martinboehm/golang-socketio"
 	"github.com/martinboehm/golang-socketio/transport"
@@ -176,7 +176,7 @@ func insertFiatRate(date string, rates map[string]float32, tokenRates map[string
 		Rates:      rates,
 		TokenRates: tokenRates,
 	}
-	wb := gorocksdb.NewWriteBatch()
+	wb := grocksdb.NewWriteBatch()
 	defer wb.Destroy()
 	if err := d.FiatRatesStoreTicker(wb, ticker); err != nil {
 		return err
