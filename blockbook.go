@@ -583,7 +583,9 @@ func storeInternalStateLoop() {
 			glog.Error("storeInternalStateLoop ", errors.ErrorStack(err))
 		}
 		if lastAppInfo.Add(logAppInfoPeriod).Before(time.Now()) {
-			glog.Info(index.GetMemoryStats())
+			if glog.V(1) {
+				glog.Info(index.GetMemoryStats())
+			}
 			if err := blockbookAppInfoMetric(index, chain, txCache, internalState, metrics); err != nil {
 				glog.Error("blockbookAppInfoMetric ", err)
 			}
