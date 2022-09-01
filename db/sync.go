@@ -386,7 +386,9 @@ ConnectLoop:
 				start = time.Now()
 			}
 			if msTime.Before(time.Now()) {
-				glog.Info(w.db.GetMemoryStats())
+				if glog.V(1) {
+					glog.Info(w.db.GetMemoryStats())
+				}
 				w.metrics.IndexDBSize.Set(float64(w.db.DatabaseSizeOnDisk()))
 				msTime = time.Now().Add(10 * time.Minute)
 			}
