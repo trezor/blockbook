@@ -544,7 +544,7 @@ func (b *EthereumRPC) processEventsForBlock(blockNumber string) (map[string][]*b
 		"toBlock":   blockNumber,
 	})
 	if err != nil {
-		return nil, nil, errors.Annotatef(err, "blockNumber %v", blockNumber)
+		return nil, nil, errors.Annotatef(err, "eth_getLogs blockNumber %v", blockNumber)
 	}
 	r := make(map[string][]*bchain.RpcLog)
 	for i := range logs {
@@ -708,7 +708,7 @@ func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error
 		blockSpecificData = &bchain.EthereumBlockSpecificData{}
 		if err != nil {
 			blockSpecificData.InternalDataError = err.Error()
-			glog.Info("InternalDataError ", bbh.Height, ": ", err.Error())
+			// glog.Info("InternalDataError ", bbh.Height, ": ", err.Error())
 		}
 		if len(ens) > 0 {
 			blockSpecificData.AddressAliasRecords = ens
