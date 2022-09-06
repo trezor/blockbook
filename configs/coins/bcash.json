@@ -27,9 +27,7 @@
     "verification_type": "sha256",
     "verification_source": "e32e05fd63161f6f1fe717fca789448d2ee48e2017d3d4c6686b4222fe69497e",
     "extract_command": "tar -C backend --strip 1 -xf",
-    "exclude_files": [
-      "bin/bitcoin-qt"
-    ],
+    "exclude_files": ["bin/bitcoin-qt"],
     "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/bitcoind -datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -conf={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf -pid=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",
     "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/*.log",
     "postinst_script_template": "",
@@ -58,7 +56,7 @@
       "slip44": 145,
       "additional_params": {
         "fiat_rates": "coingecko",
-        "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"bitcoin-cash\", \"periodSeconds\": 60}"
+        "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"bitcoin-cash\", \"periodSeconds\": 900}"
       }
     }
   },
