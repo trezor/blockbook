@@ -27,9 +27,7 @@
     "verification_type": "gpg-sha256",
     "verification_source": "https://github.com/dashpay/dash/releases/download/v18.0.1/SHA256SUMS.asc",
     "extract_command": "tar -C backend --strip 1 -xf",
-    "exclude_files": [
-      "bin/dash-qt"
-    ],
+    "exclude_files": ["bin/dash-qt"],
     "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/dashd -deprecatedrpc=estimatefee -datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -conf={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf -pid=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",
     "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/*.log",
     "postinst_script_template": "",
@@ -60,7 +58,7 @@
       "slip44": 5,
       "additional_params": {
         "fiat_rates": "coingecko",
-        "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"dash\", \"periodSeconds\": 60}"
+        "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"dash\", \"periodSeconds\": 900}"
       }
     }
   },

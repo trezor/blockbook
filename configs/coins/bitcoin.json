@@ -27,9 +27,7 @@
     "verification_type": "sha256",
     "verification_source": "2cca490c1f2842884a3c5b0606f179f9f937177da4eadd628e3f7fd7e25d26d0",
     "extract_command": "tar -C backend --strip 1 -xf",
-    "exclude_files": [
-      "bin/bitcoin-qt"
-    ],
+    "exclude_files": ["bin/bitcoin-qt"],
     "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/bitcoind -datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -conf={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf -pid=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",
     "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/*.log",
     "postinst_script_template": "",
@@ -62,7 +60,7 @@
         "alternative_estimate_fee": "whatthefee-disabled",
         "alternative_estimate_fee_params": "{\"url\": \"https://whatthefee.io/data.json\", \"periodSeconds\": 60}",
         "fiat_rates": "coingecko",
-        "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"bitcoin\", \"periodSeconds\": 60}"
+        "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"bitcoin\", \"periodSeconds\": 900}"
       }
     }
   },
