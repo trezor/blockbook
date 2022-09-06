@@ -38,9 +38,7 @@
     "server_config_file": "bitcoin_like.conf",
     "client_config_file": "bitcoin_like_client.conf",
     "additional_params": {
-      "addnode": [
-        "mainnet.z.cash"
-      ]
+      "addnode": ["mainnet.z.cash"]
     }
   },
   "blockbook": {
@@ -59,7 +57,7 @@
       "slip44": 133,
       "additional_params": {
         "fiat_rates": "coingecko",
-        "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"zcash\", \"periodSeconds\": 60}"
+        "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"zcash\", \"periodSeconds\": 900}"
       }
     }
   },

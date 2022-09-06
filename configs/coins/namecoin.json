@@ -27,9 +27,7 @@
     "verification_type": "sha256",
     "verification_source": "1e7f06030881fac5b8a6d33f497f1cab9a120189741ec81bc21e58d5cd93fa6f",
     "extract_command": "tar -C backend --strip 1 -xf",
-    "exclude_files": [
-      "bin/namecoin-qt"
-    ],
+    "exclude_files": ["bin/namecoin-qt"],
     "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/namecoind -datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -conf={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf -pid=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",
     "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/*.log",
     "postinst_script_template": "",
@@ -40,9 +38,7 @@
     "server_config_file": "bitcoin_like.conf",
     "client_config_file": "bitcoin_like_client.conf",
     "additional_params": {
-      "addnode": [
-        "45.24.110.177:8334"
-      ],
+      "addnode": ["45.24.110.177:8334"],
       "discover": 0,
       "listenonion": 0,
       "upnp": 0,
@@ -66,7 +62,7 @@
       "slip44": 7,
       "additional_params": {
         "fiat_rates": "coingecko",
-        "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"namecoin\", \"periodSeconds\": 60}"
+        "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"namecoin\", \"periodSeconds\": 900}"
       }
     }
   },
