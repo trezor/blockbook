@@ -1,9 +1,9 @@
 {
   "coin": {
-      "name": "Bitcore",
-      "shortcut": "BTX",
-      "label": "Bitcore",
-      "alias": "bitcore"
+    "name": "Bitcore",
+    "shortcut": "BTX",
+    "label": "Bitcore",
+    "alias": "bitcore"
   },
   "ports": {
     "backend_rpc": 8054,
@@ -60,7 +60,7 @@
       "block_addresses_to_keep": 300,
       "additional_params": {
         "fiat_rates": "coingecko",
-        "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"bitcore\", \"periodSeconds\": 60}"
+        "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"bitcore\", \"periodSeconds\": 900}"
       }
     }
   },
