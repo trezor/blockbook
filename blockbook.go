@@ -458,13 +458,19 @@ func blockbookAppInfoMetric(db *db.RocksDB, chain bchain.BlockChain, txCache *db
 	if err != nil {
 		return err
 	}
+	subversion := si.Backend.Subversion
+	if subversion == "" {
+		// for coins without subversion (ETH) use ConsensusVersion as subversion in metrics
+		subversion = si.Backend.ConsensusVersion
+	}
+
 	metrics.BlockbookAppInfo.Reset()
 	metrics.BlockbookAppInfo.With(common.Labels{
 		"blockbook_version":        si.Blockbook.Version,
 		"blockbook_commit":         si.Blockbook.GitCommit,
 		"blockbook_buildtime":      si.Blockbook.BuildTime,
 		"backend_version":          si.Backend.Version,
-		"backend_subversion":       si.Backend.Subversion,
+		"backend_subversion":       subversion,
 		"backend_protocol_version": si.Backend.ProtocolVersion}).Set(float64(0))
 	metrics.BackendBestHeight.Set(float64(si.Backend.Blocks))
 	metrics.BlockbookBestHeight.Set(float64(si.Blockbook.BestHeight))
