@@ -548,13 +548,19 @@ func (w *Worker) getEthereumTokensTransfers(transfers bchain.TokenTransfers, add
 			glog.Errorf("GetContractInfo error %v, contract %v", err, t.Contract)
 		}
 		if contractInfo == nil {
-			glog.Warningf("Contract %v %v not found in DB", t.Contract, typeName)
+			// log warning only if the contract should have been known from processing of the internal data
+			if eth.ProcessInternalTransactions {
+				glog.Warningf("Contract %v %v not found in DB", t.Contract, typeName)
+			}
 			contractInfo, err = w.chain.GetContractInfo(cd)
 			if err != nil {
 				glog.Errorf("GetContractInfo from chain error %v, contract %v", err, t.Contract)
 			}
 			if contractInfo == nil {
-				contractInfo = &bchain.ContractInfo{Name: t.Contract, Type: bchain.UnknownTokenType}
+				contractInfo = &bchain.ContractInfo{Name: t.Contract, Type: bchain.UnknownTokenType, Decimals: w.chainParser.AmountDecimals()}
+			}
+			if err = w.db.StoreContractInfo(contractInfo); err != nil {
+				glog.Errorf("StoreContractInfo error %v, contract %v", err, t.Contract)
 			}
 		}
 		var value *Amount
