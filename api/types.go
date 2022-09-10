@@ -431,24 +431,29 @@ type BlockRaw struct {
 
 // BlockbookInfo contains information about the running blockbook instance
 type BlockbookInfo struct {
-	Coin              string                       `json:"coin"`
-	Host              string                       `json:"host"`
-	Version           string                       `json:"version"`
-	GitCommit         string                       `json:"gitCommit"`
-	BuildTime         string                       `json:"buildTime"`
-	SyncMode          bool                         `json:"syncMode"`
-	InitialSync       bool                         `json:"initialSync"`
-	InSync            bool                         `json:"inSync"`
-	BestHeight        uint32                       `json:"bestHeight"`
-	LastBlockTime     time.Time                    `json:"lastBlockTime"`
-	InSyncMempool     bool                         `json:"inSyncMempool"`
-	LastMempoolTime   time.Time                    `json:"lastMempoolTime"`
-	MempoolSize       int                          `json:"mempoolSize"`
-	Decimals          int                          `json:"decimals"`
-	DbSize            int64                        `json:"dbSize"`
-	DbSizeFromColumns int64                        `json:"dbSizeFromColumns,omitempty"`
-	DbColumns         []common.InternalStateColumn `json:"dbColumns,omitempty"`
-	About             string                       `json:"about"`
+	Coin                         string                       `json:"coin"`
+	Host                         string                       `json:"host"`
+	Version                      string                       `json:"version"`
+	GitCommit                    string                       `json:"gitCommit"`
+	BuildTime                    string                       `json:"buildTime"`
+	SyncMode                     bool                         `json:"syncMode"`
+	InitialSync                  bool                         `json:"initialSync"`
+	InSync                       bool                         `json:"inSync"`
+	BestHeight                   uint32                       `json:"bestHeight"`
+	LastBlockTime                time.Time                    `json:"lastBlockTime"`
+	InSyncMempool                bool                         `json:"inSyncMempool"`
+	LastMempoolTime              time.Time                    `json:"lastMempoolTime"`
+	MempoolSize                  int                          `json:"mempoolSize"`
+	Decimals                     int                          `json:"decimals"`
+	DbSize                       int64                        `json:"dbSize"`
+	HasFiatRates                 bool                         `json:"hasFiatRates,omitempty"`
+	HasTokenFiatRates            bool                         `json:"hasTokenFiatRates,omitempty"`
+	CurrentFiatRatesTime         *time.Time                   `json:"currentFiatRatesTime,omitempty"`
+	HistoricalFiatRatesTime      *time.Time                   `json:"historicalFiatRatesTime,omitempty"`
+	HistoricalTokenFiatRatesTime *time.Time                   `json:"historicalTokenFiatRatesTime,omitempty"`
+	DbSizeFromColumns            int64                        `json:"dbSizeFromColumns,omitempty"`
+	DbColumns                    []common.InternalStateColumn `json:"dbColumns,omitempty"`
+	About                        string                       `json:"about"`
 }
 
 // SystemInfo contains information about the running blockbook and backend instance
