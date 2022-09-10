@@ -520,10 +520,14 @@ func (s *PublicServer) parseTemplates() []*template.Template {
 }
 
 func formatUnixTime(ut int64) string {
-	return formatTime(time.Unix(ut, 0))
+	t := time.Unix(ut, 0)
+	return formatTime(&t)
 }
 
-func formatTime(t time.Time) string {
+func formatTime(t *time.Time) string {
+	if t == nil {
+		return ""
+	}
 	return t.Format(time.RFC1123)
 }
 

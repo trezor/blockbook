@@ -134,9 +134,11 @@ func aggregateAddresses(m map[string]struct{}, addresses []string, isAddress boo
 }
 
 func (w *Worker) newAddressesMapForAliases() map[string]struct{} {
+	// return non nil map only if the chain supports address aliases
 	if w.useAddressAliases {
 		return make(map[string]struct{})
 	}
+	// returning nil disables the processing of the address aliases
 	return nil
 }
 
@@ -2034,6 +2036,13 @@ func (w *Worker) ComputeFeeStats(blockFrom, blockTo int, stopCompute chan os.Sig
 	return nil
 }
 
+func nonZeroTime(t time.Time) *time.Time {
+	if t.IsZero() {
+		return nil
+	}
+	return &t
+}
+
 // GetSystemInfo returns information about system
 func (w *Worker) GetSystemInfo(internal bool) (*SystemInfo, error) {
 	start := time.Now()
@@ -2057,24 +2066,29 @@ func (w *Worker) GetSystemInfo(internal bool) (*SystemInfo, error) {
 		internalDBSize = w.is.DBSizeTotal()
 	}
 	blockbookInfo := &BlockbookInfo{
-		Coin:              w.is.Coin,
-		Host:              w.is.Host,
-		Version:           vi.Version,
-		GitCommit:         vi.GitCommit,
-		BuildTime:         vi.BuildTime,
-		SyncMode:          w.is.SyncMode,
-		InitialSync:       w.is.InitialSync,
-		InSync:            inSync,
-		BestHeight:        bestHeight,
-		LastBlockTime:     lastBlockTime,
-		InSyncMempool:     inSyncMempool,
-		LastMempoolTime:   lastMempoolTime,
-		MempoolSize:       mempoolSize,
-		Decimals:          w.chainParser.AmountDecimals(),
-		DbSize:            w.db.DatabaseSizeOnDisk(),
-		DbSizeFromColumns: internalDBSize,
-		DbColumns:         columnStats,
-		About:             Text.BlockbookAbout,
+		Coin:                         w.is.Coin,
+		Host:                         w.is.Host,
+		Version:                      vi.Version,
+		GitCommit:                    vi.GitCommit,
+		BuildTime:                    vi.BuildTime,
+		SyncMode:                     w.is.SyncMode,
+		InitialSync:                  w.is.InitialSync,
+		InSync:                       inSync,
+		BestHeight:                   bestHeight,
+		LastBlockTime:                lastBlockTime,
+		InSyncMempool:                inSyncMempool,
+		LastMempoolTime:              lastMempoolTime,
+		MempoolSize:                  mempoolSize,
+		Decimals:                     w.chainParser.AmountDecimals(),
+		HasFiatRates:                 w.is.HasFiatRates,
+		HasTokenFiatRates:            w.is.HasTokenFiatRates,
+		CurrentFiatRatesTime:         nonZeroTime(w.is.CurrentFiatRatesTime),
+		HistoricalFiatRatesTime:      nonZeroTime(w.is.HistoricalFiatRatesTime),
+		HistoricalTokenFiatRatesTime: nonZeroTime(w.is.HistoricalTokenFiatRatesTime),
+		DbSize:                       w.db.DatabaseSizeOnDisk(),
+		DbSizeFromColumns:            internalDBSize,
+		DbColumns:                    columnStats,
+		About:                        Text.BlockbookAbout,
 	}
 	backendInfo := &common.BackendInfo{
 		BackendError:     backendError,

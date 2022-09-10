@@ -47,6 +47,16 @@
                     <td>Transactions in Mempool</td>
                     <td class="data">{{if .InternalExplorer}}<a href="/mempool">{{$bb.MempoolSize}}</a>{{else}}{{$bb.MempoolSize}}{{end}}</td>
                 </tr>
+                {{- if $bb.HasFiatRates -}}
+                <tr>
+                    <td>Current Fiat rates</td>
+                    <td class="data">{{formatTime $bb.CurrentFiatRatesTime}}</td>
+                </tr>
+                <tr>
+                    <td>Historical Fiat rates</td>
+                    <td class="data">{{formatTime $bb.HistoricalFiatRatesTime}}{{if $bb.HasTokenFiatRates}}<br>tokens {{formatTime $bb.HistoricalTokenFiatRatesTime}}{{end}}</td>
+                </tr>
+                {{- end -}}
                 <tr>
                     <td>Size On Disk</td>
                     <td class="data">{{$bb.DbSize}}</td>

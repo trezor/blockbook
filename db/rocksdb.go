@@ -1740,6 +1740,11 @@ func (d *RocksDB) SetInternalState(is *common.InternalState) {
 	d.is = is
 }
 
+// GetInternalState gets the InternalState
+func (d *RocksDB) GetInternalState() *common.InternalState {
+	return d.is
+}
+
 // StoreInternalState stores the internal state to db
 func (d *RocksDB) StoreInternalState(is *common.InternalState) error {
 	if d.metrics != nil {
