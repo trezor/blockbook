@@ -749,7 +749,7 @@ func (d *RocksDB) GetContractInfoForAddress(address string) (*bchain.ContractInf
 }
 
 // GetContractInfo gets contract from cache or DB and possibly updates the type from typeFromContext
-// this is because it is hard to guess the type of the contract using API, it is easier to set it the first time its usage is detected in tx
+// it is hard to guess the type of the contract using API, it is easier to set it the first time the contract is processed in a tx
 func (d *RocksDB) GetContractInfo(contract bchain.AddressDescriptor, typeFromContext bchain.TokenTypeName) (*bchain.ContractInfo, error) {
 	cacheKey := string(contract)
 	cachedContractsMux.Lock()
@@ -783,9 +783,18 @@ func (d *RocksDB) GetContractInfo(contract bchain.AddressDescriptor, typeFromCon
 }
 
 // StoreContractInfo stores contractInfo in DB
-// if CreatedInBlock==0 and DestructedInBlock!=0, it is evaluated as a desctruction of a contract, the contract info is updated
+// if CreatedInBlock==0 and DestructedInBlock!=0, it is evaluated as a destruction of a contract, the contract info is updated
 // in all other cases the contractInfo overwrites previously stored data in DB (however it should not really happen as contract is created only once)
-func (d *RocksDB) StoreContractInfo(wb *grocksdb.WriteBatch, contractInfo *bchain.ContractInfo) error {
+func (d *RocksDB) StoreContractInfo(contractInfo *bchain.ContractInfo) error {
+	wb := grocksdb.NewWriteBatch()
+	defer wb.Destroy()
+	if err := d.storeContractInfo(wb, contractInfo); err != nil {
+		return err
+	}
+	return d.WriteBatch(wb)
+}
+
+func (d *RocksDB) storeContractInfo(wb *grocksdb.WriteBatch, contractInfo *bchain.ContractInfo) error {
 	if contractInfo.Contract != "" {
 		key, err := d.chainParser.GetAddrDescFromAddress(contractInfo.Contract)
 		if err != nil {
@@ -882,7 +891,7 @@ func (d *RocksDB) storeBlockSpecificDataEthereumType(wb *grocksdb.WriteBatch, bl
 			}
 		}
 		for i := range blockSpecificData.Contracts {
-			if err := d.StoreContractInfo(wb, &blockSpecificData.Contracts[i]); err != nil {
+			if err := d.storeContractInfo(wb, &blockSpecificData.Contracts[i]); err != nil {
 				return err
 			}
 		}
