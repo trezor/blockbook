@@ -105,7 +105,7 @@ func (cg *Coingecko) makeReq(url string) ([]byte, error) {
 			return nil, err
 		}
 		// if there is a throttling error, wait 60 seconds and retry
-		glog.Errorf("Coingecko makeReq %v error %v, will retry in 60 seconds", url, err)
+		glog.Warningf("Coingecko makeReq %v error %v, will retry in 60 seconds", url, err)
 		time.Sleep(60 * time.Second)
 	}
 }
