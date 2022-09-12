@@ -95,7 +95,9 @@ func (rd *RatesDownloader) Run() error {
 				rd.callbackOnNewTicker(tickers)
 			}
 		}
-		if time.Now().UTC().YearDay() != lastHistoricalTickers.YearDay() || time.Now().UTC().Year() != lastHistoricalTickers.Year() {
+		now := time.Now().UTC()
+		// once a day, 1 hour after UTC midnight (to let the provider prepare historical rates) update historical tickers
+		if (now.YearDay() != lastHistoricalTickers.YearDay() || now.Year() != lastHistoricalTickers.Year()) && now.Hour() > 0 {
 			err = rd.downloader.UpdateHistoricalTickers()
 			if err != nil {
 				glog.Error("FiatRatesDownloader: UpdateHistoricalTickers error ", err)
@@ -127,10 +129,10 @@ func (rd *RatesDownloader) Run() error {
 			}
 		}
 		// wait for the next run with a slight random value to avoid too many request at the same time
-		now := time.Now().Unix()
-		next := now + rd.periodSeconds
+		unix := time.Now().Unix()
+		next := unix + rd.periodSeconds
 		next -= next % rd.periodSeconds
 		next += int64(rand.Intn(12))
-		time.Sleep(time.Duration(next-now) * time.Second)
+		time.Sleep(time.Duration(next-unix) * time.Second)
 	}
 }
