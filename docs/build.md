@@ -206,11 +206,12 @@ make command to create a portable binary.
 
 ```
 sudo apt-get update && sudo apt-get install -y \
-    build-essential git wget pkg-config libzmq3-dev libgflags-dev libsnappy-dev zlib1g-dev libbz2-dev liblz4-dev
+    build-essential git wget pkg-config libzmq3-dev libgflags-dev libsnappy-dev zlib1g-dev libbz2-dev liblz4-dev libtool
 git clone https://github.com/facebook/rocksdb.git
 cd rocksdb
 git checkout v6.22.1
 CFLAGS=-fPIC CXXFLAGS=-fPIC make release
+sudo make install
 ```
 
 Setup variables for gorocksdb
