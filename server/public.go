@@ -142,6 +142,9 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 		serveMux.HandleFunc(path+"spending/", s.htmlTemplateHandler(s.explorerSpendingTx))
 		serveMux.HandleFunc(path+"sendtx", s.htmlTemplateHandler(s.explorerSendTx))
 		serveMux.HandleFunc(path+"mempool", s.htmlTemplateHandler(s.explorerMempool))
+		if s.chainParser.GetChainType() == bchain.ChainEthereumType {
+			serveMux.HandleFunc(path+"nft/", s.htmlTemplateHandler(s.explorerNftDetail))
+		}
 	} else {
 		// redirect to wallet requests for tx and address, possibly to external site
 		serveMux.HandleFunc(path+"tx/", s.txRedirect)
@@ -417,6 +420,7 @@ const (
 	blockTpl
 	sendTransactionTpl
 	mempoolTpl
+	nftDetailTpl
 
 	tplCount
 )
@@ -445,6 +449,9 @@ type TemplateData struct {
 	SendTxHex            string
 	Status               string
 	NonZeroBalanceTokens bool
+	TokenId              string
+	URI                  string
+	ContractInfo         *bchain.ContractInfo
 }
 
 func (s *PublicServer) parseTemplates() []*template.Template {
@@ -460,6 +467,7 @@ func (s *PublicServer) parseTemplates() []*template.Template {
 		"tokenTransfersCount":      tokenTransfersCount,
 		"tokenCount":               tokenCount,
 		"hasPrefix":                strings.HasPrefix,
+		"jsStr":                    jsStr,
 	}
 	var createTemplate func(filenames ...string) *template.Template
 	if s.debug {
@@ -509,6 +517,7 @@ func (s *PublicServer) parseTemplates() []*template.Template {
 		t[txTpl] = createTemplate("./static/templates/tx.html", "./static/templates/txdetail_ethereumtype.html", "./static/templates/base.html")
 		t[addressTpl] = createTemplate("./static/templates/address.html", "./static/templates/txdetail_ethereumtype.html", "./static/templates/paging.html", "./static/templates/base.html")
 		t[blockTpl] = createTemplate("./static/templates/block.html", "./static/templates/txdetail_ethereumtype.html", "./static/templates/paging.html", "./static/templates/base.html")
+		t[nftDetailTpl] = createTemplate("./static/templates/tokenDetail.html", "./static/templates/base.html")
 	} else {
 		t[txTpl] = createTemplate("./static/templates/tx.html", "./static/templates/txdetail.html", "./static/templates/base.html")
 		t[addressTpl] = createTemplate("./static/templates/address.html", "./static/templates/txdetail.html", "./static/templates/paging.html", "./static/templates/base.html")
@@ -599,6 +608,10 @@ func tokenCount(tokens []api.Token, t bchain.TokenTypeName) int {
 		}
 	}
 	return count
+}
+
+func jsStr(s string) template.JSStr {
+	return template.JSStr(s)
 }
 
 func (s *PublicServer) explorerTx(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
@@ -735,6 +748,28 @@ func (s *PublicServer) explorerAddress(w http.ResponseWriter, r *http.Request) (
 		data.Address.Filter = filterParam
 	}
 	return addressTpl, data, nil
+}
+
+func (s *PublicServer) explorerNftDetail(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
+	parts := strings.Split(r.URL.Path, "/")
+	if len(parts) < 3 {
+		return errorTpl, nil, api.NewAPIError("Missing parameters", true)
+	}
+	tokenId := parts[len(parts)-1]
+	contract := parts[len(parts)-2]
+	uri, ci, err := s.api.GetEthereumTokenURI(contract, tokenId)
+	s.metrics.ExplorerViews.With(common.Labels{"action": "nftDetail"}).Inc()
+	if err != nil {
+		return errorTpl, nil, api.NewAPIError(err.Error(), true)
+	}
+	if ci == nil {
+		return errorTpl, nil, api.NewAPIError(fmt.Sprintf("Unknown contract %s", contract), true)
+	}
+	data := s.newTemplateData()
+	data.TokenId = tokenId
+	data.ContractInfo = ci
+	data.URI = uri
+	return nftDetailTpl, data, nil
 }
 
 func (s *PublicServer) explorerXpub(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {

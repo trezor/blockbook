@@ -1,0 +1,111 @@
+{{define "specific"}}{{$data := .}}
+<h1>NFT Token Detail</h1>
+<div class="row">
+    <div class="col-md-6">
+        <table class="table data-table">
+            <tbody>
+                <tr>
+                    <td style="width: 25%;">Token ID</td>
+                    <td class="data">{{$data.TokenId}}</td>
+                </tr>
+                <tr id="name" style="display: none;">
+                    <td>NTF Name</td>
+                    <td class="data"></td>
+                </tr>
+                <tr id="description" style="display: none;">
+                    <td>NTF Description</td>
+                    <td class="data"></td>
+                </tr>
+                <tr>
+                    <td>Contract</td>
+                    <td class="data"><a href="/address/{{$data.ContractInfo.Contract}}">{{$data.ContractInfo.Contract}}</a> {{$data.ContractInfo.Name}}</td>
+                </tr>
+                <tr>
+                    <td>Contract type</td>
+                    <td class="data">{{$data.ContractInfo.Type}}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    <div class="col-md-6" id="image"></div>
+</div>
+<div class="data-div" id="metadatablock">
+    <h5>Metadata</h5>
+    <div class="alert alert-data" style="word-wrap: break-word; font-size: smaller;">
+        <pre id="metadata" style="margin: 0;">Loading metadata from <a href="{{$data.URI}}">{{$data.URI}}</a>...</pre>
+    </div>
+</div>
+<script type="text/javascript">
+    function syntaxHighlight(json) {
+        json = JSON.stringify(json, undefined, 2);
+        json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
+            var cls = 'number';
+            if (/^"/.test(match)) {
+                if (/:$/.test(match)) {
+                    cls = 'key';
+                } else {
+                    cls = 'string';
+                }
+            } else if (/true|false/.test(match)) {
+                cls = 'boolean';
+            } else if (/null/.test(match)) {
+                cls = 'null';
+            }
+            return '<span class="' + cls + '">' + match + '</span>';
+        });
+    }
+    function showImage(s) {
+        const img = document.createElement("img");
+        img.className="border w-100";
+        img.src = s;
+        const src = document.getElementById("image");
+        src.appendChild(img);
+        src.style.display="block";
+    }
+    function nftInfo(id,text) {
+        const src = document.getElementById(id);
+        src.getElementsByClassName('data')[0].innerText=text;
+        src.style.display='';
+    }
+    async function getMetadata(url) {
+        try {
+            const uri={{ jsStr $data.URI }};
+            if(uri) {
+                const response = await fetch(uri);
+                const contentType=response.headers.get('content-type');
+                if(contentType&&contentType.toString().startsWith("image/")) {
+                    showImage(uri);
+                    document.getElementById("metadatablock").style.display='none';
+                } else {
+                    const data = await response.json();
+                    document.getElementById("metadata").innerHTML = syntaxHighlight(data);
+                    if (data.name) {
+                        nftInfo('name',data.name)
+                    }
+                    if (data.description) {
+                        nftInfo('description',data.description)
+                    }
+                    if (data.image||data.image_url) {
+                        let s=data.image?.toString();
+                        if(!s) {
+                            s=data.image_url;
+                        }
+                        if(s.startsWith("ipfs://")) {
+                            s=s.replace("ipfs://","https://ipfs.io/ipfs/");
+                        }
+                        if(s.startsWith("https://")) {
+                            showImage(s);
+                        }
+                    }
+                }
+            } else {
+                document.getElementById("metadata").innerText = "Error: cannot get metadata link from blockchain";
+            }
+        } catch(e) {
+            document.getElementById("metadata").innerText = "Error loading metadata: "+e;
+        }
+    }
+    getMetadata();
+</script>
+{{end}}
