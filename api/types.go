@@ -163,7 +163,7 @@ type TokenTransfer struct {
 	Type             bchain.TokenTypeName `json:"type"`
 	From             string               `json:"from"`
 	To               string               `json:"to"`
-	Token            string               `json:"token"`
+	Contract         string               `json:"contract"`
 	Name             string               `json:"name"`
 	Symbol           string               `json:"symbol"`
 	Decimals         int                  `json:"decimals"`

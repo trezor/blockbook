@@ -532,36 +532,57 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 	return r, nil
 }
 
+func (w *Worker) getContractInfo(contract string, typeFromContext bchain.TokenTypeName) (*bchain.ContractInfo, bool, error) {
+	cd, err := w.chainParser.GetAddrDescFromAddress(contract)
+	if err != nil {
+		return nil, false, err
+	}
+	return w.getContractDescriptorInfo(cd, typeFromContext)
+}
+
+func (w *Worker) getContractDescriptorInfo(cd bchain.AddressDescriptor, typeFromContext bchain.TokenTypeName) (*bchain.ContractInfo, bool, error) {
+	var err error
+	validContract := true
+	contractInfo, err := w.db.GetContractInfo(cd, typeFromContext)
+	if err != nil {
+		return nil, false, err
+	}
+	if contractInfo == nil {
+		// log warning only if the contract should have been known from processing of the internal data
+		if eth.ProcessInternalTransactions {
+			glog.Warningf("Contract %v %v not found in DB", cd, typeFromContext)
+		}
+		contractInfo, err = w.chain.GetContractInfo(cd)
+		if err != nil {
+			glog.Errorf("GetContractInfo from chain error %v, contract %v", err, cd)
+		}
+		if contractInfo == nil {
+			contractInfo = &bchain.ContractInfo{Type: bchain.UnknownTokenType, Decimals: w.chainParser.AmountDecimals()}
+			addresses, _, _ := w.chainParser.GetAddressesFromAddrDesc(cd)
+			if len(addresses) > 0 {
+				contractInfo.Contract = addresses[0]
+			}
+
+			validContract = false
+		} else {
+			if err = w.db.StoreContractInfo(contractInfo); err != nil {
+				glog.Errorf("StoreContractInfo error %v, contract %v", err, cd)
+			}
+		}
+	}
+	return contractInfo, validContract, nil
+}
+
 func (w *Worker) getEthereumTokensTransfers(transfers bchain.TokenTransfers, addresses map[string]struct{}) []TokenTransfer {
 	sort.Sort(transfers)
 	tokens := make([]TokenTransfer, len(transfers))
 	for i := range transfers {
 		t := transfers[i]
-		cd, err := w.chainParser.GetAddrDescFromAddress(t.Contract)
-		if err != nil {
-			glog.Errorf("GetAddrDescFromAddress error %v, contract %v", err, t.Contract)
-			continue
-		}
 		typeName := bchain.EthereumTokenTypeMap[t.Type]
-		contractInfo, err := w.db.GetContractInfo(cd, typeName)
+		contractInfo, _, err := w.getContractInfo(t.Contract, typeName)
 		if err != nil {
-			glog.Errorf("GetContractInfo error %v, contract %v", err, t.Contract)
-		}
-		if contractInfo == nil {
-			// log warning only if the contract should have been known from processing of the internal data
-			if eth.ProcessInternalTransactions {
-				glog.Warningf("Contract %v %v not found in DB", t.Contract, typeName)
-			}
-			contractInfo, err = w.chain.GetContractInfo(cd)
-			if err != nil {
-				glog.Errorf("GetContractInfo from chain error %v, contract %v", err, t.Contract)
-			}
-			if contractInfo == nil {
-				contractInfo = &bchain.ContractInfo{Name: t.Contract, Type: bchain.UnknownTokenType, Decimals: w.chainParser.AmountDecimals()}
-			}
-			if err = w.db.StoreContractInfo(contractInfo); err != nil {
-				glog.Errorf("StoreContractInfo error %v, contract %v", err, t.Contract)
-			}
+			glog.Errorf("getContractInfo error %v, contract %v", err, t.Contract)
+			continue
 		}
 		var value *Amount
 		var values []MultiTokenValue
@@ -578,7 +599,7 @@ func (w *Worker) getEthereumTokensTransfers(transfers bchain.TokenTransfers, add
 		aggregateAddress(addresses, t.To)
 		tokens[i] = TokenTransfer{
 			Type:             typeName,
-			Token:            t.Contract,
+			Contract:         t.Contract,
 			From:             t.From,
 			To:               t.To,
 			Value:            value,
@@ -589,6 +610,26 @@ func (w *Worker) getEthereumTokensTransfers(transfers bchain.TokenTransfers, add
 		}
 	}
 	return tokens
+}
+
+func (w *Worker) GetEthereumTokenURI(contract string, id string) (string, *bchain.ContractInfo, error) {
+	cd, err := w.chainParser.GetAddrDescFromAddress(contract)
+	if err != nil {
+		return "", nil, err
+	}
+	tokenId, ok := new(big.Int).SetString(id, 10)
+	if !ok {
+		return "", nil, errors.New("Invalid token id")
+	}
+	uri, err := w.chain.GetTokenURI(cd, tokenId)
+	if err != nil {
+		return "", nil, err
+	}
+	ci, _, err := w.getContractDescriptorInfo(cd, bchain.UnknownTokenType)
+	if err != nil {
+		return "", nil, err
+	}
+	return uri, ci, nil
 }
 
 func (w *Worker) getAddressTxids(addrDesc bchain.AddressDescriptor, mempool bool, filter *AddressFilter, maxResults int) ([]string, error) {
@@ -772,29 +813,11 @@ func computePaging(count, page, itemsOnPage int) (Paging, int, int, int) {
 }
 
 func (w *Worker) getEthereumContractBalance(addrDesc bchain.AddressDescriptor, index int, c *db.AddrContract, details AccountDetails) (*Token, error) {
-	validContract := true
 	typeName := bchain.EthereumTokenTypeMap[c.Type]
-	ci, err := w.db.GetContractInfo(c.Contract, typeName)
+	ci, validContract, err := w.getContractDescriptorInfo(c.Contract, typeName)
 	if err != nil {
-		return nil, errors.Annotatef(err, "GetContractInfo %v", c.Contract)
+		return nil, errors.Annotatef(err, "getEthereumContractBalance %v", c.Contract)
 	}
-	if ci == nil {
-		glog.Warningf("Contract %v %v not found in DB", c.Contract, typeName)
-		ci, err = w.chain.GetContractInfo(c.Contract)
-		if err != nil {
-			glog.Errorf("GetContractInfo from chain error %v, contract %v", err, c.Contract)
-		}
-		if ci == nil {
-			ci = &bchain.ContractInfo{Type: bchain.UnknownTokenType}
-			addresses, _, _ := w.chainParser.GetAddressesFromAddrDesc(c.Contract)
-			if len(addresses) > 0 {
-				ci.Contract = addresses[0]
-				ci.Name = addresses[0]
-			}
-			validContract = false
-		}
-	}
-
 	t := Token{
 		Contract:      ci.Contract,
 		Name:          ci.Name,
@@ -840,26 +863,9 @@ func (w *Worker) getEthereumContractBalance(addrDesc bchain.AddressDescriptor, i
 // a fallback method in case internal transactions are not processed and there is no indexed info about contract balance for an address
 func (w *Worker) getEthereumContractBalanceFromBlockchain(addrDesc, contract bchain.AddressDescriptor, details AccountDetails) (*Token, error) {
 	var b *big.Int
-	validContract := true
-	ci, err := w.db.GetContractInfo(contract, "")
+	ci, validContract, err := w.getContractDescriptorInfo(contract, bchain.UnknownTokenType)
 	if err != nil {
 		return nil, errors.Annotatef(err, "GetContractInfo %v", contract)
-	}
-	if ci == nil {
-		glog.Warningf("Contract %v not found in DB", contract)
-		ci, err = w.chain.GetContractInfo(contract)
-		if err != nil {
-			glog.Errorf("GetContractInfo from chain error %v, contract %v", err, contract)
-		}
-		if ci == nil {
-			ci = &bchain.ContractInfo{Type: bchain.UnknownTokenType}
-			addresses, _, _ := w.chainParser.GetAddressesFromAddrDesc(contract)
-			if len(addresses) > 0 {
-				ci.Contract = addresses[0]
-				ci.Name = addresses[0]
-			}
-			validContract = false
-		}
 	}
 	// do not read contract balances etc in case of Basic option
 	if details >= AccountDetailsTokenBalances && validContract {

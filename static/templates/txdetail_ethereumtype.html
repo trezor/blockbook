@@ -67,7 +67,7 @@
                 </table>
             </div>
         </div>
-        <div class="col-md-3 text-right" style="padding: .4rem 0;">
+        <div class="col-md-3 text-right" style="padding: .4rem 0;overflow-wrap: break-word;">
             {{formatAmount $tx.ValueOutSat}} {{$cs}}
         </div>
     </div>
@@ -132,7 +132,7 @@
                 </table>
             </div>
         </div>
-        <div class="col-md-3 text-right" style="padding: .4rem 0;">{{formatAmount $tt.Value}} {{$cs}}</div>
+        <div class="col-md-3 text-right" style="padding: .4rem 0;overflow-wrap: break-word;">{{formatAmount $tt.Value}} {{$cs}}</div>
     </div>
     {{- end -}}
     <div class="row" style="padding: 6px 15px;"></div>
@@ -176,7 +176,7 @@
                 </table>
             </div>
         </div>
-        <div class="col-md-3 text-right" style="padding: .4rem 0;">{{formatAmountWithDecimals $tt.Value $tt.Decimals}} {{$tt.Symbol}}</div>
+        <div class="col-md-3 text-right" style="padding: .4rem 0;overflow-wrap: break-word;">{{formatAmountWithDecimals $tt.Value $tt.Decimals}} {{$tt.Symbol}}</div>
     </div>
     {{- end -}}
     {{- end -}}
@@ -221,7 +221,7 @@
                 </table>
             </div>
         </div>
-        <div class="col-md-3 text-right" style="padding: .4rem 0;">ID {{formatAmountWithDecimals $tt.Value 0}} {{$tt.Symbol}}</div>
+        <div class="col-md-3 text-right" style="padding: .4rem 0;overflow-wrap: break-word;">ID <a href="/nft/{{$tt.Contract}}/{{$tt.Value}}">{{$tt.Value}}</a> {{$tt.Symbol}}</div>
     </div>
     {{- end -}}
     {{- end -}}
@@ -266,9 +266,9 @@
                 </table>
             </div>
         </div>
-        <div class="col-md-3 text-right" style="padding: .4rem 0;">
-            {{- range $iv := $tt.MultiTokenValues -}}
-                {{formatAmountWithDecimals $iv.Id 0}}:{{formatAmountWithDecimals $iv.Value 0}} {{$tt.Symbol}}
+        <div class="col-md-3 text-right" style="padding: .4rem 0;overflow-wrap: break-word;">
+            {{- range $i, $iv := $tt.MultiTokenValues -}}
+                {{if $i}}, {{end}}{{$iv.Value}} {{$tt.Symbol}} of ID <a href="/nft/{{$tt.Contract}}/{{$iv.Id}}">{{$iv.Id}}</a>
             {{- end -}}
         </div>
     </div>
