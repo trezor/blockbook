@@ -129,7 +129,12 @@ func (c *fakeBlockChainEthereumType) GetContractInfo(contractDesc bchain.Address
 	}, nil
 }
 
-// EthereumTypeGetErc20ContractBalance is not supported
+// EthereumTypeGetErc20ContractBalance returns simulated balance
 func (c *fakeBlockChainEthereumType) EthereumTypeGetErc20ContractBalance(addrDesc, contractDesc bchain.AddressDescriptor) (*big.Int, error) {
 	return big.NewInt(1000000000 + int64(addrDesc[0])*1000 + int64(contractDesc[0])), nil
+}
+
+// GetTokenURI returns URI derived from the input contractDesc
+func (c *fakeBlockChainEthereumType) GetTokenURI(contractDesc bchain.AddressDescriptor, tokenID *big.Int) (string, error) {
+	return "https://ipfs.io/ipfs/" + contractDesc.String()[3:] + ".json", nil
 }

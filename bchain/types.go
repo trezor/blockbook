@@ -317,6 +317,7 @@ type BlockChain interface {
 	EthereumTypeGetNonce(addrDesc AddressDescriptor) (uint64, error)
 	EthereumTypeEstimateGas(params map[string]interface{}) (uint64, error)
 	EthereumTypeGetErc20ContractBalance(addrDesc, contractDesc AddressDescriptor) (*big.Int, error)
+	GetTokenURI(contractDesc AddressDescriptor, tokenID *big.Int) (string, error)
 }
 
 // BlockChainParser defines common interface to parsing and conversions of block chain data
