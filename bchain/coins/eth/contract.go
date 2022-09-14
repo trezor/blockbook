@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/juju/errors"
 	"github.com/trezor/blockbook/bchain"
 )
@@ -14,6 +15,8 @@ const erc20TransferMethodSignature = "0xa9059cbb"                  // transfer(a
 const erc721TransferFromMethodSignature = "0x23b872dd"             // transferFrom(address,address,uint256)
 const erc721SafeTransferFromMethodSignature = "0x42842e0e"         // safeTransferFrom(address,address,uint256)
 const erc721SafeTransferFromWithDataMethodSignature = "0xb88d4fde" // safeTransferFrom(address,address,uint256,bytes)
+const erc721TokenURIMethodSignature = "0xc87b56dd"                 // tokenURI(uint256)
+const erc1155URIMethodSignature = "0x0e89341c"                     // uri(uint256)
 
 const tokenTransferEventSignature = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
 const tokenERC1155TransferSingleEventSignature = "0xc3d58168c5ae7397731d063d5bbf3d657854427343f4c083240f7aacaa2d0f62"
@@ -24,7 +27,7 @@ const nameRegisteredEventSignature = "0xca6abbe9d7f11422cb6ca7629fbf6fe9efb1c621
 const contractNameSignature = "0x06fdde03"
 const contractSymbolSignature = "0x95d89b41"
 const contractDecimalsSignature = "0x313ce567"
-const contractBalanceOf = "0x70a08231"
+const contractBalanceOfSignature = "0x70a08231"
 
 func addressFromPaddedHex(s string) (string, error) {
 	var t big.Int
@@ -315,9 +318,9 @@ func (b *EthereumRPC) GetContractInfo(contractDesc bchain.AddressDescriptor) (*b
 
 // EthereumTypeGetErc20ContractBalance returns balance of ERC20 contract for given address
 func (b *EthereumRPC) EthereumTypeGetErc20ContractBalance(addrDesc, contractDesc bchain.AddressDescriptor) (*big.Int, error) {
-	addr := EIP55Address(addrDesc)
-	contract := EIP55Address(contractDesc)
-	req := contractBalanceOf + "0000000000000000000000000000000000000000000000000000000000000000"[len(addr)-2:] + addr[2:]
+	addr := hexutil.Encode(addrDesc)
+	contract := hexutil.Encode(contractDesc)
+	req := contractBalanceOfSignature + "0000000000000000000000000000000000000000000000000000000000000000"[len(addr)-2:] + addr[2:]
 	data, err := b.ethCall(req, contract)
 	if err != nil {
 		return nil, err
@@ -327,4 +330,38 @@ func (b *EthereumRPC) EthereumTypeGetErc20ContractBalance(addrDesc, contractDesc
 		return nil, errors.New("Invalid balance")
 	}
 	return r, nil
+}
+
+// GetContractInfo returns URI of non fungible or multi token defined by token id
+func (b *EthereumRPC) GetTokenURI(contractDesc bchain.AddressDescriptor, tokenID *big.Int) (string, error) {
+	address := hexutil.Encode(contractDesc)
+	// CryptoKitties do not fully support ERC721 standard, do not have tokenURI method
+	if address == "0x06012c8cf97bead5deae237070f9587f8e7a266d" {
+		return "https://api.cryptokitties.co/kitties/" + tokenID.Text(10), nil
+	}
+	id := tokenID.Text(16)
+	if len(id) < 64 {
+		id = "0000000000000000000000000000000000000000000000000000000000000000"[len(id):] + id
+	}
+	// try ERC721 tokenURI method and  ERC1155 uri method
+	for _, method := range []string{erc721TokenURIMethodSignature, erc1155URIMethodSignature} {
+		data, err := b.ethCall(method+id, address)
+		if err == nil && data != "" {
+			uri := parseSimpleStringProperty(data)
+			// try to sanitize the URI returned from the contract
+			i := strings.LastIndex(uri, "ipfs://")
+			if i >= 0 {
+				uri = strings.Replace(uri[i:], "ipfs://", "https://ipfs.io/ipfs/", 1)
+				// some contracts return uri ipfs://ifps/abcdef instead of ipfs://abcdef
+				uri = strings.Replace(uri, "https://ipfs.io/ipfs/ipfs/", "https://ipfs.io/ipfs/", 1)
+			}
+			i = strings.LastIndex(uri, "https://")
+			// allow only https:// URIs
+			if i >= 0 {
+				uri = strings.ReplaceAll(uri[i:], "{id}", id)
+				return uri, nil
+			}
+		}
+	}
+	return "", nil
 }

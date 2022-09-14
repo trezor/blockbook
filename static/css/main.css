@@ -226,6 +226,7 @@ h3 {
     table-layout: fixed;
     border-radius: .25rem;
     background: white;
+    overflow-wrap: break-word;
 }
 
 .data-table td, .data-table th {
