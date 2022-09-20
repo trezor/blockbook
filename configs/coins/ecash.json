@@ -40,6 +40,7 @@
     "server_config_file": "bcash.conf",
     "client_config_file": "bitcoin_like_client.conf",
     "additional_params": {
+      "listen": 1,
       "avalanche": 1
     }
   },
