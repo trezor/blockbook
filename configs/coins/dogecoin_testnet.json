@@ -44,6 +44,13 @@
       "rpcthreads": 16,
       "upnp": 0,
       "whitelist": "127.0.0.1"
+    },
+    "platforms": {
+      "arm64": {
+        "binary_url": "https://github.com/dogecoin/dogecoin/releases/download/v1.14.6/dogecoin-1.14.6-aarch64-linux-gnu.tar.gz",
+        "verification_source": "87419c29607b2612746fccebd694037e4be7600fc32198c4989f919be20952db",
+        "exclude_files": []
+      }
     }
   },
   "blockbook": {

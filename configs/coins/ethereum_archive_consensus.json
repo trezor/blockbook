@@ -33,7 +33,13 @@
     "protect_memory": true,
     "mainnet": false,
     "server_config_file": "",
-    "client_config_file": ""
+    "client_config_file": "",
+    "platforms": {
+      "arm64": {
+        "binary_url": "https://github.com/prysmaticlabs/prysm/releases/download/v3.1.1/beacon-chain-v3.1.1-linux-arm64",
+        "verification_source": "97665ac0ff54c9f8f97c99949519d13eea964a09decc17e2830b14c9d6dc1b24"
+      }
+    }
   },
   "meta": {
     "package_maintainer": "IT",
