@@ -34,6 +34,8 @@ const (
 	TestNet EthereumNet = 3
 	// TestNetGoerli is Goerli test network
 	TestNetGoerli EthereumNet = 5
+	// TestNetSepolia is Sepolia test network
+	TestNetSepolia EthereumNet = 11155111
 )
 
 // Configuration represents json config file
@@ -175,6 +177,9 @@ func (b *EthereumRPC) Initialize() error {
 	case TestNetGoerli:
 		b.Testnet = true
 		b.Network = "goerli"
+	case TestNetSepolia:
+		b.Testnet = true
+		b.Network = "sepolia"
 	default:
 		return errors.Errorf("Unknown network id %v", id)
 	}
