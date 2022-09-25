@@ -41,6 +41,12 @@
     "client_config_file": "bitcoin_client.conf",
     "additional_params": {
       "deprecatedrpc": "estimatefee"
+    },
+    "platforms": {
+      "arm64": {
+        "binary_url": "https://bitcoincore.org/bin/bitcoin-core-23.0/bitcoin-23.0-aarch64-linux-gnu.tar.gz",
+        "verification_source": "06f4c78271a77752ba5990d60d81b1751507f77efda1e5981b4e92fd4d9969fb"
+      }
     }
   },
   "blockbook": {
