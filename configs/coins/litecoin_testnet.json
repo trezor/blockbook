@@ -41,6 +41,12 @@
     "client_config_file": "bitcoin_like_client.conf",
     "additional_params": {
       "whitelist": "127.0.0.1"
+    },
+    "platforms": {
+      "arm64": {
+        "binary_url": "https://download.litecoin.org/litecoin-0.21.2.1/linux/litecoin-0.21.2.1-aarch64-linux-gnu.tar.gz",
+        "verification_source": "https://download.litecoin.org/litecoin-0.21.2.1/linux/litecoin-0.21.2.1-aarch64-linux-gnu.tar.gz.asc"
+      }
     }
   },
   "blockbook": {
