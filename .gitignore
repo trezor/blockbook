@@ -15,3 +15,4 @@ build/*.deb
 .bin-image
 .deb-image
 \.idea/
+__debug*
