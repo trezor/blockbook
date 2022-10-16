@@ -1,5 +1,5 @@
 {{define "specific"}}{{$cs := .CoinShortcut}}{{$addr := .Address}}{{$data := .}}
-<h1>{{if $addr.ContractInfo}}Contract {{$addr.ContractInfo.Name}} ({{$addr.ContractInfo.Symbol}}){{else}}Address{{end}} <small class="text-muted">{{formatAmount $addr.BalanceSat}} {{$cs}}</small>
+<h1>{{if $addr.ContractInfo}}Contract {{$addr.ContractInfo.Name}}{{if $addr.ContractInfo.Symbol}} ({{$addr.ContractInfo.Symbol}}){{end}}{{else}}Address{{end}} <small class="text-muted">{{formatAmount $addr.BalanceSat}} {{$cs}}</small>
 </h1>
 <div class="alert alert-data ellipsis">
     <span class="data">{{$addr.AddrStr}}</span>
@@ -10,6 +10,26 @@
         <table class="table data-table">
             <tbody>
                 {{- if eq .ChainType 1 -}}
+                {{if $addr.ContractInfo}}
+                {{if $addr.ContractInfo.Type}}
+                <tr>
+                    <td style="width: 25%;">Contract type</td>
+                    <td class="data">{{$addr.ContractInfo.Type}}</td>
+                </tr>
+                {{end}}
+                {{if $addr.ContractInfo.CreatedInBlock}}
+                <tr>
+                    <td style="width: 25%;">Created in Block</td>
+                    <td class="data"><a href="/block/{{$addr.ContractInfo.CreatedInBlock}}">{{$addr.ContractInfo.CreatedInBlock}}</a></td>
+                </tr>
+                {{end}}
+                {{if $addr.ContractInfo.DestructedInBlock}}
+                <tr>
+                    <td style="width: 25%;">Destructed in Block</td>
+                    <td class="data"><a href="/block/{{$addr.ContractInfo.DestructedInBlock}}">{{$addr.ContractInfo.DestructedInBlock}}</a></td>
+                </tr>
+                {{end}}
+                {{end}}
                 <tr>
                     <td style="width: 25%;">Balance</td>
                     <td class="data">{{formatAmount $addr.BalanceSat}} {{$cs}}</td>
@@ -158,19 +178,31 @@
 {{- end}}{{if or $addr.Transactions $addr.Filter -}}
 <div class="row h-container">
     <h3 class="col-md-3">Transactions</h3>
-    <select class="col-md-2" style="background-color: #eaeaea;" onchange="self.location='?filter='+options[selectedIndex].value">
+    <select class="col-md-3" style="background-color: #eaeaea;" onchange="self.location='?filter='+options[selectedIndex].value">
         <option>All</option>
-        <option {{if eq $addr.Filter "inputs" -}} selected{{end}} value="inputs">Address on input side</option>
-        <option {{if eq $addr.Filter "outputs" -}} selected{{end}} value="outputs">Address on output side</option>
+        <option {{if eq $addr.Filter "inputs" -}}selected{{end}} value="inputs">Address on input side</option>
+        <option {{if eq $addr.Filter "outputs" -}}selected{{end}} value="outputs">Address on output side</option>
         {{- if $addr.Tokens -}}
-        <option {{if eq $addr.Filter "0" -}} selected{{end}} value="0">Non-contract</option>
-        <option {{if eq $addr.Filter "0" -}} selected{{end}} value="1">Internal</option>
+        <option {{if eq $addr.Filter "0" -}}selected{{end}} value="0">Non-contract</option>
+        <option {{if eq $addr.Filter "1" -}}selected{{end}} value="1">Internal</option>
         {{- range $t := $addr.Tokens -}}
-        <option {{if eq $addr.Filter $t.ContractIndex -}} selected{{end}} value="{{$t.ContractIndex}}">{{$t.Name}}</option>
+        {{if eq $t.Type "ERC20"}}
+        <option {{if eq $addr.Filter $t.ContractIndex -}}selected{{end}} value="{{$t.ContractIndex}}">{{if $t.Name}}{{$t.Name}}{{else}}{{$t.Contract}}{{end}} (ERC20)</option>
+        {{- end -}}
+        {{- end -}}
+        {{- range $t := $addr.Tokens -}}
+        {{if eq $t.Type "ERC721"}}
+        <option {{if eq $addr.Filter $t.ContractIndex -}}selected{{end}} value="{{$t.ContractIndex}}">{{if $t.Name}}{{$t.Name}}{{else}}{{$t.Contract}}{{end}} (ERC721)</option>
+        {{- end -}}
+        {{- end -}}
+        {{- range $t := $addr.Tokens -}}
+        {{if eq $t.Type "ERC1155"}}
+        <option {{if eq $addr.Filter $t.ContractIndex -}}selected{{end}} value="{{$t.ContractIndex}}">{{if $t.Name}}{{$t.Name}}{{else}}{{$t.Contract}}{{end}} (ERC1155)</option>
+        {{- end -}}
         {{- end -}}
         {{- end -}}
     </select>
-    <div class="col-md-7">
+    <div class="col-md-6">
         <nav>{{template "paging" $data}}</nav>
     </div>
 </div>

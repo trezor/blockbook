@@ -812,6 +812,10 @@ func (d *RocksDB) storeContractInfo(wb *grocksdb.WriteBatch, contractInfo *bchai
 			contractInfo = storedCI
 		}
 		wb.PutCF(d.cfh[cfContracts], key, packContractInfo(contractInfo))
+		cacheKey := string(key)
+		cachedContractsMux.Lock()
+		delete(cachedContracts, cacheKey)
+		cachedContractsMux.Unlock()
 	}
 	return nil
 }

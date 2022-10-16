@@ -569,6 +569,27 @@ func (w *Worker) getContractDescriptorInfo(cd bchain.AddressDescriptor, typeFrom
 				glog.Errorf("StoreContractInfo error %v, contract %v", err, cd)
 			}
 		}
+	} else if (len(contractInfo.Name) > 0 && contractInfo.Name[0] == 0) || (len(contractInfo.Symbol) > 0 && contractInfo.Symbol[0] == 0) {
+		// fix contract name/symbol that was parsed as a string consisting of zeroes
+		blockchainContractInfo, err := w.chain.GetContractInfo(cd)
+		if err != nil {
+			glog.Errorf("GetContractInfo from chain error %v, contract %v", err, cd)
+		} else {
+			if len(blockchainContractInfo.Name) > 0 && blockchainContractInfo.Name[0] != 0 {
+				contractInfo.Name = blockchainContractInfo.Name
+			} else {
+				contractInfo.Name = ""
+			}
+			if len(blockchainContractInfo.Symbol) > 0 && blockchainContractInfo.Symbol[0] != 0 {
+				contractInfo.Symbol = blockchainContractInfo.Symbol
+			} else {
+				contractInfo.Symbol = ""
+			}
+			contractInfo.Decimals = blockchainContractInfo.Decimals
+			if err = w.db.StoreContractInfo(contractInfo); err != nil {
+				glog.Errorf("StoreContractInfo error %v, contract %v", err, cd)
+			}
+		}
 	}
 	return contractInfo, validContract, nil
 }
@@ -957,8 +978,10 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 				totalResults = int(ca.TotalTxs)
 			} else if filter.Vout == 0 {
 				totalResults = int(ca.NonContractTxs)
-			} else if filter.Vout > 0 && filter.Vout-1 < len(ca.Contracts) {
-				totalResults = int(ca.Contracts[filter.Vout-1].Txs)
+			} else if filter.Vout == db.InternalTxIndexOffset {
+				totalResults = int(ca.InternalTxs)
+			} else if filter.Vout >= db.ContractIndexOffset && filter.Vout-db.ContractIndexOffset < len(ca.Contracts) {
+				totalResults = int(ca.Contracts[filter.Vout-db.ContractIndexOffset].Txs)
 			} else if filter.Vout == AddressFilterVoutQueryNotNecessary {
 				totalResults = 0
 			}
@@ -972,16 +995,17 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 				BalanceSat: *b,
 			}
 		}
-		// special handling if filtering for a contract, check the ballance of it in the blockchain
-		if len(filterDesc) > 0 && details >= AccountDetailsTokens {
-			t, err := w.getEthereumContractBalanceFromBlockchain(addrDesc, filterDesc, details)
-			if err != nil {
-				return nil, nil, nil, 0, 0, 0, 0, err
-			}
-			tokens = []Token{*t}
-			// switch off query for transactions, there are no transactions
-			filter.Vout = AddressFilterVoutQueryNotNecessary
+	}
+	// special handling if filtering for a contract, return the contract details even though the address had no transactions with it
+	if len(tokens) == 0 && len(filterDesc) > 0 && details >= AccountDetailsTokens {
+		t, err := w.getEthereumContractBalanceFromBlockchain(addrDesc, filterDesc, details)
+		if err != nil {
+			return nil, nil, nil, 0, 0, 0, 0, err
 		}
+		tokens = []Token{*t}
+		// switch off query for transactions, there are no transactions
+		filter.Vout = AddressFilterVoutQueryNotNecessary
+		totalResults = -1
 	}
 	return ba, tokens, ci, n, nonContractTxs, internalTxs, totalResults, nil
 }
