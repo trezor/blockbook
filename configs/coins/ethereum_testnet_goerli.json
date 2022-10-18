@@ -1,7 +1,7 @@
 {
   "coin": {
     "name": "Ethereum Testnet Goerli",
-    "shortcut": "gGOE",
+    "shortcut": "tGOR",
     "label": "Ethereum Goerli",
     "alias": "ethereum_testnet_goerli"
   },
