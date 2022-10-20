@@ -97,11 +97,11 @@
         <option {{if eq $addr.Filter "outputs" -}} selected{{end}} value="outputs">XPUB addresses on output side</option>
     </select>
     <div class="col-md-6">
-        <nav>{{template "paging" $data}}</nav>
+        {{template "paging" $data}}
     </div>
 </div>
 <div class="data-div">
     {{- range $tx := $addr.Transactions}}{{$data := setTxToTemplateData $data $tx}}{{template "txdetail" $data}}{{end -}}
 </div>
-<nav>{{template "paging" $data }}</nav>
+{{template "paging" $data }}
 {{end}}{{end}}

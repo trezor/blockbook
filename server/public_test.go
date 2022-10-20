@@ -4,11 +4,13 @@ package server
 
 import (
 	"encoding/json"
+	"html/template"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -1606,4 +1608,30 @@ func Test_PublicServer_BitcoinType(t *testing.T) {
 	httpTestsBitcoinType(t, ts)
 	socketioTestsBitcoinType(t, ts)
 	websocketTestsBitcoinType(t, ts)
+}
+
+func Test_formatInt64(t *testing.T) {
+	tests := []struct {
+		name string
+		n    int64
+		want template.HTML
+	}{
+		{"1", 1, "1"},
+		{"13", 13, "13"},
+		{"123", 123, "123"},
+		{"1234", 1234, `1<span class="ns">234</span>`},
+		{"91234", 91234, `91<span class="ns">234</span>`},
+		{"891234", 891234, `891<span class="ns">234</span>`},
+		{"7891234", 7891234, `7<span class="ns">891</span><span class="ns">234</span>`},
+		{"67891234", 67891234, `67<span class="ns">891</span><span class="ns">234</span>`},
+		{"567891234", 567891234, `567<span class="ns">891</span><span class="ns">234</span>`},
+		{"4567891234", 4567891234, `4<span class="ns">567</span><span class="ns">891</span><span class="ns">234</span>`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := formatInt64(tt.n); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("formatInt64() = %v, want %v", got, tt.want)
+			}
+		})
+	}
 }

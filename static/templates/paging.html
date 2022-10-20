@@ -1,11 +1,16 @@
-{{- define "paging"}}{{$data := .}}{{if $data.PrevPage -}}
-<ul class="pagination justify-content-end">
-    <li class="page-item"><a class="page-link" href="?page={{$data.PrevPage}}{{$data.PageParams}}">&lt;</a></li>
-    {{- range $p := $data.PagingRange -}}
-    <li class="page-item{{if eq $data.Page $p}} active{{end}}">
-        {{- if $p}}<a class="page-link" href="?page={{$p}}{{$data.PageParams}}">{{$p}}</a>
-        {{- else}}<span class="page-text">...</span>{{end -}}
-    </li>{{- end -}}
-    <li class="page-item"><a class="page-link" href="?page={{$data.NextPage}}{{$data.PageParams}}">&gt;</a></li>
-</ul>
-{{- end}}{{end -}}
+{{define "paging"}}{{$data := .}}{{if $data.PrevPage}}
+<nav class="paging justify-content-end">
+    <a class="btn btn-paging" href="?page={{$data.PrevPage}}{{$data.PageParams}}">Previous</a>
+    {{if $data.PagingRange}}
+    <div class="paging-group mx-2">
+    <div class="bb-group">
+        {{range $p := $data.PagingRange}}
+            {{if $p}}<a class="btn{{if eq $data.Page $p}} active{{end}}" href="?page={{$p}}{{$data.PageParams}}">{{$p}}</a>
+            {{else}}<span>...</span>{{end}}
+        {{end}}
+    </div>
+    </div>
+    {{end}}
+    <a class="btn btn-paging" href="?page={{$data.NextPage}}{{$data.PageParams}}">Next</a>
+</nav>
+{{end}}{{end}}
