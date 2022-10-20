@@ -1,15 +1,13 @@
 {{define "specific"}}{{$cs := .CoinShortcut}}{{$b := .Block}}{{$data := . -}}
-<h1>Block {{$b.Height}}</h1>
+<h1>Block {{formatUint32 $b.Height}}</h1>
 <div class="alert alert-data ellipsis">
     <span class="data">{{$b.Hash}}</span>
 </div>
 <div class="row h-container">
-    <h3 class="col-md-6 col-sm-12">Summary</h3>
-    <nav class="col-md-6 col-sm-12">
-        <ul class="pagination justify-content-end">
-            <li class="page-item">{{if $b.Prev}}<a class="page-link" href="/block/{{$b.Prev}}">Previous Block</a>{{else}}<span class="page-link text-muted disabled">Previous Block</span>{{end}}</li>
-            <li class="page-item">{{if $b.Next}}<a class="page-link" href="/block/{{$b.Next}}">Next Block</a>{{else}}<span class="page-link text-muted disabled">Next Block</span>{{end}}</li>
-        </ul>
+    <h3 class="col-md-6">Summary</h3>
+    <nav class="col-md-6 paging justify-content-end">
+        {{if $b.Prev}}<a class="btn btn-paging" href="/block/{{$b.Prev}}">Previous Block</a>{{else}}<span class="btn btn-paging">Previous Block</span>{{end}}
+        {{if $b.Next}}<a class="btn btn-paging ms-2" href="/block/{{$b.Next}}">Next Block</a>{{else}}<span class="btn btn-paging ms-2">Next Block</span>{{end}}
     </nav>
 </div>
 <div class="data-div row">
@@ -69,10 +67,10 @@
 {{- if $b.Transactions -}}
 <div class="row h-container">
     <h3 class="col-md-6 col-sm-12">Transactions</h3>
-    <nav class="col-md-6 col-sm-12">{{template "paging" $data}}</nav>
+    <div class="col-md-6 col-sm-12">{{template "paging" $data}}</div>
 </div>
 <div class="data-div">
     {{- range $tx := $b.Transactions}}{{$data := setTxToTemplateData $data $tx}}{{template "txdetail" $data}}{{end -}}
 </div>
-<nav>{{template "paging" $data }}</nav>
+{{template "paging" $data }}
 {{end}}{{end}}

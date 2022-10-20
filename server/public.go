@@ -460,6 +460,9 @@ func (s *PublicServer) parseTemplates() []*template.Template {
 		"formatUnixTime":           formatUnixTime,
 		"formatAmount":             s.formatAmount,
 		"formatAmountWithDecimals": formatAmountWithDecimals,
+		"formatInt64":              formatInt64,
+		"formatInt":                formatInt,
+		"formatUint32":             formatUint32,
 		"setTxToTemplateData":      setTxToTemplateData,
 		"feePerByte":               feePerByte,
 		"isOwnAddress":             isOwnAddress,
@@ -528,16 +531,70 @@ func (s *PublicServer) parseTemplates() []*template.Template {
 	return t
 }
 
-func formatUnixTime(ut int64) string {
+func relativeTime(d int64) string {
+	var u string
+	if d < 60 {
+		if d == 1 {
+			u = " sec"
+		} else {
+			u = " secs"
+		}
+	} else if d < 3600 {
+		d /= 60
+		if d == 1 {
+			u = " min"
+		} else {
+			u = " mins"
+		}
+	} else if d < 3600*24 {
+		d /= 3600
+		if d == 1 {
+			u = " hour"
+		} else {
+			u = " hours"
+		}
+	} else {
+		d /= 3600 * 24
+		if d == 1 {
+			u = " day"
+		} else {
+			u = " days"
+		}
+	}
+	return strconv.FormatInt(d, 10) + u
+}
+
+func formatUnixTime(ut int64) template.HTML {
 	t := time.Unix(ut, 0)
 	return formatTime(&t)
 }
 
-func formatTime(t *time.Time) string {
+func formatTime(t *time.Time) template.HTML {
 	if t == nil {
 		return ""
 	}
-	return t.Format(time.RFC1123)
+	u := t.Unix()
+	if u <= 0 {
+		return ""
+	}
+	d := time.Now().Unix() - u
+	f := t.UTC().Format("2006-01-02 15:04:05")
+	if d < 0 {
+		return template.HTML(f)
+	}
+	r := relativeTime(d)
+	if d > 3600*24 {
+		d = d % (3600 * 24)
+		if d >= 3600 {
+			r += " " + relativeTime(d)
+		}
+	} else if d > 3600 {
+		d = d % 3600
+		if d >= 60 {
+			r += " " + relativeTime(d)
+		}
+	}
+	return template.HTML(`<span tt="` + f + `">` + r + " ago</span>")
 }
 
 func toJSON(data interface{}) string {
@@ -562,6 +619,28 @@ func formatAmountWithDecimals(a *api.Amount, d int) string {
 		return "0"
 	}
 	return a.DecimalString(d)
+}
+
+func formatInt(i int) template.HTML {
+	return formatInt64(int64(i))
+}
+
+func formatUint32(i uint32) template.HTML {
+	return formatInt64(int64(i))
+}
+
+func formatInt64(i int64) template.HTML {
+	s := strconv.FormatInt(i, 10)
+	t := (len(s) - 1) / 3
+	if t <= 0 {
+		return template.HTML(s)
+	}
+	t *= 3
+	rv := s[:len(s)-t]
+	for i := len(s) - t; i < len(s); i += 3 {
+		rv += `<span class="ns">` + s[i:i+3] + "</span>"
+	}
+	return template.HTML(rv)
 }
 
 // called from template to support txdetail.html functionality
