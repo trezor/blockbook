@@ -22,10 +22,10 @@
     "package_name": "backend-ecash",
     "package_revision": "satoshilabs-1",
     "system_user": "ecash",
-    "version": "0.25.1",
-    "binary_url": "https://download.bitcoinabc.org/0.25.1/linux/bitcoin-abc-0.25.1-x86_64-linux-gnu.tar.gz",
+    "version": "0.26.1",
+    "binary_url": "https://download.bitcoinabc.org/0.26.1/linux/bitcoin-abc-0.26.1-x86_64-linux-gnu.tar.gz",
     "verification_type": "sha256",
-    "verification_source": "295183578ce67444fd6a504d2dcb85d07345454881ba4db5f52d82dd3a659bed",
+    "verification_source": "64c799b339b2aa03f50ac605f7df0586341ff5a2d74321b424f4fe35d37da0be",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
       "bin/bitcoin-qt"
@@ -38,7 +38,11 @@
     "protect_memory": true,
     "mainnet": true,
     "server_config_file": "bcash.conf",
-    "client_config_file": "bitcoin_like_client.conf"
+    "client_config_file": "bitcoin_like_client.conf",
+    "additional_params": {
+      "listen": 1,
+      "avalanche": 1
+    }
   },
   "blockbook": {
     "package_name": "blockbook-ecash",
@@ -49,7 +53,7 @@
     "additional_params": "",
     "block_chain": {
       "parse": true,
-      "subversion": "/Bitcoin ABC:0.24.9(EB32.0)/",
+      "subversion": "/Bitcoin ABC:0.26.1(EB32.0)/",
       "address_format": "cashaddr",
       "mempool_workers": 8,
       "mempool_sub_workers": 2,
