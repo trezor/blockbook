@@ -44,7 +44,12 @@ func addressFromPaddedHex(s string) (string, error) {
 	return a.String(), nil
 }
 
-func processTransferEvent(l *bchain.RpcLog) (*bchain.TokenTransfer, error) {
+func processTransferEvent(l *bchain.RpcLog) (transfer *bchain.TokenTransfer, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = errors.Errorf("processTransferEvent recovered from panic %v", r)
+		}
+	}()
 	tl := len(l.Topics)
 	var ttt bchain.TokenType
 	var value big.Int
@@ -63,11 +68,12 @@ func processTransferEvent(l *bchain.RpcLog) (*bchain.TokenTransfer, error) {
 	} else {
 		return nil, nil
 	}
-	from, err := addressFromPaddedHex(l.Topics[1])
+	var from, to string
+	from, err = addressFromPaddedHex(l.Topics[1])
 	if err != nil {
 		return nil, err
 	}
-	to, err := addressFromPaddedHex(l.Topics[2])
+	to, err = addressFromPaddedHex(l.Topics[2])
 	if err != nil {
 		return nil, err
 	}
@@ -80,16 +86,22 @@ func processTransferEvent(l *bchain.RpcLog) (*bchain.TokenTransfer, error) {
 	}, nil
 }
 
-func processERC1155TransferSingleEvent(l *bchain.RpcLog) (*bchain.TokenTransfer, error) {
+func processERC1155TransferSingleEvent(l *bchain.RpcLog) (transfer *bchain.TokenTransfer, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = errors.Errorf("processERC1155TransferSingleEvent recovered from panic %v", r)
+		}
+	}()
 	tl := len(l.Topics)
 	if tl != 4 {
 		return nil, nil
 	}
-	from, err := addressFromPaddedHex(l.Topics[2])
+	var from, to string
+	from, err = addressFromPaddedHex(l.Topics[2])
 	if err != nil {
 		return nil, err
 	}
-	to, err := addressFromPaddedHex(l.Topics[3])
+	to, err = addressFromPaddedHex(l.Topics[3])
 	if err != nil {
 		return nil, err
 	}
@@ -115,16 +127,22 @@ func processERC1155TransferSingleEvent(l *bchain.RpcLog) (*bchain.TokenTransfer,
 	}, nil
 }
 
-func processERC1155TransferBatchEvent(l *bchain.RpcLog) (*bchain.TokenTransfer, error) {
+func processERC1155TransferBatchEvent(l *bchain.RpcLog) (transfer *bchain.TokenTransfer, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = errors.Errorf("processERC1155TransferBatchEvent recovered from panic %v", r)
+		}
+	}()
 	tl := len(l.Topics)
 	if tl < 4 {
 		return nil, nil
 	}
-	from, err := addressFromPaddedHex(l.Topics[2])
+	var from, to string
+	from, err = addressFromPaddedHex(l.Topics[2])
 	if err != nil {
 		return nil, err
 	}
-	to, err := addressFromPaddedHex(l.Topics[3])
+	to, err = addressFromPaddedHex(l.Topics[3])
 	if err != nil {
 		return nil, err
 	}
@@ -179,6 +197,7 @@ func processERC1155TransferBatchEvent(l *bchain.RpcLog) (*bchain.TokenTransfer, 
 		MultiTokenValues: idValues,
 	}, nil
 }
+
 func contractGetTransfersFromLog(logs []*bchain.RpcLog) (bchain.TokenTransfers, error) {
 	var r bchain.TokenTransfers
 	var tt *bchain.TokenTransfer
