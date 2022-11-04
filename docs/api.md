@@ -57,7 +57,7 @@ The following methods are supported:
 #### Status page
 Status page returns current status of Blockbook and connected backend.
 ```
-GET /api
+GET /api/v2
 ```
 
 Response:
