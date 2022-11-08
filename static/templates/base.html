@@ -11,9 +11,39 @@
     <meta name="description" content="Trezor {{.CoinLabel}} Explorer">
     <title>Trezor {{.CoinLabel}} Explorer</title>
     <script type="text/javascript">
+        function syntaxHighlight(json) {
+            json = JSON.stringify(json, undefined, 2);
+            json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
+                var cls = 'number';
+                if (/^"/.test(match)) {
+                    if (/:$/.test(match)) {
+                        cls = 'key';
+                    } else {
+                        cls = 'string';
+                    }
+                } else if (/true|false/.test(match)) {
+                    cls = 'boolean';
+                } else if (/null/.test(match)) {
+                    cls = 'null';
+                }
+                return '<span class="' + cls + '">' + match + '</span>';
+            });
+        }
         window.onload=()=>{
             document.querySelectorAll('[tt]').forEach(e=>new bootstrap.Tooltip(e,{title:e.getAttribute("tt")}));
-            document.querySelectorAll("#header .bb-group>.btn-check").forEach(e=>e.addEventListener('click',(x)=>console.log("clicked",x.target.id)));
+            document.querySelectorAll("#header .bb-group>.btn-check").forEach(e=>e.addEventListener('click',e=>console.log("clicked",e.target.id)));
+            document.querySelectorAll('.copyable').forEach(e=>e.addEventListener('click',e=>{
+                console.log("clicked",e.clientX<e.target.getBoundingClientRect().x,e.offsetX, e.clientX, e.target.getBoundingClientRect(), e);
+                if(e.clientX<e.target.getBoundingClientRect().x){
+                    let t=e.target.getAttribute("copy-content");
+                    if(!t) t=e.target.innerText;
+                    navigator.clipboard.writeText(t);
+                    e.target.className=e.target.className.replace('copyable','copied');
+                    setTimeout(()=>e.target.className=e.target.className.replace('copied','copyable'),1000);
+                    e.preventDefault();
+                }
+            }));
         }
     </script>
 </head>
