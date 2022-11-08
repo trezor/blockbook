@@ -20,7 +20,7 @@
     "package_revision": "satoshilabs-1",
     "system_user": "ethereum",
     "version": "3.1.2",
-    "binary_url": "https://github.com/prysmaticlabs/prysm/releases/download/v3.1.2/beacon-chain-v3.1.2-darwin-amd64",
+    "binary_url": "https://github.com/prysmaticlabs/prysm/releases/download/v3.1.2/beacon-chain-v3.1.2-linux-amd64",
     "verification_type": "sha256",
     "verification_source": "56abf71981d3bfd48b04e8bd09544513a0512202b46e9f239a762922c84ac18c",
     "extract_command": "mv ${ARCHIVE} backend/beacon-chain && chmod +x backend/beacon-chain && echo",
