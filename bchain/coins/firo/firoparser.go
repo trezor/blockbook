@@ -170,7 +170,7 @@ func (p *FiroParser) ParseBlock(b []byte) (*bchain.Block, error) {
 	} else {
 		if isMTP(header) {
 			mtpHeader := MTPBlockHeader{}
-			mtpHashData := MTPHashData{}
+			mtpHashDataRoot := MTPHashDataRoot{}
 
 			// header
 			err = binary.Read(reader, binary.LittleEndian, &mtpHeader)
@@ -178,27 +178,45 @@ func (p *FiroParser) ParseBlock(b []byte) (*bchain.Block, error) {
 				return nil, err
 			}
 
-			// hash data
-			err = binary.Read(reader, binary.LittleEndian, &mtpHashData)
+			// hash data root
+			err = binary.Read(reader, binary.LittleEndian, &mtpHashDataRoot)
 			if err != nil {
 				return nil, err
 			}
 
-			// proof
-			for i := 0; i < MTPL*3; i++ {
-				var numberProofBlocks uint8
+			isAllZero := true
+			for i := 0; i < 16; i++ {
+				if mtpHashDataRoot.HashRootMTP[i] != 0 {
+					isAllZero = false
+					break
+				}
+			}
+			
 
-				err = binary.Read(reader, binary.LittleEndian, &numberProofBlocks)
+			if !isAllZero {
+				// hash data
+				mtpHashData := MTPHashData{}
+				err = binary.Read(reader, binary.LittleEndian, &mtpHashData)
 				if err != nil {
 					return nil, err
 				}
 
-				for j := uint8(0); j < numberProofBlocks; j++ {
-					var mtpData [16]uint8
+				// proof
+				for i := 0; i < MTPL*3; i++ {
+					var numberProofBlocks uint8
 
-					err = binary.Read(reader, binary.LittleEndian, mtpData[:])
+					err = binary.Read(reader, binary.LittleEndian, &numberProofBlocks)
 					if err != nil {
 						return nil, err
+					}
+
+					for j := uint8(0); j < numberProofBlocks; j++ {
+						var mtpData [16]uint8
+
+						err = binary.Read(reader, binary.LittleEndian, mtpData[:])
+						if err != nil {
+							return nil, err
+						}
 					}
 				}
 			}
@@ -318,8 +336,11 @@ func isProgPow(h *wire.BlockHeader, isTestNet bool) bool {
 	return isTestNet && epoch >= SwitchToProgPowBlockHeaderTestnet || !isTestNet && epoch >= SwitchToProgPowBlockHeaderMainnet
 }
 
-type MTPHashData struct {
+type MTPHashDataRoot struct {
 	HashRootMTP [16]uint8
+}
+
+type MTPHashData struct {
 	BlockMTP    [128][128]uint64
 }
 
