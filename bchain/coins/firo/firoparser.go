@@ -21,6 +21,7 @@ const (
 	OpLelantusMint      = 0xc5
 	OpLelantusJMint     = 0xc6
 	OpLelantusJoinSplit = 0xc7
+	OpLelantusJoinSplitPayload = 0xc9
 
 	MainnetMagic wire.BitcoinNet = 0xe3d9fef1
 	TestnetMagic wire.BitcoinNet = 0xcffcbeea
@@ -121,6 +122,8 @@ func (p *FiroParser) GetAddressesFromAddrDesc(addrDesc bchain.AddressDescriptor)
 		case OpLelantusJMint:
 			return []string{"LelantusJMint"}, false, nil
 		case OpLelantusJoinSplit:
+			return []string{"LelantusJoinSplit"}, false, nil
+		case OpLelantusJoinSplitPayload:
 			return []string{"LelantusJoinSplit"}, false, nil
 		}
 	}
