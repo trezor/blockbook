@@ -8,15 +8,16 @@ import (
 	"time"
 
 	"github.com/golang/glog"
+	"github.com/trezor/blockbook/common"
 	"github.com/trezor/blockbook/db"
 )
 
 // OnNewFiatRatesTicker is used to send notification about a new FiatRates ticker
-type OnNewFiatRatesTicker func(ticker *db.CurrencyRatesTicker)
+type OnNewFiatRatesTicker func(ticker *common.CurrencyRatesTicker)
 
 // RatesDownloaderInterface provides method signatures for specific fiat rates downloaders
 type RatesDownloaderInterface interface {
-	CurrentTickers() (*db.CurrencyRatesTicker, error)
+	CurrentTickers() (*common.CurrencyRatesTicker, error)
 	UpdateHistoricalTickers() error
 	UpdateHistoricalTokenTickers() error
 }
@@ -80,17 +81,25 @@ func NewFiatRatesDownloader(db *db.RocksDB, apiType string, params string, callb
 func (rd *RatesDownloader) Run() error {
 	var lastHistoricalTickers time.Time
 	is := rd.db.GetInternalState()
-
+	tickerFromIs := is.GetCurrentTicker("", "")
+	firstRun := true
 	for {
+		unix := time.Now().Unix()
+		next := unix + rd.periodSeconds
+		next -= next % rd.periodSeconds
+		// skip waiting for the period for the first run if there are no tickerFromIs or they are too old
+		if !firstRun || (tickerFromIs != nil && next-tickerFromIs.Timestamp.Unix() < rd.periodSeconds) {
+			// wait for the next run with a slight random value to avoid too many request at the same time
+			next += int64(rand.Intn(12))
+			time.Sleep(time.Duration(next-unix) * time.Second)
+		}
+		firstRun = false
 		tickers, err := rd.downloader.CurrentTickers()
 		if err != nil || tickers == nil {
 			glog.Error("FiatRatesDownloader: CurrentTickers error ", err)
 		} else {
-			rd.db.FiatRatesSetCurrentTicker(tickers)
+			is.SetCurrentTicker(tickers)
 			glog.Info("FiatRatesDownloader: CurrentTickers updated")
-			if is != nil {
-				is.CurrentFiatRatesTime = time.Now()
-			}
 			if rd.callbackOnNewTicker != nil {
 				rd.callbackOnNewTicker(tickers)
 			}
@@ -128,11 +137,5 @@ func (rd *RatesDownloader) Run() error {
 				}
 			}
 		}
-		// wait for the next run with a slight random value to avoid too many request at the same time
-		unix := time.Now().Unix()
-		next := unix + rd.periodSeconds
-		next -= next % rd.periodSeconds
-		next += int64(rand.Intn(12))
-		time.Sleep(time.Duration(next-unix) * time.Second)
 	}
 }

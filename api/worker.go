@@ -1633,7 +1633,7 @@ func removeEmpty(stringSlice []string) []string {
 }
 
 // getFiatRatesResult checks if CurrencyRatesTicker contains all necessary data and returns formatted result
-func (w *Worker) getFiatRatesResult(currencies []string, ticker *db.CurrencyRatesTicker, token string) (*FiatTicker, error) {
+func (w *Worker) getFiatRatesResult(currencies []string, ticker *common.CurrencyRatesTicker, token string) (*FiatTicker, error) {
 	if token != "" {
 		if len(currencies) != 1 {
 			return nil, NewAPIError("Rates for token only for a single currency", true)
@@ -1672,7 +1672,7 @@ func (w *Worker) getFiatRatesResult(currencies []string, ticker *db.CurrencyRate
 
 // GetFiatRatesForBlockID returns fiat rates for block height or block hash
 func (w *Worker) GetFiatRatesForBlockID(blockID string, currencies []string, token string) (*FiatTicker, error) {
-	var ticker *db.CurrencyRatesTicker
+	var ticker *common.CurrencyRatesTicker
 	bi, err := w.getBlockInfoFromBlockID(blockID)
 	if err != nil {
 		if err == bchain.ErrBlockNotFound {
@@ -1707,13 +1707,14 @@ func (w *Worker) GetCurrentFiatRates(currencies []string, token string) (*FiatTi
 	if len(currencies) == 1 {
 		vsCurrency = currencies[0]
 	}
-	ticker, err := w.db.FiatRatesGetCurrentTicker(vsCurrency, token)
-	if ticker == nil || err != nil {
+	ticker := w.is.GetCurrentTicker(vsCurrency, token)
+	var err error
+	if ticker == nil {
 		ticker, err = w.db.FiatRatesFindLastTicker(vsCurrency, token)
 		if err != nil {
 			return nil, NewAPIError(fmt.Sprintf("Error finding ticker: %v", err), false)
 		} else if ticker == nil {
-			return nil, NewAPIError(fmt.Sprintf("No tickers found!"), true)
+			return nil, NewAPIError("No tickers found!", true)
 		}
 	}
 	result, err := w.getFiatRatesResult(currencies, ticker, token)
@@ -2101,6 +2102,10 @@ func (w *Worker) GetSystemInfo(internal bool) (*SystemInfo, error) {
 		columnStats = w.is.GetAllDBColumnStats()
 		internalDBSize = w.is.DBSizeTotal()
 	}
+	var currentFiatRatesTime time.Time
+	if w.is.CurrentTicker != nil {
+		currentFiatRatesTime = w.is.CurrentTicker.Timestamp
+	}
 	blockbookInfo := &BlockbookInfo{
 		Coin:                         w.is.Coin,
 		Host:                         w.is.Host,
@@ -2118,7 +2123,7 @@ func (w *Worker) GetSystemInfo(internal bool) (*SystemInfo, error) {
 		Decimals:                     w.chainParser.AmountDecimals(),
 		HasFiatRates:                 w.is.HasFiatRates,
 		HasTokenFiatRates:            w.is.HasTokenFiatRates,
-		CurrentFiatRatesTime:         nonZeroTime(w.is.CurrentFiatRatesTime),
+		CurrentFiatRatesTime:         nonZeroTime(currentFiatRatesTime),
 		HistoricalFiatRatesTime:      nonZeroTime(w.is.HistoricalFiatRatesTime),
 		HistoricalTokenFiatRatesTime: nonZeroTime(w.is.HistoricalTokenFiatRatesTime),
 		DbSize:                       w.db.DatabaseSizeOnDisk(),

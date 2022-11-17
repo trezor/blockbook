@@ -222,7 +222,7 @@ func (s *PublicServer) OnNewBlock(hash string, height uint32) {
 }
 
 // OnNewFiatRatesTicker notifies users subscribed to bitcoind/fiatrates about new ticker
-func (s *PublicServer) OnNewFiatRatesTicker(ticker *db.CurrencyRatesTicker) {
+func (s *PublicServer) OnNewFiatRatesTicker(ticker *common.CurrencyRatesTicker) {
 	s.websocket.OnNewFiatRatesTicker(ticker)
 }
 
