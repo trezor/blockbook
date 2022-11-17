@@ -12,6 +12,7 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/linxGnu/grocksdb"
+	"github.com/trezor/blockbook/common"
 	"github.com/trezor/blockbook/db"
 )
 
@@ -223,11 +224,11 @@ func (cg *Coingecko) platformIds() error {
 	return nil
 }
 
-func (cg *Coingecko) CurrentTickers() (*db.CurrencyRatesTicker, error) {
+func (cg *Coingecko) CurrentTickers() (*common.CurrencyRatesTicker, error) {
 	cg.updatingCurrent = true
 	defer func() { cg.updatingCurrent = false }()
 
-	var newTickers = db.CurrencyRatesTicker{}
+	var newTickers = common.CurrencyRatesTicker{}
 
 	if vsCurrencies == nil {
 		vs, err := cg.simpleSupportedVSCurrencies()
@@ -275,7 +276,7 @@ func (cg *Coingecko) CurrentTickers() (*db.CurrencyRatesTicker, error) {
 	return &newTickers, nil
 }
 
-func (cg *Coingecko) getHistoricalTicker(tickersToUpdate map[uint]*db.CurrencyRatesTicker, coinId string, vsCurrency string, token string) (bool, error) {
+func (cg *Coingecko) getHistoricalTicker(tickersToUpdate map[uint]*common.CurrencyRatesTicker, coinId string, vsCurrency string, token string) (bool, error) {
 	lastTicker, err := cg.db.FiatRatesFindLastTicker(vsCurrency, token)
 	if err != nil {
 		return false, err
@@ -306,7 +307,7 @@ func (cg *Coingecko) getHistoricalTicker(tickersToUpdate map[uint]*db.CurrencyRa
 		rate := float32(p[1])
 		if timestamp%(24*3600) == 0 && timestamp != 0 && rate != 0 { // process only tickers for the whole day with non 0 value
 			var found bool
-			var ticker *db.CurrencyRatesTicker
+			var ticker *common.CurrencyRatesTicker
 			if ticker, found = tickersToUpdate[timestamp]; !found {
 				u := time.Unix(int64(timestamp), 0).UTC()
 				ticker, err = cg.db.FiatRatesGetTicker(&u)
@@ -321,7 +322,7 @@ func (cg *Coingecko) getHistoricalTicker(tickersToUpdate map[uint]*db.CurrencyRa
 						}
 						continue
 					}
-					ticker = &db.CurrencyRatesTicker{
+					ticker = &common.CurrencyRatesTicker{
 						Timestamp: u,
 						Rates:     make(map[string]float32),
 					}
@@ -341,7 +342,7 @@ func (cg *Coingecko) getHistoricalTicker(tickersToUpdate map[uint]*db.CurrencyRa
 	return true, nil
 }
 
-func (cg *Coingecko) storeTickers(tickersToUpdate map[uint]*db.CurrencyRatesTicker) error {
+func (cg *Coingecko) storeTickers(tickersToUpdate map[uint]*common.CurrencyRatesTicker) error {
 	if len(tickersToUpdate) > 0 {
 		wb := grocksdb.NewWriteBatch()
 		defer wb.Destroy()
@@ -368,7 +369,7 @@ func (cg *Coingecko) throttleHistoricalDownload() {
 
 // UpdateHistoricalTickers gets historical tickers for the main crypto currency
 func (cg *Coingecko) UpdateHistoricalTickers() error {
-	tickersToUpdate := make(map[uint]*db.CurrencyRatesTicker)
+	tickersToUpdate := make(map[uint]*common.CurrencyRatesTicker)
 
 	// reload vs_currencies
 	vs, err := cg.simpleSupportedVSCurrencies()
@@ -401,7 +402,7 @@ func (cg *Coingecko) UpdateHistoricalTokenTickers() error {
 	}
 	cg.updatingTokens = true
 	defer func() { cg.updatingTokens = false }()
-	tickersToUpdate := make(map[uint]*db.CurrencyRatesTicker)
+	tickersToUpdate := make(map[uint]*common.CurrencyRatesTicker)
 
 	if cg.platformIdentifier != "" && cg.platformVsCurrency != "" {
 		//  reload platform ids
@@ -425,7 +426,7 @@ func (cg *Coingecko) UpdateHistoricalTokenTickers() error {
 				if err != nil {
 					return err
 				}
-				tickersToUpdate = make(map[uint]*db.CurrencyRatesTicker)
+				tickersToUpdate = make(map[uint]*common.CurrencyRatesTicker)
 				glog.Infof("Coingecko updated %d of %d token tickers", count, len(platformIds))
 			}
 			if req {

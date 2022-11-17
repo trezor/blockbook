@@ -527,7 +527,7 @@ func onNewBlockHash(hash string, height uint32) {
 	}
 }
 
-func onNewFiatRatesTicker(ticker *db.CurrencyRatesTicker) {
+func onNewFiatRatesTicker(ticker *common.CurrencyRatesTicker) {
 	defer func() {
 		if r := recover(); r != nil {
 			glog.Error("onNewFiatRatesTicker recovered from panic: ", r)

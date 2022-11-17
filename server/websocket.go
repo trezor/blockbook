@@ -979,7 +979,7 @@ func (s *WebsocketServer) OnNewTx(tx *bchain.MempoolTx) {
 	}
 }
 
-func (s *WebsocketServer) broadcastTicker(currency string, rates map[string]float32, ticker *db.CurrencyRatesTicker) {
+func (s *WebsocketServer) broadcastTicker(currency string, rates map[string]float32, ticker *common.CurrencyRatesTicker) {
 	as, ok := s.fiatRatesSubscriptions[currency]
 	if ok && len(as) > 0 {
 		data := struct {
@@ -1022,7 +1022,7 @@ func (s *WebsocketServer) broadcastTicker(currency string, rates map[string]floa
 }
 
 // OnNewFiatRatesTicker is a callback that broadcasts info about fiat rates affecting subscribed currency
-func (s *WebsocketServer) OnNewFiatRatesTicker(ticker *db.CurrencyRatesTicker) {
+func (s *WebsocketServer) OnNewFiatRatesTicker(ticker *common.CurrencyRatesTicker) {
 	s.fiatRatesSubscriptionsLock.Lock()
 	defer s.fiatRatesSubscriptionsLock.Unlock()
 	for currency, rate := range ticker.Rates {

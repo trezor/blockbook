@@ -173,7 +173,7 @@ func insertFiatRate(date string, rates map[string]float32, tokenRates map[string
 	if err != nil {
 		return err
 	}
-	ticker := &db.CurrencyRatesTicker{
+	ticker := &common.CurrencyRatesTicker{
 		Timestamp:  *convertedDate,
 		Rates:      rates,
 		TokenRates: tokenRates,
