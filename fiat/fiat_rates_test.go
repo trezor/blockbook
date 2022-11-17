@@ -165,7 +165,7 @@ func TestFiatRates(t *testing.T) {
 			return
 		}
 
-		wantCurrentTickers := db.CurrencyRatesTicker{
+		wantCurrentTickers := common.CurrencyRatesTicker{
 			Rates: map[string]float32{
 				"aed": 8447.1,
 				"ars": 268901,
@@ -208,7 +208,7 @@ func TestFiatRates(t *testing.T) {
 		if err != nil || ticker == nil {
 			t.Fatalf("FiatRatesFindLastTicker failed with error: %v", err)
 		}
-		wantTicker := db.CurrencyRatesTicker{
+		wantTicker := common.CurrencyRatesTicker{
 			Rates: map[string]float32{
 				"aed": 241272.48,
 				"ars": 241272.48,
@@ -233,7 +233,7 @@ func TestFiatRates(t *testing.T) {
 		if err != nil || ticker == nil {
 			t.Fatalf("FiatRatesFindLastTicker failed with error: %v", err)
 		}
-		wantTicker = db.CurrencyRatesTicker{
+		wantTicker = common.CurrencyRatesTicker{
 			Rates: map[string]float32{
 				"aed": 240402.97,
 				"ars": 240402.97,
@@ -266,7 +266,7 @@ func TestFiatRates(t *testing.T) {
 		if err != nil || ticker == nil {
 			t.Fatalf("FiatRatesFindLastTicker failed with error: %v", err)
 		}
-		wantTicker = db.CurrencyRatesTicker{
+		wantTicker = common.CurrencyRatesTicker{
 			Rates: map[string]float32{
 				"aed": 240402.97,
 				"ars": 240402.97,
