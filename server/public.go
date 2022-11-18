@@ -30,6 +30,8 @@ const blocksOnPage = 50
 const mempoolTxsOnPage = 50
 const txsInAPI = 1000
 
+const secondaryCoinCookieName = "secondary_coin"
+
 const (
 	_ = iota
 	apiV1
@@ -330,8 +332,8 @@ func (s *PublicServer) jsonHandler(handler func(r *http.Request, apiVersion int)
 	}
 }
 
-func (s *PublicServer) newTemplateData() *TemplateData {
-	return &TemplateData{
+func (s *PublicServer) newTemplateData(r *http.Request) *TemplateData {
+	t := &TemplateData{
 		CoinName:         s.is.Coin,
 		CoinShortcut:     s.is.CoinShortcut,
 		CoinLabel:        s.is.CoinLabel,
@@ -339,10 +341,47 @@ func (s *PublicServer) newTemplateData() *TemplateData {
 		InternalExplorer: s.internalExplorer && !s.is.InitialSync,
 		TOSLink:          api.Text.TOSLink,
 	}
+	if s.is.HasFiatRates {
+		// get the secondary coin and if it should be shown either from query parameters "secondary" and "use_secondary"
+		// or from the cookie "secondary_coin" in the format secondary=use_secondary, for example EUR=true
+		// the query parameters take precedence over the cookie
+		var cookieSecondary string
+		var cookieUseSecondary bool
+		cookie, _ := r.Cookie(secondaryCoinCookieName)
+		if cookie != nil {
+			a := strings.Split(cookie.Value, "=")
+			if len(a) == 2 {
+				cookieSecondary = a[0]
+				cookieUseSecondary, _ = strconv.ParseBool(a[1])
+			}
+		}
+		secondary := strings.ToLower(r.URL.Query().Get("secondary"))
+		if secondary == "" {
+			if cookieSecondary != "" {
+				secondary = strings.ToLower(cookieSecondary)
+			} else {
+				secondary = "usd"
+			}
+		}
+		ticker := s.is.GetCurrentTicker(secondary, "")
+		if ticker == nil && secondary != "usd" {
+			secondary = "usd"
+			ticker = s.is.GetCurrentTicker(secondary, "")
+		}
+		if ticker != nil {
+			t.SecondaryCoin = strings.ToUpper(secondary)
+			t.CurrentSecondaryCoinRate = float64(ticker.Rates[secondary])
+			t.UseSecondaryCoin, _ = strconv.ParseBool(r.URL.Query().Get("use_secondary"))
+			if !t.UseSecondaryCoin {
+				t.UseSecondaryCoin = cookieUseSecondary
+			}
+		}
+	}
+	return t
 }
 
-func (s *PublicServer) newTemplateDataWithError(text string) *TemplateData {
-	td := s.newTemplateData()
+func (s *PublicServer) newTemplateDataWithError(text string, r *http.Request) *TemplateData {
+	td := s.newTemplateData(r)
 	td.Error = &api.APIError{Text: text}
 	return td
 }
@@ -359,9 +398,9 @@ func (s *PublicServer) htmlTemplateHandler(handler func(w http.ResponseWriter, r
 				debug.PrintStack()
 				t = errorInternalTpl
 				if s.debug {
-					data = s.newTemplateDataWithError(fmt.Sprint("Internal server error: recovered from panic ", e))
+					data = s.newTemplateDataWithError(fmt.Sprint("Internal server error: recovered from panic ", e), r)
 				} else {
-					data = s.newTemplateDataWithError("Internal server error")
+					data = s.newTemplateDataWithError("Internal server error", r)
 				}
 			}
 			// noTpl means the handler completely handled the request
@@ -387,7 +426,7 @@ func (s *PublicServer) htmlTemplateHandler(handler func(w http.ResponseWriter, r
 		if err != nil || (data == nil && t != noTpl) {
 			t = errorInternalTpl
 			if apiErr, ok := err.(*api.APIError); ok {
-				data = s.newTemplateData()
+				data = s.newTemplateData(r)
 				data.Error = apiErr
 				if apiErr.Public {
 					t = errorTpl
@@ -397,11 +436,15 @@ func (s *PublicServer) htmlTemplateHandler(handler func(w http.ResponseWriter, r
 					glog.Error(handlerName, " error: ", err)
 				}
 				if s.debug {
-					data = s.newTemplateDataWithError(fmt.Sprintf("Internal server error: %v, data %+v", err, data))
+					data = s.newTemplateDataWithError(fmt.Sprintf("Internal server error: %v, data %+v", err, data), r)
 				} else {
-					data = s.newTemplateDataWithError("Internal server error")
+					data = s.newTemplateDataWithError("Internal server error", r)
 				}
 			}
+		}
+		// if SecondaryCoin is specified, set secondary_coin cookie
+		if data != nil && data.SecondaryCoin != "" {
+			http.SetCookie(w, &http.Cookie{Name: secondaryCoinCookieName, Value: data.SecondaryCoin + "=" + strconv.FormatBool(data.UseSecondaryCoin), Path: "/"})
 		}
 	}
 }
@@ -427,31 +470,37 @@ const (
 
 // TemplateData is used to transfer data to the templates
 type TemplateData struct {
-	CoinName             string
-	CoinShortcut         string
-	CoinLabel            string
-	InternalExplorer     bool
-	ChainType            bchain.ChainType
-	Address              *api.Address
-	AddrStr              string
-	Tx                   *api.Tx
-	Error                *api.APIError
-	Blocks               *api.Blocks
-	Block                *api.Block
-	Info                 *api.SystemInfo
-	MempoolTxids         *api.MempoolTxids
-	Page                 int
-	PrevPage             int
-	NextPage             int
-	PagingRange          []int
-	PageParams           template.URL
-	TOSLink              string
-	SendTxHex            string
-	Status               string
-	NonZeroBalanceTokens bool
-	TokenId              string
-	URI                  string
-	ContractInfo         *bchain.ContractInfo
+	CoinName                     string
+	CoinShortcut                 string
+	CoinLabel                    string
+	InternalExplorer             bool
+	ChainType                    bchain.ChainType
+	Address                      *api.Address
+	AddrStr                      string
+	Tx                           *api.Tx
+	Error                        *api.APIError
+	Blocks                       *api.Blocks
+	Block                        *api.Block
+	Info                         *api.SystemInfo
+	MempoolTxids                 *api.MempoolTxids
+	Page                         int
+	PrevPage                     int
+	NextPage                     int
+	PagingRange                  []int
+	PageParams                   template.URL
+	TOSLink                      string
+	SendTxHex                    string
+	Status                       string
+	NonZeroBalanceTokens         bool
+	TokenId                      string
+	URI                          string
+	ContractInfo                 *bchain.ContractInfo
+	SecondaryCoin                string
+	UseSecondaryCoin             bool
+	CurrentSecondaryCoinRate     float64
+	TxBlocktime                  int64
+	TxDate                       string
+	TxBlocktimeSecondaryCoinRate float64
 }
 
 func (s *PublicServer) parseTemplates() []*template.Template {
@@ -460,6 +509,7 @@ func (s *PublicServer) parseTemplates() []*template.Template {
 		"formatUnixTime":           formatUnixTime,
 		"formatAmount":             s.formatAmount,
 		"formatAmountWithDecimals": formatAmountWithDecimals,
+		"amount":                   s.amount,
 		"formatInt64":              formatInt64,
 		"formatInt":                formatInt,
 		"formatUint32":             formatUint32,
@@ -605,8 +655,6 @@ func toJSON(data interface{}) string {
 	return string(json)
 }
 
-// for now return the string as it is
-// in future could be used to do coin specific formatting
 func (s *PublicServer) formatAmount(a *api.Amount) string {
 	if a == nil {
 		return "0"
@@ -621,6 +669,79 @@ func formatAmountWithDecimals(a *api.Amount, d int) string {
 	return a.DecimalString(d)
 }
 
+func appendAmountSpan(rv *strings.Builder, class, amount, shortcut, txDate string) {
+	rv.WriteString(`<span class="`)
+	rv.WriteString(class)
+	rv.WriteString(`"`)
+	if txDate != "" {
+		rv.WriteString(` tm="`)
+		rv.WriteString(txDate)
+		rv.WriteString(`"`)
+	}
+	rv.WriteString(">")
+	i := strings.IndexByte(amount, '.')
+	if i < 0 {
+		appendSeparatedNumberSpans(rv, amount, "nc")
+	} else {
+		appendSeparatedNumberSpans(rv, amount[:i], "nc")
+		rv.WriteString(`.`)
+		rv.WriteString(`<span class="amt-dec">`)
+		appendLeftSeparatedNumberSpans(rv, amount[i+1:], "ns")
+		rv.WriteString("</span>")
+	}
+	rv.WriteString(" ")
+	rv.WriteString(shortcut)
+	rv.WriteString("</span>")
+}
+
+func (s *PublicServer) amount(a *api.Amount, td *TemplateData, classes string) template.HTML {
+	primary := s.formatAmount(a)
+	var rv strings.Builder
+	rv.WriteString(`<span class="amt`)
+	if classes != "" {
+		rv.WriteString(` `)
+		rv.WriteString(classes)
+	}
+	rv.WriteString(`" cc="`)
+	rv.WriteString(primary)
+	rv.WriteString(" ")
+	rv.WriteString(td.CoinShortcut)
+	rv.WriteString(`">`)
+	appendAmountSpan(&rv, "prim-amt", primary, td.CoinShortcut, "")
+	if td.SecondaryCoin != "" {
+		base, err := strconv.ParseFloat(primary, 64)
+		if err == nil {
+			currentSecondary := strconv.FormatFloat(base*td.CurrentSecondaryCoinRate, 'f', 2, 64)
+			blocktimeSecondary := ""
+			// if tx is specified, secondary amount is at the time of tx and current amount with class "csec-amt"
+			if td.Tx != nil {
+				if td.Tx.Blocktime != td.TxBlocktime {
+					td.TxBlocktime = td.Tx.Blocktime
+					date := time.Unix(td.Tx.Blocktime, 0).UTC()
+					secondary := strings.ToLower(td.SecondaryCoin)
+					ticker, _ := s.db.FiatRatesFindTicker(&date, secondary, "")
+					if ticker != nil {
+						td.TxBlocktimeSecondaryCoinRate = float64(ticker.Rates[secondary])
+						// the ticker is from the midnight, valid for the whole day before
+						td.TxDate = date.Add(-1 * time.Second).Format("2006-01-02")
+					}
+				}
+				if td.TxBlocktimeSecondaryCoinRate != 0 {
+					blocktimeSecondary = strconv.FormatFloat(base*td.TxBlocktimeSecondaryCoinRate, 'f', 2, 64)
+				}
+			}
+			if blocktimeSecondary != "" {
+				appendAmountSpan(&rv, "sec-amt", blocktimeSecondary, td.SecondaryCoin, td.TxDate)
+				appendAmountSpan(&rv, "csec-amt", currentSecondary, td.SecondaryCoin, "")
+			} else {
+				appendAmountSpan(&rv, "sec-amt", currentSecondary, td.SecondaryCoin, "")
+			}
+		}
+	}
+	rv.WriteString("</span>")
+	return template.HTML(rv.String())
+}
+
 func formatInt(i int) template.HTML {
 	return formatInt64(int64(i))
 }
@@ -629,23 +750,58 @@ func formatUint32(i uint32) template.HTML {
 	return formatInt64(int64(i))
 }
 
-func formatInt64(i int64) template.HTML {
-	s := strconv.FormatInt(i, 10)
+func appendSeparatedNumberSpans(rv *strings.Builder, s, separatorClass string) {
 	t := (len(s) - 1) / 3
 	if t <= 0 {
-		return template.HTML(s)
+		rv.WriteString(s)
+	} else {
+		t *= 3
+		rv.WriteString(s[:len(s)-t])
+		for i := len(s) - t; i < len(s); i += 3 {
+			rv.WriteString(`<span class="`)
+			rv.WriteString(separatorClass)
+			rv.WriteString(`">`)
+			rv.WriteString(s[i : i+3])
+			rv.WriteString("</span>")
+		}
 	}
-	t *= 3
-	rv := s[:len(s)-t]
-	for i := len(s) - t; i < len(s); i += 3 {
-		rv += `<span class="ns">` + s[i:i+3] + "</span>"
+}
+
+func appendLeftSeparatedNumberSpans(rv *strings.Builder, s, separatorClass string) {
+	l := len(s)
+	if l <= 3 {
+		rv.WriteString(s)
+	} else {
+		rv.WriteString(s[:3])
+		for i := 3; i < len(s); i += 3 {
+			rv.WriteString(`<span class="`)
+			rv.WriteString(separatorClass)
+			rv.WriteString(`">`)
+			e := i + 3
+			if e > l {
+				e = l
+			}
+			rv.WriteString(s[i:e])
+			rv.WriteString("</span>")
+		}
 	}
-	return template.HTML(rv)
+}
+
+func formatInt64(i int64) template.HTML {
+	s := strconv.FormatInt(i, 10)
+	var rv strings.Builder
+	appendSeparatedNumberSpans(&rv, s, "ns")
+	return template.HTML(rv.String())
 }
 
 // called from template to support txdetail.html functionality
 func setTxToTemplateData(td *TemplateData, tx *api.Tx) *TemplateData {
 	td.Tx = tx
+	// reset the TxBlocktimeSecondaryCoinRate if different Blocktime
+	if td.TxBlocktime != tx.Blocktime {
+		td.TxBlocktime = 0
+		td.TxBlocktimeSecondaryCoinRate = 0
+	}
 	return td
 }
 
@@ -704,7 +860,7 @@ func (s *PublicServer) explorerTx(w http.ResponseWriter, r *http.Request) (tpl, 
 			return errorTpl, nil, err
 		}
 	}
-	data := s.newTemplateData()
+	data := s.newTemplateData(r)
 	data.Tx = tx
 	return txTpl, data, nil
 }
@@ -814,7 +970,7 @@ func (s *PublicServer) explorerAddress(w http.ResponseWriter, r *http.Request) (
 	if err != nil {
 		return errorTpl, nil, err
 	}
-	data := s.newTemplateData()
+	data := s.newTemplateData(r)
 	data.AddrStr = address.AddrStr
 	data.Address = address
 	data.Page = address.Page
@@ -844,7 +1000,7 @@ func (s *PublicServer) explorerNftDetail(w http.ResponseWriter, r *http.Request)
 	if ci == nil {
 		return errorTpl, nil, api.NewAPIError(fmt.Sprintf("Unknown contract %s", contract), true)
 	}
-	data := s.newTemplateData()
+	data := s.newTemplateData(r)
 	data.TokenId = tokenId
 	data.ContractInfo = ci
 	data.URI = uri
@@ -870,7 +1026,7 @@ func (s *PublicServer) explorerXpub(w http.ResponseWriter, r *http.Request) (tpl
 		}
 		return errorTpl, nil, err
 	}
-	data := s.newTemplateData()
+	data := s.newTemplateData(r)
 	data.AddrStr = address.AddrStr
 	data.Address = address
 	data.Page = address.Page
@@ -895,7 +1051,7 @@ func (s *PublicServer) explorerBlocks(w http.ResponseWriter, r *http.Request) (t
 	if err != nil {
 		return errorTpl, nil, err
 	}
-	data := s.newTemplateData()
+	data := s.newTemplateData(r)
 	data.Blocks = blocks
 	data.Page = blocks.Page
 	data.PagingRange, data.PrevPage, data.NextPage = getPagingRange(blocks.Page, blocks.TotalPages)
@@ -916,7 +1072,7 @@ func (s *PublicServer) explorerBlock(w http.ResponseWriter, r *http.Request) (tp
 			return errorTpl, nil, err
 		}
 	}
-	data := s.newTemplateData()
+	data := s.newTemplateData(r)
 	data.Block = block
 	data.Page = block.Page
 	data.PagingRange, data.PrevPage, data.NextPage = getPagingRange(block.Page, block.TotalPages)
@@ -931,7 +1087,7 @@ func (s *PublicServer) explorerIndex(w http.ResponseWriter, r *http.Request) (tp
 	if err != nil {
 		return errorTpl, nil, err
 	}
-	data := s.newTemplateData()
+	data := s.newTemplateData(r)
 	data.Info = si
 	return indexTpl, data, nil
 }
@@ -970,7 +1126,7 @@ func (s *PublicServer) explorerSearch(w http.ResponseWriter, r *http.Request) (t
 
 func (s *PublicServer) explorerSendTx(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
 	s.metrics.ExplorerViews.With(common.Labels{"action": "sendtx"}).Inc()
-	data := s.newTemplateData()
+	data := s.newTemplateData(r)
 	if r.Method == http.MethodPost {
 		err := r.ParseForm()
 		if err != nil {
@@ -1002,7 +1158,7 @@ func (s *PublicServer) explorerMempool(w http.ResponseWriter, r *http.Request) (
 	if err != nil {
 		return errorTpl, nil, err
 	}
-	data := s.newTemplateData()
+	data := s.newTemplateData(r)
 	data.MempoolTxids = mempoolTxids
 	data.Page = mempoolTxids.Page
 	data.PagingRange, data.PrevPage, data.NextPage = getPagingRange(mempoolTxids.Page, mempoolTxids.TotalPages)
