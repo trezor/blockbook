@@ -1,4 +1,4 @@
-{{define "txdetail"}}{{$cs := .CoinShortcut}}{{$addr := .AddrStr}}{{$tx := .Tx}}{{$data := .}}
+{{define "txdetail"}}{{$addr := .AddrStr}}{{$tx := .Tx}}{{$data := .}}
 <div class="tx-detail">
     <div class="row head">
         <div class="col-xs-7 col-md-8">
@@ -22,7 +22,7 @@
                     {{if $vin.Txid}}
                     <a class="outpoint" href="/tx/{{$vin.Txid}}" tt="Outpoint {{$vin.Txid}},{{$vin.Vout}}">←</a>
                     {{end}}
-                    {{if $vin.Addresses}}<span class="tx-amt copyable">{{formatAmount $vin.ValueSat}} {{$cs}}</span>{{end}}
+                    {{if $vin.Addresses}}{{amount $vin.ValueSat $data "tx-amt copyable"}}{{end}}
                 </div>
                 {{else}}
                 <div class="col-12">No Inputs</div>
@@ -42,7 +42,7 @@
                             <span class="tx-addr">Unparsed address</span>
                             {{- end -}}
                             <span class="tx-amt">
-                                <span class="copyable">{{formatAmount $vout.ValueSat}} {{$cs}}</span>{{if $vout.Spent}}<a class="spent" href="{{if $vout.SpentTxID}}/tx/{{$vout.SpentTxID}}{{else}}/spending/{{$tx.Txid}}/{{$vout.N}}{{end}}" tt="Spent">→</a>{{else}}<span class="unspent" tt="Unspent">×</span>
+                                {{amount $vout.ValueSat $data "copyable"}}{{if $vout.Spent}}<a class="spent" href="{{if $vout.SpentTxID}}/tx/{{$vout.SpentTxID}}{{else}}/spending/{{$tx.Txid}}/{{$vout.N}}{{end}}" tt="Spent">→</a>{{else}}<span class="unspent" tt="Unspent">×</span>
                                 {{end}}
                             </span>
                             </td>
@@ -56,18 +56,18 @@
     <div class="row footer">
         <div class="col-sm-12 col-md-4">
             {{- if $tx.FeesSat -}}
-            Fee: <span class="txvalue">{{formatAmount $tx.FeesSat}} {{$cs}}</span>
+            Fee {{amount $tx.FeesSat $data "txvalue copyable ms-3"}}
             {{- end -}}
         </div>
         <div class="col-sm-12 col-md-8 text-end">
             <span class="me-4">
             {{- if $tx.Confirmations -}}
-            <span class="txvalue">{{formatUint32 $tx.Confirmations}}</span> Confirmations
+            <span class="txvalue">{{formatUint32 $tx.Confirmations}}</span> confirmations
             {{- else -}}
             <span class="txvalue unconfirmed">Unconfirmed Transaction!</span>            
             {{- end -}}
             </span>
-            <span class="txvalue">{{formatAmount $tx.ValueOutSat}} {{$cs}}</span>
+            {{amount $tx.ValueOutSat $data "txvalue copyable"}}
         </div>
     </div>
 </div>
