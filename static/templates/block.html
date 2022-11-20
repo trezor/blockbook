@@ -1,4 +1,4 @@
-{{define "specific"}}{{$cs := .CoinShortcut}}{{$b := .Block}}{{$data := . -}}
+{{define "specific"}}{{$cs := .CoinShortcut}}{{$b := .Block}}{{$data := .}}
 <div class="row">
     <h1 class="col-sm-6">Block</h1>
     <nav class="col-sm-6 paging justify-content-end pb-1">
@@ -64,13 +64,13 @@
         </table>
     </div>
 </div>
-{{- if $b.Transactions -}}
-<div class="row pt-3">
-    <h3 class="col-md-6">Transactions</h3>
+{{if $b.Transactions}}
+<div class="row pt-3 pb-1">
+    <h3 class="col-md-6 align-self-center">Transactions</h3>
     <div class="col-md-6">{{template "paging" $data}}</div>
 </div>
 <div>
-    {{- range $tx := $b.Transactions}}{{$data := setTxToTemplateData $data $tx}}{{template "txdetail" $data}}{{end -}}
+    {{range $tx := $b.Transactions}}{{$data := setTxToTemplateData $data $tx}}{{template "txdetail" $data}}{{end}}
 </div>
 {{template "paging" $data }}
 {{end}}{{end}}
