@@ -29,6 +29,14 @@ a:hover {
     text-decoration: underline;
 }
 
+select {
+    border-radius: 0.5rem;
+    padding-left: 0.5rem;
+    border: 1px solid #ced4da;
+    color: var(--bs-body-color);
+    min-height: 45px;
+}
+
 #header {
     position: absolute;
     top: 0;
@@ -53,6 +61,16 @@ a:hover {
 
 #header .container {
     min-height: 50px;
+}
+
+.badge {
+    vertical-align: middle;
+    filter: drop-shadow(0px 4px 4px rgba(0, 0, 0, 0.15));
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    --bs-badge-padding-x: 0.8rem;
+    --bs-badge-font-weight: normal;
+    --bs-badge-border-radius: 0.6rem;
 }
 
 .bb-group {
@@ -211,6 +229,11 @@ span.btn-paging:hover {
     font-weight: normal;
 }
 
+.data-table tbody th {
+    color: #757575;
+    font-weight: normal;
+}
+
 .data-table tbody {
     background: white;
     border-radius: 8px;
@@ -218,12 +241,14 @@ span.btn-paging:hover {
 }
 
 .data-table h3,
+.data-table h5,
 .data-table h6 {
     margin-bottom: 0;
 }
 
-.data-table h3 {
-    color: black;
+.data-table h3,
+.data-table h5 {
+    color: var(--bs-body-color);
 }
 
 .info-table tbody {
@@ -304,7 +329,7 @@ span.btn-paging:hover {
 }
 
 .tx-detail:last-child {
-    margin-bottom: 3rem;
+    margin-bottom: 2rem;
 }
 
 .tx-detail span.ellipsis,
@@ -390,6 +415,16 @@ span.btn-paging:hover {
 .txvalue {
     color: var(--bs-body-color);
     font-weight: bold;
+}
+
+.txerror {
+    background-color: #c51f13b3;
+    color: white !important;
+}
+
+.txerror a,
+.txerror .txvalue {
+    color: white;
 }
 
 .tx-amt .amt:hover,
