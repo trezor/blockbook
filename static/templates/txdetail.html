@@ -3,9 +3,9 @@
     <div class="row head">
         <div class="col-xs-7 col-md-8">
             <a href="/tx/{{$tx.Txid}}" class="ellipsis copyable txid">{{$tx.Txid}}</a>
-            {{- if $tx.Rbf}}<span class="ps-1" tt="Replace-by-Fee (RBF) transaction, could be overriden"> RBF</span>{{end -}}
+            {{if $tx.Rbf}}<span class="ps-1" tt="Replace-by-Fee (RBF) transaction, could be overridden"> RBF</span>{{end}}
         </div>
-        {{- if $tx.Blocktime}}<div class="col-xs-5 col-md-4 text-end">{{if $tx.Confirmations}}mined{{else}}first seen{{end}} <span class="txvalue">{{formatUnixTime $tx.Blocktime}}</span></div>{{end -}}
+        {{if $tx.Blocktime}}<div class="col-xs-5 col-md-4 text-end">{{if $tx.Confirmations}}mined{{else}}first seen{{end}} <span class="txvalue ms-1">{{formatUnixTime $tx.Blocktime}}</span></div>{{end}}
     </div>
     <div class="row body">
         <div class="col-md-5">
@@ -32,15 +32,15 @@
         <div class="col-md-1 col-xs-12 text-center">&nbsp;<span class="octicon"></span></div>
         <div class="col-md-6">
             <div class="row tx-out">
-                        {{- range $vout := $tx.Vout -}}
+                        {{range $vout := $tx.Vout}}
                         <div class="col-12{{if $vout.IsOwn}} tx-own{{end}}">
                             {{range $a := $vout.Addresses}}
                             <span class="ellipsis tx-addr copyable">
                                 {{if and (ne $a $addr) $vout.IsAddress}}<a href="/address/{{$a}}">{{$a}}</a>{{else}}{{$a}}{{end}}
                             </span>
-                            {{- else -}}
+                            {{else}}
                             <span class="tx-addr">Unparsed address</span>
-                            {{- end -}}
+                            {{end}}
                             <span class="tx-amt">
                                 {{amount $vout.ValueSat $data "copyable"}}{{if $vout.Spent}}<a class="spent" href="{{if $vout.SpentTxID}}/tx/{{$vout.SpentTxID}}{{else}}/spending/{{$tx.Txid}}/{{$vout.N}}{{end}}" tt="Spent">→</a>{{else}}<span class="unspent" tt="Unspent">×</span>
                                 {{end}}
@@ -55,17 +55,17 @@
     </div>
     <div class="row footer">
         <div class="col-sm-12 col-md-4">
-            {{- if $tx.FeesSat -}}
+            {{if $tx.FeesSat}}
             Fee {{amount $tx.FeesSat $data "txvalue copyable ms-3"}}
-            {{- end -}}
+            {{end}}
         </div>
         <div class="col-sm-12 col-md-8 text-end">
             <span class="me-4">
-            {{- if $tx.Confirmations -}}
+            {{if $tx.Confirmations}}
             <span class="txvalue">{{formatUint32 $tx.Confirmations}}</span> confirmations
-            {{- else -}}
+            {{else}}
             <span class="txvalue unconfirmed">Unconfirmed Transaction!</span>            
-            {{- end -}}
+            {{end}}
             </span>
             {{amount $tx.ValueOutSat $data "txvalue copyable"}}
         </div>

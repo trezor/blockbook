@@ -1,11 +1,11 @@
 {{define "specific"}}{{$cs := .CoinShortcut}}{{$bb := .Info.Blockbook}}{{$be := .Info.Backend}}
 <h1>Application status</h1>
-{{- if $bb.InitialSync -}}
+{{if $bb.InitialSync}}
 <h3><span class="badge bg-danger text-white p-3 w-100" style="white-space: break-spaces;">Application is now in initial synchronization and does not provide any data.</span></h3>
-{{- end -}}
-{{- if not $bb.SyncMode -}}
+{{end}}
+{{if not $bb.SyncMode}}
 <h3><span class="badge bg-warning text-white p-3 w-100" style="white-space: break-spaces;">Synchronization with backend is disabled, the state of index is not up to date.</span></h3>
-{{- end -}}
+{{end}}
 <div class="row">
     <div class="col-lg-6">
         <table class="table data-table info-table">
@@ -50,7 +50,7 @@
                     <td>Transactions in Mempool</td>
                     <td>{{if .InternalExplorer}}<a href="/mempool">{{$bb.MempoolSize}}</a>{{else}}{{formatInt $bb.MempoolSize}}{{end}}</td>
                 </tr>
-                {{- if $bb.HasFiatRates -}}
+                {{if $bb.HasFiatRates}}
                 <tr>
                     <td>Current Fiat rates</td>
                     <td>{{formatTime $bb.CurrentFiatRatesTime}}</td>
@@ -59,7 +59,7 @@
                     <td>Historical Fiat rates</td>
                     <td>{{formatTime $bb.HistoricalFiatRatesTime}}{{if $bb.HasTokenFiatRates}}<br>tokens {{formatTime $bb.HistoricalTokenFiatRatesTime}}{{end}}</td>
                 </tr>
-                {{- end -}}
+                {{end}}
                 <tr>
                     <td>Size On Disk</td>
                     <td>{{formatInt64 $bb.DbSize}}</td>
@@ -67,19 +67,19 @@
             </tbody>
         </table>
     </div>
-    <div class="col-lg-6">        
+    <div class="col-lg-6">
         <table class="table data-table info-table">
             <tbody>
                 <tr>
                     <td style="white-space: nowrap;"><h3>Backend</h3></td>
                     <td></td>
                 </tr>
-                {{- if $be.BackendError -}}
+                {{if $be.BackendError}}
                 <tr>
                     <td>Backend Error</td>
                     <td class="data text-danger">{{$be.BackendError}}</td>
                 </tr>
-                {{- end -}}
+                {{end}}
                 <tr>
                     <td>Chain</td>
                     <td>{{$be.Chain}}</td>
@@ -88,24 +88,24 @@
                     <td>Version</td>
                     <td>{{$be.Version}}</td>
                 </tr>
-                {{- if $be.Subversion -}}
+                {{if $be.Subversion}}
                 <tr>
                     <td>Subversion</td>
                     <td>{{$be.Subversion}}</td>
                 </tr>
-                {{- end -}}
-                {{- if $be.ProtocolVersion -}}
+                {{end}}
+                {{if $be.ProtocolVersion}}
                 <tr>
                     <td>Protocol Version</td>
                     <td>{{$be.ProtocolVersion}}</td>
                 </tr>
-                {{- end -}}
-                {{- if $be.ConsensusVersion -}}
+                {{end}}
+                {{if $be.ConsensusVersion}}
                 <tr>
                     <td>Consensus Version</td>
                     <td>{{$be.ConsensusVersion}}</td>
                 </tr>
-                {{- end -}}
+                {{end}}
                 <tr>
                     <td>Last Block</td>
                     <td>{{formatInt $be.Blocks}}</td>
@@ -114,30 +114,30 @@
                     <td>Difficulty</td>
                     <td>{{$be.Difficulty}}</td>
                 </tr>
-                {{- if $be.Timeoffset -}}
+                {{if $be.Timeoffset}}
                 <tr>
                     <td>Timeoffset</td>
                     <td>{{$be.Timeoffset}}</td>
                 </tr>
-                {{- end -}}
-                {{- if $be.SizeOnDisk -}}
+                {{end}}
+                {{if $be.SizeOnDisk}}
                 <tr>
                     <td>Size On Disk</td>
                     <td>{{formatInt64 $be.SizeOnDisk}}</td>
                 </tr>
-                {{- end -}}
-                {{- if $be.Consensus -}}
+                {{end}}
+                {{if $be.Consensus}}
                 <tr>
                     <td>Consensus</td>
                     <td>{{toJSON $be.Consensus}}</td>
                 </tr>
-                {{- end -}}
-                {{- if $be.Warnings -}}
+                {{end}}
+                {{if $be.Warnings}}
                 <tr>
                     <td>Warnings</td>
                     <td class="data text-warning">{{$be.Warnings}}</td>
                 </tr>
-                {{- end -}}
+                {{end}}
             </tbody>
         </table>
     </div>

@@ -1,4 +1,4 @@
-{{define "specific"}}{{$cs := .CoinShortcut}}{{$tx := .Tx}}
+{{define "specific"}}{{$tx := .Tx}}{{$data := .}}
 <div class="row">
     <h1 class="col-12">Transaction</h1>
 </div>
@@ -7,7 +7,7 @@
 </div>
 <table class="table data-table info-table">
     <tbody>
-        {{- if $tx.Confirmations -}}
+        {{if $tx.Confirmations}}
         <tr>
             <td>Mined Time</td>
             <td>{{formatUnixTime $tx.Blocktime}}</td>
@@ -22,26 +22,26 @@
             <td>In Block Height</td>
             <td><a href="/block/{{$tx.Blockheight}}">{{formatInt $tx.Blockheight}}</a></td>
         </tr>{{end}}
-        {{- if $tx.EthereumSpecific -}}
+        {{if $tx.EthereumSpecific}}
         <tr>
             <td>Status</td>
             {{if $tx.EthereumSpecific.Status}}
             {{if eq $tx.EthereumSpecific.Status 1}}
-            <td class="text-success">Success</td>
+            <td><span class="badge bg-success">Success</span></td>
             {{else}}
-            {{if eq $tx.EthereumSpecific.Status -1}}
+            {{if eq $tx.EthereumSpecific.Status 1}}
             <td>Pending</td>
             {{else}}
             <td>Unknown</td>
             {{end}}
             {{end}}
             {{else}}
-            <td class="text-danger">Fail{{if $tx.EthereumSpecific.Error}} ({{$tx.EthereumSpecific.Error}})</div>{{end}}</td>
+            <td><span class="badge bg-danger">Failed</span>{{if $tx.EthereumSpecific.Error}}<span class="text-danger small fw-normal ms-1"> {{$tx.EthereumSpecific.Error}}{{end}}</td>
             {{end}}
         </tr>
         <tr>
             <td>Value</td>
-            <td>{{formatAmount $tx.ValueOutSat}} {{$cs}}</td>
+            <td>{{amount $tx.ValueOutSat $data "copyable"}}</td>
         </tr>
         <tr>
             <td>Gas Used / Limit</td>
@@ -49,16 +49,16 @@
         </tr>
         <tr>
             <td>Gas Price</td>
-            <td>{{formatAmount $tx.EthereumSpecific.GasPrice}} {{$cs}}</td>
+            <td>{{amount $tx.EthereumSpecific.GasPrice $data "copyable"}}</td>
         </tr>
-        {{- else -}}
+        {{else}}
         <tr>
             <td>Total Input</td>
-            <td>{{formatAmount $tx.ValueInSat}} {{$cs}}</td>
+            <td>{{amount $tx.ValueInSat $data "copyable"}}</td>
         </tr>
         <tr>
             <td>Total Output</td>
-            <td>{{formatAmount $tx.ValueOutSat}} {{$cs}}</td>
+            <td>{{amount $tx.ValueOutSat $data "copyable"}}</td>
         </tr>
         {{if $tx.VSize}}
         <tr>
@@ -71,26 +71,26 @@
             <td>Size</td>
             <td>{{formatInt $tx.Size}}</td>
         </tr>
-        {{- end -}}
-        {{- end -}}
-        {{- end -}}
-        {{- if $tx.FeesSat -}}
+        {{end}}
+        {{end}}
+        {{end}}
+        {{if $tx.FeesSat}}
         <tr>
             <td>Fees</td>
-            <td>{{formatAmount $tx.FeesSat}} {{$cs}}{{if $tx.Size}} ({{feePerByte $tx}}){{end}}</td>
-        </tr>{{end -}}
+            <td>{{amount $tx.FeesSat $data "copyable"}}{{if $tx.Size}} ({{feePerByte $tx}}){{end}}</td>
+        </tr>{{end}}
         {{if not $tx.Confirmations}}
         <tr>
             <td><span tt="Replace by fee">RBF</span></td>
             <td>
                 {{if $tx.Rbf}}
-                <span tt="Replace by fee transaction, could be replaced.">ON</span>
+                <span tt="Replace-by-Fee transaction, could be overridden by a new transaction">ON</span>
                 {{else}}
                 <span tt="Final transaction that can not be replaced unless it is dropped from the mempool.">OFF️</span>
                 {{end}}
             </td>
         </tr>
-        {{end -}}
+        {{end}}
     </tbody>
 </table>
 <h3>Details</h3>
