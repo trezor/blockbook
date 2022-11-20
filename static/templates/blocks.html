@@ -3,7 +3,7 @@
     <div class="col-md-6"><h1>Blocks</h1></div>
     <div class="col-md-6">{{if $blocks.Blocks}}{{template "paging" $data }}{{end}}</div>
 </row>
-{{if $blocks.Blocks -}}
+{{if $blocks.Blocks}}
 <div>
     <table class="table table-hover data-table">
         <thead>
@@ -16,7 +16,7 @@
             </tr>
         </thead>
         <tbody>
-            {{- range $b := $blocks.Blocks -}}
+            {{range $b := $blocks.Blocks}}
             <tr>
                 <td><a href="/block/{{$b.Height}}">{{formatUint32 $b.Height}}</a></td>
                 <td class="ellipsis">{{$b.Hash}}</td>
@@ -24,7 +24,7 @@
                 <td class="text-end">{{formatUint32 $b.Txs}}</td>
                 <td class="text-end">{{formatUint32 $b.Size}}</td>
             </tr>
-            {{- end -}}
+            {{end}}
         </tbody>
     </table>
 </div>
