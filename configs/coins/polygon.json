@@ -1,0 +1,64 @@
+{
+    "coin": {
+        "name": "Polygon",
+        "shortcut": "MATIC",
+        "label": "Polygon",
+        "alias": "Polygon"
+    },
+    "ports": {
+        "backend_rpc": 8064,
+        "backend_message_queue": 0,
+        "backend_p2p": 38364,
+        "backend_http": 8164,
+        "blockbook_internal": 9064,
+        "blockbook_public": 9164
+    },
+    "ipc": {
+        "rpc_url_template": "https://polygon-mainnet.g.alchemy.com/v2/M6n6hceGoCfo3rW0dqGclpQ1jjBLKF5i",
+        "rpc_timeout": 25
+    },
+    "backend": {
+        "package_name": "backend-polygon",
+        "package_revision": "satoshilabs-1",
+        "system_user": "polygon",
+        "version": "1.10.17-25c9b49f",
+        "binary_url": "",
+        "verification_type": "",
+        "verification_source": "",
+        "extract_command": "",
+        "exclude_files": [],
+        "exec_command_template": "",
+        "logrotate_files_template": "",
+        "postinst_script_template": "",
+        "service_type": "simple",
+        "service_additional_params_template": "",
+        "protect_memory": true,
+        "mainnet": true,
+        "server_config_file": "",
+        "client_config_file": ""
+    },
+    "blockbook": {
+        "package_name": "blockbook-polygon",
+        "system_user": "blockbook-polygon",
+        "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
+        "public_binding_template": ":{{.Ports.BlockbookPublic}}",
+        "explorer_url": "",
+        "additional_params": "",
+        "block_chain": {
+            "parse": true,
+            "mempool_workers": 8,
+            "mempool_sub_workers": 2,
+            "block_addresses_to_keep": 300,
+            "additional_params": {
+                "mempoolTxTimeoutHours": 48,
+                "queryBackendOnMempoolResync": false,
+                "fiat_rates": "coingecko",
+                "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"matic\", \"periodSeconds\": 60}"
+            }
+        }
+    },
+    "meta": {
+        "package_maintainer": "IT",
+        "package_maintainer_email": "it@satoshilabs.com"
+    }
+}
