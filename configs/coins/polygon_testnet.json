@@ -58,7 +58,7 @@
         }
     },
     "meta": {
-        "package_maintainer": "IT",
-        "package_maintainer_email": "it@satoshilabs.com"
+        "package_maintainer": "martin-key",
+        "package_maintainer_email": "martin@gostartups.net"
     }
 }
