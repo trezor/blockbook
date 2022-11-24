@@ -36,7 +36,7 @@
                 </tr>
                 <tr>
                     <td>Last Block Update</td>
-                    <td>{{formatTime $bb.LastBlockTime}}</td>
+                    <td>{{timeSpan $bb.LastBlockTime}}</td>
                 </tr>
                 <tr>
                     <td>Mempool in Sync</td>
@@ -44,7 +44,7 @@
                 </tr>
                 <tr>
                     <td>Last Mempool Update</td>
-                    <td>{{formatTime $bb.LastMempoolTime}}</td>
+                    <td>{{timeSpan $bb.LastMempoolTime}}</td>
                 </tr>
                 <tr>
                     <td>Transactions in Mempool</td>
@@ -53,11 +53,11 @@
                 {{if $bb.HasFiatRates}}
                 <tr>
                     <td>Current Fiat rates</td>
-                    <td>{{formatTime $bb.CurrentFiatRatesTime}}</td>
+                    <td>{{timeSpan $bb.CurrentFiatRatesTime}}</td>
                 </tr>
                 <tr>
                     <td>Historical Fiat rates</td>
-                    <td>{{formatTime $bb.HistoricalFiatRatesTime}}{{if $bb.HasTokenFiatRates}}<br>tokens {{formatTime $bb.HistoricalTokenFiatRatesTime}}{{end}}</td>
+                    <td>{{timeSpan $bb.HistoricalFiatRatesTime}}{{if $bb.HasTokenFiatRates}}<br><span class="fw-normal">tokens</span> {{timeSpan $bb.HistoricalTokenFiatRatesTime}}{{end}}</td>
                 </tr>
                 {{end}}
                 <tr>
@@ -77,7 +77,7 @@
                 {{if $be.BackendError}}
                 <tr>
                     <td>Backend Error</td>
-                    <td class="data text-danger">{{$be.BackendError}}</td>
+                    <td class="text-danger">{{$be.BackendError}}</td>
                 </tr>
                 {{end}}
                 <tr>
@@ -135,7 +135,7 @@
                 {{if $be.Warnings}}
                 <tr>
                     <td>Warnings</td>
-                    <td class="data text-warning">{{$be.Warnings}}</td>
+                    <td class="text-warning">{{$be.Warnings}}</td>
                 </tr>
                 {{end}}
             </tbody>

@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
-	"io/ioutil"
+	"io"
 	"math/big"
 	"net/http"
 	"net/url"
+	"os"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -239,12 +240,12 @@ func (s *PublicServer) OnNewTx(tx *bchain.MempoolTx) {
 }
 
 func (s *PublicServer) txRedirect(w http.ResponseWriter, r *http.Request) {
-	http.Redirect(w, r, joinURL(s.explorerURL, r.URL.Path), 302)
+	http.Redirect(w, r, joinURL(s.explorerURL, r.URL.Path), http.StatusFound)
 	s.metrics.ExplorerViews.With(common.Labels{"action": "tx-redirect"}).Inc()
 }
 
 func (s *PublicServer) addressRedirect(w http.ResponseWriter, r *http.Request) {
-	http.Redirect(w, r, joinURL(s.explorerURL, r.URL.Path), 302)
+	http.Redirect(w, r, joinURL(s.explorerURL, r.URL.Path), http.StatusFound)
 	s.metrics.ExplorerViews.With(common.Labels{"action": "address-redirect"}).Inc()
 }
 
@@ -371,6 +372,7 @@ func (s *PublicServer) newTemplateData(r *http.Request) *TemplateData {
 		if ticker != nil {
 			t.SecondaryCoin = strings.ToUpper(secondary)
 			t.CurrentSecondaryCoinRate = float64(ticker.Rates[secondary])
+			t.CurrentTicker = ticker
 			t.UseSecondaryCoin, _ = strconv.ParseBool(r.URL.Query().Get("use_secondary"))
 			if !t.UseSecondaryCoin {
 				t.UseSecondaryCoin = cookieUseSecondary
@@ -470,49 +472,55 @@ const (
 
 // TemplateData is used to transfer data to the templates
 type TemplateData struct {
-	CoinName                     string
-	CoinShortcut                 string
-	CoinLabel                    string
-	InternalExplorer             bool
-	ChainType                    bchain.ChainType
-	Address                      *api.Address
-	AddrStr                      string
-	Tx                           *api.Tx
-	Error                        *api.APIError
-	Blocks                       *api.Blocks
-	Block                        *api.Block
-	Info                         *api.SystemInfo
-	MempoolTxids                 *api.MempoolTxids
-	Page                         int
-	PrevPage                     int
-	NextPage                     int
-	PagingRange                  []int
-	PageParams                   template.URL
-	TOSLink                      string
-	SendTxHex                    string
-	Status                       string
-	NonZeroBalanceTokens         bool
-	TokenId                      string
-	URI                          string
-	ContractInfo                 *bchain.ContractInfo
-	SecondaryCoin                string
-	UseSecondaryCoin             bool
-	CurrentSecondaryCoinRate     float64
-	TxBlocktime                  int64
-	TxDate                       string
-	TxBlocktimeSecondaryCoinRate float64
+	CoinName                 string
+	CoinShortcut             string
+	CoinLabel                string
+	InternalExplorer         bool
+	ChainType                bchain.ChainType
+	Address                  *api.Address
+	AddrStr                  string
+	Tx                       *api.Tx
+	Error                    *api.APIError
+	Blocks                   *api.Blocks
+	Block                    *api.Block
+	Info                     *api.SystemInfo
+	MempoolTxids             *api.MempoolTxids
+	Page                     int
+	PrevPage                 int
+	NextPage                 int
+	PagingRange              []int
+	PageParams               template.URL
+	TOSLink                  string
+	SendTxHex                string
+	Status                   string
+	NonZeroBalanceTokens     bool
+	TokenId                  string
+	URI                      string
+	ContractInfo             *bchain.ContractInfo
+	SecondaryCoin            string
+	UseSecondaryCoin         bool
+	CurrentSecondaryCoinRate float64
+	CurrentTicker            *common.CurrencyRatesTicker
+	TxBlocktime              int64
+	TxDate                   string
+	TxSecondaryCoinRate      float64
+	TxTicker                 *common.CurrencyRatesTicker
 }
 
 func (s *PublicServer) parseTemplates() []*template.Template {
 	templateFuncMap := template.FuncMap{
-		"formatTime":               formatTime,
-		"formatUnixTime":           formatUnixTime,
+		"timeSpan":                 timeSpan,
+		"unixTimeSpan":             unixTimeSpan,
+		"amountSpan":               s.amountSpan,
+		"tokenAmountSpan":          s.tokenAmountSpan,
+		"amountSatsSpan":           s.amountSatsSpan,
+		"addressAliasSpan":         addressAliasSpan,
 		"formatAmount":             s.formatAmount,
 		"formatAmountWithDecimals": formatAmountWithDecimals,
-		"amount":                   s.amount,
 		"formatInt64":              formatInt64,
 		"formatInt":                formatInt,
 		"formatUint32":             formatUint32,
+		"formatBigInt":             formatBigInt,
 		"setTxToTemplateData":      setTxToTemplateData,
 		"feePerByte":               feePerByte,
 		"isOwnAddress":             isOwnAddress,
@@ -537,7 +545,7 @@ func (s *PublicServer) parseTemplates() []*template.Template {
 			}
 			t := template.New(filepath.Base(filenames[0])).Funcs(templateFuncMap)
 			for _, filename := range filenames {
-				b, err := ioutil.ReadFile(filename)
+				b, err := os.ReadFile(filename)
 				if err != nil {
 					panic(err)
 				}
@@ -614,12 +622,14 @@ func relativeTime(d int64) string {
 	return strconv.FormatInt(d, 10) + u
 }
 
-func formatUnixTime(ut int64) template.HTML {
+func unixTimeSpan(ut int64) template.HTML {
 	t := time.Unix(ut, 0)
-	return formatTime(&t)
+	return timeSpan(&t)
 }
 
-func formatTime(t *time.Time) template.HTML {
+var timeNow = time.Now
+
+func timeSpan(t *time.Time) template.HTML {
 	if t == nil {
 		return ""
 	}
@@ -627,7 +637,7 @@ func formatTime(t *time.Time) template.HTML {
 	if u <= 0 {
 		return ""
 	}
-	d := time.Now().Unix() - u
+	d := timeNow().Unix() - u
 	f := t.UTC().Format("2006-01-02 15:04:05")
 	if d < 0 {
 		return template.HTML(f)
@@ -694,9 +704,7 @@ func appendAmountSpan(rv *strings.Builder, class, amount, shortcut, txDate strin
 	rv.WriteString("</span>")
 }
 
-func (s *PublicServer) amount(a *api.Amount, td *TemplateData, classes string) template.HTML {
-	primary := s.formatAmount(a)
-	var rv strings.Builder
+func appendWrappingAmountSpan(rv *strings.Builder, primary, symbol, classes string) {
 	rv.WriteString(`<span class="amt`)
 	if classes != "" {
 		rv.WriteString(` `)
@@ -705,15 +713,21 @@ func (s *PublicServer) amount(a *api.Amount, td *TemplateData, classes string) t
 	rv.WriteString(`" cc="`)
 	rv.WriteString(primary)
 	rv.WriteString(" ")
-	rv.WriteString(td.CoinShortcut)
+	rv.WriteString(symbol)
 	rv.WriteString(`">`)
+}
+
+func (s *PublicServer) amountSpan(a *api.Amount, td *TemplateData, classes string) template.HTML {
+	primary := s.formatAmount(a)
+	var rv strings.Builder
+	appendWrappingAmountSpan(&rv, primary, td.CoinShortcut, classes)
 	appendAmountSpan(&rv, "prim-amt", primary, td.CoinShortcut, "")
 	if td.SecondaryCoin != "" {
-		base, err := strconv.ParseFloat(primary, 64)
+		p, err := strconv.ParseFloat(primary, 64)
 		if err == nil {
-			currentSecondary := strconv.FormatFloat(base*td.CurrentSecondaryCoinRate, 'f', 2, 64)
-			blocktimeSecondary := ""
-			// if tx is specified, secondary amount is at the time of tx and current amount with class "csec-amt"
+			currentSecondary := strconv.FormatFloat(p*td.CurrentSecondaryCoinRate, 'f', 2, 64)
+			txSecondary := ""
+			// if tx is specified, compute secondary amount is at the time of tx and amount with current rate is returned with class "csec-amt"
 			if td.Tx != nil {
 				if td.Tx.Blocktime != td.TxBlocktime {
 					td.TxBlocktime = td.Tx.Blocktime
@@ -721,21 +735,108 @@ func (s *PublicServer) amount(a *api.Amount, td *TemplateData, classes string) t
 					secondary := strings.ToLower(td.SecondaryCoin)
 					ticker, _ := s.db.FiatRatesFindTicker(&date, secondary, "")
 					if ticker != nil {
-						td.TxBlocktimeSecondaryCoinRate = float64(ticker.Rates[secondary])
+						td.TxSecondaryCoinRate = float64(ticker.Rates[secondary])
 						// the ticker is from the midnight, valid for the whole day before
 						td.TxDate = date.Add(-1 * time.Second).Format("2006-01-02")
+						td.TxTicker = ticker
 					}
 				}
-				if td.TxBlocktimeSecondaryCoinRate != 0 {
-					blocktimeSecondary = strconv.FormatFloat(base*td.TxBlocktimeSecondaryCoinRate, 'f', 2, 64)
+				if td.TxSecondaryCoinRate != 0 {
+					txSecondary = strconv.FormatFloat(p*td.TxSecondaryCoinRate, 'f', 2, 64)
 				}
 			}
-			if blocktimeSecondary != "" {
-				appendAmountSpan(&rv, "sec-amt", blocktimeSecondary, td.SecondaryCoin, td.TxDate)
+			if txSecondary != "" {
+				appendAmountSpan(&rv, "sec-amt", txSecondary, td.SecondaryCoin, td.TxDate)
 				appendAmountSpan(&rv, "csec-amt", currentSecondary, td.SecondaryCoin, "")
 			} else {
 				appendAmountSpan(&rv, "sec-amt", currentSecondary, td.SecondaryCoin, "")
 			}
+		}
+	}
+	rv.WriteString("</span>")
+	return template.HTML(rv.String())
+}
+
+func (s *PublicServer) amountSatsSpan(a *api.Amount, td *TemplateData, classes string) template.HTML {
+	var sats string
+	if s.chainParser.GetChainType() == bchain.ChainEthereumType {
+		sats = a.DecimalString(9) // Gwei
+	} else {
+		sats = a.String()
+	}
+	var rv strings.Builder
+	rv.WriteString(`<span`)
+	if classes != "" {
+		rv.WriteString(`  class="`)
+		rv.WriteString(classes)
+		rv.WriteString(`"`)
+	}
+	rv.WriteString(` cc="`)
+	rv.WriteString(sats)
+	rv.WriteString(`">`)
+	appendAmountSpan(&rv, "", sats, "", "")
+	rv.WriteString("</span>")
+	return template.HTML(rv.String())
+}
+
+func getContractRate(ticker *common.CurrencyRatesTicker, contract string) (float64, bool) {
+	if ticker == nil {
+		return 0, false
+	}
+	rate, found := ticker.TokenRates[contract]
+	return float64(rate), found
+}
+
+func (s *PublicServer) tokenAmountSpan(t *api.TokenTransfer, td *TemplateData, classes string) template.HTML {
+	primary := formatAmountWithDecimals(t.Value, t.Decimals)
+	var rv strings.Builder
+	appendWrappingAmountSpan(&rv, primary, td.CoinShortcut, classes)
+	appendAmountSpan(&rv, "prim-amt", primary, t.Symbol, "")
+	if td.SecondaryCoin != "" {
+		var currentBase, currentSecondary, txBase, txSecondary string
+		p, err := strconv.ParseFloat(primary, 64)
+		if err == nil {
+			ticker := td.CurrentTicker
+			baseRate, found := getContractRate(ticker, t.Contract)
+			if !found {
+				now := time.Now().UTC()
+				ticker, _ = s.db.FiatRatesFindTicker(&now, "", t.Contract)
+				baseRate, found = getContractRate(ticker, t.Contract)
+			}
+			if found {
+				base := p * baseRate
+				currentBase = strconv.FormatFloat(base, 'g', s.chainParser.AmountDecimals(), 64)
+				currentSecondary = strconv.FormatFloat(base*td.CurrentSecondaryCoinRate, 'f', 2, 64)
+			}
+			ticker = td.TxTicker
+			baseRate, found = getContractRate(ticker, t.Contract)
+			if !found {
+				ticker, _ = s.db.FiatRatesFindTicker(&td.TxTicker.Timestamp, "", t.Contract)
+				baseRate, found = getContractRate(ticker, t.Contract)
+			}
+			if found {
+				base := p * baseRate
+				txBase = strconv.FormatFloat(base, 'g', s.chainParser.AmountDecimals(), 64)
+				txSecondary = strconv.FormatFloat(base*td.CurrentSecondaryCoinRate, 'f', 2, 64)
+			}
+		}
+		if txBase != "" {
+			appendAmountSpan(&rv, "base-amt", txBase, td.CoinShortcut, td.TxDate)
+			if currentBase != "" {
+				appendAmountSpan(&rv, "cbase-amt", currentBase, td.CoinShortcut, "")
+			}
+		} else if currentBase != "" {
+			appendAmountSpan(&rv, "base-amt", currentBase, td.CoinShortcut, "")
+		}
+		if txSecondary != "" {
+			appendAmountSpan(&rv, "sec-amt", txSecondary, td.SecondaryCoin, td.TxDate)
+			if currentSecondary != "" {
+				appendAmountSpan(&rv, "csec-amt", currentSecondary, td.SecondaryCoin, "")
+			}
+		} else if currentSecondary != "" {
+			appendAmountSpan(&rv, "sec-amt", currentSecondary, td.SecondaryCoin, "")
+		} else {
+			appendAmountSpan(&rv, "sec-amt", "-", "", "")
 		}
 	}
 	rv.WriteString("</span>")
@@ -794,13 +895,50 @@ func formatInt64(i int64) template.HTML {
 	return template.HTML(rv.String())
 }
 
+func formatBigInt(i *big.Int) template.HTML {
+	if i == nil {
+		return ""
+	}
+	s := i.String()
+	var rv strings.Builder
+	appendSeparatedNumberSpans(&rv, s, "ns")
+	return template.HTML(rv.String())
+}
+
+func addressAliasSpan(a string, td *TemplateData) template.HTML {
+	var alias api.AddressAlias
+	var found bool
+	if td.Block != nil {
+		alias, found = td.Block.AddressAliases[a]
+	} else if td.Address != nil {
+		alias, found = td.Address.AddressAliases[a]
+	} else if td.Tx != nil {
+		alias, found = td.Tx.AddressAliases[a]
+	}
+	var rv strings.Builder
+	if !found {
+		rv.WriteString(`<span class="copyable">`)
+		rv.WriteString(a)
+	} else {
+		rv.WriteString(`<span class="copyable" cc="`)
+		rv.WriteString(a)
+		rv.WriteString(`" alias-type="`)
+		rv.WriteString(alias.Type)
+		rv.WriteString(`">`)
+		rv.WriteString(alias.Alias)
+	}
+	rv.WriteString("</span>")
+	return template.HTML(rv.String())
+}
+
 // called from template to support txdetail.html functionality
 func setTxToTemplateData(td *TemplateData, tx *api.Tx) *TemplateData {
 	td.Tx = tx
 	// reset the TxBlocktimeSecondaryCoinRate if different Blocktime
 	if td.TxBlocktime != tx.Blocktime {
 		td.TxBlocktime = 0
-		td.TxBlocktimeSecondaryCoinRate = 0
+		td.TxSecondaryCoinRate = 0
+		td.TxTicker = nil
 	}
 	return td
 }
@@ -875,7 +1013,7 @@ func (s *PublicServer) explorerSpendingTx(w http.ResponseWriter, r *http.Request
 		if ec == nil {
 			spendingTx, err := s.api.GetSpendingTxid(tx, n)
 			if err == nil && spendingTx != "" {
-				http.Redirect(w, r, joinURL("/tx/", spendingTx), 302)
+				http.Redirect(w, r, joinURL("/tx/", spendingTx), http.StatusFound)
 				return noTpl, nil, nil
 			}
 		}
@@ -1102,22 +1240,22 @@ func (s *PublicServer) explorerSearch(w http.ResponseWriter, r *http.Request) (t
 	if len(q) > 0 {
 		address, err = s.api.GetXpubAddress(q, 0, 1, api.AccountDetailsBasic, &api.AddressFilter{Vout: api.AddressFilterVoutOff}, 0)
 		if err == nil {
-			http.Redirect(w, r, joinURL("/xpub/", url.QueryEscape(address.AddrStr)), 302)
+			http.Redirect(w, r, joinURL("/xpub/", url.QueryEscape(address.AddrStr)), http.StatusFound)
 			return noTpl, nil, nil
 		}
 		block, err = s.api.GetBlock(q, 0, 1)
 		if err == nil {
-			http.Redirect(w, r, joinURL("/block/", block.Hash), 302)
+			http.Redirect(w, r, joinURL("/block/", block.Hash), http.StatusFound)
 			return noTpl, nil, nil
 		}
 		tx, err = s.api.GetTransaction(q, false, false)
 		if err == nil {
-			http.Redirect(w, r, joinURL("/tx/", tx.Txid), 302)
+			http.Redirect(w, r, joinURL("/tx/", tx.Txid), http.StatusFound)
 			return noTpl, nil, nil
 		}
 		address, err = s.api.GetAddress(q, 0, 1, api.AccountDetailsBasic, &api.AddressFilter{Vout: api.AddressFilterVoutOff})
 		if err == nil {
-			http.Redirect(w, r, joinURL("/address/", address.AddrStr), 302)
+			http.Redirect(w, r, joinURL("/address/", address.AddrStr), http.StatusFound)
 			return noTpl, nil, nil
 		}
 	}
@@ -1465,7 +1603,7 @@ func (s *PublicServer) apiSendTx(r *http.Request, apiVersion int) (interface{}, 
 	var hex string
 	s.metrics.ExplorerViews.With(common.Labels{"action": "api-sendtx"}).Inc()
 	if r.Method == http.MethodPost {
-		data, err := ioutil.ReadAll(r.Body)
+		data, err := io.ReadAll(r.Body)
 		if err != nil {
 			return nil, api.NewAPIError("Missing tx blob", true)
 		}
