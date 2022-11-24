@@ -20,7 +20,7 @@
             <tr>
                 <td><a href="/block/{{$b.Height}}">{{formatUint32 $b.Height}}</a></td>
                 <td class="ellipsis">{{$b.Hash}}</td>
-                <td>{{formatUnixTime $b.Time}}</td>
+                <td>{{unixTimeSpan $b.Time}}</td>
                 <td class="text-end">{{formatUint32 $b.Txs}}</td>
                 <td class="text-end">{{formatUint32 $b.Size}}</td>
             </tr>

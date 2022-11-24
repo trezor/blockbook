@@ -3,7 +3,7 @@
     <div class="col-md-10 order-2 order-md-1">
         <h1>{{if $addr.ContractInfo}}Contract {{$addr.ContractInfo.Name}}{{if $addr.ContractInfo.Symbol}} ({{$addr.ContractInfo.Symbol}}){{end}}{{else}}Address{{end}}</h1>
         <h5 class="col-12 d-flex h-data pb-2"><span class="ellipsis copyable">{{$addr.AddrStr}}</span></h5>
-        <h4>{{amount $addr.BalanceSat $data "copyable"}}</h4>
+        <h4>{{amountSpan $addr.BalanceSat $data "copyable"}}</h4>
     </div>
     <div class="col-md-2 order-1 order-md-2 d-flex justify-content-center justify-content-md-end mb-3 mb-md-0">
         <div id="qrcode"></div>
@@ -42,7 +42,7 @@
         {{end}}
         <tr>
             <td style="width: 25%;">Balance</td>
-            <td>{{amount $addr.BalanceSat $data "copyable"}}</td>
+            <td>{{amountSpan $addr.BalanceSat $data "copyable"}}</td>
         </tr>
         <tr>
             <td>Transactions</td>
@@ -74,7 +74,7 @@
                         {{range $t := $addr.Tokens}}
                         {{if eq $t.Type "ERC20"}}
                         <tr>
-                            <td class="data ellipsis"><a href="/address/{{$t.Contract}}">{{if $t.Name}}{{$t.Name}}{{else}}{{$t.Contract}}{{end}}</a></td>
+                            <td class="ellipsis"><a href="/address/{{$t.Contract}}">{{if $t.Name}}{{$t.Name}}{{else}}{{$t.Contract}}{{end}}</a></td>
                             <td>{{formatAmountWithDecimals $t.BalanceSat $t.Decimals}} {{$t.Symbol}}</td>
                             <td>{{$t.Transfers}}</td>
                         </tr>
@@ -99,7 +99,7 @@
                         {{range $t := $addr.Tokens}}
                         {{if eq $t.Type "ERC721"}}
                         <tr>
-                            <td class="data ellipsis"><a href="/address/{{$t.Contract}}">{{if $t.Name}}{{$t.Name}}{{else}}{{$t.Contract}}{{end}}</a></td>
+                            <td class="ellipsis"><a href="/address/{{$t.Contract}}">{{if $t.Name}}{{$t.Name}}{{else}}{{$t.Contract}}{{end}}</a></td>
                             <td>
                                 {{range $i, $iv := $t.Ids}}{{if $i}}, {{end}}<a href="/nft/{{$t.Contract}}/{{formatAmountWithDecimals $iv 0}}">{{formatAmountWithDecimals $iv 0}}</a>{{end}}
                             </td>
@@ -126,7 +126,7 @@
                         {{range $t := $addr.Tokens}}
                         {{if eq $t.Type "ERC1155"}}
                         <tr>
-                            <td class="data ellipsis"><a href="/address/{{$t.Contract}}">{{if $t.Name}}{{$t.Name}}{{else}}{{$t.Contract}}{{end}}</a></td>
+                            <td class="ellipsis"><a href="/address/{{$t.Contract}}">{{if $t.Name}}{{$t.Name}}{{else}}{{$t.Contract}}{{end}}</a></td>
                             <td>
                             {{range $i, $iv := $t.MultiTokenValues}}{{if $i}}, {{end}}{{$iv.Value}} of ID <a href="/nft/{{$t.Contract}}/{{$iv.Id}}">{{$iv.Id}}</a>{{end}}
                             </td>
@@ -143,15 +143,15 @@
         {{else}}
         <tr>
             <td style="width: 25%;">Total Received</td>
-            <td>{{amount $addr.TotalReceivedSat $data "copyable"}}</td>
+            <td>{{amountSpan $addr.TotalReceivedSat $data "copyable"}}</td>
         </tr>
         <tr>
             <td>Total Sent</td>
-            <td>{{amount $addr.TotalSentSat $data "copyable"}}</td>
+            <td>{{amountSpan $addr.TotalSentSat $data "copyable"}}</td>
         </tr>
         <tr>
             <td>Final Balance</td>
-            <td>{{amount $addr.BalanceSat $data "copyable"}}</td>
+            <td>{{amountSpan $addr.BalanceSat $data "copyable"}}</td>
         </tr>
         <tr>
             <td>No. Transactions</td>
@@ -169,7 +169,7 @@
         </tr>
         <tr>
             <td style="width: 25%;">Unconfirmed Balance</td>
-            <td>{{amount $addr.UnconfirmedBalanceSat $data "copyable"}}</td>
+            <td>{{amountSpan $addr.UnconfirmedBalanceSat $data "copyable"}}</td>
         </tr>
         <tr>
             <td>No. Transactions</td>
