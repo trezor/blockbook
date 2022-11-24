@@ -50,7 +50,19 @@ function amountTooltip() {
   const prim = this.querySelector(".prim-amt");
   const sec = this.querySelector(".sec-amt");
   const csec = this.querySelector(".csec-amt");
+  const base = this.querySelector(".base-amt");
+  const cbase = this.querySelector(".cbase-amt");
   let s = `${prim.outerHTML}<br>`;
+  if (base) {
+    let t = base.getAttribute("tm");
+    if (!t) {
+      t = "now";
+    }
+    s += `<span class="amt-time">${t}</span>${base.outerHTML}<br>`;
+  }
+  if (cbase) {
+    s += `<span class="amt-time">now</span>${cbase.outerHTML}<br>`;
+  }
   if (sec) {
     let t = sec.getAttribute("tm");
     if (!t) {
@@ -59,9 +71,15 @@ function amountTooltip() {
     s += `<span class="amt-time">${t}</span>${sec.outerHTML}<br>`;
   }
   if (csec) {
-    s += `<span class="amt-time">now</span>${csec.outerHTML}`;
+    s += `<span class="amt-time">now</span>${csec.outerHTML}<br>`;
   }
-  return `<span class="amt-tooltip">${s}</span>`;
+  return `<span class="l-tooltip">${s}</span>`;
+}
+
+function addressAliasTooltip() {
+  const type = this.getAttribute("alias-type");
+  const address = this.getAttribute("cc");
+  return `<span class="l-tooltip">${type}<br>${address}</span>`;
 }
 
 window.addEventListener("DOMContentLoaded", () => {
@@ -77,6 +95,13 @@ window.addEventListener("DOMContentLoaded", () => {
         (e) => new bootstrap.Tooltip(e, { title: amountTooltip, html: true })
       );
   }
+
+  document
+    .querySelectorAll("[alias-type]")
+    .forEach(
+      (e) =>
+        new bootstrap.Tooltip(e, { title: addressAliasTooltip, html: true })
+    );
 
   document
     .querySelectorAll("[tt]")

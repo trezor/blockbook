@@ -2,32 +2,32 @@
 <h1>NFT Token Detail</h1>
 <div class="row">
     <div class="col-md-6">
-        <table class="table data-table">
+        <table class="table data-table info-table">
             <tbody>
                 <tr>
                     <td style="width: 25%;">Token ID</td>
-                    <td class="data">{{$data.TokenId}}</td>
+                    <td>{{$data.TokenId}}</td>
                 </tr>
                 <tr id="name" style="display: none;">
                     <td>NTF Name</td>
-                    <td class="data"></td>
+                    <td></td>
                 </tr>
                 <tr id="description" style="display: none;">
                     <td>NTF Description</td>
-                    <td class="data"></td>
+                    <td></td>
                 </tr>
                 <tr>
                     <td>Contract</td>
-                    <td class="data"><a href="/address/{{$data.ContractInfo.Contract}}">{{$data.ContractInfo.Contract}}</a> {{$data.ContractInfo.Name}}</td>
+                    <td><a href="/address/{{$data.ContractInfo.Contract}}">{{$data.ContractInfo.Contract}}</a><br>{{$data.ContractInfo.Name}}</td>
                 </tr>
                 <tr>
                     <td>Contract type</td>
-                    <td class="data">{{$data.ContractInfo.Type}}</td>
+                    <td>{{$data.ContractInfo.Type}}</td>
                 </tr>
             </tbody>
         </table>
     </div>
-    <div class="col-md-6" id="image"></div>
+    <div class="col-md-6 mt-4" id="image"></div>
 </div>
 <div id="metadatablock">
     <h5>Metadata</h5>
@@ -38,7 +38,7 @@
 <script type="text/javascript">
     function showImage(s) {
         const img = document.createElement("img");
-        img.className="border w-100";
+        img.className="border w-100 bg-white";
         img.src = s;
         const src = document.getElementById("image");
         src.appendChild(img);
@@ -46,7 +46,7 @@
     }
     function nftInfo(id,text) {
         const src = document.getElementById(id);
-        src.getElementsByClassName('data')[0].innerText=text;
+        src.getElementsByTagName("td")[1].innerText=text;
         src.style.display='';
     }
     async function getMetadata(url) {
