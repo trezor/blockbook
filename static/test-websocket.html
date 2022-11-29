@@ -141,6 +141,7 @@
             const from = parseInt(document.getElementById("getAccountInfoFrom").value);
             const to = parseInt(document.getElementById("getAccountInfoTo").value);
             const contractFilter = document.getElementById("getAccountInfoContract").value.trim();
+            const secondaryCurrency = document.getElementById("getAccountInfoSecondaryCurrency").value.trim();
             const pageSize = 10;
             const method = 'getAccountInfo';
             const tokens = "derived"; // could be "nonzero", "used", default is "derived" i.e. all
@@ -152,7 +153,8 @@
                 pageSize,
                 from,
                 to,
-                contractFilter
+                contractFilter,
+                secondaryCurrency,
                 // default gap=20
             };
             send(method, params, function (result) {
@@ -471,9 +473,10 @@
                 </div>
                 <div class="row" style="margin: 0; margin-top: 5px;">
                     <input type="text" placeholder="page" style="width: 10%; margin-right: 5px;" class="form-control" id="getAccountInfoPage">
-                    <input type="text" placeholder="from" style="width: 15%;margin-left: 5px;margin-right: 5px;" class="form-control" id="getAccountInfoFrom">
-                    <input type="text" placeholder="to" style="width: 15%; margin-left: 5px; margin-right: 5px;" class="form-control" id="getAccountInfoTo">
-                    <input type="text" placeholder="contract" style="width: 55%; margin-left: 5px; margin-right: 5px;" class="form-control" id="getAccountInfoContract">
+                    <input type="text" placeholder="from" style="width: 13%;margin-left: 5px;margin-right: 5px;" class="form-control" id="getAccountInfoFrom">
+                    <input type="text" placeholder="to" style="width: 13%; margin-left: 5px; margin-right: 5px;" class="form-control" id="getAccountInfoTo">
+                    <input type="text" placeholder="contract" style="width: 50%; margin-left: 5px; margin-right: 5px;" class="form-control" id="getAccountInfoContract">
+                    <input type="text" placeholder="usd" style="width: 8%; margin-left: 5px;" class="form-control" id="getAccountInfoSecondaryCurrency">
                 </div>
             </div>
             <div class="col form-inline"></div>
