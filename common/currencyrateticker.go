@@ -1,12 +1,24 @@
 package common
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 // CurrencyRatesTicker contains coin ticker data fetched from API
 type CurrencyRatesTicker struct {
 	Timestamp  time.Time          `json:"timestamp"`  // return as unix timestamp in API
 	Rates      map[string]float32 `json:"rates"`      // rates of the base currency against a list of vs currencies
 	TokenRates map[string]float32 `json:"tokenRates"` // rates of the tokens (identified by the address of the contract) against the base currency
+}
+
+// Convert returns token rate in base currency
+func (t *CurrencyRatesTicker) GetTokenRate(token string) (float32, bool) {
+	if t.TokenRates != nil {
+		rate, found := t.TokenRates[strings.ToLower(token)]
+		return rate, found
+	}
+	return 0, false
 }
 
 // Convert converts value in base currency to toCurrency
@@ -20,11 +32,9 @@ func (t *CurrencyRatesTicker) Convert(baseValue float64, toCurrency string) floa
 
 // ConvertTokenToBase converts token value to base currency
 func (t *CurrencyRatesTicker) ConvertTokenToBase(value float64, token string) float64 {
-	if t.TokenRates != nil {
-		rate, found := t.TokenRates[token]
-		if found {
-			return value * float64(rate)
-		}
+	rate, found := t.GetTokenRate(token)
+	if found {
+		return value * float64(rate)
 	}
 	return 0
 }
@@ -40,13 +50,11 @@ func (t *CurrencyRatesTicker) ConvertToken(value float64, token string, toCurren
 
 // TokenRateInCurrency return token rate in toCurrency currency
 func (t *CurrencyRatesTicker) TokenRateInCurrency(token string, toCurrency string) float32 {
-	if t.TokenRates != nil {
-		rate, found := t.TokenRates[token]
+	rate, found := t.GetTokenRate(token)
+	if found {
+		baseRate, found := t.Rates[toCurrency]
 		if found {
-			baseRate, found := t.Rates[toCurrency]
-			if found {
-				return baseRate * rate
-			}
+			return baseRate * rate
 		}
 	}
 	return 0

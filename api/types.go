@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math/big"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/trezor/blockbook/bchain"
@@ -62,6 +63,21 @@ type Amount big.Int
 // IsZeroBigInt if big int has zero value
 func IsZeroBigInt(b *big.Int) bool {
 	return len(b.Bits()) == 0
+}
+
+// Compare returns an integer comparing two Amounts. The result will be 0 if a == b, -1 if a < b, and +1 if a > b.
+// Nil Amount is always less then non nil amount, two nil Amounts are equal
+func (a *Amount) Compare(b *Amount) int {
+	if b == nil {
+		if a == nil {
+			return 0
+		}
+		return 1
+	}
+	if a == nil {
+		return -1
+	}
+	return (*big.Int)(a).Cmp((*big.Int)(b))
 }
 
 // MarshalJSON Amount serialization
@@ -151,11 +167,37 @@ type Token struct {
 	Symbol           string               `json:"symbol,omitempty"`
 	Decimals         int                  `json:"decimals,omitempty"`
 	BalanceSat       *Amount              `json:"balance,omitempty"`
+	BaseValue        float64              `json:"baseValue,omitempty"`
+	FiatValue        float64              `json:"fiatValue,omitempty"`
 	Ids              []Amount             `json:"ids,omitempty"`              // multiple ERC721 tokens
 	MultiTokenValues []MultiTokenValue    `json:"multiTokenValues,omitempty"` // multiple ERC1155 tokens
 	TotalReceivedSat *Amount              `json:"totalReceived,omitempty"`
 	TotalSentSat     *Amount              `json:"totalSent,omitempty"`
 	ContractIndex    string               `json:"-"`
+}
+
+// Tokens is array of Token
+type Tokens []Token
+
+func (a Tokens) Len() int      { return len(a) }
+func (a Tokens) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+func (a Tokens) Less(i, j int) bool {
+	ti := &a[i]
+	tj := &a[j]
+	// sort by BaseValue descending  and then Name and then by Contract
+	if ti.BaseValue < tj.BaseValue {
+		return false
+	} else if ti.BaseValue > tj.BaseValue {
+		return true
+	}
+	c := strings.Compare(ti.Name, tj.Name)
+	if c == 1 {
+		return false
+	} else if c == -1 {
+		return true
+	}
+	c = strings.Compare(ti.Contract, tj.Contract)
+	return c == -1
 }
 
 // TokenTransfer contains info about a token transfer done in a transaction
@@ -286,7 +328,11 @@ type Address struct {
 	Txids                 []string             `json:"txids,omitempty"`
 	Nonce                 string               `json:"nonce,omitempty"`
 	UsedTokens            int                  `json:"usedTokens,omitempty"`
-	Tokens                []Token              `json:"tokens,omitempty"`
+	Tokens                Tokens               `json:"tokens,omitempty"`
+	TokensBaseValue       float64              `json:"tokensBaseValue,omitempty"`
+	TokensFiatValue       float64              `json:"tokensFiatValue,omitempty"`
+	TotalBaseValue        float64              `json:"totalBaseValue,omitempty"`
+	TotalFiatValue        float64              `json:"totalFiatValue,omitempty"`
 	ContractInfo          *bchain.ContractInfo `json:"contractInfo,omitempty"`
 	AddressAliases        AddressAliasesMap    `json:"addressAliases,omitempty"`
 	// helpers for explorer

@@ -48,7 +48,7 @@
                 <div class="col-12">No Outputs</div>
                 {{end}}
             </div>
-        </div>        
+        </div>
         <div class="col-md-3 amt-out">{{amountSpan $tx.ValueOutSat $data "tx-out copyable"}}</div>
     </div>
 
@@ -175,7 +175,7 @@
         </div>
         <div class="col-md-3 amt-out">
             {{range $i, $iv := $tt.MultiTokenValues}}
-                {{if $i}}, {{end}}{{$iv.Value}} {{$tt.Symbol}} of ID <a href="/nft/{{$tt.Contract}}/{{$iv.Id}}">{{$iv.Id}}</a>
+                {{if $i}}, {{end}}{{formattedAmountSpan $iv.Value 0 $tt.Symbol $data ""}} of ID <a href="/nft/{{$tt.Contract}}/{{$iv.Id}}">{{$iv.Id}}</a>
             {{end}}
         </div>
     </div>

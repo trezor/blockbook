@@ -69,6 +69,12 @@ select {
     border-color: #00854d;
 }
 
+.base-value {
+    color: #757575 !important;
+    padding-left: 0.5rem;
+    font-weight: normal;
+}
+
 .badge {
     vertical-align: middle;
     filter: drop-shadow(0px 4px 4px rgba(0, 0, 0, 0.15));
@@ -77,6 +83,10 @@ select {
     --bs-badge-padding-x: 0.8rem;
     --bs-badge-font-weight: normal;
     --bs-badge-border-radius: 0.6rem;
+}
+
+.bg-secondary {
+    background-color: #757575 !important;
 }
 
 .accordion {
@@ -91,6 +101,10 @@ select {
 .accordion-button:focus {
     outline: 0;
     box-shadow: none;
+}
+
+.accordion-body {
+    letter-spacing: -0.01em;
 }
 
 .bb-group {
@@ -464,7 +478,7 @@ span.btn-paging:hover {
 }
 
 .txerror {
-    background-color: #c51f13b3;
+    background-color: #c51f13a0;
     color: white !important;
 }
 
