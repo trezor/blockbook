@@ -63,7 +63,6 @@ type fiatRatesSubscription struct {
 
 // WebsocketServer is a handle to websocket server
 type WebsocketServer struct {
-	socket                          *websocket.Conn
 	upgrader                        *websocket.Upgrader
 	db                              *db.RocksDB
 	txCache                         *db.TxCache
@@ -483,15 +482,16 @@ func (s *WebsocketServer) onRequest(c *websocketChannel, req *websocketReq) {
 }
 
 type accountInfoReq struct {
-	Descriptor     string `json:"descriptor"`
-	Details        string `json:"details"`
-	Tokens         string `json:"tokens"`
-	PageSize       int    `json:"pageSize"`
-	Page           int    `json:"page"`
-	FromHeight     int    `json:"from"`
-	ToHeight       int    `json:"to"`
-	ContractFilter string `json:"contractFilter"`
-	Gap            int    `json:"gap"`
+	Descriptor        string `json:"descriptor"`
+	Details           string `json:"details"`
+	Tokens            string `json:"tokens"`
+	PageSize          int    `json:"pageSize"`
+	Page              int    `json:"page"`
+	FromHeight        int    `json:"from"`
+	ToHeight          int    `json:"to"`
+	ContractFilter    string `json:"contractFilter"`
+	SecondaryCurrency string `json:"secondaryCurrency"`
+	Gap               int    `json:"gap"`
 }
 
 func unmarshalGetAccountInfoRequest(params []byte) (*accountInfoReq, error) {
@@ -540,7 +540,7 @@ func (s *WebsocketServer) getAccountInfo(req *accountInfoReq) (res *api.Address,
 	}
 	a, err := s.api.GetXpubAddress(req.Descriptor, req.Page, req.PageSize, opt, &filter, req.Gap)
 	if err != nil {
-		return s.api.GetAddress(req.Descriptor, req.Page, req.PageSize, opt, &filter)
+		return s.api.GetAddress(req.Descriptor, req.Page, req.PageSize, opt, &filter, strings.ToLower(req.SecondaryCurrency))
 	}
 	return a, nil
 }
@@ -825,6 +825,8 @@ func (s *WebsocketServer) subscribeFiatRates(c *websocketChannel, d *fiatRatesSu
 	currency := d.Currency
 	if currency == "" {
 		currency = allFiatRates
+	} else {
+		currency = strings.ToLower(currency)
 	}
 	as, ok := s.fiatRatesSubscriptions[currency]
 	if !ok {

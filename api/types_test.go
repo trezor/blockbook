@@ -172,3 +172,50 @@ func TestBalanceHistories_SortAndAggregate(t *testing.T) {
 		})
 	}
 }
+
+func TestAmount_Compare(t *testing.T) {
+	tests := []struct {
+		name string
+		a    *Amount
+		b    *Amount
+		want int
+	}{
+		{
+			name: "nil-nil",
+			a:    nil,
+			b:    nil,
+			want: 0,
+		},
+		{
+			name: "20-nil",
+			a:    (*Amount)(big.NewInt(20)),
+			b:    nil,
+			want: 1,
+		},
+		{
+			name: "nil-20",
+			a:    nil,
+			b:    (*Amount)(big.NewInt(20)),
+			want: -1,
+		},
+		{
+			name: "18-20",
+			a:    (*Amount)(big.NewInt(18)),
+			b:    (*Amount)(big.NewInt(20)),
+			want: -1,
+		},
+		{
+			name: "20-20",
+			a:    (*Amount)(big.NewInt(20)),
+			b:    (*Amount)(big.NewInt(20)),
+			want: 0,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.a.Compare(tt.b); got != tt.want {
+				t.Errorf("Amount.Compare() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

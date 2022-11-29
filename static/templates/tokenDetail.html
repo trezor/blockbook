@@ -6,11 +6,11 @@
             <tbody>
                 <tr>
                     <td style="width: 25%;">Token ID</td>
-                    <td>{{$data.TokenId}}</td>
+                    <td><span class="copyable">{{$data.TokenId}}</span></td>
                 </tr>
                 <tr id="name" style="display: none;">
                     <td>NTF Name</td>
-                    <td></td>
+                    <td class="copyable"></td>
                 </tr>
                 <tr id="description" style="display: none;">
                     <td>NTF Description</td>
@@ -18,7 +18,7 @@
                 </tr>
                 <tr>
                     <td>Contract</td>
-                    <td><a href="/address/{{$data.ContractInfo.Contract}}">{{$data.ContractInfo.Contract}}</a><br>{{$data.ContractInfo.Name}}</td>
+                    <td><a href="/address/{{$data.ContractInfo.Contract}}"><span class="copyable">{{$data.ContractInfo.Contract}}</span></a><br>{{$data.ContractInfo.Name}}</td>
                 </tr>
                 <tr>
                     <td>Contract type</td>
