@@ -850,8 +850,12 @@ func (s *PublicServer) summaryValuesSpan(baseValue float64, secondaryValue float
 			rv.WriteString(")</span>")
 		}
 	} else {
-		if td.SecondaryCoin != "" {
-			rv.WriteString("-")
+		if baseValue > 0 {
+			appendAmountSpan(&rv, "", strconv.FormatFloat(baseValue, 'f', 6, 64), td.CoinShortcut, "")
+		} else {
+			if td.SecondaryCoin != "" {
+				rv.WriteString("-")
+			}
 		}
 	}
 	return template.HTML(rv.String())
@@ -1184,16 +1188,16 @@ func (s *PublicServer) explorerXpub(w http.ResponseWriter, r *http.Request) (tpl
 		return errorTpl, nil, api.NewAPIError("Missing xpub", true)
 	}
 	s.metrics.ExplorerViews.With(common.Labels{"action": "xpub"}).Inc()
-	page, _, _, filter, filterParam, gap := s.getAddressQueryParams(r, api.AccountDetailsTxHistoryLight, txsOnPage)
 	// do not allow txsOnPage and details to be changed by query params
-	address, err := s.api.GetXpubAddress(xpub, page, txsOnPage, api.AccountDetailsTxHistoryLight, filter, gap)
+	page, _, _, filter, filterParam, gap := s.getAddressQueryParams(r, api.AccountDetailsTxHistoryLight, txsOnPage)
+	data := s.newTemplateData(r)
+	address, err := s.api.GetXpubAddress(xpub, page, txsOnPage, api.AccountDetailsTxHistoryLight, filter, gap, strings.ToLower(data.SecondaryCoin))
 	if err != nil {
 		if err == api.ErrUnsupportedXpub {
 			err = api.NewAPIError("XPUB functionality is not supported", true)
 		}
 		return errorTpl, nil, err
 	}
-	data := s.newTemplateData(r)
 	data.AddrStr = address.AddrStr
 	data.Address = address
 	data.Page = address.Page
@@ -1267,7 +1271,7 @@ func (s *PublicServer) explorerSearch(w http.ResponseWriter, r *http.Request) (t
 	var err error
 	s.metrics.ExplorerViews.With(common.Labels{"action": "search"}).Inc()
 	if len(q) > 0 {
-		address, err = s.api.GetXpubAddress(q, 0, 1, api.AccountDetailsBasic, &api.AddressFilter{Vout: api.AddressFilterVoutOff}, 0)
+		address, err = s.api.GetXpubAddress(q, 0, 1, api.AccountDetailsBasic, &api.AddressFilter{Vout: api.AddressFilterVoutOff}, 0, "")
 		if err == nil {
 			http.Redirect(w, r, joinURL("/xpub/", url.QueryEscape(address.AddrStr)), http.StatusFound)
 			return noTpl, nil, nil
@@ -1501,7 +1505,8 @@ func (s *PublicServer) apiXpub(r *http.Request, apiVersion int) (interface{}, er
 	var err error
 	s.metrics.ExplorerViews.With(common.Labels{"action": "api-xpub"}).Inc()
 	page, pageSize, details, filter, _, gap := s.getAddressQueryParams(r, api.AccountDetailsTxidHistory, txsInAPI)
-	address, err = s.api.GetXpubAddress(xpub, page, pageSize, details, filter, gap)
+	secondaryCoin := strings.ToLower(r.URL.Query().Get("secondary"))
+	address, err = s.api.GetXpubAddress(xpub, page, pageSize, details, filter, gap, secondaryCoin)
 	if err == nil && apiVersion == apiV1 {
 		return s.api.AddressToV1(address), nil
 	}

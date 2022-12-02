@@ -48,7 +48,7 @@
                 </tr>
                 <tr>
                     <td>Transactions in Mempool</td>
-                    <td>{{if .InternalExplorer}}<a href="/mempool">{{$bb.MempoolSize}}</a>{{else}}{{formatInt $bb.MempoolSize}}{{end}}</td>
+                    <td>{{if .InternalExplorer}}<a href="/mempool">{{formatInt $bb.MempoolSize}}</a>{{else}}{{formatInt $bb.MempoolSize}}{{end}}</td>
                 </tr>
                 {{if $bb.HasFiatRates}}
                 <tr>

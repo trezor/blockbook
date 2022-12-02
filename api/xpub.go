@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/big"
 	"sort"
+	"strconv"
 	"sync"
 	"time"
 
@@ -387,7 +388,7 @@ func (w *Worker) getXpubData(xd *bchain.XpubDescriptor, page int, txsOnPage int,
 }
 
 // GetXpubAddress computes address value and gets transactions for given address
-func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option AccountDetails, filter *AddressFilter, gap int) (*Address, error) {
+func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option AccountDetails, filter *AddressFilter, gap int, secondaryCoin string) (*Address, error) {
 	start := time.Now()
 	page--
 	if page < 0 {
@@ -567,6 +568,20 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 	setIsOwnAddresses(txs, xpubAddresses)
 	var totalReceived big.Int
 	totalReceived.Add(&data.balanceSat, &data.sentSat)
+
+	var fiatValue float64
+	if secondaryCoin != "" {
+		ticker := w.is.GetCurrentTicker("", "")
+		balance, err := strconv.ParseFloat((*Amount)(&data.balanceSat).DecimalString(w.chainParser.AmountDecimals()), 64)
+		if ticker != nil && err == nil {
+			r, found := ticker.Rates[secondaryCoin]
+			if found {
+				secondaryRate := float64(r)
+				fiatValue = secondaryRate * balance
+			}
+		}
+	}
+
 	addr := Address{
 		Paging:                pg,
 		AddrStr:               xpub,
@@ -580,6 +595,7 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 		Txids:                 txids,
 		UsedTokens:            usedTokens,
 		Tokens:                tokens,
+		FiatValue:             fiatValue,
 		XPubAddresses:         xpubAddresses,
 		AddressAliases:        w.getAddressAliases(addresses),
 	}

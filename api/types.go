@@ -5,7 +5,6 @@ import (
 	"errors"
 	"math/big"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/trezor/blockbook/bchain"
@@ -190,14 +189,17 @@ func (a Tokens) Less(i, j int) bool {
 	} else if ti.BaseValue > tj.BaseValue {
 		return true
 	}
-	c := strings.Compare(ti.Name, tj.Name)
-	if c == 1 {
-		return false
-	} else if c == -1 {
-		return true
+	if ti.Name == "" {
+		if tj.Name != "" {
+			return false
+		}
+	} else {
+		if tj.Name == "" {
+			return true
+		}
+		return ti.Name < tj.Name
 	}
-	c = strings.Compare(ti.Contract, tj.Contract)
-	return c == -1
+	return ti.Contract < tj.Contract
 }
 
 // TokenTransfer contains info about a token transfer done in a transaction
@@ -329,6 +331,7 @@ type Address struct {
 	Nonce                 string               `json:"nonce,omitempty"`
 	UsedTokens            int                  `json:"usedTokens,omitempty"`
 	Tokens                Tokens               `json:"tokens,omitempty"`
+	FiatValue             float64              `json:"fiatValue,omitempty"`
 	TokensBaseValue       float64              `json:"tokensBaseValue,omitempty"`
 	TokensFiatValue       float64              `json:"tokensFiatValue,omitempty"`
 	TotalBaseValue        float64              `json:"totalBaseValue,omitempty"`

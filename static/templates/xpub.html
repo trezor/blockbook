@@ -3,7 +3,10 @@
     <div class="col-md-10 order-2 order-md-1">
         <h1>XPUB</h1>
         <h5 class="col-12 d-flex h-data pb-2"><span class="ellipsis copyable">{{$addr.AddrStr}}</span></h5>
-        <h4>{{amountSpan $addr.BalanceSat $data "copyable"}}</h4>
+        <h4 class="row">
+            <div class="col-lg-6">{{formattedAmountSpan $addr.BalanceSat 0 $data.CoinShortcut $data "copyable"}}</div>
+            {{if $addr.FiatValue}}<div class="col-lg-6">{{summaryValuesSpan 0 $addr.FiatValue $data}}</div>{{end}}
+        </h4>
     </div>
     <div class="col-md-2 order-1 order-md-2 d-flex justify-content-center justify-content-md-end mb-3 mb-md-0">
         <div id="qrcode"></div>
@@ -60,7 +63,7 @@
             <td>{{amountSpan $t.BalanceSat $data "copyable"}}</td>
             <td>{{formatInt $t.Transfers}}</td>
             <td>{{$t.Path}}</td>
-        </tr>        
+        </tr>
         {{end}}
         {{else}}
         <tr>
