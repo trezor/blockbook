@@ -1256,22 +1256,26 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 			}
 		}
 	}
-	var secondaryRate, totalFiatValue float64
-	ticker := w.is.GetCurrentTicker("", "")
-	totalBaseValue, err := strconv.ParseFloat((*Amount)(&ba.BalanceSat).DecimalString(w.chainParser.AmountDecimals()), 64)
-	if ticker != nil && err == nil {
-		r, found := ticker.Rates[secondaryCoin]
-		if found {
-			secondaryRate = float64(r)
-		}
-	}
 	if w.chainType == bchain.ChainBitcoinType {
 		totalReceived = ba.ReceivedSat()
 		totalSent = &ba.SentSat
-	} else {
-		totalBaseValue += ed.tokensBaseValue
 	}
-	totalFiatValue = secondaryRate * totalBaseValue
+	var secondaryRate, totalFiatValue, totalBaseValue, fiatValue float64
+	if secondaryCoin != "" {
+		ticker := w.is.GetCurrentTicker("", "")
+		balance, err := strconv.ParseFloat((*Amount)(&ba.BalanceSat).DecimalString(w.chainParser.AmountDecimals()), 64)
+		if ticker != nil && err == nil {
+			r, found := ticker.Rates[secondaryCoin]
+			if found {
+				secondaryRate = float64(r)
+			}
+		}
+		fiatValue = secondaryRate * balance
+		if w.chainType == bchain.ChainEthereumType {
+			totalBaseValue += balance + ed.tokensBaseValue
+			totalFiatValue = secondaryRate * totalBaseValue
+		}
+	}
 	r := &Address{
 		Paging:                pg,
 		AddrStr:               address,
@@ -1286,6 +1290,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 		Transactions:          txs,
 		Txids:                 txids,
 		Tokens:                ed.tokens,
+		FiatValue:             fiatValue,
 		TokensBaseValue:       ed.tokensBaseValue,
 		TokensFiatValue:       ed.tokensFiatValue,
 		TotalBaseValue:        totalBaseValue,

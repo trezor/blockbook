@@ -1,12 +1,19 @@
 {{define "specific"}}{{$addr := .Address}}{{$data := .}}
-<div class="row">
+<div class="row g-0 ms-2 ms-lg-0">
     <div class="col-md-10 order-2 order-md-1">
         <h1>{{if $addr.ContractInfo}}Contract {{$addr.ContractInfo.Name}}{{if $addr.ContractInfo.Symbol}} ({{$addr.ContractInfo.Symbol}}){{end}}{{else}}Address {{addressAlias $addr.AddrStr $data}}{{end}}</h1>
         <h5 class="col-12 d-flex h-data pb-2"><span class="ellipsis copyable">{{$addr.AddrStr}}</span></h5>
-        <h4>
-            {{formattedAmountSpan $addr.BalanceSat 0 $data.CoinShortcut $data "copyable"}}
-            {{if $addr.TotalFiatValue}}<span class="ps-5"{{if eq .ChainType 1}} tt="Address value including tokens"{{end}}>{{summaryValuesSpan  $addr.TotalBaseValue $addr.TotalFiatValue $data}}</span>{{end}}
+        <h4 class="row">
+            <div class="col-lg-6">{{formattedAmountSpan $addr.BalanceSat 0 $data.CoinShortcut $data "copyable"}}</div>
+            {{if $addr.FiatValue}}<div class="col-lg-6">{{summaryValuesSpan 0 $addr.FiatValue $data}}</div>{{end}}
         </h4>
+        {{if gt $addr.TotalFiatValue $addr.FiatValue}}
+        <div class="row g-0 small text-muted">Including Tokens</div>
+        <h4 class="row">
+            <div class="col-lg-6">{{summaryValuesSpan $addr.TotalBaseValue 0 $data}}</div>
+            <div class="col-lg-6">{{summaryValuesSpan 0 $addr.TotalFiatValue $data}}</div>
+        </h4>
+        {{end}}
     </div>
     <div class="col-md-2 order-1 order-md-2 d-flex justify-content-center justify-content-md-end mb-3 mb-md-0">
         <div id="qrcode"></div>
@@ -121,7 +128,7 @@
                             <th style="width: 25%;">Contract</th>
                             <th style="width: 30%;">Quantity</th>
                             <th style="width: 35%;">Value</th>
-                            <th class="text-end" style="width: 10%;">Transfers</th>
+                            <th class="text-end" style="width: 10%;"><span class="d-none d-md-block">Transfers</span><span class="d-block d-md-none">#</span></th>
                         </tr>
                         {{range $t := $addr.Tokens}}
                         {{if eq $t.Type "ERC20"}}
@@ -157,7 +164,7 @@
                         <tr>
                             <th style="width: 25%;">Contract</th>
                             <th style="width: 65%;">Tokens</th>
-                            <th class="text-end" style="width: 10%;">Transfers</th>
+                            <th class="text-end" style="width: 10%;"><span class="d-none d-md-block">Transfers</span><span class="d-block d-md-none">#</span></th>
                         </tr>
                         {{range $t := $addr.Tokens}}
                         {{if eq $t.Type "ERC721"}}
@@ -194,7 +201,7 @@
                         <tr>
                             <th style="width: 25%;">Contract</th>
                             <th style="width: 65%;">Tokens</th>
-                            <th class="text-end" style="width: 10%;">Transfers</th>
+                            <th class="text-end" style="width: 10%;"><span class="d-none d-md-block">Transfers</span><span class="d-block d-md-none">#</span></th>
                         </tr>
                         {{range $t := $addr.Tokens}}
                         {{if eq $t.Type "ERC1155"}}
