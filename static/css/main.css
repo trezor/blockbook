@@ -15,7 +15,7 @@ body {
 body {
     min-height: 100%;
     margin: 0;
-    background: linear-gradient(to bottom, #f6f6f6 300px, #e5e5e5 0), #e5e5e5;
+    background: linear-gradient(to bottom, #f6f6f6 360px, #e5e5e5 0), #e5e5e5;
     background-repeat: no-repeat;
 }
 
@@ -588,11 +588,25 @@ span.btn-paging:hover {
 @media (max-width: 768px) {
     body {
         font-size: 0.8rem;
+        background: linear-gradient(to bottom, #f6f6f6 500px, #e5e5e5 0), #e5e5e5;
+    }
+
+    .container {
+        padding-left: 2px;
+        padding-right: 2px;
+    }
+
+    .accordion-body {
+        padding: var(--bs-accordion-body-padding-y) 0;
     }
 
     .octicon {
         scale: 60% !important;
         margin-top: -2px;
+    }
+
+    .unconfirmed {
+        padding: 0.1rem 0.8rem;
     }
 
     .btn {

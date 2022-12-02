@@ -592,7 +592,7 @@ func (b *EthereumRPC) getCreationContractInfo(contract string, height uint32) *b
 
 func (b *EthereumRPC) processCallTrace(call *rpcCallTrace, d *bchain.EthereumInternalData, contracts []bchain.ContractInfo, blockHeight uint32) []bchain.ContractInfo {
 	value, err := hexutil.DecodeBig(call.Value)
-	if call.Type == "CREATE" {
+	if call.Type == "CREATE" || call.Type == "CREATE2" {
 		d.Transfers = append(d.Transfers, bchain.EthereumInternalTransfer{
 			Type:  bchain.CREATE,
 			Value: *value,
@@ -600,7 +600,6 @@ func (b *EthereumRPC) processCallTrace(call *rpcCallTrace, d *bchain.EthereumInt
 			To:    call.To, // new contract address
 		})
 		contracts = append(contracts, *b.getCreationContractInfo(call.To, blockHeight))
-
 	} else if call.Type == "SELFDESTRUCT" {
 		d.Transfers = append(d.Transfers, bchain.EthereumInternalTransfer{
 			Type:  bchain.SELFDESTRUCT,
