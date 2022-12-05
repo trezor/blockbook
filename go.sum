@@ -403,8 +403,9 @@ github.com/mailru/easyjson v0.0.0-20190626092158-b2ccc519800e/go.mod h1:C1wdFJiN
 github.com/martinboehm/bchutil v0.0.0-20190104112650-6373f11b6efe h1:khZWpHuxJNh2EGzBbaS6EQ2d6KxgK31WeG0TnlTMUD4=
 github.com/martinboehm/bchutil v0.0.0-20190104112650-6373f11b6efe/go.mod h1:0hw4tpGU+9slqN/DrevhjTMb0iR9esxzpCdx8I6/UzU=
 github.com/martinboehm/btcd v0.0.0-20190104121910-8e7c0427fee5/go.mod h1:rKQj/jGwFruYjpM6vN+syReFoR0DsLQaajhyH/5mwUE=
-github.com/martinboehm/btcd v0.0.0-20221009194001-987348babe73 h1:IaA3JXJ1iTNurglw33ehZOOyhP8W1rEJX1Y2U42w8fw=
-github.com/martinboehm/btcd v0.0.0-20221009194001-987348babe73/go.mod h1:YGXD0z/xtFXFF5jFp1GaVnrKRlEADn4pD47Zu4xaLg0=
+github.com/martinboehm/btcd v0.0.0-20211010165247-d1f65b0f30fa/go.mod h1:YGXD0z/xtFXFF5jFp1GaVnrKRlEADn4pD47Zu4xaLg0=
+github.com/martinboehm/btcd v0.0.0-20221101112928-408689e15809 h1:a3l5GCQYYyB4zDmtsB8gu+aB15earQxMG1W/S/zKcXs=
+github.com/martinboehm/btcd v0.0.0-20221101112928-408689e15809/go.mod h1:YGXD0z/xtFXFF5jFp1GaVnrKRlEADn4pD47Zu4xaLg0=
 github.com/martinboehm/btcutil v0.0.0-20180706230648-ab6388e0c60a/go.mod h1:NIviPmxe43yBgIB4HGB4w4kv9/s5kaDa/pi+wZAAxQo=
 github.com/martinboehm/btcutil v0.0.0-20210922221517-e83b0c752949/go.mod h1:8iJaVY/VHW6lnojpTXf5X4gF2dx81Xtj2R6lJp2colA=
 github.com/martinboehm/btcutil v0.0.0-20211010173611-6ef1889c1819 h1:ra2UymMEDhR0CVxqz/0minCNXO8YMeZwxdnnFDpWVJ0=
