@@ -7,11 +7,11 @@ ARG PORTABLE_ROCKSDB
 RUN apt-get update && \
     apt-get upgrade -y && \
     apt-get install -y build-essential git wget pkg-config lxc-dev libzmq3-dev \
-                       libgflags-dev libsnappy-dev zlib1g-dev libbz2-dev \
-                       liblz4-dev graphviz && \
+    libgflags-dev libsnappy-dev zlib1g-dev libbz2-dev \
+    liblz4-dev graphviz && \
     apt-get clean
 ARG GOLANG_VERSION
-ENV GOLANG_VERSION=go1.17.1
+ENV GOLANG_VERSION=go1.18.8
 ENV ROCKSDB_VERSION=v6.22.1
 ENV GOPATH=/go
 ENV PATH=$PATH:$GOPATH/bin
@@ -25,7 +25,7 @@ RUN if [ -n "${TCMALLOC}" ]; then \
     echo "Using TCMALLOC"; \
     apt-get install -y google-perftools; \
     ln -s /usr/lib/libtcmalloc.so.4 /usr/lib/libtcmalloc.so;\
-fi
+    fi
 
 # install and configure go
 ARG TARGETPLATFORM
