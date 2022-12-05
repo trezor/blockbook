@@ -298,7 +298,7 @@ func (b *EthereumRPC) fetchContractInfo(address string) (*bchain.ContractInfo, e
 		return nil, nil
 		// return nil, errors.Annotatef(err, "erc20NameSignature %v", address)
 	}
-	name := parseSimpleStringProperty(data)
+	name := strings.TrimSpace(parseSimpleStringProperty(data))
 	if name != "" {
 		data, err = b.ethCall(contractSymbolSignature, address)
 		if err != nil {
@@ -306,7 +306,7 @@ func (b *EthereumRPC) fetchContractInfo(address string) (*bchain.ContractInfo, e
 			return nil, nil
 			// return nil, errors.Annotatef(err, "erc20SymbolSignature %v", address)
 		}
-		symbol := parseSimpleStringProperty(data)
+		symbol := strings.TrimSpace(parseSimpleStringProperty(data))
 		data, _ = b.ethCall(contractDecimalsSignature, address)
 		// if err != nil {
 		// 	glog.Warning(errors.Annotatef(err, "Contract DecimalsSignature %v", address))
