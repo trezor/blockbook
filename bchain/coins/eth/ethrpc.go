@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"math/big"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	ethereum "github.com/ethereum/go-ethereum"
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/golang/glog"
@@ -20,16 +22,16 @@ import (
 	"github.com/trezor/blockbook/common"
 )
 
-// EthereumNet type specifies the type of ethereum network
-type EthereumNet uint32
+// Network type specifies the type of network
+type Network uint32
 
 const (
 	// MainNet is production network
-	MainNet EthereumNet = 1
+	MainNet Network = 1
 	// TestNet is Ropsten test network
-	TestNet EthereumNet = 3
+	TestNet Network = 3
 	// TestNetGoerli is Goerli test network
-	TestNetGoerli EthereumNet = 5
+	TestNetGoerli Network = 5
 )
 
 // Configuration represents json config file
@@ -48,7 +50,7 @@ type EthereumRPC struct {
 	*bchain.BaseChain
 	Client               Client
 	RPC                  RPCClient
-	MainNetChainID       EthereumNet
+	MainNetChainID       Network
 	Timeout              time.Duration
 	Parser               *EthereumParser
 	Mempool              *bchain.MempoolEthereumType
@@ -56,11 +58,12 @@ type EthereumRPC struct {
 	bestHeaderLock       sync.Mutex
 	bestHeader           Header
 	bestHeaderTime       time.Time
-	chanNewBlock         chan Header
+	ChanNewBlock         interface{}
 	newBlockSubscription ClientSubscription
 	chanNewTx            chan ethcommon.Hash
 	newTxSubscription    ClientSubscription
 	ChainConfig          *Configuration
+	PushHandler          func(bchain.NotificationType)
 }
 
 // NewEthereumRPC returns new EthRPC instance.
@@ -81,30 +84,6 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 		ChainConfig: &c,
 	}
 
-	// always create parser
-	s.Parser = NewEthereumParser(c.BlockAddressesToKeep)
-	s.Timeout = time.Duration(c.RPCTimeout) * time.Second
-
-	// new blocks notifications handling
-	// the subscription is done in Initialize
-	s.chanNewBlock = make(chan Header)
-	go func() {
-		for {
-			h, ok := <-s.chanNewBlock
-			if !ok {
-				break
-			}
-			glog.V(2).Info("rpc: new block header ", h.Number())
-			// update best header to the new header
-			s.bestHeaderLock.Lock()
-			s.bestHeader = h
-			s.bestHeaderTime = time.Now()
-			s.bestHeaderLock.Unlock()
-			// notify blockbook
-			pushHandler(bchain.NotificationNewBlock)
-		}
-	}()
-
 	// new mempool transaction notifications handling
 	// the subscription is done in Initialize
 	s.chanNewTx = make(chan ethcommon.Hash)
@@ -119,9 +98,14 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 				glog.Info("rpc: new tx ", hex)
 			}
 			s.Mempool.AddTransactionToMempool(hex)
-			pushHandler(bchain.NotificationNewTx)
+			s.PushHandler(bchain.NotificationNewTx)
 		}
 	}()
+
+	// always create parser
+	s.Parser = NewEthereumParser(c.BlockAddressesToKeep)
+	s.Timeout = time.Duration(c.RPCTimeout) * time.Second
+	s.PushHandler = pushHandler
 
 	return s, nil
 }
@@ -155,6 +139,21 @@ func (b *EthereumRPC) Initialize() error {
 	b.RPC = rc
 	b.MainNetChainID = MainNet
 
+	// new blocks notifications handling
+	// the subscription is done in Initialize
+	b.ChanNewBlock = make(chan *types.Header)
+	go func() {
+		for {
+			h, ok := <-b.ChanNewBlock.(chan *types.Header)
+			if !ok {
+				break
+			}
+			b.UpdateBestHeader(&EthereumHeader{Header: h})
+			// notify blockbook
+			b.PushHandler(bchain.NotificationNewBlock)
+		}
+	}()
+
 	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
 	defer cancel()
 
@@ -164,7 +163,7 @@ func (b *EthereumRPC) Initialize() error {
 	}
 
 	// parameters for getInfo request
-	switch EthereumNet(id.Uint64()) {
+	switch Network(id.Uint64()) {
 	case MainNet:
 		b.Testnet = false
 		b.Network = "livenet"
@@ -225,7 +224,7 @@ func (b *EthereumRPC) subscribeEvents() error {
 		b.newBlockSubscription = nil
 		ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
 		defer cancel()
-		sub, err := b.RPC.EthSubscribe(ctx, b.chanNewBlock, "newHeads")
+		sub, err := b.RPC.EthSubscribe(ctx, b.ChanNewBlock, "newHeads")
 		if err != nil {
 			return nil, errors.Annotatef(err, "EthSubscribe newHeads")
 		}
@@ -296,6 +295,7 @@ func (b *EthereumRPC) subscribe(f func() (ClientSubscription, error)) error {
 }
 
 func (b *EthereumRPC) closeRPC() {
+	glog.Info("rpc: shutdown")
 	if b.newBlockSubscription != nil {
 		b.newBlockSubscription.Unsubscribe()
 	}
@@ -322,8 +322,6 @@ func (b *EthereumRPC) reconnectRPC() error {
 // Shutdown cleans up rpc interface to ethereum
 func (b *EthereumRPC) Shutdown(ctx context.Context) error {
 	b.closeRPC()
-	close(b.chanNewBlock)
-	glog.Info("rpc: shutdown")
 	return nil
 }
 
@@ -392,6 +390,14 @@ func (b *EthereumRPC) getBestHeader() (Header, error) {
 		b.bestHeaderTime = time.Now()
 	}
 	return b.bestHeader, nil
+}
+
+func (b *EthereumRPC) UpdateBestHeader(h Header) {
+	glog.V(2).Info("rpc: new block header ", h.Number())
+	b.bestHeaderLock.Lock()
+	b.bestHeader = h
+	b.bestHeaderTime = time.Now()
+	b.bestHeaderLock.Unlock()
 }
 
 // GetBestBlockHash returns hash of the tip of the best-block-chain
@@ -492,10 +498,23 @@ func (b *EthereumRPC) getBlockRaw(hash string, height uint32, fullTxs bool) (jso
 	} else {
 		err = b.RPC.CallContext(ctx, &raw, "eth_getBlockByNumber", fmt.Sprintf("%#x", height), fullTxs)
 	}
-	if err != nil {
-		return nil, errors.Annotatef(err, "hash %v, height %v", hash, height)
-	} else if len(raw) == 0 {
-		return nil, bchain.ErrBlockNotFound
+
+	switch b.ChainConfig.CoinName {
+	case "Avalanche":
+		// unfinalized data cannot be queried error returned when trying to query a block height greater than last finalized block
+		// do not throw rpc error and instead treat as ErrBlockNotFound
+		// https://docs.avax.network/quickstart/exchanges/integrate-exchange-with-avalanche#determining-finality
+		if err != nil && !strings.Contains(err.Error(), "unfinalized data") {
+			return nil, errors.Annotatef(err, "hash %v, height %v", hash, height)
+		} else if len(raw) == 0 {
+			return nil, bchain.ErrBlockNotFound
+		}
+	default:
+		if err != nil {
+			return nil, errors.Annotatef(err, "hash %v, height %v", hash, height)
+		} else if len(raw) == 0 {
+			return nil, bchain.ErrBlockNotFound
+		}
 	}
 	return raw, nil
 }
@@ -720,29 +739,23 @@ func (b *EthereumRPC) EthereumTypeEstimateGas(params map[string]interface{}) (ui
 	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
 	defer cancel()
 	msg := ethereum.CallMsg{}
-	s, ok := GetStringFromMap("from", params)
-	if ok && len(s) > 0 {
+	if s, ok := GetStringFromMap("from", params); ok && len(s) > 0 {
 		msg.From = ethcommon.HexToAddress(s)
 	}
-	s, ok = GetStringFromMap("to", params)
-	if ok && len(s) > 0 {
+	if s, ok := GetStringFromMap("to", params); ok && len(s) > 0 {
 		a := ethcommon.HexToAddress(s)
 		msg.To = &a
 	}
-	s, ok = GetStringFromMap("data", params)
-	if ok && len(s) > 0 {
+	if s, ok := GetStringFromMap("data", params); ok && len(s) > 0 {
 		msg.Data = ethcommon.FromHex(s)
 	}
-	s, ok = GetStringFromMap("value", params)
-	if ok && len(s) > 0 {
+	if s, ok := GetStringFromMap("value", params); ok && len(s) > 0 {
 		msg.Value, _ = hexutil.DecodeBig(s)
 	}
-	s, ok = GetStringFromMap("gas", params)
-	if ok && len(s) > 0 {
+	if s, ok := GetStringFromMap("gas", params); ok && len(s) > 0 {
 		msg.Gas, _ = hexutil.DecodeUint64(s)
 	}
-	s, ok = GetStringFromMap("gasPrice", params)
-	if ok && len(s) > 0 {
+	if s, ok := GetStringFromMap("gasPrice", params); ok && len(s) > 0 {
 		msg.GasPrice, _ = hexutil.DecodeBig(s)
 	}
 	return b.Client.EstimateGas(ctx, msg)
