@@ -1,0 +1,62 @@
+{
+  "coin": {
+    "name": "Avalanche",
+    "shortcut": "AVAX",
+    "label": "Avalanche",
+    "alias": "avalanche"
+  },
+  "ports": {
+    "backend_rpc": 8098,
+    "backend_message_queue": 0,
+    "blockbook_internal": 9098,
+    "blockbook_public": 9198
+  },
+  "ipc": {
+    "rpc_url_template": "ws://127.0.0.1:{{.Ports.BackendRPC}}/ext/bc/C/ws",
+    "rpc_timeout": 25
+  },
+  "backend": {
+    "package_name": "backend-avalanche",
+    "package_revision": "satoshilabs-1",
+    "system_user": "avalanche",
+    "version": "1.10.21-67109427",
+    "binary_url": "https://github.com/ava-labs/avalanchego/releases/download/v1.9.3/avalanchego-linux-amd64-v1.9.3.tar.gz",
+    "verification_type": "gpg",
+    "verification_source": "https://github.com/ava-labs/avalanchego/releases/download/v1.9.3/avalanchego-linux-amd64-v1.9.3.tar.gz.sig",
+    "extract_command": "tar -C backend --strip 1 -xf",
+    "exclude_files": [],
+    "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/avalanchego --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --http-port {{.Ports.BackendRPC}} --staking-ephemeral-cert-enabled --chain-config-content ewogICJldGgtYXBpcyI6IFsKICAgICJldGgiLAogICAgImV0aC1maWx0ZXIiLAogICAgIm5ldCIsCiAgICAiZGVidWctdHJhY2VyIiwKICAgICJ3ZWIzIiwKICAgICJpbnRlcm5hbC1ldGgiLAogICAgImludGVybmFsLWJsb2NrY2hhaW4iLAogICAgImludGVybmFsLXRyYW5zYWN0aW9uIiwKICAgICJpbnRlcm5hbC10eC1wb29sIiwKICAgICJpbnRlcm5hbC1kZWJ1ZyIKICBdCn0= 2>>{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
+    "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
+    "postinst_script_template": "",
+    "service_type": "simple",
+    "service_additional_params_template": "",
+    "protect_memory": true,
+    "mainnet": true,
+    "server_config_file": "",
+    "client_config_file": ""
+  },
+  "blockbook": {
+    "package_name": "blockbook-avalanche",
+    "system_user": "blockbook-avalanche",
+    "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
+    "public_binding_template": ":{{.Ports.BlockbookPublic}}",
+    "explorer_url": "",
+    "additional_params": "",
+    "block_chain": {
+      "parse": true,
+      "mempool_workers": 8,
+      "mempool_sub_workers": 2,
+      "block_addresses_to_keep": 300,
+      "additional_params": {
+        "mempoolTxTimeoutHours": 48,
+        "queryBackendOnMempoolResync": false,
+        "fiat_rates": "coingecko",
+        "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"avalanche-2\", \"periodSeconds\": 60}"
+      }
+    }
+  },
+  "meta": {
+    "package_maintainer": "IT",
+    "package_maintainer_email": "it@satoshilabs.com"
+  }
+}
