@@ -1,4 +1,8 @@
 {
+    "avalanche": {
+        "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "EstimateFee", "GetBestBlockHash", "GetBestBlockHeight",
+                "GetBlockHeader"]
+    },
     "bcash": {
         "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",
                 "EstimateFee", "GetBestBlockHash", "GetBestBlockHeight", "GetBlockHeader"],
