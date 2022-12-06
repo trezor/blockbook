@@ -22,10 +22,10 @@
     "package_name": "backend-bcash-testnet",
     "package_revision": "satoshilabs-1",
     "system_user": "bcash",
-    "version": "24.1.0",
-    "binary_url": "https://github.com/bitcoin-cash-node/bitcoin-cash-node/releases/download/v24.1.0/bitcoin-cash-node-24.1.0-x86_64-linux-gnu.tar.gz",
+    "version": "25.0.0",
+    "binary_url": "https://github.com/bitcoin-cash-node/bitcoin-cash-node/releases/download/v25.0.0/bitcoin-cash-node-25.0.0-x86_64-linux-gnu.tar.gz",
     "verification_type": "sha256",
-    "verification_source": "857b6b95c54d84756fdd86893cd238a9b100c471a0b235aca4246cca74112ca9",
+    "verification_source": "f2383a35772544cf4c349429238e19b0771f0e61862726663fceea9d1e3ba4c2",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
       "bin/bitcoin-qt"
