@@ -380,7 +380,10 @@ func (d *RocksDB) ConnectBlock(block *bchain.Block) error {
 	if err := d.WriteBatch(wb); err != nil {
 		return err
 	}
-	d.is.AppendBlockTime(uint32(block.Time))
+	avg := d.is.AppendBlockTime(uint32(block.Time))
+	if d.metrics != nil {
+		d.metrics.AvgBlockPeriod.Set(float64(avg))
+	}
 	return nil
 }
 
@@ -1631,7 +1634,6 @@ func (d *RocksDB) loadBlockTimes() ([]uint32, error) {
 		}
 		times = append(times, time)
 	}
-	glog.Info("loaded ", len(times), " block times")
 	return times, nil
 }
 
@@ -1699,10 +1701,15 @@ func (d *RocksDB) LoadInternalState(rpcCoin string) (*common.InternalState, erro
 		return nil, err
 	}
 	is.DbColumns = nc
-	is.BlockTimes, err = d.loadBlockTimes()
+	bt, err := d.loadBlockTimes()
 	if err != nil {
 		return nil, err
 	}
+	avg := is.SetBlockTimes(bt)
+	if d.metrics != nil {
+		d.metrics.AvgBlockPeriod.Set(float64(avg))
+	}
+
 	// after load, reset the synchronization data
 	is.IsSynchronized = false
 	is.IsMempoolSynchronized = false

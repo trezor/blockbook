@@ -2244,10 +2244,10 @@ type bitcoinTypeEstimatedFee struct {
 	lock      sync.Mutex
 }
 
-const bitcoinTypeEstimatedFeeCacheSize = 300
+const estimatedFeeCacheSize = 300
 
-var bitcoinTypeEstimatedFeeCache [bitcoinTypeEstimatedFeeCacheSize]bitcoinTypeEstimatedFee
-var bitcoinTypeEstimatedFeeConservativeCache [bitcoinTypeEstimatedFeeCacheSize]bitcoinTypeEstimatedFee
+var estimatedFeeCache [estimatedFeeCacheSize]bitcoinTypeEstimatedFee
+var estimatedFeeConservativeCache [estimatedFeeCacheSize]bitcoinTypeEstimatedFee
 
 func (w *Worker) cachedBitcoinTypeEstimateFee(blocks int, conservative bool, s *bitcoinTypeEstimatedFee) (big.Int, error) {
 	s.lock.Lock()
@@ -2261,18 +2261,22 @@ func (w *Worker) cachedBitcoinTypeEstimateFee(blocks int, conservative bool, s *
 	if err == nil {
 		s.timestamp = time.Now().Unix()
 		s.fee = fee
+		w.metrics.EstimatedFee.With(common.Labels{
+			"blocks":       strconv.Itoa(blocks),
+			"conservative": strconv.FormatBool(conservative),
+		}).Set(float64(fee.Int64()))
 	}
 	return fee, err
 }
 
-// BitcoinTypeEstimateFee returns a fee estimation for given number of blocks
+// EstimateFee returns a fee estimation for given number of blocks
 // it uses 10 second cache to reduce calls to the backend
-func (w *Worker) BitcoinTypeEstimateFee(blocks int, conservative bool) (big.Int, error) {
-	if blocks >= bitcoinTypeEstimatedFeeCacheSize {
+func (w *Worker) EstimateFee(blocks int, conservative bool) (big.Int, error) {
+	if blocks >= estimatedFeeCacheSize {
 		return w.chain.EstimateSmartFee(blocks, conservative)
 	}
 	if conservative {
-		return w.cachedBitcoinTypeEstimateFee(blocks, conservative, &bitcoinTypeEstimatedFeeConservativeCache[blocks])
+		return w.cachedBitcoinTypeEstimateFee(blocks, conservative, &estimatedFeeConservativeCache[blocks])
 	}
-	return w.cachedBitcoinTypeEstimateFee(blocks, conservative, &bitcoinTypeEstimatedFeeCache[blocks])
+	return w.cachedBitcoinTypeEstimateFee(blocks, conservative, &estimatedFeeCache[blocks])
 }
