@@ -1,17 +1,17 @@
 {{define "txdetail"}}{{$cs := .CoinShortcut}}{{$addr := .AddrStr}}{{$tx := .Tx}}{{$data := .}}
 <div class="tx-detail">
-    <div class="row head{{if eq $tx.EthereumSpecific.Status 0}} txerror{{end}}">
-        <div class="col-xs-7 col-md-8">
+    <div class="row head">
+        <div class="col-xs-7 col-md-8{{if eq $tx.EthereumSpecific.Status 0}} txerror{{end}}">
             <a href="/tx/{{$tx.Txid}}" class="ellipsis copyable txid">{{$tx.Txid}}</a>
             {{if $tx.Rbf}}<span class="ps-1" tt="Replace-by-Fee (RBF) transaction, could be overridden"> RBF</span>{{end}}
         </div>
         {{if $tx.Blocktime}}<div class="col-xs-5 col-md-4 text-end">{{if $tx.Confirmations}}mined{{else}}first seen{{end}} <span class="txvalue ms-1">{{unixTimeSpan $tx.Blocktime}}</span></div>{{end}}
+        {{if eq $tx.EthereumSpecific.Status 0}}<div class="col-12 txerror pb-1"><span class="badge bg-danger">Failed</span>{{if $tx.EthereumSpecific.Error}}<span class="small ms-1">{{$tx.EthereumSpecific.Error}}</span>{{end}}</div>{{end}}
         {{if $tx.EthereumSpecific.ParsedData}}
             {{if $tx.EthereumSpecific.ParsedData.Name}}<div class="col-12 small"><span class="txvalue">{{$tx.EthereumSpecific.ParsedData.Name}}</span>{{if $tx.EthereumSpecific.ParsedData.MethodId}}<span class="ms-1" tt="4-byte signature"> ({{$tx.EthereumSpecific.ParsedData.MethodId}})</span>{{end}}</div>{{else}}
             {{if $tx.EthereumSpecific.ParsedData.MethodId}}<div class="col-12 small txvalue"><span tt="4-byte signature">{{$tx.EthereumSpecific.ParsedData.MethodId}}</span></div>{{end}}
             {{end}}
         {{end}}
-        {{if eq $tx.EthereumSpecific.Status 0}}<div col-12><span class="badge bg-danger">Failed</span>{{if $tx.EthereumSpecific.Error}}<span class="small ms-1">{{$tx.EthereumSpecific.Error}}</span>{{end}}</div>{{end}}
     </div>
     <div class="row body">
         <div class="col-md-4">
@@ -184,12 +184,12 @@
     {{end}}
 
     <div class="row footer">
-        <div class="col-sm-12 col-md-4">
+        <div class="col-sm-12 col-md-6">
             {{if $tx.FeesSat}}
-            Fee {{amountSpan $tx.FeesSat $data "txvalue copyable ms-3"}}
+            Fee {{amountSpan $tx.FeesSat $data "txvalue copyable ms-3"}} <span class="fw-normal small">({{amountSatsSpan $tx.EthereumSpecific.GasPrice $data ""}} Gwei/gas)</span>
             {{end}}
         </div>
-        <div class="col-sm-12 col-md-8 text-end">
+        <div class="col-sm-12 col-md-6 text-end">
             <span class="me-4">
             {{if $tx.Confirmations}}
             <span class="txvalue">{{formatUint32 $tx.Confirmations}}</span> confirmations

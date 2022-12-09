@@ -38,7 +38,7 @@ select {
 }
 
 #header {
-    position: absolute;
+    position: fixed;
     top: 0;
     left: 0;
     width: 100%;
@@ -46,8 +46,16 @@ select {
     padding-bottom: 0;
     padding-top: 0;
     background-color: white;
-    border: 0;
+    border-bottom: 1px solid #f6f6f6;
     z-index: 10;
+}
+
+#header a {
+    color: var(--bs-navbar-brand-color);
+}
+
+#header a:hover {
+    color: var(--bs-navbar-brand-hover-color);
 }
 
 #header .navbar {
@@ -61,6 +69,23 @@ select {
 
 #header .container {
     min-height: 50px;
+}
+
+#header .btn.dropdown-toggle {
+    padding-right: 0;
+}
+
+#header .dropdown-menu {
+    --bs-dropdown-min-width: 13rem;
+}
+
+#header .dropdown-menu[data-bs-popper] {
+    left: initial;
+    right: 0;
+}
+
+#header .dropdown-menu.show {
+    display: flex;
 }
 
 .form-control:focus {
@@ -77,7 +102,6 @@ select {
 
 .badge {
     vertical-align: middle;
-    filter: drop-shadow(0px 4px 4px rgba(0, 0, 0, 0.15));
     text-transform: uppercase;
     letter-spacing: 0.15em;
     --bs-badge-padding-x: 0.8rem;
@@ -478,19 +502,18 @@ span.btn-paging:hover {
 }
 
 .txerror {
-    background-color: #c51f13a0;
-    color: white !important;
+    color: #c51f13;
 }
 
 .txerror a,
 .txerror .txvalue {
-    color: white;
+    color: #c51f13;
 }
 
 .txerror .copyable::before,
 .txerror .copied::before {
-    /* turn svg stroke to white */
-    filter: hue-rotate(180deg) brightness(1000%) contrast(100%);
+    /* turn svg stroke to red */
+    filter: invert(86%) sepia(43%) saturate(732%) hue-rotate(367deg) brightness(84%);
 }
 
 .tx-amt .amt:hover,
@@ -617,6 +640,11 @@ span.btn-paging:hover {
 @media (max-width: 991px) {
     #header .container {
         min-height: 40px;
+    }
+
+    #header .dropdown-menu[data-bs-popper] {
+        left: 0;
+        right: initial;
     }
 
     .trezor-logo {

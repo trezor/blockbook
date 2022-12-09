@@ -18,17 +18,18 @@ import (
 
 // Coingecko is a structure that implements RatesDownloaderInterface
 type Coingecko struct {
-	url                string
-	coin               string
-	platformIdentifier string
-	platformVsCurrency string
-	httpTimeoutSeconds time.Duration
-	throttlingDelay    time.Duration
-	timeFormat         string
-	httpClient         *http.Client
-	db                 *db.RocksDB
-	updatingCurrent    bool
-	updatingTokens     bool
+	url                 string
+	coin                string
+	platformIdentifier  string
+	platformVsCurrency  string
+	allowedVsCurrencies map[string]struct{}
+	httpTimeout         time.Duration
+	throttlingDelay     time.Duration
+	timeFormat          string
+	httpClient          *http.Client
+	db                  *db.RocksDB
+	updatingCurrent     bool
+	updatingTokens      bool
 }
 
 // simpleSupportedVSCurrencies https://api.coingecko.com/api/v3/simple/supported_vs_currencies
@@ -50,21 +51,28 @@ type marketChartPrices struct {
 }
 
 // NewCoinGeckoDownloader creates a coingecko structure that implements the RatesDownloaderInterface
-func NewCoinGeckoDownloader(db *db.RocksDB, url string, coin string, platformIdentifier string, platformVsCurrency string, timeFormat string, throttleDown bool) RatesDownloaderInterface {
+func NewCoinGeckoDownloader(db *db.RocksDB, url string, coin string, platformIdentifier string, platformVsCurrency string, allowedVsCurrencies string, timeFormat string, throttleDown bool) RatesDownloaderInterface {
 	var throttlingDelayMs int
 	if throttleDown {
 		throttlingDelayMs = 100
 	}
-	httpTimeoutSeconds := 15 * time.Second
+	httpTimeout := 15 * time.Second
+	allowedVsCurrenciesMap := make(map[string]struct{})
+	if len(allowedVsCurrencies) > 0 {
+		for _, c := range strings.Split(strings.ToLower(allowedVsCurrencies), ",") {
+			allowedVsCurrenciesMap[c] = struct{}{}
+		}
+	}
 	return &Coingecko{
-		url:                url,
-		coin:               coin,
-		platformIdentifier: platformIdentifier,
-		platformVsCurrency: platformVsCurrency,
-		httpTimeoutSeconds: httpTimeoutSeconds,
-		timeFormat:         timeFormat,
+		url:                 url,
+		coin:                coin,
+		platformIdentifier:  platformIdentifier,
+		platformVsCurrency:  platformVsCurrency,
+		allowedVsCurrencies: allowedVsCurrenciesMap,
+		httpTimeout:         httpTimeout,
+		timeFormat:          timeFormat,
 		httpClient: &http.Client{
-			Timeout: httpTimeoutSeconds,
+			Timeout: httpTimeout,
 		},
 		db:              db,
 		throttlingDelay: time.Duration(throttlingDelayMs) * time.Millisecond,
@@ -123,7 +131,16 @@ func (cg *Coingecko) simpleSupportedVSCurrencies() (simpleSupportedVSCurrencies,
 	if err != nil {
 		return nil, err
 	}
-	return data, nil
+	if len(cg.allowedVsCurrencies) == 0 {
+		return data, nil
+	}
+	filtered := make([]string, 0, len(cg.allowedVsCurrencies))
+	for _, c := range data {
+		if _, found := cg.allowedVsCurrencies[c]; found {
+			filtered = append(filtered, c)
+		}
+	}
+	return filtered, nil
 }
 
 // SimplePrice /simple/price Multiple ID and Currency (ids, vs_currencies)

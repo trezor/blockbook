@@ -48,6 +48,12 @@
                         <label class="btn" for="primary-coin">{{.CoinShortcut}}</label>
                         <input type="radio" class="btn-check" name="btnradio" id="secondary-coin" autocomplete="off"{{if .UseSecondaryCoin}} checked{{end}}>
                         <label class="btn" for="secondary-coin">{{.SecondaryCoin}}</label>
+                        <button type="button" class="btn dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false"></button>
+                        <div class="dropdown-menu row">
+                            {{range $c := .SecondaryCurrencies}}
+                            <div class="col-3"><a href="?secondary={{$c}}&use_secondary=true">{{$c}}</a></div>
+                            {{end}}
+                        </div>                        
                     </div>
                     {{end}}
                 </div>
