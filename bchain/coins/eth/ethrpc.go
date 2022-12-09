@@ -56,22 +56,22 @@ type Configuration struct {
 // EthereumRPC is an interface to JSON-RPC eth service.
 type EthereumRPC struct {
 	*bchain.BaseChain
-	Client               Client
-	RPC                  RPCClient
+	Client               bchain.EVMClient
+	RPC                  bchain.EVMRPCClient
 	MainNetChainID       Network
 	Timeout              time.Duration
 	Parser               *EthereumParser
 	PushHandler          func(bchain.NotificationType)
-	OpenRPC              func(string) (RPCClient, Client, error)
+	OpenRPC              func(string) (bchain.EVMRPCClient, bchain.EVMClient, error)
 	Mempool              *bchain.MempoolEthereumType
 	mempoolInitialized   bool
 	bestHeaderLock       sync.Mutex
-	bestHeader           Header
+	bestHeader           bchain.EVMHeader
 	bestHeaderTime       time.Time
-	NewBlock             NewBlockSubscriber
-	newBlockSubscription ClientSubscription
-	NewTx                NewTxSubscriber
-	newTxSubscription    ClientSubscription
+	NewBlock             bchain.EVMNewBlockSubscriber
+	newBlockSubscription bchain.EVMClientSubscription
+	NewTx                bchain.EVMNewTxSubscriber
+	newTxSubscription    bchain.EVMClientSubscription
 	ChainConfig          *Configuration
 }
 
@@ -108,7 +108,7 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 
 // Initialize initializes ethereum rpc interface
 func (b *EthereumRPC) Initialize() error {
-	b.OpenRPC = func(url string) (RPCClient, Client, error) {
+	b.OpenRPC = func(url string) (bchain.EVMRPCClient, bchain.EVMClient, error) {
 		r, err := rpc.Dial(url)
 		if err != nil {
 			return nil, nil, err
@@ -211,7 +211,7 @@ func (b *EthereumRPC) subscribeEvents() error {
 	}()
 
 	// new block subscription
-	if err := b.subscribe(func() (ClientSubscription, error) {
+	if err := b.subscribe(func() (bchain.EVMClientSubscription, error) {
 		// invalidate the previous subscription - it is either the first one or there was an error
 		b.newBlockSubscription = nil
 		ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
@@ -244,7 +244,7 @@ func (b *EthereumRPC) subscribeEvents() error {
 	}()
 
 	// new mempool transaction subscription
-	if err := b.subscribe(func() (ClientSubscription, error) {
+	if err := b.subscribe(func() (bchain.EVMClientSubscription, error) {
 		// invalidate the previous subscription - it is either the first one or there was an error
 		b.newTxSubscription = nil
 		ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
@@ -264,7 +264,7 @@ func (b *EthereumRPC) subscribeEvents() error {
 }
 
 // subscribe subscribes notification and tries to resubscribe in case of error
-func (b *EthereumRPC) subscribe(f func() (ClientSubscription, error)) error {
+func (b *EthereumRPC) subscribe(f func() (bchain.EVMClientSubscription, error)) error {
 	s, err := f()
 	if err != nil {
 		return err
@@ -410,7 +410,7 @@ func (b *EthereumRPC) GetChainInfo() (*bchain.ChainInfo, error) {
 	return rv, nil
 }
 
-func (b *EthereumRPC) getBestHeader() (Header, error) {
+func (b *EthereumRPC) getBestHeader() (bchain.EVMHeader, error) {
 	b.bestHeaderLock.Lock()
 	defer b.bestHeaderLock.Unlock()
 	// if the best header was not updated for 15 minutes, there could be a subscription problem, reconnect RPC
@@ -436,7 +436,7 @@ func (b *EthereumRPC) getBestHeader() (Header, error) {
 	return b.bestHeader, nil
 }
 
-func (b *EthereumRPC) UpdateBestHeader(h Header) {
+func (b *EthereumRPC) UpdateBestHeader(h bchain.EVMHeader) {
 	glog.V(2).Info("rpc: new block header ", h.Number())
 	b.bestHeaderLock.Lock()
 	b.bestHeader = h
