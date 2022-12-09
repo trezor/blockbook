@@ -54,6 +54,7 @@ type Header interface {
 	Difficulty() *big.Int
 }
 
+// EthereumHeader wraps the ethereum header to conform with the Header interface
 type EthereumHeader struct {
 	*types.Header
 }
@@ -68,4 +69,14 @@ func (h *EthereumHeader) Number() *big.Int {
 
 func (h *EthereumHeader) Difficulty() *big.Int {
 	return h.Header.Difficulty
+}
+
+// Hash interface for evm chains
+type Hash interface {
+	Hex() string
+}
+
+// EthereumHash wraps the ethereum hash to conform with the Hash interface
+type EthereumHash struct {
+	common.Hash
 }
