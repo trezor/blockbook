@@ -638,11 +638,15 @@ func (s *WebsocketServer) estimateFee(c *websocketChannel, params []byte) (inter
 			return nil, err
 		}
 		sg := strconv.FormatUint(gas, 10)
-		for i, b := range r.Blocks {
-			fee, err := s.chain.EstimateSmartFee(b, true)
-			if err != nil {
-				return nil, err
-			}
+		b := 1
+		if len(r.Blocks) > 0 {
+			b = r.Blocks[0]
+		}
+		fee, err := s.api.EstimateFee(b, true)
+		if err != nil {
+			return nil, err
+		}
+		for i := range r.Blocks {
 			res[i].FeePerUnit = fee.String()
 			res[i].FeeLimit = sg
 			fee.Mul(&fee, new(big.Int).SetUint64(gas))
@@ -666,7 +670,7 @@ func (s *WebsocketServer) estimateFee(c *websocketChannel, params []byte) (inter
 			}
 		}
 		for i, b := range r.Blocks {
-			fee, err := s.api.BitcoinTypeEstimateFee(b, conservative)
+			fee, err := s.api.EstimateFee(b, conservative)
 			if err != nil {
 				return nil, err
 			}

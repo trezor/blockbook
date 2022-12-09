@@ -6,6 +6,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/golang/glog"
 )
 
 const (
@@ -68,6 +70,7 @@ type InternalState struct {
 	BestHeight     uint32    `json:"bestHeight"`
 	LastSync       time.Time `json:"lastSync"`
 	BlockTimes     []uint32  `json:"-"`
+	AvgBlockPeriod uint32    `json:"-"`
 
 	IsMempoolSynchronized bool      `json:"isMempoolSynchronized"`
 	MempoolSize           int       `json:"mempoolSize"`
@@ -77,7 +80,6 @@ type InternalState struct {
 
 	UtxoChecked bool `json:"utxoChecked"`
 
-	// store only the historical state, not the current state of the fiat rates in DB
 	HasFiatRates                 bool                 `json:"-"`
 	HasTokenFiatRates            bool                 `json:"-"`
 	HistoricalFiatRatesTime      time.Time            `json:"historicalFiatRatesTime"`
@@ -208,11 +210,23 @@ func (is *InternalState) GetBlockTime(height uint32) uint32 {
 	return 0
 }
 
-// AppendBlockTime appends block time to BlockTimes
-func (is *InternalState) AppendBlockTime(time uint32) {
+// SetBlockTimes initializes BlockTimes array, returns AvgBlockPeriod
+func (is *InternalState) SetBlockTimes(blockTimes []uint32) uint32 {
+	is.mux.Lock()
+	defer is.mux.Unlock()
+	is.BlockTimes = blockTimes
+	is.computeAvgBlockPeriod()
+	glog.Info("set ", len(is.BlockTimes), " block times, average block period ", is.AvgBlockPeriod, "s")
+	return is.AvgBlockPeriod
+}
+
+// AppendBlockTime appends block time to BlockTimes, returns AvgBlockPeriod
+func (is *InternalState) AppendBlockTime(time uint32) uint32 {
 	is.mux.Lock()
 	defer is.mux.Unlock()
 	is.BlockTimes = append(is.BlockTimes, time)
+	is.computeAvgBlockPeriod()
+	return is.AvgBlockPeriod
 }
 
 // RemoveLastBlockTimes removes last times from BlockTimes
@@ -223,6 +237,7 @@ func (is *InternalState) RemoveLastBlockTimes(count int) {
 		count = len(is.BlockTimes)
 	}
 	is.BlockTimes = is.BlockTimes[:len(is.BlockTimes)-count]
+	is.computeAvgBlockPeriod()
 }
 
 // GetBlockHeightOfTime returns block height of the first block with time greater or equal to the given time or MaxUint32 if no such block
@@ -244,6 +259,25 @@ func (is *InternalState) GetBlockHeightOfTime(time uint32) uint32 {
 		}
 	}
 	return uint32(height)
+}
+
+const avgBlockPeriodSample = 100
+
+// Avg100BlocksPeriod returns average period of the last 100 blocks in seconds
+func (is *InternalState) GetAvgBlockPeriod() uint32 {
+	is.mux.Lock()
+	defer is.mux.Unlock()
+	return is.AvgBlockPeriod
+}
+
+// computeAvgBlockPeriod returns computes average of the last 100 blocks in seconds
+func (is *InternalState) computeAvgBlockPeriod() {
+	last := len(is.BlockTimes) - 1
+	first := last - avgBlockPeriodSample - 1
+	if first < 0 {
+		return
+	}
+	is.AvgBlockPeriod = (is.BlockTimes[last] - is.BlockTimes[first]) / avgBlockPeriodSample
 }
 
 // SetBackendInfo sets new BackendInfo
