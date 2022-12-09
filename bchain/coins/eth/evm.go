@@ -44,20 +44,12 @@ type EthereumRPCClient struct {
 }
 
 func (c *EthereumRPCClient) EthSubscribe(ctx context.Context, channel interface{}, args ...interface{}) (bchain.EVMClientSubscription, error) {
-	sub, err := c.Client.EthSubscribe(ctx, channel, args)
+	sub, err := c.Client.EthSubscribe(ctx, channel, args...)
 	if err != nil {
 		return nil, err
 	}
 
 	return &EthereumClientSubscription{ClientSubscription: sub}, nil
-}
-
-func (c *EthereumRPCClient) CallContext(ctx context.Context, result interface{}, method string, args ...interface{}) error {
-	return c.Client.CallContext(ctx, result, method, args)
-}
-
-func (c *EthereumRPCClient) Close() {
-	c.Client.Close()
 }
 
 // EthereumHeader wraps the ethereum header to conform with the Header interface
@@ -85,10 +77,6 @@ type EthereumHash struct {
 // EthereumClientSubscription wraps an ethereum client subcription to conform with the ClientSubscription interface
 type EthereumClientSubscription struct {
 	*rpc.ClientSubscription
-}
-
-func (c *EthereumClientSubscription) Unsubscribe() {
-	c.ClientSubscription.Unsubscribe()
 }
 
 // EthereumNewBlock wraps an ethereum header channel to conform with the Subscriber interface
