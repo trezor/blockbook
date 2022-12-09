@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"runtime"
 	"runtime/debug"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -373,6 +374,11 @@ func (s *PublicServer) newTemplateData(r *http.Request) *TemplateData {
 			t.SecondaryCoin = strings.ToUpper(secondary)
 			t.CurrentSecondaryCoinRate = float64(ticker.Rates[secondary])
 			t.CurrentTicker = ticker
+			t.SecondaryCurrencies = make([]string, 0, len(ticker.Rates))
+			for k := range ticker.Rates {
+				t.SecondaryCurrencies = append(t.SecondaryCurrencies, strings.ToUpper(k))
+			}
+			sort.Strings(t.SecondaryCurrencies) // sort to get deterministic results
 			t.UseSecondaryCoin, _ = strconv.ParseBool(r.URL.Query().Get("use_secondary"))
 			if !t.UseSecondaryCoin {
 				t.UseSecondaryCoin = cookieUseSecondary
@@ -501,6 +507,7 @@ type TemplateData struct {
 	UseSecondaryCoin         bool
 	CurrentSecondaryCoinRate float64
 	CurrentTicker            *common.CurrencyRatesTicker
+	SecondaryCurrencies      []string
 	TxDate                   string
 	TxSecondaryCoinRate      float64
 	TxTicker                 *common.CurrencyRatesTicker
@@ -724,6 +731,13 @@ func appendAmountWrapperSpan(rv *strings.Builder, primary, symbol, classes strin
 	rv.WriteString(`">`)
 }
 
+func formatSecondaryAmount(a float64, td *TemplateData) string {
+	if td.SecondaryCoin == "BTC" || td.SecondaryCoin == "ETH" {
+		return strconv.FormatFloat(a, 'f', 6, 64)
+	}
+	return strconv.FormatFloat(a, 'f', 2, 64)
+}
+
 func (s *PublicServer) amountSpan(a *api.Amount, td *TemplateData, classes string) template.HTML {
 	primary := s.formatAmount(a)
 	var rv strings.Builder
@@ -732,7 +746,7 @@ func (s *PublicServer) amountSpan(a *api.Amount, td *TemplateData, classes strin
 	if td.SecondaryCoin != "" {
 		p, err := strconv.ParseFloat(primary, 64)
 		if err == nil {
-			currentSecondary := strconv.FormatFloat(p*td.CurrentSecondaryCoinRate, 'f', 2, 64)
+			currentSecondary := formatSecondaryAmount(p*td.CurrentSecondaryCoinRate, td)
 			txSecondary := ""
 			// if tx is specified, compute secondary amount is at the time of tx and amount with current rate is returned with class "csec-amt"
 			if td.Tx != nil {
@@ -748,7 +762,7 @@ func (s *PublicServer) amountSpan(a *api.Amount, td *TemplateData, classes strin
 					}
 				}
 				if td.TxSecondaryCoinRate != 0 {
-					txSecondary = strconv.FormatFloat(p*td.TxSecondaryCoinRate, 'f', 2, 64)
+					txSecondary = formatSecondaryAmount(p*td.TxSecondaryCoinRate, td)
 				}
 			}
 			if txSecondary != "" {
@@ -798,13 +812,13 @@ func (s *PublicServer) tokenAmountSpan(t *api.TokenTransfer, td *TemplateData, c
 			if found {
 				base := p * baseRate
 				currentBase = strconv.FormatFloat(base, 'f', 6, 64)
-				currentSecondary = strconv.FormatFloat(base*td.CurrentSecondaryCoinRate, 'f', 2, 64)
+				currentSecondary = formatSecondaryAmount(base*td.CurrentSecondaryCoinRate, td)
 			}
 			baseRate, found = s.api.GetContractBaseRate(td.TxTicker, t.Contract, td.Tx.Blocktime)
 			if found {
 				base := p * baseRate
 				txBase = strconv.FormatFloat(base, 'f', 6, 64)
-				txSecondary = strconv.FormatFloat(base*td.TxSecondaryCoinRate, 'f', 2, 64)
+				txSecondary = formatSecondaryAmount(base*td.TxSecondaryCoinRate, td)
 			}
 		}
 		if txBase != "" {
@@ -843,7 +857,7 @@ func (s *PublicServer) formattedAmountSpan(a *api.Amount, d int, symbol string, 
 func (s *PublicServer) summaryValuesSpan(baseValue float64, secondaryValue float64, td *TemplateData) template.HTML {
 	var rv strings.Builder
 	if secondaryValue > 0 {
-		appendAmountSpan(&rv, "", strconv.FormatFloat(secondaryValue, 'f', 2, 64), td.SecondaryCoin, "")
+		appendAmountSpan(&rv, "", formatSecondaryAmount(secondaryValue, td), td.SecondaryCoin, "")
 		if baseValue > 0 && s.chainParser.GetChainType() == bchain.ChainEthereumType {
 			rv.WriteString(`<span class="base-value">(`)
 			appendAmountSpan(&rv, "", strconv.FormatFloat(baseValue, 'f', 6, 64), td.CoinShortcut, "")

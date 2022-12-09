@@ -677,29 +677,30 @@ func computeFeeStats(stopCompute chan os.Signal, blockFrom, blockTo int, db *db.
 	return err
 }
 
-func initDownloaders(db *db.RocksDB, chain bchain.BlockChain, configfile string) {
-	data, err := ioutil.ReadFile(configfile)
+func initDownloaders(db *db.RocksDB, chain bchain.BlockChain, configFile string) {
+	data, err := ioutil.ReadFile(configFile)
 	if err != nil {
-		glog.Errorf("Error reading file %v, %v", configfile, err)
+		glog.Errorf("Error reading file %v, %v", configFile, err)
 		return
 	}
 
 	var config struct {
-		FiatRates          string `json:"fiat_rates"`
-		FiatRatesParams    string `json:"fiat_rates_params"`
-		FourByteSignatures string `json:"fourByteSignatures"`
+		FiatRates             string `json:"fiat_rates"`
+		FiatRatesParams       string `json:"fiat_rates_params"`
+		FiatRatesVsCurrencies string `json:"fiat_rates_vs_currencies"`
+		FourByteSignatures    string `json:"fourByteSignatures"`
 	}
 
 	err = json.Unmarshal(data, &config)
 	if err != nil {
-		glog.Errorf("Error parsing config file %v, %v", configfile, err)
+		glog.Errorf("Error parsing config file %v, %v", configFile, err)
 		return
 	}
 
 	if config.FiatRates == "" || config.FiatRatesParams == "" {
-		glog.Infof("FiatRates config (%v) is empty, not downloading fiat rates", configfile)
+		glog.Infof("FiatRates config (%v) is empty, not downloading fiat rates", configFile)
 	} else {
-		fiatRates, err := fiat.NewFiatRatesDownloader(db, config.FiatRates, config.FiatRatesParams, onNewFiatRatesTicker)
+		fiatRates, err := fiat.NewFiatRatesDownloader(db, config.FiatRates, config.FiatRatesParams, config.FiatRatesVsCurrencies, onNewFiatRatesTicker)
 		if err != nil {
 			glog.Errorf("NewFiatRatesDownloader Init error: %v", err)
 		} else {
