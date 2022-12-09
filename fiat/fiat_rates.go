@@ -33,7 +33,7 @@ type RatesDownloader struct {
 }
 
 // NewFiatRatesDownloader initializes the downloader for FiatRates API.
-func NewFiatRatesDownloader(db *db.RocksDB, apiType string, params string, callback OnNewFiatRatesTicker) (*RatesDownloader, error) {
+func NewFiatRatesDownloader(db *db.RocksDB, apiType string, params string, allowedVsCurrencies string, callback OnNewFiatRatesTicker) (*RatesDownloader, error) {
 	var rd = &RatesDownloader{}
 	type fiatRatesParams struct {
 		URL                string `json:"url"`
@@ -65,7 +65,7 @@ func NewFiatRatesDownloader(db *db.RocksDB, apiType string, params string, callb
 			// a small hack - in tests the callback is not used, therefore there is no delay slowing the test
 			throttle = false
 		}
-		rd.downloader = NewCoinGeckoDownloader(db, rdParams.URL, rdParams.Coin, rdParams.PlatformIdentifier, rdParams.PlatformVsCurrency, rd.timeFormat, throttle)
+		rd.downloader = NewCoinGeckoDownloader(db, rdParams.URL, rdParams.Coin, rdParams.PlatformIdentifier, rdParams.PlatformVsCurrency, allowedVsCurrencies, rd.timeFormat, throttle)
 		if is != nil {
 			is.HasFiatRates = true
 			is.HasTokenFiatRates = rd.downloadTokens

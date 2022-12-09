@@ -148,7 +148,7 @@ func TestFiatRates(t *testing.T) {
 		t.Fatalf("Error parsing FiatRates config - empty parameter")
 		return
 	}
-	fiatRates, err := NewFiatRatesDownloader(d, config.FiatRates, config.FiatRatesParams, nil)
+	fiatRates, err := NewFiatRatesDownloader(d, config.FiatRates, config.FiatRatesParams, "", nil)
 	if err != nil {
 		t.Fatalf("FiatRates init error: %v", err)
 	}
