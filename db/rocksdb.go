@@ -1648,7 +1648,7 @@ func (d *RocksDB) checkColumns(is *common.InternalState) ([]common.InternalState
 			if sc[j].Name == nc[i].Name {
 				// check the version of the column, if it does not match, the db is not compatible
 				if sc[j].Version != dbVersion {
-					// upgrade of DB 5 to 6 for BitecoinType coins is possible
+					// upgrade of DB 5 to 6 for BitcoinType coins is possible
 					// columns transactions and fiatRates must be cleared as they are not compatible
 					if sc[j].Version == 5 && dbVersion == 6 && d.chainParser.GetChainType() == bchain.ChainBitcoinType {
 						if nc[i].Name == "transactions" {
@@ -2098,7 +2098,7 @@ const (
 
 // big int is packed in BigEndian order without memory allocation as 1 byte length followed by bytes of big int
 // number of written bytes is returned
-// limitation: bigints longer than 248 bytes are truncated to 248 bytes
+// limitation: big ints longer than 248 bytes are truncated to 248 bytes
 // caution: buffer must be big enough to hold the packed big int, buffer 249 bytes big is always safe
 func packBigint(bi *big.Int, buf []byte) int {
 	w := bi.Bits()

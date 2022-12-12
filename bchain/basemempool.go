@@ -122,6 +122,7 @@ func (m *BaseMempool) txToMempoolTx(tx *Tx) *MempoolTx {
 		Blocktime:        time.Now().Unix(),
 		LockTime:         tx.LockTime,
 		Txid:             tx.Txid,
+		VSize:            tx.VSize,
 		Version:          tx.Version,
 		Vout:             tx.Vout,
 		CoinSpecificData: tx.CoinSpecificData,
