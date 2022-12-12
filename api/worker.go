@@ -208,6 +208,49 @@ func (w *Worker) getParsedEthereumInputData(data string) *bchain.EthereumParsedI
 	return eth.ParseInputData(signatures, data)
 }
 
+// getConfirmationETA returns confirmation ETA in seconds and blocks
+func (w *Worker) getConfirmationETA(tx *Tx) (int64, uint32) {
+	var etaBlocks uint32
+	var etaSeconds int64
+	if w.chainType == bchain.ChainBitcoinType && tx.FeesSat != nil {
+		_, _, mempoolSize := w.is.GetMempoolSyncState()
+		// if there are a few transactions in the mempool, the estimate fee does not work well
+		// and the tx is most probably going to be confirmed in the first block
+		if mempoolSize < 32 {
+			etaBlocks = 1
+		} else {
+			var txFeePerKB int64
+			if tx.VSize > 0 {
+				txFeePerKB = 1000 * tx.FeesSat.AsInt64() / int64(tx.VSize)
+			} else if tx.Size > 0 {
+				txFeePerKB = 1000 * tx.FeesSat.AsInt64() / int64(tx.Size)
+			}
+			if txFeePerKB > 0 {
+				// binary search the estimate, split it to more common first 7 blocks and the rest up to 70 blocks
+				var b int
+				fee, _ := w.cachedEstimateFee(7, true)
+				if fee.Int64() <= txFeePerKB {
+					b = sort.Search(7, func(i int) bool {
+						// fee is in sats/kB
+						fee, _ := w.cachedEstimateFee(i+1, true)
+						return fee.Int64() <= txFeePerKB
+					})
+					b += 1
+				} else {
+					b = sort.Search(63, func(i int) bool {
+						fee, _ := w.cachedEstimateFee(i+7, true)
+						return fee.Int64() <= txFeePerKB
+					})
+					b += 7
+				}
+				etaBlocks = uint32(b)
+			}
+		}
+		etaSeconds = int64(etaBlocks * w.is.AvgBlockPeriod)
+	}
+	return etaSeconds, etaBlocks
+}
+
 // getTransactionFromBchainTx reads transaction data from txid
 func (w *Worker) getTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spendingTxs bool, specificJSON bool, addresses map[string]struct{}) (*Tx, error) {
 	var err error
@@ -392,8 +435,6 @@ func (w *Worker) getTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 		}
 
 	}
-	// for now do not return size, we would have to compute vsize of segwit transactions
-	// size:=len(bchainTx.Hex) / 2
 	var sj json.RawMessage
 	// return CoinSpecificData for all mempool transactions or if requested
 	if specificJSON || bchainTx.Confirmations == 0 {
@@ -401,10 +442,6 @@ func (w *Worker) getTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 		if err != nil {
 			return nil, err
 		}
-	}
-	// for mempool transaction get first seen time
-	if bchainTx.Confirmations == 0 {
-		bchainTx.Blocktime = int64(w.mempool.GetTransactionTime(bchainTx.Txid))
 	}
 	r := &Tx{
 		Blockhash:        blockhash,
@@ -426,6 +463,10 @@ func (w *Worker) getTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 		CoinSpecificData: sj,
 		TokenTransfers:   tokens,
 		EthereumSpecific: ethSpecific,
+	}
+	if bchainTx.Confirmations == 0 {
+		r.Blocktime = int64(w.mempool.GetTransactionTime(bchainTx.Txid))
+		r.ConfirmationETASeconds, r.ConfirmationETABlocks = w.getConfirmationETA(r)
 	}
 	return r, nil
 }
@@ -521,6 +562,8 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 		ValueInSat:       (*Amount)(pValInSat),
 		ValueOutSat:      (*Amount)(&valOutSat),
 		Version:          mempoolTx.Version,
+		Size:             len(mempoolTx.Hex) >> 1,
+		VSize:            int(mempoolTx.VSize),
 		Hex:              mempoolTx.Hex,
 		Rbf:              rbf,
 		Vin:              vins,
@@ -529,6 +572,7 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 		EthereumSpecific: ethSpecific,
 		AddressAliases:   w.getAddressAliases(addresses),
 	}
+	r.ConfirmationETASeconds, r.ConfirmationETABlocks = w.getConfirmationETA(r)
 	return r, nil
 }
 
@@ -2249,7 +2293,13 @@ const estimatedFeeCacheSize = 300
 var estimatedFeeCache [estimatedFeeCacheSize]bitcoinTypeEstimatedFee
 var estimatedFeeConservativeCache [estimatedFeeCacheSize]bitcoinTypeEstimatedFee
 
-func (w *Worker) cachedBitcoinTypeEstimateFee(blocks int, conservative bool, s *bitcoinTypeEstimatedFee) (big.Int, error) {
+func (w *Worker) cachedEstimateFee(blocks int, conservative bool) (big.Int, error) {
+	var s *bitcoinTypeEstimatedFee
+	if conservative {
+		s = &estimatedFeeConservativeCache[blocks]
+	} else {
+		s = &estimatedFeeCache[blocks]
+	}
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	// 10 seconds cache
@@ -2261,10 +2311,13 @@ func (w *Worker) cachedBitcoinTypeEstimateFee(blocks int, conservative bool, s *
 	if err == nil {
 		s.timestamp = time.Now().Unix()
 		s.fee = fee
-		w.metrics.EstimatedFee.With(common.Labels{
-			"blocks":       strconv.Itoa(blocks),
-			"conservative": strconv.FormatBool(conservative),
-		}).Set(float64(fee.Int64()))
+		// store metrics for the first 32 block estimates
+		if blocks < 33 {
+			w.metrics.EstimatedFee.With(common.Labels{
+				"blocks":       strconv.Itoa(blocks),
+				"conservative": strconv.FormatBool(conservative),
+			}).Set(float64(fee.Int64()))
+		}
 	}
 	return fee, err
 }
@@ -2275,8 +2328,5 @@ func (w *Worker) EstimateFee(blocks int, conservative bool) (big.Int, error) {
 	if blocks >= estimatedFeeCacheSize {
 		return w.chain.EstimateSmartFee(blocks, conservative)
 	}
-	if conservative {
-		return w.cachedBitcoinTypeEstimateFee(blocks, conservative, &estimatedFeeConservativeCache[blocks])
-	}
-	return w.cachedBitcoinTypeEstimateFee(blocks, conservative, &estimatedFeeCache[blocks])
+	return w.cachedEstimateFee(blocks, conservative)
 }

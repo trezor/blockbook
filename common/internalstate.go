@@ -210,6 +210,16 @@ func (is *InternalState) GetBlockTime(height uint32) uint32 {
 	return 0
 }
 
+// GetLastBlockTime returns time of the last block
+func (is *InternalState) GetLastBlockTime() uint32 {
+	is.mux.Lock()
+	defer is.mux.Unlock()
+	if len(is.BlockTimes) > 0 {
+		return is.BlockTimes[len(is.BlockTimes)-1]
+	}
+	return 0
+}
+
 // SetBlockTimes initializes BlockTimes array, returns AvgBlockPeriod
 func (is *InternalState) SetBlockTimes(blockTimes []uint32) uint32 {
 	is.mux.Lock()

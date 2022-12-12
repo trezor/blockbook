@@ -516,6 +516,7 @@ type TemplateData struct {
 func (s *PublicServer) parseTemplates() []*template.Template {
 	templateFuncMap := template.FuncMap{
 		"timeSpan":                 timeSpan,
+		"relativeTime":             relativeTime,
 		"unixTimeSpan":             unixTimeSpan,
 		"amountSpan":               s.amountSpan,
 		"tokenAmountSpan":          s.tokenAmountSpan,
@@ -598,7 +599,7 @@ func (s *PublicServer) parseTemplates() []*template.Template {
 	return t
 }
 
-func relativeTime(d int64) string {
+func relativeTimeUnit(d int64) string {
 	var u string
 	if d < 60 {
 		if d == 1 {
@@ -631,6 +632,22 @@ func relativeTime(d int64) string {
 	return strconv.FormatInt(d, 10) + u
 }
 
+func relativeTime(d int64) string {
+	r := relativeTimeUnit(d)
+	if d > 3600*24 {
+		d = d % (3600 * 24)
+		if d >= 3600 {
+			r += " " + relativeTimeUnit(d)
+		}
+	} else if d > 3600 {
+		d = d % 3600
+		if d >= 60 {
+			r += " " + relativeTimeUnit(d)
+		}
+	}
+	return r
+}
+
 func unixTimeSpan(ut int64) template.HTML {
 	t := time.Unix(ut, 0)
 	return timeSpan(&t)
@@ -652,17 +669,6 @@ func timeSpan(t *time.Time) template.HTML {
 		return template.HTML(f)
 	}
 	r := relativeTime(d)
-	if d > 3600*24 {
-		d = d % (3600 * 24)
-		if d >= 3600 {
-			r += " " + relativeTime(d)
-		}
-	} else if d > 3600 {
-		d = d % 3600
-		if d >= 60 {
-			r += " " + relativeTime(d)
-		}
-	}
 	return template.HTML(`<span tt="` + f + `">` + r + " ago</span>")
 }
 
