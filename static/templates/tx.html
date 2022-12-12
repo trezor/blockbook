@@ -80,6 +80,14 @@
             <td>{{amountSpan $tx.FeesSat $data "copyable"}}{{if $tx.Size}} ({{feePerByte $tx}}){{end}}</td>
         </tr>{{end}}
         {{if not $tx.Confirmations}}
+        {{if $tx.ConfirmationETABlocks}}
+        <tr>
+            <td>Confirmation ETA</td>
+            <td>
+                <span tt="Estimated first potential confirmation of this transaction.">in approx. {{relativeTime $tx.ConfirmationETASeconds}} <span class="fw-normal ps-1">({{$tx.ConfirmationETABlocks}} blocks)</span></span>
+            </td>
+        </tr>
+        {{end}}
         <tr>
             <td><span tt="Replace by fee">RBF</span></td>
             <td>

@@ -245,26 +245,28 @@ type AddressAliasesMap map[string]AddressAlias
 
 // Tx holds information about a transaction
 type Tx struct {
-	Txid             string            `json:"txid"`
-	Version          int32             `json:"version,omitempty"`
-	Locktime         uint32            `json:"lockTime,omitempty"`
-	Vin              []Vin             `json:"vin"`
-	Vout             []Vout            `json:"vout"`
-	Blockhash        string            `json:"blockHash,omitempty"`
-	Blockheight      int               `json:"blockHeight"`
-	Confirmations    uint32            `json:"confirmations"`
-	Blocktime        int64             `json:"blockTime"`
-	Size             int               `json:"size,omitempty"`
-	VSize            int               `json:"vsize,omitempty"`
-	ValueOutSat      *Amount           `json:"value"`
-	ValueInSat       *Amount           `json:"valueIn,omitempty"`
-	FeesSat          *Amount           `json:"fees,omitempty"`
-	Hex              string            `json:"hex,omitempty"`
-	Rbf              bool              `json:"rbf,omitempty"`
-	CoinSpecificData json.RawMessage   `json:"coinSpecificData,omitempty"`
-	TokenTransfers   []TokenTransfer   `json:"tokenTransfers,omitempty"`
-	EthereumSpecific *EthereumSpecific `json:"ethereumSpecific,omitempty"`
-	AddressAliases   AddressAliasesMap `json:"addressAliases,omitempty"`
+	Txid                   string            `json:"txid"`
+	Version                int32             `json:"version,omitempty"`
+	Locktime               uint32            `json:"lockTime,omitempty"`
+	Vin                    []Vin             `json:"vin"`
+	Vout                   []Vout            `json:"vout"`
+	Blockhash              string            `json:"blockHash,omitempty"`
+	Blockheight            int               `json:"blockHeight"`
+	Confirmations          uint32            `json:"confirmations"`
+	ConfirmationETABlocks  uint32            `json:"confirmationETABlocks,omitempty"`
+	ConfirmationETASeconds int64             `json:"confirmationETASeconds,omitempty"`
+	Blocktime              int64             `json:"blockTime"`
+	Size                   int               `json:"size,omitempty"`
+	VSize                  int               `json:"vsize,omitempty"`
+	ValueOutSat            *Amount           `json:"value"`
+	ValueInSat             *Amount           `json:"valueIn,omitempty"`
+	FeesSat                *Amount           `json:"fees,omitempty"`
+	Hex                    string            `json:"hex,omitempty"`
+	Rbf                    bool              `json:"rbf,omitempty"`
+	CoinSpecificData       json.RawMessage   `json:"coinSpecificData,omitempty"`
+	TokenTransfers         []TokenTransfer   `json:"tokenTransfers,omitempty"`
+	EthereumSpecific       *EthereumSpecific `json:"ethereumSpecific,omitempty"`
+	AddressAliases         AddressAliasesMap `json:"addressAliases,omitempty"`
 }
 
 // FeeStats contains detailed block fee statistics

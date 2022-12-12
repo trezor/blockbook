@@ -6,6 +6,10 @@
             {{if $tx.Rbf}}<span class="ps-1" tt="Replace-by-Fee (RBF) transaction, could be overridden"> RBF</span>{{end}}
         </div>
         {{if $tx.Blocktime}}<div class="col-xs-5 col-md-4 text-end">{{if $tx.Confirmations}}mined{{else}}first seen{{end}} <span class="txvalue ms-1">{{unixTimeSpan $tx.Blocktime}}</span></div>{{end}}
+        {{if $tx.ConfirmationETABlocks}}<div class="col-12 text-end">
+            <span class="badge bg-info fw-bold" style="text-transform: none;" tt="Estimated first potential confirmation of this transaction.">confirmation estimated in {{relativeTime $tx.ConfirmationETASeconds}} <span class="fw-normal ps-1">({{$tx.ConfirmationETABlocks}} blocks)</span></span>
+        </div>
+        {{end}}
     </div>
     <div class="row body">
         <div class="col-md-5">

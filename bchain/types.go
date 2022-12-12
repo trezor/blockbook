@@ -107,6 +107,7 @@ type MempoolTx struct {
 	Txid             string         `json:"txid"`
 	Version          int32          `json:"version"`
 	LockTime         uint32         `json:"locktime"`
+	VSize            int64          `json:"vsize,omitempty"`
 	Vin              []MempoolVin   `json:"vin"`
 	Vout             []Vout         `json:"vout"`
 	Blocktime        int64          `json:"blocktime,omitempty"`
