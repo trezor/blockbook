@@ -1,0 +1,36 @@
+{
+  "coin": {
+    "name": "Optimism DTL",
+    "shortcut": "ETH",
+    "label": "Optimism",
+    "alias": "optimism_dtl"
+  },
+  "ports": {
+    "backend_http": 8302
+  },
+  "backend": {
+    "package_name": "backend-optimism-dtl",
+    "package_revision": "satoshilabs-1",
+    "system_user": "optimism",
+    "version": "0.5.48",
+    "binary_url": "https://github.com/ethereum-optimism/optimism/archive/refs/tags/@eth-optimism/data-transport-layer@0.5.48.tar.gz",
+    "verification_type": "sha256",
+    "verification_source": "f3b37bc50c102a0603c89ed42add83e9c13b9d247b3bda8c2d35f5fba447a700",
+    "extract_command": "tar -C backend --strip 1 -xf data-transport-layer@0.5.48.tar.gz && cd backend && yarn --ignore-scripts && yarn --cwd packages/common-ts build && yarn --cwd packages/core-utils build && yarn --cwd packages/hardhat-deploy-config build && yarn --cwd packages/contracts build && yarn --cwd packages/data-transport-layer build && echo",
+    "exclude_files": [],
+    "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/optimism_dtl_exec.sh'",
+    "exec_script": "optimism_dtl.sh",
+    "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
+    "postinst_script_template": "",
+    "service_type": "simple",
+    "service_additional_params_template": "",
+    "protect_memory": true,
+    "mainnet": true,
+    "server_config_file": "",
+    "client_config_file": ""
+  },
+  "meta": {
+    "package_maintainer": "IT",
+    "package_maintainer_email": "it@satoshilabs.com"
+  }
+}
