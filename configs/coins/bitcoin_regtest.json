@@ -22,10 +22,10 @@
     "package_name": "backend-bitcoin-regtest",
     "package_revision": "satoshilabs-1",
     "system_user": "bitcoin",
-    "version": "24.0",
-    "binary_url": "https://bitcoincore.org/bin/bitcoin-core-24.0/bitcoin-24.0-x86_64-linux-gnu.tar.gz",
+    "version": "24.0.1",
+    "binary_url": "https://bitcoincore.org/bin/bitcoin-core-24.0.1/bitcoin-24.0.1-x86_64-linux-gnu.tar.gz",
     "verification_type": "sha256",
-    "verification_source": "fb86cf6af7a10bc5f3ae6cd6a5b0348854e1462102fe71e755d30b51b6e317d1",
+    "verification_source": "49df6e444515d457ea0b885d66f521f2a26ca92ccf73d5296082e633544253bf",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
       "bin/bitcoin-qt"
