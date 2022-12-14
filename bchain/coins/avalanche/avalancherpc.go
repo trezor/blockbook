@@ -26,7 +26,7 @@ type AvalancheRPC struct {
 	*eth.EthereumRPC
 }
 
-// NewAvalancheRPC returns new EthRPC instance.
+// NewAvalancheRPC returns new AvalancheRPC instance.
 func NewAvalancheRPC(config json.RawMessage, pushHandler func(bchain.NotificationType)) (bchain.BlockChain, error) {
 	c, err := eth.NewEthereumRPC(config, pushHandler)
 	if err != nil {
@@ -40,7 +40,7 @@ func NewAvalancheRPC(config json.RawMessage, pushHandler func(bchain.Notificatio
 	return s, nil
 }
 
-// Initialize initializes avalanche rpc interface
+// Initialize avalanche rpc interface
 func (b *AvalancheRPC) Initialize() error {
 	b.OpenRPC = func(url string) (bchain.EVMRPCClient, bchain.EVMClient, error) {
 		r, err := rpc.Dial(url)

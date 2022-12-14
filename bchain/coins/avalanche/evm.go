@@ -13,11 +13,12 @@ import (
 	"github.com/trezor/blockbook/bchain"
 )
 
-// AvalancheClient wraps the go-ethereum ethclient to conform with the EVMClient interface
+// AvalancheClient wraps a client to implement the EVMClient interface
 type AvalancheClient struct {
 	ethclient.Client
 }
 
+// HeaderByNumber returns a block header that implements the EVMHeader interface
 func (c *AvalancheClient) HeaderByNumber(ctx context.Context, number *big.Int) (bchain.EVMHeader, error) {
 	h, err := c.Client.HeaderByNumber(ctx, number)
 	if err != nil {
@@ -27,23 +28,27 @@ func (c *AvalancheClient) HeaderByNumber(ctx context.Context, number *big.Int) (
 	return &AvalancheHeader{Header: h}, nil
 }
 
+// EstimateGas returns the current estimated gas cost for executing a transaction
 func (c *AvalancheClient) EstimateGas(ctx context.Context, msg interface{}) (uint64, error) {
 	return c.Client.EstimateGas(ctx, msg.(avax.CallMsg))
 }
 
+// BalanceAt returns the balance for the given account at a specific block, or latest known block if no block number is provided
 func (c *AvalancheClient) BalanceAt(ctx context.Context, addrDesc bchain.AddressDescriptor, blockNumber *big.Int) (*big.Int, error) {
 	return c.Client.BalanceAt(ctx, common.BytesToAddress(addrDesc), nil)
 }
 
+// NonceAt returns the nonce for the given account at a specific block, or latest known block if no block number is provided
 func (c *AvalancheClient) NonceAt(ctx context.Context, addrDesc bchain.AddressDescriptor, blockNumber *big.Int) (uint64, error) {
 	return c.Client.NonceAt(ctx, common.BytesToAddress(addrDesc), nil)
 }
 
-// AvalancheRPCClient wraps the go-ethereum rpc client to conform with the Client interface
+// AvalancheRPCClient wraps an rpc client to implement the EVMRPCClient interface
 type AvalancheRPCClient struct {
 	*rpc.Client
 }
 
+// EthSubscribe subscribes to events and returns a client subscription that implements the EVMClientSubscription interface
 func (c *AvalancheRPCClient) EthSubscribe(ctx context.Context, channel interface{}, args ...interface{}) (bchain.EVMClientSubscription, error) {
 	sub, err := c.Client.EthSubscribe(ctx, channel, args...)
 	if err != nil {
@@ -53,6 +58,7 @@ func (c *AvalancheRPCClient) EthSubscribe(ctx context.Context, channel interface
 	return &AvalancheClientSubscription{ClientSubscription: sub}, nil
 }
 
+// CallContext performs a JSON-RPC call with the given arguments
 func (c *AvalancheRPCClient) CallContext(ctx context.Context, result interface{}, method string, args ...interface{}) error {
 	err := c.Client.CallContext(ctx, result, method, args...)
 	// unfinalized data cannot be queried error returned when trying to query a block height greater than last finalized block
@@ -64,65 +70,74 @@ func (c *AvalancheRPCClient) CallContext(ctx context.Context, result interface{}
 	return err
 }
 
-// AvalancheHeader wraps the avalanche header to conform with the Header interface
+// AvalancheHeader wraps a block header to implement the EVMHeader interface
 type AvalancheHeader struct {
 	*types.Header
 }
 
+// Hash returns the block hash as a hex string
 func (h *AvalancheHeader) Hash() string {
 	return h.Header.Hash().Hex()
 }
 
+// Number returns the block number
 func (h *AvalancheHeader) Number() *big.Int {
 	return h.Header.Number
 }
 
+// Difficulty returns the block difficulty
 func (h *AvalancheHeader) Difficulty() *big.Int {
 	return h.Header.Difficulty
 }
 
-// AvalancheHash wraps the avalanche hash to conform with the Hash interface
+// AvalancheHash wraps a transaction hash to implement the EVMHash interface
 type AvalancheHash struct {
 	common.Hash
 }
 
-// AvalancheClientSubscription wraps an avalanche client subcription to conform with the ClientSubscription interface
+// AvalancheClientSubscription wraps a client subcription to implement the EVMClientSubscription interface
 type AvalancheClientSubscription struct {
 	*rpc.ClientSubscription
 }
 
-// AvalancheNewBlock wraps an avalanche header channel to conform with the Subscriber interface
+// AvalancheNewBlock wraps a block header channel to implement the EVMNewBlockSubscriber interface
 type AvalancheNewBlock struct {
 	channel chan *types.Header
 }
 
+// Channel returns the underlying channel as an empty interface
 func (s *AvalancheNewBlock) Channel() interface{} {
 	return s.channel
 }
 
+// Read from the underlying channel and return a block header that implements the EVMHeader interface
 func (s *AvalancheNewBlock) Read() (bchain.EVMHeader, bool) {
 	h, ok := <-s.channel
 	return &AvalancheHeader{Header: h}, ok
 }
 
+// Close the underlying channel
 func (s *AvalancheNewBlock) Close() {
 	close(s.channel)
 }
 
-// AvalancheNewTx wraps an ethereum transaction hash channel to conform with the Subscriber interface
+// AvalancheNewTx wraps a transaction hash channel to conform with the EVMNewTxSubscriber interface
 type AvalancheNewTx struct {
 	channel chan common.Hash
 }
 
+// Channel returns the underlying channel as an empty interface
 func (s *AvalancheNewTx) Channel() interface{} {
 	return s.channel
 }
 
+// Read from the underlying channel and return a transaction hash that implements the EVMHash interface
 func (s *AvalancheNewTx) Read() (bchain.EVMHash, bool) {
 	h, ok := <-s.channel
 	return &AvalancheHash{Hash: h}, ok
 }
 
+// Close the underlying channel
 func (s *AvalancheNewTx) Close() {
 	close(s.channel)
 }
