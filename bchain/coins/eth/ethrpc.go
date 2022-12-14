@@ -436,6 +436,7 @@ func (b *EthereumRPC) getBestHeader() (bchain.EVMHeader, error) {
 	return b.bestHeader, nil
 }
 
+// UpdateBestHeader keeps track of the latest block header confirmed on chain
 func (b *EthereumRPC) UpdateBestHeader(h bchain.EVMHeader) {
 	glog.V(2).Info("rpc: new block header ", h.Number())
 	b.bestHeaderLock.Lock()
@@ -899,6 +900,8 @@ func (b *EthereumRPC) EstimateSmartFee(blocks int, conservative bool) (big.Int, 
 	return r, err
 }
 
+// GetStringFromMap attempts to return the value for a specific key in a map as a string if valid,
+// otherwise returns an empty string with false indicating there was no key found, or the value was not a string
 func GetStringFromMap(p string, params map[string]interface{}) (string, bool) {
 	v, ok := params[p]
 	if ok {
