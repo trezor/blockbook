@@ -656,7 +656,7 @@ func (b *EthereumRPC) getInternalDataForBlock(blockHash string, blockHeight uint
 		for i, result := range trace {
 			r := &result.Result
 			d := &data[i]
-			if r.Type == "CREATE" {
+			if r.Type == "CREATE" || r.Type == "CREATE2" {
 				d.Type = bchain.CREATE
 				d.Contract = r.To
 				contracts = append(contracts, *b.getCreationContractInfo(d.Contract, blockHeight))
