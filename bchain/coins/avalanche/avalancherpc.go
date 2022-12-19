@@ -6,7 +6,7 @@ import (
 
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/ethclient"
-	avax "github.com/ava-labs/coreth/interfaces"
+	"github.com/ava-labs/coreth/interfaces"
 	"github.com/ava-labs/coreth/rpc"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -47,16 +47,19 @@ func (b *AvalancheRPC) Initialize() error {
 		if err != nil {
 			return nil, nil, err
 		}
-		return &AvalancheRPCClient{Client: r}, &AvalancheClient{Client: ethclient.NewClient(r)}, nil
+		rc := &AvalancheRPCClient{Client: r}
+		c := &AvalancheClient{Client: ethclient.NewClient(r)}
+		return rc, c, nil
 	}
 
-	rc, ec, err := b.OpenRPC(b.ChainConfig.RPCURL)
+	rpcClient, client, err := b.OpenRPC(b.ChainConfig.RPCURL)
 	if err != nil {
 		return err
 	}
 
-	b.EthereumRPC.Client = ec
-	b.EthereumRPC.RPC = rc
+	// set chain specific
+	b.Client = client
+	b.RPC = rpcClient
 	b.MainNetChainID = MainNet
 	b.NewBlock = &AvalancheNewBlock{channel: make(chan *types.Header)}
 	b.NewTx = &AvalancheNewTx{channel: make(chan common.Hash)}
@@ -87,7 +90,7 @@ func (b *AvalancheRPC) Initialize() error {
 func (b *AvalancheRPC) EthereumTypeEstimateGas(params map[string]interface{}) (uint64, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
 	defer cancel()
-	msg := avax.CallMsg{}
+	msg := interfaces.CallMsg{}
 	if s, ok := eth.GetStringFromMap("from", params); ok && len(s) > 0 {
 		msg.From = common.HexToAddress(s)
 	}

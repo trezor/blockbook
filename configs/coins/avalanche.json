@@ -7,7 +7,6 @@
   },
   "ports": {
     "backend_rpc": 8098,
-    "backend_message_queue": 0,
     "backend_p2p": 38398,
     "blockbook_internal": 9098,
     "blockbook_public": 9198
@@ -48,7 +47,7 @@
     "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
     "public_binding_template": ":{{.Ports.BlockbookPublic}}",
     "explorer_url": "",
-    "additional_params": "-workers=16",
+    "additional_params": "",
     "block_chain": {
       "parse": true,
       "mempool_workers": 8,
@@ -58,6 +57,7 @@
         "mempoolTxTimeoutHours": 48,
         "queryBackendOnMempoolResync": false,
         "fiat_rates": "coingecko",
+        "fiat_rates_vs_currencies": "AED,ARS,AUD,BDT,BHD,BMD,BRL,CAD,CHF,CLP,CNY,CZK,DKK,EUR,GBP,HKD,HUF,IDR,ILS,INR,JPY,KRW,KWD,LKR,MMK,MXN,MYR,NGN,NOK,NZD,PHP,PKR,PLN,RUB,SAR,SEK,SGD,THB,TRY,TWD,UAH,USD,VEF,VND,ZAR,BTC,ETH",
         "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"avalanche-2\",\"platformIdentifier\": \"avalanche\",\"platformVsCurrency\": \"usd\",\"periodSeconds\": 900}"
       }
     }

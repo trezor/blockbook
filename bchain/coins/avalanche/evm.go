@@ -7,7 +7,7 @@ import (
 
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/ethclient"
-	avax "github.com/ava-labs/coreth/interfaces"
+	"github.com/ava-labs/coreth/interfaces"
 	"github.com/ava-labs/coreth/rpc"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/trezor/blockbook/bchain"
@@ -30,7 +30,7 @@ func (c *AvalancheClient) HeaderByNumber(ctx context.Context, number *big.Int) (
 
 // EstimateGas returns the current estimated gas cost for executing a transaction
 func (c *AvalancheClient) EstimateGas(ctx context.Context, msg interface{}) (uint64, error) {
-	return c.Client.EstimateGas(ctx, msg.(avax.CallMsg))
+	return c.Client.EstimateGas(ctx, msg.(interfaces.CallMsg))
 }
 
 // BalanceAt returns the balance for the given account at a specific block, or latest known block if no block number is provided
@@ -64,10 +64,10 @@ func (c *AvalancheRPCClient) CallContext(ctx context.Context, result interface{}
 	// unfinalized data cannot be queried error returned when trying to query a block height greater than last finalized block
 	// do not throw rpc error and instead treat as ErrBlockNotFound
 	// https://docs.avax.network/quickstart/exchanges/integrate-exchange-with-avalanche#determining-finality
-	if err != nil && strings.Contains(err.Error(), "cannot query unfinalized data") {
-		err = nil
+	if err != nil && !strings.Contains(err.Error(), "cannot query unfinalized data") {
+		return err
 	}
-	return err
+	return nil
 }
 
 // AvalancheHeader wraps a block header to implement the EVMHeader interface
