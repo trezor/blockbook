@@ -22,10 +22,10 @@
     "package_name": "backend-vertcoin-testnet",
     "package_revision": "satoshilabs-1",
     "system_user": "vertcoin",
-    "version": "0.18.0",
-    "binary_url": "https://github.com/vertcoin-project/vertcoin-core/releases/download/0.18.0/vertcoin-0.18.0-x86_64-linux-gnu.tar.gz",
+    "version": "22.1",
+    "binary_url": "https://github.com/vertcoin-project/vertcoin-core/releases/download/v22.1/vertcoin-22.1-x86_64-linux-gnu.tar.gz",
     "verification_type": "sha256",
-    "verification_source": "6ded7ea883b6cf9cee95701b13eef2e601a85f91d15f255d4fc7b25db92808ec",
+    "verification_source": "aab3068e02d55128326801cdbcbfcb175be96291e024edf5ab12f3af6f4433c0",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
       "bin/vertcoin-qt"
