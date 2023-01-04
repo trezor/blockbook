@@ -21,7 +21,7 @@ const (
 	MainNet eth.Network = 10
 )
 
-// OptimismRPC is an interface to JSON-RPC avalanche service.
+// OptimismRPC is an interface to JSON-RPC optimism service.
 type OptimismRPC struct {
 	*eth.EthereumRPC
 }
@@ -40,14 +40,16 @@ func NewOptimismRPC(config json.RawMessage, pushHandler func(bchain.Notification
 	return s, nil
 }
 
-// Initialize initializes avalanche rpc interface
+// Initialize optimism rpc interface
 func (b *OptimismRPC) Initialize() error {
 	b.OpenRPC = func(url string) (bchain.EVMRPCClient, bchain.EVMClient, error) {
 		r, err := rpc.Dial(url)
 		if err != nil {
 			return nil, nil, err
 		}
-		return &OptimismRPCClient{Client: r}, &OptimismClient{Client: ethclient.NewClient(r)}, nil
+		rc := &OptimismRPCClient{Client: r}
+		c := &OptimismClient{Client: ethclient.NewClient(r)}
+		return rc, c, nil
 	}
 
 	rc, ec, err := b.OpenRPC(b.ChainConfig.RPCURL)
@@ -55,8 +57,8 @@ func (b *OptimismRPC) Initialize() error {
 		return err
 	}
 
-	b.EthereumRPC.Client = ec
-	b.EthereumRPC.RPC = rc
+	b.Client = ec
+	b.RPC = rc
 	b.MainNetChainID = MainNet
 	b.NewBlock = &OptimismNewBlock{channel: make(chan *types.Header)}
 	b.NewTx = &OptimismNewTx{channel: make(chan common.Hash)}
