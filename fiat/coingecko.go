@@ -271,21 +271,24 @@ func (cg *Coingecko) CurrentTickers() (*common.CurrencyRatesTicker, error) {
 			}
 		}
 		newTickers.TokenRates = make(map[string]float32)
-		const platformIdsGroup = 200
-		for from := 0; from < len(platformIds); from += platformIdsGroup {
-			to := from + platformIdsGroup
-			if to > len(platformIds) {
-				to = len(platformIds)
-			}
-			tokenPrices, err := cg.simplePrice(platformIds[from:to], []string{cg.platformVsCurrency})
-			if err != nil || tokenPrices == nil {
-				return nil, err
-			}
-			for id, v := range *tokenPrices {
-				t, found := platformIdsToTokens[id]
-				if found {
-					newTickers.TokenRates[t] = v[cg.platformVsCurrency]
+		from := 0
+		const maxRequestLen = 6000
+		requestLen := 0
+		for to := 0; to < len(platformIds); to++ {
+			requestLen += len(platformIds[to]) + 3 // 3 characters for the comma separator %2C
+			if requestLen > maxRequestLen || to+1 >= len(platformIds) {
+				tokenPrices, err := cg.simplePrice(platformIds[from:to+1], []string{cg.platformVsCurrency})
+				if err != nil || tokenPrices == nil {
+					return nil, err
 				}
+				for id, v := range *tokenPrices {
+					t, found := platformIdsToTokens[id]
+					if found {
+						newTickers.TokenRates[t] = v[cg.platformVsCurrency]
+					}
+				}
+				from = to + 1
+				requestLen = 0
 			}
 		}
 	}
