@@ -35,12 +35,12 @@ func init() {
 
 // VertcoinParser handle
 type VertcoinParser struct {
-	*btc.BitcoinLikeParser
+	*btc.BitcoinParser
 }
 
 // NewVertcoinParser returns new VertcoinParser instance
 func NewVertcoinParser(params *chaincfg.Params, c *btc.Configuration) *VertcoinParser {
-	p := &VertcoinParser{BitcoinLikeParser: btc.NewBitcoinLikeParser(params, c)}
+	p := &VertcoinParser{BitcoinParser: btc.NewBitcoinParser(params, c)}
 	p.VSizeSupport = true
 	return p
 }
