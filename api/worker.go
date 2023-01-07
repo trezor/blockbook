@@ -619,17 +619,19 @@ func (w *Worker) getContractDescriptorInfo(cd bchain.AddressDescriptor, typeFrom
 		if err != nil {
 			glog.Errorf("GetContractInfo from chain error %v, contract %v", err, cd)
 		} else {
-			if len(blockchainContractInfo.Name) > 0 && blockchainContractInfo.Name[0] != 0 {
+			if blockchainContractInfo != nil && len(blockchainContractInfo.Name) > 0 && blockchainContractInfo.Name[0] != 0 {
 				contractInfo.Name = blockchainContractInfo.Name
 			} else {
 				contractInfo.Name = ""
 			}
-			if len(blockchainContractInfo.Symbol) > 0 && blockchainContractInfo.Symbol[0] != 0 {
+			if blockchainContractInfo != nil && len(blockchainContractInfo.Symbol) > 0 && blockchainContractInfo.Symbol[0] != 0 {
 				contractInfo.Symbol = blockchainContractInfo.Symbol
 			} else {
 				contractInfo.Symbol = ""
 			}
-			contractInfo.Decimals = blockchainContractInfo.Decimals
+			if blockchainContractInfo != nil {
+				contractInfo.Decimals = blockchainContractInfo.Decimals
+			}
 			if err = w.db.StoreContractInfo(contractInfo); err != nil {
 				glog.Errorf("StoreContractInfo error %v, contract %v", err, cd)
 			}
