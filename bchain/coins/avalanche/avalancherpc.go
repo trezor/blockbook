@@ -3,7 +3,10 @@ package avalanche
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"net/url"
 
+	"github.com/ava-labs/avalanchego/api/info"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/ethclient"
 	"github.com/ava-labs/coreth/interfaces"
@@ -24,6 +27,7 @@ const (
 // AvalancheRPC is an interface to JSON-RPC avalanche service.
 type AvalancheRPC struct {
 	*eth.EthereumRPC
+	info info.Client
 }
 
 // NewAvalancheRPC returns new AvalancheRPC instance.
@@ -52,6 +56,16 @@ func (b *AvalancheRPC) Initialize() error {
 		return rc, c, nil
 	}
 
+	rpcUrl, err := url.Parse(b.ChainConfig.RPCURL)
+	if err != nil {
+		return err
+	}
+
+	scheme := "http"
+	if rpcUrl.Scheme == "wss" || rpcUrl.Scheme == "https" {
+		scheme = "https"
+	}
+
 	rpcClient, client, err := b.OpenRPC(b.ChainConfig.RPCURL)
 	if err != nil {
 		return err
@@ -60,6 +74,7 @@ func (b *AvalancheRPC) Initialize() error {
 	// set chain specific
 	b.Client = client
 	b.RPC = rpcClient
+	b.info = info.NewClient(fmt.Sprintf("%s://%s", scheme, rpcUrl.Host))
 	b.MainNetChainID = MainNet
 	b.NewBlock = &AvalancheNewBlock{channel: make(chan *types.Header)}
 	b.NewTx = &AvalancheNewTx{channel: make(chan common.Hash)}
@@ -84,6 +99,30 @@ func (b *AvalancheRPC) Initialize() error {
 	glog.Info("rpc: block chain ", b.Network)
 
 	return nil
+}
+
+// GetChainInfo returns information about the connected backend
+func (b *AvalancheRPC) GetChainInfo() (*bchain.ChainInfo, error) {
+	ci, err := b.EthereumRPC.GetChainInfo()
+	if err != nil {
+		fmt.Println(err)
+		return nil, err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+	defer cancel()
+
+	v, err := b.info.GetNodeVersion(ctx)
+	if err != nil {
+		fmt.Println("here", err)
+		return nil, err
+	}
+
+	if avm, ok := v.VMVersions["avm"]; ok {
+		ci.Version = avm
+	}
+
+	return ci, nil
 }
 
 // EthereumTypeEstimateGas returns estimation of gas consumption for given transaction parameters
