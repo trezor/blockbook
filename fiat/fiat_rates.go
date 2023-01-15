@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"strings"
 	"time"
 
 	"github.com/golang/glog"
@@ -58,11 +59,15 @@ func NewFiatRatesDownloader(db *db.RocksDB, apiType string, params string, allow
 	rd.db = db
 	rd.callbackOnNewTicker = callback
 	rd.downloadTokens = rdParams.PlatformIdentifier != "" && rdParams.PlatformVsCurrency != ""
+	if rd.downloadTokens {
+		common.TickerRecalculateTokenRate = strings.ToLower(db.GetInternalState().CoinShortcut) != rdParams.PlatformVsCurrency
+		common.TickerTokenVsCurrency = rdParams.PlatformVsCurrency
+	}
 	is := rd.db.GetInternalState()
 	if apiType == "coingecko" {
 		throttle := true
 		if callback == nil {
-			// a small hack - in tests the callback is not used, therefore there is no delay slowing the test
+			// a small hack - in tests the callback is not used, therefore there is no delay slowing down the test
 			throttle = false
 		}
 		rd.downloader = NewCoinGeckoDownloader(db, rdParams.URL, rdParams.Coin, rdParams.PlatformIdentifier, rdParams.PlatformVsCurrency, allowedVsCurrencies, rd.timeFormat, throttle)
