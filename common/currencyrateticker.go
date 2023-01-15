@@ -12,10 +12,28 @@ type CurrencyRatesTicker struct {
 	TokenRates map[string]float32 `json:"tokenRates"` // rates of the tokens (identified by the address of the contract) against the base currency
 }
 
+var (
+	// TickerRecalculateTokenRate signals if it is necessary to recalculate token rate to base rate
+	// this happens when token rates are downloaded in TokenVsCurrency different from the base currency
+	TickerRecalculateTokenRate bool
+	// TickerTokenVsCurrency is the currency in which the token rates are downloaded
+	TickerTokenVsCurrency string
+)
+
 // Convert returns token rate in base currency
 func (t *CurrencyRatesTicker) GetTokenRate(token string) (float32, bool) {
 	if t.TokenRates != nil {
 		rate, found := t.TokenRates[strings.ToLower(token)]
+		if !found {
+			return 0, false
+		}
+		if TickerRecalculateTokenRate {
+			vsRate, found := t.Rates[TickerTokenVsCurrency]
+			if !found || vsRate == 0 {
+				return 0, false
+			}
+			rate = rate / vsRate
+		}
 		return rate, found
 	}
 	return 0, false
