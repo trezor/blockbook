@@ -808,23 +808,28 @@ func (s *PublicServer) amountSatsSpan(a *api.Amount, td *TemplateData, classes s
 func (s *PublicServer) tokenAmountSpan(t *api.TokenTransfer, td *TemplateData, classes string) template.HTML {
 	primary := formatAmountWithDecimals(t.Value, t.Decimals)
 	var rv strings.Builder
-	appendAmountWrapperSpan(&rv, primary, td.CoinShortcut, classes)
+	appendAmountWrapperSpan(&rv, primary, t.Symbol, classes)
 	appendAmountSpan(&rv, "prim-amt", primary, t.Symbol, "")
 	if td.SecondaryCoin != "" {
 		var currentBase, currentSecondary, txBase, txSecondary string
 		p, err := strconv.ParseFloat(primary, 64)
 		if err == nil {
-			baseRate, found := s.api.GetContractBaseRate(td.CurrentTicker, t.Contract, 0)
-			if found {
-				base := p * baseRate
-				currentBase = strconv.FormatFloat(base, 'f', 6, 64)
-				currentSecondary = formatSecondaryAmount(base*td.CurrentSecondaryCoinRate, td)
-			}
-			baseRate, found = s.api.GetContractBaseRate(td.TxTicker, t.Contract, td.Tx.Blocktime)
-			if found {
-				base := p * baseRate
-				txBase = strconv.FormatFloat(base, 'f', 6, 64)
-				txSecondary = formatSecondaryAmount(base*td.TxSecondaryCoinRate, td)
+			if td.CurrentTicker != nil {
+				// get rate from current ticker
+				baseRateCurrent, found := td.CurrentTicker.GetTokenRate(t.Contract)
+				if found {
+					base := p * float64(baseRateCurrent)
+					currentBase = strconv.FormatFloat(base, 'f', 6, 64)
+					currentSecondary = formatSecondaryAmount(base*td.CurrentSecondaryCoinRate, td)
+					// get the historical rate only if current rate exist
+					// it is very costly to search in DB in vain for a rate for token for which there are no exchange rates
+					baseRate, found := s.api.GetContractBaseRate(td.TxTicker, t.Contract, td.Tx.Blocktime)
+					if found {
+						base := p * baseRate
+						txBase = strconv.FormatFloat(base, 'f', 6, 64)
+						txSecondary = formatSecondaryAmount(base*td.TxSecondaryCoinRate, td)
+					}
+				}
 			}
 		}
 		if txBase != "" {
