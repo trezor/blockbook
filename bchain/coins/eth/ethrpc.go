@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math/big"
 	"net/http"
 	"strconv"
@@ -358,7 +358,7 @@ func (b *EthereumRPC) getConsensusVersion() string {
 		glog.Error("getConsensusVersion ", err)
 		return ""
 	}
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		glog.Error("getConsensusVersion ", err)
 		return ""
