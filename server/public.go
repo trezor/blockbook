@@ -343,6 +343,9 @@ func (s *PublicServer) newTemplateData(r *http.Request) *TemplateData {
 		InternalExplorer: s.internalExplorer && !s.is.InitialSync,
 		TOSLink:          api.Text.TOSLink,
 	}
+	if !s.debug {
+		t.Minified = ".min.1"
+	}
 	if s.is.HasFiatRates {
 		// get the secondary coin and if it should be shown either from query parameters "secondary" and "use_secondary"
 		// or from the cookie "secondary_coin" in the format secondary=use_secondary, for example EUR=true
@@ -496,6 +499,7 @@ type TemplateData struct {
 	NextPage                 int
 	PagingRange              []int
 	PageParams               template.URL
+	Minified                 string
 	TOSLink                  string
 	SendTxHex                string
 	Status                   string
