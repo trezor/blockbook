@@ -1,8 +1,8 @@
 @import "TTHoves/TTHoves.css";
 
 * {
-    margin: 0px;
-    padding: 0px;
+    margin: 0;
+    padding: 0;
     outline: none;
     font-family: "TT Hoves", -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
 }
@@ -253,7 +253,7 @@ span.btn-paging:hover {
 
 .data-table {
     table-layout: fixed;
-    overflow-wrap: break-word;
+    overflow-wrap: anywhere;
     margin-left: 8px;
     margin-top: 2rem;
     margin-bottom: 2rem;
