@@ -1625,11 +1625,32 @@ func Test_appendAmountSpan(t *testing.T) {
 			want:     `<span class="prim-amt">1<span class="nc">432</span><span class="nc">134</span>.<span class="amt-dec">234<span class="ns">56</span></span> BTC</span>`,
 		},
 		{
-			name:     "sec-amt 431341.23 EUR",
+			name:     "sec-amt 1 EUR",
 			class:    "sec-amt",
-			amount:   "4321341.23",
+			amount:   "1",
 			shortcut: "EUR",
-			want:     `<span class="sec-amt">4<span class="nc">321</span><span class="nc">341</span>.<span class="amt-dec">23</span> EUR</span>`,
+			want:     `<span class="sec-amt">1 EUR</span>`,
+		},
+		{
+			name:     "sec-amt -1 EUR",
+			class:    "sec-amt",
+			amount:   "-1",
+			shortcut: "EUR",
+			want:     `<span class="sec-amt">-1 EUR</span>`,
+		},
+		{
+			name:     "sec-amt 432109.23 EUR",
+			class:    "sec-amt",
+			amount:   "432109.23",
+			shortcut: "EUR",
+			want:     `<span class="sec-amt">432<span class="nc">109</span>.<span class="amt-dec">23</span> EUR</span>`,
+		},
+		{
+			name:     "sec-amt -432109.23 EUR",
+			class:    "sec-amt",
+			amount:   "-432109.23",
+			shortcut: "EUR",
+			want:     `<span class="sec-amt">-432<span class="nc">109</span>.<span class="amt-dec">23</span> EUR</span>`,
 		},
 		{
 			name:     "sec-amt 43141.29 EUR",
@@ -1638,6 +1659,14 @@ func Test_appendAmountSpan(t *testing.T) {
 			shortcut: "EUR",
 			txDate:   "2022-03-14",
 			want:     `<span class="sec-amt" tm="2022-03-14">43<span class="nc">141</span>.<span class="amt-dec">29</span> EUR</span>`,
+		},
+		{
+			name:     "sec-amt -43141.29 EUR",
+			class:    "sec-amt",
+			amount:   "-43141.29",
+			shortcut: "EUR",
+			txDate:   "2022-03-14",
+			want:     `<span class="sec-amt" tm="2022-03-14">-43<span class="nc">141</span>.<span class="amt-dec">29</span> EUR</span>`,
 		},
 	}
 	for _, tt := range tests {
