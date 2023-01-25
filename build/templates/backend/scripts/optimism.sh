@@ -39,7 +39,6 @@ else
 fi
 
 $GETH_BIN \
-  --vmodule=eth/*=5,miner=4,rpc=5,rollup=4,consensus/clique=1 \
   --datadir=$DATA_DIR \
   --password=$DATA_DIR/password \
   --networkid=10 \
