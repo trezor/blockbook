@@ -895,6 +895,10 @@ func formatUint32(i uint32) template.HTML {
 }
 
 func appendSeparatedNumberSpans(rv *strings.Builder, s, separatorClass string) {
+	if len(s) > 0 && s[0] == '-' {
+		s = s[1:]
+		rv.WriteByte('-')
+	}
 	t := (len(s) - 1) / 3
 	if t <= 0 {
 		rv.WriteString(s)
