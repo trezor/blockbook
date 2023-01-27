@@ -26,7 +26,7 @@
     "verification_source": "4033ccbdcb1edaeb0ef1131cdd4ae4d2fd9258b306e2b5a99419c827a37c7856",
     "extract_command": "mkdir source && tar -C source --strip 1 -xf l2geth@0.5.29.tar.gz && cd source/l2geth && make geth && mv build/bin/geth /build/build/pkg-defs/backend/backend && echo",
     "exclude_files": [],
-    "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/optimism_exec.sh'",
+    "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/optimism_exec.sh 2>> {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
     "exec_script": "optimism.sh",
     "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
     "postinst_script_template": "",

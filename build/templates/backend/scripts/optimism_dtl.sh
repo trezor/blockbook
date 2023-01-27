@@ -16,10 +16,10 @@ export DATA_TRANSPORT_LAYER__L2_CHAIN_ID=10
 export DATA_TRANSPORT_LAYER__NODE_ENV=production
 export DATA_TRANSPORT_LAYER__POLLING_INTERVAL=500
 export DATA_TRANSPORT_LAYER__SERVER_HOSTNAME=127.0.0.1
-export DATA_TRANSPORT_LAYER__SERVER_PORT={{.Ports.BackendHTTP}}
+export DATA_TRANSPORT_LAYER__SERVER_PORT={{.Ports.BackendHttp}}
 export DATA_TRANSPORT_LAYER__L1_START_HEIGHT=13596466
 export DATA_TRANSPORT_LAYER__L2_RPC_ENDPOINT=https://mainnet.optimism.io
 
-node {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/packages/data-transport-layer/dist/src/services/run.js 2>> {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log
+node {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/packages/data-transport-layer/dist/src/services/run.js
 
 {{end}}
