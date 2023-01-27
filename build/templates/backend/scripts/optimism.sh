@@ -11,7 +11,6 @@ export ROLLUP_ENABLE_L2_GAS_POLLING=false
 export ROLLUP_ADDRESS_MANAGER_OWNER_ADDRESS=0x9BA6e03D8B90dE867373Db8cF1A58d2F7F006b3A
 
 GETH_BIN={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/geth 
-LOG=2>> {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log
 DATA_DIR={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend
 
 CHAINDATA_DIR=$DATA_DIR/geth/chaindata
@@ -27,14 +26,14 @@ L2GETH_BERLIN_ACTIVATION_HEIGHT=3950000
 if [ ! -d "$KEYSTORE_DIR" ]; then
     echo -n $BLOCK_SIGNER_PRIVATE_KEY_PASSWORD > $DATA_DIR/password
     echo -n $BLOCK_SIGNER_PRIVATE_KEY > $DATA_DIR/block-signer-key
-    $GETH_BIN account import --datadir=$DATA_DIR --password=$DATA_DIR/password $DATA_DIR/block-signer-key $LOG
+    $GETH_BIN account import --datadir=$DATA_DIR --password=$DATA_DIR/password $DATA_DIR/block-signer-key
 fi
 
 if [ ! -d "$CHAINDATA_DIR" ]; then
-    $GETH_BIN init --datadir=$DATA_DIR $L2GETH_GENESIS_URL $L2GETH_GENESIS_HASH $LOG
+    $GETH_BIN init --datadir=$DATA_DIR $L2GETH_GENESIS_URL $L2GETH_GENESIS_HASH
 else
     if !($GETH_BIN dump-chain-cfg --datadir=$DATA_DIR | grep -q "\"berlinBlock\": $L2GETH_BERLIN_ACTIVATION_HEIGHT"); then
-        $GETH_BIN init --datadir=$DATA_DIR $L2GETH_GENESIS_URL $L2GETH_GENESIS_HASH $LOG
+        $GETH_BIN init --datadir=$DATA_DIR $L2GETH_GENESIS_URL $L2GETH_GENESIS_HASH
     fi
 fi
 
@@ -51,7 +50,7 @@ $GETH_BIN \
   --port={{.Ports.BackendP2P}} \
   --rpc \
   --rpcaddr=127.0.0.1 \
-  --rpcport={{.Ports.BackendHTTP}} \
+  --rpcport={{.Ports.BackendHttp}} \
   --rpcapi=eth,rollup,net,web3,debug \
   --rpcvhosts="*" \
   --rpccorsdomain="*" \
@@ -74,7 +73,6 @@ $GETH_BIN \
   --nousb \
   --nodiscover \
   --syncmode=full \
-  --gcmode=full \
-  $LOG
+  --gcmode=full
 
 {{end}}
