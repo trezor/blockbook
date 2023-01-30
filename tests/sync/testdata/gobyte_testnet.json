@@ -1,0 +1,83 @@
+{
+	"connectBlocks": {
+		"syncRanges": [
+			{"lower": 100, "upper": 102}
+		],
+		"blocks": {
+			"102": {
+				"height": 102,
+				"hash": "0000038063bb627244fe9ff3ff0d8b27f14fc47e4fba376af87aaf72c7c756ab",
+				"noTxs": 1,
+				"txDetails": [
+					{
+						"hex": "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff1e016604b924ad600858000000000000000d2f6e6f64655374726174756d2f000000000320349d2c000000001976a914bd4e36518d7cd109b063c160052e6b8b5fb2bcc088ac8017b42c000000001976a914091d573211851fc8bca05d2edc4488b9cff4399f88ac60e31600000000001976a91422851477d63a085dbc2398c8430af1c09e7343f688ac00000000",
+						"txid": "dcad2baf48f08623c8c7fa25af4856ef0bfc47d15e5ed5e0ae13372483322ccf",
+						"version": 1,
+						"vin": [
+							{
+								"coinbase": "016604b924ad600858000000000000000d2f6e6f64655374726174756d2f",
+								"sequence": 0
+							}
+						],
+						"vout": [
+							{
+								"value": 7.485,
+								"n": 0,
+								"scriptPubKey": {
+									"hex": "76a914bd4e36518d7cd109b063c160052e6b8b5fb2bcc088ac"
+								}
+							},
+              {
+								"value": 7.5,
+								"n": 1,
+								"scriptPubKey": {
+									"hex": "76a914091d573211851fc8bca05d2edc4488b9cff4399f88ac"
+								}
+							},
+              {
+  								"value": 0.015,
+  								"n": 2,
+  								"scriptPubKey": {
+  									"hex": "76a91422851477d63a085dbc2398c8430af1c09e7343f688ac"
+									}
+								}
+							]
+						}
+					]
+				}
+			}
+		},
+	"handleFork": {
+		"syncRanges": [
+			{"lower": 100, "upper": 102}
+		],
+		"fakeBlocks": {
+			"100": {
+				"height": 100,
+				"hash": "000000f4d48fd4f3e4603fdc57ac1204d6069e6e9ccd7ffbbed2d7933d5217c6"
+			},
+			"101": {
+				"height": 101,
+				"hash": "00000338dfac0e428d0b1d7c06618da2878b2b38238fb734edfe7e4bdc62e26e"
+			},
+			"102": {
+				"height": 102,
+				"hash": "000003ab83a3e442d436298044358c71dd2410002855467b35f1b14e824cf340"
+			}
+		},
+		"realBlocks": {
+			"100": {
+				"height": 100,
+				"hash": "000001463d8843b95a353d29cb64209021e60ec2c5a013f50529ad0f14e46551"
+			},
+			"101": {
+				"height": 101,
+				"hash": "000007b1438e48cbe943cd05b2573fb7f5dcaee98686fd7e1c4fa18dff9c39fb"
+			},
+			"102": {
+				"height": 102,
+				"hash": "0000038063bb627244fe9ff3ff0d8b27f14fc47e4fba376af87aaf72c7c756ab"
+			}
+		}
+	}
+}

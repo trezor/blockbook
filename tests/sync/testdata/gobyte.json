@@ -1,0 +1,75 @@
+{
+    "connectBlocks": {
+        "syncRanges": [
+            {
+                "lower": 100,
+                "upper": 102
+            }
+        ],
+        "blocks": {
+            "102": {
+                "height": 102,
+                "hash": "000000030eafdb8e57b5f15fac463e1317c884eb26c07a31c07da29b9a81d37a",
+                "noTxs": 1,
+                "txDetails": [
+                    {
+                        "hex": "02000000010000000000000000000000000000000000000000000000000000000000000000ffffffff16016604b4b80d5a0881000027000000007969696d70000000000001002f6859000000001976a9149df9f3921726b613d6b2c4b19ba8f9c8e140651088ac00000000",
+                        "txid": "807f74143ac467327f32ffd7da013048d84cfe692b9fc4cd81c91e5e0800d818",
+                        "version": 2,
+                        "vin": [
+                            {
+                                "coinbase": "016604b4b80d5a0881000027000000007969696d7000",
+                                "sequence": 0
+                            }
+                        ],
+                        "vout": [
+                            {
+                                "value": 15,
+                                "n": 0,
+                                "scriptPubKey": {
+                                    "hex": "76a9149df9f3921726b613d6b2c4b19ba8f9c8e140651088ac"
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+    },
+    "handleFork": {
+        "syncRanges": [
+            {
+                "lower": 100,
+                "upper": 102
+            }
+        ],
+        "fakeBlocks": {
+            "100": {
+                "height": 100,
+                "hash": "00000003b7a40b024e981cb30beef8da05c40d05932c3bf4b76a666db7ea9faa"
+            },
+            "101": {
+                "height": 101,
+                "hash": "00000001e655cafafafea4aa9c50234a5a5e141eb76c9cff899f207bd8e5a19e"
+            },
+            "102": {
+                "height": 102,
+                "hash": "0000000a025fd311e9226eafbdc3ffae6d7a7a33ffca003b7af67e30b0cc0a9a"
+            }
+        },
+        "realBlocks": {
+            "100": {
+                "height": 100,
+                "hash": "0000000ddf998faca169d36810c0b5f6553f15d23a031b069c5353cd21fe7028"
+            },
+            "101": {
+                "height": 101,
+                "hash": "00000006dcd9ff8900dce53ceaf8cda4bf780f10462efca78d96b165e37c8ee7"
+            },
+            "102": {
+                "height": 102,
+                "hash": "000000030eafdb8e57b5f15fac463e1317c884eb26c07a31c07da29b9a81d37a"
+            }
+        }
+    }
+}
