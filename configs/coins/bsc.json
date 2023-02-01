@@ -1,0 +1,70 @@
+{
+  "coin": {
+    "name": "BSC Smart Chain",
+    "shortcut": "BNB",
+    "label": "BSC Smart Chain",
+    "alias": "bsc"
+  },
+  "ports": {
+    "backend_rpc": 8203,
+    "backend_p2p": 38403,
+    "backend_http": 8303,
+    "blockbook_internal": 9203,
+    "blockbook_public": 9303
+  },
+  "ipc": {
+    "rpc_url_template": "ws://127.0.0.1:{{.Ports.BackendRPC}}",
+    "rpc_timeout": 25
+  },
+  "backend": {
+    "package_name": "backend-bsc",
+    "package_revision": "satoshilabs-1",
+    "system_user": "bsc",
+    "version": "1.1.18-hf",
+    "binary_url": "https://github.com/bnb-chain/bsc/releases/download/v1.1.18_hf/geth_linux",
+    "verification_type": "sha256",
+    "verification_source": "1427ef4bc19e51fe9dead2d211ff6ebebe610cbbe7a0e1b35870f01cfed6473e",
+    "extract_command": "mv ${ARCHIVE} backend/geth && chmod +x backend/geth && echo",
+    "exclude_files": [],
+    "exec_command_template": "/bin/sh -c '[[ ! -d {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/geth/chaindata ]] && {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/geth init --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/genesis.json 2>> {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log; {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/geth --networkid 56 --syncmode full --txlookuplimit 0 --ipcdisable --cache 8000 --nat none --rpc.allow-unprotected-txs --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --port {{.Ports.BackendP2P}} --ws --ws.addr 127.0.0.1 --ws.port {{.Ports.BackendRPC}} --ws.origins \"*\" --ws.api \"eth,net,web3,debug,txpool\" --http --http.port {{.Ports.BackendHttp}} --http.addr 127.0.0.1 --http.corsdomain \"*\" --http.vhosts \"*\" --http.api \"eth,net,web3,debug,txpool\" 2>> {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
+    "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
+    "postinst_script_template": "wget https://github.com/bnb-chain/bsc/releases/download/v1.1.18_hf/mainnet.zip -O {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/mainnet.zip && unzip -o -d {{.Env.BackendInstallPath}}/{{.Coin.Alias}} {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/mainnet.zip && rm -f {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/mainnet.zip",
+    "service_type": "simple",
+    "service_additional_params_template": "",
+    "protect_memory": true,
+    "mainnet": true,
+    "server_config_file": "",
+    "client_config_file": "",
+    "platforms": {
+      "arm64": {
+        "binary_url": "https://github.com/bnb-chain/bsc/releases/download/v1.1.18_hf/geth-linux-arm64",
+        "verification_source": "a7ef543567c012622c9069b3687e413fa86a8465e6b80302803b303c5a71fd9d"
+      }
+    }
+  },
+  "blockbook": {
+    "package_name": "blockbook-bsc",
+    "system_user": "blockbook-bsc",
+    "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
+    "public_binding_template": ":{{.Ports.BlockbookPublic}}",
+    "explorer_url": "",
+    "additional_params": "",
+    "block_chain": {
+      "parse": true,
+      "mempool_workers": 8,
+      "mempool_sub_workers": 2,
+      "block_addresses_to_keep": 300,
+      "additional_params": {
+        "mempoolTxTimeoutHours": 48,
+        "queryBackendOnMempoolResync": false,
+        "fiat_rates": "coingecko",
+        "fiat_rates_vs_currencies": "AED,ARS,AUD,BDT,BHD,BMD,BRL,CAD,CHF,CLP,CNY,CZK,DKK,EUR,GBP,HKD,HUF,IDR,ILS,INR,JPY,KRW,KWD,LKR,MMK,MXN,MYR,NGN,NOK,NZD,PHP,PKR,PLN,RUB,SAR,SEK,SGD,THB,TRY,TWD,UAH,USD,VEF,VND,ZAR,BTC,ETH",
+        "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"binancecoin\",\"platformIdentifier\": \"binance-smart-chain\",\"platformVsCurrency\": \"bnb\",\"periodSeconds\": 900}"
+      }
+    }
+  },
+  "meta": {
+    "package_maintainer": "IT",
+    "package_maintainer_email": "it@satoshilabs.com"
+  }
+}
