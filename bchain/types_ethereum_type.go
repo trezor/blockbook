@@ -6,8 +6,6 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 )
 
-// EthereumType specific
-
 // EthereumInternalTransfer contains data about internal transfer
 type EthereumInternalTransfer struct {
 	Type  EthereumInternalTransactionType `json:"type"`
@@ -16,6 +14,7 @@ type EthereumInternalTransfer struct {
 	Value big.Int                         `json:"value"`
 }
 
+// FourByteSignature contains data about about a contract function signature
 type FourByteSignature struct {
 	// stored in DB
 	Name       string
@@ -26,10 +25,13 @@ type FourByteSignature struct {
 	ParsedParameters []abi.Type
 }
 
+// EthereumParsedInputParam contains data about a contract function parameter
 type EthereumParsedInputParam struct {
 	Type   string   `json:"type"`
 	Values []string `json:"values,omitempty"`
 }
+
+// EthereumParsedInputData contains the parsed data for an input data hex payload
 type EthereumParsedInputData struct {
 	MethodId string                     `json:"methodId"`
 	Name     string                     `json:"name"`
@@ -75,7 +77,7 @@ const (
 
 // EthereumTokenTypeMap maps bchain.TokenType to TokenTypeName
 // the map must match all bchain.TokenType to avoid index out of range panic
-var EthereumTokenTypeMap []TokenTypeName = []TokenTypeName{ERC20TokenType, ERC771TokenType, ERC1155TokenType}
+var EthereumTokenTypeMap = []TokenTypeName{ERC20TokenType, ERC771TokenType, ERC1155TokenType}
 
 type MultiTokenValue struct {
 	Id    big.Int
