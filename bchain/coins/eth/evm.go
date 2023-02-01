@@ -92,6 +92,11 @@ type EthereumNewBlock struct {
 	channel chan *types.Header
 }
 
+// NewEthereumNewBlock returns an initialized EthereumNewBlock struct
+func NewEthereumNewBlock() *EthereumNewBlock {
+	return &EthereumNewBlock{channel: make(chan *types.Header)}
+}
+
 // Channel returns the underlying channel as an empty interface
 func (s *EthereumNewBlock) Channel() interface{} {
 	return s.channel
@@ -111,6 +116,11 @@ func (s *EthereumNewBlock) Close() {
 // EthereumNewTx wraps a transaction hash channel to implement the EVMNewTxSubscriber interface
 type EthereumNewTx struct {
 	channel chan common.Hash
+}
+
+// NewEthereumNewTx returns an initialized EthereumNewTx struct
+func NewEthereumNewTx() *EthereumNewTx {
+	return &EthereumNewTx{channel: make(chan common.Hash)}
 }
 
 // Channel returns the underlying channel as an empty interface
