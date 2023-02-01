@@ -5,13 +5,13 @@
         <h5 class="col-12 d-flex h-data pb-2"><span class="ellipsis copyable">{{$addr.AddrStr}}</span></h5>
         <h4 class="row">
             <div class="col-lg-6">{{formattedAmountSpan $addr.BalanceSat 0 $data.CoinShortcut $data "copyable"}}</div>
-            {{if $addr.FiatValue}}<div class="col-lg-6">{{summaryValuesSpan 0 $addr.FiatValue $data}}</div>{{end}}
+            {{if $addr.SecondaryValue}}<div class="col-lg-6">{{summaryValuesSpan 0 $addr.SecondaryValue $data}}</div>{{end}}
         </h4>
-        {{if gt $addr.TotalFiatValue $addr.FiatValue}}
+        {{if gt $addr.TotalSecondaryValue $addr.SecondaryValue}}
         <div class="row g-0 small text-muted">Including Tokens</div>
         <h4 class="row">
             <div class="col-lg-6">{{summaryValuesSpan $addr.TotalBaseValue 0 $data}}</div>
-            <div class="col-lg-6">{{summaryValuesSpan 0 $addr.TotalFiatValue $data}}</div>
+            <div class="col-lg-6">{{summaryValuesSpan 0 $addr.TotalSecondaryValue $data}}</div>
         </h4>
         {{end}}
     </div>
@@ -116,7 +116,7 @@
             <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#erc20Body" aria-expanded="false" aria-controls="erc20Body">
                 <div class="row g-0 w-100">
                     <h5 class="col-md-4 mb-md-0">ERC20 Tokens <span class="badge bg-secondary">{{tokenCount $addr.Tokens "ERC20"}}</span></h5>
-                    <h5 class="col-md-8 mb-md-0"><span tt="Total value of tokens">{{summaryValuesSpan $addr.TokensBaseValue $addr.TokensFiatValue $data}}</span></h5>
+                    <h5 class="col-md-8 mb-md-0"><span tt="Total value of tokens">{{summaryValuesSpan $addr.TokensBaseValue $addr.TokensSecondaryValue $data}}</span></h5>
                 </div>
             </button>
         </div>
@@ -135,7 +135,7 @@
                         <tr>
                             <td class="ellipsis"><a href="/address/{{$t.Contract}}">{{if $t.Name}}<span class="copyable" cc="{{$t.Contract}}" alias-type="Contract">{{$t.Name}}</span>{{else}}<span class="copyable">{{$t.Contract}}</span>{{end}}</a></td>
                             <td>{{formattedAmountSpan $t.BalanceSat $t.Decimals $t.Symbol $data "copyable"}}</td>
-                            <td>{{summaryValuesSpan $t.BaseValue $t.FiatValue $data}}</span></td>
+                            <td>{{summaryValuesSpan $t.BaseValue $t.SecondaryValue $data}}</span></td>
                             <td class="text-end">{{formatInt $t.Transfers}}</td>
                         </tr>
                         {{end}}

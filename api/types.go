@@ -166,8 +166,8 @@ type Token struct {
 	Symbol           string               `json:"symbol,omitempty"`
 	Decimals         int                  `json:"decimals,omitempty"`
 	BalanceSat       *Amount              `json:"balance,omitempty"`
-	BaseValue        float64              `json:"baseValue,omitempty"`
-	FiatValue        float64              `json:"fiatValue,omitempty"`
+	BaseValue        float64              `json:"baseValue,omitempty"`        // value in the base currency (ETH for Ethereum)
+	SecondaryValue   float64              `json:"secondaryValue,omitempty"`   // value in secondary (fiat) currency, if specified
 	Ids              []Amount             `json:"ids,omitempty"`              // multiple ERC721 tokens
 	MultiTokenValues []MultiTokenValue    `json:"multiTokenValues,omitempty"` // multiple ERC1155 tokens
 	TotalReceivedSat *Amount              `json:"totalReceived,omitempty"`
@@ -333,11 +333,11 @@ type Address struct {
 	Nonce                 string               `json:"nonce,omitempty"`
 	UsedTokens            int                  `json:"usedTokens,omitempty"`
 	Tokens                Tokens               `json:"tokens,omitempty"`
-	FiatValue             float64              `json:"fiatValue,omitempty"`
+	SecondaryValue        float64              `json:"secondaryValue,omitempty"` // address value in secondary currency
 	TokensBaseValue       float64              `json:"tokensBaseValue,omitempty"`
-	TokensFiatValue       float64              `json:"tokensFiatValue,omitempty"`
-	TotalBaseValue        float64              `json:"totalBaseValue,omitempty"`
-	TotalFiatValue        float64              `json:"totalFiatValue,omitempty"`
+	TokensSecondaryValue  float64              `json:"tokensSecondaryValue,omitempty"`
+	TotalBaseValue        float64              `json:"totalBaseValue,omitempty"`      // value including tokens in base currency
+	TotalSecondaryValue   float64              `json:"totalSecondaryValue,omitempty"` // value including tokens in secondary currency
 	ContractInfo          *bchain.ContractInfo `json:"contractInfo,omitempty"`
 	AddressAliases        AddressAliasesMap    `json:"addressAliases,omitempty"`
 	// helpers for explorer

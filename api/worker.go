@@ -913,7 +913,7 @@ func (w *Worker) getEthereumContractBalance(addrDesc bchain.AddressDescriptor, i
 							if ticker != nil {
 								secondaryRate, found := ticker.Rates[secondaryCoin]
 								if found {
-									t.FiatValue = t.BaseValue * float64(secondaryRate)
+									t.SecondaryValue = t.BaseValue * float64(secondaryRate)
 								}
 							}
 						}
@@ -995,14 +995,14 @@ func (w *Worker) GetContractBaseRate(ticker *common.CurrencyRatesTicker, contrac
 }
 
 type ethereumTypeAddressData struct {
-	tokens          Tokens
-	contractInfo    *bchain.ContractInfo
-	nonce           string
-	nonContractTxs  int
-	internalTxs     int
-	totalResults    int
-	tokensBaseValue float64
-	tokensFiatValue float64
+	tokens               Tokens
+	contractInfo         *bchain.ContractInfo
+	nonce                string
+	nonContractTxs       int
+	internalTxs          int
+	totalResults         int
+	tokensBaseValue      float64
+	tokensSecondaryValue float64
 }
 
 func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescriptor, details AccountDetails, filter *AddressFilter, secondaryCoin string) (*db.AddrBalance, *ethereumTypeAddressData, error) {
@@ -1055,7 +1055,7 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 				}
 				d.tokens[j] = *t
 				d.tokensBaseValue += t.BaseValue
-				d.tokensFiatValue += t.FiatValue
+				d.tokensSecondaryValue += t.SecondaryValue
 				j++
 			}
 			d.tokens = d.tokens[:j]
@@ -1306,7 +1306,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 		totalReceived = ba.ReceivedSat()
 		totalSent = &ba.SentSat
 	}
-	var secondaryRate, totalFiatValue, totalBaseValue, fiatValue float64
+	var secondaryRate, totalSecondaryValue, totalBaseValue, secondaryValue float64
 	if secondaryCoin != "" {
 		ticker := w.is.GetCurrentTicker("", "")
 		balance, err := strconv.ParseFloat((*Amount)(&ba.BalanceSat).DecimalString(w.chainParser.AmountDecimals()), 64)
@@ -1316,10 +1316,10 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 				secondaryRate = float64(r)
 			}
 		}
-		fiatValue = secondaryRate * balance
+		secondaryValue = secondaryRate * balance
 		if w.chainType == bchain.ChainEthereumType {
 			totalBaseValue += balance + ed.tokensBaseValue
-			totalFiatValue = secondaryRate * totalBaseValue
+			totalSecondaryValue = secondaryRate * totalBaseValue
 		}
 	}
 	r := &Address{
@@ -1336,11 +1336,11 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 		Transactions:          txs,
 		Txids:                 txids,
 		Tokens:                ed.tokens,
-		FiatValue:             fiatValue,
+		SecondaryValue:        secondaryValue,
 		TokensBaseValue:       ed.tokensBaseValue,
-		TokensFiatValue:       ed.tokensFiatValue,
+		TokensSecondaryValue:  ed.tokensSecondaryValue,
 		TotalBaseValue:        totalBaseValue,
-		TotalFiatValue:        totalFiatValue,
+		TotalSecondaryValue:   totalSecondaryValue,
 		ContractInfo:          ed.contractInfo,
 		Nonce:                 ed.nonce,
 		AddressAliases:        w.getAddressAliases(addresses),
