@@ -569,7 +569,7 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 	var totalReceived big.Int
 	totalReceived.Add(&data.balanceSat, &data.sentSat)
 
-	var fiatValue float64
+	var secondaryValue float64
 	if secondaryCoin != "" {
 		ticker := w.is.GetCurrentTicker("", "")
 		balance, err := strconv.ParseFloat((*Amount)(&data.balanceSat).DecimalString(w.chainParser.AmountDecimals()), 64)
@@ -577,7 +577,7 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 			r, found := ticker.Rates[secondaryCoin]
 			if found {
 				secondaryRate := float64(r)
-				fiatValue = secondaryRate * balance
+				secondaryValue = secondaryRate * balance
 			}
 		}
 	}
@@ -595,7 +595,7 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 		Txids:                 txids,
 		UsedTokens:            usedTokens,
 		Tokens:                tokens,
-		FiatValue:             fiatValue,
+		SecondaryValue:        secondaryValue,
 		XPubAddresses:         xpubAddresses,
 		AddressAliases:        w.getAddressAliases(addresses),
 	}
