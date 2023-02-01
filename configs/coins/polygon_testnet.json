@@ -6,12 +6,10 @@
         "alias": "Polygon TestNet"
     },
     "ports": {
-        "backend_rpc": 0,
+        "backend_rpc": 18099,
         "backend_message_queue": 0,
-        "backend_p2p": 38364,
-        "backend_http": 8164,
-        "blockbook_internal": 9064,
-        "blockbook_public": 9164
+        "blockbook_internal": 19099,
+        "blockbook_public": 19199
     },
     "ipc": {
         "rpc_url_template": "https://polygon-mumbai.g.alchemy.com/v2/LN4G87sFj_wQpr9wAZQOWnFvDsLZSmen",

@@ -6,12 +6,10 @@
         "alias": "Polygon"
     },
     "ports": {
-        "backend_rpc": 8064,
+        "backend_rpc": 8099,
         "backend_message_queue": 0,
-        "backend_p2p": 38364,
-        "backend_http": 8164,
-        "blockbook_internal": 9064,
-        "blockbook_public": 9164
+        "blockbook_internal": 9099,
+        "blockbook_public": 9199
     },
     "ipc": {
         "rpc_url_template": "https://polygon-mainnet.g.alchemy.com/v2/M6n6hceGoCfo3rW0dqGclpQ1jjBLKF5i",
