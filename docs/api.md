@@ -98,7 +98,7 @@ Get transaction returns "normalized" data about transaction, which has the same 
 GET /api/v2/tx/<txid>
 ```
 
-Response for Bitcoin-type coins:
+Response for Bitcoin-type coins, confirmed transaction:
 
 ```javascript
 {
@@ -142,10 +142,60 @@ Response for Bitcoin-type coins:
   "blockHeight": 2647927,
   "confirmations": 1,
   "blockTime": 1553088212,
+  "size": 234,
+  "vsize": 153,
   "value": "55795008999999",
   "valueIn": "55795108999999",
   "fees": "100000000",
   "hex": "0100000...0011000"
+}
+```
+
+Response for Bitcoin-type coins, unconfirmed transaction (_blockHeight_: -1, _confirmations_: 0, mining estimates _confirmationETABlocks_ and _confirmationETASeconds_):
+
+```javascript
+{
+  "txid": "cd8ec77174e426070d0a50779232bba7312b712e2c6843d82d963d7076c61366",
+  "version": 2,
+  "vin": [
+    {
+      "txid": "47687cc4abb58d815168686465a38113a0608b2568a6d6480129d197e653f6dc",
+      "sequence": 4294967295,
+      "n": 0,
+      "addresses": ["bc1qka0gpenex558g8gpxmpx247mwhw695k6a7yhs4"],
+      "isAddress": true,
+      "value": "1983687"
+    }
+  ],
+  "vout": [
+    {
+      "value": "3106",
+      "n": 0,
+      "hex": "0020d7da4868055fde790a8581637ab81c216e17a3f8a099283da6c4a27419ffa539",
+      "addresses": [
+        "bc1q6ldys6q9tl08jz59s93h4wquy9hp0glc5zvjs0dxcj38gx0l55uspu8x86"
+      ],
+      "isAddress": true
+    },
+    {
+      "value": "1979101",
+      "n": 1,
+      "hex": "0014381be30ca46ddf378ef69ebc4a601bd6ff30b754",
+      "addresses": ["bc1q8qd7xr9ydh0n0rhkn67y5cqm6mlnpd65dcyeeg"],
+      "isAddress": true
+    }
+  ],
+  "blockHeight": -1,
+  "confirmations": 0,
+  "confirmationETABlocks": 3,
+  "confirmationETASeconds": 2055,
+  "blockTime": 1675270935,
+  "size": 234,
+  "vsize": 153,
+  "value": "1982207",
+  "valueIn": "1983687",
+  "fees": "1480",
+  "hex": "020000000001...b18f00000000"
 }
 ```
 
