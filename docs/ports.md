@@ -35,6 +35,8 @@
 | Ritocoin                | 9060                    | 9160                  | 8060             | 38360                       |
 | Decred                  | 9061                    | 9161                  | 8061             | 38361                       |
 | SnowGem                 | 9062                    | 9162                  | 8062             | 38362                       |
+| BNB Smart Chain         | 9064                    | 9164                  | 8064             | 38364 p2p, 8164 http        |
+| BNB Smart Chain Archive | 9065                    | 9165                  | 8065             | 38365 p2p, 8165 http        |
 | Flo                     | 9066                    | 9166                  | 8066             | 38366                       |
 | Polis                   | 9067                    | 9167                  | 8067             | 38367                       |
 | Qtum                    | 9088                    | 9188                  | 8088             | 38388                       |
@@ -48,8 +50,6 @@
 | eCash                   | 9097                    | 9197                  | 8097             | 38397                       |
 | Avalanche               | 9098                    | 9198                  | 8098             | 38398 p2p                   |
 | Avalanche Archive       | 9099                    | 9199                  | 8099             | 38399 p2p                   |
-| BNB Smart Chain         | 9203                    | 9303                  | 8203             | 38403 p2p, 8303 http        |
-| BNB Smart Chain Archive | 9204                    | 9304                  | 8204             | 38404 p2p                   |
 | Bitcoin Signet          | 19020                   | 19120                 | 18020            | 48320                       |
 | Bitcoin Regtest         | 19021                   | 19121                 | 18021            | 48321                       |
 | Ethereum Goerli         | 19026                   | 19126                 | 18026            | 48326 p2p                   |

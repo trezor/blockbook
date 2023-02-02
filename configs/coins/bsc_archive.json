@@ -1,23 +1,23 @@
 {
   "coin": {
-    "name": "BNB Smart Chain",
+    "name": "BNB Smart Chain Archive",
     "shortcut": "BNB",
-    "label": "BNB Smart Chain",
-    "alias": "bsc"
+    "label": "BNB Smart Chain Archive",
+    "alias": "bsc_archive"
   },
   "ports": {
-    "backend_rpc": 8064,
-    "backend_p2p": 38364,
-    "backend_http": 8164,
-    "blockbook_internal": 9064,
-    "blockbook_public": 9164
+    "backend_rpc": 8065,
+    "backend_p2p": 38365,
+    "backend_http": 8165,
+    "blockbook_internal": 9065,
+    "blockbook_public": 9165
   },
   "ipc": {
     "rpc_url_template": "ws://127.0.0.1:{{.Ports.BackendRPC}}",
     "rpc_timeout": 25
   },
   "backend": {
-    "package_name": "backend-bsc",
+    "package_name": "backend-bsc-archive",
     "package_revision": "satoshilabs-1",
     "system_user": "bsc",
     "version": "1.1.18-hf",
@@ -44,7 +44,7 @@
     }
   },
   "blockbook": {
-    "package_name": "blockbook-bsc",
+    "package_name": "blockbook-bsc-archive",
     "system_user": "blockbook-bsc",
     "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
     "public_binding_template": ":{{.Ports.BlockbookPublic}}",
@@ -54,9 +54,11 @@
       "parse": true,
       "mempool_workers": 8,
       "mempool_sub_workers": 2,
-      "block_addresses_to_keep": 300,
+      "block_addresses_to_keep": 600,
       "additional_params": {
+        "address_aliases": true,
         "mempoolTxTimeoutHours": 48,
+        "processInternalTransactions": true,
         "queryBackendOnMempoolResync": false,
         "fiat_rates": "coingecko",
         "fiat_rates_vs_currencies": "AED,ARS,AUD,BDT,BHD,BMD,BRL,CAD,CHF,CLP,CNY,CZK,DKK,EUR,GBP,HKD,HUF,IDR,ILS,INR,JPY,KRW,KWD,LKR,MMK,MXN,MYR,NGN,NOK,NZD,PHP,PKR,PLN,RUB,SAR,SEK,SGD,THB,TRY,TWD,UAH,USD,VEF,VND,ZAR,BTC,ETH",
