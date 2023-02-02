@@ -2,7 +2,7 @@
   "coin": {
     "name": "BNB Smart Chain Archive",
     "shortcut": "BNB",
-    "label": "BNB Smart Chain Archive",
+    "label": "BNB Smart Chain",
     "alias": "bsc_archive"
   },
   "ports": {

@@ -136,6 +136,7 @@ func init() {
 	BlockChainFactories["Avalanche"] = avalanche.NewAvalancheRPC
 	BlockChainFactories["Avalanche Archive"] = avalanche.NewAvalancheRPC
 	BlockChainFactories["BNB Smart Chain"] = bsc.NewBNBSmartChainRPC
+	BlockChainFactories["BNB Smart Chain Archive"] = bsc.NewBNBSmartChainRPC
 }
 
 // GetCoinNameFromConfig gets coin name and coin shortcut from config file
