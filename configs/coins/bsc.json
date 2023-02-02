@@ -1,8 +1,8 @@
 {
   "coin": {
-    "name": "BSC Smart Chain",
+    "name": "BNB Smart Chain",
     "shortcut": "BNB",
-    "label": "BSC Smart Chain",
+    "label": "BNB Smart Chain",
     "alias": "bsc"
   },
   "ports": {
