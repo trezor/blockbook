@@ -26,6 +26,7 @@ type Backend struct {
 	ExtractCommand                  string             `json:"extract_command"`
 	ExcludeFiles                    []string           `json:"exclude_files"`
 	ExecCommandTemplate             string             `json:"exec_command_template"`
+	ExecScript                      string             `json:"exec_script"`
 	LogrotateFilesTemplate          string             `json:"logrotate_files_template"`
 	PostinstScriptTemplate          string             `json:"postinst_script_template"`
 	ServiceType                     string             `json:"service_type"`
@@ -280,11 +281,15 @@ func GeneratePackageDefinitions(config *Config, templateDir, outputDir string) e
 	}
 
 	if !isEmpty(config, "backend") {
-		err = writeBackendServerConfigFile(config, outputDir)
-		if err == nil {
-			err = writeBackendClientConfigFile(config, outputDir)
+		if err := writeBackendServerConfigFile(config, outputDir); err != nil {
+			return err
 		}
-		if err != nil {
+
+		if err := writeBackendClientConfigFile(config, outputDir); err != nil {
+			return err
+		}
+
+		if err := writeBackendExecScript(config, outputDir); err != nil {
 			return err
 		}
 	}
@@ -346,6 +351,26 @@ func writeBackendClientConfigFile(config *Config, outputDir string) error {
 		return nil
 	}
 	in, err := os.Open(filepath.Join(outputDir, "backend/config", config.Backend.ClientConfigFile))
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	_, err = io.Copy(out, in)
+	return err
+}
+
+func writeBackendExecScript(config *Config, outputDir string) error {
+	out, err := os.OpenFile(filepath.Join(outputDir, "backend/exec.sh"), os.O_CREATE|os.O_WRONLY, 0777)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	if config.Backend.ExecScript == "" {
+		return nil
+	}
+	in, err := os.Open(filepath.Join(outputDir, "backend/scripts", config.Backend.ExecScript))
 	if err != nil {
 		return err
 	}
