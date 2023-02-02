@@ -109,13 +109,13 @@
 </table>
 {{end}}
 {{if eq .ChainType 1}}
-{{if tokenCount $addr.Tokens "ERC20"}}
+{{if tokenCount $addr.Tokens .FungibleTokenName}}
 <div class="accordion mt-2 mb-2" id="erc20">
     <div class="accordion-item">
         <div class="accordion-header" id="erc20Heading">
             <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#erc20Body" aria-expanded="false" aria-controls="erc20Body">
                 <div class="row g-0 w-100">
-                    <h5 class="col-md-4 mb-md-0">ERC20 Tokens <span class="badge bg-secondary">{{tokenCount $addr.Tokens "ERC20"}}</span></h5>
+                    <h5 class="col-md-4 mb-md-0">{{.FungibleTokenName}} Tokens <span class="badge bg-secondary">{{tokenCount $addr.Tokens .FungibleTokenName}}</span></h5>
                     <h5 class="col-md-8 mb-md-0"><span tt="Total value of tokens">{{summaryValuesSpan $addr.TokensBaseValue $addr.TokensSecondaryValue $data}}</span></h5>
                 </div>
             </button>
@@ -131,7 +131,7 @@
                             <th class="text-end" style="width: 10%;"><span class="d-none d-md-block">Transfers</span><span class="d-block d-md-none">#</span></th>
                         </tr>
                         {{range $t := $addr.Tokens}}
-                        {{if eq $t.Type "ERC20"}}
+                        {{if eq $t.Type $.FungibleTokenName}}
                         <tr>
                             <td class="ellipsis"><a href="/address/{{$t.Contract}}">{{if $t.Name}}<span class="copyable" cc="{{$t.Contract}}" alias-type="Contract">{{$t.Name}}</span>{{else}}<span class="copyable">{{$t.Contract}}</span>{{end}}</a></td>
                             <td>{{formattedAmountSpan $t.BalanceSat $t.Decimals $t.Symbol $data "copyable"}}</td>
@@ -147,13 +147,13 @@
     </div>
 </div>
 {{end}}
-{{if tokenCount $addr.Tokens "ERC721"}}
+{{if tokenCount $addr.Tokens .NonFungibleTokenName}}
 <div class="accordion mt-2 mb-2" id="erc721">
     <div class="accordion-item">
         <div class="accordion-header" id="erc721Heading">
             <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#erc721Body" aria-expanded="false" aria-controls="erc721Body">
                 <div class="row g-0 w-100">
-                    <h5 class="col-12 mb-md-0">ERC721 Tokens <span class="badge bg-secondary">{{tokenCount $addr.Tokens "ERC721"}}</span></h5>
+                    <h5 class="col-12 mb-md-0">{{.NonFungibleTokenName}} Tokens <span class="badge bg-secondary">{{tokenCount $addr.Tokens .NonFungibleTokenName}}</span></h5>
                 </div>
             </button>
         </div>
@@ -167,7 +167,7 @@
                             <th class="text-end" style="width: 10%;"><span class="d-none d-md-block">Transfers</span><span class="d-block d-md-none">#</span></th>
                         </tr>
                         {{range $t := $addr.Tokens}}
-                        {{if eq $t.Type "ERC721"}}
+                        {{if eq $t.Type $.NonFungibleTokenName}}
                         <tr>
                             <td class="ellipsis"><a href="/address/{{$t.Contract}}">{{if $t.Name}}<span class="copyable" cc="{{$t.Contract}}" alias-type="Contract">{{$t.Name}}</span>{{else}}<span class="copyable">{{$t.Contract}}</span>{{end}}</a></td>
                             <td>
@@ -184,13 +184,13 @@
     </div>
 </div>
 {{end}}
-{{if tokenCount $addr.Tokens "ERC1155"}}
+{{if tokenCount $addr.Tokens .MultiTokenName}}
 <div class="accordion mt-2 mb-2" id="erc1155">
     <div class="accordion-item">
         <div class="accordion-header" id="erc1155Heading">
             <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#erc1155Body" aria-expanded="false" aria-controls="erc1155Body">
                 <div class="row g-0 w-100">
-                    <h5 class="col-12 mb-md-0">ERC1155 Tokens <span class="badge bg-secondary">{{tokenCount $addr.Tokens "ERC1155"}}</span></h5>
+                    <h5 class="col-12 mb-md-0">{{.MultiTokenName}} Tokens <span class="badge bg-secondary">{{tokenCount $addr.Tokens .MultiTokenName}}</span></h5>
                 </div>
             </button>
         </div>
@@ -204,7 +204,7 @@
                             <th class="text-end" style="width: 10%;"><span class="d-none d-md-block">Transfers</span><span class="d-block d-md-none">#</span></th>
                         </tr>
                         {{range $t := $addr.Tokens}}
-                        {{if eq $t.Type "ERC1155"}}
+                        {{if eq $t.Type $.MultiTokenName}}
                         <tr>
                             <td class="ellipsis"><a href="/address/{{$t.Contract}}">{{if $t.Name}}<span class="copyable" cc="{{$t.Contract}}" alias-type="Contract">{{$t.Name}}</span>{{else}}<span class="copyable">{{$t.Contract}}</span>{{end}}</a></td>
                             <td>
@@ -234,18 +234,18 @@
             <option {{if eq $addr.Filter "0"}}selected{{end}} value="0">Non-contract</option>
             <option {{if eq $addr.Filter "1"}}selected{{end}} value="1">Internal</option>
             {{range $t := $addr.Tokens}}
-            {{if eq $t.Type "ERC20"}}
-            <option {{if eq $addr.Filter $t.ContractIndex}}selected{{end}} value="{{$t.ContractIndex}}">{{if $t.Name}}{{$t.Name}}{{else}}{{$t.Contract}}{{end}} (ERC20)</option>
+            {{if eq $t.Type $.FungibleTokenName}}
+            <option {{if eq $addr.Filter $t.ContractIndex}}selected{{end}} value="{{$t.ContractIndex}}">{{if $t.Name}}{{$t.Name}}{{else}}{{$t.Contract}}{{end}} ({{$.FungibleTokenName}})</option>
             {{end}}
             {{end}}
             {{range $t := $addr.Tokens}}
-            {{if eq $t.Type "ERC721"}}
-            <option {{if eq $addr.Filter $t.ContractIndex}}selected{{end}} value="{{$t.ContractIndex}}">{{if $t.Name}}{{$t.Name}}{{else}}{{$t.Contract}}{{end}} (ERC721)</option>
+            {{if eq $t.Type $.NonFungibleTokenName}}
+            <option {{if eq $addr.Filter $t.ContractIndex}}selected{{end}} value="{{$t.ContractIndex}}">{{if $t.Name}}{{$t.Name}}{{else}}{{$t.Contract}}{{end}} ({{$.NonFungibleTokenName}})</option>
             {{end}}
             {{end}}
             {{range $t := $addr.Tokens}}
-            {{if eq $t.Type "ERC1155"}}
-            <option {{if eq $addr.Filter $t.ContractIndex}}selected{{end}} value="{{$t.ContractIndex}}">{{if $t.Name}}{{$t.Name}}{{else}}{{$t.Contract}}{{end}} (ERC1155)</option>
+            {{if eq $t.Type $.MultiTokenName}}
+            <option {{if eq $addr.Filter $t.ContractIndex}}selected{{end}} value="{{$t.ContractIndex}}">{{if $t.Name}}{{$t.Name}}{{else}}{{$t.Contract}}{{end}} ({{$.MultiTokenName}})</option>
             {{end}}
             {{end}}
             {{end}}

@@ -95,18 +95,12 @@
     {{end}}
     {{end}}
 
-    {{if tokenTransfersCount $tx "ERC20"}}
+    {{if tokenTransfersCount $tx .FungibleTokenName}}
     <div class="row subhead">
-        ERC20 Token Transfers
+        {{.FungibleTokenName}} Token Transfers
     </div>
-    {{end}}
-    {{if tokenTransfersCount $tx "BEP20"}}
-    <div class="row subhead">
-        BEP20 Token Transfers
-    </div>
-    {{end}}
     {{range $tt := $tx.TokenTransfers}}
-    {{if or (eq $tt.Type "ERC20") (eq $tt.Type "BEP20")}}
+    {{if eq $tt.Type $.FungibleTokenName}}
     <div class="row body">
         <div class="col-md-4">
             <div class="row tx-addr">
@@ -127,19 +121,14 @@
     </div>
     {{end}}
     {{end}}
+    {{end}}
 
-    {{if tokenTransfersCount $tx "ERC721"}}
+    {{if tokenTransfersCount $tx .NonFungibleTokenName}}
     <div class="row subhead">
-        ERC721 Token Transfers
+        {{.NonFungibleTokenName}} Token Transfers
     </div>
-    {{end}}
-    {{if tokenTransfersCount $tx "BEP721"}}
-    <div class="row subhead">
-        BEP721 Token Transfers
-    </div>
-    {{end}}
     {{range $tt := $tx.TokenTransfers}}
-    {{if or (eq $tt.Type "ERC721") (eq $tt.Type "BEP721")}}
+    {{if eq $tt.Type $.NonFungibleTokenName}}
     <div class="row body">
         <div class="col-md-4">
             <div class="row tx-addr">
@@ -160,19 +149,14 @@
     </div>
     {{end}}
     {{end}}
+    {{end}}
 
-    {{if tokenTransfersCount $tx "ERC1155"}}
+    {{if tokenTransfersCount $tx .MultiTokenName}}
     <div class="row subhead">
-        ERC1155 Token Transfers
+        {{.MultiTokenName}} Token Transfers
     </div>
-    {{end}}
-    {{if tokenTransfersCount $tx "BEP1155"}}
-    <div class="row subhead">
-        BEP1155 Token Transfers
-    </div>
-    {{end}}
     {{range $tt := $tx.TokenTransfers}}
-    {{if or (eq $tt.Type "ERC1155") (eq $tt.Type "BEP1155")}}
+    {{if eq $tt.Type $.MultiTokenName}}
     <div class="row body">
         <div class="col-md-4">
             <div class="row tx-addr">
@@ -195,6 +179,7 @@
             {{end}}
         </div>
     </div>
+    {{end}}
     {{end}}
     {{end}}
 

@@ -343,6 +343,11 @@ func (s *PublicServer) newTemplateData(r *http.Request) *TemplateData {
 		InternalExplorer: s.internalExplorer && !s.is.InitialSync,
 		TOSLink:          api.Text.TOSLink,
 	}
+	if t.ChainType == bchain.ChainEthereumType {
+		t.FungibleTokenName = bchain.EthereumTokenTypeMap[bchain.FungibleToken]
+		t.NonFungibleTokenName = bchain.EthereumTokenTypeMap[bchain.NonFungibleToken]
+		t.MultiTokenName = bchain.EthereumTokenTypeMap[bchain.MultiToken]
+	}
 	if !s.debug {
 		t.Minified = ".min.2"
 	}
@@ -486,6 +491,9 @@ type TemplateData struct {
 	CoinLabel                string
 	InternalExplorer         bool
 	ChainType                bchain.ChainType
+	FungibleTokenName        bchain.TokenTypeName
+	NonFungibleTokenName     bchain.TokenTypeName
+	MultiTokenName           bchain.TokenTypeName
 	Address                  *api.Address
 	AddrStr                  string
 	Tx                       *api.Tx
