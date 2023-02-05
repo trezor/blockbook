@@ -59,17 +59,18 @@ const (
 
 // RocksDB handle
 type RocksDB struct {
-	path         string
-	db           *grocksdb.DB
-	wo           *grocksdb.WriteOptions
-	ro           *grocksdb.ReadOptions
-	cfh          []*grocksdb.ColumnFamilyHandle
-	chainParser  bchain.BlockChainParser
-	is           *common.InternalState
-	metrics      *common.Metrics
-	cache        *grocksdb.Cache
-	maxOpenFiles int
-	cbs          connectBlockStats
+	path          string
+	db            *grocksdb.DB
+	wo            *grocksdb.WriteOptions
+	ro            *grocksdb.ReadOptions
+	cfh           []*grocksdb.ColumnFamilyHandle
+	chainParser   bchain.BlockChainParser
+	is            *common.InternalState
+	metrics       *common.Metrics
+	cache         *grocksdb.Cache
+	maxOpenFiles  int
+	cbs           connectBlockStats
+	extendedIndex bool
 }
 
 const (
@@ -126,7 +127,7 @@ func openDB(path string, c *grocksdb.Cache, openFiles int) (*grocksdb.DB, []*gro
 
 // NewRocksDB opens an internal handle to RocksDB environment.  Close
 // needs to be called to release it.
-func NewRocksDB(path string, cacheSize, maxOpenFiles int, parser bchain.BlockChainParser, metrics *common.Metrics) (d *RocksDB, err error) {
+func NewRocksDB(path string, cacheSize, maxOpenFiles int, parser bchain.BlockChainParser, metrics *common.Metrics, extendedIndex bool) (d *RocksDB, err error) {
 	glog.Infof("rocksdb: opening %s, required data version %v, cache size %v, max open files %v", path, dbVersion, cacheSize, maxOpenFiles)
 
 	cfNames = append([]string{}, cfBaseNames...)
@@ -135,6 +136,7 @@ func NewRocksDB(path string, cacheSize, maxOpenFiles int, parser bchain.BlockCha
 		cfNames = append(cfNames, cfNamesBitcoinType...)
 	} else if chainType == bchain.ChainEthereumType {
 		cfNames = append(cfNames, cfNamesEthereumType...)
+		extendedIndex = false
 	} else {
 		return nil, errors.New("Unknown chain type")
 	}
@@ -146,7 +148,7 @@ func NewRocksDB(path string, cacheSize, maxOpenFiles int, parser bchain.BlockCha
 	}
 	wo := grocksdb.NewDefaultWriteOptions()
 	ro := grocksdb.NewDefaultReadOptions()
-	return &RocksDB{path, db, wo, ro, cfh, parser, nil, metrics, c, maxOpenFiles, connectBlockStats{}}, nil
+	return &RocksDB{path, db, wo, ro, cfh, parser, nil, metrics, c, maxOpenFiles, connectBlockStats{}, extendedIndex}, nil
 }
 
 func (d *RocksDB) closeDB() error {
@@ -202,6 +204,11 @@ func atoUint64(s string) uint64 {
 
 func (d *RocksDB) WriteBatch(wb *grocksdb.WriteBatch) error {
 	return d.db.Write(d.wo, wb)
+}
+
+// HasExtendedIndex returns true if the DB indexes input txids and spending data
+func (d *RocksDB) HasExtendedIndex() bool {
+	return d.extendedIndex
 }
 
 // GetMemoryStats returns memory usage statistics as reported by RocksDB
@@ -417,9 +424,12 @@ func (ti *TxInput) Addresses(p bchain.BlockChainParser) ([]string, bool, error) 
 
 // TxOutput holds output data of the transaction in TxAddresses
 type TxOutput struct {
-	AddrDesc bchain.AddressDescriptor
-	Spent    bool
-	ValueSat big.Int
+	AddrDesc    bchain.AddressDescriptor
+	Spent       bool
+	ValueSat    big.Int
+	SpentTxid   string
+	SpentIndex  uint32
+	SpentHeight uint32
 }
 
 // Addresses converts AddressDescriptor of the output to array of strings
@@ -681,6 +691,11 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses add
 			tai.ValueSat = spentOutput.ValueSat
 			// mark the output as spent in tx
 			spentOutput.Spent = true
+			if d.extendedIndex {
+				spentOutput.SpentTxid = tx.Txid
+				spentOutput.SpentIndex = uint32(i)
+				spentOutput.SpentHeight = block.Height
+			}
 			if len(spentOutput.AddrDesc) == 0 {
 				if !logged {
 					glog.V(1).Infof("rocksdb: height %d, tx %v, input tx %v vout %v skipping empty address", block.Height, tx.Txid, input.Txid, input.Vout)
@@ -757,7 +772,7 @@ func (d *RocksDB) storeTxAddresses(wb *grocksdb.WriteBatch, am map[string]*TxAdd
 	varBuf := make([]byte, maxPackedBigintBytes)
 	buf := make([]byte, 1024)
 	for txID, ta := range am {
-		buf = packTxAddresses(ta, buf, varBuf)
+		buf = d.packTxAddresses(ta, buf, varBuf)
 		wb.PutCF(d.cfh[cfTxAddresses], []byte(txID), buf)
 	}
 	return nil
@@ -901,7 +916,7 @@ func (d *RocksDB) getTxAddresses(btxID []byte) (*TxAddresses, error) {
 	if len(buf) < 3 {
 		return nil, nil
 	}
-	return unpackTxAddresses(buf)
+	return d.unpackTxAddresses(buf)
 }
 
 // GetTxAddresses returns TxAddresses for given txid or nil if not found
@@ -932,7 +947,7 @@ func (d *RocksDB) AddrDescForOutpoint(outpoint bchain.Outpoint) (bchain.AddressD
 	return ta.Outputs[outpoint.Vout].AddrDesc, &ta.Outputs[outpoint.Vout].ValueSat
 }
 
-func packTxAddresses(ta *TxAddresses, buf []byte, varBuf []byte) []byte {
+func (d *RocksDB) packTxAddresses(ta *TxAddresses, buf []byte, varBuf []byte) []byte {
 	buf = buf[:0]
 	l := packVaruint(uint(ta.Height), varBuf)
 	buf = append(buf, varBuf[:l]...)
@@ -944,7 +959,7 @@ func packTxAddresses(ta *TxAddresses, buf []byte, varBuf []byte) []byte {
 	l = packVaruint(uint(len(ta.Outputs)), varBuf)
 	buf = append(buf, varBuf[:l]...)
 	for i := range ta.Outputs {
-		buf = appendTxOutput(&ta.Outputs[i], buf, varBuf)
+		buf = d.appendTxOutput(&ta.Outputs[i], buf, varBuf)
 	}
 	return buf
 }
@@ -959,7 +974,7 @@ func appendTxInput(txi *TxInput, buf []byte, varBuf []byte) []byte {
 	return buf
 }
 
-func appendTxOutput(txo *TxOutput, buf []byte, varBuf []byte) []byte {
+func (d *RocksDB) appendTxOutput(txo *TxOutput, buf []byte, varBuf []byte) []byte {
 	la := len(txo.AddrDesc)
 	if txo.Spent {
 		la = ^la
@@ -969,6 +984,20 @@ func appendTxOutput(txo *TxOutput, buf []byte, varBuf []byte) []byte {
 	buf = append(buf, txo.AddrDesc...)
 	l = packBigint(&txo.ValueSat, varBuf)
 	buf = append(buf, varBuf[:l]...)
+	if d.extendedIndex && txo.Spent {
+		btxID, err := d.chainParser.PackTxid(txo.SpentTxid)
+		if err != nil {
+			if err != bchain.ErrTxidMissing {
+				glog.Error("Cannot pack txid ", txo.SpentTxid)
+			}
+			btxID = make([]byte, d.chainParser.PackedTxidLen())
+		}
+		buf = append(buf, btxID...)
+		l = packVaruint(uint(txo.SpentIndex), varBuf)
+		buf = append(buf, varBuf[:l]...)
+		l = packVaruint(uint(txo.SpentHeight), varBuf)
+		buf = append(buf, varBuf[:l]...)
+	}
 	return buf
 }
 
@@ -1034,7 +1063,7 @@ func packAddrBalance(ab *AddrBalance, buf, varBuf []byte) []byte {
 	return buf
 }
 
-func unpackTxAddresses(buf []byte) (*TxAddresses, error) {
+func (d *RocksDB) unpackTxAddresses(buf []byte) (*TxAddresses, error) {
 	ta := TxAddresses{}
 	height, l := unpackVaruint(buf)
 	ta.Height = uint32(height)
@@ -1048,7 +1077,7 @@ func unpackTxAddresses(buf []byte) (*TxAddresses, error) {
 	l += ll
 	ta.Outputs = make([]TxOutput, outputs)
 	for i := uint(0); i < outputs; i++ {
-		l += unpackTxOutput(&ta.Outputs[i], buf[l:])
+		l += d.unpackTxOutput(&ta.Outputs[i], buf[l:])
 	}
 	return &ta, nil
 }
@@ -1061,7 +1090,7 @@ func unpackTxInput(ti *TxInput, buf []byte) int {
 	return l + int(al)
 }
 
-func unpackTxOutput(to *TxOutput, buf []byte) int {
+func (d *RocksDB) unpackTxOutput(to *TxOutput, buf []byte) int {
 	al, l := unpackVarint(buf)
 	if al < 0 {
 		to.Spent = true
@@ -1070,7 +1099,20 @@ func unpackTxOutput(to *TxOutput, buf []byte) int {
 	to.AddrDesc = append([]byte(nil), buf[l:l+al]...)
 	al += l
 	to.ValueSat, l = unpackBigint(buf[al:])
-	return l + al
+	al += l
+	if d.extendedIndex && to.Spent {
+		l = d.chainParser.PackedTxidLen()
+		to.SpentTxid, _ = d.chainParser.UnpackTxid(buf[al : al+l])
+		al += l
+		var i uint
+		i, l = unpackVaruint(buf[al:])
+		al += l
+		to.SpentIndex = uint32(i)
+		i, l = unpackVaruint(buf[al:])
+		to.SpentHeight = uint32(i)
+		al += l
+	}
+	return al
 }
 
 func (d *RocksDB) packTxIndexes(txi []txIndexes) []byte {
@@ -1682,7 +1724,7 @@ func (d *RocksDB) LoadInternalState(rpcCoin string) (*common.InternalState, erro
 	data := val.Data()
 	var is *common.InternalState
 	if len(data) == 0 {
-		is = &common.InternalState{Coin: rpcCoin, UtxoChecked: true}
+		is = &common.InternalState{Coin: rpcCoin, UtxoChecked: true, ExtendedIndex: d.extendedIndex}
 	} else {
 		is, err = common.UnpackInternalState(data)
 		if err != nil {
@@ -1694,6 +1736,9 @@ func (d *RocksDB) LoadInternalState(rpcCoin string) (*common.InternalState, erro
 			is.Coin = rpcCoin
 		} else if is.Coin != rpcCoin {
 			return nil, errors.Errorf("Coins do not match. DB coin %v, RPC coin %v", is.Coin, rpcCoin)
+		}
+		if is.ExtendedIndex != d.extendedIndex {
+			return nil, errors.Errorf("ExtendedIndex setting does not match. DB extendedIndex %v, extendedIndex in options %v", is.ExtendedIndex, d.extendedIndex)
 		}
 	}
 	nc, err := d.checkColumns(is)

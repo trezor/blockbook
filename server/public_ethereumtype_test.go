@@ -211,7 +211,7 @@ func Test_PublicServer_EthereumType(t *testing.T) {
 		glog.Fatal("fakechain: ", err)
 	}
 
-	s, dbpath := setupPublicHTTPServer(parser, chain, t)
+	s, dbpath := setupPublicHTTPServer(parser, chain, t, false)
 	defer closeAndDestroyPublicServer(t, s, dbpath)
 	s.ConnectFullPublicInterface()
 	// take the handler of the public server and pass it to the test server

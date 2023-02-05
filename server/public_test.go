@@ -39,12 +39,12 @@ func TestMain(m *testing.M) {
 	os.Exit(c)
 }
 
-func setupRocksDB(parser bchain.BlockChainParser, chain bchain.BlockChain, t *testing.T) (*db.RocksDB, *common.InternalState, string) {
+func setupRocksDB(parser bchain.BlockChainParser, chain bchain.BlockChain, t *testing.T, extendedIndex bool) (*db.RocksDB, *common.InternalState, string) {
 	tmp, err := ioutil.TempDir("", "testdb")
 	if err != nil {
 		t.Fatal(err)
 	}
-	d, err := db.NewRocksDB(tmp, 100000, -1, parser, nil)
+	d, err := db.NewRocksDB(tmp, 100000, -1, parser, nil, extendedIndex)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,8 +95,8 @@ func setupRocksDB(parser bchain.BlockChainParser, chain bchain.BlockChain, t *te
 
 var metrics *common.Metrics
 
-func setupPublicHTTPServer(parser bchain.BlockChainParser, chain bchain.BlockChain, t *testing.T) (*PublicServer, string) {
-	d, is, path := setupRocksDB(parser, chain, t)
+func setupPublicHTTPServer(parser bchain.BlockChainParser, chain bchain.BlockChain, t *testing.T, extendedIndex bool) (*PublicServer, string) {
+	d, is, path := setupRocksDB(parser, chain, t, extendedIndex)
 	// setup internal state and match BestHeight to test data
 	is.Coin = "Fakecoin"
 	is.CoinLabel = "Fake Coin"
@@ -105,7 +105,7 @@ func setupPublicHTTPServer(parser bchain.BlockChainParser, chain bchain.BlockCha
 	var err error
 	// metrics can be setup only once
 	if metrics == nil {
-		metrics, err = common.GetMetrics("Fakecoin")
+		metrics, err = common.GetMetrics("Fakecoin" + strconv.FormatBool(extendedIndex))
 		if err != nil {
 			glog.Fatal("metrics: ", err)
 		}
@@ -1499,7 +1499,7 @@ func fixedTimeNow() time.Time {
 	return time.Date(2022, 9, 15, 12, 43, 56, 0, time.UTC)
 }
 
-func Test_PublicServer_BitcoinType(t *testing.T) {
+func setupChain(t *testing.T) (bchain.BlockChainParser, bchain.BlockChain) {
 	timeNow = fixedTimeNow
 	parser := btc.NewBitcoinParser(
 		btc.GetChainParams("test"),
@@ -1515,8 +1515,13 @@ func Test_PublicServer_BitcoinType(t *testing.T) {
 	if err != nil {
 		glog.Fatal("fakechain: ", err)
 	}
+	return parser, chain
+}
 
-	s, dbpath := setupPublicHTTPServer(parser, chain, t)
+func Test_PublicServer_BitcoinType(t *testing.T) {
+	parser, chain := setupChain(t)
+
+	s, dbpath := setupPublicHTTPServer(parser, chain, t, false)
 	defer closeAndDestroyPublicServer(t, s, dbpath)
 	s.ConnectFullPublicInterface()
 	// take the handler of the public server and pass it to the test server
@@ -1526,6 +1531,83 @@ func Test_PublicServer_BitcoinType(t *testing.T) {
 	httpTestsBitcoinType(t, ts)
 	socketioTestsBitcoinType(t, ts)
 	websocketTestsBitcoinType(t, ts)
+}
+
+func httpTestsExtendedIndex(t *testing.T, ts *httptest.Server) {
+	tests := []struct {
+		name        string
+		r           *http.Request
+		status      int
+		contentType string
+		body        []string
+	}{
+		{
+			name:        "apiTx v2",
+			r:           newGetRequest(ts.URL + "/api/v2/tx/7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25"),
+			status:      http.StatusOK,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`{"txid":"7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25","vin":[{"txid":"effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75","n":0,"addresses":["mv9uLThosiEnGRbVPS7Vhyw6VssbVRsiAw"],"isAddress":true,"value":"1234567890123"},{"txid":"00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840","vout":1,"n":1,"addresses":["mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz"],"isAddress":true,"value":"12345"}],"vout":[{"value":"317283951061","n":0,"spent":true,"spentTxId":"3d90d15ed026dc45e19ffb52875ed18fa9e8012ad123d7f7212176e2b0ebdb71","spentHeight":225494,"hex":"76a914ccaaaf374e1b06cb83118453d102587b4273d09588ac","addresses":["mzB8cYrfRwFRFAGTDzV8LkUQy5BQicxGhX"],"isAddress":true},{"value":"917283951061","n":1,"hex":"76a9148d802c045445df49613f6a70ddd2e48526f3701f88ac","addresses":["mtR97eM2HPWVM6c8FGLGcukgaHHQv7THoL"],"isAddress":true},{"value":"0","n":2,"hex":"6a072020f1686f6a20","addresses":["OP_RETURN 2020f1686f6a20"],"isAddress":false}],"blockHash":"00000000eb0443fd7dc4a1ed5c686a8e995057805f9a161d9a5a77a95e72b7b6","blockHeight":225494,"confirmations":1,"blockTime":1521595678,"value":"1234567902122","valueIn":"1234567902468","fees":"346"}`,
+			},
+		},
+		{
+			name:        "apiAddress v2 details=txs",
+			r:           newGetRequest(ts.URL + "/api/v2/address/mv9uLThosiEnGRbVPS7Vhyw6VssbVRsiAw?details=txs"),
+			status:      http.StatusOK,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`{"page":1,"totalPages":1,"itemsOnPage":1000,"address":"mv9uLThosiEnGRbVPS7Vhyw6VssbVRsiAw","balance":"0","totalReceived":"1234567890123","totalSent":"1234567890123","unconfirmedBalance":"0","unconfirmedTxs":0,"txs":2,"transactions":[{"txid":"7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25","vin":[{"txid":"effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75","n":0,"addresses":["mv9uLThosiEnGRbVPS7Vhyw6VssbVRsiAw"],"isAddress":true,"isOwn":true,"value":"1234567890123"},{"txid":"00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840","vout":1,"n":1,"addresses":["mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz"],"isAddress":true,"value":"12345"}],"vout":[{"value":"317283951061","n":0,"spent":true,"spentTxId":"3d90d15ed026dc45e19ffb52875ed18fa9e8012ad123d7f7212176e2b0ebdb71","spentHeight":225494,"hex":"76a914ccaaaf374e1b06cb83118453d102587b4273d09588ac","addresses":["mzB8cYrfRwFRFAGTDzV8LkUQy5BQicxGhX"],"isAddress":true},{"value":"917283951061","n":1,"hex":"76a9148d802c045445df49613f6a70ddd2e48526f3701f88ac","addresses":["mtR97eM2HPWVM6c8FGLGcukgaHHQv7THoL"],"isAddress":true},{"value":"0","n":2,"hex":"6a072020f1686f6a20","addresses":["OP_RETURN 2020f1686f6a20"],"isAddress":false}],"blockHash":"00000000eb0443fd7dc4a1ed5c686a8e995057805f9a161d9a5a77a95e72b7b6","blockHeight":225494,"confirmations":1,"blockTime":1521595678,"value":"1234567902122","valueIn":"1234567902468","fees":"346"},{"txid":"effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75","vin":[],"vout":[{"value":"1234567890123","n":0,"spent":true,"spentTxId":"7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25","spentHeight":225494,"hex":"76a914a08eae93007f22668ab5e4a9c83c8cd1c325e3e088ac","addresses":["mv9uLThosiEnGRbVPS7Vhyw6VssbVRsiAw"],"isAddress":true,"isOwn":true},{"value":"1","n":1,"spent":true,"spentTxId":"3d90d15ed026dc45e19ffb52875ed18fa9e8012ad123d7f7212176e2b0ebdb71","spentIndex":1,"spentHeight":225494,"hex":"a91452724c5178682f70e0ba31c6ec0633755a3b41d987","addresses":["2MzmAKayJmja784jyHvRUW1bXPget1csRRG"],"isAddress":true},{"value":"9876","n":2,"spent":true,"spentTxId":"05e2e48aeabdd9b75def7b48d756ba304713c2aba7b522bf9dbc893fc4231b07","spentHeight":225494,"hex":"a914e921fc4912a315078f370d959f2c4f7b6d2a683c87","addresses":["2NEVv9LJmAnY99W1pFoc5UJjVdypBqdnvu1"],"isAddress":true}],"blockHash":"0000000076fbbed90fd75b0e18856aa35baa984e9c9d444cf746ad85e94e2997","blockHeight":225493,"confirmations":2,"blockTime":1521515026,"value":"1234567900000","valueIn":"0","fees":"0"}]}`,
+			},
+		},
+		{
+			name:        "apiGetBlock",
+			r:           newGetRequest(ts.URL + "/api/v2/block/225493"),
+			status:      http.StatusOK,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`{"page":1,"totalPages":1,"itemsOnPage":1000,"hash":"0000000076fbbed90fd75b0e18856aa35baa984e9c9d444cf746ad85e94e2997","nextBlockHash":"00000000eb0443fd7dc4a1ed5c686a8e995057805f9a161d9a5a77a95e72b7b6","height":225493,"confirmations":2,"size":1234567,"time":1521515026,"version":0,"merkleRoot":"","nonce":"","bits":"","difficulty":"","txCount":2,"txs":[{"txid":"00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840","vin":[],"vout":[{"value":"100000000","n":0,"addresses":["mfcWp7DB6NuaZsExybTTXpVgWz559Np4Ti"],"isAddress":true},{"value":"12345","n":1,"spent":true,"spentTxId":"7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25","spentIndex":1,"spentHeight":225494,"addresses":["mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz"],"isAddress":true},{"value":"12345","n":2,"addresses":["mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz"],"isAddress":true}],"blockHash":"0000000076fbbed90fd75b0e18856aa35baa984e9c9d444cf746ad85e94e2997","blockHeight":225493,"confirmations":2,"blockTime":1521515026,"value":"100024690","valueIn":"0","fees":"0"},{"txid":"effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75","vin":[],"vout":[{"value":"1234567890123","n":0,"spent":true,"spentTxId":"7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25","spentHeight":225494,"addresses":["mv9uLThosiEnGRbVPS7Vhyw6VssbVRsiAw"],"isAddress":true},{"value":"1","n":1,"spent":true,"spentTxId":"3d90d15ed026dc45e19ffb52875ed18fa9e8012ad123d7f7212176e2b0ebdb71","spentIndex":1,"spentHeight":225494,"addresses":["2MzmAKayJmja784jyHvRUW1bXPget1csRRG"],"isAddress":true},{"value":"9876","n":2,"spent":true,"spentTxId":"05e2e48aeabdd9b75def7b48d756ba304713c2aba7b522bf9dbc893fc4231b07","spentHeight":225494,"addresses":["2NEVv9LJmAnY99W1pFoc5UJjVdypBqdnvu1"],"isAddress":true}],"blockHash":"0000000076fbbed90fd75b0e18856aa35baa984e9c9d444cf746ad85e94e2997","blockHeight":225493,"confirmations":2,"blockTime":1521515026,"value":"1234567900000","valueIn":"0","fees":"0"}]}`,
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp, err := http.DefaultClient.Do(tt.r)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != tt.status {
+				t.Errorf("StatusCode = %v, want %v", resp.StatusCode, tt.status)
+			}
+			if resp.Header["Content-Type"][0] != tt.contentType {
+				t.Errorf("Content-Type = %v, want %v", resp.Header["Content-Type"][0], tt.contentType)
+			}
+			bb, err := ioutil.ReadAll(resp.Body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			b := string(bb)
+			for _, c := range tt.body {
+				if !strings.Contains(b, c) {
+					t.Errorf("got %v, want to contain %v", b, c)
+					break
+				}
+			}
+		})
+	}
+}
+
+func Test_PublicServer_BitcoinType_ExtendedIndex(t *testing.T) {
+	parser, chain := setupChain(t)
+
+	s, dbpath := setupPublicHTTPServer(parser, chain, t, true)
+	defer closeAndDestroyPublicServer(t, s, dbpath)
+	s.ConnectFullPublicInterface()
+	// take the handler of the public server and pass it to the test server
+	ts := httptest.NewServer(s.https.Handler)
+	defer ts.Close()
+
+	httpTestsExtendedIndex(t, ts)
 }
 
 func Test_formatInt64(t *testing.T) {
