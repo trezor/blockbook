@@ -291,6 +291,16 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *webs
 		}
 		return
 	},
+	"getBlock": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
+		r := struct {
+			Id string `json:"id"`
+		}{}
+		err = json.Unmarshal(req.Params, &r)
+		if err == nil {
+			rv, err = s.getBlock(r.Id)
+		}
+		return
+	},
 	"getAccountUtxo": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
 		r := struct {
 			Descriptor string `json:"descriptor"`
@@ -614,6 +624,14 @@ func (s *WebsocketServer) getBlockHash(height int) (interface{}, error) {
 	return &hash{
 		Hash: h,
 	}, nil
+}
+
+func (s *WebsocketServer) getBlock(id string) (interface{}, error) {
+	block, err := s.api.GetBlock(id, 0, 100000)
+	if err != nil {
+		return nil, err
+	}
+	return block, nil
 }
 
 func (s *WebsocketServer) estimateFee(c *websocketChannel, params []byte) (interface{}, error) {

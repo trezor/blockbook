@@ -1435,6 +1435,16 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			},
 			want: `{"id":"39","data":{"subscribed":false,"message":"unsubscribeNewTransaction not enabled, use -enablesubnewtx flag to enable."}}`,
 		},
+		{
+			name: "websocket getBlock",
+			req: websocketReq{
+				Method: "getBlock",
+				Params: map[string]interface{}{
+					"id": "00000000eb0443fd7dc4a1ed5c686a8e995057805f9a161d9a5a77a95e72b7b6",
+				},
+			},
+			want: `{"id":"40","data":{"page":1,"totalPages":1,"itemsOnPage":100000,"hash":"00000000eb0443fd7dc4a1ed5c686a8e995057805f9a161d9a5a77a95e72b7b6","previousBlockHash":"0000000076fbbed90fd75b0e18856aa35baa984e9c9d444cf746ad85e94e2997","height":225494,"confirmations":1,"size":2345678,"time":1521595678,"version":0,"merkleRoot":"","nonce":"","bits":"","difficulty":"","txCount":4,"txs":[{"txid":"7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25","vin":[{"n":0,"addresses":["mv9uLThosiEnGRbVPS7Vhyw6VssbVRsiAw"],"isAddress":true,"value":"1234567890123"},{"n":1,"addresses":["mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz"],"isAddress":true,"value":"12345"}],"vout":[{"value":"317283951061","n":0,"spent":true,"addresses":["mzB8cYrfRwFRFAGTDzV8LkUQy5BQicxGhX"],"isAddress":true},{"value":"917283951061","n":1,"addresses":["mtR97eM2HPWVM6c8FGLGcukgaHHQv7THoL"],"isAddress":true},{"value":"0","n":2,"addresses":["OP_RETURN 2020f1686f6a20"],"isAddress":false}],"blockHash":"00000000eb0443fd7dc4a1ed5c686a8e995057805f9a161d9a5a77a95e72b7b6","blockHeight":225494,"confirmations":1,"blockTime":1521595678,"value":"1234567902122","valueIn":"1234567902468","fees":"346"},{"txid":"3d90d15ed026dc45e19ffb52875ed18fa9e8012ad123d7f7212176e2b0ebdb71","vin":[{"n":0,"addresses":["mzB8cYrfRwFRFAGTDzV8LkUQy5BQicxGhX"],"isAddress":true,"value":"317283951061"},{"n":1,"addresses":["2MzmAKayJmja784jyHvRUW1bXPget1csRRG"],"isAddress":true,"value":"1"}],"vout":[{"value":"118641975500","n":0,"addresses":["2N6utyMZfPNUb1Bk8oz7p2JqJrXkq83gegu"],"isAddress":true},{"value":"198641975500","n":1,"addresses":["mmJx9Y8ayz9h14yd9fgCW1bUKoEpkBAquP"],"isAddress":true}],"blockHash":"00000000eb0443fd7dc4a1ed5c686a8e995057805f9a161d9a5a77a95e72b7b6","blockHeight":225494,"confirmations":1,"blockTime":1521595678,"value":"317283951000","valueIn":"317283951062","fees":"62"},{"txid":"05e2e48aeabdd9b75def7b48d756ba304713c2aba7b522bf9dbc893fc4231b07","vin":[{"n":0,"addresses":["2NEVv9LJmAnY99W1pFoc5UJjVdypBqdnvu1"],"isAddress":true,"value":"9876"}],"vout":[{"value":"9000","n":0,"addresses":["2NEVv9LJmAnY99W1pFoc5UJjVdypBqdnvu1"],"isAddress":true}],"blockHash":"00000000eb0443fd7dc4a1ed5c686a8e995057805f9a161d9a5a77a95e72b7b6","blockHeight":225494,"confirmations":1,"blockTime":1521595678,"value":"9000","valueIn":"9876","fees":"876"},{"txid":"fdd824a780cbb718eeb766eb05d83fdefc793a27082cd5e67f856d69798cf7db","vin":[{"n":0,"isAddress":false,"value":"0"}],"vout":[{"value":"1360030331","n":0,"addresses":["mzVznVsCHkVHX9UN8WPFASWUUHtxnNn4Jj"],"isAddress":true},{"value":"0","n":1,"addresses":[],"isAddress":false}],"blockHash":"00000000eb0443fd7dc4a1ed5c686a8e995057805f9a161d9a5a77a95e72b7b6","blockHeight":225494,"confirmations":1,"blockTime":1521595678,"value":"1360030331","valueIn":"0","fees":"0"}]}}`,
+		},
 	}
 
 	// send all requests at once

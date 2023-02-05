@@ -133,6 +133,17 @@
             });
         }
 
+        function getBlock() {
+            const method = "getBlock";
+            const id = document.getElementById("getBlockId").value;
+            const params = {
+                id,
+            };
+            send(method, params, function (result) {
+                document.getElementById("getBlockResult").innerText = JSON.stringify(result).replace(/,/g, ", ");
+            });
+        }
+
         function getAccountInfo() {
             const descriptor = document.getElementById('getAccountInfoDescriptor').value.trim();
             const selectDetails = document.getElementById('getAccountInfoDetails');
@@ -455,6 +466,19 @@
         </div>
         <div class="row">
             <div class="col" id="getBlockHashResult"></div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <input class="btn btn-secondary" type="button" value="getBlock" onclick="getBlock()">
+            </div>
+            <div class="col-8">
+                <input type="text" class="form-control" placeholder="height/hash" id="getBlockId" value="">
+            </div>
+            <div class="col">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col" id="getBlockResult"></div>
         </div>
         <div class="row">
             <div class="col">
