@@ -127,8 +127,6 @@ func makeBlockChain(coin string) (bchain.BlockChain, bchain.Mempool, error) {
 		return nil, nil, err
 	}
 
-	fmt.Println(coinName)
-
 	return initBlockChain(coinName, cfg)
 }
 
