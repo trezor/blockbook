@@ -415,6 +415,9 @@ type outpoint struct {
 type TxInput struct {
 	AddrDesc bchain.AddressDescriptor
 	ValueSat big.Int
+	// extended index properties
+	Txid string
+	Vout uint32
 }
 
 // Addresses converts AddressDescriptor of the input to array of strings
@@ -424,9 +427,10 @@ func (ti *TxInput) Addresses(p bchain.BlockChainParser) ([]string, bool, error) 
 
 // TxOutput holds output data of the transaction in TxAddresses
 type TxOutput struct {
-	AddrDesc    bchain.AddressDescriptor
-	Spent       bool
-	ValueSat    big.Int
+	AddrDesc bchain.AddressDescriptor
+	Spent    bool
+	ValueSat big.Int
+	// extended index properties
 	SpentTxid   string
 	SpentIndex  uint32
 	SpentHeight uint32
@@ -442,6 +446,8 @@ type TxAddresses struct {
 	Height  uint32
 	Inputs  []TxInput
 	Outputs []TxOutput
+	// extended index properties
+	VSize uint32
 }
 
 // Utxo holds information about unspent transaction output
@@ -596,13 +602,21 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses add
 		}
 		blockTxIDs[txi] = btxID
 		ta := TxAddresses{Height: block.Height}
+		if d.extendedIndex {
+			if tx.VSize > 0 {
+				ta.VSize = uint32(tx.VSize)
+			} else {
+				ta.VSize = uint32(len(tx.Hex))
+			}
+		}
 		ta.Outputs = make([]TxOutput, len(tx.Vout))
 		txAddressesMap[string(btxID)] = &ta
 		blockTxAddresses[txi] = &ta
-		for i, output := range tx.Vout {
+		for i := range tx.Vout {
+			output := &tx.Vout[i]
 			tao := &ta.Outputs[i]
 			tao.ValueSat = output.ValueSat
-			addrDesc, err := d.chainParser.GetAddrDescFromVout(&output)
+			addrDesc, err := d.chainParser.GetAddrDescFromVout(output)
 			if err != nil || len(addrDesc) == 0 || len(addrDesc) > maxAddrDescLen {
 				if err != nil {
 					// do not log ErrAddressMissing, transactions can be without to address (for example eth contracts)
@@ -652,7 +666,8 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses add
 		ta := blockTxAddresses[txi]
 		ta.Inputs = make([]TxInput, len(tx.Vin))
 		logged := false
-		for i, input := range tx.Vin {
+		for i := range tx.Vin {
+			input := &tx.Vin[i]
 			tai := &ta.Inputs[i]
 			btxID, err := d.chainParser.PackTxid(input.Txid)
 			if err != nil {
@@ -695,6 +710,8 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses add
 				spentOutput.SpentTxid = tx.Txid
 				spentOutput.SpentIndex = uint32(i)
 				spentOutput.SpentHeight = block.Height
+				tai.Txid = input.Txid
+				tai.Vout = input.Vout
 			}
 			if len(spentOutput.AddrDesc) == 0 {
 				if !logged {
@@ -951,10 +968,14 @@ func (d *RocksDB) packTxAddresses(ta *TxAddresses, buf []byte, varBuf []byte) []
 	buf = buf[:0]
 	l := packVaruint(uint(ta.Height), varBuf)
 	buf = append(buf, varBuf[:l]...)
+	if d.extendedIndex {
+		l = packVaruint(uint(ta.VSize), varBuf)
+		buf = append(buf, varBuf[:l]...)
+	}
 	l = packVaruint(uint(len(ta.Inputs)), varBuf)
 	buf = append(buf, varBuf[:l]...)
 	for i := range ta.Inputs {
-		buf = appendTxInput(&ta.Inputs[i], buf, varBuf)
+		buf = d.appendTxInput(&ta.Inputs[i], buf, varBuf)
 	}
 	l = packVaruint(uint(len(ta.Outputs)), varBuf)
 	buf = append(buf, varBuf[:l]...)
@@ -964,13 +985,38 @@ func (d *RocksDB) packTxAddresses(ta *TxAddresses, buf []byte, varBuf []byte) []
 	return buf
 }
 
-func appendTxInput(txi *TxInput, buf []byte, varBuf []byte) []byte {
+func (d *RocksDB) appendTxInput(txi *TxInput, buf []byte, varBuf []byte) []byte {
 	la := len(txi.AddrDesc)
-	l := packVaruint(uint(la), varBuf)
-	buf = append(buf, varBuf[:l]...)
-	buf = append(buf, txi.AddrDesc...)
-	l = packBigint(&txi.ValueSat, varBuf)
-	buf = append(buf, varBuf[:l]...)
+	var l int
+	if d.extendedIndex {
+		if txi.Txid == "" {
+			// coinbase transaction
+			la = ^la
+		}
+		l = packVarint(la, varBuf)
+		buf = append(buf, varBuf[:l]...)
+		buf = append(buf, txi.AddrDesc...)
+		l = packBigint(&txi.ValueSat, varBuf)
+		buf = append(buf, varBuf[:l]...)
+		if la >= 0 {
+			btxID, err := d.chainParser.PackTxid(txi.Txid)
+			if err != nil {
+				if err != bchain.ErrTxidMissing {
+					glog.Error("Cannot pack txid ", txi.Txid)
+				}
+				btxID = make([]byte, d.chainParser.PackedTxidLen())
+			}
+			buf = append(buf, btxID...)
+			l = packVaruint(uint(txi.Vout), varBuf)
+			buf = append(buf, varBuf[:l]...)
+		}
+	} else {
+		l = packVaruint(uint(la), varBuf)
+		buf = append(buf, varBuf[:l]...)
+		buf = append(buf, txi.AddrDesc...)
+		l = packBigint(&txi.ValueSat, varBuf)
+		buf = append(buf, varBuf[:l]...)
+	}
 	return buf
 }
 
@@ -1049,7 +1095,7 @@ func packAddrBalance(ab *AddrBalance, buf, varBuf []byte) []byte {
 	l = packBigint(&ab.BalanceSat, varBuf)
 	buf = append(buf, varBuf[:l]...)
 	for _, utxo := range ab.Utxos {
-		// if Vout < 0, utxo is marked as spent
+		// if Vout < 0, utxo is marked as spent and removed from the entry
 		if utxo.Vout >= 0 {
 			buf = append(buf, utxo.BtxID...)
 			l = packVaruint(uint(utxo.Vout), varBuf)
@@ -1067,11 +1113,16 @@ func (d *RocksDB) unpackTxAddresses(buf []byte) (*TxAddresses, error) {
 	ta := TxAddresses{}
 	height, l := unpackVaruint(buf)
 	ta.Height = uint32(height)
+	if d.extendedIndex {
+		vsize, ll := unpackVaruint(buf[l:])
+		ta.VSize = uint32(vsize)
+		l += ll
+	}
 	inputs, ll := unpackVaruint(buf[l:])
 	l += ll
 	ta.Inputs = make([]TxInput, inputs)
 	for i := uint(0); i < inputs; i++ {
-		l += unpackTxInput(&ta.Inputs[i], buf[l:])
+		l += d.unpackTxInput(&ta.Inputs[i], buf[l:])
 	}
 	outputs, ll := unpackVaruint(buf[l:])
 	l += ll
@@ -1082,12 +1133,35 @@ func (d *RocksDB) unpackTxAddresses(buf []byte) (*TxAddresses, error) {
 	return &ta, nil
 }
 
-func unpackTxInput(ti *TxInput, buf []byte) int {
-	al, l := unpackVaruint(buf)
-	ti.AddrDesc = append([]byte(nil), buf[l:l+int(al)]...)
-	al += uint(l)
-	ti.ValueSat, l = unpackBigint(buf[al:])
-	return l + int(al)
+func (d *RocksDB) unpackTxInput(ti *TxInput, buf []byte) int {
+	if d.extendedIndex {
+		al, l := unpackVarint(buf)
+		var coinbase bool
+		if al < 0 {
+			coinbase = true
+			al = ^al
+		}
+		ti.AddrDesc = append([]byte(nil), buf[l:l+al]...)
+		al += l
+		ti.ValueSat, l = unpackBigint(buf[al:])
+		al += l
+		if !coinbase {
+			l = d.chainParser.PackedTxidLen()
+			ti.Txid, _ = d.chainParser.UnpackTxid(buf[al : al+l])
+			al += l
+			var i uint
+			i, l = unpackVaruint(buf[al:])
+			ti.Vout = uint32(i)
+			al += l
+		}
+		return al
+	} else {
+		al, l := unpackVaruint(buf)
+		ti.AddrDesc = append([]byte(nil), buf[l:l+int(al)]...)
+		al += uint(l)
+		ti.ValueSat, l = unpackBigint(buf[al:])
+		return l + int(al)
+	}
 }
 
 func (d *RocksDB) unpackTxOutput(to *TxOutput, buf []byte) int {
