@@ -53,7 +53,7 @@
     "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
     "public_binding_template": ":{{.Ports.BlockbookPublic}}",
     "explorer_url": "",
-    "additional_params": "-enablesubnewtx",
+    "additional_params": "-enablesubnewtx -extendedindex",
     "block_chain": {
       "parse": true,
       "mempool_workers": 8,
