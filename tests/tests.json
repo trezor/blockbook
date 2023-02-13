@@ -48,6 +48,9 @@
     "bsc": {
         "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "EstimateFee", "GetBlockHeader"]
     },
+    "bsc_archive": {
+        "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "EstimateFee", "GetBlockHeader"]
+    },
     "cpuchain": {
         "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",
                 "EstimateSmartFee", "EstimateFee"],
