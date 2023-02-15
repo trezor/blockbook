@@ -20,6 +20,6 @@ export DATA_TRANSPORT_LAYER__SERVER_PORT={{.Ports.BackendHttp}}
 export DATA_TRANSPORT_LAYER__L1_START_HEIGHT=13596466
 export DATA_TRANSPORT_LAYER__L2_RPC_ENDPOINT=https://mainnet.optimism.io
 
-node {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/packages/data-transport-layer/dist/src/services/run.js
+node {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/source/packages/data-transport-layer/dist/src/services/run.js
 
 {{end}}
