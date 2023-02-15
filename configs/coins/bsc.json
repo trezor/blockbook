@@ -20,16 +20,16 @@
     "package_name": "backend-bsc",
     "package_revision": "satoshilabs-1",
     "system_user": "bsc",
-    "version": "1.1.18-hf",
-    "binary_url": "https://github.com/bnb-chain/bsc/releases/download/v1.1.18_hf/geth_linux",
+    "version": "1.1.19",
+    "binary_url": "https://github.com/bnb-chain/bsc/releases/download/v1.1.19/geth_linux",
     "verification_type": "sha256",
-    "verification_source": "1427ef4bc19e51fe9dead2d211ff6ebebe610cbbe7a0e1b35870f01cfed6473e",
+    "verification_source": "ad49b00a5df44fb67e0dc166a7cf02a02c67ab296d25e4ac3d56134567577c41",
     "extract_command": "mv ${ARCHIVE} backend/geth_linux && chmod +x backend/geth_linux && echo",
     "exclude_files": [],
     "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bsc_exec.sh 2>> {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
     "exec_script": "bsc.sh",
     "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
-    "postinst_script_template": "wget https://github.com/bnb-chain/bsc/releases/download/v1.1.18_hf/mainnet.zip -O {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/mainnet.zip && unzip -o -d {{.Env.BackendInstallPath}}/{{.Coin.Alias}} {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/mainnet.zip && rm -f {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/mainnet.zip",
+    "postinst_script_template": "wget https://github.com/bnb-chain/bsc/releases/download/v1.1.19/mainnet.zip -O {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/mainnet.zip && unzip -o -d {{.Env.BackendInstallPath}}/{{.Coin.Alias}} {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/mainnet.zip && rm -f {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/mainnet.zip",
     "service_type": "simple",
     "service_additional_params_template": "",
     "protect_memory": true,
@@ -38,8 +38,8 @@
     "client_config_file": "",
     "platforms": {
       "arm64": {
-        "binary_url": "https://github.com/bnb-chain/bsc/releases/download/v1.1.18_hf/geth-linux-arm64",
-        "verification_source": "a7ef543567c012622c9069b3687e413fa86a8465e6b80302803b303c5a71fd9d"
+        "binary_url": "https://github.com/bnb-chain/bsc/releases/download/v1.1.19/geth-linux-arm64",
+        "verification_source": "50aae5defb41cb5f4da462b5f86097c2daf945672ce9fb1c1e4393f6e038610f"
       }
     }
   },
