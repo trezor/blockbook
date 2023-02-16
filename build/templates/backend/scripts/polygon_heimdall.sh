@@ -26,3 +26,5 @@ heimdalld start \
   --bor_rpc_url http://127.0.0.1:8303 \ # backend-polygon-bor service
   --eth_rpc_url http://127.0.0.1:8136 \ # backend-ethereum service
   --rest-server 
+
+{{end}}
