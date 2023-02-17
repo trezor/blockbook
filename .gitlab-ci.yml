@@ -146,7 +146,7 @@ backend-deploy-and-test-bitcoin_testnet:
       - configs/coins/bitcoin_testnet.json
   tags:
     - blockbook
-  script: ./contrib/scripts/backend-deploy-and-test.sh bitcoin_testnet bitcoin-testnet bitcoin=test testnet3/debug.log 
+  script: ./contrib/scripts/backend-deploy-and-test.sh bitcoin_testnet bitcoin-testnet bitcoin=test testnet3/debug.log
 
 backend-deploy-and-test-zcash_testnet:
   stage: backend-deploy-and-test
@@ -157,15 +157,15 @@ backend-deploy-and-test-zcash_testnet:
       - configs/coins/zcash_testnet.json
   tags:
     - blockbook
-  script: ./contrib/scripts/backend-deploy-and-test.sh zcash_testnet zcash-testnet zcash=test testnet3/debug.log 
+  script: ./contrib/scripts/backend-deploy-and-test.sh zcash_testnet zcash-testnet zcash=test testnet3/debug.log
 
-backend-deploy-and-test-ethereum_testnet_ropsten:
+backend-deploy-and-test-goerli-archive:
   stage: backend-deploy-and-test
   only:
     refs:
       - master
     changes:
-      - configs/coins/ethereum_testnet_ropsten.json
+      - configs/coins/ethereum_testnet_goerli_archive.json
   tags:
     - blockbook
-  script: ./contrib/scripts/backend-deploy-and-test.sh ethereum_testnet_ropsten ethereum-testnet-ropsten ethereum=test ethereum_testnet_ropsten.log 
+  script: ./contrib/scripts/backend-deploy-and-test.sh ethereum_testnet_goerli_archive ethereum-testnet-goerli-archive ethereum=test ethereum_testnet_goerli_archive.log
