@@ -23,7 +23,7 @@
     "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/polygon_heimdall_exec.sh 2>> {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
     "exec_script": "polygon_heimdall.sh",
     "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
-    "postinst_script_template": "wget https://github.com/maticnetwork/heimdall/blob/v0.3.0/builder/files/genesis-mainnet-v1.json -O {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/genesis.json && cd {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/source && make build && mv build/heimdalld {{.Env.BackendInstallPath}}/{{.Coin.Alias}} && rm -rf {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/source",
+    "postinst_script_template": "wget https://raw.githubusercontent.com/maticnetwork/heimdall/v0.3.0/builder/files/genesis-mainnet-v1.json -O {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/genesis.json && cd {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/source && make build && mv build/heimdalld {{.Env.BackendInstallPath}}/{{.Coin.Alias}} && rm -rf {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/source",
     "service_type": "simple",
     "service_additional_params_template": "",
     "protect_memory": true,
