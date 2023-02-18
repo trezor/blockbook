@@ -55,7 +55,7 @@ type EthereumInternalData struct {
 	Error     string
 }
 
-// ContractInfo contains info about ERC20 contract
+// ContractInfo contains info about a contract
 type ContractInfo struct {
 	Type              TokenTypeName `json:"type"`
 	Contract          string        `json:"contract"`

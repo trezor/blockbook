@@ -339,6 +339,7 @@ type Address struct {
 	TotalBaseValue        float64              `json:"totalBaseValue,omitempty"`      // value including tokens in base currency
 	TotalSecondaryValue   float64              `json:"totalSecondaryValue,omitempty"` // value including tokens in secondary currency
 	ContractInfo          *bchain.ContractInfo `json:"contractInfo,omitempty"`
+	Erc20Contract         *bchain.ContractInfo `json:"erc20Contract,omitempty"` // deprecated
 	AddressAliases        AddressAliasesMap    `json:"addressAliases,omitempty"`
 	// helpers for explorer
 	Filter        string              `json:"-"`

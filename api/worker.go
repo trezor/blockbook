@@ -1007,6 +1007,7 @@ type ethereumTypeAddressData struct {
 
 func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescriptor, details AccountDetails, filter *AddressFilter, secondaryCoin string) (*db.AddrBalance, *ethereumTypeAddressData, error) {
 	var ba *db.AddrBalance
+	var n uint64
 	// unknown number of results for paging initially
 	d := ethereumTypeAddressData{totalResults: -1}
 	ca, err := w.db.GetAddrDescContracts(addrDesc)
@@ -1031,11 +1032,10 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 		if b != nil {
 			ba.BalanceSat = *b
 		}
-		n, err := w.chain.EthereumTypeGetNonce(addrDesc)
+		n, err = w.chain.EthereumTypeGetNonce(addrDesc)
 		if err != nil {
 			return nil, nil, errors.Annotatef(err, "EthereumTypeGetNonce %v", addrDesc)
 		}
-		d.nonce = strconv.Itoa(int(n))
 		ticker := w.is.GetCurrentTicker("", "")
 		if details > AccountDetailsBasic {
 			d.tokens = make([]Token, len(ca.Contracts))
@@ -1089,6 +1089,8 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 			}
 		}
 	}
+	// returns 0 for unknown address
+	d.nonce = strconv.Itoa(int(n))
 	// special handling if filtering for a contract, return the contract details even though the address had no transactions with it
 	if len(d.tokens) == 0 && len(filterDesc) > 0 && details >= AccountDetailsTokens {
 		t, err := w.getEthereumContractBalanceFromBlockchain(addrDesc, filterDesc, details)
@@ -1344,6 +1346,10 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 		ContractInfo:          ed.contractInfo,
 		Nonce:                 ed.nonce,
 		AddressAliases:        w.getAddressAliases(addresses),
+	}
+	// keep address backward compatible, set deprecated Erc20Contract value if ERC20 token
+	if ed.contractInfo != nil && ed.contractInfo.Type == bchain.ERC20TokenType {
+		r.Erc20Contract = ed.contractInfo
 	}
 	glog.Info("GetAddress ", address, ", ", time.Since(start))
 	return r, nil
