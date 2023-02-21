@@ -1262,7 +1262,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 					"timestamps": []string{"yesterday"},
 				},
 			},
-			want: `{"id":"23","data":{"error":{"message":"json: cannot unmarshal string into Go struct field .timestamps of type int64"}}}`,
+			want: `{"id":"23","data":{"error":{"message":"json: cannot unmarshal string into Go struct field WsFiatRatesForTimestampsReq.timestamps of type int64"}}}`,
 		},
 		{
 			name: "websocket getFiatRatesForTimestamps empty currency",

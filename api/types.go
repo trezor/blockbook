@@ -158,7 +158,7 @@ type MultiTokenValue struct {
 
 // Token contains info about tokens held by an address
 type Token struct {
-	Type             bchain.TokenTypeName `json:"type"`
+	Type             bchain.TokenTypeName `json:"type" ts_type:"'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155'"`
 	Name             string               `json:"name"`
 	Path             string               `json:"path,omitempty"`
 	Contract         string               `json:"contract,omitempty"`
@@ -263,7 +263,7 @@ type Tx struct {
 	FeesSat                *Amount           `json:"fees,omitempty"`
 	Hex                    string            `json:"hex,omitempty"`
 	Rbf                    bool              `json:"rbf,omitempty"`
-	CoinSpecificData       json.RawMessage   `json:"coinSpecificData,omitempty"`
+	CoinSpecificData       json.RawMessage   `json:"coinSpecificData,omitempty" ts_type:"any"`
 	TokenTransfers         []TokenTransfer   `json:"tokenTransfers,omitempty"`
 	EthereumSpecific       *EthereumSpecific `json:"ethereumSpecific,omitempty"`
 	AddressAliases         AddressAliasesMap `json:"addressAliases,omitempty"`
