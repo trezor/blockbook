@@ -6,10 +6,10 @@
         "alias": "Arbitrum"
     },
     "ports": {
-        "backend_rpc": 8098,
+        "backend_rpc": 8069,
         "backend_message_queue": 0,
-        "blockbook_internal": 9098,
-        "blockbook_public": 9198
+        "blockbook_internal": 9069,
+        "blockbook_public": 9169
     },
     "ipc": {
         "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
