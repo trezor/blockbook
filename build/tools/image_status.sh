@@ -16,10 +16,10 @@ if [ -z "$IMG_CREATED_TIME" ]; then
     exit 0
 fi
 
-IMG_CREATED_TS=$(date -d $IMG_CREATED_TIME +%s)
-GIT_COMMIT_TS=$(date -d $(git log --pretty="format:%cI" -1 $DIR) +%s)
+IMG_CREATED_TS=$IMG_CREATED_TIME
+GIT_COMMIT_TS=$(git log --pretty="format:%cI" -1 $DIR)
 
-if [ $IMG_CREATED_TS -lt $GIT_COMMIT_TS ]; then
+if [[ "$IMG_CREATED_TS" < "$GIT_COMMIT_TS" ]]; then
     echo "out-of-time"
 else
     echo "ok"

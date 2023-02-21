@@ -1,107 +1,120 @@
-{{define "specific"}}{{$cs := .CoinShortcut}}{{$addr := .Address}}{{$data := .}}
-<h1>XPUB <small class="text-muted">{{formatAmount $addr.BalanceSat}} {{$cs}}</small>
-</h1>
-<div class="alert alert-data ellipsis">
-    <span class="data">{{$addr.AddrStr}}</span>
-</div>
-<h3>Confirmed</h3>
-<div class="data-div row">
-    <div class="col-lg-10">
-        <table class="table data-table">
-            <tbody>
-                <tr>
-                    <td style="width: 25%;">Total Received</td>
-                    <td class="data">{{formatAmount $addr.TotalReceivedSat}} {{$cs}}</td>
-                </tr>
-                <tr>
-                    <td>Total Sent</td>
-                    <td class="data">{{formatAmount $addr.TotalSentSat}} {{$cs}}</td>
-                </tr>
-                <tr>
-                    <td>Final Balance</td>
-                    <td class="data">{{formatAmount $addr.BalanceSat}} {{$cs}}</td>
-                </tr>
-                <tr>
-                    <td>No. Transactions</td>
-                    <td class="data">{{$addr.Txs}}</td>
-                </tr>
-                <tr>
-                    <td>Used XPUB Addresses</td>
-                    <td class="data">{{$addr.UsedTokens}}</td>
-                </tr>
-                 <tr>
-                    {{- if or $addr.Tokens $addr.UsedTokens -}}
-                    <td>{{if $data.NonZeroBalanceTokens}}XPUB Addresses with Balance{{else}}XPUB Addresses{{end}}</td>
-                    <td style="padding: 0;">
-                        <table class="table data-table">
-                            <tbody>
-                                <tr>
-                                    <th style="width: 50%;">Address</th>
-                                    <th>Balance</th>
-                                    <th style="width: 8%;">Txs</th>
-                                    <th style="width: 18%;">Path</th>
-                                </tr>
-                                {{- range $t := $addr.Tokens -}}
-                                <tr>
-                                    <td class="data ellipsis"><a href="/address/{{$t.Name}}">{{$t.Name}}</a></td>
-                                    <td class="data">{{formatAmount $t.BalanceSat}} {{$cs}}</td>
-                                    <td class="data">{{$t.Transfers}}</td>
-                                    <td>{{$t.Path}}</td>
-                                </tr>
-                                {{- end -}}
-                                {{- if $data.NonZeroBalanceTokens -}}
-                                <tr>
-                                    <td colspan="4"><a href="?tokens=used" style="float: left; margin-right: 30px;">Show used XPUB addresses</a><a href="?tokens=derived" style="float: left;">Show derived XPUB addresses</a></td>
-                                </tr>
-                                {{- end -}}
-                            </tbody>
-                        </table>
-                    </td>
-                    {{- else -}}
-                    <td></td><td><a href="?tokens=derived" style="float: left;">Show derived XPUB addresses</a></td>
-                    {{- end -}}
-                </tr>
-        </tbody>
-        </table>
+{{define "specific"}}{{$addr := .Address}}{{$data := .}}
+<div class="row">
+    <div class="col-md-10 order-2 order-md-1">
+        <h1>XPUB</h1>
+        <h5 class="col-12 d-flex h-data pb-2"><span class="ellipsis copyable">{{$addr.AddrStr}}</span></h5>
+        <h4 class="row">
+            <div class="col-lg-6">{{formattedAmountSpan $addr.BalanceSat 0 $data.CoinShortcut $data "copyable"}}</div>
+            {{if $addr.SecondaryValue}}<div class="col-lg-6">{{summaryValuesSpan 0 $addr.SecondaryValue $data}}</div>{{end}}
+        </h4>
     </div>
-    <div class="col-lg-2">
-        <div id="qrcode" style="width: 160px; height: 160px; float: right; padding-left: 10px;"></div>
+    <div class="col-md-2 order-1 order-md-2 d-flex justify-content-center justify-content-md-end mb-3 mb-md-0">
+        <div id="qrcode"></div>
         <script type="text/javascript" src="/static/js/qrcode.min.js"></script>
         <script type="text/javascript">
-            new QRCode(document.getElementById("qrcode"), { text: "{{$addr.AddrStr}}", width: 160, height: 160 });
+            new QRCode(document.getElementById("qrcode"), { text: "{{$addr.AddrStr}}", width: 120, height: 120 });
         </script>
     </div>
 </div>
-{{- if $addr.UnconfirmedTxs -}}
-<h3>Unconfirmed</h3>
-<div class="data-div">
-    <table class="table data-table">
-        <tbody>
-            <tr>
-                <td style="width: 25%;">Unconfirmed Balance</td>
-                <td class="data">{{formatAmount $addr.UnconfirmedBalanceSat}} {{$cs}}</td>
-            </tr>
-            <tr>
-                <td>No. Transactions</td>
-                <td class="data">{{$addr.UnconfirmedTxs}}</td>
-            </tr>
-        </tbody>
-    </table>
-</div>
-{{- end}}{{if or $addr.Transactions $addr.Filter -}}
-<div class="row h-container">
-    <h3 class="col-md-3">Transactions</h3>
-    <select class="col-md-3" style="background-color: #eaeaea;" onchange="self.location='?filter='+options[selectedIndex].value">
-        <option>All</option>
-        <option {{if eq $addr.Filter "inputs" -}} selected{{end}} value="inputs">XPUB addresses on input side</option>
-        <option {{if eq $addr.Filter "outputs" -}} selected{{end}} value="outputs">XPUB addresses on output side</option>
-    </select>
-    <div class="col-md-6">
-        <nav>{{template "paging" $data}}</nav>
+<table class="table data-table info-table">
+    <tbody>
+        <tr>
+            <td style="white-space: nowrap;"><h5>Confirmed</h5></td>
+            <td></td>
+        </tr>
+        <tr>
+            <td style="width: 25%;">Total Received</td>
+            <td>{{amountSpan $addr.TotalReceivedSat $data "copyable"}}</td>
+        </tr>
+        <tr>
+            <td>Total Sent</td>
+            <td>{{amountSpan $addr.TotalSentSat $data "copyable"}}</td>
+        </tr>
+        <tr>
+            <td>Final Balance</td>
+            <td>{{amountSpan $addr.BalanceSat $data "copyable"}}</td>
+        </tr>
+        <tr>
+            <td>No. Transactions</td>
+            <td>{{formatInt $addr.Txs}}</td>
+        </tr>
+        <tr>
+            <td>Used XPUB Addresses</td>
+            <td>{{formatInt $addr.UsedTokens}}</td>
+        </tr>
+    </tbody>
+</table>
+<table class="table data-table">
+    <tbody>
+        <tr>
+            <td style="white-space: nowrap; width: 50%;"><h5>{{if $data.NonZeroBalanceTokens}}XPUB Addresses with Balance{{else}}XPUB Addresses{{end}}</h5></td>
+            <td colspan="3"></td>
+        </tr>
+        {{if $addr.Tokens}}
+        <tr>
+            <th>Address</th>
+            <th>Balance</th>
+            <th>Txs</th>
+            <th>Path</th>
+        </tr>
+        {{range $t := $addr.Tokens}}
+        <tr>
+            <td class="ellipsis"><a href="/address/{{$t.Name}}" class="copyable">{{$t.Name}}</a></td>
+            <td>{{amountSpan $t.BalanceSat $data "copyable"}}</td>
+            <td>{{formatInt $t.Transfers}}</td>
+            <td>{{$t.Path}}</td>
+        </tr>
+        {{end}}
+        {{else}}
+        <tr>
+            <td colspan="4">No addresses</td>
+        </tr>
+        {{end}}
+    </tbody>
+</table>
+<div class="row mb-4">
+    <div class="col-12">
+    {{if $data.NonZeroBalanceTokens}}
+    <a href="?tokens=used" class="ms-3 me-3">Show used XPUB addresses</a><a href="?tokens=derived">Show all derived XPUB addresses</a>
+    {{else}}
+    <a href="?tokens=nonzero" class="ms-3 me-3">Show XPUB addresses with nonzero balance</a>
+    {{end}}
     </div>
 </div>
-<div class="data-div">
-    {{- range $tx := $addr.Transactions}}{{$data := setTxToTemplateData $data $tx}}{{template "txdetail" $data}}{{end -}}
+{{if $addr.UnconfirmedTxs}}
+<table class="table data-table info-table">
+    <tbody>
+        <tr>
+            <td style="white-space: nowrap;"><h5>Unconfirmed</h5></td>
+            <td></td>
+        </tr>
+        <tr>
+            <td style="width: 25%;">Unconfirmed Balance</td>
+            <td>{{amountSpan $addr.UnconfirmedBalanceSat $data "copyable"}}</td>
+        </tr>
+        <tr>
+            <td>No. Transactions</td>
+            <td>{{formatInt $addr.UnconfirmedTxs}}</td>
+        </tr>
+    </tbody>
+</table>
+{{end}}
+{{if or $addr.Transactions $addr.Filter}}
+<div class="row pt-3 pb-1">
+    <h3 class="col-sm-6 col-lg-3 m-0 align-self-center">Transactions</h3>
+    <div class="col-sm-6 col-lg-3 my-2 my-lg-0 align-self-center">
+        <select  class="w-100" onchange="self.location='?filter='+options[selectedIndex].value">
+            <option>All</option>
+            <option {{if eq $addr.Filter "inputs"}}selected{{end}} value="inputs">XPUB addresses on input side</option>
+            <option {{if eq $addr.Filter "outputs"}}selected{{end}} value="outputs">XPUB addresses on output side</option>
+        </select>
+    </div>
+    <div class="col-lg-6">
+        {{template "paging" $data}}
+    </div>
 </div>
-<nav>{{template "paging" $data }}</nav>
+<div>
+    {{range $tx := $addr.Transactions}}{{$data := setTxToTemplateData $data $tx}}{{template "txdetail" $data}}{{end}}
+</div>
+{{template "paging" $data }}
 {{end}}{{end}}

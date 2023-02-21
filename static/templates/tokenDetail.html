@@ -1,0 +1,92 @@
+{{define "specific"}}{{$data := .}}
+<h1>NFT Token Detail</h1>
+<div class="row">
+    <div class="col-md-6">
+        <table class="table data-table info-table">
+            <tbody>
+                <tr>
+                    <td style="width: 25%;">Token ID</td>
+                    <td><span class="copyable">{{$data.TokenId}}</span></td>
+                </tr>
+                <tr id="name" style="display: none;">
+                    <td>NTF Name</td>
+                    <td class="copyable"></td>
+                </tr>
+                <tr id="description" style="display: none;">
+                    <td>NTF Description</td>
+                    <td></td>
+                </tr>
+                <tr>
+                    <td>Contract</td>
+                    <td><a href="/address/{{$data.ContractInfo.Contract}}"><span class="copyable">{{$data.ContractInfo.Contract}}</span></a><br>{{$data.ContractInfo.Name}}</td>
+                </tr>
+                <tr>
+                    <td>Contract type</td>
+                    <td>{{$data.ContractInfo.Type}}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    <div class="col-md-6 mt-4" id="image"></div>
+</div>
+<div id="metadatablock">
+    <h5>Metadata</h5>
+    <div class="json">
+        <pre id="raw">Loading metadata from <a href="{{$data.URI}}">{{$data.URI}}</a>...</pre>
+    </div>
+</div>
+<script type="text/javascript">
+    function showImage(s) {
+        const img = document.createElement("img");
+        img.className="border w-100 bg-white";
+        img.src = s;
+        const src = document.getElementById("image");
+        src.appendChild(img);
+        src.style.display="block";
+    }
+    function nftInfo(id,text) {
+        const src = document.getElementById(id);
+        src.getElementsByTagName("td")[1].innerText=text;
+        src.style.display='';
+    }
+    async function getMetadata(url) {
+        try {
+            const uri={{ jsStr $data.URI }};
+            if(uri) {
+                const response = await fetch(uri);
+                const contentType=response.headers.get('content-type');
+                if(contentType&&contentType.toString().startsWith("image/")) {
+                    showImage(uri);
+                    document.getElementById("metadatablock").style.display='none';
+                } else {
+                    const data = await response.json();
+                    document.getElementById("raw").innerHTML = syntaxHighlight(data);
+                    if (data.name) {
+                        nftInfo('name',data.name)
+                    }
+                    if (data.description) {
+                        nftInfo('description',data.description)
+                    }
+                    if (data.image||data.image_url) {
+                        let s=data.image?.toString();
+                        if(!s) {
+                            s=data.image_url;
+                        }
+                        if(s.startsWith("ipfs://")) {
+                            s=s.replace("ipfs://","https://ipfs.io/ipfs/");
+                        }
+                        if(s.startsWith("https://")) {
+                            showImage(s);
+                        }
+                    }
+                }
+            } else {
+                document.getElementById("raw").innerText = "Error: cannot get metadata link from blockchain";
+            }
+        } catch(e) {
+            document.getElementById("raw").innerText = "Error loading metadata: "+e;
+        }
+    }
+    getMetadata();
+</script>
+{{end}}

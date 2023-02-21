@@ -1,49 +1,50 @@
 {
-    "blockHeight": 1377592,
-    "blockHash": "bddb1cfbd474e9516399b373e411bd33c1a71cb01aa8469a27d397ef0a891c7d",
-    "blockTime": 1519947864,
-    "blockTxs": [
-        "84e9147bf6e171adbda3b3961e467652286d9d9c2933d19326bf84766d047922",
-        "8d6e628b891dd17bfe3bb5a24a6c7f02ebc2cf499a85515d0325033aa74ab53a",
-        "5b77ca9735f65d110b086be410658d0239e1fcee13231942a262b35a5b8d6a91",
-        "19ad3daa2447be4e000d822f79ce252f274b016dacf1418b433d36c0aaf24f18",
-        "5bffbf0c8ff66d298d94dc323c3644e21932dfc733603d6637ff46cb8d34466c",
-        "90d587e35b23905f0125111f41d69bb6c7eed44f0944caad2903aae1f174ac49"
-    ],
-    "txDetails": {
-        "19ad3daa2447be4e000d822f79ce252f274b016dacf1418b433d36c0aaf24f18": {
-            "hex": "010000000001011f9216c16c78386540d7ae7d32657c388ef5f204596f84ea0851dcb78c479a87010000001716001432d094c8e2efd308d2c69affd6712ebbf7a5a286ffffffff0289544a110000000017a91457ca840d6c811dd6808722babe3f88d2fdb2ca14875bb1c9180000000017a91482696a9b4188eda8f93b120315cad4260cbb90db8702483045022100aa256153317133fa719180935017671e33ca77df6f5426554f5b0855f07a392b02202684e8c30623e1c4e753ea23a95bd571e1fda7d15dc0b1e2d54ff5bc50329256012103399a1d98f0733ef400ff8d4f43fe4543065f7f387c863361c77a8826321ca6fb00000000",
-            "txid": "19ad3daa2447be4e000d822f79ce252f274b016dacf1418b433d36c0aaf24f18",
-            "blocktime": 1519947864,
-            "time": 1519947864,
-            "locktime": 0,
-            "version": 1,
-            "vin": [
-                {
-                    "txid": "879a478cb7dc5108ea846f5904f2f58e387c65327daed7406538786cc116921f",
-                    "vout": 1,
-                    "scriptSig": {
-                        "hex": "16001432d094c8e2efd308d2c69affd6712ebbf7a5a286"
-                    },
-                    "sequence": 4294967295
-                }
-            ],
-            "vout": [
-                {
-                    "value": 2.90083977,
-                    "n": 0,
-                    "scriptPubKey": {
-                        "hex": "a91457ca840d6c811dd6808722babe3f88d2fdb2ca1487"
-                    }
-                },
-                {
-                    "value": 4.15871323,
-                    "n": 1,
-                    "scriptPubKey": {
-                        "hex": "a91482696a9b4188eda8f93b120315cad4260cbb90db87"
-                    }
-                }
-            ]
+  "blockHeight": 1377592,
+  "blockHash": "bddb1cfbd474e9516399b373e411bd33c1a71cb01aa8469a27d397ef0a891c7d",
+  "blockTime": 1519947864,
+  "blockTxs": [
+    "84e9147bf6e171adbda3b3961e467652286d9d9c2933d19326bf84766d047922",
+    "8d6e628b891dd17bfe3bb5a24a6c7f02ebc2cf499a85515d0325033aa74ab53a",
+    "5b77ca9735f65d110b086be410658d0239e1fcee13231942a262b35a5b8d6a91",
+    "19ad3daa2447be4e000d822f79ce252f274b016dacf1418b433d36c0aaf24f18",
+    "5bffbf0c8ff66d298d94dc323c3644e21932dfc733603d6637ff46cb8d34466c",
+    "90d587e35b23905f0125111f41d69bb6c7eed44f0944caad2903aae1f174ac49"
+  ],
+  "txDetails": {
+    "19ad3daa2447be4e000d822f79ce252f274b016dacf1418b433d36c0aaf24f18": {
+      "hex": "010000000001011f9216c16c78386540d7ae7d32657c388ef5f204596f84ea0851dcb78c479a87010000001716001432d094c8e2efd308d2c69affd6712ebbf7a5a286ffffffff0289544a110000000017a91457ca840d6c811dd6808722babe3f88d2fdb2ca14875bb1c9180000000017a91482696a9b4188eda8f93b120315cad4260cbb90db8702483045022100aa256153317133fa719180935017671e33ca77df6f5426554f5b0855f07a392b02202684e8c30623e1c4e753ea23a95bd571e1fda7d15dc0b1e2d54ff5bc50329256012103399a1d98f0733ef400ff8d4f43fe4543065f7f387c863361c77a8826321ca6fb00000000",
+      "txid": "19ad3daa2447be4e000d822f79ce252f274b016dacf1418b433d36c0aaf24f18",
+      "blocktime": 1519947864,
+      "time": 1519947864,
+      "locktime": 0,
+      "vsize": 166,
+      "version": 1,
+      "vin": [
+        {
+          "txid": "879a478cb7dc5108ea846f5904f2f58e387c65327daed7406538786cc116921f",
+          "vout": 1,
+          "scriptSig": {
+            "hex": "16001432d094c8e2efd308d2c69affd6712ebbf7a5a286"
+          },
+          "sequence": 4294967295
         }
+      ],
+      "vout": [
+        {
+          "value": 2.90083977,
+          "n": 0,
+          "scriptPubKey": {
+            "hex": "a91457ca840d6c811dd6808722babe3f88d2fdb2ca1487"
+          }
+        },
+        {
+          "value": 4.15871323,
+          "n": 1,
+          "scriptPubKey": {
+            "hex": "a91482696a9b4188eda8f93b120315cad4260cbb90db87"
+          }
+        }
+      ]
     }
+  }
 }

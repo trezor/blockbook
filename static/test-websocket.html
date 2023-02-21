@@ -7,6 +7,9 @@
     <style>
         .row {
             margin-top: 1%;
+        }    
+        ::placeholder {
+            color: #ccc !important;
         }
     </style>
     <title>Blockbook Websocket Test Page</title>
@@ -94,6 +97,12 @@
                 }
             };
         }
+        function paramAsArray(name) {
+            const p = document.getElementById(name).value;
+            if(p) {
+                return p.split(",").map(s => s.trim());
+            }
+        }
 
         function getInfo() {
             const method = 'getInfo';
@@ -132,6 +141,7 @@
             const from = parseInt(document.getElementById("getAccountInfoFrom").value);
             const to = parseInt(document.getElementById("getAccountInfoTo").value);
             const contractFilter = document.getElementById("getAccountInfoContract").value.trim();
+            const secondaryCurrency = document.getElementById("getAccountInfoSecondaryCurrency").value.trim();
             const pageSize = 10;
             const method = 'getAccountInfo';
             const tokens = "derived"; // could be "nonzero", "used", default is "derived" i.e. all
@@ -143,7 +153,8 @@
                 pageSize,
                 from,
                 to,
-                contractFilter
+                contractFilter,
+                secondaryCurrency,
                 // default gap=20
             };
             send(method, params, function (result) {
@@ -166,7 +177,7 @@
             const descriptor = document.getElementById('getBalanceHistoryDescriptor').value.trim();
             const from = parseInt(document.getElementById("getBalanceHistoryFrom").value.trim());
             const to = parseInt(document.getElementById("getBalanceHistoryTo").value.trim());
-            const currencies = document.getElementById('getBalanceHistoryFiat').value.split(",");
+            const currencies = paramAsArray('getBalanceHistoryFiat');
             const groupBy = parseInt(document.getElementById("getBalanceHistoryGroupBy").value);
             const method = 'getBalanceHistory';
             const params = {
@@ -207,7 +218,7 @@
 
         function estimateFee() {
             try {
-                var blocks = document.getElementById('estimateFeeBlocks').value.split(",");
+                var blocks = paramAsArray('estimateFeeBlocks');
                 var specific = document.getElementById('estimateFeeSpecific').value.trim();
                 if (specific) {
                     // example for bitcoin type: {"conservative": false,"txsize":1234}
@@ -299,8 +310,7 @@
 
         function subscribeAddresses() {
             const method = 'subscribeAddresses';
-            var addresses = document.getElementById('subscribeAddressesName').value.split(",");
-            addresses = addresses.map(s => s.trim());
+            var addresses = paramAsArray('subscribeAddressesName');
             const params = {
                 addresses
             };
@@ -329,12 +339,14 @@
 
         function getFiatRatesForTimestamps() {
             const method = 'getFiatRatesForTimestamps';
-            var timestamps = document.getElementById('getFiatRatesForTimestampsList').value.split(",");
-            var currencies = document.getElementById('getFiatRatesForTimestampsCurrency').value.split(",");
+            var timestamps = paramAsArray('getFiatRatesForTimestampsList');
+            var currencies = paramAsArray('getFiatRatesForTimestampsCurrency');
+            var token = document.getElementById('getFiatRatesForTimestampsToken').value;
             timestamps = timestamps.map(Number);
             const params = {
                 timestamps,
-                'currencies': currencies
+                'currencies': currencies,
+                token,
             };
             send(method, params, function (result) {
                 document.getElementById('getFiatRatesForTimestampsResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
@@ -343,9 +355,11 @@
 
         function getCurrentFiatRates() {
             const method = 'getCurrentFiatRates';
-            var currencies = document.getElementById('getCurrentFiatRatesCurrency').value.split(",");
+            var currencies = paramAsArray('getCurrentFiatRatesCurrency');
+            var token = document.getElementById('getCurrentFiatRatesToken').value;
             const params = {
-                "currencies": currencies
+                "currencies": currencies,
+                token,
             };
             send(method, params, function (result) {
                 document.getElementById('getCurrentFiatRatesResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
@@ -355,9 +369,11 @@
         function getFiatRatesTickersList() {
             const method = 'getFiatRatesTickersList';
             var timestamp = document.getElementById('getFiatRatesTickersListDate').value;
+            var token = document.getElementById('getFiatRatesTickersToken').value;
             timestamp = parseInt(timestamp);
             const params = {
                 timestamp,
+                token,
             };
             send(method, params, function (result) {
                 document.getElementById('getFiatRatesTickersListResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
@@ -367,8 +383,10 @@
         function subscribeNewFiatRatesTicker() {
             const method = 'subscribeFiatRates';
             var currency = document.getElementById('subscribeFiatRatesCurrency').value;
+            var tokens = paramAsArray('subscribeFiatRatesTokens');
             const params = {
-                "currency": currency
+                "currency": currency,
+                tokens,
             };
             if (subscribeNewFiatRatesTickerId) {
                 delete subscriptions[subscribeNewFiatRatesTickerId];
@@ -455,9 +473,10 @@
                 </div>
                 <div class="row" style="margin: 0; margin-top: 5px;">
                     <input type="text" placeholder="page" style="width: 10%; margin-right: 5px;" class="form-control" id="getAccountInfoPage">
-                    <input type="text" placeholder="from" style="width: 15%;margin-left: 5px;margin-right: 5px;" class="form-control" id="getAccountInfoFrom">
-                    <input type="text" placeholder="to" style="width: 15%; margin-left: 5px; margin-right: 5px;" class="form-control" id="getAccountInfoTo">
-                    <input type="text" placeholder="contract" style="width: 55%; margin-left: 5px; margin-right: 5px;" class="form-control" id="getAccountInfoContract">
+                    <input type="text" placeholder="from" style="width: 13%;margin-left: 5px;margin-right: 5px;" class="form-control" id="getAccountInfoFrom">
+                    <input type="text" placeholder="to" style="width: 13%; margin-left: 5px; margin-right: 5px;" class="form-control" id="getAccountInfoTo">
+                    <input type="text" placeholder="contract" style="width: 50%; margin-left: 5px; margin-right: 5px;" class="form-control" id="getAccountInfoContract">
+                    <input type="text" placeholder="usd" style="width: 8%; margin-left: 5px;" class="form-control" id="getAccountInfoSecondaryCurrency">
                 </div>
             </div>
             <div class="col form-inline"></div>
@@ -473,7 +492,7 @@
             <div class="col-8">
                 <div class="row" style="margin: 0;">
                     <input type="text" placeholder="descriptor" class="form-control" id="getAccountUtxoDescriptor" value="0xba98d6a5ac827632e3457de7512d211e4ff7e8bd">
-                 </div>
+                </div>
             </div>
             <div class="col form-inline"></div>
         </div>
@@ -509,7 +528,7 @@
             <div class="col-8">
                 <div class="row" style="margin: 0;">
                     <input type="text" placeholder="txid" class="form-control" id="getTransactionTxid" value="0xb266c89f9bfefa4aa2fca4e65b7d6c918d5407f464be781c2803f3546d34a574">
-                 </div>
+                </div>
             </div>
             <div class="col form-inline"></div>
         </div>
@@ -524,7 +543,7 @@
             <div class="col-8">
                 <div class="row" style="margin: 0;">
                     <input type="text" placeholder="txid" class="form-control" id="getTransactionSpecificTxid" value="0xb266c89f9bfefa4aa2fca4e65b7d6c918d5407f464be781c2803f3546d34a574">
-                 </div>
+                </div>
             </div>
             <div class="col form-inline"></div>
         </div>
@@ -573,6 +592,9 @@
             <div class="col-7">
                 <input type="text" class="form-control" id="getFiatRatesForTimestampsList" value="1575288000,1575550800">
             </div>
+            <div class="col-5 offset-3">
+                <input type="text" class="form-control" id="getFiatRatesForTimestampsToken" value="" placeholder="Token address">
+            </div>
         </div>
         <div class="row">
             <div class="col" id="getFiatRatesForTimestampsResult"></div>
@@ -584,16 +606,22 @@
             <div class="col-1">
                 <input type="text" class="form-control" id="getCurrentFiatRatesCurrency" placeholder="usd">
             </div>
+            <div class="col-5">
+                <input type="text" class="form-control" id="getCurrentFiatRatesToken" value="" placeholder="Token address">
+            </div>
         </div>
         <div class="row">
             <div class="col" id="getCurrentFiatRatesResult"></div>
         </div>
         <div class="row">
             <div class="col-2">
-                <input class="btn btn-secondary" type="button" value="get fiat rates tickers" onclick="getFiatRatesTickersList()">
+                <input class="btn btn-secondary" type="button" value="get available tickers" onclick="getFiatRatesTickersList()">
             </div>
-            <div class="col-8">
+            <div class="col-4">
                 <input type="text" class="form-control" id="getFiatRatesTickersListDate" value="1576591569" placeholder="Unix timestamp">
+            </div>
+            <div class="col-5">
+                <input type="text" class="form-control" id="getFiatRatesTickersToken" value="" placeholder="Token address">
             </div>
         </div>
         <div class="row">
@@ -645,14 +673,17 @@
             <div class="col" id="subscribeAddressesResult"></div>
         </div>
         <div class="row">
-            <div class="col-3">
-                <input class="btn btn-secondary" type="button" value="subscribe new fiat rates" onclick="subscribeNewFiatRatesTicker()">
-            </div>
-            <div class="col-1">
-                <span id="subscribeNewFiatRatesTickerId"></span>
+            <div class="col-2">
+                <input class="btn btn-secondary" type="button" value="subscribe fiat rates" onclick="subscribeNewFiatRatesTicker()">
             </div>
             <div class="col-1">
                 <input type="text" class="form-control" id="subscribeFiatRatesCurrency" value="usd">
+            </div>
+            <div class="col-8">
+                <input type="text" class="form-control" id="subscribeFiatRatesTokens" value="" placeholder="0xdAC17F958D2ee523a2206206994597C13D831ec7,0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2">
+            </div>
+            <div class="col-1">
+                <span id="subscribeNewFiatRatesTickerId"></span>
             </div>
             <div class="col-5">
                 <input class="btn btn-secondary" id="unsubscribeNewFiatRatesTickerButton" style="display: none;" type="button" value="unsubscribe" onclick="unsubscribeNewFiatRatesTicker()">

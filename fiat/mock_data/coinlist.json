@@ -1,0 +1,30 @@
+[
+  { "id": "01coin", "symbol": "zoc", "name": "01coin", "platforms": {} },
+  {
+    "id": "0-5x-long-algorand-token",
+    "symbol": "algohalf",
+    "name": "0.5X Long Algorand Token",
+    "platforms": { "ethereum": "" }
+  },
+  { "id": "ethereum", "symbol": "eth", "name": "Ethereum", "platforms": {} },
+  {
+    "id": "ethereum-cash-token",
+    "symbol": "ecash",
+    "name": "Ethereum Cash Token",
+    "platforms": { "ethereum": "0x906710835d1ae85275eb770f06873340ca54274b" }
+  },
+  {
+    "id": "santa-shiba",
+    "symbol": "santashib",
+    "name": "Santa Shiba",
+    "platforms": {
+      "binance-smart-chain": "0x74c609b16512869b1873f5a9d7999deee386e740"
+    }
+  },
+  {
+    "id": "vendit",
+    "symbol": "vndt",
+    "name": "Vendit",
+    "platforms": { "ethereum": "0x5e9997684d061269564f94e5d11ba6ce6fa9528c" }
+  }
+]

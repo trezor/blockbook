@@ -82,6 +82,7 @@ type Tx struct {
 	Txid        string `json:"txid"`
 	Version     int32  `json:"version"`
 	LockTime    uint32 `json:"locktime"`
+	VSize       int64  `json:"vsize,omitempty"`
 	Vin         []Vin  `json:"vin"`
 	Vout        []Vout `json:"vout"`
 	BlockHeight uint32 `json:"blockHeight,omitempty"`
@@ -102,21 +103,53 @@ type MempoolVin struct {
 // MempoolTx is blockchain transaction in mempool
 // optimized for onNewTx notification
 type MempoolTx struct {
-	Hex              string          `json:"hex"`
-	Txid             string          `json:"txid"`
-	Version          int32           `json:"version"`
-	LockTime         uint32          `json:"locktime"`
-	Vin              []MempoolVin    `json:"vin"`
-	Vout             []Vout          `json:"vout"`
-	Blocktime        int64           `json:"blocktime,omitempty"`
-	Erc20            []Erc20Transfer `json:"-"`
-	CoinSpecificData interface{}     `json:"-"`
+	Hex              string         `json:"hex"`
+	Txid             string         `json:"txid"`
+	Version          int32          `json:"version"`
+	LockTime         uint32         `json:"locktime"`
+	VSize            int64          `json:"vsize,omitempty"`
+	Vin              []MempoolVin   `json:"vin"`
+	Vout             []Vout         `json:"vout"`
+	Blocktime        int64          `json:"blocktime,omitempty"`
+	TokenTransfers   TokenTransfers `json:"-"`
+	CoinSpecificData interface{}    `json:"-"`
+}
+
+// TokenType - type of token
+type TokenType int
+
+// TokenType enumeration
+const (
+	FungibleToken    = TokenType(iota) // ERC20
+	NonFungibleToken                   // ERC721
+	MultiToken                         // ERC1155
+)
+
+// TokenTypeName specifies type of token
+type TokenTypeName string
+
+// Token types
+const (
+	UnknownTokenType TokenTypeName = ""
+
+	// XPUBAddressTokenType is address derived from xpub
+	XPUBAddressTokenType TokenTypeName = "XPUBAddress"
+)
+
+// TokenTransfers is array of TokenTransfer
+type TokenTransfers []*TokenTransfer
+
+func (a TokenTransfers) Len() int      { return len(a) }
+func (a TokenTransfers) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+func (a TokenTransfers) Less(i, j int) bool {
+	return a[i].Type < a[j].Type
 }
 
 // Block is block header and list of transactions
 type Block struct {
 	BlockHeader
-	Txs []Tx `json:"tx"`
+	Txs              []Tx        `json:"tx"`
+	CoinSpecificData interface{} `json:"-"`
 }
 
 // BlockHeader contains limited data (as needed for indexing) from backend block header
@@ -161,18 +194,19 @@ type MempoolEntry struct {
 
 // ChainInfo is used to get information about blockchain
 type ChainInfo struct {
-	Chain           string      `json:"chain"`
-	Blocks          int         `json:"blocks"`
-	Headers         int         `json:"headers"`
-	Bestblockhash   string      `json:"bestblockhash"`
-	Difficulty      string      `json:"difficulty"`
-	SizeOnDisk      int64       `json:"size_on_disk"`
-	Version         string      `json:"version"`
-	Subversion      string      `json:"subversion"`
-	ProtocolVersion string      `json:"protocolversion"`
-	Timeoffset      float64     `json:"timeoffset"`
-	Warnings        string      `json:"warnings"`
-	Consensus       interface{} `json:"consensus,omitempty"`
+	Chain            string      `json:"chain"`
+	Blocks           int         `json:"blocks"`
+	Headers          int         `json:"headers"`
+	Bestblockhash    string      `json:"bestblockhash"`
+	Difficulty       string      `json:"difficulty"`
+	SizeOnDisk       int64       `json:"size_on_disk"`
+	Version          string      `json:"version"`
+	Subversion       string      `json:"subversion"`
+	ProtocolVersion  string      `json:"protocolversion"`
+	Timeoffset       float64     `json:"timeoffset"`
+	Warnings         string      `json:"warnings"`
+	ConsensusVersion string      `json:"consensus_version,omitempty"`
+	Consensus        interface{} `json:"consensus,omitempty"`
 }
 
 // RPCError defines rpc error returned by backend
@@ -198,24 +232,6 @@ func AddressDescriptorFromString(s string) (AddressDescriptor, error) {
 		return hex.DecodeString(s[3:])
 	}
 	return nil, errors.New("invalid address descriptor")
-}
-
-// EthereumType specific
-
-// Erc20Contract contains info about ERC20 contract
-type Erc20Contract struct {
-	Contract string `json:"contract"`
-	Name     string `json:"name"`
-	Symbol   string `json:"symbol"`
-	Decimals int    `json:"decimals"`
-}
-
-// Erc20Transfer contains a single ERC20 token transfer
-type Erc20Transfer struct {
-	Contract string
-	From     string
-	To       string
-	Tokens   big.Int
 }
 
 // MempoolTxidEntry contains mempool txid with first seen time
@@ -294,14 +310,15 @@ type BlockChain interface {
 	EstimateFee(blocks int) (big.Int, error)
 	SendRawTransaction(tx string) (string, error)
 	GetMempoolEntry(txid string) (*MempoolEntry, error)
+	GetContractInfo(contractDesc AddressDescriptor) (*ContractInfo, error)
 	// parser
 	GetChainParser() BlockChainParser
 	// EthereumType specific
 	EthereumTypeGetBalance(addrDesc AddressDescriptor) (*big.Int, error)
 	EthereumTypeGetNonce(addrDesc AddressDescriptor) (uint64, error)
 	EthereumTypeEstimateGas(params map[string]interface{}) (uint64, error)
-	EthereumTypeGetErc20ContractInfo(contractDesc AddressDescriptor) (*Erc20Contract, error)
 	EthereumTypeGetErc20ContractBalance(addrDesc, contractDesc AddressDescriptor) (*big.Int, error)
+	GetTokenURI(contractDesc AddressDescriptor, tokenID *big.Int) (string, error)
 }
 
 // BlockChainParser defines common interface to parsing and conversions of block chain data
@@ -313,8 +330,12 @@ type BlockChainParser interface {
 	KeepBlockAddresses() int
 	// AmountDecimals returns number of decimal places in coin amounts
 	AmountDecimals() int
+	// UseAddressAliases returns true if address aliases are enabled
+	UseAddressAliases() bool
 	// MinimumCoinbaseConfirmations returns minimum number of confirmations a coinbase transaction must have before it can be spent
 	MinimumCoinbaseConfirmations() int
+	// SupportsVSize returns true if vsize of a transaction should be computed and returned by API
+	SupportsVSize() bool
 	// AmountToDecimalString converts amount in big.Int to string with decimal point in the correct place
 	AmountToDecimalString(a *big.Int) string
 	// AmountToBigInt converts amount in common.JSONNumber (string) to big.Int
@@ -345,7 +366,9 @@ type BlockChainParser interface {
 	DeriveAddressDescriptors(descriptor *XpubDescriptor, change uint32, indexes []uint32) ([]AddressDescriptor, error)
 	DeriveAddressDescriptorsFromTo(descriptor *XpubDescriptor, change uint32, fromIndex uint32, toIndex uint32) ([]AddressDescriptor, error)
 	// EthereumType specific
-	EthereumTypeGetErc20FromTx(tx *Tx) ([]Erc20Transfer, error)
+	EthereumTypeGetTokenTransfersFromTx(tx *Tx) (TokenTransfers, error)
+	// AddressAlias
+	FormatAddressAlias(address string, name string) string
 }
 
 // Mempool defines common interface to mempool

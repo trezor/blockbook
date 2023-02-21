@@ -1,6 +1,6 @@
 SHELL = /bin/bash
 VERSION ?= devel
-GITCOMMIT = $(shell cd /src && git describe --always --dirty)
+GITCOMMIT = $(shell cd /src && git config --global --add safe.directory /src && git describe --always --dirty)
 BUILDTIME = $(shell date --iso-8601=seconds)
 LDFLAGS := -X github.com/trezor/blockbook/common.version=$(VERSION) -X github.com/trezor/blockbook/common.gitcommit=$(GITCOMMIT) -X github.com/trezor/blockbook/common.buildtime=$(BUILDTIME)
 BLOCKBOOK_BASE := $(GOPATH)/src/github.com/trezor
@@ -10,12 +10,12 @@ ARGS ?=
 all: build tools
 
 build: prepare-sources
-	cd $(BLOCKBOOK_SRC) && go build -tags rocksdb_6_16 -o $(CURDIR)/blockbook -ldflags="-s -w $(LDFLAGS)" $(ARGS)
+	cd $(BLOCKBOOK_SRC) && go build -o $(CURDIR)/blockbook -ldflags="-s -w $(LDFLAGS)" $(ARGS)
 	cp $(CURDIR)/blockbook /out/blockbook
 	chown $(PACKAGER) /out/blockbook
 
 build-debug: prepare-sources
-	cd $(BLOCKBOOK_SRC) && go build -tags rocksdb_6_16 -o $(CURDIR)/blockbook -ldflags="$(LDFLAGS)" $(ARGS)
+	cd $(BLOCKBOOK_SRC) && go build -o $(CURDIR)/blockbook -ldflags="$(LDFLAGS)" $(ARGS)
 	cp $(CURDIR)/blockbook /out/blockbook
 	chown $(PACKAGER) /out/blockbook
 
@@ -24,13 +24,13 @@ tools:
 	chown $(PACKAGER) /out/{ldb,sst_dump}
 
 test: prepare-sources
-	cd $(BLOCKBOOK_SRC) && go test -tags 'rocksdb_6_16 unittest' `go list ./... | grep -vP '^github.com/trezor/blockbook/(contrib|tests)'` $(ARGS)
+	cd $(BLOCKBOOK_SRC) && go test -tags 'unittest' `go list ./... | grep -vP '^github.com/trezor/blockbook/(contrib|tests)'` $(ARGS)
 
 test-integration: prepare-sources
-	cd $(BLOCKBOOK_SRC) && go test -tags 'rocksdb_6_16 integration' `go list github.com/trezor/blockbook/tests/...` $(ARGS)
+	cd $(BLOCKBOOK_SRC) && go test -tags 'integration' `go list github.com/trezor/blockbook/tests/...` $(ARGS)
 
 test-all: prepare-sources
-	cd $(BLOCKBOOK_SRC) && go test -tags 'rocksdb_6_16 unittest integration' `go list ./... | grep -v '^github.com/trezor/blockbook/contrib'` $(ARGS)
+	cd $(BLOCKBOOK_SRC) && go test -tags 'unittest integration' `go list ./... | grep -v '^github.com/trezor/blockbook/contrib'` $(ARGS)
 
 prepare-sources:
 	@ [ -n "`ls /src 2> /dev/null`" ] || (echo "/src doesn't exist or is empty" 1>&2 && exit 1)
@@ -38,3 +38,4 @@ prepare-sources:
 	mkdir -p $(BLOCKBOOK_BASE)
 	cp -r /src $(BLOCKBOOK_SRC)
 	cd $(BLOCKBOOK_SRC) && go mod download
+	sed -i 's/wsMessageSizeLimit\ =\ 15\ \*\ 1024\ \*\ 1024/wsMessageSizeLimit = 50 * 1024 * 1024/g' $(GOPATH)/pkg/mod/github.com/ethereum/go-ethereum*/rpc/websocket.go

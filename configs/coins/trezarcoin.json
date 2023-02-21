@@ -27,9 +27,7 @@
     "verification_type": "sha256",
     "verification_source": "4b41c4fecf36a870d6bb7298d85b211f61d9f2bcc6c1bef3167f3ef772bc6fdf",
     "extract_command": "tar -C backend --strip 1 -xf",
-    "exclude_files": [
-      "bin/trezarcoin-qt"
-    ],
+    "exclude_files": ["bin/trezarcoin-qt"],
     "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/trezarcoind -datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -conf={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf -pid=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",
     "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/*.log",
     "postinst_script_template": "",
@@ -59,7 +57,8 @@
       "slip44": 232,
       "additional_params": {
         "fiat_rates": "coingecko",
-        "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"trezarcoin\", \"periodSeconds\": 60}"
+        "fiat_rates_vs_currencies": "AED,ARS,AUD,BDT,BHD,BMD,BRL,CAD,CHF,CLP,CNY,CZK,DKK,EUR,GBP,HKD,HUF,IDR,ILS,INR,JPY,KRW,KWD,LKR,MMK,MXN,MYR,NGN,NOK,NZD,PHP,PKR,PLN,RUB,SAR,SEK,SGD,THB,TRY,TWD,UAH,USD,VEF,VND,ZAR,BTC,ETH",
+        "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"trezarcoin\", \"periodSeconds\": 900}"
       }
     }
   },

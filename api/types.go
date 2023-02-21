@@ -64,6 +64,21 @@ func IsZeroBigInt(b *big.Int) bool {
 	return len(b.Bits()) == 0
 }
 
+// Compare returns an integer comparing two Amounts. The result will be 0 if a == b, -1 if a < b, and +1 if a > b.
+// Nil Amount is always less then non nil amount, two nil Amounts are equal
+func (a *Amount) Compare(b *Amount) int {
+	if b == nil {
+		if a == nil {
+			return 0
+		}
+		return 1
+	}
+	if a == nil {
+		return -1
+	}
+	return (*big.Int)(a).Cmp((*big.Int)(b))
+}
+
 // MarshalJSON Amount serialization
 func (a *Amount) MarshalJSON() (out []byte, err error) {
 	if a == nil {
@@ -135,72 +150,123 @@ type Vout struct {
 	Type        string                   `json:"type,omitempty"`
 }
 
-// TokenType specifies type of token
-type TokenType string
-
-// ERC20TokenType is Ethereum ERC20 token
-const ERC20TokenType TokenType = "ERC20"
-
-// XPUBAddressTokenType is address derived from xpub
-const XPUBAddressTokenType TokenType = "XPUBAddress"
+// MultiTokenValue contains values for contract with id and value (like ERC1155)
+type MultiTokenValue struct {
+	Id    *Amount `json:"id,omitempty"`
+	Value *Amount `json:"value,omitempty"`
+}
 
 // Token contains info about tokens held by an address
 type Token struct {
-	Type             TokenType `json:"type"`
-	Name             string    `json:"name"`
-	Path             string    `json:"path,omitempty"`
-	Contract         string    `json:"contract,omitempty"`
-	Transfers        int       `json:"transfers"`
-	Symbol           string    `json:"symbol,omitempty"`
-	Decimals         int       `json:"decimals,omitempty"`
-	BalanceSat       *Amount   `json:"balance,omitempty"`
-	TotalReceivedSat *Amount   `json:"totalReceived,omitempty"`
-	TotalSentSat     *Amount   `json:"totalSent,omitempty"`
-	ContractIndex    string    `json:"-"`
+	Type             bchain.TokenTypeName `json:"type"`
+	Name             string               `json:"name"`
+	Path             string               `json:"path,omitempty"`
+	Contract         string               `json:"contract,omitempty"`
+	Transfers        int                  `json:"transfers"`
+	Symbol           string               `json:"symbol,omitempty"`
+	Decimals         int                  `json:"decimals,omitempty"`
+	BalanceSat       *Amount              `json:"balance,omitempty"`
+	BaseValue        float64              `json:"baseValue,omitempty"`        // value in the base currency (ETH for Ethereum)
+	SecondaryValue   float64              `json:"secondaryValue,omitempty"`   // value in secondary (fiat) currency, if specified
+	Ids              []Amount             `json:"ids,omitempty"`              // multiple ERC721 tokens
+	MultiTokenValues []MultiTokenValue    `json:"multiTokenValues,omitempty"` // multiple ERC1155 tokens
+	TotalReceivedSat *Amount              `json:"totalReceived,omitempty"`
+	TotalSentSat     *Amount              `json:"totalSent,omitempty"`
+	ContractIndex    string               `json:"-"`
+}
+
+// Tokens is array of Token
+type Tokens []Token
+
+func (a Tokens) Len() int      { return len(a) }
+func (a Tokens) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+func (a Tokens) Less(i, j int) bool {
+	ti := &a[i]
+	tj := &a[j]
+	// sort by BaseValue descending  and then Name and then by Contract
+	if ti.BaseValue < tj.BaseValue {
+		return false
+	} else if ti.BaseValue > tj.BaseValue {
+		return true
+	}
+	if ti.Name == "" {
+		if tj.Name != "" {
+			return false
+		}
+	} else {
+		if tj.Name == "" {
+			return true
+		}
+		return ti.Name < tj.Name
+	}
+	return ti.Contract < tj.Contract
 }
 
 // TokenTransfer contains info about a token transfer done in a transaction
 type TokenTransfer struct {
-	Type     TokenType `json:"type"`
-	From     string    `json:"from"`
-	To       string    `json:"to"`
-	Token    string    `json:"token"`
-	Name     string    `json:"name"`
-	Symbol   string    `json:"symbol"`
-	Decimals int       `json:"decimals"`
-	Value    *Amount   `json:"value"`
+	Type             bchain.TokenTypeName `json:"type"`
+	From             string               `json:"from"`
+	To               string               `json:"to"`
+	Contract         string               `json:"contract"`
+	Name             string               `json:"name"`
+	Symbol           string               `json:"symbol"`
+	Decimals         int                  `json:"decimals"`
+	Value            *Amount              `json:"value,omitempty"`
+	MultiTokenValues []MultiTokenValue    `json:"multiTokenValues,omitempty"`
+}
+
+type EthereumInternalTransfer struct {
+	Type  bchain.EthereumInternalTransactionType `json:"type"`
+	From  string                                 `json:"from"`
+	To    string                                 `json:"to"`
+	Value *Amount                                `json:"value"`
 }
 
 // EthereumSpecific contains ethereum specific transaction data
 type EthereumSpecific struct {
-	Status   eth.TxStatus `json:"status"` // 1 OK, 0 Fail, -1 pending
-	Nonce    uint64       `json:"nonce"`
-	GasLimit *big.Int     `json:"gasLimit"`
-	GasUsed  *big.Int     `json:"gasUsed"`
-	GasPrice *Amount      `json:"gasPrice"`
-	Data     string       `json:"data,omitempty"`
+	Type              bchain.EthereumInternalTransactionType `json:"type,omitempty"`
+	CreatedContract   string                                 `json:"createdContract,omitempty"`
+	Status            eth.TxStatus                           `json:"status"` // 1 OK, 0 Fail, -1 pending
+	Error             string                                 `json:"error,omitempty"`
+	Nonce             uint64                                 `json:"nonce"`
+	GasLimit          *big.Int                               `json:"gasLimit"`
+	GasUsed           *big.Int                               `json:"gasUsed"`
+	GasPrice          *Amount                                `json:"gasPrice"`
+	Data              string                                 `json:"data,omitempty"`
+	ParsedData        *bchain.EthereumParsedInputData        `json:"parsedData,omitempty"`
+	InternalTransfers []EthereumInternalTransfer             `json:"internalTransfers,omitempty"`
 }
+
+type AddressAlias struct {
+	Type  string
+	Alias string
+}
+type AddressAliasesMap map[string]AddressAlias
 
 // Tx holds information about a transaction
 type Tx struct {
-	Txid             string            `json:"txid"`
-	Version          int32             `json:"version,omitempty"`
-	Locktime         uint32            `json:"lockTime,omitempty"`
-	Vin              []Vin             `json:"vin"`
-	Vout             []Vout            `json:"vout"`
-	Blockhash        string            `json:"blockHash,omitempty"`
-	Blockheight      int               `json:"blockHeight"`
-	Confirmations    uint32            `json:"confirmations"`
-	Blocktime        int64             `json:"blockTime"`
-	Size             int               `json:"size,omitempty"`
-	ValueOutSat      *Amount           `json:"value"`
-	ValueInSat       *Amount           `json:"valueIn,omitempty"`
-	FeesSat          *Amount           `json:"fees,omitempty"`
-	Hex              string            `json:"hex,omitempty"`
-	Rbf              bool              `json:"rbf,omitempty"`
-	CoinSpecificData json.RawMessage   `json:"coinSpecificData,omitempty"`
-	TokenTransfers   []TokenTransfer   `json:"tokenTransfers,omitempty"`
-	EthereumSpecific *EthereumSpecific `json:"ethereumSpecific,omitempty"`
+	Txid                   string            `json:"txid"`
+	Version                int32             `json:"version,omitempty"`
+	Locktime               uint32            `json:"lockTime,omitempty"`
+	Vin                    []Vin             `json:"vin"`
+	Vout                   []Vout            `json:"vout"`
+	Blockhash              string            `json:"blockHash,omitempty"`
+	Blockheight            int               `json:"blockHeight"`
+	Confirmations          uint32            `json:"confirmations"`
+	ConfirmationETABlocks  uint32            `json:"confirmationETABlocks,omitempty"`
+	ConfirmationETASeconds int64             `json:"confirmationETASeconds,omitempty"`
+	Blocktime              int64             `json:"blockTime"`
+	Size                   int               `json:"size,omitempty"`
+	VSize                  int               `json:"vsize,omitempty"`
+	ValueOutSat            *Amount           `json:"value"`
+	ValueInSat             *Amount           `json:"valueIn,omitempty"`
+	FeesSat                *Amount           `json:"fees,omitempty"`
+	Hex                    string            `json:"hex,omitempty"`
+	Rbf                    bool              `json:"rbf,omitempty"`
+	CoinSpecificData       json.RawMessage   `json:"coinSpecificData,omitempty"`
+	TokenTransfers         []TokenTransfer   `json:"tokenTransfers,omitempty"`
+	EthereumSpecific       *EthereumSpecific `json:"ethereumSpecific,omitempty"`
+	AddressAliases         AddressAliasesMap `json:"addressAliases,omitempty"`
 }
 
 // FeeStats contains detailed block fee statistics
@@ -253,20 +319,28 @@ type AddressFilter struct {
 // Address holds information about address and its transactions
 type Address struct {
 	Paging
-	AddrStr               string                `json:"address"`
-	BalanceSat            *Amount               `json:"balance"`
-	TotalReceivedSat      *Amount               `json:"totalReceived,omitempty"`
-	TotalSentSat          *Amount               `json:"totalSent,omitempty"`
-	UnconfirmedBalanceSat *Amount               `json:"unconfirmedBalance"`
-	UnconfirmedTxs        int                   `json:"unconfirmedTxs"`
-	Txs                   int                   `json:"txs"`
-	NonTokenTxs           int                   `json:"nonTokenTxs,omitempty"`
-	Transactions          []*Tx                 `json:"transactions,omitempty"`
-	Txids                 []string              `json:"txids,omitempty"`
-	Nonce                 string                `json:"nonce,omitempty"`
-	UsedTokens            int                   `json:"usedTokens,omitempty"`
-	Tokens                []Token               `json:"tokens,omitempty"`
-	Erc20Contract         *bchain.Erc20Contract `json:"erc20Contract,omitempty"`
+	AddrStr               string               `json:"address"`
+	BalanceSat            *Amount              `json:"balance"`
+	TotalReceivedSat      *Amount              `json:"totalReceived,omitempty"`
+	TotalSentSat          *Amount              `json:"totalSent,omitempty"`
+	UnconfirmedBalanceSat *Amount              `json:"unconfirmedBalance"`
+	UnconfirmedTxs        int                  `json:"unconfirmedTxs"`
+	Txs                   int                  `json:"txs"`
+	NonTokenTxs           int                  `json:"nonTokenTxs,omitempty"`
+	InternalTxs           int                  `json:"internalTxs,omitempty"`
+	Transactions          []*Tx                `json:"transactions,omitempty"`
+	Txids                 []string             `json:"txids,omitempty"`
+	Nonce                 string               `json:"nonce,omitempty"`
+	UsedTokens            int                  `json:"usedTokens,omitempty"`
+	Tokens                Tokens               `json:"tokens,omitempty"`
+	SecondaryValue        float64              `json:"secondaryValue,omitempty"` // address value in secondary currency
+	TokensBaseValue       float64              `json:"tokensBaseValue,omitempty"`
+	TokensSecondaryValue  float64              `json:"tokensSecondaryValue,omitempty"`
+	TotalBaseValue        float64              `json:"totalBaseValue,omitempty"`      // value including tokens in base currency
+	TotalSecondaryValue   float64              `json:"totalSecondaryValue,omitempty"` // value including tokens in secondary currency
+	ContractInfo          *bchain.ContractInfo `json:"contractInfo,omitempty"`
+	Erc20Contract         *bchain.ContractInfo `json:"erc20Contract,omitempty"` // deprecated
+	AddressAliases        AddressAliasesMap    `json:"addressAliases,omitempty"`
 	// helpers for explorer
 	Filter        string              `json:"-"`
 	XPubAddresses map[string]struct{} `json:"-"`
@@ -310,7 +384,7 @@ type BalanceHistory struct {
 	ReceivedSat   *Amount            `json:"received"`
 	SentSat       *Amount            `json:"sent"`
 	SentToSelfSat *Amount            `json:"sentToSelf"`
-	FiatRates     map[string]float64 `json:"rates,omitempty"`
+	FiatRates     map[string]float32 `json:"rates,omitempty"`
 	Txid          string             `json:"txid,omitempty"`
 }
 
@@ -397,8 +471,9 @@ type BlockInfo struct {
 type Block struct {
 	Paging
 	BlockInfo
-	TxCount      int   `json:"txCount"`
-	Transactions []*Tx `json:"txs,omitempty"`
+	TxCount        int               `json:"txCount"`
+	Transactions   []*Tx             `json:"txs,omitempty"`
+	AddressAliases AddressAliasesMap `json:"addressAliases,omitempty"`
 }
 
 // BlockRaw contains raw block in hex
@@ -408,24 +483,29 @@ type BlockRaw struct {
 
 // BlockbookInfo contains information about the running blockbook instance
 type BlockbookInfo struct {
-	Coin              string                       `json:"coin"`
-	Host              string                       `json:"host"`
-	Version           string                       `json:"version"`
-	GitCommit         string                       `json:"gitCommit"`
-	BuildTime         string                       `json:"buildTime"`
-	SyncMode          bool                         `json:"syncMode"`
-	InitialSync       bool                         `json:"initialSync"`
-	InSync            bool                         `json:"inSync"`
-	BestHeight        uint32                       `json:"bestHeight"`
-	LastBlockTime     time.Time                    `json:"lastBlockTime"`
-	InSyncMempool     bool                         `json:"inSyncMempool"`
-	LastMempoolTime   time.Time                    `json:"lastMempoolTime"`
-	MempoolSize       int                          `json:"mempoolSize"`
-	Decimals          int                          `json:"decimals"`
-	DbSize            int64                        `json:"dbSize"`
-	DbSizeFromColumns int64                        `json:"dbSizeFromColumns,omitempty"`
-	DbColumns         []common.InternalStateColumn `json:"dbColumns,omitempty"`
-	About             string                       `json:"about"`
+	Coin                         string                       `json:"coin"`
+	Host                         string                       `json:"host"`
+	Version                      string                       `json:"version"`
+	GitCommit                    string                       `json:"gitCommit"`
+	BuildTime                    string                       `json:"buildTime"`
+	SyncMode                     bool                         `json:"syncMode"`
+	InitialSync                  bool                         `json:"initialSync"`
+	InSync                       bool                         `json:"inSync"`
+	BestHeight                   uint32                       `json:"bestHeight"`
+	LastBlockTime                time.Time                    `json:"lastBlockTime"`
+	InSyncMempool                bool                         `json:"inSyncMempool"`
+	LastMempoolTime              time.Time                    `json:"lastMempoolTime"`
+	MempoolSize                  int                          `json:"mempoolSize"`
+	Decimals                     int                          `json:"decimals"`
+	DbSize                       int64                        `json:"dbSize"`
+	HasFiatRates                 bool                         `json:"hasFiatRates,omitempty"`
+	HasTokenFiatRates            bool                         `json:"hasTokenFiatRates,omitempty"`
+	CurrentFiatRatesTime         *time.Time                   `json:"currentFiatRatesTime,omitempty"`
+	HistoricalFiatRatesTime      *time.Time                   `json:"historicalFiatRatesTime,omitempty"`
+	HistoricalTokenFiatRatesTime *time.Time                   `json:"historicalTokenFiatRatesTime,omitempty"`
+	DbSizeFromColumns            int64                        `json:"dbSizeFromColumns,omitempty"`
+	DbColumns                    []common.InternalStateColumn `json:"dbColumns,omitempty"`
+	About                        string                       `json:"about"`
 }
 
 // SystemInfo contains information about the running blockbook and backend instance
@@ -445,4 +525,23 @@ type MempoolTxids struct {
 	Paging
 	Mempool     []MempoolTxid `json:"mempool"`
 	MempoolSize int           `json:"mempoolSize"`
+}
+
+// FiatTicker contains formatted CurrencyRatesTicker data
+type FiatTicker struct {
+	Timestamp int64              `json:"ts,omitempty"`
+	Rates     map[string]float32 `json:"rates"`
+	Error     string             `json:"error,omitempty"`
+}
+
+// FiatTickers contains a formatted CurrencyRatesTicker list
+type FiatTickers struct {
+	Tickers []FiatTicker `json:"tickers"`
+}
+
+// AvailableVsCurrencies contains formatted data about available versus currencies for exchange rates
+type AvailableVsCurrencies struct {
+	Timestamp int64    `json:"ts,omitempty"`
+	Tickers   []string `json:"available_currencies"`
+	Error     string   `json:"error,omitempty"`
 }

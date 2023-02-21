@@ -22,10 +22,10 @@
     "package_name": "backend-litecoin-testnet",
     "package_revision": "satoshilabs-1",
     "system_user": "litecoin",
-    "version": "0.18.1",
-    "binary_url": "https://download.litecoin.org/litecoin-0.18.1/linux/litecoin-0.18.1-x86_64-linux-gnu.tar.gz",
-    "verification_type": "gpg-sha256",
-    "verification_source": "https://download.litecoin.org/litecoin-0.18.1/linux/litecoin-0.18.1-linux-signatures.asc",
+    "version": "0.21.2.1",
+    "binary_url": "https://download.litecoin.org/litecoin-0.21.2.1/linux/litecoin-0.21.2.1-x86_64-linux-gnu.tar.gz",
+    "verification_type": "gpg",
+    "verification_source": "https://download.litecoin.org/litecoin-0.21.2.1/linux/litecoin-0.21.2.1-x86_64-linux-gnu.tar.gz.asc",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
       "bin/litecoin-qt"
@@ -41,6 +41,12 @@
     "client_config_file": "bitcoin_like_client.conf",
     "additional_params": {
       "whitelist": "127.0.0.1"
+    },
+    "platforms": {
+      "arm64": {
+        "binary_url": "https://download.litecoin.org/litecoin-0.21.2.1/linux/litecoin-0.21.2.1-aarch64-linux-gnu.tar.gz",
+        "verification_source": "https://download.litecoin.org/litecoin-0.21.2.1/linux/litecoin-0.21.2.1-aarch64-linux-gnu.tar.gz.asc"
+      }
     }
   },
   "blockbook": {

@@ -30,7 +30,7 @@
 | Viacoin                | 9055                    | 9155                  | 8055             | 38355                       |
 | VIPSTARCOIN            | 9056                    | 9156                  | 8056             | 38356                       |
 | MonetaryUnit           | 9057                    | 9157                  | 8057             | 38357                       |
-| ZelCash                | 9058                    | 9158                  | 8058             | 38358                       |
+| Flux                   | 9058                    | 9158                  | 8058             | 38358                       |
 | Ravencoin              | 9059                    | 9159                  | 8059             | 38359                       |
 | Ritocoin               | 9060                    | 9160                  | 8060             | 38360                       |
 | Decred                 | 9061                    | 9161                  | 8061             | 38361                       |
@@ -38,6 +38,8 @@
 | Hydra                  | 9063                    | 9163                  | 8063             | 38363                       |
 | Flo                    | 9066                    | 9166                  | 8066             | 38366                       |
 | Polis                  | 9067                    | 9167                  | 8067             | 38367                       |
+| Polygon                | 9068                    | 9168                  | 8068             |                             |
+| Arbitrum               | 9069                    | 9169                  | 8069             |                             |
 | Qtum                   | 9088                    | 9188                  | 8088             | 38388                       |
 | Divi Project           | 9089                    | 9189                  | 8089             | 38389                       |
 | CPUchain               | 9090                    | 9190                  | 8090             | 38390                       |
@@ -47,11 +49,12 @@
 | BitZeny                | 9095                    | 9195                  | 8095             | 38395                       |
 | Trezarcoin             | 9096                    | 9196                  | 8096             | 38396                       |
 | eCash                  | 9097                    | 9197                  | 8097             | 38397                       |
-| Polygon                  | 9099                    | 9199                  | 8099             |                       |
-| Arbitrum             | 9098                    | 9198                  | 8098             |                       |
+| Avalanche              | 9098                    | 9198                  | 8098             | 38398 p2p                   |
+| Avalanche Archive      | 9099                    | 9199                  | 8099             | 38399 p2p                   |
 | Bitcoin Signet         | 19020                   | 19120                 | 18020            | 48320                       |
 | Bitcoin Regtest        | 19021                   | 19121                 | 18021            | 48321                       |
 | Ethereum Goerli        | 19026                   | 19126                 | 18026            | 48326 p2p                   |
+| Ethereum Sepolia       | 19176                   | 19176                 | 18076            | 48376 p2p                   |
 | Bitcoin Testnet        | 19030                   | 19130                 | 18030            | 48330                       |
 | Bitcoin Cash Testnet   | 19031                   | 19131                 | 18031            | 48331                       |
 | Zcash Testnet          | 19032                   | 19132                 | 18032            | 48332                       |
@@ -70,10 +73,10 @@
 | Koto Testnet           | 19051                   | 19151                 | 18051            | 48351                       |
 | Decred Testnet         | 19061                   | 19161                 | 18061            | 48361                       |
 | Flo Testnet            | 19066                   | 19166                 | 18066            | 48366                       |
+| Polygon Testnet        | 19068                   | 19168                 | 18068            |                             |
+| Arbitrum  Testnet      | 19069                   | 19169                 | 18069            |                             | 
 | Qtum Testnet           | 19088                   | 19188                 | 18088            | 48388                       |
 | Omotenashicoin Testnet | 19089                   | 19189                 | 18089            | 48389                       |
-| Polygon Testnet | 19099                   | 19199                 | 18099            |                       |
-| Arbitrum  Testnet         |  19098                    | 19198                  | 18098             |                       | 
 
 
 > NOTE: This document is generated from coin definitions in `configs/coins`.

@@ -22,14 +22,12 @@
     "package_name": "backend-dogecoin",
     "package_revision": "satoshilabs-1",
     "system_user": "dogecoin",
-    "version": "1.14.5",
-    "binary_url": "https://github.com/dogecoin/dogecoin/releases/download/v1.14.5/dogecoin-1.14.5-x86_64-linux-gnu.tar.gz",
+    "version": "1.14.6",
+    "binary_url": "https://github.com/dogecoin/dogecoin/releases/download/v1.14.6/dogecoin-1.14.6-x86_64-linux-gnu.tar.gz",
     "verification_type": "sha256",
-    "verification_source": "17a03f019168ec5283947ea6fbf1a073c1d185ea9edacc2b91f360e1c191428e",
+    "verification_source": "fe9c9cdab946155866a5bd5a5127d2971a9eed3e0b65fb553fe393ad1daaebb0",
     "extract_command": "tar -C backend --strip 1 -xf",
-    "exclude_files": [
-      "bin/dogecoin-qt"
-    ],
+    "exclude_files": ["bin/dogecoin-qt"],
     "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/dogecoind -datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -conf={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf -pid=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",
     "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/*.log",
     "postinst_script_template": "",
@@ -44,6 +42,13 @@
       "rpcthreads": 16,
       "upnp": 0,
       "whitelist": "127.0.0.1"
+    },
+    "platforms": {
+      "arm64": {
+        "binary_url": "https://github.com/dogecoin/dogecoin/releases/download/v1.14.6/dogecoin-1.14.6-aarch64-linux-gnu.tar.gz",
+        "verification_source": "87419c29607b2612746fccebd694037e4be7600fc32198c4989f919be20952db",
+        "exclude_files": []
+      }
     }
   },
   "blockbook": {
@@ -62,7 +67,8 @@
       "slip44": 3,
       "additional_params": {
         "fiat_rates": "coingecko",
-        "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"dogecoin\", \"periodSeconds\": 60}"
+        "fiat_rates_vs_currencies": "AED,ARS,AUD,BDT,BHD,BMD,BRL,CAD,CHF,CLP,CNY,CZK,DKK,EUR,GBP,HKD,HUF,IDR,ILS,INR,JPY,KRW,KWD,LKR,MMK,MXN,MYR,NGN,NOK,NZD,PHP,PKR,PLN,RUB,SAR,SEK,SGD,THB,TRY,TWD,UAH,USD,VEF,VND,ZAR,BTC,ETH",
+        "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"dogecoin\", \"periodSeconds\": 900}"
       }
     }
   },

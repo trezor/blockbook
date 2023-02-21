@@ -1,0 +1,48 @@
+{
+  "coin": {
+    "name": "Ethereum Archive",
+    "shortcut": "ETH",
+    "label": "Ethereum",
+    "alias": "ethereum_archive_consensus",
+    "execution_alias": "ethereum_archive"
+  },
+  "ports": {
+    "backend_rpc": 8016,
+    "backend_message_queue": 0,
+    "backend_p2p": 38316,
+    "backend_http": 8116,
+    "backend_authrpc": 8516,
+    "blockbook_internal": 9016,
+    "blockbook_public": 9116
+  },
+  "backend": {
+    "package_name": "backend-ethereum-archive-consensus",
+    "package_revision": "satoshilabs-1",
+    "system_user": "ethereum",
+    "version": "3.2.0",
+    "binary_url": "https://github.com/prysmaticlabs/prysm/releases/download/v3.2.0/beacon-chain-v3.2.0-linux-amd64",
+    "verification_type": "sha256",
+    "verification_source": "e57fed14bc15a62ab38a6605a8f93c2cf29fbd7a6333dd3ad72781c3778e36fc",
+    "extract_command": "mv ${ARCHIVE} backend/beacon-chain && chmod +x backend/beacon-chain && echo",
+    "exclude_files": [],
+    "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/beacon-chain --mainnet --accept-terms-of-use --execution-endpoint=http://localhost:{{.Ports.BackendAuthRpc}} --grpc-gateway-port=7516 --rpc-port=7517 --monitoring-port=7518 --p2p-tcp-port=3516 --p2p-udp-port=2516 --datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --jwt-secret={{.Env.BackendDataPath}}/ethereum_archive/backend/geth/jwtsecret 2>>{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
+    "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
+    "postinst_script_template": "",
+    "service_type": "simple",
+    "service_additional_params_template": "",
+    "protect_memory": true,
+    "mainnet": false,
+    "server_config_file": "",
+    "client_config_file": "",
+    "platforms": {
+      "arm64": {
+        "binary_url": "https://github.com/prysmaticlabs/prysm/releases/download/v3.1.2/beacon-chain-v3.1.2-linux-arm64",
+        "verification_source": "1701df47dbb6598a9215f82a313e1531c211bb912618dc3d0cd33e6e67c5ebb5"
+      }
+    }
+  },
+  "meta": {
+    "package_maintainer": "IT",
+    "package_maintainer_email": "it@satoshilabs.com"
+  }
+}

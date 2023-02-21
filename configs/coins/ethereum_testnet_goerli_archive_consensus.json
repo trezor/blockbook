@@ -1,0 +1,48 @@
+{
+  "coin": {
+    "name": "Ethereum Testnet Goerli Archive",
+    "shortcut": "tGOR",
+    "label": "Ethereum Goerli",
+    "alias": "ethereum_testnet_goerli_archive_consensus",
+    "execution_alias": "ethereum_testnet_goerli_archive"
+  },
+  "ports": {
+    "backend_rpc": 18006,
+    "backend_message_queue": 0,
+    "backend_p2p": 48306,
+    "backend_http": 18106,
+    "backend_authrpc": 18506,
+    "blockbook_internal": 19006,
+    "blockbook_public": 19106
+  },
+  "backend": {
+    "package_name": "backend-ethereum-testnet-goerli-archive-consensus",
+    "package_revision": "satoshilabs-1",
+    "system_user": "ethereum",
+    "version": "3.2.0",
+    "binary_url": "https://github.com/prysmaticlabs/prysm/releases/download/v3.2.0/beacon-chain-v3.2.0-linux-amd64",
+    "verification_type": "sha256",
+    "verification_source": "e57fed14bc15a62ab38a6605a8f93c2cf29fbd7a6333dd3ad72781c3778e36fc",
+    "extract_command": "mv ${ARCHIVE} backend/beacon-chain && chmod +x backend/beacon-chain && echo",
+    "exclude_files": [],
+    "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/beacon-chain --prater --accept-terms-of-use --execution-endpoint=http://localhost:{{.Ports.BackendAuthRpc}} --grpc-gateway-port=17506 --rpc-port=17507 --monitoring-port=17508 --p2p-tcp-port=13506 --p2p-udp-port=12506 --datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --jwt-secret={{.Env.BackendDataPath}}/ethereum_testnet_goerli_archive/backend/geth/jwtsecret --genesis-state={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/genesis.ssz 2>>{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
+    "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
+    "postinst_script_template": "wget https://github.com/eth-clients/eth2-networks/raw/master/shared/prater/genesis.ssz -O {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/genesis.ssz",
+    "service_type": "simple",
+    "service_additional_params_template": "",
+    "protect_memory": true,
+    "mainnet": false,
+    "server_config_file": "",
+    "client_config_file": "",
+    "platforms": {
+      "arm64": {
+        "binary_url": "https://github.com/prysmaticlabs/prysm/releases/download/v3.1.2/beacon-chain-v3.1.2-linux-arm64",
+        "verification_source": "1701df47dbb6598a9215f82a313e1531c211bb912618dc3d0cd33e6e67c5ebb5"
+      }
+    }
+  },
+  "meta": {
+    "package_maintainer": "IT",
+    "package_maintainer_email": "it@satoshilabs.com"
+  }
+}

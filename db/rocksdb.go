@@ -4,25 +4,25 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"math/big"
 	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
+	"sync"
 	"time"
 	"unsafe"
 
 	vlq "github.com/bsm/go-vlq"
-	"github.com/flier/gorocksdb"
 	"github.com/golang/glog"
 	"github.com/juju/errors"
+	"github.com/linxGnu/grocksdb"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/common"
 )
 
-const dbVersion = 5
+const dbVersion = 6
 
 const packedHeightBytes = 4
 const maxAddrDescLen = 1024
@@ -31,39 +31,11 @@ const maxAddrDescLen = 1024
 // when doing huge scan, it is better to close it and reopen from time to time to free the resources
 const refreshIterator = 5000000
 
-// FiatRatesTimeFormat is a format string for storing FiatRates timestamps in rocksdb
-const FiatRatesTimeFormat = "20060102150405" // YYYYMMDDhhmmss
-
-// CurrencyRatesTicker contains coin ticker data fetched from API
-type CurrencyRatesTicker struct {
-	Timestamp *time.Time // return as unix timestamp in API
-	Rates     map[string]float64
-}
-
-// ResultTickerAsString contains formatted CurrencyRatesTicker data
-type ResultTickerAsString struct {
-	Timestamp int64              `json:"ts,omitempty"`
-	Rates     map[string]float64 `json:"rates"`
-	Error     string             `json:"error,omitempty"`
-}
-
-// ResultTickersAsString contains a formatted CurrencyRatesTicker list
-type ResultTickersAsString struct {
-	Tickers []ResultTickerAsString `json:"tickers"`
-}
-
-// ResultTickerListAsString contains formatted data about available currency tickers
-type ResultTickerListAsString struct {
-	Timestamp int64    `json:"ts,omitempty"`
-	Tickers   []string `json:"available_currencies"`
-	Error     string   `json:"error,omitempty"`
-}
-
 // RepairRocksDB calls RocksDb db repair function
 func RepairRocksDB(name string) error {
 	glog.Infof("rocksdb: repair")
-	opts := gorocksdb.NewDefaultOptions()
-	return gorocksdb.RepairDb(name, opts)
+	opts := grocksdb.NewDefaultOptions()
+	return grocksdb.RepairDb(name, opts)
 }
 
 type connectBlockStats struct {
@@ -88,14 +60,14 @@ const (
 // RocksDB handle
 type RocksDB struct {
 	path         string
-	db           *gorocksdb.DB
-	wo           *gorocksdb.WriteOptions
-	ro           *gorocksdb.ReadOptions
-	cfh          []*gorocksdb.ColumnFamilyHandle
+	db           *grocksdb.DB
+	wo           *grocksdb.WriteOptions
+	ro           *grocksdb.ReadOptions
+	cfh          []*grocksdb.ColumnFamilyHandle
 	chainParser  bchain.BlockChainParser
 	is           *common.InternalState
 	metrics      *common.Metrics
-	cache        *gorocksdb.Cache
+	cache        *grocksdb.Cache
 	maxOpenFiles int
 	cbs          connectBlockStats
 }
@@ -110,8 +82,18 @@ const (
 	// BitcoinType
 	cfAddressBalance
 	cfTxAddresses
+
+	__break__
+
 	// EthereumType
-	cfAddressContracts = cfAddressBalance
+	cfAddressContracts = iota - __break__ + cfAddressBalance - 1
+	cfInternalData
+	cfContracts
+	cfFunctionSignatures
+	cfBlockInternalDataErrors
+
+	// TODO move to common section
+	cfAddressAliases
 )
 
 // common columns
@@ -120,22 +102,22 @@ var cfBaseNames = []string{"default", "height", "addresses", "blockTxs", "transa
 
 // type specific columns
 var cfNamesBitcoinType = []string{"addressBalance", "txAddresses"}
-var cfNamesEthereumType = []string{"addressContracts"}
+var cfNamesEthereumType = []string{"addressContracts", "internalData", "contracts", "functionSignatures", "blockInternalDataErrors", "addressAliases"}
 
-func openDB(path string, c *gorocksdb.Cache, openFiles int) (*gorocksdb.DB, []*gorocksdb.ColumnFamilyHandle, error) {
+func openDB(path string, c *grocksdb.Cache, openFiles int) (*grocksdb.DB, []*grocksdb.ColumnFamilyHandle, error) {
 	// opts with bloom filter
 	opts := createAndSetDBOptions(10, c, openFiles)
 	// opts for addresses without bloom filter
 	// from documentation: if most of your queries are executed using iterators, you shouldn't set bloom filter
 	optsAddresses := createAndSetDBOptions(0, c, openFiles)
 	// default, height, addresses, blockTxids, transactions
-	cfOptions := []*gorocksdb.Options{opts, opts, optsAddresses, opts, opts, opts}
+	cfOptions := []*grocksdb.Options{opts, opts, optsAddresses, opts, opts, opts}
 	// append type specific options
 	count := len(cfNames) - len(cfOptions)
 	for i := 0; i < count; i++ {
 		cfOptions = append(cfOptions, opts)
 	}
-	db, cfh, err := gorocksdb.OpenDbColumnFamilies(opts, path, cfNames, cfOptions)
+	db, cfh, err := grocksdb.OpenDbColumnFamilies(opts, path, cfNames, cfOptions)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -157,13 +139,13 @@ func NewRocksDB(path string, cacheSize, maxOpenFiles int, parser bchain.BlockCha
 		return nil, errors.New("Unknown chain type")
 	}
 
-	c := gorocksdb.NewLRUCache(uint64(cacheSize))
+	c := grocksdb.NewLRUCache(uint64(cacheSize))
 	db, cfh, err := openDB(path, c, maxOpenFiles)
 	if err != nil {
 		return nil, err
 	}
-	wo := gorocksdb.NewDefaultWriteOptions()
-	ro := gorocksdb.NewDefaultReadOptions()
+	wo := grocksdb.NewDefaultWriteOptions()
+	ro := grocksdb.NewDefaultReadOptions()
 	return &RocksDB{path, db, wo, ro, cfh, parser, nil, metrics, c, maxOpenFiles, connectBlockStats{}}, nil
 }
 
@@ -174,104 +156,6 @@ func (d *RocksDB) closeDB() error {
 	d.db.Close()
 	d.db = nil
 	return nil
-}
-
-// FiatRatesConvertDate checks if the date is in correct format and returns the Time object.
-// Possible formats are: YYYYMMDDhhmmss, YYYYMMDDhhmm, YYYYMMDDhh, YYYYMMDD
-func FiatRatesConvertDate(date string) (*time.Time, error) {
-	for format := FiatRatesTimeFormat; len(format) >= 8; format = format[:len(format)-2] {
-		convertedDate, err := time.Parse(format, date)
-		if err == nil {
-			return &convertedDate, nil
-		}
-	}
-	msg := "Date \"" + date + "\" does not match any of available formats. "
-	msg += "Possible formats are: YYYYMMDDhhmmss, YYYYMMDDhhmm, YYYYMMDDhh, YYYYMMDD"
-	return nil, errors.New(msg)
-}
-
-// FiatRatesStoreTicker stores ticker data at the specified time
-func (d *RocksDB) FiatRatesStoreTicker(ticker *CurrencyRatesTicker) error {
-	if len(ticker.Rates) == 0 {
-		return errors.New("Error storing ticker: empty rates")
-	} else if ticker.Timestamp == nil {
-		return errors.New("Error storing ticker: empty timestamp")
-	}
-	ratesMarshalled, err := json.Marshal(ticker.Rates)
-	if err != nil {
-		glog.Error("Error marshalling ticker rates: ", err)
-		return err
-	}
-	timeFormatted := ticker.Timestamp.UTC().Format(FiatRatesTimeFormat)
-	err = d.db.PutCF(d.wo, d.cfh[cfFiatRates], []byte(timeFormatted), ratesMarshalled)
-	if err != nil {
-		glog.Error("Error storing ticker: ", err)
-		return err
-	}
-	return nil
-}
-
-// FiatRatesFindTicker gets FiatRates data closest to the specified timestamp
-func (d *RocksDB) FiatRatesFindTicker(tickerTime *time.Time) (*CurrencyRatesTicker, error) {
-	ticker := &CurrencyRatesTicker{}
-	tickerTimeFormatted := tickerTime.UTC().Format(FiatRatesTimeFormat)
-	it := d.db.NewIteratorCF(d.ro, d.cfh[cfFiatRates])
-	defer it.Close()
-
-	for it.Seek([]byte(tickerTimeFormatted)); it.Valid(); it.Next() {
-		timeObj, err := time.Parse(FiatRatesTimeFormat, string(it.Key().Data()))
-		if err != nil {
-			glog.Error("FiatRatesFindTicker time parse error: ", err)
-			return nil, err
-		}
-		timeObj = timeObj.UTC()
-		ticker.Timestamp = &timeObj
-		err = json.Unmarshal(it.Value().Data(), &ticker.Rates)
-		if err != nil {
-			glog.Error("FiatRatesFindTicker error unpacking rates: ", err)
-			return nil, err
-		}
-		break
-	}
-	if err := it.Err(); err != nil {
-		glog.Error("FiatRatesFindTicker Iterator error: ", err)
-		return nil, err
-	}
-	if !it.Valid() {
-		return nil, nil // ticker not found
-	}
-	return ticker, nil
-}
-
-// FiatRatesFindLastTicker gets the last FiatRates record
-func (d *RocksDB) FiatRatesFindLastTicker() (*CurrencyRatesTicker, error) {
-	ticker := &CurrencyRatesTicker{}
-	it := d.db.NewIteratorCF(d.ro, d.cfh[cfFiatRates])
-	defer it.Close()
-
-	for it.SeekToLast(); it.Valid(); it.Next() {
-		timeObj, err := time.Parse(FiatRatesTimeFormat, string(it.Key().Data()))
-		if err != nil {
-			glog.Error("FiatRatesFindTicker time parse error: ", err)
-			return nil, err
-		}
-		timeObj = timeObj.UTC()
-		ticker.Timestamp = &timeObj
-		err = json.Unmarshal(it.Value().Data(), &ticker.Rates)
-		if err != nil {
-			glog.Error("FiatRatesFindTicker error unpacking rates: ", err)
-			return nil, err
-		}
-		break
-	}
-	if err := it.Err(); err != nil {
-		glog.Error("FiatRatesFindLastTicker Iterator error: ", err)
-		return ticker, err
-	}
-	if !it.Valid() {
-		return nil, nil // ticker not found
-	}
-	return ticker, nil
 }
 
 // Close releases the RocksDB environment opened in NewRocksDB.
@@ -314,6 +198,10 @@ func atoUint64(s string) uint64 {
 		return 0
 	}
 	return uint64(i)
+}
+
+func (d *RocksDB) WriteBatch(wb *grocksdb.WriteBatch) error {
+	return d.db.Write(d.wo, wb)
 }
 
 // GetMemoryStats returns memory usage statistics as reported by RocksDB
@@ -437,7 +325,7 @@ const (
 
 // ConnectBlock indexes addresses in the block and stores them in db
 func (d *RocksDB) ConnectBlock(block *bchain.Block) error {
-	wb := gorocksdb.NewWriteBatch()
+	wb := grocksdb.NewWriteBatch()
 	defer wb.Destroy()
 
 	if glog.V(2) {
@@ -474,6 +362,12 @@ func (d *RocksDB) ConnectBlock(block *bchain.Block) error {
 		if err := d.storeAddressContracts(wb, addressContracts); err != nil {
 			return err
 		}
+		if err := d.storeInternalDataEthereumType(wb, blockTxs); err != nil {
+			return err
+		}
+		if err = d.storeBlockSpecificDataEthereumType(wb, block); err != nil {
+			return err
+		}
 		if err := d.storeAndCleanupBlockTxsEthereumType(wb, block, blockTxs); err != nil {
 			return err
 		}
@@ -483,10 +377,13 @@ func (d *RocksDB) ConnectBlock(block *bchain.Block) error {
 	if err := d.storeAddresses(wb, block.Height, addresses); err != nil {
 		return err
 	}
-	if err := d.db.Write(d.wo, wb); err != nil {
+	if err := d.WriteBatch(wb); err != nil {
 		return err
 	}
-	d.is.AppendBlockTime(uint32(block.Time))
+	avg := d.is.AppendBlockTime(uint32(block.Time))
+	if d.metrics != nil {
+		d.metrics.AvgBlockPeriod.Set(float64(avg))
+	}
 	return nil
 }
 
@@ -846,7 +743,7 @@ func addToAddressesMap(addresses addressesMap, strAddrDesc string, btxID []byte,
 	return false
 }
 
-func (d *RocksDB) storeAddresses(wb *gorocksdb.WriteBatch, height uint32, addresses addressesMap) error {
+func (d *RocksDB) storeAddresses(wb *grocksdb.WriteBatch, height uint32, addresses addressesMap) error {
 	for addrDesc, txi := range addresses {
 		ba := bchain.AddressDescriptor(addrDesc)
 		key := packAddressKey(ba, height)
@@ -856,7 +753,7 @@ func (d *RocksDB) storeAddresses(wb *gorocksdb.WriteBatch, height uint32, addres
 	return nil
 }
 
-func (d *RocksDB) storeTxAddresses(wb *gorocksdb.WriteBatch, am map[string]*TxAddresses) error {
+func (d *RocksDB) storeTxAddresses(wb *grocksdb.WriteBatch, am map[string]*TxAddresses) error {
 	varBuf := make([]byte, maxPackedBigintBytes)
 	buf := make([]byte, 1024)
 	for txID, ta := range am {
@@ -866,7 +763,7 @@ func (d *RocksDB) storeTxAddresses(wb *gorocksdb.WriteBatch, am map[string]*TxAd
 	return nil
 }
 
-func (d *RocksDB) storeBalances(wb *gorocksdb.WriteBatch, abm map[string]*AddrBalance) error {
+func (d *RocksDB) storeBalances(wb *grocksdb.WriteBatch, abm map[string]*AddrBalance) error {
 	// allocate buffer initial buffer
 	buf := make([]byte, 1024)
 	varBuf := make([]byte, maxPackedBigintBytes)
@@ -882,7 +779,7 @@ func (d *RocksDB) storeBalances(wb *gorocksdb.WriteBatch, abm map[string]*AddrBa
 	return nil
 }
 
-func (d *RocksDB) cleanupBlockTxs(wb *gorocksdb.WriteBatch, block *bchain.Block) error {
+func (d *RocksDB) cleanupBlockTxs(wb *grocksdb.WriteBatch, block *bchain.Block) error {
 	keep := d.chainParser.KeepBlockAddresses()
 	// cleanup old block address
 	if block.Height > uint32(keep) {
@@ -903,7 +800,7 @@ func (d *RocksDB) cleanupBlockTxs(wb *gorocksdb.WriteBatch, block *bchain.Block)
 	return nil
 }
 
-func (d *RocksDB) storeAndCleanupBlockTxs(wb *gorocksdb.WriteBatch, block *bchain.Block) error {
+func (d *RocksDB) storeAndCleanupBlockTxs(wb *grocksdb.WriteBatch, block *bchain.Block) error {
 	pl := d.chainParser.PackedTxidLen()
 	buf := make([]byte, 0, pl*len(block.Txs))
 	varBuf := make([]byte, vlq.MaxLen64)
@@ -1331,7 +1228,7 @@ func (d *RocksDB) GetBlockInfo(height uint32) (*BlockInfo, error) {
 	return bi, err
 }
 
-func (d *RocksDB) writeHeightFromBlock(wb *gorocksdb.WriteBatch, block *bchain.Block, op int) error {
+func (d *RocksDB) writeHeightFromBlock(wb *grocksdb.WriteBatch, block *bchain.Block, op int) error {
 	return d.writeHeight(wb, block.Height, &BlockInfo{
 		Hash:   block.Hash,
 		Time:   block.Time,
@@ -1341,7 +1238,7 @@ func (d *RocksDB) writeHeightFromBlock(wb *gorocksdb.WriteBatch, block *bchain.B
 	}, op)
 }
 
-func (d *RocksDB) writeHeight(wb *gorocksdb.WriteBatch, height uint32, bi *BlockInfo, op int) error {
+func (d *RocksDB) writeHeight(wb *grocksdb.WriteBatch, height uint32, bi *BlockInfo, op int) error {
 	key := packUint(height)
 	switch op {
 	case opInsert:
@@ -1358,9 +1255,53 @@ func (d *RocksDB) writeHeight(wb *gorocksdb.WriteBatch, height uint32, bi *Block
 	return nil
 }
 
+// address alias support
+var cachedAddressAliasRecords = make(map[string]string)
+var cachedAddressAliasRecordsMux sync.Mutex
+
+// InitAddressAliasRecords loads all records to cache
+func (d *RocksDB) InitAddressAliasRecords() (int, error) {
+	count := 0
+	cachedAddressAliasRecordsMux.Lock()
+	defer cachedAddressAliasRecordsMux.Unlock()
+	it := d.db.NewIteratorCF(d.ro, d.cfh[cfAddressAliases])
+	defer it.Close()
+	for it.SeekToFirst(); it.Valid(); it.Next() {
+		address := string(it.Key().Data())
+		name := string(it.Value().Data())
+		if address != "" && name != "" {
+			cachedAddressAliasRecords[address] = d.chainParser.FormatAddressAlias(address, name)
+			count++
+		}
+	}
+	return count, nil
+}
+
+func (d *RocksDB) GetAddressAlias(address string) string {
+	cachedAddressAliasRecordsMux.Lock()
+	name := cachedAddressAliasRecords[address]
+	cachedAddressAliasRecordsMux.Unlock()
+	return name
+}
+
+func (d *RocksDB) storeAddressAliasRecords(wb *grocksdb.WriteBatch, records []bchain.AddressAliasRecord) error {
+	if d.chainParser.UseAddressAliases() {
+		for i := range records {
+			r := &records[i]
+			if len(r.Name) > 0 {
+				wb.PutCF(d.cfh[cfAddressAliases], []byte(r.Address), []byte(r.Name))
+				cachedAddressAliasRecordsMux.Lock()
+				cachedAddressAliasRecords[r.Address] = d.chainParser.FormatAddressAlias(r.Address, r.Name)
+				cachedAddressAliasRecordsMux.Unlock()
+			}
+		}
+	}
+	return nil
+}
+
 // Disconnect blocks
 
-func (d *RocksDB) disconnectTxAddressesInputs(wb *gorocksdb.WriteBatch, btxID []byte, inputs []outpoint, txa *TxAddresses, txAddressesToUpdate map[string]*TxAddresses,
+func (d *RocksDB) disconnectTxAddressesInputs(wb *grocksdb.WriteBatch, btxID []byte, inputs []outpoint, txa *TxAddresses, txAddressesToUpdate map[string]*TxAddresses,
 	getAddressBalance func(addrDesc bchain.AddressDescriptor) (*AddrBalance, error),
 	addressFoundInTx func(addrDesc bchain.AddressDescriptor, btxID []byte) bool) error {
 	var err error
@@ -1416,7 +1357,7 @@ func (d *RocksDB) disconnectTxAddressesInputs(wb *gorocksdb.WriteBatch, btxID []
 	return nil
 }
 
-func (d *RocksDB) disconnectTxAddressesOutputs(wb *gorocksdb.WriteBatch, btxID []byte, txa *TxAddresses,
+func (d *RocksDB) disconnectTxAddressesOutputs(wb *grocksdb.WriteBatch, btxID []byte, txa *TxAddresses,
 	getAddressBalance func(addrDesc bchain.AddressDescriptor) (*AddrBalance, error),
 	addressFoundInTx func(addrDesc bchain.AddressDescriptor, btxID []byte) bool) error {
 	for i, t := range txa.Outputs {
@@ -1448,7 +1389,7 @@ func (d *RocksDB) disconnectTxAddressesOutputs(wb *gorocksdb.WriteBatch, btxID [
 }
 
 func (d *RocksDB) disconnectBlock(height uint32, blockTxs []blockTxs) error {
-	wb := gorocksdb.NewWriteBatch()
+	wb := grocksdb.NewWriteBatch()
 	defer wb.Destroy()
 	txAddressesToUpdate := make(map[string]*TxAddresses)
 	txAddresses := make([]*TxAddresses, len(blockTxs))
@@ -1532,7 +1473,7 @@ func (d *RocksDB) disconnectBlock(height uint32, blockTxs []blockTxs) error {
 		wb.DeleteCF(d.cfh[cfTransactions], b)
 		wb.DeleteCF(d.cfh[cfTxAddresses], b)
 	}
-	return d.db.Write(d.wo, wb)
+	return d.WriteBatch(wb)
 }
 
 // DisconnectBlockRangeBitcoinType removes all data belonging to blocks in range lower-higher
@@ -1560,7 +1501,7 @@ func (d *RocksDB) DisconnectBlockRangeBitcoinType(lower uint32, higher uint32) e
 	return nil
 }
 
-func (d *RocksDB) storeBalancesDisconnect(wb *gorocksdb.WriteBatch, balances map[string]*AddrBalance) {
+func (d *RocksDB) storeBalancesDisconnect(wb *grocksdb.WriteBatch, balances map[string]*AddrBalance) {
 	for _, b := range balances {
 		if b != nil {
 			// remove spent utxos
@@ -1646,14 +1587,14 @@ func (d *RocksDB) DeleteTx(txid string) error {
 		return nil
 	}
 	// use write batch so that this delete matches other deletes
-	wb := gorocksdb.NewWriteBatch()
+	wb := grocksdb.NewWriteBatch()
 	defer wb.Destroy()
 	d.internalDeleteTx(wb, key)
-	return d.db.Write(d.wo, wb)
+	return d.WriteBatch(wb)
 }
 
 // internalDeleteTx checks if tx is cached and updates internal state accordingly
-func (d *RocksDB) internalDeleteTx(wb *gorocksdb.WriteBatch, key []byte) {
+func (d *RocksDB) internalDeleteTx(wb *grocksdb.WriteBatch, key []byte) {
 	val, err := d.db.GetCF(d.ro, d.cfh[cfTransactions], key)
 	// ignore error, it is only for statistics
 	if err == nil {
@@ -1693,8 +1634,42 @@ func (d *RocksDB) loadBlockTimes() ([]uint32, error) {
 		}
 		times = append(times, time)
 	}
-	glog.Info("loaded ", len(times), " block times")
 	return times, nil
+}
+
+func (d *RocksDB) checkColumns(is *common.InternalState) ([]common.InternalStateColumn, error) {
+	// make sure that column stats match the columns
+	sc := is.DbColumns
+	nc := make([]common.InternalStateColumn, len(cfNames))
+	for i := 0; i < len(nc); i++ {
+		nc[i].Name = cfNames[i]
+		nc[i].Version = dbVersion
+		for j := 0; j < len(sc); j++ {
+			if sc[j].Name == nc[i].Name {
+				// check the version of the column, if it does not match, the db is not compatible
+				if sc[j].Version != dbVersion {
+					// upgrade of DB 5 to 6 for BitcoinType coins is possible
+					// columns transactions and fiatRates must be cleared as they are not compatible
+					if sc[j].Version == 5 && dbVersion == 6 && d.chainParser.GetChainType() == bchain.ChainBitcoinType {
+						if nc[i].Name == "transactions" {
+							d.db.DeleteRangeCF(d.wo, d.cfh[cfTransactions], []byte{0}, []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff})
+						} else if nc[i].Name == "fiatRates" {
+							d.db.DeleteRangeCF(d.wo, d.cfh[cfFiatRates], []byte{0}, []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff})
+						}
+						glog.Infof("Column %s upgraded from v%d to v%d", nc[i].Name, sc[j].Version, dbVersion)
+					} else {
+						return nil, errors.Errorf("DB version %v of column '%v' does not match the required version %v. DB is not compatible.", sc[j].Version, sc[j].Name, dbVersion)
+					}
+				}
+				nc[i].Rows = sc[j].Rows
+				nc[i].KeyBytes = sc[j].KeyBytes
+				nc[i].ValueBytes = sc[j].ValueBytes
+				nc[i].Updated = sc[j].Updated
+				break
+			}
+		}
+	}
+	return nc, nil
 }
 
 // LoadInternalState loads from db internal state or initializes a new one if not yet stored
@@ -1721,37 +1696,35 @@ func (d *RocksDB) LoadInternalState(rpcCoin string) (*common.InternalState, erro
 			return nil, errors.Errorf("Coins do not match. DB coin %v, RPC coin %v", is.Coin, rpcCoin)
 		}
 	}
-	// make sure that column stats match the columns
-	sc := is.DbColumns
-	nc := make([]common.InternalStateColumn, len(cfNames))
-	for i := 0; i < len(nc); i++ {
-		nc[i].Name = cfNames[i]
-		nc[i].Version = dbVersion
-		for j := 0; j < len(sc); j++ {
-			if sc[j].Name == nc[i].Name {
-				// check the version of the column, if it does not match, the db is not compatible
-				if sc[j].Version != dbVersion {
-					return nil, errors.Errorf("DB version %v of column '%v' does not match the required version %v. DB is not compatible.", sc[j].Version, sc[j].Name, dbVersion)
-				}
-				nc[i].Rows = sc[j].Rows
-				nc[i].KeyBytes = sc[j].KeyBytes
-				nc[i].ValueBytes = sc[j].ValueBytes
-				nc[i].Updated = sc[j].Updated
-				break
-			}
-		}
-	}
-	is.DbColumns = nc
-	is.BlockTimes, err = d.loadBlockTimes()
+	nc, err := d.checkColumns(is)
 	if err != nil {
 		return nil, err
 	}
+	is.DbColumns = nc
+	bt, err := d.loadBlockTimes()
+	if err != nil {
+		return nil, err
+	}
+	avg := is.SetBlockTimes(bt)
+	if d.metrics != nil {
+		d.metrics.AvgBlockPeriod.Set(float64(avg))
+	}
+
 	// after load, reset the synchronization data
 	is.IsSynchronized = false
 	is.IsMempoolSynchronized = false
 	var t time.Time
 	is.LastMempoolSync = t
 	is.SyncMode = false
+
+	if d.chainParser.UseAddressAliases() {
+		recordsCount, err := d.InitAddressAliasRecords()
+		if err != nil {
+			return nil, err
+		}
+		glog.Infof("loaded %d address alias records", recordsCount)
+	}
+
 	return is, nil
 }
 
@@ -1772,6 +1745,11 @@ func (d *RocksDB) SetInconsistentState(inconsistent bool) error {
 // SetInternalState sets the InternalState to be used by db to collect internal state
 func (d *RocksDB) SetInternalState(is *common.InternalState) {
 	d.is = is
+}
+
+// GetInternalState gets the InternalState
+func (d *RocksDB) GetInternalState() *common.InternalState {
+	return d.is
 }
 
 // StoreInternalState stores the internal state to db
@@ -1798,7 +1776,7 @@ func (d *RocksDB) computeColumnSize(col int, stopCompute chan os.Signal) (int64,
 	var rows, keysSum, valuesSum int64
 	var seekKey []byte
 	// do not use cache
-	ro := gorocksdb.NewDefaultReadOptions()
+	ro := grocksdb.NewDefaultReadOptions()
 	ro.SetFillCache(false)
 	for {
 		var key []byte
@@ -1943,10 +1921,10 @@ func (d *RocksDB) fixUtxo(addrDesc bchain.AddressDescriptor, ba *AddrBalance) (b
 				utxos[i], utxos[opp] = utxos[opp], utxos[i]
 			}
 			ba.Utxos = utxos
-			wb := gorocksdb.NewWriteBatch()
+			wb := grocksdb.NewWriteBatch()
 			err = d.storeBalances(wb, map[string]*AddrBalance{string(addrDesc): ba})
 			if err == nil {
-				err = d.db.Write(d.wo, wb)
+				err = d.WriteBatch(wb)
 			}
 			wb.Destroy()
 			if err != nil {
@@ -1956,10 +1934,10 @@ func (d *RocksDB) fixUtxo(addrDesc bchain.AddressDescriptor, ba *AddrBalance) (b
 		}
 		return fixed, false, errors.Errorf("balance %s, checksum %s, from txa %s, txs %d", ba.BalanceSat.String(), checksum.String(), checksumFromTxs.String(), ba.Txs)
 	} else if reorder {
-		wb := gorocksdb.NewWriteBatch()
+		wb := grocksdb.NewWriteBatch()
 		err := d.storeBalances(wb, map[string]*AddrBalance{string(addrDesc): ba})
 		if err == nil {
-			err = d.db.Write(d.wo, wb)
+			err = d.WriteBatch(wb)
 		}
 		wb.Destroy()
 		if err != nil {
@@ -1979,7 +1957,7 @@ func (d *RocksDB) FixUtxos(stop chan os.Signal) error {
 	var row, errorsCount, fixedCount int64
 	var seekKey []byte
 	// do not use cache
-	ro := gorocksdb.NewDefaultReadOptions()
+	ro := grocksdb.NewDefaultReadOptions()
 	ro.SetFillCache(false)
 	for {
 		var addrDesc bchain.AddressDescriptor
@@ -2091,6 +2069,23 @@ func unpackVaruint(buf []byte) (uint, int) {
 	return uint(i), ofs
 }
 
+func packString(s string) []byte {
+	varBuf := make([]byte, vlq.MaxLen64)
+	l := len(s)
+	i := packVaruint(uint(l), varBuf)
+	buf := make([]byte, 0, i+l)
+	buf = append(buf, varBuf[:i]...)
+	buf = append(buf, s...)
+	return buf
+}
+
+func unpackString(buf []byte) (string, int) {
+	sl, l := unpackVaruint(buf)
+	so := l + int(sl)
+	s := string(buf[l:so])
+	return s, so
+}
+
 const (
 	// number of bits in a big.Word
 	wordBits = 32 << (uint64(^big.Word(0)) >> 63)
@@ -2103,7 +2098,7 @@ const (
 
 // big int is packed in BigEndian order without memory allocation as 1 byte length followed by bytes of big int
 // number of written bytes is returned
-// limitation: bigints longer than 248 bytes are truncated to 248 bytes
+// limitation: big ints longer than 248 bytes are truncated to 248 bytes
 // caution: buffer must be big enough to hold the packed big int, buffer 249 bytes big is always safe
 func packBigint(bi *big.Int, buf []byte) int {
 	w := bi.Bits()

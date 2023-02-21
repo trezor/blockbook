@@ -22,10 +22,10 @@
     "package_name": "backend-zcash",
     "package_revision": "satoshilabs-1",
     "system_user": "zcash",
-    "version": "4.6.0-2",
-    "binary_url": "https://z.cash/downloads/zcash-4.6.0-2-linux64-debian-buster.tar.gz",
+    "version": "5.3.2",
+    "binary_url": "https://z.cash/downloads/zcash-5.3.2-linux64-debian-bullseye.tar.gz",
     "verification_type": "sha256",
-    "verification_source": "9e18ded3b25cbc38f8189a7d276d2fefbeb122f1ac4d578404bbdf960c1b16e2",
+    "verification_source": "20b0aa39b72826fe5c2d967151ce8cccbd11c1cf1b6c2adf8ddad0c596e241fc",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [],
     "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/zcashd -datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -conf={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf -pid=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",
@@ -38,9 +38,7 @@
     "server_config_file": "bitcoin_like.conf",
     "client_config_file": "bitcoin_like_client.conf",
     "additional_params": {
-      "addnode": [
-        "mainnet.z.cash"
-      ]
+      "addnode": ["mainnet.z.cash"]
     }
   },
   "blockbook": {
@@ -59,7 +57,8 @@
       "slip44": 133,
       "additional_params": {
         "fiat_rates": "coingecko",
-        "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"zcash\", \"periodSeconds\": 60}"
+        "fiat_rates_vs_currencies": "AED,ARS,AUD,BDT,BHD,BMD,BRL,CAD,CHF,CLP,CNY,CZK,DKK,EUR,GBP,HKD,HUF,IDR,ILS,INR,JPY,KRW,KWD,LKR,MMK,MXN,MYR,NGN,NOK,NZD,PHP,PKR,PLN,RUB,SAR,SEK,SGD,THB,TRY,TWD,UAH,USD,VEF,VND,ZAR,BTC,ETH",
+        "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"zcash\", \"periodSeconds\": 900}"
       }
     }
   },

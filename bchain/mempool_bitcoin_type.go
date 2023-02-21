@@ -61,6 +61,10 @@ func (m *MempoolBitcoinType) getInputAddress(payload *chanInputPayload) *addrInd
 	var addrDesc AddressDescriptor
 	var value *big.Int
 	vin := &payload.tx.Vin[payload.index]
+	if vin.Txid == "" {
+		// cannot get address from empty input txid (for example in Litecoin mweb)
+		return nil
+	}
 	if m.AddrDescForOutpoint != nil {
 		addrDesc, value = m.AddrDescForOutpoint(Outpoint{vin.Txid, int32(vin.Vout)})
 	}
