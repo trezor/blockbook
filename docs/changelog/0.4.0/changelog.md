@@ -1,12 +1,12 @@
 # Blockbook v0.4.0 Changelog
 
-## API:
+## API [(source)](https://github.com/trezor/blockbook/blob/master/docs/api.md):
 
 - Blockbook V1 endpoints are exclusively available for Bitcoin-based 
 blockchains, and only supported by Bitcoin Insight. 
-[(source)](https://github.com/trezor/blockbook/commit/c1256d22e9e34844acfbae5f094365e74da7dc99#diff-9eddf4dc51bf6a0125ca7fb094468ad284112270385c41cebce4f8f0a29620abR902)
+[(source)](https://github.com/trezor/blockbook/blob/master/docs/api.md#legacy-api-v1)
 
-### Xpubs:
+### Xpubs [(source)](https://github.com/trezor/blockbook/blob/master/docs/api.md#get-xpub):
 ```
 GET 
 /api/v2/xpub/<xpub|descriptor>[?page=<page>&pageSize=<size>&from=<block 
@@ -15,11 +15,9 @@ height>&details=<basic|tokens|tokenBalances|txids|txs>&tokens=<nonzero|used|deri
 ```
 
 - Xpub endpoint now supports specifying secondary fiat currency in which 
-the crypto values are converted to. 
-[(source)](https://github.com/trezor/blockbook/commit/c1256d22e9e34844acfbae5f094365e74da7dc99#diff-9eddf4dc51bf6a0125ca7fb094468ad284112270385c41cebce4f8f0a29620abR433), 
-[(example)](https://github.com/trezor/blockbook/commit/c1256d22e9e34844acfbae5f094365e74da7dc99#diff-9eddf4dc51bf6a0125ca7fb094468ad284112270385c41cebce4f8f0a29620abR371-R404)
+the crypto values are converted to.
 
-### Transactions:
+### Transactions [(source)](https://github.com/trezor/blockbook/blob/master/docs/api.md#get-transaction):
 ```
 GET /api/v2/tx/<txid>
 ```
@@ -31,7 +29,6 @@ GET /api/v2/tx/<txid>
 - unconfirmed transaction (**blockHeight: -1, confirmations: 0, mining 
 estimates confirmationETABlocks and confirmationETASeconds**) are 
 included. 
-[(source)](https://github.com/trezor/blockbook/commit/b227dfedcbde37219a4cb16500529513cc48e1e8#diff-9eddf4dc51bf6a0125ca7fb094468ad284112270385c41cebce4f8f0a29620abR188-R191)
 
 #### Ethereum Transaction:
 Response for Ethereum-like coins - 
@@ -40,7 +37,7 @@ Data of the transaction consist of:
 
 - always only one _vin_, only one _vout_
 - an array of _tokenTransfers_ (ERC20, ERC721 or ERC1155)
-- _ethereumSpecific_ data [(example)](https://github.com/trezor/blockbook/commit/c1256d22e9e34844acfbae5f094365e74da7dc99#diff-9eddf4dc51bf6a0125ca7fb094468ad284112270385c41cebce4f8f0a29620abR219-R247)
+- _ethereumSpecific_ data [(example)](https://github.com/trezor/blockbook/blob/master/docs/api.md#get-transaction)
   - _type_ (returned only for contract creation - value `1` and 
 destruction value `2`)
   - _status_ (`1` OK, `0` Failure, `-1` pending), potential _error_ 
@@ -49,11 +46,10 @@ message, _gasLimit_, _gasUsed_, _gasPrice_, _nonce_, input _data_
 directory was found
   - internal transfers (type `0` transfer, type `1` contract creation, 
 type `2` contract destruction)
-- _addressAliases_ - maps addresses in the transaction to names from 
-contract or ENS. Only addresses with known names are returned. [(example)](https://github.com/trezor/blockbook/commit/c1256d22e9e34844acfbae5f094365e74da7dc99#diff-9eddf4dc51bf6a0125ca7fb094468ad284112270385c41cebce4f8f0a29620abR219-R247)
+- _addressAliases_ - maps addresses in the transaction to names from contract or ENS. Only addresses with known names are returned.
 
 ---
-## Database:
+## Database [(source)]([(source)](https://github.com/trezor/blockbook/blob/master/docs/rocksdb.md)):
 
 - In case of the Ethereum type coins, the database is not compatible with 
 previous the versions. The database must be recreated by inital 
@@ -68,10 +64,8 @@ is necessary.
 ### Existing Columns:
 
 - default: data format version changed to 6. 
-[(source)](https://github.com/trezor/blockbook/commit/c1256d22e9e34844acfbae5f094365e74da7dc99#diff-96484041aa460b98eecdb7c9dbab36e8eb8b37a645415a05590e562f31efc0abR28)
 
 - fiatRates: Stored daily fiat rates, one day as one entry. 
-[(source)](https://github.com/trezor/blockbook/commit/c1256d22e9e34844acfbae5f094365e74da7dc99#diff-96484041aa460b98eecdb7c9dbab36e8eb8b37a645415a05590e562f31efc0abR158)
 
 
 
@@ -81,7 +75,6 @@ is necessary.
 provide information about the contract including name, symbol, type 
 (ERC20, ERC721, or ERC1155), decimals, created and destructed block 
 height. 
-[(source)](https://github.com/trezor/blockbook/commit/c1256d22e9e34844acfbae5f094365e74da7dc99#diff-96484041aa460b98eecdb7c9dbab36e8eb8b37a645415a05590e562f31efc0abR170)
 
 - functionSignatures: Added a database for four byte signatures downloaded 
 from https://www.4byte.directory/
@@ -92,16 +85,10 @@ for retries
 
 - addressAliases: Maps Ethereum addresses to their corresponding Ethereum 
 Name Service (ENS) names. 
-[(source)](https://github.com/trezor/blockbook/commit/c1256d22e9e34844acfbae5f094365e74da7dc99#diff-96484041aa460b98eecdb7c9dbab36e8eb8b37a645415a05590e562f31efc0abR195)
-
 ---
-## Environment:
+## Environment [(source)](https://github.com/trezor/blockbook/blob/master/docs/api.md#legacy-api-v1):
 Debian recommended version changed to 11. 
-[(source)](https://github.com/trezor/blockbook/commit/1a476e58f07cb32ffecc41392b339428f7075feb#diff-43453f510556d352276e897e137cb103b3bbca24acb6cba33208d4887b2e3c77R81)
 
 Go version changed to 1.19. 
-[(source)](https://github.com/trezor/blockbook/commit/1a476e58f07cb32ffecc41392b339428f7075feb#diff-2e4b6e0eeeea63d6e3c6af432b51d8afc20029970c5849106cc1e0ca899c1701R14)
 
 Rocksdb version changed to 7.5.3. 
-[(source)](https://github.com/trezor/blockbook/commit/1a476e58f07cb32ffecc41392b339428f7075feb#diff-2e4b6e0eeeea63d6e3c6af432b51d8afc20029970c5849106cc1e0ca899c1701R15)
-
