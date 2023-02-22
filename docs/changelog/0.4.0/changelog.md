@@ -34,13 +34,13 @@ included.
 [(source)](https://github.com/trezor/blockbook/commit/b227dfedcbde37219a4cb16500529513cc48e1e8#diff-9eddf4dc51bf6a0125ca7fb094468ad284112270385c41cebce4f8f0a29620abR188-R191)
 
 #### Ethereum Transaction:
-Response for Ethereum-type coins - 
-[(example)](0x92524e7a1164841639951ee3d32d8072e77e0283f2f42a07c5bb8bae6358f0b4). 
+Response for Ethereum-like coins - 
+[(example)](https://eth1.trezor.io/api/v2/tx/0x92524e7a1164841639951ee3d32d8072e77e0283f2f42a07c5bb8bae6358f0b4). 
 Data of the transaction consist of:
 
 - always only one _vin_, only one _vout_
 - an array of _tokenTransfers_ (ERC20, ERC721 or ERC1155)
-- _ethereumSpecific_ data
+- _ethereumSpecific_ data [(example)](https://github.com/trezor/blockbook/commit/c1256d22e9e34844acfbae5f094365e74da7dc99#diff-9eddf4dc51bf6a0125ca7fb094468ad284112270385c41cebce4f8f0a29620abR219-R247)
   - _type_ (returned only for contract creation - value `1` and 
 destruction value `2`)
   - _status_ (`1` OK, `0` Failure, `-1` pending), potential _error_ 
@@ -50,7 +50,7 @@ directory was found
   - internal transfers (type `0` transfer, type `1` contract creation, 
 type `2` contract destruction)
 - _addressAliases_ - maps addresses in the transaction to names from 
-contract or ENS. Only addresses with known names are returned.
+contract or ENS. Only addresses with known names are returned. [(example)](https://github.com/trezor/blockbook/commit/c1256d22e9e34844acfbae5f094365e74da7dc99#diff-9eddf4dc51bf6a0125ca7fb094468ad284112270385c41cebce4f8f0a29620abR219-R247)
 
 ---
 ## Database:
