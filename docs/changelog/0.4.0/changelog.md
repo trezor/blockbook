@@ -49,7 +49,7 @@ type `2` contract destruction)
 - _addressAliases_ - maps addresses in the transaction to names from contract or ENS. Only addresses with known names are returned.
 
 ---
-## Database [(source)]([(source)](https://github.com/trezor/blockbook/blob/master/docs/rocksdb.md)):
+## Database [(source)](https://github.com/trezor/blockbook/blob/master/docs/rocksdb.md):
 
 - In case of the Ethereum type coins, the database is not compatible with 
 previous the versions. The database must be recreated by inital 
