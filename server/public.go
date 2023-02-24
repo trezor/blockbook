@@ -344,7 +344,7 @@ func (s *PublicServer) newTemplateData(r *http.Request) *TemplateData {
 		TOSLink:          api.Text.TOSLink,
 	}
 	if !s.debug {
-		t.Minified = ".min.1"
+		t.Minified = ".min.2"
 	}
 	if s.is.HasFiatRates {
 		// get the secondary coin and if it should be shown either from query parameters "secondary" and "use_secondary"
