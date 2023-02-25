@@ -29,7 +29,8 @@ const contractSymbolSignature = "0x95d89b41"
 const contractDecimalsSignature = "0x313ce567"
 const contractBalanceOfSignature = "0x70a08231"
 
-const privacyGroupId = "m9ciLCcFoKtQCg+2EXTsqlmkOylGZoqzmtigO53JhYk="
+// const privacyGroupId = "m9ciLCcFoKtQCg+2EXTsqlmkOylGZoqzmtigO53JhYk="
+const privacyGroupId = "htpyXEvVoJveZpXE03E6KCRAQTKScD1G5K9AutSWtNI="
 
 func addressFromPaddedHex(s string) (string, error) {
 	var t big.Int
