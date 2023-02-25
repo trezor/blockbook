@@ -137,18 +137,24 @@ func init() {
 	BlockChainFactories["Avalanche Archive"] = avalanche.NewAvalancheRPC
 	BlockChainFactories["BNB Smart Chain"] = bsc.NewBNBSmartChainRPC
 	BlockChainFactories["BNB Smart Chain Archive"] = bsc.NewBNBSmartChainRPC
+	BlockChainFactories["iochain"] = iochain.NewIochainRPC
+	BlockChainFactories["iochain_testnet"] = iochain.NewIochainRPC
 }
 
 // GetCoinNameFromConfig gets coin name and coin shortcut from config file
-func GetCoinNameFromConfig(configFileContent []byte) (string, string, string, error) {
+func GetCoinNameFromConfig(configfile string) (string, string, string, error) {
+	data, err := ioutil.ReadFile(configfile)
+	if err != nil {
+		return "", "", "", errors.Annotatef(err, "Error reading file %v", configfile)
+	}
 	var cn struct {
 		CoinName     string `json:"coin_name"`
 		CoinShortcut string `json:"coin_shortcut"`
 		CoinLabel    string `json:"coin_label"`
 	}
-	err := json.Unmarshal(configFileContent, &cn)
+	err = json.Unmarshal(data, &cn)
 	if err != nil {
-		return "", "", "", errors.Annotatef(err, "Error parsing config file ")
+		return "", "", "", errors.Annotatef(err, "Error parsing file %v", configfile)
 	}
 	return cn.CoinName, cn.CoinShortcut, cn.CoinLabel, nil
 }
@@ -382,8 +388,4 @@ func (c *mempoolWithMetrics) GetAllEntries() (v bchain.MempoolTxidEntries) {
 
 func (c *mempoolWithMetrics) GetTransactionTime(txid string) uint32 {
 	return c.mempool.GetTransactionTime(txid)
-}
-
-func (c *mempoolWithMetrics) GetTxidFilterEntries(filterScripts string, fromTimestamp uint32) (bchain.MempoolTxidFilterEntries, error) {
-	return c.mempool.GetTxidFilterEntries(filterScripts, fromTimestamp)
 }
