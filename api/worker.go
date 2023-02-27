@@ -609,6 +609,9 @@ func (w *Worker) getContractDescriptorInfo(cd bchain.AddressDescriptor, typeFrom
 
 			validContract = false
 		} else {
+			if typeFromContext != bchain.UnknownTokenType && contractInfo.Type == bchain.UnknownTokenType {
+				contractInfo.Type = typeFromContext
+			}
 			if err = w.db.StoreContractInfo(contractInfo); err != nil {
 				glog.Errorf("StoreContractInfo error %v, contract %v", err, cd)
 			}
