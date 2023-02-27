@@ -222,13 +222,13 @@ func (m *ProtoCompleteTransaction_ReceiptType_LogType) GetTopics() [][]byte {
 }
 
 func init() {
-	proto.RegisterType((*ProtoCompleteTransaction)(nil), "eth.ProtoCompleteTransaction")
-	proto.RegisterType((*ProtoCompleteTransaction_TxType)(nil), "eth.ProtoCompleteTransaction.TxType")
-	proto.RegisterType((*ProtoCompleteTransaction_ReceiptType)(nil), "eth.ProtoCompleteTransaction.ReceiptType")
-	proto.RegisterType((*ProtoCompleteTransaction_ReceiptType_LogType)(nil), "eth.ProtoCompleteTransaction.ReceiptType.LogType")
+	proto.RegisterType((*ProtoCompleteTransaction)(nil), "iochain.ProtoCompleteTransaction")
+	proto.RegisterType((*ProtoCompleteTransaction_TxType)(nil), "iochain.ProtoCompleteTransaction.TxType")
+	proto.RegisterType((*ProtoCompleteTransaction_ReceiptType)(nil), "iochain.ProtoCompleteTransaction.ReceiptType")
+	proto.RegisterType((*ProtoCompleteTransaction_ReceiptType_LogType)(nil), "iochain.ProtoCompleteTransaction.ReceiptType.LogType")
 }
 
-func init() { proto.RegisterFile("bchain/coins/eth/ethtx.proto", fileDescriptor0) }
+func init() { proto.RegisterFile("bchain/coins/iochain/ethtx.proto", fileDescriptor0) }
 
 var fileDescriptor0 = []byte{
 	// 409 bytes of a gzipped FileDescriptorProto
