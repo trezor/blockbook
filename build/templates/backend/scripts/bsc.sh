@@ -15,7 +15,7 @@ if [ ! -d "$CHAINDATA_DIR" ]; then
 fi
 
 $GETH_BIN \
-  --networkid 56 \
+  --config $INSTALL_DIR/config.toml \
   --datadir $DATA_DIR \
   --port {{.Ports.BackendP2P}} \
   --http \
@@ -30,6 +30,7 @@ $GETH_BIN \
   --ws.api eth,net,web3,debug,txpool \
   --ws.origins '*' \
   --syncmode full \
+  --maxpeers 100 \
   --rpc.allow-unprotected-txs \
   --txlookuplimit 0 \
   --cache 8000 \
