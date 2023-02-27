@@ -1,5 +1,6 @@
 syntax = "proto3";
 	package iochain;
+  option go_package = "./";
 	message ProtoCompleteTransaction {
         message TxType {
             uint64 AccountNonce = 1;
