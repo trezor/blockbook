@@ -34,6 +34,7 @@ import (
 	"github.com/trezor/blockbook/bchain/coins/grs"
 	"github.com/trezor/blockbook/bchain/coins/hydra"
 	"github.com/trezor/blockbook/bchain/coins/koto"
+	"github.com/trezor/blockbook/bchain/coins/kucoin"
 	"github.com/trezor/blockbook/bchain/coins/liquid"
 	"github.com/trezor/blockbook/bchain/coins/litecoin"
 	"github.com/trezor/blockbook/bchain/coins/monacoin"
@@ -140,6 +141,8 @@ func init() {
 	BlockChainFactories["Arbitrum TestNet"] = eth.NewEthereumRPC
 	BlockChainFactories["Avalanche"] = avalanche.NewAvalancheRPC
 	BlockChainFactories["Avalanche Archive"] = avalanche.NewAvalancheRPC
+	BlockChainFactories["KuCoin Community Chain"] = kucoin.NewKucoinRPC
+	BlockChainFactories["KuCoin Community Chain TestNet"] = kucoin.NewKucoinRPC
 }
 
 // GetCoinNameFromConfig gets coin name and coin shortcut from config file
