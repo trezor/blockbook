@@ -1,7 +1,7 @@
 {
   "coin": {
     "name": "Ethereum Testnet Goerli Archive",
-    "shortcut": "tETH",
+    "shortcut": "tGOR",
     "label": "Ethereum Goerli",
     "alias": "ethereum_testnet_goerli_archive_consensus",
     "execution_alias": "ethereum_testnet_goerli_archive"
