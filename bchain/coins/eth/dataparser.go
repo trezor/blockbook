@@ -76,7 +76,8 @@ func decamel(s string) string {
 				b.WriteByte(' ')
 			}
 			b.WriteRune(v)
-			splittable = unicode.IsLower(v) || unicode.IsNumber(v)
+			// special handling of ETH to be able to convert "addETHToContract" to "Add ETH To Contract"
+			splittable = unicode.IsLower(v) || unicode.IsNumber(v) || (i >= 2 && s[i-2:i+1] == "ETH")
 		}
 	}
 	return b.String()
@@ -98,7 +99,7 @@ func GetSignatureFromData(data string) uint32 {
 
 const ErrorTy byte = 255
 
-func processParam(data string, index int, t *abi.Type, processed []bool) ([]string, int, bool) {
+func processParam(data string, index int, dataOffset int, t *abi.Type, processed []bool) ([]string, int, bool) {
 	var retval []string
 	d := index << 6
 	if d+64 > len(data) {
@@ -140,7 +141,7 @@ func processParam(data string, index int, t *abi.Type, processed []bool) ([]stri
 		for i := 0; i < t.Size; i++ {
 			var r []string
 			var ok bool
-			r, index, ok = processParam(data, index, t.Elem, processed)
+			r, index, ok = processParam(data, index, dataOffset, t.Elem, processed)
 			if !ok {
 				return nil, 0, false
 			}
@@ -156,7 +157,7 @@ func processParam(data string, index int, t *abi.Type, processed []bool) ([]stri
 		processed[index] = true
 		index++
 		offset <<= 1
-		d = int(offset)
+		d = int(offset) + dataOffset
 		dynIndex := d >> 6
 		if d+64 > len(data) || d < 0 {
 			return nil, 0, false
@@ -195,10 +196,11 @@ func processParam(data string, index int, t *abi.Type, processed []bool) ([]stri
 				}
 			}
 		} else {
+			newOffset := dataOffset + dynIndex<<6
 			for i := 0; i < count; i++ {
 				var r []string
 				var ok bool
-				r, dynIndex, ok = processParam(data, dynIndex, t.Elem, processed)
+				r, dynIndex, ok = processParam(data, dynIndex, newOffset, t.Elem, processed)
 				if !ok {
 					return nil, 0, false
 				}
@@ -222,7 +224,7 @@ func tryParseParams(data string, params []string, parsedParams []abi.Type) []bch
 	var ok bool
 	for i := range params {
 		t := &parsedParams[i]
-		values, index, ok = processParam(data, index, t, processed)
+		values, index, ok = processParam(data, index, 0, t, processed)
 		if !ok {
 			return nil
 		}
@@ -244,7 +246,7 @@ func ParseInputData(signatures *[]bchain.FourByteSignature, data string) *bchain
 	if len(data) <= 2 { // data is empty or 0x
 		return &bchain.EthereumParsedInputData{Name: "Transfer"}
 	}
-	if len(data) < 10 || (len(data)-10)%64 != 0 {
+	if len(data) < 10 {
 		return nil
 	}
 	parsed := bchain.EthereumParsedInputData{
