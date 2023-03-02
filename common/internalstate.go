@@ -87,6 +87,8 @@ type InternalState struct {
 	HistoricalTokenFiatRatesTime time.Time            `json:"historicalTokenFiatRatesTime"`
 	CurrentTicker                *CurrencyRatesTicker `json:"currentTicker"`
 
+	EnableSubNewTx bool `json:"-"`
+
 	BackendInfo BackendInfo `json:"-"`
 }
 

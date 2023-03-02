@@ -86,7 +86,7 @@ type WebsocketServer struct {
 }
 
 // NewWebsocketServer creates new websocket interface to blockbook and returns its handle
-func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, txCache *db.TxCache, metrics *common.Metrics, is *common.InternalState, enableSubNewTx bool) (*WebsocketServer, error) {
+func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, txCache *db.TxCache, metrics *common.Metrics, is *common.InternalState) (*WebsocketServer, error) {
 	api, err := api.NewWorker(db, chain, mempool, txCache, metrics, is)
 	if err != nil {
 		return nil, err
@@ -111,7 +111,7 @@ func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.
 		api:                         api,
 		block0hash:                  b0,
 		newBlockSubscriptions:       make(map[*websocketChannel]string),
-		newTransactionEnabled:       enableSubNewTx,
+		newTransactionEnabled:       is.EnableSubNewTx,
 		newTransactionSubscriptions: make(map[*websocketChannel]string),
 		addressSubscriptions:        make(map[string]map[*websocketChannel]string),
 		fiatRatesSubscriptions:      make(map[string]map[*websocketChannel]string),
@@ -292,12 +292,20 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *webs
 		return
 	},
 	"getBlock": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
+		if !s.is.ExtendedIndex {
+			return nil, errors.New("Not supported")
+		}
 		r := struct {
-			Id string `json:"id"`
+			Id       string `json:"id"`
+			PageSize int    `json:"pageSize"`
+			Page     int    `json:"page"`
 		}{}
 		err = json.Unmarshal(req.Params, &r)
+		if r.PageSize == 0 {
+			r.PageSize = 1000000
+		}
 		if err == nil {
-			rv, err = s.getBlock(r.Id)
+			rv, err = s.getBlock(r.Id, r.Page, r.PageSize)
 		}
 		return
 	},
@@ -626,8 +634,8 @@ func (s *WebsocketServer) getBlockHash(height int) (interface{}, error) {
 	}, nil
 }
 
-func (s *WebsocketServer) getBlock(id string) (interface{}, error) {
-	block, err := s.api.GetBlock(id, 0, 100000)
+func (s *WebsocketServer) getBlock(id string, page, pageSize int) (interface{}, error) {
+	block, err := s.api.GetBlock(id, page, pageSize)
 	if err != nil {
 		return nil, err
 	}
