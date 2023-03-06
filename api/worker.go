@@ -412,6 +412,15 @@ func (w *Worker) getTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 		}
 		tokens = w.getEthereumTokensTransfers(tokenTransfers, addresses)
 		ethTxData := eth.GetEthereumTxData(bchainTx)
+		if ethTxData.GasPrice == nil {
+			ethTxData.GasPrice = big.NewInt(0)
+		}
+		if ethTxData.GasLimit == nil {
+			ethTxData.GasLimit = big.NewInt(0)
+		}
+		if ethTxData.GasUsed == nil {
+			ethTxData.GasUsed = big.NewInt(0)
+		}
 
 		var internalData *bchain.EthereumInternalData
 		if eth.ProcessInternalTransactions {
@@ -567,6 +576,15 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 		}
 		tokens = w.getEthereumTokensTransfers(mempoolTx.TokenTransfers, addresses)
 		ethTxData := eth.GetEthereumTxDataFromSpecificData(mempoolTx.CoinSpecificData)
+		if ethTxData.GasPrice == nil {
+			ethTxData.GasPrice = big.NewInt(0)
+		}
+		if ethTxData.GasLimit == nil {
+			ethTxData.GasLimit = big.NewInt(0)
+		}
+		if ethTxData.GasUsed == nil {
+			ethTxData.GasUsed = big.NewInt(0)
+		}
 		ethSpecific = &EthereumSpecific{
 			GasLimit: ethTxData.GasLimit,
 			GasPrice: (*Amount)(ethTxData.GasPrice),

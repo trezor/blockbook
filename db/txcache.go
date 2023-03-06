@@ -4,7 +4,6 @@ import (
 	"github.com/golang/glog"
 	"github.com/juju/errors"
 	"github.com/trezor/blockbook/bchain"
-	"github.com/trezor/blockbook/bchain/coins/eth"
 	"github.com/trezor/blockbook/common"
 )
 
@@ -81,10 +80,10 @@ func (c *TxCache) GetTransaction(txid string) (*bchain.Tx, int, error) {
 				h = ta.Height
 			}
 		} else if c.chainType == bchain.ChainEthereumType {
-			h, err = eth.GetHeightFromTx(tx)
-			if err != nil {
-				return nil, 0, err
-			}
+			//h, err = eth.GetHeightFromTx(tx)
+			//if err != nil {
+			//	return nil, 0, err
+			//}
 		} else {
 			return nil, 0, errors.New("Unknown chain type")
 		}
