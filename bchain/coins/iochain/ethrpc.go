@@ -704,6 +704,7 @@ func (b *EthereumRPC) getInternalDataForBlock(blockHash string, blockHeight uint
 
 // GetBlock returns block with given hash or height, hash has precedence if both passed
 func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
+	glog.Info("***** GetBlock", hash, height)
 	raw, err := b.getBlockRaw(hash, height, true)
 	if err != nil {
 		return nil, err
@@ -716,18 +717,21 @@ func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error
 	if err := json.Unmarshal(raw, &body); err != nil {
 		return nil, errors.Annotatef(err, "hash %v, height %v", hash, height)
 	}
+	glog.Info("***** GetBlock 2", hash, height)
 	bbh, err := b.ethHeaderToBlockHeader(&head)
 	if err != nil {
 		return nil, errors.Annotatef(err, "hash %v, height %v", hash, height)
 	}
 	// get block events
 	// TODO - could be possibly done in parallel to getInternalDataForBlock
+	glog.Info("***** GetBlock 2", hash, height)
 	logs, ens, err := b.processEventsForBlock(head.Number)
 	if err != nil {
 		return nil, err
 	}
 	// error fetching internal data does not stop the block processing
 	var blockSpecificData *bchain.EthereumBlockSpecificData
+	glog.Info("***** GetBlock 3", hash, height)
 	internalData, contracts, err := b.getInternalDataForBlock(head.Hash, bbh.Height, body.Transactions)
 	// pass internalData error and ENS records in blockSpecificData to be stored
 	if err != nil || len(ens) > 0 || len(contracts) > 0 {
@@ -745,6 +749,7 @@ func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error
 			// glog.Info("Contracts", contracts)
 		}
 	}
+	glog.Info("***** GetBlock 4", hash, height)
 
 	btxs := make([]bchain.Tx, len(body.Transactions))
 	for i := range body.Transactions {
@@ -758,6 +763,7 @@ func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error
 			b.Mempool.RemoveTransactionFromMempool(tx.Hash)
 		}
 	}
+	glog.Info("***** GetBlock 5", hash, height)
 	bbk := bchain.Block{
 		BlockHeader:      *bbh,
 		Txs:              btxs,
