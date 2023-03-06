@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"net/url"
 
-	"github.com/ava-labs/avalanchego/api/info"
+	jsontypes "github.com/ava-labs/avalanchego/utils/json"
 	"github.com/ava-labs/coreth/core/types"
 	"github.com/ava-labs/coreth/ethclient"
 	"github.com/ava-labs/coreth/interfaces"
@@ -27,7 +27,7 @@ const (
 // AvalancheRPC is an interface to JSON-RPC avalanche service.
 type AvalancheRPC struct {
 	*eth.EthereumRPC
-	info info.Client
+	info *rpc.Client
 }
 
 // NewAvalancheRPC returns new AvalancheRPC instance.
@@ -56,6 +56,11 @@ func (b *AvalancheRPC) Initialize() error {
 		return rc, c, nil
 	}
 
+	rpcClient, client, err := b.OpenRPC(b.ChainConfig.RPCURL)
+	if err != nil {
+		return err
+	}
+
 	rpcUrl, err := url.Parse(b.ChainConfig.RPCURL)
 	if err != nil {
 		return err
@@ -66,7 +71,7 @@ func (b *AvalancheRPC) Initialize() error {
 		scheme = "https"
 	}
 
-	rpcClient, client, err := b.OpenRPC(b.ChainConfig.RPCURL)
+	infoClient, err := rpc.DialHTTP(fmt.Sprintf("%s://%s/ext/info", scheme, rpcUrl.Host))
 	if err != nil {
 		return err
 	}
@@ -74,7 +79,7 @@ func (b *AvalancheRPC) Initialize() error {
 	// set chain specific
 	b.Client = client
 	b.RPC = rpcClient
-	b.info = info.NewClient(fmt.Sprintf("%s://%s", scheme, rpcUrl.Host))
+	b.info = infoClient
 	b.MainNetChainID = MainNet
 	b.NewBlock = &AvalancheNewBlock{channel: make(chan *types.Header)}
 	b.NewTx = &AvalancheNewTx{channel: make(chan common.Hash)}
@@ -112,9 +117,15 @@ func (b *AvalancheRPC) GetChainInfo() (*bchain.ChainInfo, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
 	defer cancel()
 
-	v, err := b.info.GetNodeVersion(ctx)
-	if err != nil {
-		fmt.Println("here", err)
+	var v struct {
+		Version            string            `json:"version"`
+		DatabaseVersion    string            `json:"databaseVersion"`
+		RPCProtocolVersion jsontypes.Uint32  `json:"rpcProtocolVersion"`
+		GitCommit          string            `json:"gitCommit"`
+		VMVersions         map[string]string `json:"vmVersions"`
+	}
+
+	if err := b.info.CallContext(ctx, &v, "info.getNodeVersion"); err != nil {
 		return nil, err
 	}
 
