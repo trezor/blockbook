@@ -47,6 +47,7 @@ type Configuration struct {
 	ProcessInternalTransactions     bool   `json:"processInternalTransactions"`
 	ProcessZeroInternalTransactions bool   `json:"processZeroInternalTransactions"`
 	ConsensusNodeVersionURL         string `json:"consensusNodeVersion"`
+	PrivacyGroupId                  string `json:"privacy_group_id"`
 }
 
 // EthereumRPC is an interface to JSON-RPC eth service.
@@ -554,7 +555,7 @@ func (b *EthereumRPC) processEventsForBlock(blockNumber string) (map[string][]*b
 		return nil, nil, errors.Annotatef(err, "eth_getLogs blockNumber %v", blockNumber)
 	}
 	var pLogs []rpcLogWithTxHash
-	err = b.RPC.CallContext(ctx, &pLogs, "priv_getLogs", privacyGroupId, map[string]interface{}{
+	err = b.RPC.CallContext(ctx, &pLogs, "priv_getLogs", b.ChainConfig.PrivacyGroupId, map[string]interface{}{
 		"fromBlock": blockNumber,
 		"toBlock":   blockNumber,
 	})
@@ -1014,7 +1015,7 @@ func (b *EthereumRPC) EthereumTypeGetNonce(addrDesc bchain.AddressDescriptor) (u
 	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
 	defer cancel()
 	var raw json.RawMessage
-	if err := b.RPC.CallContext(ctx, &raw, "priv_getTransactionCount", ethcommon.BytesToAddress(addrDesc), privacyGroupId); err != nil {
+	if err := b.RPC.CallContext(ctx, &raw, "priv_getTransactionCount", ethcommon.BytesToAddress(addrDesc), b.ChainConfig.PrivacyGroupId); err != nil {
 		return 0, errors.Annotatef(err, "raw result %v", raw)
 	}
 	var result string
