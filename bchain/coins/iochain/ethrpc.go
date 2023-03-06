@@ -29,9 +29,9 @@ type Network uint32
 
 const (
 	// MainNet is Iochain production network
-	MainNet Network = 1
+	MainNet Network = 21728
 	// TestNet is Iochain test network
-	TestNet Network = 21728
+	TestNet Network = 21720
 )
 
 // Configuration represents json config file
@@ -71,6 +71,8 @@ type EthereumRPC struct {
 	newTxSubscription    bchain.EVMClientSubscription
 	ChainConfig          *Configuration
 }
+
+const privacyPrecompileAddress = "0x000000000000000000000000000000000000007e"
 
 // ProcessInternalTransactions specifies if internal transactions are processed
 var ProcessInternalTransactions bool
@@ -456,18 +458,11 @@ func (b *EthereumRPC) GetBestBlockHeight() (uint32, error) {
 
 // GetBlockHash returns hash of block in best-block-chain at given height
 func (b *EthereumRPC) GetBlockHash(height uint32) (string, error) {
-	var n big.Int
-	n.SetUint64(uint64(height))
-	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
-	defer cancel()
-	h, err := b.Client.HeaderByNumber(ctx, &n)
+	block, err := b.GetBlock("", height)
 	if err != nil {
-		if err == ethereum.NotFound {
-			return "", bchain.ErrBlockNotFound
-		}
-		return "", errors.Annotatef(err, "height %v", height)
+		return "", err
 	}
-	return h.Hash(), nil
+	return block.Hash, nil
 }
 
 func (b *EthereumRPC) ethHeaderToBlockHeader(h *rpcHeader) (*bchain.BlockHeader, error) {
@@ -536,7 +531,7 @@ func (b *EthereumRPC) getBlockRaw(hash string, height uint32, fullTxs bool) (jso
 	}
 	if err != nil {
 		return nil, errors.Annotatef(err, "hash %v, height %v", hash, height)
-	} else if len(raw) == 0 {
+	} else if len(raw) == 0 || raw == nil || string(raw) == "null" {
 		return nil, bchain.ErrBlockNotFound
 	}
 	return raw, nil
@@ -813,9 +808,24 @@ func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 		}
 		return nil, bchain.ErrTxNotFound
 	}
-	// try and pull the private transaction data but fail silently if this does not work
-	// private transactions return null if the linked node was not part of the privacy group
-	b.RPC.CallContext(ctx, &tx, "priv_getPrivateTransaction", hash)
+	if tx.To == privacyPrecompileAddress {
+		// private transaction
+		var ptx *bchain.RpcTransaction
+		err = b.RPC.CallContext(ctx, &ptx, "priv_getPrivateTransaction", hash)
+		if err != nil {
+			return nil, err
+		}
+		if ptx == nil {
+			return nil, bchain.ErrTxNotFound
+		}
+		tx.From = ptx.From
+		tx.GasPrice = ptx.GasPrice
+		tx.GasLimit = ptx.GasLimit
+		tx.To = ptx.To
+		tx.Value = ptx.Value
+		tx.AccountNonce = ptx.AccountNonce
+		tx.Payload = ptx.Payload
+	}
 	var btx *bchain.Tx
 	if tx.BlockNumber == "" {
 		// mempool tx

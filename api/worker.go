@@ -412,6 +412,15 @@ func (w *Worker) getTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 		}
 		tokens = w.getEthereumTokensTransfers(tokenTransfers, addresses)
 		ethTxData := eth.GetEthereumTxData(bchainTx)
+		if ethTxData.GasPrice == nil {
+			ethTxData.GasPrice = big.NewInt(0)
+		}
+		if ethTxData.GasLimit == nil {
+			ethTxData.GasLimit = big.NewInt(0)
+		}
+		if ethTxData.GasUsed == nil {
+			ethTxData.GasUsed = big.NewInt(0)
+		}
 
 		var internalData *bchain.EthereumInternalData
 		if eth.ProcessInternalTransactions {
@@ -567,6 +576,15 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 		}
 		tokens = w.getEthereumTokensTransfers(mempoolTx.TokenTransfers, addresses)
 		ethTxData := eth.GetEthereumTxDataFromSpecificData(mempoolTx.CoinSpecificData)
+		if ethTxData.GasPrice == nil {
+			ethTxData.GasPrice = big.NewInt(0)
+		}
+		if ethTxData.GasLimit == nil {
+			ethTxData.GasLimit = big.NewInt(0)
+		}
+		if ethTxData.GasUsed == nil {
+			ethTxData.GasUsed = big.NewInt(0)
+		}
 		ethSpecific = &EthereumSpecific{
 			GasLimit: ethTxData.GasLimit,
 			GasPrice: (*Amount)(ethTxData.GasPrice),
@@ -1049,7 +1067,6 @@ type ethereumTypeAddressData struct {
 
 func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescriptor, details AccountDetails, filter *AddressFilter, secondaryCoin string) (*db.AddrBalance, *ethereumTypeAddressData, error) {
 	var ba *db.AddrBalance
-	var n uint64
 	// unknown number of results for paging initially
 	d := ethereumTypeAddressData{totalResults: -1}
 	ca, err := w.db.GetAddrDescContracts(addrDesc)
@@ -1074,10 +1091,12 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 		if b != nil {
 			ba.BalanceSat = *b
 		}
-		n, err = w.chain.EthereumTypeGetNonce(addrDesc)
+		n, err := w.chain.EthereumTypeGetNonce(addrDesc)
 		if err != nil {
 			return nil, nil, errors.Annotatef(err, "EthereumTypeGetNonce %v", addrDesc)
 		}
+		// returns 0 for unknown address
+		d.nonce = strconv.Itoa(int(n))
 		ticker := w.fiatRates.GetCurrentTicker("", "")
 		if details > AccountDetailsBasic {
 			d.tokens = make([]Token, len(ca.Contracts))
@@ -1130,6 +1149,10 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 				BalanceSat: *b,
 			}
 		}
+	}
+	n, err := w.chain.EthereumTypeGetNonce(addrDesc)
+	if err != nil {
+		return nil, nil, errors.Annotatef(err, "EthereumTypeGetNonce %v", addrDesc)
 	}
 	// returns 0 for unknown address
 	d.nonce = strconv.Itoa(int(n))

@@ -2,6 +2,8 @@ package eth
 
 import (
 	"encoding/hex"
+	"encoding/json"
+	"github.com/golang/glog"
 	"math/big"
 	"strconv"
 	"strings"
@@ -492,26 +494,29 @@ func GetEthereumTxData(tx *bchain.Tx) *EthereumTxData {
 
 // GetEthereumTxDataFromSpecificData returns EthereumTxData from coinSpecificData
 func GetEthereumTxDataFromSpecificData(coinSpecificData interface{}) *EthereumTxData {
+	txt, _ := json.Marshal(coinSpecificData)
 	etd := EthereumTxData{Status: TxStatusPending}
-	csd, ok := coinSpecificData.(bchain.EthereumSpecificData)
-	if ok {
-		if csd.Tx != nil {
-			etd.Nonce, _ = hexutil.DecodeUint64(csd.Tx.AccountNonce)
-			etd.GasLimit, _ = hexutil.DecodeBig(csd.Tx.GasLimit)
-			etd.GasPrice, _ = hexutil.DecodeBig(csd.Tx.GasPrice)
-			etd.Data = csd.Tx.Payload
+	var csd bchain.EthereumSpecificData
+	err := json.Unmarshal(txt, &csd)
+	if err != nil {
+		glog.Error("Failed to cast coinSpecificData: ", err)
+	}
+	if csd.Tx != nil {
+		etd.Nonce, _ = hexutil.DecodeUint64(csd.Tx.AccountNonce)
+		etd.GasLimit, _ = hexutil.DecodeBig(csd.Tx.GasLimit)
+		etd.GasPrice, _ = hexutil.DecodeBig(csd.Tx.GasPrice)
+		etd.Data = csd.Tx.Payload
+	}
+	if csd.Receipt != nil {
+		switch csd.Receipt.Status {
+		case "0x1":
+			etd.Status = TxStatusOK
+		case "": // old transactions did not set status
+			etd.Status = TxStatusUnknown
+		default:
+			etd.Status = TxStatusFailure
 		}
-		if csd.Receipt != nil {
-			switch csd.Receipt.Status {
-			case "0x1":
-				etd.Status = TxStatusOK
-			case "": // old transactions did not set status
-				etd.Status = TxStatusUnknown
-			default:
-				etd.Status = TxStatusFailure
-			}
-			etd.GasUsed, _ = hexutil.DecodeBig(csd.Receipt.GasUsed)
-		}
+		etd.GasUsed, _ = hexutil.DecodeBig(csd.Receipt.GasUsed)
 	}
 	return &etd
 }
