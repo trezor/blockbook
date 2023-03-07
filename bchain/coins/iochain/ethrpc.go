@@ -456,18 +456,11 @@ func (b *EthereumRPC) GetBestBlockHeight() (uint32, error) {
 
 // GetBlockHash returns hash of block in best-block-chain at given height
 func (b *EthereumRPC) GetBlockHash(height uint32) (string, error) {
-	var n big.Int
-	n.SetUint64(uint64(height))
-	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
-	defer cancel()
-	h, err := b.Client.HeaderByNumber(ctx, &n)
+	block, err := b.GetBlock("", height)
 	if err != nil {
-		if err == ethereum.NotFound {
-			return "", bchain.ErrBlockNotFound
-		}
-		return "", errors.Annotatef(err, "height %v", height)
+		return "", err
 	}
-	return h.Hash(), nil
+	return block.Hash, nil
 }
 
 func (b *EthereumRPC) ethHeaderToBlockHeader(h *rpcHeader) (*bchain.BlockHeader, error) {
