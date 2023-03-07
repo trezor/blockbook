@@ -39,3 +39,4 @@ prepare-sources:
 	cp -r /src $(BLOCKBOOK_SRC)
 	cd $(BLOCKBOOK_SRC) && go mod download
 	sed -i 's/wsMessageSizeLimit\ =\ 15\ \*\ 1024\ \*\ 1024/wsMessageSizeLimit = 50 * 1024 * 1024/g' $(GOPATH)/pkg/mod/github.com/ethereum/go-ethereum*/rpc/websocket.go
+	sed -i 's/wsMessageSizeLimit\ =\ 15\ \*\ 1024\ \*\ 1024/wsMessageSizeLimit = 50 * 1024 * 1024/g' $(GOPATH)/pkg/mod/github.com/ava-labs/coreth*/rpc/websocket.go

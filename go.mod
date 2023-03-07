@@ -18,7 +18,7 @@ require (
 	github.com/golang/glog v1.0.0
 	github.com/golang/protobuf v1.5.2
 	github.com/gorilla/websocket v1.4.2
-	github.com/juju/errors v1.0.0
+	github.com/juju/errors v0.0.0-20170703010042-c7d06af17c68
 	github.com/linxGnu/grocksdb v1.7.7
 	github.com/martinboehm/bchutil v0.0.0-20190104112650-6373f11b6efe
 	github.com/martinboehm/btcd v0.0.0-20221101112928-408689e15809
@@ -29,7 +29,7 @@ require (
 	github.com/pirk/ecashutil v0.0.0-20220124103933-d37f548d249e
 	github.com/prometheus/client_golang v1.13.0
 	github.com/schancel/cashaddr-converter v0.0.0-20181111022653-4769e7add95a
-	golang.org/x/crypto v0.3.0
+	golang.org/x/crypto v0.0.0-20220622213112-05595931fe9d
 	google.golang.org/protobuf v1.28.1
 )
 
@@ -61,6 +61,8 @@ require (
 	github.com/gorilla/rpc v1.2.0 // indirect
 	github.com/holiman/big v0.0.0-20221017200358-a027dc42d04e // indirect
 	github.com/holiman/uint256 v1.2.0 // indirect
+	github.com/juju/loggo v0.0.0-20190526231331-6e530bcce5d8 // indirect
+	github.com/juju/testing v0.0.0-20191001232224-ce9dec17d28b // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.2-0.20181231171920-c182affec369 // indirect
 	github.com/mr-tron/base58 v1.2.0 // indirect
@@ -77,6 +79,7 @@ require (
 	golang.org/x/exp v0.0.0-20220426173459-3bcf042a4bf5 // indirect
 	golang.org/x/sys v0.5.0 // indirect
 	golang.org/x/time v0.0.0-20210723032227-1f47c861a9ac // indirect
+	gopkg.in/mgo.v2 v2.0.0-20190816093944-a6b53ec6cb22 // indirect
 	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
