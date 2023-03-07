@@ -705,6 +705,7 @@ func (b *EthereumRPC) getInternalDataForBlock(blockHash string, blockHeight uint
 // GetBlock returns block with given hash or height, hash has precedence if both passed
 func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 	glog.Info("***** GetBlock", hash, height)
+	hash = ""
 	raw, err := b.getBlockRaw(hash, height, true)
 	if err != nil {
 		return nil, err
