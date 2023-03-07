@@ -17,7 +17,7 @@ require (
 	github.com/ethereum-optimism/optimism/l2geth v0.0.0-20230115070844-d8e328ae936c
 	github.com/ethereum/go-ethereum v1.10.26
 	github.com/golang/glog v1.0.0
-	github.com/golang/protobuf v1.5.2
+	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/gorilla/websocket v1.5.0
 	github.com/juju/errors v0.0.0-20170703010042-c7d06af17c68
 	github.com/linxGnu/grocksdb v1.7.7
