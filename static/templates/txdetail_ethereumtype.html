@@ -95,12 +95,12 @@
     {{end}}
     {{end}}
 
-    {{if tokenTransfersCount $tx "ERC20"}}
+    {{if tokenTransfersCount $tx .FungibleTokenName}}
     <div class="row subhead">
-        ERC20 Token Transfers
+        {{.FungibleTokenName}} Token Transfers
     </div>
     {{range $tt := $tx.TokenTransfers}}
-    {{if eq $tt.Type "ERC20"}}
+    {{if eq $tt.Type $.FungibleTokenName}}
     <div class="row body">
         <div class="col-md-4">
             <div class="row tx-addr">
@@ -123,12 +123,12 @@
     {{end}}
     {{end}}
 
-    {{if tokenTransfersCount $tx "ERC721"}}
+    {{if tokenTransfersCount $tx .NonFungibleTokenName}}
     <div class="row subhead">
-        ERC721 Token Transfers
+        {{.NonFungibleTokenName}} Token Transfers
     </div>
     {{range $tt := $tx.TokenTransfers}}
-    {{if eq $tt.Type "ERC721"}}
+    {{if eq $tt.Type $.NonFungibleTokenName}}
     <div class="row body">
         <div class="col-md-4">
             <div class="row tx-addr">
@@ -151,12 +151,12 @@
     {{end}}
     {{end}}
 
-    {{if tokenTransfersCount $tx "ERC1155"}}
+    {{if tokenTransfersCount $tx .MultiTokenName}}
     <div class="row subhead">
-        ERC1155 Token Transfers
+        {{.MultiTokenName}} Token Transfers
     </div>
     {{range $tt := $tx.TokenTransfers}}
-    {{if eq $tt.Type "ERC1155"}}
+    {{if eq $tt.Type $.MultiTokenName}}
     <div class="row body">
         <div class="col-md-4">
             <div class="row tx-addr">
