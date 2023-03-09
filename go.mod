@@ -14,7 +14,7 @@ require (
 	github.com/decred/dcrd/dcrutil/v3 v3.0.0
 	github.com/decred/dcrd/hdkeychain/v3 v3.0.0
 	github.com/decred/dcrd/txscript/v3 v3.0.0
-	github.com/ethereum-optimism/optimism/l2geth v0.0.0-20230115070844-d8e328ae936c
+	github.com/ethereum-optimism/optimism/l2geth v0.0.0-20230309061732-9f0958f717d9
 	github.com/ethereum/go-ethereum v1.10.26
 	github.com/golang/glog v1.0.0
 	github.com/golang/protobuf v1.5.2 // indirect
