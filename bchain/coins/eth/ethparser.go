@@ -337,9 +337,7 @@ func (p *EthereumParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) (
 			}
 		}
 		if r.Receipt.L1FeeScalar != "" {
-			if pt.Receipt.L1FeeScalar, err = hexDecodeBig(r.Receipt.L1FeeScalar); err != nil {
-				return nil, errors.Annotatef(err, "L1FeeScalar %v", r.Receipt.L1FeeScalar)
-			}
+			pt.Receipt.L1FeeScalar = []byte(r.Receipt.L1FeeScalar)
 		}
 		if r.Receipt.L1GasPrice != "" {
 			if pt.Receipt.L1GasPrice, err = hexDecodeBig(r.Receipt.L1GasPrice); err != nil {
@@ -403,7 +401,7 @@ func (p *EthereumParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 			rr.L1Fee = hexEncodeBig(pt.Receipt.L1Fee)
 		}
 		if len(pt.Receipt.L1FeeScalar) > 0 {
-			rr.L1FeeScalar = hexEncodeBig(pt.Receipt.L1FeeScalar)
+			rr.L1FeeScalar = string(pt.Receipt.L1FeeScalar)
 		}
 		if len(pt.Receipt.L1GasPrice) > 0 {
 			rr.L1GasPrice = hexEncodeBig(pt.Receipt.L1GasPrice)
