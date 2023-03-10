@@ -29,9 +29,9 @@ type Network uint32
 
 const (
 	// MainNet is Iochain production network
-	MainNet Network = 1
+	MainNet Network = 21728
 	// TestNet is Iochain test network
-	TestNet Network = 21728
+	TestNet Network = 21720
 )
 
 // Configuration represents json config file
