@@ -604,6 +604,9 @@ func (b *EthereumRPC) getCreationContractInfo(contract string, height uint32) *b
 
 func (b *EthereumRPC) processCallTrace(call *rpcCallTrace, d *bchain.EthereumInternalData, contracts []bchain.ContractInfo, blockHeight uint32) []bchain.ContractInfo {
 	value, err := hexutil.DecodeBig(call.Value)
+	if err != nil {
+		value = new(big.Int)
+	}
 	if call.Type == "CREATE" || call.Type == "CREATE2" {
 		d.Transfers = append(d.Transfers, bchain.EthereumInternalTransfer{
 			Type:  bchain.CREATE,
