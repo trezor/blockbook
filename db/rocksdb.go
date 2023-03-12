@@ -1651,13 +1651,26 @@ func dirSize(path string) (int64, error) {
 	return size, err
 }
 
+// limit the number of size on disk calculations by restricting it to once a minute
+var databaseSizeOnDisk int64
+var nextDatabaseSizeOnDisk time.Time
+var databaseSizeOnDiskMux sync.Mutex
+
 // DatabaseSizeOnDisk returns size of the database in bytes
 func (d *RocksDB) DatabaseSizeOnDisk() int64 {
+	databaseSizeOnDiskMux.Lock()
+	defer databaseSizeOnDiskMux.Unlock()
+	now := time.Now().UTC()
+	if now.Before(nextDatabaseSizeOnDisk) {
+		return databaseSizeOnDisk
+	}
 	size, err := dirSize(d.path)
 	if err != nil {
 		glog.Warning("rocksdb: DatabaseSizeOnDisk: ", err)
 		return 0
 	}
+	databaseSizeOnDisk = size
+	nextDatabaseSizeOnDisk = now.Add(60 * time.Second)
 	return size
 }
 
