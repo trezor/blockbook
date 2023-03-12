@@ -584,7 +584,7 @@ type resultGetInfo struct {
 }
 
 func (s *SocketIoServer) getInfo() (res resultGetInfo, err error) {
-	_, height, _ := s.is.GetSyncState()
+	_, height, _, _ := s.is.GetSyncState()
 	res.Result.Blocks = int(height)
 	res.Result.Testnet = s.chain.IsTestnet()
 	res.Result.Network = s.chain.GetNetworkName()

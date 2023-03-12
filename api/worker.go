@@ -1625,12 +1625,12 @@ func (w *Worker) GetBalanceHistory(address string, fromTimestamp, toTimestamp in
 
 func (w *Worker) waitForBackendSync() {
 	// wait a short time if blockbook is synchronizing with backend
-	inSync, _, _ := w.is.GetSyncState()
+	inSync, _, _, _ := w.is.GetSyncState()
 	count := 30
 	for !inSync && count > 0 {
 		time.Sleep(time.Millisecond * 100)
 		count--
-		inSync, _, _ = w.is.GetSyncState()
+		inSync, _, _, _ = w.is.GetSyncState()
 	}
 }
 
@@ -2262,9 +2262,15 @@ func nonZeroTime(t time.Time) *time.Time {
 
 // GetSystemInfo returns information about system
 func (w *Worker) GetSystemInfo(internal bool) (*SystemInfo, error) {
-	start := time.Now()
+	start := time.Now().UTC()
 	vi := common.GetVersionInfo()
-	inSync, bestHeight, lastBlockTime := w.is.GetSyncState()
+	inSync, bestHeight, lastBlockTime, startSync := w.is.GetSyncState()
+	if !inSync && !w.is.InitialSync {
+		// if less than 5 seconds into syncing, return inSync=true to avoid short time not in sync reports that confuse monitoring
+		if startSync.Add(5 * time.Second).After(start) {
+			inSync = true
+		}
+	}
 	inSyncMempool, lastMempoolTime, mempoolSize := w.is.GetMempoolSyncState()
 	ci, err := w.chain.GetChainInfo()
 	var backendError string
