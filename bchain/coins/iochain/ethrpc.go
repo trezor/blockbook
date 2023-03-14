@@ -807,9 +807,6 @@ func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 		}
 		return nil, bchain.ErrTxNotFound
 	}
-	// try and pull the private transaction data but fail silently if this does not work
-	// private transactions return null if the linked node was not part of the privacy group
-	b.RPC.CallContext(ctx, &tx, "priv_getPrivateTransaction", hash)
 	var btx *bchain.Tx
 	if tx.BlockNumber == "" {
 		// mempool tx
