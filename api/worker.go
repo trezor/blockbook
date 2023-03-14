@@ -1067,7 +1067,6 @@ type ethereumTypeAddressData struct {
 
 func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescriptor, details AccountDetails, filter *AddressFilter, secondaryCoin string) (*db.AddrBalance, *ethereumTypeAddressData, error) {
 	var ba *db.AddrBalance
-	var n uint64
 	// unknown number of results for paging initially
 	d := ethereumTypeAddressData{totalResults: -1}
 	ca, err := w.db.GetAddrDescContracts(addrDesc)
@@ -1148,6 +1147,10 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 				BalanceSat: *b,
 			}
 		}
+	}
+	n, err := w.chain.EthereumTypeGetNonce(addrDesc)
+	if err != nil {
+		return nil, nil, errors.Annotatef(err, "EthereumTypeGetNonce %v", addrDesc)
 	}
 	// returns 0 for unknown address
 	d.nonce = strconv.Itoa(int(n))
