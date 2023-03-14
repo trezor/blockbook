@@ -72,6 +72,8 @@ type EthereumRPC struct {
 	ChainConfig          *Configuration
 }
 
+const privacyPrecompileAddress = "0x000000000000000000000000000000000000007e"
+
 // ProcessInternalTransactions specifies if internal transactions are processed
 var ProcessInternalTransactions bool
 
@@ -807,11 +809,16 @@ func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 		}
 		return nil, bchain.ErrTxNotFound
 	}
-	var ptx *bchain.RpcTransaction
-	// try and pull the private transaction data but fail silently if this does not work
-	// private transactions return null if the linked node was not part of the privacy group
-	err = b.RPC.CallContext(ctx, &ptx, "priv_getPrivateTransaction", hash)
-	if err == nil {
+	if tx.To == privacyPrecompileAddress {
+		// private transaction
+		var ptx *bchain.RpcTransaction
+		err = b.RPC.CallContext(ctx, &ptx, "priv_getPrivateTransaction", hash)
+		if err != nil {
+			return nil, err
+		}
+		if ptx == nil {
+			return nil, bchain.ErrTxNotFound
+		}
 		tx.From = ptx.From
 		tx.GasPrice = ptx.GasPrice
 		tx.GasLimit = ptx.GasLimit
