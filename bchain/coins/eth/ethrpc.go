@@ -545,7 +545,7 @@ func (b *EthereumRPC) getBlockRaw(hash string, height uint32, fullTxs bool) (jso
 	}
 	if err != nil {
 		return nil, errors.Annotatef(err, "hash %v, height %v", hash, height)
-	} else if len(raw) == 0 {
+	} else if len(raw) == 0 || (len(raw) == 4 && string(raw) == "null") {
 		return nil, bchain.ErrBlockNotFound
 	}
 	return raw, nil
