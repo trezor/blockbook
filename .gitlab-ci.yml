@@ -169,3 +169,14 @@ backend-deploy-and-test-goerli-archive:
   tags:
     - blockbook
   script: ./contrib/scripts/backend-deploy-and-test.sh ethereum_testnet_goerli_archive ethereum-testnet-goerli-archive ethereum=test ethereum_testnet_goerli_archive.log
+
+backend-deploy-and-test-cxau:
+  stage: backend-deploy-and-test
+  only:
+    refs:
+      - master
+    changes:
+      - configs/coins/cxau.json
+  tags:
+    - blockbook
+  script: ./contrib/scripts/backend-deploy-and-test.sh cxau
