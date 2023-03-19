@@ -38,6 +38,7 @@ import (
 	"github.com/trezor/blockbook/bchain/coins/litecoin"
 	"github.com/trezor/blockbook/bchain/coins/monacoin"
 	"github.com/trezor/blockbook/bchain/coins/monetaryunit"
+        "github.com/Nur1Labs/blockbook/bchain/coins/mubdi/cxau"
 	"github.com/trezor/blockbook/bchain/coins/myriad"
 	"github.com/trezor/blockbook/bchain/coins/namecoin"
 	"github.com/trezor/blockbook/bchain/coins/nuls"
@@ -137,6 +138,8 @@ func init() {
 	BlockChainFactories["Avalanche Archive"] = avalanche.NewAvalancheRPC
 	BlockChainFactories["BNB Smart Chain"] = bsc.NewBNBSmartChainRPC
 	BlockChainFactories["BNB Smart Chain Archive"] = bsc.NewBNBSmartChainRPC
+	BlockChainFactories["cXAU"] = cxau.NewcXAURPC
+	BlockChainFactories["cXAU Eggs"] = cxau.NewcXAURPC
 }
 
 // GetCoinNameFromConfig gets coin name and coin shortcut from config file
