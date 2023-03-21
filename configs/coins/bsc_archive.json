@@ -1,0 +1,74 @@
+{
+    "coin": {
+        "name": "BNB Smart Chain Archive",
+        "shortcut": "BNB",
+        "label": "BNB Smart Chain",
+        "alias": "bsc_archive"
+    },
+    "ports": {
+        "backend_rpc": 8065,
+        "backend_p2p": 38365,
+        "backend_http": 8165,
+        "blockbook_internal": 9065,
+        "blockbook_public": 9165
+    },
+    "ipc": {
+        "rpc_url_template": "ws://127.0.0.1:{{.Ports.BackendRPC}}",
+        "rpc_timeout": 25
+    },
+    "backend": {
+        "package_name": "backend-bsc-archive",
+        "package_revision": "satoshilabs-1",
+        "system_user": "bsc",
+        "version": "1.1.19",
+        "binary_url": "https://github.com/bnb-chain/bsc/releases/download/v1.1.19/geth_linux",
+        "verification_type": "sha256",
+        "verification_source": "ad49b00a5df44fb67e0dc166a7cf02a02c67ab296d25e4ac3d56134567577c41",
+        "extract_command": "mv ${ARCHIVE} backend/geth_linux && chmod +x backend/geth_linux && echo",
+        "exclude_files": [],
+        "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bsc_archive_exec.sh 2>> {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
+        "exec_script": "bsc_archive.sh",
+        "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
+        "postinst_script_template": "wget https://github.com/bnb-chain/bsc/releases/download/v1.1.19/mainnet.zip -O {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/mainnet.zip && unzip -o -d {{.Env.BackendInstallPath}}/{{.Coin.Alias}} {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/mainnet.zip && rm -f {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/mainnet.zip && sed -i -e '/\\[Node.LogConfig\\]/,+5d' {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/config.toml",
+        "service_type": "simple",
+        "service_additional_params_template": "",
+        "protect_memory": true,
+        "mainnet": true,
+        "server_config_file": "",
+        "client_config_file": "",
+        "platforms": {
+            "arm64": {
+                "binary_url": "https://github.com/bnb-chain/bsc/releases/download/v1.1.19/geth-linux-arm64",
+                "verification_source": "50aae5defb41cb5f4da462b5f86097c2daf945672ce9fb1c1e4393f6e038610f"
+            }
+        }
+    },
+    "blockbook": {
+        "package_name": "blockbook-bsc-archive",
+        "system_user": "blockbook-bsc",
+        "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
+        "public_binding_template": ":{{.Ports.BlockbookPublic}}",
+        "explorer_url": "",
+        "additional_params": "-workers=16",
+        "block_chain": {
+            "parse": true,
+            "mempool_workers": 8,
+            "mempool_sub_workers": 2,
+            "block_addresses_to_keep": 600,
+            "additional_params": {
+                "address_aliases": true,
+                "mempoolTxTimeoutHours": 48,
+                "processInternalTransactions": true,
+                "queryBackendOnMempoolResync": false,
+                "fiat_rates": "coingecko",
+                "fiat_rates_vs_currencies": "AED,ARS,AUD,BDT,BHD,BMD,BRL,CAD,CHF,CLP,CNY,CZK,DKK,EUR,GBP,HKD,HUF,IDR,ILS,INR,JPY,KRW,KWD,LKR,MMK,MXN,MYR,NGN,NOK,NZD,PHP,PKR,PLN,RUB,SAR,SEK,SGD,THB,TRY,TWD,UAH,USD,VEF,VND,ZAR,BTC,ETH",
+                "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"binancecoin\",\"platformIdentifier\": \"binance-smart-chain\",\"platformVsCurrency\": \"bnb\",\"periodSeconds\": 900}",
+                "fourByteSignatures": "https://www.4byte.directory/api/v1/signatures/"
+            }
+        }
+    },
+    "meta": {
+        "package_maintainer": "IT",
+        "package_maintainer_email": "it@satoshilabs.com"
+    }
+}

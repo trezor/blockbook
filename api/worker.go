@@ -101,6 +101,19 @@ func (w *Worker) setSpendingTxToVout(vout *Vout, txid string, height uint32) err
 
 // GetSpendingTxid returns transaction id of transaction that spent given output
 func (w *Worker) GetSpendingTxid(txid string, n int) (string, error) {
+	if w.db.HasExtendedIndex() {
+		tsp, err := w.db.GetTxAddresses(txid)
+		if err != nil {
+			return "", err
+		} else if tsp == nil {
+			glog.Warning("DB inconsistency:  tx ", txid, ": not found in txAddresses")
+			return "", NewAPIError(fmt.Sprintf("Txid %v not found", txid), false)
+		}
+		if n >= len(tsp.Outputs) || n < 0 {
+			return "", NewAPIError(fmt.Sprintf("Passed incorrect vout index %v for tx %v, len vout %v", n, txid, len(tsp.Outputs)), false)
+		}
+		return tsp.Outputs[n].SpentTxid, nil
+	}
 	start := time.Now()
 	tx, err := w.getTransaction(txid, false, false, nil)
 	if err != nil {
@@ -368,10 +381,16 @@ func (w *Worker) getTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 		aggregateAddresses(addresses, vout.Addresses, vout.IsAddress)
 		if ta != nil {
 			vout.Spent = ta.Outputs[i].Spent
-			if spendingTxs && vout.Spent {
-				err = w.setSpendingTxToVout(vout, bchainTx.Txid, uint32(height))
-				if err != nil {
-					glog.Errorf("setSpendingTxToVout error %v, %v, output %v", err, vout.AddrDesc, vout.N)
+			if vout.Spent {
+				if w.db.HasExtendedIndex() {
+					vout.SpentTxID = ta.Outputs[i].SpentTxid
+					vout.SpentIndex = int(ta.Outputs[i].SpentIndex)
+					vout.SpentHeight = int(ta.Outputs[i].SpentHeight)
+				} else if spendingTxs {
+					err = w.setSpendingTxToVout(vout, bchainTx.Txid, uint32(height))
+					if err != nil {
+						glog.Errorf("setSpendingTxToVout error %v, %v, output %v", err, vout.AddrDesc, vout.N)
+					}
 				}
 			}
 		}
@@ -609,6 +628,9 @@ func (w *Worker) getContractDescriptorInfo(cd bchain.AddressDescriptor, typeFrom
 
 			validContract = false
 		} else {
+			if typeFromContext != bchain.UnknownTokenType && contractInfo.Type == bchain.UnknownTokenType {
+				contractInfo.Type = typeFromContext
+			}
 			if err = w.db.StoreContractInfo(contractInfo); err != nil {
 				glog.Errorf("StoreContractInfo error %v, contract %v", err, cd)
 			}
@@ -822,6 +844,10 @@ func (w *Worker) txFromTxAddress(txid string, ta *db.TxAddresses, bi *db.BlockIn
 		if err != nil {
 			glog.Errorf("tai.Addresses error %v, tx %v, input %v, tai %+v", err, txid, i, tai)
 		}
+		if w.db.HasExtendedIndex() {
+			vin.Txid = tai.Txid
+			vin.Vout = tai.Vout
+		}
 		aggregateAddresses(addresses, vin.Addresses, vin.IsAddress)
 	}
 	vouts := make([]Vout, len(ta.Outputs))
@@ -836,6 +862,11 @@ func (w *Worker) txFromTxAddress(txid string, ta *db.TxAddresses, bi *db.BlockIn
 			glog.Errorf("tai.Addresses error %v, tx %v, output %v, tao %+v", err, txid, i, tao)
 		}
 		vout.Spent = tao.Spent
+		if vout.Spent && w.db.HasExtendedIndex() {
+			vout.SpentTxID = tao.SpentTxid
+			vout.SpentIndex = int(tao.SpentIndex)
+			vout.SpentHeight = int(tao.SpentHeight)
+		}
 		aggregateAddresses(addresses, vout.Addresses, vout.IsAddress)
 	}
 	// for coinbase transactions valIn is 0
@@ -854,6 +885,11 @@ func (w *Worker) txFromTxAddress(txid string, ta *db.TxAddresses, bi *db.BlockIn
 		ValueOutSat:   (*Amount)(&valOutSat),
 		Vin:           vins,
 		Vout:          vouts,
+	}
+	if w.chainParser.SupportsVSize() {
+		r.VSize = int(ta.VSize)
+	} else {
+		r.Size = int(ta.VSize)
 	}
 	return r
 }
@@ -1462,6 +1498,35 @@ func (w *Worker) balanceHistoryForTxid(addrDesc bchain.AddressDescriptor, txid s
 					}
 				}
 			}
+			// process internal transactions
+			if eth.ProcessInternalTransactions {
+				internalData, err := w.db.GetEthereumInternalData(txid)
+				if err != nil {
+					return nil, err
+				}
+				if internalData != nil {
+					for i := range internalData.Transfers {
+						f := &internalData.Transfers[i]
+						txAddrDesc, err := w.chainParser.GetAddrDescFromAddress(f.From)
+						if err != nil {
+							return nil, err
+						}
+						if bytes.Equal(addrDesc, txAddrDesc) {
+							(*big.Int)(bh.SentSat).Add((*big.Int)(bh.SentSat), &f.Value)
+							if f.From == f.To {
+								(*big.Int)(bh.SentToSelfSat).Add((*big.Int)(bh.SentToSelfSat), &f.Value)
+							}
+						}
+						txAddrDesc, err = w.chainParser.GetAddrDescFromAddress(f.To)
+						if err != nil {
+							return nil, err
+						}
+						if bytes.Equal(addrDesc, txAddrDesc) {
+							(*big.Int)(bh.ReceivedSat).Add((*big.Int)(bh.ReceivedSat), &f.Value)
+						}
+					}
+				}
+			}
 		}
 		for i := range bchainTx.Vin {
 			bchainVin := &bchainTx.Vin[i]
@@ -1560,12 +1625,12 @@ func (w *Worker) GetBalanceHistory(address string, fromTimestamp, toTimestamp in
 
 func (w *Worker) waitForBackendSync() {
 	// wait a short time if blockbook is synchronizing with backend
-	inSync, _, _ := w.is.GetSyncState()
+	inSync, _, _, _ := w.is.GetSyncState()
 	count := 30
 	for !inSync && count > 0 {
 		time.Sleep(time.Millisecond * 100)
 		count--
-		inSync, _, _ = w.is.GetSyncState()
+		inSync, _, _, _ = w.is.GetSyncState()
 	}
 }
 
@@ -2197,9 +2262,15 @@ func nonZeroTime(t time.Time) *time.Time {
 
 // GetSystemInfo returns information about system
 func (w *Worker) GetSystemInfo(internal bool) (*SystemInfo, error) {
-	start := time.Now()
+	start := time.Now().UTC()
 	vi := common.GetVersionInfo()
-	inSync, bestHeight, lastBlockTime := w.is.GetSyncState()
+	inSync, bestHeight, lastBlockTime, startSync := w.is.GetSyncState()
+	if !inSync && !w.is.InitialSync {
+		// if less than 5 seconds into syncing, return inSync=true to avoid short time not in sync reports that confuse monitoring
+		if startSync.Add(5 * time.Second).After(start) {
+			inSync = true
+		}
+	}
 	inSyncMempool, lastMempoolTime, mempoolSize := w.is.GetMempoolSyncState()
 	ci, err := w.chain.GetChainInfo()
 	var backendError string

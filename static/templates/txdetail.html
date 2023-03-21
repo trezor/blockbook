@@ -59,8 +59,8 @@
     </div>
     <div class="row footer">
         <div class="col-sm-12 col-md-4">
-            {{if $tx.FeesSat}}
-            Fee {{amountSpan $tx.FeesSat $data "txvalue copyable ms-3"}}
+            {{if $tx.FeesSat}}{{$fpb := feePerByte $tx}}
+            Fee {{amountSpan $tx.FeesSat $data "txvalue copyable ms-3"}}{{if $fpb}} <span class="fw-normal small">({{$fpb}})</span>{{end}}
             {{end}}
         </div>
         <div class="col-sm-12 col-md-8 text-end">

@@ -58,7 +58,8 @@ type InternalState struct {
 	CoinLabel    string `json:"coinLabel"`
 	Host         string `json:"host"`
 
-	DbState uint32 `json:"dbState"`
+	DbState       uint32 `json:"dbState"`
+	ExtendedIndex bool   `json:"extendedIndex"`
 
 	LastStore time.Time `json:"lastStore"`
 
@@ -68,6 +69,7 @@ type InternalState struct {
 	InitialSync    bool      `json:"initialSync"`
 	IsSynchronized bool      `json:"isSynchronized"`
 	BestHeight     uint32    `json:"bestHeight"`
+	StartSync      time.Time `json:"-"`
 	LastSync       time.Time `json:"lastSync"`
 	BlockTimes     []uint32  `json:"-"`
 	AvgBlockPeriod uint32    `json:"-"`
@@ -86,6 +88,8 @@ type InternalState struct {
 	HistoricalTokenFiatRatesTime time.Time            `json:"historicalTokenFiatRatesTime"`
 	CurrentTicker                *CurrencyRatesTicker `json:"currentTicker"`
 
+	EnableSubNewTx bool `json:"-"`
+
 	BackendInfo BackendInfo `json:"-"`
 }
 
@@ -93,6 +97,7 @@ type InternalState struct {
 func (is *InternalState) StartedSync() {
 	is.mux.Lock()
 	defer is.mux.Unlock()
+	is.StartSync = time.Now().UTC()
 	is.IsSynchronized = false
 }
 
@@ -102,7 +107,7 @@ func (is *InternalState) FinishedSync(bestHeight uint32) {
 	defer is.mux.Unlock()
 	is.IsSynchronized = true
 	is.BestHeight = bestHeight
-	is.LastSync = time.Now()
+	is.LastSync = time.Now().UTC()
 }
 
 // UpdateBestHeight sets new best height, without changing IsSynchronized flag
@@ -110,7 +115,7 @@ func (is *InternalState) UpdateBestHeight(bestHeight uint32) {
 	is.mux.Lock()
 	defer is.mux.Unlock()
 	is.BestHeight = bestHeight
-	is.LastSync = time.Now()
+	is.LastSync = time.Now().UTC()
 }
 
 // FinishedSyncNoChange marks end of synchronization in case no index update was necessary, it does not update lastSync time
@@ -121,10 +126,10 @@ func (is *InternalState) FinishedSyncNoChange() {
 }
 
 // GetSyncState gets the state of synchronization
-func (is *InternalState) GetSyncState() (bool, uint32, time.Time) {
+func (is *InternalState) GetSyncState() (bool, uint32, time.Time, time.Time) {
 	is.mux.Lock()
 	defer is.mux.Unlock()
-	return is.IsSynchronized, is.BestHeight, is.LastSync
+	return is.IsSynchronized, is.BestHeight, is.LastSync, is.StartSync
 }
 
 // StartedMempoolSync signals start of mempool synchronization

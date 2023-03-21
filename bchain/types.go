@@ -120,9 +120,9 @@ type TokenType int
 
 // TokenType enumeration
 const (
-	FungibleToken    = TokenType(iota) // ERC20
-	NonFungibleToken                   // ERC721
-	MultiToken                         // ERC1155
+	FungibleToken    = TokenType(iota) // ERC20/BEP20
+	NonFungibleToken                   // ERC721/BEP721
+	MultiToken                         // ERC1155/BEP1155
 )
 
 // TokenTypeName specifies type of token

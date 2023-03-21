@@ -34,31 +34,15 @@ var (
 	connectionCounter uint64
 )
 
-type websocketReq struct {
-	ID     string          `json:"id"`
-	Method string          `json:"method"`
-	Params json.RawMessage `json:"params"`
-}
-
-type websocketRes struct {
-	ID   string      `json:"id"`
-	Data interface{} `json:"data"`
-}
-
 type websocketChannel struct {
 	id            uint64
 	conn          *websocket.Conn
-	out           chan *websocketRes
+	out           chan *WsRes
 	ip            string
 	requestHeader http.Header
 	alive         bool
 	aliveLock     sync.Mutex
 	addrDescs     []string // subscribed address descriptors as strings
-}
-
-type fiatRatesSubscription struct {
-	Currency string   `json:"currency"`
-	Tokens   []string `json:"tokens"`
 }
 
 // WebsocketServer is a handle to websocket server
@@ -86,7 +70,7 @@ type WebsocketServer struct {
 }
 
 // NewWebsocketServer creates new websocket interface to blockbook and returns its handle
-func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, txCache *db.TxCache, metrics *common.Metrics, is *common.InternalState, enableSubNewTx bool) (*WebsocketServer, error) {
+func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, txCache *db.TxCache, metrics *common.Metrics, is *common.InternalState) (*WebsocketServer, error) {
 	api, err := api.NewWorker(db, chain, mempool, txCache, metrics, is)
 	if err != nil {
 		return nil, err
@@ -111,7 +95,7 @@ func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.
 		api:                         api,
 		block0hash:                  b0,
 		newBlockSubscriptions:       make(map[*websocketChannel]string),
-		newTransactionEnabled:       enableSubNewTx,
+		newTransactionEnabled:       is.EnableSubNewTx,
 		newTransactionSubscriptions: make(map[*websocketChannel]string),
 		addressSubscriptions:        make(map[string]map[*websocketChannel]string),
 		fiatRatesSubscriptions:      make(map[string]map[*websocketChannel]string),
@@ -147,7 +131,7 @@ func (s *WebsocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	c := &websocketChannel{
 		id:            atomic.AddUint64(&connectionCounter, 1),
 		conn:          conn,
-		out:           make(chan *websocketRes, outChannelSize),
+		out:           make(chan *WsRes, outChannelSize),
 		ip:            getIP(r),
 		requestHeader: r.Header,
 		alive:         true,
@@ -184,7 +168,7 @@ func (c *websocketChannel) CloseOut() bool {
 	return false
 }
 
-func (c *websocketChannel) DataOut(data *websocketRes) {
+func (c *websocketChannel) DataOut(data *WsRes) {
 	c.aliveLock.Lock()
 	defer c.aliveLock.Unlock()
 	if c.alive {
@@ -215,7 +199,7 @@ func (s *WebsocketServer) inputLoop(c *websocketChannel) {
 		}
 		switch t {
 		case websocket.TextMessage:
-			var req websocketReq
+			var req WsReq
 			err := json.Unmarshal(d, &req)
 			if err != nil {
 				glog.Error("Error parsing message from ", c.id, ", ", string(d), ", ", err)
@@ -229,7 +213,6 @@ func (s *WebsocketServer) inputLoop(c *websocketChannel) {
 			return
 		case websocket.PingMessage:
 			c.conn.WriteControl(websocket.PongMessage, nil, time.Now().Add(defaultTimeout))
-			break
 		case websocket.CloseMessage:
 			s.closeChannel(c)
 			return
@@ -270,46 +253,49 @@ func (s *WebsocketServer) onDisconnect(c *websocketChannel) {
 	s.metrics.WebsocketClients.Dec()
 }
 
-var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *websocketReq) (interface{}, error){
-	"getAccountInfo": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
+var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *WsReq) (interface{}, error){
+	"getAccountInfo": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
 		r, err := unmarshalGetAccountInfoRequest(req.Params)
 		if err == nil {
 			rv, err = s.getAccountInfo(r)
 		}
 		return
 	},
-	"getInfo": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
+	"getInfo": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
 		return s.getInfo()
 	},
-	"getBlockHash": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
-		r := struct {
-			Height int `json:"height"`
-		}{}
+	"getBlockHash": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
+		r := WsBlockHashReq{}
 		err = json.Unmarshal(req.Params, &r)
 		if err == nil {
 			rv, err = s.getBlockHash(r.Height)
 		}
 		return
 	},
-	"getAccountUtxo": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
-		r := struct {
-			Descriptor string `json:"descriptor"`
-		}{}
+	"getBlock": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
+		if !s.is.ExtendedIndex {
+			return nil, errors.New("Not supported")
+		}
+		r := WsBlockReq{}
+		err = json.Unmarshal(req.Params, &r)
+		if r.PageSize == 0 {
+			r.PageSize = 1000000
+		}
+		if err == nil {
+			rv, err = s.getBlock(r.Id, r.Page, r.PageSize)
+		}
+		return
+	},
+	"getAccountUtxo": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
+		r := WsAccountUtxoReq{}
 		err = json.Unmarshal(req.Params, &r)
 		if err == nil {
 			rv, err = s.getAccountUtxo(r.Descriptor)
 		}
 		return
 	},
-	"getBalanceHistory": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
-		r := struct {
-			Descriptor string   `json:"descriptor"`
-			From       int64    `json:"from"`
-			To         int64    `json:"to"`
-			Currencies []string `json:"currencies"`
-			Gap        int      `json:"gap"`
-			GroupBy    uint32   `json:"groupBy"`
-		}{}
+	"getBalanceHistory": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
+		r := WsBalanceHistoryReq{}
 		err = json.Unmarshal(req.Params, &r)
 		if err == nil {
 			if r.From <= 0 {
@@ -328,63 +314,57 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *webs
 		}
 		return
 	},
-	"getTransaction": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
-		r := struct {
-			Txid string `json:"txid"`
-		}{}
+	"getTransaction": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
+		r := WsTransactionReq{}
 		err = json.Unmarshal(req.Params, &r)
 		if err == nil {
 			rv, err = s.getTransaction(r.Txid)
 		}
 		return
 	},
-	"getTransactionSpecific": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
-		r := struct {
-			Txid string `json:"txid"`
-		}{}
+	"getTransactionSpecific": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
+		r := WsTransactionSpecificReq{}
 		err = json.Unmarshal(req.Params, &r)
 		if err == nil {
 			rv, err = s.getTransactionSpecific(r.Txid)
 		}
 		return
 	},
-	"estimateFee": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
+	"estimateFee": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
 		return s.estimateFee(c, req.Params)
 	},
-	"sendTransaction": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
-		r := struct {
-			Hex string `json:"hex"`
-		}{}
+	"sendTransaction": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
+		r := WsSendTransactionReq{}
 		err = json.Unmarshal(req.Params, &r)
 		if err == nil {
 			rv, err = s.sendTransaction(r.Hex)
 		}
 		return
 	},
-	"subscribeNewBlock": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
+	"subscribeNewBlock": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
 		return s.subscribeNewBlock(c, req)
 	},
-	"unsubscribeNewBlock": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
+	"unsubscribeNewBlock": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
 		return s.unsubscribeNewBlock(c)
 	},
-	"subscribeNewTransaction": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
+	"subscribeNewTransaction": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
 		return s.subscribeNewTransaction(c, req)
 	},
-	"unsubscribeNewTransaction": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
+	"unsubscribeNewTransaction": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
 		return s.unsubscribeNewTransaction(c)
 	},
-	"subscribeAddresses": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
+	"subscribeAddresses": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
 		ad, err := s.unmarshalAddresses(req.Params)
 		if err == nil {
 			rv, err = s.subscribeAddresses(c, ad, req)
 		}
 		return
 	},
-	"unsubscribeAddresses": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
+	"unsubscribeAddresses": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
 		return s.unsubscribeAddresses(c)
 	},
-	"subscribeFiatRates": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
-		var r fiatRatesSubscription
+	"subscribeFiatRates": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
+		var r WsSubscribeFiatRatesReq
 		err = json.Unmarshal(req.Params, &r)
 		if err != nil {
 			return nil, err
@@ -395,41 +375,31 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *webs
 		}
 		return s.subscribeFiatRates(c, &r, req)
 	},
-	"unsubscribeFiatRates": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
+	"unsubscribeFiatRates": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
 		return s.unsubscribeFiatRates(c)
 	},
-	"ping": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
+	"ping": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
 		r := struct{}{}
 		return r, nil
 	},
-	"getCurrentFiatRates": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
-		r := struct {
-			Currencies []string `json:"currencies"`
-			Token      string   `json:"token"`
-		}{}
+	"getCurrentFiatRates": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
+		r := WsCurrentFiatRatesReq{}
 		err = json.Unmarshal(req.Params, &r)
 		if err == nil {
 			rv, err = s.getCurrentFiatRates(r.Currencies, r.Token)
 		}
 		return
 	},
-	"getFiatRatesForTimestamps": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
-		r := struct {
-			Timestamps []int64  `json:"timestamps"`
-			Currencies []string `json:"currencies"`
-			Token      string   `json:"token"`
-		}{}
+	"getFiatRatesForTimestamps": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
+		r := WsFiatRatesForTimestampsReq{}
 		err = json.Unmarshal(req.Params, &r)
 		if err == nil {
 			rv, err = s.getFiatRatesForTimestamps(r.Timestamps, r.Currencies, r.Token)
 		}
 		return
 	},
-	"getFiatRatesTickersList": func(s *WebsocketServer, c *websocketChannel, req *websocketReq) (rv interface{}, err error) {
-		r := struct {
-			Timestamp int64  `json:"timestamp"`
-			Token     string `json:"token"`
-		}{}
+	"getFiatRatesTickersList": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
+		r := WsFiatRatesTickersListReq{}
 		err = json.Unmarshal(req.Params, &r)
 		if err == nil {
 			rv, err = s.getAvailableVsCurrencies(r.Timestamp, r.Token)
@@ -438,7 +408,7 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *webs
 	},
 }
 
-func (s *WebsocketServer) onRequest(c *websocketChannel, req *websocketReq) {
+func (s *WebsocketServer) onRequest(c *websocketChannel, req *WsReq) {
 	var err error
 	var data interface{}
 	defer func() {
@@ -451,7 +421,7 @@ func (s *WebsocketServer) onRequest(c *websocketChannel, req *websocketReq) {
 		}
 		// nil data means no response
 		if data != nil {
-			c.DataOut(&websocketRes{
+			c.DataOut(&WsRes{
 				ID:   req.ID,
 				Data: data,
 			})
@@ -481,21 +451,8 @@ func (s *WebsocketServer) onRequest(c *websocketChannel, req *websocketReq) {
 	}
 }
 
-type accountInfoReq struct {
-	Descriptor        string `json:"descriptor"`
-	Details           string `json:"details"`
-	Tokens            string `json:"tokens"`
-	PageSize          int    `json:"pageSize"`
-	Page              int    `json:"page"`
-	FromHeight        int    `json:"from"`
-	ToHeight          int    `json:"to"`
-	ContractFilter    string `json:"contractFilter"`
-	SecondaryCurrency string `json:"secondaryCurrency"`
-	Gap               int    `json:"gap"`
-}
-
-func unmarshalGetAccountInfoRequest(params []byte) (*accountInfoReq, error) {
-	var r accountInfoReq
+func unmarshalGetAccountInfoRequest(params []byte) (*WsAccountInfoReq, error) {
+	var r WsAccountInfoReq
 	err := json.Unmarshal(params, &r)
 	if err != nil {
 		return nil, err
@@ -503,7 +460,7 @@ func unmarshalGetAccountInfoRequest(params []byte) (*accountInfoReq, error) {
 	return &r, nil
 }
 
-func (s *WebsocketServer) getAccountInfo(req *accountInfoReq) (res *api.Address, err error) {
+func (s *WebsocketServer) getAccountInfo(req *WsAccountInfoReq) (res *api.Address, err error) {
 	var opt api.AccountDetails
 	switch req.Details {
 	case "tokens":
@@ -545,7 +502,7 @@ func (s *WebsocketServer) getAccountInfo(req *accountInfoReq) (res *api.Address,
 	return a, nil
 }
 
-func (s *WebsocketServer) getAccountUtxo(descriptor string) (interface{}, error) {
+func (s *WebsocketServer) getAccountUtxo(descriptor string) (api.Utxos, error) {
 	utxo, err := s.api.GetXpubUtxo(descriptor, false, 0)
 	if err != nil {
 		return s.api.GetAddressUtxo(descriptor, false)
@@ -553,7 +510,7 @@ func (s *WebsocketServer) getAccountUtxo(descriptor string) (interface{}, error)
 	return utxo, nil
 }
 
-func (s *WebsocketServer) getTransaction(txid string) (interface{}, error) {
+func (s *WebsocketServer) getTransaction(txid string) (*api.Tx, error) {
 	return s.api.GetTransaction(txid, false, false)
 }
 
@@ -561,31 +518,14 @@ func (s *WebsocketServer) getTransactionSpecific(txid string) (interface{}, erro
 	return s.chain.GetTransactionSpecific(&bchain.Tx{Txid: txid})
 }
 
-func (s *WebsocketServer) getInfo() (interface{}, error) {
+func (s *WebsocketServer) getInfo() (*WsInfoRes, error) {
 	vi := common.GetVersionInfo()
 	bi := s.is.GetBackendInfo()
 	height, hash, err := s.db.GetBestBlock()
 	if err != nil {
 		return nil, err
 	}
-	type backendInfo struct {
-		Version          string      `json:"version,omitempty"`
-		Subversion       string      `json:"subversion,omitempty"`
-		ConsensusVersion string      `json:"consensus_version,omitempty"`
-		Consensus        interface{} `json:"consensus,omitempty"`
-	}
-	type info struct {
-		Name       string      `json:"name"`
-		Shortcut   string      `json:"shortcut"`
-		Decimals   int         `json:"decimals"`
-		Version    string      `json:"version"`
-		BestHeight int         `json:"bestHeight"`
-		BestHash   string      `json:"bestHash"`
-		Block0Hash string      `json:"block0Hash"`
-		Testnet    bool        `json:"testnet"`
-		Backend    backendInfo `json:"backend"`
-	}
-	return &info{
+	return &WsInfoRes{
 		Name:       s.is.Coin,
 		Shortcut:   s.is.CoinShortcut,
 		Decimals:   s.chainParser.AmountDecimals(),
@@ -594,7 +534,7 @@ func (s *WebsocketServer) getInfo() (interface{}, error) {
 		Version:    vi.Version,
 		Block0Hash: s.block0hash,
 		Testnet:    s.chain.IsTestnet(),
-		Backend: backendInfo{
+		Backend: WsBackendInfo{
 			Version:          bi.Version,
 			Subversion:       bi.Subversion,
 			ConsensusVersion: bi.ConsensusVersion,
@@ -603,35 +543,31 @@ func (s *WebsocketServer) getInfo() (interface{}, error) {
 	}, nil
 }
 
-func (s *WebsocketServer) getBlockHash(height int) (interface{}, error) {
+func (s *WebsocketServer) getBlockHash(height int) (*WsBlockHashRes, error) {
 	h, err := s.db.GetBlockHash(uint32(height))
 	if err != nil {
 		return nil, err
 	}
-	type hash struct {
-		Hash string `json:"hash"`
-	}
-	return &hash{
+	return &WsBlockHashRes{
 		Hash: h,
 	}, nil
 }
 
+func (s *WebsocketServer) getBlock(id string, page, pageSize int) (interface{}, error) {
+	block, err := s.api.GetBlock(id, page, pageSize)
+	if err != nil {
+		return nil, err
+	}
+	return block, nil
+}
+
 func (s *WebsocketServer) estimateFee(c *websocketChannel, params []byte) (interface{}, error) {
-	type estimateFeeReq struct {
-		Blocks   []int                  `json:"blocks"`
-		Specific map[string]interface{} `json:"specific"`
-	}
-	type estimateFeeRes struct {
-		FeePerTx   string `json:"feePerTx,omitempty"`
-		FeePerUnit string `json:"feePerUnit,omitempty"`
-		FeeLimit   string `json:"feeLimit,omitempty"`
-	}
-	var r estimateFeeReq
+	var r WsEstimateFeeReq
 	err := json.Unmarshal(params, &r)
 	if err != nil {
 		return nil, err
 	}
-	res := make([]estimateFeeRes, len(r.Blocks))
+	res := make([]WsEstimateFeeRes, len(r.Blocks))
 	if s.chainParser.GetChainType() == bchain.ChainEthereumType {
 		gas, err := s.chain.EthereumTypeEstimateGas(r.Specific)
 		if err != nil {
@@ -703,7 +639,7 @@ type subscriptionResponseMessage struct {
 	Message    string `json:"message"`
 }
 
-func (s *WebsocketServer) subscribeNewBlock(c *websocketChannel, req *websocketReq) (res interface{}, err error) {
+func (s *WebsocketServer) subscribeNewBlock(c *websocketChannel, req *WsReq) (res interface{}, err error) {
 	s.newBlockSubscriptionsLock.Lock()
 	defer s.newBlockSubscriptionsLock.Unlock()
 	s.newBlockSubscriptions[c] = req.ID
@@ -719,7 +655,7 @@ func (s *WebsocketServer) unsubscribeNewBlock(c *websocketChannel) (res interfac
 	return &subscriptionResponse{false}, nil
 }
 
-func (s *WebsocketServer) subscribeNewTransaction(c *websocketChannel, req *websocketReq) (res interface{}, err error) {
+func (s *WebsocketServer) subscribeNewTransaction(c *websocketChannel, req *WsReq) (res interface{}, err error) {
 	s.newTransactionSubscriptionsLock.Lock()
 	defer s.newTransactionSubscriptionsLock.Unlock()
 	if !s.newTransactionEnabled {
@@ -742,9 +678,7 @@ func (s *WebsocketServer) unsubscribeNewTransaction(c *websocketChannel) (res in
 }
 
 func (s *WebsocketServer) unmarshalAddresses(params []byte) ([]string, error) {
-	r := struct {
-		Addresses []string `json:"addresses"`
-	}{}
+	r := WsSubscribeAddressesReq{}
 	err := json.Unmarshal(params, &r)
 	if err != nil {
 		return nil, err
@@ -778,7 +712,7 @@ func (s *WebsocketServer) doUnsubscribeAddresses(c *websocketChannel) {
 	c.addrDescs = nil
 }
 
-func (s *WebsocketServer) subscribeAddresses(c *websocketChannel, addrDesc []string, req *websocketReq) (res interface{}, err error) {
+func (s *WebsocketServer) subscribeAddresses(c *websocketChannel, addrDesc []string, req *WsReq) (res interface{}, err error) {
 	s.addressSubscriptionsLock.Lock()
 	defer s.addressSubscriptionsLock.Unlock()
 	// unsubscribe all previous subscriptions
@@ -821,7 +755,7 @@ func (s *WebsocketServer) doUnsubscribeFiatRates(c *websocketChannel) {
 }
 
 // subscribeFiatRates subscribes all FiatRates subscriptions by this channel
-func (s *WebsocketServer) subscribeFiatRates(c *websocketChannel, d *fiatRatesSubscription, req *websocketReq) (res interface{}, err error) {
+func (s *WebsocketServer) subscribeFiatRates(c *websocketChannel, d *WsSubscribeFiatRatesReq, req *WsReq) (res interface{}, err error) {
 	s.fiatRatesSubscriptionsLock.Lock()
 	defer s.fiatRatesSubscriptionsLock.Unlock()
 	// unsubscribe all previous subscriptions
@@ -865,7 +799,7 @@ func (s *WebsocketServer) onNewBlockAsync(hash string, height uint32) {
 		Hash:   hash,
 	}
 	for c, id := range s.newBlockSubscriptions {
-		c.DataOut(&websocketRes{
+		c.DataOut(&WsRes{
 			ID:   id,
 			Data: &data,
 		})
@@ -882,7 +816,7 @@ func (s *WebsocketServer) sendOnNewTx(tx *api.Tx) {
 	s.newTransactionSubscriptionsLock.Lock()
 	defer s.newTransactionSubscriptionsLock.Unlock()
 	for c, id := range s.newTransactionSubscriptions {
-		c.DataOut(&websocketRes{
+		c.DataOut(&WsRes{
 			ID:   id,
 			Data: &tx,
 		})
@@ -910,7 +844,7 @@ func (s *WebsocketServer) sendOnNewTxAddr(stringAddressDescriptor string, tx *ap
 		as, ok := s.addressSubscriptions[stringAddressDescriptor]
 		if ok {
 			for c, id := range as {
-				c.DataOut(&websocketRes{
+				c.DataOut(&WsRes{
 					ID:   id,
 					Data: &data,
 				})
@@ -1012,12 +946,12 @@ func (s *WebsocketServer) broadcastTicker(currency string, rates map[string]floa
 						dataWithTokens.TokenRates[token] = rate
 					}
 				}
-				c.DataOut(&websocketRes{
+				c.DataOut(&WsRes{
 					ID:   id,
 					Data: &dataWithTokens,
 				})
 			} else {
-				c.DataOut(&websocketRes{
+				c.DataOut(&WsRes{
 					ID:   id,
 					Data: &data,
 				})
@@ -1037,17 +971,17 @@ func (s *WebsocketServer) OnNewFiatRatesTicker(ticker *common.CurrencyRatesTicke
 	s.broadcastTicker(allFiatRates, ticker.Rates, nil)
 }
 
-func (s *WebsocketServer) getCurrentFiatRates(currencies []string, token string) (interface{}, error) {
+func (s *WebsocketServer) getCurrentFiatRates(currencies []string, token string) (*api.FiatTicker, error) {
 	ret, err := s.api.GetCurrentFiatRates(currencies, strings.ToLower(token))
 	return ret, err
 }
 
-func (s *WebsocketServer) getFiatRatesForTimestamps(timestamps []int64, currencies []string, token string) (interface{}, error) {
+func (s *WebsocketServer) getFiatRatesForTimestamps(timestamps []int64, currencies []string, token string) (*api.FiatTickers, error) {
 	ret, err := s.api.GetFiatRatesForTimestamps(timestamps, currencies, strings.ToLower(token))
 	return ret, err
 }
 
-func (s *WebsocketServer) getAvailableVsCurrencies(timestamp int64, token string) (interface{}, error) {
+func (s *WebsocketServer) getAvailableVsCurrencies(timestamp int64, token string) (*api.AvailableVsCurrencies, error) {
 	ret, err := s.api.GetAvailableVsCurrencies(timestamp, strings.ToLower(token))
 	return ret, err
 }

@@ -84,6 +84,8 @@ var (
 
 	// resync mempool at least each resyncMempoolPeriodMs (could be more often if invoked by message from ZeroMQ)
 	resyncMempoolPeriodMs = flag.Int("resyncmempoolperiod", 60017, "resync mempool period in milliseconds")
+
+	extendedIndex = flag.Bool("extendedindex", false, "if true, create index of input txids and spending transactions")
 )
 
 var (
@@ -172,14 +174,14 @@ func mainWithExitCode() int {
 		return exitCodeFatal
 	}
 
-	index, err = db.NewRocksDB(*dbPath, *dbCache, *dbMaxOpenFiles, chain.GetChainParser(), metrics)
+	index, err = db.NewRocksDB(*dbPath, *dbCache, *dbMaxOpenFiles, chain.GetChainParser(), metrics, *extendedIndex)
 	if err != nil {
 		glog.Error("rocksDB: ", err)
 		return exitCodeFatal
 	}
 	defer index.Close()
 
-	internalState, err = newInternalState(coin, coinShortcut, coinLabel, index)
+	internalState, err = newInternalState(coin, coinShortcut, coinLabel, index, *enableSubNewTx)
 	if err != nil {
 		glog.Error("internalState: ", err)
 		return exitCodeFatal
@@ -404,7 +406,7 @@ func startInternalServer() (*server.InternalServer, error) {
 
 func startPublicServer() (*server.PublicServer, error) {
 	// start public server in limited functionality, extend it after sync is finished by calling ConnectFullPublicInterface
-	publicServer, err := server.NewPublicServer(*publicBinding, *certFiles, index, chain, mempool, txCache, *explorerURL, metrics, internalState, *debugMode, *enableSubNewTx)
+	publicServer, err := server.NewPublicServer(*publicBinding, *certFiles, index, chain, mempool, txCache, *explorerURL, metrics, internalState, *debugMode)
 	if err != nil {
 		return nil, err
 	}
@@ -477,7 +479,7 @@ func blockbookAppInfoMetric(db *db.RocksDB, chain bchain.BlockChain, txCache *db
 	return nil
 }
 
-func newInternalState(coin, coinShortcut, coinLabel string, d *db.RocksDB) (*common.InternalState, error) {
+func newInternalState(coin, coinShortcut, coinLabel string, d *db.RocksDB, enableSubNewTx bool) (*common.InternalState, error) {
 	is, err := d.LoadInternalState(coin)
 	if err != nil {
 		return nil, err
@@ -487,6 +489,7 @@ func newInternalState(coin, coinShortcut, coinLabel string, d *db.RocksDB) (*com
 		coinLabel = coin
 	}
 	is.CoinLabel = coinLabel
+	is.EnableSubNewTx = enableSubNewTx
 	name, err := os.Hostname()
 	if err != nil {
 		glog.Error("get hostname ", err)

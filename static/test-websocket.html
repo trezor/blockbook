@@ -1,5 +1,6 @@
 <!doctype html>
 <html lang="en">
+
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
@@ -7,7 +8,8 @@
     <style>
         .row {
             margin-top: 1%;
-        }    
+        }
+
         ::placeholder {
             color: #ccc !important;
         }
@@ -99,7 +101,7 @@
         }
         function paramAsArray(name) {
             const p = document.getElementById(name).value;
-            if(p) {
+            if (p) {
                 return p.split(",").map(s => s.trim());
             }
         }
@@ -130,6 +132,21 @@
             };
             send(method, params, function (result) {
                 document.getElementById('getBlockHashResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
+            });
+        }
+
+        function getBlock() {
+            const method = "getBlock";
+            const id = document.getElementById("getBlockId").value;
+            const page = parseInt(document.getElementById("getBlockPage").value);
+            const pageSize = parseInt(document.getElementById("getBlockPageSize").value);
+            const params = {
+                id,
+            };
+            if (page) params.page = page;
+            if (pageSize) params.pageSize = pageSize;
+            send(method, params, function (result) {
+                document.getElementById("getBlockResult").innerText = JSON.stringify(result).replace(/,/g, ", ");
             });
         }
 
@@ -455,6 +472,23 @@
         </div>
         <div class="row">
             <div class="col" id="getBlockHashResult"></div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <input class="btn btn-secondary" type="button" value="getBlock" onclick="getBlock()">
+            </div>
+            <div class="col-8">
+                <div class="row" style="margin: 0;">
+                    <input type="text" class="form-control" placeholder="height/hash" style="width: 68%; margin-right: 5px;" id="getBlockId" value="">
+                    <input type="text" class="form-control" placeholder="page" style="width: 15%; margin-right: 5px;" id="getBlockPage" value="">
+                    <input type="text" class="form-control" placeholder="page size" style="width: 15%;" id="getBlockPageSize" value="">
+                </div>
+            </div>
+            <div class="col">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col" id="getBlockResult"></div>
         </div>
         <div class="row">
             <div class="col">

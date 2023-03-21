@@ -63,7 +63,7 @@ type PublicServer struct {
 
 // NewPublicServer creates new public server http interface to blockbook and returns its handle
 // only basic functionality is mapped, to map all functions, call
-func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, txCache *db.TxCache, explorerURL string, metrics *common.Metrics, is *common.InternalState, debugMode bool, enableSubNewTx bool) (*PublicServer, error) {
+func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, txCache *db.TxCache, explorerURL string, metrics *common.Metrics, is *common.InternalState, debugMode bool) (*PublicServer, error) {
 
 	api, err := api.NewWorker(db, chain, mempool, txCache, metrics, is)
 	if err != nil {
@@ -75,7 +75,7 @@ func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bch
 		return nil, err
 	}
 
-	websocket, err := NewWebsocketServer(db, chain, mempool, txCache, metrics, is, enableSubNewTx)
+	websocket, err := NewWebsocketServer(db, chain, mempool, txCache, metrics, is)
 	if err != nil {
 		return nil, err
 	}
@@ -343,8 +343,13 @@ func (s *PublicServer) newTemplateData(r *http.Request) *TemplateData {
 		InternalExplorer: s.internalExplorer && !s.is.InitialSync,
 		TOSLink:          api.Text.TOSLink,
 	}
+	if t.ChainType == bchain.ChainEthereumType {
+		t.FungibleTokenName = bchain.EthereumTokenTypeMap[bchain.FungibleToken]
+		t.NonFungibleTokenName = bchain.EthereumTokenTypeMap[bchain.NonFungibleToken]
+		t.MultiTokenName = bchain.EthereumTokenTypeMap[bchain.MultiToken]
+	}
 	if !s.debug {
-		t.Minified = ".min.1"
+		t.Minified = ".min.2"
 	}
 	if s.is.HasFiatRates {
 		// get the secondary coin and if it should be shown either from query parameters "secondary" and "use_secondary"
@@ -486,6 +491,9 @@ type TemplateData struct {
 	CoinLabel                string
 	InternalExplorer         bool
 	ChainType                bchain.ChainType
+	FungibleTokenName        bchain.TokenTypeName
+	NonFungibleTokenName     bchain.TokenTypeName
+	MultiTokenName           bchain.TokenTypeName
 	Address                  *api.Address
 	AddrStr                  string
 	Tx                       *api.Tx
