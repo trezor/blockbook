@@ -46,7 +46,7 @@ func (c *TxCache) GetTransaction(txid string) (*bchain.Tx, int, error) {
 		}
 		if tx != nil {
 			// number of confirmations is not stored in cache, they change all the time
-			_, bestheight, _ := c.is.GetSyncState()
+			_, bestheight, _, _ := c.is.GetSyncState()
 			tx.Confirmations = bestheight - h + 1
 			c.metrics.TxCacheEfficiency.With(common.Labels{"status": "hit"}).Inc()
 			return tx, int(h), nil

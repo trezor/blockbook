@@ -135,7 +135,7 @@ func (rd *RatesDownloader) Run() error {
 						} else {
 							glog.Info("FiatRatesDownloader: UpdateHistoricalTokenTickers finished")
 							if is != nil {
-								is.HistoricalTokenFiatRatesTime = time.Now()
+								is.HistoricalTokenFiatRatesTime = time.Now().UTC()
 							}
 						}
 					}()
