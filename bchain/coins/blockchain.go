@@ -42,6 +42,7 @@ import (
 	"github.com/trezor/blockbook/bchain/coins/namecoin"
 	"github.com/trezor/blockbook/bchain/coins/nuls"
 	"github.com/trezor/blockbook/bchain/coins/omotenashicoin"
+	"github.com/trezor/blockbook/bchain/coins/optimism"
 	"github.com/trezor/blockbook/bchain/coins/pivx"
 	"github.com/trezor/blockbook/bchain/coins/polis"
 	"github.com/trezor/blockbook/bchain/coins/qtum"
@@ -137,6 +138,8 @@ func init() {
 	BlockChainFactories["Avalanche Archive"] = avalanche.NewAvalancheRPC
 	BlockChainFactories["BNB Smart Chain"] = bsc.NewBNBSmartChainRPC
 	BlockChainFactories["BNB Smart Chain Archive"] = bsc.NewBNBSmartChainRPC
+	BlockChainFactories["Optimism"] = optimism.NewOptimismRPC
+	BlockChainFactories["Optimism Archive"] = optimism.NewOptimismRPC
 }
 
 // GetCoinNameFromConfig gets coin name and coin shortcut from config file
