@@ -1,0 +1,37 @@
+{
+  "coin": {
+    "name": "Optimism Op-Node",
+    "shortcut": "ETH",
+    "label": "Optimism",
+    "alias": "optimism_op_node"
+  },
+  "ports": {
+    "backend_rpc": 8201,
+    "blockbook_internal": 9201,
+    "blockbook_public": 9301
+  },
+  "backend": {
+    "package_name": "backend-optimism-op-node",
+    "package_revision": "satoshilabs-1",
+    "system_user": "optimism",
+    "version": "1.7.6",
+    "binary_url": "https://github.com/ethereum-optimism/optimism/archive/refs/tags/op-node/v1.7.6.tar.gz",
+    "verification_type": "sha256",
+    "verification_source": "91384e4834f0d0776d1c3e19613b5c50a904f6e5814349e444d42d9e8be5a7ab",
+    "extract_command": "mkdir backend/source && tar -C backend/source --strip 1 -xf",
+    "exclude_files": [],
+    "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/op-node --network op-mainnet --l1 http://127.0.0.1:8136 --l1.beacon http://127.0.0.1:7536 --l1.trustrpc --l1.rpckind=debug_geth --l2 http://127.0.0.1:8400 --rpc.addr 127.0.0.1 --rpc.port {{.Ports.BackendRPC}} --l2.jwt-secret {{.Env.BackendDataPath}}/optimism/backend/jwtsecret 2>&1>> {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
+    "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
+    "postinst_script_template": "cd {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/source/op-node && go build -o {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/op-node ./cmd && rm -rf {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/source",
+    "service_type": "simple",
+    "service_additional_params_template": "",
+    "protect_memory": true,
+    "mainnet": true,
+    "server_config_file": "",
+    "client_config_file": ""
+  },
+  "meta": {
+    "package_maintainer": "IT",
+    "package_maintainer_email": "it@satoshilabs.com"
+  }
+}
