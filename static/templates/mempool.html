@@ -1,27 +1,25 @@
 {{define "specific"}}{{$txs := .MempoolTxids.Mempool}}{{$data := .}}
-<h1>Mempool Transactions <small class="text-muted">by time of appearance</small>
-</h1>
-<div class="row h-container">
-    <h5 class="col-md-6 col-sm-12">{{$.MempoolTxids.MempoolSize}} transactions in mempool</h5>
-    <nav class="col-md-6 col-sm-12">{{template "paging" $data }}</nav>
-</div>
-<div class="data-div">
-    <table class="table table-striped data-table table-hover">
-        <thead>
-            <tr>
-                <th style="width: 70%;">Transaction</th>
-                <th style="width: 30%;">Time</th>
-            </tr>
-        </thead>
-        <tbody>
-            {{- range $tx := $txs -}}
-            <tr>
-                <td class="ellipsis"><a href="/tx/{{$tx.Txid}}">{{$tx.Txid}}</a></td>
-                <td>{{formatUnixTime $tx.Time}}</td>
-            </tr>
-            {{- end -}}
-        </tbody>
-    </table>
-</div>
-<nav>{{template "paging" $data }}</nav>
+<div class="row">
+    <div class="col-lg-6"><h1>Mempool Transactions</h1><h5 class="mb-lg-0">{{$.MempoolTxids.MempoolSize}} transactions in mempool</h5></div>
+    <div class="col-lg-6">{{if $txs}}{{template "paging" $data }}{{end}}</div>
+</row>
+{{if $txs}}
+<table class="table data-table table-hover">
+    <thead>
+        <tr>
+            <th style="width: 70%;">Transaction</th>
+            <th style="width: 30%;">Time of appearance</th>
+        </tr>
+    </thead>
+    <tbody>
+        {{range $tx := $txs}}
+        <tr>
+            <td class="ellipsis"><a href="/tx/{{$tx.Txid}}">{{$tx.Txid}}</a></td>
+            <td>{{unixTimeSpan $tx.Time}}</td>
+        </tr>
+        {{end}}
+    </tbody>
+</table>
+{{end}}
+{{template "paging" $data }}
 {{end}}

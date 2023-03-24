@@ -7,7 +7,7 @@ Build-Depends: debhelper, wget, tar, gzip, make, dh-exec
 Standards-Version: 3.9.5
 
 Package: {{.Backend.PackageName}}
-Architecture: amd64
+Architecture: {{.Env.Architecture}}
 Depends: ${shlibs:Depends}, ${misc:Depends}, logrotate
 Description: Satoshilabs packaged {{.Coin.Name}} server
 {{end}}

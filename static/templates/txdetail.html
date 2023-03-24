@@ -1,92 +1,77 @@
-{{define "txdetail"}}{{$cs := .CoinShortcut}}{{$addr := .AddrStr}}{{$tx := .Tx}}{{$data := .}}
-<div class="alert alert-data">
-    <div class="row line-bot">
-        <div class="col-xs-7 col-md-8 ellipsis">
-            <a href="/tx/{{$tx.Txid}}">{{$tx.Txid}}</a>
-            {{- if $tx.Rbf}}<span title="Replace-by-Fee (RBF) transaction, could be overriden"> RBF</span>{{end -}}
+{{define "txdetail"}}{{$addr := .AddrStr}}{{$tx := .Tx}}{{$data := .}}
+<div class="tx-detail">
+    <div class="row head">
+        <div class="col-xs-7 col-md-8">
+            <a href="/tx/{{$tx.Txid}}" class="ellipsis copyable txid">{{$tx.Txid}}</a>
+            {{if $tx.Rbf}}<span class="ps-1" tt="Replace-by-Fee (RBF) transaction, could be overridden"> RBF</span>{{end}}
         </div>
-        {{- if $tx.Blocktime}}<div class="col-xs-5 col-md-4 text-muted text-right">{{if $tx.Confirmations}}mined{{else}}first seen{{end}} {{formatUnixTime $tx.Blocktime}}</div>{{end -}}
+        {{if $tx.Blocktime}}<div class="col-xs-5 col-md-4 text-end">{{if $tx.Confirmations}}mined{{else}}first seen{{end}} <span class="txvalue ms-1">{{unixTimeSpan $tx.Blocktime}}</span></div>{{end}}
+        {{if $tx.ConfirmationETABlocks}}<div class="col-12 text-end">
+            <span class="badge bg-info fw-bold" style="text-transform: none;" tt="Estimated first potential confirmation of this transaction.">confirmation estimated in {{relativeTime $tx.ConfirmationETASeconds}} <span class="fw-normal ps-1">({{$tx.ConfirmationETABlocks}} blocks)</span></span>
+        </div>
+        {{end}}
     </div>
-    <div class="row line-mid">
+    <div class="row body">
         <div class="col-md-5">
             <div class="row tx-in">
-                <table class="table data-table">
-                    <tbody>
-                        {{- range $vin := $tx.Vin -}}
-                        <tr{{if $vin.IsOwn}} class="tx-own"{{end}}>
-                            <td>
-                                {{- if $vin.Txid -}}
-                                <a class="float-left text-muted" href="/tx/{{$vin.Txid}}" title="Outpoint {{$vin.Txid}},{{$vin.Vout}}">➡&nbsp;</a>
-                                {{- end -}}
-                                {{- range $a := $vin.Addresses -}}
-                                <span class="ellipsis tx-addr">
-                                    {{if and (ne $a $addr) $vin.IsAddress}}<a href="/address/{{$a}}">{{$a}}</a>{{else}}{{$a}}{{end}}
-                                </span>
-                                {{- else -}}
-                                <span class="tx-addr">{{- if $vin.Hex -}}Unparsed address{{- else -}}No Inputs (Newly Generated Coins){{- end -}}</span>
-                                {{- end -}}{{- if $vin.Addresses -}}
-                                <span class="tx-amt">{{formatAmount $vin.ValueSat}} {{$cs}}</span>
-                                {{- end -}}
-                            </td>
-                        </tr>
-                        {{- else -}}
-                        <tr>
-                            <td>No Inputs</td>
-                        </tr>
-                        {{- end -}}
-                    </tbody>
-                </table>
+                {{range $vin := $tx.Vin}}
+                <div class="col-12{{if $vin.IsOwn}} tx-own{{end}}">
+                    {{range $a := $vin.Addresses}}
+                    <span class="ellipsis copyable">
+                        {{if and (ne $a $addr) $vin.IsAddress}}<a href="/address/{{$a}}">{{$a}}</a>{{else}}{{$a}}{{end}}
+                    </span>
+                    {{else}}
+                    {{if $vin.Hex}}Unparsed address{{else}}No Inputs (Newly Generated Coins){{end}}
+                    {{end}}
+                    {{if $vin.Txid}}
+                    <a class="outpoint" href="/tx/{{$vin.Txid}}" tt="Outpoint {{$vin.Txid}},{{$vin.Vout}}">←</a>
+                    {{end}}
+                    {{if $vin.Addresses}}{{amountSpan $vin.ValueSat $data "tx-amt copyable"}}{{end}}
+                </div>
+                {{else}}
+                <div class="col-12">No Inputs</div>
+                {{end}}
             </div>
         </div>
-        <div class="col-md-1 col-xs-12 text-center">
-            <svg class="octicon" viewBox="0 0 8 16">
-                <path fill-rule="evenodd" d="M7.5 8l-5 5L1 11.5 4.75 8 1 4.5 2.5 3l5 5z"></path>
-            </svg>
-        </div>
+        <div class="col-md-1 col-xs-12 text-center">&nbsp;<span class="octicon"></span></div>
         <div class="col-md-6">
             <div class="row tx-out">
-                <table class="table data-table">
-                    <tbody>
-                        {{- range $vout := $tx.Vout -}}
-                        <tr{{if $vout.IsOwn}} class="tx-own"{{end}}>
-                            <td>
-                                {{- range $a := $vout.Addresses -}}
-                                <span class="ellipsis tx-addr">
-                                    {{- if and (ne $a $addr) $vout.IsAddress}}<a href="/address/{{$a}}">{{$a}}</a>{{else}}{{$a}}{{- end -}}
-                                </span>
-                                {{- else -}}
-                                <span class="tx-addr">Unparsed address</span>
-                                {{- end -}}
-                                <span class="tx-amt">
-                                    {{formatAmount $vout.ValueSat}} {{$cs}} {{if $vout.Spent}}<a class="text-danger" href="{{if $vout.SpentTxID}}/tx/{{$vout.SpentTxID}}{{else}}/spending/{{$tx.Txid}}/{{$vout.N}}{{end}}" title="Spent">➡</a>{{else -}}
-                                    <span class="text-success" title="Unspent"> <b>×</b></span>
-                                    {{- end -}}
-                                </span>
-                            </td>
-                        </tr>
-                        {{- else -}}
-                        <tr>
-                            <td>No Outputs</td>
-                        </tr>
-                        {{- end -}}
-                    </tbody>
-                </table>
+                {{range $vout := $tx.Vout}}
+                <div class="col-12{{if $vout.IsOwn}} tx-own{{end}}">
+                    {{range $a := $vout.Addresses}}
+                    <span class="ellipsis copyable">
+                        {{if and (ne $a $addr) $vout.IsAddress}}<a href="/address/{{$a}}">{{$a}}</a>{{else}}{{$a}}{{end}}
+                    </span>
+                    {{else}}
+                    Unparsed address
+                    {{end}}
+                    <span class="tx-amt">
+                        {{amountSpan $vout.ValueSat $data "copyable"}}{{if $vout.Spent}}<a class="spent" href="{{if $vout.SpentTxID}}/tx/{{$vout.SpentTxID}}{{else}}/spending/{{$tx.Txid}}/{{$vout.N}}{{end}}" tt="Spent">→</a>{{else}}<span class="unspent" tt="Unspent">×</span>
+                        {{end}}
+                    </span>
+                    </td>
+                </div>
+                {{else}}
+                <div class="col-12">No Outputs</div>
+                {{end}}
             </div>
         </div>
     </div>
-    <div class="row line-top">
-        <div class="col-xs-6 col-sm-4 col-md-4">
-            {{- if $tx.FeesSat -}}
-            <span class="txvalues txvalues-default">Fee: {{formatAmount $tx.FeesSat}} {{$cs}}</span>
-            {{- end -}}
+    <div class="row footer">
+        <div class="col-sm-12 col-md-4">
+            {{if $tx.FeesSat}}{{$fpb := feePerByte $tx}}
+            Fee {{amountSpan $tx.FeesSat $data "txvalue copyable ms-3"}}{{if $fpb}} <span class="fw-normal small">({{$fpb}})</span>{{end}}
+            {{end}}
         </div>
-        <div class="col-xs-6 col-sm-8 col-md-8 text-right">
-            {{- if $tx.Confirmations -}}
-            <span class="txvalues txvalues-success">{{$tx.Confirmations}} Confirmations</span>
-            {{- else -}}
-            <span class="txvalues txvalues-danger ng-hide">Unconfirmed Transaction!</span>
-            {{- end -}}
-            <span class="txvalues txvalues-primary">{{formatAmount $tx.ValueOutSat}} {{$cs}}</span>
+        <div class="col-sm-12 col-md-8 text-end">
+            <span class="me-4">
+            {{if $tx.Confirmations}}
+            <span class="txvalue">{{formatUint32 $tx.Confirmations}}</span> confirmations
+            {{else}}
+            <span class="txvalue unconfirmed">Unconfirmed Transaction!</span>
+            {{end}}
+            </span>
+            {{amountSpan $tx.ValueOutSat $data "txvalue copyable"}}
         </div>
     </div>
 </div>

@@ -43,6 +43,7 @@ type Configuration struct {
 	RPCUser                      string `json:"rpc_user"`
 	RPCPass                      string `json:"rpc_pass"`
 	RPCTimeout                   int    `json:"rpc_timeout"`
+	AddressAliases               bool   `json:"address_aliases,omitempty"`
 	Parse                        bool   `json:"parse"`
 	MessageQueueBinding          string `json:"message_queue_binding"`
 	Subversion                   string `json:"subversion"`
@@ -728,10 +729,10 @@ func (b *BitcoinRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 		return nil, err
 	}
 	tx, err := b.Parser.ParseTxFromJson(r)
-	tx.CoinSpecificData = r
 	if err != nil {
 		return nil, errors.Annotatef(err, "txid %v", txid)
 	}
+	tx.CoinSpecificData = r
 	return tx, nil
 }
 

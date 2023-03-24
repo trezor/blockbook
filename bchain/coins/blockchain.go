@@ -11,10 +11,12 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/bchain/coins/avalanche"
 	"github.com/trezor/blockbook/bchain/coins/bch"
 	"github.com/trezor/blockbook/bchain/coins/bellcoin"
 	"github.com/trezor/blockbook/bchain/coins/bitcore"
 	"github.com/trezor/blockbook/bchain/coins/bitzeny"
+	"github.com/trezor/blockbook/bchain/coins/bsc"
 	"github.com/trezor/blockbook/bchain/coins/btc"
 	"github.com/trezor/blockbook/bchain/coins/btg"
 	"github.com/trezor/blockbook/bchain/coins/cpuchain"
@@ -33,6 +35,7 @@ import (
 	"github.com/trezor/blockbook/bchain/coins/grs"
 	"github.com/trezor/blockbook/bchain/coins/hydra"
 	"github.com/trezor/blockbook/bchain/coins/koto"
+	"github.com/trezor/blockbook/bchain/coins/kucoin"
 	"github.com/trezor/blockbook/bchain/coins/liquid"
 	"github.com/trezor/blockbook/bchain/coins/litecoin"
 	"github.com/trezor/blockbook/bchain/coins/monacoin"
@@ -69,9 +72,14 @@ func init() {
 	BlockChainFactories["Zcash"] = zec.NewZCashRPC
 	BlockChainFactories["Zcash Testnet"] = zec.NewZCashRPC
 	BlockChainFactories["Ethereum"] = eth.NewEthereumRPC
+	BlockChainFactories["Ethereum Archive"] = eth.NewEthereumRPC
 	BlockChainFactories["Ethereum Classic"] = eth.NewEthereumRPC
 	BlockChainFactories["Ethereum Testnet Ropsten"] = eth.NewEthereumRPC
+	BlockChainFactories["Ethereum Testnet Ropsten Archive"] = eth.NewEthereumRPC
 	BlockChainFactories["Ethereum Testnet Goerli"] = eth.NewEthereumRPC
+	BlockChainFactories["Ethereum Testnet Goerli Archive"] = eth.NewEthereumRPC
+	BlockChainFactories["Ethereum Testnet Sepolia"] = eth.NewEthereumRPC
+	BlockChainFactories["Ethereum Testnet Sepolia Archive"] = eth.NewEthereumRPC
 	BlockChainFactories["Bcash"] = bch.NewBCashRPC
 	BlockChainFactories["Bcash Testnet"] = bch.NewBCashRPC
 	BlockChainFactories["Bgold"] = btg.NewBGoldRPC
@@ -132,6 +140,13 @@ func init() {
 	BlockChainFactories["Polygon TestNet"] = eth.NewEthereumRPC
 	BlockChainFactories["Arbitrum"] = eth.NewEthereumRPC
 	BlockChainFactories["Arbitrum TestNet"] = eth.NewEthereumRPC
+	BlockChainFactories["Avalanche"] = avalanche.NewAvalancheRPC
+	BlockChainFactories["Avalanche Archive"] = avalanche.NewAvalancheRPC
+	BlockChainFactories["BNB Smart Chain"] = bsc.NewBNBSmartChainRPC
+	BlockChainFactories["BNB Smart Chain Archive"] = bsc.NewBNBSmartChainRPC
+	BlockChainFactories["KuCoin Community Chain"] = kucoin.NewKucoinRPC
+	BlockChainFactories["KuCoin Community Chain TestNet"] = kucoin.NewKucoinRPC
+
 }
 
 // GetCoinNameFromConfig gets coin name and coin shortcut from config file
@@ -326,14 +341,20 @@ func (c *blockChainWithMetrics) EthereumTypeEstimateGas(params map[string]interf
 	return c.b.EthereumTypeEstimateGas(params)
 }
 
-func (c *blockChainWithMetrics) EthereumTypeGetErc20ContractInfo(contractDesc bchain.AddressDescriptor) (v *bchain.Erc20Contract, err error) {
-	defer func(s time.Time) { c.observeRPCLatency("EthereumTypeGetErc20ContractInfo", s, err) }(time.Now())
-	return c.b.EthereumTypeGetErc20ContractInfo(contractDesc)
+func (c *blockChainWithMetrics) GetContractInfo(contractDesc bchain.AddressDescriptor) (v *bchain.ContractInfo, err error) {
+	defer func(s time.Time) { c.observeRPCLatency("GetContractInfo", s, err) }(time.Now())
+	return c.b.GetContractInfo(contractDesc)
 }
 
 func (c *blockChainWithMetrics) EthereumTypeGetErc20ContractBalance(addrDesc, contractDesc bchain.AddressDescriptor) (v *big.Int, err error) {
-	defer func(s time.Time) { c.observeRPCLatency("EthereumTypeGetErc20ContractInfo", s, err) }(time.Now())
+	defer func(s time.Time) { c.observeRPCLatency("EthereumTypeGetErc20ContractBalance", s, err) }(time.Now())
 	return c.b.EthereumTypeGetErc20ContractBalance(addrDesc, contractDesc)
+}
+
+// GetContractInfo returns URI of non fungible or multi token defined by token id
+func (c *blockChainWithMetrics) GetTokenURI(contractDesc bchain.AddressDescriptor, tokenID *big.Int) (v string, err error) {
+	defer func(s time.Time) { c.observeRPCLatency("GetTokenURI", s, err) }(time.Now())
+	return c.b.GetTokenURI(contractDesc, tokenID)
 }
 
 type mempoolWithMetrics struct {

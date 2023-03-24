@@ -58,19 +58,20 @@ func (w *SyncWorker) updateBackendInfo() {
 		ci = &bchain.ChainInfo{}
 	}
 	w.is.SetBackendInfo(&common.BackendInfo{
-		BackendError:    backendError,
-		BestBlockHash:   ci.Bestblockhash,
-		Blocks:          ci.Blocks,
-		Chain:           ci.Chain,
-		Difficulty:      ci.Difficulty,
-		Headers:         ci.Headers,
-		ProtocolVersion: ci.ProtocolVersion,
-		SizeOnDisk:      ci.SizeOnDisk,
-		Subversion:      ci.Subversion,
-		Timeoffset:      ci.Timeoffset,
-		Version:         ci.Version,
-		Warnings:        ci.Warnings,
-		Consensus:       ci.Consensus,
+		BackendError:     backendError,
+		BestBlockHash:    ci.Bestblockhash,
+		Blocks:           ci.Blocks,
+		Chain:            ci.Chain,
+		Difficulty:       ci.Difficulty,
+		Headers:          ci.Headers,
+		ProtocolVersion:  ci.ProtocolVersion,
+		SizeOnDisk:       ci.SizeOnDisk,
+		Subversion:       ci.Subversion,
+		Timeoffset:       ci.Timeoffset,
+		Version:          ci.Version,
+		Warnings:         ci.Warnings,
+		ConsensusVersion: ci.ConsensusVersion,
+		Consensus:        ci.Consensus,
 	})
 }
 
@@ -385,7 +386,9 @@ ConnectLoop:
 				start = time.Now()
 			}
 			if msTime.Before(time.Now()) {
-				glog.Info(w.db.GetMemoryStats())
+				if glog.V(1) {
+					glog.Info(w.db.GetMemoryStats())
+				}
 				w.metrics.IndexDBSize.Set(float64(w.db.DatabaseSizeOnDisk()))
 				msTime = time.Now().Add(10 * time.Minute)
 			}

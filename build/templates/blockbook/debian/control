@@ -7,7 +7,7 @@ Build-Depends: debhelper, dh-exec
 Standards-Version: 3.9.5
 
 Package: {{.Blockbook.PackageName}}
-Architecture: amd64
+Architecture: {{.Env.Architecture}}
 Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, {{.Backend.PackageName}}
 Description: Satoshilabs blockbook server ({{.Coin.Name}})
 {{end}}

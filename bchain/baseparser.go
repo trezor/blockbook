@@ -6,16 +6,17 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/gogo/protobuf/proto"
 	"github.com/golang/glog"
 	"github.com/juju/errors"
 	"github.com/trezor/blockbook/common"
+	"google.golang.org/protobuf/proto"
 )
 
 // BaseParser implements data parsing/handling functionality base for all other parsers
 type BaseParser struct {
 	BlockAddressesToKeep int
 	AmountDecimalPoint   int
+	AddressAliases       bool
 }
 
 // ParseBlock parses raw block to our Block struct - currently not implemented
@@ -103,6 +104,11 @@ func (p *BaseParser) AmountDecimals() int {
 	return p.AmountDecimalPoint
 }
 
+// UseAddressAliases returns true if address aliases are enabled
+func (p *BaseParser) UseAddressAliases() bool {
+	return p.AddressAliases
+}
+
 // ParseTxFromJson parses JSON message containing transaction and returns Tx struct
 func (p *BaseParser) ParseTxFromJson(msg json.RawMessage) (*Tx, error) {
 	var tx Tx
@@ -167,6 +173,11 @@ func (p *BaseParser) MinimumCoinbaseConfirmations() int {
 	return 0
 }
 
+// SupportsVSize returns true if vsize of a transaction should be computed and returned by API
+func (p *BaseParser) SupportsVSize() bool {
+	return false
+}
+
 // PackTx packs transaction to byte array using protobuf
 func (p *BaseParser) PackTx(tx *Tx, height uint32, blockTime int64) ([]byte, error) {
 	var err error
@@ -210,6 +221,7 @@ func (p *BaseParser) PackTx(tx *Tx, height uint32, blockTime int64) ([]byte, err
 		Vin:       pti,
 		Vout:      pto,
 		Version:   tx.Version,
+		VSize:     tx.VSize,
 	}
 	if pt.Hex, err = hex.DecodeString(tx.Hex); err != nil {
 		return nil, errors.Annotatef(err, "Hex %v", tx.Hex)
@@ -270,6 +282,7 @@ func (p *BaseParser) UnpackTx(buf []byte) (*Tx, uint32, error) {
 		Vin:       vin,
 		Vout:      vout,
 		Version:   pt.Version,
+		VSize:     pt.VSize,
 	}
 	return &tx, pt.Height, nil
 }
@@ -300,7 +313,12 @@ func (p *BaseParser) DeriveAddressDescriptorsFromTo(descriptor *XpubDescriptor, 
 	return nil, errors.New("Not supported")
 }
 
-// EthereumTypeGetErc20FromTx is unsupported
-func (p *BaseParser) EthereumTypeGetErc20FromTx(tx *Tx) ([]Erc20Transfer, error) {
+// EthereumTypeGetTokenTransfersFromTx is unsupported
+func (p *BaseParser) EthereumTypeGetTokenTransfersFromTx(tx *Tx) (TokenTransfers, error) {
 	return nil, errors.New("Not supported")
+}
+
+// FormatAddressAlias makes possible to do coin specific formatting to an address alias
+func (p *BaseParser) FormatAddressAlias(address string, name string) string {
+	return name
 }

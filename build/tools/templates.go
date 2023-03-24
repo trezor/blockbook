@@ -8,9 +8,36 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
+	"runtime"
 	"text/template"
 	"time"
 )
+
+// Backend contains backend specific fields
+type Backend struct {
+	PackageName                     string             `json:"package_name"`
+	PackageRevision                 string             `json:"package_revision"`
+	SystemUser                      string             `json:"system_user"`
+	Version                         string             `json:"version"`
+	BinaryURL                       string             `json:"binary_url"`
+	VerificationType                string             `json:"verification_type"`
+	VerificationSource              string             `json:"verification_source"`
+	ExtractCommand                  string             `json:"extract_command"`
+	ExcludeFiles                    []string           `json:"exclude_files"`
+	ExecCommandTemplate             string             `json:"exec_command_template"`
+	ExecScript                      string             `json:"exec_script"`
+	LogrotateFilesTemplate          string             `json:"logrotate_files_template"`
+	PostinstScriptTemplate          string             `json:"postinst_script_template"`
+	ServiceType                     string             `json:"service_type"`
+	ServiceAdditionalParamsTemplate string             `json:"service_additional_params_template"`
+	ProtectMemory                   bool               `json:"protect_memory"`
+	Mainnet                         bool               `json:"mainnet"`
+	ServerConfigFile                string             `json:"server_config_file"`
+	ClientConfigFile                string             `json:"client_config_file"`
+	AdditionalParams                interface{}        `json:"additional_params,omitempty"`
+	Platforms                       map[string]Backend `json:"platforms,omitempty"`
+}
 
 // Config contains the structure of the config
 type Config struct {
@@ -23,6 +50,9 @@ type Config struct {
 	Ports struct {
 		BackendRPC          int `json:"backend_rpc"`
 		BackendMessageQueue int `json:"backend_message_queue"`
+		BackendP2P          int `json:"backend_p2p"`
+		BackendHttp         int `json:"backend_http"`
+		BackendAuthRpc      int `json:"backend_authrpc"`
 		BlockbookInternal   int `json:"blockbook_internal"`
 		BlockbookPublic     int `json:"blockbook_public"`
 	} `json:"ports"`
@@ -33,27 +63,7 @@ type Config struct {
 		RPCTimeout                  int    `json:"rpc_timeout"`
 		MessageQueueBindingTemplate string `json:"message_queue_binding_template"`
 	} `json:"ipc"`
-	Backend struct {
-		PackageName                     string      `json:"package_name"`
-		PackageRevision                 string      `json:"package_revision"`
-		SystemUser                      string      `json:"system_user"`
-		Version                         string      `json:"version"`
-		BinaryURL                       string      `json:"binary_url"`
-		VerificationType                string      `json:"verification_type"`
-		VerificationSource              string      `json:"verification_source"`
-		ExtractCommand                  string      `json:"extract_command"`
-		ExcludeFiles                    []string    `json:"exclude_files"`
-		ExecCommandTemplate             string      `json:"exec_command_template"`
-		LogrotateFilesTemplate          string      `json:"logrotate_files_template"`
-		PostinstScriptTemplate          string      `json:"postinst_script_template"`
-		ServiceType                     string      `json:"service_type"`
-		ServiceAdditionalParamsTemplate string      `json:"service_additional_params_template"`
-		ProtectMemory                   bool        `json:"protect_memory"`
-		Mainnet                         bool        `json:"mainnet"`
-		ServerConfigFile                string      `json:"server_config_file"`
-		ClientConfigFile                string      `json:"client_config_file"`
-		AdditionalParams                interface{} `json:"additional_params,omitempty"`
-	} `json:"backend"`
+	Backend   Backend `json:"backend"`
 	Blockbook struct {
 		PackageName             string `json:"package_name"`
 		SystemUser              string `json:"system_user"`
@@ -87,6 +97,7 @@ type Config struct {
 		BackendDataPath      string `json:"backend_data_path"`
 		BlockbookInstallPath string `json:"blockbook_install_path"`
 		BlockbookDataPath    string `json:"blockbook_data_path"`
+		Architecture         string `json:"architecture"`
 	} `json:"-"`
 }
 
@@ -136,6 +147,16 @@ func (c *Config) ParseTemplate() *template.Template {
 	return t
 }
 
+func copyNonZeroBackendFields(toValue *Backend, fromValue *Backend) {
+	from := reflect.ValueOf(*fromValue)
+	to := reflect.ValueOf(toValue).Elem()
+	for i := 0; i < from.NumField(); i++ {
+		if from.Field(i).IsValid() && !from.Field(i).IsZero() {
+			to.Field(i).Set(from.Field(i))
+		}
+	}
+}
+
 // LoadConfig loads the config files
 func LoadConfig(configsDir, coin string) (*Config, error) {
 	config := new(Config)
@@ -161,8 +182,15 @@ func LoadConfig(configsDir, coin string) (*Config, error) {
 	}
 
 	config.Meta.BuildDatetime = time.Now().Format("Mon, 02 Jan 2006 15:04:05 -0700")
+	config.Env.Architecture = runtime.GOARCH
 
 	if !isEmpty(config, "backend") {
+		// set platform specific fields to config
+		platform, found := config.Backend.Platforms[runtime.GOARCH]
+		if found {
+			copyNonZeroBackendFields(&config.Backend, &platform)
+		}
+
 		switch config.Backend.ServiceType {
 		case "forking":
 		case "simple":
@@ -253,11 +281,15 @@ func GeneratePackageDefinitions(config *Config, templateDir, outputDir string) e
 	}
 
 	if !isEmpty(config, "backend") {
-		err = writeBackendServerConfigFile(config, outputDir)
-		if err == nil {
-			err = writeBackendClientConfigFile(config, outputDir)
+		if err := writeBackendServerConfigFile(config, outputDir); err != nil {
+			return err
 		}
-		if err != nil {
+
+		if err := writeBackendClientConfigFile(config, outputDir); err != nil {
+			return err
+		}
+
+		if err := writeBackendExecScript(config, outputDir); err != nil {
 			return err
 		}
 	}
@@ -319,6 +351,27 @@ func writeBackendClientConfigFile(config *Config, outputDir string) error {
 		return nil
 	}
 	in, err := os.Open(filepath.Join(outputDir, "backend/config", config.Backend.ClientConfigFile))
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	_, err = io.Copy(out, in)
+	return err
+}
+
+func writeBackendExecScript(config *Config, outputDir string) error {
+	if config.Backend.ExecScript == "" {
+		return nil
+	}
+
+	out, err := os.OpenFile(filepath.Join(outputDir, "backend/exec.sh"), os.O_CREATE|os.O_WRONLY, 0777)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	in, err := os.Open(filepath.Join(outputDir, "backend/scripts", config.Backend.ExecScript))
 	if err != nil {
 		return err
 	}

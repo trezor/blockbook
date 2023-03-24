@@ -1,31 +1,6 @@
 # Blockbook API
 
-**Blockbook** provides REST, websocket and socket.io API to the indexed blockchain.
-
-There are two versions of provided API.
-
-## Legacy API V1
-
-The legacy API is a compatible subset of API provided by **Bitcore Insight**. It supports only Bitcoin-type coins. The details of the REST/socket.io requests can be found in the Insight's documentation.
-
-### REST API
-```
-GET /api/v1/block-index/<block height>
-GET /api/v1/tx/<txid>
-GET /api/v1/address/<address>
-GET /api/v1/utxo/<address>
-GET /api/v1/block/<block height | block hash>
-GET /api/v1/estimatefee/<number of blocks>
-GET /api/v1/sendtx/<hex tx data>
-POST /api/v1/sendtx (hex tx data in request body)  
-```
-
-### Socket.io API
-Socket.io interface is provided at `/socket.io/`. The interface also can be explored using Blockbook Socket.io Test Page found at `/test-socketio.html`.
-
-The legacy API is provided as is and will not be further developed.
-
-The legacy API is currently (Blockbook v0.3.5) also accessible without the */v1/* prefix, however in the future versions the version less access will be removed.
+**Blockbook** provides REST and websocket API to the indexed blockchain.
 
 ## API V2
 
@@ -33,9 +8,8 @@ API V2 is the current version of API. It can be used with all coin types that Bl
 
 Common principles used in API V2:
 
-- all amounts are transferred as strings, in the lowest denomination (satoshis, wei, ...), without decimal point
-- empty fields are omitted. Empty field is a string of value *null* or *""*, a number of value *0*, an object of value *null* or an array without elements. The reason for this is that the interface serves many different coins which use only subset of the fields. Sometimes this principle can lead to slightly confusing results, for example when transaction version is 0, the field *version* is omitted.
-
+- all crypto amounts are transferred as strings, in the lowest denomination (satoshis, wei, ...), without decimal point
+- empty fields are omitted. Empty field is a string of value _null_ or _""_, a number of value _0_, an object of value _null_ or an array without elements. The reason for this is that the interface serves many different coins which use only subset of the fields. Sometimes this principle can lead to slightly confusing results, for example when transaction version is 0, the field _version_ is omitted.
 
 ### REST API
 
@@ -55,7 +29,9 @@ The following methods are supported:
 - [Balance history](#balance-history)
 
 #### Status page
+
 Status page returns current status of Blockbook and connected backend.
+
 ```
 GET /api
 ```
@@ -67,7 +43,7 @@ Response:
   "blockbook": {
     "coin": "Bitcoin",
     "host": "blockbook",
-    "version": "0.3.6",
+    "version": "0.4.0",
     "gitCommit": "3d9ad91",
     "buildTime": "2019-05-17T14:34:00+00:00",
     "syncMode": true,
@@ -99,6 +75,7 @@ Response:
 ```
 
 #### Get block hash
+
 ```
 GET /api/v2/block-index/<block height>
 ```
@@ -111,15 +88,17 @@ Response:
 }
 ```
 
-_Note: Blockbook always follows the main chain of the backend it is attached to. See notes on **Get Block** below_ 
+_Note: Blockbook always follows the main chain of the backend it is attached to. See notes on **Get Block** below_
 
 #### Get transaction
+
 Get transaction returns "normalized" data about transaction, which has the same general structure for all supported coins. It does not return coin specific fields (for example information about Zcash shielded addresses).
+
 ```
 GET /api/v2/tx/<txid>
 ```
 
-Response for Bitcoin-type coins:
+Response for Bitcoin-type coins, confirmed transaction:
 
 ```javascript
 {
@@ -163,6 +142,8 @@ Response for Bitcoin-type coins:
   "blockHeight": 2647927,
   "confirmations": 1,
   "blockTime": 1553088212,
+  "size": 234,
+  "vsize": 153,
   "value": "55795008999999",
   "valueIn": "55795108999999",
   "fees": "100000000",
@@ -170,60 +151,166 @@ Response for Bitcoin-type coins:
 }
 ```
 
-Response for Ethereum-type coins. There is always only one *vin*, only one *vout*, possibly an array of *tokenTransfers* and *ethereumSpecific* part. Missing is *hex* field:
+Response for Bitcoin-type coins, unconfirmed transaction (_blockHeight_: -1, _confirmations_: 0, mining estimates _confirmationETABlocks_ and _confirmationETASeconds_):
 
 ```javascript
 {
-  "txid": "0xb78a36a4a0e7d708d595c3b193cace8f5b420e72e1f595a5387d87de509f0806",
+  "txid": "cd8ec77174e426070d0a50779232bba7312b712e2c6843d82d963d7076c61366",
+  "version": 2,
+  "vin": [
+    {
+      "txid": "47687cc4abb58d815168686465a38113a0608b2568a6d6480129d197e653f6dc",
+      "sequence": 4294967295,
+      "n": 0,
+      "addresses": ["bc1qka0gpenex558g8gpxmpx247mwhw695k6a7yhs4"],
+      "isAddress": true,
+      "value": "1983687"
+    }
+  ],
+  "vout": [
+    {
+      "value": "3106",
+      "n": 0,
+      "hex": "0020d7da4868055fde790a8581637ab81c216e17a3f8a099283da6c4a27419ffa539",
+      "addresses": [
+        "bc1q6ldys6q9tl08jz59s93h4wquy9hp0glc5zvjs0dxcj38gx0l55uspu8x86"
+      ],
+      "isAddress": true
+    },
+    {
+      "value": "1979101",
+      "n": 1,
+      "hex": "0014381be30ca46ddf378ef69ebc4a601bd6ff30b754",
+      "addresses": ["bc1q8qd7xr9ydh0n0rhkn67y5cqm6mlnpd65dcyeeg"],
+      "isAddress": true
+    }
+  ],
+  "blockHeight": -1,
+  "confirmations": 0,
+  "confirmationETABlocks": 3,
+  "confirmationETASeconds": 2055,
+  "blockTime": 1675270935,
+  "size": 234,
+  "vsize": 153,
+  "value": "1982207",
+  "valueIn": "1983687",
+  "fees": "1480",
+  "hex": "020000000001...b18f00000000"
+}
+```
+
+Response for Ethereum-type coins. Data of the transaction consist of:
+
+- always only one _vin_, only one _vout_
+- an array of _tokenTransfers_ (ERC20, ERC721 or ERC1155)
+- _ethereumSpecific_ data
+  - _type_ (returned only for contract creation - value `1` and destruction value `2`)
+  - _status_ (`1` OK, `0` Failure, `-1` pending), potential _error_ message, _gasLimit_, _gasUsed_, _gasPrice_, _nonce_, input _data_
+  - parsed input data in the field _parsedData_, if a match with the 4byte directory was found
+  - internal transfers (type `0` transfer, type `1` contract creation, type `2` contract destruction)
+- _addressAliases_ - maps addresses in the transaction to names from contract or ENS. Only addresses with known names are returned.
+
+```javascript
+{
+  "txid": "0xa6c8ae1f91918d09cf2bd67bbac4c168849e672fd81316fa1d26bb9b4fc0f790",
   "vin": [
     {
       "n": 0,
-      "addresses": [
-        "0x9c2e011c0ce0d75c2b62b9c5a0ba0a7456593803"
-      ],
+      "addresses": ["0xd446089cf19C3D3Eb1743BeF3A852293Fd2C7775"],
       "isAddress": true
     }
   ],
   "vout": [
     {
-      "value": "0",
+      "value": "5615959129349132871",
       "n": 0,
-      "addresses": [
-        "0xc32ae45504ee9482db99cfa21066a59e877bc0e6"
-      ],
+      "addresses": ["0xC36442b4a4522E871399CD717aBDD847Ab11FE88"],
       "isAddress": true
     }
   ],
-  "blockHash": "0x39df7fb0893200e1e78c04f98691637a89b64e7a3edd96c16f2537e2fd56c414",
-  "blockHeight": 5241585,
+  "blockHash": "0x10ea8cfecda89d6d864c1d919911f819c9febc2b455b48c9918cee3c6cdc4adb",
+  "blockHeight": 16529834,
   "confirmations": 3,
-  "blockTime": 1553088337,
-  "value": "0",
-  "fees": "402501000000000",
+  "blockTime": 1675204631,
+  "value": "5615959129349132871",
+  "fees": "19141662404282012",
   "tokenTransfers": [
     {
       "type": "ERC20",
-      "from": "0x9c2e011c0ce0d75c2b62b9c5a0ba0a7456593803",
-      "to": "0x583cbbb8a8443b38abcc0c956bece47340ea1367",
-      "token": "0xc32ae45504ee9482db99cfa21066a59e877bc0e6",
-      "name": "Tangany Test Token",
-      "symbol": "TATETO",
+      "from": "0xd446089cf19C3D3Eb1743BeF3A852293Fd2C7775",
+      "to": "0x3B685307C8611AFb2A9E83EBc8743dc20480716E",
+      "contract": "0x4E15361FD6b4BB609Fa63C81A2be19d873717870",
+      "name": "Fantom Token",
+      "symbol": "FTM",
       "decimals": 18,
-      "value": "133800000"
+      "value": "15362368338194882707417"
+    },
+    {
+      "type": "ERC20",
+      "from": "0xC36442b4a4522E871399CD717aBDD847Ab11FE88",
+      "to": "0x3B685307C8611AFb2A9E83EBc8743dc20480716E",
+      "contract": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+      "name": "Wrapped Ether",
+      "symbol": "WETH",
+      "decimals": 18,
+      "value": "5615959129349132871"
+    },
+    {
+      "type": "ERC721",
+      "from": "0x0000000000000000000000000000000000000000",
+      "to": "0xd446089cf19C3D3Eb1743BeF3A852293Fd2C7775",
+      "contract": "0xC36442b4a4522E871399CD717aBDD847Ab11FE88",
+      "name": "Uniswap V3 Positions NFT-V1",
+      "symbol": "UNI-V3-POS",
+      "decimals": 18,
+      "value": "428189"
     }
   ],
   "ethereumSpecific": {
     "status": 1,
-    "nonce": 2830,
-    "gasLimit": 36591,
-    "gasUsed": 36591,
-    "gasPrice": "11000000000",
-    "data": "0xa9059cbb000000000000000000000000ba98d6a5"
+    "nonce": 505,
+    "gasLimit": 550941,
+    "gasUsed": 434686,
+    "gasPrice": "44035608242",
+    "data": "0xac9650d800000000000000000000",
+    "parsedData": {
+      "methodId": "0xfa2b068f",
+      "name": "Mint",
+      "function": "mint(address, uint256, uint32, bytes32[], address)",
+      "params": [
+        {
+          "type": "address",
+          "values": ["0xa5fD1Da088598e88ba731B0E29AECF0BC2A31F82"]
+        },
+        { "type": "uint256", "values": ["688173296"] },
+        { "type": "uint32", "values": ["0"] }
+      ]
+    },
+    "internalTransfers": [
+      {
+        "type": 0,
+        "from": "0xC36442b4a4522E871399CD717aBDD847Ab11FE88",
+        "to": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+        "value": "5615959129349132871"
+      }
+    ]
+  },
+  "addressAliases": {
+    "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2": {
+      "Type": "Contract",
+      "Alias": "Wrapped Ether"
+    },
+    "0xC36442b4a4522E871399CD717aBDD847Ab11FE88": {
+      "Type": "Contract",
+      "Alias": "Uniswap V3 Positions NFT-V1"
+    }
   }
 }
+
 ```
 
 A note about the `blockTime` field:
+
 - for already mined transaction (`confirmations > 0`), the field `blockTime` contains time of the block
 - for transactions in mempool (`confirmations == 0`), the field contains time when the running instance of Blockbook was first time notified about the transaction. This time may be different in different instances of Blockbook.
 
@@ -291,23 +378,25 @@ Example response:
 Returns balances and transactions of an address. The returned transactions are sorted by block height, newest blocks first.
 
 ```
-GET /api/v2/address/<address>[?page=<page>&pageSize=<size>&from=<block height>&to=<block height>&details=<basic|tokens|tokenBalances|txids|txs>&contract=<contract address>]
+GET /api/v2/address/<address>[?page=<page>&pageSize=<size>&from=<block height>&to=<block height>&details=<basic|tokens|tokenBalances|txids|txs>&contract=<contract address>&secondary=usd]
 ```
 
 The optional query parameters:
-- *page*: specifies page of returned transactions, starting from 1. If out of range, Blockbook returns the closest possible page.
-- *pageSize*: number of transactions returned by call (default and maximum 1000)
-- *from*, *to*: filter of the returned transactions *from* block height *to* block height (default no filter)
-- *details*: specifies level of details returned by request (default *txids*)
-    - *basic*: return only address balances, without any transactions
-    - *tokens*: *basic* + tokens belonging to the address (applicable only to some coins)
-    - *tokenBalances*: *basic* + tokens with balances + belonging to the address (applicable only to some coins)
-    - *txids*: *tokenBalances* + list of txids, subject to  *from*, *to* filter and paging
-    - *txslight*:  *tokenBalances* + list of transaction with limited details (only data from index), subject to  *from*, *to* filter and paging
-    - *txs*:  *tokenBalances* + list of transaction with details, subject to  *from*, *to* filter and paging
-- *contract*: return only transactions which affect specified contract (applicable only to coins which support contracts)
 
-Response:
+- _page_: specifies page of returned transactions, starting from 1. If out of range, Blockbook returns the closest possible page.
+- _pageSize_: number of transactions returned by call (default and maximum 1000)
+- _from_, _to_: filter of the returned transactions _from_ block height _to_ block height (default no filter)
+- _details_: specifies level of details returned by request (default _txids_)
+  - _basic_: return only address balances, without any transactions
+  - _tokens_: _basic_ + tokens belonging to the address (applicable only to some coins)
+  - _tokenBalances_: _basic_ + tokens with balances + belonging to the address (applicable only to some coins)
+  - _txids_: _tokenBalances_ + list of txids, subject to _from_, _to_ filter and paging
+  - _txslight_: _tokenBalances_ + list of transaction with limited details (only data from index), subject to _from_, _to_ filter and paging
+  - _txs_: _tokenBalances_ + list of transaction with details, subject to _from_, _to_ filter and paging
+- _contract_: return only transactions which affect specified contract (applicable only to coins which support contracts)
+- _secondary_: specifies secondary (fiat) currency in which the token and total balances are returned in addition to crypto values
+
+Example response for bitcoin type coin, _details_ set to _txids_:
 
 ```javascript
 {
@@ -329,53 +418,87 @@ Response:
 }
 ```
 
+Example response for ethereum type coin, _details_ set to _tokenBalances_ and _secondary_ set to _usd_. The _baseValue_ is value of the token in the base currency (ETH), _secondaryValue_ is value of the token in specified _secondary_ currency:
+
+```javascript
+{
+  "address": "0x2df3951b2037bA620C20Ed0B73CCF45Ea473e83B",
+  "balance": "21004631949601199",
+  "unconfirmedBalance": "0",
+  "unconfirmedTxs": 0,
+  "txs": 5,
+  "nonTokenTxs": 3,
+  "nonce": "1",
+  "tokens": [
+    {
+      "type": "ERC20",
+      "name": "Tether USD",
+      "contract": "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+      "transfers": 3,
+      "symbol": "USDT",
+      "decimals": 6,
+      "balance": "4913000000",
+      "baseValue": 3.104622978658881,
+      "secondaryValue": 4914.214559070491
+    }
+  ],
+  "secondaryValue": 33.247601671503574,
+  "tokensBaseValue": 3.104622978658881,
+  "tokensSecondaryValue": 4914.214559070491,
+  "totalBaseValue": 3.125627610608482,
+  "totalSecondaryValue": 4947.462160741995
+}
+
+```
+
 #### Get xpub
 
-Returns balances and transactions of an xpub or output descriptor, applicable only for Bitcoin-type coins. 
+Returns balances and transactions of an xpub or output descriptor, applicable only for Bitcoin-type coins.
 
 Blockbook supports BIP44, BIP49, BIP84 and BIP86 (Taproot) derivation schemes, using either xpubs or output descriptors (see https://github.com/bitcoin/bitcoin/blob/master/doc/descriptors.md)
 
-* Xpubs
+- Xpubs
 
-  Blockbook expects xpub at level 3 derivation path, i.e. *m/purpose'/coin_type'/account'/*. Blockbook completes the *change/address_index* part of the path when deriving addresses. 
+  Blockbook expects xpub at level 3 derivation path, i.e. _m/purpose'/coin_type'/account'/_. Blockbook completes the _change/address_index_ part of the path when deriving addresses.
   The BIP version is determined by the prefix of the xpub. The prefixes for each coin are defined by fields `xpub_magic`, `xpub_magic_segwit_p2sh`, `xpub_magic_segwit_native` in the [trezor-common](https://github.com/trezor/trezor-common/tree/master/defs/bitcoin) library. If the prefix is not recognized, Blockbook defaults to BIP44 derivation scheme.
 
-* Output descriptors
-  
+- Output descriptors
+
   Output descriptors are in the form `<type>([<path>]<xpub>[/<change>/*])[#checkum]`, for example `pkh([5c9e228d/44'/0'/0']xpub6BgBgses...Mj92pReUsQ/<0;1>/*)#abcd`
-  
+
   Parameters `type` and `xpub` are mandatory, the rest is optional
-  
+
   Blockbook supports a limited set of `type`s:
+
   - BIP44: `pkh(xpub)`
   - BIP49: `sh(wpkh(xpub))`
   - BIP84: `wpkh(xpub)`
   - BIP86 (Taproot single key): `tr(xpub)`
-  
-  Parameter `change` can be a single number or a list of change indexes, specified either in the format `<index1;index2;...>` or `{index1,index2,...}`. If the parameter `change` is not specified, Blockbook defaults to `<0;1>`.
 
-  
+  Parameter `change` can be a single number or a list of change indexes, specified either in the format `<index1;index2;...>` or `{index1,index2,...}`. If the parameter `change` is not specified, Blockbook defaults to `<0;1>`.
 
 The returned transactions are sorted by block height, newest blocks first.
 
 ```
-GET /api/v2/xpub/<xpub|descriptor>[?page=<page>&pageSize=<size>&from=<block height>&to=<block height>&details=<basic|tokens|tokenBalances|txids|txs>&tokens=<nonzero|used|derived>]
+GET /api/v2/xpub/<xpub|descriptor>[?page=<page>&pageSize=<size>&from=<block height>&to=<block height>&details=<basic|tokens|tokenBalances|txids|txs>&tokens=<nonzero|used|derived>&secondary=eur]
 ```
 
 The optional query parameters:
-- *page*: specifies page of returned transactions, starting from 1. If out of range, Blockbook returns the closest possible page.
-- *pageSize*: number of transactions returned by call (default and maximum 1000)
-- *from*, *to*: filter of the returned transactions *from* block height *to* block height (default no filter)
-- *details*: specifies level of details returned by request (default *txids*)
-    - *basic*: return only xpub balances, without any derived addresses and transactions
-    - *tokens*: *basic* + tokens (addresses) derived from the xpub, subject to *tokens* parameter
-    - *tokenBalances*: *basic* + tokens (addresses) derived from the xpub with balances, subject to *tokens* parameter
-    - *txids*: *tokenBalances* + list of txids, subject to  *from*, *to* filter and paging
-    - *txs*:  *tokenBalances* + list of transaction with details, subject to  *from*, *to* filter and paging
-- *tokens*: specifies what tokens (xpub addresses) are returned by the request (default *nonzero*)
-    - *nonzero*: return only addresses with nonzero balance
-    - *used*: return addresses with at least one transaction
-    - *derived*: return all derived addresses
+
+- _page_: specifies page of returned transactions, starting from 1. If out of range, Blockbook returns the closest possible page.
+- _pageSize_: number of transactions returned by call (default and maximum 1000)
+- _from_, _to_: filter of the returned transactions _from_ block height _to_ block height (default no filter)
+- _details_: specifies level of details returned by request (default _txids_)
+  - _basic_: return only xpub balances, without any derived addresses and transactions
+  - _tokens_: _basic_ + tokens (addresses) derived from the xpub, subject to _tokens_ parameter
+  - _tokenBalances_: _basic_ + tokens (addresses) derived from the xpub with balances, subject to _tokens_ parameter
+  - _txids_: _tokenBalances_ + list of txids, subject to _from_, _to_ filter and paging
+  - _txs_: _tokenBalances_ + list of transaction with details, subject to _from_, _to_ filter and paging
+- _tokens_: specifies what tokens (xpub addresses) are returned by the request (default _nonzero_)
+  - _nonzero_: return only addresses with nonzero balance
+  - _used_: return addresses with at least one transaction
+  - _derived_: return all derived addresses
+- _secondary_: specifies secondary (fiat) currency in which the balances are returned in addition to crypto values
 
 Response:
 
@@ -385,8 +508,8 @@ Response:
   "totalPages": 1,
   "itemsOnPage": 1000,
   "address": "dgub8sbe5Mi8LA4dXB9zPfLZW8arm...9Vjp2HHx91xdDEmWYpmD49fpoUYF",
-  "balance": "0",
-  "totalReceived": "3083381250",
+  "balance": "90000000",
+  "totalReceived": "3093381250",
   "totalSent": "3083381250",
   "unconfirmedBalance": "0",
   "unconfirmedTxs": 0,
@@ -406,8 +529,8 @@ Response:
       "path": "m/44'/3'/0'/0/0",
       "transfers": 3,
       "decimals": 8,
-      "balance": "0",
-      "totalReceived": "2803986975",
+      "balance": "90000000",
+      "totalReceived": "2903986975",
       "totalSent": "2803986975"
     },
     {
@@ -420,19 +543,20 @@ Response:
       "totalReceived": "279394275",
       "totalSent": "279394275"
     }
-  ]
+  ],
+  "secondaryValue": 21195.47633568
 }
 ```
 
-Note: *usedTokens* always returns total number of **used** addresses of xpub.
+Note: _usedTokens_ always returns total number of **used** addresses of xpub.
 
 #### Get utxo
 
-Returns array of unspent transaction outputs of address or xpub, applicable only for Bitcoin-type coins. By default, the list contains both confirmed and unconfirmed transactions. The query parameter *confirmed=true* disables return of unconfirmed transactions. The returned utxos are sorted by block height, newest blocks first. For xpubs or output descriptors, the response also contains address and derivation path of the utxo.
+Returns array of unspent transaction outputs of address or xpub, applicable only for Bitcoin-type coins. By default, the list contains both confirmed and unconfirmed transactions. The query parameter _confirmed=true_ disables return of unconfirmed transactions. The returned utxos are sorted by block height, newest blocks first. For xpubs or output descriptors, the response also contains address and derivation path of the utxo.
 
-Unconfirmed utxos do not have field *height*, the field *confirmations* has value *0* and may contain field *lockTime*, if not zero.
+Unconfirmed utxos do not have field _height_, the field _confirmations_ has value _0_ and may contain field _lockTime_, if not zero.
 
-Coinbase utxos have field *coinbase* set to true, however due to performance reasons only up to minimum coinbase confirmations limit (100). After this limit, utxos are not detected as coinbase.
+Coinbase utxos have field _coinbase_ set to true, however due to performance reasons only up to minimum coinbase confirmations limit (100). After this limit, utxos are not detected as coinbase.
 
 ```
 GET /api/v2/utxo/<address|xpub|descriptor>[?confirmed=true]
@@ -443,35 +567,35 @@ Response:
 ```javascript
 [
   {
-    "txid": "13d26cd939bf5d155b1c60054e02d9c9b832a85e6ec4f2411be44b6b5a2842e9",
-    "vout": 0,
-    "value": "1422303206539",
-    "confirmations": 0,
-    "lockTime": 2648100
+    txid: "13d26cd939bf5d155b1c60054e02d9c9b832a85e6ec4f2411be44b6b5a2842e9",
+    vout: 0,
+    value: "1422303206539",
+    confirmations: 0,
+    lockTime: 2648100,
   },
   {
-    "txid": "a79e396a32e10856c97b95f43da7e9d2b9a11d446f7638dbd75e5e7603128cac",
-    "vout": 1,
-    "value": "39748685",
-    "height": 2648043,
-    "confirmations": 47,
-    "coinbase": true
+    txid: "a79e396a32e10856c97b95f43da7e9d2b9a11d446f7638dbd75e5e7603128cac",
+    vout: 1,
+    value: "39748685",
+    height: 2648043,
+    confirmations: 47,
+    coinbase: true,
   },
   {
-    "txid": "de4f379fdc3ea9be063e60340461a014f372a018d70c3db35701654e7066b3ef",
-    "vout": 0,
-    "value": "122492339065",
-    "height": 2646043,
-    "confirmations": 2047
+    txid: "de4f379fdc3ea9be063e60340461a014f372a018d70c3db35701654e7066b3ef",
+    vout: 0,
+    value: "122492339065",
+    height: 2646043,
+    confirmations: 2047,
   },
   {
-    "txid": "9e8eb9b3d2e8e4b5d6af4c43a9196dfc55a05945c8675904d8c61f404ea7b1e9",
-    "vout": 0,
-    "value": "142771322208",
-    "height": 2644885,
-    "confirmations": 3205
-  }
-]
+    txid: "9e8eb9b3d2e8e4b5d6af4c43a9196dfc55a05945c8675904d8c61f404ea7b1e9",
+    vout: 0,
+    value: "142771322208",
+    height: 2644885,
+    confirmations: 3205,
+  },
+];
 ```
 
 #### Get block
@@ -571,6 +695,7 @@ Response:
   ]
 }
 ```
+
 _Note: Blockbook always follows the main chain of the backend it is attached to. If there is a rollback-reorg in the backend, Blockbook will also do rollback. When you ask for block by height, you will always get the main chain block. If you ask for block by hash, you may get the block from another fork but it is not guaranteed (backend may not keep it)_
 
 #### Send transaction
@@ -579,7 +704,7 @@ Sends new transaction to backend.
 
 ```
 GET /api/v2/sendtx/<hex tx data>
-POST /api/v2/sendtx (hex tx data in request body)  
+POST /api/v2/sendtx/ (hex tx data in request body)  NB: the '/' symbol at the end is mandatory.
 ```
 
 Response:
@@ -602,14 +727,15 @@ or in case of error
 
 #### Tickers list
 
-Returns a list of available currency rate tickers for the specified date, along with an actual data timestamp.
+Returns a list of available currency rate tickers (secondary currencies) for the specified date, along with an actual data timestamp.
 
 ```
 GET /api/v2/tickers-list/?timestamp=<timestamp>
 ```
 
 The query parameters:
-- *timestamp*: specifies a Unix timestamp to return available tickers for.
+
+- _timestamp_: specifies a Unix timestamp to return available tickers for.
 
 Example response:
 
@@ -633,8 +759,9 @@ GET /api/v2/tickers/[?currency=<currency>&timestamp=<timestamp>]
 ```
 
 The optional query parameters:
-- *currency*: specifies a currency of returned rate ("usd", "eur", "eth"...). If not specified, all available currencies will be returned.
-- *timestamp*: a Unix timestamp that specifies a date to return currency rates for. If not specified, the last available rate will be returned.
+
+- _currency_: specifies a currency of returned rate ("usd", "eur", "eth"...). If not specified, all available currencies will be returned.
+- _timestamp_: a Unix timestamp that specifies a date to return currency rates for. If not specified, the last available rate will be returned.
 
 Example response (no parameters):
 
@@ -660,6 +787,7 @@ Example response (currency=usd):
 ```
 
 Example error response (e.g. rate unavailable, incorrect currency...):
+
 ```javascript
 {
   "ts":7980386400,
@@ -678,14 +806,17 @@ GET /api/v2/balancehistory/<XPUB | address>?from=<dateFrom>&to=<dateTo>[&fiatcur
 ```
 
 Query parameters:
-- *from*: specifies a start date as a Unix timestamp
-- *to*: specifies an end date as a Unix timestamp
+
+- _from_: specifies a start date as a Unix timestamp
+- _to_: specifies an end date as a Unix timestamp
 
 The optional query parameters:
-- *fiatcurrency*: if specified, the response will contain fiat rate at the time of transaction. If not, all available currencies will be returned.
-- *groupBy*: an interval in seconds, to group results by. Default is 3600 seconds.
 
-Example response (fiatcurrency not specified):
+- _fiatcurrency_: if specified, the response will contain secondary (fiat) rate at the time of transaction. If not, all available currencies will be returned.
+- _groupBy_: an interval in seconds, to group results by. Default is 3600 seconds.
+
+Example response (_fiatcurrency_ not specified):
+
 ```javascript
 [
   {
@@ -720,26 +851,26 @@ Example response (fiatcurrency=usd):
 ```javascript
 [
   {
-    "time": 1578391200,
-    "txs": 5,
-    "received": "5000000",
-    "sent": "0",
-    "sentToSelf":"0",
-    "rates": {
-      "usd": 7855.9
-    }
+    time: 1578391200,
+    txs: 5,
+    received: "5000000",
+    sent: "0",
+    sentToSelf: "0",
+    rates: {
+      usd: 7855.9,
+    },
   },
   {
-    "time": 1578488400,
-    "txs": 1,
-    "received": "0",
-    "sent": "5000000",
-    "sentToSelf":"0",
-    "rates": {
-      "usd": 8283.11
-    }
-  }
-]
+    time: 1578488400,
+    txs: 1,
+    received: "0",
+    sent: "5000000",
+    sentToSelf: "0",
+    rates: {
+      usd: 8283.11,
+    },
+  },
+];
 ```
 
 Example response (fiatcurrency=usd&groupBy=172800):
@@ -747,16 +878,16 @@ Example response (fiatcurrency=usd&groupBy=172800):
 ```javascript
 [
   {
-    "time": 1578355200,
-    "txs": 6,
-    "received": "5000000",
-    "sent": "5000000",
-    "sentToSelf":"0",
-    "rates": {
-      "usd": 7734.45
-    }
-  }
-]
+    time: 1578355200,
+    txs: 6,
+    received: "5000000",
+    sent: "5000000",
+    sentToSelf: "0",
+    rates: {
+      usd: 7734.45,
+    },
+  },
+];
 ```
 
 The value of `sentToSelf` is the amount sent from the same address to the same address or within addresses of xpub.
@@ -783,10 +914,10 @@ The websocket interface provides the following requests:
 
 The client can subscribe to the following events:
 
-- `subscribeNewBlock`       - new block added to blockchain
+- `subscribeNewBlock` - new block added to blockchain
 - `subscribeNewTransaction` - new transaction added to blockchain (all addresses)
-- `subscribeAddresses`      - new transaction for given address (list of addresses)
-- `subscribeFiatRates`      - new currency rate ticker
+- `subscribeAddresses` - new transaction for a given address (list of addresses) added to mempool
+- `subscribeFiatRates` - new currency rate ticker
 
 There can be always only one subscription of given event per connection, i.e. new list of addresses replaces previous list of addresses.
 
@@ -795,21 +926,48 @@ The subscribeNewTransaction event is not enabled by default. To enable support, 
 _Note: If there is reorg on the backend (blockchain), you will get a new block hash with the same or even smaller height if the reorg is deeper_
 
 Websocket communication format
-```
+
+```javascript
 {
   "id":"1", //an id to help to identify the response
-  "method":"<The method that you would like to call>", 
+  "method":"<The method that you would like to call>",
   "params":<The params (same as in the API call>
 }
 ```
 
 Example for subscribing to an address (or multiple addresses)
-```
+
+```javascript
 {
-  "id":"1", 
-  "method":"subscribeAddresses", 
+  "id":"1",
+  "method":"subscribeAddresses",
   "params":{
     "addresses":["mnYYiDCb2JZXnqEeXta1nkt5oCVe2RVhJj", "tb1qp0we5epypgj4acd2c4au58045ruud2pd6heuee"]
    }
 }
 ```
+
+## Legacy API V1
+
+The legacy API is a compatible subset of API provided by **Bitcore Insight**. It is supported only Bitcoin-type coins. The details of the REST/socket.io requests can be found in the Insight's documentation.
+
+### REST API
+
+```
+GET /api/v1/block-index/<block height>
+GET /api/v1/tx/<txid>
+GET /api/v1/address/<address>
+GET /api/v1/utxo/<address>
+GET /api/v1/block/<block height | block hash>
+GET /api/v1/estimatefee/<number of blocks>
+GET /api/v1/sendtx/<hex tx data>
+POST /api/v1/sendtx/ (hex tx data in request body)
+```
+
+### Socket.io API
+
+Socket.io interface is provided at `/socket.io/`. The interface also can be explored using Blockbook Socket.io Test Page found at `/test-socketio.html`.
+
+The legacy API is provided as is and will not be further developed.
+
+The legacy API is currently (as of Blockbook v0.4.0) also accessible without the _/v1/_ prefix, however in the future versions the version less access will be removed.

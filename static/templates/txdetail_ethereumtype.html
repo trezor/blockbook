@@ -1,127 +1,203 @@
 {{define "txdetail"}}{{$cs := .CoinShortcut}}{{$addr := .AddrStr}}{{$tx := .Tx}}{{$data := .}}
-<div class="alert alert-data"{{if eq $tx.EthereumSpecific.Status 0}} style="background-color: #faf2ee;"{{end}}>
-    <div class="row line-bot">
-        <div class="col-xs-7 col-md-8 ellipsis">
-            <a href="/tx/{{$tx.Txid}}">{{$tx.Txid}}</a>
-            {{if eq $tx.EthereumSpecific.Status 1}}<span class="text-success"> ✔</span>{{end}}{{if eq $tx.EthereumSpecific.Status 0}}<span class="text-danger"> ✘</span>{{end}}
+<div class="tx-detail">
+    <div class="row head">
+        <div class="col-xs-7 col-md-8{{if eq $tx.EthereumSpecific.Status 0}} txerror{{end}}">
+            <a href="/tx/{{$tx.Txid}}" class="ellipsis copyable txid">{{$tx.Txid}}</a>
+            {{if $tx.Rbf}}<span class="ps-1" tt="Replace-by-Fee (RBF) transaction, could be overridden"> RBF</span>{{end}}
         </div>
-        {{- if $tx.Blocktime}}<div class="col-xs-5 col-md-4 text-muted text-right">{{if $tx.Confirmations}}mined{{else}}first seen{{end}} {{formatUnixTime $tx.Blocktime}}</div>{{end -}}
+        {{if $tx.Blocktime}}<div class="col-xs-5 col-md-4 text-end">{{if $tx.Confirmations}}mined{{else}}first seen{{end}} <span class="txvalue ms-1">{{unixTimeSpan $tx.Blocktime}}</span></div>{{end}}
+        {{if eq $tx.EthereumSpecific.Status 0}}<div class="col-12 txerror pb-1"><span class="badge bg-danger">Failed</span>{{if $tx.EthereumSpecific.Error}}<span class="small ms-1">{{$tx.EthereumSpecific.Error}}</span>{{end}}</div>{{end}}
+        {{if $tx.EthereumSpecific.ParsedData}}
+            {{if $tx.EthereumSpecific.ParsedData.Name}}<div class="col-12 small"><span class="txvalue">{{$tx.EthereumSpecific.ParsedData.Name}}</span>{{if $tx.EthereumSpecific.ParsedData.MethodId}}<span class="ms-1" tt="4-byte signature"> ({{$tx.EthereumSpecific.ParsedData.MethodId}})</span>{{end}}</div>{{else}}
+            {{if $tx.EthereumSpecific.ParsedData.MethodId}}<div class="col-12 small txvalue"><span tt="4-byte signature">{{$tx.EthereumSpecific.ParsedData.MethodId}}</span></div>{{end}}
+            {{end}}
+        {{end}}
     </div>
-    <div class="row line-mid">
+    <div class="row body">
         <div class="col-md-4">
             <div class="row tx-in">
-                <table class="table data-table">
-                    <tbody>
-                        {{- range $vin := $tx.Vin -}}
-                        <tr{{if $vin.IsOwn}} class="tx-own"{{end}}>
-                            <td>
-                                {{- range $a := $vin.Addresses -}}
-                                <span class="ellipsis tx-addr">
-                                    {{if and (ne $a $addr) $vin.IsAddress}}<a href="/address/{{$a}}">{{$a}}</a>{{else}}{{$a}}{{end}}
-                                </span>
-                                {{- else -}}
-                                <span class="tx-addr">Unparsed address</span>
-                                {{- end -}}
-                            </td>
-                        </tr>
-                        {{- else -}}
-                        <tr>
-                            <td>No Inputs</td>
-                        </tr>
-                        {{- end -}}
-                    </tbody>
-                </table>
+                {{range $vin := $tx.Vin}}
+                <div class="col-12{{if $vin.IsOwn}} tx-own{{end}}">
+                    {{range $a := $vin.Addresses}}
+                    <span class="ellipsis">
+                        {{if and (ne $a $addr) $vin.IsAddress}}<a href="/address/{{$a}}">{{addressAliasSpan $a $data}}</a>{{else}}{{addressAliasSpan $a $data}}{{end}}
+                    </span>
+                    {{else}}
+                    Unparsed address
+                    {{end}}
+                </div>
+                {{else}}
+                <div class="col-12">No Inputs</div>
+                {{end}}
             </div>
         </div>
-        <div class="col-md-1 col-xs-12 text-center">
-            <svg class="octicon" viewBox="0 0 8 16">
-                <path fill-rule="evenodd" d="M7.5 8l-5 5L1 11.5 4.75 8 1 4.5 2.5 3l5 5z"></path>
-            </svg>
-        </div>
+        <div class="col-md-1 col-xs-12 text-center">&nbsp;<span class="octicon"></span></div>
         <div class="col-md-4">
             <div class="row tx-out">
-                <table class="table data-table">
-                    <tbody>
-                        {{- range $vout := $tx.Vout -}}
-                        <tr{{if $vout.IsOwn}} class="tx-own"{{end}}>
-                            <td>
-                                {{- range $a := $vout.Addresses -}}
-                                <span class="ellipsis tx-addr">
-                                    {{- if and (ne $a $addr) $vout.IsAddress}}<a href="/address/{{$a}}">{{$a}}</a>{{else}}{{$a}}{{- end -}}
-                                </span>
-                                {{- else -}}
-                                <span class="tx-addr">Unparsed address</span>
-                                {{- end -}}
-                            </td>
-                        </tr>
-                        {{- else -}}
-                        <tr>
-                            <td>No Outputs</td>
-                        </tr>
-                        {{- end -}}
-                    </tbody>
-                </table>
+                {{range $vout := $tx.Vout}}
+                <div class="col-12{{if $vout.IsOwn}} tx-own{{end}}">
+                    {{range $a := $vout.Addresses}}
+                    <span class="ellipsis">
+                        {{if and (ne $a $addr) $vout.IsAddress}}<a href="/address/{{$a}}">{{addressAliasSpan $a $data}}</a>{{else}}{{addressAliasSpan $a $data}}{{end}}
+                    </span>
+                    {{else}}
+                    Unparsed address
+                    {{end}}
+                </div>
+                {{else}}
+                <div class="col-12">No Outputs</div>
+                {{end}}
             </div>
         </div>
-        <div class="col-md-3 text-right" style="padding: .4rem 0;">
-            {{formatAmount $tx.ValueOutSat}} {{$cs}}
-        </div>
+        <div class="col-md-3 amt-out">{{amountSpan $tx.ValueOutSat $data "tx-out copyable"}}</div>
     </div>
-    {{- if $tx.TokenTransfers -}}
-    <div class="row line-top" style="padding: 15px 0 6px 15px;font-weight: bold;">
-        ERC20 Token Transfers
+
+    {{if eq $tx.EthereumSpecific.Type 1}}
+    <div class="row subhead">
+        Contract creation
     </div>
-    {{- range $erc20 := $tx.TokenTransfers -}}
-    <div class="row" style="padding: 2px 15px;">
+    <div class="row body">
         <div class="col-md-4">
             <div class="row tx-in">
-                <table class="table data-table">
-                    <tbody>
-                        <tr{{if isOwnAddress $data $erc20.From}} class="tx-own"{{end}}>
-                            <td>
-                                <span class="ellipsis tx-addr">{{if ne $erc20.From $addr}}<a href="/address/{{$erc20.From}}">{{$erc20.From}}</a>{{else}}{{$erc20.From}}{{end}}</span>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
+                <div class="col-12 ellipsis{{if isOwnAddress $data $tx.EthereumSpecific.CreatedContract}} tx-own{{end}}">
+                    {{if ne $tx.EthereumSpecific.CreatedContract $addr}}<a href="/address/{{$tx.EthereumSpecific.CreatedContract}}">{{addressAliasSpan $tx.EthereumSpecific.CreatedContract $data}}</a>{{else}}{{addressAliasSpan $tx.EthereumSpecific.CreatedContract $data}}{{end}}
+                </div>
             </div>
         </div>
-        <div class="col-md-1 col-xs-12 text-center">
-            <svg class="octicon" viewBox="0 0 8 16">
-                <path fill-rule="evenodd" d="M7.5 8l-5 5L1 11.5 4.75 8 1 4.5 2.5 3l5 5z"></path>
-            </svg>
-        </div>
-        <div class="col-md-4">
-            <div class="row tx-out">
-                <table class="table data-table">
-                    <tbody>
-                        <tr{{if isOwnAddress $data $erc20.To}} class="tx-own"{{end}}>
-                            <td>
-                                <span class="ellipsis tx-addr">{{if ne $erc20.To $addr}}<a href="/address/{{$erc20.To}}">{{$erc20.To}}</a>{{else}}{{$erc20.To}}{{end}}</span>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-        <div class="col-md-3 text-right" style="padding: .4rem 0;">{{formatAmountWithDecimals $erc20.Value $erc20.Decimals}} {{$erc20.Symbol}}</div>
     </div>
-    {{- end -}}
-    <div class="row" style="padding: 6px 15px;"></div>
-    {{- end -}}
-    <div class="row line-top">
-        <div class="col-xs-6 col-sm-4 col-md-4">
-            {{- if $tx.FeesSat -}}
-            <span class="txvalues txvalues-default">Fee: {{formatAmount $tx.FeesSat}} {{$cs}}</span>
-            {{- end -}}
+    {{end}}
+
+    {{if $tx.EthereumSpecific.InternalTransfers}}
+    <div class="row subhead">
+        Internal Transactions
+    </div>
+    {{range $tt := $tx.EthereumSpecific.InternalTransfers}}
+    {{if eq $tt.Type 1}}<div class="row subhead-2">Contract creation</div>{{end}}
+    {{if eq $tt.Type 2}}<div class="row subhead-2">Contract destruction</div>{{end}}
+    <div class="row body">
+        <div class="col-md-4">
+            <div class="row tx-addr">
+                <div class="col-12 ellipsis{{if isOwnAddress $data $tt.From}} tx-own{{end}}">
+                    {{if ne $tt.From $addr}}<a href="/address/{{$tt.From}}">{{addressAliasSpan $tt.From $data}}</a>{{else}}{{addressAliasSpan $tt.From $data}}{{end}}
+                </div>
+            </div>
         </div>
-        <div class="col-xs-6 col-sm-8 col-md-8 text-right">
-            {{- if $tx.Confirmations -}}
-            <span class="txvalues txvalues-success">{{$tx.Confirmations}} Confirmations</span>
-            {{- else -}}
-            <span class="txvalues txvalues-danger ng-hide">Unconfirmed Transaction!</span>
-            {{- end -}}
-            <span class="txvalues txvalues-primary">{{formatAmount $tx.ValueOutSat}} {{$cs}}</span>
+        <div class="col-md-1 col-xs-12 text-center">&nbsp;<span class="octicon"></span></div>
+        <div class="col-md-4">
+            <div class="row tx-addr">
+                <div class="col-12 ellipsis{{if isOwnAddress $data $tt.To}} tx-own{{end}}">
+                    {{if ne $tt.To $addr}}<a href="/address/{{$tt.To}}">{{addressAliasSpan $tt.To $data}}</a>{{else}}{{addressAliasSpan $tt.To $data}}{{end}}
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 amt-out">{{amountSpan $tt.Value $data "tx-out copyable"}}</div>
+    </div>
+    {{end}}
+    {{end}}
+
+    {{if tokenTransfersCount $tx .FungibleTokenName}}
+    <div class="row subhead">
+        {{.FungibleTokenName}} Token Transfers
+    </div>
+    {{range $tt := $tx.TokenTransfers}}
+    {{if eq $tt.Type $.FungibleTokenName}}
+    <div class="row body">
+        <div class="col-md-4">
+            <div class="row tx-addr">
+                <div class="col-12 ellipsis{{if isOwnAddress $data $tt.From}} tx-own{{end}}">
+                    {{if ne $tt.From $addr}}<a href="/address/{{$tt.From}}">{{addressAliasSpan $tt.From $data}}</a>{{else}}{{addressAliasSpan $tt.From $data}}{{end}}
+                </div>
+            </div>
+        </div>
+        <div class="col-md-1 col-xs-12 text-center">&nbsp;<span class="octicon"></span></div>
+        <div class="col-md-4">
+            <div class="row tx-addr">
+                <div class="col-12 ellipsis{{if isOwnAddress $data $tt.To}} tx-own{{end}}">
+                    {{if ne $tt.To $addr}}<a href="/address/{{$tt.To}}">{{addressAliasSpan $tt.To $data}}</a>{{else}}{{addressAliasSpan $tt.To $data}}{{end}}
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 amt-out">{{tokenAmountSpan $tt $data "tx-out copyable"}}</div>
+    </div>
+    {{end}}
+    {{end}}
+    {{end}}
+
+    {{if tokenTransfersCount $tx .NonFungibleTokenName}}
+    <div class="row subhead">
+        {{.NonFungibleTokenName}} Token Transfers
+    </div>
+    {{range $tt := $tx.TokenTransfers}}
+    {{if eq $tt.Type $.NonFungibleTokenName}}
+    <div class="row body">
+        <div class="col-md-4">
+            <div class="row tx-addr">
+                <div class="col-12 ellipsis{{if isOwnAddress $data $tt.From}} tx-own{{end}}">
+                    {{if ne $tt.From $addr}}<a href="/address/{{$tt.From}}">{{addressAliasSpan $tt.From $data}}</a>{{else}}{{addressAliasSpan $tt.From $data}}{{end}}
+                </div>
+            </div>
+        </div>
+        <div class="col-md-1 col-xs-12 text-center">&nbsp;<span class="octicon"></span></div>
+        <div class="col-md-4">
+            <div class="row tx-addr">
+                <div class="col-12 ellipsis{{if isOwnAddress $data $tt.To}} tx-own{{end}}">
+                    {{if ne $tt.To $addr}}<a href="/address/{{$tt.To}}">{{addressAliasSpan $tt.To $data}}</a>{{else}}{{addressAliasSpan $tt.To $data}}{{end}}
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 amt-out">ID <a href="/nft/{{$tt.Contract}}/{{$tt.Value}}">{{$tt.Value}}</a> {{$tt.Symbol}}</div>
+    </div>
+    {{end}}
+    {{end}}
+    {{end}}
+
+    {{if tokenTransfersCount $tx .MultiTokenName}}
+    <div class="row subhead">
+        {{.MultiTokenName}} Token Transfers
+    </div>
+    {{range $tt := $tx.TokenTransfers}}
+    {{if eq $tt.Type $.MultiTokenName}}
+    <div class="row body">
+        <div class="col-md-4">
+            <div class="row tx-addr">
+                <div class="col-12 ellipsis{{if isOwnAddress $data $tt.From}} tx-own{{end}}">
+                    {{if ne $tt.From $addr}}<a href="/address/{{$tt.From}}">{{addressAliasSpan $tt.From $data}}</a>{{else}}{{addressAliasSpan $tt.From $data}}{{end}}
+                </div>
+            </div>
+        </div>
+        <div class="col-md-1 col-xs-12 text-center">&nbsp;<span class="octicon"></span></div>
+        <div class="col-md-4">
+            <div class="row tx-addr">
+                <div class="col-12 ellipsis{{if isOwnAddress $data $tt.To}} tx-own{{end}}">
+                    {{if ne $tt.To $addr}}<a href="/address/{{$tt.To}}">{{addressAliasSpan $tt.To $data}}</a>{{else}}{{addressAliasSpan $tt.To $data}}{{end}}
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 amt-out">
+            {{range $i, $iv := $tt.MultiTokenValues}}
+                {{if $i}}, {{end}}{{formattedAmountSpan $iv.Value 0 $tt.Symbol $data ""}} of ID <a href="/nft/{{$tt.Contract}}/{{$iv.Id}}">{{$iv.Id}}</a>
+            {{end}}
+        </div>
+    </div>
+    {{end}}
+    {{end}}
+    {{end}}
+
+    <div class="row footer">
+        <div class="col-sm-12 col-md-6">
+            {{if $tx.FeesSat}}
+            Fee {{amountSpan $tx.FeesSat $data "txvalue copyable ms-3"}} <span class="fw-normal small">({{amountSatsSpan $tx.EthereumSpecific.GasPrice $data ""}} Gwei/gas)</span>
+            {{end}}
+        </div>
+        <div class="col-sm-12 col-md-6 text-end">
+            <span class="me-4">
+            {{if $tx.Confirmations}}
+            <span class="txvalue">{{formatUint32 $tx.Confirmations}}</span> confirmations
+            {{else}}
+            <span class="txvalue unconfirmed">Unconfirmed Transaction!</span>
+            {{end}}
+            </span>
+            {{amountSpan $tx.ValueOutSat $data "txvalue copyable"}}
         </div>
     </div>
 </div>

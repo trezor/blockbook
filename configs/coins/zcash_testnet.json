@@ -21,10 +21,10 @@
   "backend": {
     "package_name": "backend-zcash-testnet",
     "package_revision": "satoshilabs-1",
-    "version": "4.6.0-2",
-    "binary_url": "https://z.cash/downloads/zcash-4.6.0-2-linux64-debian-buster.tar.gz",
+    "version": "5.4.2",
+    "binary_url": "https://z.cash/downloads/zcash-5.4.2-linux64-debian-bullseye.tar.gz",
     "verification_type": "sha256",
-    "verification_source": "9e18ded3b25cbc38f8189a7d276d2fefbeb122f1ac4d578404bbdf960c1b16e2",
+    "verification_source": "bbc339d88a23207f81ff01b91b7a925ab013a855c6691d0f8b3400ebfb149c08",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [],
     "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/zcashd -datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -conf={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf -pid=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",

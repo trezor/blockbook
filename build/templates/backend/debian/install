@@ -3,4 +3,5 @@
 backend/* {{.Env.BackendInstallPath}}/{{.Coin.Alias}}
 server.conf => {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf
 client.conf => {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}_client.conf
+{{if .Backend.ExecScript }}exec.sh => {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}_exec.sh{{end}}
 {{end}}

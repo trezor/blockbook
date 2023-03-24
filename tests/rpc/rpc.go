@@ -356,7 +356,7 @@ func testGetBestBlockHeight(t *testing.T, h *TestHandler) {
 			return
 		}
 	}
-	t.Error("GetBestBlockHeigh() didn't get the the best heigh")
+	t.Error("GetBestBlockHeight() didn't get the best height")
 }
 
 func testGetBlockHeader(t *testing.T, h *TestHandler) {

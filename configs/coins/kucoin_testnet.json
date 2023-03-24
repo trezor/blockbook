@@ -1,0 +1,63 @@
+{
+    "coin": {
+        "name": "KuCoin Community Chain TestNet",
+        "shortcut": "KCC TestNet",
+        "label": "KuCoin Community Chain TestNet",
+        "alias": "KuCoin Community Chain TestNet"
+    },
+    "ports": {
+        "backend_rpc": 18070,
+        "backend_message_queue": 0,
+        "blockbook_internal": 19070,
+        "blockbook_public": 19170
+    },
+    "ipc": {
+        "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
+        "rpc_user": "",
+        "rpc_pass": "",
+        "rpc_timeout": 25,
+        "message_queue_binding_template": "tcp://127.0.0.1:{{.Ports.BackendMessageQueue}}"
+    },
+    "backend": {
+        "package_name": "backend-kucoin-testnet",
+        "package_revision": "satoshilabs-1",
+        "system_user": "kucoin-testnet",
+        "version": "0.18.5.5",
+        "binary_url": "",
+        "extract_command": "unzip -d backend",
+        "exclude_files": [],
+        "exec_command_template": "",
+        "logrotate_files_template": "",
+        "postinst_script_template": "",
+        "service_type": "forking",
+        "service_additional_params_template": "",
+        "protect_memory": true,
+        "mainnet": true,
+        "server_config_file": "",
+        "client_config_file": ""
+    },
+    "blockbook": {
+        "package_name": "blockbook-kucoin-testnet",
+        "system_user": "blockbook-kucoin-testnet",
+        "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
+        "public_binding_template": ":{{.Ports.BlockbookPublic}}",
+        "explorer_url": "",
+        "additional_params": "",
+        "block_chain": {
+            "parse": true,
+            "mempool_workers": 8,
+            "mempool_sub_workers": 2,
+            "block_addresses_to_keep": 10000,
+            "additional_params": {
+                "mempoolTxTimeoutHours": 48,
+                "queryBackendOnMempoolResync": true,
+                "fiat_rates": "coingecko",
+                "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"kcs\", \"periodSeconds\": 60}"
+            }
+        }
+    },
+    "meta": {
+        "package_maintainer": "martin-key",
+        "package_maintainer_email": "martin@gostartups.net"
+    }
+}

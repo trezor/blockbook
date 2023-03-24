@@ -480,6 +480,7 @@ func init() {
 		Blocktime: 1519053802,
 		Txid:      "056e3d82e5ffd0e915fb9b62797d76263508c34fe3e5dbed30dd3e943930f204",
 		LockTime:  512115,
+		VSize:     189,
 		Version:   1,
 		Vin: []bchain.Vin{
 			{
@@ -510,6 +511,7 @@ func init() {
 		Blocktime: 1235678901,
 		Txid:      "474e6795760ebe81cb4023dc227e5a0efe340e1771c89a0035276361ed733de7",
 		LockTime:  0,
+		VSize:     166,
 		Version:   1,
 		Vin: []bchain.Vin{
 			{
@@ -550,6 +552,7 @@ func init() {
 		Blocktime: 1607805599,
 		Txid:      "24551a58a1d1fb89d7052e2bbac7cb69a7825ee1e39439befbec8c32148cf735",
 		LockTime:  15745,
+		VSize:     208,
 		Version:   2,
 		Vin: []bchain.Vin{
 			{

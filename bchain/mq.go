@@ -92,15 +92,13 @@ func (mq *MQ) run(callback func(NotificationType)) {
 		} else {
 			repeatedError = false
 		}
-		if msg != nil && len(msg) >= 3 {
+		if len(msg) >= 3 {
 			var nt NotificationType
 			switch string(msg[0]) {
 			case "hashblock":
 				nt = NotificationNewBlock
-				break
 			case "hashtx":
 				nt = NotificationNewTx
-				break
 			default:
 				nt = NotificationUnknown
 				glog.Infof("MQ: NotificationUnknown %v", string(msg[0]))

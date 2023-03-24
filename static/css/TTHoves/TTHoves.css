@@ -1,0 +1,39 @@
+@font-face {
+    font-family: 'TT Hoves';
+    src: url('./TTHoves-Bold.woff2') format('woff2'),
+        url('./TTHoves-Bold.woff') format('woff');
+    font-weight: bold;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'TT Hoves';
+    src: url('./TTHoves-Regular.woff2') format('woff2'),
+        url('./TTHoves-Regular.woff') format('woff');
+    font-weight: normal;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'TT Hoves';
+    src: url('./TTHoves-Light.woff2') format('woff2'),
+        url('./TTHoves-Light.woff') format('woff');
+    font-weight: 300;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'TT Hoves';
+    src: url('./TTHoves-DemiBold.woff2') format('woff2'),
+        url('./TTHoves-DemiBold.woff') format('woff');
+    font-weight: 600;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'TT Hoves';
+    src: url('./TTHoves-Medium.woff2') format('woff2'),
+        url('./TTHoves-Medium.woff') format('woff');
+    font-weight: 500;
+    font-style: normal;
+}

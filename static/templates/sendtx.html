@@ -1,16 +1,16 @@
-{{define "specific" -}}
+{{define "specific"}}
 <h1>Send Raw Transaction</h1>
 <form method="POST" action="/sendtx">
     <div class="form-group">
         <label for="exampleFormControlTextarea1">Raw transaction data</label>
         <textarea class="form-control" rows="8" name="hex">{{.SendTxHex}}</textarea>
     </div>
-    <div class="form-group"><button type="submit" class="btn btn-primary">Send</button></div>
+    <div class="form-group mt-3"><button type="submit" class="btn btn-outline-secondary">Send</button></div>
 </form>
-{{- if .Status -}}
-<div class="alert alert-success">{{.Status}}</div>
-{{- end -}}
-{{- if .Error -}}
-<div class="alert alert-danger">{{.Error.Text}}</div>
-{{- end -}}
-{{- end -}}
+{{if .Status}}
+<div class="alert alert-success mt-3">{{.Status}}</div>
+{{end}}
+{{if .Error}}
+<div class="alert alert-danger mt-3">{{.Error.Text}}</div>
+{{end}}
+{{end}}

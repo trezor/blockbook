@@ -1,120 +1,262 @@
-{{define "specific"}}{{$cs := .CoinShortcut}}{{$addr := .Address}}{{$data := .}}
-<h1>{{if $addr.Erc20Contract}}Contract {{$addr.Erc20Contract.Name}} ({{$addr.Erc20Contract.Symbol}}){{else}}Address{{end}} <small class="text-muted">{{formatAmount $addr.BalanceSat}} {{$cs}}</small>
-</h1>
-<div class="alert alert-data ellipsis">
-    <span class="data">{{$addr.AddrStr}}</span>
-</div>
-<h3>Confirmed</h3>
-<div class="data-div row">
-    <div class="col-lg-10">
-        <table class="table data-table">
-            <tbody>
-                {{- if eq .ChainType 1 -}}
-                <tr>
-                    <td style="width: 25%;">Balance</td>
-                    <td class="data">{{formatAmount $addr.BalanceSat}} {{$cs}}</td>
-                </tr>
-                <tr>
-                    <td>Transactions</td>
-                    <td class="data">{{$addr.Txs}}</td>
-                </tr>
-                <tr>
-                    <td>Non-contract Transactions</td>
-                    <td class="data">{{$addr.NonTokenTxs}}</td>
-                </tr>
-                <tr>
-                    <td>Nonce</td>
-                    <td class="data">{{$addr.Nonce}}</td>
-                </tr>
-                {{- if $addr.Tokens -}}
-                <tr>
-                    <td>ERC20 Tokens</td>
-                    <td style="padding: 0;">
-                        <table class="table data-table">
-                            <tbody>
-                                <tr>
-                                    <th>Contract</th>
-                                    <th>Tokens</th>
-                                    <th style="width: 15%;">Transfers</th>
-                                </tr>
-                                {{- range $t := $addr.Tokens -}}
-                                <tr>
-                                    <td class="data ellipsis">{{if $t.Contract}}<a href="/address/{{$t.Contract}}">{{$t.Name}}</a>{{else}}{{$t.Name}}{{end}}</td>
-                                    <td class="data">{{formatAmountWithDecimals $t.BalanceSat $t.Decimals}} {{$t.Symbol}}</td>
-                                    <td class="data">{{$t.Transfers}}</td>
-                                </tr>
-                                {{- end -}}
-                            </tbody>
-                        </table>
-                    </td>
-                </tr>
-                {{- end -}}
-                </tr>
-                {{- else -}}
-                <tr>
-                    <td style="width: 25%;">Total Received</td>
-                    <td class="data">{{formatAmount $addr.TotalReceivedSat}} {{$cs}}</td>
-                </tr>
-                <tr>
-                    <td>Total Sent</td>
-                    <td class="data">{{formatAmount $addr.TotalSentSat}} {{$cs}}</td>
-                </tr>
-                <tr>
-                    <td>Final Balance</td>
-                    <td class="data">{{formatAmount $addr.BalanceSat}} {{$cs}}</td>
-                </tr>
-                <tr>
-                    <td>No. Transactions</td>
-                    <td class="data">{{$addr.Txs}}</td>
-                </tr>
-                {{- end -}}
-            </tbody>
-        </table>
+{{define "specific"}}{{$addr := .Address}}{{$data := .}}
+<div class="row g-0 ms-2 ms-lg-0">
+    <div class="col-md-10 order-2 order-md-1">
+        <h1>{{if $addr.ContractInfo}}Contract {{$addr.ContractInfo.Name}}{{if $addr.ContractInfo.Symbol}} ({{$addr.ContractInfo.Symbol}}){{end}}{{else}}Address {{addressAlias $addr.AddrStr $data}}{{end}}</h1>
+        <h5 class="col-12 d-flex h-data pb-2"><span class="ellipsis copyable">{{$addr.AddrStr}}</span></h5>
+        <h4 class="row">
+            <div class="col-lg-6">{{formattedAmountSpan $addr.BalanceSat 0 $data.CoinShortcut $data "copyable"}}</div>
+            {{if $addr.SecondaryValue}}<div class="col-lg-6">{{summaryValuesSpan 0 $addr.SecondaryValue $data}}</div>{{end}}
+        </h4>
+        {{if gt $addr.TotalSecondaryValue $addr.SecondaryValue}}
+        <div class="row g-0 small text-muted">Including Tokens</div>
+        <h4 class="row">
+            <div class="col-lg-6">{{summaryValuesSpan $addr.TotalBaseValue 0 $data}}</div>
+            <div class="col-lg-6">{{summaryValuesSpan 0 $addr.TotalSecondaryValue $data}}</div>
+        </h4>
+        {{end}}
     </div>
-    <div class="col-lg-2">
-        <div id="qrcode" style="width: 160px; height: 160px; float: right; padding-left: 10px;"></div>
+    <div class="col-md-2 order-1 order-md-2 d-flex justify-content-center justify-content-md-end mb-3 mb-md-0">
+        <div id="qrcode"></div>
         <script type="text/javascript" src="/static/js/qrcode.min.js"></script>
         <script type="text/javascript">
-            new QRCode(document.getElementById("qrcode"), { text: "{{$addr.AddrStr}}", width: 160, height: 160 });
+            new QRCode(document.getElementById("qrcode"), { text: "{{$addr.AddrStr}}", width: 120, height: 120 });
         </script>
     </div>
 </div>
-{{- if $addr.UnconfirmedTxs -}}
-<h3>Unconfirmed</h3>
-<div class="data-div">
-    <table class="table data-table">
-        <tbody>
-            <tr>
-                <td style="width: 25%;">Unconfirmed Balance</td>
-                <td class="data">{{formatAmount $addr.UnconfirmedBalanceSat}} {{$cs}}</td>
-            </tr>
-            <tr>
-                <td>No. Transactions</td>
-                <td class="data">{{$addr.UnconfirmedTxs}}</td>
-            </tr>
-        </tbody>
-    </table>
-</div>
-{{- end}}{{if or $addr.Transactions $addr.Filter -}}
-<div class="row h-container">
-    <h3 class="col-md-3">Transactions</h3>
-    <select class="col-md-2" style="background-color: #eaeaea;" onchange="self.location='?filter='+options[selectedIndex].value">
-        <option>All</option>
-        <option {{if eq $addr.Filter "inputs" -}} selected{{end}} value="inputs">Address on input side</option>
-        <option {{if eq $addr.Filter "outputs" -}} selected{{end}} value="outputs">Address on output side</option>
-        {{- if $addr.Tokens -}}
-        <option {{if eq $addr.Filter "0" -}} selected{{end}} value="0">Non-contract</option>
-        {{- range $t := $addr.Tokens -}}
-        <option {{if eq $addr.Filter $t.ContractIndex -}} selected{{end}} value="{{$t.ContractIndex}}">{{$t.Name}}</option>
-        {{- end -}}
-        {{- end -}}
-    </select>
-    <div class="col-md-7">
-        <nav>{{template "paging" $data}}</nav>
+<table class="table data-table info-table">
+    <tbody>
+        <tr>
+            <td style="white-space: nowrap;"><h5>Confirmed</h5></td>
+            <td></td>
+        </tr>
+        {{if eq .ChainType 1}}
+        <tr>
+            <td style="width: 25%;">Balance</td>
+            <td>{{amountSpan $addr.BalanceSat $data "copyable"}}</td>
+        </tr>
+        <tr>
+            <td>Transactions</td>
+            <td>{{formatInt $addr.Txs}}</td>
+        </tr>
+        <tr>
+            <td>Non-contract Transactions</td>
+            <td>{{formatInt $addr.NonTokenTxs}}</td>
+        </tr>
+        <tr>
+            <td>Internal Transactions</td>
+            <td>{{formatInt $addr.InternalTxs}}</td>
+        </tr>
+        <tr>
+            <td>Nonce</td>
+            <td>{{$addr.Nonce}}</td>
+        </tr>
+        {{if $addr.ContractInfo}}
+        {{if $addr.ContractInfo.Type}}
+        <tr>
+            <td style="width: 25%;">Contract type</td>
+            <td>{{$addr.ContractInfo.Type}}</td>
+        </tr>
+        {{end}}
+        {{if $addr.ContractInfo.CreatedInBlock}}
+        <tr>
+            <td style="width: 25%;">Created in Block</td>
+            <td><a href="/block/{{$addr.ContractInfo.CreatedInBlock}}">{{formatUint32 $addr.ContractInfo.CreatedInBlock}}</a></td>
+        </tr>
+        {{end}}
+        {{if $addr.ContractInfo.DestructedInBlock}}
+        <tr>
+            <td style="width: 25%;">Destructed in Block</td>
+            <td><a href="/block/{{$addr.ContractInfo.DestructedInBlock}}">{{formatUint32 $addr.ContractInfo.DestructedInBlock}}</a></td>
+        </tr>
+        {{end}}
+        {{end}}
+        {{else}}
+        <tr>
+            <td style="width: 25%;">Total Received</td>
+            <td>{{amountSpan $addr.TotalReceivedSat $data "copyable"}}</td>
+        </tr>
+        <tr>
+            <td>Total Sent</td>
+            <td>{{amountSpan $addr.TotalSentSat $data "copyable"}}</td>
+        </tr>
+        <tr>
+            <td>Final Balance</td>
+            <td>{{amountSpan $addr.BalanceSat $data "copyable"}}</td>
+        </tr>
+        <tr>
+            <td>No. Transactions</td>
+            <td>{{formatInt $addr.Txs}}</td>
+        </tr>
+        {{end}}
+    </tbody>
+</table>
+{{if $addr.UnconfirmedTxs}}
+<table class="table data-table info-table">
+    <tbody>
+        <tr>
+            <td style="white-space: nowrap;"><h5>Unconfirmed</h5></td>
+            <td></td>
+        </tr>
+        <tr>
+            <td style="width: 25%;">Unconfirmed Balance</td>
+            <td>{{amountSpan $addr.UnconfirmedBalanceSat $data "copyable"}}</td>
+        </tr>
+        <tr>
+            <td>No. Transactions</td>
+            <td>{{formatInt $addr.UnconfirmedTxs}}</td>
+        </tr>
+    </tbody>
+</table>
+{{end}}
+{{if eq .ChainType 1}}
+{{if tokenCount $addr.Tokens .FungibleTokenName}}
+<div class="accordion mt-2 mb-2" id="erc20">
+    <div class="accordion-item">
+        <div class="accordion-header" id="erc20Heading">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#erc20Body" aria-expanded="false" aria-controls="erc20Body">
+                <div class="row g-0 w-100">
+                    <h5 class="col-md-4 mb-md-0">{{.FungibleTokenName}} Tokens <span class="badge bg-secondary">{{tokenCount $addr.Tokens .FungibleTokenName}}</span></h5>
+                    <h5 class="col-md-8 mb-md-0"><span tt="Total value of tokens">{{summaryValuesSpan $addr.TokensBaseValue $addr.TokensSecondaryValue $data}}</span></h5>
+                </div>
+            </button>
+        </div>
+        <div id="erc20Body" class="accordion-collapse collapse" aria-labelledby="erc20Heading" data-bs-parent="#erc20">
+            <div class="accordion-body">
+                <table class="table data-table mt-0 mb-0">
+                    <tbody>
+                        <tr>
+                            <th style="width: 25%;">Contract</th>
+                            <th style="width: 30%;">Quantity</th>
+                            <th style="width: 35%;">Value</th>
+                            <th class="text-end" style="width: 10%;"><span class="d-none d-md-block">Transfers</span><span class="d-block d-md-none">#</span></th>
+                        </tr>
+                        {{range $t := $addr.Tokens}}
+                        {{if eq $t.Type $.FungibleTokenName}}
+                        <tr>
+                            <td class="ellipsis"><a href="/address/{{$t.Contract}}">{{if $t.Name}}<span class="copyable" cc="{{$t.Contract}}" alias-type="Contract">{{$t.Name}}</span>{{else}}<span class="copyable">{{$t.Contract}}</span>{{end}}</a></td>
+                            <td>{{formattedAmountSpan $t.BalanceSat $t.Decimals $t.Symbol $data "copyable"}}</td>
+                            <td>{{summaryValuesSpan $t.BaseValue $t.SecondaryValue $data}}</span></td>
+                            <td class="text-end">{{formatInt $t.Transfers}}</td>
+                        </tr>
+                        {{end}}
+                        {{end}}
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
 </div>
-<div class="data-div">
-    {{- range $tx := $addr.Transactions}}{{$data := setTxToTemplateData $data $tx}}{{template "txdetail" $data}}{{end -}}
+{{end}}
+{{if tokenCount $addr.Tokens .NonFungibleTokenName}}
+<div class="accordion mt-2 mb-2" id="erc721">
+    <div class="accordion-item">
+        <div class="accordion-header" id="erc721Heading">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#erc721Body" aria-expanded="false" aria-controls="erc721Body">
+                <div class="row g-0 w-100">
+                    <h5 class="col-12 mb-md-0">{{.NonFungibleTokenName}} Tokens <span class="badge bg-secondary">{{tokenCount $addr.Tokens .NonFungibleTokenName}}</span></h5>
+                </div>
+            </button>
+        </div>
+        <div id="erc721Body" class="accordion-collapse collapse" aria-labelledby="erc721Heading" data-bs-parent="#erc721">
+            <div class="accordion-body">
+                <table class="table data-table mt-0 mb-0">
+                    <tbody>
+                        <tr>
+                            <th style="width: 25%;">Contract</th>
+                            <th style="width: 65%;">Tokens</th>
+                            <th class="text-end" style="width: 10%;"><span class="d-none d-md-block">Transfers</span><span class="d-block d-md-none">#</span></th>
+                        </tr>
+                        {{range $t := $addr.Tokens}}
+                        {{if eq $t.Type $.NonFungibleTokenName}}
+                        <tr>
+                            <td class="ellipsis"><a href="/address/{{$t.Contract}}">{{if $t.Name}}<span class="copyable" cc="{{$t.Contract}}" alias-type="Contract">{{$t.Name}}</span>{{else}}<span class="copyable">{{$t.Contract}}</span>{{end}}</a></td>
+                            <td>
+                                {{range $i, $iv := $t.Ids}}{{if $i}}, {{end}}<a href="/nft/{{$t.Contract}}/{{formatAmountWithDecimals $iv 0}}">{{formatAmountWithDecimals $iv 0}}</a>{{end}}
+                            </td>
+                            <td class="text-end">{{$t.Transfers}}</td>
+                        </tr>
+                        {{end}}
+                        {{end}}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
 </div>
-<nav>{{template "paging" $data }}</nav>
+{{end}}
+{{if tokenCount $addr.Tokens .MultiTokenName}}
+<div class="accordion mt-2 mb-2" id="erc1155">
+    <div class="accordion-item">
+        <div class="accordion-header" id="erc1155Heading">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#erc1155Body" aria-expanded="false" aria-controls="erc1155Body">
+                <div class="row g-0 w-100">
+                    <h5 class="col-12 mb-md-0">{{.MultiTokenName}} Tokens <span class="badge bg-secondary">{{tokenCount $addr.Tokens .MultiTokenName}}</span></h5>
+                </div>
+            </button>
+        </div>
+        <div id="erc1155Body" class="accordion-collapse collapse" aria-labelledby="erc1155Heading" data-bs-parent="#erc1155">
+            <div class="accordion-body">
+                <table class="table data-table mt-0 mb-0">
+                    <tbody>
+                        <tr>
+                            <th style="width: 25%;">Contract</th>
+                            <th style="width: 65%;">Tokens</th>
+                            <th class="text-end" style="width: 10%;"><span class="d-none d-md-block">Transfers</span><span class="d-block d-md-none">#</span></th>
+                        </tr>
+                        {{range $t := $addr.Tokens}}
+                        {{if eq $t.Type $.MultiTokenName}}
+                        <tr>
+                            <td class="ellipsis"><a href="/address/{{$t.Contract}}">{{if $t.Name}}<span class="copyable" cc="{{$t.Contract}}" alias-type="Contract">{{$t.Name}}</span>{{else}}<span class="copyable">{{$t.Contract}}</span>{{end}}</a></td>
+                            <td>
+                                {{range $i, $iv := $t.MultiTokenValues}}{{if $i}}, {{end}}{{formattedAmountSpan $iv.Value 0 $t.Symbol $data ""}} of ID <a href="/nft/{{$t.Contract}}/{{$iv.Id}}">{{$iv.Id}}</a>{{end}}
+                            </td>
+                            <td class="text-end">{{formatInt $t.Transfers}}</td>
+                        </tr>
+                        {{end}}
+                        {{end}}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{{end}}
+{{end}}
+{{if or $addr.Transactions $addr.Filter}}
+<div class="row pt-3 pb-1">
+    <h3 class="col-sm-6 col-lg-3 m-0 align-self-center">Transactions</h3>
+    <div class="col-sm-6 col-lg-3 my-2 my-lg-0 align-self-center">
+        <select  class="w-100" onchange="self.location='?filter='+options[selectedIndex].value">
+            <option>All</option>
+            <option {{if eq $addr.Filter "inputs"}}selected{{end}} value="inputs">Address on input side</option>
+            <option {{if eq $addr.Filter "outputs"}}selected{{end}} value="outputs">Address on output side</option>
+            {{if $addr.Tokens}}
+            <option {{if eq $addr.Filter "0"}}selected{{end}} value="0">Non-contract</option>
+            <option {{if eq $addr.Filter "1"}}selected{{end}} value="1">Internal</option>
+            {{range $t := $addr.Tokens}}
+            {{if eq $t.Type $.FungibleTokenName}}
+            <option {{if eq $addr.Filter $t.ContractIndex}}selected{{end}} value="{{$t.ContractIndex}}">{{if $t.Name}}{{$t.Name}}{{else}}{{$t.Contract}}{{end}} ({{$.FungibleTokenName}})</option>
+            {{end}}
+            {{end}}
+            {{range $t := $addr.Tokens}}
+            {{if eq $t.Type $.NonFungibleTokenName}}
+            <option {{if eq $addr.Filter $t.ContractIndex}}selected{{end}} value="{{$t.ContractIndex}}">{{if $t.Name}}{{$t.Name}}{{else}}{{$t.Contract}}{{end}} ({{$.NonFungibleTokenName}})</option>
+            {{end}}
+            {{end}}
+            {{range $t := $addr.Tokens}}
+            {{if eq $t.Type $.MultiTokenName}}
+            <option {{if eq $addr.Filter $t.ContractIndex}}selected{{end}} value="{{$t.ContractIndex}}">{{if $t.Name}}{{$t.Name}}{{else}}{{$t.Contract}}{{end}} ({{$.MultiTokenName}})</option>
+            {{end}}
+            {{end}}
+            {{end}}
+        </select>
+    </div>
+    <div class="col-lg-6">
+        {{template "paging" $data}}
+    </div>
+</div>
+<div>
+    {{range $tx := $addr.Transactions}}{{$data := setTxToTemplateData $data $tx}}{{template "txdetail" $data}}{{end}}
+</div>
+{{template "paging" $data }}
 {{end}}{{end}}

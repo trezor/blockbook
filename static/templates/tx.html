@@ -1,116 +1,170 @@
-{{define "specific"}}{{$cs := .CoinShortcut}}{{$tx := .Tx}}
-<h1>Transaction</h1>
-<div class="alert alert-data ellipsis">
-    <span class="data">{{$tx.Txid}}</span>
+{{define "specific"}}{{$tx := .Tx}}{{$data := .}}
+<div class="row">
+    <h1 class="col-12">Transaction</h1>
 </div>
-<h3>Summary</h3>
-<div class="data-div">
-    <table class="table data-table">
-        <tbody>
-            {{- if $tx.Confirmations -}}
-            <tr>
-                <td style="width: 25%;">Mined Time</td>
-                <td class="data">{{formatUnixTime $tx.Blocktime}}</td>
-            </tr>{{end -}}
-            <tr>
-                <td style="width: 25%;">In Block</td>
-                <td class="ellipsis data">{{if $tx.Confirmations}}{{$tx.Blockhash}}{{else}}Unconfirmed{{end}}</td>
-            </tr>
-            {{- if $tx.Confirmations -}}
-            <tr>
-                <td>In Block Height</td>
-                <td class="data"><a href="/block/{{$tx.Blockheight}}">{{$tx.Blockheight}}</a></td>
-            </tr>{{end}}
-            {{- if $tx.EthereumSpecific -}}
-            <tr>
-                <td>Status</td>
-                {{- if $tx.EthereumSpecific.Status -}}
-                {{- if eq $tx.EthereumSpecific.Status 1 -}}
-                <td class="data text-success">Success</td>
-                {{- else -}}
-                {{- if eq $tx.EthereumSpecific.Status -1 -}}
-                <td class="data">Pending</td>
-                {{- else -}}
-                <td class="data">Unknown</td>
-                {{- end -}}
-                {{- end -}}
-                {{- else -}}
-                <td class="data text-danger">Fail</td>
-                {{- end -}}
-            </tr>
-            <tr>
-                <td>Value</td>
-                <td class="data">{{formatAmount $tx.ValueOutSat}} {{$cs}}</td>
-            </tr>
-            <tr>
-                <td>Gas Used / Limit</td>
-                <td class="data">{{if $tx.EthereumSpecific.GasUsed}}{{$tx.EthereumSpecific.GasUsed}}{{else}}pending{{end}} / {{$tx.EthereumSpecific.GasLimit}}</td>
-            </tr>
-            <tr>
-                <td>Gas Price</td>
-                <td class="data">{{formatAmount $tx.EthereumSpecific.GasPrice}} {{$cs}}</td>
-            </tr>
-            {{- else -}}
-            <tr>
-                <td>Total Input</td>
-                <td class="data">{{formatAmount $tx.ValueInSat}} {{$cs}}</td>
-            </tr>
-            <tr>
-                <td>Total Output</td>
-                <td class="data">{{formatAmount $tx.ValueOutSat}} {{$cs}}</td>
-            </tr>
-            {{- end -}}
-            {{- if $tx.FeesSat -}}
-            <tr>
-                <td>Fees</td>
-                <td class="data">{{formatAmount $tx.FeesSat}} {{$cs}}</td>
-            </tr>{{end -}}
-            {{- if not $tx.Confirmations}}
-            <tr>
-                <td><span title="Replace by fee">RBF</span></td>
-                <td class="data">
-                    {{- if $tx.Rbf}}
-                    <span title="Replace by fee transaction, could be replaced.">ON</span>
-                    {{- else -}}
-                    <span title="Final transaction that can not be replaced unless it is dropped from the mempool.">OFF️</span>
-                    {{end -}}
-                </td>
-            </tr>
-            {{end -}}
-        </tbody>
-    </table>
+<div class="row pt-3">
+    <h5 class="col-12 d-flex h-data"><span class="ellipsis copyable">{{$tx.Txid}}</span></h5>
 </div>
-<h3>Details</h3>
-<div class="data-div">
+<table class="table data-table info-table">
+    <tbody>
+        {{if $tx.Confirmations}}
+        <tr>
+            <td>Mined Time</td>
+            <td>{{unixTimeSpan $tx.Blocktime}}</td>
+        </tr>
+        {{end}}
+        <tr>
+            <td>In Block</td>
+            <td class="ellipsis" style="max-width: 280px">{{if $tx.Confirmations}}{{$tx.Blockhash}}{{else}}<span class="badge bg-danger">Unconfirmed</span>{{end}}</td>
+        </tr>
+        {{if $tx.Confirmations}}
+        <tr>
+            <td>In Block Height</td>
+            <td><a href="/block/{{$tx.Blockheight}}">{{formatInt $tx.Blockheight}}</a></td>
+        </tr>{{end}}
+        {{if $tx.EthereumSpecific}}
+        <tr>
+            <td>Status</td>
+            {{if $tx.EthereumSpecific.Status}}
+            {{if eq $tx.EthereumSpecific.Status 1}}
+            <td><span class="badge bg-success">Success</span></td>
+            {{else}}
+            {{if eq $tx.EthereumSpecific.Status -1}}
+            <td>Pending</td>
+            {{else}}
+            <td>Unknown</td>
+            {{end}}
+            {{end}}
+            {{else}}
+            <td><span class="badge bg-danger">Failed</span>{{if $tx.EthereumSpecific.Error}}<span class="text-danger small fw-normal ms-1"> {{$tx.EthereumSpecific.Error}}{{end}}</td>
+            {{end}}
+        </tr>
+        <tr>
+            <td>Value</td>
+            <td>{{amountSpan $tx.ValueOutSat $data "copyable"}}</td>
+        </tr>
+        <tr>
+            <td>Gas Used / Limit</td>
+            <td>{{if $tx.EthereumSpecific.GasUsed}}{{formatBigInt $tx.EthereumSpecific.GasUsed}}{{else}}pending{{end}} / {{formatBigInt $tx.EthereumSpecific.GasLimit}}</td>
+        </tr>
+        <tr>
+            <td>Gas Price</td>
+            <td>{{amountSpan $tx.EthereumSpecific.GasPrice $data "copyable"}} <span class="fw-normal ps-3">({{amountSatsSpan $tx.EthereumSpecific.GasPrice $data "copyable"}} Gwei)</span></td>
+        </tr>
+        {{else}}
+        <tr>
+            <td>Total Input</td>
+            <td>{{amountSpan $tx.ValueInSat $data "copyable"}}</td>
+        </tr>
+        <tr>
+            <td>Total Output</td>
+            <td>{{amountSpan $tx.ValueOutSat $data "copyable"}}</td>
+        </tr>
+        {{if $tx.VSize}}
+        <tr>
+            <td>Size / vSize</td>
+            <td>{{formatInt $tx.Size}} / {{formatInt $tx.VSize}}</td>
+        </tr>
+        {{else}}
+        {{if $tx.Size}}
+        <tr>
+            <td>Size</td>
+            <td>{{formatInt $tx.Size}}</td>
+        </tr>
+        {{end}}
+        {{end}}
+        {{end}}
+        {{if $tx.FeesSat}}
+        <tr>
+            <td>Fees</td>
+            <td>{{amountSpan $tx.FeesSat $data "copyable"}}{{if $tx.Size}} ({{feePerByte $tx}}){{end}}</td>
+        </tr>{{end}}
+        {{if not $tx.Confirmations}}
+        {{if $tx.ConfirmationETABlocks}}
+        <tr>
+            <td>Confirmation ETA</td>
+            <td>
+                <span tt="Estimated first potential confirmation of this transaction.">in approx. {{relativeTime $tx.ConfirmationETASeconds}} <span class="fw-normal ps-1">({{$tx.ConfirmationETABlocks}} blocks)</span></span>
+            </td>
+        </tr>
+        {{end}}
+        <tr>
+            <td><span tt="Replace by fee">RBF</span></td>
+            <td>
+                {{if $tx.Rbf}}
+                <span tt="Replace-by-Fee transaction, could be overridden by a new transaction">ON</span>
+                {{else}}
+                <span tt="Final transaction that can not be replaced unless it is dropped from the mempool.">OFF️</span>
+                {{end}}
+            </td>
+        </tr>
+        {{end}}
+    </tbody>
+</table>
+<div class="pt-1">
     {{template "txdetail" .}}
 </div>
-<div class="data-div">
+{{if eq .ChainType 1}}
+{{if $tx.EthereumSpecific.ParsedData}}
+{{if $tx.EthereumSpecific.ParsedData.Function }}
+<div class="pt-2">
+    <h5>Input Data</h5>
+    <div class="accordion" id="inputData">
+        <div class="accordion-item">
+          <h2 class="accordion-header" id="inputDataHeading">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#inputDataBody" aria-expanded="false" aria-controls="inputDataBody">
+                <h5 class="mb-0">{{if $tx.EthereumSpecific.ParsedData.Name}}{{$tx.EthereumSpecific.ParsedData.Name}} {{end}}{{if $tx.EthereumSpecific.ParsedData.MethodId}} <span class="fw-normal small" tt="4-byte signature">{{$tx.EthereumSpecific.ParsedData.MethodId}}</span>{{end}}</h5>
+            </button>
+          </h2>
+          <div id="inputDataBody" class="accordion-collapse collapse" aria-labelledby="inputDataHeading" data-bs-parent="#inputData">
+            <div class="accordion-body">
+                <div class="row">
+                    <div class="col-12 mx-1 mx-md-0"><span class="copyable" style="overflow-wrap: break-word;">{{$tx.EthereumSpecific.Data}}</span></div>
+                    <div class="col-12 mx-1 mx-md-0 pt-2"><span class="copyable">{{$tx.EthereumSpecific.ParsedData.Function}}</span></div>
+                    {{if $tx.EthereumSpecific.ParsedData.Params}}
+                    <div class="col-12">
+                    <table class="table data-table mt-2 mb-0">
+                    <thead>
+                        <tr>
+                            <th style="width: 5%;">#</th>
+                            <th style="width: 20%;">Type</th>
+                            <th>Data</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{range $i,$p := $tx.EthereumSpecific.ParsedData.Params}}
+                        <tr>
+                            <td>{{$i}}</td>
+                            <td>{{$p.Type}}</td>
+                            <td>
+                                {{range $j,$v := $p.Values}}
+                                {{if $j}}<br>{{end}}
+                                {{if hasPrefix $p.Type "address"}}<a href="/address/{{$v}}">{{addressAliasSpan $v $data}}</a>{{else}}<span class="copyable">{{$v}}</span>{{end}}
+                                {{end}}
+                            </td>
+                        </tr>
+                        {{end}}
+                    </tbody>
+                    </table>
+                    </div>
+                    {{end}}
+                </div>
+            </div>
+          </div>
+        </div>
+    </div>
+</div>
+{{end}}
+{{end}}
+{{end}}
+<div class="pt-4">
     <h5>Raw Transaction</h5>
-    <div class="alert alert-data" style="word-wrap: break-word; font-size: smaller;">
-        <pre id="txSpecific"></pre>
+    <div class="json">
+        <pre id="raw"></pre>
     </div>
     <script type="text/javascript">
-        txSpecific = {{$tx.CoinSpecificData}};
-        function syntaxHighlight(json) {
-            json = JSON.stringify(json, undefined, 2);
-            json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-            return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
-                var cls = 'number';
-                if (/^"/.test(match)) {
-                    if (/:$/.test(match)) {
-                        cls = 'key';
-                    } else {
-                        cls = 'string';
-                    }
-                } else if (/true|false/.test(match)) {
-                    cls = 'boolean';
-                } else if (/null/.test(match)) {
-                    cls = 'null';
-                }
-                return '<span class="' + cls + '">' + match + '</span>';
-            });
-        }
-        document.getElementById('txSpecific').innerHTML = syntaxHighlight(txSpecific);
+        var raw = {{$tx.CoinSpecificData}};
+        document.getElementById('raw').innerHTML = syntaxHighlight(raw);
     </script>
 </div>
 {{end}}

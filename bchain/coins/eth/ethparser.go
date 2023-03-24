@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"math/big"
 	"strconv"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/golang/protobuf/proto"
@@ -12,8 +13,11 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
-// EthereumTypeAddressDescriptorLen - in case of EthereumType, the AddressDescriptor has fixed length
+// EthereumTypeAddressDescriptorLen - the AddressDescriptor of EthereumType has fixed length
 const EthereumTypeAddressDescriptorLen = 20
+
+// EthereumTypeTxidLen - the length of Txid
+const EthereumTypeTxidLen = 32
 
 // EtherAmountDecimalPoint defines number of decimal points in Ether amounts
 const EtherAmountDecimalPoint = 18
@@ -24,10 +28,11 @@ type EthereumParser struct {
 }
 
 // NewEthereumParser returns new EthereumParser instance
-func NewEthereumParser(b int) *EthereumParser {
+func NewEthereumParser(b int, addressAliases bool) *EthereumParser {
 	return &EthereumParser{&bchain.BaseParser{
 		BlockAddressesToKeep: b,
 		AmountDecimalPoint:   EtherAmountDecimalPoint,
+		AddressAliases:       addressAliases,
 	}}
 }
 
@@ -41,48 +46,13 @@ type rpcHeader struct {
 	Nonce      string `json:"nonce"`
 }
 
-type rpcTransaction struct {
-	AccountNonce     string `json:"nonce"`
-	GasPrice         string `json:"gasPrice"`
-	GasLimit         string `json:"gas"`
-	To               string `json:"to"` // nil means contract creation
-	Value            string `json:"value"`
-	Payload          string `json:"input"`
-	Hash             string `json:"hash"`
-	BlockNumber      string `json:"blockNumber"`
-	BlockHash        string `json:"blockHash,omitempty"`
-	From             string `json:"from"`
-	TransactionIndex string `json:"transactionIndex"`
-	// Signature values - ignored
-	// V string `json:"v"`
-	// R string `json:"r"`
-	// S string `json:"s"`
-}
-
-type rpcLog struct {
-	Address string   `json:"address"`
-	Topics  []string `json:"topics"`
-	Data    string   `json:"data"`
-}
-
 type rpcLogWithTxHash struct {
-	rpcLog
+	bchain.RpcLog
 	Hash string `json:"transactionHash"`
 }
 
-type rpcReceipt struct {
-	GasUsed string    `json:"gasUsed"`
-	Status  string    `json:"status"`
-	Logs    []*rpcLog `json:"logs"`
-}
-
-type completeTransaction struct {
-	Tx      *rpcTransaction `json:"tx"`
-	Receipt *rpcReceipt     `json:"receipt,omitempty"`
-}
-
 type rpcBlockTransactions struct {
-	Transactions []rpcTransaction `json:"transactions"`
+	Transactions []bchain.RpcTransaction `json:"transactions"`
 }
 
 type rpcBlockTxids struct {
@@ -96,7 +66,7 @@ func ethNumber(n string) (int64, error) {
 	return 0, errors.Errorf("Not a number: '%v'", n)
 }
 
-func (p *EthereumParser) ethTxToTx(tx *rpcTransaction, receipt *rpcReceipt, blocktime int64, confirmations uint32, fixEIP55 bool) (*bchain.Tx, error) {
+func (p *EthereumParser) ethTxToTx(tx *bchain.RpcTransaction, receipt *bchain.RpcReceipt, internalData *bchain.EthereumInternalData, blocktime int64, confirmations uint32, fixEIP55 bool) (*bchain.Tx, error) {
 	txid := tx.Hash
 	var (
 		fa, ta []string
@@ -121,9 +91,24 @@ func (p *EthereumParser) ethTxToTx(tx *rpcTransaction, receipt *rpcReceipt, bloc
 			}
 		}
 	}
-	ct := completeTransaction{
-		Tx:      tx,
-		Receipt: receipt,
+	if internalData != nil {
+		// ignore empty internal data
+		if internalData.Type == bchain.CALL && len(internalData.Transfers) == 0 && len(internalData.Error) == 0 {
+			internalData = nil
+		} else {
+			if fixEIP55 {
+				for i := range internalData.Transfers {
+					it := &internalData.Transfers[i]
+					it.From = EIP55AddressFromAddress(it.From)
+					it.To = EIP55AddressFromAddress(it.To)
+				}
+			}
+		}
+	}
+	ct := bchain.EthereumSpecificData{
+		Tx:           tx,
+		InternalData: internalData,
+		Receipt:      receipt,
 	}
 	vs, err := hexutil.DecodeBig(tx.Value)
 	if err != nil {
@@ -254,10 +239,11 @@ func hexEncodeBig(b []byte) string {
 }
 
 // PackTx packs transaction to byte array
+// completeTransaction.InternalData are not packed, they are stored in a different table
 func (p *EthereumParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) ([]byte, error) {
 	var err error
 	var n uint64
-	r, ok := tx.CoinSpecificData.(completeTransaction)
+	r, ok := tx.CoinSpecificData.(bchain.EthereumSpecificData)
 	if !ok {
 		return nil, errors.New("Missing CoinSpecificData")
 	}
@@ -356,7 +342,7 @@ func (p *EthereumParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 	if err != nil {
 		return nil, 0, err
 	}
-	rt := rpcTransaction{
+	rt := bchain.RpcTransaction{
 		AccountNonce: hexutil.EncodeUint64(pt.Tx.AccountNonce),
 		BlockNumber:  hexutil.EncodeUint64(uint64(pt.BlockNumber)),
 		From:         EIP55Address(pt.Tx.From),
@@ -371,15 +357,15 @@ func (p *EthereumParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 		TransactionIndex: hexutil.EncodeUint64(uint64(pt.Tx.TransactionIndex)),
 		Value:            hexEncodeBig(pt.Tx.Value),
 	}
-	var rr *rpcReceipt
+	var rr *bchain.RpcReceipt
 	if pt.Receipt != nil {
-		logs := make([]*rpcLog, len(pt.Receipt.Log))
+		logs := make([]*bchain.RpcLog, len(pt.Receipt.Log))
 		for i, l := range pt.Receipt.Log {
 			topics := make([]string, len(l.Topics))
 			for j, t := range l.Topics {
 				topics[j] = hexutil.Encode(t)
 			}
-			logs[i] = &rpcLog{
+			logs[i] = &bchain.RpcLog{
 				Address: EIP55Address(l.Address),
 				Data:    hexutil.Encode(l.Data),
 				Topics:  topics,
@@ -390,13 +376,14 @@ func (p *EthereumParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 		if len(pt.Receipt.Status) != 1 || pt.Receipt.Status[0] != 'U' {
 			status = hexEncodeBig(pt.Receipt.Status)
 		}
-		rr = &rpcReceipt{
+		rr = &bchain.RpcReceipt{
 			GasUsed: hexEncodeBig(pt.Receipt.GasUsed),
 			Status:  status,
 			Logs:    logs,
 		}
 	}
-	tx, err := p.ethTxToTx(&rt, rr, int64(pt.BlockTime), 0, false)
+	// TODO handle internal transactions
+	tx, err := p.ethTxToTx(&rt, rr, nil, int64(pt.BlockTime), 0, false)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -405,7 +392,7 @@ func (p *EthereumParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 
 // PackedTxidLen returns length in bytes of packed txid
 func (p *EthereumParser) PackedTxidLen() int {
-	return 32
+	return EthereumTypeTxidLen
 }
 
 // PackTxid packs txid to byte array
@@ -442,7 +429,7 @@ func (p *EthereumParser) GetChainType() bchain.ChainType {
 // GetHeightFromTx returns ethereum specific data from bchain.Tx
 func GetHeightFromTx(tx *bchain.Tx) (uint32, error) {
 	var bn string
-	csd, ok := tx.CoinSpecificData.(completeTransaction)
+	csd, ok := tx.CoinSpecificData.(bchain.EthereumSpecificData)
 	if !ok {
 		return 0, errors.New("Missing CoinSpecificData")
 	}
@@ -454,22 +441,27 @@ func GetHeightFromTx(tx *bchain.Tx) (uint32, error) {
 	return uint32(n), nil
 }
 
-// EthereumTypeGetErc20FromTx returns Erc20 data from bchain.Tx
-func (p *EthereumParser) EthereumTypeGetErc20FromTx(tx *bchain.Tx) ([]bchain.Erc20Transfer, error) {
-	var r []bchain.Erc20Transfer
+// EthereumTypeGetTokenTransfersFromTx returns contract transfers from bchain.Tx
+func (p *EthereumParser) EthereumTypeGetTokenTransfersFromTx(tx *bchain.Tx) (bchain.TokenTransfers, error) {
+	var r bchain.TokenTransfers
 	var err error
-	csd, ok := tx.CoinSpecificData.(completeTransaction)
+	csd, ok := tx.CoinSpecificData.(bchain.EthereumSpecificData)
 	if ok {
 		if csd.Receipt != nil {
-			r, err = erc20GetTransfersFromLog(csd.Receipt.Logs)
+			r, err = contractGetTransfersFromLog(csd.Receipt.Logs)
 		} else {
-			r, err = erc20GetTransfersFromTx(csd.Tx)
+			r, err = contractGetTransfersFromTx(csd.Tx)
 		}
 		if err != nil {
 			return nil, err
 		}
 	}
 	return r, nil
+}
+
+// FormatAddressAlias adds .eth to a name alias
+func (p *EthereumParser) FormatAddressAlias(address string, name string) string {
+	return name + ".eth"
 }
 
 // TxStatus is status of transaction
@@ -501,7 +493,7 @@ func GetEthereumTxData(tx *bchain.Tx) *EthereumTxData {
 // GetEthereumTxDataFromSpecificData returns EthereumTxData from coinSpecificData
 func GetEthereumTxDataFromSpecificData(coinSpecificData interface{}) *EthereumTxData {
 	etd := EthereumTxData{Status: TxStatusPending}
-	csd, ok := coinSpecificData.(completeTransaction)
+	csd, ok := coinSpecificData.(bchain.EthereumSpecificData)
 	if ok {
 		if csd.Tx != nil {
 			etd.Nonce, _ = hexutil.DecodeUint64(csd.Tx.AccountNonce)
@@ -522,4 +514,46 @@ func GetEthereumTxDataFromSpecificData(coinSpecificData interface{}) *EthereumTx
 		}
 	}
 	return &etd
+}
+
+const errorOutputSignature = "08c379a0"
+
+// ParseErrorFromOutput takes output field from internal transaction data and extracts an error message from it
+// the output must have errorOutputSignature to be parsed
+func ParseErrorFromOutput(output string) string {
+	if has0xPrefix(output) {
+		output = output[2:]
+	}
+	if len(output) < 8+64+64+64 || output[:8] != errorOutputSignature {
+		return ""
+	}
+	return parseSimpleStringProperty(output[8:])
+}
+
+// PackInternalTransactionError packs common error messages to single byte to save DB space
+func PackInternalTransactionError(e string) string {
+	if e == "execution reverted" {
+		return "\x01"
+	}
+	if e == "out of gas" {
+		return "\x02"
+	}
+	if e == "contract creation code storage out of gas" {
+		return "\x03"
+	}
+	if e == "max code size exceeded" {
+		return "\x04"
+	}
+
+	return e
+}
+
+// UnpackInternalTransactionError unpacks common error messages packed by PackInternalTransactionError
+func UnpackInternalTransactionError(data []byte) string {
+	e := string(data)
+	e = strings.ReplaceAll(e, "\x01", "Reverted. ")
+	e = strings.ReplaceAll(e, "\x02", "Out of gas. ")
+	e = strings.ReplaceAll(e, "\x03", "Contract creation code storage out of gas. ")
+	e = strings.ReplaceAll(e, "\x04", "Max code size exceeded. ")
+	return strings.TrimSpace(e)
 }

@@ -24,6 +24,8 @@ type Metrics struct {
 	IndexDBSize              prometheus.Gauge
 	ExplorerViews            *prometheus.CounterVec
 	MempoolSize              prometheus.Gauge
+	EstimatedFee             *prometheus.GaugeVec
+	AvgBlockPeriod           prometheus.Gauge
 	DbColumnRows             *prometheus.GaugeVec
 	DbColumnSize             *prometheus.GaugeVec
 	BlockbookAppInfo         *prometheus.GaugeVec
@@ -169,6 +171,21 @@ func GetMetrics(coin string) (*Metrics, error) {
 			ConstLabels: Labels{"coin": coin},
 		},
 	)
+	metrics.EstimatedFee = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name:        "blockbook_estimated_fee",
+			Help:        "Estimated fee per byte (gas) for number of blocks",
+			ConstLabels: Labels{"coin": coin},
+		},
+		[]string{"blocks", "conservative"},
+	)
+	metrics.AvgBlockPeriod = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name:        "blockbook_avg_block_period",
+			Help:        "Average period of mining of last 100 blocks in seconds",
+			ConstLabels: Labels{"coin": coin},
+		},
+	)
 	metrics.DbColumnRows = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name:        "blockbook_dbcolumn_rows",
@@ -209,7 +226,7 @@ func GetMetrics(coin string) (*Metrics, error) {
 	)
 	metrics.ExplorerPendingRequests = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name:        "blockbook_explorer_pending_reqests",
+			Name:        "blockbook_explorer_pending_requests",
 			Help:        "Number of unfinished requests in explorer interface",
 			ConstLabels: Labels{"coin": coin},
 		},
@@ -217,7 +234,7 @@ func GetMetrics(coin string) (*Metrics, error) {
 	)
 	metrics.WebsocketPendingRequests = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name:        "blockbook_websocket_pending_reqests",
+			Name:        "blockbook_websocket_pending_requests",
 			Help:        "Number of unfinished requests in websocket interface",
 			ConstLabels: Labels{"coin": coin},
 		},
@@ -225,7 +242,7 @@ func GetMetrics(coin string) (*Metrics, error) {
 	)
 	metrics.SocketIOPendingRequests = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name:        "blockbook_socketio_pending_reqests",
+			Name:        "blockbook_socketio_pending_requests",
 			Help:        "Number of unfinished requests in socketio interface",
 			ConstLabels: Labels{"coin": coin},
 		},

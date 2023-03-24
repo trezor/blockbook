@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"math/big"
 	"reflect"
+	"sort"
 	"testing"
 )
 
@@ -168,6 +169,154 @@ func TestBalanceHistories_SortAndAggregate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := tt.a.SortAndAggregate(tt.groupByTime); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("BalanceHistories.SortAndAggregate() = %+v, want %+v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestAmount_Compare(t *testing.T) {
+	tests := []struct {
+		name string
+		a    *Amount
+		b    *Amount
+		want int
+	}{
+		{
+			name: "nil-nil",
+			a:    nil,
+			b:    nil,
+			want: 0,
+		},
+		{
+			name: "20-nil",
+			a:    (*Amount)(big.NewInt(20)),
+			b:    nil,
+			want: 1,
+		},
+		{
+			name: "nil-20",
+			a:    nil,
+			b:    (*Amount)(big.NewInt(20)),
+			want: -1,
+		},
+		{
+			name: "18-20",
+			a:    (*Amount)(big.NewInt(18)),
+			b:    (*Amount)(big.NewInt(20)),
+			want: -1,
+		},
+		{
+			name: "20-20",
+			a:    (*Amount)(big.NewInt(20)),
+			b:    (*Amount)(big.NewInt(20)),
+			want: 0,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.a.Compare(tt.b); got != tt.want {
+				t.Errorf("Amount.Compare() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestTokens_Sort(t *testing.T) {
+	tests := []struct {
+		name     string
+		unsorted Tokens
+		sorted   Tokens
+	}{
+		{
+			name: "one",
+			unsorted: Tokens{
+				{
+					Name:      "a",
+					Contract:  "0x1",
+					BaseValue: 12.34,
+				},
+			},
+			sorted: Tokens{
+				{
+					Name:      "a",
+					Contract:  "0x1",
+					BaseValue: 12.34,
+				},
+			},
+		},
+		{
+			name: "mix",
+			unsorted: Tokens{
+				{
+					Name:      "",
+					Contract:  "0x6",
+					BaseValue: 0,
+				},
+				{
+					Name:      "",
+					Contract:  "0x5",
+					BaseValue: 0,
+				},
+				{
+					Name:      "b",
+					Contract:  "0x2",
+					BaseValue: 1,
+				},
+				{
+					Name:      "d",
+					Contract:  "0x4",
+					BaseValue: 0,
+				},
+				{
+					Name:      "a",
+					Contract:  "0x1",
+					BaseValue: 12.34,
+				},
+				{
+					Name:      "c",
+					Contract:  "0x3",
+					BaseValue: 0,
+				},
+			},
+			sorted: Tokens{
+				{
+					Name:      "a",
+					Contract:  "0x1",
+					BaseValue: 12.34,
+				},
+				{
+					Name:      "b",
+					Contract:  "0x2",
+					BaseValue: 1,
+				},
+				{
+					Name:      "c",
+					Contract:  "0x3",
+					BaseValue: 0,
+				},
+				{
+					Name:      "d",
+					Contract:  "0x4",
+					BaseValue: 0,
+				},
+				{
+					Name:      "",
+					Contract:  "0x5",
+					BaseValue: 0,
+				},
+				{
+					Name:      "",
+					Contract:  "0x6",
+					BaseValue: 0,
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sort.Sort(tt.unsorted)
+			if !reflect.DeepEqual(tt.unsorted, tt.sorted) {
+				t.Errorf("Tokens Sort got %v, want %v", tt.unsorted, tt.sorted)
 			}
 		})
 	}

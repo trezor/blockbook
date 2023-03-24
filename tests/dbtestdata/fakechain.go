@@ -188,7 +188,7 @@ func (c *fakeBlockChain) GetTransactionForMempool(txid string) (v *bchain.Tx, er
 }
 
 func (c *fakeBlockChain) EstimateSmartFee(blocks int, conservative bool) (v big.Int, err error) {
-	if conservative == false {
+	if !conservative {
 		v.SetInt64(int64(blocks)*100 - 1)
 	} else {
 		v.SetInt64(int64(blocks) * 100)

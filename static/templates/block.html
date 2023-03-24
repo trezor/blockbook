@@ -1,78 +1,76 @@
-{{define "specific"}}{{$cs := .CoinShortcut}}{{$b := .Block}}{{$data := . -}}
-<h1>Block {{$b.Height}}</h1>
-<div class="alert alert-data ellipsis">
-    <span class="data">{{$b.Hash}}</span>
-</div>
-<div class="row h-container">
-    <h3 class="col-md-6 col-sm-12">Summary</h3>
-    <nav class="col-md-6 col-sm-12">
-        <ul class="pagination justify-content-end">
-            <li class="page-item">{{if $b.Prev}}<a class="page-link" href="/block/{{$b.Prev}}">Previous Block</a>{{else}}<span class="page-link text-muted disabled">Previous Block</span>{{end}}</li>
-            <li class="page-item">{{if $b.Next}}<a class="page-link" href="/block/{{$b.Next}}">Next Block</a>{{else}}<span class="page-link text-muted disabled">Next Block</span>{{end}}</li>
-        </ul>
+{{define "specific"}}{{$cs := .CoinShortcut}}{{$b := .Block}}{{$data := .}}
+<div class="row">
+    <h1 class="col-sm-6">Block</h1>
+    <nav class="col-sm-6 paging justify-content-end pb-1">
+        {{if $b.Prev}}<a class="btn btn-paging" href="/block/{{$b.Prev}}">Previous Block</a>{{else}}<span class="btn btn-paging">Previous Block</span>{{end}}
+        {{if $b.Next}}<a class="btn btn-paging ms-2" href="/block/{{$b.Next}}">Next Block</a>{{else}}<span class="btn btn-paging ms-2">Next Block</span>{{end}}
     </nav>
 </div>
-<div class="data-div row">
+<div class="row pt-3">
+    <h5 class="col-lg-3 h-data"><span class="ellipsis copyable">{{formatUint32 $b.Height}}</span></h5>
+    <h5 class="col-lg-9 justify-content-end d-flex h-data"><span class="copyable ellipsis">{{$b.Hash}}</span></h5>
+</div>
+<div class="row">
     <div class="col-md-6">
-        <table class="table data-table">
+        <table class="table data-table info-table">
             <tbody>
                 <tr>
-                    <td style="width: 25%;">Transactions</td>
-                    <td class="data">{{$b.TxCount}}</td>
+                    <td>Transactions</td>
+                    <td>{{formatInt $b.TxCount}}</td>
                 </tr>
                 <tr>
                     <td>Height</td>
-                    <td class="data">{{$b.Height}}</td>
+                    <td>{{formatUint32 $b.Height}}</td>
                 </tr>
                 <tr>
                     <td>Confirmations</td>
-                    <td class="data">{{$b.Confirmations}}</td>
+                    <td>{{formatInt $b.Confirmations}}</td>
                 </tr>
                 <tr>
                     <td>Timestamp</td>
-                    <td class="data">{{formatUnixTime $b.Time}}</td>
+                    <td>{{unixTimeSpan $b.Time}}</td>
                 </tr>
                 <tr>
                     <td>Size (bytes)</td>
-                    <td class="data">{{$b.Size}}</td>
+                    <td>{{formatInt $b.Size}}</td>
                 </tr>
             </tbody>
         </table>
     </div>
     <div class="col-md-6">
-        <table class="table data-table">
+        <table class="table data-table info-table">
             <tbody>
                 <tr>
-                    <td style="width: 25%;">Version</td>
-                    <td class="data ellipsis">{{$b.Version}}</td>
+                    <td>Version</td>
+                    <td class="ellipsis">{{$b.Version}}</td>
                 </tr>
                 <tr>
-                    <td>Merkle Root</td>
-                    <td class="data ellipsis">{{$b.MerkleRoot}}</td>
+                    <td>Merkle&nbsp;Root</td>
+                    <td style="max-width: 280px;" class="ellipsis">{{$b.MerkleRoot}}</td>
                 </tr>
                 <tr>
                     <td>Nonce</td>
-                    <td class="data ellipsis">{{$b.Nonce}}</td>
+                    <td style="max-width: 280px;" class="ellipsis">{{$b.Nonce}}</td>
                 </tr>
                 <tr>
                     <td>Bits</td>
-                    <td class="data ellipsis">{{$b.Bits}}</td>
+                    <td class="ellipsis">{{$b.Bits}}</td>
                 </tr>
                 <tr>
                     <td>Difficulty</td>
-                    <td class="data ellipsis">{{$b.Difficulty}}</td>
+                    <td class="ellipsis">{{$b.Difficulty}}</td>
                 </tr>
             </tbody>
         </table>
     </div>
 </div>
-{{- if $b.Transactions -}}
-<div class="row h-container">
-    <h3 class="col-md-6 col-sm-12">Transactions</h3>
-    <nav class="col-md-6 col-sm-12">{{template "paging" $data}}</nav>
+{{if $b.Transactions}}
+<div class="row pt-3 pb-1">
+    <h3 class="col-md-6 align-self-center">Transactions</h3>
+    <div class="col-md-6">{{template "paging" $data}}</div>
 </div>
-<div class="data-div">
-    {{- range $tx := $b.Transactions}}{{$data := setTxToTemplateData $data $tx}}{{template "txdetail" $data}}{{end -}}
+<div>
+    {{range $tx := $b.Transactions}}{{$data := setTxToTemplateData $data $tx}}{{template "txdetail" $data}}{{end}}
 </div>
-<nav>{{template "paging" $data }}</nav>
+{{template "paging" $data }}
 {{end}}{{end}}
