@@ -1,0 +1,43 @@
+#!/bin/sh
+
+{{define "main" -}}
+
+set -e
+
+GETH_BIN={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/geth
+DATA_DIR={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend
+
+CHAINDATA_DIR=$DATA_DIR/geth/chaindata
+SNAPSHOT=https://storage.googleapis.com/oplabs-goerli-data/goerli-bedrock.tar
+
+if [[ -n "$SNAPSHOT" && ! -d "$CHAINDATA_DIR" ]]; then
+  wget -c $SNAPSHOT -O - | tar -xvf - -C $DATA_DIR
+fi
+
+$GETH_BIN \
+  --datadir=$DATA_DIR \
+  --networkid=420 \
+  --authrpc.addr=127.0.0.1 \
+  --authrpc.port={{.Ports.BackendAuthRpc}} \
+  --authrpc.vhosts="*" \
+  --port={{.Ports.BackendP2p}} \
+  --http \
+  --http.port={{.Ports.BackendHttp}} \
+  --http.addr=127.0.0.1 \
+  --http.api=eth,net,web3,debug,txpool,engine \
+  --http.vhosts="*" \
+  --http.corsdomain="*" \
+  --ws \
+  --ws.port={{.Ports.BackendRPC}} \
+  --ws.addr=127.0.0.1 \
+  --ws.api=eth,net,web3,debug,txpool,engine \
+  --ws.origins="*" \
+  --rollup.disabletxpoolgossip=true \
+  --rollup.sequencerhttp=https://goerli-sequencer.optimism.io \
+  --cache=4096 \
+  --syncmode=full \
+  --gcmode=full \
+  --maxpeers=0 \
+  --nodiscover
+
+{{end}}
