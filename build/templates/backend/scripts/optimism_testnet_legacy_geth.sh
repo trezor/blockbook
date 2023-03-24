@@ -20,7 +20,7 @@ fi
 $GETH_BIN \
   --datadir=$DATA_DIR \
   --networkid=420 \
-  --port={{.Ports.BackendP2p}} \
+  --port={{.Ports.BackendP2P}} \
   --rpc \
   --rpcport={{.Ports.BackendHttp}} \
   --rpcaddr=127.0.0.1 \

@@ -20,7 +20,7 @@ $GETH_BIN \
   --authrpc.addr=127.0.0.1 \
   --authrpc.port={{.Ports.BackendAuthRpc}} \
   --authrpc.vhosts="*" \
-  --port={{.Ports.BackendP2p}} \
+  --port={{.Ports.BackendP2P}} \
   --http \
   --http.port={{.Ports.BackendHttp}} \
   --http.addr=127.0.0.1 \
