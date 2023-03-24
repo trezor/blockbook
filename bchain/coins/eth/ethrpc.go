@@ -798,12 +798,13 @@ func (b *EthereumRPC) GetTransactionForMempool(txid string) (*bchain.Tx, error) 
 func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
 	defer cancel()
-	var tx *bchain.RpcTransaction
+	tx := &bchain.RpcTransaction{}
 	hash := ethcommon.HexToHash(txid)
-	err := b.RPC.CallContext(ctx, &tx, "eth_getTransactionByHash", hash)
+	err := b.RPC.CallContext(ctx, tx, "eth_getTransactionByHash", hash)
 	if err != nil {
 		return nil, err
-	} else if tx == nil {
+	}
+	if *tx == (bchain.RpcTransaction{}) {
 		if b.mempoolInitialized {
 			b.Mempool.RemoveTransactionFromMempool(txid)
 		}
