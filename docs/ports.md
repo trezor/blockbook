@@ -51,7 +51,7 @@
 | Avalanche                    | 9098                    | 9198                  | 8098             | 38398 p2p                         |
 | Avalanche Archive            | 9099                    | 9199                  | 8099             | 38399 p2p                         |
 | Optimism                     | 9200                    | 9300                  | 8200             | 38400 p2p, 8300 http, 8400 auth   |
-| Optimism Rollup              |                         |                       | 8201             |                                   |
+| Optimism Op-Node             |                         |                       | 8201             |                                   |
 | Optimism Archive             | 9202                    | 9302                  | 8202             | 38402 p2p, 8302 http, 8402 auth   |
 | Optimism Legacy Geth         |                         |                       | 8203             | 38403 p2p, 8303 http              |
 | Bitcoin Signet               | 19020                   | 19120                 | 18020            | 48320                             |
@@ -79,7 +79,7 @@
 | Qtum Testnet                 | 19088                   | 19188                 | 18088            | 48388                             |
 | Omotenashicoin Testnet       | 19089                   | 19189                 | 18089            | 48389                             |
 | Optimism Testnet             | 19200                   | 19300                 | 18200            | 48400 p2p, 18300 http, 18400 auth |
-| Optimism Testent Rollup      |                         |                       | 18201            |                                   |
+| Optimism Testent Op-Node     |                         |                       | 18201            |                                   |
 | Optimism Testnet Archive     | 19202                   | 19302                 | 18202            | 48402 p2p, 18302 http, 18402 auth |
 | Optimism Legacy Geth Testnet |                         |                       | 18203            | 48403 p2p, 18303 http             |
 
