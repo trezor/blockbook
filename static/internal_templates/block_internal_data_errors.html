@@ -1,0 +1,34 @@
+{{define "specific"}}
+<div class="row g-0">
+    <h3 class="col-md-11">Blocks with errors from fetching internal data</h3>
+    <div class="col-md-1 justify-content-right">
+        {{if .InInternalDataRetry}}Fetching...{{else}}
+        <form method="POST" action="/admin/internal-data-errors">
+            <button type="submit" class="btn btn-outline-secondary">Retry fetch</button>
+        </form>    
+        {{end}}
+    </div>
+</row>
+<div>
+    <table class="table table-hover">
+        <thead>
+            <tr>
+                <th>Height</th>
+                <th class="col-md-6">Hash</th>
+                <th class="col-md-1 text-end">Retries</span></th>
+                <th>Error Message</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range $e := .InternalDataErrors}}
+            <tr>
+                <td>{{formatUint32 $e.Height}}</a></td>
+                <td class="ellipsis">{{$e.Hash}}</td>
+                <td class="text-end">{{$e.Retries}}</td>
+                <td>{{$e.ErrorMessage}}</td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+{{end}}
