@@ -735,7 +735,7 @@ func unpackContractInfo(buf []byte) (*bchain.ContractInfo, error) {
 	ui, l = unpackVaruint(buf)
 	contractInfo.CreatedInBlock = uint32(ui)
 	buf = buf[l:]
-	ui, l = unpackVaruint(buf)
+	ui, _ = unpackVaruint(buf)
 	contractInfo.DestructedInBlock = uint32(ui)
 	return &contractInfo, nil
 }
@@ -765,7 +765,7 @@ func (d *RocksDB) GetContractInfo(contract bchain.AddressDescriptor, typeFromCon
 		if len(buf) == 0 {
 			return nil, nil
 		}
-		contractInfo, err = unpackContractInfo(buf)
+		contractInfo, _ = unpackContractInfo(buf)
 		addresses, _, _ := d.chainParser.GetAddressesFromAddrDesc(contract)
 		if len(addresses) > 0 {
 			contractInfo.Contract = addresses[0]
@@ -774,6 +774,9 @@ func (d *RocksDB) GetContractInfo(contract bchain.AddressDescriptor, typeFromCon
 		if typeFromContext != bchain.UnknownTokenType && contractInfo.Type == bchain.UnknownTokenType {
 			contractInfo.Type = typeFromContext
 			err = d.db.PutCF(d.wo, d.cfh[cfContracts], contract, packContractInfo(contractInfo))
+			if err != nil {
+				return nil, err
+			}
 		}
 		cachedContractsMux.Lock()
 		cachedContracts[cacheKey] = contractInfo
@@ -864,8 +867,9 @@ func (d *RocksDB) storeAndCleanupBlockTxsEthereumType(wb *grocksdb.WriteBatch, b
 	return d.cleanupBlockTxs(wb, block)
 }
 
-func (d *RocksDB) storeBlockInternalDataErrorEthereumType(wb *grocksdb.WriteBatch, block *bchain.Block, message string) error {
+func (d *RocksDB) storeBlockInternalDataErrorEthereumType(wb *grocksdb.WriteBatch, block *bchain.Block, message string, retryCount uint8) error {
 	key := packUint(block.Height)
+	// TODO: this supposes that Txid and block hash are the same size
 	txid, err := d.chainParser.PackTxid(block.Hash)
 	if err != nil {
 		return err
@@ -874,10 +878,58 @@ func (d *RocksDB) storeBlockInternalDataErrorEthereumType(wb *grocksdb.WriteBatc
 	buf := make([]byte, 0, len(txid)+len(m)+1)
 	// the stored structure is txid+retry count (1 byte)+error message
 	buf = append(buf, txid...)
-	buf = append(buf, 0)
+	buf = append(buf, retryCount)
 	buf = append(buf, m...)
 	wb.PutCF(d.cfh[cfBlockInternalDataErrors], key, buf)
 	return nil
+}
+
+type BlockInternalDataError struct {
+	Height       uint32
+	Hash         string
+	Retries      uint8
+	ErrorMessage string
+}
+
+func (d *RocksDB) unpackBlockInternalDataError(val []byte) (string, uint8, string, error) {
+	txidUnpackedLen := d.chainParser.PackedTxidLen()
+	var hash, message string
+	var retries uint8
+	var err error
+	if len(val) > txidUnpackedLen+1 {
+		hash, err = d.chainParser.UnpackTxid(val[:txidUnpackedLen])
+		if err != nil {
+			return "", 0, "", err
+		}
+		val = val[txidUnpackedLen:]
+		retries = val[0]
+		message = string(val[1:])
+	}
+	return hash, retries, message, nil
+}
+
+func (d *RocksDB) GetBlockInternalDataErrorsEthereumType() ([]BlockInternalDataError, error) {
+	retval := []BlockInternalDataError{}
+	if d.chainParser.GetChainType() == bchain.ChainEthereumType {
+		it := d.db.NewIteratorCF(d.ro, d.cfh[cfBlockInternalDataErrors])
+		defer it.Close()
+		for it.SeekToFirst(); it.Valid(); it.Next() {
+			height := unpackUint(it.Key().Data())
+			val := it.Value().Data()
+			hash, retires, message, err := d.unpackBlockInternalDataError(val)
+			if err != nil {
+				glog.Error("GetBlockInternalDataErrorsEthereumType height ", height, ", unpack error ", err)
+				continue
+			}
+			retval = append(retval, BlockInternalDataError{
+				Height:       height,
+				Hash:         hash,
+				Retries:      retires,
+				ErrorMessage: message,
+			})
+		}
+	}
+	return retval, nil
 }
 
 func (d *RocksDB) storeBlockSpecificDataEthereumType(wb *grocksdb.WriteBatch, block *bchain.Block) error {
@@ -885,7 +937,7 @@ func (d *RocksDB) storeBlockSpecificDataEthereumType(wb *grocksdb.WriteBatch, bl
 	if blockSpecificData != nil {
 		if blockSpecificData.InternalDataError != "" {
 			glog.Info("storeBlockSpecificDataEthereumType ", block.Height, ": ", blockSpecificData.InternalDataError)
-			if err := d.storeBlockInternalDataErrorEthereumType(wb, block, blockSpecificData.InternalDataError); err != nil {
+			if err := d.storeBlockInternalDataErrorEthereumType(wb, block, blockSpecificData.InternalDataError, 0); err != nil {
 				return err
 			}
 		}
