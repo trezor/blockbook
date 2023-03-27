@@ -6,11 +6,11 @@
     "alias": "polygon_bor"
   },
   "ports": {
-    "backend_rpc": 8203,
-    "backend_p2p": 38403,
-    "backend_http": 8303,
-    "blockbook_internal": 9203,
-    "blockbook_public": 9303
+    "backend_rpc": 8200,
+    "backend_p2p": 38400,
+    "backend_http": 8300,
+    "blockbook_internal": 9200,
+    "blockbook_public": 9300
   },
   "ipc": {
     "rpc_url_template": "ws://127.0.0.1:{{.Ports.BackendRPC}}",
@@ -20,16 +20,16 @@
     "package_name": "backend-polygon-bor",
     "package_revision": "satoshilabs-1",
     "system_user": "polygon",
-    "version": "0.3.3",
-    "binary_url": "https://github.com/maticnetwork/bor/archive/refs/tags/v0.3.3.tar.gz",
+    "version": "0.3.7",
+    "binary_url": "https://github.com/maticnetwork/bor/archive/refs/tags/v0.3.7.tar.gz",
     "verification_type": "sha256",
-    "verification_source": "d0f811a0e07dd3e1d8bfdde1ef89e29e1620753d815e7f5ed424578c7e473ede",
+    "verification_source": "7ea2e331aa3efac889c84aa1e027cc84123543ae18b81602aff4a8e4c89d8365",
     "extract_command": "mkdir backend/source && tar -C backend/source --strip 1 -xf",
     "exclude_files": [],
     "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/polygon_bor_exec.sh 2>> {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
     "exec_script": "polygon_bor.sh",
     "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
-    "postinst_script_template": "wget https://raw.githubusercontent.com/maticnetwork/bor/v0.3.3/builder/files/genesis-mainnet-v1.json -O {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/genesis.json && cd {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/source && make bor && mv build/bin/bor {{.Env.BackendInstallPath}}/{{.Coin.Alias}} && rm -rf {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/source",
+    "postinst_script_template": "wget https://raw.githubusercontent.com/maticnetwork/bor/v0.3.7/builder/files/genesis-mainnet-v1.json -O {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/genesis.json && cd {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/source && make bor && mv build/bin/bor {{.Env.BackendInstallPath}}/{{.Coin.Alias}} && rm -rf {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/source",
     "service_type": "simple",
     "service_additional_params_template": "",
     "protect_memory": true,

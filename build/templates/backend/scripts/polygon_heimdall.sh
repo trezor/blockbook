@@ -26,7 +26,8 @@ $HEIMDALL_BIN start \
   --rpc.laddr tcp://127.0.0.1:{{.Ports.BackendRPC}} \
   --p2p.laddr tcp://0.0.0.0:{{.Ports.BackendP2P}} \
   --laddr tcp://127.0.0.1:{{.Ports.BackendHttp}} \
-  --bor_rpc_url http://127.0.0.1:8303 \
+  --node tcp://127.0.0.1:{{.Ports.BackendRPC}} \
+  --bor_rpc_url http://127.0.0.1:8300 \
   --eth_rpc_url http://127.0.0.1:8136 \
   --rest-server 
 
