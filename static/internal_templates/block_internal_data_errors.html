@@ -1,8 +1,9 @@
 {{define "specific"}}
+<h3>Blocks with errors from fetching internal data</h3>
 <div class="row g-0">
-    <h3 class="col-md-11">Blocks with errors from fetching internal data</h3>
+    <div class="col-md-11">Count: {{len .InternalDataErrors}}</div>
     <div class="col-md-1 justify-content-right">
-        {{if .InInternalDataRetry}}Fetching...{{else}}
+        {{if .RefetchingInternalData}}Fetching...{{else}}
         <form method="POST" action="/admin/internal-data-errors">
             <button type="submit" class="btn btn-outline-secondary">Retry fetch</button>
         </form>    

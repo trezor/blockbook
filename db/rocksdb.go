@@ -775,6 +775,24 @@ func addToAddressesMap(addresses addressesMap, strAddrDesc string, btxID []byte,
 	return false
 }
 
+func (d *RocksDB) getTxIndexesForAddressAndBlock(addrDesc bchain.AddressDescriptor, height uint32) ([]txIndexes, error) {
+	key := packAddressKey(addrDesc, height)
+	val, err := d.db.GetCF(d.ro, d.cfh[cfAddresses], key)
+	if err != nil {
+		return nil, err
+	}
+	defer val.Free()
+	// nil data means the key was not found in DB
+	if val.Data() == nil {
+		return nil, nil
+	}
+	rv, err := d.unpackTxIndexes(val.Data())
+	if err != nil {
+		return nil, err
+	}
+	return rv, nil
+}
+
 func (d *RocksDB) storeAddresses(wb *grocksdb.WriteBatch, height uint32, addresses addressesMap) error {
 	for addrDesc, txi := range addresses {
 		ba := bchain.AddressDescriptor(addrDesc)
@@ -1206,6 +1224,34 @@ func (d *RocksDB) packTxIndexes(txi []txIndexes) []byte {
 		}
 	}
 	return buf
+}
+
+func (d *RocksDB) unpackTxIndexes(buf []byte) ([]txIndexes, error) {
+	var retval []txIndexes
+	txidUnpackedLen := d.chainParser.PackedTxidLen()
+	for len(buf) > txidUnpackedLen {
+		btxID := make([]byte, txidUnpackedLen)
+		copy(btxID, buf[:txidUnpackedLen])
+		indexes := make([]int32, 0, 16)
+		buf = buf[txidUnpackedLen:]
+		for {
+			index, l := unpackVarint32(buf)
+			indexes = append(indexes, index>>1)
+			buf = buf[l:]
+			if index&1 == 1 {
+				break
+			}
+		}
+		retval = append(retval, txIndexes{
+			btxID:   btxID,
+			indexes: indexes,
+		})
+	}
+	// reverse the return values, packTxIndexes is storing it in reverse
+	for i, j := 0, len(retval)-1; i < j; i, j = i+1, j-1 {
+		retval[i], retval[j] = retval[j], retval[i]
+	}
+	return retval, nil
 }
 
 func (d *RocksDB) packOutpoints(outpoints []outpoint) []byte {

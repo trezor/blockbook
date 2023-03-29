@@ -388,7 +388,23 @@ func (d *RocksDB) processBaseTxData(blockTx *ethBlockTx, tx *bchain.Tx, addresse
 	return nil
 }
 
-func (d *RocksDB) processInternalData(blockTx *ethBlockTx, tx *bchain.Tx, id *bchain.EthereumInternalData, addresses addressesMap, addressContracts map[string]*AddrContracts) error {
+func (d *RocksDB) setAddressTxIndexesToAddressMap(addrDesc bchain.AddressDescriptor, height uint32, addresses addressesMap) error {
+	strAddrDesc := string(addrDesc)
+	_, found := addresses[strAddrDesc]
+	if !found {
+		txIndexes, err := d.getTxIndexesForAddressAndBlock(addrDesc, height)
+		if err != nil {
+			return err
+		}
+		if len(txIndexes) > 0 {
+			addresses[strAddrDesc] = txIndexes
+		}
+	}
+	return nil
+}
+
+// existingBlock signals that internal data are reconnected to already indexed block after they failed during standard sync
+func (d *RocksDB) processInternalData(blockTx *ethBlockTx, tx *bchain.Tx, id *bchain.EthereumInternalData, addresses addressesMap, addressContracts map[string]*AddrContracts, existingBlock bool) error {
 	blockTx.internalData = &ethInternalData{
 		internalType: id.Type,
 		errorMsg:     id.Error,
@@ -404,6 +420,11 @@ func (d *RocksDB) processInternalData(blockTx *ethBlockTx, tx *bchain.Tx, id *bc
 			blockTx.internalData.internalType = bchain.CALL
 		} else {
 			blockTx.internalData.contract = to
+			if existingBlock {
+				if err = d.setAddressTxIndexesToAddressMap(to, tx.BlockHeight, addresses); err != nil {
+					return err
+				}
+			}
 			if err = d.addToAddressesAndContractsEthereumType(to, blockTx.btxID, internalTransferTo, nil, nil, true, addresses, addressContracts); err != nil {
 				return err
 			}
@@ -422,6 +443,11 @@ func (d *RocksDB) processInternalData(blockTx *ethBlockTx, tx *bchain.Tx, id *bc
 					glog.Warningf("rocksdb: processInternalData: %v, tx %v, internal transfer %d to", err, tx.Txid, i)
 				}
 			} else {
+				if existingBlock {
+					if err = d.setAddressTxIndexesToAddressMap(to, tx.BlockHeight, addresses); err != nil {
+						return err
+					}
+				}
 				if err = d.addToAddressesAndContractsEthereumType(to, blockTx.btxID, internalTransferTo, nil, nil, true, addresses, addressContracts); err != nil {
 					return err
 				}
@@ -433,6 +459,11 @@ func (d *RocksDB) processInternalData(blockTx *ethBlockTx, tx *bchain.Tx, id *bc
 					glog.Warningf("rocksdb: processInternalData: %v, tx %v, internal transfer %d from", err, tx.Txid, i)
 				}
 			} else {
+				if existingBlock {
+					if err = d.setAddressTxIndexesToAddressMap(from, tx.BlockHeight, addresses); err != nil {
+						return err
+					}
+				}
 				if err = d.addToAddressesAndContractsEthereumType(from, blockTx.btxID, internalTransferFrom, nil, nil, !bytes.Equal(from, to), addresses, addressContracts); err != nil {
 					return err
 				}
@@ -498,7 +529,7 @@ func (d *RocksDB) processAddressesEthereumType(block *bchain.Block, addresses ad
 		// process internal data
 		eid, _ := tx.CoinSpecificData.(bchain.EthereumSpecificData)
 		if eid.InternalData != nil {
-			if err = d.processInternalData(blockTx, tx, eid.InternalData, addresses, addressContracts); err != nil {
+			if err = d.processInternalData(blockTx, tx, eid.InternalData, addresses, addressContracts, false); err != nil {
 				return nil, err
 			}
 		}
@@ -508,6 +539,53 @@ func (d *RocksDB) processAddressesEthereumType(block *bchain.Block, addresses ad
 		}
 	}
 	return blockTxs, nil
+}
+
+// ReconnectInternalDataToBlockEthereumType adds missing internal data to the block and stores them in db
+func (d *RocksDB) ReconnectInternalDataToBlockEthereumType(block *bchain.Block) error {
+	wb := grocksdb.NewWriteBatch()
+	defer wb.Destroy()
+	if d.chainParser.GetChainType() != bchain.ChainEthereumType {
+		return errors.New("Unsupported chain type")
+	}
+
+	addresses := make(addressesMap)
+	addressContracts := make(map[string]*AddrContracts)
+
+	// process internal data
+	blockTxs := make([]ethBlockTx, len(block.Txs))
+	for txi := range block.Txs {
+		tx := &block.Txs[txi]
+		eid, _ := tx.CoinSpecificData.(bchain.EthereumSpecificData)
+		if eid.InternalData != nil {
+			btxID, err := d.chainParser.PackTxid(tx.Txid)
+			if err != nil {
+				return err
+			}
+			blockTx := &blockTxs[txi]
+			blockTx.btxID = btxID
+			tx.BlockHeight = block.Height
+			if err = d.processInternalData(blockTx, tx, eid.InternalData, addresses, addressContracts, true); err != nil {
+				return err
+			}
+		}
+	}
+
+	if err := d.storeAddressContracts(wb, addressContracts); err != nil {
+		return err
+	}
+	if err := d.storeInternalDataEthereumType(wb, blockTxs); err != nil {
+		return err
+	}
+	if err := d.storeAddresses(wb, block.Height, addresses); err != nil {
+		return err
+	}
+	// remove the block from the internal errors table
+	wb.DeleteCF(d.cfh[cfBlockInternalDataErrors], packUint(block.Height))
+	if err := d.WriteBatch(wb); err != nil {
+		return err
+	}
+	return nil
 }
 
 var ethZeroAddress []byte = make([]byte, eth.EthereumTypeAddressDescriptorLen)
@@ -867,7 +945,7 @@ func (d *RocksDB) storeAndCleanupBlockTxsEthereumType(wb *grocksdb.WriteBatch, b
 	return d.cleanupBlockTxs(wb, block)
 }
 
-func (d *RocksDB) storeBlockInternalDataErrorEthereumType(wb *grocksdb.WriteBatch, block *bchain.Block, message string, retryCount uint8) error {
+func (d *RocksDB) StoreBlockInternalDataErrorEthereumType(wb *grocksdb.WriteBatch, block *bchain.Block, message string, retryCount uint8) error {
 	key := packUint(block.Height)
 	// TODO: this supposes that Txid and block hash are the same size
 	txid, err := d.chainParser.PackTxid(block.Hash)
@@ -937,7 +1015,7 @@ func (d *RocksDB) storeBlockSpecificDataEthereumType(wb *grocksdb.WriteBatch, bl
 	if blockSpecificData != nil {
 		if blockSpecificData.InternalDataError != "" {
 			glog.Info("storeBlockSpecificDataEthereumType ", block.Height, ": ", blockSpecificData.InternalDataError)
-			if err := d.storeBlockInternalDataErrorEthereumType(wb, block, blockSpecificData.InternalDataError, 0); err != nil {
+			if err := d.StoreBlockInternalDataErrorEthereumType(wb, block, blockSpecificData.InternalDataError, 0); err != nil {
 				return err
 			}
 		}

@@ -1596,3 +1596,79 @@ func Test_packUnpackString(t *testing.T) {
 		})
 	}
 }
+
+func TestRocksDB_packTxIndexes_unpackTxIndexes(t *testing.T) {
+	type args struct {
+		txi []txIndexes
+	}
+	tests := []struct {
+		name string
+		data []txIndexes
+		hex  string
+	}{
+		{
+			name: "1",
+			data: []txIndexes{
+				{
+					btxID:   hexToBytes(dbtestdata.TxidB1T1),
+					indexes: []int32{1},
+				},
+			},
+			hex: "00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa384006",
+		},
+		{
+			name: "2",
+			data: []txIndexes{
+				{
+					btxID:   hexToBytes(dbtestdata.TxidB1T1),
+					indexes: []int32{-2, 1, 3, 1234, -53241},
+				},
+				{
+					btxID:   hexToBytes(dbtestdata.TxidB1T2),
+					indexes: []int32{-2, -1, 0, 1, 2, 3},
+				},
+			},
+			hex: "effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac7507030004080e00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa384007040ca6488cff61",
+		},
+		{
+			name: "3",
+			data: []txIndexes{
+				{
+					btxID:   hexToBytes(dbtestdata.TxidB2T1),
+					indexes: []int32{-2, 1, 3},
+				},
+				{
+					btxID:   hexToBytes(dbtestdata.TxidB1T1),
+					indexes: []int32{-2, -1, 0, 1, 2, 3},
+				},
+				{
+					btxID:   hexToBytes(dbtestdata.TxidB1T2),
+					indexes: []int32{-2},
+				},
+			},
+			hex: "effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac750500b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa384007030004080e7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d2507040e",
+		},
+	}
+	d := &RocksDB{
+		chainParser: &testBitcoinParser{
+			BitcoinParser: bitcoinTestnetParser(),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b := d.packTxIndexes(tt.data)
+			hex := hex.EncodeToString(b)
+			if !reflect.DeepEqual(hex, tt.hex) {
+				t.Errorf("packTxIndexes() = %v, want %v", hex, tt.hex)
+			}
+			got, err := d.unpackTxIndexes(b)
+			if err != nil {
+				t.Errorf("unpackTxIndexes() error = %v", err)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.data) {
+				t.Errorf("unpackTxIndexes() = %+v, want %+v", got, tt.data)
+			}
+		})
+	}
+}
