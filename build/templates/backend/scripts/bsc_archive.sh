@@ -8,9 +8,9 @@ INSTALL_DIR={{.Env.BackendInstallPath}}/{{.Coin.Alias}}
 DATA_DIR={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend
 
 GETH_BIN=$INSTALL_DIR/geth_linux
-CHAINDATA_DIR=$DATA_DIR/geth/chaindata
+LIGHTCHAINDATA_DIR=$DATA_DIR/geth/lightchaindata
 
-if [ ! -d "$CHAINDATA_DIR" ]; then
+if [ ! -d "$LIGHTCHAINDATA_DIR" ]; then
   $GETH_BIN init --datadir $DATA_DIR $INSTALL_DIR/genesis.json
 fi
 
@@ -33,7 +33,7 @@ $GETH_BIN \
   --cache.gc 0 \
   --cache.trie 30 \
   --syncmode full \
-  --maxpeers 100 \
+  --maxpeers 200 \
   --rpc.allow-unprotected-txs \
   --txlookuplimit 0 \
   --cache 8000 \
