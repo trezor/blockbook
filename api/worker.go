@@ -957,20 +957,47 @@ func (w *Worker) getEthereumContractBalance(addrDesc bchain.AddressDescriptor, i
 				}
 			}
 		} else {
-			if len(c.Ids) > 0 {
-				ids := make([]Amount, len(c.Ids))
-				for j := range ids {
-					ids[j] = (Amount)(c.Ids[j])
+			ids := []Amount{}
+			c.Ids.Range(func(key, val any) bool {
+				k, ok := key.(string)
+				if !ok {
+					glog.Errorf("invalid nft id: %v (type: %T)", key, k)
+					return true
 				}
+				id, ok := new(big.Int).SetString(k, 10)
+				if !ok {
+					glog.Errorf("failed to convert nft id: %s", k)
+					return true
+				}
+				ids = append(ids, (Amount)(*id))
+				return true
+			})
+			if len(ids) > 0 {
 				t.Ids = ids
 			}
-			if len(c.MultiTokenValues) > 0 {
-				idValues := make([]MultiTokenValue, len(c.MultiTokenValues))
-				for j := range idValues {
-					idValues[j].Id = (*Amount)(&c.MultiTokenValues[j].Id)
-					idValues[j].Value = (*Amount)(&c.MultiTokenValues[j].Value)
+
+			multiTokenValues := []MultiTokenValue{}
+			c.MultiTokenValues.Range(func(key, val any) bool {
+				k, ok := key.(string)
+				if !ok {
+					glog.Errorf("invalid multi token id: %v (%T)", key, key)
+					return true
 				}
-				t.MultiTokenValues = idValues
+				id, ok := new(big.Int).SetString(k, 10)
+				if !ok {
+					glog.Errorf("failed to convert multi token id: %s", k)
+					return true
+				}
+				v, ok := val.(*big.Int)
+				if !ok {
+					glog.Errorf("invalid multi token value: %v (%T)", val, val)
+					return true
+				}
+				multiTokenValues = append(multiTokenValues, MultiTokenValue{Id: (*Amount)(id), Value: (*Amount)(v)})
+				return true
+			})
+			if len(multiTokenValues) > 0 {
+				t.MultiTokenValues = multiTokenValues
 			}
 		}
 	}

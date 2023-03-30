@@ -22,9 +22,9 @@ type AddrContract struct {
 	Type             bchain.TokenType
 	Contract         bchain.AddressDescriptor
 	Txs              uint
-	Value            big.Int                  // single value of ERC20
-	Ids              []big.Int                // multiple ERC721 tokens
-	MultiTokenValues []bchain.MultiTokenValue // multiple ERC1155 tokens
+	Value            big.Int  // single value of ERC20
+	Ids              sync.Map // multiple ERC721 tokens
+	MultiTokenValues sync.Map // multiple ERC1155 tokens
 }
 
 // AddrContracts contains number of transactions and contracts for an address
@@ -53,19 +53,58 @@ func packAddrContracts(acs *AddrContracts) []byte {
 			l = packBigint(&ac.Value, varBuf)
 			buf = append(buf, varBuf[:l]...)
 		} else if ac.Type == bchain.NonFungibleToken {
-			l = packVaruint(uint(len(ac.Ids)), varBuf)
+			i := 0
+			ids := []*big.Int{}
+			ac.Ids.Range(func(key, val any) bool {
+				k, ok := key.(string)
+				if !ok {
+					glog.Errorf("invalid nft id: %v (type: %T)", key, k)
+					return true
+				}
+				id, ok := new(big.Int).SetString(k, 10)
+				if !ok {
+					glog.Errorf("failed to convert nft id: %s", k)
+					return true
+				}
+				ids = append(ids, id)
+				i++
+				return true
+			})
+			l = packVaruint(uint(i), varBuf)
 			buf = append(buf, varBuf[:l]...)
-			for i := range ac.Ids {
-				l = packBigint(&ac.Ids[i], varBuf)
+			for i := range ids {
+				l = packBigint(ids[i], varBuf)
 				buf = append(buf, varBuf[:l]...)
 			}
 		} else { // bchain.ERC1155
-			l = packVaruint(uint(len(ac.MultiTokenValues)), varBuf)
+			i := 0
+			multiTokenValues := []bchain.MultiTokenValue{}
+			ac.MultiTokenValues.Range(func(key, val any) bool {
+				k, ok := key.(string)
+				if !ok {
+					glog.Errorf("invalid multi token id: %v (%T)", key, key)
+					return true
+				}
+				id, ok := new(big.Int).SetString(k, 10)
+				if !ok {
+					glog.Errorf("failed to convert multi token id: %s", k)
+					return true
+				}
+				v, ok := val.(*big.Int)
+				if !ok {
+					glog.Errorf("invalid multi token value: %v (%T)", val, val)
+					return true
+				}
+				multiTokenValues = append(multiTokenValues, bchain.MultiTokenValue{Id: *id, Value: *v})
+				i++
+				return true
+			})
+			l = packVaruint(uint(i), varBuf)
 			buf = append(buf, varBuf[:l]...)
-			for i := range ac.MultiTokenValues {
-				l = packBigint(&ac.MultiTokenValues[i].Id, varBuf)
+			for i := range multiTokenValues {
+				l = packBigint(&multiTokenValues[i].Id, varBuf)
 				buf = append(buf, varBuf[:l]...)
-				l = packBigint(&ac.MultiTokenValues[i].Value, varBuf)
+				l = packBigint(&multiTokenValues[i].Value, varBuf)
 				buf = append(buf, varBuf[:l]...)
 			}
 		}
@@ -100,24 +139,21 @@ func unpackAddrContracts(buf []byte, addrDesc bchain.AddressDescriptor) (*AddrCo
 			buf = buf[ll:]
 			ac.Value = b
 		} else {
-			len, ll := unpackVaruint(buf)
+			length, ll := unpackVaruint(buf)
 			buf = buf[ll:]
 			if ttt == bchain.NonFungibleToken {
-				ac.Ids = make([]big.Int, len)
-				for i := uint(0); i < len; i++ {
-					b, ll := unpackBigint(buf)
+				for i := uint(0); i < length; i++ {
+					id, ll := unpackBigint(buf)
 					buf = buf[ll:]
-					ac.Ids[i] = b
+					ac.Ids.Store(id.String(), struct{}{})
 				}
 			} else {
-				ac.MultiTokenValues = make([]bchain.MultiTokenValue, len)
-				for i := uint(0); i < len; i++ {
-					b, ll := unpackBigint(buf)
+				for i := uint(0); i < length; i++ {
+					id, ll := unpackBigint(buf)
 					buf = buf[ll:]
-					ac.MultiTokenValues[i].Id = b
-					b, ll = unpackBigint(buf)
+					value, ll := unpackBigint(buf)
 					buf = buf[ll:]
-					ac.MultiTokenValues[i].Value = b
+					ac.MultiTokenValues.Store(id.String(), &value)
 				}
 			}
 		}
@@ -232,38 +268,30 @@ func addToContract(c *AddrContract, contractIndex int, index int32, contract bch
 	} else if transfer.Type == bchain.NonFungibleToken {
 		if index < 0 {
 			// remove token from the list
-			for i := range c.Ids {
-				if c.Ids[i].Cmp(&transfer.Value) == 0 {
-					c.Ids = append(c.Ids[:i], c.Ids[i+1:]...)
-					break
-				}
-			}
+			c.Ids.Delete(transfer.Value.String())
 		} else {
 			// add token to the list
-			c.Ids = append(c.Ids, transfer.Value)
+			c.Ids.Store(transfer.Value.String(), struct{}{})
 		}
 	} else { // bchain.ERC1155
 		for _, t := range transfer.MultiTokenValues {
-			for i := range c.MultiTokenValues {
-				// find the token in the list
-				if c.MultiTokenValues[i].Id.Cmp(&t.Id) == 0 {
-					aggregate(&c.MultiTokenValues[i].Value, &t.Value)
-					// if transfer from, remove if the value is zero
-					if index < 0 && len(c.MultiTokenValues[i].Value.Bits()) == 0 {
-						c.MultiTokenValues = append(c.MultiTokenValues[:i], c.MultiTokenValues[i+1:]...)
-					}
-					goto nextTransfer
+			if val, ok := c.MultiTokenValues.Load(t.Id.String()); ok {
+				v, ok := val.(*big.Int)
+				if !ok {
+					glog.Errorf("invalid multi token value: %v (%T)", val, val)
+					continue
+				}
+				aggregate(v, &t.Value)
+				if index < 0 && len(v.Bits()) == 0 {
+					c.MultiTokenValues.Delete(t.Id.String())
+				}
+			} else {
+				// if not found and transfer to, add to the list
+				// it is necessary to add a copy of the value so that subsequent calls to addToContract do not change the transfer value
+				if index >= 0 {
+					c.MultiTokenValues.Store(t.Id.String(), big.NewInt(t.Value.Int64()))
 				}
 			}
-			// if not found and transfer to, add to the list
-			// it is necessary to add a copy of the value so that subsequent calls to addToContract do not change the transfer value
-			if index >= 0 {
-				c.MultiTokenValues = append(c.MultiTokenValues, bchain.MultiTokenValue{
-					Id:    t.Id,
-					Value: *new(big.Int).Set(&t.Value),
-				})
-			}
-		nextTransfer:
 		}
 	}
 	if addTxCount {
