@@ -52,6 +52,7 @@
 | Avalanche Archive       | 9099                    | 9199                  | 8099             | 38399 p2p                   |
 | Polygon                 | 9200                    | 9300                  | 8200             | 38400 p2p, 8300 http        |
 | Polygon Heimdall        | 9201                    | 9301                  | 8201             | 38401 p2p, 8301 http        |
+| Polygon Archive         | 9202                    | 9302                  | 8202             | 38402 p2p, 8302 http        |
 | Bitcoin Signet          | 19020                   | 19120                 | 18020            | 48320                       |
 | Bitcoin Regtest         | 19021                   | 19121                 | 18021            | 48321                       |
 | Ethereum Goerli         | 19026                   | 19126                 | 18026            | 48326 p2p                   |
