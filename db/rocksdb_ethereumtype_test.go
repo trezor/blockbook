@@ -6,6 +6,8 @@ import (
 	"encoding/hex"
 	"math/big"
 	"reflect"
+	"sort"
+	"sync"
 	"testing"
 
 	"github.com/juju/errors"
@@ -28,6 +30,106 @@ func bigintFromStringToHex(s string) string {
 	var b big.Int
 	b.SetString(s, 0)
 	return bigintToHex(&b)
+}
+
+func makeIds(ids ...big.Int) sync.Map {
+	var m sync.Map
+	for i, _ := range ids {
+		m.Store(ids[i].String(), struct{}{})
+	}
+	return m
+}
+
+func makeMultiTokenValues(values ...bchain.MultiTokenValue) sync.Map {
+	var m sync.Map
+	for i, _ := range values {
+		m.Store(values[i].Id.String(), &values[i].Value)
+	}
+	return m
+}
+
+// deepCopyAddrContracts makes a deep copy to prevent sync.Map variables from being modified by reference
+func deepCopyAddrContracts(v AddrContracts) *AddrContracts {
+	contracts := []AddrContract{}
+	for _, cc := range v.Contracts {
+		var ids sync.Map
+		cc.Ids.Range(func(key, val any) bool {
+			ids.Store(key, val)
+			return true
+		})
+		var multiTokenValues sync.Map
+		cc.MultiTokenValues.Range(func(k, v any) bool {
+			multiTokenValues.Store(k, v)
+			return true
+		})
+		c := cc
+		c.Ids = ids
+		c.MultiTokenValues = multiTokenValues
+		contracts = append(contracts, c)
+	}
+
+	return &AddrContracts{
+		TotalTxs:       v.TotalTxs,
+		NonContractTxs: v.NonContractTxs,
+		InternalTxs:    v.InternalTxs,
+		Contracts:      contracts,
+	}
+}
+
+// deepEqualSyncMap compares the AddrContract sync.Map properties and removes them from the AddrContracts reference passed in
+// because reflect.DeepEqual will always fail on two separate copies of sync.Map
+func deepEqualSyncMap(t *testing.T, got *AddrContracts, want *AddrContracts) {
+	var gotIds []string
+	var gotMultiTokenIds []string
+	var gotMultiTokenValues []string
+	for i, contract := range got.Contracts {
+		contract.Ids.Range(func(key, val any) bool {
+			gotIds = append(gotIds, key.(string))
+			return true
+		})
+		contract.MultiTokenValues.Range(func(key, val any) bool {
+			gotMultiTokenIds = append(gotMultiTokenIds, key.(string))
+			v := val.(*big.Int)
+			gotMultiTokenValues = append(gotMultiTokenValues, v.String())
+			return true
+		})
+		got.Contracts[i].Ids = sync.Map{}
+		got.Contracts[i].MultiTokenValues = sync.Map{}
+	}
+	sort.Strings(gotIds)
+	sort.Strings(gotMultiTokenIds)
+	sort.Strings(gotMultiTokenValues)
+
+	var wantIds []string
+	var wantMultiTokenIds []string
+	var wantMultiTokenValues []string
+	for i, contract := range want.Contracts {
+		contract.Ids.Range(func(key, val any) bool {
+			wantIds = append(wantIds, key.(string))
+			return true
+		})
+		contract.MultiTokenValues.Range(func(key, val any) bool {
+			wantMultiTokenIds = append(wantMultiTokenIds, key.(string))
+			v := val.(*big.Int)
+			wantMultiTokenValues = append(wantMultiTokenValues, v.String())
+			return true
+		})
+		want.Contracts[i].Ids = sync.Map{}
+		want.Contracts[i].MultiTokenValues = sync.Map{}
+	}
+	sort.Strings(wantIds)
+	sort.Strings(wantMultiTokenIds)
+	sort.Strings(wantMultiTokenValues)
+
+	if !reflect.DeepEqual(gotIds, wantIds) {
+		t.Errorf("deepEqualSyncMap() ids = %+v, want %+v", gotIds, wantIds)
+	}
+	if !reflect.DeepEqual(gotMultiTokenIds, wantMultiTokenIds) {
+		t.Errorf("deepEqualSyncMap() multi token ids = %+v, want %+v", gotMultiTokenIds, wantMultiTokenIds)
+	}
+	if !reflect.DeepEqual(gotMultiTokenValues, wantMultiTokenValues) {
+		t.Errorf("deepEqualSyncMap() multi token values = %+v, want %+v", gotMultiTokenValues, wantMultiTokenValues)
+	}
 }
 
 func verifyAfterEthereumTypeBlock1(t *testing.T, d *RocksDB, afterDisconnect bool) {
@@ -765,28 +867,28 @@ func Test_packUnpackAddrContracts(t *testing.T) {
 						Type:     bchain.NonFungibleToken,
 						Contract: addressToAddrDesc(dbtestdata.EthAddrContract47, parser),
 						Txs:      41235,
-						Ids: []big.Int{
+						Ids: makeIds(
 							*big.NewInt(1),
 							*big.NewInt(2),
 							*big.NewInt(3),
 							*big.NewInt(3144223412344123),
 							*big.NewInt(5),
-						},
+						),
 					},
 					{
 						Type:     bchain.MultiToken,
 						Contract: addressToAddrDesc(dbtestdata.EthAddrContract4a, parser),
 						Txs:      64,
-						MultiTokenValues: []bchain.MultiTokenValue{
-							{
+						MultiTokenValues: makeMultiTokenValues(
+							bchain.MultiTokenValue{
 								Id:    *big.NewInt(1),
 								Value: *big.NewInt(1412341234),
 							},
-							{
+							bchain.MultiTokenValue{
 								Id:    *big.NewInt(123412341234),
 								Value: *big.NewInt(3),
 							},
-						},
+						),
 					},
 				},
 			},
@@ -800,8 +902,9 @@ func Test_packUnpackAddrContracts(t *testing.T) {
 				t.Errorf("unpackAddrContracts() error = %v", err)
 				return
 			}
+			deepEqualSyncMap(t, got, &tt.data)
 			if !reflect.DeepEqual(got, &tt.data) {
-				t.Errorf("unpackAddrContracts() = %v, want %v", got, tt.data)
+				t.Errorf("unpackAddrContracts() = %+v, want %+v", got, tt.data)
 			}
 		})
 	}
@@ -894,7 +997,7 @@ func Test_addToContracts(t *testing.T) {
 						Type:     bchain.NonFungibleToken,
 						Contract: addressToAddrDesc(dbtestdata.EthAddrContract6f, parser),
 						Txs:      1,
-						Ids:      []big.Int{*big.NewInt(1)},
+						Ids:      makeIds(*big.NewInt(1)),
 					},
 				},
 			},
@@ -923,7 +1026,7 @@ func Test_addToContracts(t *testing.T) {
 						Type:     bchain.NonFungibleToken,
 						Contract: addressToAddrDesc(dbtestdata.EthAddrContract6f, parser),
 						Txs:      2,
-						Ids:      []big.Int{*big.NewInt(1), *big.NewInt(2)},
+						Ids:      makeIds(*big.NewInt(1), *big.NewInt(2)),
 					},
 				},
 			},
@@ -952,7 +1055,7 @@ func Test_addToContracts(t *testing.T) {
 						Type:     bchain.NonFungibleToken,
 						Contract: addressToAddrDesc(dbtestdata.EthAddrContract6f, parser),
 						Txs:      2,
-						Ids:      []big.Int{*big.NewInt(2)},
+						Ids:      makeIds(*big.NewInt(2)),
 					},
 				},
 			},
@@ -986,18 +1089,18 @@ func Test_addToContracts(t *testing.T) {
 						Type:     bchain.NonFungibleToken,
 						Contract: addressToAddrDesc(dbtestdata.EthAddrContract6f, parser),
 						Txs:      2,
-						Ids:      []big.Int{*big.NewInt(2)},
+						Ids:      makeIds(*big.NewInt(2)),
 					},
 					{
 						Type:     bchain.MultiToken,
 						Contract: addressToAddrDesc(dbtestdata.EthAddrContractCd, parser),
 						Txs:      1,
-						MultiTokenValues: []bchain.MultiTokenValue{
-							{
+						MultiTokenValues: makeMultiTokenValues(
+							bchain.MultiTokenValue{
 								Id:    *big.NewInt(11),
 								Value: *big.NewInt(56789),
 							},
-						},
+						),
 					},
 				},
 			},
@@ -1035,22 +1138,22 @@ func Test_addToContracts(t *testing.T) {
 						Type:     bchain.NonFungibleToken,
 						Contract: addressToAddrDesc(dbtestdata.EthAddrContract6f, parser),
 						Txs:      2,
-						Ids:      []big.Int{*big.NewInt(2)},
+						Ids:      makeIds(*big.NewInt(2)),
 					},
 					{
 						Type:     bchain.MultiToken,
 						Contract: addressToAddrDesc(dbtestdata.EthAddrContractCd, parser),
 						Txs:      2,
-						MultiTokenValues: []bchain.MultiTokenValue{
-							{
+						MultiTokenValues: makeMultiTokenValues(
+							bchain.MultiTokenValue{
 								Id:    *big.NewInt(11),
 								Value: *big.NewInt(56900),
 							},
-							{
+							bchain.MultiTokenValue{
 								Id:    *big.NewInt(22),
 								Value: *big.NewInt(222),
 							},
-						},
+						),
 					},
 				},
 			},
@@ -1088,18 +1191,18 @@ func Test_addToContracts(t *testing.T) {
 						Type:     bchain.NonFungibleToken,
 						Contract: addressToAddrDesc(dbtestdata.EthAddrContract6f, parser),
 						Txs:      2,
-						Ids:      []big.Int{*big.NewInt(2)},
+						Ids:      makeIds(*big.NewInt(2)),
 					},
 					{
 						Type:     bchain.MultiToken,
 						Contract: addressToAddrDesc(dbtestdata.EthAddrContractCd, parser),
 						Txs:      3,
-						MultiTokenValues: []bchain.MultiTokenValue{
-							{
+						MultiTokenValues: makeMultiTokenValues(
+							bchain.MultiTokenValue{
 								Id:    *big.NewInt(11),
 								Value: *big.NewInt(56788),
 							},
-						},
+						),
 					},
 				},
 			},
@@ -1118,7 +1221,9 @@ func Test_addToContracts(t *testing.T) {
 			if got := addToContract(&addrContracts.Contracts[contractIndex], contractIndex, tt.args.index, tt.args.contract, tt.args.transfer, tt.args.addTxCount); got != tt.wantIndex {
 				t.Errorf("addToContracts() = %v, want %v", got, tt.wantIndex)
 			}
-			if !reflect.DeepEqual(addrContracts, tt.wantAddrContracts) {
+			addrContractsCopy := deepCopyAddrContracts(*addrContracts)
+			deepEqualSyncMap(t, addrContractsCopy, tt.wantAddrContracts)
+			if !reflect.DeepEqual(addrContractsCopy, tt.wantAddrContracts) {
 				t.Errorf("addToContracts() = %+v, want %+v", addrContracts, tt.wantAddrContracts)
 			}
 		})
