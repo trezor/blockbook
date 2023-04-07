@@ -8,9 +8,9 @@ INSTALL_DIR={{.Env.BackendInstallPath}}/{{.Coin.Alias}}
 DATA_DIR={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend
 
 GETH_BIN=$INSTALL_DIR/geth_linux
-LIGHTCHAINDATA_DIR=$DATA_DIR/geth/lightchaindata
+CHAINDATA_DIR=$DATA_DIR/geth/chaindata
 
-if [ ! -d "$LIGHTCHAINDATA_DIR" ]; then
+if [ ! -d "$CHAINDATA_DIR" ]; then
   $GETH_BIN init --datadir $DATA_DIR $INSTALL_DIR/genesis.json
 fi
 
