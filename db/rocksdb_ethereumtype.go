@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/hex"
 	"math/big"
+	"os"
+	"sort"
 	"sync"
 
 	vlq "github.com/bsm/go-vlq"
@@ -17,14 +19,103 @@ import (
 const InternalTxIndexOffset = 1
 const ContractIndexOffset = 2
 
+type AggregateFn = func(*big.Int, *big.Int)
+
+type Ids []big.Int
+
+func (s *Ids) sort() bool {
+	sorted := false
+	sort.Slice(*s, func(i, j int) bool {
+		isLess := (*s)[i].Cmp(&(*s)[j]) == -1
+		if isLess == (i > j) { // it is necessary to swap - (id[i]<id[j] and i>j) or (id[i]>id[j] and i<j)
+			sorted = true
+		}
+		return isLess
+	})
+	return sorted
+}
+
+func (s *Ids) search(id big.Int) int {
+	// attempt to find id using a binary search
+	return sort.Search(len(*s), func(i int) bool {
+		cmp := (*s)[i].Cmp(&id)
+		return cmp == 1 || cmp == 0
+	})
+}
+
+// insert id in ascending order
+func (s *Ids) insert(id big.Int) {
+	i := s.search(id)
+	if i == len(*s) {
+		*s = append(*s, id)
+	} else {
+		*s = append((*s)[:i+1], (*s)[i:]...)
+		(*s)[i] = id
+	}
+}
+
+func (s *Ids) remove(id big.Int) {
+	i := s.search(id)
+	// remove id if found
+	if i < len(*s) && (*s)[i].Cmp(&id) == 0 {
+		*s = append((*s)[:i], (*s)[i+1:]...)
+	}
+}
+
+type MultiTokenValues []bchain.MultiTokenValue
+
+func (s *MultiTokenValues) sort() bool {
+	sorted := false
+	sort.Slice(*s, func(i, j int) bool {
+		isLess := (*s)[i].Id.Cmp(&(*s)[j].Id) == -1
+		if isLess == (i > j) { // it is necessary to swap - (id[i]<id[j] and i>j) or (id[i]>id[j] and i<j)
+			sorted = true
+		}
+		return isLess
+	})
+	return sorted
+}
+
+// search for multi token value using a binary seach on id
+func (s *MultiTokenValues) search(m bchain.MultiTokenValue) int {
+	return sort.Search(len(*s), func(i int) bool {
+		cmp := (*s)[i].Id.Cmp(&m.Id)
+		return cmp == 1 || cmp == 0
+	})
+}
+
+func (s *MultiTokenValues) upsert(m bchain.MultiTokenValue, index int32, aggregate AggregateFn) {
+	i := s.search(m)
+	if i < len(*s) && (*s)[i].Id.Cmp(&m.Id) == 0 {
+		aggregate(&(*s)[i].Value, &m.Value)
+		// if transfer from, remove if the value is zero
+		if index < 0 && len((*s)[i].Value.Bits()) == 0 {
+			*s = append((*s)[:i], (*s)[i+1:]...)
+		}
+		return
+	}
+	if index >= 0 {
+		elem := bchain.MultiTokenValue{
+			Id:    m.Id,
+			Value: *new(big.Int).Set(&m.Value),
+		}
+		if i == len(*s) {
+			*s = append(*s, elem)
+		} else {
+			*s = append((*s)[:i+1], (*s)[i:]...)
+			(*s)[i] = elem
+		}
+	}
+}
+
 // AddrContract is Contract address with number of transactions done by given address
 type AddrContract struct {
 	Type             bchain.TokenType
 	Contract         bchain.AddressDescriptor
 	Txs              uint
-	Value            big.Int                  // single value of ERC20
-	Ids              []big.Int                // multiple ERC721 tokens
-	MultiTokenValues []bchain.MultiTokenValue // multiple ERC1155 tokens
+	Value            big.Int           // single value of ERC20
+	Ids              *Ids              // multiple ERC721 tokens
+	MultiTokenValues *MultiTokenValues // multiple ERC1155 tokens
 }
 
 // AddrContracts contains number of transactions and contracts for an address
@@ -53,19 +144,19 @@ func packAddrContracts(acs *AddrContracts) []byte {
 			l = packBigint(&ac.Value, varBuf)
 			buf = append(buf, varBuf[:l]...)
 		} else if ac.Type == bchain.NonFungibleToken {
-			l = packVaruint(uint(len(ac.Ids)), varBuf)
+			l = packVaruint(uint(len(*ac.Ids)), varBuf)
 			buf = append(buf, varBuf[:l]...)
-			for i := range ac.Ids {
-				l = packBigint(&ac.Ids[i], varBuf)
+			for i := range *ac.Ids {
+				l = packBigint(&(*ac.Ids)[i], varBuf)
 				buf = append(buf, varBuf[:l]...)
 			}
 		} else { // bchain.ERC1155
-			l = packVaruint(uint(len(ac.MultiTokenValues)), varBuf)
+			l = packVaruint(uint(len(*ac.MultiTokenValues)), varBuf)
 			buf = append(buf, varBuf[:l]...)
-			for i := range ac.MultiTokenValues {
-				l = packBigint(&ac.MultiTokenValues[i].Id, varBuf)
+			for i := range *ac.MultiTokenValues {
+				l = packBigint(&(*ac.MultiTokenValues)[i].Id, varBuf)
 				buf = append(buf, varBuf[:l]...)
-				l = packBigint(&ac.MultiTokenValues[i].Value, varBuf)
+				l = packBigint(&(*ac.MultiTokenValues)[i].Value, varBuf)
 				buf = append(buf, varBuf[:l]...)
 			}
 		}
@@ -91,9 +182,11 @@ func unpackAddrContracts(buf []byte, addrDesc bchain.AddressDescriptor) (*AddrCo
 		ttt := bchain.TokenType(txs & 3)
 		txs >>= 2
 		ac := AddrContract{
-			Type:     ttt,
-			Contract: contract,
-			Txs:      txs,
+			Type:             ttt,
+			Contract:         contract,
+			Txs:              txs,
+			Ids:              &Ids{},
+			MultiTokenValues: &MultiTokenValues{},
 		}
 		if ttt == bchain.FungibleToken {
 			b, ll := unpackBigint(buf)
@@ -103,21 +196,23 @@ func unpackAddrContracts(buf []byte, addrDesc bchain.AddressDescriptor) (*AddrCo
 			len, ll := unpackVaruint(buf)
 			buf = buf[ll:]
 			if ttt == bchain.NonFungibleToken {
-				ac.Ids = make([]big.Int, len)
+				ids := make(Ids, len)
+				ac.Ids = &ids
 				for i := uint(0); i < len; i++ {
 					b, ll := unpackBigint(buf)
 					buf = buf[ll:]
-					ac.Ids[i] = b
+					(*ac.Ids)[i] = b
 				}
 			} else {
-				ac.MultiTokenValues = make([]bchain.MultiTokenValue, len)
+				vals := make(MultiTokenValues, len)
+				ac.MultiTokenValues = &vals
 				for i := uint(0); i < len; i++ {
 					b, ll := unpackBigint(buf)
 					buf = buf[ll:]
-					ac.MultiTokenValues[i].Id = b
+					(*ac.MultiTokenValues)[i].Id = b
 					b, ll = unpackBigint(buf)
 					buf = buf[ll:]
-					ac.MultiTokenValues[i].Value = b
+					(*ac.MultiTokenValues)[i].Value = b
 				}
 			}
 		}
@@ -210,7 +305,7 @@ func addToAddressesMapEthereumType(addresses addressesMap, strAddrDesc string, b
 }
 
 func addToContract(c *AddrContract, contractIndex int, index int32, contract bchain.AddressDescriptor, transfer *bchain.TokenTransfer, addTxCount bool) int32 {
-	var aggregate func(*big.Int, *big.Int)
+	var aggregate AggregateFn
 	// index 0 is for ETH transfers, index 1 (InternalTxIndexOffset) is for internal transfers, contract indexes start with 2 (ContractIndexOffset)
 	if index < 0 {
 		index = ^int32(contractIndex + ContractIndexOffset)
@@ -231,39 +326,13 @@ func addToContract(c *AddrContract, contractIndex int, index int32, contract bch
 		aggregate(&c.Value, &transfer.Value)
 	} else if transfer.Type == bchain.NonFungibleToken {
 		if index < 0 {
-			// remove token from the list
-			for i := range c.Ids {
-				if c.Ids[i].Cmp(&transfer.Value) == 0 {
-					c.Ids = append(c.Ids[:i], c.Ids[i+1:]...)
-					break
-				}
-			}
+			c.Ids.remove(transfer.Value)
 		} else {
-			// add token to the list
-			c.Ids = append(c.Ids, transfer.Value)
+			c.Ids.insert(transfer.Value)
 		}
 	} else { // bchain.ERC1155
 		for _, t := range transfer.MultiTokenValues {
-			for i := range c.MultiTokenValues {
-				// find the token in the list
-				if c.MultiTokenValues[i].Id.Cmp(&t.Id) == 0 {
-					aggregate(&c.MultiTokenValues[i].Value, &t.Value)
-					// if transfer from, remove if the value is zero
-					if index < 0 && len(c.MultiTokenValues[i].Value.Bits()) == 0 {
-						c.MultiTokenValues = append(c.MultiTokenValues[:i], c.MultiTokenValues[i+1:]...)
-					}
-					goto nextTransfer
-				}
-			}
-			// if not found and transfer to, add to the list
-			// it is necessary to add a copy of the value so that subsequent calls to addToContract do not change the transfer value
-			if index >= 0 {
-				c.MultiTokenValues = append(c.MultiTokenValues, bchain.MultiTokenValue{
-					Id:    t.Id,
-					Value: *new(big.Int).Set(&t.Value),
-				})
-			}
-		nextTransfer:
+			c.MultiTokenValues.upsert(t, index, aggregate)
 		}
 	}
 	if addTxCount {
@@ -305,8 +374,10 @@ func (d *RocksDB) addToAddressesAndContractsEthereumType(addrDesc bchain.Address
 			if !found {
 				contractIndex = len(ac.Contracts)
 				ac.Contracts = append(ac.Contracts, AddrContract{
-					Contract: contract,
-					Type:     transfer.Type,
+					Contract:         contract,
+					Type:             transfer.Type,
+					Ids:              &Ids{},
+					MultiTokenValues: &MultiTokenValues{},
 				})
 			}
 			c := &ac.Contracts[contractIndex]
@@ -1201,4 +1272,57 @@ func (d *RocksDB) DisconnectBlockRangeEthereumType(lower uint32, higher uint32) 
 		glog.Infof("rocksdb: blocks %d-%d disconnected", lower, higher)
 	}
 	return err
+}
+
+func (d *RocksDB) SortAddressContracts(stop chan os.Signal) error {
+	if d.chainParser.GetChainType() != bchain.ChainEthereumType {
+		glog.Info("SortAddressContracts: applicable only for ethereum type coins")
+		return nil
+	}
+
+	glog.Info("SortAddressContracts: starting")
+
+	// do not use cache
+	ro := grocksdb.NewDefaultReadOptions()
+	ro.SetFillCache(false)
+
+	wb := grocksdb.NewWriteBatch()
+	defer wb.Destroy()
+
+	it := d.db.NewIteratorCF(ro, d.cfh[cfAddressContracts])
+	defer it.Close()
+
+	var rowCount, idsSortedCount, multiTokenValuesSortedCount int
+	for it.SeekToFirst(); it.Valid(); it.Next() {
+		select {
+		case <-stop:
+			return errors.New("SortAddressContracts: interrupted")
+		default:
+		}
+		rowCount++
+		addrDesc := it.Key().Data()
+		buf := it.Value().Data()
+		if len(buf) > 0 {
+			ca, err := unpackAddrContracts(buf, addrDesc)
+			if err != nil {
+				glog.Error("failed to unpack AddrContracts for: ", hex.EncodeToString(addrDesc))
+			}
+			for i := range ca.Contracts {
+				c := &ca.Contracts[i]
+				if sorted := c.Ids.sort(); sorted {
+					idsSortedCount++
+				}
+				if sorted := c.MultiTokenValues.sort(); sorted {
+					multiTokenValuesSortedCount++
+				}
+			}
+			buf := packAddrContracts(ca)
+			wb.PutCF(d.cfh[cfAddressContracts], addrDesc, buf)
+		}
+	}
+	if err := d.WriteBatch(wb); err != nil {
+		return err
+	}
+	glog.Infof("SortAddressContracts: finished, scanned %d rows, sorted %d id entries and %d multi token value entries", rowCount, idsSortedCount, multiTokenValuesSortedCount)
+	return nil
 }

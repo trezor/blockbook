@@ -196,6 +196,17 @@ func mainWithExitCode() int {
 		}
 		internalState.UtxoChecked = true
 	}
+
+	// sort addressContracts if necessary
+	if !internalState.SortedAddressContracts {
+		err = index.SortAddressContracts(chanOsSignal)
+		if err != nil {
+			glog.Error("sortAddressContracts: ", err)
+			return exitCodeFatal
+		}
+		internalState.SortedAddressContracts = true
+	}
+
 	index.SetInternalState(internalState)
 	if *fixUtxo {
 		err = index.StoreInternalState(internalState)

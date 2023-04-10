@@ -957,18 +957,18 @@ func (w *Worker) getEthereumContractBalance(addrDesc bchain.AddressDescriptor, i
 				}
 			}
 		} else {
-			if len(c.Ids) > 0 {
-				ids := make([]Amount, len(c.Ids))
+			if len(*c.Ids) > 0 {
+				ids := make([]Amount, len(*c.Ids))
 				for j := range ids {
-					ids[j] = (Amount)(c.Ids[j])
+					ids[j] = (Amount)((*c.Ids)[j])
 				}
 				t.Ids = ids
 			}
-			if len(c.MultiTokenValues) > 0 {
-				idValues := make([]MultiTokenValue, len(c.MultiTokenValues))
+			if len(*c.MultiTokenValues) > 0 {
+				idValues := make([]MultiTokenValue, len(*c.MultiTokenValues))
 				for j := range idValues {
-					idValues[j].Id = (*Amount)(&c.MultiTokenValues[j].Id)
-					idValues[j].Value = (*Amount)(&c.MultiTokenValues[j].Value)
+					idValues[j].Id = (*Amount)(&(*c.MultiTokenValues)[j].Id)
+					idValues[j].Value = (*Amount)(&(*c.MultiTokenValues)[j].Value)
 				}
 				t.MultiTokenValues = idValues
 			}
