@@ -113,9 +113,9 @@ type AddrContract struct {
 	Type             bchain.TokenType
 	Contract         bchain.AddressDescriptor
 	Txs              uint
-	Value            big.Int           // single value of ERC20
-	Ids              *Ids              // multiple ERC721 tokens
-	MultiTokenValues *MultiTokenValues // multiple ERC1155 tokens
+	Value            big.Int          // single value of ERC20
+	Ids              Ids              // multiple ERC721 tokens
+	MultiTokenValues MultiTokenValues // multiple ERC1155 tokens
 }
 
 // AddrContracts contains number of transactions and contracts for an address
@@ -144,19 +144,19 @@ func packAddrContracts(acs *AddrContracts) []byte {
 			l = packBigint(&ac.Value, varBuf)
 			buf = append(buf, varBuf[:l]...)
 		} else if ac.Type == bchain.NonFungibleToken {
-			l = packVaruint(uint(len(*ac.Ids)), varBuf)
+			l = packVaruint(uint(len(ac.Ids)), varBuf)
 			buf = append(buf, varBuf[:l]...)
-			for i := range *ac.Ids {
-				l = packBigint(&(*ac.Ids)[i], varBuf)
+			for i := range ac.Ids {
+				l = packBigint(&ac.Ids[i], varBuf)
 				buf = append(buf, varBuf[:l]...)
 			}
 		} else { // bchain.ERC1155
-			l = packVaruint(uint(len(*ac.MultiTokenValues)), varBuf)
+			l = packVaruint(uint(len(ac.MultiTokenValues)), varBuf)
 			buf = append(buf, varBuf[:l]...)
-			for i := range *ac.MultiTokenValues {
-				l = packBigint(&(*ac.MultiTokenValues)[i].Id, varBuf)
+			for i := range ac.MultiTokenValues {
+				l = packBigint(&ac.MultiTokenValues[i].Id, varBuf)
 				buf = append(buf, varBuf[:l]...)
-				l = packBigint(&(*ac.MultiTokenValues)[i].Value, varBuf)
+				l = packBigint(&ac.MultiTokenValues[i].Value, varBuf)
 				buf = append(buf, varBuf[:l]...)
 			}
 		}
@@ -182,11 +182,9 @@ func unpackAddrContracts(buf []byte, addrDesc bchain.AddressDescriptor) (*AddrCo
 		ttt := bchain.TokenType(txs & 3)
 		txs >>= 2
 		ac := AddrContract{
-			Type:             ttt,
-			Contract:         contract,
-			Txs:              txs,
-			Ids:              &Ids{},
-			MultiTokenValues: &MultiTokenValues{},
+			Type:     ttt,
+			Contract: contract,
+			Txs:      txs,
 		}
 		if ttt == bchain.FungibleToken {
 			b, ll := unpackBigint(buf)
@@ -196,23 +194,21 @@ func unpackAddrContracts(buf []byte, addrDesc bchain.AddressDescriptor) (*AddrCo
 			len, ll := unpackVaruint(buf)
 			buf = buf[ll:]
 			if ttt == bchain.NonFungibleToken {
-				ids := make(Ids, len)
-				ac.Ids = &ids
+				ac.Ids = make(Ids, len)
 				for i := uint(0); i < len; i++ {
 					b, ll := unpackBigint(buf)
 					buf = buf[ll:]
-					(*ac.Ids)[i] = b
+					ac.Ids[i] = b
 				}
 			} else {
-				vals := make(MultiTokenValues, len)
-				ac.MultiTokenValues = &vals
+				ac.MultiTokenValues = make(MultiTokenValues, len)
 				for i := uint(0); i < len; i++ {
 					b, ll := unpackBigint(buf)
 					buf = buf[ll:]
-					(*ac.MultiTokenValues)[i].Id = b
+					ac.MultiTokenValues[i].Id = b
 					b, ll = unpackBigint(buf)
 					buf = buf[ll:]
-					(*ac.MultiTokenValues)[i].Value = b
+					ac.MultiTokenValues[i].Value = b
 				}
 			}
 		}
@@ -374,10 +370,8 @@ func (d *RocksDB) addToAddressesAndContractsEthereumType(addrDesc bchain.Address
 			if !found {
 				contractIndex = len(ac.Contracts)
 				ac.Contracts = append(ac.Contracts, AddrContract{
-					Contract:         contract,
-					Type:             transfer.Type,
-					Ids:              &Ids{},
-					MultiTokenValues: &MultiTokenValues{},
+					Contract: contract,
+					Type:     transfer.Type,
 				})
 			}
 			c := &ac.Contracts[contractIndex]
