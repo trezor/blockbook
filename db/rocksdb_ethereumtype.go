@@ -1273,19 +1273,12 @@ func (d *RocksDB) SortAddressContracts(stop chan os.Signal) error {
 		glog.Info("SortAddressContracts: applicable only for ethereum type coins")
 		return nil
 	}
-
 	glog.Info("SortAddressContracts: starting")
-
 	// do not use cache
 	ro := grocksdb.NewDefaultReadOptions()
 	ro.SetFillCache(false)
-
-	wb := grocksdb.NewWriteBatch()
-	defer wb.Destroy()
-
 	it := d.db.NewIteratorCF(ro, d.cfh[cfAddressContracts])
 	defer it.Close()
-
 	var rowCount, idsSortedCount, multiTokenValuesSortedCount int
 	for it.SeekToFirst(); it.Valid(); it.Next() {
 		select {
@@ -1301,22 +1294,34 @@ func (d *RocksDB) SortAddressContracts(stop chan os.Signal) error {
 			if err != nil {
 				glog.Error("failed to unpack AddrContracts for: ", hex.EncodeToString(addrDesc))
 			}
+			update := false
 			for i := range ca.Contracts {
 				c := &ca.Contracts[i]
 				if sorted := c.Ids.sort(); sorted {
 					idsSortedCount++
+					update = true
 				}
 				if sorted := c.MultiTokenValues.sort(); sorted {
 					multiTokenValuesSortedCount++
+					update = true
 				}
 			}
-			buf := packAddrContracts(ca)
-			wb.PutCF(d.cfh[cfAddressContracts], addrDesc, buf)
+			if update {
+				if err := func() error {
+					wb := grocksdb.NewWriteBatch()
+					defer wb.Destroy()
+					buf := packAddrContracts(ca)
+					wb.PutCF(d.cfh[cfAddressContracts], addrDesc, buf)
+					return d.WriteBatch(wb)
+				}(); err != nil {
+					return errors.Errorf("failed to write cfAddressContracts for: %v: %v", addrDesc, err)
+				}
+			}
+		}
+		if rowCount%100000 == 0 {
+			glog.Infof("SortAddressContracts: progress - scanned %d rows, sorted %d ids and %d multi token values", rowCount, idsSortedCount, multiTokenValuesSortedCount)
 		}
 	}
-	if err := d.WriteBatch(wb); err != nil {
-		return err
-	}
-	glog.Infof("SortAddressContracts: finished, scanned %d rows, sorted %d id entries and %d multi token value entries", rowCount, idsSortedCount, multiTokenValuesSortedCount)
+	glog.Infof("SortAddressContracts: finished - scanned %d rows, sorted %d ids and %d multi token value", rowCount, idsSortedCount, multiTokenValuesSortedCount)
 	return nil
 }
