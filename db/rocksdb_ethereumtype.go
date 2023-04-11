@@ -38,8 +38,7 @@ func (s *Ids) sort() bool {
 func (s *Ids) search(id big.Int) int {
 	// attempt to find id using a binary search
 	return sort.Search(len(*s), func(i int) bool {
-		cmp := (*s)[i].CmpAbs(&id)
-		return cmp == 1 || cmp == 0
+		return (*s)[i].CmpAbs(&id) >= 0
 	})
 }
 
@@ -79,8 +78,7 @@ func (s *MultiTokenValues) sort() bool {
 // search for multi token value using a binary seach on id
 func (s *MultiTokenValues) search(m bchain.MultiTokenValue) int {
 	return sort.Search(len(*s), func(i int) bool {
-		cmp := (*s)[i].Id.CmpAbs(&m.Id)
-		return cmp == 1 || cmp == 0
+		return (*s)[i].Id.CmpAbs(&m.Id) >= 0
 	})
 }
 
