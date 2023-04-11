@@ -1318,7 +1318,7 @@ func (d *RocksDB) SortAddressContracts(stop chan os.Signal) error {
 				}
 			}
 		}
-		if rowCount%100000 == 0 {
+		if rowCount%5000000 == 0 {
 			glog.Infof("SortAddressContracts: progress - scanned %d rows, sorted %d ids and %d multi token values", rowCount, idsSortedCount, multiTokenValuesSortedCount)
 		}
 	}
