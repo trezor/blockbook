@@ -230,7 +230,7 @@ type EthereumSpecific struct {
 	Error             string                                 `json:"error,omitempty"`
 	Nonce             uint64                                 `json:"nonce"`
 	GasLimit          *big.Int                               `json:"gasLimit"`
-	GasUsed           *big.Int                               `json:"gasUsed"`
+	GasUsed           *big.Int                               `json:"gasUsed,omitempty"`
 	GasPrice          *Amount                                `json:"gasPrice"`
 	Data              string                                 `json:"data,omitempty"`
 	ParsedData        *bchain.EthereumParsedInputData        `json:"parsedData,omitempty"`
