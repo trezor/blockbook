@@ -80,8 +80,6 @@ type InternalState struct {
 
 	DbColumns []InternalStateColumn `json:"dbColumns"`
 
-	UtxoChecked bool `json:"utxoChecked"`
-
 	HasFiatRates                 bool                 `json:"-"`
 	HasTokenFiatRates            bool                 `json:"-"`
 	HistoricalFiatRatesTime      time.Time            `json:"historicalFiatRatesTime"`
@@ -91,6 +89,10 @@ type InternalState struct {
 	EnableSubNewTx bool `json:"-"`
 
 	BackendInfo BackendInfo `json:"-"`
+
+	// database migrations
+	UtxoChecked            bool `json:"utxoChecked"`
+	SortedAddressContracts bool `json:"sortedAddressContracts"`
 }
 
 // StartedSync signals start of synchronization

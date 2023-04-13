@@ -765,7 +765,7 @@ func Test_packUnpackAddrContracts(t *testing.T) {
 						Type:     bchain.NonFungibleToken,
 						Contract: addressToAddrDesc(dbtestdata.EthAddrContract47, parser),
 						Txs:      41235,
-						Ids: []big.Int{
+						Ids: Ids{
 							*big.NewInt(1),
 							*big.NewInt(2),
 							*big.NewInt(3),
@@ -777,7 +777,7 @@ func Test_packUnpackAddrContracts(t *testing.T) {
 						Type:     bchain.MultiToken,
 						Contract: addressToAddrDesc(dbtestdata.EthAddrContract4a, parser),
 						Txs:      64,
-						MultiTokenValues: []bchain.MultiTokenValue{
+						MultiTokenValues: MultiTokenValues{
 							{
 								Id:    *big.NewInt(1),
 								Value: *big.NewInt(1412341234),
@@ -894,7 +894,7 @@ func Test_addToContracts(t *testing.T) {
 						Type:     bchain.NonFungibleToken,
 						Contract: addressToAddrDesc(dbtestdata.EthAddrContract6f, parser),
 						Txs:      1,
-						Ids:      []big.Int{*big.NewInt(1)},
+						Ids:      Ids{*big.NewInt(1)},
 					},
 				},
 			},
@@ -923,7 +923,7 @@ func Test_addToContracts(t *testing.T) {
 						Type:     bchain.NonFungibleToken,
 						Contract: addressToAddrDesc(dbtestdata.EthAddrContract6f, parser),
 						Txs:      2,
-						Ids:      []big.Int{*big.NewInt(1), *big.NewInt(2)},
+						Ids:      Ids{*big.NewInt(1), *big.NewInt(2)},
 					},
 				},
 			},
@@ -952,7 +952,7 @@ func Test_addToContracts(t *testing.T) {
 						Type:     bchain.NonFungibleToken,
 						Contract: addressToAddrDesc(dbtestdata.EthAddrContract6f, parser),
 						Txs:      2,
-						Ids:      []big.Int{*big.NewInt(2)},
+						Ids:      Ids{*big.NewInt(2)},
 					},
 				},
 			},
@@ -986,13 +986,13 @@ func Test_addToContracts(t *testing.T) {
 						Type:     bchain.NonFungibleToken,
 						Contract: addressToAddrDesc(dbtestdata.EthAddrContract6f, parser),
 						Txs:      2,
-						Ids:      []big.Int{*big.NewInt(2)},
+						Ids:      Ids{*big.NewInt(2)},
 					},
 					{
 						Type:     bchain.MultiToken,
 						Contract: addressToAddrDesc(dbtestdata.EthAddrContractCd, parser),
 						Txs:      1,
-						MultiTokenValues: []bchain.MultiTokenValue{
+						MultiTokenValues: MultiTokenValues{
 							{
 								Id:    *big.NewInt(11),
 								Value: *big.NewInt(56789),
@@ -1035,13 +1035,13 @@ func Test_addToContracts(t *testing.T) {
 						Type:     bchain.NonFungibleToken,
 						Contract: addressToAddrDesc(dbtestdata.EthAddrContract6f, parser),
 						Txs:      2,
-						Ids:      []big.Int{*big.NewInt(2)},
+						Ids:      Ids{*big.NewInt(2)},
 					},
 					{
 						Type:     bchain.MultiToken,
 						Contract: addressToAddrDesc(dbtestdata.EthAddrContractCd, parser),
 						Txs:      2,
-						MultiTokenValues: []bchain.MultiTokenValue{
+						MultiTokenValues: MultiTokenValues{
 							{
 								Id:    *big.NewInt(11),
 								Value: *big.NewInt(56900),
@@ -1088,13 +1088,13 @@ func Test_addToContracts(t *testing.T) {
 						Type:     bchain.NonFungibleToken,
 						Contract: addressToAddrDesc(dbtestdata.EthAddrContract6f, parser),
 						Txs:      2,
-						Ids:      []big.Int{*big.NewInt(2)},
+						Ids:      Ids{*big.NewInt(2)},
 					},
 					{
 						Type:     bchain.MultiToken,
 						Contract: addressToAddrDesc(dbtestdata.EthAddrContractCd, parser),
 						Txs:      3,
-						MultiTokenValues: []bchain.MultiTokenValue{
+						MultiTokenValues: MultiTokenValues{
 							{
 								Id:    *big.NewInt(11),
 								Value: *big.NewInt(56788),
