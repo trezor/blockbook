@@ -80,11 +80,10 @@ type InternalState struct {
 
 	DbColumns []InternalStateColumn `json:"dbColumns"`
 
-	HasFiatRates                 bool                 `json:"-"`
-	HasTokenFiatRates            bool                 `json:"-"`
-	HistoricalFiatRatesTime      time.Time            `json:"historicalFiatRatesTime"`
-	HistoricalTokenFiatRatesTime time.Time            `json:"historicalTokenFiatRatesTime"`
-	CurrentTicker                *CurrencyRatesTicker `json:"currentTicker"`
+	HasFiatRates                 bool      `json:"-"`
+	HasTokenFiatRates            bool      `json:"-"`
+	HistoricalFiatRatesTime      time.Time `json:"historicalFiatRatesTime"`
+	HistoricalTokenFiatRatesTime time.Time `json:"historicalTokenFiatRatesTime"`
 
 	EnableSubNewTx bool `json:"-"`
 
@@ -317,24 +316,6 @@ func (is *InternalState) Pack() ([]byte, error) {
 	defer is.mux.Unlock()
 	is.LastStore = time.Now()
 	return json.Marshal(is)
-}
-
-// GetCurrentTicker returns current ticker
-func (is *InternalState) GetCurrentTicker(vsCurrency string, token string) *CurrencyRatesTicker {
-	is.mux.Lock()
-	currentTicker := is.CurrentTicker
-	is.mux.Unlock()
-	if currentTicker != nil && IsSuitableTicker(currentTicker, vsCurrency, token) {
-		return currentTicker
-	}
-	return nil
-}
-
-// SetCurrentTicker sets current ticker
-func (is *InternalState) SetCurrentTicker(t *CurrencyRatesTicker) {
-	is.mux.Lock()
-	defer is.mux.Unlock()
-	is.CurrentTicker = t
 }
 
 // UnpackInternalState unmarshals internal state from json

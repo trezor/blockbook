@@ -3,9 +3,8 @@
 package fiat
 
 import (
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -32,7 +31,7 @@ func TestMain(m *testing.M) {
 }
 
 func setupRocksDB(t *testing.T, parser bchain.BlockChainParser) (*db.RocksDB, *common.InternalState, string) {
-	tmp, err := ioutil.TempDir("", "testdb")
+	tmp, err := os.MkdirTemp("", "testdb")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +74,7 @@ func getFiatRatesMockData(name string) (string, error) {
 		glog.Errorf("Cannot open file %v", filename)
 		return "", err
 	}
-	b, err := ioutil.ReadAll(mockFile)
+	b, err := io.ReadAll(mockFile)
 	if err != nil {
 		glog.Errorf("Cannot read file %v", filename)
 		return "", err
@@ -133,165 +132,159 @@ func TestFiatRates(t *testing.T) {
 	// mocked CoinGecko API
 	configJSON := `{"fiat_rates": "coingecko", "fiat_rates_params": "{\"url\": \"` + mockServer.URL + `\", \"coin\": \"ethereum\",\"platformIdentifier\":\"ethereum\",\"platformVsCurrency\": \"eth\",\"periodSeconds\": 60}"}`
 
-	type fiatRatesConfig struct {
-		FiatRates       string `json:"fiat_rates"`
-		FiatRatesParams string `json:"fiat_rates_params"`
-	}
-
-	var config fiatRatesConfig
-	err := json.Unmarshal([]byte(configJSON), &config)
+	configFile, err := os.CreateTemp("", "config*.json")
 	if err != nil {
-		t.Fatalf("Error parsing config: %v", err)
+		t.Fatalf("FiatRates configFile error: %v", err)
+	}
+	if _, err := configFile.WriteString(configJSON); err != nil {
+		t.Fatalf("FiatRates configFile WriteString error: %v", err)
+	}
+	if err := configFile.Close(); err != nil {
+		t.Fatalf("FiatRates configFile Close error: %v", err)
 	}
 
-	if config.FiatRates == "" || config.FiatRatesParams == "" {
-		t.Fatalf("Error parsing FiatRates config - empty parameter")
-		return
-	}
-	fiatRates, err := NewFiatRatesDownloader(d, config.FiatRates, config.FiatRatesParams, "", nil)
+	fiatRates, err := NewFiatRates(d, configFile.Name(), nil)
 	if err != nil {
 		t.Fatalf("FiatRates init error: %v", err)
 	}
-	if config.FiatRates == "coingecko" {
 
-		// get current tickers
-		currentTickers, err := fiatRates.downloader.CurrentTickers()
-		if err != nil {
-			t.Fatalf("Error in CurrentTickers: %v", err)
-			return
-		}
-		if currentTickers == nil {
-			t.Fatalf("CurrentTickers returned nil value")
-			return
-		}
+	// get current tickers
+	currentTickers, err := fiatRates.downloader.CurrentTickers()
+	if err != nil {
+		t.Fatalf("Error in CurrentTickers: %v", err)
+		return
+	}
+	if currentTickers == nil {
+		t.Fatalf("CurrentTickers returned nil value")
+		return
+	}
 
-		wantCurrentTickers := common.CurrencyRatesTicker{
-			Rates: map[string]float32{
-				"aed": 8447.1,
-				"ars": 268901,
-				"aud": 3314.36,
-				"btc": 0.07531005,
-				"eth": 1,
-				"eur": 2182.99,
-				"ltc": 29.097696,
-				"usd": 2299.72,
-			},
-			TokenRates: map[string]float32{
-				"0x5e9997684d061269564f94e5d11ba6ce6fa9528c": 5.58195e-07,
-				"0x906710835d1ae85275eb770f06873340ca54274b": 1.39852e-10,
-			},
-			Timestamp: currentTickers.Timestamp,
-		}
-		if !reflect.DeepEqual(currentTickers, &wantCurrentTickers) {
-			t.Fatalf("CurrentTickers() = %v, want %v", *currentTickers, wantCurrentTickers)
-		}
+	wantCurrentTickers := common.CurrencyRatesTicker{
+		Rates: map[string]float32{
+			"aed": 8447.1,
+			"ars": 268901,
+			"aud": 3314.36,
+			"btc": 0.07531005,
+			"eth": 1,
+			"eur": 2182.99,
+			"ltc": 29.097696,
+			"usd": 2299.72,
+		},
+		TokenRates: map[string]float32{
+			"0x5e9997684d061269564f94e5d11ba6ce6fa9528c": 5.58195e-07,
+			"0x906710835d1ae85275eb770f06873340ca54274b": 1.39852e-10,
+		},
+		Timestamp: currentTickers.Timestamp,
+	}
+	if !reflect.DeepEqual(currentTickers, &wantCurrentTickers) {
+		t.Fatalf("CurrentTickers() = %v, want %v", *currentTickers, wantCurrentTickers)
+	}
 
-		ticker, err := fiatRates.db.FiatRatesFindLastTicker("usd", "")
-		if err != nil {
-			t.Fatalf("FiatRatesFindLastTicker failed with error: %v", err)
-		}
-		if ticker != nil {
-			t.Fatalf("FiatRatesFindLastTicker found unexpected data")
-		}
+	ticker, err := fiatRates.db.FiatRatesFindLastTicker("usd", "")
+	if err != nil {
+		t.Fatalf("FiatRatesFindLastTicker failed with error: %v", err)
+	}
+	if ticker != nil {
+		t.Fatalf("FiatRatesFindLastTicker found unexpected data")
+	}
 
-		// update historical tickers for the first time
-		err = fiatRates.downloader.UpdateHistoricalTickers()
-		if err != nil {
-			t.Fatalf("UpdateHistoricalTickers 1st pass failed with error: %v", err)
-		}
-		err = fiatRates.downloader.UpdateHistoricalTokenTickers()
-		if err != nil {
-			t.Fatalf("UpdateHistoricalTokenTickers 1st pass failed with error: %v", err)
-		}
+	// update historical tickers for the first time
+	err = fiatRates.downloader.UpdateHistoricalTickers()
+	if err != nil {
+		t.Fatalf("UpdateHistoricalTickers 1st pass failed with error: %v", err)
+	}
+	err = fiatRates.downloader.UpdateHistoricalTokenTickers()
+	if err != nil {
+		t.Fatalf("UpdateHistoricalTokenTickers 1st pass failed with error: %v", err)
+	}
 
-		ticker, err = fiatRates.db.FiatRatesFindLastTicker("usd", "")
-		if err != nil || ticker == nil {
-			t.Fatalf("FiatRatesFindLastTicker failed with error: %v", err)
-		}
-		wantTicker := common.CurrencyRatesTicker{
-			Rates: map[string]float32{
-				"aed": 241272.48,
-				"ars": 241272.48,
-				"aud": 241272.48,
-				"btc": 241272.48,
-				"eth": 241272.48,
-				"eur": 241272.48,
-				"ltc": 241272.48,
-				"usd": 1794.5397,
-			},
-			TokenRates: map[string]float32{
-				"0x5e9997684d061269564f94e5d11ba6ce6fa9528c": 4.161734e+07,
-				"0x906710835d1ae85275eb770f06873340ca54274b": 4.161734e+07,
-			},
-			Timestamp: time.Unix(1654732800, 0).UTC(),
-		}
-		if !reflect.DeepEqual(ticker, &wantTicker) {
-			t.Fatalf("UpdateHistoricalTickers(usd) 1st pass = %v, want %v", *ticker, wantTicker)
-		}
+	ticker, err = fiatRates.db.FiatRatesFindLastTicker("usd", "")
+	if err != nil || ticker == nil {
+		t.Fatalf("FiatRatesFindLastTicker failed with error: %v", err)
+	}
+	wantTicker := common.CurrencyRatesTicker{
+		Rates: map[string]float32{
+			"aed": 241272.48,
+			"ars": 241272.48,
+			"aud": 241272.48,
+			"btc": 241272.48,
+			"eth": 241272.48,
+			"eur": 241272.48,
+			"ltc": 241272.48,
+			"usd": 1794.5397,
+		},
+		TokenRates: map[string]float32{
+			"0x5e9997684d061269564f94e5d11ba6ce6fa9528c": 4.161734e+07,
+			"0x906710835d1ae85275eb770f06873340ca54274b": 4.161734e+07,
+		},
+		Timestamp: time.Unix(1654732800, 0).UTC(),
+	}
+	if !reflect.DeepEqual(ticker, &wantTicker) {
+		t.Fatalf("UpdateHistoricalTickers(usd) 1st pass = %v, want %v", *ticker, wantTicker)
+	}
 
-		ticker, err = fiatRates.db.FiatRatesFindLastTicker("eur", "")
-		if err != nil || ticker == nil {
-			t.Fatalf("FiatRatesFindLastTicker failed with error: %v", err)
-		}
-		wantTicker = common.CurrencyRatesTicker{
-			Rates: map[string]float32{
-				"aed": 240402.97,
-				"ars": 240402.97,
-				"aud": 240402.97,
-				"btc": 240402.97,
-				"eth": 240402.97,
-				"eur": 240402.97,
-				"ltc": 240402.97,
-			},
-			TokenRates: map[string]float32{
-				"0x5e9997684d061269564f94e5d11ba6ce6fa9528c": 4.1464476e+07,
-				"0x906710835d1ae85275eb770f06873340ca54274b": 4.1464476e+07,
-			},
-			Timestamp: time.Unix(1654819200, 0).UTC(),
-		}
-		if !reflect.DeepEqual(ticker, &wantTicker) {
-			t.Fatalf("UpdateHistoricalTickers(eur) 1st pass = %v, want %v", *ticker, wantTicker)
-		}
+	ticker, err = fiatRates.db.FiatRatesFindLastTicker("eur", "")
+	if err != nil || ticker == nil {
+		t.Fatalf("FiatRatesFindLastTicker failed with error: %v", err)
+	}
+	wantTicker = common.CurrencyRatesTicker{
+		Rates: map[string]float32{
+			"aed": 240402.97,
+			"ars": 240402.97,
+			"aud": 240402.97,
+			"btc": 240402.97,
+			"eth": 240402.97,
+			"eur": 240402.97,
+			"ltc": 240402.97,
+		},
+		TokenRates: map[string]float32{
+			"0x5e9997684d061269564f94e5d11ba6ce6fa9528c": 4.1464476e+07,
+			"0x906710835d1ae85275eb770f06873340ca54274b": 4.1464476e+07,
+		},
+		Timestamp: time.Unix(1654819200, 0).UTC(),
+	}
+	if !reflect.DeepEqual(ticker, &wantTicker) {
+		t.Fatalf("UpdateHistoricalTickers(eur) 1st pass = %v, want %v", *ticker, wantTicker)
+	}
 
-		// update historical tickers for the second time
-		err = fiatRates.downloader.UpdateHistoricalTickers()
-		if err != nil {
-			t.Fatalf("UpdateHistoricalTickers 2nd pass failed with error: %v", err)
-		}
-		err = fiatRates.downloader.UpdateHistoricalTokenTickers()
-		if err != nil {
-			t.Fatalf("UpdateHistoricalTokenTickers 2nd pass failed with error: %v", err)
-		}
-		ticker, err = fiatRates.db.FiatRatesFindLastTicker("usd", "")
-		if err != nil || ticker == nil {
-			t.Fatalf("FiatRatesFindLastTicker failed with error: %v", err)
-		}
-		wantTicker = common.CurrencyRatesTicker{
-			Rates: map[string]float32{
-				"aed": 240402.97,
-				"ars": 240402.97,
-				"aud": 240402.97,
-				"btc": 240402.97,
-				"eth": 240402.97,
-				"eur": 240402.97,
-				"ltc": 240402.97,
-				"usd": 1788.4183,
-			},
-			TokenRates: map[string]float32{
-				"0x5e9997684d061269564f94e5d11ba6ce6fa9528c": 4.1464476e+07,
-				"0x906710835d1ae85275eb770f06873340ca54274b": 4.1464476e+07,
-			},
-			Timestamp: time.Unix(1654819200, 0).UTC(),
-		}
-		if !reflect.DeepEqual(ticker, &wantTicker) {
-			t.Fatalf("UpdateHistoricalTickers(usd) 2nd pass = %v, want %v", *ticker, wantTicker)
-		}
-		ticker, err = fiatRates.db.FiatRatesFindLastTicker("eur", "")
-		if err != nil || ticker == nil {
-			t.Fatalf("FiatRatesFindLastTicker failed with error: %v", err)
-		}
-		if !reflect.DeepEqual(ticker, &wantTicker) {
-			t.Fatalf("UpdateHistoricalTickers(eur) 2nd pass = %v, want %v", *ticker, wantTicker)
-		}
+	// update historical tickers for the second time
+	err = fiatRates.downloader.UpdateHistoricalTickers()
+	if err != nil {
+		t.Fatalf("UpdateHistoricalTickers 2nd pass failed with error: %v", err)
+	}
+	err = fiatRates.downloader.UpdateHistoricalTokenTickers()
+	if err != nil {
+		t.Fatalf("UpdateHistoricalTokenTickers 2nd pass failed with error: %v", err)
+	}
+	ticker, err = fiatRates.db.FiatRatesFindLastTicker("usd", "")
+	if err != nil || ticker == nil {
+		t.Fatalf("FiatRatesFindLastTicker failed with error: %v", err)
+	}
+	wantTicker = common.CurrencyRatesTicker{
+		Rates: map[string]float32{
+			"aed": 240402.97,
+			"ars": 240402.97,
+			"aud": 240402.97,
+			"btc": 240402.97,
+			"eth": 240402.97,
+			"eur": 240402.97,
+			"ltc": 240402.97,
+			"usd": 1788.4183,
+		},
+		TokenRates: map[string]float32{
+			"0x5e9997684d061269564f94e5d11ba6ce6fa9528c": 4.1464476e+07,
+			"0x906710835d1ae85275eb770f06873340ca54274b": 4.1464476e+07,
+		},
+		Timestamp: time.Unix(1654819200, 0).UTC(),
+	}
+	if !reflect.DeepEqual(ticker, &wantTicker) {
+		t.Fatalf("UpdateHistoricalTickers(usd) 2nd pass = %v, want %v", *ticker, wantTicker)
+	}
+	ticker, err = fiatRates.db.FiatRatesFindLastTicker("eur", "")
+	if err != nil || ticker == nil {
+		t.Fatalf("FiatRatesFindLastTicker failed with error: %v", err)
+	}
+	if !reflect.DeepEqual(ticker, &wantTicker) {
+		t.Fatalf("UpdateHistoricalTickers(eur) 2nd pass = %v, want %v", *ticker, wantTicker)
 	}
 }

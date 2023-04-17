@@ -571,7 +571,7 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 
 	var secondaryValue float64
 	if secondaryCoin != "" {
-		ticker := w.is.GetCurrentTicker("", "")
+		ticker := w.fiatRates.GetCurrentTicker("", "")
 		balance, err := strconv.ParseFloat((*Amount)(&data.balanceSat).DecimalString(w.chainParser.AmountDecimals()), 64)
 		if ticker != nil && err == nil {
 			r, found := ticker.Rates[secondaryCoin]

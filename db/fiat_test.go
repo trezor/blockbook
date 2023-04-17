@@ -158,22 +158,6 @@ func TestRocksTickers(t *testing.T) {
 		t.Errorf("Ticker %v found unexpectedly for aud vsCurrency", ticker)
 	}
 
-	ticker = d.is.GetCurrentTicker("", "")
-	if ticker != nil {
-		t.Errorf("FiatRatesGetCurrentTicker %v found unexpectedly", ticker)
-	}
-
-	d.is.SetCurrentTicker(ticker1)
-	ticker = d.is.GetCurrentTicker("", "")
-	if err != nil {
-		t.Errorf("TestRocksTickers err: %+v", err)
-	} else if ticker == nil {
-		t.Errorf("Ticker not found")
-	} else if ticker.Timestamp.Format(FiatRatesTimeFormat) != ticker1.Timestamp.Format(FiatRatesTimeFormat) {
-		t.Errorf("Incorrect ticker found. Expected: %v, found: %+v", ticker1.Timestamp, ticker.Timestamp)
-	}
-
-	d.is.SetCurrentTicker(nil)
 }
 
 func Test_packUnpackCurrencyRatesTicker(t *testing.T) {

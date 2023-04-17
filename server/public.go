@@ -25,6 +25,7 @@ import (
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/common"
 	"github.com/trezor/blockbook/db"
+	"github.com/trezor/blockbook/fiat"
 )
 
 const txsOnPage = 25
@@ -57,23 +58,24 @@ type PublicServer struct {
 	explorerURL      string
 	internalExplorer bool
 	is               *common.InternalState
+	fiatRates        *fiat.FiatRates
 }
 
 // NewPublicServer creates new public server http interface to blockbook and returns its handle
 // only basic functionality is mapped, to map all functions, call
-func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, txCache *db.TxCache, explorerURL string, metrics *common.Metrics, is *common.InternalState, debugMode bool) (*PublicServer, error) {
+func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, txCache *db.TxCache, explorerURL string, metrics *common.Metrics, is *common.InternalState, fiatRates *fiat.FiatRates, debugMode bool) (*PublicServer, error) {
 
-	api, err := api.NewWorker(db, chain, mempool, txCache, metrics, is)
+	api, err := api.NewWorker(db, chain, mempool, txCache, metrics, is, fiatRates)
 	if err != nil {
 		return nil, err
 	}
 
-	socketio, err := NewSocketIoServer(db, chain, mempool, txCache, metrics, is)
+	socketio, err := NewSocketIoServer(db, chain, mempool, txCache, metrics, is, fiatRates)
 	if err != nil {
 		return nil, err
 	}
 
-	websocket, err := NewWebsocketServer(db, chain, mempool, txCache, metrics, is)
+	websocket, err := NewWebsocketServer(db, chain, mempool, txCache, metrics, is, fiatRates)
 	if err != nil {
 		return nil, err
 	}
@@ -104,6 +106,7 @@ func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bch
 		explorerURL:      explorerURL,
 		internalExplorer: explorerURL == "",
 		is:               is,
+		fiatRates:        fiatRates,
 	}
 	s.htmlTemplates.newTemplateData = s.newTemplateData
 	s.htmlTemplates.newTemplateDataWithError = s.newTemplateDataWithError
@@ -377,10 +380,10 @@ func (s *PublicServer) newTemplateData(r *http.Request) *TemplateData {
 				secondary = "usd"
 			}
 		}
-		ticker := s.is.GetCurrentTicker(secondary, "")
+		ticker := s.fiatRates.GetCurrentTicker(secondary, "")
 		if ticker == nil && secondary != "usd" {
 			secondary = "usd"
-			ticker = s.is.GetCurrentTicker(secondary, "")
+			ticker = s.fiatRates.GetCurrentTicker(secondary, "")
 		}
 		if ticker != nil {
 			t.SecondaryCoin = strings.ToUpper(secondary)

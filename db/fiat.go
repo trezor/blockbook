@@ -2,8 +2,8 @@ package db
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"math"
-	"sync"
 	"time"
 
 	vlq "github.com/bsm/go-vlq"
@@ -15,9 +15,6 @@ import (
 
 // FiatRatesTimeFormat is a format string for storing FiatRates timestamps in rocksdb
 const FiatRatesTimeFormat = "20060102150405" // YYYYMMDDhhmmss
-
-var lastTickerInDB *common.CurrencyRatesTicker
-var lastTickerInDBMux sync.Mutex
 
 func packTimestamp(t *time.Time) []byte {
 	return []byte(t.UTC().Format(FiatRatesTimeFormat))
@@ -148,21 +145,21 @@ func (d *RocksDB) FiatRatesGetTicker(tickerTime *time.Time) (*common.CurrencyRat
 
 // FiatRatesFindTicker gets FiatRates data closest to the specified timestamp, of the base currency, vsCurrency or the token if specified
 func (d *RocksDB) FiatRatesFindTicker(tickerTime *time.Time, vsCurrency string, token string) (*common.CurrencyRatesTicker, error) {
-	currentTicker := d.is.GetCurrentTicker("", "")
-	lastTickerInDBMux.Lock()
-	dbTicker := lastTickerInDB
-	lastTickerInDBMux.Unlock()
-	if currentTicker != nil {
-		if !tickerTime.Before(currentTicker.Timestamp) || (dbTicker != nil && tickerTime.After(dbTicker.Timestamp)) {
-			f := true
-			if token != "" && currentTicker.TokenRates != nil {
-				_, f = currentTicker.TokenRates[token]
-			}
-			if f {
-				return currentTicker, nil
-			}
-		}
-	}
+	// currentTicker := d.is.GetCurrentTicker("", "")
+	// lastTickerInDBMux.Lock()
+	// dbTicker := lastTickerInDB
+	// lastTickerInDBMux.Unlock()
+	// if currentTicker != nil {
+	// 	if !tickerTime.Before(currentTicker.Timestamp) || (dbTicker != nil && tickerTime.After(dbTicker.Timestamp)) {
+	// 		f := true
+	// 		if token != "" && currentTicker.TokenRates != nil {
+	// 			_, f = currentTicker.TokenRates[token]
+	// 		}
+	// 		if f {
+	// 			return currentTicker, nil
+	// 		}
+	// 	}
+	// }
 
 	tickerTimeFormatted := tickerTime.UTC().Format(FiatRatesTimeFormat)
 	it := d.db.NewIteratorCF(d.ro, d.cfh[cfFiatRates])
@@ -193,14 +190,33 @@ func (d *RocksDB) FiatRatesFindLastTicker(vsCurrency string, token string) (*com
 			return nil, err
 		}
 		if ticker != nil {
-			// if without filter, store the ticker for later use
-			if vsCurrency == "" && token == "" {
-				lastTickerInDBMux.Lock()
-				lastTickerInDB = ticker
-				lastTickerInDBMux.Unlock()
-			}
 			return ticker, nil
 		}
 	}
 	return nil, nil
+}
+
+func (d *RocksDB) FiatRatesGetSpecialTickers(key string) (*[]common.CurrencyRatesTicker, error) {
+	val, err := d.db.GetCF(d.ro, d.cfh[cfDefault], []byte(key))
+	if err != nil {
+		return nil, err
+	}
+	defer val.Free()
+	data := val.Data()
+	if data == nil {
+		return nil, nil
+	}
+	var tickers []common.CurrencyRatesTicker
+	if err := json.Unmarshal(data, &tickers); err != nil {
+		return nil, err
+	}
+	return &tickers, nil
+}
+
+func (d *RocksDB) FiatRatesStoreSpecialTickers(key string, tickers *[]common.CurrencyRatesTicker) error {
+	data, err := json.Marshal(tickers)
+	if err != nil {
+		return err
+	}
+	return d.db.PutCF(d.wo, d.cfh[cfDefault], []byte(key), data)
 }

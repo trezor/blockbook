@@ -18,6 +18,7 @@ import (
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/common"
 	"github.com/trezor/blockbook/db"
+	"github.com/trezor/blockbook/fiat"
 )
 
 const upgradeFailed = "Upgrade failed: "
@@ -70,8 +71,8 @@ type WebsocketServer struct {
 }
 
 // NewWebsocketServer creates new websocket interface to blockbook and returns its handle
-func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, txCache *db.TxCache, metrics *common.Metrics, is *common.InternalState) (*WebsocketServer, error) {
-	api, err := api.NewWorker(db, chain, mempool, txCache, metrics, is)
+func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, txCache *db.TxCache, metrics *common.Metrics, is *common.InternalState, fiatRates *fiat.FiatRates) (*WebsocketServer, error) {
+	api, err := api.NewWorker(db, chain, mempool, txCache, metrics, is, fiatRates)
 	if err != nil {
 		return nil, err
 	}

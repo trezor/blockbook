@@ -19,6 +19,7 @@ import (
 	"github.com/trezor/blockbook/bchain/coins/eth"
 	"github.com/trezor/blockbook/common"
 	"github.com/trezor/blockbook/db"
+	"github.com/trezor/blockbook/fiat"
 )
 
 // Worker is handle to api worker
@@ -31,11 +32,12 @@ type Worker struct {
 	useAddressAliases bool
 	mempool           bchain.Mempool
 	is                *common.InternalState
+	fiatRates         *fiat.FiatRates
 	metrics           *common.Metrics
 }
 
 // NewWorker creates new api worker
-func NewWorker(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, txCache *db.TxCache, metrics *common.Metrics, is *common.InternalState) (*Worker, error) {
+func NewWorker(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, txCache *db.TxCache, metrics *common.Metrics, is *common.InternalState, fiatRates *fiat.FiatRates) (*Worker, error) {
 	w := &Worker{
 		db:                db,
 		txCache:           txCache,
@@ -45,6 +47,7 @@ func NewWorker(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, 
 		useAddressAliases: chain.GetChainParser().UseAddressAliases(),
 		mempool:           mempool,
 		is:                is,
+		fiatRates:         fiatRates,
 		metrics:           metrics,
 	}
 	if w.chainType == bchain.ChainBitcoinType {
@@ -1072,7 +1075,7 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 		if err != nil {
 			return nil, nil, errors.Annotatef(err, "EthereumTypeGetNonce %v", addrDesc)
 		}
-		ticker := w.is.GetCurrentTicker("", "")
+		ticker := w.fiatRates.GetCurrentTicker("", "")
 		if details > AccountDetailsBasic {
 			d.tokens = make([]Token, len(ca.Contracts))
 			var j int
@@ -1346,7 +1349,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 	}
 	var secondaryRate, totalSecondaryValue, totalBaseValue, secondaryValue float64
 	if secondaryCoin != "" {
-		ticker := w.is.GetCurrentTicker("", "")
+		ticker := w.fiatRates.GetCurrentTicker("", "")
 		balance, err := strconv.ParseFloat((*Amount)(&ba.BalanceSat).DecimalString(w.chainParser.AmountDecimals()), 64)
 		if ticker != nil && err == nil {
 			r, found := ticker.Rates[secondaryCoin]
@@ -1887,7 +1890,7 @@ func (w *Worker) GetCurrentFiatRates(currencies []string, token string) (*FiatTi
 	if len(currencies) == 1 {
 		vsCurrency = currencies[0]
 	}
-	ticker := w.is.GetCurrentTicker(vsCurrency, token)
+	ticker := w.fiatRates.GetCurrentTicker(vsCurrency, token)
 	var err error
 	if ticker == nil {
 		ticker, err = w.db.FiatRatesFindLastTicker(vsCurrency, token)
@@ -2289,8 +2292,9 @@ func (w *Worker) GetSystemInfo(internal bool) (*SystemInfo, error) {
 		internalDBSize = w.is.DBSizeTotal()
 	}
 	var currentFiatRatesTime time.Time
-	if w.is.CurrentTicker != nil {
-		currentFiatRatesTime = w.is.CurrentTicker.Timestamp
+	ct := w.fiatRates.GetCurrentTicker("", "")
+	if ct != nil {
+		currentFiatRatesTime = ct.Timestamp
 	}
 	blockbookInfo := &BlockbookInfo{
 		Coin:                         w.is.Coin,

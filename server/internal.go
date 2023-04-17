@@ -14,6 +14,7 @@ import (
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/common"
 	"github.com/trezor/blockbook/db"
+	"github.com/trezor/blockbook/fiat"
 )
 
 // InternalServer is handle to internal http server
@@ -31,8 +32,8 @@ type InternalServer struct {
 }
 
 // NewInternalServer creates new internal http interface to blockbook and returns its handle
-func NewInternalServer(binding, certFiles string, db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, txCache *db.TxCache, metrics *common.Metrics, is *common.InternalState) (*InternalServer, error) {
-	api, err := api.NewWorker(db, chain, mempool, txCache, metrics, is)
+func NewInternalServer(binding, certFiles string, db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, txCache *db.TxCache, metrics *common.Metrics, is *common.InternalState, fiatRates *fiat.FiatRates) (*InternalServer, error) {
+	api, err := api.NewWorker(db, chain, mempool, txCache, metrics, is, fiatRates)
 	if err != nil {
 		return nil, err
 	}

@@ -24,6 +24,7 @@ import (
 	"github.com/trezor/blockbook/bchain/coins/btc"
 	"github.com/trezor/blockbook/common"
 	"github.com/trezor/blockbook/db"
+	"github.com/trezor/blockbook/fiat"
 	"github.com/trezor/blockbook/tests/dbtestdata"
 )
 
@@ -121,7 +122,7 @@ func setupPublicHTTPServer(parser bchain.BlockChainParser, chain bchain.BlockCha
 	}
 
 	// s.Run is never called, binding can be to any port
-	s, err := NewPublicServer("localhost:12345", "", d, chain, mempool, txCache, "", metrics, is, false)
+	s, err := NewPublicServer("localhost:12345", "", d, chain, mempool, txCache, "", metrics, is, &fiat.FiatRates{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}

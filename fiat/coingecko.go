@@ -190,13 +190,15 @@ func (cg *Coingecko) coinsList() (coinList, error) {
 }
 
 // coinMarketChart /coins/{id}/market_chart?vs_currency={usd, eur, jpy, etc.}&days={1,14,30,max}
-func (cg *Coingecko) coinMarketChart(id string, vs_currency string, days string) (*marketChartPrices, error) {
+func (cg *Coingecko) coinMarketChart(id string, vs_currency string, days string, daily bool) (*marketChartPrices, error) {
 	if len(id) == 0 || len(vs_currency) == 0 || len(days) == 0 {
 		return nil, fmt.Errorf("id, vs_currency, and days is required")
 	}
 
 	params := url.Values{}
-	params.Add("interval", "daily")
+	if daily {
+		params.Add("interval", "daily")
+	}
 	params.Add("vs_currency", vs_currency)
 	params.Add("days", days)
 
@@ -241,6 +243,7 @@ func (cg *Coingecko) platformIds() error {
 	return nil
 }
 
+// CurrentTickers returns the latest exchange rates
 func (cg *Coingecko) CurrentTickers() (*common.CurrencyRatesTicker, error) {
 	cg.updatingCurrent = true
 	defer func() { cg.updatingCurrent = false }()
@@ -296,6 +299,16 @@ func (cg *Coingecko) CurrentTickers() (*common.CurrencyRatesTicker, error) {
 	return &newTickers, nil
 }
 
+// HourlyTickers returns the array of the exchange rates in hourly granularity
+func (cg *Coingecko) HourlyTickers() (*[]common.CurrencyRatesTicker, error) {
+	return nil, nil
+}
+
+// HourlyTickers returns the array of the exchange rates in five minutes granularity
+func (cg *Coingecko) FiveMinutesTickers() (*[]common.CurrencyRatesTicker, error) {
+	return nil, nil
+}
+
 func (cg *Coingecko) getHistoricalTicker(tickersToUpdate map[uint]*common.CurrencyRatesTicker, coinId string, vsCurrency string, token string) (bool, error) {
 	lastTicker, err := cg.db.FiatRatesFindLastTicker(vsCurrency, token)
 	if err != nil {
@@ -312,7 +325,7 @@ func (cg *Coingecko) getHistoricalTicker(tickersToUpdate map[uint]*common.Curren
 		}
 		days = strconv.Itoa(d)
 	}
-	mc, err := cg.coinMarketChart(coinId, vsCurrency, days)
+	mc, err := cg.coinMarketChart(coinId, vsCurrency, days, true)
 	if err != nil {
 		return false, err
 	}

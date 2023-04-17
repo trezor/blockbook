@@ -7,9 +7,9 @@ import (
 
 // CurrencyRatesTicker contains coin ticker data fetched from API
 type CurrencyRatesTicker struct {
-	Timestamp  time.Time          `json:"timestamp"`  // return as unix timestamp in API
-	Rates      map[string]float32 `json:"rates"`      // rates of the base currency against a list of vs currencies
-	TokenRates map[string]float32 `json:"tokenRates"` // rates of the tokens (identified by the address of the contract) against the base currency
+	Timestamp  time.Time          `json:"timestamp"`            // return as unix timestamp in API
+	Rates      map[string]float32 `json:"rates"`                // rates of the base currency against a list of vs currencies
+	TokenRates map[string]float32 `json:"tokenRates,omitempty"` // rates of the tokens (identified by the address of the contract) against the base currency
 }
 
 var (
