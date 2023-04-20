@@ -541,6 +541,7 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 	} else {
 		txCount = int(data.txCountEstimate)
 	}
+	addrTxCount := int(data.txCountEstimate)
 	usedTokens := 0
 	var tokens []Token
 	var xpubAddresses map[string]struct{}
@@ -589,6 +590,7 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 		TotalReceivedSat:      (*Amount)(&totalReceived),
 		TotalSentSat:          (*Amount)(&data.sentSat),
 		Txs:                   txCount,
+		AddrTxCount:           addrTxCount,
 		UnconfirmedBalanceSat: (*Amount)(&uBalSat),
 		UnconfirmedTxs:        unconfirmedTxs,
 		Transactions:          txs,
