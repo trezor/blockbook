@@ -19,7 +19,7 @@ if [[ ! -d "$CONFIG_DIR" ]]; then
   cp $INSTALL_DIR/genesis.json $CONFIG_DIR/genesis.json
 fi
 
-# --bor_rpc_url: backend-polygon-bor ports.backend_http
+# --bor_rpc_url: backend-polygon-bor-archive ports.backend_http
 # --eth_rpc_url: backend-ethereum ports.backend_http
 $HEIMDALL_BIN start \
   --home $HOME_DIR \

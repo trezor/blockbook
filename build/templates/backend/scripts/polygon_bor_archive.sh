@@ -9,7 +9,7 @@ DATA_DIR={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend
 
 BOR_BIN=$INSTALL_DIR/bor
 
-# --bor.heimdall = backend-polygon-heimdall ports.backend_http
+# --bor.heimdall = backend-polygon-heimdall-archive ports.backend_http
 $BOR_BIN server \
   --chain $INSTALL_DIR/genesis.json \
   --syncmode full \
