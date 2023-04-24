@@ -20,16 +20,16 @@
         "package_name": "backend-bsc-archive",
         "package_revision": "satoshilabs-1",
         "system_user": "bsc",
-        "version": "1.1.21",
-        "binary_url": "https://github.com/bnb-chain/bsc/releases/download/v1.1.21/geth_linux",
+        "version": "1.1.23",
+        "binary_url": "https://github.com/bnb-chain/bsc/releases/download/v1.1.23/geth_linux",
         "verification_type": "sha256",
-        "verification_source": "4ebfe29a3f08bfd7ccd10bffa98e96f50274d57514e4dc793b5f4ac03e3e045f",
+        "verification_source": "6636c40d4e82017257467ab2cfc88b11990cf3bb35faeec9c5194ab90009a81f",
         "extract_command": "mv ${ARCHIVE} backend/geth_linux && chmod +x backend/geth_linux && echo",
         "exclude_files": [],
         "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bsc_archive_exec.sh 2>> {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
         "exec_script": "bsc_archive.sh",
         "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
-        "postinst_script_template": "wget https://github.com/bnb-chain/bsc/releases/download/v1.1.21/mainnet.zip -O {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/mainnet.zip && unzip -o -d {{.Env.BackendInstallPath}}/{{.Coin.Alias}} {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/mainnet.zip && rm -f {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/mainnet.zip && sed -i -e '/\\[Node.LogConfig\\]/,+5d' {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/config.toml",
+        "postinst_script_template": "wget https://github.com/bnb-chain/bsc/releases/download/v1.1.23/mainnet.zip -O {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/mainnet.zip && unzip -o -d {{.Env.BackendInstallPath}}/{{.Coin.Alias}} {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/mainnet.zip && rm -f {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/mainnet.zip && sed -i -e '/\\[Node.LogConfig\\]/,+5d' {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/config.toml",
         "service_type": "simple",
         "service_additional_params_template": "",
         "protect_memory": true,
@@ -38,8 +38,8 @@
         "client_config_file": "",
         "platforms": {
             "arm64": {
-                "binary_url": "https://github.com/bnb-chain/bsc/releases/download/v1.1.21/geth-linux-arm64",
-                "verification_source": "ab736d6238c26189dbd1c81447540a155e8190a8a6eb6a0862dca574987cabf3"
+                "binary_url": "https://github.com/bnb-chain/bsc/releases/download/v1.1.23/geth-linux-arm64",
+                "verification_source": "74105d6b9b8483a92ab8311784315c5f65dac2213004e0b1433cdf9127bced35"
             }
         }
     },
@@ -49,7 +49,7 @@
         "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
         "public_binding_template": ":{{.Ports.BlockbookPublic}}",
         "explorer_url": "",
-        "additional_params": "-workers=16",
+        "additional_params": "-dbcache=1500000000 -workers=16",
         "block_chain": {
             "parse": true,
             "mempool_workers": 8,
