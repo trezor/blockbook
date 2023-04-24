@@ -1,17 +1,17 @@
 {
   "coin": {
-    "name": "Polygon",
+    "name": "Polygon Archive",
     "shortcut": "MATIC",
     "label": "Polygon",
-    "alias": "polygon_heimdall"
+    "alias": "polygon_heimdall_archive"
   },
   "ports": {
-    "backend_rpc": 8071,
-    "backend_p2p": 38371,
-    "backend_http": 8171
+    "backend_rpc": 8073,
+    "backend_p2p": 38373,
+    "backend_http": 8173
   },
   "backend": {
-    "package_name": "backend-polygon-heimdall",
+    "package_name": "backend-polygon-heimdall-archive",
     "package_revision": "satoshilabs-1",
     "system_user": "polygon",
     "version": "0.3.3",

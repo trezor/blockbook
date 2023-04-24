@@ -6,11 +6,11 @@
     "alias": "polygon_bor_archive"
   },
   "ports": {
-    "backend_rpc": 8202,
-    "backend_p2p": 38402,
-    "backend_http": 8302,
-    "blockbook_internal": 9202,
-    "blockbook_public": 9302
+    "backend_rpc": 8072,
+    "backend_p2p": 38372,
+    "backend_http": 8172,
+    "blockbook_internal": 9072,
+    "blockbook_public": 9172
   },
   "ipc": {
     "rpc_url_template": "ws://127.0.0.1:{{.Ports.BackendRPC}}",
