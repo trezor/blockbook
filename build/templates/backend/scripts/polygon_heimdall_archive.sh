@@ -20,7 +20,7 @@ if [[ ! -d "$CONFIG_DIR" ]]; then
 fi
 
 # --bor_rpc_url: backend-polygon-bor-archive ports.backend_http
-# --eth_rpc_url: backend-ethereum ports.backend_http
+# --eth_rpc_url: backend-ethereum-archive ports.backend_http
 $HEIMDALL_BIN start \
   --home $HOME_DIR \
   --rpc.laddr tcp://127.0.0.1:{{.Ports.BackendRPC}} \
@@ -28,7 +28,7 @@ $HEIMDALL_BIN start \
   --laddr tcp://127.0.0.1:{{.Ports.BackendHttp}} \
   --node tcp://127.0.0.1:{{.Ports.BackendRPC}} \
   --bor_rpc_url http://127.0.0.1:8172 \
-  --eth_rpc_url http://127.0.0.1:8136 \
+  --eth_rpc_url http://127.0.0.1:8116 \
   --rest-server 
 
 {{end}}
