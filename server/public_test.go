@@ -168,12 +168,12 @@ func newPostRequest(u string, body string) *http.Request {
 }
 
 func insertFiatRate(date string, rates map[string]float32, tokenRates map[string]float32, d *db.RocksDB) error {
-	convertedDate, err := db.FiatRatesConvertDate(date)
+	convertedDate, err := time.Parse("20060102150405", date)
 	if err != nil {
 		return err
 	}
 	ticker := &common.CurrencyRatesTicker{
-		Timestamp:  *convertedDate,
+		Timestamp:  convertedDate,
 		Rates:      rates,
 		TokenRates: tokenRates,
 	}

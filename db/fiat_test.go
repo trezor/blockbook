@@ -17,22 +17,6 @@ func TestRocksTickers(t *testing.T) {
 	})
 	defer closeAndDestroyRocksDB(t, d)
 
-	// Test valid formats
-	for _, date := range []string{"20190130", "2019013012", "201901301250", "20190130125030"} {
-		_, err := FiatRatesConvertDate(date)
-		if err != nil {
-			t.Errorf("%v", err)
-		}
-	}
-
-	// Test invalid formats
-	for _, date := range []string{"01102019", "10201901", "", "abc", "20190130xxx"} {
-		_, err := FiatRatesConvertDate(date)
-		if err == nil {
-			t.Errorf("Wrongly-formatted date \"%v\" marked as valid!", date)
-		}
-	}
-
 	// Test storing & finding tickers
 	pastKey, _ := time.Parse(FiatRatesTimeFormat, "20190627000000")
 	futureKey, _ := time.Parse(FiatRatesTimeFormat, "20190630000000")

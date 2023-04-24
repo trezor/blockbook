@@ -3,7 +3,7 @@ package fiat
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -86,7 +86,7 @@ func doReq(req *http.Request, client *http.Client) ([]byte, error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -299,14 +299,43 @@ func (cg *Coingecko) CurrentTickers() (*common.CurrencyRatesTicker, error) {
 	return &newTickers, nil
 }
 
+func (cg *Coingecko) getHighGranularityTickers(days string) (*[]common.CurrencyRatesTicker, error) {
+	mc, err := cg.coinMarketChart(cg.coin, highGranularityVsCurrency, days, false)
+	if err != nil {
+		return nil, err
+	}
+	if len(mc.Prices) < 2 {
+		return nil, nil
+	}
+	// ignore the last point, it is not in granularity
+	tickers := make([]common.CurrencyRatesTicker, len(mc.Prices)-1)
+	for i, p := range mc.Prices[:len(mc.Prices)-1] {
+		var timestamp uint
+		timestamp = uint(p[0])
+		if timestamp > 100000000000 {
+			// convert timestamp from milliseconds to seconds
+			timestamp /= 1000
+		}
+		rate := float32(p[1])
+		u := time.Unix(int64(timestamp), 0).UTC()
+		ticker := common.CurrencyRatesTicker{
+			Timestamp: u,
+			Rates:     make(map[string]float32),
+		}
+		ticker.Rates[highGranularityVsCurrency] = rate
+		tickers[i] = ticker
+	}
+	return &tickers, nil
+}
+
 // HourlyTickers returns the array of the exchange rates in hourly granularity
 func (cg *Coingecko) HourlyTickers() (*[]common.CurrencyRatesTicker, error) {
-	return nil, nil
+	return cg.getHighGranularityTickers("90")
 }
 
 // HourlyTickers returns the array of the exchange rates in five minutes granularity
 func (cg *Coingecko) FiveMinutesTickers() (*[]common.CurrencyRatesTicker, error) {
-	return nil, nil
+	return cg.getHighGranularityTickers("1")
 }
 
 func (cg *Coingecko) getHistoricalTicker(tickersToUpdate map[uint]*common.CurrencyRatesTicker, coinId string, vsCurrency string, token string) (bool, error) {
