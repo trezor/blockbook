@@ -11,7 +11,7 @@ HEIMDALL_BIN=$INSTALL_DIR/heimdalld
 HOME_DIR=$DATA_DIR/heimdalld
 CONFIG_DIR=$HOME_DIR/config
 
-if [[ ! -d "$CONFIG_DIR" ]]; then
+if [ ! -d "$CONFIG_DIR" ]; then
   # init chain
   $HEIMDALL_BIN init --home $HOME_DIR
 
