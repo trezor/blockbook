@@ -580,7 +580,11 @@ func (s *PublicServer) amountSpan(a *api.Amount, td *TemplateData, classes strin
 				if td.TxTicker == nil {
 					date := time.Unix(td.Tx.Blocktime, 0).UTC()
 					secondary := strings.ToLower(td.SecondaryCoin)
-					ticker, _ := s.db.FiatRatesFindTicker(&date, secondary, "")
+					var ticker *common.CurrencyRatesTicker
+					tickers, err := s.fiatRates.GetTickersForTimestamps([]int64{int64(td.Tx.Blocktime)}, "", "")
+					if err == nil && tickers != nil && len(*tickers) > 0 {
+						ticker = (*tickers)[0]
+					}
 					if ticker != nil {
 						td.TxSecondaryCoinRate = float64(ticker.Rates[secondary])
 						// the ticker is from the midnight, valid for the whole day before

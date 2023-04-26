@@ -140,19 +140,15 @@ func init() {
 }
 
 // GetCoinNameFromConfig gets coin name and coin shortcut from config file
-func GetCoinNameFromConfig(configfile string) (string, string, string, error) {
-	data, err := ioutil.ReadFile(configfile)
-	if err != nil {
-		return "", "", "", errors.Annotatef(err, "Error reading file %v", configfile)
-	}
+func GetCoinNameFromConfig(configFileContent []byte) (string, string, string, error) {
 	var cn struct {
 		CoinName     string `json:"coin_name"`
 		CoinShortcut string `json:"coin_shortcut"`
 		CoinLabel    string `json:"coin_label"`
 	}
-	err = json.Unmarshal(data, &cn)
+	err := json.Unmarshal(configFileContent, &cn)
 	if err != nil {
-		return "", "", "", errors.Annotatef(err, "Error parsing file %v", configfile)
+		return "", "", "", errors.Annotatef(err, "Error parsing config file ")
 	}
 	return cn.CoinName, cn.CoinShortcut, cn.CoinLabel, nil
 }

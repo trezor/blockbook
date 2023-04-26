@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -37,7 +36,7 @@ type RatesDownloaderInterface interface {
 	UpdateHistoricalTokenTickers() error
 }
 
-// FiatRates stores FiatRates API parameters
+// FiatRates is used to fetch and refresh fiat rates
 type FiatRates struct {
 	Enabled                bool
 	periodSeconds          int64
@@ -62,19 +61,15 @@ type FiatRates struct {
 }
 
 // NewFiatRates initializes the FiatRates handler
-func NewFiatRates(db *db.RocksDB, configFile string, callback OnNewFiatRatesTicker) (*FiatRates, error) {
+func NewFiatRates(db *db.RocksDB, configFileContent []byte, callback OnNewFiatRatesTicker) (*FiatRates, error) {
 	var config struct {
 		FiatRates             string `json:"fiat_rates"`
 		FiatRatesParams       string `json:"fiat_rates_params"`
 		FiatRatesVsCurrencies string `json:"fiat_rates_vs_currencies"`
 	}
-	data, err := os.ReadFile(configFile)
+	err := json.Unmarshal(configFileContent, &config)
 	if err != nil {
-		return nil, fmt.Errorf("error reading file %v, %v", configFile, err)
-	}
-	err = json.Unmarshal(data, &config)
-	if err != nil {
-		return nil, fmt.Errorf("error parsing config file %v, %v", configFile, err)
+		return nil, fmt.Errorf("error parsing config file, %v", err)
 	}
 
 	var fr = &FiatRates{
@@ -83,7 +78,7 @@ func NewFiatRates(db *db.RocksDB, configFile string, callback OnNewFiatRatesTick
 	}
 
 	if config.FiatRates == "" || config.FiatRatesParams == "" {
-		glog.Infof("FiatRates config (%v) is empty, not downloading fiat rates", configFile)
+		glog.Infof("FiatRates config is empty, not downloading fiat rates")
 		fr.Enabled = false
 		return fr, nil
 	}
@@ -176,22 +171,30 @@ func (fr *FiatRates) getTokenTickersForTimestamps(timestamps []int64, vsCurrency
 	currentTicker := fr.GetCurrentTicker("", token)
 	tickers := make([]*common.CurrencyRatesTicker, len(timestamps))
 	var prevTicker *common.CurrencyRatesTicker
+	var prevTs int64
+	var err error
 	for i, t := range timestamps {
 		// check if the token is available in the current ticker - if not, return nil ticker instead of wasting time in costly DB searches
 		if currentTicker != nil {
 			var ticker *common.CurrencyRatesTicker
 			date := time.Unix(t, 0)
 			// if previously found ticker is newer than this one (token tickers may not be in DB for every day), skip search in DB
-			if prevTicker != nil && !date.After(prevTicker.Timestamp) {
+			if prevTicker != nil && t >= prevTs && !date.After(prevTicker.Timestamp) {
 				ticker = prevTicker
+				prevTs = t
 			} else {
-				ticker, _ := fr.db.FiatRatesFindTicker(&date, vsCurrency, token)
+				ticker, err = fr.db.FiatRatesFindTicker(&date, vsCurrency, token)
+				if err != nil {
+					return nil, err
+				}
 				prevTicker = ticker
+				prevTs = t
 			}
 			// if ticker not found in DB, use current ticker
 			if ticker == nil {
 				tickers[i] = currentTicker
 				prevTicker = currentTicker
+				prevTs = t
 			} else {
 				tickers[i] = ticker
 			}
@@ -202,6 +205,9 @@ func (fr *FiatRates) getTokenTickersForTimestamps(timestamps []int64, vsCurrency
 
 // GetTickersForTimestamps returns tickers for slice of timestamps, that contain requested vsCurrency and token
 func (fr *FiatRates) GetTickersForTimestamps(timestamps []int64, vsCurrency string, token string) (*[]*common.CurrencyRatesTicker, error) {
+	if !fr.Enabled {
+		return nil, nil
+	}
 	// token rates are not in memory, them load from DB
 	if token != "" {
 		return fr.getTokenTickersForTimestamps(timestamps, vsCurrency, token)
@@ -210,12 +216,13 @@ func (fr *FiatRates) GetTickersForTimestamps(timestamps []int64, vsCurrency stri
 	defer fr.mux.RUnlock()
 	tickers := make([]*common.CurrencyRatesTicker, len(timestamps))
 	var prevTicker *common.CurrencyRatesTicker
+	var prevTs int64
 	for i, t := range timestamps {
-		dailyTs := normalizedUnix(t, secondsInDay)
+		dailyTs := ceilUnix(t, secondsInDay)
 		// use higher granularity only for non daily timestamps
 		if t != dailyTs {
 			if t >= fr.fiveMinutesTickersFrom && t <= fr.fiveMinutesTickersTo {
-				if ticker, found := fr.fiveMinutesTickers[normalizedUnix(t, secondsInFiveMinutes)]; found && ticker != nil {
+				if ticker, found := fr.fiveMinutesTickers[ceilUnix(t, secondsInFiveMinutes)]; found && ticker != nil {
 					if common.IsSuitableTicker(ticker, vsCurrency, token) {
 						tickers[i] = ticker
 						continue
@@ -223,7 +230,7 @@ func (fr *FiatRates) GetTickersForTimestamps(timestamps []int64, vsCurrency stri
 				}
 			}
 			if t >= fr.hourlyTickersFrom && t <= fr.hourlyTickersTo {
-				if ticker, found := fr.hourlyTickers[normalizedUnix(t, secondsInHour)]; found && ticker != nil {
+				if ticker, found := fr.hourlyTickers[ceilUnix(t, secondsInHour)]; found && ticker != nil {
 					if common.IsSuitableTicker(ticker, vsCurrency, token) {
 						tickers[i] = ticker
 						continue
@@ -231,7 +238,7 @@ func (fr *FiatRates) GetTickersForTimestamps(timestamps []int64, vsCurrency stri
 				}
 			}
 		}
-		if prevTicker != nil && dailyTs >= prevTicker.Timestamp.Unix() {
+		if prevTicker != nil && t >= prevTs && t <= prevTicker.Timestamp.Unix() {
 			tickers[i] = prevTicker
 			continue
 		} else {
@@ -245,15 +252,17 @@ func (fr *FiatRates) GetTickersForTimestamps(timestamps []int64, vsCurrency stri
 					if common.IsSuitableTicker(ticker, vsCurrency, token) {
 						tickers[i] = ticker
 						prevTicker = ticker
+						prevTs = t
 						break
 					} else {
 						found = false
 					}
 				}
-				if !found {
-					tickers[i] = fr.currentTicker
-					prevTicker = fr.currentTicker
-				}
+			}
+			if !found {
+				tickers[i] = fr.currentTicker
+				prevTicker = fr.currentTicker
+				prevTs = t
 			}
 		}
 	}
@@ -266,12 +275,17 @@ func (fr *FiatRates) logTickersInfo() {
 		len(fr.fiveMinutesTickers), time.Unix(fr.fiveMinutesTickersFrom, 0).Format("2006-01-02 15:04"), time.Unix(fr.fiveMinutesTickersTo, 0).Format("2006-01-02 15:04"))
 }
 
-func normalizedTimeUnix(t time.Time, granularity int64) int64 {
-	return normalizedUnix(t.UTC().Unix(), granularity)
+func roundTimeUnix(t time.Time, granularity int64) int64 {
+	return roundUnix(t.UTC().Unix(), granularity)
 }
 
-func normalizedUnix(t int64, granularity int64) int64 {
+func roundUnix(t int64, granularity int64) int64 {
 	unix := t + (granularity >> 1)
+	return unix - unix%granularity
+}
+
+func ceilUnix(t int64, granularity int64) int64 {
+	unix := t + (granularity - 1)
 	return unix - unix%granularity
 }
 
@@ -281,7 +295,11 @@ func (fr *FiatRates) loadDailyTickers() error {
 	defer fr.mux.Unlock()
 	fr.dailyTickers = make(map[int64]*common.CurrencyRatesTicker)
 	err := fr.db.FiatRatesGetAllTickers(func(ticker *common.CurrencyRatesTicker) error {
-		normalizedTime := normalizedTimeUnix(ticker.Timestamp, secondsInDay)
+		normalizedTime := roundTimeUnix(ticker.Timestamp, secondsInDay)
+		if normalizedTime == fr.dailyTickersFrom {
+			// there are multiple tickers on the first day, use only the first one
+			return nil
+		}
 		// remove token rates from cache to save memory (tickers with token rates are hundreds of kb big)
 		ticker.TokenRates = nil
 		if len(fr.dailyTickers) > 0 {
@@ -321,8 +339,8 @@ func (fr *FiatRates) tickersToMap(tickers *[]common.CurrencyRatesTicker, granula
 	to := int64(0)
 	for i := range *tickers {
 		ticker := (*tickers)[i]
-		normalizedTime := normalizedTimeUnix(ticker.Timestamp, granularitySeconds)
-		dailyTime := normalizedTimeUnix(ticker.Timestamp, secondsInDay)
+		normalizedTime := roundTimeUnix(ticker.Timestamp, granularitySeconds)
+		dailyTime := roundTimeUnix(ticker.Timestamp, secondsInDay)
 		dailyTicker, found := fr.dailyTickers[dailyTime]
 		if !found {
 			// if not found in historical tickers, use current ticker

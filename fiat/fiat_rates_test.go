@@ -132,18 +132,7 @@ func TestFiatRates(t *testing.T) {
 	// mocked CoinGecko API
 	configJSON := `{"fiat_rates": "coingecko", "fiat_rates_params": "{\"url\": \"` + mockServer.URL + `\", \"coin\": \"ethereum\",\"platformIdentifier\":\"ethereum\",\"platformVsCurrency\": \"eth\",\"periodSeconds\": 60}"}`
 
-	configFile, err := os.CreateTemp("", "config*.json")
-	if err != nil {
-		t.Fatalf("FiatRates configFile error: %v", err)
-	}
-	if _, err := configFile.WriteString(configJSON); err != nil {
-		t.Fatalf("FiatRates configFile WriteString error: %v", err)
-	}
-	if err := configFile.Close(); err != nil {
-		t.Fatalf("FiatRates configFile Close error: %v", err)
-	}
-
-	fiatRates, err := NewFiatRates(d, configFile.Name(), nil)
+	fiatRates, err := NewFiatRates(d, []byte(configJSON), nil)
 	if err != nil {
 		t.Fatalf("FiatRates init error: %v", err)
 	}

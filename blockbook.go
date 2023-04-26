@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
-	"io/ioutil"
 	"log"
 	"math/rand"
 	"net/http"
@@ -158,7 +157,13 @@ func mainWithExitCode() int {
 		return exitCodeFatal
 	}
 
-	coin, coinShortcut, coinLabel, err := coins.GetCoinNameFromConfig(*configFile)
+	configFileContent, err := os.ReadFile(*configFile)
+	if err != nil {
+		glog.Errorf("Error reading file %v, %v", configFile, err)
+		return exitCodeFatal
+	}
+
+	coin, coinShortcut, coinLabel, err := coins.GetCoinNameFromConfig(configFileContent)
 	if err != nil {
 		glog.Error("config: ", err)
 		return exitCodeFatal
@@ -274,7 +279,7 @@ func mainWithExitCode() int {
 		return exitCodeFatal
 	}
 
-	if fiatRates, err = fiat.NewFiatRates(index, *configFile, onNewFiatRatesTicker); err != nil {
+	if fiatRates, err = fiat.NewFiatRates(index, configFileContent, onNewFiatRatesTicker); err != nil {
 		glog.Error("fiatRates ", err)
 		return exitCodeFatal
 	}
@@ -363,7 +368,7 @@ func mainWithExitCode() int {
 
 	if internalServer != nil || publicServer != nil || chain != nil {
 		// start fiat rates downloader only if not shutting down immediately
-		initDownloaders(index, chain, *configFile)
+		initDownloaders(index, chain, configFileContent)
 		waitForSignalAndShutdown(internalServer, publicServer, chain, 10*time.Second)
 	}
 
@@ -697,24 +702,18 @@ func computeFeeStats(stopCompute chan os.Signal, blockFrom, blockTo int, db *db.
 	return err
 }
 
-func initDownloaders(db *db.RocksDB, chain bchain.BlockChain, configFile string) {
+func initDownloaders(db *db.RocksDB, chain bchain.BlockChain, configFileContent []byte) {
 	if fiatRates.Enabled {
 		go fiatRates.RunDownloader()
-	}
-
-	data, err := ioutil.ReadFile(configFile)
-	if err != nil {
-		glog.Errorf("Error reading file %v, %v", configFile, err)
-		return
 	}
 
 	var config struct {
 		FourByteSignatures string `json:"fourByteSignatures"`
 	}
 
-	err = json.Unmarshal(data, &config)
+	err := json.Unmarshal(configFileContent, &config)
 	if err != nil {
-		glog.Errorf("Error parsing config file %v, %v", configFile, err)
+		glog.Errorf("Error parsing config file %v, %v", *configFile, err)
 		return
 	}
 
