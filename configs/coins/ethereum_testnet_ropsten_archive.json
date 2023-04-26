@@ -1,75 +1,75 @@
 {
-  "coin": {
-    "name": "Ethereum Testnet Ropsten Archive",
-    "shortcut": "tROP",
-    "label": "Ethereum Ropsten",
-    "alias": "ethereum_testnet_ropsten_archive"
-  },
-  "ports": {
-    "backend_rpc": 18016,
-    "backend_message_queue": 0,
-    "backend_p2p": 48316,
-    "backend_http": 18116,
-    "backend_authrpc": 18516,
-    "blockbook_internal": 19016,
-    "blockbook_public": 19116
-  },
-  "ipc": {
-    "rpc_url_template": "ws://127.0.0.1:{{.Ports.BackendRPC}}",
-    "rpc_timeout": 25
-  },
-  "backend": {
-    "package_name": "backend-ethereum-testnet-ropsten-archive",
-    "package_revision": "satoshilabs-1",
-    "system_user": "ethereum",
-    "version": "1.10.26-e5eb32ac",
-    "binary_url": "https://gethstore.blob.core.windows.net/builds/geth-linux-amd64-1.10.26-e5eb32ac.tar.gz",
-    "verification_type": "gpg",
-    "verification_source": "https://gethstore.blob.core.windows.net/builds/geth-linux-amd64-1.10.26-e5eb32ac.tar.gz.asc",
-    "extract_command": "tar -C backend --strip 1 -xf",
-    "exclude_files": [],
-    "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/geth --ropsten --syncmode full --gcmode archive --txlookuplimit 0 --ipcdisable --cache 1024 --nat none --override.terminaltotaldifficulty 50000000000000000 --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --port {{.Ports.BackendP2P}} --ws --ws.addr 127.0.0.1 --ws.port {{.Ports.BackendRPC}} --ws.origins \"*\" --ws.api \"eth,net,web3,debug,txpool\" --http --http.port {{.Ports.BackendHttp}} -http.addr 127.0.0.1 --http.corsdomain \"*\" --http.vhosts \"*\" --http.api \"eth,net,web3,debug,txpool\" --authrpc.port {{.Ports.BackendAuthRpc}} 2>>{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
-    "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
-    "postinst_script_template": "",
-    "service_type": "simple",
-    "service_additional_params_template": "",
-    "protect_memory": true,
-    "mainnet": false,
-    "server_config_file": "",
-    "client_config_file": "",
-    "platforms": {
-      "arm64": {
-        "binary_url": "https://gethstore.blob.core.windows.net/builds/geth-linux-arm64-1.10.26-e5eb32ac.tar.gz",
-        "verification_source": "https://gethstore.blob.core.windows.net/builds/geth-linux-arm64-1.10.26-e5eb32ac.tar.gz.asc"
-      }
+    "coin": {
+        "name": "Ethereum Testnet Ropsten Archive",
+        "shortcut": "tROP",
+        "label": "Ethereum Ropsten",
+        "alias": "ethereum_testnet_ropsten_archive"
+    },
+    "ports": {
+        "backend_rpc": 18016,
+        "backend_message_queue": 0,
+        "backend_p2p": 48316,
+        "backend_http": 18116,
+        "backend_authrpc": 18516,
+        "blockbook_internal": 19016,
+        "blockbook_public": 19116
+    },
+    "ipc": {
+        "rpc_url_template": "ws://127.0.0.1:{{.Ports.BackendRPC}}",
+        "rpc_timeout": 25
+    },
+    "backend": {
+        "package_name": "backend-ethereum-testnet-ropsten-archive",
+        "package_revision": "satoshilabs-1",
+        "system_user": "ethereum",
+        "version": "1.10.26-e5eb32ac",
+        "binary_url": "https://gethstore.blob.core.windows.net/builds/geth-linux-amd64-1.10.26-e5eb32ac.tar.gz",
+        "verification_type": "gpg",
+        "verification_source": "https://gethstore.blob.core.windows.net/builds/geth-linux-amd64-1.10.26-e5eb32ac.tar.gz.asc",
+        "extract_command": "tar -C backend --strip 1 -xf",
+        "exclude_files": [],
+        "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/geth --ropsten --syncmode full --gcmode archive --txlookuplimit 0 --ipcdisable --cache 1024 --nat none --override.terminaltotaldifficulty 50000000000000000 --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --port {{.Ports.BackendP2P}} --ws --ws.addr 127.0.0.1 --ws.port {{.Ports.BackendRPC}} --ws.origins \"*\" --ws.api \"eth,net,web3,debug,txpool\" --http --http.port {{.Ports.BackendHttp}} -http.addr 127.0.0.1 --http.corsdomain \"*\" --http.vhosts \"*\" --http.api \"eth,net,web3,debug,txpool\" --authrpc.port {{.Ports.BackendAuthRpc}} 2>>{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
+        "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
+        "postinst_script_template": "",
+        "service_type": "simple",
+        "service_additional_params_template": "",
+        "protect_memory": true,
+        "mainnet": false,
+        "server_config_file": "",
+        "client_config_file": "",
+        "platforms": {
+            "arm64": {
+                "binary_url": "https://gethstore.blob.core.windows.net/builds/geth-linux-arm64-1.10.26-e5eb32ac.tar.gz",
+                "verification_source": "https://gethstore.blob.core.windows.net/builds/geth-linux-arm64-1.10.26-e5eb32ac.tar.gz.asc"
+            }
+        }
+    },
+    "blockbook": {
+        "package_name": "blockbook-ethereum-testnet-ropsten-archive",
+        "system_user": "blockbook-ethereum",
+        "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
+        "public_binding_template": ":{{.Ports.BlockbookPublic}}",
+        "explorer_url": "",
+        "additional_params": "-workers=16",
+        "block_chain": {
+            "parse": true,
+            "mempool_workers": 8,
+            "mempool_sub_workers": 2,
+            "block_addresses_to_keep": 3000,
+            "additional_params": {
+                "consensusNodeVersion": "http://localhost:17516/eth/v1/node/version",
+                "address_aliases": true,
+                "mempoolTxTimeoutHours": 12,
+                "processInternalTransactions": true,
+                "queryBackendOnMempoolResync": false,
+                "fiat_rates-disabled": "coingecko",
+                "fiat_rates_params": "{\"coin\": \"ethereum\",\"platformIdentifier\": \"ethereum\",\"platformVsCurrency\": \"eth\",\"periodSeconds\": 900}",
+                "fourByteSignatures": "https://www.4byte.directory/api/v1/signatures/"
+            }
+        }
+    },
+    "meta": {
+        "package_maintainer": "IT",
+        "package_maintainer_email": "it@satoshilabs.com"
     }
-  },
-  "blockbook": {
-    "package_name": "blockbook-ethereum-testnet-ropsten-archive",
-    "system_user": "blockbook-ethereum",
-    "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
-    "public_binding_template": ":{{.Ports.BlockbookPublic}}",
-    "explorer_url": "",
-    "additional_params": "-workers=16",
-    "block_chain": {
-      "parse": true,
-      "mempool_workers": 8,
-      "mempool_sub_workers": 2,
-      "block_addresses_to_keep": 3000,
-      "additional_params": {
-        "consensusNodeVersion": "http://localhost:17516/eth/v1/node/version",
-        "address_aliases": true,
-        "mempoolTxTimeoutHours": 12,
-        "processInternalTransactions": true,
-        "queryBackendOnMempoolResync": false,
-        "fiat_rates-disabled": "coingecko",
-        "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"ethereum\",\"platformIdentifier\": \"ethereum\",\"platformVsCurrency\": \"eth\",\"periodSeconds\": 900}",
-        "fourByteSignatures": "https://www.4byte.directory/api/v1/signatures/"
-      }
-    }
-  },
-  "meta": {
-    "package_maintainer": "IT",
-    "package_maintainer_email": "it@satoshilabs.com"
-  }
 }

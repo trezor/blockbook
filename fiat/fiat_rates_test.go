@@ -132,7 +132,7 @@ func TestFiatRates(t *testing.T) {
 	// mocked CoinGecko API
 	configJSON := `{"fiat_rates": "coingecko", "fiat_rates_params": "{\"url\": \"` + mockServer.URL + `\", \"coin\": \"ethereum\",\"platformIdentifier\":\"ethereum\",\"platformVsCurrency\": \"eth\",\"periodSeconds\": 60}"}`
 
-	fiatRates, err := NewFiatRates(d, []byte(configJSON), nil)
+	fiatRates, err := NewFiatRates(d, []byte(configJSON), nil, nil)
 	if err != nil {
 		t.Fatalf("FiatRates init error: %v", err)
 	}

@@ -61,7 +61,7 @@ type FiatRates struct {
 }
 
 // NewFiatRates initializes the FiatRates handler
-func NewFiatRates(db *db.RocksDB, configFileContent []byte, callback OnNewFiatRatesTicker) (*FiatRates, error) {
+func NewFiatRates(db *db.RocksDB, configFileContent []byte, metrics *common.Metrics, callback OnNewFiatRatesTicker) (*FiatRates, error) {
 	var config struct {
 		FiatRates             string `json:"fiat_rates"`
 		FiatRatesParams       string `json:"fiat_rates_params"`
@@ -95,7 +95,7 @@ func NewFiatRates(db *db.RocksDB, configFileContent []byte, callback OnNewFiatRa
 	if err != nil {
 		return nil, err
 	}
-	if rdParams.URL == "" || rdParams.PeriodSeconds == 0 {
+	if rdParams.PeriodSeconds == 0 {
 		return nil, errors.New("missing parameters")
 	}
 	fr.timeFormat = "02-01-2006"              // Layout string for FiatRates date formatting (DD-MM-YYYY)
@@ -117,7 +117,7 @@ func NewFiatRates(db *db.RocksDB, configFileContent []byte, callback OnNewFiatRa
 			// a small hack - in tests the callback is not used, therefore there is no delay slowing down the test
 			throttle = false
 		}
-		fr.downloader = NewCoinGeckoDownloader(db, rdParams.URL, rdParams.Coin, rdParams.PlatformIdentifier, rdParams.PlatformVsCurrency, fr.allowedVsCurrencies, fr.timeFormat, throttle)
+		fr.downloader = NewCoinGeckoDownloader(db, rdParams.URL, rdParams.Coin, rdParams.PlatformIdentifier, rdParams.PlatformVsCurrency, fr.allowedVsCurrencies, fr.timeFormat, metrics, throttle)
 		if is != nil {
 			is.HasFiatRates = true
 			is.HasTokenFiatRates = fr.downloadTokens
@@ -359,6 +359,10 @@ func (fr *FiatRates) tickersToMap(tickers *[]common.CurrencyRatesTicker, granula
 			}
 		}
 		if len(m) > 0 {
+			if normalizedTime == from {
+				// there are multiple normalized tickers for the first entry, skip
+				continue
+			}
 			// check that there is a ticker for each period, set it from current value if missing
 			prevTime := normalizedTime
 			for {

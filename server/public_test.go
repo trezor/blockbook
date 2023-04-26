@@ -123,7 +123,7 @@ func setupPublicHTTPServer(parser bchain.BlockChainParser, chain bchain.BlockCha
 
 	// mocked CoinGecko API
 	configJSON := `{"fiat_rates": "coingecko", "fiat_rates_params": "{\"url\": \"none\", \"coin\": \"ethereum\",\"platformIdentifier\":\"ethereum\",\"platformVsCurrency\": \"usd\",\"periodSeconds\": 60}"}`
-	fiatRates, err := fiat.NewFiatRates(d, []byte(configJSON), nil)
+	fiatRates, err := fiat.NewFiatRates(d, []byte(configJSON), nil, nil)
 	if err != nil {
 		glog.Fatal("fiatRates ", err)
 	}

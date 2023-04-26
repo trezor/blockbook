@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -19,6 +20,7 @@ import (
 // Coingecko is a structure that implements RatesDownloaderInterface
 type Coingecko struct {
 	url                 string
+	apiKey              string
 	coin                string
 	platformIdentifier  string
 	platformVsCurrency  string
@@ -30,6 +32,7 @@ type Coingecko struct {
 	db                  *db.RocksDB
 	updatingCurrent     bool
 	updatingTokens      bool
+	metrics             *common.Metrics
 }
 
 // simpleSupportedVSCurrencies https://api.coingecko.com/api/v3/simple/supported_vs_currencies
@@ -51,7 +54,7 @@ type marketChartPrices struct {
 }
 
 // NewCoinGeckoDownloader creates a coingecko structure that implements the RatesDownloaderInterface
-func NewCoinGeckoDownloader(db *db.RocksDB, url string, coin string, platformIdentifier string, platformVsCurrency string, allowedVsCurrencies string, timeFormat string, throttleDown bool) RatesDownloaderInterface {
+func NewCoinGeckoDownloader(db *db.RocksDB, url string, coin string, platformIdentifier string, platformVsCurrency string, allowedVsCurrencies string, timeFormat string, metrics *common.Metrics, throttleDown bool) RatesDownloaderInterface {
 	var throttlingDelayMs int
 	if throttleDown {
 		throttlingDelayMs = 100
@@ -63,8 +66,22 @@ func NewCoinGeckoDownloader(db *db.RocksDB, url string, coin string, platformIde
 			allowedVsCurrenciesMap[c] = struct{}{}
 		}
 	}
+
+	apiKey := os.Getenv("COINGECKO_API_KEY")
+
+	// use default address if not overridden, with respect to existence of apiKey
+	if url == "" {
+		if apiKey != "" {
+			url = "https://pro-api.coingecko.com/api/v3/"
+		} else {
+			url = "https://api.coingecko.com/api/v3"
+		}
+	}
+	glog.Info("Coingecko downloader url ", url)
+
 	return &Coingecko{
 		url:                 url,
+		apiKey:              apiKey,
 		coin:                coin,
 		platformIdentifier:  platformIdentifier,
 		platformVsCurrency:  platformVsCurrency,
@@ -76,6 +93,7 @@ func NewCoinGeckoDownloader(db *db.RocksDB, url string, coin string, platformIde
 		},
 		db:              db,
 		throttlingDelay: time.Duration(throttlingDelayMs) * time.Millisecond,
+		metrics:         metrics,
 	}
 }
 
@@ -97,7 +115,7 @@ func doReq(req *http.Request, client *http.Client) ([]byte, error) {
 }
 
 // makeReq HTTP request helper - will retry the call after 1 minute on error
-func (cg *Coingecko) makeReq(url string) ([]byte, error) {
+func (cg *Coingecko) makeReq(url string, endpoint string) ([]byte, error) {
 	for {
 		// glog.Infof("Coingecko makeReq %v", url)
 		req, err := http.NewRequest("GET", url, nil)
@@ -105,13 +123,25 @@ func (cg *Coingecko) makeReq(url string) ([]byte, error) {
 			return nil, err
 		}
 		req.Header.Set("Content-Type", "application/json")
+		if cg.apiKey != "" {
+			req.Header.Set("x-cg-pro-api-key", cg.apiKey)
+		}
 		resp, err := doReq(req, cg.httpClient)
 		if err == nil {
+			if cg.metrics != nil {
+				cg.metrics.CoingeckoRequests.With(common.Labels{"endpoint": endpoint, "status": "success"}).Inc()
+			}
 			return resp, err
 		}
 		if err.Error() != "error code: 1015" && !strings.Contains(strings.ToLower(err.Error()), "exceeded the rate limit") {
+			if cg.metrics != nil {
+				cg.metrics.CoingeckoRequests.With(common.Labels{"endpoint": endpoint, "status": "error"}).Inc()
+			}
 			glog.Errorf("Coingecko makeReq %v error %v", url, err)
 			return nil, err
+		}
+		if cg.metrics != nil {
+			cg.metrics.CoingeckoRequests.With(common.Labels{"endpoint": endpoint, "status": "throttle"}).Inc()
 		}
 		// if there is a throttling error, wait 60 seconds and retry
 		glog.Warningf("Coingecko makeReq %v error %v, will retry in 60 seconds", url, err)
@@ -122,7 +152,7 @@ func (cg *Coingecko) makeReq(url string) ([]byte, error) {
 // SimpleSupportedVSCurrencies /simple/supported_vs_currencies
 func (cg *Coingecko) simpleSupportedVSCurrencies() (simpleSupportedVSCurrencies, error) {
 	url := cg.url + "/simple/supported_vs_currencies"
-	resp, err := cg.makeReq(url)
+	resp, err := cg.makeReq(url, "supported_vs_currencies")
 	if err != nil {
 		return nil, err
 	}
@@ -153,7 +183,7 @@ func (cg *Coingecko) simplePrice(ids []string, vsCurrencies []string) (*map[stri
 	params.Add("vs_currencies", vsCurrenciesParam)
 
 	url := fmt.Sprintf("%s/simple/price?%s", cg.url, params.Encode())
-	resp, err := cg.makeReq(url)
+	resp, err := cg.makeReq(url, "simple/price")
 	if err != nil {
 		return nil, err
 	}
@@ -176,7 +206,7 @@ func (cg *Coingecko) coinsList() (coinList, error) {
 	}
 	params.Add("include_platform", platform)
 	url := fmt.Sprintf("%s/coins/list?%s", cg.url, params.Encode())
-	resp, err := cg.makeReq(url)
+	resp, err := cg.makeReq(url, "coins/list")
 	if err != nil {
 		return nil, err
 	}
@@ -203,7 +233,7 @@ func (cg *Coingecko) coinMarketChart(id string, vs_currency string, days string,
 	params.Add("days", days)
 
 	url := fmt.Sprintf("%s/coins/%s/market_chart?%s", cg.url, id, params.Encode())
-	resp, err := cg.makeReq(url)
+	resp, err := cg.makeReq(url, "market_chart")
 	if err != nil {
 		return nil, err
 	}

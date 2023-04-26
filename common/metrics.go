@@ -35,6 +35,7 @@ type Metrics struct {
 	WebsocketPendingRequests *prometheus.GaugeVec
 	SocketIOPendingRequests  *prometheus.GaugeVec
 	XPubCacheSize            prometheus.Gauge
+	CoingeckoRequests        *prometheus.CounterVec
 }
 
 // Labels represents a collection of label name -> value mappings.
@@ -254,6 +255,14 @@ func GetMetrics(coin string) (*Metrics, error) {
 			Help:        "Number of cached xpubs",
 			ConstLabels: Labels{"coin": coin},
 		},
+	)
+	metrics.CoingeckoRequests = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name:        "blockbook_coingecko_requests",
+			Help:        "Total number of requests to coingecko",
+			ConstLabels: Labels{"coin": coin},
+		},
+		[]string{"endpoint", "status"},
 	)
 
 	v := reflect.ValueOf(metrics)

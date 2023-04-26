@@ -279,7 +279,7 @@ func mainWithExitCode() int {
 		return exitCodeFatal
 	}
 
-	if fiatRates, err = fiat.NewFiatRates(index, configFileContent, onNewFiatRatesTicker); err != nil {
+	if fiatRates, err = fiat.NewFiatRates(index, configFileContent, metrics, onNewFiatRatesTicker); err != nil {
 		glog.Error("fiatRates ", err)
 		return exitCodeFatal
 	}
