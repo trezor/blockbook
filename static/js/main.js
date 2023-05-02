@@ -28,10 +28,10 @@ function syntaxHighlight(json) {
 }
 
 function getCoinCookie() {
-  return document.cookie
-    .split("; ")
-    .find((row) => row.startsWith("secondary_coin="))
-    ?.split("=");
+  if(hasSecondary) return document.cookie
+  .split("; ")
+  .find((row) => row.startsWith("secondary_coin="))
+  ?.split("=");
 }
 
 function changeCSSStyle(selector, cssProp, cssVal) {
