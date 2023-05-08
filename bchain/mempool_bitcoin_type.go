@@ -1,10 +1,12 @@
 package bchain
 
 import (
+	"encoding/hex"
 	"math/big"
 	"time"
 
 	"github.com/golang/glog"
+	"github.com/martinboehm/btcutil/gcs"
 )
 
 type chanInputPayload struct {
@@ -18,11 +20,14 @@ type MempoolBitcoinType struct {
 	chanTxid            chan string
 	chanAddrIndex       chan txidio
 	AddrDescForOutpoint AddrDescForOutpointFunc
+	golombFilterP       uint8
+	golombFilterM       uint64
 }
 
 // NewMempoolBitcoinType creates new mempool handler.
 // For now there is no cleanup of sync routines, the expectation is that the mempool is created only once per process
-func NewMempoolBitcoinType(chain BlockChain, workers int, subworkers int) *MempoolBitcoinType {
+func NewMempoolBitcoinType(chain BlockChain, workers int, subworkers int, golombFilterP uint8) *MempoolBitcoinType {
+	golombFilterM := uint64(1 << golombFilterP)
 	m := &MempoolBitcoinType{
 		BaseMempool: BaseMempool{
 			chain:        chain,
@@ -31,6 +36,8 @@ func NewMempoolBitcoinType(chain BlockChain, workers int, subworkers int) *Mempo
 		},
 		chanTxid:      make(chan string, 1),
 		chanAddrIndex: make(chan txidio, 1),
+		golombFilterP: golombFilterP,
+		golombFilterM: golombFilterM,
 	}
 	for i := 0; i < workers; i++ {
 		go func(i int) {
@@ -91,6 +98,34 @@ func (m *MempoolBitcoinType) getInputAddress(payload *chanInputPayload) *addrInd
 
 }
 
+func (m *MempoolBitcoinType) computeGolombFilter(mtx *MempoolTx) string {
+	filterData := make([][]byte, 0)
+	for i := range mtx.Vin {
+		vin := &mtx.Vin[i]
+		filterData = append(filterData, vin.AddrDesc)
+	}
+	for i := range mtx.Vout {
+		vout := &mtx.Vout[i]
+		b, err := hex.DecodeString(vout.ScriptPubKey.Hex)
+		if err == nil {
+			filterData = append(filterData, b)
+		}
+	}
+	if len(filterData) == 0 {
+		return ""
+	}
+	b, _ := hex.DecodeString(mtx.Txid)
+	if len(b) < gcs.KeySize {
+		return ""
+	}
+	filter, err := gcs.BuildGCSFilter(m.golombFilterP, m.golombFilterM, *(*[gcs.KeySize]byte)(b[:gcs.KeySize]), filterData)
+	if err != nil {
+		glog.Error("Cannot create golomb filter for ", mtx.Txid, ", ", err)
+	}
+	fb, _ := filter.Bytes()
+	return hex.EncodeToString(fb)
+}
+
 func (m *MempoolBitcoinType) getTxAddrs(txid string, chanInput chan chanInputPayload, chanResult chan *addrIndex) ([]addrIndex, bool) {
 	tx, err := m.chain.GetTransactionForMempool(txid)
 	if err != nil {
@@ -141,6 +176,9 @@ func (m *MempoolBitcoinType) getTxAddrs(txid string, chanInput chan chanInputPay
 		if ai != nil {
 			io = append(io, *ai)
 		}
+	}
+	if m.golombFilterP > 0 {
+		mtx.GolombFilter = m.computeGolombFilter(mtx)
 	}
 	if m.OnNewTx != nil {
 		m.OnNewTx(mtx)

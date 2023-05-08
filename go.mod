@@ -38,6 +38,7 @@ require (
 	github.com/Groestlcoin/go-groestl-hash v0.0.0-20181012171753-790653ac190c // indirect
 	github.com/PiRK/cashaddr-converter v0.0.0-20220121162910-c6cb45163b29 // indirect
 	github.com/VictoriaMetrics/fastcache v1.10.0 // indirect
+	github.com/aead/siphash v1.0.1 // indirect
 	github.com/agl/ed25519 v0.0.0-20170116200512-5312a6153412 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/btcsuite/btcd/btcec/v2 v2.3.2 // indirect
@@ -65,6 +66,7 @@ require (
 	github.com/holiman/uint256 v1.2.0 // indirect
 	github.com/juju/loggo v0.0.0-20190526231331-6e530bcce5d8 // indirect
 	github.com/juju/testing v0.0.0-20191001232224-ce9dec17d28b // indirect
+	github.com/kkdai/bstream v0.0.0-20171226095907-f71540b9dfdc // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect
 	github.com/mr-tron/base58 v1.2.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect

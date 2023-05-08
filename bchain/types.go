@@ -113,6 +113,7 @@ type MempoolTx struct {
 	Blocktime        int64          `json:"blocktime,omitempty"`
 	TokenTransfers   TokenTransfers `json:"-"`
 	CoinSpecificData interface{}    `json:"-"`
+	GolombFilter     string         `json:"-"`
 }
 
 // TokenType - type of token
