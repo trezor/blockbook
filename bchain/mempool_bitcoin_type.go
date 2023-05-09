@@ -14,6 +14,11 @@ type chanInputPayload struct {
 	index int
 }
 
+type golombFilterScriptsType int
+
+const golombFilterScriptsAll = golombFilterScriptsType(0)
+const golombFilterScriptsTaproot = golombFilterScriptsType(1)
+
 // MempoolBitcoinType is mempool handle.
 type MempoolBitcoinType struct {
 	BaseMempool
@@ -22,11 +27,22 @@ type MempoolBitcoinType struct {
 	AddrDescForOutpoint AddrDescForOutpointFunc
 	golombFilterP       uint8
 	golombFilterM       uint64
+	golombFilterScripts golombFilterScriptsType
 }
 
 // NewMempoolBitcoinType creates new mempool handler.
 // For now there is no cleanup of sync routines, the expectation is that the mempool is created only once per process
-func NewMempoolBitcoinType(chain BlockChain, workers int, subworkers int, golombFilterP uint8) *MempoolBitcoinType {
+func NewMempoolBitcoinType(chain BlockChain, workers int, subworkers int, golombFilterP uint8, golombFilterScripts string) *MempoolBitcoinType {
+	var filterScripts golombFilterScriptsType
+	switch golombFilterScripts {
+	case "":
+		filterScripts = golombFilterScriptsAll
+	case "taproot":
+		filterScripts = golombFilterScriptsTaproot
+	default:
+		glog.Error("Invalid golombFilterScripts ", golombFilterScripts, ", switching off golomb filter")
+		golombFilterP = 0
+	}
 	golombFilterM := uint64(1 << golombFilterP)
 	m := &MempoolBitcoinType{
 		BaseMempool: BaseMempool{
@@ -34,10 +50,11 @@ func NewMempoolBitcoinType(chain BlockChain, workers int, subworkers int, golomb
 			txEntries:    make(map[string]txEntry),
 			addrDescToTx: make(map[string][]Outpoint),
 		},
-		chanTxid:      make(chan string, 1),
-		chanAddrIndex: make(chan txidio, 1),
-		golombFilterP: golombFilterP,
-		golombFilterM: golombFilterM,
+		chanTxid:            make(chan string, 1),
+		chanAddrIndex:       make(chan txidio, 1),
+		golombFilterP:       golombFilterP,
+		golombFilterM:       golombFilterM,
+		golombFilterScripts: filterScripts,
 	}
 	for i := 0; i < workers; i++ {
 		go func(i int) {
@@ -98,17 +115,28 @@ func (m *MempoolBitcoinType) getInputAddress(payload *chanInputPayload) *addrInd
 
 }
 
+func isTaproot(addrDesc AddressDescriptor) bool {
+	if len(addrDesc) == 34 && addrDesc[0] == 0x51 && addrDesc[1] == 0x20 {
+		return true
+	}
+	return false
+}
+
 func (m *MempoolBitcoinType) computeGolombFilter(mtx *MempoolTx) string {
 	filterData := make([][]byte, 0)
 	for i := range mtx.Vin {
 		vin := &mtx.Vin[i]
-		filterData = append(filterData, vin.AddrDesc)
+		if m.golombFilterScripts == golombFilterScriptsAll || (m.golombFilterScripts == golombFilterScriptsTaproot && isTaproot(vin.AddrDesc)) {
+			filterData = append(filterData, vin.AddrDesc)
+		}
 	}
 	for i := range mtx.Vout {
 		vout := &mtx.Vout[i]
 		b, err := hex.DecodeString(vout.ScriptPubKey.Hex)
 		if err == nil {
-			filterData = append(filterData, b)
+			if m.golombFilterScripts == golombFilterScriptsAll || (m.golombFilterScripts == golombFilterScriptsTaproot && isTaproot(b)) {
+				filterData = append(filterData, b)
+			}
 		}
 	}
 	if len(filterData) == 0 {
