@@ -14,11 +14,13 @@ type addrIndex struct {
 type txEntry struct {
 	addrIndexes []addrIndex
 	time        uint32
+	filter      string
 }
 
 type txidio struct {
-	txid string
-	io   []addrIndex
+	txid   string
+	io     []addrIndex
+	filter string
 }
 
 // BaseMempool is mempool base handle

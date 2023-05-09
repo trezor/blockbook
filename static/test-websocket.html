@@ -397,6 +397,20 @@
             });
         }
 
+        function getMempoolFilters() {
+            const method = 'getMempoolFilters';
+            var timestamp = document.getElementById('getMempoolFiltersFromTimestamp').value;
+            var scriptType = document.getElementById('getMempoolFiltersScriptType').value;
+            fromTimestamp = parseInt(timestamp);
+            const params = {
+                scriptType,
+                fromTimestamp,
+            };
+            send(method, params, function (result) {
+                document.getElementById('getMempoolFiltersResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
+            });
+        }
+
         function subscribeNewFiatRatesTicker() {
             const method = 'subscribeFiatRates';
             var currency = document.getElementById('subscribeFiatRatesCurrency').value;
@@ -660,6 +674,20 @@
         </div>
         <div class="row">
             <div class="col" id="getFiatRatesTickersListResult"></div>
+        </div>
+        <div class="row">
+            <div class="col-2">
+                <input class="btn btn-secondary" type="button" value="get mempool filters" onclick="getMempoolFilters()">
+            </div>
+            <div class="col-5">
+                <input type="text" class="form-control" id="getMempoolFiltersScriptType" value="taproot" placeholder="filter script">
+            </div>
+            <div class="col-4">
+                <input type="text" class="form-control" id="getMempoolFiltersFromTimestamp" value="" placeholder="From unix timestamp">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col" id="getMempoolFiltersResult"></div>
         </div>
         <div class="row">
             <div class="col">

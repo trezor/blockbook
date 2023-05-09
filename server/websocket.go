@@ -342,6 +342,14 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *WsRe
 		}
 		return
 	},
+	"getMempoolFilters": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
+		r := WsMempoolFiltersReq{}
+		err = json.Unmarshal(req.Params, &r)
+		if err == nil {
+			rv, err = s.getMempoolFilters(&r)
+		}
+		return
+	},
 	"subscribeNewBlock": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
 		return s.subscribeNewBlock(c, req)
 	},
@@ -629,6 +637,11 @@ func (s *WebsocketServer) sendTransaction(tx string) (res resultSendTransaction,
 		return res, err
 	}
 	res.Result = txid
+	return
+}
+
+func (s *WebsocketServer) getMempoolFilters(r *WsMempoolFiltersReq) (res bchain.MempoolTxidFilterEntries, err error) {
+	res, err = s.mempool.GetTxidFilterEntries(r.ScriptType, r.FromTimestamp)
 	return
 }
 

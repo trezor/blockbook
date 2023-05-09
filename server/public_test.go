@@ -1451,6 +1451,26 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			},
 			want: `{"id":"40","data":{"error":{"message":"Not supported"}}}`,
 		},
+		{
+			name: "websocket getMempoolFilters",
+			req: websocketReq{
+				Method: "getMempoolFilters",
+				Params: map[string]interface{}{
+					"scriptType": "",
+				},
+			},
+			want: `{"id":"41","data":{}}`,
+		},
+		{
+			name: "websocket getMempoolFilters invalid type",
+			req: websocketReq{
+				Method: "getMempoolFilters",
+				Params: map[string]interface{}{
+					"scriptType": "invalid",
+				},
+			},
+			want: `{"id":"42","data":{"error":{"message":"Unsupported script filter invalid"}}}`,
+		},
 	}
 
 	// send all requests at once

@@ -7,6 +7,7 @@ import (
 
 	"github.com/tkrajina/typescriptify-golang-structs/typescriptify"
 	"github.com/trezor/blockbook/api"
+	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/server"
 )
 
@@ -56,6 +57,8 @@ func main() {
 	t.Add(server.WsCurrentFiatRatesReq{})
 	t.Add(server.WsFiatRatesForTimestampsReq{})
 	t.Add(server.WsFiatRatesTickersListReq{})
+	t.Add(server.WsMempoolFiltersReq{})
+	t.Add(bchain.MempoolTxidFilterEntries{})
 
 	err := t.ConvertToFile("blockbook-api.ts")
 	if err != nil {

@@ -23,18 +23,18 @@ import (
 // BitcoinRPC is an interface to JSON-RPC bitcoind service.
 type BitcoinRPC struct {
 	*bchain.BaseChain
-	client              http.Client
-	rpcURL              string
-	user                string
-	password            string
-	Mempool             *bchain.MempoolBitcoinType
-	ParseBlocks         bool
-	pushHandler         func(bchain.NotificationType)
-	mq                  *bchain.MQ
-	ChainConfig         *Configuration
-	RPCMarshaler        RPCMarshaler
-	golombFilterP       uint8
-	golombFilterScripts string
+	client               http.Client
+	rpcURL               string
+	user                 string
+	password             string
+	Mempool              *bchain.MempoolBitcoinType
+	ParseBlocks          bool
+	pushHandler          func(bchain.NotificationType)
+	mq                   *bchain.MQ
+	ChainConfig          *Configuration
+	RPCMarshaler         RPCMarshaler
+	golombFilterP        uint8
+	mempoolFilterScripts string
 }
 
 // Configuration represents json config file
@@ -63,7 +63,7 @@ type Configuration struct {
 	AlternativeEstimateFeeParams string `json:"alternative_estimate_fee_params,omitempty"`
 	MinimumCoinbaseConfirmations int    `json:"minimumCoinbaseConfirmations,omitempty"`
 	GolombFilterP                uint8  `json:"golomb_filter_p,omitempty"`
-	GolombFilterScripts          string `json:"golomb_filter_scripts,omitempty"`
+	MempoolFilterScripts         string `json:"mempool_filter_scripts,omitempty"`
 }
 
 // NewBitcoinRPC returns new BitcoinRPC instance.
@@ -100,17 +100,17 @@ func NewBitcoinRPC(config json.RawMessage, pushHandler func(bchain.NotificationT
 	}
 
 	s := &BitcoinRPC{
-		BaseChain:           &bchain.BaseChain{},
-		client:              http.Client{Timeout: time.Duration(c.RPCTimeout) * time.Second, Transport: transport},
-		rpcURL:              c.RPCURL,
-		user:                c.RPCUser,
-		password:            c.RPCPass,
-		ParseBlocks:         c.Parse,
-		ChainConfig:         &c,
-		pushHandler:         pushHandler,
-		RPCMarshaler:        JSONMarshalerV2{},
-		golombFilterP:       c.GolombFilterP,
-		golombFilterScripts: c.GolombFilterScripts,
+		BaseChain:            &bchain.BaseChain{},
+		client:               http.Client{Timeout: time.Duration(c.RPCTimeout) * time.Second, Transport: transport},
+		rpcURL:               c.RPCURL,
+		user:                 c.RPCUser,
+		password:             c.RPCPass,
+		ParseBlocks:          c.Parse,
+		ChainConfig:          &c,
+		pushHandler:          pushHandler,
+		RPCMarshaler:         JSONMarshalerV2{},
+		golombFilterP:        c.GolombFilterP,
+		mempoolFilterScripts: c.MempoolFilterScripts,
 	}
 
 	return s, nil
@@ -156,7 +156,7 @@ func (b *BitcoinRPC) Initialize() error {
 // CreateMempool creates mempool if not already created, however does not initialize it
 func (b *BitcoinRPC) CreateMempool(chain bchain.BlockChain) (bchain.Mempool, error) {
 	if b.Mempool == nil {
-		b.Mempool = bchain.NewMempoolBitcoinType(chain, b.ChainConfig.MempoolWorkers, b.ChainConfig.MempoolSubWorkers, b.golombFilterP, b.golombFilterScripts)
+		b.Mempool = bchain.NewMempoolBitcoinType(chain, b.ChainConfig.MempoolWorkers, b.ChainConfig.MempoolSubWorkers, b.golombFilterP, b.mempoolFilterScripts)
 	}
 	return b.Mempool, nil
 }

@@ -15,19 +15,17 @@ func hexToBytes(h string) []byte {
 func TestMempoolBitcoinType_computeGolombFilter_taproot(t *testing.T) {
 	randomScript := hexToBytes("a914ff074800343a81ada8fe86c2d5d5a0e55b93dd7a87")
 	m := &MempoolBitcoinType{
-		golombFilterP:       20,
-		golombFilterM:       uint64(1 << 20),
-		golombFilterScripts: golombFilterScriptsTaproot,
+		golombFilterP: 20,
+		golombFilterM: uint64(1 << 20),
+		filterScripts: filterScriptsTaproot,
 	}
 	tests := []struct {
 		name string
-		N    uint32
 		mtx  MempoolTx
 		want string
 	}{
 		{
 			name: "taproot",
-			N:    2,
 			mtx: MempoolTx{
 				Txid: "86336c62a63f509a278624e3f400cdd50838d035a44e0af8a7d6d133c04cc2d2",
 				Vin: []MempoolVin{
@@ -47,11 +45,10 @@ func TestMempoolBitcoinType_computeGolombFilter_taproot(t *testing.T) {
 					},
 				},
 			},
-			want: "35dddcce5d60",
+			want: "0235dddcce5d60",
 		},
 		{
 			name: "taproot multiple",
-			N:    7,
 			mtx: MempoolTx{
 				Txid: "86336c62a63f509a278624e3f400cdd50838d035a44e0af8a7d6d133c04cc2d2",
 				Vin: []MempoolVin{
@@ -103,11 +100,10 @@ func TestMempoolBitcoinType_computeGolombFilter_taproot(t *testing.T) {
 					},
 				},
 			},
-			want: "1143e4ad12730965a5247ac15db8c81c89b0bc",
+			want: "071143e4ad12730965a5247ac15db8c81c89b0bc",
 		},
 		{
 			name: "partial taproot",
-			N:    1,
 			mtx: MempoolTx{
 				Txid: "86336c62a63f509a278624e3f400cdd50838d035a44e0af8a7d6d133c04cc2d2",
 				Vin: []MempoolVin{
@@ -127,11 +123,10 @@ func TestMempoolBitcoinType_computeGolombFilter_taproot(t *testing.T) {
 					},
 				},
 			},
-			want: "1aeee8",
+			want: "011aeee8",
 		},
 		{
 			name: "no taproot",
-			N:    0,
 			mtx: MempoolTx{
 				Txid: "86336c62a63f509a278624e3f400cdd50838d035a44e0af8a7d6d133c04cc2d2",
 				Vin: []MempoolVin{
@@ -162,7 +157,7 @@ func TestMempoolBitcoinType_computeGolombFilter_taproot(t *testing.T) {
 			}
 			if got != "" {
 				// build the filter from computed value
-				filter, err := gcs.FromBytes(tt.N, m.golombFilterP, m.golombFilterM, hexToBytes(got))
+				filter, err := gcs.FromNBytes(m.golombFilterP, m.golombFilterM, hexToBytes(got))
 				if err != nil {
 					t.Errorf("gcs.BuildGCSFilter() unexpected error %v", err)
 				}
