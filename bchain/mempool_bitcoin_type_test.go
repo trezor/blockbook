@@ -103,6 +103,49 @@ func TestMempoolBitcoinType_computeGolombFilter_taproot(t *testing.T) {
 			want: "071143e4ad12730965a5247ac15db8c81c89b0bc",
 		},
 		{
+			name: "taproot duplicities",
+			mtx: MempoolTx{
+				Txid: "33a03f983b47725bbdd6045f2d5ee0d95dce08eaaf7104759758aabd8af27d34",
+				Vin: []MempoolVin{
+					{
+						// bc1px2k5tu5mfq23ekkwncz5apx6ccw2nr0rne25r8t8zk7nu035ryxqn9ge8p
+						AddrDesc: hexToBytes("512032ad45f29b48151cdace9e054e84dac61ca98de39e55419d6715bd3e3e34190c"),
+					},
+					{
+						// bc1px2k5tu5mfq23ekkwncz5apx6ccw2nr0rne25r8t8zk7nu035ryxqn9ge8p
+						AddrDesc: hexToBytes("512032ad45f29b48151cdace9e054e84dac61ca98de39e55419d6715bd3e3e34190c"),
+					},
+				},
+				Vout: []Vout{
+					{
+						ScriptPubKey: ScriptPubKey{
+							Hex: "512032ad45f29b48151cdace9e054e84dac61ca98de39e55419d6715bd3e3e34190c",
+							Addresses: []string{
+								"bc1px2k5tu5mfq23ekkwncz5apx6ccw2nr0rne25r8t8zk7nu035ryxqn9ge8p",
+							},
+						},
+					},
+					{
+						ScriptPubKey: ScriptPubKey{
+							Hex: "512032ad45f29b48151cdace9e054e84dac61ca98de39e55419d6715bd3e3e34190c",
+							Addresses: []string{
+								"bc1px2k5tu5mfq23ekkwncz5apx6ccw2nr0rne25r8t8zk7nu035ryxqn9ge8p",
+							},
+						},
+					},
+					{
+						ScriptPubKey: ScriptPubKey{
+							Hex: "512032ad45f29b48151cdace9e054e84dac61ca98de39e55419d6715bd3e3e34190c",
+							Addresses: []string{
+								"bc1px2k5tu5mfq23ekkwncz5apx6ccw2nr0rne25r8t8zk7nu035ryxqn9ge8p",
+							},
+						},
+					},
+				},
+			},
+			want: "01778db0",
+		},
+		{
 			name: "partial taproot",
 			mtx: MempoolTx{
 				Txid: "86336c62a63f509a278624e3f400cdd50838d035a44e0af8a7d6d133c04cc2d2",

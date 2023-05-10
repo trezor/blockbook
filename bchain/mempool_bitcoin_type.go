@@ -133,11 +133,16 @@ func isTaproot(addrDesc AddressDescriptor) bool {
 }
 
 func (m *MempoolBitcoinType) computeGolombFilter(mtx *MempoolTx) string {
+	uniqueScripts := make(map[string]struct{})
 	filterData := make([][]byte, 0)
 	for i := range mtx.Vin {
 		vin := &mtx.Vin[i]
 		if m.filterScripts == filterScriptsAll || (m.filterScripts == filterScriptsTaproot && isTaproot(vin.AddrDesc)) {
-			filterData = append(filterData, vin.AddrDesc)
+			s := string(vin.AddrDesc)
+			if _, found := uniqueScripts[s]; !found {
+				filterData = append(filterData, vin.AddrDesc)
+				uniqueScripts[s] = struct{}{}
+			}
 		}
 	}
 	for i := range mtx.Vout {
@@ -145,7 +150,11 @@ func (m *MempoolBitcoinType) computeGolombFilter(mtx *MempoolTx) string {
 		b, err := hex.DecodeString(vout.ScriptPubKey.Hex)
 		if err == nil {
 			if m.filterScripts == filterScriptsAll || (m.filterScripts == filterScriptsTaproot && isTaproot(b)) {
-				filterData = append(filterData, b)
+				s := string(b)
+				if _, found := uniqueScripts[s]; !found {
+					filterData = append(filterData, b)
+					uniqueScripts[s] = struct{}{}
+				}
 			}
 		}
 	}
