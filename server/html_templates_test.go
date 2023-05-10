@@ -166,7 +166,84 @@ func Test_appendAmountSpan(t *testing.T) {
 			var rv strings.Builder
 			appendAmountSpan(&rv, tt.class, tt.amount, tt.shortcut, tt.txDate)
 			if got := rv.String(); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("formatTime() = %v, want %v", got, tt.want)
+				t.Errorf("appendAmountSpan() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_appendAmountSpanBitcoinType(t *testing.T) {
+	tests := []struct {
+		name     string
+		class    string
+		amount   string
+		shortcut string
+		txDate   string
+		want     string
+	}{
+		{
+			name:     "prim-amt 1.23456789 BTC",
+			class:    "prim-amt",
+			amount:   "1.23456789",
+			shortcut: "BTC",
+			want:     `<span class="prim-amt">1.<span class="amt-dec">23<span class="ns">456</span><span class="ns">789</span></span> BTC</span>`,
+		},
+		{
+			name:     "prim-amt 1432134.23456 BTC",
+			class:    "prim-amt",
+			amount:   "1432134.23456",
+			shortcut: "BTC",
+			want:     `<span class="prim-amt">1<span class="nc">432</span><span class="nc">134</span>.<span class="amt-dec">23<span class="ns">456</span><span class="ns">000</span></span> BTC</span>`,
+		},
+		{
+			name:     "prim-amt 1 BTC",
+			class:    "prim-amt",
+			amount:   "1",
+			shortcut: "BTC",
+			want:     `<span class="prim-amt">1.<span class="amt-dec">00<span class="ns">000</span><span class="ns">000</span></span> BTC</span>`,
+		},
+		{
+			name:     "prim-amt 0 BTC",
+			class:    "prim-amt",
+			amount:   "0",
+			shortcut: "BTC",
+			want:     `<span class="prim-amt">0 BTC</span>`,
+		},
+		{
+			name:     "prim-amt 34.2 BTC",
+			class:    "prim-amt",
+			amount:   "34.2",
+			shortcut: "BTC",
+			want:     `<span class="prim-amt">34.<span class="amt-dec">20<span class="ns">000</span><span class="ns">000</span></span> BTC</span>`,
+		},
+		{
+			name:     "prim-amt -34.2345678 BTC",
+			class:    "prim-amt",
+			amount:   "-34.2345678",
+			shortcut: "BTC",
+			want:     `<span class="prim-amt">-34.<span class="amt-dec">23<span class="ns">456</span><span class="ns">780</span></span> BTC</span>`,
+		},
+		{
+			name:     "prim-amt -1234.2345 BTC",
+			class:    "prim-amt",
+			amount:   "-1234.2345",
+			shortcut: "BTC",
+			want:     `<span class="prim-amt">-1<span class="nc">234</span>.<span class="amt-dec">23<span class="ns">450</span><span class="ns">000</span></span> BTC</span>`,
+		},
+		{
+			name:     "prim-amt -123.23 BTC",
+			class:    "prim-amt",
+			amount:   "-123.23",
+			shortcut: "BTC",
+			want:     `<span class="prim-amt">-123.<span class="amt-dec">23<span class="ns">000</span><span class="ns">000</span></span> BTC</span>`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var rv strings.Builder
+			appendAmountSpanBitcoinType(&rv, tt.class, tt.amount, tt.shortcut, tt.txDate)
+			if got := rv.String(); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("appendAmountSpanBitcoinType() = %v, want %v", got, tt.want)
 			}
 		})
 	}

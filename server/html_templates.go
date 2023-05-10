@@ -219,6 +219,49 @@ func appendAmountSpan(rv *strings.Builder, class, amount, shortcut, txDate strin
 	rv.WriteString("</span>")
 }
 
+func appendAmountSpanBitcoinType(rv *strings.Builder, class, amount, shortcut, txDate string) {
+	if amount == "0" {
+		appendAmountSpan(rv, class, amount, shortcut, txDate)
+		return
+	}
+	rv.WriteString(`<span`)
+	if class != "" {
+		rv.WriteString(` class="`)
+		rv.WriteString(class)
+		rv.WriteString(`"`)
+	}
+	if txDate != "" {
+		rv.WriteString(` tm="`)
+		rv.WriteString(txDate)
+		rv.WriteString(`"`)
+	}
+	rv.WriteString(">")
+	i := strings.IndexByte(amount, '.')
+	var decimals string
+	if i < 0 {
+		appendSeparatedNumberSpans(rv, amount, "nc")
+		decimals = "00000000"
+	} else {
+		appendSeparatedNumberSpans(rv, amount[:i], "nc")
+		decimals = amount[i+1:] + "00000000"
+	}
+	rv.WriteString(`.`)
+	rv.WriteString(`<span class="amt-dec">`)
+	rv.WriteString(decimals[:2])
+	rv.WriteString(`<span class="ns">`)
+	rv.WriteString(decimals[2:5])
+	rv.WriteString("</span>")
+	rv.WriteString(`<span class="ns">`)
+	rv.WriteString(decimals[5:8])
+	rv.WriteString("</span>")
+	rv.WriteString("</span>")
+	if shortcut != "" {
+		rv.WriteString(" ")
+		rv.WriteString(shortcut)
+	}
+	rv.WriteString("</span>")
+}
+
 func appendAmountWrapperSpan(rv *strings.Builder, primary, symbol, classes string) {
 	rv.WriteString(`<span class="amt`)
 	if classes != "" {

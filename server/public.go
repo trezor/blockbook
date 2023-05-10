@@ -44,21 +44,22 @@ const (
 // PublicServer provides public http server functionality
 type PublicServer struct {
 	htmlTemplates[TemplateData]
-	binding          string
-	certFiles        string
-	socketio         *SocketIoServer
-	websocket        *WebsocketServer
-	https            *http.Server
-	db               *db.RocksDB
-	txCache          *db.TxCache
-	chain            bchain.BlockChain
-	chainParser      bchain.BlockChainParser
-	mempool          bchain.Mempool
-	api              *api.Worker
-	explorerURL      string
-	internalExplorer bool
-	is               *common.InternalState
-	fiatRates        *fiat.FiatRates
+	binding             string
+	certFiles           string
+	socketio            *SocketIoServer
+	websocket           *WebsocketServer
+	https               *http.Server
+	db                  *db.RocksDB
+	txCache             *db.TxCache
+	chain               bchain.BlockChain
+	chainParser         bchain.BlockChainParser
+	mempool             bchain.Mempool
+	api                 *api.Worker
+	explorerURL         string
+	internalExplorer    bool
+	is                  *common.InternalState
+	fiatRates           *fiat.FiatRates
+	useSatsAmountFormat bool
 }
 
 // NewPublicServer creates new public server http interface to blockbook and returns its handle
@@ -92,21 +93,22 @@ func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bch
 			metrics: metrics,
 			debug:   debugMode,
 		},
-		binding:          binding,
-		certFiles:        certFiles,
-		https:            https,
-		api:              api,
-		socketio:         socketio,
-		websocket:        websocket,
-		db:               db,
-		txCache:          txCache,
-		chain:            chain,
-		chainParser:      chain.GetChainParser(),
-		mempool:          mempool,
-		explorerURL:      explorerURL,
-		internalExplorer: explorerURL == "",
-		is:               is,
-		fiatRates:        fiatRates,
+		binding:             binding,
+		certFiles:           certFiles,
+		https:               https,
+		api:                 api,
+		socketio:            socketio,
+		websocket:           websocket,
+		db:                  db,
+		txCache:             txCache,
+		chain:               chain,
+		chainParser:         chain.GetChainParser(),
+		mempool:             mempool,
+		explorerURL:         explorerURL,
+		internalExplorer:    explorerURL == "",
+		is:                  is,
+		fiatRates:           fiatRates,
+		useSatsAmountFormat: chain.GetChainParser().GetChainType() == bchain.ChainBitcoinType && chain.GetChainParser().AmountDecimals() == 8,
 	}
 	s.htmlTemplates.newTemplateData = s.newTemplateData
 	s.htmlTemplates.newTemplateDataWithError = s.newTemplateDataWithError
@@ -569,7 +571,11 @@ func (s *PublicServer) amountSpan(a *api.Amount, td *TemplateData, classes strin
 	primary := s.formatAmount(a)
 	var rv strings.Builder
 	appendAmountWrapperSpan(&rv, primary, td.CoinShortcut, classes)
-	appendAmountSpan(&rv, "prim-amt", primary, td.CoinShortcut, "")
+	if s.useSatsAmountFormat {
+		appendAmountSpanBitcoinType(&rv, "prim-amt", primary, td.CoinShortcut, "")
+	} else {
+		appendAmountSpan(&rv, "prim-amt", primary, td.CoinShortcut, "")
+	}
 	if td.SecondaryCoin != "" {
 		p, err := strconv.ParseFloat(primary, 64)
 		if err == nil {
