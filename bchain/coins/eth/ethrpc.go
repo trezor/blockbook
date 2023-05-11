@@ -54,26 +54,27 @@ type Configuration struct {
 // EthereumRPC is an interface to JSON-RPC eth service.
 type EthereumRPC struct {
 	*bchain.BaseChain
-	Client                bchain.EVMClient
-	RPC                   bchain.EVMRPCClient
-	MainNetChainID        Network
-	Timeout               time.Duration
-	Parser                *EthereumParser
-	PushHandler           func(bchain.NotificationType)
-	OpenRPC               func(string) (bchain.EVMRPCClient, bchain.EVMClient, error)
-	Mempool               *bchain.MempoolEthereumType
-	mempoolInitialized    bool
-	bestHeaderLock        sync.Mutex
-	bestHeader            bchain.EVMHeader
-	bestHeaderTime        time.Time
-	NewBlock              bchain.EVMNewBlockSubscriber
-	newBlockSubscription  bchain.EVMClientSubscription
-	NewTx                 bchain.EVMNewTxSubscriber
-	newTxSubscription     bchain.EVMClientSubscription
-	ChainConfig           *Configuration
-	supportedStakingPools []string
-	stakingPoolNames      []string
-	stakingPoolContracts  []string
+	Client                  bchain.EVMClient
+	RPC                     bchain.EVMRPCClient
+	MainNetChainID          Network
+	Timeout                 time.Duration
+	Parser                  *EthereumParser
+	PushHandler             func(bchain.NotificationType)
+	OpenRPC                 func(string) (bchain.EVMRPCClient, bchain.EVMClient, error)
+	GetInternalDataForBlock func(blockHash string, blockHeight uint32, transactions []bchain.RpcTransaction) ([]bchain.EthereumInternalData, []bchain.ContractInfo, error)
+	Mempool                 *bchain.MempoolEthereumType
+	mempoolInitialized      bool
+	bestHeaderLock          sync.Mutex
+	bestHeader              bchain.EVMHeader
+	bestHeaderTime          time.Time
+	NewBlock                bchain.EVMNewBlockSubscriber
+	newBlockSubscription    bchain.EVMClientSubscription
+	NewTx                   bchain.EVMNewTxSubscriber
+	newTxSubscription       bchain.EVMClientSubscription
+	ChainConfig             *Configuration
+	supportedStakingPools   []string
+	stakingPoolNames        []string
+	stakingPoolContracts    []string
 }
 
 // ProcessInternalTransactions specifies if internal transactions are processed
@@ -97,6 +98,8 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 		ChainConfig: &c,
 	}
 
+	// use debug_trace for internal data by default
+	s.GetInternalDataForBlock = s.getInternalDataForBlock
 	ProcessInternalTransactions = c.ProcessInternalTransactions
 
 	// always create parser
@@ -609,7 +612,8 @@ type rpcTraceResult struct {
 	Result rpcCallTrace `json:"result"`
 }
 
-func (b *EthereumRPC) getCreationContractInfo(contract string, height uint32) *bchain.ContractInfo {
+// GetCreationContractInfo retrieves the info for a contract address and sets the creation block height
+func (b *EthereumRPC) GetCreationContractInfo(contract string, height uint32) *bchain.ContractInfo {
 	ci, err := b.fetchContractInfo(contract)
 	if ci == nil || err != nil {
 		ci = &bchain.ContractInfo{
@@ -630,7 +634,7 @@ func (b *EthereumRPC) processCallTrace(call *rpcCallTrace, d *bchain.EthereumInt
 			From:  call.From,
 			To:    call.To, // new contract address
 		})
-		contracts = append(contracts, *b.getCreationContractInfo(call.To, blockHeight))
+		contracts = append(contracts, *b.GetCreationContractInfo(call.To, blockHeight))
 	} else if call.Type == "SELFDESTRUCT" {
 		d.Transfers = append(d.Transfers, bchain.EthereumInternalTransfer{
 			Type:  bchain.SELFDESTRUCT,
@@ -701,7 +705,7 @@ func (b *EthereumRPC) getInternalDataForBlock(blockHash string, blockHeight uint
 			if r.Type == "CREATE" || r.Type == "CREATE2" {
 				d.Type = bchain.CREATE
 				d.Contract = r.To
-				contracts = append(contracts, *b.getCreationContractInfo(d.Contract, blockHeight))
+				contracts = append(contracts, *b.GetCreationContractInfo(d.Contract, blockHeight))
 			} else if r.Type == "SELFDESTRUCT" {
 				d.Type = bchain.SELFDESTRUCT
 			}
@@ -760,7 +764,7 @@ func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error
 	}
 	// error fetching internal data does not stop the block processing
 	var blockSpecificData *bchain.EthereumBlockSpecificData
-	internalData, contracts, err := b.getInternalDataForBlock(head.Hash, bbh.Height, body.Transactions)
+	internalData, contracts, err := b.GetInternalDataForBlock(head.Hash, bbh.Height, body.Transactions)
 	// pass internalData error and ENS records in blockSpecificData to be stored
 	if err != nil || len(ens) > 0 || len(contracts) > 0 {
 		blockSpecificData = &bchain.EthereumBlockSpecificData{}
