@@ -68,6 +68,7 @@ type EthereumRPC struct {
 	Parser                    *EthereumParser
 	PushHandler               func(bchain.NotificationType)
 	OpenRPC                   func(string) (bchain.EVMRPCClient, bchain.EVMClient, error)
+	GetInternalDataForBlock   func(blockHash string, blockHeight uint32, transactions []bchain.RpcTransaction) ([]bchain.EthereumInternalData, []bchain.ContractInfo, error)
 	Mempool                   *bchain.MempoolEthereumType
 	mempoolInitialized        bool
 	bestHeaderLock            sync.Mutex
@@ -106,6 +107,8 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 		ChainConfig: &c,
 	}
 
+	// use debug_trace for internal data by default
+	s.GetInternalDataForBlock = s.getInternalDataForBlock
 	ProcessInternalTransactions = c.ProcessInternalTransactions
 
 	// always create parser
@@ -661,7 +664,8 @@ type rpcTraceResult struct {
 	Result rpcCallTrace `json:"result"`
 }
 
-func (b *EthereumRPC) getCreationContractInfo(contract string, height uint32) *bchain.ContractInfo {
+// GetCreationContractInfo retrieves the info for a contract address and sets the creation block height
+func (b *EthereumRPC) GetCreationContractInfo(contract string, height uint32) *bchain.ContractInfo {
 	// do not fetch fetchContractInfo in sync, it slows it down
 	// the contract will be fetched only when asked by a client
 	// ci, err := b.fetchContractInfo(contract)
@@ -688,7 +692,7 @@ func (b *EthereumRPC) processCallTrace(call *rpcCallTrace, d *bchain.EthereumInt
 			From:  call.From,
 			To:    call.To, // new contract address
 		})
-		contracts = append(contracts, *b.getCreationContractInfo(call.To, blockHeight))
+		contracts = append(contracts, *b.GetCreationContractInfo(call.To, blockHeight))
 	} else if call.Type == "SELFDESTRUCT" {
 		d.Transfers = append(d.Transfers, bchain.EthereumInternalTransfer{
 			Type:  bchain.SELFDESTRUCT,
@@ -759,7 +763,7 @@ func (b *EthereumRPC) getInternalDataForBlock(blockHash string, blockHeight uint
 			if r.Type == "CREATE" || r.Type == "CREATE2" {
 				d.Type = bchain.CREATE
 				d.Contract = r.To
-				contracts = append(contracts, *b.getCreationContractInfo(d.Contract, blockHeight))
+				contracts = append(contracts, *b.GetCreationContractInfo(d.Contract, blockHeight))
 			} else if r.Type == "SELFDESTRUCT" {
 				d.Type = bchain.SELFDESTRUCT
 			}
