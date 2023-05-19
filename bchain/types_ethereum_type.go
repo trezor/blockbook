@@ -122,10 +122,13 @@ type RpcLog struct {
 
 // RpcLog is returned by eth_getTransactionReceipt
 type RpcReceipt struct {
-	GasUsed      string    `json:"gasUsed"`
-	Status       string    `json:"status"`
-	Logs         []*RpcLog `json:"logs"`
-	RevertReason string    `json:"revertReason"`
+	GasUsed         string    `json:"gasUsed"`
+	Status          string    `json:"status"`
+	Logs            []*RpcLog `json:"logs"`
+	RevertReason    string    `json:"revertReason,omitempty"`
+	PrivateFrom     string    `json:"privateFrom,omitempty"`
+	PrivacyGroupId  string    `json:"privacyGroupId,omitempty"`
+	contractAddress string    `json:"contractAddress,omitempty"`
 }
 
 // EthereumSpecificData contains data specific to Ethereum transactions
