@@ -1,75 +1,73 @@
 {
-  "coin": {
-    "name": "Regtest",
-    "shortcut": "rBTC",
-    "label": "Bitcoin Regtest",
-    "alias": "bitcoin_regtest"
-  },
-  "ports": {
-    "backend_rpc": 18021,
-    "backend_message_queue": 48321,
-    "blockbook_internal": 19021,
-    "blockbook_public": 19121
-  },
-  "ipc": {
-    "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
-    "rpc_user": "rpc",
-    "rpc_pass": "rpc",
-    "rpc_timeout": 25,
-    "message_queue_binding_template": "tcp://127.0.0.1:{{.Ports.BackendMessageQueue}}"
-  },
-  "backend": {
-    "package_name": "backend-bitcoin-regtest",
-    "package_revision": "satoshilabs-1",
-    "system_user": "bitcoin",
-    "version": "24.0.1",
-    "binary_url": "https://bitcoincore.org/bin/bitcoin-core-24.0.1/bitcoin-24.0.1-x86_64-linux-gnu.tar.gz",
-    "verification_type": "sha256",
-    "verification_source": "49df6e444515d457ea0b885d66f521f2a26ca92ccf73d5296082e633544253bf",
-    "extract_command": "tar -C backend --strip 1 -xf",
-    "exclude_files": [
-      "bin/bitcoin-qt"
-    ],
-    "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/bitcoind -datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -conf={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf -pid=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",
-    "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/regtest/*.log",
-    "postinst_script_template": "",
-    "service_type": "forking",
-    "service_additional_params_template": "",
-    "mainnet": false,
-    "protect_memory": true,
-    "server_config_file": "bitcoin_regtest.conf",
-    "client_config_file": "bitcoin_client.conf",
-    "additional_params": {
-      "deprecatedrpc": "estimatefee"
+    "coin": {
+        "name": "Regtest",
+        "shortcut": "rBTC",
+        "label": "Bitcoin Regtest",
+        "alias": "bitcoin_regtest"
     },
-    "platforms": {
-      "arm64": {
-        "binary_url": "https://bitcoincore.org/bin/bitcoin-core-24.0/bitcoin-24.0-aarch64-linux-gnu.tar.gz",
-        "verification_source": "904e103f08f776d03935118568411724f9e070e0e888e52c9e5692308fa47d49"
-      }
+    "ports": {
+        "backend_rpc": 18021,
+        "backend_message_queue": 48321,
+        "blockbook_internal": 19021,
+        "blockbook_public": 19121
+    },
+    "ipc": {
+        "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
+        "rpc_user": "rpc",
+        "rpc_pass": "rpc",
+        "rpc_timeout": 25,
+        "message_queue_binding_template": "tcp://127.0.0.1:{{.Ports.BackendMessageQueue}}"
+    },
+    "backend": {
+        "package_name": "backend-bitcoin-regtest",
+        "package_revision": "satoshilabs-1",
+        "system_user": "bitcoin",
+        "version": "24.1",
+        "binary_url": "https://bitcoincore.org/bin/bitcoin-core-24.1/bitcoin-24.1-x86_64-linux-gnu.tar.gz",
+        "verification_type": "sha256",
+        "verification_source": "c112af3d19cca7f5b5f942708ca4d522110d8e1dc1c0f8d3077f531c94e5f00f",
+        "extract_command": "tar -C backend --strip 1 -xf",
+        "exclude_files": ["bin/bitcoin-qt"],
+        "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/bitcoind -datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -conf={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf -pid=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",
+        "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/regtest/*.log",
+        "postinst_script_template": "",
+        "service_type": "forking",
+        "service_additional_params_template": "",
+        "mainnet": false,
+        "protect_memory": true,
+        "server_config_file": "bitcoin_regtest.conf",
+        "client_config_file": "bitcoin_client.conf",
+        "additional_params": {
+            "deprecatedrpc": "estimatefee"
+        },
+        "platforms": {
+            "arm64": {
+                "binary_url": "https://bitcoincore.org/bin/bitcoin-core-24.1/bitcoin-24.1-aarch64-linux-gnu.tar.gz",
+                "verification_source": "69ef67b290ce05120d8a5a5a5c0aa3e7d4878838286e6dc96935d15fc0d44b56"
+            }
+        }
+    },
+    "blockbook": {
+        "package_name": "blockbook-bitcoin-regtest",
+        "system_user": "blockbook-bitcoin",
+        "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
+        "public_binding_template": ":{{.Ports.BlockbookPublic}}",
+        "explorer_url": "",
+        "additional_params": "",
+        "block_chain": {
+            "parse": true,
+            "mempool_workers": 8,
+            "mempool_sub_workers": 2,
+            "block_addresses_to_keep": 300,
+            "xpub_magic": 70617039,
+            "xpub_magic_segwit_p2sh": 71979618,
+            "xpub_magic_segwit_native": 73342198,
+            "slip44": 1,
+            "additional_params": {}
+        }
+    },
+    "meta": {
+        "package_maintainer": "IT",
+        "package_maintainer_email": "it@satoshilabs.com"
     }
-  },
-  "blockbook": {
-    "package_name": "blockbook-bitcoin-regtest",
-    "system_user": "blockbook-bitcoin",
-    "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
-    "public_binding_template": ":{{.Ports.BlockbookPublic}}",
-    "explorer_url": "",
-    "additional_params": "",
-    "block_chain": {
-      "parse": true,
-      "mempool_workers": 8,
-      "mempool_sub_workers": 2,
-      "block_addresses_to_keep": 300,
-      "xpub_magic": 70617039,
-      "xpub_magic_segwit_p2sh": 71979618,
-      "xpub_magic_segwit_native": 73342198,
-      "slip44": 1,
-      "additional_params": {}
-    }
-  },
-  "meta": {
-    "package_maintainer": "IT",
-    "package_maintainer_email": "it@satoshilabs.com"
-  }
 }
