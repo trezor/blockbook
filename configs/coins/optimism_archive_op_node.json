@@ -1,15 +1,15 @@
 {
 	"coin": {
-	  "name": "Optimism Op-Node",
+	  "name": "Optimism Archive Op-Node",
 	  "shortcut": "ETH",
 	  "label": "Optimism",
-	  "alias": "optimism_op_node"
+	  "alias": "optimism_archive_op_node"
 	},
 	"ports": {
-	  "backend_rpc": 8201
+	  "backend_rpc": 8203
 	},
 	"backend": {
-	  "package_name": "backend-optimism-op-node",
+	  "package_name": "backend-optimism-archive-op-node",
 	  "package_revision": "satoshilabs-1",
 	  "system_user": "optimism",
 	  "version": "1.1.0",
@@ -18,7 +18,7 @@
 	  "verification_source": "f84bbf1b069dc2f2570c3f6989ae464cd3ede12faf7f4f6796e97380de7f8923",
 	  "extract_command": "mkdir backend/source && tar -C backend/source --strip 1 -xf",
 	  "exclude_files": [],
-	  "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/op-node --network mainnet --l1 http://127.0.0.1:8136 --l1.trustrpc --l1.rpckind=debug_geth --l2 http://127.0.0.1:8400 --rpc.addr 127.0.0.1 --rpc.port {{.Ports.BackendRPC}} --l2.jwt-secret {{.Env.BackendDataPath}}/optimism/backend/jwtsecret 2>&1>> {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
+	  "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/op-node --network mainnet --l1 http://127.0.0.1:8116 --l1.trustrpc --l1.rpckind=debug_geth --l2 http://127.0.0.1:8402 --rpc.addr 127.0.0.1 --rpc.port {{.Ports.BackendRPC}} --l2.jwt-secret {{.Env.BackendDataPath}}/optimism_archive/backend/jwtsecret 2>&1>> {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
 	  "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
 	  "postinst_script_template": "cd {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/source/op-node && go build -o {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/op-node ./cmd && rm -rf {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/source",
 	  "service_type": "simple",
