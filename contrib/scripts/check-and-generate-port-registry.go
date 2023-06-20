@@ -242,7 +242,7 @@ func writeMarkdown(output string, slice PortInfoSlice) error {
 	header := []string{"coin", "blockbook public", "blockbook internal", "backend rpc", "backend service ports (zmq)"}
 	writeTable(&buf, header, slice)
 
-	fmt.Fprintf(&buf, "\n> NOTE: This document is generated from coin definitions in `configs/coins`.\n")
+	fmt.Fprintf(&buf, "\n> NOTE: This document is generated from coin definitions in `configs/coins` using command `go run contrib/scripts/check-and-generate-port-registry.go -w`.\n")
 
 	out := os.Stdout
 	if output != "stdout" {

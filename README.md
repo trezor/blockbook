@@ -4,12 +4,12 @@
 
 **Blockbook** is back-end service for Trezor wallet. Main features of **Blockbook** are:
 
-- index of addresses and address balances of the connected block chain
-- fast index search
-- simple blockchain explorer
-- websocket, API and legacy Bitcore Insight compatible socket.io interfaces
-- support of multiple coins (Bitcoin and Ethereum type) with easy extensibility to other coins
-- scripts for easy creation of debian packages for backend and blockbook
+-   index of addresses and address balances of the connected block chain
+-   fast index search
+-   simple blockchain explorer
+-   websocket, API and legacy Bitcore Insight compatible socket.io interfaces
+-   support of multiple coins (Bitcoin and Ethereum type) with easy extensibility to other coins
+-   scripts for easy creation of debian packages for backend and blockbook
 
 ## Build and installation instructions
 
@@ -19,7 +19,7 @@ Memory and disk requirements for initial synchronization of **Bitcoin mainnet** 
 Other coins should have lower requirements, depending on the size of their block chain. Note that fast SSD disks are highly
 recommended.
 
-User installation guide is [here](https://wiki.trezor.io/User_manual:Running_a_local_instance_of_Trezor_Wallet_backend_(Blockbook)).
+User installation guide is [here](<https://wiki.trezor.io/User_manual:Running_a_local_instance_of_Trezor_Wallet_backend_(Blockbook)>).
 
 Developer build guide is [here](/docs/build.md).
 
@@ -27,14 +27,15 @@ Contribution guide is [here](CONTRIBUTING.md).
 
 ## Implemented coins
 
-Blockbook currently supports over 30 coins. The Trezor team implemented 
+Blockbook currently supports over 30 coins. The Trezor team implemented
 
-- Bitcoin, Bitcoin Cash, Zcash, Dash, Litecoin, Bitcoin Gold, Ethereum, Ethereum Classic, Dogecoin, Namecoin, Vertcoin, DigiByte, Liquid
+-   Bitcoin, Bitcoin Cash, Zcash, Dash, Litecoin, Bitcoin Gold, Ethereum, Ethereum Classic, Dogecoin, Namecoin, Vertcoin, DigiByte, Liquid
 
 the rest of coins were implemented by the community.
 
 Testnets for some coins are also supported, for example:
-- Bitcoin Testnet, Bitcoin Cash Testnet, ZCash Testnet, Ethereum Testnet Ropsten
+
+-   Bitcoin Testnet, Bitcoin Cash Testnet, ZCash Testnet, Ethereum Testnets (Goerli, Sepolia)
 
 List of all implemented coins is in [the registry of ports](/docs/ports.md).
 
@@ -42,19 +43,19 @@ List of all implemented coins is in [the registry of ports](/docs/ports.md).
 
 #### Out of memory when doing initial synchronization
 
-How to reduce memory footprint of the initial sync: 
+How to reduce memory footprint of the initial sync:
 
-- disable rocksdb cache by parameter `-dbcache=0`, the default size is 500MB
-- run blockbook with parameter `-workers=1`. This disables bulk import mode, which caches a lot of data in memory (not in rocksdb cache). It will run about twice as slowly but especially for smaller blockchains it is no problem at all.
+-   disable rocksdb cache by parameter `-dbcache=0`, the default size is 500MB
+-   run blockbook with parameter `-workers=1`. This disables bulk import mode, which caches a lot of data in memory (not in rocksdb cache). It will run about twice as slowly but especially for smaller blockchains it is no problem at all.
 
 Please add your experience to this [issue](https://github.com/trezor/blockbook/issues/43).
 
 #### Error `internalState: database is in inconsistent state and cannot be used`
 
-Blockbook was killed during the initial import, most commonly by OOM killer. 
-By default, Blockbook performs the initial import in bulk import mode, which for performance reasons does not store all data immediately to the database. If Blockbook is killed during this phase, the database is left in an inconsistent state. 
+Blockbook was killed during the initial import, most commonly by OOM killer.
+By default, Blockbook performs the initial import in bulk import mode, which for performance reasons does not store all data immediately to the database. If Blockbook is killed during this phase, the database is left in an inconsistent state.
 
-See above how to reduce the memory footprint, delete the database files and run the import again. 
+See above how to reduce the memory footprint, delete the database files and run the import again.
 
 Check [this](https://github.com/trezor/blockbook/issues/89) or [this](https://github.com/trezor/blockbook/issues/147) issue for more info.
 
