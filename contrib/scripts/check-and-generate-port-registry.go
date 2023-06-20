@@ -1,4 +1,4 @@
-//usr/bin/go run $0 $@ ; exit
+// usr/bin/go run $0 $@ ; exit
 package main
 
 import (
@@ -36,6 +36,7 @@ type Config struct {
 	Coin struct {
 		Name  string `json:"name"`
 		Label string `json:"label"`
+		Alias string `json:"alias"`
 	}
 	Ports map[string]uint16 `json:"ports"`
 }
@@ -69,21 +70,22 @@ func checkPorts() int {
 		}
 
 		if _, ok := v.Ports["blockbook_internal"]; !ok {
-			fmt.Printf("%s: missing blockbook_internal port\n", v.Coin.Name)
+			fmt.Printf("%s (%s): missing blockbook_internal port\n", v.Coin.Name, v.Coin.Alias)
 			status = 1
 		}
 		if _, ok := v.Ports["blockbook_public"]; !ok {
-			fmt.Printf("%s: missing blockbook_public port\n", v.Coin.Name)
+			fmt.Printf("%s (%s): missing blockbook_public port\n", v.Coin.Name, v.Coin.Alias)
 			status = 1
 		}
 		if _, ok := v.Ports["backend_rpc"]; !ok {
-			fmt.Printf("%s: missing backend_rpc port\n", v.Coin.Name)
+			fmt.Printf("%s (%s): missing backend_rpc port\n", v.Coin.Name, v.Coin.Alias)
 			status = 1
 		}
 
 		for _, port := range v.Ports {
-			if port > 0 {
-				ports[port] = append(ports[port], v.Coin.Name)
+			// ignore duplicities caused by consensus layer configs
+			if port > 0 && !strings.Contains(v.Coin.Alias, "_consensus") {
+				ports[port] = append(ports[port], v.Coin.Alias)
 			}
 		}
 	}
@@ -158,8 +160,12 @@ func loadPortInfo(dir string) (PortInfoSlice, error) {
 			return nil, fmt.Errorf("%s: json: %s", path, err)
 		}
 
+		// skip consensus layer configs
+		if strings.Contains(v.Coin.Alias, "_consensus") {
+			continue
+		}
 		name := v.Coin.Label
-		if len(name) == 0 {
+		if len(name) == 0 || strings.Contains(v.Coin.Name, "Archive") {
 			name = v.Coin.Name
 		}
 		item := &PortInfo{CoinName: name, BackendServicePorts: map[string]uint16{}}
@@ -233,7 +239,7 @@ func writeMarkdown(output string, slice PortInfoSlice) error {
 
 	fmt.Fprintf(&buf, "# Registry of ports\n\n")
 
-	header := []string{"coin", "blockbook internal port", "blockbook public port", "backend rpc port", "backend service ports (zmq)"}
+	header := []string{"coin", "blockbook public", "blockbook internal", "backend rpc", "backend service ports (zmq)"}
 	writeTable(&buf, header, slice)
 
 	fmt.Fprintf(&buf, "\n> NOTE: This document is generated from coin definitions in `configs/coins`.\n")
@@ -263,11 +269,11 @@ func writeTable(w io.Writer, header []string, slice PortInfoSlice) {
 	for i, item := range slice {
 		row := make([]string, len(header))
 		row[0] = item.CoinName
-		if item.BlockbookInternalPort > 0 {
-			row[1] = fmt.Sprintf("%d", item.BlockbookInternalPort)
-		}
 		if item.BlockbookPublicPort > 0 {
-			row[2] = fmt.Sprintf("%d", item.BlockbookPublicPort)
+			row[1] = fmt.Sprintf("%d", item.BlockbookPublicPort)
+		}
+		if item.BlockbookInternalPort > 0 {
+			row[2] = fmt.Sprintf("%d", item.BlockbookInternalPort)
 		}
 		if item.BackendRPCPort > 0 {
 			row[3] = fmt.Sprintf("%d", item.BackendRPCPort)
@@ -284,6 +290,7 @@ func writeTable(w io.Writer, header []string, slice PortInfoSlice) {
 			svcPorts = append(svcPorts, s)
 		}
 
+		sort.Strings(svcPorts)
 		row[4] = strings.Join(svcPorts, ", ")
 
 		rows[i] = row
