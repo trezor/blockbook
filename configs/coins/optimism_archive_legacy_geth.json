@@ -8,7 +8,9 @@
   "ports": {
     "backend_rpc": 8204,
     "backend_http": 8304,
-    "backend_p2p": 38404
+    "backend_p2p": 38404,
+    "blockbook_internal": 9204,
+    "blockbook_public": 9304
   },
   "backend": {
     "package_name": "backend-optimism-archive-legacy-geth",
