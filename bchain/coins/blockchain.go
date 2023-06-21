@@ -11,6 +11,7 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/bchain/coins/arbitrum"
 	"github.com/trezor/blockbook/bchain/coins/avalanche"
 	"github.com/trezor/blockbook/bchain/coins/bch"
 	"github.com/trezor/blockbook/bchain/coins/bellcoin"
@@ -142,6 +143,10 @@ func init() {
 	BlockChainFactories["Polygon Archive"] = polygon.NewPolygonRPC
 	BlockChainFactories["Optimism"] = optimism.NewOptimismRPC
 	BlockChainFactories["Optimism Archive"] = optimism.NewOptimismRPC
+	BlockChainFactories["Arbitrum"] = arbitrum.NewArbitrumRPC
+	BlockChainFactories["Arbitrum Archive"] = arbitrum.NewArbitrumRPC
+	BlockChainFactories["Arbitrum Nova"] = arbitrum.NewArbitrumRPC
+	BlockChainFactories["Arbitrum Nova Archive"] = arbitrum.NewArbitrumRPC
 }
 
 // NewBlockChain creates bchain.BlockChain and bchain.Mempool for the coin passed by the parameter coin

@@ -55,6 +55,10 @@
 | Avalanche Archive                | 9199             | 9099               | 8099        | 38399 p2p                                           |
 | Optimism                         | 9300             | 9200               | 8200        | 38400 p2p, 8300 http, 8400 authrpc                  |
 | Optimism Archive                 | 9302             | 9202               | 8202        | 38402 p2p, 8302 http, 8402 authrpc                  |
+| Arbitrum                         | 9305             | 9205               | 8205        | 38405 p2p, 8305 http                                |
+| Arbitrum Archive                 | 9306             | 9206               | 8306        | 38406 p2p                                           |
+| Arbitrum Nova                    | 9307             | 9207               | 8207        | 38407 p2p, 8307 http                                |
+| Arbitrum Nova Archive            | 9308             | 9208               | 8308        | 38408 p2p                                           |
 | Ethereum Testnet Holesky         | 19116            | 19016              | 18016       | 18116 http, 18516 authrpc, 48316 p2p                |
 | Bitcoin Signet                   | 19120            | 19020              | 18020       | 48320                                               |
 | Bitcoin Regtest                  | 19121            | 19021              | 18021       | 48321                                               |
