@@ -40,6 +40,10 @@
 | BNB Smart Chain Archive          | 9165             | 9065               | 8065        | 38365 p2p, 8165 http                 |
 | Flo                              | 9166             | 9066               | 8066        | 38366                                |
 | Polis                            | 9167             | 9067               | 8067        | 38367                                |
+| Polygon                          | 9170             | 9070               | 8070        | 38370 p2p, 8170 http                 |
+| Polygon Heimdall                 | 9171             | 9071               | 8071        | 38371 p2p, 8171 http                 |
+| Polygon Archive                  | 9172             | 9072               | 8072        | 38372 p2p, 8172 http                 |
+| Polygon Archive Heimdall         | 9173             | 9073               | 8073        | 38373 p2p, 8173 http                 |
 | Qtum                             | 9188             | 9088               | 8088        | 38388                                |
 | Divi Project                     | 9189             | 9089               | 8089        | 38389                                |
 | CPUchain                         | 9190             | 9090               | 8090        | 38390                                |
