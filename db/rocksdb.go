@@ -15,11 +15,11 @@ import (
 	"unsafe"
 
 	vlq "github.com/bsm/go-vlq"
+	"github.com/cryptohub-digital/blockbook-fork/bchain"
+	"github.com/cryptohub-digital/blockbook-fork/common"
 	"github.com/golang/glog"
 	"github.com/juju/errors"
 	"github.com/linxGnu/grocksdb"
-	"github.com/trezor/blockbook/bchain"
-	"github.com/trezor/blockbook/common"
 )
 
 const dbVersion = 6
@@ -134,7 +134,7 @@ func NewRocksDB(path string, cacheSize, maxOpenFiles int, parser bchain.BlockCha
 	chainType := parser.GetChainType()
 	if chainType == bchain.ChainBitcoinType {
 		cfNames = append(cfNames, cfNamesBitcoinType...)
-	} else if chainType == bchain.ChainEthereumType {
+	} else if chainType == bchain.ChainEthereumType ||  chainType == bchain.ChainCoreCoinType {
 		cfNames = append(cfNames, cfNamesEthereumType...)
 		extendedIndex = false
 	} else {
@@ -376,6 +376,21 @@ func (d *RocksDB) ConnectBlock(block *bchain.Block) error {
 			return err
 		}
 		if err := d.storeAndCleanupBlockTxsEthereumType(wb, block, blockTxs); err != nil {
+			return err
+		}
+	} else if chainType == bchain.ChainCoreCoinType {
+		addressContracts := make(map[string]*AddrContracts)
+		blockTxs, err := d.processAddressesCoreCoinType(block, addresses, addressContracts)
+		if err != nil {
+			return err
+		}
+		if err := d.storeAddressContracts(wb, addressContracts); err != nil {
+			return err
+		}
+		if err = d.storeBlockSpecificDataCoreCoinType(wb, block); err != nil {
+			return err
+		}
+		if err := d.storeAndCleanupBlockTxsCoreCoinType(wb, block, blockTxs); err != nil {
 			return err
 		}
 	} else {

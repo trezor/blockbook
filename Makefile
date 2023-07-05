@@ -45,20 +45,20 @@ build-images: clean-images
 	$(MAKE) .bin-image .deb-image
 
 .bin-image:
-	@if [ $$(build/tools/image_status.sh $(BIN_IMAGE):latest build/docker) != "ok" ]; then \
+	# @if [ $$(build/tools/image_status.sh $(BIN_IMAGE):latest build/docker) != "ok" ]; then \
 		echo "Building image $(BIN_IMAGE) from $(BASE_IMAGE)"; \
 		docker build --no-cache=$(NO_CACHE) --build-arg TCMALLOC=$(TCMALLOC) --build-arg BASE_IMAGE=$(BASE_IMAGE) --build-arg PORTABLE_ROCKSDB=$(PORTABLE) -t $(BIN_IMAGE) build/docker/bin; \
-	else \
-		echo "Image $(BIN_IMAGE) is up to date"; \
-	fi
+	# else \
+	# 	echo "Image $(BIN_IMAGE) is up to date"; \
+	# fi
 
 .deb-image: .bin-image
-	@if [ $$(build/tools/image_status.sh $(DEB_IMAGE):latest build/docker) != "ok" ]; then \
+	# @if [ $$(build/tools/image_status.sh $(DEB_IMAGE):latest build/docker) != "ok" ]; then \
 		echo "Building image $(DEB_IMAGE)..."; \
 		docker build --no-cache=$(NO_CACHE) -t $(DEB_IMAGE) build/docker/deb; \
-	else \
-		echo "Image $(DEB_IMAGE) is up to date"; \
-	fi
+	# else \
+		# echo "Image $(DEB_IMAGE) is up to date"; \
+	# fi
 
 clean: clean-bin clean-deb
 

@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/trezor/blockbook/bchain"
+	"github.com/cryptohub-digital/blockbook-fork/bchain"
 )
 
 func Test_parseSimpleStringProperty(t *testing.T) {

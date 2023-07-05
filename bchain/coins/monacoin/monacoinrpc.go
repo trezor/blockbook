@@ -3,9 +3,9 @@ package monacoin
 import (
 	"encoding/json"
 
+	"github.com/cryptohub-digital/blockbook-fork/bchain"
+	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/btc"
 	"github.com/golang/glog"
-	"github.com/trezor/blockbook/bchain"
-	"github.com/trezor/blockbook/bchain/coins/btc"
 )
 
 // MonacoinRPC is an interface to JSON-RPC bitcoind service.

@@ -1,4 +1,4 @@
-module github.com/trezor/blockbook
+module github.com/cryptohub-digital/blockbook-fork
 
 go 1.19
 
@@ -35,6 +35,13 @@ require (
 )
 
 require (
+	github.com/alecthomas/gozmq v0.0.0-20140622232202-d1b01a2df6b2 // indirect
+	github.com/aristanetworks/goarista v0.0.0-20170210015632-ea17b1a17847 // indirect
+	github.com/core-coin/ed448 v1.0.2 // indirect
+	github.com/core-coin/go-goldilocks v1.0.15 // indirect
+)
+
+require (
 	github.com/Groestlcoin/go-groestl-hash v0.0.0-20181012171753-790653ac190c // indirect
 	github.com/PiRK/cashaddr-converter v0.0.0-20220121162910-c6cb45163b29 // indirect
 	github.com/VictoriaMetrics/fastcache v1.10.0 // indirect
@@ -44,6 +51,7 @@ require (
 	github.com/btcsuite/btcd/btcec/v2 v2.3.2 // indirect
 	github.com/btcsuite/btclog v0.0.0-20170628155309-84c8d2346e9f // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
+	github.com/core-coin/go-core/v2 v2.0.6
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dchest/blake256 v1.0.0 // indirect
 	github.com/dchest/siphash v1.2.1 // indirect
@@ -56,6 +64,7 @@ require (
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.1.0 // indirect
 	github.com/decred/dcrd/wire v1.4.0 // indirect
 	github.com/decred/slog v1.1.0 // indirect
+	github.com/flier/gorocksdb v1.1.0
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/go-stack/stack v1.8.1 // indirect
 	github.com/golang/mock v1.6.0 // indirect

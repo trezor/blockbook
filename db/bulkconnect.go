@@ -3,9 +3,10 @@ package db
 import (
 	"time"
 
+	"github.com/cryptohub-digital/blockbook-fork/bchain"
+	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/xcb"
 	"github.com/golang/glog"
 	"github.com/linxGnu/grocksdb"
-	"github.com/trezor/blockbook/bchain"
 )
 
 // bulk connect
@@ -26,6 +27,7 @@ type BulkConnect struct {
 	bulkAddresses      []bulkAddresses
 	bulkAddressesCount int
 	ethBlockTxs        []ethBlockTx
+	xcbBlockTx []xcbBlockTx
 	txAddressesMap     map[string]*TxAddresses
 	balances           map[string]*AddrBalance
 	addressContracts   map[string]*AddrContracts
@@ -351,6 +353,79 @@ func (b *BulkConnect) connectBlockEthereumType(block *bchain.Block, storeBlockTx
 	return nil
 }
 
+func (b *BulkConnect) connectBlockCoreCoinType(block *bchain.Block, storeBlockTxs bool) error {
+	addresses := make(addressesMap)
+	blockTxs, err := b.d.processAddressesCoreCoinType(block, addresses, b.addressContracts)
+	if err != nil {
+		return err
+	}
+	b.xcbBlockTx = append(b.xcbBlockTx, blockTxs...)
+	var storeAddrContracts chan error
+	var sa bool
+	if len(b.addressContracts) > maxBulkAddrContracts {
+		sa = true
+		storeAddrContracts = make(chan error)
+		go b.parallelStoreAddressContracts(storeAddrContracts, false)
+	}
+	b.bulkAddresses = append(b.bulkAddresses, bulkAddresses{
+		bi: BlockInfo{
+			Hash:   block.Hash,
+			Time:   block.Time,
+			Txs:    uint32(len(block.Txs)),
+			Size:   uint32(block.Size),
+			Height: block.Height,
+		},
+		addresses: addresses,
+	})
+	b.bulkAddressesCount += len(addresses)
+	// open WriteBatch only if going to write
+	if sa || b.bulkAddressesCount > maxBulkAddresses || storeBlockTxs {
+		start := time.Now()
+		wb := grocksdb.NewWriteBatch()
+		defer wb.Destroy()
+		bac := b.bulkAddressesCount
+		if sa || b.bulkAddressesCount > maxBulkAddresses {
+			if err = b.storeBulkAddresses(wb); err != nil {
+				return err
+			}
+		}
+		b.xcbBlockTx = b.xcbBlockTx[:0]
+		if err = b.d.storeBlockSpecificDataCoreCoinType(wb, block); err != nil {
+			return err
+		}
+		if storeBlockTxs {
+			if err = b.d.storeAndCleanupBlockTxsCoreCoinType(wb, block, blockTxs); err != nil {
+				return err
+			}
+		}
+		if err = b.d.WriteBatch(wb); err != nil {
+			return err
+		}
+		if bac > b.bulkAddressesCount {
+			glog.Info("rocksdb: height ", b.height, ", stored ", bac, " addresses, done in ", time.Since(start))
+		}
+	} else {
+		// if there are blockSpecificData, store them
+		blockSpecificData, _ := block.CoinSpecificData.(*xcb.CoreCoinBlockSpecificData)
+		if blockSpecificData != nil {
+			wb := grocksdb.NewWriteBatch()
+			defer wb.Destroy()
+			if err = b.d.storeBlockSpecificDataCoreCoinType(wb, block); err != nil {
+				return err
+			}
+			if err := b.d.WriteBatch(wb); err != nil {
+				return err
+			}
+		}
+	}
+	if storeAddrContracts != nil {
+		if err := <-storeAddrContracts; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // ConnectBlock connects block in bulk mode
 func (b *BulkConnect) ConnectBlock(block *bchain.Block, storeBlockTxs bool) error {
 	b.height = block.Height
@@ -358,6 +433,8 @@ func (b *BulkConnect) ConnectBlock(block *bchain.Block, storeBlockTxs bool) erro
 		return b.connectBlockBitcoinType(block, storeBlockTxs)
 	} else if b.chainType == bchain.ChainEthereumType {
 		return b.connectBlockEthereumType(block, storeBlockTxs)
+	} else if b.chainType == bchain.ChainCoreCoinType {
+		return b.connectBlockCoreCoinType(block, storeBlockTxs)
 	}
 	// for default is to connect blocks in non bulk mode
 	return b.d.ConnectBlock(block)
@@ -374,7 +451,7 @@ func (b *BulkConnect) Close() error {
 		go b.parallelStoreTxAddresses(storeTxAddressesChan, true)
 		storeBalancesChan = make(chan error)
 		go b.parallelStoreBalances(storeBalancesChan, true)
-	} else if b.chainType == bchain.ChainEthereumType {
+	} else if b.chainType == bchain.ChainEthereumType || b.chainType == bchain.ChainCoreCoinType {
 		storeAddressContractsChan = make(chan error)
 		go b.parallelStoreAddressContracts(storeAddressContractsChan, true)
 	}

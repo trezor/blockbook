@@ -68,16 +68,17 @@ type ContractInfo struct {
 	DestructedInBlock uint32        `json:"destructedInBlock,omitempty"`
 }
 
-// Ethereum token type names
+// Token type names
 const (
 	ERC20TokenType   TokenTypeName = "ERC20"
 	ERC771TokenType  TokenTypeName = "ERC721"
 	ERC1155TokenType TokenTypeName = "ERC1155"
+	XRC20TokenType  TokenTypeName = "XRC20"
 )
 
-// EthereumTokenTypeMap maps bchain.TokenType to TokenTypeName
+// TokenTypeMap maps bchain.TokenType to TokenTypeName
 // the map must match all bchain.TokenType to avoid index out of range panic
-var EthereumTokenTypeMap = []TokenTypeName{ERC20TokenType, ERC771TokenType, ERC1155TokenType}
+var TokenTypeMap = []TokenTypeName{ERC20TokenType, ERC771TokenType, ERC1155TokenType, XRC20TokenType}
 
 type MultiTokenValue struct {
 	Id    big.Int

@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/trezor/blockbook/common"
+	"github.com/cryptohub-digital/blockbook-fork/common"
 )
 
 // ChainType is type of the blockchain
@@ -19,6 +19,8 @@ const (
 	ChainBitcoinType = ChainType(iota)
 	// ChainEthereumType is blockchain derived from ethereum
 	ChainEthereumType
+	// ChainCoreCoinType is blockchain derived from coreblockchain
+	ChainCoreCoinType
 )
 
 // errors with specific meaning returned by blockchain rpc
@@ -120,7 +122,7 @@ type TokenType int
 
 // TokenType enumeration
 const (
-	FungibleToken    = TokenType(iota) // ERC20/BEP20
+	FungibleToken    = TokenType(iota) // ERC20/BEP20/XRC20
 	NonFungibleToken                   // ERC721/BEP721
 	MultiToken                         // ERC1155/BEP1155
 )
@@ -324,6 +326,12 @@ type BlockChain interface {
 	EthereumTypeEstimateGas(params map[string]interface{}) (uint64, error)
 	EthereumTypeGetErc20ContractBalance(addrDesc, contractDesc AddressDescriptor) (*big.Int, error)
 	GetTokenURI(contractDesc AddressDescriptor, tokenID *big.Int) (string, error)
+	// CoreCoinType specific
+	CoreCoinTypeGetBalance(addrDesc AddressDescriptor) (*big.Int, error)
+	CoreCoinTypeGetNonce(addrDesc AddressDescriptor) (uint64, error)
+	CoreCoinTypeEstimateEnergy(params map[string]interface{}) (uint64, error)
+	CoreCoinTypeGetXrc20ContractInfo(contractDesc AddressDescriptor) (*ContractInfo, error)
+	CoreCoinTypeGetXrc20ContractBalance(addrDesc, contractDesc AddressDescriptor) (*big.Int, error)
 }
 
 // BlockChainParser defines common interface to parsing and conversions of block chain data
@@ -372,6 +380,8 @@ type BlockChainParser interface {
 	DeriveAddressDescriptorsFromTo(descriptor *XpubDescriptor, change uint32, fromIndex uint32, toIndex uint32) ([]AddressDescriptor, error)
 	// EthereumType specific
 	EthereumTypeGetTokenTransfersFromTx(tx *Tx) (TokenTransfers, error)
+	// CoreCoinType specific
+	CoreblockchainTypeGetXrc20FromTx(tx *Tx) (TokenTransfers, error)
 	// AddressAlias
 	FormatAddressAlias(address string, name string) string
 }

@@ -20,12 +20,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cryptohub-digital/blockbook-fork/api"
+	"github.com/cryptohub-digital/blockbook-fork/bchain"
+	"github.com/cryptohub-digital/blockbook-fork/common"
+	"github.com/cryptohub-digital/blockbook-fork/db"
+	"github.com/cryptohub-digital/blockbook-fork/fiat"
 	"github.com/golang/glog"
-	"github.com/trezor/blockbook/api"
-	"github.com/trezor/blockbook/bchain"
-	"github.com/trezor/blockbook/common"
-	"github.com/trezor/blockbook/db"
-	"github.com/trezor/blockbook/fiat"
 )
 
 const txsOnPage = 25
@@ -353,9 +353,9 @@ func (s *PublicServer) newTemplateData(r *http.Request) *TemplateData {
 		TOSLink:          api.Text.TOSLink,
 	}
 	if t.ChainType == bchain.ChainEthereumType {
-		t.FungibleTokenName = bchain.EthereumTokenTypeMap[bchain.FungibleToken]
-		t.NonFungibleTokenName = bchain.EthereumTokenTypeMap[bchain.NonFungibleToken]
-		t.MultiTokenName = bchain.EthereumTokenTypeMap[bchain.MultiToken]
+		t.FungibleTokenName = bchain.TokenTypeMap[bchain.FungibleToken]
+		t.NonFungibleTokenName = bchain.TokenTypeMap[bchain.NonFungibleToken]
+		t.MultiTokenName = bchain.TokenTypeMap[bchain.MultiToken]
 	}
 	if !s.debug {
 		t.Minified = ".min.3"

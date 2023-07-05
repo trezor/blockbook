@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cryptohub-digital/blockbook-fork/api"
+	"github.com/cryptohub-digital/blockbook-fork/common"
 	"github.com/golang/glog"
-	"github.com/trezor/blockbook/api"
-	"github.com/trezor/blockbook/common"
 )
 
 type tpl int

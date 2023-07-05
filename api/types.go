@@ -7,10 +7,11 @@ import (
 	"sort"
 	"time"
 
-	"github.com/trezor/blockbook/bchain"
-	"github.com/trezor/blockbook/bchain/coins/eth"
-	"github.com/trezor/blockbook/common"
-	"github.com/trezor/blockbook/db"
+	"github.com/cryptohub-digital/blockbook-fork/bchain"
+	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/eth"
+	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/xcb"
+	"github.com/cryptohub-digital/blockbook-fork/common"
+	"github.com/cryptohub-digital/blockbook-fork/db"
 )
 
 const maxUint32 = ^uint32(0)
@@ -237,6 +238,16 @@ type EthereumSpecific struct {
 	InternalTransfers []EthereumInternalTransfer             `json:"internalTransfers,omitempty"`
 }
 
+// CoreCoinSpecific contains core coin specific transaction data
+type CoreCoinSpecific struct {
+	Status            xcb.TxStatus                           `json:"status"` // 1 OK, 0 Fail, -1 pending
+	Nonce             uint64                                 `json:"nonce"`
+	EnergyLimit          *big.Int                               `json:"energyLimit"`
+	EnergyUsed           *big.Int                               `json:"energyUsed,omitempty"`
+	EnergyPrice          *Amount                                `json:"energyPrice"`
+	Data              string                                 `json:"data,omitempty"`
+}
+
 type AddressAlias struct {
 	Type  string
 	Alias string
@@ -266,6 +277,7 @@ type Tx struct {
 	CoinSpecificData       json.RawMessage   `json:"coinSpecificData,omitempty" ts_type:"any"`
 	TokenTransfers         []TokenTransfer   `json:"tokenTransfers,omitempty"`
 	EthereumSpecific       *EthereumSpecific `json:"ethereumSpecific,omitempty"`
+	CoreCoinSpecific *CoreCoinSpecific `json:"corecoinSpecific,omitempty"`
 	AddressAliases         AddressAliasesMap `json:"addressAliases,omitempty"`
 }
 

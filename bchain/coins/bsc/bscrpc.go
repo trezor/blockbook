@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/cryptohub-digital/blockbook-fork/bchain"
+	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/eth"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/golang/glog"
 	"github.com/juju/errors"
-	"github.com/trezor/blockbook/bchain"
-	"github.com/trezor/blockbook/bchain/coins/eth"
 )
 
 const (
@@ -34,8 +34,8 @@ func NewBNBSmartChainRPC(config json.RawMessage, pushHandler func(bchain.Notific
 		return nil, err
 	}
 
-	// overwrite EthereumTokenTypeMap with bsc specific token type names
-	bchain.EthereumTokenTypeMap = []bchain.TokenTypeName{BEP20TokenType, BEP721TokenType, BEP1155TokenType}
+	// overwrite TokenTypeMap with bsc specific token type names
+	bchain.TokenTypeMap = []bchain.TokenTypeName{BEP20TokenType, BEP721TokenType, BEP1155TokenType}
 
 	s := &BNBSmartChainRPC{
 		EthereumRPC: c.(*eth.EthereumRPC),

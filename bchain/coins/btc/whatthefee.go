@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cryptohub-digital/blockbook-fork/bchain"
 	"github.com/golang/glog"
 	"github.com/juju/errors"
-	"github.com/trezor/blockbook/bchain"
 )
 
 // https://whatthefee.io returns

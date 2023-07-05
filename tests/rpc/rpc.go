@@ -13,7 +13,7 @@ import (
 
 	mapset "github.com/deckarep/golang-set"
 	"github.com/juju/errors"
-	"github.com/trezor/blockbook/bchain"
+	"github.com/cryptohub-digital/blockbook-fork/bchain"
 )
 
 var testMap = map[string]func(t *testing.T, th *TestHandler){

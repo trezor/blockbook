@@ -5,14 +5,14 @@ import (
 	"math/big"
 )
 
-// BaseChain is base type for bchain.BlockChain
+// BaseChain is base type for BlockChain
 type BaseChain struct {
 	Parser  BlockChainParser
 	Testnet bool
 	Network string
 }
 
-// TODO more bchain.BlockChain methods
+// TODO more BlockChain methods
 
 // GetChainParser returns BlockChainParser
 func (b *BaseChain) GetChainParser() BlockChainParser {
@@ -67,4 +67,29 @@ func (b *BaseChain) EthereumTypeGetErc20ContractBalance(addrDesc, contractDesc A
 // GetContractInfo returns URI of non fungible or multi token defined by token id
 func (p *BaseChain) GetTokenURI(contractDesc AddressDescriptor, tokenID *big.Int) (string, error) {
 	return "", errors.New("Not supported")
+}
+
+// CoreCoinTypeGetBalance is not supported
+func (cp *BaseChain) CoreCoinTypeGetBalance(addrDesc AddressDescriptor) (*big.Int, error) {
+	return nil, errors.New("Not supported")
+}
+
+// CoreCoinTypeGetNonce is not supported
+func (cp *BaseChain) CoreCoinTypeGetNonce(addrDesc AddressDescriptor) (uint64, error){
+	return 0, errors.New("Not supported")
+}
+
+// CoreCoinTypeEstimateEnergy is not supported
+func (cp *BaseChain) CoreCoinTypeEstimateEnergy(params map[string]interface{}) (uint64, error){
+	return 0, errors.New("Not supported")
+}
+
+// CoreCoinTypeGetXrc20ContractBalance is not supported
+func (cp *BaseChain) CoreCoinTypeGetXrc20ContractBalance(addrDesc, contractDesc AddressDescriptor) (*big.Int, error){
+	return nil, errors.New("Not supported")
+}
+
+// CoreCoinTypeGetXrc20ContractInfo is not supported
+func (cp *BaseChain) CoreCoinTypeGetXrc20ContractInfo(contractDesc AddressDescriptor) (*ContractInfo, error) {
+	return nil, errors.New("Not supported")
 }

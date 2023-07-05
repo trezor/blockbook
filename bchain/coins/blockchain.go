@@ -9,52 +9,52 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/cryptohub-digital/blockbook-fork/bchain"
+	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/avalanche"
+	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/bch"
+	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/bellcoin"
+	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/bitcore"
+	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/bitzeny"
+	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/bsc"
+	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/btc"
+	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/btg"
+	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/cpuchain"
+	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/dash"
+	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/dcr"
+	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/deeponion"
+	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/digibyte"
+	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/divi"
+	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/dogecoin"
+	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/ecash"
+	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/eth"
+	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/firo"
+	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/flo"
+	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/fujicoin"
+	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/gamecredits"
+	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/grs"
+	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/koto"
+	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/liquid"
+	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/litecoin"
+	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/monacoin"
+	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/monetaryunit"
+	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/myriad"
+	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/namecoin"
+	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/nuls"
+	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/omotenashicoin"
+	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/pivx"
+	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/polis"
+	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/qtum"
+	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/ravencoin"
+	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/ritocoin"
+	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/snowgem"
+	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/trezarcoin"
+	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/unobtanium"
+	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/vertcoin"
+	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/viacoin"
+	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/vipstarcoin"
+	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/zec"
+	"github.com/cryptohub-digital/blockbook-fork/common"
 	"github.com/juju/errors"
-	"github.com/trezor/blockbook/bchain"
-	"github.com/trezor/blockbook/bchain/coins/avalanche"
-	"github.com/trezor/blockbook/bchain/coins/bch"
-	"github.com/trezor/blockbook/bchain/coins/bellcoin"
-	"github.com/trezor/blockbook/bchain/coins/bitcore"
-	"github.com/trezor/blockbook/bchain/coins/bitzeny"
-	"github.com/trezor/blockbook/bchain/coins/bsc"
-	"github.com/trezor/blockbook/bchain/coins/btc"
-	"github.com/trezor/blockbook/bchain/coins/btg"
-	"github.com/trezor/blockbook/bchain/coins/cpuchain"
-	"github.com/trezor/blockbook/bchain/coins/dash"
-	"github.com/trezor/blockbook/bchain/coins/dcr"
-	"github.com/trezor/blockbook/bchain/coins/deeponion"
-	"github.com/trezor/blockbook/bchain/coins/digibyte"
-	"github.com/trezor/blockbook/bchain/coins/divi"
-	"github.com/trezor/blockbook/bchain/coins/dogecoin"
-	"github.com/trezor/blockbook/bchain/coins/ecash"
-	"github.com/trezor/blockbook/bchain/coins/eth"
-	"github.com/trezor/blockbook/bchain/coins/firo"
-	"github.com/trezor/blockbook/bchain/coins/flo"
-	"github.com/trezor/blockbook/bchain/coins/fujicoin"
-	"github.com/trezor/blockbook/bchain/coins/gamecredits"
-	"github.com/trezor/blockbook/bchain/coins/grs"
-	"github.com/trezor/blockbook/bchain/coins/koto"
-	"github.com/trezor/blockbook/bchain/coins/liquid"
-	"github.com/trezor/blockbook/bchain/coins/litecoin"
-	"github.com/trezor/blockbook/bchain/coins/monacoin"
-	"github.com/trezor/blockbook/bchain/coins/monetaryunit"
-	"github.com/trezor/blockbook/bchain/coins/myriad"
-	"github.com/trezor/blockbook/bchain/coins/namecoin"
-	"github.com/trezor/blockbook/bchain/coins/nuls"
-	"github.com/trezor/blockbook/bchain/coins/omotenashicoin"
-	"github.com/trezor/blockbook/bchain/coins/pivx"
-	"github.com/trezor/blockbook/bchain/coins/polis"
-	"github.com/trezor/blockbook/bchain/coins/qtum"
-	"github.com/trezor/blockbook/bchain/coins/ravencoin"
-	"github.com/trezor/blockbook/bchain/coins/ritocoin"
-	"github.com/trezor/blockbook/bchain/coins/snowgem"
-	"github.com/trezor/blockbook/bchain/coins/trezarcoin"
-	"github.com/trezor/blockbook/bchain/coins/unobtanium"
-	"github.com/trezor/blockbook/bchain/coins/vertcoin"
-	"github.com/trezor/blockbook/bchain/coins/viacoin"
-	"github.com/trezor/blockbook/bchain/coins/vipstarcoin"
-	"github.com/trezor/blockbook/bchain/coins/zec"
-	"github.com/trezor/blockbook/common"
 )
 
 type blockChainFactory func(config json.RawMessage, pushHandler func(bchain.NotificationType)) (bchain.BlockChain, error)
@@ -341,6 +341,31 @@ func (c *blockChainWithMetrics) EthereumTypeGetErc20ContractBalance(addrDesc, co
 func (c *blockChainWithMetrics) GetTokenURI(contractDesc bchain.AddressDescriptor, tokenID *big.Int) (v string, err error) {
 	defer func(s time.Time) { c.observeRPCLatency("GetTokenURI", s, err) }(time.Now())
 	return c.b.GetTokenURI(contractDesc, tokenID)
+}
+
+func (c *blockChainWithMetrics) CoreCoinTypeGetBalance(addrDesc bchain.AddressDescriptor) (v *big.Int, err error) {
+	defer func(s time.Time) { c.observeRPCLatency("CoreCoinTypeGetBalance", s, err) }(time.Now())
+	return c.b.CoreCoinTypeGetBalance(addrDesc)
+}
+
+func (c *blockChainWithMetrics) CoreCoinTypeGetNonce(addrDesc bchain.AddressDescriptor) (v uint64, err error){
+	defer func(s time.Time) { c.observeRPCLatency("CoreCoinTypeGetNonce", s, err) }(time.Now())
+	return c.b.CoreCoinTypeGetNonce(addrDesc)
+}
+
+func (c *blockChainWithMetrics) CoreCoinTypeEstimateEnergy(params map[string]interface{}) (v uint64, err error){
+	defer func(s time.Time) { c.observeRPCLatency("CoreCoinTypeEstimateEnergy", s, err) }(time.Now())
+	return c.b.CoreCoinTypeEstimateEnergy(params)
+}
+
+func (c *blockChainWithMetrics) CoreCoinTypeGetXrc20ContractBalance(addrDesc, contractDesc bchain.AddressDescriptor) (v *big.Int, err error){
+	defer func(s time.Time) { c.observeRPCLatency("CoreCoinTypeGetXrc20ContractBalance", s, err) }(time.Now())
+	return c.b.CoreCoinTypeGetXrc20ContractBalance(addrDesc, contractDesc)
+}
+
+func (c *blockChainWithMetrics) CoreCoinTypeGetXrc20ContractInfo(contractDesc bchain.AddressDescriptor) (v *bchain.ContractInfo, err error) {
+	defer func(s time.Time) { c.observeRPCLatency("CoreCoinTypeGetXrc20ContractInfo", s, err) }(time.Now())
+	return c.b.CoreCoinTypeGetXrc20ContractInfo(contractDesc)
 }
 
 type mempoolWithMetrics struct {

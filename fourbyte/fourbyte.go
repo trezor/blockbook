@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cryptohub-digital/blockbook-fork/bchain"
+	"github.com/cryptohub-digital/blockbook-fork/db"
 	"github.com/golang/glog"
 	"github.com/linxGnu/grocksdb"
-	"github.com/trezor/blockbook/bchain"
-	"github.com/trezor/blockbook/db"
 )
 
 // Coingecko is a structure that implements RatesDownloaderInterface

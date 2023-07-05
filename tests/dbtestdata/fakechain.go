@@ -6,7 +6,7 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/trezor/blockbook/bchain"
+	"github.com/cryptohub-digital/blockbook-fork/bchain"
 )
 
 type fakeBlockChain struct {
@@ -215,5 +215,22 @@ func (c *fakeBlockChain) GetChainParser() bchain.BlockChainParser {
 
 // GetMempoolTransactions returns transactions in mempool
 func (c *fakeBlockChain) GetMempoolTransactions() ([]string, error) {
+	return nil, errors.New("Not implemented")
+}
+
+func (c *fakeBlockChain) CoreCoinTypeGetBalance(addrDesc bchain.AddressDescriptor) (*big.Int, error) {
+	return nil, errors.New("Not implemented")
+}
+func (c *fakeBlockChain) CoreCoinTypeGetNonce(addrDesc bchain.AddressDescriptor) (uint64, error){
+	return 0, errors.New("Not implemented")
+}
+func (c *fakeBlockChain) CoreCoinTypeEstimateEnergy(params map[string]interface{}) (uint64, error){
+	return 0, errors.New("Not implemented")
+}
+func (c *fakeBlockChain) CoreCoinTypeGetXrc20ContractBalance(addrDesc, contractDesc bchain.AddressDescriptor) (*big.Int, error){
+	return nil, errors.New("Not implemented")
+}
+
+func (c *fakeBlockChain) CoreCoinTypeGetXrc20ContractInfo(contractDesc bchain.AddressDescriptor) (*bchain.ContractInfo, error) {
 	return nil, errors.New("Not implemented")
 }

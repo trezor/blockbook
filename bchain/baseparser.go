@@ -6,9 +6,9 @@ import (
 	"math/big"
 	"strings"
 
+	"github.com/cryptohub-digital/blockbook-fork/common"
 	"github.com/golang/glog"
 	"github.com/juju/errors"
-	"github.com/trezor/blockbook/common"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -321,4 +321,9 @@ func (p *BaseParser) EthereumTypeGetTokenTransfersFromTx(tx *Tx) (TokenTransfers
 // FormatAddressAlias makes possible to do coin specific formatting to an address alias
 func (p *BaseParser) FormatAddressAlias(address string, name string) string {
 	return name
+}
+
+// CoreblockchainTypeGetXrc20FromTx is unsupported
+func (p *BaseParser) CoreblockchainTypeGetXrc20FromTx(tx *Tx) (TokenTransfers, error) {
+	return nil, errors.New("Not supported")
 }
