@@ -318,7 +318,7 @@ func (p *PivXParser) PivxDecode(MsgTx *wire.MsgTx, r *bytes.Reader, pver uint32,
 	version := uint32(MsgTx.Version)
 	txVersion := version & 0xffff
 
-	if txVersion == 3 {
+	if txVersion >= 3 {
 		// valueBalance
 		r.Seek(9, io.SeekCurrent)
 
