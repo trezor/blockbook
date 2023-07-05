@@ -48,6 +48,7 @@ import (
 	"github.com/trezor/blockbook/bchain/coins/qtum"
 	"github.com/trezor/blockbook/bchain/coins/ravencoin"
 	"github.com/trezor/blockbook/bchain/coins/ritocoin"
+	"github.com/trezor/blockbook/bchain/coins/rsk"
 	"github.com/trezor/blockbook/bchain/coins/snowgem"
 	"github.com/trezor/blockbook/bchain/coins/trezarcoin"
 	"github.com/trezor/blockbook/bchain/coins/unobtanium"
@@ -140,6 +141,7 @@ func init() {
 	BlockChainFactories["BNB Smart Chain Archive"] = bsc.NewBNBSmartChainRPC
 	BlockChainFactories["Polygon"] = polygon.NewPolygonRPC
 	BlockChainFactories["Polygon Archive"] = polygon.NewPolygonRPC
+	BlockChainFactories["Rsk"] = rsk.NewRskRPC
 }
 
 // GetCoinNameFromConfig gets coin name and coin shortcut from config file

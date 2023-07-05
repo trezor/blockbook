@@ -155,6 +155,10 @@
         "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "MempoolSync", "EstimateSmartFee",
                 "EstimateFee", "GetBestBlockHash", "GetBestBlockHeight", "GetBlockHeader"]
     },
+    "rsk": {
+      "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "EstimateFee", "GetBestBlockHash", "GetBestBlockHeight",
+        "GetBlockHeader"]
+    },
     "vertcoin": {
         "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",
                 "EstimateSmartFee", "EstimateFee", "GetBestBlockHash", "GetBestBlockHeight", "GetBlockHeader"],
