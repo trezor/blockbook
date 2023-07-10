@@ -29,7 +29,7 @@
     "verification_source": "198d13a8676714f289e5707dba3f45c6c2dbc5daa1a08c669e64a41df2fe330a",
     "extract_command": "sh -c 'cp \"$$1\" backend/' fake-extract",
     "exclude_files": [],
-    "exec_command_template": "/bin/sh -c 'java -Xmx4G -Xms1024m -Ddatabase.dir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -Drpc.providers.web.http.port={{.Ports.BackendRPC}} -Drpc.providers.web.ws.enabled=true  -Drpc.providers.web.ws.port=4445 -Drpc.providers.web.cors=\"*\" -Dlogback.configurationFile=~/backend/logback.xml -cp {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/rskj-core-5.0.0-FINGERROOT-all co.rsk.Start 2>>{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
+    "exec_command_template": "/bin/sh -c 'java -Xmx4G -Xms1024m -Ddatabase.dir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -Drpc.providers.web.http.port={{.Ports.BackendRPC}} -Drpc.providers.web.ws.enabled=true  -Drpc.providers.web.ws.port=4445 -Drpc.providers.web.cors=\"*\" -Dlogback.configurationFile=~/backend/logback.xml -cp {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/rskj-core-5.0.0-FINGERROOT-all.jar co.rsk.Start 2>>{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
     "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
     "postinst_script_template": "",
     "service_type": "simple",
