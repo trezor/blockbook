@@ -1,8 +1,8 @@
 {
   "coin": {
-    "name": "RSK",
-    "shortcut": "RSK",
-    "label": "RSK",
+    "name": "Rsk",
+    "shortcut": "Rsk",
+    "label": "Rsk",
     "alias": "rsk"
   },
   "ports": {
