@@ -169,7 +169,7 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 
 	var apiDefault int
 	// ethereum supports only api V2
-	if s.chainParser.GetChainType() == bchain.ChainEthereumType {
+	if s.chainParser.GetChainType() == bchain.ChainEthereumType || s.chainParser.GetChainType() == bchain.ChainCoreCoinType {
 		apiDefault = apiV2
 	} else {
 		apiDefault = apiV1
@@ -352,7 +352,7 @@ func (s *PublicServer) newTemplateData(r *http.Request) *TemplateData {
 		InternalExplorer: s.internalExplorer && !s.is.InitialSync,
 		TOSLink:          api.Text.TOSLink,
 	}
-	if t.ChainType == bchain.ChainEthereumType {
+	if t.ChainType == bchain.ChainEthereumType || t.ChainType == bchain.ChainCoreCoinType {
 		t.FungibleTokenName = bchain.TokenTypeMap[bchain.FungibleToken]
 		t.NonFungibleTokenName = bchain.TokenTypeMap[bchain.NonFungibleToken]
 		t.MultiTokenName = bchain.TokenTypeMap[bchain.MultiToken]
@@ -542,10 +542,17 @@ func (s *PublicServer) parseTemplates() []*template.Template {
 		t[addressTpl] = createTemplate("./static/templates/address.html", "./static/templates/txdetail_ethereumtype.html", "./static/templates/paging.html", "./static/templates/base.html")
 		t[blockTpl] = createTemplate("./static/templates/block.html", "./static/templates/txdetail_ethereumtype.html", "./static/templates/paging.html", "./static/templates/base.html")
 		t[nftDetailTpl] = createTemplate("./static/templates/tokenDetail.html", "./static/templates/base.html")
+	} else if s.chainParser.GetChainType() == bchain.ChainCoreCoinType {
+		t[txTpl] = createTemplate("./static/templates/tx.html", "./static/templates/txdetail_corecointype.html", "./static/templates/base.html")
+		t[addressTpl] = createTemplate("./static/templates/address.html", "./static/templates/txdetail_corecointype.html", "./static/templates/paging.html", "./static/templates/base.html")
+		t[blockTpl] = createTemplate("./static/templates/block.html", "./static/templates/txdetail_corecointype.html", "./static/templates/paging.html", "./static/templates/base.html")
+		t[nftDetailTpl] = createTemplate("./static/templates/tokenDetail.html", "./static/templates/base.html")
+
 	} else {
 		t[txTpl] = createTemplate("./static/templates/tx.html", "./static/templates/txdetail.html", "./static/templates/base.html")
 		t[addressTpl] = createTemplate("./static/templates/address.html", "./static/templates/txdetail.html", "./static/templates/paging.html", "./static/templates/base.html")
 		t[blockTpl] = createTemplate("./static/templates/block.html", "./static/templates/txdetail.html", "./static/templates/paging.html", "./static/templates/base.html")
+
 	}
 	t[xpubTpl] = createTemplate("./static/templates/xpub.html", "./static/templates/txdetail.html", "./static/templates/paging.html", "./static/templates/base.html")
 	t[mempoolTpl] = createTemplate("./static/templates/mempool.html", "./static/templates/paging.html", "./static/templates/base.html")
@@ -616,7 +623,7 @@ func (s *PublicServer) amountSpan(a *api.Amount, td *TemplateData, classes strin
 
 func (s *PublicServer) amountSatsSpan(a *api.Amount, td *TemplateData, classes string) template.HTML {
 	var sats string
-	if s.chainParser.GetChainType() == bchain.ChainEthereumType {
+	if s.chainParser.GetChainType() == bchain.ChainEthereumType || s.chainParser.GetChainType() == bchain.ChainCoreCoinType {
 		sats = a.DecimalString(9) // Gwei
 	} else {
 		sats = a.String()
@@ -687,7 +694,9 @@ func (s *PublicServer) tokenAmountSpan(t *api.TokenTransfer, td *TemplateData, c
 }
 
 func (s *PublicServer) formattedAmountSpan(a *api.Amount, d int, symbol string, td *TemplateData, classes string) template.HTML {
+	fmt.Println("amount", a, "decimals", d, "symbol", symbol, "data", td)
 	if symbol == td.CoinShortcut {
+		fmt.Println("tuuuuuuuut")
 		d = s.chainParser.AmountDecimals()
 	}
 	value := formatAmountWithDecimals(a, d)
@@ -699,17 +708,22 @@ func (s *PublicServer) formattedAmountSpan(a *api.Amount, d int, symbol string, 
 func (s *PublicServer) summaryValuesSpan(baseValue float64, secondaryValue float64, td *TemplateData) template.HTML {
 	var rv strings.Builder
 	if secondaryValue > 0 {
+		fmt.Println("tuuuuuuuut2")
+
 		appendAmountSpan(&rv, "", formatSecondaryAmount(secondaryValue, td), td.SecondaryCoin, "")
-		if baseValue > 0 && s.chainParser.GetChainType() == bchain.ChainEthereumType {
+		if baseValue > 0 && (s.chainParser.GetChainType() == bchain.ChainEthereumType || s.chainParser.GetChainType() == bchain.ChainCoreCoinType) {
 			rv.WriteString(`<span class="base-value">(`)
 			appendAmountSpan(&rv, "", strconv.FormatFloat(baseValue, 'f', 6, 64), td.CoinShortcut, "")
 			rv.WriteString(")</span>")
 		}
 	} else {
 		if baseValue > 0 {
+			fmt.Println("tuuuuuuuut3")
 			appendAmountSpan(&rv, "", strconv.FormatFloat(baseValue, 'f', 6, 64), td.CoinShortcut, "")
 		} else {
 			if td.SecondaryCoin != "" {
+				fmt.Println("tuuuuuuuut4")
+
 				rv.WriteString("-")
 			}
 		}
@@ -798,11 +812,15 @@ func isOwnAddress(td *TemplateData, a string) bool {
 // called from template, returns count of token transfers of given type in a tx
 func tokenTransfersCount(tx *api.Tx, t bchain.TokenTypeName) int {
 	count := 0
+	fmt.Println(tx.TokenTransfers)
 	for i := range tx.TokenTransfers {
+		fmt.Println(tx.TokenTransfers[i].Type)
 		if tx.TokenTransfers[i].Type == t {
 			count++
 		}
 	}
+	fmt.Println(count)
+	fmt.Println(t)
 	return count
 }
 
@@ -943,6 +961,8 @@ func (s *PublicServer) explorerAddress(w http.ResponseWriter, r *http.Request) (
 	if err != nil {
 		return errorTpl, nil, err
 	}
+	fmt.Println("11111")
+	fmt.Println(address.Tokens)
 	data.AddrStr = address.AddrStr
 	data.Address = address
 	data.Page = address.Page

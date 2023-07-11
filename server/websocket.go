@@ -597,6 +597,26 @@ func (s *WebsocketServer) estimateFee(c *websocketChannel, params []byte) (inter
 			fee.Mul(&fee, new(big.Int).SetUint64(gas))
 			res[i].FeePerTx = fee.String()
 		}
+	} else if s.chainParser.GetChainType() == bchain.ChainCoreCoinType {
+		energy, err := s.chain.CoreCoinTypeEstimateEnergy(r.Specific)
+		if err != nil {
+			return nil, err
+		}
+		sg := strconv.FormatUint(energy, 10)
+		b := 1
+		if len(r.Blocks) > 0 {
+			b = r.Blocks[0]
+		}
+		fee, err := s.api.EstimateFee(b, true)
+		if err != nil {
+			return nil, err
+		}
+		for i := range r.Blocks {
+			res[i].FeePerUnit = fee.String()
+			res[i].FeeLimit = sg
+			fee.Mul(&fee, new(big.Int).SetUint64(energy))
+			res[i].FeePerTx = fee.String()
+		}
 	} else {
 		conservative := true
 		v, ok := r.Specific["conservative"]

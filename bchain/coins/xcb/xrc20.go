@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"fmt"
 	"math/big"
 	"strings"
 	"sync"
 	"unicode/utf8"
 
 	"github.com/core-coin/go-core/v2/common"
+	"github.com/core-coin/go-core/v2/common/hexutil"
 	"github.com/golang/glog"
 	"github.com/juju/errors"
 
@@ -30,7 +32,6 @@ var xrc20abi = `[{"constant":true,"inputs":[],"name":"name","outputs":[{"name":"
 {"inputs":[{"name":"_initialAmount","type":"uint256"},{"name":"_tokenName","type":"string"},{"name":"_decimalUnits","type":"uint8"},{"name":"_tokenSymbol","type":"string"}],"payable":false,"type":"constructor"},
 {"constant":false,"inputs":[{"name":"_spender","type":"address"},{"name":"_value","type":"uint256"},{"name":"_extraData","type":"bytes"}],"name":"approveAndCall","outputs":[{"name":"success","type":"bool"}],"payable":false,"type":"function","signature":"0xcae9ca51"},
 {"constant":true,"inputs":[],"name":"version","outputs":[{"name":"","type":"string"}],"payable":false,"type":"function","signature":"0x54fd4d50"}]`
-
 
 // doing the parsing/processing without using go-core/accounts/abi library, it is simple to get data from Transfer event
 const xrc20TransferMethodSignature = "0x4b40e901"
@@ -79,8 +80,8 @@ func xrc20GetTransfersFromLog(logs []*RpcLog) (bchain.TokenTransfers, error) {
 				Contract: l.Address,
 				From:     from,
 				To:       to,
-				Value:   t,
-				Type: bchain.FungibleToken,
+				Value:    t,
+				Type:     bchain.FungibleToken,
 			})
 		}
 	}
@@ -89,7 +90,7 @@ func xrc20GetTransfersFromLog(logs []*RpcLog) (bchain.TokenTransfers, error) {
 
 func xrc20GetTransfersFromTx(tx *RpcTransaction) (bchain.TokenTransfers, error) {
 	var r bchain.TokenTransfers
-	if len(tx.Payload) % (128+len(xrc20TransferMethodSignature)) == 0 && strings.HasPrefix(tx.Payload, xrc20TransferMethodSignature) {
+	if len(tx.Payload)%(128+len(xrc20TransferMethodSignature)) == 0 && strings.HasPrefix(tx.Payload, xrc20TransferMethodSignature) {
 		to, err := addressFromPaddedHex(tx.Payload[len(xrc20TransferMethodSignature) : 64+len(xrc20TransferMethodSignature)])
 		if err != nil {
 			return nil, err
@@ -103,8 +104,8 @@ func xrc20GetTransfersFromTx(tx *RpcTransaction) (bchain.TokenTransfers, error) 
 			Contract: tx.To,
 			From:     tx.From,
 			To:       to,
-			Value:   t,
-			Type: bchain.FungibleToken,
+			Value:    t,
+			Type:     bchain.FungibleToken,
 		})
 	}
 	return r, nil
@@ -182,12 +183,16 @@ func parsexrc20StringProperty(contractDesc bchain.AddressDescriptor, data string
 
 // CoreCoinTypeGetXrc20ContractInfo returns information about xrc20 contract
 func (b *CoreblockchainRPC) CoreCoinTypeGetXrc20ContractInfo(contractDesc bchain.AddressDescriptor) (*bchain.ContractInfo, error) {
-	cds := string(contractDesc)
+	cds, err := b.Parser.GetAddrDescFromAddress(common.Bytes2Hex(contractDesc[:]))
+	if err != nil {
+		return nil, err
+	}
 	cachedContractsMux.Lock()
-	contract, found := cachedContracts[cds]
+	contract, found := cachedContracts[common.Bytes2Hex(cds)]
 	cachedContractsMux.Unlock()
+
 	if !found {
-		address, err := common.HexToAddress(cds)
+		address, err := common.HexToAddress(common.Bytes2Hex(cds))
 		if err != nil {
 			return nil, err
 		}
@@ -218,7 +223,7 @@ func (b *CoreblockchainRPC) CoreCoinTypeGetXrc20ContractInfo(contractDesc bchain
 				Contract: address.Hex(),
 				Name:     name,
 				Symbol:   symbol,
-				Type: bchain.XRC20TokenType,
+				Type:     bchain.XRC20TokenType,
 			}
 			d := parsexrc20NumericProperty(contractDesc, data)
 			if d != nil {
@@ -230,7 +235,7 @@ func (b *CoreblockchainRPC) CoreCoinTypeGetXrc20ContractInfo(contractDesc bchain
 			contract = nil
 		}
 		cachedContractsMux.Lock()
-		cachedContracts[cds] = contract
+		cachedContracts[common.Bytes2Hex(cds)] = contract
 		cachedContractsMux.Unlock()
 	}
 	return contract, nil
@@ -238,22 +243,28 @@ func (b *CoreblockchainRPC) CoreCoinTypeGetXrc20ContractInfo(contractDesc bchain
 
 // CoreCoinTypeGetXrc20ContractBalance returns balance of xrc20 contract for given address
 func (b *CoreblockchainRPC) CoreCoinTypeGetXrc20ContractBalance(addrDesc, contractDesc bchain.AddressDescriptor) (*big.Int, error) {
-	addr, err := common.HexToAddress(string(addrDesc))
+	addr := cutAddress(addrDesc)
+	contract := "0x" + cutAddress(contractDesc)
+
+	req := xrc20BalanceOf + "0000000000000000000000000000000000000000000000000000000000000000"[len(addr):] + addr
+	data, err := b.xcbCall(req, contract)
 	if err != nil {
 		return nil, err
 	}
-	contract, err := common.HexToAddress("0x" + string(contractDesc))
-	if err != nil {
-		return nil, err
-	}
-	req := xrc20BalanceOf + "0000000000000000000000000000000000000000000000000000000000000000"[len(addr):] + addr.Hex()
-	data, err := b.xcbCall(req, contract.String())
-	if err != nil {
-		return nil, err
-	}
+	fmt.Println(data)
 	r := parsexrc20NumericProperty(contractDesc, data)
 	if r == nil {
 		return nil, errors.New("Invalid balance")
 	}
 	return r, nil
+}
+
+func cutAddress(addrDesc bchain.AddressDescriptor) string {
+	raw := hexutil.Encode(addrDesc)
+
+	if len(raw) > 2 {
+		raw = raw[2:]
+	}
+
+	return raw
 }

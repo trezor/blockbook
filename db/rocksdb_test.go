@@ -14,12 +14,12 @@ import (
 	"testing"
 
 	vlq "github.com/bsm/go-vlq"
-	"github.com/juju/errors"
-	"github.com/martinboehm/btcutil/chaincfg"
 	"github.com/cryptohub-digital/blockbook-fork/bchain"
 	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/btc"
 	"github.com/cryptohub-digital/blockbook-fork/common"
 	"github.com/cryptohub-digital/blockbook-fork/tests/dbtestdata"
+	"github.com/juju/errors"
+	"github.com/martinboehm/btcutil/chaincfg"
 )
 
 // simplified explanation of signed varint packing, used in many index data structures

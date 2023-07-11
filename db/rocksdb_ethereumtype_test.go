@@ -8,12 +8,12 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/juju/errors"
-	"github.com/linxGnu/grocksdb"
 	"github.com/cryptohub-digital/blockbook-fork/bchain"
 	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/eth"
 	"github.com/cryptohub-digital/blockbook-fork/common"
 	"github.com/cryptohub-digital/blockbook-fork/tests/dbtestdata"
+	"github.com/juju/errors"
+	"github.com/linxGnu/grocksdb"
 )
 
 type testEthereumParser struct {

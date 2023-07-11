@@ -115,5 +115,10 @@ type CVMNewTxSubscriber interface {
 
 // CoreCoinBlockSpecificData contain data specific for Ethereum block
 type CoreCoinBlockSpecificData struct {
-	Contracts           []bchain.ContractInfo
+	Contracts []bchain.ContractInfo
 }
+
+const (
+	// xrc token type names
+	XRC20TokenType bchain.TokenTypeName = "XRC20"
+)

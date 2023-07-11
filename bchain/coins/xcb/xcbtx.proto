@@ -1,7 +1,7 @@
 syntax = "proto3";
-	package eth;
+	package xcb;
 		
-	message ProtoCompleteTransaction {
+	message ProtoXCBCompleteTransaction {
         message TxType {
             uint64 AccountNonce = 1;
             bytes EnergyPrice = 2;

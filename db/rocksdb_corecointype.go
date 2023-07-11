@@ -103,7 +103,6 @@ func (d *RocksDB) GetCoreCoinAddrDescContracts(addrDesc bchain.AddressDescriptor
 	return unpackCoreCoinAddrContracts(buf, addrDesc)
 }
 
-
 // func isZeroAddress(addrDesc bchain.AddressDescriptor) bool {
 // 	for _, b := range addrDesc {
 // 		if b != 0 {
@@ -112,7 +111,6 @@ func (d *RocksDB) GetCoreCoinAddrDescContracts(addrDesc bchain.AddressDescriptor
 // 	}
 // 	return true
 // }
-
 
 // addToAddressesMapCoreCoinType maintains mapping between addresses and transactions in one block
 // it ensures that each index is there only once, there can be for example multiple internal transactions of the same address
@@ -233,9 +231,9 @@ type xcbBlockTxContract struct {
 }
 
 type xcbBlockTx struct {
-	btxID        []byte
-	from, to     bchain.AddressDescriptor
-	contracts    []xcbBlockTxContract
+	btxID     []byte
+	from, to  bchain.AddressDescriptor
+	contracts []xcbBlockTxContract
 }
 
 func (d *RocksDB) processBaseCoreCoinTxData(blockTx *xcbBlockTx, tx *bchain.Tx, addresses addressesMap, addressContracts map[string]*AddrContracts) error {
@@ -287,7 +285,6 @@ func (d *RocksDB) processBaseCoreCoinTxData(blockTx *xcbBlockTx, tx *bchain.Tx, 
 // 	}
 // 	return nil
 // }
-
 
 func (d *RocksDB) processCoreCoinContractTransfers(blockTx *xcbBlockTx, tx *bchain.Tx, addresses addressesMap, addressContracts map[string]*AddrContracts) error {
 	tokenTransfers, err := d.chainParser.CoreblockchainTypeGetXrc20FromTx(tx)
@@ -358,7 +355,6 @@ func appendXcbAddress(buf []byte, a bchain.AddressDescriptor) []byte {
 	return buf
 }
 
-
 func packCoreCoinBlockTx(buf []byte, blockTx *xcbBlockTx) []byte {
 	varBuf := make([]byte, maxPackedBigintBytes)
 	buf = append(buf, blockTx.btxID...)
@@ -378,7 +374,7 @@ func packCoreCoinBlockTx(buf []byte, blockTx *xcbBlockTx) []byte {
 		if c.transferType == bchain.FungibleToken {
 			l = packBigint(&c.value, varBuf)
 			buf = append(buf, varBuf[:l]...)
-		} else { 
+		} else {
 			panic("token in not implemented")
 		}
 	}
@@ -459,7 +455,7 @@ func unpackCoreCoinBlockTx(buf []byte, pos int) (*xcbBlockTx, int, error) {
 		if c.transferType == bchain.FungibleToken {
 			c.value, l = unpackBigint(buf[pos:])
 			pos += l
-		} else { 
+		} else {
 			panic("token in not implemented")
 		}
 	}
@@ -656,7 +652,7 @@ func (d *RocksDB) DisconnectBlockRangeCoreCoinType(lower uint32, higher uint32) 
 }
 
 func (d *RocksDB) SortCoreCoinAddressContracts(stop chan os.Signal) error {
-	if d.chainParser.GetChainType() != bchain.ChainCoreCoinType  {
+	if d.chainParser.GetChainType() != bchain.ChainCoreCoinType {
 		glog.Info("SortCoreCoinAddressContracts: applicable only for corecoin type")
 		return nil
 	}

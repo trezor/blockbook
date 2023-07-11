@@ -14,18 +14,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/glog"
-	"github.com/gorilla/websocket"
-	"github.com/linxGnu/grocksdb"
-	"github.com/martinboehm/btcutil/chaincfg"
-	gosocketio "github.com/martinboehm/golang-socketio"
-	"github.com/martinboehm/golang-socketio/transport"
 	"github.com/cryptohub-digital/blockbook-fork/bchain"
 	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/btc"
 	"github.com/cryptohub-digital/blockbook-fork/common"
 	"github.com/cryptohub-digital/blockbook-fork/db"
 	"github.com/cryptohub-digital/blockbook-fork/fiat"
 	"github.com/cryptohub-digital/blockbook-fork/tests/dbtestdata"
+	"github.com/golang/glog"
+	"github.com/gorilla/websocket"
+	"github.com/linxGnu/grocksdb"
+	"github.com/martinboehm/btcutil/chaincfg"
+	gosocketio "github.com/martinboehm/golang-socketio"
+	"github.com/martinboehm/golang-socketio/transport"
 )
 
 func TestMain(m *testing.M) {

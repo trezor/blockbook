@@ -8,33 +8,34 @@
 <table class="table data-table info-table">
     <tbody>
         {{if $tx.Confirmations}}
-        <tr>
-            <td>Mined Time</td>
-            <td>{{unixTimeSpan $tx.Blocktime}}</td>
-        </tr>
+            <tr>
+                <td>Mined Time</td>
+                <td>{{unixTimeSpan $tx.Blocktime}}</td>
+            </tr>
         {{end}}
         <tr>
             <td>In Block</td>
             <td class="ellipsis" style="max-width: 280px">{{if $tx.Confirmations}}{{$tx.Blockhash}}{{else}}<span class="badge bg-danger">Unconfirmed</span>{{end}}</td>
         </tr>
         {{if $tx.Confirmations}}
-        <tr>
-            <td>In Block Height</td>
-            <td><a href="/block/{{$tx.Blockheight}}">{{formatInt $tx.Blockheight}}</a></td>
-        </tr>{{end}}
+            <tr>
+                <td>In Block Height</td>
+                <td><a href="/block/{{$tx.Blockheight}}">{{formatInt $tx.Blockheight}}</a></td>
+            </tr>
+        {{end}}
         {{if $tx.EthereumSpecific}}
         <tr>
             <td>Status</td>
             {{if $tx.EthereumSpecific.Status}}
-            {{if eq $tx.EthereumSpecific.Status 1}}
-            <td><span class="badge bg-success">Success</span></td>
-            {{else}}
-            {{if eq $tx.EthereumSpecific.Status -1}}
-            <td>Pending</td>
-            {{else}}
-            <td>Unknown</td>
-            {{end}}
-            {{end}}
+                {{if eq $tx.EthereumSpecific.Status 1}}
+                <td><span class="badge bg-success">Success</span></td>
+                {{else}}
+                    {{if eq $tx.EthereumSpecific.Status -1}}
+                    <td>Pending</td>
+                    {{else}}
+                    <td>Unknown</td>
+                    {{end}}
+                {{end}}
             {{else}}
             <td><span class="badge bg-danger">Failed</span>{{if $tx.EthereumSpecific.Error}}<span class="text-danger small fw-normal ms-1"> {{$tx.EthereumSpecific.Error}}{{end}}</td>
             {{end}}
@@ -52,27 +53,58 @@
             <td>{{amountSpan $tx.EthereumSpecific.GasPrice $data "copyable"}} <span class="fw-normal ps-3">({{amountSatsSpan $tx.EthereumSpecific.GasPrice $data "copyable"}} Gwei)</span></td>
         </tr>
         {{else}}
-        <tr>
-            <td>Total Input</td>
-            <td>{{amountSpan $tx.ValueInSat $data "copyable"}}</td>
-        </tr>
-        <tr>
-            <td>Total Output</td>
-            <td>{{amountSpan $tx.ValueOutSat $data "copyable"}}</td>
-        </tr>
-        {{if $tx.VSize}}
-        <tr>
-            <td>Size / vSize</td>
-            <td>{{formatInt $tx.Size}} / {{formatInt $tx.VSize}}</td>
-        </tr>
-        {{else}}
-        {{if $tx.Size}}
-        <tr>
-            <td>Size</td>
-            <td>{{formatInt $tx.Size}}</td>
-        </tr>
-        {{end}}
-        {{end}}
+            {{if $tx.CoreCoinSpecific}}
+                <tr>
+                    <td>Status</td>
+                    {{if $tx.CoreCoinSpecific.Status}}
+                        {{if eq $tx.CoreCoinSpecific.Status 1}}
+                        <td><span class="badge bg-success">Success</span></td>
+                        {{else}}
+                            {{if eq $tx.CoreCoinSpecific.Status -1}}
+                            <td>Pending</td>
+                            {{else}}
+                            <td>Unknown</td>
+                            {{end}}
+                        {{end}}
+                    {{else}}
+                    <td><span class="badge bg-danger">Failed</span>{{if $tx.CoreCoinSpecific.Error}}<span class="text-danger small fw-normal ms-1"> {{$tx.CoreCoinSpecific.Error}}{{end}}</td>
+                    {{end}}
+                </tr>
+                <tr>
+                    <td>Value</td>
+                    <td>{{amountSpan $tx.ValueOutSat $data "copyable"}}</td>
+                </tr>
+                <tr>
+                    <td>Energy Used / Limit</td>
+                    <td>{{if $tx.CoreCoinSpecific.EnergyUsed}}{{formatBigInt $tx.CoreCoinSpecific.EnergyUsed}}{{else}}pending{{end}} / {{formatBigInt $tx.CoreCoinSpecific.EnergyLimit}}</td>
+                </tr>
+                <tr>
+                    <td>Energy Price</td>
+                    <td>{{amountSpan $tx.CoreCoinSpecific.EnergyPrice $data "copyable"}} <span class="fw-normal ps-3">({{amountSatsSpan $tx.CoreCoinSpecific.EnergyPrice $data "copyable"}} Nucle)</span></td>
+                </tr>
+            {{else}}
+                <tr>
+                    <td>Total Input</td>
+                    <td>{{amountSpan $tx.ValueInSat $data "copyable"}}</td>
+                </tr>
+                <tr>
+                    <td>Total Output</td>
+                    <td>{{amountSpan $tx.ValueOutSat $data "copyable"}}</td>
+                </tr>
+                    {{if $tx.VSize}}
+                    <tr>
+                        <td>Size / vSize</td>
+                        <td>{{formatInt $tx.Size}} / {{formatInt $tx.VSize}}</td>
+                    </tr>
+                    {{else}}
+                        {{if $tx.Size}}
+                        <tr>
+                            <td>Size</td>
+                            <td>{{formatInt $tx.Size}}</td>
+                        </tr>
+                    {{end}}
+                {{end}}
+            {{end}}
         {{end}}
         {{if $tx.FeesSat}}
         <tr>

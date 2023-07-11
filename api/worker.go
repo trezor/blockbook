@@ -764,7 +764,7 @@ func (w *Worker) getTokensFromXrc20(xrc20 bchain.TokenTransfers) []TokenTransfer
 		}
 		tokens[i] = TokenTransfer{
 			Type:     bchain.XRC20TokenType,
-			Contract:    e.Contract,
+			Contract: e.Contract,
 			From:     e.From,
 			To:       e.To,
 			Decimals: xrc20c.Decimals,
@@ -1281,6 +1281,7 @@ func (w *Worker) getCoreCoinTypeAddressBalances(addrDesc bchain.AddressDescripto
 					filter.Vout = i + 1
 				}
 				t, err := w.getCoreCoinToken(i+1, addrDesc, c.Contract, details, int(c.Txs))
+				fmt.Println("aaaaaaaaaaaaaaaaaaaaaaaaa", t.BalanceSat)
 				if err != nil {
 					return nil, nil, nil, 0, 0, 0, err
 				}
@@ -1359,12 +1360,15 @@ func (w *Worker) getCoreCoinToken(index int, addrDesc, contract bchain.AddressDe
 	if details >= AccountDetailsTokenBalances && validContract {
 		b, err = w.chain.CoreCoinTypeGetXrc20ContractBalance(addrDesc, contract)
 		if err != nil {
+			fmt.Println("errrr", err)
 			// return nil, nil, nil, errors.Annotatef(err, "CoreCoinTypeGetXrc20ContractBalance %v %v", addrDesc, c.Contract)
 			glog.Warningf("CoreCoinTypeGetXrc20ContractBalance addr %v, contract %v, %v", addrDesc, contract, err)
 		}
 	} else {
+		fmt.Println("baddddddddddd")
 		b = nil
 	}
+	fmt.Println("bbbbbbbbbb", b)
 	return &Token{
 		Type:          bchain.XRC20TokenType,
 		BalanceSat:    (*Amount)(b),
@@ -1490,12 +1494,12 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 		totalResults = ed.totalResults
 	} else if w.chainType == bchain.ChainCoreCoinType {
 		var nonce uint64
-		ba, ed.tokens, ed.contractInfo, nonce, ed.nonContractTxs, ed.totalResults , err = w.getCoreCoinTypeAddressBalances(addrDesc, option, filter)
+		ba, ed.tokens, ed.contractInfo, nonce, ed.nonContractTxs, ed.totalResults, err = w.getCoreCoinTypeAddressBalances(addrDesc, option, filter)
 		ed.nonce = strconv.Itoa(int(nonce))
 		if err != nil {
 			return nil, err
 		}
-		} else {
+	} else {
 		// ba can be nil if the address is only in mempool!
 		ba, err = w.db.GetAddrDescBalance(addrDesc, db.AddressBalanceDetailNoUTXO)
 		if err != nil {
@@ -1629,7 +1633,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 		AddressAliases:        w.getAddressAliases(addresses),
 	}
 	// keep address backward compatible, set deprecated Erc20Contract value if ERC20 token
-	if ed.contractInfo != nil && ed.contractInfo.Type == bchain.ERC20TokenType {
+	if ed.contractInfo != nil && (ed.contractInfo.Type == bchain.ERC20TokenType || ed.contractInfo.Type == xcb.XRC20TokenType) {
 		r.Erc20Contract = ed.contractInfo
 	}
 	glog.Info("GetAddress ", address, ", ", time.Since(start))
@@ -1800,7 +1804,7 @@ func (w *Worker) balanceHistoryForTxid(addrDesc bchain.AddressDescriptor, txid s
 			}
 		}
 	} else if w.chainType == bchain.ChainCoreCoinType {
-		
+
 		var value big.Int
 		xcbTxData := xcb.GetCoreCoinTxData(bchainTx)
 		// add received amount only for OK or unknown status (old) transactions

@@ -134,7 +134,7 @@ func NewRocksDB(path string, cacheSize, maxOpenFiles int, parser bchain.BlockCha
 	chainType := parser.GetChainType()
 	if chainType == bchain.ChainBitcoinType {
 		cfNames = append(cfNames, cfNamesBitcoinType...)
-	} else if chainType == bchain.ChainEthereumType ||  chainType == bchain.ChainCoreCoinType {
+	} else if chainType == bchain.ChainEthereumType || chainType == bchain.ChainCoreCoinType {
 		cfNames = append(cfNames, cfNamesEthereumType...)
 		extendedIndex = false
 	} else {

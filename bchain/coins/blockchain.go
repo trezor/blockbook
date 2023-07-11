@@ -52,7 +52,9 @@ import (
 	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/vertcoin"
 	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/viacoin"
 	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/vipstarcoin"
+	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/xcb"
 	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/zec"
+
 	"github.com/cryptohub-digital/blockbook-fork/common"
 	"github.com/juju/errors"
 )
@@ -137,6 +139,8 @@ func init() {
 	BlockChainFactories["Avalanche Archive"] = avalanche.NewAvalancheRPC
 	BlockChainFactories["BNB Smart Chain"] = bsc.NewBNBSmartChainRPC
 	BlockChainFactories["BNB Smart Chain Archive"] = bsc.NewBNBSmartChainRPC
+	BlockChainFactories["Core Coin"] = xcb.NewCoreblockchainRPC
+
 }
 
 // GetCoinNameFromConfig gets coin name and coin shortcut from config file
@@ -348,17 +352,17 @@ func (c *blockChainWithMetrics) CoreCoinTypeGetBalance(addrDesc bchain.AddressDe
 	return c.b.CoreCoinTypeGetBalance(addrDesc)
 }
 
-func (c *blockChainWithMetrics) CoreCoinTypeGetNonce(addrDesc bchain.AddressDescriptor) (v uint64, err error){
+func (c *blockChainWithMetrics) CoreCoinTypeGetNonce(addrDesc bchain.AddressDescriptor) (v uint64, err error) {
 	defer func(s time.Time) { c.observeRPCLatency("CoreCoinTypeGetNonce", s, err) }(time.Now())
 	return c.b.CoreCoinTypeGetNonce(addrDesc)
 }
 
-func (c *blockChainWithMetrics) CoreCoinTypeEstimateEnergy(params map[string]interface{}) (v uint64, err error){
+func (c *blockChainWithMetrics) CoreCoinTypeEstimateEnergy(params map[string]interface{}) (v uint64, err error) {
 	defer func(s time.Time) { c.observeRPCLatency("CoreCoinTypeEstimateEnergy", s, err) }(time.Now())
 	return c.b.CoreCoinTypeEstimateEnergy(params)
 }
 
-func (c *blockChainWithMetrics) CoreCoinTypeGetXrc20ContractBalance(addrDesc, contractDesc bchain.AddressDescriptor) (v *big.Int, err error){
+func (c *blockChainWithMetrics) CoreCoinTypeGetXrc20ContractBalance(addrDesc, contractDesc bchain.AddressDescriptor) (v *big.Int, err error) {
 	defer func(s time.Time) { c.observeRPCLatency("CoreCoinTypeGetXrc20ContractBalance", s, err) }(time.Now())
 	return c.b.CoreCoinTypeGetXrc20ContractBalance(addrDesc, contractDesc)
 }

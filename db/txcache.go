@@ -86,7 +86,7 @@ func (c *TxCache) GetTransaction(txid string) (*bchain.Tx, int, error) {
 			if err != nil {
 				return nil, 0, err
 			}
-		}  else if c.chainType == bchain.ChainCoreCoinType {
+		} else if c.chainType == bchain.ChainCoreCoinType {
 			h, err = xcb.GetHeightFromTx(tx)
 			if err != nil {
 				return nil, 0, err

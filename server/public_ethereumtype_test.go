@@ -9,13 +9,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/glog"
-	"github.com/linxGnu/grocksdb"
 	"github.com/cryptohub-digital/blockbook-fork/bchain"
 	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/eth"
 	"github.com/cryptohub-digital/blockbook-fork/common"
 	"github.com/cryptohub-digital/blockbook-fork/db"
 	"github.com/cryptohub-digital/blockbook-fork/tests/dbtestdata"
+	"github.com/golang/glog"
+	"github.com/linxGnu/grocksdb"
 )
 
 func httpTestsEthereumType(t *testing.T, ts *httptest.Server) {

@@ -29,7 +29,7 @@
             <td style="white-space: nowrap;"><h5>Confirmed</h5></td>
             <td></td>
         </tr>
-        {{if eq .ChainType 1}}
+        {{if or (eq .ChainType 1) (eq .ChainType 2)}}
         <tr>
             <td style="width: 25%;">Balance</td>
             <td>{{amountSpan $addr.BalanceSat $data "copyable"}}</td>
@@ -108,7 +108,7 @@
     </tbody>
 </table>
 {{end}}
-{{if eq .ChainType 1}}
+{{if or (eq .ChainType 1) (eq .ChainType 2)}}
 {{if tokenCount $addr.Tokens .FungibleTokenName}}
 <div class="accordion mt-2 mb-2" id="erc20">
     <div class="accordion-item">

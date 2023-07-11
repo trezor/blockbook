@@ -91,7 +91,7 @@ func (p *CoreCoinParser) xcbTxToTx(tx *RpcTransaction, receipt *RpcReceipt, bloc
 		Txid:          txid,
 		Vin: []bchain.Vin{
 			{
-				Addresses: ta,
+				Addresses: fa,
 			},
 		},
 		Vout: []bchain.Vout{
@@ -99,7 +99,7 @@ func (p *CoreCoinParser) xcbTxToTx(tx *RpcTransaction, receipt *RpcReceipt, bloc
 				N:        0, // there is always up to one To address
 				ValueSat: *vs,
 				ScriptPubKey: bchain.ScriptPubKey{
-					Addresses: fa,
+					Addresses: ta,
 				},
 			},
 		},
@@ -184,8 +184,8 @@ func (p *CoreCoinParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) (
 	if !ok {
 		return nil, errors.New("Missing CoinSpecificData")
 	}
-	pt := &ProtoCompleteTransaction{}
-	pt.Tx = &ProtoCompleteTransaction_TxType{}
+	pt := &ProtoXCBCompleteTransaction{}
+	pt.Tx = &ProtoXCBCompleteTransaction_TxType{}
 	if pt.Tx.AccountNonce, err = hexutil.DecodeUint64(r.Tx.AccountNonce); err != nil {
 		return nil, errors.Annotatef(err, "AccountNonce %v", r.Tx.AccountNonce)
 	}
@@ -221,7 +221,7 @@ func (p *CoreCoinParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) (
 		return nil, errors.Annotatef(err, "Value %v", r.Tx.Value)
 	}
 	if r.Receipt != nil {
-		pt.Receipt = &ProtoCompleteTransaction_ReceiptType{}
+		pt.Receipt = &ProtoXCBCompleteTransaction_ReceiptType{}
 		if pt.Receipt.EnergyUsed, err = hexDecodeBig(r.Receipt.EnergyUsed); err != nil {
 			return nil, errors.Annotatef(err, "EnergyUsed %v", r.Receipt.EnergyUsed)
 		}
@@ -234,7 +234,7 @@ func (p *CoreCoinParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) (
 			// there is a potential for conflict with value 0x55 but this is not used by any chain at this moment
 			pt.Receipt.Status = []byte{'U'}
 		}
-		ptLogs := make([]*ProtoCompleteTransaction_ReceiptType_LogType, len(r.Receipt.Logs))
+		ptLogs := make([]*ProtoXCBCompleteTransaction_ReceiptType_LogType, len(r.Receipt.Logs))
 		for i, l := range r.Receipt.Logs {
 			a, err := hexutil.Decode(l.Address)
 			if err != nil {
@@ -251,7 +251,7 @@ func (p *CoreCoinParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) (
 					return nil, errors.Annotatef(err, "Topic cannot be decoded %v", l)
 				}
 			}
-			ptLogs[i] = &ProtoCompleteTransaction_ReceiptType_LogType{
+			ptLogs[i] = &ProtoXCBCompleteTransaction_ReceiptType_LogType{
 				Address: a,
 				Data:    d,
 				Topics:  t,
@@ -265,7 +265,7 @@ func (p *CoreCoinParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) (
 
 // UnpackTx unpacks transaction from byte array
 func (p *CoreCoinParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
-	var pt ProtoCompleteTransaction
+	var pt ProtoXCBCompleteTransaction
 	err := proto.Unmarshal(buf, &pt)
 	if err != nil {
 		return nil, 0, err

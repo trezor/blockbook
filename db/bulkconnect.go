@@ -27,7 +27,7 @@ type BulkConnect struct {
 	bulkAddresses      []bulkAddresses
 	bulkAddressesCount int
 	ethBlockTxs        []ethBlockTx
-	xcbBlockTx []xcbBlockTx
+	xcbBlockTx         []xcbBlockTx
 	txAddressesMap     map[string]*TxAddresses
 	balances           map[string]*AddrBalance
 	addressContracts   map[string]*AddrContracts

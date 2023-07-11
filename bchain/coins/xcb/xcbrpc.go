@@ -93,6 +93,9 @@ func NewCoreblockchainRPC(config json.RawMessage, pushHandler func(bchain.Notifi
 
 	ProcessInternalTransactions = c.ProcessInternalTransactions
 
+	// overwrite TokenTypeMap with bsc specific token type names
+	bchain.TokenTypeMap = []bchain.TokenTypeName{XRC20TokenType, bchain.ERC771TokenType, bchain.ERC1155TokenType}
+
 	// always create parser
 	s.Parser = NewCoreCoinParser(c.BlockAddressesToKeep)
 	s.Timeout = time.Duration(c.RPCTimeout) * time.Second

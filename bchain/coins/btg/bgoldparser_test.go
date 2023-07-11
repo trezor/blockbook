@@ -11,8 +11,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/martinboehm/btcutil/chaincfg"
 	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/btc"
+	"github.com/martinboehm/btcutil/chaincfg"
 )
 
 func TestMain(m *testing.M) {

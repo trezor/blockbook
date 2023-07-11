@@ -12,12 +12,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/glog"
-	"github.com/martinboehm/btcutil/chaincfg"
 	"github.com/cryptohub-digital/blockbook-fork/bchain"
 	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/btc"
 	"github.com/cryptohub-digital/blockbook-fork/common"
 	"github.com/cryptohub-digital/blockbook-fork/db"
+	"github.com/golang/glog"
+	"github.com/martinboehm/btcutil/chaincfg"
 )
 
 func TestMain(m *testing.M) {
