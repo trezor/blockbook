@@ -15,8 +15,6 @@ import (
 const (
 	// MainNet is production network
 	MainNet eth.Network = 10
-	// TestNet is Goerli test network
-	TestNet eth.Network = 420
 )
 
 // OptimismRPC is an interface to JSON-RPC optimism service.
@@ -75,9 +73,6 @@ func (b *OptimismRPC) Initialize() error {
 	case MainNet:
 		b.Testnet = false
 		b.Network = "livenet"
-	case TestNet:
-		b.Testnet = true
-		b.Network = "goerli"
 	default:
 		return errors.Errorf("Unknown network id %v", id)
 	}

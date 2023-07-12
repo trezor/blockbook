@@ -143,8 +143,6 @@ func init() {
 	BlockChainFactories["Polygon Archive"] = polygon.NewPolygonRPC
 	BlockChainFactories["Optimism"] = optimism.NewOptimismRPC
 	BlockChainFactories["Optimism Archive"] = optimism.NewOptimismRPC
-	BlockChainFactories["Optimism Testnet"] = optimism.NewOptimismRPC
-	BlockChainFactories["Optimism Testnet Archive"] = optimism.NewOptimismRPC
 }
 
 // GetCoinNameFromConfig gets coin name and coin shortcut from config file
