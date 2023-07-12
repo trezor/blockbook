@@ -2,8 +2,10 @@ package pivx
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"math/big"
 
@@ -13,7 +15,6 @@ import (
 	"github.com/martinboehm/btcutil/chaincfg"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/bchain/coins/btc"
-	"github.com/trezor/blockbook/bchain/coins/utils"
 )
 
 // magic numbers
@@ -100,7 +101,12 @@ func (p *PivXParser) ParseBlock(b []byte) (*bchain.Block, error) {
 		r.Seek(32, io.SeekCurrent)
 	}
 
-	err = utils.DecodeTransactions(r, 0, wire.WitnessEncoding, &w)
+	if h.Version > 7 {
+		// Skip new hashFinalSaplingRoot (block version 8 or newer)
+		r.Seek(32, io.SeekCurrent)
+	}
+
+	err = p.PivxDecodeTransactions(r, 0, &w)
 	if err != nil {
 		return nil, errors.Annotatef(err, "DecodeTransactions")
 	}
@@ -253,6 +259,90 @@ func (p *PivXParser) GetAddrDescForUnknownInput(tx *bchain.Tx, input int) bchain
 
 	s := make([]byte, 10)
 	return s
+}
+
+func (p *PivXParser) PivxDecodeTransactions(r *bytes.Reader, pver uint32, blk *wire.MsgBlock) error {
+	maxTxPerBlock := uint64((wire.MaxBlockPayload / 10) + 1)
+
+	txCount, err := wire.ReadVarInt(r, pver)
+	if err != nil {
+		return err
+	}
+
+	// Prevent more transactions than could possibly fit into a block.
+	// It would be possible to cause memory exhaustion and panics without
+	// a sane upper bound on this count.
+	if txCount > maxTxPerBlock {
+		str := fmt.Sprintf("too many transactions to fit into a block "+
+			"[count %d, max %d]", txCount, maxTxPerBlock)
+		return &wire.MessageError{Func: "utils.decodeTransactions", Description: str}
+	}
+
+	blk.Transactions = make([]*wire.MsgTx, 0, txCount)
+	for i := uint64(0); i < txCount; i++ {
+		tx := wire.MsgTx{}
+
+		// read version & seek back to original state
+		var version uint32 = 0
+		if err = binary.Read(r, binary.LittleEndian, &version); err != nil {
+			return err
+		}
+		if _, err = r.Seek(-4, io.SeekCurrent); err != nil {
+			return err
+		}
+
+		txVersion := version & 0xffff
+		enc := wire.WitnessEncoding
+
+		// shielded transactions
+		if txVersion >= 3 {
+			enc = wire.BaseEncoding
+		}
+
+		err := p.PivxDecode(&tx, r, pver, enc)
+		if err != nil {
+			return err
+		}
+		blk.Transactions = append(blk.Transactions, &tx)
+	}
+
+	return nil
+}
+
+func (p *PivXParser) PivxDecode(MsgTx *wire.MsgTx, r *bytes.Reader, pver uint32, enc wire.MessageEncoding) error {
+	if err := MsgTx.BtcDecode(r, pver, enc); err != nil {
+		return err
+	}
+
+	// extra
+	version := uint32(MsgTx.Version)
+	txVersion := version & 0xffff
+
+	if txVersion >= 3 {
+		// valueBalance
+		r.Seek(9, io.SeekCurrent)
+
+		vShieldedSpend, err := wire.ReadVarInt(r, 0)
+		if err != nil {
+			return err
+		}
+		if vShieldedSpend > 0 {
+			r.Seek(int64(vShieldedSpend*384), io.SeekCurrent)
+		}
+
+		vShieldOutput, err := wire.ReadVarInt(r, 0)
+		if err != nil {
+			return err
+		}
+		if vShieldOutput > 0 {
+			r.Seek(int64(vShieldOutput*948), io.SeekCurrent)
+		}
+
+		// bindingSig
+		r.Seek(64, io.SeekCurrent)
+	}
+
+	return nil
 }
 
 // Checks if script is OP_ZEROCOINMINT

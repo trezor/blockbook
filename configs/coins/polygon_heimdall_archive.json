@@ -1,0 +1,40 @@
+{
+  "coin": {
+    "name": "Polygon Archive Heimdall",
+    "shortcut": "MATIC",
+    "label": "Polygon",
+    "alias": "polygon_archive_heimdall"
+  },
+  "ports": {
+    "backend_rpc": 8073,
+    "backend_p2p": 38373,
+    "backend_http": 8173,
+    "blockbook_internal": 9073,
+    "blockbook_public": 9173
+  },
+  "backend": {
+    "package_name": "backend-polygon-archive-heimdall",
+    "package_revision": "satoshilabs-1",
+    "system_user": "polygon",
+    "version": "0.3.4",
+    "binary_url": "https://github.com/maticnetwork/heimdall/archive/refs/tags/v0.3.4.tar.gz",
+    "verification_type": "sha256",
+    "verification_source": "6d75bf685ce6714472afcc2ec8ecae5b53aa3aae513ffca9d1b2d26ae5892872",
+    "extract_command": "mkdir backend/source && tar -C backend/source --strip 1 -xf v0.3.4.tar.gz && cd backend/source && make build && mv build/heimdalld ../ && rm -rf ../source && echo",
+    "exclude_files": [],
+    "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/polygon_archive_heimdall_exec.sh  2>&1 >> {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
+    "exec_script": "polygon_archive_heimdall.sh",
+    "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
+    "postinst_script_template": "wget https://raw.githubusercontent.com/maticnetwork/heimdall/v0.3.4/builder/files/genesis-mainnet-v1.json -O {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/genesis.json",
+    "service_type": "simple",
+    "service_additional_params_template": "",
+    "protect_memory": true,
+    "mainnet": true,
+    "server_config_file": "",
+    "client_config_file": ""
+  },
+  "meta": {
+    "package_maintainer": "IT",
+    "package_maintainer_email": "it@satoshilabs.com"
+  }
+}

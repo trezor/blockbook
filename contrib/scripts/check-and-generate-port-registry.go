@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math"
 	"os"
 	"path/filepath"
@@ -38,14 +37,17 @@ type Config struct {
 		Label string `json:"label"`
 		Alias string `json:"alias"`
 	}
-	Ports map[string]uint16 `json:"ports"`
+	Ports     map[string]uint16 `json:"ports"`
+	Blockbook struct {
+		PackageName string `json:"package_name"`
+	}
 }
 
 func checkPorts() int {
 	ports := make(map[uint16][]string)
 	status := 0
 
-	files, err := ioutil.ReadDir(inputDir)
+	files, err := os.ReadDir(inputDir)
 	if err != nil {
 		panic(err)
 	}
@@ -83,8 +85,8 @@ func checkPorts() int {
 		}
 
 		for _, port := range v.Ports {
-			// ignore duplicities caused by consensus layer configs
-			if port > 0 && !strings.Contains(v.Coin.Alias, "_consensus") {
+			// ignore duplicities caused by configs that do not serve blockbook directly (consensus layers)
+			if port > 0 && v.Blockbook.PackageName == "" {
 				ports[port] = append(ports[port], v.Coin.Alias)
 			}
 		}
@@ -134,7 +136,7 @@ func main() {
 }
 
 func loadPortInfo(dir string) (PortInfoSlice, error) {
-	files, err := ioutil.ReadDir(dir)
+	files, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, err
 	}
@@ -160,30 +162,31 @@ func loadPortInfo(dir string) (PortInfoSlice, error) {
 			return nil, fmt.Errorf("%s: json: %s", path, err)
 		}
 
-		// skip consensus layer configs
-		if strings.Contains(v.Coin.Alias, "_consensus") {
+		// skip configs that do not have blockbook (consensus layers)
+		if v.Blockbook.PackageName == "" {
 			continue
 		}
 		name := v.Coin.Label
-		if len(name) == 0 || strings.Contains(v.Coin.Name, "Archive") {
+		// exceptions when to use Name instead of Label so that the table looks good
+		if len(name) == 0 || strings.Contains(v.Coin.Name, "Ethereum") || strings.Contains(v.Coin.Name, "Archive") {
 			name = v.Coin.Name
 		}
 		item := &PortInfo{CoinName: name, BackendServicePorts: map[string]uint16{}}
-		for k, v := range v.Ports {
-			if v == 0 {
+		for k, p := range v.Ports {
+			if p == 0 {
 				continue
 			}
 
 			switch k {
 			case "blockbook_internal":
-				item.BlockbookInternalPort = v
+				item.BlockbookInternalPort = p
 			case "blockbook_public":
-				item.BlockbookPublicPort = v
+				item.BlockbookPublicPort = p
 			case "backend_rpc":
-				item.BackendRPCPort = v
+				item.BackendRPCPort = p
 			default:
 				if len(k) > 8 && k[:8] == "backend_" {
-					item.BackendServicePorts[k[8:]] = v
+					item.BackendServicePorts[k[8:]] = p
 				}
 			}
 		}
