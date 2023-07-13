@@ -6,7 +6,9 @@ import (
 )
 
 // JSONNumber is used instead of json.Number after upgrade to go 1.14
-//  to handle data which can be numbers in double quotes or possibly not numbers at all
+//
+//	to handle data which can be numbers in double quotes or possibly not numbers at all
+//
 // see https://github.com/golang/go/issues/37308
 type JSONNumber string
 

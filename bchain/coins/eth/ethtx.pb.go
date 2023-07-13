@@ -5,9 +5,11 @@
 Package eth is a generated protocol buffer package.
 
 It is generated from these files:
+
 	bchain/coins/eth/ethtx.proto
 
 It has these top-level messages:
+
 	ProtoCompleteTransaction
 */
 package eth

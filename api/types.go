@@ -240,12 +240,12 @@ type EthereumSpecific struct {
 
 // CoreCoinSpecific contains core coin specific transaction data
 type CoreCoinSpecific struct {
-	Status            xcb.TxStatus                           `json:"status"` // 1 OK, 0 Fail, -1 pending
-	Nonce             uint64                                 `json:"nonce"`
-	EnergyLimit          *big.Int                               `json:"energyLimit"`
-	EnergyUsed           *big.Int                               `json:"energyUsed,omitempty"`
-	EnergyPrice          *Amount                                `json:"energyPrice"`
-	Data              string                                 `json:"data,omitempty"`
+	Status      xcb.TxStatus `json:"status"` // 1 OK, 0 Fail, -1 pending
+	Nonce       uint64       `json:"nonce"`
+	EnergyLimit *big.Int     `json:"energyLimit"`
+	EnergyUsed  *big.Int     `json:"energyUsed,omitempty"`
+	EnergyPrice *Amount      `json:"energyPrice"`
+	Data        string       `json:"data,omitempty"`
 }
 
 type AddressAlias struct {
@@ -277,7 +277,7 @@ type Tx struct {
 	CoinSpecificData       json.RawMessage   `json:"coinSpecificData,omitempty" ts_type:"any"`
 	TokenTransfers         []TokenTransfer   `json:"tokenTransfers,omitempty"`
 	EthereumSpecific       *EthereumSpecific `json:"ethereumSpecific,omitempty"`
-	CoreCoinSpecific *CoreCoinSpecific `json:"corecoinSpecific,omitempty"`
+	CoreCoinSpecific       *CoreCoinSpecific `json:"corecoinSpecific,omitempty"`
 	AddressAliases         AddressAliasesMap `json:"addressAliases,omitempty"`
 }
 

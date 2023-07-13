@@ -212,11 +212,11 @@ func mainWithExitCode() int {
 				return exitCodeFatal
 			}
 		} else {
-		err = index.SortAddressContracts(chanOsSignal)
-		if err != nil {
-			glog.Error("sortAddressContracts: ", err)
-			return exitCodeFatal
-		}
+			err = index.SortAddressContracts(chanOsSignal)
+			if err != nil {
+				glog.Error("sortAddressContracts: ", err)
+				return exitCodeFatal
+			}
 		}
 		internalState.SortedAddressContracts = true
 	}
