@@ -323,7 +323,7 @@ func (p *BaseParser) FormatAddressAlias(address string, name string) string {
 	return name
 }
 
-// CoreblockchainTypeGetXrc20FromTx is unsupported
-func (p *BaseParser) CoreblockchainTypeGetXrc20FromTx(tx *Tx) (TokenTransfers, error) {
+// CoreCoinTypeGetTokenTransfersFromTx is unsupported
+func (p *BaseParser) CoreCoinTypeGetTokenTransfersFromTx(tx *Tx) (TokenTransfers, error) {
 	return nil, errors.New("Not supported")
 }

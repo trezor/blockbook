@@ -320,7 +320,6 @@ func (p *CoreCoinParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 			Logs:       logs,
 		}
 	}
-	// TODO handle internal transactions
 	tx, err := p.xcbTxToTx(&rt, rr, int64(pt.BlockTime), 0)
 	if err != nil {
 		return nil, 0, err
@@ -379,16 +378,16 @@ func GetHeightFromTx(tx *bchain.Tx) (uint32, error) {
 	return uint32(n), nil
 }
 
-// CoreCoinTypeGetXrc20FromTx returns xrc20 data from bchain.Tx
-func (p *CoreCoinParser) CoreblockchainTypeGetXrc20FromTx(tx *bchain.Tx) (bchain.TokenTransfers, error) {
+// CoreCoinTypeGetTokenTransfersFromTx returns tokens data from bchain.Tx
+func (p *CoreCoinParser) CoreCoinTypeGetTokenTransfersFromTx(tx *bchain.Tx) (bchain.TokenTransfers, error) {
 	var r bchain.TokenTransfers
 	var err error
 	csd, ok := tx.CoinSpecificData.(CoreCoinSpecificData)
 	if ok {
 		if csd.Receipt != nil {
-			r, err = xrc20GetTransfersFromLog(csd.Receipt.Logs)
+			r, err = getTokenTransfersFromLog(csd.Receipt.Logs)
 		} else {
-			r, err = xrc20GetTransfersFromTx(csd.Tx)
+			r, err = getTokenTransfersFromTx(csd.Tx)
 		}
 		if err != nil {
 			return nil, err

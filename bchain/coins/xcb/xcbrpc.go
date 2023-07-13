@@ -4,9 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"math/big"
-	"net/http"
 	"strconv"
 	"sync"
 	"time"
@@ -93,8 +91,8 @@ func NewCoreblockchainRPC(config json.RawMessage, pushHandler func(bchain.Notifi
 
 	ProcessInternalTransactions = c.ProcessInternalTransactions
 
-	// overwrite TokenTypeMap with bsc specific token type names
-	bchain.TokenTypeMap = []bchain.TokenTypeName{XRC20TokenType, bchain.ERC771TokenType, bchain.ERC1155TokenType}
+	// overwrite TokenTypeMap with crc specific token type names
+	bchain.TokenTypeMap = []bchain.TokenTypeName{CRC20TokenType, CRC721TokenType, bchain.ERC1155TokenType}
 
 	// always create parser
 	s.Parser = NewCoreCoinParser(c.BlockAddressesToKeep)
@@ -338,37 +336,6 @@ func (b *CoreblockchainRPC) GetSubversion() string {
 	return ""
 }
 
-func (b *CoreblockchainRPC) getConsensusVersion() string {
-	if b.ChainConfig.ConsensusNodeVersionURL == "" {
-		return ""
-	}
-	httpClient := &http.Client{
-		Timeout: 2 * time.Second,
-	}
-	resp, err := httpClient.Get(b.ChainConfig.ConsensusNodeVersionURL)
-	if err != nil || resp.StatusCode != http.StatusOK {
-		glog.Error("getConsensusVersion ", err)
-		return ""
-	}
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		glog.Error("getConsensusVersion ", err)
-		return ""
-	}
-	type consensusVersion struct {
-		Data struct {
-			Version string `json:"version"`
-		} `json:"data"`
-	}
-	var v consensusVersion
-	err = json.Unmarshal(body, &v)
-	if err != nil {
-		glog.Error("getConsensusVersion ", err)
-		return ""
-	}
-	return v.Data.Version
-}
-
 // GetChainInfo returns information about the connected backend
 func (b *CoreblockchainRPC) GetChainInfo() (*bchain.ChainInfo, error) {
 	h, err := b.getBestHeader()
@@ -385,13 +352,11 @@ func (b *CoreblockchainRPC) GetChainInfo() (*bchain.ChainInfo, error) {
 	if err := b.RPC.CallContext(ctx, &ver, "web3_clientVersion"); err != nil {
 		return nil, err
 	}
-	consensusVersion := b.getConsensusVersion()
 	rv := &bchain.ChainInfo{
-		Blocks:           int(h.Number().Int64()),
-		Bestblockhash:    h.Hash(),
-		Difficulty:       h.Difficulty().String(),
-		Version:          ver,
-		ConsensusVersion: consensusVersion,
+		Blocks:        int(h.Number().Int64()),
+		Bestblockhash: h.Hash(),
+		Difficulty:    h.Difficulty().String(),
+		Version:       ver,
 	}
 	idi := int(id.Uint64())
 	if idi == int(b.MainNetChainID) {
@@ -543,14 +508,14 @@ func (b *CoreblockchainRPC) getBlockRaw(hash string, height uint32, fullTxs bool
 	return raw, nil
 }
 
-func (b *CoreblockchainRPC) getXrc20EventsForBlock(blockNumber string) (map[string][]*RpcLog, error) {
+func (b *CoreblockchainRPC) getTokenEventsForBlock(blockNumber string) (map[string][]*RpcLog, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
 	defer cancel()
 	var logs []rpcLogWithTxHash
 	err := b.RPC.CallContext(ctx, &logs, "xcb_getLogs", map[string]interface{}{
 		"fromBlock": blockNumber,
 		"toBlock":   blockNumber,
-		"topics":    []string{xrc20TransferEventSignature},
+		"topics":    []string{tokenTransferEventSignature},
 	})
 	if err != nil {
 		return nil, errors.Annotatef(err, "xcb_getLogs blockNumber %v", blockNumber)
@@ -581,8 +546,8 @@ func (b *CoreblockchainRPC) GetBlock(hash string, height uint32) (*bchain.Block,
 	if err != nil {
 		return nil, errors.Annotatef(err, "hash %v, height %v", hash, height)
 	}
-	// get xrc20 events
-	logs, err := b.getXrc20EventsForBlock(head.Number)
+	// get token events
+	logs, err := b.getTokenEventsForBlock(head.Number)
 	if err != nil {
 		return nil, err
 	}

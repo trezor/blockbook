@@ -64,7 +64,7 @@ func (b *BaseChain) EthereumTypeGetErc20ContractBalance(addrDesc, contractDesc A
 	return nil, errors.New("Not supported")
 }
 
-// GetContractInfo returns URI of non fungible or multi token defined by token id
+// GetTokenURI returns URI of non fungible or multi token defined by token id
 func (p *BaseChain) GetTokenURI(contractDesc AddressDescriptor, tokenID *big.Int) (string, error) {
 	return "", errors.New("Not supported")
 }
@@ -75,21 +75,16 @@ func (cp *BaseChain) CoreCoinTypeGetBalance(addrDesc AddressDescriptor) (*big.In
 }
 
 // CoreCoinTypeGetNonce is not supported
-func (cp *BaseChain) CoreCoinTypeGetNonce(addrDesc AddressDescriptor) (uint64, error){
+func (cp *BaseChain) CoreCoinTypeGetNonce(addrDesc AddressDescriptor) (uint64, error) {
 	return 0, errors.New("Not supported")
 }
 
 // CoreCoinTypeEstimateEnergy is not supported
-func (cp *BaseChain) CoreCoinTypeEstimateEnergy(params map[string]interface{}) (uint64, error){
+func (cp *BaseChain) CoreCoinTypeEstimateEnergy(params map[string]interface{}) (uint64, error) {
 	return 0, errors.New("Not supported")
 }
 
-// CoreCoinTypeGetXrc20ContractBalance is not supported
-func (cp *BaseChain) CoreCoinTypeGetXrc20ContractBalance(addrDesc, contractDesc AddressDescriptor) (*big.Int, error){
-	return nil, errors.New("Not supported")
-}
-
-// CoreCoinTypeGetXrc20ContractInfo is not supported
-func (cp *BaseChain) CoreCoinTypeGetXrc20ContractInfo(contractDesc AddressDescriptor) (*ContractInfo, error) {
+// CoreCoinTypeGetCrc20ContractBalance is not supported
+func (cp *BaseChain) CoreCoinTypeGetCrc20ContractBalance(addrDesc, contractDesc AddressDescriptor) (*big.Int, error) {
 	return nil, errors.New("Not supported")
 }

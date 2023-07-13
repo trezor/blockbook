@@ -97,43 +97,12 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-3 amt-out">ID <a href="/nft/{{$tt.Contract}}/{{$tt.Value}}">{{$tt.Value}}</a> {{$tt.Symbol}}</div>
+        <div class="col-md-3 amt-out">ID {{$tt.Value}} {{$tt.Symbol}}</div>
     </div>
     {{end}}
     {{end}}
     {{end}}
 
-    {{if tokenTransfersCount $tx .MultiTokenName}}
-    <div class="row subhead">
-        {{.MultiTokenName}} Token Transfers
-    </div>
-    {{range $tt := $tx.TokenTransfers}}
-    {{if eq $tt.Type $.MultiTokenName}}
-    <div class="row body">
-        <div class="col-md-4">
-            <div class="row tx-addr">
-                <div class="col-12 ellipsis{{if isOwnAddress $data $tt.From}} tx-own{{end}}">
-                    {{if ne $tt.From $addr}}<a href="/address/{{$tt.From}}">{{addressAliasSpan $tt.From $data}}</a>{{else}}{{addressAliasSpan $tt.From $data}}{{end}}
-                </div>
-            </div>
-        </div>
-        <div class="col-md-1 col-xs-12 text-center">&nbsp;<span class="octicon"></span></div>
-        <div class="col-md-4">
-            <div class="row tx-addr">
-                <div class="col-12 ellipsis{{if isOwnAddress $data $tt.To}} tx-own{{end}}">
-                    {{if ne $tt.To $addr}}<a href="/address/{{$tt.To}}">{{addressAliasSpan $tt.To $data}}</a>{{else}}{{addressAliasSpan $tt.To $data}}{{end}}
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3 amt-out">
-            {{range $i, $iv := $tt.MultiTokenValues}}
-                {{if $i}}, {{end}}{{formattedAmountSpan $iv.Value 0 $tt.Symbol $data ""}} of ID <a href="/nft/{{$tt.Contract}}/{{$iv.Id}}">{{$iv.Id}}</a>
-            {{end}}
-        </div>
-    </div>
-    {{end}}
-    {{end}}
-    {{end}}
 
     <div class="row footer">
         <div class="col-sm-12 col-md-6">

@@ -10,7 +10,7 @@ import (
 	"github.com/cryptohub-digital/blockbook-fork/tests/dbtestdata"
 )
 
-func TestXrc20_xrc20GetTransfersFromLog(t *testing.T) {
+func TestCrc20_getTokenTransfersFromLog(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    []*RpcLog
@@ -125,21 +125,21 @@ func TestXrc20_xrc20GetTransfersFromLog(t *testing.T) {
 	common.DefaultNetworkID = common.NetworkID(3)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := xrc20GetTransfersFromLog(tt.args)
+			got, err := getTokenTransfersFromLog(tt.args)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("xrc20GetTransfersFromLog error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("getTokenTransfersFromLog error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 
 			// the addresses could have different case
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("xrc20GetTransfersFromLog = %+v, want %+v", got, tt.want)
+				t.Errorf("getTokenTransfersFromLog = %+v, want %+v", got, tt.want)
 			}
 		})
 	}
 }
 
-func TestXrc20_parsexrc20StringProperty(t *testing.T) {
+func TestCrc20_parseCRC20StringProperty(t *testing.T) {
 	tests := []struct {
 		name string
 		args string
@@ -178,16 +178,16 @@ func TestXrc20_parsexrc20StringProperty(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := parsexrc20StringProperty(nil, tt.args)
+			got := parseCRC20StringProperty(nil, tt.args)
 			// the addresses could have different case
 			if got != tt.want {
-				t.Errorf("parsexrc20StringProperty = %v, want %v", got, tt.want)
+				t.Errorf("parseCRC20StringProperty = %v, want %v", got, tt.want)
 			}
 		})
 	}
 }
 
-func TestXrc20_xrc20GetTransfersFromTx(t *testing.T) {
+func TestCrc20_getTokenTransfersFromTx(t *testing.T) {
 	common.DefaultNetworkID = common.NetworkID(3)
 	p := NewCoreCoinParser(1)
 	b := dbtestdata.GetTestCoreCoinTypeBlock1(p)
@@ -218,14 +218,14 @@ func TestXrc20_xrc20GetTransfersFromTx(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := xrc20GetTransfersFromTx(tt.args)
+			got, err := getTokenTransfersFromTx(tt.args)
 			if err != nil {
-				t.Errorf("xrc20GetTransfersFromTx error = %v", err)
+				t.Errorf("getTokenTransfersFromTx error = %v", err)
 				return
 			}
 			// the addresses could have different case
 			if len(got) > 0 && len(tt.want) > 0 && !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("xrc20GetTransfersFromTx = %+v, want %+v", got, tt.want)
+				t.Errorf("getTokenTransfersFromTx = %+v, want %+v", got, tt.want)
 			}
 		})
 	}

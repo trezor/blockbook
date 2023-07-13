@@ -546,8 +546,6 @@ func (s *PublicServer) parseTemplates() []*template.Template {
 		t[txTpl] = createTemplate("./static/templates/tx.html", "./static/templates/txdetail_corecointype.html", "./static/templates/base.html")
 		t[addressTpl] = createTemplate("./static/templates/address.html", "./static/templates/txdetail_corecointype.html", "./static/templates/paging.html", "./static/templates/base.html")
 		t[blockTpl] = createTemplate("./static/templates/block.html", "./static/templates/txdetail_corecointype.html", "./static/templates/paging.html", "./static/templates/base.html")
-		t[nftDetailTpl] = createTemplate("./static/templates/tokenDetail.html", "./static/templates/base.html")
-
 	} else {
 		t[txTpl] = createTemplate("./static/templates/tx.html", "./static/templates/txdetail.html", "./static/templates/base.html")
 		t[addressTpl] = createTemplate("./static/templates/address.html", "./static/templates/txdetail.html", "./static/templates/paging.html", "./static/templates/base.html")
@@ -694,9 +692,7 @@ func (s *PublicServer) tokenAmountSpan(t *api.TokenTransfer, td *TemplateData, c
 }
 
 func (s *PublicServer) formattedAmountSpan(a *api.Amount, d int, symbol string, td *TemplateData, classes string) template.HTML {
-	fmt.Println("amount", a, "decimals", d, "symbol", symbol, "data", td)
 	if symbol == td.CoinShortcut {
-		fmt.Println("tuuuuuuuut")
 		d = s.chainParser.AmountDecimals()
 	}
 	value := formatAmountWithDecimals(a, d)
@@ -708,7 +704,6 @@ func (s *PublicServer) formattedAmountSpan(a *api.Amount, d int, symbol string, 
 func (s *PublicServer) summaryValuesSpan(baseValue float64, secondaryValue float64, td *TemplateData) template.HTML {
 	var rv strings.Builder
 	if secondaryValue > 0 {
-		fmt.Println("tuuuuuuuut2")
 
 		appendAmountSpan(&rv, "", formatSecondaryAmount(secondaryValue, td), td.SecondaryCoin, "")
 		if baseValue > 0 && (s.chainParser.GetChainType() == bchain.ChainEthereumType || s.chainParser.GetChainType() == bchain.ChainCoreCoinType) {
@@ -718,12 +713,9 @@ func (s *PublicServer) summaryValuesSpan(baseValue float64, secondaryValue float
 		}
 	} else {
 		if baseValue > 0 {
-			fmt.Println("tuuuuuuuut3")
 			appendAmountSpan(&rv, "", strconv.FormatFloat(baseValue, 'f', 6, 64), td.CoinShortcut, "")
 		} else {
 			if td.SecondaryCoin != "" {
-				fmt.Println("tuuuuuuuut4")
-
 				rv.WriteString("-")
 			}
 		}
@@ -812,15 +804,11 @@ func isOwnAddress(td *TemplateData, a string) bool {
 // called from template, returns count of token transfers of given type in a tx
 func tokenTransfersCount(tx *api.Tx, t bchain.TokenTypeName) int {
 	count := 0
-	fmt.Println(tx.TokenTransfers)
 	for i := range tx.TokenTransfers {
-		fmt.Println(tx.TokenTransfers[i].Type)
 		if tx.TokenTransfers[i].Type == t {
 			count++
 		}
 	}
-	fmt.Println(count)
-	fmt.Println(t)
 	return count
 }
 
@@ -961,8 +949,6 @@ func (s *PublicServer) explorerAddress(w http.ResponseWriter, r *http.Request) (
 	if err != nil {
 		return errorTpl, nil, err
 	}
-	fmt.Println("11111")
-	fmt.Println(address.Tokens)
 	data.AddrStr = address.AddrStr
 	data.Address = address
 	data.Page = address.Page

@@ -30,6 +30,13 @@ func packCoreCoinAddrContract(acs *AddrContracts) []byte {
 		if ac.Type == bchain.FungibleToken {
 			l = packBigint(&ac.Value, varBuf)
 			buf = append(buf, varBuf[:l]...)
+		} else if ac.Type == bchain.NonFungibleToken {
+			l = packVaruint(uint(len(ac.Ids)), varBuf)
+			buf = append(buf, varBuf[:l]...)
+			for i := range ac.Ids {
+				l = packBigint(&ac.Ids[i], varBuf)
+				buf = append(buf, varBuf[:l]...)
+			}
 		} else {
 			panic("other token types are not implemented")
 		}
@@ -64,7 +71,18 @@ func unpackCoreCoinAddrContracts(buf []byte, addrDesc bchain.AddressDescriptor) 
 			buf = buf[ll:]
 			ac.Value = b
 		} else {
-			panic("other token types are not implemented")
+			len, ll := unpackVaruint(buf)
+			buf = buf[ll:]
+			if ttt == bchain.NonFungibleToken {
+				ac.Ids = make(Ids, len)
+				for i := uint(0); i < len; i++ {
+					b, ll := unpackBigint(buf)
+					buf = buf[ll:]
+					ac.Ids[i] = b
+				}
+			} else {
+				panic("other token types are not implemented")
+			}
 		}
 		c = append(c, ac)
 	}
@@ -75,19 +93,6 @@ func unpackCoreCoinAddrContracts(buf []byte, addrDesc bchain.AddressDescriptor) 
 		Contracts:      c,
 	}, nil
 }
-
-// func (d *RocksDB) storeAddressContracts(wb *grocksdb.WriteBatch, acm map[string]*AddrContracts) error {
-// 	for addrDesc, acs := range acm {
-// 		// address with 0 contracts is removed from db - happens on disconnect
-// 		if acs == nil || (acs.NonContractTxs == 0 && acs.InternalTxs == 0 && len(acs.Contracts) == 0) {
-// 			wb.DeleteCF(d.cfh[cfAddressContracts], bchain.AddressDescriptor(addrDesc))
-// 		} else {
-// 			buf := packAddrContracts(acs)
-// 			wb.PutCF(d.cfh[cfAddressContracts], bchain.AddressDescriptor(addrDesc), buf)
-// 		}
-// 	}
-// 	return nil
-// }
 
 // GetCoreCoinAddrDescContracts returns AddrContracts for given addrDesc
 func (d *RocksDB) GetCoreCoinAddrDescContracts(addrDesc bchain.AddressDescriptor) (*AddrContracts, error) {
@@ -102,15 +107,6 @@ func (d *RocksDB) GetCoreCoinAddrDescContracts(addrDesc bchain.AddressDescriptor
 	}
 	return unpackCoreCoinAddrContracts(buf, addrDesc)
 }
-
-// func isZeroAddress(addrDesc bchain.AddressDescriptor) bool {
-// 	for _, b := range addrDesc {
-// 		if b != 0 {
-// 			return false
-// 		}
-// 	}
-// 	return true
-// }
 
 // addToAddressesMapCoreCoinType maintains mapping between addresses and transactions in one block
 // it ensures that each index is there only once, there can be for example multiple internal transactions of the same address
@@ -160,6 +156,12 @@ func addToCoreCoinContract(c *AddrContract, contractIndex int, index int32, cont
 	}
 	if transfer.Type == bchain.FungibleToken {
 		aggregate(&c.Value, &transfer.Value)
+	} else if transfer.Type == bchain.NonFungibleToken {
+		if index < 0 {
+			c.Ids.remove(transfer.Value)
+		} else {
+			c.Ids.insert(transfer.Value)
+		}
 	} else {
 		panic("token is not implemented")
 	}
@@ -287,7 +289,7 @@ func (d *RocksDB) processBaseCoreCoinTxData(blockTx *xcbBlockTx, tx *bchain.Tx, 
 // }
 
 func (d *RocksDB) processCoreCoinContractTransfers(blockTx *xcbBlockTx, tx *bchain.Tx, addresses addressesMap, addressContracts map[string]*AddrContracts) error {
-	tokenTransfers, err := d.chainParser.CoreblockchainTypeGetXrc20FromTx(tx)
+	tokenTransfers, err := d.chainParser.CoreCoinTypeGetTokenTransfersFromTx(tx)
 	if err != nil {
 		glog.Warningf("rocksdb: processCoreCoinContractTransfers %v, tx %v", err, tx.Txid)
 	}
@@ -371,7 +373,7 @@ func packCoreCoinBlockTx(buf []byte, blockTx *xcbBlockTx) []byte {
 		buf = appendAddress(buf, c.contract)
 		l = packVaruint(uint(c.transferType), varBuf)
 		buf = append(buf, varBuf[:l]...)
-		if c.transferType == bchain.FungibleToken {
+		if c.transferType == bchain.FungibleToken || c.transferType == bchain.NonFungibleToken {
 			l = packBigint(&c.value, varBuf)
 			buf = append(buf, varBuf[:l]...)
 		} else {
@@ -452,7 +454,7 @@ func unpackCoreCoinBlockTx(buf []byte, pos int) (*xcbBlockTx, int, error) {
 		cc, l = unpackVaruint(buf[pos:])
 		c.transferType = bchain.TokenType(cc)
 		pos += l
-		if c.transferType == bchain.FungibleToken {
+		if c.transferType == bchain.FungibleToken || c.transferType == bchain.NonFungibleToken {
 			c.value, l = unpackBigint(buf[pos:])
 			pos += l
 		} else {

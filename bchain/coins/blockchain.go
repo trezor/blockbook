@@ -341,7 +341,7 @@ func (c *blockChainWithMetrics) EthereumTypeGetErc20ContractBalance(addrDesc, co
 	return c.b.EthereumTypeGetErc20ContractBalance(addrDesc, contractDesc)
 }
 
-// GetContractInfo returns URI of non fungible or multi token defined by token id
+// GetTokenURI returns URI of non fungible or multi token defined by token id
 func (c *blockChainWithMetrics) GetTokenURI(contractDesc bchain.AddressDescriptor, tokenID *big.Int) (v string, err error) {
 	defer func(s time.Time) { c.observeRPCLatency("GetTokenURI", s, err) }(time.Now())
 	return c.b.GetTokenURI(contractDesc, tokenID)
@@ -362,14 +362,9 @@ func (c *blockChainWithMetrics) CoreCoinTypeEstimateEnergy(params map[string]int
 	return c.b.CoreCoinTypeEstimateEnergy(params)
 }
 
-func (c *blockChainWithMetrics) CoreCoinTypeGetXrc20ContractBalance(addrDesc, contractDesc bchain.AddressDescriptor) (v *big.Int, err error) {
-	defer func(s time.Time) { c.observeRPCLatency("CoreCoinTypeGetXrc20ContractBalance", s, err) }(time.Now())
-	return c.b.CoreCoinTypeGetXrc20ContractBalance(addrDesc, contractDesc)
-}
-
-func (c *blockChainWithMetrics) CoreCoinTypeGetXrc20ContractInfo(contractDesc bchain.AddressDescriptor) (v *bchain.ContractInfo, err error) {
-	defer func(s time.Time) { c.observeRPCLatency("CoreCoinTypeGetXrc20ContractInfo", s, err) }(time.Now())
-	return c.b.CoreCoinTypeGetXrc20ContractInfo(contractDesc)
+func (c *blockChainWithMetrics) CoreCoinTypeGetCrc20ContractBalance(addrDesc, contractDesc bchain.AddressDescriptor) (v *big.Int, err error) {
+	defer func(s time.Time) { c.observeRPCLatency("CoreCoinTypeGetCrc20ContractBalance", s, err) }(time.Now())
+	return c.b.CoreCoinTypeGetCrc20ContractBalance(addrDesc, contractDesc)
 }
 
 type mempoolWithMetrics struct {

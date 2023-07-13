@@ -73,12 +73,11 @@ const (
 	ERC20TokenType   TokenTypeName = "ERC20"
 	ERC771TokenType  TokenTypeName = "ERC721"
 	ERC1155TokenType TokenTypeName = "ERC1155"
-	XRC20TokenType  TokenTypeName = "XRC20"
 )
 
 // TokenTypeMap maps bchain.TokenType to TokenTypeName
 // the map must match all bchain.TokenType to avoid index out of range panic
-var TokenTypeMap = []TokenTypeName{ERC20TokenType, ERC771TokenType, ERC1155TokenType, XRC20TokenType}
+var TokenTypeMap = []TokenTypeName{ERC20TokenType, ERC771TokenType, ERC1155TokenType}
 
 type MultiTokenValue struct {
 	Id    big.Int

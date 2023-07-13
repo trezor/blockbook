@@ -59,7 +59,7 @@ func (m *MempoolCoreCoinType) createTxEntry(txid string, txTime uint32) (txEntry
 			addrIndexes, input.AddrDesc = appendAddress(addrIndexes, ^int32(i), a, parser)
 		}
 	}
-	t, err := parser.CoreblockchainTypeGetXrc20FromTx(tx)
+	t, err := parser.CoreCoinTypeGetTokenTransfersFromTx(tx)
 	if err != nil {
 		glog.Error("GetGetTokenTransfersFromTx for tx ", txid, ", ", err)
 	} else {

@@ -171,7 +171,11 @@
                         <tr>
                             <td class="ellipsis"><a href="/address/{{$t.Contract}}">{{if $t.Name}}<span class="copyable" cc="{{$t.Contract}}" alias-type="Contract">{{$t.Name}}</span>{{else}}<span class="copyable">{{$t.Contract}}</span>{{end}}</a></td>
                             <td>
+                             {{if eq $.ChainType 2}}
+                                {{range $i, $iv := $t.Ids}}{{if $i}}, {{end}}{{formatAmountWithDecimals $iv 0}}{{end}}
+                             {{else}}
                                 {{range $i, $iv := $t.Ids}}{{if $i}}, {{end}}<a href="/nft/{{$t.Contract}}/{{formatAmountWithDecimals $iv 0}}">{{formatAmountWithDecimals $iv 0}}</a>{{end}}
+                             {{end}}
                             </td>
                             <td class="text-end">{{$t.Transfers}}</td>
                         </tr>
