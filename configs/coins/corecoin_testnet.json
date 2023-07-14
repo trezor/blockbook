@@ -1,9 +1,9 @@
 {
     "coin": {
-        "name": "Core Coin",
-        "shortcut": "XCB",
-        "label": "Core",
-        "alias": "corecoin"
+        "name": "Core Coin Devin",
+        "shortcut": "XAB",
+        "label": "Core Devin",
+        "alias": "corecoin_testnet"
     },
     "ports": {
         "backend_rpc": 8546,
@@ -18,7 +18,7 @@
         "rpc_timeout": 25
     },
     "backend": {
-        "package_name": "backend-gocore",
+        "package_name": "backend-gocore-devin",
         "package_revision": "a7f8ca53db94bdf57ce9307eedd08bcef5dc07a3",
         "system_user": "corecoin",
         "version": "2.0.6",
@@ -27,13 +27,13 @@
         "verification_source": "f9aedc9f050e78e34c2f1667f41956d398bd965fe97717296805409b3fa3eb80",
         "extract_command": "mv ${ARCHIVE} backend/gocore && chmod +x backend/gocore && echo",
         "exclude_files": [],
-        "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/gocore --syncmode full --txlookuplimit 0 --ipcdisable --cache 1024 --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --port {{.Ports.BackendP2P}} --ws --ws.addr 127.0.0.1 --ws.port {{.Ports.BackendRPC}} --ws.origins \"*\" --ws.api \"xcb,net,web3,debug,txpool\" --http --http.port {{.Ports.BackendHttp}} --http.addr 127.0.0.1 --http.corsdomain \"*\" --http.vhosts \"*\" --http.api \"xcb,net,web3,debug,txpool\" 2>>{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
+        "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/gocore --syncmode full --devin --txlookuplimit 0 --ipcdisable --cache 1024 --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --port {{.Ports.BackendP2P}} --ws --ws.addr 127.0.0.1 --ws.port {{.Ports.BackendRPC}} --ws.origins \"*\" --ws.api \"xcb,net,web3,debug,txpool\" --http --http.port {{.Ports.BackendHttp}} --http.addr 127.0.0.1 --http.corsdomain \"*\" --http.vhosts \"*\" --http.api \"xcb,net,web3,debug,txpool\" 2>>{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
         "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
         "postinst_script_template": "",
         "service_type": "simple",
         "service_additional_params_template": "",
         "protect_memory": true,
-        "mainnet": true,
+        "mainnet": false,
         "server_config_file": "",
         "client_config_file": "",
         "platforms": {

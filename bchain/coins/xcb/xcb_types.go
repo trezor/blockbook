@@ -7,24 +7,6 @@ import (
 	"github.com/cryptohub-digital/blockbook-fork/bchain"
 )
 
-// CoreCoinInternalTransactionType - type of core coin transaction from internal data
-type CoreCoinInternalTransactionType int
-
-// CoreCoinInternalTransactionType enumeration
-const (
-	CALL = CoreCoinInternalTransactionType(iota)
-	CREATE
-	SELFDESTRUCT
-)
-
-// CoreCoinInternalTransfer contains data about internal transfer
-type CoreCoinInternalTransfer struct {
-	Type  CoreCoinInternalTransactionType `json:"type"`
-	From  string                          `json:"from"`
-	To    string                          `json:"to"`
-	Value big.Int                         `json:"value"`
-}
-
 // RpcLog is returned by xcb_getLogs
 type RpcLog struct {
 	Address string   `json:"address"`

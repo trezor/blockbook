@@ -35,7 +35,6 @@ require (
 )
 
 require (
-	github.com/alecthomas/gozmq v0.0.0-20140622232202-d1b01a2df6b2 // indirect
 	github.com/aristanetworks/goarista v0.0.0-20170210015632-ea17b1a17847 // indirect
 	github.com/core-coin/ed448 v1.0.2 // indirect
 	github.com/core-coin/go-goldilocks v1.0.15 // indirect
@@ -64,7 +63,6 @@ require (
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.1.0 // indirect
 	github.com/decred/dcrd/wire v1.4.0 // indirect
 	github.com/decred/slog v1.1.0 // indirect
-	github.com/flier/gorocksdb v1.1.0
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/go-stack/stack v1.8.1 // indirect
 	github.com/golang/mock v1.6.0 // indirect
