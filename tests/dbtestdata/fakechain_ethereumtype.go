@@ -5,7 +5,7 @@ import (
 	"math/big"
 	"strconv"
 
-	"github.com/cryptohub-digital/blockbook-fork/bchain"
+	"github.com/trezor/blockbook/bchain"
 )
 
 type fakeBlockChainEthereumType struct {

@@ -1,12 +1,12 @@
 package db
 
 import (
-	"github.com/cryptohub-digital/blockbook-fork/bchain"
-	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/eth"
-	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/xcb"
-	"github.com/cryptohub-digital/blockbook-fork/common"
 	"github.com/golang/glog"
 	"github.com/juju/errors"
+	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/bchain/coins/eth"
+	"github.com/trezor/blockbook/bchain/coins/xcb"
+	"github.com/trezor/blockbook/common"
 )
 
 // TxCache is handle to TxCacheServer

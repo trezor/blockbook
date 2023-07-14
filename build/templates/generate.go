@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	build "github.com/cryptohub-digital/blockbook-fork/build/tools"
+	build "github.com/trezor/blockbook/build/tools"
 )
 
 const (

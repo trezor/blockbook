@@ -7,9 +7,9 @@ import (
 
 	xcbcommon "github.com/core-coin/go-core/v2/common"
 	"github.com/core-coin/go-core/v2/common/hexutil"
-	"github.com/cryptohub-digital/blockbook-fork/bchain"
 	"github.com/golang/protobuf/proto"
 	"github.com/juju/errors"
+	"github.com/trezor/blockbook/bchain"
 )
 
 // CoreCoinTypeAddressDescriptorLen - the AddressDescriptor of Core Coin has fixed length

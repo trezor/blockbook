@@ -10,9 +10,9 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/cryptohub-digital/blockbook-fork/bchain"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/golang/glog"
+	"github.com/trezor/blockbook/bchain"
 )
 
 func parseSimpleNumericProperty(data string) *big.Int {

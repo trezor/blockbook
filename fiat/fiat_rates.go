@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cryptohub-digital/blockbook-fork/common"
-	"github.com/cryptohub-digital/blockbook-fork/db"
 	"github.com/golang/glog"
+	"github.com/trezor/blockbook/common"
+	"github.com/trezor/blockbook/db"
 )
 
 const currentTickersKey = "CurrentTickers"

@@ -4,7 +4,7 @@ import (
 	"context"
 	"math/big"
 
-	"github.com/cryptohub-digital/blockbook-fork/bchain"
+	"github.com/trezor/blockbook/bchain"
 )
 
 // RpcLog is returned by xcb_getLogs

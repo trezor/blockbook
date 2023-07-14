@@ -15,10 +15,10 @@ import (
 	"github.com/core-coin/go-core/v2/core/types"
 	"github.com/core-coin/go-core/v2/rpc"
 	"github.com/core-coin/go-core/v2/xcbclient"
-	"github.com/cryptohub-digital/blockbook-fork/bchain"
-	"github.com/cryptohub-digital/blockbook-fork/common"
 	"github.com/golang/glog"
 	"github.com/juju/errors"
+	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/common"
 )
 
 // Network type specifies the type of core-coin network

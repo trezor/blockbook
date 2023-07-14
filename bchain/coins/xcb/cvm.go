@@ -9,7 +9,7 @@ import (
 	"github.com/core-coin/go-core/v2/core/types"
 	"github.com/core-coin/go-core/v2/rpc"
 	"github.com/core-coin/go-core/v2/xcbclient"
-	"github.com/cryptohub-digital/blockbook-fork/bchain"
+	"github.com/trezor/blockbook/bchain"
 )
 
 // CoreblockchainClient wraps a client to implement the CVMClient interface

@@ -3,10 +3,10 @@ package api
 import (
 	"sync"
 
-	"github.com/cryptohub-digital/blockbook-fork/bchain"
-	"github.com/cryptohub-digital/blockbook-fork/db"
 	"github.com/golang/glog"
 	"github.com/linxGnu/grocksdb"
+	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/db"
 )
 
 // refetch internal data

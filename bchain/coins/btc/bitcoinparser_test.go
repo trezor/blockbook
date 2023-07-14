@@ -9,8 +9,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/cryptohub-digital/blockbook-fork/bchain"
 	"github.com/martinboehm/btcutil/chaincfg"
+	"github.com/trezor/blockbook/bchain"
 )
 
 func TestMain(m *testing.M) {

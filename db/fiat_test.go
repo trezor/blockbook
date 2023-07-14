@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cryptohub-digital/blockbook-fork/common"
 	"github.com/linxGnu/grocksdb"
+	"github.com/trezor/blockbook/common"
 )
 
 func TestRocksTickers(t *testing.T) {

@@ -15,7 +15,7 @@ mkdir -p build
 cp -r /src/build/templates build
 cp -r /src/build/scripts build
 cp -r /src/configs .
-mkdir -p /go/src/github.com/cryptohub-digital/blockbook-fork/build && cp -r /src/build/tools /go/src/github.com/cryptohub-digital/blockbook-fork/build/tools
+mkdir -p /go/src/github.com/trezor/blockbook/build && cp -r /src/build/tools /go/src/github.com/trezor/blockbook/build/tools
 go env -w GO111MODULE=off
 go run build/templates/generate.go $coin
 go env -w GO111MODULE=auto

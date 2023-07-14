@@ -14,7 +14,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/juju/errors"
 
-	"github.com/cryptohub-digital/blockbook-fork/bchain"
+	"github.com/trezor/blockbook/bchain"
 )
 
 const tokenTransferEventSignature = "0xc17a9d92b89f27cb79cc390f23a1a5d302fefab8c7911075ede952ac2b5607a1"

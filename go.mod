@@ -1,4 +1,4 @@
-module github.com/cryptohub-digital/blockbook-fork
+module github.com/trezor/blockbook
 
 go 1.19
 

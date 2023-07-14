@@ -5,10 +5,10 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/cryptohub-digital/blockbook-fork/bchain"
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/juju/errors"
+	"github.com/trezor/blockbook/bchain"
 )
 
 const erc20TransferMethodSignature = "0xa9059cbb"                  // transfer(address,uint256)

@@ -1,7 +1,7 @@
 package bitzeny
 
 import (
-	"github.com/cryptohub-digital/blockbook-fork/bchain/coins/btc"
+	"github.com/trezor/blockbook/bchain/coins/btc"
 
 	"github.com/martinboehm/btcd/wire"
 	"github.com/martinboehm/btcutil/chaincfg"

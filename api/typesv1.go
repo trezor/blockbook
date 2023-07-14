@@ -3,7 +3,7 @@ package api
 import (
 	"math/big"
 
-	"github.com/cryptohub-digital/blockbook-fork/bchain"
+	"github.com/trezor/blockbook/bchain"
 )
 
 // ScriptSigV1 is used for legacy api v1

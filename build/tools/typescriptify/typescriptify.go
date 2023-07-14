@@ -5,10 +5,10 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/cryptohub-digital/blockbook-fork/api"
-	"github.com/cryptohub-digital/blockbook-fork/bchain"
-	"github.com/cryptohub-digital/blockbook-fork/server"
 	"github.com/tkrajina/typescriptify-golang-structs/typescriptify"
+	"github.com/trezor/blockbook/api"
+	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/server"
 )
 
 func main() {
