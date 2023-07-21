@@ -9,6 +9,7 @@
     "coin_shortcut": "{{.Coin.Shortcut}}",
     "coin_label": "{{.Coin.Label}}",
     "rpc_url": "{{template "IPC.RPCURLTemplate" .}}",
+    "ws_url": "{{template "IPC.WSURLTemplate" .}}",
     "rpc_user": "{{.IPC.RPCUser}}",
     "rpc_pass": "{{.IPC.RPCPass}}",
     "rpc_timeout": {{.IPC.RPCTimeout}},

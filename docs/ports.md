@@ -53,7 +53,7 @@
 | eCash                            | 9197             | 9097               | 8097        | 38397                                |
 | Avalanche                        | 9198             | 9098               | 8098        | 38398 p2p                            |
 | Avalanche Archive                | 9199             | 9099               | 8099        | 38399 p2p                            |
-| RSK                              | 9200             | 9100               | 8100        | 38400 p2p                            |
+| Rsk                              | 9200             | 9100               | 4444        | 4444 http, 4445 ws, 5050 p2p         |
 | Ethereum Testnet Goerli Archive  | 19106            | 19006              | 18006       | 18106 http, 18506 authrpc, 48306 p2p |
 | Bitcoin Signet                   | 19120            | 19020              | 18020       | 48320                                |
 | Bitcoin Regtest                  | 19121            | 19021              | 18021       | 48321                                |

@@ -117,6 +117,7 @@ func (w *SyncWorker) ResyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 
 func (w *SyncWorker) resyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync bool) error {
 	remoteBestHash, err := w.chain.GetBestBlockHash()
+	glog.Info("chain best block hash: ", remoteBestHash)
 	if err != nil {
 		return err
 	}
@@ -331,6 +332,7 @@ func (w *SyncWorker) ConnectBlocksParallel(lower, higher uint32) error {
 			for {
 				block, err = w.chain.GetBlock(hh.hash, hh.height)
 				if err != nil {
+					glog.Error("error getting block hash: ", hh.hash, " block: height: ", hh.height)
 					// signal came while looping in the error loop
 					if hchClosed.Load() == true {
 						glog.Error("getBlockWorker ", i, " connect block error ", err, ". Exiting...")

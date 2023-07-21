@@ -43,6 +43,7 @@ type Configuration struct {
 	CoinName                        string `json:"coin_name"`
 	CoinShortcut                    string `json:"coin_shortcut"`
 	RPCURL                          string `json:"rpc_url"`
+	WSURL                           string `json:"ws_url"`
 	RPCTimeout                      int    `json:"rpc_timeout"`
 	BlockAddressesToKeep            int    `json:"block_addresses_to_keep"`
 	AddressAliases                  bool   `json:"address_aliases,omitempty"`
@@ -64,14 +65,14 @@ type EthereumRPC struct {
 	PushHandler          func(bchain.NotificationType)
 	OpenRPC              func(string) (bchain.EVMRPCClient, bchain.EVMClient, error)
 	Mempool              *bchain.MempoolEthereumType
-	mempoolInitialized   bool
-	bestHeaderLock       sync.Mutex
+	MempoolInitialized   bool
+	BestHeaderLock       sync.Mutex
 	bestHeader           bchain.EVMHeader
-	bestHeaderTime       time.Time
+	BestHeaderTime       time.Time
 	NewBlock             bchain.EVMNewBlockSubscriber
-	newBlockSubscription bchain.EVMClientSubscription
+	NewBlockSubscription bchain.EVMClientSubscription
 	NewTx                bchain.EVMNewTxSubscriber
-	newTxSubscription    bchain.EVMClientSubscription
+	NewTxSubscription    bchain.EVMClientSubscription
 	ChainConfig          *Configuration
 }
 
@@ -191,7 +192,7 @@ func (b *EthereumRPC) InitializeMempool(addrDescForOutpoint bchain.AddrDescForOu
 		return err
 	}
 
-	b.mempoolInitialized = true
+	b.MempoolInitialized = true
 
 	return nil
 }
@@ -211,16 +212,16 @@ func (b *EthereumRPC) subscribeEvents() error {
 	}()
 
 	// new block subscription
-	if err := b.subscribe(func() (bchain.EVMClientSubscription, error) {
+	if err := b.Subscribe(func() (bchain.EVMClientSubscription, error) {
 		// invalidate the previous subscription - it is either the first one or there was an error
-		b.newBlockSubscription = nil
+		b.NewBlockSubscription = nil
 		ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
 		defer cancel()
 		sub, err := b.RPC.EthSubscribe(ctx, b.NewBlock.Channel(), "newHeads")
 		if err != nil {
 			return nil, errors.Annotatef(err, "EthSubscribe newHeads")
 		}
-		b.newBlockSubscription = sub
+		b.NewBlockSubscription = sub
 		glog.Info("Subscribed to newHeads")
 		return sub, nil
 	}); err != nil {
@@ -244,16 +245,16 @@ func (b *EthereumRPC) subscribeEvents() error {
 	}()
 
 	// new mempool transaction subscription
-	if err := b.subscribe(func() (bchain.EVMClientSubscription, error) {
+	if err := b.Subscribe(func() (bchain.EVMClientSubscription, error) {
 		// invalidate the previous subscription - it is either the first one or there was an error
-		b.newTxSubscription = nil
+		b.NewTxSubscription = nil
 		ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
 		defer cancel()
 		sub, err := b.RPC.EthSubscribe(ctx, b.NewTx.Channel(), "newPendingTransactions")
 		if err != nil {
 			return nil, errors.Annotatef(err, "EthSubscribe newPendingTransactions")
 		}
-		b.newTxSubscription = sub
+		b.NewTxSubscription = sub
 		glog.Info("Subscribed to newPendingTransactions")
 		return sub, nil
 	}); err != nil {
@@ -263,8 +264,8 @@ func (b *EthereumRPC) subscribeEvents() error {
 	return nil
 }
 
-// subscribe subscribes notification and tries to resubscribe in case of error
-func (b *EthereumRPC) subscribe(f func() (bchain.EVMClientSubscription, error)) error {
+// Subscribe subscribes notification and tries to resubscribe in case of error
+func (b *EthereumRPC) Subscribe(f func() (bchain.EVMClientSubscription, error)) error {
 	s, err := f()
 	if err != nil {
 		return err
@@ -304,11 +305,11 @@ func (b *EthereumRPC) subscribe(f func() (bchain.EVMClientSubscription, error)) 
 }
 
 func (b *EthereumRPC) closeRPC() {
-	if b.newBlockSubscription != nil {
-		b.newBlockSubscription.Unsubscribe()
+	if b.NewBlockSubscription != nil {
+		b.NewBlockSubscription.Unsubscribe()
 	}
-	if b.newTxSubscription != nil {
-		b.newTxSubscription.Unsubscribe()
+	if b.NewTxSubscription != nil {
+		b.NewTxSubscription.Unsubscribe()
 	}
 	if b.RPC != nil {
 		b.RPC.Close()
@@ -394,6 +395,9 @@ func (b *EthereumRPC) GetChainInfo() (*bchain.ChainInfo, error) {
 		return nil, err
 	}
 	consensusVersion := b.getConsensusVersion()
+	glog.Info("RSK Log Data")
+	glog.Info(h)
+	glog.Info(h.Hash())
 	rv := &bchain.ChainInfo{
 		Blocks:           int(h.Number().Int64()),
 		Bestblockhash:    h.Hash(),
@@ -411,11 +415,11 @@ func (b *EthereumRPC) GetChainInfo() (*bchain.ChainInfo, error) {
 }
 
 func (b *EthereumRPC) getBestHeader() (bchain.EVMHeader, error) {
-	b.bestHeaderLock.Lock()
-	defer b.bestHeaderLock.Unlock()
+	b.BestHeaderLock.Lock()
+	defer b.BestHeaderLock.Unlock()
 	// if the best header was not updated for 15 minutes, there could be a subscription problem, reconnect RPC
 	// do it only in case of normal operation, not initial synchronization
-	if b.bestHeaderTime.Add(15*time.Minute).Before(time.Now()) && !b.bestHeaderTime.IsZero() && b.mempoolInitialized {
+	if b.BestHeaderTime.Add(15*time.Minute).Before(time.Now()) && !b.BestHeaderTime.IsZero() && b.MempoolInitialized {
 		err := b.reconnectRPC()
 		if err != nil {
 			return nil, err
@@ -431,7 +435,7 @@ func (b *EthereumRPC) getBestHeader() (bchain.EVMHeader, error) {
 			b.bestHeader = nil
 			return nil, err
 		}
-		b.bestHeaderTime = time.Now()
+		b.BestHeaderTime = time.Now()
 	}
 	return b.bestHeader, nil
 }
@@ -439,10 +443,10 @@ func (b *EthereumRPC) getBestHeader() (bchain.EVMHeader, error) {
 // UpdateBestHeader keeps track of the latest block header confirmed on chain
 func (b *EthereumRPC) UpdateBestHeader(h bchain.EVMHeader) {
 	glog.V(2).Info("rpc: new block header ", h.Number())
-	b.bestHeaderLock.Lock()
+	b.BestHeaderLock.Lock()
 	b.bestHeader = h
-	b.bestHeaderTime = time.Now()
-	b.bestHeaderLock.Unlock()
+	b.BestHeaderTime = time.Now()
+	b.BestHeaderLock.Unlock()
 }
 
 // GetBestBlockHash returns hash of the tip of the best-block-chain
@@ -476,6 +480,7 @@ func (b *EthereumRPC) GetBlockHash(height uint32) (string, error) {
 		}
 		return "", errors.Annotatef(err, "height %v", height)
 	}
+	glog.Info("GetBlockHash By: ", height, " Hash: ", h.Hash())
 	return h.Hash(), nil
 }
 
@@ -767,7 +772,7 @@ func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error
 			return nil, errors.Annotatef(err, "hash %v, height %v, txid %v", hash, height, tx.Hash)
 		}
 		btxs[i] = *btx
-		if b.mempoolInitialized {
+		if b.MempoolInitialized {
 			b.Mempool.RemoveTransactionFromMempool(tx.Hash)
 		}
 	}
@@ -821,7 +826,7 @@ func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 	if err != nil {
 		return nil, err
 	} else if tx == nil {
-		if b.mempoolInitialized {
+		if b.MempoolInitialized {
 			b.Mempool.RemoveTransactionFromMempool(txid)
 		}
 		return nil, bchain.ErrTxNotFound
@@ -867,7 +872,7 @@ func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 			return nil, errors.Annotatef(err, "txid %v", txid)
 		}
 		// remove tx from mempool if it is there
-		if b.mempoolInitialized {
+		if b.MempoolInitialized {
 			b.Mempool.RemoveTransactionFromMempool(txid)
 		}
 	}
