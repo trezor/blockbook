@@ -140,6 +140,7 @@ func init() {
 	BlockChainFactories["BNB Smart Chain"] = bsc.NewBNBSmartChainRPC
 	BlockChainFactories["BNB Smart Chain Archive"] = bsc.NewBNBSmartChainRPC
 	BlockChainFactories["Core Coin"] = xcb.NewCoreblockchainRPC
+	BlockChainFactories["Core Coin Devin"] = xcb.NewCoreblockchainRPC
 
 }
 
