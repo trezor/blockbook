@@ -360,17 +360,17 @@ func appendXcbAddress(buf []byte, a bchain.AddressDescriptor) []byte {
 func packCoreCoinBlockTx(buf []byte, blockTx *xcbBlockTx) []byte {
 	varBuf := make([]byte, maxPackedBigintBytes)
 	buf = append(buf, blockTx.btxID...)
-	buf = appendAddress(buf, blockTx.from)
-	buf = appendAddress(buf, blockTx.to)
+	buf = appendXcbAddress(buf, blockTx.from)
+	buf = appendXcbAddress(buf, blockTx.to)
 	// internal data are not stored in blockTx, they are fetched on disconnect directly from the cfInternalData column
 	// contracts - store the number of address pairs
 	l := packVaruint(uint(len(blockTx.contracts)), varBuf)
 	buf = append(buf, varBuf[:l]...)
 	for j := range blockTx.contracts {
 		c := &blockTx.contracts[j]
-		buf = appendAddress(buf, c.from)
-		buf = appendAddress(buf, c.to)
-		buf = appendAddress(buf, c.contract)
+		buf = appendXcbAddress(buf, c.from)
+		buf = appendXcbAddress(buf, c.to)
+		buf = appendXcbAddress(buf, c.contract)
 		l = packVaruint(uint(c.transferType), varBuf)
 		buf = append(buf, varBuf[:l]...)
 		if c.transferType == bchain.FungibleToken || c.transferType == bchain.NonFungibleToken {
@@ -538,7 +538,7 @@ func (d *RocksDB) disconnectCoreCoinAddress(btxID []byte, internal bool, addrDes
 				if addrContracts.NonContractTxs > 0 {
 					addrContracts.NonContractTxs--
 				} else {
-					glog.Warning("AddressContracts ", addrDesc, ", EthTxs would be negative, tx ", hex.EncodeToString(btxID))
+					glog.Warning("AddressContracts ", addrDesc, ", XcbTxs would be negative, tx ", hex.EncodeToString(btxID))
 				}
 			}
 		} else {
