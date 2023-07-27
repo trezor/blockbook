@@ -8,7 +8,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/golang/glog"
 	"github.com/trezor/blockbook/bchain"
 	"math/big"
 	"strings"
@@ -26,11 +25,6 @@ func (c *RskClient) HeaderByNumber(ctx context.Context, number *big.Int) (bchain
 	if err != nil {
 		return nil, err
 	}
-
-	glog.Info("RSK HeaderByNumber")
-	glog.Info(h.Number())
-	glog.Info(h.Hash())
-	glog.Info(h.Difficulty())
 
 	return h, nil
 }
@@ -108,13 +102,11 @@ type RskClientSubscription struct {
 // RskHeaderByNumber HeaderByNumber returns a RSK block header from the current canonical chain. If number is
 // nil, the latest known header is returned.
 func rskHeaderByNumber(b *RskRPCClient, ctx context.Context, number *big.Int) (*RskHeader, error) {
-	glog.Info("rskHeaderByNumber")
 	var head *RskHeader
 	err := b.Client.CallContext(ctx, &head, "eth_getBlockByNumber", toBlockNumArg(number), false)
 	if err == nil && head == nil {
 		err = ethereum.NotFound
 	}
-	glog.Info(head)
 	return head, err
 }
 

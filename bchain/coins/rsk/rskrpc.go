@@ -90,8 +90,6 @@ func (b *RskRPC) Initialize() error {
 		return errors.Errorf("Unknown network id %v", id)
 	}
 
-	glog.Info("rpc: block chain ", b.Network)
-
 	return nil
 }
 

@@ -395,9 +395,6 @@ func (b *EthereumRPC) GetChainInfo() (*bchain.ChainInfo, error) {
 		return nil, err
 	}
 	consensusVersion := b.getConsensusVersion()
-	glog.Info("RSK Log Data")
-	glog.Info(h)
-	glog.Info(h.Hash())
 	rv := &bchain.ChainInfo{
 		Blocks:           int(h.Number().Int64()),
 		Bestblockhash:    h.Hash(),
@@ -480,7 +477,6 @@ func (b *EthereumRPC) GetBlockHash(height uint32) (string, error) {
 		}
 		return "", errors.Annotatef(err, "height %v", height)
 	}
-	glog.Info("GetBlockHash By: ", height, " Hash: ", h.Hash())
 	return h.Hash(), nil
 }
 
