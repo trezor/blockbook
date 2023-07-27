@@ -34,7 +34,7 @@ components of Blockbook, it is mandatory that coin implementations have these in
 implemented in packages `blockbook/tests/rpc` and `blockbook/tests/sync` and both of them are declarative. For each coin
 there are test definition that enables particular tests of test suite and *testdata* file that contains test fixtures.
 
-Not every coin implementation support full set of back-end API so it is necessary define which tests of test suite
+Not every coin implementation supports full set of back-end API so it is necessary to define which tests of test suite
 are able to run. That is done in test definition file *blockbook/tests/tests.json*. Configuration is hierarchical and
 test implementations call each level as separate subtest. Go's *test* command allows filter tests to run by `-run` flag.
 It perfectly fits with layered test definitions. For example, you can:

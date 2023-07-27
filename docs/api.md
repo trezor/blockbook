@@ -464,7 +464,7 @@ Blockbook supports BIP44, BIP49, BIP84 and BIP86 (Taproot) derivation schemes, u
 
 - Output descriptors
 
-  Output descriptors are in the form `<type>([<path>]<xpub>[/<change>/*])[#checkum]`, for example `pkh([5c9e228d/44'/0'/0']xpub6BgBgses...Mj92pReUsQ/<0;1>/*)#abcd`
+  Output descriptors are in the form `<type>([<path>]<xpub>[/<change>/*])[#checksum]`, for example `pkh([5c9e228d/44'/0'/0']xpub6BgBgses...Mj92pReUsQ/<0;1>/*)#abcd`
 
   Parameters `type` and `xpub` are mandatory, the rest is optional
 

@@ -11,7 +11,7 @@ Manual build require additional dependencies that are described in appropriate s
 ## Build in Docker environment
 
 All build operations run in Docker container in order to keep build environment isolated. Makefile in root of repository
-define few targets used for building, testing and packaging of Blockbook. With Docker image definitions and Debian
+defines few targets used for building, testing and packaging of Blockbook. With Docker image definitions and Debian
 package templates in *build/docker* and *build/templates* respectively, they are only inputs that make build process.
 
 Docker build images are created at first execution of Makefile and that information is persisted. (Actually there are
@@ -137,7 +137,7 @@ Blockbook versioning is much simpler. There is only one version defined in *conf
 
 ### Back-end building
 
-Because we don't keep back-end archives inside out repository we download them during build process. Build steps
+Because we don't keep back-end archives inside our repository we download them during build process. Build steps
 are these: download, verify and extract archive, prepare distribution and make package.
 
 All configuration keys described below are in coin definition file in *configs/coins*.
@@ -153,7 +153,7 @@ have signed sha256 sums and some don't care about verification at all. So there 
 could be *gpg*, *gpg-sha256* or *sha256* and chooses particular method.
 
 *gpg* type require file with digital sign and maintainer's public key imported in Docker build image (see below). Sign
-file is downloaded from URL defined in *backend.verification_source*. Than is passed to gpg in order to verify archvie.
+file is downloaded from URL defined in *backend.verification_source*. Than is passed to gpg in order to verify archive.
 
 *gpg-sha256* type require signed checksum file and maintainer's public key imported in Docker build image (see below).
 Checksum file is downloaded from URL defined in *backend.verification_source*. Then is verified by gpg and passed to
@@ -201,12 +201,12 @@ export PATH=$PATH:$GOPATH/bin
 ```
 
 Install RocksDB: https://github.com/facebook/rocksdb/blob/master/INSTALL.md
-and compile the static_lib and tools. Optionally, consider adding `PORTABLE=1` before the 
+and compile the static_lib and tools. Optionally, consider adding `PORTABLE=1` before the
 make command to create a portable binary.
 
 ```
 sudo apt-get update && sudo apt-get install -y \
-    build-essential git wget pkg-config libzmq3-dev libgflags-dev libsnappy-dev zlib1g-dev libzstd-dev  libbz2-dev liblz4-dev 
+    build-essential git wget pkg-config libzmq3-dev libgflags-dev libsnappy-dev zlib1g-dev libzstd-dev  libbz2-dev liblz4-dev
 git clone https://github.com/facebook/rocksdb.git
 cd rocksdb
 git checkout v7.5.3

@@ -1,65 +1,65 @@
 {
-  "coin": {
-    "name": "Polygon",
-    "shortcut": "MATIC",
-    "label": "Polygon",
-    "alias": "polygon_bor"
-  },
-  "ports": {
-    "backend_rpc": 8070,
-    "backend_p2p": 38370,
-    "backend_http": 8170,
-    "blockbook_internal": 9070,
-    "blockbook_public": 9170
-  },
-  "ipc": {
-    "rpc_url_template": "ws://127.0.0.1:{{.Ports.BackendRPC}}",
-    "rpc_timeout": 25
-  },
-  "backend": {
-    "package_name": "backend-polygon-bor",
-    "package_revision": "satoshilabs-1",
-    "system_user": "polygon",
-    "version": "0.3.9",
-    "binary_url": "https://github.com/maticnetwork/bor/archive/refs/tags/v0.3.9.tar.gz",
-    "verification_type": "sha256",
-    "verification_source": "54da737571d297311f59ac483ce1428e519345dabb22c8c1563ede0834cd368f",
-    "extract_command": "mkdir backend/source && tar -C backend/source --strip 1 -xf v0.3.9.tar.gz && cd backend/source && make bor && mv build/bin/bor ../ && rm -rf ../source && echo",
-    "exclude_files": [],
-    "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/polygon_bor_exec.sh 2>> {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
-    "exec_script": "polygon_bor.sh",
-    "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
-    "postinst_script_template": "wget https://raw.githubusercontent.com/maticnetwork/bor/v0.3.9/builder/files/genesis-mainnet-v1.json -O {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/genesis.json",
-    "service_type": "simple",
-    "service_additional_params_template": "",
-    "protect_memory": true,
-    "mainnet": true,
-    "server_config_file": "",
-    "client_config_file": ""
-  },
-  "blockbook": {
-    "package_name": "blockbook-polygon",
-    "system_user": "blockbook-polygon",
-    "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
-    "public_binding_template": ":{{.Ports.BlockbookPublic}}",
-    "explorer_url": "",
-    "additional_params": "",
-    "block_chain": {
-      "parse": true,
-      "mempool_workers": 8,
-      "mempool_sub_workers": 2,
-      "block_addresses_to_keep": 300,
-      "additional_params": {
-        "mempoolTxTimeoutHours": 48,
-        "queryBackendOnMempoolResync": false,
-        "fiat_rates": "coingecko",
-        "fiat_rates_vs_currencies": "AED,ARS,AUD,BDT,BHD,BMD,BRL,CAD,CHF,CLP,CNY,CZK,DKK,EUR,GBP,HKD,HUF,IDR,ILS,INR,JPY,KRW,KWD,LKR,MMK,MXN,MYR,NGN,NOK,NZD,PHP,PKR,PLN,RUB,SAR,SEK,SGD,THB,TRY,TWD,UAH,USD,VEF,VND,ZAR,BTC,ETH",
-        "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"matic-network\",\"platformIdentifier\": \"polygon-pos\",\"platformVsCurrency\": \"usd\",\"periodSeconds\": 900}"
-      }
+    "coin": {
+        "name": "Polygon",
+        "shortcut": "MATIC",
+        "label": "Polygon",
+        "alias": "polygon_bor"
+    },
+    "ports": {
+        "backend_rpc": 8070,
+        "backend_p2p": 38370,
+        "backend_http": 8170,
+        "blockbook_internal": 9070,
+        "blockbook_public": 9170
+    },
+    "ipc": {
+        "rpc_url_template": "ws://127.0.0.1:{{.Ports.BackendRPC}}",
+        "rpc_timeout": 25
+    },
+    "backend": {
+        "package_name": "backend-polygon-bor",
+        "package_revision": "satoshilabs-1",
+        "system_user": "polygon",
+        "version": "0.4.0",
+        "binary_url": "https://github.com/maticnetwork/bor/archive/refs/tags/v0.4.0.tar.gz",
+        "verification_type": "sha256",
+        "verification_source": "99fa80e9320075f581ba17b2f58330917688794650873a7484ddb8b80ee4a84d",
+        "extract_command": "mkdir backend/source && tar -C backend/source --strip 1 -xf v0.4.0.tar.gz && cd backend/source && make bor && mv build/bin/bor ../ && rm -rf ../source && echo",
+        "exclude_files": [],
+        "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/polygon_bor_exec.sh 2>> {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
+        "exec_script": "polygon_bor.sh",
+        "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
+        "postinst_script_template": "wget https://raw.githubusercontent.com/maticnetwork/bor/v0.4.0/builder/files/genesis-mainnet-v1.json -O {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/genesis.json",
+        "service_type": "simple",
+        "service_additional_params_template": "",
+        "protect_memory": true,
+        "mainnet": true,
+        "server_config_file": "",
+        "client_config_file": ""
+    },
+    "blockbook": {
+        "package_name": "blockbook-polygon",
+        "system_user": "blockbook-polygon",
+        "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
+        "public_binding_template": ":{{.Ports.BlockbookPublic}}",
+        "explorer_url": "",
+        "additional_params": "",
+        "block_chain": {
+            "parse": true,
+            "mempool_workers": 8,
+            "mempool_sub_workers": 2,
+            "block_addresses_to_keep": 300,
+            "additional_params": {
+                "mempoolTxTimeoutHours": 48,
+                "queryBackendOnMempoolResync": false,
+                "fiat_rates": "coingecko",
+                "fiat_rates_vs_currencies": "AED,ARS,AUD,BDT,BHD,BMD,BRL,CAD,CHF,CLP,CNY,CZK,DKK,EUR,GBP,HKD,HUF,IDR,ILS,INR,JPY,KRW,KWD,LKR,MMK,MXN,MYR,NGN,NOK,NZD,PHP,PKR,PLN,RUB,SAR,SEK,SGD,THB,TRY,TWD,UAH,USD,VEF,VND,ZAR,BTC,ETH",
+                "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"matic-network\",\"platformIdentifier\": \"polygon-pos\",\"platformVsCurrency\": \"usd\",\"periodSeconds\": 900}"
+            }
+        }
+    },
+    "meta": {
+        "package_maintainer": "IT",
+        "package_maintainer_email": "it@satoshilabs.com"
     }
-  },
-  "meta": {
-    "package_maintainer": "IT",
-    "package_maintainer_email": "it@satoshilabs.com"
-  }
 }
