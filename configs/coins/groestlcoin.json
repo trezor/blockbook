@@ -22,10 +22,10 @@
         "package_name": "backend-groestlcoin",
         "package_revision": "satoshilabs-1",
         "system_user": "groestlcoin",
-        "version": "24.0.1",
-        "binary_url": "https://github.com/Groestlcoin/groestlcoin/releases/download/v24.0.1/groestlcoin-24.0.1-x86_64-linux-gnu.tar.gz",
+        "version": "25.0",
+        "binary_url": "https://github.com/Groestlcoin/groestlcoin/releases/download/v25.0/groestlcoin-25.0-x86_64-linux-gnu.tar.gz",
         "verification_type": "sha256",
-        "verification_source": "4b69743190e2697d7b7772bf6f63cde595d590ff6664abf15a7201dab2a6098b",
+        "verification_source": "bcca36b5a2f1e83a4fd9888bc0016d3f46f9ef01238dc23a8e03f2f4ac3b9707",
         "extract_command": "tar -C backend --strip 1 -xf",
         "exclude_files": ["bin/groestlcoin-qt"],
         "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/groestlcoind -datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -conf={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf -pid=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",
@@ -38,8 +38,13 @@
         "server_config_file": "bitcoin.conf",
         "client_config_file": "bitcoin_client.conf",
         "additional_params": {
-            "deprecatedrpc": "estimatefee",
-            "whitelist": "127.0.0.1"
+            "deprecatedrpc": "estimatefee"
+        },
+        "platforms": {
+          "arm64": {
+            "binary_url": "https://github.com/Groestlcoin/groestlcoin/releases/download/v25.0/groestlcoin-25.0-aarch64-linux-gnu.tar.gz",
+            "verification_source": "d8776b405113b46d6be6e4921c5a5e62cbfaa5329087abbec14cc24d750f9c94"
+          }
         }
     },
     "blockbook": {
@@ -48,7 +53,7 @@
         "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
         "public_binding_template": ":{{.Ports.BlockbookPublic}}",
         "explorer_url": "",
-        "additional_params": "",
+        "additional_params": "-enablesubnewtx -extendedindex",
         "block_chain": {
             "parse": true,
             "mempool_workers": 8,
@@ -61,7 +66,9 @@
             "additional_params": {
                 "fiat_rates": "coingecko",
                 "fiat_rates_vs_currencies": "AED,ARS,AUD,BDT,BHD,BMD,BRL,CAD,CHF,CLP,CNY,CZK,DKK,EUR,GBP,HKD,HUF,IDR,ILS,INR,JPY,KRW,KWD,LKR,MMK,MXN,MYR,NGN,NOK,NZD,PHP,PKR,PLN,RUB,SAR,SEK,SGD,THB,TRY,TWD,UAH,USD,VEF,VND,ZAR,BTC,ETH",
-                "fiat_rates_params": "{\"coin\": \"groestlcoin\", \"periodSeconds\": 900}"
+                "fiat_rates_params": "{\"coin\": \"groestlcoin\", \"periodSeconds\": 900}",
+                "golomb_filter_p": 20,
+                "mempool_filter_scripts": "taproot"
             }
         }
     },
