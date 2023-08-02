@@ -10,8 +10,8 @@
         "backend_message_queue": 0,
         "backend_p2p": 30301,
         "backend_http": 8545,
-        "blockbook_internal": 9036,
-        "blockbook_public": 9136
+        "blockbook_internal": 9237,
+        "blockbook_public": 9337
     },
     "ipc": {
         "rpc_url_template": "ws://127.0.0.1:{{.Ports.BackendRPC}}",
