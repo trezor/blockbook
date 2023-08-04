@@ -1,7 +1,7 @@
 {
     "coin": {
         "name": "Ethereum Testnet Sepolia Archive",
-        "shortcut": "gSEP",
+        "shortcut": "tETH",
         "label": "Ethereum Sepolia",
         "alias": "ethereum_testnet_sepolia_archive"
     },
