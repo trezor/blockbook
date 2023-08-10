@@ -1471,6 +1471,16 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			},
 			want: `{"id":"42","data":{"error":{"message":"Unsupported script filter invalid"}}}`,
 		},
+		{
+			name: "websocket getBlockFilter",
+			req: websocketReq{
+				Method: "getBlockFilter",
+				Params: map[string]interface{}{
+					"blockHash": "abcd",
+				},
+			},
+			want: `{"id":"43","data":""}`,
+		},
 	}
 
 	// send all requests at once

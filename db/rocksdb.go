@@ -83,6 +83,7 @@ const (
 	// BitcoinType
 	cfAddressBalance
 	cfTxAddresses
+	cfBlockFilter
 
 	__break__
 
@@ -102,7 +103,7 @@ var cfNames []string
 var cfBaseNames = []string{"default", "height", "addresses", "blockTxs", "transactions", "fiatRates"}
 
 // type specific columns
-var cfNamesBitcoinType = []string{"addressBalance", "txAddresses"}
+var cfNamesBitcoinType = []string{"addressBalance", "txAddresses", "blockFilter"}
 var cfNamesEthereumType = []string{"addressContracts", "internalData", "contracts", "functionSignatures", "blockInternalDataErrors", "addressAliases"}
 
 func openDB(path string, c *grocksdb.Cache, openFiles int) (*grocksdb.DB, []*grocksdb.ColumnFamilyHandle, error) {
@@ -347,8 +348,9 @@ func (d *RocksDB) ConnectBlock(block *bchain.Block) error {
 	addresses := make(addressesMap)
 	if chainType == bchain.ChainBitcoinType {
 		txAddressesMap := make(map[string]*TxAddresses)
+		allBlockAddrDesc := make([][]byte, 0)
 		balances := make(map[string]*AddrBalance)
-		if err := d.processAddressesBitcoinType(block, addresses, txAddressesMap, balances); err != nil {
+		if err := d.processAddressesBitcoinType(block, addresses, txAddressesMap, balances, &allBlockAddrDesc); err != nil {
 			return err
 		}
 		if err := d.storeTxAddresses(wb, txAddressesMap); err != nil {
@@ -358,6 +360,11 @@ func (d *RocksDB) ConnectBlock(block *bchain.Block) error {
 			return err
 		}
 		if err := d.storeAndCleanupBlockTxs(wb, block); err != nil {
+			return err
+		}
+		taprootOnly := true // TODO: take from config
+		blockFilter := computeBlockFilter(allBlockAddrDesc, block.BlockHeader.Hash, taprootOnly)
+		if err := d.storeBlockFilter(wb, block.BlockHeader.Hash, blockFilter); err != nil {
 			return err
 		}
 	} else if chainType == bchain.ChainEthereumType {
@@ -590,7 +597,8 @@ func (d *RocksDB) GetAndResetConnectBlockStats() string {
 	return s
 }
 
-func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses addressesMap, txAddressesMap map[string]*TxAddresses, balances map[string]*AddrBalance) error {
+// TODO: maybe return allBlockAddrDesc from this function instead of taking it as argument
+func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses addressesMap, txAddressesMap map[string]*TxAddresses, balances map[string]*AddrBalance, allBlockAddrDesc *[][]byte) error {
 	blockTxIDs := make([][]byte, len(block.Txs))
 	blockTxAddresses := make([]*TxAddresses, len(block.Txs))
 	// first process all outputs so that inputs can refer to txs in this block
@@ -628,6 +636,7 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses add
 				}
 				continue
 			}
+			*allBlockAddrDesc = append(*allBlockAddrDesc, addrDesc) // new addrDesc
 			tao.AddrDesc = addrDesc
 			if d.chainParser.IsAddrDescIndexable(addrDesc) {
 				strAddrDesc := string(addrDesc)
@@ -702,6 +711,7 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses add
 			if spentOutput.Spent {
 				glog.Warningf("rocksdb: height %d, tx %v, input tx %v vout %v is double spend", block.Height, tx.Txid, input.Txid, input.Vout)
 			}
+			*allBlockAddrDesc = append(*allBlockAddrDesc, spentOutput.AddrDesc) // new addrDesc
 			tai.AddrDesc = spentOutput.AddrDesc
 			tai.ValueSat = spentOutput.ValueSat
 			// mark the output as spent in tx
@@ -1550,6 +1560,19 @@ func (d *RocksDB) disconnectTxAddressesOutputs(wb *grocksdb.WriteBatch, btxID []
 	return nil
 }
 
+func (d *RocksDB) disconnectBlockFilter(wb *grocksdb.WriteBatch, height uint32) error {
+	blockHash, err := d.GetBlockHash(height)
+	if err != nil {
+		return err
+	}
+	blockHashBytes, err := hex.DecodeString(blockHash)
+	if err != nil {
+		return err
+	}
+	wb.DeleteCF(d.cfh[cfBlockFilter], blockHashBytes)
+	return nil
+}
+
 func (d *RocksDB) disconnectBlock(height uint32, blockTxs []blockTxs) error {
 	wb := grocksdb.NewWriteBatch()
 	defer wb.Destroy()
@@ -1634,6 +1657,9 @@ func (d *RocksDB) disconnectBlock(height uint32, blockTxs []blockTxs) error {
 		b := []byte(s)
 		wb.DeleteCF(d.cfh[cfTransactions], b)
 		wb.DeleteCF(d.cfh[cfTxAddresses], b)
+	}
+	if err := d.disconnectBlockFilter(wb, height); err != nil {
+		return err
 	}
 	return d.WriteBatch(wb)
 }
@@ -1873,6 +1899,7 @@ func (d *RocksDB) LoadInternalState(rpcCoin string) (*common.InternalState, erro
 		if is.ExtendedIndex != d.extendedIndex {
 			return nil, errors.Errorf("ExtendedIndex setting does not match. DB extendedIndex %v, extendedIndex in options %v", is.ExtendedIndex, d.extendedIndex)
 		}
+		// TODO: verify the block filter P and error if it does not match
 	}
 	nc, err := d.checkColumns(is)
 	if err != nil {
@@ -2189,6 +2216,36 @@ func (d *RocksDB) FixUtxos(stop chan os.Signal) error {
 	}
 	glog.Info("FixUtxos: finished, scanned ", row, " rows, found ", errorsCount, " errors, fixed ", fixedCount)
 	return nil
+}
+
+func (d *RocksDB) storeBlockFilter(wb *grocksdb.WriteBatch, blockHash string, blockFilter string) error {
+	blockHashBytes, err := hex.DecodeString(blockHash)
+	if err != nil {
+		return err
+	}
+	blockFilterBytes, err := hex.DecodeString(blockFilter)
+	if err != nil {
+		return err
+	}
+	wb.PutCF(d.cfh[cfBlockFilter], blockHashBytes, blockFilterBytes)
+	return nil
+}
+
+func (d *RocksDB) GetBlockFilter(blockHash string) (string, error) {
+	blockHashBytes, err := hex.DecodeString(blockHash)
+	if err != nil {
+		return "", err
+	}
+	val, err := d.db.GetCF(d.ro, d.cfh[cfBlockFilter], blockHashBytes)
+	if err != nil {
+		return "", err
+	}
+	defer val.Free()
+	buf := val.Data()
+	if buf == nil {
+		return "", nil
+	}
+	return hex.EncodeToString(buf), nil
 }
 
 // Helpers

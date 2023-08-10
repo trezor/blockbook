@@ -81,6 +81,10 @@ type WsMempoolFiltersReq struct {
 	FromTimestamp uint32 `json:"fromTimestamp"`
 }
 
+type WsBlockFilterReq struct {
+	BlockHash string `json:"blockHash"`
+}
+
 type WsTransactionSpecificReq struct {
 	Txid string `json:"txid"`
 }
