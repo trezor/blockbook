@@ -92,6 +92,10 @@ type InternalState struct {
 	// database migrations
 	UtxoChecked            bool `json:"utxoChecked"`
 	SortedAddressContracts bool `json:"sortedAddressContracts"`
+
+	// TODO: add golombFilterP for block filters and check it at each startup
+	// if consistent with supplied config value
+	// Change of this value would require reindex
 }
 
 // StartedSync signals start of synchronization

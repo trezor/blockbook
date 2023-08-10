@@ -226,6 +226,13 @@ func (ad AddressDescriptor) String() string {
 	return "ad:" + hex.EncodeToString(ad)
 }
 
+func (ad AddressDescriptor) IsTaproot() bool {
+	if len(ad) == 34 && ad[0] == 0x51 && ad[1] == 0x20 {
+		return true
+	}
+	return false
+}
+
 // AddressDescriptorFromString converts string created by AddressDescriptor.String to AddressDescriptor
 func AddressDescriptorFromString(s string) (AddressDescriptor, error) {
 	if len(s) > 3 && s[0:3] == "ad:" {
