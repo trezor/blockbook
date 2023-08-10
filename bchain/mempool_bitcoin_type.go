@@ -125,39 +125,33 @@ func (m *MempoolBitcoinType) getInputAddress(payload *chanInputPayload) *addrInd
 
 }
 
-func isTaproot(addrDesc AddressDescriptor) bool {
-	if len(addrDesc) == 34 && addrDesc[0] == 0x51 && addrDesc[1] == 0x20 {
-		return true
-	}
-	return false
-}
-
 func (m *MempoolBitcoinType) computeGolombFilter(mtx *MempoolTx) string {
 	uniqueScripts := make(map[string]struct{})
 	filterData := make([][]byte, 0)
-	for i := range mtx.Vin {
-		vin := &mtx.Vin[i]
-		if m.filterScripts == filterScriptsAll || (m.filterScripts == filterScriptsTaproot && isTaproot(vin.AddrDesc)) {
-			s := string(vin.AddrDesc)
+
+	handleAddrDesc := func(ad AddressDescriptor) {
+		if m.filterScripts == filterScriptsAll || (m.filterScripts == filterScriptsTaproot && ad.IsTaproot()) {
+			if len(ad) == 0 {
+				return
+			}
+			s := string(ad)
 			if _, found := uniqueScripts[s]; !found {
-				filterData = append(filterData, vin.AddrDesc)
+				filterData = append(filterData, ad)
 				uniqueScripts[s] = struct{}{}
 			}
 		}
 	}
-	for i := range mtx.Vout {
-		vout := &mtx.Vout[i]
+
+	for _, vin := range mtx.Vin {
+		handleAddrDesc(vin.AddrDesc)
+	}
+	for _, vout := range mtx.Vout {
 		b, err := hex.DecodeString(vout.ScriptPubKey.Hex)
 		if err == nil {
-			if m.filterScripts == filterScriptsAll || (m.filterScripts == filterScriptsTaproot && isTaproot(b)) {
-				s := string(b)
-				if _, found := uniqueScripts[s]; !found {
-					filterData = append(filterData, b)
-					uniqueScripts[s] = struct{}{}
-				}
-			}
+			handleAddrDesc(b)
 		}
 	}
+
 	if len(filterData) == 0 {
 		return ""
 	}

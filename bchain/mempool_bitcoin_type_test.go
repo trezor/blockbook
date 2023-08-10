@@ -211,8 +211,8 @@ func TestMempoolBitcoinType_computeGolombFilter_taproot(t *testing.T) {
 					if err != nil {
 						t.Errorf("filter.Match vin[%d] unexpected error %v", i, err)
 					}
-					if match != isTaproot(tt.mtx.Vin[i].AddrDesc) {
-						t.Errorf("filter.Match vin[%d] got %v, want %v", i, match, isTaproot(tt.mtx.Vin[i].AddrDesc))
+					if match != tt.mtx.Vin[i].AddrDesc.IsTaproot() {
+						t.Errorf("filter.Match vin[%d] got %v, want %v", i, match, tt.mtx.Vin[i].AddrDesc.IsTaproot())
 					}
 				}
 				// check that the vout scripts match the filter
@@ -222,8 +222,8 @@ func TestMempoolBitcoinType_computeGolombFilter_taproot(t *testing.T) {
 					if err != nil {
 						t.Errorf("filter.Match vout[%d] unexpected error %v", i, err)
 					}
-					if match != isTaproot(s) {
-						t.Errorf("filter.Match vout[%d] got %v, want %v", i, match, isTaproot(s))
+					if match != AddressDescriptor(s).IsTaproot() {
+						t.Errorf("filter.Match vout[%d] got %v, want %v", i, match, AddressDescriptor(s).IsTaproot())
 					}
 				}
 				// check that a random script does not match the filter

@@ -350,6 +350,14 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *WsRe
 		}
 		return
 	},
+	"getBlockFilter": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
+		r := WsBlockFilterReq{}
+		err = json.Unmarshal(req.Params, &r)
+		if err == nil {
+			rv, err = s.getBlockFilter(&r)
+		}
+		return
+	},
 	"subscribeNewBlock": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
 		return s.subscribeNewBlock(c, req)
 	},
@@ -643,6 +651,10 @@ func (s *WebsocketServer) sendTransaction(tx string) (res resultSendTransaction,
 func (s *WebsocketServer) getMempoolFilters(r *WsMempoolFiltersReq) (res bchain.MempoolTxidFilterEntries, err error) {
 	res, err = s.mempool.GetTxidFilterEntries(r.ScriptType, r.FromTimestamp)
 	return
+}
+
+func (s *WebsocketServer) getBlockFilter(r *WsBlockFilterReq) (res string, err error) {
+	return s.db.GetBlockFilter(r.BlockHash)
 }
 
 type subscriptionResponse struct {
