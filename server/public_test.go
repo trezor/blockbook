@@ -4,7 +4,7 @@ package server
 
 import (
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -38,8 +38,8 @@ func TestMain(m *testing.M) {
 	os.Exit(c)
 }
 
-func setupRocksDB(parser bchain.BlockChainParser, chain bchain.BlockChain, t *testing.T, extendedIndex bool) (*db.RocksDB, *common.InternalState, string) {
-	tmp, err := ioutil.TempDir("", "testdb")
+func setupRocksDB(parser bchain.BlockChainParser, chain bchain.BlockChain, t *testing.T, extendedIndex bool, config *common.Config) (*db.RocksDB, *common.InternalState, string) {
+	tmp, err := os.MkdirTemp("", "testdb")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +47,7 @@ func setupRocksDB(parser bchain.BlockChainParser, chain bchain.BlockChain, t *te
 	if err != nil {
 		t.Fatal(err)
 	}
-	is, err := d.LoadInternalState("fakecoin")
+	is, err := d.LoadInternalState(config)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,11 +95,16 @@ func setupRocksDB(parser bchain.BlockChainParser, chain bchain.BlockChain, t *te
 var metrics *common.Metrics
 
 func setupPublicHTTPServer(parser bchain.BlockChainParser, chain bchain.BlockChain, t *testing.T, extendedIndex bool) (*PublicServer, string) {
-	d, is, path := setupRocksDB(parser, chain, t, extendedIndex)
-	// setup internal state and match BestHeight to test data
-	is.Coin = "Fakecoin"
-	is.CoinLabel = "Fake Coin"
-	is.CoinShortcut = "FAKE"
+	// config with mocked CoinGecko API
+	config := common.Config{
+		CoinName:        "Fakecoin",
+		CoinLabel:       "Fake Coin",
+		CoinShortcut:    "FAKE",
+		FiatRates:       "coingecko",
+		FiatRatesParams: `{"url": "none", "coin": "ethereum","platformIdentifier": "ethereum","platformVsCurrency": "usd","periodSeconds": 60}`,
+	}
+
+	d, is, path := setupRocksDB(parser, chain, t, extendedIndex, &config)
 
 	var err error
 	// metrics can be setup only once
@@ -121,9 +126,7 @@ func setupPublicHTTPServer(parser bchain.BlockChainParser, chain bchain.BlockCha
 		glog.Fatal("txCache: ", err)
 	}
 
-	// mocked CoinGecko API
-	configJSON := `{"fiat_rates": "coingecko", "fiat_rates_params": "{\"url\": \"none\", \"coin\": \"ethereum\",\"platformIdentifier\":\"ethereum\",\"platformVsCurrency\": \"usd\",\"periodSeconds\": 60}"}`
-	fiatRates, err := fiat.NewFiatRates(d, []byte(configJSON), nil, nil)
+	fiatRates, err := fiat.NewFiatRates(d, &config, nil, nil)
 	if err != nil {
 		glog.Fatal("fiatRates ", err)
 	}
@@ -252,7 +255,7 @@ func performHttpTests(tests []httpTests, t *testing.T, ts *httptest.Server) {
 			if resp.Header["Content-Type"][0] != tt.contentType {
 				t.Errorf("Content-Type = %v, want %v", resp.Header["Content-Type"][0], tt.contentType)
 			}
-			bb, err := ioutil.ReadAll(resp.Body)
+			bb, err := io.ReadAll(resp.Body)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1618,7 +1621,7 @@ func httpTestsExtendedIndex(t *testing.T, ts *httptest.Server) {
 			if resp.Header["Content-Type"][0] != tt.contentType {
 				t.Errorf("Content-Type = %v, want %v", resp.Header["Content-Type"][0], tt.contentType)
 			}
-			bb, err := ioutil.ReadAll(resp.Body)
+			bb, err := io.ReadAll(resp.Body)
 			if err != nil {
 				t.Fatal(err)
 			}

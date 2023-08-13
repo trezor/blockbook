@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"math/big"
+	"os"
 	"reflect"
 	"time"
 
@@ -142,23 +142,9 @@ func init() {
 	BlockChainFactories["Polygon Archive"] = polygon.NewPolygonRPC
 }
 
-// GetCoinNameFromConfig gets coin name and coin shortcut from config file
-func GetCoinNameFromConfig(configFileContent []byte) (string, string, string, error) {
-	var cn struct {
-		CoinName     string `json:"coin_name"`
-		CoinShortcut string `json:"coin_shortcut"`
-		CoinLabel    string `json:"coin_label"`
-	}
-	err := json.Unmarshal(configFileContent, &cn)
-	if err != nil {
-		return "", "", "", errors.Annotatef(err, "Error parsing config file ")
-	}
-	return cn.CoinName, cn.CoinShortcut, cn.CoinLabel, nil
-}
-
 // NewBlockChain creates bchain.BlockChain and bchain.Mempool for the coin passed by the parameter coin
 func NewBlockChain(coin string, configfile string, pushHandler func(bchain.NotificationType), metrics *common.Metrics) (bchain.BlockChain, bchain.Mempool, error) {
-	data, err := ioutil.ReadFile(configfile)
+	data, err := os.ReadFile(configfile)
 	if err != nil {
 		return nil, nil, errors.Annotatef(err, "Error reading file %v", configfile)
 	}

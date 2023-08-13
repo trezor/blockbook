@@ -1874,7 +1874,7 @@ func (d *RocksDB) checkColumns(is *common.InternalState) ([]common.InternalState
 }
 
 // LoadInternalState loads from db internal state or initializes a new one if not yet stored
-func (d *RocksDB) LoadInternalState(rpcCoin string) (*common.InternalState, error) {
+func (d *RocksDB) LoadInternalState(config *common.Config) (*common.InternalState, error) {
 	val, err := d.db.GetCF(d.ro, d.cfh[cfDefault], []byte(internalStateKey))
 	if err != nil {
 		return nil, err
@@ -1883,7 +1883,14 @@ func (d *RocksDB) LoadInternalState(rpcCoin string) (*common.InternalState, erro
 	data := val.Data()
 	var is *common.InternalState
 	if len(data) == 0 {
-		is = &common.InternalState{Coin: rpcCoin, UtxoChecked: true, SortedAddressContracts: true, ExtendedIndex: d.extendedIndex}
+		is = &common.InternalState{
+			Coin:                   config.CoinName,
+			UtxoChecked:            true,
+			SortedAddressContracts: true,
+			ExtendedIndex:          d.extendedIndex,
+			BlockGolombFilterP:     config.BlockGolombFilterP,
+			BlockFilterScripts:     config.BlockFilterScripts,
+		}
 	} else {
 		is, err = common.UnpackInternalState(data)
 		if err != nil {
@@ -1892,14 +1899,19 @@ func (d *RocksDB) LoadInternalState(rpcCoin string) (*common.InternalState, erro
 		// verify that the rpc coin matches DB coin
 		// running it mismatched would corrupt the database
 		if is.Coin == "" {
-			is.Coin = rpcCoin
-		} else if is.Coin != rpcCoin {
-			return nil, errors.Errorf("Coins do not match. DB coin %v, RPC coin %v", is.Coin, rpcCoin)
+			is.Coin = config.CoinName
+		} else if is.Coin != config.CoinName {
+			return nil, errors.Errorf("Coins do not match. DB coin %v, RPC coin %v", is.Coin, config.CoinName)
 		}
 		if is.ExtendedIndex != d.extendedIndex {
 			return nil, errors.Errorf("ExtendedIndex setting does not match. DB extendedIndex %v, extendedIndex in options %v", is.ExtendedIndex, d.extendedIndex)
 		}
-		// TODO: verify the block filter P and error if it does not match
+		if is.BlockGolombFilterP != config.BlockGolombFilterP {
+			return nil, errors.Errorf("BlockGolombFilterP does not match. DB BlockGolombFilterP %v, config BlockGolombFilterP %v", is.BlockGolombFilterP, config.BlockGolombFilterP)
+		}
+		if is.BlockFilterScripts != config.BlockFilterScripts {
+			return nil, errors.Errorf("BlockFilterScripts does not match. DB BlockFilterScripts %v, config BlockFilterScripts  %v", is.BlockFilterScripts, config.BlockFilterScripts)
+		}
 	}
 	nc, err := d.checkColumns(is)
 	if err != nil {
@@ -1928,6 +1940,13 @@ func (d *RocksDB) LoadInternalState(rpcCoin string) (*common.InternalState, erro
 			return nil, err
 		}
 		glog.Infof("loaded %d address alias records", recordsCount)
+	}
+
+	is.CoinShortcut = config.CoinShortcut
+	if config.CoinLabel == "" {
+		is.CoinLabel = config.CoinName
+	} else {
+		is.CoinLabel = config.CoinLabel
 	}
 
 	return is, nil

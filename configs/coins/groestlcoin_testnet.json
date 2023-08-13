@@ -41,10 +41,10 @@
             "deprecatedrpc": "estimatefee"
         },
         "platforms": {
-          "arm64": {
-            "binary_url": "https://github.com/Groestlcoin/groestlcoin/releases/download/v25.0/groestlcoin-25.0-aarch64-linux-gnu.tar.gz",
-            "verification_source": "d8776b405113b46d6be6e4921c5a5e62cbfaa5329087abbec14cc24d750f9c94"
-          }
+            "arm64": {
+                "binary_url": "https://github.com/Groestlcoin/groestlcoin/releases/download/v25.0/groestlcoin-25.0-aarch64-linux-gnu.tar.gz",
+                "verification_source": "d8776b405113b46d6be6e4921c5a5e62cbfaa5329087abbec14cc24d750f9c94"
+            }
         }
     },
     "blockbook": {
@@ -62,11 +62,7 @@
             "xpub_magic": 70617039,
             "xpub_magic_segwit_p2sh": 71979618,
             "xpub_magic_segwit_native": 73342198,
-            "slip44": 1,
-            "additional_params": {
-                "golomb_filter_p": 20,
-                "mempool_filter_scripts": "taproot"
-            }
+            "slip44": 1
         }
     },
     "meta": {
