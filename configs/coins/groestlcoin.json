@@ -41,10 +41,10 @@
             "deprecatedrpc": "estimatefee"
         },
         "platforms": {
-          "arm64": {
-            "binary_url": "https://github.com/Groestlcoin/groestlcoin/releases/download/v25.0/groestlcoin-25.0-aarch64-linux-gnu.tar.gz",
-            "verification_source": "d8776b405113b46d6be6e4921c5a5e62cbfaa5329087abbec14cc24d750f9c94"
-          }
+            "arm64": {
+                "binary_url": "https://github.com/Groestlcoin/groestlcoin/releases/download/v25.0/groestlcoin-25.0-aarch64-linux-gnu.tar.gz",
+                "verification_source": "d8776b405113b46d6be6e4921c5a5e62cbfaa5329087abbec14cc24d750f9c94"
+            }
         }
     },
     "blockbook": {
@@ -66,9 +66,7 @@
             "additional_params": {
                 "fiat_rates": "coingecko",
                 "fiat_rates_vs_currencies": "AED,ARS,AUD,BDT,BHD,BMD,BRL,CAD,CHF,CLP,CNY,CZK,DKK,EUR,GBP,HKD,HUF,IDR,ILS,INR,JPY,KRW,KWD,LKR,MMK,MXN,MYR,NGN,NOK,NZD,PHP,PKR,PLN,RUB,SAR,SEK,SGD,THB,TRY,TWD,UAH,USD,VEF,VND,ZAR,BTC,ETH",
-                "fiat_rates_params": "{\"coin\": \"groestlcoin\", \"periodSeconds\": 900}",
-                "golomb_filter_p": 20,
-                "mempool_filter_scripts": "taproot"
+                "fiat_rates_params": "{\"coin\": \"groestlcoin\", \"periodSeconds\": 900}"
             }
         }
     },

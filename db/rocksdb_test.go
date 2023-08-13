@@ -5,7 +5,6 @@ package db
 import (
 	"encoding/binary"
 	"encoding/hex"
-	"io/ioutil"
 	"math/big"
 	"os"
 	"reflect"
@@ -44,7 +43,7 @@ func bitcoinTestnetParser() *btc.BitcoinParser {
 }
 
 func setupRocksDB(t *testing.T, p bchain.BlockChainParser) *RocksDB {
-	tmp, err := ioutil.TempDir("", "testdb")
+	tmp, err := os.MkdirTemp("", "testdb")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,7 +51,7 @@ func setupRocksDB(t *testing.T, p bchain.BlockChainParser) *RocksDB {
 	if err != nil {
 		t.Fatal(err)
 	}
-	is, err := d.LoadInternalState("coin-unittest")
+	is, err := d.LoadInternalState(&common.Config{CoinName: "coin-unittest"})
 	if err != nil {
 		t.Fatal(err)
 	}

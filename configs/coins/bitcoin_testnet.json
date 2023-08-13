@@ -64,7 +64,9 @@
             "xpub_magic_segwit_native": 73342198,
             "slip44": 1,
             "additional_params": {
-                "golomb_filter_p": 20,
+                "block_golomb_filter_p": 20,
+                "block_filter_scripts": "taproot",
+                "mempool_golomb_filter_p": 20,
                 "mempool_filter_scripts": "taproot"
             }
         }

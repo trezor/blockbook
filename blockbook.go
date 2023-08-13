@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"flag"
 	"log"
 	"math/rand"
@@ -152,30 +151,19 @@ func mainWithExitCode() int {
 		return exitCodeOK
 	}
 
-	if *configFile == "" {
-		glog.Error("Missing blockchaincfg configuration parameter")
-		return exitCodeFatal
-	}
-
-	configFileContent, err := os.ReadFile(*configFile)
-	if err != nil {
-		glog.Errorf("Error reading file %v, %v", configFile, err)
-		return exitCodeFatal
-	}
-
-	coin, coinShortcut, coinLabel, err := coins.GetCoinNameFromConfig(configFileContent)
+	config, err := common.GetConfig(*configFile)
 	if err != nil {
 		glog.Error("config: ", err)
 		return exitCodeFatal
 	}
 
-	metrics, err = common.GetMetrics(coin)
+	metrics, err = common.GetMetrics(config.CoinName)
 	if err != nil {
 		glog.Error("metrics: ", err)
 		return exitCodeFatal
 	}
 
-	if chain, mempool, err = getBlockChainWithRetry(coin, *configFile, pushSynchronizationHandler, metrics, 120); err != nil {
+	if chain, mempool, err = getBlockChainWithRetry(config.CoinName, *configFile, pushSynchronizationHandler, metrics, 120); err != nil {
 		glog.Error("rpc: ", err)
 		return exitCodeFatal
 	}
@@ -187,7 +175,7 @@ func mainWithExitCode() int {
 	}
 	defer index.Close()
 
-	internalState, err = newInternalState(coin, coinShortcut, coinLabel, index, *enableSubNewTx)
+	internalState, err = newInternalState(config, index, *enableSubNewTx)
 	if err != nil {
 		glog.Error("internalState: ", err)
 		return exitCodeFatal
@@ -279,7 +267,7 @@ func mainWithExitCode() int {
 		return exitCodeFatal
 	}
 
-	if fiatRates, err = fiat.NewFiatRates(index, configFileContent, metrics, onNewFiatRatesTicker); err != nil {
+	if fiatRates, err = fiat.NewFiatRates(index, config, metrics, onNewFiatRatesTicker); err != nil {
 		glog.Error("fiatRates ", err)
 		return exitCodeFatal
 	}
@@ -368,7 +356,7 @@ func mainWithExitCode() int {
 
 	if internalServer != nil || publicServer != nil || chain != nil {
 		// start fiat rates downloader only if not shutting down immediately
-		initDownloaders(index, chain, configFileContent)
+		initDownloaders(index, chain, config)
 		waitForSignalAndShutdown(internalServer, publicServer, chain, 10*time.Second)
 	}
 
@@ -501,16 +489,12 @@ func blockbookAppInfoMetric(db *db.RocksDB, chain bchain.BlockChain, txCache *db
 	return nil
 }
 
-func newInternalState(coin, coinShortcut, coinLabel string, d *db.RocksDB, enableSubNewTx bool) (*common.InternalState, error) {
-	is, err := d.LoadInternalState(coin)
+func newInternalState(config *common.Config, d *db.RocksDB, enableSubNewTx bool) (*common.InternalState, error) {
+	is, err := d.LoadInternalState(config)
 	if err != nil {
 		return nil, err
 	}
-	is.CoinShortcut = coinShortcut
-	if coinLabel == "" {
-		coinLabel = coin
-	}
-	is.CoinLabel = coinLabel
+
 	is.EnableSubNewTx = enableSubNewTx
 	name, err := os.Hostname()
 	if err != nil {
@@ -702,19 +686,9 @@ func computeFeeStats(stopCompute chan os.Signal, blockFrom, blockTo int, db *db.
 	return err
 }
 
-func initDownloaders(db *db.RocksDB, chain bchain.BlockChain, configFileContent []byte) {
+func initDownloaders(db *db.RocksDB, chain bchain.BlockChain, config *common.Config) {
 	if fiatRates.Enabled {
 		go fiatRates.RunDownloader()
-	}
-
-	var config struct {
-		FourByteSignatures string `json:"fourByteSignatures"`
-	}
-
-	err := json.Unmarshal(configFileContent, &config)
-	if err != nil {
-		glog.Errorf("Error parsing config file %v, %v", *configFile, err)
-		return
 	}
 
 	if config.FourByteSignatures != "" && chain.GetChainParser().GetChainType() == bchain.ChainEthereumType {
