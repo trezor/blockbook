@@ -810,6 +810,7 @@ func Test_BlockFilter_GetAndStore(t *testing.T) {
 
 	blockHash := "0000000000000003d0c9722718f8ee86c2cf394f9cd458edb1c854de2a7b1a91"
 	blockFilter := "042c6340895e413d8a811fa0"
+	blockFilterBytes, _ := hex.DecodeString(blockFilter)
 
 	// Empty at the beginning
 	got, err := d.GetBlockFilter(blockHash)
@@ -823,7 +824,7 @@ func Test_BlockFilter_GetAndStore(t *testing.T) {
 
 	// Store the filter
 	wb := grocksdb.NewWriteBatch()
-	if err := d.storeBlockFilter(wb, blockHash, blockFilter); err != nil {
+	if err := d.storeBlockFilter(wb, blockHash, blockFilterBytes); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.WriteBatch(wb); err != nil {
