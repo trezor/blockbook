@@ -27,7 +27,7 @@ type BulkConnect struct {
 	bulkAddressesCount int
 	ethBlockTxs        []ethBlockTx
 	txAddressesMap     map[string]*TxAddresses
-	blockFilters       map[string]string
+	blockFilters       map[string][]byte
 	balances           map[string]*AddrBalance
 	addressContracts   map[string]*AddrContracts
 	height             uint32
@@ -52,6 +52,7 @@ func (d *RocksDB) InitBulkConnect() (*BulkConnect, error) {
 		txAddressesMap:   make(map[string]*TxAddresses),
 		balances:         make(map[string]*AddrBalance),
 		addressContracts: make(map[string]*AddrContracts),
+		blockFilters:     make(map[string][]byte),
 	}
 	if err := d.SetInconsistentState(true); err != nil {
 		return nil, err
@@ -178,14 +179,20 @@ func (b *BulkConnect) storeBulkBlockFilters(wb *grocksdb.WriteBatch) error {
 			return err
 		}
 	}
-	b.blockFilters = make(map[string]string)
+	b.blockFilters = make(map[string][]byte)
 	return nil
 }
 
 func (b *BulkConnect) connectBlockBitcoinType(block *bchain.Block, storeBlockTxs bool) error {
 	addresses := make(addressesMap)
-	allBlockAddrDesc := make([][]byte, 0)
-	if err := b.d.processAddressesBitcoinType(block, addresses, b.txAddressesMap, b.balances, &allBlockAddrDesc); err != nil {
+	gf, err := bchain.NewGolombFilter(b.d.is.BlockGolombFilterP, b.d.is.BlockFilterScripts, block.BlockHeader.Hash)
+	if err != nil {
+		glog.Error("connectBlockBitcoinType golomb filter error ", err)
+		gf = nil
+	} else if gf != nil && !gf.Enabled {
+		gf = nil
+	}
+	if err := b.d.processAddressesBitcoinType(block, addresses, b.txAddressesMap, b.balances, gf); err != nil {
 		return err
 	}
 	var storeAddressesChan, storeBalancesChan chan error
@@ -212,11 +219,9 @@ func (b *BulkConnect) connectBlockBitcoinType(block *bchain.Block, storeBlockTxs
 		addresses: addresses,
 	})
 	b.bulkAddressesCount += len(addresses)
-	if b.blockFilters == nil {
-		b.blockFilters = make(map[string]string) // TODO: where to put this?
+	if gf != nil {
+		b.blockFilters[block.BlockHeader.Hash] = gf.Compute()
 	}
-	taprootOnly := true // TODO: take from config
-	b.blockFilters[block.BlockHeader.Hash] = computeBlockFilter(allBlockAddrDesc, block.BlockHeader.Hash, taprootOnly)
 	// open WriteBatch only if going to write
 	if sa || b.bulkAddressesCount > maxBulkAddresses || storeBlockTxs || len(b.blockFilters) > maxBlockFilters {
 		start := time.Now()

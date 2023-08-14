@@ -16,9 +16,9 @@ func TestMempoolBitcoinType_computeGolombFilter_taproot(t *testing.T) {
 	randomScript := hexToBytes("a914ff074800343a81ada8fe86c2d5d5a0e55b93dd7a87")
 	m := &MempoolBitcoinType{
 		golombFilterP: 20,
-		golombFilterM: uint64(1 << 20),
-		filterScripts: filterScriptsTaproot,
+		filterScripts: "taproot",
 	}
+	golombFilterM := uint64(1 << uint64(m.golombFilterP))
 	tests := []struct {
 		name string
 		mtx  MempoolTx
@@ -200,7 +200,7 @@ func TestMempoolBitcoinType_computeGolombFilter_taproot(t *testing.T) {
 			}
 			if got != "" {
 				// build the filter from computed value
-				filter, err := gcs.FromNBytes(m.golombFilterP, m.golombFilterM, hexToBytes(got))
+				filter, err := gcs.FromNBytes(m.golombFilterP, golombFilterM, hexToBytes(got))
 				if err != nil {
 					t.Errorf("gcs.BuildGCSFilter() unexpected error %v", err)
 				}

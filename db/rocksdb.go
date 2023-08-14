@@ -348,9 +348,15 @@ func (d *RocksDB) ConnectBlock(block *bchain.Block) error {
 	addresses := make(addressesMap)
 	if chainType == bchain.ChainBitcoinType {
 		txAddressesMap := make(map[string]*TxAddresses)
-		allBlockAddrDesc := make([][]byte, 0)
 		balances := make(map[string]*AddrBalance)
-		if err := d.processAddressesBitcoinType(block, addresses, txAddressesMap, balances, &allBlockAddrDesc); err != nil {
+		gf, err := bchain.NewGolombFilter(d.is.BlockGolombFilterP, d.is.BlockFilterScripts, block.BlockHeader.Hash)
+		if err != nil {
+			glog.Error("ConnectBlock golomb filter error ", err)
+			gf = nil
+		} else if gf != nil && !gf.Enabled {
+			gf = nil
+		}
+		if err := d.processAddressesBitcoinType(block, addresses, txAddressesMap, balances, gf); err != nil {
 			return err
 		}
 		if err := d.storeTxAddresses(wb, txAddressesMap); err != nil {
@@ -362,10 +368,11 @@ func (d *RocksDB) ConnectBlock(block *bchain.Block) error {
 		if err := d.storeAndCleanupBlockTxs(wb, block); err != nil {
 			return err
 		}
-		taprootOnly := true // TODO: take from config
-		blockFilter := computeBlockFilter(allBlockAddrDesc, block.BlockHeader.Hash, taprootOnly)
-		if err := d.storeBlockFilter(wb, block.BlockHeader.Hash, blockFilter); err != nil {
-			return err
+		if gf != nil {
+			blockFilter := gf.Compute()
+			if err := d.storeBlockFilter(wb, block.BlockHeader.Hash, blockFilter); err != nil {
+				return err
+			}
 		}
 	} else if chainType == bchain.ChainEthereumType {
 		addressContracts := make(map[string]*AddrContracts)
@@ -597,8 +604,7 @@ func (d *RocksDB) GetAndResetConnectBlockStats() string {
 	return s
 }
 
-// TODO: maybe return allBlockAddrDesc from this function instead of taking it as argument
-func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses addressesMap, txAddressesMap map[string]*TxAddresses, balances map[string]*AddrBalance, allBlockAddrDesc *[][]byte) error {
+func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses addressesMap, txAddressesMap map[string]*TxAddresses, balances map[string]*AddrBalance, gf *bchain.GolombFilter) error {
 	blockTxIDs := make([][]byte, len(block.Txs))
 	blockTxAddresses := make([]*TxAddresses, len(block.Txs))
 	// first process all outputs so that inputs can refer to txs in this block
@@ -636,7 +642,9 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses add
 				}
 				continue
 			}
-			*allBlockAddrDesc = append(*allBlockAddrDesc, addrDesc) // new addrDesc
+			if gf != nil {
+				gf.AddAddrDesc(addrDesc)
+			}
 			tao.AddrDesc = addrDesc
 			if d.chainParser.IsAddrDescIndexable(addrDesc) {
 				strAddrDesc := string(addrDesc)
@@ -711,7 +719,9 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses add
 			if spentOutput.Spent {
 				glog.Warningf("rocksdb: height %d, tx %v, input tx %v vout %v is double spend", block.Height, tx.Txid, input.Txid, input.Vout)
 			}
-			*allBlockAddrDesc = append(*allBlockAddrDesc, spentOutput.AddrDesc) // new addrDesc
+			if gf != nil {
+				gf.AddAddrDesc(spentOutput.AddrDesc)
+			}
 			tai.AddrDesc = spentOutput.AddrDesc
 			tai.ValueSat = spentOutput.ValueSat
 			// mark the output as spent in tx
@@ -2237,16 +2247,12 @@ func (d *RocksDB) FixUtxos(stop chan os.Signal) error {
 	return nil
 }
 
-func (d *RocksDB) storeBlockFilter(wb *grocksdb.WriteBatch, blockHash string, blockFilter string) error {
+func (d *RocksDB) storeBlockFilter(wb *grocksdb.WriteBatch, blockHash string, blockFilter []byte) error {
 	blockHashBytes, err := hex.DecodeString(blockHash)
 	if err != nil {
 		return err
 	}
-	blockFilterBytes, err := hex.DecodeString(blockFilter)
-	if err != nil {
-		return err
-	}
-	wb.PutCF(d.cfh[cfBlockFilter], blockHashBytes, blockFilterBytes)
+	wb.PutCF(d.cfh[cfBlockFilter], blockHashBytes, blockFilter)
 	return nil
 }
 
