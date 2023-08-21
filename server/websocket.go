@@ -82,9 +82,10 @@ func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.
 	}
 	s := &WebsocketServer{
 		upgrader: &websocket.Upgrader{
-			ReadBufferSize:  1024 * 32,
-			WriteBufferSize: 1024 * 32,
-			CheckOrigin:     checkOrigin,
+			ReadBufferSize:    1024 * 32,
+			WriteBufferSize:   1024 * 32,
+			CheckOrigin:       checkOrigin,
+			EnableCompression: true,
 		},
 		db:                          db,
 		txCache:                     txCache,
