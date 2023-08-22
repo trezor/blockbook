@@ -45,6 +45,8 @@ func main() {
 	t.Add(server.WsBlockHashReq{})
 	t.Add(server.WsBlockHashRes{})
 	t.Add(server.WsBlockReq{})
+	t.Add(server.WsBlockFilterReq{})
+	t.Add(server.WsBlockFiltersBatchReq{})
 	t.Add(server.WsAccountUtxoReq{})
 	t.Add(server.WsBalanceHistoryReq{})
 	t.Add(server.WsTransactionReq{})

@@ -413,12 +413,25 @@
 
         function getBlockFilter() {
             const method = 'getBlockFilter';
-            let blockHash = document.getElementById('getBlockFilterBlockHash').value;
+            const blockHash = document.getElementById('getBlockFilterBlockHash').value;
             const params = {
                 blockHash,
             };
             send(method, params, function (result) {
                 document.getElementById('getBlockFilterResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
+            });
+        }
+
+        function getBlockFiltersBatch() {
+            const method = 'getBlockFiltersBatch';
+            const bestKnownBlockHash = document.getElementById('getBlockFiltersBatchBlockHash').value;
+            const pageSize = parseInt(document.getElementById("getBlockFiltersBatchPageSize").value);
+            const params = {
+                bestKnownBlockHash,
+            };
+            if (pageSize) params.pageSize = pageSize;
+            send(method, params, function (result) {
+                document.getElementById('getBlockFiltersBatchResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
             });
         }
 
@@ -704,12 +717,26 @@
             <div class="col-2">
                 <input class="btn btn-secondary" type="button" value="get block filter" onclick="getBlockFilter()">
             </div>
-            <div class="col-5">
+            <div class="col-8">
                 <input type="text" class="form-control" id="getBlockFilterBlockHash" value="000000000000001cb4edd91be03b6775abd351fb51b1fbb0871fc1451454f362" placeholder="block hash">
             </div>
         </div>
         <div class="row">
             <div class="col" id="getBlockFilterResult"></div>
+        </div>
+        <div class="row">
+            <div class="col-2">
+                <input class="btn btn-secondary" type="button" value="get block filter batch" onclick="getBlockFiltersBatch()">
+            </div>
+            <div class="col-10">
+                <div class="row" style="margin: 0;">
+                    <input type="text" class="form-control" id="getBlockFiltersBatchBlockHash"  style="width: 80%; margin-right: 5px;" value="000000000000001cb4edd91be03b6775abd351fb51b1fbb0871fc1451454f362" placeholder="best known block hash">
+                    <input type="text" class="form-control" placeholder="page size" style="width: 15%;" id="getBlockFiltersBatchPageSize" value="">
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col" id="getBlockFiltersBatchResult"></div>
         </div>
         <div class="row">
             <div class="col">
