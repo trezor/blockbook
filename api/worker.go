@@ -2200,6 +2200,48 @@ func (w *Worker) GetBlockRaw(bid string) (*BlockRaw, error) {
 	return &BlockRaw{Hex: hex}, err
 }
 
+// GetBlockFiltersBatch returns array of block filter data in the format ["height:hash:filter",...] if blocks greater than bestKnownBlockHash
+func (w *Worker) GetBlockFiltersBatch(bestKnownBlockHash string, pageSize int) ([]string, error) {
+	if w.is.BlockGolombFilterP == 0 {
+		return nil, NewAPIError("Not supported", true)
+	}
+	if pageSize > 10000 {
+		return nil, NewAPIError("pageSize max 10000", true)
+	}
+	if pageSize <= 0 {
+		pageSize = 1000
+	}
+	bi, err := w.chain.GetBlockInfo(bestKnownBlockHash)
+	if err != nil {
+		return nil, err
+	}
+	bestHeight, _, err := w.db.GetBestBlock()
+	if err != nil {
+		return nil, err
+	}
+	from := bi.Height + 1
+	to := bestHeight + 1
+	if from >= to {
+		return []string{}, nil
+	}
+	if to-from > uint32(pageSize) {
+		to = from + uint32(pageSize)
+	}
+	r := make([]string, 0, to-from)
+	for i := from; i < to; i++ {
+		blockHash, err := w.db.GetBlockHash(uint32(i))
+		if err != nil {
+			return nil, err
+		}
+		blockFilter, err := w.db.GetBlockFilter(blockHash)
+		if err != nil {
+			return nil, err
+		}
+		r = append(r, fmt.Sprintf("%d:%s:%s", i, blockHash, blockFilter))
+	}
+	return r, err
+}
+
 // ComputeFeeStats computes fee distribution in defined blocks and logs them to log
 func (w *Worker) ComputeFeeStats(blockFrom, blockTo int, stopCompute chan os.Signal) error {
 	bestheight, _, err := w.db.GetBestBlock()

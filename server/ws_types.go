@@ -85,6 +85,11 @@ type WsBlockFilterReq struct {
 	BlockHash string `json:"blockHash"`
 }
 
+type WsBlockFiltersBatchReq struct {
+	BlockHash string `json:"bestKnownBlockHash"`
+	PageSize  int    `json:"pageSize,omitempty"`
+}
+
 type WsTransactionSpecificReq struct {
 	Txid string `json:"txid"`
 }
