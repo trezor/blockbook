@@ -57,6 +57,9 @@ type Vin struct {
 	ScriptSig ScriptSig `json:"scriptSig"`
 	Sequence  uint32    `json:"sequence"`
 	Addresses []string  `json:"addresses"`
+	Witness   [][]byte  `json:"witness"`
+}
+
 }
 
 // ScriptPubKey contains data about output script
