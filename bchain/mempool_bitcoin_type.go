@@ -97,20 +97,18 @@ func (m *MempoolBitcoinType) getInputAddress(payload *chanInputPayload) *addrInd
 
 }
 
-func (m *MempoolBitcoinType) computeGolombFilter(mtx *MempoolTx) string {
+func (m *MempoolBitcoinType) computeGolombFilter(mtx *MempoolTx, tx *Tx) string {
 	gf, _ := NewGolombFilter(m.golombFilterP, m.filterScripts, mtx.Txid)
 	if gf == nil || !gf.Enabled {
 		return ""
 	}
 	for _, vin := range mtx.Vin {
-		// TODO: send transaction or witness
-		gf.AddAddrDesc(vin.AddrDesc, nil)
+		gf.AddAddrDesc(vin.AddrDesc, tx)
 	}
 	for _, vout := range mtx.Vout {
 		b, err := hex.DecodeString(vout.ScriptPubKey.Hex)
 		if err == nil {
-			// TODO: send transaction or witness
-			gf.AddAddrDesc(b, nil)
+			gf.AddAddrDesc(b, tx)
 		}
 	}
 	fb := gf.Compute()
@@ -170,7 +168,7 @@ func (m *MempoolBitcoinType) getTxAddrs(txid string, chanInput chan chanInputPay
 	}
 	var golombFilter string
 	if m.golombFilterP > 0 {
-		golombFilter = m.computeGolombFilter(mtx)
+		golombFilter = m.computeGolombFilter(mtx, tx)
 	}
 	if m.OnNewTx != nil {
 		m.OnNewTx(mtx)
