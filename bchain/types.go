@@ -1,7 +1,6 @@
 package bchain
 
 import (
-	"bytes"
 	"context"
 	"encoding/hex"
 	"encoding/json"
@@ -61,21 +60,6 @@ type Vin struct {
 	Witness   [][]byte  `json:"witness"`
 }
 
-// Checks whether this input contains ordinal data
-func (vin Vin) ContainsOrdinal() bool {
-	byte_pattern := []byte{
-		0x00, // OP_0, OP_FALSE
-		0x63, // OP_IF
-		0x03, // OP_PUSHBYTES_3
-		0x6f, // "o"
-		0x72, // "r"
-		0x64, // "d"
-		0x01, // OP_PUSHBYTES_1
-	}
-	// Witness needs to have at least 3 items and the second one needs to contain certain pattern
-	return len(vin.Witness) > 2 && bytes.Contains(vin.Witness[1], byte_pattern)
-}
-
 // ScriptPubKey contains data about output script
 type ScriptPubKey struct {
 	// Asm       string   `json:"asm"`
@@ -108,24 +92,6 @@ type Tx struct {
 	Time             int64       `json:"time,omitempty"`
 	Blocktime        int64       `json:"blocktime,omitempty"`
 	CoinSpecificData interface{} `json:"-"`
-}
-
-func (tx Tx) ContainsOrdinal() bool {
-	for _, vin := range tx.Vin {
-		if vin.ContainsOrdinal() {
-			return true
-		}
-	}
-	return false
-}
-
-func (tx Tx) AllParentTxIds() []string {
-	// TODO: might be better to use a map to avoid duplicates
-	txids := make([]string, 0)
-	for _, vin := range tx.Vin {
-		txids = append(txids, vin.Txid)
-	}
-	return txids
 }
 
 // MempoolVin contains data about tx input

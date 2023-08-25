@@ -607,8 +607,6 @@ func (d *RocksDB) GetAndResetConnectBlockStats() string {
 func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses addressesMap, txAddressesMap map[string]*TxAddresses, balances map[string]*AddrBalance, gf *bchain.GolombFilter) error {
 	blockTxIDs := make([][]byte, len(block.Txs))
 	blockTxAddresses := make([]*TxAddresses, len(block.Txs))
-	ordinalTxIds := make([]string, 0)                                    // For Golomb filters
-	allAddressDescriptors := make(map[string][]bchain.AddressDescriptor) // For Golomb filters
 	// first process all outputs so that inputs can refer to txs in this block
 	for txi := range block.Txs {
 		tx := &block.Txs[txi]
@@ -645,7 +643,7 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses add
 				continue
 			}
 			if gf != nil {
-				allAddressDescriptors[tx.Txid] = append(allAddressDescriptors[tx.Txid], addrDesc)
+				gf.AddAddrDesc(addrDesc, tx)
 			}
 			tao.AddrDesc = addrDesc
 			if d.chainParser.IsAddrDescIndexable(addrDesc) {
@@ -684,15 +682,6 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses add
 		spendingTxid := blockTxIDs[txi]
 		ta := blockTxAddresses[txi]
 		ta.Inputs = make([]TxInput, len(tx.Vin))
-		if gf != nil {
-			// When transaction contains ordinal, flagging it together with all its parent transactions
-			if tx.ContainsOrdinal() {
-				ordinalTxIds = append(ordinalTxIds, tx.Txid)
-				for _, parentTxId := range tx.AllParentTxIds() {
-					ordinalTxIds = append(ordinalTxIds, parentTxId)
-				}
-			}
-		}
 		logged := false
 		for i := range tx.Vin {
 			input := &tx.Vin[i]
@@ -731,7 +720,7 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses add
 				glog.Warningf("rocksdb: height %d, tx %v, input tx %v vout %v is double spend", block.Height, tx.Txid, input.Txid, input.Vout)
 			}
 			if gf != nil {
-				allAddressDescriptors[tx.Txid] = append(allAddressDescriptors[tx.Txid], spentOutput.AddrDesc)
+				gf.AddAddrDesc(spentOutput.AddrDesc, tx)
 			}
 			tai.AddrDesc = spentOutput.AddrDesc
 			tai.ValueSat = spentOutput.ValueSat
@@ -780,24 +769,7 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses add
 			}
 		}
 	}
-	if gf != nil {
-		addValidTxsToBlockFilter(ordinalTxIds, allAddressDescriptors, gf)
-	}
 	return nil
-}
-
-// Removes all the ordinal-related descriptors and adds only the valid ones to the Golomb filter
-func addValidTxsToBlockFilter(ordinalTxIds []string, allAddressDescriptors map[string][]bchain.AddressDescriptor, gf *bchain.GolombFilter) {
-	// Remove all the descriptors coming from ordinal-related transactions
-	for _, txid := range ordinalTxIds {
-		delete(allAddressDescriptors, txid)
-	}
-	// Adding the rest to the Golomb filter
-	for _, descriptors := range allAddressDescriptors {
-		for _, addrDesc := range descriptors {
-			gf.AddAddrDesc(addrDesc)
-		}
-	}
 }
 
 // addToAddressesMap maintains mapping between addresses and transactions in one block

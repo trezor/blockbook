@@ -1,6 +1,7 @@
 package bchain
 
 import (
+	"bytes"
 	"encoding/hex"
 
 	"github.com/golang/glog"
@@ -14,6 +15,7 @@ const (
 	FilterScriptsInvalid = FilterScriptsType(iota)
 	FilterScriptsAll
 	FilterScriptsTaproot
+	FilterScriptsTaprootNoOrdinals
 )
 
 // GolombFilter is computing golomb filter of address descriptors
@@ -48,9 +50,36 @@ func NewGolombFilter(p uint8, filterScripts string, key string) (*GolombFilter, 
 	return &gf, nil
 }
 
+// Checks whether this input contains ordinal data
+func isInputOrdinal(vin Vin) bool {
+	byte_pattern := []byte{
+		0x00, // OP_0, OP_FALSE
+		0x63, // OP_IF
+		0x03, // OP_PUSHBYTES_3
+		0x6f, // "o"
+		0x72, // "r"
+		0x64, // "d"
+		0x01, // OP_PUSHBYTES_1
+	}
+	// Witness needs to have at least 3 items and the second one needs to contain certain pattern
+	return len(vin.Witness) > 2 && bytes.Contains(vin.Witness[1], byte_pattern)
+}
+
+func txContainsOrdinal(tx *Tx) bool {
+	for _, vin := range tx.Vin {
+		if isInputOrdinal(vin) {
+			return true
+		}
+	}
+	return false
+}
+
 // AddAddrDesc adds taproot address descriptor to the data for the filter
-func (f *GolombFilter) AddAddrDesc(ad AddressDescriptor) {
-	if f.filterScriptsType == FilterScriptsTaproot && !ad.IsTaproot() {
+func (f *GolombFilter) AddAddrDesc(ad AddressDescriptor, tx *Tx) {
+	if f.ignoreNonTaproot() && !ad.IsTaproot() {
+		return
+	}
+	if f.ignoreOrdinals() && tx != nil && txContainsOrdinal(tx) {
 		return
 	}
 	if len(ad) == 0 {
@@ -91,12 +120,30 @@ func (f *GolombFilter) Compute() []byte {
 	return fb
 }
 
+func (f *GolombFilter) ignoreNonTaproot() bool {
+	switch f.filterScriptsType {
+	case FilterScriptsTaproot, FilterScriptsTaprootNoOrdinals:
+		return true
+	}
+	return false
+}
+
+func (f *GolombFilter) ignoreOrdinals() bool {
+	switch f.filterScriptsType {
+	case FilterScriptsTaprootNoOrdinals:
+		return true
+	}
+	return false
+}
+
 func filterScriptsToScriptsType(filterScripts string) FilterScriptsType {
 	switch filterScripts {
 	case "":
 		return FilterScriptsAll
 	case "taproot":
 		return FilterScriptsTaproot
+	case "taproot-noordinals":
+		return FilterScriptsTaprootNoOrdinals
 	}
 	return FilterScriptsInvalid
 }

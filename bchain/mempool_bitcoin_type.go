@@ -103,12 +103,14 @@ func (m *MempoolBitcoinType) computeGolombFilter(mtx *MempoolTx) string {
 		return ""
 	}
 	for _, vin := range mtx.Vin {
-		gf.AddAddrDesc(vin.AddrDesc)
+		// TODO: send transaction or witness
+		gf.AddAddrDesc(vin.AddrDesc, nil)
 	}
 	for _, vout := range mtx.Vout {
 		b, err := hex.DecodeString(vout.ScriptPubKey.Hex)
 		if err == nil {
-			gf.AddAddrDesc(b)
+			// TODO: send transaction or witness
+			gf.AddAddrDesc(b, nil)
 		}
 	}
 	fb := gf.Compute()
