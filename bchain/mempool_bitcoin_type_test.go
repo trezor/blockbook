@@ -18,7 +18,7 @@ func TestMempoolBitcoinType_computeGolombFilter_taproot(t *testing.T) {
 		golombFilterP: 20,
 		filterScripts: "taproot",
 	}
-	golombFilterM := uint64(1 << uint64(m.golombFilterP))
+	golombFilterM := GetGolombParamM(m.golombFilterP)
 	tests := []struct {
 		name string
 		mtx  MempoolTx

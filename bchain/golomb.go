@@ -61,6 +61,12 @@ func NewGolombFilter(p uint8, filterScripts string, key string, useZeroedKey boo
 	return &gf, nil
 }
 
+// Gets the M parameter that we are using for the filter
+// Currently it relies on P parameter, but that can change
+func GetGolombParamM(p uint8) uint64 {
+	return uint64(1 << uint64(p))
+}
+
 // Checks whether this input contains ordinal data
 func isInputOrdinal(vin Vin) bool {
 	byte_pattern := []byte{
@@ -144,7 +150,7 @@ func (f *GolombFilter) includeAllAddressDescriptorsOrdinals() {
 
 // Compute computes golomb filter from the data
 func (f *GolombFilter) Compute() []byte {
-	m := uint64(1 << uint64(f.p))
+	m := GetGolombParamM(f.p)
 
 	// In case of ignoring the ordinals, we still need to assemble the filter data
 	if f.ignoreOrdinals() {

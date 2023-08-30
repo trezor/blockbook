@@ -1232,6 +1232,8 @@ func (s *PublicServer) apiBlockFilters(r *http.Request, apiVersion int) (interfa
 	// Define return type
 	type resBlockFilters struct {
 		BlockFilters map[int]map[string]string `json:"blockFilters"`
+		ParamP       uint8                     `json:"paramP"`
+		ParamM       uint64                    `json:"paramM"`
 	}
 
 	// Parse parameters
@@ -1246,6 +1248,15 @@ func (s *PublicServer) apiBlockFilters(r *http.Request, apiVersion int) (interfa
 	to, ec := strconv.Atoi(r.URL.Query().Get("to"))
 	if ec != nil {
 		to = 0
+	}
+	// TODO: not using this at the moment, should it stay here?
+	// paramM, ec := strconv.Atoi(r.URL.Query().Get("m"))
+	// if ec != nil {
+	// 	paramM = 0
+	// }
+	scriptType := r.URL.Query().Get("scriptType")
+	if scriptType != s.is.BlockFilterScripts {
+		return nil, api.NewAPIError(fmt.Sprintf("Invalid scriptType %s. Use %s", scriptType, s.is.BlockFilterScripts), true)
 	}
 
 	// Sanity checks
@@ -1297,6 +1308,8 @@ func (s *PublicServer) apiBlockFilters(r *http.Request, apiVersion int) (interfa
 		}
 		return resBlockFilters{
 			BlockFilters: blockFiltersMap,
+			ParamP:       s.is.BlockGolombFilterP,
+			ParamM:       bchain.GetGolombParamM(s.is.BlockGolombFilterP),
 		}, nil
 	}
 

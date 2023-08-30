@@ -82,12 +82,16 @@ type WsMempoolFiltersReq struct {
 }
 
 type WsBlockFilterReq struct {
-	BlockHash string `json:"blockHash"`
+	ScriptType string `json:"scriptType"`
+	BlockHash  string `json:"blockHash"`
+	ParamM     string `json:"paramM,omitempty"`
 }
 
 type WsBlockFiltersBatchReq struct {
-	BlockHash string `json:"bestKnownBlockHash"`
-	PageSize  int    `json:"pageSize,omitempty"`
+	ScriptType string `json:"scriptType"`
+	BlockHash  string `json:"bestKnownBlockHash"`
+	PageSize   int    `json:"pageSize,omitempty"`
+	ParamM     string `json:"paramM,omitempty"`
 }
 
 type WsTransactionSpecificReq struct {
