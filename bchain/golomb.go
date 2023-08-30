@@ -21,6 +21,7 @@ const (
 // GolombFilter is computing golomb filter of address descriptors
 type GolombFilter struct {
 	Enabled           bool
+	UseZeroedKey      bool
 	p                 uint8
 	key               string
 	filterScripts     string
@@ -34,12 +35,13 @@ type GolombFilter struct {
 }
 
 // NewGolombFilter initializes the GolombFilter handler
-func NewGolombFilter(p uint8, filterScripts string, key string) (*GolombFilter, error) {
+func NewGolombFilter(p uint8, filterScripts string, key string, useZeroedKey bool) (*GolombFilter, error) {
 	if p == 0 {
 		return &GolombFilter{Enabled: false}, nil
 	}
 	gf := GolombFilter{
 		Enabled:           true,
+		UseZeroedKey:      useZeroedKey,
 		p:                 p,
 		key:               key,
 		filterScripts:     filterScripts,
@@ -153,12 +155,19 @@ func (f *GolombFilter) Compute() []byte {
 		return nil
 	}
 
-	b, _ := hex.DecodeString(f.key)
-	if len(b) < gcs.KeySize {
-		return nil
+	// Used key is possibly just zeroes, otherwise get it from the supplied key
+	var key [gcs.KeySize]byte
+	if f.UseZeroedKey {
+		key = [gcs.KeySize]byte{}
+	} else {
+		b, _ := hex.DecodeString(f.key)
+		if len(b) < gcs.KeySize {
+			return nil
+		}
+		copy(key[:], b[:gcs.KeySize])
 	}
 
-	filter, err := gcs.BuildGCSFilter(f.p, m, *(*[gcs.KeySize]byte)(b[:gcs.KeySize]), f.filterData)
+	filter, err := gcs.BuildGCSFilter(f.p, m, key, f.filterData)
 	if err != nil {
 		glog.Error("Cannot create golomb filter for ", f.key, ", ", err)
 		return nil

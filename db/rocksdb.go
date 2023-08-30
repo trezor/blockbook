@@ -349,7 +349,7 @@ func (d *RocksDB) ConnectBlock(block *bchain.Block) error {
 	if chainType == bchain.ChainBitcoinType {
 		txAddressesMap := make(map[string]*TxAddresses)
 		balances := make(map[string]*AddrBalance)
-		gf, err := bchain.NewGolombFilter(d.is.BlockGolombFilterP, d.is.BlockFilterScripts, block.BlockHeader.Hash)
+		gf, err := bchain.NewGolombFilter(d.is.BlockGolombFilterP, d.is.BlockFilterScripts, block.BlockHeader.Hash, d.is.BlockFilterUseZeroedKey)
 		if err != nil {
 			glog.Error("ConnectBlock golomb filter error ", err)
 			gf = nil
@@ -1894,12 +1894,13 @@ func (d *RocksDB) LoadInternalState(config *common.Config) (*common.InternalStat
 	var is *common.InternalState
 	if len(data) == 0 {
 		is = &common.InternalState{
-			Coin:                   config.CoinName,
-			UtxoChecked:            true,
-			SortedAddressContracts: true,
-			ExtendedIndex:          d.extendedIndex,
-			BlockGolombFilterP:     config.BlockGolombFilterP,
-			BlockFilterScripts:     config.BlockFilterScripts,
+			Coin:                    config.CoinName,
+			UtxoChecked:             true,
+			SortedAddressContracts:  true,
+			ExtendedIndex:           d.extendedIndex,
+			BlockGolombFilterP:      config.BlockGolombFilterP,
+			BlockFilterScripts:      config.BlockFilterScripts,
+			BlockFilterUseZeroedKey: config.BlockFilterUseZeroedKey,
 		}
 	} else {
 		is, err = common.UnpackInternalState(data)

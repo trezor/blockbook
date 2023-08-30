@@ -98,7 +98,8 @@ func (m *MempoolBitcoinType) getInputAddress(payload *chanInputPayload) *addrInd
 }
 
 func (m *MempoolBitcoinType) computeGolombFilter(mtx *MempoolTx, tx *Tx) string {
-	gf, _ := NewGolombFilter(m.golombFilterP, m.filterScripts, mtx.Txid)
+	// Never using zeroed key for mempool filters
+	gf, _ := NewGolombFilter(m.golombFilterP, m.filterScripts, mtx.Txid, false)
 	if gf == nil || !gf.Enabled {
 		return ""
 	}
