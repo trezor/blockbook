@@ -657,15 +657,30 @@ func (s *WebsocketServer) sendTransaction(tx string) (res resultSendTransaction,
 	return
 }
 
-func (s *WebsocketServer) getMempoolFilters(r *WsMempoolFiltersReq) (res bchain.MempoolTxidFilterEntries, err error) {
-	res, err = s.mempool.GetTxidFilterEntries(r.ScriptType, r.FromTimestamp)
-	return
+func (s *WebsocketServer) getMempoolFilters(r *WsMempoolFiltersReq) (res interface{}, err error) {
+	type resMempoolFilters struct {
+		ParamP    uint8             `json:"P"`
+		ParamM    uint64            `json:"M"`
+		ZeroedKey bool              `json:"zeroedKey"`
+		Entries   map[string]string `json:"entries"`
+	}
+	filterEntries, err := s.mempool.GetTxidFilterEntries(r.ScriptType, r.FromTimestamp)
+	if err != nil {
+		return nil, err
+	}
+	return resMempoolFilters{
+		ParamP:    s.is.BlockGolombFilterP,
+		ParamM:    bchain.GetGolombParamM(s.is.BlockGolombFilterP),
+		ZeroedKey: s.is.BlockFilterUseZeroedKey,
+		Entries:   filterEntries.Entries,
+	}, nil
 }
 
 func (s *WebsocketServer) getBlockFilter(r *WsBlockFilterReq) (res interface{}, err error) {
 	type resBlockFilter struct {
 		ParamP      uint8  `json:"P"`
 		ParamM      uint64 `json:"M"`
+		ZeroedKey   bool   `json:"zeroedKey"`
 		BlockFilter string `json:"blockFilter"`
 	}
 	if s.is.BlockFilterScripts != r.ScriptType {
@@ -676,9 +691,10 @@ func (s *WebsocketServer) getBlockFilter(r *WsBlockFilterReq) (res interface{}, 
 		return nil, err
 	}
 	return resBlockFilter{
-		BlockFilter: blockFilter,
 		ParamP:      s.is.BlockGolombFilterP,
 		ParamM:      bchain.GetGolombParamM(s.is.BlockGolombFilterP),
+		ZeroedKey:   s.is.BlockFilterUseZeroedKey,
+		BlockFilter: blockFilter,
 	}, nil
 }
 
@@ -686,6 +702,7 @@ func (s *WebsocketServer) getBlockFiltersBatch(r *WsBlockFiltersBatchReq) (res i
 	type resBlockFiltersBatch struct {
 		ParamP            uint8    `json:"P"`
 		ParamM            uint64   `json:"M"`
+		ZeroedKey         bool     `json:"zeroedKey"`
 		BlockFiltersBatch []string `json:"blockFiltersBatch"`
 	}
 	if s.is.BlockFilterScripts != r.ScriptType {
@@ -696,9 +713,10 @@ func (s *WebsocketServer) getBlockFiltersBatch(r *WsBlockFiltersBatchReq) (res i
 		return nil, err
 	}
 	return resBlockFiltersBatch{
-		BlockFiltersBatch: blockFiltersBatch,
 		ParamP:            s.is.BlockGolombFilterP,
 		ParamM:            bchain.GetGolombParamM(s.is.BlockGolombFilterP),
+		ZeroedKey:         s.is.BlockFilterUseZeroedKey,
+		BlockFiltersBatch: blockFiltersBatch,
 	}, nil
 }
 

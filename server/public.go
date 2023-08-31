@@ -1237,6 +1237,7 @@ func (s *PublicServer) apiBlockFilters(r *http.Request, apiVersion int) (interfa
 	type resBlockFilters struct {
 		ParamP       uint8                     `json:"P"`
 		ParamM       uint64                    `json:"M"`
+		ZeroedKey    bool                      `json:"zeroedKey"`
 		BlockFilters map[int]blockFilterResult `json:"blockFilters"`
 	}
 
@@ -1309,6 +1310,7 @@ func (s *PublicServer) apiBlockFilters(r *http.Request, apiVersion int) (interfa
 		return resBlockFilters{
 			ParamP:       s.is.BlockGolombFilterP,
 			ParamM:       bchain.GetGolombParamM(s.is.BlockGolombFilterP),
+			ZeroedKey:    s.is.BlockFilterUseZeroedKey,
 			BlockFilters: blockFiltersMap,
 		}, nil
 	}

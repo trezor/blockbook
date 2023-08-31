@@ -22,11 +22,12 @@ type MempoolBitcoinType struct {
 	AddrDescForOutpoint AddrDescForOutpointFunc
 	golombFilterP       uint8
 	filterScripts       string
+	useZeroedKey        bool
 }
 
 // NewMempoolBitcoinType creates new mempool handler.
 // For now there is no cleanup of sync routines, the expectation is that the mempool is created only once per process
-func NewMempoolBitcoinType(chain BlockChain, workers int, subworkers int, golombFilterP uint8, filterScripts string) *MempoolBitcoinType {
+func NewMempoolBitcoinType(chain BlockChain, workers int, subworkers int, golombFilterP uint8, filterScripts string, useZeroedKey bool) *MempoolBitcoinType {
 	m := &MempoolBitcoinType{
 		BaseMempool: BaseMempool{
 			chain:        chain,
@@ -37,6 +38,7 @@ func NewMempoolBitcoinType(chain BlockChain, workers int, subworkers int, golomb
 		chanAddrIndex: make(chan txidio, 1),
 		golombFilterP: golombFilterP,
 		filterScripts: filterScripts,
+		useZeroedKey:  useZeroedKey,
 	}
 	for i := 0; i < workers; i++ {
 		go func(i int) {
@@ -98,8 +100,7 @@ func (m *MempoolBitcoinType) getInputAddress(payload *chanInputPayload) *addrInd
 }
 
 func (m *MempoolBitcoinType) computeGolombFilter(mtx *MempoolTx, tx *Tx) string {
-	// Never using zeroed key for mempool filters
-	gf, _ := NewGolombFilter(m.golombFilterP, m.filterScripts, mtx.Txid, false)
+	gf, _ := NewGolombFilter(m.golombFilterP, "", mtx.Txid, m.useZeroedKey)
 	if gf == nil || !gf.Enabled {
 		return ""
 	}
