@@ -664,9 +664,9 @@ func (s *WebsocketServer) getMempoolFilters(r *WsMempoolFiltersReq) (res bchain.
 
 func (s *WebsocketServer) getBlockFilter(r *WsBlockFilterReq) (res interface{}, err error) {
 	type resBlockFilter struct {
+		ParamP      uint8  `json:"P"`
+		ParamM      uint64 `json:"M"`
 		BlockFilter string `json:"blockFilter"`
-		ParamP      uint8  `json:"paramP"`
-		ParamM      uint64 `json:"paramM"`
 	}
 	if s.is.BlockFilterScripts != r.ScriptType {
 		return nil, errors.Errorf("Unsupported script type %s", r.ScriptType)
@@ -684,9 +684,9 @@ func (s *WebsocketServer) getBlockFilter(r *WsBlockFilterReq) (res interface{}, 
 
 func (s *WebsocketServer) getBlockFiltersBatch(r *WsBlockFiltersBatchReq) (res interface{}, err error) {
 	type resBlockFiltersBatch struct {
+		ParamP            uint8    `json:"P"`
+		ParamM            uint64   `json:"M"`
 		BlockFiltersBatch []string `json:"blockFiltersBatch"`
-		ParamP            uint8    `json:"paramP"`
-		ParamM            uint64   `json:"paramM"`
 	}
 	if s.is.BlockFilterScripts != r.ScriptType {
 		return nil, errors.Errorf("Unsupported script type %s", r.ScriptType)

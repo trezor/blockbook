@@ -424,9 +424,7 @@
                 scriptType,
             };
             send(method, params, function (result) {
-                document.getElementById('getBlockFilterResultParamP').innerText = `P: ${result.paramP}`;
-                document.getElementById('getBlockFilterResultParamM').innerText = `M: ${result.paramM}`;
-                document.getElementById('getBlockFilterResult').innerText = JSON.stringify(result.blockFilter).replace(/,/g, ", ");
+                document.getElementById('getBlockFilterResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
             });
         }
 
@@ -441,9 +439,7 @@
             };
             if (pageSize) params.pageSize = pageSize;
             send(method, params, function (result) {
-                document.getElementById('getBlockFiltersBatchResultParamP').innerText = `P: ${result.paramP}`;
-                document.getElementById('getBlockFiltersBatchResultParamM').innerText = `M: ${result.paramM}`;
-                document.getElementById('getBlockFiltersBatchResult').innerText = JSON.stringify(result.blockFiltersBatch).replace(/,/g, ", ");
+                document.getElementById('getBlockFiltersBatchResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
             });
         }
 
@@ -735,8 +731,6 @@
             </div>
         </div>
         <div class="row">
-            <div class="col" id="getBlockFilterResultParamP"></div>
-            <div class="col" id="getBlockFilterResultParamM"></div>
             <div class="col" id="getBlockFilterResult"></div>
         </div>
         <div class="row">
@@ -752,8 +746,6 @@
             </div>
         </div>
         <div class="row">
-            <div class="col" id="getBlockFiltersBatchResultParamP"></div>
-            <div class="col" id="getBlockFiltersBatchResultParamM"></div>
             <div class="col" id="getBlockFiltersBatchResult"></div>
         </div>
         <div class="row">

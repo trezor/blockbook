@@ -1923,6 +1923,9 @@ func (d *RocksDB) LoadInternalState(config *common.Config) (*common.InternalStat
 		if is.BlockFilterScripts != config.BlockFilterScripts {
 			return nil, errors.Errorf("BlockFilterScripts does not match. DB BlockFilterScripts %v, config BlockFilterScripts  %v", is.BlockFilterScripts, config.BlockFilterScripts)
 		}
+		if is.BlockFilterUseZeroedKey != config.BlockFilterUseZeroedKey {
+			return nil, errors.Errorf("BlockFilterUseZeroedKey does not match. DB BlockFilterUseZeroedKey %v, config BlockFilterUseZeroedKey  %v", is.BlockFilterUseZeroedKey, config.BlockFilterUseZeroedKey)
+		}
 	}
 	nc, err := d.checkColumns(is)
 	if err != nil {
