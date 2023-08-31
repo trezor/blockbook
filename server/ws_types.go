@@ -79,6 +79,7 @@ type WsTransactionReq struct {
 type WsMempoolFiltersReq struct {
 	ScriptType    string `json:"scriptType"`
 	FromTimestamp uint32 `json:"fromTimestamp"`
+	ParamM        uint64 `json:"M,omitempty"`
 }
 
 type WsBlockFilterReq struct {
