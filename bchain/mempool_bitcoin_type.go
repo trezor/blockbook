@@ -251,5 +251,5 @@ func (m *MempoolBitcoinType) GetTxidFilterEntries(filterScripts string, fromTime
 		}
 	}
 	m.mux.Unlock()
-	return MempoolTxidFilterEntries{entries}, nil
+	return MempoolTxidFilterEntries{entries, m.useZeroedKey}, nil
 }

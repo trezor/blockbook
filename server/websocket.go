@@ -671,7 +671,7 @@ func (s *WebsocketServer) getMempoolFilters(r *WsMempoolFiltersReq) (res interfa
 	return resMempoolFilters{
 		ParamP:    s.is.BlockGolombFilterP,
 		ParamM:    bchain.GetGolombParamM(s.is.BlockGolombFilterP),
-		ZeroedKey: s.is.BlockFilterUseZeroedKey,
+		ZeroedKey: filterEntries.UsedZeroedKey,
 		Entries:   filterEntries.Entries,
 	}, nil
 }
