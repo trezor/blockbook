@@ -57,6 +57,7 @@ type Vin struct {
 	ScriptSig ScriptSig `json:"scriptSig"`
 	Sequence  uint32    `json:"sequence"`
 	Addresses []string  `json:"addresses"`
+	Witness   [][]byte  `json:"witness"`
 }
 
 // ScriptPubKey contains data about output script
@@ -273,8 +274,10 @@ type XpubDescriptor struct {
 type MempoolTxidEntries []MempoolTxidEntry
 
 // MempoolTxidFilterEntries is a map of txids to mempool golomb filters
+// Also contains a flag whether constant zeroed key was used when calculating the filters
 type MempoolTxidFilterEntries struct {
-	Entries map[string]string `json:"entries,omitempty"`
+	Entries       map[string]string `json:"entries,omitempty"`
+	UsedZeroedKey bool              `json:"usedZeroedKey,omitempty"`
 }
 
 // OnNewBlockFunc is used to send notification about a new block
