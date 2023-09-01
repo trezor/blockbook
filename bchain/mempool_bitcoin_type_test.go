@@ -194,7 +194,7 @@ func TestMempoolBitcoinType_computeGolombFilter_taproot(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := m.computeGolombFilter(&tt.mtx)
+			got := m.computeGolombFilter(&tt.mtx, nil)
 			if got != tt.want {
 				t.Errorf("MempoolBitcoinType.computeGolombFilter() = %v, want %v", got, tt.want)
 			}
@@ -238,3 +238,5 @@ func TestMempoolBitcoinType_computeGolombFilter_taproot(t *testing.T) {
 		})
 	}
 }
+
+// TODO test also taproot-noordinals option

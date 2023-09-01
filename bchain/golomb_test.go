@@ -88,7 +88,8 @@ func TestGolombFilter(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gf, err := NewGolombFilter(tt.p, tt.filterScripts, tt.key)
+			// TODO add tests for useZeroedKey
+			gf, err := NewGolombFilter(tt.p, tt.filterScripts, tt.key, false)
 			if err != nil && !tt.wantError {
 				t.Errorf("TestGolombFilter.NewGolombFilter() got unexpected error '%v'", err)
 				return
@@ -105,7 +106,7 @@ func TestGolombFilter(t *testing.T) {
 				return
 			}
 			for _, ad := range tt.addressDescriptors {
-				gf.AddAddrDesc(ad)
+				gf.AddAddrDesc(ad, nil)
 			}
 			f := gf.Compute()
 			got := hex.EncodeToString(f)
