@@ -1462,7 +1462,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 					"scriptType": "",
 				},
 			},
-			want: `{"id":"41","data":{}}`,
+			want: `{"id":"41","data":{"P":0,"M":1,"zeroedKey":false,"entries":{}}}`,
 		},
 		{
 			name: "websocket getMempoolFilters invalid type",
@@ -1482,7 +1482,7 @@ func websocketTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 					"blockHash": "abcd",
 				},
 			},
-			want: `{"id":"43","data":""}`,
+			want: `{"id":"43","data":{"P":0,"M":1,"zeroedKey":false,"blockFilter":""}}`,
 		},
 	}
 
