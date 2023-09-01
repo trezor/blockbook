@@ -1230,8 +1230,15 @@ func (s *PublicServer) apiBlockIndex(r *http.Request, apiVersion int) (interface
 
 func (s *PublicServer) apiBlockFilters(r *http.Request, apiVersion int) (interface{}, error) {
 	// Define return type
+	type blockFilterResult struct {
+		BlockHash string `json:"blockHash"`
+		Filter    string `json:"filter"`
+	}
 	type resBlockFilters struct {
-		BlockFilters map[int]map[string]string `json:"blockFilters"`
+		ParamP       uint8                     `json:"P"`
+		ParamM       uint64                    `json:"M"`
+		ZeroedKey    bool                      `json:"zeroedKey"`
+		BlockFilters map[int]blockFilterResult `json:"blockFilters"`
 	}
 
 	// Parse parameters
@@ -1247,6 +1254,11 @@ func (s *PublicServer) apiBlockFilters(r *http.Request, apiVersion int) (interfa
 	if ec != nil {
 		to = 0
 	}
+	scriptType := r.URL.Query().Get("scriptType")
+	if scriptType != s.is.BlockFilterScripts {
+		return nil, api.NewAPIError(fmt.Sprintf("Invalid scriptType %s. Use %s", scriptType, s.is.BlockFilterScripts), true)
+	}
+	// NOTE: technically, we are also accepting "m: uint64" param, but we do not use it currently
 
 	// Sanity checks
 	if lastN == 0 && from == 0 && to == 0 {
@@ -1278,7 +1290,7 @@ func (s *PublicServer) apiBlockFilters(r *http.Request, apiVersion int) (interfa
 	}
 
 	handleBlockFiltersResultFromTo := func(fromHeight int, toHeight int) (interface{}, error) {
-		blockFiltersMap := make(map[int]map[string]string)
+		blockFiltersMap := make(map[int]blockFilterResult)
 		for i := fromHeight; i <= toHeight; i++ {
 			blockHash, err := s.db.GetBlockHash(uint32(i))
 			if err != nil {
@@ -1290,12 +1302,15 @@ func (s *PublicServer) apiBlockFilters(r *http.Request, apiVersion int) (interfa
 				glog.Error(err)
 				return nil, err
 			}
-			resultMap := make(map[string]string)
-			resultMap["blockHash"] = blockHash
-			resultMap["filter"] = blockFilter
-			blockFiltersMap[i] = resultMap
+			blockFiltersMap[i] = blockFilterResult{
+				BlockHash: blockHash,
+				Filter:    blockFilter,
+			}
 		}
 		return resBlockFilters{
+			ParamP:       s.is.BlockGolombFilterP,
+			ParamM:       bchain.GetGolombParamM(s.is.BlockGolombFilterP),
+			ZeroedKey:    s.is.BlockFilterUseZeroedKey,
 			BlockFilters: blockFiltersMap,
 		}, nil
 	}

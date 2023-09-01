@@ -349,7 +349,7 @@ func (d *RocksDB) ConnectBlock(block *bchain.Block) error {
 	if chainType == bchain.ChainBitcoinType {
 		txAddressesMap := make(map[string]*TxAddresses)
 		balances := make(map[string]*AddrBalance)
-		gf, err := bchain.NewGolombFilter(d.is.BlockGolombFilterP, d.is.BlockFilterScripts, block.BlockHeader.Hash)
+		gf, err := bchain.NewGolombFilter(d.is.BlockGolombFilterP, d.is.BlockFilterScripts, block.BlockHeader.Hash, d.is.BlockFilterUseZeroedKey)
 		if err != nil {
 			glog.Error("ConnectBlock golomb filter error ", err)
 			gf = nil
@@ -643,7 +643,7 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses add
 				continue
 			}
 			if gf != nil {
-				gf.AddAddrDesc(addrDesc)
+				gf.AddAddrDesc(addrDesc, tx)
 			}
 			tao.AddrDesc = addrDesc
 			if d.chainParser.IsAddrDescIndexable(addrDesc) {
@@ -720,7 +720,7 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses add
 				glog.Warningf("rocksdb: height %d, tx %v, input tx %v vout %v is double spend", block.Height, tx.Txid, input.Txid, input.Vout)
 			}
 			if gf != nil {
-				gf.AddAddrDesc(spentOutput.AddrDesc)
+				gf.AddAddrDesc(spentOutput.AddrDesc, tx)
 			}
 			tai.AddrDesc = spentOutput.AddrDesc
 			tai.ValueSat = spentOutput.ValueSat
@@ -1894,12 +1894,13 @@ func (d *RocksDB) LoadInternalState(config *common.Config) (*common.InternalStat
 	var is *common.InternalState
 	if len(data) == 0 {
 		is = &common.InternalState{
-			Coin:                   config.CoinName,
-			UtxoChecked:            true,
-			SortedAddressContracts: true,
-			ExtendedIndex:          d.extendedIndex,
-			BlockGolombFilterP:     config.BlockGolombFilterP,
-			BlockFilterScripts:     config.BlockFilterScripts,
+			Coin:                    config.CoinName,
+			UtxoChecked:             true,
+			SortedAddressContracts:  true,
+			ExtendedIndex:           d.extendedIndex,
+			BlockGolombFilterP:      config.BlockGolombFilterP,
+			BlockFilterScripts:      config.BlockFilterScripts,
+			BlockFilterUseZeroedKey: config.BlockFilterUseZeroedKey,
 		}
 	} else {
 		is, err = common.UnpackInternalState(data)
@@ -1921,6 +1922,9 @@ func (d *RocksDB) LoadInternalState(config *common.Config) (*common.InternalStat
 		}
 		if is.BlockFilterScripts != config.BlockFilterScripts {
 			return nil, errors.Errorf("BlockFilterScripts does not match. DB BlockFilterScripts %v, config BlockFilterScripts  %v", is.BlockFilterScripts, config.BlockFilterScripts)
+		}
+		if is.BlockFilterUseZeroedKey != config.BlockFilterUseZeroedKey {
+			return nil, errors.Errorf("BlockFilterUseZeroedKey does not match. DB BlockFilterUseZeroedKey %v, config BlockFilterUseZeroedKey  %v", is.BlockFilterUseZeroedKey, config.BlockFilterUseZeroedKey)
 		}
 	}
 	nc, err := d.checkColumns(is)

@@ -657,17 +657,67 @@ func (s *WebsocketServer) sendTransaction(tx string) (res resultSendTransaction,
 	return
 }
 
-func (s *WebsocketServer) getMempoolFilters(r *WsMempoolFiltersReq) (res bchain.MempoolTxidFilterEntries, err error) {
-	res, err = s.mempool.GetTxidFilterEntries(r.ScriptType, r.FromTimestamp)
-	return
+func (s *WebsocketServer) getMempoolFilters(r *WsMempoolFiltersReq) (res interface{}, err error) {
+	type resMempoolFilters struct {
+		ParamP    uint8             `json:"P"`
+		ParamM    uint64            `json:"M"`
+		ZeroedKey bool              `json:"zeroedKey"`
+		Entries   map[string]string `json:"entries"`
+	}
+	filterEntries, err := s.mempool.GetTxidFilterEntries(r.ScriptType, r.FromTimestamp)
+	if err != nil {
+		return nil, err
+	}
+	return resMempoolFilters{
+		ParamP:    s.is.BlockGolombFilterP,
+		ParamM:    bchain.GetGolombParamM(s.is.BlockGolombFilterP),
+		ZeroedKey: filterEntries.UsedZeroedKey,
+		Entries:   filterEntries.Entries,
+	}, nil
 }
 
-func (s *WebsocketServer) getBlockFilter(r *WsBlockFilterReq) (res string, err error) {
-	return s.db.GetBlockFilter(r.BlockHash)
+func (s *WebsocketServer) getBlockFilter(r *WsBlockFilterReq) (res interface{}, err error) {
+	type resBlockFilter struct {
+		ParamP      uint8  `json:"P"`
+		ParamM      uint64 `json:"M"`
+		ZeroedKey   bool   `json:"zeroedKey"`
+		BlockFilter string `json:"blockFilter"`
+	}
+	if s.is.BlockFilterScripts != r.ScriptType {
+		return nil, errors.Errorf("Unsupported script type %s", r.ScriptType)
+	}
+	blockFilter, err := s.db.GetBlockFilter(r.BlockHash)
+	if err != nil {
+		return nil, err
+	}
+	return resBlockFilter{
+		ParamP:      s.is.BlockGolombFilterP,
+		ParamM:      bchain.GetGolombParamM(s.is.BlockGolombFilterP),
+		ZeroedKey:   s.is.BlockFilterUseZeroedKey,
+		BlockFilter: blockFilter,
+	}, nil
 }
 
-func (s *WebsocketServer) getBlockFiltersBatch(r *WsBlockFiltersBatchReq) (res []string, err error) {
-	return s.api.GetBlockFiltersBatch(r.BlockHash, r.PageSize)
+func (s *WebsocketServer) getBlockFiltersBatch(r *WsBlockFiltersBatchReq) (res interface{}, err error) {
+	type resBlockFiltersBatch struct {
+		ParamP            uint8    `json:"P"`
+		ParamM            uint64   `json:"M"`
+		ZeroedKey         bool     `json:"zeroedKey"`
+		BlockFiltersBatch []string `json:"blockFiltersBatch"`
+	}
+	if s.is.BlockFilterScripts != r.ScriptType {
+		return nil, errors.Errorf("Unsupported script type %s", r.ScriptType)
+	}
+	blockFiltersBatch, err := s.api.GetBlockFiltersBatch(r.BlockHash, r.PageSize)
+	if err != nil {
+		return nil, err
+	}
+	return resBlockFiltersBatch{
+		ParamP:            s.is.BlockGolombFilterP,
+		ParamM:            bchain.GetGolombParamM(s.is.BlockGolombFilterP),
+		ZeroedKey:         s.is.BlockFilterUseZeroedKey,
+		BlockFiltersBatch: blockFiltersBatch,
+	}, nil
 }
 
 type subscriptionResponse struct {

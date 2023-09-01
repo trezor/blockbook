@@ -185,7 +185,7 @@ func (b *BulkConnect) storeBulkBlockFilters(wb *grocksdb.WriteBatch) error {
 
 func (b *BulkConnect) connectBlockBitcoinType(block *bchain.Block, storeBlockTxs bool) error {
 	addresses := make(addressesMap)
-	gf, err := bchain.NewGolombFilter(b.d.is.BlockGolombFilterP, b.d.is.BlockFilterScripts, block.BlockHeader.Hash)
+	gf, err := bchain.NewGolombFilter(b.d.is.BlockGolombFilterP, b.d.is.BlockFilterScripts, block.BlockHeader.Hash, b.d.is.BlockFilterUseZeroedKey)
 	if err != nil {
 		glog.Error("connectBlockBitcoinType golomb filter error ", err)
 		gf = nil

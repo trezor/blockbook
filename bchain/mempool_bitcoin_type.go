@@ -22,11 +22,12 @@ type MempoolBitcoinType struct {
 	AddrDescForOutpoint AddrDescForOutpointFunc
 	golombFilterP       uint8
 	filterScripts       string
+	useZeroedKey        bool
 }
 
 // NewMempoolBitcoinType creates new mempool handler.
 // For now there is no cleanup of sync routines, the expectation is that the mempool is created only once per process
-func NewMempoolBitcoinType(chain BlockChain, workers int, subworkers int, golombFilterP uint8, filterScripts string) *MempoolBitcoinType {
+func NewMempoolBitcoinType(chain BlockChain, workers int, subworkers int, golombFilterP uint8, filterScripts string, useZeroedKey bool) *MempoolBitcoinType {
 	m := &MempoolBitcoinType{
 		BaseMempool: BaseMempool{
 			chain:        chain,
@@ -37,6 +38,7 @@ func NewMempoolBitcoinType(chain BlockChain, workers int, subworkers int, golomb
 		chanAddrIndex: make(chan txidio, 1),
 		golombFilterP: golombFilterP,
 		filterScripts: filterScripts,
+		useZeroedKey:  useZeroedKey,
 	}
 	for i := 0; i < workers; i++ {
 		go func(i int) {
@@ -97,18 +99,18 @@ func (m *MempoolBitcoinType) getInputAddress(payload *chanInputPayload) *addrInd
 
 }
 
-func (m *MempoolBitcoinType) computeGolombFilter(mtx *MempoolTx) string {
-	gf, _ := NewGolombFilter(m.golombFilterP, m.filterScripts, mtx.Txid)
+func (m *MempoolBitcoinType) computeGolombFilter(mtx *MempoolTx, tx *Tx) string {
+	gf, _ := NewGolombFilter(m.golombFilterP, "", mtx.Txid, m.useZeroedKey)
 	if gf == nil || !gf.Enabled {
 		return ""
 	}
 	for _, vin := range mtx.Vin {
-		gf.AddAddrDesc(vin.AddrDesc)
+		gf.AddAddrDesc(vin.AddrDesc, tx)
 	}
 	for _, vout := range mtx.Vout {
 		b, err := hex.DecodeString(vout.ScriptPubKey.Hex)
 		if err == nil {
-			gf.AddAddrDesc(b)
+			gf.AddAddrDesc(b, tx)
 		}
 	}
 	fb := gf.Compute()
@@ -168,7 +170,7 @@ func (m *MempoolBitcoinType) getTxAddrs(txid string, chanInput chan chanInputPay
 	}
 	var golombFilter string
 	if m.golombFilterP > 0 {
-		golombFilter = m.computeGolombFilter(mtx)
+		golombFilter = m.computeGolombFilter(mtx, tx)
 	}
 	if m.OnNewTx != nil {
 		m.OnNewTx(mtx)
@@ -249,5 +251,5 @@ func (m *MempoolBitcoinType) GetTxidFilterEntries(filterScripts string, fromTime
 		}
 	}
 	m.mux.Unlock()
-	return MempoolTxidFilterEntries{entries}, nil
+	return MempoolTxidFilterEntries{entries, m.useZeroedKey}, nil
 }
