@@ -34,7 +34,7 @@ type BitcoinRPC struct {
 	RPCMarshaler         RPCMarshaler
 	mempoolGolombFilterP uint8
 	mempoolFilterScripts string
-	useZeroedKey         bool
+	mempoolUseZeroedKey  bool
 }
 
 // Configuration represents json config file
@@ -112,7 +112,7 @@ func NewBitcoinRPC(config json.RawMessage, pushHandler func(bchain.NotificationT
 		RPCMarshaler:         JSONMarshalerV2{},
 		mempoolGolombFilterP: c.MempoolGolombFilterP,
 		mempoolFilterScripts: c.MempoolFilterScripts,
-		useZeroedKey:         c.MempoolFilterUseZeroedKey,
+		mempoolUseZeroedKey:  c.MempoolFilterUseZeroedKey,
 	}
 
 	return s, nil
@@ -158,7 +158,7 @@ func (b *BitcoinRPC) Initialize() error {
 // CreateMempool creates mempool if not already created, however does not initialize it
 func (b *BitcoinRPC) CreateMempool(chain bchain.BlockChain) (bchain.Mempool, error) {
 	if b.Mempool == nil {
-		b.Mempool = bchain.NewMempoolBitcoinType(chain, b.ChainConfig.MempoolWorkers, b.ChainConfig.MempoolSubWorkers, b.mempoolGolombFilterP, b.mempoolFilterScripts, b.useZeroedKey)
+		b.Mempool = bchain.NewMempoolBitcoinType(chain, b.ChainConfig.MempoolWorkers, b.ChainConfig.MempoolSubWorkers, b.mempoolGolombFilterP, b.mempoolFilterScripts, b.mempoolUseZeroedKey)
 	}
 	return b.Mempool, nil
 }
