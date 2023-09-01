@@ -64,7 +64,7 @@ type Configuration struct {
 	MinimumCoinbaseConfirmations int    `json:"minimumCoinbaseConfirmations,omitempty"`
 	MempoolGolombFilterP         uint8  `json:"mempool_golomb_filter_p,omitempty"`
 	MempoolFilterScripts         string `json:"mempool_filter_scripts,omitempty"`
-	UseZeroedKey                 bool   `json:"block_filter_use_zeroed_key,omitempty"`
+	MempoolFilterUseZeroedKey    bool   `json:"mempool_filter_use_zeroed_key,omitempty"`
 }
 
 // NewBitcoinRPC returns new BitcoinRPC instance.
@@ -112,7 +112,7 @@ func NewBitcoinRPC(config json.RawMessage, pushHandler func(bchain.NotificationT
 		RPCMarshaler:         JSONMarshalerV2{},
 		mempoolGolombFilterP: c.MempoolGolombFilterP,
 		mempoolFilterScripts: c.MempoolFilterScripts,
-		useZeroedKey:         c.UseZeroedKey,
+		useZeroedKey:         c.MempoolFilterUseZeroedKey,
 	}
 
 	return s, nil
