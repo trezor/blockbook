@@ -380,6 +380,10 @@ func (b *BulkConnect) Close() error {
 	}
 	wb := grocksdb.NewWriteBatch()
 	defer wb.Destroy()
+	if err := b.d.storeInternalDataEthereumType(wb, b.ethBlockTxs); err != nil {
+		return err
+	}
+	b.ethBlockTxs = b.ethBlockTxs[:0]
 	bac := b.bulkAddressesCount
 	if err := b.storeBulkAddresses(wb); err != nil {
 		return err
