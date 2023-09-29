@@ -2,7 +2,7 @@
 
 # Blockbook
 
-**Blockbook** is back-end service for Trezor wallet. Main features of **Blockbook** are:
+**Blockbook** is a back-end service for Trezor Suite. The main features of **Blockbook** are:
 
 -   index of addresses and address balances of the connected block chain
 -   fast index search

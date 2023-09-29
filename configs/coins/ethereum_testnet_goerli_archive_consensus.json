@@ -19,10 +19,10 @@
     "package_name": "backend-ethereum-testnet-goerli-archive-consensus",
     "package_revision": "satoshilabs-1",
     "system_user": "ethereum",
-    "version": "4.0.7",
-    "binary_url": "https://github.com/prysmaticlabs/prysm/releases/download/v4.0.7/beacon-chain-v4.0.7-linux-amd64",
+    "version": "4.0.8",
+    "binary_url": "https://github.com/prysmaticlabs/prysm/releases/download/v4.0.8/beacon-chain-v4.0.8-linux-amd64",
     "verification_type": "sha256",
-    "verification_source": "a606f3e95f5504ef67a9ed4871a5dfc710f0b932f5917b64af235ecbfd56eb8d",
+    "verification_source": "79f0938f86016d8a67d0d5e84d030472712fe5c8f482123aac960bb54c695509",
     "extract_command": "mv ${ARCHIVE} backend/beacon-chain && chmod +x backend/beacon-chain && echo",
     "exclude_files": [],
     "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/beacon-chain --prater --accept-terms-of-use --execution-endpoint=http://localhost:{{.Ports.BackendAuthRpc}} --grpc-gateway-port=17506 --rpc-port=17507 --monitoring-port=17508 --p2p-tcp-port=13506 --p2p-udp-port=12506 --datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --jwt-secret={{.Env.BackendDataPath}}/ethereum_testnet_goerli_archive/backend/geth/jwtsecret --genesis-state={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/genesis.ssz 2>>{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
@@ -36,8 +36,8 @@
     "client_config_file": "",
     "platforms": {
       "arm64": {
-        "binary_url": "https://github.com/prysmaticlabs/prysm/releases/download/v4.0.7/beacon-chain-v4.0.7-linux-arm64",
-        "verification_source": "52c61a12b1dd30eebfaa1593da4dbf7078ddc5a06117b3a5a3d5a48f7156de5a"
+        "binary_url": "https://github.com/prysmaticlabs/prysm/releases/download/v4.0.8/beacon-chain-v4.0.8-linux-arm64",
+        "verification_source": "841df39b572e27610d638a6cf0939e13af97b0b71bb5c7df68560c8f89166878"
       }
     }
   },
