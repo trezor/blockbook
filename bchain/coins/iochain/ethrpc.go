@@ -73,6 +73,7 @@ type EthereumRPC struct {
 }
 
 const privacyPrecompileAddress = "0x000000000000000000000000000000000000007e"
+const flexiblePrivacyPrecompileAddress = "0x000000000000000000000000000000000000007d"
 
 // ProcessInternalTransactions specifies if internal transactions are processed
 var ProcessInternalTransactions bool
@@ -808,7 +809,7 @@ func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 		}
 		return nil, bchain.ErrTxNotFound
 	}
-	if tx.To == privacyPrecompileAddress {
+	if tx.To == privacyPrecompileAddress || tx.To == flexiblePrivacyPrecompileAddress {
 		// private transaction
 		var ptx *bchain.RpcTransaction
 		err = b.RPC.CallContext(ctx, &ptx, "priv_getPrivateTransaction", hash)
