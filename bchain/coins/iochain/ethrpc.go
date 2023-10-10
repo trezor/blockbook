@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/ethereum/go-ethereum/rlp"
 	"io/ioutil"
 	"math/big"
 	"net/http"
@@ -966,11 +967,15 @@ func (b *EthereumRPC) EthereumTypeEstimateGas(params map[string]interface{}) (ui
 
 // SendRawTransaction sends raw transaction
 func (b *EthereumRPC) SendRawTransaction(hex string) (string, error) {
-	resPublic, err := b.SendRawTransactionPublic(hex)
-	if err == nil {
-		return resPublic, nil
+	isPrivate, err := isPrivateTransactions(hex)
+	if err != nil {
+		return "", err
 	}
-	return b.SendRawTransactionPrivate(hex)
+	if isPrivate {
+		return b.SendRawTransactionPrivate(hex)
+	} else {
+		return b.SendRawTransactionPublic(hex)
+	}
 }
 
 // SendRawTransactionPublic sends raw public transaction
@@ -1013,6 +1018,39 @@ func (b *EthereumRPC) SendRawTransactionPrivate(hex string) (string, error) {
 		return "", errors.New("SendRawTransaction: failed, empty result")
 	}
 	return result, nil
+}
+
+func isPrivateTransactions(rawTx string) (bool, error) {
+	if !strings.HasPrefix(rawTx, "0x") {
+		rawTx = "0x" + rawTx
+	}
+	txBytes := ethcommon.FromHex(rawTx)
+
+	var elements []rlp.RawValue
+	if err := rlp.DecodeBytes(txBytes, &elements); err != nil {
+		return false, err
+	}
+
+	if len(elements) <= 9 {
+		return false, nil
+	}
+
+	hasPrivacyGroupID := false
+	// Iterate through extra fields beyond standard 9 to find privacyGroupId
+	for i := 9; i < len(elements); i++ {
+		// Attempt to decode as []byte (for privacyGroupId)
+		privacyGroupID := new([]byte)
+		if rlp.DecodeBytes(elements[i], privacyGroupID) == nil && len(*privacyGroupID) > 0 {
+			hasPrivacyGroupID = true
+			break
+		}
+	}
+
+	if hasPrivacyGroupID {
+		return true, nil
+	}
+
+	return false, nil
 }
 
 // EthereumTypeGetBalance returns current balance of an address
