@@ -23,8 +23,8 @@
         "package_name": "backend-ethereum-testnet-sepolia-archive",
         "package_revision": "satoshilabs-1",
         "system_user": "ethereum",
-        "version": "2.48.1",
-        "binary_url": "https://github.com/ledgerwatch/erigon/releases/download/v2.48.1/erigon_2.48.1_linux_amd64.tar.gz",
+        "version": "v2.53.2",
+        "binary_url": "https://github.com/ledgerwatch/erigon/releases/download/v2.53.2/erigon_v2.53.2_linux_amd64.tar.gz",
         "verification_type": "sha256",
         "verification_source": "b1409105805afed9995baaa91f326a61758b299c3e8b3f63624373f0d073119e",
         "extract_command": "tar -C backend -xf",
@@ -40,7 +40,7 @@
         "client_config_file": "",
         "platforms": {
             "arm64": {
-                "binary_url": "https://github.com/ledgerwatch/erigon/releases/download/v2.48.1/erigon_2.48.1_linux_arm64.tar.gz",
+                "binary_url": "https://github.com/ledgerwatch/erigon/releases/download/v2.53.2/erigon_v2.53.2_linux_arm64.tar.gz",
                 "verification_source": "af4ee22645f9dd6a8b859e875b0ae00d1d111cba6d462b6027b028315dce1516"
             }
         }
