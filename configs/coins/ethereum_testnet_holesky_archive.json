@@ -1,19 +1,19 @@
 {
     "coin": {
-        "name": "Ethereum Testnet Sepolia Archive",
-        "shortcut": "tSEP",
-        "label": "Ethereum Sepolia",
+        "name": "Ethereum Testnet Holesky Archive",
+        "shortcut": "hSEP",
+        "label": "Ethereum Holesky",
         "alias": "ethereum_testnet_sepolia_archive"
     },
     "ports": {
-        "backend_rpc": 18086,
+        "backend_rpc": 18036,
         "backend_message_queue": 0,
-        "backend_p2p": 48386,
-        "backend_http": 18186,
-        "backend_torrent": 18186,
-        "backend_authrpc": 18586,
-        "blockbook_internal": 19086,
-        "blockbook_public": 19186
+        "backend_p2p": 48336,
+        "backend_http": 18136,
+        "backend_torrent": 18136,
+        "backend_authrpc": 18536,
+        "blockbook_internal": 19036,
+        "blockbook_public": 19136
     },
     "ipc": {
         "rpc_url_template": "ws://127.0.0.1:{{.Ports.BackendRPC}}",
@@ -23,13 +23,13 @@
         "package_name": "backend-ethereum-testnet-sepolia-archive",
         "package_revision": "satoshilabs-1",
         "system_user": "ethereum",
-        "version": "2.53.2",
-        "binary_url": "https://github.com/ledgerwatch/erigon/releases/download/v2.53.2/erigon_2.53.2_linux_amd64.tar.gz",
+        "version": "v2.53.2",
+        "binary_url": "https://github.com/ledgerwatch/erigon/releases/download/v2.48.1/erigon_2.48.1_linux_amd64.tar.gz",
         "verification_type": "sha256",
         "verification_source": "b1409105805afed9995baaa91f326a61758b299c3e8b3f63624373f0d073119e",
         "extract_command": "tar -C backend -xf",
         "exclude_files": [],
-        "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/erigon --chain sepolia --snap.keepblocks --db.size.limit 15TB --prune c --prune.c.older 1000000 -torrent.download.rate 32mb --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/erigon --port {{.Ports.BackendP2P}} --ws --http --http.port {{.Ports.BackendRPC}} --http.addr 127.0.0.1 --http.corsdomain \"*\" --http.vhosts \"*\" --http.api \"eth,net,web3,debug,txpool\" --authrpc.port {{.Ports.BackendAuthRpc}} --private.api.addr \"\" --torrent.port {{.Ports.BackendHttp}} --log.dir.path {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --log.dir.prefix {{.Coin.Alias}}'",
+        "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/erigon --chain holesky --snap.keepblocks --db.size.limit 15TB --prune c --prune.c.older 1000000 -torrent.download.rate 32mb --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/erigon --port {{.Ports.BackendP2P}} --ws --http --http.port {{.Ports.BackendRPC}} --http.addr 127.0.0.1 --http.corsdomain \"*\" --http.vhosts \"*\" --http.api \"eth,net,web3,debug,txpool\" --authrpc.port {{.Ports.BackendAuthRpc}} --private.api.addr \"\" --torrent.port {{.Ports.BackendHttp}} --log.dir.path {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --log.dir.prefix {{.Coin.Alias}}'",
         "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
         "postinst_script_template": "",
         "service_type": "simple",
@@ -40,7 +40,7 @@
         "client_config_file": "",
         "platforms": {
             "arm64": {
-                "binary_url": "https://github.com/ledgerwatch/erigon/releases/download/2.53.2/erigon_2.53.2_linux_arm64.tar.gz",
+                "binary_url": "https://github.com/ledgerwatch/erigon/releases/download/v2.48.1/erigon_2.48.1_linux_arm64.tar.gz",
                 "verification_source": "af4ee22645f9dd6a8b859e875b0ae00d1d111cba6d462b6027b028315dce1516"
             }
         }
@@ -58,7 +58,7 @@
             "mempool_sub_workers": 2,
             "block_addresses_to_keep": 3000,
             "additional_params": {
-                "consensusNodeVersion": "http://localhost:17586/eth/v1/node/version",
+                "consensusNodeVersion": "http://localhost:17536/eth/v1/node/version",
                 "address_aliases": true,
                 "mempoolTxTimeoutHours": 12,
                 "processInternalTransactions": true,
