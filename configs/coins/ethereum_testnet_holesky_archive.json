@@ -3,7 +3,7 @@
         "name": "Ethereum Testnet Holesky Archive",
         "shortcut": "hSEP",
         "label": "Ethereum Holesky",
-        "alias": "ethereum_testnet_sepolia_archive"
+        "alias": "ethereum_testnet_holesky_archive"
     },
     "ports": {
         "backend_rpc": 18036,
@@ -20,7 +20,7 @@
         "rpc_timeout": 25
     },
     "backend": {
-        "package_name": "backend-ethereum-testnet-sepolia-archive",
+        "package_name": "backend-ethereum-testnet-holesky-archive",
         "package_revision": "satoshilabs-1",
         "system_user": "ethereum",
         "version": "2.53.2",
