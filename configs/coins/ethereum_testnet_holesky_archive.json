@@ -26,7 +26,7 @@
         "version": "2.53.2",
         "binary_url": "https://github.com/ledgerwatch/erigon/releases/download/v2.53.2/erigon_2.53.2_linux_amd64.tar.gz",
         "verification_type": "sha256",
-        "verification_source": "b1409105805afed9995baaa91f326a61758b299c3e8b3f63624373f0d073119e",
+        "verification_source": "dd88dcce57c659a88696dd361780906fddd5968621eb0518f57b4e07f80cb3e6",
         "extract_command": "tar -C backend -xf",
         "exclude_files": [],
         "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/erigon --chain holesky --snap.keepblocks --db.size.limit 15TB --prune c --prune.c.older 1000000 -torrent.download.rate 32mb --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/erigon --port {{.Ports.BackendP2P}} --ws --http --http.port {{.Ports.BackendRPC}} --http.addr 127.0.0.1 --http.corsdomain \"*\" --http.vhosts \"*\" --http.api \"eth,net,web3,debug,txpool\" --authrpc.port {{.Ports.BackendAuthRpc}} --private.api.addr \"\" --torrent.port {{.Ports.BackendHttp}} --log.dir.path {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --log.dir.prefix {{.Coin.Alias}}'",
@@ -41,7 +41,7 @@
         "platforms": {
             "arm64": {
                 "binary_url": "https://github.com/ledgerwatch/erigon/releases/download/v2.53.2/erigon_2.53.2_linux_arm64.tar.gz",
-                "verification_source": "af4ee22645f9dd6a8b859e875b0ae00d1d111cba6d462b6027b028315dce1516"
+                "verification_source": "2492d160c34b88041c5dcdcef43e7213e99d8f2a1e112de2c5966b226ce6a4e4"
             }
         }
     },
