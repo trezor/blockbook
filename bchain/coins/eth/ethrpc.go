@@ -34,6 +34,8 @@ const (
 	TestNetGoerli Network = 5
 	// TestNetSepolia is Sepolia test network
 	TestNetSepolia Network = 11155111
+	// TestNetHolesky is Holesky test network
+	TestNetHolesky Network = 17000
 )
 
 // Configuration represents json config file
@@ -147,6 +149,9 @@ func (b *EthereumRPC) Initialize() error {
 	case TestNetSepolia:
 		b.Testnet = true
 		b.Network = "sepolia"
+	case TestNetHolesky:
+		b.Testnet = true
+		b.Network = "holesky"
 	default:
 		return errors.Errorf("Unknown network id %v", id)
 	}
