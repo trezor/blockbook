@@ -26,9 +26,9 @@
         "binary_url": "https://github.com/ledgerwatch/erigon/releases/download/v2.53.2/erigon_2.53.2_linux_amd64.tar.gz",
         "verification_type": "sha256",
         "verification_source": "dd88dcce57c659a88696dd361780906fddd5968621eb0518f57b4e07f80cb3e6",
-        "extract_command": "tar -C backend --strip 1 -xf",
+        "extract_command": "tar -C backend -xf",
         "exclude_files": [],
-        "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/geth --syncmode full --txlookuplimit 0 --ipcdisable --cache 1024 --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --port {{.Ports.BackendP2P}} --ws --ws.addr 127.0.0.1 --ws.port {{.Ports.BackendRPC}} --ws.origins \"*\" --ws.api \"eth,net,web3,debug,txpool\" --http --http.port {{.Ports.BackendHttp}} --http.addr 127.0.0.1 --http.corsdomain \"*\" --http.vhosts \"*\" --http.api \"eth,net,web3,debug,txpool\" --authrpc.port {{.Ports.BackendAuthRpc}} 2>>{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
+        "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/erigon --chain mainnet --snap.keepblocks --db.size.limit 15TB --prune c --prune.c.older 1000000 -torrent.download.rate 32mb --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/erigon --port {{.Ports.BackendP2P}} --ws --http --http.port {{.Ports.BackendRPC}} --http.addr 127.0.0.1 --http.corsdomain \"*\" --http.vhosts \"*\" --http.api \"eth,net,web3,debug,txpool\" --authrpc.port {{.Ports.BackendAuthRpc}} --private.api.addr \"\" --torrent.port {{.Ports.BackendHttp}} --log.dir.path {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --log.dir.prefix {{.Coin.Alias}}'",
         "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
         "postinst_script_template": "",
         "service_type": "simple",
@@ -58,11 +58,13 @@
             "block_addresses_to_keep": 300,
             "additional_params": {
                 "consensusNodeVersion": "http://localhost:7536/eth/v1/node/version",
+                "address_aliases": true,
                 "mempoolTxTimeoutHours": 48,
                 "queryBackendOnMempoolResync": false,
                 "fiat_rates": "coingecko",
                 "fiat_rates_vs_currencies": "AED,ARS,AUD,BDT,BHD,BMD,BRL,CAD,CHF,CLP,CNY,CZK,DKK,EUR,GBP,HKD,HUF,IDR,ILS,INR,JPY,KRW,KWD,LKR,MMK,MXN,MYR,NGN,NOK,NZD,PHP,PKR,PLN,RUB,SAR,SEK,SGD,THB,TRY,TWD,UAH,USD,VEF,VND,ZAR,BTC,ETH",
-                "fiat_rates_params": "{\"coin\": \"ethereum\",\"platformIdentifier\": \"ethereum\",\"platformVsCurrency\": \"eth\",\"periodSeconds\": 900}"
+                "fiat_rates_params": "{\"coin\": \"ethereum\",\"platformIdentifier\": \"ethereum\",\"platformVsCurrency\": \"eth\",\"periodSeconds\": 900}",
+                "fourByteSignatures": "https://www.4byte.directory/api/v1/signatures/"
             }
         }
     },
