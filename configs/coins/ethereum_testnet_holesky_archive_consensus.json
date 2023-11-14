@@ -1,7 +1,7 @@
 {
     "coin": {
         "name": "Ethereum Testnet Holesky Archive",
-        "shortcut": "hSEP",
+        "shortcut": "tHOL",
         "label": "Ethereum Holesky",
         "alias": "ethereum_testnet_holesky_archive_consensus",
         "execution_alias": "ethereum_testnet_holesky_archive"
