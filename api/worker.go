@@ -1393,7 +1393,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 	if ed.contractInfo != nil && ed.contractInfo.Type == bchain.ERC20TokenType {
 		r.Erc20Contract = ed.contractInfo
 	}
-	glog.Info("GetAddress ", address, ", ", time.Since(start))
+	glog.Info("GetAddress-", option, " ", address, ", ", time.Since(start))
 	return r, nil
 }
 
