@@ -122,12 +122,12 @@ func getIP(r *http.Request) string {
 // ServeHTTP sets up handler of websocket channel
 func (s *WebsocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
-		http.Error(w, upgradeFailed+ErrorMethodNotAllowed.Error(), 503)
+		http.Error(w, upgradeFailed+ErrorMethodNotAllowed.Error(), http.StatusServiceUnavailable)
 		return
 	}
 	conn, err := s.upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		http.Error(w, upgradeFailed+err.Error(), 503)
+		http.Error(w, upgradeFailed+err.Error(), http.StatusServiceUnavailable)
 		return
 	}
 	c := &websocketChannel{
@@ -456,7 +456,9 @@ func (s *WebsocketServer) onRequest(c *websocketChannel, req *WsReq) {
 	}()
 	t := time.Now()
 	s.metrics.WebsocketPendingRequests.With((common.Labels{"method": req.Method})).Inc()
-	defer s.metrics.WebsocketReqDuration.With(common.Labels{"method": req.Method}).Observe(float64(time.Since(t)) / 1e3) // in microseconds
+	defer func() {
+		s.metrics.WebsocketReqDuration.With(common.Labels{"method": req.Method}).Observe(float64(time.Since(t)) / 1e3) // in microseconds
+	}()
 	f, ok := requestHandlers[req.Method]
 	if ok {
 		data, err = f(s, c, req)
