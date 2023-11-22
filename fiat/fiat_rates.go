@@ -61,16 +61,7 @@ type FiatRates struct {
 }
 
 // NewFiatRates initializes the FiatRates handler
-func NewFiatRates(db *db.RocksDB, configFileContent []byte, metrics *common.Metrics, callback OnNewFiatRatesTicker) (*FiatRates, error) {
-	var config struct {
-		FiatRates             string `json:"fiat_rates"`
-		FiatRatesParams       string `json:"fiat_rates_params"`
-		FiatRatesVsCurrencies string `json:"fiat_rates_vs_currencies"`
-	}
-	err := json.Unmarshal(configFileContent, &config)
-	if err != nil {
-		return nil, fmt.Errorf("error parsing config file, %v", err)
-	}
+func NewFiatRates(db *db.RocksDB, config *common.Config, metrics *common.Metrics, callback OnNewFiatRatesTicker) (*FiatRates, error) {
 
 	var fr = &FiatRates{
 		provider:            config.FiatRates,
@@ -91,7 +82,7 @@ func NewFiatRates(db *db.RocksDB, configFileContent []byte, metrics *common.Metr
 		PeriodSeconds      int64  `json:"periodSeconds"`
 	}
 	rdParams := &fiatRatesParams{}
-	err = json.Unmarshal([]byte(config.FiatRatesParams), &rdParams)
+	err := json.Unmarshal([]byte(config.FiatRatesParams), &rdParams)
 	if err != nil {
 		return nil, err
 	}

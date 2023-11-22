@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"io"
-	"io/ioutil"
 	"math/big"
 	"net"
 	"net/http"
@@ -33,8 +32,9 @@ type BitcoinRPC struct {
 	mq                   *bchain.MQ
 	ChainConfig          *Configuration
 	RPCMarshaler         RPCMarshaler
-	golombFilterP        uint8
+	mempoolGolombFilterP uint8
 	mempoolFilterScripts string
+	mempoolUseZeroedKey  bool
 }
 
 // Configuration represents json config file
@@ -62,8 +62,9 @@ type Configuration struct {
 	AlternativeEstimateFee       string `json:"alternative_estimate_fee,omitempty"`
 	AlternativeEstimateFeeParams string `json:"alternative_estimate_fee_params,omitempty"`
 	MinimumCoinbaseConfirmations int    `json:"minimumCoinbaseConfirmations,omitempty"`
-	GolombFilterP                uint8  `json:"golomb_filter_p,omitempty"`
+	MempoolGolombFilterP         uint8  `json:"mempool_golomb_filter_p,omitempty"`
 	MempoolFilterScripts         string `json:"mempool_filter_scripts,omitempty"`
+	MempoolFilterUseZeroedKey    bool   `json:"mempool_filter_use_zeroed_key,omitempty"`
 }
 
 // NewBitcoinRPC returns new BitcoinRPC instance.
@@ -109,8 +110,9 @@ func NewBitcoinRPC(config json.RawMessage, pushHandler func(bchain.NotificationT
 		ChainConfig:          &c,
 		pushHandler:          pushHandler,
 		RPCMarshaler:         JSONMarshalerV2{},
-		golombFilterP:        c.GolombFilterP,
+		mempoolGolombFilterP: c.MempoolGolombFilterP,
 		mempoolFilterScripts: c.MempoolFilterScripts,
+		mempoolUseZeroedKey:  c.MempoolFilterUseZeroedKey,
 	}
 
 	return s, nil
@@ -156,7 +158,7 @@ func (b *BitcoinRPC) Initialize() error {
 // CreateMempool creates mempool if not already created, however does not initialize it
 func (b *BitcoinRPC) CreateMempool(chain bchain.BlockChain) (bchain.Mempool, error) {
 	if b.Mempool == nil {
-		b.Mempool = bchain.NewMempoolBitcoinType(chain, b.ChainConfig.MempoolWorkers, b.ChainConfig.MempoolSubWorkers, b.golombFilterP, b.mempoolFilterScripts)
+		b.Mempool = bchain.NewMempoolBitcoinType(chain, b.ChainConfig.MempoolWorkers, b.ChainConfig.MempoolSubWorkers, b.mempoolGolombFilterP, b.mempoolFilterScripts, b.mempoolUseZeroedKey)
 	}
 	return b.Mempool, nil
 }
@@ -891,7 +893,7 @@ func safeDecodeResponse(body io.ReadCloser, res interface{}) (err error) {
 			}
 		}
 	}()
-	data, err = ioutil.ReadAll(body)
+	data, err = io.ReadAll(body)
 	if err != nil {
 		return err
 	}

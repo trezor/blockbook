@@ -357,6 +357,13 @@ export interface WsBlockReq {
     pageSize?: number;
     page?: number;
 }
+export interface WsBlockFilterReq {
+    blockHash: string;
+}
+export interface WsBlockFiltersBatchReq {
+    bestKnownBlockHash: string;
+    pageSize?: number;
+}
 export interface WsAccountUtxoReq {
     descriptor: string;
 }

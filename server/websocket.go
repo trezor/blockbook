@@ -82,9 +82,10 @@ func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.
 	}
 	s := &WebsocketServer{
 		upgrader: &websocket.Upgrader{
-			ReadBufferSize:  1024 * 32,
-			WriteBufferSize: 1024 * 32,
-			CheckOrigin:     checkOrigin,
+			ReadBufferSize:    1024 * 32,
+			WriteBufferSize:   1024 * 32,
+			CheckOrigin:       checkOrigin,
+			EnableCompression: true,
 		},
 		db:                          db,
 		txCache:                     txCache,
@@ -121,12 +122,12 @@ func getIP(r *http.Request) string {
 // ServeHTTP sets up handler of websocket channel
 func (s *WebsocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
-		http.Error(w, upgradeFailed+ErrorMethodNotAllowed.Error(), 503)
+		http.Error(w, upgradeFailed+ErrorMethodNotAllowed.Error(), http.StatusServiceUnavailable)
 		return
 	}
 	conn, err := s.upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		http.Error(w, upgradeFailed+err.Error(), 503)
+		http.Error(w, upgradeFailed+err.Error(), http.StatusServiceUnavailable)
 		return
 	}
 	c := &websocketChannel{
@@ -350,6 +351,22 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *WsRe
 		}
 		return
 	},
+	"getBlockFilter": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
+		r := WsBlockFilterReq{}
+		err = json.Unmarshal(req.Params, &r)
+		if err == nil {
+			rv, err = s.getBlockFilter(&r)
+		}
+		return
+	},
+	"getBlockFiltersBatch": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
+		r := WsBlockFiltersBatchReq{}
+		err = json.Unmarshal(req.Params, &r)
+		if err == nil {
+			rv, err = s.getBlockFiltersBatch(&r)
+		}
+		return
+	},
 	"subscribeNewBlock": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
 		return s.subscribeNewBlock(c, req)
 	},
@@ -439,7 +456,9 @@ func (s *WebsocketServer) onRequest(c *websocketChannel, req *WsReq) {
 	}()
 	t := time.Now()
 	s.metrics.WebsocketPendingRequests.With((common.Labels{"method": req.Method})).Inc()
-	defer s.metrics.WebsocketReqDuration.With(common.Labels{"method": req.Method}).Observe(float64(time.Since(t)) / 1e3) // in microseconds
+	defer func() {
+		s.metrics.WebsocketReqDuration.With(common.Labels{"method": req.Method}).Observe(float64(time.Since(t)) / 1e3) // in microseconds
+	}()
 	f, ok := requestHandlers[req.Method]
 	if ok {
 		data, err = f(s, c, req)
@@ -640,9 +659,67 @@ func (s *WebsocketServer) sendTransaction(tx string) (res resultSendTransaction,
 	return
 }
 
-func (s *WebsocketServer) getMempoolFilters(r *WsMempoolFiltersReq) (res bchain.MempoolTxidFilterEntries, err error) {
-	res, err = s.mempool.GetTxidFilterEntries(r.ScriptType, r.FromTimestamp)
-	return
+func (s *WebsocketServer) getMempoolFilters(r *WsMempoolFiltersReq) (res interface{}, err error) {
+	type resMempoolFilters struct {
+		ParamP    uint8             `json:"P"`
+		ParamM    uint64            `json:"M"`
+		ZeroedKey bool              `json:"zeroedKey"`
+		Entries   map[string]string `json:"entries"`
+	}
+	filterEntries, err := s.mempool.GetTxidFilterEntries(r.ScriptType, r.FromTimestamp)
+	if err != nil {
+		return nil, err
+	}
+	return resMempoolFilters{
+		ParamP:    s.is.BlockGolombFilterP,
+		ParamM:    bchain.GetGolombParamM(s.is.BlockGolombFilterP),
+		ZeroedKey: filterEntries.UsedZeroedKey,
+		Entries:   filterEntries.Entries,
+	}, nil
+}
+
+func (s *WebsocketServer) getBlockFilter(r *WsBlockFilterReq) (res interface{}, err error) {
+	type resBlockFilter struct {
+		ParamP      uint8  `json:"P"`
+		ParamM      uint64 `json:"M"`
+		ZeroedKey   bool   `json:"zeroedKey"`
+		BlockFilter string `json:"blockFilter"`
+	}
+	if s.is.BlockFilterScripts != r.ScriptType {
+		return nil, errors.Errorf("Unsupported script type %s", r.ScriptType)
+	}
+	blockFilter, err := s.db.GetBlockFilter(r.BlockHash)
+	if err != nil {
+		return nil, err
+	}
+	return resBlockFilter{
+		ParamP:      s.is.BlockGolombFilterP,
+		ParamM:      bchain.GetGolombParamM(s.is.BlockGolombFilterP),
+		ZeroedKey:   s.is.BlockFilterUseZeroedKey,
+		BlockFilter: blockFilter,
+	}, nil
+}
+
+func (s *WebsocketServer) getBlockFiltersBatch(r *WsBlockFiltersBatchReq) (res interface{}, err error) {
+	type resBlockFiltersBatch struct {
+		ParamP            uint8    `json:"P"`
+		ParamM            uint64   `json:"M"`
+		ZeroedKey         bool     `json:"zeroedKey"`
+		BlockFiltersBatch []string `json:"blockFiltersBatch"`
+	}
+	if s.is.BlockFilterScripts != r.ScriptType {
+		return nil, errors.Errorf("Unsupported script type %s", r.ScriptType)
+	}
+	blockFiltersBatch, err := s.api.GetBlockFiltersBatch(r.BlockHash, r.PageSize)
+	if err != nil {
+		return nil, err
+	}
+	return resBlockFiltersBatch{
+		ParamP:            s.is.BlockGolombFilterP,
+		ParamM:            bchain.GetGolombParamM(s.is.BlockGolombFilterP),
+		ZeroedKey:         s.is.BlockFilterUseZeroedKey,
+		BlockFiltersBatch: blockFiltersBatch,
+	}, nil
 }
 
 type subscriptionResponse struct {

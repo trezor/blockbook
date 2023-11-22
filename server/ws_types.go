@@ -79,6 +79,20 @@ type WsTransactionReq struct {
 type WsMempoolFiltersReq struct {
 	ScriptType    string `json:"scriptType"`
 	FromTimestamp uint32 `json:"fromTimestamp"`
+	ParamM        uint64 `json:"M,omitempty"`
+}
+
+type WsBlockFilterReq struct {
+	ScriptType string `json:"scriptType"`
+	BlockHash  string `json:"blockHash"`
+	ParamM     uint64 `json:"M,omitempty"`
+}
+
+type WsBlockFiltersBatchReq struct {
+	ScriptType string `json:"scriptType"`
+	BlockHash  string `json:"bestKnownBlockHash"`
+	PageSize   int    `json:"pageSize,omitempty"`
+	ParamM     uint64 `json:"M,omitempty"`
 }
 
 type WsTransactionSpecificReq struct {

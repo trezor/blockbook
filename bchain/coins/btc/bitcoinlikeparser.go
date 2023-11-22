@@ -231,6 +231,7 @@ func (p *BitcoinLikeParser) TxFromMsgTx(t *wire.MsgTx, parseAddresses bool) bcha
 			Vout:      in.PreviousOutPoint.Index,
 			Sequence:  in.Sequence,
 			ScriptSig: s,
+			Witness:   in.Witness,
 		}
 	}
 	vout := make([]bchain.Vout, len(t.TxOut))

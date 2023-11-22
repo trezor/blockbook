@@ -30,12 +30,12 @@ type Network uint32
 const (
 	// MainNet is production network
 	MainNet Network = 1
-	// TestNet is Ropsten test network
-	TestNet Network = 3
 	// TestNetGoerli is Goerli test network
 	TestNetGoerli Network = 5
 	// TestNetSepolia is Sepolia test network
 	TestNetSepolia Network = 11155111
+	// TestNetHolesky is Holesky test network
+	TestNetHolesky Network = 17000
 )
 
 // Configuration represents json config file
@@ -143,15 +143,15 @@ func (b *EthereumRPC) Initialize() error {
 	case MainNet:
 		b.Testnet = false
 		b.Network = "livenet"
-	case TestNet:
-		b.Testnet = true
-		b.Network = "testnet"
 	case TestNetGoerli:
 		b.Testnet = true
 		b.Network = "goerli"
 	case TestNetSepolia:
 		b.Testnet = true
 		b.Network = "sepolia"
+	case TestNetHolesky:
+		b.Testnet = true
+		b.Network = "holesky"
 	default:
 		return errors.Errorf("Unknown network id %v", id)
 	}

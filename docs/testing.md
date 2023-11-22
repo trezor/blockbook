@@ -16,7 +16,7 @@ You can use Go's flag *-run* to filter which tests should be executed. Use *ARGS
 
 ## Unit tests
 
-Unit test file must start with constraint `// +build unittest` followed by blank line (constraints are described
+Unit test file must start with constraint `//go:build unittest` followed by blank line (constraints are described
 [here](https://golang.org/pkg/go/build/#hdr-Build_Constraints)).
 
 Every coin implementation must have unit tests. At least for parser. Usual test suite define real transaction data

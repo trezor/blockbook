@@ -92,6 +92,11 @@ type InternalState struct {
 	// database migrations
 	UtxoChecked            bool `json:"utxoChecked"`
 	SortedAddressContracts bool `json:"sortedAddressContracts"`
+
+	// golomb filter settings
+	BlockGolombFilterP      uint8  `json:"block_golomb_filter_p"`
+	BlockFilterScripts      string `json:"block_filter_scripts"`
+	BlockFilterUseZeroedKey bool   `json:"block_filter_use_zeroed_key"`
 }
 
 // StartedSync signals start of synchronization

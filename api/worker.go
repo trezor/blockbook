@@ -36,6 +36,15 @@ type Worker struct {
 	metrics           *common.Metrics
 }
 
+// contractInfoWithValid contains the contract info and whether it is a valid contract or not
+type contractInfoWithValid struct {
+	*bchain.ContractInfo
+	Valid bool
+}
+
+// contractInfoCache is a temporary cache of contract information for ethereum token transfers
+type contractInfoCache = map[string]*contractInfoWithValid
+
 // NewWorker creates new api worker
 func NewWorker(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, txCache *db.TxCache, metrics *common.Metrics, is *common.InternalState, fiatRates *fiat.FiatRates) (*Worker, error) {
 	w := &Worker{
@@ -605,7 +614,11 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 	return r, nil
 }
 
-func (w *Worker) getContractInfo(contract string, typeFromContext bchain.TokenTypeName) (*bchain.ContractInfo, bool, error) {
+func (w *Worker) getContractInfo(contract string, typeFromContext bchain.TokenTypeName, cache contractInfoCache) (*bchain.ContractInfo, bool, error) {
+	cached := cache[contract]
+	if cached != nil {
+		return cached.ContractInfo, cached.Valid, nil
+	}
 	cd, err := w.chainParser.GetAddrDescFromAddress(contract)
 	if err != nil {
 		return nil, false, err
@@ -674,15 +687,17 @@ func (w *Worker) getContractDescriptorInfo(cd bchain.AddressDescriptor, typeFrom
 
 func (w *Worker) getEthereumTokensTransfers(transfers bchain.TokenTransfers, addresses map[string]struct{}) []TokenTransfer {
 	sort.Sort(transfers)
+	contractCache := make(contractInfoCache)
 	tokens := make([]TokenTransfer, len(transfers))
 	for i := range transfers {
 		t := transfers[i]
 		typeName := bchain.EthereumTokenTypeMap[t.Type]
-		contractInfo, _, err := w.getContractInfo(t.Contract, typeName)
+		contractInfo, valid, err := w.getContractInfo(t.Contract, typeName, contractCache)
 		if err != nil {
 			glog.Errorf("getContractInfo error %v, contract %v", err, t.Contract)
 			continue
 		}
+		contractCache[t.Contract] = &contractInfoWithValid{ContractInfo: contractInfo, Valid: valid}
 		var value *Amount
 		var values []MultiTokenValue
 		if t.Type == bchain.MultiToken {
@@ -2205,6 +2220,48 @@ func (w *Worker) GetBlockRaw(bid string) (*BlockRaw, error) {
 		return nil, err
 	}
 	return &BlockRaw{Hex: hex}, err
+}
+
+// GetBlockFiltersBatch returns array of block filter data in the format ["height:hash:filter",...] if blocks greater than bestKnownBlockHash
+func (w *Worker) GetBlockFiltersBatch(bestKnownBlockHash string, pageSize int) ([]string, error) {
+	if w.is.BlockGolombFilterP == 0 {
+		return nil, NewAPIError("Not supported", true)
+	}
+	if pageSize > 10000 {
+		return nil, NewAPIError("pageSize max 10000", true)
+	}
+	if pageSize <= 0 {
+		pageSize = 1000
+	}
+	bi, err := w.chain.GetBlockInfo(bestKnownBlockHash)
+	if err != nil {
+		return nil, err
+	}
+	bestHeight, _, err := w.db.GetBestBlock()
+	if err != nil {
+		return nil, err
+	}
+	from := bi.Height + 1
+	to := bestHeight + 1
+	if from >= to {
+		return []string{}, nil
+	}
+	if to-from > uint32(pageSize) {
+		to = from + uint32(pageSize)
+	}
+	r := make([]string, 0, to-from)
+	for i := from; i < to; i++ {
+		blockHash, err := w.db.GetBlockHash(uint32(i))
+		if err != nil {
+			return nil, err
+		}
+		blockFilter, err := w.db.GetBlockFilter(blockHash)
+		if err != nil {
+			return nil, err
+		}
+		r = append(r, fmt.Sprintf("%d:%s:%s", i, blockHash, blockFilter))
+	}
+	return r, err
 }
 
 // ComputeFeeStats computes fee distribution in defined blocks and logs them to log

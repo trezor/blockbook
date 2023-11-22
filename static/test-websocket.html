@@ -87,7 +87,11 @@
                 var f = pendingMessages[resp.id];
                 if (f != undefined) {
                     delete pendingMessages[resp.id];
-                    f(resp.data);
+                    try {
+                        f(resp.data);
+                    } catch (e) {
+                        alert(`Error: ${e}.\nLook into the console for websocket response.`);
+                    }
                 } else {
                     f = subscriptions[resp.id];
                     if (f != undefined) {
@@ -411,6 +415,34 @@
             });
         }
 
+        function getBlockFilter() {
+            const method = 'getBlockFilter';
+            const blockHash = document.getElementById('getBlockFilterBlockHash').value;
+            const scriptType = document.getElementById('getBlockFilterBlockHashScriptType').value;
+            const params = {
+                blockHash,
+                scriptType,
+            };
+            send(method, params, function (result) {
+                document.getElementById('getBlockFilterResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
+            });
+        }
+
+        function getBlockFiltersBatch() {
+            const method = 'getBlockFiltersBatch';
+            const bestKnownBlockHash = document.getElementById('getBlockFiltersBatchBlockHash').value;
+            const pageSize = parseInt(document.getElementById("getBlockFiltersBatchPageSize").value);
+            const scriptType = document.getElementById('getBlockFiltersBatchScriptType').value;
+            const params = {
+                bestKnownBlockHash,
+                scriptType,
+            };
+            if (pageSize) params.pageSize = pageSize;
+            send(method, params, function (result) {
+                document.getElementById('getBlockFiltersBatchResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
+            });
+        }
+
         function subscribeNewFiatRatesTicker() {
             const method = 'subscribeFiatRates';
             var currency = document.getElementById('subscribeFiatRatesCurrency').value;
@@ -688,6 +720,33 @@
         </div>
         <div class="row">
             <div class="col" id="getMempoolFiltersResult"></div>
+        </div>
+        <div class="row">
+            <div class="col-2">
+                <input class="btn btn-secondary" type="button" value="get block filter" onclick="getBlockFilter()">
+            </div>
+            <div class="col-8">
+                <input type="text" class="form-control" id="getBlockFilterBlockHash" value="000000000000001cb4edd91be03b6775abd351fb51b1fbb0871fc1451454f362" placeholder="block hash">
+                <input type="text" class="form-control" id="getBlockFilterBlockHashScriptType" value="taproot-noordinals" placeholder="filter script">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col" id="getBlockFilterResult"></div>
+        </div>
+        <div class="row">
+            <div class="col-2">
+                <input class="btn btn-secondary" type="button" value="get block filter batch" onclick="getBlockFiltersBatch()">
+            </div>
+            <div class="col-10">
+                <div class="row" style="margin: 0;">
+                    <input type="text" class="form-control" id="getBlockFiltersBatchBlockHash"  style="width: 80%; margin-right: 5px;" value="000000000000001cb4edd91be03b6775abd351fb51b1fbb0871fc1451454f362" placeholder="best known block hash">
+                    <input type="text" class="form-control" placeholder="page size" style="width: 15%;" id="getBlockFiltersBatchPageSize" value="">
+                    <input type="text" class="form-control" id="getBlockFiltersBatchScriptType" value="taproot-noordinals" placeholder="filter script">
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col" id="getBlockFiltersBatchResult"></div>
         </div>
         <div class="row">
             <div class="col">

@@ -59,6 +59,7 @@
 | Optimism Archive Op-Node         | 9303             | 9203               | 8203        |                                      |
 | Optimism Archive Legacy Geth     | 9304             | 9204               | 8204        | 38404 p2p, 8304 http                 |
 | Ethereum Testnet Goerli Archive  | 19106            | 19006              | 18006       | 18106 http, 18506 authrpc, 48306 p2p |
+| Ethereum Testnet Holesky         | 19116            | 19016              | 18016       | 18116 http, 18516 authrpc, 48316 p2p |
 | Bitcoin Signet                   | 19120            | 19020              | 18020       | 48320                                |
 | Bitcoin Regtest                  | 19121            | 19021              | 18021       | 48321                                |
 | Ethereum Testnet Goerli          | 19126            | 19026              | 18026       | 18126 http, 18526 authrpc, 48326 p2p |
@@ -68,6 +69,7 @@
 | Dash Testnet                     | 19133            | 19033              | 18033       | 48333                                |
 | Litecoin Testnet                 | 19134            | 19034              | 18034       | 48334                                |
 | Bitcoin Gold Testnet             | 19135            | 19035              | 18035       | 48335                                |
+| Ethereum Testnet Holesky Archive | 19136            | 19036              | 18036       | 18136 http, 18536 authrpc, 48336 p2p |
 | Dogecoin Testnet                 | 19138            | 19038              | 18038       | 48338                                |
 | Vertcoin Testnet                 | 19140            | 19040              | 18040       | 48340                                |
 | Monacoin Testnet                 | 19141            | 19041              | 18041       | 48341                                |

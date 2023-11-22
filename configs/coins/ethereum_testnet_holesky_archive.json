@@ -1,26 +1,26 @@
 {
     "coin": {
-        "name": "Ethereum Testnet Sepolia Archive",
-        "shortcut": "tSEP",
-        "label": "Ethereum Sepolia",
-        "alias": "ethereum_testnet_sepolia_archive"
+        "name": "Ethereum Testnet Holesky Archive",
+        "shortcut": "tHOL",
+        "label": "Ethereum Holesky",
+        "alias": "ethereum_testnet_holesky_archive"
     },
     "ports": {
-        "backend_rpc": 18086,
+        "backend_rpc": 18036,
         "backend_message_queue": 0,
-        "backend_p2p": 48386,
-        "backend_http": 18186,
-        "backend_torrent": 18186,
-        "backend_authrpc": 18586,
-        "blockbook_internal": 19086,
-        "blockbook_public": 19186
+        "backend_p2p": 48336,
+        "backend_http": 18136,
+        "backend_torrent": 18136,
+        "backend_authrpc": 18536,
+        "blockbook_internal": 19036,
+        "blockbook_public": 19136
     },
     "ipc": {
         "rpc_url_template": "ws://127.0.0.1:{{.Ports.BackendRPC}}",
         "rpc_timeout": 25
     },
     "backend": {
-        "package_name": "backend-ethereum-testnet-sepolia-archive",
+        "package_name": "backend-ethereum-testnet-holesky-archive",
         "package_revision": "satoshilabs-1",
         "system_user": "ethereum",
         "version": "2.54.0",
@@ -29,7 +29,7 @@
         "verification_source": "c7936d50ffe28b61b8a5755361345fef6c820da3c7df0f1613036297cbbf2e0a",
         "extract_command": "tar -C backend -xf",
         "exclude_files": [],
-        "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/erigon --chain sepolia --snap.keepblocks --db.size.limit 15TB --prune c --prune.c.older 1000000 -torrent.download.rate 32mb --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/erigon --port {{.Ports.BackendP2P}} --ws --http --http.port {{.Ports.BackendRPC}} --http.addr 127.0.0.1 --http.corsdomain \"*\" --http.vhosts \"*\" --http.api \"eth,net,web3,debug,txpool\" --authrpc.port {{.Ports.BackendAuthRpc}} --private.api.addr \"\" --torrent.port {{.Ports.BackendHttp}} --log.dir.path {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --log.dir.prefix {{.Coin.Alias}}'",
+        "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/erigon --chain holesky --snap.keepblocks --db.size.limit 15TB --prune c --prune.c.older 1000000 -torrent.download.rate 32mb --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/erigon --port {{.Ports.BackendP2P}} --ws --http --http.port {{.Ports.BackendRPC}} --http.addr 127.0.0.1 --http.corsdomain \"*\" --http.vhosts \"*\" --http.api \"eth,net,web3,debug,txpool\" --authrpc.port {{.Ports.BackendAuthRpc}} --private.api.addr \"\" --torrent.port {{.Ports.BackendHttp}} --log.dir.path {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --log.dir.prefix {{.Coin.Alias}}'",
         "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
         "postinst_script_template": "",
         "service_type": "simple",
@@ -40,13 +40,13 @@
         "client_config_file": "",
         "platforms": {
             "arm64": {
-                "binary_url": "https://github.com/ledgerwatch/erigon/releases/download/2.54.0/erigon_2.54.0_linux_arm64.tar.gz",
+                "binary_url": "https://github.com/ledgerwatch/erigon/releases/download/v2.54.0/erigon_2.54.0_linux_arm64.tar.gz",
                 "verification_source": "ee1d1f34a4d91a0aca9f61f57f12cdc19b6d4313c6e1be546b815c59d47144e2"
             }
         }
     },
     "blockbook": {
-        "package_name": "blockbook-ethereum-testnet-sepolia-archive",
+        "package_name": "blockbook-ethereum-testnet-holesky-archive",
         "system_user": "blockbook-ethereum",
         "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
         "public_binding_template": ":{{.Ports.BlockbookPublic}}",
@@ -58,7 +58,7 @@
             "mempool_sub_workers": 2,
             "block_addresses_to_keep": 3000,
             "additional_params": {
-                "consensusNodeVersion": "http://localhost:17586/eth/v1/node/version",
+                "consensusNodeVersion": "http://localhost:17536/eth/v1/node/version",
                 "address_aliases": true,
                 "mempoolTxTimeoutHours": 12,
                 "processInternalTransactions": true,

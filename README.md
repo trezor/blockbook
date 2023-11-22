@@ -2,7 +2,7 @@
 
 # Blockbook
 
-**Blockbook** is back-end service for Trezor wallet. Main features of **Blockbook** are:
+**Blockbook** is a back-end service for Trezor Suite. The main features of **Blockbook** are:
 
 -   index of addresses and address balances of the connected block chain
 -   fast index search
@@ -35,7 +35,7 @@ the rest of coins were implemented by the community.
 
 Testnets for some coins are also supported, for example:
 
--   Bitcoin Testnet, Bitcoin Cash Testnet, ZCash Testnet, Ethereum Testnets (Goerli, Sepolia)
+-   Bitcoin Testnet, Bitcoin Cash Testnet, ZCash Testnet, Ethereum Testnets (Goerli, Sepolia, Holesky)
 
 List of all implemented coins is in [the registry of ports](/docs/ports.md).
 

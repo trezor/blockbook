@@ -710,6 +710,10 @@ func TestUnpackTx(t *testing.T) {
 				t.Errorf("unpackTx() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
+			// ignore witness unpacking
+			for i := range got.Vin {
+				got.Vin[i].Witness = nil
+			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("unpackTx() got = %v, want %v", got, tt.want)
 			}

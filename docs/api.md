@@ -908,6 +908,8 @@ The websocket interface provides the following requests:
 - getCurrentFiatRates
 - getFiatRatesTickersList
 - getFiatRatesForTimestamps
+- getMempoolFilters
+- getBlockFilter
 - estimateFee
 - sendTransaction
 - ping

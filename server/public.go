@@ -184,6 +184,7 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 		serveMux.HandleFunc(path+"api/v1/estimatefee/", s.jsonHandler(s.apiEstimateFee, apiV1))
 	}
 	serveMux.HandleFunc(path+"api/block-index/", s.jsonHandler(s.apiBlockIndex, apiDefault))
+	serveMux.HandleFunc(path+"api/block-filters/", s.jsonHandler(s.apiBlockFilters, apiDefault))
 	serveMux.HandleFunc(path+"api/tx-specific/", s.jsonHandler(s.apiTxSpecific, apiDefault))
 	serveMux.HandleFunc(path+"api/tx/", s.jsonHandler(s.apiTx, apiDefault))
 	serveMux.HandleFunc(path+"api/address/", s.jsonHandler(s.apiAddress, apiDefault))
@@ -196,6 +197,7 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 	serveMux.HandleFunc(path+"api/balancehistory/", s.jsonHandler(s.apiBalanceHistory, apiDefault))
 	// v2 format
 	serveMux.HandleFunc(path+"api/v2/block-index/", s.jsonHandler(s.apiBlockIndex, apiV2))
+	serveMux.HandleFunc(path+"api/v2/block-filters/", s.jsonHandler(s.apiBlockFilters, apiV2))
 	serveMux.HandleFunc(path+"api/v2/tx-specific/", s.jsonHandler(s.apiTxSpecific, apiV2))
 	serveMux.HandleFunc(path+"api/v2/tx/", s.jsonHandler(s.apiTx, apiV2))
 	serveMux.HandleFunc(path+"api/v2/address/", s.jsonHandler(s.apiAddress, apiV2))
@@ -1224,6 +1226,96 @@ func (s *PublicServer) apiBlockIndex(r *http.Request, apiVersion int) (interface
 	return resBlockIndex{
 		BlockHash: hash,
 	}, nil
+}
+
+func (s *PublicServer) apiBlockFilters(r *http.Request, apiVersion int) (interface{}, error) {
+	// Define return type
+	type blockFilterResult struct {
+		BlockHash string `json:"blockHash"`
+		Filter    string `json:"filter"`
+	}
+	type resBlockFilters struct {
+		ParamP       uint8                     `json:"P"`
+		ParamM       uint64                    `json:"M"`
+		ZeroedKey    bool                      `json:"zeroedKey"`
+		BlockFilters map[int]blockFilterResult `json:"blockFilters"`
+	}
+
+	// Parse parameters
+	lastN, ec := strconv.Atoi(r.URL.Query().Get("lastN"))
+	if ec != nil {
+		lastN = 0
+	}
+	from, ec := strconv.Atoi(r.URL.Query().Get("from"))
+	if ec != nil {
+		from = 0
+	}
+	to, ec := strconv.Atoi(r.URL.Query().Get("to"))
+	if ec != nil {
+		to = 0
+	}
+	scriptType := r.URL.Query().Get("scriptType")
+	if scriptType != s.is.BlockFilterScripts {
+		return nil, api.NewAPIError(fmt.Sprintf("Invalid scriptType %s. Use %s", scriptType, s.is.BlockFilterScripts), true)
+	}
+	// NOTE: technically, we are also accepting "m: uint64" param, but we do not use it currently
+
+	// Sanity checks
+	if lastN == 0 && from == 0 && to == 0 {
+		return nil, api.NewAPIError("Missing parameters", true)
+	}
+	if from > to {
+		return nil, api.NewAPIError("Invalid parameters - from > to", true)
+	}
+
+	// Best height is needed more than once
+	bestHeight, _, err := s.db.GetBestBlock()
+	if err != nil {
+		glog.Error(err)
+		return nil, err
+	}
+
+	// Modify to/from if needed
+	if lastN > 0 {
+		// Get data for last N blocks
+		to = int(bestHeight)
+		from = to - lastN + 1
+	} else {
+		// Get data for specified from-to range
+		// From will always stay the same (even if 0)
+		// To will be the best block if not specified
+		if to == 0 {
+			to = int(bestHeight)
+		}
+	}
+
+	handleBlockFiltersResultFromTo := func(fromHeight int, toHeight int) (interface{}, error) {
+		blockFiltersMap := make(map[int]blockFilterResult)
+		for i := fromHeight; i <= toHeight; i++ {
+			blockHash, err := s.db.GetBlockHash(uint32(i))
+			if err != nil {
+				glog.Error(err)
+				return nil, err
+			}
+			blockFilter, err := s.db.GetBlockFilter(blockHash)
+			if err != nil {
+				glog.Error(err)
+				return nil, err
+			}
+			blockFiltersMap[i] = blockFilterResult{
+				BlockHash: blockHash,
+				Filter:    blockFilter,
+			}
+		}
+		return resBlockFilters{
+			ParamP:       s.is.BlockGolombFilterP,
+			ParamM:       bchain.GetGolombParamM(s.is.BlockGolombFilterP),
+			ZeroedKey:    s.is.BlockFilterUseZeroedKey,
+			BlockFilters: blockFiltersMap,
+		}, nil
+	}
+
+	return handleBlockFiltersResultFromTo(from, to)
 }
 
 func (s *PublicServer) apiTx(r *http.Request, apiVersion int) (interface{}, error) {
