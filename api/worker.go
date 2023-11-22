@@ -36,6 +36,15 @@ type Worker struct {
 	metrics           *common.Metrics
 }
 
+// contractInfoWithValid contains the contract info and whether it is a valid contract or not
+type contractInfoWithValid struct {
+	*bchain.ContractInfo
+	Valid bool
+}
+
+// contractInfoCache is a temporary cache of contract information for ethereum token transfers
+type contractInfoCache = map[string]*contractInfoWithValid
+
 // NewWorker creates new api worker
 func NewWorker(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, txCache *db.TxCache, metrics *common.Metrics, is *common.InternalState, fiatRates *fiat.FiatRates) (*Worker, error) {
 	w := &Worker{
@@ -598,7 +607,11 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 	return r, nil
 }
 
-func (w *Worker) getContractInfo(contract string, typeFromContext bchain.TokenTypeName) (*bchain.ContractInfo, bool, error) {
+func (w *Worker) getContractInfo(contract string, typeFromContext bchain.TokenTypeName, cache contractInfoCache) (*bchain.ContractInfo, bool, error) {
+	cached := cache[contract]
+	if cached != nil {
+		return cached.ContractInfo, cached.Valid, nil
+	}
 	cd, err := w.chainParser.GetAddrDescFromAddress(contract)
 	if err != nil {
 		return nil, false, err
@@ -667,15 +680,17 @@ func (w *Worker) getContractDescriptorInfo(cd bchain.AddressDescriptor, typeFrom
 
 func (w *Worker) getEthereumTokensTransfers(transfers bchain.TokenTransfers, addresses map[string]struct{}) []TokenTransfer {
 	sort.Sort(transfers)
+	contractCache := make(contractInfoCache)
 	tokens := make([]TokenTransfer, len(transfers))
 	for i := range transfers {
 		t := transfers[i]
 		typeName := bchain.EthereumTokenTypeMap[t.Type]
-		contractInfo, _, err := w.getContractInfo(t.Contract, typeName)
+		contractInfo, valid, err := w.getContractInfo(t.Contract, typeName, contractCache)
 		if err != nil {
 			glog.Errorf("getContractInfo error %v, contract %v", err, t.Contract)
 			continue
 		}
+		contractCache[t.Contract] = &contractInfoWithValid{ContractInfo: contractInfo, Valid: valid}
 		var value *Amount
 		var values []MultiTokenValue
 		if t.Type == bchain.MultiToken {
