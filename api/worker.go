@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/trezor/blockbook/bchain/coins/iochain"
 	"math"
 	"math/big"
 	"os"
@@ -411,7 +412,7 @@ func (w *Worker) getTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 			glog.Errorf("GetTokenTransfersFromTx error %v, %v", err, bchainTx)
 		}
 		tokens = w.getEthereumTokensTransfers(tokenTransfers, addresses)
-		ethTxData := eth.GetEthereumTxData(bchainTx)
+		ethTxData := iochain.GetIochainTxData(bchainTx)
 		if ethTxData.GasPrice == nil {
 			ethTxData.GasPrice = big.NewInt(0)
 		}
@@ -440,13 +441,17 @@ func (w *Worker) getTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 			valOutSat = bchainTx.Vout[0].ValueSat
 		}
 		ethSpecific = &EthereumSpecific{
-			GasLimit:   ethTxData.GasLimit,
-			GasPrice:   (*Amount)(ethTxData.GasPrice),
-			GasUsed:    ethTxData.GasUsed,
-			Nonce:      ethTxData.Nonce,
-			Status:     ethTxData.Status,
-			Data:       ethTxData.Data,
-			ParsedData: parsedInputData,
+			GasLimit:        ethTxData.GasLimit,
+			GasPrice:        (*Amount)(ethTxData.GasPrice),
+			GasUsed:         ethTxData.GasUsed,
+			Nonce:           ethTxData.Nonce,
+			Status:          ethTxData.Status,
+			Data:            ethTxData.Data,
+			PrivateFrom:     ethTxData.PrivateFrom,
+			PrivacyGroupId:  ethTxData.PrivacyGroupId,
+			ContractAddress: ethTxData.ContractAddress,
+			RevertReason:    ethTxData.RevertReason,
+			ParsedData:      parsedInputData,
 		}
 		if internalData != nil {
 			ethSpecific.Type = internalData.Type

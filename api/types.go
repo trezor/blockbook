@@ -233,6 +233,10 @@ type EthereumSpecific struct {
 	GasUsed           *big.Int                               `json:"gasUsed,omitempty"`
 	GasPrice          *Amount                                `json:"gasPrice"`
 	Data              string                                 `json:"data,omitempty"`
+	PrivateFrom       string                                 `json:"privateFrom,omitempty"`
+	PrivacyGroupId    string                                 `json:"privacyGroupId,omitempty"`
+	ContractAddress   string                                 `json:"contractAddress,omitempty"`
+	RevertReason      string                                 `json:"revertReason,omitempty"`
 	ParsedData        *bchain.EthereumParsedInputData        `json:"parsedData,omitempty"`
 	InternalTransfers []EthereumInternalTransfer             `json:"internalTransfers,omitempty"`
 }

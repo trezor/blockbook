@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"github.com/golang/glog"
+	"github.com/trezor/blockbook/bchain/coins/eth"
 	"math/big"
 	"strconv"
 	"strings"
@@ -469,33 +470,29 @@ func (p *EthereumParser) FormatAddressAlias(address string, name string) string 
 // TxStatus is status of transaction
 type TxStatus int
 
-// statuses of transaction
-const (
-	TxStatusUnknown = TxStatus(iota - 2)
-	TxStatusPending
-	TxStatusFailure
-	TxStatusOK
-)
-
 // EthereumTxData contains ethereum specific transaction data
 type EthereumTxData struct {
-	Status   TxStatus `json:"status"` // 1 OK, 0 Fail, -1 pending, -2 unknown
-	Nonce    uint64   `json:"nonce"`
-	GasLimit *big.Int `json:"gaslimit"`
-	GasUsed  *big.Int `json:"gasused"`
-	GasPrice *big.Int `json:"gasprice"`
-	Data     string   `json:"data"`
+	Status          eth.TxStatus `json:"status"` // 1 OK, 0 Fail, -1 pending, -2 unknown
+	Nonce           uint64       `json:"nonce"`
+	GasLimit        *big.Int     `json:"gaslimit"`
+	GasUsed         *big.Int     `json:"gasused"`
+	GasPrice        *big.Int     `json:"gasprice"`
+	PrivateFrom     string       `json:"privateFrom,omitempty"`
+	PrivacyGroupId  string       `json:"privacyGroupId,omitempty"`
+	ContractAddress string       `json:"contractAddress,omitempty"`
+	RevertReason    string       `json:"revertReason,omitempty"`
+	Data            string       `json:"data"`
 }
 
-// GetEthereumTxData returns EthereumTxData from bchain.Tx
-func GetEthereumTxData(tx *bchain.Tx) *EthereumTxData {
-	return GetEthereumTxDataFromSpecificData(tx.CoinSpecificData)
+// GetIochainTxData returns EthereumTxData from bchain.Tx
+func GetIochainTxData(tx *bchain.Tx) *EthereumTxData {
+	return GetIochainTxDataFromSpecificData(tx.CoinSpecificData)
 }
 
-// GetEthereumTxDataFromSpecificData returns EthereumTxData from coinSpecificData
-func GetEthereumTxDataFromSpecificData(coinSpecificData interface{}) *EthereumTxData {
+// GetIochainTxDataFromSpecificData returns EthereumTxData from coinSpecificData
+func GetIochainTxDataFromSpecificData(coinSpecificData interface{}) *EthereumTxData {
 	txt, _ := json.Marshal(coinSpecificData)
-	etd := EthereumTxData{Status: TxStatusPending}
+	etd := EthereumTxData{Status: eth.TxStatusPending}
 	var csd bchain.EthereumSpecificData
 	err := json.Unmarshal(txt, &csd)
 	if err != nil {
@@ -510,11 +507,11 @@ func GetEthereumTxDataFromSpecificData(coinSpecificData interface{}) *EthereumTx
 	if csd.Receipt != nil {
 		switch csd.Receipt.Status {
 		case "0x1":
-			etd.Status = TxStatusOK
+			etd.Status = eth.TxStatusOK
 		case "": // old transactions did not set status
-			etd.Status = TxStatusUnknown
+			etd.Status = eth.TxStatusUnknown
 		default:
-			etd.Status = TxStatusFailure
+			etd.Status = eth.TxStatusFailure
 		}
 		etd.GasUsed, _ = hexutil.DecodeBig(csd.Receipt.GasUsed)
 	}
