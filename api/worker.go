@@ -607,11 +607,7 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 	return r, nil
 }
 
-func (w *Worker) getContractInfo(contract string, typeFromContext bchain.TokenTypeName, cache contractInfoCache) (*bchain.ContractInfo, bool, error) {
-	cached := cache[contract]
-	if cached != nil {
-		return cached.ContractInfo, cached.Valid, nil
-	}
+func (w *Worker) getContractInfo(contract string, typeFromContext bchain.TokenTypeName) (*bchain.ContractInfo, bool, error) {
 	cd, err := w.chainParser.GetAddrDescFromAddress(contract)
 	if err != nil {
 		return nil, false, err
@@ -686,12 +682,18 @@ func (w *Worker) getEthereumTokensTransfers(transfers bchain.TokenTransfers, add
 		for i := range transfers {
 			t := transfers[i]
 			typeName := bchain.EthereumTokenTypeMap[t.Type]
-			contractInfo, valid, err := w.getContractInfo(t.Contract, typeName, contractCache)
-			if err != nil {
-				glog.Errorf("getContractInfo error %v, contract %v", err, t.Contract)
-				continue
+			var contractInfo *bchain.ContractInfo
+			if cached, ok := contractCache[t.Contract]; ok {
+				contractInfo = cached.ContractInfo
+			} else {
+				info, valid, err := w.getContractInfo(t.Contract, typeName)
+				if err != nil {
+					glog.Errorf("getContractInfo error %v, contract %v", err, t.Contract)
+					continue
+				}
+				contractInfo = info
+				contractCache[t.Contract] = &contractInfoWithValid{ContractInfo: info, Valid: valid}
 			}
-			contractCache[t.Contract] = &contractInfoWithValid{ContractInfo: contractInfo, Valid: valid}
 			var value *Amount
 			var values []MultiTokenValue
 			if t.Type == bchain.MultiToken {
