@@ -679,41 +679,43 @@ func (w *Worker) getContractDescriptorInfo(cd bchain.AddressDescriptor, typeFrom
 }
 
 func (w *Worker) getEthereumTokensTransfers(transfers bchain.TokenTransfers, addresses map[string]struct{}) []TokenTransfer {
-	sort.Sort(transfers)
-	contractCache := make(contractInfoCache)
 	tokens := make([]TokenTransfer, len(transfers))
-	for i := range transfers {
-		t := transfers[i]
-		typeName := bchain.EthereumTokenTypeMap[t.Type]
-		contractInfo, valid, err := w.getContractInfo(t.Contract, typeName, contractCache)
-		if err != nil {
-			glog.Errorf("getContractInfo error %v, contract %v", err, t.Contract)
-			continue
-		}
-		contractCache[t.Contract] = &contractInfoWithValid{ContractInfo: contractInfo, Valid: valid}
-		var value *Amount
-		var values []MultiTokenValue
-		if t.Type == bchain.MultiToken {
-			values = make([]MultiTokenValue, len(t.MultiTokenValues))
-			for j := range values {
-				values[j].Id = (*Amount)(&t.MultiTokenValues[j].Id)
-				values[j].Value = (*Amount)(&t.MultiTokenValues[j].Value)
+	if len(transfers) > 0 {
+		sort.Sort(transfers)
+		contractCache := make(contractInfoCache)
+		for i := range transfers {
+			t := transfers[i]
+			typeName := bchain.EthereumTokenTypeMap[t.Type]
+			contractInfo, valid, err := w.getContractInfo(t.Contract, typeName, contractCache)
+			if err != nil {
+				glog.Errorf("getContractInfo error %v, contract %v", err, t.Contract)
+				continue
 			}
-		} else {
-			value = (*Amount)(&t.Value)
-		}
-		aggregateAddress(addresses, t.From)
-		aggregateAddress(addresses, t.To)
-		tokens[i] = TokenTransfer{
-			Type:             typeName,
-			Contract:         t.Contract,
-			From:             t.From,
-			To:               t.To,
-			Value:            value,
-			MultiTokenValues: values,
-			Decimals:         contractInfo.Decimals,
-			Name:             contractInfo.Name,
-			Symbol:           contractInfo.Symbol,
+			contractCache[t.Contract] = &contractInfoWithValid{ContractInfo: contractInfo, Valid: valid}
+			var value *Amount
+			var values []MultiTokenValue
+			if t.Type == bchain.MultiToken {
+				values = make([]MultiTokenValue, len(t.MultiTokenValues))
+				for j := range values {
+					values[j].Id = (*Amount)(&t.MultiTokenValues[j].Id)
+					values[j].Value = (*Amount)(&t.MultiTokenValues[j].Value)
+				}
+			} else {
+				value = (*Amount)(&t.Value)
+			}
+			aggregateAddress(addresses, t.From)
+			aggregateAddress(addresses, t.To)
+			tokens[i] = TokenTransfer{
+				Type:             typeName,
+				Contract:         t.Contract,
+				From:             t.From,
+				To:               t.To,
+				Value:            value,
+				MultiTokenValues: values,
+				Decimals:         contractInfo.Decimals,
+				Name:             contractInfo.Name,
+				Symbol:           contractInfo.Symbol,
+			}
 		}
 	}
 	return tokens
