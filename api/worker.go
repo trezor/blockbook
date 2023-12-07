@@ -36,14 +36,8 @@ type Worker struct {
 	metrics           *common.Metrics
 }
 
-// contractInfoWithValid contains the contract info and whether it is a valid contract or not
-type contractInfoWithValid struct {
-	*bchain.ContractInfo
-	Valid bool
-}
-
 // contractInfoCache is a temporary cache of contract information for ethereum token transfers
-type contractInfoCache = map[string]*contractInfoWithValid
+type contractInfoCache = map[string]*bchain.ContractInfo
 
 // NewWorker creates new api worker
 func NewWorker(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, txCache *db.TxCache, metrics *common.Metrics, is *common.InternalState, fiatRates *fiat.FiatRates) (*Worker, error) {
@@ -683,16 +677,16 @@ func (w *Worker) getEthereumTokensTransfers(transfers bchain.TokenTransfers, add
 			t := transfers[i]
 			typeName := bchain.EthereumTokenTypeMap[t.Type]
 			var contractInfo *bchain.ContractInfo
-			if cached, ok := contractCache[t.Contract]; ok {
-				contractInfo = cached.ContractInfo
+			if info, ok := contractCache[t.Contract]; ok {
+				contractInfo = info
 			} else {
-				info, valid, err := w.getContractInfo(t.Contract, typeName)
+				info, _, err := w.getContractInfo(t.Contract, typeName)
 				if err != nil {
 					glog.Errorf("getContractInfo error %v, contract %v", err, t.Contract)
 					continue
 				}
 				contractInfo = info
-				contractCache[t.Contract] = &contractInfoWithValid{ContractInfo: info, Valid: valid}
+				contractCache[t.Contract] = info
 			}
 			var value *Amount
 			var values []MultiTokenValue
