@@ -22,10 +22,10 @@
         "package_name": "backend-ethereum",
         "package_revision": "satoshilabs-1",
         "system_user": "ethereum",
-        "version": "2.54.0",
-        "binary_url": "https://github.com/ledgerwatch/erigon/releases/download/v2.54.0/erigon_2.54.0_linux_amd64.tar.gz",
+        "version": "2.55.1",
+        "binary_url": "https://github.com/ledgerwatch/erigon/releases/download/v2.55.1/erigon_2.55.1_linux_amd64.tar.gz",
         "verification_type": "sha256",
-        "verification_source": "c7936d50ffe28b61b8a5755361345fef6c820da3c7df0f1613036297cbbf2e0a",
+        "verification_source": "74ffbcb7adf79377fafb904d713ad6e089b87ddd6961dec9b04e9e097fc6860f",
         "extract_command": "tar -C backend -xf",
         "exclude_files": [],
         "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/erigon --chain mainnet --snap.keepblocks --db.size.limit 15TB --prune c --prune.c.older 1000000 -torrent.download.rate 32mb --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/erigon --port {{.Ports.BackendP2P}} --ws --http --http.port {{.Ports.BackendRPC}} --http.addr 127.0.0.1 --http.corsdomain \"*\" --http.vhosts \"*\" --http.api \"eth,net,web3,debug,txpool\" --authrpc.port {{.Ports.BackendAuthRpc}} --private.api.addr \"\" --torrent.port {{.Ports.BackendHttp}} --log.dir.path {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --log.dir.prefix {{.Coin.Alias}}'",
@@ -39,8 +39,8 @@
         "client_config_file": "",
         "platforms": {
             "arm64": {
-                "binary_url": "https://github.com/ledgerwatch/erigon/releases/download/v2.54.0/erigon_2.54.0_linux_arm64.tar.gz",
-                "verification_source": "ee1d1f34a4d91a0aca9f61f57f12cdc19b6d4313c6e1be546b815c59d47144e2"
+                "binary_url": "https://github.com/ledgerwatch/erigon/releases/download/v2.55.1/erigon_2.55.1_linux_arm64.tar.gz",
+                "verification_source": "0da39c2fb4e5c1522460d25052f20dd6f6bf1dc01b6b6f8661ba2f2b617fc404"
             }
         }
     },

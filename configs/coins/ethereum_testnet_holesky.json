@@ -22,10 +22,10 @@
         "package_name": "backend-ethereum-testnet-holesky",
         "package_revision": "satoshilabs-1",
         "system_user": "ethereum",
-        "version": "1.12.0-e501b3b0",
-        "binary_url": "https://gethstore.blob.core.windows.net/builds/geth-linux-amd64-1.12.0-e501b3b0.tar.gz",
-        "verification_type": "gpg",
-        "verification_source": "https://gethstore.blob.core.windows.net/builds/geth-linux-amd64-1.12.0-e501b3b0.tar.gz.asc",
+        "version": "2.55.1",
+        "binary_url": "https://github.com/ledgerwatch/erigon/releases/download/v2.55.1/erigon_2.55.1_linux_amd64.tar.gz",
+        "verification_type": "sha256",
+        "verification_source": "74ffbcb7adf79377fafb904d713ad6e089b87ddd6961dec9b04e9e097fc6860f",
         "extract_command": "tar -C backend --strip 1 -xf",
         "exclude_files": [],
         "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/geth --holesky --syncmode full --txlookuplimit 0 --ipcdisable --cache 1024 --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --port {{.Ports.BackendP2P}} --ws --ws.addr 127.0.0.1 --ws.port {{.Ports.BackendRPC}} --ws.origins \"*\" --ws.api \"eth,net,web3,debug,txpool\" --http --http.port {{.Ports.BackendHttp}} -http.addr 127.0.0.1 --http.corsdomain \"*\" --http.vhosts \"*\" --http.api \"eth,net,web3,debug,txpool\" --authrpc.port {{.Ports.BackendAuthRpc}} 2>>{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
@@ -39,8 +39,8 @@
         "client_config_file": "",
         "platforms": {
             "arm64": {
-                "binary_url": "https://gethstore.blob.core.windows.net/builds/geth-linux-arm64-1.12.0-e501b3b0.tar.gz",
-                "verification_source": "https://gethstore.blob.core.windows.net/builds/geth-linux-arm64-1.12.0-e501b3b0.tar.gz.asc"
+                "binary_url": "https://github.com/ledgerwatch/erigon/releases/download/v2.55.1/erigon_2.55.1_linux_arm64.tar.gz",
+                "verification_source": "0da39c2fb4e5c1522460d25052f20dd6f6bf1dc01b6b6f8661ba2f2b617fc404"
             }
         }
     },

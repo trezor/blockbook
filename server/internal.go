@@ -65,6 +65,7 @@ func NewInternalServer(binding, certFiles string, db *db.RocksDB, chain bchain.B
 	s.templates = s.parseTemplates()
 
 	serveMux.Handle(path+"favicon.ico", http.FileServer(http.Dir("./static/")))
+	serveMux.Handle(path+"static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./static/"))))
 	serveMux.HandleFunc(path+"metrics", promhttp.Handler().ServeHTTP)
 	serveMux.HandleFunc(path, s.index)
 	serveMux.HandleFunc(path+"admin", s.htmlTemplateHandler(s.adminIndex))
