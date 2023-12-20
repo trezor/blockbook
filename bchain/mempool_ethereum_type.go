@@ -132,8 +132,8 @@ func (m *MempoolEthereumType) Resync() (int, error) {
 	return entries, nil
 }
 
-// AddTransactionToMempool adds transactions to mempool
-func (m *MempoolEthereumType) AddTransactionToMempool(txid string) {
+// AddTransactionToMempool adds transactions to mempool, returns true if tx added to mempool, false if not added (for example duplicate call)
+func (m *MempoolEthereumType) AddTransactionToMempool(txid string) bool {
 	m.mux.Lock()
 	_, exists := m.txEntries[txid]
 	m.mux.Unlock()
@@ -143,7 +143,7 @@ func (m *MempoolEthereumType) AddTransactionToMempool(txid string) {
 	if !exists {
 		entry, ok := m.createTxEntry(txid, uint32(time.Now().Unix()))
 		if !ok {
-			return
+			return false
 		}
 		m.mux.Lock()
 		m.txEntries[txid] = entry
@@ -152,6 +152,7 @@ func (m *MempoolEthereumType) AddTransactionToMempool(txid string) {
 		}
 		m.mux.Unlock()
 	}
+	return !exists
 }
 
 // RemoveTransactionFromMempool removes transaction from mempool
