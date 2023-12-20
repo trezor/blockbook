@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"os"
@@ -119,7 +121,7 @@ func doReq(req *http.Request, client *http.Client) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("%s", body)
 	}
 	return body, nil
@@ -127,7 +129,9 @@ func doReq(req *http.Request, client *http.Client) ([]byte, error) {
 
 // makeReq HTTP request helper - will retry the call after 1 minute on error
 func (cg *Coingecko) makeReq(url string, endpoint string) ([]byte, error) {
+	var attempt int
 	for {
+		attempt++
 		// glog.Infof("Coingecko makeReq %v", url)
 		req, err := http.NewRequest("GET", url, nil)
 		if err != nil {
@@ -154,10 +158,25 @@ func (cg *Coingecko) makeReq(url string, endpoint string) ([]byte, error) {
 		if cg.metrics != nil {
 			cg.metrics.CoingeckoRequests.With(common.Labels{"endpoint": endpoint, "status": "throttle"}).Inc()
 		}
-		// if there is a throttling error, wait 60 seconds and retry
-		glog.Warningf("Coingecko makeReq %v error %v, will retry in 60 seconds", url, err)
-		time.Sleep(60 * time.Second)
+		// if there is a throttling error, exponential backoff and retry
+		exponentialBackoffSleep := exponentialBackoff(attempt)
+		glog.Warningf("Coingecko makeReq %v error %v, will retry in %v", url, err, exponentialBackoffSleep)
+		time.Sleep(exponentialBackoff(attempt))
 	}
+}
+
+// exponentialBackoff returns the sleep duration for the given attempt number
+func exponentialBackoff(attempt int) time.Duration {
+	baseDelay := time.Second * 60 // 1 minute
+	maxDelay := time.Minute * 5   // 5 minutes
+
+	// Exponential backoff with jitter to avoid thundering herd problem
+	//(https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/)
+	backoff := time.Duration(math.Min(float64(baseDelay)*math.Exp2(float64(attempt)), float64(maxDelay))) // 2^attempt * baseDelay capped at maxDelay
+	jitter := time.Duration(rand.Int63n(int64(backoff) / 2))                                              // random value between 0 and backoff/2
+
+	sleepDuration := time.Duration(math.Min(float64(backoff+jitter), float64(maxDelay))) // backoff + jitter capped at maxDelay
+	return sleepDuration
 }
 
 // SimpleSupportedVSCurrencies /simple/supported_vs_currencies
