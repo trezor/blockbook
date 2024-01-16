@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -504,6 +505,12 @@ func newInternalState(config *common.Config, d *db.RocksDB, enableSubNewTx bool)
 			name = name[:i]
 		}
 		is.Host = name
+	}
+
+	is.WsGetAccountInfoLimit, _ = strconv.Atoi(os.Getenv(strings.ToUpper(is.CoinShortcut) + "_WS_GETACCOUNTINFO_LIMIT"))
+	if is.WsGetAccountInfoLimit > 0 {
+		glog.Info("WsGetAccountInfoLimit enabled with limit ", is.WsGetAccountInfoLimit)
+		is.WsLimitExceedingIPs = make(map[string]int)
 	}
 	return is, nil
 }

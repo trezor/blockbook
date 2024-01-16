@@ -358,11 +358,15 @@ export interface WsBlockReq {
     page?: number;
 }
 export interface WsBlockFilterReq {
+    scriptType: string;
     blockHash: string;
+    M?: number;
 }
 export interface WsBlockFiltersBatchReq {
+    scriptType: string;
     bestKnownBlockHash: string;
     pageSize?: number;
+    M?: number;
 }
 export interface WsAccountUtxoReq {
     descriptor: string;
@@ -423,7 +427,9 @@ export interface WsFiatRatesTickersListReq {
 export interface WsMempoolFiltersReq {
     scriptType: string;
     fromTimestamp: number;
+    M?: number;
 }
 export interface MempoolTxidFilterEntries {
     entries?: { [key: string]: string };
+    usedZeroedKey?: boolean;
 }

@@ -191,7 +191,7 @@ like macOS or Windows, please adapt the instructions to your target system.
 Setup go environment (use newer version of go as available)
 
 ```
-wget https://golang.org/dl/go1.19.linux-amd64.tar.gz && tar xf go1.19.linux-amd64.tar.gz
+wget https://golang.org/dl/go1.21.4.linux-amd64.tar.gz && tar xf go1.21.4.linux-amd64.tar.gz
 sudo mv go /opt/go
 sudo ln -s /opt/go/bin/go /usr/bin/go
 # see `go help gopath` for details

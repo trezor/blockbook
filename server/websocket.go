@@ -36,14 +36,16 @@ var (
 )
 
 type websocketChannel struct {
-	id            uint64
-	conn          *websocket.Conn
-	out           chan *WsRes
-	ip            string
-	requestHeader http.Header
-	alive         bool
-	aliveLock     sync.Mutex
-	addrDescs     []string // subscribed address descriptors as strings
+	id                           uint64
+	conn                         *websocket.Conn
+	out                          chan *WsRes
+	ip                           string
+	requestHeader                http.Header
+	alive                        bool
+	aliveLock                    sync.Mutex
+	addrDescs                    []string // subscribed address descriptors as strings
+	getAddressInfoDescriptorsMux sync.Mutex
+	getAddressInfoDescriptors    map[string]struct{}
 }
 
 // WebsocketServer is a handle to websocket server
@@ -112,7 +114,11 @@ func checkOrigin(r *http.Request) bool {
 }
 
 func getIP(r *http.Request) string {
-	ip := r.Header.Get("X-Real-Ip")
+	ip := r.Header.Get("cf-connecting-ip")
+	if ip != "" {
+		return ip
+	}
+	ip = r.Header.Get("X-Real-Ip")
 	if ip != "" {
 		return ip
 	}
@@ -138,6 +144,9 @@ func (s *WebsocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		requestHeader: r.Header,
 		alive:         true,
 	}
+	if s.is.WsGetAccountInfoLimit > 0 {
+		c.getAddressInfoDescriptors = make(map[string]struct{})
+	}
 	go s.inputLoop(c)
 	go s.outputLoop(c)
 	s.onConnect(c)
@@ -148,11 +157,13 @@ func (s *WebsocketServer) GetHandler() http.Handler {
 	return s
 }
 
-func (s *WebsocketServer) closeChannel(c *websocketChannel) {
+func (s *WebsocketServer) closeChannel(c *websocketChannel) bool {
 	if c.CloseOut() {
 		c.conn.Close()
 		s.onDisconnect(c)
+		return true
 	}
+	return false
 }
 
 func (c *websocketChannel) CloseOut() bool {
@@ -259,6 +270,19 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *WsRe
 	"getAccountInfo": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
 		r, err := unmarshalGetAccountInfoRequest(req.Params)
 		if err == nil {
+			if s.is.WsGetAccountInfoLimit > 0 {
+				c.getAddressInfoDescriptorsMux.Lock()
+				c.getAddressInfoDescriptors[r.Descriptor] = struct{}{}
+				l := len(c.getAddressInfoDescriptors)
+				c.getAddressInfoDescriptorsMux.Unlock()
+				if l > s.is.WsGetAccountInfoLimit {
+					if s.closeChannel(c) {
+					glog.Info("Client ", c.id, " exceeded getAddressInfo limit, ", c.ip)
+					s.is.AddWsLimitExceedingIP(c.ip)
+					}
+					return
+				}
+			}
 			rv, err = s.getAccountInfo(r)
 		}
 		return

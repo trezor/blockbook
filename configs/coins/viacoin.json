@@ -14,7 +14,7 @@
   "ipc": {
     "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
     "rpc_user": "rpc",
-    "rpc_pass": "rpcp",
+    "rpc_pass": "rpc",
     "rpc_timeout": 25,
     "message_queue_binding_template": "tcp://127.0.0.1:{{.Ports.BackendMessageQueue}}"
   },
@@ -22,10 +22,10 @@
     "package_name": "backend-viacoin",
     "package_revision": "satoshilabs-1",
     "system_user": "viacoin",
-    "version": "1.14-beta-1",
-    "binary_url": "https://github.com/viacoin/viacoin/releases/download/v0.15.2/viacoin-0.15.2-x86_64-linux-gnu.tar.gz",
+    "version": "0.16.3",
+    "binary_url": "https://github.com/viacoin/viacoin/releases/download/v0.16.3/viacoin-0.16.3-x86_64-linux-gnu.tar.gz",
     "verification_type": "sha256",
-    "verification_source": "bdbd432645a8b4baadddb7169ea4bef3d03f80dc2ce53dce5783d8582ac63bab",
+    "verification_source": "4b84d8f1485d799fdff6cb4b1a316c00056b8869b53a702cd8ce2cc581bae59a",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
       "bin/viacoin-qt"
@@ -41,6 +41,7 @@
     "client_config_file": "bitcoin_like_client.conf",
     "additional_params": {
       "discover": 0,
+      "deprecatedrpc": "estimatefee",
       "rpcthreads": 16,
       "upnp": 0,
       "whitelist": "127.0.0.1"
@@ -62,11 +63,15 @@
       "xpub_magic_segwit_p2sh": 77429938,
       "xpub_magic_segwit_native": 78792518,
       "slip44": 14,
-      "additional_params": {}
+      "additional_params": {
+        "fiat_rates": "coingecko",
+        "fiat_rates_vs_currencies": "AED,ARS,AUD,BDT,BHD,BMD,BRL,CAD,CHF,CLP,CNY,CZK,DKK,EUR,GBP,HKD,HUF,IDR,ILS,INR,JPY,KRW,KWD,LKR,MMK,MXN,MYR,NGN,NOK,NZD,PHP,PKR,PLN,RUB,SAR,SEK,SGD,THB,TRY,TWD,UAH,USD,VEF,VND,ZAR,BTC,ETH",
+        "fiat_rates_params": "{\"coin\": \"viacoin\", \"periodSeconds\": 900}"
+      }
     }
   },
   "meta": {
     "package_maintainer": "Romano",
-    "package_maintainer_email": "romanornr@gmail.com"
+    "package_maintainer_email": "viacoin@protonmail.com"
   }
 }

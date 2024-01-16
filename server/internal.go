@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"net/http"
 	"path/filepath"
+	"sort"
 
 	"github.com/golang/glog"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -64,9 +65,11 @@ func NewInternalServer(binding, certFiles string, db *db.RocksDB, chain bchain.B
 	s.templates = s.parseTemplates()
 
 	serveMux.Handle(path+"favicon.ico", http.FileServer(http.Dir("./static/")))
+	serveMux.Handle(path+"static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./static/"))))
 	serveMux.HandleFunc(path+"metrics", promhttp.Handler().ServeHTTP)
 	serveMux.HandleFunc(path, s.index)
 	serveMux.HandleFunc(path+"admin", s.htmlTemplateHandler(s.adminIndex))
+	serveMux.HandleFunc(path+"admin/ws-limit-exceeding-ips", s.htmlTemplateHandler(s.wsLimitExceedingIPs))
 	if s.chainParser.GetChainType() == bchain.ChainEthereumType {
 		serveMux.HandleFunc(path+"admin/internal-data-errors", s.htmlTemplateHandler(s.internalDataErrors))
 	}
@@ -115,9 +118,16 @@ func (s *InternalServer) index(w http.ResponseWriter, r *http.Request) {
 const (
 	adminIndexTpl = iota + errorInternalTpl + 1
 	adminInternalErrorsTpl
+	adminLimitExceedingIPS
 
 	internalTplCount
 )
+
+// WsLimitExceedingIP is used to transfer data to the templates
+type WsLimitExceedingIP struct {
+	IP    string
+	Count int
+}
 
 // InternalTemplateData is used to transfer data to the templates
 type InternalTemplateData struct {
@@ -128,6 +138,8 @@ type InternalTemplateData struct {
 	Error                  *api.APIError
 	InternalDataErrors     []db.BlockInternalDataError
 	RefetchingInternalData bool
+	WsGetAccountInfoLimit  int
+	WsLimitExceedingIPs    []WsLimitExceedingIP
 }
 
 func (s *InternalServer) newTemplateData(r *http.Request) *InternalTemplateData {
@@ -161,6 +173,7 @@ func (s *InternalServer) parseTemplates() []*template.Template {
 	t[errorInternalTpl] = createTemplate("./static/internal_templates/error.html", "./static/internal_templates/base.html")
 	t[adminIndexTpl] = createTemplate("./static/internal_templates/index.html", "./static/internal_templates/base.html")
 	t[adminInternalErrorsTpl] = createTemplate("./static/internal_templates/block_internal_data_errors.html", "./static/internal_templates/base.html")
+	t[adminLimitExceedingIPS] = createTemplate("./static/internal_templates/ws_limit_exceeding_ips.html", "./static/internal_templates/base.html")
 	return t
 }
 
@@ -184,4 +197,21 @@ func (s *InternalServer) internalDataErrors(w http.ResponseWriter, r *http.Reque
 	data.InternalDataErrors = internalErrors
 	data.RefetchingInternalData = s.api.IsRefetchingInternalData()
 	return adminInternalErrorsTpl, data, nil
+}
+
+func (s *InternalServer) wsLimitExceedingIPs(w http.ResponseWriter, r *http.Request) (tpl, *InternalTemplateData, error) {
+	if r.Method == http.MethodPost {
+		s.is.ResetWsLimitExceedingIPs()
+	}
+	data := s.newTemplateData(r)
+	ips := make([]WsLimitExceedingIP, 0, len(s.is.WsLimitExceedingIPs))
+	for k, v := range s.is.WsLimitExceedingIPs {
+		ips = append(ips, WsLimitExceedingIP{k, v})
+	}
+	sort.Slice(ips, func(i, j int) bool {
+		return ips[i].Count > ips[j].Count
+	})
+	data.WsLimitExceedingIPs = ips
+	data.WsGetAccountInfoLimit = s.is.WsGetAccountInfoLimit
+	return adminLimitExceedingIPS, data, nil
 }

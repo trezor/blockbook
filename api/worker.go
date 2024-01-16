@@ -36,14 +36,8 @@ type Worker struct {
 	metrics           *common.Metrics
 }
 
-// contractInfoWithValid contains the contract info and whether it is a valid contract or not
-type contractInfoWithValid struct {
-	*bchain.ContractInfo
-	Valid bool
-}
-
 // contractInfoCache is a temporary cache of contract information for ethereum token transfers
-type contractInfoCache = map[string]*contractInfoWithValid
+type contractInfoCache = map[string]*bchain.ContractInfo
 
 // NewWorker creates new api worker
 func NewWorker(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, txCache *db.TxCache, metrics *common.Metrics, is *common.InternalState, fiatRates *fiat.FiatRates) (*Worker, error) {
@@ -435,25 +429,18 @@ func (w *Worker) getTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 		// mempool txs do not have fees yet
 		if ethTxData.GasUsed != nil {
 			feesSat.Mul(ethTxData.GasPrice, ethTxData.GasUsed)
-			if ethTxData.L1Fee != nil {
-				feesSat.Add(&feesSat, ethTxData.L1Fee)
-			}
 		}
 		if len(bchainTx.Vout) > 0 {
 			valOutSat = bchainTx.Vout[0].ValueSat
 		}
 		ethSpecific = &EthereumSpecific{
-			GasLimit:    ethTxData.GasLimit,
-			GasPrice:    (*Amount)(ethTxData.GasPrice),
-			GasUsed:     ethTxData.GasUsed,
-			L1Fee:       ethTxData.L1Fee,
-			L1FeeScalar: ethTxData.L1FeeScalar,
-			L1GasPrice:  (*Amount)(ethTxData.L1GasPrice),
-			L1GasUsed:   ethTxData.L1GasUsed,
-			Nonce:       ethTxData.Nonce,
-			Status:      ethTxData.Status,
-			Data:        ethTxData.Data,
-			ParsedData:  parsedInputData,
+			GasLimit:   ethTxData.GasLimit,
+			GasPrice:   (*Amount)(ethTxData.GasPrice),
+			GasUsed:    ethTxData.GasUsed,
+			Nonce:      ethTxData.Nonce,
+			Status:     ethTxData.Status,
+			Data:       ethTxData.Data,
+			ParsedData: parsedInputData,
 		}
 		if internalData != nil {
 			ethSpecific.Type = internalData.Type
@@ -614,11 +601,7 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 	return r, nil
 }
 
-func (w *Worker) getContractInfo(contract string, typeFromContext bchain.TokenTypeName, cache contractInfoCache) (*bchain.ContractInfo, bool, error) {
-	cached := cache[contract]
-	if cached != nil {
-		return cached.ContractInfo, cached.Valid, nil
-	}
+func (w *Worker) getContractInfo(contract string, typeFromContext bchain.TokenTypeName) (*bchain.ContractInfo, bool, error) {
 	cd, err := w.chainParser.GetAddrDescFromAddress(contract)
 	if err != nil {
 		return nil, false, err
@@ -686,41 +669,49 @@ func (w *Worker) getContractDescriptorInfo(cd bchain.AddressDescriptor, typeFrom
 }
 
 func (w *Worker) getEthereumTokensTransfers(transfers bchain.TokenTransfers, addresses map[string]struct{}) []TokenTransfer {
-	sort.Sort(transfers)
-	contractCache := make(contractInfoCache)
 	tokens := make([]TokenTransfer, len(transfers))
-	for i := range transfers {
-		t := transfers[i]
-		typeName := bchain.EthereumTokenTypeMap[t.Type]
-		contractInfo, valid, err := w.getContractInfo(t.Contract, typeName, contractCache)
-		if err != nil {
-			glog.Errorf("getContractInfo error %v, contract %v", err, t.Contract)
-			continue
-		}
-		contractCache[t.Contract] = &contractInfoWithValid{ContractInfo: contractInfo, Valid: valid}
-		var value *Amount
-		var values []MultiTokenValue
-		if t.Type == bchain.MultiToken {
-			values = make([]MultiTokenValue, len(t.MultiTokenValues))
-			for j := range values {
-				values[j].Id = (*Amount)(&t.MultiTokenValues[j].Id)
-				values[j].Value = (*Amount)(&t.MultiTokenValues[j].Value)
+	if len(transfers) > 0 {
+		sort.Sort(transfers)
+		contractCache := make(contractInfoCache)
+		for i := range transfers {
+			t := transfers[i]
+			typeName := bchain.EthereumTokenTypeMap[t.Type]
+			var contractInfo *bchain.ContractInfo
+			if info, ok := contractCache[t.Contract]; ok {
+				contractInfo = info
+			} else {
+				info, _, err := w.getContractInfo(t.Contract, typeName)
+				if err != nil {
+					glog.Errorf("getContractInfo error %v, contract %v", err, t.Contract)
+					continue
+				}
+				contractInfo = info
+				contractCache[t.Contract] = info
 			}
-		} else {
-			value = (*Amount)(&t.Value)
-		}
-		aggregateAddress(addresses, t.From)
-		aggregateAddress(addresses, t.To)
-		tokens[i] = TokenTransfer{
-			Type:             typeName,
-			Contract:         t.Contract,
-			From:             t.From,
-			To:               t.To,
-			Value:            value,
-			MultiTokenValues: values,
-			Decimals:         contractInfo.Decimals,
-			Name:             contractInfo.Name,
-			Symbol:           contractInfo.Symbol,
+			var value *Amount
+			var values []MultiTokenValue
+			if t.Type == bchain.MultiToken {
+				values = make([]MultiTokenValue, len(t.MultiTokenValues))
+				for j := range values {
+					values[j].Id = (*Amount)(&t.MultiTokenValues[j].Id)
+					values[j].Value = (*Amount)(&t.MultiTokenValues[j].Value)
+				}
+			} else {
+				value = (*Amount)(&t.Value)
+			}
+			aggregateAddress(addresses, t.From)
+			aggregateAddress(addresses, t.To)
+			tokens[i] = TokenTransfer{
+				Type:             typeName,
+				Contract:         t.Contract,
+				From:             t.From,
+				To:               t.To,
+				Value:            value,
+				MultiTokenValues: values,
+				Decimals:         contractInfo.Decimals,
+				Name:             contractInfo.Name,
+				Symbol:           contractInfo.Symbol,
+			}
 		}
 	}
 	return tokens
@@ -1415,7 +1406,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 	if ed.contractInfo != nil && ed.contractInfo.Type == bchain.ERC20TokenType {
 		r.Erc20Contract = ed.contractInfo
 	}
-	glog.Info("GetAddress ", address, ", ", time.Since(start))
+	glog.Info("GetAddress-", option, " ", address, ", ", time.Since(start))
 	return r, nil
 }
 
