@@ -11,10 +11,10 @@ GETH_BIN={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/geth
 DATA_DIR={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend
 
 CHAINDATA_DIR=$DATA_DIR/geth/chaindata
-SNAPSHOT=https://storage.googleapis.com/oplabs-mainnet-data/mainnet-legacy-archival.tar.zst
+SNAPSHOT=https://datadirs.optimism.io/mainnet-legacy-archival.tar.zst
 
 if [ ! -d "$CHAINDATA_DIR" ]; then
-  wget -c $SNAPSHOT -O - | tar -xvf - -C $DATA_DIR
+  wget -c $SNAPSHOT -O - | zstd -cd | tar xf - -C $DATA_DIR
 fi
 
 $GETH_BIN \
