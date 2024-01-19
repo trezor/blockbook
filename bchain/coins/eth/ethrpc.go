@@ -56,23 +56,26 @@ type Configuration struct {
 // EthereumRPC is an interface to JSON-RPC eth service.
 type EthereumRPC struct {
 	*bchain.BaseChain
-	Client               bchain.EVMClient
-	RPC                  bchain.EVMRPCClient
-	MainNetChainID       Network
-	Timeout              time.Duration
-	Parser               *EthereumParser
-	PushHandler          func(bchain.NotificationType)
-	OpenRPC              func(string) (bchain.EVMRPCClient, bchain.EVMClient, error)
-	Mempool              *bchain.MempoolEthereumType
-	mempoolInitialized   bool
-	bestHeaderLock       sync.Mutex
-	bestHeader           bchain.EVMHeader
-	bestHeaderTime       time.Time
-	NewBlock             bchain.EVMNewBlockSubscriber
-	newBlockSubscription bchain.EVMClientSubscription
-	NewTx                bchain.EVMNewTxSubscriber
-	newTxSubscription    bchain.EVMClientSubscription
-	ChainConfig          *Configuration
+	Client                bchain.EVMClient
+	RPC                   bchain.EVMRPCClient
+	MainNetChainID        Network
+	Timeout               time.Duration
+	Parser                *EthereumParser
+	PushHandler           func(bchain.NotificationType)
+	OpenRPC               func(string) (bchain.EVMRPCClient, bchain.EVMClient, error)
+	Mempool               *bchain.MempoolEthereumType
+	mempoolInitialized    bool
+	bestHeaderLock        sync.Mutex
+	bestHeader            bchain.EVMHeader
+	bestHeaderTime        time.Time
+	NewBlock              bchain.EVMNewBlockSubscriber
+	newBlockSubscription  bchain.EVMClientSubscription
+	NewTx                 bchain.EVMNewTxSubscriber
+	newTxSubscription     bchain.EVMClientSubscription
+	ChainConfig           *Configuration
+	supportedStakingPools []string
+	stakingPoolNames      []string
+	stakingPoolContracts  []string
 }
 
 // ProcessInternalTransactions specifies if internal transactions are processed
@@ -155,6 +158,12 @@ func (b *EthereumRPC) Initialize() error {
 	default:
 		return errors.Errorf("Unknown network id %v", id)
 	}
+
+	err = b.initStakingPools(b.ChainConfig.CoinShortcut)
+	if err != nil {
+		return err
+	}
+
 	glog.Info("rpc: block chain ", b.Network)
 
 	return nil

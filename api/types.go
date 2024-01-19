@@ -316,6 +316,20 @@ type AddressFilter struct {
 	OnlyConfirmed bool
 }
 
+// StakingPool holds data about address participation in a staking pool contract
+type StakingPool struct {
+	Contract                string  `json:"contract"`
+	Name                    string  `json:"name"`
+	PendingBalance          *Amount `json:"pendingBalance"`
+	PendingDepositedBalance *Amount `json:"pendingDepositedBalance"`
+	DepositedBalance        *Amount `json:"depositedBalance"`
+	WithdrawTotalAmount     *Amount `json:"withdrawTotalAmount"`
+	ClaimableAmount         *Amount `json:"claimableAmount"`
+	PendingRestakedReward   *Amount `json:"pendingRestakedReward"`
+	RestakedReward          *Amount `json:"restakedReward"`
+	AutocompoundBalance     *Amount `json:"autocompoundBalance"`
+}
+
 // Address holds information about address and its transactions
 type Address struct {
 	Paging
@@ -342,6 +356,7 @@ type Address struct {
 	ContractInfo          *bchain.ContractInfo `json:"contractInfo,omitempty"`
 	Erc20Contract         *bchain.ContractInfo `json:"erc20Contract,omitempty"` // deprecated
 	AddressAliases        AddressAliasesMap    `json:"addressAliases,omitempty"`
+	StakingPools          []StakingPool        `json:"stakingPools,omitempty"`
 	// helpers for explorer
 	Filter        string              `json:"-"`
 	XPubAddresses map[string]struct{} `json:"-"`
@@ -504,6 +519,7 @@ type BlockbookInfo struct {
 	CurrentFiatRatesTime         *time.Time                   `json:"currentFiatRatesTime,omitempty"`
 	HistoricalFiatRatesTime      *time.Time                   `json:"historicalFiatRatesTime,omitempty"`
 	HistoricalTokenFiatRatesTime *time.Time                   `json:"historicalTokenFiatRatesTime,omitempty"`
+	SupportedStakingPools        []string                     `json:"supportedStakingPools,omitempty"`
 	DbSizeFromColumns            int64                        `json:"dbSizeFromColumns,omitempty"`
 	DbColumns                    []common.InternalStateColumn `json:"dbColumns,omitempty"`
 	About                        string                       `json:"about"`

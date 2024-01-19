@@ -41,30 +41,38 @@ func (b *BaseChain) GetMempoolEntry(txid string) (*MempoolEntry, error) {
 
 // EthereumTypeGetBalance is not supported
 func (b *BaseChain) EthereumTypeGetBalance(addrDesc AddressDescriptor) (*big.Int, error) {
-	return nil, errors.New("Not supported")
+	return nil, errors.New("not supported")
 }
 
 // EthereumTypeGetNonce is not supported
 func (b *BaseChain) EthereumTypeGetNonce(addrDesc AddressDescriptor) (uint64, error) {
-	return 0, errors.New("Not supported")
+	return 0, errors.New("not supported")
 }
 
 // EthereumTypeEstimateGas is not supported
 func (b *BaseChain) EthereumTypeEstimateGas(params map[string]interface{}) (uint64, error) {
-	return 0, errors.New("Not supported")
+	return 0, errors.New("not supported")
 }
 
 // GetContractInfo is not supported
 func (b *BaseChain) GetContractInfo(contractDesc AddressDescriptor) (*ContractInfo, error) {
-	return nil, errors.New("Not supported")
+	return nil, errors.New("not supported")
 }
 
 // EthereumTypeGetErc20ContractBalance is not supported
 func (b *BaseChain) EthereumTypeGetErc20ContractBalance(addrDesc, contractDesc AddressDescriptor) (*big.Int, error) {
-	return nil, errors.New("Not supported")
+	return nil, errors.New("not supported")
 }
 
 // GetContractInfo returns URI of non fungible or multi token defined by token id
 func (p *BaseChain) GetTokenURI(contractDesc AddressDescriptor, tokenID *big.Int) (string, error) {
-	return "", errors.New("Not supported")
+	return "", errors.New("not supported")
+}
+
+func (b *BaseChain) EthereumTypeGetSupportedStakingPools() []string {
+	return nil
+}
+
+func (b *BaseChain) EthereumTypeGetStakingPoolsData(addrDesc AddressDescriptor) ([]StakingPoolData, error) {
+	return nil, errors.New("not supported")
 }

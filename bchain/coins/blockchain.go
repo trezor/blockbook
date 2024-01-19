@@ -332,6 +332,15 @@ func (c *blockChainWithMetrics) GetTokenURI(contractDesc bchain.AddressDescripto
 	return c.b.GetTokenURI(contractDesc, tokenID)
 }
 
+func (c *blockChainWithMetrics) EthereumTypeGetSupportedStakingPools() []string {
+	return c.b.EthereumTypeGetSupportedStakingPools()
+}
+
+func (c *blockChainWithMetrics) EthereumTypeGetStakingPoolsData(addrDesc bchain.AddressDescriptor) (v []bchain.StakingPoolData, err error) {
+	defer func(s time.Time) { c.observeRPCLatency("EthereumTypeStakingPoolsData", s, err) }(time.Now())
+	return c.b.EthereumTypeGetStakingPoolsData(addrDesc)
+}
+
 type mempoolWithMetrics struct {
 	mempool bchain.Mempool
 	m       *common.Metrics

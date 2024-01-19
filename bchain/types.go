@@ -333,6 +333,8 @@ type BlockChain interface {
 	EthereumTypeGetNonce(addrDesc AddressDescriptor) (uint64, error)
 	EthereumTypeEstimateGas(params map[string]interface{}) (uint64, error)
 	EthereumTypeGetErc20ContractBalance(addrDesc, contractDesc AddressDescriptor) (*big.Int, error)
+	EthereumTypeGetSupportedStakingPools() []string
+	EthereumTypeGetStakingPoolsData(addrDesc AddressDescriptor) ([]StakingPoolData, error)
 	GetTokenURI(contractDesc AddressDescriptor, tokenID *big.Int) (string, error)
 }
 

@@ -109,6 +109,17 @@ export interface FeeStats {
     averageFeePerKb: number;
     decilesFeePerKb: number[];
 }
+export interface StakingPool {
+    contract: string;
+    pendingBalance: string;
+    pendingDepositedBalance: string;
+    depositedBalance: string;
+    withdrawTotalAmount: string;
+    claimableAmount: string;
+    pendingRestakedReward: string;
+    restakedReward: string;
+    autocompoundBalance: string;
+}
 export interface ContractInfo {
     type: string;
     contract: string;
@@ -161,6 +172,7 @@ export interface Address {
     contractInfo?: ContractInfo;
     erc20Contract?: ContractInfo;
     addressAliases?: { [key: string]: AddressAlias };
+    stakingPools?: StakingPool[];
 }
 export interface Utxo {
     txid: string;
@@ -264,6 +276,7 @@ export interface BlockbookInfo {
     currentFiatRatesTime?: string;
     historicalFiatRatesTime?: string;
     historicalTokenFiatRatesTime?: string;
+    stakingPoolContracts?: string[];
     dbSizeFromColumns?: number;
     dbColumns?: InternalStateColumn[];
     about: string;

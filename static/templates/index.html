@@ -64,6 +64,12 @@
                     <td>Size On Disk</td>
                     <td>{{formatInt64 $bb.DbSize}}</td>
                 </tr>
+                {{if $bb.SupportedStakingPools}}
+                <tr>
+                    <td>Supported Staking Pools</td>
+                    <td>{{$bb.SupportedStakingPools}}</td>
+                </tr>
+                {{end}}
             </tbody>
         </table>
     </div>
