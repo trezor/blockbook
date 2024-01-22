@@ -1893,7 +1893,11 @@ func (w *Worker) GetCurrentFiatRates(currencies []string, token string) (*FiatTi
 	ticker := w.fiatRates.GetCurrentTicker(vsCurrency, token)
 	var err error
 	if ticker == nil {
-		ticker, err = w.db.FiatRatesFindLastTicker(vsCurrency, token)
+		if token == "" {
+			// fallback - get last fiat rate from db if not in current ticker
+			// not for tokens, many tokens do not have fiat rates at all and it is very costly to do DB search for token without an exchange rate
+			ticker, err = w.db.FiatRatesFindLastTicker(vsCurrency, token)
+		}
 		if err != nil {
 			return nil, NewAPIError(fmt.Sprintf("Error finding ticker: %v", err), false)
 		} else if ticker == nil {
