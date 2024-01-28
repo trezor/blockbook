@@ -30,7 +30,6 @@ $BOR_BIN server \
   --ws.origins '*' \
   --txlookuplimit 0 \
   --cache 4096 \
-  --ipcdisable \
   --nat none 
 
 {{end}}
