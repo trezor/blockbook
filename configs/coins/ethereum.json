@@ -22,10 +22,10 @@
         "package_name": "backend-ethereum",
         "package_revision": "satoshilabs-1",
         "system_user": "ethereum",
-        "version": "2.56.0",
-        "binary_url": "https://github.com/ledgerwatch/erigon/releases/download/v2.56.0/erigon_2.56.0_linux_amd64.tar.gz",
+        "version": "2.57.0",
+        "binary_url": "https://github.com/ledgerwatch/erigon/releases/download/v2.57.0/erigon_2.57.0_linux_amd64.tar.gz",
         "verification_type": "sha256",
-        "verification_source": "e2d3741db8220bd43b0d523f34e3d56c3bcce08251b7625128e08a821a37a46f",
+        "verification_source": "6efa0477af314c4bd752ad119d39444154a5bc7c78695509f888aea58b305dff",
         "extract_command": "tar -C backend -xf",
         "exclude_files": [],
         "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/erigon --chain mainnet --snap.keepblocks --db.size.limit 15TB --prune c --prune.c.older 1000000 -torrent.download.rate 32mb --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/erigon --port {{.Ports.BackendP2P}} --ws --ws.port {{.Ports.BackendRPC}} --http --http.port {{.Ports.BackendRPC}} --http.addr 127.0.0.1 --http.corsdomain \"*\" --http.vhosts \"*\" --http.api \"eth,net,web3,debug,txpool\" --authrpc.port {{.Ports.BackendAuthRpc}} --private.api.addr \"\" --torrent.port {{.Ports.BackendHttp}} --log.dir.path {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --log.dir.prefix {{.Coin.Alias}}'",
@@ -39,8 +39,8 @@
         "client_config_file": "",
         "platforms": {
             "arm64": {
-                "binary_url": "https://github.com/ledgerwatch/erigon/releases/download/v2.56.0/erigon_2.56.0_linux_arm64.tar.gz",
-                "verification_source": "620956a942b837a971b1108b1b900396839a93b0fd459a6895ee7fe3b84d7e2c"
+                "binary_url": "https://github.com/ledgerwatch/erigon/releases/download/v2.57.0/erigon_2.57.0_linux_arm64.tar.gz",
+                "verification_source": "d7288276bce563e59e729803ab8fc821f853de2df4c3f13b8ef4e3a69db79019"
             }
         }
     },
