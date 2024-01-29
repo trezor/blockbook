@@ -22,10 +22,10 @@
         "package_name": "backend-ethereum",
         "package_revision": "satoshilabs-1",
         "system_user": "ethereum",
-        "version": "2.57.0",
-        "binary_url": "https://github.com/ledgerwatch/erigon/releases/download/v2.57.0/erigon_2.57.0_linux_amd64.tar.gz",
+        "version": "2.57.2",
+        "binary_url": "https://github.com/ledgerwatch/erigon/releases/download/v2.57.2/erigon_2.57.2_linux_amd64.tar.gz",
         "verification_type": "sha256",
-        "verification_source": "6efa0477af314c4bd752ad119d39444154a5bc7c78695509f888aea58b305dff",
+        "verification_source": "2f546c3d2e2826eb22c115819df726fa68e9634d25b0d526d1a6547c847aa6e6",
         "extract_command": "tar -C backend -xf",
         "exclude_files": [],
         "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/erigon --chain mainnet --snap.keepblocks --db.size.limit 15TB --prune c --prune.c.older 1000000 -torrent.download.rate 32mb --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/erigon --port {{.Ports.BackendP2P}} --ws --ws.port {{.Ports.BackendRPC}} --http --http.port {{.Ports.BackendRPC}} --http.addr 127.0.0.1 --http.corsdomain \"*\" --http.vhosts \"*\" --http.api \"eth,net,web3,debug,txpool\" --authrpc.port {{.Ports.BackendAuthRpc}} --private.api.addr \"\" --torrent.port {{.Ports.BackendHttp}} --log.dir.path {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --log.dir.prefix {{.Coin.Alias}}'",
@@ -39,8 +39,8 @@
         "client_config_file": "",
         "platforms": {
             "arm64": {
-                "binary_url": "https://github.com/ledgerwatch/erigon/releases/download/v2.57.0/erigon_2.57.0_linux_arm64.tar.gz",
-                "verification_source": "d7288276bce563e59e729803ab8fc821f853de2df4c3f13b8ef4e3a69db79019"
+                "binary_url": "https://github.com/ledgerwatch/erigon/releases/download/v2.57.2/erigon_2.57.2_linux_arm64.tar.gz",
+                "verification_source": "383830da92f5e9e5be27c60a6a9223d937ebf8262109ae44ca0b4a74fc38b1d5"
             }
         }
     },
