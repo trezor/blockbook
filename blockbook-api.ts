@@ -116,7 +116,6 @@ export interface StakingPool {
     depositedBalance: string;
     withdrawTotalAmount: string;
     claimableAmount: string;
-    pendingRestakedReward: string;
     restakedReward: string;
     autocompoundBalance: string;
 }

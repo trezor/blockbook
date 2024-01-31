@@ -1185,7 +1185,6 @@ func (w *Worker) getStakingPoolsData(addrDesc bchain.AddressDescriptor) ([]Staki
 				DepositedBalance:        (*Amount)(&p.DepositedBalance),
 				WithdrawTotalAmount:     (*Amount)(&p.WithdrawTotalAmount),
 				ClaimableAmount:         (*Amount)(&p.ClaimableAmount),
-				PendingRestakedReward:   (*Amount)(&p.PendingRestakedReward),
 				RestakedReward:          (*Amount)(&p.RestakedReward),
 				AutocompoundBalance:     (*Amount)(&p.AutocompoundBalance),
 			})

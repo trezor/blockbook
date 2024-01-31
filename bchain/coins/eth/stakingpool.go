@@ -52,7 +52,6 @@ const everstakePendingBalanceOfMethodSignature = "0x59b8c763"          // pendin
 const everstakePendingDepositedBalanceOfMethodSignature = "0x80f14ecc" // pendingDepositedBalanceOf(address)
 const everstakeDepositedBalanceOfMethodSignature = "0x68b48254"        // depositedBalanceOf(address)
 const everstakeWithdrawRequestMethodSignature = "0x14cbc46a"           // withdrawRequest(address)
-const everstakePendingRestakedRewardOfMethodSignature = "0x376d1884"   // pendingRestakedRewardOf(address)
 const everstakeRestakedRewardOfMethodSignature = "0x0c98929a"          // restakedRewardOf(address)
 const everstakeAutocompoundBalanceOfMethodSignature = "0x2fec7966"     // autocompoundBalanceOf(address)
 
@@ -120,13 +119,6 @@ func (b *EthereumRPC) everstakePoolData(addr, contract, name string) (*bchain.St
 		return nil, errors.New("Invalid balance")
 	}
 	poolData.ClaimableAmount = *value
-	allZeros = allZeros && isZeroBigInt(value)
-
-	value, err = b.everstakeContractCallSimpleNumeric(everstakePendingRestakedRewardOfMethodSignature, addr, contract)
-	if err != nil {
-		return nil, err
-	}
-	poolData.PendingRestakedReward = *value
 	allZeros = allZeros && isZeroBigInt(value)
 
 	value, err = b.everstakeContractCallSimpleNumeric(everstakeRestakedRewardOfMethodSignature, addr, contract)

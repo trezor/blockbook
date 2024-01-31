@@ -156,7 +156,6 @@ type StakingPoolData struct {
 	DepositedBalance        big.Int `json:"depositedBalance"`        // depositedBalanceOf method
 	WithdrawTotalAmount     big.Int `json:"withdrawTotalAmount"`     // withdrawRequest method, return value [0]
 	ClaimableAmount         big.Int `json:"claimableAmount"`         // withdrawRequest method, return value [1]
-	PendingRestakedReward   big.Int `json:"pendingRestakedReward"`   // pendingRestakedRewardOf method
 	RestakedReward          big.Int `json:"restakedReward"`          // restakedRewardOf method
 	AutocompoundBalance     big.Int `json:"autocompoundBalance"`     // autocompoundBalanceOf method
 }

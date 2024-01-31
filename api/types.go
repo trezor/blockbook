@@ -325,7 +325,6 @@ type StakingPool struct {
 	DepositedBalance        *Amount `json:"depositedBalance"`
 	WithdrawTotalAmount     *Amount `json:"withdrawTotalAmount"`
 	ClaimableAmount         *Amount `json:"claimableAmount"`
-	PendingRestakedReward   *Amount `json:"pendingRestakedReward"`
 	RestakedReward          *Amount `json:"restakedReward"`
 	AutocompoundBalance     *Amount `json:"autocompoundBalance"`
 }
