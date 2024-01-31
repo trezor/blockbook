@@ -49,6 +49,7 @@ type Config struct {
 	} `json:"coin"`
 	Ports struct {
 		BackendRPC          int `json:"backend_rpc"`
+		BackendWS           int `json:"backend_ws"`
 		BackendMessageQueue int `json:"backend_message_queue"`
 		BackendP2P          int `json:"backend_p2p"`
 		BackendHttp         int `json:"backend_http"`
@@ -58,6 +59,7 @@ type Config struct {
 	} `json:"ports"`
 	IPC struct {
 		RPCURLTemplate              string `json:"rpc_url_template"`
+		WSURLTemplate               string `json:"ws_url_template"`
 		RPCUser                     string `json:"rpc_user"`
 		RPCPass                     string `json:"rpc_pass"`
 		RPCTimeout                  int    `json:"rpc_timeout"`
@@ -124,6 +126,7 @@ func generateRPCAuth(user, pass string) (string, error) {
 func (c *Config) ParseTemplate() *template.Template {
 	templates := map[string]string{
 		"IPC.RPCURLTemplate":                      c.IPC.RPCURLTemplate,
+		"IPC.WSURLTemplate":                       c.IPC.WSURLTemplate,
 		"IPC.MessageQueueBindingTemplate":         c.IPC.MessageQueueBindingTemplate,
 		"Backend.ExecCommandTemplate":             c.Backend.ExecCommandTemplate,
 		"Backend.LogrotateFilesTemplate":          c.Backend.LogrotateFilesTemplate,
