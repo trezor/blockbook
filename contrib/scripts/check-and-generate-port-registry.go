@@ -163,12 +163,15 @@ func loadPortInfo(dir string) (PortInfoSlice, error) {
 		}
 
 		// skip configs that do not have blockbook (consensus layers)
-		if v.Blockbook.PackageName == "" {
+		if v.Blockbook.PackageName == "" && !(strings.Contains(v.Coin.Name, "Gnosis")) {
 			continue
 		}
 		name := v.Coin.Label
 		// exceptions when to use Name instead of Label so that the table looks good
-		if len(name) == 0 || strings.Contains(v.Coin.Name, "Ethereum") || strings.Contains(v.Coin.Name, "Archive") {
+		if len(name) == 0 ||
+			strings.Contains(v.Coin.Name, "Ethereum") ||
+			strings.Contains(v.Coin.Name, "Gnosis") ||
+			strings.Contains(v.Coin.Name, "Archive") {
 			name = v.Coin.Name
 		}
 		item := &PortInfo{CoinName: name, BackendServicePorts: map[string]uint16{}}
