@@ -64,8 +64,8 @@
             "xpub_magic_segwit_p2sh": 77429938,
             "xpub_magic_segwit_native": 78792518,
             "additional_params": {
-                "alternative_estimate_fee": "whatthefee-disabled",
-                "alternative_estimate_fee_params": "{\"url\": \"https://whatthefee.io/data.json\", \"periodSeconds\": 60}",
+                "alternative_estimate_fee": "mempoolspace",
+                "alternative_estimate_fee_params": "{\"url\": \"https://mempool.space/api/v1/fees/recommended\", \"periodSeconds\": 20}",
                 "fiat_rates": "coingecko",
                 "fiat_rates_vs_currencies": "AED,ARS,AUD,BDT,BHD,BMD,BRL,CAD,CHF,CLP,CNY,CZK,DKK,EUR,GBP,HKD,HUF,IDR,ILS,INR,JPY,KRW,KWD,LKR,MMK,MXN,MYR,NGN,NOK,NZD,PHP,PKR,PLN,RUB,SAR,SEK,SGD,THB,TRY,TWD,UAH,USD,VEF,VND,ZAR,BTC,ETH",
                 "fiat_rates_params": "{\"coin\": \"bitcoin\", \"periodSeconds\": 900}",
