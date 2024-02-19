@@ -23,10 +23,10 @@
         "package_name": "backend-ethereum-testnet-sepolia-archive",
         "package_revision": "satoshilabs-1",
         "system_user": "ethereum",
-        "version": "2.57.2",
-        "binary_url": "https://github.com/ledgerwatch/erigon/releases/download/v2.57.2/erigon_2.57.2_linux_amd64.tar.gz",
+        "version": "2.58.0",
+        "binary_url": "https://github.com/ledgerwatch/erigon/releases/download/v2.58.0/erigon_2.58.0_linux_amd64.tar.gz",
         "verification_type": "sha256",
-        "verification_source": "2f546c3d2e2826eb22c115819df726fa68e9634d25b0d526d1a6547c847aa6e6",
+        "verification_source": "4570e13e4db742f5c0968b4e158aaed155573abd58ab2065d81e811a7defd1b5",
         "extract_command": "tar -C backend -xf",
         "exclude_files": [],
         "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/erigon --chain sepolia --snap.keepblocks --db.size.limit 15TB --prune c --prune.c.older 1000000 -torrent.download.rate 32mb --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/erigon --port {{.Ports.BackendP2P}} --ws --ws.port {{.Ports.BackendRPC}} --http --http.port {{.Ports.BackendRPC}} --http.addr 127.0.0.1 --http.corsdomain \"*\" --http.vhosts \"*\" --http.api \"eth,net,web3,debug,txpool\" --authrpc.port {{.Ports.BackendAuthRpc}} --private.api.addr \"\" --torrent.port {{.Ports.BackendHttp}} --log.dir.path {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --log.dir.prefix {{.Coin.Alias}}'",
@@ -40,8 +40,8 @@
         "client_config_file": "",
         "platforms": {
             "arm64": {
-                "binary_url": "https://github.com/ledgerwatch/erigon/releases/download/v2.57.2/erigon_2.57.2_linux_arm64.tar.gz",
-                "verification_source": "383830da92f5e9e5be27c60a6a9223d937ebf8262109ae44ca0b4a74fc38b1d5"
+                "binary_url": "https://github.com/ledgerwatch/erigon/releases/download/v2.58.0/erigon_2.58.0_linux_arm64.tar.gz",
+                "verification_source": "532eb7f1ab55439979dfa499be48d6776d5f96d429db8aa1ea6894567fcfcb13"
             }
         }
     },
