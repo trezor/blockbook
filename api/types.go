@@ -231,7 +231,7 @@ type EthereumSpecific struct {
 	Nonce             uint64                                 `json:"nonce"`
 	GasLimit          *big.Int                               `json:"gasLimit"`
 	GasUsed           *big.Int                               `json:"gasUsed,omitempty"`
-	GasPrice          *Amount                                `json:"gasPrice"`
+	GasPrice          *Amount                                `json:"gasPrice,omitempty"`
 	Data              string                                 `json:"data,omitempty"`
 	ParsedData        *bchain.EthereumParsedInputData        `json:"parsedData,omitempty"`
 	InternalTransfers []EthereumInternalTransfer             `json:"internalTransfers,omitempty"`
