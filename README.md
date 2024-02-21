@@ -74,3 +74,7 @@ Blockbook stores data the key-value store RocksDB. Database format is described 
 ## API
 
 Blockbook API is described [here](/docs/api.md).
+
+#### Third-party API clients
+
+- [Rust Client](https://crates.io/crates/blockbook/)
