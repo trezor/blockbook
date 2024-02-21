@@ -144,7 +144,7 @@ func (cg *Coingecko) makeReq(url string, endpoint string) ([]byte, error) {
 			}
 			return resp, err
 		}
-		if err.Error() != "error code: 1015" && !strings.Contains(strings.ToLower(err.Error()), "exceeded the rate limit") {
+		if err.Error() != "error code: 1015" && !strings.Contains(strings.ToLower(err.Error()), "exceeded the rate limit") && !strings.Contains(strings.ToLower(err.Error()), "throttled") {
 			if cg.metrics != nil {
 				cg.metrics.CoingeckoRequests.With(common.Labels{"endpoint": endpoint, "status": "error"}).Inc()
 			}
