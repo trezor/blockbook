@@ -1650,6 +1650,17 @@ func (w *Worker) GetBalanceHistory(address string, fromTimestamp, toTimestamp in
 	if err != nil {
 		return nil, err
 	}
+	// do not get balance history for contracts
+	if w.chainType == bchain.ChainEthereumType {
+		ci, err := w.db.GetContractInfo(addrDesc, bchain.UnknownTokenType)
+		if err != nil {
+			return nil, err
+		}
+		if ci != nil {
+			glog.Info("GetBalanceHistory ", address, " is a contract, skipping")
+			return nil, NewAPIError("GetBalanceHistory for a contract not allowed", true)
+		}
+	}
 	fromUnix, fromHeight, toUnix, toHeight := w.balanceHistoryHeightsFromTo(fromTimestamp, toTimestamp)
 	if fromHeight >= toHeight {
 		return bhs, nil
