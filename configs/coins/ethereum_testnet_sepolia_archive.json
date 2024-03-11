@@ -23,10 +23,10 @@
         "package_name": "backend-ethereum-testnet-sepolia-archive",
         "package_revision": "satoshilabs-1",
         "system_user": "ethereum",
-        "version": "2.58.1",
-        "binary_url": "https://github.com/ledgerwatch/erigon/releases/download/v2.58.1/erigon_2.58.1_linux_amd64.tar.gz",
+        "version": "2.58.2",
+        "binary_url": "https://github.com/ledgerwatch/erigon/releases/download/v2.58.2/erigon_2.58.2_linux_amd64.tar.gz",
         "verification_type": "sha256",
-        "verification_source": "71fbac9d4c2755dfbed18a7c76fcb3d4dc8d21921d82ac64b68b9a2ad5aeeb3a",
+        "verification_source": "3e43bbf2276b4d003cd0630c35bf29fb8ff0b90e4cb9a120f1035111a171c03f",
         "extract_command": "tar -C backend -xf",
         "exclude_files": [],
         "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/erigon --chain sepolia --snap.keepblocks --db.size.limit 15TB --prune c --prune.c.older 1000000 -torrent.download.rate 32mb --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/erigon --port {{.Ports.BackendP2P}} --ws --ws.port {{.Ports.BackendRPC}} --http --http.port {{.Ports.BackendRPC}} --http.addr 127.0.0.1 --http.corsdomain \"*\" --http.vhosts \"*\" --http.api \"eth,net,web3,debug,txpool\" --authrpc.port {{.Ports.BackendAuthRpc}} --private.api.addr \"\" --torrent.port {{.Ports.BackendHttp}} --log.dir.path {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --log.dir.prefix {{.Coin.Alias}}'",
@@ -40,8 +40,8 @@
         "client_config_file": "",
         "platforms": {
             "arm64": {
-                "binary_url": "https://github.com/ledgerwatch/erigon/releases/download/v2.58.1/erigon_2.58.1_linux_arm64.tar.gz",
-                "verification_source": "6421db293631802ba60f41b30d85500bf122831b87fa945d993f722352b87aa0"
+                "binary_url": "https://github.com/ledgerwatch/erigon/releases/download/v2.58.2/erigon_2.58.2_linux_arm64.tar.gz",
+                "verification_source": "393926ccf97a99cb351501edf90235805f91190782b4b59a7ca83022ea937c4c"
             }
         }
     },
