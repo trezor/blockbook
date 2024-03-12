@@ -1,4 +1,4 @@
-package main
+packagpackagepackagepackagepackagepackagepackagepackagepackagepackagpackagepackagepackagepackagepackagepackagepackagepackageepackagepackagepackagepackagepackagepackagepackageepackagepackagepackagepackagepackagepackagepackage main
 
 import (
 	"blockbook/api"
@@ -88,7 +88,13 @@ var (
 	syncWorker                 *db.SyncWorker
 	internalState              *common.InternalState
 	callbacksOnNewBlock        []bchain.OnNewBlockFunc
-	callbacksOnNewTxAddr       []bchain.OnNewTxAddrFunc
+	callbacksOnNewTxAddr       []bchain.OnNewTxAddrFuncgTo("INFO")
+}
+
+gTo("INFO")
+}
+
+
 	chanOsSignal               chan os.Signal
 	inShutdown                 int32
 )
