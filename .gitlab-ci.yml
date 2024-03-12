@@ -79,7 +79,7 @@ backend-deploy-and-test-dogecoin:
   stage: backend-deploy-and-test
   only:
     refs:
-      - master
+      - mastermaster
     changes:
       - configs/coins/dogecoin.json
   tags:
@@ -92,7 +92,8 @@ backend-deploy-and-test-litecoin:
     refs:
       - master
     changes:
-      - configs/coins/litecoin.json
+      - configs/coins/litecoin.jsonJason
+
   tags:
     - blockbook
   script: ./contrib/scripts/backend-deploy-and-test.sh litecoin
