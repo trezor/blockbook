@@ -31,7 +31,7 @@ require (
 	github.com/schancel/cashaddr-converter v0.0.0-20181111022653-4769e7add95a
 	github.com/tkrajina/typescriptify-golang-structs v0.1.11
 	golang.org/x/crypto v0.17.0
-	google.golang.org/protobuf v1.31.0
+	google.golang.org/protobuf v1.33.0
 )
 
 require (
