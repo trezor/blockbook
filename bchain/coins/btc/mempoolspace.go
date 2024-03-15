@@ -86,27 +86,27 @@ func (p *mempoolSpaceFeeProvider) mempoolSpaceFeeProcessData(data *mempoolSpaceF
 		feePerKB: data.FastestFee * 1000,
 	}
 
-	// HalfHourFee is for 2-5 blocks
+	// HalfHourFee is for 2-6 blocks
 	p.fees[1] = alternativeFeeProviderFee{
-		blocks:   5,
+		blocks:   6,
 		feePerKB: data.HalfHourFee * 1000,
 	}
 
-	// HourFee is for 6-18 blocks
+	// HourFee is for 7-36 blocks
 	p.fees[2] = alternativeFeeProviderFee{
-		blocks:   18,
+		blocks:   36,
 		feePerKB: data.HourFee * 1000,
 	}
 
-	// EconomyFee is for 19-100 blocks
+	// EconomyFee is for 37-200 blocks
 	p.fees[3] = alternativeFeeProviderFee{
-		blocks:   100,
+		blocks:   500,
 		feePerKB: data.EconomyFee * 1000,
 	}
 
-	// MinimumFee is for over 100 blocks
+	// MinimumFee is for over 500 blocks
 	p.fees[4] = alternativeFeeProviderFee{
-		blocks:   500,
+		blocks:   1000,
 		feePerKB: data.MinimumFee * 1000,
 	}
 
