@@ -30,8 +30,6 @@ type Network uint32
 const (
 	// MainNet is production network
 	MainNet Network = 1
-	// TestNetGoerli is Goerli test network
-	TestNetGoerli Network = 5
 	// TestNetSepolia is Sepolia test network
 	TestNetSepolia Network = 11155111
 	// TestNetHolesky is Holesky test network
@@ -146,9 +144,6 @@ func (b *EthereumRPC) Initialize() error {
 	case MainNet:
 		b.Testnet = false
 		b.Network = "livenet"
-	case TestNetGoerli:
-		b.Testnet = true
-		b.Network = "goerli"
 	case TestNetSepolia:
 		b.Testnet = true
 		b.Network = "sepolia"
