@@ -53,11 +53,9 @@
 | eCash                            | 9197             | 9097               | 8097        | 38397                                |
 | Avalanche                        | 9198             | 9098               | 8098        | 38398 p2p                            |
 | Avalanche Archive                | 9199             | 9099               | 8099        | 38399 p2p                            |
-| Ethereum Testnet Goerli Archive  | 19106            | 19006              | 18006       | 18106 http, 18506 authrpc, 48306 p2p |
 | Ethereum Testnet Holesky         | 19116            | 19016              | 18016       | 18116 http, 18516 authrpc, 48316 p2p |
 | Bitcoin Signet                   | 19120            | 19020              | 18020       | 48320                                |
 | Bitcoin Regtest                  | 19121            | 19021              | 18021       | 48321                                |
-| Ethereum Testnet Goerli          | 19126            | 19026              | 18026       | 18126 http, 18526 authrpc, 48326 p2p |
 | Bitcoin Testnet                  | 19130            | 19030              | 18030       | 48330                                |
 | Bitcoin Cash Testnet             | 19131            | 19031              | 18031       | 48331                                |
 | Zcash Testnet                    | 19132            | 19032              | 18032       | 48332                                |
