@@ -179,11 +179,19 @@ func (b *EthereumRPC) InitializeMempool(addrDescForOutpoint bchain.AddrDescForOu
 		return errors.New("Mempool not created")
 	}
 
+	var err error
+	var txs []string
 	// get initial mempool transactions
-	txs, err := b.GetMempoolTransactions()
-	if err != nil {
-		return err
+	// workaround for an occasional `decoding block` error from getBlockRaw - try 3 times with a delay and then proceed
+	for i := 0; i < 3; i++ {
+		txs, err = b.GetMempoolTransactions()
+		if err == nil {
+			break
+		}
+		glog.Error("GetMempoolTransaction ", err)
+		time.Sleep(time.Second * 5)
 	}
+
 	for _, txid := range txs {
 		b.Mempool.AddTransactionToMempool(txid)
 	}
