@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+option go_package = "github.com/trezor/blockbook/bchain/coins/eth";
+
+message ProtoAddrContracts {
+  message MultiTokenValue {
+    bytes Id = 1;
+    bytes Value = 2;
+  }
+  message AddrContract {
+    int64 Type = 1;
+    bytes Contract = 2;
+    uint64 Txs = 3;
+    bytes Value = 4;
+    repeated bytes Ids = 5;
+    repeated MultiTokenValue MultiTokenValues = 6;
+  }
+  uint64 TotalTxs = 1;
+  uint64 NonContractTxs = 2;
+  uint64 InternalTxs = 3;
+  repeated AddrContract Contracts = 4;
+}
