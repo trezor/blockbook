@@ -29,30 +29,26 @@ type BulkConnect struct {
 	txAddressesMap     map[string]*TxAddresses
 	blockFilters       map[string][]byte
 	balances           map[string]*AddrBalance
-	addressContracts   map[string]*AddrContracts
 	height             uint32
 }
 
 const (
-	maxBulkAddresses          = 80000
-	maxBulkTxAddresses        = 500000
-	partialStoreAddresses     = maxBulkTxAddresses / 10
-	maxBulkBalances           = 700000
-	partialStoreBalances      = maxBulkBalances / 10
-	maxBulkAddrContracts      = 1200000
-	partialStoreAddrContracts = maxBulkAddrContracts / 10
-	maxBlockFilters           = 1000
+	maxBulkAddresses      = 80000
+	maxBulkTxAddresses    = 500000
+	partialStoreAddresses = maxBulkTxAddresses / 10
+	maxBulkBalances       = 700000
+	partialStoreBalances  = maxBulkBalances / 10
+	maxBlockFilters       = 1000
 )
 
 // InitBulkConnect initializes bulk connect and switches DB to inconsistent state
 func (d *RocksDB) InitBulkConnect() (*BulkConnect, error) {
 	b := &BulkConnect{
-		d:                d,
-		chainType:        d.chainParser.GetChainType(),
-		txAddressesMap:   make(map[string]*TxAddresses),
-		balances:         make(map[string]*AddrBalance),
-		addressContracts: make(map[string]*AddrContracts),
-		blockFilters:     make(map[string][]byte),
+		d:              d,
+		chainType:      d.chainParser.GetChainType(),
+		txAddressesMap: make(map[string]*TxAddresses),
+		balances:       make(map[string]*AddrBalance),
+		blockFilters:   make(map[string][]byte),
 	}
 	if err := d.SetInconsistentState(true); err != nil {
 		return nil, err
@@ -266,15 +262,15 @@ func (b *BulkConnect) connectBlockBitcoinType(block *bchain.Block, storeBlockTxs
 func (b *BulkConnect) storeAddressContracts(wb *grocksdb.WriteBatch, all bool) (int, error) {
 	var ac map[string]*AddrContracts
 	if all {
-		ac = b.addressContracts
-		b.addressContracts = make(map[string]*AddrContracts)
+		ac = b.d.addressContracts
+		b.d.addressContracts = make(map[string]*AddrContracts)
 	} else {
 		ac = make(map[string]*AddrContracts)
 		// store some random address contracts
-		for k, a := range b.addressContracts {
+		for k, a := range b.d.addressContracts {
 			ac[k] = a
-			delete(b.addressContracts, k)
-			if len(ac) >= partialStoreAddrContracts {
+			delete(b.d.addressContracts, k)
+			if len(ac) >= (b.d.maxAddrContracts / 10) {
 				break
 			}
 		}
@@ -299,20 +295,20 @@ func (b *BulkConnect) parallelStoreAddressContracts(c chan error, all bool) {
 		c <- err
 		return
 	}
-	glog.Info("rocksdb: height ", b.height, ", stored ", count, " addressContracts, ", len(b.addressContracts), " remaining, done in ", time.Since(start))
+	glog.Info("rocksdb: height ", b.height, ", stored ", count, " addressContracts, ", len(b.d.addressContracts), " remaining, done in ", time.Since(start))
 	c <- nil
 }
 
 func (b *BulkConnect) connectBlockEthereumType(block *bchain.Block, storeBlockTxs bool) error {
 	addresses := make(addressesMap)
-	blockTxs, err := b.d.processAddressesEthereumType(block, addresses, b.addressContracts)
+	blockTxs, err := b.d.processAddressesEthereumType(block, addresses, b.d.addressContracts)
 	if err != nil {
 		return err
 	}
 	b.ethBlockTxs = append(b.ethBlockTxs, blockTxs...)
 	var storeAddrContracts chan error
 	var sa bool
-	if len(b.addressContracts) > maxBulkAddrContracts {
+	if len(b.d.addressContracts) > b.d.maxAddrContracts {
 		sa = true
 		storeAddrContracts = make(chan error)
 		go b.parallelStoreAddressContracts(storeAddrContracts, false)

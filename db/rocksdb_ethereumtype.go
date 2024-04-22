@@ -14,6 +14,7 @@ import (
 	"github.com/linxGnu/grocksdb"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/bchain/coins/eth"
+	"google.golang.org/protobuf/proto"
 )
 
 const InternalTxIndexOffset = 1
@@ -124,45 +125,79 @@ type AddrContracts struct {
 	Contracts      []AddrContract
 }
 
-// packAddrContracts packs AddrContracts into a byte buffer
-func packAddrContracts(acs *AddrContracts) []byte {
-	buf := make([]byte, 0, 128)
-	varBuf := make([]byte, maxPackedBigintBytes)
-	l := packVaruint(acs.TotalTxs, varBuf)
-	buf = append(buf, varBuf[:l]...)
-	l = packVaruint(acs.NonContractTxs, varBuf)
-	buf = append(buf, varBuf[:l]...)
-	l = packVaruint(acs.InternalTxs, varBuf)
-	buf = append(buf, varBuf[:l]...)
-	for _, ac := range acs.Contracts {
-		buf = append(buf, ac.Contract...)
-		l = packVaruint(uint(ac.Standard)+ac.Txs<<2, varBuf)
-		buf = append(buf, varBuf[:l]...)
-		if ac.Standard == bchain.FungibleToken {
-			l = packBigint(&ac.Value, varBuf)
-			buf = append(buf, varBuf[:l]...)
-		} else if ac.Standard == bchain.NonFungibleToken {
-			l = packVaruint(uint(len(ac.Ids)), varBuf)
-			buf = append(buf, varBuf[:l]...)
-			for i := range ac.Ids {
-				l = packBigint(&ac.Ids[i], varBuf)
-				buf = append(buf, varBuf[:l]...)
-			}
-		} else { // bchain.ERC1155
-			l = packVaruint(uint(len(ac.MultiTokenValues)), varBuf)
-			buf = append(buf, varBuf[:l]...)
-			for i := range ac.MultiTokenValues {
-				l = packBigint(&ac.MultiTokenValues[i].Id, varBuf)
-				buf = append(buf, varBuf[:l]...)
-				l = packBigint(&ac.MultiTokenValues[i].Value, varBuf)
-				buf = append(buf, varBuf[:l]...)
+// packAddrContract packs AddrContracts into a protobuf encoded byte slice
+func packAddrContracts(acs *AddrContracts) ([]byte, error) {
+	ptContracts := make([]*eth.ProtoAddrContracts_AddrContract, len(acs.Contracts))
+	for i, c := range acs.Contracts {
+		ptIds := make([][]byte, len(c.Ids))
+		for j, id := range c.Ids {
+			ptIds[j] = id.Bytes()
+		}
+		ptMultiTokenValues := make([]*eth.ProtoAddrContracts_MultiTokenValue, len(c.MultiTokenValues))
+		for k, mtv := range c.MultiTokenValues {
+			ptMultiTokenValues[k] = &eth.ProtoAddrContracts_MultiTokenValue{
+				Id:    mtv.Id.Bytes(),
+				Value: mtv.Value.Bytes(),
 			}
 		}
+		ptContracts[i] = &eth.ProtoAddrContracts_AddrContract{
+			Contract:         c.Contract,
+			Ids:              ptIds,
+			MultiTokenValues: ptMultiTokenValues,
+			Type:             int64(c.Type),
+			Txs:              uint64(c.Txs),
+			Value:            c.Value.Bytes(),
+		}
 	}
-	return buf
+	pt := &eth.ProtoAddrContracts{
+		TotalTxs:       uint64(acs.TotalTxs),
+		InternalTxs:    uint64(acs.InternalTxs),
+		NonContractTxs: uint64(acs.NonContractTxs),
+		Contracts:      ptContracts,
+	}
+	return proto.Marshal(pt)
 }
 
+// unpackAddrContract unpacks the protobuf encoded byte slice into AddrContracts
 func unpackAddrContracts(buf []byte, addrDesc bchain.AddressDescriptor) (*AddrContracts, error) {
+	pt := &eth.ProtoAddrContracts{}
+	err := proto.Unmarshal(buf, pt)
+	if err != nil {
+		return unpackAddrContractsLegacy(buf, addrDesc)
+	}
+	contracts := make([]AddrContract, len(pt.Contracts))
+	for i, c := range pt.Contracts {
+		ids := make([]big.Int, len(c.Ids))
+		for j, id := range c.Ids {
+			ids[j] = *new(big.Int).SetBytes(id)
+		}
+		multiTokenValues := make(MultiTokenValues, len(c.MultiTokenValues))
+		for k, mtv := range c.MultiTokenValues {
+			multiTokenValues[k] = bchain.MultiTokenValue{
+				Id:    *new(big.Int).SetBytes(mtv.Id),
+				Value: *new(big.Int).SetBytes(mtv.Value),
+			}
+		}
+		contracts[i] = AddrContract{
+			Type:             bchain.TokenType(c.Type),
+			Contract:         c.Contract,
+			Txs:              uint(c.Txs),
+			Value:            *new(big.Int).SetBytes(c.Value),
+			Ids:              ids,
+			MultiTokenValues: multiTokenValues,
+		}
+	}
+	acs := &AddrContracts{
+		TotalTxs:       uint(pt.TotalTxs),
+		NonContractTxs: uint(pt.NonContractTxs),
+		InternalTxs:    uint(pt.InternalTxs),
+		Contracts:      contracts,
+	}
+	return acs, nil
+}
+
+// unpackAddrContractsLegacy unpacks AddrContracts from legacy manual packed byte slice
+func unpackAddrContractsLegacy(buf []byte, addrDesc bchain.AddressDescriptor) (*AddrContracts, error) {
 	tt, l := unpackVaruint(buf)
 	buf = buf[l:]
 	nct, l := unpackVaruint(buf)
@@ -226,7 +261,10 @@ func (d *RocksDB) storeAddressContracts(wb *grocksdb.WriteBatch, acm map[string]
 		if acs == nil || (acs.NonContractTxs == 0 && acs.InternalTxs == 0 && len(acs.Contracts) == 0) {
 			wb.DeleteCF(d.cfh[cfAddressContracts], bchain.AddressDescriptor(addrDesc))
 		} else {
-			buf := packAddrContracts(acs)
+			buf, err := packAddrContracts(acs)
+			if err != nil {
+				return err
+			}
 			wb.PutCF(d.cfh[cfAddressContracts], bchain.AddressDescriptor(addrDesc), buf)
 		}
 	}
@@ -338,7 +376,7 @@ func addToContract(c *AddrContract, contractIndex int, index int32, contract bch
 func (d *RocksDB) addToAddressesAndContractsEthereumType(addrDesc bchain.AddressDescriptor, btxID []byte, index int32, contract bchain.AddressDescriptor, transfer *bchain.TokenTransfer, addTxCount bool, addresses addressesMap, addressContracts map[string]*AddrContracts) error {
 	var err error
 	strAddrDesc := string(addrDesc)
-	ac, e := addressContracts[strAddrDesc]
+	ac, e := d.addressContracts[strAddrDesc]
 	if !e {
 		ac, err = d.GetAddrDescContracts(addrDesc)
 		if err != nil {
@@ -348,8 +386,10 @@ func (d *RocksDB) addToAddressesAndContractsEthereumType(addrDesc bchain.Address
 			ac = &AddrContracts{}
 		}
 		addressContracts[strAddrDesc] = ac
+		d.addressContracts[strAddrDesc] = ac
 		d.cbs.balancesMiss++
 	} else {
+		addressContracts[strAddrDesc] = ac
 		d.cbs.balancesHit++
 	}
 	if contract == nil {
@@ -1440,7 +1480,10 @@ func (d *RocksDB) SortAddressContracts(stop chan os.Signal) error {
 				if err := func() error {
 					wb := grocksdb.NewWriteBatch()
 					defer wb.Destroy()
-					buf := packAddrContracts(ca)
+					buf, err := packAddrContracts(ca)
+					if err != nil {
+						return err
+					}
 					wb.PutCF(d.cfh[cfAddressContracts], addrDesc, buf)
 					return d.WriteBatch(wb)
 				}(); err != nil {
