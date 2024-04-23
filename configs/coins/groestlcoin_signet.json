@@ -22,10 +22,10 @@
         "package_name": "backend-groestlcoin-signet",
         "package_revision": "satoshilabs-1",
         "system_user": "groestlcoin",
-        "version": "26.0",
-        "binary_url": "https://github.com/Groestlcoin/groestlcoin/releases/download/v26.0/groestlcoin-26.0-x86_64-linux-gnu.tar.gz",
+        "version": "27.0",
+        "binary_url": "https://github.com/Groestlcoin/groestlcoin/releases/download/v27.0/groestlcoin-27.0-x86_64-linux-gnu.tar.gz",
         "verification_type": "sha256",
-        "verification_source": "0e24be6c094c1d7ae75d9d99b9bfb067e75200ed43fd8fde94d307a6bbd8bd72",
+        "verification_source": "5189f036913e2033b5fe95ba8f3fc027e9c5bd286d2150e9133cd4a2fd69a7a0",
         "extract_command": "tar -C backend --strip 1 -xf",
         "exclude_files": ["bin/groestlcoin-qt"],
         "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/groestlcoind -datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -conf={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf -pid=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",
@@ -42,8 +42,8 @@
         },
         "platforms": {
           "arm64": {
-            "binary_url": "https://github.com/Groestlcoin/groestlcoin/releases/download/v26.0/groestlcoin-26.0-aarch64-linux-gnu.tar.gz",
-            "verification_source": "69c4f39699efe7a6c112aa2570ad061e90ff1a0128d07df318d2f2df29083dff"
+            "binary_url": "https://github.com/Groestlcoin/groestlcoin/releases/download/v27.0/groestlcoin-27.0-aarch64-linux-gnu.tar.gz",
+            "verification_source": "95e1a4c4f4d50709df40e2d86c4b578db053d1cb475a3384862192c1298f9de6"
           }
         }
     },
