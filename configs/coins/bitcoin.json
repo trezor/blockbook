@@ -57,8 +57,8 @@
         "additional_params": "-dbcache=0 -workers=1 -enablesubnewtx -extendedindex",
         "block_chain": {
             "parse": true,
-            "mempool_workers": 4,
-            "mempool_sub_workers": 2,
+            "mempool_workers": 8,
+            "mempool_sub_workers": 4,
             "block_addresses_to_keep": 300,
             "xpub_magic": 76067358,
             "xpub_magic_segwit_p2sh": 77429938,
@@ -69,10 +69,10 @@
                 "fiat_rates": "coingecko",
                 "fiat_rates_vs_currencies": "AED,ARS,AUD,BDT,BHD,BMD,BRL,CAD,CHF,CLP,CNY,CZK,DKK,EUR,GBP,HKD,HUF,IDR,ILS,INR,JPY,KRW,KWD,LKR,MMK,MXN,MYR,NGN,NOK,NZD,PHP,PKR,PLN,RUB,SAR,SEK,SGD,THB,TRY,TWD,UAH,USD,VEF,VND,ZAR,BTC,ETH",
                 "fiat_rates_params": "{\"coin\": \"bitcoin\", \"periodSeconds\": 900}",
-                "block_golomb_filter_p": 12,
+                "block_golomb_filter_p": 20,
                 "block_filter_scripts": "taproot-noordinals",
                 "block_filter_use_zeroed_key": true,
-                "mempool_golomb_filter_p": 12,
+                "mempool_golomb_filter_p": 20,
                 "mempool_filter_scripts": "taproot",
                 "mempool_filter_use_zeroed_key": false
             }
