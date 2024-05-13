@@ -208,9 +208,9 @@ type TokenTransfer struct {
 	From             string               `json:"from"`
 	To               string               `json:"to"`
 	Contract         string               `json:"contract"`
-	Name             string               `json:"name"`
-	Symbol           string               `json:"symbol"`
-	Decimals         int                  `json:"decimals"`
+	Name             string               `json:"name,omitempty"`
+	Symbol           string               `json:"symbol,omitempty"`
+	Decimals         int                  `json:"decimals,omitempty"`
 	Value            *Amount              `json:"value,omitempty"`
 	MultiTokenValues []MultiTokenValue    `json:"multiTokenValues,omitempty"`
 }

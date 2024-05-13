@@ -46,9 +46,9 @@ export interface TokenTransfer {
     from: string;
     to: string;
     contract: string;
-    name: string;
-    symbol: string;
-    decimals: number;
+    name?: string;
+    symbol?: string;
+    decimals?: number;
     value?: string;
     multiTokenValues?: MultiTokenValue[];
 }
@@ -111,6 +111,7 @@ export interface FeeStats {
 }
 export interface StakingPool {
     contract: string;
+    name: string;
     pendingBalance: string;
     pendingDepositedBalance: string;
     depositedBalance: string;
@@ -275,7 +276,7 @@ export interface BlockbookInfo {
     currentFiatRatesTime?: string;
     historicalFiatRatesTime?: string;
     historicalTokenFiatRatesTime?: string;
-    stakingPoolContracts?: string[];
+    supportedStakingPools?: string[];
     dbSizeFromColumns?: number;
     dbColumns?: InternalStateColumn[];
     about: string;
