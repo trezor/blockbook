@@ -23,10 +23,10 @@
         "package_name": "backend-ethereum-testnet-sepolia-archive",
         "package_revision": "satoshilabs-1",
         "system_user": "ethereum",
-        "version": "2.59.1",
-        "binary_url": "https://github.com/ledgerwatch/erigon/releases/download/v2.59.1/erigon_2.59.1_linux_amd64.tar.gz",
+        "version": "2.60.0",
+        "binary_url": "https://github.com/ledgerwatch/erigon/releases/download/v2.60.0/erigon_2.60.0_linux_amd64.tar.gz",
         "verification_type": "sha256",
-        "verification_source": "5800f0da3ec52f8abc414860f4b3c9ac8c46d07c5044b5458820c71fd4b95b38",
+        "verification_source": "27acb08c65c18128e78faa1c7edfae169e53f58db7bb347bc7145ce8ea1013a0",
         "extract_command": "tar -C backend -xf",
         "exclude_files": [],
         "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/erigon --chain sepolia --snap.keepblocks --db.size.limit 15TB --prune c --prune.c.older 1000000 -torrent.download.rate 32mb --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/erigon --port {{.Ports.BackendP2P}} --ws --ws.port {{.Ports.BackendRPC}} --http --http.port {{.Ports.BackendRPC}} --http.addr 127.0.0.1 --http.corsdomain \"*\" --http.vhosts \"*\" --http.api \"eth,net,web3,debug,txpool\" --authrpc.port {{.Ports.BackendAuthRpc}} --private.api.addr \"\" --torrent.port {{.Ports.BackendHttp}} --log.dir.path {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --log.dir.prefix {{.Coin.Alias}}'",
@@ -40,8 +40,8 @@
         "client_config_file": "",
         "platforms": {
             "arm64": {
-                "binary_url": "https://github.com/ledgerwatch/erigon/releases/download/v2.59.1/erigon_2.59.1_linux_arm64.tar.gz",
-                "verification_source": "9d29e04f600111971c56a9c48aa5c7c9e81cd61ad8bb042c240505e4bd93bf88"
+                "binary_url": "https://github.com/ledgerwatch/erigon/releases/download/v2.60.0/erigon_2.60.0_linux_arm64.tar.gz",
+                "verification_source": "2cd54f7ef945f37cd3b9d1955c38417f13927bdbecc1a6d004f63f75b5d6a977"
             }
         }
     },
