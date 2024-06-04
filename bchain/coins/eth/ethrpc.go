@@ -107,17 +107,22 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 	return s, nil
 }
 
+// OpenRPC opens RPC connection to ETH backend
+var OpenRPC = func(url string) (bchain.EVMRPCClient, bchain.EVMClient, error) {
+	opts := []rpc.ClientOption{}
+	opts = append(opts, rpc.WithWebsocketMessageSizeLimit(0))
+	r, err := rpc.DialOptions(context.Background(), url, opts...)
+	if err != nil {
+		return nil, nil, err
+	}
+	rc := &EthereumRPCClient{Client: r}
+	ec := &EthereumClient{Client: ethclient.NewClient(r)}
+	return rc, ec, nil
+}
+
 // Initialize initializes ethereum rpc interface
 func (b *EthereumRPC) Initialize() error {
-	b.OpenRPC = func(url string) (bchain.EVMRPCClient, bchain.EVMClient, error) {
-		r, err := rpc.Dial(url)
-		if err != nil {
-			return nil, nil, err
-		}
-		rc := &EthereumRPCClient{Client: r}
-		ec := &EthereumClient{Client: ethclient.NewClient(r)}
-		return rc, ec, nil
-	}
+	b.OpenRPC = OpenRPC
 
 	rc, ec, err := b.OpenRPC(b.ChainConfig.RPCURL)
 	if err != nil {
