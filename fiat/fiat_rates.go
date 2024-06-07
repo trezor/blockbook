@@ -419,8 +419,8 @@ func (fr *FiatRates) RunDownloader() error {
 			}
 		}
 
-		// load hourly tickers, give about 30 minutes to prepare the tickers
-		if time.Now().UTC().Unix() >= fr.hourlyTickersTo+secondsInHour+secondsInHour/2 {
+		// load hourly tickers, it is necessary to wait about 1 hour to prepare the tickers
+		if time.Now().UTC().Unix() >= fr.hourlyTickersTo+secondsInHour+secondsInHour {
 			hourlyTickers, err := fr.downloader.HourlyTickers()
 			if err != nil || hourlyTickers == nil {
 				glog.Error("FiatRatesDownloader: HourlyTickers error ", err)
@@ -430,8 +430,8 @@ func (fr *FiatRates) RunDownloader() error {
 			}
 		}
 
-		// load five minute tickers, give about 5 minutes to prepare the tickers
-		if time.Now().UTC().Unix() >= fr.fiveMinutesTickersTo+2*secondsInFiveMinutes {
+		// load five minute tickers, it is necessary to wait about 10 minutes to prepare the tickers
+		if time.Now().UTC().Unix() >= fr.fiveMinutesTickersTo+3*secondsInFiveMinutes {
 			fiveMinutesTickers, err := fr.downloader.FiveMinutesTickers()
 			if err != nil || fiveMinutesTickers == nil {
 				glog.Error("FiatRatesDownloader: FiveMinutesTickers error ", err)
