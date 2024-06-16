@@ -4,7 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
+	"math"
 	"math/big"
 	"net/http"
 	"strconv"
@@ -49,6 +50,7 @@ type Configuration struct {
 	ProcessInternalTransactions     bool   `json:"processInternalTransactions"`
 	ProcessZeroInternalTransactions bool   `json:"processZeroInternalTransactions"`
 	ConsensusNodeVersionURL         string `json:"consensusNodeVersion"`
+	MaxPriorityFeePerGas            bool   `json:"maxPriorityFeePerGas"`
 }
 
 // EthereumRPC is an interface to JSON-RPC eth service.
@@ -372,7 +374,7 @@ func (b *EthereumRPC) getConsensusVersion() string {
 		glog.Error("getConsensusVersion ", err)
 		return ""
 	}
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		glog.Error("getConsensusVersion ", err)
 		return ""
@@ -973,6 +975,54 @@ func (b *EthereumRPC) EthereumTypeEstimateGas(params map[string]interface{}) (ui
 		msg.GasPrice, _ = hexutil.DecodeBig(s)
 	}
 	return b.Client.EstimateGas(ctx, msg)
+}
+
+// EthereumTypeGetPriorityFeePerGas retrieves the maximum priority fee per gas for an Ethereum transaction, if supported
+func (b *EthereumRPC) EthereumTypeGetPriorityFeePerGas() ([]bchain.PriorityFeePerGas, error) {
+	if !b.ChainConfig.MaxPriorityFeePerGas {
+		return nil, nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+	defer cancel()
+
+	var maxPriorityFeePerGas hexutil.Big
+	err := b.RPC.CallContext(ctx, &maxPriorityFeePerGas, "eth_maxPriorityFeePerGas")
+	if err != nil {
+		return nil, err
+	}
+
+	type history struct {
+		OldestBlock   string     `json:"oldestBlock"`
+		Reward        [][]string `json:"reward"`
+		BaseFeePerGas []string   `json:"baseFeePerGas"`
+		GasUsedRatio  []float64  `json:"gasUsedRatio"`
+	}
+	var h history
+	percentiles := []int{1, 50, 70, 90, 99}
+	priorityFeePerGas := make([]bchain.PriorityFeePerGas, len(percentiles))
+
+	err = b.RPC.CallContext(ctx, &h, "eth_feeHistory", 4, "pending", percentiles)
+	if err != nil {
+		return nil, err
+	}
+
+	glog.Info("eth_maxPriorityFeePerGas ", maxPriorityFeePerGas)
+	hs, _ := json.Marshal(h)
+	glog.Info("eth_feeHistory ", string(hs))
+
+	for i := 0; i < len(priorityFeePerGas); i++ {
+		priorityFeePerGas[i].Percentile = percentiles[i]
+		priorityFeePerGas[i].MaxPriorityFee = float64(maxPriorityFeePerGas.ToInt().Uint64())
+		for j := 0; j < len(h.Reward); j++ {
+			p, _ := hexutil.DecodeUint64(h.Reward[j][i])
+			priorityFeePerGas[i].PriorityFee += float64(p)
+		}
+	}
+	for i := 0; i < len(priorityFeePerGas); i++ {
+		priorityFeePerGas[i].PriorityFee = math.Floor(priorityFeePerGas[i].PriorityFee / float64(len(h.Reward)))
+	}
+
+	return priorityFeePerGas, err
 }
 
 // SendRawTransaction sends raw transaction

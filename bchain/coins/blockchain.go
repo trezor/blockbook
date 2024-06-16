@@ -314,6 +314,11 @@ func (c *blockChainWithMetrics) EthereumTypeEstimateGas(params map[string]interf
 	return c.b.EthereumTypeEstimateGas(params)
 }
 
+func (c *blockChainWithMetrics) EthereumTypeGetPriorityFeePerGas() (v []bchain.PriorityFeePerGas, err error) {
+	defer func(s time.Time) { c.observeRPCLatency("EthereumTypeGetPriorityFeePerGas", s, err) }(time.Now())
+	return c.b.EthereumTypeGetPriorityFeePerGas()
+}
+
 func (c *blockChainWithMetrics) GetContractInfo(contractDesc bchain.AddressDescriptor) (v *bchain.ContractInfo, err error) {
 	defer func(s time.Time) { c.observeRPCLatency("GetContractInfo", s, err) }(time.Now())
 	return c.b.GetContractInfo(contractDesc)
