@@ -1,6 +1,10 @@
 package server
 
-import "encoding/json"
+import (
+	"encoding/json"
+
+	"github.com/trezor/blockbook/bchain"
+)
 
 type WsReq struct {
 	ID     string          `json:"id"`
@@ -105,9 +109,10 @@ type WsEstimateFeeReq struct {
 }
 
 type WsEstimateFeeRes struct {
-	FeePerTx   string `json:"feePerTx,omitempty"`
-	FeePerUnit string `json:"feePerUnit,omitempty"`
-	FeeLimit   string `json:"feeLimit,omitempty"`
+	FeePerTx           string                     `json:"feePerTx,omitempty"`
+	FeePerUnit         string                     `json:"feePerUnit,omitempty"`
+	PriorityFeePerUnit []bchain.PriorityFeePerGas `json:"priorityFeePerUnit,omitempty"`
+	FeeLimit           string                     `json:"feeLimit,omitempty"`
 }
 
 type WsSendTransactionReq struct {
