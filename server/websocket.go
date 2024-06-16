@@ -367,7 +367,7 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *WsRe
 		return
 	},
 	"estimateFee": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
-		return s.estimateFee(c, req.Params)
+		return s.estimateFee(req.Params)
 	},
 	"sendTransaction": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
 		r := WsSendTransactionReq{}
@@ -632,7 +632,7 @@ func (s *WebsocketServer) getBlock(id string, page, pageSize int) (interface{}, 
 	return block, nil
 }
 
-func (s *WebsocketServer) estimateFee(c *websocketChannel, params []byte) (interface{}, error) {
+func (s *WebsocketServer) estimateFee(params []byte) (interface{}, error) {
 	var r WsEstimateFeeReq
 	err := json.Unmarshal(params, &r)
 	if err != nil {
@@ -653,11 +653,17 @@ func (s *WebsocketServer) estimateFee(c *websocketChannel, params []byte) (inter
 		if err != nil {
 			return nil, err
 		}
+		feePerTx := new(big.Int)
+		feePerTx.Mul(&fee, new(big.Int).SetUint64(gas))
+		pf, err := s.chain.EthereumTypeGetPriorityFeePerGas()
+		if err != nil {
+			return nil, err
+		}
 		for i := range r.Blocks {
 			res[i].FeePerUnit = fee.String()
 			res[i].FeeLimit = sg
-			fee.Mul(&fee, new(big.Int).SetUint64(gas))
-			res[i].FeePerTx = fee.String()
+			res[i].FeePerTx = feePerTx.String()
+			res[i].PriorityFeePerUnit = pf
 		}
 	} else {
 		conservative := true

@@ -163,3 +163,10 @@ type StakingPoolData struct {
 	RestakedReward          big.Int `json:"restakedReward"`          // restakedRewardOf method
 	AutocompoundBalance     big.Int `json:"autocompoundBalance"`     // autocompoundBalanceOf method
 }
+
+// PriorityFeePerGas contains priority fee fro given percentile
+type PriorityFeePerGas struct {
+	Percentile     int     `json:"percentile"`
+	PriorityFee    float64 `json:"priorityFee"`
+	MaxPriorityFee float64 `json:"maxPriorityFee"`
+}

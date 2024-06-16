@@ -54,6 +54,11 @@ func (b *BaseChain) EthereumTypeEstimateGas(params map[string]interface{}) (uint
 	return 0, errors.New("not supported")
 }
 
+// EthereumTypeGetPriorityFeePerGas is not supported
+func (b *BaseChain) EthereumTypeGetPriorityFeePerGas() ([]PriorityFeePerGas, error) {
+	return nil, errors.New("not supported")
+}
+
 // GetContractInfo is not supported
 func (b *BaseChain) GetContractInfo(contractDesc AddressDescriptor) (*ContractInfo, error) {
 	return nil, errors.New("not supported")
