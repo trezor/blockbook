@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -59,18 +60,20 @@ const (
 
 // RocksDB handle
 type RocksDB struct {
-	path          string
-	db            *grocksdb.DB
-	wo            *grocksdb.WriteOptions
-	ro            *grocksdb.ReadOptions
-	cfh           []*grocksdb.ColumnFamilyHandle
-	chainParser   bchain.BlockChainParser
-	is            *common.InternalState
-	metrics       *common.Metrics
-	cache         *grocksdb.Cache
-	maxOpenFiles  int
-	cbs           connectBlockStats
-	extendedIndex bool
+	path             string
+	db               *grocksdb.DB
+	wo               *grocksdb.WriteOptions
+	ro               *grocksdb.ReadOptions
+	cfh              []*grocksdb.ColumnFamilyHandle
+	chainParser      bchain.BlockChainParser
+	is               *common.InternalState
+	metrics          *common.Metrics
+	cache            *grocksdb.Cache
+	maxOpenFiles     int
+	cbs              connectBlockStats
+	extendedIndex    bool
+	maxAddrContracts int
+	addressContracts map[string]*AddrContracts
 }
 
 const (
@@ -128,7 +131,7 @@ func openDB(path string, c *grocksdb.Cache, openFiles int) (*grocksdb.DB, []*gro
 
 // NewRocksDB opens an internal handle to RocksDB environment.  Close
 // needs to be called to release it.
-func NewRocksDB(path string, cacheSize, maxOpenFiles int, parser bchain.BlockChainParser, metrics *common.Metrics, extendedIndex bool) (d *RocksDB, err error) {
+func NewRocksDB(path string, cacheSize, maxOpenFiles int, parser bchain.BlockChainParser, metrics *common.Metrics, extendedIndex bool, maxAddrContracts int) (*RocksDB, error) {
 	glog.Infof("rocksdb: opening %s, required data version %v, cache size %v, max open files %v", path, dbVersion, cacheSize, maxOpenFiles)
 
 	cfNames = append([]string{}, cfBaseNames...)
@@ -147,9 +150,23 @@ func NewRocksDB(path string, cacheSize, maxOpenFiles int, parser bchain.BlockCha
 	if err != nil {
 		return nil, err
 	}
-	wo := grocksdb.NewDefaultWriteOptions()
-	ro := grocksdb.NewDefaultReadOptions()
-	return &RocksDB{path, db, wo, ro, cfh, parser, nil, metrics, c, maxOpenFiles, connectBlockStats{}, extendedIndex}, nil
+	d := &RocksDB{
+		path:             path,
+		db:               db,
+		wo:               grocksdb.NewDefaultWriteOptions(),
+		ro:               grocksdb.NewDefaultReadOptions(),
+		cfh:              cfh,
+		chainParser:      parser,
+		is:               nil,
+		metrics:          metrics,
+		cache:            c,
+		maxOpenFiles:     maxOpenFiles,
+		cbs:              connectBlockStats{},
+		extendedIndex:    extendedIndex,
+		maxAddrContracts: maxAddrContracts,
+		addressContracts: make(map[string]*AddrContracts),
+	}
+	return d, nil
 }
 
 func (d *RocksDB) closeDB() error {
@@ -331,6 +348,22 @@ const (
 	opDelete = 1
 )
 
+func (d *RocksDB) pruneAddressContracts(attempt float64) {
+	desiredSize := d.maxAddrContracts / 2
+	threshold := math.Pow(10, attempt)
+	for k, v := range d.addressContracts {
+		if len(d.addressContracts) == desiredSize {
+			break
+		}
+		if len(v.Contracts) < int(threshold) {
+			delete(d.addressContracts, k)
+		}
+	}
+	if len(d.addressContracts) > desiredSize {
+		d.pruneAddressContracts(attempt + 1)
+	}
+}
+
 // ConnectBlock indexes addresses in the block and stores them in db
 func (d *RocksDB) ConnectBlock(block *bchain.Block) error {
 	wb := grocksdb.NewWriteBatch()
@@ -375,6 +408,9 @@ func (d *RocksDB) ConnectBlock(block *bchain.Block) error {
 			}
 		}
 	} else if chainType == bchain.ChainEthereumType {
+		if len(d.addressContracts) > d.maxAddrContracts {
+			d.pruneAddressContracts(1)
+		}
 		addressContracts := make(map[string]*AddrContracts)
 		blockTxs, err := d.processAddressesEthereumType(block, addresses, addressContracts)
 		if err != nil {

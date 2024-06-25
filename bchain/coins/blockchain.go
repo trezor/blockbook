@@ -32,6 +32,7 @@ import (
 	"github.com/trezor/blockbook/bchain/coins/flo"
 	"github.com/trezor/blockbook/bchain/coins/fujicoin"
 	"github.com/trezor/blockbook/bchain/coins/gamecredits"
+	"github.com/trezor/blockbook/bchain/coins/gnosis"
 	"github.com/trezor/blockbook/bchain/coins/grs"
 	"github.com/trezor/blockbook/bchain/coins/koto"
 	"github.com/trezor/blockbook/bchain/coins/liquid"
@@ -138,6 +139,8 @@ func init() {
 	BlockChainFactories["BNB Smart Chain Archive"] = bsc.NewBNBSmartChainRPC
 	BlockChainFactories["Polygon"] = polygon.NewPolygonRPC
 	BlockChainFactories["Polygon Archive"] = polygon.NewPolygonRPC
+	BlockChainFactories["Gnosis"] = gnosis.NewGnosisRPC
+	BlockChainFactories["Gnosis Archive"] = gnosis.NewGnosisRPC
 }
 
 // NewBlockChain creates bchain.BlockChain and bchain.Mempool for the coin passed by the parameter coin
