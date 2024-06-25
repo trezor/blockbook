@@ -108,7 +108,7 @@ func NewFiatRates(db *db.RocksDB, config *common.Config, metrics *common.Metrics
 			// a small hack - in tests the callback is not used, therefore there is no delay slowing down the test
 			throttle = false
 		}
-		fr.downloader = NewCoinGeckoDownloader(db, rdParams.URL, rdParams.Coin, rdParams.PlatformIdentifier, rdParams.PlatformVsCurrency, fr.allowedVsCurrencies, fr.timeFormat, metrics, throttle)
+		fr.downloader = NewCoinGeckoDownloader(db, db.GetInternalState().CoinShortcut, rdParams.URL, rdParams.Coin, rdParams.PlatformIdentifier, rdParams.PlatformVsCurrency, fr.allowedVsCurrencies, fr.timeFormat, metrics, throttle)
 		if is != nil {
 			is.HasFiatRates = true
 			is.HasTokenFiatRates = fr.downloadTokens

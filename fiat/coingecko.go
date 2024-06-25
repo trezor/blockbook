@@ -59,7 +59,7 @@ type marketChartPrices struct {
 }
 
 // NewCoinGeckoDownloader creates a coingecko structure that implements the RatesDownloaderInterface
-func NewCoinGeckoDownloader(db *db.RocksDB, url string, coin string, platformIdentifier string, platformVsCurrency string, allowedVsCurrencies string, timeFormat string, metrics *common.Metrics, throttleDown bool) RatesDownloaderInterface {
+func NewCoinGeckoDownloader(db *db.RocksDB, coinShortcut string, url string, coin string, platformIdentifier string, platformVsCurrency string, allowedVsCurrencies string, timeFormat string, metrics *common.Metrics, throttleDown bool) RatesDownloaderInterface {
 	throttlingDelayMs := 0 // No delay by default
 	if throttleDown {
 		throttlingDelayMs = DefaultThrottleDelayMs
@@ -67,7 +67,10 @@ func NewCoinGeckoDownloader(db *db.RocksDB, url string, coin string, platformIde
 
 	allowedVsCurrenciesMap := getAllowedVsCurrenciesMap(allowedVsCurrencies)
 
-	apiKey := os.Getenv("COINGECKO_API_KEY")
+	apiKey := os.Getenv(strings.ToUpper(coinShortcut) + "_COINGECKO_API_KEY")
+	if apiKey == "" {
+		apiKey = os.Getenv("COINGECKO_API_KEY")
+	}
 
 	// use default address if not overridden, with respect to existence of apiKey
 	if url == "" {
