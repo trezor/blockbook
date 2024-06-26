@@ -64,6 +64,8 @@
             "xpub_magic_segwit_native": 73342198,
             "slip44": 1,
             "additional_params": {
+                "alternative_estimate_fee": "mempoolspace",
+                "alternative_estimate_fee_params": "{\"url\": \"https://mempool.space/testnet/api/v1/fees/recommended\", \"periodSeconds\": 20}",
                 "block_golomb_filter_p": 20,
                 "block_filter_scripts": "taproot-noordinals",
                 "block_filter_use_zeroed_key": true,
