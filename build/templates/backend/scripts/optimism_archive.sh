@@ -11,7 +11,7 @@ CHAINDATA_DIR=$DATA_DIR/geth/chaindata
 SNAPSHOT=https://datadirs.optimism.io/latest
 
 if [ ! -d "$CHAINDATA_DIR" ]; then
-  wget -c $SNAPSHOT -O - | zstd -cd | tar xf - -C $DATA_DIR
+  wget -c $(curl -sL $SNAPSHOT | grep -oP '(?<=url=)[^"]*') -O - | zstd -cd | tar xf - -C $DATA_DIR
 fi
 
 $GETH_BIN \
