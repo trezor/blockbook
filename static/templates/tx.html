@@ -51,6 +51,24 @@
             <td>Gas Price</td>
             <td>{{amountSpan $tx.EthereumSpecific.GasPrice $data "copyable"}} <span class="fw-normal ps-3">({{amountSatsSpan $tx.EthereumSpecific.GasPrice $data "copyable"}} Gwei)</span></td>
         </tr>
+        {{if $tx.EthereumSpecific.L1GasUsed}}
+        <tr>
+            <td>L1 Gas Used</td>
+            <td>{{formatBigInt $tx.EthereumSpecific.L1GasUsed}}</td>
+        </tr>
+        {{end}}
+        {{if $tx.EthereumSpecific.L1GasPrice}}
+        <tr>
+            <td>L1 Gas Price</td>
+            <td>{{amountSpan $tx.EthereumSpecific.L1GasPrice $data "copyable"}} <span class="fw-normal ps-3">({{amountSatsSpan $tx.EthereumSpecific.L1GasPrice $data "copyable"}} Gwei)</span></td>
+        </tr>
+        {{end}}
+        {{if $tx.EthereumSpecific.L1FeeScalar}}
+        <tr>
+            <td>L1 Fee Scalar</td>
+            <td>{{$tx.EthereumSpecific.L1FeeScalar}}</td>
+        </tr>
+        {{end}}
         {{else}}
         <tr>
             <td>Total Input</td>

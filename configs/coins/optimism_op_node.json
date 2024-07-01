@@ -1,0 +1,38 @@
+{
+  "coin": {
+    "name": "Optimism Op-Node",
+    "shortcut": "ETH",
+    "label": "Optimism",
+    "alias": "optimism_op_node"
+  },
+  "ports": {
+    "backend_rpc": 8201,
+    "blockbook_internal": 9201,
+    "blockbook_public": 9301
+  },
+  "backend": {
+    "package_name": "backend-optimism-op-node",
+    "package_revision": "satoshilabs-1",
+    "system_user": "optimism",
+    "version": "1.7.6",
+    "binary_url": "https://github.com/ethereum-optimism/optimism/archive/refs/tags/op-node/v1.7.6.tar.gz",
+    "verification_type": "sha256",
+    "verification_source": "91384e4834f0d0776d1c3e19613b5c50a904f6e5814349e444d42d9e8be5a7ab",
+    "extract_command": "mkdir backend/source && tar -C backend/source --strip 1 -xf v1.7.6.tar.gz && cd backend/source/op-node && go build -o ../../op-node ./cmd && rm -rf ../../source && echo",
+    "exclude_files": [],
+    "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/optimism_op_node_exec.sh 2>&1 >> {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
+    "exec_script": "optimism_op_node.sh",
+    "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
+    "postinst_script_template": "",
+    "service_type": "simple",
+    "service_additional_params_template": "",
+    "protect_memory": true,
+    "mainnet": true,
+    "server_config_file": "",
+    "client_config_file": ""
+  },
+  "meta": {
+    "package_maintainer": "IT",
+    "package_maintainer_email": "it@satoshilabs.com"
+  }
+}

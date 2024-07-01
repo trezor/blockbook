@@ -42,6 +42,7 @@ import (
 	"github.com/trezor/blockbook/bchain/coins/namecoin"
 	"github.com/trezor/blockbook/bchain/coins/nuls"
 	"github.com/trezor/blockbook/bchain/coins/omotenashicoin"
+	"github.com/trezor/blockbook/bchain/coins/optimism"
 	"github.com/trezor/blockbook/bchain/coins/pivx"
 	"github.com/trezor/blockbook/bchain/coins/polis"
 	"github.com/trezor/blockbook/bchain/coins/polygon"
@@ -138,6 +139,8 @@ func init() {
 	BlockChainFactories["BNB Smart Chain Archive"] = bsc.NewBNBSmartChainRPC
 	BlockChainFactories["Polygon"] = polygon.NewPolygonRPC
 	BlockChainFactories["Polygon Archive"] = polygon.NewPolygonRPC
+	BlockChainFactories["Optimism"] = optimism.NewOptimismRPC
+	BlockChainFactories["Optimism Archive"] = optimism.NewOptimismRPC
 }
 
 // NewBlockChain creates bchain.BlockChain and bchain.Mempool for the coin passed by the parameter coin

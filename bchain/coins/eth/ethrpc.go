@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math/big"
 	"net/http"
 	"strconv"
@@ -377,7 +377,7 @@ func (b *EthereumRPC) getConsensusVersion() string {
 		glog.Error("getConsensusVersion ", err)
 		return ""
 	}
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		glog.Error("getConsensusVersion ", err)
 		return ""
@@ -623,6 +623,9 @@ func (b *EthereumRPC) getCreationContractInfo(contract string, height uint32) *b
 
 func (b *EthereumRPC) processCallTrace(call *rpcCallTrace, d *bchain.EthereumInternalData, contracts []bchain.ContractInfo, blockHeight uint32) []bchain.ContractInfo {
 	value, err := hexutil.DecodeBig(call.Value)
+	if err != nil {
+		value = new(big.Int)
+	}
 	if call.Type == "CREATE" || call.Type == "CREATE2" {
 		d.Transfers = append(d.Transfers, bchain.EthereumInternalTransfer{
 			Type:  bchain.CREATE,
@@ -834,12 +837,13 @@ func (b *EthereumRPC) GetTransactionForMempool(txid string) (*bchain.Tx, error) 
 func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
 	defer cancel()
-	var tx *bchain.RpcTransaction
+	tx := &bchain.RpcTransaction{}
 	hash := ethcommon.HexToHash(txid)
-	err := b.RPC.CallContext(ctx, &tx, "eth_getTransactionByHash", hash)
+	err := b.RPC.CallContext(ctx, tx, "eth_getTransactionByHash", hash)
 	if err != nil {
 		return nil, err
-	} else if tx == nil {
+	}
+	if *tx == (bchain.RpcTransaction{}) {
 		if b.mempoolInitialized {
 			b.Mempool.RemoveTransactionFromMempool(txid)
 		}
