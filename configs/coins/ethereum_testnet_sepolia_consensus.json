@@ -31,7 +31,7 @@
         "exclude_files": [],
         "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/beacon-chain --sepolia --accept-terms-of-use --execution-endpoint=http://localhost:{{.Ports.BackendAuthRpc}} --grpc-gateway-port=17576 --rpc-port=17577 --monitoring-port=17578 --p2p-tcp-port=13576 --p2p-udp-port=12576 --datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --jwt-secret={{.Env.BackendDataPath}}/ethereum_testnet_sepolia/backend/erigon/jwt.hex --genesis-state={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/genesis.ssz 2>>{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
         "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
-        "postinst_script_template": "wget https://github.com/eth-clients/merge-testnets/raw/302fe27afdc7a9d15b1766a0c0a9d64319140255/sepolia/genesis.ssz -O {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/genesis.ssz",
+        "postinst_script_template": "wget https://github.com/eth-clients/holesky/raw/main/metadata/genesis.ssz -O {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/genesis.ssz",
         "service_type": "simple",
         "service_additional_params_template": "",
         "protect_memory": true,
