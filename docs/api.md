@@ -603,8 +603,13 @@ Response:
 Returns information about block with transactions, subject to paging.
 
 ```
-GET /api/v2/block/<block height|block hash>
+GET /api/v2/block/<block height|block hash>[?page=<page>&pageSize=<size>]
 ```
+
+The optional query parameters:
+
+- _page_: specifies page of returned transactions, starting from 1. If out of range, Blockbook returns the closest possible page.
+- _pageSize_: number of transactions returned by call (default and maximum 1000)
 
 Response:
 

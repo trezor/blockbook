@@ -32,6 +32,7 @@ const txsOnPage = 25
 const blocksOnPage = 50
 const mempoolTxsOnPage = 50
 const txsInAPI = 1000
+const blocksInAPI = 100
 
 const secondaryCoinCookieName = "secondary_coin"
 
@@ -204,6 +205,7 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 	serveMux.HandleFunc(path+"api/v2/xpub/", s.jsonHandler(s.apiXpub, apiV2))
 	serveMux.HandleFunc(path+"api/v2/utxo/", s.jsonHandler(s.apiUtxo, apiV2))
 	serveMux.HandleFunc(path+"api/v2/block/", s.jsonHandler(s.apiBlock, apiV2))
+	serveMux.HandleFunc(path+"api/v2/blocks/", s.jsonHandler(s.apiBlocks, apiV2))
 	serveMux.HandleFunc(path+"api/v2/rawblock/", s.jsonHandler(s.apiBlockRaw, apiDefault))
 	serveMux.HandleFunc(path+"api/v2/sendtx/", s.jsonHandler(s.apiSendTx, apiV2))
 	serveMux.HandleFunc(path+"api/v2/estimatefee/", s.jsonHandler(s.apiEstimateFee, apiV2))
@@ -928,6 +930,18 @@ func (s *PublicServer) getAddressQueryParams(r *http.Request, accountDetails api
 	}, filterParam, gap
 }
 
+func (s *PublicServer) getBlockQueryParams(r *http.Request, maxPageSize int) (int, int) {
+	page, ec := strconv.Atoi(r.URL.Query().Get("page"))
+	if ec != nil {
+		page = 0
+	}
+	pageSize, ec := strconv.Atoi(r.URL.Query().Get("pageSize"))
+	if ec != nil || pageSize > maxPageSize {
+		pageSize = maxPageSize
+	}
+	return page, pageSize
+}
+
 func (s *PublicServer) explorerAddress(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
 	var addressParam string
 	i := strings.LastIndexByte(r.URL.Path, '/')
@@ -1488,17 +1502,50 @@ func (s *PublicServer) apiBlock(r *http.Request, apiVersion int) (interface{}, e
 	var block *api.Block
 	var err error
 	s.metrics.ExplorerViews.With(common.Labels{"action": "api-block"}).Inc()
+
 	if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
-		page, ec := strconv.Atoi(r.URL.Query().Get("page"))
-		if ec != nil {
-			page = 0
-		}
-		block, err = s.api.GetBlock(r.URL.Path[i+1:], page, txsInAPI)
+		page, pageSize := s.getBlockQueryParams(r, txsInAPI)
+		block, err = s.api.GetBlock(r.URL.Path[i+1:], page, pageSize)
 		if err == nil && apiVersion == apiV1 {
 			return s.api.BlockToV1(block), nil
 		}
 	}
 	return block, err
+}
+
+func (s *PublicServer) apiBlocks(r *http.Request, apiVersion int) (interface{}, error) {
+	var blocks []*api.Block
+
+	s.metrics.ExplorerViews.With(common.Labels{"action": "api-block"}).Inc()
+
+	page, pageSize := s.getBlockQueryParams(r, blocksInAPI)
+
+	blocks = make([]*api.Block, 0, pageSize)
+
+	bestBlock, _, err := s.db.GetBestBlock()
+
+	if err != nil {
+		return blocks, err
+	}
+
+	for i := 0; i < pageSize; i++ {
+		blockNumber := bestBlock - uint32(page * pageSize + i)
+
+		// We have no more blocks, return as is
+		if blockNumber < 0 {
+			return blocks, nil
+		}
+
+		block, err := s.api.GetBlock(strconv.FormatUint(uint64(blockNumber), 10), 1, 0)
+
+		if err != nil {
+			return blocks, err
+		}
+
+		blocks = append(blocks, block)
+	}
+
+	return blocks, err
 }
 
 func (s *PublicServer) apiBlockRaw(r *http.Request, apiVersion int) (interface{}, error) {
