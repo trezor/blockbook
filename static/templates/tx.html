@@ -117,6 +117,12 @@
             </td>
         </tr>
         {{end}}
+        {{if $tx.EthereumSpecific}}
+        <tr>
+            <td>Nonce</td>
+            <td>{{$tx.EthereumSpecific.Nonce}}</td>
+        </tr>
+        {{end}}
     </tbody>
 </table>
 <div class="pt-1">
