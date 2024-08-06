@@ -12,6 +12,7 @@ type Config struct {
 	CoinName                string `json:"coin_name"`
 	CoinShortcut            string `json:"coin_shortcut"`
 	CoinLabel               string `json:"coin_label"`
+	Network                 string `json:"network"`
 	FourByteSignatures      string `json:"fourByteSignatures"`
 	FiatRates               string `json:"fiat_rates"`
 	FiatRatesParams         string `json:"fiat_rates_params"`

@@ -33,6 +33,10 @@ export interface EthereumSpecific {
     gasLimit: number;
     gasUsed?: number;
     gasPrice?: string;
+    l1Fee?: number;
+    l1FeeScalar?: string;
+    l1GasPrice?: string;
+    l1GasUsed?: number;
     data?: string;
     parsedData?: EthereumParsedInputData;
     internalTransfers?: EthereumInternalTransfer[];
@@ -351,6 +355,7 @@ export interface WsBackendInfo {
 export interface WsInfoRes {
     name: string;
     shortcut: string;
+    network: string;
     decimals: number;
     version: string;
     bestHeight: number;

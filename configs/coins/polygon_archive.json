@@ -2,6 +2,7 @@
     "coin": {
         "name": "Polygon Archive",
         "shortcut": "MATIC",
+        "network": "MATIC",
         "label": "Polygon",
         "alias": "polygon_archive_bor"
     },

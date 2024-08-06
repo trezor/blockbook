@@ -503,6 +503,7 @@ type BlockRaw struct {
 // BlockbookInfo contains information about the running blockbook instance
 type BlockbookInfo struct {
 	Coin                         string                       `json:"coin"`
+	Network                      string                       `json:"network"`
 	Host                         string                       `json:"host"`
 	Version                      string                       `json:"version"`
 	GitCommit                    string                       `json:"gitCommit"`

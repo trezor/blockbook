@@ -2413,6 +2413,7 @@ func (w *Worker) GetSystemInfo(internal bool) (*SystemInfo, error) {
 	}
 	blockbookInfo := &BlockbookInfo{
 		Coin:                         w.is.Coin,
+		Network:                      w.is.GetNetwork(),
 		Host:                         w.is.Host,
 		Version:                      vi.Version,
 		GitCommit:                    vi.GitCommit,

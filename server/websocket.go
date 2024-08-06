@@ -277,8 +277,8 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *WsRe
 				c.getAddressInfoDescriptorsMux.Unlock()
 				if l > s.is.WsGetAccountInfoLimit {
 					if s.closeChannel(c) {
-					glog.Info("Client ", c.id, " exceeded getAddressInfo limit, ", c.ip)
-					s.is.AddWsLimitExceedingIP(c.ip)
+						glog.Info("Client ", c.id, " exceeded getAddressInfo limit, ", c.ip)
+						s.is.AddWsLimitExceedingIP(c.ip)
 					}
 					return
 				}
@@ -580,6 +580,7 @@ func (s *WebsocketServer) getInfo() (*WsInfoRes, error) {
 	return &WsInfoRes{
 		Name:       s.is.Coin,
 		Shortcut:   s.is.CoinShortcut,
+		Network:    s.is.GetNetwork(),
 		Decimals:   s.chainParser.AmountDecimals(),
 		BestHeight: int(height),
 		BestHash:   hash,

@@ -44,6 +44,7 @@ type Config struct {
 	Coin struct {
 		Name     string `json:"name"`
 		Shortcut string `json:"shortcut"`
+		Network  string `json:"network,omitempty"`
 		Label    string `json:"label"`
 		Alias    string `json:"alias"`
 	} `json:"coin"`

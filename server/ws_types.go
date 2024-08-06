@@ -36,6 +36,7 @@ type WsBackendInfo struct {
 type WsInfoRes struct {
 	Name       string        `json:"name"`
 	Shortcut   string        `json:"shortcut"`
+	Network    string        `json:"network"`
 	Decimals   int           `json:"decimals"`
 	Version    string        `json:"version"`
 	BestHeight int           `json:"bestHeight"`

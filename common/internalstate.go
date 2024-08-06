@@ -57,6 +57,7 @@ type InternalState struct {
 	CoinShortcut string `json:"coinShortcut"`
 	CoinLabel    string `json:"coinLabel"`
 	Host         string `json:"host"`
+	Network      string `json:"network,omitempty"`
 
 	DbState       uint32 `json:"dbState"`
 	ExtendedIndex bool   `json:"extendedIndex"`
@@ -303,6 +304,15 @@ func (is *InternalState) computeAvgBlockPeriod() {
 		return
 	}
 	is.AvgBlockPeriod = (is.BlockTimes[last] - is.BlockTimes[first]) / avgBlockPeriodSample
+}
+
+// GetNetwork returns network. If not set returns the same value as CoinShortcut
+func (is *InternalState) GetNetwork() string {
+	network := is.Network
+	if network == "" {
+		return is.CoinShortcut
+	}
+	return network
 }
 
 // SetBackendInfo sets new BackendInfo
