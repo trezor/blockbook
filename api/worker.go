@@ -918,6 +918,14 @@ func (w *Worker) txFromTxAddress(txid string, ta *db.TxAddresses, bi *db.BlockIn
 }
 
 func computePaging(count, page, itemsOnPage int) (Paging, int, int, int) {
+	if itemsOnPage == 0 {
+		totalPages := count - 1
+		return Paging{
+			ItemsOnPage: itemsOnPage,
+			Page:        page + 1,
+			TotalPages:  totalPages,
+		}, 0, 0, page
+	}
 	from := page * itemsOnPage
 	totalPages := (count - 1) / itemsOnPage
 	if totalPages < 0 {
@@ -2209,6 +2217,34 @@ func (w *Worker) GetBlock(bid string, page int, txsOnPage int) (*Block, error) {
 	bestheight, _, err := w.db.GetBestBlock()
 	if err != nil {
 		return nil, errors.Annotatef(err, "GetBestBlock")
+	}
+	if (txsOnPage == 0) {
+		pg, _, _, _ := computePaging(txCount, page, txsOnPage)
+		addresses := w.newAddressesMapForAliases()
+
+		txs := make([]*Tx, 0)
+
+		return &Block{
+			Paging: pg,
+			BlockInfo: BlockInfo{
+				Hash:          bi.Hash,
+				Prev:          bi.Prev,
+				Next:          bi.Next,
+				Height:        bi.Height,
+				Confirmations: bi.Confirmations,
+				Size:          bi.Size,
+				Time:          bi.Time,
+				Bits:          bi.Bits,
+				Difficulty:    string(bi.Difficulty),
+				MerkleRoot:    bi.MerkleRoot,
+				Nonce:         string(bi.Nonce),
+				Txids:         bi.Txids,
+				Version:       bi.Version,
+			},
+			TxCount:        txCount,
+			Transactions:   txs,
+			AddressAliases: w.getAddressAliases(addresses),
+		}, nil
 	}
 	pg, from, to, page := computePaging(txCount, page, txsOnPage)
 	txs := make([]*Tx, to-from)
