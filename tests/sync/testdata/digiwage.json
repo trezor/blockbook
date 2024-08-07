@@ -1,0 +1,125 @@
+{
+    "connectBlocks": {
+        "syncRanges": [
+            {
+                "lower": 235000,
+                "upper": 235000
+            }
+        ],
+        "blocks": {
+            "235000": {
+                "height": 235000,
+                "hash": "25961563bc9afae2b7ed3bc8dc61da40185bbe86096d687f746c632a885a1e01",
+                "noTxs": 2,
+                "txDetails": [
+                    {
+                        "hex": "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff0603f895030101ffffffff0100000000000000000000000000",
+                        "txid": "88bdc0bc8ac4ea1f687b8b04dceebd6434e5294165b37798cc185f1f489634f9",
+                        "version": 1,
+                        "locktime": 0,
+                        "vin": [
+                            {
+                                "coinbase": "03f895030101",
+                                "sequence": 4294967295
+                            }
+                        ],
+                        "vout": [
+                            {
+                                "value": 0,
+                                "n": 0,
+                                "scriptPubKey": {
+                                    "asm": "",
+                                    "hex": "",
+                                    "type": "nonstandard"
+                                }
+                            }
+                        ],
+                        "blockhash": "25961563bc9afae2b7ed3bc8dc61da40185bbe86096d687f746c632a885a1e01",
+                        "confirmations": 2553878,
+                        "time": 1536318380,
+                        "blocktime": 1536318380
+                    },
+                    {
+                        "txid": "8a2d76ef159f8439680fc2deda0a6138549c56ec3b0a3a286f72a653580d131b",
+                        "version": 1,
+                        "size": 211,
+                        "locktime": 0,
+                        "vin": [
+                            {
+                                "txid": "38d914c70fe589fa4c70e7475d78296b82b0602440fa7ff21a2f792107219080",
+                                "vout": 1,
+                                "scriptSig": {
+                                    "asm": "3045022100a69bf16bbeda76dbeb22541714f640ad2c98f530560b9090848c63b718ef4aba02203fc5be3622bdad8316b502e405d62871ffba0e57c41f5b43fdc7047f793b924f01",
+                                    "hex": "483045022100a69bf16bbeda76dbeb22541714f640ad2c98f530560b9090848c63b718ef4aba02203fc5be3622bdad8316b502e405d62871ffba0e57c41f5b43fdc7047f793b924f01"
+                                },
+                                "sequence": 4294967295
+                            }
+                        ],
+                        "vout": [
+                            {
+                                "value": 0,
+                                "n": 0,
+                                "scriptPubKey": {
+                                    "asm": "",
+                                    "hex": "",
+                                    "type": "nonstandard"
+                                }
+                            },
+                            {
+                                "value": 2579.60977867,
+                                "n": 1,
+                                "scriptPubKey": {
+                                    "asm": "030e55883d14ce52ba7b3ab23a61dfc50241333a8ee748029ec849ac036676b1d9 OP_CHECKSIG",
+                                    "hex": "21030e55883d14ce52ba7b3ab23a61dfc50241333a8ee748029ec849ac036676b1d9ac",
+                                    "reqSigs": 1,
+                                    "type": "pubkey",
+                                    "addresses": [
+                                        "DLCX1bJ5we7WV4cibdKZ98oyKSoUWAQC53"
+                                    ]
+                                }
+                            },
+                            {
+                                "value": 40,
+                                "n": 2,
+                                "scriptPubKey": {
+                                    "asm": "OP_DUP OP_HASH160 2ccad575530bcb760a9365820b837787928390fd OP_EQUALVERIFY OP_CHECKSIG",
+                                    "hex": "76a9142ccad575530bcb760a9365820b837787928390fd88ac",
+                                    "reqSigs": 1,
+                                    "type": "pubkeyhash",
+                                    "addresses": [
+                                        "D9DwFqftdv3DBpxnbQBtUKdjtFBesU1XyC"
+                                    ]
+                                }
+                            }
+                        ],
+                        "hex": "01000000018090210721792f1af27ffa402460b0826b29785d47e7704cfa89e50fc714d9380100000049483045022100a69bf16bbeda76dbeb22541714f640ad2c98f530560b9090848c63b718ef4aba02203fc5be3622bdad8316b502e405d62871ffba0e57c41f5b43fdc7047f793b924f01ffffffff03000000000000000000cb25ac0f3c0000002321030e55883d14ce52ba7b3ab23a61dfc50241333a8ee748029ec849ac036676b1d9ac00286bee000000001976a9142ccad575530bcb760a9365820b837787928390fd88ac00000000",
+                        "blockhash": "25961563bc9afae2b7ed3bc8dc61da40185bbe86096d687f746c632a885a1e01",
+                        "confirmations": 2553889,
+                        "time": 1536318380,
+                        "blocktime": 1536318380
+                    }
+                ]
+            }
+        },
+        "handleFork": {
+            "syncRanges": [
+                {
+                    "lower": 235000,
+                    "upper": 235000
+                }
+            ],
+            "fakeBlocks": {
+                "235000": {
+                    "height": 235000,
+                    "hash": "162456fe604bc5dd185c19a388334ebd886fa6db7941e6b3e10b555642103f92"
+                }
+            },
+            "realBlocks": {
+                "235000": {
+                    "height": 235000,
+                    "hash": "25961563bc9afae2b7ed3bc8dc61da40185bbe86096d687f746c632a885a1e01"
+                }
+            }
+        }
+    }
+}
