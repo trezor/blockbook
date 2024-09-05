@@ -463,6 +463,10 @@ func (a BalanceHistories) SortAndAggregate(groupByTime uint32) BalanceHistories 
 	return bhs
 }
 
+type BlockHeight struct {
+	Height        uint32            `json:"height"`
+}
+
 // Blocks is list of blocks with paging information
 type Blocks struct {
 	Paging
