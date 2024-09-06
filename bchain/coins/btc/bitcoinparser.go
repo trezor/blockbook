@@ -4,10 +4,27 @@ import (
 	"encoding/json"
 	"math/big"
 
+	"github.com/martinboehm/btcd/wire"
 	"github.com/martinboehm/btcutil/chaincfg"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/common"
 )
+
+// temp params for signet(wait btcd commit)
+// magic numbers
+const (
+	Testnet4Magic wire.BitcoinNet = 0x283f161c
+)
+
+// chain parameters
+var (
+	TestNet4Params chaincfg.Params
+)
+
+func init() {
+	TestNet4Params = chaincfg.TestNet3Params
+	TestNet4Params.Net = Testnet4Magic
+}
 
 // BitcoinParser handle
 type BitcoinParser struct {
@@ -33,6 +50,8 @@ func GetChainParams(chain string) *chaincfg.Params {
 	switch chain {
 	case "test":
 		return &chaincfg.TestNet3Params
+	case "testnet4":
+		return &TestNet4Params
 	case "regtest":
 		return &chaincfg.RegressionNetParams
 	case "signet":
