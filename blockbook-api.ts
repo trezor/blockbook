@@ -261,6 +261,7 @@ export interface InternalStateColumn {
 }
 export interface BlockbookInfo {
     coin: string;
+    network: string;
     host: string;
     version: string;
     gitCommit: string;
@@ -446,6 +447,14 @@ export interface WsMempoolFiltersReq {
     scriptType: string;
     fromTimestamp: number;
     M?: number;
+}
+export interface WsEthCallReq {
+    from?: string;
+    to: string;
+    data: string;
+}
+export interface WsEthCallRes {
+    data: string;
 }
 export interface MempoolTxidFilterEntries {
     entries?: { [key: string]: string };

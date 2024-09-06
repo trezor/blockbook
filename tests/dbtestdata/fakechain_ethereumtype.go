@@ -134,6 +134,11 @@ func (c *fakeBlockChainEthereumType) EthereumTypeGetErc20ContractBalance(addrDes
 	return big.NewInt(1000000000 + int64(addrDesc[0])*1000 + int64(contractDesc[0])), nil
 }
 
+// EthereumTypeEthCall calls eth_call with given data and to address
+func (c *fakeBlockChainEthereumType) EthereumTypeEthCall(data, to, from string) (string, error) {
+	return data + "abcd", nil
+}
+
 // GetTokenURI returns URI derived from the input contractDesc
 func (c *fakeBlockChainEthereumType) GetTokenURI(contractDesc bchain.AddressDescriptor, tokenID *big.Int) (string, error) {
 	return "https://ipfs.io/ipfs/" + contractDesc.String()[3:] + ".json", nil

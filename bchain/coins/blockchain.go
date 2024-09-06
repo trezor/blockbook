@@ -342,6 +342,12 @@ func (c *blockChainWithMetrics) EthereumTypeGetStakingPoolsData(addrDesc bchain.
 	return c.b.EthereumTypeGetStakingPoolsData(addrDesc)
 }
 
+// EthereumTypeEthCall calls eth_call with given data and to address
+func (c *blockChainWithMetrics) EthereumTypeEthCall(data, to, from string) (v string, err error) {
+	defer func(s time.Time) { c.observeRPCLatency("EthereumTypeEthCall", s, err) }(time.Now())
+	return c.b.EthereumTypeEthCall(data, to, from)
+}
+
 type mempoolWithMetrics struct {
 	mempool bchain.Mempool
 	m       *common.Metrics

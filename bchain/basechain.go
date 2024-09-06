@@ -76,3 +76,8 @@ func (b *BaseChain) EthereumTypeGetSupportedStakingPools() []string {
 func (b *BaseChain) EthereumTypeGetStakingPoolsData(addrDesc AddressDescriptor) ([]StakingPoolData, error) {
 	return nil, errors.New("not supported")
 }
+
+// EthereumTypeEthCall calls eth_call with given data and to address
+func (b *BaseChain) EthereumTypeEthCall(data, to, from string) (string, error) {
+	return "", errors.New("not supported")
+}

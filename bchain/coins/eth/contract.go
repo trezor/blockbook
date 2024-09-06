@@ -273,14 +273,19 @@ func contractGetTransfersFromTx(tx *bchain.RpcTransaction) (bchain.TokenTransfer
 	return r, nil
 }
 
-func (b *EthereumRPC) ethCall(data, to string) (string, error) {
+// EthereumTypeEthCall calls eth_call with given data and to address
+func (b *EthereumRPC) EthereumTypeEthCall(data, to, from string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
 	defer cancel()
 	var r string
-	err := b.RPC.CallContext(ctx, &r, "eth_call", map[string]interface{}{
+	args := map[string]interface{}{
 		"data": data,
 		"to":   to,
-	}, "latest")
+	}
+	if from != "" {
+		args["from"] = from
+	}
+	err := b.RPC.CallContext(ctx, &r, "eth_call", args, "latest")
 	if err != nil {
 		return "", err
 	}
@@ -289,7 +294,7 @@ func (b *EthereumRPC) ethCall(data, to string) (string, error) {
 
 func (b *EthereumRPC) fetchContractInfo(address string) (*bchain.ContractInfo, error) {
 	var contract bchain.ContractInfo
-	data, err := b.ethCall(contractNameSignature, address)
+	data, err := b.EthereumTypeEthCall(contractNameSignature, address, "")
 	if err != nil {
 		// ignore the error from the eth_call - since geth v1.9.15 they changed the behavior
 		// and returning error "execution reverted" for some non contract addresses
@@ -300,14 +305,14 @@ func (b *EthereumRPC) fetchContractInfo(address string) (*bchain.ContractInfo, e
 	}
 	name := strings.TrimSpace(parseSimpleStringProperty(data))
 	if name != "" {
-		data, err = b.ethCall(contractSymbolSignature, address)
+		data, err = b.EthereumTypeEthCall(contractSymbolSignature, address, "")
 		if err != nil {
 			// glog.Warning(errors.Annotatef(err, "Contract SymbolSignature %v", address))
 			return nil, nil
 			// return nil, errors.Annotatef(err, "erc20SymbolSignature %v", address)
 		}
 		symbol := strings.TrimSpace(parseSimpleStringProperty(data))
-		data, _ = b.ethCall(contractDecimalsSignature, address)
+		data, _ = b.EthereumTypeEthCall(contractDecimalsSignature, address, "")
 		// if err != nil {
 		// 	glog.Warning(errors.Annotatef(err, "Contract DecimalsSignature %v", address))
 		// 	// return nil, errors.Annotatef(err, "erc20DecimalsSignature %v", address)
@@ -340,7 +345,7 @@ func (b *EthereumRPC) EthereumTypeGetErc20ContractBalance(addrDesc, contractDesc
 	addr := hexutil.Encode(addrDesc)[2:]
 	contract := hexutil.Encode(contractDesc)
 	req := contractBalanceOfSignature + "0000000000000000000000000000000000000000000000000000000000000000"[len(addr):] + addr
-	data, err := b.ethCall(req, contract)
+	data, err := b.EthereumTypeEthCall(req, contract, "")
 	if err != nil {
 		return nil, err
 	}
@@ -364,7 +369,7 @@ func (b *EthereumRPC) GetTokenURI(contractDesc bchain.AddressDescriptor, tokenID
 	}
 	// try ERC721 tokenURI method and  ERC1155 uri method
 	for _, method := range []string{erc721TokenURIMethodSignature, erc1155URIMethodSignature} {
-		data, err := b.ethCall(method+id, address)
+		data, err := b.EthereumTypeEthCall(method+id, address, "")
 		if err == nil && data != "" {
 			uri := parseSimpleStringProperty(data)
 			// try to sanitize the URI returned from the contract

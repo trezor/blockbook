@@ -1484,9 +1484,20 @@ var websocketTestsBitcoinType = []websocketTest{
 		},
 		want: `{"id":"43","data":{"P":0,"M":1,"zeroedKey":false,"blockFilter":""}}`,
 	},
+	{
+		name: "websocket ethCall",
+		req: websocketReq{
+			Method: "ethCall",
+			Params: WsEthCallReq{
+				To:   "0x123",
+				Data: "0x456",
+			},
+		},
+		want: `{"id":"44","data":{"error":{"message":"not supported"}}}`,
+	},
 }
 
-func runWebsocketTestsBitcoinType(t *testing.T, ts *httptest.Server, tests []websocketTest) {
+func runWebsocketTests(t *testing.T, ts *httptest.Server, tests []websocketTest) {
 	url := strings.Replace(ts.URL, "http://", "ws://", 1) + "/websocket"
 	s, _, err := websocket.DefaultDialer.Dial(url, nil)
 	if err != nil {
@@ -1577,7 +1588,7 @@ func Test_PublicServer_BitcoinType(t *testing.T) {
 
 	httpTestsBitcoinType(t, ts)
 	socketioTestsBitcoinType(t, ts)
-	runWebsocketTestsBitcoinType(t, ts, websocketTestsBitcoinType)
+	runWebsocketTests(t, ts, websocketTestsBitcoinType)
 }
 
 func httpTestsBitcoinTypeExtendedIndex(t *testing.T, ts *httptest.Server) {
@@ -1758,5 +1769,5 @@ func Test_PublicServer_BitcoinType_ExtendedIndex(t *testing.T) {
 	defer ts.Close()
 
 	httpTestsBitcoinTypeExtendedIndex(t, ts)
-	runWebsocketTestsBitcoinType(t, ts, websocketTestsBitcoinTypeExtendedIndex)
+	runWebsocketTests(t, ts, websocketTestsBitcoinTypeExtendedIndex)
 }

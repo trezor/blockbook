@@ -74,3 +74,7 @@ Blockbook stores data the key-value store RocksDB. Database format is described 
 ## API
 
 Blockbook API is described [here](/docs/api.md).
+
+## Environment variables
+
+List of environment variables that affect Blockbook's behavior is [here](/docs/env.md).

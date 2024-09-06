@@ -134,6 +134,27 @@ func httpTestsEthereumType(t *testing.T, ts *httptest.Server) {
 	performHttpTests(tests, t, ts)
 }
 
+var websocketTestsEthereumType = []websocketTest{
+	{
+		name: "websocket getInfo",
+		req: websocketReq{
+			Method: "getInfo",
+		},
+		want: `{"id":"0","data":{"name":"Fakecoin","shortcut":"FAKE","network":"FAKE","decimals":18,"version":"unknown","bestHeight":4321001,"bestHash":"0x2b57e15e93a0ed197417a34c2498b7187df79099572c04a6b6e6ff418f74e6ee","block0Hash":"","testnet":true,"backend":{"version":"001001","subversion":"/Fakecoin:0.0.1/"}}}`,
+	},
+	{
+		name: "websocket ethCall",
+		req: websocketReq{
+			Method: "ethCall",
+			Params: WsEthCallReq{
+				To:   "0xcdA9FC258358EcaA88845f19Af595e908bb7EfE9",
+				Data: "0x4567",
+			},
+		},
+		want: `{"id":"1","data":{"data":"0x4567abcd"}}`,
+	},
+}
+
 func initEthereumTypeDB(d *db.RocksDB) error {
 	// add 0xa9059cbb transfer(address,uint256)	signature
 	wb := grocksdb.NewWriteBatch()
@@ -238,4 +259,5 @@ func Test_PublicServer_EthereumType(t *testing.T) {
 	defer ts.Close()
 
 	httpTestsEthereumType(t, ts)
+	runWebsocketTests(t, ts, websocketTestsEthereumType)
 }
