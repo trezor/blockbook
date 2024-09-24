@@ -50,6 +50,7 @@ type Configuration struct {
 	ProcessInternalTransactions     bool   `json:"processInternalTransactions"`
 	ProcessZeroInternalTransactions bool   `json:"processZeroInternalTransactions"`
 	ConsensusNodeVersionURL         string `json:"consensusNodeVersion"`
+	DisableMempoolSync              bool   `json:"disableMempoolSync,omitempty"`
 }
 
 // EthereumRPC is an interface to JSON-RPC eth service.
@@ -174,7 +175,7 @@ func (b *EthereumRPC) Initialize() error {
 func (b *EthereumRPC) CreateMempool(chain bchain.BlockChain) (bchain.Mempool, error) {
 	if b.Mempool == nil {
 		b.Mempool = bchain.NewMempoolEthereumType(chain, b.ChainConfig.MempoolTxTimeoutHours, b.ChainConfig.QueryBackendOnMempoolResync)
-		glog.Info("mempool created, MempoolTxTimeoutHours=", b.ChainConfig.MempoolTxTimeoutHours, ", QueryBackendOnMempoolResync=", b.ChainConfig.QueryBackendOnMempoolResync)
+		glog.Info("mempool created, MempoolTxTimeoutHours=", b.ChainConfig.MempoolTxTimeoutHours, ", QueryBackendOnMempoolResync=", b.ChainConfig.QueryBackendOnMempoolResync, ", DisableMempoolSync=", b.ChainConfig.DisableMempoolSync)
 	}
 	return b.Mempool, nil
 }
@@ -263,21 +264,23 @@ func (b *EthereumRPC) subscribeEvents() error {
 		}
 	}()
 
-	// new mempool transaction subscription
-	if err := b.subscribe(func() (bchain.EVMClientSubscription, error) {
-		// invalidate the previous subscription - it is either the first one or there was an error
-		b.newTxSubscription = nil
-		ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
-		defer cancel()
-		sub, err := b.RPC.EthSubscribe(ctx, b.NewTx.Channel(), "newPendingTransactions")
-		if err != nil {
-			return nil, errors.Annotatef(err, "EthSubscribe newPendingTransactions")
+	if !b.ChainConfig.DisableMempoolSync {
+		// new mempool transaction subscription
+		if err := b.subscribe(func() (bchain.EVMClientSubscription, error) {
+			// invalidate the previous subscription - it is either the first one or there was an error
+			b.newTxSubscription = nil
+			ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+			defer cancel()
+			sub, err := b.RPC.EthSubscribe(ctx, b.NewTx.Channel(), "newPendingTransactions")
+			if err != nil {
+				return nil, errors.Annotatef(err, "EthSubscribe newPendingTransactions")
+			}
+			b.newTxSubscription = sub
+			glog.Info("Subscribed to newPendingTransactions")
+			return sub, nil
+		}); err != nil {
+			return err
 		}
-		b.newTxSubscription = sub
-		glog.Info("Subscribed to newPendingTransactions")
-		return sub, nil
-	}); err != nil {
-		return err
 	}
 
 	return nil
