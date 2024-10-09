@@ -1,0 +1,80 @@
+{
+    "coin": {
+        "name": "Testnet4",
+        "shortcut": "TEST",
+        "label": "Bitcoin Testnet4",
+        "alias": "bitcoin_testnet4"
+    },
+    "ports": {
+        "backend_rpc": 18029,
+        "backend_message_queue": 48329,
+        "blockbook_internal": 19029,
+        "blockbook_public": 19129
+    },
+    "ipc": {
+        "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
+        "rpc_user": "rpc",
+        "rpc_pass": "rpc",
+        "rpc_timeout": 25,
+        "message_queue_binding_template": "tcp://127.0.0.1:{{.Ports.BackendMessageQueue}}"
+    },
+    "backend": {
+        "package_name": "backend-bitcoin-testnet4",
+        "package_revision": "satoshilabs-1",
+        "system_user": "bitcoin",
+        "version": "28.0",
+        "binary_url": "https://bitcoincore.org/bin/bitcoin-core-28.0/bitcoin-28.0-x86_64-linux-gnu.tar.gz",
+        "verification_type": "sha256",
+        "verification_source": "7fe294b02b25b51acb8e8e0a0eb5af6bbafa7cd0c5b0e5fcbb61263104a82fbc",
+        "extract_command": "tar -C backend --strip 1 -xf",
+        "exclude_files": ["bin/bitcoin-qt"],
+        "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/bitcoind -datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -conf={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf -pid=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",
+        "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/testnet4/*.log",
+        "postinst_script_template": "",
+        "service_type": "forking",
+        "service_additional_params_template": "",
+        "protect_memory": true,
+        "mainnet": false,
+        "server_config_file": "bitcoin_testnet4.conf",
+        "client_config_file": "bitcoin_client.conf",
+        "additional_params": {
+            "deprecatedrpc": "estimatefee"
+        },
+        "platforms": {
+            "arm64": {
+                "binary_url": "https://bitcoincore.org/bin/bitcoin-core-28.0/bitcoin-28.0-aarch64-linux-gnu.tar.gz",
+                "verification_source": "7fa582d99a25c354d23e371a5848bd9e6a79702870f9cbbf1292b86e647d0f4e"
+            }
+        }
+    },
+    "blockbook": {
+        "package_name": "blockbook-bitcoin-testnet4",
+        "system_user": "blockbook-bitcoin",
+        "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
+        "public_binding_template": ":{{.Ports.BlockbookPublic}}",
+        "explorer_url": "",
+        "additional_params": "-enablesubnewtx -extendedindex",
+        "block_chain": {
+            "parse": true,
+            "mempool_workers": 8,
+            "mempool_sub_workers": 2,
+            "block_addresses_to_keep": 10000,
+            "xpub_magic": 70617039,
+            "xpub_magic_segwit_p2sh": 71979618,
+            "xpub_magic_segwit_native": 73342198,
+            "slip44": 1,
+            "additional_params": {
+                "block_golomb_filter_p": 20,
+                "block_filter_scripts": "taproot-noordinals",
+                "block_filter_use_zeroed_key": true,
+                "mempool_golomb_filter_p": 20,
+                "mempool_filter_scripts": "taproot",
+                "mempool_filter_use_zeroed_key": false
+            }
+        }
+    },
+    "meta": {
+        "package_maintainer": "IT",
+        "package_maintainer_email": "it@satoshilabs.com"
+    }
+}
