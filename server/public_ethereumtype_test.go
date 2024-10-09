@@ -143,10 +143,10 @@ var websocketTestsEthereumType = []websocketTest{
 		want: `{"id":"0","data":{"name":"Fakecoin","shortcut":"FAKE","network":"FAKE","decimals":18,"version":"unknown","bestHeight":4321001,"bestHash":"0x2b57e15e93a0ed197417a34c2498b7187df79099572c04a6b6e6ff418f74e6ee","block0Hash":"","testnet":true,"backend":{"version":"001001","subversion":"/Fakecoin:0.0.1/"}}}`,
 	},
 	{
-		name: "websocket ethCall",
+		name: "websocket rpcCall",
 		req: websocketReq{
-			Method: "ethCall",
-			Params: WsEthCallReq{
+			Method: "rpcCall",
+			Params: WsRpcCallReq{
 				To:   "0xcdA9FC258358EcaA88845f19Af595e908bb7EfE9",
 				Data: "0x4567",
 			},

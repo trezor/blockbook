@@ -77,7 +77,7 @@ func (b *BaseChain) EthereumTypeGetStakingPoolsData(addrDesc AddressDescriptor) 
 	return nil, errors.New("not supported")
 }
 
-// EthereumTypeEthCall calls eth_call with given data and to address
-func (b *BaseChain) EthereumTypeEthCall(data, to, from string) (string, error) {
+// EthereumTypeRpcCall calls eth_call with given data and to address
+func (b *BaseChain) EthereumTypeRpcCall(data, to, from string) (string, error) {
 	return "", errors.New("not supported")
 }

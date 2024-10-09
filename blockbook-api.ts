@@ -448,12 +448,12 @@ export interface WsMempoolFiltersReq {
     fromTimestamp: number;
     M?: number;
 }
-export interface WsEthCallReq {
+export interface WsRpcCallReq {
     from?: string;
     to: string;
     data: string;
 }
-export interface WsEthCallRes {
+export interface WsRpcCallRes {
     data: string;
 }
 export interface MempoolTxidFilterEntries {

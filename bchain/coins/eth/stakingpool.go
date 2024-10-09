@@ -61,7 +61,7 @@ func isZeroBigInt(b *big.Int) bool {
 
 func (b *EthereumRPC) everstakeBalanceTypeContractCall(signature, addr, contract string) (string, error) {
 	req := signature + "0000000000000000000000000000000000000000000000000000000000000000"[len(addr):] + addr
-	return b.EthereumTypeEthCall(req, contract, "")
+	return b.EthereumTypeRpcCall(req, contract, "")
 }
 
 func (b *EthereumRPC) everstakeContractCallSimpleNumeric(signature, addr, contract string) (*big.Int, error) {

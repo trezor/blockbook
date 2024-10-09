@@ -536,18 +536,18 @@
                 });
             }
 
-            function ethCall() {
-                const from = document.getElementById('ethCallFrom').value.trim();
-                const to = document.getElementById('ethCallTo').value.trim();
-                const data = document.getElementById('ethCallData').value.trim();
-                const method = 'ethCall';
+            function rpcCall() {
+                const from = document.getElementById('rpcCallFrom').value.trim();
+                const to = document.getElementById('rpcCallTo').value.trim();
+                const data = document.getElementById('rpcCallData').value.trim();
+                const method = 'rpcCall';
                 const params = {
                     from,
                     to,
                     data,
                 };
                 send(method, params, function (result) {
-                    document.getElementById('ethCallResult').innerText = JSON.stringify(
+                    document.getElementById('rpcCallResult').innerText = JSON.stringify(
                         result,
                     ).replace(/,/g, ', ');
                 });
@@ -1118,8 +1118,8 @@
                     <input
                         class="btn btn-secondary"
                         type="button"
-                        value="ethCall"
-                        onclick="ethCall()"
+                        value="rpcCall"
+                        onclick="rpcCall()"
                     />
                 </div>
                 <div class="col-10">
@@ -1127,7 +1127,7 @@
                         <input
                             type="text"
                             class="form-control"
-                            id="ethCallFrom"
+                            id="rpcCallFrom"
                             style="width: 60%; margin-right: 5px"
                             value=""
                             placeholder="from"
@@ -1135,7 +1135,7 @@
                         <input
                             type="text"
                             class="form-control"
-                            id="ethCallTo"
+                            id="rpcCallTo"
                             style="width: 60%; margin-right: 5px"
                             value="0x624087dd1904ab122a32878ce9e933c7071f53b9"
                             placeholder="to"
@@ -1145,14 +1145,14 @@
                             class="form-control"
                             placeholder="data"
                             style="width: 100%"
-                            id="ethCallData"
+                            id="rpcCallData"
                             value="0x2fec7966000000000000000000000000ce66a9577f4e2589c1d1547b75b7a2b0807ce0ed"
                         />
                     </div>
                 </div>
             </div>
             <div class="row">
-                <div class="col" id="ethCallResult"></div>
+                <div class="col" id="rpcCallResult"></div>
             </div>
             <div class="row">
                 <div class="col">

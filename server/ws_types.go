@@ -139,12 +139,12 @@ type WsFiatRatesTickersListReq struct {
 	Token     string `json:"token,omitempty"`
 }
 
-type WsEthCallReq struct {
+type WsRpcCallReq struct {
 	From string `json:"from,omitempty"`
 	To   string `json:"to"`
 	Data string `json:"data"`
 }
 
-type WsEthCallRes struct {
+type WsRpcCallRes struct {
 	Data string `json:"data"`
 }

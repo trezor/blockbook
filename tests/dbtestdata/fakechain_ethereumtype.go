@@ -134,8 +134,8 @@ func (c *fakeBlockChainEthereumType) EthereumTypeGetErc20ContractBalance(addrDes
 	return big.NewInt(1000000000 + int64(addrDesc[0])*1000 + int64(contractDesc[0])), nil
 }
 
-// EthereumTypeEthCall calls eth_call with given data and to address
-func (c *fakeBlockChainEthereumType) EthereumTypeEthCall(data, to, from string) (string, error) {
+// EthereumTypeRpcCall calls eth_call with given data and to address
+func (c *fakeBlockChainEthereumType) EthereumTypeRpcCall(data, to, from string) (string, error) {
 	return data + "abcd", nil
 }
 

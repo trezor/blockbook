@@ -8,4 +8,4 @@ Some behavior of Blockbook can be modified by environment variables. The variabl
 
 -   `COINGECKO_API_KEY` or `<coin shortcut>_COINGECKO_API_KEY` - API key for making requests to CoinGecko in the paid tier.
 
--   `<coin shortcut>_ALLOWED_ETH_CALL_CONTRACTS` - Contract addresses for which `ethCall` websocket requests can be made, as a comma-separated list. If omitted, `ethCall` is enabled for all addresses.
+-   `<coin shortcut>_ALLOWED_RPC_CALL_TO` - Addresses to which `rpcCall` websocket requests can be made, as a comma-separated list. If omitted, `rpcCall` is enabled for all addresses.

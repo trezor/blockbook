@@ -1485,10 +1485,10 @@ var websocketTestsBitcoinType = []websocketTest{
 		want: `{"id":"43","data":{"P":0,"M":1,"zeroedKey":false,"blockFilter":""}}`,
 	},
 	{
-		name: "websocket ethCall",
+		name: "websocket rpcCall",
 		req: websocketReq{
-			Method: "ethCall",
-			Params: WsEthCallReq{
+			Method: "rpcCall",
+			Params: WsRpcCallReq{
 				To:   "0x123",
 				Data: "0x456",
 			},
