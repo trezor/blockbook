@@ -67,6 +67,7 @@ var BlockChainFactories = make(map[string]blockChainFactory)
 func init() {
 	BlockChainFactories["Bitcoin"] = btc.NewBitcoinRPC
 	BlockChainFactories["Testnet"] = btc.NewBitcoinRPC
+	BlockChainFactories["Testnet4"] = btc.NewBitcoinRPC
 	BlockChainFactories["Signet"] = btc.NewBitcoinRPC
 	BlockChainFactories["Regtest"] = btc.NewBitcoinRPC
 	BlockChainFactories["Zcash"] = zec.NewZCashRPC
