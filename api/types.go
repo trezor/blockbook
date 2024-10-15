@@ -366,6 +366,8 @@ type Address struct {
 	TotalSentSat          *Amount              `json:"totalSent,omitempty"`
 	UnconfirmedBalanceSat *Amount              `json:"unconfirmedBalance"`
 	UnconfirmedTxs        int                  `json:"unconfirmedTxs"`
+	UnconfirmedSending    *Amount              `json:"unconfirmedSending,omitempty"`
+	UnconfirmedReceiving  *Amount              `json:"unconfirmedReceiving,omitempty"`
 	Txs                   int                  `json:"txs"`
 	AddrTxCount           int                  `json:"addrTxCount,omitempty"`
 	NonTokenTxs           int                  `json:"nonTokenTxs,omitempty"`
