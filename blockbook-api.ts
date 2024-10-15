@@ -159,6 +159,8 @@ export interface Address {
     totalSent?: string;
     unconfirmedBalance: string;
     unconfirmedTxs: number;
+    unconfirmedSending?: string;
+    unconfirmedReceiving?: string;
     txs: number;
     addrTxCount?: number;
     nonTokenTxs?: number;
