@@ -309,6 +309,11 @@ func (s *PublicServer) jsonHandler(handler func(r *http.Request, apiVersion int)
 				}
 			}
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+			// Adding  CORS support
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
+
 			if e, isError := data.(jsonError); isError {
 				w.WriteHeader(e.HTTPStatus)
 			}
