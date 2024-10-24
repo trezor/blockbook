@@ -60,6 +60,7 @@
             "additional_params": {
                 "consensusNodeVersion": "http://localhost:17536/eth/v1/node/version",
                 "address_aliases": true,
+                "eip1559Fees": true,
                 "mempoolTxTimeoutHours": 12,
                 "processInternalTransactions": true,
                 "queryBackendOnMempoolResync": false,

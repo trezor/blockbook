@@ -415,10 +415,22 @@ export interface WsEstimateFeeReq {
         value?: string;
     };
 }
+export interface Eip1559Fee {
+    maxFeePerGas: string;
+    maxPriorityFeePerGas: string;
+}
+export interface Eip1559Fees {
+    baseFeePerGas?: string;
+    low?: Eip1559Fee;
+    medium?: Eip1559Fee;
+    high?: Eip1559Fee;
+    instant?: Eip1559Fee;
+}
 export interface WsEstimateFeeRes {
     feePerTx?: string;
     feePerUnit?: string;
     feeLimit?: string;
+    eip1559?: Eip1559Fees;
 }
 export interface WsSendTransactionReq {
     hex: string;

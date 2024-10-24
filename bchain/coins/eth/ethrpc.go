@@ -51,31 +51,35 @@ type Configuration struct {
 	ProcessZeroInternalTransactions bool   `json:"processZeroInternalTransactions"`
 	ConsensusNodeVersionURL         string `json:"consensusNodeVersion"`
 	DisableMempoolSync              bool   `json:"disableMempoolSync,omitempty"`
+	Eip1559Fees                     bool   `json:"eip1559Fees,omitempty"`
+	AlternativeEstimateFee          string `json:"alternative_estimate_fee,omitempty"`
+	AlternativeEstimateFeeParams    string `json:"alternative_estimate_fee_params,omitempty"`
 }
 
 // EthereumRPC is an interface to JSON-RPC eth service.
 type EthereumRPC struct {
 	*bchain.BaseChain
-	Client                bchain.EVMClient
-	RPC                   bchain.EVMRPCClient
-	MainNetChainID        Network
-	Timeout               time.Duration
-	Parser                *EthereumParser
-	PushHandler           func(bchain.NotificationType)
-	OpenRPC               func(string) (bchain.EVMRPCClient, bchain.EVMClient, error)
-	Mempool               *bchain.MempoolEthereumType
-	mempoolInitialized    bool
-	bestHeaderLock        sync.Mutex
-	bestHeader            bchain.EVMHeader
-	bestHeaderTime        time.Time
-	NewBlock              bchain.EVMNewBlockSubscriber
-	newBlockSubscription  bchain.EVMClientSubscription
-	NewTx                 bchain.EVMNewTxSubscriber
-	newTxSubscription     bchain.EVMClientSubscription
-	ChainConfig           *Configuration
-	supportedStakingPools []string
-	stakingPoolNames      []string
-	stakingPoolContracts  []string
+	Client                 bchain.EVMClient
+	RPC                    bchain.EVMRPCClient
+	MainNetChainID         Network
+	Timeout                time.Duration
+	Parser                 *EthereumParser
+	PushHandler            func(bchain.NotificationType)
+	OpenRPC                func(string) (bchain.EVMRPCClient, bchain.EVMClient, error)
+	Mempool                *bchain.MempoolEthereumType
+	mempoolInitialized     bool
+	bestHeaderLock         sync.Mutex
+	bestHeader             bchain.EVMHeader
+	bestHeaderTime         time.Time
+	NewBlock               bchain.EVMNewBlockSubscriber
+	newBlockSubscription   bchain.EVMClientSubscription
+	NewTx                  bchain.EVMNewTxSubscriber
+	newTxSubscription      bchain.EVMClientSubscription
+	ChainConfig            *Configuration
+	supportedStakingPools  []string
+	stakingPoolNames       []string
+	stakingPoolContracts   []string
+	alternativeFeeProvider alternativeFeeProviderInterface
 }
 
 // ProcessInternalTransactions specifies if internal transactions are processed
@@ -164,6 +168,14 @@ func (b *EthereumRPC) Initialize() error {
 	err = b.initStakingPools()
 	if err != nil {
 		return err
+	}
+
+	if b.ChainConfig.AlternativeEstimateFee == "1inch" {
+		if b.alternativeFeeProvider, err = NewOneInchFeesProvider(b, b.ChainConfig.AlternativeEstimateFeeParams); err != nil {
+			glog.Error("New1InchFeesProvider error ", err, " Reverting to default estimateFee functionality")
+			// disable AlternativeEstimateFee logic
+			b.alternativeFeeProvider = nil
+		}
 	}
 
 	glog.Info("rpc: block chain ", b.Network)
@@ -988,6 +1000,80 @@ func (b *EthereumRPC) EthereumTypeEstimateGas(params map[string]interface{}) (ui
 		msg.GasPrice, _ = hexutil.DecodeBig(s)
 	}
 	return b.Client.EstimateGas(ctx, msg)
+}
+
+// EthereumTypeGetEip1559Fees retrieves Eip1559Fees, if supported
+func (b *EthereumRPC) EthereumTypeGetEip1559Fees() (*bchain.Eip1559Fees, error) {
+	if !b.ChainConfig.Eip1559Fees {
+		return nil, nil
+	}
+	// if there is an alternative provider, use it
+	if b.alternativeFeeProvider != nil {
+		return b.alternativeFeeProvider.GetEip1559Fees()
+	}
+
+	// otherwise use algorithm from here https://docs.alchemy.com/docs/how-to-build-a-gas-fee-estimator-using-eip-1559
+	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+	defer cancel()
+
+	var maxPriorityFeePerGas hexutil.Big
+	err := b.RPC.CallContext(ctx, &maxPriorityFeePerGas, "eth_maxPriorityFeePerGas")
+	if err != nil {
+		return nil, err
+	}
+
+	var fees bchain.Eip1559Fees
+
+	type history struct {
+		OldestBlock   string     `json:"oldestBlock"`
+		Reward        [][]string `json:"reward"`
+		BaseFeePerGas []string   `json:"baseFeePerGas"`
+		GasUsedRatio  []float64  `json:"gasUsedRatio"`
+	}
+	var h history
+	percentiles := []int{
+		20, // low
+		70, // medium
+		90, // high
+		99, // instant
+	}
+	blocks := 4
+
+	err = b.RPC.CallContext(ctx, &h, "eth_feeHistory", blocks, "pending", percentiles)
+	if err != nil {
+		return nil, err
+	}
+
+	hs, _ := json.Marshal(h)
+	baseFee, _ := hexutil.DecodeUint64(h.BaseFeePerGas[blocks-1])
+	fees.BaseFeePerGas = big.NewInt(int64(baseFee))
+	maxBasePriorityFee := maxPriorityFeePerGas.ToInt().Int64()
+	glog.Info("eth_maxPriorityFeePerGas ", maxPriorityFeePerGas)
+	glog.Info("eth_feeHistory ", string(hs))
+
+	for i := 0; i < 4; i++ {
+		var f bchain.Eip1559Fee
+		priorityFee := int64(0)
+		for j := 0; j < len(h.Reward); j++ {
+			p, _ := hexutil.DecodeUint64(h.Reward[j][i])
+			priorityFee += int64(p)
+		}
+		priorityFee = priorityFee / int64(len(h.Reward))
+		f.MaxFeePerGas = big.NewInt(priorityFee)
+		f.MaxPriorityFeePerGas = big.NewInt(maxBasePriorityFee)
+		maxBasePriorityFee *= 2
+		switch i {
+		case 0:
+			fees.Low = &f
+		case 1:
+			fees.Medium = &f
+		case 2:
+			fees.High = &f
+		default:
+			fees.Instant = &f
+		}
+	}
+	return &fees, err
 }
 
 // SendRawTransaction sends raw transaction

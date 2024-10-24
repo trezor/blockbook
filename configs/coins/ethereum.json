@@ -59,6 +59,7 @@
             "additional_params": {
                 "consensusNodeVersion": "http://localhost:7536/eth/v1/node/version",
                 "address_aliases": true,
+                "eip1559Fees": true,
                 "mempoolTxTimeoutHours": 48,
                 "queryBackendOnMempoolResync": false,
                 "fiat_rates": "coingecko",

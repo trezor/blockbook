@@ -10,6 +10,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/juju/errors"
 	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/common"
 )
 
 // https://mempool.space/api/v1/fees/recommended returns
@@ -25,7 +26,7 @@ type mempoolSpaceFeeResult struct {
 
 type mempoolSpaceFeeParams struct {
 	URL           string `json:"url"`
-	PeriodSeconds int    `periodSeconds:"url"`
+	PeriodSeconds int    `json:"periodSeconds"`
 }
 
 type mempoolSpaceFeeProvider struct {
@@ -41,7 +42,7 @@ func NewMempoolSpaceFee(chain bchain.BlockChain, params string) (alternativeFeeP
 		return nil, err
 	}
 	if p.params.URL == "" || p.params.PeriodSeconds == 0 {
-		return nil, errors.New("NewWhatTheFee: Missing parameters")
+		return nil, errors.New("NewMempoolSpaceFee: Missing parameters")
 	}
 	p.chain = chain
 	go p.mempoolSpaceFeeDownloader()
@@ -131,5 +132,5 @@ func (p *mempoolSpaceFeeProvider) mempoolSpaceFeeGetData(res interface{}) error 
 	if httpRes.StatusCode != http.StatusOK {
 		return errors.New(p.params.URL + " returned status " + strconv.Itoa(httpRes.StatusCode))
 	}
-	return safeDecodeResponse(httpRes.Body, &res)
+	return common.SafeDecodeResponseFromReader(httpRes.Body, &res)
 }

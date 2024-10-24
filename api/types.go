@@ -566,3 +566,18 @@ type AvailableVsCurrencies struct {
 	Tickers   []string `json:"available_currencies"`
 	Error     string   `json:"error,omitempty"`
 }
+
+// Eip1559Fee
+type Eip1559Fee struct {
+	MaxFeePerGas         *Amount `json:"maxFeePerGas"`
+	MaxPriorityFeePerGas *Amount `json:"maxPriorityFeePerGas"`
+}
+
+// Eip1559Fees
+type Eip1559Fees struct {
+	BaseFeePerGas *Amount     `json:"baseFeePerGas,omitempty"`
+	Low           *Eip1559Fee `json:"low,omitempty"`
+	Medium        *Eip1559Fee `json:"medium,omitempty"`
+	High          *Eip1559Fee `json:"high,omitempty"`
+	Instant       *Eip1559Fee `json:"instant,omitempty"`
+}

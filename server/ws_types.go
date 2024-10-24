@@ -1,6 +1,10 @@
 package server
 
-import "encoding/json"
+import (
+	"encoding/json"
+
+	"github.com/trezor/blockbook/api"
+)
 
 type WsReq struct {
 	ID     string          `json:"id"`
@@ -106,9 +110,10 @@ type WsEstimateFeeReq struct {
 }
 
 type WsEstimateFeeRes struct {
-	FeePerTx   string `json:"feePerTx,omitempty"`
-	FeePerUnit string `json:"feePerUnit,omitempty"`
-	FeeLimit   string `json:"feeLimit,omitempty"`
+	FeePerTx   string           `json:"feePerTx,omitempty"`
+	FeePerUnit string           `json:"feePerUnit,omitempty"`
+	FeeLimit   string           `json:"feeLimit,omitempty"`
+	Eip1559    *api.Eip1559Fees `json:"eip1559,omitempty"`
 }
 
 type WsSendTransactionReq struct {

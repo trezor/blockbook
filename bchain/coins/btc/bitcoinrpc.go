@@ -5,11 +5,9 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
-	"io"
 	"math/big"
 	"net"
 	"net/http"
-	"runtime/debug"
 	"time"
 
 	"github.com/golang/glog"
@@ -907,26 +905,6 @@ func (b *BitcoinRPC) GetMempoolEntry(txid string) (*bchain.MempoolEntry, error) 
 	return res.Result, nil
 }
 
-func safeDecodeResponse(body io.ReadCloser, res interface{}) (err error) {
-	var data []byte
-	defer func() {
-		if r := recover(); r != nil {
-			glog.Error("unmarshal json recovered from panic: ", r, "; data: ", string(data))
-			debug.PrintStack()
-			if len(data) > 0 && len(data) < 2048 {
-				err = errors.Errorf("Error: %v", string(data))
-			} else {
-				err = errors.New("Internal error")
-			}
-		}
-	}()
-	data, err = io.ReadAll(body)
-	if err != nil {
-		return err
-	}
-	return json.Unmarshal(data, &res)
-}
-
 // Call calls Backend RPC interface, using RPCMarshaler interface to marshall the request
 func (b *BitcoinRPC) Call(req interface{}, res interface{}) error {
 	httpData, err := b.RPCMarshaler.Marshal(req)
@@ -950,11 +928,11 @@ func (b *BitcoinRPC) Call(req interface{}, res interface{}) error {
 	// if server returns HTTP error code it might not return json with response
 	// handle both cases
 	if httpRes.StatusCode != 200 {
-		err = safeDecodeResponse(httpRes.Body, &res)
+		err = common.SafeDecodeResponseFromReader(httpRes.Body, &res)
 		if err != nil {
 			return errors.Errorf("%v %v", httpRes.Status, err)
 		}
 		return nil
 	}
-	return safeDecodeResponse(httpRes.Body, &res)
+	return common.SafeDecodeResponseFromReader(httpRes.Body, &res)
 }

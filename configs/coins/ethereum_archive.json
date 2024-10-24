@@ -59,6 +59,9 @@
             "additional_params": {
                 "consensusNodeVersion": "http://localhost:7516/eth/v1/node/version",
                 "address_aliases": true,
+                "eip1559Fees": true,
+                "alternative_estimate_fee": "1inch",
+                "alternative_estimate_fee_params": "{\"url\": \"https://api.1inch.dev/gas-price/v1.5/1\", \"periodSeconds\": 20}",
                 "mempoolTxTimeoutHours": 48,
                 "processInternalTransactions": true,
                 "queryBackendOnMempoolResync": false,
