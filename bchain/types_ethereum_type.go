@@ -163,3 +163,18 @@ type StakingPoolData struct {
 	RestakedReward          big.Int `json:"restakedReward"`          // restakedRewardOf method
 	AutocompoundBalance     big.Int `json:"autocompoundBalance"`     // autocompoundBalanceOf method
 }
+
+// Eip1559Fee
+type Eip1559Fee struct {
+	MaxFeePerGas         *big.Int `json:"maxFeePerGas"`
+	MaxPriorityFeePerGas *big.Int `json:"maxPriorityFeePerGas"`
+}
+
+// Eip1559Fees
+type Eip1559Fees struct {
+	BaseFeePerGas *big.Int    `json:"baseFeePerGas,omitempty"`
+	Low           *Eip1559Fee `json:"low,omitempty"`
+	Medium        *Eip1559Fee `json:"medium,omitempty"`
+	High          *Eip1559Fee `json:"high,omitempty"`
+	Instant       *Eip1559Fee `json:"instant,omitempty"`
+}

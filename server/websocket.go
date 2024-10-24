@@ -367,7 +367,7 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *WsRe
 		return
 	},
 	"estimateFee": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
-		return s.estimateFee(c, req.Params)
+		return s.estimateFee(req.Params)
 	},
 	"sendTransaction": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
 		r := WsSendTransactionReq{}
@@ -632,7 +632,19 @@ func (s *WebsocketServer) getBlock(id string, page, pageSize int) (interface{}, 
 	return block, nil
 }
 
-func (s *WebsocketServer) estimateFee(c *websocketChannel, params []byte) (interface{}, error) {
+func eip1559FeesToApi(fee *bchain.Eip1559Fee) *api.Eip1559Fee {
+	if fee == nil {
+		return nil
+	}
+	apiFee := api.Eip1559Fee{}
+	if fee != nil {
+		apiFee.MaxFeePerGas = (*api.Amount)(fee.MaxFeePerGas)
+		apiFee.MaxPriorityFeePerGas = (*api.Amount)(fee.MaxPriorityFeePerGas)
+	}
+	return &apiFee
+}
+
+func (s *WebsocketServer) estimateFee(params []byte) (interface{}, error) {
 	var r WsEstimateFeeReq
 	err := json.Unmarshal(params, &r)
 	if err != nil {
@@ -653,11 +665,26 @@ func (s *WebsocketServer) estimateFee(c *websocketChannel, params []byte) (inter
 		if err != nil {
 			return nil, err
 		}
+		feePerTx := new(big.Int)
+		feePerTx.Mul(&fee, new(big.Int).SetUint64(gas))
+		eip1559, err := s.chain.EthereumTypeGetEip1559Fees()
+		if err != nil {
+			return nil, err
+		}
+		var eip1559Api *api.Eip1559Fees
+		if eip1559 != nil {
+			eip1559Api = &api.Eip1559Fees{}
+			eip1559Api.BaseFeePerGas = (*api.Amount)(eip1559.BaseFeePerGas)
+			eip1559Api.Instant = eip1559FeesToApi(eip1559.Instant)
+			eip1559Api.High = eip1559FeesToApi(eip1559.High)
+			eip1559Api.Medium = eip1559FeesToApi(eip1559.Medium)
+			eip1559Api.Low = eip1559FeesToApi(eip1559.Low)
+		}
 		for i := range r.Blocks {
 			res[i].FeePerUnit = fee.String()
 			res[i].FeeLimit = sg
-			fee.Mul(&fee, new(big.Int).SetUint64(gas))
-			res[i].FeePerTx = fee.String()
+			res[i].FeePerTx = feePerTx.String()
+			res[i].Eip1559 = eip1559Api
 		}
 	} else {
 		conservative := true
