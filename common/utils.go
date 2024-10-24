@@ -1,7 +1,13 @@
 package common
 
 import (
+	"encoding/json"
+	"io"
+	"runtime/debug"
 	"time"
+
+	"github.com/golang/glog"
+	"github.com/juju/errors"
 )
 
 // TickAndDebounce calls function f on trigger channel or with tickTime period (whatever is sooner) with debounce
@@ -38,4 +44,25 @@ Loop:
 			firstDebounce = time.Time{}
 		}
 	}
+}
+
+// SafeDecodeResponseFromReader reads from io.ReadCloser safely, with recovery from panic
+func SafeDecodeResponseFromReader(body io.ReadCloser, res interface{}) (err error) {
+	var data []byte
+	defer func() {
+		if r := recover(); r != nil {
+			glog.Error("unmarshal json recovered from panic: ", r, "; data: ", string(data))
+			debug.PrintStack()
+			if len(data) > 0 && len(data) < 2048 {
+				err = errors.Errorf("Error: %v", string(data))
+			} else {
+				err = errors.New("Internal error")
+			}
+		}
+	}()
+	data, err = io.ReadAll(body)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(data, &res)
 }

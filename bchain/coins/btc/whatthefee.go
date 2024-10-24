@@ -11,6 +11,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/juju/errors"
 	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/common"
 )
 
 // https://whatthefee.io returns
@@ -119,5 +120,5 @@ func (p *whatTheFeeProvider) whatTheFeeGetData(res interface{}) error {
 	if httpRes.StatusCode != 200 {
 		return errors.New("whatthefee.io returned status " + strconv.Itoa(httpRes.StatusCode))
 	}
-	return safeDecodeResponse(httpRes.Body, &res)
+	return common.SafeDecodeResponseFromReader(httpRes.Body, &res)
 }
