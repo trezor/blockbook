@@ -22,10 +22,10 @@
         "package_name": "backend-ethereum",
         "package_revision": "satoshilabs-1",
         "system_user": "ethereum",
-        "version": "2.60.8",
-        "binary_url": "https://github.com/ledgerwatch/erigon/releases/download/2.60.8/erigon_2.60.8_linux_amd64.tar.gz",
+        "version": "2.60.9",
+        "binary_url": "https://github.com/erigontech/erigon/releases/download/v2.60.9/erigon_v2.60.9_linux_amd64.tar.gz",
         "verification_type": "sha256",
-        "verification_source": "02e9f46a0689c458045db113f9b356fb23f549e4bc2815826301e874a94f52d4",
+        "verification_source": "be5067e127c34f6c4720633de5783a7222c2b278848bd34a847f0f04b5da9484",
         "extract_command": "tar -C backend --strip-components=1 -xf",
         "exclude_files": [],
         "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/erigon --chain mainnet --snap.keepblocks --db.size.limit 15TB --prune c --prune.c.older 1000000 -torrent.download.rate 32mb --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/erigon --port {{.Ports.BackendP2P}} --ws --ws.port {{.Ports.BackendRPC}} --http --http.port {{.Ports.BackendRPC}} --http.addr 127.0.0.1 --http.corsdomain \"*\" --http.vhosts \"*\" --http.api \"eth,net,web3,debug,txpool\" --authrpc.port {{.Ports.BackendAuthRpc}} --private.api.addr \"\" --torrent.port {{.Ports.BackendHttp}} --log.dir.path {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --log.dir.prefix {{.Coin.Alias}}'",
@@ -39,8 +39,8 @@
         "client_config_file": "",
         "platforms": {
             "arm64": {
-                "binary_url": "https://github.com/ledgerwatch/erigon/releases/download/2.60.8/erigon_2.60.8_linux_arm64.tar.gz",
-                "verification_source": "0c19123af4bcf510e70a98de6bc882cf55c4b66cef841fdcedb8aa7c6c65d698"
+                "binary_url": "https://github.com/erigontech/erigon/releases/download/v2.60.9/erigon_v2.60.9_linux_arm64.tar.gz",
+                "verification_source": "21c8fb8bb97838736b4b4f7a8faac56ebbfe1230e6f7da4d9ba3085842a15513"
             }
         }
     },
