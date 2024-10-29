@@ -1,15 +1,15 @@
 {
     "coin": {
-        "name": "Regtest",
-        "shortcut": "rBTC",
-        "label": "Bitcoin Regtest",
-        "alias": "bitcoin_regtest"
+        "name": "Testnet4",
+        "shortcut": "TEST",
+        "label": "Bitcoin Testnet4",
+        "alias": "bitcoin_testnet4"
     },
     "ports": {
-        "backend_rpc": 18021,
-        "backend_message_queue": 48321,
-        "blockbook_internal": 19021,
-        "blockbook_public": 19121
+        "backend_rpc": 18029,
+        "backend_message_queue": 48329,
+        "blockbook_internal": 19029,
+        "blockbook_public": 19129
     },
     "ipc": {
         "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
@@ -19,7 +19,7 @@
         "message_queue_binding_template": "tcp://127.0.0.1:{{.Ports.BackendMessageQueue}}"
     },
     "backend": {
-        "package_name": "backend-bitcoin-regtest",
+        "package_name": "backend-bitcoin-testnet4",
         "package_revision": "satoshilabs-1",
         "system_user": "bitcoin",
         "version": "28.0",
@@ -29,13 +29,13 @@
         "extract_command": "tar -C backend --strip 1 -xf",
         "exclude_files": ["bin/bitcoin-qt"],
         "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/bitcoind -datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -conf={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf -pid=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",
-        "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/regtest/*.log",
+        "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/testnet4/*.log",
         "postinst_script_template": "",
         "service_type": "forking",
         "service_additional_params_template": "",
-        "mainnet": false,
         "protect_memory": true,
-        "server_config_file": "bitcoin_regtest.conf",
+        "mainnet": false,
+        "server_config_file": "bitcoin_testnet4.conf",
         "client_config_file": "bitcoin_client.conf",
         "additional_params": {
             "deprecatedrpc": "estimatefee"
@@ -48,17 +48,17 @@
         }
     },
     "blockbook": {
-        "package_name": "blockbook-bitcoin-regtest",
+        "package_name": "blockbook-bitcoin-testnet4",
         "system_user": "blockbook-bitcoin",
         "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
         "public_binding_template": ":{{.Ports.BlockbookPublic}}",
         "explorer_url": "",
-        "additional_params": "",
+        "additional_params": "-enablesubnewtx -extendedindex",
         "block_chain": {
             "parse": true,
             "mempool_workers": 8,
             "mempool_sub_workers": 2,
-            "block_addresses_to_keep": 300,
+            "block_addresses_to_keep": 10000,
             "xpub_magic": 70617039,
             "xpub_magic_segwit_p2sh": 71979618,
             "xpub_magic_segwit_native": 73342198,

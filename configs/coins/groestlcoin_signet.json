@@ -35,16 +35,16 @@
         "service_additional_params_template": "",
         "protect_memory": true,
         "mainnet": false,
-        "server_config_file": "bitcoin-signet.conf",
+        "server_config_file": "bitcoin_signet.conf",
         "client_config_file": "bitcoin_client.conf",
         "additional_params": {
             "deprecatedrpc": "estimatefee"
         },
         "platforms": {
-          "arm64": {
-            "binary_url": "https://github.com/Groestlcoin/groestlcoin/releases/download/v28.0/groestlcoin-28.0-aarch64-linux-gnu.tar.gz",
-            "verification_source": "092c6ff333a3defe2603b91c55aea6415e554a2bbc6abb3ad43ac712fa9b63b1"
-          }
+            "arm64": {
+                "binary_url": "https://github.com/Groestlcoin/groestlcoin/releases/download/v28.0/groestlcoin-28.0-aarch64-linux-gnu.tar.gz",
+                "verification_source": "092c6ff333a3defe2603b91c55aea6415e554a2bbc6abb3ad43ac712fa9b63b1"
+            }
         }
     },
     "blockbook": {
