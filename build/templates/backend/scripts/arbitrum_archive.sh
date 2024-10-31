@@ -15,8 +15,8 @@ $NITRO_BIN \
   --init.download-path $DATA_DIR/tmp \
   --auth.jwtsecret $DATA_DIR/jwtsecret \
   --persistent.chain $DATA_DIR \
-  --parent-chain.connection.url http://127.0.0.1:8136 \
-  --parent-chain.blob-client.beacon-url http://127.0.0.1:7536 \
+  --parent-chain.connection.url http://127.0.0.1:8116 \
+  --parent-chain.blob-client.beacon-url http://127.0.0.1:7516 \
   --http.addr 127.0.0.1 \
   --http.port {{.Ports.BackendHttp}} \
   --http.api eth,net,web3,debug,txpool,arb \
