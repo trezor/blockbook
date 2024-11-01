@@ -11,7 +11,7 @@ NITRO_BIN=$INSTALL_DIR/nitro
 
 $NITRO_BIN \
   --chain.name nova \
-  --init.url https://snapshot.arbitrum.foundation/nova/nitro-archive.tar \
+  --init.latest archive \
   --init.download-path $DATA_DIR/tmp \
   --auth.jwtsecret $DATA_DIR/jwtsecret \
   --persistent.chain $DATA_DIR \

@@ -11,7 +11,7 @@ NITRO_BIN=$INSTALL_DIR/nitro
 
 $NITRO_BIN \
   --chain.name arb1 \
-  --init.url https://snapshot.arbitrum.foundation/arb1/nitro-pruned.tar \
+  --init.latest pruned \
   --init.download-path $DATA_DIR/tmp \
   --auth.jwtsecret $DATA_DIR/jwtsecret \
   --persistent.chain $DATA_DIR \
