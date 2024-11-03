@@ -294,10 +294,23 @@ func (s *PublicServer) jsonHandler(handler func(r *http.Request, apiVersion int)
 		Text       string `json:"error"`
 		HTTPStatus int    `json:"-"`
 	}
+
 	handlerName := getFunctionName(handler)
 	return func(w http.ResponseWriter, r *http.Request) {
 		var data interface{}
 		var err error
+
+		systemInfo, err := s.api.GetSystemInfo(false)
+		if err != nil {
+			glog.Error("Failed to get system info: ", err)
+			json.NewEncoder(w).Encode(jsonError{Text: err.Error(), HTTPStatus: http.StatusInternalServerError})
+			return
+		} else if !systemInfo.Blockbook.InSync {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			json.NewEncoder(w).Encode(systemInfo.Blockbook)
+			return
+		}
+
 		defer func() {
 			if e := recover(); e != nil {
 				glog.Error(handlerName, " recovered from panic: ", e)
