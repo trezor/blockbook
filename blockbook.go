@@ -85,6 +85,8 @@ var (
 	resyncMempoolPeriodMs = flag.Int("resyncmempoolperiod", 60017, "resync mempool period in milliseconds")
 
 	extendedIndex = flag.Bool("extendedindex", false, "if true, create index of input txids and spending transactions")
+
+	enableAPIBeforeSyncFlag = flag.Bool("enableapibeforesync", false, "enable API access before full synchronization is completed")
 )
 
 var (
@@ -421,6 +423,12 @@ func startPublicServer() (*server.PublicServer, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Check if the API-before-sync flag is set
+	if *enableAPIBeforeSyncFlag {
+		publicServer.ConnectFullPublicInterface()
+	}
+
 	go func() {
 		err = publicServer.Run()
 		if err != nil {
@@ -432,6 +440,11 @@ func startPublicServer() (*server.PublicServer, error) {
 			}
 		}
 	}()
+
+	// Call ConnectFullPublicInterface after sync if the flag is not set
+	if !*enableAPIBeforeSyncFlag {
+		publicServer.ConnectFullPublicInterface()
+	}
 	return publicServer, err
 }
 
