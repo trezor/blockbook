@@ -149,6 +149,7 @@ func init() {
 	BlockChainFactories["Arbitrum Nova"] = arbitrum.NewArbitrumRPC
 	BlockChainFactories["Arbitrum Nova Archive"] = arbitrum.NewArbitrumRPC
 	BlockChainFactories["Base"] = base.NewBaseRPC
+	BlockChainFactories["Base Archive"] = base.NewBaseRPC
 }
 
 // NewBlockChain creates bchain.BlockChain and bchain.Mempool for the coin passed by the parameter coin
