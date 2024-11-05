@@ -35,6 +35,8 @@ const txsInAPI = 1000
 
 const secondaryCoinCookieName = "secondary_coin"
 
+const maxEstimateFeeRetries = 3
+
 const (
 	_ = iota
 	apiV1
@@ -1642,6 +1644,25 @@ type resultEstimateFeeAsString struct {
 	Result string `json:"result"`
 }
 
+// estimateFeeRetryNegative tries to estimate the fee X times if the fee is negative.
+// It gradually increases the number of blocks to estimate the fee for.
+func (s *PublicServer) estimateFeeRetryNegative(blocks int, conservative bool, maxRetries int) (big.Int, error) {
+	var fee big.Int
+	var err error
+	for i := 0; i < maxRetries; i++ {
+		fee, err = s.chain.EstimateSmartFee(blocks, conservative)
+		if err == nil && fee.Sign() != -1 {
+			return fee, nil
+		}
+		fee, err = s.chain.EstimateFee(blocks)
+		if err == nil && fee.Sign() != -1 {
+			return fee, nil
+		}
+		blocks++
+	}
+	return big.Int{}, fmt.Errorf("failed to estimate fee after %d retries", maxRetries)
+}
+
 func (s *PublicServer) apiEstimateFee(r *http.Request, apiVersion int) (interface{}, error) {
 	var res resultEstimateFeeAsString
 	s.metrics.ExplorerViews.With(common.Labels{"action": "api-estimatefee"}).Inc()
@@ -1660,13 +1681,9 @@ func (s *PublicServer) apiEstimateFee(r *http.Request, apiVersion int) (interfac
 					return nil, api.NewAPIError("Parameter 'conservative' cannot be converted to boolean", true)
 				}
 			}
-			var fee big.Int
-			fee, err = s.chain.EstimateSmartFee(blocks, conservative)
+			fee, err := s.estimateFeeRetryNegative(blocks, conservative, maxEstimateFeeRetries)
 			if err != nil {
-				fee, err = s.chain.EstimateFee(blocks)
-				if err != nil {
-					return nil, err
-				}
+				return nil, api.NewAPIError(fmt.Sprintf("Failed to estimate fee: %v", err), true)
 			}
 			res.Result = s.chainParser.AmountToDecimalString(&fee)
 			return res, nil
