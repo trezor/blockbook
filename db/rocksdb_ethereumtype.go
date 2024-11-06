@@ -298,6 +298,11 @@ func unpackAddrContractsLegacy(buf []byte, addrDesc bchain.AddressDescriptor) (*
 }
 
 func (d *RocksDB) storeAddressContracts(wb *grocksdb.WriteBatch, acm map[string]*AddrContracts) error {
+	defer func() {
+		if d.maxAddrContracts == 0 {
+			d.addressContracts = make(map[string]*AddrContracts)
+		}
+	}()
 	for addrDesc, acs := range acm {
 		// address with 0 contracts is removed from db - happens on disconnect
 		if acs == nil || (acs.NonContractTxs == 0 && acs.InternalTxs == 0 && len(acs.Contracts) == 0) {
@@ -314,9 +319,6 @@ func (d *RocksDB) storeAddressContracts(wb *grocksdb.WriteBatch, acm map[string]
 				wb.PutCF(d.cfh[cfAddressContracts], bchain.AddressDescriptor(addrDesc), buf)
 			}
 		}
-	}
-	if d.maxAddrContracts == 0 {
-		d.addressContracts = make(map[string]*AddrContracts)
 	}
 	return nil
 }
@@ -1487,7 +1489,9 @@ func (d *RocksDB) DisconnectBlockRangeEthereumType(lower uint32, higher uint32) 
 		wb.DeleteCF(d.cfh[cfHeight], key)
 		wb.DeleteCF(d.cfh[cfBlockInternalDataErrors], key)
 	}
-	d.storeAddressContracts(wb, contracts)
+	if err := d.storeAddressContracts(wb, contracts); err != nil {
+		return err
+	}
 	err := d.WriteBatch(wb)
 	if err == nil {
 		d.is.RemoveLastBlockTimes(int(higher-lower) + 1)
