@@ -46,7 +46,7 @@ var (
 	dbPath               = flag.String("datadir", "./data", "path to database directory")
 	dbCache              = flag.Int("dbcache", 1<<29, "size of the rocksdb cache")
 	dbMaxOpenFiles       = flag.Int("dbmaxopenfiles", 1<<14, "max open files by rocksdb")
-	dbMaxAddrContracts   = flag.Int("dbmaxaddrcontracts", 1<<20, "max size of the address contracts map")
+	dbMaxAddrContracts   = flag.Int("dbmaxaddrcontracts", 0, "max size of the address contracts cache (default bulk mode cache only at static size of 1200000)")
 	dbProtoAddrContracts = flag.Bool("dbprotoaddrcontracts", false, "use protobuf encoding for addrContracts (also migrates legacy format to protobuf if applicable in existing databases)")
 
 	blockFrom      = flag.Int("blockheight", -1, "height of the starting block")
