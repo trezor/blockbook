@@ -315,6 +315,9 @@ func (d *RocksDB) storeAddressContracts(wb *grocksdb.WriteBatch, acm map[string]
 			}
 		}
 	}
+	if d.maxAddrContracts == 0 {
+		d.addressContracts = make(map[string]*AddrContracts)
+	}
 	return nil
 }
 
@@ -436,11 +439,15 @@ func (d *RocksDB) addToAddressesAndContractsEthereumType(addrDesc bchain.Address
 		if ac == nil {
 			ac = &AddrContracts{}
 		}
-		addressContracts[strAddrDesc] = ac
+		if addressContracts != nil {
+			addressContracts[strAddrDesc] = ac
+		}
 		d.addressContracts[strAddrDesc] = ac
 		d.cbs.balancesMiss++
 	} else {
-		addressContracts[strAddrDesc] = ac
+		if addressContracts != nil {
+			addressContracts[strAddrDesc] = ac
+		}
 		d.cbs.balancesHit++
 	}
 	if contract == nil {

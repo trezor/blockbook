@@ -410,7 +410,7 @@ func (d *RocksDB) ConnectBlock(block *bchain.Block) error {
 			}
 		}
 	} else if chainType == bchain.ChainEthereumType {
-		if len(d.addressContracts) > d.maxAddrContracts {
+		if d.maxAddrContracts > 0 && len(d.addressContracts) > d.maxAddrContracts {
 			d.pruneAddressContracts(1)
 		}
 		addressContracts := make(map[string]*AddrContracts)
