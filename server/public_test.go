@@ -43,7 +43,7 @@ func setupRocksDB(parser bchain.BlockChainParser, chain bchain.BlockChain, t *te
 	if err != nil {
 		t.Fatal(err)
 	}
-	d, err := db.NewRocksDB(tmp, 100000, -1, parser, nil, extendedIndex)
+	d, err := db.NewRocksDB(tmp, 100000, -1, parser, nil, extendedIndex, 0, false)
 	if err != nil {
 		t.Fatal(err)
 	}
