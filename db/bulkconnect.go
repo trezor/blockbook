@@ -21,15 +21,16 @@ type bulkAddresses struct {
 
 // BulkConnect is used to connect blocks in bulk, faster but if interrupted inconsistent way
 type BulkConnect struct {
-	d                  *RocksDB
-	chainType          bchain.ChainType
-	bulkAddresses      []bulkAddresses
-	bulkAddressesCount int
-	ethBlockTxs        []ethBlockTx
-	txAddressesMap     map[string]*TxAddresses
-	blockFilters       map[string][]byte
-	balances           map[string]*AddrBalance
-	height             uint32
+	d                    *RocksDB
+	chainType            bchain.ChainType
+	bulkAddresses        []bulkAddresses
+	bulkAddressesCount   int
+	ethBlockTxs          []ethBlockTx
+	txAddressesMap       map[string]*TxAddresses
+	blockFilters         map[string][]byte
+	balances             map[string]*AddrBalance
+	height               uint32
+	maxBulkAddrContracts int
 }
 
 const (
@@ -43,12 +44,17 @@ const (
 
 // InitBulkConnect initializes bulk connect and switches DB to inconsistent state
 func (d *RocksDB) InitBulkConnect() (*BulkConnect, error) {
+	maxBulkAddrContracts := 1200000
+	if d.maxAddrContracts != 0 {
+		maxBulkAddrContracts = d.maxAddrContracts
+	}
 	b := &BulkConnect{
-		d:              d,
-		chainType:      d.chainParser.GetChainType(),
-		txAddressesMap: make(map[string]*TxAddresses),
-		balances:       make(map[string]*AddrBalance),
-		blockFilters:   make(map[string][]byte),
+		d:                    d,
+		chainType:            d.chainParser.GetChainType(),
+		txAddressesMap:       make(map[string]*TxAddresses),
+		balances:             make(map[string]*AddrBalance),
+		blockFilters:         make(map[string][]byte),
+		maxBulkAddrContracts: maxBulkAddrContracts,
 	}
 	if err := d.SetInconsistentState(true); err != nil {
 		return nil, err
@@ -270,7 +276,7 @@ func (b *BulkConnect) storeAddressContracts(wb *grocksdb.WriteBatch, all bool) (
 		for k, a := range b.d.addressContracts {
 			ac[k] = a
 			delete(b.d.addressContracts, k)
-			if len(ac) >= (b.d.maxAddrContracts / 10) {
+			if len(ac) >= (b.maxBulkAddrContracts / 10) {
 				break
 			}
 		}
@@ -301,14 +307,14 @@ func (b *BulkConnect) parallelStoreAddressContracts(c chan error, all bool) {
 
 func (b *BulkConnect) connectBlockEthereumType(block *bchain.Block, storeBlockTxs bool) error {
 	addresses := make(addressesMap)
-	blockTxs, err := b.d.processAddressesEthereumType(block, addresses, b.d.addressContracts)
+	blockTxs, err := b.d.processAddressesEthereumType(block, addresses, nil)
 	if err != nil {
 		return err
 	}
 	b.ethBlockTxs = append(b.ethBlockTxs, blockTxs...)
 	var storeAddrContracts chan error
 	var sa bool
-	if len(b.d.addressContracts) > b.d.maxAddrContracts {
+	if len(b.d.addressContracts) > b.maxBulkAddrContracts {
 		sa = true
 		storeAddrContracts = make(chan error)
 		go b.parallelStoreAddressContracts(storeAddrContracts, false)
