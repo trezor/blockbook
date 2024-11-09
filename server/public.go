@@ -60,11 +60,12 @@ type PublicServer struct {
 	is                  *common.InternalState
 	fiatRates           *fiat.FiatRates
 	useSatsAmountFormat bool
+	enableAPIBeforeSync bool
 }
 
 // NewPublicServer creates new public server http interface to blockbook and returns its handle
 // only basic functionality is mapped, to map all functions, call
-func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, txCache *db.TxCache, explorerURL string, metrics *common.Metrics, is *common.InternalState, fiatRates *fiat.FiatRates, debugMode bool) (*PublicServer, error) {
+func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, txCache *db.TxCache, explorerURL string, metrics *common.Metrics, is *common.InternalState, fiatRates *fiat.FiatRates, debugMode bool, enableAPIBeforeSync bool) (*PublicServer, error) {
 
 	api, err := api.NewWorker(db, chain, mempool, txCache, metrics, is, fiatRates)
 	if err != nil {
@@ -109,6 +110,7 @@ func NewPublicServer(binding string, certFiles string, db *db.RocksDB, chain bch
 		is:                  is,
 		fiatRates:           fiatRates,
 		useSatsAmountFormat: chain.GetChainParser().GetChainType() == bchain.ChainBitcoinType && chain.GetChainParser().AmountDecimals() == 8,
+		enableAPIBeforeSync: enableAPIBeforeSync,
 	}
 	s.htmlTemplates.newTemplateData = s.newTemplateData
 	s.htmlTemplates.newTemplateDataWithError = s.newTemplateDataWithError
@@ -305,7 +307,7 @@ func (s *PublicServer) jsonHandler(handler func(r *http.Request, apiVersion int)
 			glog.Error("Failed to get system info: ", err)
 			json.NewEncoder(w).Encode(jsonError{Text: err.Error(), HTTPStatus: http.StatusInternalServerError})
 			return
-		} else if !systemInfo.Blockbook.InSync {
+		} else if !systemInfo.Blockbook.InSync && !s.enableAPIBeforeSync {
 			w.WriteHeader(http.StatusServiceUnavailable)
 			json.NewEncoder(w).Encode(systemInfo.Blockbook)
 			return
