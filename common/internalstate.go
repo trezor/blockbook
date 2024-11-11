@@ -91,8 +91,7 @@ type InternalState struct {
 	BackendInfo BackendInfo `json:"-"`
 
 	// database migrations
-	UtxoChecked            bool `json:"utxoChecked"`
-	SortedAddressContracts bool `json:"sortedAddressContracts"`
+	UtxoChecked bool `json:"utxoChecked"`
 
 	// golomb filter settings
 	BlockGolombFilterP      uint8  `json:"block_golomb_filter_p"`

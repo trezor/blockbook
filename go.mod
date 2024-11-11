@@ -3,24 +3,13 @@ module github.com/trezor/blockbook
 go 1.21
 
 require (
-	github.com/ava-labs/avalanchego v1.10.18-rc.0
-	github.com/ava-labs/coreth v0.12.10-rc.0
 	github.com/bsm/go-vlq v0.0.0-20150828105119-ec6e8d4f5f4e
 	github.com/deckarep/golang-set v1.8.0
-	github.com/decred/dcrd/chaincfg/chainhash v1.0.2
-	github.com/decred/dcrd/chaincfg/v3 v3.0.0
-	github.com/decred/dcrd/dcrec v1.0.0
-	github.com/decred/dcrd/dcrjson/v3 v3.0.1
-	github.com/decred/dcrd/dcrutil/v3 v3.0.0
-	github.com/decred/dcrd/hdkeychain/v3 v3.0.0
-	github.com/decred/dcrd/txscript/v3 v3.0.0
-	github.com/ethereum/go-ethereum v1.13.14
 	github.com/golang/glog v1.1.0
 	github.com/golang/protobuf v1.5.3
 	github.com/gorilla/websocket v1.4.2
 	github.com/juju/errors v0.0.0-20170703010042-c7d06af17c68
 	github.com/linxGnu/grocksdb v1.7.7
-	github.com/martinboehm/bchutil v0.0.0-20190104112650-6373f11b6efe
 	github.com/martinboehm/btcd v0.0.0-20221101112928-408689e15809
 	github.com/martinboehm/btcutil v0.0.0-20211010173611-6ef1889c1819
 	github.com/martinboehm/golang-socketio v0.0.0-20180414165752-f60b0a8befde
@@ -55,15 +44,6 @@ require (
 	github.com/dchest/blake256 v1.0.0 // indirect
 	github.com/dchest/siphash v1.2.1 // indirect
 	github.com/deckarep/golang-set/v2 v2.1.0 // indirect
-	github.com/decred/base58 v1.0.3 // indirect
-	github.com/decred/dcrd/crypto/blake256 v1.0.0 // indirect
-	github.com/decred/dcrd/crypto/ripemd160 v1.0.1 // indirect
-	github.com/decred/dcrd/dcrec/edwards/v2 v2.0.1 // indirect
-	github.com/decred/dcrd/dcrec/secp256k1/v3 v3.0.0 // indirect
-	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.1.0 // indirect
-	github.com/decred/dcrd/wire v1.4.0 // indirect
-	github.com/decred/slog v1.1.0 // indirect
-	github.com/ethereum/c-kzg-4844 v0.4.0 // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
 	github.com/go-logr/logr v1.3.0 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect

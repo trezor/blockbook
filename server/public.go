@@ -155,9 +155,6 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 		serveMux.HandleFunc(path+"spending/", s.htmlTemplateHandler(s.explorerSpendingTx))
 		serveMux.HandleFunc(path+"sendtx", s.htmlTemplateHandler(s.explorerSendTx))
 		serveMux.HandleFunc(path+"mempool", s.htmlTemplateHandler(s.explorerMempool))
-		if s.chainParser.GetChainType() == bchain.ChainEthereumType {
-			serveMux.HandleFunc(path+"nft/", s.htmlTemplateHandler(s.explorerNftDetail))
-		}
 	} else {
 		// redirect to wallet requests for tx and address, possibly to external site
 		serveMux.HandleFunc(path+"tx/", s.txRedirect)
@@ -168,21 +165,16 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 	// use versioned api for stability
 
 	var apiDefault int
-	// ethereum supports only api V2
-	if s.chainParser.GetChainType() == bchain.ChainEthereumType {
-		apiDefault = apiV2
-	} else {
-		apiDefault = apiV1
-		// legacy v1 format
-		serveMux.HandleFunc(path+"api/v1/block-index/", s.jsonHandler(s.apiBlockIndex, apiV1))
-		serveMux.HandleFunc(path+"api/v1/tx-specific/", s.jsonHandler(s.apiTxSpecific, apiV1))
-		serveMux.HandleFunc(path+"api/v1/tx/", s.jsonHandler(s.apiTx, apiV1))
-		serveMux.HandleFunc(path+"api/v1/address/", s.jsonHandler(s.apiAddress, apiV1))
-		serveMux.HandleFunc(path+"api/v1/utxo/", s.jsonHandler(s.apiUtxo, apiV1))
-		serveMux.HandleFunc(path+"api/v1/block/", s.jsonHandler(s.apiBlock, apiV1))
-		serveMux.HandleFunc(path+"api/v1/sendtx/", s.jsonHandler(s.apiSendTx, apiV1))
-		serveMux.HandleFunc(path+"api/v1/estimatefee/", s.jsonHandler(s.apiEstimateFee, apiV1))
-	}
+	apiDefault = apiV1
+	// legacy v1 format
+	serveMux.HandleFunc(path+"api/v1/block-index/", s.jsonHandler(s.apiBlockIndex, apiV1))
+	serveMux.HandleFunc(path+"api/v1/tx-specific/", s.jsonHandler(s.apiTxSpecific, apiV1))
+	serveMux.HandleFunc(path+"api/v1/tx/", s.jsonHandler(s.apiTx, apiV1))
+	serveMux.HandleFunc(path+"api/v1/address/", s.jsonHandler(s.apiAddress, apiV1))
+	serveMux.HandleFunc(path+"api/v1/utxo/", s.jsonHandler(s.apiUtxo, apiV1))
+	serveMux.HandleFunc(path+"api/v1/block/", s.jsonHandler(s.apiBlock, apiV1))
+	serveMux.HandleFunc(path+"api/v1/sendtx/", s.jsonHandler(s.apiSendTx, apiV1))
+	serveMux.HandleFunc(path+"api/v1/estimatefee/", s.jsonHandler(s.apiEstimateFee, apiV1))
 	serveMux.HandleFunc(path+"api/block-index/", s.jsonHandler(s.apiBlockIndex, apiDefault))
 	serveMux.HandleFunc(path+"api/block-filters/", s.jsonHandler(s.apiBlockFilters, apiDefault))
 	serveMux.HandleFunc(path+"api/tx-specific/", s.jsonHandler(s.apiTxSpecific, apiDefault))
@@ -354,11 +346,6 @@ func (s *PublicServer) newTemplateData(r *http.Request) *TemplateData {
 		InternalExplorer: s.internalExplorer && !s.is.InitialSync,
 		TOSLink:          api.Text.TOSLink,
 	}
-	if t.ChainType == bchain.ChainEthereumType {
-		t.FungibleTokenName = bchain.EthereumTokenTypeMap[bchain.FungibleToken]
-		t.NonFungibleTokenName = bchain.EthereumTokenTypeMap[bchain.NonFungibleToken]
-		t.MultiTokenName = bchain.EthereumTokenTypeMap[bchain.MultiToken]
-	}
 	if !s.debug {
 		t.Minified = ".min.3"
 	}
@@ -457,7 +444,6 @@ type TemplateData struct {
 	NonZeroBalanceTokens     bool
 	TokenId                  string
 	URI                      string
-	ContractInfo             *bchain.ContractInfo
 	SecondaryCoin            string
 	UseSecondaryCoin         bool
 	CurrentSecondaryCoinRate float64
@@ -478,8 +464,6 @@ func (s *PublicServer) parseTemplates() []*template.Template {
 		"amountSatsSpan":           s.amountSatsSpan,
 		"formattedAmountSpan":      s.formattedAmountSpan,
 		"summaryValuesSpan":        s.summaryValuesSpan,
-		"addressAlias":             addressAlias,
-		"addressAliasSpan":         addressAliasSpan,
 		"formatAmount":             s.formatAmount,
 		"formatAmountWithDecimals": formatAmountWithDecimals,
 		"formatInt64":              formatInt64,
@@ -490,8 +474,6 @@ func (s *PublicServer) parseTemplates() []*template.Template {
 		"feePerByte":               feePerByte,
 		"isOwnAddress":             isOwnAddress,
 		"toJSON":                   toJSON,
-		"tokenTransfersCount":      tokenTransfersCount,
-		"tokenCount":               tokenCount,
 		"hasPrefix":                strings.HasPrefix,
 		"jsStr":                    jsStr,
 	}
@@ -539,16 +521,9 @@ func (s *PublicServer) parseTemplates() []*template.Template {
 	t[indexTpl] = createTemplate("./static/templates/index.html", "./static/templates/base.html")
 	t[blocksTpl] = createTemplate("./static/templates/blocks.html", "./static/templates/paging.html", "./static/templates/base.html")
 	t[sendTransactionTpl] = createTemplate("./static/templates/sendtx.html", "./static/templates/base.html")
-	if s.chainParser.GetChainType() == bchain.ChainEthereumType {
-		t[txTpl] = createTemplate("./static/templates/tx.html", "./static/templates/txdetail_ethereumtype.html", "./static/templates/base.html")
-		t[addressTpl] = createTemplate("./static/templates/address.html", "./static/templates/txdetail_ethereumtype.html", "./static/templates/paging.html", "./static/templates/base.html")
-		t[blockTpl] = createTemplate("./static/templates/block.html", "./static/templates/txdetail_ethereumtype.html", "./static/templates/paging.html", "./static/templates/base.html")
-		t[nftDetailTpl] = createTemplate("./static/templates/tokenDetail.html", "./static/templates/base.html")
-	} else {
-		t[txTpl] = createTemplate("./static/templates/tx.html", "./static/templates/txdetail.html", "./static/templates/base.html")
-		t[addressTpl] = createTemplate("./static/templates/address.html", "./static/templates/txdetail.html", "./static/templates/paging.html", "./static/templates/base.html")
-		t[blockTpl] = createTemplate("./static/templates/block.html", "./static/templates/txdetail.html", "./static/templates/paging.html", "./static/templates/base.html")
-	}
+	t[txTpl] = createTemplate("./static/templates/tx.html", "./static/templates/txdetail.html", "./static/templates/base.html")
+	t[addressTpl] = createTemplate("./static/templates/address.html", "./static/templates/txdetail.html", "./static/templates/paging.html", "./static/templates/base.html")
+	t[blockTpl] = createTemplate("./static/templates/block.html", "./static/templates/txdetail.html", "./static/templates/paging.html", "./static/templates/base.html")
 	t[xpubTpl] = createTemplate("./static/templates/xpub.html", "./static/templates/txdetail.html", "./static/templates/paging.html", "./static/templates/base.html")
 	t[mempoolTpl] = createTemplate("./static/templates/mempool.html", "./static/templates/paging.html", "./static/templates/base.html")
 	return t
@@ -618,11 +593,7 @@ func (s *PublicServer) amountSpan(a *api.Amount, td *TemplateData, classes strin
 
 func (s *PublicServer) amountSatsSpan(a *api.Amount, td *TemplateData, classes string) template.HTML {
 	var sats string
-	if s.chainParser.GetChainType() == bchain.ChainEthereumType {
-		sats = a.DecimalString(9) // Gwei
-	} else {
-		sats = a.String()
-	}
+	sats = a.String()
 	var rv strings.Builder
 	rv.WriteString(`<span`)
 	if classes != "" {
@@ -702,11 +673,6 @@ func (s *PublicServer) summaryValuesSpan(baseValue float64, secondaryValue float
 	var rv strings.Builder
 	if secondaryValue > 0 {
 		appendAmountSpan(&rv, "", formatSecondaryAmount(secondaryValue, td), td.SecondaryCoin, "")
-		if baseValue > 0 && s.chainParser.GetChainType() == bchain.ChainEthereumType {
-			rv.WriteString(`<span class="base-value">(`)
-			appendAmountSpan(&rv, "", strconv.FormatFloat(baseValue, 'f', 6, 64), td.CoinShortcut, "")
-			rv.WriteString(")</span>")
-		}
 	} else {
 		if baseValue > 0 {
 			appendAmountSpan(&rv, "", strconv.FormatFloat(baseValue, 'f', 6, 64), td.CoinShortcut, "")
@@ -724,48 +690,6 @@ func formatSecondaryAmount(a float64, td *TemplateData) string {
 		return strconv.FormatFloat(a, 'f', 6, 64)
 	}
 	return strconv.FormatFloat(a, 'f', 2, 64)
-}
-
-func getAddressAlias(a string, td *TemplateData) *api.AddressAlias {
-	var alias api.AddressAlias
-	var found bool
-	if td.Block != nil {
-		alias, found = td.Block.AddressAliases[a]
-	} else if td.Address != nil {
-		alias, found = td.Address.AddressAliases[a]
-	} else if td.Tx != nil {
-		alias, found = td.Tx.AddressAliases[a]
-	}
-	if !found {
-		return nil
-	}
-	return &alias
-}
-
-func addressAlias(a string, td *TemplateData) string {
-	alias := getAddressAlias(a, td)
-	if alias == nil {
-		return ""
-	}
-	return alias.Alias
-}
-
-func addressAliasSpan(a string, td *TemplateData) template.HTML {
-	var rv strings.Builder
-	alias := getAddressAlias(a, td)
-	if alias == nil {
-		rv.WriteString(`<span class="copyable">`)
-		rv.WriteString(a)
-	} else {
-		rv.WriteString(`<span class="copyable" cc="`)
-		rv.WriteString(a)
-		rv.WriteString(`" alias-type="`)
-		rv.WriteString(alias.Type)
-		rv.WriteString(`">`)
-		rv.WriteString(alias.Alias)
-	}
-	rv.WriteString("</span>")
-	return template.HTML(rv.String())
 }
 
 // called from template to support txdetail.html functionality
@@ -795,28 +719,6 @@ func feePerByte(tx *api.Tx) string {
 // isOwnAddress returns true if the address is the one that is being shown in the explorer
 func isOwnAddress(td *TemplateData, a string) bool {
 	return a == td.AddrStr
-}
-
-// called from template, returns count of token transfers of given type in a tx
-func tokenTransfersCount(tx *api.Tx, t bchain.TokenTypeName) int {
-	count := 0
-	for i := range tx.TokenTransfers {
-		if tx.TokenTransfers[i].Type == t {
-			count++
-		}
-	}
-	return count
-}
-
-// called from template, returns count of tokens in array of given type
-func tokenCount(tokens []api.Token, t bchain.TokenTypeName) int {
-	count := 0
-	for i := range tokens {
-		if tokens[i].Type == t {
-			count++
-		}
-	}
-	return count
 }
 
 func jsStr(s string) template.JSStr {
@@ -957,28 +859,6 @@ func (s *PublicServer) explorerAddress(w http.ResponseWriter, r *http.Request) (
 		data.Address.Filter = filterParam
 	}
 	return addressTpl, data, nil
-}
-
-func (s *PublicServer) explorerNftDetail(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
-	parts := strings.Split(r.URL.Path, "/")
-	if len(parts) < 3 {
-		return errorTpl, nil, api.NewAPIError("Missing parameters", true)
-	}
-	tokenId := parts[len(parts)-1]
-	contract := parts[len(parts)-2]
-	uri, ci, err := s.api.GetEthereumTokenURI(contract, tokenId)
-	s.metrics.ExplorerViews.With(common.Labels{"action": "nftDetail"}).Inc()
-	if err != nil {
-		return errorTpl, nil, api.NewAPIError(err.Error(), true)
-	}
-	if ci == nil {
-		return errorTpl, nil, api.NewAPIError(fmt.Sprintf("Unknown contract %s", contract), true)
-	}
-	data := s.newTemplateData(r)
-	data.TokenId = tokenId
-	data.ContractInfo = ci
-	data.URI = uri
-	return nftDetailTpl, data, nil
 }
 
 func (s *PublicServer) explorerXpub(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {

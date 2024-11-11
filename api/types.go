@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/trezor/blockbook/bchain"
-	"github.com/trezor/blockbook/bchain/coins/eth"
 	"github.com/trezor/blockbook/common"
 	"github.com/trezor/blockbook/db"
 )
@@ -215,62 +214,27 @@ type TokenTransfer struct {
 	MultiTokenValues []MultiTokenValue    `json:"multiTokenValues,omitempty"`
 }
 
-type EthereumInternalTransfer struct {
-	Type  bchain.EthereumInternalTransactionType `json:"type"`
-	From  string                                 `json:"from"`
-	To    string                                 `json:"to"`
-	Value *Amount                                `json:"value"`
-}
-
-// EthereumSpecific contains ethereum specific transaction data
-type EthereumSpecific struct {
-	Type              bchain.EthereumInternalTransactionType `json:"type,omitempty"`
-	CreatedContract   string                                 `json:"createdContract,omitempty"`
-	Status            eth.TxStatus                           `json:"status"` // 1 OK, 0 Fail, -1 pending
-	Error             string                                 `json:"error,omitempty"`
-	Nonce             uint64                                 `json:"nonce"`
-	GasLimit          *big.Int                               `json:"gasLimit"`
-	GasUsed           *big.Int                               `json:"gasUsed,omitempty"`
-	GasPrice          *Amount                                `json:"gasPrice,omitempty"`
-	L1Fee             *big.Int                               `json:"l1Fee,omitempty"`
-	L1FeeScalar       string                                 `json:"l1FeeScalar,omitempty"`
-	L1GasPrice        *Amount                                `json:"l1GasPrice,omitempty"`
-	L1GasUsed         *big.Int                               `json:"l1GasUsed,omitempty"`
-	Data              string                                 `json:"data,omitempty"`
-	ParsedData        *bchain.EthereumParsedInputData        `json:"parsedData,omitempty"`
-	InternalTransfers []EthereumInternalTransfer             `json:"internalTransfers,omitempty"`
-}
-
-type AddressAlias struct {
-	Type  string
-	Alias string
-}
-type AddressAliasesMap map[string]AddressAlias
-
 // Tx holds information about a transaction
 type Tx struct {
-	Txid                   string            `json:"txid"`
-	Version                int32             `json:"version,omitempty"`
-	Locktime               uint32            `json:"lockTime,omitempty"`
-	Vin                    []Vin             `json:"vin"`
-	Vout                   []Vout            `json:"vout"`
-	Blockhash              string            `json:"blockHash,omitempty"`
-	Blockheight            int               `json:"blockHeight"`
-	Confirmations          uint32            `json:"confirmations"`
-	ConfirmationETABlocks  uint32            `json:"confirmationETABlocks,omitempty"`
-	ConfirmationETASeconds int64             `json:"confirmationETASeconds,omitempty"`
-	Blocktime              int64             `json:"blockTime"`
-	Size                   int               `json:"size,omitempty"`
-	VSize                  int               `json:"vsize,omitempty"`
-	ValueOutSat            *Amount           `json:"value"`
-	ValueInSat             *Amount           `json:"valueIn,omitempty"`
-	FeesSat                *Amount           `json:"fees,omitempty"`
-	Hex                    string            `json:"hex,omitempty"`
-	Rbf                    bool              `json:"rbf,omitempty"`
-	CoinSpecificData       json.RawMessage   `json:"coinSpecificData,omitempty" ts_type:"any"`
-	TokenTransfers         []TokenTransfer   `json:"tokenTransfers,omitempty"`
-	EthereumSpecific       *EthereumSpecific `json:"ethereumSpecific,omitempty"`
-	AddressAliases         AddressAliasesMap `json:"addressAliases,omitempty"`
+	Txid                   string          `json:"txid"`
+	Version                int32           `json:"version,omitempty"`
+	Locktime               uint32          `json:"lockTime,omitempty"`
+	Vin                    []Vin           `json:"vin"`
+	Vout                   []Vout          `json:"vout"`
+	Blockhash              string          `json:"blockHash,omitempty"`
+	Blockheight            int             `json:"blockHeight"`
+	Confirmations          uint32          `json:"confirmations"`
+	ConfirmationETABlocks  uint32          `json:"confirmationETABlocks,omitempty"`
+	ConfirmationETASeconds int64           `json:"confirmationETASeconds,omitempty"`
+	Blocktime              int64           `json:"blockTime"`
+	Size                   int             `json:"size,omitempty"`
+	VSize                  int             `json:"vsize,omitempty"`
+	ValueOutSat            *Amount         `json:"value"`
+	ValueInSat             *Amount         `json:"valueIn,omitempty"`
+	FeesSat                *Amount         `json:"fees,omitempty"`
+	Hex                    string          `json:"hex,omitempty"`
+	Rbf                    bool            `json:"rbf,omitempty"`
+	CoinSpecificData       json.RawMessage `json:"coinSpecificData,omitempty" ts_type:"any"`
 }
 
 // FeeStats contains detailed block fee statistics
@@ -336,30 +300,20 @@ type StakingPool struct {
 // Address holds information about address and its transactions
 type Address struct {
 	Paging
-	AddrStr               string               `json:"address"`
-	BalanceSat            *Amount              `json:"balance"`
-	TotalReceivedSat      *Amount              `json:"totalReceived,omitempty"`
-	TotalSentSat          *Amount              `json:"totalSent,omitempty"`
-	UnconfirmedBalanceSat *Amount              `json:"unconfirmedBalance"`
-	UnconfirmedTxs        int                  `json:"unconfirmedTxs"`
-	Txs                   int                  `json:"txs"`
-	AddrTxCount           int                  `json:"addrTxCount,omitempty"`
-	NonTokenTxs           int                  `json:"nonTokenTxs,omitempty"`
-	InternalTxs           int                  `json:"internalTxs,omitempty"`
-	Transactions          []*Tx                `json:"transactions,omitempty"`
-	Txids                 []string             `json:"txids,omitempty"`
-	Nonce                 string               `json:"nonce,omitempty"`
-	UsedTokens            int                  `json:"usedTokens,omitempty"`
-	Tokens                Tokens               `json:"tokens,omitempty"`
-	SecondaryValue        float64              `json:"secondaryValue,omitempty"` // address value in secondary currency
-	TokensBaseValue       float64              `json:"tokensBaseValue,omitempty"`
-	TokensSecondaryValue  float64              `json:"tokensSecondaryValue,omitempty"`
-	TotalBaseValue        float64              `json:"totalBaseValue,omitempty"`      // value including tokens in base currency
-	TotalSecondaryValue   float64              `json:"totalSecondaryValue,omitempty"` // value including tokens in secondary currency
-	ContractInfo          *bchain.ContractInfo `json:"contractInfo,omitempty"`
-	Erc20Contract         *bchain.ContractInfo `json:"erc20Contract,omitempty"` // deprecated
-	AddressAliases        AddressAliasesMap    `json:"addressAliases,omitempty"`
-	StakingPools          []StakingPool        `json:"stakingPools,omitempty"`
+	AddrStr               string   `json:"address"`
+	BalanceSat            *Amount  `json:"balance"`
+	TotalReceivedSat      *Amount  `json:"totalReceived,omitempty"`
+	TotalSentSat          *Amount  `json:"totalSent,omitempty"`
+	UnconfirmedBalanceSat *Amount  `json:"unconfirmedBalance"`
+	UnconfirmedTxs        int      `json:"unconfirmedTxs"`
+	Txs                   int      `json:"txs"`
+	AddrTxCount           int      `json:"addrTxCount,omitempty"`
+	Transactions          []*Tx    `json:"transactions,omitempty"`
+	Txids                 []string `json:"txids,omitempty"`
+	UsedTokens            int      `json:"usedTokens,omitempty"`
+	SecondaryValue        float64  `json:"secondaryValue,omitempty"`      // address value in secondary currency
+	TotalBaseValue        float64  `json:"totalBaseValue,omitempty"`      // value including tokens in base currency
+	TotalSecondaryValue   float64  `json:"totalSecondaryValue,omitempty"` // value including tokens in secondary currency
 	// helpers for explorer
 	Filter        string              `json:"-"`
 	XPubAddresses map[string]struct{} `json:"-"`
@@ -490,9 +444,8 @@ type BlockInfo struct {
 type Block struct {
 	Paging
 	BlockInfo
-	TxCount        int               `json:"txCount"`
-	Transactions   []*Tx             `json:"txs,omitempty"`
-	AddressAliases AddressAliasesMap `json:"addressAliases,omitempty"`
+	TxCount      int   `json:"txCount"`
+	Transactions []*Tx `json:"txs,omitempty"`
 }
 
 // BlockRaw contains raw block in hex
@@ -523,7 +476,6 @@ type BlockbookInfo struct {
 	CurrentFiatRatesTime         *time.Time                   `json:"currentFiatRatesTime,omitempty"`
 	HistoricalFiatRatesTime      *time.Time                   `json:"historicalFiatRatesTime,omitempty"`
 	HistoricalTokenFiatRatesTime *time.Time                   `json:"historicalTokenFiatRatesTime,omitempty"`
-	SupportedStakingPools        []string                     `json:"supportedStakingPools,omitempty"`
 	DbSizeFromColumns            int64                        `json:"dbSizeFromColumns,omitempty"`
 	DbColumns                    []common.InternalStateColumn `json:"dbColumns,omitempty"`
 	About                        string                       `json:"about"`

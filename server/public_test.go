@@ -77,17 +77,8 @@ func setupRocksDB(parser bchain.BlockChainParser, chain bchain.BlockChain, t *te
 		t.Fatal(err)
 	}
 	is.FinishedSync(block2.Height)
-	if parser.GetChainType() == bchain.ChainEthereumType {
-		if err := initTestFiatRatesEthereumType(d); err != nil {
-			t.Fatal(err)
-		}
-		if err := initEthereumTypeDB(d); err != nil {
-			t.Fatal(err)
-		}
-	} else {
-		if err := initTestFiatRates(d); err != nil {
-			t.Fatal(err)
-		}
+	if err := initTestFiatRates(d); err != nil {
+		t.Fatal(err)
 	}
 	return d, is, tmp
 }
@@ -1483,17 +1474,6 @@ var websocketTestsBitcoinType = []websocketTest{
 			},
 		},
 		want: `{"id":"43","data":{"P":0,"M":1,"zeroedKey":false,"blockFilter":""}}`,
-	},
-	{
-		name: "websocket rpcCall",
-		req: websocketReq{
-			Method: "rpcCall",
-			Params: WsRpcCallReq{
-				To:   "0x123",
-				Data: "0x456",
-			},
-		},
-		want: `{"id":"44","data":{"error":{"message":"not supported"}}}`,
 	},
 }
 

@@ -4,9 +4,7 @@ import (
 	"encoding/json"
 	"math/big"
 	"net/http"
-	"os"
 	"runtime/debug"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -71,7 +69,6 @@ type WebsocketServer struct {
 	fiatRatesSubscriptions          map[string]map[*websocketChannel]string
 	fiatRatesTokenSubscriptions     map[*websocketChannel][]string
 	fiatRatesSubscriptionsLock      sync.Mutex
-	allowedRpcCallTo                map[string]struct{}
 }
 
 // NewWebsocketServer creates new websocket interface to blockbook and returns its handle
@@ -106,14 +103,6 @@ func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.
 		addressSubscriptions:        make(map[string]map[*websocketChannel]string),
 		fiatRatesSubscriptions:      make(map[string]map[*websocketChannel]string),
 		fiatRatesTokenSubscriptions: make(map[*websocketChannel][]string),
-	}
-	envRpcCall := os.Getenv(strings.ToUpper(is.CoinShortcut) + "_ALLOWED_RPC_CALL_TO")
-	if envRpcCall != "" {
-		s.allowedRpcCallTo = make(map[string]struct{})
-		for _, c := range strings.Split(envRpcCall, ",") {
-			s.allowedRpcCallTo[strings.ToLower(c)] = struct{}{}
-		}
-		glog.Info("Support of rpcCall for these contracts: ", envRpcCall)
 	}
 	return s, nil
 }
@@ -401,14 +390,6 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *WsRe
 		}
 		return
 	},
-	"rpcCall": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
-		r := WsRpcCallReq{}
-		err = json.Unmarshal(req.Params, &r)
-		if err == nil {
-			rv, err = s.rpcCall(&r)
-		}
-		return
-	},
 	"subscribeNewBlock": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
 		return s.subscribeNewBlock(c, req)
 	},
@@ -639,55 +620,33 @@ func (s *WebsocketServer) estimateFee(c *websocketChannel, params []byte) (inter
 		return nil, err
 	}
 	res := make([]WsEstimateFeeRes, len(r.Blocks))
-	if s.chainParser.GetChainType() == bchain.ChainEthereumType {
-		gas, err := s.chain.EthereumTypeEstimateGas(r.Specific)
+	conservative := true
+	v, ok := r.Specific["conservative"]
+	if ok {
+		vc, ok := v.(bool)
+		if ok {
+			conservative = vc
+		}
+	}
+	txSize := 0
+	v, ok = r.Specific["txsize"]
+	if ok {
+		f, ok := v.(float64)
+		if ok {
+			txSize = int(f)
+		}
+	}
+	for i, b := range r.Blocks {
+		fee, err := s.api.EstimateFee(b, conservative)
 		if err != nil {
 			return nil, err
 		}
-		sg := strconv.FormatUint(gas, 10)
-		b := 1
-		if len(r.Blocks) > 0 {
-			b = r.Blocks[0]
-		}
-		fee, err := s.api.EstimateFee(b, true)
-		if err != nil {
-			return nil, err
-		}
-		for i := range r.Blocks {
-			res[i].FeePerUnit = fee.String()
-			res[i].FeeLimit = sg
-			fee.Mul(&fee, new(big.Int).SetUint64(gas))
+		res[i].FeePerUnit = fee.String()
+		if txSize > 0 {
+			fee.Mul(&fee, big.NewInt(int64(txSize)))
+			fee.Add(&fee, big.NewInt(500))
+			fee.Div(&fee, big.NewInt(1000))
 			res[i].FeePerTx = fee.String()
-		}
-	} else {
-		conservative := true
-		v, ok := r.Specific["conservative"]
-		if ok {
-			vc, ok := v.(bool)
-			if ok {
-				conservative = vc
-			}
-		}
-		txSize := 0
-		v, ok = r.Specific["txsize"]
-		if ok {
-			f, ok := v.(float64)
-			if ok {
-				txSize = int(f)
-			}
-		}
-		for i, b := range r.Blocks {
-			fee, err := s.api.EstimateFee(b, conservative)
-			if err != nil {
-				return nil, err
-			}
-			res[i].FeePerUnit = fee.String()
-			if txSize > 0 {
-				fee.Mul(&fee, big.NewInt(int64(txSize)))
-				fee.Add(&fee, big.NewInt(500))
-				fee.Div(&fee, big.NewInt(1000))
-				res[i].FeePerTx = fee.String()
-			}
 		}
 	}
 	return res, nil
@@ -763,20 +722,6 @@ func (s *WebsocketServer) getBlockFiltersBatch(r *WsBlockFiltersBatchReq) (res i
 		ZeroedKey:         s.is.BlockFilterUseZeroedKey,
 		BlockFiltersBatch: blockFiltersBatch,
 	}, nil
-}
-
-func (s *WebsocketServer) rpcCall(r *WsRpcCallReq) (*WsRpcCallRes, error) {
-	if s.allowedRpcCallTo != nil {
-		_, ok := s.allowedRpcCallTo[strings.ToLower(r.To)]
-		if !ok {
-			return nil, errors.New("Not supported")
-		}
-	}
-	data, err := s.chain.EthereumTypeRpcCall(r.Data, r.To, r.From)
-	if err != nil {
-		return nil, err
-	}
-	return &WsRpcCallRes{Data: data}, nil
 }
 
 type subscriptionResponse struct {
@@ -1018,24 +963,6 @@ func (s *WebsocketServer) getNewTxSubscriptions(tx *bchain.MempoolTx) map[string
 	}
 	for i := range tx.Vout {
 		addrDesc, err := s.chainParser.GetAddrDescFromVout(&tx.Vout[i])
-		if err == nil && len(addrDesc) > 0 {
-			sad := string(addrDesc)
-			as, ok := s.addressSubscriptions[sad]
-			if ok && len(as) > 0 {
-				subscribed[sad] = struct{}{}
-			}
-		}
-	}
-	for i := range tx.TokenTransfers {
-		addrDesc, err := s.chainParser.GetAddrDescFromAddress(tx.TokenTransfers[i].From)
-		if err == nil && len(addrDesc) > 0 {
-			sad := string(addrDesc)
-			as, ok := s.addressSubscriptions[sad]
-			if ok && len(as) > 0 {
-				subscribed[sad] = struct{}{}
-			}
-		}
-		addrDesc, err = s.chainParser.GetAddrDescFromAddress(tx.TokenTransfers[i].To)
 		if err == nil && len(addrDesc) > 0 {
 			sad := string(addrDesc)
 			as, ok := s.addressSubscriptions[sad]

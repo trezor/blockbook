@@ -79,12 +79,6 @@ function amountTooltip() {
   return `<span class="l-tooltip">${s}</span>`;
 }
 
-function addressAliasTooltip() {
-  const type = this.getAttribute("alias-type");
-  const address = this.getAttribute("cc");
-  return `<span class="l-tooltip">${type}<br>${address}</span>`;
-}
-
 window.addEventListener("DOMContentLoaded", () => {
   const a = getCoinCookie();
   if (a?.length === 3) {
@@ -98,13 +92,6 @@ window.addEventListener("DOMContentLoaded", () => {
         (e) => new bootstrap.Tooltip(e, { title: amountTooltip, html: true })
       );
   }
-
-  document
-    .querySelectorAll("[alias-type]")
-    .forEach(
-      (e) =>
-        new bootstrap.Tooltip(e, { title: addressAliasTooltip, html: true })
-    );
 
   document
     .querySelectorAll("[tt]")

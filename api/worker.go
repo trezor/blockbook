@@ -16,7 +16,6 @@ import (
 	"github.com/golang/glog"
 	"github.com/juju/errors"
 	"github.com/trezor/blockbook/bchain"
-	"github.com/trezor/blockbook/bchain/coins/eth"
 	"github.com/trezor/blockbook/common"
 	"github.com/trezor/blockbook/db"
 	"github.com/trezor/blockbook/fiat"
@@ -24,34 +23,29 @@ import (
 
 // Worker is handle to api worker
 type Worker struct {
-	db                *db.RocksDB
-	txCache           *db.TxCache
-	chain             bchain.BlockChain
-	chainParser       bchain.BlockChainParser
-	chainType         bchain.ChainType
-	useAddressAliases bool
-	mempool           bchain.Mempool
-	is                *common.InternalState
-	fiatRates         *fiat.FiatRates
-	metrics           *common.Metrics
+	db          *db.RocksDB
+	txCache     *db.TxCache
+	chain       bchain.BlockChain
+	chainParser bchain.BlockChainParser
+	chainType   bchain.ChainType
+	mempool     bchain.Mempool
+	is          *common.InternalState
+	fiatRates   *fiat.FiatRates
+	metrics     *common.Metrics
 }
-
-// contractInfoCache is a temporary cache of contract information for ethereum token transfers
-type contractInfoCache = map[string]*bchain.ContractInfo
 
 // NewWorker creates new api worker
 func NewWorker(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.Mempool, txCache *db.TxCache, metrics *common.Metrics, is *common.InternalState, fiatRates *fiat.FiatRates) (*Worker, error) {
 	w := &Worker{
-		db:                db,
-		txCache:           txCache,
-		chain:             chain,
-		chainParser:       chain.GetChainParser(),
-		chainType:         chain.GetChainParser().GetChainType(),
-		useAddressAliases: chain.GetChainParser().UseAddressAliases(),
-		mempool:           mempool,
-		is:                is,
-		fiatRates:         fiatRates,
-		metrics:           metrics,
+		db:          db,
+		txCache:     txCache,
+		chain:       chain,
+		chainParser: chain.GetChainParser(),
+		chainType:   chain.GetChainParser().GetChainType(),
+		mempool:     mempool,
+		is:          is,
+		fiatRates:   fiatRates,
+		metrics:     metrics,
 	}
 	if w.chainType == bchain.ChainBitcoinType {
 		w.initXpubCache()
@@ -153,37 +147,7 @@ func aggregateAddresses(m map[string]struct{}, addresses []string, isAddress boo
 }
 
 func (w *Worker) newAddressesMapForAliases() map[string]struct{} {
-	// return non nil map only if the chain supports address aliases
-	if w.useAddressAliases {
-		return make(map[string]struct{})
-	}
 	// returning nil disables the processing of the address aliases
-	return nil
-}
-
-func (w *Worker) getAddressAliases(addresses map[string]struct{}) AddressAliasesMap {
-	if len(addresses) > 0 {
-		aliases := make(AddressAliasesMap)
-		var t string
-		if w.chainType == bchain.ChainEthereumType {
-			t = "ENS"
-		} else {
-			t = "Alias"
-		}
-		for a := range addresses {
-			if w.chainType == bchain.ChainEthereumType {
-				ci, err := w.db.GetContractInfoForAddress(a)
-				if err == nil && ci != nil && ci.Name != "" {
-					aliases[a] = AddressAlias{Type: "Contract", Alias: ci.Name}
-				}
-			}
-			n := w.db.GetAddressAlias(a)
-			if len(n) > 0 {
-				aliases[a] = AddressAlias{Type: t, Alias: n}
-			}
-		}
-		return aliases
-	}
 	return nil
 }
 
@@ -194,7 +158,6 @@ func (w *Worker) GetTransaction(txid string, spendingTxs bool, specificJSON bool
 	if err != nil {
 		return nil, err
 	}
-	tx.AddressAliases = w.getAddressAliases(addresses)
 	return tx, nil
 }
 
@@ -208,23 +171,6 @@ func (w *Worker) getTransaction(txid string, spendingTxs bool, specificJSON bool
 		return nil, NewAPIError(fmt.Sprintf("Transaction '%v' not found (%v)", txid, err), true)
 	}
 	return w.getTransactionFromBchainTx(bchainTx, height, spendingTxs, specificJSON, addresses)
-}
-
-func (w *Worker) getParsedEthereumInputData(data string) *bchain.EthereumParsedInputData {
-	var err error
-	var signatures *[]bchain.FourByteSignature
-	fourBytes := eth.GetSignatureFromData(data)
-	if fourBytes != 0 {
-		signatures, err = w.db.GetFourByteSignatures(fourBytes)
-		if err != nil {
-			glog.Errorf("GetFourByteSignatures(%v) error %v", fourBytes, err)
-			return nil
-		}
-		if signatures == nil {
-			return nil
-		}
-	}
-	return eth.ParseInputData(signatures, data)
 }
 
 // getConfirmationETA returns confirmation ETA in seconds and blocks
@@ -274,8 +220,6 @@ func (w *Worker) getConfirmationETA(tx *Tx) (int64, uint32) {
 func (w *Worker) getTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spendingTxs bool, specificJSON bool, addresses map[string]struct{}) (*Tx, error) {
 	var err error
 	var ta *db.TxAddresses
-	var tokens []TokenTransfer
-	var ethSpecific *EthereumSpecific
 	var blockhash string
 	if bchainTx.Confirmations > 0 {
 		if w.chainType == bchain.ChainBitcoinType {
@@ -360,16 +304,6 @@ func (w *Worker) getTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 					valInSat.Add(&valInSat, (*big.Int)(vin.ValueSat))
 				}
 			}
-		} else if w.chainType == bchain.ChainEthereumType {
-			if len(bchainVin.Addresses) > 0 {
-				vin.AddrDesc, err = w.chainParser.GetAddrDescFromAddress(bchainVin.Addresses[0])
-				if err != nil {
-					glog.Errorf("GetAddrDescFromAddress error %v, tx %v, bchainVin %v", err, bchainTx.Txid, bchainVin)
-				}
-				vin.Addresses = bchainVin.Addresses
-				vin.IsAddress = true
-				aggregateAddresses(addresses, vin.Addresses, vin.IsAddress)
-			}
 		}
 	}
 	vouts := make([]Vout, len(bchainTx.Vout))
@@ -408,64 +342,6 @@ func (w *Worker) getTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 			feesSat.SetUint64(0)
 		}
 		pValInSat = &valInSat
-	} else if w.chainType == bchain.ChainEthereumType {
-		tokenTransfers, err := w.chainParser.EthereumTypeGetTokenTransfersFromTx(bchainTx)
-		if err != nil {
-			glog.Errorf("GetTokenTransfersFromTx error %v, %v", err, bchainTx)
-		}
-		tokens = w.getEthereumTokensTransfers(tokenTransfers, addresses)
-		ethTxData := eth.GetEthereumTxData(bchainTx)
-
-		var internalData *bchain.EthereumInternalData
-		if eth.ProcessInternalTransactions {
-			internalData, err = w.db.GetEthereumInternalData(bchainTx.Txid)
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		parsedInputData := w.getParsedEthereumInputData(ethTxData.Data)
-
-		// mempool txs do not have fees yet
-		if ethTxData.GasUsed != nil {
-			feesSat.Mul(ethTxData.GasPrice, ethTxData.GasUsed)
-			if ethTxData.L1Fee != nil {
-				feesSat.Add(&feesSat, ethTxData.L1Fee)
-			}
-		}
-		if len(bchainTx.Vout) > 0 {
-			valOutSat = bchainTx.Vout[0].ValueSat
-		}
-		ethSpecific = &EthereumSpecific{
-			GasLimit:    ethTxData.GasLimit,
-			GasPrice:    (*Amount)(ethTxData.GasPrice),
-			GasUsed:     ethTxData.GasUsed,
-			L1Fee:       ethTxData.L1Fee,
-			L1FeeScalar: ethTxData.L1FeeScalar,
-			L1GasPrice:  (*Amount)(ethTxData.L1GasPrice),
-			L1GasUsed:   ethTxData.L1GasUsed,
-			Nonce:       ethTxData.Nonce,
-			Status:      ethTxData.Status,
-			Data:        ethTxData.Data,
-			ParsedData:  parsedInputData,
-		}
-		if internalData != nil {
-			ethSpecific.Type = internalData.Type
-			ethSpecific.CreatedContract = internalData.Contract
-			ethSpecific.Error = internalData.Error
-			ethSpecific.InternalTransfers = make([]EthereumInternalTransfer, len(internalData.Transfers))
-			for i := range internalData.Transfers {
-				f := &internalData.Transfers[i]
-				t := &ethSpecific.InternalTransfers[i]
-				t.From = f.From
-				aggregateAddress(addresses, t.From)
-				t.To = f.To
-				aggregateAddress(addresses, t.To)
-				t.Type = f.Type
-				t.Value = (*Amount)(&f.Value)
-			}
-		}
-
 	}
 	var sj json.RawMessage
 	// return CoinSpecificData for all mempool transactions or if requested
@@ -493,8 +369,6 @@ func (w *Worker) getTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 		Vin:              vins,
 		Vout:             vouts,
 		CoinSpecificData: sj,
-		TokenTransfers:   tokens,
-		EthereumSpecific: ethSpecific,
 	}
 	if bchainTx.Confirmations == 0 {
 		r.Blocktime = int64(w.mempool.GetTransactionTime(bchainTx.Txid))
@@ -509,8 +383,6 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 	var err error
 	var valInSat, valOutSat, feesSat big.Int
 	var pValInSat *big.Int
-	var tokens []TokenTransfer
-	var ethSpecific *EthereumSpecific
 	addresses := w.newAddressesMapForAliases()
 	vins := make([]Vin, len(mempoolTx.Vin))
 	rbf := false
@@ -538,16 +410,6 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 				}
 				aggregateAddresses(addresses, vin.Addresses, vin.IsAddress)
 			}
-		} else if w.chainType == bchain.ChainEthereumType {
-			if len(bchainVin.Addresses) > 0 {
-				vin.AddrDesc, err = w.chainParser.GetAddrDescFromAddress(bchainVin.Addresses[0])
-				if err != nil {
-					glog.Errorf("GetAddrDescFromAddress error %v, tx %v, bchainVin %v", err, mempoolTx.Txid, bchainVin)
-				}
-				vin.Addresses = bchainVin.Addresses
-				vin.IsAddress = true
-				aggregateAddresses(addresses, vin.Addresses, vin.IsAddress)
-			}
 		}
 	}
 	vouts := make([]Vout, len(mempoolTx.Vout))
@@ -571,177 +433,24 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 			feesSat.SetUint64(0)
 		}
 		pValInSat = &valInSat
-	} else if w.chainType == bchain.ChainEthereumType {
-		if len(mempoolTx.Vout) > 0 {
-			valOutSat = mempoolTx.Vout[0].ValueSat
-		}
-		tokens = w.getEthereumTokensTransfers(mempoolTx.TokenTransfers, addresses)
-		ethTxData := eth.GetEthereumTxDataFromSpecificData(mempoolTx.CoinSpecificData)
-		ethSpecific = &EthereumSpecific{
-			GasLimit: ethTxData.GasLimit,
-			GasPrice: (*Amount)(ethTxData.GasPrice),
-			GasUsed:  ethTxData.GasUsed,
-			Nonce:    ethTxData.Nonce,
-			Status:   ethTxData.Status,
-			Data:     ethTxData.Data,
-		}
 	}
 	r := &Tx{
-		Blocktime:        mempoolTx.Blocktime,
-		FeesSat:          (*Amount)(&feesSat),
-		Locktime:         mempoolTx.LockTime,
-		Txid:             mempoolTx.Txid,
-		ValueInSat:       (*Amount)(pValInSat),
-		ValueOutSat:      (*Amount)(&valOutSat),
-		Version:          mempoolTx.Version,
-		Size:             len(mempoolTx.Hex) >> 1,
-		VSize:            int(mempoolTx.VSize),
-		Hex:              mempoolTx.Hex,
-		Rbf:              rbf,
-		Vin:              vins,
-		Vout:             vouts,
-		TokenTransfers:   tokens,
-		EthereumSpecific: ethSpecific,
-		AddressAliases:   w.getAddressAliases(addresses),
+		Blocktime:   mempoolTx.Blocktime,
+		FeesSat:     (*Amount)(&feesSat),
+		Locktime:    mempoolTx.LockTime,
+		Txid:        mempoolTx.Txid,
+		ValueInSat:  (*Amount)(pValInSat),
+		ValueOutSat: (*Amount)(&valOutSat),
+		Version:     mempoolTx.Version,
+		Size:        len(mempoolTx.Hex) >> 1,
+		VSize:       int(mempoolTx.VSize),
+		Hex:         mempoolTx.Hex,
+		Rbf:         rbf,
+		Vin:         vins,
+		Vout:        vouts,
 	}
 	r.ConfirmationETASeconds, r.ConfirmationETABlocks = w.getConfirmationETA(r)
 	return r, nil
-}
-
-func (w *Worker) getContractInfo(contract string, typeFromContext bchain.TokenTypeName) (*bchain.ContractInfo, bool, error) {
-	cd, err := w.chainParser.GetAddrDescFromAddress(contract)
-	if err != nil {
-		return nil, false, err
-	}
-	return w.getContractDescriptorInfo(cd, typeFromContext)
-}
-
-func (w *Worker) getContractDescriptorInfo(cd bchain.AddressDescriptor, typeFromContext bchain.TokenTypeName) (*bchain.ContractInfo, bool, error) {
-	var err error
-	validContract := true
-	contractInfo, err := w.db.GetContractInfo(cd, typeFromContext)
-	if err != nil {
-		return nil, false, err
-	}
-	if contractInfo == nil {
-		// log warning only if the contract should have been known from processing of the internal data
-		if eth.ProcessInternalTransactions {
-			glog.Warningf("Contract %v %v not found in DB", cd, typeFromContext)
-		}
-		contractInfo, err = w.chain.GetContractInfo(cd)
-		if err != nil {
-			glog.Errorf("GetContractInfo from chain error %v, contract %v", err, cd)
-		}
-		if contractInfo == nil {
-			contractInfo = &bchain.ContractInfo{Type: bchain.UnknownTokenType, Decimals: w.chainParser.AmountDecimals()}
-			addresses, _, _ := w.chainParser.GetAddressesFromAddrDesc(cd)
-			if len(addresses) > 0 {
-				contractInfo.Contract = addresses[0]
-			}
-
-			validContract = false
-		} else {
-			if typeFromContext != bchain.UnknownTokenType && contractInfo.Type == bchain.UnknownTokenType {
-				contractInfo.Type = typeFromContext
-			}
-			if err = w.db.StoreContractInfo(contractInfo); err != nil {
-				glog.Errorf("StoreContractInfo error %v, contract %v", err, cd)
-			}
-		}
-	} else if (len(contractInfo.Name) > 0 && contractInfo.Name[0] == 0) || (len(contractInfo.Symbol) > 0 && contractInfo.Symbol[0] == 0) {
-		// fix contract name/symbol that was parsed as a string consisting of zeroes
-		blockchainContractInfo, err := w.chain.GetContractInfo(cd)
-		if err != nil {
-			glog.Errorf("GetContractInfo from chain error %v, contract %v", err, cd)
-		} else {
-			if blockchainContractInfo != nil && len(blockchainContractInfo.Name) > 0 && blockchainContractInfo.Name[0] != 0 {
-				contractInfo.Name = blockchainContractInfo.Name
-			} else {
-				contractInfo.Name = ""
-			}
-			if blockchainContractInfo != nil && len(blockchainContractInfo.Symbol) > 0 && blockchainContractInfo.Symbol[0] != 0 {
-				contractInfo.Symbol = blockchainContractInfo.Symbol
-			} else {
-				contractInfo.Symbol = ""
-			}
-			if blockchainContractInfo != nil {
-				contractInfo.Decimals = blockchainContractInfo.Decimals
-			}
-			if err = w.db.StoreContractInfo(contractInfo); err != nil {
-				glog.Errorf("StoreContractInfo error %v, contract %v", err, cd)
-			}
-		}
-	}
-	return contractInfo, validContract, nil
-}
-
-func (w *Worker) getEthereumTokensTransfers(transfers bchain.TokenTransfers, addresses map[string]struct{}) []TokenTransfer {
-	tokens := make([]TokenTransfer, len(transfers))
-	if len(transfers) > 0 {
-		sort.Sort(transfers)
-		contractCache := make(contractInfoCache)
-		for i := range transfers {
-			t := transfers[i]
-			typeName := bchain.EthereumTokenTypeMap[t.Type]
-			var contractInfo *bchain.ContractInfo
-			if info, ok := contractCache[t.Contract]; ok {
-				contractInfo = info
-			} else {
-				info, _, err := w.getContractInfo(t.Contract, typeName)
-				if err != nil {
-					glog.Errorf("getContractInfo error %v, contract %v", err, t.Contract)
-					continue
-				}
-				contractInfo = info
-				contractCache[t.Contract] = info
-			}
-			var value *Amount
-			var values []MultiTokenValue
-			if t.Type == bchain.MultiToken {
-				values = make([]MultiTokenValue, len(t.MultiTokenValues))
-				for j := range values {
-					values[j].Id = (*Amount)(&t.MultiTokenValues[j].Id)
-					values[j].Value = (*Amount)(&t.MultiTokenValues[j].Value)
-				}
-			} else {
-				value = (*Amount)(&t.Value)
-			}
-			aggregateAddress(addresses, t.From)
-			aggregateAddress(addresses, t.To)
-			tokens[i] = TokenTransfer{
-				Type:             typeName,
-				Contract:         t.Contract,
-				From:             t.From,
-				To:               t.To,
-				Value:            value,
-				MultiTokenValues: values,
-				Decimals:         contractInfo.Decimals,
-				Name:             contractInfo.Name,
-				Symbol:           contractInfo.Symbol,
-			}
-		}
-	}
-	return tokens
-}
-
-func (w *Worker) GetEthereumTokenURI(contract string, id string) (string, *bchain.ContractInfo, error) {
-	cd, err := w.chainParser.GetAddrDescFromAddress(contract)
-	if err != nil {
-		return "", nil, err
-	}
-	tokenId, ok := new(big.Int).SetString(id, 10)
-	if !ok {
-		return "", nil, errors.New("Invalid token id")
-	}
-	uri, err := w.chain.GetTokenURI(cd, tokenId)
-	if err != nil {
-		return "", nil, err
-	}
-	ci, _, err := w.getContractDescriptorInfo(cd, bchain.UnknownTokenType)
-	if err != nil {
-		return "", nil, err
-	}
-	return uri, ci, nil
 }
 
 func (w *Worker) getAddressTxids(addrDesc bchain.AddressDescriptor, mempool bool, filter *AddressFilter, maxResults int) ([]string, error) {
@@ -809,19 +518,6 @@ func (t *Tx) getAddrVoutValue(addrDesc bchain.AddressDescriptor) *big.Int {
 	for _, vout := range t.Vout {
 		if bytes.Equal(vout.AddrDesc, addrDesc) && vout.ValueSat != nil {
 			val.Add(&val, (*big.Int)(vout.ValueSat))
-		}
-	}
-	return &val
-}
-func (t *Tx) getAddrEthereumTypeMempoolInputValue(addrDesc bchain.AddressDescriptor) *big.Int {
-	var val big.Int
-	if len(t.Vin) > 0 && len(t.Vout) > 0 && bytes.Equal(t.Vin[0].AddrDesc, addrDesc) {
-		val.Add(&val, (*big.Int)(t.Vout[0].ValueSat))
-		// add maximum possible fee (the used value is not yet known)
-		if t.EthereumSpecific != nil && t.EthereumSpecific.GasLimit != nil && t.EthereumSpecific.GasPrice != nil {
-			var fees big.Int
-			fees.Mul((*big.Int)(t.EthereumSpecific.GasPrice), t.EthereumSpecific.GasLimit)
-			val.Add(&val, &fees)
 		}
 	}
 	return &val
@@ -938,98 +634,6 @@ func computePaging(count, page, itemsOnPage int) (Paging, int, int, int) {
 	}, from, to, page
 }
 
-func (w *Worker) getEthereumContractBalance(addrDesc bchain.AddressDescriptor, index int, c *db.AddrContract, details AccountDetails, ticker *common.CurrencyRatesTicker, secondaryCoin string) (*Token, error) {
-	typeName := bchain.EthereumTokenTypeMap[c.Type]
-	ci, validContract, err := w.getContractDescriptorInfo(c.Contract, typeName)
-	if err != nil {
-		return nil, errors.Annotatef(err, "getEthereumContractBalance %v", c.Contract)
-	}
-	t := Token{
-		Contract:      ci.Contract,
-		Name:          ci.Name,
-		Symbol:        ci.Symbol,
-		Type:          typeName,
-		Transfers:     int(c.Txs),
-		Decimals:      ci.Decimals,
-		ContractIndex: strconv.Itoa(index),
-	}
-	// return contract balances/values only at or above AccountDetailsTokenBalances
-	if details >= AccountDetailsTokenBalances && validContract {
-		if c.Type == bchain.FungibleToken {
-			// get Erc20 Contract Balance from blockchain, balance obtained from adding and subtracting transfers is not correct
-			b, err := w.chain.EthereumTypeGetErc20ContractBalance(addrDesc, c.Contract)
-			if err != nil {
-				// return nil, nil, nil, errors.Annotatef(err, "EthereumTypeGetErc20ContractBalance %v %v", addrDesc, c.Contract)
-				glog.Warningf("EthereumTypeGetErc20ContractBalance addr %v, contract %v, %v", addrDesc, c.Contract, err)
-			} else {
-				t.BalanceSat = (*Amount)(b)
-				if secondaryCoin != "" {
-					baseRate, found := w.GetContractBaseRate(ticker, t.Contract, 0)
-					if found {
-						value, err := strconv.ParseFloat(t.BalanceSat.DecimalString(t.Decimals), 64)
-						if err == nil {
-							t.BaseValue = value * baseRate
-							if ticker != nil {
-								secondaryRate, found := ticker.Rates[secondaryCoin]
-								if found {
-									t.SecondaryValue = t.BaseValue * float64(secondaryRate)
-								}
-							}
-						}
-					}
-				}
-			}
-		} else {
-			if len(c.Ids) > 0 {
-				ids := make([]Amount, len(c.Ids))
-				for j := range ids {
-					ids[j] = (Amount)(c.Ids[j])
-				}
-				t.Ids = ids
-			}
-			if len(c.MultiTokenValues) > 0 {
-				idValues := make([]MultiTokenValue, len(c.MultiTokenValues))
-				for j := range idValues {
-					idValues[j].Id = (*Amount)(&c.MultiTokenValues[j].Id)
-					idValues[j].Value = (*Amount)(&c.MultiTokenValues[j].Value)
-				}
-				t.MultiTokenValues = idValues
-			}
-		}
-	}
-
-	return &t, nil
-}
-
-// a fallback method in case internal transactions are not processed and there is no indexed info about contract balance for an address
-func (w *Worker) getEthereumContractBalanceFromBlockchain(addrDesc, contract bchain.AddressDescriptor, details AccountDetails) (*Token, error) {
-	var b *big.Int
-	ci, validContract, err := w.getContractDescriptorInfo(contract, bchain.UnknownTokenType)
-	if err != nil {
-		return nil, errors.Annotatef(err, "GetContractInfo %v", contract)
-	}
-	// do not read contract balances etc in case of Basic option
-	if details >= AccountDetailsTokenBalances && validContract {
-		b, err = w.chain.EthereumTypeGetErc20ContractBalance(addrDesc, contract)
-		if err != nil {
-			// return nil, nil, nil, errors.Annotatef(err, "EthereumTypeGetErc20ContractBalance %v %v", addrDesc, c.Contract)
-			glog.Warningf("EthereumTypeGetErc20ContractBalance addr %v, contract %v, %v", addrDesc, contract, err)
-		}
-	} else {
-		b = nil
-	}
-	return &Token{
-		Type:          ci.Type,
-		BalanceSat:    (*Amount)(b),
-		Contract:      ci.Contract,
-		Name:          ci.Name,
-		Symbol:        ci.Symbol,
-		Transfers:     0,
-		Decimals:      ci.Decimals,
-		ContractIndex: "0",
-	}, nil
-}
-
 // GetContractBaseRate returns contract rate in base coin from the ticker or DB at the timestamp. Zero timestamp means now.
 func (w *Worker) GetContractBaseRate(ticker *common.CurrencyRatesTicker, token string, timestamp int64) (float64, bool) {
 	if ticker == nil {
@@ -1054,150 +658,6 @@ func (w *Worker) GetContractBaseRate(ticker *common.CurrencyRatesTicker, token s
 	}
 
 	return float64(rate), found
-}
-
-type ethereumTypeAddressData struct {
-	tokens               Tokens
-	contractInfo         *bchain.ContractInfo
-	nonce                string
-	nonContractTxs       int
-	internalTxs          int
-	totalResults         int
-	tokensBaseValue      float64
-	tokensSecondaryValue float64
-	stakingPools         []StakingPool
-}
-
-func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescriptor, details AccountDetails, filter *AddressFilter, secondaryCoin string) (*db.AddrBalance, *ethereumTypeAddressData, error) {
-	var ba *db.AddrBalance
-	var n uint64
-	// unknown number of results for paging initially
-	d := ethereumTypeAddressData{totalResults: -1}
-	ca, err := w.db.GetAddrDescContracts(addrDesc)
-	if err != nil {
-		return nil, nil, NewAPIError(fmt.Sprintf("Address not found, %v", err), true)
-	}
-	b, err := w.chain.EthereumTypeGetBalance(addrDesc)
-	if err != nil {
-		return nil, nil, errors.Annotatef(err, "EthereumTypeGetBalance %v", addrDesc)
-	}
-	var filterDesc bchain.AddressDescriptor
-	if filter.Contract != "" {
-		filterDesc, err = w.chainParser.GetAddrDescFromAddress(filter.Contract)
-		if err != nil {
-			return nil, nil, NewAPIError(fmt.Sprintf("Invalid contract filter, %v", err), true)
-		}
-	}
-	if ca != nil {
-		ba = &db.AddrBalance{
-			Txs: uint32(ca.TotalTxs),
-		}
-		if b != nil {
-			ba.BalanceSat = *b
-		}
-		n, err = w.chain.EthereumTypeGetNonce(addrDesc)
-		if err != nil {
-			return nil, nil, errors.Annotatef(err, "EthereumTypeGetNonce %v", addrDesc)
-		}
-		ticker := w.fiatRates.GetCurrentTicker("", "")
-		if details > AccountDetailsBasic {
-			d.tokens = make([]Token, len(ca.Contracts))
-			var j int
-			for i := range ca.Contracts {
-				c := &ca.Contracts[i]
-				if len(filterDesc) > 0 {
-					if !bytes.Equal(filterDesc, c.Contract) {
-						continue
-					}
-					// filter only transactions of this contract
-					filter.Vout = i + db.ContractIndexOffset
-				}
-				t, err := w.getEthereumContractBalance(addrDesc, i+db.ContractIndexOffset, c, details, ticker, secondaryCoin)
-				if err != nil {
-					return nil, nil, err
-				}
-				d.tokens[j] = *t
-				d.tokensBaseValue += t.BaseValue
-				d.tokensSecondaryValue += t.SecondaryValue
-				j++
-			}
-			d.tokens = d.tokens[:j]
-			sort.Sort(d.tokens)
-		}
-		d.contractInfo, err = w.db.GetContractInfo(addrDesc, "")
-		if err != nil {
-			return nil, nil, err
-		}
-		if filter.FromHeight == 0 && filter.ToHeight == 0 {
-			// compute total results for paging
-			if filter.Vout == AddressFilterVoutOff {
-				d.totalResults = int(ca.TotalTxs)
-			} else if filter.Vout == 0 {
-				d.totalResults = int(ca.NonContractTxs)
-			} else if filter.Vout == db.InternalTxIndexOffset {
-				d.totalResults = int(ca.InternalTxs)
-			} else if filter.Vout >= db.ContractIndexOffset && filter.Vout-db.ContractIndexOffset < len(ca.Contracts) {
-				d.totalResults = int(ca.Contracts[filter.Vout-db.ContractIndexOffset].Txs)
-			} else if filter.Vout == AddressFilterVoutQueryNotNecessary {
-				d.totalResults = 0
-			}
-		}
-		d.nonContractTxs = int(ca.NonContractTxs)
-		d.internalTxs = int(ca.InternalTxs)
-	} else {
-		// addresses without any normal transactions can have internal transactions that were not processed and therefore balance
-		if b != nil {
-			ba = &db.AddrBalance{
-				BalanceSat: *b,
-			}
-		}
-	}
-	// returns 0 for unknown address
-	d.nonce = strconv.Itoa(int(n))
-	// special handling if filtering for a contract, return the contract details even though the address had no transactions with it
-	if len(d.tokens) == 0 && len(filterDesc) > 0 && details >= AccountDetailsTokens {
-		t, err := w.getEthereumContractBalanceFromBlockchain(addrDesc, filterDesc, details)
-		if err != nil {
-			return nil, nil, err
-		}
-		d.tokens = []Token{*t}
-		// switch off query for transactions, there are no transactions
-		filter.Vout = AddressFilterVoutQueryNotNecessary
-		d.totalResults = -1
-	}
-	// if staking pool enabled, fetch the staking pool details
-	if details >= AccountDetailsTokenBalances {
-		d.stakingPools, err = w.getStakingPoolsData(addrDesc)
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-	return ba, &d, nil
-}
-
-func (w *Worker) getStakingPoolsData(addrDesc bchain.AddressDescriptor) ([]StakingPool, error) {
-	var pools []StakingPool
-	if len(w.chain.EthereumTypeGetSupportedStakingPools()) > 0 {
-		sp, err := w.chain.EthereumTypeGetStakingPoolsData(addrDesc)
-		if err != nil {
-			return nil, err
-		}
-		for i := range sp {
-			p := &sp[i]
-			pools = append(pools, StakingPool{
-				Contract:                p.Contract,
-				Name:                    p.Name,
-				PendingBalance:          (*Amount)(&p.PendingBalance),
-				PendingDepositedBalance: (*Amount)(&p.PendingDepositedBalance),
-				DepositedBalance:        (*Amount)(&p.DepositedBalance),
-				WithdrawTotalAmount:     (*Amount)(&p.WithdrawTotalAmount),
-				ClaimableAmount:         (*Amount)(&p.ClaimableAmount),
-				RestakedReward:          (*Amount)(&p.RestakedReward),
-				AutocompoundBalance:     (*Amount)(&p.AutocompoundBalance),
-			})
-		}
-	}
-	return pools, nil
 }
 
 func (w *Worker) txFromTxid(txid string, bestHeight uint32, option AccountDetails, blockInfo *db.BlockInfo, addresses map[string]struct{}) (*Tx, error) {
@@ -1300,30 +760,21 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 		unconfirmedTxs           int
 		totalResults             int
 	)
-	ed := &ethereumTypeAddressData{}
 	addrDesc, address, err := w.getAddrDescAndNormalizeAddress(address)
 	if err != nil {
 		return nil, err
 	}
-	if w.chainType == bchain.ChainEthereumType {
-		ba, ed, err = w.getEthereumTypeAddressBalances(addrDesc, option, filter, secondaryCoin)
-		if err != nil {
-			return nil, err
-		}
-		totalResults = ed.totalResults
-	} else {
-		// ba can be nil if the address is only in mempool!
-		ba, err = w.db.GetAddrDescBalance(addrDesc, db.AddressBalanceDetailNoUTXO)
-		if err != nil {
-			return nil, NewAPIError(fmt.Sprintf("Address not found, %v", err), true)
-		}
-		if ba != nil {
-			// totalResults is known only if there is no filter
-			if filter.Vout == AddressFilterVoutOff && filter.FromHeight == 0 && filter.ToHeight == 0 {
-				totalResults = int(ba.Txs)
-			} else {
-				totalResults = -1
-			}
+	// ba can be nil if the address is only in mempool!
+	ba, err = w.db.GetAddrDescBalance(addrDesc, db.AddressBalanceDetailNoUTXO)
+	if err != nil {
+		return nil, NewAPIError(fmt.Sprintf("Address not found, %v", err), true)
+	}
+	if ba != nil {
+		// totalResults is known only if there is no filter
+		if filter.Vout == AddressFilterVoutOff && filter.FromHeight == 0 && filter.ToHeight == 0 {
+			totalResults = int(ba.Txs)
+		} else {
+			totalResults = -1
 		}
 	}
 	// if there are only unconfirmed transactions, there is no paging
@@ -1348,12 +799,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 				if tx.Confirmations == 0 {
 					unconfirmedTxs++
 					uBalSat.Add(&uBalSat, tx.getAddrVoutValue(addrDesc))
-					// ethereum has a different logic - value not in input and add maximum possible fees
-					if w.chainType == bchain.ChainEthereumType {
-						uBalSat.Sub(&uBalSat, tx.getAddrEthereumTypeMempoolInputValue(addrDesc))
-					} else {
-						uBalSat.Sub(&uBalSat, tx.getAddrVinValue(addrDesc))
-					}
+					uBalSat.Sub(&uBalSat, tx.getAddrVinValue(addrDesc))
 					if page == 0 {
 						if option == AccountDetailsTxidHistory {
 							txids = append(txids, tx.Txid)
@@ -1414,10 +860,6 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 			}
 		}
 		secondaryValue = secondaryRate * balance
-		if w.chainType == bchain.ChainEthereumType {
-			totalBaseValue += balance + ed.tokensBaseValue
-			totalSecondaryValue = secondaryRate * totalBaseValue
-		}
 	}
 	r := &Address{
 		Paging:                pg,
@@ -1426,26 +868,13 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 		TotalReceivedSat:      (*Amount)(totalReceived),
 		TotalSentSat:          (*Amount)(totalSent),
 		Txs:                   int(ba.Txs),
-		NonTokenTxs:           ed.nonContractTxs,
-		InternalTxs:           ed.internalTxs,
 		UnconfirmedBalanceSat: (*Amount)(&uBalSat),
 		UnconfirmedTxs:        unconfirmedTxs,
 		Transactions:          txs,
 		Txids:                 txids,
-		Tokens:                ed.tokens,
 		SecondaryValue:        secondaryValue,
-		TokensBaseValue:       ed.tokensBaseValue,
-		TokensSecondaryValue:  ed.tokensSecondaryValue,
 		TotalBaseValue:        totalBaseValue,
 		TotalSecondaryValue:   totalSecondaryValue,
-		ContractInfo:          ed.contractInfo,
-		Nonce:                 ed.nonce,
-		AddressAliases:        w.getAddressAliases(addresses),
-		StakingPools:          ed.stakingPools,
-	}
-	// keep address backward compatible, set deprecated Erc20Contract value if ERC20 token
-	if ed.contractInfo != nil && ed.contractInfo.Type == bchain.ERC20TokenType {
-		r.Erc20Contract = ed.contractInfo
 	}
 	glog.Info("GetAddress-", option, " ", address, ", ", time.Since(start))
 	return r, nil
@@ -1471,7 +900,6 @@ func (w *Worker) balanceHistoryForTxid(addrDesc bchain.AddressDescriptor, txid s
 	var time uint32
 	var err error
 	var ta *db.TxAddresses
-	var bchainTx *bchain.Tx
 	var height uint32
 	if w.chainType == bchain.ChainBitcoinType {
 		ta, err = w.db.GetTxAddresses(txid)
@@ -1483,17 +911,6 @@ func (w *Worker) balanceHistoryForTxid(addrDesc bchain.AddressDescriptor, txid s
 			return nil, nil
 		}
 		height = ta.Height
-	} else if w.chainType == bchain.ChainEthereumType {
-		var h int
-		bchainTx, h, err = w.txCache.GetTransaction(txid)
-		if err != nil {
-			return nil, err
-		}
-		if bchainTx == nil {
-			glog.Warning("Inconsistency:  tx ", txid, ": not found in the blockchain")
-			return nil, nil
-		}
-		height = uint32(h)
 	}
 	time = w.is.GetBlockTime(height)
 	if time < fromUnix || time >= toUnix {
@@ -1534,83 +951,6 @@ func (w *Worker) balanceHistoryForTxid(addrDesc bchain.AddressDescriptor, txid s
 			if countSentToSelf {
 				if _, found := selfAddrDesc[string(tao.AddrDesc)]; found {
 					(*big.Int)(bh.SentToSelfSat).Add((*big.Int)(bh.SentToSelfSat), &tao.ValueSat)
-				}
-			}
-		}
-	} else if w.chainType == bchain.ChainEthereumType {
-		var value big.Int
-		ethTxData := eth.GetEthereumTxData(bchainTx)
-		// add received amount only for OK or unknown status (old) transactions
-		if ethTxData.Status == eth.TxStatusOK || ethTxData.Status == eth.TxStatusUnknown {
-			if len(bchainTx.Vout) > 0 {
-				bchainVout := &bchainTx.Vout[0]
-				value = bchainVout.ValueSat
-				if len(bchainVout.ScriptPubKey.Addresses) > 0 {
-					txAddrDesc, err := w.chainParser.GetAddrDescFromAddress(bchainVout.ScriptPubKey.Addresses[0])
-					if err != nil {
-						return nil, err
-					}
-					if bytes.Equal(addrDesc, txAddrDesc) {
-						(*big.Int)(bh.ReceivedSat).Add((*big.Int)(bh.ReceivedSat), &value)
-					}
-					if _, found := selfAddrDesc[string(txAddrDesc)]; found {
-						countSentToSelf = true
-					}
-				}
-			}
-			// process internal transactions
-			if eth.ProcessInternalTransactions {
-				internalData, err := w.db.GetEthereumInternalData(txid)
-				if err != nil {
-					return nil, err
-				}
-				if internalData != nil {
-					for i := range internalData.Transfers {
-						f := &internalData.Transfers[i]
-						txAddrDesc, err := w.chainParser.GetAddrDescFromAddress(f.From)
-						if err != nil {
-							return nil, err
-						}
-						if bytes.Equal(addrDesc, txAddrDesc) {
-							(*big.Int)(bh.SentSat).Add((*big.Int)(bh.SentSat), &f.Value)
-							if f.From == f.To {
-								(*big.Int)(bh.SentToSelfSat).Add((*big.Int)(bh.SentToSelfSat), &f.Value)
-							}
-						}
-						txAddrDesc, err = w.chainParser.GetAddrDescFromAddress(f.To)
-						if err != nil {
-							return nil, err
-						}
-						if bytes.Equal(addrDesc, txAddrDesc) {
-							(*big.Int)(bh.ReceivedSat).Add((*big.Int)(bh.ReceivedSat), &f.Value)
-						}
-					}
-				}
-			}
-		}
-		for i := range bchainTx.Vin {
-			bchainVin := &bchainTx.Vin[i]
-			if len(bchainVin.Addresses) > 0 {
-				txAddrDesc, err := w.chainParser.GetAddrDescFromAddress(bchainVin.Addresses[0])
-				if err != nil {
-					return nil, err
-				}
-				if bytes.Equal(addrDesc, txAddrDesc) {
-					// add received amount only for OK or unknown status (old) transactions, fees always
-					if ethTxData.Status == eth.TxStatusOK || ethTxData.Status == eth.TxStatusUnknown {
-						(*big.Int)(bh.SentSat).Add((*big.Int)(bh.SentSat), &value)
-						if countSentToSelf {
-							if _, found := selfAddrDesc[string(txAddrDesc)]; found {
-								(*big.Int)(bh.SentToSelfSat).Add((*big.Int)(bh.SentToSelfSat), &value)
-							}
-						}
-					}
-					var feesSat big.Int
-					// mempool txs do not have fees yet
-					if ethTxData.GasUsed != nil {
-						feesSat.Mul(ethTxData.GasPrice, ethTxData.GasUsed)
-					}
-					(*big.Int)(bh.SentSat).Add((*big.Int)(bh.SentSat), &feesSat)
 				}
 			}
 		}
@@ -1656,17 +996,6 @@ func (w *Worker) GetBalanceHistory(address string, fromTimestamp, toTimestamp in
 	addrDesc, _, err := w.getAddrDescAndNormalizeAddress(address)
 	if err != nil {
 		return nil, err
-	}
-	// do not get balance history for contracts
-	if w.chainType == bchain.ChainEthereumType {
-		ci, err := w.db.GetContractInfo(addrDesc, bchain.UnknownTokenType)
-		if err != nil {
-			return nil, err
-		}
-		if ci != nil {
-			glog.Info("GetBalanceHistory ", address, " is a contract, skipping")
-			return nil, NewAPIError("GetBalanceHistory for a contract not allowed", true)
-		}
 	}
 	fromUnix, fromHeight, toUnix, toHeight := w.balanceHistoryHeightsFromTo(fromTimestamp, toTimestamp)
 	if fromHeight >= toHeight {
@@ -2247,9 +1576,8 @@ func (w *Worker) GetBlock(bid string, page int, txsOnPage int) (*Block, error) {
 			Txids:         bi.Txids,
 			Version:       bi.Version,
 		},
-		TxCount:        txCount,
-		Transactions:   txs,
-		AddressAliases: w.getAddressAliases(addresses),
+		TxCount:      txCount,
+		Transactions: txs,
 	}, nil
 }
 
@@ -2432,7 +1760,6 @@ func (w *Worker) GetSystemInfo(internal bool) (*SystemInfo, error) {
 		CurrentFiatRatesTime:         nonZeroTime(currentFiatRatesTime),
 		HistoricalFiatRatesTime:      nonZeroTime(w.is.HistoricalFiatRatesTime),
 		HistoricalTokenFiatRatesTime: nonZeroTime(w.is.HistoricalTokenFiatRatesTime),
-		SupportedStakingPools:        w.chain.EthereumTypeGetSupportedStakingPools(),
 		DbSize:                       w.db.DatabaseSizeOnDisk(),
 		DbSizeFromColumns:            internalDBSize,
 		DbColumns:                    columnStats,

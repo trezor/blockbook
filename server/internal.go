@@ -70,9 +70,6 @@ func NewInternalServer(binding, certFiles string, db *db.RocksDB, chain bchain.B
 	serveMux.HandleFunc(path, s.index)
 	serveMux.HandleFunc(path+"admin", s.htmlTemplateHandler(s.adminIndex))
 	serveMux.HandleFunc(path+"admin/ws-limit-exceeding-ips", s.htmlTemplateHandler(s.wsLimitExceedingIPs))
-	if s.chainParser.GetChainType() == bchain.ChainEthereumType {
-		serveMux.HandleFunc(path+"admin/internal-data-errors", s.htmlTemplateHandler(s.internalDataErrors))
-	}
 	return s, nil
 }
 
@@ -136,7 +133,6 @@ type InternalTemplateData struct {
 	CoinLabel              string
 	ChainType              bchain.ChainType
 	Error                  *api.APIError
-	InternalDataErrors     []db.BlockInternalDataError
 	RefetchingInternalData bool
 	WsGetAccountInfoLimit  int
 	WsLimitExceedingIPs    []WsLimitExceedingIP
@@ -180,23 +176,6 @@ func (s *InternalServer) parseTemplates() []*template.Template {
 func (s *InternalServer) adminIndex(w http.ResponseWriter, r *http.Request) (tpl, *InternalTemplateData, error) {
 	data := s.newTemplateData(r)
 	return adminIndexTpl, data, nil
-}
-
-func (s *InternalServer) internalDataErrors(w http.ResponseWriter, r *http.Request) (tpl, *InternalTemplateData, error) {
-	if r.Method == http.MethodPost {
-		err := s.api.RefetchInternalData()
-		if err != nil {
-			return errorTpl, nil, err
-		}
-	}
-	data := s.newTemplateData(r)
-	internalErrors, err := s.db.GetBlockInternalDataErrorsEthereumType()
-	if err != nil {
-		return errorTpl, nil, err
-	}
-	data.InternalDataErrors = internalErrors
-	data.RefetchingInternalData = s.api.IsRefetchingInternalData()
-	return adminInternalErrorsTpl, data, nil
 }
 
 func (s *InternalServer) wsLimitExceedingIPs(w http.ResponseWriter, r *http.Request) (tpl, *InternalTemplateData, error) {

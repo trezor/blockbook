@@ -86,16 +86,6 @@ const (
 	cfBlockFilter
 
 	__break__
-
-	// EthereumType
-	cfAddressContracts = iota - __break__ + cfAddressBalance - 1
-	cfInternalData
-	cfContracts
-	cfFunctionSignatures
-	cfBlockInternalDataErrors
-
-	// TODO move to common section
-	cfAddressAliases
 )
 
 // common columns
@@ -104,7 +94,6 @@ var cfBaseNames = []string{"default", "height", "addresses", "blockTxs", "transa
 
 // type specific columns
 var cfNamesBitcoinType = []string{"addressBalance", "txAddresses", "blockFilter"}
-var cfNamesEthereumType = []string{"addressContracts", "internalData", "contracts", "functionSignatures", "blockInternalDataErrors", "addressAliases"}
 
 func openDB(path string, c *grocksdb.Cache, openFiles int) (*grocksdb.DB, []*grocksdb.ColumnFamilyHandle, error) {
 	// opts with bloom filter
@@ -135,9 +124,6 @@ func NewRocksDB(path string, cacheSize, maxOpenFiles int, parser bchain.BlockCha
 	chainType := parser.GetChainType()
 	if chainType == bchain.ChainBitcoinType {
 		cfNames = append(cfNames, cfNamesBitcoinType...)
-	} else if chainType == bchain.ChainEthereumType {
-		cfNames = append(cfNames, cfNamesEthereumType...)
-		extendedIndex = false
 	} else {
 		return nil, errors.New("Unknown chain type")
 	}
@@ -373,24 +359,6 @@ func (d *RocksDB) ConnectBlock(block *bchain.Block) error {
 			if err := d.storeBlockFilter(wb, block.BlockHeader.Hash, blockFilter); err != nil {
 				return err
 			}
-		}
-	} else if chainType == bchain.ChainEthereumType {
-		addressContracts := make(map[string]*AddrContracts)
-		blockTxs, err := d.processAddressesEthereumType(block, addresses, addressContracts)
-		if err != nil {
-			return err
-		}
-		if err := d.storeAddressContracts(wb, addressContracts); err != nil {
-			return err
-		}
-		if err := d.storeInternalDataEthereumType(wb, blockTxs); err != nil {
-			return err
-		}
-		if err = d.storeBlockSpecificDataEthereumType(wb, block); err != nil {
-			return err
-		}
-		if err := d.storeAndCleanupBlockTxsEthereumType(wb, block, blockTxs); err != nil {
-			return err
 		}
 	} else {
 		return errors.New("Unknown chain type")
@@ -1437,50 +1405,6 @@ func (d *RocksDB) writeHeight(wb *grocksdb.WriteBatch, height uint32, bi *BlockI
 	return nil
 }
 
-// address alias support
-var cachedAddressAliasRecords = make(map[string]string)
-var cachedAddressAliasRecordsMux sync.Mutex
-
-// InitAddressAliasRecords loads all records to cache
-func (d *RocksDB) InitAddressAliasRecords() (int, error) {
-	count := 0
-	cachedAddressAliasRecordsMux.Lock()
-	defer cachedAddressAliasRecordsMux.Unlock()
-	it := d.db.NewIteratorCF(d.ro, d.cfh[cfAddressAliases])
-	defer it.Close()
-	for it.SeekToFirst(); it.Valid(); it.Next() {
-		address := string(it.Key().Data())
-		name := string(it.Value().Data())
-		if address != "" && name != "" {
-			cachedAddressAliasRecords[address] = d.chainParser.FormatAddressAlias(address, name)
-			count++
-		}
-	}
-	return count, nil
-}
-
-func (d *RocksDB) GetAddressAlias(address string) string {
-	cachedAddressAliasRecordsMux.Lock()
-	name := cachedAddressAliasRecords[address]
-	cachedAddressAliasRecordsMux.Unlock()
-	return name
-}
-
-func (d *RocksDB) storeAddressAliasRecords(wb *grocksdb.WriteBatch, records []bchain.AddressAliasRecord) error {
-	if d.chainParser.UseAddressAliases() {
-		for i := range records {
-			r := &records[i]
-			if len(r.Name) > 0 {
-				wb.PutCF(d.cfh[cfAddressAliases], []byte(r.Address), []byte(r.Name))
-				cachedAddressAliasRecordsMux.Lock()
-				cachedAddressAliasRecords[r.Address] = d.chainParser.FormatAddressAlias(r.Address, r.Name)
-				cachedAddressAliasRecordsMux.Unlock()
-			}
-		}
-	}
-	return nil
-}
-
 // Disconnect blocks
 
 func (d *RocksDB) disconnectTxAddressesInputs(wb *grocksdb.WriteBatch, btxID []byte, inputs []outpoint, txa *TxAddresses, txAddressesToUpdate map[string]*TxAddresses,
@@ -1896,7 +1820,6 @@ func (d *RocksDB) LoadInternalState(config *common.Config) (*common.InternalStat
 		is = &common.InternalState{
 			Coin:                    config.CoinName,
 			UtxoChecked:             true,
-			SortedAddressContracts:  true,
 			ExtendedIndex:           d.extendedIndex,
 			BlockGolombFilterP:      config.BlockGolombFilterP,
 			BlockFilterScripts:      config.BlockFilterScripts,
@@ -1947,14 +1870,6 @@ func (d *RocksDB) LoadInternalState(config *common.Config) (*common.InternalStat
 	var t time.Time
 	is.LastMempoolSync = t
 	is.SyncMode = false
-
-	if d.chainParser.UseAddressAliases() {
-		recordsCount, err := d.InitAddressAliasRecords()
-		if err != nil {
-			return nil, err
-		}
-		glog.Infof("loaded %d address alias records", recordsCount)
-	}
 
 	is.CoinShortcut = config.CoinShortcut
 	if config.CoinLabel == "" {

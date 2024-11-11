@@ -535,23 +535,6 @@
                         .setAttribute('style', 'display: none;');
                 });
             }
-
-            function rpcCall() {
-                const from = document.getElementById('rpcCallFrom').value.trim();
-                const to = document.getElementById('rpcCallTo').value.trim();
-                const data = document.getElementById('rpcCallData').value.trim();
-                const method = 'rpcCall';
-                const params = {
-                    from,
-                    to,
-                    data,
-                };
-                send(method, params, function (result) {
-                    document.getElementById('rpcCallResult').innerText = JSON.stringify(
-                        result,
-                    ).replace(/,/g, ', ');
-                });
-            }
         </script>
     </head>
 
@@ -1112,47 +1095,6 @@
             </div>
             <div class="row">
                 <div class="col" id="getBlockFiltersBatchResult"></div>
-            </div>
-            <div class="row">
-                <div class="col">
-                    <input
-                        class="btn btn-secondary"
-                        type="button"
-                        value="rpcCall"
-                        onclick="rpcCall()"
-                    />
-                </div>
-                <div class="col-10">
-                    <div class="row" style="margin: 0">
-                        <input
-                            type="text"
-                            class="form-control"
-                            id="rpcCallFrom"
-                            style="width: 60%; margin-right: 5px"
-                            value=""
-                            placeholder="from"
-                        />
-                        <input
-                            type="text"
-                            class="form-control"
-                            id="rpcCallTo"
-                            style="width: 60%; margin-right: 5px"
-                            value="0x624087dd1904ab122a32878ce9e933c7071f53b9"
-                            placeholder="to"
-                        />
-                        <input
-                            type="text"
-                            class="form-control"
-                            placeholder="data"
-                            style="width: 100%"
-                            id="rpcCallData"
-                            value="0x2fec7966000000000000000000000000ce66a9577f4e2589c1d1547b75b7a2b0807ce0ed"
-                        />
-                    </div>
-                </div>
-            </div>
-            <div class="row">
-                <div class="col" id="rpcCallResult"></div>
             </div>
             <div class="row">
                 <div class="col">

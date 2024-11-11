@@ -12,8 +12,7 @@ automatically, there is sometimes necessary see intermediate step. You can gener
 generated to *build/pkg-defs* directory.
 
 Good examples of coin configuration are
-[*configs/coins/bitcoin.json*](/configs/coins/bitcoin.json) and
-[*configs/coins/ethereum.json*](/configs/coins/ethereum.json) for Bitcoin-like coins and different coins, respectively.
+[*configs/coins/bitcoin.json*](/configs/coins/bitcoin.json) for Bitcoin-like coins.
 
 ## Description of coin definition
 

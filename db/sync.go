@@ -452,8 +452,6 @@ func (w *SyncWorker) DisconnectBlocks(lower uint32, higher uint32, hashes []stri
 	ct := w.chain.GetChainParser().GetChainType()
 	if ct == bchain.ChainBitcoinType {
 		return w.db.DisconnectBlockRangeBitcoinType(lower, higher)
-	} else if ct == bchain.ChainEthereumType {
-		return w.db.DisconnectBlockRangeEthereumType(lower, higher)
 	}
 	return errors.New("Unknown chain type")
 }

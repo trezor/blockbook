@@ -23,7 +23,6 @@ import (
 	"github.com/trezor/blockbook/common"
 	"github.com/trezor/blockbook/db"
 	"github.com/trezor/blockbook/fiat"
-	"github.com/trezor/blockbook/fourbyte"
 	"github.com/trezor/blockbook/server"
 )
 
@@ -190,16 +189,6 @@ func mainWithExitCode() int {
 			return exitCodeFatal
 		}
 		internalState.UtxoChecked = true
-	}
-
-	// sort addressContracts if necessary
-	if !internalState.SortedAddressContracts {
-		err = index.SortAddressContracts(chanOsSignal)
-		if err != nil {
-			glog.Error("sortAddressContracts: ", err)
-			return exitCodeFatal
-		}
-		internalState.SortedAddressContracts = true
 	}
 
 	index.SetInternalState(internalState)
@@ -697,16 +686,4 @@ func initDownloaders(db *db.RocksDB, chain bchain.BlockChain, config *common.Con
 	if fiatRates.Enabled {
 		go fiatRates.RunDownloader()
 	}
-
-	if config.FourByteSignatures != "" && chain.GetChainParser().GetChainType() == bchain.ChainEthereumType {
-		fbsd, err := fourbyte.NewFourByteSignaturesDownloader(db, config.FourByteSignatures)
-		if err != nil {
-			glog.Errorf("NewFourByteSignaturesDownloader Init error: %v", err)
-		} else {
-			glog.Infof("Starting FourByteSignatures downloader...")
-			go fbsd.Run()
-		}
-
-	}
-
 }

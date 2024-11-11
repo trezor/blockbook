@@ -138,13 +138,3 @@ type WsFiatRatesTickersListReq struct {
 	Timestamp int64  `json:"timestamp,omitempty"`
 	Token     string `json:"token,omitempty"`
 }
-
-type WsRpcCallReq struct {
-	From string `json:"from,omitempty"`
-	To   string `json:"to"`
-	Data string `json:"data"`
-}
-
-type WsRpcCallRes struct {
-	Data string `json:"data"`
-}

@@ -104,16 +104,15 @@ type MempoolVin struct {
 // MempoolTx is blockchain transaction in mempool
 // optimized for onNewTx notification
 type MempoolTx struct {
-	Hex              string         `json:"hex"`
-	Txid             string         `json:"txid"`
-	Version          int32          `json:"version"`
-	LockTime         uint32         `json:"locktime"`
-	VSize            int64          `json:"vsize,omitempty"`
-	Vin              []MempoolVin   `json:"vin"`
-	Vout             []Vout         `json:"vout"`
-	Blocktime        int64          `json:"blocktime,omitempty"`
-	TokenTransfers   TokenTransfers `json:"-"`
-	CoinSpecificData interface{}    `json:"-"`
+	Hex              string       `json:"hex"`
+	Txid             string       `json:"txid"`
+	Version          int32        `json:"version"`
+	LockTime         uint32       `json:"locktime"`
+	VSize            int64        `json:"vsize,omitempty"`
+	Vin              []MempoolVin `json:"vin"`
+	Vout             []Vout       `json:"vout"`
+	Blocktime        int64        `json:"blocktime,omitempty"`
+	CoinSpecificData interface{}  `json:"-"`
 }
 
 // TokenType - type of token
@@ -136,15 +135,6 @@ const (
 	// XPUBAddressTokenType is address derived from xpub
 	XPUBAddressTokenType TokenTypeName = "XPUBAddress"
 )
-
-// TokenTransfers is array of TokenTransfer
-type TokenTransfers []*TokenTransfer
-
-func (a TokenTransfers) Len() int      { return len(a) }
-func (a TokenTransfers) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
-func (a TokenTransfers) Less(i, j int) bool {
-	return a[i].Type < a[j].Type
-}
 
 // Block is block header and list of transactions
 type Block struct {
@@ -325,18 +315,8 @@ type BlockChain interface {
 	EstimateFee(blocks int) (big.Int, error)
 	SendRawTransaction(tx string) (string, error)
 	GetMempoolEntry(txid string) (*MempoolEntry, error)
-	GetContractInfo(contractDesc AddressDescriptor) (*ContractInfo, error)
 	// parser
 	GetChainParser() BlockChainParser
-	// EthereumType specific
-	EthereumTypeGetBalance(addrDesc AddressDescriptor) (*big.Int, error)
-	EthereumTypeGetNonce(addrDesc AddressDescriptor) (uint64, error)
-	EthereumTypeEstimateGas(params map[string]interface{}) (uint64, error)
-	EthereumTypeGetErc20ContractBalance(addrDesc, contractDesc AddressDescriptor) (*big.Int, error)
-	EthereumTypeGetSupportedStakingPools() []string
-	EthereumTypeGetStakingPoolsData(addrDesc AddressDescriptor) ([]StakingPoolData, error)
-	EthereumTypeRpcCall(data, to, from string) (string, error)
-	GetTokenURI(contractDesc AddressDescriptor, tokenID *big.Int) (string, error)
 }
 
 // BlockChainParser defines common interface to parsing and conversions of block chain data
@@ -348,8 +328,6 @@ type BlockChainParser interface {
 	KeepBlockAddresses() int
 	// AmountDecimals returns number of decimal places in coin amounts
 	AmountDecimals() int
-	// UseAddressAliases returns true if address aliases are enabled
-	UseAddressAliases() bool
 	// MinimumCoinbaseConfirmations returns minimum number of confirmations a coinbase transaction must have before it can be spent
 	MinimumCoinbaseConfirmations() int
 	// SupportsVSize returns true if vsize of a transaction should be computed and returned by API
@@ -383,10 +361,6 @@ type BlockChainParser interface {
 	DerivationBasePath(descriptor *XpubDescriptor) (string, error)
 	DeriveAddressDescriptors(descriptor *XpubDescriptor, change uint32, indexes []uint32) ([]AddressDescriptor, error)
 	DeriveAddressDescriptorsFromTo(descriptor *XpubDescriptor, change uint32, fromIndex uint32, toIndex uint32) ([]AddressDescriptor, error)
-	// EthereumType specific
-	EthereumTypeGetTokenTransfersFromTx(tx *Tx) (TokenTransfers, error)
-	// AddressAlias
-	FormatAddressAlias(address string, name string) string
 }
 
 // Mempool defines common interface to mempool

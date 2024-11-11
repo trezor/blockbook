@@ -394,10 +394,6 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 	if page < 0 {
 		page = 0
 	}
-	type mempoolMap struct {
-		tx          *Tx
-		inputOutput byte
-	}
 	var (
 		txc            xpubTxids
 		txmMap         map[string]*Tx
@@ -543,10 +539,8 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 	}
 	addrTxCount := int(data.txCountEstimate)
 	usedTokens := 0
-	var tokens []Token
 	var xpubAddresses map[string]struct{}
 	if option > AccountDetailsBasic {
-		tokens = make([]Token, 0, 4)
 		xpubAddresses = make(map[string]struct{})
 	}
 	for ci, da := range data.addresses {
@@ -560,7 +554,6 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 				if filter.TokensToReturn == TokensToReturnDerived ||
 					filter.TokensToReturn == TokensToReturnUsed && ad.balance != nil ||
 					filter.TokensToReturn == TokensToReturnNonzeroBalance && ad.balance != nil && !IsZeroBigInt(&ad.balance.BalanceSat) {
-					tokens = append(tokens, token)
 				}
 				xpubAddresses[token.Name] = struct{}{}
 			}
@@ -596,10 +589,8 @@ func (w *Worker) GetXpubAddress(xpub string, page int, txsOnPage int, option Acc
 		Transactions:          txs,
 		Txids:                 txids,
 		UsedTokens:            usedTokens,
-		Tokens:                tokens,
 		SecondaryValue:        secondaryValue,
 		XPubAddresses:         xpubAddresses,
-		AddressAliases:        w.getAddressAliases(addresses),
 	}
 	glog.Info("GetXpubAddress ", xpub[:xpubLogPrefix], ", cache ", inCache, ", ", txCount, " txs, ", time.Since(start))
 	return &addr, nil
