@@ -61,6 +61,8 @@
                 "consensusNodeVersion": "http://localhost:17536/eth/v1/node/version",
                 "address_aliases": true,
                 "eip1559Fees": true,
+                "alternative_estimate_fee": "infura",
+                "alternative_estimate_fee_params": "{\"url\": \"https://gas.api.infura.io/v3/${api_key}/networks/17000/suggestedGasFees\", \"periodSeconds\": 60}",
                 "mempoolTxTimeoutHours": 12,
                 "processInternalTransactions": true,
                 "queryBackendOnMempoolResync": false,

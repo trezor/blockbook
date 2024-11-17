@@ -17,3 +17,9 @@ type alternativeFeeProvider struct {
 type alternativeFeeProviderInterface interface {
 	GetEip1559Fees() (*bchain.Eip1559Fees, error)
 }
+
+func (p *alternativeFeeProvider) GetEip1559Fees() (*bchain.Eip1559Fees, error) {
+	p.mux.Lock()
+	defer p.mux.Unlock()
+	return p.eip1559Fees, nil
+}
