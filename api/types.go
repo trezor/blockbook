@@ -571,6 +571,8 @@ type AvailableVsCurrencies struct {
 type Eip1559Fee struct {
 	MaxFeePerGas         *Amount `json:"maxFeePerGas"`
 	MaxPriorityFeePerGas *Amount `json:"maxPriorityFeePerGas"`
+	MinWaitTimeEstimate  int     `json:"minWaitTimeEstimate,omitempty"`
+	MaxWaitTimeEstimate  int     `json:"maxWaitTimeEstimate,omitempty"`
 }
 
 // Eip1559Fees

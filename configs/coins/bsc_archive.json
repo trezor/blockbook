@@ -15,7 +15,7 @@
     },
     "ipc": {
         "rpc_url_template": "ws://127.0.0.1:{{.Ports.BackendRPC}}",
-        "rpc_timeout": 25
+        "rpc_timeout": 240
     },
     "backend": {
         "package_name": "backend-bsc-archive",
@@ -58,9 +58,13 @@
             "block_addresses_to_keep": 600,
             "additional_params": {
                 "address_aliases": true,
+                "eip1559Fees": true,
+                "alternative_estimate_fee": "infura",
+                "alternative_estimate_fee_params": "{\"url\": \"https://gas.api.infura.io/v3/${api_key}/networks/56/suggestedGasFees\", \"periodSeconds\": 20}",
                 "mempoolTxTimeoutHours": 48,
                 "processInternalTransactions": true,
                 "queryBackendOnMempoolResync": false,
+                "disableMempoolSync": true,
                 "fiat_rates": "coingecko",
                 "fiat_rates_vs_currencies": "AED,ARS,AUD,BDT,BHD,BMD,BRL,CAD,CHF,CLP,CNY,CZK,DKK,EUR,GBP,HKD,HUF,IDR,ILS,INR,JPY,KRW,KWD,LKR,MMK,MXN,MYR,NGN,NOK,NZD,PHP,PKR,PLN,RUB,SAR,SEK,SGD,THB,TRY,TWD,UAH,USD,VEF,VND,ZAR,BTC,ETH",
                 "fiat_rates_params": "{\"coin\": \"binancecoin\",\"platformIdentifier\": \"binance-smart-chain\",\"platformVsCurrency\": \"bnb\",\"periodSeconds\": 900}",

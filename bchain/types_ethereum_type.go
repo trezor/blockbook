@@ -168,6 +168,8 @@ type StakingPoolData struct {
 type Eip1559Fee struct {
 	MaxFeePerGas         *big.Int `json:"maxFeePerGas"`
 	MaxPriorityFeePerGas *big.Int `json:"maxPriorityFeePerGas"`
+	MinWaitTimeEstimate  int      `json:"minWaitTimeEstimate,omitempty"`
+	MaxWaitTimeEstimate  int      `json:"maxWaitTimeEstimate,omitempty"`
 }
 
 // Eip1559Fees

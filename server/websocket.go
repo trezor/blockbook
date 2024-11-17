@@ -640,6 +640,8 @@ func eip1559FeesToApi(fee *bchain.Eip1559Fee) *api.Eip1559Fee {
 	if fee != nil {
 		apiFee.MaxFeePerGas = (*api.Amount)(fee.MaxFeePerGas)
 		apiFee.MaxPriorityFeePerGas = (*api.Amount)(fee.MaxPriorityFeePerGas)
+		apiFee.MaxWaitTimeEstimate = fee.MaxWaitTimeEstimate
+		apiFee.MinWaitTimeEstimate = fee.MinWaitTimeEstimate
 	}
 	return &apiFee
 }

@@ -110,6 +110,23 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 	s.Timeout = time.Duration(c.RPCTimeout) * time.Second
 	s.PushHandler = pushHandler
 
+	if s.ChainConfig.AlternativeEstimateFee == "1inch" {
+		if s.alternativeFeeProvider, err = NewOneInchFeesProvider(s, s.ChainConfig.AlternativeEstimateFeeParams); err != nil {
+			glog.Error("New1InchFeesProvider error ", err, " Reverting to default estimateFee functionality")
+			// disable AlternativeEstimateFee logic
+			s.alternativeFeeProvider = nil
+		}
+	} else if s.ChainConfig.AlternativeEstimateFee == "infura" {
+		if s.alternativeFeeProvider, err = NewInfuraFeesProvider(s, s.ChainConfig.AlternativeEstimateFeeParams); err != nil {
+			glog.Error("NewInfuraFeesProvider error ", err, " Reverting to default estimateFee functionality")
+			// disable AlternativeEstimateFee logic
+			s.alternativeFeeProvider = nil
+		}
+	}
+	if s.alternativeFeeProvider != nil {
+		glog.Info("Using alternative fee provider ", s.ChainConfig.AlternativeEstimateFee)
+	}
+
 	return s, nil
 }
 
@@ -168,14 +185,6 @@ func (b *EthereumRPC) Initialize() error {
 	err = b.initStakingPools()
 	if err != nil {
 		return err
-	}
-
-	if b.ChainConfig.AlternativeEstimateFee == "1inch" {
-		if b.alternativeFeeProvider, err = NewOneInchFeesProvider(b, b.ChainConfig.AlternativeEstimateFeeParams); err != nil {
-			glog.Error("New1InchFeesProvider error ", err, " Reverting to default estimateFee functionality")
-			// disable AlternativeEstimateFee logic
-			b.alternativeFeeProvider = nil
-		}
 	}
 
 	glog.Info("rpc: block chain ", b.Network)
@@ -1042,6 +1051,9 @@ func (b *EthereumRPC) EthereumTypeGetEip1559Fees() (*bchain.Eip1559Fees, error) 
 	err = b.RPC.CallContext(ctx, &h, "eth_feeHistory", blocks, "pending", percentiles)
 	if err != nil {
 		return nil, err
+	}
+	if len(h.BaseFeePerGas) < blocks {
+		return nil, nil
 	}
 
 	hs, _ := json.Marshal(h)
