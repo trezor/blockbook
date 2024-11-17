@@ -571,13 +571,21 @@ type AvailableVsCurrencies struct {
 type Eip1559Fee struct {
 	MaxFeePerGas         *Amount `json:"maxFeePerGas"`
 	MaxPriorityFeePerGas *Amount `json:"maxPriorityFeePerGas"`
+	MinWaitTimeEstimate  int     `json:"minWaitTimeEstimate,omitempty"`
+	MaxWaitTimeEstimate  int     `json:"maxWaitTimeEstimate,omitempty"`
 }
 
 // Eip1559Fees
 type Eip1559Fees struct {
-	BaseFeePerGas *Amount     `json:"baseFeePerGas,omitempty"`
-	Low           *Eip1559Fee `json:"low,omitempty"`
-	Medium        *Eip1559Fee `json:"medium,omitempty"`
-	High          *Eip1559Fee `json:"high,omitempty"`
-	Instant       *Eip1559Fee `json:"instant,omitempty"`
+	BaseFeePerGas              *Amount     `json:"baseFeePerGas,omitempty"`
+	Low                        *Eip1559Fee `json:"low,omitempty"`
+	Medium                     *Eip1559Fee `json:"medium,omitempty"`
+	High                       *Eip1559Fee `json:"high,omitempty"`
+	Instant                    *Eip1559Fee `json:"instant,omitempty"`
+	NetworkCongestion          float64     `json:"networkCongestion,omitempty"`
+	LatestPriorityFeeRange     []*Amount   `json:"latestPriorityFeeRange,omitempty"`
+	HistoricalPriorityFeeRange []*Amount   `json:"historicalPriorityFeeRange,omitempty"`
+	HistoricalBaseFeeRange     []*Amount   `json:"historicalBaseFeeRange,omitempty"`
+	PriorityFeeTrend           string      `json:"priorityFeeTrend,omitempty"`
+	BaseFeeTrend               string      `json:"baseFeeTrend,omitempty"`
 }

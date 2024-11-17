@@ -637,11 +637,22 @@ func eip1559FeesToApi(fee *bchain.Eip1559Fee) *api.Eip1559Fee {
 		return nil
 	}
 	apiFee := api.Eip1559Fee{}
-	if fee != nil {
-		apiFee.MaxFeePerGas = (*api.Amount)(fee.MaxFeePerGas)
-		apiFee.MaxPriorityFeePerGas = (*api.Amount)(fee.MaxPriorityFeePerGas)
-	}
+	apiFee.MaxFeePerGas = (*api.Amount)(fee.MaxFeePerGas)
+	apiFee.MaxPriorityFeePerGas = (*api.Amount)(fee.MaxPriorityFeePerGas)
+	apiFee.MaxWaitTimeEstimate = fee.MaxWaitTimeEstimate
+	apiFee.MinWaitTimeEstimate = fee.MinWaitTimeEstimate
 	return &apiFee
+}
+
+func eip1559FeeRangeToApi(feeRange []*big.Int) []*api.Amount {
+	if feeRange == nil {
+		return nil
+	}
+	apiFeeRange := make([]*api.Amount, len(feeRange))
+	for i := range feeRange {
+		apiFeeRange[i] = (*api.Amount)(feeRange[i])
+	}
+	return apiFeeRange
 }
 
 func (s *WebsocketServer) estimateFee(params []byte) (interface{}, error) {
@@ -679,6 +690,12 @@ func (s *WebsocketServer) estimateFee(params []byte) (interface{}, error) {
 			eip1559Api.High = eip1559FeesToApi(eip1559.High)
 			eip1559Api.Medium = eip1559FeesToApi(eip1559.Medium)
 			eip1559Api.Low = eip1559FeesToApi(eip1559.Low)
+			eip1559Api.NetworkCongestion = eip1559.NetworkCongestion
+			eip1559Api.BaseFeeTrend = eip1559.BaseFeeTrend
+			eip1559Api.PriorityFeeTrend = eip1559.PriorityFeeTrend
+			eip1559Api.LatestPriorityFeeRange = eip1559FeeRangeToApi(eip1559.LatestPriorityFeeRange)
+			eip1559Api.HistoricalBaseFeeRange = eip1559FeeRangeToApi(eip1559.HistoricalBaseFeeRange)
+			eip1559Api.HistoricalPriorityFeeRange = eip1559FeeRangeToApi(eip1559.HistoricalPriorityFeeRange)
 		}
 		for i := range r.Blocks {
 			res[i].FeePerUnit = fee.String()

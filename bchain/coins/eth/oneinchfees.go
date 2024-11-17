@@ -101,7 +101,7 @@ func bigIntFromString(s string) *big.Int {
 	return b
 }
 
-func feesFromResult(result *oneInchFeeFeeResult) *bchain.Eip1559Fee {
+func oneInchFeesFromResult(result *oneInchFeeFeeResult) *bchain.Eip1559Fee {
 	fee := bchain.Eip1559Fee{}
 	fee.MaxFeePerGas = bigIntFromString(result.MaxFeePerGas)
 	fee.MaxPriorityFeePerGas = bigIntFromString(result.MaxPriorityFeePerGas)
@@ -111,15 +111,14 @@ func feesFromResult(result *oneInchFeeFeeResult) *bchain.Eip1559Fee {
 func (p *oneInchFeeProvider) processData(data *oneInchFeeFeesResult) bool {
 	fees := bchain.Eip1559Fees{}
 	fees.BaseFeePerGas = bigIntFromString(data.BaseFee)
-	fees.Instant = feesFromResult(&data.Instant)
-	fees.High = feesFromResult(&data.High)
-	fees.Medium = feesFromResult(&data.Medium)
-	fees.Low = feesFromResult(&data.Low)
+	fees.Instant = oneInchFeesFromResult(&data.Instant)
+	fees.High = oneInchFeesFromResult(&data.High)
+	fees.Medium = oneInchFeesFromResult(&data.Medium)
+	fees.Low = oneInchFeesFromResult(&data.Low)
 	p.mux.Lock()
 	defer p.mux.Unlock()
 	p.lastSync = time.Now()
 	p.eip1559Fees = &fees
-	glog.Infof("oneInchFeesProvider: %+v", p.eip1559Fees)
 	return true
 }
 
@@ -142,10 +141,4 @@ func (p *oneInchFeeProvider) getData(res interface{}) error {
 		return errors.New(p.params.URL + " returned status " + strconv.Itoa(httpRes.StatusCode))
 	}
 	return common.SafeDecodeResponseFromReader(httpRes.Body, &res)
-}
-
-func (p *oneInchFeeProvider) GetEip1559Fees() (*bchain.Eip1559Fees, error) {
-	p.mux.Lock()
-	defer p.mux.Unlock()
-	return p.eip1559Fees, nil
 }
