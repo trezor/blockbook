@@ -610,13 +610,15 @@ type rpcTraceResult struct {
 }
 
 func (b *EthereumRPC) getCreationContractInfo(contract string, height uint32) *bchain.ContractInfo {
-	ci, err := b.fetchContractInfo(contract)
-	if ci == nil || err != nil {
-		ci = &bchain.ContractInfo{
-			Contract: contract,
-		}
+	// do not fetch fetchContractInfo in sync, it slows it down
+	// the contract will be fetched only when asked by a client
+	// ci, err := b.fetchContractInfo(contract)
+	// if ci == nil || err != nil {
+	ci := &bchain.ContractInfo{
+		Contract: contract,
 	}
-	ci.Type = bchain.UnknownTokenType
+	// }
+	ci.Type = bchain.UnhandledTokenType
 	ci.CreatedInBlock = height
 	return ci
 }

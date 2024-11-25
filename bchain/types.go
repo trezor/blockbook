@@ -131,7 +131,8 @@ type TokenTypeName string
 
 // Token types
 const (
-	UnknownTokenType TokenTypeName = ""
+	UnknownTokenType   TokenTypeName = ""
+	UnhandledTokenType TokenTypeName = "-"
 
 	// XPUBAddressTokenType is address derived from xpub
 	XPUBAddressTokenType TokenTypeName = "XPUBAddress"

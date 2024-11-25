@@ -172,9 +172,18 @@ func (w *Worker) getAddressAliases(addresses map[string]struct{}) AddressAliases
 		}
 		for a := range addresses {
 			if w.chainType == bchain.ChainEthereumType {
-				ci, err := w.db.GetContractInfoForAddress(a)
-				if err == nil && ci != nil && ci.Name != "" {
-					aliases[a] = AddressAlias{Type: "Contract", Alias: ci.Name}
+				addrDesc, err := w.chainParser.GetAddrDescFromAddress(a)
+				if err != nil || addrDesc == nil {
+					continue
+				}
+				ci, err := w.db.GetContractInfo(addrDesc, bchain.UnknownTokenType)
+				if err == nil && ci != nil {
+					if ci.Type == bchain.UnhandledTokenType {
+						ci, _, err = w.getContractDescriptorInfo(addrDesc, bchain.UnknownTokenType)
+					}
+					if err == nil && ci != nil && ci.Name != "" {
+						aliases[a] = AddressAlias{Type: "Contract", Alias: ci.Name}
+					}
 				}
 			}
 			n := w.db.GetAddressAlias(a)
@@ -608,7 +617,7 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 	return r, nil
 }
 
-func (w *Worker) getContractInfo(contract string, typeFromContext bchain.TokenTypeName) (*bchain.ContractInfo, bool, error) {
+func (w *Worker) GetContractInfo(contract string, typeFromContext bchain.TokenTypeName) (*bchain.ContractInfo, bool, error) {
 	cd, err := w.chainParser.GetAddrDescFromAddress(contract)
 	if err != nil {
 		return nil, false, err
@@ -648,7 +657,7 @@ func (w *Worker) getContractDescriptorInfo(cd bchain.AddressDescriptor, typeFrom
 				glog.Errorf("StoreContractInfo error %v, contract %v", err, cd)
 			}
 		}
-	} else if (len(contractInfo.Name) > 0 && contractInfo.Name[0] == 0) || (len(contractInfo.Symbol) > 0 && contractInfo.Symbol[0] == 0) {
+	} else if (contractInfo.Type == bchain.UnhandledTokenType || len(contractInfo.Name) > 0 && contractInfo.Name[0] == 0) || (len(contractInfo.Symbol) > 0 && contractInfo.Symbol[0] == 0) {
 		// fix contract name/symbol that was parsed as a string consisting of zeroes
 		blockchainContractInfo, err := w.chain.GetContractInfo(cd)
 		if err != nil {
@@ -666,6 +675,10 @@ func (w *Worker) getContractDescriptorInfo(cd bchain.AddressDescriptor, typeFrom
 			}
 			if blockchainContractInfo != nil {
 				contractInfo.Decimals = blockchainContractInfo.Decimals
+			}
+			if contractInfo.Type == bchain.UnhandledTokenType {
+				glog.Infof("Contract %v %v [%s] handled", cd, typeFromContext, contractInfo.Name)
+				contractInfo.Type = typeFromContext
 			}
 			if err = w.db.StoreContractInfo(contractInfo); err != nil {
 				glog.Errorf("StoreContractInfo error %v, contract %v", err, cd)
@@ -687,7 +700,7 @@ func (w *Worker) getEthereumTokensTransfers(transfers bchain.TokenTransfers, add
 			if info, ok := contractCache[t.Contract]; ok {
 				contractInfo = info
 			} else {
-				info, _, err := w.getContractInfo(t.Contract, typeName)
+				info, _, err := w.GetContractInfo(t.Contract, typeName)
 				if err != nil {
 					glog.Errorf("getContractInfo error %v, contract %v", err, t.Contract)
 					continue
@@ -1124,9 +1137,15 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 			d.tokens = d.tokens[:j]
 			sort.Sort(d.tokens)
 		}
-		d.contractInfo, err = w.db.GetContractInfo(addrDesc, "")
+		d.contractInfo, err = w.db.GetContractInfo(addrDesc, bchain.UnknownTokenType)
 		if err != nil {
 			return nil, nil, err
+		}
+		if d.contractInfo != nil && d.contractInfo.Type == bchain.UnhandledTokenType {
+			d.contractInfo, _, err = w.getContractDescriptorInfo(addrDesc, bchain.UnknownTokenType)
+			if err != nil {
+				return nil, nil, err
+			}
 		}
 		if filter.FromHeight == 0 && filter.ToHeight == 0 {
 			// compute total results for paging
