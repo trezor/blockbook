@@ -1,0 +1,39 @@
+{{define "specific"}} {{if eq .ChainType 1}}
+<script>
+    function getContractInfo(event) {
+        event.preventDefault();
+        const address = document.getElementById('contractAddress').value.trim();
+        if (!address) {
+            alert('Enter a contract address');
+        } else {
+            window.location = window.location.href.split('?')[0] + '/' + address;
+        }
+    }
+</script>
+<form onsubmit="return getContractInfo(event)">
+    <div class="row">
+        <div class="col-6">
+            <input
+                type="text"
+                class="form-control"
+                placeholder="contract address"
+                id="contractAddress"
+            />
+        </div>
+        <div class="col">
+            <input class="btn btn-secondary" type="submit" />
+        </div>
+    </div>
+</form>
+<div class="row" style="margin: 35px">
+    To update contract, use POST request to /admin/contract-info/ endpoint. Example:
+    <div style="margin-top: 20px">
+        <pre>
+            curl -k -v  \
+            'https://&lt;internaladdress&gt;/admin/contract-info/' \
+            -H 'Content-Type: application/json' \
+            --data '[{ContractInfo},{ContractInfo},...]'        
+        </pre>
+    </div>
+</div>
+{{else}} Not supported {{end}}{{end}}
