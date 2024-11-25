@@ -1,9 +1,9 @@
 ```sh
-# Build the building image
-make .bin-image
+# Build the building image with a specific base image
+make .bin-image BASE_IMAGE=ubuntu:22.04
 
 # Run the image with mounted code volume and network connections
-docker run -v ".:/src" -v "./build:/out"  --network=host  blockbook-build
+docker run --rm --init -v ".:/src" -v "./build:/out"  --network=host  blockbook-build
 
 # Look at running containers
 docker ps
@@ -23,8 +23,8 @@ docker exec -it $(docker ps -q --filter ancestor=blockbook-build) /bin/bash
 
 # Go to the source code directory
 cd /src
-# Build the main binary
-go build
+# Build the main binary (the flag is necessary here - it can be omitted after `make build` in `/build` is called)
+go build -buildvcs=false
 # Regenerate config
 ./contrib/scripts/build-blockchaincfg.sh bitcoin_regtest
 # Run the app ... logs should be visible in the terminal
@@ -35,6 +35,6 @@ go build
 
 ---
 
-# Stop the container
+# Stop the container --- in case it is still running even after killing the `docker run` process
 docker stop $CONTAINER_ID
 ```

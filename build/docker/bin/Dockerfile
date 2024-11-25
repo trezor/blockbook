@@ -60,4 +60,4 @@ VOLUME /out
 
 WORKDIR /build
 
-CMD ["sh", "-c", "while true; do sleep 1000; done"]
+CMD ["sleep", "infinity"]
