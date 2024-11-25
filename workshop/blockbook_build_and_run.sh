@@ -14,5 +14,5 @@ go build
 echo "Generating bitcoin regtest config..."
 ./contrib/scripts/build-blockchaincfg.sh bitcoin_regtest
 
-echo "Running blockbook..."
+echo "Running blockbook, visit http://localhost:9130/ in the browser..."
 ./blockbook -sync -blockchaincfg=build/blockchaincfg.json -internal=:9030 -public=:9130 -logtostderr -enablesubnewtx

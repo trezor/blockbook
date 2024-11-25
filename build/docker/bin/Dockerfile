@@ -59,3 +59,5 @@ ADD Makefile /build/Makefile
 VOLUME /out
 
 WORKDIR /build
+
+CMD ["sh", "-c", "while true; do sleep 1000; done"]
