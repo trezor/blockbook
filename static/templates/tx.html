@@ -182,26 +182,16 @@
 {{end}}
 {{end}}
 <div class="pt-4">
-    <h5 style="display: inline; cursor: pointer; color: blue;" id="raw-button">Raw Transaction</h5>
-    <h5 style="display: inline; margin-left: 40px; cursor: pointer; color: blue;" id="raw-hex-button">Raw Transaction Hex</h5>
-    <div class="json">
+    <button style="display: inline-block; cursor: pointer; color: black" class="btn btn-paging" id="raw-button">Raw Transaction</button>
+    <button style="display: inline-block; cursor: pointer; color: black" class="btn btn-paging" id="raw-hex-button">Raw Transaction Hex</button>
+    <div class="json copyable">
         <pre id="raw"></pre>
     </div>
-    <button id="copy-button"
-            style="display: none; margin-top: 10px; padding: 8px 16px; font-size: 18px; color: white; background-color: #007BFF; border: none; border-radius: 4px; cursor: pointer;">
-        Copy to Clipboard
-    </button>
-    <span id="copy-success-text"
-          style="display: none; margin-left: 10px; font-size: 16px; color: green;">
-        Copied to clipboard!
-    </span>
 
     <script type="text/javascript">
         const rawOutput = document.getElementById('raw');
         const rawButton = document.getElementById('raw-button');
         const rawHexButton = document.getElementById('raw-hex-button');
-        const copyButton = document.getElementById('copy-button');
-        const copySuccessText = document.getElementById('copy-success-text');
 
         const raw = {{ $tx.CoinSpecificData }};
         const txId = {{ jsStr $tx.Txid }};
@@ -233,26 +223,16 @@
 
         function updateButtonStyles() {
             if (isShowingHexData) {
-                rawHexButton.style.color = 'green';
-                rawHexButton.style.cursor = 'default';
-                rawButton.style.color = 'blue';
-                rawButton.style.cursor = 'pointer';
-                copyButton.style.display = 'inline-block';
+                rawButton.classList.add('active');
+                rawButton.style.fontWeight = 'normal';
+                rawHexButton.classList.remove('active');
+                rawHexButton.style.fontWeight = 'bold';
             } else {
-                rawButton.style.color = 'green';
-                rawButton.style.cursor = 'default';
-                rawHexButton.style.color = 'blue';
-                rawHexButton.style.cursor = 'pointer';
-                copyButton.style.display = 'none';
-                copySuccessText.style.display = 'none';
+                rawButton.classList.remove('active');
+                rawButton.style.fontWeight = 'bold';
+                rawHexButton.classList.add('active');
+                rawHexButton.style.fontWeight = 'normal';
             }
-        }
-
-        function showCopySuccessMessage(durationMs) {
-            copySuccessText.style.display = 'inline';
-            setTimeout(() => {
-                copySuccessText.style.display = 'none';
-            }, durationMs);
         }
 
         updateButtonStyles();
@@ -277,15 +257,6 @@
                 isShowingHexData = false;
                 updateButtonStyles();
             }
-        });
-
-        copyButton.addEventListener('click', () => {
-            const txHex = rawOutput.textContent.trim();
-            navigator.clipboard.writeText(txHex).then(() => {
-                showCopySuccessMessage(5000);
-            }).catch((err) => {
-                console.error('Failed to copy: ', err);
-            });
         });
     </script>
 </div>
