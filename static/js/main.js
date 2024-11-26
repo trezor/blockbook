@@ -85,6 +85,75 @@ function addressAliasTooltip() {
   return `<span class="l-tooltip">${type}<br>${address}</span>`;
 }
 
+export function handleTxPage(rawData, txId) {
+  const rawOutput = document.getElementById('raw');
+  const rawButton = document.getElementById('raw-button');
+  const rawHexButton = document.getElementById('raw-hex-button');
+
+  rawOutput.innerHTML = syntaxHighlight(rawData);
+
+  let isShowingHexData = false;
+
+  const memoizedResponses = {};
+
+  async function getTransactionHex(txId) {
+      if (memoizedResponses[txId]) {
+          return memoizedResponses[txId];
+      }
+      const fetchedData = await fetchTransactionHex(txId);
+      memoizedResponses[txId] = fetchedData;
+      return fetchedData;
+  }
+
+  async function fetchTransactionHex(txId) {
+      const response = await fetch(`/api/rawtx/${txId}`);
+      if (!response.ok) {
+          throw new Error(`Error fetching data: ${response.status}`);
+      }
+      const txHex = await response.text();
+      const hexWithoutQuotes = txHex.replace(/"/g, '');
+      return hexWithoutQuotes;
+  }
+
+  function updateButtonStyles() {
+      if (isShowingHexData) {
+          rawButton.classList.add('active');
+          rawButton.style.fontWeight = 'normal';
+          rawHexButton.classList.remove('active');
+          rawHexButton.style.fontWeight = 'bold';
+      } else {
+          rawButton.classList.remove('active');
+          rawButton.style.fontWeight = 'bold';
+          rawHexButton.classList.add('active');
+          rawHexButton.style.fontWeight = 'normal';
+      }
+  }
+
+  updateButtonStyles();
+
+  rawHexButton.addEventListener('click', async () => {
+      if (!isShowingHexData) {
+          try {
+              const txHex = await getTransactionHex(txId);
+              rawOutput.textContent = txHex;
+          } catch (error) {
+              console.error('Error fetching raw transaction hex:', error);
+              rawOutput.textContent = `Error fetching raw transaction hex: ${error.message}`;
+          }
+          isShowingHexData = true;
+          updateButtonStyles();
+      }
+  });
+
+  rawButton.addEventListener('click', () => {
+      if (isShowingHexData) {
+          rawOutput.innerHTML = syntaxHighlight(rawData);
+          isShowingHexData = false;
+          updateButtonStyles();
+      }
+  });
+}
+
 window.addEventListener("DOMContentLoaded", () => {
   const a = getCoinCookie();
   if (a?.length === 3) {
