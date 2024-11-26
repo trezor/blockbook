@@ -203,14 +203,13 @@
         const copyButton = document.getElementById('copy-button');
         const copySuccessText = document.getElementById('copy-success-text');
 
-        // Start with the original raw data
-        var raw = {{$tx.CoinSpecificData}};
+        const raw = {{ $tx.CoinSpecificData }};
+        const txId = {{ jsStr $tx.Txid }};
+
         rawOutput.innerHTML = syntaxHighlight(raw);
 
-        // To know the state of the two buttons
         let isShowingHexData = false;
 
-        // Memoization store for txId -> hex mapping
         const memoizedResponses = {};
 
         async function getTransactionHex(txId) {
@@ -258,11 +257,9 @@
 
         updateButtonStyles();
 
-        // Clicking on Hex button will fetch data from API and show it
         rawHexButton.addEventListener('click', async () => {
             if (!isShowingHexData) {
                 try {
-                    const txId = '{{$tx.Txid}}';
                     const txHex = await getTransactionHex(txId);
                     rawOutput.textContent = txHex;
                 } catch (error) {
@@ -274,16 +271,14 @@
             }
         });
 
-        // Clicking on the original button will show the original data
         rawButton.addEventListener('click', () => {
             if (isShowingHexData) {
-                rawOutput.innerHTML = syntaxHighlight(raw);;
+                rawOutput.innerHTML = syntaxHighlight(raw);
                 isShowingHexData = false;
                 updateButtonStyles();
             }
         });
 
-        // Copy button functionality
         copyButton.addEventListener('click', () => {
             const txHex = rawOutput.textContent.trim();
             navigator.clipboard.writeText(txHex).then(() => {
