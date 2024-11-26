@@ -97,6 +97,10 @@ export function handleTxPage(rawData, txId) {
   const memoizedResponses = {};
 
   async function getTransactionHex(txId) {
+      // BTC-like coins have a 'hex' field in the raw data
+      if (rawData['hex']) {
+          return rawData['hex'];
+      }
       if (memoizedResponses[txId]) {
           return memoizedResponses[txId];
       }
