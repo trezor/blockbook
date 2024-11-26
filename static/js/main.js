@@ -127,7 +127,8 @@ window.addEventListener("DOMContentLoaded", () => {
       if (e.clientX < e.target.getBoundingClientRect().x) {
         let t = e.target.getAttribute("cc");
         if (!t) t = e.target.innerText;
-        navigator.clipboard.writeText(t);
+        const textToCopy = t.trim();
+        navigator.clipboard.writeText(textToCopy);
         e.target.className = e.target.className.replace("copyable", "copied");
         setTimeout(
           () =>
