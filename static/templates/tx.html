@@ -182,13 +182,116 @@
 {{end}}
 {{end}}
 <div class="pt-4">
-    <h5>Raw Transaction</h5>
+    <h5 style="display: inline; cursor: pointer; color: blue;" id="raw-button">Raw Transaction</h5>
+    <h5 style="display: inline; margin-left: 40px; cursor: pointer; color: blue;" id="raw-hex-button">Raw Transaction Hex</h5>
     <div class="json">
         <pre id="raw"></pre>
     </div>
+    <button id="copy-button"
+            style="display: none; margin-top: 10px; padding: 8px 16px; font-size: 18px; color: white; background-color: #007BFF; border: none; border-radius: 4px; cursor: pointer;">
+        Copy to Clipboard
+    </button>
+    <span id="copy-success-text"
+          style="display: none; margin-left: 10px; font-size: 16px; color: green;">
+        Copied to clipboard!
+    </span>
+
     <script type="text/javascript">
+        const rawOutput = document.getElementById('raw');
+        const rawButton = document.getElementById('raw-button');
+        const rawHexButton = document.getElementById('raw-hex-button');
+        const copyButton = document.getElementById('copy-button');
+        const copySuccessText = document.getElementById('copy-success-text');
+
+        // Start with the original raw data
         var raw = {{$tx.CoinSpecificData}};
-        document.getElementById('raw').innerHTML = syntaxHighlight(raw);
+        rawOutput.innerHTML = syntaxHighlight(raw);
+
+        // To know the state of the two buttons
+        let isShowingHexData = false;
+
+        // Memoization store for txId -> hex mapping
+        const memoizedResponses = {};
+
+        async function getTransactionHex(txId) {
+            if (memoizedResponses[txId]) {
+                return memoizedResponses[txId];
+            }
+            const fetchedData = await fetchTransactionHex(txId);
+            memoizedResponses[txId] = fetchedData;
+            return fetchedData;
+        }
+
+        async function fetchTransactionHex(txId) {
+            const response = await fetch(`/api/rawtx/${txId}`);
+            if (!response.ok) {
+                throw new Error(`Error fetching data: ${response.status}`);
+            }
+            const txHex = await response.text();
+            const hexWithoutQuotes = txHex.replace(/"/g, '');
+            return hexWithoutQuotes;
+        }
+
+        function updateButtonStyles() {
+            if (isShowingHexData) {
+                rawHexButton.style.color = 'green';
+                rawHexButton.style.cursor = 'default';
+                rawButton.style.color = 'blue';
+                rawButton.style.cursor = 'pointer';
+                copyButton.style.display = 'inline-block';
+            } else {
+                rawButton.style.color = 'green';
+                rawButton.style.cursor = 'default';
+                rawHexButton.style.color = 'blue';
+                rawHexButton.style.cursor = 'pointer';
+                copyButton.style.display = 'none';
+                copySuccessText.style.display = 'none';
+            }
+        }
+
+        function showCopySuccessMessage(durationMs) {
+            copySuccessText.style.display = 'inline';
+            setTimeout(() => {
+                copySuccessText.style.display = 'none';
+            }, durationMs);
+        }
+
+        updateButtonStyles();
+
+        // Clicking on Hex button will fetch data from API and show it
+        rawHexButton.addEventListener('click', async () => {
+            if (!isShowingHexData) {
+                try {
+                    const txId = '{{$tx.Txid}}';
+                    const txHex = await getTransactionHex(txId);
+                    rawOutput.textContent = txHex;
+                } catch (error) {
+                    console.error('Error fetching raw transaction hex:', error);
+                    rawOutput.textContent = `Error fetching raw transaction hex: ${error.message}`;
+                }
+                isShowingHexData = true;
+                updateButtonStyles();
+            }
+        });
+
+        // Clicking on the original button will show the original data
+        rawButton.addEventListener('click', () => {
+            if (isShowingHexData) {
+                rawOutput.innerHTML = syntaxHighlight(raw);;
+                isShowingHexData = false;
+                updateButtonStyles();
+            }
+        });
+
+        // Copy button functionality
+        copyButton.addEventListener('click', () => {
+            const txHex = rawOutput.textContent.trim();
+            navigator.clipboard.writeText(txHex).then(() => {
+                showCopySuccessMessage(5000);
+            }).catch((err) => {
+                console.error('Failed to copy: ', err);
+            });
+        });
     </script>
 </div>
 {{end}}

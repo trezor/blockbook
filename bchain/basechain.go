@@ -81,3 +81,7 @@ func (b *BaseChain) EthereumTypeGetStakingPoolsData(addrDesc AddressDescriptor) 
 func (b *BaseChain) EthereumTypeRpcCall(data, to, from string) (string, error) {
 	return "", errors.New("not supported")
 }
+
+func (b *BaseChain) EthereumTypeGetRawTransaction(txid string) (string, error) {
+	return "", errors.New("not supported")
+}

@@ -994,21 +994,31 @@ func (b *EthereumRPC) EthereumTypeEstimateGas(params map[string]interface{}) (ui
 
 // SendRawTransaction sends raw transaction
 func (b *EthereumRPC) SendRawTransaction(hex string) (string, error) {
+	return b.callRpcStringResult("eth_sendRawTransaction", hex)
+}
+
+// EthereumTypeGetRawTransaction gets raw transaction in hex format
+func (b *EthereumRPC) EthereumTypeGetRawTransaction(txid string) (string, error) {
+	return b.callRpcStringResult("eth_getRawTransactionByHash", txid)
+}
+
+// Helper function for calling ETH RPC with parameters and getting string result
+func (b *EthereumRPC) callRpcStringResult(rpcMethod string, args ...interface{}) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
 	defer cancel()
 	var raw json.RawMessage
-	err := b.RPC.CallContext(ctx, &raw, "eth_sendRawTransaction", hex)
+	err := b.RPC.CallContext(ctx, &raw, rpcMethod, args...)
 	if err != nil {
 		return "", err
 	} else if len(raw) == 0 {
-		return "", errors.New("SendRawTransaction: failed")
+		return "", errors.New(rpcMethod + " : failed")
 	}
 	var result string
 	if err := json.Unmarshal(raw, &result); err != nil {
 		return "", errors.Annotatef(err, "raw result %v", raw)
 	}
 	if result == "" {
-		return "", errors.New("SendRawTransaction: failed, empty result")
+		return "", errors.New(rpcMethod + " : failed, empty result")
 	}
 	return result, nil
 }
