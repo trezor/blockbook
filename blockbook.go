@@ -85,6 +85,8 @@ var (
 	resyncMempoolPeriodMs = flag.Int("resyncmempoolperiod", 60017, "resync mempool period in milliseconds")
 
 	extendedIndex = flag.Bool("extendedindex", false, "if true, create index of input txids and spending transactions")
+
+	enableAPIBeforeSyncFlag = flag.Bool("enableapibeforesync", false, "enable API access before full synchronization is completed")
 )
 
 var (
@@ -328,13 +330,9 @@ func mainWithExitCode() int {
 	}
 	go storeInternalStateLoop()
 
-	if publicServer != nil {
+	if publicServer != nil && !*enableAPIBeforeSyncFlag {
 		// start full public interface
-		callbacksOnNewBlock = append(callbacksOnNewBlock, publicServer.OnNewBlock)
-		callbacksOnNewTxAddr = append(callbacksOnNewTxAddr, publicServer.OnNewTxAddr)
-		callbacksOnNewTx = append(callbacksOnNewTx, publicServer.OnNewTx)
-		callbacksOnNewFiatRatesTicker = append(callbacksOnNewFiatRatesTicker, publicServer.OnNewFiatRatesTicker)
-		publicServer.ConnectFullPublicInterface()
+		startFullPublicInterface(publicServer)
 	}
 
 	if *blockFrom >= 0 {
@@ -417,10 +415,16 @@ func startInternalServer() (*server.InternalServer, error) {
 
 func startPublicServer() (*server.PublicServer, error) {
 	// start public server in limited functionality, extend it after sync is finished by calling ConnectFullPublicInterface
-	publicServer, err := server.NewPublicServer(*publicBinding, *certFiles, index, chain, mempool, txCache, *explorerURL, metrics, internalState, fiatRates, *debugMode)
+	publicServer, err := server.NewPublicServer(*publicBinding, *certFiles, index, chain, mempool, txCache, *explorerURL, metrics, internalState, fiatRates, *debugMode, *enableAPIBeforeSyncFlag)
 	if err != nil {
 		return nil, err
 	}
+
+	// Check if the API-before-sync flag is set
+	if *enableAPIBeforeSyncFlag {
+		startFullPublicInterface(publicServer)
+	}
+
 	go func() {
 		err = publicServer.Run()
 		if err != nil {
@@ -432,7 +436,16 @@ func startPublicServer() (*server.PublicServer, error) {
 			}
 		}
 	}()
+
 	return publicServer, err
+}
+
+func startFullPublicInterface(publicServer *server.PublicServer) {
+	callbacksOnNewBlock = append(callbacksOnNewBlock, publicServer.OnNewBlock)
+	callbacksOnNewTxAddr = append(callbacksOnNewTxAddr, publicServer.OnNewTxAddr)
+	callbacksOnNewTx = append(callbacksOnNewTx, publicServer.OnNewTx)
+	callbacksOnNewFiatRatesTicker = append(callbacksOnNewFiatRatesTicker, publicServer.OnNewFiatRatesTicker)
+	publicServer.ConnectFullPublicInterface()
 }
 
 func performRollback() error {
