@@ -356,7 +356,7 @@ func (b *EthereumRPC) EthereumTypeGetErc20ContractBalance(addrDesc, contractDesc
 	return r, nil
 }
 
-// GetContractInfo returns URI of non fungible or multi token defined by token id
+// GetTokenURI returns URI of non fungible or multi token defined by token id
 func (b *EthereumRPC) GetTokenURI(contractDesc bchain.AddressDescriptor, tokenID *big.Int) (string, error) {
 	address := hexutil.Encode(contractDesc)
 	// CryptoKitties do not fully support ERC721 standard, do not have tokenURI method

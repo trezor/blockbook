@@ -124,7 +124,7 @@ type AddrContracts struct {
 	Contracts      []AddrContract
 }
 
-// packAddrContract packs AddrContracts into a byte buffer
+// packAddrContracts packs AddrContracts into a byte buffer
 func packAddrContracts(acs *AddrContracts) []byte {
 	buf := make([]byte, 0, 128)
 	varBuf := make([]byte, maxPackedBigintBytes)
