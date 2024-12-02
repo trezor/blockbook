@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"math/big"
 	"net"
@@ -115,6 +116,11 @@ func NewBitcoinRPC(config json.RawMessage, pushHandler func(bchain.NotificationT
 		mempoolFilterScripts: c.MempoolFilterScripts,
 		mempoolUseZeroedKey:  c.MempoolFilterUseZeroedKey,
 	}
+
+	fmt.Printf("RPC URL: %s", c.RPCURL)
+	fmt.Printf("RPC User: %s", c.RPCUser)
+	fmt.Printf("RPC Password: %s", c.RPCPass)
+	fmt.Printf("Mempool Golomb Filter P: %d", c.MempoolGolombFilterP)
 
 	return s, nil
 }

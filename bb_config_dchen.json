@@ -1,0 +1,36 @@
+{
+    "coin1": {
+        "name": "Bitcoin",
+        "shortcut": "BTC",
+        "label": "Bitcoin",
+        "alias": "bitcoin"
+    },
+    "coin_name": "Bitcoin",
+
+    "ipc": {
+        "url": "http://127.0.0.1:18443",
+        "user": "user",
+        "password": "password",
+        "timeout": 25
+    },
+
+
+    "ipc.s": {
+        "rpc_url_template": "http://127.0.0.1:18443",
+        "rpc_user": "user",
+        "rpc_pass": "password",
+        "rpc_timeout": 25
+    },
+
+    "backend": {
+	"network": "regtest",
+        "mainnet": false
+    },
+    "blockbook": {
+        "block_chain": {
+            "parse": true,
+            "mempool_workers": 8,
+            "mempool_sub_workers": 2
+        }
+    }
+}
