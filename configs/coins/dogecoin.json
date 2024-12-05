@@ -22,10 +22,10 @@
         "package_name": "backend-dogecoin",
         "package_revision": "satoshilabs-1",
         "system_user": "dogecoin",
-        "version": "1.14.7",
-        "binary_url": "https://github.com/dogecoin/dogecoin/releases/download/v1.14.7/dogecoin-1.14.7-x86_64-linux-gnu.tar.gz",
+        "version": "1.14.9",
+        "binary_url": "https://github.com/dogecoin/dogecoin/releases/download/v1.14.9/dogecoin-1.14.9-x86_64-linux-gnu.tar.gz",
         "verification_type": "sha256",
-        "verification_source": "9cd22fb3ebba4d407c2947f4241b9e78c759f29cdf32de8863aea6aeed21cf8b",
+        "verification_source": "4f227117b411a7c98622c970986e27bcfc3f547a72bef65e7d9e82989175d4f8",
         "extract_command": "tar -C backend --strip 1 -xf",
         "exclude_files": ["bin/dogecoin-qt"],
         "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/dogecoind -datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -conf={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf -pid=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",
@@ -45,8 +45,8 @@
         },
         "platforms": {
             "arm64": {
-                "binary_url": "https://github.com/dogecoin/dogecoin/releases/download/v1.14.7/dogecoin-1.14.7-aarch64-linux-gnu.tar.gz",
-                "verification_source": "b8fb8050b19283d1ab3c261aaca96d84f2a17f93b52fcff9e252f390b0564f31",
+                "binary_url": "https://github.com/dogecoin/dogecoin/releases/download/v1.14.9/dogecoin-1.14.9-aarch64-linux-gnu.tar.gz",
+                "verification_source": "6928c895a20d0bcb6d5c7dcec753d35c884a471aaf8ad4242a89a96acb4f2985",
                 "exclude_files": []
             }
         }
