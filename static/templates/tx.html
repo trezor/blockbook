@@ -182,19 +182,16 @@
 {{end}}
 {{end}}
 <div class="pt-4">
-    <button style="display: inline-block; color: black" class="btn btn-paging" id="raw-button">
+    <button style="color: black" class="btn btn-paging" id="raw-button">
         Raw Transaction
     </button>
-    <button style="display: inline-block; color: black" class="btn btn-paging" id="raw-hex-button">
+    <button style="color: black" class="btn btn-paging" id="raw-hex-button">
         Raw Transaction Hex
     </button>
     <div class="json copyable">
         <pre id="raw" style="text-wrap: auto;"></pre>
     </div>
-
-    <script src="/static/js/main.js" type="module"></script>
-    <script type="module">
-        import { handleTxPage } from '/static/js/main.js';
+    <script>
         const rawData = {{ $tx.CoinSpecificData }};
         const txId = {{ jsStr $tx.Txid }};
         handleTxPage(rawData, txId);

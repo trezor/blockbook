@@ -85,7 +85,7 @@ function addressAliasTooltip() {
   return `<span class="l-tooltip">${type}<br>${address}</span>`;
 }
 
-export function handleTxPage(rawData, txId) {
+function handleTxPage(rawData, txId) {
   const rawOutput = document.getElementById('raw');
   const rawButton = document.getElementById('raw-button');
   const rawHexButton = document.getElementById('raw-hex-button');
