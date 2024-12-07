@@ -207,6 +207,11 @@ func (w *Worker) GetTransaction(txid string, spendingTxs bool, specificJSON bool
 	return tx, nil
 }
 
+// GetRawTransaction gets raw transaction data in hex format from txid
+func (w *Worker) GetRawTransaction(txid string) (string, error) {
+	return w.chain.EthereumTypeGetRawTransaction(txid)
+}
+
 // getTransaction reads transaction data from txid
 func (w *Worker) getTransaction(txid string, spendingTxs bool, specificJSON bool, addresses map[string]struct{}) (*Tx, error) {
 	bchainTx, height, err := w.txCache.GetTransaction(txid)

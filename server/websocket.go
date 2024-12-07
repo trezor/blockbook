@@ -107,7 +107,7 @@ func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.
 		fiatRatesSubscriptions:      make(map[string]map[*websocketChannel]string),
 		fiatRatesTokenSubscriptions: make(map[*websocketChannel][]string),
 	}
-	envRpcCall := os.Getenv(strings.ToUpper(is.CoinShortcut) + "_ALLOWED_RPC_CALL_TO")
+	envRpcCall := os.Getenv(strings.ToUpper(is.GetNetwork()) + "_ALLOWED_RPC_CALL_TO")
 	if envRpcCall != "" {
 		s.allowedRpcCallTo = make(map[string]struct{})
 		for _, c := range strings.Split(envRpcCall, ",") {

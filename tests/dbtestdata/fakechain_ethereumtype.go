@@ -139,6 +139,11 @@ func (c *fakeBlockChainEthereumType) EthereumTypeRpcCall(data, to, from string) 
 	return data + "abcd", nil
 }
 
+// EthereumTypeGetRawTransaction returns simulated transaction hex data
+func (c *fakeBlockChainEthereumType) EthereumTypeGetRawTransaction(txid string) (string, error) {
+	return txid + "abcd", nil
+}
+
 // GetTokenURI returns URI derived from the input contractDesc
 func (c *fakeBlockChainEthereumType) GetTokenURI(contractDesc bchain.AddressDescriptor, tokenID *big.Int) (string, error) {
 	return "https://ipfs.io/ipfs/" + contractDesc.String()[3:] + ".json", nil
