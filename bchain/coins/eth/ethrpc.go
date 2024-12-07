@@ -40,6 +40,7 @@ const (
 type Configuration struct {
 	CoinName                        string `json:"coin_name"`
 	CoinShortcut                    string `json:"coin_shortcut"`
+	Network                         string `json:"network"`
 	RPCURL                          string `json:"rpc_url"`
 	RPCTimeout                      int    `json:"rpc_timeout"`
 	BlockAddressesToKeep            int    `json:"block_addresses_to_keep"`
@@ -159,7 +160,12 @@ func (b *EthereumRPC) Initialize() error {
 		return errors.Errorf("Unknown network id %v", id)
 	}
 
-	err = b.initStakingPools(b.ChainConfig.CoinShortcut)
+	networkConfig := b.ChainConfig.Network
+	if networkConfig == "" {
+		networkConfig = b.ChainConfig.CoinShortcut
+	}
+
+	err = b.initStakingPools(networkConfig)
 	if err != nil {
 		return err
 	}
