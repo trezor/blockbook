@@ -186,6 +186,7 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 	serveMux.HandleFunc(path+"api/block-filters/", s.jsonHandler(s.apiBlockFilters, apiDefault))
 	serveMux.HandleFunc(path+"api/tx-specific/", s.jsonHandler(s.apiTxSpecific, apiDefault))
 	serveMux.HandleFunc(path+"api/tx/", s.jsonHandler(s.apiTx, apiDefault))
+	serveMux.HandleFunc(path+"api/rawtx/", s.jsonHandler(s.apiRawTx, apiDefault))
 	serveMux.HandleFunc(path+"api/address/", s.jsonHandler(s.apiAddress, apiDefault))
 	serveMux.HandleFunc(path+"api/xpub/", s.jsonHandler(s.apiXpub, apiDefault))
 	serveMux.HandleFunc(path+"api/utxo/", s.jsonHandler(s.apiUtxo, apiDefault))
@@ -303,7 +304,7 @@ func (s *PublicServer) newTemplateData(r *http.Request) *TemplateData {
 		t.MultiTokenName = bchain.EthereumTokenTypeMap[bchain.MultiToken]
 	}
 	if !s.debug {
-		t.Minified = ".min.3"
+		t.Minified = ".min.4"
 	}
 	if s.is.HasFiatRates {
 		// get the secondary coin and if it should be shown either from query parameters "secondary" and "use_secondary"
@@ -1286,6 +1287,19 @@ func (s *PublicServer) apiTx(r *http.Request, apiVersion int) (interface{}, erro
 		return s.api.TxToV1(tx), nil
 	}
 	return tx, err
+}
+
+func (s *PublicServer) apiRawTx(r *http.Request, apiVersion int) (interface{}, error) {
+	var txid string
+	i := strings.LastIndexByte(r.URL.Path, '/')
+	if i > 0 {
+		txid = r.URL.Path[i+1:]
+	}
+	if len(txid) == 0 {
+		return "", api.NewAPIError("Missing txid", true)
+	}
+	s.metrics.ExplorerViews.With(common.Labels{"action": "api-raw-tx"}).Inc()
+	return s.api.GetRawTransaction(txid)
 }
 
 func (s *PublicServer) apiTxSpecific(r *http.Request, apiVersion int) (interface{}, error) {

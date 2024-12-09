@@ -200,6 +200,10 @@ span.btn-paging:hover {
     color: #757575;
 }
 
+.btn-paging.active:hover {
+    background-color: white;
+}
+
 .paging-group {
     border: 1px solid #e2e2e2;
     border-radius: 0.5rem;

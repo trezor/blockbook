@@ -182,13 +182,19 @@
 {{end}}
 {{end}}
 <div class="pt-4">
-    <h5>Raw Transaction</h5>
-    <div class="json">
-        <pre id="raw"></pre>
+    <button style="color: black" class="btn btn-paging" id="raw-button">
+        Raw Transaction
+    </button>
+    <button style="color: black" class="btn btn-paging" id="raw-hex-button">
+        Raw Transaction Hex
+    </button>
+    <div class="json copyable">
+        <pre id="raw" style="text-wrap: auto;"></pre>
     </div>
-    <script type="text/javascript">
-        var raw = {{$tx.CoinSpecificData}};
-        document.getElementById('raw').innerHTML = syntaxHighlight(raw);
+    <script>
+        const rawData = {{ $tx.CoinSpecificData }};
+        const txId = {{ jsStr $tx.Txid }};
+        handleTxPage(rawData, txId);
     </script>
 </div>
 {{end}}
