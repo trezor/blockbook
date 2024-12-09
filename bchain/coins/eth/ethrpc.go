@@ -160,12 +160,7 @@ func (b *EthereumRPC) Initialize() error {
 		return errors.Errorf("Unknown network id %v", id)
 	}
 
-	networkConfig := b.ChainConfig.Network
-	if networkConfig == "" {
-		networkConfig = b.ChainConfig.CoinShortcut
-	}
-
-	err = b.initStakingPools(networkConfig)
+	err = b.initStakingPools()
 	if err != nil {
 		return err
 	}

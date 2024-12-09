@@ -438,6 +438,11 @@ func (b *BulkConnect) Close() error {
 			return err
 		}
 	}
+	if err := b.d.SetInconsistentState(false); err != nil {
+		return err
+	}
+	glog.Info("rocksdb: bulk connect closed, db set to open state")
+
 	bt, err := b.d.loadBlockTimes()
 	if err != nil {
 		return err
@@ -446,11 +451,7 @@ func (b *BulkConnect) Close() error {
 	if b.d.metrics != nil {
 		b.d.metrics.AvgBlockPeriod.Set(float64(avg))
 	}
-
-	if err := b.d.SetInconsistentState(false); err != nil {
-		return err
-	}
-	glog.Info("rocksdb: bulk connect closed, db set to open state")
+	glog.Info("rocksdb: processed block times")
 	b.d = nil
 	return nil
 }
