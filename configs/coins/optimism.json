@@ -56,7 +56,7 @@
                 "queryBackendOnMempoolResync": false,
                 "fiat_rates": "coingecko",
                 "fiat_rates_vs_currencies": "AED,ARS,AUD,BDT,BHD,BMD,BRL,CAD,CHF,CLP,CNY,CZK,DKK,EUR,GBP,HKD,HUF,IDR,ILS,INR,JPY,KRW,KWD,LKR,MMK,MXN,MYR,NGN,NOK,NZD,PHP,PKR,PLN,RUB,SAR,SEK,SGD,THB,TRY,TWD,UAH,USD,VEF,VND,ZAR,BTC,ETH",
-                "fiat_rates_params": "{\"url\": \"https://api.coingecko.com/api/v3\", \"coin\": \"ethereum\",\"platformIdentifier\": \"ethereum\",\"platformVsCurrency\": \"eth\",\"periodSeconds\": 900}"
+                "fiat_rates_params": "{\"coin\": \"ethereum\",\"platformIdentifier\": \"ethereum\",\"platformVsCurrency\": \"eth\",\"periodSeconds\": 900}"
             }
         }
     },
