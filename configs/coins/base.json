@@ -2,6 +2,7 @@
     "coin": {
         "name": "Base",
         "shortcut": "ETH",
+        "network": "BASE",
         "label": "Base",
         "alias": "base"
     },
