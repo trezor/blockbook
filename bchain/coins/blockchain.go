@@ -13,6 +13,7 @@ import (
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/bchain/coins/arbitrum"
 	"github.com/trezor/blockbook/bchain/coins/avalanche"
+	"github.com/trezor/blockbook/bchain/coins/base"
 	"github.com/trezor/blockbook/bchain/coins/bch"
 	"github.com/trezor/blockbook/bchain/coins/bellcoin"
 	"github.com/trezor/blockbook/bchain/coins/bitcore"
@@ -147,6 +148,8 @@ func init() {
 	BlockChainFactories["Arbitrum Archive"] = arbitrum.NewArbitrumRPC
 	BlockChainFactories["Arbitrum Nova"] = arbitrum.NewArbitrumRPC
 	BlockChainFactories["Arbitrum Nova Archive"] = arbitrum.NewArbitrumRPC
+	BlockChainFactories["Base"] = base.NewBaseRPC
+	BlockChainFactories["Base Archive"] = base.NewBaseRPC
 }
 
 // NewBlockChain creates bchain.BlockChain and bchain.Mempool for the coin passed by the parameter coin
