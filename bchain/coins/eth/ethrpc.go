@@ -745,6 +745,7 @@ func (b *EthereumRPC) getInternalDataForBlock(blockHash string, blockHeight uint
 
 // GetBlock returns block with given hash or height, hash has precedence if both passed
 func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
+	start := time.Now()
 	raw, err := b.getBlockRaw(hash, height, true)
 	if err != nil {
 		return nil, err
@@ -763,12 +764,14 @@ func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error
 	}
 	// get block events
 	// TODO - could be possibly done in parallel to getInternalDataForBlock
+	afterGetBlock := time.Now()
 	logs, ens, err := b.processEventsForBlock(head.Number)
 	if err != nil {
 		return nil, err
 	}
 	// error fetching internal data does not stop the block processing
 	var blockSpecificData *bchain.EthereumBlockSpecificData
+	afterEvents := time.Now()
 	internalData, contracts, err := b.getInternalDataForBlock(head.Hash, bbh.Height, body.Transactions)
 	// pass internalData error and ENS records in blockSpecificData to be stored
 	if err != nil || len(ens) > 0 || len(contracts) > 0 {
@@ -804,6 +807,8 @@ func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error
 		Txs:              btxs,
 		CoinSpecificData: blockSpecificData,
 	}
+	glog.Info("GetBlock ", height, "  ", hash, " afterGetBlock ", time.Since(afterGetBlock), " afterEvents ", time.Since(afterEvents), " total ", time.Since(start))
+
 	return &bbk, nil
 }
 
