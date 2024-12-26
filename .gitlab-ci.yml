@@ -158,14 +158,3 @@ backend-deploy-and-test-zcash_testnet:
   tags:
     - blockbook
   script: ./contrib/scripts/backend-deploy-and-test.sh zcash_testnet zcash-testnet zcash=test testnet3/debug.log
-
-backend-deploy-and-test-goerli-archive:
-  stage: backend-deploy-and-test
-  only:
-    refs:
-      - master
-    changes:
-      - configs/coins/ethereum_testnet_goerli_archive.json
-  tags:
-    - blockbook
-  script: ./contrib/scripts/backend-deploy-and-test.sh ethereum_testnet_goerli_archive ethereum-testnet-goerli-archive ethereum=test ethereum_testnet_goerli_archive.log

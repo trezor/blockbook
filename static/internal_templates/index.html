@@ -1,10 +1,14 @@
 {{define "specific"}}
 <div class="row">
-    <div class="col"><a href="/admin/ws-limit-exceeding-ips">IP addresses that exceeded websocket usage limit</a></div>
+    <div class="col">
+        <a href="/admin/ws-limit-exceeding-ips">IP addresses that exceeded websocket usage limit</a>
+    </div>
 </div>
 {{if eq .ChainType 1}}
 <div class="row">
     <div class="col"><a href="/admin/internal-data-errors">Internal Data Errors</a></div>
 </div>
-{{end}}
-{{end}}
+<div class="row">
+    <div class="col"><a href="/admin/contract-info">Contract Info</a></div>
+</div>
+{{end}}{{end}}

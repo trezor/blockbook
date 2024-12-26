@@ -221,6 +221,60 @@
     </div>
 </div>
 {{end}}
+{{if $addr.StakingPools }}
+<div class="accordion mt-2 mb-2" id="stakingPools">
+    <div class="accordion-item">
+        <div class="accordion-header" id="stakingPoolsHeading">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#stakingPoolsBody" aria-expanded="false" aria-controls="stakingPoolsBody">
+                <div class="row g-0 w-100">
+                    <h5 class="col-12 mb-md-0">Staking Pools <span class="badge bg-secondary">{{len $addr.StakingPools}}</span></span></h5>
+                </div>
+            </button>
+        </div>
+        <div id="stakingPoolsBody" class="accordion-collapse collapse" aria-labelledby="stakingPoolsHeading" data-bs-parent="#stakingPools">
+            <div class="accordion-body">
+                {{range $sp := $addr.StakingPools}}
+                <table class="table data-table info-table mt-0 mb-2 ml-0">
+                    <tbody>
+                        <tr>
+                            <td colspan="2" style="white-space: nowrap;"><span class="h5" style="color: var(--bs-body-color);">{{$sp.Name}}</span> {{$sp.Contract}}</td>
+                        </tr>
+                        <tr>
+                            <td style="width: 25%;">Pending Balance</td>
+                            <td>{{amountSpan $sp.PendingBalance $data "copyable"}}</td>
+                        </tr>
+                        <tr>
+                            <td>Pending Deposited Balance</td>
+                            <td>{{amountSpan $sp.PendingDepositedBalance $data "copyable"}}</td>
+                        </tr>
+                        <tr>
+                            <td style="width: 25%;">Deposited Balance</td>
+                            <td>{{amountSpan $sp.DepositedBalance $data "copyable"}}</td>
+                        </tr>
+                        <tr>
+                            <td>Withdrawal Total Amount</td>
+                            <td>{{amountSpan $sp.WithdrawTotalAmount $data "copyable"}}</td>
+                        </tr>
+                        <tr>
+                            <td style="width: 25%;">Claimable Amount</td>
+                            <td>{{amountSpan $sp.ClaimableAmount $data "copyable"}}</td>
+                        </tr>
+                        <tr>
+                            <td>Restaked Reward</td>
+                            <td>{{amountSpan $sp.RestakedReward $data "copyable"}}</td>
+                        </tr>
+                        <tr>
+                            <td>Autocompound Balance</td>
+                            <td>{{amountSpan $sp.AutocompoundBalance $data "copyable"}}</td>
+                        </tr>
+                    </tbody>
+                </table>
+                {{end}}
+            </div>
+        </div>
+    </div>
+</div>
+{{end}}
 {{end}}
 {{if or $addr.Transactions $addr.Filter}}
 <div class="row pt-3 pb-1">

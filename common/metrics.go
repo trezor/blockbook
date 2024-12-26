@@ -72,7 +72,7 @@ func GetMetrics(coin string) (*Metrics, error) {
 		prometheus.HistogramOpts{
 			Name:        "blockbook_socketio_req_duration",
 			Help:        "Socketio request duration by method (in microseconds)",
-			Buckets:     []float64{1, 5, 10, 25, 50, 75, 100, 250},
+			Buckets:     []float64{10, 100, 1_000, 10_000, 100_000, 1_000_000, 10_0000_000},
 			ConstLabels: Labels{"coin": coin},
 		},
 		[]string{"method"},
@@ -104,7 +104,7 @@ func GetMetrics(coin string) (*Metrics, error) {
 		prometheus.HistogramOpts{
 			Name:        "blockbook_websocket_req_duration",
 			Help:        "Websocket request duration by method (in microseconds)",
-			Buckets:     []float64{1, 5, 10, 25, 50, 75, 100, 250},
+			Buckets:     []float64{10, 100, 1_000, 10_000, 100_000, 1_000_000, 10_0000_000},
 			ConstLabels: Labels{"coin": coin},
 		},
 		[]string{"method"},
@@ -113,7 +113,7 @@ func GetMetrics(coin string) (*Metrics, error) {
 		prometheus.HistogramOpts{
 			Name:        "blockbook_index_resync_duration",
 			Help:        "Duration of index resync operation (in milliseconds)",
-			Buckets:     []float64{50, 100, 150, 200, 250, 300, 350, 400, 450, 500, 600, 700, 1000, 2000, 5000},
+			Buckets:     []float64{10, 100, 500, 1000, 2000, 5000, 10000},
 			ConstLabels: Labels{"coin": coin},
 		},
 	)
@@ -121,7 +121,7 @@ func GetMetrics(coin string) (*Metrics, error) {
 		prometheus.HistogramOpts{
 			Name:        "blockbook_mempool_resync_duration",
 			Help:        "Duration of mempool resync operation (in milliseconds)",
-			Buckets:     []float64{10, 25, 50, 75, 100, 150, 250, 500, 750, 1000, 2000, 5000},
+			Buckets:     []float64{10, 100, 500, 1000, 2000, 5000, 10000},
 			ConstLabels: Labels{"coin": coin},
 		},
 	)

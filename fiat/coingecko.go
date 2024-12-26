@@ -17,6 +17,11 @@ import (
 	"github.com/trezor/blockbook/db"
 )
 
+const (
+	DefaultHTTPTimeout     = 15 * time.Second
+	DefaultThrottleDelayMs = 100 // 100 ms delay between requests
+)
+
 // Coingecko is a structure that implements RatesDownloaderInterface
 type Coingecko struct {
 	url                 string
@@ -54,20 +59,18 @@ type marketChartPrices struct {
 }
 
 // NewCoinGeckoDownloader creates a coingecko structure that implements the RatesDownloaderInterface
-func NewCoinGeckoDownloader(db *db.RocksDB, url string, coin string, platformIdentifier string, platformVsCurrency string, allowedVsCurrencies string, timeFormat string, metrics *common.Metrics, throttleDown bool) RatesDownloaderInterface {
-	var throttlingDelayMs int
+func NewCoinGeckoDownloader(db *db.RocksDB, network string, url string, coin string, platformIdentifier string, platformVsCurrency string, allowedVsCurrencies string, timeFormat string, metrics *common.Metrics, throttleDown bool) RatesDownloaderInterface {
+	throttlingDelayMs := 0 // No delay by default
 	if throttleDown {
-		throttlingDelayMs = 100
-	}
-	httpTimeout := 15 * time.Second
-	allowedVsCurrenciesMap := make(map[string]struct{})
-	if len(allowedVsCurrencies) > 0 {
-		for _, c := range strings.Split(strings.ToLower(allowedVsCurrencies), ",") {
-			allowedVsCurrenciesMap[c] = struct{}{}
-		}
+		throttlingDelayMs = DefaultThrottleDelayMs
 	}
 
-	apiKey := os.Getenv("COINGECKO_API_KEY")
+	allowedVsCurrenciesMap := getAllowedVsCurrenciesMap(allowedVsCurrencies)
+
+	apiKey := os.Getenv(strings.ToUpper(network) + "_COINGECKO_API_KEY")
+	if apiKey == "" {
+		apiKey = os.Getenv("COINGECKO_API_KEY")
+	}
 
 	// use default address if not overridden, with respect to existence of apiKey
 	if url == "" {
@@ -86,15 +89,26 @@ func NewCoinGeckoDownloader(db *db.RocksDB, url string, coin string, platformIde
 		platformIdentifier:  platformIdentifier,
 		platformVsCurrency:  platformVsCurrency,
 		allowedVsCurrencies: allowedVsCurrenciesMap,
-		httpTimeout:         httpTimeout,
+		httpTimeout:         DefaultHTTPTimeout,
 		timeFormat:          timeFormat,
 		httpClient: &http.Client{
-			Timeout: httpTimeout,
+			Timeout: DefaultHTTPTimeout,
 		},
 		db:              db,
 		throttlingDelay: time.Duration(throttlingDelayMs) * time.Millisecond,
 		metrics:         metrics,
 	}
+}
+
+// getAllowedVsCurrenciesMap returns a map of allowed vs currencies
+func getAllowedVsCurrenciesMap(currenciesString string) map[string]struct{} {
+	allowedVsCurrenciesMap := make(map[string]struct{})
+	if len(currenciesString) > 0 {
+		for _, c := range strings.Split(strings.ToLower(currenciesString), ",") {
+			allowedVsCurrenciesMap[c] = struct{}{}
+		}
+	}
+	return allowedVsCurrenciesMap
 }
 
 // doReq HTTP client
@@ -133,7 +147,7 @@ func (cg *Coingecko) makeReq(url string, endpoint string) ([]byte, error) {
 			}
 			return resp, err
 		}
-		if err.Error() != "error code: 1015" && !strings.Contains(strings.ToLower(err.Error()), "exceeded the rate limit") {
+		if err.Error() != "error code: 1015" && !strings.Contains(strings.ToLower(err.Error()), "exceeded the rate limit") && !strings.Contains(strings.ToLower(err.Error()), "throttled") {
 			if cg.metrics != nil {
 				cg.metrics.CoingeckoRequests.With(common.Labels{"endpoint": endpoint, "status": "error"}).Inc()
 			}

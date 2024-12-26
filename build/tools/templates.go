@@ -21,6 +21,7 @@ type Backend struct {
 	SystemUser                      string             `json:"system_user"`
 	Version                         string             `json:"version"`
 	BinaryURL                       string             `json:"binary_url"`
+	DockerImage                     string             `json:"docker_image"`
 	VerificationType                string             `json:"verification_type"`
 	VerificationSource              string             `json:"verification_source"`
 	ExtractCommand                  string             `json:"extract_command"`
@@ -44,6 +45,7 @@ type Config struct {
 	Coin struct {
 		Name     string `json:"name"`
 		Shortcut string `json:"shortcut"`
+		Network  string `json:"network,omitempty"`
 		Label    string `json:"label"`
 		Alias    string `json:"alias"`
 	} `json:"coin"`
@@ -203,6 +205,7 @@ func LoadConfig(configsDir, coin string) (*Config, error) {
 		case "gpg":
 		case "sha256":
 		case "gpg-sha256":
+		case "docker":
 		default:
 			return nil, fmt.Errorf("Invalid verification type: %s", config.Backend.VerificationType)
 		}

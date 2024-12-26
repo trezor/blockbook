@@ -1,823 +1,1293 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
-    <style>
-        .row {
-            margin-top: 1%;
-        }
-
-        ::placeholder {
-            color: #ccc !important;
-        }
-    </style>
-    <title>Blockbook Websocket Test Page</title>
-    <script>
-        var ws;
-        var messageID;
-        var pendingMessages;
-        var subscriptions;
-        function send(method, params, callback) {
-            var id = messageID.toString();
-            messageID++;
-            pendingMessages[id] = callback;
-            var req = {
-                id,
-                method,
-                params
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+        <link
+            rel="stylesheet"
+            href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css"
+            integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm"
+            crossorigin="anonymous"
+        />
+        <style>
+            .row {
+                margin-top: 1%;
             }
-            ws.send(JSON.stringify(req));
-            return id;
-        }
-        function subscribe(method, params, callback) {
-            var id = messageID.toString();
-            messageID++;
-            subscriptions[id] = callback;
-            var req = {
-                id,
-                method,
-                params
+
+            ::placeholder {
+                color: #ccc !important;
             }
-            ws.send(JSON.stringify(req));
-            return id;
-        }
-        function unsubscribe(method, id, params, callback) {
-            delete subscriptions[id];
-            pendingMessages[id] = callback;
-            var req = {
-                id,
-                method,
-                params
-            }
-            ws.send(JSON.stringify(req));
-            return id;
-        }
-        function connect(server) {
-            messageID = 0;
-            pendingMessages = {};
-            subscriptions = {};
-            subscribeNewBlockId = "";
-            subscribeNewTransactionId = "";
-            subscribeAddressesId = "";
-            if (server.startsWith("http")) {
-                server = server.replace("http", "ws");
-            }
-            if (!server.endsWith("/websocket")) {
-                server += "/websocket";
-            }
-            ws = new WebSocket(server);
-            ws.onopen = function (e) {
-                console.log('socket connected', e);
-                document.getElementById('connectionStatus').innerText = "connected";
-            };
-            ws.onclose = function (e) {
-                console.log('socket closed', e);
-                document.getElementById('connectionStatus').innerText = "disconnected";
-            };
-            ws.onerror = function (e) {
-                console.log('socket error ', e);
-                document.getElementById('connectionStatus').innerText = "error";
-            };
-            ws.onmessage = function (e) {
-                console.log('resp ' + e.data);
-                var resp = JSON.parse(e.data);
-                var f = pendingMessages[resp.id];
-                if (f != undefined) {
-                    delete pendingMessages[resp.id];
-                    try {
-                        f(resp.data);
-                    } catch (e) {
-                        alert(`Error: ${e}.\nLook into the console for websocket response.`);
-                    }
-                } else {
-                    f = subscriptions[resp.id];
-                    if (f != undefined) {
-                        f(resp.data);
-                    }
-                    else {
-                        console.log("unkown response " + resp.id);
-                    }
-                }
-            };
-        }
-        function paramAsArray(name) {
-            const p = document.getElementById(name).value;
-            if (p) {
-                return p.split(",").map(s => s.trim());
-            }
-        }
-
-        function getInfo() {
-            const method = 'getInfo';
-            const params = {
-            };
-            send(method, params, function (result) {
-                document.getElementById('getInfoResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
-            });
-        }
-
-        function ping() {
-            const method = 'ping';
-            const params = {
-            };
-            send(method, params, function (result) {
-                document.getElementById('pingResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
-            });
-        }
-
-        function getBlockHash() {
-            const method = 'getBlockHash';
-            const height = parseInt(document.getElementById("getBlockHashHeight").value);
-            const params = {
-                height
-            };
-            send(method, params, function (result) {
-                document.getElementById('getBlockHashResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
-            });
-        }
-
-        function getBlock() {
-            const method = "getBlock";
-            const id = document.getElementById("getBlockId").value;
-            const page = parseInt(document.getElementById("getBlockPage").value);
-            const pageSize = parseInt(document.getElementById("getBlockPageSize").value);
-            const params = {
-                id,
-            };
-            if (page) params.page = page;
-            if (pageSize) params.pageSize = pageSize;
-            send(method, params, function (result) {
-                document.getElementById("getBlockResult").innerText = JSON.stringify(result).replace(/,/g, ", ");
-            });
-        }
-
-        function getAccountInfo() {
-            const descriptor = document.getElementById('getAccountInfoDescriptor').value.trim();
-            const selectDetails = document.getElementById('getAccountInfoDetails');
-            const details = selectDetails.options[selectDetails.selectedIndex].value;
-            const page = parseInt(document.getElementById("getAccountInfoPage").value);
-            const from = parseInt(document.getElementById("getAccountInfoFrom").value);
-            const to = parseInt(document.getElementById("getAccountInfoTo").value);
-            const contractFilter = document.getElementById("getAccountInfoContract").value.trim();
-            const secondaryCurrency = document.getElementById("getAccountInfoSecondaryCurrency").value.trim();
-            const pageSize = 10;
-            const method = 'getAccountInfo';
-            const tokens = "derived"; // could be "nonzero", "used", default is "derived" i.e. all
-            const params = {
-                descriptor,
-                details,
-                tokens,
-                page,
-                pageSize,
-                from,
-                to,
-                contractFilter,
-                secondaryCurrency,
-                // default gap=20
-            };
-            send(method, params, function (result) {
-                document.getElementById('getAccountInfoResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
-            });
-        }
-
-        function getAccountUtxo() {
-            const descriptor = document.getElementById('getAccountUtxoDescriptor').value.trim();
-            const method = 'getAccountUtxo';
-            const params = {
-                descriptor,
-            };
-            send(method, params, function (result) {
-                document.getElementById('getAccountUtxoResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
-            });
-        }
-
-        function getBalanceHistory() {
-            const descriptor = document.getElementById('getBalanceHistoryDescriptor').value.trim();
-            const from = parseInt(document.getElementById("getBalanceHistoryFrom").value.trim());
-            const to = parseInt(document.getElementById("getBalanceHistoryTo").value.trim());
-            const currencies = paramAsArray('getBalanceHistoryFiat');
-            const groupBy = parseInt(document.getElementById("getBalanceHistoryGroupBy").value);
-            const method = 'getBalanceHistory';
-            const params = {
-                descriptor,
-                from,
-                to,
-                currencies,
-                groupBy
-                // default gap=20
-            };
-            send(method, params, function (result) {
-                document.getElementById('getBalanceHistoryResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
-            });
-        }
-
-
-        function getTransaction() {
-            const txid = document.getElementById('getTransactionTxid').value.trim();
-            const method = 'getTransaction';
-            const params = {
-                txid,
-            };
-            send(method, params, function (result) {
-                document.getElementById('getTransactionResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
-            });
-        }
-
-        function getTransactionSpecific() {
-            const txid = document.getElementById('getTransactionSpecificTxid').value.trim();
-            const method = 'getTransactionSpecific';
-            const params = {
-                txid,
-            };
-            send(method, params, function (result) {
-                document.getElementById('getTransactionSpecificResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
-            });
-        }
-
-        function estimateFee() {
-            try {
-                var blocks = paramAsArray('estimateFeeBlocks');
-                var specific = document.getElementById('estimateFeeSpecific').value.trim();
-                if (specific) {
-                    // example for bitcoin type: {"conservative": false,"txsize":1234}
-                    // example for ethereum type: {"from":"0x65513ecd11fd3a5b1fefdcc6a500b025008405a2","to":"0x65513ecd11fd3a5b1fefdcc6a500b025008405a2","data":"0xabcd","gasPrice":"0x30d40","value":"0x1234"}
-                    specific = JSON.parse(specific)
-                }
-                else {
-                    specific = undefined;
-                }
-                blocks = blocks.map(s => parseInt(s.trim()));
-                const method = 'estimateFee';
-                const params = {
-                    blocks,
-                    specific
+        </style>
+        <title>Blockbook Websocket Test Page</title>
+        <script>
+            var ws;
+            var messageID;
+            var pendingMessages;
+            var subscriptions;
+            function send(method, params, callback) {
+                var id = messageID.toString();
+                messageID++;
+                pendingMessages[id] = callback;
+                var req = {
+                    id,
+                    method,
+                    params,
                 };
+                ws.send(JSON.stringify(req));
+                return id;
+            }
+            function subscribe(method, params, callback) {
+                var id = messageID.toString();
+                messageID++;
+                subscriptions[id] = callback;
+                var req = {
+                    id,
+                    method,
+                    params,
+                };
+                ws.send(JSON.stringify(req));
+                return id;
+            }
+            function unsubscribe(method, id, params, callback) {
+                delete subscriptions[id];
+                pendingMessages[id] = callback;
+                var req = {
+                    id,
+                    method,
+                    params,
+                };
+                ws.send(JSON.stringify(req));
+                return id;
+            }
+            function connect(server) {
+                messageID = 0;
+                pendingMessages = {};
+                subscriptions = {};
+                subscribeNewBlockId = '';
+                subscribeNewTransactionId = '';
+                subscribeAddressesId = '';
+                if (server.startsWith('http')) {
+                    server = server.replace('http', 'ws');
+                }
+                if (!server.endsWith('/websocket')) {
+                    server += '/websocket';
+                }
+                ws = new WebSocket(server);
+                ws.onopen = function (e) {
+                    console.log('socket connected', e);
+                    document.getElementById('connectionStatus').innerText = 'connected';
+                };
+                ws.onclose = function (e) {
+                    console.log('socket closed', e);
+                    document.getElementById('connectionStatus').innerText = 'disconnected';
+                };
+                ws.onerror = function (e) {
+                    console.log('socket error ', e);
+                    document.getElementById('connectionStatus').innerText = 'error';
+                };
+                ws.onmessage = function (e) {
+                    console.log('resp ' + e.data);
+                    var resp = JSON.parse(e.data);
+                    var f = pendingMessages[resp.id];
+                    if (f != undefined) {
+                        delete pendingMessages[resp.id];
+                        try {
+                            f(resp.data);
+                        } catch (e) {
+                            alert(`Error: ${e}.\nLook into the console for websocket response.`);
+                        }
+                    } else {
+                        f = subscriptions[resp.id];
+                        if (f != undefined) {
+                            f(resp.data);
+                        } else {
+                            console.log('unkown response ' + resp.id);
+                        }
+                    }
+                };
+            }
+            function paramAsArray(name) {
+                const p = document.getElementById(name).value;
+                if (p) {
+                    return p.split(',').map(s => s.trim());
+                }
+            }
+
+            function getInfo() {
+                const method = 'getInfo';
+                const params = {};
                 send(method, params, function (result) {
-                    document.getElementById('estimateFeeResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
+                    document.getElementById('getInfoResult').innerText = JSON.stringify(
+                        result,
+                    ).replace(/,/g, ', ');
                 });
             }
-            catch (e) {
-                document.getElementById('estimateFeeResult').innerText = e;
+
+            function ping() {
+                const method = 'ping';
+                const params = {};
+                send(method, params, function (result) {
+                    document.getElementById('pingResult').innerText = JSON.stringify(
+                        result,
+                    ).replace(/,/g, ', ');
+                });
             }
-        }
 
-        function sendTransaction() {
-            var hex = document.getElementById('sendTransactionHex').value.trim();
-            const method = 'sendTransaction';
-            const params = {
-                hex,
-            };
-            send(method, params, function (result) {
-                document.getElementById('sendTransactionResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
-            });
-        }
-
-        function subscribeNewBlock() {
-            const method = 'subscribeNewBlock';
-            const params = {
-            };
-            if (subscribeNewBlockId) {
-                delete subscriptions[subscribeNewBlockId];
-                subscribeNewBlockId = "";
+            function getBlockHash() {
+                const method = 'getBlockHash';
+                const height = parseInt(document.getElementById('getBlockHashHeight').value);
+                const params = {
+                    height,
+                };
+                send(method, params, function (result) {
+                    document.getElementById('getBlockHashResult').innerText = JSON.stringify(
+                        result,
+                    ).replace(/,/g, ', ');
+                });
             }
-            subscribeNewBlockId = subscribe(method, params, function (result) {
-                document.getElementById('subscribeNewBlockResult').innerText += JSON.stringify(result).replace(/,/g, ", ") + "\n";
-            });
-            document.getElementById('subscribeNewBlockId').innerText = subscribeNewBlockId;
-            document.getElementById('unsubscribeNewBlockButton').setAttribute("style", "display: inherit;");
-        }
 
-        function unsubscribeNewBlock() {
-            const method = 'unsubscribeNewBlock';
-            const params = {
-            };
-            unsubscribe(method, subscribeNewBlockId, params, function (result) {
-                subscribeNewBlockId = "";
-                document.getElementById('subscribeNewBlockResult').innerText += JSON.stringify(result).replace(/,/g, ", ") + "\n";
-                document.getElementById('subscribeNewBlockId').innerText = "";
-                document.getElementById('unsubscribeNewBlockButton').setAttribute("style", "display: none;");
-            });
-        }
-
-        function subscribeNewTransaction() {
-            const method = 'subscribeNewTransaction';
-            const params = {
-            };
-            if (subscribeNewTransactionId) {
-                delete subscriptions[subscribeNewTransactionId];
-                subscribeNewTransactionId = "";
+            function getBlock() {
+                const method = 'getBlock';
+                const id = document.getElementById('getBlockId').value;
+                const page = parseInt(document.getElementById('getBlockPage').value);
+                const pageSize = parseInt(document.getElementById('getBlockPageSize').value);
+                const params = {
+                    id,
+                };
+                if (page) params.page = page;
+                if (pageSize) params.pageSize = pageSize;
+                send(method, params, function (result) {
+                    document.getElementById('getBlockResult').innerText = JSON.stringify(
+                        result,
+                    ).replace(/,/g, ', ');
+                });
             }
-            subscribeNewTransactionId = subscribe(method, params, function (result) {
-                document.getElementById('subscribeNewTransactionResult').innerText += JSON.stringify(result).replace(/,/g, ", ") + "\n";
-            });
-            document.getElementById('subscribeNewTransactionId').innerText = subscribeNewTransactionId;
-            document.getElementById('unsubscribeNewTransactionButton').setAttribute("style", "display: inherit;");
-        }
 
-        function unsubscribeNewTransaction() {
-            const method = 'unsubscribeNewTransaction';
-            const params = {
-            };
-            unsubscribe(method, subscribeNewTransactionId, params, function (result) {
-                subscribeNewTransactionId = "";
-                document.getElementById('subscribeNewTransactionResult').innerText += JSON.stringify(result).replace(/,/g, ", ") + "\n";
-                document.getElementById('subscribeNewTransactionId').innerText = "";
-                document.getElementById('unsubscribeNewTransactionButton').setAttribute("style", "display: none;");
-            });
-        }
-
-        function subscribeAddresses() {
-            const method = 'subscribeAddresses';
-            var addresses = paramAsArray('subscribeAddressesName');
-            const params = {
-                addresses
-            };
-            if (subscribeAddressesId) {
-                delete subscriptions[subscribeAddressesId];
-                subscribeAddressesId = "";
+            function getAccountInfo() {
+                const descriptor = document.getElementById('getAccountInfoDescriptor').value.trim();
+                const selectDetails = document.getElementById('getAccountInfoDetails');
+                const details = selectDetails.options[selectDetails.selectedIndex].value;
+                const page = parseInt(document.getElementById('getAccountInfoPage').value);
+                const from = parseInt(document.getElementById('getAccountInfoFrom').value);
+                const to = parseInt(document.getElementById('getAccountInfoTo').value);
+                const contractFilter = document
+                    .getElementById('getAccountInfoContract')
+                    .value.trim();
+                const secondaryCurrency = document
+                    .getElementById('getAccountInfoSecondaryCurrency')
+                    .value.trim();
+                const pageSize = 10;
+                const method = 'getAccountInfo';
+                const tokens = 'derived'; // could be "nonzero", "used", default is "derived" i.e. all
+                const params = {
+                    descriptor,
+                    details,
+                    tokens,
+                    page,
+                    pageSize,
+                    from,
+                    to,
+                    contractFilter,
+                    secondaryCurrency,
+                    // default gap=20
+                };
+                send(method, params, function (result) {
+                    document.getElementById('getAccountInfoResult').innerText = JSON.stringify(
+                        result,
+                    ).replace(/,/g, ', ');
+                });
             }
-            subscribeAddressesId = subscribe(method, params, function (result) {
-                document.getElementById('subscribeAddressesResult').innerText += JSON.stringify(result).replace(/,/g, ", ") + "\n";
-            });
-            document.getElementById('subscribeAddressesIds').innerText = subscribeAddressesId;
-            document.getElementById('unsubscribeAddressesButton').setAttribute("style", "display: inherit;");
-        }
 
-        function unsubscribeAddresses() {
-            const method = 'unsubscribeAddresses';
-            const params = {
-            };
-            unsubscribe(method, subscribeAddressesId, params, function (result) {
-                subscribeAddressesId = "";
-                document.getElementById('subscribeAddressesResult').innerText += JSON.stringify(result).replace(/,/g, ", ") + "\n";
-                document.getElementById('subscribeAddressesIds').innerText = "";
-                document.getElementById('unsubscribeAddressesButton').setAttribute("style", "display: none;");
-            });
-        }
-
-        function getFiatRatesForTimestamps() {
-            const method = 'getFiatRatesForTimestamps';
-            var timestamps = paramAsArray('getFiatRatesForTimestampsList');
-            var currencies = paramAsArray('getFiatRatesForTimestampsCurrency');
-            var token = document.getElementById('getFiatRatesForTimestampsToken').value;
-            timestamps = timestamps.map(Number);
-            const params = {
-                timestamps,
-                'currencies': currencies,
-                token,
-            };
-            send(method, params, function (result) {
-                document.getElementById('getFiatRatesForTimestampsResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
-            });
-        }
-
-        function getCurrentFiatRates() {
-            const method = 'getCurrentFiatRates';
-            var currencies = paramAsArray('getCurrentFiatRatesCurrency');
-            var token = document.getElementById('getCurrentFiatRatesToken').value;
-            const params = {
-                "currencies": currencies,
-                token,
-            };
-            send(method, params, function (result) {
-                document.getElementById('getCurrentFiatRatesResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
-            });
-        }
-
-        function getFiatRatesTickersList() {
-            const method = 'getFiatRatesTickersList';
-            var timestamp = document.getElementById('getFiatRatesTickersListDate').value;
-            var token = document.getElementById('getFiatRatesTickersToken').value;
-            timestamp = parseInt(timestamp);
-            const params = {
-                timestamp,
-                token,
-            };
-            send(method, params, function (result) {
-                document.getElementById('getFiatRatesTickersListResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
-            });
-        }
-
-        function getMempoolFilters() {
-            const method = 'getMempoolFilters';
-            var timestamp = document.getElementById('getMempoolFiltersFromTimestamp').value;
-            var scriptType = document.getElementById('getMempoolFiltersScriptType').value;
-            fromTimestamp = parseInt(timestamp);
-            const params = {
-                scriptType,
-                fromTimestamp,
-            };
-            send(method, params, function (result) {
-                document.getElementById('getMempoolFiltersResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
-            });
-        }
-
-        function getBlockFilter() {
-            const method = 'getBlockFilter';
-            const blockHash = document.getElementById('getBlockFilterBlockHash').value;
-            const scriptType = document.getElementById('getBlockFilterBlockHashScriptType').value;
-            const params = {
-                blockHash,
-                scriptType,
-            };
-            send(method, params, function (result) {
-                document.getElementById('getBlockFilterResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
-            });
-        }
-
-        function getBlockFiltersBatch() {
-            const method = 'getBlockFiltersBatch';
-            const bestKnownBlockHash = document.getElementById('getBlockFiltersBatchBlockHash').value;
-            const pageSize = parseInt(document.getElementById("getBlockFiltersBatchPageSize").value);
-            const scriptType = document.getElementById('getBlockFiltersBatchScriptType').value;
-            const params = {
-                bestKnownBlockHash,
-                scriptType,
-            };
-            if (pageSize) params.pageSize = pageSize;
-            send(method, params, function (result) {
-                document.getElementById('getBlockFiltersBatchResult').innerText = JSON.stringify(result).replace(/,/g, ", ");
-            });
-        }
-
-        function subscribeNewFiatRatesTicker() {
-            const method = 'subscribeFiatRates';
-            var currency = document.getElementById('subscribeFiatRatesCurrency').value;
-            var tokens = paramAsArray('subscribeFiatRatesTokens');
-            const params = {
-                "currency": currency,
-                tokens,
-            };
-            if (subscribeNewFiatRatesTickerId) {
-                delete subscriptions[subscribeNewFiatRatesTickerId];
-                subscribeNewFiatRatesTickerId = "";
+            function getAccountUtxo() {
+                const descriptor = document.getElementById('getAccountUtxoDescriptor').value.trim();
+                const method = 'getAccountUtxo';
+                const params = {
+                    descriptor,
+                };
+                send(method, params, function (result) {
+                    document.getElementById('getAccountUtxoResult').innerText = JSON.stringify(
+                        result,
+                    ).replace(/,/g, ', ');
+                });
             }
-            subscribeNewFiatRatesTickerId = subscribe(method, params, function (result) {
-                document.getElementById('subscribeNewFiatRatesTickerResult').innerText += JSON.stringify(result).replace(/,/g, ", ") + "\n";
-            });
-            document.getElementById('subscribeNewFiatRatesTickerId').innerText = subscribeNewFiatRatesTickerId;
-            document.getElementById('unsubscribeNewFiatRatesTickerButton').setAttribute("style", "display: inherit;");
-        }
 
-        function unsubscribeNewFiatRatesTicker() {
-            const method = 'unsubscribeFiatRates';
-            const params = {
-            };
-            unsubscribe(method, subscribeNewFiatRatesTickerId, params, function (result) {
-                subscribeNewFiatRatesTickerId = "";
-                document.getElementById('subscribeNewFiatRatesTickerResult').innerText += JSON.stringify(result).replace(/,/g, ", ") + "\n";
-                document.getElementById('subscribeNewFiatRatesTickerId').innerText = "";
-                document.getElementById('unsubscribeNewFiatRatesTickerButton').setAttribute("style", "display: none;");
-            });
-        }
+            function getBalanceHistory() {
+                const descriptor = document
+                    .getElementById('getBalanceHistoryDescriptor')
+                    .value.trim();
+                const from = parseInt(
+                    document.getElementById('getBalanceHistoryFrom').value.trim(),
+                );
+                const to = parseInt(document.getElementById('getBalanceHistoryTo').value.trim());
+                const currencies = paramAsArray('getBalanceHistoryFiat');
+                const groupBy = parseInt(document.getElementById('getBalanceHistoryGroupBy').value);
+                const method = 'getBalanceHistory';
+                const params = {
+                    descriptor,
+                    from,
+                    to,
+                    currencies,
+                    groupBy,
+                    // default gap=20
+                };
+                send(method, params, function (result) {
+                    document.getElementById('getBalanceHistoryResult').innerText = JSON.stringify(
+                        result,
+                    ).replace(/,/g, ', ');
+                });
+            }
+
+            function getTransaction() {
+                const txid = document.getElementById('getTransactionTxid').value.trim();
+                const method = 'getTransaction';
+                const params = {
+                    txid,
+                };
+                send(method, params, function (result) {
+                    document.getElementById('getTransactionResult').innerText = JSON.stringify(
+                        result,
+                    ).replace(/,/g, ', ');
+                });
+            }
+
+            function getTransactionSpecific() {
+                const txid = document.getElementById('getTransactionSpecificTxid').value.trim();
+                const method = 'getTransactionSpecific';
+                const params = {
+                    txid,
+                };
+                send(method, params, function (result) {
+                    document.getElementById('getTransactionSpecificResult').innerText =
+                        JSON.stringify(result).replace(/,/g, ', ');
+                });
+            }
+
+            function estimateFee() {
+                try {
+                    var blocks = paramAsArray('estimateFeeBlocks');
+                    var specific = document.getElementById('estimateFeeSpecific').value.trim();
+                    if (specific) {
+                        // example for bitcoin type: {"conservative": false,"txsize":1234}
+                        // example for ethereum type: {"from":"0x65513ecd11fd3a5b1fefdcc6a500b025008405a2","to":"0x65513ecd11fd3a5b1fefdcc6a500b025008405a2","data":"0xabcd","gasPrice":"0x30d40","value":"0x1234"}
+                        specific = JSON.parse(specific);
+                    } else {
+                        specific = undefined;
+                    }
+                    blocks = blocks.map(s => parseInt(s.trim()));
+                    const method = 'estimateFee';
+                    const params = {
+                        blocks,
+                        specific,
+                    };
+                    send(method, params, function (result) {
+                        document.getElementById('estimateFeeResult').innerText = JSON.stringify(
+                            result,
+                        ).replace(/,/g, ', ');
+                    });
+                } catch (e) {
+                    document.getElementById('estimateFeeResult').innerText = e;
+                }
+            }
+
+            function sendTransaction() {
+                var hex = document.getElementById('sendTransactionHex').value.trim();
+                const method = 'sendTransaction';
+                const params = {
+                    hex,
+                };
+                send(method, params, function (result) {
+                    document.getElementById('sendTransactionResult').innerText = JSON.stringify(
+                        result,
+                    ).replace(/,/g, ', ');
+                });
+            }
+
+            function subscribeNewBlock() {
+                const method = 'subscribeNewBlock';
+                const params = {};
+                if (subscribeNewBlockId) {
+                    delete subscriptions[subscribeNewBlockId];
+                    subscribeNewBlockId = '';
+                }
+                subscribeNewBlockId = subscribe(method, params, function (result) {
+                    document.getElementById('subscribeNewBlockResult').innerText +=
+                        JSON.stringify(result).replace(/,/g, ', ') + '\n';
+                });
+                document.getElementById('subscribeNewBlockId').innerText = subscribeNewBlockId;
+                document
+                    .getElementById('unsubscribeNewBlockButton')
+                    .setAttribute('style', 'display: inherit;');
+            }
+
+            function unsubscribeNewBlock() {
+                const method = 'unsubscribeNewBlock';
+                const params = {};
+                unsubscribe(method, subscribeNewBlockId, params, function (result) {
+                    subscribeNewBlockId = '';
+                    document.getElementById('subscribeNewBlockResult').innerText +=
+                        JSON.stringify(result).replace(/,/g, ', ') + '\n';
+                    document.getElementById('subscribeNewBlockId').innerText = '';
+                    document
+                        .getElementById('unsubscribeNewBlockButton')
+                        .setAttribute('style', 'display: none;');
+                });
+            }
+
+            function subscribeNewTransaction() {
+                const method = 'subscribeNewTransaction';
+                const params = {};
+                if (subscribeNewTransactionId) {
+                    delete subscriptions[subscribeNewTransactionId];
+                    subscribeNewTransactionId = '';
+                }
+                subscribeNewTransactionId = subscribe(method, params, function (result) {
+                    document.getElementById('subscribeNewTransactionResult').innerText +=
+                        JSON.stringify(result).replace(/,/g, ', ') + '\n';
+                });
+                document.getElementById('subscribeNewTransactionId').innerText =
+                    subscribeNewTransactionId;
+                document
+                    .getElementById('unsubscribeNewTransactionButton')
+                    .setAttribute('style', 'display: inherit;');
+            }
+
+            function unsubscribeNewTransaction() {
+                const method = 'unsubscribeNewTransaction';
+                const params = {};
+                unsubscribe(method, subscribeNewTransactionId, params, function (result) {
+                    subscribeNewTransactionId = '';
+                    document.getElementById('subscribeNewTransactionResult').innerText +=
+                        JSON.stringify(result).replace(/,/g, ', ') + '\n';
+                    document.getElementById('subscribeNewTransactionId').innerText = '';
+                    document
+                        .getElementById('unsubscribeNewTransactionButton')
+                        .setAttribute('style', 'display: none;');
+                });
+            }
+
+            function subscribeAddresses() {
+                const method = 'subscribeAddresses';
+                var addresses = paramAsArray('subscribeAddressesName');
+                const params = {
+                    addresses,
+                };
+                if (subscribeAddressesId) {
+                    delete subscriptions[subscribeAddressesId];
+                    subscribeAddressesId = '';
+                }
+                subscribeAddressesId = subscribe(method, params, function (result) {
+                    document.getElementById('subscribeAddressesResult').innerText +=
+                        JSON.stringify(result).replace(/,/g, ', ') + '\n';
+                });
+                document.getElementById('subscribeAddressesIds').innerText = subscribeAddressesId;
+                document
+                    .getElementById('unsubscribeAddressesButton')
+                    .setAttribute('style', 'display: inherit;');
+            }
+
+            function unsubscribeAddresses() {
+                const method = 'unsubscribeAddresses';
+                const params = {};
+                unsubscribe(method, subscribeAddressesId, params, function (result) {
+                    subscribeAddressesId = '';
+                    document.getElementById('subscribeAddressesResult').innerText +=
+                        JSON.stringify(result).replace(/,/g, ', ') + '\n';
+                    document.getElementById('subscribeAddressesIds').innerText = '';
+                    document
+                        .getElementById('unsubscribeAddressesButton')
+                        .setAttribute('style', 'display: none;');
+                });
+            }
+
+            function getFiatRatesForTimestamps() {
+                const method = 'getFiatRatesForTimestamps';
+                var timestamps = paramAsArray('getFiatRatesForTimestampsList');
+                var currencies = paramAsArray('getFiatRatesForTimestampsCurrency');
+                var token = document.getElementById('getFiatRatesForTimestampsToken').value;
+                timestamps = timestamps.map(Number);
+                const params = {
+                    timestamps,
+                    currencies: currencies,
+                    token,
+                };
+                send(method, params, function (result) {
+                    document.getElementById('getFiatRatesForTimestampsResult').innerText =
+                        JSON.stringify(result).replace(/,/g, ', ');
+                });
+            }
+
+            function getCurrentFiatRates() {
+                const method = 'getCurrentFiatRates';
+                var currencies = paramAsArray('getCurrentFiatRatesCurrency');
+                var token = document.getElementById('getCurrentFiatRatesToken').value;
+                const params = {
+                    currencies: currencies,
+                    token,
+                };
+                send(method, params, function (result) {
+                    document.getElementById('getCurrentFiatRatesResult').innerText = JSON.stringify(
+                        result,
+                    ).replace(/,/g, ', ');
+                });
+            }
+
+            function getFiatRatesTickersList() {
+                const method = 'getFiatRatesTickersList';
+                var timestamp = document.getElementById('getFiatRatesTickersListDate').value;
+                var token = document.getElementById('getFiatRatesTickersToken').value;
+                timestamp = parseInt(timestamp);
+                const params = {
+                    timestamp,
+                    token,
+                };
+                send(method, params, function (result) {
+                    document.getElementById('getFiatRatesTickersListResult').innerText =
+                        JSON.stringify(result).replace(/,/g, ', ');
+                });
+            }
+
+            function getMempoolFilters() {
+                const method = 'getMempoolFilters';
+                var timestamp = document.getElementById('getMempoolFiltersFromTimestamp').value;
+                var scriptType = document.getElementById('getMempoolFiltersScriptType').value;
+                fromTimestamp = parseInt(timestamp);
+                const params = {
+                    scriptType,
+                    fromTimestamp,
+                };
+                send(method, params, function (result) {
+                    document.getElementById('getMempoolFiltersResult').innerText = JSON.stringify(
+                        result,
+                    ).replace(/,/g, ', ');
+                });
+            }
+
+            function getBlockFilter() {
+                const method = 'getBlockFilter';
+                const blockHash = document.getElementById('getBlockFilterBlockHash').value;
+                const scriptType = document.getElementById(
+                    'getBlockFilterBlockHashScriptType',
+                ).value;
+                const params = {
+                    blockHash,
+                    scriptType,
+                };
+                send(method, params, function (result) {
+                    document.getElementById('getBlockFilterResult').innerText = JSON.stringify(
+                        result,
+                    ).replace(/,/g, ', ');
+                });
+            }
+
+            function getBlockFiltersBatch() {
+                const method = 'getBlockFiltersBatch';
+                const bestKnownBlockHash = document.getElementById(
+                    'getBlockFiltersBatchBlockHash',
+                ).value;
+                const pageSize = parseInt(
+                    document.getElementById('getBlockFiltersBatchPageSize').value,
+                );
+                const scriptType = document.getElementById('getBlockFiltersBatchScriptType').value;
+                const params = {
+                    bestKnownBlockHash,
+                    scriptType,
+                };
+                if (pageSize) params.pageSize = pageSize;
+                send(method, params, function (result) {
+                    document.getElementById('getBlockFiltersBatchResult').innerText =
+                        JSON.stringify(result).replace(/,/g, ', ');
+                });
+            }
+
+            function subscribeNewFiatRatesTicker() {
+                const method = 'subscribeFiatRates';
+                var currency = document.getElementById('subscribeFiatRatesCurrency').value;
+                var tokens = paramAsArray('subscribeFiatRatesTokens');
+                const params = {
+                    currency: currency,
+                    tokens,
+                };
+                if (subscribeNewFiatRatesTickerId) {
+                    delete subscriptions[subscribeNewFiatRatesTickerId];
+                    subscribeNewFiatRatesTickerId = '';
+                }
+                subscribeNewFiatRatesTickerId = subscribe(method, params, function (result) {
+                    document.getElementById('subscribeNewFiatRatesTickerResult').innerText +=
+                        JSON.stringify(result).replace(/,/g, ', ') + '\n';
+                });
+                document.getElementById('subscribeNewFiatRatesTickerId').innerText =
+                    subscribeNewFiatRatesTickerId;
+                document
+                    .getElementById('unsubscribeNewFiatRatesTickerButton')
+                    .setAttribute('style', 'display: inherit;');
+            }
+
+            function unsubscribeNewFiatRatesTicker() {
+                const method = 'unsubscribeFiatRates';
+                const params = {};
+                unsubscribe(method, subscribeNewFiatRatesTickerId, params, function (result) {
+                    subscribeNewFiatRatesTickerId = '';
+                    document.getElementById('subscribeNewFiatRatesTickerResult').innerText +=
+                        JSON.stringify(result).replace(/,/g, ', ') + '\n';
+                    document.getElementById('subscribeNewFiatRatesTickerId').innerText = '';
+                    document
+                        .getElementById('unsubscribeNewFiatRatesTickerButton')
+                        .setAttribute('style', 'display: none;');
+                });
+            }
+
+            function rpcCall() {
+                const from = document.getElementById('rpcCallFrom').value.trim();
+                const to = document.getElementById('rpcCallTo').value.trim();
+                const data = document.getElementById('rpcCallData').value.trim();
+                const method = 'rpcCall';
+                const params = {
+                    from,
+                    to,
+                    data,
+                };
+                send(method, params, function (result) {
+                    document.getElementById('rpcCallResult').innerText = JSON.stringify(
+                        result,
+                    ).replace(/,/g, ', ');
+                });
+            }
+        </script>
+    </head>
+
+    <body>
+        <div class="container">
+            <div class="row justify-content-center">
+                <h1>Blockbook Websocket Test Page</h1>
+            </div>
+            <div class="row">
+                <div class="col">
+                    <input
+                        class="btn btn-secondary"
+                        type="button"
+                        value="Login"
+                        onclick="connect(document.getElementById('serverAddress').value)"
+                    />
+                </div>
+                <div class="col-8">
+                    <input type="text" class="form-control" id="serverAddress" value="" />
+                </div>
+                <div class="col form-inline">
+                    <label id="connectionStatus">not connected</label>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col">
+                    <input
+                        class="btn btn-secondary"
+                        type="button"
+                        value="getInfo"
+                        onclick="getInfo()"
+                    />
+                </div>
+                <div class="col-10" id="getInfoResult"></div>
+            </div>
+            <div class="row">
+                <div class="col">
+                    <input class="btn btn-secondary" type="button" value="ping" onclick="ping()" />
+                </div>
+                <div class="col-10" id="pingResult"></div>
+            </div>
+            <div class="row">
+                <div class="col">
+                    <input
+                        class="btn btn-secondary"
+                        type="button"
+                        value="getBlockHash"
+                        onclick="getBlockHash()"
+                    />
+                </div>
+                <div class="col-8">
+                    <input
+                        type="text"
+                        class="form-control"
+                        placeholder="height"
+                        id="getBlockHashHeight"
+                        value="0"
+                    />
+                </div>
+                <div class="col"></div>
+            </div>
+            <div class="row">
+                <div class="col" id="getBlockHashResult"></div>
+            </div>
+            <div class="row">
+                <div class="col">
+                    <input
+                        class="btn btn-secondary"
+                        type="button"
+                        value="getBlock"
+                        onclick="getBlock()"
+                    />
+                </div>
+                <div class="col-8">
+                    <div class="row" style="margin: 0">
+                        <input
+                            type="text"
+                            class="form-control"
+                            placeholder="height/hash"
+                            style="width: 68%; margin-right: 5px"
+                            id="getBlockId"
+                            value=""
+                        />
+                        <input
+                            type="text"
+                            class="form-control"
+                            placeholder="page"
+                            style="width: 15%; margin-right: 5px"
+                            id="getBlockPage"
+                            value=""
+                        />
+                        <input
+                            type="text"
+                            class="form-control"
+                            placeholder="page size"
+                            style="width: 15%"
+                            id="getBlockPageSize"
+                            value=""
+                        />
+                    </div>
+                </div>
+                <div class="col"></div>
+            </div>
+            <div class="row">
+                <div class="col" id="getBlockResult"></div>
+            </div>
+            <div class="row">
+                <div class="col">
+                    <input
+                        class="btn btn-secondary"
+                        type="button"
+                        value="getAccountInfo"
+                        onclick="getAccountInfo()"
+                    />
+                </div>
+                <div class="col-8">
+                    <div class="row" style="margin: 0">
+                        <input
+                            type="text"
+                            placeholder="descriptor"
+                            style="width: 79%"
+                            class="form-control"
+                            id="getAccountInfoDescriptor"
+                            value="0xba98d6a5ac827632e3457de7512d211e4ff7e8bd"
+                        />
+                        <select id="getAccountInfoDetails" style="width: 20%; margin-left: 5px">
+                            <option value="basic">Basic</option>
+                            <option value="tokens">Tokens</option>
+                            <option value="tokenBalances">TokenBalances</option>
+                            <option value="txids">Txids</option>
+                            <option value="txs">Transactions</option>
+                        </select>
+                    </div>
+                    <div class="row" style="margin: 0; margin-top: 5px">
+                        <input
+                            type="text"
+                            placeholder="page"
+                            style="width: 10%; margin-right: 5px"
+                            class="form-control"
+                            id="getAccountInfoPage"
+                        />
+                        <input
+                            type="text"
+                            placeholder="from"
+                            style="width: 13%; margin-left: 5px; margin-right: 5px"
+                            class="form-control"
+                            id="getAccountInfoFrom"
+                        />
+                        <input
+                            type="text"
+                            placeholder="to"
+                            style="width: 13%; margin-left: 5px; margin-right: 5px"
+                            class="form-control"
+                            id="getAccountInfoTo"
+                        />
+                        <input
+                            type="text"
+                            placeholder="contract"
+                            style="width: 50%; margin-left: 5px; margin-right: 5px"
+                            class="form-control"
+                            id="getAccountInfoContract"
+                        />
+                        <input
+                            type="text"
+                            placeholder="usd"
+                            style="width: 8%; margin-left: 5px"
+                            class="form-control"
+                            id="getAccountInfoSecondaryCurrency"
+                        />
+                    </div>
+                </div>
+                <div class="col form-inline"></div>
+            </div>
+            <div class="row">
+                <div class="col" id="getAccountInfoResult"></div>
+            </div>
+            <div class="row">
+                <div class="col">
+                    <input
+                        class="btn btn-secondary"
+                        type="button"
+                        value="getAccountUtxo"
+                        onclick="getAccountUtxo()"
+                    />
+                </div>
+                <div class="col-8">
+                    <div class="row" style="margin: 0">
+                        <input
+                            type="text"
+                            placeholder="descriptor"
+                            class="form-control"
+                            id="getAccountUtxoDescriptor"
+                            value="0xba98d6a5ac827632e3457de7512d211e4ff7e8bd"
+                        />
+                    </div>
+                </div>
+                <div class="col form-inline"></div>
+            </div>
+            <div class="row">
+                <div class="col" id="getAccountUtxoResult"></div>
+            </div>
+            <div class="row">
+                <div class="col">
+                    <input
+                        class="btn btn-secondary"
+                        type="button"
+                        value="getBalanceHistory"
+                        onclick="getBalanceHistory()"
+                    />
+                </div>
+                <div class="col-8">
+                    <div class="row" style="margin: 0">
+                        <input
+                            type="text"
+                            placeholder="descriptor"
+                            class="form-control"
+                            id="getBalanceHistoryDescriptor"
+                            value="0xba98d6a5ac827632e3457de7512d211e4ff7e8bd"
+                        />
+                    </div>
+                    <div class="row" style="margin: 0; margin-top: 5px">
+                        <input
+                            type="text"
+                            placeholder="from Unix TS"
+                            style="width: 20%; margin-left: 5px; margin-right: 5px"
+                            class="form-control"
+                            id="getBalanceHistoryFrom"
+                        />
+                        <input
+                            type="text"
+                            placeholder="to Unix TS"
+                            style="width: 20%; margin-left: 5px; margin-right: 5px"
+                            class="form-control"
+                            id="getBalanceHistoryTo"
+                        />
+                        <input
+                            type="text"
+                            placeholder="usd,eur"
+                            style="width: 20%; margin-left: 5px; margin-right: 5px"
+                            class="form-control"
+                            id="getBalanceHistoryFiat"
+                        />
+                        <input
+                            type="text"
+                            placeholder="group by (sec)"
+                            style="width: 20%; margin-left: 5px; margin-right: 5px"
+                            class="form-control"
+                            id="getBalanceHistoryGroupBy"
+                        />
+                    </div>
+                </div>
+                <div class="col form-inline"></div>
+            </div>
+            <div class="row">
+                <div class="col" id="getBalanceHistoryResult"></div>
+            </div>
+            <div class="row">
+                <div class="col">
+                    <input
+                        class="btn btn-secondary"
+                        type="button"
+                        value="getTransaction"
+                        onclick="getTransaction()"
+                    />
+                </div>
+                <div class="col-8">
+                    <div class="row" style="margin: 0">
+                        <input
+                            type="text"
+                            placeholder="txid"
+                            class="form-control"
+                            id="getTransactionTxid"
+                            value="0xb266c89f9bfefa4aa2fca4e65b7d6c918d5407f464be781c2803f3546d34a574"
+                        />
+                    </div>
+                </div>
+                <div class="col form-inline"></div>
+            </div>
+            <div class="row">
+                <div class="col" id="getTransactionResult"></div>
+            </div>
+            <div class="row">
+                <div class="col">
+                    <input
+                        class="btn btn-secondary"
+                        type="button"
+                        value="getTransactionSpecific"
+                        onclick="getTransactionSpecific()"
+                    />
+                </div>
+                <div class="col-8">
+                    <div class="row" style="margin: 0">
+                        <input
+                            type="text"
+                            placeholder="txid"
+                            class="form-control"
+                            id="getTransactionSpecificTxid"
+                            value="0xb266c89f9bfefa4aa2fca4e65b7d6c918d5407f464be781c2803f3546d34a574"
+                        />
+                    </div>
+                </div>
+                <div class="col form-inline"></div>
+            </div>
+            <div class="row">
+                <div class="col" id="getTransactionSpecificResult"></div>
+            </div>
+            <div class="row">
+                <div class="col">
+                    <input
+                        class="btn btn-secondary"
+                        type="button"
+                        value="estimateFee"
+                        onclick="estimateFee()"
+                    />
+                </div>
+                <div class="col-8">
+                    <div class="row" style="margin: 0">
+                        <input
+                            type="text"
+                            placeholder="comma separated list of block targets"
+                            class="form-control"
+                            id="estimateFeeBlocks"
+                            value="2,5,10,20"
+                        />
+                    </div>
+                    <div class="row" style="margin: 0; margin-top: 5px">
+                        <input
+                            type="text"
+                            placeholder="tx specific JSON"
+                            class="form-control"
+                            id="estimateFeeSpecific"
+                            value=""
+                        />
+                    </div>
+                </div>
+                <div class="col"></div>
+            </div>
+            <div class="row">
+                <div class="col" id="estimateFeeResult"></div>
+            </div>
+            <div class="row">
+                <div class="col">
+                    <input
+                        class="btn btn-secondary"
+                        type="button"
+                        value="sendTransaction"
+                        onclick="sendTransaction()"
+                    />
+                </div>
+                <div class="col-8">
+                    <input
+                        type="text"
+                        class="form-control"
+                        id="sendTransactionHex"
+                        value="010000000001019d64f0c72a0d206001decbffaa722eb1044534c74eee7a5df8318e42a4323ec10000000017160014550da1f5d25a9dae2eafd6902b4194c4c6500af6ffffffff02809698000000000017a914cd668d781ece600efa4b2404dc91fd26b8b8aed8870553d7360000000017a914246655bdbd54c7e477d0ea2375e86e0db2b8f80a8702473044022076aba4ad559616905fa51d4ddd357fc1fdb428d40cb388e042cdd1da4a1b7357022011916f90c712ead9a66d5f058252efd280439ad8956a967e95d437d246710bc9012102a80a5964c5612bb769ef73147b2cf3c149bc0fd4ecb02f8097629c94ab013ffd00000000"
+                    />
+                </div>
+                <div class="col"></div>
+            </div>
+            <div class="row">
+                <div class="col" id="sendTransactionResult"></div>
+            </div>
+            <div class="row">
+                <div class="col-2">
+                    <input
+                        class="btn btn-secondary"
+                        type="button"
+                        value="get fiat rates for dates"
+                        onclick="getFiatRatesForTimestamps()"
+                    />
+                </div>
+                <div class="col-1">
+                    <input
+                        type="text"
+                        class="form-control"
+                        id="getFiatRatesForTimestampsCurrency"
+                        placeholder="usd,eur"
+                    />
+                </div>
+                <div class="col-7">
+                    <input
+                        type="text"
+                        class="form-control"
+                        id="getFiatRatesForTimestampsList"
+                        value="1575288000,1575550800"
+                    />
+                </div>
+                <div class="col-5 offset-3">
+                    <input
+                        type="text"
+                        class="form-control"
+                        id="getFiatRatesForTimestampsToken"
+                        value=""
+                        placeholder="Token address"
+                    />
+                </div>
+            </div>
+            <div class="row">
+                <div class="col" id="getFiatRatesForTimestampsResult"></div>
+            </div>
+            <div class="row">
+                <div class="col-2">
+                    <input
+                        class="btn btn-secondary"
+                        type="button"
+                        value="get current fiat rates"
+                        onclick="getCurrentFiatRates()"
+                    />
+                </div>
+                <div class="col-1">
+                    <input
+                        type="text"
+                        class="form-control"
+                        id="getCurrentFiatRatesCurrency"
+                        placeholder="usd"
+                    />
+                </div>
+                <div class="col-5">
+                    <input
+                        type="text"
+                        class="form-control"
+                        id="getCurrentFiatRatesToken"
+                        value=""
+                        placeholder="Token address"
+                    />
+                </div>
+            </div>
+            <div class="row">
+                <div class="col" id="getCurrentFiatRatesResult"></div>
+            </div>
+            <div class="row">
+                <div class="col-2">
+                    <input
+                        class="btn btn-secondary"
+                        type="button"
+                        value="get available tickers"
+                        onclick="getFiatRatesTickersList()"
+                    />
+                </div>
+                <div class="col-4">
+                    <input
+                        type="text"
+                        class="form-control"
+                        id="getFiatRatesTickersListDate"
+                        value="1576591569"
+                        placeholder="Unix timestamp"
+                    />
+                </div>
+                <div class="col-5">
+                    <input
+                        type="text"
+                        class="form-control"
+                        id="getFiatRatesTickersToken"
+                        value=""
+                        placeholder="Token address"
+                    />
+                </div>
+            </div>
+            <div class="row">
+                <div class="col" id="getFiatRatesTickersListResult"></div>
+            </div>
+            <div class="row">
+                <div class="col-2">
+                    <input
+                        class="btn btn-secondary"
+                        type="button"
+                        value="get mempool filters"
+                        onclick="getMempoolFilters()"
+                    />
+                </div>
+                <div class="col-5">
+                    <input
+                        type="text"
+                        class="form-control"
+                        id="getMempoolFiltersScriptType"
+                        value="taproot"
+                        placeholder="filter script"
+                    />
+                </div>
+                <div class="col-4">
+                    <input
+                        type="text"
+                        class="form-control"
+                        id="getMempoolFiltersFromTimestamp"
+                        value=""
+                        placeholder="From unix timestamp"
+                    />
+                </div>
+            </div>
+            <div class="row">
+                <div class="col" id="getMempoolFiltersResult"></div>
+            </div>
+            <div class="row">
+                <div class="col-2">
+                    <input
+                        class="btn btn-secondary"
+                        type="button"
+                        value="get block filter"
+                        onclick="getBlockFilter()"
+                    />
+                </div>
+                <div class="col-8">
+                    <input
+                        type="text"
+                        class="form-control"
+                        id="getBlockFilterBlockHash"
+                        value="000000000000001cb4edd91be03b6775abd351fb51b1fbb0871fc1451454f362"
+                        placeholder="block hash"
+                    />
+                    <input
+                        type="text"
+                        class="form-control"
+                        id="getBlockFilterBlockHashScriptType"
+                        value="taproot-noordinals"
+                        placeholder="filter script"
+                    />
+                </div>
+            </div>
+            <div class="row">
+                <div class="col" id="getBlockFilterResult"></div>
+            </div>
+            <div class="row">
+                <div class="col-2">
+                    <input
+                        class="btn btn-secondary"
+                        type="button"
+                        value="get block filter batch"
+                        onclick="getBlockFiltersBatch()"
+                    />
+                </div>
+                <div class="col-10">
+                    <div class="row" style="margin: 0">
+                        <input
+                            type="text"
+                            class="form-control"
+                            id="getBlockFiltersBatchBlockHash"
+                            style="width: 80%; margin-right: 5px"
+                            value="000000000000001cb4edd91be03b6775abd351fb51b1fbb0871fc1451454f362"
+                            placeholder="best known block hash"
+                        />
+                        <input
+                            type="text"
+                            class="form-control"
+                            placeholder="page size"
+                            style="width: 15%"
+                            id="getBlockFiltersBatchPageSize"
+                            value=""
+                        />
+                        <input
+                            type="text"
+                            class="form-control"
+                            id="getBlockFiltersBatchScriptType"
+                            value="taproot-noordinals"
+                            placeholder="filter script"
+                        />
+                    </div>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col" id="getBlockFiltersBatchResult"></div>
+            </div>
+            <div class="row">
+                <div class="col">
+                    <input
+                        class="btn btn-secondary"
+                        type="button"
+                        value="rpcCall"
+                        onclick="rpcCall()"
+                    />
+                </div>
+                <div class="col-10">
+                    <div class="row" style="margin: 0">
+                        <input
+                            type="text"
+                            class="form-control"
+                            id="rpcCallFrom"
+                            style="width: 60%; margin-right: 5px"
+                            value=""
+                            placeholder="from"
+                        />
+                        <input
+                            type="text"
+                            class="form-control"
+                            id="rpcCallTo"
+                            style="width: 60%; margin-right: 5px"
+                            value="0x624087dd1904ab122a32878ce9e933c7071f53b9"
+                            placeholder="to"
+                        />
+                        <input
+                            type="text"
+                            class="form-control"
+                            placeholder="data"
+                            style="width: 100%"
+                            id="rpcCallData"
+                            value="0x2fec7966000000000000000000000000ce66a9577f4e2589c1d1547b75b7a2b0807ce0ed"
+                        />
+                    </div>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col" id="rpcCallResult"></div>
+            </div>
+            <div class="row">
+                <div class="col">
+                    <input
+                        class="btn btn-secondary"
+                        type="button"
+                        value="subscribe new block"
+                        onclick="subscribeNewBlock()"
+                    />
+                </div>
+                <div class="col-4">
+                    <span id="subscribeNewBlockId"></span>
+                </div>
+                <div class="col">
+                    <input
+                        class="btn btn-secondary"
+                        id="unsubscribeNewBlockButton"
+                        style="display: none"
+                        type="button"
+                        value="unsubscribe"
+                        onclick="unsubscribeNewBlock()"
+                    />
+                </div>
+            </div>
+            <div class="row">
+                <div class="col" id="subscribeNewBlockResult"></div>
+            </div>
+            <div class="row">
+                <div class="col">
+                    <input
+                        class="btn btn-secondary"
+                        type="button"
+                        value="subscribe new transaction"
+                        onclick="subscribeNewTransaction()"
+                    />
+                </div>
+                <div class="col-4">
+                    <span id="subscribeNewTransactionId"></span>
+                </div>
+                <div class="col">
+                    <input
+                        class="btn btn-secondary"
+                        id="unsubscribeNewTransactionButton"
+                        style="display: none"
+                        type="button"
+                        value="unsubscribe"
+                        onclick="unsubscribeNewTransaction()"
+                    />
+                </div>
+            </div>
+            <div class="row">
+                <div class="col" id="subscribeNewTransactionResult"></div>
+            </div>
+            <div class="row">
+                <div class="col">
+                    <input
+                        class="btn btn-secondary"
+                        type="button"
+                        value="subscribe address"
+                        onclick="subscribeAddresses()"
+                    />
+                </div>
+                <div class="col-8">
+                    <input
+                        type="text"
+                        class="form-control"
+                        id="subscribeAddressesName"
+                        value="0xba98d6a5ac827632e3457de7512d211e4ff7e8bd,0x73d0385f4d8e00c5e6504c6030f47bf6212736a8"
+                    />
+                </div>
+                <div class="col">
+                    <span id="subscribeAddressesIds"></span>
+                </div>
+                <div class="col">
+                    <input
+                        class="btn btn-secondary"
+                        id="unsubscribeAddressesButton"
+                        style="display: none"
+                        type="button"
+                        value="unsubscribe"
+                        onclick="unsubscribeAddresses()"
+                    />
+                </div>
+            </div>
+            <div class="row">
+                <div class="col" id="subscribeAddressesResult"></div>
+            </div>
+            <div class="row">
+                <div class="col-2">
+                    <input
+                        class="btn btn-secondary"
+                        type="button"
+                        value="subscribe fiat rates"
+                        onclick="subscribeNewFiatRatesTicker()"
+                    />
+                </div>
+                <div class="col-1">
+                    <input
+                        type="text"
+                        class="form-control"
+                        id="subscribeFiatRatesCurrency"
+                        value="usd"
+                    />
+                </div>
+                <div class="col-8">
+                    <input
+                        type="text"
+                        class="form-control"
+                        id="subscribeFiatRatesTokens"
+                        value=""
+                        placeholder="0xdAC17F958D2ee523a2206206994597C13D831ec7,0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+                    />
+                </div>
+                <div class="col-1">
+                    <span id="subscribeNewFiatRatesTickerId"></span>
+                </div>
+                <div class="col-5">
+                    <input
+                        class="btn btn-secondary"
+                        id="unsubscribeNewFiatRatesTickerButton"
+                        style="display: none"
+                        type="button"
+                        value="unsubscribe"
+                        onclick="unsubscribeNewFiatRatesTicker()"
+                    />
+                </div>
+            </div>
+            <div class="row">
+                <div class="col" id="subscribeNewFiatRatesTickerResult"></div>
+            </div>
+        </div>
+        <br /><br />
+    </body>
+    <script>
+        document.getElementById('serverAddress').value =
+            window.location.protocol + '//' + window.location.host;
     </script>
-</head>
-
-<body>
-    <div class="container">
-        <div class="row justify-content-center">
-            <h1>Blockbook Websocket Test Page</h1>
-        </div>
-        <div class="row">
-            <div class="col">
-                <input class="btn btn-secondary" type="button" value="Login" onclick="connect(document.getElementById('serverAddress').value)">
-            </div>
-            <div class="col-8">
-                <input type="text" class="form-control" id="serverAddress" value="">
-            </div>
-            <div class="col form-inline">
-                <label id="connectionStatus">not connected</label>
-            </div>
-        </div>
-        <div class="row">
-            <div class="col">
-                <input class="btn btn-secondary" type="button" value="getInfo" onclick="getInfo()">
-            </div>
-            <div class="col-10" id="getInfoResult">
-            </div>
-        </div>
-        <div class="row">
-            <div class="col">
-                <input class="btn btn-secondary" type="button" value="ping" onclick="ping()">
-            </div>
-            <div class="col-10" id="pingResult">
-            </div>
-        </div>
-        <div class="row">
-            <div class="col">
-                <input class="btn btn-secondary" type="button" value="getBlockHash" onclick="getBlockHash()">
-            </div>
-            <div class="col-8">
-                <input type="text" class="form-control" placeholder="height" id="getBlockHashHeight" value="0">
-            </div>
-            <div class="col">
-            </div>
-        </div>
-        <div class="row">
-            <div class="col" id="getBlockHashResult"></div>
-        </div>
-        <div class="row">
-            <div class="col">
-                <input class="btn btn-secondary" type="button" value="getBlock" onclick="getBlock()">
-            </div>
-            <div class="col-8">
-                <div class="row" style="margin: 0;">
-                    <input type="text" class="form-control" placeholder="height/hash" style="width: 68%; margin-right: 5px;" id="getBlockId" value="">
-                    <input type="text" class="form-control" placeholder="page" style="width: 15%; margin-right: 5px;" id="getBlockPage" value="">
-                    <input type="text" class="form-control" placeholder="page size" style="width: 15%;" id="getBlockPageSize" value="">
-                </div>
-            </div>
-            <div class="col">
-            </div>
-        </div>
-        <div class="row">
-            <div class="col" id="getBlockResult"></div>
-        </div>
-        <div class="row">
-            <div class="col">
-                <input class="btn btn-secondary" type="button" value="getAccountInfo" onclick="getAccountInfo()">
-            </div>
-            <div class="col-8">
-                <div class="row" style="margin: 0;">
-                    <input type="text" placeholder="descriptor" style="width: 79%" class="form-control" id="getAccountInfoDescriptor" value="0xba98d6a5ac827632e3457de7512d211e4ff7e8bd">
-                    <select id="getAccountInfoDetails" style="width: 20%; margin-left: 5px;">
-                        <option value="basic">Basic</option>
-                        <option value="tokens">Tokens</option>
-                        <option value="tokenBalances">TokenBalances</option>
-                        <option value="txids">Txids</option>
-                        <option value="txs">Transactions</option>
-                    </select>
-                </div>
-                <div class="row" style="margin: 0; margin-top: 5px;">
-                    <input type="text" placeholder="page" style="width: 10%; margin-right: 5px;" class="form-control" id="getAccountInfoPage">
-                    <input type="text" placeholder="from" style="width: 13%;margin-left: 5px;margin-right: 5px;" class="form-control" id="getAccountInfoFrom">
-                    <input type="text" placeholder="to" style="width: 13%; margin-left: 5px; margin-right: 5px;" class="form-control" id="getAccountInfoTo">
-                    <input type="text" placeholder="contract" style="width: 50%; margin-left: 5px; margin-right: 5px;" class="form-control" id="getAccountInfoContract">
-                    <input type="text" placeholder="usd" style="width: 8%; margin-left: 5px;" class="form-control" id="getAccountInfoSecondaryCurrency">
-                </div>
-            </div>
-            <div class="col form-inline"></div>
-        </div>
-        <div class="row">
-            <div class="col" id="getAccountInfoResult">
-            </div>
-        </div>
-        <div class="row">
-            <div class="col">
-                <input class="btn btn-secondary" type="button" value="getAccountUtxo" onclick="getAccountUtxo()">
-            </div>
-            <div class="col-8">
-                <div class="row" style="margin: 0;">
-                    <input type="text" placeholder="descriptor" class="form-control" id="getAccountUtxoDescriptor" value="0xba98d6a5ac827632e3457de7512d211e4ff7e8bd">
-                </div>
-            </div>
-            <div class="col form-inline"></div>
-        </div>
-        <div class="row">
-            <div class="col" id="getAccountUtxoResult">
-            </div>
-        </div>
-        <div class="row">
-            <div class="col">
-                <input class="btn btn-secondary" type="button" value="getBalanceHistory" onclick="getBalanceHistory()">
-            </div>
-            <div class="col-8">
-                <div class="row" style="margin: 0;">
-                    <input type="text" placeholder="descriptor" class="form-control" id="getBalanceHistoryDescriptor" value="0xba98d6a5ac827632e3457de7512d211e4ff7e8bd">
-                </div>
-                <div class="row" style="margin: 0; margin-top: 5px;">
-                    <input type="text" placeholder="from Unix TS" style="width: 20%;margin-left: 5px;margin-right: 5px;" class="form-control" id="getBalanceHistoryFrom">
-                    <input type="text" placeholder="to Unix TS" style="width: 20%; margin-left: 5px; margin-right: 5px;" class="form-control" id="getBalanceHistoryTo">
-                    <input type="text" placeholder="usd,eur" style="width: 20%; margin-left: 5px; margin-right: 5px;" class="form-control" id="getBalanceHistoryFiat">
-                    <input type="text" placeholder="group by (sec)" style="width: 20%; margin-left: 5px; margin-right: 5px;" class="form-control" id="getBalanceHistoryGroupBy">
-                </div>
-            </div>
-            <div class="col form-inline"></div>
-        </div>
-        <div class="row">
-            <div class="col" id="getBalanceHistoryResult">
-            </div>
-        </div>
-        <div class="row">
-            <div class="col">
-                <input class="btn btn-secondary" type="button" value="getTransaction" onclick="getTransaction()">
-            </div>
-            <div class="col-8">
-                <div class="row" style="margin: 0;">
-                    <input type="text" placeholder="txid" class="form-control" id="getTransactionTxid" value="0xb266c89f9bfefa4aa2fca4e65b7d6c918d5407f464be781c2803f3546d34a574">
-                </div>
-            </div>
-            <div class="col form-inline"></div>
-        </div>
-        <div class="row">
-            <div class="col" id="getTransactionResult">
-            </div>
-        </div>
-        <div class="row">
-            <div class="col">
-                <input class="btn btn-secondary" type="button" value="getTransactionSpecific" onclick="getTransactionSpecific()">
-            </div>
-            <div class="col-8">
-                <div class="row" style="margin: 0;">
-                    <input type="text" placeholder="txid" class="form-control" id="getTransactionSpecificTxid" value="0xb266c89f9bfefa4aa2fca4e65b7d6c918d5407f464be781c2803f3546d34a574">
-                </div>
-            </div>
-            <div class="col form-inline"></div>
-        </div>
-        <div class="row">
-            <div class="col" id="getTransactionSpecificResult">
-            </div>
-        </div>
-        <div class="row">
-            <div class="col">
-                <input class="btn btn-secondary" type="button" value="estimateFee" onclick="estimateFee()">
-            </div>
-            <div class="col-8">
-                <div class="row" style="margin: 0;">
-                    <input type="text" placeholder="comma separated list of block targets" class="form-control" id="estimateFeeBlocks" value="2,5,10,20">
-                </div>
-                <div class="row" style="margin: 0; margin-top: 5px;">
-                    <input type="text" placeholder="tx specific JSON" class="form-control" id="estimateFeeSpecific" value="">
-                </div>
-            </div>
-            <div class="col"></div>
-        </div>
-        <div class="row">
-            <div class="col" id="estimateFeeResult">
-            </div>
-        </div>
-        <div class="row">
-            <div class="col">
-                <input class="btn btn-secondary" type="button" value="sendTransaction" onclick="sendTransaction()">
-            </div>
-            <div class="col-8">
-                <input type="text" class="form-control" id="sendTransactionHex" value="010000000001019d64f0c72a0d206001decbffaa722eb1044534c74eee7a5df8318e42a4323ec10000000017160014550da1f5d25a9dae2eafd6902b4194c4c6500af6ffffffff02809698000000000017a914cd668d781ece600efa4b2404dc91fd26b8b8aed8870553d7360000000017a914246655bdbd54c7e477d0ea2375e86e0db2b8f80a8702473044022076aba4ad559616905fa51d4ddd357fc1fdb428d40cb388e042cdd1da4a1b7357022011916f90c712ead9a66d5f058252efd280439ad8956a967e95d437d246710bc9012102a80a5964c5612bb769ef73147b2cf3c149bc0fd4ecb02f8097629c94ab013ffd00000000">
-            </div>
-            <div class="col">
-            </div>
-        </div>
-        <div class="row">
-            <div class="col" id="sendTransactionResult"></div>
-        </div>
-        <div class="row">
-            <div class="col-2">
-                <input class="btn btn-secondary" type="button" value="get fiat rates for dates" onclick="getFiatRatesForTimestamps()">
-            </div>
-            <div class="col-1">
-                <input type="text" class="form-control" id="getFiatRatesForTimestampsCurrency" placeholder="usd,eur">
-            </div>
-            <div class="col-7">
-                <input type="text" class="form-control" id="getFiatRatesForTimestampsList" value="1575288000,1575550800">
-            </div>
-            <div class="col-5 offset-3">
-                <input type="text" class="form-control" id="getFiatRatesForTimestampsToken" value="" placeholder="Token address">
-            </div>
-        </div>
-        <div class="row">
-            <div class="col" id="getFiatRatesForTimestampsResult"></div>
-        </div>
-        <div class="row">
-            <div class="col-2">
-                <input class="btn btn-secondary" type="button" value="get current fiat rates" onclick="getCurrentFiatRates()">
-            </div>
-            <div class="col-1">
-                <input type="text" class="form-control" id="getCurrentFiatRatesCurrency" placeholder="usd">
-            </div>
-            <div class="col-5">
-                <input type="text" class="form-control" id="getCurrentFiatRatesToken" value="" placeholder="Token address">
-            </div>
-        </div>
-        <div class="row">
-            <div class="col" id="getCurrentFiatRatesResult"></div>
-        </div>
-        <div class="row">
-            <div class="col-2">
-                <input class="btn btn-secondary" type="button" value="get available tickers" onclick="getFiatRatesTickersList()">
-            </div>
-            <div class="col-4">
-                <input type="text" class="form-control" id="getFiatRatesTickersListDate" value="1576591569" placeholder="Unix timestamp">
-            </div>
-            <div class="col-5">
-                <input type="text" class="form-control" id="getFiatRatesTickersToken" value="" placeholder="Token address">
-            </div>
-        </div>
-        <div class="row">
-            <div class="col" id="getFiatRatesTickersListResult"></div>
-        </div>
-        <div class="row">
-            <div class="col-2">
-                <input class="btn btn-secondary" type="button" value="get mempool filters" onclick="getMempoolFilters()">
-            </div>
-            <div class="col-5">
-                <input type="text" class="form-control" id="getMempoolFiltersScriptType" value="taproot" placeholder="filter script">
-            </div>
-            <div class="col-4">
-                <input type="text" class="form-control" id="getMempoolFiltersFromTimestamp" value="" placeholder="From unix timestamp">
-            </div>
-        </div>
-        <div class="row">
-            <div class="col" id="getMempoolFiltersResult"></div>
-        </div>
-        <div class="row">
-            <div class="col-2">
-                <input class="btn btn-secondary" type="button" value="get block filter" onclick="getBlockFilter()">
-            </div>
-            <div class="col-8">
-                <input type="text" class="form-control" id="getBlockFilterBlockHash" value="000000000000001cb4edd91be03b6775abd351fb51b1fbb0871fc1451454f362" placeholder="block hash">
-                <input type="text" class="form-control" id="getBlockFilterBlockHashScriptType" value="taproot-noordinals" placeholder="filter script">
-            </div>
-        </div>
-        <div class="row">
-            <div class="col" id="getBlockFilterResult"></div>
-        </div>
-        <div class="row">
-            <div class="col-2">
-                <input class="btn btn-secondary" type="button" value="get block filter batch" onclick="getBlockFiltersBatch()">
-            </div>
-            <div class="col-10">
-                <div class="row" style="margin: 0;">
-                    <input type="text" class="form-control" id="getBlockFiltersBatchBlockHash"  style="width: 80%; margin-right: 5px;" value="000000000000001cb4edd91be03b6775abd351fb51b1fbb0871fc1451454f362" placeholder="best known block hash">
-                    <input type="text" class="form-control" placeholder="page size" style="width: 15%;" id="getBlockFiltersBatchPageSize" value="">
-                    <input type="text" class="form-control" id="getBlockFiltersBatchScriptType" value="taproot-noordinals" placeholder="filter script">
-                </div>
-            </div>
-        </div>
-        <div class="row">
-            <div class="col" id="getBlockFiltersBatchResult"></div>
-        </div>
-        <div class="row">
-            <div class="col">
-                <input class="btn btn-secondary" type="button" value="subscribe new block" onclick="subscribeNewBlock()">
-            </div>
-            <div class="col-4">
-                <span id="subscribeNewBlockId"></span>
-            </div>
-            <div class="col">
-                <input class="btn btn-secondary" id="unsubscribeNewBlockButton" style="display: none;" type="button" value="unsubscribe" onclick="unsubscribeNewBlock()">
-            </div>
-        </div>
-        <div class="row">
-            <div class="col" id="subscribeNewBlockResult"></div>
-        </div>
-        <div class="row">
-            <div class="col">
-                <input class="btn btn-secondary" type="button" value="subscribe new transaction" onclick="subscribeNewTransaction()">
-            </div>
-            <div class="col-4">
-                <span id="subscribeNewTransactionId"></span>
-            </div>
-            <div class="col">
-                <input class="btn btn-secondary" id="unsubscribeNewTransactionButton" style="display: none;" type="button" value="unsubscribe" onclick="unsubscribeNewTransaction()">
-            </div>
-        </div>
-        <div class="row">
-            <div class="col" id="subscribeNewTransactionResult"></div>
-        </div>
-        <div class="row">
-            <div class="col">
-                <input class="btn btn-secondary" type="button" value="subscribe address" onclick="subscribeAddresses()">
-            </div>
-            <div class="col-8">
-                <input type="text" class="form-control" id="subscribeAddressesName" value="0xba98d6a5ac827632e3457de7512d211e4ff7e8bd,0x73d0385f4d8e00c5e6504c6030f47bf6212736a8">
-            </div>
-            <div class="col">
-                <span id="subscribeAddressesIds"></span>
-            </div>
-            <div class="col">
-                <input class="btn btn-secondary" id="unsubscribeAddressesButton" style="display: none;" type="button" value="unsubscribe" onclick="unsubscribeAddresses()">
-            </div>
-        </div>
-        <div class="row">
-            <div class="col" id="subscribeAddressesResult"></div>
-        </div>
-        <div class="row">
-            <div class="col-2">
-                <input class="btn btn-secondary" type="button" value="subscribe fiat rates" onclick="subscribeNewFiatRatesTicker()">
-            </div>
-            <div class="col-1">
-                <input type="text" class="form-control" id="subscribeFiatRatesCurrency" value="usd">
-            </div>
-            <div class="col-8">
-                <input type="text" class="form-control" id="subscribeFiatRatesTokens" value="" placeholder="0xdAC17F958D2ee523a2206206994597C13D831ec7,0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2">
-            </div>
-            <div class="col-1">
-                <span id="subscribeNewFiatRatesTickerId"></span>
-            </div>
-            <div class="col-5">
-                <input class="btn btn-secondary" id="unsubscribeNewFiatRatesTickerButton" style="display: none;" type="button" value="unsubscribe" onclick="unsubscribeNewFiatRatesTicker()">
-            </div>
-        </div>
-        <div class="row">
-            <div class="col" id="subscribeNewFiatRatesTickerResult"></div>
-        </div>
-    </div>
-    <br><br>
-</body>
-<script>
-    document.getElementById('serverAddress').value = window.location.protocol + "//" + window.location.host;
-</script>
-
 </html>

@@ -35,7 +35,7 @@ the rest of coins were implemented by the community.
 
 Testnets for some coins are also supported, for example:
 
--   Bitcoin Testnet, Bitcoin Cash Testnet, ZCash Testnet, Ethereum Testnets (Goerli, Sepolia, Holesky)
+-   Bitcoin Testnet, Bitcoin Cash Testnet, ZCash Testnet, Ethereum Testnets (Sepolia, Holesky)
 
 List of all implemented coins is in [the registry of ports](/docs/ports.md).
 
@@ -74,3 +74,7 @@ Blockbook stores data the key-value store RocksDB. Database format is described 
 ## API
 
 Blockbook API is described [here](/docs/api.md).
+
+## Environment variables
+
+List of environment variables that affect Blockbook's behavior is [here](/docs/env.md).

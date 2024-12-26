@@ -60,6 +60,8 @@ func main() {
 	t.Add(server.WsFiatRatesForTimestampsReq{})
 	t.Add(server.WsFiatRatesTickersListReq{})
 	t.Add(server.WsMempoolFiltersReq{})
+	t.Add(server.WsRpcCallReq{})
+	t.Add(server.WsRpcCallRes{})
 	t.Add(bchain.MempoolTxidFilterEntries{})
 
 	err := t.ConvertToFile("blockbook-api.ts")

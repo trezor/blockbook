@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/golang/glog"
 	"github.com/juju/errors"
 	"github.com/trezor/blockbook/bchain"
@@ -38,15 +36,7 @@ func NewPolygonRPC(config json.RawMessage, pushHandler func(bchain.NotificationT
 
 // Initialize polygon rpc interface
 func (b *PolygonRPC) Initialize() error {
-	b.OpenRPC = func(url string) (bchain.EVMRPCClient, bchain.EVMClient, error) {
-		r, err := rpc.Dial(url)
-		if err != nil {
-			return nil, nil, err
-		}
-		rc := &eth.EthereumRPCClient{Client: r}
-		ec := &eth.EthereumClient{Client: ethclient.NewClient(r)}
-		return rc, ec, nil
-	}
+	b.OpenRPC = eth.OpenRPC
 
 	rc, ec, err := b.OpenRPC(b.ChainConfig.RPCURL)
 	if err != nil {

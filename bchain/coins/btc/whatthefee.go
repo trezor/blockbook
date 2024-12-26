@@ -3,11 +3,9 @@ package btc
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"math"
 	"net/http"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/golang/glog"
@@ -34,49 +32,40 @@ type whatTheFeeParams struct {
 	PeriodSeconds int    `periodSeconds:"url"`
 }
 
-type whatTheFeeFee struct {
-	blocks    int
-	feesPerKB []int
-}
-
-type whatTheFeeData struct {
+type whatTheFeeProvider struct {
+	*alternativeFeeProvider
 	params        whatTheFeeParams
 	probabilities []string
-	fees          []whatTheFeeFee
-	lastSync      time.Time
-	chain         bchain.BlockChain
-	mux           sync.Mutex
 }
 
-var whatTheFee whatTheFeeData
-
-// InitWhatTheFee initializes https://whatthefee.io handler
-func InitWhatTheFee(chain bchain.BlockChain, params string) error {
-	err := json.Unmarshal([]byte(params), &whatTheFee.params)
+// NewWhatTheFee initializes https://whatthefee.io provider
+func NewWhatTheFee(chain bchain.BlockChain, params string) (alternativeFeeProviderInterface, error) {
+	var p whatTheFeeProvider
+	err := json.Unmarshal([]byte(params), &p.params)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	if whatTheFee.params.URL == "" || whatTheFee.params.PeriodSeconds == 0 {
-		return errors.New("Missing parameters")
+	if p.params.URL == "" || p.params.PeriodSeconds == 0 {
+		return nil, errors.New("NewWhatTheFee: Missing parameters")
 	}
-	whatTheFee.chain = chain
-	go whatTheFeeDownloader()
-	return nil
+	p.chain = chain
+	go p.whatTheFeeDownloader()
+	return &p, nil
 }
 
-func whatTheFeeDownloader() {
-	period := time.Duration(whatTheFee.params.PeriodSeconds) * time.Second
+func (p *whatTheFeeProvider) whatTheFeeDownloader() {
+	period := time.Duration(p.params.PeriodSeconds) * time.Second
 	timer := time.NewTimer(period)
 	counter := 0
 	for {
 		var data whatTheFeeServiceResult
-		err := whatTheFeeGetData(&data)
+		err := p.whatTheFeeGetData(&data)
 		if err != nil {
 			glog.Error("whatTheFeeGetData ", err)
 		} else {
-			if whatTheFeeProcessData(&data) {
+			if p.whatTheFeeProcessData(&data) {
 				if counter%60 == 0 {
-					whatTheFeeCompareToDefault()
+					p.compareToDefault()
 				}
 				counter++
 			}
@@ -86,15 +75,15 @@ func whatTheFeeDownloader() {
 	}
 }
 
-func whatTheFeeProcessData(data *whatTheFeeServiceResult) bool {
+func (p *whatTheFeeProvider) whatTheFeeProcessData(data *whatTheFeeServiceResult) bool {
 	if len(data.Index) == 0 || len(data.Index) != len(data.Data) || len(data.Columns) == 0 {
 		glog.Errorf("invalid data %+v", data)
 		return false
 	}
-	whatTheFee.mux.Lock()
-	defer whatTheFee.mux.Unlock()
-	whatTheFee.probabilities = data.Columns
-	whatTheFee.fees = make([]whatTheFeeFee, len(data.Index))
+	p.mux.Lock()
+	defer p.mux.Unlock()
+	p.probabilities = data.Columns
+	p.fees = make([]alternativeFeeProviderFee, len(data.Index))
 	for i, blocks := range data.Index {
 		if len(data.Columns) != len(data.Data[i]) {
 			glog.Errorf("invalid data %+v", data)
@@ -104,19 +93,19 @@ func whatTheFeeProcessData(data *whatTheFeeServiceResult) bool {
 		for j, l := range data.Data[i] {
 			fees[j] = int(1000 * math.Exp(float64(l)/100))
 		}
-		whatTheFee.fees[i] = whatTheFeeFee{
-			blocks:    blocks,
-			feesPerKB: fees,
+		p.fees[i] = alternativeFeeProviderFee{
+			blocks:   blocks,
+			feePerKB: fees[len(fees)/2],
 		}
 	}
-	whatTheFee.lastSync = time.Now()
-	glog.Infof("%+v", whatTheFee.fees)
+	p.lastSync = time.Now()
+	glog.Infof("whatTheFees: %+v", p.fees)
 	return true
 }
 
-func whatTheFeeGetData(res interface{}) error {
+func (p *whatTheFeeProvider) whatTheFeeGetData(res interface{}) error {
 	var httpData []byte
-	httpReq, err := http.NewRequest("GET", whatTheFee.params.URL, bytes.NewBuffer(httpData))
+	httpReq, err := http.NewRequest("GET", p.params.URL, bytes.NewBuffer(httpData))
 	if err != nil {
 		return err
 	}
@@ -131,26 +120,4 @@ func whatTheFeeGetData(res interface{}) error {
 		return errors.New("whatthefee.io returned status " + strconv.Itoa(httpRes.StatusCode))
 	}
 	return safeDecodeResponse(httpRes.Body, &res)
-}
-
-func whatTheFeeCompareToDefault() {
-	output := ""
-	for _, fee := range whatTheFee.fees {
-		output += fmt.Sprint(fee.blocks, ",")
-		for _, wtf := range fee.feesPerKB {
-			output += fmt.Sprint(wtf, ",")
-		}
-		conservative, err := whatTheFee.chain.EstimateSmartFee(fee.blocks, true)
-		if err != nil {
-			glog.Error(err)
-			return
-		}
-		economical, err := whatTheFee.chain.EstimateSmartFee(fee.blocks, false)
-		if err != nil {
-			glog.Error(err)
-			return
-		}
-		output += fmt.Sprint(conservative.String(), ",", economical.String(), "\n")
-	}
-	glog.Info("whatTheFeeCompareToDefault\n", output)
 }

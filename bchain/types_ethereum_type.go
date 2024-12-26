@@ -122,9 +122,13 @@ type RpcLog struct {
 
 // RpcLog is returned by eth_getTransactionReceipt
 type RpcReceipt struct {
-	GasUsed string    `json:"gasUsed"`
-	Status  string    `json:"status"`
-	Logs    []*RpcLog `json:"logs"`
+	GasUsed     string    `json:"gasUsed"`
+	Status      string    `json:"status"`
+	Logs        []*RpcLog `json:"logs"`
+	L1Fee       string    `json:"l1Fee,omitempty"`
+	L1FeeScalar string    `json:"l1FeeScalar,omitempty"`
+	L1GasPrice  string    `json:"l1GasPrice,omitempty"`
+	L1GasUsed   string    `json:"l1GasUsed,omitempty"`
 }
 
 // EthereumSpecificData contains data specific to Ethereum transactions
@@ -145,4 +149,17 @@ type EthereumBlockSpecificData struct {
 	InternalDataError   string
 	AddressAliasRecords []AddressAliasRecord
 	Contracts           []ContractInfo
+}
+
+// StakingPool holds data about address participation in a staking pool contract
+type StakingPoolData struct {
+	Contract                string  `json:"contract"`
+	Name                    string  `json:"name"`
+	PendingBalance          big.Int `json:"pendingBalance"`          // pendingBalanceOf method
+	PendingDepositedBalance big.Int `json:"pendingDepositedBalance"` // pendingDepositedBalanceOf method
+	DepositedBalance        big.Int `json:"depositedBalance"`        // depositedBalanceOf method
+	WithdrawTotalAmount     big.Int `json:"withdrawTotalAmount"`     // withdrawRequest method, return value [0]
+	ClaimableAmount         big.Int `json:"claimableAmount"`         // withdrawRequest method, return value [1]
+	RestakedReward          big.Int `json:"restakedReward"`          // restakedRewardOf method
+	AutocompoundBalance     big.Int `json:"autocompoundBalance"`     // autocompoundBalanceOf method
 }

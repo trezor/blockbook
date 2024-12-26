@@ -51,6 +51,24 @@
             <td>Gas Price</td>
             <td>{{amountSpan $tx.EthereumSpecific.GasPrice $data "copyable"}} <span class="fw-normal ps-3">({{amountSatsSpan $tx.EthereumSpecific.GasPrice $data "copyable"}} Gwei)</span></td>
         </tr>
+        {{if $tx.EthereumSpecific.L1GasUsed}}
+        <tr>
+            <td>L1 Gas Used</td>
+            <td>{{formatBigInt $tx.EthereumSpecific.L1GasUsed}}</td>
+        </tr>
+        {{end}}
+        {{if $tx.EthereumSpecific.L1GasPrice}}
+        <tr>
+            <td>L1 Gas Price</td>
+            <td>{{amountSpan $tx.EthereumSpecific.L1GasPrice $data "copyable"}} <span class="fw-normal ps-3">({{amountSatsSpan $tx.EthereumSpecific.L1GasPrice $data "copyable"}} Gwei)</span></td>
+        </tr>
+        {{end}}
+        {{if $tx.EthereumSpecific.L1FeeScalar}}
+        <tr>
+            <td>L1 Fee Scalar</td>
+            <td>{{$tx.EthereumSpecific.L1FeeScalar}}</td>
+        </tr>
+        {{end}}
         {{else}}
         <tr>
             <td>Total Input</td>
@@ -97,6 +115,12 @@
                 <span tt="Final transaction that can not be replaced unless it is dropped from the mempool.">OFF️</span>
                 {{end}}
             </td>
+        </tr>
+        {{end}}
+        {{if $tx.EthereumSpecific}}
+        <tr>
+            <td>Nonce</td>
+            <td>{{$tx.EthereumSpecific.Nonce}}</td>
         </tr>
         {{end}}
     </tbody>
@@ -158,13 +182,19 @@
 {{end}}
 {{end}}
 <div class="pt-4">
-    <h5>Raw Transaction</h5>
-    <div class="json">
-        <pre id="raw"></pre>
+    <button style="color: black" class="btn btn-paging" id="raw-button">
+        Raw Transaction
+    </button>
+    <button style="color: black" class="btn btn-paging" id="raw-hex-button">
+        Raw Transaction Hex
+    </button>
+    <div class="json copyable">
+        <pre id="raw" style="text-wrap: auto;"></pre>
     </div>
-    <script type="text/javascript">
-        var raw = {{$tx.CoinSpecificData}};
-        document.getElementById('raw').innerHTML = syntaxHighlight(raw);
+    <script>
+        const rawData = {{ $tx.CoinSpecificData }};
+        const txId = {{ jsStr $tx.Txid }};
+        handleTxPage(rawData, txId);
     </script>
 </div>
 {{end}}

@@ -1962,6 +1962,7 @@ func (d *RocksDB) LoadInternalState(config *common.Config) (*common.InternalStat
 	} else {
 		is.CoinLabel = config.CoinLabel
 	}
+	is.Network = config.Network
 
 	return is, nil
 }

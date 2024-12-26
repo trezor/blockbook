@@ -5,11 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"io"
 	"net/http"
 	"path/filepath"
 	"sort"
+	"strconv"
+	"strings"
 
 	"github.com/golang/glog"
+	"github.com/juju/errors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/trezor/blockbook/api"
 	"github.com/trezor/blockbook/bchain"
@@ -72,6 +76,8 @@ func NewInternalServer(binding, certFiles string, db *db.RocksDB, chain bchain.B
 	serveMux.HandleFunc(path+"admin/ws-limit-exceeding-ips", s.htmlTemplateHandler(s.wsLimitExceedingIPs))
 	if s.chainParser.GetChainType() == bchain.ChainEthereumType {
 		serveMux.HandleFunc(path+"admin/internal-data-errors", s.htmlTemplateHandler(s.internalDataErrors))
+		serveMux.HandleFunc(path+"admin/contract-info", s.htmlTemplateHandler(s.contractInfoPage))
+		serveMux.HandleFunc(path+"admin/contract-info/", s.jsonHandler(s.apiContractInfo, 0))
 	}
 	return s, nil
 }
@@ -118,7 +124,8 @@ func (s *InternalServer) index(w http.ResponseWriter, r *http.Request) {
 const (
 	adminIndexTpl = iota + errorInternalTpl + 1
 	adminInternalErrorsTpl
-	adminLimitExceedingIPS
+	adminLimitExceedingIPSTpl
+	adminContractInfoTpl
 
 	internalTplCount
 )
@@ -173,7 +180,8 @@ func (s *InternalServer) parseTemplates() []*template.Template {
 	t[errorInternalTpl] = createTemplate("./static/internal_templates/error.html", "./static/internal_templates/base.html")
 	t[adminIndexTpl] = createTemplate("./static/internal_templates/index.html", "./static/internal_templates/base.html")
 	t[adminInternalErrorsTpl] = createTemplate("./static/internal_templates/block_internal_data_errors.html", "./static/internal_templates/base.html")
-	t[adminLimitExceedingIPS] = createTemplate("./static/internal_templates/ws_limit_exceeding_ips.html", "./static/internal_templates/base.html")
+	t[adminLimitExceedingIPSTpl] = createTemplate("./static/internal_templates/ws_limit_exceeding_ips.html", "./static/internal_templates/base.html")
+	t[adminContractInfoTpl] = createTemplate("./static/internal_templates/contract_info.html", "./static/internal_templates/base.html")
 	return t
 }
 
@@ -213,5 +221,54 @@ func (s *InternalServer) wsLimitExceedingIPs(w http.ResponseWriter, r *http.Requ
 	})
 	data.WsLimitExceedingIPs = ips
 	data.WsGetAccountInfoLimit = s.is.WsGetAccountInfoLimit
-	return adminLimitExceedingIPS, data, nil
+	return adminLimitExceedingIPSTpl, data, nil
+}
+
+func (s *InternalServer) contractInfoPage(w http.ResponseWriter, r *http.Request) (tpl, *InternalTemplateData, error) {
+	data := s.newTemplateData(r)
+	return adminContractInfoTpl, data, nil
+}
+
+func (s *InternalServer) apiContractInfo(r *http.Request, apiVersion int) (interface{}, error) {
+	if r.Method == http.MethodPost {
+		return s.updateContracts(r)
+	}
+	var contractAddress string
+	i := strings.LastIndexByte(r.URL.Path, '/')
+	if i > 0 {
+		contractAddress = r.URL.Path[i+1:]
+	}
+	if len(contractAddress) == 0 {
+		return nil, api.NewAPIError("Missing contract address", true)
+	}
+
+	contractInfo, valid, err := s.api.GetContractInfo(contractAddress, bchain.UnknownTokenType)
+	if err != nil {
+		return nil, api.NewAPIError(err.Error(), true)
+	}
+	if !valid {
+		return nil, api.NewAPIError("Not a contract", true)
+	}
+	return contractInfo, nil
+}
+
+func (s *InternalServer) updateContracts(r *http.Request) (interface{}, error) {
+	data, err := io.ReadAll(r.Body)
+	if err != nil {
+		return nil, api.NewAPIError("Cannot get request body", true)
+	}
+	var contractInfos []bchain.ContractInfo
+	err = json.Unmarshal(data, &contractInfos)
+	if err != nil {
+		return nil, errors.Annotatef(err, "Cannot unmarshal body to array of ContractInfo objects")
+	}
+	for i := range contractInfos {
+		c := &contractInfos[i]
+		err := s.db.StoreContractInfo(c)
+		if err != nil {
+			return nil, api.NewAPIError("Error updating contract "+c.Contract+" "+err.Error(), true)
+		}
+
+	}
+	return "{\"success\":\"Updated " + strconv.Itoa(len(contractInfos)) + " contracts\"}", nil
 }

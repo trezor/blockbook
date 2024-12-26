@@ -1,9 +1,10 @@
 BIN_IMAGE = blockbook-build
 DEB_IMAGE = blockbook-build-deb
 PACKAGER = $(shell id -u):$(shell id -g)
+DOCKER_VERSION = $(shell docker version --format '{{.Client.Version}}')
 BASE_IMAGE = $$(awk -F= '$$1=="ID" { print $$2 ;}' /etc/os-release):$$(awk -F= '$$1=="VERSION_ID" { print $$2 ;}' /etc/os-release | tr -d '"')
 NO_CACHE = false
-TCMALLOC = 
+TCMALLOC =
 PORTABLE = 0
 ARGS ?=
 
@@ -27,7 +28,7 @@ test-all: .bin-image
 	docker run -t --rm -e PACKAGER=$(PACKAGER) -v "$(CURDIR):/src" --network="host" $(BIN_IMAGE) make test-all ARGS="$(ARGS)"
 
 deb-backend-%: .deb-image
-	docker run -t --rm -e PACKAGER=$(PACKAGER) -v "$(CURDIR):/src" -v "$(CURDIR)/build:/out" $(DEB_IMAGE) /build/build-deb.sh backend $* $(ARGS)
+	docker run -t --rm -e PACKAGER=$(PACKAGER) -v /var/run/docker.sock:/var/run/docker.sock -v "$(CURDIR):/src" -v "$(CURDIR)/build:/out" $(DEB_IMAGE) /build/build-deb.sh backend $* $(ARGS)
 
 deb-blockbook-%: .deb-image
 	docker run -t --rm -e PACKAGER=$(PACKAGER) -v "$(CURDIR):/src" -v "$(CURDIR)/build:/out" $(DEB_IMAGE) /build/build-deb.sh blockbook $* $(ARGS)
@@ -55,7 +56,7 @@ build-images: clean-images
 .deb-image: .bin-image
 	@if [ $$(build/tools/image_status.sh $(DEB_IMAGE):latest build/docker) != "ok" ]; then \
 		echo "Building image $(DEB_IMAGE)..."; \
-		docker build --no-cache=$(NO_CACHE) -t $(DEB_IMAGE) build/docker/deb; \
+		docker build --no-cache=$(NO_CACHE) --build-arg DOCKER_VERSION=$(DOCKER_VERSION) -t $(DEB_IMAGE) build/docker/deb; \
 	else \
 		echo "Image $(DEB_IMAGE) is up to date"; \
 	fi
@@ -79,3 +80,6 @@ clean-bin-image:
 
 clean-deb-image:
 	- docker rmi $(DEB_IMAGE)
+
+style:
+	find . -name "*.go" -exec gofmt -w {} \;
