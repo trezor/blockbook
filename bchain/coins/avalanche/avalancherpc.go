@@ -110,7 +110,6 @@ func (b *AvalancheRPC) Initialize() error {
 func (b *AvalancheRPC) GetChainInfo() (*bchain.ChainInfo, error) {
 	ci, err := b.EthereumRPC.GetChainInfo()
 	if err != nil {
-		fmt.Println(err)
 		return nil, err
 	}
 
