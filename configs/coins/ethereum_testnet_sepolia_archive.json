@@ -23,10 +23,10 @@
         "package_name": "backend-ethereum-testnet-sepolia-archive",
         "package_revision": "satoshilabs-1",
         "system_user": "ethereum",
-        "version": "2.60.10",
-        "binary_url": "https://github.com/ledgerwatch/erigon/releases/download/v2.60.10/erigon_v2.60.10_linux_amd64.tar.gz",
+        "version": "2.61.0",
+        "binary_url": "https://github.com/ledgerwatch/erigon/releases/download/v2.61.0/erigon_v2.61.0_linux_amd64.tar.gz",
         "verification_type": "sha256",
-        "verification_source": "e22dc039846f2aee3d180b1dfb7d1b8282377d76ab4654137ed4abfec5d8e2af",
+        "verification_source": "53a093ab3151915f4e156d73aad8e1b7a3c17aa5fabf0ad74b876513f58670d1",
         "extract_command": "tar -C backend --strip-components=1 -xf",
         "exclude_files": [],
         "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/erigon --chain sepolia --snap.keepblocks --db.size.limit 15TB --prune c --prune.c.older 1000000 -torrent.download.rate 32mb --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/erigon --port {{.Ports.BackendP2P}} --ws --ws.port {{.Ports.BackendRPC}} --http --http.port {{.Ports.BackendRPC}} --http.addr 127.0.0.1 --http.corsdomain \"*\" --http.vhosts \"*\" --http.api \"eth,net,web3,debug,txpool\" --authrpc.port {{.Ports.BackendAuthRpc}} --private.api.addr \"\" --torrent.port {{.Ports.BackendHttp}} --log.dir.path {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --log.dir.prefix {{.Coin.Alias}}'",
@@ -40,8 +40,8 @@
         "client_config_file": "",
         "platforms": {
             "arm64": {
-                "binary_url": "https://github.com/ledgerwatch/erigon/releases/download/v2.60.10/erigon_v2.60.10_linux_arm64.tar.gz",
-                "verification_source": "68cb9baf937d19446de91bc1efccf389b4a2452233b3a5ef1cf5cd8a91b9ce95"
+                "binary_url": "https://github.com/ledgerwatch/erigon/releases/download/v2.61.0/erigon_v2.61.0_linux_arm64.tar.gz",
+                "verification_source": "97cb84005442777d08d730c1b6a3166ce64ce4eb96aa7b6514edb41ae037b625"
             }
         }
     },
