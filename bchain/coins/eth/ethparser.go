@@ -25,15 +25,19 @@ const EtherAmountDecimalPoint = 18
 // EthereumParser handle
 type EthereumParser struct {
 	*bchain.BaseParser
+	EnsSuffix string
 }
 
 // NewEthereumParser returns new EthereumParser instance
 func NewEthereumParser(b int, addressAliases bool) *EthereumParser {
-	return &EthereumParser{&bchain.BaseParser{
-		BlockAddressesToKeep: b,
-		AmountDecimalPoint:   EtherAmountDecimalPoint,
-		AddressAliases:       addressAliases,
-	}}
+	return &EthereumParser{
+		BaseParser: &bchain.BaseParser{
+			BlockAddressesToKeep: b,
+			AmountDecimalPoint:   EtherAmountDecimalPoint,
+			AddressAliases:       addressAliases,
+		},
+		EnsSuffix: ".eth",
+	}
 }
 
 type rpcHeader struct {
@@ -489,7 +493,7 @@ func (p *EthereumParser) EthereumTypeGetTokenTransfersFromTx(tx *bchain.Tx) (bch
 
 // FormatAddressAlias adds .eth to a name alias
 func (p *EthereumParser) FormatAddressAlias(address string, name string) string {
-	return name + ".eth"
+	return name + p.EnsSuffix
 }
 
 // TxStatus is status of transaction
