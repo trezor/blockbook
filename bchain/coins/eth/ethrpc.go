@@ -622,7 +622,7 @@ func (b *EthereumRPC) getCreationContractInfo(contract string, height uint32) *b
 		Contract: contract,
 	}
 	// }
-	ci.Type = bchain.UnhandledTokenType
+	ci.Standard = bchain.UnhandledTokenType
 	ci.CreatedInBlock = height
 	return ci
 }

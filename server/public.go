@@ -299,9 +299,9 @@ func (s *PublicServer) newTemplateData(r *http.Request) *TemplateData {
 		TOSLink:          api.Text.TOSLink,
 	}
 	if t.ChainType == bchain.ChainEthereumType {
-		t.FungibleTokenName = bchain.EthereumTokenTypeMap[bchain.FungibleToken]
-		t.NonFungibleTokenName = bchain.EthereumTokenTypeMap[bchain.NonFungibleToken]
-		t.MultiTokenName = bchain.EthereumTokenTypeMap[bchain.MultiToken]
+		t.FungibleTokenName = bchain.EthereumTokenStandardMap[bchain.FungibleToken]
+		t.NonFungibleTokenName = bchain.EthereumTokenStandardMap[bchain.NonFungibleToken]
+		t.MultiTokenName = bchain.EthereumTokenStandardMap[bchain.MultiToken]
 	}
 	if !s.debug {
 		t.Minified = ".min.4"
@@ -378,9 +378,9 @@ type TemplateData struct {
 	CoinLabel                string
 	InternalExplorer         bool
 	ChainType                bchain.ChainType
-	FungibleTokenName        bchain.TokenTypeName
-	NonFungibleTokenName     bchain.TokenTypeName
-	MultiTokenName           bchain.TokenTypeName
+	FungibleTokenName        bchain.TokenStandardName
+	NonFungibleTokenName     bchain.TokenStandardName
+	MultiTokenName           bchain.TokenStandardName
 	Address                  *api.Address
 	AddrStr                  string
 	Tx                       *api.Tx
@@ -742,7 +742,7 @@ func isOwnAddress(td *TemplateData, a string) bool {
 }
 
 // called from template, returns count of token transfers of given type in a tx
-func tokenTransfersCount(tx *api.Tx, t bchain.TokenTypeName) int {
+func tokenTransfersCount(tx *api.Tx, t bchain.TokenStandardName) int {
 	count := 0
 	for i := range tx.TokenTransfers {
 		if tx.TokenTransfers[i].Type == t {
@@ -753,7 +753,7 @@ func tokenTransfersCount(tx *api.Tx, t bchain.TokenTypeName) int {
 }
 
 // called from template, returns count of tokens in array of given type
-func tokenCount(tokens []api.Token, t bchain.TokenTypeName) int {
+func tokenCount(tokens []api.Token, t bchain.TokenStandardName) int {
 	count := 0
 	for i := range tokens {
 		if tokens[i].Type == t {
