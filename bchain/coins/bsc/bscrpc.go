@@ -15,9 +15,9 @@ const (
 	MainNet eth.Network = 56
 
 	// bsc token type names
-	BEP20TokenType   bchain.TokenTypeName = "BEP20"
-	BEP721TokenType  bchain.TokenTypeName = "BEP721"
-	BEP1155TokenType bchain.TokenTypeName = "BEP1155"
+	BEP20TokenStandard   bchain.TokenStandardName = "BEP20"
+	BEP721TokenStandard  bchain.TokenStandardName = "BEP721"
+	BEP1155TokenStandard bchain.TokenStandardName = "BEP1155"
 )
 
 // BNBSmartChainRPC is an interface to JSON-RPC bsc service.
@@ -33,7 +33,7 @@ func NewBNBSmartChainRPC(config json.RawMessage, pushHandler func(bchain.Notific
 	}
 
 	// overwrite EthereumTokenTypeMap with bsc specific token type names
-	bchain.EthereumTokenTypeMap = []bchain.TokenTypeName{BEP20TokenType, BEP721TokenType, BEP1155TokenType}
+	bchain.EthereumTokenStandardMap = []bchain.TokenStandardName{BEP20TokenStandard, BEP721TokenStandard, BEP1155TokenStandard}
 
 	s := &BNBSmartChainRPC{
 		EthereumRPC: c.(*eth.EthereumRPC),

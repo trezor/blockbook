@@ -622,7 +622,7 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 	return r, nil
 }
 
-func (w *Worker) GetContractInfo(contract string, typeFromContext bchain.TokenTypeName) (*bchain.ContractInfo, bool, error) {
+func (w *Worker) GetContractInfo(contract string, typeFromContext bchain.TokenStandardName) (*bchain.ContractInfo, bool, error) {
 	cd, err := w.chainParser.GetAddrDescFromAddress(contract)
 	if err != nil {
 		return nil, false, err
@@ -630,7 +630,7 @@ func (w *Worker) GetContractInfo(contract string, typeFromContext bchain.TokenTy
 	return w.getContractDescriptorInfo(cd, typeFromContext)
 }
 
-func (w *Worker) getContractDescriptorInfo(cd bchain.AddressDescriptor, typeFromContext bchain.TokenTypeName) (*bchain.ContractInfo, bool, error) {
+func (w *Worker) getContractDescriptorInfo(cd bchain.AddressDescriptor, typeFromContext bchain.TokenStandardName) (*bchain.ContractInfo, bool, error) {
 	var err error
 	validContract := true
 	contractInfo, err := w.db.GetContractInfo(cd, typeFromContext)
@@ -647,7 +647,7 @@ func (w *Worker) getContractDescriptorInfo(cd bchain.AddressDescriptor, typeFrom
 			glog.Errorf("GetContractInfo from chain error %v, contract %v", err, cd)
 		}
 		if contractInfo == nil {
-			contractInfo = &bchain.ContractInfo{Type: bchain.UnknownTokenType, Decimals: w.chainParser.AmountDecimals()}
+			contractInfo = &bchain.ContractInfo{Standard: bchain.UnknownTokenType, Decimals: w.chainParser.AmountDecimals()}
 			addresses, _, _ := w.chainParser.GetAddressesFromAddrDesc(cd)
 			if len(addresses) > 0 {
 				contractInfo.Contract = addresses[0]
@@ -655,14 +655,14 @@ func (w *Worker) getContractDescriptorInfo(cd bchain.AddressDescriptor, typeFrom
 
 			validContract = false
 		} else {
-			if typeFromContext != bchain.UnknownTokenType && contractInfo.Type == bchain.UnknownTokenType {
-				contractInfo.Type = typeFromContext
+			if typeFromContext != bchain.UnknownTokenType && contractInfo.Standard == bchain.UnknownTokenType {
+				contractInfo.Standard = typeFromContext
 			}
 			if err = w.db.StoreContractInfo(contractInfo); err != nil {
 				glog.Errorf("StoreContractInfo error %v, contract %v", err, cd)
 			}
 		}
-	} else if (contractInfo.Type == bchain.UnhandledTokenType || len(contractInfo.Name) > 0 && contractInfo.Name[0] == 0) || (len(contractInfo.Symbol) > 0 && contractInfo.Symbol[0] == 0) {
+	} else if (contractInfo.Standard == bchain.UnhandledTokenType || len(contractInfo.Name) > 0 && contractInfo.Name[0] == 0) || (len(contractInfo.Symbol) > 0 && contractInfo.Symbol[0] == 0) {
 		// fix contract name/symbol that was parsed as a string consisting of zeroes
 		blockchainContractInfo, err := w.chain.GetContractInfo(cd)
 		if err != nil {
@@ -681,9 +681,9 @@ func (w *Worker) getContractDescriptorInfo(cd bchain.AddressDescriptor, typeFrom
 			if blockchainContractInfo != nil {
 				contractInfo.Decimals = blockchainContractInfo.Decimals
 			}
-			if contractInfo.Type == bchain.UnhandledTokenType {
+			if contractInfo.Standard == bchain.UnhandledTokenType {
 				glog.Infof("Contract %v %v [%s] handled", cd, typeFromContext, contractInfo.Name)
-				contractInfo.Type = typeFromContext
+				contractInfo.Standard = typeFromContext
 			}
 			if err = w.db.StoreContractInfo(contractInfo); err != nil {
 				glog.Errorf("StoreContractInfo error %v, contract %v", err, cd)
@@ -700,7 +700,7 @@ func (w *Worker) getEthereumTokensTransfers(transfers bchain.TokenTransfers, add
 		contractCache := make(contractInfoCache)
 		for i := range transfers {
 			t := transfers[i]
-			typeName := bchain.EthereumTokenTypeMap[t.Type]
+			typeName := bchain.EthereumTokenStandardMap[t.Standard]
 			var contractInfo *bchain.ContractInfo
 			if info, ok := contractCache[t.Contract]; ok {
 				contractInfo = info
@@ -715,7 +715,7 @@ func (w *Worker) getEthereumTokensTransfers(transfers bchain.TokenTransfers, add
 			}
 			var value *Amount
 			var values []MultiTokenValue
-			if t.Type == bchain.MultiToken {
+			if t.Standard == bchain.MultiToken {
 				values = make([]MultiTokenValue, len(t.MultiTokenValues))
 				for j := range values {
 					values[j].Id = (*Amount)(&t.MultiTokenValues[j].Id)
@@ -957,7 +957,7 @@ func computePaging(count, page, itemsOnPage int) (Paging, int, int, int) {
 }
 
 func (w *Worker) getEthereumContractBalance(addrDesc bchain.AddressDescriptor, index int, c *db.AddrContract, details AccountDetails, ticker *common.CurrencyRatesTicker, secondaryCoin string) (*Token, error) {
-	typeName := bchain.EthereumTokenTypeMap[c.Type]
+	typeName := bchain.EthereumTokenStandardMap[c.Standard]
 	ci, validContract, err := w.getContractDescriptorInfo(c.Contract, typeName)
 	if err != nil {
 		return nil, errors.Annotatef(err, "getEthereumContractBalance %v", c.Contract)
@@ -1468,7 +1468,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 		StakingPools:          ed.stakingPools,
 	}
 	// keep address backward compatible, set deprecated Erc20Contract value if ERC20 token
-	if ed.contractInfo != nil && ed.contractInfo.Type == bchain.ERC20TokenType {
+	if ed.contractInfo != nil && ed.contractInfo.Standard == bchain.ERC20TokenStandard {
 		r.Erc20Contract = ed.contractInfo
 	}
 	glog.Info("GetAddress-", option, " ", address, ", ", time.Since(start))

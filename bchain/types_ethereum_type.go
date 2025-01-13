@@ -59,25 +59,27 @@ type EthereumInternalData struct {
 
 // ContractInfo contains info about a contract
 type ContractInfo struct {
-	Type              TokenTypeName `json:"type"`
-	Contract          string        `json:"contract"`
-	Name              string        `json:"name"`
-	Symbol            string        `json:"symbol"`
-	Decimals          int           `json:"decimals"`
-	CreatedInBlock    uint32        `json:"createdInBlock,omitempty"`
-	DestructedInBlock uint32        `json:"destructedInBlock,omitempty"`
+	// Deprecated: Use Standard instead.
+	Type              TokenStandardName `json:"type"`
+	Standard          TokenStandardName `json:"standard"`
+	Contract          string            `json:"contract"`
+	Name              string            `json:"name"`
+	Symbol            string            `json:"symbol"`
+	Decimals          int               `json:"decimals"`
+	CreatedInBlock    uint32            `json:"createdInBlock,omitempty"`
+	DestructedInBlock uint32            `json:"destructedInBlock,omitempty"`
 }
 
 // Ethereum token type names
 const (
-	ERC20TokenType   TokenTypeName = "ERC20"
-	ERC771TokenType  TokenTypeName = "ERC721"
-	ERC1155TokenType TokenTypeName = "ERC1155"
+	ERC20TokenStandard   TokenStandardName = "ERC20"
+	ERC771TokenStandard  TokenStandardName = "ERC721"
+	ERC1155TokenStandard TokenStandardName = "ERC1155"
 )
 
 // EthereumTokenTypeMap maps bchain.TokenType to TokenTypeName
 // the map must match all bchain.TokenType to avoid index out of range panic
-var EthereumTokenTypeMap = []TokenTypeName{ERC20TokenType, ERC771TokenType, ERC1155TokenType}
+var EthereumTokenStandardMap = []TokenStandardName{ERC20TokenStandard, ERC771TokenStandard, ERC1155TokenStandard}
 
 type MultiTokenValue struct {
 	Id    big.Int
@@ -86,7 +88,9 @@ type MultiTokenValue struct {
 
 // TokenTransfer contains a single token transfer
 type TokenTransfer struct {
-	Type             TokenType
+	// Deprecated: Use Standard instead.
+	Type             TokenStandard
+	Standard         TokenStandard
 	Contract         string
 	From             string
 	To               string
