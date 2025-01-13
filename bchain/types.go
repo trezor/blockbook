@@ -116,26 +116,29 @@ type MempoolTx struct {
 	CoinSpecificData interface{}    `json:"-"`
 }
 
-// TokenType - type of token
-type TokenType int
+// // Deprecated: Use TokenStandard instead.
+// type TokenType int
 
-// TokenType enumeration
+// TokenStandard - standard of token
+type TokenStandard int
+
+// TokenStandard enumeration
 const (
-	FungibleToken    = TokenType(iota) // ERC20/BEP20
-	NonFungibleToken                   // ERC721/BEP721
-	MultiToken                         // ERC1155/BEP1155
+	FungibleToken    = TokenStandard(iota) // ERC20/BEP20
+	NonFungibleToken                       // ERC721/BEP721
+	MultiToken                             // ERC1155/BEP1155
 )
 
-// TokenTypeName specifies type of token
-type TokenTypeName string
+// TokenStandardName specifies type of token
+type TokenStandardName string
 
 // Token types
 const (
-	UnknownTokenType   TokenTypeName = ""
-	UnhandledTokenType TokenTypeName = "-"
+	UnknownTokenType   TokenStandardName = ""
+	UnhandledTokenType TokenStandardName = "-"
 
 	// XPUBAddressTokenType is address derived from xpub
-	XPUBAddressTokenType TokenTypeName = "XPUBAddress"
+	XPUBAddressTokenType TokenStandardName = "XPUBAddress"
 )
 
 // TokenTransfers is array of TokenTransfer
