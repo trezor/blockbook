@@ -672,6 +672,7 @@ func (b *EthereumRPC) getInternalDataForBlock(blockHash string, blockHeight uint
 	data := make([]bchain.EthereumInternalData, len(transactions))
 	contracts := make([]bchain.ContractInfo, 0)
 	if ProcessInternalTransactions {
+		start := time.Now()
 		ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
 		defer cancel()
 		var trace []rpcTraceResult
@@ -680,6 +681,7 @@ func (b *EthereumRPC) getInternalDataForBlock(blockHash string, blockHeight uint
 			glog.Error("debug_traceBlockByHash block ", blockHash, ", error ", err)
 			return data, contracts, err
 		}
+		afterTraceBlockByHash := time.Now()
 		if len(trace) != len(data) {
 			if len(trace) < len(data) {
 				for i := range transactions {
@@ -739,12 +741,14 @@ func (b *EthereumRPC) getInternalDataForBlock(blockHash string, blockHeight uint
 				// glog.Infof("Internal Data Error %d %s: %s", n, transactions[i].Hash, UnpackInternalTransactionError([]byte(d.Error)))
 			}
 		}
+		glog.Info("getInternalDataForBlock ", blockHash, " traceBlockByHash ", afterTraceBlockByHash.Sub(start), " processing ", time.Since(afterTraceBlockByHash), ", total ", time.Since(start))
 	}
 	return data, contracts, nil
 }
 
 // GetBlock returns block with given hash or height, hash has precedence if both passed
 func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
+	start := time.Now()
 	raw, err := b.getBlockRaw(hash, height, true)
 	if err != nil {
 		return nil, err
@@ -763,12 +767,14 @@ func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error
 	}
 	// get block events
 	// TODO - could be possibly done in parallel to getInternalDataForBlock
+	afterGetBlock := time.Now()
 	logs, ens, err := b.processEventsForBlock(head.Number)
 	if err != nil {
 		return nil, err
 	}
 	// error fetching internal data does not stop the block processing
 	var blockSpecificData *bchain.EthereumBlockSpecificData
+	afterEvents := time.Now()
 	internalData, contracts, err := b.getInternalDataForBlock(head.Hash, bbh.Height, body.Transactions)
 	// pass internalData error and ENS records in blockSpecificData to be stored
 	if err != nil || len(ens) > 0 || len(contracts) > 0 {
@@ -804,6 +810,8 @@ func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error
 		Txs:              btxs,
 		CoinSpecificData: blockSpecificData,
 	}
+	glog.Info("GetBlock ", height, " ", hash, " getBlockRaw ", afterGetBlock.Sub(start), ", processEventsForBlock ", afterEvents.Sub(afterGetBlock), ", getInternalDataForBlock ", time.Since(afterEvents), ", total ", time.Since(start))
+
 	return &bbk, nil
 }
 
