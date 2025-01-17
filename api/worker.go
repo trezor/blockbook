@@ -176,10 +176,10 @@ func (w *Worker) getAddressAliases(addresses map[string]struct{}) AddressAliases
 				if err != nil || addrDesc == nil {
 					continue
 				}
-				ci, err := w.db.GetContractInfo(addrDesc, bchain.UnknownTokenType)
+				ci, err := w.db.GetContractInfo(addrDesc, bchain.UnknownTokenStandard)
 				if err == nil && ci != nil {
-					if ci.Type == bchain.UnhandledTokenType {
-						ci, _, err = w.getContractDescriptorInfo(addrDesc, bchain.UnknownTokenType)
+					if ci.Standard == bchain.UnhandledTokenStandard {
+						ci, _, err = w.getContractDescriptorInfo(addrDesc, bchain.UnknownTokenStandard)
 					}
 					if err == nil && ci != nil && ci.Name != "" {
 						aliases[a] = AddressAlias{Type: "Contract", Alias: ci.Name}
@@ -647,7 +647,7 @@ func (w *Worker) getContractDescriptorInfo(cd bchain.AddressDescriptor, typeFrom
 			glog.Errorf("GetContractInfo from chain error %v, contract %v", err, cd)
 		}
 		if contractInfo == nil {
-			contractInfo = &bchain.ContractInfo{Standard: bchain.UnknownTokenType, Decimals: w.chainParser.AmountDecimals()}
+			contractInfo = &bchain.ContractInfo{Standard: bchain.UnknownTokenStandard, Decimals: w.chainParser.AmountDecimals()}
 			addresses, _, _ := w.chainParser.GetAddressesFromAddrDesc(cd)
 			if len(addresses) > 0 {
 				contractInfo.Contract = addresses[0]
@@ -655,14 +655,15 @@ func (w *Worker) getContractDescriptorInfo(cd bchain.AddressDescriptor, typeFrom
 
 			validContract = false
 		} else {
-			if typeFromContext != bchain.UnknownTokenType && contractInfo.Standard == bchain.UnknownTokenType {
+			if typeFromContext != bchain.UnknownTokenStandard && contractInfo.Standard == bchain.UnknownTokenStandard {
 				contractInfo.Standard = typeFromContext
+				contractInfo.Type = typeFromContext
 			}
 			if err = w.db.StoreContractInfo(contractInfo); err != nil {
 				glog.Errorf("StoreContractInfo error %v, contract %v", err, cd)
 			}
 		}
-	} else if (contractInfo.Standard == bchain.UnhandledTokenType || len(contractInfo.Name) > 0 && contractInfo.Name[0] == 0) || (len(contractInfo.Symbol) > 0 && contractInfo.Symbol[0] == 0) {
+	} else if (contractInfo.Standard == bchain.UnhandledTokenStandard || len(contractInfo.Name) > 0 && contractInfo.Name[0] == 0) || (len(contractInfo.Symbol) > 0 && contractInfo.Symbol[0] == 0) {
 		// fix contract name/symbol that was parsed as a string consisting of zeroes
 		blockchainContractInfo, err := w.chain.GetContractInfo(cd)
 		if err != nil {
@@ -681,9 +682,10 @@ func (w *Worker) getContractDescriptorInfo(cd bchain.AddressDescriptor, typeFrom
 			if blockchainContractInfo != nil {
 				contractInfo.Decimals = blockchainContractInfo.Decimals
 			}
-			if contractInfo.Standard == bchain.UnhandledTokenType {
+			if contractInfo.Standard == bchain.UnhandledTokenStandard {
 				glog.Infof("Contract %v %v [%s] handled", cd, typeFromContext, contractInfo.Name)
 				contractInfo.Standard = typeFromContext
+				contractInfo.Type = typeFromContext
 			}
 			if err = w.db.StoreContractInfo(contractInfo); err != nil {
 				glog.Errorf("StoreContractInfo error %v, contract %v", err, cd)
@@ -700,12 +702,12 @@ func (w *Worker) getEthereumTokensTransfers(transfers bchain.TokenTransfers, add
 		contractCache := make(contractInfoCache)
 		for i := range transfers {
 			t := transfers[i]
-			typeName := bchain.EthereumTokenStandardMap[t.Standard]
+			standard := bchain.EthereumTokenStandardMap[t.Standard]
 			var contractInfo *bchain.ContractInfo
 			if info, ok := contractCache[t.Contract]; ok {
 				contractInfo = info
 			} else {
-				info, _, err := w.GetContractInfo(t.Contract, typeName)
+				info, _, err := w.GetContractInfo(t.Contract, standard)
 				if err != nil {
 					glog.Errorf("getContractInfo error %v, contract %v", err, t.Contract)
 					continue
@@ -727,7 +729,8 @@ func (w *Worker) getEthereumTokensTransfers(transfers bchain.TokenTransfers, add
 			aggregateAddress(addresses, t.From)
 			aggregateAddress(addresses, t.To)
 			tokens[i] = TokenTransfer{
-				Type:             typeName,
+				Type:             standard,
+				Standard:         standard,
 				Contract:         t.Contract,
 				From:             t.From,
 				To:               t.To,
@@ -755,7 +758,7 @@ func (w *Worker) GetEthereumTokenURI(contract string, id string) (string, *bchai
 	if err != nil {
 		return "", nil, err
 	}
-	ci, _, err := w.getContractDescriptorInfo(cd, bchain.UnknownTokenType)
+	ci, _, err := w.getContractDescriptorInfo(cd, bchain.UnknownTokenStandard)
 	if err != nil {
 		return "", nil, err
 	}
@@ -957,8 +960,8 @@ func computePaging(count, page, itemsOnPage int) (Paging, int, int, int) {
 }
 
 func (w *Worker) getEthereumContractBalance(addrDesc bchain.AddressDescriptor, index int, c *db.AddrContract, details AccountDetails, ticker *common.CurrencyRatesTicker, secondaryCoin string) (*Token, error) {
-	typeName := bchain.EthereumTokenStandardMap[c.Standard]
-	ci, validContract, err := w.getContractDescriptorInfo(c.Contract, typeName)
+	standard := bchain.EthereumTokenStandardMap[c.Standard]
+	ci, validContract, err := w.getContractDescriptorInfo(c.Contract, standard)
 	if err != nil {
 		return nil, errors.Annotatef(err, "getEthereumContractBalance %v", c.Contract)
 	}
@@ -966,14 +969,15 @@ func (w *Worker) getEthereumContractBalance(addrDesc bchain.AddressDescriptor, i
 		Contract:      ci.Contract,
 		Name:          ci.Name,
 		Symbol:        ci.Symbol,
-		Type:          typeName,
+		Type:          standard,
+		Standard:      standard,
 		Transfers:     int(c.Txs),
 		Decimals:      ci.Decimals,
 		ContractIndex: strconv.Itoa(index),
 	}
 	// return contract balances/values only at or above AccountDetailsTokenBalances
 	if details >= AccountDetailsTokenBalances && validContract {
-		if c.Type == bchain.FungibleToken {
+		if c.Standard == bchain.FungibleToken {
 			// get Erc20 Contract Balance from blockchain, balance obtained from adding and subtracting transfers is not correct
 			b, err := w.chain.EthereumTypeGetErc20ContractBalance(addrDesc, c.Contract)
 			if err != nil {
@@ -1022,7 +1026,7 @@ func (w *Worker) getEthereumContractBalance(addrDesc bchain.AddressDescriptor, i
 // a fallback method in case internal transactions are not processed and there is no indexed info about contract balance for an address
 func (w *Worker) getEthereumContractBalanceFromBlockchain(addrDesc, contract bchain.AddressDescriptor, details AccountDetails) (*Token, error) {
 	var b *big.Int
-	ci, validContract, err := w.getContractDescriptorInfo(contract, bchain.UnknownTokenType)
+	ci, validContract, err := w.getContractDescriptorInfo(contract, bchain.UnknownTokenStandard)
 	if err != nil {
 		return nil, errors.Annotatef(err, "GetContractInfo %v", contract)
 	}
@@ -1037,7 +1041,8 @@ func (w *Worker) getEthereumContractBalanceFromBlockchain(addrDesc, contract bch
 		b = nil
 	}
 	return &Token{
-		Type:          ci.Type,
+		Type:          ci.Standard,
+		Standard:      ci.Standard,
 		BalanceSat:    (*Amount)(b),
 		Contract:      ci.Contract,
 		Name:          ci.Name,
@@ -1142,12 +1147,12 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 			d.tokens = d.tokens[:j]
 			sort.Sort(d.tokens)
 		}
-		d.contractInfo, err = w.db.GetContractInfo(addrDesc, bchain.UnknownTokenType)
+		d.contractInfo, err = w.db.GetContractInfo(addrDesc, bchain.UnknownTokenStandard)
 		if err != nil {
 			return nil, nil, err
 		}
-		if d.contractInfo != nil && d.contractInfo.Type == bchain.UnhandledTokenType {
-			d.contractInfo, _, err = w.getContractDescriptorInfo(addrDesc, bchain.UnknownTokenType)
+		if d.contractInfo != nil && d.contractInfo.Standard == bchain.UnhandledTokenStandard {
+			d.contractInfo, _, err = w.getContractDescriptorInfo(addrDesc, bchain.UnknownTokenStandard)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -1683,7 +1688,7 @@ func (w *Worker) GetBalanceHistory(address string, fromTimestamp, toTimestamp in
 	}
 	// do not get balance history for contracts
 	if w.chainType == bchain.ChainEthereumType {
-		ci, err := w.db.GetContractInfo(addrDesc, bchain.UnknownTokenType)
+		ci, err := w.db.GetContractInfo(addrDesc, bchain.UnknownTokenStandard)
 		if err != nil {
 			return nil, err
 		}

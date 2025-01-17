@@ -268,8 +268,8 @@ func (w *Worker) tokenFromXpubAddress(data *xpubData, ad *xpubAddress, changeInd
 	}
 	return Token{
 		// Deprecated: Use Standard instead.
-		Type:             bchain.XPUBAddressTokenType,
-		Standard:         bchain.XPUBAddressTokenType,
+		Type:             bchain.XPUBAddressStandard,
+		Standard:         bchain.XPUBAddressStandard,
 		Name:             address,
 		Decimals:         w.chainParser.AmountDecimals(),
 		BalanceSat:       (*Amount)(balance),

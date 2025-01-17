@@ -132,7 +132,7 @@ var Block1SpecificData = &bchain.EthereumBlockSpecificData{
 	Contracts: []bchain.ContractInfo{
 		{
 			Contract:       EthAddrContract4a,
-			Type:           bchain.ERC20TokenType,
+			Standard:       bchain.ERC20TokenStandard,
 			Name:           "Contract 74",
 			Symbol:         "S74",
 			Decimals:       12,

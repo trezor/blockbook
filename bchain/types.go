@@ -134,11 +134,11 @@ type TokenStandardName string
 
 // Token types
 const (
-	UnknownTokenType   TokenStandardName = ""
-	UnhandledTokenType TokenStandardName = "-"
+	UnknownTokenStandard   TokenStandardName = ""
+	UnhandledTokenStandard TokenStandardName = "-"
 
-	// XPUBAddressTokenType is address derived from xpub
-	XPUBAddressTokenType TokenStandardName = "XPUBAddress"
+	// XPUBAddressStandard is address derived from xpub
+	XPUBAddressStandard TokenStandardName = "XPUBAddress"
 )
 
 // TokenTransfers is array of TokenTransfer
@@ -147,7 +147,7 @@ type TokenTransfers []*TokenTransfer
 func (a TokenTransfers) Len() int      { return len(a) }
 func (a TokenTransfers) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
 func (a TokenTransfers) Less(i, j int) bool {
-	return a[i].Type < a[j].Type
+	return a[i].Standard < a[j].Standard
 }
 
 // Block is block header and list of transactions

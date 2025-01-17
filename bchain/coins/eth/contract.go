@@ -51,16 +51,16 @@ func processTransferEvent(l *bchain.RpcLog) (transfer *bchain.TokenTransfer, err
 		}
 	}()
 	tl := len(l.Topics)
-	var ttt bchain.TokenType
+	var standard bchain.TokenStandard
 	var value big.Int
 	if tl == 3 {
-		ttt = bchain.FungibleToken
+		standard = bchain.FungibleToken
 		_, ok := value.SetString(l.Data, 0)
 		if !ok {
 			return nil, errors.New("ERC20 log Data is not a number")
 		}
 	} else if tl == 4 {
-		ttt = bchain.NonFungibleToken
+		standard = bchain.NonFungibleToken
 		_, ok := value.SetString(l.Topics[3], 0)
 		if !ok {
 			return nil, errors.New("ERC721 log Topics[3] is not a number")
@@ -78,7 +78,7 @@ func processTransferEvent(l *bchain.RpcLog) (transfer *bchain.TokenTransfer, err
 		return nil, err
 	}
 	return &bchain.TokenTransfer{
-		Type:     ttt,
+		Standard: standard,
 		Contract: EIP55AddressFromAddress(l.Address),
 		From:     EIP55AddressFromAddress(from),
 		To:       EIP55AddressFromAddress(to),
@@ -119,7 +119,7 @@ func processERC1155TransferSingleEvent(l *bchain.RpcLog) (transfer *bchain.Token
 		return nil, errors.New("ERC1155 log Data value is not a number")
 	}
 	return &bchain.TokenTransfer{
-		Type:             bchain.MultiToken,
+		Standard:         bchain.MultiToken,
 		Contract:         EIP55AddressFromAddress(l.Address),
 		From:             EIP55AddressFromAddress(from),
 		To:               EIP55AddressFromAddress(to),
@@ -190,7 +190,7 @@ func processERC1155TransferBatchEvent(l *bchain.RpcLog) (transfer *bchain.TokenT
 		idValues[i] = bchain.MultiTokenValue{Id: id, Value: value}
 	}
 	return &bchain.TokenTransfer{
-		Type:             bchain.MultiToken,
+		Standard:         bchain.MultiToken,
 		Contract:         EIP55AddressFromAddress(l.Address),
 		From:             EIP55AddressFromAddress(from),
 		To:               EIP55AddressFromAddress(to),
@@ -239,7 +239,7 @@ func contractGetTransfersFromTx(tx *bchain.RpcTransaction) (bchain.TokenTransfer
 			return nil, errors.New("Data is not a number")
 		}
 		r = append(r, &bchain.TokenTransfer{
-			Type:     bchain.FungibleToken,
+			Standard: bchain.FungibleToken,
 			Contract: EIP55AddressFromAddress(tx.To),
 			From:     EIP55AddressFromAddress(tx.From),
 			To:       EIP55AddressFromAddress(to),
@@ -263,7 +263,7 @@ func contractGetTransfersFromTx(tx *bchain.RpcTransaction) (bchain.TokenTransfer
 			return nil, errors.New("Data is not a number")
 		}
 		r = append(r, &bchain.TokenTransfer{
-			Type:     bchain.NonFungibleToken,
+			Standard: bchain.NonFungibleToken,
 			Contract: EIP55AddressFromAddress(tx.To),
 			From:     EIP55AddressFromAddress(from),
 			To:       EIP55AddressFromAddress(to),
