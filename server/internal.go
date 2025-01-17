@@ -242,7 +242,7 @@ func (s *InternalServer) apiContractInfo(r *http.Request, apiVersion int) (inter
 		return nil, api.NewAPIError("Missing contract address", true)
 	}
 
-	contractInfo, valid, err := s.api.GetContractInfo(contractAddress, bchain.UnknownTokenType)
+	contractInfo, valid, err := s.api.GetContractInfo(contractAddress, bchain.UnknownTokenStandard)
 	if err != nil {
 		return nil, api.NewAPIError(err.Error(), true)
 	}

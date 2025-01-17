@@ -108,8 +108,6 @@ func (s *MultiTokenValues) upsert(m bchain.MultiTokenValue, index int32, aggrega
 
 // AddrContract is Contract address with number of transactions done by given address
 type AddrContract struct {
-	// Deprecated: Use Standard instead.
-	Type             bchain.TokenStandard
 	Standard         bchain.TokenStandard
 	Contract         bchain.AddressDescriptor
 	Txs              uint
@@ -138,12 +136,12 @@ func packAddrContracts(acs *AddrContracts) []byte {
 	buf = append(buf, varBuf[:l]...)
 	for _, ac := range acs.Contracts {
 		buf = append(buf, ac.Contract...)
-		l = packVaruint(uint(ac.Type)+ac.Txs<<2, varBuf)
+		l = packVaruint(uint(ac.Standard)+ac.Txs<<2, varBuf)
 		buf = append(buf, varBuf[:l]...)
-		if ac.Type == bchain.FungibleToken {
+		if ac.Standard == bchain.FungibleToken {
 			l = packBigint(&ac.Value, varBuf)
 			buf = append(buf, varBuf[:l]...)
-		} else if ac.Type == bchain.NonFungibleToken {
+		} else if ac.Standard == bchain.NonFungibleToken {
 			l = packVaruint(uint(len(ac.Ids)), varBuf)
 			buf = append(buf, varBuf[:l]...)
 			for i := range ac.Ids {
@@ -182,7 +180,7 @@ func unpackAddrContracts(buf []byte, addrDesc bchain.AddressDescriptor) (*AddrCo
 		ttt := bchain.TokenStandard(txs & 3)
 		txs >>= 2
 		ac := AddrContract{
-			Type:     ttt,
+			Standard: ttt,
 			Contract: contract,
 			Txs:      txs,
 		}
@@ -318,9 +316,9 @@ func addToContract(c *AddrContract, contractIndex int, index int32, contract bch
 			s.Add(s, v)
 		}
 	}
-	if transfer.Type == bchain.FungibleToken {
+	if transfer.Standard == bchain.FungibleToken {
 		aggregate(&c.Value, &transfer.Value)
-	} else if transfer.Type == bchain.NonFungibleToken {
+	} else if transfer.Standard == bchain.NonFungibleToken {
 		if index < 0 {
 			c.Ids.remove(transfer.Value)
 		} else {
@@ -371,7 +369,7 @@ func (d *RocksDB) addToAddressesAndContractsEthereumType(addrDesc bchain.Address
 				contractIndex = len(ac.Contracts)
 				ac.Contracts = append(ac.Contracts, AddrContract{
 					Contract: contract,
-					Type:     transfer.Type,
+					Standard: transfer.Standard,
 				})
 			}
 			c := &ac.Contracts[contractIndex]
@@ -568,7 +566,7 @@ func (d *RocksDB) processContractTransfers(blockTx *ethBlockTx, tx *bchain.Tx, a
 			return err
 		}
 		bc := &blockTx.contracts[i]
-		bc.transferType = t.Type
+		bc.transferType = t.Standard
 		bc.from = from
 		bc.to = to
 		bc.contract = contract
@@ -849,7 +847,7 @@ var cachedContractsMux sync.Mutex
 func packContractInfo(contractInfo *bchain.ContractInfo) []byte {
 	buf := packString(contractInfo.Name)
 	buf = append(buf, packString(contractInfo.Symbol)...)
-	buf = append(buf, packString(string(contractInfo.Type))...)
+	buf = append(buf, packString(string(contractInfo.Standard))...)
 	varBuf := make([]byte, vlq.MaxLen64)
 	l := packVaruint(uint(contractInfo.Decimals), varBuf)
 	buf = append(buf, varBuf[:l]...)
@@ -871,6 +869,7 @@ func unpackContractInfo(buf []byte) (*bchain.ContractInfo, error) {
 	buf = buf[l:]
 	s, l = unpackString(buf)
 	contractInfo.Standard = bchain.TokenStandardName(s)
+	contractInfo.Type = bchain.TokenStandardName(s)
 	buf = buf[l:]
 	ui, l = unpackVaruint(buf)
 	contractInfo.Decimals = int(ui)
@@ -916,6 +915,7 @@ func (d *RocksDB) GetContractInfo(contract bchain.AddressDescriptor, typeFromCon
 		// if the type is specified and stored contractInfo has unknown type, set and store it
 		if typeFromContext != bchain.UnknownTokenStandard && contractInfo.Standard == bchain.UnknownTokenStandard {
 			contractInfo.Standard = typeFromContext
+			contractInfo.Type = typeFromContext
 			err = d.db.PutCF(d.wo, d.cfh[cfContracts], contract, packContractInfo(contractInfo))
 			if err != nil {
 				return nil, err
@@ -1259,7 +1259,7 @@ func (d *RocksDB) disconnectAddress(btxID []byte, internal bool, addrDesc bchain
 							index = transferTo
 						}
 						addToContract(addrContract, contractIndex, index, btxContract.contract, &bchain.TokenTransfer{
-							Type:             btxContract.transferType,
+							Standard:         btxContract.transferType,
 							Value:            btxContract.value,
 							MultiTokenValues: btxContract.idValues,
 						}, false)

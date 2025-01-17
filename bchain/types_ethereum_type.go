@@ -88,8 +88,6 @@ type MultiTokenValue struct {
 
 // TokenTransfer contains a single token transfer
 type TokenTransfer struct {
-	// Deprecated: Use Standard instead.
-	Type             TokenStandard
 	Standard         TokenStandard
 	Contract         string
 	From             string
