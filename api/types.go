@@ -159,8 +159,8 @@ type MultiTokenValue struct {
 // Token contains info about tokens held by an address
 type Token struct {
 	// Deprecated: Use Standard instead.
-	Type             bchain.TokenStandardName `json:"type" ts_type:"'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155'"`
-	Standard         bchain.TokenStandardName `json:"standard" ts_type:"'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155'"`
+	Type             bchain.TokenStandardName `json:"type" ts_type:"'' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155'" ts_doc:"@deprecated: Use standard instead."`
+	Standard         bchain.TokenStandardName `json:"standard" ts_type:"'' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155'"`
 	Name             string                   `json:"name"`
 	Path             string                   `json:"path,omitempty"`
 	Contract         string                   `json:"contract,omitempty"`
@@ -207,8 +207,8 @@ func (a Tokens) Less(i, j int) bool {
 // TokenTransfer contains info about a token transfer done in a transaction
 type TokenTransfer struct {
 	// Deprecated: Use Standard instead.
-	Type             bchain.TokenStandardName `json:"type"`
-	Standard         bchain.TokenStandardName `json:"standard"`
+	Type             bchain.TokenStandardName `json:"type" ts_type:"'' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155'" ts_doc:"@deprecated: Use standard instead."`
+	Standard         bchain.TokenStandardName `json:"standard" ts_type:"'' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155'"`
 	From             string                   `json:"from"`
 	To               string                   `json:"to"`
 	Contract         string                   `json:"contract"`
@@ -362,7 +362,7 @@ type Address struct {
 	TotalSecondaryValue   float64              `json:"totalSecondaryValue,omitempty"` // value including tokens in secondary currency
 	ContractInfo          *bchain.ContractInfo `json:"contractInfo,omitempty"`
 	// Deprecated: replaced by ContractInfo
-	Erc20Contract  *bchain.ContractInfo `json:"erc20Contract,omitempty"`
+	Erc20Contract  *bchain.ContractInfo `json:"erc20Contract,omitempty" ts_doc:"@deprecated: replaced by contractInfo"`
 	AddressAliases AddressAliasesMap    `json:"addressAliases,omitempty"`
 	StakingPools   []StakingPool        `json:"stakingPools,omitempty"`
 	// helpers for explorer

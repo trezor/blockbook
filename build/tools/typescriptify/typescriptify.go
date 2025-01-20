@@ -19,6 +19,7 @@ func main() {
 
 	t.ManageType(api.Amount{}, typescriptify.TypeOptions{TSType: "string"})
 	t.ManageType([]api.Amount{}, typescriptify.TypeOptions{TSType: "string[]"})
+	t.ManageType([]*api.Amount{}, typescriptify.TypeOptions{TSType: "string[]"})
 	t.ManageType(big.Int{}, typescriptify.TypeOptions{TSType: "number"})
 	t.ManageType(time.Time{}, typescriptify.TypeOptions{TSType: "string", TSDoc: "Time in ISO 8601 YYYY-MM-DDTHH:mm:ss.sssZd"})
 
