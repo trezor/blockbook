@@ -60,8 +60,8 @@ type EthereumInternalData struct {
 // ContractInfo contains info about a contract
 type ContractInfo struct {
 	// Deprecated: Use Standard instead.
-	Type              TokenStandardName `json:"type"`
-	Standard          TokenStandardName `json:"standard"`
+	Type              TokenStandardName `json:"type" ts_type:"'' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155'" ts_doc:"@deprecated: Use standard instead."`
+	Standard          TokenStandardName `json:"standard" ts_type:"'' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155'"`
 	Contract          string            `json:"contract"`
 	Name              string            `json:"name"`
 	Symbol            string            `json:"symbol"`

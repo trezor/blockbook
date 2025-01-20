@@ -46,13 +46,15 @@ export interface MultiTokenValue {
     value?: string;
 }
 export interface TokenTransfer {
-    type: string;
+    /** @deprecated: Use standard instead. */
+    type: '' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155';
+    standard: '' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155';
     from: string;
     to: string;
     contract: string;
     name?: string;
     symbol?: string;
-    decimals?: number;
+    decimals: number;
     value?: string;
     multiTokenValues?: MultiTokenValue[];
 }
@@ -125,7 +127,9 @@ export interface StakingPool {
     autocompoundBalance: string;
 }
 export interface ContractInfo {
-    type: string;
+    /** @deprecated: Use standard instead. */
+    type: '' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155';
+    standard: '' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155';
     contract: string;
     name: string;
     symbol: string;
@@ -134,13 +138,15 @@ export interface ContractInfo {
     destructedInBlock?: number;
 }
 export interface Token {
-    type: 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155';
+    /** @deprecated: Use standard instead. */
+    type: '' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155';
+    standard: '' | 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155' | 'BEP20' | 'BEP721' | 'BEP1155';
     name: string;
     path?: string;
     contract?: string;
     transfers: number;
     symbol?: string;
-    decimals?: number;
+    decimals: number;
     balance?: string;
     baseValue?: number;
     secondaryValue?: number;
@@ -174,6 +180,7 @@ export interface Address {
     totalBaseValue?: number;
     totalSecondaryValue?: number;
     contractInfo?: ContractInfo;
+    /** @deprecated: replaced by contractInfo */
     erc20Contract?: ContractInfo;
     addressAliases?: { [key: string]: AddressAlias };
     stakingPools?: StakingPool[];
@@ -418,6 +425,8 @@ export interface WsEstimateFeeReq {
 export interface Eip1559Fee {
     maxFeePerGas: string;
     maxPriorityFeePerGas: string;
+    minWaitTimeEstimate?: number;
+    maxWaitTimeEstimate?: number;
 }
 export interface Eip1559Fees {
     baseFeePerGas?: string;
@@ -425,6 +434,12 @@ export interface Eip1559Fees {
     medium?: Eip1559Fee;
     high?: Eip1559Fee;
     instant?: Eip1559Fee;
+    networkCongestion?: number;
+    latestPriorityFeeRange?: string[];
+    historicalPriorityFeeRange?: string[];
+    historicalBaseFeeRange?: string[];
+    priorityFeeTrend?: 'up' | 'down';
+    baseFeeTrend?: 'up' | 'down';
 }
 export interface WsEstimateFeeRes {
     feePerTx?: string;
