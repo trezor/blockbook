@@ -756,13 +756,13 @@ func Test_packUnpackAddrContractsLegacy(t *testing.T) {
 				InternalTxs:    8873,
 				Contracts: []AddrContract{
 					{
-						Type:     bchain.FungibleToken,
+						Standard: bchain.FungibleToken,
 						Contract: addressToAddrDesc(dbtestdata.EthAddrContract0d, parser),
 						Txs:      8,
 						Value:    *big.NewInt(793201132),
 					},
 					{
-						Type:     bchain.NonFungibleToken,
+						Standard: bchain.NonFungibleToken,
 						Contract: addressToAddrDesc(dbtestdata.EthAddrContract47, parser),
 						Txs:      41235,
 						Ids: Ids{
@@ -774,7 +774,7 @@ func Test_packUnpackAddrContractsLegacy(t *testing.T) {
 						},
 					},
 					{
-						Type:     bchain.MultiToken,
+						Standard: bchain.MultiToken,
 						Contract: addressToAddrDesc(dbtestdata.EthAddrContract4a, parser),
 						Txs:      64,
 						MultiTokenValues: MultiTokenValues{
@@ -1232,11 +1232,11 @@ func Test_packUnpackBlockTx(t *testing.T) {
 				to:    addressToAddrDesc(dbtestdata.EthAddr55, parser),
 				contracts: []ethBlockTxContract{
 					{
-						from:         addressToAddrDesc(dbtestdata.EthAddr20, parser),
-						to:           addressToAddrDesc(dbtestdata.EthAddr5d, parser),
-						contract:     addressToAddrDesc(dbtestdata.EthAddrContract4a, parser),
-						transferType: bchain.FungibleToken,
-						value:        *big.NewInt(10000),
+						from:             addressToAddrDesc(dbtestdata.EthAddr20, parser),
+						to:               addressToAddrDesc(dbtestdata.EthAddr5d, parser),
+						contract:         addressToAddrDesc(dbtestdata.EthAddrContract4a, parser),
+						transferStandard: bchain.FungibleToken,
+						value:            *big.NewInt(10000),
 					},
 				},
 			},
@@ -1250,24 +1250,24 @@ func Test_packUnpackBlockTx(t *testing.T) {
 				to:    addressToAddrDesc(dbtestdata.EthAddr55, parser),
 				contracts: []ethBlockTxContract{
 					{
-						from:         addressToAddrDesc(dbtestdata.EthAddr20, parser),
-						to:           addressToAddrDesc(dbtestdata.EthAddr3e, parser),
-						contract:     addressToAddrDesc(dbtestdata.EthAddrContract4a, parser),
-						transferType: bchain.FungibleToken,
-						value:        *big.NewInt(987654321),
+						from:             addressToAddrDesc(dbtestdata.EthAddr20, parser),
+						to:               addressToAddrDesc(dbtestdata.EthAddr3e, parser),
+						contract:         addressToAddrDesc(dbtestdata.EthAddrContract4a, parser),
+						transferStandard: bchain.FungibleToken,
+						value:            *big.NewInt(987654321),
 					},
 					{
-						from:         addressToAddrDesc(dbtestdata.EthAddr4b, parser),
-						to:           addressToAddrDesc(dbtestdata.EthAddr55, parser),
-						contract:     addressToAddrDesc(dbtestdata.EthAddrContract6f, parser),
-						transferType: bchain.NonFungibleToken,
-						value:        *big.NewInt(13),
+						from:             addressToAddrDesc(dbtestdata.EthAddr4b, parser),
+						to:               addressToAddrDesc(dbtestdata.EthAddr55, parser),
+						contract:         addressToAddrDesc(dbtestdata.EthAddrContract6f, parser),
+						transferStandard: bchain.NonFungibleToken,
+						value:            *big.NewInt(13),
 					},
 					{
-						from:         addressToAddrDesc(dbtestdata.EthAddr5d, parser),
-						to:           addressToAddrDesc(dbtestdata.EthAddr7b, parser),
-						contract:     addressToAddrDesc(dbtestdata.EthAddrContractCd, parser),
-						transferType: bchain.MultiToken,
+						from:             addressToAddrDesc(dbtestdata.EthAddr5d, parser),
+						to:               addressToAddrDesc(dbtestdata.EthAddr7b, parser),
+						contract:         addressToAddrDesc(dbtestdata.EthAddrContractCd, parser),
+						transferStandard: bchain.MultiToken,
 						idValues: []bchain.MultiTokenValue{
 							{
 								Id:    *big.NewInt(1234),

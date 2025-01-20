@@ -14,7 +14,7 @@ const (
 	// MainNet is production network
 	MainNet eth.Network = 56
 
-	// bsc token type names
+	// bsc token standard names
 	BEP20TokenStandard   bchain.TokenStandardName = "BEP20"
 	BEP721TokenStandard  bchain.TokenStandardName = "BEP721"
 	BEP1155TokenStandard bchain.TokenStandardName = "BEP1155"
@@ -32,7 +32,7 @@ func NewBNBSmartChainRPC(config json.RawMessage, pushHandler func(bchain.Notific
 		return nil, err
 	}
 
-	// overwrite EthereumTokenTypeMap with bsc specific token type names
+	// overwrite EthereumTokenStandardMap with bsc specific token standard names
 	bchain.EthereumTokenStandardMap = []bchain.TokenStandardName{BEP20TokenStandard, BEP721TokenStandard, BEP1155TokenStandard}
 
 	s := &BNBSmartChainRPC{
