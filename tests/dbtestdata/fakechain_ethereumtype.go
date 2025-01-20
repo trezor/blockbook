@@ -120,7 +120,7 @@ func (c *fakeBlockChainEthereumType) EthereumTypeGetNonce(addrDesc bchain.Addres
 func (c *fakeBlockChainEthereumType) GetContractInfo(contractDesc bchain.AddressDescriptor) (*bchain.ContractInfo, error) {
 	addresses, _, _ := c.Parser.GetAddressesFromAddrDesc(contractDesc)
 	return &bchain.ContractInfo{
-		Type:           bchain.ERC20TokenType,
+		Standard:       bchain.ERC20TokenStandard,
 		Contract:       addresses[0],
 		Name:           "Contract " + strconv.Itoa(int(contractDesc[0])),
 		Symbol:         "S" + strconv.Itoa(int(contractDesc[0])),

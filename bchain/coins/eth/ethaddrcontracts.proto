@@ -8,7 +8,7 @@ message ProtoAddrContracts {
     bytes Value = 2;
   }
   message AddrContract {
-    int64 Type = 1;
+    int64 Standard = 1;
     bytes Contract = 2;
     uint64 Txs = 3;
     bytes Value = 4;
