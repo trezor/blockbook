@@ -51,16 +51,16 @@ func processTransferEvent(l *bchain.RpcLog) (transfer *bchain.TokenTransfer, err
 		}
 	}()
 	tl := len(l.Topics)
-	var tts bchain.TokenStandard
+	var standard bchain.TokenStandard
 	var value big.Int
 	if tl == 3 {
-		tts = bchain.FungibleToken
+		standard = bchain.FungibleToken
 		_, ok := value.SetString(l.Data, 0)
 		if !ok {
 			return nil, errors.New("ERC20 log Data is not a number")
 		}
 	} else if tl == 4 {
-		tts = bchain.NonFungibleToken
+		standard = bchain.NonFungibleToken
 		_, ok := value.SetString(l.Topics[3], 0)
 		if !ok {
 			return nil, errors.New("ERC721 log Topics[3] is not a number")
@@ -78,7 +78,7 @@ func processTransferEvent(l *bchain.RpcLog) (transfer *bchain.TokenTransfer, err
 		return nil, err
 	}
 	return &bchain.TokenTransfer{
-		Standard: tts,
+		Standard: standard,
 		Contract: EIP55AddressFromAddress(l.Address),
 		From:     EIP55AddressFromAddress(from),
 		To:       EIP55AddressFromAddress(to),

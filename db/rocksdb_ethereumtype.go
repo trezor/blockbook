@@ -254,21 +254,21 @@ func unpackAddrContractsLegacy(buf []byte, addrDesc bchain.AddressDescriptor) (*
 		contract := append(bchain.AddressDescriptor(nil), buf[:eth.EthereumTypeAddressDescriptorLen]...)
 		txs, l := unpackVaruint(buf[eth.EthereumTypeAddressDescriptorLen:])
 		buf = buf[eth.EthereumTypeAddressDescriptorLen+l:]
-		tts := bchain.TokenStandard(txs & 3)
+		standard := bchain.TokenStandard(txs & 3)
 		txs >>= 2
 		ac := AddrContract{
-			Standard: tts,
+			Standard: standard,
 			Contract: contract,
 			Txs:      txs,
 		}
-		if tts == bchain.FungibleToken {
+		if standard == bchain.FungibleToken {
 			b, ll := unpackBigint(buf)
 			buf = buf[ll:]
 			ac.Value = b
 		} else {
 			len, ll := unpackVaruint(buf)
 			buf = buf[ll:]
-			if tts == bchain.NonFungibleToken {
+			if standard == bchain.NonFungibleToken {
 				ac.Ids = make(Ids, len)
 				for i := uint(0); i < len; i++ {
 					b, ll := unpackBigint(buf)

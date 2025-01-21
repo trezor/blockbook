@@ -700,12 +700,12 @@ func (w *Worker) getEthereumTokensTransfers(transfers bchain.TokenTransfers, add
 		contractCache := make(contractInfoCache)
 		for i := range transfers {
 			t := transfers[i]
-			standardName := bchain.EthereumTokenStandardMap[t.Standard]
+			standard := bchain.EthereumTokenStandardMap[t.Standard]
 			var contractInfo *bchain.ContractInfo
 			if info, ok := contractCache[t.Contract]; ok {
 				contractInfo = info
 			} else {
-				info, _, err := w.GetContractInfo(t.Contract, standardName)
+				info, _, err := w.GetContractInfo(t.Contract, standard)
 				if err != nil {
 					glog.Errorf("getContractInfo error %v, contract %v", err, t.Contract)
 					continue
@@ -727,9 +727,8 @@ func (w *Worker) getEthereumTokensTransfers(transfers bchain.TokenTransfers, add
 			aggregateAddress(addresses, t.From)
 			aggregateAddress(addresses, t.To)
 			tokens[i] = TokenTransfer{
-				// Deprecated: Use Standard instead.
-				Type:             standardName,
-				Standard:         standardName,
+				Type:             standard,
+				Standard:         standard,
 				Contract:         t.Contract,
 				From:             t.From,
 				To:               t.To,
@@ -959,18 +958,17 @@ func computePaging(count, page, itemsOnPage int) (Paging, int, int, int) {
 }
 
 func (w *Worker) getEthereumContractBalance(addrDesc bchain.AddressDescriptor, index int, c *db.AddrContract, details AccountDetails, ticker *common.CurrencyRatesTicker, secondaryCoin string) (*Token, error) {
-	standardName := bchain.EthereumTokenStandardMap[c.Standard]
-	ci, validContract, err := w.getContractDescriptorInfo(c.Contract, standardName)
+	standard := bchain.EthereumTokenStandardMap[c.Standard]
+	ci, validContract, err := w.getContractDescriptorInfo(c.Contract, standard)
 	if err != nil {
 		return nil, errors.Annotatef(err, "getEthereumContractBalance %v", c.Contract)
 	}
 	t := Token{
-		Contract: ci.Contract,
-		Name:     ci.Name,
-		Symbol:   ci.Symbol,
-		// Deprecated: Use Standard instead.
-		Type:          standardName,
-		Standard:      standardName,
+		Contract:      ci.Contract,
+		Name:          ci.Name,
+		Symbol:        ci.Symbol,
+		Type:          standard,
+		Standard:      standard,
 		Transfers:     int(c.Txs),
 		Decimals:      ci.Decimals,
 		ContractIndex: strconv.Itoa(index),
@@ -1041,7 +1039,6 @@ func (w *Worker) getEthereumContractBalanceFromBlockchain(addrDesc, contract bch
 		b = nil
 	}
 	return &Token{
-		// Deprecated: Use Standard instead.
 		Type:          ci.Standard,
 		Standard:      ci.Standard,
 		BalanceSat:    (*Amount)(b),

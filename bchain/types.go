@@ -134,8 +134,8 @@ const (
 	UnknownTokenStandard   TokenStandardName = ""
 	UnhandledTokenStandard TokenStandardName = "-"
 
-	// XPUBAddressTokenStandard is address derived from xpub
-	XPUBAddressTokenStandard TokenStandardName = "XPUBAddress"
+	// XPUBAddressStandard is address derived from xpub
+	XPUBAddressStandard TokenStandardName = "XPUBAddress"
 )
 
 // TokenTransfers is array of TokenTransfer
