@@ -158,21 +158,23 @@ type MultiTokenValue struct {
 
 // Token contains info about tokens held by an address
 type Token struct {
-	Type             bchain.TokenTypeName `json:"type" ts_type:"'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155'"`
-	Name             string               `json:"name"`
-	Path             string               `json:"path,omitempty"`
-	Contract         string               `json:"contract,omitempty"`
-	Transfers        int                  `json:"transfers"`
-	Symbol           string               `json:"symbol,omitempty"`
-	Decimals         int                  `json:"decimals,omitempty"`
-	BalanceSat       *Amount              `json:"balance,omitempty"`
-	BaseValue        float64              `json:"baseValue,omitempty"`        // value in the base currency (ETH for Ethereum)
-	SecondaryValue   float64              `json:"secondaryValue,omitempty"`   // value in secondary (fiat) currency, if specified
-	Ids              []Amount             `json:"ids,omitempty"`              // multiple ERC721 tokens
-	MultiTokenValues []MultiTokenValue    `json:"multiTokenValues,omitempty"` // multiple ERC1155 tokens
-	TotalReceivedSat *Amount              `json:"totalReceived,omitempty"`
-	TotalSentSat     *Amount              `json:"totalSent,omitempty"`
-	ContractIndex    string               `json:"-"`
+	// Deprecated: Use Standard instead.
+	Type             bchain.TokenStandardName `json:"type" ts_type:"'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155'"`
+	Standard         bchain.TokenStandardName `json:"standard" ts_type:"'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155'"`
+	Name             string                   `json:"name"`
+	Path             string                   `json:"path,omitempty"`
+	Contract         string                   `json:"contract,omitempty"`
+	Transfers        int                      `json:"transfers"`
+	Symbol           string                   `json:"symbol,omitempty"`
+	Decimals         int                      `json:"decimals,omitempty"`
+	BalanceSat       *Amount                  `json:"balance,omitempty"`
+	BaseValue        float64                  `json:"baseValue,omitempty"`        // value in the base currency (ETH for Ethereum)
+	SecondaryValue   float64                  `json:"secondaryValue,omitempty"`   // value in secondary (fiat) currency, if specified
+	Ids              []Amount                 `json:"ids,omitempty"`              // multiple ERC721 tokens
+	MultiTokenValues []MultiTokenValue        `json:"multiTokenValues,omitempty"` // multiple ERC1155 tokens
+	TotalReceivedSat *Amount                  `json:"totalReceived,omitempty"`
+	TotalSentSat     *Amount                  `json:"totalSent,omitempty"`
+	ContractIndex    string                   `json:"-"`
 }
 
 // Tokens is array of Token
@@ -204,15 +206,17 @@ func (a Tokens) Less(i, j int) bool {
 
 // TokenTransfer contains info about a token transfer done in a transaction
 type TokenTransfer struct {
-	Type             bchain.TokenTypeName `json:"type"`
-	From             string               `json:"from"`
-	To               string               `json:"to"`
-	Contract         string               `json:"contract"`
-	Name             string               `json:"name,omitempty"`
-	Symbol           string               `json:"symbol,omitempty"`
-	Decimals         int                  `json:"decimals,omitempty"`
-	Value            *Amount              `json:"value,omitempty"`
-	MultiTokenValues []MultiTokenValue    `json:"multiTokenValues,omitempty"`
+	// Deprecated: Use Standard instead.
+	Type             bchain.TokenStandardName `json:"type"`
+	Standard         bchain.TokenStandardName `json:"standard"`
+	From             string                   `json:"from"`
+	To               string                   `json:"to"`
+	Contract         string                   `json:"contract"`
+	Name             string                   `json:"name,omitempty"`
+	Symbol           string                   `json:"symbol,omitempty"`
+	Decimals         int                      `json:"decimals,omitempty"`
+	Value            *Amount                  `json:"value,omitempty"`
+	MultiTokenValues []MultiTokenValue        `json:"multiTokenValues,omitempty"`
 }
 
 type EthereumInternalTransfer struct {
@@ -357,9 +361,10 @@ type Address struct {
 	TotalBaseValue        float64              `json:"totalBaseValue,omitempty"`      // value including tokens in base currency
 	TotalSecondaryValue   float64              `json:"totalSecondaryValue,omitempty"` // value including tokens in secondary currency
 	ContractInfo          *bchain.ContractInfo `json:"contractInfo,omitempty"`
-	Erc20Contract         *bchain.ContractInfo `json:"erc20Contract,omitempty"` // deprecated
-	AddressAliases        AddressAliasesMap    `json:"addressAliases,omitempty"`
-	StakingPools          []StakingPool        `json:"stakingPools,omitempty"`
+	// Deprecated: replaced by ContractInfo
+	Erc20Contract  *bchain.ContractInfo `json:"erc20Contract,omitempty"`
+	AddressAliases AddressAliasesMap    `json:"addressAliases,omitempty"`
+	StakingPools   []StakingPool        `json:"stakingPools,omitempty"`
 	// helpers for explorer
 	Filter        string              `json:"-"`
 	XPubAddresses map[string]struct{} `json:"-"`

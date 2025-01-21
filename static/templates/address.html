@@ -51,10 +51,10 @@
             <td>{{$addr.Nonce}}</td>
         </tr>
         {{if $addr.ContractInfo}}
-        {{if $addr.ContractInfo.Type}}
+        {{if $addr.ContractInfo.Standard}}
         <tr>
-            <td style="width: 25%;">Contract type</td>
-            <td>{{$addr.ContractInfo.Type}}</td>
+            <td style="width: 25%;">Standard</td>
+            <td>{{$addr.ContractInfo.Standard}}</td>
         </tr>
         {{end}}
         {{if $addr.ContractInfo.CreatedInBlock}}
@@ -131,7 +131,7 @@
                             <th class="text-end" style="width: 10%;"><span class="d-none d-md-block">Transfers</span><span class="d-block d-md-none">#</span></th>
                         </tr>
                         {{range $t := $addr.Tokens}}
-                        {{if eq $t.Type $.FungibleTokenName}}
+                        {{if eq $t.Standard $.FungibleTokenName}}
                         <tr>
                             <td class="ellipsis"><a href="/address/{{$t.Contract}}">{{if $t.Name}}<span class="copyable" cc="{{$t.Contract}}" alias-type="Contract">{{$t.Name}}</span>{{else}}<span class="copyable">{{$t.Contract}}</span>{{end}}</a></td>
                             <td>{{formattedAmountSpan $t.BalanceSat $t.Decimals $t.Symbol $data "copyable"}}</td>
@@ -167,7 +167,7 @@
                             <th class="text-end" style="width: 10%;"><span class="d-none d-md-block">Transfers</span><span class="d-block d-md-none">#</span></th>
                         </tr>
                         {{range $t := $addr.Tokens}}
-                        {{if eq $t.Type $.NonFungibleTokenName}}
+                        {{if eq $t.Standard $.NonFungibleTokenName}}
                         <tr>
                             <td class="ellipsis"><a href="/address/{{$t.Contract}}">{{if $t.Name}}<span class="copyable" cc="{{$t.Contract}}" alias-type="Contract">{{$t.Name}}</span>{{else}}<span class="copyable">{{$t.Contract}}</span>{{end}}</a></td>
                             <td>
@@ -204,7 +204,7 @@
                             <th class="text-end" style="width: 10%;"><span class="d-none d-md-block">Transfers</span><span class="d-block d-md-none">#</span></th>
                         </tr>
                         {{range $t := $addr.Tokens}}
-                        {{if eq $t.Type $.MultiTokenName}}
+                        {{if eq $t.Standard $.MultiTokenName}}
                         <tr>
                             <td class="ellipsis"><a href="/address/{{$t.Contract}}">{{if $t.Name}}<span class="copyable" cc="{{$t.Contract}}" alias-type="Contract">{{$t.Name}}</span>{{else}}<span class="copyable">{{$t.Contract}}</span>{{end}}</a></td>
                             <td>
@@ -288,17 +288,17 @@
             <option {{if eq $addr.Filter "0"}}selected{{end}} value="0">Non-contract</option>
             <option {{if eq $addr.Filter "1"}}selected{{end}} value="1">Internal</option>
             {{range $t := $addr.Tokens}}
-            {{if eq $t.Type $.FungibleTokenName}}
+            {{if eq $t.Standard $.FungibleTokenName}}
             <option {{if eq $addr.Filter $t.ContractIndex}}selected{{end}} value="{{$t.ContractIndex}}">{{if $t.Name}}{{$t.Name}}{{else}}{{$t.Contract}}{{end}} ({{$.FungibleTokenName}})</option>
             {{end}}
             {{end}}
             {{range $t := $addr.Tokens}}
-            {{if eq $t.Type $.NonFungibleTokenName}}
+            {{if eq $t.Standard $.NonFungibleTokenName}}
             <option {{if eq $addr.Filter $t.ContractIndex}}selected{{end}} value="{{$t.ContractIndex}}">{{if $t.Name}}{{$t.Name}}{{else}}{{$t.Contract}}{{end}} ({{$.NonFungibleTokenName}})</option>
             {{end}}
             {{end}}
             {{range $t := $addr.Tokens}}
-            {{if eq $t.Type $.MultiTokenName}}
+            {{if eq $t.Standard $.MultiTokenName}}
             <option {{if eq $addr.Filter $t.ContractIndex}}selected{{end}} value="{{$t.ContractIndex}}">{{if $t.Name}}{{$t.Name}}{{else}}{{$t.Contract}}{{end}} ({{$.MultiTokenName}})</option>
             {{end}}
             {{end}}

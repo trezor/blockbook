@@ -47,6 +47,7 @@ export interface MultiTokenValue {
 }
 export interface TokenTransfer {
     type: string;
+    standard: string;
     from: string;
     to: string;
     contract: string;
@@ -126,6 +127,7 @@ export interface StakingPool {
 }
 export interface ContractInfo {
     type: string;
+    standard: string;
     contract: string;
     name: string;
     symbol: string;
@@ -135,6 +137,7 @@ export interface ContractInfo {
 }
 export interface Token {
     type: 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155';
+    standard: 'XPUBAddress' | 'ERC20' | 'ERC721' | 'ERC1155';
     name: string;
     path?: string;
     contract?: string;
