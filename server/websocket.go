@@ -66,7 +66,7 @@ type WebsocketServer struct {
 	newTransactionEnabled           bool
 	newTransactionSubscriptions     map[*websocketChannel]string
 	newTransactionSubscriptionsLock sync.Mutex
-	addressSubscriptions            map[string]map[*websocketChannel]string
+	addressSubscriptions            map[string]map[*websocketChannel]*WsSubscribeAddressesDetails
 	addressSubscriptionsLock        sync.Mutex
 	fiatRatesSubscriptions          map[string]map[*websocketChannel]string
 	fiatRatesTokenSubscriptions     map[*websocketChannel][]string
@@ -103,7 +103,7 @@ func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.
 		newBlockSubscriptions:       make(map[*websocketChannel]string),
 		newTransactionEnabled:       is.EnableSubNewTx,
 		newTransactionSubscriptions: make(map[*websocketChannel]string),
-		addressSubscriptions:        make(map[string]map[*websocketChannel]string),
+		addressSubscriptions:        make(map[string]map[*websocketChannel]*WsSubscribeAddressesDetails),
 		fiatRatesSubscriptions:      make(map[string]map[*websocketChannel]string),
 		fiatRatesTokenSubscriptions: make(map[*websocketChannel][]string),
 	}
@@ -422,9 +422,9 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *WsRe
 		return s.unsubscribeNewTransaction(c)
 	},
 	"subscribeAddresses": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
-		ad, err := s.unmarshalAddresses(req.Params)
+		ad, nbtxs, err := s.unmarshalAddresses(req.Params)
 		if err == nil {
-			rv, err = s.subscribeAddresses(c, ad, req)
+			rv, err = s.subscribeAddresses(c, ad, nbtxs, req)
 		}
 		return
 	},
@@ -869,21 +869,21 @@ func (s *WebsocketServer) unsubscribeNewTransaction(c *websocketChannel) (res in
 	return &subscriptionResponse{false}, nil
 }
 
-func (s *WebsocketServer) unmarshalAddresses(params []byte) ([]string, error) {
+func (s *WebsocketServer) unmarshalAddresses(params []byte) ([]string, bool, error) {
 	r := WsSubscribeAddressesReq{}
 	err := json.Unmarshal(params, &r)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	rv := make([]string, len(r.Addresses))
 	for i, a := range r.Addresses {
 		ad, err := s.chainParser.GetAddrDescFromAddress(a)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		rv[i] = string(ad)
 	}
-	return rv, nil
+	return rv, r.NewBlockTxs, nil
 }
 
 // unsubscribe addresses without addressSubscriptionsLock - can be called only from subscribeAddresses and unsubscribeAddresses
@@ -904,7 +904,7 @@ func (s *WebsocketServer) doUnsubscribeAddresses(c *websocketChannel) {
 	c.addrDescs = nil
 }
 
-func (s *WebsocketServer) subscribeAddresses(c *websocketChannel, addrDesc []string, req *WsReq) (res interface{}, err error) {
+func (s *WebsocketServer) subscribeAddresses(c *websocketChannel, addrDesc []string, newBlockTxs bool, req *WsReq) (res interface{}, err error) {
 	s.addressSubscriptionsLock.Lock()
 	defer s.addressSubscriptionsLock.Unlock()
 	// unsubscribe all previous subscriptions
@@ -912,10 +912,13 @@ func (s *WebsocketServer) subscribeAddresses(c *websocketChannel, addrDesc []str
 	for _, ads := range addrDesc {
 		as, ok := s.addressSubscriptions[ads]
 		if !ok {
-			as = make(map[*websocketChannel]string)
+			as = make(map[*websocketChannel]*WsSubscribeAddressesDetails)
 			s.addressSubscriptions[ads] = as
 		}
-		as[c] = req.ID
+		as[c] = &WsSubscribeAddressesDetails{
+			requestID:          req.ID,
+			publishNewBlockTxs: newBlockTxs,
+		}
 	}
 	c.addrDescs = addrDesc
 	s.metrics.WebsocketSubscribes.With((common.Labels{"method": "subscribeAddresses"})).Set(float64(len(s.addressSubscriptions)))
@@ -999,9 +1002,60 @@ func (s *WebsocketServer) onNewBlockAsync(hash string, height uint32) {
 	glog.Info("broadcasting new block ", height, " ", hash, " to ", len(s.newBlockSubscriptions), " channels")
 }
 
+func (s *WebsocketServer) publishNewBlockTxsByAddr(block *bchain.Block) {
+	s.addressSubscriptionsLock.Lock()
+	publishNewBlockTxs := func() bool {
+		for _, as := range s.addressSubscriptions {
+			for _, details := range as {
+				if details.publishNewBlockTxs {
+					return true
+				}
+			}
+		}
+		return false
+	}()
+	s.addressSubscriptionsLock.Unlock()
+	if publishNewBlockTxs {
+		for _, tx := range block.Txs {
+			tx := tx
+			go func() {
+				var tokenTransfers bchain.TokenTransfers
+				if s.chainParser.GetChainType() == bchain.ChainEthereumType {
+					tokenTransfers, _ = s.chainParser.EthereumTypeGetTokenTransfersFromTx(&tx)
+				}
+				vins := make([]bchain.MempoolVin, len(tx.Vin))
+				for i, vin := range tx.Vin {
+					vins[i] = bchain.MempoolVin{Vin: vin}
+				}
+				subscribed := s.getNewTxSubscriptions(vins, tx.Vout, tokenTransfers)
+				if len(subscribed) > 0 {
+					if csd, ok := tx.CoinSpecificData.(bchain.EthereumSpecificData); ok {
+						receipt, err := s.chain.EthereumTypeGetTransactionReceipt(tx.Txid)
+						if err != nil {
+							glog.Error("GetTransactionFromMempoolTx error ", err, " for ", tx.Txid)
+							return
+						}
+						csd.Receipt = receipt
+						tx.CoinSpecificData = csd
+					}
+					atx, err := s.api.GetTransactionFromBchainTx(&tx, int(block.Height), false, false, nil)
+					if err != nil {
+						glog.Error("GetTransactionFromMempoolTx error ", err, " for ", tx.Txid)
+						return
+					}
+					for stringAddressDescriptor := range subscribed {
+						s.sendOnNewTxAddr(stringAddressDescriptor, atx, true)
+					}
+				}
+			}()
+		}
+	}
+}
+
 // OnNewBlock is a callback that broadcasts info about new block to subscribed clients
-func (s *WebsocketServer) OnNewBlock(hash string, height uint32) {
-	go s.onNewBlockAsync(hash, height)
+func (s *WebsocketServer) OnNewBlock(block *bchain.Block) {
+	go s.onNewBlockAsync(block.Hash, block.Height)
+	go s.publishNewBlockTxsByAddr(block)
 }
 
 func (s *WebsocketServer) sendOnNewTx(tx *api.Tx) {
@@ -1016,7 +1070,7 @@ func (s *WebsocketServer) sendOnNewTx(tx *api.Tx) {
 	glog.Info("broadcasting new tx ", tx.Txid, " to ", len(s.newTransactionSubscriptions), " channels")
 }
 
-func (s *WebsocketServer) sendOnNewTxAddr(stringAddressDescriptor string, tx *api.Tx) {
+func (s *WebsocketServer) sendOnNewTxAddr(stringAddressDescriptor string, tx *api.Tx, newBlockTx bool) {
 	addrDesc := bchain.AddressDescriptor(stringAddressDescriptor)
 	addr, _, err := s.chainParser.GetAddressesFromAddrDesc(addrDesc)
 	if err != nil {
@@ -1035,9 +1089,12 @@ func (s *WebsocketServer) sendOnNewTxAddr(stringAddressDescriptor string, tx *ap
 		defer s.addressSubscriptionsLock.Unlock()
 		as, ok := s.addressSubscriptions[stringAddressDescriptor]
 		if ok {
-			for c, id := range as {
+			for c, details := range as {
+				if newBlockTx && !details.publishNewBlockTxs {
+					continue
+				}
 				c.DataOut(&WsRes{
-					ID:   id,
+					ID:   details.requestID,
 					Data: &data,
 				})
 			}
@@ -1046,44 +1103,52 @@ func (s *WebsocketServer) sendOnNewTxAddr(stringAddressDescriptor string, tx *ap
 	}
 }
 
-func (s *WebsocketServer) getNewTxSubscriptions(tx *bchain.MempoolTx) map[string]struct{} {
+func (s *WebsocketServer) getNewTxSubscriptions(vins []bchain.MempoolVin, vouts []bchain.Vout, tokenTransfers bchain.TokenTransfers) map[string]struct{} {
 	// check if there is any subscription in inputs, outputs and token transfers
 	s.addressSubscriptionsLock.Lock()
 	defer s.addressSubscriptionsLock.Unlock()
 	subscribed := make(map[string]struct{})
-	for i := range tx.Vin {
-		sad := string(tx.Vin[i].AddrDesc)
-		if len(sad) > 0 {
-			as, ok := s.addressSubscriptions[sad]
-			if ok && len(as) > 0 {
+	for i := range vins {
+		if sad := string(vins[i].AddrDesc); len(sad) > 0 {
+			if as, ok := s.addressSubscriptions[sad]; ok && len(as) > 0 {
+				subscribed[sad] = struct{}{}
+			}
+		} else if s.chainParser.GetChainType() == bchain.ChainBitcoinType {
+			if addrDesc, err := s.chainParser.GetAddrDescFromVout(&vouts[vins[i].Vout]); err == nil {
+				sad := string(addrDesc)
+				if as, ok := s.addressSubscriptions[sad]; ok && len(as) > 0 {
+					subscribed[sad] = struct{}{}
+				}
+			}
+		} else if s.chainParser.GetChainType() == bchain.ChainEthereumType {
+			if len(vins[i].Addresses) > 0 {
+				if addrDesc, err := s.chainParser.GetAddrDescFromAddress(vins[i].Addresses[0]); err == nil {
+					sad := string(addrDesc)
+					if as, ok := s.addressSubscriptions[sad]; ok && len(as) > 0 {
+						subscribed[sad] = struct{}{}
+					}
+				}
+			}
+		}
+	}
+	for i := range vouts {
+		if addrDesc, err := s.chainParser.GetAddrDescFromVout(&vouts[i]); err == nil && len(addrDesc) > 0 {
+			sad := string(addrDesc)
+			if as, ok := s.addressSubscriptions[sad]; ok && len(as) > 0 {
 				subscribed[sad] = struct{}{}
 			}
 		}
 	}
-	for i := range tx.Vout {
-		addrDesc, err := s.chainParser.GetAddrDescFromVout(&tx.Vout[i])
-		if err == nil && len(addrDesc) > 0 {
+	for i := range tokenTransfers {
+		if addrDesc, err := s.chainParser.GetAddrDescFromAddress(tokenTransfers[i].From); err == nil && len(addrDesc) > 0 {
 			sad := string(addrDesc)
-			as, ok := s.addressSubscriptions[sad]
-			if ok && len(as) > 0 {
+			if as, ok := s.addressSubscriptions[sad]; ok && len(as) > 0 {
 				subscribed[sad] = struct{}{}
 			}
 		}
-	}
-	for i := range tx.TokenTransfers {
-		addrDesc, err := s.chainParser.GetAddrDescFromAddress(tx.TokenTransfers[i].From)
-		if err == nil && len(addrDesc) > 0 {
+		if addrDesc, err := s.chainParser.GetAddrDescFromAddress(tokenTransfers[i].To); err == nil && len(addrDesc) > 0 {
 			sad := string(addrDesc)
-			as, ok := s.addressSubscriptions[sad]
-			if ok && len(as) > 0 {
-				subscribed[sad] = struct{}{}
-			}
-		}
-		addrDesc, err = s.chainParser.GetAddrDescFromAddress(tx.TokenTransfers[i].To)
-		if err == nil && len(addrDesc) > 0 {
-			sad := string(addrDesc)
-			as, ok := s.addressSubscriptions[sad]
-			if ok && len(as) > 0 {
+			if as, ok := s.addressSubscriptions[sad]; ok && len(as) > 0 {
 				subscribed[sad] = struct{}{}
 			}
 		}
@@ -1099,13 +1164,13 @@ func (s *WebsocketServer) onNewTxAsync(tx *bchain.MempoolTx, subscribed map[stri
 	}
 	s.sendOnNewTx(atx)
 	for stringAddressDescriptor := range subscribed {
-		s.sendOnNewTxAddr(stringAddressDescriptor, atx)
+		s.sendOnNewTxAddr(stringAddressDescriptor, atx, false)
 	}
 }
 
 // OnNewTx is a callback that broadcasts info about a tx affecting subscribed address
 func (s *WebsocketServer) OnNewTx(tx *bchain.MempoolTx) {
-	subscribed := s.getNewTxSubscriptions(tx)
+	subscribed := s.getNewTxSubscriptions(tx.Vin, tx.Vout, tx.TokenTransfers)
 	if len(s.newTransactionSubscriptions) > 0 || len(subscribed) > 0 {
 		go s.onNewTxAsync(tx, subscribed)
 	}
