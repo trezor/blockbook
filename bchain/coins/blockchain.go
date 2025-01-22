@@ -374,6 +374,11 @@ func (c *blockChainWithMetrics) EthereumTypeGetRawTransaction(txid string) (v st
 	return c.b.EthereumTypeGetRawTransaction(txid)
 }
 
+func (c *blockChainWithMetrics) EthereumTypeGetTransactionReceipt(txid string) (v *bchain.RpcReceipt, err error) {
+	defer func(s time.Time) { c.observeRPCLatency("EthereumTypeGetTransactionReceipt", s, err) }(time.Now())
+	return c.b.EthereumTypeGetTransactionReceipt(txid)
+}
+
 type mempoolWithMetrics struct {
 	mempool bchain.Mempool
 	m       *common.Metrics

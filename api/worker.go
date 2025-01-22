@@ -221,7 +221,7 @@ func (w *Worker) getTransaction(txid string, spendingTxs bool, specificJSON bool
 		}
 		return nil, NewAPIError(fmt.Sprintf("Transaction '%v' not found (%v)", txid, err), true)
 	}
-	return w.getTransactionFromBchainTx(bchainTx, height, spendingTxs, specificJSON, addresses)
+	return w.GetTransactionFromBchainTx(bchainTx, height, spendingTxs, specificJSON, addresses)
 }
 
 func (w *Worker) getParsedEthereumInputData(data string) *bchain.EthereumParsedInputData {
@@ -284,8 +284,8 @@ func (w *Worker) getConfirmationETA(tx *Tx) (int64, uint32) {
 	return etaSeconds, etaBlocks
 }
 
-// getTransactionFromBchainTx reads transaction data from txid
-func (w *Worker) getTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spendingTxs bool, specificJSON bool, addresses map[string]struct{}) (*Tx, error) {
+// GetTransactionFromBchainTx reads transaction data from txid
+func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spendingTxs bool, specificJSON bool, addresses map[string]struct{}) (*Tx, error) {
 	var err error
 	var ta *db.TxAddresses
 	var tokens []TokenTransfer
