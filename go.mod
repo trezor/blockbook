@@ -15,7 +15,7 @@ require (
 	github.com/decred/dcrd/hdkeychain/v3 v3.0.0
 	github.com/decred/dcrd/txscript/v3 v3.0.0
 	github.com/ethereum/go-ethereum v1.13.14
-	github.com/golang/glog v1.2.1
+	github.com/golang/glog v1.2.4
 	github.com/gorilla/websocket v1.5.0
 	github.com/juju/errors v0.0.0-20170703010042-c7d06af17c68
 	github.com/linxGnu/grocksdb v1.7.7
