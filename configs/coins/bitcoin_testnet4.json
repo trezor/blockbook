@@ -22,10 +22,10 @@
         "package_name": "backend-bitcoin-testnet4",
         "package_revision": "satoshilabs-1",
         "system_user": "bitcoin",
-        "version": "28.0",
-        "binary_url": "https://bitcoincore.org/bin/bitcoin-core-28.0/bitcoin-28.0-x86_64-linux-gnu.tar.gz",
+        "version": "28.1",
+        "binary_url": "https://bitcoincore.org/bin/bitcoin-core-28.1/bitcoin-28.1-x86_64-linux-gnu.tar.gz",
         "verification_type": "sha256",
-        "verification_source": "7fe294b02b25b51acb8e8e0a0eb5af6bbafa7cd0c5b0e5fcbb61263104a82fbc",
+        "verification_source": "07f77afd326639145b9ba9562912b2ad2ccec47b8a305bd075b4f4cb127b7ed7",
         "extract_command": "tar -C backend --strip 1 -xf",
         "exclude_files": ["bin/bitcoin-qt"],
         "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/bitcoind -datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -conf={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf -pid=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",
@@ -42,8 +42,8 @@
         },
         "platforms": {
             "arm64": {
-                "binary_url": "https://bitcoincore.org/bin/bitcoin-core-28.0/bitcoin-28.0-aarch64-linux-gnu.tar.gz",
-                "verification_source": "7fa582d99a25c354d23e371a5848bd9e6a79702870f9cbbf1292b86e647d0f4e"
+                "binary_url": "https://bitcoincore.org/bin/bitcoin-core-28.1/bitcoin-28.1-aarch64-linux-gnu.tar.gz",
+                "verification_source": "6ddb6990690bd4c9a9f4319ed6f6e9c995c85ce5530ee9f120e80ce09e090c44"
             }
         }
     },
