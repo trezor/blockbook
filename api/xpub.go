@@ -267,7 +267,9 @@ func (w *Worker) tokenFromXpubAddress(data *xpubData, ad *xpubAddress, changeInd
 		}
 	}
 	return Token{
+		// Deprecated: Use Standard instead.
 		Type:             bchain.XPUBAddressTokenType,
+		Standard:         bchain.XPUBAddressTokenType,
 		Name:             address,
 		Decimals:         w.chainParser.AmountDecimals(),
 		BalanceSat:       (*Amount)(balance),
