@@ -440,7 +440,7 @@ var (
 )
 
 func init() {
-	xpubDesriptorRegex, _ = regexp.Compile(`^(?P<type>(sh\(wpkh|wpkh|pk|pkh|wpkh|wsh|tr))\((\[\w+/(?P<bip>\d+)'/\d+'?/\d+'?\])?(?P<xpub>\w+)(/(({(?P<changelist1>\d+(,\d+)*)})|(<(?P<changelist2>\d+(;\d+)*)>)|(?P<change>\d+))/\*)?\)+`)
+	xpubDesriptorRegex, _ = regexp.Compile(`^(?P<type>(sh\(wpkh|wpkh|pk|pkh|wpkh|wsh|tr))\((\[\w+/(?P<bip>\d+)['h]/\d+['h]?/\d+['h]?\])?(?P<xpub>\w+)(/(({(?P<changelist1>\d+(,\d+)*)})|(<(?P<changelist2>\d+(;\d+)*)>)|(?P<change>\d+))/\*)?\)+`)
 	typeSubexpIndex = xpubDesriptorRegex.SubexpIndex("type")
 	bipSubexpIndex = xpubDesriptorRegex.SubexpIndex("bip")
 	xpubSubexpIndex = xpubDesriptorRegex.SubexpIndex("xpub")

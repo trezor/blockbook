@@ -824,6 +824,18 @@ func TestParseXpubDescriptors(t *testing.T) {
 			},
 		},
 		{
+			name:   "tr([5c9e228d/86h/1h/0h]tpubD/{0,1,2}/*)#4rqwxvej",
+			xpub:   "tr([5c9e228d/86h/1h/0h]tpubDC88gkaZi5HvJGxGDNLADkvtdpni3mLmx6vr2KnXmWMG8zfkBRggsxHVBkUpgcwPe2KKpkyvTJCdXHb1UHEWE64vczyyPQfHr1skBcsRedN/{0,1,2}/*)#4rqwxvej",
+			parser: btcTestnetParser,
+			want: &bchain.XpubDescriptor{
+				XpubDescriptor: "tr([5c9e228d/86h/1h/0h]tpubDC88gkaZi5HvJGxGDNLADkvtdpni3mLmx6vr2KnXmWMG8zfkBRggsxHVBkUpgcwPe2KKpkyvTJCdXHb1UHEWE64vczyyPQfHr1skBcsRedN/{0,1,2}/*)#4rqwxvej",
+				Xpub:           "tpubDC88gkaZi5HvJGxGDNLADkvtdpni3mLmx6vr2KnXmWMG8zfkBRggsxHVBkUpgcwPe2KKpkyvTJCdXHb1UHEWE64vczyyPQfHr1skBcsRedN",
+				Type:           bchain.P2TR,
+				Bip:            "86",
+				ChangeIndexes:  []uint32{0, 1, 2},
+			},
+		},
+		{
 			name:   "tr([5c9e228d/86'/1'/0']tpubD/<0;1;2>/*)#4rqwxvej",
 			xpub:   "tr([5c9e228d/86'/1'/0']tpubDC88gkaZi5HvJGxGDNLADkvtdpni3mLmx6vr2KnXmWMG8zfkBRggsxHVBkUpgcwPe2KKpkyvTJCdXHb1UHEWE64vczyyPQfHr1skBcsRedN/<0;1;2>/*)#4rqwxvej",
 			parser: btcTestnetParser,
