@@ -53,7 +53,9 @@
             "block_addresses_to_keep": 600,
             "additional_params": {
                 "address_aliases": true,
-                "mempoolTxTimeoutHours": 48,
+                "eip1559Fees": true,
+                "alternative_estimate_fee": "infura",
+                "alternative_estimate_fee_params": "{\"url\": \"https://gas.api.infura.io/v3/${api_key}/networks/10/suggestedGasFees\", \"periodSeconds\": 60}",
                 "processInternalTransactions": true,
                 "queryBackendOnMempoolResync": false,
                 "fiat_rates": "coingecko",
