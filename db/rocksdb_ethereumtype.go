@@ -127,33 +127,30 @@ type AddrContracts struct {
 
 // packAddrContract packs AddrContracts into a protobuf encoded byte slice
 func packAddrContracts(acs *AddrContracts) ([]byte, error) {
-	ptContracts := make([]*eth.ProtoAddrContracts_AddrContract, len(acs.Contracts))
-	for i, c := range acs.Contracts {
-		ptIds := make([][]byte, len(c.Ids))
-		for j, id := range c.Ids {
-			ptIds[j] = id.Bytes()
-		}
-		ptMultiTokenValues := make([]*eth.ProtoAddrContracts_MultiTokenValue, len(c.MultiTokenValues))
-		for k, mtv := range c.MultiTokenValues {
-			ptMultiTokenValues[k] = &eth.ProtoAddrContracts_MultiTokenValue{
-				Id:    mtv.Id.Bytes(),
-				Value: mtv.Value.Bytes(),
-			}
-		}
-		ptContracts[i] = &eth.ProtoAddrContracts_AddrContract{
-			Contract:         c.Contract,
-			Ids:              ptIds,
-			MultiTokenValues: ptMultiTokenValues,
-			Standard:         int64(c.Standard),
-			Txs:              uint64(c.Txs),
-			Value:            c.Value.Bytes(),
-		}
-	}
 	pt := &eth.ProtoAddrContracts{
 		TotalTxs:       uint64(acs.TotalTxs),
 		InternalTxs:    uint64(acs.InternalTxs),
 		NonContractTxs: uint64(acs.NonContractTxs),
-		Contracts:      ptContracts,
+		Contracts:      make([]*eth.ProtoAddrContracts_AddrContract, len(acs.Contracts)),
+	}
+	for i, c := range acs.Contracts {
+		pt.Contracts[i] = &eth.ProtoAddrContracts_AddrContract{
+			Contract:         c.Contract,
+			Standard:         int64(c.Standard),
+			Txs:              uint64(c.Txs),
+			Value:            c.Value.Bytes(),
+			Ids:              make([][]byte, len(c.Ids)),
+			MultiTokenValues: make([]*eth.ProtoAddrContracts_MultiTokenValue, len(c.MultiTokenValues)),
+		}
+		for j, id := range c.Ids {
+			pt.Contracts[i].Ids[j] = id.Bytes()
+		}
+		for j, m := range c.MultiTokenValues {
+			pt.Contracts[i].MultiTokenValues[j] = &eth.ProtoAddrContracts_MultiTokenValue{
+				Id:    m.Id.Bytes(),
+				Value: m.Value.Bytes(),
+			}
+		}
 	}
 	return proto.Marshal(pt)
 }
@@ -199,41 +196,34 @@ func packAddrContractsLegacy(acs *AddrContracts) []byte {
 // unpackAddrContract unpacks the protobuf encoded byte slice into AddrContracts
 func unpackAddrContracts(buf []byte, addrDesc bchain.AddressDescriptor) (*AddrContracts, error) {
 	pt := &eth.ProtoAddrContracts{}
-	err := proto.Unmarshal(buf, pt)
-	if err != nil {
+	if err := proto.Unmarshal(buf, pt); err != nil {
 		return unpackAddrContractsLegacy(buf, addrDesc)
-	}
-	contracts := make([]AddrContract, len(pt.Contracts))
-	for i, c := range pt.Contracts {
-		var ids []big.Int
-		if len(c.Ids) > 0 {
-			ids = make([]big.Int, len(c.Ids))
-			for j, id := range c.Ids {
-				ids[j].SetBytes(id)
-			}
-		}
-		var multiTokenValues MultiTokenValues
-		if len(c.MultiTokenValues) > 0 {
-			multiTokenValues = make(MultiTokenValues, len(c.MultiTokenValues))
-			for k, mtv := range c.MultiTokenValues {
-				multiTokenValues[k].Id.SetBytes(mtv.Id)
-				multiTokenValues[k].Value.SetBytes(mtv.Value)
-			}
-		}
-		contracts[i] = AddrContract{
-			Standard:         bchain.TokenStandard(c.Standard),
-			Contract:         c.Contract,
-			Txs:              uint(c.Txs),
-			Value:            *new(big.Int).SetBytes(c.Value),
-			Ids:              ids,
-			MultiTokenValues: multiTokenValues,
-		}
 	}
 	acs := &AddrContracts{
 		TotalTxs:       uint(pt.TotalTxs),
 		NonContractTxs: uint(pt.NonContractTxs),
 		InternalTxs:    uint(pt.InternalTxs),
-		Contracts:      contracts,
+		Contracts:      make([]AddrContract, len(pt.Contracts)),
+	}
+	for i, c := range pt.Contracts {
+		contract := &acs.Contracts[i]
+		contract.Standard = bchain.TokenStandard(c.Standard)
+		contract.Contract = c.Contract
+		contract.Txs = uint(c.Txs)
+		contract.Value.SetBytes(c.Value)
+		if size := len(c.Ids); size > 0 {
+			contract.Ids = make([]big.Int, size)
+			for j, id := range c.Ids {
+				contract.Ids[j].SetBytes(id)
+			}
+		}
+		if size := len(c.MultiTokenValues); size > 0 {
+			contract.MultiTokenValues = make(MultiTokenValues, size)
+			for j, mtv := range c.MultiTokenValues {
+				contract.MultiTokenValues[j].Id.SetBytes(mtv.Id)
+				contract.MultiTokenValues[j].Value.SetBytes(mtv.Value)
+			}
+		}
 	}
 	return acs, nil
 }
