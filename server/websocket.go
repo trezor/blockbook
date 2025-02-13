@@ -68,6 +68,7 @@ type WebsocketServer struct {
 	newTransactionSubscriptionsLock sync.Mutex
 	addressSubscriptions            map[string]map[*websocketChannel]*WsSubscribeAddressesDetails
 	addressSubscriptionsLock        sync.Mutex
+	newBlockTxsSubscriptionCount    atomic.Int64
 	fiatRatesSubscriptions          map[string]map[*websocketChannel]string
 	fiatRatesTokenSubscriptions     map[*websocketChannel][]string
 	fiatRatesSubscriptionsLock      sync.Mutex
@@ -888,10 +889,14 @@ func (s *WebsocketServer) unmarshalAddresses(params []byte) ([]string, bool, err
 
 // unsubscribe addresses without addressSubscriptionsLock - can be called only from subscribeAddresses and unsubscribeAddresses
 func (s *WebsocketServer) doUnsubscribeAddresses(c *websocketChannel) {
+	newBlockTxs := false
 	for _, ads := range c.addrDescs {
 		sa, e := s.addressSubscriptions[ads]
 		if e {
-			for sc := range sa {
+			for sc, details := range sa {
+				if details.publishNewBlockTxs {
+					newBlockTxs = true
+				}
 				if sc == c {
 					delete(sa, c)
 				}
@@ -901,12 +906,18 @@ func (s *WebsocketServer) doUnsubscribeAddresses(c *websocketChannel) {
 			}
 		}
 	}
+	if newBlockTxs {
+		s.newBlockTxsSubscriptionCount.Add(-1)
+	}
 	c.addrDescs = nil
 }
 
 func (s *WebsocketServer) subscribeAddresses(c *websocketChannel, addrDesc []string, newBlockTxs bool, req *WsReq) (res interface{}, err error) {
 	s.addressSubscriptionsLock.Lock()
 	defer s.addressSubscriptionsLock.Unlock()
+	if newBlockTxs {
+		s.newBlockTxsSubscriptionCount.Add(1)
+	}
 	// unsubscribe all previous subscriptions
 	s.doUnsubscribeAddresses(c)
 	for _, ads := range addrDesc {
@@ -1004,18 +1015,8 @@ func (s *WebsocketServer) onNewBlockAsync(hash string, height uint32) {
 
 func (s *WebsocketServer) publishNewBlockTxsByAddr(block *bchain.Block) {
 	s.addressSubscriptionsLock.Lock()
-	publishNewBlockTxs := func() bool {
-		for _, as := range s.addressSubscriptions {
-			for _, details := range as {
-				if details.publishNewBlockTxs {
-					return true
-				}
-			}
-		}
-		return false
-	}()
 	s.addressSubscriptionsLock.Unlock()
-	if publishNewBlockTxs {
+	if s.newBlockTxsSubscriptionCount.Load() > 0 {
 		for _, tx := range block.Txs {
 			tx := tx
 			go func() {
@@ -1023,7 +1024,10 @@ func (s *WebsocketServer) publishNewBlockTxsByAddr(block *bchain.Block) {
 				var internalTransfers []bchain.EthereumInternalTransfer
 				if s.chainParser.GetChainType() == bchain.ChainEthereumType {
 					tokenTransfers, _ = s.chainParser.EthereumTypeGetTokenTransfersFromTx(&tx)
-					internalTransfers = tx.CoinSpecificData.(bchain.EthereumSpecificData).InternalData.Transfers
+					esd := tx.CoinSpecificData.(bchain.EthereumSpecificData)
+					if esd.InternalData != nil {
+						internalTransfers = esd.InternalData.Transfers
+					}
 				}
 				vins := make([]bchain.MempoolVin, len(tx.Vin))
 				for i, vin := range tx.Vin {
