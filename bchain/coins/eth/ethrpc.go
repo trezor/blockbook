@@ -1119,7 +1119,7 @@ func (b *EthereumRPC) callRpcStringResult(rpcMethod string, args ...interface{})
 	return result, nil
 }
 
-// EthereumTypeGetTransactionReceipt returns current balance of an address
+// EthereumTypeGetTransactionReceipt returns the transaction receipt by the transaction ID.
 func (b *EthereumRPC) EthereumTypeGetTransactionReceipt(txid string) (*bchain.RpcReceipt, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
 	defer cancel()
