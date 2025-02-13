@@ -1020,14 +1020,16 @@ func (s *WebsocketServer) publishNewBlockTxsByAddr(block *bchain.Block) {
 			tx := tx
 			go func() {
 				var tokenTransfers bchain.TokenTransfers
+				var internalTransfers []bchain.EthereumInternalTransfer
 				if s.chainParser.GetChainType() == bchain.ChainEthereumType {
 					tokenTransfers, _ = s.chainParser.EthereumTypeGetTokenTransfersFromTx(&tx)
+					internalTransfers = tx.CoinSpecificData.(bchain.EthereumSpecificData).InternalData.Transfers
 				}
 				vins := make([]bchain.MempoolVin, len(tx.Vin))
 				for i, vin := range tx.Vin {
 					vins[i] = bchain.MempoolVin{Vin: vin}
 				}
-				subscribed := s.getNewTxSubscriptions(vins, tx.Vout, tokenTransfers)
+				subscribed := s.getNewTxSubscriptions(vins, tx.Vout, tokenTransfers, internalTransfers)
 				if len(subscribed) > 0 {
 					if csd, ok := tx.CoinSpecificData.(bchain.EthereumSpecificData); ok {
 						receipt, err := s.chain.EthereumTypeGetTransactionReceipt(tx.Txid)
@@ -1103,55 +1105,50 @@ func (s *WebsocketServer) sendOnNewTxAddr(stringAddressDescriptor string, tx *ap
 	}
 }
 
-func (s *WebsocketServer) getNewTxSubscriptions(vins []bchain.MempoolVin, vouts []bchain.Vout, tokenTransfers bchain.TokenTransfers) map[string]struct{} {
-	// check if there is any subscription in inputs, outputs and token transfers
+func (s *WebsocketServer) getNewTxSubscriptions(vins []bchain.MempoolVin, vouts []bchain.Vout, tokenTransfers bchain.TokenTransfers, internalTransfers []bchain.EthereumInternalTransfer) map[string]struct{} {
+	// check if there is any subscription in inputs, outputs and transfers
 	s.addressSubscriptionsLock.Lock()
 	defer s.addressSubscriptionsLock.Unlock()
 	subscribed := make(map[string]struct{})
+	processAddress := func(address string) {
+		if addrDesc, err := s.chainParser.GetAddrDescFromAddress(address); err == nil && len(addrDesc) > 0 {
+			sad := string(addrDesc)
+			if as, ok := s.addressSubscriptions[sad]; ok && len(as) > 0 {
+				subscribed[sad] = struct{}{}
+			}
+		}
+	}
+	processVout := func(vout bchain.Vout) {
+		if addrDesc, err := s.chainParser.GetAddrDescFromVout(&vout); err == nil && len(addrDesc) > 0 {
+			sad := string(addrDesc)
+			if as, ok := s.addressSubscriptions[sad]; ok && len(as) > 0 {
+				subscribed[sad] = struct{}{}
+			}
+		}
+	}
 	for i := range vins {
 		if sad := string(vins[i].AddrDesc); len(sad) > 0 {
 			if as, ok := s.addressSubscriptions[sad]; ok && len(as) > 0 {
 				subscribed[sad] = struct{}{}
 			}
 		} else if s.chainParser.GetChainType() == bchain.ChainBitcoinType {
-			if addrDesc, err := s.chainParser.GetAddrDescFromVout(&vouts[vins[i].Vout]); err == nil {
-				sad := string(addrDesc)
-				if as, ok := s.addressSubscriptions[sad]; ok && len(as) > 0 {
-					subscribed[sad] = struct{}{}
-				}
-			}
+			processVout(vouts[vins[i].Vout])
 		} else if s.chainParser.GetChainType() == bchain.ChainEthereumType {
 			if len(vins[i].Addresses) > 0 {
-				if addrDesc, err := s.chainParser.GetAddrDescFromAddress(vins[i].Addresses[0]); err == nil {
-					sad := string(addrDesc)
-					if as, ok := s.addressSubscriptions[sad]; ok && len(as) > 0 {
-						subscribed[sad] = struct{}{}
-					}
-				}
+				processAddress(vins[i].Addresses[0])
 			}
 		}
 	}
 	for i := range vouts {
-		if addrDesc, err := s.chainParser.GetAddrDescFromVout(&vouts[i]); err == nil && len(addrDesc) > 0 {
-			sad := string(addrDesc)
-			if as, ok := s.addressSubscriptions[sad]; ok && len(as) > 0 {
-				subscribed[sad] = struct{}{}
-			}
-		}
+		processVout(vouts[i])
 	}
 	for i := range tokenTransfers {
-		if addrDesc, err := s.chainParser.GetAddrDescFromAddress(tokenTransfers[i].From); err == nil && len(addrDesc) > 0 {
-			sad := string(addrDesc)
-			if as, ok := s.addressSubscriptions[sad]; ok && len(as) > 0 {
-				subscribed[sad] = struct{}{}
-			}
-		}
-		if addrDesc, err := s.chainParser.GetAddrDescFromAddress(tokenTransfers[i].To); err == nil && len(addrDesc) > 0 {
-			sad := string(addrDesc)
-			if as, ok := s.addressSubscriptions[sad]; ok && len(as) > 0 {
-				subscribed[sad] = struct{}{}
-			}
-		}
+		processAddress(tokenTransfers[i].From)
+		processAddress(tokenTransfers[i].To)
+	}
+	for i := range internalTransfers {
+		processAddress(internalTransfers[i].From)
+		processAddress(internalTransfers[i].To)
 	}
 	return subscribed
 }
@@ -1170,7 +1167,7 @@ func (s *WebsocketServer) onNewTxAsync(tx *bchain.MempoolTx, subscribed map[stri
 
 // OnNewTx is a callback that broadcasts info about a tx affecting subscribed address
 func (s *WebsocketServer) OnNewTx(tx *bchain.MempoolTx) {
-	subscribed := s.getNewTxSubscriptions(tx.Vin, tx.Vout, tx.TokenTransfers)
+	subscribed := s.getNewTxSubscriptions(tx.Vin, tx.Vout, tx.TokenTransfers, nil)
 	if len(s.newTransactionSubscriptions) > 0 || len(subscribed) > 0 {
 		go s.onNewTxAsync(tx, subscribed)
 	}
