@@ -622,25 +622,25 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 	return r, nil
 }
 
-func (w *Worker) GetContractInfo(contract string, typeFromContext bchain.TokenStandardName) (*bchain.ContractInfo, bool, error) {
+func (w *Worker) GetContractInfo(contract string, standardFromContext bchain.TokenStandardName) (*bchain.ContractInfo, bool, error) {
 	cd, err := w.chainParser.GetAddrDescFromAddress(contract)
 	if err != nil {
 		return nil, false, err
 	}
-	return w.getContractDescriptorInfo(cd, typeFromContext)
+	return w.getContractDescriptorInfo(cd, standardFromContext)
 }
 
-func (w *Worker) getContractDescriptorInfo(cd bchain.AddressDescriptor, typeFromContext bchain.TokenStandardName) (*bchain.ContractInfo, bool, error) {
+func (w *Worker) getContractDescriptorInfo(cd bchain.AddressDescriptor, standardFromContext bchain.TokenStandardName) (*bchain.ContractInfo, bool, error) {
 	var err error
 	validContract := true
-	contractInfo, err := w.db.GetContractInfo(cd, typeFromContext)
+	contractInfo, err := w.db.GetContractInfo(cd, standardFromContext)
 	if err != nil {
 		return nil, false, err
 	}
 	if contractInfo == nil {
 		// log warning only if the contract should have been known from processing of the internal data
 		if eth.ProcessInternalTransactions {
-			glog.Warningf("Contract %v %v not found in DB", cd, typeFromContext)
+			glog.Warningf("Contract %v %v not found in DB", cd, standardFromContext)
 		}
 		contractInfo, err = w.chain.GetContractInfo(cd)
 		if err != nil {
@@ -655,9 +655,9 @@ func (w *Worker) getContractDescriptorInfo(cd bchain.AddressDescriptor, typeFrom
 
 			validContract = false
 		} else {
-			if typeFromContext != bchain.UnknownTokenStandard && contractInfo.Standard == bchain.UnknownTokenStandard {
-				contractInfo.Standard = typeFromContext
-				contractInfo.Type = typeFromContext
+			if standardFromContext != bchain.UnknownTokenStandard && contractInfo.Standard == bchain.UnknownTokenStandard {
+				contractInfo.Standard = standardFromContext
+				contractInfo.Type = standardFromContext
 			}
 			if err = w.db.StoreContractInfo(contractInfo); err != nil {
 				glog.Errorf("StoreContractInfo error %v, contract %v", err, cd)
@@ -683,9 +683,9 @@ func (w *Worker) getContractDescriptorInfo(cd bchain.AddressDescriptor, typeFrom
 				contractInfo.Decimals = blockchainContractInfo.Decimals
 			}
 			if contractInfo.Standard == bchain.UnhandledTokenStandard {
-				glog.Infof("Contract %v %v [%s] handled", cd, typeFromContext, contractInfo.Name)
-				contractInfo.Standard = typeFromContext
-				contractInfo.Type = typeFromContext
+				glog.Infof("Contract %v %v [%s] handled", cd, standardFromContext, contractInfo.Name)
+				contractInfo.Standard = standardFromContext
+				contractInfo.Type = standardFromContext
 			}
 			if err = w.db.StoreContractInfo(contractInfo); err != nil {
 				glog.Errorf("StoreContractInfo error %v, contract %v", err, cd)

@@ -70,15 +70,15 @@ type ContractInfo struct {
 	DestructedInBlock uint32            `json:"destructedInBlock,omitempty"`
 }
 
-// Ethereum token type names
+// Ethereum token standard names
 const (
 	ERC20TokenStandard   TokenStandardName = "ERC20"
 	ERC771TokenStandard  TokenStandardName = "ERC721"
 	ERC1155TokenStandard TokenStandardName = "ERC1155"
 )
 
-// EthereumTokenTypeMap maps bchain.TokenType to TokenTypeName
-// the map must match all bchain.TokenType to avoid index out of range panic
+// EthereumTokenStandardMap maps bchain.TokenStandard to TokenStandardName
+// the map must match all bchain.TokenStandard to avoid index out of range panic
 var EthereumTokenStandardMap = []TokenStandardName{ERC20TokenStandard, ERC771TokenStandard, ERC1155TokenStandard}
 
 type MultiTokenValue struct {

@@ -1,7 +1,7 @@
 # Registry of ports
 
 | coin                             | blockbook public | blockbook internal | backend rpc | backend service ports (zmq)                         |
-| -------------------------------- | ---------------- | ------------------ | ----------- | --------------------------------------------------- |
+|----------------------------------|------------------|--------------------|-------------|-----------------------------------------------------|
 | Ethereum Archive                 | 9116             | 9016               | 8016        | 38316 p2p, 8116 http, 8516 authrpc                  |
 | Bitcoin                          | 9130             | 9030               | 8030        | 38330                                               |
 | Bitcoin Cash                     | 9131             | 9031               | 8031        | 38331                                               |
@@ -59,6 +59,8 @@
 | Arbitrum Archive                 | 9306             | 9206               | 8306        | 38406 p2p                                           |
 | Arbitrum Nova                    | 9307             | 9207               | 8207        | 38407 p2p, 8307 http                                |
 | Arbitrum Nova Archive            | 9308             | 9208               | 8308        | 38408 p2p                                           |
+| Base                             | 9309             | 9209               | 8309        | 38409 p2p, 8209 http, 8409 authrpc                  |
+| Base Archive                     | 9311             | 9211               | 8211        | 38411 p2p, 8311 http, 8411 authrpc                  |
 | Ethereum Testnet Holesky         | 19116            | 19016              | 18016       | 18116 http, 18516 authrpc, 48316 p2p                |
 | Bitcoin Signet                   | 19120            | 19020              | 18020       | 48320                                               |
 | Bitcoin Regtest                  | 19121            | 19021              | 18021       | 48321                                               |
