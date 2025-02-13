@@ -1032,7 +1032,7 @@ func (s *WebsocketServer) publishNewBlockTxsByAddr(block *bchain.Block) {
 					if csd, ok := tx.CoinSpecificData.(bchain.EthereumSpecificData); ok {
 						receipt, err := s.chain.EthereumTypeGetTransactionReceipt(tx.Txid)
 						if err != nil {
-							glog.Error("GetTransactionFromMempoolTx error ", err, " for ", tx.Txid)
+							glog.Error("EthereumTypeGetTransactionReceipt error ", err, " for ", tx.Txid)
 							return
 						}
 						csd.Receipt = receipt
@@ -1040,7 +1040,7 @@ func (s *WebsocketServer) publishNewBlockTxsByAddr(block *bchain.Block) {
 					}
 					atx, err := s.api.GetTransactionFromBchainTx(&tx, int(block.Height), false, false, nil)
 					if err != nil {
-						glog.Error("GetTransactionFromMempoolTx error ", err, " for ", tx.Txid)
+						glog.Error("GetTransactionFromBchainTx error ", err, " for ", tx.Txid)
 						return
 					}
 					for stringAddressDescriptor := range subscribed {
