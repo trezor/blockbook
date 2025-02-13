@@ -8,7 +8,7 @@ GETH_BIN={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/geth
 DATA_DIR={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend
 
 CHAINDATA_DIR=$DATA_DIR/geth/chaindata
-SNAPSHOT=https://mainnet-archive-snapshots.base.org/$(curl https://mainnet-archive-snapshots.base.org/latest)
+SNAPSHOT=https://mainnet-full-snapshots.base.org/$(curl https://mainnet-full-snapshots.base.org/latest)
 
 if [ ! -d "$CHAINDATA_DIR" ]; then
   wget -c $SNAPSHOT -O - | zstd -cd | tar xf - --strip-components=1 -C $DATA_DIR
