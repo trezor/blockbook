@@ -68,7 +68,7 @@ type WebsocketServer struct {
 	newTransactionSubscriptionsLock sync.Mutex
 	addressSubscriptions            map[string]map[*websocketChannel]*WsSubscribeAddressesDetails
 	addressSubscriptionsLock        sync.Mutex
-	newBlockTxsSubscriptionCount    atomic.Int64
+	newBlockTxsSubscriptionCount    int
 	fiatRatesSubscriptions          map[string]map[*websocketChannel]string
 	fiatRatesTokenSubscriptions     map[*websocketChannel][]string
 	fiatRatesSubscriptionsLock      sync.Mutex
@@ -889,15 +889,14 @@ func (s *WebsocketServer) unmarshalAddresses(params []byte) ([]string, bool, err
 
 // unsubscribe addresses without addressSubscriptionsLock - can be called only from subscribeAddresses and unsubscribeAddresses
 func (s *WebsocketServer) doUnsubscribeAddresses(c *websocketChannel) {
-	newBlockTxs := false
 	for _, ads := range c.addrDescs {
 		sa, e := s.addressSubscriptions[ads]
 		if e {
 			for sc, details := range sa {
-				if details.publishNewBlockTxs {
-					newBlockTxs = true
-				}
 				if sc == c {
+					if details.publishNewBlockTxs {
+						s.newBlockTxsSubscriptionCount--
+					}
 					delete(sa, c)
 				}
 			}
@@ -906,18 +905,12 @@ func (s *WebsocketServer) doUnsubscribeAddresses(c *websocketChannel) {
 			}
 		}
 	}
-	if newBlockTxs {
-		s.newBlockTxsSubscriptionCount.Add(-1)
-	}
 	c.addrDescs = nil
 }
 
 func (s *WebsocketServer) subscribeAddresses(c *websocketChannel, addrDesc []string, newBlockTxs bool, req *WsReq) (res interface{}, err error) {
 	s.addressSubscriptionsLock.Lock()
 	defer s.addressSubscriptionsLock.Unlock()
-	if newBlockTxs {
-		s.newBlockTxsSubscriptionCount.Add(1)
-	}
 	// unsubscribe all previous subscriptions
 	s.doUnsubscribeAddresses(c)
 	for _, ads := range addrDesc {
@@ -929,6 +922,9 @@ func (s *WebsocketServer) subscribeAddresses(c *websocketChannel, addrDesc []str
 		as[c] = &WsSubscribeAddressesDetails{
 			requestID:          req.ID,
 			publishNewBlockTxs: newBlockTxs,
+		}
+		if newBlockTxs {
+			s.newBlockTxsSubscriptionCount++
 		}
 	}
 	c.addrDescs = addrDesc
@@ -1014,54 +1010,53 @@ func (s *WebsocketServer) onNewBlockAsync(hash string, height uint32) {
 }
 
 func (s *WebsocketServer) publishNewBlockTxsByAddr(block *bchain.Block) {
-	s.addressSubscriptionsLock.Lock()
-	s.addressSubscriptionsLock.Unlock()
-	if s.newBlockTxsSubscriptionCount.Load() > 0 {
-		for _, tx := range block.Txs {
-			tx := tx
-			go func() {
-				var tokenTransfers bchain.TokenTransfers
-				var internalTransfers []bchain.EthereumInternalTransfer
-				if s.chainParser.GetChainType() == bchain.ChainEthereumType {
-					tokenTransfers, _ = s.chainParser.EthereumTypeGetTokenTransfersFromTx(&tx)
-					esd := tx.CoinSpecificData.(bchain.EthereumSpecificData)
-					if esd.InternalData != nil {
-						internalTransfers = esd.InternalData.Transfers
-					}
-				}
-				vins := make([]bchain.MempoolVin, len(tx.Vin))
-				for i, vin := range tx.Vin {
-					vins[i] = bchain.MempoolVin{Vin: vin}
-				}
-				subscribed := s.getNewTxSubscriptions(vins, tx.Vout, tokenTransfers, internalTransfers)
-				if len(subscribed) > 0 {
-					if csd, ok := tx.CoinSpecificData.(bchain.EthereumSpecificData); ok {
-						receipt, err := s.chain.EthereumTypeGetTransactionReceipt(tx.Txid)
-						if err != nil {
-							glog.Error("EthereumTypeGetTransactionReceipt error ", err, " for ", tx.Txid)
-							return
-						}
-						csd.Receipt = receipt
-						tx.CoinSpecificData = csd
-					}
-					atx, err := s.api.GetTransactionFromBchainTx(&tx, int(block.Height), false, false, nil)
+	for _, tx := range block.Txs {
+		var tokenTransfers bchain.TokenTransfers
+		var internalTransfers []bchain.EthereumInternalTransfer
+		if s.chainParser.GetChainType() == bchain.ChainEthereumType {
+			tokenTransfers, _ = s.chainParser.EthereumTypeGetTokenTransfersFromTx(&tx)
+			esd := tx.CoinSpecificData.(bchain.EthereumSpecificData)
+			if esd.InternalData != nil {
+				internalTransfers = esd.InternalData.Transfers
+			}
+		}
+		vins := make([]bchain.MempoolVin, len(tx.Vin))
+		for i, vin := range tx.Vin {
+			vins[i] = bchain.MempoolVin{Vin: vin}
+		}
+		subscribed := s.getNewTxSubscriptions(vins, tx.Vout, tokenTransfers, internalTransfers)
+		if len(subscribed) > 0 {
+			go func(tx bchain.Tx, subscribed map[string]struct{}) {
+				if csd, ok := tx.CoinSpecificData.(bchain.EthereumSpecificData); ok {
+					receipt, err := s.chain.EthereumTypeGetTransactionReceipt(tx.Txid)
 					if err != nil {
-						glog.Error("GetTransactionFromBchainTx error ", err, " for ", tx.Txid)
+						glog.Error("EthereumTypeGetTransactionReceipt error ", err, " for ", tx.Txid)
 						return
 					}
-					for stringAddressDescriptor := range subscribed {
-						s.sendOnNewTxAddr(stringAddressDescriptor, atx, true)
-					}
+					csd.Receipt = receipt
+					tx.CoinSpecificData = csd
 				}
-			}()
+				atx, err := s.api.GetTransactionFromBchainTx(&tx, int(block.Height), false, false, nil)
+				if err != nil {
+					glog.Error("GetTransactionFromBchainTx error ", err, " for ", tx.Txid)
+					return
+				}
+				for stringAddressDescriptor := range subscribed {
+					s.sendOnNewTxAddr(stringAddressDescriptor, atx, true)
+				}
+			}(tx, subscribed)
 		}
 	}
 }
 
 // OnNewBlock is a callback that broadcasts info about new block to subscribed clients
 func (s *WebsocketServer) OnNewBlock(block *bchain.Block) {
+	s.addressSubscriptionsLock.Lock()
+	defer s.addressSubscriptionsLock.Unlock()
 	go s.onNewBlockAsync(block.Hash, block.Height)
-	go s.publishNewBlockTxsByAddr(block)
+	if s.newBlockTxsSubscriptionCount > 0 {
+		go s.publishNewBlockTxsByAddr(block)
+	}
 }
 
 func (s *WebsocketServer) sendOnNewTx(tx *api.Tx) {
