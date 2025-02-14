@@ -121,7 +121,12 @@ type WsSendTransactionReq struct {
 }
 
 type WsSubscribeAddressesReq struct {
-	Addresses []string `json:"addresses"`
+	Addresses   []string `json:"addresses"`
+	NewBlockTxs bool     `json:"newBlockTxs"`
+}
+type WsSubscribeAddressesDetails struct {
+	requestID          string
+	publishNewBlockTxs bool
 }
 type WsSubscribeFiatRatesReq struct {
 	Currency string   `json:"currency,omitempty"`
