@@ -53,10 +53,11 @@ var (
 	blockUntil     = flag.Int("blockuntil", -1, "height of the final block")
 	rollbackHeight = flag.Int("rollback", -1, "rollback to the given height and quit")
 
-	synchronize = flag.Bool("sync", false, "synchronizes until tip, if together with zeromq, keeps index synchronized")
-	repair      = flag.Bool("repair", false, "repair the database")
-	fixUtxo     = flag.Bool("fixutxo", false, "check and fix utxo db and exit")
-	prof        = flag.String("prof", "", "http server binding [address]:port of the interface to profiling data /debug/pprof/ (default no profiling)")
+	synchronize          = flag.Bool("sync", false, "synchronizes until tip, if together with zeromq, keeps index synchronized")
+	repair               = flag.Bool("repair", false, "repair the database")
+	fixUtxo              = flag.Bool("fixutxo", false, "check and fix utxo db and exit")
+	migrateAddrContracts = flag.Bool("migrateAddrContracts", false, "migrate addrContracts and exit")
+	prof                 = flag.String("prof", "", "http server binding [address]:port of the interface to profiling data /debug/pprof/ (default no profiling)")
 
 	syncChunk   = flag.Int("chunk", 100, "block chunk size for processing in bulk mode")
 	syncWorkers = flag.Int("workers", 8, "number of workers to process blocks in bulk mode")
@@ -181,6 +182,20 @@ func mainWithExitCode() int {
 	internalState, err = newInternalState(config, index, *enableSubNewTx)
 	if err != nil {
 		glog.Error("internalState: ", err)
+		return exitCodeFatal
+	}
+
+	if *migrateAddrContracts {
+		err = index.MigrateAddrContracts(chanOsSignal)
+		if err != nil {
+			glog.Error("migrateAddrContracts: ", err)
+			return exitCodeFatal
+		}
+		return exitCodeOK
+	}
+
+	if !*migrateAddrContracts {
+		glog.Error("this version of blockbook is migrating addrContracts only, run it with --migrateAddrContracts")
 		return exitCodeFatal
 	}
 

@@ -2224,6 +2224,67 @@ func (d *RocksDB) fixUtxo(addrDesc bchain.AddressDescriptor, ba *AddrBalance) (b
 	return false, reorder, nil
 }
 
+// MigrateAddrContracts migrates from protobuf to legacy
+func (d *RocksDB) MigrateAddrContracts(stop chan os.Signal) error {
+	if d.chainParser.GetChainType() != bchain.ChainEthereumType {
+		glog.Info("MigrateAddrContracts: applicable only for ethereum type coins")
+		return nil
+	}
+	glog.Info("MigrateAddrContracts: starting")
+	var row int64
+	var protobufSize, legacySize int
+	var seekKey []byte
+	// do not use cache
+	ro := grocksdb.NewDefaultReadOptions()
+	ro.SetFillCache(false)
+	for {
+		var addrDesc bchain.AddressDescriptor
+		it := d.db.NewIteratorCF(ro, d.cfh[cfAddressContracts])
+		if row == 0 {
+			it.SeekToFirst()
+		} else {
+			glog.Info("MigrateAddrContracts: row ", row, ", protobuf size sum ", protobufSize, ", legacy size sum ", legacySize)
+			it.Seek(seekKey)
+			it.Next()
+		}
+
+		wb := grocksdb.NewWriteBatch()
+		for count := 0; it.Valid() && count < refreshIterator; it.Next() {
+			select {
+			case <-stop:
+				return errors.New("Interrupted")
+			default:
+			}
+			addrDesc = it.Key().Data()
+			buf := it.Value().Data()
+			protobufSize += len(buf)
+			count++
+			row++
+			acs, err := unpackAddrContracts(buf, addrDesc)
+			if err != nil {
+				return err
+			}
+			repacked := packAddrContractsLegacy(acs)
+			legacySize += len(repacked)
+			wb.PutCF(d.cfh[cfAddressContracts], addrDesc, repacked)
+		}
+		err := d.WriteBatch(wb)
+		wb.Destroy()
+		if err != nil {
+			return errors.Errorf("error storing repacked data %v", err)
+		}
+
+		seekKey = append([]byte{}, addrDesc...)
+		valid := it.Valid()
+		it.Close()
+		if !valid {
+			break
+		}
+	}
+	glog.Info("MigrateAddrContracts: finished, scanned ", row, " rows, protobuf size sum ", protobufSize, ", legacy size sum ", legacySize)
+	return nil
+}
+
 // FixUtxos checks and fixes possible
 func (d *RocksDB) FixUtxos(stop chan os.Signal) error {
 	if d.chainParser.GetChainType() != bchain.ChainBitcoinType {
