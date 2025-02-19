@@ -49,6 +49,11 @@ type websocketChannel struct {
 	getAddressInfoDescriptors    map[string]struct{}
 }
 
+type addressDetails struct {
+	requestID          string
+	publishNewBlockTxs bool
+}
+
 // WebsocketServer is a handle to websocket server
 type WebsocketServer struct {
 	upgrader                        *websocket.Upgrader
@@ -66,7 +71,7 @@ type WebsocketServer struct {
 	newTransactionEnabled           bool
 	newTransactionSubscriptions     map[*websocketChannel]string
 	newTransactionSubscriptionsLock sync.Mutex
-	addressSubscriptions            map[string]map[*websocketChannel]*WsSubscribeAddressesDetails
+	addressSubscriptions            map[string]map[*websocketChannel]*addressDetails
 	addressSubscriptionsLock        sync.Mutex
 	newBlockTxsSubscriptionCount    int
 	fiatRatesSubscriptions          map[string]map[*websocketChannel]string
@@ -104,7 +109,7 @@ func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.
 		newBlockSubscriptions:       make(map[*websocketChannel]string),
 		newTransactionEnabled:       is.EnableSubNewTx,
 		newTransactionSubscriptions: make(map[*websocketChannel]string),
-		addressSubscriptions:        make(map[string]map[*websocketChannel]*WsSubscribeAddressesDetails),
+		addressSubscriptions:        make(map[string]map[*websocketChannel]*addressDetails),
 		fiatRatesSubscriptions:      make(map[string]map[*websocketChannel]string),
 		fiatRatesTokenSubscriptions: make(map[*websocketChannel][]string),
 	}
@@ -916,10 +921,10 @@ func (s *WebsocketServer) subscribeAddresses(c *websocketChannel, addrDesc []str
 	for _, ads := range addrDesc {
 		as, ok := s.addressSubscriptions[ads]
 		if !ok {
-			as = make(map[*websocketChannel]*WsSubscribeAddressesDetails)
+			as = make(map[*websocketChannel]*addressDetails)
 			s.addressSubscriptions[ads] = as
 		}
-		as[c] = &WsSubscribeAddressesDetails{
+		as[c] = &addressDetails{
 			requestID:          req.ID,
 			publishNewBlockTxs: newBlockTxs,
 		}
