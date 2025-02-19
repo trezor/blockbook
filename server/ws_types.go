@@ -122,7 +122,7 @@ type WsSendTransactionReq struct {
 
 type WsSubscribeAddressesReq struct {
 	Addresses   []string `json:"addresses"`
-	NewBlockTxs bool     `json:"newBlockTxs"`
+	NewBlockTxs bool     `json:"newBlockTxs,omitempty"`
 }
 type WsSubscribeFiatRatesReq struct {
 	Currency string   `json:"currency,omitempty"`
