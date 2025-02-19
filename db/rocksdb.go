@@ -60,21 +60,20 @@ const (
 
 // RocksDB handle
 type RocksDB struct {
-	path               string
-	db                 *grocksdb.DB
-	wo                 *grocksdb.WriteOptions
-	ro                 *grocksdb.ReadOptions
-	cfh                []*grocksdb.ColumnFamilyHandle
-	chainParser        bchain.BlockChainParser
-	is                 *common.InternalState
-	metrics            *common.Metrics
-	cache              *grocksdb.Cache
-	maxOpenFiles       int
-	cbs                connectBlockStats
-	extendedIndex      bool
-	maxAddrContracts   int
-	addressContracts   map[string]*AddrContracts
-	protoAddrContracts bool
+	path             string
+	db               *grocksdb.DB
+	wo               *grocksdb.WriteOptions
+	ro               *grocksdb.ReadOptions
+	cfh              []*grocksdb.ColumnFamilyHandle
+	chainParser      bchain.BlockChainParser
+	is               *common.InternalState
+	metrics          *common.Metrics
+	cache            *grocksdb.Cache
+	maxOpenFiles     int
+	cbs              connectBlockStats
+	extendedIndex    bool
+	maxAddrContracts int
+	addressContracts map[string]*AddrContracts
 }
 
 const (
@@ -132,7 +131,7 @@ func openDB(path string, c *grocksdb.Cache, openFiles int) (*grocksdb.DB, []*gro
 
 // NewRocksDB opens an internal handle to RocksDB environment.  Close
 // needs to be called to release it.
-func NewRocksDB(path string, cacheSize, maxOpenFiles int, parser bchain.BlockChainParser, metrics *common.Metrics, extendedIndex bool, maxAddrContracts int, protoAddrContracts bool) (*RocksDB, error) {
+func NewRocksDB(path string, cacheSize, maxOpenFiles int, parser bchain.BlockChainParser, metrics *common.Metrics, extendedIndex bool, maxAddrContracts int) (*RocksDB, error) {
 	glog.Infof("rocksdb: opening %s, required data version %v, cache size %v, max open files %v", path, dbVersion, cacheSize, maxOpenFiles)
 
 	cfNames = append([]string{}, cfBaseNames...)
@@ -152,21 +151,20 @@ func NewRocksDB(path string, cacheSize, maxOpenFiles int, parser bchain.BlockCha
 		return nil, err
 	}
 	d := &RocksDB{
-		path:               path,
-		db:                 db,
-		wo:                 grocksdb.NewDefaultWriteOptions(),
-		ro:                 grocksdb.NewDefaultReadOptions(),
-		cfh:                cfh,
-		chainParser:        parser,
-		is:                 nil,
-		metrics:            metrics,
-		cache:              c,
-		maxOpenFiles:       maxOpenFiles,
-		cbs:                connectBlockStats{},
-		extendedIndex:      extendedIndex,
-		maxAddrContracts:   maxAddrContracts,
-		addressContracts:   make(map[string]*AddrContracts),
-		protoAddrContracts: protoAddrContracts,
+		path:             path,
+		db:               db,
+		wo:               grocksdb.NewDefaultWriteOptions(),
+		ro:               grocksdb.NewDefaultReadOptions(),
+		cfh:              cfh,
+		chainParser:      parser,
+		is:               nil,
+		metrics:          metrics,
+		cache:            c,
+		maxOpenFiles:     maxOpenFiles,
+		cbs:              connectBlockStats{},
+		extendedIndex:    extendedIndex,
+		maxAddrContracts: maxAddrContracts,
+		addressContracts: make(map[string]*AddrContracts),
 	}
 	return d, nil
 }
