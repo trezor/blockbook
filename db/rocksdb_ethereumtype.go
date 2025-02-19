@@ -221,11 +221,6 @@ func unpackAddrContracts(buf []byte, addrDesc bchain.AddressDescriptor) (*AddrCo
 }
 
 func (d *RocksDB) storeAddressContracts(wb *grocksdb.WriteBatch, acm map[string]*AddrContracts) error {
-	defer func() {
-		if d.maxAddrContracts == 0 {
-			d.addressContracts = make(map[string]*AddrContracts)
-		}
-	}()
 	for addrDesc, acs := range acm {
 		// address with 0 contracts is removed from db - happens on disconnect
 		if acs == nil || (acs.NonContractTxs == 0 && acs.InternalTxs == 0 && len(acs.Contracts) == 0) {
@@ -343,7 +338,7 @@ func addToContract(c *AddrContract, contractIndex int, index int32, contract bch
 func (d *RocksDB) addToAddressesAndContractsEthereumType(addrDesc bchain.AddressDescriptor, btxID []byte, index int32, contract bchain.AddressDescriptor, transfer *bchain.TokenTransfer, addTxCount bool, addresses addressesMap, addressContracts map[string]*AddrContracts) error {
 	var err error
 	strAddrDesc := string(addrDesc)
-	ac, e := d.addressContracts[strAddrDesc]
+	ac, e := addressContracts[strAddrDesc]
 	if !e {
 		ac, err = d.GetAddrDescContracts(addrDesc)
 		if err != nil {
@@ -352,15 +347,9 @@ func (d *RocksDB) addToAddressesAndContractsEthereumType(addrDesc bchain.Address
 		if ac == nil {
 			ac = &AddrContracts{}
 		}
-		if addressContracts != nil {
-			addressContracts[strAddrDesc] = ac
-		}
-		d.addressContracts[strAddrDesc] = ac
+		addressContracts[strAddrDesc] = ac
 		d.cbs.balancesMiss++
 	} else {
-		if addressContracts != nil {
-			addressContracts[strAddrDesc] = ac
-		}
 		d.cbs.balancesHit++
 	}
 	if contract == nil {
