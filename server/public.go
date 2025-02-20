@@ -745,7 +745,7 @@ func isOwnAddress(td *TemplateData, a string) bool {
 func tokenTransfersCount(tx *api.Tx, t bchain.TokenStandardName) int {
 	count := 0
 	for i := range tx.TokenTransfers {
-		if tx.TokenTransfers[i].Type == t {
+		if tx.TokenTransfers[i].Standard == t {
 			count++
 		}
 	}
@@ -756,7 +756,7 @@ func tokenTransfersCount(tx *api.Tx, t bchain.TokenStandardName) int {
 func tokenCount(tokens []api.Token, t bchain.TokenStandardName) int {
 	count := 0
 	for i := range tokens {
-		if tokens[i].Type == t {
+		if tokens[i].Standard == t {
 			count++
 		}
 	}

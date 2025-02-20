@@ -1,4 +1,4 @@
-package bsc
+package base
 
 import (
 	"context"
@@ -12,39 +12,30 @@ import (
 
 const (
 	// MainNet is production network
-	MainNet eth.Network = 56
-
-	// bsc token standard names
-	BEP20TokenStandard   bchain.TokenStandardName = "BEP20"
-	BEP721TokenStandard  bchain.TokenStandardName = "BEP721"
-	BEP1155TokenStandard bchain.TokenStandardName = "BEP1155"
+	MainNet eth.Network = 8453
 )
 
-// BNBSmartChainRPC is an interface to JSON-RPC bsc service.
-type BNBSmartChainRPC struct {
+// BaseRPC is an interface to JSON-RPC base service.
+type BaseRPC struct {
 	*eth.EthereumRPC
 }
 
-// NewBNBSmartChainRPC returns new BNBSmartChainRPC instance.
-func NewBNBSmartChainRPC(config json.RawMessage, pushHandler func(bchain.NotificationType)) (bchain.BlockChain, error) {
+// NewBaseRPC returns new BaseRPC instance.
+func NewBaseRPC(config json.RawMessage, pushHandler func(bchain.NotificationType)) (bchain.BlockChain, error) {
 	c, err := eth.NewEthereumRPC(config, pushHandler)
 	if err != nil {
 		return nil, err
 	}
 
-	// overwrite EthereumTokenStandardMap with bsc specific token standard names
-	bchain.EthereumTokenStandardMap = []bchain.TokenStandardName{BEP20TokenStandard, BEP721TokenStandard, BEP1155TokenStandard}
-
-	s := &BNBSmartChainRPC{
+	s := &BaseRPC{
 		EthereumRPC: c.(*eth.EthereumRPC),
 	}
-	s.Parser.EnsSuffix = ".bnb"
 
 	return s, nil
 }
 
-// Initialize bnb smart chain rpc interface
-func (b *BNBSmartChainRPC) Initialize() error {
+// Initialize base rpc interface
+func (b *BaseRPC) Initialize() error {
 	b.OpenRPC = eth.OpenRPC
 
 	rc, ec, err := b.OpenRPC(b.ChainConfig.RPCURL)

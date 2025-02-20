@@ -177,21 +177,21 @@ func unpackAddrContracts(buf []byte, addrDesc bchain.AddressDescriptor) (*AddrCo
 		contract := append(bchain.AddressDescriptor(nil), buf[:eth.EthereumTypeAddressDescriptorLen]...)
 		txs, l := unpackVaruint(buf[eth.EthereumTypeAddressDescriptorLen:])
 		buf = buf[eth.EthereumTypeAddressDescriptorLen+l:]
-		ttt := bchain.TokenStandard(txs & 3)
+		standard := bchain.TokenStandard(txs & 3)
 		txs >>= 2
 		ac := AddrContract{
-			Standard: ttt,
+			Standard: standard,
 			Contract: contract,
 			Txs:      txs,
 		}
-		if ttt == bchain.FungibleToken {
+		if standard == bchain.FungibleToken {
 			b, ll := unpackBigint(buf)
 			buf = buf[ll:]
 			ac.Value = b
 		} else {
 			len, ll := unpackVaruint(buf)
 			buf = buf[ll:]
-			if ttt == bchain.NonFungibleToken {
+			if standard == bchain.NonFungibleToken {
 				ac.Ids = make(Ids, len)
 				for i := uint(0); i < len; i++ {
 					b, ll := unpackBigint(buf)
@@ -391,7 +391,7 @@ func (d *RocksDB) addToAddressesAndContractsEthereumType(addrDesc bchain.Address
 
 type ethBlockTxContract struct {
 	from, to, contract bchain.AddressDescriptor
-	transferType       bchain.TokenStandard
+	transferStandard   bchain.TokenStandard
 	value              big.Int
 	idValues           []bchain.MultiTokenValue
 }
@@ -566,7 +566,7 @@ func (d *RocksDB) processContractTransfers(blockTx *ethBlockTx, tx *bchain.Tx, a
 			return err
 		}
 		bc := &blockTx.contracts[i]
-		bc.transferType = t.Standard
+		bc.transferStandard = t.Standard
 		bc.from = from
 		bc.to = to
 		bc.contract = contract
@@ -890,9 +890,9 @@ func (d *RocksDB) GetContractInfoForAddress(address string) (*bchain.ContractInf
 	return d.GetContractInfo(contract, "")
 }
 
-// GetContractInfo gets contract from cache or DB and possibly updates the type from typeFromContext
-// it is hard to guess the type of the contract using API, it is easier to set it the first time the contract is processed in a tx
-func (d *RocksDB) GetContractInfo(contract bchain.AddressDescriptor, typeFromContext bchain.TokenStandardName) (*bchain.ContractInfo, error) {
+// GetContractInfo gets contract from cache or DB and possibly updates the standard from standardFromContext
+// it is hard to guess the standard of the contract using API, it is easier to set it the first time the contract is processed in a tx
+func (d *RocksDB) GetContractInfo(contract bchain.AddressDescriptor, standardFromContext bchain.TokenStandardName) (*bchain.ContractInfo, error) {
 	cacheKey := string(contract)
 	cachedContractsMux.Lock()
 	contractInfo, found := cachedContracts[cacheKey]
@@ -912,10 +912,10 @@ func (d *RocksDB) GetContractInfo(contract bchain.AddressDescriptor, typeFromCon
 		if len(addresses) > 0 {
 			contractInfo.Contract = addresses[0]
 		}
-		// if the type is specified and stored contractInfo has unknown type, set and store it
-		if typeFromContext != bchain.UnknownTokenStandard && contractInfo.Standard == bchain.UnknownTokenStandard {
-			contractInfo.Standard = typeFromContext
-			contractInfo.Type = typeFromContext
+		// if the standard is specified and stored contractInfo has unknown standard, set and store it
+		if standardFromContext != bchain.UnknownTokenStandard && contractInfo.Standard == bchain.UnknownTokenStandard {
+			contractInfo.Standard = standardFromContext
+			contractInfo.Type = standardFromContext
 			err = d.db.PutCF(d.wo, d.cfh[cfContracts], contract, packContractInfo(contractInfo))
 			if err != nil {
 				return nil, err
@@ -980,9 +980,9 @@ func packBlockTx(buf []byte, blockTx *ethBlockTx) []byte {
 		buf = appendAddress(buf, c.from)
 		buf = appendAddress(buf, c.to)
 		buf = appendAddress(buf, c.contract)
-		l = packVaruint(uint(c.transferType), varBuf)
+		l = packVaruint(uint(c.transferStandard), varBuf)
 		buf = append(buf, varBuf[:l]...)
-		if c.transferType == bchain.MultiToken {
+		if c.transferStandard == bchain.MultiToken {
 			l = packVaruint(uint(len(c.idValues)), varBuf)
 			buf = append(buf, varBuf[:l]...)
 			for i := range c.idValues {
@@ -1144,9 +1144,9 @@ func unpackBlockTx(buf []byte, pos int) (*ethBlockTx, int, error) {
 			return nil, 0, err
 		}
 		cc, l = unpackVaruint(buf[pos:])
-		c.transferType = bchain.TokenStandard(cc)
+		c.transferStandard = bchain.TokenStandard(cc)
 		pos += l
-		if c.transferType == bchain.MultiToken {
+		if c.transferStandard == bchain.MultiToken {
 			cc, l = unpackVaruint(buf[pos:])
 			pos += l
 			c.idValues = make([]bchain.MultiTokenValue, cc)
@@ -1259,7 +1259,7 @@ func (d *RocksDB) disconnectAddress(btxID []byte, internal bool, addrDesc bchain
 							index = transferTo
 						}
 						addToContract(addrContract, contractIndex, index, btxContract.contract, &bchain.TokenTransfer{
-							Standard:         btxContract.transferType,
+							Standard:         btxContract.transferStandard,
 							Value:            btxContract.value,
 							MultiTokenValues: btxContract.idValues,
 						}, false)

@@ -116,9 +116,6 @@ type MempoolTx struct {
 	CoinSpecificData interface{}    `json:"-"`
 }
 
-// // Deprecated: Use TokenStandard instead.
-// type TokenType int
-
 // TokenStandard - standard of token
 type TokenStandard int
 
@@ -129,10 +126,10 @@ const (
 	MultiToken                             // ERC1155/BEP1155
 )
 
-// TokenStandardName specifies type of token
+// TokenStandardName specifies standard of token
 type TokenStandardName string
 
-// Token types
+// Token standards
 const (
 	UnknownTokenStandard   TokenStandardName = ""
 	UnhandledTokenStandard TokenStandardName = "-"
