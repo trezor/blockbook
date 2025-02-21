@@ -59,6 +59,7 @@ type PublicServer struct {
 	is                  *common.InternalState
 	fiatRates           *fiat.FiatRates
 	useSatsAmountFormat bool
+	isFullInterface     bool
 }
 
 // NewPublicServer creates new public server http interface to blockbook and returns its handle
@@ -216,6 +217,7 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 	serveMux.Handle(path+"socket.io/", s.socketio.GetHandler())
 	// websocket interface
 	serveMux.Handle(path+"websocket", s.websocket.GetHandler())
+	s.isFullInterface = true
 }
 
 // Close closes the server
@@ -998,6 +1000,11 @@ func (s *PublicServer) explorerBlock(w http.ResponseWriter, r *http.Request) (tp
 }
 
 func (s *PublicServer) explorerIndex(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
+	if !s.isFullInterface && r.URL.Path != "/" {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		w.Write([]byte("Service unavailable"))
+		return noTpl, nil, nil
+	}
 	var si *api.SystemInfo
 	var err error
 	s.metrics.ExplorerViews.With(common.Labels{"action": "index"}).Inc()
@@ -1142,6 +1149,9 @@ func getPagingRange(page int, total int) ([]int, int, int) {
 }
 
 func (s *PublicServer) apiIndex(r *http.Request, apiVersion int) (interface{}, error) {
+	if !s.isFullInterface && r.URL.Path != "/api/" {
+		return nil, api.NewAPIError("Service unavailable", false)
+	}
 	s.metrics.ExplorerViews.With(common.Labels{"action": "api-index"}).Inc()
 	return s.api.GetSystemInfo(false)
 }
