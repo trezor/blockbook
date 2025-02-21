@@ -547,8 +547,8 @@ func TestRocksDB_Index_BitcoinType(t *testing.T) {
 	}
 	verifyAfterBitcoinTypeBlock1(t, d, false)
 
-	if len(d.is.BlockTimes) != 1 {
-		t.Fatal("Expecting is.BlockTimes 1, got ", len(d.is.BlockTimes))
+	if len(d.is.BlockTimes) != 225494 {
+		t.Fatal("Expecting is.BlockTimes 225494, got ", len(d.is.BlockTimes))
 	}
 
 	// connect 2nd block - use some outputs from the 1st block as the inputs and 1 input uses tx from the same block
@@ -558,8 +558,8 @@ func TestRocksDB_Index_BitcoinType(t *testing.T) {
 	}
 	verifyAfterBitcoinTypeBlock2(t, d)
 
-	if len(d.is.BlockTimes) != 2 {
-		t.Fatal("Expecting is.BlockTimes 1, got ", len(d.is.BlockTimes))
+	if len(d.is.BlockTimes) != 225495 {
+		t.Fatal("Expecting is.BlockTimes 225495, got ", len(d.is.BlockTimes))
 	}
 
 	// get transactions for various addresses / low-high ranges
@@ -667,8 +667,8 @@ func TestRocksDB_Index_BitcoinType(t *testing.T) {
 		}
 	}
 
-	if len(d.is.BlockTimes) != 1 {
-		t.Fatal("Expecting is.BlockTimes 1, got ", len(d.is.BlockTimes))
+	if len(d.is.BlockTimes) != 225494 {
+		t.Fatal("Expecting is.BlockTimes 225494, got ", len(d.is.BlockTimes))
 	}
 
 	// connect block again and verify the state of db
@@ -677,8 +677,8 @@ func TestRocksDB_Index_BitcoinType(t *testing.T) {
 	}
 	verifyAfterBitcoinTypeBlock2(t, d)
 
-	if len(d.is.BlockTimes) != 2 {
-		t.Fatal("Expecting is.BlockTimes 1, got ", len(d.is.BlockTimes))
+	if len(d.is.BlockTimes) != 225495 {
+		t.Fatal("Expecting is.BlockTimes 225495, got ", len(d.is.BlockTimes))
 	}
 
 	// test public methods for address balance and tx addresses

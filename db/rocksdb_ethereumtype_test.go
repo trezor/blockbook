@@ -409,8 +409,8 @@ func TestRocksDB_Index_EthereumType(t *testing.T) {
 	}
 	verifyAfterEthereumTypeBlock1(t, d, false)
 
-	if len(d.is.BlockTimes) != 1 {
-		t.Fatal("Expecting is.BlockTimes 1, got ", len(d.is.BlockTimes))
+	if len(d.is.BlockTimes) != 4321001 {
+		t.Fatal("Expecting is.BlockTimes 4321001, got ", len(d.is.BlockTimes))
 	}
 
 	// connect 2nd block, simulate InternalDataError and AddressAlias
@@ -421,8 +421,8 @@ func TestRocksDB_Index_EthereumType(t *testing.T) {
 	verifyAfterEthereumTypeBlock2(t, d, true)
 	block2.CoinSpecificData = nil
 
-	if len(d.is.BlockTimes) != 2 {
-		t.Fatal("Expecting is.BlockTimes 2, got ", len(d.is.BlockTimes))
+	if len(d.is.BlockTimes) != 4321002 {
+		t.Fatal("Expecting is.BlockTimes 4321002, got ", len(d.is.BlockTimes))
 	}
 
 	// get transactions for various addresses / low-high ranges
@@ -551,8 +551,8 @@ func TestRocksDB_Index_EthereumType(t *testing.T) {
 		}
 	}
 
-	if len(d.is.BlockTimes) != 1 {
-		t.Fatal("Expecting is.BlockTimes 1, got ", len(d.is.BlockTimes))
+	if len(d.is.BlockTimes) != 4321001 {
+		t.Fatal("Expecting is.BlockTimes 4321001, got ", len(d.is.BlockTimes))
 	}
 
 	// connect block again and verify the state of db
@@ -561,8 +561,8 @@ func TestRocksDB_Index_EthereumType(t *testing.T) {
 	}
 	verifyAfterEthereumTypeBlock2(t, d, false)
 
-	if len(d.is.BlockTimes) != 2 {
-		t.Fatal("Expecting is.BlockTimes 2, got ", len(d.is.BlockTimes))
+	if len(d.is.BlockTimes) != 4321002 {
+		t.Fatal("Expecting is.BlockTimes 4321002, got ", len(d.is.BlockTimes))
 	}
 
 }

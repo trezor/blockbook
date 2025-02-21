@@ -240,17 +240,29 @@ func (is *InternalState) GetLastBlockTime() uint32 {
 func (is *InternalState) SetBlockTimes(blockTimes []uint32) uint32 {
 	is.mux.Lock()
 	defer is.mux.Unlock()
-	is.BlockTimes = blockTimes
+	if len(is.BlockTimes) < len(blockTimes) {
+		// no new block was set
+		is.BlockTimes = blockTimes
+	} else {
+		copy(is.BlockTimes, blockTimes)
+	}
 	is.computeAvgBlockPeriod()
 	glog.Info("set ", len(is.BlockTimes), " block times, average block period ", is.AvgBlockPeriod, "s")
 	return is.AvgBlockPeriod
 }
 
-// AppendBlockTime appends block time to BlockTimes, returns AvgBlockPeriod
-func (is *InternalState) AppendBlockTime(time uint32) uint32 {
+// SetBlockTime sets block time to BlockTimes, allocating the slice as necessary, returns AvgBlockPeriod
+func (is *InternalState) SetBlockTime(height uint32, time uint32) uint32 {
 	is.mux.Lock()
 	defer is.mux.Unlock()
-	is.BlockTimes = append(is.BlockTimes, time)
+	if int(height) >= len(is.BlockTimes) {
+		extend := int(height) - len(is.BlockTimes) + 1
+		for i := 0; i < extend; i++ {
+			is.BlockTimes = append(is.BlockTimes, time)
+		}
+	} else {
+		is.BlockTimes[height] = time
+	}
 	is.computeAvgBlockPeriod()
 	return is.AvgBlockPeriod
 }

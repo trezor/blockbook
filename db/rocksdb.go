@@ -401,7 +401,7 @@ func (d *RocksDB) ConnectBlock(block *bchain.Block) error {
 	if err := d.WriteBatch(wb); err != nil {
 		return err
 	}
-	avg := d.is.AppendBlockTime(uint32(block.Time))
+	avg := d.is.SetBlockTime(block.Height, uint32(block.Time))
 	if d.metrics != nil {
 		d.metrics.AvgBlockPeriod.Set(float64(avg))
 	}
@@ -1848,6 +1848,20 @@ func (d *RocksDB) loadBlockTimes() ([]uint32, error) {
 	return times, nil
 }
 
+func (d *RocksDB) setBlockTimes() {
+	start := time.Now()
+	bt, err := d.loadBlockTimes()
+	if err != nil {
+		glog.Error("rocksdb: cannot load block times ", err)
+		return
+	}
+	avg := d.is.SetBlockTimes(bt)
+	if d.metrics != nil {
+		d.metrics.AvgBlockPeriod.Set(float64(avg))
+	}
+	glog.Info("rocksdb: processed block times in ", time.Since(start))
+}
+
 func (d *RocksDB) checkColumns(is *common.InternalState) ([]common.InternalStateColumn, error) {
 	// make sure that column stats match the columns
 	sc := is.DbColumns
@@ -1932,15 +1946,14 @@ func (d *RocksDB) LoadInternalState(config *common.Config) (*common.InternalStat
 		return nil, err
 	}
 	is.DbColumns = nc
-	bt, err := d.loadBlockTimes()
-	if err != nil {
-		return nil, err
-	}
-	avg := is.SetBlockTimes(bt)
-	if d.metrics != nil {
-		d.metrics.AvgBlockPeriod.Set(float64(avg))
-	}
 
+	d.is = is
+	// set block times asynchronously (if not in unit test), it slows server startup for chains with large number of blocks
+	if is.Coin == "coin-unittest" {
+		d.setBlockTimes()
+	} else {
+		go d.setBlockTimes()
+	}
 	// after load, reset the synchronization data
 	is.IsSynchronized = false
 	is.IsMempoolSynchronized = false
