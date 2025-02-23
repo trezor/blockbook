@@ -372,7 +372,7 @@ func (fr *FiatRates) tickersToMap(tickers *[]common.CurrencyRatesTicker, granula
 	return m, from, to
 }
 
-// setCurrentTicker sets hourly tickers
+// setHourlyTickers sets hourly tickers
 func (fr *FiatRates) setHourlyTickers(t *[]common.CurrencyRatesTicker) {
 	fr.db.FiatRatesStoreSpecialTickers(hourlyTickersKey, t)
 	fr.mux.Lock()
@@ -380,7 +380,7 @@ func (fr *FiatRates) setHourlyTickers(t *[]common.CurrencyRatesTicker) {
 	fr.hourlyTickers, fr.hourlyTickersFrom, fr.hourlyTickersTo = fr.tickersToMap(t, secondsInHour)
 }
 
-// setCurrentTicker sets hourly tickers
+// setFiveMinutesTickers sets five minutes tickers
 func (fr *FiatRates) setFiveMinutesTickers(t *[]common.CurrencyRatesTicker) {
 	fr.db.FiatRatesStoreSpecialTickers(fiveMinutesTickersKey, t)
 	fr.mux.Lock()
