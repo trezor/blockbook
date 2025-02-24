@@ -75,7 +75,7 @@ also in [build guide](/docs/build.md#on-naming-conventions-and-versioning). You 
 *mainnet* option.
 
 In the section *blockbook* update information how to build and configure Blockbook service. Usually they are only
-*package_name*, *system_user* and *explorer_url* options. Naming conventions are are described
+*package_name*, *system_user* and *explorer_url* options. Naming conventions are described
 [here](/docs/build.md#on-naming-conventions-and-versioning).
 
 Update *package_maintainer* and *package_maintainer_email* options in the section *meta*.
