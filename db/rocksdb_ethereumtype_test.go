@@ -729,6 +729,48 @@ func Test_packUnpackEthInternalData(t *testing.T) {
 	}
 }
 
+func generateAddrContracts(f, nf, nfc, m, mc int) []AddrContract {
+	parser := ethereumTestnetParser()
+	rv := make([]AddrContract, f+nf+m)
+	i := 0
+	for ; i < f; i++ {
+		rv[i] = AddrContract{
+			Standard: bchain.FungibleToken,
+			Contract: addressToAddrDesc(dbtestdata.EthAddrContract0d, parser),
+			Txs:      uint(i + 100000),
+			Value:    *big.NewInt(793201132 + int64(i*1000)),
+		}
+	}
+	for ; i < f+nf; i++ {
+		ids := make(Ids, nfc)
+		for j := 0; j < nfc; j++ {
+			ids[j] = *big.NewInt(int64(i*100000) + int64(j*100))
+		}
+		rv[i] = AddrContract{
+			Standard: bchain.NonFungibleToken,
+			Contract: addressToAddrDesc(dbtestdata.EthAddrContract47, parser),
+			Txs:      uint(i + 100000),
+			Ids:      ids,
+		}
+	}
+	for ; i < f+nf+m; i++ {
+		mtv := make(MultiTokenValues, mc)
+		for j := 0; j < nfc; j++ {
+			mtv[j] = bchain.MultiTokenValue{
+				Id:    *big.NewInt(int64(j)),
+				Value: *big.NewInt(4231521 + int64(i*1000000) + int64(j*1000)),
+			}
+		}
+		rv[i] = AddrContract{
+			Standard:         bchain.MultiToken,
+			Contract:         addressToAddrDesc(dbtestdata.EthAddrContract4a, parser),
+			Txs:              uint(i + 100000),
+			MultiTokenValues: mtv,
+		}
+	}
+	return rv
+}
+
 func Test_packUnpackAddrContracts(t *testing.T) {
 	parser := ethereumTestnetParser()
 	type args struct {
@@ -789,6 +831,24 @@ func Test_packUnpackAddrContracts(t *testing.T) {
 						},
 					},
 				},
+			},
+		},
+		{
+			name: "generated",
+			data: AddrContracts{
+				TotalTxs:       3333330,
+				NonContractTxs: 2222220,
+				InternalTxs:    1111110,
+				Contracts:      generateAddrContracts(10, 1, 1_000, 1, 1_000),
+			},
+		},
+		{
+			name: "huge",
+			data: AddrContracts{
+				TotalTxs:       3333330,
+				NonContractTxs: 2222220,
+				InternalTxs:    1111110,
+				Contracts:      generateAddrContracts(10000, 1, 1_000_000, 1, 1_000_000),
 			},
 		},
 	}

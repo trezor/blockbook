@@ -333,6 +333,9 @@ const (
 
 // ConnectBlock indexes addresses in the block and stores them in db
 func (d *RocksDB) ConnectBlock(block *bchain.Block) error {
+	start := time.Now()
+	var processTime time.Time
+
 	wb := grocksdb.NewWriteBatch()
 	defer wb.Destroy()
 
@@ -380,6 +383,7 @@ func (d *RocksDB) ConnectBlock(block *bchain.Block) error {
 		if err != nil {
 			return err
 		}
+		processTime = time.Now()
 		if err := d.storeAddressContracts(wb, addressContracts); err != nil {
 			return err
 		}
@@ -398,6 +402,7 @@ func (d *RocksDB) ConnectBlock(block *bchain.Block) error {
 	if err := d.storeAddresses(wb, block.Height, addresses); err != nil {
 		return err
 	}
+	writeBatch := time.Now()
 	if err := d.WriteBatch(wb); err != nil {
 		return err
 	}
@@ -405,6 +410,7 @@ func (d *RocksDB) ConnectBlock(block *bchain.Block) error {
 	if d.metrics != nil {
 		d.metrics.AvgBlockPeriod.Set(float64(avg))
 	}
+	glog.Info("db.ConnectBlock ", block.Height, "  ", block.Hash, ", process ", processTime.Sub(start), ", other ", writeBatch.Sub(processTime), ", write batch ", time.Since(writeBatch), ", total ", time.Since(start))
 	return nil
 }
 
@@ -864,7 +870,7 @@ func (d *RocksDB) cleanupBlockTxs(wb *grocksdb.WriteBatch, block *bchain.Block) 
 				break
 			}
 			val.Free()
-			d.db.DeleteCF(d.wo, d.cfh[cfBlockTxs], key)
+			wb.DeleteCF(d.cfh[cfBlockTxs], key)
 		}
 	}
 	return nil
