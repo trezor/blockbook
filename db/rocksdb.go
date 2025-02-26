@@ -59,18 +59,19 @@ const (
 
 // RocksDB handle
 type RocksDB struct {
-	path          string
-	db            *grocksdb.DB
-	wo            *grocksdb.WriteOptions
-	ro            *grocksdb.ReadOptions
-	cfh           []*grocksdb.ColumnFamilyHandle
-	chainParser   bchain.BlockChainParser
-	is            *common.InternalState
-	metrics       *common.Metrics
-	cache         *grocksdb.Cache
-	maxOpenFiles  int
-	cbs           connectBlockStats
-	extendedIndex bool
+	path            string
+	db              *grocksdb.DB
+	wo              *grocksdb.WriteOptions
+	ro              *grocksdb.ReadOptions
+	cfh             []*grocksdb.ColumnFamilyHandle
+	chainParser     bchain.BlockChainParser
+	is              *common.InternalState
+	metrics         *common.Metrics
+	cache           *grocksdb.Cache
+	maxOpenFiles    int
+	cbs             connectBlockStats
+	extendedIndex   bool
+	connectBlockMux sync.Mutex
 }
 
 const (
@@ -149,7 +150,7 @@ func NewRocksDB(path string, cacheSize, maxOpenFiles int, parser bchain.BlockCha
 	}
 	wo := grocksdb.NewDefaultWriteOptions()
 	ro := grocksdb.NewDefaultReadOptions()
-	return &RocksDB{path, db, wo, ro, cfh, parser, nil, metrics, c, maxOpenFiles, connectBlockStats{}, extendedIndex}, nil
+	return &RocksDB{path, db, wo, ro, cfh, parser, nil, metrics, c, maxOpenFiles, connectBlockStats{}, extendedIndex, sync.Mutex{}}, nil
 }
 
 func (d *RocksDB) closeDB() error {
@@ -333,6 +334,9 @@ const (
 
 // ConnectBlock indexes addresses in the block and stores them in db
 func (d *RocksDB) ConnectBlock(block *bchain.Block) error {
+	d.connectBlockMux.Lock()
+	defer d.connectBlockMux.Unlock()
+
 	wb := grocksdb.NewWriteBatch()
 	defer wb.Destroy()
 
