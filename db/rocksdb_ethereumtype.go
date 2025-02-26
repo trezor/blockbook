@@ -606,6 +606,9 @@ func (d *RocksDB) processAddressesEthereumType(block *bchain.Block, addresses ad
 
 // ReconnectInternalDataToBlockEthereumType adds missing internal data to the block and stores them in db
 func (d *RocksDB) ReconnectInternalDataToBlockEthereumType(block *bchain.Block) error {
+	d.connectBlockMux.Lock()
+	defer d.connectBlockMux.Unlock()
+
 	wb := grocksdb.NewWriteBatch()
 	defer wb.Destroy()
 	if d.chainParser.GetChainType() != bchain.ChainEthereumType {
