@@ -2,6 +2,7 @@ package db
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/hex"
 	"math/big"
 	"os"
@@ -126,13 +127,15 @@ type AddrContracts struct {
 
 // packAddrContracts packs AddrContracts into a byte buffer
 func packAddrContracts(acs *AddrContracts) []byte {
-	buf := make([]byte, 0, 128)
+	buf := make([]byte, 0, 8+len(acs.Contracts)*(eth.EthereumTypeAddressDescriptorLen+12))
 	varBuf := make([]byte, maxPackedBigintBytes)
 	l := packVaruint(acs.TotalTxs, varBuf)
 	buf = append(buf, varBuf[:l]...)
 	l = packVaruint(acs.NonContractTxs, varBuf)
 	buf = append(buf, varBuf[:l]...)
 	l = packVaruint(acs.InternalTxs, varBuf)
+	buf = append(buf, varBuf[:l]...)
+	l = packVaruint(uint(len(acs.Contracts)), varBuf)
 	buf = append(buf, varBuf[:l]...)
 	for _, ac := range acs.Contracts {
 		buf = append(buf, ac.Contract...)
@@ -162,14 +165,91 @@ func packAddrContracts(acs *AddrContracts) []byte {
 	return buf
 }
 
-func unpackAddrContracts(buf []byte, addrDesc bchain.AddressDescriptor) (*AddrContracts, error) {
+func unpackAddrContractsV6(buf []byte, addrDesc bchain.AddressDescriptor) (acs *AddrContracts, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			glog.Error("unpackAddrContractsV6 panic ", r, ", ", addrDesc, ", ", base64.StdEncoding.EncodeToString(buf))
+			acs = &AddrContracts{}
+			err = nil
+		}
+	}()
 	tt, l := unpackVaruint(buf)
 	buf = buf[l:]
 	nct, l := unpackVaruint(buf)
 	buf = buf[l:]
 	ict, l := unpackVaruint(buf)
 	buf = buf[l:]
-	c := make([]AddrContract, 0, 4)
+	c := make([]AddrContract, 0, len(buf)/30+4)
+	for len(buf) > 0 {
+		if len(buf) < eth.EthereumTypeAddressDescriptorLen {
+			return nil, errors.New("Invalid data stored in cfAddressContracts for AddrDesc " + addrDesc.String())
+		}
+		contract := append(bchain.AddressDescriptor(nil), buf[:eth.EthereumTypeAddressDescriptorLen]...)
+		txs, l := unpackVaruint(buf[eth.EthereumTypeAddressDescriptorLen:])
+		buf = buf[eth.EthereumTypeAddressDescriptorLen+l:]
+		standard := bchain.TokenStandard(txs & 3)
+		txs >>= 2
+		ac := AddrContract{
+			Standard: standard,
+			Contract: contract,
+			Txs:      txs,
+		}
+		if standard == bchain.FungibleToken {
+			b, ll := unpackBigint(buf)
+			buf = buf[ll:]
+			ac.Value = b
+		} else {
+			len, ll := unpackVaruint(buf)
+			buf = buf[ll:]
+			if len > 80_000_000 {
+				return nil, errors.Errorf("Token limit exceeded (count %d), standard (%v) in cfAddressContracts for AddrDesc %s", len, standard, addrDesc.String())
+			}
+			if standard == bchain.NonFungibleToken {
+				ac.Ids = make(Ids, len)
+				for i := uint(0); i < len; i++ {
+					b, ll := unpackBigint(buf)
+					buf = buf[ll:]
+					ac.Ids[i] = b
+				}
+			} else {
+				ac.MultiTokenValues = make(MultiTokenValues, len)
+				for i := uint(0); i < len; i++ {
+					b, ll := unpackBigint(buf)
+					buf = buf[ll:]
+					ac.MultiTokenValues[i].Id = b
+					b, ll = unpackBigint(buf)
+					buf = buf[ll:]
+					ac.MultiTokenValues[i].Value = b
+				}
+			}
+		}
+		c = append(c, ac)
+	}
+	return &AddrContracts{
+		TotalTxs:       tt,
+		NonContractTxs: nct,
+		InternalTxs:    ict,
+		Contracts:      c,
+	}, nil
+}
+
+func unpackAddrContracts(buf []byte, addrDesc bchain.AddressDescriptor) (acs *AddrContracts, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			glog.Error("unpackAddrContracts panic ", r, ", ", addrDesc, ", ", base64.StdEncoding.EncodeToString(buf))
+			acs = &AddrContracts{}
+			err = nil
+		}
+	}()
+	tt, l := unpackVaruint(buf)
+	buf = buf[l:]
+	nct, l := unpackVaruint(buf)
+	buf = buf[l:]
+	ict, l := unpackVaruint(buf)
+	buf = buf[l:]
+	cl, l := unpackVaruint(buf)
+	buf = buf[l:]
+	c := make([]AddrContract, 0, cl)
 	for len(buf) > 0 {
 		if len(buf) < eth.EthereumTypeAddressDescriptorLen {
 			return nil, errors.New("Invalid data stored in cfAddressContracts for AddrDesc " + addrDesc.String())
