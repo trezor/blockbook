@@ -18,7 +18,7 @@ require (
 	github.com/golang/glog v1.2.1
 	github.com/gorilla/websocket v1.5.0
 	github.com/juju/errors v0.0.0-20170703010042-c7d06af17c68
-	github.com/linxGnu/grocksdb v1.7.7
+	github.com/linxGnu/grocksdb v1.9.8
 	github.com/martinboehm/bchutil v0.0.0-20190104112650-6373f11b6efe
 	github.com/martinboehm/btcd v0.0.0-20221101112928-408689e15809
 	github.com/martinboehm/btcutil v0.0.0-20211010173611-6ef1889c1819
@@ -87,7 +87,7 @@ require (
 	github.com/prometheus/common v0.42.0 // indirect
 	github.com/prometheus/procfs v0.10.1 // indirect
 	github.com/shirou/gopsutil v3.21.11+incompatible // indirect
-	github.com/stretchr/testify v1.9.0 // indirect
+	github.com/stretchr/testify v1.10.0 // indirect
 	github.com/supranational/blst v0.3.13 // indirect
 	github.com/tklauser/go-sysconf v0.3.12 // indirect
 	github.com/tklauser/numcpus v0.6.1 // indirect
