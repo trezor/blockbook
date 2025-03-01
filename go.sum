@@ -168,8 +168,8 @@ github.com/kylelemons/godebug v1.1.0 h1:RPNrshWIDI6G2gRW9EHilWtl7Z6Sb1BR0xunSBf0
 github.com/kylelemons/godebug v1.1.0/go.mod h1:9/0rRGxNHcop5bhtWyNeEfOS8JIWk580+fNqagV/RAw=
 github.com/leanovate/gopter v0.2.11 h1:vRjThO1EKPb/1NsDXuDrzldR28RLkBflWYcU9CvzWu4=
 github.com/leanovate/gopter v0.2.11/go.mod h1:aK3tzZP/C+p1m3SPRE4SYZFGP7jjkuSI4f7Xvpt0S9c=
-github.com/linxGnu/grocksdb v1.7.7 h1:b6o8gagb4FL+P55qUzPchBR/C0u1lWjJOWQSWbhvTWg=
-github.com/linxGnu/grocksdb v1.7.7/go.mod h1:0hTf+iA+GOr0jDX4CgIYyJZxqOH9XlBh6KVj8+zmF34=
+github.com/linxGnu/grocksdb v1.9.8 h1:vOIKv9/+HKiqJAElJIEYv3ZLcihRxyP7Suu/Mu8Dxjs=
+github.com/linxGnu/grocksdb v1.9.8/go.mod h1:C3CNe9UYc9hlEM2pC82AqiGS3LRW537u9LFV4wIZuHk=
 github.com/martinboehm/bchutil v0.0.0-20190104112650-6373f11b6efe h1:khZWpHuxJNh2EGzBbaS6EQ2d6KxgK31WeG0TnlTMUD4=
 github.com/martinboehm/bchutil v0.0.0-20190104112650-6373f11b6efe/go.mod h1:0hw4tpGU+9slqN/DrevhjTMb0iR9esxzpCdx8I6/UzU=
 github.com/martinboehm/btcd v0.0.0-20190104121910-8e7c0427fee5/go.mod h1:rKQj/jGwFruYjpM6vN+syReFoR0DsLQaajhyH/5mwUE=

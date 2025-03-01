@@ -17,7 +17,7 @@ require (
 	github.com/golang/glog v1.2.1
 	github.com/gorilla/websocket v1.5.0
 	github.com/juju/errors v0.0.0-20170703010042-c7d06af17c68
-	github.com/linxGnu/grocksdb v1.7.7
+	github.com/linxGnu/grocksdb v1.9.8
 	github.com/martinboehm/bchutil v0.0.0-20190104112650-6373f11b6efe
 	github.com/martinboehm/btcd v0.0.0-20221101112928-408689e15809
 	github.com/martinboehm/btcutil v0.0.0-20211010173611-6ef1889c1819
