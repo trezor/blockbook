@@ -70,6 +70,7 @@ type EthereumRPC struct {
 	mempoolInitialized     bool
 	bestHeaderLock         sync.Mutex
 	bestHeader             bchain.EVMHeader
+	bestRawHeader          *bchain.BlockHeader
 	bestHeaderTime         time.Time
 	NewBlock               bchain.EVMNewBlockSubscriber
 	newBlockSubscription   bchain.EVMClientSubscription
@@ -245,6 +246,13 @@ func (b *EthereumRPC) subscribeEvents() error {
 				break
 			}
 			b.UpdateBestHeader(h)
+
+			rawHeader, err := b.GetBlockHeader("latest")
+			if err != nil {
+				glog.Error("fetchBestRawHeader ", err)
+			} else {
+				b.updateBestRawHeader(rawHeader)
+			}
 			// notify blockbook
 			b.PushHandler(bchain.NotificationNewBlock)
 		}
@@ -423,7 +431,7 @@ func (b *EthereumRPC) getConsensusVersion() string {
 
 // GetChainInfo returns information about the connected backend
 func (b *EthereumRPC) GetChainInfo() (*bchain.ChainInfo, error) {
-	h, err := b.getBestHeader()
+	h, err := b.getBestRawHeader()
 	if err != nil {
 		return nil, err
 	}
@@ -438,10 +446,17 @@ func (b *EthereumRPC) GetChainInfo() (*bchain.ChainInfo, error) {
 		return nil, err
 	}
 	consensusVersion := b.getConsensusVersion()
+
+	var difficulty string
+	bh := b.bestHeader
+	if bh != nil {
+		difficulty = bh.Difficulty().String()
+	}
+
 	rv := &bchain.ChainInfo{
-		Blocks:           int(h.Number().Int64()),
-		Bestblockhash:    h.Hash(),
-		Difficulty:       h.Difficulty().String(),
+		Blocks:           int(h.Height),
+		Bestblockhash:    h.Hash,
+		Difficulty:       difficulty,
 		Version:          ver,
 		ConsensusVersion: consensusVersion,
 	}
@@ -454,12 +469,34 @@ func (b *EthereumRPC) GetChainInfo() (*bchain.ChainInfo, error) {
 	return rv, nil
 }
 
+func (b *EthereumRPC) getBestRawHeader() (*bchain.BlockHeader, error) {
+	b.bestHeaderLock.Lock()
+	defer b.bestHeaderLock.Unlock()
+	// if the best header was not updated for 2 minutes, there could be a subscription problem, reconnect RPC
+	// do it only in case of normal operation, not initial synchronization
+	if b.bestHeaderTime.Add(2*time.Minute).Before(time.Now()) && !b.bestHeaderTime.IsZero() && b.mempoolInitialized {
+		err := b.reconnectRPC()
+		if err != nil {
+			return nil, err
+		}
+		b.bestRawHeader = nil
+	}
+	if b.bestRawHeader == nil {
+		var err error
+		b.bestRawHeader, err = b.GetBlockHeader("latest")
+		if err != nil {
+			return nil, err
+		}
+	}
+	return b.bestRawHeader, nil
+}
+
 func (b *EthereumRPC) getBestHeader() (bchain.EVMHeader, error) {
 	b.bestHeaderLock.Lock()
 	defer b.bestHeaderLock.Unlock()
-	// if the best header was not updated for 15 minutes, there could be a subscription problem, reconnect RPC
+	// if the best header was not updated for 2 minutes, there could be a subscription problem, reconnect RPC
 	// do it only in case of normal operation, not initial synchronization
-	if b.bestHeaderTime.Add(15*time.Minute).Before(time.Now()) && !b.bestHeaderTime.IsZero() && b.mempoolInitialized {
+	if b.bestHeaderTime.Add(2*time.Minute).Before(time.Now()) && !b.bestHeaderTime.IsZero() && b.mempoolInitialized {
 		err := b.reconnectRPC()
 		if err != nil {
 			return nil, err
@@ -489,38 +526,62 @@ func (b *EthereumRPC) UpdateBestHeader(h bchain.EVMHeader) {
 	b.bestHeaderLock.Unlock()
 }
 
+func (b *EthereumRPC) updateBestRawHeader(h *bchain.BlockHeader) {
+	b.bestHeaderLock.Lock()
+	b.bestRawHeader = h
+	b.bestHeaderLock.Unlock()
+}
+
 // GetBestBlockHash returns hash of the tip of the best-block-chain
 func (b *EthereumRPC) GetBestBlockHash() (string, error) {
-	h, err := b.getBestHeader()
+	header, err := b.getBestRawHeader()
 	if err != nil {
 		return "", err
 	}
-	return h.Hash(), nil
+	return header.Hash, nil
+	// h, err := b.getBestHeader()
+	// if err != nil {
+	// 	return "", err
+	// }
+	// return h.Hash(), nil
 }
 
 // GetBestBlockHeight returns height of the tip of the best-block-chain
 func (b *EthereumRPC) GetBestBlockHeight() (uint32, error) {
-	h, err := b.getBestHeader()
+	h, err := b.getBestRawHeader()
 	if err != nil {
 		return 0, err
 	}
-	return uint32(h.Number().Uint64()), nil
+	return uint32(h.Height), nil
 }
 
 // GetBlockHash returns hash of block in best-block-chain at given height
 func (b *EthereumRPC) GetBlockHash(height uint32) (string, error) {
-	var n big.Int
-	n.SetUint64(uint64(height))
-	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
-	defer cancel()
-	h, err := b.Client.HeaderByNumber(ctx, &n)
+	raw, err := b.getBlockRaw("", height, false)
 	if err != nil {
-		if err == ethereum.NotFound {
-			return "", bchain.ErrBlockNotFound
-		}
 		return "", errors.Annotatef(err, "height %v", height)
 	}
-	return h.Hash(), nil
+	var h rpcHeader
+	if err := json.Unmarshal(raw, &h); err != nil {
+		return "", errors.Annotatef(err, "height %v", height)
+	}
+	header, err := b.ethHeaderToBlockHeader(&h)
+	if err != nil {
+		return "", errors.Annotatef(err, "height %v", height)
+	}
+	return header.Hash, nil
+	// var n big.Int
+	// n.SetUint64(uint64(height))
+	// ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+	// defer cancel()
+	// h, err := b.Client.HeaderByNumber(ctx, &n)
+	// if err != nil {
+	// 	if err == ethereum.NotFound {
+	// 		return "", bchain.ErrBlockNotFound
+	// 	}
+	// 	return "", errors.Annotatef(err, "height %v", height)
+	// }
+	// return h.Hash(), nil
 }
 
 func (b *EthereumRPC) ethHeaderToBlockHeader(h *rpcHeader) (*bchain.BlockHeader, error) {
@@ -564,11 +625,16 @@ func (b *EthereumRPC) GetBlockHeader(hash string) (*bchain.BlockHeader, error) {
 }
 
 func (b *EthereumRPC) computeConfirmations(n uint64) (uint32, error) {
-	bh, err := b.getBestHeader()
-	if err != nil {
-		return 0, err
+	// bh, err := b.getBestHeader()
+	// if err != nil {
+	// 	return 0, err
+	// }
+	// bn := bh.Number().Uint64()
+	bh := b.bestRawHeader
+	if bh == nil {
+		bh = &bchain.BlockHeader{Height: uint32(n)}
 	}
-	bn := bh.Number().Uint64()
+	bn := uint64(bh.Height)
 	// transaction in the best block has 1 confirmation
 	return uint32(bn - n + 1), nil
 }
@@ -579,7 +645,7 @@ func (b *EthereumRPC) getBlockRaw(hash string, height uint32, fullTxs bool) (jso
 	var raw json.RawMessage
 	var err error
 	if hash != "" {
-		if hash == "pending" {
+		if hash == "pending" || hash == "latest" {
 			err = b.RPC.CallContext(ctx, &raw, "eth_getBlockByNumber", hash, fullTxs)
 		} else {
 			err = b.RPC.CallContext(ctx, &raw, "eth_getBlockByHash", ethcommon.HexToHash(hash), fullTxs)
