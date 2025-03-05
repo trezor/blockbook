@@ -1,0 +1,38 @@
+{
+    "blockHeight": 235000,
+    "blockHash": "25961563bc9afae2b7ed3bc8dc61da40185bbe86096d687f746c632a885a1e01",
+    "blockTime": 1536318380,
+    "blockTxs": [
+        "88bdc0bc8ac4ea1f687b8b04dceebd6434e5294165b37798cc185f1f489634f9",
+        "8a2d76ef159f8439680fc2deda0a6138549c56ec3b0a3a286f72a653580d131b"
+    ],
+    "txDetails": {
+        "88bdc0bc8ac4ea1f687b8b04dceebd6434e5294165b37798cc185f1f489634f9": {
+            "hex": "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff0603f895030101ffffffff0100000000000000000000000000",
+            "txid": "88bdc0bc8ac4ea1f687b8b04dceebd6434e5294165b37798cc185f1f489634f9",
+            "version": 1,
+            "locktime": 0,
+            "vin": [
+                {
+                    "coinbase": "03f895030101",
+                    "sequence": 4294967295
+                }
+            ],
+            "vout": [
+                {
+                    "value": 0,
+                    "n": 0,
+                    "scriptPubKey": {
+                        "asm": "",
+                        "hex": "",
+                        "type": "nonstandard"
+                    }
+                }
+            ],
+            "blockhash": "25961563bc9afae2b7ed3bc8dc61da40185bbe86096d687f746c632a885a1e01",
+            "time": 1536318380,
+            "blocktime": 1536318380,
+            "confirmations": 0
+        }
+    }
+}
