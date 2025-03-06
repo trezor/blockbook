@@ -7,6 +7,7 @@ import (
 	"os"
 	"sort"
 	"sync"
+	"time"
 
 	vlq "github.com/bsm/go-vlq"
 	"github.com/golang/glog"
@@ -261,6 +262,9 @@ func unpackAddrContractsV6(buf []byte, addrDesc bchain.AddressDescriptor) (acs *
 }
 
 func unpackAddrContracts(buf []byte, addrDesc bchain.AddressDescriptor) (acs *AddrContracts, err error) {
+	start := time.Now()
+	var fung, nonfung, nonfunglen, multi, multilen int
+	bufLen := len(buf)
 	tt, l := unpackVaruint(buf)
 	buf = buf[l:]
 	nct, l := unpackVaruint(buf)
@@ -285,6 +289,7 @@ func unpackAddrContracts(buf []byte, addrDesc bchain.AddressDescriptor) (acs *Ad
 			Txs:      txs,
 		}
 		if standard == bchain.FungibleToken {
+			fung++
 			b, ll := unpackBigint(buf)
 			buf = buf[ll:]
 			ac.Value = b
@@ -292,6 +297,8 @@ func unpackAddrContracts(buf []byte, addrDesc bchain.AddressDescriptor) (acs *Ad
 			len, ll := unpackVaruint(buf)
 			buf = buf[ll:]
 			if standard == bchain.NonFungibleToken {
+				nonfung++
+				nonfunglen += int(len)
 				ac.Ids = make(Ids, len)
 				for i := uint(0); i < len; i++ {
 					b, ll := unpackBigint(buf)
@@ -300,6 +307,8 @@ func unpackAddrContracts(buf []byte, addrDesc bchain.AddressDescriptor) (acs *Ad
 				}
 			} else {
 				ac.MultiTokenValues = make(MultiTokenValues, len)
+				multi++
+				multilen += int(len)
 				for i := uint(0); i < len; i++ {
 					b, ll := unpackBigint(buf)
 					buf = buf[ll:]
@@ -311,6 +320,12 @@ func unpackAddrContracts(buf []byte, addrDesc bchain.AddressDescriptor) (acs *Ad
 			}
 		}
 		c = append(c, ac)
+	}
+	if bufLen > 1_000_000 {
+		glog.Info("unpackAddrContracts ", addrDesc,
+			", bufLen ", bufLen, ", contracts ", len(c), ", cap ", cap(c),
+			", counts ", fung, " ", nonfung, " ", nonfunglen, " ", multi, " ", multilen,
+			", time ", time.Since(start))
 	}
 	return &AddrContracts{
 		TotalTxs:       tt,
