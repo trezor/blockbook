@@ -336,7 +336,11 @@ func (w *SyncWorker) ConnectBlocksParallel(lower, higher uint32) error {
 						glog.Error("getBlockWorker ", i, " connect block error ", err, ". Exiting...")
 						return
 					}
-					glog.Error("getBlockWorker ", i, " connect block error ", err, ". Retrying...")
+					if err == bchain.ErrBlockNotFound {
+						glog.Error("getBlockWorker ", i, " connect block ", hh.height, " ", hh.hash, " error ", err, ". Retrying...")
+					} else {
+						glog.Error("getBlockWorker ", i, " connect block error ", err, ". Retrying...")
+					}
 					w.metrics.IndexResyncErrors.With(common.Labels{"error": "failure"}).Inc()
 					time.Sleep(time.Millisecond * 500)
 				} else {
