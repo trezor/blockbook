@@ -282,7 +282,7 @@ type MempoolTxidFilterEntries struct {
 }
 
 // OnNewBlockFunc is used to send notification about a new block
-type OnNewBlockFunc func(hash string, height uint32)
+type OnNewBlockFunc func(block *Block)
 
 // OnNewTxAddrFunc is used to send notification about a new transaction/address
 type OnNewTxAddrFunc func(tx *Tx, desc AddressDescriptor)
@@ -339,6 +339,7 @@ type BlockChain interface {
 	EthereumTypeGetStakingPoolsData(addrDesc AddressDescriptor) ([]StakingPoolData, error)
 	EthereumTypeRpcCall(data, to, from string) (string, error)
 	EthereumTypeGetRawTransaction(txid string) (string, error)
+	EthereumTypeGetTransactionReceipt(txid string) (*RpcReceipt, error)
 	GetTokenURI(contractDesc AddressDescriptor, tokenID *big.Int) (string, error)
 }
 
