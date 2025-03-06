@@ -1325,6 +1325,8 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 		txids                    []string
 		pg                       Paging
 		uBalSat                  big.Int
+		uBalSending              big.Int
+		uBalReceiving            big.Int
 		totalReceived, totalSent *big.Int
 		unconfirmedTxs           int
 		totalResults             int
@@ -1376,12 +1378,12 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 				// skip already confirmed txs, mempool may be out of sync
 				if tx.Confirmations == 0 {
 					unconfirmedTxs++
-					uBalSat.Add(&uBalSat, tx.getAddrVoutValue(addrDesc))
+					uBalReceiving.Add(&uBalReceiving, tx.getAddrVoutValue(addrDesc))
 					// ethereum has a different logic - value not in input and add maximum possible fees
 					if w.chainType == bchain.ChainEthereumType {
-						uBalSat.Sub(&uBalSat, tx.getAddrEthereumTypeMempoolInputValue(addrDesc))
+						uBalSending.Add(&uBalSending, tx.getAddrEthereumTypeMempoolInputValue(addrDesc))
 					} else {
-						uBalSat.Sub(&uBalSat, tx.getAddrVinValue(addrDesc))
+						uBalSending.Add(&uBalSending, tx.getAddrVinValue(addrDesc))
 					}
 					if page == 0 {
 						if option == AccountDetailsTxidHistory {
@@ -1448,6 +1450,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 			totalSecondaryValue = secondaryRate * totalBaseValue
 		}
 	}
+	uBalSat.Sub(&uBalReceiving, &uBalSending)
 	r := &Address{
 		Paging:                pg,
 		AddrStr:               address,
@@ -1459,6 +1462,8 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 		InternalTxs:           ed.internalTxs,
 		UnconfirmedBalanceSat: (*Amount)(&uBalSat),
 		UnconfirmedTxs:        unconfirmedTxs,
+		UnconfirmedSending:    amountOrNil(&uBalSending),
+		UnconfirmedReceiving:  amountOrNil(&uBalReceiving),
 		Transactions:          txs,
 		Txids:                 txids,
 		Tokens:                ed.tokens,
@@ -1478,6 +1483,14 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 	}
 	glog.Info("GetAddress-", option, " ", address, ", ", time.Since(start))
 	return r, nil
+}
+
+// Returns either the Amount or nil if the number is zero
+func amountOrNil(num *big.Int) *Amount {
+	if num.Cmp(big.NewInt(0)) == 0 {
+		return nil
+	}
+	return (*Amount)(num)
 }
 
 func (w *Worker) balanceHistoryHeightsFromTo(fromTimestamp, toTimestamp int64) (uint32, uint32, uint32, uint32) {
