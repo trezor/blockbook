@@ -39,7 +39,7 @@ RUN echo -n "GOPATH: " && echo $GOPATH
 
 # install rocksdb
 RUN cd /opt && git clone -b $ROCKSDB_VERSION --depth 1 https://github.com/facebook/rocksdb.git
-RUN cd /opt/rocksdb && CFLAGS=-fPIC CXXFLAGS=-fPIC PORTABLE=$PORTABLE_ROCKSDB make -j 4 release
+RUN cd /opt/rocksdb && CFLAGS=-fPIC CXXFLAGS=-fPIC PORTABLE=$PORTABLE_ROCKSDB DISABLE_WARNING_AS_ERROR=1 make -j 4 release
 RUN strip /opt/rocksdb/ldb /opt/rocksdb/sst_dump && \
     cp /opt/rocksdb/ldb /opt/rocksdb/sst_dump /build
 
