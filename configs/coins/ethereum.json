@@ -22,10 +22,10 @@
         "package_name": "backend-ethereum",
         "package_revision": "satoshilabs-1",
         "system_user": "ethereum",
-        "version": "2.61.1",
-        "binary_url": "https://github.com/ledgerwatch/erigon/releases/download/v2.61.1/erigon_v2.61.1_linux_amd64.tar.gz",
+        "version": "2.61.3",
+        "binary_url": "https://github.com/ledgerwatch/erigon/releases/download/v2.61.3/erigon_v2.61.3_linux_amd64.tar.gz",
         "verification_type": "sha256",
-        "verification_source": "d92ae402d47a3564a231448bbc0365dde7bb5ea32b2f24a7b841eddf070ca09a",
+        "verification_source": "51223910eec38212b601a5b919ca28e4428630bd3cffa112490d79ccc37d0b05",
         "extract_command": "tar -C backend --strip-components=1 -xf",
         "exclude_files": [],
         "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/erigon --chain mainnet --snap.keepblocks --db.size.limit 15TB --prune c --prune.c.older 1000000 -torrent.download.rate 32mb --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/erigon --port {{.Ports.BackendP2P}} --ws --ws.port {{.Ports.BackendRPC}} --http --http.port {{.Ports.BackendRPC}} --http.addr 127.0.0.1 --http.corsdomain \"*\" --http.vhosts \"*\" --http.api \"eth,net,web3,debug,txpool\" --authrpc.port {{.Ports.BackendAuthRpc}} --private.api.addr \"\" --torrent.port {{.Ports.BackendHttp}} --log.dir.path {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --log.dir.prefix {{.Coin.Alias}}'",
@@ -39,8 +39,8 @@
         "client_config_file": "",
         "platforms": {
             "arm64": {
-                "binary_url": "https://github.com/ledgerwatch/erigon/releases/download/v2.61.1/erigon_v2.61.1_linux_arm64.tar.gz",
-                "verification_source": "a368f4199e1f6db51f055c27b1a71925aecda458e2142b13a4f30ecc66a7a7a3"
+                "binary_url": "https://github.com/ledgerwatch/erigon/releases/download/v2.61.3/erigon_v2.61.3_linux_arm64.tar.gz",
+                "verification_source": "d40340ca469929be8e3f8ddbf3e0159904d6ed3cf2744301eaf25e21a3f4fef5"
             }
         }
     },
