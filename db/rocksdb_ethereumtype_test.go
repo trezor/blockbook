@@ -771,55 +771,63 @@ func generateAddrContracts(f, nf, nfc, m, mc int) []AddrContract {
 	return rv
 }
 
+var fungibleContracts = AddrContracts{
+	TotalTxs:       3333330,
+	NonContractTxs: 2222220,
+	InternalTxs:    1111110,
+	Contracts:      generateAddrContracts(100_000, 1, 1, 1, 1),
+}
+var packedFungibleContracts = packAddrContracts(&fungibleContracts)
+var unpackedFungibleContracts, _ = partiallyUnpackAddrContracts(packedFungibleContracts)
+
+var mixedContracts = AddrContracts{
+	TotalTxs:       3333330,
+	NonContractTxs: 2222220,
+	InternalTxs:    1111110,
+	Contracts:      generateAddrContracts(100_000, 1, 1_000_000, 1, 1_000_000),
+}
+var packedMixedContracts = packAddrContracts(&mixedContracts)
+var unpackedMixedContracts, _ = partiallyUnpackAddrContracts(packedMixedContracts)
+
 func Benchmark_packUnpackAddrContractsV6_Fungible(b *testing.B) {
-	addrContracts := AddrContracts{
-		TotalTxs:       3333330,
-		NonContractTxs: 2222220,
-		InternalTxs:    1111110,
-		Contracts:      generateAddrContracts(100_000, 1, 1, 1, 1),
-	}
 	for i := 0; i < b.N; i++ {
-		packed := packAddrContractsV6(&addrContracts)
+		packed := packAddrContractsV6(&fungibleContracts)
 		unpackAddrContractsV6(packed, nil)
 	}
 }
 
 func Benchmark_packUnpackAddrContracts_Fungible(b *testing.B) {
-	addrContracts := AddrContracts{
-		TotalTxs:       3333330,
-		NonContractTxs: 2222220,
-		InternalTxs:    1111110,
-		Contracts:      generateAddrContracts(100_000, 1, 1, 1, 1),
-	}
 	for i := 0; i < b.N; i++ {
-		packed := packAddrContracts(&addrContracts)
+		packed := packAddrContracts(&fungibleContracts)
 		unpackAddrContracts(packed, nil)
 	}
 }
 
-func Benchmark_packUnpackAddrContractsV6_All(b *testing.B) {
-	addrContracts := AddrContracts{
-		TotalTxs:       3333330,
-		NonContractTxs: 2222220,
-		InternalTxs:    1111110,
-		Contracts:      generateAddrContracts(100_000, 1, 1_000_000, 1, 1_000_000),
-	}
+func Benchmark_packUnpackUnpackedkAddrContracts_Fungible(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		packed := packAddrContractsV6(&addrContracts)
+		packed := packUnpackedAddrContracts(unpackedFungibleContracts)
+		partiallyUnpackAddrContracts(packed)
+	}
+}
+
+func Benchmark_packUnpackAddrContractsV6_Mixed(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		packed := packAddrContractsV6(&mixedContracts)
 		unpackAddrContractsV6(packed, nil)
 	}
 }
 
-func Benchmark_packUnpackAddrContracts_All(b *testing.B) {
-	addrContracts := AddrContracts{
-		TotalTxs:       3333330,
-		NonContractTxs: 2222220,
-		InternalTxs:    1111110,
-		Contracts:      generateAddrContracts(100_000, 1, 1_000_000, 1, 1_000_000),
-	}
+func Benchmark_packUnpackAddrContracts_Mixed(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		packed := packAddrContracts(&addrContracts)
+		packed := packAddrContracts(&mixedContracts)
 		unpackAddrContracts(packed, nil)
+	}
+}
+
+func Benchmark_packUnpackUnpackedkAddrContracts_Mixed(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		packed := packUnpackedAddrContracts(unpackedMixedContracts)
+		partiallyUnpackAddrContracts(packed)
 	}
 }
 
@@ -1219,17 +1227,24 @@ func Test_addToContracts(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			contractIndex, found := findContractInAddressContracts(tt.args.contract, addrContracts.Contracts)
+			// convert addrContracts to partially unpacked form which is used for block import
+			buf := packAddrContracts(addrContracts)
+			unpackedAddrContracts, _ := partiallyUnpackAddrContracts(buf)
+			// check logic
+			contractIndex, found := findContractInAddressContracts(tt.args.contract, unpackedAddrContracts.Contracts)
 			if !found {
-				contractIndex = len(addrContracts.Contracts)
-				addrContracts.Contracts = append(addrContracts.Contracts, AddrContract{
+				contractIndex = len(unpackedAddrContracts.Contracts)
+				unpackedAddrContracts.Contracts = append(unpackedAddrContracts.Contracts, unpackedAddrContract{
 					Contract: tt.args.contract,
 					Standard: tt.args.transfer.Standard,
 				})
 			}
-			if got := addToContract(&addrContracts.Contracts[contractIndex], contractIndex, tt.args.index, tt.args.contract, tt.args.transfer, tt.args.addTxCount); got != tt.wantIndex {
+			if got := addToContract(&unpackedAddrContracts.Contracts[contractIndex], contractIndex, tt.args.index, tt.args.contract, tt.args.transfer, tt.args.addTxCount); got != tt.wantIndex {
 				t.Errorf("addToContracts() = %v, want %v", got, tt.wantIndex)
 			}
+			// convert from partially unpacked form to final form used by API
+			buf = packUnpackedAddrContracts(unpackedAddrContracts)
+			addrContracts, _ = unpackAddrContracts(buf, nil)
 			if !reflect.DeepEqual(addrContracts, tt.wantAddrContracts) {
 				t.Errorf("addToContracts() = %+v, want %+v", addrContracts, tt.wantAddrContracts)
 			}

@@ -29,7 +29,7 @@ type BulkConnect struct {
 	txAddressesMap     map[string]*TxAddresses
 	blockFilters       map[string][]byte
 	balances           map[string]*AddrBalance
-	addressContracts   map[string]*AddrContracts
+	addressContracts   map[string]*unpackedAddrContracts
 	height             uint32
 }
 
@@ -51,7 +51,7 @@ func (d *RocksDB) InitBulkConnect() (*BulkConnect, error) {
 		chainType:        d.chainParser.GetChainType(),
 		txAddressesMap:   make(map[string]*TxAddresses),
 		balances:         make(map[string]*AddrBalance),
-		addressContracts: make(map[string]*AddrContracts),
+		addressContracts: make(map[string]*unpackedAddrContracts),
 		blockFilters:     make(map[string][]byte),
 	}
 	if err := d.SetInconsistentState(true); err != nil {
@@ -264,12 +264,12 @@ func (b *BulkConnect) connectBlockBitcoinType(block *bchain.Block, storeBlockTxs
 }
 
 func (b *BulkConnect) storeAddressContracts(wb *grocksdb.WriteBatch, all bool) (int, error) {
-	var ac map[string]*AddrContracts
+	var ac map[string]*unpackedAddrContracts
 	if all {
 		ac = b.addressContracts
-		b.addressContracts = make(map[string]*AddrContracts)
+		b.addressContracts = make(map[string]*unpackedAddrContracts)
 	} else {
-		ac = make(map[string]*AddrContracts)
+		ac = make(map[string]*unpackedAddrContracts)
 		// store some random address contracts
 		for k, a := range b.addressContracts {
 			ac[k] = a
@@ -279,7 +279,7 @@ func (b *BulkConnect) storeAddressContracts(wb *grocksdb.WriteBatch, all bool) (
 			}
 		}
 	}
-	if err := b.d.storeAddressContracts(wb, ac); err != nil {
+	if err := b.d.storeUnpackedAddressContracts(wb, ac); err != nil {
 		return 0, err
 	}
 	return len(ac), nil
