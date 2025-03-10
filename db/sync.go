@@ -222,10 +222,13 @@ func (w *SyncWorker) connectBlocks(onNewBlock bchain.OnNewBlockFunc, initialSync
 		if res.err != nil {
 			return res.err
 		}
+		start := time.Now()
 		err := w.db.ConnectBlock(res.block)
 		if err != nil {
 			return err
 		}
+		glog.Info("ConnectBlock ", res.block.Height, "  ", res.block.Hash, ": ", time.Since(start))
+
 		if onNewBlock != nil {
 			onNewBlock(res.block.Hash, res.block.Height)
 		}
