@@ -379,12 +379,12 @@ func (d *RocksDB) ConnectBlock(block *bchain.Block) error {
 			}
 		}
 	} else if chainType == bchain.ChainEthereumType {
-		addressContracts := make(map[string]*AddrContracts)
+		addressContracts := make(map[string]*unpackedAddrContracts)
 		blockTxs, err := d.processAddressesEthereumType(block, addresses, addressContracts)
 		if err != nil {
 			return err
 		}
-		if err := d.storeAddressContracts(wb, addressContracts); err != nil {
+		if err := d.storeUnpackedAddressContracts(wb, addressContracts); err != nil {
 			return err
 		}
 		if err := d.storeInternalDataEthereumType(wb, blockTxs); err != nil {
@@ -2499,6 +2499,10 @@ func packBigint(bi *big.Int, buf []byte) int {
 	}
 	buf[0] = byte(fb)
 	return fb + 1
+}
+
+func packedBigintLen(buf []byte) int {
+	return int(buf[0]) + 1
 }
 
 func unpackBigint(buf []byte) (big.Int, int) {
