@@ -345,7 +345,7 @@ func mainWithExitCode() int {
 		until := uint32(*blockUntil)
 
 		if !*synchronize {
-			if err = syncWorker.ConnectBlocksParallel(height, until); err != nil {
+			if err = syncWorker.BulkConnectBlocks(height, until); err != nil {
 				if err != db.ErrOperationInterrupted {
 					glog.Error("connectBlocksParallel ", err)
 					return exitCodeFatal
