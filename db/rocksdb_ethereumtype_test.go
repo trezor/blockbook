@@ -778,7 +778,7 @@ var fungibleContracts = AddrContracts{
 	Contracts:      generateAddrContracts(100_000, 1, 1, 1, 1),
 }
 var packedFungibleContracts = packAddrContracts(&fungibleContracts)
-var unpackedFungibleContracts, _ = partiallyUnpackAddrContracts(packedFungibleContracts)
+var unpackedFungibleContracts, _ = partiallyUnpackAddrContracts(packedFungibleContracts, nil)
 
 var mixedContracts = AddrContracts{
 	TotalTxs:       3333330,
@@ -787,7 +787,7 @@ var mixedContracts = AddrContracts{
 	Contracts:      generateAddrContracts(100_000, 1, 1_000_000, 1, 1_000_000),
 }
 var packedMixedContracts = packAddrContracts(&mixedContracts)
-var unpackedMixedContracts, _ = partiallyUnpackAddrContracts(packedMixedContracts)
+var unpackedMixedContracts, _ = partiallyUnpackAddrContracts(packedMixedContracts, nil)
 
 func Benchmark_packUnpackAddrContractsV6_Fungible(b *testing.B) {
 	for i := 0; i < b.N; i++ {
@@ -805,8 +805,8 @@ func Benchmark_packUnpackAddrContracts_Fungible(b *testing.B) {
 
 func Benchmark_packUnpackUnpackedkAddrContracts_Fungible(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		packed := packUnpackedAddrContracts(unpackedFungibleContracts)
-		partiallyUnpackAddrContracts(packed)
+		packed := packUnpackedAddrContracts(unpackedFungibleContracts, nil)
+		partiallyUnpackAddrContracts(packed, nil)
 	}
 }
 
@@ -826,8 +826,8 @@ func Benchmark_packUnpackAddrContracts_Mixed(b *testing.B) {
 
 func Benchmark_packUnpackUnpackedkAddrContracts_Mixed(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		packed := packUnpackedAddrContracts(unpackedMixedContracts)
-		partiallyUnpackAddrContracts(packed)
+		packed := packUnpackedAddrContracts(unpackedMixedContracts, nil)
+		partiallyUnpackAddrContracts(packed, nil)
 	}
 }
 
@@ -1229,7 +1229,7 @@ func Test_addToContracts(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// convert addrContracts to partially unpacked form which is used for block import
 			buf := packAddrContracts(addrContracts)
-			unpackedAddrContracts, _ := partiallyUnpackAddrContracts(buf)
+			unpackedAddrContracts, _ := partiallyUnpackAddrContracts(buf, nil)
 			// check logic
 			contractIndex, found := findContractInAddressContracts(tt.args.contract, unpackedAddrContracts.Contracts)
 			if !found {
@@ -1243,7 +1243,7 @@ func Test_addToContracts(t *testing.T) {
 				t.Errorf("addToContracts() = %v, want %v", got, tt.wantIndex)
 			}
 			// convert from partially unpacked form to final form used by API
-			buf = packUnpackedAddrContracts(unpackedAddrContracts)
+			buf = packUnpackedAddrContracts(unpackedAddrContracts, nil)
 			addrContracts, _ = unpackAddrContracts(buf, nil)
 			if !reflect.DeepEqual(addrContracts, tt.wantAddrContracts) {
 				t.Errorf("addToContracts() = %+v, want %+v", addrContracts, tt.wantAddrContracts)

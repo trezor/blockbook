@@ -153,6 +153,7 @@ func (w *SyncWorker) resyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 	// if parallel operation is enabled and the number of blocks to be connected is large,
 	// use parallel routine to load majority of blocks
 	// use parallel sync only in case of initial sync because it puts the db to inconsistent state
+	// or in case of ChainEthereumType if the tip is farther
 	if w.syncWorkers > 1 && (initialSync || w.chain.GetChainParser().GetChainType() == bchain.ChainEthereumType) {
 		remoteBestHeight, err := w.chain.GetBestBlockHeight()
 		if err != nil {
@@ -164,7 +165,7 @@ func (w *SyncWorker) resyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 		}
 		if initialSync {
 			if remoteBestHeight-w.startHeight > uint32(w.syncChunk) {
-				glog.Infof("resync: parallel sync of blocks %d-%d, using %d workers", w.startHeight, remoteBestHeight, w.syncWorkers)
+				glog.Infof("resync: bulk sync of blocks %d-%d, using %d workers", w.startHeight, remoteBestHeight, w.syncWorkers)
 				err = w.BulkConnectBlocks(w.startHeight, remoteBestHeight)
 				if err != nil {
 					return err
@@ -173,9 +174,11 @@ func (w *SyncWorker) resyncIndex(onNewBlock bchain.OnNewBlockFunc, initialSync b
 				// new blocks may have been created in the meantime
 				return w.resyncIndex(onNewBlock, initialSync)
 			}
-		} else {
+		}
+		if w.chain.GetChainParser().GetChainType() == bchain.ChainEthereumType {
 			syncWorkers := uint32(4)
 			if remoteBestHeight-w.startHeight >= syncWorkers {
+				glog.Infof("resync: parallel sync of blocks %d-%d, using %d workers", w.startHeight, remoteBestHeight, syncWorkers)
 				err = w.ParallelConnectBlocks(onNewBlock, w.startHeight, remoteBestHeight, syncWorkers)
 				if err != nil {
 					return err
@@ -372,7 +375,7 @@ ConnectLoop:
 	hchClosed.Store(true)
 	// wait for workers and close bch that will stop writer loop
 	wg.Wait()
-	for i := 0; i < w.syncWorkers; i++ {
+	for i := 0; i < int(syncWorkers); i++ {
 		close(bch[i])
 	}
 	<-writeBlockDone
