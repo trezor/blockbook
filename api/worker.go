@@ -2282,7 +2282,7 @@ func (w *Worker) GetBlock(bid string, page int, txsOnPage int) (*Block, error) {
 	}, nil
 }
 
-// GetBlock returns paged data about block
+// GetBlockRaw returns paged data about block
 func (w *Worker) GetBlockRaw(bid string) (*BlockRaw, error) {
 	hash := w.getBlockHashBlockID(bid)
 	if hash == "" {
