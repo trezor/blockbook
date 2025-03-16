@@ -39,10 +39,12 @@
     "client_config_file": "bitcoin_like_client.conf",
     "additional_params": {
       "addnode": [
-        "explorer.zel.cash",
-        "explorer2.zel.cash",
-        "explorer.zelcash.online",
-        "explorer-asia.zel.cash"
+        "explorer.runonflux.com",
+        "explorer.runonflux.io",
+        "blockbook.runonflux.com",
+        "blockbook.runonflux.io",
+        "explorer.flux.zelcore.io",
+        "blockbook.flux.zelcore.io"
       ]
     }
   },
