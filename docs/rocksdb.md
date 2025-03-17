@@ -25,7 +25,7 @@
 
 **Database structure:**
 
-The database structure described here is of Blockbook version **0.4.0** (internal data format version 6).
+The database structure described here is of Blockbook version **0.5.0** (internal data format version 7).
 
 The database structure for **Bitcoin type** and **Ethereum type** coins is different. Column families used for both types:
 
@@ -100,7 +100,7 @@ Column families used only by **Ethereum type** coins:
   and array of _contracts_ with _number of transfers_ of given address.
 
   ```
-  (addrDesc []byte) -> (total_txs vuint)+(non-contract_txs vuint)+(internal_txs vuint)+
+  (addrDesc []byte) -> (total_txs vuint)+(non-contract_txs vuint)+(internal_txs vuint)+(contracts vuint)+
                        []((contractAddrDesc []byte)+(type+4*nr_transfers vuint))+
                        <(value bigInt) if ERC20> or
                          <(nr_values vuint)+[](id bigInt) if ERC721> or

@@ -48,7 +48,7 @@ Response (`SystemInfo` type):
     "coin": "Bitcoin",
     "network": "BTC",
     "host": "backend5",
-    "version": "0.4.0",
+    "version": "0.5.0",
     "gitCommit": "a0960c8e",
     "buildTime": "2024-08-08T12:32:50+00:00",
     "syncMode": true,
@@ -1055,4 +1055,4 @@ Socket.io interface is provided at `/socket.io/`. The interface also can be expl
 
 The legacy API is provided as is and will not be further developed.
 
-The legacy API is currently (as of Blockbook v0.4.0) also accessible without the _/v1/_ prefix, however in the future versions the version-less access will be removed.
+The legacy API is currently (as of Blockbook v0.5.0) also accessible without the _/v1/_ prefix, however in the future versions the version-less access will be removed.
