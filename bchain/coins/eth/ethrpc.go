@@ -891,7 +891,8 @@ func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 			return nil, err
 		}
 		var ht struct {
-			Time string `json:"timestamp"`
+			Time          string `json:"timestamp"`
+			BaseFeePerGas string `json:"baseFeePerGas"`
 		}
 		if err := json.Unmarshal(raw, &ht); err != nil {
 			return nil, errors.Annotatef(err, "hash %v", hash)
@@ -900,6 +901,7 @@ func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 		if time, err = ethNumber(ht.Time); err != nil {
 			return nil, errors.Annotatef(err, "txid %v", txid)
 		}
+		tx.BaseFeePerGas = ht.BaseFeePerGas
 		var receipt bchain.RpcReceipt
 		err = b.RPC.CallContext(ctx, &receipt, "eth_getTransactionReceipt", hash)
 		if err != nil {

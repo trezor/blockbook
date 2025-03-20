@@ -98,17 +98,20 @@ type TokenTransfer struct {
 
 // RpcTransaction is returned by eth_getTransactionByHash
 type RpcTransaction struct {
-	AccountNonce     string `json:"nonce"`
-	GasPrice         string `json:"gasPrice"`
-	GasLimit         string `json:"gas"`
-	To               string `json:"to"` // nil means contract creation
-	Value            string `json:"value"`
-	Payload          string `json:"input"`
-	Hash             string `json:"hash"`
-	BlockNumber      string `json:"blockNumber"`
-	BlockHash        string `json:"blockHash,omitempty"`
-	From             string `json:"from"`
-	TransactionIndex string `json:"transactionIndex"`
+	AccountNonce         string `json:"nonce"`
+	GasPrice             string `json:"gasPrice"`
+	MaxPriorityFeePerGas string `json:"maxPriorityFeePerGas,omitempty"`
+	MaxFeePerGas         string `json:"maxFeePerGas,omitempty"`
+	BaseFeePerGas        string `json:"baseFeePerGas,omitempty"`
+	GasLimit             string `json:"gas"`
+	To                   string `json:"to"` // nil means contract creation
+	Value                string `json:"value"`
+	Payload              string `json:"input"`
+	Hash                 string `json:"hash"`
+	BlockNumber          string `json:"blockNumber"`
+	BlockHash            string `json:"blockHash,omitempty"`
+	From                 string `json:"from"`
+	TransactionIndex     string `json:"transactionIndex"`
 	// Signature values - ignored
 	// V string `json:"v"`
 	// R string `json:"r"`

@@ -1939,6 +1939,8 @@ func (d *RocksDB) migrateVersion6To7(sc, nc *common.InternalStateColumn) error {
 			if err != nil {
 				return err
 			}
+		} else if nc.Name == "transactions" {
+			d.db.DeleteRangeCF(d.wo, d.cfh[cfTransactions], []byte{0}, []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff})
 		}
 		glog.Infof("Column %s migrated from v%d to v%d", nc.Name, sc.Version, dbVersion)
 	}

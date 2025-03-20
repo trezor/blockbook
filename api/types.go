@@ -245,21 +245,24 @@ type EthereumInternalTransfer struct {
 
 // EthereumSpecific contains ethereum specific transaction data
 type EthereumSpecific struct {
-	Type              bchain.EthereumInternalTransactionType `json:"type,omitempty"`
-	CreatedContract   string                                 `json:"createdContract,omitempty"`
-	Status            eth.TxStatus                           `json:"status"` // 1 OK, 0 Fail, -1 pending
-	Error             string                                 `json:"error,omitempty"`
-	Nonce             uint64                                 `json:"nonce"`
-	GasLimit          *big.Int                               `json:"gasLimit"`
-	GasUsed           *big.Int                               `json:"gasUsed,omitempty"`
-	GasPrice          *Amount                                `json:"gasPrice,omitempty"`
-	L1Fee             *big.Int                               `json:"l1Fee,omitempty"`
-	L1FeeScalar       string                                 `json:"l1FeeScalar,omitempty"`
-	L1GasPrice        *Amount                                `json:"l1GasPrice,omitempty"`
-	L1GasUsed         *big.Int                               `json:"l1GasUsed,omitempty"`
-	Data              string                                 `json:"data,omitempty"`
-	ParsedData        *bchain.EthereumParsedInputData        `json:"parsedData,omitempty"`
-	InternalTransfers []EthereumInternalTransfer             `json:"internalTransfers,omitempty"`
+	Type                 bchain.EthereumInternalTransactionType `json:"type,omitempty"`
+	CreatedContract      string                                 `json:"createdContract,omitempty"`
+	Status               eth.TxStatus                           `json:"status"` // 1 OK, 0 Fail, -1 pending
+	Error                string                                 `json:"error,omitempty"`
+	Nonce                uint64                                 `json:"nonce"`
+	GasLimit             *big.Int                               `json:"gasLimit"`
+	GasUsed              *big.Int                               `json:"gasUsed,omitempty"`
+	GasPrice             *Amount                                `json:"gasPrice,omitempty"`
+	MaxPriorityFeePerGas *Amount                                `json:"maxPriorityFeePerGas,omitempty"`
+	MaxFeePerGas         *Amount                                `json:"maxFeePerGas,omitempty"`
+	BaseFeePerGas        *Amount                                `json:"baseFeePerGas,omitempty"`
+	L1Fee                *big.Int                               `json:"l1Fee,omitempty"`
+	L1FeeScalar          string                                 `json:"l1FeeScalar,omitempty"`
+	L1GasPrice           *Amount                                `json:"l1GasPrice,omitempty"`
+	L1GasUsed            *big.Int                               `json:"l1GasUsed,omitempty"`
+	Data                 string                                 `json:"data,omitempty"`
+	ParsedData           *bchain.EthereumParsedInputData        `json:"parsedData,omitempty"`
+	InternalTransfers    []EthereumInternalTransfer             `json:"internalTransfers,omitempty"`
 }
 
 type AddressAlias struct {

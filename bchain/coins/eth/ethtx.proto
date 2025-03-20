@@ -12,6 +12,9 @@ message ProtoCompleteTransaction {
     bytes To = 7;
     bytes From = 8;
     uint32 TransactionIndex = 9;
+    optional bytes MaxPriorityFeePerGas = 10;
+    optional bytes MaxFeePerGas = 11;
+    optional bytes BaseFeePerGas = 12;
   }
   message ReceiptType {
     message LogType {
