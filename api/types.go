@@ -3,8 +3,10 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math/big"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/trezor/blockbook/bchain"
@@ -85,6 +87,21 @@ func (a *Amount) MarshalJSON() (out []byte, err error) {
 		return []byte(`"0"`), nil
 	}
 	return []byte(`"` + (*big.Int)(a).String() + `"`), nil
+}
+
+func (a *Amount) UnmarshalJSON(data []byte) error {
+	s := strings.Trim(string(data), "\"")
+	if len(s) > 0 {
+		bigValue, parsed := new(big.Int).SetString(s, 10)
+		if !parsed {
+			return fmt.Errorf("couldn't parse number: %s", s)
+		}
+		*a = Amount(*bigValue)
+	} else {
+		// assuming empty string means zero
+		*a = Amount{}
+	}
+	return nil
 }
 
 func (a *Amount) String() string {
