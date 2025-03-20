@@ -451,17 +451,20 @@ func (w *Worker) getTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 			valOutSat = bchainTx.Vout[0].ValueSat
 		}
 		ethSpecific = &EthereumSpecific{
-			GasLimit:    ethTxData.GasLimit,
-			GasPrice:    (*Amount)(ethTxData.GasPrice),
-			GasUsed:     ethTxData.GasUsed,
-			L1Fee:       ethTxData.L1Fee,
-			L1FeeScalar: ethTxData.L1FeeScalar,
-			L1GasPrice:  (*Amount)(ethTxData.L1GasPrice),
-			L1GasUsed:   ethTxData.L1GasUsed,
-			Nonce:       ethTxData.Nonce,
-			Status:      ethTxData.Status,
-			Data:        ethTxData.Data,
-			ParsedData:  parsedInputData,
+			GasLimit:             ethTxData.GasLimit,
+			GasPrice:             (*Amount)(ethTxData.GasPrice),
+			MaxPriorityFeePerGas: (*Amount)(ethTxData.MaxPriorityFeePerGas),
+			MaxFeePerGas:         (*Amount)(ethTxData.MaxFeePerGas),
+			BaseFeePerGas:        (*Amount)(ethTxData.BaseFeePerGas),
+			GasUsed:              ethTxData.GasUsed,
+			L1Fee:                ethTxData.L1Fee,
+			L1FeeScalar:          ethTxData.L1FeeScalar,
+			L1GasPrice:           (*Amount)(ethTxData.L1GasPrice),
+			L1GasUsed:            ethTxData.L1GasUsed,
+			Nonce:                ethTxData.Nonce,
+			Status:               ethTxData.Status,
+			Data:                 ethTxData.Data,
+			ParsedData:           parsedInputData,
 		}
 		if internalData != nil {
 			ethSpecific.Type = internalData.Type
@@ -592,12 +595,15 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 		tokens = w.getEthereumTokensTransfers(mempoolTx.TokenTransfers, addresses)
 		ethTxData := eth.GetEthereumTxDataFromSpecificData(mempoolTx.CoinSpecificData)
 		ethSpecific = &EthereumSpecific{
-			GasLimit: ethTxData.GasLimit,
-			GasPrice: (*Amount)(ethTxData.GasPrice),
-			GasUsed:  ethTxData.GasUsed,
-			Nonce:    ethTxData.Nonce,
-			Status:   ethTxData.Status,
-			Data:     ethTxData.Data,
+			GasLimit:             ethTxData.GasLimit,
+			GasPrice:             (*Amount)(ethTxData.GasPrice),
+			MaxPriorityFeePerGas: (*Amount)(ethTxData.MaxPriorityFeePerGas),
+			MaxFeePerGas:         (*Amount)(ethTxData.MaxFeePerGas),
+			BaseFeePerGas:        (*Amount)(ethTxData.BaseFeePerGas),
+			GasUsed:              ethTxData.GasUsed,
+			Nonce:                ethTxData.Nonce,
+			Status:               ethTxData.Status,
+			Data:                 ethTxData.Data,
 		}
 	}
 	r := &Tx{

@@ -346,6 +346,9 @@ Response for Ethereum-type coins. Data of the transaction consist of:
     "gasLimit": 550941,
     "gasUsed": 434686,
     "gasPrice": "44035608242",
+    "maxPriorityFeePerGas": "44035608243",
+    "maxFeePerGas": "44035608244",
+    "baseFeePerGas": "2035608244",
     "data": "0xac9650d800000000000000000000",
     "parsedData": {
       "methodId": "0xfa2b068f",
