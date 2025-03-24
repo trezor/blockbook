@@ -8,10 +8,11 @@ import (
 )
 
 type alternativeFeeProvider struct {
-	eip1559Fees *bchain.Eip1559Fees
-	lastSync    time.Time
-	chain       bchain.BlockChain
-	mux         sync.Mutex
+	eip1559Fees       *bchain.Eip1559Fees
+	lastSync          time.Time
+	staleSyncDuration time.Duration
+	chain             bchain.BlockChain
+	mux               sync.Mutex
 }
 
 type alternativeFeeProviderInterface interface {
@@ -21,5 +22,8 @@ type alternativeFeeProviderInterface interface {
 func (p *alternativeFeeProvider) GetEip1559Fees() (*bchain.Eip1559Fees, error) {
 	p.mux.Lock()
 	defer p.mux.Unlock()
+	if p.lastSync.Add(p.staleSyncDuration).Before(time.Now()) {
+		return nil, nil
+	}
 	return p.eip1559Fees, nil
 }

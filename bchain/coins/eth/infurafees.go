@@ -102,6 +102,8 @@ func NewInfuraFeesProvider(chain bchain.BlockChain, params string) (alternativeF
 	}
 	p.params.URL = strings.Replace(p.params.URL, "${api_key}", p.apiKey, -1)
 	p.chain = chain
+	// if the data are not successfully downloaded 10 times, stop providing data
+	p.staleSyncDuration = time.Duration(p.params.PeriodSeconds*10) * time.Second
 	go p.FeeDownloader()
 	return p, nil
 }
@@ -113,7 +115,7 @@ func (p *infuraFeeProvider) FeeDownloader() {
 		var data infuraFeesResult
 		err := p.getData(&data)
 		if err != nil {
-			glog.Error("infuraFeeProvider.FeeDownloader", err)
+			glog.Error("infuraFeeProvider.FeeDownloader ", err)
 		} else {
 			p.processData(&data)
 		}
