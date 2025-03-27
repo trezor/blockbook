@@ -304,7 +304,7 @@ func writeTable(w io.Writer, header []string, slice PortInfoSlice) {
 		padding[column] = len(header[column])
 
 		for _, row := range rows {
-			padding[column] = maxInt(padding[column], len(row[column]))
+			padding[column] = max(padding[column], len(row[column]))
 		}
 	}
 
@@ -320,13 +320,6 @@ func writeTable(w io.Writer, header []string, slice PortInfoSlice) {
 	for _, row := range content {
 		fmt.Fprintf(w, "|%s|\n", strings.Join(row, "|"))
 	}
-}
-
-func maxInt(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }
 
 func paddedRow(row []string, padding []int) []string {
