@@ -21,16 +21,16 @@
         "package_name": "backend-polygon-bor",
         "package_revision": "satoshilabs-1",
         "system_user": "polygon",
-        "version": "2.0.0",
-        "binary_url": "https://github.com/maticnetwork/bor/releases/download/v2.0.0/bor-v2.0.0-amd64.deb",
+        "version": "2.0.1",
+        "binary_url": "https://github.com/maticnetwork/bor/releases/download/v2.0.1/bor-v2.0.1-amd64.deb",
         "verification_type": "sha256",
-        "verification_source": "942667f84732e25474b48f1fa6a13b513194f954344e3fa005d7165a8dd15d9a",
+        "verification_source": "879d72f58a1d779d00c27446b4e5652f8e22a123e8ea09f5b5757092920109fd",
         "extract_command": "mkdir -p backend && dpkg --fsys-tarfile ${ARCHIVE} | tar -xO ./usr/bin/bor > backend/bor && chmod +x backend/bor && echo",
         "exclude_files": [],
         "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/polygon_bor_exec.sh 2>> {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
         "exec_script": "polygon_bor.sh",
         "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
-        "postinst_script_template": "wget https://raw.githubusercontent.com/maticnetwork/bor/v2.0.0/builder/files/genesis-mainnet-v1.json -O {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/genesis.json",
+        "postinst_script_template": "wget https://raw.githubusercontent.com/maticnetwork/bor/v2.0.1/builder/files/genesis-mainnet-v1.json -O {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/genesis.json",
         "service_type": "simple",
         "service_additional_params_template": "",
         "protect_memory": true,
@@ -39,8 +39,8 @@
         "client_config_file": "",
         "platforms": {
             "arm64": {
-                "binary_url": "https://github.com/maticnetwork/bor/releases/download/v2.0.0/bor-v2.0.0-arm64.deb",
-                "verification_source": "914d17ff48258396d228b5feb4aeac90dbd47d272619a87e384c97385b53ffcc"
+                "binary_url": "https://github.com/maticnetwork/bor/releases/download/v2.0.1/bor-v2.0.1-arm64.deb",
+                "verification_source": "9a77d0cdaa7d0c2d3152fd184a47905b24b6b05777d44f5cda2cb406fb82a3c5"
             }
         }
     },
