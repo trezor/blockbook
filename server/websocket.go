@@ -900,7 +900,7 @@ func (s *WebsocketServer) unmarshalAddresses(params []byte) ([]string, error) {
 	return rv, nil
 }
 
-// unsubscribe addresses without addressSubscriptionsLock - can be called only from subscribeAddresses and unsubscribeAddresses
+// doUnsubscribeAddresses addresses without addressSubscriptionsLock - can be called only from subscribeAddresses and unsubscribeAddresses
 func (s *WebsocketServer) doUnsubscribeAddresses(c *websocketChannel) {
 	for _, ads := range c.addrDescs {
 		sa, e := s.addressSubscriptions[ads]
@@ -945,7 +945,7 @@ func (s *WebsocketServer) unsubscribeAddresses(c *websocketChannel) (res interfa
 	return &subscriptionResponse{false}, nil
 }
 
-// unsubscribe fiat rates without fiatRatesSubscriptionsLock - can be called only from subscribeFiatRates and unsubscribeFiatRates
+// doUnsubscribeFiatRates fiat rates without fiatRatesSubscriptionsLock - can be called only from subscribeFiatRates and unsubscribeFiatRates
 func (s *WebsocketServer) doUnsubscribeFiatRates(c *websocketChannel) {
 	for fr, sa := range s.fiatRatesSubscriptions {
 		for sc := range sa {
