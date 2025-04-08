@@ -93,8 +93,13 @@ func (p *mempoolSpaceMedianFeeProvider) mempoolSpaceMedianFeeProcessData(data *[
 
 	p.fees = make([]alternativeFeeProviderFee, 0, len(*data))
 
+	zeroReplacement := 1.05
+
 	for i, block := range *data {
-		if block.MedianFee <= 0 {
+		if block.MedianFee == 0 {
+			glog.Infof("Replacing zero medianFee by: %f", zeroReplacement)
+			block.MedianFee = zeroReplacement
+		} else if block.MedianFee < 1 {
 			glog.Warningf("Skipping block at index %d due to invalid medianFee: %f", i, block.MedianFee)
 			continue
 		}
