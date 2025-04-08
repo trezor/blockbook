@@ -2,6 +2,7 @@ package btc
 
 import (
 	"encoding/json"
+	"math"
 	"net/http"
 	"strconv"
 	"time"
@@ -108,9 +109,13 @@ func (p *mempoolSpaceMedianFeeProvider) mempoolSpaceMedianFeeProcessData(data *[
 		// But even storing thousands of elements in []alternativeFeeProviderFee should not make a big performance overhead
 		// Depends on Suite requirements
 
+		// We want to convert the median fee to 3 significant digits
+		medianFee := common.RoundToSignificantDigits(block.MedianFee, 3)
+		feePerKB := int(math.Round(medianFee * 1000)) // convert sat/vB to sat/KB
+
 		p.fees = append(p.fees, alternativeFeeProviderFee{
-			blocks:   i + 1,                       // simple mapping: index 0 -> 1 block, etc.
-			feePerKB: int(block.MedianFee * 1000), // convert sat/vB to sat/KB
+			blocks:   i + 1, // simple mapping: index 0 -> 1 block, etc.
+			feePerKB: feePerKB,
 		})
 	}
 
