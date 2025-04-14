@@ -28,7 +28,7 @@ require (
 	github.com/prometheus/client_golang v1.16.0
 	github.com/schancel/cashaddr-converter v0.0.0-20181111022653-4769e7add95a
 	github.com/tkrajina/typescriptify-golang-structs v0.1.11
-	golang.org/x/crypto v0.32.0
+	golang.org/x/crypto v0.35.0
 	google.golang.org/protobuf v1.34.2
 )
 
@@ -82,7 +82,7 @@ require (
 	github.com/tkrajina/go-reflector v0.5.5 // indirect
 	github.com/yusufpapurcu/wmi v1.2.2 // indirect
 	golang.org/x/sync v0.10.0 // indirect
-	golang.org/x/sys v0.29.0 // indirect
+	golang.org/x/sys v0.30.0 // indirect
 	gopkg.in/mgo.v2 v2.0.0-20190816093944-a6b53ec6cb22 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	rsc.io/tmplfunc v0.0.3 // indirect
