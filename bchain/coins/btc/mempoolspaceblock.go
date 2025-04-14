@@ -49,7 +49,8 @@ type mempoolSpaceBlockFeeParams struct {
 	URL           string `json:"url"`
 	PeriodSeconds int    `json:"periodSeconds"`
 	// Either number, then take the specified index. If null or missing, take the medianFee
-	FeeRangeIndex *int `json:"feeRangeIndex,omitempty"`
+	FeeRangeIndex    *int `json:"feeRangeIndex,omitempty"`
+	FallbackFeePerKB int  `json:"fallbackFeePerKB,omitempty"`
 }
 
 type mempoolSpaceBlockFeeProvider struct {
@@ -57,52 +58,69 @@ type mempoolSpaceBlockFeeProvider struct {
 	params mempoolSpaceBlockFeeParams
 }
 
-// NewMempoolSpaceBlockFee initializes the provider.
+// NewMempoolSpaceBlockFee initializes the provider completely.
 func NewMempoolSpaceBlockFee(chain bchain.BlockChain, params string) (alternativeFeeProviderInterface, error) {
-	p := &mempoolSpaceBlockFeeProvider{alternativeFeeProvider: &alternativeFeeProvider{}}
-	err := json.Unmarshal([]byte(params), &p.params)
+	var paramsParsed mempoolSpaceBlockFeeParams
+	err := json.Unmarshal([]byte(params), &paramsParsed)
 	if err != nil {
 		return nil, err
 	}
 
+	p, err := NewMempoolSpaceBlockFeeProviderFromParamsWithoutChain(paramsParsed)
+	if err != nil {
+		return nil, err
+	}
+
+	p.chain = chain
+	go p.downloader()
+	return p, nil
+}
+
+// NewMempoolSpaceBlockFeeProviderFromParamsWithoutChain initializes the provider from already parsed parameters and without chain.
+// Refactored like this for better testability.
+func NewMempoolSpaceBlockFeeProviderFromParamsWithoutChain(params mempoolSpaceBlockFeeParams) (*mempoolSpaceBlockFeeProvider, error) {
 	// Check mandatory parameters
-	if p.params.URL == "" {
+	if params.URL == "" {
 		return nil, errors.New("NewMempoolSpaceBlockFee: Missing url")
 	}
-	if p.params.PeriodSeconds == 0 {
+	if params.PeriodSeconds == 0 {
 		return nil, errors.New("NewMempoolSpaceBlockFee: Missing periodSeconds")
 	}
 
-	// Set fallback fee as 1 sat/vB in case block not identified
-	p.fallbackFeePerKBIfNotAvailable = 1000
-
 	// Report on what is used
-	if p.params.FeeRangeIndex == nil {
+	if params.FeeRangeIndex == nil {
 		glog.Info("NewMempoolSpaceBlockFee: Using median fee")
 	} else {
-		index := *p.params.FeeRangeIndex
+		index := *params.FeeRangeIndex
 		if index < 0 || index > 6 {
 			return nil, errors.New("NewMempoolSpaceBlockFee: feeRangeIndex must be between 0 and 6")
 		}
 		glog.Infof("NewMempoolSpaceBlockFee: Using feeRangeIndex %d", index)
 	}
 
-	p.chain = chain
-	go p.mempoolSpaceBlockFeeDownloader()
+	p := &mempoolSpaceBlockFeeProvider{
+		alternativeFeeProvider: &alternativeFeeProvider{},
+		params:                 params,
+	}
+
+	if params.FallbackFeePerKB > 0 {
+		p.fallbackFeePerKBIfNotAvailable = params.FallbackFeePerKB
+	}
+
 	return p, nil
 }
 
-func (p *mempoolSpaceBlockFeeProvider) mempoolSpaceBlockFeeDownloader() {
+func (p *mempoolSpaceBlockFeeProvider) downloader() {
 	period := time.Duration(p.params.PeriodSeconds) * time.Second
 	timer := time.NewTimer(period)
 	counter := 0
 	for {
 		var data []mempoolSpaceBlockFeeResult
-		err := p.mempoolSpaceBlockFeeGetData(&data)
+		err := p.getData(&data)
 		if err != nil {
-			glog.Error("mempoolSpaceBlockFeeGetData ", err)
+			glog.Error("getData ", err)
 		} else {
-			if p.mempoolSpaceBlockFeeProcessData(&data) {
+			if p.processData(&data) {
 				if counter%60 == 0 {
 					p.compareToDefault()
 				}
@@ -114,9 +132,9 @@ func (p *mempoolSpaceBlockFeeProvider) mempoolSpaceBlockFeeDownloader() {
 	}
 }
 
-func (p *mempoolSpaceBlockFeeProvider) mempoolSpaceBlockFeeProcessData(data *[]mempoolSpaceBlockFeeResult) bool {
+func (p *mempoolSpaceBlockFeeProvider) processData(data *[]mempoolSpaceBlockFeeResult) bool {
 	if len(*data) == 0 {
-		glog.Error("mempoolSpaceBlockFeeProcessData: empty data")
+		glog.Error("processData: empty data")
 		return false
 	}
 
@@ -164,7 +182,7 @@ func (p *mempoolSpaceBlockFeeProvider) mempoolSpaceBlockFeeProcessData(data *[]m
 	return true
 }
 
-func (p *mempoolSpaceBlockFeeProvider) mempoolSpaceBlockFeeGetData(res interface{}) error {
+func (p *mempoolSpaceBlockFeeProvider) getData(res interface{}) error {
 	httpReq, err := http.NewRequest("GET", p.params.URL, nil)
 	if err != nil {
 		return err

@@ -5,6 +5,7 @@ package btc
 import (
 	"math/big"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -71,7 +72,7 @@ var estimateFeeTestCasesMedian = []struct {
 	{5000000, *big.NewInt(1110)},
 }
 
-var estimateFeeTestCasesFeeRangeIndex5 = []struct {
+var estimateFeeTestCasesFeeRangeIndex5FallbackSet = []struct {
 	blocks int
 	want   big.Int
 }{
@@ -81,24 +82,21 @@ var estimateFeeTestCasesFeeRangeIndex5 = []struct {
 	{3, *big.NewInt(10000)},
 	{4, *big.NewInt(5000)},
 	{5, *big.NewInt(2000)},
-	{6, *big.NewInt(2000)},
-	{7, *big.NewInt(2000)},
-	{10, *big.NewInt(2000)},
-	{36, *big.NewInt(2000)},
-	{100, *big.NewInt(2000)},
-	{201, *big.NewInt(2000)},
-	{501, *big.NewInt(2000)},
-	{5000000, *big.NewInt(2000)},
+	{6, *big.NewInt(1000)},
+	{7, *big.NewInt(1000)},
+	{10, *big.NewInt(1000)},
+	{36, *big.NewInt(1000)},
+	{100, *big.NewInt(1000)},
+	{201, *big.NewInt(1000)},
+	{501, *big.NewInt(1000)},
+	{5000000, *big.NewInt(1000)},
 }
 
-func runEstimateFeeTest(t *testing.T, testName string, feeRangeIndex *int, expected []struct {
+func runEstimateFeeTest(t *testing.T, testName string, m *mempoolSpaceBlockFeeProvider, expected []struct {
 	blocks int
 	want   big.Int
 }) {
-	m := &mempoolSpaceBlockFeeProvider{alternativeFeeProvider: &alternativeFeeProvider{}}
-	m.params.FeeRangeIndex = feeRangeIndex
-
-	success := m.mempoolSpaceBlockFeeProcessData(&testBlocks)
+	success := m.processData(&testBlocks)
 	if !success {
 		t.Fatalf("[%s] Expected data to be processed successfully", testName)
 	}
@@ -118,17 +116,83 @@ func runEstimateFeeTest(t *testing.T, testName string, feeRangeIndex *int, expec
 
 func Test_mempoolSpaceBlockFeeProviderMedian(t *testing.T) {
 	// Taking the median explicitly
-	runEstimateFeeTest(t, "median", nil, estimateFeeTestCasesMedian)
+	m, err :=
+		NewMempoolSpaceBlockFeeProviderFromParamsWithoutChain(mempoolSpaceBlockFeeParams{
+			URL:           "https://mempool.space/api/v1/fees/mempool-blocks",
+			PeriodSeconds: 20,
+			FeeRangeIndex: nil,
+		})
+	if err != nil {
+		t.Fatalf("NewMempoolSpaceBlockFeeProviderFromParamsWithoutChain returned error: %v", err)
+	}
+	runEstimateFeeTest(t, "median", m, estimateFeeTestCasesMedian)
 }
 
 func Test_mempoolSpaceBlockFeeProviderSecondLargestIndex(t *testing.T) {
 	// Taking the valid index
 	index := 5
-	runEstimateFeeTest(t, "feeRangeIndex_5", &index, estimateFeeTestCasesFeeRangeIndex5)
+	m, err :=
+		NewMempoolSpaceBlockFeeProviderFromParamsWithoutChain(mempoolSpaceBlockFeeParams{
+			URL:              "https://mempool.space/api/v1/fees/mempool-blocks",
+			PeriodSeconds:    20,
+			FeeRangeIndex:    &index,
+			FallbackFeePerKB: 1000,
+		})
+	if err != nil {
+		t.Fatalf("NewMempoolSpaceBlockFeeProviderFromParamsWithoutChain returned error: %v", err)
+	}
+	runEstimateFeeTest(t, "feeRangeIndex_5", m, estimateFeeTestCasesFeeRangeIndex5FallbackSet)
 }
 
 func Test_mempoolSpaceBlockFeeProviderInvalidIndexTooHigh(t *testing.T) {
-	// Index is too high, will fallback to median
 	index := 555
-	runEstimateFeeTest(t, "invalidFeeRangeIndex_555", &index, estimateFeeTestCasesMedian)
+	_, err :=
+		NewMempoolSpaceBlockFeeProviderFromParamsWithoutChain(mempoolSpaceBlockFeeParams{
+			URL:           "https://mempool.space/api/v1/fees/mempool-blocks",
+			PeriodSeconds: 20,
+			FeeRangeIndex: &index,
+		})
+
+	if err == nil {
+		t.Fatalf("expected error, got nil")
+	}
+
+	expectedSubstring := "feeRangeIndex must be between 0 and 6"
+	if !strings.Contains(err.Error(), expectedSubstring) {
+		t.Errorf("expected error message to contain %q, got: %v", expectedSubstring, err)
+	}
+}
+
+func Test_mempoolSpaceBlockFeeProviderMissingUrl(t *testing.T) {
+	_, err :=
+		NewMempoolSpaceBlockFeeProviderFromParamsWithoutChain(mempoolSpaceBlockFeeParams{
+			PeriodSeconds: 20,
+			FeeRangeIndex: nil,
+		})
+
+	if err == nil {
+		t.Fatalf("expected error, got nil")
+	}
+
+	expectedSubstring := "Missing url"
+	if !strings.Contains(err.Error(), expectedSubstring) {
+		t.Errorf("expected error message to contain %q, got: %v", expectedSubstring, err)
+	}
+}
+
+func Test_mempoolSpaceBlockFeeProviderMissingPeriodSeconds(t *testing.T) {
+	_, err :=
+		NewMempoolSpaceBlockFeeProviderFromParamsWithoutChain(mempoolSpaceBlockFeeParams{
+			URL:           "https://mempool.space/api/v1/fees/mempool-blocks",
+			FeeRangeIndex: nil,
+		})
+
+	if err == nil {
+		t.Fatalf("expected error, got nil")
+	}
+
+	expectedSubstring := "Missing periodSeconds"
+	if !strings.Contains(err.Error(), expectedSubstring) {
+		t.Errorf("expected error message to contain %q, got: %v", expectedSubstring, err)
+	}
 }
