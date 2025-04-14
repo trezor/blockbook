@@ -73,6 +73,9 @@ func NewMempoolSpaceBlockFee(chain bchain.BlockChain, params string) (alternativ
 		return nil, errors.New("NewMempoolSpaceBlockFee: Missing periodSeconds")
 	}
 
+	// Set fallback fee as 1 sat/vB in case block not identified
+	p.fallbackFeePerKBIfNotAvailable = 1000
+
 	// Report on what is used
 	if p.params.FeeRangeIndex == nil {
 		glog.Info("NewMempoolSpaceBlockFee: Using median fee")
