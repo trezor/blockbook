@@ -17,10 +17,11 @@ type alternativeFeeProviderFee struct {
 }
 
 type alternativeFeeProvider struct {
-	fees     []alternativeFeeProviderFee
-	lastSync time.Time
-	chain    bchain.BlockChain
-	mux      sync.Mutex
+	fees                           []alternativeFeeProviderFee
+	lastSync                       time.Time
+	chain                          bchain.BlockChain
+	mux                            sync.Mutex
+	fallbackFeePerKBIfNotAvailable int
 }
 
 type alternativeFeeProviderInterface interface {
@@ -62,6 +63,12 @@ func (p *alternativeFeeProvider) estimateFee(blocks int) (big.Int, error) {
 			return r, nil
 		}
 	}
+
+	if p.fallbackFeePerKBIfNotAvailable > 0 {
+		r = *big.NewInt(int64(p.fallbackFeePerKBIfNotAvailable))
+		return r, nil
+	}
+
 	// use the last value as fallback
 	r = *big.NewInt(int64(p.fees[len(p.fees)-1].feePerKB))
 	return r, nil
