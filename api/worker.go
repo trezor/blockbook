@@ -2418,6 +2418,7 @@ func (w *Worker) GetSystemInfo(internal bool) (*SystemInfo, error) {
 	start := time.Now().UTC()
 	vi := common.GetVersionInfo()
 	inSync, bestHeight, lastBlockTime, startSync := w.is.GetSyncState()
+	blockPeriod := w.is.GetAvgBlockPeriod()
 	if !inSync && !w.is.InitialSync {
 		// if less than 5 seconds into syncing, return inSync=true to avoid short time not in sync reports that confuse monitoring
 		if startSync.Add(5 * time.Second).After(start) {
@@ -2434,6 +2435,13 @@ func (w *Worker) GetSystemInfo(internal bool) (*SystemInfo, error) {
 		// set not in sync in case of backend error
 		inSync = false
 		inSyncMempool = false
+	}
+	// for networks with stable block period, set not in sync if last sync more than 12 block periods ago
+	if inSync && blockPeriod > 0 && w.chainType == bchain.ChainEthereumType {
+		threshold := 12 * time.Duration(blockPeriod) * time.Second
+		if lastBlockTime.Add(threshold).Before(time.Now().UTC()) {
+			inSync = false
+		}
 	}
 	var columnStats []common.InternalStateColumn
 	var internalDBSize int64
