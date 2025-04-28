@@ -2,6 +2,7 @@ package common
 
 import (
 	"encoding/json"
+	"slices"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -202,7 +203,7 @@ func (is *InternalState) GetDBColumnStatValues(c int) (int64, int64, int64) {
 func (is *InternalState) GetAllDBColumnStats() []InternalStateColumn {
 	is.mux.Lock()
 	defer is.mux.Unlock()
-	return append(is.DbColumns[:0:0], is.DbColumns...)
+	return slices.Clone(is.DbColumns)
 }
 
 // DBSizeTotal sums the computed sizes of all columns
