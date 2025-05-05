@@ -22,10 +22,10 @@
         "package_name": "backend-ethereum-archive",
         "package_revision": "satoshilabs-1",
         "system_user": "ethereum",
-        "version": "3.0.2",
-        "binary_url": "https://github.com/erigontech/erigon/releases/download/v3.0.2/erigon_v3.0.2_linux_amd64.tar.gz",
+        "version": "3.0.3",
+        "binary_url": "https://github.com/erigontech/erigon/releases/download/v3.0.3/erigon_v3.0.3_linux_amd64.tar.gz",
         "verification_type": "sha256",
-        "verification_source": "db775b9c79b2e3248152dfd72b57f94ad98ac779abb7ae2569c2cb5450756890",
+        "verification_source": "39c0063727151bac6b30d9cd16afb97b93c1f371d6a1d85d491eddd38a3fb01f",
         "extract_command": "tar -C backend --strip-components=1 -xf",
         "exclude_files": [],
         "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/erigon --chain mainnet --snap.keepblocks --db.size.limit 15TB --db.pagesize 16KB --prune.mode archive --externalcl --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/erigon --port {{.Ports.BackendP2P}} --ws --ws.port {{.Ports.BackendRPC}} --http --http.port {{.Ports.BackendRPC}} --http.addr 127.0.0.1 --http.corsdomain \"*\" --http.vhosts \"*\" --http.api \"eth,net,web3,debug,txpool\" --authrpc.port {{.Ports.BackendAuthRpc}} --private.api.addr \"\" --torrent.port {{.Ports.BackendHttp}} --log.dir.path {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --log.dir.prefix {{.Coin.Alias}}'",
@@ -39,8 +39,8 @@
         "client_config_file": "",
         "platforms": {
             "arm64": {
-                "binary_url": "https://github.com/erigontech/erigon/releases/download/v3.0.2/erigon_v3.0.2_linux_arm64.tar.gz",
-                "verification_source": "9a38679827293d9b8e5e8810de7cb6b879011de49f5cea78ab8ebea517785970"
+                "binary_url": "https://github.com/erigontech/erigon/releases/download/v3.0.3/erigon_v3.0.3_linux_arm64.tar.gz",
+                "verification_source": "9d19484f4c10a810bb030c2d26f555719eea043d4f1a23127257f0ce6849bc00"
             }
         }
     },
