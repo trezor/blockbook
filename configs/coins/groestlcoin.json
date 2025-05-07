@@ -22,7 +22,7 @@
         "package_name": "backend-groestlcoin",
         "package_revision": "satoshilabs-1",
         "system_user": "groestlcoin",
-        "version": "28.0",
+        "version": "29.0",
         "binary_url": "https://github.com/Groestlcoin/groestlcoin/releases/download/v29.0/groestlcoin-29.0-x86_64-linux-gnu.tar.gz",
         "verification_type": "sha256",
         "verification_source": "e0b3e3d96caf908060779c0d9964c777ccc4b7364af54404ff1768e018e56768",
