@@ -457,6 +457,7 @@ export interface WsSendTransactionReq {
 }
 export interface WsSubscribeAddressesReq {
     addresses: string[];
+    newBlockTxs?: boolean;
 }
 export interface WsSubscribeFiatRatesReq {
     currency?: string;
