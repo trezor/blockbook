@@ -7,6 +7,7 @@ import (
 	"io"
 	"math/big"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -80,6 +81,8 @@ type EthereumRPC struct {
 	stakingPoolNames       []string
 	stakingPoolContracts   []string
 	alternativeFeeProvider alternativeFeeProviderInterface
+	alternativeSendTxURLs  []string
+	alternativeSendTxOnly  bool
 }
 
 // ProcessInternalTransactions specifies if internal transactions are processed
@@ -125,6 +128,16 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 	}
 	if s.alternativeFeeProvider != nil {
 		glog.Info("Using alternative fee provider ", s.ChainConfig.AlternativeEstimateFee)
+	}
+
+	network := c.Network
+	if network == "" {
+		network = c.CoinShortcut
+	}
+	s.alternativeSendTxURLs = strings.Split(os.Getenv(strings.ToUpper(network)+"_ALTERNATIVE_SENDTX_URLS"), ",")
+	s.alternativeSendTxOnly = strings.ToUpper(os.Getenv(strings.ToUpper(network)+"_ALTERNATIVE_SENDTX_ONLY")) == "TRUE"
+	if len(s.alternativeSendTxURLs) > 0 {
+		glog.Infof("Using alternative send transaction providers %v. Use only alternative providers %v", s.alternativeSendTxURLs, s.alternativeSendTxOnly)
 	}
 
 	return s, nil
@@ -1093,12 +1106,55 @@ func (b *EthereumRPC) EthereumTypeGetEip1559Fees() (*bchain.Eip1559Fees, error) 
 
 // SendRawTransaction sends raw transaction
 func (b *EthereumRPC) SendRawTransaction(hex string) (string, error) {
+	if len(b.alternativeSendTxURLs) > 0 {
+		var retVal string
+		var retErr error
+		for i := range b.alternativeSendTxURLs {
+			glog.Info("eth_sendRawTransaction to ", b.alternativeSendTxURLs[i])
+			r, err := b.callHttpStringResult(b.alternativeSendTxURLs[i], "eth_sendRawTransaction", hex)
+			// set success return value; or error only if there was no previous success
+			if err == nil || len(retVal) == 0 {
+				retVal = r
+				retErr = err
+			}
+		}
+		if b.alternativeSendTxOnly {
+			return retVal, retErr
+		}
+	}
+	glog.Info("eth_sendRawTransaction default")
 	return b.callRpcStringResult("eth_sendRawTransaction", hex)
 }
 
 // EthereumTypeGetRawTransaction gets raw transaction in hex format
 func (b *EthereumRPC) EthereumTypeGetRawTransaction(txid string) (string, error) {
 	return b.callRpcStringResult("eth_getRawTransactionByHash", txid)
+}
+
+// Helper function for calling ETH RPC over http with parameters and getting string result. Creates and closes a new client for every call.
+func (b *EthereumRPC) callHttpStringResult(url string, rpcMethod string, args ...interface{}) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+	defer cancel()
+	client, err := rpc.DialContext(ctx, url)
+	if err != nil {
+		return "", err
+	}
+	defer client.Close()
+	var raw json.RawMessage
+	err = client.CallContext(ctx, &raw, rpcMethod, args...)
+	if err != nil {
+		return "", err
+	} else if len(raw) == 0 {
+		return "", errors.New(url + " " + rpcMethod + " : failed")
+	}
+	var result string
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return "", errors.Annotatef(err, "%s %s raw result %v", url, rpcMethod, raw)
+	}
+	if result == "" {
+		return "", errors.New(url + " " + rpcMethod + " : failed, empty result")
+	}
+	return result, nil
 }
 
 // Helper function for calling ETH RPC with parameters and getting string result
