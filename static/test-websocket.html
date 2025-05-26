@@ -289,6 +289,19 @@
                 }
             }
 
+            function longTermFeeRate() {
+                try {
+                    const method = 'longTermFeeRate';
+                    send(method, {}, function (result) {
+                        document.getElementById('longTermFeeRateResult').innerText = JSON.stringify(
+                            result,
+                        ).replace(/,/g, ', ');
+                    });
+                } catch (e) {
+                    document.getElementById('longTermFeeRateResult').innerText = e;
+                }
+            }
+
             function sendTransaction() {
                 var hex = document.getElementById('sendTransactionHex').value.trim();
                 const method = 'sendTransaction';
@@ -891,6 +904,20 @@
             </div>
             <div class="row">
                 <div class="col" id="estimateFeeResult"></div>
+            </div>
+            <div class="row">
+                <div class="col">
+                    <input
+                        class="btn btn-secondary"
+                        type="button"
+                        value="longTermFeeRate"
+                        onclick="longTermFeeRate()"
+                    />
+                </div>
+                <div class="col"></div>
+            </div>
+            <div class="row">
+                <div class="col" id="longTermFeeRateResult"></div>
             </div>
             <div class="row">
                 <div class="col">

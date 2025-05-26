@@ -297,6 +297,11 @@ func (c *blockChainWithMetrics) EstimateFee(blocks int) (v big.Int, err error) {
 	return c.b.EstimateFee(blocks)
 }
 
+func (c *blockChainWithMetrics) LongTermFeeRate() (v *bchain.LongTermFeeRate, err error) {
+	defer func(s time.Time) { c.observeRPCLatency("LongTermFeeRate", s, err) }(time.Now())
+	return c.b.LongTermFeeRate()
+}
+
 func (c *blockChainWithMetrics) SendRawTransaction(tx string) (v string, err error) {
 	defer func(s time.Time) { c.observeRPCLatency("SendRawTransaction", s, err) }(time.Now())
 	return c.b.SendRawTransaction(tx)

@@ -745,6 +745,12 @@ export interface WsEstimateFeeRes {
     feeLimit?: string;
     eip1559?: Eip1559Fees;
 }
+export interface WsLongTermFeeRateRes {
+    /** Long term fee rate (in sat/kByte). */
+    feePerUnit: string;
+    /** Amount of blocks used for the long term fee rate estimation. */
+    blocks: number;
+}
 export interface WsSendTransactionReq {
     /** Hex-encoded transaction data to broadcast. */
     hex: string;
