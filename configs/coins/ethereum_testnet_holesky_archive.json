@@ -23,10 +23,10 @@
         "package_name": "backend-ethereum-testnet-holesky-archive",
         "package_revision": "satoshilabs-1",
         "system_user": "ethereum",
-        "version": "3.0.3",
-        "binary_url": "https://github.com/erigontech/erigon/releases/download/v3.0.3/erigon_v3.0.3_linux_amd64.tar.gz",
+        "version": "3.0.4",
+        "binary_url": "https://github.com/erigontech/erigon/releases/download/v3.0.4/erigon_v3.0.4_linux_amd64.tar.gz",
         "verification_type": "sha256",
-        "verification_source": "39c0063727151bac6b30d9cd16afb97b93c1f371d6a1d85d491eddd38a3fb01f",
+        "verification_source": "1401c78aadf04f6f7e06a514f43a2636a2c668fded926b74446f791194cbb54c",
         "extract_command": "tar -C backend --strip-components=1 -xf",
         "exclude_files": [],
         "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/erigon --chain holesky --snap.keepblocks --db.size.limit 15TB --db.pagesize 16KB --prune.mode archive --externalcl --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/erigon --port {{.Ports.BackendP2P}} --ws --ws.port {{.Ports.BackendRPC}} --http --http.port {{.Ports.BackendRPC}} --http.addr 127.0.0.1 --http.corsdomain \"*\" --http.vhosts \"*\" --http.api \"eth,net,web3,debug,txpool\" --authrpc.port {{.Ports.BackendAuthRpc}} --private.api.addr \"\" --torrent.port {{.Ports.BackendHttp}} --log.dir.path {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --log.dir.prefix {{.Coin.Alias}}'",
@@ -40,8 +40,8 @@
         "client_config_file": "",
         "platforms": {
             "arm64": {
-                "binary_url": "https://github.com/erigontech/erigon/releases/download/v3.0.3/erigon_v3.0.3_linux_arm64.tar.gz",
-                "verification_source": "9d19484f4c10a810bb030c2d26f555719eea043d4f1a23127257f0ce6849bc00"
+                "binary_url": "https://github.com/erigontech/erigon/releases/download/v3.0.4/erigon_v3.0.4_linux_arm64.tar.gz",
+                "verification_source": "deed38eb4dff0eb6f5e4e20ca1aaf3906133fa5073865c125dac9ff408125ecf"
             }
         }
     },
