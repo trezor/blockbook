@@ -7,7 +7,6 @@ import (
 	"io"
 	"math/big"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -81,11 +80,7 @@ type EthereumRPC struct {
 	stakingPoolNames          []string
 	stakingPoolContracts      []string
 	alternativeFeeProvider    alternativeFeeProviderInterface
-	alternativeSendTxURLs     []string
-	alternativeSendTxOnly     bool
-	alternativeFetchMempoolTx bool
-	alternativeMempoolTxs     map[string]*bchain.RpcTransaction
-	alternativeMempoolTxsMux  sync.Mutex
+	alternativeSendTxProvider *AlternativeSendTxProvider
 }
 
 // ProcessInternalTransactions specifies if internal transactions are processed
@@ -137,16 +132,8 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 	if network == "" {
 		network = c.CoinShortcut
 	}
-	s.alternativeSendTxURLs = strings.Split(os.Getenv(strings.ToUpper(network)+"_ALTERNATIVE_SENDTX_URLS"), ",")
-	s.alternativeSendTxOnly = strings.ToUpper(os.Getenv(strings.ToUpper(network)+"_ALTERNATIVE_SENDTX_ONLY")) == "TRUE"
-	s.alternativeFetchMempoolTx = strings.ToUpper(os.Getenv(strings.ToUpper(network)+"_ALTERNATIVE_FETCH_MEMPOOL_TX")) == "TRUE"
-	if len(s.alternativeSendTxURLs) > 0 {
-		glog.Infof("Using alternative send transaction providers %v. Only alternative providers %v", s.alternativeSendTxURLs, s.alternativeSendTxOnly)
-	}
-	if s.alternativeFetchMempoolTx {
-		s.alternativeMempoolTxs = make(map[string]*bchain.RpcTransaction)
-		glog.Infof("Alternative fetch mempool tx %v", s.alternativeFetchMempoolTx)
-	}
+
+	s.alternativeSendTxProvider = NewAlternativeSendTxProvider(network, c.RPCTimeout, c.MempoolTxTimeoutHours)
 
 	return s, nil
 }
@@ -218,6 +205,10 @@ func (b *EthereumRPC) CreateMempool(chain bchain.BlockChain) (bchain.Mempool, er
 	if b.Mempool == nil {
 		b.Mempool = bchain.NewMempoolEthereumType(chain, b.ChainConfig.MempoolTxTimeoutHours, b.ChainConfig.QueryBackendOnMempoolResync)
 		glog.Info("mempool created, MempoolTxTimeoutHours=", b.ChainConfig.MempoolTxTimeoutHours, ", QueryBackendOnMempoolResync=", b.ChainConfig.QueryBackendOnMempoolResync, ", DisableMempoolSync=", b.ChainConfig.DisableMempoolSync)
+		if b.alternativeSendTxProvider != nil {
+			b.alternativeSendTxProvider.SetupMempool(b.Mempool, b.removeTransactionFromMempool)
+		}
+
 	}
 	return b.Mempool, nil
 }
@@ -886,10 +877,8 @@ func (b *EthereumRPC) removeTransactionFromMempool(txid string) {
 		b.Mempool.RemoveTransactionFromMempool(txid)
 	}
 	// remove tx from mempool txs fetched by alternative method
-	if b.alternativeFetchMempoolTx {
-		b.alternativeMempoolTxsMux.Lock()
-		delete(b.alternativeMempoolTxs, txid)
-		b.alternativeMempoolTxsMux.Unlock()
+	if b.alternativeSendTxProvider != nil {
+		b.alternativeSendTxProvider.RemoveTransaction(txid)
 	}
 }
 
@@ -901,10 +890,8 @@ func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 	var txFound bool
 	var err error
 	hash := ethcommon.HexToHash(txid)
-	if b.alternativeFetchMempoolTx {
-		b.alternativeMempoolTxsMux.Lock()
-		tx, txFound = b.alternativeMempoolTxs[txid]
-		b.alternativeMempoolTxsMux.Unlock()
+	if b.alternativeSendTxProvider != nil {
+		tx, txFound = b.alternativeSendTxProvider.GetTransaction(txid)
 	}
 	if !txFound {
 		tx = &bchain.RpcTransaction{}
@@ -1132,82 +1119,25 @@ func (b *EthereumRPC) EthereumTypeGetEip1559Fees() (*bchain.Eip1559Fees, error) 
 func (b *EthereumRPC) SendRawTransaction(hex string) (string, error) {
 	var txid string
 	var retErr error
-	if len(b.alternativeSendTxURLs) > 0 {
-		for i := range b.alternativeSendTxURLs {
-			glog.Info("eth_sendRawTransaction to ", b.alternativeSendTxURLs[i])
-			r, err := b.callHttpStringResult(b.alternativeSendTxURLs[i], "eth_sendRawTransaction", hex)
-			// set success return value; or error only if there was no previous success
-			if err == nil || len(txid) == 0 {
-				txid = r
-				retErr = err
-			}
-		}
-		if b.alternativeSendTxOnly && b.alternativeFetchMempoolTx {
-			hash := ethcommon.HexToHash(txid)
-			raw, err := b.callHttpRawResult(b.alternativeSendTxURLs[0], "eth_getTransactionByHash", hash)
-			if err != nil || raw == nil {
-				glog.Errorf("eth_getTransactionByHash from %s returned error %v", b.alternativeSendTxURLs[0], err)
-			} else {
-				var tx bchain.RpcTransaction
-				if err := json.Unmarshal(raw, &tx); err != nil {
-					glog.Errorf("eth_getTransactionByHash from %s unmarshal returned error %v", b.alternativeSendTxURLs[0], err)
-				}
-				b.alternativeMempoolTxsMux.Lock()
-				b.alternativeMempoolTxs[txid] = &tx
-				b.alternativeMempoolTxsMux.Unlock()
-				b.Mempool.AddTransactionToMempool(txid)
-			}
+
+	if b.alternativeSendTxProvider != nil {
+		txid, retErr = b.alternativeSendTxProvider.SendRawTransaction(hex)
+		if b.alternativeSendTxProvider.UseOnlyAlternativeProvider() {
 			return txid, retErr
 		}
 	}
-	glog.Info("eth_sendRawTransaction default")
+
 	txid, retErr = b.callRpcStringResult("eth_sendRawTransaction", hex)
 	if b.ChainConfig.DisableMempoolSync {
 		// add transactions submitted by us to mempool if sync is disabled
 		b.Mempool.AddTransactionToMempool(txid)
 	}
 	return txid, retErr
-
 }
 
 // EthereumTypeGetRawTransaction gets raw transaction in hex format
 func (b *EthereumRPC) EthereumTypeGetRawTransaction(txid string) (string, error) {
 	return b.callRpcStringResult("eth_getRawTransactionByHash", txid)
-}
-
-// Helper function for calling ETH RPC over http with parameters. Creates and closes a new client for every call.
-func (b *EthereumRPC) callHttpRawResult(url string, rpcMethod string, args ...interface{}) (json.RawMessage, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
-	defer cancel()
-	client, err := rpc.DialContext(ctx, url)
-	if err != nil {
-		return nil, err
-	}
-	defer client.Close()
-	var raw json.RawMessage
-	err = client.CallContext(ctx, &raw, rpcMethod, args...)
-	if err != nil {
-		return nil, err
-	} else if len(raw) == 0 {
-		return nil, errors.New(url + " " + rpcMethod + " : failed")
-	}
-	return raw, nil
-}
-
-// Helper function for calling ETH RPC over http with parameters and getting string result. Creates and closes a new client for every call.
-func (b *EthereumRPC) callHttpStringResult(url string, rpcMethod string, args ...interface{}) (string, error) {
-	raw, err := b.callHttpRawResult(url, rpcMethod, args...)
-	if err != nil {
-		return "", err
-	}
-	var result string
-	if err := json.Unmarshal(raw, &result); err != nil {
-		return "", errors.Annotatef(err, "%s %s raw result %v", url, rpcMethod, raw)
-	}
-	if result == "" {
-		return "", errors.New(url + " " + rpcMethod + " : failed, empty result")
-	}
-	return result, nil
 }
 
 // Helper function for calling ETH RPC with parameters and getting string result
