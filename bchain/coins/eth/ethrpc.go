@@ -59,27 +59,28 @@ type Configuration struct {
 // EthereumRPC is an interface to JSON-RPC eth service.
 type EthereumRPC struct {
 	*bchain.BaseChain
-	Client                 bchain.EVMClient
-	RPC                    bchain.EVMRPCClient
-	MainNetChainID         Network
-	Timeout                time.Duration
-	Parser                 *EthereumParser
-	PushHandler            func(bchain.NotificationType)
-	OpenRPC                func(string) (bchain.EVMRPCClient, bchain.EVMClient, error)
-	Mempool                *bchain.MempoolEthereumType
-	mempoolInitialized     bool
-	bestHeaderLock         sync.Mutex
-	bestHeader             bchain.EVMHeader
-	bestHeaderTime         time.Time
-	NewBlock               bchain.EVMNewBlockSubscriber
-	newBlockSubscription   bchain.EVMClientSubscription
-	NewTx                  bchain.EVMNewTxSubscriber
-	newTxSubscription      bchain.EVMClientSubscription
-	ChainConfig            *Configuration
-	supportedStakingPools  []string
-	stakingPoolNames       []string
-	stakingPoolContracts   []string
-	alternativeFeeProvider alternativeFeeProviderInterface
+	Client                    bchain.EVMClient
+	RPC                       bchain.EVMRPCClient
+	MainNetChainID            Network
+	Timeout                   time.Duration
+	Parser                    *EthereumParser
+	PushHandler               func(bchain.NotificationType)
+	OpenRPC                   func(string) (bchain.EVMRPCClient, bchain.EVMClient, error)
+	Mempool                   *bchain.MempoolEthereumType
+	mempoolInitialized        bool
+	bestHeaderLock            sync.Mutex
+	bestHeader                bchain.EVMHeader
+	bestHeaderTime            time.Time
+	NewBlock                  bchain.EVMNewBlockSubscriber
+	newBlockSubscription      bchain.EVMClientSubscription
+	NewTx                     bchain.EVMNewTxSubscriber
+	newTxSubscription         bchain.EVMClientSubscription
+	ChainConfig               *Configuration
+	supportedStakingPools     []string
+	stakingPoolNames          []string
+	stakingPoolContracts      []string
+	alternativeFeeProvider    alternativeFeeProviderInterface
+	alternativeSendTxProvider *AlternativeSendTxProvider
 }
 
 // ProcessInternalTransactions specifies if internal transactions are processed
@@ -126,6 +127,13 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 	if s.alternativeFeeProvider != nil {
 		glog.Info("Using alternative fee provider ", s.ChainConfig.AlternativeEstimateFee)
 	}
+
+	network := c.Network
+	if network == "" {
+		network = c.CoinShortcut
+	}
+
+	s.alternativeSendTxProvider = NewAlternativeSendTxProvider(network, c.RPCTimeout, c.MempoolTxTimeoutHours)
 
 	return s, nil
 }
@@ -197,6 +205,10 @@ func (b *EthereumRPC) CreateMempool(chain bchain.BlockChain) (bchain.Mempool, er
 	if b.Mempool == nil {
 		b.Mempool = bchain.NewMempoolEthereumType(chain, b.ChainConfig.MempoolTxTimeoutHours, b.ChainConfig.QueryBackendOnMempoolResync)
 		glog.Info("mempool created, MempoolTxTimeoutHours=", b.ChainConfig.MempoolTxTimeoutHours, ", QueryBackendOnMempoolResync=", b.ChainConfig.QueryBackendOnMempoolResync, ", DisableMempoolSync=", b.ChainConfig.DisableMempoolSync)
+		if b.alternativeSendTxProvider != nil {
+			b.alternativeSendTxProvider.SetupMempool(b.Mempool, b.removeTransactionFromMempool)
+		}
+
 	}
 	return b.Mempool, nil
 }
@@ -817,9 +829,7 @@ func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error
 			return nil, errors.Annotatef(err, "hash %v, height %v, txid %v", hash, height, tx.Hash)
 		}
 		btxs[i] = *btx
-		if b.mempoolInitialized {
-			b.Mempool.RemoveTransactionFromMempool(tx.Hash)
-		}
+		b.removeTransactionFromMempool(tx.Hash)
 	}
 	bbk := bchain.Block{
 		BlockHeader:      *bbh,
@@ -861,20 +871,37 @@ func (b *EthereumRPC) GetTransactionForMempool(txid string) (*bchain.Tx, error) 
 	return b.GetTransaction(txid)
 }
 
+func (b *EthereumRPC) removeTransactionFromMempool(txid string) {
+	// remove tx from mempool
+	if b.mempoolInitialized {
+		b.Mempool.RemoveTransactionFromMempool(txid)
+	}
+	// remove tx from mempool txs fetched by alternative method
+	if b.alternativeSendTxProvider != nil {
+		b.alternativeSendTxProvider.RemoveTransaction(txid)
+	}
+}
+
 // GetTransaction returns a transaction by the transaction ID.
 func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
 	defer cancel()
-	tx := &bchain.RpcTransaction{}
+	var tx *bchain.RpcTransaction
+	var txFound bool
+	var err error
 	hash := ethcommon.HexToHash(txid)
-	err := b.RPC.CallContext(ctx, tx, "eth_getTransactionByHash", hash)
-	if err != nil {
-		return nil, err
+	if b.alternativeSendTxProvider != nil {
+		tx, txFound = b.alternativeSendTxProvider.GetTransaction(txid)
+	}
+	if !txFound {
+		tx = &bchain.RpcTransaction{}
+		err = b.RPC.CallContext(ctx, tx, "eth_getTransactionByHash", hash)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if *tx == (bchain.RpcTransaction{}) {
-		if b.mempoolInitialized {
-			b.Mempool.RemoveTransactionFromMempool(txid)
-		}
+		b.removeTransactionFromMempool(txid)
 		return nil, bchain.ErrTxNotFound
 	}
 	var btx *bchain.Tx
@@ -919,10 +946,7 @@ func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 		if err != nil {
 			return nil, errors.Annotatef(err, "txid %v", txid)
 		}
-		// remove tx from mempool if it is there
-		if b.mempoolInitialized {
-			b.Mempool.RemoveTransactionFromMempool(txid)
-		}
+		b.removeTransactionFromMempool(txid)
 	}
 	return btx, nil
 }
@@ -1093,7 +1117,22 @@ func (b *EthereumRPC) EthereumTypeGetEip1559Fees() (*bchain.Eip1559Fees, error) 
 
 // SendRawTransaction sends raw transaction
 func (b *EthereumRPC) SendRawTransaction(hex string) (string, error) {
-	return b.callRpcStringResult("eth_sendRawTransaction", hex)
+	var txid string
+	var retErr error
+
+	if b.alternativeSendTxProvider != nil {
+		txid, retErr = b.alternativeSendTxProvider.SendRawTransaction(hex)
+		if b.alternativeSendTxProvider.UseOnlyAlternativeProvider() {
+			return txid, retErr
+		}
+	}
+
+	txid, retErr = b.callRpcStringResult("eth_sendRawTransaction", hex)
+	if b.ChainConfig.DisableMempoolSync {
+		// add transactions submitted by us to mempool if sync is disabled
+		b.Mempool.AddTransactionToMempool(txid)
+	}
+	return txid, retErr
 }
 
 // EthereumTypeGetRawTransaction gets raw transaction in hex format
