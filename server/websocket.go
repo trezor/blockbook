@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"net/http"
 	"os"
+	"regexp"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -537,8 +538,10 @@ func unmarshalGetAccountInfoRequest(params []byte) (*WsAccountInfoReq, error) {
 
 func (s *WebsocketServer) getAccountInfo(req *WsAccountInfoReq) (res *api.Address, err error) {
 	descriptor := strings.ToLower(strings.TrimSpace(req.Descriptor))
-
 	if strings.HasSuffix(descriptor, ".eth") {
+		if err := validateENSName(descriptor); err != nil {
+			return nil, errors.New("Invalid ENS name: " + err.Error())
+		}
 		resolvedAddr, err := s.resolveENS(descriptor)
 		if err != nil {
 			return nil, errors.New("Failed to resolve ENS name: " + err.Error())
@@ -678,6 +681,29 @@ func (s *WebsocketServer) getENSRegistryAddress() string {
 	default:
 		return ""
 	}
+}
+
+func validateENSName(name string) error {
+	if !strings.HasSuffix(name, ".eth") {
+		return errors.New("not an ENS name")
+	}
+
+	name = strings.TrimSuffix(name, ".eth")
+
+	if !regexp.MustCompile(`^[a-zA-Z0-9\-\.]+$`).MatchString(name) {
+		return errors.New("invalid characters in ENS name")
+	}
+
+	labels := strings.Split(name, ".")
+	for _, label := range labels {
+		if len(label) == 0 || len(label) > 255 {
+			return errors.New("invalid label length in ENS name")
+		}
+	}
+	if len(name) > 255 {
+		return errors.New("ENS name too long")
+	}
+	return nil
 }
 
 func (s *WebsocketServer) getAccountUtxo(descriptor string) (api.Utxos, error) {
