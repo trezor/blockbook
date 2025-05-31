@@ -1,7 +1,9 @@
 package server
 
 import (
+	"encoding/hex"
 	"encoding/json"
+	"golang.org/x/crypto/sha3"
 	"math/big"
 	"net/http"
 	"os"
@@ -28,6 +30,9 @@ const defaultTimeout = 60 * time.Second
 
 // allRates is a special "currency" parameter that means all available currencies
 const allFiatRates = "!ALL!"
+
+// ENS Registry contract address
+const ensRegistryAddress = "0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e"
 
 var (
 	// ErrorMethodNotAllowed is returned when client tries to upgrade method other than GET
@@ -531,6 +536,16 @@ func unmarshalGetAccountInfoRequest(params []byte) (*WsAccountInfoReq, error) {
 }
 
 func (s *WebsocketServer) getAccountInfo(req *WsAccountInfoReq) (res *api.Address, err error) {
+	descriptor := strings.ToLower(strings.TrimSpace(req.Descriptor))
+
+	if strings.HasSuffix(descriptor, ".eth") {
+		resolvedAddr, err := s.resolveENS(descriptor)
+		if err != nil {
+			return nil, errors.New("Failed to resolve ENS name: " + err.Error())
+		}
+		descriptor = resolvedAddr
+	}
+
 	var opt api.AccountDetails
 	switch req.Details {
 	case "tokens":
@@ -570,6 +585,99 @@ func (s *WebsocketServer) getAccountInfo(req *WsAccountInfoReq) (res *api.Addres
 		return s.api.GetAddress(req.Descriptor, req.Page, req.PageSize, opt, &filter, strings.ToLower(req.SecondaryCurrency))
 	}
 	return a, nil
+}
+
+func (s *WebsocketServer) resolveENS(ensName string) (string, error) {
+	ensName = strings.ToLower(strings.TrimSpace(ensName))
+	if !strings.HasSuffix(ensName, ".eth") || s.chainParser.GetChainType() != bchain.ChainEthereumType {
+		return "", errors.New("Invalid ENS name or not Ethereum chain")
+	}
+
+	ensRegistryAddr := s.getENSRegistryAddress()
+	if ensRegistryAddr == "" {
+		return "", errors.New("ENS not supported on this network")
+	}
+
+	node := s.nameHash(ensName)
+
+	method := "eth_call"
+	to := ensRegistryAddr
+	data := "0x0178b8bf" + node[2:]
+	result, err := s.chain.EthereumTypeRpcCall(method, to, data)
+	if err != nil {
+		return "", errors.Annotate(err, "failed to query ENS registry")
+	}
+
+	resolverAddr, err := s.parseAddressFromResult(result)
+	if err != nil || resolverAddr == "0x0000000000000000000000000000000000000000" {
+		return "", errors.New("no resolver set")
+	}
+
+	method = "eth_call"
+	data = "0x3b3b57de" + node[2:]
+	result, err = s.chain.EthereumTypeRpcCall(method, resolverAddr, data)
+	if err != nil {
+		return "", errors.Annotate(err, "failed to query resolver")
+	}
+
+	address, err := s.parseAddressFromResult(result)
+	if err != nil || address == "0x0000000000000000000000000000000000000000" {
+		return "", errors.New("ENS name not found")
+	}
+	return address, nil
+}
+
+func (s *WebsocketServer) nameHash(name string) string {
+	node := make([]byte, 32)
+	if name != "" {
+		labels := strings.Split(name, ".")
+		for i := len(labels) - 1; i >= 0; i-- {
+			labelHash := s.keccak256([]byte(labels[i]))
+			node = s.keccak256(append(node, labelHash...))
+		}
+	}
+	return "0x" + hex.EncodeToString(node)
+}
+
+func (s *WebsocketServer) keccak256(data []byte) []byte {
+	hash := sha3.NewLegacyKeccak256()
+	hash.Write(data)
+	return hash.Sum(nil)
+}
+
+func (s *WebsocketServer) parseAddressFromResult(result interface{}) (string, error) {
+	var resultStr string
+	switch v := result.(type) {
+	case string:
+		resultStr = v
+	case map[string]interface{}:
+		if r, ok := v["result"].(string); ok {
+			resultStr = r
+		} else {
+			return "", errors.New("invalid RPC result format: missing result field")
+		}
+	default:
+		return "", errors.New("invalid RPC result type")
+	}
+
+	if len(resultStr) < 2 || resultStr[:2] != "0x" {
+		return "", errors.New("invalid hex result")
+	}
+	hexData := resultStr[2:]
+	if len(hexData) < 64 {
+		return "", errors.New("result too short")
+	}
+	addressHex := hexData[len(hexData)-40:]
+	return "0x" + addressHex, nil
+}
+
+func (s *WebsocketServer) getENSRegistryAddress() string {
+	switch strings.ToLower(s.is.GetNetwork()) {
+	case "mainnet", "ethereum", "eth", "goerli", "sepolia":
+		return ensRegistryAddress
+	default:
+		return ""
+	}
 }
 
 func (s *WebsocketServer) getAccountUtxo(descriptor string) (api.Utxos, error) {
