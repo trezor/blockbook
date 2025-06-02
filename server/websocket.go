@@ -7,7 +7,6 @@ import (
 	"math/big"
 	"net/http"
 	"os"
-	"regexp"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -603,10 +602,8 @@ func (s *WebsocketServer) resolveENS(ensName string) (string, error) {
 
 	node := s.nameHash(ensName)
 
-	method := "eth_call"
-	to := ensRegistryAddr
 	data := "0x0178b8bf" + node[2:]
-	result, err := s.chain.EthereumTypeRpcCall(method, to, data)
+	result, err := s.chain.EthereumTypeRpcCall(data, ensRegistryAddr, "0x0000000000000000000000000000000000000000")
 	if err != nil {
 		return "", errors.Annotate(err, "failed to query ENS registry")
 	}
@@ -616,9 +613,8 @@ func (s *WebsocketServer) resolveENS(ensName string) (string, error) {
 		return "", errors.New("no resolver set")
 	}
 
-	method = "eth_call"
 	data = "0x3b3b57de" + node[2:]
-	result, err = s.chain.EthereumTypeRpcCall(method, resolverAddr, data)
+	result, err = s.chain.EthereumTypeRpcCall(data, resolverAddr, "0x0000000000000000000000000000000000000000")
 	if err != nil {
 		return "", errors.Annotate(err, "failed to query resolver")
 	}
@@ -675,12 +671,32 @@ func (s *WebsocketServer) parseAddressFromResult(result interface{}) (string, er
 }
 
 func (s *WebsocketServer) getENSRegistryAddress() string {
-	switch strings.ToLower(s.is.GetNetwork()) {
-	case "mainnet", "ethereum", "eth", "goerli", "sepolia":
-		return ensRegistryAddress
-	default:
+	if s.chainParser.GetChainType() != bchain.ChainEthereumType {
 		return ""
 	}
+
+	network := strings.ToLower(s.is.GetNetwork())
+
+	supportedNetworks := []string{
+		// Mainnet identifiers
+		"mainnet", "ethereum", "eth",
+		// Testnet identifiers
+		"sepolia", "goerli", "holesky", "hoodi",
+		// Coin shortcuts (for compatibility)
+		"tsep", "tgor", "thol",
+	}
+
+	for _, supportedNet := range supportedNetworks {
+		if strings.Contains(network, supportedNet) {
+			return ensRegistryAddress
+		}
+	}
+
+	if strings.Contains(network, "ethereum") && !strings.Contains(network, "test") {
+		return ensRegistryAddress
+	}
+
+	return ""
 }
 
 func validateENSName(name string) error {
@@ -690,18 +706,15 @@ func validateENSName(name string) error {
 
 	name = strings.TrimSuffix(name, ".eth")
 
-	if !regexp.MustCompile(`^[a-zA-Z0-9\-\.]+$`).MatchString(name) {
-		return errors.New("invalid characters in ENS name")
+	if len(name) > 255 {
+		return errors.New("ENS name too long")
 	}
 
 	labels := strings.Split(name, ".")
 	for _, label := range labels {
-		if len(label) == 0 || len(label) > 255 {
+		if len(label) == 0 || len(label) > 63 {
 			return errors.New("invalid label length in ENS name")
 		}
-	}
-	if len(name) > 255 {
-		return errors.New("ENS name too long")
 	}
 	return nil
 }
