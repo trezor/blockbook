@@ -369,6 +369,9 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *WsRe
 	"estimateFee": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
 		return s.estimateFee(req.Params)
 	},
+	"longTermFeeRate": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
+		return s.longTermFeeRate()
+	},
 	"sendTransaction": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
 		r := WsSendTransactionReq{}
 		err = json.Unmarshal(req.Params, &r)
@@ -735,6 +738,17 @@ func (s *WebsocketServer) estimateFee(params []byte) (interface{}, error) {
 		}
 	}
 	return res, nil
+}
+
+func (s *WebsocketServer) longTermFeeRate() (res interface{}, err error) {
+	feeRate, err := s.chain.LongTermFeeRate()
+	if err != nil {
+		return nil, err
+	}
+	return WsLongTermFeeRateRes{
+		FeePerUnit: feeRate.FeePerUnit.String(),
+		Blocks:     feeRate.Blocks,
+	}, nil
 }
 
 func (s *WebsocketServer) sendTransaction(tx string) (res resultSendTransaction, err error) {

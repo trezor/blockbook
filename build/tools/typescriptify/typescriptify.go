@@ -54,6 +54,7 @@ func main() {
 	t.Add(server.WsTransactionSpecificReq{})
 	t.Add(server.WsEstimateFeeReq{})
 	t.Add(server.WsEstimateFeeRes{})
+	t.Add(server.WsLongTermFeeRateRes{})
 	t.Add(server.WsSendTransactionReq{})
 	t.Add(server.WsSubscribeAddressesReq{})
 	t.Add(server.WsSubscribeFiatRatesReq{})
