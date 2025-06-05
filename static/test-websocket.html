@@ -191,10 +191,12 @@
                     secondaryCurrency,
                     // default gap=20
                 };
+
                 send(method, params, function (result) {
-                    document.getElementById('getAccountInfoResult').innerText = JSON.stringify(
-                        result,
-                    ).replace(/,/g, ', ');
+                    const isENS = descriptor.endsWith('.eth');
+                    const prefix = isENS ? `ENS: ${descriptor} → ${result.address || 'failed'}\n` : '';
+                    document.getElementById('getAccountInfoResult').innerText =
+                        prefix + JSON.stringify(result).replace(/,/g, ', ');
                 });
             }
 
@@ -671,7 +673,7 @@
                     <div class="row" style="margin: 0">
                         <input
                             type="text"
-                            placeholder="descriptor"
+                            placeholder="descriptor (address or ENS name)"
                             style="width: 79%"
                             class="form-control"
                             id="getAccountInfoDescriptor"
