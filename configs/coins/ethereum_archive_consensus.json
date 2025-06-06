@@ -19,10 +19,10 @@
         "package_name": "backend-ethereum-archive-consensus",
         "package_revision": "satoshilabs-1",
         "system_user": "ethereum",
-        "version": "6.0.2",
-        "binary_url": "https://github.com/OffchainLabs/prysm/releases/download/v6.0.2/beacon-chain-v6.0.2-linux-amd64",
+        "version": "6.0.4",
+        "binary_url": "https://github.com/OffchainLabs/prysm/releases/download/v6.0.4/beacon-chain-v6.0.4-linux-amd64",
         "verification_type": "sha256",
-        "verification_source": "043e7f2e319569b6e59edaaeeb4cb36e3c4c070f7f1cd8629c8da39ad23e3193",
+        "verification_source": "5be75a5b5bb8654420eaba215f1138236395fe7fc6182329079c28dc5217258e",
         "extract_command": "mv ${ARCHIVE} backend/beacon-chain && chmod +x backend/beacon-chain && echo",
         "exclude_files": [],
         "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/beacon-chain --mainnet --accept-terms-of-use --execution-endpoint=http://localhost:{{.Ports.BackendAuthRpc}} --grpc-gateway-port=7516 --rpc-port=7517 --monitoring-port=7518 --p2p-tcp-port=3516 --p2p-udp-port=2516 --datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --jwt-secret={{.Env.BackendDataPath}}/ethereum_archive/backend/erigon/jwt.hex 2>>{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
@@ -36,8 +36,8 @@
         "client_config_file": "",
         "platforms": {
             "arm64": {
-                "binary_url": "https://github.com/OffchainLabs/prysm/releases/download/v6.0.2/beacon-chain-v6.0.2-linux-arm64",
-                "verification_source": "15504e2e8548d7b84913d32e1dce1ed578e0dfc36e374a21b4076200a998d7f1"
+                "binary_url": "https://github.com/OffchainLabs/prysm/releases/download/v6.0.4/beacon-chain-v6.0.4-linux-arm64",
+                "verification_source": "24b0fd2efe77f77f7c690e73d408ea42e4de355472d386f6d8da19c216afad44"
             }
         }
     },
