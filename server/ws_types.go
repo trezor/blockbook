@@ -133,6 +133,12 @@ type WsEstimateFeeRes struct {
 	Eip1559    *api.Eip1559Fees `json:"eip1559,omitempty"`
 }
 
+// WsLongTermFeeRateRes is returned in response to a long term fee rate request.
+type WsLongTermFeeRateRes struct {
+	FeePerUnit string `json:"feePerUnit" ts_doc:"Long term fee rate (in sat/kByte)."`
+	Blocks     uint64 `json:"blocks" ts_doc:"Amount of blocks used for the long term fee rate estimation."`
+}
+
 // WsSendTransactionReq is used to broadcast a transaction to the network.
 type WsSendTransactionReq struct {
 	Hex string `json:"hex" ts_doc:"Hex-encoded transaction data to broadcast."`

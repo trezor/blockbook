@@ -211,6 +211,12 @@ type ChainInfo struct {
 	Consensus        interface{} `json:"consensus,omitempty" ts_doc:"Additional consensus details, structure depends on chain."`
 }
 
+// LongTermFeeRate gets information about the fee rate over longer period of time.
+type LongTermFeeRate struct {
+	FeePerUnit big.Int `json:"feePerUnit" ts_doc:"Long term fee rate (in sat/kByte)."`
+	Blocks     uint64  `json:"blocks" ts_doc:"Amount of blocks used for the long term fee rate estimation."`
+}
+
 // RPCError defines rpc error returned by backend
 type RPCError struct {
 	Code    int    `json:"code" ts_doc:"Error code returned by the backend RPC."`
@@ -324,6 +330,7 @@ type BlockChain interface {
 	GetTransactionSpecific(tx *Tx) (json.RawMessage, error)
 	EstimateSmartFee(blocks int, conservative bool) (big.Int, error)
 	EstimateFee(blocks int) (big.Int, error)
+	LongTermFeeRate() (*LongTermFeeRate, error)
 	SendRawTransaction(tx string) (string, error)
 	GetMempoolEntry(txid string) (*MempoolEntry, error)
 	GetContractInfo(contractDesc AddressDescriptor) (*ContractInfo, error)
