@@ -55,7 +55,7 @@
                 "address_aliases": true,
                 "eip1559Fees": true,
                 "alternative_estimate_fee": "infura",
-                "alternative_estimate_fee_params": "{\"url\": \"https://gas.api.infura.io/v3/${api_key}/networks/10/suggestedGasFees\", \"periodSeconds\": 10}",
+                "alternative_estimate_fee_params": "{\"url\": \"https://gas.api.infura.io/v3/${api_key}/networks/10/suggestedGasFees\", \"periodSeconds\": 20}",
                 "processInternalTransactions": true,
                 "queryBackendOnMempoolResync": false,
                 "fiat_rates": "coingecko",
