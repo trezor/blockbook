@@ -377,7 +377,7 @@ func (cg *Coingecko) HourlyTickers() (*[]common.CurrencyRatesTicker, error) {
 	return cg.getHighGranularityTickers("90")
 }
 
-// HourlyTickers returns the array of the exchange rates in five minutes granularity
+// FiveMinutesTickers returns the array of the exchange rates in five minutes granularity
 func (cg *Coingecko) FiveMinutesTickers() (*[]common.CurrencyRatesTicker, error) {
 	return cg.getHighGranularityTickers("1")
 }
