@@ -7,6 +7,7 @@ import (
 	"os"
 	"sort"
 	"sync"
+	"time"
 
 	vlq "github.com/bsm/go-vlq"
 	"github.com/golang/glog"
@@ -261,6 +262,9 @@ func unpackAddrContractsV6(buf []byte, addrDesc bchain.AddressDescriptor) (acs *
 }
 
 func unpackAddrContracts(buf []byte, addrDesc bchain.AddressDescriptor) (acs *AddrContracts, err error) {
+	start := time.Now()
+	var fung, nonfung, nonfunglen, multi, multilen int
+	bufLen := len(buf)
 	tt, l := unpackVaruint(buf)
 	buf = buf[l:]
 	nct, l := unpackVaruint(buf)
@@ -285,6 +289,7 @@ func unpackAddrContracts(buf []byte, addrDesc bchain.AddressDescriptor) (acs *Ad
 			Txs:      txs,
 		}
 		if standard == bchain.FungibleToken {
+			fung++
 			b, ll := unpackBigint(buf)
 			buf = buf[ll:]
 			ac.Value = b
@@ -292,6 +297,8 @@ func unpackAddrContracts(buf []byte, addrDesc bchain.AddressDescriptor) (acs *Ad
 			len, ll := unpackVaruint(buf)
 			buf = buf[ll:]
 			if standard == bchain.NonFungibleToken {
+				nonfung++
+				nonfunglen += int(len)
 				ac.Ids = make(Ids, len)
 				for i := uint(0); i < len; i++ {
 					b, ll := unpackBigint(buf)
@@ -300,6 +307,8 @@ func unpackAddrContracts(buf []byte, addrDesc bchain.AddressDescriptor) (acs *Ad
 				}
 			} else {
 				ac.MultiTokenValues = make(MultiTokenValues, len)
+				multi++
+				multilen += int(len)
 				for i := uint(0); i < len; i++ {
 					b, ll := unpackBigint(buf)
 					buf = buf[ll:]
@@ -311,6 +320,12 @@ func unpackAddrContracts(buf []byte, addrDesc bchain.AddressDescriptor) (acs *Ad
 			}
 		}
 		c = append(c, ac)
+	}
+	if bufLen > 1_000_000 {
+		glog.Info("unpackAddrContracts ", addrDesc,
+			", bufLen ", bufLen, ", contracts ", len(c), ", cap ", cap(c),
+			", counts ", fung, " ", nonfung, " ", nonfunglen, " ", multi, " ", multilen,
+			", time ", time.Since(start))
 	}
 	return &AddrContracts{
 		TotalTxs:       tt,
@@ -1669,11 +1684,14 @@ func (d *RocksDB) getUnpackedAddrDescContracts(addrDesc bchain.AddressDescriptor
 	if len(buf) == 0 {
 		return nil, nil
 	}
-	return partiallyUnpackAddrContracts(buf)
+	return partiallyUnpackAddrContracts(buf, addrDesc)
 }
 
 // to speed up import of blocks, the unpacking of big ints is deferred to time when they are needed
-func partiallyUnpackAddrContracts(buf []byte) (acs *unpackedAddrContracts, err error) {
+func partiallyUnpackAddrContracts(buf []byte, addrDesc bchain.AddressDescriptor) (acs *unpackedAddrContracts, err error) {
+	start := time.Now()
+	var fung, nonfung, nonfunglen, multi, multilen int
+	bufLen := len(buf)
 	// make copy of the slice to avoid subsequent allocation of smaller slices
 	buf = append([]byte{}, buf...)
 	index := 0
@@ -1699,6 +1717,7 @@ func partiallyUnpackAddrContracts(buf []byte) (acs *unpackedAddrContracts, err e
 			Txs:      txs,
 		}
 		if standard == bchain.FungibleToken {
+			fung++
 			l := packedBigintLen(buf[index:])
 			ac.Value = unpackedBigInt{Slice: buf[index : index+l]}
 			index += l
@@ -1706,6 +1725,8 @@ func partiallyUnpackAddrContracts(buf []byte) (acs *unpackedAddrContracts, err e
 			len, ll := unpackVaruint(buf[index:])
 			index += ll
 			if standard == bchain.NonFungibleToken {
+				nonfung++
+				nonfunglen += int(len)
 				ac.Ids = make(unpackedIds, len)
 				for i := uint(0); i < len; i++ {
 					ll := packedBigintLen(buf[index:])
@@ -1713,6 +1734,8 @@ func partiallyUnpackAddrContracts(buf []byte) (acs *unpackedAddrContracts, err e
 					index += ll
 				}
 			} else {
+				multi++
+				multilen += int(len)
 				ac.MultiTokenValues = make(unpackedMultiTokenValues, len)
 				for i := uint(0); i < len; i++ {
 					ll := packedBigintLen(buf[index:])
@@ -1726,6 +1749,12 @@ func partiallyUnpackAddrContracts(buf []byte) (acs *unpackedAddrContracts, err e
 		}
 		c = append(c, ac)
 	}
+	if bufLen > 1_000_000 {
+		glog.Info("partiallyUnpackAddrContracts ", addrDesc,
+			", bufLen ", bufLen, ", contracts ", len(c), ", cap ", cap(c),
+			", counts ", fung, " ", nonfung, " ", nonfunglen, " ", multi, " ", multilen,
+			", time ", time.Since(start))
+	}
 	return &unpackedAddrContracts{
 		Packed:         buf,
 		TotalTxs:       tt,
@@ -1736,7 +1765,9 @@ func partiallyUnpackAddrContracts(buf []byte) (acs *unpackedAddrContracts, err e
 }
 
 // packUnpackedAddrContracts packs unpackedAddrContracts into a byte buffer
-func packUnpackedAddrContracts(acs *unpackedAddrContracts) []byte {
+func packUnpackedAddrContracts(acs *unpackedAddrContracts, addrDesc bchain.AddressDescriptor) []byte {
+	start := time.Now()
+	var packed, unpacked int
 	buf := make([]byte, 0, len(acs.Packed)+eth.EthereumTypeAddressDescriptorLen+12)
 	varBuf := make([]byte, maxPackedBigintBytes)
 	l := packVaruint(acs.TotalTxs, varBuf)
@@ -1755,8 +1786,10 @@ func packUnpackedAddrContracts(acs *unpackedAddrContracts) []byte {
 			if ac.Value.Value != nil {
 				l = packBigint(ac.Value.Value, varBuf)
 				buf = append(buf, varBuf[:l]...)
+				unpacked++
 			} else {
 				buf = append(buf, ac.Value.Slice...)
+				packed++
 			}
 		} else if ac.Standard == bchain.NonFungibleToken {
 			l = packVaruint(uint(len(ac.Ids)), varBuf)
@@ -1765,8 +1798,10 @@ func packUnpackedAddrContracts(acs *unpackedAddrContracts) []byte {
 				if ac.Ids[i].Value != nil {
 					l = packBigint(ac.Ids[i].Value, varBuf)
 					buf = append(buf, varBuf[:l]...)
+					unpacked++
 				} else {
 					buf = append(buf, ac.Ids[i].Slice...)
+					packed++
 				}
 			}
 		} else { // bchain.ERC1155
@@ -1776,18 +1811,30 @@ func packUnpackedAddrContracts(acs *unpackedAddrContracts) []byte {
 				if ac.MultiTokenValues[i].Id.Value != nil {
 					l = packBigint(ac.MultiTokenValues[i].Id.Value, varBuf)
 					buf = append(buf, varBuf[:l]...)
+					unpacked++
 				} else {
 					buf = append(buf, ac.MultiTokenValues[i].Id.Slice...)
+					packed++
 				}
 				if ac.MultiTokenValues[i].Value.Value != nil {
 					l = packBigint(ac.MultiTokenValues[i].Value.Value, varBuf)
 					buf = append(buf, varBuf[:l]...)
+					unpacked++
 				} else {
 					buf = append(buf, ac.MultiTokenValues[i].Value.Slice...)
+					packed++
 				}
 			}
 		}
 	}
+	if len(buf) > 1_000_000 {
+		glog.Info("packUnpackedAddrContracts ", addrDesc,
+			", bufLen ", len(buf), ", orig cap ", len(acs.Packed)+eth.EthereumTypeAddressDescriptorLen+12,
+			", contracts ", len(acs.Contracts),
+			", packed ", packed, " unpacked ", unpacked,
+			", time ", time.Since(start))
+	}
+
 	return buf
 }
 
@@ -1797,7 +1844,7 @@ func (d *RocksDB) storeUnpackedAddressContracts(wb *grocksdb.WriteBatch, acm map
 		if acs == nil || (acs.NonContractTxs == 0 && acs.InternalTxs == 0 && len(acs.Contracts) == 0) {
 			wb.DeleteCF(d.cfh[cfAddressContracts], bchain.AddressDescriptor(addrDesc))
 		} else {
-			buf := packUnpackedAddrContracts(acs)
+			buf := packUnpackedAddrContracts(acs, bchain.AddressDescriptor(addrDesc))
 			wb.PutCF(d.cfh[cfAddressContracts], bchain.AddressDescriptor(addrDesc), buf)
 		}
 	}

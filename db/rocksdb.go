@@ -337,6 +337,9 @@ func (d *RocksDB) ConnectBlock(block *bchain.Block) error {
 	d.connectBlockMux.Lock()
 	defer d.connectBlockMux.Unlock()
 
+	start := time.Now()
+	var processTime time.Time
+
 	wb := grocksdb.NewWriteBatch()
 	defer wb.Destroy()
 
@@ -384,6 +387,7 @@ func (d *RocksDB) ConnectBlock(block *bchain.Block) error {
 		if err != nil {
 			return err
 		}
+		processTime = time.Now()
 		if err := d.storeUnpackedAddressContracts(wb, addressContracts); err != nil {
 			return err
 		}
@@ -402,6 +406,7 @@ func (d *RocksDB) ConnectBlock(block *bchain.Block) error {
 	if err := d.storeAddresses(wb, block.Height, addresses); err != nil {
 		return err
 	}
+	writeBatch := time.Now()
 	if err := d.WriteBatch(wb); err != nil {
 		return err
 	}
@@ -409,6 +414,7 @@ func (d *RocksDB) ConnectBlock(block *bchain.Block) error {
 	if d.metrics != nil {
 		d.metrics.AvgBlockPeriod.Set(float64(avg))
 	}
+	glog.Info("db.ConnectBlock ", block.Height, "  ", block.Hash, ", process ", processTime.Sub(start), ", other ", writeBatch.Sub(processTime), ", write batch ", time.Since(writeBatch), ", total ", time.Since(start))
 	return nil
 }
 
