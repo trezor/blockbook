@@ -209,7 +209,7 @@ sudo apt-get update && sudo apt-get install -y \
     build-essential git wget pkg-config libzmq3-dev libgflags-dev libsnappy-dev zlib1g-dev libzstd-dev  libbz2-dev liblz4-dev
 git clone https://github.com/facebook/rocksdb.git
 cd rocksdb
-git checkout v7.5.3
+git checkout v9.10.0
 CFLAGS=-fPIC CXXFLAGS=-fPIC make release
 ```
 
