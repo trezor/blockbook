@@ -22,10 +22,10 @@
         "package_name": "backend-ethereum-testnet-holesky",
         "package_revision": "satoshilabs-1",
         "system_user": "ethereum",
-        "version": "3.0.5",
-        "binary_url": "https://github.com/erigontech/erigon/releases/download/v3.0.5/erigon_v3.0.5_linux_amd64.tar.gz",
+        "version": "3.0.7",
+        "binary_url": "https://github.com/erigontech/erigon/releases/download/v3.0.7/erigon_v3.0.7_linux_amd64.tar.gz",
         "verification_type": "sha256",
-        "verification_source": "64e6bcad4de63dc24c45dd308180238c78972bfc9553bcbe2724c0d4c0de0074",
+        "verification_source": "63a03e23db410028b345e0bd6e1dae5a4dbd3839ec43b15002c74c60bad7c027",
         "extract_command": "tar -C backend --strip-components=1 -xf",
         "exclude_files": [],
         "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/erigon --chain holesky --snap.keepblocks --db.size.limit 15TB --db.pagesize 16KB --prune.mode full --externalcl --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/erigon --port {{.Ports.BackendP2P}} --ws --ws.port {{.Ports.BackendRPC}} --http --http.port {{.Ports.BackendRPC}} --http.addr 127.0.0.1 --http.corsdomain \"*\" --http.vhosts \"*\" --http.api \"eth,net,web3,debug,txpool\" --authrpc.port {{.Ports.BackendAuthRpc}} --private.api.addr \"\" --torrent.port {{.Ports.BackendHttp}} --log.dir.path {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --log.dir.prefix {{.Coin.Alias}}'",
@@ -39,8 +39,8 @@
         "client_config_file": "",
         "platforms": {
             "arm64": {
-                "binary_url": "https://github.com/erigontech/erigon/releases/download/v3.0.5/erigon_v3.0.5_linux_arm64.tar.gz",
-                "verification_source": "741d327a6620c44225d36def78629b8cac5427d7bc2ff0bb20e97191c94e61e4"
+                "binary_url": "https://github.com/erigontech/erigon/releases/download/v3.0.7/erigon_v3.0.7_linux_arm64.tar.gz",
+                "verification_source": "c5422bc7eccce354cb14b7435ea26a4bbae7bb9e80402d45f641a68db1a28c2b"
             }
         }
     },
