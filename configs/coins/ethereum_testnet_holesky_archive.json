@@ -23,10 +23,10 @@
         "package_name": "backend-ethereum-testnet-holesky-archive",
         "package_revision": "satoshilabs-1",
         "system_user": "ethereum",
-        "version": "3.0.5",
-        "binary_url": "https://github.com/erigontech/erigon/releases/download/v3.0.5/erigon_v3.0.5_linux_amd64.tar.gz",
+        "version": "3.0.8",
+        "binary_url": "https://github.com/erigontech/erigon/releases/download/v3.0.8/erigon_v3.0.8_linux_amd64.tar.gz",
         "verification_type": "sha256",
-        "verification_source": "64e6bcad4de63dc24c45dd308180238c78972bfc9553bcbe2724c0d4c0de0074",
+        "verification_source": "0bf4d6eea0054017360eaddf6ac4b4a25ebeede8df1e89dfaddab207558394fb",
         "extract_command": "tar -C backend --strip-components=1 -xf",
         "exclude_files": [],
         "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/erigon --chain holesky --snap.keepblocks --db.size.limit 15TB --db.pagesize 16KB --prune.mode archive --externalcl --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/erigon --port {{.Ports.BackendP2P}} --ws --ws.port {{.Ports.BackendRPC}} --http --http.port {{.Ports.BackendRPC}} --http.addr 127.0.0.1 --http.corsdomain \"*\" --http.vhosts \"*\" --http.api \"eth,net,web3,debug,txpool\" --authrpc.port {{.Ports.BackendAuthRpc}} --private.api.addr \"\" --torrent.port {{.Ports.BackendHttp}} --log.dir.path {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --log.dir.prefix {{.Coin.Alias}}'",
@@ -40,8 +40,8 @@
         "client_config_file": "",
         "platforms": {
             "arm64": {
-                "binary_url": "https://github.com/erigontech/erigon/releases/download/v3.0.5/erigon_v3.0.5_linux_arm64.tar.gz",
-                "verification_source": "741d327a6620c44225d36def78629b8cac5427d7bc2ff0bb20e97191c94e61e4"
+                "binary_url": "https://github.com/erigontech/erigon/releases/download/v3.0.8/erigon_v3.0.8_linux_arm64.tar.gz",
+                "verification_source": "4a2505601cbd1877a6a70302153cbd33a3729708db1cc56ce601a797a533def1"
             }
         }
     },
