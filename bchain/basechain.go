@@ -95,3 +95,7 @@ func (b *BaseChain) EthereumTypeRpcCall(data, to, from string) (string, error) {
 func (b *BaseChain) EthereumTypeGetRawTransaction(txid string) (string, error) {
 	return "", errors.New("not supported")
 }
+
+func (b *BaseChain) EthereumTypeGetTransactionReceipt(txid string) (*RpcReceipt, error) {
+	return nil, errors.New("not supported")
+}
