@@ -22,10 +22,10 @@
         "package_name": "backend-ethereum-testnet-holesky",
         "package_revision": "satoshilabs-1",
         "system_user": "ethereum",
-        "version": "3.0.8",
-        "binary_url": "https://github.com/erigontech/erigon/releases/download/v3.0.8/erigon_v3.0.8_linux_amd64.tar.gz",
+        "version": "3.0.11",
+        "binary_url": "https://github.com/erigontech/erigon/releases/download/v3.0.11/erigon_v3.0.11_linux_amd64.tar.gz",
         "verification_type": "sha256",
-        "verification_source": "0bf4d6eea0054017360eaddf6ac4b4a25ebeede8df1e89dfaddab207558394fb",
+        "verification_source": "f046e1e0ffbb460b156dea52023f0fa84efe536edb8d6eb42094b398d710615c",
         "extract_command": "tar -C backend --strip-components=1 -xf",
         "exclude_files": [],
         "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/erigon --chain holesky --snap.keepblocks --db.size.limit 15TB --db.pagesize 16KB --prune.mode full --externalcl --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/erigon --port {{.Ports.BackendP2P}} --ws --ws.port {{.Ports.BackendRPC}} --http --http.port {{.Ports.BackendRPC}} --http.addr 127.0.0.1 --http.corsdomain \"*\" --http.vhosts \"*\" --http.api \"eth,net,web3,debug,txpool\" --authrpc.port {{.Ports.BackendAuthRpc}} --private.api.addr \"\" --torrent.port {{.Ports.BackendHttp}} --log.dir.path {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --log.dir.prefix {{.Coin.Alias}}'",
@@ -39,8 +39,8 @@
         "client_config_file": "",
         "platforms": {
             "arm64": {
-                "binary_url": "https://github.com/erigontech/erigon/releases/download/v3.0.8/erigon_v3.0.8_linux_arm64.tar.gz",
-                "verification_source": "4a2505601cbd1877a6a70302153cbd33a3729708db1cc56ce601a797a533def1"
+                "binary_url": "https://github.com/erigontech/erigon/releases/download/v3.0.11/erigon_v3.0.11_linux_arm64.tar.gz",
+                "verification_source": "c8c3c660187a2848bb8af0a1a65dd4548d8fd9bb46d1e6d2f5eb60854436e6c9"
             }
         }
     },
