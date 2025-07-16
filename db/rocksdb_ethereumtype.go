@@ -321,7 +321,7 @@ func unpackAddrContracts(buf []byte, addrDesc bchain.AddressDescriptor) (acs *Ad
 		}
 		c = append(c, ac)
 	}
-	if bufLen > 1_000_000 {
+	if bufLen > addrContractsCacheMinSize {
 		glog.Info("unpackAddrContracts ", addrDesc,
 			", bufLen ", bufLen, ", contracts ", len(c), ", cap ", cap(c),
 			", counts ", fung, " ", nonfung, " ", nonfunglen, " ", multi, " ", multilen,
@@ -1675,6 +1675,12 @@ func (s *unpackedMultiTokenValues) upsert(m bchain.MultiTokenValue, index int32,
 
 // getUnpackedAddrDescContracts returns partially unpacked AddrContracts for given addrDesc
 func (d *RocksDB) getUnpackedAddrDescContracts(addrDesc bchain.AddressDescriptor) (*unpackedAddrContracts, error) {
+	d.addrContractsCacheMux.Lock()
+	rv, found := d.addrContractsCache[string(addrDesc)]
+	d.addrContractsCacheMux.Unlock()
+	if found && rv != nil {
+		return rv, nil
+	}
 	val, err := d.db.GetCF(d.ro, d.cfh[cfAddressContracts], addrDesc)
 	if err != nil {
 		return nil, err
@@ -1684,7 +1690,13 @@ func (d *RocksDB) getUnpackedAddrDescContracts(addrDesc bchain.AddressDescriptor
 	if len(buf) == 0 {
 		return nil, nil
 	}
-	return partiallyUnpackAddrContracts(buf, addrDesc)
+	rv, err = partiallyUnpackAddrContracts(buf, addrDesc)
+	if err != nil && rv != nil && len(buf) > addrContractsCacheMinSize {
+		d.addrContractsCacheMux.Lock()
+		d.addrContractsCache[string(addrDesc)] = rv
+		d.addrContractsCacheMux.Unlock()
+	}
+	return rv, err
 }
 
 // to speed up import of blocks, the unpacking of big ints is deferred to time when they are needed
@@ -1749,7 +1761,7 @@ func partiallyUnpackAddrContracts(buf []byte, addrDesc bchain.AddressDescriptor)
 		}
 		c = append(c, ac)
 	}
-	if bufLen > 1_000_000 {
+	if bufLen > addrContractsCacheMinSize {
 		glog.Info("partiallyUnpackAddrContracts ", addrDesc,
 			", bufLen ", bufLen, ", contracts ", len(c), ", cap ", cap(c),
 			", counts ", fung, " ", nonfung, " ", nonfunglen, " ", multi, " ", multilen,
@@ -1827,7 +1839,7 @@ func packUnpackedAddrContracts(acs *unpackedAddrContracts, addrDesc bchain.Addre
 			}
 		}
 	}
-	if len(buf) > 1_000_000 {
+	if len(buf) > addrContractsCacheMinSize {
 		glog.Info("packUnpackedAddrContracts ", addrDesc,
 			", bufLen ", len(buf), ", orig cap ", len(acs.Packed)+eth.EthereumTypeAddressDescriptorLen+12,
 			", contracts ", len(acs.Contracts),
@@ -1843,10 +1855,31 @@ func (d *RocksDB) storeUnpackedAddressContracts(wb *grocksdb.WriteBatch, acm map
 		// address with 0 contracts is removed from db - happens on disconnect
 		if acs == nil || (acs.NonContractTxs == 0 && acs.InternalTxs == 0 && len(acs.Contracts) == 0) {
 			wb.DeleteCF(d.cfh[cfAddressContracts], bchain.AddressDescriptor(addrDesc))
+			d.addrContractsCacheMux.Lock()
+			delete(d.addrContractsCache, addrDesc)
+			d.addrContractsCacheMux.Unlock()
 		} else {
 			buf := packUnpackedAddrContracts(acs, bchain.AddressDescriptor(addrDesc))
 			wb.PutCF(d.cfh[cfAddressContracts], bchain.AddressDescriptor(addrDesc), buf)
+			if len(buf) > addrContractsCacheMinSize {
+				d.addrContractsCacheMux.Lock()
+				d.addrContractsCache[addrDesc] = acs
+				d.addrContractsCacheMux.Unlock()
+			}
 		}
 	}
 	return nil
+}
+
+func (d *RocksDB) periodicCleanAddrContractsCache() {
+	period := time.Duration(5) * time.Minute
+	timer := time.NewTimer(period)
+	for {
+		<-timer.C
+		timer.Reset(period)
+		glog.Info("periodicCleanAddrContractsCache: cleaning ", len(d.addrContractsCache), " entries")
+		d.addrContractsCacheMux.Lock()
+		d.addrContractsCache = make(map[string]*unpackedAddrContracts)
+		d.addrContractsCacheMux.Unlock()
+	}
 }
