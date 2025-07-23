@@ -39,7 +39,8 @@
         "client_config_file": "bitcoin_client.conf",
         "additional_params": {
             "deprecatedrpc": "estimatefee",
-            "addnode": ["ove.palatinus.cz"]
+            "addnode": ["ove.palatinus.cz"],
+            "minrelaytxfee": "0.1"
         },
         "platforms": {
             "arm64": {
