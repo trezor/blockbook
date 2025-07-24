@@ -1367,6 +1367,27 @@ func setIsOwnAddress(tx *Tx, address string) {
 
 // GetAddress computes address value and gets transactions for given address
 func (w *Worker) GetAddress(address string, page int, txsOnPage int, option AccountDetails, filter *AddressFilter, secondaryCoin string) (*Address, error) {
+	if w.chainType == bchain.ChainEthereumType && strings.HasSuffix(strings.ToLower(address), ".eth") {
+		ensResolver, ok := w.chain.(interface {
+			ResolveENS(string) (*bchain.ENSResolution, error)
+		})
+		if !ok {
+			return nil, fmt.Errorf("ENS resolution not supported for this chain")
+		}
+
+		ensRes, err := ensResolver.ResolveENS(address)
+		if err != nil {
+			glog.Errorf("ENS resolution failed for %s: %v", address, err)
+			return nil, fmt.Errorf("ENS resolution failed: %w", err)
+		}
+
+		if ensRes == nil || ensRes.Address == "" {
+			return nil, fmt.Errorf("ENS name not found: %s", address)
+		}
+
+		address = ensRes.Address
+		glog.Infof("ENS resolved %s to %s", strings.ToLower(address), ensRes.Address)
+	}
 	start := time.Now()
 	page--
 	if page < 0 {

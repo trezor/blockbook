@@ -31,6 +31,8 @@ const contractSymbolSignature = "0x95d89b41"
 const contractDecimalsSignature = "0x313ce567"
 const contractBalanceOfSignature = "0x70a08231"
 
+const ENSRegistryAddress = "0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e" // ENSRegistryAddress is the mainnet ENS registry contract address
+
 func addressFromPaddedHex(s string) (string, error) {
 	var t big.Int
 	var ok bool
