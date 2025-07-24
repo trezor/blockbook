@@ -34,6 +34,7 @@ type Worker struct {
 	is                *common.InternalState
 	fiatRates         *fiat.FiatRates
 	metrics           *common.Metrics
+	ethParser         *eth.EthereumParser
 }
 
 // contractInfoCache is a temporary cache of contract information for ethereum token transfers
@@ -1319,6 +1320,20 @@ func setIsOwnAddress(tx *Tx, address string) {
 
 // GetAddress computes address value and gets transactions for given address
 func (w *Worker) GetAddress(address string, page int, txsOnPage int, option AccountDetails, filter *AddressFilter, secondaryCoin string) (*Address, error) {
+	if w.chainType == bchain.ChainEthereumType && strings.HasSuffix(strings.ToLower(address), w.ethParser.EnsSuffix) {
+		if rpc, ok := w.chain.(*eth.EthereumRPC); ok {
+			ensRes, err := rpc.ResolveENS(address)
+			if err != nil {
+				return nil, fmt.Errorf("ENS resolution failed: %w", err)
+			}
+			if ensRes.Address == "" {
+				return nil, fmt.Errorf("ENS name not found: %s", address)
+			}
+			address = ensRes.Address
+		} else {
+			return nil, fmt.Errorf("EthereumRPC not available for ENS resolution")
+		}
+	}
 	start := time.Now()
 	page--
 	if page < 0 {
