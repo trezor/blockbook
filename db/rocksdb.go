@@ -57,21 +57,25 @@ const (
 	addressBalanceDetailUTXOIndexed = 2
 )
 
+const addrContractsCacheMinSize = 300_000 // limit for caching address contracts in memory to speed up indexing
+
 // RocksDB handle
 type RocksDB struct {
-	path            string
-	db              *grocksdb.DB
-	wo              *grocksdb.WriteOptions
-	ro              *grocksdb.ReadOptions
-	cfh             []*grocksdb.ColumnFamilyHandle
-	chainParser     bchain.BlockChainParser
-	is              *common.InternalState
-	metrics         *common.Metrics
-	cache           *grocksdb.Cache
-	maxOpenFiles    int
-	cbs             connectBlockStats
-	extendedIndex   bool
-	connectBlockMux sync.Mutex
+	path                  string
+	db                    *grocksdb.DB
+	wo                    *grocksdb.WriteOptions
+	ro                    *grocksdb.ReadOptions
+	cfh                   []*grocksdb.ColumnFamilyHandle
+	chainParser           bchain.BlockChainParser
+	is                    *common.InternalState
+	metrics               *common.Metrics
+	cache                 *grocksdb.Cache
+	maxOpenFiles          int
+	cbs                   connectBlockStats
+	extendedIndex         bool
+	connectBlockMux       sync.Mutex
+	addrContractsCacheMux sync.Mutex
+	addrContractsCache    map[string]*unpackedAddrContracts
 }
 
 const (
@@ -150,7 +154,11 @@ func NewRocksDB(path string, cacheSize, maxOpenFiles int, parser bchain.BlockCha
 	}
 	wo := grocksdb.NewDefaultWriteOptions()
 	ro := grocksdb.NewDefaultReadOptions()
-	return &RocksDB{path, db, wo, ro, cfh, parser, nil, metrics, c, maxOpenFiles, connectBlockStats{}, extendedIndex, sync.Mutex{}}, nil
+	r := &RocksDB{path, db, wo, ro, cfh, parser, nil, metrics, c, maxOpenFiles, connectBlockStats{}, extendedIndex, sync.Mutex{}, sync.Mutex{}, make(map[string]*unpackedAddrContracts)}
+	if chainType == bchain.ChainEthereumType {
+		go r.periodicStoreAddrContractsCache()
+	}
+	return r, nil
 }
 
 func (d *RocksDB) closeDB() error {
@@ -165,6 +173,10 @@ func (d *RocksDB) closeDB() error {
 // Close releases the RocksDB environment opened in NewRocksDB.
 func (d *RocksDB) Close() error {
 	if d.db != nil {
+		// store cached address contracts
+		if d.chainParser.GetChainType() == bchain.ChainEthereumType {
+			d.storeAddrContractsCache()
+		}
 		// store the internal state of the app
 		if d.is != nil && d.is.DbState == common.DbStateOpen {
 			d.is.DbState = common.DbStateClosed
