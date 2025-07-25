@@ -2,6 +2,7 @@ package eth
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -22,6 +23,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/common"
+	"golang.org/x/crypto/sha3"
 )
 
 // Network type specifies the type of ethereum network
@@ -1178,4 +1180,73 @@ func (b *EthereumRPC) EthereumTypeGetNonce(addrDesc bchain.AddressDescriptor) (u
 // GetChainParser returns ethereum BlockChainParser
 func (b *EthereumRPC) GetChainParser() bchain.BlockChainParser {
 	return b.Parser
+}
+
+// ENS helper: namehash per ENS spec
+func ensNameHash(name string) string {
+	node := make([]byte, 32)
+	if name != "" {
+		labels := strings.Split(name, ".")
+		for i := len(labels) - 1; i >= 0; i-- {
+			labelHash := keccak256([]byte(labels[i]))
+			node = keccak256(append(node, labelHash...))
+		}
+	}
+	return "0x" + hex.EncodeToString(node)
+}
+
+func keccak256(data []byte) []byte {
+	hash := sha3.NewLegacyKeccak256()
+	hash.Write(data)
+	return hash.Sum(nil)
+}
+
+func parseENSAddressFromResult(result string) (string, error) {
+	if len(result) < 2 || result[:2] != "0x" {
+		return "", errors.New("invalid hex result")
+	}
+	hexData := result[2:]
+	if len(hexData) < 64 {
+		return "", errors.New("result too short")
+	}
+	addressHex := hexData[len(hexData)-40:]
+	return "0x" + addressHex, nil
+}
+
+// ResolveENS resolves an ENS name to an Ethereum address using the ENS registry and resolver contracts
+func (b *EthereumRPC) ResolveENS(name string) (*bchain.ENSResolution, error) {
+	name = strings.ToLower(strings.TrimSpace(name))
+	if !strings.HasSuffix(name, ".eth") {
+		return &bchain.ENSResolution{Name: name, Error: "invalid ENS name"}, errors.New("invalid ENS name")
+	}
+
+	node := ensNameHash(name)
+
+	// 1. Get resolver address from ENS registry
+	data := "0x0178b8bf" + node[2:]
+	result, err := b.callRpcStringResult(data, ENSRegistryAddress, "0x0000000000000000000000000000000000000000")
+	if err != nil {
+		return &bchain.ENSResolution{Name: name, Error: "failed to query ENS registry"}, err
+	}
+	resolverAddr, err := parseENSAddressFromResult(result)
+	if err != nil || resolverAddr == "0x0000000000000000000000000000000000000000" {
+		return &bchain.ENSResolution{Name: name, Error: "no resolver set"}, errors.New("no resolver set")
+	}
+
+	// 2. Get address from resolver
+	data = "0x3b3b57de" + node[2:]
+	result, err = b.callRpcStringResult(data, resolverAddr, "0x0000000000000000000000000000000000000000")
+	if err != nil {
+		return &bchain.ENSResolution{Name: name, Error: "failed to query resolver"}, err
+	}
+	address, err := parseENSAddressFromResult(result)
+	if err != nil || address == "0x0000000000000000000000000000000000000000" {
+		return &bchain.ENSResolution{Name: name, Error: "ENS name not found"}, errors.New("ENS name not found")
+	}
+
+	return &bchain.ENSResolution{Name: name, Address: address}, nil
+}
+
+func (p *EthereumParser) ResolveENS(name string) (*bchain.ENSResolution, error) {
+	return nil, errors.New("unsupported chain type for ENS resolution")
 }
