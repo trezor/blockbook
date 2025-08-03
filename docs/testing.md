@@ -44,6 +44,19 @@ It perfectly fits with layered test definitions. For example, you can:
 * run single test – `make test-integration ARGS="-run=TestIntegration//sync/HandleFork"`
 * run tests for set of coins – `make test-integration ARGS="-run='TestIntegration/(bcash|bgold|bitcoin|dash|dogecoin|litecoin|snowgem|vertcoin|zcash|zelcash)/'"`
 
+**Satoxcoin Testing:**
+
+```bash
+# Run Satoxcoin-specific tests
+make test-integration ARGS="-run=TestIntegration/satoxcoin/"
+
+# Run Satoxcoin parser tests
+make test ARGS="-run TestSatoxcoin"
+
+# Run Satoxcoin unit tests
+go test ./bchain/coins/satoxcoin
+```
+
 Test fixtures are defined in *testdata* directory in package of particular test suite. They are separate JSON files named
 by coin. File schemes are very similar with verbose results of CLI tools and are described below. Integration tests
 follow the same concept, use live component or service and verify their results with fixtures.

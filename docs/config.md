@@ -15,6 +15,9 @@ Good examples of coin configuration are
 [*configs/coins/bitcoin.json*](/configs/coins/bitcoin.json) and
 [*configs/coins/ethereum.json*](/configs/coins/ethereum.json) for Bitcoin-like coins and different coins, respectively.
 
+For Satoxcoin implementation, see [*configs/coins/satoxcoin.json*](/configs/coins/satoxcoin.json) and
+[*configs/coins/satoxcoin_testnet.json*](/configs/coins/satoxcoin_testnet.json) for mainnet and testnet configurations.
+
 ## Description of coin definition
 
 * `coin` – Base information about coin.

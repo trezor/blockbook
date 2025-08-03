@@ -1,5 +1,124 @@
 [![Go Report Card](https://goreportcard.com/badge/trezor/blockbook)](https://goreportcard.com/report/trezor/blockbook)
 
+# Blockbook - Satoxcoin Edition
+
+**Modified for Satoxcoin by Satoxcoin Core Developers**
+
+This is a modified version of the original Blockbook project, customized to support Satoxcoin (SATOX) as the default blockchain explorer. The original Blockbook project is developed by Trezor and is licensed under the GNU Affero General Public License v3.0.
+
+**Original Project:** [Trezor Blockbook](https://github.com/trezor/blockbook)  
+**Satoxcoin Implementation:** Satoxcoin Core Developers  
+**License:** GNU Affero General Public License v3.0 (see COPYING file)
+
+## Satoxcoin Features
+
+- **Default Coin:** Satoxcoin (SATOX) is set as the default blockchain
+- **SLIP44 Support:** Uses SLIP 9007 (BIP44 Coin Type: 1669) for Satoxcoin
+- **Network Support:** Mainnet, testnet, and regtest configurations
+- **CoinGecko Integration:** Real-time price data for SATOX
+- **Multi-Network:** Supports both mainnet and testnet environments
+
+## System Requirements
+
+### Supported Operating Systems
+- **Ubuntu 22.04 LTS** (jammy) - ✅ Fully Supported
+- **Ubuntu 20.04 LTS** (focal) - ✅ Compatible
+- **Debian 11+** - ✅ Compatible
+- **Other Linux distributions** - ✅ Compatible with Go 1.23+
+
+### Hardware Requirements
+- **RAM:** Minimum 4GB, Recommended 8GB+ for mainnet
+- **Storage:** Minimum 50GB, Recommended 100GB+ for full blockchain
+- **CPU:** Multi-core processor recommended
+- **Network:** Stable internet connection for blockchain sync
+
+### Dependencies
+- **Go:** 1.23.0 or higher
+- **RocksDB:** Included via `github.com/linxGnu/grocksdb v1.9.8`
+- **ZeroMQ:** `github.com/pebbe/zmq4 v1.2.1`
+- **Ethereum Libraries:** `github.com/ethereum/go-ethereum v1.15.5`
+- **Bitcoin Libraries:** `github.com/martinboehm/btcd` and `github.com/martinboehm/btcutil`
+
+## Installation
+
+### Quick Start (Ubuntu 22.04)
+```bash
+# Install Go 1.23+
+sudo apt update
+sudo apt install golang-go
+
+# Clone and build
+git clone <repository-url>
+cd satoxcoin-blockbook
+go build -o blockbook .
+
+# Run with default Satoxcoin configuration
+./blockbook
+```
+
+## Usage
+
+```bash
+# Run with default Satoxcoin mainnet configuration (port 6110)
+./blockbook
+
+# Run with testnet configuration (port 6110)
+./blockbook -blockchaincfg=blockchaincfg_testnet.json
+
+# Run with custom configuration
+./blockbook -blockchaincfg=path/to/custom/config.json
+
+# Run with low-resource configuration (port 6110)
+./blockbook -blockchaincfg=blockchaincfg_low_resource.json -dbcache=67108864 -workers=1 -chunk=50
+
+### Satoxcoin Node Configuration
+
+Before running the blockbook, ensure your Satoxcoin node is properly configured:
+
+1. **Create Satoxcoin configuration file:**
+   ```bash
+   # Create config directory
+   mkdir -p ~/.satoxcoin
+   
+   # Copy example configuration
+   cp satoxcoin.conf.example ~/.satoxcoin/satoxcoin.conf
+   
+   # Edit with your credentials
+   nano ~/.satoxcoin/satoxcoin.conf
+   ```
+
+2. **Update credentials in the config file:**
+   ```bash
+   rpcuser=your_actual_username
+   rpcpassword=your_actual_password
+   ```
+
+3. **Start Satoxcoin node:**
+   ```bash
+   satoxcoind
+   ```
+
+4. **Verify RPC connection:**
+   ```bash
+   satoxcoin-cli getblockchaininfo
+   ```
+
+### Docker Support
+The project uses the existing blockbook Docker infrastructure:
+
+```bash
+# Build using existing Docker infrastructure
+make build
+
+# Build optimized for VPS
+make build ARGS="-ldflags='-s -w'"
+
+# Run with low-resource configuration
+./blockbook -blockchaincfg=blockchaincfg_low_resource.json -dbcache=67108864 -workers=1 -chunk=50
+```
+
+---
+
 # Blockbook
 
 **Blockbook** is a back-end service for Trezor Suite. The main features of **Blockbook** are:
@@ -31,7 +150,9 @@ Blockbook currently supports over 30 coins. The Trezor team implemented
 
 -   Bitcoin, Bitcoin Cash, Zcash, Dash, Litecoin, Bitcoin Gold, Ethereum, Ethereum Classic, Dogecoin, Namecoin, Vertcoin, DigiByte, Liquid
 
-the rest of coins were implemented by the community.
+the rest of coins were implemented by the community, including:
+
+-   Satoxcoin (SATOX) - Custom implementation by Satoxcoin Core Developers
 
 Testnets for some coins are also supported, for example:
 

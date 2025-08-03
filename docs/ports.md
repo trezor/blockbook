@@ -87,5 +87,7 @@
 | Ethereum Testnet Sepolia Archive | 19186            | 19086              | 18086       | 18186 http, 18186 torrent, 18586 authrpc, 48386 p2p |
 | Qtum Testnet                     | 19188            | 19088              | 18088       | 48388                                               |
 | Omotenashicoin Testnet           | 19189            | 19089              | 18089       | 48389                                               |
+| Satoxcoin                        | 6110             | 6111               | 7777        | 38777                                               |
+| Satoxcoin Testnet                | 6110             | 6111               | 19766       | 38966                                               |
 
 > NOTE: This document is generated from coin definitions in `configs/coins` using command `go run contrib/scripts/check-and-generate-port-registry.go -w`.

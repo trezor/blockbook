@@ -3,6 +3,7 @@ data*/
 profile/
 blockbook
 notes.txt
+blockchain-rules.md
 debug*
 .vscode
 docker/blockbook

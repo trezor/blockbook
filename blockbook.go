@@ -1,3 +1,14 @@
+/*
+ * Satoxcoin Blockbook - Main Application
+ * Copyright (C) 2025 Satoxcoin Core Developers
+ *
+ * This is a modified version of the original Blockbook project by Trezor,
+ * customized to support Satoxcoin (SATOX) as the default blockchain explorer.
+ * The original Blockbook project is available at: https://github.com/trezor/blockbook
+ *
+ * License: GNU Affero General Public License v3.0
+ */
+
 package main
 
 import (
@@ -41,7 +52,7 @@ const exitCodeOK = 0
 const exitCodeFatal = 255
 
 var (
-	configFile = flag.String("blockchaincfg", "", "path to blockchain RPC service configuration json file")
+	configFile = flag.String("blockchaincfg", "blockchaincfg.json", "path to blockchain RPC service configuration json file")
 
 	dbPath         = flag.String("datadir", "./data", "path to database directory")
 	dbCache        = flag.Int("dbcache", 1<<29, "size of the rocksdb cache")

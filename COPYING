@@ -2,6 +2,16 @@
                        Version 3, 19 November 2007
 
  Copyright (C) 2007 Free Software Foundation, Inc. <https://fsf.org/>
+
+                    SATOXCOIN BLOCKBOOK MODIFICATION
+                       Copyright (C) 2025 Satoxcoin Core Developers
+
+ This is a modified version of the original Blockbook project by Trezor,
+ customized to support Satoxcoin (SATOX) as the default blockchain explorer.
+ The original Blockbook project is available at: https://github.com/trezor/blockbook
+
+ Satoxcoin Implementation: Satoxcoin Core Developers, 2025
+ License: GNU Affero General Public License v3.0
  Everyone is permitted to copy and distribute verbatim copies
  of this license document, but changing it is not allowed.
 

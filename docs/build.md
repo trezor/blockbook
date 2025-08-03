@@ -72,6 +72,19 @@ build/backend-bitcoin_0.21.0-satoshilabs-1_amd64.deb  build/blockbook-bitcoin_0.
 
 We have built one back-end package, for Bitcoin, and two Blockbook packages, for Bitcoin and Bitcoin Testnet. The `all-bitcoin` initially cleaned the build directory and rebuilt the Docker build image.
 
+**Satoxcoin Example:**
+
+```bash
+# Build Satoxcoin packages
+make all-satoxcoin
+
+# Build Satoxcoin testnet packages
+make all-satoxcoin_testnet
+
+# Build both mainnet and testnet
+make all-satoxcoin deb-blockbook-satoxcoin_testnet
+```
+
 ### Extra variables
 
 There are few variables that can be passed to `make` in order to modify build process:

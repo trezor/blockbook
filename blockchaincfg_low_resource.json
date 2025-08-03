@@ -1,0 +1,12 @@
+{
+    "coin_name": "Satoxcoin",
+    "coin_shortcut": "SATOX",
+    "coin_label": "Satoxcoin",
+    "network": "livenet",
+    "fiat_rates": "coingecko",
+    "fiat_rates_params": "{\"coin\": \"satoxcoin\", \"periodSeconds\": 600}",
+    "fiat_rates_vs_currencies": "USD,BTC,ETH",
+    "block_golomb_filter_p": 20,
+    "block_filter_scripts": "taproot",
+    "block_filter_use_zeroed_key": false
+} 

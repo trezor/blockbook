@@ -1,0 +1,41 @@
+# Satoxcoin Core Configuration File
+# This file should be placed in the Satoxcoin data directory
+# Example: ~/.satoxcoin/satoxcoin.conf
+
+# RPC Configuration (Required for Blockbook)
+server=1
+rpcuser=your_rpc_username
+rpcpassword=your_rpc_password
+rpcport=7777
+rpcbind=127.0.0.1
+rpcallowip=127.0.0.1
+
+# P2P Configuration
+port=60777
+
+# Indexes (Required for Blockbook)
+txindex=1
+assetindex=1
+
+# Additional Settings for Blockbook
+# Enable extended RPC calls
+deprecatedrpc=estimatefee
+
+# Network Settings
+# For mainnet (default)
+# For testnet, add: testnet=1
+# For regtest, add: regtest=1
+
+# Performance Settings
+dbcache=512
+maxmempool=64
+maxconnections=10
+
+# Logging
+debug=rpc
+debug=net
+debug=selectcoins
+
+# Security
+rpcworkqueue=16
+rpcthreads=4 

@@ -1,0 +1,24 @@
+{
+    "fiat_rates": "coingecko",
+    "fiat_rates_params": "{\"coin\": \"satoxcoin\", \"periodSeconds\": 300}",
+    "fiat_rates_vs_currencies": "AED,ARS,AUD,BDT,BHD,BMD,BRL,CAD,CHF,CLP,CNY,CZK,DKK,EUR,GBP,HKD,HUF,IDR,ILS,INR,JPY,KRW,KWD,LKR,MMK,MXN,MYR,NGN,NOK,NZD,PHP,PKR,PLN,RUB,SAR,SEK,SGD,THB,TRY,TWD,UAH,USD,VEF,VND,ZAR,BTC,ETH",
+    "coin_name": "Satoxcoin",
+    "coin_shortcut": "SATOX",
+    "coin_label": "Satoxcoin",
+    "rpc_url": "http://127.0.0.1:7777",
+    "rpc_user": "your_rpc_username",
+    "rpc_pass": "your_rpc_password",
+    "rpc_timeout": 25,
+    "parse": true,
+    "message_queue_binding": "tcp://127.0.0.1:38777",
+    "subversion": "/Satoxcoin Core:latest/",
+    "address_format": "",
+    "xpub_magic": 76067358,
+    "xpub_magic_segwit_p2sh": 77429938,
+    "xpub_magic_segwit_native": 78792518,
+    "slip44": 9007,
+
+    "mempool_workers": 8,
+    "mempool_sub_workers": 2,
+    "block_addresses_to_keep": 300
+}
