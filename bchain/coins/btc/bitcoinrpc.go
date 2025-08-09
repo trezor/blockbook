@@ -144,17 +144,30 @@ func (b *BitcoinRPC) Initialize() error {
 	glog.Info("rpc: block chain ", params.Name)
 
 	if b.ChainConfig.AlternativeEstimateFee == "whatthefee" {
+		glog.Info("Using WhatTheFee")
 		if b.alternativeFeeProvider, err = NewWhatTheFee(b, b.ChainConfig.AlternativeEstimateFeeParams); err != nil {
 			glog.Error("NewWhatTheFee error ", err, " Reverting to default estimateFee functionality")
 			// disable AlternativeEstimateFee logic
 			b.alternativeFeeProvider = nil
 		}
 	} else if b.ChainConfig.AlternativeEstimateFee == "mempoolspace" {
+		glog.Info("Using MempoolSpaceFee")
 		if b.alternativeFeeProvider, err = NewMempoolSpaceFee(b, b.ChainConfig.AlternativeEstimateFeeParams); err != nil {
 			glog.Error("MempoolSpaceFee error ", err, " Reverting to default estimateFee functionality")
 			// disable AlternativeEstimateFee logic
 			b.alternativeFeeProvider = nil
 		}
+	} else if b.ChainConfig.AlternativeEstimateFee == "mempoolspaceblock" {
+		glog.Info("Using MempoolSpaceBlockFee")
+		if b.alternativeFeeProvider, err = NewMempoolSpaceBlockFee(b, b.ChainConfig.AlternativeEstimateFeeParams); err != nil {
+			glog.Error("MempoolSpaceBlockFee error ", err, " Reverting to default estimateFee functionality")
+			// disable AlternativeEstimateFee logic
+			b.alternativeFeeProvider = nil
+		}
+	} else if len(b.ChainConfig.AlternativeEstimateFee) > 0 {
+		glog.Error("AlternativeEstimateFee ", b.ChainConfig.AlternativeEstimateFee, " not supported")
+	} else {
+		glog.Info("Using default estimateFee")
 	}
 
 	return nil
@@ -858,6 +871,21 @@ func (b *BitcoinRPC) EstimateFee(blocks int) (big.Int, error) {
 		return r, err
 	}
 	return r, nil
+}
+
+// LongTermFeeRate returns smallest fee rate from historic blocks.
+func (b *BitcoinRPC) LongTermFeeRate() (*bchain.LongTermFeeRate, error) {
+	blocks := 1008 // ~7 days of blocks, highest number estimatesmartfee supports
+	glog.V(1).Info("rpc: estimatesmartfee (long term fee rate) - ", blocks)
+	// Going for the ECONOMICAL mode, to get the lowest fee rate
+	feePerUnit, err := b.blockchainEstimateSmartFee(blocks, false)
+	if err != nil {
+		return nil, err
+	}
+	return &bchain.LongTermFeeRate{
+		Blocks:     uint64(blocks),
+		FeePerUnit: feePerUnit,
+	}, nil
 }
 
 // SendRawTransaction sends raw transaction

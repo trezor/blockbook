@@ -369,6 +369,9 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *WsRe
 	"estimateFee": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
 		return s.estimateFee(req.Params)
 	},
+	"longTermFeeRate": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
+		return s.longTermFeeRate()
+	},
 	"sendTransaction": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
 		r := WsSendTransactionReq{}
 		err = json.Unmarshal(req.Params, &r)
@@ -737,6 +740,17 @@ func (s *WebsocketServer) estimateFee(params []byte) (interface{}, error) {
 	return res, nil
 }
 
+func (s *WebsocketServer) longTermFeeRate() (res interface{}, err error) {
+	feeRate, err := s.chain.LongTermFeeRate()
+	if err != nil {
+		return nil, err
+	}
+	return WsLongTermFeeRateRes{
+		FeePerUnit: feeRate.FeePerUnit.String(),
+		Blocks:     feeRate.Blocks,
+	}, nil
+}
+
 func (s *WebsocketServer) sendTransaction(tx string) (res resultSendTransaction, err error) {
 	txid, err := s.chain.SendRawTransaction(tx)
 	if err != nil {
@@ -886,7 +900,7 @@ func (s *WebsocketServer) unmarshalAddresses(params []byte) ([]string, error) {
 	return rv, nil
 }
 
-// unsubscribe addresses without addressSubscriptionsLock - can be called only from subscribeAddresses and unsubscribeAddresses
+// doUnsubscribeAddresses addresses without addressSubscriptionsLock - can be called only from subscribeAddresses and unsubscribeAddresses
 func (s *WebsocketServer) doUnsubscribeAddresses(c *websocketChannel) {
 	for _, ads := range c.addrDescs {
 		sa, e := s.addressSubscriptions[ads]
@@ -931,7 +945,7 @@ func (s *WebsocketServer) unsubscribeAddresses(c *websocketChannel) (res interfa
 	return &subscriptionResponse{false}, nil
 }
 
-// unsubscribe fiat rates without fiatRatesSubscriptionsLock - can be called only from subscribeFiatRates and unsubscribeFiatRates
+// doUnsubscribeFiatRates fiat rates without fiatRatesSubscriptionsLock - can be called only from subscribeFiatRates and unsubscribeFiatRates
 func (s *WebsocketServer) doUnsubscribeFiatRates(c *websocketChannel) {
 	for fr, sa := range s.fiatRatesSubscriptions {
 		for sc := range sa {

@@ -39,6 +39,11 @@ func (b *BaseChain) GetMempoolEntry(txid string) (*MempoolEntry, error) {
 	return nil, errors.New("GetMempoolEntry: not supported")
 }
 
+// LongTermFeeRate returns smallest fee rate from historic blocks.
+func (b *BaseChain) LongTermFeeRate() (*LongTermFeeRate, error) {
+	return nil, errors.New("not supported")
+}
+
 // EthereumTypeGetBalance is not supported
 func (b *BaseChain) EthereumTypeGetBalance(addrDesc AddressDescriptor) (*big.Int, error) {
 	return nil, errors.New("not supported")

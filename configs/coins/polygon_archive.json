@@ -21,16 +21,16 @@
         "package_name": "backend-polygon-archive-bor",
         "package_revision": "satoshilabs-1",
         "system_user": "polygon",
-        "version": "2.0.0",
-        "binary_url": "https://github.com/maticnetwork/bor/releases/download/v2.0.0/bor-v2.0.0-amd64.deb",
+        "version": "2.2.9",
+        "binary_url": "https://github.com/maticnetwork/bor/releases/download/v2.2.9/bor-v2.2.9-amd64.deb",
         "verification_type": "sha256",
-        "verification_source": "942667f84732e25474b48f1fa6a13b513194f954344e3fa005d7165a8dd15d9a",
+        "verification_source": "8125ae8f2c5e2485ba112e065bcbfa40468a113a41a3dfa34871dd239fd12f6e",
         "extract_command": "mkdir -p backend && dpkg --fsys-tarfile ${ARCHIVE} | tar -xO ./usr/bin/bor > backend/bor && chmod +x backend/bor && echo",
         "exclude_files": [],
         "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/polygon_archive_bor_exec.sh 2>> {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
         "exec_script": "polygon_archive_bor.sh",
         "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
-        "postinst_script_template": "wget https://raw.githubusercontent.com/maticnetwork/bor/v2.0.0/builder/files/genesis-mainnet-v1.json -O {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/genesis.json",
+        "postinst_script_template": "wget https://raw.githubusercontent.com/maticnetwork/bor/v2.2.9/builder/files/genesis-mainnet-v1.json -O {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/genesis.json",
         "service_type": "simple",
         "service_additional_params_template": "",
         "protect_memory": true,
@@ -39,8 +39,8 @@
         "client_config_file": "",
         "platforms": {
             "arm64": {
-                "binary_url": "https://github.com/maticnetwork/bor/releases/download/v2.0.0/bor-v2.0.0-arm64.deb",
-                "verification_source": "914d17ff48258396d228b5feb4aeac90dbd47d272619a87e384c97385b53ffcc"
+                "binary_url": "https://github.com/maticnetwork/bor/releases/download/v2.2.9/bor-v2.2.9-arm64.deb",
+                "verification_source": "344bbd01a230250a43373ee559cb596bc8afb95026ce4aa9652c46077740414f"
             }
         }
     },
@@ -60,7 +60,7 @@
                 "address_aliases": true,
                 "eip1559Fees": true,
                 "alternative_estimate_fee": "infura",
-                "alternative_estimate_fee_params": "{\"url\": \"https://gas.api.infura.io/v3/${api_key}/networks/137/suggestedGasFees\", \"periodSeconds\": 60}",
+                "alternative_estimate_fee_params": "{\"url\": \"https://gas.api.infura.io/v3/${api_key}/networks/137/suggestedGasFees\", \"periodSeconds\": 8}",
                 "mempoolTxTimeoutHours": 48,
                 "processInternalTransactions": true,
                 "queryBackendOnMempoolResync": false,

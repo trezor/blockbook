@@ -48,7 +48,7 @@ Response (`SystemInfo` type):
     "coin": "Bitcoin",
     "network": "BTC",
     "host": "backend5",
-    "version": "0.4.0",
+    "version": "0.5.0",
     "gitCommit": "a0960c8e",
     "buildTime": "2024-08-08T12:32:50+00:00",
     "syncMode": true,
@@ -346,6 +346,9 @@ Response for Ethereum-type coins. Data of the transaction consist of:
     "gasLimit": 550941,
     "gasUsed": 434686,
     "gasPrice": "44035608242",
+    "maxPriorityFeePerGas": "44035608243",
+    "maxFeePerGas": "44035608244",
+    "baseFeePerGas": "2035608244",
     "data": "0xac9650d800000000000000000000",
     "parsedData": {
       "methodId": "0xfa2b068f",
@@ -1055,4 +1058,4 @@ Socket.io interface is provided at `/socket.io/`. The interface also can be expl
 
 The legacy API is provided as is and will not be further developed.
 
-The legacy API is currently (as of Blockbook v0.4.0) also accessible without the _/v1/_ prefix, however in the future versions the version-less access will be removed.
+The legacy API is currently (as of Blockbook v0.5.0) also accessible without the _/v1/_ prefix, however in the future versions the version-less access will be removed.

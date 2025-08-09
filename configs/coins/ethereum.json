@@ -22,13 +22,13 @@
         "package_name": "backend-ethereum",
         "package_revision": "satoshilabs-1",
         "system_user": "ethereum",
-        "version": "2.61.1",
-        "binary_url": "https://github.com/ledgerwatch/erigon/releases/download/v2.61.1/erigon_v2.61.1_linux_amd64.tar.gz",
+        "version": "3.0.11",
+        "binary_url": "https://github.com/erigontech/erigon/releases/download/v3.0.11/erigon_v3.0.11_linux_amd64.tar.gz",
         "verification_type": "sha256",
-        "verification_source": "d92ae402d47a3564a231448bbc0365dde7bb5ea32b2f24a7b841eddf070ca09a",
+        "verification_source": "f046e1e0ffbb460b156dea52023f0fa84efe536edb8d6eb42094b398d710615c",
         "extract_command": "tar -C backend --strip-components=1 -xf",
         "exclude_files": [],
-        "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/erigon --chain mainnet --snap.keepblocks --db.size.limit 15TB --prune c --prune.c.older 1000000 -torrent.download.rate 32mb --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/erigon --port {{.Ports.BackendP2P}} --ws --ws.port {{.Ports.BackendRPC}} --http --http.port {{.Ports.BackendRPC}} --http.addr 127.0.0.1 --http.corsdomain \"*\" --http.vhosts \"*\" --http.api \"eth,net,web3,debug,txpool\" --authrpc.port {{.Ports.BackendAuthRpc}} --private.api.addr \"\" --torrent.port {{.Ports.BackendHttp}} --log.dir.path {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --log.dir.prefix {{.Coin.Alias}}'",
+        "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/erigon --chain mainnet --snap.keepblocks --db.size.limit 15TB --db.pagesize 16KB --prune.mode full --externalcl --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/erigon --port {{.Ports.BackendP2P}} --ws --ws.port {{.Ports.BackendRPC}} --http --http.port {{.Ports.BackendRPC}} --http.addr 127.0.0.1 --http.corsdomain \"*\" --http.vhosts \"*\" --http.api \"eth,net,web3,debug,txpool\" --authrpc.port {{.Ports.BackendAuthRpc}} --private.api.addr \"\" --torrent.port {{.Ports.BackendHttp}} --log.dir.path {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --log.dir.prefix {{.Coin.Alias}}'",
         "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
         "postinst_script_template": "",
         "service_type": "simple",
@@ -39,8 +39,8 @@
         "client_config_file": "",
         "platforms": {
             "arm64": {
-                "binary_url": "https://github.com/ledgerwatch/erigon/releases/download/v2.61.1/erigon_v2.61.1_linux_arm64.tar.gz",
-                "verification_source": "a368f4199e1f6db51f055c27b1a71925aecda458e2142b13a4f30ecc66a7a7a3"
+                "binary_url": "https://github.com/erigontech/erigon/releases/download/v3.0.11/erigon_v3.0.11_linux_arm64.tar.gz",
+                "verification_source": "c8c3c660187a2848bb8af0a1a65dd4548d8fd9bb46d1e6d2f5eb60854436e6c9"
             }
         }
     },
