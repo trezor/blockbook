@@ -42,6 +42,8 @@
 | Polis                            | 9167             | 9067               | 8067        | 38367                                               |
 | Polygon                          | 9170             | 9070               | 8070        | 38370 p2p, 8170 http                                |
 | Polygon Archive                  | 9172             | 9072               | 8072        | 38372 p2p, 8172 http                                |
+| Gnosis                           | 9174             | 9074               | 8074        | 38374 p2p, 8174 http, 8574 authrpc                  |
+| Gnosis Archive                   | 9176             | 9076               | 8076        | 38376 p2p, 8176 http, 8576 authrpc                  |
 | Qtum                             | 9188             | 9088               | 8088        | 38388                                               |
 | Divi Project                     | 9189             | 9089               | 8089        | 38389                                               |
 | CPUchain                         | 9190             | 9090               | 8090        | 38390                                               |
