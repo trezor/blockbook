@@ -111,30 +111,6 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 	s.Timeout = time.Duration(c.RPCTimeout) * time.Second
 	s.PushHandler = pushHandler
 
-	if s.ChainConfig.AlternativeEstimateFee == "1inch" {
-		if s.alternativeFeeProvider, err = NewOneInchFeesProvider(s, s.ChainConfig.AlternativeEstimateFeeParams); err != nil {
-			glog.Error("New1InchFeesProvider error ", err, " Reverting to default estimateFee functionality")
-			// disable AlternativeEstimateFee logic
-			s.alternativeFeeProvider = nil
-		}
-	} else if s.ChainConfig.AlternativeEstimateFee == "infura" {
-		if s.alternativeFeeProvider, err = NewInfuraFeesProvider(s, s.ChainConfig.AlternativeEstimateFeeParams); err != nil {
-			glog.Error("NewInfuraFeesProvider error ", err, " Reverting to default estimateFee functionality")
-			// disable AlternativeEstimateFee logic
-			s.alternativeFeeProvider = nil
-		}
-	}
-	if s.alternativeFeeProvider != nil {
-		glog.Info("Using alternative fee provider ", s.ChainConfig.AlternativeEstimateFee)
-	}
-
-	network := c.Network
-	if network == "" {
-		network = c.CoinShortcut
-	}
-
-	s.alternativeSendTxProvider = NewAlternativeSendTxProvider(network, c.RPCTimeout, c.MempoolTxTimeoutHours)
-
 	return s, nil
 }
 
@@ -194,6 +170,15 @@ func (b *EthereumRPC) Initialize() error {
 	if err != nil {
 		return err
 	}
+
+	b.initAlternativeFeeProvider()
+
+	network := b.Network
+	if network == "" {
+		network = b.ChainConfig.CoinShortcut
+	}
+
+	b.alternativeSendTxProvider = NewAlternativeSendTxProvider(network, b.ChainConfig.RPCTimeout, b.ChainConfig.MempoolTxTimeoutHours)
 
 	glog.Info("rpc: block chain ", b.Network)
 
@@ -357,6 +342,27 @@ func (b *EthereumRPC) subscribe(f func() (bchain.EVMClientSubscription, error)) 
 		}
 	}()
 	return nil
+}
+
+func (b *EthereumRPC) initAlternativeFeeProvider() {
+	var err error
+	if b.ChainConfig.AlternativeEstimateFee == "1inch" {
+		if b.alternativeFeeProvider, err = NewOneInchFeesProvider(b, b.ChainConfig.AlternativeEstimateFeeParams); err != nil {
+			glog.Error("New1InchFeesProvider error ", err, " Reverting to default estimateFee functionality")
+			// disable AlternativeEstimateFee logic
+			b.alternativeFeeProvider = nil
+		}
+	} else if b.ChainConfig.AlternativeEstimateFee == "infura" {
+		if b.alternativeFeeProvider, err = NewInfuraFeesProvider(b, b.ChainConfig.AlternativeEstimateFeeParams); err != nil {
+			glog.Error("NewInfuraFeesProvider error ", err, " Reverting to default estimateFee functionality")
+			// disable AlternativeEstimateFee logic
+			b.alternativeFeeProvider = nil
+		}
+	}
+	if b.alternativeFeeProvider != nil {
+		glog.Info("Using alternative fee provider ", b.ChainConfig.AlternativeEstimateFee)
+	}
+
 }
 
 func (b *EthereumRPC) closeRPC() {
