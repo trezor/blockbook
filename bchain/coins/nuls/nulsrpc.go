@@ -471,7 +471,7 @@ func (n *NulsRPC) EstimateFee(blocks int) (big.Int, error) {
 	return *big.NewInt(100000), nil
 }
 
-func (n *NulsRPC) SendRawTransaction(tx string) (string, error) {
+func (n *NulsRPC) SendRawTransaction(tx string, alternativeRPC bool) (string, error) {
 	broadcast := CmdTxBroadcast{}
 	req := struct {
 		TxHex string `json:"txHex"`

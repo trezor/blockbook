@@ -1122,12 +1122,15 @@ func (b *EthereumRPC) EthereumTypeGetEip1559Fees() (*bchain.Eip1559Fees, error) 
 }
 
 // SendRawTransaction sends raw transaction
-func (b *EthereumRPC) SendRawTransaction(hex string) (string, error) {
+func (b *EthereumRPC) SendRawTransaction(hex string, disableAlternativeRPC bool) (string, error) {
 	var txid string
 	var retErr error
 
-	if b.alternativeSendTxProvider != nil {
+	if !disableAlternativeRPC && b.alternativeSendTxProvider != nil {
 		txid, retErr = b.alternativeSendTxProvider.SendRawTransaction(hex)
+		if retErr == nil {
+			return txid, nil
+		}
 		if b.alternativeSendTxProvider.UseOnlyAlternativeProvider() {
 			return txid, retErr
 		}
