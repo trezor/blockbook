@@ -302,9 +302,9 @@ func (c *blockChainWithMetrics) LongTermFeeRate() (v *bchain.LongTermFeeRate, er
 	return c.b.LongTermFeeRate()
 }
 
-func (c *blockChainWithMetrics) SendRawTransaction(tx string) (v string, err error) {
+func (c *blockChainWithMetrics) SendRawTransaction(tx string, disableAlternativeRPC bool) (v string, err error) {
 	defer func(s time.Time) { c.observeRPCLatency("SendRawTransaction", s, err) }(time.Now())
-	return c.b.SendRawTransaction(tx)
+	return c.b.SendRawTransaction(tx, disableAlternativeRPC)
 }
 
 func (c *blockChainWithMetrics) GetMempoolEntry(txid string) (v *bchain.MempoolEntry, err error) {

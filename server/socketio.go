@@ -641,7 +641,7 @@ func (s *SocketIoServer) getDetailedTransaction(txid string) (res resultGetDetai
 }
 
 func (s *SocketIoServer) sendTransaction(tx string) (res resultSendTransaction, err error) {
-	txid, err := s.chain.SendRawTransaction(tx)
+	txid, err := s.chain.SendRawTransaction(tx, false)
 	if err != nil {
 		return res, err
 	}
