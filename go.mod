@@ -92,3 +92,5 @@ require (
 // replace github.com/martinboehm/btcutil => ../btcutil
 
 // replace github.com/martinboehm/btcd => ../btcd
+
+replace github.com/martinboehm/bchutil => ./bchutil

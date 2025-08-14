@@ -433,6 +433,8 @@ type BlockChainParser interface {
 	ParseInputData(signatures *[]FourByteSignature, data string) *EthereumParsedInputData
 	// AddressAlias
 	FormatAddressAlias(address string, name string) string
+	// Bcash specific
+	BcashTypeParseTokenData(addrDesc AddressDescriptor) (*BcashToken, int, error)
 }
 
 // Mempool defines common interface to mempool

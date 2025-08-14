@@ -562,6 +562,11 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 	if err != nil {
 		glog.Warningf("GetTxChainExtraData error %v, %v", err, bchainTx)
 	}
+	bcashSpecific, err := w.bcashPostProcessApiTx(bchainTx.Txid, &vins, &vouts)
+	if err != nil {
+		return nil, errors.Annotatef(err, "bcashPostProcessApiTx %v", bchainTx.Txid)
+	}
+
 	r := &Tx{
 		Blockhash:        blockhash,
 		Blockheight:      height,
@@ -583,12 +588,63 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 		ChainExtraData:   chainExtraData,
 		TokenTransfers:   tokens,
 		EthereumSpecific: ethSpecific,
+		BcashSpecific:    bcashSpecific,
 	}
 	if bchainTx.Confirmations == 0 {
 		r.Blocktime = int64(w.mempool.GetTransactionTime(bchainTx.Txid))
 		r.ConfirmationETASeconds, r.ConfirmationETABlocks = w.getConfirmationETA(r)
 	}
 	return r, nil
+}
+
+func (w *Worker) bcashPostProcessApiTx(txId string, vins *[]Vin, vouts *[]Vout) (*bchain.BcashSpecific, error) {
+	var bcashSpecific *bchain.BcashSpecific
+	if w.is.CoinShortcut == "BCH" {
+		voutTokens := make([]*bchain.BcashToken, len(*vouts))
+		nVoutTokens := 0
+		for i := 0; i < len(*vouts); i++ {
+			vout := &(*vouts)[i]
+			// BCH specific, parse token data from vout
+			token, pkScriptStart, err := w.chainParser.BcashTypeParseTokenData(vout.AddrDesc)
+			if err != nil {
+				glog.Errorf("BcashTypeParseTokenData error %v, tx %v, vout %v", err, txId, i)
+				return nil, err
+			}
+			if token != nil {
+				nVoutTokens++
+			}
+			voutTokens[i] = token
+			vout.Hex = vout.Hex[pkScriptStart*2:]
+		}
+
+		vinTokens := make([]*bchain.BcashToken, len(*vins))
+		nVinTokens := 0
+		for i := 0; i < len(*vins); i++ {
+			vin := &(*vins)[i]
+			// BCH specific, parse token data from vin
+			token, _, err := w.chainParser.BcashTypeParseTokenData(vin.AddrDesc)
+			if err != nil {
+				glog.Errorf("BcashTypeParseTokenData error %v, tx %v, vin %v", err, txId, i)
+				return nil, err
+			}
+			if token != nil {
+				nVinTokens++
+			}
+			vinTokens[i] = token
+		}
+
+		if nVoutTokens > 0 || nVinTokens > 0 {
+			bcashSpecific = &bchain.BcashSpecific{}
+			if nVoutTokens > 0 {
+				bcashSpecific.TokenVouts = voutTokens
+			}
+			if nVinTokens > 0 {
+				bcashSpecific.TokenVins = vinTokens
+			}
+		}
+	}
+
+	return bcashSpecific, nil
 }
 
 // GetTransactionFromMempoolTx converts bchain.MempoolTx to Tx, with limited amount of data
@@ -688,6 +744,11 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 	if err != nil {
 		glog.Warningf("GetTxChainExtraData error %v, %v", err, mempoolTx.Txid)
 	}
+	bcashSpecific, err := w.bcashPostProcessApiTx(mempoolTx.Txid, &vins, &vouts)
+	if err != nil {
+		return nil, errors.Annotatef(err, "bcashPostProcessApiTx %v", mempoolTx.Txid)
+	}
+
 	r := &Tx{
 		Blocktime:        mempoolTx.Blocktime,
 		FeesSat:          (*Amount)(&feesSat),
@@ -706,6 +767,7 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 		TokenTransfers:   tokens,
 		EthereumSpecific: ethSpecific,
 		AddressAliases:   w.getAddressAliases(addresses),
+		BcashSpecific:    bcashSpecific,
 	}
 	r.ConfirmationETASeconds, r.ConfirmationETABlocks = w.getConfirmationETA(r)
 	return r, nil

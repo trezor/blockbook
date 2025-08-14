@@ -1,9 +1,13 @@
 package bch
 
 import (
+	"bytes"
+	"encoding/hex"
 	"fmt"
+	"math/big"
 
 	"github.com/martinboehm/bchutil"
+	"github.com/martinboehm/btcd/wire"
 	"github.com/martinboehm/btcutil"
 	"github.com/martinboehm/btcutil/chaincfg"
 	"github.com/martinboehm/btcutil/txscript"
@@ -109,6 +113,16 @@ func (p *BCashParser) GetAddrDescFromAddress(address string) (bchain.AddressDesc
 	return p.addressToOutputScript(address)
 }
 
+// GetScriptFromAddrDesc returns the locking script information without token information
+func (p *BCashParser) GetScriptFromAddrDesc(addrDesc bchain.AddressDescriptor) ([]byte, error) {
+	_, pkScriptStart, err := p.ParseTokenData(addrDesc)
+	if err != nil {
+		return nil, err
+	}
+
+	return addrDesc[pkScriptStart:], nil
+}
+
 // addressToOutputScript converts bitcoin address to ScriptPubKey
 func (p *BCashParser) addressToOutputScript(address string) ([]byte, error) {
 	if isCashAddr(address) {
@@ -149,8 +163,13 @@ func isCashAddr(addr string) bool {
 
 // outputScriptToAddresses converts ScriptPubKey to bitcoin addresses
 func (p *BCashParser) outputScriptToAddresses(script []byte) ([]string, bool, error) {
-	// convert possible P2PK script to P2PK, which bchutil can process
 	var err error
+	script, err = p.GetScriptFromAddrDesc(script)
+	if err != nil {
+		return nil, false, err
+	}
+
+	// convert possible P2PK script to P2PK, which bchutil can process
 	script, err = txscript.ConvertP2PKtoP2PKH(p.Params.Base58CksumHasher, script)
 	if err != nil {
 		return nil, false, err
@@ -185,4 +204,122 @@ func (p *BCashParser) outputScriptToAddresses(script []byte) ([]string, bool, er
 		}
 	}
 	return []string{addr}, len(addr) > 0, nil
+}
+
+// https://github.com/bitjson/cashtokens/blob/1d3745e04b2c454f7a194d9fab368df72e8adc69/readme.md#token-encoding
+// https://github.com/bitauth/libauth/blob/60aec239cc2d57ae21d0069c5bbafb346abc9b66/src/lib/message/transaction-encoding.ts#L223
+func (p *BCashParser) ParseTokenData(script []byte) (*bchain.BcashToken, int, error) {
+	if len(script) == 0 {
+		return nil, 0, nil
+	}
+
+	br := bytes.NewReader(script)
+
+	// Check for prefix 0xef
+	b, err := br.ReadByte()
+	if err != nil {
+		return nil, 0, err
+	}
+	if b != 0xef {
+		return nil, 0, nil // Not a token prefix
+	}
+
+	// Check minimum length
+	if br.Size() < 34 {
+		return nil, 0, fmt.Errorf("Invalid token prefix: insufficient length. The minimum possible length is 34. Missing bytes: %d", 34-br.Size())
+	}
+
+	token := &bchain.BcashToken{}
+
+	// Read tokenId (32 bytes, reversed)
+	categoryBin := make([]byte, 32)
+	br.Read(categoryBin[:])
+	for i, j := 0, len(categoryBin)-1; i < j; i, j = i+1, j-1 {
+		categoryBin[i], categoryBin[j] = categoryBin[j], categoryBin[i]
+	}
+	token.Category = hex.EncodeToString(categoryBin)
+
+	// Read bitfield
+	bitfield, err := br.ReadByte()
+	if err != nil {
+		return nil, 0, err
+	}
+	if bitfield == 0 {
+		return nil, 0, fmt.Errorf("Invalid token prefix: must encode at least one token. Bitfield: 0b%08b", bitfield)
+	}
+
+	prefixStructure := bitfield & 0xf0
+	reserved := prefixStructure & 0x80
+	if reserved != 0 {
+		return nil, 0, fmt.Errorf("Invalid token prefix: reserved bit is set. Bitfield: 0b%08b", bitfield)
+	}
+	hasCommitmentLength := prefixStructure & 0x40
+	hasNFT := prefixStructure & 0x20
+	hasAmount := prefixStructure & 0x10
+
+	NFTCapability := bchain.BcashNFTCapabilityType(bitfield & 0x0f)
+
+	var commitmentLength uint64 = 0
+	if hasNFT != 0 {
+		token.Nft = &bchain.BcashTokenNft{}
+
+		if hasCommitmentLength != 0 {
+			commitmentLength, err = wire.ReadVarInt(br, 0)
+			if err != nil {
+				return nil, 0, fmt.Errorf("Invalid token prefix: invalid non-fungible token commitment. Error reading CompactSize-prefixed bin: invalid CompactSize. Error reading CompactSize.")
+			}
+			if commitmentLength == 0 {
+				return nil, 0, fmt.Errorf("Invalid token prefix: if encoded, commitment length must be greater than 0.")
+			}
+			if br.Len() < int(commitmentLength) {
+				return nil, 0, fmt.Errorf("Invalid token prefix: invalid non-fungible token commitment. Error reading CompactSize-prefixed bin: insufficient bytes. Required bytes: %d, remaining bytes: %d", commitmentLength, br.Len())
+			}
+		}
+		if NFTCapability > 2 {
+			return nil, 0, fmt.Errorf("Invalid token prefix: capability must be none (0), mutable (1), or minting (2). Capability value: %d", NFTCapability)
+		}
+		token.Nft.Capability = bchain.ToNFTCapabilityLabel(NFTCapability)
+
+		if hasCommitmentLength != 0 {
+			commitmentBin := make([]byte, commitmentLength)
+			_, err = br.Read(commitmentBin[:])
+			if err != nil {
+				return nil, 0, fmt.Errorf("Invalid token prefix: invalid non-fungible token commitment.")
+			}
+			token.Nft.Commitment = hex.EncodeToString(commitmentBin)
+		} else {
+			token.Nft.Commitment = ""
+		}
+	} else {
+		if hasCommitmentLength != 0 {
+			return nil, 0, fmt.Errorf("Invalid token prefix: commitment requires an NFT. Bitfield: 0b%08b", bitfield)
+		}
+		if NFTCapability > 0 {
+			return nil, 0, fmt.Errorf("Invalid token prefix: capability requires an NFT. Bitfield: 0b%04b", bitfield)
+		}
+	}
+
+	if hasAmount != 0 {
+		ftAmount, err := wire.ReadVarInt(br, 0)
+		if err != nil {
+			return nil, 0, fmt.Errorf("Invalid token prefix: invalid fungible token amount encoding. Error reading CompactSize.")
+		}
+		if ftAmount == 0 {
+			return nil, 0, fmt.Errorf("Invalid token prefix: if encoded, fungible token amount must be greater than 0.")
+		}
+
+		if ftAmount > 9223372036854775807 {
+			return nil, 0, fmt.Errorf("Invalid token prefix: exceeds maximum fungible token amount of 9223372036854775807. Encoded amount: %d", ftAmount)
+		}
+		token.Amount = *big.NewInt(int64(ftAmount))
+	} else {
+		token.Amount = *big.NewInt(0)
+	}
+
+	return token, int(br.Size()) - br.Len(), nil
+}
+
+// BcashTypePostProcessApiTx is unsupported
+func (b *BCashParser) BcashTypeParseTokenData(addrDesc bchain.AddressDescriptor) (*bchain.BcashToken, int, error) {
+	return b.ParseTokenData(addrDesc)
 }
