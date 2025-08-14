@@ -27,6 +27,7 @@
                     <a class="outpoint" href="/tx/{{$vin.Txid}}" tt="Outpoint {{$vin.Txid}},{{$vin.Vout}}">←</a>
                     {{end}}
                     {{if $vin.Addresses}}{{amountSpan $vin.ValueSat $data "tx-amt copyable"}}{{end}}
+                    {{bcashToken $data true $vin.N}}
                 </div>
                 {{else}}
                 <div class="col-12">No Inputs</div>
@@ -49,6 +50,7 @@
                         {{amountSpan $vout.ValueSat $data "copyable"}}{{if $vout.Spent}}<a class="spent" href="{{if $vout.SpentTxID}}/tx/{{$vout.SpentTxID}}{{else}}/spending/{{$tx.Txid}}/{{$vout.N}}{{end}}" tt="Spent">→</a>{{else}}<span class="unspent" tt="Unspent">×</span>
                         {{end}}
                     </span>
+                    {{bcashToken $data false $vout.N}}
                     </td>
                 </div>
                 {{else}}

@@ -271,8 +271,8 @@ func (d *RocksDB) GetTransactions(address string, lower uint32, higher uint32, f
 func (d *RocksDB) GetAddrDescTransactions(addrDesc bchain.AddressDescriptor, lower uint32, higher uint32, fn GetTransactionsCallback) (err error) {
 	txidUnpackedLen := d.chainParser.PackedTxidLen()
 	addrDescLen := len(addrDesc)
-	startKey := packAddressKey(addrDesc, higher)
-	stopKey := packAddressKey(addrDesc, lower)
+	startKey := packAddressKey(d.chainParser, addrDesc, higher)
+	stopKey := packAddressKey(d.chainParser, addrDesc, lower)
 	indexes := make([]int32, 0, 16)
 	it := d.db.NewIteratorCF(d.ro, d.cfh[cfAddresses])
 	defer it.Close()
@@ -800,7 +800,7 @@ func addToAddressesMap(addresses addressesMap, strAddrDesc string, btxID []byte,
 }
 
 func (d *RocksDB) getTxIndexesForAddressAndBlock(addrDesc bchain.AddressDescriptor, height uint32) ([]txIndexes, error) {
-	key := packAddressKey(addrDesc, height)
+	key := packAddressKey(d.chainParser, addrDesc, height)
 	val, err := d.db.GetCF(d.ro, d.cfh[cfAddresses], key)
 	if err != nil {
 		return nil, err
@@ -820,7 +820,7 @@ func (d *RocksDB) getTxIndexesForAddressAndBlock(addrDesc bchain.AddressDescript
 func (d *RocksDB) storeAddresses(wb *grocksdb.WriteBatch, height uint32, addresses addressesMap) error {
 	for addrDesc, txi := range addresses {
 		ba := bchain.AddressDescriptor(addrDesc)
-		key := packAddressKey(ba, height)
+		key := packAddressKey(d.chainParser, ba, height)
 		val := d.packTxIndexes(txi)
 		wb.PutCF(d.cfh[cfAddresses], key, val)
 	}
@@ -1659,7 +1659,7 @@ func (d *RocksDB) disconnectBlock(height uint32, blockTxs []blockTxs) error {
 		}
 	}
 	for a := range blockAddressesTxs {
-		key := packAddressKey([]byte(a), height)
+		key := packAddressKey(d.chainParser, []byte(a), height)
 		wb.DeleteCF(d.cfh[cfAddresses], key)
 	}
 	key := packUint(height)
@@ -2379,11 +2379,23 @@ func (d *RocksDB) GetBlockFilter(blockHash string) (string, error) {
 
 // Helpers
 
-func packAddressKey(addrDesc bchain.AddressDescriptor, height uint32) []byte {
-	buf := make([]byte, len(addrDesc)+packedHeightBytes)
-	copy(buf, addrDesc)
+func packAddressKey(parser bchain.BlockChainParser, addrDesc bchain.AddressDescriptor, height uint32) []byte {
+	desc := addrDesc
+	var err error
+
+	// check for token prefix and length to match BCH cashtokens
+	if addrDesc[0] == 0xef && len(addrDesc) >= 34 {
+		desc, err = parser.GetScriptFromAddrDesc(addrDesc)
+		if err != nil {
+			// TODO: do not panic
+			panic(errors.Errorf("Cannot get script from address descriptor %s", addrDesc))
+		}
+	}
+
+	buf := make([]byte, len(desc)+packedHeightBytes)
+	copy(buf, desc)
 	// pack height as binary complement to achieve ordering from newest to oldest block
-	binary.BigEndian.PutUint32(buf[len(addrDesc):], ^height)
+	binary.BigEndian.PutUint32(buf[len(desc):], ^height)
 	return buf
 }
 
