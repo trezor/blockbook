@@ -141,7 +141,9 @@ type WsLongTermFeeRateRes struct {
 
 // WsSendTransactionReq is used to broadcast a transaction to the network.
 type WsSendTransactionReq struct {
-	Hex string `json:"hex" ts_doc:"Hex-encoded transaction data to broadcast."`
+	Hex            string `json:"hex,omitempty" ts_doc:"Hex-encoded transaction data to broadcast (string format)."`
+	Data           string `json:"data,omitempty" ts_doc:"Hex-encoded transaction data to broadcast (json format)."`
+	AlternativeRPC bool   `json:"alternativeRpc" ts_doc:"Use alternative RPC method to broadcast transaction."`
 }
 
 // WsSubscribeAddressesReq is used to subscribe to updates on a list of addresses.

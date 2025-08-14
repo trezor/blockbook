@@ -372,6 +372,10 @@ func (c *blockChainWithMetrics) EthereumTypeGetRawTransaction(txid string) (v st
 	return c.b.EthereumTypeGetRawTransaction(txid)
 }
 
+func (c *blockChainWithMetrics) IsAlternativeRPCEnabled() bool {
+	return c.b.IsAlternativeRPCEnabled()
+}
+
 type mempoolWithMetrics struct {
 	mempool bchain.Mempool
 	m       *common.Metrics

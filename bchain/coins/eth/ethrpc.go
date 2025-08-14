@@ -1179,3 +1179,8 @@ func (b *EthereumRPC) EthereumTypeGetNonce(addrDesc bchain.AddressDescriptor) (u
 func (b *EthereumRPC) GetChainParser() bchain.BlockChainParser {
 	return b.Parser
 }
+
+// IsAlternativeRPCProviderEnabled returns true if alternative RPC provider is enabled
+func (b *EthereumRPC) IsAlternativeRPCEnabled() bool {
+	return b.alternativeSendTxProvider != nil
+}

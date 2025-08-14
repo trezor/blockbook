@@ -375,11 +375,25 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *WsRe
 	"sendTransaction": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
 		r := WsSendTransactionReq{}
 		err = json.Unmarshal(req.Params, &r)
+
+		txData, hasAlternativeRPC := "", false
+
+		if r.Hex != "" {
+			txData = r.Hex
+			hasAlternativeRPC = s.chain.IsAlternativeRPCEnabled()
+		} else if r.Data != "" {
+			txData = r.Data
+			hasAlternativeRPC = true
+			if r.AlternativeRPC == false {
+				hasAlternativeRPC = false
+			}
+		}
 		if err == nil {
-			rv, err = s.sendTransaction(r.Hex)
+			rv, err = s.sendTransaction(txData, hasAlternativeRPC)
 		}
 		return
 	},
+
 	"getMempoolFilters": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
 		r := WsMempoolFiltersReq{}
 		err = json.Unmarshal(req.Params, &r)
@@ -751,7 +765,7 @@ func (s *WebsocketServer) longTermFeeRate() (res interface{}, err error) {
 	}, nil
 }
 
-func (s *WebsocketServer) sendTransaction(tx string) (res resultSendTransaction, err error) {
+func (s *WebsocketServer) sendTransaction(tx string, alternativeRPC bool) (res resultSendTransaction, err error) {
 	txid, err := s.chain.SendRawTransaction(tx)
 	if err != nil {
 		return res, err

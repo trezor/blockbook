@@ -332,6 +332,7 @@ type BlockChain interface {
 	EstimateFee(blocks int) (big.Int, error)
 	LongTermFeeRate() (*LongTermFeeRate, error)
 	SendRawTransaction(tx string) (string, error)
+	IsAlternativeRPCEnabled() bool
 	GetMempoolEntry(txid string) (*MempoolEntry, error)
 	GetContractInfo(contractDesc AddressDescriptor) (*ContractInfo, error)
 	// parser
