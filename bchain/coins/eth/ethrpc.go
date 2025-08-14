@@ -1170,9 +1170,17 @@ func (b *EthereumRPC) EthereumTypeGetBalance(addrDesc bchain.AddressDescriptor) 
 
 // EthereumTypeGetNonce returns current balance of an address
 func (b *EthereumRPC) EthereumTypeGetNonce(addrDesc bchain.AddressDescriptor) (uint64, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
-	defer cancel()
-	return b.Client.NonceAt(ctx, addrDesc, nil)
+	result, err := b.callRpcStringResult("eth_getTransactionCount", addrDesc, "pending")
+	if err != nil {
+		return 0, err
+	}
+
+	nonce, err := hexutil.DecodeUint64(result)
+	if err != nil {
+		return 0, err
+	}
+
+	return nonce, nil
 }
 
 // GetChainParser returns ethereum BlockChainParser
