@@ -277,28 +277,29 @@ type AddressAliasesMap map[string]AddressAlias
 
 // Tx holds information about a transaction
 type Tx struct {
-	Txid                   string            `json:"txid" ts_doc:"Transaction ID (hash)."`
-	Version                int32             `json:"version,omitempty" ts_doc:"Version of the transaction (if applicable)."`
-	Locktime               uint32            `json:"lockTime,omitempty" ts_doc:"Locktime indicating earliest time/height transaction can be mined."`
-	Vin                    []Vin             `json:"vin" ts_doc:"Array of inputs for this transaction."`
-	Vout                   []Vout            `json:"vout" ts_doc:"Array of outputs for this transaction."`
-	Blockhash              string            `json:"blockHash,omitempty" ts_doc:"Hash of the block containing this transaction."`
-	Blockheight            int               `json:"blockHeight" ts_doc:"Block height in which this transaction was included."`
-	Confirmations          uint32            `json:"confirmations" ts_doc:"Number of confirmations (blocks mined after this tx's block)."`
-	ConfirmationETABlocks  uint32            `json:"confirmationETABlocks,omitempty" ts_doc:"Estimated blocks remaining until confirmation (if unconfirmed)."`
-	ConfirmationETASeconds int64             `json:"confirmationETASeconds,omitempty" ts_doc:"Estimated seconds remaining until confirmation (if unconfirmed)."`
-	Blocktime              int64             `json:"blockTime" ts_doc:"Unix timestamp of the block in which this transaction was included. 0 if unconfirmed."`
-	Size                   int               `json:"size,omitempty" ts_doc:"Transaction size in bytes."`
-	VSize                  int               `json:"vsize,omitempty" ts_doc:"Virtual size in bytes, for SegWit-enabled chains."`
-	ValueOutSat            *Amount           `json:"value" ts_doc:"Total value of all outputs (in satoshi or base units)."`
-	ValueInSat             *Amount           `json:"valueIn,omitempty" ts_doc:"Total value of all inputs (in satoshi or base units)."`
-	FeesSat                *Amount           `json:"fees,omitempty" ts_doc:"Transaction fee (inputs - outputs)."`
-	Hex                    string            `json:"hex,omitempty" ts_doc:"Raw hex-encoded transaction data."`
-	Rbf                    bool              `json:"rbf,omitempty" ts_doc:"Indicates if this transaction is replace-by-fee (RBF) enabled."`
-	CoinSpecificData       json.RawMessage   `json:"coinSpecificData,omitempty" ts_type:"any" ts_doc:"Blockchain-specific extended data."`
-	TokenTransfers         []TokenTransfer   `json:"tokenTransfers,omitempty" ts_doc:"List of token transfers that occurred in this transaction."`
-	EthereumSpecific       *EthereumSpecific `json:"ethereumSpecific,omitempty" ts_doc:"Ethereum-like blockchain specific data (if applicable)."`
-	AddressAliases         AddressAliasesMap `json:"addressAliases,omitempty" ts_doc:"Aliases for addresses involved in this transaction."`
+	Txid                   string                `json:"txid" ts_doc:"Transaction ID (hash)."`
+	Version                int32                 `json:"version,omitempty" ts_doc:"Version of the transaction (if applicable)."`
+	Locktime               uint32                `json:"lockTime,omitempty" ts_doc:"Locktime indicating earliest time/height transaction can be mined."`
+	Vin                    []Vin                 `json:"vin" ts_doc:"Array of inputs for this transaction."`
+	Vout                   []Vout                `json:"vout" ts_doc:"Array of outputs for this transaction."`
+	Blockhash              string                `json:"blockHash,omitempty" ts_doc:"Hash of the block containing this transaction."`
+	Blockheight            int                   `json:"blockHeight" ts_doc:"Block height in which this transaction was included."`
+	Confirmations          uint32                `json:"confirmations" ts_doc:"Number of confirmations (blocks mined after this tx's block)."`
+	ConfirmationETABlocks  uint32                `json:"confirmationETABlocks,omitempty" ts_doc:"Estimated blocks remaining until confirmation (if unconfirmed)."`
+	ConfirmationETASeconds int64                 `json:"confirmationETASeconds,omitempty" ts_doc:"Estimated seconds remaining until confirmation (if unconfirmed)."`
+	Blocktime              int64                 `json:"blockTime" ts_doc:"Unix timestamp of the block in which this transaction was included. 0 if unconfirmed."`
+	Size                   int                   `json:"size,omitempty" ts_doc:"Transaction size in bytes."`
+	VSize                  int                   `json:"vsize,omitempty" ts_doc:"Virtual size in bytes, for SegWit-enabled chains."`
+	ValueOutSat            *Amount               `json:"value" ts_doc:"Total value of all outputs (in satoshi or base units)."`
+	ValueInSat             *Amount               `json:"valueIn,omitempty" ts_doc:"Total value of all inputs (in satoshi or base units)."`
+	FeesSat                *Amount               `json:"fees,omitempty" ts_doc:"Transaction fee (inputs - outputs)."`
+	Hex                    string                `json:"hex,omitempty" ts_doc:"Raw hex-encoded transaction data."`
+	Rbf                    bool                  `json:"rbf,omitempty" ts_doc:"Indicates if this transaction is replace-by-fee (RBF) enabled."`
+	CoinSpecificData       json.RawMessage       `json:"coinSpecificData,omitempty" ts_type:"any" ts_doc:"Blockchain-specific extended data."`
+	TokenTransfers         []TokenTransfer       `json:"tokenTransfers,omitempty" ts_doc:"List of token transfers that occurred in this transaction."`
+	EthereumSpecific       *EthereumSpecific     `json:"ethereumSpecific,omitempty" ts_doc:"Ethereum-like blockchain specific data (if applicable)."`
+	AddressAliases         AddressAliasesMap     `json:"addressAliases,omitempty" ts_doc:"Aliases for addresses involved in this transaction."`
+	BcashSpecific          *bchain.BcashSpecific `json:"bcashSpecific,omitempty" ts_doc:"BitcoinCash blockchain specific data (if applicable), contains the information about CashTokens."`
 }
 
 // FeeStats contains detailed block fee statistics
