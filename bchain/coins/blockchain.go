@@ -81,6 +81,8 @@ func init() {
 	BlockChainFactories["Ethereum Testnet Sepolia Archive"] = eth.NewEthereumRPC
 	BlockChainFactories["Ethereum Testnet Holesky"] = eth.NewEthereumRPC
 	BlockChainFactories["Ethereum Testnet Holesky Archive"] = eth.NewEthereumRPC
+	BlockChainFactories["Ethereum Testnet Hoodi"] = eth.NewEthereumRPC
+	BlockChainFactories["Ethereum Testnet Hoodi Archive"] = eth.NewEthereumRPC
 	BlockChainFactories["Bcash"] = bch.NewBCashRPC
 	BlockChainFactories["Bcash Testnet"] = bch.NewBCashRPC
 	BlockChainFactories["Bgold"] = btg.NewBGoldRPC
