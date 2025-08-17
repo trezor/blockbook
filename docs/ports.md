@@ -61,7 +61,6 @@
 | Arbitrum Nova Archive            | 9308             | 9208               | 8308        | 38408 p2p                                           |
 | Base                             | 9309             | 9209               | 8309        | 38409 p2p, 8209 http, 8409 authrpc                  |
 | Base Archive                     | 9311             | 9211               | 8211        | 38411 p2p, 8311 http, 8411 authrpc                  |
-| Ethereum Testnet Holesky         | 19116            | 19016              | 18016       | 18116 http, 18516 authrpc, 48316 p2p                |
 | Bitcoin Signet                   | 19120            | 19020              | 18020       | 48320                                               |
 | Bitcoin Regtest                  | 19121            | 19021              | 18021       | 48321                                               |
 | Bitcoin Testnet4                 | 19129            | 19029              | 18029       | 48329                                               |
@@ -71,7 +70,6 @@
 | Dash Testnet                     | 19133            | 19033              | 18033       | 48333                                               |
 | Litecoin Testnet                 | 19134            | 19034              | 18034       | 48334                                               |
 | Bitcoin Gold Testnet             | 19135            | 19035              | 18035       | 48335                                               |
-| Ethereum Testnet Holesky Archive | 19136            | 19036              | 18036       | 18136 http, 18136 torrent, 18536 authrpc, 48336 p2p |
 | Dogecoin Testnet                 | 19138            | 19038              | 18038       | 48338                                               |
 | Vertcoin Testnet                 | 19140            | 19040              | 18040       | 48340                                               |
 | Monacoin Testnet                 | 19141            | 19041              | 18041       | 48341                                               |
@@ -83,6 +81,10 @@
 | Koto Testnet                     | 19151            | 19051              | 18051       | 48351                                               |
 | Decred Testnet                   | 19161            | 19061              | 18061       | 48361                                               |
 | Flo Testnet                      | 19166            | 19066              | 18066       | 48366                                               |
+| Ethereum Testnet Holesky         | 19116            | 19016              | 18016       | 18116 http, 18516 authrpc, 48316 p2p                |
+| Ethereum Testnet Holesky Archive | 19136            | 19036              | 18036       | 18136 http, 18136 torrent, 18536 authrpc, 48336 p2p |
+| Ethereum Testnet Hoodi           | 19106            | 19006              | 18006       | 18106 http, 18506 authrpc, 48306 p2p                |
+| Ethereum Testnet Hoodi Archive   | 19126            | 19026              | 18026       | 18126 http, 18126 torrent, 18526 authrpc, 48326 p2p |
 | Ethereum Testnet Sepolia         | 19176            | 19076              | 18076       | 18176 http, 18576 authrpc, 48376 p2p                |
 | Ethereum Testnet Sepolia Archive | 19186            | 19086              | 18086       | 18186 http, 18186 torrent, 18586 authrpc, 48386 p2p |
 | Qtum Testnet                     | 19188            | 19088              | 18088       | 48388                                               |

@@ -35,7 +35,7 @@ the rest of coins were implemented by the community.
 
 Testnets for some coins are also supported, for example:
 
--   Bitcoin Testnet, Bitcoin Cash Testnet, ZCash Testnet, Ethereum Testnets (Sepolia, Holesky)
+-   Bitcoin Testnet, Bitcoin Cash Testnet, ZCash Testnet, Ethereum Testnets (Sepolia, Hoodi)
 
 List of all implemented coins is in [the registry of ports](/docs/ports.md).
 
