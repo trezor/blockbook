@@ -205,10 +205,12 @@ func (b *EthereumRPC) CreateMempool(chain bchain.BlockChain) (bchain.Mempool, er
 	if b.Mempool == nil {
 		b.Mempool = bchain.NewMempoolEthereumType(chain, b.ChainConfig.MempoolTxTimeoutHours, b.ChainConfig.QueryBackendOnMempoolResync)
 		glog.Info("mempool created, MempoolTxTimeoutHours=", b.ChainConfig.MempoolTxTimeoutHours, ", QueryBackendOnMempoolResync=", b.ChainConfig.QueryBackendOnMempoolResync, ", DisableMempoolSync=", b.ChainConfig.DisableMempoolSync)
-		if b.alternativeSendTxProvider != nil {
-			b.alternativeSendTxProvider.SetupMempool(b.Mempool, b.removeTransactionFromMempool)
+		// Always setup alternative provider when mempool is disabled for this chain
+		if b.ChainConfig.DisableMempoolSync {
+			if b.alternativeSendTxProvider != nil {
+				b.alternativeSendTxProvider.SetupMempool(b.Mempool, b.removeTransactionFromMempool)
+			}
 		}
-
 	}
 	return b.Mempool, nil
 }
