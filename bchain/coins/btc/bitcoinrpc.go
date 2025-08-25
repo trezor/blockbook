@@ -38,15 +38,20 @@ type BitcoinRPC struct {
 
 // Configuration represents json config file
 type Configuration struct {
-	CoinName                     string `json:"coin_name"`
-	CoinShortcut                 string `json:"coin_shortcut"`
-	RPCURL                       string `json:"rpc_url"`
-	RPCUser                      string `json:"rpc_user"`
-	RPCPass                      string `json:"rpc_pass"`
-	RPCTimeout                   int    `json:"rpc_timeout"`
-	AddressAliases               bool   `json:"address_aliases,omitempty"`
-	Parse                        bool   `json:"parse"`
-	MessageQueueBinding          string `json:"message_queue_binding"`
+	CoinName            string `json:"coin_name"`
+	CoinShortcut        string `json:"coin_shortcut"`
+	RPCURL              string `json:"rpc_url"`
+	RPCUser             string `json:"rpc_user"`
+	RPCPass             string `json:"rpc_pass"`
+	RPCTimeout          int    `json:"rpc_timeout"`
+	AddressAliases      bool   `json:"address_aliases,omitempty"`
+	Parse               bool   `json:"parse"`
+	MessageQueueBinding string `json:"message_queue_binding"`
+	MessageQueueCurve   *struct {
+		PublicKey  string `json:"public_key"`
+		PrivateKey string `json:"private_key"`
+		ServerKey  string `json:"server_key"`
+	} `json:"message_queue_curve"`
 	Subversion                   string `json:"subversion"`
 	BlockAddressesToKeep         int    `json:"block_addresses_to_keep"`
 	MempoolWorkers               int    `json:"mempool_workers"`
@@ -190,7 +195,7 @@ func (b *BitcoinRPC) InitializeMempool(addrDescForOutpoint bchain.AddrDescForOut
 	b.Mempool.OnNewTxAddr = onNewTxAddr
 	b.Mempool.OnNewTx = onNewTx
 	if b.mq == nil {
-		mq, err := bchain.NewMQ(b.ChainConfig.MessageQueueBinding, b.pushHandler)
+		mq, err := bchain.NewMQ(b.ChainConfig.MessageQueueBinding, b.ChainConfig.MessageQueueCurve, b.pushHandler)
 		if err != nil {
 			glog.Error("mq: ", err)
 			return err
