@@ -1,0 +1,36 @@
+{
+    "blockHeight": 40000011,
+    "blockHash": "0x0000000002625a0ba978c29860fa4b30e286bd809d5885a83a34dc7e10b05307",
+    "blockTime": 1694226804,
+    "blockSize": 1133,
+    "blockTxs": [
+        "0x13de3dc1e26c58845763502e3bcb92e7ae7b27fc9c28db0f5fad2bcc38a6a069",
+        "0xedb7c46764f5864c85f2887b6521c9a59819d8bc0661a4a10a3be0545ba67b17",
+        "0xf626ae98b01c3f456e5391e6daeeae09088702b61180aa3b900889d25269179c",
+        "0x8c904427fa965d17b289b9afb5d3f6caf78139578a756c7dce85bd244cd5c365"
+    ],
+    "txDetails": {
+        "0xedb7c46764f5864c85f2887b6521c9a59819d8bc0661a4a10a3be0545ba67b17": {
+            "txid": "0xedb7c46764f5864c85f2887b6521c9a59819d8bc0661a4a10a3be0545ba67b17",
+            "blockTime": 1694226804,
+            "time": 1694226804,
+            "vin": [
+                {
+                    "addresses": [
+                        "TXyYbRRkixvU3YYDvmt4seDRNv2ErqPLV1"
+                    ]
+                }
+            ],
+            "vout": [
+                {
+                    "value": 0.313,
+                    "scriptPubKey": {
+                        "addresses": [
+                            "TANPXHGakLN5DkcyH3sqBBjHUfQRZ1b2y8"
+                        ]
+                    }
+                }
+            ]
+        }
+    }
+}
