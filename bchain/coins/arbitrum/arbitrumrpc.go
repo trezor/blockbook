@@ -75,3 +75,7 @@ func (b *ArbitrumRPC) Initialize() error {
 
 	return nil
 }
+
+func (b *ArbitrumRPC) ResolveENS(name string) (*bchain.ENSResolution, error) {
+	return b.EthereumRPC.ResolveENS(name)
+}
