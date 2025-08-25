@@ -201,7 +201,7 @@ func (c *fakeBlockChain) EstimateFee(blocks int) (v big.Int, err error) {
 	return
 }
 
-func (c *fakeBlockChain) SendRawTransaction(tx string) (v string, err error) {
+func (c *fakeBlockChain) SendRawTransaction(tx string, disableAlternativeRPC bool) (v string, err error) {
 	if tx == "123456" {
 		return "9876", nil
 	}

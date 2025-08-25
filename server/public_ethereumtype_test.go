@@ -153,6 +153,17 @@ var websocketTestsEthereumType = []websocketTest{
 		},
 		want: `{"id":"1","data":{"data":"0x4567abcd"}}`,
 	},
+	{
+		name: "websocket sendTransaction hex format",
+		req: websocketReq{
+			Method: "sendTransaction",
+			Params: WsSendTransactionReq{
+				Hex:                   "123456",
+				DisableAlternativeRPC: true,
+			},
+		},
+		want: `{"id":"2","data":{"result":"9876"}}`,
+	},
 }
 
 func initEthereumTypeDB(d *db.RocksDB) error {
