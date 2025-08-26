@@ -51,10 +51,7 @@ func parseSimpleStringProperty(data string) string {
 	// allow string properties as UTF-8 data
 	b, err := hex.DecodeString(data)
 	if err == nil {
-		i := bytes.Index(b, []byte{0})
-		if i > 32 {
-			i = 32
-		}
+		i := min(bytes.Index(b, []byte{0}), 32)
 		if i > 0 {
 			b = b[:i]
 		}
