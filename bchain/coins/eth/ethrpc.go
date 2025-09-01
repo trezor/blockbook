@@ -996,6 +996,20 @@ func (b *EthereumRPC) EstimateFee(blocks int) (big.Int, error) {
 
 // EstimateSmartFee returns fee estimation
 func (b *EthereumRPC) EstimateSmartFee(blocks int, conservative bool) (big.Int, error) {
+	if b.alternativeSendTxProvider != nil {
+		result, err := b.alternativeSendTxProvider.callHttpStringResult(
+			b.alternativeSendTxProvider.urls[0],
+			"eth_gasPrice",
+		)
+		if err == nil {
+			if strings.HasPrefix(result, "0x") {
+				gasPrice, err := hexutil.DecodeBig(result)
+				if err == nil {
+					return *gasPrice, nil
+				}
+			}
+		}
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
 	defer cancel()
 	var r big.Int
@@ -1040,6 +1054,17 @@ func (b *EthereumRPC) EthereumTypeEstimateGas(params map[string]interface{}) (ui
 	}
 	if s, ok := GetStringFromMap("gasPrice", params); ok && len(s) > 0 {
 		msg.GasPrice, _ = hexutil.DecodeBig(s)
+	}
+
+	if b.alternativeSendTxProvider != nil {
+		result, err := b.alternativeSendTxProvider.callHttpStringResult(
+			b.alternativeSendTxProvider.urls[0],
+			"eth_estimateGas",
+			params,
+		)
+		if err == nil {
+			return hexutil.DecodeUint64(result)
+		}
 	}
 	return b.Client.EstimateGas(ctx, msg)
 }
@@ -1179,9 +1204,35 @@ func (b *EthereumRPC) EthereumTypeGetBalance(addrDesc bchain.AddressDescriptor) 
 
 // EthereumTypeGetNonce returns current balance of an address
 func (b *EthereumRPC) EthereumTypeGetNonce(addrDesc bchain.AddressDescriptor) (uint64, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
-	defer cancel()
-	return b.Client.NonceAt(ctx, addrDesc, nil)
+
+	var result string
+	var err error
+
+	if b.alternativeSendTxProvider != nil {
+		result, err = b.alternativeSendTxProvider.callHttpStringResult(
+			b.alternativeSendTxProvider.urls[0],
+			"eth_getTransactionCount",
+			addrDesc,
+			"pending",
+		)
+		if err != nil {
+			glog.Errorf("Alternative provider failed for eth_getTransactionCount: %v, falling back to primary RPC", err)
+		}
+	}
+
+	if result == "" {
+		result, err = b.callRpcStringResult("eth_getTransactionCount", addrDesc, "pending")
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	nonce, err := hexutil.DecodeUint64(result)
+	if err != nil {
+		return 0, err
+	}
+
+	return nonce, nil
 }
 
 // GetChainParser returns ethereum BlockChainParser
