@@ -67,6 +67,8 @@ func (b *PolygonRPC) Initialize() error {
 		return errors.Errorf("Unknown network id %v", id)
 	}
 
+	b.InitAlternativeProviders()
+
 	glog.Info("rpc: block chain ", b.Network)
 
 	return nil
