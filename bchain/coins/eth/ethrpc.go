@@ -171,18 +171,22 @@ func (b *EthereumRPC) Initialize() error {
 		return err
 	}
 
+	b.InitAlternativeProviders()
+
+	glog.Info("rpc: block chain ", b.Network)
+
+	return nil
+}
+
+// InitAlternativeProviders initializes alternative providers
+func (b *EthereumRPC) InitAlternativeProviders() {
 	b.initAlternativeFeeProvider()
 
 	network := b.ChainConfig.Network
 	if network == "" {
 		network = b.ChainConfig.CoinShortcut
 	}
-
 	b.alternativeSendTxProvider = NewAlternativeSendTxProvider(network, b.ChainConfig.RPCTimeout, b.ChainConfig.MempoolTxTimeoutHours)
-
-	glog.Info("rpc: block chain ", b.Network)
-
-	return nil
 }
 
 // CreateMempool creates mempool if not already created, however does not initialize it
