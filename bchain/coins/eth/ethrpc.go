@@ -173,7 +173,7 @@ func (b *EthereumRPC) Initialize() error {
 
 	b.initAlternativeFeeProvider()
 
-	network := b.Network
+	network := b.ChainConfig.Network
 	if network == "" {
 		network = b.ChainConfig.CoinShortcut
 	}
