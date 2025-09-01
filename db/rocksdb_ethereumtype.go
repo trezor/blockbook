@@ -7,6 +7,7 @@ import (
 	"os"
 	"sort"
 	"sync"
+	"time"
 
 	vlq "github.com/bsm/go-vlq"
 	"github.com/golang/glog"
@@ -1660,6 +1661,12 @@ func (s *unpackedMultiTokenValues) upsert(m bchain.MultiTokenValue, index int32,
 
 // getUnpackedAddrDescContracts returns partially unpacked AddrContracts for given addrDesc
 func (d *RocksDB) getUnpackedAddrDescContracts(addrDesc bchain.AddressDescriptor) (*unpackedAddrContracts, error) {
+	d.addrContractsCacheMux.Lock()
+	rv, found := d.addrContractsCache[string(addrDesc)]
+	d.addrContractsCacheMux.Unlock()
+	if found && rv != nil {
+		return rv, nil
+	}
 	val, err := d.db.GetCF(d.ro, d.cfh[cfAddressContracts], addrDesc)
 	if err != nil {
 		return nil, err
@@ -1669,7 +1676,13 @@ func (d *RocksDB) getUnpackedAddrDescContracts(addrDesc bchain.AddressDescriptor
 	if len(buf) == 0 {
 		return nil, nil
 	}
-	return partiallyUnpackAddrContracts(buf)
+	rv, err = partiallyUnpackAddrContracts(buf)
+	if err == nil && rv != nil && len(buf) > addrContractsCacheMinSize {
+		d.addrContractsCacheMux.Lock()
+		d.addrContractsCache[string(addrDesc)] = rv
+		d.addrContractsCacheMux.Unlock()
+	}
+	return rv, err
 }
 
 // to speed up import of blocks, the unpacking of big ints is deferred to time when they are needed
@@ -1797,9 +1810,44 @@ func (d *RocksDB) storeUnpackedAddressContracts(wb *grocksdb.WriteBatch, acm map
 		if acs == nil || (acs.NonContractTxs == 0 && acs.InternalTxs == 0 && len(acs.Contracts) == 0) {
 			wb.DeleteCF(d.cfh[cfAddressContracts], bchain.AddressDescriptor(addrDesc))
 		} else {
-			buf := packUnpackedAddrContracts(acs)
-			wb.PutCF(d.cfh[cfAddressContracts], bchain.AddressDescriptor(addrDesc), buf)
+			// do not store large address contracts found in cache
+			if _, found := d.addrContractsCache[addrDesc]; !found {
+				buf := packUnpackedAddrContracts(acs)
+				wb.PutCF(d.cfh[cfAddressContracts], bchain.AddressDescriptor(addrDesc), buf)
+			}
 		}
 	}
 	return nil
+}
+
+func (d *RocksDB) writeContractsCache() {
+	wb := grocksdb.NewWriteBatch()
+	defer wb.Destroy()
+	d.addrContractsCacheMux.Lock()
+	for addrDesc, acs := range d.addrContractsCache {
+		buf := packUnpackedAddrContracts(acs)
+		wb.PutCF(d.cfh[cfAddressContracts], bchain.AddressDescriptor(addrDesc), buf)
+	}
+	d.addrContractsCacheMux.Unlock()
+	if err := d.WriteBatch(wb); err != nil {
+		glog.Error("writeContractsCache: failed to store addrContractsCache: ", err)
+	}
+}
+
+func (d *RocksDB) storeAddrContractsCache() {
+	start := time.Now()
+	if len(d.addrContractsCache) > 0 {
+		d.writeContractsCache()
+	}
+	glog.Info("storeAddrContractsCache: store ", len(d.addrContractsCache), " entries in ", time.Since(start))
+}
+
+func (d *RocksDB) periodicStoreAddrContractsCache() {
+	period := time.Duration(5) * time.Minute
+	timer := time.NewTimer(period)
+	for {
+		<-timer.C
+		timer.Reset(period)
+		d.storeAddrContractsCache()
+	}
 }
