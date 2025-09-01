@@ -504,7 +504,7 @@ func (b *EthereumRPC) getBestHeader() (bchain.EVMHeader, error) {
 
 // UpdateBestHeader keeps track of the latest block header confirmed on chain
 func (b *EthereumRPC) UpdateBestHeader(h bchain.EVMHeader) {
-	glog.V(2).Info("rpc: new block header ", h.Number())
+	glog.V(2).Info("rpc: new block header ", h.Number().Uint64())
 	b.bestHeaderLock.Lock()
 	b.bestHeader = h
 	b.bestHeaderTime = time.Now()
