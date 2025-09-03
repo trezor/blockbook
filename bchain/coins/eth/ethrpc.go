@@ -1211,6 +1211,7 @@ func (b *EthereumRPC) EthereumTypeGetNonce(addrDesc bchain.AddressDescriptor) (u
 
 	var result string
 	var err error
+	var useAlternative bool
 
 	if b.alternativeSendTxProvider != nil {
 		result, err = b.alternativeSendTxProvider.callHttpStringResult(
@@ -1219,18 +1220,23 @@ func (b *EthereumRPC) EthereumTypeGetNonce(addrDesc bchain.AddressDescriptor) (u
 			addrDesc,
 			"pending",
 		)
-		if err != nil {
+		if err == nil && result != "" {
+			useAlternative = true
+			glog.V(2).Infof("Alternative provider success for eth_getTransactionCount")
+		} else {
 			glog.Errorf("Alternative provider failed for eth_getTransactionCount: %v, falling back to primary RPC", err)
-			glog.Errorf("Alternative provider result was: '%s'", result)
+			if result != "" {
+				glog.Errorf("Alternative provider result was: '%s'", result)
+			}
 		}
 	}
 
-	if err != nil || b.alternativeSendTxProvider == nil {
+	if !useAlternative {
 		result, err = b.callRpcStringResult("eth_getTransactionCount", addrDesc, "pending")
 		if err != nil {
 			return 0, err
 		}
-		glog.Errorf("Primary RPC result: '%s'", result)
+		glog.V(2).Infof("Primary RPC result: '%s'", result)
 	}
 
 	nonce, err := hexutil.DecodeUint64(result)
