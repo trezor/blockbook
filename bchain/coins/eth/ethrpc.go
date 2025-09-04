@@ -2,6 +2,7 @@ package eth
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -1232,6 +1233,7 @@ func (b *EthereumRPC) EthereumTypeGetNonce(addrDesc bchain.AddressDescriptor) (u
 	}
 
 	if !useAlternative {
+		glog.Infof("Calling eth_getTransactionCount with addrDesc: %x, string: %s", addrDesc, hex.EncodeToString(addrDesc))
 		result, err = b.callRpcStringResult("eth_getTransactionCount", addrDesc, "pending")
 		if err != nil {
 			glog.Errorf("Primary RPC failed for eth_getTransactionCount: %v", err)
