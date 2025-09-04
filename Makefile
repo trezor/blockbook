@@ -34,7 +34,7 @@ deb-blockbook-%: .deb-image
 	docker run -t --rm -e PACKAGER=$(PACKAGER) -v "$(CURDIR):/src" -v "$(CURDIR)/build:/out" $(DEB_IMAGE) /build/build-deb.sh blockbook $* $(ARGS)
 
 deb-%: .deb-image
-	docker run -t --rm -e PACKAGER=$(PACKAGER) -v "$(CURDIR):/src" -v "$(CURDIR)/build:/out" $(DEB_IMAGE) /build/build-deb.sh all $* $(ARGS)
+	docker run -t --rm -e PACKAGER=$(PACKAGER) -v /var/run/docker.sock:/var/run/docker.sock -v "$(CURDIR):/src" -v "$(CURDIR)/build:/out" $(DEB_IMAGE) /build/build-deb.sh all $* $(ARGS)
 
 deb-blockbook-all: clean-deb $(addprefix deb-blockbook-, $(TARGETS))
 

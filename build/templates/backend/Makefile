@@ -1,5 +1,9 @@
 {{define "main" -}}
+{{- if ne .Backend.BinaryURL "" }}
 ARCHIVE := $(shell basename {{.Backend.BinaryURL}})
+{{- else }}
+ARCHIVE :=
+{{- end }}
 
 all:
 	mkdir backend
@@ -34,6 +38,8 @@ all:
 
 clean:
 	rm -rf backend
+{{- if ne .Backend.BinaryURL "" }}
 	rm -f ${ARCHIVE}
+{{- end }}
 	rm -f checksum
 {{end}}
