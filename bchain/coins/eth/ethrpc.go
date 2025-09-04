@@ -2,7 +2,6 @@ package eth
 
 import (
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -1209,16 +1208,22 @@ func (b *EthereumRPC) EthereumTypeGetBalance(addrDesc bchain.AddressDescriptor) 
 
 // EthereumTypeGetNonce returns current balance of an address
 func (b *EthereumRPC) EthereumTypeGetNonce(addrDesc bchain.AddressDescriptor) (uint64, error) {
+	// Convert address descriptor to proper format
+	addresses, _, err := b.GetChainParser().GetAddressesFromAddrDesc(addrDesc)
+	if err != nil || len(addresses) == 0 {
+		glog.Errorf("Could not get address from descriptor: %v", err)
+		return 0, err
+	}
+	addressHex := addresses[0]
 
 	var result string
-	var err error
 	var useAlternative bool
 
 	if b.alternativeSendTxProvider != nil {
 		result, err = b.alternativeSendTxProvider.callHttpStringResult(
 			b.alternativeSendTxProvider.urls[0],
 			"eth_getTransactionCount",
-			addrDesc,
+			addressHex,
 			"pending",
 		)
 		if err == nil && result != "" {
@@ -1226,15 +1231,11 @@ func (b *EthereumRPC) EthereumTypeGetNonce(addrDesc bchain.AddressDescriptor) (u
 			glog.V(2).Infof("Alternative provider success for eth_getTransactionCount")
 		} else {
 			glog.Errorf("Alternative provider failed for eth_getTransactionCount: %v, falling back to primary RPC", err)
-			if result != "" {
-				glog.Errorf("Alternative provider result was: '%s'", result)
-			}
 		}
 	}
 
 	if !useAlternative {
-		glog.Infof("Calling eth_getTransactionCount with addrDesc: %x, string: %s", addrDesc, hex.EncodeToString(addrDesc))
-		result, err = b.callRpcStringResult("eth_getTransactionCount", addrDesc, "pending")
+		result, err = b.callRpcStringResult("eth_getTransactionCount", addressHex, "pending")
 		if err != nil {
 			glog.Errorf("Primary RPC failed for eth_getTransactionCount: %v", err)
 			return 0, err
@@ -1244,6 +1245,7 @@ func (b *EthereumRPC) EthereumTypeGetNonce(addrDesc bchain.AddressDescriptor) (u
 
 	nonce, err := hexutil.DecodeUint64(result)
 	if err != nil {
+		glog.Errorf("Failed to parse nonce result '%s': %v", result, err)
 		return 0, err
 	}
 
