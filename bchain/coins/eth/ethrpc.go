@@ -1234,6 +1234,7 @@ func (b *EthereumRPC) EthereumTypeGetNonce(addrDesc bchain.AddressDescriptor) (u
 	if !useAlternative {
 		result, err = b.callRpcStringResult("eth_getTransactionCount", addrDesc, "pending")
 		if err != nil {
+			glog.Errorf("Primary RPC failed for eth_getTransactionCount: %v", err)
 			return 0, err
 		}
 		glog.V(2).Infof("Primary RPC result: '%s'", result)
