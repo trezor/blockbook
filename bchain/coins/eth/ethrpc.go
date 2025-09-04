@@ -1220,7 +1220,7 @@ func (b *EthereumRPC) EthereumTypeGetNonce(addrDesc bchain.AddressDescriptor) (u
 		)
 		if err == nil && result != "" {
 			useAlternative = true
-			glog.V(2).Infof("Alternative provider success for eth_getTransactionCount")
+			glog.Errorf("Alternative provider success for eth_getTransactionCount")
 		} else {
 			glog.Errorf("Alternative provider failed for eth_getTransactionCount: %v, falling back to primary RPC", err)
 		}
@@ -1232,7 +1232,7 @@ func (b *EthereumRPC) EthereumTypeGetNonce(addrDesc bchain.AddressDescriptor) (u
 			glog.Errorf("Primary RPC failed for eth_getTransactionCount: %v", err)
 			return 0, err
 		}
-		glog.V(2).Infof("Primary RPC result: '%s'", result)
+		glog.Errorf("Primary RPC result: '%s'", result)
 	}
 
 	nonce, err := hexutil.DecodeUint64(result)
