@@ -38,7 +38,7 @@ func NewBNBSmartChainRPC(config json.RawMessage, pushHandler func(bchain.Notific
 	s := &BNBSmartChainRPC{
 		EthereumRPC: c.(*eth.EthereumRPC),
 	}
-	s.Parser.EnsSuffix = ".bnb"
+	s.Parser.(*eth.EthereumParser).EnsSuffix = ".bnb"
 
 	return s, nil
 }
