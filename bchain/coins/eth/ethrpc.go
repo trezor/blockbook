@@ -1212,11 +1212,13 @@ func (b *EthereumRPC) EthereumTypeGetNonce(addrDesc bchain.AddressDescriptor) (u
 	var err error
 	var usedAlternative bool
 
+	ethAddress := ethcommon.BytesToAddress(addrDesc)
+
 	if b.alternativeSendTxProvider != nil {
 		result, err = b.alternativeSendTxProvider.callHttpStringResult(
 			b.alternativeSendTxProvider.urls[0],
 			"eth_getTransactionCount",
-			addrDesc,
+			ethAddress,
 			"pending",
 		)
 		if err == nil && result != "" {
@@ -1227,7 +1229,7 @@ func (b *EthereumRPC) EthereumTypeGetNonce(addrDesc bchain.AddressDescriptor) (u
 	}
 
 	if !usedAlternative {
-		result, err = b.callRpcStringResult("eth_getTransactionCount", addrDesc, "pending")
+		result, err = b.callRpcStringResult("eth_getTransactionCount", ethAddress, "pending")
 		if err != nil {
 			glog.Errorf("Primary RPC failed for eth_getTransactionCount: %v", err)
 			return 0, err
