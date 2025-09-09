@@ -1005,20 +1005,6 @@ func (b *EthereumRPC) EstimateFee(blocks int) (big.Int, error) {
 
 // EstimateSmartFee returns fee estimation
 func (b *EthereumRPC) EstimateSmartFee(blocks int, conservative bool) (big.Int, error) {
-	if b.alternativeSendTxProvider != nil {
-		result, err := b.alternativeSendTxProvider.callHttpStringResult(
-			b.alternativeSendTxProvider.urls[0],
-			"eth_gasPrice",
-		)
-		if err == nil {
-			if strings.HasPrefix(result, "0x") {
-				gasPrice, err := hexutil.DecodeBig(result)
-				if err == nil {
-					return *gasPrice, nil
-				}
-			}
-		}
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
 	defer cancel()
 	var r big.Int
