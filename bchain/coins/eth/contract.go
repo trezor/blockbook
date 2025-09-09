@@ -283,18 +283,6 @@ func (b *EthereumRPC) EthereumTypeRpcCall(data, to, from string) (string, error)
 		args["from"] = from
 	}
 
-	if b.alternativeSendTxProvider != nil {
-		result, err := b.alternativeSendTxProvider.callHttpStringResult(
-			b.alternativeSendTxProvider.urls[0],
-			"eth_call",
-			args,
-			"latest",
-		)
-		if err == nil {
-			return result, nil
-		}
-	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
 	defer cancel()
 	var r string
