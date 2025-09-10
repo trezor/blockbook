@@ -2,10 +2,12 @@ package server
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"html/template"
 	"io"
+	"math"
 	"math/big"
 	"net/http"
 	"net/url"
@@ -424,6 +426,7 @@ func (s *PublicServer) parseTemplates() []*template.Template {
 		"amountSatsSpan":           s.amountSatsSpan,
 		"formattedAmountSpan":      s.formattedAmountSpan,
 		"summaryValuesSpan":        s.summaryValuesSpan,
+		"bcashToken":               s.bcashToken,
 		"addressAlias":             addressAlias,
 		"addressAliasSpan":         addressAliasSpan,
 		"formatAmount":             s.formatAmount,
@@ -659,6 +662,115 @@ func (s *PublicServer) summaryValuesSpan(baseValue float64, secondaryValue float
 		} else {
 			if td.SecondaryCoin != "" {
 				rv.WriteString("-")
+			}
+		}
+	}
+	return template.HTML(rv.String())
+}
+
+/**
+ * Given a 32-byte hex-encoded token category, return a deterministic hue and
+ * saturation value to use in HSL colors representing the token category.
+ * Usage: `hsl(${ tokenCategory2HueSaturation(vout.tokenData.category) }, 50%)`
+ */
+// see original implementation: https://github.com/sickpig/bch-rpc-explorer/blob/85aed82dcae5b22050f26184bde229fe60a958b9/app/utils.js#L812
+func tokenCategory2HueSaturation(category string) string {
+	// Decode hex string to bytes
+	bin, _ := hex.DecodeString(category)
+	raw := big.NewFloat(1)
+	tmp := new(big.Float)
+	for _, b := range bin {
+		tmp.SetUint64(uint64(b))
+		raw.Mul(raw, tmp)
+	}
+	mod := new(big.Float).SetFloat64(36000)
+	// big.Float does not have Mod, so use math.Mod on float64
+	rawFloat64, _ := raw.Float64()
+	modFloat64, _ := mod.Float64()
+	raw = big.NewFloat(math.Mod(rawFloat64, modFloat64))
+
+	hue := new(big.Float).Quo(raw, big.NewFloat(100))
+	hueInt, _ := hue.Int64()
+
+	satDiv := new(big.Float).Quo(raw, big.NewFloat(360))
+	satAdd := new(big.Float).Add(satDiv, big.NewFloat(50))
+	satMin := new(big.Float)
+	if satAdd.Cmp(big.NewFloat(100)) > 0 {
+		satMin.SetFloat64(100)
+	} else {
+		satMin.Copy(satAdd)
+	}
+	saturationInt, _ := satMin.Int64()
+
+	return fmt.Sprintf("%d,%d%%", hueInt, saturationInt)
+}
+
+func (s *PublicServer) bcashToken(td *TemplateData, input bool, n int) template.HTML {
+	var rv strings.Builder
+	if td.Tx.BcashSpecific != nil {
+		var tokens []*bchain.BcashToken
+		if input {
+			tokens = td.Tx.BcashSpecific.TokenVins
+		} else {
+			tokens = td.Tx.BcashSpecific.TokenVouts
+		}
+
+		if n >= 0 && n < len(tokens) {
+			t := tokens[n]
+			if t != nil {
+				hueSat := tokenCategory2HueSaturation(t.Category)
+				tokenColor := "hsl(" + hueSat + ",40%)"
+
+				// outter div
+				rv.WriteString(`<div class="token-info border-right" style="border-color: `)
+				rv.WriteString(tokenColor)
+				rv.WriteString(`;">`)
+
+				// token category and amount
+				rv.WriteString(`<div class="flex">`)
+
+				hasAmount := t.Amount.Cmp(big.NewInt(0)) > 0
+
+				rv.WriteString(`<div class="ellipsis copyable flex-1`)
+				rv.WriteString(`" cc="`)
+				rv.WriteString(t.Category)
+				rv.WriteString(`" title="Token Category">`)
+				rv.WriteString(t.Category)
+				rv.WriteString(`</div>`)
+
+				rv.WriteString(`<div class="flex flex-1 w-half float-align-right justify-end" title="Token Amount">`)
+				if hasAmount {
+					rv.WriteString(t.Amount.String())
+				}
+				rv.WriteString(`</div>`)
+				rv.WriteString(`</div>`)
+
+				// token nft capability and commitment
+				if t.Nft != nil {
+					rv.WriteString(`<div class="flex">`)
+
+					rv.WriteString(`<div class="flex-1" title="NFT Capability">`)
+					if t.Nft.Capability != "none" {
+						rv.WriteString(string(t.Nft.Capability))
+					}
+					rv.WriteString(" nft")
+					rv.WriteString(`</div>`)
+
+					rv.WriteString(`<div class="flex flex-1 w-half float-align-right justify-end copyable" cc="`)
+					rv.WriteString(t.Nft.Commitment)
+					rv.WriteString(`" title="NFT Commitment">`)
+					if t.Nft.Commitment != "" {
+						rv.WriteString(t.Nft.Commitment)
+					} else {
+						rv.WriteString("(empty)")
+					}
+					rv.WriteString(`</div>`)
+
+					rv.WriteString(`</div>`)
+
+				}
+				// outter div end
+				rv.WriteString(`</div>`)
 			}
 		}
 	}
