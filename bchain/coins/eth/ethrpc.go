@@ -1154,6 +1154,7 @@ func (b *EthereumRPC) SendRawTransaction(hex string, disableAlternativeRPC bool)
 		if b.alternativeSendTxProvider.UseOnlyAlternativeProvider() {
 			return txid, retErr
 		}
+		retErr = nil
 	}
 
 	txid, retErr = b.callRpcStringResult("eth_sendRawTransaction", hex)
