@@ -889,7 +889,7 @@ func (b *BitcoinRPC) LongTermFeeRate() (*bchain.LongTermFeeRate, error) {
 }
 
 // SendRawTransaction sends raw transaction
-func (b *BitcoinRPC) SendRawTransaction(tx string) (string, error) {
+func (b *BitcoinRPC) SendRawTransaction(tx string, disableAlternativeRPC bool) (string, error) {
 	glog.V(1).Info("rpc: sendrawtransaction")
 
 	res := ResSendRawTransaction{}

@@ -275,9 +275,6 @@ func contractGetTransfersFromTx(tx *bchain.RpcTransaction) (bchain.TokenTransfer
 
 // EthereumTypeRpcCall calls eth_call with given data and to address
 func (b *EthereumRPC) EthereumTypeRpcCall(data, to, from string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
-	defer cancel()
-	var r string
 	args := map[string]interface{}{
 		"data": data,
 		"to":   to,
@@ -285,6 +282,10 @@ func (b *EthereumRPC) EthereumTypeRpcCall(data, to, from string) (string, error)
 	if from != "" {
 		args["from"] = from
 	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+	defer cancel()
+	var r string
 	err := b.RPC.CallContext(ctx, &r, "eth_call", args, "latest")
 	if err != nil {
 		return "", err
