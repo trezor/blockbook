@@ -760,6 +760,7 @@ export interface WsSendTransactionReq {
 export interface WsSubscribeAddressesReq {
     /** List of addresses to subscribe for updates (e.g., new transactions). */
     addresses: string[];
+    newBlockTxs?: boolean;
 }
 export interface WsSubscribeFiatRatesReq {
     /** Fiat currency code (e.g. 'USD'). */
