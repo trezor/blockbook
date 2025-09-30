@@ -1,0 +1,72 @@
+{
+  "coin": {
+    "name": "Gnosis",
+    "shortcut": "xDAI",
+    "label": "Gnosis",
+    "alias": "gnosis"
+  },
+  "ports": {
+    "backend_rpc": 8074,
+    "backend_p2p": 38374,
+    "backend_http": 8174,
+    "backend_authrpc": 8574,
+    "blockbook_internal": 9074,
+    "blockbook_public": 9174
+  },
+  "ipc": {
+    "rpc_url_template": "ws://127.0.0.1:{{.Ports.BackendRPC}}",
+    "rpc_timeout": 25
+  },
+  "backend": {
+    "package_name": "backend-gnosis",
+    "package_revision": "satoshilabs-1",
+    "system_user": "gnosis",
+    "version": "1.25.1",
+    "binary_url": "https://github.com/NethermindEth/nethermind/releases/download/1.25.1/nethermind-1.25.1-e37c10db-linux-x64.zip",
+    "verification_type": "sha256",
+    "verification_source": "f006c47418e61db230637e2cfe95b4fee1de1578195bc2699061b7a9d7fc5fc8",
+    "extract_command": "unzip -d backend",
+    "exclude_files": [],
+    "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/Nethermind.Runner --config gnosis --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --Network.P2PPort {{.Ports.BackendP2P}} --JsonRpc.Port {{.Ports.BackendHttp}} --JsonRpc.EnabledModules \"eth,net,web3,trace,subscribe,txpool,rpc\" --Init.WebSocketsEnabled true --JsonRpc.WebSocketsPort {{.Ports.BackendRPC}} --JsonRpc.EnginePort {{.Ports.BackendAuthRpc}} --JsonRpc.JwtSecretFile {{.Env.BackendDataPath}}/gnosis_consensus/backend/beacon/jwt.hex 2>&1 >> {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
+    "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
+    "postinst_script_template": "",
+    "service_type": "simple",
+    "service_additional_params_template": "",
+    "protect_memory": true,
+    "mainnet": true,
+    "server_config_file": "",
+    "client_config_file": "",
+    "platforms": {
+      "arm64": {
+        "binary_url": "https://github.com/NethermindEth/nethermind/releases/download/1.25.1/nethermind-1.25.1-e37c10db-linux-arm64.zip",
+        "verification_source": "18372c26c97ad47dabc0fa4c01015bc837798f65148cfe52cae67bcdda70dbc2"
+      }
+    }
+  },
+  "blockbook": {
+    "package_name": "blockbook-gnosis",
+    "system_user": "blockbook-gnosis",
+    "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
+    "public_binding_template": ":{{.Ports.BlockbookPublic}}",
+    "explorer_url": "",
+    "additional_params": "",
+    "block_chain": {
+      "parse": true,
+      "mempool_workers": 8,
+      "mempool_sub_workers": 2,
+      "block_addresses_to_keep": 300,
+      "additional_params": {
+        "consensusNodeVersion": "http://localhost:8075/eth/v1/node/version",
+        "mempoolTxTimeoutHours": 48,
+        "queryBackendOnMempoolResync": false,
+        "fiat_rates": "coingecko",
+        "fiat_rates_vs_currencies": "AED,ARS,AUD,BDT,BHD,BMD,BRL,CAD,CHF,CLP,CNY,CZK,DKK,EUR,GBP,HKD,HUF,IDR,ILS,INR,JPY,KRW,KWD,LKR,MMK,MXN,MYR,NGN,NOK,NZD,PHP,PKR,PLN,RUB,SAR,SEK,SGD,THB,TRY,TWD,UAH,USD,VEF,VND,ZAR,BTC,ETH",
+        "fiat_rates_params": "{\"coin\": \"xdai\",\"platformIdentifier\": \"xdai\",\"platformVsCurrency\": \"usd\",\"periodSeconds\": 900}"
+      }
+    }
+  },
+  "meta": {
+    "package_maintainer": "IT",
+    "package_maintainer_email": "it@satoshilabs.com"
+  }
+}
