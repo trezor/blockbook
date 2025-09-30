@@ -442,6 +442,40 @@ span.btn-paging:hover {
     color: var(--bs-body-color);
 }
 
+.token-info {
+    width: 100%;
+    display: inline-block;
+}
+
+.border-right {
+    border-radius: 5px;
+    border-right-width: 5px;
+    border-right-style: solid;
+    padding-right: 5px;
+}
+
+.flex {
+    display: flex;
+}
+
+.flex-1 {
+    flex: 1;
+}
+
+.justify-end {
+    justify-content: flex-end;
+}
+
+.w-half {
+    display: inline-block;
+    width: 50%;
+}
+
+.float-align-right {
+    float: right;
+    text-align: right;
+}
+
 .tx-in .col-12,
 .tx-out .col-12,
 .tx-addr .col-12 {

@@ -319,3 +319,8 @@ func (p *BaseParser) EthereumTypeGetTokenTransfersFromTx(tx *Tx) (TokenTransfers
 func (p *BaseParser) FormatAddressAlias(address string, name string) string {
 	return name
 }
+
+// BcashTypeParseTokenData is unsupported
+func (b *BaseParser) BcashTypeParseTokenData(addrDesc AddressDescriptor) (*BcashToken, int, error) {
+	return nil, 0, nil
+}
