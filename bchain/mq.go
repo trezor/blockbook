@@ -59,21 +59,21 @@ func NewMQ(binding string, curve *struct {
 		if err != nil {
 			return nil, err
 		}
-		key := curve.PublicKey
-		privateKey := curve.PrivateKey
-		if key == "" || privateKey == "" {
+		publicKey := curve.PublicKey
+		secretKey := curve.PrivateKey
+		if publicKey == "" || secretKey == "" {
 			// generate new keypair
-			key, privateKey, err = zmq.NewCurveKeypair()
+			publicKey, secretKey, err = zmq.NewCurveKeypair()
 			if err != nil {
 				return nil, err
 			}
 		}
 
-		err = socket.SetCurvePublickey(key)
+		err = socket.SetCurvePublickey(publicKey)
 		if err != nil {
 			return nil, err
 		}
-		err = socket.SetCurveSecretkey(privateKey)
+		err = socket.SetCurveSecretkey(secretKey)
 		if err != nil {
 			return nil, err
 		}
