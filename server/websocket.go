@@ -1151,7 +1151,10 @@ func (s *WebsocketServer) getNewTxSubscriptions(vins []bchain.MempoolVin, vouts 
 				subscribed[sad] = struct{}{}
 			}
 		} else if s.chainParser.GetChainType() == bchain.ChainBitcoinType {
-			processVout(vouts[vins[i].Vout])
+			vout := int(vins[i].Vout)
+			if vout >= 0 && vout < len(vouts) {
+				processVout(vouts[vins[i].Vout])
+			}
 		} else if s.chainParser.GetChainType() == bchain.ChainEthereumType {
 			if len(vins[i].Addresses) > 0 {
 				processAddress(vins[i].Addresses[0])

@@ -1042,8 +1042,8 @@ Example for subscribing to an address (or multiple addresses) including new bloc
   "id":"1",
   "method":"subscribeAddresses",
   "params":{
-    "addresses":["mnYYiDCb2JZXnqEeXta1nkt5oCVe2RVhJj", "tb1qp0we5epypgj4acd2c4au58045ruud2pd6heuee"]
-    "newBlockTxs" true,
+    "addresses":["mnYYiDCb2JZXnqEeXta1nkt5oCVe2RVhJj", "tb1qp0we5epypgj4acd2c4au58045ruud2pd6heuee"],
+    "newBlockTxs": true,
    }
 }
 ```
