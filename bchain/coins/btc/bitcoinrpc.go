@@ -38,37 +38,33 @@ type BitcoinRPC struct {
 
 // Configuration represents json config file
 type Configuration struct {
-	CoinName            string `json:"coin_name"`
-	CoinShortcut        string `json:"coin_shortcut"`
-	RPCURL              string `json:"rpc_url"`
-	RPCUser             string `json:"rpc_user"`
-	RPCPass             string `json:"rpc_pass"`
-	RPCTimeout          int    `json:"rpc_timeout"`
-	AddressAliases      bool   `json:"address_aliases,omitempty"`
-	Parse               bool   `json:"parse"`
-	MessageQueueBinding string `json:"message_queue_binding"`
-	MessageQueueCurve   *struct {
-		PublicKey  string `json:"public_key"`
-		PrivateKey string `json:"private_key"`
-		ServerKey  string `json:"server_key"`
-	} `json:"message_queue_curve"`
-	Subversion                   string `json:"subversion"`
-	BlockAddressesToKeep         int    `json:"block_addresses_to_keep"`
-	MempoolWorkers               int    `json:"mempool_workers"`
-	MempoolSubWorkers            int    `json:"mempool_sub_workers"`
-	AddressFormat                string `json:"address_format"`
-	SupportsEstimateFee          bool   `json:"supports_estimate_fee"`
-	SupportsEstimateSmartFee     bool   `json:"supports_estimate_smart_fee"`
-	XPubMagic                    uint32 `json:"xpub_magic,omitempty"`
-	XPubMagicSegwitP2sh          uint32 `json:"xpub_magic_segwit_p2sh,omitempty"`
-	XPubMagicSegwitNative        uint32 `json:"xpub_magic_segwit_native,omitempty"`
-	Slip44                       uint32 `json:"slip44,omitempty"`
-	AlternativeEstimateFee       string `json:"alternative_estimate_fee,omitempty"`
-	AlternativeEstimateFeeParams string `json:"alternative_estimate_fee_params,omitempty"`
-	MinimumCoinbaseConfirmations int    `json:"minimumCoinbaseConfirmations,omitempty"`
-	MempoolGolombFilterP         uint8  `json:"mempool_golomb_filter_p,omitempty"`
-	MempoolFilterScripts         string `json:"mempool_filter_scripts,omitempty"`
-	MempoolFilterUseZeroedKey    bool   `json:"mempool_filter_use_zeroed_key,omitempty"`
+	CoinName                     string              `json:"coin_name"`
+	CoinShortcut                 string              `json:"coin_shortcut"`
+	RPCURL                       string              `json:"rpc_url"`
+	RPCUser                      string              `json:"rpc_user"`
+	RPCPass                      string              `json:"rpc_pass"`
+	RPCTimeout                   int                 `json:"rpc_timeout"`
+	AddressAliases               bool                `json:"address_aliases,omitempty"`
+	Parse                        bool                `json:"parse"`
+	MessageQueueBinding          string              `json:"message_queue_binding"`
+	MessageQueueCurve            *bchain.CurveConfig `json:"message_queue_curve"`
+	Subversion                   string              `json:"subversion"`
+	BlockAddressesToKeep         int                 `json:"block_addresses_to_keep"`
+	MempoolWorkers               int                 `json:"mempool_workers"`
+	MempoolSubWorkers            int                 `json:"mempool_sub_workers"`
+	AddressFormat                string              `json:"address_format"`
+	SupportsEstimateFee          bool                `json:"supports_estimate_fee"`
+	SupportsEstimateSmartFee     bool                `json:"supports_estimate_smart_fee"`
+	XPubMagic                    uint32              `json:"xpub_magic,omitempty"`
+	XPubMagicSegwitP2sh          uint32              `json:"xpub_magic_segwit_p2sh,omitempty"`
+	XPubMagicSegwitNative        uint32              `json:"xpub_magic_segwit_native,omitempty"`
+	Slip44                       uint32              `json:"slip44,omitempty"`
+	AlternativeEstimateFee       string              `json:"alternative_estimate_fee,omitempty"`
+	AlternativeEstimateFeeParams string              `json:"alternative_estimate_fee_params,omitempty"`
+	MinimumCoinbaseConfirmations int                 `json:"minimumCoinbaseConfirmations,omitempty"`
+	MempoolGolombFilterP         uint8               `json:"mempool_golomb_filter_p,omitempty"`
+	MempoolFilterScripts         string              `json:"mempool_filter_scripts,omitempty"`
+	MempoolFilterUseZeroedKey    bool                `json:"mempool_filter_use_zeroed_key,omitempty"`
 }
 
 // NewBitcoinRPC returns new BitcoinRPC instance.

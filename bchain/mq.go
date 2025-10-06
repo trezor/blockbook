@@ -18,6 +18,12 @@ type MQ struct {
 	binding   string
 }
 
+type CurveConfig struct {
+	PublicKey  string `json:"public_key"`
+	PrivateKey string `json:"private_key"`
+	ServerKey  string `json:"server_key"`
+}
+
 // NotificationType is type of notification
 type NotificationType int
 
@@ -32,11 +38,7 @@ const (
 
 // NewMQ creates new Bitcoind ZeroMQ listener
 // callback function receives messages
-func NewMQ(binding string, curve *struct {
-	PublicKey  string `json:"public_key"`
-	PrivateKey string `json:"private_key"`
-	ServerKey  string `json:"server_key"`
-}, callback func(NotificationType)) (*MQ, error) {
+func NewMQ(binding string, curve *CurveConfig, callback func(NotificationType)) (*MQ, error) {
 	context, err := zmq.NewContext()
 	if err != nil {
 		return nil, err
