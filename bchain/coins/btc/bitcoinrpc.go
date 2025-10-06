@@ -85,11 +85,7 @@ type Configuration struct {
 	AddressAliases      bool   `json:"address_aliases,omitempty"`
 	Parse               bool   `json:"parse"`
 	MessageQueueBinding string `json:"message_queue_binding"`
-	MessageQueueCurve   *struct {
-		PublicKey  string `json:"public_key"`
-		PrivateKey string `json:"private_key"`
-		ServerKey  string `json:"server_key"`
-	} `json:"message_queue_curve"`
+	MessageQueueCurve            *bchain.CurveConfig `json:"message_queue_curve"`
 	Subversion                   string `json:"subversion"`
 	BlockAddressesToKeep         int    `json:"block_addresses_to_keep"`
 	MempoolWorkers               int    `json:"mempool_workers"`
