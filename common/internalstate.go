@@ -3,6 +3,7 @@ package common
 import (
 	"encoding/json"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -102,6 +103,10 @@ type InternalState struct {
 	// allowed number of fetched accounts over websocket
 	WsGetAccountInfoLimit int            `json:"-" ts_doc:"Limit of how many getAccountInfo calls can be made via WS (not exposed)."`
 	WsLimitExceedingIPs   map[string]int `json:"-" ts_doc:"Tracks IP addresses exceeding the WS limit (not exposed)."`
+}
+
+func (is *InternalState) IsBCH() bool {
+	return strings.HasSuffix(is.CoinShortcut, "BCH")
 }
 
 // StartedSync signals start of synchronization

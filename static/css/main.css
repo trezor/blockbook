@@ -462,6 +462,10 @@ span.btn-paging:hover {
     flex: 1;
 }
 
+.align-center {
+    align-items: center;
+}
+
 .justify-end {
     justify-content: flex-end;
 }

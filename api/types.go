@@ -134,20 +134,41 @@ func (a *Amount) AsInt64() int64 {
 	return (*big.Int)(a).Int64()
 }
 
+type BcashToken struct {
+	Category    string         `json:"category" ts_doc:"Identifier of the token, which is a 32-byte hash of its genesis transaction"`
+	Amount      Amount         `json:"amount" ts_doc:"Fungible token amount in base units"`
+	Name        string         `json:"name,omitempty" ts_doc:"Readable name of the token."`
+	Symbol      string         `json:"symbol,omitempty" ts_doc:"Symbol for the token (e.g., 'ETH', 'USDT')."`
+	Decimals    int            `json:"decimals,omitempty" ts_doc:"Number of decimals for this token."`
+	Description string         `json:"description,omitempty" ts_doc:"Description of the token, if available."`
+	Icon        string         `json:"icon,omitempty" ts_doc:"URL to an icon image for this token, if available."`
+	Website     string         `json:"website,omitempty" ts_doc:"URL to the token's official website, if available."`
+	Nft         *BcashTokenNft `json:"nft,omitempty" ts_doc:"Optional pointer to a BcashTokenNft object if the token also holds an NFT"`
+}
+
+type BcashTokenNft struct {
+	Capability  string `json:"capability" ts_doc:"Capability of the NFT, which can be 'none', 'mutable', or 'minting'"`
+	Commitment  string `json:"commitment" ts_doc:"Commitment of the NFT, hex encoded, maximum 40 bytes"`
+	Name        string `json:"name,omitempty"`
+	Description string `json:"description,omitempty"`
+	Icon        string `json:"icon,omitempty"`
+}
+
 // Vin contains information about single transaction input
 type Vin struct {
-	Txid      string                   `json:"txid,omitempty" ts_doc:"ID/hash of the originating transaction (where the UTXO comes from)."`
-	Vout      uint32                   `json:"vout,omitempty" ts_doc:"Index of the output in the referenced transaction."`
-	Sequence  int64                    `json:"sequence,omitempty" ts_doc:"Sequence number for this input (e.g. 4294967293)."`
-	N         int                      `json:"n" ts_doc:"Relative index of this input within the transaction."`
-	AddrDesc  bchain.AddressDescriptor `json:"-" ts_doc:"Internal address descriptor for backend usage (not exposed via JSON)."`
-	Addresses []string                 `json:"addresses,omitempty" ts_doc:"List of addresses associated with this input."`
-	IsAddress bool                     `json:"isAddress" ts_doc:"Indicates if this input is from a known address."`
-	IsOwn     bool                     `json:"isOwn,omitempty" ts_doc:"Indicates if this input belongs to the wallet in context."`
-	ValueSat  *Amount                  `json:"value,omitempty" ts_doc:"Amount (in satoshi or base units) of the input."`
-	Hex       string                   `json:"hex,omitempty" ts_doc:"Raw script hex data for this input."`
-	Asm       string                   `json:"asm,omitempty" ts_doc:"Disassembled script for this input."`
-	Coinbase  string                   `json:"coinbase,omitempty" ts_doc:"Data for coinbase inputs (when mining)."`
+	Txid       string                   `json:"txid,omitempty" ts_doc:"ID/hash of the originating transaction (where the UTXO comes from)."`
+	Vout       uint32                   `json:"vout,omitempty" ts_doc:"Index of the output in the referenced transaction."`
+	Sequence   int64                    `json:"sequence,omitempty" ts_doc:"Sequence number for this input (e.g. 4294967293)."`
+	N          int                      `json:"n" ts_doc:"Relative index of this input within the transaction."`
+	AddrDesc   bchain.AddressDescriptor `json:"-" ts_doc:"Internal address descriptor for backend usage (not exposed via JSON)."`
+	Addresses  []string                 `json:"addresses,omitempty" ts_doc:"List of addresses associated with this input."`
+	IsAddress  bool                     `json:"isAddress" ts_doc:"Indicates if this input is from a known address."`
+	IsOwn      bool                     `json:"isOwn,omitempty" ts_doc:"Indicates if this input belongs to the wallet in context."`
+	ValueSat   *Amount                  `json:"value,omitempty" ts_doc:"Amount (in satoshi or base units) of the input."`
+	Hex        string                   `json:"hex,omitempty" ts_doc:"Raw script hex data for this input."`
+	Asm        string                   `json:"asm,omitempty" ts_doc:"Disassembled script for this input."`
+	Coinbase   string                   `json:"coinbase,omitempty" ts_doc:"Data for coinbase inputs (when mining)."`
+	BcashToken *BcashToken              `json:"tokenData,omitempty" ts_doc:"If this input spends a CashToken, this field contains the token details."`
 }
 
 // Vout contains information about single transaction output
@@ -165,6 +186,7 @@ type Vout struct {
 	IsAddress   bool                     `json:"isAddress" ts_doc:"Indicates whether this output is owned by valid address."`
 	IsOwn       bool                     `json:"isOwn,omitempty" ts_doc:"Indicates if this output belongs to the wallet in context."`
 	Type        string                   `json:"type,omitempty" ts_doc:"Output script type (e.g., 'P2PKH', 'P2SH')."`
+	BcashToken  *BcashToken              `json:"tokenData,omitempty" ts_doc:"If this output receives a CashToken, this field contains the token details."`
 }
 
 // MultiTokenValue contains values for contracts with multiple token IDs
@@ -172,6 +194,8 @@ type MultiTokenValue struct {
 	Id    *Amount `json:"id,omitempty" ts_doc:"Token ID (for ERC1155)."`
 	Value *Amount `json:"value,omitempty" ts_doc:"Amount of that specific token ID."`
 }
+
+type Nft = db.BcashTokenNftMeta
 
 // Token contains info about tokens held by an address
 type Token struct {
@@ -192,6 +216,12 @@ type Token struct {
 	TotalReceivedSat *Amount                  `json:"totalReceived,omitempty" ts_doc:"Total amount of tokens received."`
 	TotalSentSat     *Amount                  `json:"totalSent,omitempty" ts_doc:"Total amount of tokens sent."`
 	ContractIndex    string                   `json:"-"`
+	Category         string                   `json:"category,omitempty" ts_doc:"Identifier of the token, 32 bytes"`
+	Commitments      []string                 `json:"commitments,omitempty" ts_doc:"Array of hex-encoded token commitments, each up to 40 bytes"`
+	Description      string                   `json:"description,omitempty" ts_doc:"Description of the token, if available."`
+	Icon             string                   `json:"icon,omitempty" ts_doc:"URL to an icon image for this token, if available."`
+	Website          string                   `json:"website,omitempty" ts_doc:"URL to the token's official website, if available."`
+	Nfts             map[string]Nft           `json:"nfts,omitempty" ts_doc:"For NFT tokens, a mapping of token IDs to their metadata, serialized in key order."`
 }
 
 // Tokens is array of Token
@@ -277,29 +307,28 @@ type AddressAliasesMap map[string]AddressAlias
 
 // Tx holds information about a transaction
 type Tx struct {
-	Txid                   string                `json:"txid" ts_doc:"Transaction ID (hash)."`
-	Version                int32                 `json:"version,omitempty" ts_doc:"Version of the transaction (if applicable)."`
-	Locktime               uint32                `json:"lockTime,omitempty" ts_doc:"Locktime indicating earliest time/height transaction can be mined."`
-	Vin                    []Vin                 `json:"vin" ts_doc:"Array of inputs for this transaction."`
-	Vout                   []Vout                `json:"vout" ts_doc:"Array of outputs for this transaction."`
-	Blockhash              string                `json:"blockHash,omitempty" ts_doc:"Hash of the block containing this transaction."`
-	Blockheight            int                   `json:"blockHeight" ts_doc:"Block height in which this transaction was included."`
-	Confirmations          uint32                `json:"confirmations" ts_doc:"Number of confirmations (blocks mined after this tx's block)."`
-	ConfirmationETABlocks  uint32                `json:"confirmationETABlocks,omitempty" ts_doc:"Estimated blocks remaining until confirmation (if unconfirmed)."`
-	ConfirmationETASeconds int64                 `json:"confirmationETASeconds,omitempty" ts_doc:"Estimated seconds remaining until confirmation (if unconfirmed)."`
-	Blocktime              int64                 `json:"blockTime" ts_doc:"Unix timestamp of the block in which this transaction was included. 0 if unconfirmed."`
-	Size                   int                   `json:"size,omitempty" ts_doc:"Transaction size in bytes."`
-	VSize                  int                   `json:"vsize,omitempty" ts_doc:"Virtual size in bytes, for SegWit-enabled chains."`
-	ValueOutSat            *Amount               `json:"value" ts_doc:"Total value of all outputs (in satoshi or base units)."`
-	ValueInSat             *Amount               `json:"valueIn,omitempty" ts_doc:"Total value of all inputs (in satoshi or base units)."`
-	FeesSat                *Amount               `json:"fees,omitempty" ts_doc:"Transaction fee (inputs - outputs)."`
-	Hex                    string                `json:"hex,omitempty" ts_doc:"Raw hex-encoded transaction data."`
-	Rbf                    bool                  `json:"rbf,omitempty" ts_doc:"Indicates if this transaction is replace-by-fee (RBF) enabled."`
-	CoinSpecificData       json.RawMessage       `json:"coinSpecificData,omitempty" ts_type:"any" ts_doc:"Blockchain-specific extended data."`
-	TokenTransfers         []TokenTransfer       `json:"tokenTransfers,omitempty" ts_doc:"List of token transfers that occurred in this transaction."`
-	EthereumSpecific       *EthereumSpecific     `json:"ethereumSpecific,omitempty" ts_doc:"Ethereum-like blockchain specific data (if applicable)."`
-	AddressAliases         AddressAliasesMap     `json:"addressAliases,omitempty" ts_doc:"Aliases for addresses involved in this transaction."`
-	BcashSpecific          *bchain.BcashSpecific `json:"bcashSpecific,omitempty" ts_doc:"BitcoinCash blockchain specific data (if applicable), contains the information about CashTokens."`
+	Txid                   string            `json:"txid" ts_doc:"Transaction ID (hash)."`
+	Version                int32             `json:"version,omitempty" ts_doc:"Version of the transaction (if applicable)."`
+	Locktime               uint32            `json:"lockTime,omitempty" ts_doc:"Locktime indicating earliest time/height transaction can be mined."`
+	Vin                    []Vin             `json:"vin" ts_doc:"Array of inputs for this transaction."`
+	Vout                   []Vout            `json:"vout" ts_doc:"Array of outputs for this transaction."`
+	Blockhash              string            `json:"blockHash,omitempty" ts_doc:"Hash of the block containing this transaction."`
+	Blockheight            int               `json:"blockHeight" ts_doc:"Block height in which this transaction was included."`
+	Confirmations          uint32            `json:"confirmations" ts_doc:"Number of confirmations (blocks mined after this tx's block)."`
+	ConfirmationETABlocks  uint32            `json:"confirmationETABlocks,omitempty" ts_doc:"Estimated blocks remaining until confirmation (if unconfirmed)."`
+	ConfirmationETASeconds int64             `json:"confirmationETASeconds,omitempty" ts_doc:"Estimated seconds remaining until confirmation (if unconfirmed)."`
+	Blocktime              int64             `json:"blockTime" ts_doc:"Unix timestamp of the block in which this transaction was included. 0 if unconfirmed."`
+	Size                   int               `json:"size,omitempty" ts_doc:"Transaction size in bytes."`
+	VSize                  int               `json:"vsize,omitempty" ts_doc:"Virtual size in bytes, for SegWit-enabled chains."`
+	ValueOutSat            *Amount           `json:"value" ts_doc:"Total value of all outputs (in satoshi or base units)."`
+	ValueInSat             *Amount           `json:"valueIn,omitempty" ts_doc:"Total value of all inputs (in satoshi or base units)."`
+	FeesSat                *Amount           `json:"fees,omitempty" ts_doc:"Transaction fee (inputs - outputs)."`
+	Hex                    string            `json:"hex,omitempty" ts_doc:"Raw hex-encoded transaction data."`
+	Rbf                    bool              `json:"rbf,omitempty" ts_doc:"Indicates if this transaction is replace-by-fee (RBF) enabled."`
+	CoinSpecificData       json.RawMessage   `json:"coinSpecificData,omitempty" ts_type:"any" ts_doc:"Blockchain-specific extended data."`
+	TokenTransfers         []TokenTransfer   `json:"tokenTransfers,omitempty" ts_doc:"List of token transfers that occurred in this transaction."`
+	EthereumSpecific       *EthereumSpecific `json:"ethereumSpecific,omitempty" ts_doc:"Ethereum-like blockchain specific data (if applicable)."`
+	AddressAliases         AddressAliasesMap `json:"addressAliases,omitempty" ts_doc:"Aliases for addresses involved in this transaction."`
 }
 
 // FeeStats contains detailed block fee statistics
@@ -399,15 +428,16 @@ type Address struct {
 
 // Utxo is one unspent transaction output
 type Utxo struct {
-	Txid          string  `json:"txid" ts_doc:"Transaction ID in which this UTXO was created."`
-	Vout          int32   `json:"vout" ts_doc:"Index of the output in that transaction."`
-	AmountSat     *Amount `json:"value" ts_doc:"Value of this UTXO (in satoshi or base units)."`
-	Height        int     `json:"height,omitempty" ts_doc:"Block height in which the UTXO was confirmed."`
-	Confirmations int     `json:"confirmations" ts_doc:"Number of confirmations for this UTXO."`
-	Address       string  `json:"address,omitempty" ts_doc:"Address to which this UTXO belongs."`
-	Path          string  `json:"path,omitempty" ts_doc:"Derivation path for XPUB-based wallets, if applicable."`
-	Locktime      uint32  `json:"lockTime,omitempty" ts_doc:"If non-zero, locktime required before spending this UTXO."`
-	Coinbase      bool    `json:"coinbase,omitempty" ts_doc:"Indicates if this UTXO originated from a coinbase transaction."`
+	Txid          string             `json:"txid" ts_doc:"Transaction ID in which this UTXO was created."`
+	Vout          int32              `json:"vout" ts_doc:"Index of the output in that transaction."`
+	AmountSat     *Amount            `json:"value" ts_doc:"Value of this UTXO (in satoshi or base units)."`
+	Height        int                `json:"height,omitempty" ts_doc:"Block height in which the UTXO was confirmed."`
+	Confirmations int                `json:"confirmations" ts_doc:"Number of confirmations for this UTXO."`
+	Address       string             `json:"address,omitempty" ts_doc:"Address to which this UTXO belongs."`
+	Path          string             `json:"path,omitempty" ts_doc:"Derivation path for XPUB-based wallets, if applicable."`
+	Locktime      uint32             `json:"lockTime,omitempty" ts_doc:"If non-zero, locktime required before spending this UTXO."`
+	Coinbase      bool               `json:"coinbase,omitempty" ts_doc:"Indicates if this UTXO originated from a coinbase transaction."`
+	BcashToken    *bchain.BcashToken `json:"tokenData,omitempty" ts_doc:"If this UTXO holds a CashToken, this field contains the token details."`
 }
 
 // Utxos is array of Utxo

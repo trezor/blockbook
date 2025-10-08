@@ -1459,7 +1459,7 @@ func (d *RocksDB) disconnectBlockTxsEthereumType(wb *grocksdb.WriteBatch, height
 		wb.DeleteCF(d.cfh[cfInternalData], blockTx.btxID)
 	}
 	for a := range addresses {
-		key := packAddressKey(d.chainParser, []byte(a), height)
+		key := packAddressKey([]byte(a), height)
 		wb.DeleteCF(d.cfh[cfAddresses], key)
 	}
 	return nil

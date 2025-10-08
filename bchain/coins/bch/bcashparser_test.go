@@ -3,6 +3,7 @@
 package bch
 
 import (
+	"bytes"
 	"encoding/hex"
 	"encoding/json"
 	"math/big"
@@ -14,7 +15,13 @@ import (
 	"github.com/martinboehm/btcutil/chaincfg"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/bchain/coins/btc"
+	"github.com/trezor/blockbook/common"
 )
+
+func hexToBytes(h string) []byte {
+	b, _ := hex.DecodeString(h)
+	return b
+}
 
 func TestMain(m *testing.M) {
 	c := m.Run()
@@ -228,6 +235,14 @@ func Test_GetAddressesFromAddrDesc(t *testing.T) {
 			wantErr:    false,
 		},
 		{
+			name:       "OP_RETURN BCMR",
+			parser:     mainParserCashAddr,
+			addresses:  []string{"OP_RETURN (BCMR 13f93a5fb1df5cbe30382368b39992287add714a5b682c0be02d6849536e5d6c gist.githubusercontent.com/alpsy05/55c602d49e44842fa41dfcabed237a15/raw/148812af3c25fb1cf91d3fbae4fc9e5cd1d501e5/Cash)"},
+			searchable: false,
+			hex:        "6a0442434d522013f93a5fb1df5cbe30382368b39992287add714a5b682c0be02d6849536e5d6c4c75676973742e67697468756275736572636f6e74656e742e636f6d2f616c70737930352f35356336303264343965343438343266613431646663616265643233376131352f7261772f313438383132616633633235666231636639316433666261653466633965356364316435303165352f43617368",
+			wantErr:    false,
+		},
+		{
 			name:       "empty",
 			parser:     mainParserCashAddr,
 			addresses:  []string{},
@@ -250,6 +265,158 @@ func Test_GetAddressesFromAddrDesc(t *testing.T) {
 			}
 			if !reflect.DeepEqual(got2, tt.searchable) {
 				t.Errorf("GetAddressesFromAddrDesc() = %v, want %v", got2, tt.searchable)
+			}
+		})
+	}
+}
+
+func Test_GetAddrDescFromVout(t *testing.T) {
+	mainParserCashAddr, mainParserLegacy, testParserCashAddr, testParserLegacy := setupParsers(t)
+	tests := []struct {
+		name       string
+		parser     *BCashParser
+		wantHex    string
+		searchable bool
+		hex        string
+		wantErr    bool
+	}{
+		{
+			name:       "test-P2PKH-0",
+			parser:     testParserLegacy,
+			wantHex:    "76a9144fa927fd3bcf57d4e3c582c3d2eb2bd3df8df47c88ac",
+			searchable: true,
+			hex:        "76a9144fa927fd3bcf57d4e3c582c3d2eb2bd3df8df47c88ac",
+
+			wantErr: false,
+		},
+		{
+			name:       "test-P2PKH-1",
+			parser:     testParserCashAddr,
+			wantHex:    "76a9144fa927fd3bcf57d4e3c582c3d2eb2bd3df8df47c88ac",
+			searchable: true,
+			hex:        "76a9144fa927fd3bcf57d4e3c582c3d2eb2bd3df8df47c88ac",
+			wantErr:    false,
+		},
+		{
+			name:       "main-P2PKH-0",
+			parser:     mainParserLegacy,
+			wantHex:    "76a9140c8967e6382c7a2ca64d8e850bfc99b7736e1a0d88ac",
+			searchable: true,
+			hex:        "76a9140c8967e6382c7a2ca64d8e850bfc99b7736e1a0d88ac",
+			wantErr:    false,
+		},
+		{
+			name:       "main-P2PKH-0",
+			parser:     mainParserCashAddr,
+			wantHex:    "76a9140c8967e6382c7a2ca64d8e850bfc99b7736e1a0d88ac",
+			searchable: true,
+			hex:        "76a9140c8967e6382c7a2ca64d8e850bfc99b7736e1a0d88ac",
+			wantErr:    false,
+		},
+		{
+			name:       "main-P2PKH-CastTokens-0",
+			parser:     mainParserCashAddr,
+			wantHex:    "76a9140c8967e6382c7a2ca64d8e850bfc99b7736e1a0d88ac",
+			searchable: true,
+			hex:        "efbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb7201ccfdffff76a9140c8967e6382c7a2ca64d8e850bfc99b7736e1a0d88ac",
+			wantErr:    false,
+		},
+		{
+			name:       "main-P2SH-0",
+			parser:     mainParserLegacy,
+			wantHex:    "a91488f772450c830a30eddfdc08a93d5f2ae1a30e1787",
+			searchable: true,
+			hex:        "a91488f772450c830a30eddfdc08a93d5f2ae1a30e1787",
+			wantErr:    false,
+		},
+		{
+			name:       "main-P2SH-1",
+			parser:     mainParserCashAddr,
+			wantHex:    "a91488f772450c830a30eddfdc08a93d5f2ae1a30e1787",
+			searchable: true,
+			hex:        "a91488f772450c830a30eddfdc08a93d5f2ae1a30e1787",
+			wantErr:    false,
+		},
+		{
+			name:       "main-P2SH-CashTokens-0",
+			parser:     mainParserCashAddr,
+			wantHex:    "a91488f772450c830a30eddfdc08a93d5f2ae1a30e1787",
+			searchable: true,
+			hex:        "efbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb7201ccfdffffa91488f772450c830a30eddfdc08a93d5f2ae1a30e1787",
+			wantErr:    false,
+		},
+		{
+			name:       "main-P2SH32-0",
+			parser:     mainParserCashAddr,
+			wantHex:    "aa20ddc9c2af180d9ee34c1a3d593998e48c68f1fb68b0312fc4722b6b3088f73c8d87",
+			searchable: true,
+			hex:        "aa20ddc9c2af180d9ee34c1a3d593998e48c68f1fb68b0312fc4722b6b3088f73c8d87",
+			wantErr:    false,
+		},
+		{
+			name:       "main-P2SH32-CashTokens-0",
+			parser:     mainParserCashAddr,
+			wantHex:    "aa20ddc9c2af180d9ee34c1a3d593998e48c68f1fb68b0312fc4722b6b3088f73c8d87",
+			searchable: true,
+			hex:        "efbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb7201ccfdffffaa20ddc9c2af180d9ee34c1a3d593998e48c68f1fb68b0312fc4722b6b3088f73c8d87",
+			wantErr:    false,
+		},
+		{
+			name:       "test-P2SH32-0",
+			parser:     testParserCashAddr,
+			wantHex:    "aa20ddc9c2af180d9ee34c1a3d593998e48c68f1fb68b0312fc4722b6b3088f73c8d87",
+			searchable: true,
+			hex:        "aa20ddc9c2af180d9ee34c1a3d593998e48c68f1fb68b0312fc4722b6b3088f73c8d87",
+			wantErr:    false,
+		},
+		{
+			name:       "main-P2PK",
+			parser:     mainParserCashAddr,
+			wantHex:    "76a914065a05c17ba9204ee56625fa83753569d58df91d88ac",
+			searchable: true,
+			hex:        "2103db3c3977c5165058bf38c46f72d32f4e872112dbafc13083a948676165cd1603ac",
+			wantErr:    false,
+		},
+		{
+			name:       "OP_RETURN ascii",
+			parser:     mainParserCashAddr,
+			wantHex:    "6a0461686f6a",
+			searchable: false,
+			hex:        "6a0461686f6a",
+			wantErr:    false,
+		},
+		{
+			name:       "OP_RETURN hex",
+			parser:     mainParserCashAddr,
+			wantHex:    "6a072020f1686f6a20",
+			searchable: false,
+			hex:        "6a072020f1686f6a20",
+			wantErr:    false,
+		},
+		{
+			name:       "empty",
+			parser:     mainParserCashAddr,
+			wantHex:    "",
+			searchable: false,
+			hex:        "",
+			wantErr:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.parser.GetAddrDescFromVout(&bchain.Vout{
+				ScriptPubKey: bchain.ScriptPubKey{
+					Hex: tt.hex,
+				},
+			})
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GetAddressesFromAddrDesc() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			gotHex := hex.EncodeToString(got)
+			if !reflect.DeepEqual(gotHex, tt.wantHex) {
+				t.Errorf("GetAddressesFromAddrDesc() = %v, want %v", gotHex, tt.wantHex)
 			}
 		})
 	}
@@ -609,19 +776,19 @@ func Test_UnpackTx(t *testing.T) {
 			wantErr: false,
 			wantTokens: []*bchain.BcashToken{
 				{
-					Category: "5e437326449aba7855da3f5922fd65cfee6eab17c6869e0636016300b0f1c3c1",
-					Amount:   *big.NewInt(0),
+					Category: hexToBytes("5e437326449aba7855da3f5922fd65cfee6eab17c6869e0636016300b0f1c3c1"),
+					Amount:   (common.Amount)(*big.NewInt(0)),
 					Nft: &bchain.BcashTokenNft{
 						Capability: bchain.BcashNFTCapabilityLabel("none"),
-						Commitment: "",
+						Commitment: hexToBytes(""),
 					},
 				},
 				{
-					Category: "d0d46f5cbd82188acede0d3e49c75700c19cb8331a30101f0bb6a260066ac972",
-					Amount:   *big.NewInt(0),
+					Category: hexToBytes("d0d46f5cbd82188acede0d3e49c75700c19cb8331a30101f0bb6a260066ac972"),
+					Amount:   (common.Amount)(*big.NewInt(0)),
 					Nft: &bchain.BcashTokenNft{
 						Capability: bchain.BcashNFTCapabilityLabel("mutable"),
-						Commitment: "15ac95680000e803a037130053e10000",
+						Commitment: hexToBytes("15ac95680000e803a037130053e10000"),
 					},
 				},
 				nil,
@@ -638,48 +805,48 @@ func Test_UnpackTx(t *testing.T) {
 			wantErr: false,
 			wantTokens: []*bchain.BcashToken{
 				{
-					Category: "b38a33f750f84c5c169a6f23cb873e6e79605021585d4f3408789689ed87f366",
-					Amount:   *big.NewInt(4503599605433096),
+					Category: hexToBytes("b38a33f750f84c5c169a6f23cb873e6e79605021585d4f3408789689ed87f366"),
+					Amount:   (common.Amount)(*big.NewInt(4503599605433096)),
 					Nft: &bchain.BcashTokenNft{
 						Capability: bchain.BcashNFTCapabilityLabel("minting"),
-						Commitment: "f13913",
+						Commitment: hexToBytes("f13913"),
 					},
 				},
 				{
-					Category: "d0d46f5cbd82188acede0d3e49c75700c19cb8331a30101f0bb6a260066ac972",
-					Amount:   *big.NewInt(0),
+					Category: hexToBytes("d0d46f5cbd82188acede0d3e49c75700c19cb8331a30101f0bb6a260066ac972"),
+					Amount:   (common.Amount)(*big.NewInt(0)),
 					Nft: &bchain.BcashTokenNft{
 						Capability: bchain.BcashNFTCapabilityLabel("mutable"),
-						Commitment: "1b3796680000e803f139130035e40000",
+						Commitment: hexToBytes("1b3796680000e803f139130035e40000"),
 					},
 				},
 				{
-					Category: "b38a33f750f84c5c169a6f23cb873e6e79605021585d4f3408789689ed87f366",
-					Amount:   *big.NewInt(0),
+					Category: hexToBytes("b38a33f750f84c5c169a6f23cb873e6e79605021585d4f3408789689ed87f366"),
+					Amount:   (common.Amount)(*big.NewInt(0)),
 					Nft: &bchain.BcashTokenNft{
 						Capability: bchain.BcashNFTCapabilityLabel("none"),
-						Commitment: "fef765e9999e6248699a45a68847c06e7d5cb36f49f42e554995a6ec1720ffbbe02e81011b379668",
+						Commitment: hexToBytes("fef765e9999e6248699a45a68847c06e7d5cb36f49f42e554995a6ec1720ffbbe02e81011b379668"),
 					},
 				},
 				{
-					Category: "b38a33f750f84c5c169a6f23cb873e6e79605021585d4f3408789689ed87f366",
-					Amount:   *big.NewInt(1200000),
+					Category: hexToBytes("b38a33f750f84c5c169a6f23cb873e6e79605021585d4f3408789689ed87f366"),
+					Amount:   (common.Amount)(*big.NewInt(1200000)),
 				},
 				nil,
 				{
-					Category: "9c8362ec067e2d516064b6184b6ef0c9a6e5daa7dfb4693e9764de48460b3d9b",
-					Amount:   *big.NewInt(0),
+					Category: hexToBytes("9c8362ec067e2d516064b6184b6ef0c9a6e5daa7dfb4693e9764de48460b3d9b"),
+					Amount:   (common.Amount)(*big.NewInt(0)),
 					Nft: &bchain.BcashTokenNft{
 						Capability: bchain.BcashNFTCapabilityLabel("minting"),
-						Commitment: "dc02",
+						Commitment: hexToBytes("dc02"),
 					},
 				},
 				{
-					Category: "9c8362ec067e2d516064b6184b6ef0c9a6e5daa7dfb4693e9764de48460b3d9b",
-					Amount:   *big.NewInt(0),
+					Category: hexToBytes("9c8362ec067e2d516064b6184b6ef0c9a6e5daa7dfb4693e9764de48460b3d9b"),
+					Amount:   (common.Amount)(*big.NewInt(0)),
 					Nft: &bchain.BcashTokenNft{
 						Capability: bchain.BcashNFTCapabilityLabel("none"),
-						Commitment: "db02",
+						Commitment: hexToBytes("db02"),
 					},
 				},
 			},
@@ -781,8 +948,8 @@ func Test_ValidTokenPrefixes(t *testing.T) {
 		if token.Amount.String() != amount {
 			t.Errorf("amount: got %s, want %s", token.Amount.String(), amount)
 		}
-		if token.Category != category {
-			t.Errorf("category: got %s, want %s", token.Category, category)
+		if hex.EncodeToString(token.Category) != category {
+			t.Errorf("category: got %s, want %s", hex.EncodeToString(token.Category), category)
 		}
 
 		if commitment != "" || nftCapability != "" {
@@ -790,12 +957,31 @@ func Test_ValidTokenPrefixes(t *testing.T) {
 				t.Fatalf("expected token to have NFT data, but got nil")
 			}
 
-			if token.Nft.Commitment != commitment {
+			if hex.EncodeToString(token.Nft.Commitment) != commitment {
 				t.Errorf("commitment: got %s, want %s", token.Nft.Commitment, commitment)
 			}
 			if string(token.Nft.Capability) != nftCapability {
 				t.Errorf("capability: got %s, want %s", token.Nft.Capability, nftCapability)
 			}
+		}
+
+		tokenData := PackTokenData(token)
+		if !bytes.Equal(tokenData, prefix) {
+			t.Errorf("packed token data does not match original prefix.\ngot:  %x\nwant: %x", tokenData, prefix)
+		}
+
+		unpacked, l, err := UnpackTokenData(tokenData)
+		if err != nil {
+			t.Fatalf("UnpackTokenData failed: %v", err)
+		}
+		if l != len(tokenData) {
+			t.Errorf("UnpackTokenData length mismatch: got %d, want %d", l, len(tokenData))
+		}
+		if hex.EncodeToString(token.Category) != hex.EncodeToString(unpacked.Category) {
+			t.Errorf("category: got %s, want %s", hex.EncodeToString(token.Category), hex.EncodeToString(unpacked.Category))
+		}
+		if !reflect.DeepEqual(unpacked, token) {
+			t.Errorf("UnpackTokenData result mismatch:\ngot:  %+v\nwant: %+v", unpacked, token)
 		}
 	}
 }

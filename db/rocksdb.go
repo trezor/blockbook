@@ -19,6 +19,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/linxGnu/grocksdb"
 	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/bchain/coins/bch"
 	"github.com/trezor/blockbook/common"
 )
 
@@ -43,6 +44,8 @@ type connectBlockStats struct {
 	txAddressesMiss int
 	balancesHit     int
 	balancesMiss    int
+	bcashTokensHit  int
+	bcashTokensMiss int
 }
 
 // AddressBalanceDetail specifies what data are returned by GetAddressBalance
@@ -86,6 +89,12 @@ const (
 	cfTxAddresses
 	cfBlockFilter
 
+	// BCH specific
+	cfBcashTokens
+	cfBcashTokenMetaQueue
+	cfBcashTokenMeta
+	cfBcashTokenNftMeta
+
 	__break__
 
 	// EthereumType
@@ -104,7 +113,7 @@ var cfNames []string
 var cfBaseNames = []string{"default", "height", "addresses", "blockTxs", "transactions", "fiatRates"}
 
 // type specific columns
-var cfNamesBitcoinType = []string{"addressBalance", "txAddresses", "blockFilter"}
+var cfNamesBitcoinType = []string{"addressBalance", "txAddresses", "blockFilter", "bcashTokens", "bcashTokenMetaQueue", "bcashTokenMeta", "bcashTokenNftMeta"}
 var cfNamesEthereumType = []string{"addressContracts", "internalData", "contracts", "functionSignatures", "blockInternalDataErrors", "addressAliases"}
 
 func openDB(path string, c *grocksdb.Cache, openFiles int) (*grocksdb.DB, []*grocksdb.ColumnFamilyHandle, error) {
@@ -271,8 +280,8 @@ func (d *RocksDB) GetTransactions(address string, lower uint32, higher uint32, f
 func (d *RocksDB) GetAddrDescTransactions(addrDesc bchain.AddressDescriptor, lower uint32, higher uint32, fn GetTransactionsCallback) (err error) {
 	txidUnpackedLen := d.chainParser.PackedTxidLen()
 	addrDescLen := len(addrDesc)
-	startKey := packAddressKey(d.chainParser, addrDesc, higher)
-	stopKey := packAddressKey(d.chainParser, addrDesc, lower)
+	startKey := packAddressKey(addrDesc, higher)
+	stopKey := packAddressKey(addrDesc, lower)
 	indexes := make([]int32, 0, 16)
 	it := d.db.NewIteratorCF(d.ro, d.cfh[cfAddresses])
 	defer it.Close()
@@ -353,6 +362,7 @@ func (d *RocksDB) ConnectBlock(block *bchain.Block) error {
 	if chainType == bchain.ChainBitcoinType {
 		txAddressesMap := make(map[string]*TxAddresses)
 		balances := make(map[string]*AddrBalance)
+		bcashTokens := make(map[string]*BcashToken)
 		gf, err := bchain.NewGolombFilter(d.is.BlockGolombFilterP, d.is.BlockFilterScripts, block.BlockHeader.Hash, d.is.BlockFilterUseZeroedKey)
 		if err != nil {
 			glog.Error("ConnectBlock golomb filter error ", err)
@@ -360,13 +370,16 @@ func (d *RocksDB) ConnectBlock(block *bchain.Block) error {
 		} else if gf != nil && !gf.Enabled {
 			gf = nil
 		}
-		if err := d.processAddressesBitcoinType(block, addresses, txAddressesMap, balances, gf); err != nil {
+		if err := d.processAddressesBitcoinType(block, addresses, txAddressesMap, balances, bcashTokens, gf); err != nil {
 			return err
 		}
 		if err := d.storeTxAddresses(wb, txAddressesMap); err != nil {
 			return err
 		}
 		if err := d.storeBalances(wb, balances); err != nil {
+			return err
+		}
+		if err := d.storeBcashTokens(wb, bcashTokens); err != nil {
 			return err
 		}
 		if err := d.storeAndCleanupBlockTxs(wb, block); err != nil {
@@ -431,8 +444,9 @@ type outpoint struct {
 
 // TxInput holds input data of the transaction in TxAddresses
 type TxInput struct {
-	AddrDesc bchain.AddressDescriptor
-	ValueSat big.Int
+	AddrDesc   bchain.AddressDescriptor
+	ValueSat   big.Int
+	BcashToken *bchain.BcashToken
 	// extended index properties
 	Txid string
 	Vout uint32
@@ -445,9 +459,10 @@ func (ti *TxInput) Addresses(p bchain.BlockChainParser) ([]string, bool, error) 
 
 // TxOutput holds output data of the transaction in TxAddresses
 type TxOutput struct {
-	AddrDesc bchain.AddressDescriptor
-	Spent    bool
-	ValueSat big.Int
+	AddrDesc   bchain.AddressDescriptor
+	Spent      bool
+	ValueSat   big.Int
+	BcashToken *bchain.BcashToken
 	// extended index properties
 	SpentTxid   string
 	SpentIndex  uint32
@@ -470,10 +485,11 @@ type TxAddresses struct {
 
 // Utxo holds information about unspent transaction output
 type Utxo struct {
-	BtxID    []byte
-	Vout     int32
-	Height   uint32
-	ValueSat big.Int
+	BtxID      []byte
+	Vout       int32
+	Height     uint32
+	ValueSat   big.Int
+	BcashToken *bchain.BcashToken
 }
 
 // AddrBalance stores number of transactions and balances of an address
@@ -608,7 +624,7 @@ func (d *RocksDB) GetAndResetConnectBlockStats() string {
 	return s
 }
 
-func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses addressesMap, txAddressesMap map[string]*TxAddresses, balances map[string]*AddrBalance, gf *bchain.GolombFilter) error {
+func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses addressesMap, txAddressesMap map[string]*TxAddresses, balances map[string]*AddrBalance, bcashTokens map[string]*BcashToken, gf *bchain.GolombFilter) error {
 	blockTxIDs := make([][]byte, len(block.Txs))
 	blockTxAddresses := make([]*TxAddresses, len(block.Txs))
 	// first process all outputs so that inputs can refer to txs in this block
@@ -634,7 +650,19 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses add
 			output := &tx.Vout[i]
 			tao := &ta.Outputs[i]
 			tao.ValueSat = output.ValueSat
-			addrDesc, err := d.chainParser.GetAddrDescFromVout(output)
+			var addrDesc bchain.AddressDescriptor
+			var err error
+			var bcashToken *bchain.BcashToken
+			if d.is.IsBCH() {
+				script, _ := hex.DecodeString(output.ScriptPubKey.Hex)
+				var l int
+				bcashToken, l, err = bch.UnpackTokenData(script)
+				if err == nil {
+					addrDesc = script[l:]
+				}
+			} else {
+				addrDesc, err = d.chainParser.GetAddrDescFromVout(output)
+			}
 			if err != nil || len(addrDesc) == 0 || len(addrDesc) > maxAddrDescLen {
 				if err != nil {
 					// do not log ErrAddressMissing, transactions can be without to address (for example eth contracts)
@@ -650,6 +678,7 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses add
 				gf.AddAddrDesc(addrDesc, tx)
 			}
 			tao.AddrDesc = addrDesc
+			tao.BcashToken = bcashToken
 			if d.chainParser.IsAddrDescIndexable(addrDesc) {
 				strAddrDesc := string(addrDesc)
 				balance, e := balances[strAddrDesc]
@@ -668,10 +697,11 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses add
 				}
 				balance.BalanceSat.Add(&balance.BalanceSat, &output.ValueSat)
 				balance.addUtxo(&Utxo{
-					BtxID:    btxID,
-					Vout:     int32(i),
-					Height:   block.Height,
-					ValueSat: output.ValueSat,
+					BtxID:      btxID,
+					Vout:       int32(i),
+					Height:     block.Height,
+					ValueSat:   output.ValueSat,
+					BcashToken: bcashToken,
 				})
 				counted := addToAddressesMap(addresses, strAddrDesc, btxID, int32(i))
 				if !counted {
@@ -728,6 +758,7 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses add
 			}
 			tai.AddrDesc = spentOutput.AddrDesc
 			tai.ValueSat = spentOutput.ValueSat
+			tai.BcashToken = spentOutput.BcashToken
 			// mark the output as spent in tx
 			spentOutput.Spent = true
 			if d.extendedIndex {
@@ -773,6 +804,12 @@ func (d *RocksDB) processAddressesBitcoinType(block *bchain.Block, addresses add
 			}
 		}
 	}
+
+	err := d.processBcashTokens(block, addresses, bcashTokens, &blockTxIDs, blockTxAddresses)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -800,7 +837,7 @@ func addToAddressesMap(addresses addressesMap, strAddrDesc string, btxID []byte,
 }
 
 func (d *RocksDB) getTxIndexesForAddressAndBlock(addrDesc bchain.AddressDescriptor, height uint32) ([]txIndexes, error) {
-	key := packAddressKey(d.chainParser, addrDesc, height)
+	key := packAddressKey(addrDesc, height)
 	val, err := d.db.GetCF(d.ro, d.cfh[cfAddresses], key)
 	if err != nil {
 		return nil, err
@@ -820,7 +857,7 @@ func (d *RocksDB) getTxIndexesForAddressAndBlock(addrDesc bchain.AddressDescript
 func (d *RocksDB) storeAddresses(wb *grocksdb.WriteBatch, height uint32, addresses addressesMap) error {
 	for addrDesc, txi := range addresses {
 		ba := bchain.AddressDescriptor(addrDesc)
-		key := packAddressKey(d.chainParser, ba, height)
+		key := packAddressKey(ba, height)
 		val := d.packTxIndexes(txi)
 		wb.PutCF(d.cfh[cfAddresses], key, val)
 	}
@@ -846,7 +883,7 @@ func (d *RocksDB) storeBalances(wb *grocksdb.WriteBatch, abm map[string]*AddrBal
 		if ab == nil || ab.Txs <= 0 {
 			wb.DeleteCF(d.cfh[cfAddressBalance], bchain.AddressDescriptor(addrDesc))
 		} else {
-			buf = packAddrBalance(ab, buf, varBuf)
+			buf = d.packAddrBalance(ab, buf, varBuf)
 			wb.PutCF(d.cfh[cfAddressBalance], bchain.AddressDescriptor(addrDesc), buf)
 		}
 	}
@@ -952,7 +989,7 @@ func (d *RocksDB) GetAddrDescBalance(addrDesc bchain.AddressDescriptor, detail A
 	if len(buf) < 3 {
 		return nil, nil
 	}
-	return unpackAddrBalance(buf, d.chainParser.PackedTxidLen(), detail)
+	return d.unpackAddrBalance(buf, d.chainParser.PackedTxidLen(), detail)
 }
 
 // GetAddressBalance returns address balance for an address or nil if address not found
@@ -1040,6 +1077,19 @@ func (d *RocksDB) appendTxInput(txi *TxInput, buf []byte, varBuf []byte) []byte 
 		buf = append(buf, txi.AddrDesc...)
 		l = packBigint(&txi.ValueSat, varBuf)
 		buf = append(buf, varBuf[:l]...)
+
+		if d.is.IsBCH() {
+			if txi.BcashToken == nil {
+				l := packVarint(0, varBuf)
+				buf = append(buf, varBuf[:l]...)
+			} else {
+				tokenData := bch.PackTokenData(txi.BcashToken)
+				l := packVarint(len(tokenData), varBuf)
+				buf = append(buf, varBuf[:l]...)
+				buf = append(buf, tokenData...)
+			}
+		}
+
 		if la >= 0 {
 			btxID, err := d.chainParser.PackTxid(txi.Txid)
 			if err != nil {
@@ -1058,6 +1108,18 @@ func (d *RocksDB) appendTxInput(txi *TxInput, buf []byte, varBuf []byte) []byte 
 		buf = append(buf, txi.AddrDesc...)
 		l = packBigint(&txi.ValueSat, varBuf)
 		buf = append(buf, varBuf[:l]...)
+
+		if d.is.IsBCH() {
+			if txi.BcashToken == nil {
+				l := packVarint(0, varBuf)
+				buf = append(buf, varBuf[:l]...)
+			} else {
+				tokenData := bch.PackTokenData(txi.BcashToken)
+				l := packVarint(len(tokenData), varBuf)
+				buf = append(buf, varBuf[:l]...)
+				buf = append(buf, tokenData...)
+			}
+		}
 	}
 	return buf
 }
@@ -1072,6 +1134,19 @@ func (d *RocksDB) appendTxOutput(txo *TxOutput, buf []byte, varBuf []byte) []byt
 	buf = append(buf, txo.AddrDesc...)
 	l = packBigint(&txo.ValueSat, varBuf)
 	buf = append(buf, varBuf[:l]...)
+
+	if d.is.IsBCH() {
+		if txo.BcashToken == nil {
+			l := packVarint(0, varBuf)
+			buf = append(buf, varBuf[:l]...)
+		} else {
+			tokenData := bch.PackTokenData(txo.BcashToken)
+			l := packVarint(len(tokenData), varBuf)
+			buf = append(buf, varBuf[:l]...)
+			buf = append(buf, tokenData...)
+		}
+	}
+
 	if d.extendedIndex && txo.Spent {
 		btxID, err := d.chainParser.PackTxid(txo.SpentTxid)
 		if err != nil {
@@ -1089,7 +1164,8 @@ func (d *RocksDB) appendTxOutput(txo *TxOutput, buf []byte, varBuf []byte) []byt
 	return buf
 }
 
-func unpackAddrBalance(buf []byte, txidUnpackedLen int, detail AddressBalanceDetail) (*AddrBalance, error) {
+func (d *RocksDB) unpackAddrBalance(buf []byte, txidUnpackedLen int, detail AddressBalanceDetail) (*AddrBalance, error) {
+	var bcashToken *bchain.BcashToken
 	txs, l := unpackVaruint(buf)
 	sentSat, sl := unpackBigint(buf[l:])
 	balanceSat, bl := unpackBigint(buf[l+sl:])
@@ -1112,11 +1188,25 @@ func unpackAddrBalance(buf []byte, txidUnpackedLen int, detail AddressBalanceDet
 			l += ll
 			valueSat, ll := unpackBigint(buf[l:])
 			l += ll
+
+			if d.is.IsBCH() && len(buf[l:]) > 0 {
+				tokenLen, tl := unpackVarint(buf[l:])
+				l += tl
+				var err error
+				if tokenLen > 0 && len(buf[l:]) >= tokenLen {
+					bcashToken, ll, err = bch.UnpackTokenData(buf[l:])
+					if err == nil && ll == tokenLen {
+						l += ll
+					}
+				}
+			}
+
 			u := Utxo{
-				BtxID:    btxID,
-				Vout:     int32(vout),
-				Height:   uint32(height),
-				ValueSat: valueSat,
+				BtxID:      btxID,
+				Vout:       int32(vout),
+				Height:     uint32(height),
+				ValueSat:   valueSat,
+				BcashToken: bcashToken,
 			}
 			if detail == AddressBalanceDetailUTXO {
 				ab.Utxos = append(ab.Utxos, u)
@@ -1128,7 +1218,7 @@ func unpackAddrBalance(buf []byte, txidUnpackedLen int, detail AddressBalanceDet
 	return ab, nil
 }
 
-func packAddrBalance(ab *AddrBalance, buf, varBuf []byte) []byte {
+func (d *RocksDB) packAddrBalance(ab *AddrBalance, buf, varBuf []byte) []byte {
 	buf = buf[:0]
 	l := packVaruint(uint(ab.Txs), varBuf)
 	buf = append(buf, varBuf[:l]...)
@@ -1146,6 +1236,18 @@ func packAddrBalance(ab *AddrBalance, buf, varBuf []byte) []byte {
 			buf = append(buf, varBuf[:l]...)
 			l = packBigint(&utxo.ValueSat, varBuf)
 			buf = append(buf, varBuf[:l]...)
+
+			if d.is.IsBCH() && len(buf[l:]) > 0 {
+				if utxo.BcashToken == nil {
+					l := packVarint(0, varBuf)
+					buf = append(buf, varBuf[:l]...)
+				} else {
+					tokenData := bch.PackTokenData(utxo.BcashToken)
+					l := packVarint(len(tokenData), varBuf)
+					buf = append(buf, varBuf[:l]...)
+					buf = append(buf, tokenData...)
+				}
+			}
 		}
 	}
 	return buf
@@ -1187,6 +1289,19 @@ func (d *RocksDB) unpackTxInput(ti *TxInput, buf []byte) int {
 		al += l
 		ti.ValueSat, l = unpackBigint(buf[al:])
 		al += l
+
+		if d.is.IsBCH() && len(buf[al:]) > 0 {
+			tokenLen, tl := unpackVarint(buf[al:])
+			al += tl
+			if tokenLen > 0 && len(buf[al:]) >= tokenLen {
+				bcashToken, ll, err := bch.UnpackTokenData(buf[al:])
+				if err == nil && ll == tokenLen {
+					al += ll
+					ti.BcashToken = bcashToken
+				}
+			}
+		}
+
 		if !coinbase {
 			l = d.chainParser.PackedTxidLen()
 			ti.Txid, _ = d.chainParser.UnpackTxid(buf[al : al+l])
@@ -1202,7 +1317,21 @@ func (d *RocksDB) unpackTxInput(ti *TxInput, buf []byte) int {
 		ti.AddrDesc = append([]byte(nil), buf[l:l+int(al)]...)
 		al += uint(l)
 		ti.ValueSat, l = unpackBigint(buf[al:])
-		return l + int(al)
+		al += uint(l)
+
+		if d.is.IsBCH() && len(buf[al:]) > 0 {
+			tokenLen, tl := unpackVarint(buf[al:])
+			al += uint(tl)
+			if tokenLen > 0 && len(buf[l:]) >= tokenLen {
+				bcashToken, ll, err := bch.UnpackTokenData(buf[al:])
+				if err == nil && ll == tokenLen {
+					al += uint(ll)
+					ti.BcashToken = bcashToken
+				}
+			}
+		}
+
+		return int(al)
 	}
 }
 
@@ -1216,6 +1345,19 @@ func (d *RocksDB) unpackTxOutput(to *TxOutput, buf []byte) int {
 	al += l
 	to.ValueSat, l = unpackBigint(buf[al:])
 	al += l
+
+	if d.is.IsBCH() && len(buf[al:]) > 0 {
+		tokenLen, tl := unpackVarint(buf[al:])
+		al += tl
+		if tokenLen > 0 && len(buf[al:]) >= tokenLen {
+			bcashToken, ll, err := bch.UnpackTokenData(buf[al:])
+			if err == nil && ll == tokenLen {
+				al += ll
+				to.BcashToken = bcashToken
+			}
+		}
+	}
+
 	if d.extendedIndex && to.Spent {
 		l = d.chainParser.PackedTxidLen()
 		to.SpentTxid, _ = d.chainParser.UnpackTxid(buf[al : al+l])
@@ -1528,10 +1670,11 @@ func (d *RocksDB) disconnectTxAddressesInputs(wb *grocksdb.WriteBatch, btxID []b
 					}
 					balance.BalanceSat.Add(&balance.BalanceSat, &t.ValueSat)
 					balance.addUtxoInDisconnect(&Utxo{
-						BtxID:    input.btxID,
-						Vout:     input.index,
-						Height:   inputHeight,
-						ValueSat: t.ValueSat,
+						BtxID:      input.btxID,
+						Vout:       input.index,
+						Height:     inputHeight,
+						ValueSat:   t.ValueSat,
+						BcashToken: t.BcashToken,
 					})
 				} else {
 					ad, _, _ := d.chainParser.GetAddressesFromAddrDesc(t.AddrDesc)
@@ -1659,7 +1802,7 @@ func (d *RocksDB) disconnectBlock(height uint32, blockTxs []blockTxs) error {
 		}
 	}
 	for a := range blockAddressesTxs {
-		key := packAddressKey(d.chainParser, []byte(a), height)
+		key := packAddressKey([]byte(a), height)
 		wb.DeleteCF(d.cfh[cfAddresses], key)
 	}
 	key := packUint(height)
@@ -2322,7 +2465,7 @@ func (d *RocksDB) FixUtxos(stop chan os.Signal) error {
 				errorsCount++
 				continue
 			}
-			ba, err := unpackAddrBalance(buf, d.chainParser.PackedTxidLen(), AddressBalanceDetailUTXO)
+			ba, err := d.unpackAddrBalance(buf, d.chainParser.PackedTxidLen(), AddressBalanceDetailUTXO)
 			if err != nil {
 				glog.Error("FixUtxos: row ", row, ", addrDesc ", addrDesc, ", unpackAddrBalance error ", err)
 				errorsCount++
@@ -2379,23 +2522,11 @@ func (d *RocksDB) GetBlockFilter(blockHash string) (string, error) {
 
 // Helpers
 
-func packAddressKey(parser bchain.BlockChainParser, addrDesc bchain.AddressDescriptor, height uint32) []byte {
-	desc := addrDesc
-	var err error
-
-	// check for token prefix and length to match BCH cashtokens
-	if addrDesc[0] == 0xef && len(addrDesc) >= 34 {
-		desc, err = parser.GetScriptFromAddrDesc(addrDesc)
-		if err != nil {
-			// TODO: do not panic
-			panic(errors.Errorf("Cannot get script from address descriptor %s", addrDesc))
-		}
-	}
-
-	buf := make([]byte, len(desc)+packedHeightBytes)
-	copy(buf, desc)
+func packAddressKey(addrDesc bchain.AddressDescriptor, height uint32) []byte {
+	buf := make([]byte, len(addrDesc)+packedHeightBytes)
+	copy(buf, addrDesc)
 	// pack height as binary complement to achieve ordering from newest to oldest block
-	binary.BigEndian.PutUint32(buf[len(desc):], ^height)
+	binary.BigEndian.PutUint32(buf[len(addrDesc):], ^height)
 	return buf
 }
 
@@ -2416,6 +2547,16 @@ func packUint(i uint32) []byte {
 
 func unpackUint(buf []byte) uint32 {
 	return binary.BigEndian.Uint32(buf)
+}
+
+func packUint16(i uint16) []byte {
+	buf := make([]byte, 2)
+	binary.BigEndian.PutUint16(buf, i)
+	return buf
+}
+
+func unpackUint16(buf []byte) uint16 {
+	return binary.BigEndian.Uint16(buf)
 }
 
 func packVarint32(i int32, buf []byte) int {
