@@ -106,7 +106,54 @@ func (p *BitcoinLikeParser) addressToOutputScript(address string) ([]byte, error
 	return script, nil
 }
 
-// TryParseOPReturn tries to process OP_RETURN script and return its string representation
+// ParsePushDataScript parses OP_RETURN data and returns pushed chunks of binary data.
+// It handles direct push, OP_PUSHDATA1 and OP_PUSHDATA2; OP_PUSHDATA4 is not supported in OP_RETURNs by consensus.
+func ParsePushDataScript(opReturn []byte) [][]byte {
+	if len(opReturn) == 0 || opReturn[0] != txscript.OP_RETURN {
+		return [][]byte{}
+	}
+
+	var chunks [][]byte
+	r := bytes.NewReader(opReturn[1:])
+
+	for r.Len() > 0 {
+		opcode, err := r.ReadByte()
+		if err != nil {
+			break
+		}
+		if opcode == 0 {
+			break
+		}
+		var length int
+		switch opcode {
+		case txscript.OP_PUSHDATA1:
+			b, err := r.ReadByte()
+			if err != nil {
+				break
+			}
+			length = int(b)
+		case txscript.OP_PUSHDATA2:
+			var l uint16
+			if err := binary.Read(r, binary.LittleEndian, &l); err != nil {
+				break
+			}
+			length = int(l)
+		default:
+			length = int(opcode)
+		}
+		if length > r.Len() {
+			break
+		}
+		data := make([]byte, length)
+		if _, err := r.Read(data); err != nil {
+			break
+		}
+		chunks = append(chunks, data)
+	}
+
+	return chunks
+}
+
 func (p *BitcoinLikeParser) TryParseOPReturn(script []byte) string {
 	if len(script) > 1 && script[0] == txscript.OP_RETURN {
 		// trying 2 variants of OP_RETURN data
@@ -145,6 +192,21 @@ func (p *BitcoinLikeParser) TryParseOPReturn(script []byte) string {
 			return "OP_RETURN " + ed
 		}
 	}
+
+	// fallback to ParsePushDataScript
+	chunks := ParsePushDataScript(script)
+	if len(chunks) > 0 {
+		var parts []string
+		for _, c := range chunks {
+			if utf8.Valid(c) {
+				parts = append(parts, string(c))
+			} else {
+				parts = append(parts, hex.EncodeToString(c))
+			}
+		}
+		return "OP_RETURN (" + strings.Join(parts, " ") + ")"
+	}
+
 	return ""
 }
 

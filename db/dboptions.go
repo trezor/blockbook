@@ -2,8 +2,11 @@ package db
 
 // #include "rocksdb/c.h"
 import "C"
-import "flag"
-import "github.com/linxGnu/grocksdb"
+import (
+	"flag"
+
+	"github.com/linxGnu/grocksdb"
+)
 
 /*
 	possible additional tuning, using options not accessible by grocksdb

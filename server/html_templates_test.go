@@ -5,6 +5,7 @@ package server
 import (
 	"bytes"
 	"html/template"
+	"math/big"
 	"reflect"
 	"strings"
 	"testing"
@@ -180,6 +181,41 @@ func Test_appendAmountSpan(t *testing.T) {
 				t.Errorf("appendAmountSpan() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func Test_bcashToken_escapesMetadata(t *testing.T) {
+	s := &PublicServer{}
+	token := &api.BcashToken{
+		Category: strings.Repeat("b", 64),
+		Amount:   api.Amount(*big.NewInt(1)),
+		Name:     `<script>alert(1)</script>`,
+		Icon:     `x" onerror="alert(2)`,
+		Nft: &api.BcashTokenNft{
+			Capability: `mutable<script>`,
+			Commitment: `x" onmouseover="alert(3)`,
+			Name:       `<b>nft</b>`,
+			Icon:       `y" onload="alert(4)`,
+		},
+	}
+
+	got := string(s.bcashToken(token))
+	for _, raw := range []string{token.Name, token.Icon, token.Nft.Capability, token.Nft.Commitment, token.Nft.Name, token.Nft.Icon} {
+		if strings.Contains(got, raw) {
+			t.Fatalf("bcashToken() leaked raw metadata %q in %q", raw, got)
+		}
+	}
+	for _, escaped := range []string{
+		template.HTMLEscapeString(token.Name),
+		template.HTMLEscapeString(token.Icon),
+		template.HTMLEscapeString(token.Nft.Capability),
+		template.HTMLEscapeString(token.Nft.Commitment),
+		template.HTMLEscapeString(token.Nft.Name),
+		template.HTMLEscapeString(token.Nft.Icon),
+	} {
+		if !strings.Contains(got, escaped) {
+			t.Fatalf("bcashToken() missing escaped metadata %q in %q", escaped, got)
+		}
 	}
 }
 

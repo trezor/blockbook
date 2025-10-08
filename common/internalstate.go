@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"slices"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -204,6 +205,10 @@ type WsBlockedIP struct {
 	Until     time.Time `ts_doc:"Time the block expires."`
 	Breaches  int       `ts_doc:"How many times this key tripped the per-connection message rate limit."`
 	Rejected  int       `ts_doc:"How many new connections were rejected while the key was blocked."`
+}
+
+func (is *InternalState) IsBCH() bool {
+	return strings.HasSuffix(is.CoinShortcut, "BCH")
 }
 
 // StartedSync signals start of synchronization
