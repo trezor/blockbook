@@ -159,7 +159,7 @@ func (p *mempoolSpaceBlockFeeProvider) processData(data *[]mempoolSpaceBlockFeeR
 			}
 		}
 
-		if fee < 1 {
+		if fee <= 0 {
 			glog.Warningf("Skipping block at index %d due to invalid fee: %f", i, fee)
 			continue
 		}

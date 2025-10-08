@@ -1308,10 +1308,12 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 		d.totalResults = -1
 	}
 	// if staking pool enabled, fetch the staking pool details
-	if details >= AccountDetailsTokenBalances {
-		d.stakingPools, err = w.getStakingPoolsData(addrDesc)
-		if err != nil {
-			return nil, nil, err
+	if details >= AccountDetailsBasic {
+		if len(w.chain.EthereumTypeGetSupportedStakingPools()) > 0 {
+			d.stakingPools, err = w.getStakingPoolsData(addrDesc)
+			if err != nil {
+				return nil, nil, err
+			}
 		}
 	}
 	return ba, &d, nil

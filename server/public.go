@@ -1304,7 +1304,7 @@ func (s *PublicServer) explorerSendTx(w http.ResponseWriter, r *http.Request) (t
 		}
 		hex := r.FormValue("hex")
 		if len(hex) > 0 {
-			res, err := s.chain.SendRawTransaction(hex)
+			res, err := s.chain.SendRawTransaction(hex, false)
 			if err != nil {
 				data.SendTxHex = hex
 				data.Error = &api.APIError{Text: err.Error(), Public: true}
@@ -1754,7 +1754,7 @@ func (s *PublicServer) apiSendTx(r *http.Request, apiVersion int) (interface{}, 
 		}
 	}
 	if len(hex) > 0 {
-		res.Result, err = s.chain.SendRawTransaction(hex)
+		res.Result, err = s.chain.SendRawTransaction(hex, false)
 		if err != nil {
 			return nil, api.NewAPIError(err.Error(), true)
 		}
