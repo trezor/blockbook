@@ -945,7 +945,12 @@ func (s *PublicServer) bcashToken(token *api.BcashToken) template.HTML {
 			categoryName = html.EscapeString(token.Name)
 		}
 
-		rv.WriteString(fmt.Sprintf(`<div class="ellipsis copyable flex-1 cc="%s" title="Token Category"><a href="/token/%s">%s</a></div>`, html.EscapeString(categoryHex), html.EscapeString(categoryHex), categoryName))
+		tokenCategoryImg := ""
+		if token.Icon != "" {
+			tokenCategoryImg = fmt.Sprintf(`<img onerror="this.style.display='none'" src="%s" alt="Token Icon" width="32px" height="32px"> `, html.EscapeString(token.Icon))
+		}
+
+		rv.WriteString(fmt.Sprintf(`<div class="ellipsis copyable flex-1 cc="%s" title="Token Category"><a href="/token/%s">%s%s</a></div>`, html.EscapeString(categoryHex), html.EscapeString(categoryHex), tokenCategoryImg, categoryName))
 
 		rv.WriteString(`<div class="flex flex-1 w-half float-align-right justify-end" title="Token Amount">`)
 		if hasAmount {
