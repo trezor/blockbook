@@ -129,6 +129,82 @@ func httpTestsEthereumType(t *testing.T, ts *httptest.Server) {
 				`{"ts":1574340000,"rates":{"usd":-1}}`,
 			},
 		},
+		{
+			name:        "explorerAddress ENS resolution - valid domain",
+			r:           newGetRequest(ts.URL + "/address/vitalik.eth"),
+			status:      http.StatusOK,
+			contentType: "text/html; charset=utf-8",
+			body: []string{
+				`Address vitalik.eth`,
+				`0x[0-9a-fA-F]{40}`,
+				`alias-type="ENS"`,
+			},
+		},
+		{
+			name:        "explorerAddress ENS resolution - expired domain",
+			r:           newGetRequest(ts.URL + "/address/expired.eth"),
+			status:      http.StatusBadRequest,
+			contentType: "text/html; charset=utf-8",
+			body: []string{
+				`ENS name expired`,
+			},
+		},
+		{
+			name:        "explorerAddress ENS resolution - non-existent domain",
+			r:           newGetRequest(ts.URL + "/address/nonexistent.eth"),
+			status:      http.StatusBadRequest,
+			contentType: "text/html; charset=utf-8",
+			body: []string{
+				`ENS name not found`,
+			},
+		},
+		{
+			name:        "explorerAddress ENS resolution - invalid domain format",
+			r:           newGetRequest(ts.URL + "/address/invalid-domain"),
+			status:      http.StatusBadRequest,
+			contentType: "text/html; charset=utf-8",
+			body: []string{
+				`invalid ENS name`,
+			},
+		},
+		{
+			name:        "apiAddress ENS resolution - valid domain",
+			r:           newGetRequest(ts.URL + "/api/v2/address/vitalik.eth"),
+			status:      http.StatusOK,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`"address":"0x[0-9a-fA-F]{40}"`,
+				`"addressAliases":{"0x[0-9a-fA-F]{40}":{"Type":"ENS","Alias":"vitalik.eth"}}`,
+			},
+		},
+		{
+			name:        "apiAddress ENS resolution - expired domain",
+			r:           newGetRequest(ts.URL + "/api/v2/address/expired.eth"),
+			status:      http.StatusBadRequest,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`"error":"ENS name expired"`,
+			},
+		},
+		{
+			name:        "apiTx ENS resolution in transaction details",
+			r:           newGetRequest(ts.URL + "/api/v2/tx/0x" + dbtestdata.EthTxidB1T2),
+			status:      http.StatusOK,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`"addressAliases":{"0x20cD153de35D469BA46127A0C8F18626b59a256A":{"Type":"ENS","Alias":"address20.eth"}}`,
+			},
+		},
+		{
+			name:        "search ENS domain",
+			r:           newGetRequest(ts.URL + "/search?q=vitalik.eth"),
+			status:      http.StatusOK,
+			contentType: "text/html; charset=utf-8",
+			body: []string{
+				`Address vitalik.eth`,
+				`0x[0-9a-fA-F]{40}`,
+			},
+		},
 	}
 
 	performHttpTests(tests, t, ts)
@@ -271,4 +347,190 @@ func Test_PublicServer_EthereumType(t *testing.T) {
 
 	httpTestsEthereumType(t, ts)
 	runWebsocketTests(t, ts, websocketTestsEthereumType)
+}
+func TestENSResolution(t *testing.T) {
+	parser := eth.NewEthereumParser(1, true)
+	chain, err := dbtestdata.NewFakeBlockChainEthereumType(parser)
+	if err != nil {
+		t.Fatalf("Failed to create fake blockchain: %v", err)
+	}
+
+	ensResolver, ok := chain.(interface {
+		ResolveENS(string) (*bchain.ENSResolution, error)
+	})
+	if !ok {
+		t.Fatal("Chain does not support ENS resolution")
+	}
+
+	testCases := []struct {
+		name        string
+		domain      string
+		expectError bool
+		errorMsg    string
+	}{
+		{
+			name:        "valid ENS domain",
+			domain:      "vitalik.eth",
+			expectError: false,
+		},
+		{
+			name:        "invalid domain format",
+			domain:      "not-an-ens-domain",
+			expectError: true,
+			errorMsg:    "invalid ENS name",
+		},
+		{
+			name:        "expired domain",
+			domain:      "expired.eth",
+			expectError: true,
+			errorMsg:    "ENS name expired",
+		},
+		{
+			name:        "non-existent domain",
+			domain:      "nonexistent.eth",
+			expectError: true,
+			errorMsg:    "ENS name not found",
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := ensResolver.ResolveENS(tc.domain)
+
+			if tc.expectError {
+				if err == nil {
+					t.Errorf("Expected error for domain %s, but got none", tc.domain)
+				}
+				if result != nil && result.Error != tc.errorMsg {
+					t.Errorf("Expected error message '%s', got '%s'", tc.errorMsg, result.Error)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Unexpected error for domain %s: %v", tc.domain, err)
+				}
+				if result == nil {
+					t.Errorf("Expected result for domain %s, but got nil", tc.domain)
+				}
+				if result != nil && result.Address == "" {
+					t.Errorf("Expected resolved address for domain %s, but got empty", tc.domain)
+				}
+			}
+		})
+	}
+}
+
+func TestENSExpiration(t *testing.T) {
+	parser := eth.NewEthereumParser(1, true)
+	chain, err := dbtestdata.NewFakeBlockChainEthereumType(parser)
+	if err != nil {
+		t.Fatalf("Failed to create fake blockchain: %v", err)
+	}
+
+	ensResolver, ok := chain.(interface {
+		CheckENSExpiration(string) (bool, error)
+	})
+	if !ok {
+		t.Fatal("Chain does not support ENS expiration checking")
+	}
+
+	testCases := []struct {
+		name          string
+		domain        string
+		expectExpired bool
+		expectError   bool
+	}{
+		{
+			name:          "valid domain",
+			domain:        "vitalik.eth",
+			expectExpired: false,
+			expectError:   false,
+		},
+		{name: "expired domain",
+			domain:        "expired.eth",
+			expectExpired: true,
+			expectError:   false,
+		},
+		{
+			name:        "invalid domain",
+			domain:      "invalid-domain",
+			expectError: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			expired, err := ensResolver.CheckENSExpiration(tc.domain)
+
+			if tc.expectError {
+				if err == nil {
+					t.Errorf("Expected error for domain %s, but got none", tc.domain)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Unexpected error for domain %s: %v", tc.domain, err)
+				}
+				if expired != tc.expectExpired {
+					t.Errorf("Expected expired=%v for domain %s, got %v", tc.expectExpired, tc.domain, expired)
+				}
+			}
+		})
+	}
+}
+
+func TestENSNameHash(t *testing.T) {
+	parser := eth.NewEthereumParser(1, true)
+	chain, err := dbtestdata.NewFakeBlockChainEthereumType(parser)
+	if err != nil {
+		t.Fatalf("Failed to create fake blockchain: %v", err)
+	}
+
+	ensResolver, ok := chain.(interface {
+		ResolveENS(string) (*bchain.ENSResolution, error)
+	})
+	if !ok {
+		t.Fatal("Chain does not support ENS resolution")
+	}
+
+	testCases := []struct {
+		name        string
+		domain      string
+		expected    string
+		expectError bool
+	}{
+		{
+			name:        "empty domain",
+			domain:      "",
+			expectError: true,
+		},
+		{
+			name:        "simple domain",
+			domain:      "eth",
+			expected:    "0x93cdeb708b7545dc668eb9280176169d1c33cfd8ed6f04690a0bcc88a93fc4ae",
+			expectError: false,
+		},
+		{
+			name:        "subdomain",
+			domain:      "vitalik.eth",
+			expected:    "0xee6c4522aab0003e8d14cd40a6af439055fd2577951148c14b6cea9a53475835",
+			expectError: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := ensResolver.ResolveENS(tc.domain)
+
+			if tc.expectError {
+				if err == nil {
+					t.Errorf("Expected error for domain %s, but got none", tc.domain)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Unexpected error for domain %s: %v", tc.domain, err)
+				}
+				if result != nil && result.NameHash != tc.expected {
+					t.Errorf("Expected name hash %s for domain %s, got %s", tc.expected, tc.domain, result.NameHash)
+				}
+			}
+		})
+	}
 }

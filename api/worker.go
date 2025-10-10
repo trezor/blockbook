@@ -1370,9 +1370,19 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 	if w.chainType == bchain.ChainEthereumType && strings.HasSuffix(strings.ToLower(address), ".eth") {
 		ensResolver, ok := w.chain.(interface {
 			ResolveENS(string) (*bchain.ENSResolution, error)
+			CheckENSExpiration(string) (bool, error)
 		})
 		if !ok {
 			return nil, fmt.Errorf("ENS resolution not supported for this chain")
+		}
+
+		expired, err := ensResolver.CheckENSExpiration(address)
+		if err != nil {
+			glog.Errorf("ENS expiration check failed for %s: %v", address, err)
+			return nil, fmt.Errorf("ENS expiration check failed: %w", err)
+		}
+		if expired {
+			return nil, fmt.Errorf("ENS name expired: %s", address)
 		}
 
 		ensRes, err := ensResolver.ResolveENS(address)
@@ -1385,8 +1395,9 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 			return nil, fmt.Errorf("ENS name not found: %s", address)
 		}
 
+		ensName := address
 		address = ensRes.Address
-		glog.Infof("ENS resolved %s to %s", strings.ToLower(address), ensRes.Address)
+		glog.Infof("ENS resolved %s to %s", ensName, ensRes.Address)
 	}
 	start := time.Now()
 	page--

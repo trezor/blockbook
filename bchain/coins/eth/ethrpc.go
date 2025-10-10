@@ -43,6 +43,22 @@ const (
 
 const defaultErc20BatchSize = 100
 
+// Ethereum address constants
+const (
+	// EthereumZeroAddress is the zero address (0x0000...0000) used to check for unset addresses
+	EthereumZeroAddress = "0x0000000000000000000000000000000000000000"
+	// EthereumAddressHexLength represents the length of an Ethereum address in hex characters (20 bytes * 2)
+	EthereumAddressHexLength = 40
+	// ENSResolverFunctionSelector is the function selector for ENS registry's resolver(bytes32) method
+	ENSResolverFunctionSelector = "0x0178b8bf"
+	// ENSAddrFunctionSelector is the function selector for the resolver's addr(bytes32) method
+	ENSAddrFunctionSelector = "0x3b3b57de"
+	// ENSExpirationFunctionSelector is the function selector for ENS registry's nameExpires(bytes32) method
+	ENSExpirationFunctionSelector = "0x1aa2e643"
+	// ENSBaseRegistrarAddress is needed for checking .eth domain expiration
+	ENSBaseRegistrarAddress = "0x57f1887a8BF19b14fC0dF6Fd9B2acc9Af147eA85"
+)
+
 // Configuration represents json config file
 type Configuration struct {
 	CoinName                        string `json:"coin_name"`
@@ -825,7 +841,7 @@ func (b *EthereumRPC) ethHeaderToBlockHeader(h *rpcHeader) (*bchain.BlockHeader,
 func (b *EthereumRPC) GetBlockHeader(hash string) (*bchain.BlockHeader, error) {
 	raw, err := b.getBlockRaw(hash, 0, false)
 	if err != nil {
-		return nil, err
+		return nil, errors.Annotatef(err, "hash %v", hash)
 	}
 	var h rpcHeader
 	if err := json.Unmarshal(raw, &h); err != nil {
@@ -1547,10 +1563,11 @@ func parseENSAddressFromResult(result string) (string, error) {
 	if len(hexData) < 64 {
 		return "", errors.New("result too short")
 	}
-	addressHex := hexData[len(hexData)-40:]
+	addressHex := hexData[len(hexData)-EthereumAddressHexLength:]
 	return "0x" + addressHex, nil
 }
 
+// ResolveENS resolves ENS domain name to Ethereum address
 func (b *EthereumRPC) ResolveENS(name string) (*bchain.ENSResolution, error) {
 	glog.Infof("ResolveENS: Starting resolution for %s", name)
 
@@ -1560,14 +1577,16 @@ func (b *EthereumRPC) ResolveENS(name string) (*bchain.ENSResolution, error) {
 		return &bchain.ENSResolution{Name: name, Error: "invalid ENS name"}, errors.New("invalid ENS name")
 	}
 
+	// Calculate the namehash for this domain
 	node := ensNameHash(name)
 	glog.Infof("ResolveENS: Generated node hash %s for %s", node, name)
 
+	// Call resolver(bytes32) on the ENS registry
 	callData := map[string]string{
 		"to":   ENSRegistryAddress,
-		"data": "0x0178b8bf" + node[2:],
+		"data": ENSResolverFunctionSelector + node[2:],
 	}
-
+	// Call the resolver function on the ENS registry
 	result, err := b.callRpcStringResult("eth_call", callData, "latest")
 	if err != nil {
 		glog.Errorf("ResolveENS: Registry call failed: %v", err)
@@ -1575,6 +1594,8 @@ func (b *EthereumRPC) ResolveENS(name string) (*bchain.ENSResolution, error) {
 	}
 	glog.Infof("ResolveENS: Registry result: %s", result)
 
+	// Parse the resolver address from the result
+	//The result is ABI-encoded, we need to extract the address from the last 40 hex characters
 	resolverAddr, err := parseENSAddressFromResult(result)
 	if err != nil {
 		glog.Errorf("ResolveENS: Failed to parse resolver address: %v", err)
@@ -1582,14 +1603,15 @@ func (b *EthereumRPC) ResolveENS(name string) (*bchain.ENSResolution, error) {
 	}
 	glog.Infof("ResolveENS: Resolver address: %s", resolverAddr)
 
-	if resolverAddr == "0x0000000000000000000000000000000000000000" {
+	if resolverAddr == EthereumZeroAddress {
 		glog.Errorf("ResolveENS: No resolver set for %s", name)
 		return &bchain.ENSResolution{Name: name, Error: "no resolver set"}, errors.New("no resolver set")
 	}
 
+	// Call the addr(bytes32) function on the resolver
 	callData = map[string]string{
 		"to":   resolverAddr,
-		"data": "0x3b3b57de" + node[2:],
+		"data": ENSAddrFunctionSelector + node[2:],
 	}
 
 	result, err = b.callRpcStringResult("eth_call", callData, "latest")
@@ -1605,11 +1627,67 @@ func (b *EthereumRPC) ResolveENS(name string) (*bchain.ENSResolution, error) {
 		return &bchain.ENSResolution{Name: name, Error: "failed to parse address"}, err
 	}
 
-	if address == "0x0000000000000000000000000000000000000000" {
+	if address == EthereumZeroAddress {
 		glog.Errorf("ResolveENS: ENS name %s not found", name)
 		return &bchain.ENSResolution{Name: name, Error: "ENS name not found"}, errors.New("ENS name not found")
 	}
 
 	glog.Infof("ResolveENS: Successfully resolved %s to %s", name, address)
 	return &bchain.ENSResolution{Name: name, Address: address}, nil
+}
+
+// CheckENSExpiration checks if an ENS domain is expired
+func (b *EthereumRPC) CheckENSExpiration(name string) (bool, error) {
+	name = strings.ToLower(strings.TrimSpace(name))
+
+	// Only check expiration for .eth domains
+	if !strings.HasSuffix(name, ".eth") {
+		glog.Infof("CheckENSExpiration: %s is not a .eth domain, skipping expiration check", name)
+		return false, nil
+	}
+
+	// Extract the label (part before .eth)
+	label := strings.TrimSuffix(name, ".eth")
+
+	// Calculate token ID: keccak256(label)
+	labelHash := keccak256([]byte(label))
+	tokenID := new(big.Int).SetBytes(labelHash)
+
+	glog.Infof("CheckENSExpiration: Checking expiration for %s (label: %s, tokenID: %s)", name, label, tokenID.String())
+
+	// Pad token ID to 32 bytes (64 hex chars) with leading zeros
+	tokenIDHex := hex.EncodeToString(tokenID.Bytes())
+	tokenIDPadded := strings.Repeat("0", 64-len(tokenIDHex)) + tokenIDHex
+
+	// Call nameExpires(uint256 id) on the Base Registrar
+	callData := map[string]string{
+		"to":   ENSBaseRegistrarAddress,
+		"data": ENSExpirationFunctionSelector + tokenIDPadded,
+	}
+
+	result, err := b.callRpcStringResult("eth_call", callData, "latest")
+	if err != nil {
+		glog.Errorf("CheckENSExpiration: RPC call failed for %s: %v", name, err)
+		return false, err
+	}
+
+	// Parse the expiration timestamp from the result
+	if len(result) < 2 || result[:2] != "0x" {
+		return false, errors.New("invalid hex result")
+	}
+
+	expiration, err := hexutil.DecodeBig(result)
+	if err != nil {
+		glog.Errorf("CheckENSExpiration: Failed to decode expiration for %s: %v", name, err)
+		return false, err
+	}
+
+	// Check if expired (current timestamp > expiration timestamp)
+	currentTime := big.NewInt(time.Now().Unix())
+	isExpired := currentTime.Cmp(expiration) > 0
+
+	expirationTime := time.Unix(expiration.Int64(), 0)
+	glog.Infof("CheckENSExpiration: %s expires at %s (expired: %v)", name, expirationTime.String(), isExpired)
+
+	return isExpired, nil
 }
