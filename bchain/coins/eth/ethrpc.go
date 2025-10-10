@@ -38,6 +38,16 @@ const (
 	TestNetHolesky Network = 17000
 )
 
+// Ethereum address constants
+const (
+	// EthereumAddressHexLength represents the length of an Ethereum address in hex characters (20 bytes * 2)
+	EthereumAddressHexLength = 40
+	// ENSResolverFunctionSelector is the function selector for ENS registry's resolver(bytes32) method
+	ENSResolverFunctionSelector = "0x0178b8bf"
+	// ENSAddrFunctionSelector is the function selector for the resolver's addr(bytes32) method
+	ENSAddrFunctionSelector = "0x3b3b57de"
+)
+
 // Configuration represents json config file
 type Configuration struct {
 	CoinName                        string `json:"coin_name"`
@@ -568,7 +578,7 @@ func (b *EthereumRPC) ethHeaderToBlockHeader(h *rpcHeader) (*bchain.BlockHeader,
 func (b *EthereumRPC) GetBlockHeader(hash string) (*bchain.BlockHeader, error) {
 	raw, err := b.getBlockRaw(hash, 0, false)
 	if err != nil {
-		return nil, err
+		return nil, errors.Annotatef(err, "hash %v", hash)
 	}
 	var h rpcHeader
 	if err := json.Unmarshal(raw, &h); err != nil {
@@ -1209,7 +1219,7 @@ func parseENSAddressFromResult(result string) (string, error) {
 	if len(hexData) < 64 {
 		return "", errors.New("result too short")
 	}
-	addressHex := hexData[len(hexData)-40:]
+	addressHex := hexData[len(hexData)-EthereumAddressHexLength:]
 	return "0x" + addressHex, nil
 }
 
@@ -1227,7 +1237,7 @@ func (b *EthereumRPC) ResolveENS(name string) (*bchain.ENSResolution, error) {
 
 	callData := map[string]string{
 		"to":   ENSRegistryAddress,
-		"data": "0x0178b8bf" + node[2:],
+		"data": ENSResolverFunctionSelector + node[2:],
 	}
 
 	result, err := b.callRpcStringResult("eth_call", callData, "latest")
@@ -1251,7 +1261,7 @@ func (b *EthereumRPC) ResolveENS(name string) (*bchain.ENSResolution, error) {
 
 	callData = map[string]string{
 		"to":   resolverAddr,
-		"data": "0x3b3b57de" + node[2:],
+		"data": ENSAddrFunctionSelector + node[2:],
 	}
 
 	result, err = b.callRpcStringResult("eth_call", callData, "latest")

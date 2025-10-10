@@ -1337,8 +1337,9 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 			return nil, fmt.Errorf("ENS name not found: %s", address)
 		}
 
+		ensName := address
 		address = ensRes.Address
-		glog.Infof("ENS resolved %s to %s", strings.ToLower(address), ensRes.Address)
+		glog.Infof("ENS resolved %s to %s", ensName, ensRes.Address)
 	}
 	start := time.Now()
 	page--
