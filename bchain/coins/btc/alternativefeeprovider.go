@@ -3,6 +3,7 @@ package btc
 import (
 	"fmt"
 	"math/big"
+	"strings"
 	"sync"
 	"time"
 
@@ -30,7 +31,7 @@ type alternativeFeeProviderInterface interface {
 }
 
 func (p *alternativeFeeProvider) compareToDefault() {
-	output := ""
+	var output strings.Builder
 	for _, fee := range p.fees {
 		conservative, err := p.chain.(*BitcoinRPC).blockchainEstimateSmartFee(fee.blocks, true)
 		if err != nil {
@@ -42,9 +43,9 @@ func (p *alternativeFeeProvider) compareToDefault() {
 			glog.Error(err)
 			return
 		}
-		output += fmt.Sprintf("Blocks %d: alternative %d, conservative %s, economical %s\n", fee.blocks, fee.feePerKB, conservative.String(), economical.String())
+		output.WriteString(fmt.Sprintf("Blocks %d: alternative %d, conservative %s, economical %s\n", fee.blocks, fee.feePerKB, conservative.String(), economical.String()))
 	}
-	glog.Info("alternativeFeeProviderCompareToDefault\n", output)
+	glog.Info("alternativeFeeProviderCompareToDefault\n", output.String())
 }
 
 func (p *alternativeFeeProvider) estimateFee(blocks int) (big.Int, error) {
