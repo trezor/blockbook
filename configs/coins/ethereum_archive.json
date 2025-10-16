@@ -22,10 +22,10 @@
         "package_name": "backend-ethereum-archive",
         "package_revision": "satoshilabs-1",
         "system_user": "ethereum",
-        "version": "3.0.17",
-        "binary_url": "https://github.com/erigontech/erigon/releases/download/v3.0.17/erigon_v3.0.17_linux_amd64.tar.gz",
+        "version": "3.1.0",
+        "binary_url": "https://github.com/erigontech/erigon/releases/download/v3.1.0/erigon_v3.1.0_linux_amd64.tar.gz",
         "verification_type": "sha256",
-        "verification_source": "e1951d4fd5da38b092ffdbecbee35a6c456a736b6e4135b7d43764780f7b40ce",
+        "verification_source": "45a9c4594b754750c4e3631b0c86b9da5b61f91b0241d824a9eed61aed040154",
         "extract_command": "tar -C backend --strip-components=1 -xf",
         "exclude_files": [],
         "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/erigon --chain mainnet --snap.keepblocks --db.size.limit 15TB --db.pagesize 16KB --prune.mode archive --externalcl --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/erigon --port {{.Ports.BackendP2P}} --ws --ws.port {{.Ports.BackendRPC}} --http --http.port {{.Ports.BackendRPC}} --http.addr 127.0.0.1 --http.corsdomain \"*\" --http.vhosts \"*\" --http.api \"eth,net,web3,debug,txpool\" --authrpc.port {{.Ports.BackendAuthRpc}} --private.api.addr \"\" --torrent.port {{.Ports.BackendHttp}} --log.dir.path {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --log.dir.prefix {{.Coin.Alias}}'",
@@ -39,8 +39,8 @@
         "client_config_file": "",
         "platforms": {
             "arm64": {
-                "binary_url": "https://github.com/erigontech/erigon/releases/download/v3.0.17/erigon_v3.0.17_linux_arm64.tar.gz",
-                "verification_source": "2607722abd7936df21b4ef9e42c4a13e883b525d272d63581a36df4fab117d64"
+                "binary_url": "https://github.com/erigontech/erigon/releases/download/v3.1.0/erigon_v3.1.0_linux_arm64.tar.gz",
+                "verification_source": "a613c211888784e5fb3ed1376cd47984d08980b6d7eb6c590af628592ca87311"
             }
         }
     },
