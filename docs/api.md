@@ -1004,7 +1004,7 @@ The client can subscribe to the following events:
 
 -   `subscribeNewBlock` - new block added to blockchain
 -   `subscribeNewTransaction` - new transaction added to blockchain (all addresses)
--   `subscribeAddresses` - new transaction for a given address (list of addresses) added to mempool
+-   `subscribeAddresses` - new transaction for a given address (list of addresses) added to mempool (and optionally confirmed in a new block)
 -   `subscribeFiatRates` - new currency rate ticker
 
 There can be always only one subscription of given event per connection, i.e. new list of addresses replaces previous list of addresses.
@@ -1031,6 +1031,19 @@ Example for subscribing to an address (or multiple addresses)
   "method":"subscribeAddresses",
   "params":{
     "addresses":["mnYYiDCb2JZXnqEeXta1nkt5oCVe2RVhJj", "tb1qp0we5epypgj4acd2c4au58045ruud2pd6heuee"]
+   }
+}
+```
+
+Example for subscribing to an address (or multiple addresses) including new block (confirmed) transactions
+
+```javascript
+{
+  "id":"1",
+  "method":"subscribeAddresses",
+  "params":{
+    "addresses":["mnYYiDCb2JZXnqEeXta1nkt5oCVe2RVhJj", "tb1qp0we5epypgj4acd2c4au58045ruud2pd6heuee"],
+    "newBlockTxs": true,
    }
 }
 ```
