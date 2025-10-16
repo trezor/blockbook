@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"fmt"
+	"html"
 	"html/template"
 	"math/big"
 	"net/http"
@@ -274,7 +275,7 @@ func appendAmountSpan(rv *strings.Builder, class, amount, shortcut, txDate strin
 	}
 	if shortcut != "" {
 		rv.WriteString(" ")
-		rv.WriteString(shortcut)
+		rv.WriteString(html.EscapeString(shortcut))
 	}
 	rv.WriteString("</span>")
 }
@@ -317,7 +318,7 @@ func appendAmountSpanBitcoinType(rv *strings.Builder, class, amount, shortcut, t
 	rv.WriteString("</span>")
 	if shortcut != "" {
 		rv.WriteString(" ")
-		rv.WriteString(shortcut)
+		rv.WriteString(html.EscapeString(shortcut))
 	}
 	rv.WriteString("</span>")
 }
@@ -331,7 +332,7 @@ func appendAmountWrapperSpan(rv *strings.Builder, primary, symbol, classes strin
 	rv.WriteString(`" cc="`)
 	rv.WriteString(primary)
 	rv.WriteString(" ")
-	rv.WriteString(symbol)
+	rv.WriteString(html.EscapeString(symbol))
 	rv.WriteString(`">`)
 }
 
