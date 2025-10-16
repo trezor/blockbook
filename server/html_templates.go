@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"fmt"
+	"html"
 	"html/template"
 	"math/big"
 	"net/http"
@@ -274,7 +275,7 @@ func appendAmountSpan(rv *strings.Builder, class, amount, shortcut, txDate strin
 	}
 	if shortcut != "" {
 		rv.WriteString(" ")
-		rv.WriteString(shortcut)
+		rv.WriteString(html.EscapeString(shortcut))
 	}
 	rv.WriteString("</span>")
 }
