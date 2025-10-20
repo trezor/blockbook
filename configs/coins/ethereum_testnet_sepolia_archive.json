@@ -23,10 +23,10 @@
         "package_name": "backend-ethereum-testnet-sepolia-archive",
         "package_revision": "satoshilabs-1",
         "system_user": "ethereum",
-        "version": "3.2.0",
-        "binary_url": "https://github.com/erigontech/erigon/releases/download/v3.2.0/erigon_v3.2.0_linux_amd64.tar.gz",
+        "version": "3.2.1",
+        "binary_url": "https://github.com/erigontech/erigon/releases/download/v3.2.1/erigon_v3.2.1_linux_amd64.tar.gz",
         "verification_type": "sha256",
-        "verification_source": "ffbc4724d262b439157531ca33fc83b50c00fb8ed32e95f16323c37240a7287e",
+        "verification_source": "8b5444988667721f2b2ef1ab3098139c31f722492992939c110813408c39dc7c",
         "extract_command": "tar -C backend --strip-components=1 -xf",
         "exclude_files": [],
         "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/erigon --chain sepolia --snap.keepblocks --db.size.limit 15TB --db.pagesize 16KB --prune.mode archive --externalcl --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/erigon --port {{.Ports.BackendP2P}} --ws --ws.port {{.Ports.BackendRPC}} --http --http.port {{.Ports.BackendRPC}} --http.addr 127.0.0.1 --http.corsdomain \"*\" --http.vhosts \"*\" --http.api \"eth,net,web3,debug,txpool\" --authrpc.port {{.Ports.BackendAuthRpc}} --private.api.addr \"\" --torrent.port {{.Ports.BackendHttp}} --log.dir.path {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --log.dir.prefix {{.Coin.Alias}}'",
@@ -40,8 +40,8 @@
         "client_config_file": "",
         "platforms": {
             "arm64": {
-                "binary_url": "https://github.com/erigontech/erigon/releases/download/v3.2.0/erigon_v3.2.0_linux_arm64.tar.gz",
-                "verification_source": "9d4d7da69924f449ef0be40575e92bf0949724ea666db05eb34a33f065ceec67"
+                "binary_url": "https://github.com/erigontech/erigon/releases/download/v3.2.1/erigon_v3.2.1_linux_arm64.tar.gz",
+                "verification_source": "19a91709dc3ddbe947c4f81e70cb1de49044954e21f441e9ea46b3696f21b57f"
             }
         }
     },
