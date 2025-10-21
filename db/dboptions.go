@@ -2,8 +2,11 @@ package db
 
 // #include "rocksdb/c.h"
 import "C"
-import "flag"
-import "github.com/linxGnu/grocksdb"
+import (
+	"flag"
+
+	"github.com/linxGnu/grocksdb"
+)
 
 /*
 	possible additional tuning, using options not accessible by grocksdb
@@ -40,7 +43,7 @@ func boolToChar(b bool) C.uchar {
 */
 
 var (
-        noCompression = flag.Bool("noCompression", false, "disable rocksdb compression when rocksdb library can't find compression library linked with binary")
+	noCompression = flag.Bool("noCompression", false, "disable rocksdb compression when rocksdb library can't find compression library linked with binary")
 )
 
 func createAndSetDBOptions(bloomBits int, c *grocksdb.Cache, maxOpenFiles int) *grocksdb.Options {
@@ -62,11 +65,11 @@ func createAndSetDBOptions(bloomBits int, c *grocksdb.Cache, maxOpenFiles int) *
 	opts.SetWriteBufferSize(1 << 27)      // 128MB
 	opts.SetMaxBytesForLevelBase(1 << 27) // 128MB
 	opts.SetMaxOpenFiles(maxOpenFiles)
-        if *noCompression {
-                // resolve error rocksDB: Invalid argument: Compression type LZ4HC is not linked with the binary
-                opts.SetCompression(grocksdb.NoCompression)
-        } else {
-                opts.SetCompression(grocksdb.LZ4HCCompression)
-        }
+	if *noCompression {
+		// resolve error rocksDB: Invalid argument: Compression type LZ4HC is not linked with the binary
+		opts.SetCompression(grocksdb.NoCompression)
+	} else {
+		opts.SetCompression(grocksdb.LZ4HCCompression)
+	}
 	return opts
 }

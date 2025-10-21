@@ -124,6 +124,7 @@ const (
 	FungibleToken    = TokenStandard(iota) // ERC20/BEP20
 	NonFungibleToken                       // ERC721/BEP721
 	MultiToken                             // ERC1155/BEP1155
+	CashToken                              // BCH CashToken
 )
 
 // TokenStandardName specifies standard of token
@@ -136,6 +137,9 @@ const (
 
 	// XPUBAddressStandard is address derived from xpub
 	XPUBAddressStandard TokenStandardName = "XPUBAddress"
+
+	// CashTokenStandard is BCH native token standard
+	CashTokenStandard TokenStandardName = "CashToken"
 )
 
 // TokenTransfers is array of TokenTransfer
