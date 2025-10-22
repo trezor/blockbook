@@ -186,6 +186,19 @@ func initEthereumTypeDB(d *db.RocksDB) error {
 	}); err != nil {
 		return err
 	}
+
+	// Add ENS aliases for test addresses
+	// These map Ethereum addresses to their ENS names
+	if err := d.StoreAddressAlias("0x7B62EB7fe80350DC7EC945C0B73242cb9877FB1b", "address7b.eth"); err != nil {
+		return err
+	}
+	if err := d.StoreAddressAlias("0x20cD153de35D469BA46127A0C8F18626b59a256A", "address20.eth"); err != nil {
+		return err
+	}
+	if err := d.StoreAddressAlias("0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045", "vitalik.eth"); err != nil {
+		return err
+	}
+
 	return d.WriteBatch(wb)
 }
 
@@ -387,8 +400,8 @@ func TestENSExpiration(t *testing.T) {
 		{
 			name:          "nonexistent domain",
 			domain:        "nonexistent.eth",
-			expectExpired: false, // Not expired
-			expectError:   false, // No error
+			expectExpired: false,
+			expectError:   false,
 		},
 		{
 			name:        "invalid domain",
