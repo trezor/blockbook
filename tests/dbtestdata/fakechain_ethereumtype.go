@@ -159,24 +159,12 @@ func (c *fakeBlockChainEthereumType) ResolveENS(name string) (*bchain.ENSResolut
 			Address: "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
 		}, nil
 	case "expired.eth":
-		return &bchain.ENSResolution{
-			Name:    name,
-			Address: "",
-			Error:   "ENS name expired",
-		}, nil
+		return nil, errors.New("ENS name expired")
 	case "nonexistent.eth":
-		return &bchain.ENSResolution{
-			Name:    name,
-			Address: "",
-			Error:   "ENS name not found",
-		}, nil
+		return nil, errors.New("ENS name not found")
 	default:
 		if !isValidENSName(name) {
-			return &bchain.ENSResolution{
-				Name:    name,
-				Address: "",
-				Error:   "invalid ENS name",
-			}, nil
+			return nil, errors.New("invalid ENS name")
 		}
 		// For any other valid ENS name, return a mock address
 		return &bchain.ENSResolution{
