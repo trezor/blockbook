@@ -184,6 +184,33 @@ func (c *fakeBlockChainEthereumType) ResolveENS(name string) (*bchain.ENSResolut
 	}
 }
 
+// ReverseResolveENS resolves an Ethereum address to an ENS name (reverse lookup)
+func (c *fakeBlockChainEthereumType) ReverseResolveENS(address string) (*bchain.ENSResolution, error) {
+	// Normalize address to checksummed format for comparison
+	normalizedAddr := normalizeAddress(address)
+
+	switch normalizedAddr {
+	case "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045":
+		return &bchain.ENSResolution{
+			Name:    "vitalik.eth",
+			Address: normalizedAddr,
+		}, nil
+	case "0x7B62EB7fe80350DC7EC945C0B73242cb9877FB1b":
+		return &bchain.ENSResolution{
+			Name:    "address7b.eth",
+			Address: normalizedAddr,
+		}, nil
+	case "0x20cD153de35D469BA46127A0C8F18626b59a256A":
+		return &bchain.ENSResolution{
+			Name:    "address20.eth",
+			Address: normalizedAddr,
+		}, nil
+	default:
+		// No ENS name found for this address
+		return nil, errors.New("no ENS name found for address")
+	}
+}
+
 func (c *fakeBlockChainEthereumType) CheckENSExpiration(name string) (bool, error) {
 	switch name {
 	case "vitalik.eth":
@@ -210,4 +237,32 @@ func isValidENSName(name string) bool {
 	}
 
 	return len(name) > 4 && name[len(name)-4:] == ".eth"
+}
+
+// normalizeAddress converts an Ethereum address to a consistent format
+// This is a simple implementation that converts to lowercase and ensures 0x prefix
+func normalizeAddress(address string) string {
+	// Remove 0x prefix if present
+	if len(address) > 2 && address[:2] == "0x" {
+		address = address[2:]
+	}
+
+	// Convert to lowercase
+	address = toLower(address)
+
+	// Add 0x prefix back
+	return "0x" + address
+}
+
+func toLower(s string) string {
+	result := make([]byte, len(s))
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c >= 'A' && c <= 'Z' {
+			result[i] = c + ('a' - 'A')
+		} else {
+			result[i] = c
+		}
+	}
+	return string(result)
 }
