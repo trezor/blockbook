@@ -162,6 +162,16 @@ func (c *fakeBlockChainEthereumType) ResolveENS(name string) (*bchain.ENSResolut
 		return nil, errors.New("ENS name expired")
 	case "nonexistent.eth":
 		return nil, errors.New("ENS name not found")
+	case "address7b.eth":
+		return &bchain.ENSResolution{
+			Name:    name,
+			Address: "0x7B62EB7fe80350DC7EC945C0B73242cb9877FB1b",
+		}, nil
+	case "address20.eth":
+		return &bchain.ENSResolution{
+			Name:    name,
+			Address: "0x20cD153de35D469BA46127A0C8F18626b59a256A",
+		}, nil
 	default:
 		if !isValidENSName(name) {
 			return nil, errors.New("invalid ENS name")
@@ -174,18 +184,36 @@ func (c *fakeBlockChainEthereumType) ResolveENS(name string) (*bchain.ENSResolut
 	}
 }
 
-func (c *fakeBlockChainEthereumType) CheckENSExpiration(name string) (bool, error) {
-	if !isValidENSName(name) {
-		return false, errors.New("invalid ENS name")
-	}
-
+func (c *fakeBlockChainEthereumType) CheckENSExpiration(name string) (*bchain.ENSResolution, error) {
 	switch name {
-	case "expired.eth":
-		return true, nil
 	case "vitalik.eth":
-		return false, nil
+		return &bchain.ENSResolution{
+			Name:    name,
+			Address: "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+		}, nil
+	case "expired.eth":
+		return &bchain.ENSResolution{
+			Name:    name,
+			Address: "",
+			Error:   "ENS name expired",
+		}, nil
+	case "nonexistent.eth":
+		return nil, errors.New("ENS name not found")
+	case "address7b.eth":
+		return &bchain.ENSResolution{
+			Name:    name,
+			Address: "0x7B62EB7fe80350DC7EC945C0B73242cb9877FB1b",
+		}, nil
+	case "address20.eth":
+		return &bchain.ENSResolution{
+			Name:    name,
+			Address: "0x20cD153de35D469BA46127A0C8F18626b59a256A",
+		}, nil
 	default:
-		return false, nil
+		if !isValidENSName(name) {
+			return nil, errors.New("invalid ENS name")
+		}
+		return nil, errors.New("ENS name not found")
 	}
 }
 
