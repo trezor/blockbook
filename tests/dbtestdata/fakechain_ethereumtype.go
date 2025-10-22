@@ -2,6 +2,7 @@ package dbtestdata
 
 import (
 	"encoding/json"
+	"errors"
 	"math/big"
 	"strconv"
 
@@ -147,4 +148,63 @@ func (c *fakeBlockChainEthereumType) EthereumTypeGetRawTransaction(txid string) 
 // GetTokenURI returns URI derived from the input contractDesc
 func (c *fakeBlockChainEthereumType) GetTokenURI(contractDesc bchain.AddressDescriptor, tokenID *big.Int) (string, error) {
 	return "https://ipfs.io/ipfs/" + contractDesc.String()[3:] + ".json", nil
+}
+
+// ResolveENS resolves an ENS name to an Ethereum address
+func (c *fakeBlockChainEthereumType) ResolveENS(name string) (*bchain.ENSResolution, error) {
+	switch name {
+	case "vitalik.eth":
+		return &bchain.ENSResolution{
+			Name:    name,
+			Address: "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+		}, nil
+	case "expired.eth":
+		return &bchain.ENSResolution{
+			Name:    name,
+			Address: "",
+			Error:   "ENS name expired",
+		}, nil
+	case "nonexistent.eth":
+		return &bchain.ENSResolution{
+			Name:    name,
+			Address: "",
+			Error:   "ENS name not found",
+		}, nil
+	default:
+		if !isValidENSName(name) {
+			return &bchain.ENSResolution{
+				Name:    name,
+				Address: "",
+				Error:   "invalid ENS name",
+			}, nil
+		}
+		// For any other valid ENS name, return a mock address
+		return &bchain.ENSResolution{
+			Name:    name,
+			Address: "0x" + name + "abcd1234567890abcdef1234567890abcdef12",
+		}, nil
+	}
+}
+
+func (c *fakeBlockChainEthereumType) CheckENSExpiration(name string) (bool, error) {
+	if !isValidENSName(name) {
+		return false, errors.New("invalid ENS name")
+	}
+
+	switch name {
+	case "expired.eth":
+		return true, nil
+	case "vitalik.eth":
+		return false, nil
+	default:
+		return false, nil
+	}
+}
+
+func isValidENSName(name string) bool {
+	if name == "" {
+		return false
+	}
+
+	return len(name) > 4 && name[len(name)-4:] == ".eth"
 }
