@@ -432,10 +432,16 @@ func TestENSExpiration(t *testing.T) {
 			expectExpired: false,
 			expectError:   false,
 		},
-		{name: "expired domain",
+		{
+			name:          "expired domain",
 			domain:        "expired.eth",
 			expectExpired: true,
 			expectError:   false,
+		},
+		{
+			name:        "nonexistent domain",
+			domain:      "nonexistent.eth",
+			expectError: true,
 		},
 		{
 			name:        "invalid domain",
