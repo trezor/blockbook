@@ -1379,16 +1379,16 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 		expired, err := ensResolver.CheckENSExpiration(address)
 		if err != nil {
 			glog.Errorf("ENS expiration check failed for %s: %v", address, err)
-			return nil, fmt.Errorf("ENS expiration check failed: %w", err)
+			return nil, errors.New("ENS name not found")
 		}
 		if expired {
-			return nil, fmt.Errorf("ENS name expired: %s", address)
+			return nil, errors.New("ENS name expired")
 		}
 
 		ensRes, err := ensResolver.ResolveENS(address)
 		if err != nil {
 			glog.Errorf("ENS resolution failed for %s: %v", address, err)
-			return nil, fmt.Errorf("ENS resolution failed: %w", err)
+			return nil, errors.New("ENS name not found")
 		}
 
 		if ensRes == nil || ensRes.Address == "" {
