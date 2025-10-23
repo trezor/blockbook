@@ -60,7 +60,7 @@
                 "consensusNodeVersion": "http://localhost:7536/eth/v1/node/version",
                 "address_aliases": true,
                 "eip1559Fees": true,
-                "mempoolTxTimeoutHours": 48,
+                "mempoolTxTimeoutHours": 1,
                 "queryBackendOnMempoolResync": false,
                 "fiat_rates": "coingecko",
                 "fiat_rates_vs_currencies": "AED,ARS,AUD,BDT,BHD,BMD,BRL,CAD,CHF,CLP,CNY,CZK,DKK,EUR,GBP,HKD,HUF,IDR,ILS,INR,JPY,KRW,KWD,LKR,MMK,MXN,MYR,NGN,NOK,NZD,PHP,PKR,PLN,RUB,SAR,SEK,SGD,THB,TRY,TWD,UAH,USD,VEF,VND,ZAR,BTC,ETH",

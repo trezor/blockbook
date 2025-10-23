@@ -227,7 +227,7 @@ func (b *EthereumRPC) InitializeMempool(addrDescForOutpoint bchain.AddrDescForOu
 	}
 
 	for _, txid := range txs {
-		b.Mempool.AddTransactionToMempool(txid)
+		b.Mempool.AddTransactionToMempool(txid, false)
 	}
 
 	b.Mempool.OnNewTxAddr = onNewTxAddr
@@ -284,7 +284,7 @@ func (b *EthereumRPC) subscribeEvents() error {
 			if glog.V(2) {
 				glog.Info("rpc: new tx ", hex)
 			}
-			added := b.Mempool.AddTransactionToMempool(hex)
+			added := b.Mempool.AddTransactionToMempool(hex, false)
 			if added {
 				b.PushHandler(bchain.NotificationNewTx)
 			}
@@ -1159,7 +1159,7 @@ func (b *EthereumRPC) SendRawTransaction(hex string, disableAlternativeRPC bool)
 	txid, retErr = b.callRpcStringResult("eth_sendRawTransaction", hex)
 	if b.ChainConfig.DisableMempoolSync {
 		// add transactions submitted by us to mempool if sync is disabled
-		b.Mempool.AddTransactionToMempool(txid)
+		b.Mempool.AddTransactionToMempool(txid, false)
 	}
 	return txid, retErr
 }

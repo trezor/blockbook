@@ -122,7 +122,7 @@ func (p *AlternativeSendTxProvider) handleMempoolTransaction(txid string) (strin
 	}
 
 	if p.mempool != nil {
-		p.mempool.AddTransactionToMempool(txid)
+		p.mempool.AddTransactionToMempool(txid, true)
 	}
 
 	return txid, nil

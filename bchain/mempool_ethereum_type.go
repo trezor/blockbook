@@ -12,23 +12,28 @@ const mempoolTimeoutRunPeriod = 10 * time.Minute
 // MempoolEthereumType is mempool handle of EthereumType chains
 type MempoolEthereumType struct {
 	BaseMempool
-	mempoolTimeoutTime   time.Duration
-	queryBackendOnResync bool
-	nextTimeoutRun       time.Time
+	mempoolTimeoutTime     time.Duration
+	mevTimeoutTime         time.Duration
+	queryBackendOnResync   bool
+	nextTimeoutRun         time.Time
+	alternativeProviderTxs map[string]bool
 }
 
 // NewMempoolEthereumType creates new mempool handler.
 func NewMempoolEthereumType(chain BlockChain, mempoolTxTimeoutHours int, queryBackendOnResync bool) *MempoolEthereumType {
 	mempoolTimeoutTime := time.Duration(mempoolTxTimeoutHours) * time.Hour
+	mevTimeoutTime := 10 * time.Minute
 	return &MempoolEthereumType{
 		BaseMempool: BaseMempool{
 			chain:        chain,
 			txEntries:    make(map[string]txEntry),
 			addrDescToTx: make(map[string][]Outpoint),
 		},
-		mempoolTimeoutTime:   mempoolTimeoutTime,
-		queryBackendOnResync: queryBackendOnResync,
-		nextTimeoutRun:       time.Now().Add(mempoolTimeoutTime),
+		mempoolTimeoutTime:     mempoolTimeoutTime,
+		mevTimeoutTime:         mevTimeoutTime,
+		queryBackendOnResync:   queryBackendOnResync,
+		nextTimeoutRun:         time.Now().Add(mempoolTimeoutTime),
+		alternativeProviderTxs: make(map[string]bool),
 	}
 }
 
@@ -109,17 +114,26 @@ func (m *MempoolEthereumType) Resync() (int, error) {
 			return 0, err
 		}
 		for _, txid := range txs {
-			m.AddTransactionToMempool(txid)
+			m.AddTransactionToMempool(txid, false)
 		}
 	}
 	m.mux.Lock()
 	entries := len(m.txEntries)
 	now := time.Now()
 	if m.nextTimeoutRun.Before(now) {
-		threshold := now.Add(-m.mempoolTimeoutTime)
+		regularThreshold := now.Add(-m.mempoolTimeoutTime)
+		//MEV timeout
+		mevThreshold := now.Add(-m.mevTimeoutTime)
 		for txid, entry := range m.txEntries {
+			var threshold time.Time
+			if _, ok := m.alternativeProviderTxs[txid]; ok {
+				threshold = mevThreshold
+			} else {
+				threshold = regularThreshold
+			}
 			if time.Unix(int64(entry.time), 0).Before(threshold) {
 				m.removeEntryFromMempool(txid, entry)
+				delete(m.alternativeProviderTxs, txid)
 			}
 		}
 		removed := entries - len(m.txEntries)
@@ -133,7 +147,7 @@ func (m *MempoolEthereumType) Resync() (int, error) {
 }
 
 // AddTransactionToMempool adds transactions to mempool, returns true if tx added to mempool, false if not added (for example duplicate call)
-func (m *MempoolEthereumType) AddTransactionToMempool(txid string) bool {
+func (m *MempoolEthereumType) AddTransactionToMempool(txid string, fromAlternativeProvider bool) bool {
 	m.mux.Lock()
 	_, exists := m.txEntries[txid]
 	m.mux.Unlock()
@@ -147,6 +161,9 @@ func (m *MempoolEthereumType) AddTransactionToMempool(txid string) bool {
 		}
 		m.mux.Lock()
 		m.txEntries[txid] = entry
+		if fromAlternativeProvider {
+			m.alternativeProviderTxs[txid] = true
+		}
 		for _, si := range entry.addrIndexes {
 			m.addrDescToTx[si.addrDesc] = append(m.addrDescToTx[si.addrDesc], Outpoint{txid, si.n})
 		}
