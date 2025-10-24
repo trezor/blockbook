@@ -1026,6 +1026,28 @@ func (s *PublicServer) explorerSearch(w http.ResponseWriter, r *http.Request) (t
 	var err error
 	s.metrics.ExplorerViews.With(common.Labels{"action": "search"}).Inc()
 	if len(q) > 0 {
+		// Check if this is an ENS name for Ethereum chains and check if it is not expired and unique
+		if s.chainParser.GetChainType() == bchain.ChainEthereumType &&
+			strings.HasSuffix(strings.ToLower(q), ".eth") {
+			if ensResolver, ok := s.chain.(interface {
+				ResolveENS(string) (*bchain.ENSResolution, error)
+				CheckENSExpiration(string) (bool, error)
+			}); ok {
+				expired, err := ensResolver.CheckENSExpiration(q)
+				if err == nil && !expired {
+					ensRes, err := ensResolver.ResolveENS(q)
+					if err == nil && ensRes.Address != "" {
+						http.Redirect(w, r, joinURL("/address/", ensRes.Address), http.StatusFound)
+						return noTpl, nil, nil
+					}
+				}
+				ensRes, err := ensResolver.ResolveENS(q)
+				if err == nil && ensRes.Address != "" {
+					http.Redirect(w, r, joinURL("/address/", ensRes.Address), http.StatusFound)
+					return noTpl, nil, nil
+				}
+			}
+		}
 		address, err = s.api.GetXpubAddress(q, 0, 1, api.AccountDetailsBasic, &api.AddressFilter{Vout: api.AddressFilterVoutOff}, 0, "")
 		if err == nil {
 			http.Redirect(w, r, joinURL("/xpub/", url.QueryEscape(address.AddrStr)), http.StatusFound)
