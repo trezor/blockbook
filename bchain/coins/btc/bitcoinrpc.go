@@ -190,7 +190,14 @@ func (b *BitcoinRPC) InitializeMempool(addrDescForOutpoint bchain.AddrDescForOut
 	b.Mempool.OnNewTxAddr = onNewTxAddr
 	b.Mempool.OnNewTx = onNewTx
 	if b.mq == nil {
-		mq, err := bchain.NewMQ(b.ChainConfig.MessageQueueBinding, b.pushHandler)
+		bitcoinTopics := bchain.SubscriptionTopics{
+			BlockSubscribe: "hashblock",
+			BlockReceive:   "hashblock",
+			TxSubscribe:    "hashtx",
+			TxReceive:      "hashtx",
+		}
+
+		mq, err := bchain.NewMQ(b.ChainConfig.MessageQueueBinding, b.pushHandler, bitcoinTopics)
 		if err != nil {
 			glog.Error("mq: ", err)
 			return err

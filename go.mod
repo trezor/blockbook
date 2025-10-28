@@ -6,6 +6,7 @@ require (
 	github.com/ava-labs/avalanchego v1.12.1
 	github.com/bsm/go-vlq v0.0.0-20150828105119-ec6e8d4f5f4e
 	github.com/deckarep/golang-set v1.8.0
+	github.com/decred/base58 v1.0.3
 	github.com/decred/dcrd/chaincfg/chainhash v1.0.2
 	github.com/decred/dcrd/chaincfg/v3 v3.0.0
 	github.com/decred/dcrd/dcrec v1.0.0
@@ -27,6 +28,7 @@ require (
 	github.com/pirk/ecashutil v0.0.0-20220124103933-d37f548d249e
 	github.com/prometheus/client_golang v1.16.0
 	github.com/schancel/cashaddr-converter v0.0.0-20181111022653-4769e7add95a
+	github.com/stretchr/testify v1.10.0
 	github.com/tkrajina/typescriptify-golang-structs v0.1.11
 	golang.org/x/crypto v0.32.0
 	google.golang.org/protobuf v1.34.2
@@ -50,7 +52,6 @@ require (
 	github.com/dchest/blake256 v1.0.0 // indirect
 	github.com/dchest/siphash v1.2.1 // indirect
 	github.com/deckarep/golang-set/v2 v2.6.0 // indirect
-	github.com/decred/base58 v1.0.3 // indirect
 	github.com/decred/dcrd/crypto/blake256 v1.0.0 // indirect
 	github.com/decred/dcrd/crypto/ripemd160 v1.0.1 // indirect
 	github.com/decred/dcrd/dcrec/edwards/v2 v2.0.1 // indirect
@@ -75,12 +76,11 @@ require (
 	github.com/prometheus/common v0.42.0 // indirect
 	github.com/prometheus/procfs v0.10.1 // indirect
 	github.com/shirou/gopsutil v3.21.11+incompatible // indirect
-	github.com/stretchr/testify v1.10.0 // indirect
 	github.com/supranational/blst v0.3.14 // indirect
 	github.com/tklauser/go-sysconf v0.3.12 // indirect
 	github.com/tklauser/numcpus v0.6.1 // indirect
 	github.com/tkrajina/go-reflector v0.5.5 // indirect
-	github.com/yusufpapurcu/wmi v1.2.2 // indirect
+	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	golang.org/x/sync v0.10.0 // indirect
 	golang.org/x/sys v0.29.0 // indirect
 	gopkg.in/mgo.v2 v2.0.0-20190816093944-a6b53ec6cb22 // indirect
