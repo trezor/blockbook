@@ -6,6 +6,7 @@ require (
 	github.com/ava-labs/avalanchego v1.14.0
 	github.com/bsm/go-vlq v0.0.0-20150828105119-ec6e8d4f5f4e
 	github.com/deckarep/golang-set v1.8.0
+	github.com/decred/base58 v1.0.3
 	github.com/decred/dcrd/chaincfg/chainhash v1.0.2
 	github.com/decred/dcrd/chaincfg/v3 v3.0.0
 	github.com/decred/dcrd/dcrec v1.0.0
@@ -27,6 +28,7 @@ require (
 	github.com/pirk/ecashutil v0.0.0-20220124103933-d37f548d249e
 	github.com/prometheus/client_golang v1.23.2
 	github.com/schancel/cashaddr-converter v0.0.0-20181111022653-4769e7add95a
+	github.com/stretchr/testify v1.10.0
 	github.com/tkrajina/typescriptify-golang-structs v0.1.11
 	golang.org/x/crypto v0.43.0
 	google.golang.org/protobuf v1.36.10

@@ -239,7 +239,7 @@ func tryParseParams(data string, params []string, parsedParams []abi.Type) []bch
 // ParseInputData tries to parse transaction input data from known FourByteSignatures
 // as there may be multiple signatures for the same four bytes, it tries to match the input to the known parameters
 // it does not parse tuples for now
-func ParseInputData(signatures *[]bchain.FourByteSignature, data string) *bchain.EthereumParsedInputData {
+func (p *EthereumParser) ParseInputData(signatures *[]bchain.FourByteSignature, data string) *bchain.EthereumParsedInputData {
 	if len(data) <= 2 { // data is empty or 0x
 		return &bchain.EthereumParsedInputData{Name: "Transfer"}
 	}
