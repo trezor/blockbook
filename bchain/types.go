@@ -395,6 +395,7 @@ type BlockChainParser interface {
 	DeriveAddressDescriptorsFromTo(descriptor *XpubDescriptor, change uint32, fromIndex uint32, toIndex uint32) ([]AddressDescriptor, error)
 	// EthereumType specific
 	EthereumTypeGetTokenTransfersFromTx(tx *Tx) (TokenTransfers, error)
+	ParseInputData(signatures *[]FourByteSignature, data string) *EthereumParsedInputData
 	// AddressAlias
 	FormatAddressAlias(address string, name string) string
 }

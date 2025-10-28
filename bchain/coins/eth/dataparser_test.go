@@ -418,9 +418,11 @@ func TestParseInputData(t *testing.T) {
 			},
 		},
 	}
+	parser := NewEthereumParser(1, false)
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := ParseInputData(tt.signatures, tt.data)
+			got := parser.ParseInputData(tt.signatures, tt.data)
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("ParseInputData() = %v, want %v", got, tt.want)
 			}
