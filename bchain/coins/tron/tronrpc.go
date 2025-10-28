@@ -359,7 +359,7 @@ func (b *TronRPC) GetContractInfo(contractDesc bchain.AddressDescriptor) (*bchai
 }
 
 // SendRawTransaction is not supported by Tron JSON-RPC
-func (b *TronRPC) SendRawTransaction(hex string) (string, error) {
+func (b *TronRPC) SendRawTransaction(tx string, disableAlternativeRPC bool) (string, error) {
 	return "", errors.New("SendRawTransaction is not supported by Tron JSON-RPC")
 }
 
