@@ -89,18 +89,18 @@ type Configuration struct {
 // EthereumRPC is an interface to JSON-RPC eth service.
 type EthereumRPC struct {
 	*bchain.BaseChain
-	Client             bchain.EVMClient
-	RPC                bchain.EVMRPCClient
-	MainNetChainID     Network
-	Timeout            time.Duration
-	Parser             *EthereumParser
-	PushHandler        func(bchain.NotificationType)
-	OpenRPC            func(string, string) (bchain.EVMRPCClient, bchain.EVMClient, error)
-	Mempool            *bchain.MempoolEthereumType
-	mempoolInitialized bool
-	bestHeaderLock     sync.Mutex
-	bestHeader         bchain.EVMHeader
-	bestHeaderTime     time.Time
+	Client                    bchain.EVMClient
+	RPC                       bchain.EVMRPCClient
+	MainNetChainID            Network
+	Timeout                   time.Duration
+	Parser                    EthereumLikeParser
+	PushHandler               func(bchain.NotificationType)
+	OpenRPC                   func(string, string) (bchain.EVMRPCClient, bchain.EVMClient, error)
+	Mempool                   *bchain.MempoolEthereumType
+	mempoolInitialized        bool
+	bestHeaderLock            sync.Mutex
+	bestHeader                bchain.EVMHeader
+	bestHeaderTime            time.Time
 	// newBlockNotifyCh coalesces bursts of newHeads events into a single wake-up.
 	// This keeps the subscription reader unblocked while we refresh the canonical tip.
 	newBlockNotifyCh          chan struct{}
