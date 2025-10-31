@@ -2,11 +2,13 @@ package server
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"html"
 	"html/template"
 	"io"
+	"math"
 	"math/big"
 	"net/http"
 	"net/url"
@@ -159,6 +161,10 @@ func (s *PublicServer) ConnectFullPublicInterface() {
 		if s.chainParser.GetChainType() == bchain.ChainEthereumType {
 			serveMux.HandleFunc(path+"nft/", s.htmlTemplateHandler(s.explorerNftDetail))
 		}
+		if s.is.IsBCH() {
+			serveMux.HandleFunc(path+"token/", s.htmlTemplateHandler(s.explorerBcashToken))
+			serveMux.HandleFunc(path+"nft/", s.htmlTemplateHandler(s.explorerNftDetail))
+		}
 	} else {
 		// redirect to wallet requests for tx and address, possibly to external site
 		serveMux.HandleFunc(path+"tx/", s.txRedirect)
@@ -301,6 +307,7 @@ func (s *PublicServer) newTemplateData(r *http.Request) *TemplateData {
 		InternalExplorer: s.internalExplorer && !s.is.InitialSync,
 		TOSLink:          api.Text.TOSLink,
 	}
+	t.CashTokenName = bchain.CashTokenStandard
 	if t.ChainType == bchain.ChainEthereumType {
 		t.FungibleTokenName = bchain.EthereumTokenStandardMap[bchain.FungibleToken]
 		t.NonFungibleTokenName = bchain.EthereumTokenStandardMap[bchain.NonFungibleToken]
@@ -370,6 +377,8 @@ const (
 	sendTransactionTpl
 	mempoolTpl
 	nftDetailTpl
+	bcashTokenTpl
+	bcashNftDetailTpl
 
 	publicTplCount
 )
@@ -384,6 +393,7 @@ type TemplateData struct {
 	FungibleTokenName        bchain.TokenStandardName
 	NonFungibleTokenName     bchain.TokenStandardName
 	MultiTokenName           bchain.TokenStandardName
+	CashTokenName            bchain.TokenStandardName
 	Address                  *api.Address
 	AddrStr                  string
 	Tx                       *api.Tx
@@ -413,6 +423,16 @@ type TemplateData struct {
 	TxDate                   string
 	TxSecondaryCoinRate      float64
 	TxTicker                 *common.CurrencyRatesTicker
+	Category                 string
+	Commitment               string
+	Name                     string
+	Symbol                   string
+	Description              string
+	Decimals                 int
+	Commitments              []string
+	CategoryName             string
+	ImageURL                 string
+	Nfts                     map[string]api.Nft
 }
 
 func (s *PublicServer) parseTemplates() []*template.Template {
@@ -425,6 +445,7 @@ func (s *PublicServer) parseTemplates() []*template.Template {
 		"amountSatsSpan":           s.amountSatsSpan,
 		"formattedAmountSpan":      s.formattedAmountSpan,
 		"summaryValuesSpan":        s.summaryValuesSpan,
+		"bcashToken":               s.bcashToken,
 		"addressAlias":             addressAlias,
 		"addressAliasSpan":         addressAliasSpan,
 		"formatAmount":             s.formatAmount,
@@ -495,6 +516,10 @@ func (s *PublicServer) parseTemplates() []*template.Template {
 		t[txTpl] = createTemplate("./static/templates/tx.html", "./static/templates/txdetail.html", "./static/templates/base.html")
 		t[addressTpl] = createTemplate("./static/templates/address.html", "./static/templates/txdetail.html", "./static/templates/paging.html", "./static/templates/base.html")
 		t[blockTpl] = createTemplate("./static/templates/block.html", "./static/templates/txdetail.html", "./static/templates/paging.html", "./static/templates/base.html")
+		if s.is.IsBCH() {
+			t[bcashTokenTpl] = createTemplate("./static/templates/bcashToken.html", "./static/templates/txdetail.html", "./static/templates/paging.html", "./static/templates/base.html")
+			t[bcashNftDetailTpl] = createTemplate("./static/templates/bcashTokenDetail.html", "./static/templates/base.html")
+		}
 	}
 	t[xpubTpl] = createTemplate("./static/templates/xpub.html", "./static/templates/txdetail.html", "./static/templates/paging.html", "./static/templates/base.html")
 	t[mempoolTpl] = createTemplate("./static/templates/mempool.html", "./static/templates/paging.html", "./static/templates/base.html")
@@ -662,6 +687,126 @@ func (s *PublicServer) summaryValuesSpan(baseValue float64, secondaryValue float
 				rv.WriteString("-")
 			}
 		}
+	}
+	return template.HTML(rv.String())
+}
+
+/**
+ * Given a 32-byte hex-encoded token category, return a deterministic hue and
+ * saturation value to use in HSL colors representing the token category.
+ * Usage: `hsl({{ tokenCategory2HueSaturation .Vout.TokenData.Category }}, 50%)`
+ */
+// see original implementation: https://github.com/sickpig/bch-rpc-explorer/blob/85aed82dcae5b22050f26184bde229fe60a958b9/app/utils.js#L812
+func tokenCategory2HueSaturation(category string) string {
+	// Decode hex string to bytes
+	bin, err := hex.DecodeString(category)
+	if err != nil || len(bin) != 32 {
+		glog.Warningf("tokenCategory2HueSaturation: invalid category: %s", category)
+		// return gray color for invalid category
+		return "0,0%,50%"
+	}
+	raw := big.NewFloat(1)
+	tmp := new(big.Float)
+	for _, b := range bin {
+		tmp.SetUint64(uint64(b))
+		raw.Mul(raw, tmp)
+	}
+	mod := new(big.Float).SetFloat64(36000)
+	// big.Float does not have Mod, so use math.Mod on float64
+	rawFloat64, _ := raw.Float64()
+	modFloat64, _ := mod.Float64()
+	raw = big.NewFloat(math.Mod(rawFloat64, modFloat64))
+
+	hue := new(big.Float).Quo(raw, big.NewFloat(100))
+	hueInt, _ := hue.Int64()
+
+	satDiv := new(big.Float).Quo(raw, big.NewFloat(360))
+	satAdd := new(big.Float).Add(satDiv, big.NewFloat(50))
+	satMin := new(big.Float)
+	if satAdd.Cmp(big.NewFloat(100)) > 0 {
+		satMin.SetFloat64(100)
+	} else {
+		satMin.Copy(satAdd)
+	}
+	saturationInt, _ := satMin.Int64()
+
+	return fmt.Sprintf("%d,%d%%", hueInt, saturationInt)
+}
+
+func (s *PublicServer) bcashToken(token *api.BcashToken) template.HTML {
+	var rv strings.Builder
+	if token != nil {
+		categoryHex := token.Category
+		hueSat := tokenCategory2HueSaturation(categoryHex)
+		tokenColor := "hsl(" + hueSat + ",40%)"
+
+		// outer div
+		rv.WriteString(`<div class="token-info border-right" style="border-color: `)
+		rv.WriteString(tokenColor)
+		rv.WriteString(`;">`)
+
+		// token category and amount
+		rv.WriteString(`<div class="flex">`)
+
+		hasAmount := token.Amount.AsInt64() != 0
+
+		categoryName := categoryHex
+		if token.Name != "" {
+			categoryName = token.Name
+		}
+
+		tokenCategoryImg := ""
+		if token.Icon != "" {
+			tokenCategoryImg = fmt.Sprintf(`<img onerror="this.style.display='none'" src="%s" alt="Token Icon" width="32px" height="32px"> `, token.Icon)
+		}
+
+		rv.WriteString(fmt.Sprintf(`<div class="ellipsis copyable flex-1 cc="%s" title="Token Category"><a href="/token/%s">%s%s</a></div>`, categoryHex, categoryHex, tokenCategoryImg, categoryName))
+
+		rv.WriteString(`<div class="flex flex-1 w-half float-align-right justify-end" title="Token Amount">`)
+		if hasAmount {
+			rv.WriteString(formatAmountWithDecimals(&token.Amount, int(token.Decimals)))
+		}
+		rv.WriteString(`</div>`)
+		rv.WriteString(`</div>`)
+
+		// token nft capability and commitment
+		if token.Nft != nil {
+			commitmentHex := token.Nft.Commitment
+			rv.WriteString(`<div class="flex">`)
+
+			rv.WriteString(`<div class="flex align-center flex-1" title="NFT Capability">`)
+			if token.Nft.Capability != "none" {
+				rv.WriteString(string(token.Nft.Capability))
+			}
+			rv.WriteString(" nft")
+			rv.WriteString(`</div>`)
+
+			commitmentName := commitmentHex
+			if token.Nft.Name != "" {
+				commitmentName = token.Nft.Name
+			} else if commitmentHex == "" {
+				commitmentName = "(empty)"
+			}
+
+			tokenIconImg := ""
+			if token.Nft.Icon != "" {
+				tokenIconImg = fmt.Sprintf(`<img onerror="this.style.display='none'" src="%s" alt="Token Icon" width="32px" height="32px"> `, token.Nft.Icon)
+			}
+
+			rv.WriteString(`<div class="flex flex-1 w-half float-align-right justify-end copyable" cc="`)
+			rv.WriteString(commitmentHex)
+			rv.WriteString(`" title="NFT Commitment">`)
+			if tokenIconImg != "" {
+				rv.WriteString(tokenIconImg)
+			}
+			rv.WriteString(fmt.Sprintf(`<a href="/nft/%s/%s">%s</a>`, categoryHex, commitmentHex, commitmentName))
+			rv.WriteString(`</div>`)
+
+			rv.WriteString(`</div>`)
+
+		}
+		// outer div end
+		rv.WriteString(`</div>`)
 	}
 	return template.HTML(rv.String())
 }
@@ -913,19 +1058,124 @@ func (s *PublicServer) explorerNftDetail(w http.ResponseWriter, r *http.Request)
 	}
 	tokenId := parts[len(parts)-1]
 	contract := parts[len(parts)-2]
-	uri, ci, err := s.api.GetEthereumTokenURI(contract, tokenId)
-	s.metrics.ExplorerViews.With(common.Labels{"action": "nftDetail"}).Inc()
-	if err != nil {
-		return errorTpl, nil, api.NewAPIError(err.Error(), true)
+	if s.chainParser.GetChainType() == bchain.ChainEthereumType {
+		uri, ci, err := s.api.GetEthereumTokenURI(contract, tokenId)
+		s.metrics.ExplorerViews.With(common.Labels{"action": "nftDetail"}).Inc()
+		if err != nil {
+			return errorTpl, nil, api.NewAPIError(err.Error(), true)
+		}
+		if ci == nil {
+			return errorTpl, nil, api.NewAPIError(fmt.Sprintf("Unknown contract %s", contract), true)
+		}
+		data := s.newTemplateData(r)
+		data.TokenId = tokenId
+		data.ContractInfo = ci
+		data.URI = uri
+		return nftDetailTpl, data, nil
+	} else if s.is.IsBCH() {
+		s.metrics.ExplorerViews.With(common.Labels{"action": "nftDetail"}).Inc()
+		data := s.newTemplateData(r)
+		data.Commitment = tokenId
+		data.Category = contract
+
+		categoryBin, err := hex.DecodeString(data.Category)
+		if err != nil || len(categoryBin) != 32 {
+			return errorTpl, nil, api.NewAPIError("Invalid category", true)
+		}
+		commitmentBin, err := hex.DecodeString(data.Commitment)
+		if err != nil {
+			return errorTpl, nil, api.NewAPIError("Invalid commitment", true)
+		}
+
+		tokenMeta, err := s.db.GetBcashTokenMeta(categoryBin)
+		if err != nil {
+			return errorTpl, nil, api.NewAPIError(err.Error(), true)
+		}
+
+		if tokenMeta != nil {
+			data.CategoryName = tokenMeta.Name
+
+			nftMeta, err := s.db.GetBcashTokenNftMeta(categoryBin, commitmentBin)
+			if err != nil {
+				return errorTpl, nil, api.NewAPIError(err.Error(), true)
+			}
+
+			if nftMeta != nil {
+				data.Name = nftMeta.Name
+				data.Description = nftMeta.Description
+				data.ImageURL = nftMeta.Icon
+			}
+		}
+		return bcashNftDetailTpl, data, nil
 	}
-	if ci == nil {
-		return errorTpl, nil, api.NewAPIError(fmt.Sprintf("Unknown contract %s", contract), true)
+
+	return errorTpl, nil, api.NewAPIError("Wrong template", true)
+}
+
+func (s *PublicServer) explorerBcashToken(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
+	var categoryParam string
+	i := strings.LastIndexByte(r.URL.Path, '/')
+	if i > 0 {
+		categoryParam = r.URL.Path[i+1:]
 	}
+	if len(categoryParam) == 0 {
+		return errorTpl, nil, api.NewAPIError("Missing address", true)
+	}
+	s.metrics.ExplorerViews.With(common.Labels{"action": "address"}).Inc()
+	page, _, _, filter, _, _ := s.getAddressQueryParams(r, api.AccountDetailsTxHistoryLight, txsOnPage)
+	// do not allow details to be changed by query params
 	data := s.newTemplateData(r)
-	data.TokenId = tokenId
-	data.ContractInfo = ci
-	data.URI = uri
-	return nftDetailTpl, data, nil
+
+	address, err := s.api.GetAddress(categoryParam, page, txsOnPage, api.AccountDetailsTxHistoryLight, filter, strings.ToLower(data.SecondaryCoin))
+	if err != nil {
+		return errorTpl, nil, err
+	}
+	address.Txs = len(address.Transactions)
+
+	data.Address = address
+	data.Category = categoryParam
+
+	binCategory, err := hex.DecodeString(categoryParam)
+	if err != nil || len(binCategory) != 32 {
+		return errorTpl, nil, api.NewAPIError("Invalid category", true)
+	}
+	tokenInfo, err := s.db.GetBcashToken(binCategory)
+	if err == nil && tokenInfo != nil {
+		commitments := make([]string, len(tokenInfo.Commitments))
+		for i, c := range tokenInfo.Commitments {
+			commitments[i] = hex.EncodeToString(c)
+		}
+		data.Commitments = commitments
+
+		tokenMeta, err := s.db.GetBcashTokenMeta(binCategory)
+		if err != nil {
+			return errorTpl, nil, api.NewAPIError(err.Error(), true)
+		}
+		if tokenMeta != nil {
+			data.Name = tokenMeta.Name
+			data.Description = tokenMeta.Description
+			data.Symbol = tokenMeta.Symbol
+			data.Decimals = int(tokenMeta.Decimals)
+			data.URI = tokenMeta.Website
+			data.ImageURL = tokenMeta.Icon
+		}
+
+		for _, c := range tokenInfo.Commitments {
+			nft, err := s.db.GetBcashTokenNftMeta(binCategory, c)
+			if err != nil {
+				return errorTpl, nil, api.NewAPIError(err.Error(), true)
+			}
+
+			if nft != nil {
+				if data.Nfts == nil {
+					data.Nfts = make(map[string]api.Nft, 0)
+				}
+				data.Nfts[hex.EncodeToString(c)] = *nft
+			}
+		}
+	}
+
+	return bcashTokenTpl, data, nil
 }
 
 func (s *PublicServer) explorerXpub(w http.ResponseWriter, r *http.Request) (tpl, *TemplateData, error) {
