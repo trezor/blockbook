@@ -22,10 +22,10 @@
     "package_name": "backend-firo",
     "package_revision": "satoshilabs-1",
     "system_user": "firo",
-    "version": "0.14.14.1",
-    "binary_url": "https://github.com/firoorg/firo/releases/download/v0.14.14.1/firo-0.14.14.1-linux64.tar.gz",
+    "version": "0.14.15.0",
+    "binary_url": "https://github.com/firoorg/firo/releases/download/v0.14.15.0/firo-0.14.15.0-linux64.tar.gz",
     "verification_type": "sha256",
-    "verification_source": "059da5f978bbda1615fdbd1a16a0e854c4c6a15480b2d50de4a8911f6f5b4636",
+    "verification_source": "6a601e7c1aa0af4aee3b28a7fbd365a1d749d2203e8d042bcccf9f950072ecd9",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
       "bin/firo-qt",
