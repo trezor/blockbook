@@ -945,19 +945,45 @@ func (w *Worker) txFromTxAddress(txid string, ta *db.TxAddresses, bi *db.BlockIn
 }
 
 func computePaging(count, page, itemsOnPage int) (Paging, int, int, int) {
-	from := page * itemsOnPage
+
+	if page < 0 {
+		page = 0
+	}
+	if itemsOnPage <= 0 {
+		itemsOnPage = 1
+	}
+	if count < 0 {
+		count = 0
+	}
+
+	safeMultiply := func(a, b int) int {
+		const maxSafeInt = 1000000000
+		if a > 0 && b > 0 {
+			if a > maxSafeInt/b {
+				return maxSafeInt
+			}
+			return a * b
+		}
+		return 0
+	}
+
 	totalPages := (count - 1) / itemsOnPage
 	if totalPages < 0 {
 		totalPages = 0
 	}
+
+	from := safeMultiply(page, itemsOnPage)
+
 	if from >= count {
 		page = totalPages
+		from = safeMultiply(page, itemsOnPage)
 	}
-	from = page * itemsOnPage
-	to := (page + 1) * itemsOnPage
+
+	to := safeMultiply(page+1, itemsOnPage)
 	if to > count {
 		to = count
 	}
+
 	return Paging{
 		ItemsOnPage: itemsOnPage,
 		Page:        page + 1,
