@@ -43,6 +43,7 @@ import (
 	"github.com/trezor/blockbook/bchain/coins/myriad"
 	"github.com/trezor/blockbook/bchain/coins/namecoin"
 	"github.com/trezor/blockbook/bchain/coins/neurai"
+	"github.com/trezor/blockbook/bchain/coins/neurai_hw"
 	"github.com/trezor/blockbook/bchain/coins/nuls"
 	"github.com/trezor/blockbook/bchain/coins/omotenashicoin"
 	"github.com/trezor/blockbook/bchain/coins/optimism"
@@ -128,7 +129,7 @@ func init() {
 	BlockChainFactories["Flux"] = zec.NewZCashRPC
 	BlockChainFactories["Ravencoin"] = ravencoin.NewRavencoinRPC
 	BlockChainFactories["Neurai"] = neurai.NewNeuraiRPC
-	BlockChainFactories["Neurai HW"] = neurai.NewNeuraiRPC
+	BlockChainFactories["Neurai HW"] = neurai_hw.NewNeuraiRPC
 	BlockChainFactories["Ritocoin"] = ritocoin.NewRitocoinRPC
 	BlockChainFactories["Divi"] = divi.NewDiviRPC
 	BlockChainFactories["CPUchain"] = cpuchain.NewCPUchainRPC
