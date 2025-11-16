@@ -1,0 +1,35 @@
+[
+    {
+        "standard": "ERC20",
+        "contract": "0xC19B6A4Ac7C7Cc24459F08984Bbd09664af17bD1",
+        "name": "Sensorium",
+        "symbol": "SENSO",
+        "decimals": 0,
+        "createdInBlock": 11098997
+    },
+    {
+        "standard": "ERC20",
+        "contract": "0xd5F7838F5C461fefF7FE49ea5ebaF7728bB0ADfa",
+        "name": "mETH",
+        "symbol": "mETH",
+        "decimals": 18,
+        "createdInBlock": 18290587
+    },
+    {
+        "standard": "ERC20",
+        "contract": "0xE6829d9a7eE3040e1276Fa75293Bde931859e8fA",
+        "name": "cmETH",
+        "symbol": "cmETH",
+        "decimals": 18,
+        "createdInBlock": 20439180
+    },
+    {
+        "type": "ERC20",
+        "standard": "ERC20",
+        "contract": "0x6f40d4A6237C257fff2dB00FA0510DeEECd303eb",
+        "name": "Fluid",
+        "symbol": "FLUID",
+        "decimals": 18,
+        "createdInBlock": 12183236
+    }
+]

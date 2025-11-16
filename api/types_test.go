@@ -47,6 +47,15 @@ func TestAmount_MarshalJSON(t *testing.T) {
 			if !reflect.DeepEqual(string(b), tt.want) {
 				t.Errorf("json.Marshal() = %v, want %v", string(b), tt.want)
 			}
+			var parsed amounts
+			err = json.Unmarshal(b, &parsed)
+			if err != nil {
+				t.Errorf("json.Unmarshal() error = %v", err)
+				return
+			}
+			if !reflect.DeepEqual(parsed, tt.a) {
+				t.Errorf("json.Unmarshal() = %v, want %v", parsed, tt.a)
+			}
 		})
 	}
 }

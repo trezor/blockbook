@@ -19,13 +19,13 @@
         "package_name": "backend-avalanche-archive",
         "package_revision": "satoshilabs-1",
         "system_user": "avalanche",
-        "version": "1.9.11",
-        "binary_url": "https://github.com/ava-labs/avalanchego/releases/download/v1.9.11/avalanchego-linux-amd64-v1.9.11.tar.gz",
+        "version": "1.13.2",
+        "binary_url": "https://github.com/ava-labs/avalanchego/releases/download/v1.13.2/avalanchego-linux-amd64-v1.13.2.tar.gz",
         "verification_type": "gpg",
-        "verification_source": "https://github.com/ava-labs/avalanchego/releases/download/v1.9.11/avalanchego-linux-amd64-v1.9.11.tar.gz.sig",
+        "verification_source": "https://github.com/ava-labs/avalanchego/releases/download/v1.13.2/avalanchego-linux-amd64-v1.13.2.tar.gz.sig",
         "extract_command": "tar -C backend --strip 1 -xf",
         "exclude_files": [],
-        "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/avalanchego --data-dir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --log-dir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --http-port {{.Ports.BackendRPC}} --staking-port {{.Ports.BackendP2P}} --public-ip 127.0.0.1 --staking-ephemeral-cert-enabled --chain-config-content ewogICJDIjp7CiAgICAiY29uZmlnIjoiZXdvZ0lDSmxkR2d0WVhCcGN5STZXd29nSUNBZ0ltVjBhQ0lzQ2lBZ0lDQWlaWFJvTFdacGJIUmxjaUlzQ2lBZ0lDQWlibVYwSWl3S0lDQWdJQ0prWldKMVp5MTBjbUZqWlhJaUxBb2dJQ0FnSW5kbFlqTWlMQW9nSUNBZ0ltbHVkR1Z5Ym1Gc0xXVjBhQ0lzQ2lBZ0lDQWlhVzUwWlhKdVlXd3RZbXh2WTJ0amFHRnBiaUlzQ2lBZ0lDQWlhVzUwWlhKdVlXd3RkSEpoYm5OaFkzUnBiMjRpTEFvZ0lDQWdJbWx1ZEdWeWJtRnNMWFI0TFhCdmIyd2lMQW9nSUNBZ0ltbHVkR1Z5Ym1Gc0xXUmxZblZuSWdvZ0lGMHNDaUFnSW5CeWRXNXBibWN0Wlc1aFlteGxaQ0k2Wm1Gc2MyVUtmUT09IgogIH0KfQ==",
+        "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/avalanchego --data-dir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --log-dir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --http-port {{.Ports.BackendRPC}} --staking-port {{.Ports.BackendP2P}} --public-ip 127.0.0.1 --staking-ephemeral-cert-enabled --chain-config-content ewogICJDIjp7CiAgICAiY29uZmlnIjoiZXdvZ0lDSmxkR2d0WVhCcGN5STZXd29nSUNBZ0ltVjBhQ0lzQ2lBZ0lDQWlaWFJvTFdacGJIUmxjaUlzQ2lBZ0lDQWlibVYwSWl3S0lDQWdJQ0prWldKMVp5MTBjbUZqWlhJaUxBb2dJQ0FnSW5kbFlqTWlMQW9nSUNBZ0ltbHVkR1Z5Ym1Gc0xXVjBhQ0lzQ2lBZ0lDQWlhVzUwWlhKdVlXd3RZbXh2WTJ0amFHRnBiaUlzQ2lBZ0lDQWlhVzUwWlhKdVlXd3RkSEpoYm5OaFkzUnBiMjRpTEFvZ0lDQWdJbWx1ZEdWeWJtRnNMWFI0TFhCdmIyd2lMQW9nSUNBZ0ltbHVkR1Z5Ym1Gc0xXUmxZblZuSWdvZ0lGMHNDaUFnSW5CeWRXNXBibWN0Wlc1aFlteGxaQ0k2Wm1Gc2MyVXNDaUFnSW5OMFlYUmxMWE41Ym1NdFpXNWhZbXhsWkNJNklHWmhiSE5sQ24wPSIKICB9Cn0=",
         "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
         "postinst_script_template": "",
         "service_type": "simple",
@@ -36,8 +36,8 @@
         "client_config_file": "",
         "platforms": {
             "arm64": {
-                "binary_url": "https://github.com/ava-labs/avalanchego/releases/download/v1.9.11/avalanchego-linux-arm64-v1.9.11.tar.gz",
-                "verification_source": "https://github.com/ava-labs/avalanchego/releases/download/v1.9.11/avalanchego-linux-arm64-v1.9.11.tar.gz.sig"
+                "binary_url": "https://github.com/ava-labs/avalanchego/releases/download/v1.13.2/avalanchego-linux-arm64-v1.13.2.tar.gz",
+                "verification_source": "https://github.com/ava-labs/avalanchego/releases/download/v1.13.2/avalanchego-linux-arm64-v1.13.2.tar.gz.sig"
             }
         }
     },

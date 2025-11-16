@@ -1,0 +1,40 @@
+{
+  "coin": {
+    "name": "Optimism Archive Legacy Geth",
+    "shortcut": "ETH",
+    "label": "Optimism",
+    "alias": "optimism_archive_legacy_geth"
+  },
+  "ports": {
+    "backend_rpc": 8204,
+    "backend_http": 8304,
+    "backend_p2p": 38404,
+    "blockbook_internal": 9204,
+    "blockbook_public": 9304
+  },
+  "backend": {
+    "package_name": "backend-optimism-archive-legacy-geth",
+    "package_revision": "satoshilabs-1",
+    "system_user": "optimism",
+    "version": "0.5.31",
+    "binary_url": "https://github.com/ethereum-optimism/optimism-legacy/archive/refs/heads/develop.zip",
+    "verification_type": "sha256",
+    "verification_source": "367b32b3f4c1450a57fa57650a0abdfb74ae58c09123d94b161aaec90fd6b883",
+    "extract_command": "mkdir backend/source && unzip -d backend/source",
+    "exclude_files": [],
+    "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/optimism_archive_legacy_geth_exec.sh 2>> {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
+    "exec_script": "optimism_archive_legacy_geth.sh",
+    "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
+    "postinst_script_template": "cd {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/source/optimism-legacy-devlop/l2geth && make geth && mv build/bin/geth {{.Env.BackendInstallPath}}/{{.Coin.Alias}} && rm -rf {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/source",
+    "service_type": "simple",
+    "service_additional_params_template": "",
+    "protect_memory": true,
+    "mainnet": true,
+    "server_config_file": "",
+    "client_config_file": ""
+  },
+  "meta": {
+    "package_maintainer": "IT",
+    "package_maintainer_email": "it@satoshilabs.com"
+  }
+}

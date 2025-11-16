@@ -2,6 +2,7 @@
     "coin": {
         "name": "BNB Smart Chain",
         "shortcut": "BNB",
+        "network": "BSC",
         "label": "BNB Smart Chain",
         "alias": "bsc"
     },

@@ -175,7 +175,9 @@ func (s *SocketIoServer) onMessage(c *gosocketio.Channel, req map[string]json.Ra
 	t := time.Now()
 	params := req["params"]
 	s.metrics.SocketIOPendingRequests.With((common.Labels{"method": method})).Inc()
-	defer s.metrics.SocketIOReqDuration.With(common.Labels{"method": method}).Observe(float64(time.Since(t)) / 1e3) // in microseconds
+	defer func() {
+		s.metrics.SocketIOReqDuration.With(common.Labels{"method": method}).Observe(float64(time.Since(t)) / 1e3) // in microseconds
+	}()
 	f, ok := onMessageHandlers[method]
 	if ok {
 		rv, err = f(s, params)
@@ -639,7 +641,7 @@ func (s *SocketIoServer) getDetailedTransaction(txid string) (res resultGetDetai
 }
 
 func (s *SocketIoServer) sendTransaction(tx string) (res resultSendTransaction, err error) {
-	txid, err := s.chain.SendRawTransaction(tx)
+	txid, err := s.chain.SendRawTransaction(tx, false)
 	if err != nil {
 		return res, err
 	}

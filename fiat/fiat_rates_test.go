@@ -30,7 +30,7 @@ func TestMain(m *testing.M) {
 	os.Exit(c)
 }
 
-func setupRocksDB(t *testing.T, parser bchain.BlockChainParser) (*db.RocksDB, *common.InternalState, string) {
+func setupRocksDB(t *testing.T, parser bchain.BlockChainParser, config *common.Config) (*db.RocksDB, *common.InternalState, string) {
 	tmp, err := os.MkdirTemp("", "testdb")
 	if err != nil {
 		t.Fatal(err)
@@ -39,7 +39,7 @@ func setupRocksDB(t *testing.T, parser bchain.BlockChainParser) (*db.RocksDB, *c
 	if err != nil {
 		t.Fatal(err)
 	}
-	is, err := d.LoadInternalState("fakecoin")
+	is, err := d.LoadInternalState(config)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,11 +83,6 @@ func getFiatRatesMockData(name string) (string, error) {
 }
 
 func TestFiatRates(t *testing.T) {
-	d, _, tmp := setupRocksDB(t, &testBitcoinParser{
-		BitcoinParser: bitcoinTestnetParser(),
-	})
-	defer closeAndDestroyRocksDB(t, d, tmp)
-
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var err error
 		var mockData string
@@ -129,10 +124,19 @@ func TestFiatRates(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	// mocked CoinGecko API
-	configJSON := `{"fiat_rates": "coingecko", "fiat_rates_params": "{\"url\": \"` + mockServer.URL + `\", \"coin\": \"ethereum\",\"platformIdentifier\":\"ethereum\",\"platformVsCurrency\": \"eth\",\"periodSeconds\": 60}"}`
+	// config with mocked CoinGecko API
+	config := common.Config{
+		CoinName:        "fakecoin",
+		FiatRates:       "coingecko",
+		FiatRatesParams: `{"url": "` + mockServer.URL + `", "coin": "ethereum","platformIdentifier": "ethereum","platformVsCurrency": "eth","periodSeconds": 60}`,
+	}
 
-	fiatRates, err := NewFiatRates(d, []byte(configJSON), nil, nil)
+	d, _, tmp := setupRocksDB(t, &testBitcoinParser{
+		BitcoinParser: bitcoinTestnetParser(),
+	}, &config)
+	defer closeAndDestroyRocksDB(t, d, tmp)
+
+	fiatRates, err := NewFiatRates(d, &config, nil, nil)
 	if err != nil {
 		t.Fatalf("FiatRates init error: %v", err)
 	}

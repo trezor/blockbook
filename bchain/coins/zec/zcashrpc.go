@@ -1,7 +1,10 @@
 package zec
 
 import (
+	"bytes"
 	"encoding/json"
+	"os/exec"
+	"reflect"
 
 	"github.com/golang/glog"
 	"github.com/juju/errors"
@@ -42,7 +45,7 @@ func NewZCashRPC(config json.RawMessage, pushHandler func(bchain.NotificationTyp
 	z := &ZCashRPC{
 		BitcoinRPC: b.(*btc.BitcoinRPC),
 	}
-	z.RPCMarshaler = btc.JSONMarshalerV1{}
+	z.RPCMarshaler = JSONMarshalerV1Zebra{}
 	z.ChainConfig.SupportsEstimateSmartFee = false
 	return z, nil
 }
@@ -84,13 +87,16 @@ func (z *ZCashRPC) GetChainInfo() (*bchain.ChainInfo, error) {
 		return nil, chainInfo.Error
 	}
 
+	// networkinfo not supported by zebra
 	networkInfo := btc.ResGetNetworkInfo{}
-	err = z.Call(&btc.CmdGetNetworkInfo{Method: "getnetworkinfo"}, &networkInfo)
-	if err != nil {
-		return nil, err
-	}
-	if networkInfo.Error != nil {
-		return nil, networkInfo.Error
+
+	zebrad := "zebra"
+	cmd := exec.Command("/opt/coins/nodes/zcash/bin/zebrad", "--version")
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	err = cmd.Run()
+	if err == nil {
+		zebrad = out.String()
 	}
 
 	return &bchain.ChainInfo{
@@ -100,7 +106,7 @@ func (z *ZCashRPC) GetChainInfo() (*bchain.ChainInfo, error) {
 		Difficulty:      string(chainInfo.Result.Difficulty),
 		Headers:         chainInfo.Result.Headers,
 		SizeOnDisk:      chainInfo.Result.SizeOnDisk,
-		Version:         string(networkInfo.Result.Version),
+		Version:         zebrad,
 		Subversion:      string(networkInfo.Result.Subversion),
 		ProtocolVersion: string(networkInfo.Result.ProtocolVersion),
 		Timeoffset:      networkInfo.Result.Timeoffset,
@@ -111,6 +117,22 @@ func (z *ZCashRPC) GetChainInfo() (*bchain.ChainInfo, error) {
 
 // GetBlock returns block with given hash.
 func (z *ZCashRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
+	type rpcBlock struct {
+		bchain.BlockHeader
+		Txs []bchain.Tx `json:"tx"`
+	}
+	type rpcBlockTxids struct {
+		Txids []string `json:"tx"`
+	}
+	type resGetBlockV1 struct {
+		Error  *bchain.RPCError `json:"error"`
+		Result rpcBlockTxids    `json:"result"`
+	}
+	type resGetBlockV2 struct {
+		Error  *bchain.RPCError `json:"error"`
+		Result rpcBlock         `json:"result"`
+	}
+
 	var err error
 	if hash == "" && height > 0 {
 		hash, err = z.GetBlockHash(height)
@@ -119,38 +141,84 @@ func (z *ZCashRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 		}
 	}
 
-	glog.V(1).Info("rpc: getblock (verbosity=1) ", hash)
-
-	res := btc.ResGetBlockThin{}
+	var rawResponse json.RawMessage
+	resV2 := resGetBlockV2{}
 	req := btc.CmdGetBlock{Method: "getblock"}
 	req.Params.BlockHash = hash
-	req.Params.Verbosity = 1
-	err = z.Call(&req, &res)
-
+	req.Params.Verbosity = 2
+	err = z.Call(&req, &rawResponse)
 	if err != nil {
 		return nil, errors.Annotatef(err, "hash %v", hash)
 	}
-	if res.Error != nil {
-		return nil, errors.Annotatef(res.Error, "hash %v", hash)
+	// hack for ZCash, where the field "valueZat" is used instead of "valueSat"
+	rawResponse = bytes.ReplaceAll(rawResponse, []byte(`"valueZat"`), []byte(`"valueSat"`))
+	err = json.Unmarshal(rawResponse, &resV2)
+	if err != nil {
+		return nil, errors.Annotatef(err, "hash %v", hash)
 	}
 
-	txs := make([]bchain.Tx, 0, len(res.Result.Txids))
-	for _, txid := range res.Result.Txids {
-		tx, err := z.GetTransaction(txid)
-		if err != nil {
-			if err == bchain.ErrTxNotFound {
-				glog.Errorf("rpc: getblock: skipping transanction in block %s due error: %s", hash, err)
-				continue
-			}
-			return nil, err
-		}
-		txs = append(txs, *tx)
+	if resV2.Error != nil {
+		return nil, errors.Annotatef(resV2.Error, "hash %v", hash)
 	}
 	block := &bchain.Block{
-		BlockHeader: res.Result.BlockHeader,
-		Txs:         txs,
+		BlockHeader: resV2.Result.BlockHeader,
+		Txs:         resV2.Result.Txs,
+	}
+
+	// transactions fetched in block with verbosity 2 do not contain txids, so we need to get it separately
+	resV1 := resGetBlockV1{}
+	req.Params.Verbosity = 1
+	err = z.Call(&req, &resV1)
+	if err != nil {
+		return nil, errors.Annotatef(err, "hash %v", hash)
+	}
+	if resV1.Error != nil {
+		return nil, errors.Annotatef(resV1.Error, "hash %v", hash)
+	}
+	for i := range resV1.Result.Txids {
+		block.Txs[i].Txid = resV1.Result.Txids[i]
 	}
 	return block, nil
+}
+
+// GetTransaction returns a transaction by the transaction ID
+func (z *ZCashRPC) GetTransaction(txid string) (*bchain.Tx, error) {
+	r, err := z.getRawTransaction(txid)
+	if err != nil {
+		return nil, err
+	}
+	// hack for ZCash, where the field "valueZat" is used instead of "valueSat"
+	r = bytes.ReplaceAll(r, []byte(`"valueZat"`), []byte(`"valueSat"`))
+	tx, err := z.Parser.ParseTxFromJson(r)
+	if err != nil {
+		return nil, errors.Annotatef(err, "txid %v", txid)
+	}
+	tx.Blocktime = tx.Time
+	tx.Txid = txid
+	tx.CoinSpecificData = r
+	return tx, nil
+}
+
+// getRawTransaction returns json as returned by backend, with all coin specific data
+func (z *ZCashRPC) getRawTransaction(txid string) (json.RawMessage, error) {
+	glog.V(1).Info("rpc: getrawtransaction ", txid)
+
+	res := btc.ResGetRawTransaction{}
+	req := btc.CmdGetRawTransaction{Method: "getrawtransaction"}
+	req.Params.Txid = txid
+	req.Params.Verbose = true
+	err := z.Call(&req, &res)
+
+	if err != nil {
+		return nil, errors.Annotatef(err, "txid %v", txid)
+	}
+	if res.Error != nil {
+		if btc.IsMissingTx(res.Error) {
+			return nil, bchain.ErrTxNotFound
+		}
+		return nil, errors.Annotatef(res.Error, "txid %v", txid)
+	}
+	return res.Result, nil
 }
 
 // GetTransactionForMempool returns a transaction by the transaction ID.
@@ -167,4 +235,73 @@ func (z *ZCashRPC) GetMempoolEntry(txid string) (*bchain.MempoolEntry, error) {
 // GetBlockRaw is not supported
 func (z *ZCashRPC) GetBlockRaw(hash string) (string, error) {
 	return "", errors.New("GetBlockRaw: not supported")
+}
+
+// JSONMarshalerV1 is used for marshalling requests to legacy Bitcoin Type RPC interfaces
+type JSONMarshalerV1Zebra struct{}
+
+// Marshal converts struct passed by parameter to JSON
+func (JSONMarshalerV1Zebra) Marshal(v interface{}) ([]byte, error) {
+	u := cmdUntypedParams{}
+
+	switch v := v.(type) {
+	case *btc.CmdGetBlock:
+		u.Method = v.Method
+		u.Params = append(u.Params, v.Params.BlockHash)
+		u.Params = append(u.Params, v.Params.Verbosity)
+	case *btc.CmdGetRawTransaction:
+		var n int
+		if v.Params.Verbose {
+			n = 1
+		}
+		u.Method = v.Method
+		u.Params = append(u.Params, v.Params.Txid)
+		u.Params = append(u.Params, n)
+	default:
+		{
+			v := reflect.ValueOf(v).Elem()
+
+			f := v.FieldByName("Method")
+			if !f.IsValid() || f.Kind() != reflect.String {
+				return nil, btc.ErrInvalidValue
+			}
+			u.Method = f.String()
+
+			f = v.FieldByName("Params")
+			if f.IsValid() {
+				var arr []interface{}
+				switch f.Kind() {
+				case reflect.Slice:
+					arr = make([]interface{}, f.Len())
+					for i := 0; i < f.Len(); i++ {
+						arr[i] = f.Index(i).Interface()
+					}
+				case reflect.Struct:
+					arr = make([]interface{}, f.NumField())
+					for i := 0; i < f.NumField(); i++ {
+						arr[i] = f.Field(i).Interface()
+					}
+				default:
+					return nil, btc.ErrInvalidValue
+				}
+				u.Params = arr
+			}
+		}
+	}
+	u.Id = "-"
+	if u.Params == nil {
+		u.Params = make([]interface{}, 0)
+	}
+	d, err := json.Marshal(u)
+	if err != nil {
+		return nil, err
+	}
+
+	return d, nil
+}
+
+type cmdUntypedParams struct {
+	Method string        `json:"method"`
+	Id     string        `json:"id"`
+	Params []interface{} `json:"params"`
 }

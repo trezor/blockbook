@@ -160,6 +160,13 @@ func Test_appendAmountSpan(t *testing.T) {
 			txDate:   "2022-03-14",
 			want:     `<span class="sec-amt" tm="2022-03-14">-43<span class="nc">141</span>.<span class="amt-dec">29</span> EUR</span>`,
 		},
+		{
+			name:     "prim-amt 1.23456789 BTC",
+			class:    "prim-amt",
+			amount:   "1.23456789",
+			shortcut: "<javascript>alert(1)</javascript>",
+			want:     `<span class="prim-amt">1.<span class="amt-dec">234<span class="ns">567</span><span class="ns">89</span></span> &lt;javascript&gt;alert(1)&lt;/javascript&gt;</span>`,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

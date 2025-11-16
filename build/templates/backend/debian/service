@@ -19,7 +19,7 @@ Type=simple
 {{template "Backend.ServiceAdditionalParamsTemplate" .}}
 
 # Resource limits
-LimitNOFILE=500000
+LimitNOFILE=2000000
 
 # Hardening measures
 ####################

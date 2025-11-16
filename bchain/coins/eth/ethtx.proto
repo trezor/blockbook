@@ -1,30 +1,37 @@
 syntax = "proto3";
-	package eth;
-		
-	message ProtoCompleteTransaction {
-        message TxType {
-            uint64 AccountNonce = 1;
-            bytes GasPrice = 2;
-            uint64 GasLimit = 3;
-            bytes Value = 4;
-            bytes Payload = 5;
-            bytes Hash = 6;
-            bytes To = 7;
-            bytes From = 8;
-            uint32 TransactionIndex = 9;
-        } 
-        message ReceiptType {
-            message LogType {
-                bytes Address = 1;
-                bytes Data = 2;
-                repeated bytes Topics = 3;
-            }
-            bytes GasUsed = 1;
-            bytes Status = 2;
-            repeated LogType Log = 3;
-        }
-        uint32 BlockNumber = 1;
-        uint64 BlockTime = 2;
-        TxType Tx = 3;
-        ReceiptType Receipt = 4;
+option go_package = "bchain/coins/eth";
+
+message ProtoCompleteTransaction {
+  message TxType {
+    uint64 AccountNonce = 1;
+    bytes GasPrice = 2;
+    uint64 GasLimit = 3;
+    bytes Value = 4;
+    bytes Payload = 5;
+    bytes Hash = 6;
+    bytes To = 7;
+    bytes From = 8;
+    uint32 TransactionIndex = 9;
+    optional bytes MaxPriorityFeePerGas = 10;
+    optional bytes MaxFeePerGas = 11;
+    optional bytes BaseFeePerGas = 12;
+  }
+  message ReceiptType {
+    message LogType {
+      bytes Address = 1;
+      bytes Data = 2;
+      repeated bytes Topics = 3;
     }
+    bytes GasUsed = 1;
+    bytes Status = 2;
+    repeated LogType Log = 3;
+    optional bytes L1Fee = 4;
+    optional bytes L1FeeScalar = 5;
+    optional bytes L1GasPrice = 6;
+    optional bytes L1GasUsed = 7;
+  }
+  uint32 BlockNumber = 1;
+  uint64 BlockTime = 2;
+  TxType Tx = 3;
+  ReceiptType Receipt = 4;
+}

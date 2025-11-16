@@ -1,0 +1,65 @@
+{
+    "coin": {
+        "name": "Arbitrum Nova",
+        "shortcut": "ETH",
+        "label": "Arbitrum Nova",
+        "alias": "arbitrum_nova"
+    },
+    "ports": {
+        "backend_rpc": 8207,
+        "backend_p2p": 38407,
+        "backend_http": 8307,
+        "blockbook_internal": 9207,
+        "blockbook_public": 9307
+    },
+    "ipc": {
+        "rpc_url_template": "ws://127.0.0.1:{{.Ports.BackendRPC}}",
+        "rpc_timeout": 25
+    },
+    "backend": {
+        "package_name": "backend-arbitrum-nova",
+        "package_revision": "satoshilabs-1",
+        "system_user": "arbitrum",
+        "version": "3.2.1",
+        "docker_image": "offchainlabs/nitro-node:v3.2.1-d81324d",
+        "verification_type": "docker",
+        "verification_source": "724ebdcca39cd0c28ffd025ecea8d1622a376f41344201b729afb60352cbc306",
+        "extract_command": "docker cp extract:/home/user/target backend/target; docker cp extract:/home/user/nitro-legacy backend/nitro-legacy; docker cp extract:/usr/local/bin/nitro backend/nitro",
+        "exclude_files": [],
+        "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/arbitrum_nova_exec.sh 2>> {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
+        "exec_script": "arbitrum_nova.sh",
+        "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
+        "postinst_script_template": "openssl rand -hex 32 > {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/jwtsecret",
+        "service_type": "simple",
+        "service_additional_params_template": "",
+        "protect_memory": true,
+        "mainnet": true,
+        "server_config_file": "",
+        "client_config_file": ""
+    },
+    "blockbook": {
+        "package_name": "blockbook-arbitrum-nova",
+        "system_user": "blockbook-arbitrum",
+        "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
+        "public_binding_template": ":{{.Ports.BlockbookPublic}}",
+        "explorer_url": "",
+        "additional_params": "",
+        "block_chain": {
+            "parse": true,
+            "mempool_workers": 8,
+            "mempool_sub_workers": 2,
+            "block_addresses_to_keep": 300,
+            "additional_params": {
+                "mempoolTxTimeoutHours": 48,
+                "queryBackendOnMempoolResync": false,
+                "fiat_rates": "coingecko",
+                "fiat_rates_vs_currencies": "AED,ARS,AUD,BDT,BHD,BMD,BRL,CAD,CHF,CLP,CNY,CZK,DKK,EUR,GBP,HKD,HUF,IDR,ILS,INR,JPY,KRW,KWD,LKR,MMK,MXN,MYR,NGN,NOK,NZD,PHP,PKR,PLN,RUB,SAR,SEK,SGD,THB,TRY,TWD,UAH,USD,VEF,VND,ZAR,BTC,ETH",
+                "fiat_rates_params": "{\"coin\": \"ethereum\",\"platformIdentifier\": \"ethereum\",\"platformVsCurrency\": \"eth\",\"periodSeconds\": 900}"
+            }
+        }
+    },
+    "meta": {
+        "package_maintainer": "IT",
+        "package_maintainer_email": "it@satoshilabs.com"
+    }
+}

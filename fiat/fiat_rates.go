@@ -61,16 +61,7 @@ type FiatRates struct {
 }
 
 // NewFiatRates initializes the FiatRates handler
-func NewFiatRates(db *db.RocksDB, configFileContent []byte, metrics *common.Metrics, callback OnNewFiatRatesTicker) (*FiatRates, error) {
-	var config struct {
-		FiatRates             string `json:"fiat_rates"`
-		FiatRatesParams       string `json:"fiat_rates_params"`
-		FiatRatesVsCurrencies string `json:"fiat_rates_vs_currencies"`
-	}
-	err := json.Unmarshal(configFileContent, &config)
-	if err != nil {
-		return nil, fmt.Errorf("error parsing config file, %v", err)
-	}
+func NewFiatRates(db *db.RocksDB, config *common.Config, metrics *common.Metrics, callback OnNewFiatRatesTicker) (*FiatRates, error) {
 
 	var fr = &FiatRates{
 		provider:            config.FiatRates,
@@ -91,7 +82,7 @@ func NewFiatRates(db *db.RocksDB, configFileContent []byte, metrics *common.Metr
 		PeriodSeconds      int64  `json:"periodSeconds"`
 	}
 	rdParams := &fiatRatesParams{}
-	err = json.Unmarshal([]byte(config.FiatRatesParams), &rdParams)
+	err := json.Unmarshal([]byte(config.FiatRatesParams), &rdParams)
 	if err != nil {
 		return nil, err
 	}
@@ -117,7 +108,7 @@ func NewFiatRates(db *db.RocksDB, configFileContent []byte, metrics *common.Metr
 			// a small hack - in tests the callback is not used, therefore there is no delay slowing down the test
 			throttle = false
 		}
-		fr.downloader = NewCoinGeckoDownloader(db, rdParams.URL, rdParams.Coin, rdParams.PlatformIdentifier, rdParams.PlatformVsCurrency, fr.allowedVsCurrencies, fr.timeFormat, metrics, throttle)
+		fr.downloader = NewCoinGeckoDownloader(db, db.GetInternalState().GetNetwork(), rdParams.URL, rdParams.Coin, rdParams.PlatformIdentifier, rdParams.PlatformVsCurrency, fr.allowedVsCurrencies, fr.timeFormat, metrics, throttle)
 		if is != nil {
 			is.HasFiatRates = true
 			is.HasTokenFiatRates = fr.downloadTokens
@@ -381,7 +372,7 @@ func (fr *FiatRates) tickersToMap(tickers *[]common.CurrencyRatesTicker, granula
 	return m, from, to
 }
 
-// setCurrentTicker sets hourly tickers
+// setHourlyTickers sets hourly tickers
 func (fr *FiatRates) setHourlyTickers(t *[]common.CurrencyRatesTicker) {
 	fr.db.FiatRatesStoreSpecialTickers(hourlyTickersKey, t)
 	fr.mux.Lock()
@@ -389,7 +380,7 @@ func (fr *FiatRates) setHourlyTickers(t *[]common.CurrencyRatesTicker) {
 	fr.hourlyTickers, fr.hourlyTickersFrom, fr.hourlyTickersTo = fr.tickersToMap(t, secondsInHour)
 }
 
-// setCurrentTicker sets hourly tickers
+// setFiveMinutesTickers sets five minutes tickers
 func (fr *FiatRates) setFiveMinutesTickers(t *[]common.CurrencyRatesTicker) {
 	fr.db.FiatRatesStoreSpecialTickers(fiveMinutesTickersKey, t)
 	fr.mux.Lock()
@@ -411,10 +402,12 @@ func (fr *FiatRates) RunDownloader() error {
 		// skip waiting for the period for the first run if there are no tickerFromIs or they are too old
 		if !firstRun || (tickerFromIs != nil && next-tickerFromIs.Timestamp.Unix() < fr.periodSeconds) {
 			// wait for the next run with a slight random value to avoid too many request at the same time
-			next += int64(rand.Intn(12))
+			next += int64(rand.Intn(3))
 			time.Sleep(time.Duration(next-unix) * time.Second)
 		}
 		firstRun = false
+
+		// load current tickers
 		currentTicker, err := fr.downloader.CurrentTickers()
 		if err != nil || currentTicker == nil {
 			glog.Error("FiatRatesDownloader: CurrentTickers error ", err)
@@ -425,22 +418,31 @@ func (fr *FiatRates) RunDownloader() error {
 				fr.callbackOnNewTicker(currentTicker)
 			}
 		}
-		hourlyTickers, err := fr.downloader.HourlyTickers()
-		if err != nil || hourlyTickers == nil {
-			glog.Error("FiatRatesDownloader: HourlyTickers error ", err)
-		} else {
-			fr.setHourlyTickers(hourlyTickers)
-			glog.Info("FiatRatesDownloader: HourlyTickers updated")
+
+		// load hourly tickers, it is necessary to wait about 1 hour to prepare the tickers
+		if time.Now().UTC().Unix() >= fr.hourlyTickersTo+secondsInHour+secondsInHour {
+			hourlyTickers, err := fr.downloader.HourlyTickers()
+			if err != nil || hourlyTickers == nil {
+				glog.Error("FiatRatesDownloader: HourlyTickers error ", err)
+			} else {
+				fr.setHourlyTickers(hourlyTickers)
+				glog.Info("FiatRatesDownloader: HourlyTickers updated")
+			}
 		}
-		fiveMinutesTickers, err := fr.downloader.FiveMinutesTickers()
-		if err != nil || fiveMinutesTickers == nil {
-			glog.Error("FiatRatesDownloader: FiveMinutesTickers error ", err)
-		} else {
-			fr.setFiveMinutesTickers(fiveMinutesTickers)
-			glog.Info("FiatRatesDownloader: FiveMinutesTickers updated")
+
+		// load five minute tickers, it is necessary to wait about 10 minutes to prepare the tickers
+		if time.Now().UTC().Unix() >= fr.fiveMinutesTickersTo+3*secondsInFiveMinutes {
+			fiveMinutesTickers, err := fr.downloader.FiveMinutesTickers()
+			if err != nil || fiveMinutesTickers == nil {
+				glog.Error("FiatRatesDownloader: FiveMinutesTickers error ", err)
+			} else {
+				fr.setFiveMinutesTickers(fiveMinutesTickers)
+				glog.Info("FiatRatesDownloader: FiveMinutesTickers updated")
+			}
 		}
-		now := time.Now().UTC()
+
 		// once a day, 1 hour after UTC midnight (to let the provider prepare historical rates) update historical tickers
+		now := time.Now().UTC()
 		if (now.YearDay() != lastHistoricalTickers.YearDay() || now.Year() != lastHistoricalTickers.Year()) && now.Hour() > 0 {
 			err = fr.downloader.UpdateHistoricalTickers()
 			if err != nil {

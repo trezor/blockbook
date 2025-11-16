@@ -22,10 +22,10 @@
     "package_name": "backend-neurai-hw",
     "package_revision": "neurai-dev",
     "system_user": "neurai-hw",
-    "version": "1.0.4.0",
-    "binary_url": "https://github.com/NeuraiProject/Neurai/releases/download/1.0.4/neurai-1.0.4.0.WITH.NEW.DERIVATION.-x86_64-linux-gnu.tar.gz",
+    "version": "1.0.5.0",
+    "binary_url": "https://github.com/NeuraiProject/Neurai/releases/download/1.0.5/neurai-1.0.5.0.SLIP44-1900.-x86_64-linux-gnu.tar.gz",
     "verification_type": "sha256",
-    "verification_source": "ea2577c3038e740e264b7df1daf43195fee29b2baacb1ec865ee37a925dd60fb",
+    "verification_source": "d33763b708bae94f17d2d1455c92402c853cfdd4134e20ffdcffbca7c8663f66",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
       "neurai-qt"

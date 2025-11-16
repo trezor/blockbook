@@ -1,0 +1,29 @@
+{{define "specific"}}
+<h3>IP addresses disconnected for exceeding websocket limit</h3>
+<div class="row g-0">
+    <div class="col-md-11">Distinct ip addresses that exceeded limit of {{.WsGetAccountInfoLimit}} requests since last reset: {{len .WsLimitExceedingIPs}}</div>
+    <div class="col-md-1 justify-content-right">
+        <form method="POST" action="/admin/ws-limit-exceeding-ips">
+            <button type="submit" class="btn btn-outline-secondary">Reset</button>
+        </form>    
+    </div>
+</row>
+<div>
+    <table class="table table-hover">
+        <thead>
+            <tr>
+                <th>IP</th>
+                <th>Count</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range $d := .WsLimitExceedingIPs}}
+            <tr>
+                <td>{{$d.IP}}</a></td>
+                <td>{{$d.Count}}</td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+{{end}}

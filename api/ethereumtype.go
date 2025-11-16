@@ -62,7 +62,7 @@ func (w *Worker) RefetchInternalDataRoutine() {
 			if block != nil {
 				blockSpecificData, _ = block.CoinSpecificData.(*bchain.EthereumBlockSpecificData)
 			}
-			if err != nil || block == nil || blockSpecificData == nil || blockSpecificData.InternalDataError != "" {
+			if err != nil || block == nil || (blockSpecificData != nil && blockSpecificData.InternalDataError != "") {
 				glog.Errorf("Refetching internal data for %d %s, error %v, retrying", ie.Height, ie.Hash, err)
 				// try for second time to fetch the data - the 2nd attempt after the first unsuccessful has many times higher probability of success
 				// probably something to do with data preloaded to cache on the backend

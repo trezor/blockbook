@@ -120,7 +120,7 @@ func (c *fakeBlockChainEthereumType) EthereumTypeGetNonce(addrDesc bchain.Addres
 func (c *fakeBlockChainEthereumType) GetContractInfo(contractDesc bchain.AddressDescriptor) (*bchain.ContractInfo, error) {
 	addresses, _, _ := c.Parser.GetAddressesFromAddrDesc(contractDesc)
 	return &bchain.ContractInfo{
-		Type:           bchain.ERC20TokenType,
+		Standard:       bchain.ERC20TokenStandard,
 		Contract:       addresses[0],
 		Name:           "Contract " + strconv.Itoa(int(contractDesc[0])),
 		Symbol:         "S" + strconv.Itoa(int(contractDesc[0])),
@@ -132,6 +132,16 @@ func (c *fakeBlockChainEthereumType) GetContractInfo(contractDesc bchain.Address
 // EthereumTypeGetErc20ContractBalance returns simulated balance
 func (c *fakeBlockChainEthereumType) EthereumTypeGetErc20ContractBalance(addrDesc, contractDesc bchain.AddressDescriptor) (*big.Int, error) {
 	return big.NewInt(1000000000 + int64(addrDesc[0])*1000 + int64(contractDesc[0])), nil
+}
+
+// EthereumTypeRpcCall calls eth_call with given data and to address
+func (c *fakeBlockChainEthereumType) EthereumTypeRpcCall(data, to, from string) (string, error) {
+	return data + "abcd", nil
+}
+
+// EthereumTypeGetRawTransaction returns simulated transaction hex data
+func (c *fakeBlockChainEthereumType) EthereumTypeGetRawTransaction(txid string) (string, error) {
+	return txid + "abcd", nil
 }
 
 // GetTokenURI returns URI derived from the input contractDesc

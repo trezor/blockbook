@@ -1,0 +1,67 @@
+{
+    "coin": {
+        "name": "Optimism",
+        "shortcut": "ETH",
+        "network": "OP",
+        "label": "Optimism",
+        "alias": "optimism"
+    },
+    "ports": {
+        "backend_rpc": 8200,
+        "backend_p2p": 38400,
+        "backend_http": 8300,
+        "backend_authrpc": 8400,
+        "blockbook_internal": 9200,
+        "blockbook_public": 9300
+    },
+    "ipc": {
+        "rpc_url_template": "ws://127.0.0.1:{{.Ports.BackendRPC}}",
+        "rpc_timeout": 25
+    },
+    "backend": {
+        "package_name": "backend-optimism",
+        "package_revision": "satoshilabs-1",
+        "system_user": "optimism",
+        "version": "1.101315.1",
+        "binary_url": "https://github.com/ethereum-optimism/op-geth/archive/refs/tags/v1.101315.1.tar.gz",
+        "verification_type": "sha256",
+        "verification_source": "f0f31ef2982f87f9e3eb90f2b603f5fcd9d680e487d35f5bdcf5aeba290b153f",
+        "extract_command": "mkdir backend/source && tar -C backend/source --strip 1 -xf v1.101315.1.tar.gz && cd backend/source && make geth && mv build/bin/geth ../ && rm -rf ../source && echo",
+        "exclude_files": [],
+        "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/optimism_exec.sh 2>> {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
+        "exec_script": "optimism.sh",
+        "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
+        "postinst_script_template": "openssl rand -hex 32 > {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/jwtsecret",
+        "service_type": "simple",
+        "service_additional_params_template": "",
+        "protect_memory": true,
+        "mainnet": true,
+        "server_config_file": "",
+        "client_config_file": ""
+    },
+    "blockbook": {
+        "package_name": "blockbook-optimism",
+        "system_user": "blockbook-optimism",
+        "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
+        "public_binding_template": ":{{.Ports.BlockbookPublic}}",
+        "explorer_url": "",
+        "additional_params": "",
+        "block_chain": {
+            "parse": true,
+            "mempool_workers": 8,
+            "mempool_sub_workers": 2,
+            "block_addresses_to_keep": 300,
+            "additional_params": {
+                "mempoolTxTimeoutHours": 48,
+                "queryBackendOnMempoolResync": false,
+                "fiat_rates": "coingecko",
+                "fiat_rates_vs_currencies": "AED,ARS,AUD,BDT,BHD,BMD,BRL,CAD,CHF,CLP,CNY,CZK,DKK,EUR,GBP,HKD,HUF,IDR,ILS,INR,JPY,KRW,KWD,LKR,MMK,MXN,MYR,NGN,NOK,NZD,PHP,PKR,PLN,RUB,SAR,SEK,SGD,THB,TRY,TWD,UAH,USD,VEF,VND,ZAR,BTC,ETH",
+                "fiat_rates_params": "{\"coin\": \"ethereum\",\"platformIdentifier\": \"optimistic-ethereum\",\"platformVsCurrency\": \"eth\",\"periodSeconds\": 900}"
+            }
+        }
+    },
+    "meta": {
+        "package_maintainer": "IT",
+        "package_maintainer_email": "it@satoshilabs.com"
+    }
+}

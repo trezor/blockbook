@@ -51,16 +51,16 @@ func processTransferEvent(l *bchain.RpcLog) (transfer *bchain.TokenTransfer, err
 		}
 	}()
 	tl := len(l.Topics)
-	var ttt bchain.TokenType
+	var standard bchain.TokenStandard
 	var value big.Int
 	if tl == 3 {
-		ttt = bchain.FungibleToken
+		standard = bchain.FungibleToken
 		_, ok := value.SetString(l.Data, 0)
 		if !ok {
 			return nil, errors.New("ERC20 log Data is not a number")
 		}
 	} else if tl == 4 {
-		ttt = bchain.NonFungibleToken
+		standard = bchain.NonFungibleToken
 		_, ok := value.SetString(l.Topics[3], 0)
 		if !ok {
 			return nil, errors.New("ERC721 log Topics[3] is not a number")
@@ -78,7 +78,7 @@ func processTransferEvent(l *bchain.RpcLog) (transfer *bchain.TokenTransfer, err
 		return nil, err
 	}
 	return &bchain.TokenTransfer{
-		Type:     ttt,
+		Standard: standard,
 		Contract: EIP55AddressFromAddress(l.Address),
 		From:     EIP55AddressFromAddress(from),
 		To:       EIP55AddressFromAddress(to),
@@ -119,7 +119,7 @@ func processERC1155TransferSingleEvent(l *bchain.RpcLog) (transfer *bchain.Token
 		return nil, errors.New("ERC1155 log Data value is not a number")
 	}
 	return &bchain.TokenTransfer{
-		Type:             bchain.MultiToken,
+		Standard:         bchain.MultiToken,
 		Contract:         EIP55AddressFromAddress(l.Address),
 		From:             EIP55AddressFromAddress(from),
 		To:               EIP55AddressFromAddress(to),
@@ -190,7 +190,7 @@ func processERC1155TransferBatchEvent(l *bchain.RpcLog) (transfer *bchain.TokenT
 		idValues[i] = bchain.MultiTokenValue{Id: id, Value: value}
 	}
 	return &bchain.TokenTransfer{
-		Type:             bchain.MultiToken,
+		Standard:         bchain.MultiToken,
 		Contract:         EIP55AddressFromAddress(l.Address),
 		From:             EIP55AddressFromAddress(from),
 		To:               EIP55AddressFromAddress(to),
@@ -239,7 +239,7 @@ func contractGetTransfersFromTx(tx *bchain.RpcTransaction) (bchain.TokenTransfer
 			return nil, errors.New("Data is not a number")
 		}
 		r = append(r, &bchain.TokenTransfer{
-			Type:     bchain.FungibleToken,
+			Standard: bchain.FungibleToken,
 			Contract: EIP55AddressFromAddress(tx.To),
 			From:     EIP55AddressFromAddress(tx.From),
 			To:       EIP55AddressFromAddress(to),
@@ -263,7 +263,7 @@ func contractGetTransfersFromTx(tx *bchain.RpcTransaction) (bchain.TokenTransfer
 			return nil, errors.New("Data is not a number")
 		}
 		r = append(r, &bchain.TokenTransfer{
-			Type:     bchain.NonFungibleToken,
+			Standard: bchain.NonFungibleToken,
 			Contract: EIP55AddressFromAddress(tx.To),
 			From:     EIP55AddressFromAddress(from),
 			To:       EIP55AddressFromAddress(to),
@@ -273,14 +273,20 @@ func contractGetTransfersFromTx(tx *bchain.RpcTransaction) (bchain.TokenTransfer
 	return r, nil
 }
 
-func (b *EthereumRPC) ethCall(data, to string) (string, error) {
+// EthereumTypeRpcCall calls eth_call with given data and to address
+func (b *EthereumRPC) EthereumTypeRpcCall(data, to, from string) (string, error) {
+	args := map[string]interface{}{
+		"data": data,
+		"to":   to,
+	}
+	if from != "" {
+		args["from"] = from
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
 	defer cancel()
 	var r string
-	err := b.RPC.CallContext(ctx, &r, "eth_call", map[string]interface{}{
-		"data": data,
-		"to":   to,
-	}, "latest")
+	err := b.RPC.CallContext(ctx, &r, "eth_call", args, "latest")
 	if err != nil {
 		return "", err
 	}
@@ -289,7 +295,7 @@ func (b *EthereumRPC) ethCall(data, to string) (string, error) {
 
 func (b *EthereumRPC) fetchContractInfo(address string) (*bchain.ContractInfo, error) {
 	var contract bchain.ContractInfo
-	data, err := b.ethCall(contractNameSignature, address)
+	data, err := b.EthereumTypeRpcCall(contractNameSignature, address, "")
 	if err != nil {
 		// ignore the error from the eth_call - since geth v1.9.15 they changed the behavior
 		// and returning error "execution reverted" for some non contract addresses
@@ -300,14 +306,14 @@ func (b *EthereumRPC) fetchContractInfo(address string) (*bchain.ContractInfo, e
 	}
 	name := strings.TrimSpace(parseSimpleStringProperty(data))
 	if name != "" {
-		data, err = b.ethCall(contractSymbolSignature, address)
+		data, err = b.EthereumTypeRpcCall(contractSymbolSignature, address, "")
 		if err != nil {
 			// glog.Warning(errors.Annotatef(err, "Contract SymbolSignature %v", address))
 			return nil, nil
 			// return nil, errors.Annotatef(err, "erc20SymbolSignature %v", address)
 		}
 		symbol := strings.TrimSpace(parseSimpleStringProperty(data))
-		data, _ = b.ethCall(contractDecimalsSignature, address)
+		data, _ = b.EthereumTypeRpcCall(contractDecimalsSignature, address, "")
 		// if err != nil {
 		// 	glog.Warning(errors.Annotatef(err, "Contract DecimalsSignature %v", address))
 		// 	// return nil, errors.Annotatef(err, "erc20DecimalsSignature %v", address)
@@ -337,10 +343,10 @@ func (b *EthereumRPC) GetContractInfo(contractDesc bchain.AddressDescriptor) (*b
 
 // EthereumTypeGetErc20ContractBalance returns balance of ERC20 contract for given address
 func (b *EthereumRPC) EthereumTypeGetErc20ContractBalance(addrDesc, contractDesc bchain.AddressDescriptor) (*big.Int, error) {
-	addr := hexutil.Encode(addrDesc)
+	addr := hexutil.Encode(addrDesc)[2:]
 	contract := hexutil.Encode(contractDesc)
-	req := contractBalanceOfSignature + "0000000000000000000000000000000000000000000000000000000000000000"[len(addr)-2:] + addr[2:]
-	data, err := b.ethCall(req, contract)
+	req := contractBalanceOfSignature + "0000000000000000000000000000000000000000000000000000000000000000"[len(addr):] + addr
+	data, err := b.EthereumTypeRpcCall(req, contract, "")
 	if err != nil {
 		return nil, err
 	}
@@ -351,7 +357,7 @@ func (b *EthereumRPC) EthereumTypeGetErc20ContractBalance(addrDesc, contractDesc
 	return r, nil
 }
 
-// GetContractInfo returns URI of non fungible or multi token defined by token id
+// GetTokenURI returns URI of non fungible or multi token defined by token id
 func (b *EthereumRPC) GetTokenURI(contractDesc bchain.AddressDescriptor, tokenID *big.Int) (string, error) {
 	address := hexutil.Encode(contractDesc)
 	// CryptoKitties do not fully support ERC721 standard, do not have tokenURI method
@@ -364,7 +370,7 @@ func (b *EthereumRPC) GetTokenURI(contractDesc bchain.AddressDescriptor, tokenID
 	}
 	// try ERC721 tokenURI method and  ERC1155 uri method
 	for _, method := range []string{erc721TokenURIMethodSignature, erc1155URIMethodSignature} {
-		data, err := b.ethCall(method+id, address)
+		data, err := b.EthereumTypeRpcCall(method+id, address, "")
 		if err == nil && data != "" {
 			uri := parseSimpleStringProperty(data)
 			// try to sanitize the URI returned from the contract

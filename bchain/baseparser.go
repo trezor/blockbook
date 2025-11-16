@@ -47,10 +47,7 @@ func (p *BaseParser) AmountToBigInt(n common.JSONNumber) (big.Int, error) {
 	var r big.Int
 	s := string(n)
 	i := strings.IndexByte(s, '.')
-	d := p.AmountDecimalPoint
-	if d > len(zeros) {
-		d = len(zeros)
-	}
+	d := min(p.AmountDecimalPoint, len(zeros))
 	if i == -1 {
 		s = s + zeros[:d]
 	} else {

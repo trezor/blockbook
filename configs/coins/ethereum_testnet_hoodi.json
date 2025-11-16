@@ -1,0 +1,71 @@
+{
+    "coin": {
+        "name": "Ethereum Testnet Hoodi",
+        "shortcut": "tHOD",
+        "label": "Ethereum Hoodi",
+        "alias": "ethereum_testnet_hoodi"
+    },
+    "ports": {
+        "backend_rpc": 18006,
+        "backend_message_queue": 0,
+        "backend_p2p": 48306,
+        "backend_http": 18106,
+        "backend_authrpc": 18506,
+        "blockbook_internal": 19006,
+        "blockbook_public": 19106
+    },
+    "ipc": {
+        "rpc_url_template": "ws://127.0.0.1:{{.Ports.BackendRPC}}",
+        "rpc_timeout": 25
+    },
+    "backend": {
+        "package_name": "backend-ethereum-testnet-hoodi",
+        "package_revision": "satoshilabs-1",
+        "system_user": "ethereum",
+        "version": "3.2.1",
+        "binary_url": "https://github.com/erigontech/erigon/releases/download/v3.2.1/erigon_v3.2.1_linux_amd64.tar.gz",
+        "verification_type": "sha256",
+        "verification_source": "8b5444988667721f2b2ef1ab3098139c31f722492992939c110813408c39dc7c",
+        "extract_command": "tar -C backend --strip-components=1 -xf",
+        "exclude_files": [],
+        "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/erigon --chain hoodi --snap.keepblocks --db.size.limit 15TB --db.pagesize 16KB --prune.mode full --externalcl --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/erigon --port {{.Ports.BackendP2P}} --ws --ws.port {{.Ports.BackendRPC}} --http --http.port {{.Ports.BackendRPC}} --http.addr 127.0.0.1 --http.corsdomain \"*\" --http.vhosts \"*\" --http.api \"eth,net,web3,debug,txpool\" --authrpc.port {{.Ports.BackendAuthRpc}} --private.api.addr \"\" --torrent.port {{.Ports.BackendHttp}} --log.dir.path {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --log.dir.prefix {{.Coin.Alias}}'",
+        "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
+        "postinst_script_template": "",
+        "service_type": "simple",
+        "service_additional_params_template": "",
+        "protect_memory": true,
+        "mainnet": false,
+        "server_config_file": "",
+        "client_config_file": "",
+        "platforms": {
+            "arm64": {
+                "binary_url": "https://github.com/erigontech/erigon/releases/download/v3.2.1/erigon_v3.2.1_linux_arm64.tar.gz",
+                "verification_source": "19a91709dc3ddbe947c4f81e70cb1de49044954e21f441e9ea46b3696f21b57f"
+            }
+        }
+    },
+    "blockbook": {
+        "package_name": "blockbook-ethereum-testnet-hoodi",
+        "system_user": "blockbook-ethereum",
+        "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
+        "public_binding_template": ":{{.Ports.BlockbookPublic}}",
+        "explorer_url": "",
+        "additional_params": "",
+        "block_chain": {
+            "parse": true,
+            "mempool_workers": 8,
+            "mempool_sub_workers": 2,
+            "block_addresses_to_keep": 3000,
+            "additional_params": {
+                "consensusNodeVersion": "http://localhost:17506/eth/v1/node/version",
+                "eip1559Fees": true,
+                "mempoolTxTimeoutHours": 12,
+                "queryBackendOnMempoolResync": false
+            }
+        }
+    },
+    "meta": {
+        "package_maintainer": "IT",
+        "package_maintainer_email": "it@satoshilabs.com"
+    }
+}

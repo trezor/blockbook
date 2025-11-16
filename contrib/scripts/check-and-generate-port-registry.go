@@ -1,4 +1,4 @@
-//usr/bin/go run $0 $@ ; exit
+// usr/bin/go run $0 $@ ; exit
 package main
 
 import (
@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math"
 	"os"
 	"path/filepath"
@@ -36,15 +35,19 @@ type Config struct {
 	Coin struct {
 		Name  string `json:"name"`
 		Label string `json:"label"`
+		Alias string `json:"alias"`
 	}
-	Ports map[string]uint16 `json:"ports"`
+	Ports     map[string]uint16 `json:"ports"`
+	Blockbook struct {
+		PackageName string `json:"package_name"`
+	}
 }
 
 func checkPorts() int {
 	ports := make(map[uint16][]string)
 	status := 0
 
-	files, err := ioutil.ReadDir(inputDir)
+	files, err := os.ReadDir(inputDir)
 	if err != nil {
 		panic(err)
 	}
@@ -69,21 +72,22 @@ func checkPorts() int {
 		}
 
 		if _, ok := v.Ports["blockbook_internal"]; !ok {
-			fmt.Printf("%s: missing blockbook_internal port\n", v.Coin.Name)
+			fmt.Printf("%s (%s): missing blockbook_internal port\n", v.Coin.Name, v.Coin.Alias)
 			status = 1
 		}
 		if _, ok := v.Ports["blockbook_public"]; !ok {
-			fmt.Printf("%s: missing blockbook_public port\n", v.Coin.Name)
+			fmt.Printf("%s (%s): missing blockbook_public port\n", v.Coin.Name, v.Coin.Alias)
 			status = 1
 		}
 		if _, ok := v.Ports["backend_rpc"]; !ok {
-			fmt.Printf("%s: missing backend_rpc port\n", v.Coin.Name)
+			fmt.Printf("%s (%s): missing backend_rpc port\n", v.Coin.Name, v.Coin.Alias)
 			status = 1
 		}
 
 		for _, port := range v.Ports {
-			if port > 0 {
-				ports[port] = append(ports[port], v.Coin.Name)
+			// ignore duplicities caused by configs that do not serve blockbook directly (consensus layers)
+			if port > 0 && v.Blockbook.PackageName == "" {
+				ports[port] = append(ports[port], v.Coin.Alias)
 			}
 		}
 	}
@@ -132,7 +136,7 @@ func main() {
 }
 
 func loadPortInfo(dir string) (PortInfoSlice, error) {
-	files, err := ioutil.ReadDir(dir)
+	files, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, err
 	}
@@ -158,26 +162,31 @@ func loadPortInfo(dir string) (PortInfoSlice, error) {
 			return nil, fmt.Errorf("%s: json: %s", path, err)
 		}
 
+		// skip configs that do not have blockbook (consensus layers)
+		if v.Blockbook.PackageName == "" {
+			continue
+		}
 		name := v.Coin.Label
-		if len(name) == 0 {
+		// exceptions when to use Name instead of Label so that the table looks good
+		if len(name) == 0 || strings.Contains(v.Coin.Name, "Ethereum") || strings.Contains(v.Coin.Name, "Archive") {
 			name = v.Coin.Name
 		}
 		item := &PortInfo{CoinName: name, BackendServicePorts: map[string]uint16{}}
-		for k, v := range v.Ports {
-			if v == 0 {
+		for k, p := range v.Ports {
+			if p == 0 {
 				continue
 			}
 
 			switch k {
 			case "blockbook_internal":
-				item.BlockbookInternalPort = v
+				item.BlockbookInternalPort = p
 			case "blockbook_public":
-				item.BlockbookPublicPort = v
+				item.BlockbookPublicPort = p
 			case "backend_rpc":
-				item.BackendRPCPort = v
+				item.BackendRPCPort = p
 			default:
 				if len(k) > 8 && k[:8] == "backend_" {
-					item.BackendServicePorts[k[8:]] = v
+					item.BackendServicePorts[k[8:]] = p
 				}
 			}
 		}
@@ -233,10 +242,10 @@ func writeMarkdown(output string, slice PortInfoSlice) error {
 
 	fmt.Fprintf(&buf, "# Registry of ports\n\n")
 
-	header := []string{"coin", "blockbook internal port", "blockbook public port", "backend rpc port", "backend service ports (zmq)"}
+	header := []string{"coin", "blockbook public", "blockbook internal", "backend rpc", "backend service ports (zmq)"}
 	writeTable(&buf, header, slice)
 
-	fmt.Fprintf(&buf, "\n> NOTE: This document is generated from coin definitions in `configs/coins`.\n")
+	fmt.Fprintf(&buf, "\n> NOTE: This document is generated from coin definitions in `configs/coins` using command `go run contrib/scripts/check-and-generate-port-registry.go -w`.\n")
 
 	out := os.Stdout
 	if output != "stdout" {
@@ -263,11 +272,11 @@ func writeTable(w io.Writer, header []string, slice PortInfoSlice) {
 	for i, item := range slice {
 		row := make([]string, len(header))
 		row[0] = item.CoinName
-		if item.BlockbookInternalPort > 0 {
-			row[1] = fmt.Sprintf("%d", item.BlockbookInternalPort)
-		}
 		if item.BlockbookPublicPort > 0 {
-			row[2] = fmt.Sprintf("%d", item.BlockbookPublicPort)
+			row[1] = fmt.Sprintf("%d", item.BlockbookPublicPort)
+		}
+		if item.BlockbookInternalPort > 0 {
+			row[2] = fmt.Sprintf("%d", item.BlockbookInternalPort)
 		}
 		if item.BackendRPCPort > 0 {
 			row[3] = fmt.Sprintf("%d", item.BackendRPCPort)
@@ -284,6 +293,7 @@ func writeTable(w io.Writer, header []string, slice PortInfoSlice) {
 			svcPorts = append(svcPorts, s)
 		}
 
+		sort.Strings(svcPorts)
 		row[4] = strings.Join(svcPorts, ", ")
 
 		rows[i] = row
@@ -294,7 +304,7 @@ func writeTable(w io.Writer, header []string, slice PortInfoSlice) {
 		padding[column] = len(header[column])
 
 		for _, row := range rows {
-			padding[column] = maxInt(padding[column], len(row[column]))
+			padding[column] = max(padding[column], len(row[column]))
 		}
 	}
 
@@ -310,13 +320,6 @@ func writeTable(w io.Writer, header []string, slice PortInfoSlice) {
 	for _, row := range content {
 		fmt.Fprintf(w, "|%s|\n", strings.Join(row, "|"))
 	}
-}
-
-func maxInt(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }
 
 func paddedRow(row []string, padding []int) []string {

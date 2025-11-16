@@ -7,6 +7,8 @@
 {{end}}
     "coin_name": "{{.Coin.Name}}",
     "coin_shortcut": "{{.Coin.Shortcut}}",
+{{- if .Coin.Network}}
+    "network": "{{.Coin.Network}}",{{end}}
     "coin_label": "{{.Coin.Label}}",
     "rpc_url": "{{template "IPC.RPCURLTemplate" .}}",
     "rpc_user": "{{.IPC.RPCUser}}",

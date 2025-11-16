@@ -11,6 +11,7 @@ stdenv.mkDerivation {
     snappy
     zeromq
     zlib
+    gcc
   ];
   shellHook = ''
     export CGO_LDFLAGS="-L${stdenv.cc.cc.lib}/lib -lrocksdb -lz -lbz2 -lsnappy -llz4 -lm -lstdc++"

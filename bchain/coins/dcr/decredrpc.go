@@ -791,7 +791,7 @@ func (d *DecredRPC) EstimateFee(blocks int) (big.Int, error) {
 	return r, nil
 }
 
-func (d *DecredRPC) SendRawTransaction(tx string) (string, error) {
+func (d *DecredRPC) SendRawTransaction(tx string, disableAlternativeRPC bool) (string, error) {
 	sendRawTxRequest := &GenericCmd{
 		ID:     1,
 		Method: "sendrawtransaction",

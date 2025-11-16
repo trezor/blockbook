@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"math/big"
 	"net/http"
+	"os"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -36,14 +37,16 @@ var (
 )
 
 type websocketChannel struct {
-	id            uint64
-	conn          *websocket.Conn
-	out           chan *WsRes
-	ip            string
-	requestHeader http.Header
-	alive         bool
-	aliveLock     sync.Mutex
-	addrDescs     []string // subscribed address descriptors as strings
+	id                           uint64
+	conn                         *websocket.Conn
+	out                          chan *WsRes
+	ip                           string
+	requestHeader                http.Header
+	alive                        bool
+	aliveLock                    sync.Mutex
+	addrDescs                    []string // subscribed address descriptors as strings
+	getAddressInfoDescriptorsMux sync.Mutex
+	getAddressInfoDescriptors    map[string]struct{}
 }
 
 // WebsocketServer is a handle to websocket server
@@ -68,6 +71,7 @@ type WebsocketServer struct {
 	fiatRatesSubscriptions          map[string]map[*websocketChannel]string
 	fiatRatesTokenSubscriptions     map[*websocketChannel][]string
 	fiatRatesSubscriptionsLock      sync.Mutex
+	allowedRpcCallTo                map[string]struct{}
 }
 
 // NewWebsocketServer creates new websocket interface to blockbook and returns its handle
@@ -82,9 +86,10 @@ func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.
 	}
 	s := &WebsocketServer{
 		upgrader: &websocket.Upgrader{
-			ReadBufferSize:  1024 * 32,
-			WriteBufferSize: 1024 * 32,
-			CheckOrigin:     checkOrigin,
+			ReadBufferSize:    1024 * 32,
+			WriteBufferSize:   1024 * 32,
+			CheckOrigin:       checkOrigin,
+			EnableCompression: true,
 		},
 		db:                          db,
 		txCache:                     txCache,
@@ -102,6 +107,14 @@ func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.
 		fiatRatesSubscriptions:      make(map[string]map[*websocketChannel]string),
 		fiatRatesTokenSubscriptions: make(map[*websocketChannel][]string),
 	}
+	envRpcCall := os.Getenv(strings.ToUpper(is.GetNetwork()) + "_ALLOWED_RPC_CALL_TO")
+	if envRpcCall != "" {
+		s.allowedRpcCallTo = make(map[string]struct{})
+		for _, c := range strings.Split(envRpcCall, ",") {
+			s.allowedRpcCallTo[strings.ToLower(c)] = struct{}{}
+		}
+		glog.Info("Support of rpcCall for these contracts: ", envRpcCall)
+	}
 	return s, nil
 }
 
@@ -111,7 +124,11 @@ func checkOrigin(r *http.Request) bool {
 }
 
 func getIP(r *http.Request) string {
-	ip := r.Header.Get("X-Real-Ip")
+	ip := r.Header.Get("cf-connecting-ip")
+	if ip != "" {
+		return ip
+	}
+	ip = r.Header.Get("X-Real-Ip")
 	if ip != "" {
 		return ip
 	}
@@ -121,12 +138,12 @@ func getIP(r *http.Request) string {
 // ServeHTTP sets up handler of websocket channel
 func (s *WebsocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
-		http.Error(w, upgradeFailed+ErrorMethodNotAllowed.Error(), 503)
+		http.Error(w, upgradeFailed+ErrorMethodNotAllowed.Error(), http.StatusServiceUnavailable)
 		return
 	}
 	conn, err := s.upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		http.Error(w, upgradeFailed+err.Error(), 503)
+		http.Error(w, upgradeFailed+err.Error(), http.StatusServiceUnavailable)
 		return
 	}
 	c := &websocketChannel{
@@ -136,6 +153,9 @@ func (s *WebsocketServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		ip:            getIP(r),
 		requestHeader: r.Header,
 		alive:         true,
+	}
+	if s.is.WsGetAccountInfoLimit > 0 {
+		c.getAddressInfoDescriptors = make(map[string]struct{})
 	}
 	go s.inputLoop(c)
 	go s.outputLoop(c)
@@ -147,11 +167,13 @@ func (s *WebsocketServer) GetHandler() http.Handler {
 	return s
 }
 
-func (s *WebsocketServer) closeChannel(c *websocketChannel) {
+func (s *WebsocketServer) closeChannel(c *websocketChannel) bool {
 	if c.CloseOut() {
 		c.conn.Close()
 		s.onDisconnect(c)
+		return true
 	}
+	return false
 }
 
 func (c *websocketChannel) CloseOut() bool {
@@ -258,6 +280,19 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *WsRe
 	"getAccountInfo": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
 		r, err := unmarshalGetAccountInfoRequest(req.Params)
 		if err == nil {
+			if s.is.WsGetAccountInfoLimit > 0 {
+				c.getAddressInfoDescriptorsMux.Lock()
+				c.getAddressInfoDescriptors[r.Descriptor] = struct{}{}
+				l := len(c.getAddressInfoDescriptors)
+				c.getAddressInfoDescriptorsMux.Unlock()
+				if l > s.is.WsGetAccountInfoLimit {
+					if s.closeChannel(c) {
+						glog.Info("Client ", c.id, " exceeded getAddressInfo limit, ", c.ip)
+						s.is.AddWsLimitExceedingIP(c.ip)
+					}
+					return
+				}
+			}
 			rv, err = s.getAccountInfo(r)
 		}
 		return
@@ -332,21 +367,49 @@ var requestHandlers = map[string]func(*WebsocketServer, *websocketChannel, *WsRe
 		return
 	},
 	"estimateFee": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
-		return s.estimateFee(c, req.Params)
+		return s.estimateFee(req.Params)
+	},
+	"longTermFeeRate": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
+		return s.longTermFeeRate()
 	},
 	"sendTransaction": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
 		r := WsSendTransactionReq{}
 		err = json.Unmarshal(req.Params, &r)
 		if err == nil {
-			rv, err = s.sendTransaction(r.Hex)
+			rv, err = s.sendTransaction(r.Hex, r.DisableAlternativeRPC)
 		}
 		return
 	},
+
 	"getMempoolFilters": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
 		r := WsMempoolFiltersReq{}
 		err = json.Unmarshal(req.Params, &r)
 		if err == nil {
 			rv, err = s.getMempoolFilters(&r)
+		}
+		return
+	},
+	"getBlockFilter": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
+		r := WsBlockFilterReq{}
+		err = json.Unmarshal(req.Params, &r)
+		if err == nil {
+			rv, err = s.getBlockFilter(&r)
+		}
+		return
+	},
+	"getBlockFiltersBatch": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
+		r := WsBlockFiltersBatchReq{}
+		err = json.Unmarshal(req.Params, &r)
+		if err == nil {
+			rv, err = s.getBlockFiltersBatch(&r)
+		}
+		return
+	},
+	"rpcCall": func(s *WebsocketServer, c *websocketChannel, req *WsReq) (rv interface{}, err error) {
+		r := WsRpcCallReq{}
+		err = json.Unmarshal(req.Params, &r)
+		if err == nil {
+			rv, err = s.rpcCall(&r)
 		}
 		return
 	},
@@ -439,7 +502,9 @@ func (s *WebsocketServer) onRequest(c *websocketChannel, req *WsReq) {
 	}()
 	t := time.Now()
 	s.metrics.WebsocketPendingRequests.With((common.Labels{"method": req.Method})).Inc()
-	defer s.metrics.WebsocketReqDuration.With(common.Labels{"method": req.Method}).Observe(float64(time.Since(t)) / 1e3) // in microseconds
+	defer func() {
+		s.metrics.WebsocketReqDuration.With(common.Labels{"method": req.Method}).Observe(float64(time.Since(t)) / 1e3) // in microseconds
+	}()
 	f, ok := requestHandlers[req.Method]
 	if ok {
 		data, err = f(s, c, req)
@@ -537,6 +602,7 @@ func (s *WebsocketServer) getInfo() (*WsInfoRes, error) {
 	return &WsInfoRes{
 		Name:       s.is.Coin,
 		Shortcut:   s.is.CoinShortcut,
+		Network:    s.is.GetNetwork(),
 		Decimals:   s.chainParser.AmountDecimals(),
 		BestHeight: int(height),
 		BestHash:   hash,
@@ -570,7 +636,30 @@ func (s *WebsocketServer) getBlock(id string, page, pageSize int) (interface{}, 
 	return block, nil
 }
 
-func (s *WebsocketServer) estimateFee(c *websocketChannel, params []byte) (interface{}, error) {
+func eip1559FeesToApi(fee *bchain.Eip1559Fee) *api.Eip1559Fee {
+	if fee == nil {
+		return nil
+	}
+	apiFee := api.Eip1559Fee{}
+	apiFee.MaxFeePerGas = (*api.Amount)(fee.MaxFeePerGas)
+	apiFee.MaxPriorityFeePerGas = (*api.Amount)(fee.MaxPriorityFeePerGas)
+	apiFee.MaxWaitTimeEstimate = fee.MaxWaitTimeEstimate
+	apiFee.MinWaitTimeEstimate = fee.MinWaitTimeEstimate
+	return &apiFee
+}
+
+func eip1559FeeRangeToApi(feeRange []*big.Int) []*api.Amount {
+	if feeRange == nil {
+		return nil
+	}
+	apiFeeRange := make([]*api.Amount, len(feeRange))
+	for i := range feeRange {
+		apiFeeRange[i] = (*api.Amount)(feeRange[i])
+	}
+	return apiFeeRange
+}
+
+func (s *WebsocketServer) estimateFee(params []byte) (interface{}, error) {
 	var r WsEstimateFeeReq
 	err := json.Unmarshal(params, &r)
 	if err != nil {
@@ -591,11 +680,32 @@ func (s *WebsocketServer) estimateFee(c *websocketChannel, params []byte) (inter
 		if err != nil {
 			return nil, err
 		}
+		feePerTx := new(big.Int)
+		feePerTx.Mul(&fee, new(big.Int).SetUint64(gas))
+		eip1559, err := s.chain.EthereumTypeGetEip1559Fees()
+		if err != nil {
+			return nil, err
+		}
+		var eip1559Api *api.Eip1559Fees
+		if eip1559 != nil {
+			eip1559Api = &api.Eip1559Fees{}
+			eip1559Api.BaseFeePerGas = (*api.Amount)(eip1559.BaseFeePerGas)
+			eip1559Api.Instant = eip1559FeesToApi(eip1559.Instant)
+			eip1559Api.High = eip1559FeesToApi(eip1559.High)
+			eip1559Api.Medium = eip1559FeesToApi(eip1559.Medium)
+			eip1559Api.Low = eip1559FeesToApi(eip1559.Low)
+			eip1559Api.NetworkCongestion = eip1559.NetworkCongestion
+			eip1559Api.BaseFeeTrend = eip1559.BaseFeeTrend
+			eip1559Api.PriorityFeeTrend = eip1559.PriorityFeeTrend
+			eip1559Api.LatestPriorityFeeRange = eip1559FeeRangeToApi(eip1559.LatestPriorityFeeRange)
+			eip1559Api.HistoricalBaseFeeRange = eip1559FeeRangeToApi(eip1559.HistoricalBaseFeeRange)
+			eip1559Api.HistoricalPriorityFeeRange = eip1559FeeRangeToApi(eip1559.HistoricalPriorityFeeRange)
+		}
 		for i := range r.Blocks {
 			res[i].FeePerUnit = fee.String()
 			res[i].FeeLimit = sg
-			fee.Mul(&fee, new(big.Int).SetUint64(gas))
-			res[i].FeePerTx = fee.String()
+			res[i].FeePerTx = feePerTx.String()
+			res[i].Eip1559 = eip1559Api
 		}
 	} else {
 		conservative := true
@@ -631,8 +741,19 @@ func (s *WebsocketServer) estimateFee(c *websocketChannel, params []byte) (inter
 	return res, nil
 }
 
-func (s *WebsocketServer) sendTransaction(tx string) (res resultSendTransaction, err error) {
-	txid, err := s.chain.SendRawTransaction(tx)
+func (s *WebsocketServer) longTermFeeRate() (res interface{}, err error) {
+	feeRate, err := s.chain.LongTermFeeRate()
+	if err != nil {
+		return nil, err
+	}
+	return WsLongTermFeeRateRes{
+		FeePerUnit: feeRate.FeePerUnit.String(),
+		Blocks:     feeRate.Blocks,
+	}, nil
+}
+
+func (s *WebsocketServer) sendTransaction(tx string, disableAlternativeRPC bool) (res resultSendTransaction, err error) {
+	txid, err := s.chain.SendRawTransaction(tx, disableAlternativeRPC)
 	if err != nil {
 		return res, err
 	}
@@ -640,9 +761,81 @@ func (s *WebsocketServer) sendTransaction(tx string) (res resultSendTransaction,
 	return
 }
 
-func (s *WebsocketServer) getMempoolFilters(r *WsMempoolFiltersReq) (res bchain.MempoolTxidFilterEntries, err error) {
-	res, err = s.mempool.GetTxidFilterEntries(r.ScriptType, r.FromTimestamp)
-	return
+func (s *WebsocketServer) getMempoolFilters(r *WsMempoolFiltersReq) (res interface{}, err error) {
+	type resMempoolFilters struct {
+		ParamP    uint8             `json:"P"`
+		ParamM    uint64            `json:"M"`
+		ZeroedKey bool              `json:"zeroedKey"`
+		Entries   map[string]string `json:"entries"`
+	}
+	filterEntries, err := s.mempool.GetTxidFilterEntries(r.ScriptType, r.FromTimestamp)
+	if err != nil {
+		return nil, err
+	}
+	return resMempoolFilters{
+		ParamP:    s.is.BlockGolombFilterP,
+		ParamM:    bchain.GetGolombParamM(s.is.BlockGolombFilterP),
+		ZeroedKey: filterEntries.UsedZeroedKey,
+		Entries:   filterEntries.Entries,
+	}, nil
+}
+
+func (s *WebsocketServer) getBlockFilter(r *WsBlockFilterReq) (res interface{}, err error) {
+	type resBlockFilter struct {
+		ParamP      uint8  `json:"P"`
+		ParamM      uint64 `json:"M"`
+		ZeroedKey   bool   `json:"zeroedKey"`
+		BlockFilter string `json:"blockFilter"`
+	}
+	if s.is.BlockFilterScripts != r.ScriptType {
+		return nil, errors.Errorf("Unsupported script type %s", r.ScriptType)
+	}
+	blockFilter, err := s.db.GetBlockFilter(r.BlockHash)
+	if err != nil {
+		return nil, err
+	}
+	return resBlockFilter{
+		ParamP:      s.is.BlockGolombFilterP,
+		ParamM:      bchain.GetGolombParamM(s.is.BlockGolombFilterP),
+		ZeroedKey:   s.is.BlockFilterUseZeroedKey,
+		BlockFilter: blockFilter,
+	}, nil
+}
+
+func (s *WebsocketServer) getBlockFiltersBatch(r *WsBlockFiltersBatchReq) (res interface{}, err error) {
+	type resBlockFiltersBatch struct {
+		ParamP            uint8    `json:"P"`
+		ParamM            uint64   `json:"M"`
+		ZeroedKey         bool     `json:"zeroedKey"`
+		BlockFiltersBatch []string `json:"blockFiltersBatch"`
+	}
+	if s.is.BlockFilterScripts != r.ScriptType {
+		return nil, errors.Errorf("Unsupported script type %s", r.ScriptType)
+	}
+	blockFiltersBatch, err := s.api.GetBlockFiltersBatch(r.BlockHash, r.PageSize)
+	if err != nil {
+		return nil, err
+	}
+	return resBlockFiltersBatch{
+		ParamP:            s.is.BlockGolombFilterP,
+		ParamM:            bchain.GetGolombParamM(s.is.BlockGolombFilterP),
+		ZeroedKey:         s.is.BlockFilterUseZeroedKey,
+		BlockFiltersBatch: blockFiltersBatch,
+	}, nil
+}
+
+func (s *WebsocketServer) rpcCall(r *WsRpcCallReq) (*WsRpcCallRes, error) {
+	if s.allowedRpcCallTo != nil {
+		_, ok := s.allowedRpcCallTo[strings.ToLower(r.To)]
+		if !ok {
+			return nil, errors.New("Not supported")
+		}
+	}
+	data, err := s.chain.EthereumTypeRpcCall(r.Data, r.To, r.From)
+	if err != nil {
+		return nil, err
+	}
+	return &WsRpcCallRes{Data: data}, nil
 }
 
 type subscriptionResponse struct {
@@ -708,7 +901,7 @@ func (s *WebsocketServer) unmarshalAddresses(params []byte) ([]string, error) {
 	return rv, nil
 }
 
-// unsubscribe addresses without addressSubscriptionsLock - can be called only from subscribeAddresses and unsubscribeAddresses
+// doUnsubscribeAddresses addresses without addressSubscriptionsLock - can be called only from subscribeAddresses and unsubscribeAddresses
 func (s *WebsocketServer) doUnsubscribeAddresses(c *websocketChannel) {
 	for _, ads := range c.addrDescs {
 		sa, e := s.addressSubscriptions[ads]
@@ -753,7 +946,7 @@ func (s *WebsocketServer) unsubscribeAddresses(c *websocketChannel) (res interfa
 	return &subscriptionResponse{false}, nil
 }
 
-// unsubscribe fiat rates without fiatRatesSubscriptionsLock - can be called only from subscribeFiatRates and unsubscribeFiatRates
+// doUnsubscribeFiatRates fiat rates without fiatRatesSubscriptionsLock - can be called only from subscribeFiatRates and unsubscribeFiatRates
 func (s *WebsocketServer) doUnsubscribeFiatRates(c *websocketChannel) {
 	for fr, sa := range s.fiatRatesSubscriptions {
 		for sc := range sa {

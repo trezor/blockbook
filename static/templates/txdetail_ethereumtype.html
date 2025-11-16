@@ -100,7 +100,7 @@
         {{.FungibleTokenName}} Token Transfers
     </div>
     {{range $tt := $tx.TokenTransfers}}
-    {{if eq $tt.Type $.FungibleTokenName}}
+    {{if eq $tt.Standard $.FungibleTokenName}}
     <div class="row body">
         <div class="col-md-4">
             <div class="row tx-addr">
@@ -128,7 +128,7 @@
         {{.NonFungibleTokenName}} Token Transfers
     </div>
     {{range $tt := $tx.TokenTransfers}}
-    {{if eq $tt.Type $.NonFungibleTokenName}}
+    {{if eq $tt.Standard $.NonFungibleTokenName}}
     <div class="row body">
         <div class="col-md-4">
             <div class="row tx-addr">
@@ -156,7 +156,7 @@
         {{.MultiTokenName}} Token Transfers
     </div>
     {{range $tt := $tx.TokenTransfers}}
-    {{if eq $tt.Type $.MultiTokenName}}
+    {{if eq $tt.Standard $.MultiTokenName}}
     <div class="row body">
         <div class="col-md-4">
             <div class="row tx-addr">

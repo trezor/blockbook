@@ -22,10 +22,10 @@
     "package_name": "backend-pivx",
     "package_revision": "satoshilabs-1",
     "system_user": "pivx",
-    "version": "4.0.0",
-    "binary_url": "https://github.com/PIVX-Project/PIVX/releases/download/v4.0.0/pivx-4.0.0-x86_64-linux-gnu.tar.gz",
+    "version": "5.6.1",
+    "binary_url": "https://github.com/PIVX-Project/PIVX/releases/download/v5.6.1/pivx-5.6.1-x86_64-linux-gnu.tar.gz",
     "verification_type": "sha256",
-    "verification_source": "6cb1f608ec0e106ea6bbb455ec8b85c7cad05ca52ab43011d3db80557816b79e",
+    "verification_source": "6704625c63ff73da8c57f0fbb1dab6f1e4bd8f62c17467e05f52a64012a0ee2f",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
       "bin/pivx-qt"

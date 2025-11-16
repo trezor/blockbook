@@ -1,0 +1,39 @@
+{
+    "coin": {
+        "name": "Polygon Heimdall",
+        "shortcut": "MATIC",
+        "label": "Polygon",
+        "alias": "polygon_heimdall"
+    },
+    "ports": {
+        "backend_rpc": 8071,
+        "backend_p2p": 38371,
+        "backend_http": 8171,
+        "blockbook_internal": 9071,
+        "blockbook_public": 9171
+    },
+    "backend": {
+        "package_name": "backend-polygon-heimdall",
+        "package_revision": "satoshilabs-1",
+        "system_user": "polygon",
+        "version": "0.2.16",
+        "binary_url": "https://github.com/0xPolygon/heimdall-v2/releases/download/v0.2.16/heimdall-v0.2.16-amd64.deb",
+        "verification_type": "sha256",
+        "verification_source": "1682bade3065065a4b660a162e06c843b4a3079af829cec300a05e9577c9389b",
+        "extract_command": "mkdir -p backend && dpkg --fsys-tarfile ${ARCHIVE} | tar -xO ./usr/bin/heimdalld > backend/heimdalld && chmod +x backend/heimdalld && echo",
+        "exclude_files": [],
+        "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/polygon_heimdall_exec.sh 2>&1 >> {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
+        "exec_script": "polygon_heimdall.sh",
+        "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
+        "service_type": "simple",
+        "service_additional_params_template": "",
+        "protect_memory": true,
+        "mainnet": true,
+        "server_config_file": "",
+        "client_config_file": ""
+    },
+    "meta": {
+        "package_maintainer": "IT",
+        "package_maintainer_email": "it@satoshilabs.com"
+    }
+}

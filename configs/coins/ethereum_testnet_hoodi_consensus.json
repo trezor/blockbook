@@ -1,0 +1,52 @@
+{
+    "coin": {
+        "name": "Ethereum Testnet Hoodi",
+        "shortcut": "tHOD",
+        "label": "Ethereum Hoodi",
+        "alias": "ethereum_testnet_hoodi_consensus",
+        "execution_alias": "ethereum_testnet_hoodi"
+    },
+    "ports": {
+        "backend_rpc": 18006,
+        "backend_message_queue": 0,
+        "backend_p2p": 48306,
+        "backend_http": 18106,
+        "backend_authrpc": 18506,
+        "blockbook_internal": 19006,
+        "blockbook_public": 19106
+    },
+    "ipc": {
+        "rpc_url_template": "ws://127.0.0.1:{{.Ports.BackendRPC}}",
+        "rpc_timeout": 25
+    },
+    "backend": {
+        "package_name": "backend-ethereum-testnet-hoodi-consensus",
+        "package_revision": "satoshilabs-1",
+        "system_user": "ethereum",
+        "version": "6.1.2",
+        "binary_url": "https://github.com/OffchainLabs/prysm/releases/download/v6.1.2/beacon-chain-v6.1.2-linux-amd64",
+        "verification_type": "sha256",
+        "verification_source": "45d34c817db22e34ae12ebe733d281db76a349e3be439952f9e1dd50f10bc2b1",
+        "extract_command": "mv ${ARCHIVE} backend/beacon-chain && chmod +x backend/beacon-chain && echo",
+        "exclude_files": [],
+        "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/beacon-chain --hoodi --accept-terms-of-use --execution-endpoint=http://localhost:{{.Ports.BackendAuthRpc}} --grpc-gateway-port=17506 --rpc-port=17507 --monitoring-port=17508 --p2p-tcp-port=13506 --p2p-udp-port=12506 --datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --jwt-secret={{.Env.BackendDataPath}}/ethereum_testnet_hoodi/backend/erigon/jwt.hex --genesis-state={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/genesis.ssz 2>>{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
+        "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
+        "postinst_script_template": "wget https://github.com/eth-clients/holesky/raw/main/metadata/genesis.ssz -O {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/genesis.ssz",
+        "service_type": "simple",
+        "service_additional_params_template": "",
+        "protect_memory": true,
+        "mainnet": false,
+        "server_config_file": "",
+        "client_config_file": "",
+        "platforms": {
+            "arm64": {
+                "binary_url": "https://github.com/OffchainLabs/prysm/releases/download/v6.1.2/beacon-chain-v6.1.2-linux-arm64",
+                "verification_source": "2651f1407bb842e7f03dc00ba58990ee3345865cb5d474a3f76a968db5e57c02"
+            }
+        }
+    },
+    "meta": {
+        "package_maintainer": "IT",
+        "package_maintainer_email": "it@satoshilabs.com"
+    }
+}

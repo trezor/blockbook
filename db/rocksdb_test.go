@@ -5,7 +5,6 @@ package db
 import (
 	"encoding/binary"
 	"encoding/hex"
-	"io/ioutil"
 	"math/big"
 	"os"
 	"reflect"
@@ -15,6 +14,7 @@ import (
 
 	vlq "github.com/bsm/go-vlq"
 	"github.com/juju/errors"
+	"github.com/linxGnu/grocksdb"
 	"github.com/martinboehm/btcutil/chaincfg"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/bchain/coins/btc"
@@ -43,7 +43,7 @@ func bitcoinTestnetParser() *btc.BitcoinParser {
 }
 
 func setupRocksDB(t *testing.T, p bchain.BlockChainParser) *RocksDB {
-	tmp, err := ioutil.TempDir("", "testdb")
+	tmp, err := os.MkdirTemp("", "testdb")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +51,7 @@ func setupRocksDB(t *testing.T, p bchain.BlockChainParser) *RocksDB {
 	if err != nil {
 		t.Fatal(err)
 	}
-	is, err := d.LoadInternalState("coin-unittest")
+	is, err := d.LoadInternalState(&common.Config{CoinName: "coin-unittest"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -547,8 +547,8 @@ func TestRocksDB_Index_BitcoinType(t *testing.T) {
 	}
 	verifyAfterBitcoinTypeBlock1(t, d, false)
 
-	if len(d.is.BlockTimes) != 1 {
-		t.Fatal("Expecting is.BlockTimes 1, got ", len(d.is.BlockTimes))
+	if len(d.is.BlockTimes) != 225494 {
+		t.Fatal("Expecting is.BlockTimes 225494, got ", len(d.is.BlockTimes))
 	}
 
 	// connect 2nd block - use some outputs from the 1st block as the inputs and 1 input uses tx from the same block
@@ -558,8 +558,8 @@ func TestRocksDB_Index_BitcoinType(t *testing.T) {
 	}
 	verifyAfterBitcoinTypeBlock2(t, d)
 
-	if len(d.is.BlockTimes) != 2 {
-		t.Fatal("Expecting is.BlockTimes 1, got ", len(d.is.BlockTimes))
+	if len(d.is.BlockTimes) != 225495 {
+		t.Fatal("Expecting is.BlockTimes 225495, got ", len(d.is.BlockTimes))
 	}
 
 	// get transactions for various addresses / low-high ranges
@@ -667,8 +667,8 @@ func TestRocksDB_Index_BitcoinType(t *testing.T) {
 		}
 	}
 
-	if len(d.is.BlockTimes) != 1 {
-		t.Fatal("Expecting is.BlockTimes 1, got ", len(d.is.BlockTimes))
+	if len(d.is.BlockTimes) != 225494 {
+		t.Fatal("Expecting is.BlockTimes 225494, got ", len(d.is.BlockTimes))
 	}
 
 	// connect block again and verify the state of db
@@ -677,8 +677,8 @@ func TestRocksDB_Index_BitcoinType(t *testing.T) {
 	}
 	verifyAfterBitcoinTypeBlock2(t, d)
 
-	if len(d.is.BlockTimes) != 2 {
-		t.Fatal("Expecting is.BlockTimes 1, got ", len(d.is.BlockTimes))
+	if len(d.is.BlockTimes) != 225495 {
+		t.Fatal("Expecting is.BlockTimes 225495, got ", len(d.is.BlockTimes))
 	}
 
 	// test public methods for address balance and tx addresses
@@ -799,6 +799,46 @@ func Test_BulkConnect_BitcoinType(t *testing.T) {
 
 	if len(d.is.BlockTimes) != 225495 {
 		t.Fatal("Expecting is.BlockTimes 225495, got ", len(d.is.BlockTimes))
+	}
+}
+
+func Test_BlockFilter_GetAndStore(t *testing.T) {
+	d := setupRocksDB(t, &testBitcoinParser{
+		BitcoinParser: bitcoinTestnetParser(),
+	})
+	defer closeAndDestroyRocksDB(t, d)
+
+	blockHash := "0000000000000003d0c9722718f8ee86c2cf394f9cd458edb1c854de2a7b1a91"
+	blockFilter := "042c6340895e413d8a811fa0"
+	blockFilterBytes, _ := hex.DecodeString(blockFilter)
+
+	// Empty at the beginning
+	got, err := d.GetBlockFilter(blockHash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := ""
+	if got != want {
+		t.Fatalf("GetBlockFilter(%s) = %s, want %s", blockHash, got, want)
+	}
+
+	// Store the filter
+	wb := grocksdb.NewWriteBatch()
+	if err := d.storeBlockFilter(wb, blockHash, blockFilterBytes); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.WriteBatch(wb); err != nil {
+		t.Fatal(err)
+	}
+
+	// Get the filter
+	got, err = d.GetBlockFilter(blockHash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want = blockFilter
+	if got != want {
+		t.Fatalf("GetBlockFilter(%s) = %s, want %s", blockHash, got, want)
 	}
 }
 

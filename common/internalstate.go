@@ -2,6 +2,7 @@ package common
 
 import (
 	"encoding/json"
+	"slices"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -23,75 +24,85 @@ var inShutdown int32
 
 // InternalStateColumn contains the data of a db column
 type InternalStateColumn struct {
-	Name       string    `json:"name"`
-	Version    uint32    `json:"version"`
-	Rows       int64     `json:"rows"`
-	KeyBytes   int64     `json:"keyBytes"`
-	ValueBytes int64     `json:"valueBytes"`
-	Updated    time.Time `json:"updated"`
+	Name       string    `json:"name" ts_doc:"Name of the database column."`
+	Version    uint32    `json:"version" ts_doc:"Version or schema version of the column."`
+	Rows       int64     `json:"rows" ts_doc:"Number of rows stored in this column."`
+	KeyBytes   int64     `json:"keyBytes" ts_doc:"Total size (in bytes) of keys stored in this column."`
+	ValueBytes int64     `json:"valueBytes" ts_doc:"Total size (in bytes) of values stored in this column."`
+	Updated    time.Time `json:"updated" ts_doc:"Timestamp of the last update to this column."`
 }
 
 // BackendInfo is used to get information about blockchain
 type BackendInfo struct {
-	BackendError     string      `json:"error,omitempty"`
-	Chain            string      `json:"chain,omitempty"`
-	Blocks           int         `json:"blocks,omitempty"`
-	Headers          int         `json:"headers,omitempty"`
-	BestBlockHash    string      `json:"bestBlockHash,omitempty"`
-	Difficulty       string      `json:"difficulty,omitempty"`
-	SizeOnDisk       int64       `json:"sizeOnDisk,omitempty"`
-	Version          string      `json:"version,omitempty"`
-	Subversion       string      `json:"subversion,omitempty"`
-	ProtocolVersion  string      `json:"protocolVersion,omitempty"`
-	Timeoffset       float64     `json:"timeOffset,omitempty"`
-	Warnings         string      `json:"warnings,omitempty"`
-	ConsensusVersion string      `json:"consensus_version,omitempty"`
-	Consensus        interface{} `json:"consensus,omitempty"`
+	BackendError     string      `json:"error,omitempty" ts_doc:"Error message if something went wrong in the backend."`
+	Chain            string      `json:"chain,omitempty" ts_doc:"Name of the chain - e.g. 'main'."`
+	Blocks           int         `json:"blocks,omitempty" ts_doc:"Number of fully verified blocks in the chain."`
+	Headers          int         `json:"headers,omitempty" ts_doc:"Number of block headers in the chain."`
+	BestBlockHash    string      `json:"bestBlockHash,omitempty" ts_doc:"Hash of the best block in hex."`
+	Difficulty       string      `json:"difficulty,omitempty" ts_doc:"Current difficulty of the network."`
+	SizeOnDisk       int64       `json:"sizeOnDisk,omitempty" ts_doc:"Size of the blockchain data on disk in bytes."`
+	Version          string      `json:"version,omitempty" ts_doc:"Version of the blockchain backend - e.g. '280000'."`
+	Subversion       string      `json:"subversion,omitempty" ts_doc:"Subversion of the blockchain backend - e.g. '/Satoshi:28.0.0/'."`
+	ProtocolVersion  string      `json:"protocolVersion,omitempty" ts_doc:"Protocol version of the blockchain backend - e.g. '70016'."`
+	Timeoffset       float64     `json:"timeOffset,omitempty" ts_doc:"Time offset (in seconds) reported by the backend."`
+	Warnings         string      `json:"warnings,omitempty" ts_doc:"Any warnings given by the backend regarding the chain state."`
+	ConsensusVersion string      `json:"consensus_version,omitempty" ts_doc:"Version or details of the consensus protocol in use."`
+	Consensus        interface{} `json:"consensus,omitempty" ts_doc:"Additional chain-specific consensus data."`
 }
 
 // InternalState contains the data of the internal state
 type InternalState struct {
-	mux sync.Mutex
+	mux sync.Mutex `ts_doc:"Mutex for synchronized access to the internal state."`
 
-	Coin         string `json:"coin"`
-	CoinShortcut string `json:"coinShortcut"`
-	CoinLabel    string `json:"coinLabel"`
-	Host         string `json:"host"`
+	Coin         string `json:"coin" ts_doc:"Coin name (e.g. 'Bitcoin')."`
+	CoinShortcut string `json:"coinShortcut" ts_doc:"Short code for the coin (e.g. 'BTC')."`
+	CoinLabel    string `json:"coinLabel" ts_doc:"Human-readable label for the coin (e.g. 'Bitcoin main')."`
+	Host         string `json:"host" ts_doc:"Hostname of the node or backend."`
+	Network      string `json:"network,omitempty" ts_doc:"Network name if different from CoinShortcut (e.g. 'testnet')."`
 
-	DbState       uint32 `json:"dbState"`
-	ExtendedIndex bool   `json:"extendedIndex"`
+	DbState       uint32 `json:"dbState" ts_doc:"State of the database (closed=0, open=1, inconsistent=2)."`
+	ExtendedIndex bool   `json:"extendedIndex" ts_doc:"Indicates if an extended indexing strategy is used."`
 
-	LastStore time.Time `json:"lastStore"`
+	LastStore time.Time `json:"lastStore" ts_doc:"Time when the internal state was last stored/persisted."`
 
 	// true if application is with flag --sync
-	SyncMode bool `json:"syncMode"`
+	SyncMode bool `json:"syncMode" ts_doc:"Flag indicating if the node is in sync mode."`
 
-	InitialSync    bool      `json:"initialSync"`
-	IsSynchronized bool      `json:"isSynchronized"`
-	BestHeight     uint32    `json:"bestHeight"`
-	StartSync      time.Time `json:"-"`
-	LastSync       time.Time `json:"lastSync"`
-	BlockTimes     []uint32  `json:"-"`
-	AvgBlockPeriod uint32    `json:"-"`
+	InitialSync    bool      `json:"initialSync" ts_doc:"If true, the system is in the initial sync phase."`
+	IsSynchronized bool      `json:"isSynchronized" ts_doc:"If true, the main index is fully synced to BestHeight."`
+	BestHeight     uint32    `json:"bestHeight" ts_doc:"Current best block height known to the indexer."`
+	StartSync      time.Time `json:"-" ts_doc:"Timestamp when sync started (not exposed via JSON)."`
+	LastSync       time.Time `json:"lastSync" ts_doc:"Timestamp of the last successful sync."`
+	BlockTimes     []uint32  `json:"-" ts_doc:"List of block timestamps (per height) for calculating historical stats (not exposed via JSON)."`
+	AvgBlockPeriod uint32    `json:"-" ts_doc:"Average time (in seconds) per block for the last 100 blocks (not exposed via JSON)."`
 
-	IsMempoolSynchronized bool      `json:"isMempoolSynchronized"`
-	MempoolSize           int       `json:"mempoolSize"`
-	LastMempoolSync       time.Time `json:"lastMempoolSync"`
+	IsMempoolSynchronized bool      `json:"isMempoolSynchronized" ts_doc:"If true, mempool data is in sync."`
+	MempoolSize           int       `json:"mempoolSize" ts_doc:"Number of transactions in the current mempool."`
+	LastMempoolSync       time.Time `json:"lastMempoolSync" ts_doc:"Timestamp of the last mempool sync."`
 
-	DbColumns []InternalStateColumn `json:"dbColumns"`
+	DbColumns []InternalStateColumn `json:"dbColumns" ts_doc:"List of database column statistics."`
 
-	HasFiatRates                 bool      `json:"-"`
-	HasTokenFiatRates            bool      `json:"-"`
-	HistoricalFiatRatesTime      time.Time `json:"historicalFiatRatesTime"`
-	HistoricalTokenFiatRatesTime time.Time `json:"historicalTokenFiatRatesTime"`
+	HasFiatRates                 bool      `json:"-" ts_doc:"True if fiat rates are supported (not exposed via JSON)."`
+	HasTokenFiatRates            bool      `json:"-" ts_doc:"True if token fiat rates are supported (not exposed via JSON)."`
+	HistoricalFiatRatesTime      time.Time `json:"historicalFiatRatesTime" ts_doc:"Timestamp of the last historical fiat rates update."`
+	HistoricalTokenFiatRatesTime time.Time `json:"historicalTokenFiatRatesTime" ts_doc:"Timestamp of the last historical token fiat rates update."`
 
-	EnableSubNewTx bool `json:"-"`
+	EnableSubNewTx bool `json:"-" ts_doc:"Internal flag controlling subscription to new transactions (not exposed)."`
 
-	BackendInfo BackendInfo `json:"-"`
+	BackendInfo BackendInfo `json:"-" ts_doc:"Information about the connected blockchain backend (not exposed in JSON)."`
 
 	// database migrations
-	UtxoChecked            bool `json:"utxoChecked"`
-	SortedAddressContracts bool `json:"sortedAddressContracts"`
+	UtxoChecked            bool `json:"utxoChecked" ts_doc:"Indicates if UTXO consistency checks have been performed."`
+	SortedAddressContracts bool `json:"sortedAddressContracts" ts_doc:"Indicates if address/contract sorting has been completed."`
+
+	// golomb filter settings
+	BlockGolombFilterP      uint8  `json:"block_golomb_filter_p" ts_doc:"Parameter P for building Golomb-Rice filters for blocks."`
+	BlockFilterScripts      string `json:"block_filter_scripts" ts_doc:"Scripts included in block filters (e.g., 'p2pkh,p2sh')."`
+	BlockFilterUseZeroedKey bool   `json:"block_filter_use_zeroed_key" ts_doc:"If true, uses a zeroed key for building block filters."`
+
+	// allowed number of fetched accounts over websocket
+	WsGetAccountInfoLimit int            `json:"-" ts_doc:"Limit of how many getAccountInfo calls can be made via WS (not exposed)."`
+	WsLimitExceedingIPs   map[string]int `json:"-" ts_doc:"Tracks IP addresses exceeding the WS limit (not exposed)."`
 }
 
 // StartedSync signals start of synchronization
@@ -192,7 +203,7 @@ func (is *InternalState) GetDBColumnStatValues(c int) (int64, int64, int64) {
 func (is *InternalState) GetAllDBColumnStats() []InternalStateColumn {
 	is.mux.Lock()
 	defer is.mux.Unlock()
-	return append(is.DbColumns[:0:0], is.DbColumns...)
+	return slices.Clone(is.DbColumns)
 }
 
 // DBSizeTotal sums the computed sizes of all columns
@@ -230,17 +241,29 @@ func (is *InternalState) GetLastBlockTime() uint32 {
 func (is *InternalState) SetBlockTimes(blockTimes []uint32) uint32 {
 	is.mux.Lock()
 	defer is.mux.Unlock()
-	is.BlockTimes = blockTimes
+	if len(is.BlockTimes) < len(blockTimes) {
+		// no new block was set
+		is.BlockTimes = blockTimes
+	} else {
+		copy(is.BlockTimes, blockTimes)
+	}
 	is.computeAvgBlockPeriod()
 	glog.Info("set ", len(is.BlockTimes), " block times, average block period ", is.AvgBlockPeriod, "s")
 	return is.AvgBlockPeriod
 }
 
-// AppendBlockTime appends block time to BlockTimes, returns AvgBlockPeriod
-func (is *InternalState) AppendBlockTime(time uint32) uint32 {
+// SetBlockTime sets block time to BlockTimes, allocating the slice as necessary, returns AvgBlockPeriod
+func (is *InternalState) SetBlockTime(height uint32, time uint32) uint32 {
 	is.mux.Lock()
 	defer is.mux.Unlock()
-	is.BlockTimes = append(is.BlockTimes, time)
+	if int(height) >= len(is.BlockTimes) {
+		extend := int(height) - len(is.BlockTimes) + 1
+		for i := 0; i < extend; i++ {
+			is.BlockTimes = append(is.BlockTimes, time)
+		}
+	} else {
+		is.BlockTimes[height] = time
+	}
 	is.computeAvgBlockPeriod()
 	return is.AvgBlockPeriod
 }
@@ -296,6 +319,15 @@ func (is *InternalState) computeAvgBlockPeriod() {
 	is.AvgBlockPeriod = (is.BlockTimes[last] - is.BlockTimes[first]) / avgBlockPeriodSample
 }
 
+// GetNetwork returns network. If not set returns the same value as CoinShortcut
+func (is *InternalState) GetNetwork() string {
+	network := is.Network
+	if network == "" {
+		return is.CoinShortcut
+	}
+	return network
+}
+
 // SetBackendInfo sets new BackendInfo
 func (is *InternalState) SetBackendInfo(bi *BackendInfo) {
 	is.mux.Lock()
@@ -335,4 +367,16 @@ func SetInShutdown() {
 // IsInShutdown returns true if in application shutdown state
 func IsInShutdown() bool {
 	return atomic.LoadInt32(&inShutdown) != 0
+}
+
+func (is *InternalState) AddWsLimitExceedingIP(ip string) {
+	is.mux.Lock()
+	defer is.mux.Unlock()
+	is.WsLimitExceedingIPs[ip] = is.WsLimitExceedingIPs[ip] + 1
+}
+
+func (is *InternalState) ResetWsLimitExceedingIPs() {
+	is.mux.Lock()
+	defer is.mux.Unlock()
+	is.WsLimitExceedingIPs = make(map[string]int)
 }

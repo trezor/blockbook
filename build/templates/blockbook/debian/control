@@ -8,6 +8,6 @@ Standards-Version: 3.9.5
 
 Package: {{.Blockbook.PackageName}}
 Architecture: {{.Env.Architecture}}
-Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc, {{.Backend.PackageName}}
+Depends: ${shlibs:Depends}, ${misc:Depends}, coreutils, passwd, findutils, psmisc
 Description: Satoshilabs blockbook server ({{.Coin.Name}})
 {{end}}

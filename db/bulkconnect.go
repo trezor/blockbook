@@ -27,8 +27,9 @@ type BulkConnect struct {
 	bulkAddressesCount int
 	ethBlockTxs        []ethBlockTx
 	txAddressesMap     map[string]*TxAddresses
+	blockFilters       map[string][]byte
 	balances           map[string]*AddrBalance
-	addressContracts   map[string]*AddrContracts
+	addressContracts   map[string]*unpackedAddrContracts
 	height             uint32
 }
 
@@ -40,6 +41,7 @@ const (
 	partialStoreBalances      = maxBulkBalances / 10
 	maxBulkAddrContracts      = 1200000
 	partialStoreAddrContracts = maxBulkAddrContracts / 10
+	maxBlockFilters           = 1000
 )
 
 // InitBulkConnect initializes bulk connect and switches DB to inconsistent state
@@ -49,7 +51,8 @@ func (d *RocksDB) InitBulkConnect() (*BulkConnect, error) {
 		chainType:        d.chainParser.GetChainType(),
 		txAddressesMap:   make(map[string]*TxAddresses),
 		balances:         make(map[string]*AddrBalance),
-		addressContracts: make(map[string]*AddrContracts),
+		addressContracts: make(map[string]*unpackedAddrContracts),
+		blockFilters:     make(map[string][]byte),
 	}
 	if err := d.SetInconsistentState(true); err != nil {
 		return nil, err
@@ -170,9 +173,26 @@ func (b *BulkConnect) storeBulkAddresses(wb *grocksdb.WriteBatch) error {
 	return nil
 }
 
+func (b *BulkConnect) storeBulkBlockFilters(wb *grocksdb.WriteBatch) error {
+	for blockHash, blockFilter := range b.blockFilters {
+		if err := b.d.storeBlockFilter(wb, blockHash, blockFilter); err != nil {
+			return err
+		}
+	}
+	b.blockFilters = make(map[string][]byte)
+	return nil
+}
+
 func (b *BulkConnect) connectBlockBitcoinType(block *bchain.Block, storeBlockTxs bool) error {
 	addresses := make(addressesMap)
-	if err := b.d.processAddressesBitcoinType(block, addresses, b.txAddressesMap, b.balances); err != nil {
+	gf, err := bchain.NewGolombFilter(b.d.is.BlockGolombFilterP, b.d.is.BlockFilterScripts, block.BlockHeader.Hash, b.d.is.BlockFilterUseZeroedKey)
+	if err != nil {
+		glog.Error("connectBlockBitcoinType golomb filter error ", err)
+		gf = nil
+	} else if gf != nil && !gf.Enabled {
+		gf = nil
+	}
+	if err := b.d.processAddressesBitcoinType(block, addresses, b.txAddressesMap, b.balances, gf); err != nil {
 		return err
 	}
 	var storeAddressesChan, storeBalancesChan chan error
@@ -199,8 +219,11 @@ func (b *BulkConnect) connectBlockBitcoinType(block *bchain.Block, storeBlockTxs
 		addresses: addresses,
 	})
 	b.bulkAddressesCount += len(addresses)
+	if gf != nil {
+		b.blockFilters[block.BlockHeader.Hash] = gf.Compute()
+	}
 	// open WriteBatch only if going to write
-	if sa || b.bulkAddressesCount > maxBulkAddresses || storeBlockTxs {
+	if sa || b.bulkAddressesCount > maxBulkAddresses || storeBlockTxs || len(b.blockFilters) > maxBlockFilters {
 		start := time.Now()
 		wb := grocksdb.NewWriteBatch()
 		defer wb.Destroy()
@@ -212,6 +235,11 @@ func (b *BulkConnect) connectBlockBitcoinType(block *bchain.Block, storeBlockTxs
 		}
 		if storeBlockTxs {
 			if err := b.d.storeAndCleanupBlockTxs(wb, block); err != nil {
+				return err
+			}
+		}
+		if len(b.blockFilters) > maxBlockFilters {
+			if err := b.storeBulkBlockFilters(wb); err != nil {
 				return err
 			}
 		}
@@ -236,12 +264,12 @@ func (b *BulkConnect) connectBlockBitcoinType(block *bchain.Block, storeBlockTxs
 }
 
 func (b *BulkConnect) storeAddressContracts(wb *grocksdb.WriteBatch, all bool) (int, error) {
-	var ac map[string]*AddrContracts
+	var ac map[string]*unpackedAddrContracts
 	if all {
 		ac = b.addressContracts
-		b.addressContracts = make(map[string]*AddrContracts)
+		b.addressContracts = make(map[string]*unpackedAddrContracts)
 	} else {
-		ac = make(map[string]*AddrContracts)
+		ac = make(map[string]*unpackedAddrContracts)
 		// store some random address contracts
 		for k, a := range b.addressContracts {
 			ac[k] = a
@@ -251,7 +279,7 @@ func (b *BulkConnect) storeAddressContracts(wb *grocksdb.WriteBatch, all bool) (
 			}
 		}
 	}
-	if err := b.d.storeAddressContracts(wb, ac); err != nil {
+	if err := b.d.storeUnpackedAddressContracts(wb, ac); err != nil {
 		return 0, err
 	}
 	return len(ac), nil
@@ -380,8 +408,15 @@ func (b *BulkConnect) Close() error {
 	}
 	wb := grocksdb.NewWriteBatch()
 	defer wb.Destroy()
+	if err := b.d.storeInternalDataEthereumType(wb, b.ethBlockTxs); err != nil {
+		return err
+	}
+	b.ethBlockTxs = b.ethBlockTxs[:0]
 	bac := b.bulkAddressesCount
 	if err := b.storeBulkAddresses(wb); err != nil {
+		return err
+	}
+	if err := b.storeBulkBlockFilters(wb); err != nil {
 		return err
 	}
 	if err := b.d.WriteBatch(wb); err != nil {
@@ -403,19 +438,18 @@ func (b *BulkConnect) Close() error {
 			return err
 		}
 	}
-	bt, err := b.d.loadBlockTimes()
-	if err != nil {
-		return err
-	}
-	avg := b.d.is.SetBlockTimes(bt)
-	if b.d.metrics != nil {
-		b.d.metrics.AvgBlockPeriod.Set(float64(avg))
-	}
-
 	if err := b.d.SetInconsistentState(false); err != nil {
 		return err
 	}
 	glog.Info("rocksdb: bulk connect closed, db set to open state")
+
+	// set block times asynchronously (if not in unit test), it slows server startup for chains with large number of blocks
+	if b.d.is.Coin == "coin-unittest" {
+		b.d.setBlockTimes()
+	} else {
+		go b.d.setBlockTimes()
+	}
+
 	b.d = nil
 	return nil
 }

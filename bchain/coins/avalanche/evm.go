@@ -5,32 +5,32 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/ava-labs/coreth/core/types"
-	"github.com/ava-labs/coreth/ethclient"
-	"github.com/ava-labs/coreth/interfaces"
-	"github.com/ava-labs/coreth/rpc"
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/trezor/blockbook/bchain"
 )
 
 // AvalancheClient wraps a client to implement the EVMClient interface
 type AvalancheClient struct {
-	ethclient.Client
+	*ethclient.Client
+	*AvalancheRPCClient
 }
 
 // HeaderByNumber returns a block header that implements the EVMHeader interface
 func (c *AvalancheClient) HeaderByNumber(ctx context.Context, number *big.Int) (bchain.EVMHeader, error) {
-	h, err := c.Client.HeaderByNumber(ctx, number)
-	if err != nil {
-		return nil, err
+	var head *Header
+	err := c.AvalancheRPCClient.CallContext(ctx, &head, "eth_getBlockByNumber", bchain.ToBlockNumArg(number), false)
+	if err == nil && head == nil {
+		err = ethereum.NotFound
 	}
-
-	return &AvalancheHeader{Header: h}, nil
+	return &AvalancheHeader{Header: head}, err
 }
 
 // EstimateGas returns the current estimated gas cost for executing a transaction
 func (c *AvalancheClient) EstimateGas(ctx context.Context, msg interface{}) (uint64, error) {
-	return c.Client.EstimateGas(ctx, msg.(interfaces.CallMsg))
+	return c.Client.EstimateGas(ctx, msg.(ethereum.CallMsg))
 }
 
 // BalanceAt returns the balance for the given account at a specific block, or latest known block if no block number is provided
@@ -72,7 +72,7 @@ func (c *AvalancheRPCClient) CallContext(ctx context.Context, result interface{}
 
 // AvalancheHeader wraps a block header to implement the EVMHeader interface
 type AvalancheHeader struct {
-	*types.Header
+	*Header
 }
 
 // Hash returns the block hash as a hex string
@@ -102,7 +102,7 @@ type AvalancheClientSubscription struct {
 
 // AvalancheNewBlock wraps a block header channel to implement the EVMNewBlockSubscriber interface
 type AvalancheNewBlock struct {
-	channel chan *types.Header
+	channel chan *Header
 }
 
 // Channel returns the underlying channel as an empty interface

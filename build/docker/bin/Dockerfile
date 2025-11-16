@@ -1,5 +1,5 @@
 # initialize from the image defined by BASE_IMAGE
-ARG BASE_IMAGE
+ARG BASE_IMAGE=debian:12
 FROM $BASE_IMAGE
 ARG DEBIAN_FRONTEND=noninteractive
 ARG PORTABLE_ROCKSDB
@@ -11,8 +11,8 @@ RUN apt-get update && \
                        libzstd-dev liblz4-dev graphviz && \
     apt-get clean
 ARG GOLANG_VERSION
-ENV GOLANG_VERSION=go1.19.2
-ENV ROCKSDB_VERSION=v7.7.2
+ENV GOLANG_VERSION=go1.23.7
+ENV ROCKSDB_VERSION=v9.10.0
 ENV GOPATH=/go
 ENV PATH=$PATH:$GOPATH/bin
 ENV CGO_CFLAGS="-I/opt/rocksdb/include"
@@ -39,7 +39,7 @@ RUN echo -n "GOPATH: " && echo $GOPATH
 
 # install rocksdb
 RUN cd /opt && git clone -b $ROCKSDB_VERSION --depth 1 https://github.com/facebook/rocksdb.git
-RUN cd /opt/rocksdb && CFLAGS=-fPIC CXXFLAGS=-fPIC PORTABLE=$PORTABLE_ROCKSDB make -j 4 release
+RUN cd /opt/rocksdb && CFLAGS=-fPIC CXXFLAGS=-fPIC PORTABLE=$PORTABLE_ROCKSDB DISABLE_WARNING_AS_ERROR=1 make -j 4 release
 RUN strip /opt/rocksdb/ldb /opt/rocksdb/sst_dump && \
     cp /opt/rocksdb/ldb /opt/rocksdb/sst_dump /build
 

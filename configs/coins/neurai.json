@@ -6,10 +6,10 @@
     "alias": "neurai"
   },
   "ports": {
-    "backend_rpc": 8069,
-    "backend_message_queue": 38369,
-    "blockbook_internal": 9069,
-    "blockbook_public" : 9169
+    "backend_rpc": 8068,
+    "backend_message_queue": 38368,
+    "blockbook_internal": 9068,
+    "blockbook_public" : 9168
   },
   "ipc": {
     "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
@@ -19,13 +19,13 @@
     "message_queue_binding_template": "tcp://127.0.0.1:{{.Ports.BackendMessageQueue}}"
   },
   "backend": {
-    "package_name": "backend-neurai-hw",
+    "package_name": "backend-neurai",
     "package_revision": "neurai-dev",
-    "system_user": "neurai-hw",
-    "version": "1.0.4.0",
-    "binary_url": "https://github.com/NeuraiProject/Neurai/releases/download/1.0.4/neurai-1.0.4.0.WITH.NEW.DERIVATION.-x86_64-linux-gnu.tar.gz",
+    "system_user": "neurai",
+    "version": "1.0.5.0",
+    "binary_url": "https://github.com/NeuraiProject/Neurai/releases/download/1.0.5/neurai-1.0.5.0.SLIP44-0.-x86_64-linux-gnu.tar.gz",
     "verification_type": "sha256",
-    "verification_source": "ea2577c3038e740e264b7df1daf43195fee29b2baacb1ec865ee37a925dd60fb",
+    "verification_source": "843d88d36cfcf10464eb39f27a512190d4ef1c09f9ab31d83036bb086f773049",
     "extract_command": "tar -C backend --strip 1 -xf",
     "exclude_files": [
       "neurai-qt"
@@ -44,8 +44,8 @@
     }
   },
   "blockbook": {
-    "package_name": "blockbook-neurai-hw",
-    "system_user": "blockbook-neurai-hw",
+    "package_name": "blockbook-neurai",
+    "system_user": "blockbook-neurai",
     "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
     "public_binding_template": ":{{.Ports.BlockbookPublic}}",
     "explorer_url": "",
@@ -56,7 +56,7 @@
       "mempool_sub_workers": 2,
       "block_addresses_to_keep": 300,
       "xpub_magic": 76067358,
-      "slip44": 1900,
+      "slip44": 0,
       "additional_params": {}
     }
   },

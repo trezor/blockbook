@@ -16,9 +16,9 @@ func TestMempoolBitcoinType_computeGolombFilter_taproot(t *testing.T) {
 	randomScript := hexToBytes("a914ff074800343a81ada8fe86c2d5d5a0e55b93dd7a87")
 	m := &MempoolBitcoinType{
 		golombFilterP: 20,
-		golombFilterM: uint64(1 << 20),
-		filterScripts: filterScriptsTaproot,
+		filterScripts: "taproot",
 	}
+	golombFilterM := GetGolombParamM(m.golombFilterP)
 	tests := []struct {
 		name string
 		mtx  MempoolTx
@@ -194,13 +194,13 @@ func TestMempoolBitcoinType_computeGolombFilter_taproot(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := m.computeGolombFilter(&tt.mtx)
+			got := m.computeGolombFilter(&tt.mtx, nil)
 			if got != tt.want {
 				t.Errorf("MempoolBitcoinType.computeGolombFilter() = %v, want %v", got, tt.want)
 			}
 			if got != "" {
 				// build the filter from computed value
-				filter, err := gcs.FromNBytes(m.golombFilterP, m.golombFilterM, hexToBytes(got))
+				filter, err := gcs.FromNBytes(m.golombFilterP, golombFilterM, hexToBytes(got))
 				if err != nil {
 					t.Errorf("gcs.BuildGCSFilter() unexpected error %v", err)
 				}
@@ -211,8 +211,8 @@ func TestMempoolBitcoinType_computeGolombFilter_taproot(t *testing.T) {
 					if err != nil {
 						t.Errorf("filter.Match vin[%d] unexpected error %v", i, err)
 					}
-					if match != isTaproot(tt.mtx.Vin[i].AddrDesc) {
-						t.Errorf("filter.Match vin[%d] got %v, want %v", i, match, isTaproot(tt.mtx.Vin[i].AddrDesc))
+					if match != tt.mtx.Vin[i].AddrDesc.IsTaproot() {
+						t.Errorf("filter.Match vin[%d] got %v, want %v", i, match, tt.mtx.Vin[i].AddrDesc.IsTaproot())
 					}
 				}
 				// check that the vout scripts match the filter
@@ -222,8 +222,8 @@ func TestMempoolBitcoinType_computeGolombFilter_taproot(t *testing.T) {
 					if err != nil {
 						t.Errorf("filter.Match vout[%d] unexpected error %v", i, err)
 					}
-					if match != isTaproot(s) {
-						t.Errorf("filter.Match vout[%d] got %v, want %v", i, match, isTaproot(s))
+					if match != AddressDescriptor(s).IsTaproot() {
+						t.Errorf("filter.Match vout[%d] got %v, want %v", i, match, AddressDescriptor(s).IsTaproot())
 					}
 				}
 				// check that a random script does not match the filter
@@ -234,6 +234,118 @@ func TestMempoolBitcoinType_computeGolombFilter_taproot(t *testing.T) {
 				if match != false {
 					t.Errorf("filter.Match randomScript got true, want false")
 				}
+			}
+		})
+	}
+}
+
+func TestMempoolBitcoinType_computeGolombFilter_taproot_noordinals(t *testing.T) {
+	m := &MempoolBitcoinType{
+		golombFilterP: 20,
+		filterScripts: "taproot-noordinals",
+	}
+	tests := []struct {
+		name string
+		mtx  MempoolTx
+		tx   Tx
+		want string
+	}{
+		{
+			name: "taproot-no-ordinals normal taproot tx",
+			mtx: MempoolTx{
+				Txid: "86336c62a63f509a278624e3f400cdd50838d035a44e0af8a7d6d133c04cc2d2",
+				Vin: []MempoolVin{
+					{
+						// bc1pdfc3xk96cm9g7lwlm78hxd2xuevzpqfzjw0shaarwflczs7lh0lstksdn0
+						AddrDesc: hexToBytes("51206a711358bac6ca8f7ddfdf8f733546e658208122939f0bf7a3727f8143dfbbff"),
+					},
+				},
+				Vout: []Vout{
+					{
+						ScriptPubKey: ScriptPubKey{
+							Hex: "51206850b179630df0f7012ae2b111bafa52ebb9b54e1435fc4f98fbe0af6f95076a",
+							Addresses: []string{
+								"bc1pdpgtz7trphc0wqf2u2c3rwh62t4mnd2wzs6lcnucl0s27mu4qa4q4md9ta",
+							},
+						},
+					},
+				},
+			},
+			tx: Tx{
+				Vin: []Vin{
+					{
+						Witness: [][]byte{
+							hexToBytes("737ad2835962e3d147cd74a578f1109e9314eac9d00c9fad304ce2050b78fac21a2d124fd886d1d646cf1de5d5c9754b0415b960b1319526fa25e36ca1f650ce"),
+						},
+					},
+				},
+				Vout: []Vout{
+					{
+						ScriptPubKey: ScriptPubKey{
+							Hex: "51206850b179630df0f7012ae2b111bafa52ebb9b54e1435fc4f98fbe0af6f95076a",
+							Addresses: []string{
+								"bc1pdpgtz7trphc0wqf2u2c3rwh62t4mnd2wzs6lcnucl0s27mu4qa4q4md9ta",
+							},
+						},
+					},
+				},
+			},
+			want: "02899e8c952b40",
+		},
+		{
+			name: "taproot-no-ordinals ordinal tx",
+			mtx: MempoolTx{
+				Txid: "86336c62a63f509a278624e3f400cdd50838d035a44e0af8a7d6d133c04cc2d2",
+				Vin: []MempoolVin{
+					{
+						// bc1pdfc3xk96cm9g7lwlm78hxd2xuevzpqfzjw0shaarwflczs7lh0lstksdn0
+						AddrDesc: hexToBytes("51206a711358bac6ca8f7ddfdf8f733546e658208122939f0bf7a3727f8143dfbbff"),
+					},
+				},
+				Vout: []Vout{
+					{
+						ScriptPubKey: ScriptPubKey{
+							Hex: "51206850b179630df0f7012ae2b111bafa52ebb9b54e1435fc4f98fbe0af6f95076a",
+							Addresses: []string{
+								"bc1pdpgtz7trphc0wqf2u2c3rwh62t4mnd2wzs6lcnucl0s27mu4qa4q4md9ta",
+							},
+						},
+					},
+				},
+			},
+			tx: Tx{
+				// https://mempool.space/tx/c4cae52a6e681b66c85c12feafb42f3617f34977032df1ee139eae07370863ef
+				Txid: "c4cae52a6e681b66c85c12feafb42f3617f34977032df1ee139eae07370863ef",
+				Vin: []Vin{
+					{
+						Txid: "11111c17cbe86aebab146ee039d4e354cb55a9fb226ebdd2e30948630e7710ad",
+						Vout: 0,
+						Witness: [][]byte{
+							hexToBytes("737ad2835962e3d147cd74a578f1109e9314eac9d00c9fad304ce2050b78fac21a2d124fd886d1d646cf1de5d5c9754b0415b960b1319526fa25e36ca1f650ce"),
+							hexToBytes("2029f34532e043fade4471779b4955005db8fa9b64c9e8d0a2dae4a38bbca23328ac0063036f726401010a696d6167652f77656270004d08025249464650020000574542505650384c440200002f57c2950067a026009086939b7785a104699656f4f53388355445b6415d22f8924000fd83bd31d346ca69f8fcfed6d8d18231846083f90f00ffbf203883666c36463c6ba8662257d789935e002192245bd15ac00216b080052cac85b380052c60e1593859f33a7a7abff7ed88feb361db3692341bc83553aef7aec75669ffb1ffd87fec3ff61ffb8ffdc736f20a96a0fba34071d4fdf111c435381df667728f95c4e82b6872d82471bfdc1665107bb80fd46df1686425bcd2e27eb59adc9d17b54b997ee96776a7c37ca2b57b9551bcffeb71d88768765af7384c2e3ba031ca3f19c9ddb0c6ec55223fbfe3731a1e8d7bb010de8532d53293bbbb6145597ee53559a612e6de4f8fc66936ef463eea7498555643ac0dafad6627575f2733b9fb352e411e7d9df8fc80fde75f5f66f5c5381a46b9a697d9c97555c4bf41a4909b9dd071557c3dfe0bfcd6459e06514266c65756ce9f25705230df63d30fef6076b797e1f49d00b41e87b5ccecb1c237f419e4b3ca6876053c14fc979a629459a62f78d735fb078bfa0e7a1fc69ad379447d817e06b3d7f1de820f28534f85fa20469cd6f93ddc6c5f2a94878fc64a98ac336294c99d27d11742268ae1a34cd61f31e2e4aee94b0ff496f55068fa727ace6ad2ec1e6e3f59e6a8bd154f287f652fbfaa05cac067951de1bfacc0e330c3bf6dd2efde4c509646566836eb71986154731daf722a6ff585001e87f9479559a61265d6e330f3682bf87ab2598fc3fca36da778e59cee71584594ef175e6d7d5f70d6deb02c4b371e5063c35669ffb1ffd87ffe0e730068"),
+							hexToBytes("c129f34532e043fade4471779b4955005db8fa9b64c9e8d0a2dae4a38bbca23328"),
+						},
+					},
+				},
+				Vout: []Vout{
+					{
+						ScriptPubKey: ScriptPubKey{
+							Hex: "51206850b179630df0f7012ae2b111bafa52ebb9b54e1435fc4f98fbe0af6f95076a",
+							Addresses: []string{
+								"bc1pdpgtz7trphc0wqf2u2c3rwh62t4mnd2wzs6lcnucl0s27mu4qa4q4md9ta",
+							},
+						},
+					},
+				},
+			},
+			want: "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := m.computeGolombFilter(&tt.mtx, &tt.tx)
+			if got != tt.want {
+				t.Errorf("MempoolBitcoinType.computeGolombFilter() = %v, want %v", got, tt.want)
 			}
 		})
 	}

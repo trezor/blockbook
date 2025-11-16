@@ -57,7 +57,7 @@ func (t *CurrencyRatesTicker) ConvertTokenToBase(value float64, token string) fl
 	return 0
 }
 
-// ConvertTokenToBase converts token value to toCurrency currency
+// ConvertToken converts token value to toCurrency currency
 func (t *CurrencyRatesTicker) ConvertToken(value float64, token string, toCurrency string) float64 {
 	baseValue := t.ConvertTokenToBase(value, token)
 	if baseValue > 0 {

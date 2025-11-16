@@ -1,0 +1,38 @@
+{
+  "coin": {
+    "name": "Base Archive Op-Node",
+    "shortcut": "ETH",
+    "label": "Base",
+    "alias": "base_archive_op_node"
+  },
+  "ports": {
+    "backend_rpc": 8212,
+    "blockbook_internal": 9212,
+    "blockbook_public": 9312
+  },
+  "backend": {
+    "package_name": "backend-base-archive-op-node",
+    "package_revision": "satoshilabs-1",
+    "system_user": "base",
+    "version": "1.10.1",
+    "docker_image": "us-docker.pkg.dev/oplabs-tools-artifacts/images/op-node:v1.10.1",
+    "verification_type": "docker",
+    "verification_source": "8f40714868fbdc788f67251383a0c0b78a3a937f07b2303bc7d33df5df6297d9",
+    "extract_command": "docker cp extract:/usr/local/bin/op-node backend/op-node",
+    "exclude_files": [],
+    "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/base_archive_op_node_exec.sh 2>&1 >> {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log'",
+    "exec_script": "base_archive_op_node.sh",
+    "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
+    "postinst_script_template": "",
+    "service_type": "simple",
+    "service_additional_params_template": "",
+    "protect_memory": true,
+    "mainnet": true,
+    "server_config_file": "",
+    "client_config_file": ""
+  },
+  "meta": {
+    "package_maintainer": "IT",
+    "package_maintainer_email": "it@satoshilabs.com"
+  }
+}
