@@ -65,7 +65,7 @@ type EthereumRPC struct {
 	RPC                       bchain.EVMRPCClient
 	MainNetChainID            Network
 	Timeout                   time.Duration
-	Parser                    *EthereumParser
+	Parser                    EthereumLikeParser
 	PushHandler               func(bchain.NotificationType)
 	OpenRPC                   func(string) (bchain.EVMRPCClient, bchain.EVMClient, error)
 	Mempool                   *bchain.MempoolEthereumType

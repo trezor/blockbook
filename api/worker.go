@@ -238,7 +238,7 @@ func (w *Worker) getParsedEthereumInputData(data string) *bchain.EthereumParsedI
 			return nil
 		}
 	}
-	return eth.ParseInputData(signatures, data)
+	return w.chainParser.ParseInputData(signatures, data)
 }
 
 // getConfirmationETA returns confirmation ETA in seconds and blocks

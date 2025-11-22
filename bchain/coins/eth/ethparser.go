@@ -22,10 +22,18 @@ const EthereumTypeTxidLen = 32
 // EtherAmountDecimalPoint defines number of decimal points in Ether amounts
 const EtherAmountDecimalPoint = 18
 
+type EthereumLikeParser interface {
+	bchain.BlockChainParser
+	ethTxToTx(tx *bchain.RpcTransaction, receipt *bchain.RpcReceipt, internalData *bchain.EthereumInternalData, blocktime int64, confirmations uint32, fixEIP55 bool) (*bchain.Tx, error)
+	SetEnsSuffix(suffix string)
+}
+
 // EthereumParser handle
 type EthereumParser struct {
 	*bchain.BaseParser
-	EnsSuffix string
+	EnsSuffix             string
+	FormatAddressFunc     func(addr string) string
+	FromDescToAddressFunc func(addrDesc bchain.AddressDescriptor) string
 }
 
 // NewEthereumParser returns new EthereumParser instance
@@ -36,7 +44,9 @@ func NewEthereumParser(b int, addressAliases bool) *EthereumParser {
 			AmountDecimalPoint:   EtherAmountDecimalPoint,
 			AddressAliases:       addressAliases,
 		},
-		EnsSuffix: ".eth",
+		EnsSuffix:             ".eth",
+		FormatAddressFunc:     EIP55AddressFromAddress,
+		FromDescToAddressFunc: EIP55Address,
 	}
 }
 
@@ -63,6 +73,10 @@ type rpcBlockTxids struct {
 	Transactions []string `json:"transactions"`
 }
 
+func (p *EthereumParser) SetEnsSuffix(suffix string) {
+	p.EnsSuffix = suffix
+}
+
 func ethNumber(n string) (int64, error) {
 	if len(n) > 2 {
 		return strconv.ParseInt(n[2:], 16, 64)
@@ -78,20 +92,20 @@ func (p *EthereumParser) ethTxToTx(tx *bchain.RpcTransaction, receipt *bchain.Rp
 	)
 	if len(tx.From) > 2 {
 		if fixEIP55 {
-			tx.From = EIP55AddressFromAddress(tx.From)
+			tx.From = p.FormatAddressFunc(tx.From)
 		}
 		fa = []string{tx.From}
 	}
 	if len(tx.To) > 2 {
 		if fixEIP55 {
-			tx.To = EIP55AddressFromAddress(tx.To)
+			tx.To = p.FormatAddressFunc(tx.To)
 		}
 		ta = []string{tx.To}
 	}
 	if fixEIP55 && receipt != nil && receipt.Logs != nil {
 		for _, l := range receipt.Logs {
 			if len(l.Address) > 2 {
-				l.Address = EIP55AddressFromAddress(l.Address)
+				l.Address = p.FormatAddressFunc(l.Address)
 			}
 		}
 	}
@@ -103,8 +117,8 @@ func (p *EthereumParser) ethTxToTx(tx *bchain.RpcTransaction, receipt *bchain.Rp
 			if fixEIP55 {
 				for i := range internalData.Transfers {
 					it := &internalData.Transfers[i]
-					it.From = EIP55AddressFromAddress(it.From)
-					it.To = EIP55AddressFromAddress(it.To)
+					it.From = p.FormatAddressFunc(it.From)
+					it.To = p.FormatAddressFunc(it.To)
 				}
 			}
 		}
@@ -212,7 +226,7 @@ func EIP55AddressFromAddress(address string) string {
 
 // GetAddressesFromAddrDesc returns addresses for given address descriptor with flag if the addresses are searchable
 func (p *EthereumParser) GetAddressesFromAddrDesc(addrDesc bchain.AddressDescriptor) ([]string, bool, error) {
-	return []string{EIP55Address(addrDesc)}, true, nil
+	return []string{p.FromDescToAddressFunc(addrDesc)}, true, nil
 }
 
 // GetScriptFromAddrDesc returns output script for given address descriptor
@@ -382,7 +396,7 @@ func (p *EthereumParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 	rt := bchain.RpcTransaction{
 		AccountNonce: hexutil.EncodeUint64(pt.Tx.AccountNonce),
 		BlockNumber:  hexutil.EncodeUint64(uint64(pt.BlockNumber)),
-		From:         EIP55Address(pt.Tx.From),
+		From:         p.FromDescToAddressFunc(pt.Tx.From),
 		GasLimit:     hexutil.EncodeUint64(pt.Tx.GasLimit),
 		Hash:         hexutil.Encode(pt.Tx.Hash),
 		Payload:      hexutil.Encode(pt.Tx.Payload),
@@ -390,7 +404,7 @@ func (p *EthereumParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 		// R:                hexEncodeBig(pt.R),
 		// S:                hexEncodeBig(pt.S),
 		// V:                hexEncodeBig(pt.V),
-		To:               EIP55Address(pt.Tx.To),
+		To:               p.FromDescToAddressFunc(pt.Tx.To),
 		TransactionIndex: hexutil.EncodeUint64(uint64(pt.Tx.TransactionIndex)),
 		Value:            hexEncodeBig(pt.Tx.Value),
 	}
@@ -416,7 +430,7 @@ func (p *EthereumParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 				topics[j] = hexutil.Encode(t)
 			}
 			rr.Logs[i] = &bchain.RpcLog{
-				Address: EIP55Address(l.Address),
+				Address: p.FromDescToAddressFunc(l.Address),
 				Data:    hexutil.Encode(l.Data),
 				Topics:  topics,
 			}

@@ -1,0 +1,68 @@
+{
+    "coin": {
+        "name": "Tron Testnet Nile",
+        "shortcut": "TRX",
+        "label": "Tron Nile",
+        "alias": "tron_testnet_nile"
+    },
+    "ports": {
+        "backend_rpc": 8545,
+        "backend_message_queue": 5555,
+        "backend_p2p": 18888,
+        "backend_http": 8090,
+        "blockbook_internal": 19090,
+        "blockbook_public": 19190
+    },
+    "ipc": {
+        "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}/jsonrpc",
+        "rpc_timeout": 25,
+        "message_queue_binding_template": "tcp://127.0.0.1:{{.Ports.BackendMessageQueue}}"
+    },
+    "backend": {
+        "package_name": "backend-tron-testnet-nile",
+        "package_revision": "latest",
+        "system_user": "tron",
+        "version": "4.8.0.2",
+        "binary_url": "https://github.com/tron-nile-testnet/nile-testnet/releases/download/GreatVoyage-Nile-v4.8.0.2/FullNode-Nile-4.8.0.2.jar",
+        "verification_type": "sha256",
+        "verification_source": "3525d415bf16da86386904614e15c3b4549d2f96e1c1adb8db80892e4a6b0f07",
+        "extract_command": "mv ${ARCHIVE} backend/ && wget -q https://raw.githubusercontent.com/tron-nile-testnet/nile-testnet/refs/heads/master/framework/src/main/resources/config-nile.conf -O test_net_config.conf && sed -i 's/^[ \\t]*#*[ \\t]*httpFullNodeEnable.*/httpFullNodeEnable = true/' test_net_config.conf && sed -i 's/^[ \\t]*#*[ \\t]*httpFullNodePort.*/httpFullNodePort = 8545/' test_net_config.conf && sed -i '/triggerName *= *\"block\"/{n;s/enable *= *.*/enable = true/;}' test_net_config.conf && sed -i 's/^[ \\t]*supportConstant[ \\t]*=[ \\t]*false/supportConstant = true/' test_net_config.conf && mv test_net_config.conf backend/ && echo ",
+        "exclude_files": [],
+        "exec_command_template": "/usr/bin/java -Xms32G -Xmx32G -XX:ReservedCodeCacheSize=256m -XX:MetaspaceSize=256m -XX:MaxMetaspaceSize=512m -XX:MaxDirectMemorySize=1G -XX:+PrintGCDetails -XX:+PrintGCDateStamps -Xloggc:gc.log -XX:+UseConcMarkSweepGC -XX:NewRatio=2 -XX:+CMSScavengeBeforeRemark -XX:+ParallelRefProcEnabled -XX:+HeapDumpOnOutOfMemoryError -XX:+UseCMSInitiatingOccupancyOnly -XX:CMSInitiatingOccupancyFraction=70 -jar {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/FullNode-Nile-4.8.0.2.jar --es -c {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/test_net_config.conf >> {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log 2>&1",
+        "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log",
+        "postinst_script_template": "",
+        "service_type": "simple",
+        "service_additional_params_template": "StandardOutput=append:{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/{{.Coin.Alias}}.log\nStandardError=inherit",
+        "protect_memory": false,
+        "mainnet": false,
+        "server_config_file": "",
+        "client_config_file": ""
+    },
+    "blockbook": {
+        "package_name": "blockbook-tron",
+        "system_user": "blockbook-tron",
+        "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
+        "public_binding_template": ":{{.Ports.BlockbookPublic}}",
+        "explorer_url": "",
+        "additional_params": "",
+        "block_chain": {
+            "parse": true,
+            "mempool_workers": 0,
+            "mempool_sub_workers": 0,
+            "block_addresses_to_keep": 10000,
+            "additional_params": {
+                "address_aliases": true,
+                "mempoolTxTimeoutHours": 48,
+                "queryBackendOnMempoolResync": false,
+                "fiat_rates": "coingecko",
+                "fiat_rates_vs_currencies": "USD,EUR,CNY",
+                "fiat_rates_params": "{\"coin\": \"tron\",\"platformIdentifier\": \"tron\",\"platformVsCurrency\": \"trx\",\"periodSeconds\": 900}",
+                "fourByteSignatures": "https://www.4byte.directory/api/v1/signatures/"
+            }
+        }
+    },
+    "meta": {
+        "package_maintainer": "IT",
+        "package_maintainer_email": "it@satoshilabs.com"
+    }
+}

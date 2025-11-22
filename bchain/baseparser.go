@@ -319,3 +319,7 @@ func (p *BaseParser) EthereumTypeGetTokenTransfersFromTx(tx *Tx) (TokenTransfers
 func (p *BaseParser) FormatAddressAlias(address string, name string) string {
 	return name
 }
+
+func (b *BaseParser) ParseInputData(signatures *[]FourByteSignature, data string) *EthereumParsedInputData {
+	return nil
+}
