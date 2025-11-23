@@ -20,6 +20,7 @@ import (
 	"github.com/trezor/blockbook/api"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/bchain/coins"
+	"github.com/trezor/blockbook/bcmr"
 	"github.com/trezor/blockbook/common"
 	"github.com/trezor/blockbook/db"
 	"github.com/trezor/blockbook/fiat"
@@ -102,6 +103,7 @@ var (
 	syncWorker                    *db.SyncWorker
 	internalState                 *common.InternalState
 	fiatRates                     *fiat.FiatRates
+	bcmrDownloader                *bcmr.BcmrDownloader
 	callbacksOnNewBlock           []bchain.OnNewBlockFunc
 	callbacksOnNewTxAddr          []bchain.OnNewTxAddrFunc
 	callbacksOnNewTx              []bchain.OnNewTxFunc
@@ -270,6 +272,11 @@ func mainWithExitCode() int {
 
 	if fiatRates, err = fiat.NewFiatRates(index, config, metrics, onNewFiatRatesTicker); err != nil {
 		glog.Error("fiatRates ", err)
+		return exitCodeFatal
+	}
+
+	if bcmrDownloader, err = bcmr.NewBcmrDownloader(index, config, metrics); err != nil {
+		glog.Error("bcmrDownloader ", err)
 		return exitCodeFatal
 	}
 
@@ -696,6 +703,10 @@ func computeFeeStats(stopCompute chan os.Signal, blockFrom, blockTo int, db *db.
 func initDownloaders(db *db.RocksDB, chain bchain.BlockChain, config *common.Config) {
 	if fiatRates.Enabled {
 		go fiatRates.RunDownloader()
+	}
+
+	if bcmrDownloader != nil {
+		go bcmrDownloader.RunDownloader()
 	}
 
 	if config.FourByteSignatures != "" && chain.GetChainParser().GetChainType() == bchain.ChainEthereumType {

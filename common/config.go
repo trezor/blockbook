@@ -20,6 +20,7 @@ type Config struct {
 	BlockGolombFilterP      uint8  `json:"block_golomb_filter_p"`
 	BlockFilterScripts      string `json:"block_filter_scripts"`
 	BlockFilterUseZeroedKey bool   `json:"block_filter_use_zeroed_key"`
+	BcmrProvider            string `json:"bcmr_provider"`
 }
 
 // GetConfig loads and parses the config file and returns Config struct
