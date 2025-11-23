@@ -80,6 +80,7 @@ func NewFiatRates(db *db.RocksDB, config *common.Config, metrics *common.Metrics
 		PlatformIdentifier string `json:"platformIdentifier"`
 		PlatformVsCurrency string `json:"platformVsCurrency"`
 		PeriodSeconds      int64  `json:"periodSeconds"`
+		Plan               string `json:"plan"`
 	}
 	rdParams := &fiatRatesParams{}
 	err := json.Unmarshal([]byte(config.FiatRatesParams), &rdParams)
@@ -108,7 +109,7 @@ func NewFiatRates(db *db.RocksDB, config *common.Config, metrics *common.Metrics
 			// a small hack - in tests the callback is not used, therefore there is no delay slowing down the test
 			throttle = false
 		}
-		fr.downloader = NewCoinGeckoDownloader(db, db.GetInternalState().GetNetwork(), rdParams.URL, rdParams.Coin, rdParams.PlatformIdentifier, rdParams.PlatformVsCurrency, fr.allowedVsCurrencies, fr.timeFormat, metrics, throttle)
+		fr.downloader = NewCoinGeckoDownloader(db, db.GetInternalState().GetNetwork(), rdParams.URL, rdParams.Coin, rdParams.PlatformIdentifier, rdParams.PlatformVsCurrency, fr.allowedVsCurrencies, fr.timeFormat, rdParams.Plan, metrics, throttle)
 		if is != nil {
 			is.HasFiatRates = true
 			is.HasTokenFiatRates = fr.downloadTokens
