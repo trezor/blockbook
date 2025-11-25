@@ -944,8 +944,7 @@ func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 			return nil, errors.Annotatef(err, "txid %v", txid)
 		}
 		tx.BaseFeePerGas = ht.BaseFeePerGas
-		var receipt bchain.RpcReceipt
-		err = b.RPC.CallContext(ctx, &receipt, "eth_getTransactionReceipt", hash)
+		receipt, err := b.EthereumTypeGetTransactionReceipt(txid)
 		if err != nil {
 			return nil, errors.Annotatef(err, "txid %v", txid)
 		}
@@ -957,7 +956,7 @@ func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 		if err != nil {
 			return nil, errors.Annotatef(err, "txid %v", txid)
 		}
-		btx, err = b.Parser.ethTxToTx(tx, &receipt, nil, time, confirmations, true)
+		btx, err = b.Parser.ethTxToTx(tx, receipt, nil, time, confirmations, true)
 		if err != nil {
 			return nil, errors.Annotatef(err, "txid %v", txid)
 		}
@@ -1188,6 +1187,15 @@ func (b *EthereumRPC) callRpcStringResult(rpcMethod string, args ...interface{})
 		return "", errors.New(rpcMethod + " : failed, empty result")
 	}
 	return result, nil
+}
+
+// EthereumTypeGetTransactionReceipt returns the transaction receipt by the transaction ID.
+func (b *EthereumRPC) EthereumTypeGetTransactionReceipt(txid string) (*bchain.RpcReceipt, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+	defer cancel()
+	var r *bchain.RpcReceipt
+	err := b.RPC.CallContext(ctx, &r, "eth_getTransactionReceipt", ethcommon.HexToHash(txid))
+	return r, err
 }
 
 // EthereumTypeGetBalance returns current balance of an address

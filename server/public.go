@@ -234,9 +234,9 @@ func (s *PublicServer) Shutdown(ctx context.Context) error {
 }
 
 // OnNewBlock notifies users subscribed to bitcoind/hashblock about new block
-func (s *PublicServer) OnNewBlock(hash string, height uint32) {
-	s.socketio.OnNewBlockHash(hash)
-	s.websocket.OnNewBlock(hash, height)
+func (s *PublicServer) OnNewBlock(block *bchain.Block) {
+	s.socketio.OnNewBlockHash(block.Hash)
+	s.websocket.OnNewBlock(block)
 }
 
 // OnNewFiatRatesTicker notifies users subscribed to bitcoind/fiatrates about new ticker

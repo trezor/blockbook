@@ -243,7 +243,7 @@ func (w *SyncWorker) connectBlocks(onNewBlock bchain.OnNewBlockFunc, initialSync
 			return err
 		}
 		if onNewBlock != nil {
-			onNewBlock(res.block.Hash, res.block.Height)
+			onNewBlock(res.block)
 		}
 		w.metrics.BlockbookBestHeight.Set(float64(res.block.Height))
 		if res.block.Height > 0 && res.block.Height%1000 == 0 {
@@ -325,7 +325,7 @@ func (w *SyncWorker) ParallelConnectBlocks(onNewBlock bchain.OnNewBlockFunc, low
 				}
 
 				if onNewBlock != nil {
-					onNewBlock(b.Hash, b.Height)
+					onNewBlock(b)
 				}
 				w.metrics.BlockbookBestHeight.Set(float64(b.Height))
 
