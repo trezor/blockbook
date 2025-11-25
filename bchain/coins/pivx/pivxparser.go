@@ -89,7 +89,6 @@ func GetChainParams(chain string) *chaincfg.Params {
 // ParseBlock parses raw block to our Block struct
 func (p *PivXParser) ParseBlock(b []byte) (*bchain.Block, error) {
 	r := bytes.NewReader(b)
-	w := wire.MsgBlock{}
 	h := wire.BlockHeader{}
 	err := h.Deserialize(r)
 	if err != nil {
@@ -106,14 +105,14 @@ func (p *PivXParser) ParseBlock(b []byte) (*bchain.Block, error) {
 		r.Seek(32, io.SeekCurrent)
 	}
 
-	err = p.PivxDecodeTransactions(r, 0, &w)
+	msgTxs, err := p.PivxDecodeTransactions(r, 0)
 	if err != nil {
 		return nil, errors.Annotatef(err, "DecodeTransactions")
 	}
 
-	txs := make([]bchain.Tx, len(w.Transactions))
-	for ti, t := range w.Transactions {
-		txs[ti] = p.TxFromMsgTx(t, false)
+	txs := make([]bchain.Tx, len(msgTxs))
+	for ti, t := range msgTxs {
+		txs[ti] = p.TxFromMsgTx(&t, false)
 	}
 
 	return &bchain.Block{
@@ -137,7 +136,7 @@ func (p *PivXParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 
 // ParseTx parses byte array containing transaction and returns Tx struct
 func (p *PivXParser) ParseTx(b []byte) (*bchain.Tx, error) {
-	t := wire.MsgTx{}
+	t := PivxMsgTx{}
 	r := bytes.NewReader(b)
 	if err := t.Deserialize(r); err != nil {
 		return nil, err
@@ -148,7 +147,8 @@ func (p *PivXParser) ParseTx(b []byte) (*bchain.Tx, error) {
 }
 
 // TxFromMsgTx parses tx and adds handling for OP_ZEROCOINSPEND inputs
-func (p *PivXParser) TxFromMsgTx(t *wire.MsgTx, parseAddresses bool) bchain.Tx {
+func (p *PivXParser) TxFromMsgTx(pivxTx *PivxMsgTx, parseAddresses bool) bchain.Tx {
+	t := &pivxTx.MsgTx
 	vin := make([]bchain.Vin, len(t.TxIn))
 	for i, in := range t.TxIn {
 
@@ -196,7 +196,7 @@ func (p *PivXParser) TxFromMsgTx(t *wire.MsgTx, parseAddresses bool) bchain.Tx {
 		}
 	}
 	tx := bchain.Tx{
-		Txid:     t.TxHash().String(),
+		Txid:     pivxTx.TxHash().String(),
 		Version:  t.Version,
 		LockTime: t.LockTime,
 		Vin:      vin,
@@ -261,12 +261,12 @@ func (p *PivXParser) GetAddrDescForUnknownInput(tx *bchain.Tx, input int) bchain
 	return s
 }
 
-func (p *PivXParser) PivxDecodeTransactions(r *bytes.Reader, pver uint32, blk *wire.MsgBlock) error {
+func (p *PivXParser) PivxDecodeTransactions(r *bytes.Reader, pver uint32) ([]PivxMsgTx, error) {
 	maxTxPerBlock := uint64((wire.MaxBlockPayload / 10) + 1)
 
 	txCount, err := wire.ReadVarInt(r, pver)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Prevent more transactions than could possibly fit into a block.
@@ -275,20 +275,20 @@ func (p *PivXParser) PivxDecodeTransactions(r *bytes.Reader, pver uint32, blk *w
 	if txCount > maxTxPerBlock {
 		str := fmt.Sprintf("too many transactions to fit into a block "+
 			"[count %d, max %d]", txCount, maxTxPerBlock)
-		return &wire.MessageError{Func: "utils.decodeTransactions", Description: str}
+		return nil, &wire.MessageError{Func: "utils.decodeTransactions", Description: str}
 	}
 
-	blk.Transactions = make([]*wire.MsgTx, 0, txCount)
+	pivxTransactions := make([]PivxMsgTx, 0, txCount)
 	for i := uint64(0); i < txCount; i++ {
-		tx := wire.MsgTx{}
+		tx := PivxMsgTx{}
 
 		// read version & seek back to original state
 		var version uint32 = 0
 		if err = binary.Read(r, binary.LittleEndian, &version); err != nil {
-			return err
+			return nil, err
 		}
 		if _, err = r.Seek(-4, io.SeekCurrent); err != nil {
-			return err
+			return nil, err
 		}
 
 		txVersion := version & 0xffff
@@ -299,14 +299,14 @@ func (p *PivXParser) PivxDecodeTransactions(r *bytes.Reader, pver uint32, blk *w
 			enc = wire.BaseEncoding
 		}
 
-		err := p.PivxDecode(&tx, r, pver, enc)
+		err := tx.PivxDecode(r, pver, enc)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		blk.Transactions = append(blk.Transactions, &tx)
+		pivxTransactions = append(pivxTransactions, tx)
 	}
 
-	return nil
+	return pivxTransactions, nil
 }
 
 func (p *PivXParser) PivxDecode(MsgTx *wire.MsgTx, r *bytes.Reader, pver uint32, enc wire.MessageEncoding) error {
@@ -320,7 +320,11 @@ func (p *PivXParser) PivxDecode(MsgTx *wire.MsgTx, r *bytes.Reader, pver uint32,
 
 	if txVersion >= 3 {
 		// valueBalance
-		r.Seek(9, io.SeekCurrent)
+		_, err := r.Seek(9, io.SeekCurrent)
+
+		if err != nil {
+			return err
+		}
 
 		vShieldedSpend, err := wire.ReadVarInt(r, 0)
 		if err != nil {
