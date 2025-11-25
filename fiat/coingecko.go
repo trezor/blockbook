@@ -38,6 +38,7 @@ type Coingecko struct {
 	updatingCurrent     bool
 	updatingTokens      bool
 	metrics             *common.Metrics
+	plan			    string
 }
 
 // simpleSupportedVSCurrencies https://api.coingecko.com/api/v3/simple/supported_vs_currencies
@@ -59,7 +60,7 @@ type marketChartPrices struct {
 }
 
 // NewCoinGeckoDownloader creates a coingecko structure that implements the RatesDownloaderInterface
-func NewCoinGeckoDownloader(db *db.RocksDB, network string, url string, coin string, platformIdentifier string, platformVsCurrency string, allowedVsCurrencies string, timeFormat string, metrics *common.Metrics, throttleDown bool) RatesDownloaderInterface {
+func NewCoinGeckoDownloader(db *db.RocksDB, network string, url string, coin string, platformIdentifier string, platformVsCurrency string, allowedVsCurrencies string, timeFormat string, plan string, metrics *common.Metrics, throttleDown bool) RatesDownloaderInterface {
 	throttlingDelayMs := 0 // No delay by default
 	if throttleDown {
 		throttlingDelayMs = DefaultThrottleDelayMs
@@ -74,10 +75,15 @@ func NewCoinGeckoDownloader(db *db.RocksDB, network string, url string, coin str
 
 	// use default address if not overridden, with respect to existence of apiKey
 	if url == "" {
-		if apiKey != "" {
-			url = "https://pro-api.coingecko.com/api/v3/"
+		const (
+			proURL  = "https://pro-api.coingecko.com/api/v3"
+			freeURL = "https://api.coingecko.com/api/v3"
+		)
+
+		if apiKey != "" && (plan == "pro" || plan == "") {
+			url = proURL
 		} else {
-			url = "https://api.coingecko.com/api/v3"
+			url = freeURL
 		}
 	}
 	glog.Info("Coingecko downloader url ", url)
@@ -129,7 +135,7 @@ func doReq(req *http.Request, client *http.Client) ([]byte, error) {
 }
 
 // makeReq HTTP request helper - will retry the call after 1 minute on error
-func (cg *Coingecko) makeReq(url string, endpoint string) ([]byte, error) {
+func (cg *Coingecko) makeReq(url string, endpoint string, plan string) ([]byte, error) {
 	for {
 		// glog.Infof("Coingecko makeReq %v", url)
 		req, err := http.NewRequest("GET", url, nil)
@@ -138,7 +144,11 @@ func (cg *Coingecko) makeReq(url string, endpoint string) ([]byte, error) {
 		}
 		req.Header.Set("Content-Type", "application/json")
 		if cg.apiKey != "" {
-			req.Header.Set("x-cg-pro-api-key", cg.apiKey)
+			if plan == "pro" {
+				req.Header.Set("x-cg-pro-api-key", cg.apiKey)
+			} else {
+				req.Header.Set("x-cg-demo-api-key", cg.apiKey)
+			}
 		}
 		resp, err := doReq(req, cg.httpClient)
 		if err == nil {
@@ -166,7 +176,7 @@ func (cg *Coingecko) makeReq(url string, endpoint string) ([]byte, error) {
 // SimpleSupportedVSCurrencies /simple/supported_vs_currencies
 func (cg *Coingecko) simpleSupportedVSCurrencies() (simpleSupportedVSCurrencies, error) {
 	url := cg.url + "/simple/supported_vs_currencies"
-	resp, err := cg.makeReq(url, "supported_vs_currencies")
+	resp, err := cg.makeReq(url, "supported_vs_currencies", cg.plan)
 	if err != nil {
 		return nil, err
 	}
@@ -197,7 +207,7 @@ func (cg *Coingecko) simplePrice(ids []string, vsCurrencies []string) (*map[stri
 	params.Add("vs_currencies", vsCurrenciesParam)
 
 	url := fmt.Sprintf("%s/simple/price?%s", cg.url, params.Encode())
-	resp, err := cg.makeReq(url, "simple/price")
+	resp, err := cg.makeReq(url, "simple/price", cg.plan)
 	if err != nil {
 		return nil, err
 	}
@@ -220,7 +230,7 @@ func (cg *Coingecko) coinsList() (coinList, error) {
 	}
 	params.Add("include_platform", platform)
 	url := fmt.Sprintf("%s/coins/list?%s", cg.url, params.Encode())
-	resp, err := cg.makeReq(url, "coins/list")
+	resp, err := cg.makeReq(url, "coins/list", cg.plan)
 	if err != nil {
 		return nil, err
 	}
@@ -247,7 +257,7 @@ func (cg *Coingecko) coinMarketChart(id string, vs_currency string, days string,
 	params.Add("days", days)
 
 	url := fmt.Sprintf("%s/coins/%s/market_chart?%s", cg.url, id, params.Encode())
-	resp, err := cg.makeReq(url, "market_chart")
+	resp, err := cg.makeReq(url, "market_chart", cg.plan)
 	if err != nil {
 		return nil, err
 	}
