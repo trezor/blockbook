@@ -2,6 +2,7 @@ package dbtestdata
 
 import (
 	"encoding/json"
+	"errors"
 	"math/big"
 	"strconv"
 
@@ -147,4 +148,121 @@ func (c *fakeBlockChainEthereumType) EthereumTypeGetRawTransaction(txid string) 
 // GetTokenURI returns URI derived from the input contractDesc
 func (c *fakeBlockChainEthereumType) GetTokenURI(contractDesc bchain.AddressDescriptor, tokenID *big.Int) (string, error) {
 	return "https://ipfs.io/ipfs/" + contractDesc.String()[3:] + ".json", nil
+}
+
+// ResolveENS resolves an ENS name to an Ethereum address
+func (c *fakeBlockChainEthereumType) ResolveENS(name string) (*bchain.ENSResolution, error) {
+	switch name {
+	case "vitalik.eth":
+		return &bchain.ENSResolution{
+			Name:    name,
+			Address: "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+		}, nil
+	case "expired.eth":
+		return nil, errors.New("ENS name expired")
+	case "nonexistent.eth":
+		return nil, errors.New("ENS name not found")
+	case "address7b.eth":
+		return &bchain.ENSResolution{
+			Name:    name,
+			Address: "0x7B62EB7fe80350DC7EC945C0B73242cb9877FB1b",
+		}, nil
+	case "address20.eth":
+		return &bchain.ENSResolution{
+			Name:    name,
+			Address: "0x20cD153de35D469BA46127A0C8F18626b59a256A",
+		}, nil
+	default:
+		if !isValidENSName(name) {
+			return nil, errors.New("invalid ENS name")
+		}
+		// For any other valid ENS name, return a mock address
+		return &bchain.ENSResolution{
+			Name:    name,
+			Address: "0x" + name + "abcd1234567890abcdef1234567890abcdef12",
+		}, nil
+	}
+}
+
+// ReverseResolveENS resolves an Ethereum address to an ENS name (reverse lookup)
+func (c *fakeBlockChainEthereumType) ReverseResolveENS(address string) (*bchain.ENSResolution, error) {
+	// Normalize address to checksummed format for comparison
+	normalizedAddr := normalizeAddress(address)
+
+	switch normalizedAddr {
+	case "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045":
+		return &bchain.ENSResolution{
+			Name:    "vitalik.eth",
+			Address: normalizedAddr,
+		}, nil
+	case "0x7B62EB7fe80350DC7EC945C0B73242cb9877FB1b":
+		return &bchain.ENSResolution{
+			Name:    "address7b.eth",
+			Address: normalizedAddr,
+		}, nil
+	case "0x20cD153de35D469BA46127A0C8F18626b59a256A":
+		return &bchain.ENSResolution{
+			Name:    "address20.eth",
+			Address: normalizedAddr,
+		}, nil
+	default:
+		// No ENS name found for this address
+		return nil, errors.New("no ENS name found for address")
+	}
+}
+
+func (c *fakeBlockChainEthereumType) CheckENSExpiration(name string) (bool, error) {
+	switch name {
+	case "vitalik.eth":
+		return false, nil // Not expired
+	case "expired.eth":
+		return true, nil // Expired
+	case "nonexistent.eth":
+		return false, nil // Not expired (doesn't exist)
+	case "address7b.eth":
+		return false, nil // Not expired
+	case "address20.eth":
+		return false, nil // Not expired
+	default:
+		if !isValidENSName(name) {
+			return false, errors.New("invalid ENS name")
+		}
+		return false, nil // Not expired by default
+	}
+}
+
+func isValidENSName(name string) bool {
+	if name == "" {
+		return false
+	}
+
+	return len(name) > 4 && name[len(name)-4:] == ".eth"
+}
+
+// normalizeAddress converts an Ethereum address to a consistent format
+// This is a simple implementation that converts to lowercase and ensures 0x prefix
+func normalizeAddress(address string) string {
+	// Remove 0x prefix if present
+	if len(address) > 2 && address[:2] == "0x" {
+		address = address[2:]
+	}
+
+	// Convert to lowercase
+	address = toLower(address)
+
+	// Add 0x prefix back
+	return "0x" + address
+}
+
+func toLower(s string) string {
+	result := make([]byte, len(s))
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c >= 'A' && c <= 'Z' {
+			result[i] = c + ('a' - 'A')
+		} else {
+			result[i] = c
+		}
+	}
+	return string(result)
 }

@@ -73,3 +73,7 @@ func (b *BaseRPC) Initialize() error {
 
 	return nil
 }
+
+func (b *BaseRPC) ResolveENS(name string) (*bchain.ENSResolution, error) {
+	return b.EthereumRPC.ResolveENS(name)
+}

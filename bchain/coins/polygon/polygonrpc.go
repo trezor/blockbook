@@ -73,3 +73,7 @@ func (b *PolygonRPC) Initialize() error {
 
 	return nil
 }
+
+func (b *PolygonRPC) ResolveENS(name string) (*bchain.ENSResolution, error) {
+	return b.EthereumRPC.ResolveENS(name)
+}
