@@ -1,0 +1,66 @@
+{
+  "coin": {
+    "name": "Digiwage",
+    "shortcut": "WAGE",
+    "label": "Digiwage",
+    "alias": "digiwage"
+  },
+  "ports": {
+    "backend_rpc": 18090,
+    "backend_message_queue": 48390,
+    "blockbook_internal": 19090,
+    "blockbook_public": 19190
+  },
+  "ipc": {
+    "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}",
+    "rpc_user": "rpc_digiwage",
+    "rpc_pass": "rpc_digiwage",
+    "rpc_timeout": 25,
+    "message_queue_binding_template": "tcp://127.0.0.1:{{.Ports.BackendMessageQueue}}"
+  },
+  "backend": {
+    "package_name": "backend-digiwage",
+    "package_revision": "satoshilabs-1",
+    "system_user": "digiwage",
+    "version": "2.0.1",
+    "binary_url": "https://github.com/digiwage/digiwage/releases/download/v2.0.1/digiwage-2.0.1-x86_64-linux-gnu.tar.gz",
+    "verification_type": "sha256",
+    "verification_source": "3b5b1b73117e75902825e7fc323805fafc5f6fd25201c77d02217c882af3c4f0",
+    "extract_command": "tar -C backend --strip 1 -xf",
+    "exclude_files": [
+      "bin/digiwage-qt"
+    ],
+    "exec_command_template": "{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/bin/digiwaged -datadir={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend -conf={{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf -pid=/run/{{.Coin.Alias}}/{{.Coin.Alias}}.pid",
+    "logrotate_files_template": "{{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/*.log",
+    "service_type": "forking",
+    "service_additional_params_template": "Environment=\"HOME={{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend\"",
+    "protect_memory": false,
+    "mainnet": true,
+    "server_config_file": "bitcoin_like.conf",
+    "client_config_file": "bitcoin_like_client.conf",
+    "additional_params": {
+      "whitelist": "127.0.0.1"
+    }
+  },
+  "blockbook": {
+    "package_name": "blockbook-digiwage",
+    "system_user": "blockbook-digiwage",
+    "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
+    "public_binding_template": ":{{.Ports.BlockbookPublic}}",
+    "explorer_url": "",
+    "additional_params": "",
+    "block_chain": {
+      "parse": true,
+      "mempool_workers": 8,
+      "mempool_sub_workers": 2,
+      "block_addresses_to_keep": 300,
+      "xpub_magic": 36513075,
+      "slip44": 377,
+      "additional_params": {}
+    }
+  },
+  "meta": {
+    "package_maintainer": "digiwage_devs",
+    "package_maintainer_email": "contact@digiwage.org"
+  }
+}
