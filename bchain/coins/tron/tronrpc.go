@@ -3,6 +3,7 @@ package tron
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -30,6 +31,7 @@ const (
 type TronConfiguration struct {
 	eth.Configuration
 	MessageQueueBinding string `json:"message_queue_binding"`
+	HttpUrlTemplate     string `json:"tron_http_url_template"`
 }
 
 type TronRPC struct {
@@ -55,17 +57,25 @@ func NewTronRPC(config json.RawMessage, pushHandler func(bchain.NotificationType
 
 	bchain.EthereumTokenStandardMap = []bchain.TokenStandardName{TRC20TokenType, TRC721TokenType, TRC1155TokenType}
 
-	s := &TronRPC{
+	tronRpc := &TronRPC{
 		EthereumRPC: c.(*eth.EthereumRPC),
 		Parser:      NewTronParser(cfg.BlockAddressesToKeep, cfg.AddressAliases),
 	}
 
-	eth.ProcessInternalTransactions = false // not possible while tron does not support the `debug_traceBlockByHash` method
-	s.EthereumRPC.Parser = s.Parser
-	s.ChainConfig = &cfg
-	s.PushHandler = pushHandler
+	tronRpc.EthereumRPC.Parser = tronRpc.Parser
+	tronRpc.ChainConfig = &cfg
+	tronRpc.PushHandler = pushHandler
 
-	return s, nil
+	tronHTTP := NewTronHTTPClient(cfg.HttpUrlTemplate, time.Duration(cfg.RPCTimeout)*time.Second)
+
+	internalProvider := NewTronInternalDataProvider(
+		tronHTTP,
+		time.Duration(cfg.RPCTimeout)*time.Second,
+	)
+
+	tronRpc.EthereumRPC.InternalDataProvider = internalProvider
+
+	return tronRpc, nil
 }
 
 // OpenRPC opens an RPC connection to the Tron backend (wsURL is unused – Tron has no WS subscriptions)
