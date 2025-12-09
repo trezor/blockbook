@@ -81,7 +81,14 @@ func (p *TronParser) GetAddressesFromAddrDesc(desc bchain.AddressDescriptor) ([]
 }
 
 func ToTronAddressFromDesc(addrDesc bchain.AddressDescriptor) string {
-	withPrefix := append([]byte{0x41}, addrDesc...)
+	var withPrefix []byte
+
+	// check if already prefixed with 0x41
+	if len(addrDesc) == 1+TronTypeAddressDescriptorLen && addrDesc[0] == 0x41 {
+		withPrefix = addrDesc
+	} else {
+		withPrefix = append([]byte{0x41}, addrDesc...)
+	}
 
 	firstSHA := sha256.Sum256(withPrefix)
 	secondSHA := sha256.Sum256(firstSHA[:])
@@ -203,4 +210,39 @@ func SanitizeHexUint64String(s string) string {
 		return "0x" + sanitized
 	}
 	return s
+}
+
+func normalizeTxID(id string) string {
+	id = strings.ToLower(id)
+	if strings.HasPrefix(id, "0x") {
+		id = id[2:] // remove 0x
+	}
+	return id
+}
+
+func tronNoteHexToInternalType(noteHex string) (bchain.EthereumInternalTransactionType, error) {
+	note, err := decodeNoteHex(noteHex)
+	if err != nil {
+		return bchain.CALL, err
+	}
+
+	switch note {
+	case "create":
+		return bchain.CREATE, nil
+	case "suicide":
+		return bchain.SELFDESTRUCT, nil
+	case "call":
+		return bchain.CALL, nil
+	default:
+		// add others
+		return bchain.CALL, nil
+	}
+}
+
+func decodeNoteHex(hexStr string) (string, error) {
+	decoded, err := hex.DecodeString(hexStr)
+	if err != nil {
+		return "", fmt.Errorf("invalid hex in note: %s", hexStr)
+	}
+	return string(decoded), nil
 }

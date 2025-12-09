@@ -6,6 +6,14 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 )
 
+type EthereumInternalDataProvider interface {
+	GetInternalDataForBlock(
+		hash string,
+		height uint32,
+		txs []RpcTransaction,
+	) ([]EthereumInternalData, []ContractInfo, error)
+}
+
 // EthereumInternalTransfer contains data about internal transfer
 type EthereumInternalTransfer struct {
 	Type  EthereumInternalTransactionType `json:"type" ts_doc:"The type of internal transaction (CALL, CREATE, SELFDESTRUCT)."`

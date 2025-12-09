@@ -116,6 +116,7 @@ type EthereumRPC struct {
 	stakingPoolContracts      []string
 	alternativeFeeProvider    alternativeFeeProviderInterface
 	alternativeSendTxProvider *AlternativeSendTxProvider
+	InternalDataProvider      bchain.EthereumInternalDataProvider
 }
 
 // ProcessInternalTransactions specifies if internal transactions are processed
@@ -978,6 +979,10 @@ func (b *EthereumRPC) processCallTrace(call *rpcCallTrace, d *bchain.EthereumInt
 
 // getInternalDataForBlock fetches debug trace using callTracer, extracts internal transfers/creations/destructions; ctx controls cancellation.
 func (b *EthereumRPC) getInternalDataForBlock(ctx context.Context, blockHash string, blockHeight uint32, transactions []bchain.RpcTransaction) ([]bchain.EthereumInternalData, []bchain.ContractInfo, error) {
+	if b.InternalDataProvider != nil {
+		return b.InternalDataProvider.GetInternalDataForBlock(blockHash, blockHeight, transactions)
+	}
+
 	data := make([]bchain.EthereumInternalData, len(transactions))
 	contracts := make([]bchain.ContractInfo, 0)
 	if ProcessInternalTransactions {
