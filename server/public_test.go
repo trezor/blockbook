@@ -1792,7 +1792,7 @@ func Test_validateIntParam(t *testing.T) {
 		{"invalid string", "abc", 0, 0, 100, 0},
 		{"invalid string with default", "xyz", 42, 0, 100, 42},
 		{"zero max (no limit)", "1000", 0, 0, 0, 1000},
-		{"very large number", "9223372036854775807", 0, 0, 1000000, 1000000},
+		{"very large number", "9223372036854775807", 0, 0, maxPageNumber, maxPageNumber},
 		{"negative with min constraint", "-5", 0, 5, 100, 0},
 		{"whitespace", "  10  ", 0, 0, 100, 0},
 		{"zero value", "0", 0, 0, 100, 0},
