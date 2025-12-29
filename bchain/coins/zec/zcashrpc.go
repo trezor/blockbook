@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os/exec"
 	"reflect"
+	"strings"
 
 	"github.com/golang/glog"
 	"github.com/juju/errors"
@@ -121,12 +122,9 @@ func (z *ZCashRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 		bchain.BlockHeader
 		Txs []bchain.Tx `json:"tx"`
 	}
-	type rpcBlockTxids struct {
-		Txids []string `json:"tx"`
-	}
 	type resGetBlockV1 struct {
 		Error  *bchain.RPCError `json:"error"`
-		Result rpcBlockTxids    `json:"result"`
+		Result bchain.BlockInfo `json:"result"`
 	}
 	type resGetBlockV2 struct {
 		Error  *bchain.RPCError `json:"error"`
@@ -148,6 +146,12 @@ func (z *ZCashRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 	req.Params.Verbosity = 2
 	err = z.Call(&req, &rawResponse)
 	if err != nil {
+		// Check if it's a memory error and fall back
+		errStr := strings.ToLower(err.Error())
+		if strings.Contains(errStr, "memory capacity exceeded") || strings.Contains(errStr, "response is too big") {
+			glog.Warningf("getblock verbosity=2 failed for block %v, falling back to individual tx fetches", hash)
+			return z.getBlockWithFallback(hash)
+		}
 		return nil, errors.Annotatef(err, "hash %v", hash)
 	}
 	// hack for ZCash, where the field "valueZat" is used instead of "valueSat"
@@ -157,9 +161,17 @@ func (z *ZCashRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 		return nil, errors.Annotatef(err, "hash %v", hash)
 	}
 
+	// Check if verbosity=2 returned an RPC error
 	if resV2.Error != nil {
+		// Check if error is memory-related (case-insensitive)
+		errorMsg := strings.ToLower(resV2.Error.Message)
+		if strings.Contains(errorMsg, "memory capacity exceeded") || strings.Contains(errorMsg, "response is too big") {
+			glog.Warningf("getblock verbosity=2 returned memory error for block %v, falling back to verbosity=1 + individual tx fetches", hash)
+			return z.getBlockWithFallback(hash)
+		}
 		return nil, errors.Annotatef(resV2.Error, "hash %v", hash)
 	}
+
 	block := &bchain.Block{
 		BlockHeader: resV2.Result.BlockHeader,
 		Txs:         resV2.Result.Txs,
@@ -178,6 +190,44 @@ func (z *ZCashRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 	for i := range resV1.Result.Txids {
 		block.Txs[i].Txid = resV1.Result.Txids[i]
 	}
+	return block, nil
+}
+
+// getBlockWithFallback fetches block using verbosity=1 and then fetches each transaction individually
+func (z *ZCashRPC) getBlockWithFallback(hash string) (*bchain.Block, error) {
+	type resGetBlockV1 struct {
+		Error  *bchain.RPCError `json:"error"`
+		Result bchain.BlockInfo `json:"result"`
+	}
+
+	// Get block header and txids using verbosity=1
+	resV1 := resGetBlockV1{}
+	req := btc.CmdGetBlock{Method: "getblock"}
+	req.Params.BlockHash = hash
+	req.Params.Verbosity = 1
+	err := z.Call(&req, &resV1)
+	if err != nil {
+		return nil, errors.Annotatef(err, "hash %v", hash)
+	}
+	if resV1.Error != nil {
+		return nil, errors.Annotatef(resV1.Error, "hash %v", hash)
+	}
+
+	// Create block with header from verbosity=1 response
+	block := &bchain.Block{
+		BlockHeader: resV1.Result.BlockHeader,
+		Txs:         make([]bchain.Tx, 0, len(resV1.Result.Txids)),
+	}
+
+	// Fetch each transaction individually
+	for _, txid := range resV1.Result.Txids {
+		tx, err := z.GetTransaction(txid)
+		if err != nil {
+			return nil, errors.Annotatef(err, "failed to fetch tx %v for block %v", txid, hash)
+		}
+		block.Txs = append(block.Txs, *tx)
+	}
+
 	return block, nil
 }
 
