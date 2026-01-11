@@ -442,17 +442,26 @@ func (w *Worker) getTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 
 		// mempool txs do not have fees yet
 		if ethTxData.GasUsed != nil {
-			feesSat.Mul(ethTxData.GasPrice, ethTxData.GasUsed)
-			if ethTxData.L1Fee != nil {
-				feesSat.Add(&feesSat, ethTxData.L1Fee)
-			}
-		}
+            // Use EffectiveGasPrice if available (for L2 networks like Arbitrum),
+            // otherwise fall back to GasPrice
+            gasPrice := ethTxData.GasPrice
+            if ethTxData.EffectiveGasPrice != nil && ethTxData.EffectiveGasPrice.Sign() > 0 {
+                gasPrice = ethTxData.EffectiveGasPrice
+            }
+            if gasPrice != nil {
+                feesSat.Mul(gasPrice, ethTxData.GasUsed)
+            }
+            if ethTxData.L1Fee != nil {
+                feesSat.Add(&feesSat, ethTxData.L1Fee)
+            }
+        }
 		if len(bchainTx.Vout) > 0 {
 			valOutSat = bchainTx.Vout[0].ValueSat
 		}
 		ethSpecific = &EthereumSpecific{
 			GasLimit:             ethTxData.GasLimit,
 			GasPrice:             (*Amount)(ethTxData.GasPrice),
+			EffectiveGasPrice:    (*Amount)(ethTxData.EffectiveGasPrice),
 			MaxPriorityFeePerGas: (*Amount)(ethTxData.MaxPriorityFeePerGas),
 			MaxFeePerGas:         (*Amount)(ethTxData.MaxFeePerGas),
 			BaseFeePerGas:        (*Amount)(ethTxData.BaseFeePerGas),
@@ -1656,10 +1665,16 @@ func (w *Worker) balanceHistoryForTxid(addrDesc bchain.AddressDescriptor, txid s
 						}
 					}
 					var feesSat big.Int
-					// mempool txs do not have fees yet
-					if ethTxData.GasUsed != nil {
-						feesSat.Mul(ethTxData.GasPrice, ethTxData.GasUsed)
-					}
+                    // mempool txs do not have fees yet
+                    if ethTxData.GasUsed != nil {
+                        gasPrice := ethTxData.GasPrice
+                        if ethTxData.EffectiveGasPrice != nil && ethTxData.EffectiveGasPrice.Sign() > 0 {
+                            gasPrice = ethTxData.EffectiveGasPrice
+                        }
+                        if gasPrice != nil {
+                            feesSat.Mul(gasPrice, ethTxData.GasUsed)
+                        }
+                    }
 					(*big.Int)(bh.SentSat).Add((*big.Int)(bh.SentSat), &feesSat)
 				}
 			}

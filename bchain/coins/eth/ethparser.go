@@ -350,6 +350,11 @@ func (p *EthereumParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) (
 
 		}
 		pt.Receipt.Log = ptLogs
+		if r.Receipt.EffectiveGasPrice != "" {
+            if pt.Receipt.EffectiveGasPrice, err = hexDecodeBig(r.Receipt.EffectiveGasPrice); err != nil {
+                    return nil, errors.Annotatef(err, "EffectiveGasPrice %v", r.Receipt.EffectiveGasPrice)
+            }
+        }
 		if r.Receipt.L1Fee != "" {
 			if pt.Receipt.L1Fee, err = hexDecodeBig(r.Receipt.L1Fee); err != nil {
 				return nil, errors.Annotatef(err, "L1Fee %v", r.Receipt.L1Fee)
@@ -421,6 +426,9 @@ func (p *EthereumParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 				Topics:  topics,
 			}
 		}
+        if len(pt.Receipt.EffectiveGasPrice) > 0 {
+            rr.EffectiveGasPrice = hexEncodeBig(pt.Receipt.EffectiveGasPrice)
+        }
 		// handle a special value []byte{'U'} as unknown state
 		if len(pt.Receipt.Status) != 1 || pt.Receipt.Status[0] != 'U' {
 			rr.Status = hexEncodeBig(pt.Receipt.Status)
@@ -538,6 +546,7 @@ type EthereumTxData struct {
 	GasLimit             *big.Int `json:"gaslimit"`
 	GasUsed              *big.Int `json:"gasused"`
 	GasPrice             *big.Int `json:"gasprice"`
+	EffectiveGasPrice    *big.Int `json:"effectiveGasPrice,omitempty"`
 	MaxPriorityFeePerGas *big.Int `json:"maxPriorityFeePerGas,omitempty"`
 	MaxFeePerGas         *big.Int `json:"maxFeePerGas,omitempty"`
 	BaseFeePerGas        *big.Int `json:"baseFeePerGas,omitempty"`
@@ -577,6 +586,7 @@ func GetEthereumTxDataFromSpecificData(coinSpecificData interface{}) *EthereumTx
 				etd.Status = TxStatusFailure
 			}
 			etd.GasUsed, _ = hexutil.DecodeBig(csd.Receipt.GasUsed)
+			etd.EffectiveGasPrice, _ = hexutil.DecodeBig(csd.Receipt.EffectiveGasPrice)
 			etd.L1Fee, _ = hexutil.DecodeBig(csd.Receipt.L1Fee)
 			etd.L1GasPrice, _ = hexutil.DecodeBig(csd.Receipt.L1GasPrice)
 			etd.L1GasUsed, _ = hexutil.DecodeBig(csd.Receipt.L1GasUsed)
