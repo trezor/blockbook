@@ -1,6 +1,7 @@
 package tron
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -43,7 +44,7 @@ func (c *TronClient) BalanceAt(ctx context.Context, addrDesc bchain.AddressDescr
 
 // NonceAt is not supported by Tron RPC
 func (c *TronClient) NonceAt(ctx context.Context, addrDesc bchain.AddressDescriptor, blockNumber *big.Int) (uint64, error) {
-	return 1, nil
+	return 0, nil
 }
 
 // TronHash wraps a transaction hash to implement the EVMHash interface
@@ -253,17 +254,16 @@ func (b *TronRPC) getBlockRaw(hash string, height uint32, fullTxs bool) (json.Ra
 
 func (c *TronRPCClient) CallContext(ctx context.Context, result interface{}, method string, args ...interface{}) error {
 	var rawData json.RawMessage
-	var err error
 
 	if err := c.Client.CallContext(ctx, &rawData, method, args...); err != nil {
 		return err
 	}
 
 	// Clean up the response for Tron-specific (Tron has wrong stateRoot as '0x')
+	// Skip when returning raw JSON to avoid an extra marshal/unmarshal cycle.
 	if method == "eth_getBlockByHash" || method == "eth_getBlockByNumber" {
-		rawData, err = fixStateRoot(rawData)
-		if err != nil {
-			return err
+		if _, ok := result.(*json.RawMessage); !ok {
+			rawData = fixStateRoot(rawData)
 		}
 	}
 
@@ -279,15 +279,15 @@ func (c *TronRPCClient) CallContext(ctx context.Context, result interface{}, met
 //
 // Workaround: Replace invalid stateRoot with a zero hash to allow successful parsing by go-ethereum library
 // Reference: https://github.com/tronprotocol/java-tron/issues/5518
-func fixStateRoot(data []byte) ([]byte, error) {
-	var raw map[string]interface{}
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return nil, err
+func fixStateRoot(data []byte) []byte {
+	const (
+		stateRootBad  = `"stateRoot":"0x"`
+		stateRootGood = `"stateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000"`
+	)
+
+	if !bytes.Contains(data, []byte(stateRootBad)) {
+		return data
 	}
 
-	if stateRoot, ok := raw["stateRoot"].(string); ok && (stateRoot == "0x" || len(stateRoot) != 66) {
-		raw["stateRoot"] = "0x0000000000000000000000000000000000000000000000000000000000000000"
-	}
-
-	return json.Marshal(raw)
+	return bytes.Replace(data, []byte(stateRootBad), []byte(stateRootGood), 1)
 }
