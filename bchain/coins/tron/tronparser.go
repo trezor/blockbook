@@ -183,9 +183,11 @@ func (p *TronParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) ([]by
 		return nil, fmt.Errorf("failed to convert 'from' address: %w", err)
 	}
 
-	r.Tx.To, err = p.FromTronAddressToHex(r.Tx.To)
-	if err != nil {
-		return nil, fmt.Errorf("failed to convert 'to' address: %w", err)
+	if r.Tx.To != "" {
+		r.Tx.To, err = p.FromTronAddressToHex(r.Tx.To)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert 'to' address: %w", err)
+		}
 	}
 
 	for i, l := range r.Receipt.Logs {
