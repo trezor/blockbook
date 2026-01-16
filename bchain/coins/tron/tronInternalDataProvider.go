@@ -104,24 +104,31 @@ func buildInternalDataFromTronInfos(
 
 		d := &data[i]
 
-		topType, createdContract, err := detectTopType(info.InternalTransactions)
+		topType, contractAddr, err := detectTopType(info.InternalTransactions)
+		d.Type = topType
 		if err != nil {
 			return data, contracts, err
 		}
 
-		if topType == bchain.CALL && info.ContractAddress != "" {
-			topType = bchain.CREATE
-			createdContract = ToTronAddressFromAddress(info.ContractAddress)
+		if contractAddr != "" {
+			d.Contract = contractAddr
 		}
 
-		d.Type = topType
+		if topType == bchain.CALL && info.ContractAddress != "" {
+			topType = bchain.CREATE
+			contractAddr = ToTronAddressFromAddress(info.ContractAddress)
+		}
 
-		if createdContract != "" {
-			d.Contract = createdContract
+		if topType == bchain.CREATE && contractAddr != "" {
 			contracts = append(contracts, bchain.ContractInfo{
-				Contract:       createdContract,
+				Contract:       contractAddr,
 				CreatedInBlock: blockHeight,
 				Standard:       bchain.UnhandledTokenStandard,
+			})
+		} else if d.Type == bchain.SELFDESTRUCT {
+			contracts = append(contracts, bchain.ContractInfo{
+				Contract:          contractAddr,
+				DestructedInBlock: blockHeight,
 			})
 		}
 
@@ -171,13 +178,14 @@ func buildInternalDataFromTronInfos(
 }
 
 // we need to figure out the root type of the transaction
+// CREATE > SELFDESTRUCT > CALL
 func detectTopType(internalTxs []tronInternalTransaction) (
 	bchain.EthereumInternalTransactionType,
 	string,
 	error,
 ) {
-	topType := bchain.CALL
 	var createdContract string
+	var destructedContract string
 
 	for _, itx := range internalTxs {
 		t, err := tronNoteHexToInternalType(itx.Note)
@@ -189,17 +197,23 @@ func detectTopType(internalTxs []tronInternalTransaction) (
 		case bchain.CALL:
 			continue
 		case bchain.CREATE:
-			return bchain.CREATE,
-				ToTronAddressFromAddress(itx.TransferToAddress),
-				nil
-
+			if createdContract == "" {
+				createdContract = ToTronAddressFromAddress(itx.TransferToAddress)
+			}
 		case bchain.SELFDESTRUCT:
-			topType = bchain.SELFDESTRUCT
-
+			if destructedContract == "" {
+				destructedContract = ToTronAddressFromAddress(itx.CallerAddress)
+			}
 		default:
-			panic("unhandled eth internal transaction type")
+			glog.Warningf("Unknown Tron internal transaction type %v", t)
 		}
 	}
 
-	return topType, createdContract, nil
+	if createdContract != "" {
+		return bchain.CREATE, createdContract, nil
+	}
+	if destructedContract != "" {
+		return bchain.SELFDESTRUCT, destructedContract, nil
+	}
+	return bchain.CALL, "", nil
 }
