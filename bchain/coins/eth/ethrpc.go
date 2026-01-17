@@ -1648,6 +1648,11 @@ func (b *EthereumRPC) CheckENSExpiration(name string) (bool, error) {
 
 	// Extract the label (part before .eth)
 	label := strings.TrimSuffix(name, ".eth")
+	if strings.Contains(label, ".") {
+		// Base Registrar tracks only second-level .eth names; for subdomains, check the parent label.
+		parts := strings.Split(label, ".")
+		label = parts[len(parts)-1]
+	}
 
 	// Calculate token ID: keccak256(label)
 	labelHash := keccak256([]byte(label))
