@@ -1567,6 +1567,14 @@ func parseENSAddressFromResult(result string) (string, error) {
 	return "0x" + addressHex, nil
 }
 
+func (b *EthereumRPC) ensContracts() (string, string, error) {
+	if b.Testnet || b.MainNetChainID != MainNet {
+		// ENS contracts are mainnet-only here; avoid calling empty/uninitialized addresses on other networks.
+		return "", "", errors.New("ENS contracts not configured for this network")
+	}
+	return ENSRegistryAddress, ENSBaseRegistrarAddress, nil
+}
+
 // ResolveENS resolves ENS domain name to Ethereum address
 func (b *EthereumRPC) ResolveENS(name string) (*bchain.ENSResolution, error) {
 	glog.Infof("ResolveENS: Starting resolution for %s", name)
@@ -1581,9 +1589,15 @@ func (b *EthereumRPC) ResolveENS(name string) (*bchain.ENSResolution, error) {
 	node := ensNameHash(name)
 	glog.Infof("ResolveENS: Generated node hash %s for %s", node, name)
 
+	registry, _, err := b.ensContracts()
+	if err != nil {
+		// This avoids empty eth_call targets on L2s while keeping mainnet behavior unchanged
+		return &bchain.ENSResolution{Name: name, Error: "ENS not supported on this network"}, err
+	}
+
 	// Call resolver(bytes32) on the ENS registry
 	callData := map[string]string{
-		"to":   ENSRegistryAddress,
+		"to":   registry,
 		"data": ENSResolverFunctionSelector + node[2:],
 	}
 	// Call the resolver function on the ENS registry
@@ -1654,6 +1668,11 @@ func (b *EthereumRPC) CheckENSExpiration(name string) (bool, error) {
 		label = parts[len(parts)-1]
 	}
 
+	_, registrar, err := b.ensContracts()
+	if err != nil {
+		return false, err
+	}
+
 	// Calculate token ID: keccak256(label)
 	labelHash := keccak256([]byte(label))
 	tokenID := new(big.Int).SetBytes(labelHash)
@@ -1666,7 +1685,7 @@ func (b *EthereumRPC) CheckENSExpiration(name string) (bool, error) {
 
 	// Call nameExpires(uint256 id) on the Base Registrar
 	callData := map[string]string{
-		"to":   ENSBaseRegistrarAddress,
+		"to":   registrar,
 		"data": ENSExpirationFunctionSelector + tokenIDPadded,
 	}
 
