@@ -1,7 +1,12 @@
 {{define "main" -}}
 #!/usr/bin/dh-exec
 backend/* {{.Env.BackendInstallPath}}/{{.Coin.Alias}}
+{{/* Use .toml when the backend config file is alias.toml; default remains alias.conf. */}}
+{{if eq .Backend.ServerConfigFile (printf "%s.toml" .Coin.Alias)}}
+server.conf => {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.toml
+{{else}}
 server.conf => {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}.conf
+{{end}}
 client.conf => {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}_client.conf
 {{if .Backend.ExecScript }}exec.sh => {{.Env.BackendInstallPath}}/{{.Coin.Alias}}/{{.Coin.Alias}}_exec.sh{{end}}
 {{end}}
