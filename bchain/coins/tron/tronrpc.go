@@ -234,12 +234,16 @@ func (b *TronRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 		return nil, errors.Annotatef(err, "txid %v", txid)
 	}
 
-	if tx.Vout[0].ScriptPubKey.Addresses == nil && csd.Receipt.ContractAddress != "" {
+	if len(tx.Vout) > 0 &&
+		tx.Vout[0].ScriptPubKey.Addresses == nil &&
+		csd.Receipt != nil &&
+		csd.Receipt.ContractAddress != "" {
 		tx.Vout = []bchain.Vout{{
 			ValueSat: tx.Vout[0].ValueSat,
 			N:        0,
 			ScriptPubKey: bchain.ScriptPubKey{
-				Addresses: []string{ToTronAddressFromAddress(csd.Receipt.ContractAddress)}},
+				Addresses: []string{ToTronAddressFromAddress(csd.Receipt.ContractAddress)},
+			},
 		}}
 
 		csd.InternalData = &bchain.EthereumInternalData{
