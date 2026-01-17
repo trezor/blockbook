@@ -105,18 +105,18 @@ func buildInternalDataFromTronInfos(
 		d := &data[i]
 
 		topType, contractAddr, err := detectTopType(info.InternalTransactions)
-		d.Type = topType
 		if err != nil {
 			return data, contracts, err
-		}
-
-		if contractAddr != "" {
-			d.Contract = contractAddr
 		}
 
 		if topType == bchain.CALL && info.ContractAddress != "" {
 			topType = bchain.CREATE
 			contractAddr = ToTronAddressFromAddress(info.ContractAddress)
+		}
+
+		d.Type = topType
+		if contractAddr != "" {
+			d.Contract = contractAddr
 		}
 
 		if topType == bchain.CREATE && contractAddr != "" {
@@ -125,7 +125,7 @@ func buildInternalDataFromTronInfos(
 				CreatedInBlock: blockHeight,
 				Standard:       bchain.UnhandledTokenStandard,
 			})
-		} else if d.Type == bchain.SELFDESTRUCT {
+		} else if topType == bchain.SELFDESTRUCT {
 			contracts = append(contracts, bchain.ContractInfo{
 				Contract:          contractAddr,
 				DestructedInBlock: blockHeight,
