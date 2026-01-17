@@ -1,6 +1,7 @@
 package tron
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -62,7 +63,14 @@ func (p *TronParser) GetAddrDescFromAddress(address string) (bchain.AddressDescr
 		if len(decoded) != 25 || decoded[0] != 0x41 {
 			return nil, errors.New("invalid Tron base58 address")
 		}
-		return decoded[1:21], nil
+		payload := decoded[:21]
+		checksum := decoded[21:]
+		first := sha256.Sum256(payload)
+		second := sha256.Sum256(first[:])
+		if !bytes.Equal(checksum, second[:4]) {
+			return nil, errors.New("invalid Tron base58 checksum")
+		}
+		return payload[1:], nil
 	} else if len(address) != TronTypeAddressDescriptorLen*2 {
 		glog.Infof("Invalid Tron address length: got %d chars: %q", len(address), address)
 		return nil, bchain.ErrAddressMissing
