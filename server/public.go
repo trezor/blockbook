@@ -1041,11 +1041,6 @@ func (s *PublicServer) explorerSearch(w http.ResponseWriter, r *http.Request) (t
 						return noTpl, nil, nil
 					}
 				}
-				ensRes, err := ensResolver.ResolveENS(q)
-				if err == nil && ensRes.Address != "" {
-					http.Redirect(w, r, joinURL("/address/", ensRes.Address), http.StatusFound)
-					return noTpl, nil, nil
-				}
 			}
 		}
 		address, err = s.api.GetXpubAddress(q, 0, 1, api.AccountDetailsBasic, &api.AddressFilter{Vout: api.AddressFilterVoutOff}, 0, "")
