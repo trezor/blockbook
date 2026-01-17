@@ -444,3 +444,12 @@ func (c *blockChainWithMetrics) ResolveENS(name string) (*bchain.ENSResolution, 
 	}
 	return nil, errors.New("ENS resolution not supported by underlying chain")
 }
+
+func (c *blockChainWithMetrics) CheckENSExpiration(name string) (bool, error) {
+	if ensResolver, ok := c.b.(interface {
+		CheckENSExpiration(string) (bool, error)
+	}); ok {
+		return ensResolver.CheckENSExpiration(name)
+	}
+	return false, errors.New("ENS expiration check not supported by underlying chain")
+}
