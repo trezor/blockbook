@@ -2,6 +2,7 @@ package eth
 
 import (
 	"context"
+	"encoding/hex"
 	"math/big"
 	"strings"
 
@@ -32,14 +33,20 @@ const contractDecimalsSignature = "0x313ce567"
 const contractBalanceOfSignature = "0x70a08231"
 
 func addressFromPaddedHex(s string) (string, error) {
-	var t big.Int
-	var ok bool
+	// Logs/topics and calldata often include a 0x prefix; strip it so length math and decoding are consistent.
 	if has0xPrefix(s) {
-		_, ok = t.SetString(s[2:], 16)
-	} else {
-		_, ok = t.SetString(s, 16)
+		s = s[2:]
 	}
-	if !ok {
+	if len(s) >= EthereumTypeAddressDescriptorLen*2 {
+		// Fast path: padded topics/data store the address in the last 20 bytes.
+		s = s[len(s)-EthereumTypeAddressDescriptorLen*2:]
+		if b, err := hex.DecodeString(s); err == nil && len(b) == EthereumTypeAddressDescriptorLen {
+			return ethcommon.BytesToAddress(b).String(), nil
+		}
+	}
+	// Fallback: handle odd formats by parsing the full value as a number.
+	var t big.Int
+	if _, ok := t.SetString(s, 16); !ok {
 		return "", errors.New("Data is not a number")
 	}
 	a := ethcommon.BigToAddress(&t)
