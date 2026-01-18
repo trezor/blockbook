@@ -702,12 +702,12 @@ func addressAliasSpan(a string, td *TemplateData) template.HTML {
 	alias := getAddressAlias(a, td)
 	if alias == nil {
 		rv.WriteString(`<span class="copyable">`)
-		rv.WriteString(a)
+		rv.WriteString(html.EscapeString(a))
 	} else {
 		rv.WriteString(`<span class="copyable" cc="`)
 		rv.WriteString(html.EscapeString(a))
 		rv.WriteString(`" alias-type="`)
-		rv.WriteString(alias.Type)
+		rv.WriteString(html.EscapeString(alias.Type))
 		rv.WriteString(`">`)
 		rv.WriteString(html.EscapeString(alias.Alias))
 	}
