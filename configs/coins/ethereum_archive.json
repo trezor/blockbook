@@ -24,10 +24,10 @@
         "package_name": "backend-ethereum-archive",
         "package_revision": "satoshilabs-1",
         "system_user": "ethereum",
-        "version": "3.2.1",
-        "binary_url": "https://github.com/erigontech/erigon/releases/download/v3.2.1/erigon_v3.2.1_linux_amd64.tar.gz",
+        "version": "3.3.3",
+        "binary_url": "https://github.com/erigontech/erigon/releases/download/v3.3.3/erigon_v3.3.3_linux_amd64.tar.gz",
         "verification_type": "sha256",
-        "verification_source": "8b5444988667721f2b2ef1ab3098139c31f722492992939c110813408c39dc7c",
+        "verification_source": "f72e38acbd4581f8e652f11923c0b72d67a53ce1770894a2bdb881d64722b097",
         "extract_command": "tar -C backend --strip-components=1 -xf",
         "exclude_files": [],
         "exec_command_template": "/bin/sh -c '{{.Env.BackendInstallPath}}/{{.Coin.Alias}}/erigon --chain mainnet --snap.keepblocks --db.size.limit 15TB --db.pagesize 16KB --prune.mode archive --externalcl --nat none --datadir {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend/erigon --port {{.Ports.BackendP2P}} --ws --ws.addr {{.Env.RPCBindHost}} --ws.port {{.Ports.BackendRPC}} --http --http.port {{.Ports.BackendRPC}} --http.addr {{.Env.RPCBindHost}} --http.corsdomain \"*\" --http.vhosts \"*\" --http.api \"eth,net,web3,debug,txpool\" --authrpc.port {{.Ports.BackendAuthRpc}} --private.api.addr \"\" --torrent.port {{.Ports.BackendHttp}} --log.dir.path {{.Env.BackendDataPath}}/{{.Coin.Alias}}/backend --log.dir.prefix {{.Coin.Alias}}'",
@@ -41,8 +41,8 @@
         "client_config_file": "",
         "platforms": {
             "arm64": {
-                "binary_url": "https://github.com/erigontech/erigon/releases/download/v3.2.1/erigon_v3.2.1_linux_arm64.tar.gz",
-                "verification_source": "19a91709dc3ddbe947c4f81e70cb1de49044954e21f441e9ea46b3696f21b57f"
+                "binary_url": "https://github.com/erigontech/erigon/releases/download/v3.3.3/erigon_v3.3.3_linux_arm64.tar.gz",
+                "verification_source": "00fd630731eb95fd4c70bb921c6335b4a1c1a92ab60032c8bbc40a9497eae1b9"
             }
         }
     },
