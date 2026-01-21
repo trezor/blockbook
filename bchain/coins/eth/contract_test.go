@@ -27,14 +27,29 @@ func Test_addressFromPaddedHex(t *testing.T) {
 			wantHex: "5dc6288b35e0807a3d6feb89b3a2ff4ab773168e",
 		},
 		{
+			name:    "address_no_padding_no_prefix",
+			input:   "5dc6288b35e0807a3d6feb89b3a2ff4ab773168e",
+			wantHex: "5dc6288b35e0807a3d6feb89b3a2ff4ab773168e",
+		},
+		{
 			name:    "uppercase_prefix",
-			input:   "0X0000000000000000000000005dc6288b35e0807a3d6feb89b3a2ff4ab773168e",
+			input:   "0X0000000000000000000000005DC6288B35E0807A3D6FEB89B3A2FF4AB773168E",
 			wantHex: "5dc6288b35e0807a3d6feb89b3a2ff4ab773168e",
 		},
 		{
 			name:    "padded",
 			input:   "0x0000000000000000000000002aacf811ac1a60081ea39f7783c0d26c500871a8",
 			wantHex: "2aacf811ac1a60081ea39f7783c0d26c500871a8",
+		},
+		{
+			name:    "padded_no_prefix",
+			input:   "0000000000000000000000002aacf811ac1a60081ea39f7783c0d26c500871a8",
+			wantHex: "2aacf811ac1a60081ea39f7783c0d26c500871a8",
+		},
+		{
+			name:    "odd_length_over_40",
+			input:   "f5dc6288b35e0807a3d6feb89b3a2ff4ab773168e",
+			wantHex: "5dc6288b35e0807a3d6feb89b3a2ff4ab773168e",
 		},
 		{
 			name:    "all_zero",
@@ -47,6 +62,11 @@ func Test_addressFromPaddedHex(t *testing.T) {
 			wantHex: "00000000000000000000000000000000001a2b3c",
 		},
 		{
+			name:    "unpadded_with_prefix",
+			input:   "0x1a2b3c",
+			wantHex: "00000000000000000000000000000000001a2b3c",
+		},
+		{
 			name:    "invalid_fast_path",
 			input:   "0x0000000000000000000000002aacf811ac1a60081ea39f7783c0d26c500871zz",
 			wantErr: true,
@@ -54,6 +74,11 @@ func Test_addressFromPaddedHex(t *testing.T) {
 		{
 			name:    "invalid",
 			input:   "0xzz",
+			wantErr: true,
+		},
+		{
+			name:    "invalid_prefix_only",
+			input:   "0x",
 			wantErr: true,
 		},
 	}
