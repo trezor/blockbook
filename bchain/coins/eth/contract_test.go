@@ -3,6 +3,8 @@
 package eth
 
 import (
+	"bytes"
+	"encoding/hex"
 	"fmt"
 	"math/big"
 	"strings"
@@ -11,6 +13,105 @@ import (
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/tests/dbtestdata"
 )
+
+func Test_addressFromPaddedHex(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantHex string
+		wantErr bool
+	}{
+		{
+			name:    "address_no_padding_with_prefix",
+			input:   "0x5dc6288b35e0807a3d6feb89b3a2ff4ab773168e",
+			wantHex: "5dc6288b35e0807a3d6feb89b3a2ff4ab773168e",
+		},
+		{
+			name:    "address_no_padding_no_prefix",
+			input:   "5dc6288b35e0807a3d6feb89b3a2ff4ab773168e",
+			wantHex: "5dc6288b35e0807a3d6feb89b3a2ff4ab773168e",
+		},
+		{
+			name:    "uppercase_prefix",
+			input:   "0X0000000000000000000000005DC6288B35E0807A3D6FEB89B3A2FF4AB773168E",
+			wantHex: "5dc6288b35e0807a3d6feb89b3a2ff4ab773168e",
+		},
+		{
+			name:    "padded",
+			input:   "0x0000000000000000000000002aacf811ac1a60081ea39f7783c0d26c500871a8",
+			wantHex: "2aacf811ac1a60081ea39f7783c0d26c500871a8",
+		},
+		{
+			name:    "padded_no_prefix",
+			input:   "0000000000000000000000002aacf811ac1a60081ea39f7783c0d26c500871a8",
+			wantHex: "2aacf811ac1a60081ea39f7783c0d26c500871a8",
+		},
+		{
+			name:    "odd_length_over_40",
+			input:   "f5dc6288b35e0807a3d6feb89b3a2ff4ab773168e",
+			wantHex: "5dc6288b35e0807a3d6feb89b3a2ff4ab773168e",
+		},
+		{
+			name:    "all_zero",
+			input:   "0x0000000000000000000000000000000000000000000000000000000000000000",
+			wantHex: "0000000000000000000000000000000000000000",
+		},
+		{
+			name:    "unpadded",
+			input:   "1a2b3c",
+			wantHex: "00000000000000000000000000000000001a2b3c",
+		},
+		{
+			name:    "unpadded_with_prefix",
+			input:   "0x1a2b3c",
+			wantHex: "00000000000000000000000000000000001a2b3c",
+		},
+		{
+			name:    "invalid_fast_path",
+			input:   "0x0000000000000000000000002aacf811ac1a60081ea39f7783c0d26c500871zz",
+			wantErr: true,
+		},
+		{
+			name:    "invalid",
+			input:   "0xzz",
+			wantErr: true,
+		},
+		{
+			name:    "invalid_prefix_only",
+			input:   "0x",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := addressFromPaddedHex(tt.input)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("expected error for %q", tt.input)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("addressFromPaddedHex(%q) error %v", tt.input, err)
+			}
+			if len(got) < 2 || !strings.HasPrefix(got, "0x") {
+				t.Fatalf("addressFromPaddedHex(%q) returned %q", tt.input, got)
+			}
+			gotBytes, err := hex.DecodeString(got[2:])
+			if err != nil {
+				t.Fatalf("decode got %q error %v", got, err)
+			}
+			wantBytes, err := hex.DecodeString(tt.wantHex)
+			if err != nil {
+				t.Fatalf("decode want %q error %v", tt.wantHex, err)
+			}
+			if !bytes.Equal(gotBytes, wantBytes) {
+				t.Fatalf("addressFromPaddedHex(%q) bytes %x want %x", tt.input, gotBytes, wantBytes)
+			}
+		})
+	}
+}
 
 func Test_contractGetTransfersFromLog(t *testing.T) {
 	tests := []struct {
