@@ -3,6 +3,7 @@ package tron
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"time"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
@@ -34,11 +35,23 @@ type TronConfiguration struct {
 	HttpUrlTemplate     string `json:"tron_http_url_template"`
 }
 
+type tronBroadcastHexResponse struct {
+	Result  bool   `json:"result"`
+	TxID    string `json:"txid"`
+	Code    string `json:"code,omitempty"`
+	Message string `json:"message,omitempty"`
+}
+
+type tronGetTransactionByIDResponse struct {
+	RawDataHex string `json:"raw_data_hex"`
+}
+
 type TronRPC struct {
 	*eth.EthereumRPC
 	Parser      *TronParser
 	ChainConfig *TronConfiguration
 	mq          *bchain.MQ
+	http        TronHTTP
 }
 
 func NewTronRPC(config json.RawMessage, pushHandler func(bchain.NotificationType)) (bchain.BlockChain, error) {
@@ -67,6 +80,7 @@ func NewTronRPC(config json.RawMessage, pushHandler func(bchain.NotificationType
 	tronRpc.PushHandler = pushHandler
 
 	tronHTTP := NewTronHTTPClient(cfg.HttpUrlTemplate, time.Duration(cfg.RPCTimeout)*time.Second)
+	tronRpc.http = tronHTTP
 
 	internalProvider := NewTronInternalDataProvider(
 		tronHTTP,
@@ -304,12 +318,51 @@ func (b *TronRPC) GetContractInfo(contractDesc bchain.AddressDescriptor) (*bchai
 	return contract, nil
 }
 
-// SendRawTransaction is not supported by Tron JSON-RPC
 func (b *TronRPC) SendRawTransaction(tx string, disableAlternativeRPC bool) (string, error) {
-	return "", errors.New("SendRawTransaction is not supported by Tron JSON-RPC")
+	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+	defer cancel()
+
+	req := map[string]string{
+		"transaction": strings.TrimPrefix(tx, "0x"),
+	}
+	var resp tronBroadcastHexResponse
+	if err := b.http.Request(ctx, "/wallet/broadcasthex", req, &resp); err != nil {
+		return "", err
+	}
+	if !resp.Result {
+		if resp.Code != "" || resp.Message != "" {
+			return "", errors.Errorf("Tron broadcasthex failed: %s %s", resp.Code, resp.Message)
+		}
+		return "", errors.New("Tron broadcasthex failed")
+	}
+
+	txid := resp.TxID
+	if !strings.HasPrefix(txid, "0x") {
+		txid = "0x" + txid
+	}
+	if b.ChainConfig.DisableMempoolSync && b.Mempool != nil {
+		b.Mempool.AddTransactionToMempool(txid)
+	}
+	return txid, nil
 }
 
-// EthereumTypeGetRawTransaction is not supported by Tron JSON-RPC
 func (b *TronRPC) EthereumTypeGetRawTransaction(txid string) (string, error) {
-	return "", errors.New("EthereumTypeGetRawTransaction is not supported by Tron JSON-RPC")
+	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+	defer cancel()
+
+	req := map[string]string{
+		"value": strings.TrimPrefix(txid, "0x"),
+	}
+	var resp tronGetTransactionByIDResponse
+	if err := b.http.Request(ctx, "/wallet/gettransactionbyid", req, &resp); err != nil {
+		return "", err
+	}
+	if resp.RawDataHex == "" {
+		return "", errors.Errorf("Tron gettransactionbyid returned empty raw_data_hex for %s", txid)
+	}
+	rawHex := resp.RawDataHex
+	if !strings.HasPrefix(rawHex, "0x") {
+		rawHex = "0x" + rawHex
+	}
+	return rawHex, nil
 }
