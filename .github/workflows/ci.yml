@@ -18,6 +18,11 @@ jobs:
       with:
         go-version: '1.21'
     
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y librocksdb-dev libzmq3-dev pkg-config
+    
     - name: Download dependencies
       run: go mod download
     
