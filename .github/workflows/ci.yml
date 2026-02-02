@@ -13,19 +13,13 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     
-    - name: Set up Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: '1.21'
+    - name: Build Docker image
+      run: make build-images
     
-    - name: Install system dependencies
+    - name: Run unit tests in Docker
       run: |
-        sudo apt-get update
-        sudo apt-get install -y librocksdb-dev libzmq3-dev pkg-config
-    
-    - name: Download dependencies
-      run: go mod download
-    
-    - name: Run unit tests
-      run: |
-        go test -tags 'unittest' $(go list ./... | grep -vP '^github.com/trezor/blockbook/(contrib|tests)')
+        docker run --rm -v "$(pwd):/src" blockbook-build bash -c "
+          cd /src && 
+          go mod download && 
+          go test -tags 'unittest' \$(go list ./... | grep -vP '^github.com/trezor/blockbook/(contrib|tests)')
+        "
