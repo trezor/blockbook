@@ -20,6 +20,46 @@ type BaseRPC struct {
 	*eth.EthereumRPC
 }
 
+// baseParserWrapper wraps EthereumParser to filter NFT transfers
+type baseParserWrapper struct {
+	*eth.EthereumParser
+}
+
+// EthereumTypeGetTokenTransfersFromTx returns contract transfers from bchain.Tx
+// Overridden to skip NFT transfers for Base
+// TEMPORARY FIX: Skip NFT processing for Base due to performance/consistency issues
+// This is a workaround to handle NFT-related DB consistency problems.
+func (p *baseParserWrapper) EthereumTypeGetTokenTransfersFromTx(tx *bchain.Tx) (bchain.TokenTransfers, error) {
+	// Call parent implementation to get all transfers
+	transfers, err := p.EthereumParser.EthereumTypeGetTokenTransfersFromTx(tx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Filter out NFT transfers (ERC721 and ERC1155)
+	if len(transfers) == 0 {
+		return transfers, nil
+	}
+
+	filtered := make(bchain.TokenTransfers, 0, len(transfers))
+	skippedCount := 0
+
+	for _, transfer := range transfers {
+		// Skip ERC721 (NonFungibleToken) and ERC1155 (MultiToken)
+		if transfer.Standard == bchain.NonFungibleToken || transfer.Standard == bchain.MultiToken {
+			skippedCount++
+			continue
+		}
+		filtered = append(filtered, transfer)
+	}
+
+	if skippedCount > 0 {
+		glog.V(1).Infof("Skipped %d NFT transfers (ERC721/ERC1155)", skippedCount)
+	}
+
+	return filtered, nil
+}
+
 // NewBaseRPC returns new BaseRPC instance.
 func NewBaseRPC(config json.RawMessage, pushHandler func(bchain.NotificationType)) (bchain.BlockChain, error) {
 	c, err := eth.NewEthereumRPC(config, pushHandler)
@@ -72,4 +112,11 @@ func (b *BaseRPC) Initialize() error {
 	glog.Info("rpc: block chain ", b.Network)
 
 	return nil
+}
+
+// GetChainParser returns the Base parser which filters out NFT transfers
+func (b *BaseRPC) GetChainParser() bchain.BlockChainParser {
+	return &baseParserWrapper{
+		EthereumParser: b.Parser,
+	}
 }
