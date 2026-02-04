@@ -1,3 +1,6 @@
+configs/environ.overrides.json
+configs/environ.override.json
+
 vendor/
 data*/
 profile/
