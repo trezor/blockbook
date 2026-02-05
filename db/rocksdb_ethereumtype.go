@@ -70,6 +70,13 @@ type addrContractsHotEntry struct {
 	lastUpdateTime int64
 }
 
+type addrContractsCacheMeta struct {
+	sizeBytes      int
+	dirty          bool
+	lastUpdateTime int64
+	lastFlushTime  int64
+}
+
 type MultiTokenValues []bchain.MultiTokenValue
 
 func (s *MultiTokenValues) sort() bool {
@@ -461,12 +468,16 @@ func (d *RocksDB) addToAddressesAndContractsEthereumType(addrDesc bchain.Address
 	} else {
 		d.cbs.balancesHit++
 	}
+	now := blockTime
+	if now <= 0 {
+		now = time.Now().Unix()
+	}
 	sizeBytes := 0
 	if ac.Packed != nil {
 		sizeBytes = len(ac.Packed)
 	}
-	hotScore := d.updateAddrContractsHotness(strAddrDesc, sizeBytes, blockHeight, blockTime)
-	d.maybeCacheAddrContracts(strAddrDesc, ac, sizeBytes, hotScore)
+	hotScore := d.updateAddrContractsHotness(strAddrDesc, sizeBytes, blockHeight, now)
+	d.maybeCacheAddrContracts(strAddrDesc, ac, sizeBytes, hotScore, now)
 	if contract == nil {
 		if addTxCount {
 			if index == internalTransferFrom || index == internalTransferTo {
@@ -501,14 +512,11 @@ func (d *RocksDB) addToAddressesAndContractsEthereumType(addrDesc bchain.Address
 	if !counted {
 		ac.TotalTxs++
 	}
+	d.markAddrContractsCacheDirty(strAddrDesc, sizeBytes, now)
 	return nil
 }
 
-func (d *RocksDB) updateAddrContractsHotness(addrKey string, sizeBytes int, blockHeight uint32, blockTime int64) float64 {
-	now := blockTime
-	if now <= 0 {
-		now = time.Now().Unix()
-	}
+func (d *RocksDB) updateAddrContractsHotness(addrKey string, sizeBytes int, blockHeight uint32, now int64) float64 {
 	atomic.StoreInt64(&d.addrContractsHotLastTime, now)
 	if sizeBytes < d.addrContractsCacheMinSizeBytes {
 		return 0
@@ -551,7 +559,7 @@ func (d *RocksDB) updateAddrContractsHotness(addrKey string, sizeBytes int, bloc
 	return entry.score
 }
 
-func (d *RocksDB) maybeCacheAddrContracts(addrKey string, acs *unpackedAddrContracts, sizeBytes int, hotScore float64) {
+func (d *RocksDB) maybeCacheAddrContracts(addrKey string, acs *unpackedAddrContracts, sizeBytes int, hotScore float64, now int64) {
 	if acs == nil || sizeBytes == 0 {
 		return
 	}
@@ -561,7 +569,41 @@ func (d *RocksDB) maybeCacheAddrContracts(addrKey string, acs *unpackedAddrContr
 	d.addrContractsCacheMux.Lock()
 	if _, found := d.addrContractsCache[addrKey]; !found {
 		d.addrContractsCache[addrKey] = acs
+		d.addrContractsCacheMeta[addrKey] = &addrContractsCacheMeta{
+			sizeBytes:      sizeBytes,
+			dirty:          false,
+			lastUpdateTime: now,
+			lastFlushTime:  now,
+		}
 	}
+	d.addrContractsCacheMux.Unlock()
+}
+
+func (d *RocksDB) markAddrContractsCacheDirty(addrKey string, sizeBytes int, now int64) {
+	d.addrContractsCacheMux.Lock()
+	_, cached := d.addrContractsCache[addrKey]
+	if !cached {
+		d.addrContractsCacheMux.Unlock()
+		return
+	}
+	// Track dirty state for adaptive flush decisions.
+	meta, ok := d.addrContractsCacheMeta[addrKey]
+	if !ok {
+		meta = &addrContractsCacheMeta{
+			sizeBytes:      sizeBytes,
+			lastUpdateTime: now,
+			lastFlushTime:  now,
+		}
+		d.addrContractsCacheMeta[addrKey] = meta
+	}
+	if sizeBytes > 0 {
+		meta.sizeBytes = sizeBytes
+	}
+	if meta.lastFlushTime == 0 {
+		meta.lastFlushTime = now
+	}
+	meta.dirty = true
+	meta.lastUpdateTime = now
 	d.addrContractsCacheMux.Unlock()
 }
 
@@ -1907,6 +1949,10 @@ func (d *RocksDB) storeUnpackedAddressContracts(wb *grocksdb.WriteBatch, acm map
 		// address with 0 contracts is removed from db - happens on disconnect
 		if acs == nil || (acs.NonContractTxs == 0 && acs.InternalTxs == 0 && len(acs.Contracts) == 0) {
 			wb.DeleteCF(d.cfh[cfAddressContracts], bchain.AddressDescriptor(addrDesc))
+			d.addrContractsCacheMux.Lock()
+			delete(d.addrContractsCache, addrDesc)
+			delete(d.addrContractsCacheMeta, addrDesc)
+			d.addrContractsCacheMux.Unlock()
 		} else {
 			// do not store large address contracts found in cache
 			if _, found := d.addrContractsCache[addrDesc]; !found {
@@ -1929,36 +1975,90 @@ func (d *RocksDB) storeUnpackedAddressContracts(wb *grocksdb.WriteBatch, acm map
 	return nil
 }
 
-func (d *RocksDB) writeContractsCache() {
+type cacheFlushEntry struct {
+	addrDesc       string
+	acs            *unpackedAddrContracts
+	lastUpdateTime int64
+}
+
+func (d *RocksDB) shouldFlushAddrContracts(meta *addrContractsCacheMeta, now int64, force bool) bool {
+	if meta == nil || !meta.dirty {
+		return false
+	}
+	if force {
+		return true
+	}
+	// Flush cold entries or cap dirty age to avoid large periodic write bursts.
+	if d.addrContractsCacheFlushIdle > 0 && now-meta.lastUpdateTime >= int64(d.addrContractsCacheFlushIdle.Seconds()) {
+		return true
+	}
+	if d.addrContractsCacheFlushMaxAge > 0 && now-meta.lastFlushTime >= int64(d.addrContractsCacheFlushMaxAge.Seconds()) {
+		return true
+	}
+	return false
+}
+
+func (d *RocksDB) writeContractsCache(force bool) (int, uint64) {
 	wb := grocksdb.NewWriteBatch()
 	defer wb.Destroy()
 	var entries uint64
 	var bytes uint64
+	now := atomic.LoadInt64(&d.addrContractsHotLastTime)
+	if now <= 0 {
+		now = time.Now().Unix()
+	}
+	flushEntries := make([]cacheFlushEntry, 0)
 	d.addrContractsCacheMux.Lock()
 	for addrDesc, acs := range d.addrContractsCache {
-		buf := packUnpackedAddrContracts(acs)
-		wb.PutCF(d.cfh[cfAddressContracts], bchain.AddressDescriptor(addrDesc), buf)
+		meta := d.addrContractsCacheMeta[addrDesc]
+		if meta == nil {
+			continue
+		}
+		if d.shouldFlushAddrContracts(meta, now, force) {
+			flushEntries = append(flushEntries, cacheFlushEntry{
+				addrDesc:       addrDesc,
+				acs:            acs,
+				lastUpdateTime: meta.lastUpdateTime,
+			})
+		}
+	}
+	d.addrContractsCacheMux.Unlock()
+	if len(flushEntries) == 0 {
+		return 0, 0
+	}
+	for _, entry := range flushEntries {
+		buf := packUnpackedAddrContracts(entry.acs)
+		wb.PutCF(d.cfh[cfAddressContracts], bchain.AddressDescriptor(entry.addrDesc), buf)
 		entries++
 		bytes += uint64(len(buf))
 	}
-	d.addrContractsCacheMux.Unlock()
 	if err := d.WriteBatch(wb); err != nil {
 		glog.Error("writeContractsCache: failed to store addrContractsCache: ", err)
-		return
+		return 0, 0
 	}
 	if entries > 0 {
 		atomic.AddUint64(&d.addrContractsCacheWriteEntries, entries)
 		atomic.AddUint64(&d.addrContractsCacheWriteBytes, bytes)
 		atomic.AddUint64(&d.addrContractsCacheFlushes, 1)
 	}
+	d.addrContractsCacheMux.Lock()
+	for _, entry := range flushEntries {
+		meta := d.addrContractsCacheMeta[entry.addrDesc]
+		// If the entry was updated since selection, keep it dirty for a later flush.
+		if meta == nil || meta.lastUpdateTime != entry.lastUpdateTime {
+			continue
+		}
+		meta.dirty = false
+		meta.lastFlushTime = now
+	}
+	d.addrContractsCacheMux.Unlock()
+	return int(entries), bytes
 }
 
-func (d *RocksDB) storeAddrContractsCache() {
+func (d *RocksDB) storeAddrContractsCache(force bool) {
 	start := time.Now()
-	if len(d.addrContractsCache) > 0 {
-		d.writeContractsCache()
-	}
-	glog.Info("storeAddrContractsCache: store ", len(d.addrContractsCache), " entries in ", time.Since(start))
+	flushed, _ := d.writeContractsCache(force)
+	glog.Info("storeAddrContractsCache: store ", flushed, " entries (", len(d.addrContractsCache), " cached) in ", time.Since(start))
 }
 
 func (d *RocksDB) periodicStoreAddrContractsCache() {
@@ -1967,7 +2067,7 @@ func (d *RocksDB) periodicStoreAddrContractsCache() {
 	for {
 		<-timer.C
 		timer.Reset(period)
-		d.storeAddrContractsCache()
+		d.storeAddrContractsCache(false)
 		d.logAddrContractsCacheMetrics(period)
 		d.evictAddrContractsHot(0)
 	}

@@ -33,6 +33,12 @@ func (d *RocksDB) loadAddrContractsCacheConfigFromEnv() {
 	if v, ok := lookupEnvDuration(network+"_ADDR_CONTRACTS_CACHE_HOT_EVICT_AFTER", d.addrContractsHotEvictAfter); ok {
 		d.addrContractsHotEvictAfter = v
 	}
+	if v, ok := lookupEnvDuration(network+"_ADDR_CONTRACTS_CACHE_FLUSH_IDLE", d.addrContractsCacheFlushIdle); ok {
+		d.addrContractsCacheFlushIdle = v
+	}
+	if v, ok := lookupEnvDuration(network+"_ADDR_CONTRACTS_CACHE_FLUSH_MAX_AGE", d.addrContractsCacheFlushMaxAge); ok {
+		d.addrContractsCacheFlushMaxAge = v
+	}
 }
 
 func lookupEnvInt(key string, current int) (int, bool) {

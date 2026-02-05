@@ -25,6 +25,12 @@ Some behavior of Blockbook can be modified by environment variables. The variabl
 -   `<coin shortcut>_ADDR_CONTRACTS_CACHE_HOT_EVICT_AFTER`  
     Default: `6h`  
     Description: Evict hotness entries not updated for this duration (e.g. `6h`).
+-   `<coin shortcut>_ADDR_CONTRACTS_CACHE_FLUSH_IDLE`  
+    Default: `15m`  
+    Description: Flush dirty cache entries not updated for this duration.
+-   `<coin shortcut>_ADDR_CONTRACTS_CACHE_FLUSH_MAX_AGE`  
+    Default: `2h`  
+    Description: Flush dirty cache entries older than this duration, even if still hot.
 
 ## Build-time variables
 

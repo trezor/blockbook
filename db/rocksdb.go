@@ -62,6 +62,8 @@ const addrContractsCacheAlwaysSize = 1_000_000
 const addrContractsCacheHotMinScore = 2.0
 const addrContractsHotHalfLife = 30 * time.Minute
 const addrContractsHotEvictAfter = 6 * time.Hour
+const addrContractsCacheFlushIdle = 15 * time.Minute
+const addrContractsCacheFlushMaxAge = 2 * time.Hour
 
 // RocksDB handle
 type RocksDB struct {
@@ -80,6 +82,7 @@ type RocksDB struct {
 	connectBlockMux                sync.Mutex
 	addrContractsCacheMux          sync.Mutex
 	addrContractsCache             map[string]*unpackedAddrContracts
+	addrContractsCacheMeta         map[string]*addrContractsCacheMeta
 	addrContractsHotMux            sync.Mutex
 	addrContractsHot               map[string]*addrContractsHotEntry
 	addrContractsHotSeen           map[string]struct{}
@@ -90,6 +93,8 @@ type RocksDB struct {
 	addrContractsCacheHotMinScore  float64
 	addrContractsHotHalfLife       time.Duration
 	addrContractsHotEvictAfter     time.Duration
+	addrContractsCacheFlushIdle    time.Duration
+	addrContractsCacheFlushMaxAge  time.Duration
 	addrContractsCacheHit          uint64
 	addrContractsCacheMiss         uint64
 	addrContractsCacheSkipped      uint64
@@ -192,6 +197,7 @@ func NewRocksDB(path string, cacheSize, maxOpenFiles int, parser bchain.BlockCha
 		connectBlockMux:                sync.Mutex{},
 		addrContractsCacheMux:          sync.Mutex{},
 		addrContractsCache:             make(map[string]*unpackedAddrContracts),
+		addrContractsCacheMeta:         make(map[string]*addrContractsCacheMeta),
 		addrContractsHotMux:            sync.Mutex{},
 		addrContractsHot:               make(map[string]*addrContractsHotEntry),
 		addrContractsHotSeen:           make(map[string]struct{}),
@@ -200,6 +206,8 @@ func NewRocksDB(path string, cacheSize, maxOpenFiles int, parser bchain.BlockCha
 		addrContractsCacheHotMinScore:  addrContractsCacheHotMinScore,
 		addrContractsHotHalfLife:       addrContractsHotHalfLife,
 		addrContractsHotEvictAfter:     addrContractsHotEvictAfter,
+		addrContractsCacheFlushIdle:    addrContractsCacheFlushIdle,
+		addrContractsCacheFlushMaxAge:  addrContractsCacheFlushMaxAge,
 	}
 	if chainType == bchain.ChainEthereumType {
 		go r.periodicStoreAddrContractsCache()
@@ -221,7 +229,7 @@ func (d *RocksDB) Close() error {
 	if d.db != nil {
 		// store cached address contracts
 		if d.chainParser.GetChainType() == bchain.ChainEthereumType {
-			d.storeAddrContractsCache()
+			d.storeAddrContractsCache(true)
 		}
 		// store the internal state of the app
 		if d.is != nil && d.is.DbState == common.DbStateOpen {
