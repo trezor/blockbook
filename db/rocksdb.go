@@ -61,21 +61,29 @@ const addrContractsCacheMinSize = 300_000 // limit for caching address contracts
 
 // RocksDB handle
 type RocksDB struct {
-	path                  string
-	db                    *grocksdb.DB
-	wo                    *grocksdb.WriteOptions
-	ro                    *grocksdb.ReadOptions
-	cfh                   []*grocksdb.ColumnFamilyHandle
-	chainParser           bchain.BlockChainParser
-	is                    *common.InternalState
-	metrics               *common.Metrics
-	cache                 *grocksdb.Cache
-	maxOpenFiles          int
-	cbs                   connectBlockStats
-	extendedIndex         bool
-	connectBlockMux       sync.Mutex
-	addrContractsCacheMux sync.Mutex
-	addrContractsCache    map[string]*unpackedAddrContracts
+	path                           string
+	db                             *grocksdb.DB
+	wo                             *grocksdb.WriteOptions
+	ro                             *grocksdb.ReadOptions
+	cfh                            []*grocksdb.ColumnFamilyHandle
+	chainParser                    bchain.BlockChainParser
+	is                             *common.InternalState
+	metrics                        *common.Metrics
+	cache                          *grocksdb.Cache
+	maxOpenFiles                   int
+	cbs                            connectBlockStats
+	extendedIndex                  bool
+	connectBlockMux                sync.Mutex
+	addrContractsCacheMux          sync.Mutex
+	addrContractsCache             map[string]*unpackedAddrContracts
+	addrContractsCacheHit          uint64
+	addrContractsCacheMiss         uint64
+	addrContractsCacheSkipped      uint64
+	addrContractsWriteEntries      uint64
+	addrContractsWriteBytes        uint64
+	addrContractsCacheWriteEntries uint64
+	addrContractsCacheWriteBytes   uint64
+	addrContractsCacheFlushes      uint64
 }
 
 const (

@@ -3,10 +3,12 @@ package db
 import (
 	"bytes"
 	"encoding/hex"
+	"fmt"
 	"math/big"
 	"os"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	vlq "github.com/bsm/go-vlq"
@@ -1665,8 +1667,10 @@ func (d *RocksDB) getUnpackedAddrDescContracts(addrDesc bchain.AddressDescriptor
 	rv, found := d.addrContractsCache[string(addrDesc)]
 	d.addrContractsCacheMux.Unlock()
 	if found && rv != nil {
+		atomic.AddUint64(&d.addrContractsCacheHit, 1)
 		return rv, nil
 	}
+	atomic.AddUint64(&d.addrContractsCacheMiss, 1)
 	val, err := d.db.GetCF(d.ro, d.cfh[cfAddressContracts], addrDesc)
 	if err != nil {
 		return nil, err
@@ -1805,6 +1809,9 @@ func packUnpackedAddrContracts(acs *unpackedAddrContracts) []byte {
 }
 
 func (d *RocksDB) storeUnpackedAddressContracts(wb *grocksdb.WriteBatch, acm map[string]*unpackedAddrContracts) error {
+	var writes uint64
+	var writeBytes uint64
+	var skipped uint64
 	for addrDesc, acs := range acm {
 		// address with 0 contracts is removed from db - happens on disconnect
 		if acs == nil || (acs.NonContractTxs == 0 && acs.InternalTxs == 0 && len(acs.Contracts) == 0) {
@@ -1814,8 +1821,19 @@ func (d *RocksDB) storeUnpackedAddressContracts(wb *grocksdb.WriteBatch, acm map
 			if _, found := d.addrContractsCache[addrDesc]; !found {
 				buf := packUnpackedAddrContracts(acs)
 				wb.PutCF(d.cfh[cfAddressContracts], bchain.AddressDescriptor(addrDesc), buf)
+				writes++
+				writeBytes += uint64(len(buf))
+			} else {
+				skipped++
 			}
 		}
+	}
+	if writes > 0 {
+		atomic.AddUint64(&d.addrContractsWriteEntries, writes)
+		atomic.AddUint64(&d.addrContractsWriteBytes, writeBytes)
+	}
+	if skipped > 0 {
+		atomic.AddUint64(&d.addrContractsCacheSkipped, skipped)
 	}
 	return nil
 }
@@ -1823,14 +1841,24 @@ func (d *RocksDB) storeUnpackedAddressContracts(wb *grocksdb.WriteBatch, acm map
 func (d *RocksDB) writeContractsCache() {
 	wb := grocksdb.NewWriteBatch()
 	defer wb.Destroy()
+	var entries uint64
+	var bytes uint64
 	d.addrContractsCacheMux.Lock()
 	for addrDesc, acs := range d.addrContractsCache {
 		buf := packUnpackedAddrContracts(acs)
 		wb.PutCF(d.cfh[cfAddressContracts], bchain.AddressDescriptor(addrDesc), buf)
+		entries++
+		bytes += uint64(len(buf))
 	}
 	d.addrContractsCacheMux.Unlock()
 	if err := d.WriteBatch(wb); err != nil {
 		glog.Error("writeContractsCache: failed to store addrContractsCache: ", err)
+		return
+	}
+	if entries > 0 {
+		atomic.AddUint64(&d.addrContractsCacheWriteEntries, entries)
+		atomic.AddUint64(&d.addrContractsCacheWriteBytes, bytes)
+		atomic.AddUint64(&d.addrContractsCacheFlushes, 1)
 	}
 }
 
@@ -1849,5 +1877,64 @@ func (d *RocksDB) periodicStoreAddrContractsCache() {
 		<-timer.C
 		timer.Reset(period)
 		d.storeAddrContractsCache()
+		d.logAddrContractsCacheMetrics(period)
 	}
+}
+
+func (d *RocksDB) logAddrContractsCacheMetrics(period time.Duration) {
+	hits := atomic.SwapUint64(&d.addrContractsCacheHit, 0)
+	misses := atomic.SwapUint64(&d.addrContractsCacheMiss, 0)
+	skipped := atomic.SwapUint64(&d.addrContractsCacheSkipped, 0)
+	writes := atomic.SwapUint64(&d.addrContractsWriteEntries, 0)
+	writeBytes := atomic.SwapUint64(&d.addrContractsWriteBytes, 0)
+	cacheWrites := atomic.SwapUint64(&d.addrContractsCacheWriteEntries, 0)
+	cacheWriteBytes := atomic.SwapUint64(&d.addrContractsCacheWriteBytes, 0)
+	flushes := atomic.SwapUint64(&d.addrContractsCacheFlushes, 0)
+
+	total := hits + misses
+	if total == 0 && writes == 0 && cacheWrites == 0 && skipped == 0 && flushes == 0 {
+		return
+	}
+	hitRate := 0.0
+	if total > 0 {
+		hitRate = float64(hits) * 100 / float64(total)
+	}
+	avgWrite := uint64(0)
+	if writes > 0 {
+		avgWrite = writeBytes / writes
+	}
+	avgCacheWrite := uint64(0)
+	if cacheWrites > 0 {
+		avgCacheWrite = cacheWriteBytes / cacheWrites
+	}
+	glog.Infof(
+		"address cache: interval=%s hit=%d miss=%d hit_rate=%.1f%% writes=%d write_bytes=%s avg_write=%s cache_writes=%d cache_write_bytes=%s avg_cache_write=%s cache_skipped=%d cache_flushes=%d",
+		period,
+		hits,
+		misses,
+		hitRate,
+		writes,
+		formatBytesShort(writeBytes),
+		formatBytesShort(avgWrite),
+		cacheWrites,
+		formatBytesShort(cacheWriteBytes),
+		formatBytesShort(avgCacheWrite),
+		skipped,
+		flushes,
+	)
+}
+
+func formatBytesShort(bytes uint64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%dB", bytes)
+	}
+	div, exp := float64(unit), 0
+	b := float64(bytes)
+	for n := b / unit; n >= unit && exp < 4; n /= unit {
+		div *= unit
+		exp++
+	}
+	suffix := "KMGT"
+	return fmt.Sprintf("%.1f%ciB", b/div, suffix[exp])
 }
