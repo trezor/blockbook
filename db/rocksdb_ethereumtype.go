@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"math/big"
 	"os"
 	"sort"
@@ -62,6 +63,11 @@ func (s *Ids) remove(id big.Int) {
 	if i < len(*s) && (*s)[i].CmpAbs(&id) == 0 {
 		*s = append((*s)[:i], (*s)[i+1:]...)
 	}
+}
+
+type addrContractsHotEntry struct {
+	score          float64
+	lastUpdateTime int64
 }
 
 type MultiTokenValues []bchain.MultiTokenValue
@@ -438,7 +444,7 @@ func addToContract(c *unpackedAddrContract, contractIndex int, index int32, cont
 	return index
 }
 
-func (d *RocksDB) addToAddressesAndContractsEthereumType(addrDesc bchain.AddressDescriptor, btxID []byte, index int32, contract bchain.AddressDescriptor, transfer *bchain.TokenTransfer, addTxCount bool, addresses addressesMap, addressContracts map[string]*unpackedAddrContracts) error {
+func (d *RocksDB) addToAddressesAndContractsEthereumType(addrDesc bchain.AddressDescriptor, btxID []byte, index int32, contract bchain.AddressDescriptor, transfer *bchain.TokenTransfer, addTxCount bool, addresses addressesMap, addressContracts map[string]*unpackedAddrContracts, blockHeight uint32, blockTime int64) error {
 	var err error
 	strAddrDesc := string(addrDesc)
 	ac, e := addressContracts[strAddrDesc]
@@ -455,6 +461,12 @@ func (d *RocksDB) addToAddressesAndContractsEthereumType(addrDesc bchain.Address
 	} else {
 		d.cbs.balancesHit++
 	}
+	sizeBytes := 0
+	if ac.Packed != nil {
+		sizeBytes = len(ac.Packed)
+	}
+	hotScore := d.updateAddrContractsHotness(strAddrDesc, sizeBytes, blockHeight, blockTime)
+	d.maybeCacheAddrContracts(strAddrDesc, ac, sizeBytes, hotScore)
 	if contract == nil {
 		if addTxCount {
 			if index == internalTransferFrom || index == internalTransferTo {
@@ -492,6 +504,90 @@ func (d *RocksDB) addToAddressesAndContractsEthereumType(addrDesc bchain.Address
 	return nil
 }
 
+func (d *RocksDB) updateAddrContractsHotness(addrKey string, sizeBytes int, blockHeight uint32, blockTime int64) float64 {
+	now := blockTime
+	if now <= 0 {
+		now = time.Now().Unix()
+	}
+	atomic.StoreInt64(&d.addrContractsHotLastTime, now)
+	if sizeBytes < d.addrContractsCacheMinSizeBytes {
+		return 0
+	}
+
+	d.addrContractsHotMux.Lock()
+	defer d.addrContractsHotMux.Unlock()
+
+	if d.addrContractsHotBlock != blockHeight {
+		d.addrContractsHotBlock = blockHeight
+		d.addrContractsHotSeen = make(map[string]struct{})
+	}
+	if _, seen := d.addrContractsHotSeen[addrKey]; seen {
+		if entry, ok := d.addrContractsHot[addrKey]; ok {
+			return entry.score
+		}
+		return 0
+	}
+	d.addrContractsHotSeen[addrKey] = struct{}{}
+
+	entry, ok := d.addrContractsHot[addrKey]
+	if !ok {
+		entry = &addrContractsHotEntry{score: 0, lastUpdateTime: now}
+		d.addrContractsHot[addrKey] = entry
+	}
+
+	if entry.lastUpdateTime > 0 && now > entry.lastUpdateTime {
+		delta := float64(now - entry.lastUpdateTime)
+		halfLife := d.addrContractsHotHalfLife.Seconds()
+		if halfLife > 0 {
+			decay := math.Exp(-math.Ln2 * delta / halfLife)
+			entry.score *= decay
+		}
+	}
+	if entry.lastUpdateTime > 0 && now < entry.lastUpdateTime {
+		now = entry.lastUpdateTime
+	}
+	entry.score++
+	entry.lastUpdateTime = now
+	return entry.score
+}
+
+func (d *RocksDB) maybeCacheAddrContracts(addrKey string, acs *unpackedAddrContracts, sizeBytes int, hotScore float64) {
+	if acs == nil || sizeBytes == 0 {
+		return
+	}
+	if sizeBytes < d.addrContractsCacheAlwaysBytes && (sizeBytes < d.addrContractsCacheMinSizeBytes || hotScore < d.addrContractsCacheHotMinScore) {
+		return
+	}
+	d.addrContractsCacheMux.Lock()
+	if _, found := d.addrContractsCache[addrKey]; !found {
+		d.addrContractsCache[addrKey] = acs
+	}
+	d.addrContractsCacheMux.Unlock()
+}
+
+func (d *RocksDB) evictAddrContractsHot(now int64) {
+	if d.addrContractsHotEvictAfter <= 0 {
+		return
+	}
+	if now <= 0 {
+		now = atomic.LoadInt64(&d.addrContractsHotLastTime)
+		if now <= 0 {
+			now = time.Now().Unix()
+		}
+	}
+	cutoff := now - int64(d.addrContractsHotEvictAfter.Seconds())
+	if cutoff <= 0 {
+		return
+	}
+	d.addrContractsHotMux.Lock()
+	for key, entry := range d.addrContractsHot {
+		if entry.lastUpdateTime > 0 && entry.lastUpdateTime < cutoff {
+			delete(d.addrContractsHot, key)
+		}
+	}
+	d.addrContractsHotMux.Unlock()
+}
+
 type ethBlockTxContract struct {
 	from, to, contract bchain.AddressDescriptor
 	transferStandard   bchain.TokenStandard
@@ -519,7 +615,7 @@ type ethBlockTx struct {
 	internalData *ethInternalData
 }
 
-func (d *RocksDB) processBaseTxData(blockTx *ethBlockTx, tx *bchain.Tx, addresses addressesMap, addressContracts map[string]*unpackedAddrContracts) error {
+func (d *RocksDB) processBaseTxData(blockTx *ethBlockTx, tx *bchain.Tx, addresses addressesMap, addressContracts map[string]*unpackedAddrContracts, blockHeight uint32, blockTime int64) error {
 	var from, to bchain.AddressDescriptor
 	var err error
 	// there is only one output address in EthereumType transaction, store it in format txid 0
@@ -531,7 +627,7 @@ func (d *RocksDB) processBaseTxData(blockTx *ethBlockTx, tx *bchain.Tx, addresse
 				glog.Warningf("rocksdb: processBaseTxData: %v, tx %v, output", err, tx.Txid)
 			}
 		} else {
-			if err = d.addToAddressesAndContractsEthereumType(to, blockTx.btxID, transferTo, nil, nil, true, addresses, addressContracts); err != nil {
+			if err = d.addToAddressesAndContractsEthereumType(to, blockTx.btxID, transferTo, nil, nil, true, addresses, addressContracts, blockHeight, blockTime); err != nil {
 				return err
 			}
 			blockTx.to = to
@@ -545,7 +641,7 @@ func (d *RocksDB) processBaseTxData(blockTx *ethBlockTx, tx *bchain.Tx, addresse
 				glog.Warningf("rocksdb: processBaseTxData: %v, tx %v, input", err, tx.Txid)
 			}
 		} else {
-			if err = d.addToAddressesAndContractsEthereumType(from, blockTx.btxID, transferFrom, nil, nil, !bytes.Equal(from, to), addresses, addressContracts); err != nil {
+			if err = d.addToAddressesAndContractsEthereumType(from, blockTx.btxID, transferFrom, nil, nil, !bytes.Equal(from, to), addresses, addressContracts, blockHeight, blockTime); err != nil {
 				return err
 			}
 			blockTx.from = from
@@ -570,7 +666,7 @@ func (d *RocksDB) setAddressTxIndexesToAddressMap(addrDesc bchain.AddressDescrip
 }
 
 // existingBlock signals that internal data are reconnected to already indexed block after they failed during standard sync
-func (d *RocksDB) processInternalData(blockTx *ethBlockTx, tx *bchain.Tx, id *bchain.EthereumInternalData, addresses addressesMap, addressContracts map[string]*unpackedAddrContracts, existingBlock bool) error {
+func (d *RocksDB) processInternalData(blockTx *ethBlockTx, tx *bchain.Tx, id *bchain.EthereumInternalData, addresses addressesMap, addressContracts map[string]*unpackedAddrContracts, existingBlock bool, blockHeight uint32, blockTime int64) error {
 	blockTx.internalData = &ethInternalData{
 		internalType: id.Type,
 		errorMsg:     id.Error,
@@ -591,7 +687,7 @@ func (d *RocksDB) processInternalData(blockTx *ethBlockTx, tx *bchain.Tx, id *bc
 					return err
 				}
 			}
-			if err = d.addToAddressesAndContractsEthereumType(to, blockTx.btxID, internalTransferTo, nil, nil, true, addresses, addressContracts); err != nil {
+			if err = d.addToAddressesAndContractsEthereumType(to, blockTx.btxID, internalTransferTo, nil, nil, true, addresses, addressContracts, blockHeight, blockTime); err != nil {
 				return err
 			}
 		}
@@ -614,7 +710,7 @@ func (d *RocksDB) processInternalData(blockTx *ethBlockTx, tx *bchain.Tx, id *bc
 						return err
 					}
 				}
-				if err = d.addToAddressesAndContractsEthereumType(to, blockTx.btxID, internalTransferTo, nil, nil, true, addresses, addressContracts); err != nil {
+				if err = d.addToAddressesAndContractsEthereumType(to, blockTx.btxID, internalTransferTo, nil, nil, true, addresses, addressContracts, blockHeight, blockTime); err != nil {
 					return err
 				}
 				ito.to = to
@@ -630,7 +726,7 @@ func (d *RocksDB) processInternalData(blockTx *ethBlockTx, tx *bchain.Tx, id *bc
 						return err
 					}
 				}
-				if err = d.addToAddressesAndContractsEthereumType(from, blockTx.btxID, internalTransferFrom, nil, nil, !bytes.Equal(from, to), addresses, addressContracts); err != nil {
+				if err = d.addToAddressesAndContractsEthereumType(from, blockTx.btxID, internalTransferFrom, nil, nil, !bytes.Equal(from, to), addresses, addressContracts, blockHeight, blockTime); err != nil {
 					return err
 				}
 				ito.from = from
@@ -642,7 +738,7 @@ func (d *RocksDB) processInternalData(blockTx *ethBlockTx, tx *bchain.Tx, id *bc
 	return nil
 }
 
-func (d *RocksDB) processContractTransfers(blockTx *ethBlockTx, tx *bchain.Tx, addresses addressesMap, addressContracts map[string]*unpackedAddrContracts) error {
+func (d *RocksDB) processContractTransfers(blockTx *ethBlockTx, tx *bchain.Tx, addresses addressesMap, addressContracts map[string]*unpackedAddrContracts, blockHeight uint32, blockTime int64) error {
 	tokenTransfers, err := d.chainParser.EthereumTypeGetTokenTransfersFromTx(tx)
 	if err != nil {
 		glog.Warningf("rocksdb: processContractTransfers %v, tx %v", err, tx.Txid)
@@ -661,11 +757,11 @@ func (d *RocksDB) processContractTransfers(blockTx *ethBlockTx, tx *bchain.Tx, a
 			glog.Warningf("rocksdb: processContractTransfers %v, tx %v, transfer %v", err, tx.Txid, t)
 			continue
 		}
-		if err = d.addToAddressesAndContractsEthereumType(to, blockTx.btxID, int32(i), contract, t, true, addresses, addressContracts); err != nil {
+		if err = d.addToAddressesAndContractsEthereumType(to, blockTx.btxID, int32(i), contract, t, true, addresses, addressContracts, blockHeight, blockTime); err != nil {
 			return err
 		}
 		eq := bytes.Equal(from, to)
-		if err = d.addToAddressesAndContractsEthereumType(from, blockTx.btxID, ^int32(i), contract, t, !eq, addresses, addressContracts); err != nil {
+		if err = d.addToAddressesAndContractsEthereumType(from, blockTx.btxID, ^int32(i), contract, t, !eq, addresses, addressContracts, blockHeight, blockTime); err != nil {
 			return err
 		}
 		bc := &blockTx.contracts[i]
@@ -689,18 +785,18 @@ func (d *RocksDB) processAddressesEthereumType(block *bchain.Block, addresses ad
 		}
 		blockTx := &blockTxs[txi]
 		blockTx.btxID = btxID
-		if err = d.processBaseTxData(blockTx, tx, addresses, addressContracts); err != nil {
+		if err = d.processBaseTxData(blockTx, tx, addresses, addressContracts, block.Height, block.Time); err != nil {
 			return nil, err
 		}
 		// process internal data
 		eid, _ := tx.CoinSpecificData.(bchain.EthereumSpecificData)
 		if eid.InternalData != nil {
-			if err = d.processInternalData(blockTx, tx, eid.InternalData, addresses, addressContracts, false); err != nil {
+			if err = d.processInternalData(blockTx, tx, eid.InternalData, addresses, addressContracts, false, block.Height, block.Time); err != nil {
 				return nil, err
 			}
 		}
 		// store contract transfers
-		if err = d.processContractTransfers(blockTx, tx, addresses, addressContracts); err != nil {
+		if err = d.processContractTransfers(blockTx, tx, addresses, addressContracts, block.Height, block.Time); err != nil {
 			return nil, err
 		}
 	}
@@ -734,7 +830,7 @@ func (d *RocksDB) ReconnectInternalDataToBlockEthereumType(block *bchain.Block) 
 			blockTx := &blockTxs[txi]
 			blockTx.btxID = btxID
 			tx.BlockHeight = block.Height
-			if err = d.processInternalData(blockTx, tx, eid.InternalData, addresses, addressContracts, true); err != nil {
+			if err = d.processInternalData(blockTx, tx, eid.InternalData, addresses, addressContracts, true, block.Height, block.Time); err != nil {
 				return err
 			}
 		}
@@ -1681,11 +1777,6 @@ func (d *RocksDB) getUnpackedAddrDescContracts(addrDesc bchain.AddressDescriptor
 		return nil, nil
 	}
 	rv, err = partiallyUnpackAddrContracts(buf)
-	if err == nil && rv != nil && len(buf) > addrContractsCacheMinSize {
-		d.addrContractsCacheMux.Lock()
-		d.addrContractsCache[string(addrDesc)] = rv
-		d.addrContractsCacheMux.Unlock()
-	}
 	return rv, err
 }
 
@@ -1878,6 +1969,7 @@ func (d *RocksDB) periodicStoreAddrContractsCache() {
 		timer.Reset(period)
 		d.storeAddrContractsCache()
 		d.logAddrContractsCacheMetrics(period)
+		d.evictAddrContractsHot(0)
 	}
 }
 

@@ -58,6 +58,10 @@ const (
 )
 
 const addrContractsCacheMinSize = 300_000 // limit for caching address contracts in memory to speed up indexing
+const addrContractsCacheAlwaysSize = 1_000_000
+const addrContractsCacheHotMinScore = 2.0
+const addrContractsHotHalfLife = 30 * time.Minute
+const addrContractsHotEvictAfter = 6 * time.Hour
 
 // RocksDB handle
 type RocksDB struct {
@@ -76,6 +80,16 @@ type RocksDB struct {
 	connectBlockMux                sync.Mutex
 	addrContractsCacheMux          sync.Mutex
 	addrContractsCache             map[string]*unpackedAddrContracts
+	addrContractsHotMux            sync.Mutex
+	addrContractsHot               map[string]*addrContractsHotEntry
+	addrContractsHotSeen           map[string]struct{}
+	addrContractsHotBlock          uint32
+	addrContractsHotLastTime       int64
+	addrContractsCacheMinSizeBytes int
+	addrContractsCacheAlwaysBytes  int
+	addrContractsCacheHotMinScore  float64
+	addrContractsHotHalfLife       time.Duration
+	addrContractsHotEvictAfter     time.Duration
 	addrContractsCacheHit          uint64
 	addrContractsCacheMiss         uint64
 	addrContractsCacheSkipped      uint64
@@ -162,7 +176,31 @@ func NewRocksDB(path string, cacheSize, maxOpenFiles int, parser bchain.BlockCha
 	}
 	wo := grocksdb.NewDefaultWriteOptions()
 	ro := grocksdb.NewDefaultReadOptions()
-	r := &RocksDB{path, db, wo, ro, cfh, parser, nil, metrics, c, maxOpenFiles, connectBlockStats{}, extendedIndex, sync.Mutex{}, sync.Mutex{}, make(map[string]*unpackedAddrContracts)}
+	r := &RocksDB{
+		path:                           path,
+		db:                             db,
+		wo:                             wo,
+		ro:                             ro,
+		cfh:                            cfh,
+		chainParser:                    parser,
+		is:                             nil,
+		metrics:                        metrics,
+		cache:                          c,
+		maxOpenFiles:                   maxOpenFiles,
+		cbs:                            connectBlockStats{},
+		extendedIndex:                  extendedIndex,
+		connectBlockMux:                sync.Mutex{},
+		addrContractsCacheMux:          sync.Mutex{},
+		addrContractsCache:             make(map[string]*unpackedAddrContracts),
+		addrContractsHotMux:            sync.Mutex{},
+		addrContractsHot:               make(map[string]*addrContractsHotEntry),
+		addrContractsHotSeen:           make(map[string]struct{}),
+		addrContractsCacheMinSizeBytes: addrContractsCacheMinSize,
+		addrContractsCacheAlwaysBytes:  addrContractsCacheAlwaysSize,
+		addrContractsCacheHotMinScore:  addrContractsCacheHotMinScore,
+		addrContractsHotHalfLife:       addrContractsHotHalfLife,
+		addrContractsHotEvictAfter:     addrContractsHotEvictAfter,
+	}
 	if chainType == bchain.ChainEthereumType {
 		go r.periodicStoreAddrContractsCache()
 	}
@@ -2103,6 +2141,7 @@ func (d *RocksDB) SetInconsistentState(inconsistent bool) error {
 // SetInternalState sets the InternalState to be used by db to collect internal state
 func (d *RocksDB) SetInternalState(is *common.InternalState) {
 	d.is = is
+	d.loadAddrContractsCacheConfigFromEnv()
 }
 
 // GetInternalState gets the InternalState

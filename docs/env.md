@@ -10,6 +10,22 @@ Some behavior of Blockbook can be modified by environment variables. The variabl
 
 -   `<coin shortcut>_ALLOWED_RPC_CALL_TO` - Addresses to which `rpcCall` websocket requests can be made, as a comma-separated list. If omitted, `rpcCall` is enabled for all addresses.
 
+-   `<coin shortcut>_ADDR_CONTRACTS_CACHE_MIN_SIZE`  
+    Default: `300000`  
+    Description: Minimum packed size (bytes) to consider addressContracts hotness/caching. Accepts bytes or `K/M/G/T` suffixes (e.g. `300000`, `300K`, `1MiB`).
+-   `<coin shortcut>_ADDR_CONTRACTS_CACHE_ALWAYS_SIZE`  
+    Default: `1000000`  
+    Description: Always cache addressContracts above this packed size (bytes). Accepts bytes or `K/M/G/T` suffixes.
+-   `<coin shortcut>_ADDR_CONTRACTS_CACHE_HOT_MIN_SCORE`  
+    Default: `2`  
+    Description: Hotness score threshold for caching (float).
+-   `<coin shortcut>_ADDR_CONTRACTS_CACHE_HOT_HALF_LIFE`  
+    Default: `30m`  
+    Description: EWMA half‑life for hotness decay (duration, e.g. `30m`, `2h`).
+-   `<coin shortcut>_ADDR_CONTRACTS_CACHE_HOT_EVICT_AFTER`  
+    Default: `6h`  
+    Description: Evict hotness entries not updated for this duration (e.g. `6h`).
+
 ## Build-time variables
 
 -   `BB_RPC_URL_HTTP_<coin alias>` - Overrides `ipc.rpc_url_template` during package/config generation so build and
