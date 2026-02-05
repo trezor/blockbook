@@ -17,3 +17,6 @@ build/*.deb
 \.idea/
 __debug*
 .gocache/
+
+# Environment files with credentials
+*.env

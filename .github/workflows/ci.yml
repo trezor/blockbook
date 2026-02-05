@@ -7,19 +7,56 @@ on:
     branches: [ master ]
 
 jobs:
-  test:
+  unit-tests:
+    name: Unit Tests
     runs-on: ubuntu-latest
-    
+
     steps:
-    - uses: actions/checkout@v3
-    
+    - name: Checkout code
+      uses: actions/checkout@v4
+
     - name: Build Docker image
       run: make build-images
-    
-    - name: Run unit tests in Docker
-      run: |
-        docker run --rm -v "$(pwd):/src" blockbook-build bash -c "
-          cd /src && 
-          go mod download && 
-          go test -tags 'unittest' \$(go list ./... | grep -vP '^github.com/trezor/blockbook/(contrib|tests)')
-        "
+
+    - name: Run unit tests
+      run: make test
+
+  connectivity-tests:
+    name: Backend Connectivity Tests
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    if: vars.BB_RPC_URL_HTTP_BITCOIN != ''
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Build Docker image
+      run: make build-images
+
+    - name: Run connectivity tests
+      env:
+        # UTXO chains
+        BB_RPC_URL_HTTP_BITCOIN: ${{ vars.BB_RPC_URL_HTTP_BITCOIN }}
+        BB_RPC_URL_HTTP_BITCOIN_TESTNET: ${{ vars.BB_RPC_URL_HTTP_BITCOIN_TESTNET }}
+        BB_RPC_URL_HTTP_BITCOIN_TESTNET4: ${{ vars.BB_RPC_URL_HTTP_BITCOIN_TESTNET4 }}
+        BB_RPC_URL_HTTP_BCASH: ${{ vars.BB_RPC_URL_HTTP_BCASH }}
+        BB_RPC_URL_HTTP_DOGECOIN: ${{ vars.BB_RPC_URL_HTTP_DOGECOIN }}
+        BB_RPC_URL_HTTP_LITECOIN: ${{ vars.BB_RPC_URL_HTTP_LITECOIN }}
+        BB_RPC_URL_HTTP_ZCASH: ${{ vars.BB_RPC_URL_HTTP_ZCASH }}
+        # EVM chains (HTTP + WS)
+        BB_RPC_URL_HTTP_ETHEREUM: ${{ vars.BB_RPC_URL_HTTP_ETHEREUM }}
+        BB_RPC_URL_WS_ETHEREUM: ${{ vars.BB_RPC_URL_WS_ETHEREUM }}
+        BB_RPC_URL_HTTP_BSC: ${{ vars.BB_RPC_URL_HTTP_BSC }}
+        BB_RPC_URL_WS_BSC: ${{ vars.BB_RPC_URL_WS_BSC }}
+        BB_RPC_URL_HTTP_AVALANCHE: ${{ vars.BB_RPC_URL_HTTP_AVALANCHE }}
+        BB_RPC_URL_WS_AVALANCHE: ${{ vars.BB_RPC_URL_WS_AVALANCHE }}
+        BB_RPC_URL_HTTP_POLYGON: ${{ vars.BB_RPC_URL_HTTP_POLYGON }}
+        BB_RPC_URL_WS_POLYGON: ${{ vars.BB_RPC_URL_WS_POLYGON }}
+        BB_RPC_URL_HTTP_ARBITRUM: ${{ vars.BB_RPC_URL_HTTP_ARBITRUM }}
+        BB_RPC_URL_WS_ARBITRUM: ${{ vars.BB_RPC_URL_WS_ARBITRUM }}
+        BB_RPC_URL_HTTP_OPTIMISM: ${{ vars.BB_RPC_URL_HTTP_OPTIMISM }}
+        BB_RPC_URL_WS_OPTIMISM: ${{ vars.BB_RPC_URL_WS_OPTIMISM }}
+        BB_RPC_URL_HTTP_BASE: ${{ vars.BB_RPC_URL_HTTP_BASE }}
+        BB_RPC_URL_WS_BASE: ${{ vars.BB_RPC_URL_WS_BASE }}
+      run: make test-connectivity
