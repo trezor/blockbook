@@ -1,6 +1,7 @@
 package db
 
 import (
+	"sync/atomic"
 	"time"
 
 	"github.com/golang/glog"
@@ -250,7 +251,8 @@ func (b *BulkConnect) connectBlockBitcoinType(block *bchain.Block, storeBlockTxs
 			return err
 		}
 		if bac > b.bulkAddressesCount {
-			glog.Info("rocksdb: height ", b.height, ", stored ", bac, " addresses, done in ", time.Since(start))
+			oversizeSkipped := atomic.SwapUint64(&b.d.addrContractsCacheState.oversizeSkipped, 0)
+			glog.Info("rocksdb: height ", b.height, ", stored ", bac, " addresses, oversize_skipped=", oversizeSkipped, ", done in ", time.Since(start))
 		}
 	}
 	if storeAddressesChan != nil {
@@ -358,7 +360,8 @@ func (b *BulkConnect) connectBlockEthereumType(block *bchain.Block, storeBlockTx
 			return err
 		}
 		if bac > b.bulkAddressesCount {
-			glog.Info("rocksdb: height ", b.height, ", stored ", bac, " addresses, done in ", time.Since(start))
+			oversizeSkipped := atomic.SwapUint64(&b.d.addrContractsCacheState.oversizeSkipped, 0)
+			glog.Info("rocksdb: height ", b.height, ", stored ", bac, " addresses, oversize_skipped=", oversizeSkipped, ", done in ", time.Since(start))
 		}
 	} else {
 		// if there are blockSpecificData, store them
@@ -425,7 +428,8 @@ func (b *BulkConnect) Close() error {
 	if err := b.d.WriteBatch(wb); err != nil {
 		return err
 	}
-	glog.Info("rocksdb: height ", b.height, ", stored ", bac, " addresses, done in ", time.Since(start))
+	oversizeSkipped := atomic.SwapUint64(&b.d.addrContractsCacheState.oversizeSkipped, 0)
+	glog.Info("rocksdb: height ", b.height, ", stored ", bac, " addresses, oversize_skipped=", oversizeSkipped, ", done in ", time.Since(start))
 	if storeTxAddressesChan != nil {
 		if err := <-storeTxAddressesChan; err != nil {
 			return err

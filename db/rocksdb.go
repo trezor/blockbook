@@ -57,8 +57,8 @@ const (
 	addressBalanceDetailUTXOIndexed = 2
 )
 
-const addrContractsCacheMinSize = 300_000 // limit for caching address contracts in memory to speed up indexing
-const addrContractsCacheAlwaysSize = 300_000
+const addrContractsCacheMinSize = 100_000 // limit for caching address contracts in memory to speed up indexing
+const addrContractsSkipSize = 100_000
 const addrContractsCacheHotMinScore = 2.0
 const addrContractsHotHalfLife = 45 * time.Minute
 const addrContractsHotEvictAfter = 8 * time.Hour
@@ -179,7 +179,7 @@ func NewRocksDB(path string, cacheSize, maxOpenFiles int, parser bchain.BlockCha
 			hot:             make(map[string]*addrContractsHotEntry),
 			hotSeen:         make(map[string]struct{}),
 			minSizeBytes:    addrContractsCacheMinSize,
-			alwaysSizeBytes: addrContractsCacheAlwaysSize,
+			alwaysSizeBytes: addrContractsSkipSize,
 			hotMinScore:     addrContractsCacheHotMinScore,
 			hotHalfLife:     addrContractsHotHalfLife,
 			hotEvictAfter:   addrContractsHotEvictAfter,
