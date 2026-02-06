@@ -2,6 +2,7 @@ package db
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -23,7 +24,7 @@ type addrContractsCacheState struct {
 	hotEvictAfter   time.Duration
 	flushIdle       time.Duration
 	flushMaxAge     time.Duration
-	enabled         bool
+	enabled         atomic.Bool
 
 	hit               uint64
 	miss              uint64

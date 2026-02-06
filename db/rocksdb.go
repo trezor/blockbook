@@ -185,9 +185,9 @@ func NewRocksDB(path string, cacheSize, maxOpenFiles int, parser bchain.BlockCha
 			hotEvictAfter:   addrContractsHotEvictAfter,
 			flushIdle:       addrContractsCacheFlushIdle,
 			flushMaxAge:     addrContractsCacheFlushMaxAge,
-			enabled:         true,
 		},
 	}
+	r.addrContractsCacheState.enabled.Store(true)
 	if chainType == bchain.ChainEthereumType {
 		go r.periodicStoreAddrContractsCache()
 	}
@@ -2132,9 +2132,7 @@ func (d *RocksDB) SetInternalState(is *common.InternalState) {
 }
 
 func (d *RocksDB) setAddrContractsCacheEnabled(enabled bool) {
-	d.addrContractsCacheState.cacheMux.Lock()
-	d.addrContractsCacheState.enabled = enabled
-	d.addrContractsCacheState.cacheMux.Unlock()
+	d.addrContractsCacheState.enabled.Store(enabled)
 }
 
 // GetInternalState gets the InternalState
