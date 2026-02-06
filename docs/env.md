@@ -20,10 +20,10 @@ Some behavior of Blockbook can be modified by environment variables. The variabl
     Default: `2`  
     Description: Hotness score threshold for caching (float).
 -   `<coin shortcut>_ADDR_CONTRACTS_CACHE_HOT_HALF_LIFE`  
-    Default: `30m`  
+    Default: `45m`  
     Description: EWMA half‑life for hotness decay (duration, e.g. `30m`, `2h`).
 -   `<coin shortcut>_ADDR_CONTRACTS_CACHE_HOT_EVICT_AFTER`  
-    Default: `6h`  
+    Default: `8h`  
     Description: Evict hotness entries not updated for this duration (e.g. `6h`).
 -   `<coin shortcut>_ADDR_CONTRACTS_CACHE_FLUSH_IDLE`  
     Default: `15m`  

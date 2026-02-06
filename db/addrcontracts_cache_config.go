@@ -18,26 +18,26 @@ func (d *RocksDB) loadAddrContractsCacheConfigFromEnv() {
 		return
 	}
 
-	if v, ok := lookupEnvInt(network+"_ADDR_CONTRACTS_CACHE_MIN_SIZE", d.addrContractsCacheMinSizeBytes); ok {
-		d.addrContractsCacheMinSizeBytes = v
+	if v, ok := lookupEnvInt(network+"_ADDR_CONTRACTS_CACHE_MIN_SIZE", d.addrContractsCacheState.minSizeBytes); ok {
+		d.addrContractsCacheState.minSizeBytes = v
 	}
-	if v, ok := lookupEnvInt(network+"_ADDR_CONTRACTS_CACHE_ALWAYS_SIZE", d.addrContractsCacheAlwaysBytes); ok {
-		d.addrContractsCacheAlwaysBytes = v
+	if v, ok := lookupEnvInt(network+"_ADDR_CONTRACTS_CACHE_ALWAYS_SIZE", d.addrContractsCacheState.alwaysSizeBytes); ok {
+		d.addrContractsCacheState.alwaysSizeBytes = v
 	}
-	if v, ok := lookupEnvFloat(network+"_ADDR_CONTRACTS_CACHE_HOT_MIN_SCORE", d.addrContractsCacheHotMinScore); ok {
-		d.addrContractsCacheHotMinScore = v
+	if v, ok := lookupEnvFloat(network+"_ADDR_CONTRACTS_CACHE_HOT_MIN_SCORE", d.addrContractsCacheState.hotMinScore); ok {
+		d.addrContractsCacheState.hotMinScore = v
 	}
-	if v, ok := lookupEnvDuration(network+"_ADDR_CONTRACTS_CACHE_HOT_HALF_LIFE", d.addrContractsHotHalfLife); ok {
-		d.addrContractsHotHalfLife = v
+	if v, ok := lookupEnvDuration(network+"_ADDR_CONTRACTS_CACHE_HOT_HALF_LIFE", d.addrContractsCacheState.hotHalfLife); ok {
+		d.addrContractsCacheState.hotHalfLife = v
 	}
-	if v, ok := lookupEnvDuration(network+"_ADDR_CONTRACTS_CACHE_HOT_EVICT_AFTER", d.addrContractsHotEvictAfter); ok {
-		d.addrContractsHotEvictAfter = v
+	if v, ok := lookupEnvDuration(network+"_ADDR_CONTRACTS_CACHE_HOT_EVICT_AFTER", d.addrContractsCacheState.hotEvictAfter); ok {
+		d.addrContractsCacheState.hotEvictAfter = v
 	}
-	if v, ok := lookupEnvDuration(network+"_ADDR_CONTRACTS_CACHE_FLUSH_IDLE", d.addrContractsCacheFlushIdle); ok {
-		d.addrContractsCacheFlushIdle = v
+	if v, ok := lookupEnvDuration(network+"_ADDR_CONTRACTS_CACHE_FLUSH_IDLE", d.addrContractsCacheState.flushIdle); ok {
+		d.addrContractsCacheState.flushIdle = v
 	}
-	if v, ok := lookupEnvDuration(network+"_ADDR_CONTRACTS_CACHE_FLUSH_MAX_AGE", d.addrContractsCacheFlushMaxAge); ok {
-		d.addrContractsCacheFlushMaxAge = v
+	if v, ok := lookupEnvDuration(network+"_ADDR_CONTRACTS_CACHE_FLUSH_MAX_AGE", d.addrContractsCacheState.flushMaxAge); ok {
+		d.addrContractsCacheState.flushMaxAge = v
 	}
 }
 

@@ -71,7 +71,6 @@ type addrContractsHotEntry struct {
 }
 
 type addrContractsCacheMeta struct {
-	sizeBytes      int
 	dirty          bool
 	lastUpdateTime int64
 	lastFlushTime  int64
@@ -476,8 +475,10 @@ func (d *RocksDB) addToAddressesAndContractsEthereumType(addrDesc bchain.Address
 	if ac.Packed != nil {
 		sizeBytes = len(ac.Packed)
 	}
-	hotScore := d.updateAddrContractsHotness(strAddrDesc, sizeBytes, blockHeight, now)
-	d.maybeCacheAddrContracts(strAddrDesc, ac, sizeBytes, hotScore, now)
+	if d.addrContractsCacheState.enabled {
+		hotScore := d.updateAddrContractsHotness(strAddrDesc, sizeBytes, blockHeight, now)
+		d.maybeCacheAddrContracts(strAddrDesc, ac, sizeBytes, hotScore, now)
+	}
 	if contract == nil {
 		if addTxCount {
 			if index == internalTransferFrom || index == internalTransferTo {
@@ -512,40 +513,42 @@ func (d *RocksDB) addToAddressesAndContractsEthereumType(addrDesc bchain.Address
 	if !counted {
 		ac.TotalTxs++
 	}
-	d.markAddrContractsCacheDirty(strAddrDesc, sizeBytes, now)
+	if d.addrContractsCacheState.enabled {
+		d.markAddrContractsCacheDirty(strAddrDesc, sizeBytes, now)
+	}
 	return nil
 }
 
 func (d *RocksDB) updateAddrContractsHotness(addrKey string, sizeBytes int, blockHeight uint32, now int64) float64 {
-	atomic.StoreInt64(&d.addrContractsHotLastTime, now)
-	if sizeBytes < d.addrContractsCacheMinSizeBytes {
+	atomic.StoreInt64(&d.addrContractsCacheState.hotLastTime, now)
+	if sizeBytes < d.addrContractsCacheState.minSizeBytes {
 		return 0
 	}
 
-	d.addrContractsHotMux.Lock()
-	defer d.addrContractsHotMux.Unlock()
+	d.addrContractsCacheState.hotMux.Lock()
+	defer d.addrContractsCacheState.hotMux.Unlock()
 
-	if d.addrContractsHotBlock != blockHeight {
-		d.addrContractsHotBlock = blockHeight
-		d.addrContractsHotSeen = make(map[string]struct{})
+	if d.addrContractsCacheState.hotBlock != blockHeight {
+		d.addrContractsCacheState.hotBlock = blockHeight
+		d.addrContractsCacheState.hotSeen = make(map[string]struct{})
 	}
-	if _, seen := d.addrContractsHotSeen[addrKey]; seen {
-		if entry, ok := d.addrContractsHot[addrKey]; ok {
+	if _, seen := d.addrContractsCacheState.hotSeen[addrKey]; seen {
+		if entry, ok := d.addrContractsCacheState.hot[addrKey]; ok {
 			return entry.score
 		}
 		return 0
 	}
-	d.addrContractsHotSeen[addrKey] = struct{}{}
+	d.addrContractsCacheState.hotSeen[addrKey] = struct{}{}
 
-	entry, ok := d.addrContractsHot[addrKey]
+	entry, ok := d.addrContractsCacheState.hot[addrKey]
 	if !ok {
 		entry = &addrContractsHotEntry{score: 0, lastUpdateTime: now}
-		d.addrContractsHot[addrKey] = entry
+		d.addrContractsCacheState.hot[addrKey] = entry
 	}
 
 	if entry.lastUpdateTime > 0 && now > entry.lastUpdateTime {
 		delta := float64(now - entry.lastUpdateTime)
-		halfLife := d.addrContractsHotHalfLife.Seconds()
+		halfLife := d.addrContractsCacheState.hotHalfLife.Seconds()
 		if halfLife > 0 {
 			decay := math.Exp(-math.Ln2 * delta / halfLife)
 			entry.score *= decay
@@ -563,71 +566,69 @@ func (d *RocksDB) maybeCacheAddrContracts(addrKey string, acs *unpackedAddrContr
 	if acs == nil || sizeBytes == 0 {
 		return
 	}
-	if sizeBytes < d.addrContractsCacheAlwaysBytes && (sizeBytes < d.addrContractsCacheMinSizeBytes || hotScore < d.addrContractsCacheHotMinScore) {
+	if sizeBytes < d.addrContractsCacheState.alwaysSizeBytes && (sizeBytes < d.addrContractsCacheState.minSizeBytes || hotScore < d.addrContractsCacheState.hotMinScore) {
 		return
 	}
-	d.addrContractsCacheMux.Lock()
-	if _, found := d.addrContractsCache[addrKey]; !found {
-		d.addrContractsCache[addrKey] = acs
-		d.addrContractsCacheMeta[addrKey] = &addrContractsCacheMeta{
-			sizeBytes:      sizeBytes,
+	d.addrContractsCacheState.cacheMux.Lock()
+	if _, found := d.addrContractsCacheState.cache[addrKey]; !found {
+		d.addrContractsCacheState.cache[addrKey] = acs
+		d.addrContractsCacheState.cacheMeta[addrKey] = &addrContractsCacheMeta{
 			dirty:          false,
 			lastUpdateTime: now,
 			lastFlushTime:  now,
 		}
 	}
-	d.addrContractsCacheMux.Unlock()
+	d.addrContractsCacheState.cacheMux.Unlock()
 }
 
 func (d *RocksDB) markAddrContractsCacheDirty(addrKey string, sizeBytes int, now int64) {
-	d.addrContractsCacheMux.Lock()
-	_, cached := d.addrContractsCache[addrKey]
+	d.addrContractsCacheState.cacheMux.Lock()
+	_, cached := d.addrContractsCacheState.cache[addrKey]
 	if !cached {
-		d.addrContractsCacheMux.Unlock()
+		d.addrContractsCacheState.cacheMux.Unlock()
 		return
 	}
 	// Track dirty state for adaptive flush decisions.
-	meta, ok := d.addrContractsCacheMeta[addrKey]
+	meta, ok := d.addrContractsCacheState.cacheMeta[addrKey]
 	if !ok {
 		meta = &addrContractsCacheMeta{
-			sizeBytes:      sizeBytes,
 			lastUpdateTime: now,
 			lastFlushTime:  now,
 		}
-		d.addrContractsCacheMeta[addrKey] = meta
-	}
-	if sizeBytes > 0 {
-		meta.sizeBytes = sizeBytes
+		d.addrContractsCacheState.cacheMeta[addrKey] = meta
 	}
 	if meta.lastFlushTime == 0 {
 		meta.lastFlushTime = now
 	}
 	meta.dirty = true
 	meta.lastUpdateTime = now
-	d.addrContractsCacheMux.Unlock()
+	d.addrContractsCacheState.cacheMux.Unlock()
 }
 
 func (d *RocksDB) evictAddrContractsHot(now int64) {
-	if d.addrContractsHotEvictAfter <= 0 {
+	if d.addrContractsCacheState.hotEvictAfter <= 0 {
+		return
+	}
+	if !d.addrContractsCacheState.enabled {
 		return
 	}
 	if now <= 0 {
-		now = atomic.LoadInt64(&d.addrContractsHotLastTime)
+		now = atomic.LoadInt64(&d.addrContractsCacheState.hotLastTime)
 		if now <= 0 {
 			now = time.Now().Unix()
 		}
 	}
-	cutoff := now - int64(d.addrContractsHotEvictAfter.Seconds())
+	cutoff := now - int64(d.addrContractsCacheState.hotEvictAfter.Seconds())
 	if cutoff <= 0 {
 		return
 	}
-	d.addrContractsHotMux.Lock()
-	for key, entry := range d.addrContractsHot {
+	d.addrContractsCacheState.hotMux.Lock()
+	for key, entry := range d.addrContractsCacheState.hot {
 		if entry.lastUpdateTime > 0 && entry.lastUpdateTime < cutoff {
-			delete(d.addrContractsHot, key)
+			delete(d.addrContractsCacheState.hot, key)
 		}
 	}
-	d.addrContractsHotMux.Unlock()
+	d.addrContractsCacheState.hotMux.Unlock()
 }
 
 type ethBlockTxContract struct {
@@ -1801,14 +1802,14 @@ func (s *unpackedMultiTokenValues) upsert(m bchain.MultiTokenValue, index int32,
 
 // getUnpackedAddrDescContracts returns partially unpacked AddrContracts for given addrDesc
 func (d *RocksDB) getUnpackedAddrDescContracts(addrDesc bchain.AddressDescriptor) (*unpackedAddrContracts, error) {
-	d.addrContractsCacheMux.Lock()
-	rv, found := d.addrContractsCache[string(addrDesc)]
-	d.addrContractsCacheMux.Unlock()
+	d.addrContractsCacheState.cacheMux.Lock()
+	rv, found := d.addrContractsCacheState.cache[string(addrDesc)]
+	d.addrContractsCacheState.cacheMux.Unlock()
 	if found && rv != nil {
-		atomic.AddUint64(&d.addrContractsCacheHit, 1)
+		atomic.AddUint64(&d.addrContractsCacheState.hit, 1)
 		return rv, nil
 	}
-	atomic.AddUint64(&d.addrContractsCacheMiss, 1)
+	atomic.AddUint64(&d.addrContractsCacheState.miss, 1)
 	val, err := d.db.GetCF(d.ro, d.cfh[cfAddressContracts], addrDesc)
 	if err != nil {
 		return nil, err
@@ -1949,13 +1950,13 @@ func (d *RocksDB) storeUnpackedAddressContracts(wb *grocksdb.WriteBatch, acm map
 		// address with 0 contracts is removed from db - happens on disconnect
 		if acs == nil || (acs.NonContractTxs == 0 && acs.InternalTxs == 0 && len(acs.Contracts) == 0) {
 			wb.DeleteCF(d.cfh[cfAddressContracts], bchain.AddressDescriptor(addrDesc))
-			d.addrContractsCacheMux.Lock()
-			delete(d.addrContractsCache, addrDesc)
-			delete(d.addrContractsCacheMeta, addrDesc)
-			d.addrContractsCacheMux.Unlock()
+			d.addrContractsCacheState.cacheMux.Lock()
+			delete(d.addrContractsCacheState.cache, addrDesc)
+			delete(d.addrContractsCacheState.cacheMeta, addrDesc)
+			d.addrContractsCacheState.cacheMux.Unlock()
 		} else {
 			// do not store large address contracts found in cache
-			if _, found := d.addrContractsCache[addrDesc]; !found {
+			if _, found := d.addrContractsCacheState.cache[addrDesc]; !found {
 				buf := packUnpackedAddrContracts(acs)
 				wb.PutCF(d.cfh[cfAddressContracts], bchain.AddressDescriptor(addrDesc), buf)
 				writes++
@@ -1966,11 +1967,11 @@ func (d *RocksDB) storeUnpackedAddressContracts(wb *grocksdb.WriteBatch, acm map
 		}
 	}
 	if writes > 0 {
-		atomic.AddUint64(&d.addrContractsWriteEntries, writes)
-		atomic.AddUint64(&d.addrContractsWriteBytes, writeBytes)
+		atomic.AddUint64(&d.addrContractsCacheState.writeEntries, writes)
+		atomic.AddUint64(&d.addrContractsCacheState.writeBytes, writeBytes)
 	}
 	if skipped > 0 {
-		atomic.AddUint64(&d.addrContractsCacheSkipped, skipped)
+		atomic.AddUint64(&d.addrContractsCacheState.skipped, skipped)
 	}
 	return nil
 }
@@ -1989,10 +1990,10 @@ func (d *RocksDB) shouldFlushAddrContracts(meta *addrContractsCacheMeta, now int
 		return true
 	}
 	// Flush cold entries or cap dirty age to avoid large periodic write bursts.
-	if d.addrContractsCacheFlushIdle > 0 && now-meta.lastUpdateTime >= int64(d.addrContractsCacheFlushIdle.Seconds()) {
+	if d.addrContractsCacheState.flushIdle > 0 && now-meta.lastUpdateTime >= int64(d.addrContractsCacheState.flushIdle.Seconds()) {
 		return true
 	}
-	if d.addrContractsCacheFlushMaxAge > 0 && now-meta.lastFlushTime >= int64(d.addrContractsCacheFlushMaxAge.Seconds()) {
+	if d.addrContractsCacheState.flushMaxAge > 0 && now-meta.lastFlushTime >= int64(d.addrContractsCacheState.flushMaxAge.Seconds()) {
 		return true
 	}
 	return false
@@ -2003,14 +2004,14 @@ func (d *RocksDB) writeContractsCache(force bool) (int, uint64) {
 	defer wb.Destroy()
 	var entries uint64
 	var bytes uint64
-	now := atomic.LoadInt64(&d.addrContractsHotLastTime)
+	now := atomic.LoadInt64(&d.addrContractsCacheState.hotLastTime)
 	if now <= 0 {
 		now = time.Now().Unix()
 	}
 	flushEntries := make([]cacheFlushEntry, 0)
-	d.addrContractsCacheMux.Lock()
-	for addrDesc, acs := range d.addrContractsCache {
-		meta := d.addrContractsCacheMeta[addrDesc]
+	d.addrContractsCacheState.cacheMux.Lock()
+	for addrDesc, acs := range d.addrContractsCacheState.cache {
+		meta := d.addrContractsCacheState.cacheMeta[addrDesc]
 		if meta == nil {
 			continue
 		}
@@ -2022,7 +2023,7 @@ func (d *RocksDB) writeContractsCache(force bool) (int, uint64) {
 			})
 		}
 	}
-	d.addrContractsCacheMux.Unlock()
+	d.addrContractsCacheState.cacheMux.Unlock()
 	if len(flushEntries) == 0 {
 		return 0, 0
 	}
@@ -2037,13 +2038,13 @@ func (d *RocksDB) writeContractsCache(force bool) (int, uint64) {
 		return 0, 0
 	}
 	if entries > 0 {
-		atomic.AddUint64(&d.addrContractsCacheWriteEntries, entries)
-		atomic.AddUint64(&d.addrContractsCacheWriteBytes, bytes)
-		atomic.AddUint64(&d.addrContractsCacheFlushes, 1)
+		atomic.AddUint64(&d.addrContractsCacheState.cacheWriteEntries, entries)
+		atomic.AddUint64(&d.addrContractsCacheState.cacheWriteBytes, bytes)
+		atomic.AddUint64(&d.addrContractsCacheState.cacheFlushes, 1)
 	}
-	d.addrContractsCacheMux.Lock()
+	d.addrContractsCacheState.cacheMux.Lock()
 	for _, entry := range flushEntries {
-		meta := d.addrContractsCacheMeta[entry.addrDesc]
+		meta := d.addrContractsCacheState.cacheMeta[entry.addrDesc]
 		// If the entry was updated since selection, keep it dirty for a later flush.
 		if meta == nil || meta.lastUpdateTime != entry.lastUpdateTime {
 			continue
@@ -2051,14 +2052,14 @@ func (d *RocksDB) writeContractsCache(force bool) (int, uint64) {
 		meta.dirty = false
 		meta.lastFlushTime = now
 	}
-	d.addrContractsCacheMux.Unlock()
+	d.addrContractsCacheState.cacheMux.Unlock()
 	return int(entries), bytes
 }
 
 func (d *RocksDB) storeAddrContractsCache(force bool) {
 	start := time.Now()
 	flushed, _ := d.writeContractsCache(force)
-	glog.Info("storeAddrContractsCache: store ", flushed, " entries (", len(d.addrContractsCache), " cached) in ", time.Since(start))
+	glog.Info("storeAddrContractsCache: store ", flushed, " entries (", len(d.addrContractsCacheState.cache), " cached) in ", time.Since(start))
 }
 
 func (d *RocksDB) periodicStoreAddrContractsCache() {
@@ -2067,6 +2068,9 @@ func (d *RocksDB) periodicStoreAddrContractsCache() {
 	for {
 		<-timer.C
 		timer.Reset(period)
+		if !d.addrContractsCacheState.enabled {
+			continue
+		}
 		d.storeAddrContractsCache(false)
 		d.logAddrContractsCacheMetrics(period)
 		d.evictAddrContractsHot(0)
@@ -2074,14 +2078,17 @@ func (d *RocksDB) periodicStoreAddrContractsCache() {
 }
 
 func (d *RocksDB) logAddrContractsCacheMetrics(period time.Duration) {
-	hits := atomic.SwapUint64(&d.addrContractsCacheHit, 0)
-	misses := atomic.SwapUint64(&d.addrContractsCacheMiss, 0)
-	skipped := atomic.SwapUint64(&d.addrContractsCacheSkipped, 0)
-	writes := atomic.SwapUint64(&d.addrContractsWriteEntries, 0)
-	writeBytes := atomic.SwapUint64(&d.addrContractsWriteBytes, 0)
-	cacheWrites := atomic.SwapUint64(&d.addrContractsCacheWriteEntries, 0)
-	cacheWriteBytes := atomic.SwapUint64(&d.addrContractsCacheWriteBytes, 0)
-	flushes := atomic.SwapUint64(&d.addrContractsCacheFlushes, 0)
+	if !d.addrContractsCacheState.enabled {
+		return
+	}
+	hits := atomic.SwapUint64(&d.addrContractsCacheState.hit, 0)
+	misses := atomic.SwapUint64(&d.addrContractsCacheState.miss, 0)
+	skipped := atomic.SwapUint64(&d.addrContractsCacheState.skipped, 0)
+	writes := atomic.SwapUint64(&d.addrContractsCacheState.writeEntries, 0)
+	writeBytes := atomic.SwapUint64(&d.addrContractsCacheState.writeBytes, 0)
+	cacheWrites := atomic.SwapUint64(&d.addrContractsCacheState.cacheWriteEntries, 0)
+	cacheWriteBytes := atomic.SwapUint64(&d.addrContractsCacheState.cacheWriteBytes, 0)
+	flushes := atomic.SwapUint64(&d.addrContractsCacheState.cacheFlushes, 0)
 
 	total := hits + misses
 	if total == 0 && writes == 0 && cacheWrites == 0 && skipped == 0 && flushes == 0 {

@@ -54,6 +54,9 @@ func (d *RocksDB) InitBulkConnect() (*BulkConnect, error) {
 		addressContracts: make(map[string]*unpackedAddrContracts),
 		blockFilters:     make(map[string][]byte),
 	}
+	if b.chainType == bchain.ChainEthereumType {
+		d.setAddrContractsCacheEnabled(false)
+	}
 	if err := d.SetInconsistentState(true); err != nil {
 		return nil, err
 	}
@@ -437,6 +440,9 @@ func (b *BulkConnect) Close() error {
 		if err := <-storeAddressContractsChan; err != nil {
 			return err
 		}
+	}
+	if b.chainType == bchain.ChainEthereumType {
+		b.d.setAddrContractsCacheEnabled(true)
 	}
 	if err := b.d.SetInconsistentState(false); err != nil {
 		return err
