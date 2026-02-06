@@ -34,4 +34,6 @@ type addrContractsCacheState struct {
 	cacheWriteEntries uint64
 	cacheWriteBytes   uint64
 	cacheFlushes      uint64
+	oversizeLogLast   int64
+	oversizeLogCount  uint64
 }

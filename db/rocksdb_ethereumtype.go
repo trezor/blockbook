@@ -22,6 +22,8 @@ import (
 
 const InternalTxIndexOffset = 1
 const ContractIndexOffset = 2
+const addrContractsOversizeLogInterval = 5 * time.Minute
+const addrContractsOversizeLogLimit = 5
 
 type AggregateFn = func(*big.Int, *big.Int)
 
@@ -74,6 +76,7 @@ type addrContractsCacheMeta struct {
 	dirty          bool
 	lastUpdateTime int64
 	lastFlushTime  int64
+	oversize       bool
 }
 
 type MultiTokenValues []bchain.MultiTokenValue
@@ -584,6 +587,7 @@ func (d *RocksDB) maybeCacheAddrContracts(addrKey string, acs *unpackedAddrContr
 			dirty:          false,
 			lastUpdateTime: now,
 			lastFlushTime:  now,
+			oversize:       acs.Packed != nil && len(acs.Packed) > d.addrContractsCacheState.alwaysSizeBytes,
 		}
 	}
 	d.addrContractsCacheState.cacheMux.Unlock()
@@ -607,6 +611,9 @@ func (d *RocksDB) markAddrContractsCacheDirtyLocked(addrKey string, now int64) {
 			lastFlushTime:  now,
 		}
 		d.addrContractsCacheState.cacheMeta[addrKey] = meta
+	}
+	if meta.oversize {
+		return
 	}
 	if meta.lastFlushTime == 0 {
 		meta.lastFlushTime = now
@@ -1995,6 +2002,11 @@ func (d *RocksDB) storeUnpackedAddressContracts(wb *grocksdb.WriteBatch, acm map
 			d.addrContractsCacheState.cacheMux.Unlock()
 			if !found {
 				buf := packUnpackedAddrContracts(acs)
+				if len(buf) > d.addrContractsCacheState.alwaysSizeBytes {
+					skipped++
+					d.logAddrContractsOversize(addrDesc, len(buf), "direct_write")
+					continue
+				}
 				wb.PutCF(d.cfh[cfAddressContracts], bchain.AddressDescriptor(addrDesc), buf)
 				writes++
 				writeBytes += uint64(len(buf))
@@ -2054,6 +2066,13 @@ func (d *RocksDB) writeContractsCache(force bool) (int, uint64) {
 		}
 		if d.shouldFlushAddrContracts(meta, now, force) {
 			buf := packUnpackedAddrContracts(acs)
+			if len(buf) > d.addrContractsCacheState.alwaysSizeBytes {
+				meta.oversize = true
+				meta.dirty = false
+				meta.lastFlushTime = now
+				d.logAddrContractsOversize(addrDesc, len(buf), "cache_flush")
+				continue
+			}
 			flushEntries = append(flushEntries, cacheFlushEntry{
 				addrDesc:       addrDesc,
 				buf:            buf,
@@ -2158,6 +2177,33 @@ func (d *RocksDB) logAddrContractsCacheMetrics(period time.Duration) {
 		skipped,
 		flushes,
 	)
+}
+
+func (d *RocksDB) logAddrContractsOversize(addrDesc string, size int, source string) {
+	now := time.Now().Unix()
+	last := atomic.LoadInt64(&d.addrContractsCacheState.oversizeLogLast)
+	if last == 0 || now-last >= int64(addrContractsOversizeLogInterval.Seconds()) {
+		if atomic.CompareAndSwapInt64(&d.addrContractsCacheState.oversizeLogLast, last, now) {
+			atomic.StoreUint64(&d.addrContractsCacheState.oversizeLogCount, 0)
+		}
+	}
+	count := atomic.AddUint64(&d.addrContractsCacheState.oversizeLogCount, 1)
+	if count <= addrContractsOversizeLogLimit {
+		glog.Warningf(
+			"address cache: dropped oversize entry addr=%x size=%s limit=%s source=%s",
+			[]byte(addrDesc),
+			formatBytesShort(uint64(size)),
+			formatBytesShort(uint64(d.addrContractsCacheState.alwaysSizeBytes)),
+			source,
+		)
+		return
+	}
+	if count == addrContractsOversizeLogLimit+1 {
+		glog.Warningf(
+			"address cache: oversize drop logs suppressed for %s",
+			addrContractsOversizeLogInterval,
+		)
+	}
 }
 
 func formatBytesShort(bytes uint64) string {
