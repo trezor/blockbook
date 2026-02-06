@@ -14,7 +14,7 @@ Some behavior of Blockbook can be modified by environment variables. The variabl
     Default: `300000`  
     Description: Minimum packed size (bytes) to consider addressContracts hotness/caching. Accepts bytes or `K/M/G/T` suffixes (e.g. `300000`, `300K`, `1MiB`).
 -   `<coin shortcut>_ADDR_CONTRACTS_CACHE_ALWAYS_SIZE`  
-    Default: `600000`  
+    Default: `300000`  
     Description: Always cache addressContracts above this packed size (bytes). Accepts bytes or `K/M/G/T` suffixes.
 -   `<coin shortcut>_ADDR_CONTRACTS_CACHE_HOT_MIN_SCORE`  
     Default: `2`  

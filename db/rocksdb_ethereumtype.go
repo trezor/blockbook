@@ -2003,6 +2003,7 @@ func (d *RocksDB) storeUnpackedAddressContracts(wb *grocksdb.WriteBatch, acm map
 			if !found {
 				buf := packUnpackedAddrContracts(acs)
 				if len(buf) > d.addrContractsCacheState.alwaysSizeBytes {
+					atomic.AddUint64(&d.addrContractsCacheState.oversizeSkipped, 1)
 					skipped++
 					d.logAddrContractsOversize(addrDesc, len(buf), "direct_write")
 					continue
@@ -2067,6 +2068,7 @@ func (d *RocksDB) writeContractsCache(force bool) (int, uint64) {
 		if d.shouldFlushAddrContracts(meta, now, force) {
 			buf := packUnpackedAddrContracts(acs)
 			if len(buf) > d.addrContractsCacheState.alwaysSizeBytes {
+				atomic.AddUint64(&d.addrContractsCacheState.oversizeSkipped, 1)
 				meta.oversize = true
 				meta.dirty = false
 				meta.lastFlushTime = now
@@ -2145,6 +2147,7 @@ func (d *RocksDB) logAddrContractsCacheMetrics(period time.Duration) {
 	cacheWrites := atomic.SwapUint64(&d.addrContractsCacheState.cacheWriteEntries, 0)
 	cacheWriteBytes := atomic.SwapUint64(&d.addrContractsCacheState.cacheWriteBytes, 0)
 	flushes := atomic.SwapUint64(&d.addrContractsCacheState.cacheFlushes, 0)
+	oversizeSkipped := atomic.SwapUint64(&d.addrContractsCacheState.oversizeSkipped, 0)
 
 	total := hits + misses
 	hitRate := 0.0
@@ -2160,7 +2163,7 @@ func (d *RocksDB) logAddrContractsCacheMetrics(period time.Duration) {
 		avgCacheWrite = cacheWriteBytes / cacheWrites
 	}
 	glog.Infof(
-		"address cache: interval=%s hit=%d miss=%d hit_rate=%.1f%% writes=%d write_bytes=%s avg_write=%s cache_writes=%d cache_write_bytes=%s avg_cache_write=%s cache_skipped=%d cache_flushes=%d",
+		"address cache: interval=%s hit=%d miss=%d hit_rate=%.1f%% writes=%d write_bytes=%s avg_write=%s cache_writes=%d cache_write_bytes=%s avg_cache_write=%s cache_skipped=%d cache_flushes=%d oversize_skipped=%d",
 		period,
 		hits,
 		misses,
@@ -2173,6 +2176,7 @@ func (d *RocksDB) logAddrContractsCacheMetrics(period time.Duration) {
 		formatBytesShort(avgCacheWrite),
 		skipped,
 		flushes,
+		oversizeSkipped,
 	)
 }
 

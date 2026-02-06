@@ -927,6 +927,43 @@ func Test_packUnpackAddrContracts(t *testing.T) {
 	}
 }
 
+func Test_storeUnpackedAddressContracts_SkipsOversize(t *testing.T) {
+	d := setupRocksDB(t, &testEthereumParser{
+		EthereumParser: ethereumTestnetParser(),
+	})
+	defer closeAndDestroyRocksDB(t, d)
+
+	d.addrContractsCacheState.alwaysSizeBytes = 1
+
+	addrDesc := addressToAddrDesc(dbtestdata.EthAddr55, d.chainParser)
+	acs := &unpackedAddrContracts{
+		TotalTxs:       1,
+		NonContractTxs: 1,
+		Contracts: []unpackedAddrContract{
+			{
+				Standard: bchain.FungibleToken,
+				Contract: addressToAddrDesc(dbtestdata.EthAddrContract4a, d.chainParser),
+				Txs:      1,
+				Value:    unpackedBigInt{Value: big.NewInt(1)},
+			},
+		},
+	}
+	wb := grocksdb.NewWriteBatch()
+	defer wb.Destroy()
+
+	if err := d.storeUnpackedAddressContracts(wb, map[string]*unpackedAddrContracts{
+		string(addrDesc): acs,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.WriteBatch(wb); err != nil {
+		t.Fatal(err)
+	}
+	if err := checkColumn(d, cfAddressContracts, []keyPair{}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func Test_addToContracts(t *testing.T) {
 	// the test builds addToContracts that keeps contracts of an address
 	// the test adds and removes values from addToContracts, therefore the order of tests is important
