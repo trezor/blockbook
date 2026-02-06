@@ -2147,9 +2147,6 @@ func (d *RocksDB) logAddrContractsCacheMetrics(period time.Duration) {
 	flushes := atomic.SwapUint64(&d.addrContractsCacheState.cacheFlushes, 0)
 
 	total := hits + misses
-	if total == 0 && writes == 0 && cacheWrites == 0 && skipped == 0 && flushes == 0 {
-		return
-	}
 	hitRate := 0.0
 	if total > 0 {
 		hitRate = float64(hits) * 100 / float64(total)

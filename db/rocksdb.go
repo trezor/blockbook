@@ -58,7 +58,7 @@ const (
 )
 
 const addrContractsCacheMinSize = 300_000 // limit for caching address contracts in memory to speed up indexing
-const addrContractsCacheAlwaysSize = 1_000_000
+const addrContractsCacheAlwaysSize = 600_000
 const addrContractsCacheHotMinScore = 2.0
 const addrContractsHotHalfLife = 45 * time.Minute
 const addrContractsHotEvictAfter = 8 * time.Hour
