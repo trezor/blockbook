@@ -11,10 +11,10 @@ Some behavior of Blockbook can be modified by environment variables. The variabl
 -   `<coin shortcut>_ALLOWED_RPC_CALL_TO` - Addresses to which `rpcCall` websocket requests can be made, as a comma-separated list. If omitted, `rpcCall` is enabled for all addresses.
 
 -   `<coin shortcut>_ADDR_CONTRACTS_CACHE_MIN_SIZE`  
-    Default: `25000`  
+    Default: `5000`  
     Description: Minimum packed size (bytes) to consider addressContracts hotness/caching. Accepts bytes or `K/M/G/T` suffixes (e.g. `300000`, `300K`, `1MiB`).
 -   `<coin shortcut>_ADDR_CONTRACTS_CACHE_ALWAYS_SIZE`  
-    Default: `50000`  
+    Default: `10000`  
     Description: Always cache addressContracts above this packed size (bytes). Accepts bytes or `K/M/G/T` suffixes.
 -   `<coin shortcut>_ADDR_CONTRACTS_CACHE_HOT_MIN_SCORE`  
     Default: `2`  
