@@ -48,7 +48,7 @@ jobs:
       always() &&
       (needs.unit-tests.result == 'success' || needs.unit-tests.result == 'skipped') &&
       (github.event_name != 'workflow_dispatch' || inputs.run_connectivity_tests) &&
-      vars.BB_RPC_URL_HTTP_bitcoin != ''
+      vars.BB_RPC_URL_HTTP_ethereum != ''
 
     steps:
     - name: Checkout code
@@ -59,15 +59,9 @@ jobs:
 
     - name: Run connectivity tests
       env:
-        # UTXO chains (coin alias must be lowercase, matching configs/coins/*.json)
-        BB_RPC_URL_HTTP_bitcoin: ${{ vars.BB_RPC_URL_HTTP_bitcoin }}
-        BB_RPC_URL_HTTP_bitcoin_testnet: ${{ vars.BB_RPC_URL_HTTP_bitcoin_testnet }}
-        BB_RPC_URL_HTTP_bitcoin_testnet4: ${{ vars.BB_RPC_URL_HTTP_bitcoin_testnet4 }}
-        BB_RPC_URL_HTTP_bcash: ${{ vars.BB_RPC_URL_HTTP_bcash }}
-        BB_RPC_URL_HTTP_dogecoin: ${{ vars.BB_RPC_URL_HTTP_dogecoin }}
-        BB_RPC_URL_HTTP_litecoin: ${{ vars.BB_RPC_URL_HTTP_litecoin }}
-        BB_RPC_URL_HTTP_zcash: ${{ vars.BB_RPC_URL_HTTP_zcash }}
-        # EVM chains (HTTP + WS)
+        # EVM chains only — publicly reachable endpoints
+        # UTXO chains (bitcoin, bcash, dogecoin, litecoin, zcash) are tested
+        # on the dev server where internal backends are reachable.
         BB_RPC_URL_HTTP_ethereum: ${{ vars.BB_RPC_URL_HTTP_ethereum }}
         BB_RPC_URL_WS_ethereum: ${{ vars.BB_RPC_URL_WS_ethereum }}
         BB_RPC_URL_HTTP_bsc: ${{ vars.BB_RPC_URL_HTTP_bsc }}
@@ -108,15 +102,8 @@ jobs:
 
     - name: Run integration tests
       env:
-        # UTXO chains (coin alias must be lowercase, matching configs/coins/*.json)
-        BB_RPC_URL_HTTP_bitcoin: ${{ vars.BB_RPC_URL_HTTP_bitcoin }}
-        BB_RPC_URL_HTTP_bitcoin_testnet: ${{ vars.BB_RPC_URL_HTTP_bitcoin_testnet }}
-        BB_RPC_URL_HTTP_bitcoin_testnet4: ${{ vars.BB_RPC_URL_HTTP_bitcoin_testnet4 }}
-        BB_RPC_URL_HTTP_bcash: ${{ vars.BB_RPC_URL_HTTP_bcash }}
-        BB_RPC_URL_HTTP_dogecoin: ${{ vars.BB_RPC_URL_HTTP_dogecoin }}
-        BB_RPC_URL_HTTP_litecoin: ${{ vars.BB_RPC_URL_HTTP_litecoin }}
-        BB_RPC_URL_HTTP_zcash: ${{ vars.BB_RPC_URL_HTTP_zcash }}
-        # EVM chains (HTTP + WS)
+        # EVM chains only — publicly reachable endpoints
+        # UTXO chains are tested on the dev server where internal backends are reachable.
         BB_RPC_URL_HTTP_ethereum: ${{ vars.BB_RPC_URL_HTTP_ethereum }}
         BB_RPC_URL_WS_ethereum: ${{ vars.BB_RPC_URL_WS_ethereum }}
         BB_RPC_URL_HTTP_bsc: ${{ vars.BB_RPC_URL_HTTP_bsc }}
