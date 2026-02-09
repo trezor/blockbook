@@ -60,10 +60,8 @@ jobs:
     - name: Run connectivity tests
       env:
         # EVM chains with publicly reachable endpoints only.
-        # Ethereum is excluded until a public RPC URL is available.
+        # Ethereum and BSC excluded until valid public RPC URLs are available.
         # UTXO chains are tested on the dev server where internal backends are reachable.
-        BB_RPC_URL_HTTP_bsc: ${{ vars.BB_RPC_URL_HTTP_bsc }}
-        BB_RPC_URL_WS_bsc: ${{ vars.BB_RPC_URL_WS_bsc }}
         BB_RPC_URL_HTTP_avalanche: ${{ vars.BB_RPC_URL_HTTP_avalanche }}
         BB_RPC_URL_WS_avalanche: ${{ vars.BB_RPC_URL_WS_avalanche }}
         BB_RPC_URL_HTTP_polygon_bor: ${{ vars.BB_RPC_URL_HTTP_polygon_bor }}
@@ -76,9 +74,9 @@ jobs:
         BB_RPC_URL_WS_base: ${{ vars.BB_RPC_URL_WS_base }}
       run: |
         # Default to EVM-only coins (publicly reachable from GitHub runners).
-        # Ethereum excluded — no public RPC URL available yet.
+        # Ethereum and BSC excluded until valid public RPC URLs are available.
         # UTXO chains use internal backends and are tested on the dev server.
-        EVM_COINS="avalanche|bsc|arbitrum|base|optimism|polygon"
+        EVM_COINS="avalanche|arbitrum|base|optimism|polygon"
         FILTER="${{ inputs.coin_filter }}"
         FILTER="${FILTER:-$EVM_COINS}"
         make test-connectivity ARGS="-run 'TestIntegration/($FILTER)=.*/connectivity'"
@@ -102,9 +100,7 @@ jobs:
     - name: Run integration tests
       env:
         # EVM chains with publicly reachable endpoints only.
-        # Ethereum excluded until a public RPC URL is available.
-        BB_RPC_URL_HTTP_bsc: ${{ vars.BB_RPC_URL_HTTP_bsc }}
-        BB_RPC_URL_WS_bsc: ${{ vars.BB_RPC_URL_WS_bsc }}
+        # Ethereum and BSC excluded until valid public RPC URLs are available.
         BB_RPC_URL_HTTP_avalanche: ${{ vars.BB_RPC_URL_HTTP_avalanche }}
         BB_RPC_URL_WS_avalanche: ${{ vars.BB_RPC_URL_WS_avalanche }}
         BB_RPC_URL_HTTP_polygon_bor: ${{ vars.BB_RPC_URL_HTTP_polygon_bor }}
@@ -117,8 +113,8 @@ jobs:
         BB_RPC_URL_WS_base: ${{ vars.BB_RPC_URL_WS_base }}
       run: |
         # Default to EVM-only coins (publicly reachable from GitHub runners).
-        # Ethereum excluded — no public RPC URL available yet.
-        EVM_COINS="avalanche|bsc|arbitrum|base|optimism|polygon"
+        # Ethereum and BSC excluded until valid public RPC URLs are available.
+        EVM_COINS="avalanche|arbitrum|base|optimism|polygon"
         FILTER="${{ inputs.coin_filter }}"
         FILTER="${FILTER:-$EVM_COINS}"
         make test-integration ARGS="-run 'TestIntegration/($FILTER)=.*/' -v"
