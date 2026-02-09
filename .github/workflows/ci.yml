@@ -77,12 +77,12 @@ jobs:
         BB_RPC_URL_HTTP_base: ${{ vars.BB_RPC_URL_HTTP_base }}
         BB_RPC_URL_WS_base: ${{ vars.BB_RPC_URL_WS_base }}
       run: |
+        # Default to EVM-only coins (publicly reachable from GitHub runners).
+        # UTXO chains use internal backends and are tested on the dev server.
+        EVM_COINS="avalanche|bsc|arbitrum|base|ethereum|optimism|polygon"
         FILTER="${{ inputs.coin_filter }}"
-        if [ -n "$FILTER" ]; then
-          make test-connectivity ARGS="-run 'TestIntegration/($FILTER)=.*/connectivity'"
-        else
-          make test-connectivity
-        fi
+        FILTER="${FILTER:-$EVM_COINS}"
+        make test-connectivity ARGS="-run 'TestIntegration/($FILTER)=.*/connectivity'"
 
   integration-tests:
     name: Integration Tests (RPC + Sync)
@@ -119,9 +119,8 @@ jobs:
         BB_RPC_URL_HTTP_base: ${{ vars.BB_RPC_URL_HTTP_base }}
         BB_RPC_URL_WS_base: ${{ vars.BB_RPC_URL_WS_base }}
       run: |
+        # Default to EVM-only coins (publicly reachable from GitHub runners).
+        EVM_COINS="avalanche|bsc|arbitrum|base|ethereum|optimism|polygon"
         FILTER="${{ inputs.coin_filter }}"
-        if [ -n "$FILTER" ]; then
-          make test-integration ARGS="-run 'TestIntegration/($FILTER)=.*/' -v"
-        else
-          make test-integration ARGS="-v"
-        fi
+        FILTER="${FILTER:-$EVM_COINS}"
+        make test-integration ARGS="-run 'TestIntegration/($FILTER)=.*/' -v"
