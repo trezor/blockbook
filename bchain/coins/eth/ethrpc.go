@@ -946,13 +946,15 @@ func (b *EthereumRPC) processCallTrace(call *rpcCallTrace, d *bchain.EthereumInt
 	return contracts
 }
 
-// getInternalDataForBlock fetches debug trace using callTracer, extracts internal transfers/creations/destructions; ctx controls cancellation.
-func (b *EthereumRPC) getInternalDataForBlock(ctx context.Context, blockHash string, blockHeight uint32, transactions []bchain.RpcTransaction) ([]bchain.EthereumInternalData, []bchain.ContractInfo, error) {
+// getInternalDataForBlock fetches debug trace using callTracer, extracts internal transfers and creations and destructions of contracts
+func (b *EthereumRPC) getInternalDataForBlock(blockHash string, blockHeight uint32, transactions []bchain.RpcTransaction) ([]bchain.EthereumInternalData, []bchain.ContractInfo, error) {
 	data := make([]bchain.EthereumInternalData, len(transactions))
 	contracts := make([]bchain.ContractInfo, 0)
 	if ProcessInternalTransactions {
+		ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+		defer cancel()
 		var trace []rpcTraceResult
-		err := b.RPC.CallContext(ctx, &trace, "debug_traceBlockByHash", blockHash, map[string]interface{}{"tracer": "callTracer"}) // Use caller-provided ctx for timeout/cancel.
+		err := b.RPC.CallContext(ctx, &trace, "debug_traceBlockByHash", blockHash, map[string]interface{}{"tracer": "callTracer"})
 		if err != nil {
 			glog.Error("debug_traceBlockByHash block ", blockHash, ", error ", err)
 			return data, contracts, err
@@ -1039,49 +1041,21 @@ func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error
 	if err != nil {
 		return nil, errors.Annotatef(err, "hash %v, height %v", hash, height)
 	}
-	// Run event/log processing and internal data extraction in parallel; allow early return on log failure.
-	ctxInternal, cancelInternal := context.WithTimeout(context.Background(), b.Timeout) // Cancel trace RPC on log error or timeout.
-	defer cancelInternal()                                                              // Ensure timer resources are released on any return path.
-	type logsResult struct {                                                            // Bundles processEventsForBlock outputs for channel return.
-		logs map[string][]*bchain.RpcLog
-		ens  []bchain.AddressAliasRecord
-		err  error
+	// get block events
+	// TODO - could be possibly done in parallel to getInternalDataForBlock
+	logs, ens, err := b.processEventsForBlock(head.Number)
+	if err != nil {
+		return nil, err
 	}
-	type internalResult struct { // Bundles getInternalDataForBlock outputs for channel return.
-		data      []bchain.EthereumInternalData
-		contracts []bchain.ContractInfo
-		err       error
-	}
-	logsCh := make(chan logsResult, 1)         // Buffered so send won't block if we return early.
-	internalCh := make(chan internalResult, 1) // Buffered to avoid goroutine leak on early return.
-	go func() {
-		logs, ens, err := b.processEventsForBlock(head.Number)
-		logsCh <- logsResult{logs: logs, ens: ens, err: err} // Send result without shared state.
-	}()
-	go func() {
-		data, contracts, err := b.getInternalDataForBlock(ctxInternal, head.Hash, bbh.Height, body.Transactions) // ctxInternal allows cancellation on log errors.
-		internalCh <- internalResult{data: data, contracts: contracts, err: err}                                 // Send result without shared state.
-	}()
-	logsRes := <-logsCh
-	if logsRes.err != nil {
-		// Short-circuit on log failure to preserve existing error behavior.
-		return nil, logsRes.err
-	}
-	internalRes := <-internalCh
-	// Rebind results to keep downstream logic unchanged.
-	logs := logsRes.logs
-	ens := logsRes.ens
-	internalData := internalRes.data
-	contracts := internalRes.contracts
-	internalErr := internalRes.err
 	// error fetching internal data does not stop the block processing
 	var blockSpecificData *bchain.EthereumBlockSpecificData
+	internalData, contracts, err := b.getInternalDataForBlock(head.Hash, bbh.Height, body.Transactions)
 	// pass internalData error and ENS records in blockSpecificData to be stored
-	if internalErr != nil || len(ens) > 0 || len(contracts) > 0 {
+	if err != nil || len(ens) > 0 || len(contracts) > 0 {
 		blockSpecificData = &bchain.EthereumBlockSpecificData{}
-		if internalErr != nil {
-			blockSpecificData.InternalDataError = internalErr.Error()
-			// glog.Info("InternalDataError ", bbh.Height, ": ", internalErr.Error())
+		if err != nil {
+			blockSpecificData.InternalDataError = err.Error()
+			// glog.Info("InternalDataError ", bbh.Height, ": ", err.Error())
 		}
 		if len(ens) > 0 {
 			blockSpecificData.AddressAliasRecords = ens
