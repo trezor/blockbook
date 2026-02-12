@@ -102,6 +102,8 @@ Good examples of coin configuration are
           * Address-contracts cache configuration (Blockbook, Ethereum-type indexing):
             * `address_contracts_cache_min_size` – Minimum packed size (bytes) before an addressContracts entry is cached (default **300000**).
             * `address_contracts_cache_max_bytes` – Cache size cap in bytes; when exceeded, cached entries are flushed early (default **4000000000**).
+          * Mempool sync configuration (Blockbook, Ethereum-type indexing):
+            * `mempool_sync_over_ws` – Use the WebSocket RPC connection for mempool sync lookups (pending block fetch + tx lookups). Default **true**.
 
 * `meta` – Common package metadata.
     * `package_maintainer` – Full name of package maintainer.

@@ -59,6 +59,7 @@ type Configuration struct {
 	AddressAliases                  bool   `json:"address_aliases,omitempty"`
 	MempoolTxTimeoutHours           int    `json:"mempoolTxTimeoutHours"`
 	QueryBackendOnMempoolResync     bool   `json:"queryBackendOnMempoolResync"`
+	MempoolSyncOverWS               *bool  `json:"mempool_sync_over_ws,omitempty"`
 	ProcessInternalTransactions     bool   `json:"processInternalTransactions"`
 	ProcessZeroInternalTransactions bool   `json:"processZeroInternalTransactions"`
 	ConsensusNodeVersionURL         string `json:"consensusNodeVersion"`
@@ -137,6 +138,10 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 	}
 	if c.AddressContractsCacheMaxBytes <= 0 {
 		c.AddressContractsCacheMaxBytes = defaultAddressContractsCacheMaxBytes
+	}
+	if c.MempoolSyncOverWS == nil {
+		defaultMempoolSyncOverWS := true
+		c.MempoolSyncOverWS = &defaultMempoolSyncOverWS
 	}
 
 	s := &EthereumRPC{
@@ -240,6 +245,30 @@ func dialRPC(rawURL string) (*rpc.Client, error) {
 		opts = append(opts, rpc.WithWebsocketMessageSizeLimit(0))
 	}
 	return rpc.DialOptions(context.Background(), rawURL, opts...)
+}
+
+func (b *EthereumRPC) shouldUseMempoolSyncOverWS() bool {
+	if b.ChainConfig == nil {
+		return true
+	}
+	if b.ChainConfig.MempoolSyncOverWS == nil {
+		return true
+	}
+	return *b.ChainConfig.MempoolSyncOverWS
+}
+
+func (b *EthereumRPC) wsCallClient() *rpc.Client {
+	if b.RPC == nil {
+		return nil
+	}
+	switch c := b.RPC.(type) {
+	case *DualRPCClient:
+		return c.SubClient
+	case *EthereumRPCClient:
+		return c.Client
+	default:
+		return nil
+	}
 }
 
 // OpenRPC opens RPC connection to ETH backend.
@@ -795,19 +824,21 @@ func (b *EthereumRPC) computeConfirmations(n uint64) (uint32, error) {
 	return uint32(bn - n + 1), nil
 }
 
-func (b *EthereumRPC) getBlockRaw(hash string, height uint32, fullTxs bool) (json.RawMessage, error) {
+type callContextFunc func(ctx context.Context, result interface{}, method string, args ...interface{}) error
+
+func (b *EthereumRPC) getBlockRawWithCall(call callContextFunc, hash string, height uint32, fullTxs bool) (json.RawMessage, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
 	defer cancel()
 	var raw json.RawMessage
 	var err error
 	if hash != "" {
 		if hash == "pending" {
-			err = b.RPC.CallContext(ctx, &raw, "eth_getBlockByNumber", hash, fullTxs)
+			err = call(ctx, &raw, "eth_getBlockByNumber", hash, fullTxs)
 		} else {
-			err = b.RPC.CallContext(ctx, &raw, "eth_getBlockByHash", ethcommon.HexToHash(hash), fullTxs)
+			err = call(ctx, &raw, "eth_getBlockByHash", ethcommon.HexToHash(hash), fullTxs)
 		}
 	} else {
-		err = b.RPC.CallContext(ctx, &raw, "eth_getBlockByNumber", fmt.Sprintf("%#x", height), fullTxs)
+		err = call(ctx, &raw, "eth_getBlockByNumber", fmt.Sprintf("%#x", height), fullTxs)
 	}
 	if err != nil {
 		return nil, errors.Annotatef(err, "hash %v, height %v", hash, height)
@@ -815,6 +846,10 @@ func (b *EthereumRPC) getBlockRaw(hash string, height uint32, fullTxs bool) (jso
 		return nil, bchain.ErrBlockNotFound
 	}
 	return raw, nil
+}
+
+func (b *EthereumRPC) getBlockRaw(hash string, height uint32, fullTxs bool) (json.RawMessage, error) {
+	return b.getBlockRawWithCall(b.RPC.CallContext, hash, height, fullTxs)
 }
 
 func (b *EthereumRPC) processEventsForBlock(blockNumber string) (map[string][]*bchain.RpcLog, []bchain.AddressAliasRecord, error) {
@@ -1105,7 +1140,38 @@ func (b *EthereumRPC) GetBlockInfo(hash string) (*bchain.BlockInfo, error) {
 // GetTransactionForMempool returns a transaction by the transaction ID.
 // It could be optimized for mempool, i.e. without block time and confirmations
 func (b *EthereumRPC) GetTransactionForMempool(txid string) (*bchain.Tx, error) {
-	return b.GetTransaction(txid)
+	call := b.RPC.CallContext
+	if b.shouldUseMempoolSyncOverWS() {
+		if wsClient := b.wsCallClient(); wsClient != nil {
+			call = wsClient.CallContext
+		}
+	}
+	var tx *bchain.RpcTransaction
+	var txFound bool
+	hash := ethcommon.HexToHash(txid)
+	if b.alternativeSendTxProvider != nil {
+		tx, txFound = b.alternativeSendTxProvider.GetTransaction(txid)
+	}
+	if !txFound || tx == nil {
+		tx = &bchain.RpcTransaction{}
+		ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+		defer cancel()
+		if err := call(ctx, tx, "eth_getTransactionByHash", hash); err != nil {
+			return nil, err
+		}
+	}
+	if *tx == (bchain.RpcTransaction{}) {
+		b.removeTransactionFromMempool(txid)
+		return nil, bchain.ErrTxNotFound
+	}
+	if tx.BlockNumber != "" {
+		return nil, bchain.ErrTxNotFound
+	}
+	btx, err := b.Parser.ethTxToTx(tx, nil, nil, 0, 0, true)
+	if err != nil {
+		return nil, errors.Annotatef(err, "txid %v", txid)
+	}
+	return btx, nil
 }
 
 func (b *EthereumRPC) removeTransactionFromMempool(txid string) {
@@ -1207,7 +1273,17 @@ func (b *EthereumRPC) GetTransactionSpecific(tx *bchain.Tx) (json.RawMessage, er
 
 // GetMempoolTransactions returns transactions in mempool
 func (b *EthereumRPC) GetMempoolTransactions() ([]string, error) {
-	raw, err := b.getBlockRaw("pending", 0, false)
+	var raw json.RawMessage
+	var err error
+	if b.shouldUseMempoolSyncOverWS() {
+		if wsClient := b.wsCallClient(); wsClient != nil {
+			raw, err = b.getBlockRawWithCall(wsClient.CallContext, "pending", 0, false)
+		} else {
+			raw, err = b.getBlockRaw("pending", 0, false)
+		}
+	} else {
+		raw, err = b.getBlockRaw("pending", 0, false)
+	}
 	if err != nil {
 		return nil, err
 	}
