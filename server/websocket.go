@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"math/big"
 	"net/http"
+	"net/url"
 	"os"
 	"runtime/debug"
 	"strconv"
@@ -83,6 +84,7 @@ type WebsocketServer struct {
 	fiatRatesSubscriptions       map[string]map[*websocketChannel]string
 	fiatRatesTokenSubscriptions  map[*websocketChannel][]string
 	fiatRatesSubscriptionsLock   sync.Mutex
+	allowedOrigins               map[string]struct{}
 	allowedRpcCallTo             map[string]struct{}
 }
 
@@ -97,12 +99,6 @@ func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.
 		return nil, err
 	}
 	s := &WebsocketServer{
-		upgrader: &websocket.Upgrader{
-			ReadBufferSize:    1024 * 32,
-			WriteBufferSize:   1024 * 32,
-			CheckOrigin:       checkOrigin,
-			EnableCompression: true,
-		},
 		db:                          db,
 		txCache:                     txCache,
 		chain:                       chain,
@@ -119,6 +115,14 @@ func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.
 		fiatRatesSubscriptions:      make(map[string]map[*websocketChannel]string),
 		fiatRatesTokenSubscriptions: make(map[*websocketChannel][]string),
 	}
+	s.upgrader = &websocket.Upgrader{
+		ReadBufferSize:    1024 * 32,
+		WriteBufferSize:   1024 * 32,
+		CheckOrigin:       s.checkOrigin,
+		EnableCompression: true,
+	}
+	originEnvName := strings.ToUpper(is.GetNetwork()) + "_WS_ALLOWED_ORIGINS"
+	s.allowedOrigins = parseAllowedOrigins(originEnvName, os.Getenv(originEnvName))
 	envRpcCall := os.Getenv(strings.ToUpper(is.GetNetwork()) + "_ALLOWED_RPC_CALL_TO")
 	if envRpcCall != "" {
 		s.allowedRpcCallTo = make(map[string]struct{})
@@ -133,9 +137,54 @@ func NewWebsocketServer(db *db.RocksDB, chain bchain.BlockChain, mempool bchain.
 	return s, nil
 }
 
-// allow all origins
-func checkOrigin(r *http.Request) bool {
-	return true
+func parseAllowedOrigins(originEnvName, envAllowedOrigins string) map[string]struct{} {
+	if envAllowedOrigins == "" {
+		glog.Warning("Websocket origin allowlist not configured (", originEnvName, "); all origins allowed")
+		return nil
+	}
+	allowedOrigins := make(map[string]struct{})
+	for _, origin := range strings.Split(envAllowedOrigins, ",") {
+		origin = strings.TrimSpace(origin)
+		if origin == "" {
+			continue
+		}
+		normalizedOrigin, ok := normalizeOrigin(origin)
+		if !ok {
+			glog.Warning("Ignoring invalid websocket origin in ", originEnvName, ": ", origin)
+			continue
+		}
+		allowedOrigins[normalizedOrigin] = struct{}{}
+	}
+	if len(allowedOrigins) == 0 {
+		glog.Warning("Websocket origin allowlist is empty after parsing ", originEnvName, "; all origins allowed")
+		return nil
+	}
+	glog.Info("Websocket origin allowlist enabled: ", envAllowedOrigins)
+	return allowedOrigins
+}
+
+func (s *WebsocketServer) checkOrigin(r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return true
+	}
+	if len(s.allowedOrigins) == 0 {
+		return true
+	}
+	normalizedOrigin, ok := normalizeOrigin(origin)
+	if !ok {
+		return false
+	}
+	_, ok = s.allowedOrigins[normalizedOrigin]
+	return ok
+}
+
+func normalizeOrigin(origin string) (string, bool) {
+	u, err := url.Parse(origin)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return "", false
+	}
+	return strings.ToLower(u.Scheme) + "://" + strings.ToLower(u.Host), true
 }
 
 func getIP(r *http.Request) string {

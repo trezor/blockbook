@@ -78,3 +78,7 @@ Blockbook API is described [here](/docs/api.md).
 ## Environment variables
 
 List of environment variables that affect Blockbook's behavior is [here](/docs/env.md).
+
+## Security Note
+
+WebSocket origin checks are not enforced by default. If you expose Blockbook without a proxy that restricts origins, it is your responsibility to configure the origin allowlist (or equivalent controls). See `docs/env.md` for details.
