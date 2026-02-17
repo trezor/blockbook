@@ -919,13 +919,13 @@ func (s *WebsocketServer) unmarshalAddresses(params []byte) ([]string, bool, err
 	r := WsSubscribeAddressesReq{}
 	err := json.Unmarshal(params, &r)
 	if err != nil {
-		return nil, false, err
+		return nil, false, api.NewAPIError("Invalid subscribeAddresses params", true)
 	}
 	rv := make([]string, len(r.Addresses))
 	for i, a := range r.Addresses {
 		ad, err := s.chainParser.GetAddrDescFromAddress(a)
 		if err != nil {
-			return nil, false, err
+			return nil, false, api.NewAPIError("Invalid address "+strconv.Quote(a)+", "+err.Error(), true)
 		}
 		rv[i] = string(ad)
 	}
