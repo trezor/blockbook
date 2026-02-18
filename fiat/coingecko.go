@@ -20,6 +20,7 @@ import (
 const (
 	DefaultHTTPTimeout     = 15 * time.Second
 	DefaultThrottleDelayMs = 100 // 100 ms delay between requests
+	coingeckoFreeHistoryDaysLimit = 365
 )
 
 // Coingecko is a structure that implements RatesDownloaderInterface
@@ -38,7 +39,7 @@ type Coingecko struct {
 	updatingCurrent     bool
 	updatingTokens      bool
 	metrics             *common.Metrics
-	plan			    string
+	plan                string
 }
 
 // simpleSupportedVSCurrencies https://api.coingecko.com/api/v3/simple/supported_vs_currencies
@@ -395,21 +396,61 @@ func (cg *Coingecko) FiveMinutesTickers() (*[]common.CurrencyRatesTicker, error)
 	return cg.getHighGranularityTickers("1")
 }
 
+func (cg *Coingecko) historicalRangeDaysLimit() int {
+	plan := strings.ToLower(strings.TrimSpace(cg.plan))
+	if plan == "pro" {
+		return 0
+	}
+	if plan == "free" {
+		return coingeckoFreeHistoryDaysLimit
+	}
+	// Default public endpoint has historical range limits.
+	if strings.Contains(cg.url, "pro-api.coingecko.com") {
+		return 0
+	}
+	if strings.Contains(cg.url, "api.coingecko.com") {
+		return coingeckoFreeHistoryDaysLimit
+	}
+	return 0
+}
+
+func (cg *Coingecko) resolveHistoricalDays(lastTicker *common.CurrencyRatesTicker) (string, bool) {
+	limitDays := cg.historicalRangeDaysLimit()
+	if lastTicker == nil {
+		if limitDays > 0 {
+			return strconv.Itoa(limitDays), true
+		}
+		return "max", true
+	}
+	diff := time.Since(lastTicker.Timestamp)
+	d := int(diff / (24 * time.Hour))
+	if d <= 0 { // nothing to do, the last ticker already exists for current day
+		return "", false
+	}
+	if limitDays > 0 && d > limitDays {
+		d = limitDays
+	}
+	return strconv.Itoa(d), true
+}
+
+func isHistoricalRangeLimitError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "error_code\":10012") ||
+		strings.Contains(msg, "allowed time range") ||
+		strings.Contains(msg, "past 365 days")
+}
+
 func (cg *Coingecko) getHistoricalTicker(tickersToUpdate map[uint]*common.CurrencyRatesTicker, coinId string, vsCurrency string, token string) (bool, error) {
 	lastTicker, err := cg.db.FiatRatesFindLastTicker(vsCurrency, token)
 	if err != nil {
 		return false, err
 	}
-	var days string
-	if lastTicker == nil {
-		days = "max"
-	} else {
-		diff := time.Since(lastTicker.Timestamp)
-		d := int(diff / (24 * 3600 * 1000000000))
-		if d == 0 { // nothing to do, the last ticker exist
-			return false, nil
-		}
-		days = strconv.Itoa(d)
+	days, shouldRequest := cg.resolveHistoricalDays(lastTicker)
+	if !shouldRequest {
+		return false, nil
 	}
 	mc, err := cg.coinMarketChart(coinId, vsCurrency, days, true)
 	if err != nil {
@@ -502,6 +543,10 @@ func (cg *Coingecko) UpdateHistoricalTickers() error {
 		var err error
 		var req bool
 		if req, err = cg.getHistoricalTicker(tickersToUpdate, cg.coin, currency, ""); err != nil {
+			if isHistoricalRangeLimitError(err) {
+				glog.Warningf("getHistoricalTicker %s-%s range limited, skipping remaining historical currency updates in this run: %v", cg.coin, currency, err)
+				break
+			}
 			// report error and continue, Coingecko may return error like "Could not find coin with the given id"
 			// the rates will be updated next run
 			glog.Errorf("getHistoricalTicker %s-%s %v", cg.coin, currency, err)
@@ -535,6 +580,10 @@ func (cg *Coingecko) UpdateHistoricalTokenTickers() error {
 			var err error
 			var req bool
 			if req, err = cg.getHistoricalTicker(tickersToUpdate, tokenId, cg.platformVsCurrency, token); err != nil {
+				if isHistoricalRangeLimitError(err) {
+					glog.Warningf("getHistoricalTicker %s-%s range limited, skipping remaining token historical updates in this run: %v", tokenId, cg.platformVsCurrency, err)
+					break
+				}
 				// report error and continue, Coingecko may return error like "Could not find coin with the given id"
 				// the rates will be updated next run
 				glog.Errorf("getHistoricalTicker %s-%s %v", tokenId, cg.platformVsCurrency, err)
