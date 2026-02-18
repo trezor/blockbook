@@ -1750,9 +1750,12 @@ func (w *Worker) balanceHistoryForTxid(addrDesc bchain.AddressDescriptor, txid s
 	return &bh, nil
 }
 
-func (w *Worker) setFiatRateToBalanceHistories(histories BalanceHistories, currencies []string) error {
+func (w *Worker) setFiatRateToBalanceHistories(histories BalanceHistories, currencies []string, pathLabel string) error {
 	if len(histories) == 0 || w.fiatRates == nil {
 		return nil
+	}
+	if pathLabel == "" {
+		pathLabel = "unknown"
 	}
 	applyTickerToHistory := func(bh *BalanceHistory, ticker *common.CurrencyRatesTicker, currenciesLowercase []string) {
 		if ticker == nil {
@@ -1776,10 +1779,38 @@ func (w *Worker) setFiatRateToBalanceHistories(histories BalanceHistories, curre
 	for i := range histories {
 		timestamps[i] = int64(histories[i].Time)
 	}
+	batchStarted := time.Now()
 	tickers, err := getTickersForTimestamps(w.fiatRates, timestamps, "", "")
 	batchFetchValid := err == nil && tickers != nil && len(*tickers) == len(histories)
+	if w.metrics != nil {
+		status := "ok"
+		if !batchFetchValid {
+			status = "err"
+		}
+		w.metrics.BalanceHistoryFiatDuration.With(common.Labels{
+			"path":   pathLabel,
+			"mode":   "batch",
+			"status": status,
+		}).Observe(time.Since(batchStarted).Seconds())
+	}
 	if !batchFetchValid {
-		glog.Errorf("Error finding tickers for %d timestamps. Error: %v", len(timestamps), err)
+		reason := "batch_error"
+		returnedTickers := -1
+		if err == nil {
+			if tickers == nil {
+				reason = "empty_result"
+			} else {
+				returnedTickers = len(*tickers)
+				reason = "len_mismatch"
+			}
+		}
+		glog.Errorf("Error finding tickers for %d timestamps (returned %d, reason %s). Error: %v", len(timestamps), returnedTickers, reason, err)
+		if w.metrics != nil {
+			w.metrics.BalanceHistoryFiatFallback.With(common.Labels{
+				"path":   pathLabel,
+				"reason": reason,
+			}).Inc()
+		}
 	}
 	currenciesLowercase := make([]string, len(currencies))
 	for i := range currencies {
@@ -1792,14 +1823,24 @@ func (w *Worker) setFiatRateToBalanceHistories(histories BalanceHistories, curre
 		return nil
 	}
 	// Fallback to per-point lookup to preserve original behavior on partial failures.
+	fallbackStarted := time.Now()
+	fallbackStatus := "ok"
 	for i := range histories {
 		bh := &histories[i]
 		pointTickers, pointErr := getTickersForTimestamps(w.fiatRates, []int64{int64(bh.Time)}, "", "")
 		if pointErr != nil || pointTickers == nil || len(*pointTickers) == 0 {
 			glog.Errorf("Error finding ticker by date %v. Error: %v", bh.Time, pointErr)
+			fallbackStatus = "err"
 			continue
 		}
 		applyTickerToHistory(bh, (*pointTickers)[0], currenciesLowercase)
+	}
+	if w.metrics != nil {
+		w.metrics.BalanceHistoryFiatDuration.With(common.Labels{
+			"path":   pathLabel,
+			"mode":   "fallback",
+			"status": fallbackStatus,
+		}).Observe(time.Since(fallbackStarted).Seconds())
 	}
 	return nil
 }
@@ -1843,7 +1884,10 @@ func (w *Worker) GetBalanceHistory(address string, fromTimestamp, toTimestamp in
 		}
 	}
 	bha := bhs.SortAndAggregate(groupBy)
-	err = w.setFiatRateToBalanceHistories(bha, currencies)
+	if w.metrics != nil {
+		w.metrics.BalanceHistoryPoints.With(common.Labels{"path": "address"}).Observe(float64(len(bha)))
+	}
+	err = w.setFiatRateToBalanceHistories(bha, currencies, "address")
 	if err != nil {
 		return nil, err
 	}
