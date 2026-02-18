@@ -334,3 +334,87 @@ func TestGetTickersForTimestamps_UsesGranularityAndFallback(t *testing.T) {
 		t.Fatalf("unexpected rates: got %v, want %v", got, want)
 	}
 }
+
+func TestGetTokenTickersForTimestamps_QueriesUniqueSortedTimestamps(t *testing.T) {
+	originalFindTicker := fiatRatesFindTicker
+	defer func() {
+		fiatRatesFindTicker = originalFindTicker
+	}()
+
+	lookupCalls := make([]int64, 0)
+	fiatRatesFindTicker = func(_ *db.RocksDB, tickerTime *time.Time, _, _ string) (*common.CurrencyRatesTicker, error) {
+		ts := tickerTime.UTC().Unix()
+		lookupCalls = append(lookupCalls, ts)
+		return &common.CurrencyRatesTicker{
+			Timestamp:  time.Unix(ts, 0).UTC(),
+			Rates:      map[string]float32{"usd": float32(ts)},
+			TokenRates: map[string]float32{"token": 1},
+		}, nil
+	}
+
+	fr := &FiatRates{
+		currentTicker: &common.CurrencyRatesTicker{
+			Timestamp:  time.Unix(999, 0).UTC(),
+			Rates:      map[string]float32{"usd": 1},
+			TokenRates: map[string]float32{"token": 1},
+		},
+	}
+	input := []int64{300, 100, 200, 100, 250}
+	tickers, err := fr.getTokenTickersForTimestamps(input, "", "token")
+	if err != nil {
+		t.Fatalf("getTokenTickersForTimestamps returned error: %v", err)
+	}
+	if tickers == nil {
+		t.Fatal("expected non-nil tickers")
+	}
+
+	if !reflect.DeepEqual(lookupCalls, []int64{100, 200, 250, 300}) {
+		t.Fatalf("unexpected DB lookup order: got %v", lookupCalls)
+	}
+
+	got := make([]float32, len(input))
+	for i := range input {
+		if (*tickers)[i] == nil {
+			t.Fatalf("ticker at index %d is nil", i)
+		}
+		got[i] = (*tickers)[i].Rates["usd"]
+	}
+	want := []float32{300, 100, 200, 100, 250}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("unexpected returned rates: got %v, want %v", got, want)
+	}
+}
+
+func TestGetTokenTickersForTimestamps_SkipsDBLookupWhenCurrentTickerHasNoToken(t *testing.T) {
+	originalFindTicker := fiatRatesFindTicker
+	defer func() {
+		fiatRatesFindTicker = originalFindTicker
+	}()
+
+	lookupCalls := 0
+	fiatRatesFindTicker = func(_ *db.RocksDB, _ *time.Time, _, _ string) (*common.CurrencyRatesTicker, error) {
+		lookupCalls++
+		return nil, nil
+	}
+
+	fr := &FiatRates{
+		currentTicker: &common.CurrencyRatesTicker{
+			Timestamp:  time.Unix(999, 0).UTC(),
+			Rates:      map[string]float32{"usd": 1},
+			TokenRates: map[string]float32{"another-token": 1},
+		},
+	}
+	tickers, err := fr.getTokenTickersForTimestamps([]int64{100, 200}, "", "token")
+	if err != nil {
+		t.Fatalf("getTokenTickersForTimestamps returned error: %v", err)
+	}
+	if lookupCalls != 0 {
+		t.Fatalf("expected 0 DB lookups, got %d", lookupCalls)
+	}
+	if tickers == nil || len(*tickers) != 2 {
+		t.Fatalf("unexpected ticker result shape: %+v", tickers)
+	}
+	if (*tickers)[0] != nil || (*tickers)[1] != nil {
+		t.Fatalf("expected nil tickers when current ticker does not include token, got %+v", *tickers)
+	}
+}
