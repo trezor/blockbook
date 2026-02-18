@@ -103,6 +103,7 @@ func (m *MempoolEthereumType) createTxEntry(txid string, txTime uint32) (txEntry
 // Resync ethereum type removes timed out transactions and returns number of transactions in mempool.
 // Transactions are added/removed by AddTransactionToMempool/RemoveTransactionFromMempool methods
 func (m *MempoolEthereumType) Resync() (int, error) {
+	start := time.Now()
 	if m.queryBackendOnResync {
 		txs, err := m.chain.GetMempoolTransactions()
 		if err != nil {
@@ -128,7 +129,12 @@ func (m *MempoolEthereumType) Resync() (int, error) {
 		m.nextTimeoutRun = now.Add(mempoolTimeoutRunPeriod)
 	}
 	m.mux.Unlock()
-	glog.Info("Mempool: resync ", entries, " transactions in mempool")
+	duration := time.Since(start)
+	throughput := 0.0
+	if seconds := duration.Seconds(); seconds > 0 {
+		throughput = float64(entries) / seconds
+	}
+	glog.Infof("Mempool: resync %d transactions in mempool, duration %s, throughput %.2f tx/s", entries, duration.Round(time.Millisecond), throughput)
 	return entries, nil
 }
 
