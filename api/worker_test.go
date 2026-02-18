@@ -179,6 +179,32 @@ func TestSetFiatRateToBalanceHistories_SkipsLookupForEmptyHistory(t *testing.T) 
 	}
 }
 
+func TestSetFiatRateToBalanceHistories_SkipsLookupWhenFiatRatesDisabled(t *testing.T) {
+	histories := BalanceHistories{{Time: 100}}
+	w := &Worker{
+		fiatRates: &fiat.FiatRates{Enabled: false},
+	}
+	originalGetter := getTickersForTimestamps
+	defer func() {
+		getTickersForTimestamps = originalGetter
+	}()
+
+	calls := 0
+	getTickersForTimestamps = func(_ *fiat.FiatRates, _ []int64, _, _ string) (*[]*common.CurrencyRatesTicker, error) {
+		calls++
+		tickers := []*common.CurrencyRatesTicker{}
+		return &tickers, nil
+	}
+
+	err := w.setFiatRateToBalanceHistories(histories, []string{"usd"}, "address")
+	if err != nil {
+		t.Fatalf("setFiatRateToBalanceHistories returned error: %v", err)
+	}
+	if calls != 0 {
+		t.Fatalf("expected 0 ticker lookup calls when fiat rates are disabled, got %d", calls)
+	}
+}
+
 func TestGetSecondaryTicker_SkipsLookupWithoutSecondaryCurrency(t *testing.T) {
 	w := &Worker{
 		fiatRates: &fiat.FiatRates{Enabled: true},

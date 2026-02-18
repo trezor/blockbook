@@ -1764,7 +1764,7 @@ func (w *Worker) balanceHistoryForTxid(addrDesc bchain.AddressDescriptor, txid s
 }
 
 func (w *Worker) setFiatRateToBalanceHistories(histories BalanceHistories, currencies []string, pathLabel string) error {
-	if len(histories) == 0 || w.fiatRates == nil {
+	if len(histories) == 0 || w.fiatRates == nil || !w.fiatRates.Enabled {
 		return nil
 	}
 	if pathLabel == "" {
