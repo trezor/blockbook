@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -58,6 +59,10 @@ type FiatRates struct {
 	dailyTickers           map[int64]*common.CurrencyRatesTicker
 	dailyTickersFrom       int64
 	dailyTickersTo         int64
+}
+
+var fiatRatesFindTicker = func(d *db.RocksDB, tickerTime *time.Time, vsCurrency string, token string) (*common.CurrencyRatesTicker, error) {
+	return d.FiatRatesFindTicker(tickerTime, vsCurrency, token)
 }
 
 // NewFiatRates initializes the FiatRates handler
@@ -162,36 +167,60 @@ func (fr *FiatRates) GetCurrentTicker(vsCurrency string, token string) *common.C
 func (fr *FiatRates) getTokenTickersForTimestamps(timestamps []int64, vsCurrency string, token string) (*[]*common.CurrencyRatesTicker, error) {
 	currentTicker := fr.GetCurrentTicker("", token)
 	tickers := make([]*common.CurrencyRatesTicker, len(timestamps))
+	if currentTicker == nil {
+		// If token is missing in current ticker, keep nil entries and skip
+		// expensive DB lookups; this preserves the existing response shape.
+		return &tickers, nil
+	}
+
+	// Query unique timestamps in ascending order so adjacent points can reuse the
+	// previously resolved ticker and avoid repeated DB scans.
+	uniqueMap := make(map[int64]struct{}, len(timestamps))
+	uniqueTimestamps := make([]int64, 0, len(timestamps))
+	for _, ts := range timestamps {
+		if _, found := uniqueMap[ts]; found {
+			continue
+		}
+		uniqueMap[ts] = struct{}{}
+		uniqueTimestamps = append(uniqueTimestamps, ts)
+	}
+	sort.Slice(uniqueTimestamps, func(i, j int) bool {
+		return uniqueTimestamps[i] < uniqueTimestamps[j]
+	})
+
 	var prevTicker *common.CurrencyRatesTicker
 	var prevTs int64
+	resolvedTickers := make(map[int64]*common.CurrencyRatesTicker, len(uniqueTimestamps))
 	var err error
-	for i, t := range timestamps {
-		// check if the token is available in the current ticker - if not, return nil ticker instead of wasting time in costly DB searches
-		if currentTicker != nil {
-			var ticker *common.CurrencyRatesTicker
-			date := time.Unix(t, 0)
-			// if previously found ticker is newer than this one (token tickers may not be in DB for every day), skip search in DB
-			if prevTicker != nil && t >= prevTs && !date.After(prevTicker.Timestamp) {
-				ticker = prevTicker
-				prevTs = t
-			} else {
-				ticker, err = fr.db.FiatRatesFindTicker(&date, vsCurrency, token)
-				if err != nil {
-					return nil, err
-				}
-				prevTicker = ticker
-				prevTs = t
+	for _, t := range uniqueTimestamps {
+		var ticker *common.CurrencyRatesTicker
+		date := time.Unix(t, 0)
+		// if previously found ticker is newer than this one (token tickers may not be in DB for every day), skip search in DB
+		if prevTicker != nil && t >= prevTs && !date.After(prevTicker.Timestamp) {
+			ticker = prevTicker
+			prevTs = t
+		} else {
+			ticker, err = fiatRatesFindTicker(fr.db, &date, vsCurrency, token)
+			if err != nil {
+				return nil, err
 			}
-			// if ticker not found in DB, use current ticker
-			if ticker == nil {
-				tickers[i] = currentTicker
-				prevTicker = currentTicker
-				prevTs = t
-			} else {
-				tickers[i] = ticker
-			}
+			prevTicker = ticker
+			prevTs = t
+		}
+		// if ticker not found in DB, use current ticker
+		if ticker == nil {
+			resolvedTickers[t] = currentTicker
+			prevTicker = currentTicker
+			prevTs = t
+		} else {
+			resolvedTickers[t] = ticker
 		}
 	}
+
+	for i, t := range timestamps {
+		tickers[i] = resolvedTickers[t]
+	}
+
 	return &tickers, nil
 }
 
