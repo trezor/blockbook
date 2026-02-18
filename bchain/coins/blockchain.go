@@ -396,6 +396,17 @@ type mempoolWithMetrics struct {
 	m       *common.Metrics
 }
 
+func (c *mempoolWithMetrics) chainTypeLabel() string {
+	switch c.mempool.(type) {
+	case *bchain.MempoolBitcoinType:
+		return "utxo"
+	case *bchain.MempoolEthereumType:
+		return "evm"
+	default:
+		return "other"
+	}
+}
+
 func (c *mempoolWithMetrics) observeRPCLatency(method string, start time.Time, err error) {
 	var e string
 	if err != nil {
@@ -405,8 +416,26 @@ func (c *mempoolWithMetrics) observeRPCLatency(method string, start time.Time, e
 }
 
 func (c *mempoolWithMetrics) Resync() (count int, err error) {
-	defer func(s time.Time) { c.observeRPCLatency("ResyncMempool", s, err) }(time.Now())
+	start := time.Now()
+	defer func(s time.Time) { c.observeRPCLatency("ResyncMempool", s, err) }(start)
 	count, err = c.mempool.Resync()
+	duration := time.Since(start)
+	c.m.MempoolResyncDuration.Observe(float64(duration) / 1e6) // in milliseconds
+	status := "success"
+	if err != nil {
+		status = "failure"
+	}
+	throughput := 0.0
+	if err == nil {
+		seconds := duration.Seconds()
+		if seconds > 0 {
+			throughput = float64(count) / seconds
+		}
+	}
+	c.m.MempoolResyncThroughput.With(common.Labels{
+		"chain":  c.chainTypeLabel(),
+		"status": status,
+	}).Observe(throughput)
 	if err == nil {
 		c.m.MempoolSize.Set(float64(count))
 	}

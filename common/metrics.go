@@ -28,6 +28,7 @@ type Metrics struct {
 	WebsocketNewBlockTxsSubscriptions prometheus.Gauge
 	IndexResyncDuration               prometheus.Histogram
 	MempoolResyncDuration             prometheus.Histogram
+	MempoolResyncThroughput           *prometheus.HistogramVec
 	TxCacheEfficiency                 *prometheus.CounterVec
 	RPCLatency                        *prometheus.HistogramVec
 	EthCallRequests                   *prometheus.CounterVec
@@ -229,6 +230,15 @@ func GetMetrics(coin string) (*Metrics, error) {
 			Buckets:     []float64{10, 100, 500, 1000, 2000, 5000, 10000},
 			ConstLabels: Labels{"coin": coin},
 		},
+	)
+	metrics.MempoolResyncThroughput = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:        "blockbook_mempool_resync_throughput_txs_per_second",
+			Help:        "Effective mempool resync throughput in transactions per second",
+			Buckets:     []float64{0.1, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000},
+			ConstLabels: Labels{"coin": coin},
+		},
+		[]string{"chain", "status"},
 	)
 	metrics.TxCacheEfficiency = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
