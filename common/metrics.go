@@ -21,6 +21,9 @@ type Metrics struct {
 	WebsocketAddrNotifications        *prometheus.CounterVec
 	WebsocketNewBlockTxs              *prometheus.CounterVec
 	WebsocketNewBlockTxsDuration      *prometheus.HistogramVec
+	BalanceHistoryFiatDuration        *prometheus.HistogramVec
+	BalanceHistoryFiatFallback        *prometheus.CounterVec
+	BalanceHistoryPoints              *prometheus.HistogramVec
 	WebsocketEthReceipt               *prometheus.CounterVec
 	WebsocketNewBlockTxsSubscriptions prometheus.Gauge
 	IndexResyncDuration               prometheus.Histogram
@@ -169,6 +172,32 @@ func GetMetrics(coin string) (*Metrics, error) {
 			ConstLabels: Labels{"coin": coin},
 		},
 		[]string{"stage"},
+	)
+	metrics.BalanceHistoryFiatDuration = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:        "blockbook_balance_history_fiat_duration_seconds",
+			Help:        "Duration of balance history fiat lookup stage by request path and mode",
+			Buckets:     []float64{0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10, 20},
+			ConstLabels: Labels{"coin": coin},
+		},
+		[]string{"path", "mode", "status"},
+	)
+	metrics.BalanceHistoryFiatFallback = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name:        "blockbook_balance_history_fiat_fallback_total",
+			Help:        "Number of balance history fiat lookup fallbacks by path and reason",
+			ConstLabels: Labels{"coin": coin},
+		},
+		[]string{"path", "reason"},
+	)
+	metrics.BalanceHistoryPoints = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:        "blockbook_balance_history_points",
+			Help:        "Number of output points in balance history responses by request path",
+			Buckets:     []float64{1, 2, 5, 10, 20, 40, 80, 160, 320, 640, 1280},
+			ConstLabels: Labels{"coin": coin},
+		},
+		[]string{"path"},
 	)
 	metrics.WebsocketEthReceipt = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
