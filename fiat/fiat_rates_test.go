@@ -281,3 +281,56 @@ func TestFiatRates(t *testing.T) {
 		t.Fatalf("UpdateHistoricalTickers(eur) 2nd pass = %v, want %v", *ticker, wantTicker)
 	}
 }
+
+func TestGetTickersForTimestamps_UsesGranularityAndFallback(t *testing.T) {
+	fr := &FiatRates{
+		Enabled: true,
+		currentTicker: &common.CurrencyRatesTicker{
+			Timestamp: time.Unix(123456, 0).UTC(),
+			Rates:     map[string]float32{"usd": 4},
+		},
+		fiveMinutesTickers: map[int64]*common.CurrencyRatesTicker{
+			600: {
+				Timestamp: time.Unix(600, 0).UTC(),
+				Rates:     map[string]float32{"usd": 1},
+			},
+		},
+		fiveMinutesTickersFrom: 600,
+		fiveMinutesTickersTo:   600,
+		hourlyTickers: map[int64]*common.CurrencyRatesTicker{
+			3600: {
+				Timestamp: time.Unix(3600, 0).UTC(),
+				Rates:     map[string]float32{"usd": 2},
+			},
+		},
+		hourlyTickersFrom: 3600,
+		hourlyTickersTo:   3600,
+		dailyTickers: map[int64]*common.CurrencyRatesTicker{
+			86400: {
+				Timestamp: time.Unix(86400, 0).UTC(),
+				Rates:     map[string]float32{"usd": 3},
+			},
+		},
+		dailyTickersFrom: 86400,
+		dailyTickersTo:   86400,
+	}
+
+	tickers, err := fr.GetTickersForTimestamps([]int64{600, 3600, 86400, 90000}, "usd", "")
+	if err != nil {
+		t.Fatalf("GetTickersForTimestamps returned error: %v", err)
+	}
+	if tickers == nil || len(*tickers) != 4 {
+		t.Fatalf("unexpected ticker result shape: %+v", tickers)
+	}
+
+	got := []float32{
+		(*tickers)[0].Rates["usd"],
+		(*tickers)[1].Rates["usd"],
+		(*tickers)[2].Rates["usd"],
+		(*tickers)[3].Rates["usd"],
+	}
+	want := []float32{1, 2, 3, 4}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("unexpected rates: got %v, want %v", got, want)
+	}
+}

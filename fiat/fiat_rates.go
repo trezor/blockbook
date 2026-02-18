@@ -204,8 +204,21 @@ func (fr *FiatRates) GetTickersForTimestamps(timestamps []int64, vsCurrency stri
 	if token != "" {
 		return fr.getTokenTickersForTimestamps(timestamps, vsCurrency, token)
 	}
+	// Snapshot all cache references under a short read lock so readers do not
+	// block writers while iterating over potentially large timestamp slices.
 	fr.mux.RLock()
-	defer fr.mux.RUnlock()
+	currentTicker := fr.currentTicker
+	fiveMinutesTickers := fr.fiveMinutesTickers
+	fiveMinutesTickersFrom := fr.fiveMinutesTickersFrom
+	fiveMinutesTickersTo := fr.fiveMinutesTickersTo
+	hourlyTickers := fr.hourlyTickers
+	hourlyTickersFrom := fr.hourlyTickersFrom
+	hourlyTickersTo := fr.hourlyTickersTo
+	dailyTickers := fr.dailyTickers
+	dailyTickersFrom := fr.dailyTickersFrom
+	dailyTickersTo := fr.dailyTickersTo
+	fr.mux.RUnlock()
+
 	tickers := make([]*common.CurrencyRatesTicker, len(timestamps))
 	var prevTicker *common.CurrencyRatesTicker
 	var prevTs int64
@@ -213,16 +226,16 @@ func (fr *FiatRates) GetTickersForTimestamps(timestamps []int64, vsCurrency stri
 		dailyTs := ceilUnix(t, secondsInDay)
 		// use higher granularity only for non daily timestamps
 		if t != dailyTs {
-			if t >= fr.fiveMinutesTickersFrom && t <= fr.fiveMinutesTickersTo {
-				if ticker, found := fr.fiveMinutesTickers[ceilUnix(t, secondsInFiveMinutes)]; found && ticker != nil {
+			if t >= fiveMinutesTickersFrom && t <= fiveMinutesTickersTo {
+				if ticker, found := fiveMinutesTickers[ceilUnix(t, secondsInFiveMinutes)]; found && ticker != nil {
 					if common.IsSuitableTicker(ticker, vsCurrency, token) {
 						tickers[i] = ticker
 						continue
 					}
 				}
 			}
-			if t >= fr.hourlyTickersFrom && t <= fr.hourlyTickersTo {
-				if ticker, found := fr.hourlyTickers[ceilUnix(t, secondsInHour)]; found && ticker != nil {
+			if t >= hourlyTickersFrom && t <= hourlyTickersTo {
+				if ticker, found := hourlyTickers[ceilUnix(t, secondsInHour)]; found && ticker != nil {
 					if common.IsSuitableTicker(ticker, vsCurrency, token) {
 						tickers[i] = ticker
 						continue
@@ -235,12 +248,12 @@ func (fr *FiatRates) GetTickersForTimestamps(timestamps []int64, vsCurrency stri
 			continue
 		} else {
 			var found bool
-			if dailyTs < fr.dailyTickersFrom {
-				dailyTs = fr.dailyTickersFrom
+			if dailyTs < dailyTickersFrom {
+				dailyTs = dailyTickersFrom
 			}
 			var ticker *common.CurrencyRatesTicker
-			for ; dailyTs <= fr.dailyTickersTo; dailyTs += secondsInDay {
-				if ticker, found = fr.dailyTickers[dailyTs]; found && ticker != nil {
+			for ; dailyTs <= dailyTickersTo; dailyTs += secondsInDay {
+				if ticker, found = dailyTickers[dailyTs]; found && ticker != nil {
 					if common.IsSuitableTicker(ticker, vsCurrency, token) {
 						tickers[i] = ticker
 						prevTicker = ticker
@@ -252,8 +265,8 @@ func (fr *FiatRates) GetTickersForTimestamps(timestamps []int64, vsCurrency stri
 				}
 			}
 			if !found {
-				tickers[i] = fr.currentTicker
-				prevTicker = fr.currentTicker
+				tickers[i] = currentTicker
+				prevTicker = currentTicker
 				prevTs = t
 			}
 		}
@@ -283,42 +296,55 @@ func ceilUnix(t int64, granularity int64) int64 {
 
 // loadDailyTickers loads daily tickers to cache
 func (fr *FiatRates) loadDailyTickers() error {
-	fr.mux.Lock()
-	defer fr.mux.Unlock()
-	fr.dailyTickers = make(map[int64]*common.CurrencyRatesTicker)
+	// Build the daily map outside the lock: loading historical fiat data can be
+	// expensive and we only need the lock for the final cache swap.
+	dailyTickers := make(map[int64]*common.CurrencyRatesTicker)
+	dailyTickersFrom := int64(0)
+	dailyTickersTo := int64(0)
 	err := fr.db.FiatRatesGetAllTickers(func(ticker *common.CurrencyRatesTicker) error {
 		normalizedTime := roundTimeUnix(ticker.Timestamp, secondsInDay)
-		if normalizedTime == fr.dailyTickersFrom {
+		if normalizedTime == dailyTickersFrom {
 			// there are multiple tickers on the first day, use only the first one
 			return nil
 		}
 		// remove token rates from cache to save memory (tickers with token rates are hundreds of kb big)
 		ticker.TokenRates = nil
-		if len(fr.dailyTickers) > 0 {
+		if len(dailyTickers) > 0 {
 			// check that there is a ticker for every day, if missing, set it from current value if missing
 			prevTime := normalizedTime
 			for {
 				prevTime -= secondsInDay
-				if _, found := fr.dailyTickers[prevTime]; found {
+				if _, found := dailyTickers[prevTime]; found {
 					break
 				}
-				fr.dailyTickers[prevTime] = ticker
+				dailyTickers[prevTime] = ticker
 			}
 		} else {
-			fr.dailyTickersFrom = normalizedTime
+			dailyTickersFrom = normalizedTime
 		}
-		fr.dailyTickers[normalizedTime] = ticker
-		fr.dailyTickersTo = normalizedTime
+		dailyTickers[normalizedTime] = ticker
+		dailyTickersTo = normalizedTime
 		return nil
 	})
-	return err
+	if err != nil {
+		return err
+	}
+
+	fr.mux.Lock()
+	fr.dailyTickers = dailyTickers
+	fr.dailyTickersFrom = dailyTickersFrom
+	fr.dailyTickersTo = dailyTickersTo
+	fr.mux.Unlock()
+	return nil
 }
 
 // setCurrentTicker sets current ticker
 func (fr *FiatRates) setCurrentTicker(t *common.CurrencyRatesTicker) {
 	fr.mux.Lock()
-	defer fr.mux.Unlock()
 	fr.currentTicker = t
+	fr.mux.Unlock()
+	// Persisting to DB can take longer than an in-memory pointer swap.
+	// Keep the mutex scope tight so readers are not blocked on storage I/O.
 	fr.db.FiatRatesStoreSpecialTickers(currentTickersKey, &[]common.CurrencyRatesTicker{*t})
 }
 
