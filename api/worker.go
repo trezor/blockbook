@@ -40,6 +40,10 @@ var getTickersForTimestamps = func(fr *fiat.FiatRates, timestamps []int64, vsCur
 	return fr.GetTickersForTimestamps(timestamps, vsCurrency, token)
 }
 
+var getCurrentTicker = func(fr *fiat.FiatRates, vsCurrency string, token string) *common.CurrencyRatesTicker {
+	return fr.GetCurrentTicker(vsCurrency, token)
+}
+
 // contractInfoCache is a temporary cache of contract information for ethereum token transfers
 type contractInfoCache = map[string]*bchain.ContractInfo
 
@@ -1106,6 +1110,15 @@ type ethereumTypeAddressData struct {
 	stakingPools         []StakingPool
 }
 
+func (w *Worker) getSecondaryTicker(secondaryCoin string) *common.CurrencyRatesTicker {
+	// Secondary fiat values are computed only when a secondary currency is
+	// requested, so skip ticker lookup otherwise.
+	if secondaryCoin == "" || w.fiatRates == nil {
+		return nil
+	}
+	return getCurrentTicker(w.fiatRates, "", "")
+}
+
 func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescriptor, details AccountDetails, filter *AddressFilter, secondaryCoin string) (*db.AddrBalance, *ethereumTypeAddressData, error) {
 	var ba *db.AddrBalance
 	var n uint64
@@ -1141,7 +1154,7 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 		if err != nil {
 			return nil, nil, errors.Annotatef(err, "EthereumTypeGetNonce %v", addrDesc)
 		}
-		ticker := w.fiatRates.GetCurrentTicker("", "")
+		ticker := w.getSecondaryTicker(secondaryCoin)
 		var erc20Balances map[string]*big.Int
 		if details >= AccountDetailsTokenBalances && len(ca.Contracts) > 1 {
 			// Batch ERC20 balanceOf calls to cut per-contract RPC; fallback is single-call per contract.
