@@ -36,6 +36,10 @@ type Worker struct {
 	metrics           *common.Metrics
 }
 
+var getTickersForTimestamps = func(fr *fiat.FiatRates, timestamps []int64, vsCurrency string, token string) (*[]*common.CurrencyRatesTicker, error) {
+	return fr.GetTickersForTimestamps(timestamps, vsCurrency, token)
+}
+
 // contractInfoCache is a temporary cache of contract information for ethereum token transfers
 type contractInfoCache = map[string]*bchain.ContractInfo
 
@@ -1715,23 +1719,18 @@ func (w *Worker) balanceHistoryForTxid(addrDesc bchain.AddressDescriptor, txid s
 }
 
 func (w *Worker) setFiatRateToBalanceHistories(histories BalanceHistories, currencies []string) error {
-	for i := range histories {
-		bh := &histories[i]
-		tickers, err := w.fiatRates.GetTickersForTimestamps([]int64{int64(bh.Time)}, "", "")
-		if err != nil || tickers == nil || len(*tickers) == 0 {
-			glog.Errorf("Error finding ticker by date %v. Error: %v", bh.Time, err)
-			continue
-		}
-		ticker := (*tickers)[0]
+	if len(histories) == 0 || w.fiatRates == nil {
+		return nil
+	}
+	applyTickerToHistory := func(bh *BalanceHistory, ticker *common.CurrencyRatesTicker, currenciesLowercase []string) {
 		if ticker == nil {
-			continue
+			return
 		}
-		if len(currencies) == 0 {
+		if len(currenciesLowercase) == 0 {
 			bh.FiatRates = ticker.Rates
 		} else {
-			rates := make(map[string]float32)
-			for _, currency := range currencies {
-				currency = strings.ToLower(currency)
+			rates := make(map[string]float32, len(currenciesLowercase))
+			for _, currency := range currenciesLowercase {
 				if rate, found := ticker.Rates[currency]; found {
 					rates[currency] = rate
 				} else {
@@ -1740,6 +1739,35 @@ func (w *Worker) setFiatRateToBalanceHistories(histories BalanceHistories, curre
 			}
 			bh.FiatRates = rates
 		}
+	}
+	timestamps := make([]int64, len(histories))
+	for i := range histories {
+		timestamps[i] = int64(histories[i].Time)
+	}
+	tickers, err := getTickersForTimestamps(w.fiatRates, timestamps, "", "")
+	batchFetchValid := err == nil && tickers != nil && len(*tickers) == len(histories)
+	if !batchFetchValid {
+		glog.Errorf("Error finding tickers for %d timestamps. Error: %v", len(timestamps), err)
+	}
+	currenciesLowercase := make([]string, len(currencies))
+	for i := range currencies {
+		currenciesLowercase[i] = strings.ToLower(currencies[i])
+	}
+	if batchFetchValid {
+		for i := range histories {
+			applyTickerToHistory(&histories[i], (*tickers)[i], currenciesLowercase)
+		}
+		return nil
+	}
+	// Fallback to per-point lookup to preserve original behavior on partial failures.
+	for i := range histories {
+		bh := &histories[i]
+		pointTickers, pointErr := getTickersForTimestamps(w.fiatRates, []int64{int64(bh.Time)}, "", "")
+		if pointErr != nil || pointTickers == nil || len(*pointTickers) == 0 {
+			glog.Errorf("Error finding ticker by date %v. Error: %v", bh.Time, pointErr)
+			continue
+		}
+		applyTickerToHistory(bh, (*pointTickers)[0], currenciesLowercase)
 	}
 	return nil
 }
