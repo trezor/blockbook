@@ -42,6 +42,7 @@ type FiatRates struct {
 	Enabled                bool
 	periodSeconds          int64
 	db                     *db.RocksDB
+	metrics                *common.Metrics
 	timeFormat             string
 	callbackOnNewTicker    OnNewFiatRatesTicker
 	downloader             RatesDownloaderInterface
@@ -101,6 +102,7 @@ func NewFiatRates(db *db.RocksDB, config *common.Config, metrics *common.Metrics
 		fr.periodSeconds = 60
 	}
 	fr.db = db
+	fr.metrics = metrics
 	fr.callbackOnNewTicker = callback
 	fr.downloadTokens = rdParams.PlatformIdentifier != "" && rdParams.PlatformVsCurrency != ""
 	if fr.downloadTokens {
@@ -444,6 +446,16 @@ func (fr *FiatRates) setFiveMinutesTickers(t *[]common.CurrencyRatesTicker) {
 	fr.fiveMinutesTickers, fr.fiveMinutesTickersFrom, fr.fiveMinutesTickersTo = fr.tickersToMap(t, secondsInFiveMinutes)
 }
 
+func (fr *FiatRates) observeUpdateDuration(stage, status string, start time.Time) {
+	if fr.metrics == nil {
+		return
+	}
+	fr.metrics.FiatRatesUpdateDuration.With(common.Labels{
+		"stage":  stage,
+		"status": status,
+	}).Observe(time.Since(start).Seconds())
+}
+
 // RunDownloader periodically downloads current (every 15 minutes) and historical (once a day) tickers
 func (fr *FiatRates) RunDownloader() error {
 	glog.Infof("Starting %v FiatRates downloader...", fr.provider)
@@ -464,11 +476,14 @@ func (fr *FiatRates) RunDownloader() error {
 		firstRun = false
 
 		// load current tickers
+		currentTickersStart := time.Now()
 		currentTicker, err := fr.downloader.CurrentTickers()
 		if err != nil || currentTicker == nil {
+			fr.observeUpdateDuration("current_tickers", "error", currentTickersStart)
 			glog.Error("FiatRatesDownloader: CurrentTickers error ", err)
 		} else {
 			fr.setCurrentTicker(currentTicker)
+			fr.observeUpdateDuration("current_tickers", "success", currentTickersStart)
 			glog.Info("FiatRatesDownloader: CurrentTickers updated")
 			if fr.callbackOnNewTicker != nil {
 				fr.callbackOnNewTicker(currentTicker)
@@ -477,22 +492,28 @@ func (fr *FiatRates) RunDownloader() error {
 
 		// load hourly tickers, it is necessary to wait about 1 hour to prepare the tickers
 		if time.Now().UTC().Unix() >= fr.hourlyTickersTo+secondsInHour+secondsInHour {
+			hourlyTickersStart := time.Now()
 			hourlyTickers, err := fr.downloader.HourlyTickers()
 			if err != nil || hourlyTickers == nil {
+				fr.observeUpdateDuration("hourly_tickers", "error", hourlyTickersStart)
 				glog.Error("FiatRatesDownloader: HourlyTickers error ", err)
 			} else {
 				fr.setHourlyTickers(hourlyTickers)
+				fr.observeUpdateDuration("hourly_tickers", "success", hourlyTickersStart)
 				glog.Info("FiatRatesDownloader: HourlyTickers updated")
 			}
 		}
 
 		// load five minute tickers, it is necessary to wait about 10 minutes to prepare the tickers
 		if time.Now().UTC().Unix() >= fr.fiveMinutesTickersTo+3*secondsInFiveMinutes {
+			fiveMinutesTickersStart := time.Now()
 			fiveMinutesTickers, err := fr.downloader.FiveMinutesTickers()
 			if err != nil || fiveMinutesTickers == nil {
+				fr.observeUpdateDuration("five_minutes_tickers", "error", fiveMinutesTickersStart)
 				glog.Error("FiatRatesDownloader: FiveMinutesTickers error ", err)
 			} else {
 				fr.setFiveMinutesTickers(fiveMinutesTickers)
+				fr.observeUpdateDuration("five_minutes_tickers", "success", fiveMinutesTickersStart)
 				glog.Info("FiatRatesDownloader: FiveMinutesTickers updated")
 			}
 		}
@@ -500,14 +521,20 @@ func (fr *FiatRates) RunDownloader() error {
 		// once a day, 1 hour after UTC midnight (to let the provider prepare historical rates) update historical tickers
 		now := time.Now().UTC()
 		if (now.YearDay() != lastHistoricalTickers.YearDay() || now.Year() != lastHistoricalTickers.Year()) && now.Hour() > 0 {
+			historicalTickersStart := time.Now()
 			err = fr.downloader.UpdateHistoricalTickers()
 			if err != nil {
+				fr.observeUpdateDuration("historical_tickers", "error", historicalTickersStart)
 				glog.Error("FiatRatesDownloader: UpdateHistoricalTickers error ", err)
 			} else {
+				fr.observeUpdateDuration("historical_tickers", "success", historicalTickersStart)
 				lastHistoricalTickers = time.Now().UTC()
+				loadDailyTickersStart := time.Now()
 				if err = fr.loadDailyTickers(); err != nil {
+					fr.observeUpdateDuration("load_daily_tickers", "error", loadDailyTickersStart)
 					glog.Error("FiatRatesDownloader: loadDailyTickers error ", err)
 				} else {
+					fr.observeUpdateDuration("load_daily_tickers", "success", loadDailyTickersStart)
 					ticker, found := fr.dailyTickers[fr.dailyTickersTo]
 					if !found || ticker == nil {
 						glog.Error("FiatRatesDownloader: dailyTickers not loaded")
@@ -522,10 +549,13 @@ func (fr *FiatRates) RunDownloader() error {
 				if fr.downloadTokens {
 					// UpdateHistoricalTokenTickers in a goroutine, it can take quite some time as there are many tokens
 					go func() {
+						historicalTokenTickersStart := time.Now()
 						err := fr.downloader.UpdateHistoricalTokenTickers()
 						if err != nil {
+							fr.observeUpdateDuration("historical_token_tickers", "error", historicalTokenTickersStart)
 							glog.Error("FiatRatesDownloader: UpdateHistoricalTokenTickers error ", err)
 						} else {
+							fr.observeUpdateDuration("historical_token_tickers", "success", historicalTokenTickersStart)
 							glog.Info("FiatRatesDownloader: UpdateHistoricalTokenTickers finished")
 							if is != nil {
 								is.HistoricalTokenFiatRatesTime = time.Now().UTC()

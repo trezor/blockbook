@@ -60,6 +60,7 @@ type Metrics struct {
 	SocketIOPendingRequests           *prometheus.GaugeVec
 	XPubCacheSize                     prometheus.Gauge
 	CoingeckoRequests                 *prometheus.CounterVec
+	FiatRatesUpdateDuration           *prometheus.HistogramVec
 }
 
 // Labels represents a collection of label name -> value mappings.
@@ -478,6 +479,15 @@ func GetMetrics(coin string) (*Metrics, error) {
 			ConstLabels: Labels{"coin": coin},
 		},
 		[]string{"endpoint", "status"},
+	)
+	metrics.FiatRatesUpdateDuration = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:        "blockbook_fiat_rates_update_duration_seconds",
+			Help:        "Duration of fiat rates downloader update stages in seconds",
+			Buckets:     []float64{0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10, 20, 30, 60, 120, 300},
+			ConstLabels: Labels{"coin": coin},
+		},
+		[]string{"stage", "status"},
 	)
 
 	v := reflect.ValueOf(metrics)
