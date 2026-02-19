@@ -128,7 +128,7 @@ func TestFiatRates(t *testing.T) {
 	config := common.Config{
 		CoinName:        "fakecoin",
 		FiatRates:       "coingecko",
-		FiatRatesParams: `{"url": "` + mockServer.URL + `", "coin": "ethereum","platformIdentifier": "ethereum","platformVsCurrency": "eth","periodSeconds": 60}`,
+		FiatRatesParams: `{"url": "` + mockServer.URL + `", "coin": "ethereum","platformIdentifier": "ethereum","platformVsCurrency": "eth","periodSeconds": 60,"plan":"pro"}`,
 	}
 
 	d, _, tmp := setupRocksDB(t, &testBitcoinParser{

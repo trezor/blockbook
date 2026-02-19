@@ -10,9 +10,92 @@ import (
 	"github.com/trezor/blockbook/common"
 )
 
+func TestResolveCoinGeckoPlan(t *testing.T) {
+	tests := []struct {
+		name      string
+		plan      string
+		url       string
+		hasAPIKey bool
+		want      string
+	}{
+		{
+			name:      "explicit free overrides pro url and api key",
+			plan:      "free",
+			url:       coingeckoProAPIURL,
+			hasAPIKey: true,
+			want:      coingeckoPlanFree,
+		},
+		{
+			name:      "explicit pro",
+			plan:      "pro",
+			url:       "",
+			hasAPIKey: false,
+			want:      coingeckoPlanPro,
+		},
+		{
+			name:      "infer pro from pro url",
+			plan:      "",
+			url:       coingeckoProAPIURL,
+			hasAPIKey: false,
+			want:      coingeckoPlanPro,
+		},
+		{
+			name:      "infer pro from pro url with trailing slash and uppercase",
+			plan:      "",
+			url:       "HTTPS://PRO-API.COINGECKO.COM/API/V3/",
+			hasAPIKey: false,
+			want:      coingeckoPlanPro,
+		},
+		{
+			name:      "infer free from public url",
+			plan:      "",
+			url:       coingeckoFreeAPIURL,
+			hasAPIKey: true,
+			want:      coingeckoPlanFree,
+		},
+		{
+			name:      "empty plan with api key stays backward compatible and defaults to pro",
+			plan:      "",
+			url:       "",
+			hasAPIKey: true,
+			want:      coingeckoPlanPro,
+		},
+		{
+			name:      "empty plan without api key defaults to free",
+			plan:      "",
+			url:       "",
+			hasAPIKey: false,
+			want:      coingeckoPlanFree,
+		},
+		{
+			name:      "unknown plan falls back to api key default",
+			plan:      "enterprise",
+			url:       "",
+			hasAPIKey: true,
+			want:      coingeckoPlanPro,
+		},
+		{
+			name:      "unknown plan skips url inference and falls back to api key default",
+			plan:      "enterprise",
+			url:       coingeckoFreeAPIURL,
+			hasAPIKey: true,
+			want:      coingeckoPlanPro,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := resolveCoinGeckoPlan(tt.plan, tt.url, tt.hasAPIKey)
+			if got != tt.want {
+				t.Fatalf("unexpected plan: got %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestResolveHistoricalDays_FreeAPIWithoutLastTickerUses365(t *testing.T) {
 	cg := &Coingecko{
-		url: "https://api.coingecko.com/api/v3",
+		plan: coingeckoPlanFree,
 	}
 
 	days, shouldRequest := cg.resolveHistoricalDays(nil)
@@ -26,8 +109,7 @@ func TestResolveHistoricalDays_FreeAPIWithoutLastTickerUses365(t *testing.T) {
 
 func TestResolveHistoricalDays_ProAPIWithoutLastTickerUsesMax(t *testing.T) {
 	cg := &Coingecko{
-		url:  "https://pro-api.coingecko.com/api/v3",
-		plan: "pro",
+		plan: coingeckoPlanPro,
 	}
 
 	days, shouldRequest := cg.resolveHistoricalDays(nil)
@@ -41,7 +123,7 @@ func TestResolveHistoricalDays_ProAPIWithoutLastTickerUsesMax(t *testing.T) {
 
 func TestResolveHistoricalDays_FreeAPICapsLongLookbackTo365(t *testing.T) {
 	cg := &Coingecko{
-		url: "https://api.coingecko.com/api/v3",
+		plan: coingeckoPlanFree,
 	}
 
 	days, shouldRequest := cg.resolveHistoricalDays(&common.CurrencyRatesTicker{
@@ -57,7 +139,7 @@ func TestResolveHistoricalDays_FreeAPICapsLongLookbackTo365(t *testing.T) {
 
 func TestResolveHistoricalDays_SkipsWhenSameDayTickerExists(t *testing.T) {
 	cg := &Coingecko{
-		url: "https://api.coingecko.com/api/v3",
+		plan: coingeckoPlanFree,
 	}
 
 	days, shouldRequest := cg.resolveHistoricalDays(&common.CurrencyRatesTicker{
@@ -68,6 +150,18 @@ func TestResolveHistoricalDays_SkipsWhenSameDayTickerExists(t *testing.T) {
 	}
 	if days != "" {
 		t.Fatalf("unexpected days value: got %q, want empty", days)
+	}
+}
+
+func TestHistoricalRangeDaysLimit_DependsOnPlan(t *testing.T) {
+	free := (&Coingecko{plan: coingeckoPlanFree}).historicalRangeDaysLimit()
+	if free != coingeckoFreeHistoryDaysLimit {
+		t.Fatalf("unexpected free limit: got %d, want %d", free, coingeckoFreeHistoryDaysLimit)
+	}
+
+	pro := (&Coingecko{plan: coingeckoPlanPro}).historicalRangeDaysLimit()
+	if pro != 0 {
+		t.Fatalf("unexpected pro limit: got %d, want %d", pro, 0)
 	}
 }
 
