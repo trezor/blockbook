@@ -277,7 +277,7 @@ Response for Ethereum-type coins. Data of the transaction consist of:
 -   an array of _tokenTransfers_ (ERC20, ERC721 or ERC1155)
 -   _ethereumSpecific_ data
     -   _type_ (returned only for contract creation - value `1` and destruction value `2`)
-    -   _status_ (`1` OK, `0` Failure, `-1` pending), potential _error_ message, _gasLimit_, _gasUsed_, _gasPrice_, _nonce_, input _data_
+    -   _status_ (`1` OK, `0` Failure, `-1` pending), potential _error_ message, _gasLimit_, _gasUsed_, _gasPrice_, _effectiveGasPrice_, _nonce_, input _data_
     -   parsed input data in the field _parsedData_, if a match with the 4byte directory was found
     -   internal transfers (type `0` transfer, type `1` contract creation, type `2` contract destruction)
 -   _addressAliases_ - maps addresses in the transaction to names from contract or ENS. Only addresses with known names are returned.
