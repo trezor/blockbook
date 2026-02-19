@@ -6,6 +6,7 @@ package server
 import (
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 	"time"
 
@@ -470,5 +471,62 @@ func TestENSExpiration(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func Test_HTTPFiatRates_EthereumType_TokenCoverage(t *testing.T) {
+	timeNow = fixedTimeNow
+	parser := eth.NewEthereumParser(1, true)
+	chain, err := dbtestdata.NewFakeBlockChainEthereumType(parser)
+	if err != nil {
+		glog.Fatal("fakechain: ", err)
+	}
+
+	s, dbpath := setupPublicHTTPServer(parser, chain, t, false)
+	defer closeAndDestroyPublicServer(t, s, dbpath)
+	s.ConnectFullPublicInterface()
+	ts := httptest.NewServer(s.https.Handler)
+	defer ts.Close()
+
+	token := "0xA4DD6Bc15Be95Af55f0447555c8b6aA3088562f3"
+
+	var currentToken fiatTickerResponse
+	mustGetJSON(t, ts.URL+"/api/v2/tickers?currency=USD&token="+token, http.StatusOK, &currentToken)
+	if currentToken.Timestamp != 1592821931 {
+		t.Fatalf("unexpected current token timestamp: got %d, want %d", currentToken.Timestamp, 1592821931)
+	}
+	if !reflect.DeepEqual(currentToken.Rates, map[string]float32{"usd": 8.2}) {
+		t.Fatalf("unexpected current token rates: got %v", currentToken.Rates)
+	}
+
+	var tickersList fiatTickersListResponse
+	mustGetJSON(t, ts.URL+"/api/v2/tickers-list?timestamp=1574340000&token="+token, http.StatusOK, &tickersList)
+	if tickersList.Timestamp != 1574380800 {
+		t.Fatalf("unexpected tickers-list timestamp: got %d, want %d", tickersList.Timestamp, 1574380800)
+	}
+	if !reflect.DeepEqual(tickersList.Tickers, []string{"eur", "usd"}) {
+		t.Fatalf("unexpected tickers-list currencies: got %v", tickersList.Tickers)
+	}
+
+	unknownToken := "0xFFFFFFFFFFe95Af55f0447555c8b6aA3088562f3"
+	var listErr apiErrorResponse
+	mustGetJSON(t, ts.URL+"/api/v2/tickers-list?timestamp=1574340000&token="+unknownToken, http.StatusBadRequest, &listErr)
+	if listErr.Error != "No tickers found" {
+		t.Fatalf("unexpected unknown-token tickers-list error: got %q, want %q", listErr.Error, "No tickers found")
+	}
+
+	var multiToken []fiatTickerResponse
+	mustGetJSON(
+		t,
+		ts.URL+"/api/v2/multi-tickers?timestamp=1574340000,1521545531&currency=USD&token="+token,
+		http.StatusOK,
+		&multiToken,
+	)
+	wantMulti := []fiatTickerResponse{
+		{Timestamp: 1574380800, Rates: map[string]float32{"usd": 1.2}},
+		{Timestamp: 1553126400, Rates: map[string]float32{"usd": 0.8}},
+	}
+	if !reflect.DeepEqual(multiToken, wantMulti) {
+		t.Fatalf("unexpected multi token rates: got %v, want %v", multiToken, wantMulti)
 	}
 }
