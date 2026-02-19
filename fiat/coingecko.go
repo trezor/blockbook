@@ -18,8 +18,8 @@ import (
 )
 
 const (
-	DefaultHTTPTimeout     = 15 * time.Second
-	DefaultThrottleDelayMs = 100 // 100 ms delay between requests
+	DefaultHTTPTimeout            = 15 * time.Second
+	DefaultThrottleDelayMs        = 100 // 100 ms delay between requests
 	coingeckoFreeHistoryDaysLimit = 365
 )
 
@@ -437,10 +437,17 @@ func isHistoricalRangeLimitError(err error) bool {
 	if err == nil {
 		return false
 	}
-	msg := strings.ToLower(err.Error())
-	return strings.Contains(msg, "error_code\":10012") ||
-		strings.Contains(msg, "allowed time range") ||
-		strings.Contains(msg, "past 365 days")
+	var payload struct {
+		Error struct {
+			Status struct {
+				ErrorCode *int `json:"error_code"`
+			} `json:"status"`
+		} `json:"error"`
+	}
+	if jsonErr := json.Unmarshal([]byte(err.Error()), &payload); jsonErr != nil {
+		return false
+	}
+	return payload.Error.Status.ErrorCode != nil && *payload.Error.Status.ErrorCode == 10012
 }
 
 func (cg *Coingecko) getHistoricalTicker(tickersToUpdate map[uint]*common.CurrencyRatesTicker, coinId string, vsCurrency string, token string) (bool, error) {
