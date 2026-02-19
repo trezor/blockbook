@@ -626,6 +626,42 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			},
 		},
 		{
+			name:        "apiTickerList missing timestamp",
+			r:           newGetRequest(ts.URL + "/api/v2/tickers-list"),
+			status:      http.StatusBadRequest,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`{"error":"Parameter \"timestamp\" is not a valid Unix timestamp."}`,
+			},
+		},
+		{
+			name:        "apiTickerList invalid timestamp",
+			r:           newGetRequest(ts.URL + "/api/v2/tickers-list?timestamp=abc"),
+			status:      http.StatusBadRequest,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`{"error":"Parameter \"timestamp\" is not a valid Unix timestamp."}`,
+			},
+		},
+		{
+			name:        "apiMultiFiatRates missing timestamp",
+			r:           newGetRequest(ts.URL + "/api/v2/multi-tickers"),
+			status:      http.StatusBadRequest,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`{"error":"Parameter 'timestamp' is missing."}`,
+			},
+		},
+		{
+			name:        "apiMultiFiatRates invalid timestamp item",
+			r:           newGetRequest(ts.URL + "/api/v2/multi-tickers?timestamp=1574344800,abc&currency=usd"),
+			status:      http.StatusBadRequest,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`{"error":"Parameter 'timestamp' does not contain a valid Unix timestamp."}`,
+			},
+		},
+		{
 			name:        "apiAddress v1",
 			r:           newGetRequest(ts.URL + "/api/v1/address/mv9uLThosiEnGRbVPS7Vhyw6VssbVRsiAw"),
 			status:      http.StatusOK,
