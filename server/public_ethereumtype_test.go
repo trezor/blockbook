@@ -174,6 +174,62 @@ var websocketTestsEthereumType = []websocketTest{
 		},
 		want: `{"id":"2","data":{"result":"9876"}}`,
 	},
+	{
+		name: "websocket getCurrentFiatRates token usd",
+		req: websocketReq{
+			Method: "getCurrentFiatRates",
+			Params: map[string]interface{}{
+				"currencies": []string{"usd"},
+				"token":      "0xA4DD6Bc15Be95Af55f0447555c8b6aA3088562f3",
+			},
+		},
+		want: `{"id":"3","data":{"ts":1592821931,"rates":{"usd":8.2}}}`,
+	},
+	{
+		name: "websocket getCurrentFiatRates unknown token",
+		req: websocketReq{
+			Method: "getCurrentFiatRates",
+			Params: map[string]interface{}{
+				"currencies": []string{"usd"},
+				"token":      "0xFFFFFFFFFFe95Af55f0447555c8b6aA3088562f3",
+			},
+		},
+		want: `{"id":"4","data":{"error":{"message":"No tickers found!"}}}`,
+	},
+	{
+		name: "websocket getFiatRatesForTimestamps token usd",
+		req: websocketReq{
+			Method: "getFiatRatesForTimestamps",
+			Params: map[string]interface{}{
+				"currencies": []string{"usd"},
+				"timestamps": []int64{1574340000},
+				"token":      "0xA4DD6Bc15Be95Af55f0447555c8b6aA3088562f3",
+			},
+		},
+		want: `{"id":"5","data":{"tickers":[{"ts":1574380800,"rates":{"usd":1.2}}]}}`,
+	},
+	{
+		name: "websocket getFiatRatesTickersList token",
+		req: websocketReq{
+			Method: "getFiatRatesTickersList",
+			Params: map[string]interface{}{
+				"timestamp": 1574340000,
+				"token":     "0xA4DD6Bc15Be95Af55f0447555c8b6aA3088562f3",
+			},
+		},
+		want: `{"id":"6","data":{"ts":1574380800,"available_currencies":["eur","usd"]}}`,
+	},
+	{
+		name: "websocket getFiatRatesTickersList unknown token",
+		req: websocketReq{
+			Method: "getFiatRatesTickersList",
+			Params: map[string]interface{}{
+				"timestamp": 1574340000,
+				"token":     "0xFFFFFFFFFFe95Af55f0447555c8b6aA3088562f3",
+			},
+		},
+		want: `{"id":"7","data":{"error":{"message":"No tickers found"}}}`,
+	},
 }
 
 func initEthereumTypeDB(d *db.RocksDB) error {
