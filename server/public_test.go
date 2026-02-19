@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -248,6 +249,29 @@ type httpTests struct {
 	body        []string
 }
 
+type fiatTickerResponse struct {
+	Timestamp int64              `json:"ts"`
+	Rates     map[string]float32 `json:"rates"`
+}
+
+type fiatTickersListResponse struct {
+	Timestamp int64    `json:"ts"`
+	Tickers   []string `json:"available_currencies"`
+}
+
+type balanceHistoryResponse struct {
+	Time       uint32             `json:"time"`
+	Txs        uint32             `json:"txs"`
+	Received   string             `json:"received"`
+	Sent       string             `json:"sent"`
+	SentToSelf string             `json:"sentToSelf"`
+	Rates      map[string]float32 `json:"rates"`
+}
+
+type apiErrorResponse struct {
+	Error string `json:"error"`
+}
+
 func performHttpTests(tests []httpTests, t *testing.T, ts *httptest.Server) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -274,6 +298,30 @@ func performHttpTests(tests []httpTests, t *testing.T, ts *httptest.Server) {
 				}
 			}
 		})
+	}
+}
+
+func mustGetJSON(t *testing.T, endpointURL string, statusCode int, out interface{}) {
+	t.Helper()
+
+	resp, err := http.DefaultClient.Do(newGetRequest(endpointURL))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != statusCode {
+		t.Fatalf("StatusCode = %v, want %v, body = %s", resp.StatusCode, statusCode, string(body))
+	}
+	if contentType := resp.Header.Get("Content-Type"); contentType != "application/json; charset=utf-8" {
+		t.Fatalf("Content-Type = %q, want %q", contentType, "application/json; charset=utf-8")
+	}
+	if err := json.Unmarshal(body, out); err != nil {
+		t.Fatalf("failed to decode JSON body %q: %v", string(body), err)
 	}
 }
 
@@ -1676,6 +1724,86 @@ func Test_PublicServer_BitcoinType(t *testing.T) {
 	httpTestsBitcoinType(t, ts)
 	socketioTestsBitcoinType(t, ts)
 	runWebsocketTests(t, ts, websocketTestsBitcoinType)
+}
+
+func Test_HTTPFiatRates_CrossEndpointConsistency_BitcoinType(t *testing.T) {
+	parser, chain := setupChain(t)
+
+	s, dbpath := setupPublicHTTPServer(parser, chain, t, false)
+	defer closeAndDestroyPublicServer(t, s, dbpath)
+	s.ConnectFullPublicInterface()
+	ts := httptest.NewServer(s.https.Handler)
+	defer ts.Close()
+
+	var singleByTimestamp fiatTickerResponse
+	mustGetJSON(t, ts.URL+"/api/v2/tickers?timestamp=1574344800&currency=eur", http.StatusOK, &singleByTimestamp)
+
+	var multiByTimestamp []fiatTickerResponse
+	mustGetJSON(t, ts.URL+"/api/v2/multi-tickers?timestamp=1574344800&currency=eur", http.StatusOK, &multiByTimestamp)
+	if len(multiByTimestamp) != 1 {
+		t.Fatalf("unexpected multi ticker count: got %d, want %d", len(multiByTimestamp), 1)
+	}
+	if !reflect.DeepEqual(singleByTimestamp, multiByTimestamp[0]) {
+		t.Fatalf("tickers and multi-tickers mismatch: got %v vs %v", singleByTimestamp, multiByTimestamp[0])
+	}
+
+	var byBlock fiatTickerResponse
+	mustGetJSON(t, ts.URL+"/api/v2/tickers?block=225494&currency=usd", http.StatusOK, &byBlock)
+
+	var byBlockTime fiatTickerResponse
+	mustGetJSON(t, ts.URL+"/api/v2/tickers?timestamp=1521595678&currency=usd", http.StatusOK, &byBlockTime)
+	if !reflect.DeepEqual(byBlock, byBlockTime) {
+		t.Fatalf("block and timestamp ticker mismatch: got %v vs %v", byBlock, byBlockTime)
+	}
+}
+
+func Test_HTTPBalanceHistory_GroupByAndInvalidCurrency_BitcoinType(t *testing.T) {
+	parser, chain := setupChain(t)
+
+	s, dbpath := setupPublicHTTPServer(parser, chain, t, false)
+	defer closeAndDestroyPublicServer(t, s, dbpath)
+	s.ConnectFullPublicInterface()
+	ts := httptest.NewServer(s.https.Handler)
+	defer ts.Close()
+
+	addr := "2NEVv9LJmAnY99W1pFoc5UJjVdypBqdnvu1"
+
+	var grouped []balanceHistoryResponse
+	mustGetJSON(
+		t,
+		ts.URL+"/api/v2/balancehistory/"+addr+"?groupBy=200000&fiatcurrency=eur",
+		http.StatusOK,
+		&grouped,
+	)
+	wantGrouped := []balanceHistoryResponse{
+		{
+			Time:       1521400000,
+			Txs:        2,
+			Received:   "18876",
+			Sent:       "9876",
+			SentToSelf: "9000",
+			Rates:      map[string]float32{"eur": 1300},
+		},
+	}
+	if !reflect.DeepEqual(grouped, wantGrouped) {
+		t.Fatalf("unexpected grouped balance history: got %v, want %v", grouped, wantGrouped)
+	}
+
+	var invalidCurrency []balanceHistoryResponse
+	mustGetJSON(
+		t,
+		ts.URL+"/api/v2/balancehistory/"+addr+"?fiatcurrency=does_not_exist",
+		http.StatusOK,
+		&invalidCurrency,
+	)
+	if len(invalidCurrency) != 2 {
+		t.Fatalf("unexpected invalid-currency balance history count: got %d, want %d", len(invalidCurrency), 2)
+	}
+	for i := range invalidCurrency {
+		if !reflect.DeepEqual(invalidCurrency[i].Rates, map[string]float32{"does_not_exist": -1}) {
+			t.Fatalf("unexpected invalid-currency rates at index %d: got %v", i, invalidCurrency[i].Rates)
+		}
+	}
 }
 
 func Test_WebsocketFiatRates_SubscribeBroadcastAndUnsubscribe(t *testing.T) {
