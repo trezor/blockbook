@@ -77,6 +77,16 @@ func TestIsHistoricalRangeLimitError(t *testing.T) {
 		t.Fatal("expected range-limit error to be detected")
 	}
 
+	otherCoingeckoErr := fmt.Errorf(`{"error":{"status":{"error_code":10013,"error_message":"some other coingecko error"}}}`)
+	if isHistoricalRangeLimitError(otherCoingeckoErr) {
+		t.Fatal("expected non-10012 coingecko error not to be treated as range-limit")
+	}
+
+	textOnlyErr := fmt.Errorf("Your request exceeds the allowed time range within the past 365 days")
+	if isHistoricalRangeLimitError(textOnlyErr) {
+		t.Fatal("expected text-only error not to be treated as range-limit without error_code")
+	}
+
 	if isHistoricalRangeLimitError(fmt.Errorf("generic network error")) {
 		t.Fatal("expected generic error not to be treated as range-limit")
 	}
