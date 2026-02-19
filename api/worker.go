@@ -1674,6 +1674,9 @@ func (w *Worker) balanceHistoryForTxid(addrDesc bchain.AddressDescriptor, txid s
                         if gasPrice != nil {
                             feesSat.Mul(gasPrice, ethTxData.GasUsed)
                         }
+                        if ethTxData.L1Fee != nil {
+                            feesSat.Add(&feesSat, ethTxData.L1Fee)
+                        }
                     }
 					(*big.Int)(bh.SentSat).Add((*big.Int)(bh.SentSat), &feesSat)
 				}
