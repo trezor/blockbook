@@ -308,6 +308,25 @@ func TestGetAvailableVsCurrencies_PropagatesProviderErrorAsNonPublic(t *testing.
 	}
 }
 
+func TestGetAvailableVsCurrencies_NilFirstTickerReturnsPublicError(t *testing.T) {
+	w := &Worker{fiatRates: &fiat.FiatRates{}}
+	originalGetter := getTickersForTimestamps
+	defer func() {
+		getTickersForTimestamps = originalGetter
+	}()
+
+	getTickersForTimestamps = func(_ *fiat.FiatRates, _ []int64, _, _ string) (*[]*common.CurrencyRatesTicker, error) {
+		tickers := []*common.CurrencyRatesTicker{nil}
+		return &tickers, nil
+	}
+
+	_, err := w.GetAvailableVsCurrencies(123, "0xtoken")
+	apiErr := requireAPIError(t, err, true)
+	if apiErr.Text != "No tickers found" {
+		t.Fatalf("unexpected error text: got %q", apiErr.Text)
+	}
+}
+
 type fiatRatesTestError string
 
 func (e fiatRatesTestError) Error() string {
