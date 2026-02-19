@@ -191,6 +191,9 @@ func (w *Worker) GetAvailableVsCurrencies(timestamp int64, token string) (*Avail
 		return nil, NewAPIError("No tickers found", true)
 	}
 	ticker := (*tickers)[0]
+	if ticker == nil {
+		return nil, NewAPIError("No tickers found", true)
+	}
 	keys := make([]string, 0, len(ticker.Rates))
 	for k := range ticker.Rates {
 		keys = append(keys, k)
