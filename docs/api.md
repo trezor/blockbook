@@ -17,18 +17,25 @@ See all the referred types (`typescript` interfaces) in the [blockbook-api.ts](.
 
 The following methods are supported:
 
--   [Status](#status)
--   [Get block hash](#get-block-hash)
--   [Get transaction](#get-transaction)
--   [Get transaction specific](#get-transaction-specific)
--   [Get address](#get-address)
--   [Get xpub](#get-xpub)
--   [Get utxo](#get-utxo)
--   [Get block](#get-block)
--   [Send transaction](#send-transaction)
--   [Tickers list](#tickers-list)
--   [Tickers](#tickers)
--   [Balance history](#balance-history)
+- [Blockbook API](#blockbook-api)
+  - [API V2](#api-v2)
+    - [REST API](#rest-api)
+      - [Status page](#status-page)
+      - [Get block hash](#get-block-hash)
+      - [Get transaction](#get-transaction)
+      - [Get transaction specific](#get-transaction-specific)
+      - [Get address](#get-address)
+      - [Get xpub](#get-xpub)
+      - [Get utxo](#get-utxo)
+      - [Get block](#get-block)
+      - [Send transaction](#send-transaction)
+      - [Tickers list](#tickers-list)
+      - [Tickers](#tickers)
+      - [Balance history](#balance-history)
+    - [Websocket API](#websocket-api)
+  - [Legacy API V1](#legacy-api-v1)
+    - [REST API](#rest-api-1)
+    - [Socket.io API](#socketio-api)
 
 #### Status page
 
@@ -48,7 +55,7 @@ Response (`SystemInfo` type):
     "coin": "Bitcoin",
     "network": "BTC",
     "host": "backend5",
-    "version": "0.5.0",
+    "version": "0.5.1",
     "gitCommit": "a0960c8e",
     "buildTime": "2024-08-08T12:32:50+00:00",
     "syncMode": true,
