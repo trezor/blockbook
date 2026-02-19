@@ -4,7 +4,9 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -1063,10 +1065,59 @@ type websocketResp struct {
 	ID string `json:"id"`
 }
 
+type websocketRespWithData struct {
+	ID   string          `json:"id"`
+	Data json.RawMessage `json:"data"`
+}
+
 type websocketTest struct {
 	name string
 	req  websocketReq
 	want string
+}
+
+func connectWebsocket(t *testing.T, ts *httptest.Server) *websocket.Conn {
+	t.Helper()
+	url := strings.Replace(ts.URL, "http://", "ws://", 1) + "/websocket"
+	s, _, err := websocket.DefaultDialer.Dial(url, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
+
+func readWebsocketResponse(t *testing.T, s *websocket.Conn, timeout time.Duration) websocketRespWithData {
+	t.Helper()
+	if err := s.SetReadDeadline(time.Now().Add(timeout)); err != nil {
+		t.Fatal(err)
+	}
+	defer s.SetReadDeadline(time.Time{})
+
+	_, message, err := s.ReadMessage()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var resp websocketRespWithData
+	if err := json.Unmarshal(message, &resp); err != nil {
+		t.Fatal(err)
+	}
+	return resp
+}
+
+func assertNoWebsocketMessage(t *testing.T, s *websocket.Conn, timeout time.Duration) {
+	t.Helper()
+	if err := s.SetReadDeadline(time.Now().Add(timeout)); err != nil {
+		t.Fatal(err)
+	}
+	_, _, err := s.ReadMessage()
+	s.SetReadDeadline(time.Time{})
+	if err == nil {
+		t.Fatal("expected no websocket message, got one")
+	}
+	var netErr net.Error
+	if !errors.As(err, &netErr) || !netErr.Timeout() {
+		t.Fatalf("expected timeout error, got %v", err)
+	}
 }
 
 var websocketTestsBitcoinType = []websocketTest{
@@ -1625,6 +1676,169 @@ func Test_PublicServer_BitcoinType(t *testing.T) {
 	httpTestsBitcoinType(t, ts)
 	socketioTestsBitcoinType(t, ts)
 	runWebsocketTests(t, ts, websocketTestsBitcoinType)
+}
+
+func Test_WebsocketFiatRates_SubscribeBroadcastAndUnsubscribe(t *testing.T) {
+	parser, chain := setupChain(t)
+
+	s, dbpath := setupPublicHTTPServer(parser, chain, t, false)
+	defer closeAndDestroyPublicServer(t, s, dbpath)
+	s.ConnectFullPublicInterface()
+	ts := httptest.NewServer(s.https.Handler)
+	defer ts.Close()
+
+	ws := connectWebsocket(t, ts)
+	defer ws.Close()
+
+	token := "0xa4dd6bc15be95af55f0447555c8b6aa3088562f3"
+	subscribe := websocketReq{
+		ID:     "sub-fiat",
+		Method: "subscribeFiatRates",
+		Params: map[string]interface{}{
+			"currency": "USD",
+			"tokens":   []string{strings.ToUpper(token)},
+		},
+	}
+	if err := ws.WriteJSON(subscribe); err != nil {
+		t.Fatal(err)
+	}
+	ack := readWebsocketResponse(t, ws, time.Second)
+	if ack.ID != subscribe.ID {
+		t.Fatalf("unexpected subscribe response id: got %q, want %q", ack.ID, subscribe.ID)
+	}
+	var ackData struct {
+		Subscribed bool `json:"subscribed"`
+	}
+	if err := json.Unmarshal(ack.Data, &ackData); err != nil {
+		t.Fatal(err)
+	}
+	if !ackData.Subscribed {
+		t.Fatalf("expected subscribed=true, got false")
+	}
+
+	ticker := &common.CurrencyRatesTicker{
+		Timestamp: time.Unix(1700000000, 0),
+		Rates: map[string]float32{
+			"usd": 2.5,
+			"eur": 1.1,
+		},
+		TokenRates: map[string]float32{
+			token: 4,
+		},
+	}
+	expectedTokenRate := ticker.TokenRateInCurrency(token, "usd")
+	s.OnNewFiatRatesTicker(ticker)
+
+	push := readWebsocketResponse(t, ws, time.Second)
+	if push.ID != subscribe.ID {
+		t.Fatalf("unexpected push response id: got %q, want %q", push.ID, subscribe.ID)
+	}
+	var pushData struct {
+		Rates      map[string]float32 `json:"rates"`
+		TokenRates map[string]float32 `json:"tokenRates,omitempty"`
+	}
+	if err := json.Unmarshal(push.Data, &pushData); err != nil {
+		t.Fatal(err)
+	}
+	if len(pushData.Rates) != 1 || pushData.Rates["usd"] != 2.5 {
+		t.Fatalf("unexpected pushed rates: %v", pushData.Rates)
+	}
+	if len(pushData.TokenRates) != 1 || pushData.TokenRates[token] != expectedTokenRate {
+		t.Fatalf("unexpected pushed token rates: %v", pushData.TokenRates)
+	}
+
+	unsubscribe := websocketReq{
+		ID:     "unsub-fiat",
+		Method: "unsubscribeFiatRates",
+	}
+	if err := ws.WriteJSON(unsubscribe); err != nil {
+		t.Fatal(err)
+	}
+	unsubAck := readWebsocketResponse(t, ws, time.Second)
+	if unsubAck.ID != unsubscribe.ID {
+		t.Fatalf("unexpected unsubscribe response id: got %q, want %q", unsubAck.ID, unsubscribe.ID)
+	}
+	var unsubData struct {
+		Subscribed bool `json:"subscribed"`
+	}
+	if err := json.Unmarshal(unsubAck.Data, &unsubData); err != nil {
+		t.Fatal(err)
+	}
+	if unsubData.Subscribed {
+		t.Fatalf("expected subscribed=false after unsubscribe")
+	}
+
+	s.OnNewFiatRatesTicker(&common.CurrencyRatesTicker{
+		Timestamp: time.Unix(1700000060, 0),
+		Rates: map[string]float32{
+			"usd": 3.5,
+		},
+		TokenRates: map[string]float32{
+			token: 5,
+		},
+	})
+	assertNoWebsocketMessage(t, ws, 300*time.Millisecond)
+}
+
+func Test_WebsocketFiatRates_ResubscribeReplacesPreviousCurrency(t *testing.T) {
+	parser, chain := setupChain(t)
+
+	s, dbpath := setupPublicHTTPServer(parser, chain, t, false)
+	defer closeAndDestroyPublicServer(t, s, dbpath)
+	s.ConnectFullPublicInterface()
+	ts := httptest.NewServer(s.https.Handler)
+	defer ts.Close()
+
+	ws := connectWebsocket(t, ts)
+	defer ws.Close()
+
+	subscribeUSD := websocketReq{
+		ID:     "sub-usd",
+		Method: "subscribeFiatRates",
+		Params: map[string]interface{}{
+			"currency": "usd",
+		},
+	}
+	if err := ws.WriteJSON(subscribeUSD); err != nil {
+		t.Fatal(err)
+	}
+	_ = readWebsocketResponse(t, ws, time.Second)
+
+	subscribeEUR := websocketReq{
+		ID:     "sub-eur",
+		Method: "subscribeFiatRates",
+		Params: map[string]interface{}{
+			"currency": "eur",
+		},
+	}
+	if err := ws.WriteJSON(subscribeEUR); err != nil {
+		t.Fatal(err)
+	}
+	_ = readWebsocketResponse(t, ws, time.Second)
+
+	s.OnNewFiatRatesTicker(&common.CurrencyRatesTicker{
+		Timestamp: time.Unix(1700000120, 0),
+		Rates: map[string]float32{
+			"usd": 100,
+			"eur": 200,
+		},
+	})
+
+	push := readWebsocketResponse(t, ws, time.Second)
+	if push.ID != subscribeEUR.ID {
+		t.Fatalf("unexpected push response id: got %q, want %q", push.ID, subscribeEUR.ID)
+	}
+	var pushData struct {
+		Rates map[string]float32 `json:"rates"`
+	}
+	if err := json.Unmarshal(push.Data, &pushData); err != nil {
+		t.Fatal(err)
+	}
+	if len(pushData.Rates) != 1 || pushData.Rates["eur"] != 200 {
+		t.Fatalf("unexpected pushed rates after resubscribe: %v", pushData.Rates)
+	}
+
+	assertNoWebsocketMessage(t, ws, 300*time.Millisecond)
 }
 
 func httpTestsBitcoinTypeExtendedIndex(t *testing.T, ts *httptest.Server) {
