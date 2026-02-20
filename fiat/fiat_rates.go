@@ -62,8 +62,8 @@ type FiatRates struct {
 	dailyTickersTo         int64
 }
 
-var fiatRatesFindTicker = func(d *db.RocksDB, tickerTime *time.Time, vsCurrency string, token string) (*common.CurrencyRatesTicker, error) {
-	return d.FiatRatesFindTicker(tickerTime, vsCurrency, token)
+var fiatRatesFindTickers = func(d *db.RocksDB, timestamps []int64, vsCurrency string, token string) ([]*common.CurrencyRatesTicker, error) {
+	return d.FiatRatesFindTickers(timestamps, vsCurrency, token)
 }
 
 // NewFiatRates initializes the FiatRates handler
@@ -175,8 +175,7 @@ func (fr *FiatRates) getTokenTickersForTimestamps(timestamps []int64, vsCurrency
 		return &tickers, nil
 	}
 
-	// Query unique timestamps in ascending order so adjacent points can reuse the
-	// previously resolved ticker and avoid repeated DB scans.
+	// Query unique timestamps in ascending order to enable a single forward DB scan.
 	uniqueMap := make(map[int64]struct{}, len(timestamps))
 	uniqueTimestamps := make([]int64, 0, len(timestamps))
 	for _, ts := range timestamps {
@@ -190,30 +189,16 @@ func (fr *FiatRates) getTokenTickersForTimestamps(timestamps []int64, vsCurrency
 		return uniqueTimestamps[i] < uniqueTimestamps[j]
 	})
 
-	var prevTicker *common.CurrencyRatesTicker
-	var prevTs int64
+	foundTickers, err := fiatRatesFindTickers(fr.db, uniqueTimestamps, vsCurrency, token)
+	if err != nil {
+		return nil, err
+	}
 	resolvedTickers := make(map[int64]*common.CurrencyRatesTicker, len(uniqueTimestamps))
-	var err error
-	for _, t := range uniqueTimestamps {
-		var ticker *common.CurrencyRatesTicker
-		date := time.Unix(t, 0)
-		// if previously found ticker is newer than this one (token tickers may not be in DB for every day), skip search in DB
-		if prevTicker != nil && t >= prevTs && !date.After(prevTicker.Timestamp) {
-			ticker = prevTicker
-			prevTs = t
-		} else {
-			ticker, err = fiatRatesFindTicker(fr.db, &date, vsCurrency, token)
-			if err != nil {
-				return nil, err
-			}
-			prevTicker = ticker
-			prevTs = t
-		}
+	for i, t := range uniqueTimestamps {
+		ticker := foundTickers[i]
 		// if ticker not found in DB, use current ticker
 		if ticker == nil {
 			resolvedTickers[t] = currentTicker
-			prevTicker = currentTicker
-			prevTs = t
 		} else {
 			resolvedTickers[t] = ticker
 		}

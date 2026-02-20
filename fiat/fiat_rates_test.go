@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 
@@ -335,21 +336,175 @@ func TestGetTickersForTimestamps_UsesGranularityAndFallback(t *testing.T) {
 	}
 }
 
+func TestGetTickersForTimestamps_ConcurrentReadersAndWriters(t *testing.T) {
+	fr := &FiatRates{Enabled: true}
+
+	const (
+		writers      = 2
+		readers      = 8
+		testDuration = 1200 * time.Millisecond
+		waitTimeout  = 3 * time.Second
+	)
+
+	stop := make(chan struct{})
+	errCh := make(chan error, readers)
+	readerCalls := make([]int, readers)
+	var wg sync.WaitGroup
+
+	setState := func(counter int64) {
+		currentTicker := &common.CurrencyRatesTicker{
+			Timestamp: time.Unix(123456+counter, 0).UTC(),
+			Rates:     map[string]float32{"usd": float32(100 + counter%100)},
+		}
+		fr.mux.Lock()
+		fr.currentTicker = currentTicker
+		fr.fiveMinutesTickers = map[int64]*common.CurrencyRatesTicker{
+			600: {
+				Timestamp: time.Unix(600, 0).UTC(),
+				Rates:     map[string]float32{"usd": float32(1 + counter%10)},
+			},
+		}
+		fr.fiveMinutesTickersFrom = 600
+		fr.fiveMinutesTickersTo = 600
+		fr.hourlyTickers = map[int64]*common.CurrencyRatesTicker{
+			3600: {
+				Timestamp: time.Unix(3600, 0).UTC(),
+				Rates:     map[string]float32{"usd": float32(10 + counter%10)},
+			},
+		}
+		fr.hourlyTickersFrom = 3600
+		fr.hourlyTickersTo = 3600
+		fr.dailyTickers = map[int64]*common.CurrencyRatesTicker{
+			86400: {
+				Timestamp: time.Unix(86400, 0).UTC(),
+				Rates:     map[string]float32{"usd": float32(20 + counter%10)},
+			},
+		}
+		fr.dailyTickersFrom = 86400
+		fr.dailyTickersTo = 86400
+		fr.mux.Unlock()
+	}
+
+	// Seed cache state before readers start.
+	setState(0)
+
+	for w := 0; w < writers; w++ {
+		wg.Add(1)
+		go func(seed int) {
+			defer wg.Done()
+
+			counter := int64(seed)
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+				}
+
+				setState(counter)
+
+				counter++
+				time.Sleep(100 * time.Microsecond)
+			}
+		}(w)
+	}
+
+	for r := 0; r < readers; r++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+
+			timestamps := []int64{600, 3600, 86400, 90000}
+			calls := 0
+			for {
+				select {
+				case <-stop:
+					readerCalls[idx] = calls
+					return
+				default:
+				}
+
+				tickers, err := fr.GetTickersForTimestamps(timestamps, "usd", "")
+				if err != nil {
+					errCh <- fmt.Errorf("reader %d returned error: %w", idx, err)
+					readerCalls[idx] = calls
+					return
+				}
+				if tickers == nil || len(*tickers) != len(timestamps) {
+					errCh <- fmt.Errorf("reader %d unexpected ticker shape: %+v", idx, tickers)
+					readerCalls[idx] = calls
+					return
+				}
+				for i, ticker := range *tickers {
+					if ticker == nil {
+						errCh <- fmt.Errorf("reader %d got nil ticker at index %d", idx, i)
+						readerCalls[idx] = calls
+						return
+					}
+					if _, found := ticker.Rates["usd"]; !found {
+						errCh <- fmt.Errorf("reader %d ticker at index %d missing usd rate", idx, i)
+						readerCalls[idx] = calls
+						return
+					}
+				}
+				calls++
+			}
+		}(r)
+	}
+
+	time.Sleep(testDuration)
+	close(stop)
+
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(waitTimeout):
+		t.Fatal("concurrent fiat readers/writers did not finish in time")
+	}
+
+	close(errCh)
+	for err := range errCh {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	totalCalls := 0
+	for i, calls := range readerCalls {
+		if calls == 0 {
+			t.Fatalf("reader %d did not make any successful calls", i)
+		}
+		totalCalls += calls
+	}
+	if totalCalls < readers {
+		t.Fatalf("too few reader calls made: got %d", totalCalls)
+	}
+}
+
 func TestGetTokenTickersForTimestamps_QueriesUniqueSortedTimestamps(t *testing.T) {
-	originalFindTicker := fiatRatesFindTicker
+	originalFindTickers := fiatRatesFindTickers
 	defer func() {
-		fiatRatesFindTicker = originalFindTicker
+		fiatRatesFindTickers = originalFindTickers
 	}()
 
 	lookupCalls := make([]int64, 0)
-	fiatRatesFindTicker = func(_ *db.RocksDB, tickerTime *time.Time, _, _ string) (*common.CurrencyRatesTicker, error) {
-		ts := tickerTime.UTC().Unix()
-		lookupCalls = append(lookupCalls, ts)
-		return &common.CurrencyRatesTicker{
-			Timestamp:  time.Unix(ts, 0).UTC(),
-			Rates:      map[string]float32{"usd": float32(ts)},
-			TokenRates: map[string]float32{"token": 1},
-		}, nil
+	batchCalls := 0
+	fiatRatesFindTickers = func(_ *db.RocksDB, timestamps []int64, _, _ string) ([]*common.CurrencyRatesTicker, error) {
+		batchCalls++
+		lookupCalls = append(lookupCalls, timestamps...)
+		tickers := make([]*common.CurrencyRatesTicker, len(timestamps))
+		for i, ts := range timestamps {
+			tickers[i] = &common.CurrencyRatesTicker{
+				Timestamp:  time.Unix(ts, 0).UTC(),
+				Rates:      map[string]float32{"usd": float32(ts)},
+				TokenRates: map[string]float32{"token": 1},
+			}
+		}
+		return tickers, nil
 	}
 
 	fr := &FiatRates{
@@ -371,6 +526,9 @@ func TestGetTokenTickersForTimestamps_QueriesUniqueSortedTimestamps(t *testing.T
 	if !reflect.DeepEqual(lookupCalls, []int64{100, 200, 250, 300}) {
 		t.Fatalf("unexpected DB lookup order: got %v", lookupCalls)
 	}
+	if batchCalls != 1 {
+		t.Fatalf("unexpected number of batch DB calls: got %d, want %d", batchCalls, 1)
+	}
 
 	got := make([]float32, len(input))
 	for i := range input {
@@ -386,13 +544,13 @@ func TestGetTokenTickersForTimestamps_QueriesUniqueSortedTimestamps(t *testing.T
 }
 
 func TestGetTokenTickersForTimestamps_SkipsDBLookupWhenCurrentTickerHasNoToken(t *testing.T) {
-	originalFindTicker := fiatRatesFindTicker
+	originalFindTickers := fiatRatesFindTickers
 	defer func() {
-		fiatRatesFindTicker = originalFindTicker
+		fiatRatesFindTickers = originalFindTickers
 	}()
 
 	lookupCalls := 0
-	fiatRatesFindTicker = func(_ *db.RocksDB, _ *time.Time, _, _ string) (*common.CurrencyRatesTicker, error) {
+	fiatRatesFindTickers = func(_ *db.RocksDB, _ []int64, _, _ string) ([]*common.CurrencyRatesTicker, error) {
 		lookupCalls++
 		return nil, nil
 	}

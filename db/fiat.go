@@ -1,6 +1,7 @@
 package db
 
 import (
+	"bytes"
 	"encoding/binary"
 	"encoding/json"
 	"math"
@@ -146,6 +147,42 @@ func (d *RocksDB) FiatRatesFindTicker(tickerTime *time.Time, vsCurrency string, 
 		}
 	}
 	return nil, nil
+}
+
+// FiatRatesFindTickers gets FiatRates data closest to each specified timestamp.
+// The method is optimized for timestamps sorted in ascending order.
+func (d *RocksDB) FiatRatesFindTickers(timestamps []int64, vsCurrency string, token string) ([]*common.CurrencyRatesTicker, error) {
+	tickers := make([]*common.CurrencyRatesTicker, len(timestamps))
+	if len(timestamps) == 0 {
+		return tickers, nil
+	}
+
+	it := d.db.NewIteratorCF(d.ro, d.cfh[cfFiatRates])
+	defer it.Close()
+
+	first := true
+	for i, ts := range timestamps {
+		seekKey := []byte(time.Unix(ts, 0).UTC().Format(FiatRatesTimeFormat))
+		if first {
+			it.Seek(seekKey)
+			first = false
+		} else if it.Valid() && bytes.Compare(it.Key().Data(), seekKey) < 0 {
+			it.Seek(seekKey)
+		}
+
+		for ; it.Valid(); it.Next() {
+			ticker, err := getTickerFromIterator(it, vsCurrency, token)
+			if err != nil {
+				glog.Error("FiatRatesFindTickers error: ", err)
+				return nil, err
+			}
+			if ticker != nil {
+				tickers[i] = ticker
+				break
+			}
+		}
+	}
+	return tickers, nil
 }
 
 // FiatRatesGetAllTickers gets FiatRates data closest to the specified timestamp, of the base currency, vsCurrency or the token if specified
