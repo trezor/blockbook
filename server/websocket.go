@@ -278,6 +278,7 @@ func (s *WebsocketServer) outputLoop(c *websocketChannel) {
 		}
 	}()
 	for m := range c.out {
+		c.conn.SetWriteDeadline(time.Now().Add(defaultTimeout))
 		err := c.conn.WriteJSON(m)
 		if err != nil {
 			glog.Error("Error sending message to ", c.id, ", ", err)
