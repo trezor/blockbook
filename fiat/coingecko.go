@@ -25,6 +25,8 @@ const (
 	coingeckoPlanPro              = "pro"
 	coingeckoFreeAPIURL           = "https://api.coingecko.com/api/v3"
 	coingeckoProAPIURL            = "https://pro-api.coingecko.com/api/v3"
+	coingeckoAPIKeyEnv            = "COINGECKO_API_KEY"
+	coingeckoAPIKeyEnvSuffix      = "_" + coingeckoAPIKeyEnv
 )
 
 // Coingecko is a structure that implements RatesDownloaderInterface
@@ -64,8 +66,52 @@ type marketChartPrices struct {
 	Prices []marketPoint `json:"prices"`
 }
 
+func coinGeckoScopedAPIKeyEnvNames(network string, coinShortcut string) []string {
+	prefixes := []string{network, coinShortcut}
+	seen := make(map[string]struct{}, len(prefixes))
+	envNames := make([]string, 0, len(prefixes))
+	for _, prefix := range prefixes {
+		normalized := strings.ToUpper(strings.TrimSpace(prefix))
+		if normalized == "" {
+			continue
+		}
+		envName := normalized + coingeckoAPIKeyEnvSuffix
+		if _, exists := seen[envName]; exists {
+			continue
+		}
+		seen[envName] = struct{}{}
+		envNames = append(envNames, envName)
+	}
+	return envNames
+}
+
+func resolveCoinGeckoAPIKey(network string, coinShortcut string) string {
+	// Preserve network-prefixed variables for backward compatibility, but also
+	// support documented <coin shortcut>_COINGECKO_API_KEY as a fallback.
+	for _, envName := range coinGeckoScopedAPIKeyEnvNames(network, coinShortcut) {
+		if apiKey := strings.TrimSpace(os.Getenv(envName)); apiKey != "" {
+			return apiKey
+		}
+	}
+	return strings.TrimSpace(os.Getenv(coingeckoAPIKeyEnv))
+}
+
+func validateCoinGeckoAPIKeyEnv(network string, coinShortcut string) error {
+	for _, envName := range coinGeckoScopedAPIKeyEnvNames(network, coinShortcut) {
+		if value, exists := os.LookupEnv(envName); exists && strings.TrimSpace(value) == "" {
+			return fmt.Errorf("%s is set but empty", envName)
+		}
+	}
+
+	if value, exists := os.LookupEnv(coingeckoAPIKeyEnv); exists && strings.TrimSpace(value) == "" {
+		return fmt.Errorf("%s is set but empty", coingeckoAPIKeyEnv)
+	}
+
+	return nil
+}
+
 // NewCoinGeckoDownloader creates a coingecko structure that implements the RatesDownloaderInterface
-func NewCoinGeckoDownloader(db *db.RocksDB, network string, url string, coin string, platformIdentifier string, platformVsCurrency string, allowedVsCurrencies string, timeFormat string, plan string, metrics *common.Metrics, throttleDown bool) RatesDownloaderInterface {
+func NewCoinGeckoDownloader(db *db.RocksDB, network string, coinShortcut string, url string, coin string, platformIdentifier string, platformVsCurrency string, allowedVsCurrencies string, timeFormat string, plan string, metrics *common.Metrics, throttleDown bool) RatesDownloaderInterface {
 	throttlingDelayMs := 0 // No delay by default
 	if throttleDown {
 		throttlingDelayMs = DefaultThrottleDelayMs
@@ -73,10 +119,7 @@ func NewCoinGeckoDownloader(db *db.RocksDB, network string, url string, coin str
 
 	allowedVsCurrenciesMap := getAllowedVsCurrenciesMap(allowedVsCurrencies)
 
-	apiKey := os.Getenv(strings.ToUpper(network) + "_COINGECKO_API_KEY")
-	if apiKey == "" {
-		apiKey = os.Getenv("COINGECKO_API_KEY")
-	}
+	apiKey := resolveCoinGeckoAPIKey(network, coinShortcut)
 	hasAPIKey := apiKey != ""
 	plan = resolveCoinGeckoPlan(plan, url, hasAPIKey)
 
