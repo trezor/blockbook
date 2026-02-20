@@ -156,11 +156,25 @@ func (d *RocksDB) FiatRatesFindTickers(timestamps []int64, vsCurrency string, to
 	if len(timestamps) == 0 {
 		return tickers, nil
 	}
+	if len(timestamps) == 1 {
+		ts := time.Unix(timestamps[0], 0).UTC()
+		ticker, err := d.FiatRatesFindTicker(&ts, vsCurrency, token)
+		if err != nil {
+			return nil, err
+		}
+		tickers[0] = ticker
+		return tickers, nil
+	}
 
 	it := d.db.NewIteratorCF(d.ro, d.cfh[cfFiatRates])
 	defer it.Close()
 
 	first := true
+	// Cache decoding result for the current iterator key. For sparse token rates,
+	// multiple timestamps often resolve to the same key; avoid re-decoding it.
+	var decodedKey []byte
+	var decodedTicker *common.CurrencyRatesTicker
+	hasDecodedKey := false
 	for i, ts := range timestamps {
 		seekKey := []byte(time.Unix(ts, 0).UTC().Format(FiatRatesTimeFormat))
 		if first {
@@ -171,11 +185,23 @@ func (d *RocksDB) FiatRatesFindTickers(timestamps []int64, vsCurrency string, to
 		}
 
 		for ; it.Valid(); it.Next() {
+			keyData := it.Key().Data()
+			if hasDecodedKey && bytes.Equal(keyData, decodedKey) {
+				if decodedTicker != nil {
+					tickers[i] = decodedTicker
+					break
+				}
+				continue
+			}
+
 			ticker, err := getTickerFromIterator(it, vsCurrency, token)
 			if err != nil {
 				glog.Error("FiatRatesFindTickers error: ", err)
 				return nil, err
 			}
+			decodedKey = append(decodedKey[:0], keyData...)
+			decodedTicker = ticker
+			hasDecodedKey = true
 			if ticker != nil {
 				tickers[i] = ticker
 				break
