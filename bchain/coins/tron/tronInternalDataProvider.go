@@ -105,13 +105,13 @@ func buildInternalDataFromTronInfos(
 	// make sure the tx order is correct
 	infoByID := make(map[string]*tronTxInfo, len(infos))
 	for i := range infos {
-		id := normalizeTxID(infos[i].ID)
+		id := infos[i].ID
 		infoByID[id] = &infos[i]
 	}
 
 	for i := range transactions {
 		tx := &transactions[i]
-		key := normalizeTxID(tx.Hash)
+		key := strip0xPrefix(tx.Hash)
 
 		info, ok := infoByID[key]
 		if !ok {

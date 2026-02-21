@@ -156,17 +156,6 @@ func tronDecimalToHexQuantity(v interface{}) string {
 	return "0x" + n.Text(16)
 }
 
-func tronNormalizeHexString(s string) string {
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return ""
-	}
-	if strings.HasPrefix(s, "0x") || strings.HasPrefix(s, "0X") {
-		return "0x" + s[2:]
-	}
-	return "0x" + s
-}
-
 func tronResourceToString(v interface{}) string {
 	s := strings.ToUpper(tronNumberToString(v))
 	switch s {
@@ -273,10 +262,10 @@ func tronNormalizeLogs(logs []*bchain.RpcLog) []*bchain.RpcLog {
 		if l == nil {
 			continue
 		}
-		l.Address = tronNormalizeHexString(l.Address)
-		l.Data = tronNormalizeHexString(l.Data)
+		l.Address = normalizeHexString(l.Address)
+		l.Data = normalizeHexString(l.Data)
 		for i, t := range l.Topics {
-			l.Topics[i] = tronNormalizeHexString(t)
+			l.Topics[i] = normalizeHexString(t)
 		}
 	}
 	return logs
@@ -360,7 +349,7 @@ func tronBuildRpcReceipt(txByID *tronGetTransactionByIDResponse, txInfo *tronGet
 			receipt.GasUsed = gasUsed
 		}
 		if txInfo.ContractAddr != "" {
-			receipt.ContractAddress = tronNormalizeHexString(txInfo.ContractAddr)
+			receipt.ContractAddress = normalizeHexString(txInfo.ContractAddr)
 		}
 		logs := txInfo.Log
 		if len(logs) > 0 {
@@ -385,12 +374,12 @@ func tronBuildRpcTransaction(txid string, txByID *tronGetTransactionByIDResponse
 		GasLimit:         "0x0",
 		Value:            "0x0",
 		Payload:          "0x",
-		Hash:             tronNormalizeHexString(txid),
+		Hash:             normalizeHexString(txid),
 		TransactionIndex: "0x0",
 	}
 	if txByID != nil {
 		if txByID.TxID != "" {
-			tx.Hash = tronNormalizeHexString(txByID.TxID)
+			tx.Hash = normalizeHexString(txByID.TxID)
 		}
 		if gasLimit := tronDecimalToHexQuantity(txByID.RawData.FeeLimit); gasLimit != "" {
 			tx.GasLimit = gasLimit
@@ -405,7 +394,7 @@ func tronBuildRpcTransaction(txid string, txByID *tronGetTransactionByIDResponse
 			case "TriggerSmartContract":
 				tx.To = strings.TrimSpace(v.ContractAddress)
 				tx.Value = tronFirstHexQuantity(v.CallValue)
-				if data := tronNormalizeHexString(v.Data); data != "" {
+				if data := normalizeHexString(v.Data); data != "" {
 					tx.Payload = data
 				}
 			case "FreezeBalanceContract", "FreezeBalanceV2Contract":
@@ -421,7 +410,7 @@ func tronBuildRpcTransaction(txid string, txByID *tronGetTransactionByIDResponse
 				tx.To = tronFirstAddress(v.ToAddress, v.ContractAddress, v.ReceiverAddress)
 				tx.Value = tronFirstHexQuantity(v.Amount, v.CallValue, v.FrozenBalance, v.UnfreezeBalance, v.Balance)
 				if tx.Payload == "0x" {
-					if data := tronNormalizeHexString(v.Data); data != "" {
+					if data := normalizeHexString(v.Data); data != "" {
 						tx.Payload = data
 					}
 				}
@@ -500,7 +489,7 @@ func (b *TronRPC) getTransactionByID(txid string) (*tronGetTransactionByIDRespon
 	defer cancel()
 
 	req := map[string]string{
-		"value": strings.TrimPrefix(txid, "0x"),
+		"value": strip0xPrefix(txid),
 	}
 	var resp tronGetTransactionByIDResponse
 	if err := b.http.Request(ctx, "/wallet/gettransactionbyid", req, &resp); err != nil {
@@ -514,7 +503,7 @@ func (b *TronRPC) getTransactionInfoByID(txid string) (*tronGetTransactionInfoBy
 	defer cancel()
 
 	req := map[string]string{
-		"value": strings.TrimPrefix(txid, "0x"),
+		"value": strip0xPrefix(txid),
 	}
 	var resp tronGetTransactionInfoByIDResponse
 	if err := b.http.Request(ctx, "/wallet/gettransactioninfobyid", req, &resp); err != nil {
@@ -551,7 +540,7 @@ func requestBlockByNum(ctx context.Context, http TronHTTP, blockNum uint32) (*tr
 
 func requestBlockByID(ctx context.Context, http TronHTTP, blockHash string) (*tronGetBlockResponse, error) {
 	req := map[string]string{
-		"value": strings.TrimPrefix(blockHash, "0x"),
+		"value": strip0xPrefix(blockHash),
 	}
 	var resp tronGetBlockResponse
 	if err := http.Request(ctx, "/wallet/getblockbyid", req, &resp); err != nil {
@@ -567,7 +556,7 @@ func mapTransactionInfoByID(infos []tronGetTransactionInfoByIDResponse) map[stri
 	r := make(map[string]*tronGetTransactionInfoByIDResponse, len(infos))
 	for i := range infos {
 		txInfo := &infos[i]
-		id := normalizeTxID(txInfo.ID)
+		id := txInfo.ID
 		if id == "" {
 			continue
 		}
@@ -583,7 +572,7 @@ func mapTransactionByID(txs []tronGetTransactionByIDResponse) map[string]*tronGe
 	r := make(map[string]*tronGetTransactionByIDResponse, len(txs))
 	for i := range txs {
 		txByID := &txs[i]
-		id := normalizeTxID(txByID.TxID)
+		id := txByID.TxID
 		if id == "" || !tronHasTxByIDData(txByID) {
 			continue
 		}

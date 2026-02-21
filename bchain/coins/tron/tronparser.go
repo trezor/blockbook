@@ -51,10 +51,6 @@ func (p *TronParser) GetAddrDescFromVout(output *bchain.Vout) (bchain.AddressDes
 	return p.GetAddrDescFromAddress(output.ScriptPubKey.Addresses[0])
 }
 
-func has0xPrefix(s string) bool {
-	return len(s) >= 2 && s[0] == '0' && (s[1]|32) == 'x'
-}
-
 func (p *TronParser) GetAddrDescFromAddress(address string) (bchain.AddressDescriptor, error) {
 	if has0xPrefix(address) {
 		address = address[2:]
@@ -323,14 +319,6 @@ func SanitizeHexUint64String(s string) string {
 		return "0x" + sanitized
 	}
 	return s
-}
-
-func normalizeTxID(id string) string {
-	id = strings.ToLower(id)
-	if strings.HasPrefix(id, "0x") {
-		id = id[2:] // remove 0x
-	}
-	return id
 }
 
 func tronNoteHexToInternalType(noteHex string) (bchain.EthereumInternalTransactionType, error) {
