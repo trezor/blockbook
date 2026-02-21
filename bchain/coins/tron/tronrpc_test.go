@@ -29,7 +29,7 @@ func TestTronRPC_EthereumTypeGetRawTransaction(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "0x"+rawDataHex, rawHex)
 	require.Equal(t, "/wallet/gettransactionbyid", mockHTTP.LastPath)
-	require.Equal(t, map[string]string{"value": "abc"}, mockHTTP.LastBody)
+	require.Equal(t, map[string]string{"value": "7c2d4206c03a883dd9066d620335dc1be272a8dc733cfa3f6d10308faa37facc"}, mockHTTP.LastBody)
 }
 
 func TestTronRPC_EthereumTypeGetRawTransaction_Empty(t *testing.T) {
@@ -68,7 +68,7 @@ func TestTronRPC_SendRawTransaction(t *testing.T) {
 
 	gotTxID, err := tronRPC.SendRawTransaction(txHex, false)
 	require.NoError(t, err)
-	require.Equal(t, txID, gotTxID)
+	require.Equal(t, "0x"+txID, gotTxID)
 	require.Equal(t, "/wallet/broadcasthex", mockHTTP.LastPath)
 	require.Equal(t, map[string]string{"transaction": "deadbeef"}, mockHTTP.LastBody)
 }
@@ -91,4 +91,58 @@ func TestTronRPC_SendRawTransaction_Failed(t *testing.T) {
 
 	_, err := tronRPC.SendRawTransaction("deadbeef", false)
 	require.Error(t, err)
+}
+
+func TestTronRPC_GetTransactionByIDMapForBlock_ByHeight(t *testing.T) {
+	txid := "7c2d4206c03a883dd9066d620335dc1be272a8dc733cfa3f6d10308faa37facc"
+	mockHTTP := &MockTronHTTPClient{
+		Resp: tronGetBlockResponse{
+			Transactions: []tronGetTransactionByIDResponse{
+				{
+					TxID:       txid,
+					RawDataHex: "01",
+				},
+			},
+		},
+	}
+
+	tronRPC := &TronRPC{
+		EthereumRPC: &eth.EthereumRPC{
+			Timeout: time.Second,
+		},
+		http: mockHTTP,
+	}
+
+	txByID, err := tronRPC.getTransactionByIDMapForBlock("", 25)
+	require.NoError(t, err)
+	require.Equal(t, "/wallet/getblockbynum", mockHTTP.LastPath)
+	require.Equal(t, map[string]any{"num": uint32(25)}, mockHTTP.LastBody)
+	require.NotNil(t, txByID[txid])
+}
+
+func TestTronRPC_GetTransactionByIDMapForBlock_ByHash(t *testing.T) {
+	txid := "7c2d4206c03a883dd9066d620335dc1be272a8dc733cfa3f6d10308faa37facc"
+	mockHTTP := &MockTronHTTPClient{
+		Resp: tronGetBlockResponse{
+			Transactions: []tronGetTransactionByIDResponse{
+				{
+					TxID:       txid,
+					RawDataHex: "01",
+				},
+			},
+		},
+	}
+
+	tronRPC := &TronRPC{
+		EthereumRPC: &eth.EthereumRPC{
+			Timeout: time.Second,
+		},
+		http: mockHTTP,
+	}
+
+	txByID, err := tronRPC.getTransactionByIDMapForBlock("0xabc123", 0)
+	require.NoError(t, err)
+	require.Equal(t, "/wallet/getblockbyid", mockHTTP.LastPath)
+	require.Equal(t, map[string]string{"value": "abc123"}, mockHTTP.LastBody)
+	require.NotNil(t, txByID[txid])
 }

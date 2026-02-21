@@ -63,17 +63,33 @@ func (p *TronInternalDataProvider) GetInternalDataForBlock(
 	ctx, cancel := context.WithTimeout(context.Background(), p.timeout)
 	defer cancel()
 
-	var infos []tronTxInfo
-	req := map[string]any{
-		"num": blockHeight,
-	}
-
-	if err := p.http.Request(ctx, "/wallet/gettransactioninfobyblocknum", req, &infos); err != nil {
+	responses, err := requestTransactionInfoByBlockNum(ctx, p.http, blockHeight)
+	if err != nil {
 		glog.Errorf("GetInternalDataForBlock: error calling gettransactioninfobyblocknum: %v", err)
 		return nil, nil, err
 	}
+	infos := tronTxInfosFromResponses(responses)
 
 	return buildInternalDataFromTronInfos(infos, transactions, blockHeight)
+}
+
+func tronTxInfosFromResponses(responses []tronGetTransactionInfoByIDResponse) []tronTxInfo {
+	if len(responses) == 0 {
+		return nil
+	}
+	infos := make([]tronTxInfo, len(responses))
+	for i := range responses {
+		r := &responses[i]
+		info := &infos[i]
+		info.ID = r.ID
+		info.ContractAddress = r.ContractAddr
+		info.InternalTransactions = r.InternalTransactions
+		if r.BlockNumber != nil {
+			info.BlockNumber = *r.BlockNumber
+		}
+		info.Receipt.Result = r.Receipt.Result
+	}
+	return infos
 }
 
 // internal transaction format described at https://developers.tron.network/docs/tron-protocol-transaction#internal-transactions

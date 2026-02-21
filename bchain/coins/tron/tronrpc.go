@@ -3,10 +3,11 @@ package tron
 import (
 	"context"
 	"encoding/json"
+	"math/big"
 	"strings"
 	"time"
 
-	ethcommon "github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -14,8 +15,6 @@ import (
 	"github.com/juju/errors"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/bchain/coins/eth"
-
-	"math/big"
 )
 
 const (
@@ -42,8 +41,49 @@ type tronBroadcastHexResponse struct {
 	Message string `json:"message,omitempty"`
 }
 
+type tronTxRet struct {
+	ContractRet string      `json:"contractRet,omitempty"`
+	Fee         interface{} `json:"fee,omitempty"`
+}
+
+type tronTxContractValue struct {
+	OwnerAddress    string       `json:"owner_address,omitempty"`
+	ToAddress       string       `json:"to_address,omitempty"`
+	ContractAddress string       `json:"contract_address,omitempty"`
+	ReceiverAddress string       `json:"receiver_address,omitempty"`
+	Resource        interface{}  `json:"resource,omitempty"`
+	Amount          interface{}  `json:"amount,omitempty"`
+	CallValue       interface{}  `json:"call_value,omitempty"`
+	FrozenBalance   interface{}  `json:"frozen_balance,omitempty"`
+	UnfreezeBalance interface{}  `json:"unfreeze_balance,omitempty"`
+	Balance         interface{}  `json:"balance,omitempty"`
+	Votes           []tronTxVote `json:"votes,omitempty"`
+	Data            string       `json:"data,omitempty"`
+}
+
+type tronTxVote struct {
+	VoteAddress string      `json:"vote_address,omitempty"`
+	VoteCount   interface{} `json:"vote_count,omitempty"`
+}
+
+type tronTxContract struct {
+	Type      string `json:"type"`
+	Parameter struct {
+		Value tronTxContractValue `json:"value"`
+	} `json:"parameter"`
+}
+
 type tronGetTransactionByIDResponse struct {
-	RawDataHex string `json:"raw_data_hex"`
+	Ret            []tronTxRet `json:"ret,omitempty"`
+	TxID           string      `json:"txID,omitempty"`
+	BlockNumber    interface{} `json:"blockNumber,omitempty"`
+	BlockTimestamp interface{} `json:"block_timestamp,omitempty"`
+	RawDataHex     string      `json:"raw_data_hex"`
+	RawData        struct {
+		Timestamp interface{}      `json:"timestamp,omitempty"`
+		FeeLimit  interface{}      `json:"fee_limit,omitempty"`
+		Contract  []tronTxContract `json:"contract"`
+	} `json:"raw_data"`
 }
 
 type TronRPC struct {
@@ -54,8 +94,15 @@ type TronRPC struct {
 	http        TronHTTP
 }
 
+func strip0xPrefix(s string) string {
+	if len(s) >= 2 && s[0] == '0' && (s[1] == 'x' || s[1] == 'X') {
+		return s[2:]
+	}
+	return s
+}
+
 func NewTronRPC(config json.RawMessage, pushHandler func(bchain.NotificationType)) (bchain.BlockChain, error) {
-	c, err := eth.NewEthereumRPC(config, pushHandler)
+	ethereumRPC, err := eth.NewEthereumRPC(config, pushHandler)
 	if err != nil {
 		return nil, err
 	}
@@ -71,9 +118,16 @@ func NewTronRPC(config json.RawMessage, pushHandler func(bchain.NotificationType
 	bchain.EthereumTokenStandardMap = []bchain.TokenStandardName{TRC20TokenType, TRC721TokenType, TRC1155TokenType}
 
 	tronRpc := &TronRPC{
-		EthereumRPC: c.(*eth.EthereumRPC),
+		EthereumRPC: ethereumRPC.(*eth.EthereumRPC),
 		Parser:      NewTronParser(cfg.BlockAddressesToKeep, cfg.AddressAliases),
 	}
+	ethChainConfig := tronRpc.EthereumRPC.ChainConfig
+
+	tronRpc.Parser.HotAddressMinContracts = ethChainConfig.HotAddressMinContracts
+	tronRpc.Parser.HotAddressLRUCacheSize = ethChainConfig.HotAddressLRUCacheSize
+	tronRpc.Parser.HotAddressMinHits = ethChainConfig.HotAddressMinHits
+	tronRpc.Parser.AddrContractsCacheMinSize = ethChainConfig.AddressContractsCacheMinSize
+	tronRpc.Parser.AddrContractsCacheMaxBytes = ethChainConfig.AddressContractsCacheMaxBytes
 
 	tronRpc.EthereumRPC.Parser = tronRpc.Parser
 	tronRpc.ChainConfig = &cfg
@@ -161,7 +215,26 @@ func (b *TronRPC) GetBestBlockHash() (string, error) {
 		return "", err
 	}
 
-	return header.Hash(), nil
+	return strip0xPrefix(header.Hash()), nil
+}
+
+// GetBlockHash returns block hash in Tron API format (without 0x prefix).
+func (b *TronRPC) GetBlockHash(height uint32) (string, error) {
+	hash, err := b.EthereumRPC.GetBlockHash(height)
+	if err != nil {
+		return "", err
+	}
+	return strip0xPrefix(hash), nil
+}
+
+// GetChainInfo returns information about connected backend with Tron-formatted IDs (without 0x).
+func (b *TronRPC) GetChainInfo() (*bchain.ChainInfo, error) {
+	ci, err := b.EthereumRPC.GetChainInfo()
+	if err != nil {
+		return nil, err
+	}
+	ci.Bestblockhash = strip0xPrefix(ci.Bestblockhash)
+	return ci, nil
 }
 
 // GetBestBlockHeight returns height of the tip of the best-block-chain
@@ -175,6 +248,41 @@ func (b *TronRPC) GetBestBlockHeight() (uint32, error) {
 	}
 
 	return uint32(header.Number().Uint64()), nil
+}
+
+// GetBlockHeader returns block header with Tron-formatted hashes (without 0x).
+func (b *TronRPC) GetBlockHeader(hash string) (*bchain.BlockHeader, error) {
+	ethHash := hash
+	if ethHash != "" && !strings.HasPrefix(ethHash, "0x") && !strings.HasPrefix(ethHash, "0X") {
+		ethHash = "0x" + ethHash
+	}
+	bh, err := b.EthereumRPC.GetBlockHeader(ethHash)
+	if err != nil {
+		return nil, err
+	}
+	bh.Hash = strip0xPrefix(bh.Hash)
+	bh.Prev = strip0xPrefix(bh.Prev)
+	bh.Next = strip0xPrefix(bh.Next)
+	return bh, nil
+}
+
+// GetBlockInfo returns block info with Tron-formatted hashes and txids (without 0x).
+func (b *TronRPC) GetBlockInfo(hash string) (*bchain.BlockInfo, error) {
+	ethHash := hash
+	if ethHash != "" && !strings.HasPrefix(ethHash, "0x") && !strings.HasPrefix(ethHash, "0X") {
+		ethHash = "0x" + ethHash
+	}
+	bi, err := b.EthereumRPC.GetBlockInfo(ethHash)
+	if err != nil {
+		return nil, err
+	}
+	bi.Hash = strip0xPrefix(bi.Hash)
+	bi.Prev = strip0xPrefix(bi.Prev)
+	bi.Next = strip0xPrefix(bi.Next)
+	for i := range bi.Txids {
+		bi.Txids[i] = strip0xPrefix(bi.Txids[i])
+	}
+	return bi, nil
 }
 
 func (b *TronRPC) getBestHeader() (bchain.EVMHeader, error) {
@@ -236,15 +344,55 @@ func (b *TronRPC) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-func (b *TronRPC) GetTransaction(txid string) (*bchain.Tx, error) {
-	tx, err := b.EthereumRPC.GetTransaction(txid)
+func (b *TronRPC) getTransactionByIDRequired(txid string) (*tronGetTransactionByIDResponse, error) {
+	txByID, err := b.getTransactionByID(txid)
 	if err != nil {
-		return nil, err
+		return nil, errors.Annotatef(err, "txid %v", txid)
 	}
+	if !tronHasTxByIDData(txByID) {
+		return nil, errors.Annotatef(bchain.ErrTxNotFound, "txid %v", txid)
+	}
+	return txByID, nil
+}
 
-	csd, ok := tx.CoinSpecificData.(bchain.EthereumSpecificData)
+func (b *TronRPC) getTransactionInfoByIDOptional(txid string) *tronGetTransactionInfoByIDResponse {
+	txInfo, err := b.getTransactionInfoByID(txid)
+	if err != nil {
+		glog.V(1).Infof("Tron gettransactioninfobyid tx %v: %v", txid, err)
+		return nil
+	}
+	return txInfo
+}
 
-	if !ok {
+func (b *TronRPC) computeConfirmationsFromBlockNumber(txid string, blockNumber uint64, hasBlockNumber bool) uint32 {
+	if !hasBlockNumber {
+		return 0
+	}
+	confirmations, err := b.computeBlockConfirmations(blockNumber)
+	if err != nil {
+		glog.V(1).Infof("Tron eth_blockNumber tx %v: %v", txid, err)
+		return 0
+	}
+	return confirmations
+}
+
+func (b *TronRPC) computeBlockConfirmations(blockNumber uint64) (uint32, error) {
+	bestHeight, err := b.getBestBlockNumber()
+	if err != nil {
+		return 0, err
+	}
+	if bestHeight < blockNumber {
+		return 0, nil
+	}
+	return uint32(bestHeight - blockNumber + 1), nil
+}
+
+func (b *TronRPC) buildTxFromHTTPData(txid string, txByID *tronGetTransactionByIDResponse, txInfo *tronGetTransactionInfoByIDResponse, blockTime int64, confirmations uint32, internalData *bchain.EthereumInternalData) (*bchain.Tx, error) {
+	csd := tronBuildEthereumSpecificData(txid, txByID, txInfo)
+	csd.InternalData = internalData
+
+	tx, err := b.Parser.EthTxToTx(csd.Tx, csd.Receipt, csd.InternalData, blockTime, confirmations, true)
+	if err != nil {
 		return nil, errors.Annotatef(err, "txid %v", txid)
 	}
 
@@ -260,28 +408,223 @@ func (b *TronRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 			},
 		}}
 
-		csd.InternalData = &bchain.EthereumInternalData{
-			Type:     bchain.CREATE,
-			Contract: ToTronAddressFromAddress(csd.Receipt.ContractAddress),
+		contractAddress := ToTronAddressFromAddress(csd.Receipt.ContractAddress)
+		if csd.InternalData == nil {
+			csd.InternalData = &bchain.EthereumInternalData{
+				Type:     bchain.CREATE,
+				Contract: contractAddress,
+			}
+		} else if csd.InternalData.Contract == "" {
+			csd.InternalData.Type = bchain.CREATE
+			csd.InternalData.Contract = contractAddress
 		}
-		tx.CoinSpecificData = csd
 	}
-
+	tx.Txid = strip0xPrefix(tx.Txid)
+	tx.CoinSpecificData = csd
 	return tx, nil
 }
 
-func (b *TronRPC) getTransactionReceipt(txid string) (*bchain.RpcReceipt, error) {
+func (b *TronRPC) getTransactionByIDMapForBlock(hash string, blockHeight uint32) (map[string]*tronGetTransactionByIDResponse, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
 	defer cancel()
 
-	hash := ethcommon.HexToHash(txid)
-	var receipt bchain.RpcReceipt
-	err := b.RPC.CallContext(ctx, &receipt, "eth_getTransactionReceipt", hash)
+	var (
+		blockResp *tronGetBlockResponse
+		err       error
+	)
+	if hash != "" && hash != "pending" {
+		blockResp, err = requestBlockByID(ctx, b.http, hash)
+	} else {
+		blockResp, err = requestBlockByNum(ctx, b.http, blockHeight)
+	}
 	if err != nil {
-		return nil, errors.Annotatef(err, "failed to get transaction receipt for txid %v", txid)
+		return nil, err
+	}
+	if blockResp == nil {
+		return nil, nil
+	}
+	return mapTransactionByID(blockResp.Transactions), nil
+}
+
+type tronRPCBlockHeader struct {
+	Hash       string `json:"hash"`
+	ParentHash string `json:"parentHash"`
+	Number     string `json:"number"`
+	Time       string `json:"timestamp"`
+	Size       string `json:"size"`
+}
+
+type tronRPCBlockWithTransactions struct {
+	tronRPCBlockHeader
+	Transactions []bchain.RpcTransaction `json:"transactions"`
+}
+
+// GetBlock returns block with given hash or height, hash has precedence if both passed.
+// Tron implementation enriches each tx with data from Tron HTTP endpoints and does not call EthereumRPC.GetBlock.
+func (b *TronRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
+	raw, err := b.getBlockRaw(hash, height, true)
+	if err != nil {
+		return nil, err
+	}
+	var block tronRPCBlockWithTransactions
+	if err := json.Unmarshal(raw, &block); err != nil {
+		return nil, errors.Annotatef(err, "hash %v, height %v", hash, height)
 	}
 
-	return &receipt, nil
+	blockNumber, ok := tronUint64(block.Number)
+	if !ok {
+		return nil, errors.Errorf("invalid block number %q", block.Number)
+	}
+	blockTime, ok := tronUint64(block.Time)
+	if !ok {
+		return nil, errors.Errorf("invalid block timestamp %q", block.Time)
+	}
+	blockSize, ok := tronUint64(block.Size)
+	if !ok {
+		return nil, errors.Errorf("invalid block size %q", block.Size)
+	}
+
+	confirmations, err := b.computeBlockConfirmations(blockNumber)
+	if err != nil {
+		return nil, err
+	}
+
+	bbh := bchain.BlockHeader{
+		Hash:          strip0xPrefix(block.Hash),
+		Prev:          strip0xPrefix(block.ParentHash),
+		Height:        uint32(blockNumber),
+		Confirmations: int(confirmations),
+		Time:          int64(blockTime),
+		Size:          int(blockSize),
+	}
+
+	txInfosByID := map[string]*tronGetTransactionInfoByIDResponse{}
+	txByIDByID := map[string]*tronGetTransactionByIDResponse{}
+	internalData := make([]bchain.EthereumInternalData, len(block.Transactions))
+	contracts := make([]bchain.ContractInfo, 0)
+	var internalErr error
+
+	if len(block.Transactions) > 0 {
+		ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+		infos, err := requestTransactionInfoByBlockNum(ctx, b.http, bbh.Height)
+		cancel()
+		if err != nil {
+			return nil, errors.Annotatef(err, "height %v", bbh.Height)
+		}
+		if m := mapTransactionInfoByID(infos); m != nil {
+			txInfosByID = m
+		}
+		txByIDByID, err = b.getTransactionByIDMapForBlock(hash, bbh.Height)
+		if err != nil {
+			return nil, errors.Annotatef(err, "height %v", bbh.Height)
+		}
+		if eth.ProcessInternalTransactions {
+			internalData, contracts, internalErr = buildInternalDataFromTronInfos(
+				tronTxInfosFromResponses(infos),
+				block.Transactions,
+				bbh.Height,
+			)
+		}
+	}
+
+	txs := make([]bchain.Tx, len(block.Transactions))
+	for i := range block.Transactions {
+		tx := &block.Transactions[i]
+		txByID := txByIDByID[normalizeTxID(tx.Hash)]
+		if txByID == nil {
+			txByID, err = b.getTransactionByIDRequired(tx.Hash)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		txInfo := txInfosByID[normalizeTxID(tx.Hash)]
+		if txInfo == nil {
+			return nil, errors.Errorf("Tron gettransactioninfobyblocknum missing tx %v in block %v", tx.Hash, bbh.Height)
+		}
+
+		var txInternalData *bchain.EthereumInternalData
+		if i < len(internalData) {
+			txInternalData = &internalData[i]
+		}
+
+		rebuiltTx, err := b.buildTxFromHTTPData(tx.Hash, txByID, txInfo, bbh.Time, confirmations, txInternalData)
+		if err != nil {
+			return nil, err
+		}
+		txs[i] = *rebuiltTx
+
+		if b.Mempool != nil {
+			b.Mempool.RemoveTransactionFromMempool(tx.Hash)
+		}
+	}
+
+	var blockSpecificData *bchain.EthereumBlockSpecificData
+	if internalErr != nil || len(contracts) > 0 {
+		blockSpecificData = &bchain.EthereumBlockSpecificData{}
+		if internalErr != nil {
+			blockSpecificData.InternalDataError = internalErr.Error()
+		}
+		if len(contracts) > 0 {
+			blockSpecificData.Contracts = contracts
+		}
+	}
+
+	return &bchain.Block{
+		BlockHeader:      bbh,
+		Txs:              txs,
+		CoinSpecificData: blockSpecificData,
+	}, nil
+}
+
+func (b *TronRPC) GetTransaction(txid string) (*bchain.Tx, error) {
+	txByID, err := b.getTransactionByIDRequired(txid)
+	if err != nil {
+		return nil, err
+	}
+	txInfo := b.getTransactionInfoByIDOptional(txid)
+
+	blockTime, blockNumber, hasBlockNumber := tronTxMeta(txByID, txInfo)
+	confirmations := b.computeConfirmationsFromBlockNumber(txid, blockNumber, hasBlockNumber)
+	return b.buildTxFromHTTPData(txid, txByID, txInfo, blockTime, confirmations, nil)
+}
+
+// GetTransactionSpecific returns tx-specific JSON in Tron API format (without 0x in tx hash fields).
+func (b *TronRPC) GetTransactionSpecific(tx *bchain.Tx) (json.RawMessage, error) {
+	csd, ok := tx.CoinSpecificData.(bchain.EthereumSpecificData)
+	if !ok {
+		ntx, err := b.GetTransaction(tx.Txid)
+		if err != nil {
+			return nil, err
+		}
+		csd, ok = ntx.CoinSpecificData.(bchain.EthereumSpecificData)
+		if !ok {
+			return nil, errors.New("Cannot get CoinSpecificData")
+		}
+	}
+	csdCopy := csd
+	if csd.Tx != nil {
+		txCopy := *csd.Tx
+		txCopy.Hash = strip0xPrefix(txCopy.Hash)
+		txCopy.BlockHash = strip0xPrefix(txCopy.BlockHash)
+		csdCopy.Tx = &txCopy
+	}
+	m, err := json.Marshal(&csdCopy)
+	if err != nil {
+		return nil, err
+	}
+	return json.RawMessage(m), nil
+}
+
+func (b *TronRPC) getBestBlockNumber() (uint64, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+	defer cancel()
+
+	var blockNumber hexutil.Uint64
+	if err := b.RPC.CallContext(ctx, &blockNumber, "eth_blockNumber"); err != nil {
+		return 0, err
+	}
+	return uint64(blockNumber), nil
 }
 
 // Tron does not have any method for getting mempool transactions (does not support parameter 'pending' in eth_getBlockByNumber)
@@ -340,21 +683,15 @@ func (b *TronRPC) SendRawTransaction(tx string, disableAlternativeRPC bool) (str
 	if !strings.HasPrefix(txid, "0x") {
 		txid = "0x" + txid
 	}
-	if b.ChainConfig.DisableMempoolSync && b.Mempool != nil {
+	if b.ChainConfig != nil && b.ChainConfig.DisableMempoolSync && b.Mempool != nil {
 		b.Mempool.AddTransactionToMempool(txid)
 	}
 	return txid, nil
 }
 
 func (b *TronRPC) EthereumTypeGetRawTransaction(txid string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
-	defer cancel()
-
-	req := map[string]string{
-		"value": strings.TrimPrefix(txid, "0x"),
-	}
-	var resp tronGetTransactionByIDResponse
-	if err := b.http.Request(ctx, "/wallet/gettransactionbyid", req, &resp); err != nil {
+	resp, err := b.getTransactionByID(txid)
+	if err != nil {
 		return "", err
 	}
 	if resp.RawDataHex == "" {
