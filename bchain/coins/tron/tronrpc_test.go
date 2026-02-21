@@ -3,6 +3,7 @@
 package tron
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -145,4 +146,47 @@ func TestTronRPC_GetTransactionByIDMapForBlock_ByHash(t *testing.T) {
 	require.Equal(t, "/wallet/getblockbyid", mockHTTP.LastPath)
 	require.Equal(t, map[string]string{"value": "abc123"}, mockHTTP.LastBody)
 	require.NotNil(t, txByID[txid])
+}
+
+func TestTronRPC_GetMempoolTransactions(t *testing.T) {
+	mockHTTP := &MockTronHTTPClient{
+		Resp: tronGetTransactionListFromPendingResponse{
+			TxID: []string{
+				"a431984fef1d014620504d02f821f872221cf44c250a81a31e81fa4855b2b302",
+				"0xb431984fef1d014620504d02f821f872221cf44c250a81a31e81fa4855b2b303",
+			},
+		},
+	}
+
+	tronRPC := &TronRPC{
+		EthereumRPC: &eth.EthereumRPC{
+			Timeout: time.Second,
+		},
+		http: mockHTTP,
+	}
+
+	txs, err := tronRPC.GetMempoolTransactions()
+	require.NoError(t, err)
+	require.Equal(t, []string{
+		"a431984fef1d014620504d02f821f872221cf44c250a81a31e81fa4855b2b302",
+		"0xb431984fef1d014620504d02f821f872221cf44c250a81a31e81fa4855b2b303",
+	}, txs)
+	require.Equal(t, "/wallet/gettransactionlistfrompending", mockHTTP.LastPath)
+	require.Equal(t, map[string]any{}, mockHTTP.LastBody)
+}
+
+func TestTronRPC_GetMempoolTransactions_Error(t *testing.T) {
+	mockHTTP := &MockTronHTTPClient{
+		Err: errors.New("backend error"),
+	}
+
+	tronRPC := &TronRPC{
+		EthereumRPC: &eth.EthereumRPC{
+			Timeout: time.Second,
+		},
+		http: mockHTTP,
+	}
+
+	_, err := tronRPC.GetMempoolTransactions()
+	require.Error(t, err)
 }
