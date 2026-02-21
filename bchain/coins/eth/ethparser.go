@@ -32,7 +32,7 @@ const defaultAddressContractsCacheMaxBytes int64 = 4_000_000_000
 
 type EthereumLikeParser interface {
 	bchain.BlockChainParser
-	ethTxToTx(tx *bchain.RpcTransaction, receipt *bchain.RpcReceipt, internalData *bchain.EthereumInternalData, blocktime int64, confirmations uint32, fixEIP55 bool) (*bchain.Tx, error)
+	EthTxToTx(tx *bchain.RpcTransaction, receipt *bchain.RpcReceipt, internalData *bchain.EthereumInternalData, blocktime int64, confirmations uint32, fixEIP55 bool) (*bchain.Tx, error)
 	SetEnsSuffix(suffix string)
 }
 
@@ -110,7 +110,7 @@ func ethNumber(n string) (int64, error) {
 	return 0, errors.Errorf("Not a number: '%v'", n)
 }
 
-func (p *EthereumParser) ethTxToTx(tx *bchain.RpcTransaction, receipt *bchain.RpcReceipt, internalData *bchain.EthereumInternalData, blocktime int64, confirmations uint32, fixEIP55 bool) (*bchain.Tx, error) {
+func (p *EthereumParser) EthTxToTx(tx *bchain.RpcTransaction, receipt *bchain.RpcReceipt, internalData *bchain.EthereumInternalData, blocktime int64, confirmations uint32, fixEIP55 bool) (*bchain.Tx, error) {
 	txid := tx.Hash
 	var (
 		fa, ta []string
@@ -409,6 +409,10 @@ func (p *EthereumParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) (
 			}
 		}
 	}
+	if len(r.ChainExtraData) > 0 {
+		pt.ChainExtraData = make([]byte, len(r.ChainExtraData))
+		copy(pt.ChainExtraData, r.ChainExtraData)
+	}
 	return proto.Marshal(pt)
 }
 
@@ -479,9 +483,18 @@ func (p *EthereumParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 		}
 	}
 	// TODO handle internal transactions
-	tx, err := p.ethTxToTx(&rt, rr, nil, int64(pt.BlockTime), 0, false)
+	tx, err := p.EthTxToTx(&rt, rr, nil, int64(pt.BlockTime), 0, false)
 	if err != nil {
 		return nil, 0, err
+	}
+	if len(pt.ChainExtraData) > 0 {
+		csd, ok := tx.CoinSpecificData.(bchain.EthereumSpecificData)
+		if !ok {
+			return nil, 0, errors.New("Missing CoinSpecificData")
+		}
+		csd.ChainExtraData = make([]byte, len(pt.ChainExtraData))
+		copy(csd.ChainExtraData, pt.ChainExtraData)
+		tx.CoinSpecificData = csd
 	}
 	return tx, pt.BlockNumber, nil
 }
@@ -560,42 +573,9 @@ func (p *EthereumParser) FormatAddressAlias(address string, name string) string 
 	return name + p.EnsSuffix
 }
 
-// TxStatus is status of transaction
-type TxStatus int
-
-// statuses of transaction
-const (
-	TxStatusUnknown = TxStatus(iota - 2)
-	TxStatusPending
-	TxStatusFailure
-	TxStatusOK
-)
-
-// EthereumTxData contains ethereum specific transaction data
-type EthereumTxData struct {
-	Status               TxStatus `json:"status"` // 1 OK, 0 Fail, -1 pending, -2 unknown
-	Nonce                uint64   `json:"nonce"`
-	GasLimit             *big.Int `json:"gaslimit"`
-	GasUsed              *big.Int `json:"gasused"`
-	GasPrice             *big.Int `json:"gasprice"`
-	MaxPriorityFeePerGas *big.Int `json:"maxPriorityFeePerGas,omitempty"`
-	MaxFeePerGas         *big.Int `json:"maxFeePerGas,omitempty"`
-	BaseFeePerGas        *big.Int `json:"baseFeePerGas,omitempty"`
-	L1Fee                *big.Int `json:"l1Fee,omitempty"`
-	L1FeeScalar          string   `json:"l1FeeScalar,omitempty"`
-	L1GasPrice           *big.Int `json:"l1GasPrice,omitempty"`
-	L1GasUsed            *big.Int `json:"L1GasUsed,omitempty"`
-	Data                 string   `json:"data"`
-}
-
-// GetEthereumTxData returns EthereumTxData from bchain.Tx
-func GetEthereumTxData(tx *bchain.Tx) *EthereumTxData {
-	return GetEthereumTxDataFromSpecificData(tx.CoinSpecificData)
-}
-
-// GetEthereumTxDataFromSpecificData returns EthereumTxData from coinSpecificData
-func GetEthereumTxDataFromSpecificData(coinSpecificData interface{}) *EthereumTxData {
-	etd := EthereumTxData{Status: TxStatusPending}
+// GetEthereumTxDataFromSpecificData returns EthereumTxData from coinSpecificData.
+func GetEthereumTxDataFromSpecificData(coinSpecificData interface{}) *bchain.EthereumTxData {
+	etd := bchain.EthereumTxData{Status: bchain.TxStatusPending}
 	csd, ok := coinSpecificData.(bchain.EthereumSpecificData)
 	if ok {
 		if csd.Tx != nil {
@@ -610,11 +590,11 @@ func GetEthereumTxDataFromSpecificData(coinSpecificData interface{}) *EthereumTx
 		if csd.Receipt != nil {
 			switch csd.Receipt.Status {
 			case "0x1":
-				etd.Status = TxStatusOK
+				etd.Status = bchain.TxStatusOK
 			case "": // old transactions did not set status
-				etd.Status = TxStatusUnknown
+				etd.Status = bchain.TxStatusUnknown
 			default:
-				etd.Status = TxStatusFailure
+				etd.Status = bchain.TxStatusFailure
 			}
 			etd.GasUsed, _ = hexutil.DecodeBig(csd.Receipt.GasUsed)
 			etd.L1Fee, _ = hexutil.DecodeBig(csd.Receipt.L1Fee)
@@ -624,6 +604,14 @@ func GetEthereumTxDataFromSpecificData(coinSpecificData interface{}) *EthereumTx
 		}
 	}
 	return &etd
+}
+
+// GetEthereumTxData returns parsed transaction data for Ethereum-like chains.
+func (p *EthereumParser) GetEthereumTxData(tx *bchain.Tx) *bchain.EthereumTxData {
+	if tx == nil {
+		return &bchain.EthereumTxData{Status: bchain.TxStatusPending}
+	}
+	return GetEthereumTxDataFromSpecificData(tx.CoinSpecificData)
 }
 
 const errorOutputSignature = "08c379a0"
