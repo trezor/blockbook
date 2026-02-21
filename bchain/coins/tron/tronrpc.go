@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"math/big"
 	"strings"
+	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -26,6 +26,8 @@ const (
 	TRC20TokenType   bchain.TokenStandardName = "TRC20"
 	TRC721TokenType  bchain.TokenStandardName = "TRC721"
 	TRC1155TokenType bchain.TokenStandardName = "TRC1155"
+
+	tronBestHeaderMaxAge = 30 * time.Second
 )
 
 type TronConfiguration struct {
@@ -88,10 +90,15 @@ type tronGetTransactionByIDResponse struct {
 
 type TronRPC struct {
 	*eth.EthereumRPC
-	Parser      *TronParser
-	ChainConfig *TronConfiguration
-	mq          *bchain.MQ
-	http        TronHTTP
+	Parser             *TronParser
+	ChainConfig        *TronConfiguration
+	mq                 *bchain.MQ
+	http               TronHTTP
+	bestHeaderLock     sync.Mutex
+	bestHeader         bchain.EVMHeader
+	bestHeaderTime     time.Time
+	newBlockNotifyCh   chan struct{}
+	newBlockNotifyOnce sync.Once
 }
 
 func strip0xPrefix(s string) string {
@@ -118,8 +125,9 @@ func NewTronRPC(config json.RawMessage, pushHandler func(bchain.NotificationType
 	bchain.EthereumTokenStandardMap = []bchain.TokenStandardName{TRC20TokenType, TRC721TokenType, TRC1155TokenType}
 
 	tronRpc := &TronRPC{
-		EthereumRPC: ethereumRPC.(*eth.EthereumRPC),
-		Parser:      NewTronParser(cfg.BlockAddressesToKeep, cfg.AddressAliases),
+		EthereumRPC:      ethereumRPC.(*eth.EthereumRPC),
+		Parser:           NewTronParser(cfg.BlockAddressesToKeep, cfg.AddressAliases),
+		newBlockNotifyCh: make(chan struct{}, 1),
 	}
 	ethChainConfig := tronRpc.EthereumRPC.ChainConfig
 
@@ -286,16 +294,109 @@ func (b *TronRPC) GetBlockInfo(hash string) (*bchain.BlockInfo, error) {
 }
 
 func (b *TronRPC) getBestHeader() (bchain.EVMHeader, error) {
-	var err error
-	var header bchain.EVMHeader
-	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
-	defer cancel()
-	header, err = b.Client.HeaderByNumber(ctx, nil)
+	// During initial sync (before ZeroMQ is initialized) there is no push-based
+	// tip refresh, so always read the latest header from the backend.
+	if b.mq == nil {
+		_, err := b.refreshBestHeaderFromChain()
+		if err != nil {
+			return nil, err
+		}
+		b.bestHeaderLock.Lock()
+		defer b.bestHeaderLock.Unlock()
+		if b.bestHeader == nil || b.bestHeader.Number() == nil {
+			return nil, errors.New("best header is nil")
+		}
+		return b.bestHeader, nil
+	}
+
+	b.bestHeaderLock.Lock()
+	cachedHeader := b.bestHeader
+	cachedAt := b.bestHeaderTime
+	b.bestHeaderLock.Unlock()
+
+	if cachedHeader != nil && cachedAt.Add(tronBestHeaderMaxAge).After(time.Now()) {
+		return cachedHeader, nil
+	}
+
+	_, err := b.refreshBestHeaderFromChain()
 	if err != nil {
 		return nil, err
 	}
-	b.UpdateBestHeader(header)
-	return header, nil
+
+	b.bestHeaderLock.Lock()
+	defer b.bestHeaderLock.Unlock()
+	if b.bestHeader == nil || b.bestHeader.Number() == nil {
+		return nil, errors.New("best header is nil")
+	}
+	return b.bestHeader, nil
+}
+
+func (b *TronRPC) setBestHeader(h bchain.EVMHeader) bool {
+	if h == nil || h.Number() == nil {
+		return false
+	}
+	b.bestHeaderLock.Lock()
+	defer b.bestHeaderLock.Unlock()
+	changed := false
+	if b.bestHeader == nil || b.bestHeader.Number() == nil {
+		changed = true
+	} else {
+		prevNum := b.bestHeader.Number().Uint64()
+		newNum := h.Number().Uint64()
+		if prevNum != newNum || b.bestHeader.Hash() != h.Hash() {
+			changed = true
+		}
+	}
+	b.bestHeader = h
+	b.bestHeaderTime = time.Now()
+	b.UpdateBestHeader(h)
+	return changed
+}
+
+func (b *TronRPC) refreshBestHeaderFromChain() (bool, error) {
+	if b.Client == nil {
+		return false, errors.New("rpc client not initialized")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+	defer cancel()
+	h, err := b.Client.HeaderByNumber(ctx, nil)
+	if err != nil {
+		return false, err
+	}
+	if h == nil || h.Number() == nil {
+		return false, errors.New("best header is nil")
+	}
+	return b.setBestHeader(h), nil
+}
+
+func (b *TronRPC) signalNewBlock() {
+	select {
+	case b.newBlockNotifyCh <- struct{}{}:
+	default:
+	}
+}
+
+func (b *TronRPC) newBlockNotifier() {
+	for range b.newBlockNotifyCh {
+		updated, err := b.refreshBestHeaderFromChain()
+		if err != nil {
+			glog.Error("refreshBestHeaderFromChain ", err)
+			continue
+		}
+		if updated && b.PushHandler != nil {
+			b.PushHandler(bchain.NotificationNewBlock)
+		}
+	}
+}
+
+func (b *TronRPC) handleMQNotification(nt bchain.NotificationType) {
+	if nt == bchain.NotificationNewBlock {
+		b.signalNewBlock()
+		return
+	}
+	if b.PushHandler != nil {
+		b.PushHandler(nt)
+	}
 }
 
 // GetChainParser returns Tron-specific BlockChainParser
@@ -316,6 +417,9 @@ func (b *TronRPC) InitializeMempool(addrDescForOutpoint bchain.AddrDescForOutpoi
 	}
 	b.Mempool.OnNewTxAddr = onNewTxAddr
 	b.Mempool.OnNewTx = onNewTx
+	b.newBlockNotifyOnce.Do(func() {
+		go b.newBlockNotifier()
+	})
 
 	if b.mq == nil {
 		tronTopics := bchain.SubscriptionTopics{
@@ -325,7 +429,7 @@ func (b *TronRPC) InitializeMempool(addrDescForOutpoint bchain.AddrDescForOutpoi
 			TxReceive:      "",
 		}
 
-		mq, err := bchain.NewMQ(b.ChainConfig.MessageQueueBinding, b.PushHandler, tronTopics)
+		mq, err := bchain.NewMQ(b.ChainConfig.MessageQueueBinding, b.handleMQNotification, tronTopics)
 		if err != nil {
 			return err
 		}
@@ -377,10 +481,11 @@ func (b *TronRPC) computeConfirmationsFromBlockNumber(txid string, blockNumber u
 }
 
 func (b *TronRPC) computeBlockConfirmations(blockNumber uint64) (uint32, error) {
-	bestHeight, err := b.getBestBlockNumber()
+	bh, err := b.getBestHeader()
 	if err != nil {
 		return 0, err
 	}
+	bestHeight := bh.Number().Uint64()
 	if bestHeight < blockNumber {
 		return 0, nil
 	}
@@ -644,17 +749,6 @@ func (b *TronRPC) GetTransactionSpecific(tx *bchain.Tx) (json.RawMessage, error)
 		return nil, err
 	}
 	return json.RawMessage(m), nil
-}
-
-func (b *TronRPC) getBestBlockNumber() (uint64, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
-	defer cancel()
-
-	var blockNumber hexutil.Uint64
-	if err := b.RPC.CallContext(ctx, &blockNumber, "eth_blockNumber"); err != nil {
-		return 0, err
-	}
-	return uint64(blockNumber), nil
 }
 
 // Tron does not have any method for getting mempool transactions (does not support parameter 'pending' in eth_getBlockByNumber)
