@@ -52,9 +52,7 @@ func (p *TronParser) GetAddrDescFromVout(output *bchain.Vout) (bchain.AddressDes
 }
 
 func (p *TronParser) GetAddrDescFromAddress(address string) (bchain.AddressDescriptor, error) {
-	if has0xPrefix(address) {
-		address = address[2:]
-	}
+	address = strip0xPrefix(address)
 
 	if len(address) == TronAddressLen {
 		decoded := base58.Decode(address)
