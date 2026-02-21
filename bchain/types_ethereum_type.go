@@ -1,6 +1,7 @@
 package bchain
 
 import (
+	"encoding/json"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -146,11 +147,41 @@ type RpcReceipt struct {
 	ContractAddress string    `json:"contractAddress,omitempty"`
 }
 
+// TxStatus is status of transaction.
+type TxStatus int
+
+// statuses of transaction
+const (
+	TxStatusUnknown = TxStatus(iota - 2)
+	TxStatusPending
+	TxStatusFailure
+	TxStatusOK
+)
+
+// EthereumTxData contains Ethereum-like transaction data needed by API worker logic.
+type EthereumTxData struct {
+	Status               TxStatus `json:"status"` // 1 OK, 0 Fail, -1 pending, -2 unknown
+	Nonce                uint64   `json:"nonce"`
+	GasLimit             *big.Int `json:"gaslimit"`
+	GasUsed              *big.Int `json:"gasused"`
+	GasPrice             *big.Int `json:"gasprice"`
+	MaxPriorityFeePerGas *big.Int `json:"maxPriorityFeePerGas,omitempty"`
+	MaxFeePerGas         *big.Int `json:"maxFeePerGas,omitempty"`
+	BaseFeePerGas        *big.Int `json:"baseFeePerGas,omitempty"`
+	L1Fee                *big.Int `json:"l1Fee,omitempty"`
+	L1FeeScalar          string   `json:"l1FeeScalar,omitempty"`
+	L1GasPrice           *big.Int `json:"l1GasPrice,omitempty"`
+	L1GasUsed            *big.Int `json:"L1GasUsed,omitempty"`
+	Data                 string   `json:"data"`
+}
+
 // EthereumSpecificData contains data specific to Ethereum transactions
 type EthereumSpecificData struct {
 	Tx           *RpcTransaction       `json:"tx" ts_doc:"Raw transaction details from the blockchain node."`
 	InternalData *EthereumInternalData `json:"internalData,omitempty" ts_doc:"Summary of internal calls/transfers, if any."`
 	Receipt      *RpcReceipt           `json:"receipt,omitempty" ts_doc:"Transaction receipt info, including logs and gas usage."`
+	// ChainExtraData holds optional normalized chain-specific data for Ethereum-like chains.
+	ChainExtraData json.RawMessage `json:"chainExtraData,omitempty"`
 }
 
 // AddressAliasRecord maps address to ENS name

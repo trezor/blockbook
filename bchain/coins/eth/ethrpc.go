@@ -71,18 +71,18 @@ type Configuration struct {
 // EthereumRPC is an interface to JSON-RPC eth service.
 type EthereumRPC struct {
 	*bchain.BaseChain
-	Client                    bchain.EVMClient
-	RPC                       bchain.EVMRPCClient
-	MainNetChainID            Network
-	Timeout                   time.Duration
-	Parser                    EthereumLikeParser
-	PushHandler               func(bchain.NotificationType)
-	OpenRPC                   func(string, string) (bchain.EVMRPCClient, bchain.EVMClient, error)
-	Mempool                   *bchain.MempoolEthereumType
-	mempoolInitialized        bool
-	bestHeaderLock            sync.Mutex
-	bestHeader                bchain.EVMHeader
-	bestHeaderTime            time.Time
+	Client             bchain.EVMClient
+	RPC                bchain.EVMRPCClient
+	MainNetChainID     Network
+	Timeout            time.Duration
+	Parser             EthereumLikeParser
+	PushHandler        func(bchain.NotificationType)
+	OpenRPC            func(string, string) (bchain.EVMRPCClient, bchain.EVMClient, error)
+	Mempool            *bchain.MempoolEthereumType
+	mempoolInitialized bool
+	bestHeaderLock     sync.Mutex
+	bestHeader         bchain.EVMHeader
+	bestHeaderTime     time.Time
 	// newBlockNotifyCh coalesces bursts of newHeads events into a single wake-up.
 	// This keeps the subscription reader unblocked while we refresh the canonical tip.
 	newBlockNotifyCh          chan struct{}
@@ -151,12 +151,13 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 	ProcessInternalTransactions = c.ProcessInternalTransactions
 
 	// always create parser
-	s.Parser = NewEthereumParser(c.BlockAddressesToKeep, c.AddressAliases)
-	s.Parser.HotAddressMinContracts = c.HotAddressMinContracts
-	s.Parser.HotAddressLRUCacheSize = c.HotAddressLRUCacheSize
-	s.Parser.HotAddressMinHits = c.HotAddressMinHits
-	s.Parser.AddrContractsCacheMinSize = c.AddressContractsCacheMinSize
-	s.Parser.AddrContractsCacheMaxBytes = c.AddressContractsCacheMaxBytes
+	parser := NewEthereumParser(c.BlockAddressesToKeep, c.AddressAliases)
+	parser.HotAddressMinContracts = c.HotAddressMinContracts
+	parser.HotAddressLRUCacheSize = c.HotAddressLRUCacheSize
+	parser.HotAddressMinHits = c.HotAddressMinHits
+	parser.AddrContractsCacheMinSize = c.AddressContractsCacheMinSize
+	parser.AddrContractsCacheMaxBytes = c.AddressContractsCacheMaxBytes
+	s.Parser = parser
 	s.Timeout = time.Duration(c.RPCTimeout) * time.Second
 	s.PushHandler = pushHandler
 
@@ -1113,7 +1114,7 @@ func (b *EthereumRPC) GetBlock(hash string, height uint32) (*bchain.Block, error
 	btxs := make([]bchain.Tx, len(body.Transactions))
 	for i := range body.Transactions {
 		tx := &body.Transactions[i]
-		btx, err := b.Parser.ethTxToTx(tx, &bchain.RpcReceipt{Logs: logs[tx.Hash]}, &internalData[i], bbh.Time, uint32(bbh.Confirmations), true)
+		btx, err := b.Parser.EthTxToTx(tx, &bchain.RpcReceipt{Logs: logs[tx.Hash]}, &internalData[i], bbh.Time, uint32(bbh.Confirmations), true)
 		if err != nil {
 			return nil, errors.Annotatef(err, "hash %v, height %v, txid %v", hash, height, tx.Hash)
 		}
@@ -1196,7 +1197,7 @@ func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 	var btx *bchain.Tx
 	if tx.BlockNumber == "" {
 		// mempool tx
-		btx, err = b.Parser.ethTxToTx(tx, nil, nil, 0, 0, true)
+		btx, err = b.Parser.EthTxToTx(tx, nil, nil, 0, 0, true)
 		if err != nil {
 			return nil, errors.Annotatef(err, "txid %v", txid)
 		}
@@ -1230,7 +1231,7 @@ func (b *EthereumRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 		if err != nil {
 			return nil, errors.Annotatef(err, "txid %v", txid)
 		}
-		btx, err = b.Parser.ethTxToTx(tx, receipt, nil, time, confirmations, true)
+		btx, err = b.Parser.EthTxToTx(tx, receipt, nil, time, confirmations, true)
 		if err != nil {
 			return nil, errors.Annotatef(err, "txid %v", txid)
 		}
