@@ -1,7 +1,9 @@
 package dbtestdata
 
 import (
+	"encoding/json"
 	"strconv"
+	"strings"
 
 	"github.com/trezor/blockbook/bchain"
 )
@@ -25,6 +27,12 @@ func NewFakeBlockChainTronType(parser bchain.BlockChainParser) (bchain.BlockChai
 	return &fakeBlockChainTronType{
 		fakeBlockChainEthereumType: &fakeBlockChainEthereumType{&fakeBlockChain{&bchain.BaseChain{Parser: parser}}},
 	}, nil
+}
+
+func normalizeHexID(id string) string {
+	id = strings.ToLower(id)
+	id = strings.TrimPrefix(id, "0x")
+	return id
 }
 
 // GetChainInfo
@@ -61,7 +69,7 @@ func (c *fakeBlockChainTronType) GetBlockHash(height uint32) (string, error) {
 // GetBlockHeader
 func (c *fakeBlockChainTronType) GetBlockHeader(hash string) (*bchain.BlockHeader, error) {
 	b := GetTestTronBlock1(c.Parser)
-	if hash == b.BlockHeader.Hash {
+	if normalizeHexID(hash) == normalizeHexID(b.BlockHeader.Hash) {
 		return &b.BlockHeader, nil
 	}
 	return nil, bchain.ErrBlockNotFound
@@ -70,11 +78,11 @@ func (c *fakeBlockChainTronType) GetBlockHeader(hash string) (*bchain.BlockHeade
 // GetBlock
 func (c *fakeBlockChainTronType) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 	b1 := GetTestTronBlock0(c.Parser)
-	if hash == b1.BlockHeader.Hash || height == b1.BlockHeader.Height {
+	if normalizeHexID(hash) == normalizeHexID(b1.BlockHeader.Hash) || height == b1.BlockHeader.Height {
 		return b1, nil
 	}
 	b2 := GetTestTronBlock1(c.Parser)
-	if hash == b2.BlockHeader.Hash || height == b2.BlockHeader.Height {
+	if normalizeHexID(hash) == normalizeHexID(b2.BlockHeader.Hash) || height == b2.BlockHeader.Height {
 		return b2, nil
 	}
 	return nil, bchain.ErrBlockNotFound
@@ -82,7 +90,7 @@ func (c *fakeBlockChainTronType) GetBlock(hash string, height uint32) (*bchain.B
 
 func (c *fakeBlockChainTronType) GetBlockInfo(hash string) (*bchain.BlockInfo, error) {
 	b := GetTestTronBlock1(c.Parser)
-	if hash == b.BlockHeader.Hash {
+	if normalizeHexID(hash) == normalizeHexID(b.BlockHeader.Hash) {
 		return getBlockInfo(b), nil
 	}
 	return nil, bchain.ErrBlockNotFound
@@ -91,11 +99,41 @@ func (c *fakeBlockChainTronType) GetBlockInfo(hash string) (*bchain.BlockInfo, e
 // GetTransaction
 func (c *fakeBlockChainTronType) GetTransaction(txid string) (*bchain.Tx, error) {
 	blk := GetTestTronBlock1(c.Parser)
-	t := getTxInBlock(blk, txid)
+	normTxid := normalizeHexID(txid)
+	var t *bchain.Tx
+	for i := range blk.Txs {
+		if normalizeHexID(blk.Txs[i].Txid) == normTxid {
+			t = &blk.Txs[i]
+			break
+		}
+	}
 	if t == nil {
 		return nil, bchain.ErrTxNotFound
 	}
 	return t, nil
+}
+
+func (c *fakeBlockChainTronType) GetTransactionSpecific(tx *bchain.Tx) (json.RawMessage, error) {
+	txS, err := c.GetTransaction(tx.Txid)
+	if err != nil {
+		return nil, err
+	}
+	csd, ok := txS.CoinSpecificData.(bchain.EthereumSpecificData)
+	if !ok {
+		return nil, bchain.ErrTxNotFound
+	}
+	csdCopy := csd
+	if csd.Tx != nil {
+		txCopy := *csd.Tx
+		txCopy.Hash = normalizeHexID(txCopy.Hash)
+		txCopy.BlockHash = normalizeHexID(txCopy.BlockHash)
+		csdCopy.Tx = &txCopy
+	}
+	rm, err := json.Marshal(&csdCopy)
+	if err != nil {
+		return nil, err
+	}
+	return json.RawMessage(rm), nil
 }
 
 func (c *fakeBlockChainTronType) GetContractInfo(contractDesc bchain.AddressDescriptor) (*bchain.ContractInfo, error) {
