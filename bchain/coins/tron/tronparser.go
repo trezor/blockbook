@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"math/big"
 	"strings"
 
 	"github.com/decred/base58"
@@ -177,10 +179,69 @@ func (p *TronParser) EthereumTypeGetTokenTransfersFromTx(tx *bchain.Tx) (bchain.
 	return transfers, nil
 }
 
+func (p *TronParser) GetEthereumTxData(tx *bchain.Tx) *bchain.EthereumTxData {
+	r := p.EthereumParser.GetEthereumTxData(tx)
+	if tx == nil {
+		return r
+	}
+	csd, ok := tx.CoinSpecificData.(bchain.EthereumSpecificData)
+	if !ok || len(csd.ChainExtraData) == 0 {
+		return r
+	}
+	var extra tronTxExtraData
+	if err := json.Unmarshal(csd.ChainExtraData, &extra); err != nil {
+		return r
+	}
+	if r.GasUsed == nil && extra.EnergyUsageTotal != "" {
+		energy, ok := new(big.Int).SetString(extra.EnergyUsageTotal, 10)
+		if ok {
+			r.GasUsed = energy
+		}
+	}
+	return r
+}
+
+func (p *TronParser) GetChainExtraData(tx *bchain.Tx) (json.RawMessage, error) {
+	if tx == nil {
+		return nil, errors.New("tx is nil")
+	}
+	csd, ok := tx.CoinSpecificData.(bchain.EthereumSpecificData)
+	if !ok || len(csd.ChainExtraData) == 0 {
+		return nil, errors.New("missing ethereumSpecificData.chainExtraData")
+	}
+	var extra tronTxExtraData
+	if err := json.Unmarshal(csd.ChainExtraData, &extra); err != nil {
+		return nil, fmt.Errorf("invalid tron chainExtraData: %w", err)
+	}
+	if !extra.hasData() {
+		return nil, errors.New("empty tron chainExtraData")
+	}
+	r := make(json.RawMessage, len(csd.ChainExtraData))
+	copy(r, csd.ChainExtraData)
+	return r, nil
+}
+
+func validateTronChainExtraData(chainExtraData json.RawMessage) error {
+	if len(chainExtraData) == 0 {
+		return nil
+	}
+	var extra tronTxExtraData
+	if err := json.Unmarshal(chainExtraData, &extra); err != nil {
+		return fmt.Errorf("invalid tron chainExtraData: %w", err)
+	}
+	if !extra.hasData() {
+		return errors.New("empty tron chainExtraData")
+	}
+	return nil
+}
+
 func (p *TronParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) ([]byte, error) {
 	r, ok := tx.CoinSpecificData.(bchain.EthereumSpecificData)
 	if !ok {
 		return nil, errors.New("missing CoinSpecificData")
+	}
+	if err := validateTronChainExtraData(r.ChainExtraData); err != nil {
+		return nil, err
 	}
 	r.Tx.AccountNonce = SanitizeHexUint64String(r.Tx.AccountNonce)
 
@@ -208,6 +269,48 @@ func (p *TronParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) ([]by
 
 	tx.CoinSpecificData = r
 	return p.EthereumParser.PackTx(tx, height, blockTime)
+}
+
+func (p *TronParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
+	tx, height, err := p.EthereumParser.UnpackTx(buf)
+	if err != nil {
+		return nil, 0, err
+	}
+	csd, ok := tx.CoinSpecificData.(bchain.EthereumSpecificData)
+	if !ok {
+		return nil, 0, errors.New("missing CoinSpecificData")
+	}
+	if err := validateTronChainExtraData(csd.ChainExtraData); err != nil {
+		return nil, 0, err
+	}
+	if has0xPrefix(tx.Txid) {
+		tx.Txid = tx.Txid[2:]
+	}
+	return tx, height, nil
+}
+
+// UnpackTxid unpacks byte array to txid in Tron format (without 0x prefix).
+func (p *TronParser) UnpackTxid(buf []byte) (string, error) {
+	txid, err := p.EthereumParser.UnpackTxid(buf)
+	if err != nil {
+		return "", err
+	}
+	if has0xPrefix(txid) {
+		txid = txid[2:]
+	}
+	return txid, nil
+}
+
+// UnpackBlockHash unpacks byte array to block hash in Tron format (without 0x prefix).
+func (p *TronParser) UnpackBlockHash(buf []byte) (string, error) {
+	hash, err := p.EthereumParser.UnpackBlockHash(buf)
+	if err != nil {
+		return "", err
+	}
+	if has0xPrefix(hash) {
+		hash = hash[2:]
+	}
+	return hash, nil
 }
 
 // SanitizeHexUint64String Java-Tron's JSON-RPC returns "nonce" in format that is unexpected for `hexutil.DecodeUint64` in PackTx
