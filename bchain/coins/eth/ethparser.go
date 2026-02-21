@@ -410,8 +410,7 @@ func (p *EthereumParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) (
 		}
 	}
 	if len(r.ChainExtraData) > 0 {
-		pt.ChainExtraData = make([]byte, len(r.ChainExtraData))
-		copy(pt.ChainExtraData, r.ChainExtraData)
+		pt.ChainExtraData = r.ChainExtraData
 	}
 	return proto.Marshal(pt)
 }
@@ -492,8 +491,7 @@ func (p *EthereumParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 		if !ok {
 			return nil, 0, errors.New("Missing CoinSpecificData")
 		}
-		csd.ChainExtraData = make([]byte, len(pt.ChainExtraData))
-		copy(csd.ChainExtraData, pt.ChainExtraData)
+		csd.ChainExtraData = pt.ChainExtraData
 		tx.CoinSpecificData = csd
 	}
 	return tx, pt.BlockNumber, nil

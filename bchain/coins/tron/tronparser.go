@@ -180,12 +180,8 @@ func (p *TronParser) GetEthereumTxData(tx *bchain.Tx) *bchain.EthereumTxData {
 	if tx == nil {
 		return r
 	}
-	csd, ok := tx.CoinSpecificData.(bchain.EthereumSpecificData)
-	if !ok || len(csd.ChainExtraData) == 0 {
-		return r
-	}
-	var extra tronTxExtraData
-	if err := json.Unmarshal(csd.ChainExtraData, &extra); err != nil {
+	_, extra, err := parseTronExtra(tx)
+	if err != nil {
 		return r
 	}
 	if r.GasUsed == nil && extra.EnergyUsageTotal != "" {
@@ -198,23 +194,29 @@ func (p *TronParser) GetEthereumTxData(tx *bchain.Tx) *bchain.EthereumTxData {
 }
 
 func (p *TronParser) GetChainExtraData(tx *bchain.Tx) (json.RawMessage, error) {
+	csd, _, err := parseTronExtra(tx)
+	if err != nil {
+		return nil, err
+	}
+	return csd.ChainExtraData, nil
+}
+
+func parseTronExtra(tx *bchain.Tx) (bchain.EthereumSpecificData, *tronTxExtraData, error) {
 	if tx == nil {
-		return nil, errors.New("tx is nil")
+		return bchain.EthereumSpecificData{}, nil, errors.New("tx is nil")
 	}
 	csd, ok := tx.CoinSpecificData.(bchain.EthereumSpecificData)
 	if !ok || len(csd.ChainExtraData) == 0 {
-		return nil, errors.New("missing ethereumSpecificData.chainExtraData")
+		return bchain.EthereumSpecificData{}, nil, errors.New("missing ethereumSpecificData.chainExtraData")
 	}
 	var extra tronTxExtraData
 	if err := json.Unmarshal(csd.ChainExtraData, &extra); err != nil {
-		return nil, fmt.Errorf("invalid tron chainExtraData: %w", err)
+		return bchain.EthereumSpecificData{}, nil, fmt.Errorf("invalid tron chainExtraData: %w", err)
 	}
 	if !extra.hasData() {
-		return nil, errors.New("empty tron chainExtraData")
+		return bchain.EthereumSpecificData{}, nil, errors.New("empty tron chainExtraData")
 	}
-	r := make(json.RawMessage, len(csd.ChainExtraData))
-	copy(r, csd.ChainExtraData)
-	return r, nil
+	return csd, &extra, nil
 }
 
 func validateTronChainExtraData(chainExtraData json.RawMessage) error {
