@@ -3,8 +3,11 @@
 package rpc
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
+	"math/big"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -54,6 +57,8 @@ type TestData struct {
 	BlockTxs     []string              `json:"blockTxs"`
 	TxDetails    map[string]*bchain.Tx `json:"txDetails"`
 	EthCallBatch *EthCallBatchData     `json:"ethCallBatch,omitempty"`
+	// Parsed from txDetails[*].coinSpecificData in fixture JSON.
+	TxCoinSpecificData map[string]json.RawMessage `json:"-"`
 }
 
 func IntegrationTest(t *testing.T, coin string, chain bchain.BlockChain, mempool bchain.Mempool, testConfig json.RawMessage) {
@@ -108,13 +113,19 @@ func loadTestData(coin string, parser bchain.BlockChainParser) (*TestData, error
 	if err != nil {
 		return nil, err
 	}
+	v.TxCoinSpecificData, err = extractFixtureCoinSpecificData(b)
+	if err != nil {
+		return nil, err
+	}
 	for _, tx := range v.TxDetails {
 		// convert amounts in test json to bit.Int and clear the temporary JsonValue
 		for i := range tx.Vout {
 			vout := &tx.Vout[i]
-			vout.ValueSat, err = parser.AmountToBigInt(vout.JsonValue)
-			if err != nil {
-				return nil, err
+			if shouldConvertFixtureValue(vout.JsonValue.String()) {
+				vout.ValueSat, err = parser.AmountToBigInt(vout.JsonValue)
+				if err != nil {
+					return nil, err
+				}
 			}
 			vout.JsonValue = ""
 		}
@@ -129,10 +140,46 @@ func loadTestData(coin string, parser bchain.BlockChainParser) (*TestData, error
 	return &v, nil
 }
 
+func extractFixtureCoinSpecificData(rawFixture []byte) (map[string]json.RawMessage, error) {
+	var raw struct {
+		TxDetails map[string]json.RawMessage `json:"txDetails"`
+	}
+	if err := json.Unmarshal(rawFixture, &raw); err != nil {
+		return nil, err
+	}
+	if len(raw.TxDetails) == 0 {
+		return nil, nil
+	}
+
+	out := make(map[string]json.RawMessage)
+	for txid, rawTx := range raw.TxDetails {
+		var tx struct {
+			CoinSpecificData json.RawMessage `json:"coinSpecificData"`
+		}
+		if err := json.Unmarshal(rawTx, &tx); err != nil {
+			return nil, fmt.Errorf("tx %s: decode fixture tx for coinSpecificData: %w", txid, err)
+		}
+		if isJSONEmptyOrNull(tx.CoinSpecificData) {
+			continue
+		}
+		out[txid] = append(json.RawMessage(nil), tx.CoinSpecificData...)
+	}
+	if len(out) == 0 {
+		return nil, nil
+	}
+	return out, nil
+}
+
 func setTxAddresses(parser bchain.BlockChainParser, tx *bchain.Tx) error {
+	chainType := parser.GetChainType()
 	for i := range tx.Vout {
 		ad, err := parser.GetAddrDescFromVout(&tx.Vout[i])
 		if err != nil {
+			// Ethereum-like chains (including Tron) can legitimately have no "to"
+			// address (e.g. contract creation), keep fixture value as-is.
+			if chainType == bchain.ChainEthereumType && err == bchain.ErrAddressMissing {
+				continue
+			}
 			return err
 		}
 		addrs := []string{}
@@ -188,16 +235,87 @@ func testGetTransaction(t *testing.T, h *TestHandler) {
 			continue
 		}
 		got.Confirmations = 0
-		// CoinSpecificData are not specified in the fixtures
+		if wantCoinSpecificData, ok := h.TestData.TxCoinSpecificData[txid]; ok {
+			if err := assertCoinSpecificDataContains(got.CoinSpecificData, wantCoinSpecificData); err != nil {
+				t.Errorf("GetTransaction() coinSpecificData mismatch for tx %s: %v", txid, err)
+				continue
+			}
+		}
 		got.CoinSpecificData = nil
+		want.CoinSpecificData = nil
 
 		normalizeAddresses(want, h.Chain.GetChainParser())
 		normalizeAddresses(got, h.Chain.GetChainParser())
+		normalizeZeroAmounts(want)
+		normalizeZeroAmounts(got)
 
 		if !reflect.DeepEqual(got, want) {
 			t.Errorf("GetTransaction() got %+#v, want %+#v", got, want)
 		}
 	}
+}
+
+func assertCoinSpecificDataContains(got interface{}, wantRaw json.RawMessage) error {
+	if got == nil {
+		return errors.New("got coinSpecificData is nil")
+	}
+	gotRaw, err := json.Marshal(got)
+	if err != nil {
+		return fmt.Errorf("marshal got coinSpecificData: %w", err)
+	}
+
+	var gotJSON interface{}
+	if err := json.Unmarshal(gotRaw, &gotJSON); err != nil {
+		return fmt.Errorf("decode got coinSpecificData JSON: %w", err)
+	}
+	var wantJSON interface{}
+	if err := json.Unmarshal(wantRaw, &wantJSON); err != nil {
+		return fmt.Errorf("decode fixture coinSpecificData JSON: %w", err)
+	}
+	if !jsonContains(gotJSON, wantJSON) {
+		return fmt.Errorf("got %s does not contain expected %s", gotRaw, wantRaw)
+	}
+	return nil
+}
+
+func jsonContains(got, want interface{}) bool {
+	switch w := want.(type) {
+	case map[string]interface{}:
+		gm, ok := got.(map[string]interface{})
+		if !ok {
+			return false
+		}
+		for k, wv := range w {
+			gv, exists := gm[k]
+			if !exists || !jsonContains(gv, wv) {
+				return false
+			}
+		}
+		return true
+	case []interface{}:
+		ga, ok := got.([]interface{})
+		if !ok || len(ga) != len(w) {
+			return false
+		}
+		for i := range w {
+			if !jsonContains(ga[i], w[i]) {
+				return false
+			}
+		}
+		return true
+	default:
+		return reflect.DeepEqual(got, want)
+	}
+}
+
+func isJSONEmptyOrNull(raw json.RawMessage) bool {
+	trimmed := bytes.TrimSpace(raw)
+	return len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null"))
+}
+
+func shouldConvertFixtureValue(v string) bool {
+	s := strings.TrimSpace(v)
+	return s != "" && !strings.EqualFold(s, "null")
 }
 
 func testGetTransactionForMempool(t *testing.T, h *TestHandler) {
@@ -214,6 +332,8 @@ func testGetTransactionForMempool(t *testing.T, h *TestHandler) {
 
 		normalizeAddresses(want, h.Chain.GetChainParser())
 		normalizeAddresses(got, h.Chain.GetChainParser())
+		normalizeZeroAmounts(want)
+		normalizeZeroAmounts(got)
 
 		// transactions parsed from JSON may contain additional data
 		got.Confirmations, got.Blocktime, got.Time, got.CoinSpecificData = 0, 0, 0, nil
@@ -247,6 +367,14 @@ func normalizeAddresses(tx *bchain.Tx, parser bchain.BlockChainParser) {
 					tx.Vout[i].ScriptPubKey.Addresses[j] = strings.ToLower(tx.Vout[i].ScriptPubKey.Addresses[j])
 				}
 			}
+		}
+	}
+}
+
+func normalizeZeroAmounts(tx *bchain.Tx) {
+	for i := range tx.Vout {
+		if tx.Vout[i].ValueSat.Sign() == 0 {
+			tx.Vout[i].ValueSat = big.Int{}
 		}
 	}
 }
