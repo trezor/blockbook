@@ -866,6 +866,11 @@ func (b *EthereumRPC) getBlockRaw(hash string, height uint32, fullTxs bool) (jso
 	return raw, nil
 }
 
+// GetBlockRawByHashOrHeight returns raw block JSON by hash or height.
+func (b *EthereumRPC) GetBlockRawByHashOrHeight(hash string, height uint32, fullTxs bool) (json.RawMessage, error) {
+	return b.getBlockRaw(hash, height, fullTxs)
+}
+
 func (b *EthereumRPC) processEventsForBlock(blockNumber string) (map[string][]*bchain.RpcLog, []bchain.AddressAliasRecord, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
 	defer cancel()
