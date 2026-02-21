@@ -173,7 +173,7 @@ func TestFromTronAddressToHex(t *testing.T) {
 
 func TestTronParser_PackUnpackRoundtrip(t *testing.T) {
 	original := &bchain.Tx{
-		Txid: "0xa431984fef1d014620504d02f821f872221cf44c250a81a31e81fa4855b2b302",
+		Txid: "a431984fef1d014620504d02f821f872221cf44c250a81a31e81fa4855b2b302",
 		Vin: []bchain.Vin{
 			{
 				Addresses: []string{
@@ -220,6 +220,7 @@ func TestTronParser_PackUnpackRoundtrip(t *testing.T) {
 					},
 				},
 			},
+			ChainExtraData: json.RawMessage(`{"operation":"contractCall","totalFee":"12345","energyUsageTotal":"14650"}`),
 		},
 	}
 
@@ -240,4 +241,136 @@ func TestTronParser_PackUnpackRoundtrip(t *testing.T) {
 		t.Errorf("Transactions are not equal \nOriginal: %s\nUnpacked: %s", origJSON, unpkJSON)
 	}
 
+}
+
+func TestTronParser_PackTx_InvalidChainExtraData(t *testing.T) {
+	parser := NewTronParser(1, false)
+	tx := &bchain.Tx{
+		CoinSpecificData: bchain.EthereumSpecificData{
+			Tx: &bchain.RpcTransaction{
+				AccountNonce:     "0x0",
+				GasPrice:         "0x1",
+				GasLimit:         "0x5208",
+				To:               "TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf",
+				Value:            "0x0",
+				Payload:          "0x",
+				Hash:             "0xa431984fef1d014620504d02f821f872221cf44c250a81a31e81fa4855b2b302",
+				BlockNumber:      "0x1",
+				From:             "TZEZWXYQS44388xBoMhQdpL1HrBZFLfDpt",
+				TransactionIndex: "0x0",
+			},
+			Receipt: &bchain.RpcReceipt{
+				GasUsed: "0x5208",
+				Status:  "0x1",
+				Logs:    []*bchain.RpcLog{},
+			},
+			ChainExtraData: []byte("{"),
+		},
+	}
+	_, err := parser.PackTx(tx, 1, 1)
+	require.Error(t, err)
+}
+
+func TestTronParser_UnpackTx_InvalidChainExtraData(t *testing.T) {
+	parser := NewTronParser(1, false)
+	tx := &bchain.Tx{
+		CoinSpecificData: bchain.EthereumSpecificData{
+			Tx: &bchain.RpcTransaction{
+				AccountNonce:     "0x0",
+				GasPrice:         "0x1",
+				GasLimit:         "0x5208",
+				To:               "0x1111111111111111111111111111111111111111",
+				Value:            "0x0",
+				Payload:          "0x",
+				Hash:             "0xa431984fef1d014620504d02f821f872221cf44c250a81a31e81fa4855b2b302",
+				BlockNumber:      "0x1",
+				From:             "0x2222222222222222222222222222222222222222",
+				TransactionIndex: "0x0",
+			},
+			Receipt: &bchain.RpcReceipt{
+				GasUsed: "0x5208",
+				Status:  "0x1",
+				Logs:    []*bchain.RpcLog{},
+			},
+			ChainExtraData: []byte("not-json"),
+		},
+	}
+	packed, err := parser.EthereumParser.PackTx(tx, 1, 1)
+	require.NoError(t, err)
+
+	_, _, err = parser.UnpackTx(packed)
+	require.Error(t, err)
+}
+
+func TestTronParser_GetChainExtraData(t *testing.T) {
+	parser := NewTronParser(1, false)
+	valid := json.RawMessage(`{"operation":"contractCall","totalFee":"12345","energyUsageTotal":"14650"}`)
+
+	t.Run("valid", func(t *testing.T) {
+		tx := &bchain.Tx{
+			CoinSpecificData: bchain.EthereumSpecificData{
+				ChainExtraData: valid,
+			},
+		}
+		got, err := parser.GetChainExtraData(tx)
+		require.NoError(t, err)
+		require.JSONEq(t, string(valid), string(got))
+	})
+
+	t.Run("nil tx", func(t *testing.T) {
+		_, err := parser.GetChainExtraData(nil)
+		require.Error(t, err)
+	})
+
+	t.Run("missing chain extra", func(t *testing.T) {
+		tx := &bchain.Tx{
+			CoinSpecificData: bchain.EthereumSpecificData{},
+		}
+		_, err := parser.GetChainExtraData(tx)
+		require.Error(t, err)
+	})
+
+	t.Run("invalid chain extra json", func(t *testing.T) {
+		tx := &bchain.Tx{
+			CoinSpecificData: bchain.EthereumSpecificData{
+				ChainExtraData: json.RawMessage("{"),
+			},
+		}
+		_, err := parser.GetChainExtraData(tx)
+		require.Error(t, err)
+	})
+
+	t.Run("empty chain extra object", func(t *testing.T) {
+		tx := &bchain.Tx{
+			CoinSpecificData: bchain.EthereumSpecificData{
+				ChainExtraData: json.RawMessage(`{}`),
+			},
+		}
+		_, err := parser.GetChainExtraData(tx)
+		require.Error(t, err)
+	})
+}
+
+func TestTronParser_UnpackTxid_NoPrefix(t *testing.T) {
+	parser := NewTronParser(1, false)
+	txidWithPrefix := "0xa431984fef1d014620504d02f821f872221cf44c250a81a31e81fa4855b2b302"
+
+	packed, err := parser.PackTxid(txidWithPrefix)
+	require.NoError(t, err)
+
+	unpacked, err := parser.UnpackTxid(packed)
+	require.NoError(t, err)
+	require.Equal(t, "a431984fef1d014620504d02f821f872221cf44c250a81a31e81fa4855b2b302", unpacked)
+}
+
+func TestTronParser_UnpackBlockHash_NoPrefix(t *testing.T) {
+	parser := NewTronParser(1, false)
+	blockHashWithPrefix := "0x000000000348d2a70c64b102b21699f7f561fffbc67d50ed5f540db5ad631913"
+
+	packed, err := parser.PackBlockHash(blockHashWithPrefix)
+	require.NoError(t, err)
+
+	unpacked, err := parser.UnpackBlockHash(packed)
+	require.NoError(t, err)
+	require.Equal(t, "000000000348d2a70c64b102b21699f7f561fffbc67d50ed5f540db5ad631913", unpacked)
 }
