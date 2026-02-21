@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/trezor/blockbook/bchain"
-	"github.com/trezor/blockbook/bchain/coins/eth"
 	"github.com/trezor/blockbook/common"
 	"github.com/trezor/blockbook/db"
 )
@@ -248,7 +247,7 @@ type EthereumInternalTransfer struct {
 type EthereumSpecific struct {
 	Type                 bchain.EthereumInternalTransactionType `json:"type,omitempty" ts_doc:"High-level type of the Ethereum tx (e.g., 'call', 'create')."`
 	CreatedContract      string                                 `json:"createdContract,omitempty" ts_doc:"Address of contract created by this transaction, if any."`
-	Status               eth.TxStatus                           `json:"status" ts_doc:"Execution status of the transaction (1: success, 0: fail, -1: pending)."`
+	Status               bchain.TxStatus                        `json:"status" ts_doc:"Execution status of the transaction (1: success, 0: fail, -1: pending)."`
 	Error                string                                 `json:"error,omitempty" ts_doc:"Error encountered during execution, if any."`
 	Nonce                uint64                                 `json:"nonce" ts_doc:"Transaction nonce (sequential number from the sender)."`
 	GasLimit             *big.Int                               `json:"gasLimit" ts_doc:"Maximum gas allowed by the sender for this transaction."`
@@ -296,6 +295,7 @@ type Tx struct {
 	Hex                    string            `json:"hex,omitempty" ts_doc:"Raw hex-encoded transaction data."`
 	Rbf                    bool              `json:"rbf,omitempty" ts_doc:"Indicates if this transaction is replace-by-fee (RBF) enabled."`
 	CoinSpecificData       json.RawMessage   `json:"coinSpecificData,omitempty" ts_type:"any" ts_doc:"Blockchain-specific extended data."`
+	ChainExtraData         json.RawMessage   `json:"chainExtraData,omitempty" ts_type:"any" ts_doc:"Additional normalized chain-specific transaction data."`
 	TokenTransfers         []TokenTransfer   `json:"tokenTransfers,omitempty" ts_doc:"List of token transfers that occurred in this transaction."`
 	EthereumSpecific       *EthereumSpecific `json:"ethereumSpecific,omitempty" ts_doc:"Ethereum-like blockchain specific data (if applicable)."`
 	AddressAliases         AddressAliasesMap `json:"addressAliases,omitempty" ts_doc:"Aliases for addresses involved in this transaction."`
