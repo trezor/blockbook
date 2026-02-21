@@ -424,10 +424,7 @@ func (b *TronRPC) buildTxFromHTTPData(txid string, txByID *tronGetTransactionByI
 	return tx, nil
 }
 
-func (b *TronRPC) getTransactionByIDMapForBlock(hash string, blockHeight uint32) (map[string]*tronGetTransactionByIDResponse, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
-	defer cancel()
-
+func (b *TronRPC) getTransactionByIDMapForBlockWithContext(ctx context.Context, hash string, blockHeight uint32) (map[string]*tronGetTransactionByIDResponse, error) {
 	var (
 		blockResp *tronGetBlockResponse
 		err       error
@@ -444,6 +441,12 @@ func (b *TronRPC) getTransactionByIDMapForBlock(hash string, blockHeight uint32)
 		return nil, nil
 	}
 	return mapTransactionByID(blockResp.Transactions), nil
+}
+
+func (b *TronRPC) getTransactionByIDMapForBlock(hash string, blockHeight uint32) (map[string]*tronGetTransactionByIDResponse, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+	defer cancel()
+	return b.getTransactionByIDMapForBlockWithContext(ctx, hash, blockHeight)
 }
 
 type tronRPCBlockHeader struct {
@@ -506,21 +509,48 @@ func (b *TronRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 
 	if len(block.Transactions) > 0 {
 		ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
-		infos, err := requestTransactionInfoByBlockNum(ctx, b.http, bbh.Height)
-		cancel()
-		if err != nil {
-			return nil, errors.Annotatef(err, "height %v", bbh.Height)
+		defer cancel()
+
+		type txInfosResult struct {
+			infos []tronGetTransactionInfoByIDResponse
+			err   error
 		}
-		if m := mapTransactionInfoByID(infos); m != nil {
+		type txByIDResult struct {
+			txByID map[string]*tronGetTransactionByIDResponse
+			err    error
+		}
+
+		infosCh := make(chan txInfosResult, 1)
+		txByIDCh := make(chan txByIDResult, 1)
+
+		go func() {
+			infos, err := requestTransactionInfoByBlockNum(ctx, b.http, bbh.Height)
+			infosCh <- txInfosResult{infos: infos, err: err}
+		}()
+		go func() {
+			txByID, err := b.getTransactionByIDMapForBlockWithContext(ctx, hash, bbh.Height)
+			txByIDCh <- txByIDResult{txByID: txByID, err: err}
+		}()
+
+		infosRes := <-infosCh
+		if infosRes.err != nil {
+			return nil, errors.Annotatef(infosRes.err, "height %v", bbh.Height)
+		}
+		if m := mapTransactionInfoByID(infosRes.infos); m != nil {
 			txInfosByID = m
 		}
-		txByIDByID, err = b.getTransactionByIDMapForBlock(hash, bbh.Height)
-		if err != nil {
-			return nil, errors.Annotatef(err, "height %v", bbh.Height)
+
+		txByIDRes := <-txByIDCh
+		if txByIDRes.err != nil {
+			return nil, errors.Annotatef(txByIDRes.err, "height %v", bbh.Height)
 		}
+		if txByIDRes.txByID != nil {
+			txByIDByID = txByIDRes.txByID
+		}
+
 		if eth.ProcessInternalTransactions {
 			internalData, contracts, internalErr = buildInternalDataFromTronInfos(
-				tronTxInfosFromResponses(infos),
+				tronTxInfosFromResponses(infosRes.infos),
 				block.Transactions,
 				bbh.Height,
 			)
