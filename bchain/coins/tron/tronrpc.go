@@ -762,6 +762,52 @@ func (b *TronRPC) EthereumTypeGetBalance(addrDesc bchain.AddressDescriptor) (*bi
 	return b.Client.BalanceAt(ctx, addrDesc, nil)
 }
 
+// EthereumTypeEstimateGas supports both EVM hex and Tron Base58 in `from`/`to`.
+func (b *TronRPC) EthereumTypeEstimateGas(params map[string]interface{}) (uint64, error) {
+	normalizedParams := params
+	if len(params) > 0 {
+		normalizedParams = make(map[string]interface{}, len(params))
+		for k, v := range params {
+			normalizedParams[k] = v
+		}
+	}
+	for _, field := range []string{"from", "to"} {
+		address, ok := eth.GetStringFromMap(field, normalizedParams)
+		if !ok || address == "" {
+			continue
+		}
+		hexAddress, err := b.Parser.FromTronAddressToHex(address)
+		if err != nil {
+			return 0, err
+		}
+		if hexAddress != "" {
+			normalizedParams[field] = hexAddress
+		}
+	}
+	return b.EthereumRPC.EthereumTypeEstimateGas(normalizedParams)
+}
+
+// EthereumTypeRpcCall supports both EVM hex and Tron Base58 in `to`/`from`.
+func (b *TronRPC) EthereumTypeRpcCall(data, to, from string) (string, error) {
+	normalizedTo := to
+	if to != "" {
+		hexAddress, err := b.Parser.FromTronAddressToHex(to)
+		if err != nil {
+			return "", err
+		}
+		normalizedTo = hexAddress
+	}
+	normalizedFrom := from
+	if from != "" {
+		hexAddress, err := b.Parser.FromTronAddressToHex(from)
+		if err != nil {
+			return "", err
+		}
+		normalizedFrom = hexAddress
+	}
+	return b.EthereumRPC.EthereumTypeRpcCall(data, normalizedTo, normalizedFrom)
+}
+
 // EthereumTypeGetNonce returns current balance of an address
 func (b *TronRPC) EthereumTypeGetNonce(addrDesc bchain.AddressDescriptor) (uint64, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
@@ -801,11 +847,10 @@ func (b *TronRPC) SendRawTransaction(tx string, disableAlternativeRPC bool) (str
 		return "", errors.New("Tron broadcasthex failed")
 	}
 
-	txid := normalizeHexString(resp.TxID)
 	if b.ChainConfig != nil && b.ChainConfig.DisableMempoolSync && b.Mempool != nil {
-		b.Mempool.AddTransactionToMempool(txid)
+		b.Mempool.AddTransactionToMempool(resp.TxID)
 	}
-	return txid, nil
+	return resp.TxID, nil
 }
 
 func (b *TronRPC) EthereumTypeGetRawTransaction(txid string) (string, error) {
