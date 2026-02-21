@@ -42,6 +42,10 @@ type tronBroadcastHexResponse struct {
 	Message string `json:"message,omitempty"`
 }
 
+type tronGetTransactionListFromPendingResponse struct {
+	TxID []string `json:"txId,omitempty"`
+}
+
 type tronTxRet struct {
 	ContractRet string      `json:"contractRet,omitempty"`
 	Fee         interface{} `json:"fee,omitempty"`
@@ -734,13 +738,21 @@ func (b *TronRPC) GetTransactionSpecific(tx *bchain.Tx) (json.RawMessage, error)
 	if err != nil {
 		return nil, err
 	}
-	return json.RawMessage(m), nil
+	return m, nil
 }
 
-// Tron does not have any method for getting mempool transactions (does not support parameter 'pending' in eth_getBlockByNumber)
-// https://developers.tron.network/reference/eth_getblockbynumber
 func (b *TronRPC) GetMempoolTransactions() ([]string, error) {
-	return []string{}, nil
+	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+	defer cancel()
+
+	var resp tronGetTransactionListFromPendingResponse
+	if err := b.http.Request(ctx, "/wallet/gettransactionlistfrompending", map[string]any{}, &resp); err != nil {
+		return nil, err
+	}
+	if len(resp.TxID) == 0 {
+		return []string{}, nil
+	}
+	return resp.TxID, nil
 }
 
 func (b *TronRPC) EthereumTypeGetBalance(addrDesc bchain.AddressDescriptor) (*big.Int, error) {
