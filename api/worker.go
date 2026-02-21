@@ -428,7 +428,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 			glog.Errorf("GetTokenTransfersFromTx error %v, %v", err, bchainTx)
 		}
 		tokens = w.getEthereumTokensTransfers(tokenTransfers, addresses)
-		ethTxData := eth.GetEthereumTxData(bchainTx)
+		ethTxData := w.chainParser.GetEthereumTxData(bchainTx)
 
 		var internalData *bchain.EthereumInternalData
 		if eth.ProcessInternalTransactions {
@@ -485,12 +485,17 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 
 	}
 	var sj json.RawMessage
+	var chainExtraData json.RawMessage
 	// return CoinSpecificData for all mempool transactions or if requested
 	if specificJSON || bchainTx.Confirmations == 0 {
 		sj, err = w.chain.GetTransactionSpecific(bchainTx)
 		if err != nil {
 			return nil, err
 		}
+	}
+	chainExtraData, err = w.chainParser.GetChainExtraData(bchainTx)
+	if err != nil {
+		glog.Warningf("GetChainExtraData error %v, %v", err, bchainTx)
 	}
 	r := &Tx{
 		Blockhash:        blockhash,
@@ -510,6 +515,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 		Vin:              vins,
 		Vout:             vouts,
 		CoinSpecificData: sj,
+		ChainExtraData:   chainExtraData,
 		TokenTransfers:   tokens,
 		EthereumSpecific: ethSpecific,
 	}
@@ -528,6 +534,7 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 	var pValInSat *big.Int
 	var tokens []TokenTransfer
 	var ethSpecific *EthereumSpecific
+	var chainExtraData json.RawMessage
 	addresses := w.newAddressesMapForAliases()
 	vins := make([]Vin, len(mempoolTx.Vin))
 	rbf := false
@@ -593,7 +600,10 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 			valOutSat = mempoolTx.Vout[0].ValueSat
 		}
 		tokens = w.getEthereumTokensTransfers(mempoolTx.TokenTransfers, addresses)
-		ethTxData := eth.GetEthereumTxDataFromSpecificData(mempoolTx.CoinSpecificData)
+		ethTxData := w.chainParser.GetEthereumTxData(&bchain.Tx{
+			Txid:             mempoolTx.Txid,
+			CoinSpecificData: mempoolTx.CoinSpecificData,
+		})
 		ethSpecific = &EthereumSpecific{
 			GasLimit:             ethTxData.GasLimit,
 			GasPrice:             (*Amount)(ethTxData.GasPrice),
@@ -605,6 +615,13 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 			Status:               ethTxData.Status,
 			Data:                 ethTxData.Data,
 		}
+	}
+	chainExtraData, err = w.chainParser.GetChainExtraData(&bchain.Tx{
+		Txid:             mempoolTx.Txid,
+		CoinSpecificData: mempoolTx.CoinSpecificData,
+	})
+	if err != nil {
+		glog.Warningf("GetChainExtraData error %v, %v", err, mempoolTx.Txid)
 	}
 	r := &Tx{
 		Blocktime:        mempoolTx.Blocktime,
@@ -620,6 +637,7 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 		Rbf:              rbf,
 		Vin:              vins,
 		Vout:             vouts,
+		ChainExtraData:   chainExtraData,
 		TokenTransfers:   tokens,
 		EthereumSpecific: ethSpecific,
 		AddressAliases:   w.getAddressAliases(addresses),
@@ -1635,9 +1653,9 @@ func (w *Worker) balanceHistoryForTxid(addrDesc bchain.AddressDescriptor, txid s
 		}
 	} else if w.chainType == bchain.ChainEthereumType {
 		var value big.Int
-		ethTxData := eth.GetEthereumTxData(bchainTx)
+		ethTxData := w.chainParser.GetEthereumTxData(bchainTx)
 		// add received amount only for OK or unknown status (old) transactions
-		if ethTxData.Status == eth.TxStatusOK || ethTxData.Status == eth.TxStatusUnknown {
+		if ethTxData.Status == bchain.TxStatusOK || ethTxData.Status == bchain.TxStatusUnknown {
 			if len(bchainTx.Vout) > 0 {
 				bchainVout := &bchainTx.Vout[0]
 				value = bchainVout.ValueSat
@@ -1693,7 +1711,7 @@ func (w *Worker) balanceHistoryForTxid(addrDesc bchain.AddressDescriptor, txid s
 				}
 				if bytes.Equal(addrDesc, txAddrDesc) {
 					// add received amount only for OK or unknown status (old) transactions, fees always
-					if ethTxData.Status == eth.TxStatusOK || ethTxData.Status == eth.TxStatusUnknown {
+					if ethTxData.Status == bchain.TxStatusOK || ethTxData.Status == bchain.TxStatusUnknown {
 						(*big.Int)(bh.SentSat).Add((*big.Int)(bh.SentSat), &value)
 						if countSentToSelf {
 							if _, found := selfAddrDesc[string(txAddrDesc)]; found {
