@@ -16,8 +16,7 @@
     "ipc": {
         "rpc_url_template": "http://127.0.0.1:{{.Ports.BackendRPC}}/jsonrpc",
         "rpc_timeout": 25,
-        "message_queue_binding_template": "tcp://127.0.0.1:{{.Ports.BackendMessageQueue}}",
-        "http_url_template": "http://127.0.0.1:{{.Ports.BackendHTTP}}"
+        "message_queue_binding_template": "tcp://127.0.0.1:{{.Ports.BackendMessageQueue}}"
     },
     "backend": {
         "package_name": "backend-tron",
@@ -52,6 +51,7 @@
             "mempool_sub_workers": 0,
             "block_addresses_to_keep": 10000,
             "additional_params": {
+              "tron_http_url_template": "http://127.0.0.1:8090",
               "address_aliases": true,
               "mempoolTxTimeoutHours": 48,
               "queryBackendOnMempoolResync": false,
