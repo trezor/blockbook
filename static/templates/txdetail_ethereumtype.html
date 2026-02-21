@@ -1,4 +1,4 @@
-{{define "txdetail"}}{{$cs := .CoinShortcut}}{{$addr := .AddrStr}}{{$tx := .Tx}}{{$data := .}}
+{{define "txdetail"}}{{$cs := .CoinShortcut}}{{$addr := .AddrStr}}{{$tx := .Tx}}{{$data := .}}{{$chainExtra := chainExtra $tx}}
 <div class="tx-detail">
     <div class="row head">
         <div class="col-xs-7 col-md-8{{if eq $tx.EthereumSpecific.Status 0}} txerror{{end}}">
@@ -11,6 +11,15 @@
             {{if $tx.EthereumSpecific.ParsedData.Name}}<div class="col-12 small"><span class="txvalue">{{$tx.EthereumSpecific.ParsedData.Name}}</span>{{if $tx.EthereumSpecific.ParsedData.MethodId}}<span class="ms-1" tt="4-byte signature"> ({{$tx.EthereumSpecific.ParsedData.MethodId}})</span>{{end}}</div>{{else}}
             {{if $tx.EthereumSpecific.ParsedData.MethodId}}<div class="col-12 small txvalue"><span tt="4-byte signature">{{$tx.EthereumSpecific.ParsedData.MethodId}}</span></div>{{end}}
             {{end}}
+        {{end}}
+        {{if $chainExtra}}
+        <div class="col-12 small txvalue">
+            {{if $chainExtra.Operation}}<span class="badge bg-secondary">{{$chainExtra.Operation}}</span>{{end}}
+            {{if $chainExtra.Resource}}<span class="ms-2">resource {{$chainExtra.Resource}}</span>{{end}}
+            {{if $chainExtra.DelegateAmount}}<span class="ms-2">delegate {{$chainExtra.DelegateAmount}} sun</span>{{end}}
+            {{if $chainExtra.StakeAmount}}<span class="ms-2">stake {{$chainExtra.StakeAmount}} sun</span>{{end}}
+            {{if $chainExtra.UnstakeAmount}}<span class="ms-2">unstake {{$chainExtra.UnstakeAmount}} sun</span>{{end}}
+        </div>
         {{end}}
     </div>
     <div class="row body">
@@ -186,7 +195,18 @@
     <div class="row footer">
         <div class="col-sm-12 col-md-6">
             {{if $tx.FeesSat}}
-            Fee {{amountSpan $tx.FeesSat $data "txvalue copyable ms-3"}} <span class="fw-normal small">({{amountSatsSpan $tx.EthereumSpecific.GasPrice $data ""}} Gwei/gas)</span>
+            Fee {{amountSpan $tx.FeesSat $data "txvalue copyable ms-3"}}
+            {{if $chainExtra}}
+            {{if or $chainExtra.EnergyUsageTotal $chainExtra.BandwidthUsage}}
+            <span class="fw-normal small">(
+                {{if $chainExtra.EnergyUsageTotal}}Energy {{$chainExtra.EnergyUsageTotal}}{{end}}
+                {{if and $chainExtra.EnergyUsageTotal $chainExtra.BandwidthUsage}}, {{end}}
+                {{if $chainExtra.BandwidthUsage}}Bandwidth {{$chainExtra.BandwidthUsage}}{{end}}
+            )</span>
+            {{end}}
+            {{else}}
+            <span class="fw-normal small">({{amountSatsSpan $tx.EthereumSpecific.GasPrice $data ""}} Gwei/gas)</span>
+            {{end}}
             {{end}}
         </div>
         <div class="col-sm-12 col-md-6 text-end">
