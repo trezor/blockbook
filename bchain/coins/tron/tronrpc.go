@@ -556,7 +556,7 @@ type tronRPCBlockWithTransactions struct {
 // GetBlock returns block with given hash or height, hash has precedence if both passed.
 // Tron implementation enriches each tx with data from Tron HTTP endpoints and does not call EthereumRPC.GetBlock.
 func (b *TronRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
-	raw, err := b.getBlockRaw(hash, height, true)
+	raw, err := b.EthereumRPC.GetBlockRawByHashOrHeight(hash, height, true)
 	if err != nil {
 		return nil, err
 	}

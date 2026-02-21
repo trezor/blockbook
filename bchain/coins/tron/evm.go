@@ -9,12 +9,10 @@ import (
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
-	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/juju/errors"
 	"github.com/trezor/blockbook/bchain"
 )
 
@@ -227,29 +225,6 @@ func toBlockNumArg(number *big.Int) string {
 	}
 	// It's negative and large, which is invalid.
 	return fmt.Sprintf("<invalid %d>", number)
-}
-
-func (b *TronRPC) getBlockRaw(hash string, height uint32, fullTxs bool) (json.RawMessage, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
-	defer cancel()
-	var raw json.RawMessage
-	var err error
-	if hash != "" {
-		// tron does not support 'pending', changed to "latest"
-		if hash == "pending" {
-			err = b.RPC.CallContext(ctx, &raw, "eth_getBlockByNumber", "latest", fullTxs)
-		} else {
-			err = b.RPC.CallContext(ctx, &raw, "eth_getBlockByHash", ethcommon.HexToHash(hash), fullTxs)
-		}
-	} else {
-		err = b.RPC.CallContext(ctx, &raw, "eth_getBlockByNumber", fmt.Sprintf("%#x", height), fullTxs)
-	}
-	if err != nil {
-		return nil, errors.Annotatef(err, "hash %v, height %v", hash, height)
-	} else if len(raw) == 0 || (len(raw) == 4 && string(raw) == "null") {
-		return nil, bchain.ErrBlockNotFound
-	}
-	return raw, nil
 }
 
 func (c *TronRPCClient) CallContext(ctx context.Context, result interface{}, method string, args ...interface{}) error {
