@@ -445,6 +445,7 @@ func (s *PublicServer) parseTemplates() []*template.Template {
 		"hasPrefix":                strings.HasPrefix,
 		"jsStr":                    jsStr,
 	}
+	applyTemplateFuncs(templateFuncMap)
 	var createTemplate func(filenames ...string) *template.Template
 	if s.debug {
 		createTemplate = func(filenames ...string) *template.Template {

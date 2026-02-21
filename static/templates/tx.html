@@ -1,4 +1,4 @@
-{{define "specific"}}{{$tx := .Tx}}{{$data := .}}
+{{define "specific"}}{{$tx := .Tx}}{{$data := .}}{{$chainExtra := chainExtra $tx}}
 <div class="row">
     <h1 class="col-12">Transaction</h1>
 </div>
@@ -43,10 +43,111 @@
             <td>Value</td>
             <td>{{amountSpan $tx.ValueOutSat $data "copyable"}}</td>
         </tr>
+        {{if $chainExtra}}
+        {{if $chainExtra.Operation}}
         <tr>
-            <td>Gas Used / Limit</td>
-            <td>{{if $tx.EthereumSpecific.GasUsed}}{{formatBigInt $tx.EthereumSpecific.GasUsed}}{{else}}pending{{end}} / {{formatBigInt $tx.EthereumSpecific.GasLimit}}</td>
+            <td>Operation</td>
+            <td><span class="copyable">{{$chainExtra.Operation}}</span></td>
         </tr>
+        {{end}}
+        {{if $chainExtra.ContractType}}
+        <tr>
+            <td>Contract Type</td>
+            <td><span class="copyable">{{$chainExtra.ContractType}}</span></td>
+        </tr>
+        {{end}}
+        {{if $chainExtra.Resource}}
+        <tr>
+            <td>Resource</td>
+            <td><span class="copyable">{{$chainExtra.Resource}}</span></td>
+        </tr>
+        {{end}}
+        {{if $chainExtra.DelegateTo}}
+        <tr>
+            <td>Delegate To</td>
+            <td><a href="/address/{{$chainExtra.DelegateTo}}">{{addressAliasSpan $chainExtra.DelegateTo $data}}</a></td>
+        </tr>
+        {{end}}
+        {{if $chainExtra.Votes}}
+        <tr>
+            <td>Votes</td>
+            <td>
+                {{range $i, $vote := $chainExtra.Votes}}
+                {{if $i}}<br>{{end}}
+                {{if $vote.Count}}<span class="copyable">{{$vote.Count}}</span>{{end}}
+                {{if $vote.Address}}{{if $vote.Count}} for {{end}}<a href="/address/{{$vote.Address}}">{{addressAliasSpan $vote.Address $data}}</a>{{end}}
+                {{end}}
+            </td>
+        </tr>
+        {{end}}
+        {{if $chainExtra.StakeAmount}}
+        <tr>
+            <td>Stake Amount</td>
+            <td><span class="copyable">{{$chainExtra.StakeAmount}}</span> sun</td>
+        </tr>
+        {{end}}
+        {{if $chainExtra.UnstakeAmount}}
+        <tr>
+            <td>Unstake Amount</td>
+            <td><span class="copyable">{{$chainExtra.UnstakeAmount}}</span> sun</td>
+        </tr>
+        {{end}}
+        {{if $chainExtra.DelegateAmount}}
+        <tr>
+            <td>Delegate Amount</td>
+            <td><span class="copyable">{{$chainExtra.DelegateAmount}}</span> sun</td>
+        </tr>
+        {{end}}
+        {{if $chainExtra.AssetIssueID}}
+        <tr>
+            <td>TRC10 Asset ID</td>
+            <td><span class="copyable">{{$chainExtra.AssetIssueID}}</span></td>
+        </tr>
+        {{end}}
+        {{if $chainExtra.Result}}
+        <tr>
+            <td>Result</td>
+            <td><span class="copyable">{{$chainExtra.Result}}</span></td>
+        </tr>
+        {{end}}
+        {{end}}
+        <tr>
+            <td>{{if $chainExtra}}Energy Used / Limit{{else}}Gas Used / Limit{{end}}</td>
+            <td>{{if and $chainExtra $chainExtra.EnergyUsageTotal}}<span class="copyable">{{$chainExtra.EnergyUsageTotal}}</span>{{else}}{{if $tx.EthereumSpecific.GasUsed}}{{formatBigInt $tx.EthereumSpecific.GasUsed}}{{else}}pending{{end}}{{end}} / {{formatBigInt $tx.EthereumSpecific.GasLimit}}</td>
+        </tr>
+        {{if $chainExtra}}
+        {{if $chainExtra.EnergyUsage}}
+        <tr>
+            <td>Energy Usage</td>
+            <td><span class="copyable">{{$chainExtra.EnergyUsage}}</span></td>
+        </tr>
+        {{end}}
+        {{if $chainExtra.EnergyFee}}
+        <tr>
+            <td>Energy Fee</td>
+            <td><span class="copyable">{{$chainExtra.EnergyFee}}</span> sun</td>
+        </tr>
+        {{end}}
+        {{if $chainExtra.BandwidthUsage}}
+        <tr>
+            <td>Bandwidth Usage</td>
+            <td><span class="copyable">{{$chainExtra.BandwidthUsage}}</span></td>
+        </tr>
+        {{end}}
+        {{if $chainExtra.BandwidthFee}}
+        <tr>
+            <td>Bandwidth Fee</td>
+            <td><span class="copyable">{{$chainExtra.BandwidthFee}}</span> sun</td>
+        </tr>
+        {{end}}
+        {{if $chainExtra.TotalFee}}
+        <tr>
+            <td>Total Fee (Backend)</td>
+            <td><span class="copyable">{{$chainExtra.TotalFee}}</span> sun</td>
+        </tr>
+        {{end}}
+        {{end}}
+        {{if not $chainExtra}}
         <tr>
             <td>Gas Price</td>
             <td>{{amountSpan $tx.EthereumSpecific.GasPrice $data "copyable"}} <span class="fw-normal ps-3">({{amountSatsSpan $tx.EthereumSpecific.GasPrice $data "copyable"}} Gwei)</span></td>
@@ -86,6 +187,7 @@
             <td>L1 Fee Scalar</td>
             <td>{{$tx.EthereumSpecific.L1FeeScalar}}</td>
         </tr>
+        {{end}}
         {{end}}
         {{else}}
         <tr>
