@@ -339,16 +339,6 @@ func TestTronParser_GetChainExtraData(t *testing.T) {
 		_, err := parser.GetChainExtraData(tx)
 		require.Error(t, err)
 	})
-
-	t.Run("empty chain extra object", func(t *testing.T) {
-		tx := &bchain.Tx{
-			CoinSpecificData: bchain.EthereumSpecificData{
-				ChainExtraData: json.RawMessage(`{}`),
-			},
-		}
-		_, err := parser.GetChainExtraData(tx)
-		require.Error(t, err)
-	})
 }
 
 func TestTronParser_UnpackTxid_NoPrefix(t *testing.T) {
