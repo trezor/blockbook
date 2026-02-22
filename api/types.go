@@ -295,7 +295,7 @@ type Tx struct {
 	Hex                    string            `json:"hex,omitempty" ts_doc:"Raw hex-encoded transaction data."`
 	Rbf                    bool              `json:"rbf,omitempty" ts_doc:"Indicates if this transaction is replace-by-fee (RBF) enabled."`
 	CoinSpecificData       json.RawMessage   `json:"coinSpecificData,omitempty" ts_type:"any" ts_doc:"Blockchain-specific extended data."`
-	ChainExtraData         json.RawMessage   `json:"chainExtraData,omitempty" ts_type:"any" ts_doc:"Additional normalized chain-specific transaction data."`
+	ChainExtraData         json.RawMessage   `json:"chainExtraData,omitempty" ts_type:"TronChainExtraData | Record<string, unknown>" ts_doc:"Additional normalized chain-specific transaction data."`
 	TokenTransfers         []TokenTransfer   `json:"tokenTransfers,omitempty" ts_doc:"List of token transfers that occurred in this transaction."`
 	EthereumSpecific       *EthereumSpecific `json:"ethereumSpecific,omitempty" ts_doc:"Ethereum-like blockchain specific data (if applicable)."`
 	AddressAliases         AddressAliasesMap `json:"addressAliases,omitempty" ts_doc:"Aliases for addresses involved in this transaction."`
