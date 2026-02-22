@@ -69,7 +69,7 @@ func TestTronRPC_SendRawTransaction(t *testing.T) {
 
 	gotTxID, err := tronRPC.SendRawTransaction(txHex, false)
 	require.NoError(t, err)
-	require.Equal(t, "0x"+txID, gotTxID)
+	require.Equal(t, txID, gotTxID)
 	require.Equal(t, "/wallet/broadcasthex", mockHTTP.LastPath)
 	require.Equal(t, map[string]string{"transaction": "deadbeef"}, mockHTTP.LastBody)
 }

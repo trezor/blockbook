@@ -1,7 +1,11 @@
 package dbtestdata
 
 import (
+	"encoding/json"
+	"math/big"
+
 	"github.com/trezor/blockbook/bchain"
+	"github.com/trezor/blockbook/bchain/coins/tron"
 )
 
 // Addresses
@@ -31,6 +35,28 @@ const (
 	TronTx1Packed = "08a7a5a31a1a9a011201d218ba722a44a9059cbb000000000000000000000000242aa579f130bf6fea5eac12aa6b846fb8b293ab0000000000000000000000000000000000000000000000000000000000ab604e3220a431984fef1d014620504d02f821f872221cf44c250a81a31e81fa4855b2b3023a14eca9bc828a3005b9a3b909f2cc5c2a54794de05f4214ff324071970b2b08822caa310c1bb458e63a503322a8010a02393a1201011a9e010a14eca9bc828a3005b9a3b909f2cc5c2a54794de05f12200000000000000000000000000000000000000000000000000000000000ab604e1a20ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef1a20000000000000000000000000ff324071970b2b08822caa310c1bb458e63a50331a20000000000000000000000000242aa579f130bf6fea5eac12aa6b846fb8b293ab"
 )
 
+var TronTx1Extra = tron.TronChainExtraData{
+	ContractType:     "TriggerSmartContract",
+	Operation:        "contractCall",
+	AssetIssueID:     "1002001",
+	TotalFee:         "3076500",
+	EnergyUsage:      "14650",
+	EnergyUsageTotal: "14650",
+	BandwidthUsage:   "345",
+	BandwidthFee:     "0",
+	Result:           "SUCCESS",
+}
+
+func mustMarshalTronTxExtraData(extra tron.TronChainExtraData) json.RawMessage {
+	b, err := json.Marshal(extra)
+	if err != nil {
+		panic(err)
+	}
+	return b
+}
+
+var TronTx1ExtraJSON = mustMarshalTronTxExtraData(TronTx1Extra)
+
 var TronBlock1SpecificData = &bchain.EthereumBlockSpecificData{
 	Contracts: []bchain.ContractInfo{
 		{
@@ -40,6 +66,18 @@ var TronBlock1SpecificData = &bchain.EthereumBlockSpecificData{
 			Symbol:         "USDT",
 			Decimals:       12,
 			CreatedInBlock: Block0,
+		},
+	},
+}
+
+var TronTx1InternalData = &bchain.EthereumInternalData{
+	Type: bchain.CALL,
+	Transfers: []bchain.EthereumInternalTransfer{
+		{
+			Type:  bchain.CALL,
+			From:  TronAddrTZ,
+			To:    TronAddrTD,
+			Value: *big.NewInt(11231310),
 		},
 	},
 }
@@ -57,6 +95,18 @@ func GetTestTronBlock0(parser bchain.BlockChainParser) *bchain.Block {
 }
 
 func GetTestTronBlock1(parser bchain.BlockChainParser) *bchain.Block {
+	txs := unpackTxs([]packedAndInternal{{
+		packed:   TronTx1Packed,
+		internal: TronTx1InternalData,
+	}}, parser)
+	if len(txs) > 0 {
+		csd, ok := txs[0].CoinSpecificData.(bchain.EthereumSpecificData)
+		if ok {
+			csd.ChainExtraData = TronTx1ExtraJSON
+			txs[0].CoinSpecificData = csd
+		}
+	}
+
 	return &bchain.Block{
 		BlockHeader: bchain.BlockHeader{
 			Height:        Block1,
@@ -65,9 +115,7 @@ func GetTestTronBlock1(parser bchain.BlockChainParser) *bchain.Block {
 			Time:          1677700000,
 			Confirmations: 99,
 		},
-		Txs: unpackTxs([]packedAndInternal{{
-			packed: TronTx1Packed,
-		}}, parser),
+		Txs:              txs,
 		CoinSpecificData: TronBlock1SpecificData,
 	}
 }
