@@ -211,9 +211,6 @@ func parseTronExtra(tx *bchain.Tx) (bchain.EthereumSpecificData, *tronTxExtraDat
 	if err := json.Unmarshal(csd.ChainExtraData, &extra); err != nil {
 		return bchain.EthereumSpecificData{}, nil, fmt.Errorf("invalid tron chainExtraData: %w", err)
 	}
-	if !extra.hasData() {
-		return bchain.EthereumSpecificData{}, nil, errors.New("empty tron chainExtraData")
-	}
 	return csd, &extra, nil
 }
 
@@ -224,9 +221,6 @@ func validateTronChainExtraData(chainExtraData json.RawMessage) error {
 	var extra tronTxExtraData
 	if err := json.Unmarshal(chainExtraData, &extra); err != nil {
 		return fmt.Errorf("invalid tron chainExtraData: %w", err)
-	}
-	if !extra.hasData() {
-		return errors.New("empty tron chainExtraData")
 	}
 	return nil
 }

@@ -10,6 +10,30 @@ import (
 	"github.com/trezor/blockbook/bchain"
 )
 
+type TronChainExtraData struct {
+	ContractType     string          `json:"contractType,omitempty"`
+	Operation        string          `json:"operation,omitempty"`
+	Resource         string          `json:"resource,omitempty"`
+	StakeAmount      string          `json:"stakeAmount,omitempty"`
+	UnstakeAmount    string          `json:"unstakeAmount,omitempty"`
+	DelegateAmount   string          `json:"delegateAmount,omitempty"`
+	DelegateTo       string          `json:"delegateTo,omitempty"`
+	AssetIssueID     string          `json:"assetIssueID,omitempty"`
+	TotalFee         string          `json:"totalFee,omitempty"`
+	EnergyUsage      string          `json:"energyUsage,omitempty"`
+	EnergyUsageTotal string          `json:"energyUsageTotal,omitempty"`
+	EnergyFee        string          `json:"energyFee,omitempty"`
+	BandwidthUsage   string          `json:"bandwidthUsage,omitempty"`
+	BandwidthFee     string          `json:"bandwidthFee,omitempty"`
+	Result           string          `json:"result,omitempty"`
+	Votes            []TronVoteExtra `json:"votes,omitempty"`
+}
+
+type TronVoteExtra struct {
+	Address string `json:"address,omitempty"`
+	Count   string `json:"count,omitempty"`
+}
+
 type tronGetTransactionInfoByIDResponse struct {
 	ID                     string                    `json:"id,omitempty"`
 	Fee                    *int64                    `json:"fee,omitempty"`
@@ -38,48 +62,9 @@ type tronGetTransactionInfoByIDResponse struct {
 	Log []*bchain.RpcLog `json:"log,omitempty"`
 }
 
-type tronTxExtraData struct {
-	ContractType     string          `json:"contractType,omitempty"`
-	Operation        string          `json:"operation,omitempty"`
-	Resource         string          `json:"resource,omitempty"`
-	StakeAmount      string          `json:"stakeAmount,omitempty"`
-	UnstakeAmount    string          `json:"unstakeAmount,omitempty"`
-	DelegateAmount   string          `json:"delegateAmount,omitempty"`
-	DelegateTo       string          `json:"delegateTo,omitempty"`
-	AssetIssueID     string          `json:"assetIssueID,omitempty"`
-	TotalFee         string          `json:"totalFee,omitempty"`
-	EnergyUsage      string          `json:"energyUsage,omitempty"`
-	EnergyUsageTotal string          `json:"energyUsageTotal,omitempty"`
-	EnergyFee        string          `json:"energyFee,omitempty"`
-	BandwidthUsage   string          `json:"bandwidthUsage,omitempty"`
-	BandwidthFee     string          `json:"bandwidthFee,omitempty"`
-	Result           string          `json:"result,omitempty"`
-	Votes            []tronVoteExtra `json:"votes,omitempty"`
-}
-
-type tronVoteExtra struct {
-	Address string `json:"address,omitempty"`
-	Count   string `json:"count,omitempty"`
-}
-
-func (d *tronTxExtraData) hasData() bool {
-	return d.ContractType != "" ||
-		d.Operation != "" ||
-		d.Resource != "" ||
-		d.StakeAmount != "" ||
-		d.UnstakeAmount != "" ||
-		d.DelegateAmount != "" ||
-		d.DelegateTo != "" ||
-		d.AssetIssueID != "" ||
-		d.TotalFee != "" ||
-		d.EnergyUsage != "" ||
-		d.EnergyUsageTotal != "" ||
-		d.EnergyFee != "" ||
-		d.BandwidthUsage != "" ||
-		d.BandwidthFee != "" ||
-		d.Result != "" ||
-		len(d.Votes) > 0
-}
+// Keep internal aliases to avoid touching existing parser logic.
+type tronTxExtraData = TronChainExtraData
+type tronVoteExtra = TronVoteExtra
 
 func tronOperationFromContractType(contractType string) string {
 	switch contractType {
@@ -437,10 +422,8 @@ func tronBuildEthereumSpecificData(txid string, txByID *tronGetTransactionByIDRe
 		Receipt: tronBuildRpcReceipt(txByID, txInfo),
 	}
 	extra := tronBuildExtraData(txByID, txInfo)
-	if extra.hasData() {
-		if m, err := json.Marshal(extra); err == nil {
-			csd.ChainExtraData = m
-		}
+	if m, err := json.Marshal(extra); err == nil {
+		csd.ChainExtraData = m
 	}
 	return csd
 }
