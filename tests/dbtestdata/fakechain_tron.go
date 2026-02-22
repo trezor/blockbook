@@ -2,6 +2,7 @@ package dbtestdata
 
 import (
 	"encoding/json"
+	"errors"
 	"strconv"
 	"strings"
 
@@ -146,4 +147,26 @@ func (c *fakeBlockChainTronType) GetContractInfo(contractDesc bchain.AddressDesc
 		Decimals:       6,
 		CreatedInBlock: 1000,
 	}, nil
+}
+
+// EthereumTypeRpcCall validates address parameters similarly to Tron RPC and accepts both Base58 and hex.
+func (c *fakeBlockChainTronType) EthereumTypeRpcCall(data, to, from string) (string, error) {
+	type tronAddressNormalizer interface {
+		FromTronAddressToHex(addr string) (string, error)
+	}
+	parser, ok := c.Parser.(tronAddressNormalizer)
+	if !ok {
+		return "", errors.New("tron parser does not support address normalization")
+	}
+	if to != "" {
+		if _, err := parser.FromTronAddressToHex(to); err != nil {
+			return "", err
+		}
+	}
+	if from != "" {
+		if _, err := parser.FromTronAddressToHex(from); err != nil {
+			return "", err
+		}
+	}
+	return data + "abcd", nil
 }
