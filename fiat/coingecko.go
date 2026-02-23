@@ -18,15 +18,10 @@ import (
 )
 
 const (
-	DefaultHTTPTimeout            = 15 * time.Second
-	DefaultThrottleDelayMs        = 100 // 100 ms delay between requests
-	coingeckoFreeHistoryDaysLimit = 365
-	coingeckoPlanFree             = "free"
-	coingeckoPlanPro              = "pro"
-	coingeckoFreeAPIURL           = "https://api.coingecko.com/api/v3"
-	coingeckoProAPIURL            = "https://pro-api.coingecko.com/api/v3"
-	coingeckoAPIKeyEnv            = "COINGECKO_API_KEY"
-	coingeckoAPIKeyEnvSuffix      = "_" + coingeckoAPIKeyEnv
+	DefaultHTTPTimeout       = 15 * time.Second
+	DefaultThrottleDelayMs   = 100 // 100 ms delay between requests
+	coingeckoAPIKeyEnv       = "COINGECKO_API_KEY"
+	coingeckoAPIKeyEnvSuffix = "_" + coingeckoAPIKeyEnv
 )
 
 // Coingecko is a structure that implements RatesDownloaderInterface
@@ -120,15 +115,20 @@ func NewCoinGeckoDownloader(db *db.RocksDB, network string, coinShortcut string,
 	allowedVsCurrenciesMap := getAllowedVsCurrenciesMap(allowedVsCurrencies)
 
 	apiKey := resolveCoinGeckoAPIKey(network, coinShortcut)
-	hasAPIKey := apiKey != ""
-	plan = resolveCoinGeckoPlan(plan, url, hasAPIKey)
 
 	// use default address if not overridden, with respect to existence of apiKey
 	if url == "" {
-		if plan == coingeckoPlanPro {
-			url = coingeckoProAPIURL
+		const (
+			proURL  = "https://pro-api.coingecko.com/api/v3"
+			freeURL = "https://api.coingecko.com/api/v3"
+		)
+
+		plan = strings.ToLower(strings.TrimSpace(plan))
+
+		if apiKey != "" && plan != "free" {
+			url = proURL
 		} else {
-			url = coingeckoFreeAPIURL
+			url = freeURL
 		}
 	}
 	glog.Info("Coingecko downloader url ", url)
@@ -150,50 +150,6 @@ func NewCoinGeckoDownloader(db *db.RocksDB, network string, coinShortcut string,
 		metrics:         metrics,
 		plan:            plan,
 	}
-}
-
-func normalizeCoinGeckoURL(apiURL string) string {
-	return strings.TrimSuffix(strings.ToLower(strings.TrimSpace(apiURL)), "/")
-}
-
-func inferCoinGeckoPlanFromURL(apiURL string) (string, bool) {
-	switch normalizeCoinGeckoURL(apiURL) {
-	case coingeckoFreeAPIURL:
-		return coingeckoPlanFree, true
-	case coingeckoProAPIURL:
-		return coingeckoPlanPro, true
-	default:
-		return "", false
-	}
-}
-
-func resolveCoinGeckoPlan(plan string, apiURL string, hasAPIKey bool) string {
-	normalizedPlan := strings.ToLower(strings.TrimSpace(plan))
-	switch normalizedPlan {
-	case coingeckoPlanFree:
-		return coingeckoPlanFree
-	case coingeckoPlanPro:
-		return coingeckoPlanPro
-	case "":
-		// Continue with inference for backward compatibility.
-	default:
-		glog.Warningf("Coingecko unknown plan %q, defaulting by API key presence", plan)
-		if hasAPIKey {
-			return coingeckoPlanPro
-		}
-		return coingeckoPlanFree
-	}
-
-	if inferredPlan, ok := inferCoinGeckoPlanFromURL(apiURL); ok {
-		return inferredPlan
-	}
-
-	// Backward compatibility for existing deployments:
-	// API key implied Pro before plan was introduced.
-	if hasAPIKey {
-		return coingeckoPlanPro
-	}
-	return coingeckoPlanFree
 }
 
 // getAllowedVsCurrenciesMap returns a map of allowed vs currencies
@@ -225,7 +181,7 @@ func doReq(req *http.Request, client *http.Client) ([]byte, error) {
 }
 
 // makeReq HTTP request helper - will retry the call after 1 minute on error
-func (cg *Coingecko) makeReq(url string, endpoint string) ([]byte, error) {
+func (cg *Coingecko) makeReq(url string, endpoint string, plan string) ([]byte, error) {
 	for {
 		// glog.Infof("Coingecko makeReq %v", url)
 		req, err := http.NewRequest("GET", url, nil)
@@ -234,7 +190,7 @@ func (cg *Coingecko) makeReq(url string, endpoint string) ([]byte, error) {
 		}
 		req.Header.Set("Content-Type", "application/json")
 		if cg.apiKey != "" {
-			if cg.plan == coingeckoPlanPro {
+			if plan == "pro" {
 				req.Header.Set("x-cg-pro-api-key", cg.apiKey)
 			} else {
 				req.Header.Set("x-cg-demo-api-key", cg.apiKey)
@@ -266,7 +222,7 @@ func (cg *Coingecko) makeReq(url string, endpoint string) ([]byte, error) {
 // SimpleSupportedVSCurrencies /simple/supported_vs_currencies
 func (cg *Coingecko) simpleSupportedVSCurrencies() (simpleSupportedVSCurrencies, error) {
 	url := cg.url + "/simple/supported_vs_currencies"
-	resp, err := cg.makeReq(url, "supported_vs_currencies")
+	resp, err := cg.makeReq(url, "supported_vs_currencies", cg.plan)
 	if err != nil {
 		return nil, err
 	}
@@ -297,7 +253,7 @@ func (cg *Coingecko) simplePrice(ids []string, vsCurrencies []string) (*map[stri
 	params.Add("vs_currencies", vsCurrenciesParam)
 
 	url := fmt.Sprintf("%s/simple/price?%s", cg.url, params.Encode())
-	resp, err := cg.makeReq(url, "simple/price")
+	resp, err := cg.makeReq(url, "simple/price", cg.plan)
 	if err != nil {
 		return nil, err
 	}
@@ -320,7 +276,7 @@ func (cg *Coingecko) coinsList() (coinList, error) {
 	}
 	params.Add("include_platform", platform)
 	url := fmt.Sprintf("%s/coins/list?%s", cg.url, params.Encode())
-	resp, err := cg.makeReq(url, "coins/list")
+	resp, err := cg.makeReq(url, "coins/list", cg.plan)
 	if err != nil {
 		return nil, err
 	}
@@ -347,7 +303,7 @@ func (cg *Coingecko) coinMarketChart(id string, vs_currency string, days string,
 	params.Add("days", days)
 
 	url := fmt.Sprintf("%s/coins/%s/market_chart?%s", cg.url, id, params.Encode())
-	resp, err := cg.makeReq(url, "market_chart")
+	resp, err := cg.makeReq(url, "market_chart", cg.plan)
 	if err != nil {
 		return nil, err
 	}
@@ -482,57 +438,21 @@ func (cg *Coingecko) FiveMinutesTickers() (*[]common.CurrencyRatesTicker, error)
 	return cg.getHighGranularityTickers("1")
 }
 
-func (cg *Coingecko) historicalRangeDaysLimit() int {
-	if cg.plan == coingeckoPlanPro {
-		return 0
-	}
-	return coingeckoFreeHistoryDaysLimit
-}
-
-func (cg *Coingecko) resolveHistoricalDays(lastTicker *common.CurrencyRatesTicker) (string, bool) {
-	limitDays := cg.historicalRangeDaysLimit()
-	if lastTicker == nil {
-		if limitDays > 0 {
-			return strconv.Itoa(limitDays), true
-		}
-		return "max", true
-	}
-	diff := time.Since(lastTicker.Timestamp)
-	d := int(diff / (24 * time.Hour))
-	if d <= 0 { // nothing to do, the last ticker already exists for current day
-		return "", false
-	}
-	if limitDays > 0 && d > limitDays {
-		d = limitDays
-	}
-	return strconv.Itoa(d), true
-}
-
-func isHistoricalRangeLimitError(err error) bool {
-	if err == nil {
-		return false
-	}
-	var payload struct {
-		Error struct {
-			Status struct {
-				ErrorCode *int `json:"error_code"`
-			} `json:"status"`
-		} `json:"error"`
-	}
-	if jsonErr := json.Unmarshal([]byte(err.Error()), &payload); jsonErr != nil {
-		return false
-	}
-	return payload.Error.Status.ErrorCode != nil && *payload.Error.Status.ErrorCode == 10012
-}
-
 func (cg *Coingecko) getHistoricalTicker(tickersToUpdate map[uint]*common.CurrencyRatesTicker, coinId string, vsCurrency string, token string) (bool, error) {
 	lastTicker, err := cg.db.FiatRatesFindLastTicker(vsCurrency, token)
 	if err != nil {
 		return false, err
 	}
-	days, shouldRequest := cg.resolveHistoricalDays(lastTicker)
-	if !shouldRequest {
-		return false, nil
+	var days string
+	if lastTicker == nil {
+		days = "max"
+	} else {
+		diff := time.Since(lastTicker.Timestamp)
+		d := int(diff / (24 * 3600 * 1000000000))
+		if d == 0 { // nothing to do, the last ticker exist
+			return false, nil
+		}
+		days = strconv.Itoa(d)
 	}
 	mc, err := cg.coinMarketChart(coinId, vsCurrency, days, true)
 	if err != nil {
@@ -625,10 +545,6 @@ func (cg *Coingecko) UpdateHistoricalTickers() error {
 		var err error
 		var req bool
 		if req, err = cg.getHistoricalTicker(tickersToUpdate, cg.coin, currency, ""); err != nil {
-			if isHistoricalRangeLimitError(err) {
-				glog.Warningf("getHistoricalTicker %s-%s range limited, skipping remaining historical currency updates in this run: %v", cg.coin, currency, err)
-				break
-			}
 			// report error and continue, Coingecko may return error like "Could not find coin with the given id"
 			// the rates will be updated next run
 			glog.Errorf("getHistoricalTicker %s-%s %v", cg.coin, currency, err)
@@ -662,10 +578,6 @@ func (cg *Coingecko) UpdateHistoricalTokenTickers() error {
 			var err error
 			var req bool
 			if req, err = cg.getHistoricalTicker(tickersToUpdate, tokenId, cg.platformVsCurrency, token); err != nil {
-				if isHistoricalRangeLimitError(err) {
-					glog.Warningf("getHistoricalTicker %s-%s range limited, skipping remaining token historical updates in this run: %v", tokenId, cg.platformVsCurrency, err)
-					break
-				}
 				// report error and continue, Coingecko may return error like "Could not find coin with the given id"
 				// the rates will be updated next run
 				glog.Errorf("getHistoricalTicker %s-%s %v", tokenId, cg.platformVsCurrency, err)
