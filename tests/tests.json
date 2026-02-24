@@ -5,6 +5,8 @@
     },
     "bcash": {
         "connectivity": ["http"],
+        "api": ["Status", "GetBlockIndex", "GetBlockByHeight", "GetBlock", "GetTransaction", "GetTransactionSpecific",
+                "GetAddress", "GetAddressTxids", "GetAddressTxs", "GetUtxo", "GetUtxoConfirmedFilter"],
         "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",
                 "EstimateFee", "GetBestBlockHash", "GetBestBlockHeight", "GetBlockHeader"],
         "sync": ["ConnectBlocksParallel", "ConnectBlocks", "HandleFork"]
@@ -24,18 +26,25 @@
     },
     "bitcoin": {
         "connectivity": ["http"],
+        "api": ["Status", "GetBlockIndex", "GetBlockByHeight", "GetBlock", "GetTransaction", "GetTransactionSpecific",
+                "GetAddress", "GetAddressTxids", "GetAddressTxs", "GetUtxo", "GetUtxoConfirmedFilter",
+                "WsGetInfo", "WsGetBlockHash", "WsGetTransaction", "WsGetAccountInfo", "WsGetAccountUtxo", "WsPing"],
         "rpc":  ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",
                  "EstimateSmartFee", "EstimateFee", "GetBestBlockHash", "GetBestBlockHeight", "GetBlockHeader"],
         "sync": ["ConnectBlocksParallel", "ConnectBlocks", "HandleFork"]
     },
     "bitcoin_testnet": {
         "connectivity": ["http"],
+        "api": ["Status", "GetBlockIndex", "GetBlockByHeight", "GetBlock", "GetTransaction", "GetTransactionSpecific",
+                "GetAddress", "GetAddressTxids", "GetAddressTxs", "GetUtxo", "GetUtxoConfirmedFilter"],
         "rpc":  ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",
                  "EstimateSmartFee", "EstimateFee", "GetBestBlockHash", "GetBestBlockHeight", "GetBlockHeader"],
         "sync": ["ConnectBlocksParallel", "ConnectBlocks", "HandleFork"]
     },
     "bitcoin_testnet4": {
         "connectivity": ["http"],
+        "api": ["Status", "GetBlockIndex", "GetBlockByHeight", "GetBlock", "GetTransaction", "GetTransactionSpecific",
+                "GetAddress", "GetAddressTxids", "GetAddressTxs", "GetUtxo", "GetUtxoConfirmedFilter"],
         "rpc":  ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",
                  "EstimateSmartFee", "EstimateFee", "GetBestBlockHash", "GetBestBlockHeight", "GetBlockHeader"],
         "sync": ["ConnectBlocksParallel", "ConnectBlocks", "HandleFork"]
@@ -103,6 +112,8 @@
     },
     "dogecoin": {
         "connectivity": ["http"],
+        "api": ["Status", "GetBlockIndex", "GetBlockByHeight", "GetBlock", "GetTransaction", "GetTransactionSpecific",
+                "GetAddress", "GetAddressTxids", "GetAddressTxs", "GetUtxo", "GetUtxoConfirmedFilter"],
         "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "MempoolSync"],
         "sync": ["ConnectBlocksParallel", "ConnectBlocks"]
     },
@@ -147,6 +158,8 @@
     },
     "litecoin": {
         "connectivity": ["http"],
+        "api": ["Status", "GetBlockIndex", "GetBlockByHeight", "GetBlock", "GetTransaction", "GetTransactionSpecific",
+                "GetAddress", "GetAddressTxids", "GetAddressTxs", "GetUtxo", "GetUtxoConfirmedFilter"],
         "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",
                 "EstimateSmartFee", "EstimateFee"],
         "sync": ["ConnectBlocksParallel", "ConnectBlocks", "HandleFork"]
@@ -171,6 +184,8 @@
     },
     "zcash": {
         "connectivity": ["http"],
+        "api": ["Status", "GetBlockIndex", "GetBlockByHeight", "GetBlock", "GetTransaction", "GetTransactionSpecific",
+                "GetAddress", "GetAddressTxids", "GetAddressTxs", "GetUtxo", "GetUtxoConfirmedFilter"],
         "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",
                 "GetBestBlockHash", "GetBestBlockHeight", "GetBlockHeader"],
         "sync": ["ConnectBlocksParallel", "ConnectBlocks", "HandleFork"]

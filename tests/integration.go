@@ -18,6 +18,7 @@ import (
 	"github.com/martinboehm/btcutil/chaincfg"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/bchain/coins"
+	apitests "github.com/trezor/blockbook/tests/api"
 	"github.com/trezor/blockbook/tests/connectivity"
 	"github.com/trezor/blockbook/tests/rpc"
 	synctests "github.com/trezor/blockbook/tests/sync"
@@ -38,6 +39,7 @@ var integrationTests = map[string]integrationTest{
 	"rpc":          {fn: rpc.IntegrationTest, requiresChain: true},
 	"sync":         {fn: synctests.IntegrationTest, requiresChain: true},
 	"connectivity": {fn: connectivity.IntegrationTest, requiresChain: false},
+	"api":          {fn: apitests.IntegrationTest, requiresChain: false},
 }
 
 var notConnectedError = errors.New("Not connected to backend server")
