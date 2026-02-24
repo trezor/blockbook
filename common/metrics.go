@@ -60,6 +60,7 @@ type Metrics struct {
 	SocketIOPendingRequests           *prometheus.GaugeVec
 	XPubCacheSize                     prometheus.Gauge
 	CoingeckoRequests                 *prometheus.CounterVec
+	CoingeckoRangeRequests            *prometheus.CounterVec
 	FiatRatesUpdateDuration           *prometheus.HistogramVec
 }
 
@@ -479,6 +480,14 @@ func GetMetrics(coin string) (*Metrics, error) {
 			ConstLabels: Labels{"coin": coin},
 		},
 		[]string{"endpoint", "status"},
+	)
+	metrics.CoingeckoRangeRequests = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name:        "blockbook_coingecko_range_requests",
+			Help:        "Total number of coingecko range queries by range kind",
+			ConstLabels: Labels{"coin": coin},
+		},
+		[]string{"range"},
 	)
 	metrics.FiatRatesUpdateDuration = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{

@@ -3,8 +3,14 @@
 package fiat
 
 import (
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/trezor/blockbook/common"
 )
 
 func testCoinGeckoScopedAPIKeyEnvName(prefix string) string {
@@ -93,4 +99,199 @@ func TestValidateCoinGeckoAPIKeyEnv(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 	})
+}
+
+func TestCanUseBootstrapMax(t *testing.T) {
+	tests := []struct {
+		name        string
+		cg          Coingecko
+		expectAllow bool
+	}{
+		{
+			name:        "bootstrap url allows max",
+			cg:          Coingecko{bootstrapURL: "https://cdn.trezor.io/dynamic/coingecko/api/v3"},
+			expectAllow: true,
+		},
+		{
+			name:        "missing bootstrap url does not allow max",
+			cg:          Coingecko{},
+			expectAllow: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.cg.canUseBootstrapMax(); got != tt.expectAllow {
+				t.Fatalf("unexpected bootstrap-max eligibility: got %v, want %v", got, tt.expectAllow)
+			}
+		})
+	}
+}
+
+func TestNormalizeCoinGeckoPlan(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{name: "pro", in: "pro", want: coingeckoPlanPro},
+		{name: "pro uppercase", in: "PRO", want: coingeckoPlanPro},
+		{name: "free", in: "free", want: coingeckoPlanFree},
+		{name: "empty defaults to free", in: "", want: coingeckoPlanFree},
+		{name: "unknown defaults to free", in: "demo", want: coingeckoPlanFree},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := normalizeCoinGeckoPlan(tt.in)
+			if got != tt.want {
+				t.Fatalf("unexpected plan normalization: got %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCoingeckoPlanRequiresAPIKey(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want bool
+	}{
+		{name: "pro requires key", in: "pro", want: true},
+		{name: "pro uppercase requires key", in: "PRO", want: true},
+		{name: "free does not require key", in: "free", want: false},
+		{name: "empty does not require key", in: "", want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := coingeckoPlanRequiresAPIKey(tt.in)
+			if got != tt.want {
+				t.Fatalf("unexpected API-key requirement: got %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestResolveHistoricalDays(t *testing.T) {
+	t.Run("nil last ticker uses max only when allowed", func(t *testing.T) {
+		cg := Coingecko{}
+		days, shouldRequest, rangeKind := cg.resolveHistoricalDays(nil, true)
+		if !shouldRequest || days != "max" {
+			t.Fatalf("unexpected max result: days=%q shouldRequest=%v", days, shouldRequest)
+		}
+		if rangeKind != coingeckoRangeHistorical {
+			t.Fatalf("unexpected range kind: got %q, want %q", rangeKind, coingeckoRangeHistorical)
+		}
+
+		days, shouldRequest, rangeKind = cg.resolveHistoricalDays(nil, false)
+		if !shouldRequest || days != "365" {
+			t.Fatalf("unexpected capped result: days=%q shouldRequest=%v", days, shouldRequest)
+		}
+		if rangeKind != coingeckoRangeCapped {
+			t.Fatalf("unexpected range kind: got %q, want %q", rangeKind, coingeckoRangeCapped)
+		}
+	})
+
+	t.Run("same day ticker skips request", func(t *testing.T) {
+		cg := Coingecko{}
+		days, shouldRequest, rangeKind := cg.resolveHistoricalDays(&common.CurrencyRatesTicker{
+			Timestamp: time.Now().Add(-1 * time.Hour),
+		}, false)
+		if shouldRequest || days != "" {
+			t.Fatalf("unexpected same-day result: days=%q shouldRequest=%v", days, shouldRequest)
+		}
+		if rangeKind != "" {
+			t.Fatalf("unexpected range kind: got %q, want empty", rangeKind)
+		}
+	})
+
+	t.Run("older ticker is capped to 365 days", func(t *testing.T) {
+		cg := Coingecko{}
+		days, shouldRequest, rangeKind := cg.resolveHistoricalDays(&common.CurrencyRatesTicker{
+			Timestamp: time.Now().AddDate(0, 0, -500),
+		}, true)
+		if !shouldRequest || days != "365" {
+			t.Fatalf("unexpected capped result: days=%q shouldRequest=%v", days, shouldRequest)
+		}
+		if rangeKind != coingeckoRangeCapped {
+			t.Fatalf("unexpected range kind: got %q, want %q", rangeKind, coingeckoRangeCapped)
+		}
+	})
+
+	t.Run("recent ticker is tip query", func(t *testing.T) {
+		cg := Coingecko{}
+		days, shouldRequest, rangeKind := cg.resolveHistoricalDays(&common.CurrencyRatesTicker{
+			Timestamp: time.Now().AddDate(0, 0, -5),
+		}, false)
+		if !shouldRequest || days != "5" {
+			t.Fatalf("unexpected tip result: days=%q shouldRequest=%v", days, shouldRequest)
+		}
+		if rangeKind != coingeckoRangeTip {
+			t.Fatalf("unexpected range kind: got %q, want %q", rangeKind, coingeckoRangeTip)
+		}
+	})
+}
+
+func TestUpdateHistoricalTickers_BootstrapStoresSuccessfulCurrenciesEvenWhenSomeFail(t *testing.T) {
+	config := common.Config{
+		CoinName: "fakecoin",
+	}
+	d, _, tmp := setupRocksDB(t, &testBitcoinParser{
+		BitcoinParser: bitcoinTestnetParser(),
+	}, &config)
+	defer closeAndDestroyRocksDB(t, d, tmp)
+
+	if err := d.FiatRatesSetHistoricalBootstrapComplete(false); err != nil {
+		t.Fatalf("FiatRatesSetHistoricalBootstrapComplete failed: %v", err)
+	}
+
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/simple/supported_vs_currencies":
+			_, _ = w.Write([]byte(`["usd","eur"]`))
+		case "/coins/ethereum/market_chart":
+			switch r.URL.Query().Get("vs_currency") {
+			case "usd":
+				_, _ = w.Write([]byte(`{"prices":[[1654732800000,1234.5]]}`))
+			case "eur":
+				http.Error(w, "forced-failure", http.StatusInternalServerError)
+			default:
+				http.Error(w, "unexpected vs_currency", http.StatusBadRequest)
+			}
+		default:
+			http.Error(w, fmt.Sprintf("unexpected path %s", r.URL.Path), http.StatusNotFound)
+		}
+	}))
+	defer mockServer.Close()
+
+	cg := &Coingecko{
+		coin:         "ethereum",
+		bootstrapURL: mockServer.URL,
+		tipURL:       mockServer.URL,
+		httpClient:   mockServer.Client(),
+		db:           d,
+		plan:         coingeckoPlanFree,
+	}
+
+	err := cg.UpdateHistoricalTickers()
+	if err == nil {
+		t.Fatal("expected bootstrap incomplete error")
+	}
+	if !strings.Contains(err.Error(), "bootstrap incomplete") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	usdTicker, err := d.FiatRatesFindLastTicker("usd", "")
+	if err != nil {
+		t.Fatalf("FiatRatesFindLastTicker usd failed: %v", err)
+	}
+	if usdTicker == nil {
+		t.Fatal("expected usd ticker to be stored despite partial failure")
+	}
+	eurTicker, err := d.FiatRatesFindLastTicker("eur", "")
+	if err != nil {
+		t.Fatalf("FiatRatesFindLastTicker eur failed: %v", err)
+	}
+	if eurTicker != nil {
+		t.Fatalf("expected eur ticker to be missing due to forced failure, got %+v", eurTicker)
+	}
 }
