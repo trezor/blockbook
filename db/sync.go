@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	stdErrors "errors"
 	"os"
 	"sync"
@@ -487,7 +488,7 @@ GetBlockLoop:
 			}
 			block, err = w.chain.GetBlock(hh.hash, hh.height)
 			if err != nil {
-				if stdErrors.Is(err, bchain.ErrBlockNotFound) {
+				if stdErrors.Is(err, bchain.ErrBlockNotFound) || stdErrors.Is(err, context.DeadlineExceeded) {
 					notFoundRetries++
 					glog.Error("getBlockWorker ", i, " connect block ", hh.height, " ", hh.hash, " error ", err, ". Retrying...")
 					threshold := cfg.RecheckThreshold
