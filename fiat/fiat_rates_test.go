@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/golang/glog"
+	"github.com/linxGnu/grocksdb"
 	"github.com/martinboehm/btcutil/chaincfg"
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/bchain/coins/btc"
@@ -141,6 +142,13 @@ func TestFiatRates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FiatRates init error: %v", err)
 	}
+	// In the current model, FiatRatesParams.url is bootstrap URL only.
+	// Point tip/current calls to the mock explicitly to keep this test isolated.
+	coingeckoDownloader, ok := fiatRates.downloader.(*Coingecko)
+	if !ok {
+		t.Fatalf("unexpected downloader type: %T", fiatRates.downloader)
+	}
+	coingeckoDownloader.tipURL = mockServer.URL
 
 	// get current tickers
 	currentTickers, err := fiatRates.downloader.CurrentTickers()
@@ -574,5 +582,263 @@ func TestGetTokenTickersForTimestamps_SkipsDBLookupWhenCurrentTickerHasNoToken(t
 	}
 	if (*tickers)[0] != nil || (*tickers)[1] != nil {
 		t.Fatalf("expected nil tickers when current ticker does not include token, got %+v", *tickers)
+	}
+}
+
+func TestNewFiatRates_AllowsBootstrapOnDefaultHistoricalURLWithoutAPIKey(t *testing.T) {
+	config := common.Config{
+		CoinName:        "fakecoin",
+		FiatRates:       "coingecko",
+		FiatRatesParams: `{"coin":"ethereum","periodSeconds":60}`,
+	}
+	d, is, tmp := setupRocksDB(t, &testBitcoinParser{
+		BitcoinParser: bitcoinTestnetParser(),
+	}, &config)
+	defer closeAndDestroyRocksDB(t, d, tmp)
+
+	// Ensure this test is deterministic even if host env has CoinGecko keys set.
+	envNames := append([]string{coingeckoAPIKeyEnv}, coinGeckoScopedAPIKeyEnvNames(is.GetNetwork(), is.CoinShortcut)...)
+	originalEnv := make(map[string]*string, len(envNames))
+	for _, envName := range envNames {
+		if v, ok := os.LookupEnv(envName); ok {
+			value := v
+			originalEnv[envName] = &value
+		} else {
+			originalEnv[envName] = nil
+		}
+		_ = os.Unsetenv(envName)
+	}
+	defer func() {
+		for _, envName := range envNames {
+			if v := originalEnv[envName]; v == nil {
+				_ = os.Unsetenv(envName)
+			} else {
+				_ = os.Setenv(envName, *v)
+			}
+		}
+	}()
+
+	_, err := NewFiatRates(d, &config, nil, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	complete, found, err := d.FiatRatesGetHistoricalBootstrapComplete()
+	if err != nil {
+		t.Fatalf("FiatRatesGetHistoricalBootstrapComplete failed: %v", err)
+	}
+	if !found || complete {
+		t.Fatalf("unexpected bootstrap state after init: found=%v complete=%v", found, complete)
+	}
+}
+
+func TestNewFiatRates_AllowsNoKeyOrURLWhenHistoricalFiatAlreadyExists(t *testing.T) {
+	config := common.Config{
+		CoinName:        "fakecoin",
+		FiatRates:       "coingecko",
+		FiatRatesParams: `{"coin":"ethereum","periodSeconds":60}`,
+	}
+	d, is, tmp := setupRocksDB(t, &testBitcoinParser{
+		BitcoinParser: bitcoinTestnetParser(),
+	}, &config)
+	defer closeAndDestroyRocksDB(t, d, tmp)
+
+	// Seed any historical fiat ticker so the instance is no longer bootstrap-empty.
+	wb := grocksdb.NewWriteBatch()
+	defer wb.Destroy()
+	seedTicker := &common.CurrencyRatesTicker{
+		Timestamp: time.Unix(1700000000, 0).UTC(),
+		Rates: map[string]float32{
+			"usd": 1,
+		},
+	}
+	if err := d.FiatRatesStoreTicker(wb, seedTicker); err != nil {
+		t.Fatalf("FiatRatesStoreTicker failed: %v", err)
+	}
+	if err := d.WriteBatch(wb); err != nil {
+		t.Fatalf("WriteBatch failed: %v", err)
+	}
+
+	envNames := append([]string{coingeckoAPIKeyEnv}, coinGeckoScopedAPIKeyEnvNames(is.GetNetwork(), is.CoinShortcut)...)
+	originalEnv := make(map[string]*string, len(envNames))
+	for _, envName := range envNames {
+		if v, ok := os.LookupEnv(envName); ok {
+			value := v
+			originalEnv[envName] = &value
+		} else {
+			originalEnv[envName] = nil
+		}
+		_ = os.Unsetenv(envName)
+	}
+	defer func() {
+		for _, envName := range envNames {
+			if v := originalEnv[envName]; v == nil {
+				_ = os.Unsetenv(envName)
+			} else {
+				_ = os.Setenv(envName, *v)
+			}
+		}
+	}()
+
+	_, err := NewFiatRates(d, &config, nil, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	complete, found, err := d.FiatRatesGetHistoricalBootstrapComplete()
+	if err != nil {
+		t.Fatalf("FiatRatesGetHistoricalBootstrapComplete failed: %v", err)
+	}
+	if !found || !complete {
+		t.Fatalf("unexpected bootstrap state after successful init: found=%v complete=%v", found, complete)
+	}
+}
+
+func TestNewFiatRates_AllowsBootstrapStateInProgressWithoutURLOrAPIKey(t *testing.T) {
+	config := common.Config{
+		CoinName:        "fakecoin",
+		FiatRates:       "coingecko",
+		FiatRatesParams: `{"coin":"ethereum","periodSeconds":60}`,
+	}
+	d, is, tmp := setupRocksDB(t, &testBitcoinParser{
+		BitcoinParser: bitcoinTestnetParser(),
+	}, &config)
+	defer closeAndDestroyRocksDB(t, d, tmp)
+
+	// Simulate interrupted bootstrap with partially populated DB.
+	wb := grocksdb.NewWriteBatch()
+	defer wb.Destroy()
+	seedTicker := &common.CurrencyRatesTicker{
+		Timestamp: time.Unix(1700000000, 0).UTC(),
+		Rates: map[string]float32{
+			"usd": 1,
+		},
+	}
+	if err := d.FiatRatesStoreTicker(wb, seedTicker); err != nil {
+		t.Fatalf("FiatRatesStoreTicker failed: %v", err)
+	}
+	if err := d.WriteBatch(wb); err != nil {
+		t.Fatalf("WriteBatch failed: %v", err)
+	}
+	if err := d.FiatRatesSetHistoricalBootstrapComplete(false); err != nil {
+		t.Fatalf("FiatRatesSetHistoricalBootstrapComplete failed: %v", err)
+	}
+
+	envNames := append([]string{coingeckoAPIKeyEnv}, coinGeckoScopedAPIKeyEnvNames(is.GetNetwork(), is.CoinShortcut)...)
+	originalEnv := make(map[string]*string, len(envNames))
+	for _, envName := range envNames {
+		if v, ok := os.LookupEnv(envName); ok {
+			value := v
+			originalEnv[envName] = &value
+		} else {
+			originalEnv[envName] = nil
+		}
+		_ = os.Unsetenv(envName)
+	}
+	defer func() {
+		for _, envName := range envNames {
+			if v := originalEnv[envName]; v == nil {
+				_ = os.Unsetenv(envName)
+			} else {
+				_ = os.Setenv(envName, *v)
+			}
+		}
+	}()
+
+	_, err := NewFiatRates(d, &config, nil, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	complete, found, err := d.FiatRatesGetHistoricalBootstrapComplete()
+	if err != nil {
+		t.Fatalf("FiatRatesGetHistoricalBootstrapComplete failed: %v", err)
+	}
+	if !found || complete {
+		t.Fatalf("unexpected bootstrap state after init: found=%v complete=%v", found, complete)
+	}
+}
+
+func TestRegisterHistoricalBootstrapAttemptFailure_MarksBootstrapCompleteAfterThreeFailures(t *testing.T) {
+	config := common.Config{
+		CoinName: "fakecoin",
+	}
+	d, _, tmp := setupRocksDB(t, &testBitcoinParser{
+		BitcoinParser: bitcoinTestnetParser(),
+	}, &config)
+	defer closeAndDestroyRocksDB(t, d, tmp)
+
+	if err := d.FiatRatesSetHistoricalBootstrapComplete(false); err != nil {
+		t.Fatalf("FiatRatesSetHistoricalBootstrapComplete failed: %v", err)
+	}
+
+	for i := 1; i < maxHistoricalBootstrapAttempts; i++ {
+		attempts, exhausted, err := registerHistoricalBootstrapAttemptFailure(d)
+		if err != nil {
+			t.Fatalf("registerHistoricalBootstrapAttemptFailure failed: %v", err)
+		}
+		if exhausted {
+			t.Fatalf("attempt %d unexpectedly exhausted", i)
+		}
+		if attempts != i {
+			t.Fatalf("unexpected attempts value: got %d, want %d", attempts, i)
+		}
+		complete, found, err := d.FiatRatesGetHistoricalBootstrapComplete()
+		if err != nil {
+			t.Fatalf("FiatRatesGetHistoricalBootstrapComplete failed: %v", err)
+		}
+		if !found || complete {
+			t.Fatalf("bootstrap state should remain incomplete before limit: found=%v complete=%v", found, complete)
+		}
+	}
+
+	attempts, exhausted, err := registerHistoricalBootstrapAttemptFailure(d)
+	if err != nil {
+		t.Fatalf("registerHistoricalBootstrapAttemptFailure failed on limit: %v", err)
+	}
+	if !exhausted {
+		t.Fatalf("expected exhausted=true on attempt limit")
+	}
+	if attempts != maxHistoricalBootstrapAttempts {
+		t.Fatalf("unexpected attempts value on limit: got %d, want %d", attempts, maxHistoricalBootstrapAttempts)
+	}
+
+	complete, found, err := d.FiatRatesGetHistoricalBootstrapComplete()
+	if err != nil {
+		t.Fatalf("FiatRatesGetHistoricalBootstrapComplete failed: %v", err)
+	}
+	if !found || !complete {
+		t.Fatalf("bootstrap should be marked complete after attempt limit: found=%v complete=%v", found, complete)
+	}
+
+	storedAttempts, found, err := d.FiatRatesGetHistoricalBootstrapAttempts()
+	if err != nil {
+		t.Fatalf("FiatRatesGetHistoricalBootstrapAttempts failed: %v", err)
+	}
+	if !found || storedAttempts != 0 {
+		t.Fatalf("bootstrap attempts should be reset after exhaustion: found=%v attempts=%d", found, storedAttempts)
+	}
+}
+
+func TestResetHistoricalBootstrapAttempts(t *testing.T) {
+	config := common.Config{
+		CoinName: "fakecoin",
+	}
+	d, _, tmp := setupRocksDB(t, &testBitcoinParser{
+		BitcoinParser: bitcoinTestnetParser(),
+	}, &config)
+	defer closeAndDestroyRocksDB(t, d, tmp)
+
+	if err := d.FiatRatesSetHistoricalBootstrapAttempts(2); err != nil {
+		t.Fatalf("FiatRatesSetHistoricalBootstrapAttempts failed: %v", err)
+	}
+	if err := resetHistoricalBootstrapAttempts(d); err != nil {
+		t.Fatalf("resetHistoricalBootstrapAttempts failed: %v", err)
+	}
+	attempts, found, err := d.FiatRatesGetHistoricalBootstrapAttempts()
+	if err != nil {
+		t.Fatalf("FiatRatesGetHistoricalBootstrapAttempts failed: %v", err)
+	}
+	if !found || attempts != 0 {
+		t.Fatalf("unexpected attempts after reset: found=%v attempts=%d", found, attempts)
 	}
 }

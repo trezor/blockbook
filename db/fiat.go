@@ -17,6 +17,9 @@ import (
 // FiatRatesTimeFormat is a format string for storing FiatRates timestamps in rocksdb
 const FiatRatesTimeFormat = "20060102150405" // YYYYMMDDhhmmss
 
+const historicalFiatBootstrapStateKey = "HistoricalFiatBootstrapComplete"
+const historicalFiatBootstrapAttemptsKey = "HistoricalFiatBootstrapAttempts"
+
 func packTimestamp(t *time.Time) []byte {
 	return []byte(t.UTC().Format(FiatRatesTimeFormat))
 }
@@ -272,4 +275,58 @@ func (d *RocksDB) FiatRatesStoreSpecialTickers(key string, tickers *[]common.Cur
 		return err
 	}
 	return d.db.PutCF(d.wo, d.cfh[cfDefault], []byte(key), data)
+}
+
+// FiatRatesGetHistoricalBootstrapComplete gets persisted historical bootstrap completion state.
+// found=false means no state was stored yet (legacy deployments or pre-bootstrap).
+func (d *RocksDB) FiatRatesGetHistoricalBootstrapComplete() (complete bool, found bool, err error) {
+	val, err := d.db.GetCF(d.ro, d.cfh[cfDefault], []byte(historicalFiatBootstrapStateKey))
+	if err != nil {
+		return false, false, err
+	}
+	defer val.Free()
+	data := val.Data()
+	if data == nil {
+		return false, false, nil
+	}
+	if err := json.Unmarshal(data, &complete); err != nil {
+		return false, false, err
+	}
+	return complete, true, nil
+}
+
+// FiatRatesSetHistoricalBootstrapComplete stores historical bootstrap completion state.
+func (d *RocksDB) FiatRatesSetHistoricalBootstrapComplete(complete bool) error {
+	data, err := json.Marshal(complete)
+	if err != nil {
+		return err
+	}
+	return d.db.PutCF(d.wo, d.cfh[cfDefault], []byte(historicalFiatBootstrapStateKey), data)
+}
+
+// FiatRatesGetHistoricalBootstrapAttempts gets persisted number of failed bootstrap attempts.
+// found=false means no attempt counter was stored yet.
+func (d *RocksDB) FiatRatesGetHistoricalBootstrapAttempts() (attempts int, found bool, err error) {
+	val, err := d.db.GetCF(d.ro, d.cfh[cfDefault], []byte(historicalFiatBootstrapAttemptsKey))
+	if err != nil {
+		return 0, false, err
+	}
+	defer val.Free()
+	data := val.Data()
+	if data == nil {
+		return 0, false, nil
+	}
+	if err := json.Unmarshal(data, &attempts); err != nil {
+		return 0, false, err
+	}
+	return attempts, true, nil
+}
+
+// FiatRatesSetHistoricalBootstrapAttempts stores number of failed bootstrap attempts.
+func (d *RocksDB) FiatRatesSetHistoricalBootstrapAttempts(attempts int) error {
+	data, err := json.Marshal(attempts)
+	if err != nil {
+		return err
+	}
+	return d.db.PutCF(d.wo, d.cfh[cfDefault], []byte(historicalFiatBootstrapAttemptsKey), data)
 }
