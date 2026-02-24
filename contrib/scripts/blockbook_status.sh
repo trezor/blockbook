@@ -10,10 +10,20 @@ else
   host="localhost"
 fi
 
-var="B_PORT_PUBLIC_${coin}"
-port="${!var-}"
-[[ -n "$port" ]] || die "environment variable ${var} is not set"
+var="BB_API_URL_HTTP_${coin}"
+base_url="${!var-}"
+[[ -n "$base_url" ]] || die "environment variable ${var} is not set"
 command -v curl >/dev/null 2>&1 || die "curl is not installed"
 command -v jq >/dev/null 2>&1 || die "jq is not installed"
 
-curl -skv "https://${host}:${port}/api/status" | jq
+# Preserve legacy host override argument by replacing host in the configured base URL.
+if [[ -n "${2-}" ]]; then
+  if [[ "$base_url" =~ ^(https?://)([^/@]+@)?([^/:]+)(:[0-9]+)?(.*)$ ]]; then
+    base_url="${BASH_REMATCH[1]}${BASH_REMATCH[2]}${host}${BASH_REMATCH[4]}${BASH_REMATCH[5]}"
+  else
+    die "invalid URL in ${var}: ${base_url}"
+  fi
+fi
+
+status_url="${base_url%/}/api/status"
+curl -skv "$status_url" | jq

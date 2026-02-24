@@ -83,6 +83,22 @@ Example:
 HTTP connectivity for UTXO chains calls `getblockchaininfo`. For EVM chains it calls `web3_clientVersion`. WebSocket
 connectivity validates `web3_clientVersion` and opens a `newHeads` subscription.
 
+### Blockbook API end-to-end tests
+
+Public Blockbook API checks are implemented in package `blockbook/tests/api` and configured per coin by the `api` list
+in *blockbook/tests/tests.json*.
+
+Phase 1 covers smoke checks for:
+
+* HTTP: `Status`, `GetBlockIndex`, `GetBlockByHeight`, `GetBlock`, `GetTransaction`, `GetTransactionSpecific`, `GetAddress`, `GetAddressTxids`, `GetAddressTxs`, `GetUtxo`, `GetUtxoConfirmedFilter`
+* WebSocket: `WsGetInfo`, `WsGetBlockHash`, `WsGetTransaction`, `WsGetAccountInfo`, `WsGetAccountUtxo`, `WsPing`
+
+Endpoint resolution uses coin alias and this precedence:
+
+1. `BB_API_URL_HTTP_<coin alias>` and `BB_API_URL_WS_<coin alias>`
+2. localhost fallback from coin config port `ports.blockbook_public`
+3. when WS env var is missing, WS URL is derived from HTTP URL with `/websocket` path
+
 ### Synchronization integration tests
 
 Synchronization is crucial part of Blockbook and these tests test whether it is doing well. They sync few blocks from
