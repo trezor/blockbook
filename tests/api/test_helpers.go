@@ -207,6 +207,45 @@ func assertEVMTokenListContractsMatch(t *testing.T, tokens []evmTokenResponse, c
 	}
 }
 
+func assertEVMTokenBalancesHaveHoldingsFields(t *testing.T, payload *evmAddressTokenBalanceResponse, address, context string) {
+	t.Helper()
+	assertAddressMatches(t, payload.Address, address, context+".address")
+	assertNonEmptyString(t, payload.Balance, context+".balance")
+
+	for i := range payload.Tokens {
+		token := payload.Tokens[i]
+		tokenContext := fmt.Sprintf("%s.tokens[%d]", context, i)
+		assertNonEmptyString(t, token.Type, tokenContext+".type")
+
+		hasHoldings := false
+		balance := strings.TrimSpace(token.Balance)
+		if balance != "" {
+			hasHoldings = true
+		}
+
+		if len(token.IDs) > 0 {
+			for j := range token.IDs {
+				assertNonEmptyString(t, token.IDs[j], tokenContext+".ids")
+			}
+			hasHoldings = true
+		}
+
+		if len(token.MultiTokenValues) > 0 {
+			for j := range token.MultiTokenValues {
+				mv := token.MultiTokenValues[j]
+				if strings.TrimSpace(mv.ID) == "" && strings.TrimSpace(mv.Value) == "" {
+					t.Fatalf("%s.multiTokenValues entry has both empty id and value", tokenContext)
+				}
+			}
+			hasHoldings = true
+		}
+
+		if !hasHoldings {
+			t.Fatalf("%s has no holdings fields (balance, ids, multiTokenValues)", tokenContext)
+		}
+	}
+}
+
 func txIDsFromTransactions(t *testing.T, txs []txDetailResponse, context string) []string {
 	t.Helper()
 	txids := make([]string, 0, len(txs))

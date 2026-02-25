@@ -114,6 +114,7 @@ func testGetAddressTokenBalances(t *testing.T, h *TestHandler) {
 	h.mustGetJSON(t, path, &resp)
 
 	assertEVMTokenBalancesPayload(t, &resp, address, "GetAddressTokenBalances")
+	assertEVMTokenBalancesHaveHoldingsFields(t, &resp, address, "GetAddressTokenBalances")
 }
 
 func testGetAddressContractFilterEVM(t *testing.T, h *TestHandler) {
@@ -125,6 +126,7 @@ func testGetAddressContractFilterEVM(t *testing.T, h *TestHandler) {
 	h.mustGetJSON(t, path, &resp)
 
 	assertEVMTokenBalancesPayload(t, &resp, address, "GetAddressContractFilterEVM")
+	assertEVMTokenBalancesHaveHoldingsFields(t, &resp, address, "GetAddressContractFilterEVM")
 	assertEVMTokenListContractsMatch(t, resp.Tokens, contract, "GetAddressContractFilterEVM")
 }
 
@@ -184,6 +186,7 @@ func testWsGetAccountInfoEVM(t *testing.T, h *TestHandler) {
 	}
 
 	assertEVMTokenBalancesPayload(t, &info, address, "WsGetAccountInfoEVM")
+	assertEVMTokenBalancesHaveHoldingsFields(t, &info, address, "WsGetAccountInfoEVM")
 }
 
 func testWsGetAccountInfoTxidsConsistencyEVM(t *testing.T, h *TestHandler) {
@@ -280,5 +283,6 @@ func testWsGetAccountInfoContractFilterEVM(t *testing.T, h *TestHandler) {
 	}
 
 	assertEVMTokenBalancesPayload(t, &info, address, "WsGetAccountInfoContractFilterEVM")
+	assertEVMTokenBalancesHaveHoldingsFields(t, &info, address, "WsGetAccountInfoContractFilterEVM")
 	assertEVMTokenListContractsMatch(t, info.Tokens, contract, "WsGetAccountInfoContractFilterEVM")
 }
