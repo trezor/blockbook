@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -48,7 +49,7 @@ func (h *TestHandler) findTransactionNearHeight(t *testing.T, fromHeight, window
 		if !ok {
 			continue
 		}
-		blk, ok := h.getBlockByHash(t, hash, false)
+		blk, ok := h.getBlockByHashForSampling(t, hash, false)
 		if !ok {
 			continue
 		}
@@ -96,26 +97,126 @@ func (h *TestHandler) getSampleAddress(t *testing.T) (string, bool) {
 		return "", false
 	}
 
-	h.sampleAddress = firstAddressFromTx(tx)
+	if isEVMTxID(txid) {
+		h.sampleAddress = firstAddressFromTxPreferVin(tx)
+	} else {
+		h.sampleAddress = firstAddressFromTx(tx)
+	}
 	return h.sampleAddress, h.sampleAddress != ""
+}
+
+func (h *TestHandler) getSampleIndexedBlock(t *testing.T) (height int, hash string, found bool) {
+	if h.sampleBlockResolved {
+		return h.sampleBlockHeight, h.sampleBlockHash, h.sampleBlockHash != ""
+	}
+
+	status := h.getStatus(t)
+	start := status.BestHeight
+	if start > 2 {
+		start -= 2
+	}
+	lower := start - txSearchWindow
+	if lower < 1 {
+		lower = 1
+	}
+
+	h.sampleBlockResolved = true
+	for height = start; height >= lower; height-- {
+		hash, ok := h.getBlockHashForHeight(t, height, false)
+		if !ok || strings.TrimSpace(hash) == "" {
+			continue
+		}
+		// Some backends can briefly expose block-index without serving the block body yet.
+		path := fmt.Sprintf("/api/v2/block/%d?page=1&pageSize=%d", height, blockPageSize)
+		statusCode, _ := h.getHTTP(t, path)
+		if statusCode != http.StatusOK {
+			continue
+		}
+		h.sampleBlockHeight = height
+		h.sampleBlockHash = hash
+		return height, hash, true
+	}
+	return 0, "", false
+}
+
+func (h *TestHandler) getSampleIndexedHeight(t *testing.T) (height int, hash string, found bool) {
+	if h.sampleIndexResolved {
+		return h.sampleIndexHeight, h.sampleIndexHash, h.sampleIndexHash != ""
+	}
+	// If block-ready sample is already known, reuse it.
+	if h.sampleBlockResolved && h.sampleBlockHash != "" {
+		return h.sampleBlockHeight, h.sampleBlockHash, true
+	}
+
+	status := h.getStatus(t)
+	start := status.BestHeight
+	if start > 2 {
+		start -= 2
+	}
+	lower := start - txSearchWindow
+	if lower < 1 {
+		lower = 1
+	}
+
+	h.sampleIndexResolved = true
+	for height = start; height >= lower; height-- {
+		hash, ok := h.getBlockHashForHeight(t, height, false)
+		if !ok || strings.TrimSpace(hash) == "" {
+			continue
+		}
+		h.sampleIndexHeight = height
+		h.sampleIndexHash = hash
+		return height, hash, true
+	}
+	return 0, "", false
 }
 
 func firstAddressFromTx(tx *txDetailResponse) string {
 	for i := range tx.Vout {
 		for _, addr := range tx.Vout[i].Addresses {
-			if strings.TrimSpace(addr) != "" {
+			if isAddressCandidate(addr) {
 				return addr
 			}
 		}
 	}
 	for i := range tx.Vin {
 		for _, addr := range tx.Vin[i].Addresses {
-			if strings.TrimSpace(addr) != "" {
+			if isAddressCandidate(addr) {
 				return addr
 			}
 		}
 	}
 	return ""
+}
+
+func firstAddressFromTxPreferVin(tx *txDetailResponse) string {
+	for i := range tx.Vin {
+		for _, addr := range tx.Vin[i].Addresses {
+			if isAddressCandidate(addr) {
+				return addr
+			}
+		}
+	}
+	for i := range tx.Vout {
+		for _, addr := range tx.Vout[i].Addresses {
+			if isAddressCandidate(addr) {
+				return addr
+			}
+		}
+	}
+	return ""
+}
+
+func isAddressCandidate(addr string) bool {
+	addr = strings.TrimSpace(addr)
+	if addr == "" {
+		return false
+	}
+	upper := strings.ToUpper(addr)
+	if strings.HasPrefix(upper, "OP_RETURN") {
+		return false
+	}
+	return !strings.ContainsAny(addr, " \t\r\n")
 }
 
 func (h *TestHandler) getTransactionByID(t *testing.T, txid string, strict bool) (*txDetailResponse, bool) {
@@ -220,20 +321,63 @@ func (h *TestHandler) getBlockByHash(t *testing.T, hash string, strict bool) (*b
 	return blk, true
 }
 
+func (h *TestHandler) getBlockByHashForSampling(t *testing.T, hash string, strict bool) (*blockSummary, bool) {
+	if blk, found := h.blockByHash[hash]; found && len(blk.TxIDs) >= sampleBlockPageSize {
+		return blk, true
+	}
+
+	path := fmt.Sprintf("/api/v2/block/%s?page=1&pageSize=%d", url.PathEscape(hash), sampleBlockPageSize)
+	status, body := h.getHTTP(t, path)
+	if status != http.StatusOK {
+		if strict {
+			t.Fatalf("GET %s returned HTTP %d: %s", path, status, preview(body))
+		}
+		return nil, false
+	}
+
+	var res blockResponse
+	if err := json.Unmarshal(body, &res); err != nil {
+		t.Fatalf("decode block response for %s: %v", hash, err)
+	}
+
+	blk := &blockSummary{
+		Hash:       strings.TrimSpace(res.Hash),
+		Height:     res.Height,
+		HasTxField: res.Txs != nil,
+		TxIDs:      extractTxIDs(t, res.Txs),
+	}
+	if blk.Hash == "" {
+		if strict {
+			t.Fatalf("empty hash in block response for %s", hash)
+		}
+		return nil, false
+	}
+
+	h.blockByHash[hash] = blk
+	return blk, true
+}
+
 func extractTxIDs(t *testing.T, txs []json.RawMessage) []string {
 	t.Helper()
 	if txs == nil {
 		return nil
 	}
 
-	txids := make([]string, 0, len(txs))
+	type candidate struct {
+		txid   string
+		weight int
+	}
+	candidates := make([]candidate, 0, len(txs))
 	for i := range txs {
 		raw := txs[i]
 		var asString string
 		if err := json.Unmarshal(raw, &asString); err == nil {
 			asString = strings.TrimSpace(asString)
 			if asString != "" {
-				txids = append(txids, asString)
+				candidates = append(candidates, candidate{
+					txid:   asString,
+					weight: len(raw),
+				})
 			}
 			continue
 		}
@@ -250,14 +394,207 @@ func extractTxIDs(t *testing.T, txs []json.RawMessage) []string {
 			txid = strings.TrimSpace(asObject.Hash)
 		}
 		if txid != "" {
-			txids = append(txids, txid)
+			// Smaller transaction payloads tend to produce faster /tx lookups.
+			// Keep deterministic ordering by using the raw message size as a hint.
+			candidates = append(candidates, candidate{
+				txid:   txid,
+				weight: len(raw),
+			})
 		}
 	}
 
+	sort.SliceStable(candidates, func(i, j int) bool {
+		return candidates[i].weight < candidates[j].weight
+	})
+	txids := make([]string, 0, len(candidates))
+	for i := range candidates {
+		txids = append(txids, candidates[i].txid)
+	}
 	return txids
 }
 
 func hasNonEmptyObject(raw json.RawMessage) bool {
 	v := strings.TrimSpace(string(raw))
 	return v != "" && v != "null" && v != "{}"
+}
+
+func (h *TestHandler) sampleTxIDOrSkip(t *testing.T) string {
+	t.Helper()
+	txid, found := h.getSampleTxID(t)
+	if !found {
+		t.Skipf("Skipping test, no transaction found in last %d blocks from height %d", txSearchWindow, h.getStatus(t).BestHeight)
+	}
+	return txid
+}
+
+func (h *TestHandler) sampleAddressOrSkip(t *testing.T) string {
+	t.Helper()
+	address, found := h.getSampleAddress(t)
+	if !found {
+		t.Skipf("Skipping test, no address found from recent transaction window at height %d", h.getStatus(t).BestHeight)
+	}
+	return address
+}
+
+func (h *TestHandler) requireCapabilities(t *testing.T, required testCapability, group, test string) bool {
+	t.Helper()
+	if required == capabilityNone {
+		return true
+	}
+
+	h.resolveCapabilities(t)
+	if required&capabilityUTXO != 0 && !h.supportsUTXO {
+		reason := h.utxoProbeMessage
+		if reason == "" {
+			reason = "unsupported by endpoint"
+		}
+		t.Skipf("Skipping %s (%s): UTXO capability required (%s)", test, group, reason)
+		return false
+	}
+	if required&capabilityEVM != 0 && !h.supportsEVM {
+		reason := h.evmProbeMessage
+		if reason == "" {
+			reason = "unsupported by endpoint"
+		}
+		t.Skipf("Skipping %s (%s): EVM capability required (%s)", test, group, reason)
+		return false
+	}
+	return true
+}
+
+func (h *TestHandler) resolveCapabilities(t *testing.T) {
+	t.Helper()
+	if h.capabilitiesResolved {
+		return
+	}
+	h.capabilitiesResolved = true
+	h.supportsUTXO, h.utxoProbeMessage = h.probeUTXOSupport(t)
+	h.supportsEVM, h.evmProbeMessage = h.probeEVMSupport(t)
+}
+
+func (h *TestHandler) probeUTXOSupport(t *testing.T) (bool, string) {
+	t.Helper()
+
+	txid, found := h.getSampleTxID(t)
+	if !found {
+		return false, fmt.Sprintf("no sample transaction in last %d blocks", txSearchWindow)
+	}
+	if isEVMTxID(txid) {
+		return false, "detected EVM-style transaction ids (0x prefix)"
+	}
+
+	address, found := h.getSampleAddress(t)
+	if !found {
+		return false, "no sample address available for probe"
+	}
+
+	path := "/api/v2/utxo/" + url.PathEscape(address) + "?confirmed=true"
+	status, body := h.getHTTP(t, path)
+	if status != http.StatusOK {
+		t.Fatalf("UTXO capability probe %s returned HTTP %d: %s", path, status, preview(body))
+	}
+
+	var utxos []utxoResponse
+	if err := json.Unmarshal(body, &utxos); err != nil {
+		t.Fatalf("decode UTXO capability probe %s: %v", path, err)
+	}
+
+	return true, "UTXO endpoint probe succeeded"
+}
+
+func (h *TestHandler) probeEVMSupport(t *testing.T) (bool, string) {
+	t.Helper()
+
+	txid, found := h.getSampleTxID(t)
+	if !found {
+		return false, fmt.Sprintf("no sample transaction in last %d blocks", txSearchWindow)
+	}
+	if !isEVMTxID(txid) {
+		return false, "detected non-EVM transaction ids (missing 0x prefix)"
+	}
+
+	address, found := h.getSampleAddress(t)
+	if !found {
+		return false, "no sample address available for probe"
+	}
+	path := buildAddressDetailsPath(address, "tokenBalances", addressPage, addressPageSize)
+	status, body := h.getHTTP(t, path)
+	if status != http.StatusOK {
+		t.Fatalf("EVM capability probe %s returned HTTP %d: %s", path, status, preview(body))
+	}
+
+	var resp evmAddressTokenBalanceResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		t.Fatalf("decode EVM capability probe %s: %v", path, err)
+	}
+	assertAddressMatches(t, resp.Address, address, "EVM capability probe address")
+	return true, "EVM tokenBalances endpoint probe succeeded"
+}
+
+func isEVMTxID(txid string) bool {
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(txid)), "0x")
+}
+
+func isEVMAddress(address string) bool {
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(address)), "0x")
+}
+
+func (h *TestHandler) sampleEVMTxIDOrSkip(t *testing.T) string {
+	t.Helper()
+	txid := h.sampleTxIDOrSkip(t)
+	if !isEVMTxID(txid) {
+		t.Skipf("Skipping test, sample txid %s does not look EVM-like", txid)
+	}
+	return txid
+}
+
+func (h *TestHandler) sampleEVMAddressOrSkip(t *testing.T) string {
+	t.Helper()
+	address := h.sampleAddressOrSkip(t)
+	if !isEVMAddress(address) {
+		t.Skipf("Skipping test, sample address %s does not look EVM-like", address)
+	}
+	return address
+}
+
+func (h *TestHandler) getSampleEVMContract(t *testing.T) (string, bool) {
+	if h.sampleContractResolved {
+		return h.sampleContract, h.sampleContract != ""
+	}
+
+	address, found := h.getSampleAddress(t)
+	h.sampleContractResolved = true
+	if !found || !isEVMAddress(address) {
+		return "", false
+	}
+
+	path := buildAddressDetailsPath(address, "tokenBalances", addressPage, addressPageSize)
+	status, body := h.getHTTP(t, path)
+	if status != http.StatusOK {
+		t.Fatalf("GET %s returned HTTP %d: %s", path, status, preview(body))
+	}
+
+	var resp evmAddressTokenBalanceResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		t.Fatalf("decode tokenBalances for sample contract: %v", err)
+	}
+	assertAddressMatches(t, resp.Address, address, "sample EVM contract probe address")
+
+	for i := range resp.Tokens {
+		contract := strings.TrimSpace(resp.Tokens[i].Contract)
+		if contract != "" {
+			h.sampleContract = contract
+			break
+		}
+	}
+	return h.sampleContract, h.sampleContract != ""
+}
+
+func (h *TestHandler) sampleEVMContractOrSkip(t *testing.T) string {
+	t.Helper()
+	contract, found := h.getSampleEVMContract(t)
+	if !found {
+		t.Skipf("Skipping test, no contract found for sampled EVM address %s", h.sampleAddress)
+	}
+	return contract
 }
