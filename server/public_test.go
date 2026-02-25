@@ -1061,6 +1061,30 @@ func socketioTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			want: `{"result":["7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25"]}`,
 		},
 		{
+			name: "socketio getAddressTxids invalid start",
+			req: socketioReq{"getAddressTxids", []interface{}{
+				[]string{"mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz"},
+				map[string]interface{}{
+					"start":        -1,
+					"end":          0,
+					"queryMempool": false,
+				},
+			}},
+			want: `{"error":{"message":"Invalid parameter start"}}`,
+		},
+		{
+			name: "socketio getAddressTxids invalid end",
+			req: socketioReq{"getAddressTxids", []interface{}{
+				[]string{"mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz"},
+				map[string]interface{}{
+					"start":        2000000,
+					"end":          -1,
+					"queryMempool": false,
+				},
+			}},
+			want: `{"error":{"message":"Invalid parameter end"}}`,
+		},
+		{
 			name: "socketio getAddressHistory",
 			req: socketioReq{"getAddressHistory", []interface{}{
 				[]string{"mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz"},
@@ -1073,6 +1097,48 @@ func socketioTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 				},
 			}},
 			want: `{"result":{"totalCount":2,"items":[{"addresses":{"mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz":{"inputIndexes":[1],"outputIndexes":[]}},"satoshis":-12345,"confirmations":1,"tx":{"hex":"","height":225494,"blockTimestamp":1521595678,"version":0,"hash":"7c3be24063f268aaa1ed81b64776798f56088757641a34fb156c4f51ed2e9d25","inputs":[{"txid":"effd9ef509383d536b1c8af5bf434c8efbf521a4f2befd4022bbd68694b4ac75","outputIndex":0,"script":"","sequence":0,"address":"mv9uLThosiEnGRbVPS7Vhyw6VssbVRsiAw","satoshis":1234567890123},{"txid":"00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840","outputIndex":1,"script":"","sequence":0,"address":"mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz","satoshis":12345}],"inputSatoshis":1234567902468,"outputs":[{"satoshis":317283951061,"script":"76a914ccaaaf374e1b06cb83118453d102587b4273d09588ac","address":"mzB8cYrfRwFRFAGTDzV8LkUQy5BQicxGhX"},{"satoshis":917283951061,"script":"76a9148d802c045445df49613f6a70ddd2e48526f3701f88ac","address":"mtR97eM2HPWVM6c8FGLGcukgaHHQv7THoL"},{"satoshis":0,"script":"6a072020f1686f6a20","address":"OP_RETURN 2020f1686f6a20"}],"outputSatoshis":1234567902122,"feeSatoshis":346}},{"addresses":{"mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz":{"inputIndexes":[],"outputIndexes":[1,2]}},"satoshis":24690,"confirmations":2,"tx":{"hex":"","height":225493,"blockTimestamp":1521515026,"version":0,"hash":"00b2c06055e5e90e9c82bd4181fde310104391a7fa4f289b1704e5d90caa3840","inputs":[],"outputs":[{"satoshis":100000000,"script":"76a914010d39800f86122416e28f485029acf77507169288ac","address":"mfcWp7DB6NuaZsExybTTXpVgWz559Np4Ti"},{"satoshis":12345,"script":"76a9148bdf0aa3c567aa5975c2e61321b8bebbe7293df688ac","address":"mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz"},{"satoshis":12345,"script":"76a9148bdf0aa3c567aa5975c2e61321b8bebbe7293df688ac","address":"mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz"}],"outputSatoshis":100024690}}]}}`,
+		},
+		{
+			name: "socketio getAddressHistory invalid from",
+			req: socketioReq{"getAddressHistory", []interface{}{
+				[]string{"mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz"},
+				map[string]interface{}{
+					"start":        2000000,
+					"end":          0,
+					"queryMempool": false,
+					"from":         -1,
+					"to":           5,
+				},
+			}},
+			want: `{"error":{"message":"Invalid parameter from"}}`,
+		},
+		{
+			name: "socketio getAddressHistory invalid to",
+			req: socketioReq{"getAddressHistory", []interface{}{
+				[]string{"mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz"},
+				map[string]interface{}{
+					"start":        2000000,
+					"end":          0,
+					"queryMempool": false,
+					"from":         0,
+					"to":           -1,
+				},
+			}},
+			want: `{"error":{"message":"Invalid parameter to"}}`,
+		},
+		{
+			name: "socketio getAddressHistory invalid start",
+			req: socketioReq{"getAddressHistory", []interface{}{
+				[]string{"mtGXQvBowMkBpnhLckhxhbwYK44Gs9eEtz"},
+				map[string]interface{}{
+					"start":        -1,
+					"end":          0,
+					"queryMempool": false,
+					"from":         0,
+					"to":           5,
+				},
+			}},
+			want: `{"error":{"message":"Invalid parameter start"}}`,
 		},
 		{
 			name: "socketio getBlockHeader",
