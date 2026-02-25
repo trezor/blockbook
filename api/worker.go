@@ -1041,6 +1041,19 @@ func (w *Worker) getEthereumContractBalance(addrDesc bchain.AddressDescriptor, i
 	return &t, nil
 }
 
+func hasEthereumTokenHoldingsField(t *Token) bool {
+	if t == nil {
+		return false
+	}
+	if t.BalanceSat != nil {
+		return true
+	}
+	if len(t.Ids) > 0 {
+		return true
+	}
+	return len(t.MultiTokenValues) > 0
+}
+
 // a fallback method in case internal transactions are not processed and there is no indexed info about contract balance for an address
 func (w *Worker) getEthereumContractBalanceFromBlockchain(addrDesc, contract bchain.AddressDescriptor, details AccountDetails) (*Token, error) {
 	var b *big.Int
@@ -1204,6 +1217,11 @@ func (w *Worker) getEthereumTypeAddressBalances(addrDesc bchain.AddressDescripto
 				t, err := w.getEthereumContractBalance(addrDesc, i+db.ContractIndexOffset, c, details, ticker, secondaryCoin, erc20Balance)
 				if err != nil {
 					return nil, nil, err
+				}
+				// tokenBalances responses should not contain metadata-only tokens
+				// without any holdings field.
+				if details >= AccountDetailsTokenBalances && !hasEthereumTokenHoldingsField(t) {
+					continue
 				}
 				d.tokens[j] = *t
 				d.tokensBaseValue += t.BaseValue
