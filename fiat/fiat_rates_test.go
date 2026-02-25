@@ -41,7 +41,12 @@ func setupRocksDB(t *testing.T, parser bchain.BlockChainParser, config *common.C
 	if err != nil {
 		t.Fatal(err)
 	}
-	is, err := d.LoadInternalState(config)
+	// Force synchronous block-times initialization in tests.
+	// For non-"coin-unittest" names, LoadInternalState starts a background
+	// goroutine that can race with test DB teardown.
+	loadConfig := *config
+	loadConfig.CoinName = "coin-unittest"
+	is, err := d.LoadInternalState(&loadConfig)
 	if err != nil {
 		t.Fatal(err)
 	}

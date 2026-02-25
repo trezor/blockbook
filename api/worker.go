@@ -1532,6 +1532,15 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 			}
 		}
 	}
+	// On page 1, mempool items are prepended before confirmed history.
+	// Keep response bounded by requested page size for txid/txs details.
+	if page == 0 && txsOnPage > 0 {
+		if option == AccountDetailsTxidHistory && len(txids) > txsOnPage {
+			txids = txids[:txsOnPage]
+		} else if option >= AccountDetailsTxHistoryLight && len(txs) > txsOnPage {
+			txs = txs[:txsOnPage]
+		}
+	}
 	if w.chainType == bchain.ChainBitcoinType {
 		totalReceived = ba.ReceivedSat()
 		totalSent = &ba.SentSat
@@ -1827,7 +1836,8 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *db.AddrB
 	w.waitForBackendSync()
 	var err error
 	utxos := make(Utxos, 0, 8)
-	// store txids from mempool so that they are not added twice in case of import of new block while processing utxos, issue #275
+	// Store mempool outpoints so they are not duplicated from index in case of
+	// import of new block while processing utxos, issue #275.
 	inMempool := make(map[string]struct{})
 	// outputs could be spent in mempool, record and check mempool spends
 	spentInMempool := make(map[string]struct{})
@@ -1850,7 +1860,7 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *db.AddrB
 					// get outputs spent by the mempool tx
 					for i := range bchainTx.Vin {
 						vin := &bchainTx.Vin[i]
-						spentInMempool[vin.Txid+strconv.Itoa(int(vin.Vout))] = struct{}{}
+						spentInMempool[vin.Txid+":"+strconv.Itoa(int(vin.Vout))] = struct{}{}
 					}
 				}
 			}
@@ -1861,7 +1871,7 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *db.AddrB
 						vad, err := w.chainParser.GetAddrDescFromVout(vout)
 						if err == nil && bytes.Equal(addrDesc, vad) {
 							// report only outpoints that are not spent in mempool
-							_, e := spentInMempool[bchainTx.Txid+strconv.Itoa(i)]
+							_, e := spentInMempool[bchainTx.Txid+":"+strconv.Itoa(i)]
 							if !e {
 								coinbase := false
 								if len(bchainTx.Vin) == 1 && len(bchainTx.Vin[0].Coinbase) > 0 {
@@ -1874,7 +1884,7 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *db.AddrB
 									Locktime:  bchainTx.LockTime,
 									Coinbase:  coinbase,
 								})
-								inMempool[bchainTx.Txid] = struct{}{}
+								inMempool[bchainTx.Txid+":"+strconv.Itoa(i)] = struct{}{}
 							}
 						}
 					}
@@ -1906,7 +1916,7 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *db.AddrB
 				if err != nil {
 					return nil, err
 				}
-				_, e := spentInMempool[txid+strconv.Itoa(int(utxo.Vout))]
+				_, e := spentInMempool[txid+":"+strconv.Itoa(int(utxo.Vout))]
 				if !e {
 					confirmations := bestheight - int(utxo.Height) + 1
 					coinbase := false
@@ -1920,7 +1930,7 @@ func (w *Worker) getAddrDescUtxo(addrDesc bchain.AddressDescriptor, ba *db.AddrB
 							coinbase = true
 						}
 					}
-					_, e = inMempool[txid]
+					_, e = inMempool[txid+":"+strconv.Itoa(int(utxo.Vout))]
 					if !e {
 						utxos = append(utxos, Utxo{
 							Txid:          txid,

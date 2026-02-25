@@ -83,6 +83,7 @@ type RocksDB struct {
 	// addrContractsCacheBytes tracks cached size based on the packed size at insertion time.
 	addrContractsCacheBytes int64
 	hotAddrTracker          *addressHotness
+	setBlockTimesWG         sync.WaitGroup
 }
 
 const (
@@ -199,6 +200,7 @@ func NewRocksDB(path string, cacheSize, maxOpenFiles int, parser bchain.BlockCha
 }
 
 func (d *RocksDB) closeDB() error {
+	d.setBlockTimesWG.Wait()
 	for _, h := range d.cfh {
 		h.Destroy()
 	}
@@ -2127,7 +2129,11 @@ func (d *RocksDB) LoadInternalState(config *common.Config) (*common.InternalStat
 	if is.Coin == "coin-unittest" {
 		d.setBlockTimes()
 	} else {
-		go d.setBlockTimes()
+		d.setBlockTimesWG.Add(1)
+		go func() {
+			defer d.setBlockTimesWG.Done()
+			d.setBlockTimes()
+		}()
 	}
 	// after load, reset the synchronization data
 	is.IsSynchronized = false
