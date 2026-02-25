@@ -58,21 +58,15 @@ func testWsGetAccountInfo(t *testing.T, h *TestHandler) {
 	resp := h.wsCall(t, "getAccountInfo", map[string]interface{}{
 		"descriptor": address,
 		"details":    "txids",
-		"page":       1,
-		"pageSize":   10,
+		"page":       addressPage,
+		"pageSize":   addressPageSize,
 	})
 
 	var info addressTxidsResponse
 	if err := json.Unmarshal(resp.Data, &info); err != nil {
 		t.Fatalf("decode websocket getAccountInfo response: %v", err)
 	}
-	assertAddressMatches(t, info.Address, address, "WsGetAccountInfo.address")
-	if len(info.Txids) == 0 {
-		t.Fatalf("WsGetAccountInfo returned no txids for %s", address)
-	}
-	if !containsTxID(info.Txids, txid) {
-		t.Fatalf("WsGetAccountInfo does not include sample transaction %s for %s", txid, address)
-	}
+	assertAddressTxidsPayload(t, &info, address, txid, "WsGetAccountInfo")
 }
 
 func testWsGetAccountUtxo(t *testing.T, h *TestHandler) {
@@ -86,13 +80,7 @@ func testWsGetAccountUtxo(t *testing.T, h *TestHandler) {
 	if err := json.Unmarshal(resp.Data, &utxos); err != nil {
 		t.Fatalf("decode websocket getAccountUtxo response: %v", err)
 	}
-	for i := range utxos {
-		assertNonEmptyString(t, utxos[i].Txid, "WsGetAccountUtxo entry txid")
-		assertNonEmptyString(t, utxos[i].Value, "WsGetAccountUtxo entry value")
-		if utxos[i].Confirmations < 0 {
-			t.Fatalf("WsGetAccountUtxo has negative confirmations for %s", utxos[i].Txid)
-		}
-	}
+	assertUTXOListNonNegativeConfirmations(t, utxos, "WsGetAccountUtxo")
 }
 
 func testWsPing(t *testing.T, h *TestHandler) {

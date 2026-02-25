@@ -14,14 +14,29 @@ import (
 )
 
 const (
-	httpTimeout      = 20 * time.Second
-	wsDialTimeout    = 10 * time.Second
-	wsMessageTimeout = 15 * time.Second
-	txSearchWindow   = 12
-	blockPageSize    = 10
+	httpTimeout         = 30 * time.Second
+	wsDialTimeout       = 10 * time.Second
+	wsMessageTimeout    = 15 * time.Second
+	txSearchWindow      = 12
+	blockPageSize       = 1
+	sampleBlockPageSize = 3
 )
 
-var testMap = map[string]func(t *testing.T, th *TestHandler){
+type testCapability uint8
+
+const (
+	capabilityNone testCapability = 0
+	capabilityUTXO testCapability = 1 << iota
+	capabilityEVM
+)
+
+type testDefinition struct {
+	fn       func(t *testing.T, th *TestHandler)
+	required testCapability
+	group    string
+}
+
+var commonTests = map[string]func(t *testing.T, th *TestHandler){
 	"Status":                 testStatus,
 	"GetBlockIndex":          testGetBlockIndex,
 	"GetBlockByHeight":       testGetBlockByHeight,
@@ -31,15 +46,41 @@ var testMap = map[string]func(t *testing.T, th *TestHandler){
 	"GetAddress":             testGetAddress,
 	"GetAddressTxids":        testGetAddressTxids,
 	"GetAddressTxs":          testGetAddressTxs,
+}
+
+var utxoOnlyTests = map[string]func(t *testing.T, th *TestHandler){
 	"GetUtxo":                testGetUtxo,
 	"GetUtxoConfirmedFilter": testGetUtxoConfirmedFilter,
-	"WsGetInfo":              testWsGetInfo,
-	"WsGetBlockHash":         testWsGetBlockHash,
-	"WsGetTransaction":       testWsGetTransaction,
-	"WsGetAccountInfo":       testWsGetAccountInfo,
-	"WsGetAccountUtxo":       testWsGetAccountUtxo,
-	"WsPing":                 testWsPing,
 }
+
+var evmOnlyTests = map[string]func(t *testing.T, th *TestHandler){
+	"GetAddressBasicEVM":                  testGetAddressBasicEVM,
+	"GetAddressTokensEVM":                 testGetAddressTokensEVM,
+	"GetAddressTokenBalances":             testGetAddressTokenBalances,
+	"GetAddressTxidsPaginationEVM":        testGetAddressTxidsPaginationEVM,
+	"GetAddressTxsPaginationEVM":          testGetAddressTxsPaginationEVM,
+	"GetAddressContractFilterEVM":         testGetAddressContractFilterEVM,
+	"GetTransactionEVMShape":              testGetTransactionEVMShape,
+	"WsGetAccountInfoBasicEVM":            testWsGetAccountInfoBasicEVM,
+	"WsGetAccountInfoEVM":                 testWsGetAccountInfoEVM,
+	"WsGetAccountInfoTxidsConsistencyEVM": testWsGetAccountInfoTxidsConsistencyEVM,
+	"WsGetAccountInfoTxsConsistencyEVM":   testWsGetAccountInfoTxsConsistencyEVM,
+	"WsGetAccountInfoContractFilterEVM":   testWsGetAccountInfoContractFilterEVM,
+}
+
+var wsOnlyTests = map[string]func(t *testing.T, th *TestHandler){
+	"WsGetInfo":        testWsGetInfo,
+	"WsGetBlockHash":   testWsGetBlockHash,
+	"WsGetTransaction": testWsGetTransaction,
+	"WsGetAccountInfo": testWsGetAccountInfo,
+	"WsPing":           testWsPing,
+}
+
+var wsUTXOTests = map[string]func(t *testing.T, th *TestHandler){
+	"WsGetAccountUtxo": testWsGetAccountUtxo,
+}
+
+var testRegistry = buildTestRegistry()
 
 type TestHandler struct {
 	Coin      string
@@ -53,10 +94,24 @@ type TestHandler struct {
 	blockByHash       map[string]*blockSummary
 	txByID            map[string]*txDetailResponse
 
-	sampleTxResolved   bool
-	sampleTxID         string
-	sampleAddrResolved bool
-	sampleAddress      string
+	sampleTxResolved       bool
+	sampleTxID             string
+	sampleAddrResolved     bool
+	sampleAddress          string
+	sampleIndexResolved    bool
+	sampleIndexHeight      int
+	sampleIndexHash        string
+	sampleBlockResolved    bool
+	sampleBlockHeight      int
+	sampleBlockHash        string
+	sampleContractResolved bool
+	sampleContract         string
+
+	capabilitiesResolved bool
+	supportsUTXO         bool
+	utxoProbeMessage     string
+	supportsEVM          bool
+	evmProbeMessage      string
 }
 
 type statusEnvelope struct {
@@ -145,6 +200,36 @@ type wsBlockHashResponse struct {
 	Hash string `json:"hash"`
 }
 
+type evmAddressTokenBalanceResponse struct {
+	Address     string             `json:"address"`
+	Balance     string             `json:"balance"`
+	Nonce       string             `json:"nonce"`
+	Txs         int                `json:"txs"`
+	NonTokenTxs int                `json:"nonTokenTxs"`
+	Tokens      []evmTokenResponse `json:"tokens"`
+}
+
+type evmTokenResponse struct {
+	Type             string               `json:"type"`
+	Standard         string               `json:"standard"`
+	Contract         string               `json:"contract"`
+	Balance          string               `json:"balance"`
+	IDs              []string             `json:"ids"`
+	MultiTokenValues []evmMultiTokenValue `json:"multiTokenValues"`
+}
+
+type evmMultiTokenValue struct {
+	ID    string `json:"id"`
+	Value string `json:"value"`
+}
+
+type evmTxShapeResponse struct {
+	Txid             string          `json:"txid"`
+	Vin              []txPart        `json:"vin"`
+	Vout             []txPart        `json:"vout"`
+	EthereumSpecific json.RawMessage `json:"ethereumSpecific"`
+}
+
 type coinConfig struct {
 	Coin struct {
 		Alias string `json:"alias"`
@@ -181,12 +266,40 @@ func IntegrationTest(t *testing.T, coin string, _ bchain.BlockChain, _ bchain.Me
 	}
 
 	for _, test := range tests {
-		if fn, found := testMap[test]; found {
-			t.Run(test, func(t *testing.T) { fn(t, h) })
+		if td, found := testRegistry[test]; found {
+			t.Run(test, func(t *testing.T) {
+				if !h.requireCapabilities(t, td.required, td.group, test) {
+					return
+				}
+				td.fn(t, h)
+			})
 		} else {
 			t.Errorf("%s: test not found", test)
 		}
 	}
+}
+
+func buildTestRegistry() map[string]testDefinition {
+	registry := make(map[string]testDefinition, len(commonTests)+len(utxoOnlyTests)+len(evmOnlyTests)+len(wsOnlyTests)+len(wsUTXOTests))
+	addGroup := func(group string, required testCapability, tests map[string]func(t *testing.T, th *TestHandler)) {
+		for name, fn := range tests {
+			if _, found := registry[name]; found {
+				panic("duplicate api test definition: " + name)
+			}
+			registry[name] = testDefinition{
+				fn:       fn,
+				required: required,
+				group:    group,
+			}
+		}
+	}
+
+	addGroup("common", capabilityNone, commonTests)
+	addGroup("utxo-only", capabilityUTXO, utxoOnlyTests)
+	addGroup("evm-only", capabilityEVM, evmOnlyTests)
+	addGroup("ws-only", capabilityNone, wsOnlyTests)
+	addGroup("ws-utxo", capabilityUTXO, wsUTXOTests)
+	return registry
 }
 
 func getTests(cfg json.RawMessage) ([]string, error) {

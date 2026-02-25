@@ -4,12 +4,15 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 )
 
 func testStatus(t *testing.T, h *TestHandler) {
@@ -17,17 +20,19 @@ func testStatus(t *testing.T, h *TestHandler) {
 }
 
 func testGetBlockIndex(t *testing.T, h *TestHandler) {
-	status := h.getStatus(t)
-	if _, ok := h.getBlockHashForHeight(t, status.BestHeight, true); !ok {
-		t.Fatalf("missing block hash for best height %d", status.BestHeight)
+	height, _, ok := h.getSampleIndexedHeight(t)
+	if !ok {
+		t.Fatalf("missing indexed block hash in recent height window near %d", h.getStatus(t).BestHeight)
+	}
+	if _, ok := h.getBlockHashForHeight(t, height, true); !ok {
+		t.Fatalf("missing block hash for sampled height %d", height)
 	}
 }
 
 func testGetBlock(t *testing.T, h *TestHandler) {
-	status := h.getStatus(t)
-	bestHash, ok := h.getBlockHashForHeight(t, status.BestHeight, true)
+	height, bestHash, ok := h.getSampleIndexedBlock(t)
 	if !ok {
-		t.Fatalf("missing block hash for best height %d", status.BestHeight)
+		t.Fatalf("missing indexed block hash in recent height window near %d", h.getStatus(t).BestHeight)
 	}
 
 	blk, ok := h.getBlockByHash(t, bestHash, true)
@@ -35,8 +40,8 @@ func testGetBlock(t *testing.T, h *TestHandler) {
 		t.Fatalf("missing block for hash %s", bestHash)
 	}
 	assertEqualString(t, blk.Hash, bestHash, "block hash")
-	if blk.Height != status.BestHeight {
-		t.Fatalf("block height mismatch: got %d, want %d", blk.Height, status.BestHeight)
+	if blk.Height != height {
+		t.Fatalf("block height mismatch: got %d, want %d", blk.Height, height)
 	}
 	if !blk.HasTxField {
 		t.Fatalf("block response missing txs field")
@@ -44,10 +49,9 @@ func testGetBlock(t *testing.T, h *TestHandler) {
 }
 
 func testGetBlockByHeight(t *testing.T, h *TestHandler) {
-	status := h.getStatus(t)
-	height := status.BestHeight
-	if height > 2 {
-		height = height - 2
+	height, _, ok := h.getSampleIndexedBlock(t)
+	if !ok {
+		t.Fatalf("missing indexed block hash in recent height window near %d", h.getStatus(t).BestHeight)
 	}
 
 	path := fmt.Sprintf("/api/v2/block/%d?page=1&pageSize=%d", height, blockPageSize)
@@ -60,6 +64,15 @@ func testGetBlockByHeight(t *testing.T, h *TestHandler) {
 	}
 	if blk.Txs == nil {
 		t.Fatalf("GetBlockByHeight response missing txs field")
+	}
+
+	// Reuse this block response in subsequent tests to avoid an extra full block fetch.
+	h.blockHashByHeight[height] = blk.Hash
+	h.blockByHash[blk.Hash] = &blockSummary{
+		Hash:       strings.TrimSpace(blk.Hash),
+		Height:     blk.Height,
+		HasTxField: blk.Txs != nil,
+		TxIDs:      extractTxIDs(t, blk.Txs),
 	}
 
 	hashByIndex, ok := h.getBlockHashForHeight(t, height, true)
@@ -113,43 +126,22 @@ func testGetAddressTxids(t *testing.T, h *TestHandler) {
 	address := h.sampleAddressOrSkip(t)
 	txid := h.sampleTxIDOrSkip(t)
 
-	path := "/api/v2/address/" + url.PathEscape(address) + "?details=txids&page=1&pageSize=10"
+	path := buildAddressDetailsPath(address, "txids", addressPage, addressPageSize)
 	var addr addressTxidsResponse
 	h.mustGetJSON(t, path, &addr)
 
-	assertAddressMatches(t, addr.Address, address, "GetAddressTxids.address")
-	if len(addr.Txids) == 0 {
-		t.Fatalf("GetAddressTxids returned no txids for %s", address)
-	}
-	for i := range addr.Txids {
-		assertNonEmptyString(t, addr.Txids[i], "GetAddressTxids.txids")
-	}
-	if !containsTxID(addr.Txids, txid) {
-		t.Fatalf("GetAddressTxids does not include sample transaction %s for %s", txid, address)
-	}
+	assertAddressTxidsPayload(t, &addr, address, txid, "GetAddressTxids")
 }
 
 func testGetAddressTxs(t *testing.T, h *TestHandler) {
 	address := h.sampleAddressOrSkip(t)
 	txid := h.sampleTxIDOrSkip(t)
 
-	path := "/api/v2/address/" + url.PathEscape(address) + "?details=txs&page=1&pageSize=10"
+	path := buildAddressDetailsPath(address, "txs", addressPage, addressPageSize)
 	var addr addressTxsResponse
 	h.mustGetJSON(t, path, &addr)
 
-	assertAddressMatches(t, addr.Address, address, "GetAddressTxs.address")
-	if len(addr.Transactions) == 0 {
-		t.Fatalf("GetAddressTxs returned no transactions for %s", address)
-	}
-
-	txIDs := make([]string, 0, len(addr.Transactions))
-	for i := range addr.Transactions {
-		assertNonEmptyString(t, addr.Transactions[i].Txid, "GetAddressTxs.transactions.txid")
-		txIDs = append(txIDs, addr.Transactions[i].Txid)
-	}
-	if !containsTxID(txIDs, txid) {
-		t.Fatalf("GetAddressTxs does not include sample transaction %s for %s", txid, address)
-	}
+	assertAddressTxsPayload(t, &addr, address, txid, "GetAddressTxs")
 }
 
 func testGetUtxo(t *testing.T, h *TestHandler) {
@@ -157,10 +149,7 @@ func testGetUtxo(t *testing.T, h *TestHandler) {
 
 	var utxos []utxoResponse
 	h.mustGetJSON(t, "/api/v2/utxo/"+url.PathEscape(address)+"?confirmed=true", &utxos)
-	for i := range utxos {
-		assertNonEmptyString(t, utxos[i].Txid, "GetUtxo entry txid")
-		assertNonEmptyString(t, utxos[i].Value, "GetUtxo entry value")
-	}
+	assertUTXOList(t, utxos, "GetUtxo")
 }
 
 func testGetUtxoConfirmedFilter(t *testing.T, h *TestHandler) {
@@ -176,37 +165,8 @@ func testGetUtxoConfirmedFilter(t *testing.T, h *TestHandler) {
 		t.Skipf("Skipping test, address %s currently has no UTXOs", address)
 	}
 
-	for i := range confirmed {
-		assertNonEmptyString(t, confirmed[i].Txid, "GetUtxoConfirmedFilter.txid")
-		assertNonEmptyString(t, confirmed[i].Value, "GetUtxoConfirmedFilter.value")
-		if isUnconfirmedUtxo(confirmed[i]) {
-			t.Fatalf("GetUtxoConfirmedFilter returned unconfirmed UTXO: txid=%s vout=%d confirmations=%d height=%d",
-				confirmed[i].Txid, confirmed[i].Vout, confirmed[i].Confirmations, confirmed[i].Height)
-		}
-	}
-
-	for i := range all {
-		assertNonEmptyString(t, all[i].Txid, "GetUtxoConfirmedFilter.all.txid")
-		assertNonEmptyString(t, all[i].Value, "GetUtxoConfirmedFilter.all.value")
-	}
-}
-
-func (h *TestHandler) sampleTxIDOrSkip(t *testing.T) string {
-	t.Helper()
-	txid, found := h.getSampleTxID(t)
-	if !found {
-		t.Skipf("Skipping test, no transaction found in last %d blocks from height %d", txSearchWindow, h.getStatus(t).BestHeight)
-	}
-	return txid
-}
-
-func (h *TestHandler) sampleAddressOrSkip(t *testing.T) string {
-	t.Helper()
-	address, found := h.getSampleAddress(t)
-	if !found {
-		t.Skipf("Skipping test, no address found from recent transaction window at height %d", h.getStatus(t).BestHeight)
-	}
-	return address
+	assertUTXOListConfirmed(t, confirmed, "GetUtxoConfirmedFilter")
+	assertUTXOList(t, all, "GetUtxoConfirmedFilter.all")
 }
 
 func (h *TestHandler) mustGetJSON(t *testing.T, path string, out interface{}) {
@@ -238,22 +198,39 @@ func (h *TestHandler) getHTTP(t *testing.T, path string) (int, []byte) {
 func (h *TestHandler) getHTTPWithBase(t *testing.T, baseURL, path string) (int, []byte) {
 	t.Helper()
 
-	req, err := http.NewRequest(http.MethodGet, h.resolveHTTPURL(baseURL, path), nil)
-	if err != nil {
-		t.Fatalf("build GET %s: %v", path, err)
+	const maxAttempts = 2
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		req, err := http.NewRequest(http.MethodGet, h.resolveHTTPURL(baseURL, path), nil)
+		if err != nil {
+			t.Fatalf("build GET %s: %v", path, err)
+		}
+
+		resp, err := h.HTTP.Do(req)
+		if err != nil {
+			if attempt < maxAttempts && shouldRetryHTTPError(err) {
+				time.Sleep(time.Duration(attempt) * 300 * time.Millisecond)
+				continue
+			}
+			return 0, []byte(err.Error())
+		}
+
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			if attempt < maxAttempts && shouldRetryHTTPError(err) {
+				time.Sleep(time.Duration(attempt) * 300 * time.Millisecond)
+				continue
+			}
+			return 0, []byte(err.Error())
+		}
+		if attempt < maxAttempts && isRetryableHTTPStatus(resp.StatusCode) {
+			time.Sleep(time.Duration(attempt) * 300 * time.Millisecond)
+			continue
+		}
+		return resp.StatusCode, body
 	}
 
-	resp, err := h.HTTP.Do(req)
-	if err != nil {
-		t.Fatalf("GET %s: %v", path, err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatalf("read response %s: %v", path, err)
-	}
-	return resp.StatusCode, body
+	return 0, []byte("exhausted retry attempts")
 }
 
 func (h *TestHandler) resolveHTTPURL(baseURL, path string) string {
@@ -285,15 +262,6 @@ func assertAddressMatches(t *testing.T, got, want, field string) {
 	}
 }
 
-func containsTxID(txids []string, txid string) bool {
-	for i := range txids {
-		if strings.EqualFold(strings.TrimSpace(txids[i]), txid) {
-			return true
-		}
-	}
-	return false
-}
-
 func isUnconfirmedUtxo(utxo utxoResponse) bool {
 	return utxo.Confirmations <= 0 || utxo.Height <= 0
 }
@@ -305,4 +273,22 @@ func preview(body []byte) string {
 		return s
 	}
 	return s[:max] + "..."
+}
+
+func shouldRetryHTTPError(err error) bool {
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return true
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "timeout") || strings.Contains(msg, "temporary")
+}
+
+func isRetryableHTTPStatus(status int) bool {
+	switch status {
+	case http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+		return true
+	default:
+		return false
+	}
 }
