@@ -436,6 +436,47 @@ func (h *TestHandler) sampleAddressOrSkip(t *testing.T) string {
 	return address
 }
 
+func (h *TestHandler) getSampleFiatTicker(t *testing.T) (fiatTickerResponse, bool) {
+	if h.sampleFiatResolved {
+		return h.sampleFiatTicker, h.sampleFiatAvailable
+	}
+	h.sampleFiatResolved = true
+
+	path := "/api/v2/tickers?currency=usd"
+	status, body := h.getHTTP(t, path)
+	if isFiatDataUnavailable(status, body) {
+		return fiatTickerResponse{}, false
+	}
+	if status != http.StatusOK {
+		t.Fatalf("GET %s returned HTTP %d: %s", path, status, preview(body))
+	}
+
+	var ticker fiatTickerResponse
+	if err := json.Unmarshal(body, &ticker); err != nil {
+		t.Fatalf("decode %s: %v", path, err)
+	}
+	if ticker.Timestamp <= 0 || len(ticker.Rates) == 0 {
+		return fiatTickerResponse{}, false
+	}
+
+	h.sampleFiatAvailable = true
+	h.sampleFiatTicker = ticker
+	return h.sampleFiatTicker, true
+}
+
+func (h *TestHandler) sampleFiatTickerOrSkip(t *testing.T) fiatTickerResponse {
+	t.Helper()
+	ticker, found := h.getSampleFiatTicker(t)
+	if !found {
+		status := h.getStatus(t)
+		if !status.HasFiatRates {
+			t.Skipf("Skipping test, endpoint reports hasFiatRates=false")
+		}
+		t.Skipf("Skipping test, fiat ticker data currently unavailable")
+	}
+	return ticker
+}
+
 func (h *TestHandler) requireCapabilities(t *testing.T, required testCapability, group, test string) bool {
 	t.Helper()
 	if required == capabilityNone {

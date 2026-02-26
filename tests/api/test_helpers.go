@@ -155,6 +155,22 @@ func assertUTXOListNonNegativeConfirmations(t *testing.T, utxos []utxoResponse, 
 	}
 }
 
+func assertFiatTickerPayload(t *testing.T, payload *fiatTickerResponse, context string) {
+	t.Helper()
+	if payload.Timestamp <= 0 {
+		t.Fatalf("%s invalid timestamp: %d", context, payload.Timestamp)
+	}
+	if len(payload.Rates) == 0 {
+		t.Fatalf("%s returned no rates", context)
+	}
+	for currency, rate := range payload.Rates {
+		assertNonEmptyString(t, currency, context+".rates.currency")
+		if rate == 0 {
+			t.Fatalf("%s returned zero rate for currency %s", context, currency)
+		}
+	}
+}
+
 func assertUTXOSetsEqualByOutpoint(t *testing.T, got, want []utxoResponse, context string) {
 	t.Helper()
 	gotSet := utxoSetByOutpoint(t, got, context+".got")
