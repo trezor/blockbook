@@ -130,7 +130,7 @@ func testGetAddressTxids(t *testing.T, h *TestHandler) {
 	var addr addressTxidsResponse
 	h.mustGetJSON(t, path, &addr)
 
-	assertAddressTxidsPayload(t, &addr, address, txid, "GetAddressTxids")
+	assertAddressTxidsPayload(t, &addr, address, txid, "GetAddressTxids", addressPageSize)
 }
 
 func testGetAddressTxs(t *testing.T, h *TestHandler) {
@@ -141,7 +141,7 @@ func testGetAddressTxs(t *testing.T, h *TestHandler) {
 	var addr addressTxsResponse
 	h.mustGetJSON(t, path, &addr)
 
-	assertAddressTxsPayload(t, &addr, address, txid, "GetAddressTxs")
+	assertAddressTxsPayload(t, &addr, address, txid, "GetAddressTxs", addressPageSize)
 }
 
 func testGetUtxo(t *testing.T, h *TestHandler) {
@@ -155,18 +155,40 @@ func testGetUtxo(t *testing.T, h *TestHandler) {
 func testGetUtxoConfirmedFilter(t *testing.T, h *TestHandler) {
 	address := h.sampleAddressOrSkip(t)
 
-	var all []utxoResponse
-	h.mustGetJSON(t, "/api/v2/utxo/"+url.PathEscape(address), &all)
-
 	var confirmed []utxoResponse
 	h.mustGetJSON(t, "/api/v2/utxo/"+url.PathEscape(address)+"?confirmed=true", &confirmed)
 
-	if len(all) == 0 && len(confirmed) == 0 {
+	var all []utxoResponse
+	h.mustGetJSON(t, "/api/v2/utxo/"+url.PathEscape(address), &all)
+
+	var explicitFalse []utxoResponse
+	h.mustGetJSON(t, "/api/v2/utxo/"+url.PathEscape(address)+"?confirmed=false", &explicitFalse)
+
+	if len(all) == 0 && len(explicitFalse) == 0 && len(confirmed) == 0 {
 		t.Skipf("Skipping test, address %s currently has no UTXOs", address)
 	}
 
 	assertUTXOListConfirmed(t, confirmed, "GetUtxoConfirmedFilter")
 	assertUTXOList(t, all, "GetUtxoConfirmedFilter.all")
+	assertUTXOList(t, explicitFalse, "GetUtxoConfirmedFilter.confirmed=false")
+
+	// confirmed=false should be equivalent to omitted confirmed query parameter.
+	// Retry once to reduce false positives from highly dynamic mempool state.
+	if !utxoSetsEqualByOutpoint(all, explicitFalse) {
+		var allRetry []utxoResponse
+		h.mustGetJSON(t, "/api/v2/utxo/"+url.PathEscape(address), &allRetry)
+		var explicitFalseRetry []utxoResponse
+		h.mustGetJSON(t, "/api/v2/utxo/"+url.PathEscape(address)+"?confirmed=false", &explicitFalseRetry)
+		assertUTXOList(t, allRetry, "GetUtxoConfirmedFilter.all.retry")
+		assertUTXOList(t, explicitFalseRetry, "GetUtxoConfirmedFilter.confirmed=false.retry")
+		assertUTXOSetsEqualByOutpoint(t, allRetry, explicitFalseRetry, "GetUtxoConfirmedFilter.default-vs-confirmed=false")
+		all = allRetry
+		explicitFalse = explicitFalseRetry
+	}
+
+	// confirmed=false includes mempool effects, but any confirmed outpoint in that
+	// response must also exist in confirmed=true.
+	assertConfirmedUTXOsIncludedByOutpoint(t, explicitFalse, confirmed, "GetUtxoConfirmedFilter.confirmed-false-vs-true")
 }
 
 func (h *TestHandler) mustGetJSON(t *testing.T, path string, out interface{}) {
