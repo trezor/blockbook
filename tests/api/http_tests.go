@@ -122,6 +122,81 @@ func testGetAddress(t *testing.T, h *TestHandler) {
 	}
 }
 
+func testGetCurrentFiatRates(t *testing.T, h *TestHandler) {
+	ticker := h.sampleFiatTickerOrSkip(t)
+	assertFiatTickerPayload(t, &ticker, "GetCurrentFiatRates")
+
+	rate, ok := ticker.Rates["usd"]
+	if !ok {
+		t.Fatalf("GetCurrentFiatRates missing requested usd rate")
+	}
+	if rate == 0 {
+		t.Fatalf("GetCurrentFiatRates usd rate must not be zero")
+	}
+}
+
+func testGetTickersList(t *testing.T, h *TestHandler) {
+	ticker := h.sampleFiatTickerOrSkip(t)
+
+	path := fmt.Sprintf("/api/v2/tickers-list?timestamp=%d", ticker.Timestamp)
+	var list availableVsCurrenciesResponse
+	h.mustGetFiatJSONOrSkip(t, path, &list)
+
+	if list.Timestamp <= 0 {
+		t.Fatalf("GetTickersList invalid timestamp: %d", list.Timestamp)
+	}
+	if len(list.Tickers) == 0 {
+		t.Fatalf("GetTickersList returned no currencies")
+	}
+	for i := range list.Tickers {
+		assertNonEmptyString(t, list.Tickers[i], "GetTickersList.available_currencies")
+	}
+}
+
+func testGetMultiTickers(t *testing.T, h *TestHandler) {
+	ticker := h.sampleFiatTickerOrSkip(t)
+
+	listPath := fmt.Sprintf("/api/v2/tickers-list?timestamp=%d", ticker.Timestamp)
+	var list availableVsCurrenciesResponse
+	h.mustGetFiatJSONOrSkip(t, listPath, &list)
+	if len(list.Tickers) == 0 {
+		t.Skipf("Skipping test, no available fiat currencies for timestamp %d", ticker.Timestamp)
+	}
+
+	currency := strings.ToLower(strings.TrimSpace(list.Tickers[0]))
+	if currency == "" {
+		t.Fatalf("GetMultiTickers invalid empty currency from tickers-list")
+	}
+
+	var single fiatTickerResponse
+	singlePath := fmt.Sprintf("/api/v2/tickers?timestamp=%d&currency=%s", ticker.Timestamp, url.QueryEscape(currency))
+	h.mustGetFiatJSONOrSkip(t, singlePath, &single)
+	assertFiatTickerPayload(t, &single, "GetMultiTickers.single")
+
+	var multi []fiatTickerResponse
+	multiPath := fmt.Sprintf("/api/v2/multi-tickers?timestamp=%d&currency=%s", ticker.Timestamp, url.QueryEscape(currency))
+	h.mustGetFiatJSONOrSkip(t, multiPath, &multi)
+	if len(multi) != 1 {
+		t.Fatalf("GetMultiTickers expected exactly 1 entry, got %d", len(multi))
+	}
+	assertFiatTickerPayload(t, &multi[0], "GetMultiTickers.multi[0]")
+
+	if multi[0].Timestamp != single.Timestamp {
+		t.Fatalf("GetMultiTickers timestamp mismatch: single=%d multi=%d", single.Timestamp, multi[0].Timestamp)
+	}
+	singleRate, ok := single.Rates[currency]
+	if !ok {
+		t.Fatalf("GetMultiTickers single missing rate for %s", currency)
+	}
+	multiRate, ok := multi[0].Rates[currency]
+	if !ok {
+		t.Fatalf("GetMultiTickers multi missing rate for %s", currency)
+	}
+	if singleRate != multiRate {
+		t.Fatalf("GetMultiTickers rate mismatch for %s: single=%v multi=%v", currency, singleRate, multiRate)
+	}
+}
+
 func testGetAddressTxids(t *testing.T, h *TestHandler) {
 	address := h.sampleAddressOrSkip(t)
 	txid := h.sampleTxIDOrSkip(t)
@@ -200,6 +275,29 @@ func (h *TestHandler) mustGetJSON(t *testing.T, path string, out interface{}) {
 	}
 	if err := json.Unmarshal(body, out); err != nil {
 		t.Fatalf("decode %s: %v", path, err)
+	}
+}
+
+func (h *TestHandler) mustGetFiatJSONOrSkip(t *testing.T, path string, out interface{}) {
+	t.Helper()
+
+	const maxAttempts = 2
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		status, body := h.getHTTP(t, path)
+		if status == http.StatusOK {
+			if err := json.Unmarshal(body, out); err != nil {
+				t.Fatalf("decode %s: %v", path, err)
+			}
+			return
+		}
+		if isFiatDataUnavailable(status, body) {
+			if attempt < maxAttempts {
+				time.Sleep(time.Duration(attempt) * 300 * time.Millisecond)
+				continue
+			}
+			t.Skipf("Skipping test, fiat data unavailable for %s (HTTP %d: %s)", path, status, preview(body))
+		}
+		t.Fatalf("GET %s returned HTTP %d: %s", path, status, preview(body))
 	}
 }
 
@@ -313,4 +411,12 @@ func isRetryableHTTPStatus(status int) bool {
 	default:
 		return false
 	}
+}
+
+func isFiatDataUnavailable(status int, body []byte) bool {
+	if status != http.StatusBadRequest && status != http.StatusInternalServerError {
+		return false
+	}
+	msg := strings.ToLower(preview(body))
+	return strings.Contains(msg, "no tickers found") || strings.Contains(msg, "error finding ticker")
 }

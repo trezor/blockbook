@@ -46,6 +46,9 @@ var commonTests = map[string]func(t *testing.T, th *TestHandler){
 	"GetAddress":             testGetAddress,
 	"GetAddressTxids":        testGetAddressTxids,
 	"GetAddressTxs":          testGetAddressTxs,
+	"GetCurrentFiatRates":    testGetCurrentFiatRates,
+	"GetTickersList":         testGetTickersList,
+	"GetMultiTickers":        testGetMultiTickers,
 }
 
 var utxoOnlyTests = map[string]func(t *testing.T, th *TestHandler){
@@ -106,6 +109,9 @@ type TestHandler struct {
 	sampleBlockHash        string
 	sampleContractResolved bool
 	sampleContract         string
+	sampleFiatResolved     bool
+	sampleFiatAvailable    bool
+	sampleFiatTicker       fiatTickerResponse
 
 	capabilitiesResolved bool
 	supportsUTXO         bool
@@ -120,7 +126,9 @@ type statusEnvelope struct {
 }
 
 type statusBlockbook struct {
-	BestHeight int `json:"bestHeight"`
+	BestHeight           int        `json:"bestHeight"`
+	HasFiatRates         bool       `json:"hasFiatRates"`
+	CurrentFiatRatesTime *time.Time `json:"currentFiatRatesTime"`
 }
 
 type blockIndexResponse struct {
@@ -178,6 +186,16 @@ type utxoResponse struct {
 	Value         string `json:"value"`
 	Confirmations int    `json:"confirmations"`
 	Height        int    `json:"height"`
+}
+
+type fiatTickerResponse struct {
+	Timestamp int64              `json:"ts"`
+	Rates     map[string]float32 `json:"rates"`
+}
+
+type availableVsCurrenciesResponse struct {
+	Timestamp int64    `json:"ts"`
+	Tickers   []string `json:"available_currencies"`
 }
 
 type wsRequest struct {
