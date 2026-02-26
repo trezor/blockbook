@@ -27,17 +27,19 @@ func buildAddressDetailsPathWithTo(address, details string, page, pageSize, toHe
 	return path
 }
 
-func assertAddressTxidsPayload(t *testing.T, payload *addressTxidsResponse, address, txid, context string) {
+func assertAddressTxidsPayload(t *testing.T, payload *addressTxidsResponse, address, txid, context string, pageSize int) {
 	t.Helper()
 	assertAddressMatches(t, payload.Address, address, context+".address")
 	assertPageMeta(t, payload.Page, payload.ItemsOnPage, payload.TotalPages, payload.Txs, context)
+	assertPageSizeUpperBound(t, len(payload.Txids), payload.ItemsOnPage, pageSize, context+".txids")
 	assertTxIDListContains(t, payload.Txids, txid, context+".txids")
 }
 
-func assertAddressTxsPayload(t *testing.T, payload *addressTxsResponse, address, txid, context string) {
+func assertAddressTxsPayload(t *testing.T, payload *addressTxsResponse, address, txid, context string, pageSize int) {
 	t.Helper()
 	assertAddressMatches(t, payload.Address, address, context+".address")
 	assertPageMeta(t, payload.Page, payload.ItemsOnPage, payload.TotalPages, payload.Txs, context)
+	assertPageSizeUpperBound(t, len(payload.Transactions), payload.ItemsOnPage, pageSize, context+".transactions")
 	assertTransactionsContainTxID(t, payload.Transactions, txid, context+".transactions")
 }
 
@@ -76,6 +78,22 @@ func assertPageMetaAllowUnknownTotal(t *testing.T, page, itemsOnPage, totalPages
 	}
 	if totalPages > 0 && page > totalPages {
 		t.Fatalf("%s invalid page %d > totalPages %d", context, page, totalPages)
+	}
+}
+
+func assertPageSizeUpperBound(t *testing.T, payloadLen, itemsOnPage, requestedPageSize int, context string) {
+	t.Helper()
+	if requestedPageSize <= 0 {
+		return
+	}
+	if itemsOnPage > requestedPageSize {
+		t.Fatalf("%s invalid itemsOnPage %d > requested pageSize %d", context, itemsOnPage, requestedPageSize)
+	}
+	if payloadLen > requestedPageSize {
+		t.Fatalf("%s returned %d items, requested pageSize=%d", context, payloadLen, requestedPageSize)
+	}
+	if itemsOnPage > 0 && payloadLen > itemsOnPage {
+		t.Fatalf("%s returned %d items, greater than itemsOnPage=%d", context, payloadLen, itemsOnPage)
 	}
 }
 
@@ -135,6 +153,70 @@ func assertUTXOListNonNegativeConfirmations(t *testing.T, utxos []utxoResponse, 
 			t.Fatalf("%s has negative confirmations for %s", context, utxos[i].Txid)
 		}
 	}
+}
+
+func assertUTXOSetsEqualByOutpoint(t *testing.T, got, want []utxoResponse, context string) {
+	t.Helper()
+	gotSet := utxoSetByOutpoint(t, got, context+".got")
+	wantSet := utxoSetByOutpoint(t, want, context+".want")
+	if len(gotSet) != len(wantSet) {
+		t.Fatalf("%s outpoint count mismatch: got=%d want=%d", context, len(gotSet), len(wantSet))
+	}
+	for key := range wantSet {
+		if _, ok := gotSet[key]; !ok {
+			t.Fatalf("%s missing outpoint in got set: %s", context, key)
+		}
+	}
+}
+
+func assertConfirmedUTXOsIncludedByOutpoint(t *testing.T, mixed, confirmed []utxoResponse, context string) {
+	t.Helper()
+	confirmedSet := utxoSetByOutpoint(t, confirmed, context+".confirmed")
+	for i := range mixed {
+		if isUnconfirmedUtxo(mixed[i]) {
+			continue
+		}
+		key := utxoOutpointKey(mixed[i])
+		if _, ok := confirmedSet[key]; !ok {
+			t.Fatalf("%s missing confirmed outpoint %s in confirmed=true response", context, key)
+		}
+	}
+}
+
+func utxoSetsEqualByOutpoint(a, b []utxoResponse) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	set := make(map[string]struct{}, len(a))
+	for i := range a {
+		set[utxoOutpointKey(a[i])] = struct{}{}
+	}
+	if len(set) != len(a) {
+		return false
+	}
+	for i := range b {
+		if _, ok := set[utxoOutpointKey(b[i])]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
+func utxoSetByOutpoint(t *testing.T, utxos []utxoResponse, context string) map[string]utxoResponse {
+	t.Helper()
+	set := make(map[string]utxoResponse, len(utxos))
+	for i := range utxos {
+		key := utxoOutpointKey(utxos[i])
+		if _, exists := set[key]; exists {
+			t.Fatalf("%s duplicate outpoint: %s", context, key)
+		}
+		set[key] = utxos[i]
+	}
+	return set
+}
+
+func utxoOutpointKey(utxo utxoResponse) string {
+	return strings.ToLower(strings.TrimSpace(utxo.Txid)) + ":" + strconv.Itoa(utxo.Vout)
 }
 
 func assertEVMTokenBalancesPayload(t *testing.T, payload *evmAddressTokenBalanceResponse, address, context string) {

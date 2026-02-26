@@ -32,6 +32,7 @@ func testGetAddressTxidsPaginationEVM(t *testing.T, h *TestHandler) {
 
 	assertAddressMatches(t, page1.Address, address, "GetAddressTxidsPaginationEVM.page1.address")
 	assertPageMeta(t, page1.Page, page1.ItemsOnPage, page1.TotalPages, page1.Txs, "GetAddressTxidsPaginationEVM.page1")
+	assertPageSizeUpperBound(t, len(page1.Txids), page1.ItemsOnPage, evmHistoryPageSize, "GetAddressTxidsPaginationEVM.page1.txids")
 	if len(page1.Txids) == 0 {
 		t.Fatalf("GetAddressTxidsPaginationEVM page 1 returned no txids")
 	}
@@ -48,6 +49,7 @@ func testGetAddressTxidsPaginationEVM(t *testing.T, h *TestHandler) {
 
 	assertAddressMatches(t, page2.Address, address, "GetAddressTxidsPaginationEVM.page2.address")
 	assertPageMeta(t, page2.Page, page2.ItemsOnPage, page2.TotalPages, page2.Txs, "GetAddressTxidsPaginationEVM.page2")
+	assertPageSizeUpperBound(t, len(page2.Txids), page2.ItemsOnPage, evmHistoryPageSize, "GetAddressTxidsPaginationEVM.page2.txids")
 	if page2.Page != evmHistoryPage+1 {
 		t.Fatalf("GetAddressTxidsPaginationEVM page mismatch: got %d, want %d", page2.Page, evmHistoryPage+1)
 	}
@@ -67,6 +69,7 @@ func testGetAddressTxsPaginationEVM(t *testing.T, h *TestHandler) {
 
 	assertAddressMatches(t, page1.Address, address, "GetAddressTxsPaginationEVM.page1.address")
 	assertPageMeta(t, page1.Page, page1.ItemsOnPage, page1.TotalPages, page1.Txs, "GetAddressTxsPaginationEVM.page1")
+	assertPageSizeUpperBound(t, len(page1.Transactions), page1.ItemsOnPage, evmHistoryPageSize, "GetAddressTxsPaginationEVM.page1.transactions")
 	if len(page1.Transactions) == 0 {
 		t.Fatalf("GetAddressTxsPaginationEVM page 1 returned no transactions")
 	}
@@ -81,6 +84,7 @@ func testGetAddressTxsPaginationEVM(t *testing.T, h *TestHandler) {
 
 	assertAddressMatches(t, page2.Address, address, "GetAddressTxsPaginationEVM.page2.address")
 	assertPageMeta(t, page2.Page, page2.ItemsOnPage, page2.TotalPages, page2.Txs, "GetAddressTxsPaginationEVM.page2")
+	assertPageSizeUpperBound(t, len(page2.Transactions), page2.ItemsOnPage, evmHistoryPageSize, "GetAddressTxsPaginationEVM.page2.transactions")
 	if page2.Page != evmHistoryPage+1 {
 		t.Fatalf("GetAddressTxsPaginationEVM page mismatch: got %d, want %d", page2.Page, evmHistoryPage+1)
 	}

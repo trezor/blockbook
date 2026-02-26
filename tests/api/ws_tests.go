@@ -66,7 +66,7 @@ func testWsGetAccountInfo(t *testing.T, h *TestHandler) {
 	if err := json.Unmarshal(resp.Data, &info); err != nil {
 		t.Fatalf("decode websocket getAccountInfo response: %v", err)
 	}
-	assertAddressTxidsPayload(t, &info, address, txid, "WsGetAccountInfo")
+	assertAddressTxidsPayload(t, &info, address, txid, "WsGetAccountInfo", addressPageSize)
 }
 
 func testWsGetAccountUtxo(t *testing.T, h *TestHandler) {
