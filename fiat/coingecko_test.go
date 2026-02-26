@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -293,5 +294,64 @@ func TestUpdateHistoricalTickers_BootstrapStoresSuccessfulCurrenciesEvenWhenSome
 	}
 	if eurTicker != nil {
 		t.Fatalf("expected eur ticker to be missing due to forced failure, got %+v", eurTicker)
+	}
+}
+
+func TestMakeReq_ThrottleRetriesExhausted(t *testing.T) {
+	originalBackoff := coingeckoThrottleRetryBackoff
+	coingeckoThrottleRetryBackoff = []time.Duration{0, 0, 0, 0}
+	defer func() {
+		coingeckoThrottleRetryBackoff = originalBackoff
+	}()
+
+	var requests atomic.Int32
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		http.Error(w, "exceeded the rate limit", http.StatusTooManyRequests)
+	}))
+	defer mockServer.Close()
+
+	cg := &Coingecko{
+		httpClient: mockServer.Client(),
+	}
+	_, err := cg.makeReq(mockServer.URL, "market_chart", coingeckoPlanFree)
+	if err == nil {
+		t.Fatal("expected makeReq to fail after retries are exhausted")
+	}
+	wantRequests := 1 + len(coingeckoThrottleRetryBackoff)
+	if got := int(requests.Load()); got != wantRequests {
+		t.Fatalf("unexpected number of requests: got %d, want %d", got, wantRequests)
+	}
+}
+
+func TestMakeReq_ThrottleRetriesEventuallySuccess(t *testing.T) {
+	originalBackoff := coingeckoThrottleRetryBackoff
+	coingeckoThrottleRetryBackoff = []time.Duration{0, 0, 0, 0}
+	defer func() {
+		coingeckoThrottleRetryBackoff = originalBackoff
+	}()
+
+	var requests atomic.Int32
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if requests.Add(1) <= 2 {
+			http.Error(w, "throttled", http.StatusTooManyRequests)
+			return
+		}
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer mockServer.Close()
+
+	cg := &Coingecko{
+		httpClient: mockServer.Client(),
+	}
+	resp, err := cg.makeReq(mockServer.URL, "market_chart", coingeckoPlanFree)
+	if err != nil {
+		t.Fatalf("makeReq unexpectedly failed: %v", err)
+	}
+	if string(resp) != `{"ok":true}` {
+		t.Fatalf("unexpected response body: %s", string(resp))
+	}
+	if got := int(requests.Load()); got != 3 {
+		t.Fatalf("unexpected number of requests: got %d, want %d", got, 3)
 	}
 }

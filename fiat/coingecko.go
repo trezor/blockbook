@@ -33,6 +33,13 @@ const (
 	coingeckoAPIKeyEnvSuffix  = "_" + coingeckoAPIKeyEnv
 )
 
+var coingeckoThrottleRetryBackoff = []time.Duration{
+	1 * time.Minute,
+	2 * time.Minute,
+	3 * time.Minute,
+	4 * time.Minute,
+}
+
 // Coingecko is a structure that implements RatesDownloaderInterface
 type Coingecko struct {
 	tipURL              string
@@ -201,9 +208,19 @@ func doReq(req *http.Request, client *http.Client) ([]byte, error) {
 	return body, nil
 }
 
-// makeReq HTTP request helper - will retry the call after 1 minute on error
+func isCoingeckoThrottleError(err error) bool {
+	if err == nil {
+		return false
+	}
+	lowerError := strings.ToLower(err.Error())
+	return err.Error() == "error code: 1015" ||
+		strings.Contains(lowerError, "exceeded the rate limit") ||
+		strings.Contains(lowerError, "throttled")
+}
+
+// makeReq HTTP request helper with bounded retries for throttling errors.
 func (cg *Coingecko) makeReq(url string, endpoint string, plan string) ([]byte, error) {
-	for {
+	for attempt := 0; ; attempt++ {
 		// glog.Infof("Coingecko makeReq %v", url)
 		req, err := http.NewRequest("GET", url, nil)
 		if err != nil {
@@ -225,7 +242,7 @@ func (cg *Coingecko) makeReq(url string, endpoint string, plan string) ([]byte, 
 			}
 			return resp, err
 		}
-		if err.Error() != "error code: 1015" && !strings.Contains(strings.ToLower(err.Error()), "exceeded the rate limit") && !strings.Contains(strings.ToLower(err.Error()), "throttled") {
+		if !isCoingeckoThrottleError(err) {
 			if cg.metrics != nil {
 				cg.metrics.CoingeckoRequests.With(common.Labels{"endpoint": endpoint, "status": "error"}).Inc()
 			}
@@ -235,9 +252,14 @@ func (cg *Coingecko) makeReq(url string, endpoint string, plan string) ([]byte, 
 		if cg.metrics != nil {
 			cg.metrics.CoingeckoRequests.With(common.Labels{"endpoint": endpoint, "status": "throttle"}).Inc()
 		}
-		// if there is a throttling error, wait 60 seconds and retry
-		glog.Warningf("Coingecko makeReq %v error %v, will retry in 60 seconds", url, err)
-		time.Sleep(60 * time.Second)
+		if attempt >= len(coingeckoThrottleRetryBackoff) {
+			if cg.metrics != nil {
+				cg.metrics.CoingeckoRequests.With(common.Labels{"endpoint": endpoint, "status": "error"}).Inc()
+			}
+			glog.Warningf("Coingecko makeReq %v error %v, retries exhausted after %d retries", url, err, len(coingeckoThrottleRetryBackoff))
+			return nil, err
+		}
+		time.Sleep(coingeckoThrottleRetryBackoff[attempt])
 	}
 }
 
