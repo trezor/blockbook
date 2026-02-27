@@ -204,8 +204,7 @@
                 {{if $chainExtra.BandwidthUsage}}Bandwidth {{$chainExtra.BandwidthUsage}}{{end}}
             )</span>
             {{end}}
-            {{else}}
-            <span class="fw-normal small">({{amountSatsSpan $tx.EthereumSpecific.GasPrice $data ""}} Gwei/gas)</span>
+            {{else}} <span class="fw-normal small">({{amountSatsSpan $tx.EthereumSpecific.GasPrice $data ""}} Gwei/gas)</span>
             {{end}}
             {{end}}
         </div>
