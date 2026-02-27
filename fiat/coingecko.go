@@ -697,6 +697,7 @@ func (cg *Coingecko) UpdateHistoricalTokenTickers() error {
 	cg.updatingTokens = true
 	defer func() { cg.updatingTokens = false }()
 	tickersToUpdate := make(map[uint]*common.CurrencyRatesTicker)
+	var throttleErr error
 
 	if cg.platformIdentifier != "" && cg.platformVsCurrency != "" {
 		allowMax := false
@@ -723,6 +724,10 @@ func (cg *Coingecko) UpdateHistoricalTokenTickers() error {
 			var err error
 			var req bool
 			if req, err = cg.getHistoricalTicker(historicalSyncURL, tickersToUpdate, tokenId, cg.platformVsCurrency, token, allowMax); err != nil {
+				if isCoingeckoThrottleRetriesExhaustedError(err) {
+					throttleErr = err
+					break
+				}
 				// report error and continue, Coingecko may return error like "Could not find coin with the given id"
 				// the rates will be updated next run
 				glog.Errorf("getHistoricalTicker %s-%s %v", tokenId, cg.platformVsCurrency, err)
@@ -742,5 +747,11 @@ func (cg *Coingecko) UpdateHistoricalTokenTickers() error {
 		}
 	}
 
-	return cg.storeTickers(tickersToUpdate)
+	if err := cg.storeTickers(tickersToUpdate); err != nil {
+		return err
+	}
+	if throttleErr != nil {
+		return throttleErr
+	}
+	return nil
 }

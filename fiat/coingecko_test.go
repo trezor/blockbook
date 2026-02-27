@@ -368,6 +368,14 @@ func TestUpdateHistoricalTickers_StopsOnThrottleExhaustion(t *testing.T) {
 	if err := d.FiatRatesSetHistoricalBootstrapComplete(true); err != nil {
 		t.Fatalf("FiatRatesSetHistoricalBootstrapComplete failed: %v", err)
 	}
+	originalVsCurrencies := vsCurrencies
+	originalPlatformIds := platformIds
+	originalPlatformIdsToTokens := platformIdsToTokens
+	defer func() {
+		vsCurrencies = originalVsCurrencies
+		platformIds = originalPlatformIds
+		platformIdsToTokens = originalPlatformIdsToTokens
+	}()
 
 	originalBackoff := coingeckoThrottleRetryBackoff
 	coingeckoThrottleRetryBackoff = []time.Duration{0, 0, 0, 0}
@@ -422,5 +430,75 @@ func TestUpdateHistoricalTickers_StopsOnThrottleExhaustion(t *testing.T) {
 	}
 	if got := int(eurRequests.Load()); got != 0 {
 		t.Fatalf("expected eur request count 0 after throttle exhaustion, got %d", got)
+	}
+}
+
+func TestUpdateHistoricalTokenTickers_StopsOnThrottleExhaustion(t *testing.T) {
+	config := common.Config{
+		CoinName: "fakecoin",
+	}
+	d, _, tmp := setupRocksDB(t, &testBitcoinParser{
+		BitcoinParser: bitcoinTestnetParser(),
+	}, &config)
+	defer closeAndDestroyRocksDB(t, d, tmp)
+
+	if err := d.FiatRatesSetHistoricalBootstrapComplete(true); err != nil {
+		t.Fatalf("FiatRatesSetHistoricalBootstrapComplete failed: %v", err)
+	}
+	originalVsCurrencies := vsCurrencies
+	originalPlatformIds := platformIds
+	originalPlatformIdsToTokens := platformIdsToTokens
+	defer func() {
+		vsCurrencies = originalVsCurrencies
+		platformIds = originalPlatformIds
+		platformIdsToTokens = originalPlatformIdsToTokens
+	}()
+
+	originalBackoff := coingeckoThrottleRetryBackoff
+	coingeckoThrottleRetryBackoff = []time.Duration{0, 0, 0, 0}
+	defer func() {
+		coingeckoThrottleRetryBackoff = originalBackoff
+	}()
+
+	var marketChartRequests atomic.Int32
+
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/coins/list":
+			_, _ = w.Write([]byte(`[
+				{"id":"token-a","symbol":"a","name":"A","platforms":{"ethereum":"0xa"}},
+				{"id":"token-b","symbol":"b","name":"B","platforms":{"ethereum":"0xb"}}
+			]`))
+		case "/coins/token-a/market_chart", "/coins/token-b/market_chart":
+			marketChartRequests.Add(1)
+			http.Error(w, "exceeded the rate limit", http.StatusTooManyRequests)
+		default:
+			http.Error(w, fmt.Sprintf("unexpected path %s", r.URL.Path), http.StatusNotFound)
+		}
+	}))
+	defer mockServer.Close()
+
+	cg := &Coingecko{
+		coin:               "ethereum",
+		platformIdentifier: "ethereum",
+		platformVsCurrency: "eth",
+		bootstrapURL:       mockServer.URL,
+		tipURL:             mockServer.URL,
+		httpClient:         mockServer.Client(),
+		db:                 d,
+		plan:               coingeckoPlanFree,
+	}
+
+	err := cg.UpdateHistoricalTokenTickers()
+	if err == nil {
+		t.Fatal("expected throttle exhaustion error")
+	}
+	if !isCoingeckoThrottleRetriesExhaustedError(err) {
+		t.Fatalf("expected throttle exhaustion error, got %v", err)
+	}
+
+	wantRequests := 1 + len(coingeckoThrottleRetryBackoff)
+	if got := int(marketChartRequests.Load()); got != wantRequests {
+		t.Fatalf("unexpected market_chart request count: got %d, want %d", got, wantRequests)
 	}
 }
