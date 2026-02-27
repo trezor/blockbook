@@ -41,6 +41,8 @@ var coingeckoThrottleRetryBackoff = []time.Duration{
 	4 * time.Minute,
 }
 
+var errCoingeckoHistoricalTokenUpdateInProgress = errors.New("coingecko historical token update already in progress")
+
 type coingeckoThrottleRetriesExhaustedError struct {
 	cause   error
 	retries int
@@ -235,6 +237,10 @@ func isCoingeckoThrottleError(err error) bool {
 func isCoingeckoThrottleRetriesExhaustedError(err error) bool {
 	var exhaustedErr *coingeckoThrottleRetriesExhaustedError
 	return errors.As(err, &exhaustedErr)
+}
+
+func isCoingeckoHistoricalTokenUpdateInProgressError(err error) bool {
+	return errors.Is(err, errCoingeckoHistoricalTokenUpdateInProgress)
 }
 
 // makeReq HTTP request helper with bounded retries for throttling errors.
@@ -692,7 +698,7 @@ func (cg *Coingecko) UpdateHistoricalTickers() error {
 // UpdateHistoricalTokenTickers gets historical tickers for the tokens
 func (cg *Coingecko) UpdateHistoricalTokenTickers() error {
 	if cg.updatingTokens {
-		return nil
+		return errCoingeckoHistoricalTokenUpdateInProgress
 	}
 	cg.updatingTokens = true
 	defer func() { cg.updatingTokens = false }()

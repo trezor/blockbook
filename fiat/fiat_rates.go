@@ -465,6 +465,14 @@ func (fr *FiatRates) observeUpdateDuration(stage, status string, start time.Time
 	}).Observe(time.Since(start).Seconds())
 }
 
+func logFiatRatesDownloaderError(message string, err error) {
+	if isCoingeckoThrottleRetriesExhaustedError(err) {
+		glog.Warning(message, err)
+		return
+	}
+	glog.Error(message, err)
+}
+
 // RunDownloader periodically downloads current (every 15 minutes) and historical (once a day) tickers
 func (fr *FiatRates) RunDownloader() error {
 	glog.Infof("Starting %v FiatRates downloader...", fr.provider)
@@ -489,7 +497,7 @@ func (fr *FiatRates) RunDownloader() error {
 		currentTicker, err := fr.downloader.CurrentTickers()
 		if err != nil || currentTicker == nil {
 			fr.observeUpdateDuration("current_tickers", "error", currentTickersStart)
-			glog.Error("FiatRatesDownloader: CurrentTickers error ", err)
+			logFiatRatesDownloaderError("FiatRatesDownloader: CurrentTickers error ", err)
 		} else {
 			fr.setCurrentTicker(currentTicker)
 			fr.observeUpdateDuration("current_tickers", "success", currentTickersStart)
@@ -505,7 +513,7 @@ func (fr *FiatRates) RunDownloader() error {
 			hourlyTickers, err := fr.downloader.HourlyTickers()
 			if err != nil || hourlyTickers == nil {
 				fr.observeUpdateDuration("hourly_tickers", "error", hourlyTickersStart)
-				glog.Error("FiatRatesDownloader: HourlyTickers error ", err)
+				logFiatRatesDownloaderError("FiatRatesDownloader: HourlyTickers error ", err)
 			} else {
 				fr.setHourlyTickers(hourlyTickers)
 				fr.observeUpdateDuration("hourly_tickers", "success", hourlyTickersStart)
@@ -519,7 +527,7 @@ func (fr *FiatRates) RunDownloader() error {
 			fiveMinutesTickers, err := fr.downloader.FiveMinutesTickers()
 			if err != nil || fiveMinutesTickers == nil {
 				fr.observeUpdateDuration("five_minutes_tickers", "error", fiveMinutesTickersStart)
-				glog.Error("FiatRatesDownloader: FiveMinutesTickers error ", err)
+				logFiatRatesDownloaderError("FiatRatesDownloader: FiveMinutesTickers error ", err)
 			} else {
 				fr.setFiveMinutesTickers(fiveMinutesTickers)
 				fr.observeUpdateDuration("five_minutes_tickers", "success", fiveMinutesTickersStart)
@@ -540,7 +548,7 @@ func (fr *FiatRates) RunDownloader() error {
 			err = fr.downloader.UpdateHistoricalTickers()
 			if err != nil {
 				fr.observeUpdateDuration("historical_tickers", "error", historicalTickersStart)
-				glog.Error("FiatRatesDownloader: UpdateHistoricalTickers error ", err)
+				logFiatRatesDownloaderError("FiatRatesDownloader: UpdateHistoricalTickers error ", err)
 				if bootstrapInProgress {
 					// Bootstrap policy: count failed cycles and stop bootstrap mode after the
 					// configured limit so we do not retry full-history downloads forever.
@@ -589,8 +597,13 @@ func (fr *FiatRates) RunDownloader() error {
 					err = fr.downloader.UpdateHistoricalTokenTickers()
 					if err != nil {
 						cycleSuccessful = false
-						fr.observeUpdateDuration("historical_token_tickers", "error", historicalTokenTickersStart)
-						glog.Error("FiatRatesDownloader: UpdateHistoricalTokenTickers error ", err)
+						if isCoingeckoHistoricalTokenUpdateInProgressError(err) {
+							fr.observeUpdateDuration("historical_token_tickers", "skipped", historicalTokenTickersStart)
+							glog.Info("FiatRatesDownloader: UpdateHistoricalTokenTickers skipped, update already in progress")
+						} else {
+							fr.observeUpdateDuration("historical_token_tickers", "error", historicalTokenTickersStart)
+							logFiatRatesDownloaderError("FiatRatesDownloader: UpdateHistoricalTokenTickers error ", err)
+						}
 					} else {
 						fr.observeUpdateDuration("historical_token_tickers", "success", historicalTokenTickersStart)
 						glog.Info("FiatRatesDownloader: UpdateHistoricalTokenTickers finished")
@@ -604,8 +617,13 @@ func (fr *FiatRates) RunDownloader() error {
 						historicalTokenTickersStart := time.Now()
 						err := fr.downloader.UpdateHistoricalTokenTickers()
 						if err != nil {
+							if isCoingeckoHistoricalTokenUpdateInProgressError(err) {
+								fr.observeUpdateDuration("historical_token_tickers", "skipped", historicalTokenTickersStart)
+								glog.Info("FiatRatesDownloader: UpdateHistoricalTokenTickers skipped, update already in progress")
+								return
+							}
 							fr.observeUpdateDuration("historical_token_tickers", "error", historicalTokenTickersStart)
-							glog.Error("FiatRatesDownloader: UpdateHistoricalTokenTickers error ", err)
+							logFiatRatesDownloaderError("FiatRatesDownloader: UpdateHistoricalTokenTickers error ", err)
 						} else {
 							fr.observeUpdateDuration("historical_token_tickers", "success", historicalTokenTickersStart)
 							glog.Info("FiatRatesDownloader: UpdateHistoricalTokenTickers finished")

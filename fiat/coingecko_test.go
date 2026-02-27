@@ -3,6 +3,7 @@
 package fiat
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -500,5 +501,18 @@ func TestUpdateHistoricalTokenTickers_StopsOnThrottleExhaustion(t *testing.T) {
 	wantRequests := 1 + len(coingeckoThrottleRetryBackoff)
 	if got := int(marketChartRequests.Load()); got != wantRequests {
 		t.Fatalf("unexpected market_chart request count: got %d, want %d", got, wantRequests)
+	}
+}
+
+func TestUpdateHistoricalTokenTickers_ReturnsInProgressError(t *testing.T) {
+	cg := &Coingecko{
+		updatingTokens: true,
+	}
+	err := cg.UpdateHistoricalTokenTickers()
+	if err == nil {
+		t.Fatal("expected non-nil in-progress error")
+	}
+	if !errors.Is(err, errCoingeckoHistoricalTokenUpdateInProgress) {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
