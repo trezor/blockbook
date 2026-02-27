@@ -355,3 +355,72 @@ func TestMakeReq_ThrottleRetriesEventuallySuccess(t *testing.T) {
 		t.Fatalf("unexpected number of requests: got %d, want %d", got, 3)
 	}
 }
+
+func TestUpdateHistoricalTickers_StopsOnThrottleExhaustion(t *testing.T) {
+	config := common.Config{
+		CoinName: "fakecoin",
+	}
+	d, _, tmp := setupRocksDB(t, &testBitcoinParser{
+		BitcoinParser: bitcoinTestnetParser(),
+	}, &config)
+	defer closeAndDestroyRocksDB(t, d, tmp)
+
+	if err := d.FiatRatesSetHistoricalBootstrapComplete(true); err != nil {
+		t.Fatalf("FiatRatesSetHistoricalBootstrapComplete failed: %v", err)
+	}
+
+	originalBackoff := coingeckoThrottleRetryBackoff
+	coingeckoThrottleRetryBackoff = []time.Duration{0, 0, 0, 0}
+	defer func() {
+		coingeckoThrottleRetryBackoff = originalBackoff
+	}()
+
+	var usdRequests atomic.Int32
+	var eurRequests atomic.Int32
+
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/simple/supported_vs_currencies":
+			_, _ = w.Write([]byte(`["usd","eur"]`))
+		case "/coins/ethereum/market_chart":
+			switch r.URL.Query().Get("vs_currency") {
+			case "usd":
+				usdRequests.Add(1)
+				http.Error(w, "exceeded the rate limit", http.StatusTooManyRequests)
+			case "eur":
+				eurRequests.Add(1)
+				_, _ = w.Write([]byte(`{"prices":[[1654732800000,1234.5]]}`))
+			default:
+				http.Error(w, "unexpected vs_currency", http.StatusBadRequest)
+			}
+		default:
+			http.Error(w, fmt.Sprintf("unexpected path %s", r.URL.Path), http.StatusNotFound)
+		}
+	}))
+	defer mockServer.Close()
+
+	cg := &Coingecko{
+		coin:         "ethereum",
+		bootstrapURL: mockServer.URL,
+		tipURL:       mockServer.URL,
+		httpClient:   mockServer.Client(),
+		db:           d,
+		plan:         coingeckoPlanFree,
+	}
+
+	err := cg.UpdateHistoricalTickers()
+	if err == nil {
+		t.Fatal("expected throttle exhaustion error")
+	}
+	if !isCoingeckoThrottleRetriesExhaustedError(err) {
+		t.Fatalf("expected throttle exhaustion error, got %v", err)
+	}
+
+	wantUSDRequests := 1 + len(coingeckoThrottleRetryBackoff)
+	if got := int(usdRequests.Load()); got != wantUSDRequests {
+		t.Fatalf("unexpected usd request count: got %d, want %d", got, wantUSDRequests)
+	}
+	if got := int(eurRequests.Load()); got != 0 {
+		t.Fatalf("expected eur request count 0 after throttle exhaustion, got %d", got)
+	}
+}
