@@ -226,7 +226,7 @@ func (b *EthereumRPC) observeEthCallStakingPool(field string) {
 	b.metrics.EthCallStakingPool.With(common.Labels{"field": field}).Inc()
 }
 
-// EnsureSameRPCHost validates that both RPC URLs point to the same host.
+// EnsureSameRPCHost validates both RPC URLs and logs a warning if hosts differ.
 func EnsureSameRPCHost(httpURL, wsURL string) error {
 	if httpURL == "" || wsURL == "" {
 		return nil
@@ -240,7 +240,7 @@ func EnsureSameRPCHost(httpURL, wsURL string) error {
 		return errors.Annotatef(err, "rpc_url_ws")
 	}
 	if !strings.EqualFold(httpHost, wsHost) {
-		return errors.Errorf("rpc_url host %q and rpc_url_ws host %q must match", httpHost, wsHost)
+		glog.Warningf("rpc_url host %q and rpc_url_ws host %q differ", httpHost, wsHost)
 	}
 	return nil
 }
