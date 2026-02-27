@@ -7,6 +7,9 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 )
 
+// ProcessInternalTransactions specifies if internal transactions are processed
+var ProcessInternalTransactions bool
+
 type EthereumInternalDataProvider interface {
 	GetInternalDataForBlock(
 		hash string,
