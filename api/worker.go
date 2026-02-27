@@ -431,7 +431,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 		ethTxData := w.chainParser.GetEthereumTxData(bchainTx)
 
 		var internalData *bchain.EthereumInternalData
-		if eth.ProcessInternalTransactions {
+		if bchain.ProcessInternalTransactions {
 			internalData, err = w.db.GetEthereumInternalData(bchainTx.Txid)
 			if err != nil {
 				return nil, err
@@ -663,7 +663,7 @@ func (w *Worker) getContractDescriptorInfo(cd bchain.AddressDescriptor, standard
 	}
 	if contractInfo == nil {
 		// log warning only if the contract should have been known from processing of the internal data
-		if eth.ProcessInternalTransactions {
+		if bchain.ProcessInternalTransactions {
 			glog.Warningf("Contract %v %v not found in DB", cd, standardFromContext)
 		}
 		contractInfo, err = w.chain.GetContractInfo(cd)
@@ -1673,7 +1673,7 @@ func (w *Worker) balanceHistoryForTxid(addrDesc bchain.AddressDescriptor, txid s
 				}
 			}
 			// process internal transactions
-			if eth.ProcessInternalTransactions {
+			if bchain.ProcessInternalTransactions {
 				internalData, err := w.db.GetEthereumInternalData(txid)
 				if err != nil {
 					return nil, err

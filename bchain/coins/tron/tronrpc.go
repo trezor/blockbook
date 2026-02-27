@@ -643,7 +643,7 @@ func (b *TronRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 			txByIDByID = txByIDRes.txByID
 		}
 
-		if eth.ProcessInternalTransactions {
+		if bchain.ProcessInternalTransactions {
 			internalData, contracts, internalErr = buildInternalDataFromTronInfos(
 				tronTxInfosFromResponses(infosRes.infos),
 				block.Transactions,

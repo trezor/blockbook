@@ -7,7 +7,6 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/trezor/blockbook/bchain"
-	"github.com/trezor/blockbook/bchain/coins/eth"
 )
 
 type TronInternalDataProvider struct {
@@ -56,7 +55,7 @@ func (p *TronInternalDataProvider) GetInternalDataForBlock(
 	data := make([]bchain.EthereumInternalData, len(transactions))
 	contracts := make([]bchain.ContractInfo, 0)
 
-	if !eth.ProcessInternalTransactions {
+	if !bchain.ProcessInternalTransactions {
 		return data, contracts, nil
 	}
 

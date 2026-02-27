@@ -10,7 +10,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/trezor/blockbook/bchain"
-	"github.com/trezor/blockbook/bchain/coins/eth"
 )
 
 type MockTronHTTPClient struct {
@@ -33,7 +32,7 @@ func (m *MockTronHTTPClient) Request(ctx context.Context, path string, reqBody i
 }
 
 func TestTronInternalDataProvider_GetInternalDataForBlock_Simple(t *testing.T) {
-	eth.ProcessInternalTransactions = true
+	bchain.ProcessInternalTransactions = true
 
 	// fake transaction info returned from the Tron HTTP API
 	fake := []tronTxInfo{

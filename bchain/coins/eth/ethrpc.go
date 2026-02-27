@@ -101,9 +101,6 @@ type EthereumRPC struct {
 	InternalDataProvider      bchain.EthereumInternalDataProvider
 }
 
-// ProcessInternalTransactions specifies if internal transactions are processed
-var ProcessInternalTransactions bool
-
 // NewEthereumRPC returns new EthRPC instance.
 func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.NotificationType)) (bchain.BlockChain, error) {
 	var err error
@@ -148,7 +145,7 @@ func NewEthereumRPC(config json.RawMessage, pushHandler func(bchain.Notification
 	// 1-slot buffer ensures we only queue one "refresh tip" signal at a time.
 	s.newBlockNotifyCh = make(chan struct{}, 1)
 
-	ProcessInternalTransactions = c.ProcessInternalTransactions
+	bchain.ProcessInternalTransactions = c.ProcessInternalTransactions
 
 	// always create parser
 	parser := NewEthereumParser(c.BlockAddressesToKeep, c.AddressAliases)
@@ -973,7 +970,7 @@ func (b *EthereumRPC) getInternalDataForBlock(ctx context.Context, blockHash str
 
 	data := make([]bchain.EthereumInternalData, len(transactions))
 	contracts := make([]bchain.ContractInfo, 0)
-	if ProcessInternalTransactions {
+	if bchain.ProcessInternalTransactions {
 		var trace []rpcTraceResult
 		err := b.RPC.CallContext(ctx, &trace, "debug_traceBlockByHash", blockHash, map[string]interface{}{"tracer": "callTracer"}) // Use caller-provided ctx for timeout/cancel.
 		if err != nil {
