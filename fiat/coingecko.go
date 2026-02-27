@@ -2,6 +2,7 @@ package fiat
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -38,6 +39,19 @@ var coingeckoThrottleRetryBackoff = []time.Duration{
 	2 * time.Minute,
 	3 * time.Minute,
 	4 * time.Minute,
+}
+
+type coingeckoThrottleRetriesExhaustedError struct {
+	cause   error
+	retries int
+}
+
+func (e *coingeckoThrottleRetriesExhaustedError) Error() string {
+	return fmt.Sprintf("coingecko throttle retries exhausted after %d retries: %v", e.retries, e.cause)
+}
+
+func (e *coingeckoThrottleRetriesExhaustedError) Unwrap() error {
+	return e.cause
 }
 
 // Coingecko is a structure that implements RatesDownloaderInterface
@@ -218,6 +232,11 @@ func isCoingeckoThrottleError(err error) bool {
 		strings.Contains(lowerError, "throttled")
 }
 
+func isCoingeckoThrottleRetriesExhaustedError(err error) bool {
+	var exhaustedErr *coingeckoThrottleRetriesExhaustedError
+	return errors.As(err, &exhaustedErr)
+}
+
 // makeReq HTTP request helper with bounded retries for throttling errors.
 func (cg *Coingecko) makeReq(url string, endpoint string, plan string) ([]byte, error) {
 	for attempt := 0; ; attempt++ {
@@ -257,7 +276,10 @@ func (cg *Coingecko) makeReq(url string, endpoint string, plan string) ([]byte, 
 				cg.metrics.CoingeckoRequests.With(common.Labels{"endpoint": endpoint, "status": "error"}).Inc()
 			}
 			glog.Warningf("Coingecko makeReq %v error %v, retries exhausted after %d retries", url, err, len(coingeckoThrottleRetryBackoff))
-			return nil, err
+			return nil, &coingeckoThrottleRetriesExhaustedError{
+				cause:   err,
+				retries: len(coingeckoThrottleRetryBackoff),
+			}
 		}
 		time.Sleep(coingeckoThrottleRetryBackoff[attempt])
 	}
@@ -636,12 +658,17 @@ func (cg *Coingecko) UpdateHistoricalTickers() error {
 	vsCurrencies = vs
 
 	hadFailures := false
+	var throttleErr error
 	for _, currency := range vsCurrencies {
 		// get historical rates for each currency
 		var err error
 		var req bool
 		if req, err = cg.getHistoricalTicker(historicalSyncURL, tickersToUpdate, cg.coin, currency, "", allowMax); err != nil {
 			hadFailures = true
+			if isCoingeckoThrottleRetriesExhaustedError(err) {
+				throttleErr = err
+				break
+			}
 			// report error and continue, Coingecko may return error like "Could not find coin with the given id"
 			// the rates will be updated next run
 			glog.Errorf("getHistoricalTicker %s-%s %v", cg.coin, currency, err)
@@ -652,6 +679,9 @@ func (cg *Coingecko) UpdateHistoricalTickers() error {
 	}
 	if err := cg.storeTickers(tickersToUpdate); err != nil {
 		return err
+	}
+	if throttleErr != nil {
+		return throttleErr
 	}
 	if bootstrapInProgress && hadFailures {
 		return fmt.Errorf("coingecko historical bootstrap incomplete: one or more currency updates failed")
