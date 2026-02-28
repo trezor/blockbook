@@ -325,6 +325,11 @@ func (p *BaseParser) GetChainExtraData(tx *Tx) (json.RawMessage, error) {
 	return nil, nil
 }
 
+// GetChainExtraPayloadType identifies the shape of normalized chain-specific transaction data.
+func (p *BaseParser) GetChainExtraPayloadType() ChainExtraPayloadType {
+	return ChainExtraPayloadTypeUnknown
+}
+
 // FormatAddressAlias makes possible to do coin specific formatting to an address alias
 func (p *BaseParser) FormatAddressAlias(address string, name string) string {
 	return name

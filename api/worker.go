@@ -161,6 +161,21 @@ func (w *Worker) newAddressesMapForAliases() map[string]struct{} {
 	return nil
 }
 
+func (w *Worker) getChainExtraData(tx *bchain.Tx) (*ChainExtraData, error) {
+	payload, err := w.chainParser.GetChainExtraData(tx)
+	if err != nil {
+		return nil, err
+	}
+	if len(payload) == 0 {
+		return nil, nil
+	}
+
+	return &ChainExtraData{
+		PayloadType: w.chainParser.GetChainExtraPayloadType(),
+		Payload:     payload,
+	}, nil
+}
+
 func (w *Worker) getAddressAliases(addresses map[string]struct{}) AddressAliasesMap {
 	if len(addresses) > 0 {
 		aliases := make(AddressAliasesMap)
@@ -485,7 +500,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 
 	}
 	var sj json.RawMessage
-	var chainExtraData json.RawMessage
+	var chainExtraData *ChainExtraData
 	// return CoinSpecificData for all mempool transactions or if requested
 	if specificJSON || bchainTx.Confirmations == 0 {
 		sj, err = w.chain.GetTransactionSpecific(bchainTx)
@@ -493,7 +508,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 			return nil, err
 		}
 	}
-	chainExtraData, err = w.chainParser.GetChainExtraData(bchainTx)
+	chainExtraData, err = w.getChainExtraData(bchainTx)
 	if err != nil {
 		glog.Warningf("GetChainExtraData error %v, %v", err, bchainTx)
 	}
@@ -534,7 +549,7 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 	var pValInSat *big.Int
 	var tokens []TokenTransfer
 	var ethSpecific *EthereumSpecific
-	var chainExtraData json.RawMessage
+	var chainExtraData *ChainExtraData
 	addresses := w.newAddressesMapForAliases()
 	vins := make([]Vin, len(mempoolTx.Vin))
 	rbf := false
@@ -616,7 +631,7 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 			Data:                 ethTxData.Data,
 		}
 	}
-	chainExtraData, err = w.chainParser.GetChainExtraData(&bchain.Tx{
+	chainExtraData, err = w.getChainExtraData(&bchain.Tx{
 		Txid:             mempoolTx.Txid,
 		CoinSpecificData: mempoolTx.CoinSpecificData,
 	})

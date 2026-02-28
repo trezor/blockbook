@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math/big"
 	"strings"
 
 	"github.com/decred/base58"
@@ -175,19 +174,11 @@ func (p *TronParser) EthereumTypeGetTokenTransfersFromTx(tx *bchain.Tx) (bchain.
 
 func (p *TronParser) GetEthereumTxData(tx *bchain.Tx) *bchain.EthereumTxData {
 	r := p.EthereumParser.GetEthereumTxData(tx)
-	if tx == nil {
-		return r
-	}
-	_, extra, err := parseTronExtra(tx)
-	if err != nil {
-		return r
-	}
-	if r.GasUsed == nil && extra.EnergyUsageTotal != "" {
-		energy, ok := new(big.Int).SetString(extra.EnergyUsageTotal, 10)
-		if ok {
-			r.GasUsed = energy
-		}
-	}
+	// Tron reuses Ethereum-like data structure, but some fields are not
+	// semantically correct for Tron transactions and should not leak into API output.
+	r.Nonce = 0
+	r.GasLimit = nil
+	r.GasUsed = nil
 	return r
 }
 
@@ -197,6 +188,10 @@ func (p *TronParser) GetChainExtraData(tx *bchain.Tx) (json.RawMessage, error) {
 		return nil, err
 	}
 	return csd.ChainExtraData, nil
+}
+
+func (p *TronParser) GetChainExtraPayloadType() bchain.ChainExtraPayloadType {
+	return bchain.ChainExtraPayloadTypeTron
 }
 
 func parseTronExtra(tx *bchain.Tx) (bchain.EthereumSpecificData, *tronTxExtraData, error) {
