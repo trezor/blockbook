@@ -10,30 +10,6 @@ import (
 	"github.com/trezor/blockbook/bchain"
 )
 
-type TronChainExtraData struct {
-	ContractType     string          `json:"contractType,omitempty"`
-	Operation        string          `json:"operation,omitempty"`
-	Resource         string          `json:"resource,omitempty"`
-	StakeAmount      string          `json:"stakeAmount,omitempty"`
-	UnstakeAmount    string          `json:"unstakeAmount,omitempty"`
-	DelegateAmount   string          `json:"delegateAmount,omitempty"`
-	DelegateTo       string          `json:"delegateTo,omitempty"`
-	AssetIssueID     string          `json:"assetIssueID,omitempty"`
-	TotalFee         string          `json:"totalFee,omitempty"`
-	EnergyUsage      string          `json:"energyUsage,omitempty"`
-	EnergyUsageTotal string          `json:"energyUsageTotal,omitempty"`
-	EnergyFee        string          `json:"energyFee,omitempty"`
-	BandwidthUsage   string          `json:"bandwidthUsage,omitempty"`
-	BandwidthFee     string          `json:"bandwidthFee,omitempty"`
-	Result           string          `json:"result,omitempty"`
-	Votes            []TronVoteExtra `json:"votes,omitempty"`
-}
-
-type TronVoteExtra struct {
-	Address string `json:"address,omitempty"`
-	Count   string `json:"count,omitempty"`
-}
-
 type tronGetTransactionInfoByIDResponse struct {
 	ID                     string                    `json:"id,omitempty"`
 	Fee                    *int64                    `json:"fee,omitempty"`
@@ -61,10 +37,6 @@ type tronGetTransactionInfoByIDResponse struct {
 	} `json:"receipt"`
 	Log []*bchain.RpcLog `json:"log,omitempty"`
 }
-
-// Keep internal aliases to avoid touching existing parser logic.
-type tronTxExtraData = TronChainExtraData
-type tronVoteExtra = TronVoteExtra
 
 func tronOperationFromContractType(contractType string) string {
 	switch contractType {
@@ -259,8 +231,8 @@ func tronNormalizeLogs(logs []*bchain.RpcLog) []*bchain.RpcLog {
 	return logs
 }
 
-func tronBuildExtraData(txByID *tronGetTransactionByIDResponse, txInfo *tronGetTransactionInfoByIDResponse) tronTxExtraData {
-	extra := tronTxExtraData{}
+func tronBuildExtraData(txByID *tronGetTransactionByIDResponse, txInfo *tronGetTransactionInfoByIDResponse) bchain.TronChainExtraData {
+	extra := bchain.TronChainExtraData{}
 	if c := tronFirstContract(txByID); c != nil {
 		extra.ContractType = c.Type
 		extra.Operation = tronOperationFromContractType(c.Type)
@@ -269,10 +241,10 @@ func tronBuildExtraData(txByID *tronGetTransactionByIDResponse, txInfo *tronGetT
 		switch c.Type {
 		case "VoteWitnessContract":
 			if len(v.Votes) > 0 {
-				extra.Votes = make([]tronVoteExtra, 0, len(v.Votes))
+				extra.Votes = make([]bchain.TronVoteExtra, 0, len(v.Votes))
 				for _, vote := range v.Votes {
 					if count := tronNumberToString(vote.VoteCount); count != "" {
-						extra.Votes = append(extra.Votes, tronVoteExtra{
+						extra.Votes = append(extra.Votes, bchain.TronVoteExtra{
 							Address: tronAddressToBase58(vote.VoteAddress),
 							Count:   count,
 						})
@@ -477,8 +449,15 @@ func (b *TronRPC) getTransactionByID(txid string) (*tronGetTransactionByIDRespon
 	req := map[string]string{
 		"value": strip0xPrefix(txid),
 	}
+	var raw json.RawMessage
+	if err := b.http.Request(ctx, "/wallet/gettransactionbyid", req, &raw); err != nil {
+		return nil, err
+	}
+	if string(raw) == "{}" {
+		return nil, nil
+	}
 	var resp tronGetTransactionByIDResponse
-	if err := b.http.Request(ctx, "/wallet/gettransactionbyid", req, &resp); err != nil {
+	if err := json.Unmarshal(raw, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil
