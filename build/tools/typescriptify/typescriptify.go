@@ -25,6 +25,7 @@ func main() {
 
 	// API - REST and Websocket
 	t.Add(api.APIError{})
+	t.Add(bchain.TronChainExtraData{})
 	t.Add(api.Tx{})
 	t.Add(api.FeeStats{})
 	t.Add(api.Address{})

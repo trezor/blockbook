@@ -410,6 +410,7 @@ type BlockChainParser interface {
 	// EthereumType specific
 	EthereumTypeGetTokenTransfersFromTx(tx *Tx) (TokenTransfers, error)
 	GetEthereumTxData(tx *Tx) *EthereumTxData
+	GetChainExtraPayloadType() ChainExtraPayloadType
 	GetChainExtraData(tx *Tx) (json.RawMessage, error)
 	ParseInputData(signatures *[]FourByteSignature, data string) *EthereumParsedInputData
 	// AddressAlias
