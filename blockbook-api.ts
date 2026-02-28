@@ -7,6 +7,28 @@ export interface APIError {
     /** Whether the error message can safely be shown to the end user. */
     Public: boolean;
 }
+export interface TronVoteExtra {
+    address?: string;
+    count?: string;
+}
+export interface TronChainExtraData {
+    contractType?: string;
+    operation?: string;
+    resource?: string;
+    stakeAmount?: string;
+    unstakeAmount?: string;
+    delegateAmount?: string;
+    delegateTo?: string;
+    assetIssueID?: string;
+    totalFee?: string;
+    energyUsage?: string;
+    energyUsageTotal?: string;
+    energyFee?: string;
+    bandwidthUsage?: string;
+    bandwidthFee?: string;
+    result?: string;
+    votes?: TronVoteExtra[];
+}
 export interface AddressAlias {
     /** Type of alias, e.g., user-defined name or contract name. */
     Type: string;
@@ -190,8 +212,8 @@ export interface Tx {
     rbf?: boolean;
     /** Blockchain-specific extended data. */
     coinSpecificData?: any;
-    /** Additional normalized chain-specific transaction data. */
-    chainExtraData?: TronChainExtraData | Record<string, unknown>;
+    /** Additional normalized chain-specific transaction data. Use payloadType as discriminator for payload. */
+    chainExtraData?: { payloadType: 'tron'; payload?: TronChainExtraData } | { payloadType: string; payload?: any };
     /** List of token transfers that occurred in this transaction. */
     tokenTransfers?: TokenTransfer[];
     /** Ethereum-like blockchain specific data (if applicable). */
@@ -556,29 +578,6 @@ export interface AvailableVsCurrencies {
     /** Error message, if any, when fetching the available currencies. */
     error?: string;
 }
-export interface TronVoteExtra {
-    address?: string;
-    count?: string;
-}
-export interface TronChainExtraData {
-    contractType?: string;
-    operation?: string;
-    resource?: string;
-    stakeAmount?: string;
-    unstakeAmount?: string;
-    delegateAmount?: string;
-    delegateTo?: string;
-    assetIssueID?: string;
-    totalFee?: string;
-    energyUsage?: string;
-    energyUsageTotal?: string;
-    energyFee?: string;
-    bandwidthUsage?: string;
-    bandwidthFee?: string;
-    result?: string;
-    votes?: TronVoteExtra[];
-}
-
 export interface WsReq {
     /** Unique request identifier. */
     id: string;
