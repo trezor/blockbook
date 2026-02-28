@@ -122,10 +122,10 @@
             <td><span class="copyable">{{$chainExtra.EnergyUsage}}</span></td>
         </tr>
         {{end}}
-        {{if $chainExtra.EnergyFee}}
+        {{if $chainExtra.EnergyFeeAmount}}
         <tr>
             <td>Energy Fee</td>
-            <td><span class="copyable">{{$chainExtra.EnergyFee}}</span> sun</td>
+            <td>{{formattedAmountSpan $chainExtra.EnergyFeeAmount 6 "TRX" $data "copyable"}}</td>
         </tr>
         {{end}}
         {{if $chainExtra.BandwidthUsage}}
@@ -134,16 +134,16 @@
             <td><span class="copyable">{{$chainExtra.BandwidthUsage}}</span></td>
         </tr>
         {{end}}
-        {{if $chainExtra.BandwidthFee}}
+        {{if $chainExtra.BandwidthFeeAmount}}
         <tr>
             <td>Bandwidth Fee</td>
-            <td><span class="copyable">{{$chainExtra.BandwidthFee}}</span> sun</td>
+            <td>{{formattedAmountSpan $chainExtra.BandwidthFeeAmount 6 "TRX" $data "copyable"}}</td>
         </tr>
         {{end}}
-        {{if $chainExtra.TotalFee}}
+        {{if $chainExtra.TotalFeeAmount}}
         <tr>
             <td>Total Fee (Backend)</td>
-            <td><span class="copyable">{{$chainExtra.TotalFee}}</span> sun</td>
+            <td>{{formattedAmountSpan $chainExtra.TotalFeeAmount 6 "TRX" $data "copyable"}}</td>
         </tr>
         {{end}}
         {{end}}
@@ -212,7 +212,7 @@
         {{end}}
         {{end}}
         {{end}}
-        {{if $tx.FeesSat}}
+        {{if and $tx.FeesSat (not $chainExtra)}}
         <tr>
             <td>Fees</td>
             <td>{{amountSpan $tx.FeesSat $data "copyable"}}{{if $tx.Size}} ({{feePerByte $tx}}){{end}}</td>
@@ -237,7 +237,7 @@
             </td>
         </tr>
         {{end}}
-        {{if $tx.EthereumSpecific}}
+        {{if and $tx.EthereumSpecific (not $chainExtra)}}
         <tr>
             <td>Nonce</td>
             <td>{{$tx.EthereumSpecific.Nonce}}</td>
