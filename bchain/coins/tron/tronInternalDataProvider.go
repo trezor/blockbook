@@ -58,6 +58,9 @@ func (p *TronInternalDataProvider) GetInternalDataForBlock(
 	if !bchain.ProcessInternalTransactions {
 		return data, contracts, nil
 	}
+	if len(transactions) == 0 {
+		return data, contracts, nil
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), p.timeout)
 	defer cancel()

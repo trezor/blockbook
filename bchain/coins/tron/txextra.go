@@ -138,6 +138,9 @@ func tronDecimalToHexQuantity(v interface{}) string {
 	if !ok {
 		return ""
 	}
+	if n.Sign() < 0 {
+		return "0x0"
+	}
 	return "0x" + n.Text(16)
 }
 
@@ -499,8 +502,17 @@ func requestTransactionInfoByBlockNum(ctx context.Context, http TronHTTP, blockN
 	req := map[string]any{
 		"num": blockNum,
 	}
+	var raw json.RawMessage
+	if err := http.Request(ctx, "/wallet/gettransactioninfobyblocknum", req, &raw); err != nil {
+		return nil, err
+	}
+
+	if string(raw) == "{}" {
+		return nil, nil
+	}
+
 	var resp []tronGetTransactionInfoByIDResponse
-	if err := http.Request(ctx, "/wallet/gettransactioninfobyblocknum", req, &resp); err != nil {
+	if err := json.Unmarshal(raw, &resp); err != nil {
 		return nil, err
 	}
 	return resp, nil
