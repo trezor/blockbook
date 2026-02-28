@@ -74,6 +74,28 @@ func TestTronRPC_SendRawTransaction(t *testing.T) {
 	require.Equal(t, map[string]string{"transaction": "deadbeef"}, mockHTTP.LastBody)
 }
 
+func TestTronRPC_SendRawTransaction_StripsPrefixFromResponse(t *testing.T) {
+	txHex := "deadbeef"
+
+	mockHTTP := &MockTronHTTPClient{
+		Resp: tronBroadcastHexResponse{
+			Result: true,
+			TxID:   "0x7c2d4206c03a883dd9066d620335dc1be272a8dc733cfa3f6d10308faa37facc",
+		},
+	}
+
+	tronRPC := &TronRPC{
+		EthereumRPC: &eth.EthereumRPC{
+			Timeout: time.Second,
+		},
+		http: mockHTTP,
+	}
+
+	gotTxID, err := tronRPC.SendRawTransaction(txHex, false)
+	require.NoError(t, err)
+	require.Equal(t, "7c2d4206c03a883dd9066d620335dc1be272a8dc733cfa3f6d10308faa37facc", gotTxID)
+}
+
 func TestTronRPC_SendRawTransaction_Failed(t *testing.T) {
 	mockHTTP := &MockTronHTTPClient{
 		Resp: tronBroadcastHexResponse{
@@ -169,7 +191,7 @@ func TestTronRPC_GetMempoolTransactions(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []string{
 		"a431984fef1d014620504d02f821f872221cf44c250a81a31e81fa4855b2b302",
-		"0xb431984fef1d014620504d02f821f872221cf44c250a81a31e81fa4855b2b303",
+		"b431984fef1d014620504d02f821f872221cf44c250a81a31e81fa4855b2b303",
 	}, txs)
 	require.Equal(t, "/wallet/gettransactionlistfrompending", mockHTTP.LastPath)
 	require.Equal(t, map[string]any{}, mockHTTP.LastBody)

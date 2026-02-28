@@ -656,7 +656,9 @@ func (b *TronRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 	for i := range block.Transactions {
 		tx := &block.Transactions[i]
 		txByID := txByIDByID[strip0xPrefix(tx.Hash)]
+
 		if txByID == nil {
+			glog.V(1).Infof("Tron GetBlock fallback to gettransactionbyid for tx %s in block %d", tx.Hash, bbh.Height)
 			txByID, err = b.getTransactionByIDRequired(tx.Hash)
 			if err != nil {
 				return nil, err
@@ -664,23 +666,20 @@ func (b *TronRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 		}
 
 		txInfo := txInfosByID[strip0xPrefix(tx.Hash)]
-		if txInfo == nil {
-			return nil, errors.Errorf("Tron gettransactioninfobyblocknum missing tx %v in block %v", tx.Hash, bbh.Height)
-		}
 
 		var txInternalData *bchain.EthereumInternalData
 		if i < len(internalData) {
 			txInternalData = &internalData[i]
 		}
 
-		rebuiltTx, err := b.buildTxFromHTTPData(tx.Hash, txByID, txInfo, bbh.Time, confirmations, txInternalData)
+		rebuiltTx, err := b.buildTxFromHTTPData(strip0xPrefix(tx.Hash), txByID, txInfo, bbh.Time, confirmations, txInternalData)
 		if err != nil {
 			return nil, err
 		}
 		txs[i] = *rebuiltTx
 
 		if b.Mempool != nil {
-			b.Mempool.RemoveTransactionFromMempool(tx.Hash)
+			b.Mempool.RemoveTransactionFromMempool(strip0xPrefix(tx.Hash))
 		}
 	}
 
@@ -752,7 +751,11 @@ func (b *TronRPC) GetMempoolTransactions() ([]string, error) {
 	if len(resp.TxID) == 0 {
 		return []string{}, nil
 	}
-	return resp.TxID, nil
+	txs := make([]string, len(resp.TxID))
+	for i := range resp.TxID {
+		txs[i] = strip0xPrefix(resp.TxID[i])
+	}
+	return txs, nil
 }
 
 func (b *TronRPC) EthereumTypeGetBalance(addrDesc bchain.AddressDescriptor) (*big.Int, error) {
@@ -847,10 +850,11 @@ func (b *TronRPC) SendRawTransaction(tx string, disableAlternativeRPC bool) (str
 		return "", errors.New("Tron broadcasthex failed")
 	}
 
+	txID := strip0xPrefix(resp.TxID)
 	if b.ChainConfig != nil && b.ChainConfig.DisableMempoolSync && b.Mempool != nil {
-		b.Mempool.AddTransactionToMempool(resp.TxID)
+		b.Mempool.AddTransactionToMempool(txID)
 	}
-	return resp.TxID, nil
+	return txID, nil
 }
 
 func (b *TronRPC) EthereumTypeGetRawTransaction(txid string) (string, error) {

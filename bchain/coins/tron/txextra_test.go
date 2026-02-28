@@ -5,6 +5,7 @@ package tron
 import (
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/stretchr/testify/require"
 )
 
@@ -96,4 +97,57 @@ func TestTronBuildExtraData_AssetIssueID(t *testing.T) {
 	extra := tronBuildExtraData(txByID, txInfo)
 	require.Equal(t, "trc10Transfer", extra.Operation)
 	require.Equal(t, "1000047", extra.AssetIssueID)
+}
+
+func TestTronBuildRpcTransaction_ValueIsEthereumHexQuantity(t *testing.T) {
+	tests := []struct {
+		name     string
+		contract tronTxContract
+		want     int64
+	}{
+		{
+			name:     "transfer decimal string",
+			contract: tronTxContract{Type: "TransferContract"},
+			want:     586000000,
+		},
+		{
+			name:     "trigger smart contract hex string",
+			contract: tronTxContract{Type: "TriggerSmartContract"},
+			want:     12345,
+		},
+		{
+			name:     "freeze balance integer",
+			contract: tronTxContract{Type: "FreezeBalanceContract"},
+			want:     42000000,
+		},
+		{
+			name:     "unfreeze balance integer",
+			contract: tronTxContract{Type: "UnfreezeBalanceContract"},
+			want:     77000000,
+		},
+		{
+			name:     "delegate balance integer",
+			contract: tronTxContract{Type: "DelegateResourceContract"},
+			want:     88000000,
+		},
+	}
+
+	tests[0].contract.Parameter.Value.Amount = "586000000"
+	tests[1].contract.Parameter.Value.CallValue = "0x3039"
+	tests[2].contract.Parameter.Value.FrozenBalance = int64(42000000)
+	tests[3].contract.Parameter.Value.UnfreezeBalance = int64(77000000)
+	tests[4].contract.Parameter.Value.Balance = int64(88000000)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			txByID := &tronGetTransactionByIDResponse{}
+			txByID.RawData.Contract = []tronTxContract{tt.contract}
+
+			tx := tronBuildRpcTransaction("25b18a55f86afb10e7aca38d0073d04c80397c6636069193953fdefaea0b8369", txByID, nil)
+			value, err := hexutil.DecodeBig(tx.Value)
+
+			require.NoError(t, err)
+			require.Equal(t, tt.want, value.Int64())
+		})
+	}
 }
