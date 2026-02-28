@@ -7,26 +7,6 @@ import (
 	"github.com/trezor/blockbook/bchain"
 )
 
-// tronChainExtraData is a local mirror of tron.TronChainExtraData
-// to break the import cycle: eth (test) → dbtestdata → tron → eth.
-type tronChainExtraData struct {
-	ContractType     string `json:"contractType,omitempty"`
-	Operation        string `json:"operation,omitempty"`
-	Resource         string `json:"resource,omitempty"`
-	StakeAmount      string `json:"stakeAmount,omitempty"`
-	UnstakeAmount    string `json:"unstakeAmount,omitempty"`
-	DelegateAmount   string `json:"delegateAmount,omitempty"`
-	DelegateTo       string `json:"delegateTo,omitempty"`
-	AssetIssueID     string `json:"assetIssueID,omitempty"`
-	TotalFee         string `json:"totalFee,omitempty"`
-	EnergyUsage      string `json:"energyUsage,omitempty"`
-	EnergyUsageTotal string `json:"energyUsageTotal,omitempty"`
-	EnergyFee        string `json:"energyFee,omitempty"`
-	BandwidthUsage   string `json:"bandwidthUsage,omitempty"`
-	BandwidthFee     string `json:"bandwidthFee,omitempty"`
-	Result           string `json:"result,omitempty"`
-}
-
 // Addresses
 const (
 	TronAddrZero        = "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb"
@@ -54,7 +34,7 @@ const (
 	TronTx1Packed = "08a7a5a31a1a9a011201d218ba722a44a9059cbb000000000000000000000000242aa579f130bf6fea5eac12aa6b846fb8b293ab0000000000000000000000000000000000000000000000000000000000ab604e3220a431984fef1d014620504d02f821f872221cf44c250a81a31e81fa4855b2b3023a14eca9bc828a3005b9a3b909f2cc5c2a54794de05f4214ff324071970b2b08822caa310c1bb458e63a503322a8010a02393a1201011a9e010a14eca9bc828a3005b9a3b909f2cc5c2a54794de05f12200000000000000000000000000000000000000000000000000000000000ab604e1a20ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef1a20000000000000000000000000ff324071970b2b08822caa310c1bb458e63a50331a20000000000000000000000000242aa579f130bf6fea5eac12aa6b846fb8b293ab"
 )
 
-var TronTx1Extra = tronChainExtraData{
+var TronTx1Extra = bchain.TronChainExtraData{
 	ContractType:     "TriggerSmartContract",
 	Operation:        "contractCall",
 	AssetIssueID:     "1002001",
@@ -66,7 +46,7 @@ var TronTx1Extra = tronChainExtraData{
 	Result:           "SUCCESS",
 }
 
-func mustMarshalTronTxExtraData(extra tronChainExtraData) json.RawMessage {
+func mustMarshalTronTxExtraData(extra bchain.TronChainExtraData) json.RawMessage {
 	b, err := json.Marshal(extra)
 	if err != nil {
 		panic(err)

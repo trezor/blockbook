@@ -55,11 +55,11 @@ func (e *tronTxExtraTemplateData) hasData() bool {
 }
 
 func chainExtra(tx *api.Tx) *tronTxExtraTemplateData {
-	if tx == nil || len(tx.ChainExtraData) == 0 {
+	if tx == nil || tx.ChainExtraData == nil || tx.ChainExtraData.PayloadType != "tron" || len(tx.ChainExtraData.Payload) == 0 {
 		return nil
 	}
 	var extra tronTxExtraTemplateData
-	if err := json.Unmarshal(tx.ChainExtraData, &extra); err != nil {
+	if err := json.Unmarshal(tx.ChainExtraData.Payload, &extra); err != nil {
 		return nil
 	}
 	extra.Operation = strings.TrimSpace(extra.Operation)
