@@ -2,9 +2,11 @@ package server
 
 import (
 	"encoding/json"
+	"math/big"
 	"strings"
 
 	"github.com/trezor/blockbook/api"
+	"github.com/trezor/blockbook/bchain"
 )
 
 func init() {
@@ -17,22 +19,10 @@ type tronTxExtraVote struct {
 }
 
 type tronTxExtraTemplateData struct {
-	ContractType     string            `json:"contractType,omitempty"`
-	Operation        string            `json:"operation,omitempty"`
-	Resource         string            `json:"resource,omitempty"`
-	StakeAmount      string            `json:"stakeAmount,omitempty"`
-	UnstakeAmount    string            `json:"unstakeAmount,omitempty"`
-	DelegateAmount   string            `json:"delegateAmount,omitempty"`
-	DelegateTo       string            `json:"delegateTo,omitempty"`
-	AssetIssueID     string            `json:"assetIssueID,omitempty"`
-	TotalFee         string            `json:"totalFee,omitempty"`
-	EnergyUsage      string            `json:"energyUsage,omitempty"`
-	EnergyUsageTotal string            `json:"energyUsageTotal,omitempty"`
-	EnergyFee        string            `json:"energyFee,omitempty"`
-	BandwidthUsage   string            `json:"bandwidthUsage,omitempty"`
-	BandwidthFee     string            `json:"bandwidthFee,omitempty"`
-	Result           string            `json:"result,omitempty"`
-	Votes            []tronTxExtraVote `json:"votes,omitempty"`
+	bchain.TronChainExtraData
+	TotalFeeAmount     *api.Amount `json:"-"`
+	EnergyFeeAmount    *api.Amount `json:"-"`
+	BandwidthFeeAmount *api.Amount `json:"-"`
 }
 
 func (e *tronTxExtraTemplateData) hasData() bool {
@@ -58,7 +48,7 @@ func chainExtra(tx *api.Tx) *tronTxExtraTemplateData {
 	if tx == nil || tx.ChainExtraData == nil || tx.ChainExtraData.PayloadType != "tron" || len(tx.ChainExtraData.Payload) == 0 {
 		return nil
 	}
-	var extra tronTxExtraTemplateData
+	var extra bchain.TronChainExtraData
 	if err := json.Unmarshal(tx.ChainExtraData.Payload, &extra); err != nil {
 		return nil
 	}
@@ -66,8 +56,26 @@ func chainExtra(tx *api.Tx) *tronTxExtraTemplateData {
 	extra.ContractType = strings.TrimSpace(extra.ContractType)
 	extra.Resource = strings.TrimSpace(extra.Resource)
 	extra.Result = strings.TrimSpace(extra.Result)
-	if !extra.hasData() {
+	rv := &tronTxExtraTemplateData{
+		TronChainExtraData: extra,
+		TotalFeeAmount:     parseTronSunAmount(extra.TotalFee),
+		EnergyFeeAmount:    parseTronSunAmount(extra.EnergyFee),
+		BandwidthFeeAmount: parseTronSunAmount(extra.BandwidthFee),
+	}
+	if !rv.hasData() {
 		return nil
 	}
-	return &extra
+	return rv
+}
+
+func parseTronSunAmount(amount string) *api.Amount {
+	amount = strings.TrimSpace(amount)
+	if amount == "" {
+		return nil
+	}
+	bi, ok := new(big.Int).SetString(amount, 10)
+	if !ok {
+		return nil
+	}
+	return (*api.Amount)(bi)
 }

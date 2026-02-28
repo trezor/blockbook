@@ -177,6 +177,7 @@ func (p *TronParser) GetEthereumTxData(tx *bchain.Tx) *bchain.EthereumTxData {
 	// Tron reuses Ethereum-like data structure, but some fields are not
 	// semantically correct for Tron transactions and should not leak into API output.
 	r.Nonce = 0
+	r.GasPrice = nil
 	r.GasLimit = nil
 	r.GasUsed = nil
 	return r
