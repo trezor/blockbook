@@ -49,6 +49,25 @@ func TestTronRPC_EthereumTypeGetRawTransaction_Empty(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestTronRPC_GetTransactionByID_EmptyObjectMeansNotFound(t *testing.T) {
+	mockHTTP := &MockTronHTTPClient{
+		Resp: map[string]any{},
+	}
+
+	tronRPC := &TronRPC{
+		EthereumRPC: &eth.EthereumRPC{
+			Timeout: time.Second,
+		},
+		http: mockHTTP,
+	}
+
+	tx, err := tronRPC.getTransactionByID("0x788b4d0ca432b3d07f895dffe80429bf58398d0e86222460b07f9db38e238803")
+	require.NoError(t, err)
+	require.Nil(t, tx)
+	require.Equal(t, "/wallet/gettransactionbyid", mockHTTP.LastPath)
+	require.Equal(t, map[string]string{"value": "788b4d0ca432b3d07f895dffe80429bf58398d0e86222460b07f9db38e238803"}, mockHTTP.LastBody)
+}
+
 func TestTronRPC_SendRawTransaction(t *testing.T) {
 	txID := "7c2d4206c03a883dd9066d620335dc1be272a8dc733cfa3f6d10308faa37facc"
 	txHex := "0xdeadbeef"
