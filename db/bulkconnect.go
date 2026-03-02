@@ -550,10 +550,16 @@ func (b *BulkConnect) Close() error {
 	glog.Info("rocksdb: bulk connect closed, db set to open state")
 
 	// set block times asynchronously (if not in unit test), it slows server startup for chains with large number of blocks
-	if b.d.is.Coin == "coin-unittest" {
-		b.d.setBlockTimes()
+	d := b.d
+	if d.is.Coin == "coin-unittest" {
+		d.setBlockTimes()
 	} else {
-		go b.d.setBlockTimes()
+		// Keep async block-time refresh tracked so RocksDB.Close() waits for iterator teardown.
+		d.setBlockTimesWG.Add(1)
+		go func(db *RocksDB) {
+			defer db.setBlockTimesWG.Done()
+			db.setBlockTimes()
+		}(d)
 	}
 
 	b.d = nil
