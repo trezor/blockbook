@@ -15,9 +15,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Build Docker image
-        run: make build-images
-
       - name: Run unit tests
         run: make test
 
@@ -30,9 +27,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Build Docker image
-        run: make build-images
 
       - name: Export repository variables
         uses: ./.github/actions/export-repository-variables
@@ -52,9 +46,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Build Docker image
-        run: make build-images
-
       - name: Export repository variables
         uses: ./.github/actions/export-repository-variables
         with:
@@ -72,9 +63,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Build Docker image
-        run: make build-images
 
       - name: Export repository variables
         uses: ./.github/actions/export-repository-variables
