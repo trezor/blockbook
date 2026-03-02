@@ -21,10 +21,26 @@ runs:
 
         vars_map = json.loads(os.environ.get("VARS_JSON", "{}"))
         env_path = os.environ["GITHUB_ENV"]
+        rpc_prefixes = (
+            "BB_RPC_URL_HTTP_",
+            "BB_RPC_URL_WS_",
+            "BB_RPC_BIND_HOST_",
+            "BB_RPC_ALLOW_IP_",
+        )
+
+        def write_env_var(env_file, key, value):
+            delimiter = f"__{uuid.uuid4().hex}__"
+            env_file.write(f"{key}<<{delimiter}\n{value}\n{delimiter}\n")
 
         with open(env_path, "a", encoding="utf-8") as env_file:
             for key, value in vars_map.items():
                 text = "" if value is None else str(value)
-                delimiter = f"__{uuid.uuid4().hex}__"
-                env_file.write(f"{key}<<{delimiter}\n{text}\n{delimiter}\n")
+                normalized = key
+                for prefix in rpc_prefixes:
+                    if key.startswith(prefix):
+                        alias = key[len(prefix):]
+                        # Blockbook expects BB_RPC_* aliases exactly as in configs/coins (lowercase).
+                        normalized = prefix + alias.lower()
+                        break
+                write_env_var(env_file, normalized, text)
         PY
