@@ -12,7 +12,7 @@ BB_RPC_ENV := $(shell env | awk -F= '/^BB_RPC_(URL_HTTP|URL_WS|BIND_HOST|ALLOW_I
 
 TARGETS=$(subst .json,, $(shell ls configs/coins))
 
-.PHONY: build build-debug test deb
+.PHONY: build build-debug test test-connectivity test-integration test-e2e e2e test-all deb
 
 build: .bin-image
 	docker run -t --rm -e PACKAGER=$(PACKAGER) $(BB_RPC_ENV) -v "$(CURDIR):/src" -v "$(CURDIR)/build:/out" $(BIN_IMAGE) make build ARGS="$(ARGS)"
@@ -25,6 +25,11 @@ test: .bin-image
 
 test-integration: .bin-image
 	docker run -t --rm -e PACKAGER=$(PACKAGER) $(BB_RPC_ENV) -v "$(CURDIR):/src" --network="host" $(BIN_IMAGE) make test-integration ARGS="$(ARGS)"
+
+test-e2e: .bin-image
+	docker run -t --rm -e PACKAGER=$(PACKAGER) $(BB_RPC_ENV) -v "$(CURDIR):/src" --network="host" $(BIN_IMAGE) make test-e2e ARGS="$(ARGS)"
+
+e2e: test-e2e
 
 test-connectivity: .bin-image
 	docker run -t --rm -e PACKAGER=$(PACKAGER) $(BB_RPC_ENV) -v "$(CURDIR):/src" --network="host" $(BIN_IMAGE) make test-connectivity ARGS="$(ARGS)"

@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+    branches: [ master, develop ]
+  pull_request:
+    branches: [ '**' ]
+
+jobs:
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: make build-images
+
+      - name: Run unit tests
+        run: make test
+
+  connectivity-tests:
+    name: Backend Connectivity Tests
+    runs-on: [self-hosted, Linux, X64]
+    needs: unit-tests
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: make build-images
+
+      - name: Export repository variables
+        uses: ./.github/actions/export-repository-variables
+        with:
+          vars_json: ${{ toJSON(vars) }}
+
+      - name: Run connectivity tests
+        run: make test-connectivity
+
+  integration-tests:
+    name: Integration Tests (RPC + Sync)
+    runs-on: [self-hosted, Linux, X64]
+    needs: connectivity-tests
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: make build-images
+
+      - name: Export repository variables
+        uses: ./.github/actions/export-repository-variables
+        with:
+          vars_json: ${{ toJSON(vars) }}
+
+      - name: Run integration tests
+        run: make test-integration ARGS="-v"
+
+  e2e-tests:
+    name: E2E Tests (Blockbook API)
+    runs-on: [self-hosted, Linux, X64]
+    needs: integration-tests
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: make build-images
+
+      - name: Export repository variables
+        uses: ./.github/actions/export-repository-variables
+        with:
+          vars_json: ${{ toJSON(vars) }}
+
+      - name: Run e2e tests
+        run: make e2e ARGS="-v"
