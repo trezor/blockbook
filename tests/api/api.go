@@ -282,6 +282,9 @@ func IntegrationTest(t *testing.T, coin string, _ bchain.BlockChain, _ bchain.Me
 		blockByHash:       make(map[string]*blockSummary),
 		txByID:            make(map[string]*txDetailResponse),
 	}
+	// Fail fast once per coin if the API endpoint is unavailable. Without this,
+	// each subtest retries independently and can make CI appear hung.
+	_ = h.getStatus(t)
 
 	for _, test := range tests {
 		if td, found := testRegistry[test]; found {
