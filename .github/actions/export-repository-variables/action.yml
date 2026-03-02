@@ -1,0 +1,30 @@
+name: Export Repository Variables
+description: Export all repository/environment variables from a JSON map into GITHUB_ENV.
+
+inputs:
+  vars_json:
+    description: JSON object map of repository/environment variables.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Export variables to GITHUB_ENV
+      shell: bash
+      env:
+        VARS_JSON: ${{ inputs.vars_json }}
+      run: |
+        python3 - <<'PY'
+        import json
+        import os
+        import uuid
+
+        vars_map = json.loads(os.environ.get("VARS_JSON", "{}"))
+        env_path = os.environ["GITHUB_ENV"]
+
+        with open(env_path, "a", encoding="utf-8") as env_file:
+            for key, value in vars_map.items():
+                text = "" if value is None else str(value)
+                delimiter = f"__{uuid.uuid4().hex}__"
+                env_file.write(f"{key}<<{delimiter}\n{text}\n{delimiter}\n")
+        PY

@@ -8,7 +8,8 @@ There are several ways to run tests:
 
 * `make test` – run unit tests only (note that `make deb*` and `make all*` commands always run also *test* target)
 * `make test-connectivity` – run connectivity checks only
-* `make test-integration` – run integration tests only
+* `make test-integration` – run RPC and sync integration tests only
+* `make test-e2e` – run Blockbook API end-to-end tests only
 * `make test-all` – run all tests above
 
 You can use Go's flag *-run* to filter which tests should be executed. Use *ARGS* variable, e.g.
@@ -30,9 +31,10 @@ and try pack and unpack them. Specialities of particular coin are tested too. Se
 ## Integration tests
 
 Integration tests test interface between either Blockbook's components or back-end services. Integration tests are
-located in *tests* directory and every test suite has its own package. Because RPC and synchronization are crucial
-components of Blockbook, it is mandatory that coin implementations have these integration tests defined. They are
-implemented in packages `blockbook/tests/rpc` and `blockbook/tests/sync` and both of them are declarative. For each coin
+located in *tests* directory and every test suite has its own package. Because RPC, synchronization and Blockbook API
+surface are crucial components of Blockbook, it is mandatory that coin implementations have these integration tests
+defined. They are implemented in packages `blockbook/tests/rpc`, `blockbook/tests/sync` and `blockbook/tests/api`, and
+all of them are declarative. For each coin
 there are test definition that enables particular tests of test suite and *testdata* file that contains test fixtures.
 
 Not every coin implementation supports full set of back-end API so it is necessary to define which tests of test suite
@@ -46,6 +48,8 @@ It perfectly fits with layered test definitions. For example, you can:
 * run single test suite – `make test-integration ARGS="-run=TestIntegration//sync/"`
 * run single test – `make test-integration ARGS="-run=TestIntegration//sync/HandleFork"`
 * run tests for set of coins – `make test-integration ARGS="-run='TestIntegration/(bcash|bgold|bitcoin|dash|dogecoin|litecoin|snowgem|vertcoin|zcash|zelcash)/'"`
+* run e2e tests for all coins – `make test-e2e`
+* run e2e tests for single coin – `make test-e2e ARGS="-run=TestIntegration/bitcoin=main/api"`
 
 Test fixtures are defined in *testdata* directory in package of particular test suite. They are separate JSON files named
 by coin. File schemes are very similar with verbose results of CLI tools and are described below. Integration tests
@@ -87,6 +91,7 @@ connectivity validates `web3_clientVersion` and opens a `newHeads` subscription.
 
 Public Blockbook API checks are implemented in package `blockbook/tests/api` and configured per coin by the `api` list
 in *blockbook/tests/tests.json*.
+Use `make test-e2e` to run this suite only.
 
 Phase 1 covers smoke checks for:
 
