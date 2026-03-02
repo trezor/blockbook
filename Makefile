@@ -7,8 +7,8 @@ NO_CACHE = false
 TCMALLOC =
 PORTABLE = 0
 ARGS ?=
-# Forward BB_RPC_* overrides into Docker so template generation sees desired endpoints/binds/allow lists.
-BB_RPC_ENV := $(shell env | awk -F= '/^BB_RPC_(URL_HTTP|URL_WS|BIND_HOST|ALLOW_IP)_/ {print "-e " $$1}')
+# Forward BB_RPC_* and BB_API_* overrides into Docker for build/test tooling.
+BB_RPC_ENV := $(shell env | awk -F= '/^BB_RPC_(URL_HTTP|URL_WS|BIND_HOST|ALLOW_IP)_|^BB_API_URL_(HTTP|WS)_/ {print "-e " $$1}')
 
 TARGETS=$(subst .json,, $(shell ls configs/coins))
 

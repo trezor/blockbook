@@ -21,11 +21,13 @@ runs:
 
         vars_map = json.loads(os.environ.get("VARS_JSON", "{}"))
         env_path = os.environ["GITHUB_ENV"]
-        rpc_prefixes = (
+        alias_prefixes = (
             "BB_RPC_URL_HTTP_",
             "BB_RPC_URL_WS_",
             "BB_RPC_BIND_HOST_",
             "BB_RPC_ALLOW_IP_",
+            "BB_API_URL_HTTP_",
+            "BB_API_URL_WS_",
         )
 
         def write_env_var(env_file, key, value):
@@ -36,10 +38,10 @@ runs:
             for key, value in vars_map.items():
                 text = "" if value is None else str(value)
                 normalized = key
-                for prefix in rpc_prefixes:
+                for prefix in alias_prefixes:
                     if key.startswith(prefix):
                         alias = key[len(prefix):]
-                        # Blockbook expects BB_RPC_* aliases exactly as in configs/coins (lowercase).
+                        # Blockbook env lookups use lowercase coin aliases from configs/coins.
                         normalized = prefix + alias.lower()
                         break
                 write_env_var(env_file, normalized, text)
