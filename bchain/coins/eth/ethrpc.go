@@ -172,6 +172,14 @@ func (b *EthereumRPC) observeEthCall(mode string, count int) {
 	b.metrics.EthCallRequests.With(common.Labels{"mode": mode}).Add(float64(count))
 }
 
+// ObserveChainDataFallback increments a metric for chain-data fallback paths.
+func (b *EthereumRPC) ObserveChainDataFallback(component, reason string) {
+	if b.metrics == nil || component == "" || reason == "" {
+		return
+	}
+	b.metrics.ChainDataFallbacks.With(common.Labels{"component": component, "reason": reason}).Inc()
+}
+
 func (b *EthereumRPC) observeEthCallError(mode, errType string) {
 	if b.metrics == nil {
 		return

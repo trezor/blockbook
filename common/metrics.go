@@ -27,6 +27,7 @@ type Metrics struct {
 	MempoolResyncDuration             prometheus.Histogram
 	TxCacheEfficiency                 *prometheus.CounterVec
 	RPCLatency                        *prometheus.HistogramVec
+	ChainDataFallbacks                *prometheus.CounterVec
 	EthCallRequests                   *prometheus.CounterVec
 	EthCallErrors                     *prometheus.CounterVec
 	EthCallBatchSize                  prometheus.Histogram
@@ -217,6 +218,14 @@ func GetMetrics(coin string) (*Metrics, error) {
 			ConstLabels: Labels{"coin": coin},
 		},
 		[]string{"method", "error"},
+	)
+	metrics.ChainDataFallbacks = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name:        "blockbook_rpc_fallback_calls_total",
+			Help:        "Total number of chain data fallback path uses by component and reason",
+			ConstLabels: Labels{"coin": coin},
+		},
+		[]string{"component", "reason"},
 	)
 	metrics.EthCallRequests = prometheus.NewCounterVec(
 		prometheus.CounterOpts{

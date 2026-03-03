@@ -658,6 +658,7 @@ func (b *TronRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 		txByID := txByIDByID[strip0xPrefix(tx.Hash)]
 
 		if txByID == nil {
+			b.ObserveChainDataFallback("tron_getblock", "missing_tx_by_id_map")
 			glog.V(1).Infof("Tron GetBlock fallback to gettransactionbyid for tx %s in block %d", tx.Hash, bbh.Height)
 			txByID, err = b.getTransactionByIDRequired(tx.Hash)
 			if err != nil {
