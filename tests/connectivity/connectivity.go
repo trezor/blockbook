@@ -25,8 +25,8 @@ type connectivityCfg struct {
 }
 
 // IntegrationTest runs connectivity checks for the requested modes (e.g., ["http","ws"]).
-// HTTP checks verify the backend responds (UTXO uses getblockchaininfo, EVM uses web3_clientVersion).
-// WS checks verify web3_clientVersion and a newHeads subscription over the WS endpoint.
+// HTTP mode verifies both backend RPC and Blockbook HTTP API accessibility.
+// WS mode verifies both backend WS RPC and Blockbook websocket accessibility.
 func IntegrationTest(t *testing.T, coin string, _ bchain.BlockChain, _ bchain.Mempool, testConfig json.RawMessage) {
 	t.Helper()
 
@@ -39,8 +39,10 @@ func IntegrationTest(t *testing.T, coin string, _ bchain.BlockChain, _ bchain.Me
 		switch mode {
 		case "http":
 			HTTPIntegrationTest(t, coin, nil, nil, nil)
+			BlockbookHTTPIntegrationTest(t, coin, nil, nil, nil)
 		case "ws":
 			WSIntegrationTest(t, coin, nil, nil, nil)
+			BlockbookWSIntegrationTest(t, coin, nil, nil, nil)
 		default:
 			t.Fatalf("unsupported connectivity mode %q for %s", mode, coin)
 		}
