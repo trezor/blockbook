@@ -71,6 +71,19 @@ func (h *TestHandler) getSampleTxID(t *testing.T) (string, bool) {
 		return h.sampleTxID, h.sampleTxID != ""
 	}
 
+	if h.sampleBlockResolved && h.sampleBlockHash != "" {
+		if blk, ok := h.getBlockByHash(t, h.sampleBlockHash, false); ok {
+			for _, txid := range blk.TxIDs {
+				txid = strings.TrimSpace(txid)
+				if txid != "" {
+					h.sampleTxResolved = true
+					h.sampleTxID = txid
+					return h.sampleTxID, true
+				}
+			}
+		}
+	}
+
 	status := h.getStatus(t)
 	txid, _, _, found := h.findTransactionNearHeight(t, status.BestHeight, txSearchWindow)
 	h.sampleTxResolved = true
@@ -110,19 +123,22 @@ func (h *TestHandler) getSampleIndexedBlock(t *testing.T) (height int, hash stri
 		return h.sampleBlockHeight, h.sampleBlockHash, h.sampleBlockHash != ""
 	}
 
-	status := h.getStatus(t)
-	start := status.BestHeight
-	if start > 2 {
-		start -= 2
+	h.sampleBlockResolved = true
+	startHeight, startHash, ok := h.getSampleIndexedHeight(t)
+	if !ok {
+		return 0, "", false
 	}
-	lower := start - txSearchWindow
+
+	lower := startHeight - sampleBlockProbeMax + 1
 	if lower < 1 {
 		lower = 1
 	}
 
-	h.sampleBlockResolved = true
-	for height = start; height >= lower; height-- {
-		hash, ok := h.getBlockHashForHeight(t, height, false)
+	for height = startHeight; height >= lower; height-- {
+		hash = startHash
+		if height != startHeight {
+			hash, ok = h.getBlockHashForHeight(t, height, false)
+		}
 		if !ok || strings.TrimSpace(hash) == "" {
 			continue
 		}

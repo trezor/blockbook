@@ -51,6 +51,8 @@ It perfectly fits with layered test definitions. For example, you can:
 * run e2e tests for all coins – `make test-e2e`
 * run e2e tests for single coin – `make test-e2e ARGS="-run=TestIntegration/bitcoin=main/api"`
 
+Integration targets run with `go test -timeout 30m` inside Docker tooling.
+
 Test fixtures are defined in *testdata* directory in package of particular test suite. They are separate JSON files named
 by coin. File schemes are very similar with verbose results of CLI tools and are described below. Integration tests
 follow the same concept, use live component or service and verify their results with fixtures.
