@@ -86,8 +86,15 @@ Example:
 }
 ```
 
-HTTP connectivity for UTXO chains calls `getblockchaininfo`. For EVM chains it calls `web3_clientVersion`. WebSocket
-connectivity validates `web3_clientVersion` and opens a `newHeads` subscription.
+HTTP connectivity verifies both back-end and Blockbook accessibility:
+
+* back-end: UTXO chains call `getblockchaininfo`, EVM chains call `web3_clientVersion`
+* Blockbook: calls `GET /api/status` (resolved from `BB_API_URL_HTTP_<coin alias>` or local `ports.blockbook_public`)
+
+WebSocket connectivity also verifies both surfaces:
+
+* back-end: validates `web3_clientVersion` and opens a `newHeads` subscription
+* Blockbook: connects to `/websocket` (or `BB_API_URL_WS_<coin alias>`) and calls `getInfo`
 
 ### Blockbook API end-to-end tests
 

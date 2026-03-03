@@ -14,6 +14,16 @@ import (
 	"strings"
 )
 
+// ResolveEndpoints resolves Blockbook API endpoints for a coin alias using
+// BB_API_URL_* overrides first and coin config fallbacks.
+func ResolveEndpoints(coin string) (string, string, error) {
+	ep, err := resolveAPIEndpoints(coin)
+	if err != nil {
+		return "", "", err
+	}
+	return ep.HTTP, ep.WS, nil
+}
+
 func resolveAPIEndpoints(coin string) (*apiEndpoints, error) {
 	cfg, err := loadCoinConfig(coin)
 	if err != nil {

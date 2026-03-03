@@ -19,7 +19,7 @@ jobs:
         run: make test
 
   connectivity-tests:
-    name: Backend Connectivity Tests
+    name: Connectivity Tests
     runs-on: [self-hosted, Linux, X64]
     needs: unit-tests
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
@@ -70,4 +70,4 @@ jobs:
           vars_json: ${{ toJSON(vars) }}
 
       - name: Run e2e tests
-        run: make e2e ARGS="-v"
+        run: make test-e2e ARGS="-v"
