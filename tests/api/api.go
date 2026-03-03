@@ -20,6 +20,7 @@ const (
 	txSearchWindow      = 12
 	blockPageSize       = 1
 	sampleBlockPageSize = 3
+	sampleBlockProbeMax = 3
 )
 
 type testCapability uint8
