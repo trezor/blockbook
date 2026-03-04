@@ -27,6 +27,17 @@ func buildAddressDetailsPathWithTo(address, details string, page, pageSize, toHe
 	return path
 }
 
+func buildAddressDetailsPathWithRange(address, details string, page, pageSize, fromHeight, toHeight int) string {
+	path := buildAddressDetailsPath(address, details, page, pageSize)
+	if fromHeight > 0 {
+		path += "&from=" + strconv.Itoa(fromHeight)
+	}
+	if toHeight > 0 {
+		path += "&to=" + strconv.Itoa(toHeight)
+	}
+	return path
+}
+
 func assertAddressTxidsPayload(t *testing.T, payload *addressTxidsResponse, address, txid, context string, pageSize int) {
 	t.Helper()
 	assertAddressMatches(t, payload.Address, address, context+".address")

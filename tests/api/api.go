@@ -21,6 +21,8 @@ const (
 	blockPageSize       = 1
 	sampleBlockPageSize = 3
 	sampleBlockProbeMax = 3
+	sciNotationWindow   = 40
+	sciNotationTxLimit  = 8
 )
 
 type testCapability uint8
@@ -38,18 +40,19 @@ type testDefinition struct {
 }
 
 var commonTests = map[string]func(t *testing.T, th *TestHandler){
-	"Status":                 testStatus,
-	"GetBlockIndex":          testGetBlockIndex,
-	"GetBlockByHeight":       testGetBlockByHeight,
-	"GetBlock":               testGetBlock,
-	"GetTransaction":         testGetTransaction,
-	"GetTransactionSpecific": testGetTransactionSpecific,
-	"GetAddress":             testGetAddress,
-	"GetAddressTxids":        testGetAddressTxids,
-	"GetAddressTxs":          testGetAddressTxs,
-	"GetCurrentFiatRates":    testGetCurrentFiatRates,
-	"GetTickersList":         testGetTickersList,
-	"GetMultiTickers":        testGetMultiTickers,
+	"Status":                          testStatus,
+	"GetBlockIndex":                   testGetBlockIndex,
+	"GetBlockByHeight":                testGetBlockByHeight,
+	"GetBlock":                        testGetBlock,
+	"GetTransaction":                  testGetTransaction,
+	"GetTransactionSpecific":          testGetTransactionSpecific,
+	"GetAddress":                      testGetAddress,
+	"GetAddressTxids":                 testGetAddressTxids,
+	"GetAddressTxs":                   testGetAddressTxs,
+	"GetAddressTxsScientificNotation": testGetAddressTxsScientificNotation,
+	"GetCurrentFiatRates":             testGetCurrentFiatRates,
+	"GetTickersList":                  testGetTickersList,
+	"GetMultiTickers":                 testGetMultiTickers,
 }
 
 var utxoOnlyTests = map[string]func(t *testing.T, th *TestHandler){
@@ -113,6 +116,10 @@ type TestHandler struct {
 	sampleFiatResolved     bool
 	sampleFiatAvailable    bool
 	sampleFiatTicker       fiatTickerResponse
+	sampleSciAddrResolved  bool
+	sampleSciAddress       string
+	sampleSciTxID          string
+	sampleSciHeight        int
 
 	capabilitiesResolved bool
 	supportsUTXO         bool

@@ -191,7 +191,7 @@
     "zcash": {
         "connectivity": ["http"],
         "api": ["Status", "GetBlockIndex", "GetBlockByHeight", "GetBlock", "GetTransaction", "GetTransactionSpecific",
-                "GetAddress", "GetCurrentFiatRates", "GetTickersList", "GetMultiTickers", "GetAddressTxids", "GetAddressTxs", "GetUtxo", "GetUtxoConfirmedFilter"],
+                "GetAddress", "GetCurrentFiatRates", "GetTickersList", "GetMultiTickers", "GetAddressTxids", "GetAddressTxs", "GetAddressTxsScientificNotation", "GetUtxo", "GetUtxoConfirmedFilter"],
         "rpc": ["GetBlock", "GetBlockHash", "GetTransaction", "GetTransactionForMempool", "MempoolSync",
                 "GetBestBlockHash", "GetBestBlockHeight", "GetBlockHeader"],
         "sync": ["ConnectBlocksParallel", "ConnectBlocks", "HandleFork"]
