@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/trezor/blockbook/common"
 )
 
 // ResolveEndpoints resolves Blockbook API endpoints for a coin alias using
@@ -35,7 +37,10 @@ func resolveAPIEndpoints(coin string) (*apiEndpoints, error) {
 		alias = coin
 	}
 
-	httpURL := strings.TrimSpace(os.Getenv("BB_API_URL_HTTP_" + alias))
+	httpURL := ""
+	if v, ok := common.LookupEnvWithArchiveFallback("BB_API_URL_HTTP_", alias); ok {
+		httpURL = strings.TrimSpace(v)
+	}
 	if httpURL == "" {
 		if cfg.Ports.BlockbookPublic == 0 {
 			return nil, fmt.Errorf("missing ports.blockbook_public for %s", coin)
@@ -47,7 +52,10 @@ func resolveAPIEndpoints(coin string) (*apiEndpoints, error) {
 		return nil, err
 	}
 
-	wsURL := strings.TrimSpace(os.Getenv("BB_API_URL_WS_" + alias))
+	wsURL := ""
+	if v, ok := common.LookupEnvWithArchiveFallback("BB_API_URL_WS_", alias); ok {
+		wsURL = strings.TrimSpace(v)
+	}
 	if wsURL == "" {
 		wsURL, err = deriveWSFromHTTP(httpURL)
 	} else {
