@@ -1,4 +1,4 @@
-name: CI
+name: Testing
 
 on:
   push:
@@ -53,21 +53,3 @@ jobs:
 
       - name: Run integration tests
         run: make test-integration ARGS="-v"
-
-  e2e-tests:
-    name: E2E Tests (Blockbook API)
-    runs-on: [self-hosted, Linux, X64]
-    needs: integration-tests
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Export repository variables
-        uses: ./.github/actions/export-repository-variables
-        with:
-          vars_json: ${{ toJSON(vars) }}
-
-      - name: Run e2e tests
-        run: make test-e2e ARGS="-v"

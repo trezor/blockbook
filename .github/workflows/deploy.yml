@@ -1,0 +1,79 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      coins:
+        description: "Comma-separated coin aliases from configs/coins, or ALL"
+        required: true
+      ref:
+        description: "Git ref to deploy (leave empty for current ref)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    name: Prepare Plan
+    runs-on: ubuntu-latest
+    outputs:
+      deploy_matrix: ${{ steps.plan.outputs.deploy_matrix }}
+      e2e_regex: ${{ steps.plan.outputs.e2e_regex }}
+      coins_csv: ${{ steps.plan.outputs.coins_csv }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref != '' && inputs.ref || github.ref }}
+
+      - name: Build deploy/e2e plan
+        id: plan
+        env:
+          VARS_JSON: ${{ toJSON(vars) }}
+          COINS_INPUT: ${{ inputs.coins }}
+        run: ./.github/scripts/prepare_deploy_plan.py
+
+  deploy:
+    name: Deploy (${{ matrix.coin }})
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.prepare.outputs.deploy_matrix) }}
+    runs-on: [self-hosted, Linux, X64, "${{ matrix.runner }}"]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref != '' && inputs.ref || github.ref }}
+
+      - name: Export repository variables
+        uses: ./.github/actions/export-repository-variables
+        with:
+          vars_json: ${{ toJSON(vars) }}
+
+      - name: Deploy blockbook package
+        run: ./contrib/scripts/deploy-blockbook-local.sh "${{ matrix.coin }}"
+
+  e2e-tests:
+    name: E2E Tests (post-deploy)
+    needs: [prepare, deploy]
+    if: ${{ needs.deploy.result == 'success' }}
+    runs-on: [self-hosted, Linux, X64]
+    env:
+      E2E_REGEX: ${{ needs.prepare.outputs.e2e_regex }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref != '' && inputs.ref || github.ref }}
+
+      - name: Export repository variables
+        uses: ./.github/actions/export-repository-variables
+        with:
+          vars_json: ${{ toJSON(vars) }}
+
+      - name: Run e2e tests
+        run: make test-e2e ARGS="-v -run ${E2E_REGEX}"
