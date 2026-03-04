@@ -14,6 +14,8 @@ import (
 	"strings"
 	"text/template"
 	"time"
+
+	"github.com/trezor/blockbook/common"
 )
 
 // Backend contains backend specific fields
@@ -300,13 +302,12 @@ func LoadConfig(configsDir, coin string) (*Config, error) {
 		config.Env.RPCAllowIP = allowIP
 	}
 
-	rpcURLKey := "BB_RPC_URL_HTTP_" + config.Coin.Alias // Use alias so env naming matches coin config and deployment conventions.
-	if rpcURL, ok := os.LookupEnv(rpcURLKey); ok && rpcURL != "" {
+	// Resolve RPC env by exact alias first and fall back to *_archive for shared test/deploy wiring.
+	if rpcURL, ok := common.LookupEnvWithArchiveFallback("BB_RPC_URL_HTTP_", config.Coin.Alias); ok {
 		// Prefer explicit env override so package generation/tests can target hosted RPC endpoints without editing JSON.
 		config.IPC.RPCURLTemplate = rpcURL
 	}
-	rpcURLWSKey := "BB_RPC_URL_WS_" + config.Coin.Alias
-	if rpcURLWS, ok := os.LookupEnv(rpcURLWSKey); ok && rpcURLWS != "" {
+	if rpcURLWS, ok := common.LookupEnvWithArchiveFallback("BB_RPC_URL_WS_", config.Coin.Alias); ok {
 		config.IPC.RPCURLWSTemplate = rpcURLWS
 	}
 
