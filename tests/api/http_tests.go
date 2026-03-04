@@ -219,6 +219,21 @@ func testGetAddressTxs(t *testing.T, h *TestHandler) {
 	assertAddressTxsPayload(t, &addr, address, txid, "GetAddressTxs", addressPageSize)
 }
 
+func testGetAddressTxsScientificNotation(t *testing.T, h *TestHandler) {
+	const maxPageSize = 1000
+
+	address, txid, height, found := h.getSampleAddressWithScientificNotationTx(t)
+	if !found {
+		t.Skipf("Skipping test, no tx-specific scientific-notation amounts found in last %d blocks", sciNotationWindow)
+	}
+
+	path := buildAddressDetailsPathWithRange(address, "txs", addressPage, maxPageSize, height, height)
+	var addr addressTxsResponse
+	h.mustGetJSON(t, path, &addr)
+
+	assertAddressTxsPayload(t, &addr, address, txid, "GetAddressTxsScientificNotation", maxPageSize)
+}
+
 func testGetUtxo(t *testing.T, h *TestHandler) {
 	address := h.sampleAddressOrSkip(t)
 

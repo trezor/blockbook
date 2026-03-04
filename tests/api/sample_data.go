@@ -7,10 +7,13 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"regexp"
 	"sort"
 	"strings"
 	"testing"
 )
+
+var scientificNotationPattern = regexp.MustCompile(`"value(?:Zat|Sat)?"\s*:\s*-?\d+\.\d+[eE][+-]?\d+`)
 
 func (h *TestHandler) getStatus(t *testing.T) *statusBlockbook {
 	if h.status != nil {
@@ -116,6 +119,85 @@ func (h *TestHandler) getSampleAddress(t *testing.T) (string, bool) {
 		h.sampleAddress = firstAddressFromTx(tx)
 	}
 	return h.sampleAddress, h.sampleAddress != ""
+}
+
+func (h *TestHandler) getSampleAddressWithScientificNotationTx(t *testing.T) (address, txid string, height int, found bool) {
+	if h.sampleSciAddrResolved {
+		return h.sampleSciAddress, h.sampleSciTxID, h.sampleSciHeight, h.sampleSciAddress != "" && h.sampleSciTxID != ""
+	}
+	h.sampleSciAddrResolved = true
+
+	status := h.getStatus(t)
+	lower := status.BestHeight - sciNotationWindow + 1
+	if lower < 1 {
+		lower = 1
+	}
+
+	for height = status.BestHeight; height >= lower; height-- {
+		hash, ok := h.getBlockHashForHeight(t, height, false)
+		if !ok || strings.TrimSpace(hash) == "" {
+			continue
+		}
+
+		txids, ok := h.getBlockTxIDsForProbe(t, hash, sciNotationTxLimit)
+		if !ok {
+			continue
+		}
+
+		for _, txid = range txids {
+			txid = strings.TrimSpace(txid)
+			if txid == "" || !h.txSpecificHasScientificNotationAmount(t, txid) {
+				continue
+			}
+
+			tx, ok := h.getTransactionByID(t, txid, false)
+			if !ok {
+				continue
+			}
+			if isEVMTxID(txid) {
+				address = firstAddressFromTxPreferVin(tx)
+			} else {
+				address = firstAddressFromTx(tx)
+			}
+			if !isAddressCandidate(address) {
+				continue
+			}
+
+			h.sampleSciAddress = address
+			h.sampleSciTxID = txid
+			h.sampleSciHeight = height
+			return address, txid, height, true
+		}
+	}
+
+	return "", "", 0, false
+}
+
+func (h *TestHandler) getBlockTxIDsForProbe(t *testing.T, hash string, pageSize int) ([]string, bool) {
+	t.Helper()
+
+	path := fmt.Sprintf("/api/v2/block/%s?page=1&pageSize=%d", url.PathEscape(hash), pageSize)
+	status, body := h.getHTTP(t, path)
+	if status != http.StatusOK {
+		return nil, false
+	}
+
+	var res blockResponse
+	if err := json.Unmarshal(body, &res); err != nil {
+		t.Fatalf("decode block response for scientific-notation probe %s: %v", hash, err)
+	}
+	return extractTxIDs(t, res.Txs), true
+}
+
+func (h *TestHandler) txSpecificHasScientificNotationAmount(t *testing.T, txid string) bool {
+	t.Helper()
+
+	path := "/api/v2/tx-specific/" + url.PathEscape(txid)
+	status, body := h.getHTTP(t, path)
+	if status != http.StatusOK {
+		return false
+	}
+	return scientificNotationPattern.Match(body)
 }
 
 func (h *TestHandler) getSampleIndexedBlock(t *testing.T) (height int, hash string, found bool) {
