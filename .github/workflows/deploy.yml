@@ -42,7 +42,7 @@ jobs:
       fail-fast: false
       matrix:
         include: ${{ fromJSON(needs.prepare.outputs.deploy_matrix) }}
-    runs-on: [self-hosted, Linux, X64, "${{ matrix.runner }}"]
+    runs-on: [self-hosted, bb-dev-selfhosted, "${{ matrix.runner }}"]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -61,7 +61,7 @@ jobs:
     name: E2E Tests (post-deploy)
     needs: [prepare, deploy]
     if: ${{ needs.deploy.result == 'success' }}
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: [self-hosted, bb-dev-selfhosted]
     env:
       E2E_REGEX: ${{ needs.prepare.outputs.e2e_regex }}
     steps:
