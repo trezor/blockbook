@@ -9,7 +9,7 @@ on:
 jobs:
   unit-tests:
     name: Unit Tests
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: [self-hosted, bb-dev-selfhosted]
 
     steps:
       - name: Checkout code
@@ -20,7 +20,7 @@ jobs:
 
   connectivity-tests:
     name: Connectivity Tests
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: [self-hosted, bb-dev-selfhosted]
     needs: unit-tests
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
 
@@ -38,7 +38,7 @@ jobs:
 
   integration-tests:
     name: Integration Tests (RPC + Sync)
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: [self-hosted, bb-dev-selfhosted]
     needs: connectivity-tests
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
 
