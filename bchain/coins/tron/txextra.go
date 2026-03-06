@@ -11,21 +11,20 @@ import (
 )
 
 type tronGetTransactionInfoByIDResponse struct {
-	ID                     string                    `json:"id,omitempty"`
-	Fee                    *int64                    `json:"fee,omitempty"`
-	BlockNumber            *int64                    `json:"blockNumber,omitempty"`
-	BlockTimeStamp         *int64                    `json:"blockTimeStamp,omitempty"`
-	ContractResult         []string                  `json:"contractResult,omitempty"`
-	ContractAddr           string                    `json:"contract_address,omitempty"`
-	Result                 string                    `json:"result,omitempty"` // omitted on success, FAILED on error
-	ResMessage             string                    `json:"resMessage,omitempty"`
-	AssetIssueID           string                    `json:"assetIssueID,omitempty"`
-	WithdrawAmount         *int64                    `json:"withdraw_amount,omitempty"`
-	UnfreezeAmount         *int64                    `json:"unfreeze_amount,omitempty"`
-	InternalTransactions   []tronInternalTransaction `json:"internal_transactions,omitempty"`
-	WithdrawExpireAmount   *int64                    `json:"withdraw_expire_amount,omitempty"`
-	CancelUnfreezeV2Amount map[string]int64          `json:"cancel_unfreezeV2_amount,omitempty"`
-	Receipt                struct {
+	ID                   string                    `json:"id,omitempty"`
+	Fee                  *int64                    `json:"fee,omitempty"`
+	BlockNumber          *int64                    `json:"blockNumber,omitempty"`
+	BlockTimeStamp       *int64                    `json:"blockTimeStamp,omitempty"`
+	ContractResult       []string                  `json:"contractResult,omitempty"`
+	ContractAddr         string                    `json:"contract_address,omitempty"`
+	Result               string                    `json:"result,omitempty"` // omitted on success, FAILED on error
+	ResMessage           string                    `json:"resMessage,omitempty"`
+	AssetIssueID         string                    `json:"assetIssueID,omitempty"`
+	WithdrawAmount       *int64                    `json:"withdraw_amount,omitempty"`
+	UnfreezeAmount       *int64                    `json:"unfreeze_amount,omitempty"`
+	InternalTransactions []tronInternalTransaction `json:"internal_transactions,omitempty"`
+	WithdrawExpireAmount *int64                    `json:"withdraw_expire_amount,omitempty"`
+	Receipt              struct {
 		Result             string `json:"result"`
 		EnergyUsage        *int64 `json:"energy_usage,omitempty"`
 		EnergyUsageTotal   *int64 `json:"energy_usage_total,omitempty"`
