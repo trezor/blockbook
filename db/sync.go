@@ -510,8 +510,22 @@ ConnectLoop:
 				time.Sleep(time.Millisecond * 500)
 				continue
 			}
-			hch <- hashHeight{hash, h}
-			h++
+			select {
+			case hch <- hashHeight{hash, h}:
+				h++
+			case abortErr := <-abortCh:
+				glog.Warning("sync: parallel connect aborted while queuing blocks, restarting sync")
+				err = abortErr
+				close(terminating)
+				break ConnectLoop
+			case <-w.chanOsSignal:
+				glog.Info("connectBlocksParallel interrupted at height ", h)
+				err = ErrOperationInterrupted
+				close(terminating)
+				break ConnectLoop
+			case <-terminating:
+				break ConnectLoop
+			}
 		}
 	}
 	close(hch)
@@ -705,20 +719,34 @@ ConnectLoop:
 				time.Sleep(time.Millisecond * 500)
 				continue
 			}
-			hch <- hashHeight{hash, h}
-			if h > 0 && h%1000 == 0 {
-				w.metrics.BlockbookBestHeight.Set(float64(h))
-				glog.Info("connecting block ", h, " ", hash, ", elapsed ", time.Since(start), " ", w.db.GetAndResetConnectBlockStats())
-				start = time.Now()
-			}
-			if msTime.Before(time.Now()) {
-				if glog.V(1) {
-					glog.Info(w.db.GetMemoryStats())
+			select {
+			case hch <- hashHeight{hash, h}:
+				if h > 0 && h%1000 == 0 {
+					w.metrics.BlockbookBestHeight.Set(float64(h))
+					glog.Info("connecting block ", h, " ", hash, ", elapsed ", time.Since(start), " ", w.db.GetAndResetConnectBlockStats())
+					start = time.Now()
 				}
-				w.metrics.IndexDBSize.Set(float64(w.db.DatabaseSizeOnDisk()))
-				msTime = time.Now().Add(10 * time.Minute)
+				if msTime.Before(time.Now()) {
+					if glog.V(1) {
+						glog.Info(w.db.GetMemoryStats())
+					}
+					w.metrics.IndexDBSize.Set(float64(w.db.DatabaseSizeOnDisk()))
+					msTime = time.Now().Add(10 * time.Minute)
+				}
+				h++
+			case abortErr := <-abortCh:
+				glog.Warning("sync: bulk connect aborted while queuing blocks, restarting sync")
+				err = abortErr
+				close(terminating)
+				break ConnectLoop
+			case <-w.chanOsSignal:
+				glog.Info("connectBlocksParallel interrupted at height ", h)
+				err = ErrOperationInterrupted
+				close(terminating)
+				break ConnectLoop
+			case <-terminating:
+				break ConnectLoop
 			}
-			h++
 		}
 	}
 	close(hch)
