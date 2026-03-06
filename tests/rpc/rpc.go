@@ -3,8 +3,10 @@
 package rpc
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"io/ioutil"
+	"math/big"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -30,6 +32,7 @@ var testMap = map[string]func(t *testing.T, th *TestHandler){
 	"GetBestBlockHeight":       testGetBestBlockHeight,
 	"GetBlockHeader":           testGetBlockHeader,
 	"EthCallBatch":             testEthCallBatch,
+	"EthCallErc4626":           testEthCallErc4626,
 }
 
 type TestHandler struct {
@@ -46,14 +49,25 @@ type EthCallBatchData struct {
 	SkipUnavailable bool     `json:"skipUnavailable,omitempty"`
 }
 
+type EthCallErc4626Fixture struct {
+	Name          string `json:"name,omitempty"`
+	Contract      string `json:"contract"`
+	ExpectedAsset string `json:"expectedAsset,omitempty"`
+}
+
+type EthCallErc4626Data struct {
+	Contracts []EthCallErc4626Fixture `json:"contracts"`
+}
+
 type TestData struct {
-	BlockHeight  uint32                `json:"blockHeight"`
-	BlockHash    string                `json:"blockHash"`
-	BlockTime    int64                 `json:"blockTime"`
-	BlockSize    int                   `json:"blockSize"`
-	BlockTxs     []string              `json:"blockTxs"`
-	TxDetails    map[string]*bchain.Tx `json:"txDetails"`
-	EthCallBatch *EthCallBatchData     `json:"ethCallBatch,omitempty"`
+	BlockHeight    uint32                `json:"blockHeight"`
+	BlockHash      string                `json:"blockHash"`
+	BlockTime      int64                 `json:"blockTime"`
+	BlockSize      int                   `json:"blockSize"`
+	BlockTxs       []string              `json:"blockTxs"`
+	TxDetails      map[string]*bchain.Tx `json:"txDetails"`
+	EthCallBatch   *EthCallBatchData     `json:"ethCallBatch,omitempty"`
+	EthCallErc4626 *EthCallErc4626Data   `json:"ethCallErc4626,omitempty"`
 }
 
 func IntegrationTest(t *testing.T, coin string, chain bchain.BlockChain, mempool bchain.Mempool, testConfig json.RawMessage) {
@@ -528,6 +542,80 @@ func testEthCallBatch(t *testing.T, h *TestHandler) {
 		SkipUnavailable: data.SkipUnavailable,
 		NewClient:       eth.NewERC20BatchIntegrationClient,
 	})
+}
+
+func testEthCallErc4626(t *testing.T, h *TestHandler) {
+	data := h.TestData.EthCallErc4626
+	if data == nil {
+		t.Fatal("ethCallErc4626 fixture missing")
+	}
+	if len(data.Contracts) == 0 {
+		t.Fatal("ethCallErc4626.contracts missing")
+	}
+
+	for i := range data.Contracts {
+		fixture := data.Contracts[i]
+		if fixture.Contract == "" {
+			t.Fatalf("ethCallErc4626.contracts[%d].contract missing", i)
+		}
+
+		assetRaw, err := h.Chain.EthereumTypeRpcCall("0x38d52e0f", fixture.Contract, "")
+		if err != nil {
+			t.Fatalf("ethCallErc4626 %s asset() call failed: %v", fixture.Contract, err)
+		}
+		asset, err := decodeEthCallAddress(assetRaw)
+		if err != nil {
+			t.Fatalf("ethCallErc4626 %s asset() decode failed: %v", fixture.Contract, err)
+		}
+		if asset == (common.Address{}) {
+			t.Fatalf("ethCallErc4626 %s asset() returned zero address", fixture.Contract)
+		}
+		if fixture.ExpectedAsset != "" && !strings.EqualFold(asset.Hex(), fixture.ExpectedAsset) {
+			t.Fatalf("ethCallErc4626 %s asset() mismatch: got %s want %s", fixture.Contract, asset.Hex(), fixture.ExpectedAsset)
+		}
+
+		totalAssetsRaw, err := h.Chain.EthereumTypeRpcCall("0x01e1d114", fixture.Contract, "")
+		if err != nil {
+			t.Fatalf("ethCallErc4626 %s totalAssets() call failed: %v", fixture.Contract, err)
+		}
+		if _, err := decodeEthCallUint(totalAssetsRaw); err != nil {
+			t.Fatalf("ethCallErc4626 %s totalAssets() decode failed: %v", fixture.Contract, err)
+		}
+	}
+}
+
+func decodeEthCallWord(raw string) ([]byte, error) {
+	raw = strings.TrimPrefix(raw, "0x")
+	if raw == "" {
+		return nil, errors.New("empty eth_call result")
+	}
+	if len(raw)%2 != 0 {
+		return nil, errors.New("invalid eth_call hex length")
+	}
+	buf, err := hex.DecodeString(raw)
+	if err != nil {
+		return nil, err
+	}
+	if len(buf) < 32 {
+		return nil, errors.New("eth_call result too short")
+	}
+	return buf[:32], nil
+}
+
+func decodeEthCallAddress(raw string) (common.Address, error) {
+	word, err := decodeEthCallWord(raw)
+	if err != nil {
+		return common.Address{}, err
+	}
+	return common.BytesToAddress(word[12:]), nil
+}
+
+func decodeEthCallUint(raw string) (*big.Int, error) {
+	word, err := decodeEthCallWord(raw)
+	if err != nil {
+		return nil, err
+	}
+	return new(big.Int).SetBytes(word), nil
 }
 
 func getMempool(t *testing.T, h *TestHandler) []string {

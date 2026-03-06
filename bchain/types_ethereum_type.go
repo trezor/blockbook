@@ -70,6 +70,19 @@ type ContractInfo struct {
 	DestructedInBlock uint32            `json:"destructedInBlock,omitempty" ts_doc:"Block height where contract was destroyed (if any)."`
 }
 
+// EthereumTypeRPCCall defines one eth_call request payload.
+type EthereumTypeRPCCall struct {
+	Data string
+	To   string
+	From string
+}
+
+// EthereumTypeRPCCallResult carries one eth_call response payload.
+type EthereumTypeRPCCallResult struct {
+	Data  string
+	Error error
+}
+
 // Ethereum token standard names
 const (
 	ERC20TokenStandard   TokenStandardName = "ERC20"

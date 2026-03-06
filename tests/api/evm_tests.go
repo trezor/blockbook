@@ -5,7 +5,9 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"net/url"
+	"strings"
 	"testing"
 )
 
@@ -289,4 +291,118 @@ func testWsGetAccountInfoContractFilterEVM(t *testing.T, h *TestHandler) {
 	assertEVMTokenBalancesPayload(t, &info, address, "WsGetAccountInfoContractFilterEVM")
 	assertEVMTokenBalancesHaveHoldingsFields(t, &info, address, "WsGetAccountInfoContractFilterEVM")
 	assertEVMTokenListContractsMatch(t, info.Tokens, contract, "WsGetAccountInfoContractFilterEVM")
+}
+
+func testWsGetAccountInfoIncludeErc4626EVM(t *testing.T, h *TestHandler) {
+	testData, err := loadAPITestData(h.Coin)
+	if err != nil {
+		t.Fatalf("load api test data for %s: %v", h.Coin, err)
+	}
+	if len(testData.ERC4626Fixtures) == 0 {
+		t.Fatalf("api/testdata/%s.json has no erc4626Fixtures entries", h.Coin)
+	}
+
+	validatedFixtures := 0
+
+	for _, fixture := range testData.ERC4626Fixtures {
+		t.Run(fixture.Name, func(t *testing.T) {
+			resp := h.wsCall(t, "getAccountInfo", map[string]interface{}{
+				"descriptor":     fixture.Holder,
+				"details":        "tokenBalances",
+				"contractFilter": fixture.Contract,
+				"includeErc4626": true,
+				"page":           addressPage,
+				"pageSize":       addressPageSize,
+			})
+
+			var info evmAddressTokenBalanceResponse
+			if err := json.Unmarshal(resp.Data, &info); err != nil {
+				t.Fatalf("decode websocket getAccountInfo includeErc4626 response: %v", err)
+			}
+
+			assertAddressMatches(t, info.Address, fixture.Holder, "WsGetAccountInfoIncludeErc4626EVM.address")
+			if len(info.Tokens) == 0 {
+				t.Skipf("fixture %s returned no tokens for contract %s", fixture.Name, fixture.Contract)
+			}
+
+			for i := range info.Tokens {
+				token := info.Tokens[i]
+				context := fmt.Sprintf("WsGetAccountInfoIncludeErc4626EVM.tokens[%d]", i)
+				if !strings.EqualFold(token.Contract, fixture.Contract) {
+					t.Fatalf("%s contract mismatch: got %s want %s", context, token.Contract, fixture.Contract)
+				}
+				if token.Erc4626 == nil {
+					t.Fatalf("%s missing erc4626 payload for known ERC4626 contract %s", context, fixture.Contract)
+				}
+				assertErc4626Payload(t, context+".erc4626", fixture.Contract, token.Erc4626)
+			}
+
+			validatedFixtures++
+		})
+	}
+
+	if validatedFixtures == 0 {
+		t.Fatalf("WsGetAccountInfoIncludeErc4626EVM did not validate any ERC4626 fixture")
+	}
+}
+
+func assertErc4626Payload(t *testing.T, context, shareContract string, payload *evmErc4626Response) {
+	t.Helper()
+	if payload == nil {
+		t.Fatalf("%s missing payload", context)
+	}
+	if payload.Asset == nil {
+		t.Fatalf("%s missing asset metadata", context)
+	}
+	assertNonEmptyString(t, payload.Asset.Contract, context+".asset.contract")
+	if !isEVMAddress(payload.Asset.Contract) {
+		t.Fatalf("%s.asset.contract is not EVM-like: %s", context, payload.Asset.Contract)
+	}
+	if payload.Asset.Decimals < 0 {
+		t.Fatalf("%s.asset.decimals is negative: %d", context, payload.Asset.Decimals)
+	}
+
+	if payload.Share == nil {
+		t.Fatalf("%s missing share metadata", context)
+	}
+	assertNonEmptyString(t, payload.Share.Contract, context+".share.contract")
+	if !strings.EqualFold(payload.Share.Contract, shareContract) {
+		t.Fatalf("%s.share.contract mismatch: got %s want %s", context, payload.Share.Contract, shareContract)
+	}
+	if payload.Share.Decimals < 0 {
+		t.Fatalf("%s.share.decimals is negative: %d", context, payload.Share.Decimals)
+	}
+
+	assertBigIntString(t, payload.TotalAssets, context+".totalAssets")
+	assertOptionalBigIntString(t, payload.ConvertToAssets1Share, context+".convertToAssets1Share")
+	assertOptionalBigIntString(t, payload.ConvertToShares1Asset, context+".convertToShares1Asset")
+	assertOptionalBigIntString(t, payload.PreviewDeposit1Asset, context+".previewDeposit1Asset")
+	assertOptionalBigIntString(t, payload.PreviewRedeem1Share, context+".previewRedeem1Share")
+	if strings.TrimSpace(payload.Error) != "" {
+		assertNonEmptyString(t, payload.Error, context+".error")
+	}
+}
+
+func assertBigIntString(t *testing.T, value, context string) {
+	t.Helper()
+	value = strings.TrimSpace(value)
+	if value == "" {
+		t.Fatalf("%s is empty", context)
+	}
+	assertOptionalBigIntString(t, value, context)
+}
+
+func assertOptionalBigIntString(t *testing.T, value, context string) {
+	t.Helper()
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return
+	}
+	n, ok := new(big.Int).SetString(value, 10)
+	if !ok {
+		t.Fatalf("%s is not a valid decimal integer: %s", context, value)
+	}
+	if n.Sign() < 0 {
+		t.Fatalf("%s is negative: %s", context, value)
+	}
 }

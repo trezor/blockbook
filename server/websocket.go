@@ -646,6 +646,7 @@ func (s *WebsocketServer) getAccountInfo(req *WsAccountInfoReq) (res *api.Addres
 		Contract:       req.ContractFilter,
 		Vout:           api.AddressFilterVoutOff,
 		TokensToReturn: tokensToReturn,
+		IncludeErc4626: req.IncludeErc4626,
 	}
 	if req.PageSize == 0 {
 		req.PageSize = txsOnPage

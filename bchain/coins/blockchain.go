@@ -381,6 +381,17 @@ func (c *blockChainWithMetrics) EthereumTypeRpcCall(data, to, from string) (v st
 	return c.b.EthereumTypeRpcCall(data, to, from)
 }
 
+func (c *blockChainWithMetrics) EthereumTypeRpcCallBatch(calls []bchain.EthereumTypeRPCCall) (v []bchain.EthereumTypeRPCCallResult, err error) {
+	defer func(s time.Time) { c.observeRPCLatency("EthereumTypeRpcCallBatch", s, err) }(time.Now())
+	batcher, ok := c.b.(interface {
+		EthereumTypeRpcCallBatch(calls []bchain.EthereumTypeRPCCall) ([]bchain.EthereumTypeRPCCallResult, error)
+	})
+	if !ok {
+		return nil, errors.New("EthereumTypeRpcCallBatch: not supported")
+	}
+	return batcher.EthereumTypeRpcCallBatch(calls)
+}
+
 func (c *blockChainWithMetrics) EthereumTypeGetRawTransaction(txid string) (v string, err error) {
 	defer func(s time.Time) { c.observeRPCLatency("EthereumTypeGetRawTransaction", s, err) }(time.Now())
 	return c.b.EthereumTypeGetRawTransaction(txid)
