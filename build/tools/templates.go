@@ -14,8 +14,6 @@ import (
 	"strings"
 	"text/template"
 	"time"
-
-	"github.com/trezor/blockbook/common"
 )
 
 // Backend contains backend specific fields
@@ -303,11 +301,11 @@ func LoadConfig(configsDir, coin string) (*Config, error) {
 	}
 
 	// Resolve RPC env by exact alias first and fall back to *_archive for shared test/deploy wiring.
-	if rpcURL, ok := common.LookupEnvWithArchiveFallback("BB_RPC_URL_HTTP_", config.Coin.Alias); ok {
+	if rpcURL, ok := lookupEnvWithArchiveFallback("BB_RPC_URL_HTTP_", config.Coin.Alias); ok {
 		// Prefer explicit env override so package generation/tests can target hosted RPC endpoints without editing JSON.
 		config.IPC.RPCURLTemplate = rpcURL
 	}
-	if rpcURLWS, ok := common.LookupEnvWithArchiveFallback("BB_RPC_URL_WS_", config.Coin.Alias); ok {
+	if rpcURLWS, ok := lookupEnvWithArchiveFallback("BB_RPC_URL_WS_", config.Coin.Alias); ok {
 		config.IPC.RPCURLWSTemplate = rpcURLWS
 	}
 
@@ -348,6 +346,29 @@ func isEmpty(config *Config, target string) bool {
 	default:
 		panic("Invalid target name: " + target)
 	}
+}
+
+const archiveSuffix = "_archive"
+
+func lookupEnvWithArchiveFallback(prefix, alias string) (string, bool) {
+	if alias == "" {
+		return "", false
+	}
+
+	for _, candidate := range aliasCandidates(alias) {
+		if value, ok := os.LookupEnv(prefix + candidate); ok && value != "" {
+			return value, true
+		}
+	}
+	return "", false
+}
+
+func aliasCandidates(alias string) []string {
+	candidates := []string{alias}
+	if !strings.HasSuffix(alias, archiveSuffix) {
+		candidates = append(candidates, alias+archiveSuffix)
+	}
+	return candidates
 }
 
 // GeneratePackageDefinitions generate the package definitions from the config
