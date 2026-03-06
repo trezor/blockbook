@@ -3,6 +3,7 @@
 package tron
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -150,4 +151,28 @@ func TestTronBuildRpcTransaction_ValueIsEthereumHexQuantity(t *testing.T) {
 			require.Equal(t, tt.want, value.Int64())
 		})
 	}
+}
+
+func TestTronGetTransactionInfoByIDResponse_IgnoresCancelUnfreezeV2AmountShape(t *testing.T) {
+	raw := []byte(`[
+		{
+			"id":"tx1",
+			"fee":123,
+			"cancel_unfreezeV2_amount":[]
+		},
+		{
+			"id":"tx2",
+			"fee":456,
+			"cancel_unfreezeV2_amount":{"ENERGY":100}
+		}
+	]`)
+
+	var resp []tronGetTransactionInfoByIDResponse
+	err := json.Unmarshal(raw, &resp)
+	require.NoError(t, err)
+	require.Len(t, resp, 2)
+	require.Equal(t, "tx1", resp[0].ID)
+	require.Equal(t, int64(123), *resp[0].Fee)
+	require.Equal(t, "tx2", resp[1].ID)
+	require.Equal(t, int64(456), *resp[1].Fee)
 }
