@@ -32,6 +32,7 @@ const txsOnPage = 25
 const blocksOnPage = 50
 const mempoolTxsOnPage = 50
 const txsInAPI = 1000
+const maxSendTxBodyBytes int64 = 8 * 1024 * 1024
 
 const secondaryCoinCookieName = "secondary_coin"
 
@@ -1510,17 +1511,31 @@ type resultSendTransaction struct {
 	Result string `json:"result"`
 }
 
+func readSendTxHexFromBody(body io.Reader, maxBodyBytes int64) (string, error) {
+	var hex strings.Builder
+	n, err := io.Copy(&hex, io.LimitReader(body, maxBodyBytes+1))
+	if err != nil {
+		return "", api.NewAPIError("Missing tx blob", true)
+	}
+	if n > maxBodyBytes {
+		return "", api.NewAPIError("Tx blob too large", true)
+	}
+	return hex.String(), nil
+}
+
 func (s *PublicServer) apiSendTx(r *http.Request, apiVersion int) (interface{}, error) {
 	var err error
 	var res resultSendTransaction
 	var hex string
 	s.metrics.ExplorerViews.With(common.Labels{"action": "api-sendtx"}).Inc()
 	if r.Method == http.MethodPost {
-		data, err := io.ReadAll(r.Body)
-		if err != nil {
-			return nil, api.NewAPIError("Missing tx blob", true)
+		if r.ContentLength > maxSendTxBodyBytes {
+			return nil, api.NewAPIError("Tx blob too large", true)
 		}
-		hex = string(data)
+		hex, err = readSendTxHexFromBody(r.Body, maxSendTxBodyBytes)
+		if err != nil {
+			return nil, err
+		}
 	} else {
 		if i := strings.LastIndexByte(r.URL.Path, '/'); i > 0 {
 			hex = r.URL.Path[i+1:]

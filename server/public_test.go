@@ -185,6 +185,35 @@ func newPostRequest(u string, body string) *http.Request {
 	return r
 }
 
+type repeatedByteReader struct {
+	remaining int64
+}
+
+func (r *repeatedByteReader) Read(p []byte) (int, error) {
+	if r.remaining <= 0 {
+		return 0, io.EOF
+	}
+	n := int64(len(p))
+	if n > r.remaining {
+		n = r.remaining
+	}
+	for i := int64(0); i < n; i++ {
+		p[i] = '0'
+	}
+	r.remaining -= n
+	return int(n), nil
+}
+
+func newPostRequestWithContentLength(u string, contentLength int64) *http.Request {
+	r, err := http.NewRequest("POST", u, &repeatedByteReader{remaining: contentLength})
+	if err != nil {
+		glog.Fatal(err)
+	}
+	r.Header.Add("Content-Type", "application/octet-stream")
+	r.ContentLength = contentLength
+	return r
+}
+
 func insertFiatRate(date string, rates map[string]float32, tokenRates map[string]float32, d *db.RocksDB) error {
 	convertedDate, err := time.Parse("20060102150405", date)
 	if err != nil {
@@ -323,6 +352,34 @@ func mustGetJSON(t *testing.T, endpointURL string, statusCode int, out interface
 	if err := json.Unmarshal(body, out); err != nil {
 		t.Fatalf("failed to decode JSON body %q: %v", string(body), err)
 	}
+}
+
+func TestReadSendTxHexFromBody(t *testing.T) {
+	const maxBodyLen int64 = 6
+	assertAPIError := func(t *testing.T, err error, want string) {
+		t.Helper()
+		if err == nil {
+			t.Fatalf("expected error %q, got nil", want)
+		}
+		if err.Error() != want {
+			t.Fatalf("unexpected error %q, want %q", err.Error(), want)
+		}
+	}
+
+	t.Run("accepts body exactly at limit", func(t *testing.T) {
+		got, err := readSendTxHexFromBody(strings.NewReader("123456"), maxBodyLen)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != "123456" {
+			t.Fatalf("got %q, want %q", got, "123456")
+		}
+	})
+
+	t.Run("rejects body larger than limit by one byte", func(t *testing.T) {
+		_, err := readSendTxHexFromBody(strings.NewReader("1234567"), maxBodyLen)
+		assertAPIError(t, err, "Tx blob too large")
+	})
 }
 
 func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
@@ -970,6 +1027,15 @@ func httpTestsBitcoinType(t *testing.T, ts *httptest.Server) {
 			contentType: "application/json; charset=utf-8",
 			body: []string{
 				`{"error":"Missing tx blob"}`,
+			},
+		},
+		{
+			name:        "apiSendTx POST too large",
+			r:           newPostRequestWithContentLength(ts.URL+"/api/v2/sendtx/", maxSendTxBodyBytes+1),
+			status:      http.StatusBadRequest,
+			contentType: "application/json; charset=utf-8",
+			body: []string{
+				`{"error":"Tx blob too large"}`,
 			},
 		},
 		{

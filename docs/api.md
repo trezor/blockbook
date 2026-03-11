@@ -793,6 +793,8 @@ GET /api/v2/sendtx/<hex tx data>
 POST /api/v2/sendtx/ (hex tx data in request body)  NB: the '/' symbol at the end is mandatory.
 ```
 
+POST request body is limited to 8 MiB.
+
 Response:
 
 ```javascript
