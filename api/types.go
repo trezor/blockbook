@@ -250,7 +250,7 @@ type EthereumSpecific struct {
 	Status               bchain.TxStatus                        `json:"status" ts_doc:"Execution status of the transaction (1: success, 0: fail, -1: pending)."`
 	Error                string                                 `json:"error,omitempty" ts_doc:"Error encountered during execution, if any."`
 	Nonce                uint64                                 `json:"nonce" ts_doc:"Transaction nonce (sequential number from the sender)."`
-	GasLimit             *big.Int                               `json:"gasLimit,omitempty" ts_doc:"Maximum gas allowed by the sender for this transaction."`
+	GasLimit             *big.Int                               `json:"gasLimit" ts_doc:"Maximum gas allowed by the sender for this transaction."`
 	GasUsed              *big.Int                               `json:"gasUsed,omitempty" ts_doc:"Actual gas consumed by the transaction execution."`
 	GasPrice             *Amount                                `json:"gasPrice,omitempty" ts_doc:"Price (in Wei or base units) per gas unit."`
 	MaxPriorityFeePerGas *Amount                                `json:"maxPriorityFeePerGas,omitempty"`
