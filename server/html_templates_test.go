@@ -3,6 +3,7 @@
 package server
 
 import (
+	"bytes"
 	"html/template"
 	"reflect"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/trezor/blockbook/api"
+	"github.com/trezor/blockbook/bchain"
 )
 
 func Test_formatInt64(t *testing.T) {
@@ -260,11 +262,11 @@ func Test_appendAmountSpanBitcoinType(t *testing.T) {
 
 func Test_addressAliasSpan_XSS(t *testing.T) {
 	tests := []struct {
-		name    string
-		address string
-		td      *TemplateData
-		want    string
-		wantContains string // substring that must be present and properly escaped
+		name            string
+		address         string
+		td              *TemplateData
+		want            string
+		wantContains    string // substring that must be present and properly escaped
 		wantNotContains string // substring that must NOT be present (raw XSS payload)
 	}{
 		{
@@ -301,7 +303,7 @@ func Test_addressAliasSpan_XSS(t *testing.T) {
 					},
 				},
 			},
-			wantContains: `alias-type="Contract&#34; onclick=&#34;alert(1)&#34; data=&#34;`,
+			wantContains:    `alias-type="Contract&#34; onclick=&#34;alert(1)&#34; data=&#34;`,
 			wantNotContains: `onclick="alert(1)"`,
 		},
 		{
@@ -317,7 +319,7 @@ func Test_addressAliasSpan_XSS(t *testing.T) {
 					},
 				},
 			},
-			wantContains: `alias-type="&lt;script&gt;alert(1)&lt;/script&gt;"`,
+			wantContains:    `alias-type="&lt;script&gt;alert(1)&lt;/script&gt;"`,
 			wantNotContains: `<script>`,
 		},
 		{
@@ -333,7 +335,7 @@ func Test_addressAliasSpan_XSS(t *testing.T) {
 					},
 				},
 			},
-			wantContains: `&lt;img src=x onerror=alert(1)&gt;`,
+			wantContains:    `&lt;img src=x onerror=alert(1)&gt;`,
 			wantNotContains: `<img src=x onerror=alert(1)>`,
 		},
 		{
@@ -349,7 +351,7 @@ func Test_addressAliasSpan_XSS(t *testing.T) {
 					},
 				},
 			},
-			wantContains: `cc="0x1234&#34;&gt;&lt;script&gt;alert(1)&lt;/script&gt;"`,
+			wantContains:    `cc="0x1234&#34;&gt;&lt;script&gt;alert(1)&lt;/script&gt;"`,
 			wantNotContains: `<script>alert(1)</script>`,
 		},
 		{
@@ -365,7 +367,7 @@ func Test_addressAliasSpan_XSS(t *testing.T) {
 					},
 				},
 			},
-			wantContains: `alias-type="Contract&#34; onmouseover=&#34;alert(&#39;XSS&#39;)&#34; data=&#34;`,
+			wantContains:    `alias-type="Contract&#34; onmouseover=&#34;alert(&#39;XSS&#39;)&#34; data=&#34;`,
 			wantNotContains: `onmouseover="alert('XSS')"`,
 		},
 	}
@@ -373,24 +375,70 @@ func Test_addressAliasSpan_XSS(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := addressAliasSpan(tt.address, tt.td)
 			gotStr := string(got)
-			
+
 			if tt.want != "" {
 				if gotStr != tt.want {
 					t.Errorf("addressAliasSpan() = %v, want %v", gotStr, tt.want)
 				}
 			}
-			
+
 			if tt.wantContains != "" {
 				if !strings.Contains(gotStr, tt.wantContains) {
 					t.Errorf("addressAliasSpan() = %v, should contain %v", gotStr, tt.wantContains)
 				}
 			}
-			
+
 			if tt.wantNotContains != "" {
 				if strings.Contains(gotStr, tt.wantNotContains) {
 					t.Errorf("addressAliasSpan() = %v, should NOT contain raw XSS payload: %v", gotStr, tt.wantNotContains)
 				}
 			}
 		})
+	}
+}
+
+func renderTokenDetailSpecific(t *testing.T, uri string) string {
+	t.Helper()
+
+	tmpl := template.Must(template.New("tokenDetail.html").Funcs(template.FuncMap{
+		"jsStr": jsStr,
+	}).ParseFiles("./static/templates/tokenDetail.html"))
+
+	data := TemplateData{
+		TokenId: "1",
+		URI:     uri,
+		ContractInfo: &bchain.ContractInfo{
+			Contract: "0x1234567890123456789012345678901234567890",
+			Name:     "Contract",
+			Standard: bchain.ERC771TokenStandard,
+		},
+	}
+
+	var rendered bytes.Buffer
+	if err := tmpl.ExecuteTemplate(&rendered, "specific", data); err != nil {
+		t.Fatalf("ExecuteTemplate() error = %v", err)
+	}
+	return rendered.String()
+}
+
+func Test_tokenDetailTemplateEscapesURIInJSContext(t *testing.T) {
+	body := renderTokenDetailSpecific(t, `";console.log("XSS_EXEC_OK");//`)
+
+	if !strings.Contains(body, `const uri="\";console.log(\"XSS_EXEC_OK\");//";`) {
+		t.Fatalf("escaped uri literal not found in output: %s", body)
+	}
+	if strings.Contains(body, `const uri="";console.log("XSS_EXEC_OK");//";`) {
+		t.Fatalf("found unescaped JS breakout payload in output: %s", body)
+	}
+}
+
+func Test_tokenDetailTemplateEscapesScriptEndTagInJSContext(t *testing.T) {
+	body := renderTokenDetailSpecific(t, `";</script><script>alert(1)</script>//`)
+
+	if strings.Contains(body, `</script><script>alert(1)</script>`) {
+		t.Fatalf("found unescaped script-end-tag payload in output: %s", body)
+	}
+	if !strings.Contains(body, `const uri="\";\u003c/script\u003e\u003cscript\u003ealert(1)\u003c/script\u003e//";`) {
+		t.Fatalf("escaped script-end-tag payload not found in output: %s", body)
 	}
 }
