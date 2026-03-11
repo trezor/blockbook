@@ -1300,6 +1300,50 @@ func assertNoWebsocketMessage(t *testing.T, s *websocket.Conn, timeout time.Dura
 	}
 }
 
+func Test_WebsocketRejectsOversizedMessage(t *testing.T) {
+	parser, chain := setupChain(t)
+
+	s, dbpath := setupPublicHTTPServer(parser, chain, t, false)
+	defer closeAndDestroyPublicServer(t, s, dbpath)
+	s.ConnectFullPublicInterface()
+
+	ts := httptest.NewServer(s.https.Handler)
+	defer ts.Close()
+
+	ws := connectWebsocket(t, ts)
+	defer ws.Close()
+
+	// Verify the connection is healthy before sending an oversized frame.
+	if err := ws.WriteJSON(websocketReq{ID: "0", Method: "getInfo"}); err != nil {
+		t.Fatal(err)
+	}
+	resp := readWebsocketResponse(t, ws, time.Second)
+	if resp.ID != "0" {
+		t.Fatalf("got response id %q, want %q", resp.ID, "0")
+	}
+
+	payload := strings.Repeat("a", int(maxWebsocketMessageBytes)+1)
+	if err := ws.WriteMessage(websocket.TextMessage, []byte(payload)); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ws.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	_, _, err := ws.ReadMessage()
+	ws.SetReadDeadline(time.Time{})
+	if err == nil {
+		t.Fatal("expected websocket read error after oversized message")
+	}
+	if websocket.IsCloseError(err, websocket.CloseMessageTooBig, websocket.CloseAbnormalClosure) {
+		return
+	}
+	if errors.Is(err, io.EOF) {
+		return
+	}
+	t.Fatalf("unexpected websocket error after oversized message: %v", err)
+}
+
 var websocketTestsBitcoinType = []websocketTest{
 	{
 		name: "websocket getInfo",
