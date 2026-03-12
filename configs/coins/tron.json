@@ -44,7 +44,7 @@
         "internal_binding_template": ":{{.Ports.BlockbookInternal}}",
         "public_binding_template": ":{{.Ports.BlockbookPublic}}",
         "explorer_url": "",
-        "additional_params": "",
+        "additional_params": "-resyncmempoolperiod=5000",
         "block_chain": {
             "parse": true,
             "mempool_workers": 0,
@@ -53,8 +53,8 @@
             "additional_params": {
               "tron_http_url_template": "http://127.0.0.1:8090",
               "address_aliases": true,
-              "mempoolTxTimeoutHours": 48,
-              "queryBackendOnMempoolResync": false,
+              "mempoolTxTimeoutHours": 4,
+              "queryBackendOnMempoolResync": true,
               "fiat_rates": "coingecko",
               "fiat_rates_vs_currencies": "USD,EUR,CNY",
               "fiat_rates_params": "{\"coin\": \"tron\",\"platformIdentifier\": \"tron\",\"platformVsCurrency\": \"trx\",\"periodSeconds\": 900}",
