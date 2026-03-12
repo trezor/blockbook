@@ -46,11 +46,6 @@ type tronGetTransactionListFromPendingResponse struct {
 	TxID []string `json:"txId,omitempty"`
 }
 
-type tronTxRet struct {
-	ContractRet string      `json:"contractRet,omitempty"`
-	Fee         interface{} `json:"fee,omitempty"`
-}
-
 type tronTxContractValue struct {
 	OwnerAddress    string       `json:"owner_address,omitempty"`
 	ToAddress       string       `json:"to_address,omitempty"`
@@ -79,7 +74,6 @@ type tronTxContract struct {
 }
 
 type tronGetTransactionByIDResponse struct {
-	Ret            []tronTxRet `json:"ret,omitempty"`
 	TxID           string      `json:"txID,omitempty"`
 	BlockNumber    interface{} `json:"blockNumber,omitempty"`
 	BlockTimestamp interface{} `json:"block_timestamp,omitempty"`

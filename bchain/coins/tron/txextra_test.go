@@ -176,3 +176,47 @@ func TestTronGetTransactionInfoByIDResponse_IgnoresCancelUnfreezeV2AmountShape(t
 	require.Equal(t, "tx2", resp[1].ID)
 	require.Equal(t, int64(456), *resp[1].Fee)
 }
+
+func TestTronBuildRpcReceipt_RequiresTransactionInfoForStatus(t *testing.T) {
+	receipt := tronBuildRpcReceipt(nil)
+	require.Nil(t, receipt)
+
+	txInfo := &tronGetTransactionInfoByIDResponse{}
+	txInfo.Receipt.Result = "SUCCESS"
+	receipt = tronBuildRpcReceipt(txInfo)
+	require.NotNil(t, receipt)
+	require.Equal(t, "0x1", receipt.Status)
+}
+
+func TestTronBuildExtraData_ResultRequiresTransactionInfo(t *testing.T) {
+	txByID := &tronGetTransactionByIDResponse{}
+
+	extra := tronBuildExtraData(txByID, nil)
+	require.Equal(t, "", extra.Result)
+
+	txInfo := &tronGetTransactionInfoByIDResponse{}
+	txInfo.Receipt.Result = "SUCCESS"
+	extra = tronBuildExtraData(txByID, txInfo)
+	require.Equal(t, "SUCCESS", extra.Result)
+}
+
+func TestTronTxMeta_RequiresTransactionInfoBlockNumber(t *testing.T) {
+	txByID := &tronGetTransactionByIDResponse{
+		BlockNumber:    int64(12345),
+		BlockTimestamp: int64(1700000000000),
+	}
+
+	blockTime, blockNumber, hasBlockNumber := tronTxMeta(txByID, nil)
+	require.False(t, hasBlockNumber)
+	require.Equal(t, uint64(0), blockNumber)
+	require.Equal(t, int64(0), blockTime)
+
+	txInfo := &tronGetTransactionInfoByIDResponse{
+		BlockNumber:    int64Ptr(12345),
+		BlockTimeStamp: int64Ptr(1700000000000),
+	}
+	blockTime, blockNumber, hasBlockNumber = tronTxMeta(txByID, txInfo)
+	require.True(t, hasBlockNumber)
+	require.Equal(t, uint64(12345), blockNumber)
+	require.Equal(t, int64(1700000000), blockTime)
+}
