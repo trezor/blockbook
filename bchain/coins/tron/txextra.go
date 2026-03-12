@@ -209,13 +209,6 @@ func tronFirstHexQuantity(values ...interface{}) string {
 	return ""
 }
 
-func tronResultFromByID(txByID *tronGetTransactionByIDResponse) string {
-	if txByID == nil || len(txByID.Ret) == 0 {
-		return ""
-	}
-	return strings.TrimSpace(txByID.Ret[0].ContractRet)
-}
-
 func tronNormalizeLogs(logs []*bchain.RpcLog) []*bchain.RpcLog {
 	for _, l := range logs {
 		if l == nil {
@@ -287,16 +280,10 @@ func tronBuildExtraData(txByID *tronGetTransactionByIDResponse, txInfo *tronGetT
 			extra.UnstakeAmount = tronInt64PtrToString(txInfo.UnfreezeAmount)
 		}
 	}
-	if extra.TotalFee == "" && txByID != nil && len(txByID.Ret) > 0 {
-		extra.TotalFee = tronNumberToString(txByID.Ret[0].Fee)
-	}
-	if extra.Result == "" {
-		extra.Result = tronResultFromByID(txByID)
-	}
 	return extra
 }
 
-func tronBuildRpcReceipt(txByID *tronGetTransactionByIDResponse, txInfo *tronGetTransactionInfoByIDResponse) *bchain.RpcReceipt {
+func tronBuildRpcReceipt(txInfo *tronGetTransactionInfoByIDResponse) *bchain.RpcReceipt {
 	receipt := &bchain.RpcReceipt{}
 	if txInfo != nil {
 		if status := tronResultToReceiptStatus(txInfo.Receipt.Result); status != "" {
@@ -313,11 +300,6 @@ func tronBuildRpcReceipt(txByID *tronGetTransactionByIDResponse, txInfo *tronGet
 		logs := txInfo.Log
 		if len(logs) > 0 {
 			receipt.Logs = tronNormalizeLogs(logs)
-		}
-	}
-	if receipt.Status == "" {
-		if status := tronResultToReceiptStatus(tronResultFromByID(txByID)); status != "" {
-			receipt.Status = status
 		}
 	}
 	if receipt.Status == "" && receipt.GasUsed == "" && len(receipt.Logs) == 0 && receipt.ContractAddress == "" {
@@ -393,7 +375,7 @@ func tronBuildRpcTransaction(txid string, txByID *tronGetTransactionByIDResponse
 func tronBuildEthereumSpecificData(txid string, txByID *tronGetTransactionByIDResponse, txInfo *tronGetTransactionInfoByIDResponse) bchain.EthereumSpecificData {
 	csd := bchain.EthereumSpecificData{
 		Tx:      tronBuildRpcTransaction(txid, txByID, txInfo),
-		Receipt: tronBuildRpcReceipt(txByID, txInfo),
+		Receipt: tronBuildRpcReceipt(txInfo),
 	}
 	extra := tronBuildExtraData(txByID, txInfo)
 	if m, err := json.Marshal(extra); err == nil {
@@ -415,12 +397,6 @@ func tronTxMeta(txByID *tronGetTransactionByIDResponse, txInfo *tronGetTransacti
 		}
 		if ts, ok := tronInt64PtrToUint64(txInfo.BlockTimeStamp); ok {
 			blockTime = int64(ts / 1000)
-		}
-	}
-	if !hasBlockNumber && txByID != nil {
-		if n, ok := tronUint64(txByID.BlockNumber); ok {
-			blockNumber = n
-			hasBlockNumber = true
 		}
 	}
 	if blockTime == 0 && txByID != nil && hasBlockNumber {
