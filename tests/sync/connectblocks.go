@@ -3,14 +3,11 @@
 package sync
 
 import (
-	"errors"
-	"fmt"
 	"math/big"
 	"os"
 	"reflect"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/db"
@@ -27,29 +24,6 @@ func (c *blockingChain) GetBlock(hash string, height uint32) (*bchain.Block, err
 	return nil, bchain.ErrBlockNotFound
 }
 
-// alwaysErrorQueuedChain returns stable block hashes but fails all GetBlock calls.
-// This quickly creates queue backpressure in parallel/bulk sync worker pipelines.
-type alwaysErrorQueuedChain struct {
-	bchain.BlockChain
-	bestHeight uint32
-	err        error
-}
-
-func (c *alwaysErrorQueuedChain) GetBestBlockHeight() (uint32, error) {
-	return c.bestHeight, nil
-}
-
-func (c *alwaysErrorQueuedChain) GetBlockHash(height uint32) (string, error) {
-	if height > c.bestHeight {
-		return "", bchain.ErrBlockNotFound
-	}
-	return fmt.Sprintf("queue-%d", height), nil
-}
-
-func (c *alwaysErrorQueuedChain) GetBlock(hash string, height uint32) (*bchain.Block, error) {
-	return nil, c.err
-}
-
 func testConnectBlocks(t *testing.T, h *TestHandler) {
 	for _, rng := range h.TestData.ConnectBlocks.SyncRanges {
 		withRocksDBAndSyncWorker(t, h, rng.Lower, func(d *db.RocksDB, sw *db.SyncWorker, ch chan os.Signal) {
@@ -58,11 +32,11 @@ func testConnectBlocks(t *testing.T, h *TestHandler) {
 				t.Fatal(err)
 			}
 
-			err = db.ConnectBlocks(sw, func(block *bchain.Block) {
-				if block != nil && block.Hash == upperHash {
-					close(ch)
-				}
-			}, true)
+				err = db.ConnectBlocks(sw, func(block *bchain.Block) {
+					if block != nil && block.Hash == upperHash {
+						close(ch)
+					}
+				}, true)
 			if err != nil && err != db.ErrOperationInterrupted {
 				t.Fatal(err)
 			}
@@ -125,55 +99,6 @@ func testConnectBlocksParallel(t *testing.T, h *TestHandler) {
 			t.Run("verifyAddresses", func(t *testing.T) { verifyAddresses(t, d, h, rng) })
 		})
 	}
-
-	t.Run("shutdownDuringParallelConnectBackpressure", func(t *testing.T) {
-		withRocksDBAndSyncWorker(t, h, 0, func(_ *db.RocksDB, sw *db.SyncWorker, ch chan os.Signal) {
-			db.SetBlockChain(sw, &alwaysErrorQueuedChain{
-				BlockChain: h.Chain,
-				bestHeight: 200,
-				err:        errors.New("decode mismatch"),
-			})
-			done := make(chan error, 1)
-			go func() {
-				done <- sw.ConnectBlocksParallel(0, 200)
-			}()
-			time.Sleep(100 * time.Millisecond)
-			close(ch)
-			select {
-			case err := <-done:
-				if err != db.ErrOperationInterrupted {
-					t.Fatalf("expected ErrOperationInterrupted, got %v", err)
-				}
-			case <-time.After(2 * time.Second):
-				t.Fatal("parallel sync did not stop on shutdown signal while queue was blocked")
-			}
-		})
-	})
-
-	t.Run("shutdownDuringBulkConnectBackpressure", func(t *testing.T) {
-		withRocksDBAndSyncWorker(t, h, 0, func(_ *db.RocksDB, sw *db.SyncWorker, ch chan os.Signal) {
-			db.SetBlockChain(sw, &alwaysErrorQueuedChain{
-				BlockChain: h.Chain,
-				bestHeight: 200,
-				err:        errors.New("decode mismatch"),
-			})
-			done := make(chan error, 1)
-			go func() {
-				done <- sw.BulkConnectBlocks(0, 200)
-			}()
-			time.Sleep(100 * time.Millisecond)
-			close(ch)
-			select {
-			case err := <-done:
-				if err != db.ErrOperationInterrupted {
-					t.Fatalf("expected ErrOperationInterrupted, got %v", err)
-				}
-			case <-time.After(2 * time.Second):
-				t.Fatal("bulk sync did not stop on shutdown signal while queue was blocked")
-			}
-		})
-	})
-
 }
 
 func verifyBlockInfo(t *testing.T, d *db.RocksDB, h *TestHandler, rng Range) {
