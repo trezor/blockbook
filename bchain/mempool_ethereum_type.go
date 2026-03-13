@@ -104,11 +104,13 @@ func (m *MempoolEthereumType) createTxEntry(txid string, txTime uint32) (txEntry
 // Transactions are added/removed by AddTransactionToMempool/RemoveTransactionFromMempool methods
 func (m *MempoolEthereumType) Resync() (int, error) {
 	start := time.Now()
+	processedTxs := 0
 	if m.queryBackendOnResync {
 		txs, err := m.chain.GetMempoolTransactions()
 		if err != nil {
 			return 0, err
 		}
+		processedTxs = len(txs)
 		for _, txid := range txs {
 			m.AddTransactionToMempool(txid)
 		}
@@ -130,11 +132,19 @@ func (m *MempoolEthereumType) Resync() (int, error) {
 	}
 	m.mux.Unlock()
 	duration := time.Since(start)
-	throughput := 0.0
-	if seconds := duration.Seconds(); seconds > 0 {
-		throughput = float64(entries) / seconds
+	durationRounded := duration.Round(time.Millisecond)
+	if durationRounded == 0 {
+		durationRounded = duration
 	}
-	glog.Infof("Mempool: resync %d transactions in mempool, duration %s, throughput %.2f tx/s", entries, duration.Round(time.Millisecond), throughput)
+	if processedTxs > 0 {
+		throughput := 0.0
+		if seconds := duration.Seconds(); seconds > 0 {
+			throughput = float64(processedTxs) / seconds
+		}
+		glog.Infof("Mempool: resync complete, mempool size %d txs, processed %d txs, duration %s, throughput %.2f tx/s", entries, processedTxs, durationRounded, throughput)
+	} else {
+		glog.Infof("Mempool: resync complete, mempool size %d txs, duration %s", entries, durationRounded)
+	}
 	return entries, nil
 }
 
