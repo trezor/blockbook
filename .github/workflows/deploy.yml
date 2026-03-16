@@ -22,6 +22,7 @@ jobs:
       deploy_matrix: ${{ steps.plan.outputs.deploy_matrix }}
       e2e_regex: ${{ steps.plan.outputs.e2e_regex }}
       coins_csv: ${{ steps.plan.outputs.coins_csv }}
+      test_coins_csv: ${{ steps.plan.outputs.test_coins_csv }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -57,10 +58,33 @@ jobs:
       - name: Deploy blockbook package
         run: ./contrib/scripts/deploy-blockbook-local.sh "${{ matrix.coin }}"
 
-  e2e-tests:
-    name: E2E Tests (post-deploy)
+  wait-for-sync:
+    name: Wait For Sync
     needs: [prepare, deploy]
     if: ${{ needs.deploy.result == 'success' }}
+    runs-on: [self-hosted, bb-dev-selfhosted]
+    timeout-minutes: 31
+    env:
+      COINS_INPUT: ${{ needs.prepare.outputs.test_coins_csv }}
+      SYNC_TIMEOUT_SECONDS: "1800"
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref != '' && inputs.ref || github.ref }}
+
+      - name: Export repository variables
+        uses: ./.github/actions/export-repository-variables
+        with:
+          vars_json: ${{ toJSON(vars) }}
+
+      - name: Wait for Blockbook sync
+        run: python3 ./.github/scripts/wait_for_blockbook_sync.py
+
+  e2e-tests:
+    name: E2E Tests (post-deploy)
+    needs: [prepare, deploy, wait-for-sync]
+    if: ${{ needs.deploy.result == 'success' && needs.wait-for-sync.result == 'success' }}
     runs-on: [self-hosted, bb-dev-selfhosted]
     env:
       E2E_REGEX: ${{ needs.prepare.outputs.e2e_regex }}
