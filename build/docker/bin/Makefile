@@ -30,7 +30,7 @@ test-integration: prepare-sources
 	cd $(BLOCKBOOK_SRC) && go test -tags 'integration' `go list github.com/trezor/blockbook/tests/...` -run 'TestIntegration/.*/(rpc|sync)' -timeout 30m $(ARGS)
 
 test-e2e: prepare-sources
-	cd $(BLOCKBOOK_SRC) && go test -tags 'integration' `go list github.com/trezor/blockbook/tests/...` -run 'TestIntegration/.*/api' -timeout 30m $(ARGS)
+	cd $(BLOCKBOOK_SRC) && go test -tags 'integration' `go list github.com/trezor/blockbook/tests/...` -run "$${E2E_REGEX:-TestIntegration/.*/api}" -timeout 30m $(ARGS)
 
 test-connectivity: prepare-sources
 	cd $(BLOCKBOOK_SRC) && go test -tags 'integration' github.com/trezor/blockbook/tests -run 'TestIntegration/.*/connectivity' -timeout 30m $(ARGS)

@@ -76,4 +76,4 @@ jobs:
           vars_json: ${{ toJSON(vars) }}
 
       - name: Run e2e tests
-        run: make test-e2e ARGS="-v -run ${E2E_REGEX}"
+        run: make test-e2e ARGS="-v"
