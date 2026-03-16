@@ -26,7 +26,7 @@ def load_runner_map(vars_map: dict) -> dict:
     for key, value in vars_map.items():
         if not key.startswith(prefix):
             continue
-        coin = key[len(prefix):].strip()
+        coin = key[len(prefix):].strip().lower()
         runner = "" if value is None else str(value).strip()
         if coin and runner:
             mapping[coin] = runner
@@ -53,6 +53,7 @@ def parse_requested_coins(raw: str, available: dict) -> list[str]:
     seen = set()
     result = []
     for coin in tokens:
+        coin = coin.lower()
         if coin in seen:
             continue
         seen.add(coin)
