@@ -27,7 +27,7 @@ test-integration: .bin-image
 	docker run -t --rm -e PACKAGER=$(PACKAGER) $(BB_RPC_ENV) -v "$(CURDIR):/src" --network="host" $(BIN_IMAGE) make test-integration ARGS="$(ARGS)"
 
 test-e2e: .bin-image
-	docker run -t --rm -e PACKAGER=$(PACKAGER) $(BB_RPC_ENV) -v "$(CURDIR):/src" --network="host" $(BIN_IMAGE) make test-e2e ARGS="$(ARGS)"
+	docker run -t --rm -e PACKAGER=$(PACKAGER) -e E2E_REGEX $(BB_RPC_ENV) -v "$(CURDIR):/src" --network="host" $(BIN_IMAGE) make test-e2e ARGS="$(ARGS)"
 
 test-connectivity: .bin-image
 	docker run -t --rm -e PACKAGER=$(PACKAGER) $(BB_RPC_ENV) -v "$(CURDIR):/src" --network="host" $(BIN_IMAGE) make test-connectivity ARGS="$(ARGS)"
