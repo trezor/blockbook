@@ -20,6 +20,12 @@ def matchable_name(coin: str) -> str:
     return coin + "=main"
 
 
+def test_coin_name(coin: str) -> str:
+    if coin.endswith("_archive"):
+        return coin[: -len("_archive")]
+    return coin
+
+
 def load_runner_map(vars_map: dict) -> dict:
     prefix = "BB_RUNNER_"
     mapping = {}
@@ -91,12 +97,16 @@ def main() -> None:
         if not coin_cfg_path.exists():
             fail(f"unknown coin '{coin}' (missing {coin_cfg_path})")
 
-        test_cfg = tests_cfg.get(coin)
+        lookup_coin = test_coin_name(coin)
+        test_cfg = tests_cfg.get(lookup_coin)
         if not isinstance(test_cfg, dict) or "connectivity" not in test_cfg:
-            fail(f"coin '{coin}' has no connectivity tests in tests/tests.json")
+            fail(
+                f"coin '{coin}' maps to test coin '{lookup_coin}' "
+                "which has no connectivity tests in tests/tests.json"
+            )
 
         deploy_matrix.append({"coin": coin, "runner": runner_map[coin]})
-        e2e_names.append(matchable_name(coin))
+        e2e_names.append(matchable_name(lookup_coin))
 
     unique_names = sorted(set(e2e_names))
     if not unique_names:
