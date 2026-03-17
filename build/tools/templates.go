@@ -50,6 +50,7 @@ type Config struct {
 		Network  string `json:"network,omitempty"`
 		Label    string `json:"label"`
 		Alias    string `json:"alias"`
+		TestName string `json:"test_name,omitempty"`
 	} `json:"coin"`
 	Ports struct {
 		BackendRPC          int `json:"backend_rpc"`

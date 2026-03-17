@@ -3,7 +3,8 @@
         "name": "Ethereum Archive",
         "shortcut": "ETH",
         "label": "Ethereum",
-        "alias": "ethereum_archive"
+        "alias": "ethereum_archive",
+        "test_name": "ethereum"
     },
     "ports": {
         "backend_rpc": 8016,

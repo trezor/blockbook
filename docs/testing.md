@@ -89,12 +89,12 @@ Example:
 HTTP connectivity verifies both back-end and Blockbook accessibility:
 
 * back-end: UTXO chains call `getblockchaininfo`, EVM chains call `web3_clientVersion`
-* Blockbook: calls `GET /api/status` (resolved from `BB_TEST_API_URL_HTTP_<coin alias>` or local `ports.blockbook_public`)
+* Blockbook: calls `GET /api/status` (resolved from `BB_TEST_API_URL_HTTP_<test name>` or local `ports.blockbook_public`)
 
 WebSocket connectivity also verifies both surfaces:
 
 * back-end: validates `web3_clientVersion` and opens a `newHeads` subscription
-* Blockbook: connects to `/websocket` (or `BB_TEST_API_URL_WS_<coin alias>`) and calls `getInfo`
+* Blockbook: connects to `/websocket` (or `BB_TEST_API_URL_WS_<test name>`) and calls `getInfo`
 
 ### Blockbook API end-to-end tests
 
@@ -107,9 +107,10 @@ Phase 1 covers smoke checks for:
 * HTTP: `Status`, `GetBlockIndex`, `GetBlockByHeight`, `GetBlock`, `GetTransaction`, `GetTransactionSpecific`, `GetAddress`, `GetAddressTxids`, `GetAddressTxs`, `GetUtxo`, `GetUtxoConfirmedFilter`
 * WebSocket: `WsGetInfo`, `WsGetBlockHash`, `WsGetTransaction`, `WsGetAccountInfo`, `WsGetAccountUtxo`, `WsPing`
 
-Endpoint resolution uses coin alias and this precedence:
+Endpoint resolution uses the test name from `coin.test_name` in `configs/coins/<coin>.json`
+(or the config file name when `test_name` is omitted) and this precedence:
 
-1. `BB_TEST_API_URL_HTTP_<coin alias>` and `BB_TEST_API_URL_WS_<coin alias>`
+1. `BB_TEST_API_URL_HTTP_<test name>` and `BB_TEST_API_URL_WS_<test name>`
 2. localhost fallback from coin config port `ports.blockbook_public`
 3. when WS env var is missing, WS URL is derived from HTTP URL with `/websocket` path
 
