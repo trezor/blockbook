@@ -127,17 +127,6 @@ func tronResourceToString(v interface{}) string {
 	}
 }
 
-func tronResultToReceiptStatus(result string) string {
-	switch strings.ToUpper(strings.TrimSpace(result)) {
-	case "SUCCESS":
-		return "0x1"
-	case "":
-		return ""
-	default:
-		return "0x0"
-	}
-}
-
 func tronInt64PtrToString(v *int64) string {
 	if v == nil {
 		return ""
@@ -286,11 +275,12 @@ func tronBuildExtraData(txByID *tronGetTransactionByIDResponse, txInfo *tronGetT
 func tronBuildRpcReceipt(txInfo *tronGetTransactionInfoByIDResponse) *bchain.RpcReceipt {
 	receipt := &bchain.RpcReceipt{}
 	if txInfo != nil {
-		if status := tronResultToReceiptStatus(txInfo.Receipt.Result); status != "" {
-			receipt.Status = status
-		} else if status := tronResultToReceiptStatus(txInfo.Result); status != "" {
-			receipt.Status = status
+		if strings.TrimSpace(txInfo.Result) == "" {
+			receipt.Status = "0x1" // success
+		} else {
+			receipt.Status = "0x0" // failed
 		}
+
 		if gasUsed := tronInt64PtrToHexQuantity(txInfo.Receipt.EnergyUsageTotal); gasUsed != "" {
 			receipt.GasUsed = gasUsed
 		}
