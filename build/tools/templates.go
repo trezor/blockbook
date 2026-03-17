@@ -366,9 +366,19 @@ func lookupEnvWithArchiveFallback(prefix, alias string) (string, bool) {
 
 func aliasCandidates(alias string) []string {
 	candidates := []string{alias}
-	if !strings.HasSuffix(alias, archiveSuffix) {
-		candidates = append(candidates, alias+archiveSuffix)
+	if strings.Contains(alias, archiveSuffix) {
+		return candidates
 	}
+
+	candidates = append(candidates, alias+archiveSuffix)
+
+	if idx := strings.Index(alias, "_"); idx != -1 {
+		infix := alias[:idx] + archiveSuffix + alias[idx:]
+		if infix != alias && infix != alias+archiveSuffix {
+			candidates = append(candidates, infix)
+		}
+	}
+
 	return candidates
 }
 
