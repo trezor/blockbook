@@ -177,15 +177,19 @@ func TestTronGetTransactionInfoByIDResponse_IgnoresCancelUnfreezeV2AmountShape(t
 	require.Equal(t, int64(456), *resp[1].Fee)
 }
 
-func TestTronBuildRpcReceipt_RequiresTransactionInfoForStatus(t *testing.T) {
+func TestTronBuildRpcReceipt_UsesTopLevelResultOmittedAsSuccess(t *testing.T) {
 	receipt := tronBuildRpcReceipt(nil)
 	require.Nil(t, receipt)
 
 	txInfo := &tronGetTransactionInfoByIDResponse{}
-	txInfo.Receipt.Result = "SUCCESS"
 	receipt = tronBuildRpcReceipt(txInfo)
 	require.NotNil(t, receipt)
 	require.Equal(t, "0x1", receipt.Status)
+
+	txInfo.Result = "FAILED"
+	receipt = tronBuildRpcReceipt(txInfo)
+	require.NotNil(t, receipt)
+	require.Equal(t, "0x0", receipt.Status)
 }
 
 func TestTronBuildExtraData_ResultRequiresTransactionInfo(t *testing.T) {
@@ -200,7 +204,7 @@ func TestTronBuildExtraData_ResultRequiresTransactionInfo(t *testing.T) {
 	require.Equal(t, "SUCCESS", extra.Result)
 }
 
-func TestTronTxMeta_RequiresTransactionInfoBlockNumber(t *testing.T) {
+func TestTronTxMeta_FallsBackToTransactionByIDBlockNumber(t *testing.T) {
 	txByID := &tronGetTransactionByIDResponse{
 		BlockNumber:    int64(12345),
 		BlockTimestamp: int64(1700000000000),
