@@ -5,7 +5,7 @@ import os
 import re
 from pathlib import Path
 
-from plan_common import fail, load_runner_map, parse_requested_coins
+from runner import fail, load_runner_map, parse_requested_coins
 
 
 def matchable_name(coin: str) -> str:
