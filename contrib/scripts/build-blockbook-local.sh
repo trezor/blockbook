@@ -22,10 +22,14 @@ if [[ -z "$package_name" ]]; then
   exit 1
 fi
 
-package_file="$(./contrib/scripts/build-blockbook-local.sh "$coin")"
+rm -f build/${package_name}_*.deb
+make "deb-blockbook-${coin}"
 
-sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --reinstall "./${package_file}"
-sudo systemctl restart "${package_name}.service"
-sudo systemctl is-active --quiet "${package_name}.service"
+package_file="$(ls -1t build/${package_name}_*.deb 2>/dev/null | head -n1 || true)"
+if [[ -z "$package_file" ]]; then
+  echo "error: built package for '$coin' was not found (pattern build/${package_name}_*.deb)" >&2
+  exit 1
+fi
 
-echo "deployed ${coin} via ${package_file}"
+echo "built ${coin} via ${package_file}" >&2
+printf '%s\n' "$package_file"

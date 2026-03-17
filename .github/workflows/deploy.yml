@@ -3,6 +3,14 @@ name: Deploy
 on:
   workflow_dispatch:
     inputs:
+      mode:
+        description: "Workflow mode"
+        type: choice
+        options:
+          - deploy
+          - build
+        required: true
+        default: deploy
       coins:
         description: "Comma-separated coin aliases from configs/coins, or ALL"
         required: true
@@ -15,11 +23,32 @@ permissions:
   contents: read
 
 jobs:
-  prepare:
-    name: Prepare Plan
+  prepare_build:
+    name: Prepare Build Plan
     runs-on: ubuntu-latest
+    if: ${{ inputs.mode == 'build' }}
     outputs:
-      deploy_matrix: ${{ steps.plan.outputs.deploy_matrix }}
+      runner_matrix: ${{ steps.plan.outputs.runner_matrix }}
+      coins_csv: ${{ steps.plan.outputs.coins_csv }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref != '' && inputs.ref || github.ref }}
+
+      - name: Build build plan
+        id: plan
+        env:
+          VARS_JSON: ${{ toJSON(vars) }}
+          COINS_INPUT: ${{ inputs.coins }}
+        run: ./.github/scripts/prepare_build_plan.py
+
+  prepare_deploy:
+    name: Prepare Deploy Plan
+    runs-on: ubuntu-latest
+    if: ${{ inputs.mode == 'deploy' }}
+    outputs:
+      runner_matrix: ${{ steps.plan.outputs.runner_matrix }}
       e2e_regex: ${{ steps.plan.outputs.e2e_regex }}
       coins_csv: ${{ steps.plan.outputs.coins_csv }}
       test_coins_csv: ${{ steps.plan.outputs.test_coins_csv }}
@@ -36,13 +65,37 @@ jobs:
           COINS_INPUT: ${{ inputs.coins }}
         run: ./.github/scripts/prepare_deploy_plan.py
 
-  deploy:
-    name: Deploy (${{ matrix.coin }})
-    needs: prepare
+  build:
+    name: Build (${{ matrix.coin }})
+    needs: prepare_build
+    if: ${{ inputs.mode == 'build' }}
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(needs.prepare.outputs.deploy_matrix) }}
+        include: ${{ fromJSON(needs.prepare_build.outputs.runner_matrix || '[]') }}
+    runs-on: [self-hosted, bb-dev-selfhosted, "${{ matrix.runner }}"]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref != '' && inputs.ref || github.ref }}
+
+      - name: Export repository variables
+        uses: ./.github/actions/export-repository-variables
+        with:
+          vars_json: ${{ toJSON(vars) }}
+
+      - name: Build blockbook package
+        run: ./contrib/scripts/build-blockbook-local.sh "${{ matrix.coin }}"
+
+  deploy:
+    name: Deploy (${{ matrix.coin }})
+    needs: prepare_deploy
+    if: ${{ inputs.mode == 'deploy' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.prepare_deploy.outputs.runner_matrix || '[]') }}
     runs-on: [self-hosted, bb-dev-selfhosted, "${{ matrix.runner }}"]
     steps:
       - name: Checkout code
@@ -60,12 +113,12 @@ jobs:
 
   wait-for-sync:
     name: Wait For Sync
-    needs: [prepare, deploy]
+    needs: [prepare_deploy, deploy]
     if: ${{ needs.deploy.result == 'success' }}
     runs-on: [self-hosted, bb-dev-selfhosted]
     timeout-minutes: 31
     env:
-      COINS_INPUT: ${{ needs.prepare.outputs.test_coins_csv }}
+      COINS_INPUT: ${{ needs.prepare_deploy.outputs.test_coins_csv }}
       SYNC_TIMEOUT_SECONDS: "1800"
     steps:
       - name: Checkout code
@@ -83,11 +136,11 @@ jobs:
 
   e2e-tests:
     name: E2E Tests (post-deploy)
-    needs: [prepare, deploy, wait-for-sync]
+    needs: [prepare_deploy, deploy, wait-for-sync]
     if: ${{ needs.deploy.result == 'success' && needs.wait-for-sync.result == 'success' }}
     runs-on: [self-hosted, bb-dev-selfhosted]
     env:
-      E2E_REGEX: ${{ needs.prepare.outputs.e2e_regex }}
+      E2E_REGEX: ${{ needs.prepare_deploy.outputs.e2e_regex }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
