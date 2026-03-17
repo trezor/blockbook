@@ -4,7 +4,8 @@
         "shortcut": "ETH",
         "network": "OP",
         "label": "Optimism",
-        "alias": "optimism_archive"
+        "alias": "optimism_archive",
+        "test_name": "optimism"
     },
     "ports": {
         "backend_rpc": 8202,

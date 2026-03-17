@@ -3,7 +3,8 @@
         "name": "Ethereum Testnet Hoodi Archive",
         "shortcut": "tHOD",
         "label": "Ethereum Hoodi",
-        "alias": "ethereum_testnet_hoodi_archive"
+        "alias": "ethereum_testnet_hoodi_archive",
+        "test_name": "ethereum_testnet_hoodi"
     },
     "ports": {
         "backend_rpc": 18026,

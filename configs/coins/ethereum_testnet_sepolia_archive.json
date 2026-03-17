@@ -3,7 +3,8 @@
         "name": "Ethereum Testnet Sepolia Archive",
         "shortcut": "tSEP",
         "label": "Ethereum Sepolia",
-        "alias": "ethereum_testnet_sepolia_archive"
+        "alias": "ethereum_testnet_sepolia_archive",
+        "test_name": "ethereum_testnet_sepolia"
     },
     "ports": {
         "backend_rpc": 18086,

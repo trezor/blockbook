@@ -3,7 +3,8 @@
         "name": "Arbitrum Nova Archive",
         "shortcut": "ETH",
         "label": "Arbitrum Nova",
-        "alias": "arbitrum_nova_archive"
+        "alias": "arbitrum_nova_archive",
+        "test_name": "arbitrum_nova"
     },
     "ports": {
         "backend_rpc": 8308,

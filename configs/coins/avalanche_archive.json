@@ -3,7 +3,8 @@
         "name": "Avalanche Archive",
         "shortcut": "AVAX",
         "label": "Avalanche",
-        "alias": "avalanche_archive"
+        "alias": "avalanche_archive",
+        "test_name": "avalanche"
     },
     "ports": {
         "backend_rpc": 8099,

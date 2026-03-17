@@ -4,7 +4,8 @@
         "shortcut": "BNB",
         "network": "BSC",
         "label": "BNB Smart Chain",
-        "alias": "bsc_archive"
+        "alias": "bsc_archive",
+        "test_name": "bsc"
     },
     "ports": {
         "backend_rpc": 8065,

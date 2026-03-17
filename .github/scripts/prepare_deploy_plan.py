@@ -20,10 +20,26 @@ def matchable_name(coin: str) -> str:
     return coin + "=main"
 
 
-def test_coin_name(coin: str) -> str:
-    if coin.endswith("_archive"):
-        return coin[: -len("_archive")]
-    return coin
+def load_test_coin_name(config_path: Path) -> str:
+    try:
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        fail(f"cannot read {config_path}: {exc}")
+
+    coin_cfg = config.get("coin")
+    if not isinstance(coin_cfg, dict):
+        fail(f"invalid config {config_path}: missing coin section")
+
+    test_name = coin_cfg.get("test_name")
+    if test_name is None:
+        return config_path.stem
+    if not isinstance(test_name, str):
+        fail(f"invalid config {config_path}: coin.test_name must be a string")
+
+    test_name = test_name.strip()
+    if not test_name:
+        fail(f"invalid config {config_path}: coin.test_name must not be empty")
+    return test_name
 
 
 def load_runner_map(vars_map: dict) -> dict:
@@ -98,7 +114,7 @@ def main() -> None:
         if not coin_cfg_path.exists():
             fail(f"unknown coin '{coin}' (missing {coin_cfg_path})")
 
-        lookup_coin = test_coin_name(coin)
+        lookup_coin = load_test_coin_name(coin_cfg_path)
         test_cfg = tests_cfg.get(lookup_coin)
         if not isinstance(test_cfg, dict) or "connectivity" not in test_cfg:
             fail(

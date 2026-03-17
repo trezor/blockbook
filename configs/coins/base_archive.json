@@ -4,7 +4,8 @@
         "shortcut": "ETH",
         "network": "BASE",
         "label": "Base",
-        "alias": "base_archive"
+        "alias": "base_archive",
+        "test_name": "base"
     },
     "ports": {
         "backend_rpc": 8211,
