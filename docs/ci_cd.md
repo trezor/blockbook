@@ -5,7 +5,7 @@
 The repository currently uses two main workflows:
 
 - `testing.yml` for automated test checks on pushes and pull requests
-- `deploy.yml` for manual self-hosted build/deploy runs
+- `deploy.yml` for manual self-hosted build/deploy runs (shown in GitHub Actions as `Build / Deploy`)
 
 ## Testing Workflow
 
@@ -30,7 +30,7 @@ Security gate for self-hosted test jobs:
 
 ## Deploy Workflow
 
-Workflow: `.github/workflows/deploy.yml`
+Workflow: `.github/workflows/deploy.yml` (`Build / Deploy` in the Actions UI)
 
 Trigger:
 
