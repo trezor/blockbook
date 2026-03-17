@@ -41,7 +41,7 @@ jobs:
         env:
           VARS_JSON: ${{ toJSON(vars) }}
           COINS_INPUT: ${{ inputs.coins }}
-        run: ./.github/scripts/prepare_build_plan.py
+        run: ./.github/scripts/build_plan.py
 
   prepare_deploy:
     name: Prepare Deploy Plan
@@ -63,7 +63,7 @@ jobs:
         env:
           VARS_JSON: ${{ toJSON(vars) }}
           COINS_INPUT: ${{ inputs.coins }}
-        run: ./.github/scripts/prepare_deploy_plan.py
+        run: ./.github/scripts/deploy_plan.py
 
   build:
     name: Build (${{ matrix.runner }})
@@ -132,7 +132,7 @@ jobs:
           vars_json: ${{ toJSON(vars) }}
 
       - name: Wait for Blockbook sync
-        run: python3 ./.github/scripts/wait_for_blockbook_sync.py
+        run: python3 ./.github/scripts/wait_for_sync.py
 
   e2e-tests:
     name: E2E Tests (post-deploy)
