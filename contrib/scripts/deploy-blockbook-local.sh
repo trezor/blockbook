@@ -23,9 +23,10 @@ if [[ -z "$package_name" ]]; then
 fi
 
 package_file="$(./contrib/scripts/build-blockbook-local.sh "$coin")"
+package_path="$(readlink -f "$package_file")"
 
-sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --reinstall "./${package_file}"
+sudo DEBIAN_FRONTEND=noninteractive apt install -y --reinstall "$package_path"
 sudo systemctl restart "${package_name}.service"
 sudo systemctl is-active --quiet "${package_name}.service"
 
-echo "deployed ${coin} via ${package_file}"
+echo "deployed ${coin} via ${package_path}"

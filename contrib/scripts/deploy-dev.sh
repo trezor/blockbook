@@ -27,7 +27,7 @@ status=0
 for coin in $COINS
 do
     scp build/blockbook-${coin}_${VERSION}_amd64.deb ${HOST}: \
-        && ssh ${HOST} "sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --reinstall ./blockbook-${coin}_${VERSION}_amd64.deb && sudo systemctl restart blockbook-${coin}.service" \
+        && ssh ${HOST} "pkg=\$PWD/blockbook-${coin}_${VERSION}_amd64.deb && sudo DEBIAN_FRONTEND=noninteractive apt install -y --reinstall \"\$pkg\" && sudo systemctl restart blockbook-${coin}.service" \
         || status=$?
 
     if [ ${status} == 0 ]
