@@ -46,8 +46,11 @@ Inputs:
     2. install and restart service
     3. wait for Blockbook sync
     4. run post-deploy e2e tests
-- `coins`: comma-separated aliases from `configs/coins` or `ALL`
+- `coins`: comma-separated aliases from `configs/coins`; `ALL` is supported only in `mode=build`
 - `ref`: optional checkout/deploy ref; leave empty to use the workflow run ref
+
+In `mode=build`, selected coins are grouped by runner so one build job can build multiple
+`deb-blockbook-<coin>` targets in a single invocation on the same self-hosted machine.
 
 ## Trigger from `gh` CLI
 
@@ -58,6 +61,8 @@ Build selected coins:
 ```bash
 gh workflow run deploy.yml --ref <workflow-branch> -f mode='build' -f coins='bitcoin,dogecoin'
 ```
+
+If both coins map to the same runner, they are built together in one build job.
 
 Deploy selected coins:
 
@@ -77,11 +82,7 @@ Build all mapped coins:
 gh workflow run deploy.yml --ref <workflow-branch> -f mode='build' -f coins='ALL'
 ```
 
-Deploy all mapped coins:
-
-```bash
-gh workflow run deploy.yml --ref <workflow-branch> -f mode='deploy' -f coins='ALL'
-```
+`ALL` is rejected in `mode=deploy`; pass an explicit coin list there.
 
 Monitor runs:
 

@@ -20,12 +20,14 @@ def load_runner_map(vars_map: dict) -> dict:
     return mapping
 
 
-def parse_requested_coins(raw: str, available: dict) -> list[str]:
+def parse_requested_coins(raw: str, available: dict, *, allow_all: bool = True) -> list[str]:
     text = raw.strip()
     if not text:
         fail("coins input is empty")
 
     if text.upper() == "ALL":
+        if not allow_all:
+            fail("ALL is only supported in build mode")
         coins = sorted(available.keys())
         if not coins:
             fail("no BB_RUNNER_* variables found")
@@ -35,6 +37,8 @@ def parse_requested_coins(raw: str, available: dict) -> list[str]:
     if not tokens:
         fail("coins input resolved to an empty list")
     if any(token.upper() == "ALL" for token in tokens):
+        if not allow_all:
+            fail("ALL is only supported in build mode")
         fail("ALL must be used alone")
 
     seen = set()

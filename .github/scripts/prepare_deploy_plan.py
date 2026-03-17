@@ -45,7 +45,7 @@ def main() -> None:
     if not runner_map:
         fail("no BB_RUNNER_* variables found")
 
-    requested = parse_requested_coins(coins_input, runner_map)
+    requested = parse_requested_coins(coins_input, runner_map, allow_all=False)
 
     configs_dir = workspace / "configs" / "coins"
     tests_path = workspace / "tests" / "tests.json"

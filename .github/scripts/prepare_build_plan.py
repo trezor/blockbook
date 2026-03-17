@@ -19,7 +19,7 @@ def main() -> None:
     requested = parse_requested_coins(coins_input, runner_map)
     configs_dir = workspace / "configs" / "coins"
 
-    runner_matrix = []
+    grouped_by_runner = {}
     for coin in requested:
         if coin not in runner_map:
             fail(f"missing BB_RUNNER_{coin}")
@@ -28,7 +28,19 @@ def main() -> None:
         if not coin_cfg_path.exists():
             fail(f"unknown coin '{coin}' (missing {coin_cfg_path})")
 
-        runner_matrix.append({"coin": coin, "runner": runner_map[coin]})
+        runner = runner_map[coin]
+        grouped_by_runner.setdefault(runner, []).append(coin)
+
+    runner_matrix = []
+    for runner in sorted(grouped_by_runner):
+        coins = grouped_by_runner[runner]
+        runner_matrix.append(
+            {
+                "runner": runner,
+                "coins": coins,
+                "coins_csv": ",".join(coins),
+            }
+        )
 
     output_file = os.environ.get("GITHUB_OUTPUT")
     if not output_file:
@@ -39,6 +51,8 @@ def main() -> None:
         out.write(f"coins_csv={','.join(requested)}\n")
 
     print("Selected coins:", ", ".join(requested))
+    for item in runner_matrix:
+        print(f"Runner {item['runner']}: {', '.join(item['coins'])}")
 
 
 if __name__ == "__main__":

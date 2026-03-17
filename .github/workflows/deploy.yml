@@ -12,7 +12,7 @@ on:
         required: true
         default: deploy
       coins:
-        description: "Comma-separated coin aliases from configs/coins, or ALL"
+        description: "Comma-separated coin aliases from configs/coins; ALL is supported only in build mode"
         required: true
       ref:
         description: "Git ref to deploy (leave empty for current ref)"
@@ -66,7 +66,7 @@ jobs:
         run: ./.github/scripts/prepare_deploy_plan.py
 
   build:
-    name: Build (${{ matrix.coin }})
+    name: Build (${{ matrix.runner }})
     needs: prepare_build
     if: ${{ inputs.mode == 'build' }}
     strategy:
@@ -86,7 +86,7 @@ jobs:
           vars_json: ${{ toJSON(vars) }}
 
       - name: Build blockbook package
-        run: ./contrib/scripts/build-blockbook-local.sh "${{ matrix.coin }}"
+        run: ./contrib/scripts/build-blockbook-local.sh ${{ join(matrix.coins, ' ') }}
 
   deploy:
     name: Deploy (${{ matrix.coin }})
