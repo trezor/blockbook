@@ -90,10 +90,11 @@ command: `make NO_CACHE=true all-bitcoin`.
 
 `BB_RPC_URL_HTTP_<coin alias>`: Overrides `ipc.rpc_url_template` while generating package definitions so you can target
 hosted HTTP RPC endpoints without editing coin JSON. The root `Makefile` forwards any `BB_RPC_URL_HTTP_*` variables into the
-Docker build/test containers.
+Docker build/test containers. Resolution prefers the exact alias and also accepts archive variants such as `<alias>_archive`
+and, for names like Polygon, `<prefix>_archive_<suffix>`.
 
 `BB_RPC_URL_WS_<coin alias>`: Overrides `ipc.rpc_url_ws_template` for WebSocket subscriptions. It should point to the
-same host as `BB_RPC_URL_HTTP_<coin alias>`.
+same host as `BB_RPC_URL_HTTP_<coin alias>` and follows the same fallback resolution.
 
 Example:
 `BB_RPC_URL_HTTP_ethereum=http://backend_hostname:1234 BB_RPC_URL_WS_ethereum_archive=ws://backend_hostname:1234 make deb-ethereum_archive`.
