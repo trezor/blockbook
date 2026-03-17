@@ -30,7 +30,7 @@ for coin in "${coins[@]}"; do
   rm -f "build/${package_name}"_*.deb
 done
 
-make "${make_targets[@]}"
+make "${make_targets[@]}" 1>&2
 
 for i in "${!coins[@]}"; do
   coin="${coins[$i]}"

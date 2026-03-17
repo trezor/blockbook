@@ -22,11 +22,39 @@ if [[ -z "$package_name" ]]; then
   exit 1
 fi
 
-package_file="$(./contrib/scripts/build-blockbook-local.sh "$coin")"
+package_file="$(./contrib/scripts/build-blockbook-local.sh "$coin" | tail -n1)"
+if [[ -z "$package_file" ]]; then
+  echo "error: build helper did not return a package path for '$coin'" >&2
+  exit 1
+fi
+
 package_path="$(readlink -f "$package_file")"
+service_name="${package_name}.service"
 
+show_service_diagnostics() {
+  sudo systemctl status --no-pager --full "$service_name" || true
+  sudo journalctl -u "$service_name" -n 100 --no-pager || true
+}
+
+echo "installing ${package_path}"
 sudo DEBIAN_FRONTEND=noninteractive apt install -y --reinstall "$package_path"
-sudo systemctl restart "${package_name}.service"
-sudo systemctl is-active --quiet "${package_name}.service"
 
-echo "deployed ${coin} via ${package_path}"
+echo "restarting ${service_name}"
+if ! sudo systemctl restart "$service_name"; then
+  echo "error: failed to restart ${service_name}" >&2
+  show_service_diagnostics
+  exit 1
+fi
+
+echo "waiting for ${service_name} to become active"
+for _ in $(seq 1 30); do
+  if sudo systemctl is-active --quiet "$service_name"; then
+    echo "deployed ${coin} via ${package_path}"
+    exit 0
+  fi
+  sleep 1
+done
+
+echo "error: ${service_name} did not become active within 30 seconds" >&2
+show_service_diagnostics
+exit 1
