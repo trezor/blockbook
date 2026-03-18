@@ -19,6 +19,11 @@ on:
           - prod
         required: true
         default: dev
+      always_build_backend:
+        description: "Build backend packages for all selected coins; used only when mode=build"
+        type: boolean
+        required: true
+        default: false
       coins:
         description: "Comma-separated coin aliases from configs/coins; ALL is supported only in build mode"
         required: true
@@ -94,10 +99,11 @@ jobs:
         with:
           vars_json: ${{ toJSON(vars) }}
 
-      - name: Build blockbook package
+      - name: Build packages
         env:
           BRANCH_OR_TAG: ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}
-        run: ./contrib/scripts/build-blockbook-local.sh ${{ join(matrix.coins, ' ') }}
+          BB_PACKAGE_ROOT: /opt/blockbook-builds
+        run: python3 ./.github/scripts/build_packages.py ${{ inputs.always_build_backend && '--always-build-backend' || '' }} ${{ join(matrix.coins, ' ') }}
 
   deploy:
     name: Deploy (${{ matrix.coin }})
