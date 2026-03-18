@@ -214,6 +214,8 @@ func tronNormalizeLogs(logs []*bchain.RpcLog) []*bchain.RpcLog {
 
 func tronBuildExtraData(txByID *tronGetTransactionByIDResponse, txInfo *tronGetTransactionInfoByIDResponse) bchain.TronChainExtraData {
 	extra := bchain.TronChainExtraData{}
+	extra.FeeLimit = tronInt64PtrToString(txByID.RawData.FeeLimit)
+
 	if c := tronFirstContract(txByID); c != nil {
 		extra.ContractType = c.Type
 		extra.Operation = tronOperationFromContractType(c.Type)
@@ -253,22 +255,22 @@ func tronBuildExtraData(txByID *tronGetTransactionByIDResponse, txInfo *tronGetT
 			extra.DelegateTo = tronAddressToBase58(tronFirstAddress(v.ReceiverAddress, v.ContractAddress, v.ToAddress))
 		}
 	}
-	if txInfo != nil {
-		extra.AssetIssueID = strings.TrimSpace(txInfo.AssetIssueID)
-		extra.TotalFee = tronInt64PtrToString(txInfo.Fee)
-		extra.EnergyUsage = tronInt64PtrToString(txInfo.Receipt.EnergyUsage)
-		extra.EnergyUsageTotal = tronInt64PtrToString(txInfo.Receipt.EnergyUsageTotal)
-		extra.EnergyFee = tronInt64PtrToString(txInfo.Receipt.EnergyFee)
-		extra.BandwidthUsage = tronInt64PtrToString(txInfo.Receipt.NetUsage)
-		extra.BandwidthFee = tronInt64PtrToString(txInfo.Receipt.NetFee)
-		extra.Result = strings.TrimSpace(txInfo.Receipt.Result)
-		if extra.Result == "" {
-			extra.Result = strings.TrimSpace(txInfo.Result)
-		}
-		if extra.UnstakeAmount == "" {
-			extra.UnstakeAmount = tronInt64PtrToString(txInfo.UnfreezeAmount)
-		}
+
+	extra.AssetIssueID = strings.TrimSpace(txInfo.AssetIssueID)
+	extra.TotalFee = tronInt64PtrToString(txInfo.Fee)
+	extra.EnergyUsage = tronInt64PtrToString(txInfo.Receipt.EnergyUsage)
+	extra.EnergyUsageTotal = tronInt64PtrToString(txInfo.Receipt.EnergyUsageTotal)
+	extra.EnergyFee = tronInt64PtrToString(txInfo.Receipt.EnergyFee)
+	extra.BandwidthUsage = tronInt64PtrToString(txInfo.Receipt.NetUsage)
+	extra.BandwidthFee = tronInt64PtrToString(txInfo.Receipt.NetFee)
+	extra.Result = strings.TrimSpace(txInfo.Receipt.Result)
+	if extra.Result == "" {
+		extra.Result = strings.TrimSpace(txInfo.Result)
 	}
+	if extra.UnstakeAmount == "" {
+		extra.UnstakeAmount = tronInt64PtrToString(txInfo.UnfreezeAmount)
+	}
+
 	return extra
 }
 
@@ -307,7 +309,7 @@ func tronBuildRpcTransaction(txByID *tronGetTransactionByIDResponse, txInfo *tro
 		Hash:             normalizeHexString(txByID.TxID),
 		TransactionIndex: "0x0",
 	}
-	if gasLimit := tronDecimalToHexQuantity(txByID.RawData.FeeLimit); gasLimit != "" {
+	if gasLimit := tronInt64PtrToHexQuantity(txByID.RawData.FeeLimit); gasLimit != "" {
 		tx.GasLimit = gasLimit
 	}
 	if c := tronFirstContract(txByID); c != nil {

@@ -29,8 +29,9 @@ func TestTronBuildExtraData_VoteWitness(t *testing.T) {
 
 	txByID := &tronGetTransactionByIDResponse{}
 	txByID.RawData.Contract = []tronTxContract{contract}
+	txInfo := &tronGetTransactionInfoByIDResponse{}
 
-	extra := tronBuildExtraData(txByID, nil)
+	extra := tronBuildExtraData(txByID, txInfo)
 	require.Equal(t, "VoteWitnessContract", extra.ContractType)
 	require.Equal(t, "vote", extra.Operation)
 	require.Len(t, extra.Votes, 2)
@@ -48,8 +49,9 @@ func TestTronBuildExtraData_StakeAndDelegateDetails(t *testing.T) {
 
 		txByID := &tronGetTransactionByIDResponse{}
 		txByID.RawData.Contract = []tronTxContract{contract}
+		txInfo := &tronGetTransactionInfoByIDResponse{}
 
-		extra := tronBuildExtraData(txByID, nil)
+		extra := tronBuildExtraData(txByID, txInfo)
 		require.Equal(t, "freeze", extra.Operation)
 		require.Equal(t, "125000000", extra.StakeAmount)
 		require.Equal(t, "energy", extra.Resource)
@@ -77,8 +79,9 @@ func TestTronBuildExtraData_StakeAndDelegateDetails(t *testing.T) {
 
 		txByID := &tronGetTransactionByIDResponse{}
 		txByID.RawData.Contract = []tronTxContract{contract}
+		txInfo := &tronGetTransactionInfoByIDResponse{}
 
-		extra := tronBuildExtraData(txByID, nil)
+		extra := tronBuildExtraData(txByID, txInfo)
 		require.Equal(t, "delegate", extra.Operation)
 		require.Equal(t, "42000000", extra.DelegateAmount)
 		require.Equal(t, ToTronAddressFromAddress(contract.Parameter.Value.ReceiverAddress), extra.DelegateTo)
@@ -90,6 +93,7 @@ func TestTronBuildExtraData_AssetIssueID(t *testing.T) {
 	contract := tronTxContract{Type: "TransferAssetContract"}
 	txByID := &tronGetTransactionByIDResponse{}
 	txByID.RawData.Contract = []tronTxContract{contract}
+	txByID.RawData.FeeLimit = int64Ptr(999000000)
 
 	txInfo := &tronGetTransactionInfoByIDResponse{
 		AssetIssueID: "1000047",
@@ -98,6 +102,7 @@ func TestTronBuildExtraData_AssetIssueID(t *testing.T) {
 	extra := tronBuildExtraData(txByID, txInfo)
 	require.Equal(t, "trc10Transfer", extra.Operation)
 	require.Equal(t, "1000047", extra.AssetIssueID)
+	require.Equal(t, "999000000", extra.FeeLimit)
 }
 
 func TestTronBuildRpcTransaction_ValueIsEthereumHexQuantity(t *testing.T) {
@@ -197,11 +202,11 @@ func TestTronBuildRpcReceipt_UsesTopLevelResultOmittedAsSuccess(t *testing.T) {
 
 func TestTronBuildExtraData_ResultRequiresTransactionInfo(t *testing.T) {
 	txByID := &tronGetTransactionByIDResponse{}
+	txInfo := &tronGetTransactionInfoByIDResponse{}
 
-	extra := tronBuildExtraData(txByID, nil)
+	extra := tronBuildExtraData(txByID, txInfo)
 	require.Equal(t, "", extra.Result)
 
-	txInfo := &tronGetTransactionInfoByIDResponse{}
 	txInfo.Receipt.Result = "SUCCESS"
 	extra = tronBuildExtraData(txByID, txInfo)
 	require.Equal(t, "SUCCESS", extra.Result)
