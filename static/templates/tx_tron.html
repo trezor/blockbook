@@ -112,7 +112,7 @@
         {{if $chainExtra.EnergyUsageTotal}}
         <tr>
             <td>Energy Used / Limit</td>
-            <td><span class="copyable">{{$chainExtra.EnergyUsageTotal}}</span> / {{formatBigInt $eth.GasLimit}}</td>
+            <td><span class="copyable">{{$chainExtra.EnergyUsageTotal}}</span> / {{$chainExtra.FeeLimit}}</td>
         </tr>
         {{end}}
         {{if $chainExtra.EnergyUsage}}

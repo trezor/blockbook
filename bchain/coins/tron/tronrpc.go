@@ -77,8 +77,8 @@ type tronGetTransactionByIDResponse struct {
 	TxID       string `json:"txID,omitempty"`
 	RawDataHex string `json:"raw_data_hex"`
 	RawData    struct {
-		Timestamp interface{}      `json:"timestamp,omitempty"`
-		FeeLimit  interface{}      `json:"fee_limit,omitempty"`
+		Timestamp *int64           `json:"timestamp,omitempty"`
+		FeeLimit  *int64           `json:"fee_limit,omitempty"`
 		Contract  []tronTxContract `json:"contract"`
 	} `json:"raw_data"`
 }

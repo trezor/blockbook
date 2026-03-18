@@ -25,6 +25,7 @@ type TronChainExtraData struct {
 	DelegateTo       string          `json:"delegateTo,omitempty"`
 	AssetIssueID     string          `json:"assetIssueID,omitempty"`
 	TotalFee         string          `json:"totalFee,omitempty"`
+	FeeLimit         string          `json:"feeLimit,omitempty"`
 	EnergyUsage      string          `json:"energyUsage,omitempty"`
 	EnergyUsageTotal string          `json:"energyUsageTotal,omitempty"`
 	EnergyFee        string          `json:"energyFee,omitempty"`
