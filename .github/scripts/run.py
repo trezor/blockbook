@@ -52,8 +52,8 @@ def print_help() -> None:
         f"""Usage:
   {SCRIPT_NAME} help
   {SCRIPT_NAME} list [--env <dev|prod>] [--repo <owner/repo>] [--format <csv|lines>]
-  {SCRIPT_NAME} build --coins <csv> [--env <dev|prod>] [--workflow-ref <ref>] [--checkout-ref <ref>] [--repo <owner/repo>] [--run]
-  {SCRIPT_NAME} deploy --coins <csv> [--workflow-ref <ref>] [--checkout-ref <ref>] [--repo <owner/repo>] [--run]
+  {SCRIPT_NAME} build --coins <csv> [--env <dev|prod>] [--workflow-ref <ref>] [--branch-or-tag <name>] [--repo <owner/repo>] [--run]
+  {SCRIPT_NAME} deploy --coins <csv> [--workflow-ref <ref>] [--branch-or-tag <name>] [--repo <owner/repo>] [--run]
   {SCRIPT_NAME} watch [<run-id>] [--repo <owner/repo>]
 
 Commands:
@@ -66,7 +66,7 @@ Commands:
 Defaults:
   --repo : {DEFAULT_REPO}
   --workflow-ref: {workflow_ref}
-  --checkout-ref: {workflow_ref}
+  --branch-or-tag: {workflow_ref}
   --env: dev
 
 Operations:
@@ -91,7 +91,7 @@ Shared options for build/deploy:
                                Default: {DEFAULT_REPO}
   --workflow-ref <ref>         Branch/tag/commit that contains deploy.yml.
                                Default: current git branch.
-  --checkout-ref <ref>         Branch/tag/commit to run the workflow on.
+  --branch-or-tag <name>       Branch or tag to run the workflow on.
                                Default: current git branch.
   --coins <csv>                Required. Coin list, e.g. bitcoin,bsc_archive or ALL (only for build).
   --run                        Execute the generated gh command instead of printing it.
@@ -113,7 +113,7 @@ Examples:
   {SCRIPT_NAME} build --env prod --coins bitcoin,bsc_archive
   {SCRIPT_NAME} build --env prod --coins bitcoin,bsc_archive --workflow-ref my-branch
   {SCRIPT_NAME} deploy --coins bitcoin,bsc_archive
-  {SCRIPT_NAME} deploy --coins bitcoin --checkout-ref master --run
+  {SCRIPT_NAME} deploy --coins bitcoin --branch-or-tag master --run
   {SCRIPT_NAME} watch
   {SCRIPT_NAME} watch 123456789"""
     )
@@ -146,7 +146,7 @@ def load_deploy_context(repo: str):
 def build_command(
     repo: str,
     workflow_ref: str,
-    checkout_ref: str,
+    branch_or_tag: str,
     build_env: str,
     coins: str,
 ) -> list[str]:
@@ -166,15 +166,15 @@ def build_command(
         "-f",
         f"coins={coins}",
     ]
-    if checkout_ref:
-        cmd += ["-f", f"checkout_ref={checkout_ref}"]
+    if branch_or_tag:
+        cmd += ["-f", f"branch_or_tag={branch_or_tag}"]
     return cmd
 
 
 def deploy_command(
     repo: str,
     workflow_ref: str,
-    checkout_ref: str,
+    branch_or_tag: str,
     coins: str,
 ) -> list[str]:
     cmd = [
@@ -193,8 +193,8 @@ def deploy_command(
         "-f",
         f"coins={coins}",
     ]
-    if checkout_ref:
-        cmd += ["-f", f"checkout_ref={checkout_ref}"]
+    if branch_or_tag:
+        cmd += ["-f", f"branch_or_tag={branch_or_tag}"]
     return cmd
 
 
@@ -209,7 +209,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("--repo", default=DEFAULT_REPO)
     parser.add_argument("--workflow-ref", default=current_branch())
-    parser.add_argument("--checkout-ref", default=current_branch())
+    parser.add_argument("--branch-or-tag", default=current_branch())
     parser.add_argument("--coins", required=True)
     parser.add_argument("--env", choices=("dev", "prod"), default="dev")
     parser.add_argument("--run", action="store_true")
@@ -220,7 +220,7 @@ def deploy_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("--repo", default=DEFAULT_REPO)
     parser.add_argument("--workflow-ref", default=current_branch())
-    parser.add_argument("--checkout-ref", default=current_branch())
+    parser.add_argument("--branch-or-tag", default=current_branch())
     parser.add_argument("--coins", required=True)
     parser.add_argument("--run", action="store_true")
     return parser
@@ -260,7 +260,7 @@ def command_build(argv: list[str]) -> None:
         build_command(
             args.repo,
             workflow_ref,
-            args.checkout_ref,
+            args.branch_or_tag,
             args.env,
             "ALL" if selection.requested_all else ",".join(selection.coins),
         ),
@@ -284,7 +284,7 @@ def command_deploy(argv: list[str]) -> None:
         die(str(exc))
 
     print_or_run(
-        deploy_command(args.repo, workflow_ref, args.checkout_ref, ",".join(coins)),
+        deploy_command(args.repo, workflow_ref, args.branch_or_tag, ",".join(coins)),
         args.run,
     )
 

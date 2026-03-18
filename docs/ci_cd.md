@@ -51,10 +51,15 @@ Inputs:
   - default is `dev`
   - ignored when `mode=deploy`
 - `coins`: comma-separated aliases from `configs/coins`; `ALL` is supported only in `mode=build`
-- `checkout_ref`: optional checkout/deploy ref; leave empty to use the workflow run ref
+- `branch_or_tag`: optional branch or tag to check out and deploy; leave empty to use the workflow run ref name
 
 In `mode=build`, selected coins are grouped by runner so one build job can build multiple
 `deb-blockbook-<coin>` targets in a single invocation on the same self-hosted machine.
+Built packages are moved after build to:
+
+- `/opt/blockbook-builds/{branch_or_tag}/{coin_alias}/blockbook.deb`
+
+You can override the package root with `BLOCKBOOK_PACKAGE_ROOT`, but it must be an absolute path.
 
 Special cases:
 
@@ -69,7 +74,7 @@ Without `--run`, `build` and `deploy` print the underlying `gh workflow run ...`
 command. `list` prints coins, not commands.
 
 Current branch example output was captured on `new-test-name-config`, so the printed
-`--ref` and `checkout_ref` values will differ on other branches.
+`--ref` and `branch_or_tag` values will differ on other branches.
 The output below assumes `BB_RUNNER_*` repository variables are valid for the current checkout.
 
 List coins buildable on dev runners:
@@ -113,7 +118,7 @@ Print the default dev build command for selected coins:
 ```
 
 ```text
-gh workflow run deploy.yml -R trezor/blockbook --ref new-test-name-config -f mode=build -f env=dev -f coins=bitcoin,dogecoin -f checkout_ref=new-test-name-config
+gh workflow run deploy.yml -R trezor/blockbook --ref new-test-name-config -f mode=build -f env=dev -f coins=bitcoin,dogecoin -f branch_or_tag=new-test-name-config
 ```
 
 Print the prod build command for selected coins:
@@ -123,7 +128,7 @@ Print the prod build command for selected coins:
 ```
 
 ```text
-gh workflow run deploy.yml -R trezor/blockbook --ref new-test-name-config -f mode=build -f env=prod -f coins=bitcoin,bsc_archive -f checkout_ref=new-test-name-config
+gh workflow run deploy.yml -R trezor/blockbook --ref new-test-name-config -f mode=build -f env=prod -f coins=bitcoin,bsc_archive -f branch_or_tag=new-test-name-config
 ```
 
 Print the dev build command for all selectable coins:
@@ -133,7 +138,7 @@ Print the dev build command for all selectable coins:
 ```
 
 ```text
-gh workflow run deploy.yml -R trezor/blockbook --ref new-test-name-config -f mode=build -f env=dev -f coins=ALL -f checkout_ref=new-test-name-config
+gh workflow run deploy.yml -R trezor/blockbook --ref new-test-name-config -f mode=build -f env=dev -f coins=ALL -f branch_or_tag=new-test-name-config
 ```
 
 Print the prod build command for all selectable coins:
@@ -143,7 +148,7 @@ Print the prod build command for all selectable coins:
 ```
 
 ```text
-gh workflow run deploy.yml -R trezor/blockbook --ref new-test-name-config -f mode=build -f env=prod -f coins=ALL -f checkout_ref=new-test-name-config
+gh workflow run deploy.yml -R trezor/blockbook --ref new-test-name-config -f mode=build -f env=prod -f coins=ALL -f branch_or_tag=new-test-name-config
 ```
 
 Print the deploy command for selected coins:
@@ -153,15 +158,15 @@ Print the deploy command for selected coins:
 ```
 
 ```text
-gh workflow run deploy.yml -R trezor/blockbook --ref new-test-name-config -f mode=deploy -f env=dev -f coins=bitcoin,dogecoin -f checkout_ref=new-test-name-config
+gh workflow run deploy.yml -R trezor/blockbook --ref new-test-name-config -f mode=deploy -f env=dev -f coins=bitcoin,dogecoin -f branch_or_tag=new-test-name-config
 ```
 
-Print the deploy command with an explicit checkout ref:
+Print the deploy command with an explicit branch or tag:
 
 ```bash
-./.github/scripts/run.py deploy --coins bitcoin --checkout-ref master
+./.github/scripts/run.py deploy --coins bitcoin --branch-or-tag master
 ```
 
 ```text
-gh workflow run deploy.yml -R trezor/blockbook --ref new-test-name-config -f mode=deploy -f env=dev -f coins=bitcoin -f checkout_ref=master
+gh workflow run deploy.yml -R trezor/blockbook --ref new-test-name-config -f mode=deploy -f env=dev -f coins=bitcoin -f branch_or_tag=master
 ```
