@@ -9,10 +9,16 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+LOG_PREFIX = "CI/CD Pipeline:"
+
 
 def fail(message: str) -> None:
-    print(f"error: {message}", file=sys.stderr)
+    print(f"{LOG_PREFIX} error: {message}", file=sys.stderr)
     raise SystemExit(1)
+
+
+def log(message: str) -> None:
+    print(f"{LOG_PREFIX} {message}", flush=True)
 
 
 def parse_requested_coins(raw: str) -> list[str]:
@@ -114,10 +120,9 @@ def main() -> None:
         last_seen[coin] = "not checked yet"
 
     deadline = time.monotonic() + timeout_seconds
-    print(
-        "Waiting for Blockbook sync:",
-        ", ".join(f"{coin} -> {base}" for coin, base in sorted(pending.items())),
-        flush=True,
+    log(
+        "Waiting for Blockbook sync: "
+        + ", ".join(f"{coin} -> {base}" for coin, base in sorted(pending.items()))
     )
 
     while pending:
@@ -153,7 +158,7 @@ def main() -> None:
             in_sync, summary = parse_sync_state(body)
             last_seen[coin] = f"{base_url}/api/status returned HTTP 200: {summary}"
             if in_sync:
-                print(f"{coin}: synced ({summary})", flush=True)
+                log(f"{coin}: synced ({summary})")
                 del pending[coin]
 
         if not pending:
@@ -166,10 +171,7 @@ def main() -> None:
         details = "; ".join(
             f"{coin}: {last_seen[coin]}" for coin in sorted(pending)
         )
-        print(
-            f"Still waiting for Blockbook sync ({remaining_seconds}s left): {details}",
-            flush=True,
-        )
+        log(f"Still waiting for Blockbook sync ({remaining_seconds}s left): {details}")
         time.sleep(min(poll_seconds, remaining_seconds))
 
     if pending:
@@ -180,7 +182,7 @@ def main() -> None:
             f"timed out after {timeout_seconds}s waiting for Blockbook sync. {details}"
         )
 
-    print("All selected Blockbook instances are synced.", flush=True)
+    log("All selected Blockbook instances are synced.")
 
 
 if __name__ == "__main__":

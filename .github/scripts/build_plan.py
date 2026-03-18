@@ -4,31 +4,36 @@ import json
 import os
 from pathlib import Path
 
-from runner import fail, load_runner_map, parse_requested_coins
+from runner import (
+    PRODUCTION_RUNNER,
+    ValidationError,
+    fail,
+    load_coin_context,
+    log,
+    parse_json_object,
+    resolve_build_selection,
+)
 
 
 def main() -> None:
     workspace = Path(os.environ.get("GITHUB_WORKSPACE", ".")).resolve()
-    vars_map = json.loads(os.environ.get("VARS_JSON", "{}"))
+    try:
+        vars_map = parse_json_object(os.environ.get("VARS_JSON", "{}"), "VARS_JSON")
+    except ValidationError as exc:
+        fail(str(exc))
     coins_input = os.environ.get("COINS_INPUT", "")
+    build_env = os.environ.get("BUILD_ENV", "dev").strip().lower()
 
-    runner_map = load_runner_map(vars_map)
-    if not runner_map:
-        fail("no BB_RUNNER_* variables found")
-
-    requested = parse_requested_coins(coins_input, runner_map)
-    configs_dir = workspace / "configs" / "coins"
+    try:
+        context = load_coin_context(workspace, vars_map)
+        selection = resolve_build_selection(context, coins_input, build_env)
+    except ValidationError as exc:
+        fail(str(exc))
 
     grouped_by_runner = {}
-    for coin in requested:
-        if coin not in runner_map:
-            fail(f"missing BB_RUNNER_{coin}")
-
-        coin_cfg_path = configs_dir / f"{coin}.json"
-        if not coin_cfg_path.exists():
-            fail(f"unknown coin '{coin}' (missing {coin_cfg_path})")
-
-        runner = runner_map[coin]
+    for coin in selection.coins:
+        configured_runner = context.runner_map[coin]
+        runner = PRODUCTION_RUNNER if build_env == "prod" else configured_runner
         grouped_by_runner.setdefault(runner, []).append(coin)
 
     runner_matrix = []
@@ -48,11 +53,14 @@ def main() -> None:
 
     with open(output_file, "a", encoding="utf-8") as out:
         out.write(f"runner_matrix={json.dumps(runner_matrix, separators=(',', ':'))}\n")
-        out.write(f"coins_csv={','.join(requested)}\n")
+        out.write(f"coins_csv={','.join(selection.coins)}\n")
 
-    print("Selected coins:", ", ".join(requested))
+    log(f"Build env: {build_env}")
+    if selection.skipped_prod_only and selection.requested_all:
+        log("Skipped prod-only coins for env=dev: " + ", ".join(selection.skipped_prod_only))
+    log("Selected coins: " + ", ".join(selection.coins))
     for item in runner_matrix:
-        print(f"Runner {item['runner']}: {', '.join(item['coins'])}")
+        log(f"Runner {item['runner']}: {', '.join(item['coins'])}")
 
 
 if __name__ == "__main__":
