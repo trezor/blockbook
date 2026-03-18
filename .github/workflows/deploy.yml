@@ -11,11 +11,19 @@ on:
           - build
         required: true
         default: deploy
+      env:
+        description: "Build environment; used only when mode=build"
+        type: choice
+        options:
+          - dev
+          - prod
+        required: true
+        default: dev
       coins:
         description: "Comma-separated coin aliases from configs/coins; ALL is supported only in build mode"
         required: true
-      ref:
-        description: "Git ref to deploy (leave empty for current ref)"
+      checkout_ref:
+        description: "Git ref to check out and deploy (leave empty for current ref)"
         required: false
         default: ""
 
@@ -34,13 +42,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref != '' && inputs.ref || github.ref }}
+          ref: ${{ inputs.checkout_ref != '' && inputs.checkout_ref || github.ref }}
 
       - name: Build build plan
         id: plan
         env:
           VARS_JSON: ${{ toJSON(vars) }}
           COINS_INPUT: ${{ inputs.coins }}
+          BUILD_ENV: ${{ inputs.env }}
         run: ./.github/scripts/build_plan.py
 
   prepare_deploy:
@@ -56,7 +65,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref != '' && inputs.ref || github.ref }}
+          ref: ${{ inputs.checkout_ref != '' && inputs.checkout_ref || github.ref }}
 
       - name: Build deploy/e2e plan
         id: plan
@@ -78,10 +87,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref != '' && inputs.ref || github.ref }}
+          ref: ${{ inputs.checkout_ref != '' && inputs.checkout_ref || github.ref }}
 
       - name: Export repository variables
-        uses: ./.github/actions/export-repository-variables
+        uses: ./.github/actions/export-env-vars
         with:
           vars_json: ${{ toJSON(vars) }}
 
@@ -101,10 +110,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref != '' && inputs.ref || github.ref }}
+          ref: ${{ inputs.checkout_ref != '' && inputs.checkout_ref || github.ref }}
 
       - name: Export repository variables
-        uses: ./.github/actions/export-repository-variables
+        uses: ./.github/actions/export-env-vars
         with:
           vars_json: ${{ toJSON(vars) }}
 
@@ -124,10 +133,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref != '' && inputs.ref || github.ref }}
+          ref: ${{ inputs.checkout_ref != '' && inputs.checkout_ref || github.ref }}
 
       - name: Export repository variables
-        uses: ./.github/actions/export-repository-variables
+        uses: ./.github/actions/export-env-vars
         with:
           vars_json: ${{ toJSON(vars) }}
 
@@ -145,10 +154,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref != '' && inputs.ref || github.ref }}
+          ref: ${{ inputs.checkout_ref != '' && inputs.checkout_ref || github.ref }}
 
       - name: Export repository variables
-        uses: ./.github/actions/export-repository-variables
+        uses: ./.github/actions/export-env-vars
         with:
           vars_json: ${{ toJSON(vars) }}
 

@@ -40,59 +40,128 @@ Inputs:
 
 - `mode`: 
   - `build` when you want to build Blockbook Debian packages only.
-  - `deploy`
-  - when you want the full flow:
+  - `deploy` when you want the full flow:
     1. build package
     2. install and restart service
     3. wait for Blockbook sync
     4. run post-deploy e2e tests
+- `env`:
+  - `dev` keeps the current per-coin dev runner mapping
+  - `prod` builds selected coins on `production_builder` regardless of `BB_RUNNER_*`
+  - default is `dev`
+  - ignored when `mode=deploy`
 - `coins`: comma-separated aliases from `configs/coins`; `ALL` is supported only in `mode=build`
-- `ref`: optional checkout/deploy ref; leave empty to use the workflow run ref
+- `checkout_ref`: optional checkout/deploy ref; leave empty to use the workflow run ref
 
 In `mode=build`, selected coins are grouped by runner so one build job can build multiple
 `deb-blockbook-<coin>` targets in a single invocation on the same self-hosted machine.
 
-## Trigger from `gh` CLI
+Special cases:
 
-Examples assume the workflow file already exists on the selected workflow branch.
+- `mode=build` + `env=dev` skips prod-only coins when `coins=ALL`
+- `mode=build` + `env=prod` + `coins=ALL` builds all configured coins with `BB_RUNNER_*` mappings on `production_builder`
+- `mode=build` + `env=dev` fails if you explicitly request a coin whose `BB_RUNNER_*` is `production_builder`
+- `mode=deploy` is dev-only and fails fast if any selected coin is mapped to `production_builder`
 
-Build selected coins:
+## CLI examples
 
-```bash
-gh workflow run deploy.yml --ref <workflow-branch> -f mode='build' -f coins='bitcoin,dogecoin'
-```
+Without `--run`, `build` and `deploy` print the underlying `gh workflow run ...`
+command. `list` prints coins, not commands.
 
-If both coins map to the same runner, they are built together in one build job.
+Current branch example output was captured on `new-test-name-config`, so the printed
+`--ref` and `checkout_ref` values will differ on other branches.
+The output below assumes `BB_RUNNER_*` repository variables are valid for the current checkout.
 
-Deploy selected coins:
-
-```bash
-gh workflow run deploy.yml --ref <workflow-branch> -f mode='deploy' -f coins='bitcoin,dogecoin'
-```
-
-Deploy with explicit checkout ref:
+List coins buildable on dev runners:
 
 ```bash
-gh workflow run deploy.yml --ref <workflow-branch> -f mode='deploy' -f coins='bitcoin' -f ref='<commit-or-branch>'
+./.github/scripts/run.py list --env dev
 ```
 
-Build all mapped coins:
+```text
+avalanche_archive
+base_archive
+bcash
+bitcoin
+bitcoin_regtest
+bitcoin_testnet
+bitcoin_testnet4
+bsc_archive
+dash
+dogecoin
+ethereum_archive
+ethereum_testnet_hoodi_archive
+ethereum_testnet_sepolia_archive
+litecoin
+zcash
+```
+
+List all configured runner-mapped coins in CSV form:
 
 ```bash
-gh workflow run deploy.yml --ref <workflow-branch> -f mode='build' -f coins='ALL'
+./.github/scripts/run.py list --env prod --format csv
 ```
 
-`ALL` is rejected in `mode=deploy`; pass an explicit coin list there.
+```text
+arbitrum_archive,avalanche_archive,base_archive,bcash,bitcoin,bitcoin_regtest,bitcoin_testnet,bitcoin_testnet4,bsc_archive,dash,dogecoin,ethereum_archive,ethereum_testnet_hoodi_archive,ethereum_testnet_sepolia_archive,litecoin,optimism_archive,polygon_archive,zcash
+```
 
-Monitor runs:
+Print the default dev build command for selected coins:
 
 ```bash
-gh run list --workflow deploy.yml --limit 5
-gh run watch <run-id>
-gh run view <run-id> --log
+./.github/scripts/run.py build --coins bitcoin,dogecoin
 ```
 
-Ref behavior:
+```text
+gh workflow run deploy.yml -R trezor/blockbook --ref new-test-name-config -f mode=build -f env=dev -f coins=bitcoin,dogecoin -f checkout_ref=new-test-name-config
+```
 
-- `--ref` chooses which branch/tag contains the workflow definition
-- `ref` chooses what commit/branch/tag the jobs actually check out and deploy
+Print the prod build command for selected coins:
+
+```bash
+./.github/scripts/run.py build --env prod --coins bitcoin,bsc_archive
+```
+
+```text
+gh workflow run deploy.yml -R trezor/blockbook --ref new-test-name-config -f mode=build -f env=prod -f coins=bitcoin,bsc_archive -f checkout_ref=new-test-name-config
+```
+
+Print the dev build command for all selectable coins:
+
+```bash
+./.github/scripts/run.py build --coins ALL
+```
+
+```text
+gh workflow run deploy.yml -R trezor/blockbook --ref new-test-name-config -f mode=build -f env=dev -f coins=ALL -f checkout_ref=new-test-name-config
+```
+
+Print the prod build command for all selectable coins:
+
+```bash
+./.github/scripts/run.py build --env prod --coins ALL
+```
+
+```text
+gh workflow run deploy.yml -R trezor/blockbook --ref new-test-name-config -f mode=build -f env=prod -f coins=ALL -f checkout_ref=new-test-name-config
+```
+
+Print the deploy command for selected coins:
+
+```bash
+./.github/scripts/run.py deploy --coins bitcoin,dogecoin
+```
+
+```text
+gh workflow run deploy.yml -R trezor/blockbook --ref new-test-name-config -f mode=deploy -f env=dev -f coins=bitcoin,dogecoin -f checkout_ref=new-test-name-config
+```
+
+Print the deploy command with an explicit checkout ref:
+
+```bash
+./.github/scripts/run.py deploy --coins bitcoin --checkout-ref master
+```
+
+```text
+gh workflow run deploy.yml -R trezor/blockbook --ref new-test-name-config -f mode=deploy -f env=dev -f coins=bitcoin -f checkout_ref=master
+```
