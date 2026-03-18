@@ -31,19 +31,45 @@ class BuildPackagesTest(unittest.TestCase):
                 "backend": {"package_name": "backend-base"},
             },
         )
+        write_json(
+            self.workspace / "configs" / "coins" / "polygon_archive.json",
+            {
+                "coin": {"alias": "polygon_archive_bor"},
+                "blockbook": {"package_name": "blockbook-polygon"},
+                "backend": {"package_name": "backend-polygon"},
+            },
+        )
 
     def tearDown(self) -> None:
         self.tempdir.cleanup()
 
-    def run_build(self, *, rpc_url: str, always_build_backend: bool) -> tuple[list[str], str]:
+    def run_build(
+        self,
+        *,
+        coin: str,
+        rpc_env: str,
+        rpc_url: str,
+        always_build_backend: bool,
+    ) -> tuple[list[str], str]:
         commands: list[list[str]] = []
+        outputs = {
+            "deb-base_archive": ("blockbook-base_1.0_amd64.deb", "backend-base_1.0_amd64.deb"),
+            "deb-blockbook-base_archive": ("blockbook-base_1.0_amd64.deb", None),
+            "deb-polygon_archive": (
+                "blockbook-polygon_1.0_amd64.deb",
+                "backend-polygon_1.0_amd64.deb",
+            ),
+            "deb-blockbook-polygon_archive": ("blockbook-polygon_1.0_amd64.deb", None),
+        }
 
         def fake_run(cmd, check, **kwargs):
             commands.append(list(cmd))
             if cmd[:1] == ["make"]:
-                (self.build_dir / "blockbook-base_1.0_amd64.deb").write_text("blockbook", encoding="utf-8")
-                if cmd == ["make", "deb-base_archive"]:
-                    (self.build_dir / "backend-base_1.0_amd64.deb").write_text("backend", encoding="utf-8")
+                target = cmd[1]
+                blockbook_name, backend_name = outputs[target]
+                (self.build_dir / blockbook_name).write_text("blockbook", encoding="utf-8")
+                if backend_name:
+                    (self.build_dir / backend_name).write_text("backend", encoding="utf-8")
                 return None
             raise AssertionError(f"unexpected subprocess call: {cmd}")
 
@@ -51,7 +77,7 @@ class BuildPackagesTest(unittest.TestCase):
             "BRANCH_OR_TAG": "feature/test-branch",
             "BB_PACKAGE_ROOT": str(self.package_root),
             "BB_BACKEND_DOMAIN": "backend.example.test",
-            "BB_RPC_URL_HTTP_base_archive": rpc_url,
+            rpc_env: rpc_url,
         }
         stdout = io.StringIO()
         old_cwd = Path.cwd()
@@ -59,7 +85,7 @@ class BuildPackagesTest(unittest.TestCase):
             os.chdir(self.workspace)
             with patch.dict(os.environ, env, clear=False), patch("build_packages.subprocess.run", side_effect=fake_run):
                 with contextlib.redirect_stdout(stdout):
-                    argv = ["base_archive"]
+                    argv = [coin]
                     if always_build_backend:
                         argv = ["--always-build-backend", *argv]
                     build_packages.main(argv)
@@ -70,6 +96,8 @@ class BuildPackagesTest(unittest.TestCase):
 
     def test_builds_backend_when_rpc_url_matches_backend_domain(self) -> None:
         make_cmd, output = self.run_build(
+            coin="base_archive",
+            rpc_env="BB_RPC_URL_HTTP_base_archive",
             rpc_url="http://backend.example.test:18026",
             always_build_backend=False,
         )
@@ -82,6 +110,8 @@ class BuildPackagesTest(unittest.TestCase):
 
     def test_skips_backend_when_rpc_url_does_not_match_backend_domain(self) -> None:
         make_cmd, output = self.run_build(
+            coin="base_archive",
+            rpc_env="BB_RPC_URL_HTTP_base_archive",
             rpc_url="https://rpc.example.invalid/",
             always_build_backend=False,
         )
@@ -94,6 +124,8 @@ class BuildPackagesTest(unittest.TestCase):
 
     def test_always_build_backend_overrides_domain_matching(self) -> None:
         make_cmd, output = self.run_build(
+            coin="base_archive",
+            rpc_env="BB_RPC_URL_HTTP_base_archive",
             rpc_url="https://rpc.example.invalid/",
             always_build_backend=True,
         )
@@ -102,6 +134,22 @@ class BuildPackagesTest(unittest.TestCase):
         self.assertEqual(output, "build/blockbook-base_1.0_amd64.deb")
         staged_dir = self.package_root / "feature-test-branch" / "base_archive"
         self.assertTrue((staged_dir / "backend-base_1.0_amd64.deb").is_file())
+
+    def test_staging_uses_config_name_while_rpc_env_uses_alias(self) -> None:
+        make_cmd, output = self.run_build(
+            coin="polygon_archive",
+            rpc_env="BB_RPC_URL_HTTP_polygon_archive_bor",
+            rpc_url="http://backend.example.test:8545",
+            always_build_backend=False,
+        )
+
+        self.assertEqual(make_cmd, ["make", "deb-polygon_archive"])
+        self.assertEqual(output, "build/blockbook-polygon_1.0_amd64.deb")
+        staged_dir = self.package_root / "feature-test-branch" / "polygon_archive"
+        alias_dir = self.package_root / "feature-test-branch" / "polygon_archive_bor"
+        self.assertTrue((staged_dir / "blockbook-polygon_1.0_amd64.deb").is_file())
+        self.assertTrue((staged_dir / "backend-polygon_1.0_amd64.deb").is_file())
+        self.assertFalse(alias_dir.exists())
 
 
 if __name__ == "__main__":

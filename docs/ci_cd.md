@@ -64,8 +64,9 @@ Env vars :
 
 - `BB_PACKAGE_ROOT=/opt/blockbook-builds`
   - When absolute path set, build jobs copy packages to:
-  - `/opt/blockbook-builds/{branch_or_tag}/{coin_alias}/blockbook-*.deb`
-  - `/opt/blockbook-builds/{branch_or_tag}/{coin_alias}/backend-*.deb`
+  - `/opt/blockbook-builds/{branch_or_tag}/{coin}/blockbook-*.deb`
+  - `/opt/blockbook-builds/{branch_or_tag}/{coin}/backend-*.deb`
+  - `{coin}` here is the workflow/config name from `configs/coins/<coin>.json`, not `coin.alias`
 - `BB_BACKEND_DOMAIN=<backend-domain>`
   - if `always_build_backend=true`, backend is built for every selected coin
   - otherwise, backend is built only when `BB_RPC_URL_HTTP_<coin_alias>` contains `BB_BACKEND_DOMAIN`
