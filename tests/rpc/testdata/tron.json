@@ -73,7 +73,6 @@
           "contractType": "VoteWitnessContract",
           "operation": "vote",
           "bandwidthUsage": "270",
-          "result": "SUCCESS",
           "votes": [
             {
               "address": "TJvaAeFb8Lykt9RQcVyyTFN2iDvGMuyD4M",
@@ -111,8 +110,7 @@
           "resource": "energy",
           "delegateAmount": "6943000000",
           "delegateTo": "TYNwyyP1j6ZQrWQ44Aw2pbq88jtM5UaFPn",
-          "bandwidthUsage": "283",
-          "result": "SUCCESS"
+          "bandwidthUsage": "283"
         }
       }
     },
@@ -279,8 +277,7 @@
         "chainExtraData": {
           "contractType": "TransferAssetContract",
           "operation": "trc10Transfer",
-          "bandwidthUsage": "273",
-          "result": "SUCCESS"
+          "bandwidthUsage": "273"
         }
       }
     }
