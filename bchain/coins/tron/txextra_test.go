@@ -143,8 +143,12 @@ func TestTronBuildRpcTransaction_ValueIsEthereumHexQuantity(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			txByID := &tronGetTransactionByIDResponse{}
 			txByID.RawData.Contract = []tronTxContract{tt.contract}
+			txByID.TxID = "25b18a55f86afb10e7aca38d0073d04c80397c6636069193953fdefaea0b8369"
+			txInfo := &tronGetTransactionInfoByIDResponse{
+				BlockNumber: int64Ptr(1),
+			}
 
-			tx := tronBuildRpcTransaction("25b18a55f86afb10e7aca38d0073d04c80397c6636069193953fdefaea0b8369", txByID, nil)
+			tx := tronBuildRpcTransaction(txByID, txInfo)
 			value, err := hexutil.DecodeBig(tx.Value)
 
 			require.NoError(t, err)
@@ -178,11 +182,10 @@ func TestTronGetTransactionInfoByIDResponse_IgnoresCancelUnfreezeV2AmountShape(t
 }
 
 func TestTronBuildRpcReceipt_UsesTopLevelResultOmittedAsSuccess(t *testing.T) {
-	receipt := tronBuildRpcReceipt(nil)
-	require.Nil(t, receipt)
-
-	txInfo := &tronGetTransactionInfoByIDResponse{}
-	receipt = tronBuildRpcReceipt(txInfo)
+	txInfo := &tronGetTransactionInfoByIDResponse{
+		ID: "tx1",
+	}
+	receipt := tronBuildRpcReceipt(txInfo)
 	require.NotNil(t, receipt)
 	require.Equal(t, "0x1", receipt.Status)
 
@@ -204,22 +207,12 @@ func TestTronBuildExtraData_ResultRequiresTransactionInfo(t *testing.T) {
 	require.Equal(t, "SUCCESS", extra.Result)
 }
 
-func TestTronTxMeta_FallsBackToTransactionByIDBlockNumber(t *testing.T) {
-	txByID := &tronGetTransactionByIDResponse{
-		BlockNumber:    int64(12345),
-		BlockTimestamp: int64(1700000000000),
-	}
-
-	blockTime, blockNumber, hasBlockNumber := tronTxMeta(txByID, nil)
-	require.False(t, hasBlockNumber)
-	require.Equal(t, uint64(0), blockNumber)
-	require.Equal(t, int64(0), blockTime)
-
+func TestTronTxMeta_GetCorrectTxMeta(t *testing.T) {
 	txInfo := &tronGetTransactionInfoByIDResponse{
 		BlockNumber:    int64Ptr(12345),
 		BlockTimeStamp: int64Ptr(1700000000000),
 	}
-	blockTime, blockNumber, hasBlockNumber = tronTxMeta(txByID, txInfo)
+	blockTime, blockNumber, hasBlockNumber := tronTxMeta(txInfo)
 	require.True(t, hasBlockNumber)
 	require.Equal(t, uint64(12345), blockNumber)
 	require.Equal(t, int64(1700000000), blockTime)
