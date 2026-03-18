@@ -274,97 +274,88 @@ func tronBuildExtraData(txByID *tronGetTransactionByIDResponse, txInfo *tronGetT
 
 func tronBuildRpcReceipt(txInfo *tronGetTransactionInfoByIDResponse) *bchain.RpcReceipt {
 	receipt := &bchain.RpcReceipt{}
-	if txInfo != nil {
-		if strings.TrimSpace(txInfo.Result) == "" {
-			receipt.Status = "0x1" // success
-		} else {
-			receipt.Status = "0x0" // failed
-		}
-
-		if gasUsed := tronInt64PtrToHexQuantity(txInfo.Receipt.EnergyUsageTotal); gasUsed != "" {
-			receipt.GasUsed = gasUsed
-		}
-		if txInfo.ContractAddr != "" {
-			receipt.ContractAddress = normalizeHexString(txInfo.ContractAddr)
-		}
-		logs := txInfo.Log
-		if len(logs) > 0 {
-			receipt.Logs = tronNormalizeLogs(logs)
-		}
+	if strings.TrimSpace(txInfo.Result) == "" {
+		receipt.Status = "0x1" // success
+	} else {
+		receipt.Status = "0x0" // failed
 	}
+
+	if gasUsed := tronInt64PtrToHexQuantity(txInfo.Receipt.EnergyUsageTotal); gasUsed != "" {
+		receipt.GasUsed = gasUsed
+	}
+	if txInfo.ContractAddr != "" {
+		receipt.ContractAddress = normalizeHexString(txInfo.ContractAddr)
+	}
+	logs := txInfo.Log
+	if len(logs) > 0 {
+		receipt.Logs = tronNormalizeLogs(logs)
+	}
+
 	if receipt.Status == "" && receipt.GasUsed == "" && len(receipt.Logs) == 0 && receipt.ContractAddress == "" {
 		return nil
 	}
 	return receipt
 }
 
-func tronBuildRpcTransaction(txid string, txByID *tronGetTransactionByIDResponse, txInfo *tronGetTransactionInfoByIDResponse) *bchain.RpcTransaction {
+func tronBuildRpcTransaction(txByID *tronGetTransactionByIDResponse, txInfo *tronGetTransactionInfoByIDResponse) *bchain.RpcTransaction {
 	tx := &bchain.RpcTransaction{
 		AccountNonce:     "0x0",
 		GasPrice:         "0x0",
 		GasLimit:         "0x0",
 		Value:            "0x0",
 		Payload:          "0x",
-		Hash:             normalizeHexString(txid),
+		Hash:             normalizeHexString(txByID.TxID),
 		TransactionIndex: "0x0",
 	}
-	if txByID != nil {
-		if txByID.TxID != "" {
-			tx.Hash = normalizeHexString(txByID.TxID)
-		}
-		if gasLimit := tronDecimalToHexQuantity(txByID.RawData.FeeLimit); gasLimit != "" {
-			tx.GasLimit = gasLimit
-		}
-		if c := tronFirstContract(txByID); c != nil {
-			v := c.Parameter.Value
-			tx.From = strings.TrimSpace(v.OwnerAddress)
-			switch c.Type {
-			case "TransferContract", "TransferAssetContract":
-				tx.To = strings.TrimSpace(v.ToAddress)
-				tx.Value = tronFirstHexQuantity(v.Amount)
-			case "TriggerSmartContract":
-				tx.To = strings.TrimSpace(v.ContractAddress)
-				tx.Value = tronFirstHexQuantity(v.CallValue)
+	if gasLimit := tronDecimalToHexQuantity(txByID.RawData.FeeLimit); gasLimit != "" {
+		tx.GasLimit = gasLimit
+	}
+	if c := tronFirstContract(txByID); c != nil {
+		v := c.Parameter.Value
+		tx.From = strings.TrimSpace(v.OwnerAddress)
+		switch c.Type {
+		case "TransferContract", "TransferAssetContract":
+			tx.To = strings.TrimSpace(v.ToAddress)
+			tx.Value = tronFirstHexQuantity(v.Amount)
+		case "TriggerSmartContract":
+			tx.To = strings.TrimSpace(v.ContractAddress)
+			tx.Value = tronFirstHexQuantity(v.CallValue)
+			if data := normalizeHexString(v.Data); data != "" {
+				tx.Payload = data
+			}
+		case "FreezeBalanceContract", "FreezeBalanceV2Contract":
+			tx.To = tronFirstAddress(v.ReceiverAddress, v.OwnerAddress)
+			tx.Value = tronFirstHexQuantity(v.FrozenBalance, v.Amount)
+		case "UnfreezeBalanceContract", "UnfreezeBalanceV2Contract", "WithdrawExpireUnfreezeContract":
+			tx.To = tronFirstAddress(v.ReceiverAddress, v.OwnerAddress)
+			tx.Value = tronFirstHexQuantity(v.UnfreezeBalance, v.Balance, v.Amount)
+		case "DelegateResourceContract", "UnDelegateResourceContract":
+			tx.To = tronFirstAddress(v.ReceiverAddress, v.ContractAddress, v.ToAddress)
+			tx.Value = tronFirstHexQuantity(v.Balance, v.Amount)
+		default:
+			tx.To = tronFirstAddress(v.ToAddress, v.ContractAddress, v.ReceiverAddress)
+			tx.Value = tronFirstHexQuantity(v.Amount, v.CallValue, v.FrozenBalance, v.UnfreezeBalance, v.Balance)
+			if tx.Payload == "0x" {
 				if data := normalizeHexString(v.Data); data != "" {
 					tx.Payload = data
 				}
-			case "FreezeBalanceContract", "FreezeBalanceV2Contract":
-				tx.To = tronFirstAddress(v.ReceiverAddress, v.OwnerAddress)
-				tx.Value = tronFirstHexQuantity(v.FrozenBalance, v.Amount)
-			case "UnfreezeBalanceContract", "UnfreezeBalanceV2Contract", "WithdrawExpireUnfreezeContract":
-				tx.To = tronFirstAddress(v.ReceiverAddress, v.OwnerAddress)
-				tx.Value = tronFirstHexQuantity(v.UnfreezeBalance, v.Balance, v.Amount)
-			case "DelegateResourceContract", "UnDelegateResourceContract":
-				tx.To = tronFirstAddress(v.ReceiverAddress, v.ContractAddress, v.ToAddress)
-				tx.Value = tronFirstHexQuantity(v.Balance, v.Amount)
-			default:
-				tx.To = tronFirstAddress(v.ToAddress, v.ContractAddress, v.ReceiverAddress)
-				tx.Value = tronFirstHexQuantity(v.Amount, v.CallValue, v.FrozenBalance, v.UnfreezeBalance, v.Balance)
-				if tx.Payload == "0x" {
-					if data := normalizeHexString(v.Data); data != "" {
-						tx.Payload = data
-					}
-				}
 			}
 		}
-		if bn := tronDecimalToHexQuantity(txByID.BlockNumber); bn != "" {
-			tx.BlockNumber = bn
-		}
 	}
-	if txInfo != nil && tx.BlockNumber == "" {
-		if bn := tronInt64PtrToHexQuantity(txInfo.BlockNumber); bn != "" {
-			tx.BlockNumber = bn
-		}
+
+	if bn := tronInt64PtrToHexQuantity(txInfo.BlockNumber); bn != "" {
+		tx.BlockNumber = bn
 	}
+
 	if tx.Value == "" {
 		tx.Value = "0x0"
 	}
 	return tx
 }
 
-func tronBuildEthereumSpecificData(txid string, txByID *tronGetTransactionByIDResponse, txInfo *tronGetTransactionInfoByIDResponse) bchain.EthereumSpecificData {
+func tronBuildEthereumSpecificData(txByID *tronGetTransactionByIDResponse, txInfo *tronGetTransactionInfoByIDResponse) bchain.EthereumSpecificData {
 	csd := bchain.EthereumSpecificData{
-		Tx:      tronBuildRpcTransaction(txid, txByID, txInfo),
+		Tx:      tronBuildRpcTransaction(txByID, txInfo),
 		Receipt: tronBuildRpcReceipt(txInfo),
 	}
 	extra := tronBuildExtraData(txByID, txInfo)
@@ -374,72 +365,21 @@ func tronBuildEthereumSpecificData(txid string, txByID *tronGetTransactionByIDRe
 	return csd
 }
 
-func tronTxMeta(txByID *tronGetTransactionByIDResponse, txInfo *tronGetTransactionInfoByIDResponse) (int64, uint64, bool) {
+func tronTxMeta(txInfo *tronGetTransactionInfoByIDResponse) (int64, uint64, bool) {
 	var (
 		blockTime      int64
 		blockNumber    uint64
 		hasBlockNumber bool
 	)
-	if txInfo != nil {
-		if n, ok := tronInt64PtrToUint64(txInfo.BlockNumber); ok {
-			blockNumber = n
-			hasBlockNumber = true
-		}
-		if ts, ok := tronInt64PtrToUint64(txInfo.BlockTimeStamp); ok {
-			blockTime = int64(ts / 1000)
-		}
+	if n, ok := tronInt64PtrToUint64(txInfo.BlockNumber); ok {
+		blockNumber = n
+		hasBlockNumber = true
 	}
-	if blockTime == 0 && txByID != nil && hasBlockNumber {
-		if ts, ok := tronUint64(txByID.BlockTimestamp); ok {
-			blockTime = int64(ts / 1000)
-		}
-		if blockTime == 0 {
-			if ts, ok := tronUint64(txByID.RawData.Timestamp); ok {
-				blockTime = int64(ts / 1000)
-			}
-		}
+	if ts, ok := tronInt64PtrToUint64(txInfo.BlockTimeStamp); ok {
+		blockTime = int64(ts / 1000)
 	}
+
 	return blockTime, blockNumber, hasBlockNumber
-}
-
-func tronHasTxByIDData(txByID *tronGetTransactionByIDResponse) bool {
-	return txByID != nil &&
-		(txByID.TxID != "" || txByID.RawDataHex != "" || len(txByID.RawData.Contract) > 0)
-}
-
-func (b *TronRPC) getTransactionByID(txid string) (*tronGetTransactionByIDResponse, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
-	defer cancel()
-
-	req := map[string]string{
-		"value": strip0xPrefix(txid),
-	}
-	var raw json.RawMessage
-	if err := b.http.Request(ctx, "/wallet/gettransactionbyid", req, &raw); err != nil {
-		return nil, err
-	}
-	if string(raw) == "{}" {
-		return nil, nil
-	}
-	var resp tronGetTransactionByIDResponse
-	if err := json.Unmarshal(raw, &resp); err != nil {
-		return nil, err
-	}
-	return &resp, nil
-}
-
-func (b *TronRPC) getTransactionInfoByID(txid string) (*tronGetTransactionInfoByIDResponse, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
-	defer cancel()
-
-	req := map[string]string{
-		"value": strip0xPrefix(txid),
-	}
-	var resp tronGetTransactionInfoByIDResponse
-	if err := b.http.Request(ctx, "/wallet/gettransactioninfobyid", req, &resp); err != nil {
-		return nil, err
-	}
-	return &resp, nil
 }
 
 func requestTransactionInfoByBlockNum(ctx context.Context, http TronHTTP, blockNum uint32) ([]tronGetTransactionInfoByIDResponse, error) {
@@ -512,7 +452,7 @@ func mapTransactionByID(txs []tronGetTransactionByIDResponse) map[string]*tronGe
 	for i := range txs {
 		txByID := &txs[i]
 		id := txByID.TxID
-		if id == "" || !tronHasTxByIDData(txByID) {
+		if id == "" {
 			continue
 		}
 		r[id] = txByID

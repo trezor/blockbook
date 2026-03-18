@@ -74,11 +74,9 @@ type tronTxContract struct {
 }
 
 type tronGetTransactionByIDResponse struct {
-	TxID           string      `json:"txID,omitempty"`
-	BlockNumber    interface{} `json:"blockNumber,omitempty"`
-	BlockTimestamp interface{} `json:"block_timestamp,omitempty"`
-	RawDataHex     string      `json:"raw_data_hex"`
-	RawData        struct {
+	TxID       string `json:"txID,omitempty"`
+	RawDataHex string `json:"raw_data_hex"`
+	RawData    struct {
 		Timestamp interface{}      `json:"timestamp,omitempty"`
 		FeeLimit  interface{}      `json:"fee_limit,omitempty"`
 		Contract  []tronTxContract `json:"contract"`
@@ -432,24 +430,61 @@ func (b *TronRPC) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-func (b *TronRPC) getTransactionByIDRequired(txid string) (*tronGetTransactionByIDResponse, error) {
-	txByID, err := b.getTransactionByID(txid)
-	if err != nil {
-		return nil, errors.Annotatef(err, "txid %v", txid)
+func (b *TronRPC) getTransactionByID(txid string, isMempool bool) (*tronGetTransactionByIDResponse, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+	defer cancel()
+
+	req := map[string]string{
+		"value": strip0xPrefix(txid),
 	}
-	if !tronHasTxByIDData(txByID) {
+	var raw json.RawMessage
+	if isMempool {
+		if err := b.http.Request(ctx, "/wallet/gettransactionbyid", req, &raw); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := b.http.Request(ctx, "/walletsolidity/gettransactionbyid", req, &raw); err != nil {
+			return nil, err
+		}
+	}
+	if string(raw) == "{}" {
 		return nil, errors.Annotatef(bchain.ErrTxNotFound, "txid %v", txid)
 	}
-	return txByID, nil
+	var resp tronGetTransactionByIDResponse
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
 }
 
-func (b *TronRPC) getTransactionInfoByIDOptional(txid string) *tronGetTransactionInfoByIDResponse {
-	txInfo, err := b.getTransactionInfoByID(txid)
-	if err != nil {
-		glog.V(1).Infof("Tron gettransactioninfobyid tx %v: %v", txid, err)
-		return nil
+func (b *TronRPC) getTransactionInfoByID(txid string, isMempool bool) (*tronGetTransactionInfoByIDResponse, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+	defer cancel()
+
+	req := map[string]string{
+		"value": strip0xPrefix(txid),
 	}
-	return txInfo
+
+	var raw json.RawMessage
+	if isMempool {
+		if err := b.http.Request(ctx, "/wallet/gettransactioninfobyid", req, &raw); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := b.http.Request(ctx, "/walletsolidity/gettransactioninfobyid", req, &raw); err != nil {
+			return nil, err
+		}
+	}
+	if string(raw) == "{}" {
+		return nil, errors.Annotatef(bchain.ErrTxNotFound, "txid %v", txid)
+	}
+
+	var resp tronGetTransactionInfoByIDResponse
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return nil, err
+	}
+
+	return &resp, nil
 }
 
 func (b *TronRPC) computeConfirmationsFromBlockNumber(txid string, blockNumber uint64, hasBlockNumber bool) uint32 {
@@ -476,13 +511,17 @@ func (b *TronRPC) computeBlockConfirmations(blockNumber uint64) (uint32, error) 
 	return uint32(bestHeight - blockNumber + 1), nil
 }
 
-func (b *TronRPC) buildTxFromHTTPData(txid string, txByID *tronGetTransactionByIDResponse, txInfo *tronGetTransactionInfoByIDResponse, blockTime int64, confirmations uint32, internalData *bchain.EthereumInternalData) (*bchain.Tx, error) {
-	csd := tronBuildEthereumSpecificData(txid, txByID, txInfo)
+func (b *TronRPC) buildTxFromHTTPData(txByID *tronGetTransactionByIDResponse, txInfo *tronGetTransactionInfoByIDResponse, blockTime int64, confirmations uint32, internalData *bchain.EthereumInternalData, isInMempool bool) (*bchain.Tx, error) {
+	csd := tronBuildEthereumSpecificData(txByID, txInfo)
 	csd.InternalData = internalData
+
+	if isInMempool {
+		csd.Receipt = nil // set to nil so it can be considered as pending
+	}
 
 	tx, err := b.Parser.EthTxToTx(csd.Tx, csd.Receipt, csd.InternalData, blockTime, confirmations, true)
 	if err != nil {
-		return nil, errors.Annotatef(err, "txid %v", txid)
+		return nil, errors.Annotatef(err, "txid %v", txByID.TxID)
 	}
 
 	if len(tx.Vout) > 0 &&
@@ -530,12 +569,6 @@ func (b *TronRPC) getTransactionByIDMapForBlockWithContext(ctx context.Context, 
 		return nil, nil
 	}
 	return mapTransactionByID(blockResp.Transactions), nil
-}
-
-func (b *TronRPC) getTransactionByIDMapForBlock(hash string, blockHeight uint32) (map[string]*tronGetTransactionByIDResponse, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
-	defer cancel()
-	return b.getTransactionByIDMapForBlockWithContext(ctx, hash, blockHeight)
 }
 
 type tronRPCBlockHeader struct {
@@ -651,10 +684,10 @@ func (b *TronRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 		tx := &block.Transactions[i]
 		txByID := txByIDByID[strip0xPrefix(tx.Hash)]
 
-		if txByID == nil {
+		if txByID == nil { // todo possibly can be deleted
 			b.ObserveChainDataFallback("tron_getblock", "missing_tx_by_id_map")
 			glog.V(1).Infof("Tron GetBlock fallback to gettransactionbyid for tx %s in block %d", tx.Hash, bbh.Height)
-			txByID, err = b.getTransactionByIDRequired(tx.Hash)
+			txByID, err = b.getTransactionByID(tx.Hash, false)
 			if err != nil {
 				return nil, err
 			}
@@ -667,7 +700,7 @@ func (b *TronRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 			txInternalData = &internalData[i]
 		}
 
-		rebuiltTx, err := b.buildTxFromHTTPData(strip0xPrefix(tx.Hash), txByID, txInfo, bbh.Time, confirmations, txInternalData)
+		rebuiltTx, err := b.buildTxFromHTTPData(txByID, txInfo, bbh.Time, confirmations, txInternalData, false)
 		if err != nil {
 			return nil, err
 		}
@@ -697,15 +730,26 @@ func (b *TronRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 }
 
 func (b *TronRPC) GetTransaction(txid string) (*bchain.Tx, error) {
-	txByID, err := b.getTransactionByIDRequired(txid)
+	var isMempool bool
+
+	if b.Mempool != nil && b.Mempool.GetTransactionTime(txid) != 0 {
+		isMempool = true
+	} else {
+		isMempool = false
+	}
+
+	txByID, err := b.getTransactionByID(txid, isMempool)
 	if err != nil {
 		return nil, err
 	}
-	txInfo := b.getTransactionInfoByIDOptional(txid)
+	txInfo, err := b.getTransactionInfoByID(txid, isMempool)
+	if err != nil {
+		return nil, err
+	}
 
-	blockTime, blockNumber, hasBlockNumber := tronTxMeta(txByID, txInfo)
+	blockTime, blockNumber, hasBlockNumber := tronTxMeta(txInfo)
 	confirmations := b.computeConfirmationsFromBlockNumber(txid, blockNumber, hasBlockNumber)
-	return b.buildTxFromHTTPData(txid, txByID, txInfo, blockTime, confirmations, nil)
+	return b.buildTxFromHTTPData(txByID, txInfo, blockTime, confirmations, nil, isMempool)
 }
 
 // GetTransactionSpecific returns tx-specific JSON in Tron API format (without 0x in tx hash fields).
@@ -746,11 +790,8 @@ func (b *TronRPC) GetMempoolTransactions() ([]string, error) {
 	if len(resp.TxID) == 0 {
 		return []string{}, nil
 	}
-	txs := make([]string, len(resp.TxID))
-	for i := range resp.TxID {
-		txs[i] = strip0xPrefix(resp.TxID[i])
-	}
-	return txs, nil
+
+	return resp.TxID, nil
 }
 
 func (b *TronRPC) EthereumTypeGetBalance(addrDesc bchain.AddressDescriptor) (*big.Int, error) {
@@ -853,7 +894,15 @@ func (b *TronRPC) SendRawTransaction(tx string, disableAlternativeRPC bool) (str
 }
 
 func (b *TronRPC) EthereumTypeGetRawTransaction(txid string) (string, error) {
-	resp, err := b.getTransactionByID(txid)
+	var isMempool bool
+
+	if b.Mempool != nil && b.Mempool.GetTransactionTime(txid) != 0 {
+		isMempool = true
+	} else {
+		isMempool = false
+	}
+
+	resp, err := b.getTransactionByID(txid, isMempool)
 	if err != nil {
 		return "", err
 	}
