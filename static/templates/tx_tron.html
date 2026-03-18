@@ -1,4 +1,4 @@
-{{define "specific"}}{{$tx := .Tx}}{{$data := .}}{{$chainExtra := chainExtra $tx}}
+{{define "specific"}}{{$tx := .Tx}}{{$data := .}}{{$eth := $tx.EthereumSpecific}}{{$chainExtra := chainExtra $tx}}
 <div class="row">
     <h1 class="col-12">Transaction</h1>
 </div>
@@ -9,7 +9,7 @@
     <tbody>
         {{if $tx.Confirmations}}
         <tr>
-            <td>Mined Time</td>
+            <td>Included at</td>
             <td>{{unixTimeSpan $tx.Blocktime}}</td>
         </tr>
         {{end}}
@@ -21,29 +21,28 @@
         <tr>
             <td>In Block Height</td>
             <td><a href="/block/{{$tx.Blockheight}}">{{formatInt $tx.Blockheight}}</a></td>
-        </tr>{{end}}
-        {{if $tx.EthereumSpecific}}
+        </tr>
+        {{end}}
         <tr>
             <td>Status</td>
-            {{if $tx.EthereumSpecific.Status}}
-            {{if eq $tx.EthereumSpecific.Status 1}}
+            {{if $eth.Status}}
+            {{if eq $eth.Status 1}}
             <td><span class="badge bg-success">Success</span></td>
             {{else}}
-            {{if eq $tx.EthereumSpecific.Status -1}}
+            {{if eq $eth.Status -1}}
             <td>Pending</td>
             {{else}}
             <td>Unknown</td>
             {{end}}
             {{end}}
             {{else}}
-            <td><span class="badge bg-danger">Failed</span>{{if $tx.EthereumSpecific.Error}}<span class="text-danger small fw-normal ms-1"> {{$tx.EthereumSpecific.Error}}{{end}}</td>
+            <td><span class="badge bg-danger">Failed</span>{{if $eth.Error}}<span class="text-danger small fw-normal ms-1"> {{$eth.Error}}{{end}}</td>
             {{end}}
         </tr>
         <tr>
             <td>Value</td>
             <td>{{amountSpan $tx.ValueOutSat $data "copyable"}}</td>
         </tr>
-        {{if $chainExtra}}
         {{if $chainExtra.Operation}}
         <tr>
             <td>Operation</td>
@@ -110,12 +109,12 @@
             <td><span class="copyable">{{$chainExtra.Result}}</span></td>
         </tr>
         {{end}}
-        {{end}}
+        {{if $chainExtra.EnergyUsageTotal}}
         <tr>
-            <td>{{if $chainExtra}}Energy Used / Limit{{else}}Gas Used / Limit{{end}}</td>
-            <td>{{if and $chainExtra $chainExtra.EnergyUsageTotal}}<span class="copyable">{{$chainExtra.EnergyUsageTotal}}</span>{{else}}{{if $tx.EthereumSpecific.GasUsed}}{{formatBigInt $tx.EthereumSpecific.GasUsed}}{{else}}pending{{end}}{{end}} / {{formatBigInt $tx.EthereumSpecific.GasLimit}}</td>
+            <td>Energy Used / Limit</td>
+            <td><span class="copyable">{{$chainExtra.EnergyUsageTotal}}</span> / {{formatBigInt $eth.GasLimit}}</td>
         </tr>
-        {{if $chainExtra}}
+        {{end}}
         {{if $chainExtra.EnergyUsage}}
         <tr>
             <td>Energy Usage</td>
@@ -128,12 +127,10 @@
             <td>{{formattedAmountSpan $chainExtra.EnergyFeeAmount 6 "TRX" $data "copyable"}}</td>
         </tr>
         {{end}}
-        {{if $chainExtra.BandwidthUsage}}
         <tr>
             <td>Bandwidth Usage</td>
             <td><span class="copyable">{{$chainExtra.BandwidthUsage}}</span></td>
         </tr>
-        {{end}}
         {{if $chainExtra.BandwidthFeeAmount}}
         <tr>
             <td>Bandwidth Fee</td>
@@ -142,105 +139,8 @@
         {{end}}
         {{if $chainExtra.TotalFeeAmount}}
         <tr>
-            <td>Total Fee (Backend)</td>
+            <td>Total Fee</td>
             <td>{{formattedAmountSpan $chainExtra.TotalFeeAmount 6 "TRX" $data "copyable"}}</td>
-        </tr>
-        {{end}}
-        {{end}}
-        {{if not $chainExtra}}
-        <tr>
-            <td>Gas Price</td>
-            <td>{{amountSpan $tx.EthereumSpecific.GasPrice $data "copyable"}} <span class="fw-normal ps-3">({{amountSatsSpan $tx.EthereumSpecific.GasPrice $data "copyable"}} Gwei)</span></td>
-        </tr>
-        {{if $tx.EthereumSpecific.MaxPriorityFeePerGas}}
-        <tr>
-            <td>Max Priority Fee Per Gas</td>
-            <td>{{amountSpan $tx.EthereumSpecific.MaxPriorityFeePerGas $data "copyable"}} <span class="fw-normal ps-3">({{amountSatsSpan $tx.EthereumSpecific.MaxPriorityFeePerGas $data "copyable"}} Gwei)</span></td>
-        </tr>
-        {{end}}
-        {{if $tx.EthereumSpecific.MaxFeePerGas}}
-        <tr>
-            <td>Max Fee Per Gas</td>
-            <td>{{amountSpan $tx.EthereumSpecific.MaxFeePerGas $data "copyable"}} <span class="fw-normal ps-3">({{amountSatsSpan $tx.EthereumSpecific.MaxFeePerGas $data "copyable"}} Gwei)</span></td>
-        </tr>
-        {{end}}
-        {{if $tx.EthereumSpecific.BaseFeePerGas}}
-        <tr>
-            <td>Base Fee Per Gas</td>
-            <td>{{amountSpan $tx.EthereumSpecific.BaseFeePerGas $data "copyable"}} <span class="fw-normal ps-3">({{amountSatsSpan $tx.EthereumSpecific.BaseFeePerGas $data "copyable"}} Gwei)</span></td>
-        </tr>
-        {{end}}
-        {{if $tx.EthereumSpecific.L1GasUsed}}
-        <tr>
-            <td>L1 Gas Used</td>
-            <td>{{formatBigInt $tx.EthereumSpecific.L1GasUsed}}</td>
-        </tr>
-        {{end}}
-        {{if $tx.EthereumSpecific.L1GasPrice}}
-        <tr>
-            <td>L1 Gas Price</td>
-            <td>{{amountSpan $tx.EthereumSpecific.L1GasPrice $data "copyable"}} <span class="fw-normal ps-3">({{amountSatsSpan $tx.EthereumSpecific.L1GasPrice $data "copyable"}} Gwei)</span></td>
-        </tr>
-        {{end}}
-        {{if $tx.EthereumSpecific.L1FeeScalar}}
-        <tr>
-            <td>L1 Fee Scalar</td>
-            <td>{{$tx.EthereumSpecific.L1FeeScalar}}</td>
-        </tr>
-        {{end}}
-        {{end}}
-        {{else}}
-        <tr>
-            <td>Total Input</td>
-            <td>{{amountSpan $tx.ValueInSat $data "copyable"}}</td>
-        </tr>
-        <tr>
-            <td>Total Output</td>
-            <td>{{amountSpan $tx.ValueOutSat $data "copyable"}}</td>
-        </tr>
-        {{if $tx.VSize}}
-        <tr>
-            <td>Size / vSize</td>
-            <td>{{formatInt $tx.Size}} / {{formatInt $tx.VSize}}</td>
-        </tr>
-        {{else}}
-        {{if $tx.Size}}
-        <tr>
-            <td>Size</td>
-            <td>{{formatInt $tx.Size}}</td>
-        </tr>
-        {{end}}
-        {{end}}
-        {{end}}
-        {{if and $tx.FeesSat (not $chainExtra)}}
-        <tr>
-            <td>Fees</td>
-            <td>{{amountSpan $tx.FeesSat $data "copyable"}}{{if $tx.Size}} ({{feePerByte $tx}}){{end}}</td>
-        </tr>{{end}}
-        {{if not $tx.Confirmations}}
-        {{if $tx.ConfirmationETABlocks}}
-        <tr>
-            <td>Confirmation ETA</td>
-            <td>
-                <span tt="Estimated first potential confirmation of this transaction.">in approx. {{relativeTime $tx.ConfirmationETASeconds}} <span class="fw-normal ps-1">({{$tx.ConfirmationETABlocks}} blocks)</span></span>
-            </td>
-        </tr>
-        {{end}}
-        <tr>
-            <td><span tt="Replace by fee">RBF</span></td>
-            <td>
-                {{if $tx.Rbf}}
-                <span tt="Replace-by-Fee transaction, could be overridden by a new transaction">ON</span>
-                {{else}}
-                <span tt="Final transaction that can not be replaced unless it is dropped from the mempool.">OFF️</span>
-                {{end}}
-            </td>
-        </tr>
-        {{end}}
-        {{if and $tx.EthereumSpecific (not $chainExtra)}}
-        <tr>
-            <td>Nonce</td>
-            <td>{{$tx.EthereumSpecific.Nonce}}</td>
         </tr>
         {{end}}
     </tbody>
@@ -248,24 +148,23 @@
 <div class="pt-1">
     {{template "txdetail" .}}
 </div>
-{{if eq .ChainType 1}}
-{{if $tx.EthereumSpecific.ParsedData}}
-{{if $tx.EthereumSpecific.ParsedData.Function }}
+{{if and $eth $eth.ParsedData}}
+{{if $eth.ParsedData.Function }}
 <div class="pt-2">
     <h5>Input Data</h5>
     <div class="accordion" id="inputData">
         <div class="accordion-item">
           <h2 class="accordion-header" id="inputDataHeading">
             <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#inputDataBody" aria-expanded="false" aria-controls="inputDataBody">
-                <h5 class="mb-0">{{if $tx.EthereumSpecific.ParsedData.Name}}{{$tx.EthereumSpecific.ParsedData.Name}} {{end}}{{if $tx.EthereumSpecific.ParsedData.MethodId}} <span class="fw-normal small" tt="4-byte signature">{{$tx.EthereumSpecific.ParsedData.MethodId}}</span>{{end}}</h5>
+                <h5 class="mb-0">{{if $eth.ParsedData.Name}}{{$eth.ParsedData.Name}} {{end}}{{if $eth.ParsedData.MethodId}} <span class="fw-normal small" tt="4-byte signature">{{$eth.ParsedData.MethodId}}</span>{{end}}</h5>
             </button>
           </h2>
           <div id="inputDataBody" class="accordion-collapse collapse" aria-labelledby="inputDataHeading" data-bs-parent="#inputData">
             <div class="accordion-body">
                 <div class="row">
-                    <div class="col-12 mx-1 mx-md-0"><span class="copyable" style="overflow-wrap: break-word;">{{$tx.EthereumSpecific.Data}}</span></div>
-                    <div class="col-12 mx-1 mx-md-0 pt-2"><span class="copyable">{{$tx.EthereumSpecific.ParsedData.Function}}</span></div>
-                    {{if $tx.EthereumSpecific.ParsedData.Params}}
+                    <div class="col-12 mx-1 mx-md-0"><span class="copyable" style="overflow-wrap: break-word;">{{$eth.Data}}</span></div>
+                    <div class="col-12 mx-1 mx-md-0 pt-2"><span class="copyable">{{$eth.ParsedData.Function}}</span></div>
+                    {{if $eth.ParsedData.Params}}
                     <div class="col-12">
                     <table class="table data-table mt-2 mb-0">
                     <thead>
@@ -276,7 +175,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        {{range $i,$p := $tx.EthereumSpecific.ParsedData.Params}}
+                        {{range $i,$p := $eth.ParsedData.Params}}
                         <tr>
                             <td>{{$i}}</td>
                             <td>{{$p.Type}}</td>
@@ -298,7 +197,6 @@
         </div>
     </div>
 </div>
-{{end}}
 {{end}}
 {{end}}
 <div class="pt-4">
