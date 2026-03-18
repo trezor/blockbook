@@ -50,16 +50,25 @@ Inputs:
   - `prod` builds selected coins on `production_builder` regardless of `BB_RUNNER_*`
   - default is `dev`
   - ignored when `mode=deploy`
+- `always_build_backend`:
+  - `false` derives backend builds per coin from `BB_RPC_URL_HTTP_<coin_alias>`
+  - `true` forces backend builds for all selected coins
+  - ignored when `mode=deploy`
 - `coins`: comma-separated aliases from `configs/coins`; `ALL` is supported only in `mode=build`
 - `branch_or_tag`: optional branch or tag to check out and deploy; leave empty to use the workflow run ref name
 
 In `mode=build`, selected coins are grouped by runner so one build job can build multiple
 `deb-blockbook-<coin>` targets in a single invocation on the same self-hosted machine.
-Built packages are moved after build to:
 
-- `/opt/blockbook-builds/{branch_or_tag}/{coin_alias}/blockbook.deb`
+Env vars :
 
-You can override the package root with `BLOCKBOOK_PACKAGE_ROOT`, but it must be an absolute path.
+- `BB_PACKAGE_ROOT=/opt/blockbook-builds`
+  - When absolute path set, build jobs copy packages to:
+  - `/opt/blockbook-builds/{branch_or_tag}/{coin_alias}/blockbook-*.deb`
+  - `/opt/blockbook-builds/{branch_or_tag}/{coin_alias}/backend-*.deb`
+- `BB_BACKEND_DOMAIN=<backend-domain>`
+  - if `always_build_backend=true`, backend is built for every selected coin
+  - otherwise, backend is built only when `BB_RPC_URL_HTTP_<coin_alias>` contains `BB_BACKEND_DOMAIN`
 
 Special cases:
 

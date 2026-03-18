@@ -52,7 +52,7 @@ def print_help() -> None:
         f"""Usage:
   {SCRIPT_NAME} help
   {SCRIPT_NAME} list [--env <dev|prod>] [--repo <owner/repo>] [--format <csv|lines>]
-  {SCRIPT_NAME} build --coins <csv> [--env <dev|prod>] [--workflow-ref <ref>] [--branch-or-tag <name>] [--repo <owner/repo>] [--run]
+  {SCRIPT_NAME} build --coins <csv> [--env <dev|prod>] [--workflow-ref <ref>] [--branch-or-tag <name>] [--always-build-backend] [--repo <owner/repo>] [--run]
   {SCRIPT_NAME} deploy --coins <csv> [--workflow-ref <ref>] [--branch-or-tag <name>] [--repo <owner/repo>] [--run]
   {SCRIPT_NAME} watch [<run-id>] [--repo <owner/repo>]
 
@@ -99,6 +99,10 @@ Shared options for build/deploy:
 Build options:
   --env <dev|prod>             Build environment (not accepted for deploy).
                                Default: dev.
+  --always-build-backend       Build backend packages for every selected coin.
+                               Default: false.
+                               If omitted, backend builds are derived per coin
+                               from BB_RPC_URL_HTTP_<coin_alias> containing BB_BACKEND_DOMAIN.
 
 List options:
   --env <dev|prod>             Which build environment to list coins for.
@@ -111,6 +115,7 @@ Examples:
   {SCRIPT_NAME} list --env prod --format csv
   {SCRIPT_NAME} build --env dev --coins ALL
   {SCRIPT_NAME} build --env prod --coins bitcoin,bsc_archive
+  {SCRIPT_NAME} build --coins base_archive --always-build-backend
   {SCRIPT_NAME} build --env prod --coins bitcoin,bsc_archive --workflow-ref my-branch
   {SCRIPT_NAME} deploy --coins bitcoin,bsc_archive
   {SCRIPT_NAME} deploy --coins bitcoin --branch-or-tag master --run
@@ -149,6 +154,7 @@ def build_command(
     branch_or_tag: str,
     build_env: str,
     coins: str,
+    always_build_backend: bool,
 ) -> list[str]:
     cmd = [
         "gh",
@@ -166,6 +172,8 @@ def build_command(
         "-f",
         f"coins={coins}",
     ]
+    if always_build_backend:
+        cmd += ["-f", "always_build_backend=true"]
     if branch_or_tag:
         cmd += ["-f", f"branch_or_tag={branch_or_tag}"]
     return cmd
@@ -212,6 +220,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--branch-or-tag", default=current_branch())
     parser.add_argument("--coins", required=True)
     parser.add_argument("--env", choices=("dev", "prod"), default="dev")
+    parser.add_argument("--always-build-backend", action="store_true")
     parser.add_argument("--run", action="store_true")
     return parser
 
@@ -263,6 +272,7 @@ def command_build(argv: list[str]) -> None:
             args.branch_or_tag,
             args.env,
             "ALL" if selection.requested_all else ",".join(selection.coins),
+            args.always_build_backend,
         ),
         args.run,
     )
