@@ -22,8 +22,8 @@ on:
       coins:
         description: "Comma-separated coin aliases from configs/coins; ALL is supported only in build mode"
         required: true
-      checkout_ref:
-        description: "Git ref to check out and deploy (leave empty for current ref)"
+      branch_or_tag:
+        description: "Branch or tag to check out and deploy (leave empty for current ref)"
         required: false
         default: ""
 
@@ -42,7 +42,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.checkout_ref != '' && inputs.checkout_ref || github.ref }}
+          ref: ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}
 
       - name: Build build plan
         id: plan
@@ -65,7 +65,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.checkout_ref != '' && inputs.checkout_ref || github.ref }}
+          ref: ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}
 
       - name: Build deploy/e2e plan
         id: plan
@@ -87,7 +87,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.checkout_ref != '' && inputs.checkout_ref || github.ref }}
+          ref: ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}
 
       - name: Export repository variables
         uses: ./.github/actions/export-env-vars
@@ -95,6 +95,8 @@ jobs:
           vars_json: ${{ toJSON(vars) }}
 
       - name: Build blockbook package
+        env:
+          BRANCH_OR_TAG: ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}
         run: ./contrib/scripts/build-blockbook-local.sh ${{ join(matrix.coins, ' ') }}
 
   deploy:
@@ -110,7 +112,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.checkout_ref != '' && inputs.checkout_ref || github.ref }}
+          ref: ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}
 
       - name: Export repository variables
         uses: ./.github/actions/export-env-vars
@@ -118,6 +120,8 @@ jobs:
           vars_json: ${{ toJSON(vars) }}
 
       - name: Deploy blockbook package
+        env:
+          BRANCH_OR_TAG: ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}
         run: ./contrib/scripts/deploy-blockbook-local.sh "${{ matrix.coin }}"
 
   wait-for-sync:
@@ -133,7 +137,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.checkout_ref != '' && inputs.checkout_ref || github.ref }}
+          ref: ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}
 
       - name: Export repository variables
         uses: ./.github/actions/export-env-vars
@@ -154,7 +158,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.checkout_ref != '' && inputs.checkout_ref || github.ref }}
+          ref: ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}
 
       - name: Export repository variables
         uses: ./.github/actions/export-env-vars
