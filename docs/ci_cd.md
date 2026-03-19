@@ -63,6 +63,8 @@ In `mode=build`, selected coins are grouped by runner so one build job can build
 
 Env vars :
 
+See also [CI/CD workflow variables](env.md#cicd-workflow-variables).
+
 - `BB_PACKAGE_ROOT=/opt/blockbook-builds`
   - When absolute path set, build jobs copy packages to:
   - `/opt/blockbook-builds/{branch_or_tag}/{coin}/blockbook-*.deb`
@@ -79,7 +81,41 @@ Special cases:
 - `mode=build` + `env=dev` fails if you explicitly request a coin whose `BB_RUNNER_*` is `production_builder`
 - `mode=deploy` is dev-only and fails fast if any selected coin is mapped to `production_builder`
 
+## Naming Matrix
+
+```text
++-------------------------------+----------------------------------------+--------------------------------------+
+| Concern                       | Example source                         | Name used                            |
++-------------------------------+----------------------------------------+--------------------------------------+
+| Workflow/build/deploy identity| configs/coins/<coin>.json filename     | polygon_archive                      |
+| Runner mapping                | BB_RUNNER_<coin>                       | BB_RUNNER_POLYGON_ARCHIVE            |
+| Backend RPC env identity      | coin.alias                             | BB_RPC_URL_HTTP_polygon_archive_bor  |
+| Blockbook package name        | blockbook.package_name                 | blockbook-polygon                    |
+| Backend package name          | backend.package_name                   | backend-polygon                      |
+| Build target identity         | workflow/config coin name              | deb-blockbook-polygon_archive        |
+| Built Blockbook .deb filename | build/<blockbook.package_name>_*.deb   | build/blockbook-polygon_*.deb        |
+| Built backend .deb filename   | build/<backend.package_name>_*.deb     | build/backend-polygon_*.deb          |
+| Staged artifact path identity | workflow/config coin name              | {branch_or_tag}/polygon_archive/...  |
+| API/e2e test identity         | coin.test_name or config filename      | polygon                              |
+| API test env identity         | BB_TEST_API_URL_* from test identity   | BB_TEST_API_URL_HTTP_polygon         |
++-------------------------------+----------------------------------------+--------------------------------------+
+```
+
+For `polygon_archive` specifically:
+
+- workflow coin: `polygon_archive`
+- alias: `polygon_archive_bor`
+- blockbook package name: `blockbook-polygon`
+- backend package name: `backend-polygon`
+- test name: `polygon`
+
 ## CLI examples
+
+Wrapper entrypoint:
+
+```bash
+./bin/bb_deploy
+```
 
 Without `--run`, `build` and `deploy` print the underlying `gh workflow run ...`
 command. `list` prints coins, not commands.
@@ -91,7 +127,7 @@ The output below assumes `BB_RUNNER_*` repository variables are valid for the cu
 List coins buildable on dev runners:
 
 ```bash
-./.github/scripts/run.py list --env dev
+./bin/bb_deploy list --env dev
 ```
 
 ```text
@@ -115,7 +151,7 @@ zcash
 List all configured runner-mapped coins in CSV form:
 
 ```bash
-./.github/scripts/run.py list --env prod --format csv
+./bin/bb_deploy list --env prod --format csv
 ```
 
 ```text
@@ -125,7 +161,7 @@ arbitrum_archive,avalanche_archive,base_archive,bcash,bitcoin,bitcoin_regtest,bi
 Print the default dev build command for selected coins:
 
 ```bash
-./.github/scripts/run.py build --coins bitcoin,dogecoin
+./bin/bb_deploy build --coins bitcoin,dogecoin
 ```
 
 ```text
@@ -135,7 +171,7 @@ gh workflow run deploy.yml -R trezor/blockbook --ref new-test-name-config -f mod
 Print the prod build command for selected coins:
 
 ```bash
-./.github/scripts/run.py build --env prod --coins bitcoin,bsc_archive
+./bin/bb_deploy build --env prod --coins bitcoin,bsc_archive
 ```
 
 ```text
@@ -145,7 +181,7 @@ gh workflow run deploy.yml -R trezor/blockbook --ref new-test-name-config -f mod
 Print the dev build command for all selectable coins:
 
 ```bash
-./.github/scripts/run.py build --coins ALL
+./bin/bb_deploy build --coins ALL
 ```
 
 ```text
@@ -155,7 +191,7 @@ gh workflow run deploy.yml -R trezor/blockbook --ref new-test-name-config -f mod
 Print the prod build command for all selectable coins:
 
 ```bash
-./.github/scripts/run.py build --env prod --coins ALL
+./bin/bb_deploy build --env prod --coins ALL
 ```
 
 ```text
@@ -165,7 +201,7 @@ gh workflow run deploy.yml -R trezor/blockbook --ref new-test-name-config -f mod
 Print the deploy command for selected coins:
 
 ```bash
-./.github/scripts/run.py deploy --coins bitcoin,dogecoin
+./bin/bb_deploy deploy --coins bitcoin,dogecoin
 ```
 
 ```text
@@ -175,7 +211,7 @@ gh workflow run deploy.yml -R trezor/blockbook --ref new-test-name-config -f mod
 Print the deploy command with an explicit branch or tag:
 
 ```bash
-./.github/scripts/run.py deploy --coins bitcoin --branch-or-tag master
+./bin/bb_deploy deploy --coins bitcoin --branch-or-tag master
 ```
 
 ```text
