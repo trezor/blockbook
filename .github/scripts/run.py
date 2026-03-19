@@ -102,7 +102,8 @@ Build options:
   --always-build-backend       Build backend packages for every selected coin.
                                Default: false.
                                If omitted, backend builds are derived per coin
-                               from BB_RPC_URL_HTTP_<coin_alias> containing BB_BACKEND_DOMAIN.
+                               from BB_RPC_URL_HTTP_<coin_alias> having a hostname
+                               matching BB_BACKEND_DOMAIN.
 
 List options:
   --env <dev|prod>             Which build environment to list coins for.

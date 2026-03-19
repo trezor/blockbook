@@ -76,15 +76,15 @@ def should_build_backend(
     *,
     always_build_backend: bool,
     backend_domain: str,
-    rpc_url: str,
+    rpc_host: str,
 ) -> tuple[bool, str]:
     if always_build_backend:
         return True, "always-build-backend"
-    if backend_domain and backend_domain in rpc_url:
-        return True, f"rpc-url-matches-{backend_domain}"
-    if not rpc_url:
-        return False, "rpc-url-missing"
-    return False, f"rpc-url-does-not-match-{backend_domain}"
+    if backend_domain and backend_domain == rpc_host:
+        return True, f"rpc-host-matches-{backend_domain}"
+    if not rpc_host:
+        return False, "rpc-host-missing"
+    return False, f"rpc-host-does-not-match-{backend_domain}"
 
 
 def resolve_branch_or_tag() -> str:
@@ -174,12 +174,12 @@ def main(argv: list[str] | None = None) -> None:
         coin_alias = get_coin_alias(config, coin)
         rpc_env = rpc_url_env_name(coin_alias)
         rpc_url = os.environ.get(rpc_env, "").strip()
+        host = rpc_hostname(rpc_url)
         build_backend, reason = should_build_backend(
             always_build_backend=always_build_backend,
             backend_domain=backend_domain,
-            rpc_url=rpc_url,
+            rpc_host=host,
         )
-        host = rpc_hostname(rpc_url)
 
         coins.append(coin)
         blockbook_package_names.append(blockbook_package_name)
