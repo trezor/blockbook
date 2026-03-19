@@ -69,7 +69,7 @@ Env vars :
   - `{coin}` here is the workflow/config name from `configs/coins/<coin>.json`, not `coin.alias`
 - `BB_BACKEND_DOMAIN=<backend-domain>`
   - if `always_build_backend=true`, backend is built for every selected coin
-  - otherwise, backend is built only when `BB_RPC_URL_HTTP_<coin_alias>` contains `BB_BACKEND_DOMAIN`
+  - otherwise, backend is built only when `BB_RPC_URL_HTTP_<coin_alias>` has a hostname matching `BB_BACKEND_DOMAIN`
 
 Special cases:
 

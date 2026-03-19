@@ -122,6 +122,20 @@ class BuildPackagesTest(unittest.TestCase):
         self.assertTrue((staged_dir / "blockbook-base_1.0_amd64.deb").is_file())
         self.assertFalse((staged_dir / "backend-base_1.0_amd64.deb").exists())
 
+    def test_skips_backend_when_domain_only_appears_in_rpc_path(self) -> None:
+        make_cmd, output = self.run_build(
+            coin="base_archive",
+            rpc_env="BB_RPC_URL_HTTP_base_archive",
+            rpc_url="https://rpc.example.invalid/backend.example.test",
+            always_build_backend=False,
+        )
+
+        self.assertEqual(make_cmd, ["make", "deb-blockbook-base_archive"])
+        self.assertEqual(output, "build/blockbook-base_1.0_amd64.deb")
+        staged_dir = self.package_root / "feature-test-branch" / "base_archive"
+        self.assertTrue((staged_dir / "blockbook-base_1.0_amd64.deb").is_file())
+        self.assertFalse((staged_dir / "backend-base_1.0_amd64.deb").exists())
+
     def test_always_build_backend_overrides_domain_matching(self) -> None:
         make_cmd, output = self.run_build(
             coin="base_archive",
