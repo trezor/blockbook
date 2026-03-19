@@ -23,6 +23,10 @@ REPO_ROOT = SCRIPT_PATH.parents[2]
 DEFAULT_REPO = "trezor/blockbook"
 
 
+class Formatter(argparse.RawTextHelpFormatter):
+    pass
+
+
 def die(message: str) -> None:
     print(f"error: {message}", file=sys.stderr)
     raise SystemExit(1)
@@ -42,87 +46,12 @@ def current_branch() -> str:
     return result.stdout.strip()
 
 
-def default_workflow_ref() -> str:
-    return current_branch() or "<workflow-branch>"
+def workflow_ref_default() -> str:
+    return current_branch()
 
 
-def print_help() -> None:
-    workflow_ref = default_workflow_ref()
-    print(
-        f"""Usage:
-  {SCRIPT_NAME} help
-  {SCRIPT_NAME} list [--env <dev|prod>] [--repo <owner/repo>] [--format <csv|lines>]
-  {SCRIPT_NAME} build --coins <csv> [--env <dev|prod>] [--workflow-ref <ref>] [--branch-or-tag <name>] [--always-build-backend] [--repo <owner/repo>] [--run]
-  {SCRIPT_NAME} deploy --coins <csv> [--workflow-ref <ref>] [--branch-or-tag <name>] [--repo <owner/repo>] [--run]
-  {SCRIPT_NAME} watch [<run-id>] [--repo <owner/repo>]
-
-Commands:
-  help      Show this help.
-  list      List coins available for dev or prod builds.
-  build     Print or run the Build / Deploy workflow in build mode.
-  deploy    Print or run the Build / Deploy workflow in deploy mode.
-  watch     Watch the latest Build / Deploy workflow run or a specific run ID.
-
-Defaults:
-  --repo : {DEFAULT_REPO}
-  --workflow-ref: {workflow_ref}
-  --branch-or-tag: {workflow_ref}
-  --env: dev
-
-Operations:
-  list: Prints available coins for a build environment.
-    env=dev  -> coins buildable on dev runners
-    env=prod -> all configured runner-mapped coins
-
-  build: Builds Debian packages only.
-    env=dev  -> uses BB_RUNNER_* mapping, ALL skips prod-only coins
-    env=prod -> builds selected coins on production_builder
-
-  deploy: Builds, installs, restarts, waits for sync, then runs e2e tests.
-    env is fixed to dev.
-    ALL is not accepted.
-    Coins mapped to production_builder are rejected.
-
-  watch: Watches the latest Build / Deploy run by default.
-    You may also pass a specific run ID.
-
-Shared options for build/deploy:
-  --repo <owner/repo>          GitHub repository.
-                               Default: {DEFAULT_REPO}
-  --workflow-ref <ref>         Branch/tag/commit that contains deploy.yml.
-                               Default: current git branch.
-  --branch-or-tag <name>       Branch or tag to run the workflow on.
-                               Default: current git branch.
-  --coins <csv>                Required. Coin list, e.g. bitcoin,bsc_archive or ALL (only for build).
-  --run                        Execute the generated gh command instead of printing it.
-
-Build options:
-  --env <dev|prod>             Build environment (not accepted for deploy).
-                               Default: dev.
-  --always-build-backend       Build backend packages for every selected coin.
-                               Default: false.
-                               If omitted, backend builds are derived per coin
-                               from BB_RPC_URL_HTTP_<coin_alias> having a hostname
-                               matching BB_BACKEND_DOMAIN.
-
-List options:
-  --env <dev|prod>             Which build environment to list coins for.
-                               Default: dev.
-  --format <csv|lines>         Output format.
-                               Default: lines.
-
-Examples:
-  {SCRIPT_NAME} list --env dev
-  {SCRIPT_NAME} list --env prod --format csv
-  {SCRIPT_NAME} build --env dev --coins ALL
-  {SCRIPT_NAME} build --env prod --coins bitcoin,bsc_archive
-  {SCRIPT_NAME} build --coins base_archive --always-build-backend
-  {SCRIPT_NAME} build --env prod --coins bitcoin,bsc_archive --workflow-ref my-branch
-  {SCRIPT_NAME} deploy --coins bitcoin,bsc_archive
-  {SCRIPT_NAME} deploy --coins bitcoin --branch-or-tag master --run
-  {SCRIPT_NAME} watch
-  {SCRIPT_NAME} watch 123456789"""
-    )
+def workflow_ref_display() -> str:
+    return workflow_ref_default() or "<current-git-branch>"
 
 
 def load_context(repo: str):
@@ -214,48 +143,46 @@ def print_or_run(cmd: list[str], execute: bool) -> None:
     print(shlex.join(cmd))
 
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument("--repo", default=DEFAULT_REPO)
-    parser.add_argument("--workflow-ref", default=current_branch())
-    parser.add_argument("--branch-or-tag", default=current_branch())
-    parser.add_argument("--coins", required=True)
-    parser.add_argument("--env", choices=("dev", "prod"), default="dev")
-    parser.add_argument("--always-build-backend", action="store_true")
-    parser.add_argument("--run", action="store_true")
-    return parser
+def add_common_workflow_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--repo",
+        default=DEFAULT_REPO,
+        help=f"GitHub repository (default: {DEFAULT_REPO})",
+    )
+    parser.add_argument(
+        "--workflow-ref",
+        default=workflow_ref_default(),
+        help="Branch/tag/commit that contains deploy.yml (default: current git branch)",
+    )
+    parser.add_argument(
+        "--branch-or-tag",
+        default=workflow_ref_default(),
+        help="Branch or tag to run the workflow on (default: current git branch)",
+    )
+    parser.add_argument(
+        "--run",
+        action="store_true",
+        help="Execute the generated gh command instead of printing it",
+    )
 
 
-def deploy_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument("--repo", default=DEFAULT_REPO)
-    parser.add_argument("--workflow-ref", default=current_branch())
-    parser.add_argument("--branch-or-tag", default=current_branch())
-    parser.add_argument("--coins", required=True)
-    parser.add_argument("--run", action="store_true")
-    return parser
+def handle_help(args: argparse.Namespace) -> None:
+    parser = args.parser_map[args.topic] if args.topic else args.parser
+    parser.print_help()
 
 
-def watch_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument("run_id", nargs="?")
-    parser.add_argument("--repo", default=DEFAULT_REPO)
-    return parser
+def handle_list(args: argparse.Namespace) -> None:
+    context = load_context(args.repo)
+    coins = context.dev_buildable_coins if args.env == "dev" else context.all_coins
 
-
-def list_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument("--repo", default=DEFAULT_REPO)
-    parser.add_argument("--env", choices=("dev", "prod"), default="dev")
-    parser.add_argument("--format", choices=("csv", "lines"), default="lines")
-    return parser
-
-
-def command_build(argv: list[str]) -> None:
-    if any(arg in {"-h", "--help"} for arg in argv):
-        print_help()
+    if args.format == "csv":
+        print(",".join(coins))
         return
-    args = build_parser().parse_args(argv)
+    for coin in coins:
+        print(coin)
+
+
+def handle_build(args: argparse.Namespace) -> None:
     workflow_ref = args.workflow_ref or current_branch()
     if not workflow_ref:
         die("could not determine current git branch; pass --workflow-ref")
@@ -279,11 +206,7 @@ def command_build(argv: list[str]) -> None:
     )
 
 
-def command_deploy(argv: list[str]) -> None:
-    if any(arg in {"-h", "--help"} for arg in argv):
-        print_help()
-        return
-    args = deploy_parser().parse_args(argv)
+def handle_deploy(args: argparse.Namespace) -> None:
     workflow_ref = args.workflow_ref or current_branch()
     if not workflow_ref:
         die("could not determine current git branch; pass --workflow-ref")
@@ -330,52 +253,149 @@ def latest_run_id(repo: str) -> str:
     return result.stdout.strip()
 
 
-def command_watch(argv: list[str]) -> None:
-    if any(arg in {"-h", "--help"} for arg in argv):
-        print_help()
-        return
-    args = watch_parser().parse_args(argv)
+def handle_watch(args: argparse.Namespace) -> None:
     run_id = args.run_id or latest_run_id(args.repo)
     if not run_id or run_id == "null":
         die("no Build / Deploy workflow runs found")
     subprocess.run(["gh", "run", "watch", "-R", args.repo, run_id], check=True)
 
 
-def command_list(argv: list[str]) -> None:
-    if any(arg in {"-h", "--help"} for arg in argv):
-        print_help()
-        return
-    args = list_parser().parse_args(argv)
-    context = load_context(args.repo)
-    coins = context.dev_buildable_coins if args.env == "dev" else context.all_coins
+def create_parser() -> tuple[argparse.ArgumentParser, dict[str, argparse.ArgumentParser]]:
+    workflow_ref = workflow_ref_display()
+    parser = argparse.ArgumentParser(
+        prog=SCRIPT_NAME,
+        formatter_class=Formatter,
+        description="Helper for the Build / Deploy GitHub workflow.",
+        epilog=(
+            "Defaults:\n"
+            f"  --repo: {DEFAULT_REPO}\n"
+            f"  --workflow-ref: {workflow_ref}\n"
+            f"  --branch-or-tag: {workflow_ref}\n"
+            "  --env: dev\n\n"
+            "Use '<command> --help' for command-specific options."
+        ),
+    )
 
-    if args.format == "csv":
-        print(",".join(coins))
-        return
-    for coin in coins:
-        print(coin)
+    subparsers = parser.add_subparsers(dest="command")
+    parser_map: dict[str, argparse.ArgumentParser] = {}
+
+    help_parser = subparsers.add_parser(
+        "help",
+        formatter_class=Formatter,
+        help="Show top-level or subcommand help.",
+        description="Show top-level help or help for a specific subcommand.",
+    )
+    help_parser.add_argument("topic", nargs="?", choices=["list", "build", "deploy", "watch"])
+    help_parser.set_defaults(func=handle_help)
+    parser_map["help"] = help_parser
+
+    list_parser = subparsers.add_parser(
+        "list",
+        formatter_class=Formatter,
+        help="List coins available for dev or prod builds.",
+        description="List available coins for a build environment.",
+    )
+    list_parser.add_argument(
+        "--repo",
+        default=DEFAULT_REPO,
+        help=f"GitHub repository (default: {DEFAULT_REPO})",
+    )
+    list_parser.add_argument(
+        "--env",
+        choices=("dev", "prod"),
+        default="dev",
+        help="Build environment to list coins for (default: dev)",
+    )
+    list_parser.add_argument(
+        "--format",
+        choices=("csv", "lines"),
+        default="lines",
+        help="Output format (default: lines)",
+    )
+    list_parser.set_defaults(func=handle_list)
+    parser_map["list"] = list_parser
+
+    build_parser = subparsers.add_parser(
+        "build",
+        formatter_class=Formatter,
+        help="Print or run the Build / Deploy workflow in build mode.",
+        description=(
+            "Build Debian packages only.\n"
+            "- env=dev uses BB_RUNNER_* mapping and ALL skips prod-only coins\n"
+            "- env=prod builds selected coins on production_builder"
+        ),
+    )
+    add_common_workflow_args(build_parser)
+    build_parser.add_argument(
+        "--coins",
+        required=True,
+        help="Required. Coin list, e.g. bitcoin,bsc_archive or ALL",
+    )
+    build_parser.add_argument(
+        "--env",
+        choices=("dev", "prod"),
+        default="dev",
+        help="Build environment (default: dev)",
+    )
+    build_parser.add_argument(
+        "--always-build-backend",
+        action="store_true",
+        help=(
+            "Build backend packages for every selected coin. "
+            "If omitted, backend builds are derived from "
+            "BB_RPC_URL_HTTP_<coin_alias> hostname matching BB_BACKEND_DOMAIN"
+        ),
+    )
+    build_parser.set_defaults(func=handle_build)
+    parser_map["build"] = build_parser
+
+    deploy_parser = subparsers.add_parser(
+        "deploy",
+        formatter_class=Formatter,
+        help="Print or run the Build / Deploy workflow in deploy mode.",
+        description=(
+            "Build, install, restart, wait for sync, then run e2e tests.\n"
+            "- env is fixed to dev\n"
+            "- ALL is not accepted\n"
+            "- coins mapped to production_builder are rejected"
+        ),
+    )
+    add_common_workflow_args(deploy_parser)
+    deploy_parser.add_argument(
+        "--coins",
+        required=True,
+        help="Required. Coin list, e.g. bitcoin,bsc_archive",
+    )
+    deploy_parser.set_defaults(func=handle_deploy)
+    parser_map["deploy"] = deploy_parser
+
+    watch_parser = subparsers.add_parser(
+        "watch",
+        formatter_class=Formatter,
+        help="Watch the latest Build / Deploy workflow run or a specific run ID.",
+        description="Watch the latest Build / Deploy workflow run or a specific run ID.",
+    )
+    watch_parser.add_argument("run_id", nargs="?", help="Optional workflow run ID to watch")
+    watch_parser.add_argument(
+        "--repo",
+        default=DEFAULT_REPO,
+        help=f"GitHub repository (default: {DEFAULT_REPO})",
+    )
+    watch_parser.set_defaults(func=handle_watch)
+    parser_map["watch"] = watch_parser
+
+    return parser, parser_map
 
 
 def main(argv: list[str] | None = None) -> None:
-    args = list(sys.argv[1:] if argv is None else argv)
-    command = args.pop(0) if args else "help"
-
-    if command in {"help", "-h", "--help"}:
-        print_help()
+    parser, parser_map = create_parser()
+    args = parser.parse_args(sys.argv[1:] if argv is None else argv)
+    if not getattr(args, "command", None):
+        parser.print_help()
         return
-    if command == "list":
-        command_list(args)
-        return
-    if command == "build":
-        command_build(args)
-        return
-    if command == "deploy":
-        command_deploy(args)
-        return
-    if command == "watch":
-        command_watch(args)
-        return
-    die(f"unknown command: {command}")
+    args.parser = parser
+    args.parser_map = parser_map
+    args.func(args)
 
 
 if __name__ == "__main__":
