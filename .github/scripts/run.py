@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import shlex
 import subprocess
@@ -253,10 +254,50 @@ def latest_run_id(repo: str) -> str:
     return result.stdout.strip()
 
 
+def run_metadata(repo: str, run_id: str) -> dict:
+    try:
+        result = subprocess.run(
+            [
+                "gh",
+                "run",
+                "view",
+                "-R",
+                repo,
+                run_id,
+                "--json",
+                "status,conclusion",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except FileNotFoundError:
+        die("gh CLI not found")
+    except subprocess.CalledProcessError as exc:
+        details = (exc.stderr or exc.stdout or str(exc)).strip()
+        die(f"failed to fetch Build / Deploy run metadata: {details}")
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        die(f"failed to decode Build / Deploy run metadata: {exc}")
+    if not isinstance(payload, dict):
+        die("Build / Deploy run metadata must be a JSON object")
+    return payload
+
+
+def show_run_logs(repo: str, run_id: str) -> None:
+    subprocess.run(["gh", "run", "view", "-R", repo, run_id, "--log"], check=True)
+
+
 def handle_watch(args: argparse.Namespace) -> None:
     run_id = args.run_id or latest_run_id(args.repo)
     if not run_id or run_id == "null":
         die("no Build / Deploy workflow runs found")
+    metadata = run_metadata(args.repo, run_id)
+    status = str(metadata.get("status") or "").strip().lower()
+    if status == "completed":
+        show_run_logs(args.repo, run_id)
+        return
     subprocess.run(["gh", "run", "watch", "-R", args.repo, run_id], check=True)
 
 
