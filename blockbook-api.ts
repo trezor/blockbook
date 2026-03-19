@@ -29,6 +29,8 @@ export interface TronChainExtraData {
     result?: string;
     votes?: TronVoteExtra[];
 }
+export type TxChainExtraData = { payloadType: 'tron'; payload?: TronChainExtraData } | { payloadType: string; payload?: any };
+export type AccountChainExtraData = { payloadType: string; payload?: any };
 export interface AddressAlias {
     /** Type of alias, e.g., user-defined name or contract name. */
     Type: string;
@@ -213,7 +215,7 @@ export interface Tx {
     /** Blockchain-specific extended data. */
     coinSpecificData?: any;
     /** Additional normalized chain-specific transaction data. Use payloadType as discriminator for payload. */
-    chainExtraData?: { payloadType: 'tron'; payload?: TronChainExtraData } | { payloadType: string; payload?: any };
+    chainExtraData?: TxChainExtraData;
     /** List of token transfers that occurred in this transaction. */
     tokenTransfers?: TokenTransfer[];
     /** Ethereum-like blockchain specific data (if applicable). */
@@ -358,6 +360,8 @@ export interface Address {
     addressAliases?: {[key: string]: AddressAlias};
     /** List of staking pool data if address interacts with staking. */
     stakingPools?: StakingPool[];
+    /** Additional normalized chain-specific account/address data. Use payloadType as discriminator for payload. */
+    chainExtraData?: AccountChainExtraData;
 }
 export interface Utxo {
     /** Transaction ID in which this UTXO was created. */

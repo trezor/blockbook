@@ -857,6 +857,12 @@ func (b *TronRPC) EthereumTypeGetNonce(addrDesc bchain.AddressDescriptor) (uint6
 	return b.Client.NonceAt(ctx, addrDesc, nil)
 }
 
+// GetAddressChainExtraData returns normalized Tron-specific account/address data.
+// Payload population is implemented separately; default is no extra data.
+func (b *TronRPC) GetAddressChainExtraData(addrDesc bchain.AddressDescriptor) (json.RawMessage, error) {
+	return nil, nil
+}
+
 // GetContractInfo returns information about a contract
 func (b *TronRPC) GetContractInfo(contractDesc bchain.AddressDescriptor) (*bchain.ContractInfo, error) {
 	contract, err := b.EthereumRPC.GetContractInfo(contractDesc)

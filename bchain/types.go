@@ -340,6 +340,7 @@ type BlockChain interface {
 	GetTransaction(txid string) (*Tx, error)
 	GetTransactionForMempool(txid string) (*Tx, error)
 	GetTransactionSpecific(tx *Tx) (json.RawMessage, error)
+	GetAddressChainExtraData(addrDesc AddressDescriptor) (json.RawMessage, error)
 	EstimateSmartFee(blocks int, conservative bool) (big.Int, error)
 	EstimateFee(blocks int) (big.Int, error)
 	LongTermFeeRate() (*LongTermFeeRate, error)

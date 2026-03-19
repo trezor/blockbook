@@ -12,7 +12,7 @@ import (
 func TestChainExtra(t *testing.T) {
 	t.Run("valid", func(t *testing.T) {
 		tx := &api.Tx{
-			ChainExtraData: &api.ChainExtraData{
+			ChainExtraData: &api.TxChainExtraData{
 				PayloadType: "tron",
 				Payload:     json.RawMessage(`{"operation":"vote","totalFee":"3076500","energyUsageTotal":"100","energyFee":"250000","bandwidthUsage":"50","bandwidthFee":"345000","votes":[{"address":"TA","count":"2"}]}`),
 			},
@@ -42,21 +42,21 @@ func TestChainExtra(t *testing.T) {
 	})
 
 	t.Run("invalid json", func(t *testing.T) {
-		tx := &api.Tx{ChainExtraData: &api.ChainExtraData{PayloadType: "tron", Payload: json.RawMessage("{")}}
+		tx := &api.Tx{ChainExtraData: &api.TxChainExtraData{PayloadType: "tron", Payload: json.RawMessage("{")}}
 		if got := chainExtra(tx); got != nil {
 			t.Fatalf("expected nil for invalid json, got %+v", got)
 		}
 	})
 
 	t.Run("empty object", func(t *testing.T) {
-		tx := &api.Tx{ChainExtraData: &api.ChainExtraData{PayloadType: "tron", Payload: json.RawMessage(`{}`)}}
+		tx := &api.Tx{ChainExtraData: &api.TxChainExtraData{PayloadType: "tron", Payload: json.RawMessage(`{}`)}}
 		if got := chainExtra(tx); got != nil {
 			t.Fatalf("expected nil for empty extra, got %+v", got)
 		}
 	})
 
 	t.Run("wrong type", func(t *testing.T) {
-		tx := &api.Tx{ChainExtraData: &api.ChainExtraData{PayloadType: "ethereum", Payload: json.RawMessage(`{"operation":"vote"}`)}}
+		tx := &api.Tx{ChainExtraData: &api.TxChainExtraData{PayloadType: "ethereum", Payload: json.RawMessage(`{"operation":"vote"}`)}}
 		if got := chainExtra(tx); got != nil {
 			t.Fatalf("expected nil for non-tron extra, got %+v", got)
 		}
@@ -64,7 +64,7 @@ func TestChainExtra(t *testing.T) {
 
 	t.Run("invalid fee amount", func(t *testing.T) {
 		tx := &api.Tx{
-			ChainExtraData: &api.ChainExtraData{
+			ChainExtraData: &api.TxChainExtraData{
 				PayloadType: "tron",
 				Payload:     json.RawMessage(`{"operation":"vote","totalFee":"x","energyFee":"x","bandwidthFee":"345000"}`),
 			},

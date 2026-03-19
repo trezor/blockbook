@@ -294,6 +294,11 @@ func (c *blockChainWithMetrics) GetTransactionSpecific(tx *bchain.Tx) (v json.Ra
 	return c.b.GetTransactionSpecific(tx)
 }
 
+func (c *blockChainWithMetrics) GetAddressChainExtraData(addrDesc bchain.AddressDescriptor) (v json.RawMessage, err error) {
+	defer func(s time.Time) { c.observeRPCLatency("GetAddressChainExtraData", s, err) }(time.Now())
+	return c.b.GetAddressChainExtraData(addrDesc)
+}
+
 func (c *blockChainWithMetrics) GetTransactionForMempool(txid string) (v *bchain.Tx, err error) {
 	defer func(s time.Time) { c.observeRPCLatency("GetTransactionForMempool", s, err) }(time.Now())
 	return c.b.GetTransactionForMempool(txid)
