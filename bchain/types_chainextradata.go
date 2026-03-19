@@ -34,3 +34,11 @@ type TronChainExtraData struct {
 	Result           string          `json:"result,omitempty"`
 	Votes            []TronVoteExtra `json:"votes,omitempty"`
 }
+
+// TronAccountExtraData contains normalized Tron-specific account resource metadata.
+type TronAccountExtraData struct {
+	AvailableBandwidth int64 `json:"availableBandwidth"`
+	TotalBandwidth     int64 `json:"totalBandwidth"`
+	AvailableEnergy    int64 `json:"availableEnergy"`
+	TotalEnergy        int64 `json:"totalEnergy"`
+}

@@ -29,8 +29,14 @@ export interface TronChainExtraData {
     result?: string;
     votes?: TronVoteExtra[];
 }
+export interface TronAccountExtraData {
+    availableBandwidth: number;
+    totalBandwidth: number;
+    availableEnergy: number;
+    totalEnergy: number;
+}
 export type TxChainExtraData = { payloadType: 'tron'; payload?: TronChainExtraData } | { payloadType: string; payload?: any };
-export type AccountChainExtraData = { payloadType: string; payload?: any };
+export type AccountChainExtraData = { payloadType: 'tron'; payload?: TronAccountExtraData } | { payloadType: string; payload?: any };
 export interface AddressAlias {
     /** Type of alias, e.g., user-defined name or contract name. */
     Type: string;

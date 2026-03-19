@@ -46,6 +46,15 @@ type tronGetTransactionListFromPendingResponse struct {
 	TxID []string `json:"txId,omitempty"`
 }
 
+type tronGetAccountResourceResponse struct {
+	FreeNetLimit int64 `json:"freeNetLimit"`
+	FreeNetUsed  int64 `json:"freeNetUsed"`
+	NetLimit     int64 `json:"NetLimit"`
+	NetUsed      int64 `json:"NetUsed"`
+	EnergyLimit  int64 `json:"EnergyLimit"`
+	EnergyUsed   int64 `json:"EnergyUsed"`
+}
+
 type tronTxContractValue struct {
 	OwnerAddress    string       `json:"owner_address,omitempty"`
 	ToAddress       string       `json:"to_address,omitempty"`
@@ -858,9 +867,29 @@ func (b *TronRPC) EthereumTypeGetNonce(addrDesc bchain.AddressDescriptor) (uint6
 }
 
 // GetAddressChainExtraData returns normalized Tron-specific account/address data.
-// Payload population is implemented separately; default is no extra data.
 func (b *TronRPC) GetAddressChainExtraData(addrDesc bchain.AddressDescriptor) (json.RawMessage, error) {
-	return nil, nil
+	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
+	defer cancel()
+
+	req := map[string]any{
+		"address": ToTronAddressFromDesc(addrDesc),
+		"visible": true,
+	}
+	var resp tronGetAccountResourceResponse
+	if err := b.http.Request(ctx, "/wallet/getaccountresource", req, &resp); err != nil {
+		return nil, err
+	}
+
+	payload, err := json.Marshal(bchain.TronAccountExtraData{
+		AvailableBandwidth: tronAvailableResource(resp.FreeNetLimit, resp.FreeNetUsed) + tronAvailableResource(resp.NetLimit, resp.NetUsed),
+		TotalBandwidth:     resp.FreeNetLimit + resp.NetLimit,
+		AvailableEnergy:    tronAvailableResource(resp.EnergyLimit, resp.EnergyUsed),
+		TotalEnergy:        resp.EnergyLimit,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return payload, nil
 }
 
 // GetContractInfo returns information about a contract
@@ -900,6 +929,13 @@ func (b *TronRPC) SendRawTransaction(tx string, disableAlternativeRPC bool) (str
 		b.Mempool.AddTransactionToMempool(txID)
 	}
 	return txID, nil
+}
+
+func tronAvailableResource(limit, used int64) int64 {
+	if used >= limit {
+		return 0
+	}
+	return limit - used
 }
 
 func (b *TronRPC) EthereumTypeGetRawTransaction(txid string) (string, error) {
