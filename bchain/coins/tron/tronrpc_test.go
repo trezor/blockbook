@@ -3,11 +3,13 @@
 package tron
 
 import (
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"github.com/trezor/blockbook/bchain"
 	"github.com/trezor/blockbook/bchain/coins/eth"
 )
 
@@ -216,4 +218,75 @@ func TestTronRPC_GetMempoolTransactions_Error(t *testing.T) {
 
 	_, err := tronRPC.GetMempoolTransactions()
 	require.Error(t, err)
+}
+
+func TestTronRPC_GetAddressChainExtraData(t *testing.T) {
+	mockHTTP := &MockTronHTTPClient{
+		Resp: tronGetAccountResourceResponse{
+			FreeNetLimit: 600,
+			FreeNetUsed:  100,
+			NetLimit:     400,
+			NetUsed:      250,
+			EnergyLimit:  9000,
+			EnergyUsed:   1234,
+		},
+	}
+	parser := NewTronParser(1, false)
+	addrDesc, err := parser.GetAddrDescFromAddress("TLUqyV9rGYXZ2E8kXe6J3P1rvYV1Au1Goe")
+	require.NoError(t, err)
+
+	tronRPC := &TronRPC{
+		EthereumRPC: &eth.EthereumRPC{
+			Timeout: time.Second,
+		},
+		http: mockHTTP,
+	}
+
+	payload, err := tronRPC.GetAddressChainExtraData(addrDesc)
+	require.NoError(t, err)
+	require.JSONEq(t, `{
+		"availableBandwidth":650,
+		"totalBandwidth":1000,
+		"availableEnergy":7766,
+		"totalEnergy":9000
+	}`, string(payload))
+	require.Equal(t, "/wallet/getaccountresource", mockHTTP.LastPath)
+	require.Equal(t, map[string]any{
+		"address": "TLUqyV9rGYXZ2E8kXe6J3P1rvYV1Au1Goe",
+		"visible": true,
+	}, mockHTTP.LastBody)
+}
+
+func TestTronRPC_GetAddressChainExtraData_MissingFieldsClampToZero(t *testing.T) {
+	mockHTTP := &MockTronHTTPClient{
+		Resp: map[string]any{
+			"freeNetLimit": int64(100),
+			"freeNetUsed":  int64(150),
+			"NetLimit":     int64(50),
+			"NetUsed":      int64(10),
+			"EnergyUsed":   int64(20),
+		},
+	}
+
+	tronRPC := &TronRPC{
+		EthereumRPC: &eth.EthereumRPC{
+			Timeout: time.Second,
+		},
+		http: mockHTTP,
+	}
+
+	payload, err := tronRPC.GetAddressChainExtraData(bchain.AddressDescriptor{
+		0x73, 0x4c, 0x2f, 0x23, 0xab, 0x41, 0xc5, 0x23, 0x08, 0xd1,
+		0x20, 0x6c, 0x4e, 0xb5, 0xfe, 0x8e, 0x12, 0x4e, 0x68, 0x98,
+	})
+	require.NoError(t, err)
+
+	var extra bchain.TronAccountExtraData
+	require.NoError(t, json.Unmarshal(payload, &extra))
+	require.Equal(t, bchain.TronAccountExtraData{
+		AvailableBandwidth: 40,
+		TotalBandwidth:     150,
+		AvailableEnergy:    0,
+		TotalEnergy:        0,
+	}, extra)
 }
