@@ -14,16 +14,20 @@ func int64Ptr(v int64) *int64 {
 	return &v
 }
 
+func resourceCodePtr(v tronResourceCode) *tronResourceCode {
+	return &v
+}
+
 func TestTronBuildExtraData_VoteWitness(t *testing.T) {
 	contract := tronTxContract{Type: "VoteWitnessContract"}
 	contract.Parameter.Value.Votes = []tronTxVote{
 		{
 			VoteAddress: "41734c2f23ab41c52308d1206c4eb5fe8e124e6898",
-			VoteCount:   int64(17),
+			VoteCount:   int64Ptr(17),
 		},
 		{
 			VoteAddress: "41da727d310b98700af4cec797e43991899668d6f3",
-			VoteCount:   int64(3),
+			VoteCount:   int64Ptr(3),
 		},
 	}
 
@@ -44,8 +48,8 @@ func TestTronBuildExtraData_VoteWitness(t *testing.T) {
 func TestTronBuildExtraData_StakeAndDelegateDetails(t *testing.T) {
 	t.Run("stake amount", func(t *testing.T) {
 		contract := tronTxContract{Type: "FreezeBalanceV2Contract"}
-		contract.Parameter.Value.FrozenBalance = int64(125000000)
-		contract.Parameter.Value.Resource = "ENERGY"
+		contract.Parameter.Value.FrozenBalance = int64Ptr(125000000)
+		contract.Parameter.Value.Resource = resourceCodePtr(tronResourceEnergy)
 
 		txByID := &tronGetTransactionByIDResponse{}
 		txByID.RawData.Contract = []tronTxContract{contract}
@@ -73,9 +77,9 @@ func TestTronBuildExtraData_StakeAndDelegateDetails(t *testing.T) {
 
 	t.Run("delegate amount and receiver", func(t *testing.T) {
 		contract := tronTxContract{Type: "DelegateResourceContract"}
-		contract.Parameter.Value.Balance = int64(42000000)
+		contract.Parameter.Value.Balance = int64Ptr(42000000)
 		contract.Parameter.Value.ReceiverAddress = "41da727d310b98700af4cec797e43991899668d6f3"
-		contract.Parameter.Value.Resource = "BANDWIDTH"
+		contract.Parameter.Value.Resource = resourceCodePtr(tronResourceBandwidth)
 
 		txByID := &tronGetTransactionByIDResponse{}
 		txByID.RawData.Contract = []tronTxContract{contract}
@@ -86,6 +90,18 @@ func TestTronBuildExtraData_StakeAndDelegateDetails(t *testing.T) {
 		require.Equal(t, "42000000", extra.DelegateAmount)
 		require.Equal(t, ToTronAddressFromAddress(contract.Parameter.Value.ReceiverAddress), extra.DelegateTo)
 		require.Equal(t, "bandwidth", extra.Resource)
+	})
+
+	t.Run("vote power resource", func(t *testing.T) {
+		contract := tronTxContract{Type: "UnfreezeBalanceV2Contract"}
+		contract.Parameter.Value.Resource = resourceCodePtr(tronResourceVotePower)
+
+		txByID := &tronGetTransactionByIDResponse{}
+		txByID.RawData.Contract = []tronTxContract{contract}
+		txInfo := &tronGetTransactionInfoByIDResponse{}
+
+		extra := tronBuildExtraData(txByID, txInfo)
+		require.Equal(t, "votePower", extra.Resource)
 	})
 }
 
@@ -112,12 +128,12 @@ func TestTronBuildRpcTransaction_ValueIsEthereumHexQuantity(t *testing.T) {
 		want     int64
 	}{
 		{
-			name:     "transfer decimal string",
+			name:     "transfer amount",
 			contract: tronTxContract{Type: "TransferContract"},
 			want:     586000000,
 		},
 		{
-			name:     "trigger smart contract hex string",
+			name:     "trigger smart contract call value",
 			contract: tronTxContract{Type: "TriggerSmartContract"},
 			want:     12345,
 		},
@@ -127,9 +143,14 @@ func TestTronBuildRpcTransaction_ValueIsEthereumHexQuantity(t *testing.T) {
 			want:     42000000,
 		},
 		{
-			name:     "unfreeze balance integer",
-			contract: tronTxContract{Type: "UnfreezeBalanceContract"},
+			name:     "unfreeze balance v2",
+			contract: tronTxContract{Type: "UnfreezeBalanceV2Contract"},
 			want:     77000000,
+		},
+		{
+			name:     "unfreeze balance v1 has no tx value",
+			contract: tronTxContract{Type: "UnfreezeBalanceContract"},
+			want:     0,
 		},
 		{
 			name:     "delegate balance integer",
@@ -138,11 +159,11 @@ func TestTronBuildRpcTransaction_ValueIsEthereumHexQuantity(t *testing.T) {
 		},
 	}
 
-	tests[0].contract.Parameter.Value.Amount = "586000000"
-	tests[1].contract.Parameter.Value.CallValue = "0x3039"
-	tests[2].contract.Parameter.Value.FrozenBalance = int64(42000000)
-	tests[3].contract.Parameter.Value.UnfreezeBalance = int64(77000000)
-	tests[4].contract.Parameter.Value.Balance = int64(88000000)
+	tests[0].contract.Parameter.Value.Amount = int64Ptr(586000000)
+	tests[1].contract.Parameter.Value.CallValue = int64Ptr(12345)
+	tests[2].contract.Parameter.Value.FrozenBalance = int64Ptr(42000000)
+	tests[3].contract.Parameter.Value.UnfreezeBalance = int64Ptr(77000000)
+	tests[5].contract.Parameter.Value.Balance = int64Ptr(88000000)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

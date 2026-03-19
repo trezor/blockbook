@@ -35,44 +35,26 @@ type TronConfiguration struct {
 	HttpUrlTemplate     string `json:"tron_http_url_template"`
 }
 
-type tronBroadcastHexResponse struct {
-	Result  bool   `json:"result"`
-	TxID    string `json:"txid"`
-	Code    string `json:"code,omitempty"`
-	Message string `json:"message,omitempty"`
-}
-
-type tronGetTransactionListFromPendingResponse struct {
-	TxID []string `json:"txId,omitempty"`
-}
-
-type tronGetAccountResourceResponse struct {
-	FreeNetLimit int64 `json:"freeNetLimit"`
-	FreeNetUsed  int64 `json:"freeNetUsed"`
-	NetLimit     int64 `json:"NetLimit"`
-	NetUsed      int64 `json:"NetUsed"`
-	EnergyLimit  int64 `json:"EnergyLimit"`
-	EnergyUsed   int64 `json:"EnergyUsed"`
-}
+type tronResourceCode int64
 
 type tronTxContractValue struct {
-	OwnerAddress    string       `json:"owner_address,omitempty"`
-	ToAddress       string       `json:"to_address,omitempty"`
-	ContractAddress string       `json:"contract_address,omitempty"`
-	ReceiverAddress string       `json:"receiver_address,omitempty"`
-	Resource        interface{}  `json:"resource,omitempty"`
-	Amount          interface{}  `json:"amount,omitempty"`
-	CallValue       interface{}  `json:"call_value,omitempty"`
-	FrozenBalance   interface{}  `json:"frozen_balance,omitempty"`
-	UnfreezeBalance interface{}  `json:"unfreeze_balance,omitempty"`
-	Balance         interface{}  `json:"balance,omitempty"`
-	Votes           []tronTxVote `json:"votes,omitempty"`
-	Data            string       `json:"data,omitempty"`
+	OwnerAddress    string            `json:"owner_address,omitempty"`
+	ToAddress       string            `json:"to_address,omitempty"`
+	ContractAddress string            `json:"contract_address,omitempty"`
+	ReceiverAddress string            `json:"receiver_address,omitempty"`
+	Resource        *tronResourceCode `json:"resource,omitempty"`
+	Amount          *int64            `json:"amount,omitempty"`
+	CallValue       *int64            `json:"call_value,omitempty"`
+	FrozenBalance   *int64            `json:"frozen_balance,omitempty"`
+	UnfreezeBalance *int64            `json:"unfreeze_balance,omitempty"`
+	Balance         *int64            `json:"balance,omitempty"`
+	Votes           []tronTxVote      `json:"votes,omitempty"`
+	Data            string            `json:"data,omitempty"`
 }
 
 type tronTxVote struct {
-	VoteAddress string      `json:"vote_address,omitempty"`
-	VoteCount   interface{} `json:"vote_count,omitempty"`
+	VoteAddress string `json:"vote_address,omitempty"`
+	VoteCount   *int64 `json:"vote_count,omitempty"`
 }
 
 type tronTxContract struct {
@@ -442,63 +424,6 @@ func (b *TronRPC) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-func (b *TronRPC) getTransactionByID(txid string, isMempool bool) (*tronGetTransactionByIDResponse, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
-	defer cancel()
-
-	req := map[string]string{
-		"value": strip0xPrefix(txid),
-	}
-	var raw json.RawMessage
-	if isMempool {
-		if err := b.http.Request(ctx, "/wallet/gettransactionbyid", req, &raw); err != nil {
-			return nil, err
-		}
-	} else {
-		if err := b.http.Request(ctx, "/walletsolidity/gettransactionbyid", req, &raw); err != nil {
-			return nil, err
-		}
-	}
-	if string(raw) == "{}" {
-		return nil, errors.Annotatef(bchain.ErrTxNotFound, "txid %v", txid)
-	}
-	var resp tronGetTransactionByIDResponse
-	if err := json.Unmarshal(raw, &resp); err != nil {
-		return nil, err
-	}
-	return &resp, nil
-}
-
-func (b *TronRPC) getTransactionInfoByID(txid string, isMempool bool) (*tronGetTransactionInfoByIDResponse, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
-	defer cancel()
-
-	req := map[string]string{
-		"value": strip0xPrefix(txid),
-	}
-
-	var raw json.RawMessage
-	if isMempool {
-		if err := b.http.Request(ctx, "/wallet/gettransactioninfobyid", req, &raw); err != nil {
-			return nil, err
-		}
-	} else {
-		if err := b.http.Request(ctx, "/walletsolidity/gettransactioninfobyid", req, &raw); err != nil {
-			return nil, err
-		}
-	}
-	if string(raw) == "{}" {
-		return nil, errors.Annotatef(bchain.ErrTxNotFound, "txid %v", txid)
-	}
-
-	var resp tronGetTransactionInfoByIDResponse
-	if err := json.Unmarshal(raw, &resp); err != nil {
-		return nil, err
-	}
-
-	return &resp, nil
-}
-
 func (b *TronRPC) computeConfirmationsFromBlockNumber(txid string, blockNumber uint64, hasBlockNumber bool) uint32 {
 	if !hasBlockNumber {
 		return 0
@@ -791,21 +716,6 @@ func (b *TronRPC) GetTransactionSpecific(tx *bchain.Tx) (json.RawMessage, error)
 	return m, nil
 }
 
-func (b *TronRPC) GetMempoolTransactions() ([]string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
-	defer cancel()
-
-	var resp tronGetTransactionListFromPendingResponse
-	if err := b.http.Request(ctx, "/wallet/gettransactionlistfrompending", map[string]any{}, &resp); err != nil {
-		return nil, err
-	}
-	if len(resp.TxID) == 0 {
-		return []string{}, nil
-	}
-
-	return resp.TxID, nil
-}
-
 func (b *TronRPC) EthereumTypeGetBalance(addrDesc bchain.AddressDescriptor) (*big.Int, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
 	defer cancel()
@@ -866,32 +776,6 @@ func (b *TronRPC) EthereumTypeGetNonce(addrDesc bchain.AddressDescriptor) (uint6
 	return b.Client.NonceAt(ctx, addrDesc, nil)
 }
 
-// GetAddressChainExtraData returns normalized Tron-specific account/address data.
-func (b *TronRPC) GetAddressChainExtraData(addrDesc bchain.AddressDescriptor) (json.RawMessage, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
-	defer cancel()
-
-	req := map[string]any{
-		"address": ToTronAddressFromDesc(addrDesc),
-		"visible": true,
-	}
-	var resp tronGetAccountResourceResponse
-	if err := b.http.Request(ctx, "/wallet/getaccountresource", req, &resp); err != nil {
-		return nil, err
-	}
-
-	payload, err := json.Marshal(bchain.TronAccountExtraData{
-		AvailableBandwidth: tronAvailableResource(resp.FreeNetLimit, resp.FreeNetUsed) + tronAvailableResource(resp.NetLimit, resp.NetUsed),
-		TotalBandwidth:     resp.FreeNetLimit + resp.NetLimit,
-		AvailableEnergy:    tronAvailableResource(resp.EnergyLimit, resp.EnergyUsed),
-		TotalEnergy:        resp.EnergyLimit,
-	})
-	if err != nil {
-		return nil, err
-	}
-	return payload, nil
-}
-
 // GetContractInfo returns information about a contract
 func (b *TronRPC) GetContractInfo(contractDesc bchain.AddressDescriptor) (*bchain.ContractInfo, error) {
 	contract, err := b.EthereumRPC.GetContractInfo(contractDesc)
@@ -904,38 +788,6 @@ func (b *TronRPC) GetContractInfo(contractDesc bchain.AddressDescriptor) (*bchai
 	contract.Contract = ToTronAddressFromAddress(contract.Contract)
 	glog.Infof("Getting contract info for: %s", contract.Contract)
 	return contract, nil
-}
-
-func (b *TronRPC) SendRawTransaction(tx string, disableAlternativeRPC bool) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
-	defer cancel()
-
-	req := map[string]string{
-		"transaction": strip0xPrefix(tx),
-	}
-	var resp tronBroadcastHexResponse
-	if err := b.http.Request(ctx, "/wallet/broadcasthex", req, &resp); err != nil {
-		return "", err
-	}
-	if !resp.Result {
-		if resp.Code != "" || resp.Message != "" {
-			return "", errors.Errorf("Tron broadcasthex failed: %s %s", resp.Code, resp.Message)
-		}
-		return "", errors.New("Tron broadcasthex failed")
-	}
-
-	txID := strip0xPrefix(resp.TxID)
-	if b.ChainConfig != nil && b.ChainConfig.DisableMempoolSync && b.Mempool != nil {
-		b.Mempool.AddTransactionToMempool(txID)
-	}
-	return txID, nil
-}
-
-func tronAvailableResource(limit, used int64) int64 {
-	if used >= limit {
-		return 0
-	}
-	return limit - used
 }
 
 func (b *TronRPC) EthereumTypeGetRawTransaction(txid string) (string, error) {
