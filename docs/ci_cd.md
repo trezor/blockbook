@@ -47,7 +47,7 @@ Inputs:
     4. run post-deploy e2e tests
 - `env`:
   - `dev` keeps the current per-coin dev runner mapping
-  - `prod` builds selected coins on `production_builder` regardless of `BB_RUNNER_*`
+  - `prod` builds selected coins on the `production-builder` runner regardless of `BB_RUNNER_*`
   - default is `dev`
   - ignored when `mode=deploy`
 - `always_build_backend`:
@@ -77,7 +77,7 @@ See also [CI/CD workflow variables](env.md#cicd-workflow-variables).
 Special cases:
 
 - `mode=build` + `env=dev` skips prod-only coins when `coins=ALL`
-- `mode=build` + `env=prod` + `coins=ALL` builds all configured coins with `BB_RUNNER_*` mappings on `production_builder`
+- `mode=build` + `env=prod` + `coins=ALL` builds all configured coins with `BB_RUNNER_*` mappings on the `production-builder` runner
 - `mode=build` + `env=dev` fails if you explicitly request a coin whose `BB_RUNNER_*` is `production_builder`
 - `mode=deploy` is dev-only and fails fast if any selected coin is mapped to `production_builder`
 

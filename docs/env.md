@@ -33,7 +33,7 @@ Some behavior of Blockbook can be modified by environment variables. The variabl
 ## CI/CD workflow variables
 
 -   `BB_RUNNER_<coin>` - Maps a workflow/config coin name from `configs/coins/<coin>.json` to the self-hosted runner label
-    used by the `Build / Deploy` workflow. `production_builder` marks coins that are buildable only in `env=prod`.
+    used by the `Build / Deploy` workflow. `production_builder` marks coins that are buildable only in `env=prod`; those builds run on the `production-builder` self-hosted runner label.
 
 -   `BB_PACKAGE_ROOT` - Absolute filesystem path where workflow build jobs stage copied `.deb` packages after build.
     Defaults to `/opt/blockbook-builds` in the workflow.

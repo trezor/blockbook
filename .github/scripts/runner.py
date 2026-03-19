@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 PRODUCTION_RUNNER = "production_builder"
+PRODUCTION_RUNNER_LABEL = "production-builder"
 LOG_PREFIX = "CI/CD Pipeline:"
 
 
@@ -134,6 +135,12 @@ def parse_coin_tokens(raw: str, *, allow_all: bool) -> tuple[bool, list[str]]:
 
 def is_production_only_runner(runner: str) -> bool:
     return runner == PRODUCTION_RUNNER
+
+
+def build_runner_labels(runner: str, build_env: str) -> list[str]:
+    if build_env == "prod":
+        return ["self-hosted", PRODUCTION_RUNNER_LABEL]
+    return ["self-hosted", "bb-dev-selfhosted", runner]
 
 
 def coin_config_path(workspace: Path, coin: str) -> Path:
