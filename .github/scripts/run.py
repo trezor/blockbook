@@ -322,7 +322,7 @@ def create_parser() -> tuple[argparse.ArgumentParser, dict[str, argparse.Argumen
         description=(
             "Build Debian packages only.\n"
             "- env=dev uses BB_RUNNER_* mapping and ALL skips prod-only coins\n"
-            "- env=prod builds selected coins on production_builder"
+            "- env=prod builds selected coins on the production-builder runner"
         ),
     )
     add_common_workflow_args(build_parser)

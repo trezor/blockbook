@@ -7,6 +7,7 @@ from pathlib import Path
 from runner import (
     PRODUCTION_RUNNER,
     ValidationError,
+    build_runner_labels,
     fail,
     load_coin_context,
     log,
@@ -44,6 +45,7 @@ def main() -> None:
                 "runner": runner,
                 "coins": coins,
                 "coins_csv": ",".join(coins),
+                "labels_json": json.dumps(build_runner_labels(runner, build_env), separators=(",", ":")),
             }
         )
 
@@ -60,7 +62,10 @@ def main() -> None:
         log("Skipped prod-only coins for env=dev: " + ", ".join(selection.skipped_prod_only))
     log("Selected coins: " + ", ".join(selection.coins))
     for item in runner_matrix:
-        log(f"Runner {item['runner']}: {', '.join(item['coins'])}")
+        log(
+            f"Runner {item['runner']} labels={item['labels_json']}: "
+            + ", ".join(item["coins"])
+        )
 
 
 if __name__ == "__main__":
