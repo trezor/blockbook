@@ -63,7 +63,7 @@ jobs:
           VARS_JSON: ${{ toJSON(vars) }}
           COINS_INPUT: ${{ inputs.coins }}
           BUILD_ENV: ${{ inputs.env }}
-        run: ./.github/scripts/build_plan.py
+        run: python3 ./.github/scripts/build_plan.py
 
   prepare_deploy:
     name: Prepare Deploy Plan
@@ -93,7 +93,7 @@ jobs:
         env:
           VARS_JSON: ${{ toJSON(vars) }}
           COINS_INPUT: ${{ inputs.coins }}
-        run: ./.github/scripts/deploy_plan.py
+        run: python3 ./.github/scripts/deploy_plan.py
 
   build:
     name: Build (${{ matrix.runner }})
