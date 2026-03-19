@@ -56,6 +56,7 @@ Inputs:
   - ignored when `mode=deploy`
 - `coins`: comma-separated aliases from `configs/coins`; `ALL` is supported only in `mode=build`
 - `branch_or_tag`: optional branch or tag to check out and deploy; leave empty to use the workflow run ref name
+  - the selected value is validated before checkout and must exist in the target repository as a branch or tag
 
 In `mode=build`, selected coins are grouped by runner so one build job can build multiple
 `deb-blockbook-<coin>` targets in a single invocation on the same self-hosted machine.

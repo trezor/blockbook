@@ -40,14 +40,22 @@ jobs:
     name: Prepare Build Plan
     runs-on: ubuntu-latest
     if: ${{ inputs.mode == 'build' }}
+    env:
+      RESOLVED_BRANCH_OR_TAG: ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}
     outputs:
       runner_matrix: ${{ steps.plan.outputs.runner_matrix }}
       coins_csv: ${{ steps.plan.outputs.coins_csv }}
     steps:
-      - name: Checkout code
+      - name: Checkout workflow code
+        uses: actions/checkout@v4
+
+      - name: Validate branch or tag
+        run: python3 ./.github/scripts/validate_branch_or_tag.py --repo "${{ github.repository }}" --ref "${{ env.RESOLVED_BRANCH_OR_TAG }}"
+
+      - name: Checkout requested branch or tag
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}
+          ref: ${{ env.RESOLVED_BRANCH_OR_TAG }}
 
       - name: Build build plan
         id: plan
@@ -61,16 +69,24 @@ jobs:
     name: Prepare Deploy Plan
     runs-on: ubuntu-latest
     if: ${{ inputs.mode == 'deploy' }}
+    env:
+      RESOLVED_BRANCH_OR_TAG: ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}
     outputs:
       runner_matrix: ${{ steps.plan.outputs.runner_matrix }}
       e2e_regex: ${{ steps.plan.outputs.e2e_regex }}
       coins_csv: ${{ steps.plan.outputs.coins_csv }}
       test_coins_csv: ${{ steps.plan.outputs.test_coins_csv }}
     steps:
-      - name: Checkout code
+      - name: Checkout workflow code
+        uses: actions/checkout@v4
+
+      - name: Validate branch or tag
+        run: python3 ./.github/scripts/validate_branch_or_tag.py --repo "${{ github.repository }}" --ref "${{ env.RESOLVED_BRANCH_OR_TAG }}"
+
+      - name: Checkout requested branch or tag
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}
+          ref: ${{ env.RESOLVED_BRANCH_OR_TAG }}
 
       - name: Build deploy/e2e plan
         id: plan
@@ -83,6 +99,8 @@ jobs:
     name: Build (${{ matrix.runner }})
     needs: prepare_build
     if: ${{ inputs.mode == 'build' }}
+    env:
+      RESOLVED_BRANCH_OR_TAG: ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}
     strategy:
       fail-fast: false
       matrix:
@@ -92,7 +110,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}
+          ref: ${{ env.RESOLVED_BRANCH_OR_TAG }}
 
       - name: Export repository variables
         uses: ./.github/actions/export-env-vars
@@ -101,7 +119,7 @@ jobs:
 
       - name: Build packages
         env:
-          BRANCH_OR_TAG: ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}
+          BRANCH_OR_TAG: ${{ env.RESOLVED_BRANCH_OR_TAG }}
           BB_PACKAGE_ROOT: /opt/blockbook-builds
         run: python3 ./.github/scripts/build_packages.py ${{ inputs.always_build_backend && '--always-build-backend' || '' }} ${{ join(matrix.coins, ' ') }}
 
@@ -109,6 +127,8 @@ jobs:
     name: Deploy (${{ matrix.coin }})
     needs: prepare_deploy
     if: ${{ inputs.mode == 'deploy' }}
+    env:
+      RESOLVED_BRANCH_OR_TAG: ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}
     strategy:
       fail-fast: false
       matrix:
@@ -118,7 +138,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}
+          ref: ${{ env.RESOLVED_BRANCH_OR_TAG }}
 
       - name: Export repository variables
         uses: ./.github/actions/export-env-vars
@@ -127,7 +147,7 @@ jobs:
 
       - name: Deploy blockbook package
         env:
-          BRANCH_OR_TAG: ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}
+          BRANCH_OR_TAG: ${{ env.RESOLVED_BRANCH_OR_TAG }}
         run: ./contrib/scripts/deploy-blockbook-local.sh "${{ matrix.coin }}"
 
   wait-for-sync:
@@ -137,13 +157,14 @@ jobs:
     runs-on: [self-hosted, bb-dev-selfhosted]
     timeout-minutes: 31
     env:
+      RESOLVED_BRANCH_OR_TAG: ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}
       COINS_INPUT: ${{ needs.prepare_deploy.outputs.test_coins_csv }}
       SYNC_TIMEOUT_SECONDS: "1800"
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}
+          ref: ${{ env.RESOLVED_BRANCH_OR_TAG }}
 
       - name: Export repository variables
         uses: ./.github/actions/export-env-vars
@@ -159,12 +180,13 @@ jobs:
     if: ${{ needs.deploy.result == 'success' && needs.wait-for-sync.result == 'success' }}
     runs-on: [self-hosted, bb-dev-selfhosted]
     env:
+      RESOLVED_BRANCH_OR_TAG: ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}
       E2E_REGEX: ${{ needs.prepare_deploy.outputs.e2e_regex }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.branch_or_tag != '' && inputs.branch_or_tag || github.ref_name }}
+          ref: ${{ env.RESOLVED_BRANCH_OR_TAG }}
 
       - name: Export repository variables
         uses: ./.github/actions/export-env-vars
