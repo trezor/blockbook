@@ -161,7 +161,7 @@ func (w *Worker) newAddressesMapForAliases() map[string]struct{} {
 	return nil
 }
 
-func (w *Worker) getChainExtraData(tx *bchain.Tx) (*ChainExtraData, error) {
+func (w *Worker) getTxChainExtraData(tx *bchain.Tx) (*TxChainExtraData, error) {
 	payload, err := w.chainParser.GetChainExtraData(tx)
 	if err != nil {
 		return nil, err
@@ -170,7 +170,22 @@ func (w *Worker) getChainExtraData(tx *bchain.Tx) (*ChainExtraData, error) {
 		return nil, nil
 	}
 
-	return &ChainExtraData{
+	return &TxChainExtraData{
+		PayloadType: w.chainParser.GetChainExtraPayloadType(),
+		Payload:     payload,
+	}, nil
+}
+
+func (w *Worker) getAccountChainExtraData(addrDesc bchain.AddressDescriptor) (*AccountChainExtraData, error) {
+	payload, err := w.chain.GetAddressChainExtraData(addrDesc)
+	if err != nil {
+		return nil, err
+	}
+	if len(payload) == 0 {
+		return nil, nil
+	}
+
+	return &AccountChainExtraData{
 		PayloadType: w.chainParser.GetChainExtraPayloadType(),
 		Payload:     payload,
 	}, nil
@@ -500,7 +515,7 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 
 	}
 	var sj json.RawMessage
-	var chainExtraData *ChainExtraData
+	var chainExtraData *TxChainExtraData
 	// return CoinSpecificData for all mempool transactions or if requested
 	if specificJSON || bchainTx.Confirmations == 0 {
 		sj, err = w.chain.GetTransactionSpecific(bchainTx)
@@ -508,9 +523,9 @@ func (w *Worker) GetTransactionFromBchainTx(bchainTx *bchain.Tx, height int, spe
 			return nil, err
 		}
 	}
-	chainExtraData, err = w.getChainExtraData(bchainTx)
+	chainExtraData, err = w.getTxChainExtraData(bchainTx)
 	if err != nil {
-		glog.Warningf("GetChainExtraData error %v, %v", err, bchainTx)
+		glog.Warningf("GetTxChainExtraData error %v, %v", err, bchainTx)
 	}
 	r := &Tx{
 		Blockhash:        blockhash,
@@ -549,7 +564,7 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 	var pValInSat *big.Int
 	var tokens []TokenTransfer
 	var ethSpecific *EthereumSpecific
-	var chainExtraData *ChainExtraData
+	var chainExtraData *TxChainExtraData
 	addresses := w.newAddressesMapForAliases()
 	vins := make([]Vin, len(mempoolTx.Vin))
 	rbf := false
@@ -631,12 +646,12 @@ func (w *Worker) GetTransactionFromMempoolTx(mempoolTx *bchain.MempoolTx) (*Tx, 
 			Data:                 ethTxData.Data,
 		}
 	}
-	chainExtraData, err = w.getChainExtraData(&bchain.Tx{
+	chainExtraData, err = w.getTxChainExtraData(&bchain.Tx{
 		Txid:             mempoolTx.Txid,
 		CoinSpecificData: mempoolTx.CoinSpecificData,
 	})
 	if err != nil {
-		glog.Warningf("GetChainExtraData error %v, %v", err, mempoolTx.Txid)
+		glog.Warningf("GetTxChainExtraData error %v, %v", err, mempoolTx.Txid)
 	}
 	r := &Tx{
 		Blocktime:        mempoolTx.Blocktime,
@@ -1410,6 +1425,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 		txm                      []string
 		txs                      []*Tx
 		txids                    []string
+		accountChainExtraData    *AccountChainExtraData
 		pg                       Paging
 		uBalSat                  big.Int
 		uBalSending              big.Int
@@ -1422,6 +1438,10 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 	addrDesc, address, err := w.getAddrDescAndNormalizeAddress(address)
 	if err != nil {
 		return nil, err
+	}
+	accountChainExtraData, err = w.getAccountChainExtraData(addrDesc)
+	if err != nil {
+		glog.Warningf("GetAccountChainExtraData error %v, %v", err, address)
 	}
 	if w.chainType == bchain.ChainEthereumType {
 		ba, ed, err = w.getEthereumTypeAddressBalances(addrDesc, option, filter, secondaryCoin)
@@ -1563,6 +1583,7 @@ func (w *Worker) GetAddress(address string, page int, txsOnPage int, option Acco
 		Nonce:                 ed.nonce,
 		AddressAliases:        w.getAddressAliases(addresses),
 		StakingPools:          ed.stakingPools,
+		ChainExtraData:        accountChainExtraData,
 	}
 	// keep address backward compatible, set deprecated Erc20Contract value if ERC20 token
 	if ed.contractInfo != nil && ed.contractInfo.Standard == bchain.ERC20TokenStandard {
