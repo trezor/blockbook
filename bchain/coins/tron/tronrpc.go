@@ -367,6 +367,9 @@ func (b *TronRPC) newBlockNotifier() {
 		}
 		if updated && b.PushHandler != nil {
 			b.PushHandler(bchain.NotificationNewBlock)
+			// Tron mempool is refreshed via periodic/backend resync rather than per-tx
+			// subscriptions, so a new block should also trigger a mempool refresh.
+			b.PushHandler(bchain.NotificationNewTx)
 		}
 	}
 }
