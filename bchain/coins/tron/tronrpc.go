@@ -355,6 +355,14 @@ func (b *TronRPC) getBestSolidifiedHeight() (uint64, bool) {
 	return b.bestSolidifiedHeight, b.hasSolidifiedHeight
 }
 
+func (b *TronRPC) isBlockSolidified(blockNumber uint64) bool {
+	bestSolidifiedHeight, ok := b.getBestSolidifiedHeight()
+	if !ok {
+		return false
+	}
+	return blockNumber <= bestSolidifiedHeight
+}
+
 func (b *TronRPC) refreshBestHeaderFromChain() (bool, error) {
 	if b.Client == nil {
 		return false, errors.New("rpc client not initialized")
@@ -486,11 +494,11 @@ func (b *TronRPC) computeBlockConfirmations(blockNumber uint64) (uint32, error) 
 	return uint32(bestHeight - blockNumber + 1), nil
 }
 
-func (b *TronRPC) buildTxFromHTTPData(txByID *tronGetTransactionByIDResponse, txInfo *tronGetTransactionInfoByIDResponse, blockTime int64, confirmations uint32, internalData *bchain.EthereumInternalData, isInMempool bool) (*bchain.Tx, error) {
+func (b *TronRPC) buildTxFromHTTPData(txByID *tronGetTransactionByIDResponse, txInfo *tronGetTransactionInfoByIDResponse, blockTime int64, confirmations uint32, internalData *bchain.EthereumInternalData, isSolidified bool) (*bchain.Tx, error) {
 	csd := tronBuildEthereumSpecificData(txByID, txInfo)
 	csd.InternalData = internalData
 
-	if isInMempool {
+	if !isSolidified {
 		csd.Receipt = nil // set to nil so it can be considered as pending
 	}
 
@@ -527,15 +535,15 @@ func (b *TronRPC) buildTxFromHTTPData(txByID *tronGetTransactionByIDResponse, tx
 	return tx, nil
 }
 
-func (b *TronRPC) getTransactionByIDMapForBlockWithContext(ctx context.Context, hash string, blockHeight uint32) (map[string]*tronGetTransactionByIDResponse, error) {
+func (b *TronRPC) getTransactionByIDMapForBlockWithContext(ctx context.Context, hash string, blockHeight uint32, isSolidified bool) (map[string]*tronGetTransactionByIDResponse, error) {
 	var (
 		blockResp *tronGetBlockResponse
 		err       error
 	)
 	if hash != "" && hash != "pending" {
-		blockResp, err = b.requestBlockByID(ctx, hash, false)
+		blockResp, err = b.requestBlockByID(ctx, hash, isSolidified)
 	} else {
-		blockResp, err = b.requestBlockByNum(ctx, blockHeight, false)
+		blockResp, err = b.requestBlockByNum(ctx, blockHeight, isSolidified)
 	}
 	if err != nil {
 		return nil, err
@@ -588,6 +596,7 @@ func (b *TronRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 	if err != nil {
 		return nil, err
 	}
+	isSolidified := b.isBlockSolidified(blockNumber)
 
 	bbh := bchain.BlockHeader{
 		Hash:          strip0xPrefix(block.Hash),
@@ -621,11 +630,11 @@ func (b *TronRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 		txByIDCh := make(chan txByIDResult, 1)
 
 		go func() {
-			infos, err := b.requestTransactionInfoByBlockNum(ctx, bbh.Height, false)
+			infos, err := b.requestTransactionInfoByBlockNum(ctx, bbh.Height, isSolidified)
 			infosCh <- txInfosResult{infos: infos, err: err}
 		}()
 		go func() {
-			txByID, err := b.getTransactionByIDMapForBlockWithContext(ctx, hash, bbh.Height)
+			txByID, err := b.getTransactionByIDMapForBlockWithContext(ctx, hash, bbh.Height, isSolidified)
 			txByIDCh <- txByIDResult{txByID: txByID, err: err}
 		}()
 
@@ -662,7 +671,7 @@ func (b *TronRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 		if txByID == nil { // todo possibly can be deleted
 			b.ObserveChainDataFallback("tron_getblock", "missing_tx_by_id_map")
 			glog.V(1).Infof("Tron GetBlock fallback to gettransactionbyid for tx %s in block %d", tx.Hash, bbh.Height)
-			txByID, err = b.getTransactionByID(tx.Hash, false)
+			txByID, err = b.getTransactionByID(tx.Hash, isSolidified)
 			if err != nil {
 				return nil, err
 			}
@@ -675,13 +684,13 @@ func (b *TronRPC) GetBlock(hash string, height uint32) (*bchain.Block, error) {
 			txInternalData = &internalData[i]
 		}
 
-		rebuiltTx, err := b.buildTxFromHTTPData(txByID, txInfo, bbh.Time, confirmations, txInternalData, false)
+		rebuiltTx, err := b.buildTxFromHTTPData(txByID, txInfo, bbh.Time, confirmations, txInternalData, isSolidified)
 		if err != nil {
 			return nil, err
 		}
 		txs[i] = *rebuiltTx
 
-		if b.Mempool != nil {
+		if isSolidified && b.Mempool != nil {
 			b.Mempool.RemoveTransactionFromMempool(strip0xPrefix(tx.Hash))
 		}
 	}
@@ -721,7 +730,7 @@ func (b *TronRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 
 	blockTime, blockNumber, hasBlockNumber := tronTxMeta(txInfo)
 	confirmations := b.computeConfirmationsFromBlockNumber(txid, blockNumber, hasBlockNumber)
-	return b.buildTxFromHTTPData(txByID, txInfo, blockTime, confirmations, nil, !isSolidified)
+	return b.buildTxFromHTTPData(txByID, txInfo, blockTime, confirmations, nil, isSolidified)
 }
 
 // GetTransactionSpecific returns tx-specific JSON in Tron API format (without 0x in tx hash fields).
