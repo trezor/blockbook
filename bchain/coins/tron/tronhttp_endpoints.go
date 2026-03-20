@@ -66,7 +66,12 @@ func (b *TronRPC) GetMempoolTransactions() ([]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), b.Timeout)
 	defer cancel()
 
-	return b.requestMempoolTransactions(ctx)
+	txs, err := b.requestMempoolTransactions(ctx)
+	if err != nil {
+		return nil, err
+	}
+	b.reconcileMempoolWithPendingList(txs)
+	return txs, nil
 }
 
 // GetAddressChainExtraData returns normalized Tron-specific account/address data.

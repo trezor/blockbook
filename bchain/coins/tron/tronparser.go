@@ -246,12 +246,14 @@ func (p *TronParser) PackTx(tx *bchain.Tx, height uint32, blockTime int64) ([]by
 		}
 	}
 
-	for i, l := range r.Receipt.Logs {
-		addr, err := p.FromTronAddressToHex(l.Address)
-		if err != nil {
-			return nil, fmt.Errorf("failed to convert log[%d] address: %w", i, err)
+	if r.Receipt != nil {
+		for i, l := range r.Receipt.Logs {
+			addr, err := p.FromTronAddressToHex(l.Address)
+			if err != nil {
+				return nil, fmt.Errorf("failed to convert log[%d] address: %w", i, err)
+			}
+			l.Address = addr
 		}
-		l.Address = addr
 	}
 
 	tx.CoinSpecificData = r
@@ -269,6 +271,12 @@ func (p *TronParser) UnpackTx(buf []byte) (*bchain.Tx, uint32, error) {
 	}
 	if err := validateTronChainExtraData(csd.ChainExtraData); err != nil {
 		return nil, 0, err
+	}
+	// Pending (unsolidified) Tron transactions are intentionally not served from
+	// persistent tx cache so they can transition to SUCCESS/FAILED on subsequent
+	// backend refreshes.
+	if csd.Receipt == nil {
+		return nil, 0, nil
 	}
 	if has0xPrefix(tx.Txid) {
 		tx.Txid = tx.Txid[2:]

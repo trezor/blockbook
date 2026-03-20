@@ -717,6 +717,40 @@ func isTronTxNotFound(err error) bool {
 	return errors.Cause(err) == bchain.ErrTxNotFound
 }
 
+func reconcileTronMempoolWithPendingList(m bchain.Mempool, pendingTxids []string, removeTx func(string)) int {
+	if m == nil || removeTx == nil {
+		return 0
+	}
+
+	pendingSet := make(map[string]struct{}, len(pendingTxids))
+	for _, txid := range pendingTxids {
+		pendingSet[strip0xPrefix(txid)] = struct{}{}
+	}
+
+	removed := 0
+	for _, entry := range m.GetAllEntries() {
+		txid := strip0xPrefix(entry.Txid)
+		if _, ok := pendingSet[txid]; ok {
+			continue
+		}
+		removeTx(txid)
+		removed++
+	}
+
+	return removed
+}
+
+func (b *TronRPC) reconcileMempoolWithPendingList(pendingTxids []string) {
+	if b.Mempool == nil {
+		return
+	}
+
+	removed := reconcileTronMempoolWithPendingList(b.Mempool, pendingTxids, b.Mempool.RemoveTransactionFromMempool)
+	if removed > 0 {
+		glog.V(1).Infof("Tron mempool reconcile removed %d stale tx(s)", removed)
+	}
+}
+
 func isTronTxInMempool(m bchain.Mempool, txid string) bool {
 	if m == nil {
 		return false
@@ -785,7 +819,14 @@ func (b *TronRPC) GetTransaction(txid string) (*bchain.Tx, error) {
 
 	blockTime, blockNumber, hasBlockNumber := tronTxMeta(txInfo)
 	confirmations := b.computeConfirmationsFromBlockNumber(txid, blockNumber, hasBlockNumber)
-	return b.buildTxFromHTTPData(txByID, txInfo, blockTime, confirmations, nil, isSolidified)
+	tx, err := b.buildTxFromHTTPData(txByID, txInfo, blockTime, confirmations, nil, isSolidified)
+	if err != nil {
+		return nil, err
+	}
+	if isSolidified && b.Mempool != nil {
+		b.Mempool.RemoveTransactionFromMempool(strip0xPrefix(txid))
+	}
+	return tx, nil
 }
 
 // GetTransactionSpecific returns tx-specific JSON in Tron API format (without 0x in tx hash fields).
