@@ -31,7 +31,14 @@ func (m *tronTestMempool) GetAddrDescTransactions(addrDesc bchain.AddressDescrip
 }
 
 func (m *tronTestMempool) GetAllEntries() bchain.MempoolTxidEntries {
-	return nil
+	entries := make(bchain.MempoolTxidEntries, 0, len(m.txTimes))
+	for txid, firstSeen := range m.txTimes {
+		entries = append(entries, bchain.MempoolTxidEntry{
+			Txid: txid,
+			Time: firstSeen,
+		})
+	}
+	return entries
 }
 
 func (m *tronTestMempool) GetTransactionTime(txid string) uint32 {
@@ -173,6 +180,30 @@ func TestTronRPC_IsTronTxInMempool_Strips0xPrefix(t *testing.T) {
 	require.True(t, isTronTxInMempool(m, "abc"))
 	require.False(t, isTronTxInMempool(m, "0xdef"))
 	require.False(t, isTronTxInMempool(nil, "0xabc"))
+}
+
+func TestTronRPC_ReconcileTronMempoolWithPendingList_RemovesMissingTxs(t *testing.T) {
+	m := &tronTestMempool{
+		txTimes: map[string]uint32{
+			"a1": 1,
+			"b2": 2,
+			"c3": 3,
+		},
+	}
+
+	removedTxs := make(map[string]struct{})
+	removed := reconcileTronMempoolWithPendingList(m, []string{"0xa1", "c3"}, func(txid string) {
+		removedTxs[txid] = struct{}{}
+		delete(m.txTimes, txid)
+	})
+
+	require.Equal(t, 1, removed)
+	_, removedB2 := removedTxs["b2"]
+	require.True(t, removedB2)
+	require.Equal(t, map[string]uint32{
+		"a1": 1,
+		"c3": 3,
+	}, m.txTimes)
 }
 
 func TestTronRPC_GetTransactionByID_EmptyObjectMeansNotFound(t *testing.T) {
