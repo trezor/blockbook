@@ -751,13 +751,6 @@ func (b *TronRPC) reconcileMempoolWithPendingList(pendingTxids []string) {
 	}
 }
 
-func isTronTxInMempool(m bchain.Mempool, txid string) bool {
-	if m == nil {
-		return false
-	}
-	return m.GetTransactionTime(strip0xPrefix(txid)) != 0
-}
-
 func (b *TronRPC) getTransactionByIDWithFallback(txid string) (*tronGetTransactionByIDResponse, bool, error) {
 	resp, err := b.getTransactionByID(txid, true)
 	if err == nil {
@@ -789,7 +782,7 @@ func (b *TronRPC) getTransactionInfoByIDWithFallback(txid string) (*tronGetTrans
 }
 
 func (b *TronRPC) GetTransaction(txid string) (*bchain.Tx, error) {
-	if isTronTxInMempool(b.Mempool, txid) {
+	if b.Mempool != nil && b.Mempool.GetTransactionTime(strip0xPrefix(txid)) != 0 {
 		txInfo, err := b.getTransactionInfoByID(txid, false)
 		if err != nil {
 			return nil, err

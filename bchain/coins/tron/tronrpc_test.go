@@ -170,16 +170,27 @@ func TestTronRPC_GetTransactionInfoByIDWithFallback_FallbackToFullNode(t *testin
 	require.Equal(t, "/wallet/gettransactioninfobyid", fullNodeHTTP.LastPath)
 }
 
-func TestTronRPC_IsTronTxInMempool_Strips0xPrefix(t *testing.T) {
-	m := &tronTestMempool{
-		txTimes: map[string]uint32{
-			"abc": 1,
+func TestTronRPC_GetTransaction_NilMempoolDoesNotPanic(t *testing.T) {
+	mockHTTP := &MockTronHTTPClient{
+		Resp: map[string]any{
+			"id":   "abc",
+			"txID": "abc",
 		},
 	}
-	require.True(t, isTronTxInMempool(m, "0xabc"))
-	require.True(t, isTronTxInMempool(m, "abc"))
-	require.False(t, isTronTxInMempool(m, "0xdef"))
-	require.False(t, isTronTxInMempool(nil, "0xabc"))
+
+	tronRPC := &TronRPC{
+		EthereumRPC: &eth.EthereumRPC{
+			Timeout: time.Second,
+		},
+		Parser:           NewTronParser(1, false),
+		fullNodeHTTP:     mockHTTP,
+		solidityNodeHTTP: mockHTTP,
+	}
+
+	tx, err := tronRPC.GetTransaction("0xabc")
+	require.NoError(t, err)
+	require.NotNil(t, tx)
+	require.Equal(t, "abc", tx.Txid)
 }
 
 func TestTronRPC_ReconcileTronMempoolWithPendingList_RemovesMissingTxs(t *testing.T) {
